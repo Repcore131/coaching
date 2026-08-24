@@ -901,141 +901,132 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    quatre tuiles plates par quatre cadrans colores : une couleur par macro,
    posee UNE SEULE FOIS sur --c, que le cadre, la lueur, l anneau, le chiffre,
    le libelle et la pastille relisent. Changer une teinte, c est changer une
-   valeur. */
-.oa-carte{position:relative;border-radius:22px;padding:20px 20px 18px;
+   valeur.
+
+   LES QUATRE SONT SUR UNE SEULE LIGNE, comme sur la maquette. Demande de
+   Kevin, tenue coute que coute : la colonne de l app fait 440 px utiles
+   — `body` porte max-width:480px et `.pad` lui prend 40 px — donc chaque
+   cadran vit dans 104 px, et 78 px sur un telephone de 375. Tout ce qui est
+   ecrit dedans se mesure donc en cqw, la largeur du cadran lui-meme, avec un
+   plancher en pixels : la carte se replie sans jamais casser sa composition. */
+/* container-type ICI AUSSI : le titre et le surtitre se mesurent en pour cent
+   de la CARTE, les cadrans en pour cent d eux-memes. Deux conteneurs
+   imbriques, et aucune media query — la colonne de l app ne suit pas la
+   taille de la fenetre, une requete sur la fenetre se tromperait de mesure. */
+.oa-carte{container-type:inline-size;position:relative;border-radius:20px;padding:16px 14px 14px;
   margin-bottom:22px;background:linear-gradient(180deg,#0f0f0f,#070707);
   border:1px solid rgba(224,32,32,.5);
   box-shadow:0 0 30px rgba(224,32,32,.24),inset 0 1px 0 rgba(255,255,255,.045)}
-/* ── L en-tete ───────────────────────────────────────────────────────── */
-.oa-tete{display:flex;align-items:center;gap:14px;margin-bottom:17px;flex-wrap:wrap}
-.oa-boul{flex-shrink:0;width:46px;height:46px;border-radius:13px;
+/* ── L en-tete, sur UN rang : pastille, titres, semaines ─────────────── */
+.oa-tete{display:flex;align-items:center;gap:9px;margin-bottom:14px}
+.oa-boul{flex-shrink:0;width:38px;height:38px;border-radius:11px;
   display:inline-grid;place-items:center;color:var(--red-text);
   border:1px solid rgba(224,32,32,.42);background:rgba(224,32,32,.07);
-  box-shadow:0 0 15px rgba(224,32,32,.2),inset 0 1px 0 rgba(255,255,255,.05)}
-/* SANS min-width:0, ET C EST CE QUI DECIDE DE LA MISE EN PAGE. La largeur
-   minimale de ce bloc devient celle du titre, qui ne se coupe pas : quand les
-   440 px de la colonne ne suffisent plus a tenir la pastille des semaines a
-   cote, c est ELLE qui passe a la ligne, et le titre garde son corps. Sur un
-   ecran plus large, les trois se rangent sur un rang comme sur la maquette. */
-.oa-titres{flex:1 1 auto}
+  box-shadow:0 0 13px rgba(224,32,32,.2),inset 0 1px 0 rgba(255,255,255,.05)}
+.oa-titres{flex:1;min-width:0}
 /* LE SKEW, JAMAIS font-style:italic. Bebas Neue n est chargee qu en romain et
    le navigateur en fabriquerait une oblique baveuse — meme regle que .nut-titre. */
-/* 12 px ET 2,2 D INTERLETTRAGE, mesure au navigateur : a 13/3,2,
-   « OBJECTIFS ALIMENTAIRES » demande 202 px pour les ~215 que laissent la
-   pastille de gauche et celle de droite, et passait a la ligne. */
-.oa-sur{font-family:var(--pile-titre);font-size:12px;line-height:1;
-  letter-spacing:2.2px;color:#8a8a8a;text-transform:uppercase;
+.oa-sur{font-family:var(--pile-titre);font-size:clamp(8.5px,2.5cqw,11px);line-height:1;
+  letter-spacing:1.5px;color:#8a8a8a;text-transform:uppercase;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
   transform:skewX(-9deg);transform-origin:left center}
-/* IL NE SE COUPE JAMAIS. « JOUR D ENTRAINEMENT » sur deux lignes perdait la
-   forme meme du titre — c est le seul element de la carte qu on lit de loin. */
-.oa-titre{font-family:var(--pile-titre);font-size:26px;line-height:1;white-space:nowrap;
-  letter-spacing:1px;color:var(--text);text-transform:uppercase;margin-top:6px;
+/* IL NE SE COUPE PLUS. A 375 px, « JOUR D ENTRAINEMENT » demandait 154 px
+   pour les 141 que laissent la pastille de gauche et celle des semaines : il
+   sortait en « ENTRAINEME... ». Mesure au navigateur. */
+.oa-titre{font-family:var(--pile-titre);font-size:clamp(15px,5.2cqw,24px);line-height:1;
+  letter-spacing:.4px;color:var(--text);text-transform:uppercase;margin-top:4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   transform:skewX(-9deg);transform-origin:left center}
 /* `em` sans italique : il ne porte ici que la couleur du second mot. */
 .oa-titre em{font-style:normal;color:var(--red-text);
   --halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)}
-/* margin-left:auto : quand elle passe a la ligne faute de place, elle reste
-   a DROITE, comme sur la maquette. */
-.oa-pal{flex-shrink:0;margin-left:auto;display:inline-flex;align-items:center;gap:9px;
-  padding:9px 13px;border-radius:12px;color:var(--text);
-  font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;
+.oa-pal{flex-shrink:0;display:inline-flex;align-items:center;gap:5px;
+  padding:7px 8px;border-radius:10px;color:var(--text);white-space:nowrap;
+  font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;
   background:rgba(224,32,32,.09);border:1px solid rgba(224,32,32,.45);
-  box-shadow:0 0 16px rgba(224,32,32,.18)}
-.oa-pal .oa-cal{color:var(--red-text);display:inline-flex}
-.oa-pal .oa-chev{color:var(--red-text);display:inline-flex;opacity:.9}
-/* ── Les quatre cadrans ──────────────────────────────────────────────── */
-/* DEUX PAR DEUX, ET NON QUATRE DE FRONT. La maquette est dessinee sur 1 875 px ;
-   l app n en aura jamais autant. `body` porte max-width:480px et `.pad` lui
-   prend 40 px : la colonne fait 440 px UTILES, sur un telephone comme sur un
-   ecran de bureau — c est une app en forme de telephone, cadree au centre.
-   Quatre cadrans y feraient 100 px chacun : mesure au navigateur, le nombre
-   deborde de l anneau et « APPORT ENERGETIQUE » se coupe en plein mot. Plies
-   en deux, ils gardent 205 px et rendent exactement ce que montre la maquette.
-   Ce n est pas une media query : la colonne ne depend pas de la fenetre. */
-.oa-grille{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.oa-t{--c:#8a8a8a;position:relative;overflow:hidden;border-radius:17px;
-  padding:13px 12px 12px;display:flex;flex-direction:column;align-items:center;
-  background:linear-gradient(180deg,color-mix(in srgb,var(--c) 6%,#0b0b0b),#060606);
+  box-shadow:0 0 14px rgba(224,32,32,.18)}
+.oa-pal .oa-cal,.oa-pal .oa-chev{color:var(--red-text);display:inline-flex}
+/* ── Les quatre cadrans, DE FRONT ────────────────────────────────────── */
+.oa-grille{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+/* container-type : tout ce qui suit se mesure en cqw, c est-a-dire en pour
+   cent de la largeur DU CADRAN — jamais de la fenetre. C est la seule unite
+   juste ici : la colonne de l app ne suit pas la taille de l ecran. */
+.oa-t{--c:#8a8a8a;container-type:inline-size;position:relative;overflow:hidden;
+  border-radius:13px;padding:8px 5px 7px;display:flex;flex-direction:column;
+  align-items:center;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--c) 7%,#0b0b0b),#060606);
   border:1px solid color-mix(in srgb,var(--c) 40%,transparent);
-  box-shadow:0 0 13px color-mix(in srgb,var(--c) 16%,transparent),
+  box-shadow:0 0 11px color-mix(in srgb,var(--c) 15%,transparent),
     inset 0 1px 0 rgba(255,255,255,.05)}
 /* LA LUEUR DE FOND, A LA PLACE DE LA PHOTO. La maquette pose une image dans
-   chaque tuile — haltere, dosette de whey, graines, huile. Aucune n est dans
+   chaque cadran — haltere, dosette de whey, graines, huile. Aucune n est dans
    le depot, et rien ne peut aller les chercher : le service worker sert hors
    ligne et privacy.html declare les domaines un par un. En attendant qu elles
-   arrivent, ce halo tient leur place et leur role : donner du volume au coin
-   droit sans jamais passer devant le chiffre. */
-/* CENTREE SUR L ANNEAU, ET NON POUSSEE A DROITE. Un halo colle au bord droit
-   lavait la tuile entiere ; sur la maquette, la lueur nait DERRIERE le cadran
-   et s eteint avant les bords. */
-.oa-t::before{content:'';position:absolute;left:50%;top:46%;width:132%;height:96%;
+   arrivent, ce halo tient leur place et leur role. */
+.oa-t::before{content:'';position:absolute;left:50%;top:44%;width:130%;height:88%;
   transform:translate(-50%,-50%);pointer-events:none;border-radius:50%;
-  background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 15%,transparent),transparent 72%)}
+  background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 14%,transparent),transparent 72%)}
 .oa-t>*{position:relative}
-.oa-ico{align-self:flex-start;width:34px;height:34px;border-radius:10px;
+.oa-ico{align-self:flex-start;width:22cqw;height:22cqw;min-width:19px;min-height:19px;
+  max-width:28px;max-height:28px;border-radius:7px;
   display:inline-grid;place-items:center;color:var(--c);
   border:1px solid color-mix(in srgb,var(--c) 45%,transparent);
   background:color-mix(in srgb,var(--c) 12%,transparent);
-  box-shadow:0 0 12px color-mix(in srgb,var(--c) 22%,transparent)}
-.oa-cadran{position:relative;width:100%;max-width:152px;aspect-ratio:1;
-  margin:4px auto 9px}
-/* 163 DEGRES, ET NON −90. Un cercle SVG demarre son trait a 3 heures ; a
-   −90 il demarrait a midi et l ouverture tombait en haut a gauche. La maquette
-   la place EN BAS A GAUCHE, vers 7 heures — c est le seul endroit ou elle ne
-   coupe ni le chiffre ni le libelle. */
+  box-shadow:0 0 9px color-mix(in srgb,var(--c) 20%,transparent)}
+.oa-ico svg{width:56%;height:56%}
+.oa-cadran{position:relative;width:100%;aspect-ratio:1;margin:3px 0 5px}
+/* 163 DEGRES, ET NON −90. Un cercle SVG demarre son trait a 3 heures ; a −90
+   il demarrait a midi et l ouverture tombait en haut a gauche. La maquette la
+   place EN BAS A GAUCHE, vers 7 heures — le seul endroit ou elle ne coupe ni
+   le chiffre ni le libelle. */
 .oa-cadran svg{position:absolute;inset:0;width:100%;height:100%;
   transform:rotate(163deg);overflow:visible}
 /* L ARC EST DECORATIF, ET LE DIT. Ce bloc affiche des CIBLES : il n existe
    aucun consomme a comparer en diete stricte, le journal n y est pas rendu.
-   Un anneau partiellement rempli serait donc une jauge qui ne mesure rien.
-   Il est identique sur les quatre cadrans, comme sur la maquette. */
+   Un anneau partiellement rempli serait une jauge qui ne mesure rien. Il est
+   identique sur les quatre cadrans, comme sur la maquette. */
 .oa-arc{stroke:var(--c);stroke-linecap:round;
-  filter:drop-shadow(0 0 4px color-mix(in srgb,var(--c) 65%,transparent))}
+  filter:drop-shadow(0 0 3px color-mix(in srgb,var(--c) 60%,transparent))}
 .oa-centre{position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:1px;text-align:center}
-.oa-nb{font-family:var(--pile-titre);font-size:34px;line-height:1;color:var(--text);
-  letter-spacing:.5px;font-variant-numeric:tabular-nums}
-.oa-nb small{font-family:Montserrat,sans-serif;font-size:15px;font-weight:400;
-  color:var(--text-faint);letter-spacing:0;margin-left:2px}
-.oa-lbl{font-size:var(--fs-sm);font-weight:800;letter-spacing:1.4px;color:var(--c);
-  text-transform:uppercase;margin-top:3px}
-.oa-obj{font-size:var(--fs-xs);color:var(--text-faint);letter-spacing:.3px}
-.oa-pastille{width:100%;text-align:center;padding:7px 6px;border-radius:9px;
-  font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.3px;
-  text-transform:uppercase;color:var(--c);
+  align-items:center;justify-content:center;text-align:center;padding:0 4%}
+.oa-nb{font-family:var(--pile-titre);line-height:1;color:var(--text);
+  letter-spacing:.3px;font-variant-numeric:tabular-nums;white-space:nowrap;
+  font-size:clamp(16px,26cqw,30px)}
+.oa-nb small{font-family:Montserrat,sans-serif;font-weight:400;
+  color:var(--text-faint);letter-spacing:0;margin-left:1px;
+  font-size:clamp(8px,10cqw,13px)}
+.oa-lbl{font-weight:800;letter-spacing:.6px;color:var(--c);white-space:nowrap;
+  text-transform:uppercase;margin-top:2px;font-size:clamp(8px,10.5cqw,12px)}
+.oa-obj{color:var(--text-faint);white-space:nowrap;letter-spacing:0;
+  font-size:clamp(7px,8.6cqw,11px)}
+/* LA PASTILLE PEUT PASSER SUR DEUX LIGNES, et c est assume. « APPORT
+   ENERGETIQUE » demande 100 px a 10 px de corps ; dans un cadran de 78 px il
+   faudrait descendre a 6 px pour tenir sur une ligne, ce qui ne se lit plus.
+   Deux lignes lisibles valent mieux qu une ligne illisible. */
+.oa-pastille{width:100%;text-align:center;padding:4px 3px;border-radius:7px;
+  font-weight:800;letter-spacing:.2px;line-height:1.25;text-transform:uppercase;
+  color:var(--c);font-size:clamp(7px,7.4cqw,10px);
   border:1px solid color-mix(in srgb,var(--c) 38%,transparent);
   background:color-mix(in srgb,var(--c) 7%,transparent)}
 /* ── La bande du bas ─────────────────────────────────────────────────── */
-.oa-bas{display:flex;align-items:center;gap:13px;margin-top:15px;padding:13px 15px;
-  border-radius:14px;background:rgba(255,255,255,.022);
-  border:1px solid var(--border)}
+.oa-bas{display:flex;align-items:center;gap:10px;margin-top:12px;padding:11px 12px;
+  border-radius:12px;background:rgba(255,255,255,.022);
+  border:1px solid var(--border);flex-wrap:wrap}
 .oa-i{flex-shrink:0;color:var(--text-faint);display:inline-flex}
-.oa-note{flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.55}
-.oa-ajuster{flex-shrink:0;display:inline-flex;align-items:center;gap:9px;
-  padding:10px 15px;border-radius:11px;cursor:pointer;
-  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
-  letter-spacing:1.6px;text-transform:uppercase;color:var(--red-text);
+.oa-note{flex:1;min-width:0;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55}
+.oa-ajuster{flex-shrink:0;margin-left:auto;display:inline-flex;align-items:center;
+  gap:7px;padding:8px 12px;border-radius:10px;cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
+  letter-spacing:1.3px;text-transform:uppercase;color:var(--red-text);
   background:rgba(224,32,32,.09);border:1px solid rgba(224,32,32,.45);
-  box-shadow:0 0 14px rgba(224,32,32,.16)}
-/* ── QUATRE DE FRONT NE TIENNENT PAS SUR UN TELEPHONE ─────────────────
-   La maquette est dessinee large. A 375 px, quatre colonnes donneraient 70 px
-   par cadran : le chiffre passerait sous 20 px et « APPORT ENERGETIQUE » sur
-   trois lignes. Deux par deux, chaque cadran garde 150 px et le rendu reste
-   celui de la maquette, plie en deux. */
-/* LA BANDE DU BAS SE PLIE TOUJOURS : la phrase du palier fait deux lignes des
-   440 px, et le bouton n a pas la place de rester a cote d elle. */
-.oa-bas{flex-wrap:wrap}
-.oa-note{flex-basis:100%}
-.oa-ajuster{margin-left:auto}
-/* Sous 400 px — un iPhone SE, un Android compact — on serre encore d un cran. */
+  box-shadow:0 0 12px rgba(224,32,32,.16)}
+/* Sous 400 px — un iPhone SE, un Android compact — on serre d un cran. */
 @media (max-width:400px){
-  .oa-carte{padding:15px 13px 13px;border-radius:18px}
-  .oa-grille{gap:9px}
-  .oa-titre{font-size:23px}
-  .oa-sur{font-size:11px;letter-spacing:1.8px}
-  .oa-nb{font-size:30px}
-  .oa-nb small{font-size:12px}
-  .oa-pastille{letter-spacing:.9px}
+  .oa-carte{padding:13px 11px 11px;border-radius:17px}
+  .oa-grille{gap:5px}
+  .oa-tete{gap:7px}
+  .oa-boul{width:34px;height:34px;border-radius:10px}
+  .oa-pal{font-size:10px;padding:6px 7px;gap:4px}
 }
 /* ── LA CONSIGNE DU JOURNAL ──────────────────────────────────────────── */
 /* UN FOND QUI COUVRE, ET NON UNE SURFACE TRANSLUCIDE. La carte porte un ciel
@@ -42623,7 +42614,7 @@ function htmlCadranOA(m,valeur){
              rail gris a cet endroit se lirait comme la part qui reste a
              remplir, et il n y a rien a remplir — c est une cible, pas une
              jauge. -->
-        <circle class="oa-arc" cx="50" cy="50" r="${OA_R}" fill="none" stroke-width="6.5"
+        <circle class="oa-arc" cx="50" cy="50" r="${OA_R}" fill="none" stroke-width="6"
           stroke-dasharray="${(OA_CIRC*OA_PART).toFixed(1)} ${OA_CIRC}"/>
       </svg>
       <div class="oa-centre">

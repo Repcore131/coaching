@@ -19729,21 +19729,28 @@ function testExercices(){
           return /class="oa-ajuster"/.test(_htmlAjusterOA(c))
             ?true:_echec('aucun bouton avec un coach joignable');
         } finally { currentUser=sauve; if(sdb) DB.set('users',sdb); }})());
-      ok('DEUX colonnes, pas quatre : la colonne de l\'app fait 440 px',(()=>{
-        // `body` porte max-width:480px et `.pad` lui prend 40 px, sur un
-        // telephone comme sur un ecran de bureau. Quatre cadrans y feraient
-        // 100 px : mesure au navigateur, le nombre deborde de l\'anneau et
-        // « APPORT ENERGETIQUE » se coupe en plein mot.
+      ok('QUATRE colonnes, sur une seule ligne, comme la maquette',(()=>{
+        // J'avais d'abord plie la grille en deux : la colonne de l'app fait
+        // 440 px utiles — `body` porte max-width:480px et `.pad` lui prend
+        // 40 px — et quatre cadrans y font 104 px chacun. Kevin a tranche :
+        // les quatre sur UNE ligne, comme sur sa maquette. Tout ce qui est
+        // ecrit dans un cadran se mesure donc en cqw, la largeur du cadran
+        // lui-meme, avec un plancher en pixels — jamais en pour cent de la
+        // fenetre, qui ne dit rien de la colonne.
         const d=document.createElement('div');
         d.style.cssText='position:absolute;left:-9999px;top:0;width:440px';
         d.innerHTML='<div class="oa-grille"><i></i><i></i><i></i><i></i></div>';
         document.body.appendChild(d);
-        let n=0;
+        let n=0,large=0;
         try{
           const g=d.querySelector('.oa-grille');
-          n=(getComputedStyle(g).gridTemplateColumns||'').trim().split(/\s+/).filter(Boolean).length;
+          const c=(getComputedStyle(g).gridTemplateColumns||'').trim().split(/\s+/).filter(Boolean);
+          n=c.length; large=parseFloat(c[0]||'0');
         } finally { d.remove(); }
-        return n===2?true:_echec(n+' colonnes');})());
+        if(n!==4) return _echec(n+' colonnes');
+        // Et chaque cadran doit rester au-dessus de 95 px : en dessous, le
+        // nombre ne tient plus dans l'anneau.
+        return large>=95?true:_echec('cadran de '+large+' px');})());
     })();
     // ══════ LA PHRASE DU JOUR : 365 TEXTES, ET AUCUN AUTEUR ══════
     // Ce jeu-ci n'avait AUCUNE assertion — ni l'ancien, ni celui d'avant. Il
