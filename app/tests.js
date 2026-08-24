@@ -19674,6 +19674,40 @@ function testExercices(){
 
 
 
+    // ══════ LE FILET D OUVERTURE NOMME CE QU IL ATTRAPE ══════
+    // Kevin voit « cette seance n a pas pu etre ouverte » sur ses deux profils.
+    // Trente-trois formes de donnees hostiles ont ete essayees sans reproduire
+    // le defaut : ce qui manquait, c est le NOM de l erreur. Le message
+    // renvoyait a la console, qui n existe pas sur un telephone.
+    (function(){
+      ok('Le detail porte le type, le message ET la ligne',(()=>{
+        let d='';
+        try{ (null).reps; }catch(e){ d=_detailErreurEditeur(e); }
+        if(d.indexOf('TypeError')<0) return _echec('le type manque : '+d);
+        if(d.indexOf('reps')<0) return _echec('le message manque : '+d);
+        // La premiere ligne de pile porte le fichier et le numero de ligne.
+        // « at » est retire avec le chemin : il ne reste que fichier:ligne:colonne,
+        // qui est tout ce dont on a besoin et qui tient sur un ecran de telephone.
+        return /\([^()]+:\d+:\d+\)/.test(d)
+          ?true:_echec('la ligne manque : '+d);})());
+      ok('Il ne casse pas quand il n y a ni pile ni erreur',(()=>{
+        // Le filet est le DERNIER recours : s il levait a son tour, l athlete
+        // n aurait plus rien du tout.
+        if(_detailErreurEditeur({message:'x'})!=='Erreur : x')
+          return _echec(_detailErreurEditeur({message:'x'}));
+        if(_detailErreurEditeur(null)!=='Erreur : erreur inconnue')
+          return _echec(_detailErreurEditeur(null));
+        return _detailErreurEditeur(undefined)==='Erreur : erreur inconnue'
+          ?true:_echec('undefined mal traite');})());
+      ok('Le message renvoie au coach, plus a la console',(()=>{
+        // « la console en garde le detail » demandait a l athlete quelque chose
+        // qu il ne peut pas faire depuis un telephone.
+        const src=String(_echecOuvertureEditeur);
+        if(/la console en garde/.test(src))
+          return _echec('il renvoie encore a la console');
+        return /_detailErreurEditeur/.test(src)&&/clipboard/.test(src)
+          ?true:_echec('le detail n est ni affiche ni copie');})());
+    })();
     // ══════ L APERCU DE SEANCE, A LA PLACE DE LA PHOTO DE FICHE ══════
     // Demande de Kevin, 24/08/2026. Il deposait une capture d ecran de son
     // classeur ; l app connait deja la seance et sait deja la dessiner.

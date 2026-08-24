@@ -20287,10 +20287,40 @@ function _normaliserSessionsConfig(dossier,rapport){
 //
 // N'AVALE PAS L'ERREUR : la console garde la pile entière, le coach lit de
 // quoi la rapporter.
+// LE DETAIL VA A L ECRAN, PAS SEULEMENT EN CONSOLE. Sur un telephone, la
+// console n est pas atteignable : « signale-le, la console en garde le detail »
+// demandait a l athlete quelque chose qu il ne pouvait pas faire. Le message
+// portait donc la panne sans jamais permettre de la nommer — trente-trois
+// reproductions a l aveugle plus tard, c est ce qui manquait.
+//
+// CE QU ON AJOUTE : le NOM de l erreur, et la PREMIERE LIGNE DE PILE, qui
+// porte le fichier et le numero de ligne. C est ce qui transforme un rapport
+// en correctif.
+//
+// ET IL SE COPIE. Le detail est aussi pose dans le presse-papier quand le
+// navigateur le permet : recopier a la main « TypeError ... index.html:24907 »
+// depuis un ecran de telephone est une epreuve, et une transcription fausse
+// envoie chercher au mauvais endroit.
+function _detailErreurEditeur(e){
+  const nom=(e&&e.name)||'Erreur';
+  const msg=(e&&e.message)||'erreur inconnue';
+  let ou='';
+  try{
+    const l=String((e&&e.stack)||'').split(String.fromCharCode(10))
+      .map(x=>x.trim()).filter(x=>x&&x.indexOf('at ')===0)[0]||'';
+    // On ne garde que le dernier segment : le chemin complet du fichier tient
+    // trois lignes sur un telephone et n apprend rien de plus.
+    ou=l?l.replace(/.*\//,'').replace(/\)$/,''):'';
+  }catch(_e){}
+  return nom+' : '+msg+(ou?' ('+ou+')':'');
+}
 function _echecOuvertureEditeur(e){
+  const detail=_detailErreurEditeur(e);
   try{ console.error("Ouverture de l'éditeur d'exercices impossible",e); }catch(_e){}
-  try{ toast("Cette séance n'a pas pu être ouverte : "+((e&&e.message)||"erreur inconnue")
-    +". Signale-le, la console en garde le détail.","var(--red)"); }catch(_e){}
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(detail).catch(()=>{}); }catch(_e){}
+  try{ toast("Cette séance n'a pas pu être ouverte. "+detail
+    +" — détail copié, envoie-le à ton coach.","var(--red)"); }catch(_e){}
 }
 // LES SEANCES D UN MODELE, PAR GENRE — ET GARANTIES EXISTANTES.
 //
