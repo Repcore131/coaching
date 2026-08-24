@@ -810,10 +810,6 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    S EMPILE sous 430 px : l hexagone passe au-dessus du nombre. Au-dela, dans
    la fiche coach ou la grille atteint 507 px, la tuile tient 163 px et les
    deux se remettent cote a cote comme sur la maquette. */
-@media (max-width:430px){
-  .fj-tete{flex-direction:column;align-items:flex-start;gap:5px}
-  .fj-val{font-size:23px}
-}
 .fj-tuile{--c:#8a8a8a;position:relative;overflow:hidden;border-radius:14px;
   padding:10px 10px 9px;background:linear-gradient(180deg,#141414,#0d0d0d);
   border:1px solid #1e1e1e;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
@@ -855,6 +851,25 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .fj-kcal .fj-barre{background:rgba(255,255,255,.14)}
 .fj-kcal .fj-barre>i{background:#ff4040;box-shadow:0 0 10px rgba(255,64,64,.9)}
 .fj-kcal .fj-pct{color:rgba(255,255,255,.75)}
+/* ── LA TUILE ETROITE, ET POURQUOI CE BLOC EST EN DERNIER ────────────────
+   Il etait ecrit EN TETE de la section, avant les regles qu il corrige. A
+   specificite egale, c est la derniere lue qui gagne : `align-items` et le
+   corps du chiffre repassaient a leur valeur large aussitot apres, et seul
+   `flex-direction`, que rien ne redisait plus bas, survivait. La tete
+   s empilait donc bien — mais centree, et avec un chiffre de 26 px qui
+   demandait 76 px pour les 74 d une tuile de 96, si bien que la tuile, qui
+   masque ce qui deborde, coupait le dernier chiffre de « 2600 /2600 ».
+   A la fin du bloc, les trois declarations s appliquent enfin. */
+@media (max-width:430px){
+  .fj-tete{flex-direction:column;align-items:flex-start;gap:5px}
+  .fj-val{font-size:23px}
+  /* « PROTEINES » PASSAIT A LA LIGNE, ET LUI SEUL. Mesure au navigateur, sur
+     les 74 px de contenu d une tuile de 96 : 81 px a 1,6 ; 75 a 0,9, encore
+     un de trop ; 71 a 0,5. Les cinq autres libelles tiennent a tout coup. Un
+     mot coupe en « PROTEINE / S » fait une tuile plus haute que ses voisines
+     pour rien, et c est la plus lue des six. */
+  .fj-lbl{letter-spacing:.6px}
+}
 .nut-titre{font-family:var(--pile-titre);font-size:21px;font-weight:400;
   letter-spacing:1.6px;color:var(--text);text-transform:uppercase;line-height:1;
   transform:skewX(-9deg);transform-origin:left center;
@@ -39049,6 +39064,73 @@ function htmlLigneCalories(tot,m){
     </div>
   </div>`;
 }
+// ── LA TUILE DE MACRO, PARTAGEE PAR LES DEUX CARTES ─────────────────────
+// Le journal la rend en CONSOMME/CIBLE, avec sa jauge. La carte des
+// objectifs la rend en CIBLE SEULE, sans jauge. Une seule fabrique, parce
+// que deux copies du meme hexagone finiraient par diverger sur un detail —
+// la taille de l icone, l arrondi, la couleur du libelle — et les deux
+// grilles se liraient alors comme deux composants differents.
+//
+// UNE TUILE = UN HEXAGONE, UN CHIFFRE, UN LIBELLE, et une jauge quand il y a
+// quelque chose a comparer. La couleur n est ecrite QU UNE fois, sur --c :
+// les quatre morceaux la relisent.
+//
+// LA JAUGE EST PLAFONNEE A 100 %, LE POURCENTAGE NE L EST PAS. Un trait qui
+// deborderait de sa piste ne voudrait rien dire, mais « 120 % » se lit tres
+// bien et c est precisement ce que l athlete doit voir.
+function htmlTuileNut(val,cible,unite,label,coul,ico,opts){
+  const o=opts||{};
+  const nb=v=>typeof v==='number'?parseFloat(v.toFixed(1)):v;
+  // `cible > 0` ET NON `cible` : le sel est appele avec zero, et une cible
+  // de zero ne se compare pas davantage qu une cible absente. Sans cible, ni
+  // jauge ni pourcentage : il n y a rien a comparer, et un « 0 % » mentirait.
+  const aCible=typeof cible==='number'&&isFinite(cible)&&cible>0;
+  // EN CIBLE SEULE, LE GROS CHIFFRE EST LA CIBLE. La progression, ce sont les
+  // anneaux au-dessus ; la redire ici ecrirait deux fois la meme phrase, et
+  // deux grilles de tuiles identiques dont l une montre le consomme et
+  // l autre la cible seraient illisibles l une sous l autre.
+  const tete=o.cibleSeule
+    ? `<span class="fj-val">${aCible?nb(cible):'—'}</span>${aCible&&unite?`<span class="fj-cible">${unite}</span>`:''}`
+    : `<span class="fj-val">${nb(val)}</span>${aCible?`<span class="fj-cible">/${nb(cible)}${unite}</span>`:''}`;
+  const pc=(!o.cibleSeule&&aCible)?Math.round((val/cible)*100):null;
+  return `<div class="fj-tuile${o.kcal?' fj-kcal':''}" style="--c:${coul}">
+    <div class="fj-tete">
+      <span class="fj-hexa" aria-hidden="true">${icon(ico,15)}</span>
+      <div style="min-width:0">${tete}</div>
+    </div>
+    <div class="fj-lbl">${label}</div>
+    ${o.cibleSeule?'':`<div class="fj-pied">
+      <div class="fj-barre"><i style="width:${pc==null?0:Math.min(pc,100)}%"></i></div>
+      <span class="fj-pct">${pc==null?'—':pc+'%'}</span>
+    </div>`}
+  </div>`;
+}
+// LES SIX TUILES, DECRITES UNE FOIS. Les deux cartes lisent cette liste :
+// l athlete retrouve la meme macro a la meme place dans les deux grilles, et
+// une macro ajoutee un jour apparait des deux cotes du meme coup.
+//
+// `tot` et `cible` NE PORTENT PAS LE MEME NOM et c est la raison d etre de la
+// table : les totaux du journal disent `c` et `fi` la ou les objectifs disent
+// `g` et `f`. Les deux appels ecrivaient ce decalage a la main.
+const TUILES_NUT=Object.freeze([
+  Object.freeze({tot:'p',   cible:'p',   unite:'g',label:'Protéines',coul:'#ff2d2d',    ico:'haltere'}),
+  Object.freeze({tot:'c',   cible:'g',   unite:'g',label:'Glucides', coul:'var(--gluc)',ico:'wheat'}),
+  Object.freeze({tot:'l',   cible:'l',   unite:'g',label:'Lipides',  coul:'#22c55e',    ico:'droplet'}),
+  Object.freeze({tot:'sel', cible:null,  unite:'g',label:'Sel g',    coul:'#60a5fa',    ico:'salt'}),
+  Object.freeze({tot:'fi',  cible:'f',   unite:'g',label:'Fibres ℹ', coul:'#a78bfa',    ico:'leaf'}),
+  Object.freeze({tot:'kcal',cible:'kcal',unite:'', label:'Kcal',     coul:'var(--text)',ico:'flame',kcal:true})
+]);
+function htmlGrilleTuilesNut(tot,m,opts){
+  const o=opts||{};
+  return `<div class="fj-grille">${TUILES_NUT.map(t=>{
+    // Les kcal sont ARRONDIES avant d entrer dans la tuile : une somme
+    // d aliments tombe sur 1847,3 kcal, et la decimale n a aucun sens ici.
+    const brut=(tot&&tot[t.tot])||0;
+    const v=t.tot==='kcal'?Math.round(brut):brut;
+    const c=t.cible?((m&&m[t.cible])||0):0;
+    return htmlTuileNut(v,c,t.unite,t.label,t.coul,t.ico,{kcal:t.kcal,cibleSeule:o.cibleSeule});
+  }).join('')}</div>`;
+}
 // PURE. Le libellé d’un jour, PARTAGÉ par le journal et la carte des
 // objectifs. Les deux en-têtes nomment le même jour : les laisser calculer
 // ce nom chacun de son côté, c’est accepter qu’ils finissent par diverger.
@@ -39068,8 +39150,19 @@ function _renderStrictMacroRings(nut,jourAff){
   const estAuj=today===localISODate(new Date());
   const isOn=nutIsOnDay(today);
   const m=_getEffectiveMacros(nut,isOn,today);
-  // Reperes INDICATIFS, sous les totaux : ils ne les modifient pas.
-  const _repHtml=_htmlReperesRepas(currentUser,m,today);
+  // LE BLOC DE REPERES N EST PLUS RENDU A L ATHLETE. Demande de Kevin, du
+  // 24/08/2026 : les six tuiles de cibles prennent sa place au bas de la
+  // carte. C etait son DERNIER emplacement — il avait deja quitte le journal
+  // pour ne pas s y afficher deux fois — et il ne reparait donc nulle part
+  // ailleurs sur l ecran de l athlete.
+  //
+  // LE MODULE, LUI, RESTE ECRIT ET RESTE VIVANT DU COTE COACH :
+  // repartitionPrises et _htmlRepartitionPrisesCoach sont toujours rendus
+  // dans la fiche client. Ce qui n a plus d appelant, ce sont les trois
+  // pieces qui ne parlaient qu a l athlete — _htmlReperesRepas,
+  // _htmlRepartitionPrises et les phrases peri-seance. Elles ne sont pas
+  // supprimees ici : ces textes sont relus et valides, et les effacer est une
+  // decision separee de celle de les retirer de cette carte.
   if(!m.kcal&&!m.p&&!m.g&&!m.l) return '';
   const entries=(nut.log?.[today]?.entries)||[];
   const tot=entries.reduce((a,e)=>({
@@ -39099,7 +39192,19 @@ function _renderStrictMacroRings(nut,jourAff){
     </div>
     ${htmlAnneauxMacros(tot,m,'16px')}
     ${htmlLigneCalories(tot,m)}
-    ${_repHtml}
+    <!-- LES SIX CIBLES, EN TUILES. Elles ne repetent pas les anneaux : les
+         anneaux disent OU EN EST la journee, les tuiles disent CE QU IL FAUT
+         ATTEINDRE — et elles portent les deux cibles que les anneaux ne
+         montrent pas du tout, le sel et les fibres. Demande de Kevin, sur sa
+         maquette du 21/08/2026. -->
+    <div style="margin-top:14px">
+      <div class="nut-cap" style="margin-bottom:9px">Tes cibles</div>
+      ${htmlGrilleTuilesNut(tot,m,{cibleSeule:true})}
+      <!-- LA MEME NOTE QU AU JOURNAL. Le « ℹ » de la tuile des fibres ne veut
+           rien dire sans elle, et une grille qui porte le signe sans porter la
+           legende renvoie le lecteur a une phrase qui n est pas la. -->
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:9px">ℹ fibres : indicatif</div>
+    </div>
   </div>`;
 }
 
@@ -44203,16 +44308,11 @@ function _renderFjDaySummary(date){
   // d'afficher un total qui aurait l'air complet.
   const _selManquant=entries.filter(e=>e&&e.sel==null).length;
   const _microHtml=_htmlCouvertureMicro(currentUser);
-  // Le repère de répartition est rendu par _renderStrictMacroRings, sous la
-  // carte des objectifs. Il l'était AUSSI ici : les deux blocs s'affichant
-  // ensemble dès que le journal est visible, la même phrase apparaissait
-  // deux fois à l'écran.
-  //
-  // C'est la carte des objectifs qui le garde : le repère explique comment
-  // répartir la CIBLE de protéines, sa place est avec elle. Et c'est le seul
-  // des deux emplacements qui subsiste en diète stricte, où le journal est
-  // masqué — le retirer là-bas priverait ces athlètes du repère.
-  const _repHtml='';
+  // Le repère de répartition ne se rend NULLE PART sur l'écran de l'athlète.
+  // Il est parti d'ici d'abord, parce qu'il sortait deux fois dès que le
+  // journal était visible ; la carte des objectifs, qui le gardait, ne le rend
+  // plus non plus depuis le 24/08/2026. Le fantôme d'un `_repHtml` vide
+  // laissait croire à un emplacement qui n'existe plus.
   // « coucher » ferme la journée. Il passe après « Collation », qui n'est pas à
   // une heure fixe et sert déjà de fourre-tout en fin de liste.
   const repasOrder=['matin','dejeuner','diner','collation','coucher'];
@@ -44222,29 +44322,6 @@ function _renderFjDaySummary(date){
   const dayBadge=isOn
     ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-1);padding:2px 7px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
     : `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);padding:2px 7px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
-  // UNE TUILE = UN HEXAGONE, UN CHIFFRE, UN LIBELLE, UNE JAUGE. La couleur
-  // n est ecrite QU UNE fois, sur --c : les quatre morceaux la relisent.
-  //
-  // LA JAUGE EST PLAFONNEE A 100 %, le POURCENTAGE NE L EST PAS. Un trait qui
-  // deborderait de sa piste ne voudrait rien dire, mais « 120 % » se lit tres
-  // bien et c est precisement ce que l athlete doit voir. Sans cible, ni
-  // jauge ni pourcentage : il n y a rien a comparer.
-  const nb=v=>typeof v==='number'?parseFloat(v.toFixed(1)):v;
-  const tuile=(val,cible,unite,label,coul,ico,kcal)=>{
-    const pc=cible?Math.round((val/cible)*100):null;
-    return `<div class="fj-tuile${kcal?' fj-kcal':''}" style="--c:${coul}">
-      <div class="fj-tete">
-        <span class="fj-hexa" aria-hidden="true">${icon(ico,15)}</span>
-        <div style="min-width:0"><span class="fj-val">${nb(val)}</span>${cible?`<span class="fj-cible">/${cible}${unite}</span>`:''}</div>
-      </div>
-      <div class="fj-lbl">${label}</div>
-      <div class="fj-pied">
-        <div class="fj-barre"><i style="width:${pc==null?0:Math.min(pc,100)}%"></i></div>
-        <span class="fj-pct">${pc==null?'—':pc+'%'}</span>
-      </div>
-    </div>`;
-  };
-
   // L HABILLAGE EST CELUI DE LA CARTE DE L ACCUEIL — .nut-hud, son ciel et
   // son en-tete a boule — comme la carte des objectifs juste au-dessus. Les
   // trois cartes de nutrition se ressemblent enfin.
@@ -44264,19 +44341,11 @@ function _renderFjDaySummary(date){
         <button class="btn btn-red btn-sm" style="padding:11px 18px" onclick="openFoodSearch('${date}')">+ AJOUTER</button>
       </div>
       <div style="border-top:1px solid rgba(255,90,90,.18);margin-top:13px;padding-top:13px">
-        <div class="fj-grille">
-          ${tuile(tot.p,m.p,'g','Protéines','#ff2d2d','haltere')}
-          ${tuile(tot.c,m.g,'g','Glucides','var(--gluc)','wheat')}
-          ${tuile(tot.l,m.l,'g','Lipides','#22c55e','droplet')}
-          ${tuile(tot.sel,0,'g','Sel g','#60a5fa','salt')}
-          ${tuile(tot.fi,m.f,'g','Fibres ℹ','#a78bfa','leaf')}
-          ${tuile(Math.round(tot.kcal),m.kcal,'','Kcal','var(--text)','flame',true)}
-        </div>
+        ${htmlGrilleTuilesNut(tot,m)}
         <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:9px">ℹ fibres : indicatif</div>
         ${_selManquant?`<div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:3px">sel non compté sur ${_selManquant} aliment${_selManquant>1?'s':''}</div>`:''}
       </div>
     </div>
-    ${_repHtml}
     ${_htmlSelSemaine(currentUser)}
     ${_microHtml}
     ${_htmlDernierAjout(date)}

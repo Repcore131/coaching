@@ -6301,22 +6301,31 @@ function testExercices(){
       };
       try {
         window.saveUser=()=>true;
-        ok('Le repère de répartition n\'apparaît QU\'UNE FOIS',(()=>{
-          // Il était rendu par _renderStrictMacroRings ET par
-          // _renderFjDaySummary : les deux s'affichant ensemble dès que le
-          // journal est visible, la même phrase sortait deux fois à l'écran.
+        ok('Le repère de répartition n\'apparaît PLUS du tout, chez l\'athlète',(()=>{
+          // Il sortait deux fois — _renderStrictMacroRings ET
+          // _renderFjDaySummary — puis une seule, par la carte des objectifs.
+          // Depuis le 24/08/2026 elle ne le rend plus non plus : les six
+          // tuiles de cibles ont pris sa place au bas de la carte. Demande de
+          // Kevin, faite en connaissance de ce que cela retire.
           const t=_texte();
           const n=(t.match(/repas par jour/g)||[]).length;
-          if(n===0) return _echec('fixture muette : le repère ne sort pas');
-          if(n!==1) return _echec(n+' occurrences de « repas par jour »');
+          if(n!==0) return _echec(n+' occurrences de « repas par jour »');
           const m=(t.match(/Séance le matin/g)||[]).length;
-          return m<=1?true:_echec(m+' occurrences de « Séance le matin »');})());
-        ok('Il reste rendu par la carte des OBJECTIFS, pas par le journal',(()=>{
-          // C'est la carte des objectifs qui le garde : le repère explique
-          // comment répartir la CIBLE, et c'est le seul des deux emplacements
-          // qui subsiste en diète stricte, où le journal est masqué.
-          if(!/_htmlReperesRepas\(/.test(String(_renderStrictMacroRings)))
-            return _echec('la carte des objectifs ne le rend plus');
+          return m===0?true:_echec(m+' occurrences de « Séance le matin »');})());
+        ok('TÉMOIN : la fixture sait encore produire le repère',(()=>{
+          // Sans ce témoin, l'assertion du dessus passerait aussi bien parce
+          // que le repère a disparu de l'écran que parce que la fixture ne
+          // remplit plus deb-meals-day. Elle ne mesurerait plus rien.
+          const u=_ath();
+          const h=_htmlReperesRepas(u,{p:180},localISODate(new Date()));
+          return /repas par jour/.test(h)
+            ?true:_echec('la fixture ne produit plus le repère : '+h.slice(0,120));})());
+        ok('Aucune des deux cartes de nutrition ne le rend',(()=>{
+          // La règle a changé de sens : ce n'est plus « une seule des deux »,
+          // c'est « aucune ». Le module reste écrit, et reste rendu du côté
+          // COACH par _htmlRepartitionPrisesCoach — vérifié plus bas.
+          if(/_htmlReperesRepas\(/.test(String(_renderStrictMacroRings)))
+            return _echec('la carte des objectifs le rend encore');
           return !/_htmlReperesRepas\(/.test(String(_renderFjDaySummary))
             ?true:_echec('le journal le rend encore');})());
         ok('L\'hydratation est SUR l\'écran nutrition, une seule fois',(()=>{
@@ -9888,6 +9897,90 @@ function testExercices(){
               rates.push(mode+' : un champ est posé à part');
           }
           return rates.length?_echec(rates.join(' · ')):true;})());
+
+        // ── UNE SÉANCE QU'ON NE PEUT PAS OUVRIR ──────────────────────────
+        // Symptôme rapporté : sur la fiche d'un athlète, « Modifier les
+        // exercices » ne fait RIEN sur certaines séances. Reproduit : les
+        // trois éditeurs appellent renderProgEx() AVANT go(), donc une
+        // exception dans le rendu laisse l'écran où il est, sans un mot —
+        // exactement le bug déjà rencontré sur l'onglet H/F des modèles, et
+        // que _cptSeances a fermé de ce côté-là.
+        //
+        // Trois formes de données le déclenchent, mesurées au navigateur :
+        // une entrée nulle dans le tableau, des reps qui ne sont pas du
+        // texte (isCardio fait .toLowerCase dessus), et un « exercises » qui
+        // n'est pas un tableau (_photographierProgEx fait .map dessus).
+        const _ouvre=(exs,fn)=>{
+          const _sv=currentUser,_se=_coachEditClient,_sc=_progEditorCtx,_su=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser={id:'c1',email:'c@t',role:'coach',fname:'K',exAlias:{},
+              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},
+              coachPrograms:[{id:'m',name:'M',sessions_F:[],
+                sessions_H:[{day:'Lundi',name:'MOD',active:true,exercises:exs}]}]};
+            _coachEditClient={id:'a1',email:'a@t',role:'athlete',fname:'A',
+              sessions_config:[{day:'Lundi',name:'ATH',active:true,exercises:exs}]};
+            _editProgTemplateIdx=0; _editProgTemplateGender='H';
+            go('s-coach-sessions');
+            (fn||openCoachSessionExercises)(0);
+            return (document.querySelector('.screen.active')||{}).id;
+          } catch(e){ return 'EXCEPTION: '+e.message; }
+          finally{ currentUser=_sv;_coachEditClient=_se;_progEditorCtx=_sc;window.saveUser=_su; }
+        };
+        ok('Une entrée nulle dans les exercices n\'empêche pas d\'ouvrir la séance',(()=>{
+          const e=_ouvre([{name:'DC',series:3,reps:'10'},null,{name:'SQUAT',series:3,reps:'10'}]);
+          return e==='s-coach-program'?true:_echec('écran = '+e);})());
+        ok('Des reps qui ne sont pas du texte n\'empêchent pas d\'ouvrir la séance',(()=>{
+          const e=_ouvre([{name:'DC',series:3,reps:10}]);
+          return e==='s-coach-program'?true:_echec('écran = '+e);})());
+        ok('Un « exercices » qui n\'est pas un tableau n\'empêche pas d\'ouvrir la séance',(()=>{
+          const e=_ouvre({0:{name:'DC',series:3,reps:'10'}});
+          return e==='s-coach-program'?true:_echec('écran = '+e);})());
+        ok('L\'éditeur de MODÈLE résiste aux mêmes formes',(()=>{
+          const rates=[];
+          for(const [cas,exs] of [['nul',[{name:'DC',reps:'10'},null]],
+                                  ['reps nombre',[{name:'DC',reps:10}]],
+                                  ['non-tableau',{0:{name:'DC',reps:'10'}}]]){
+            const e=_ouvre(exs,openProgTemplateSessionExercises);
+            if(e!=='s-coach-program') rates.push(cas+' → '+e);
+          }
+          return rates.length?_echec(rates.join(' · ')):true;})());
+        ok('_assainirExercices ne touche pas une séance déjà saine',(()=>{
+          const s={day:'Lundi',exercises:[{name:'DC',series:3,reps:'10',repos:'01 min'}]};
+          const avant=JSON.stringify(s);
+          const n=_assainirExercices(s);
+          if(n!==0) return _echec('il dit avoir réparé '+n+' entrée(s)');
+          return JSON.stringify(s)===avant?true:_echec('la séance a été réécrite : '+JSON.stringify(s));})());
+        ok('_assainirExercices retire les entrées vides et rend les reps textuelles',(()=>{
+          const s={exercises:[{name:'A',reps:'10'},null,'BRUIT',{name:'B',reps:12},undefined]};
+          const n=_assainirExercices(s);
+          if(s.exercises.length!==2) return _echec('reste '+s.exercises.length+' exercice(s)');
+          if(s.exercises[1].reps!=='12') return _echec('reps = '+JSON.stringify(s.exercises[1].reps));
+          return n===4?true:_echec('réparations comptées : '+n);})());
+        ok('Un rendu qui échoue le DIT au lieu de laisser le bouton muet',(()=>{
+          // Le filet : si renderProgEx tombe pour une raison qu'on n'a pas
+          // prévue, le coach doit lire quelque chose. Un écran qui ne bouge
+          // pas et une console muette, c'est le bug d'origine.
+          const _sv=currentUser,_se=_coachEditClient,_sc=_progEditorCtx;
+          const _r=renderProgEx,_t=toast,_ce=console.error;
+          let dit=0;
+          try{
+            renderProgEx=()=>{throw new Error('panne simulée');};
+            toast=()=>{dit++;};
+            console.error=()=>{};
+            currentUser={id:'c1',email:'c@t',role:'coach',fname:'K',exAlias:{},
+              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},coachPrograms:[]};
+            _coachEditClient={id:'a1',email:'a@t',role:'athlete',fname:'A',
+              sessions_config:[{day:'Lundi',name:'ATH',active:true,
+                exercises:[{name:'DC',series:3,reps:'10'}]}]};
+            go('s-coach-sessions');
+            openCoachSessionExercises(0);
+            const ec=(document.querySelector('.screen.active')||{}).id;
+            if(ec==='s-coach-program') return _echec('on entre dans un écran à moitié rendu');
+            return dit>0?true:_echec('aucun message : le bouton reste muet');
+          } catch(e){ return _echec('l\'exception ressort jusqu\'au clic : '+e.message); }
+          finally{ renderProgEx=_r; toast=_t; console.error=_ce;
+            currentUser=_sv;_coachEditClient=_se;_progEditorCtx=_sc; }})());
 
         // ── L'IMPORT OCR CÔTÉ COACH ─────────────────────────────────────
         // Il etait purement INOPERANT : _athleteSessionIdx() rend null hors
@@ -18958,6 +19051,80 @@ function testExercices(){
       } finally { currentUser=sauveU; try{ setMacroUnite(sauveUnite); }catch(e){} }
     })();
 
+    // ══════ LES SIX TUILES, ET LA FABRIQUE QUE LES DEUX CARTES PARTAGENT ══════
+    // Elles n'avaient AUCUNE assertion. La fabrique vient d'être sortie du
+    // journal pour que la carte des objectifs la rende aussi : c'est le moment
+    // d'épingler ce qui doit rester vrai des deux côtés, avant qu'un des deux
+    // rendus ne se mette à diverger de l'autre en silence.
+    (function(){
+      const tot={kcal:1820.4,p:120,c:200,l:60,sel:6,fi:22};
+      const m={kcal:2200,p:150,g:250,l:70,f:30};
+      ok('Les deux grilles nomment les mêmes six macros, dans le même ordre',(()=>{
+        const lbl=h=>[...h.matchAll(/class="fj-lbl">([^<]*)</g)].map(x=>x[1]);
+        const j=lbl(htmlGrilleTuilesNut(tot,m));
+        const o=lbl(htmlGrilleTuilesNut(tot,m,{cibleSeule:true}));
+        if(j.length!==6) return _echec(j.length+' tuiles au journal');
+        return j.join('|')===o.join('|')
+          ?true:_echec('journal : '+j.join('|')+' ≠ objectifs : '+o.join('|'));})());
+      ok('En cible seule, le gros chiffre EST la cible',(()=>{
+        const h=htmlGrilleTuilesNut(tot,m,{cibleSeule:true});
+        const v=[...h.matchAll(/class="fj-val">([^<]*)</g)].map(x=>x[1]);
+        // 120 et 200 sont les CONSOMMÉS de la fixture : les voir ici voudrait
+        // dire que la carte des objectifs affiche la journée en cours.
+        if(v.indexOf('120')>=0||v.indexOf('200')>=0)
+          return _echec('un consommé est affiché : '+v.join('|'));
+        return v[0]==='150'&&v[1]==='250'&&v[5]==='2200'
+          ?true:_echec(v.join('|'));})());
+      ok('En cible seule, aucune jauge et aucun pourcentage',(()=>{
+        const h=htmlGrilleTuilesNut(tot,m,{cibleSeule:true});
+        // La progression, ce sont les anneaux au-dessus. Une jauge ici la
+        // dirait une seconde fois, sur des tuiles qui parlent de la cible.
+        if(/fj-barre/.test(h)) return _echec('une jauge est rendue');
+        return !/fj-pct/.test(h)?true:_echec('un pourcentage est rendu');})());
+      ok('Le journal, lui, garde ses six jauges et ses six pourcentages',(()=>{
+        const h=htmlGrilleTuilesNut(tot,m);
+        const b=(h.match(/fj-barre/g)||[]).length;
+        return b===6?true:_echec(b+' jauges');})());
+      ok('Sans cible, « — » et jamais « 0 % » : le sel n\'a rien à comparer',(()=>{
+        const h=htmlGrilleTuilesNut(tot,m);
+        const t=h.split('<div class="fj-tuile').find(x=>/Sel/.test(x))||'';
+        // Le pourcentage RENDU, et non la chaîne « 0% » : la jauge porte
+        // legitimement « width:0% », et la chercher partout faisait tomber le
+        // test sur son propre repère.
+        if(/class="fj-pct">0%</.test(t)) return _echec('un « 0 % » est écrit pour le sel');
+        if(/class="fj-cible"/.test(t)) return _echec('une cible est écrite pour le sel');
+        return /class="fj-pct">—</.test(t)?true:_echec('le tiret manque : '+t.slice(0,200));})());
+      ok('La jauge est plafonnée à 100 %, le pourcentage ne l\'est pas',(()=>{
+        // Deux fois la cible de protéines : « 200 % » doit se lire, mais un
+        // trait qui déborderait de sa piste ne voudrait rien dire.
+        const h=htmlGrilleTuilesNut({kcal:0,p:300,c:0,l:0,sel:0,fi:0},{p:150});
+        const t=h.split('<div class="fj-tuile').find(x=>/Prot/.test(x))||'';
+        if(t.indexOf('>200%<')<0) return _echec('le pourcentage est plafonné');
+        return t.indexOf('width:100%')>=0
+          ?true:_echec('la jauge dépasse sa piste');})());
+      ok('Les kcal sont arrondies, les grammes gardent une décimale',(()=>{
+        const h=htmlGrilleTuilesNut(tot,m);
+        const v=[...h.matchAll(/class="fj-val">([^<]*)</g)].map(x=>x[1]);
+        if(v[5]!=='1820') return _echec('kcal : '+v[5]);
+        const h2=htmlGrilleTuilesNut({kcal:0,p:0,c:0,l:60.44,sel:0,fi:0},m);
+        const v2=[...h2.matchAll(/class="fj-val">([^<]*)</g)].map(x=>x[1]);
+        return v2[2]==='60.4'?true:_echec('lipides : '+v2[2]);})());
+      ok('La carte des objectifs rend RÉELLEMENT la grille',(()=>{
+        // Les assertions ci-dessus interrogent la fabrique en isolation : on
+        // pouvait retirer entièrement son appel du rendu et tout restait vert.
+        if(!/htmlGrilleTuilesNut\(/.test(String(_renderStrictMacroRings)))
+          return _echec('la carte des objectifs ne la rend plus');
+        return /htmlGrilleTuilesNut\(/.test(String(_renderFjDaySummary))
+          ?true:_echec('le journal ne la rend plus');})());
+      ok('Une seule fabrique : le journal n\'en garde pas une copie',(()=>{
+        // C'est la raison d'être de l'extraction. Deux copies du même hexagone
+        // divergeraient sur un détail, et les deux grilles se liraient alors
+        // comme deux composants différents.
+        const src=String(_renderFjDaySummary);
+        return !/class="fj-tuile/.test(src)
+          ?true:_echec('le journal refabrique une tuile chez lui');})());
+    })();
+
     // ── Le filet sur les DEUX PLAFONDS, posé avant d'y toucher ──
     // Aucune assertion ne les nommait : ils n'étaient épinglés qu'indirectement,
     // par des valeurs attendues. Le curseur se branche juste avant eux.
@@ -26698,17 +26865,32 @@ function testExercices(){
           return !/showNotification|new Notification/.test(src)
             ?true:_echec('une notification part du module');})());
 
-        ok('Les repères sont RÉELLEMENT rendus sous l\'anneau des macros',(()=>{
-          // Les tests ci-dessus interrogent _htmlReperesRepas en isolation :
-          // on pouvait retirer entièrement son appel du rendu et tout restait
-          // vert, pour une phrase que personne ne verrait jamais.
+        ok('La carte des objectifs ne rend PLUS les repères',(()=>{
+          // Cette assertion disait l'inverse jusqu'au 24/08/2026 : elle
+          // existait parce que les tests ci-dessus interrogent
+          // _htmlReperesRepas en isolation, si bien qu'on pouvait retirer son
+          // appel du rendu sans qu'aucun ne tombe. Kevin a demandé ce retrait,
+          // et l'assertion garde le même rôle — épingler ce que la carte rend
+          // vraiment — dans l'autre sens.
           const sauve=currentUser;
           try{
             currentUser=_u({'deb-meals-day':'4'},[]);
             const h=_renderStrictMacroRings(currentUser.nutrition);
-            return /par repas/.test(h)
-              ?true:_echec('les repères n\'apparaissent pas dans l\'anneau');
+            return !/par repas/.test(h)
+              ?true:_echec('les repères apparaissent encore dans la carte');
           } finally { currentUser=sauve; }})());
+        ok('LE MODULE RESTE RENDU CÔTÉ COACH : la fiche client est son dernier emplacement',(()=>{
+          // Ce qui a été retiré, c'est la vue ATHLÈTE. La répartition des
+          // prises reste sous les yeux du coach, dans la fiche client : sans
+          // cette assertion, plus rien ne rendrait le module et personne ne le
+          // saurait avant de lire le code.
+          const c=_u({'deb-meals-day':'4'},[]);
+          c.nutrition={macros:{on:{kcal:2600,p:180,g:260,l:80}}};
+          let h=''; try{ h=_htmlRepartitionPrisesCoach(c); }catch(e){
+            return _echec('exception : '+e.message); }
+          if(!h) return _echec('la fiche coach ne rend rien');
+          return /Protéines par prise/.test(h)
+            ?true:_echec('le bloc coach a changé de titre : '+h.slice(0,120));})());
 
         // ── Le marqueur péri-séance ───────────────────────────────────────
         ok('Critère : le marqueur ne change AUCUN total',(()=>{
