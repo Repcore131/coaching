@@ -40033,9 +40033,17 @@ function _renderStrictMacroRings(nut,jourAff){
   // et le moteur sodique n'a aucune raison de tourner pour rien.
   const _sel=_selPourGrille(currentUser,today,m);
   const entries=(nut.log?.[today]?.entries)||[];
+  // LE SEL ET LES FIBRES ENTRENT DANS CE TOTAL depuis que leurs deux barres
+  // vivent ici. Le journal les comptait de son cote ; deux additions du meme
+  // journal auraient fini par diverger sur une decimale.
   const tot=entries.reduce((a,e)=>({
-    kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0)
-  }),{kcal:0,p:0,c:0,l:0});
+    kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0),
+    fi:a.fi+(e.fi||0),sel:a.sel+(e.sel||0)
+  }),{kcal:0,p:0,c:0,l:0,fi:0,sel:0});
+  // Les aliments enregistres avant ce champ, et les 190 aliments de Ciqual
+  // qui n ont pas de valeur de sel, comptent pour zero. On le DIT plutot que
+  // d afficher un total qui aurait l air complet.
+  const _selManquant=entries.filter(e=>e&&e.sel==null).length;
   const dayBadge=isOn
     ?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-1);padding:3px 10px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
@@ -40060,6 +40068,20 @@ function _renderStrictMacroRings(nut,jourAff){
     </div>
     ${htmlAnneauxMacros(tot,m,'16px')}
     ${htmlLigneCalories(tot,m)}
+    <!-- LE SEL ET LES FIBRES, SOUS LA BARRE DES CALORIES. Ce sont les deux
+         seules macros que les anneaux ne portent pas ; elles etaient dans le
+         journal, elles remontent ici, ou vit deja tout ce qui se compare a une
+         cible. Demande de Kevin, 24/08/2026. -->
+    <div class="fj-mini" style="margin-top:13px">
+      ${htmlLigneMiniNut('Sel',tot.sel,_sel.macros.sel,' g','#60a5fa')}
+      ${htmlLigneMiniNut('Fibres ℹ',tot.fi,m.f,' g','#a78bfa')}
+    </div>
+    <!-- « ℹ fibres : indicatif » N EST ECRIT QU UNE FOIS, plus bas, sous les
+         tuiles : les deux blocs portent le meme « ℹ » et la meme reserve, et
+         la redire ici la faisait sortir deux fois dans la meme carte. Le sel
+         non compte, lui, parle du TOTAL CONSOMME : sa place est sous la barre
+         qui l affiche, pas sous une grille de cibles. -->
+    ${_selManquant?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:right;margin-top:8px">sel non compté sur ${_selManquant} aliment${_selManquant>1?'s':''}</div>`:''}
     <!-- LES SIX CIBLES, EN TUILES. Elles ne repetent pas les anneaux : les
          anneaux disent OU EN EST la journee, les tuiles disent CE QU IL FAUT
          ATTEINDRE — et elles portent les deux cibles que les anneaux ne
@@ -40126,6 +40148,13 @@ function _renderNutriContent(type,dateAff){
       ${_htmlRecuperationAthlete(currentUser)}
       ${_htmlAjustement(currentUser,false)}
       <div id="nut-rings-slot">${_renderStrictMacroRings(nut)}</div>
+      <!-- LA NAVIGATION DU JOURNAL ET SA CONSIGNE, AU-DESSUS DE L HYDRATATION.
+           Demande de Kevin : le geste d ajouter un aliment se decide juste
+           apres avoir lu ses cibles, pas apres avoir descendu tout l ecran.
+           Le journal lui-meme — les repas, les aliments — reste plus bas, dans
+           #fj-today-section : c est une liste, elle se consulte, elle ne se
+           decide pas. -->
+      <div id="fj-nav-slot"></div>
       ${_htmlHydratationNut(currentUser)}
       ${_renderCycleNutSettings(nut)}`;
     // LE JOUR VISÉ, ou aujourd'hui à défaut. Cette ligne ramenait le journal à
@@ -45162,23 +45191,17 @@ function _renderFjDaySummary(date){
   const nextStr=localISODate(new Date(_yy,_mm-1,_dd+1));
   const dateLbl=_libelleJourNut(date);
   const nextBtn=isToday
-    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:4px 10px;font-size:var(--fs-md);cursor:not-allowed">→</button>`
-    :`<button onclick="_renderFjDaySummary('${nextStr}')" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:4px 10px;cursor:pointer;font-size:var(--fs-md)">→</button>`;
+    ?`<button disabled style="flex-shrink:0;background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-md);line-height:1;cursor:not-allowed">→</button>`
+    :`<button onclick="_renderFjDaySummary('${nextStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">→</button>`;
   const nut=currentUser.nutrition||{};
   const entries=(nut.log?.[date]?.entries)||[];
   const isOn=nutIsOnDay(date);
-  const m=_getEffectiveMacros(nut,isOn,date);
-  const tot=entries.reduce((a,e)=>({
-    kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0),
-    s:a.s+(e.s||0),fi:a.fi+(e.fi||0),sel:a.sel+(e.sel||0)
-  }),{kcal:0,p:0,c:0,l:0,s:0,fi:0,sel:0});
-  // Les aliments enregistrés avant ce champ, et les 190 aliments de Ciqual qui
-  // n'ont pas de valeur de sel, comptent pour zéro. On le DIT plutôt que
-  // d'afficher un total qui aurait l'air complet.
-  const _selManquant=entries.filter(e=>e&&e.sel==null).length;
-  // La cible de sel du jour, et rien de plus : la phrase qui dit sur quoi elle
-  // repose vit dans la carte des objectifs, juste au-dessus.
-  const _sel=_selPourGrille(currentUser,date,m);
+  // LE TOTAL DU JOUR N EST PLUS ADDITIONNE ICI. Il l etait pour les six tuiles,
+  // puis pour les deux barres du sel et des fibres ; les deux sont parties dans
+  // la carte des objectifs, qui refait la somme sur le meme journal. En garder
+  // une seconde ici, que plus rien ne lit, c est se preparer a la voir diverger
+  // le jour ou quelqu un la modifie sans modifier l autre. Il ne reste de ce
+  // rendu qu une LISTE : ce que l athlete a mange, repas par repas.
   const _microHtml=_htmlCouvertureMicro(currentUser);
   // Le repère de répartition ne se rend NULLE PART sur l'écran de l'athlète.
   // Il est parti d'ici d'abord, parce qu'il sortait deux fois dès que le
@@ -45194,36 +45217,28 @@ function _renderFjDaySummary(date){
   const dayBadge=isOn
     ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-1);padding:2px 7px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
     : `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);padding:2px 7px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
-  // L HABILLAGE EST CELUI DE LA CARTE DE L ACCUEIL — .nut-hud, son ciel et
-  // son en-tete a boule — comme la carte des objectifs juste au-dessus. Les
-  // trois cartes de nutrition se ressemblent enfin.
+  // PLUS DE CADRE ROUGE AUTOUR DU JOURNAL. Demande de Kevin, 24/08/2026 : la
+  // carte .nut-hud etait la troisieme de l ecran a porter le meme cadre et le
+  // meme ciel d eclairs, pour un contenu qui n est ni un objectif ni un bilan
+  // — une navigation, une consigne, un bouton. Ce qui reste ici est une liste.
+  //
+  // LA NAVIGATION ET LA CONSIGNE PARTENT DANS #fj-nav-slot, au-dessus de
+  // l hydratation. L emplacement peut manquer : en diete stricte, l ecran
+  // n est pas monte du tout.
+  const _nav=document.getElementById('fj-nav-slot');
+  if(_nav) _nav.innerHTML=`
+    <div style="margin-bottom:18px;${_animEntree('fj-nav')}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <button onclick="_renderFjDaySummary('${prevStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">←</button>
+        <div style="flex:1;min-width:0;text-align:center">
+          <div class="nut-titre" style="transform:none">${dateLbl}</div>
+          <div style="margin-top:5px">${dayBadge}</div>
+        </div>
+        ${nextBtn}
+      </div>
+      ${htmlConsigneJournal(date,entries.length===0)}
+    </div>`;
   el.innerHTML=`
-    <div class="card-nut nut-hud" style="${_animEntree('fj-jour')}margin-bottom:12px;">
-      ${_htmlNutEclairs('J')}
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:9px;min-width:0">
-          <button onclick="_renderFjDaySummary('${prevStr}')" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">←</button>
-          <span class="nut-boul">${icon('target',15)}</span>
-          <div style="min-width:0">
-            <div class="nut-titre">${dateLbl}</div>
-            <div style="margin-top:4px">${dayBadge}</div>
-          </div>
-          ${nextBtn}
-        </div>
-      </div>
-      <div style="border-top:1px solid rgba(255,90,90,.18);margin-top:13px;padding-top:13px">
-        <!-- SEUL LE SEL ET LES FIBRES RESTENT ICI. Les six tuiles disaient une
-             seconde fois ce que les anneaux de la carte des objectifs disent
-             deja pour les quatre autres macros. Demande de Kevin, 24/08/2026. -->
-        <div class="fj-mini">
-          ${htmlLigneMiniNut('Sel',tot.sel,_sel.macros.sel,' g','#60a5fa')}
-          ${htmlLigneMiniNut('Fibres ℹ',tot.fi,m.f,' g','#a78bfa')}
-        </div>
-        <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:right;margin-top:8px">ℹ fibres : indicatif</div>
-        ${_selManquant?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:right;margin-top:3px">sel non compté sur ${_selManquant} aliment${_selManquant>1?'s':''}</div>`:''}
-        ${htmlConsigneJournal(date,entries.length===0)}
-      </div>
-    </div>
     ${_htmlSelSemaine(currentUser)}
     ${_microHtml}
     ${_htmlDernierAjout(date)}
@@ -45258,10 +45273,6 @@ function _renderFjDaySummary(date){
   //
   // L’emplacement peut manquer — en diète stricte, le journal n’est pas
   // affiché du tout : on ne fabrique alors rien.
-  // LE JOURNAL A SES PROPRES JAUGES DEPUIS QU IL PORTE LE SEL ET LES FIBRES.
-  // _animerJauges n etait appele que sur la carte des objectifs : les deux
-  // lignes seraient restees a zero, rendues mais jamais remplies.
-  _animerJauges(el);
   const _slot=document.getElementById('nut-rings-slot');
   if(_slot) _slot.innerHTML=_renderStrictMacroRings(currentUser.nutrition||{},date);
   if(_slot) _animerJauges(_slot);

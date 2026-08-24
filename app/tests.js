@@ -19281,8 +19281,38 @@ function testExercices(){
           return _echec('la carte des objectifs ne la rend plus');
         if(/htmlGrilleTuilesNut\(/.test(String(_renderFjDaySummary)))
           return _echec('le journal la rend encore');
-        return /htmlLigneMiniNut\(/.test(String(_renderFjDaySummary))
-          ?true:_echec('le journal ne rend ni le sel ni les fibres');})());
+        // Le sel et les fibres ont quitté le journal a leur tour, le
+        // 24/08/2026 : ils vivent sous la barre des calories, dans la carte des
+        // objectifs, ou vit deja tout ce qui se compare a une cible. Il ne
+        // reste au journal qu'une LISTE.
+        if(/htmlLigneMiniNut\(/.test(String(_renderFjDaySummary)))
+          return _echec('le journal rend encore le sel et les fibres');
+        return /htmlLigneMiniNut\(/.test(String(_renderStrictMacroRings))
+          ?true:_echec('la carte des objectifs ne les rend pas');})());
+      ok('Les deux barres sont SOUS la ligne des calories, pas au-dessus',(()=>{
+        // Elles sont l'appoint des calories, pas leur concurrente : les mettre
+        // avant ferait lire le sel avant le total de la journée.
+        const sauve=currentUser;
+        try{
+          currentUser={id:'_o',email:'o@t',exAlias:{},exMuscles:{},sessions:[],
+            nutrition:{macros:{on:{kcal:2000,p:120,g:200,l:60,f:30},
+              off:{kcal:2000,p:120,g:200,l:60,f:30}},log:{}}};
+          const h=_renderStrictMacroRings(currentUser.nutrition);
+          const iKcal=h.indexOf('nut-bloc'), iMini=h.indexOf('fj-mini');
+          if(iKcal<0) return _echec('la ligne des calories a disparu');
+          if(iMini<0) return _echec('les deux barres ne sont pas rendues');
+          return iMini>iKcal?true:_echec('calories '+iKcal+', barres '+iMini);
+        } finally { currentUser=sauve; }})());
+      ok('La navigation du journal a QUITTE le cadre rouge',(()=>{
+        // Trois cartes de l'écran portaient le même cadre et le même ciel
+        // d'éclairs ; celle du journal ne montrait ni objectif ni bilan, mais
+        // une navigation, une consigne et un bouton.
+        const src=String(_renderFjDaySummary);
+        if(src.indexOf('fj-nav-slot')<0)
+          return _echec('l\'emplacement au-dessus de l\'hydratation n\'est pas visé');
+        if(/card-nut nut-hud/.test(src)) return _echec('le journal garde un cadre rouge');
+        return /_htmlNutEclairs/.test(src)
+          ?_echec('le journal garde son ciel d\'éclairs'):true;})());
       ok('Sans cible, la ligne légère n\'a PAS de piste',(()=>{
         // Une piste vide se lirait comme un objectif à zéro. Le sel n\'a pas de
         // cible tant que le poids de l\'athlète est inconnu.
@@ -24594,11 +24624,23 @@ function testExercices(){
             ?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,90)+'»');})());
 
         // ── Le récapitulatif du jour ──────────────────────────────────────
+        // CE QUE CETTE SONDE LIT, C'EST L'ÉCRAN, PAS UNE CARTE. Le sel et les
+        // fibres ont quitté le journal le 24/08/2026 pour la carte des
+        // objectifs, sous la barre des calories ; les lire dans le seul
+        // #fj-today-section ferait tomber ces tests pour un déménagement, pas
+        // pour une régression. La fixture porte donc des macros — sans elles,
+        // la carte des objectifs ne se rend pas du tout — et la sonde rend le
+        // texte des DEUX.
         const _recap=entries=>{
           currentUser={id:'_ts',email:'ts@t',exAlias:{},exMuscles:{},sessions:[],
-            nutrition:{log:{'2026-01-06':{entries}}}};
+            nutrition:{macros:{on:{kcal:2000,p:120,g:200,l:60,f:30},
+              off:{kcal:1800,p:120,g:170,l:60,f:30}},
+              log:{'2026-01-06':{entries}}}};
           _renderFjDaySummary('2026-01-06');
-          return (document.getElementById('fj-today-section')||{}).textContent||'';};
+          const _o=document.createElement('div');
+          _o.innerHTML=_renderStrictMacroRings(currentUser.nutrition,'2026-01-06');
+          return ((document.getElementById('fj-today-section')||{}).textContent||'')
+            +' '+(_o.textContent||'');};
         ok('Le total de sel du jour est affiché',(()=>{
           // 1,2 + 2,4 = 3,6 : un total qu'aucune autre tuile de l'écran
           // n'affiche. tile() arrondit au dixième — c'est son comportement
@@ -25261,7 +25303,12 @@ function testExercices(){
           currentUser.nutrition.macros={on:{kcal:2000,p:120,g:200,l:60,s:40,f:30},
             off:{kcal:1800,p:120,g:170,l:60,s:35,f:30}};
           _renderFjDaySummary(AUJ);
-          const t=(document.getElementById('fj-today-section')||{}).textContent||'';
+          // Les deux cartes, pour la même raison que _recap plus haut.
+          const _o=document.createElement('div');
+          _o.innerHTML=_renderStrictMacroRings(currentUser.nutrition,AUJ);
+          const t=((document.getElementById('fj-today-section')||{}).textContent||'')
+            +' '+(_o.textContent||'');
+          window._tSucre=t;
           if(/sucre/i.test(t)) return _echec('« sucre » est encore là');
           // Le sel a pris sa place, avant les fibres.
           // Le libelle est « SEL » depuis que la tuile porte une cible et
@@ -25271,7 +25318,9 @@ function testExercices(){
           const iFib=t.toLowerCase().indexOf('fibres');
           return iSel>=0&&iFib>iSel?true:_echec('sel '+iSel+' fibres '+iFib);})());
         ok('La mention indicative ne parle plus du sucre',(()=>{
-          const t=(document.getElementById('fj-today-section')||{}).textContent||'';
+          // Le texte relevé par l'assertion précédente : la mention a suivi les
+          // fibres dans la carte des objectifs.
+          const t=window._tSucre||'';
           return /fibres : indicatif/.test(t)&&!/sucre & fibres/.test(t)
             ?true:_echec('mention inchangée');})());
       } finally {
