@@ -22325,6 +22325,106 @@ function testExercices(){
           return n.length===1?true:_echec('double malgre la meme adresse : '+n.join(', '));})());
       } finally { DB.set('users',sauveD||{}); currentUser=sauveU; }
     })();
+    // ── LA FICHE ATHLETE, RANGEE EN QUATRE ONGLETS ───────────────────────
+    // Demande de Kevin, 25/08/2026. La barre etait une barre d'ANCRES : cinq
+    // puces qui faisaient defiler vers une section perdue dans un rouleau de
+    // vingt-sept. Elle CHOISIT maintenant ce que la fiche affiche.
+    (()=>{
+      const svVue=(typeof _ccdVue!=='undefined')?_ccdVue:'entrainement';
+      try{
+        ok('LES QUATRE ONGLETS EXISTENT, ET UN SEUL EST MONTE',(()=>{
+          const vues=[...document.querySelectorAll('#s-coach-client .ccd-vue')]
+            .map(v=>v.dataset.vue);
+          for(const v of CCD_VUES)
+            if(vues.indexOf(v)<0) return _echec('onglet manquant : '+v);
+          if(vues.length!==CCD_VUES.length)
+            return _echec(vues.length+' conteneurs pour '+CCD_VUES.length+' onglets');
+          // Chaque puce vise un onglet reel : une puce orpheline ne ferait rien
+          // et ne le dirait pas.
+          const puces=[...document.querySelectorAll('#ccd-ancres .pf-chip')];
+          if(puces.length!==CCD_VUES.length)
+            return _echec(puces.length+' puces pour '+CCD_VUES.length+' onglets');
+          for(const b of puces)
+            if(CCD_VUES.indexOf(b.dataset.vue)<0)
+              return _echec('puce sans onglet : '+b.dataset.vue);
+          for(const v of CCD_VUES){
+            ccdVue(v);
+            const actives=[...document.querySelectorAll('#s-coach-client .ccd-vue.actif')];
+            if(actives.length!==1||actives[0].dataset.vue!==v)
+              return _echec(v+' : '+actives.length+' onglet(s) monte(s)');
+            const p=[...document.querySelectorAll('#ccd-ancres .pf-chip.active')];
+            if(p.length!==1||p[0].dataset.vue!==v)
+              return _echec(v+' : la puce ne suit pas');
+          }
+          // Un nom inconnu retombe sur le premier plutot que de tout eteindre.
+          return ccdVue('nimportequoi')==='entrainement'
+            ?true:_echec('un onglet inconnu ne retombe pas sur entrainement');})());
+
+        ok('CHAQUE SECTION EST DANS L\'ONGLET DE SON DOMAINE',(()=>{
+          const ou=id=>{ const z=document.getElementById(id);
+            if(!z) return 'ABSENT';
+            const v=z.closest('.ccd-vue'); return v?v.dataset.vue:'hors'; };
+          const attendu={
+            'ccd-tendances':'entrainement','ccd-phase':'entrainement',
+            'ccd-volume':'entrainement','ccd-plateaux':'entrainement',
+            'ccd-forme':'entrainement','ccd-douleur':'entrainement',
+            'ccd-sessions-recap':'entrainement','ccc-pdf-content':'entrainement',
+            'ccd-nutrition':'nutrition','ccd-supplements':'nutrition',
+            'ccd-caffeine':'nutrition',
+            'ccd-sommeil':'lifestyle','ccd-pas':'lifestyle',
+            'ccd-habitudes':'lifestyle','ccd-rite':'lifestyle','ccd-micro':'lifestyle',
+            'ccd-journal':'donnees','ccd-bilans':'donnees','ccd-poids':'donnees',
+            'ccd-prises':'donnees','ccd-dossier':'donnees','ccd-reds':'donnees',
+            'ccd-securite':'donnees','ccd-suspension':'donnees'};
+          for(const id in attendu)
+            if(ou(id)!==attendu[id])
+              return _echec(id+' est dans « '+ou(id)+' » au lieu de « '+attendu[id]+' »');
+          return true;})());
+
+        ok('LES CONTRE-INDICATIONS RESTENT HORS DES ONGLETS',(()=>{
+          // Enterrer une contre-indication derriere un onglet reviendrait a
+          // demander au coach de se souvenir qu'elle existe. C'est ce que le
+          // commentaire de ce bloc refuse depuis son ecriture, et ranger la
+          // fiche ne doit pas le defaire.
+          for(const id of ['ccd-pourquoi','ccd-alertes','ccd-avatar','ccd-wa']){
+            const z=document.getElementById(id);
+            if(!z) return _echec(id+' a disparu de la fiche');
+            if(z.closest('.ccd-vue'))
+              return _echec(id+' a ete range dans un onglet');
+          }
+          return true;})());
+
+        ok('UN ONGLET FERME N\'ETEINT PAS UN SIGNAL DE SECURITE',(()=>{
+          // Douleur, RED-S, suspension : ranger la fiche ne doit pas la rendre
+          // moins sure qu'un long rouleau.
+          const z=document.getElementById('ccd-douleur');
+          const puce=document.querySelector('#ccd-ancres .pf-chip[data-vue="entrainement"]');
+          if(!z||!puce) return _echec('fixture introuvable');
+          const sect=z.closest('.cc-sect'), avant=z.innerHTML, dsp=sect?sect.style.display:'';
+          try{
+            z.textContent=''; _ccdMajAlertes();
+            if(puce.hasAttribute('data-alerte')) return _echec('pastille allumee sans signal');
+            z.textContent='Genou droit signalé hier';
+            if(sect) sect.style.display='';
+            _ccdMajAlertes();
+            if(!puce.hasAttribute('data-alerte')) return _echec('un signal n\'allume pas sa pastille');
+            // Une section masquee par le rendu n'a rien a dire : pas de pastille.
+            if(sect){ sect.style.display='none'; _ccdMajAlertes();
+              if(puce.hasAttribute('data-alerte'))
+                return _echec('une section masquee allume quand meme la pastille'); }
+            return true;
+          } finally { z.innerHTML=avant; if(sect) sect.style.display=dsp; _ccdMajAlertes(); }})());
+
+        ok('ccdAller ouvre l\'onglet de sa cible avant d\'y mener',(()=>{
+          // Sinon elle faisait defiler vers un bloc masque, et il ne se passait
+          // rien du tout.
+          ccdVue('entrainement');
+          ccdAller('ccd-nutrition');
+          if(_ccdVue!=='nutrition') return _echec('l\'onglet n\'a pas suivi : '+_ccdVue);
+          ccdAller('ccd-sommeil');
+          return _ccdVue==='lifestyle'?true:_echec('l\'onglet n\'a pas suivi : '+_ccdVue);})());
+      } finally { try{ ccdVue(svVue); }catch(e){} }
+    })();
     // ── LE PLANCHER NE DOIT PAS ECRASER LE CYCLE ─────────────────────────
     // Signale par Kevin le 25/08/2026 : « pas normal que ce soit les memes
     // chiffres en ON et OFF ». Les deux journees etaient relevees SEPAREMENT :

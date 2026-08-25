@@ -1639,6 +1639,18 @@ html{scroll-behavior:smooth}
    BORNE A CINQ PUCES SUR UNE SEULE LIGNE, jamais a la liste de 27 sections.
    C'est la justification exigee par la regle 2 ; ne pas l'etendre ailleurs. */
 #ccd-ancres{transition:padding var(--t-1) var(--c-out)}
+/* LES QUATRE VUES DE LA FICHE. Une seule est montee a la fois : les autres
+   restent dans le document — leurs identifiants sont remplis par
+   openClientDetail, qui ne sait rien des onglets et n'a pas a le savoir. */
+.ccd-vue{display:none}
+.ccd-vue.actif{display:block}
+/* LA PASTILLE DE SECURITE. Un onglet ferme ne doit jamais cacher un signal :
+   douleur, RED-S, suspension. Elle se pose sur la puce, pas dans le texte —
+   le libelle doit rester lisible a l'etroit. */
+#ccd-ancres .pf-chip{position:relative}
+#ccd-ancres .pf-chip[data-alerte]::after{content:'';position:absolute;top:3px;right:3px;
+  width:6px;height:6px;border-radius:var(--r-full);background:var(--orange);
+  box-shadow:0 0 5px var(--orange)}
 #ccd-ancres[data-serre]{padding:4px 14px}
 #ccd-ancres[data-serre] .pf-chip{padding:3px 9px;min-height:24px;font-size:9.5px}
 .pf-chip.active{background:var(--red);color:var(--text);border-color:var(--red)}
@@ -4602,12 +4614,16 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button><span class="topbar-title" id="ccd-title">Athlète</span><span class="coach-sync-badge rc-sync-badge" style="font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px"></span></div>
   <!-- CINQ ANCRES POUR VINGT-SEPT SECTIONS. Le dossier se lit en cinq temps ;
        la barre les nomme et y mene, elle ne double pas la liste des sections. -->
+  <!-- QUATRE ONGLETS, ET NON CINQ ANCRES. La barre ne mene plus a une
+       section perdue dans un rouleau de vingt-sept : elle CHOISIT ce que
+       la fiche affiche. Une pastille rouge s'allume sur l'onglet qui
+       porte un signal de securite, pour qu'un onglet ferme n'en cache
+       jamais un. -->
   <nav id="ccd-ancres" style="position:sticky;top:52px;z-index:5;display:flex;gap:6px;overflow-x:auto;padding:8px 14px;background:#090909;border-bottom:1px solid var(--border);-webkit-overflow-scrolling:touch">
-    <button class="pf-chip" data-ancre="ccd-pourquoi" onclick="ccdAller('ccd-pourquoi')">SANTÉ</button>
-    <button class="pf-chip" data-ancre="ccd-tendances" onclick="ccdAller('ccd-tendances')">ENTRAÎNEMENT</button>
-    <button class="pf-chip" data-ancre="ccd-nutrition" onclick="ccdAller('ccd-nutrition')">NUTRITION</button>
-    <button class="pf-chip" data-ancre="ccd-poids" onclick="ccdAller('ccd-poids')">CORPS</button>
-    <button class="pf-chip" data-ancre="ccd-journal" onclick="ccdAller('ccd-journal')">ÉCHANGES</button>
+    <button class="pf-chip" data-vue="entrainement" onclick="ccdVue('entrainement')">ENTRAÎNEMENT</button>
+    <button class="pf-chip" data-vue="nutrition" onclick="ccdVue('nutrition')">NUTRITION</button>
+    <button class="pf-chip" data-vue="lifestyle" onclick="ccdVue('lifestyle')">LIFESTYLE</button>
+    <button class="pf-chip" data-vue="donnees" onclick="ccdVue('donnees')">DONNÉES</button>
   </nav>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -4630,13 +4646,6 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
         <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
       </div>
-      <!-- Charge de la semaine et exercices en hausse. Masqué tant que
-           l'historique ne permet pas de les établir : c'est le contrat des
-           deux fonctions qui les calculent. -->
-      <section class="cc-sect" style="--cc-accent:var(--red);display:none">
-        <div class="cc-sect-t"><span>Tendances</span></div>
-        <div class="cc-sect-c" id="ccd-tendances"></div>
-      </section>
       <!-- CONTRE-INDICATIONS — épinglées en permanence, jamais repliées.
            Santé, allergies et TCA conditionnent toute la programmation : les
            laisser au fond du questionnaire de départ revenait à demander au
@@ -4649,14 +4658,6 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Alertes</span></div>
         <div class="cc-sect-c" id="ccd-alertes"></div>
       </section>
-      <!-- Journal du coach. En TETE de fiche : c est la premiere chose qu on
-           veut relire avant de parler a quelqu un. -->
-      <section class="cc-sect" style="--cc-accent:var(--info)">
-        <div class="cc-sect-t"><span>Journal de bord</span></div>
-        <div class="cc-sect-c" id="ccd-journal"></div>
-      </section>
-      <!-- Modèle appliqué : renseigné par openClientDetail -->
-      <div id="ccd-assigned-prog" style="display:none;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 var(--r-2) var(--r-2) 0;line-height:1.5"></div>
       <!-- Lien WhatsApp de l'athlète : libellé et cible posés par openClientDetail -->
       <a id="ccd-wa" href="#" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;gap:8px;min-height:46px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:var(--r-3);color:var(--green);text-decoration:none;font-size:var(--fs-md);font-weight:800;letter-spacing:.5px"></a>
       <!-- Sans ce lien, la fonctionnalité ne servirait qu'aux comptes créés
@@ -4667,18 +4668,56 @@ const COACH_PHOTO='icons/coach.jpg';
         <button class="btn btn-outline" onclick="openApplyTemplate()">🗂️ Appliquer un modèle</button>
         <button class="btn btn-outline" onclick="viewClientBilans()"> Bilans complets</button>
       </div>
+      <!-- LES QUATRE ONGLETS. Vingt-sept sections sur un seul rouleau,
+           c'etait une barre d'ancres qui menait a un fil interminable. Le
+           dossier se lit maintenant par domaine, et un onglet ne montre que
+           ce qui le concerne. Les sections elles-memes n'ont pas bouge d'un
+           caractere : elles sont seulement rangees. -->
+      <div class="ccd-vue" data-vue="entrainement">
+      <!-- Modèle appliqué : renseigné par openClientDetail -->
+      <div id="ccd-assigned-prog" style="display:none;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 var(--r-2) var(--r-2) 0;line-height:1.5"></div>
+      <!-- Charge de la semaine et exercices en hausse. Masqué tant que
+           l'historique ne permet pas de les établir : c'est le contrat des
+           deux fonctions qui les calculent. -->
+      <section class="cc-sect" style="--cc-accent:var(--red);display:none">
+        <div class="cc-sect-t"><span>Tendances</span></div>
+        <div class="cc-sect-c" id="ccd-tendances"></div>
+      </section>
+      <section class="cc-sect" style="--cc-accent:var(--red)">
+        <div class="cc-sect-t"><span>Phase</span></div>
+        <div class="cc-sect-c" id="ccd-phase"></div>
+      </section>
+      <section class="cc-sect" style="--cc-accent:var(--red)">
+        <div class="cc-sect-t"><span>Forme</span></div>
+        <div class="cc-sect-c" id="ccd-forme"></div>
+      </section>
+      <section class="cc-sect" style="--cc-accent:var(--red)">
+        <div class="cc-sect-t"><span>Volume</span></div>
+        <div class="cc-sect-c" id="ccd-volume"></div>
+      </section>
+      <section class="cc-sect" style="--cc-accent:var(--red)">
+        <div class="cc-sect-t"><span>Plateaux</span></div>
+        <div class="cc-sect-c" id="ccd-plateaux"></div>
+      </section>
+      <section class="cc-sect" style="--cc-accent:var(--orange)">
+        <div class="cc-sect-t"><span>Douleur</span></div>
+        <div class="cc-sect-c" id="ccd-douleur"></div>
+      </section>
+      <section class="cc-sect" style="--cc-accent:var(--red)">
+        <div class="cc-sect-t"><span>Récapitulatif des séances</span></div>
+        <div class="cc-sect-c" id="ccd-sessions-recap"></div>
+      </section>
 
       <!-- PDF PROGRAMME — dépôt direct sans passer par l'éditeur -->
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
         <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:12px">Programme PDF</div>
         <div id="ccc-pdf-content"></div>
       </div>
-
-      <!-- Nutrition coach -->
-      <section class="cc-sect" style="--cc-accent:var(--orange);display:none">
-        <div class="cc-sect-t"><span>Micro-signaux</span></div>
-        <div class="cc-sect-c" id="ccd-micro"></div>
-      </section>
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirProgrammePrint(getOwnedClient(currentClientId))">Fiche programme à imprimer</button>
+      <div id="ccd-demandes-video"></div>
+      <div id="ccd-videos"></div>
+      </div>
+      <div class="ccd-vue" data-vue="nutrition">
       <section class="cc-sect" style="--cc-accent:var(--green)">
         <div class="cc-sect-t"><span>Nutrition</span></div>
         <div class="cc-sect-c" id="ccd-nutrition"></div>
@@ -4693,6 +4732,8 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Caféine</span></div>
         <div class="cc-sect-c" id="ccd-caffeine"></div>
       </section>
+      </div>
+      <div class="ccd-vue" data-vue="lifestyle">
       <!-- Sommeil et pas : les CHIFFRES BRUTS, sans seuil ni jugement. Le
            verdict, lui, reste au bloc Récupération. Masqués tant que rien
            n’a été saisi. -->
@@ -4704,6 +4745,10 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Pas</span></div>
         <div class="cc-sect-c" id="ccd-pas"></div>
       </section>
+      <section class="cc-sect" style="--cc-accent:var(--green)">
+        <div class="cc-sect-t"><span>Habitudes</span></div>
+        <div class="cc-sect-c" id="ccd-habitudes"></div>
+      </section>
       <!-- Rite de fin de cycle : la question de l'athlète, et la réponse du
            coach. Avant les bilans, parce qu'il porte une question POSÉE —
            quelqu'un attend au bout. -->
@@ -4711,32 +4756,45 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Rite de cycle</span></div>
         <div class="cc-sect-c" id="ccd-rite"></div>
       </section>
+
+      <!-- Nutrition coach -->
+      <section class="cc-sect" style="--cc-accent:var(--orange);display:none">
+        <div class="cc-sect-t"><span>Micro-signaux</span></div>
+        <div class="cc-sect-c" id="ccd-micro"></div>
+      </section>
+      </div>
+      <div class="ccd-vue" data-vue="donnees">
+      <!-- Journal du coach. En TETE de fiche : c est la premiere chose qu on
+           veut relire avant de parler a quelqu un. -->
+      <section class="cc-sect" style="--cc-accent:var(--info)">
+        <div class="cc-sect-t"><span>Journal de bord</span></div>
+        <div class="cc-sect-c" id="ccd-journal"></div>
+      </section>
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <section class="cc-sect" style="--cc-accent:var(--info)">
         <div class="cc-sect-t"><span>Bilans</span></div>
         <div class="cc-sect-c" id="ccd-bilans"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Volume</span></div>
-        <div class="cc-sect-c" id="ccd-volume"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Plateaux</span></div>
-        <div class="cc-sect-c" id="ccd-plateaux"></div>
-      </section>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
-      <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirProgrammePrint(getOwnedClient(currentClientId))">Fiche programme à imprimer</button>
-      <section class="cc-sect" style="--cc-accent:var(--orange)">
-        <div class="cc-sect-t"><span>Dossier</span></div>
-        <div class="cc-sect-c" id="ccd-dossier"></div>
+      <section class="cc-sect" style="--cc-accent:var(--link)">
+        <div class="cc-sect-t"><span>Poids et mesures</span></div>
+        <div class="cc-sect-c" id="ccd-poids"></div>
+      </section>
+      <section class="cc-sect" style="--cc-accent:var(--link)">
+        <div class="cc-sect-t"><span>Photos de progression</span></div>
+        <div class="cc-sect-c" id="ccd-pp"></div>
+      </section>
+      <section class="cc-sect" style="--cc-accent:var(--link)">
+        <div class="cc-sect-t"><span>Photos</span></div>
+        <div class="cc-sect-c" id="ccd-photos-progression"></div>
       </section>
       <section class="cc-sect" style="--cc-accent:var(--orange)">
         <div class="cc-sect-t"><span>Prises</span></div>
         <div class="cc-sect-c" id="ccd-prises"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--link)">
-        <div class="cc-sect-t"><span>Photos de progression</span></div>
-        <div class="cc-sect-c" id="ccd-pp"></div>
+      <section class="cc-sect" style="--cc-accent:var(--orange)">
+        <div class="cc-sect-t"><span>Dossier</span></div>
+        <div class="cc-sect-c" id="ccd-dossier"></div>
       </section>
       <section class="cc-sect" style="--cc-accent:var(--orange)">
         <div class="cc-sect-t"><span>Signaux RED-S</span></div>
@@ -4746,45 +4804,16 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Sécurité</span></div>
         <div class="cc-sect-c" id="ccd-securite"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--link)">
-        <div class="cc-sect-t"><span>Photos</span></div>
-        <div class="cc-sect-c" id="ccd-photos-progression"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--green)">
-        <div class="cc-sect-t"><span>Habitudes</span></div>
-        <div class="cc-sect-c" id="ccd-habitudes"></div>
-      </section>
       <section class="cc-sect" style="--cc-accent:var(--orange)">
         <div class="cc-sect-t"><span>Suspension</span></div>
         <div class="cc-sect-c" id="ccd-suspension"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--orange)">
-        <div class="cc-sect-t"><span>Douleur</span></div>
-        <div class="cc-sect-c" id="ccd-douleur"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Phase</span></div>
-        <div class="cc-sect-c" id="ccd-phase"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Forme</span></div>
-        <div class="cc-sect-c" id="ccd-forme"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--link)">
-        <div class="cc-sect-t"><span>Poids et mesures</span></div>
-        <div class="cc-sect-c" id="ccd-poids"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Récapitulatif des séances</span></div>
-        <div class="cc-sect-c" id="ccd-sessions-recap"></div>
-      </section>
       <div id="ccd-lien-classer" style="display:none;margin-top:16px">
         <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="loadExClassify()">Exercices à classer <span id="ccd-nb-classer"></span></button>
       </div>
-      <div id="ccd-demandes-video"></div>
-      <div id="ccd-videos"></div>
       <div style="margin-top:36px;padding-top:20px;border-top:1px solid var(--surface-2)">
         <button onclick="confirmDeleteClient()" style="width:100%;padding:12px;background:transparent;border:1px solid #3a1500;color:#f97316;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">Retirer cet élève du suivi</button>
+      </div>
       </div>
     </div>
   </div>
@@ -18754,11 +18783,71 @@ function getOwnedClient(cid,users){
 // (par _defiler, qui respecte la preference systeme la ou scrollIntoView ne le
 // fait pas), la marque d'arrivee sur le titre de la section atteinte, et la
 // puce qui s'allume — .pf-chip.active existait et n'etait posee nulle part.
+// ══════ LES QUATRE ONGLETS DE LA FICHE ATHLÈTE ════════════════════════════
+// Demande de Kevin, 25/08/2026 : ranger la fiche avec un onglet entraînement /
+// programme, un nutrition, un lifestyle et un données complémentaires.
+//
+// La barre était une barre d'ANCRES : cinq puces qui faisaient défiler vers une
+// section perdue dans un rouleau de vingt-sept. On lisait le dossier d'un bout
+// à l'autre, ou on ne le lisait pas.
+//
+// CE QUI RESTE HORS ONGLETS : l'identité, les compteurs, les contre-indications,
+// les alertes, le contact et les trois actions. Enterrer une contre-indication
+// derrière un onglet reviendrait à demander au coach de se souvenir qu'elle
+// existe — c'est exactement ce que le commentaire de ce bloc refuse depuis son
+// écriture.
+const CCD_VUES=['entrainement','nutrition','lifestyle','donnees'];
+// Les sections qui portent un signal de sécurité, et l'onglet qui les contient.
+// UN ONGLET FERMÉ NE DOIT JAMAIS CACHER UN SIGNAL : la puce s'allume quand l'une
+// d'elles a quelque chose à dire. Sans ça, ranger la fiche l'aurait rendue moins
+// sûre qu'un long rouleau.
+const CCD_ALERTES={entrainement:['ccd-douleur'],
+  donnees:['ccd-reds','ccd-securite','ccd-suspension']};
+let _ccdVue='entrainement';
+function ccdVue(nom){
+  const v=CCD_VUES.indexOf(nom)>=0?nom:'entrainement';
+  _ccdVue=v;
+  try{
+    document.querySelectorAll('#s-coach-client .ccd-vue').forEach(z=>{
+      z.classList.toggle('actif',z.dataset.vue===v);
+    });
+    document.querySelectorAll('#ccd-ancres .pf-chip').forEach(b=>{
+      b.classList.toggle('active',b.dataset.vue===v);
+    });
+    // On remonte : garder la position d'un onglet en montrerait un autre par
+    // son milieu, sur une hauteur qui n'a aucune raison de correspondre.
+    const sa=document.querySelector('#s-coach-client>.scroll-area');
+    if(sa) sa.scrollTop=0;
+  }catch(e){}
+  _ccdMajAlertes();
+  return v;
+}
+// PURE au sens de l'écran : elle ne lit que ce qui est rendu. Une section vide
+// est masquée par la règle .cc-sect:has(>.cc-sect-c:empty), et son onglet
+// n'allume donc rien — c'est le comportement voulu.
+function _ccdMajAlertes(){
+  try{
+    for(const vue of CCD_VUES){
+      const b=document.querySelector('#ccd-ancres .pf-chip[data-vue="'+vue+'"]');
+      if(!b) continue;
+      const chaud=(CCD_ALERTES[vue]||[]).some(id=>{
+        const z=document.getElementById(id);
+        if(!z||!(z.textContent||'').trim()) return false;
+        const s=z.closest('.cc-sect');
+        return !(s&&s.style.display==='none');
+      });
+      if(chaud) b.setAttribute('data-alerte',''); else b.removeAttribute('data-alerte');
+    }
+  }catch(e){}
+}
+// Garde son role : mener a une section precise. Elle OUVRE d'abord l'onglet
+// qui la contient — sinon elle faisait defiler vers un bloc masque, et il ne
+// se passait rien.
 function ccdAller(id){
   const z=document.getElementById(id);
   if(!z) return;
+  try{ const v=z.closest('.ccd-vue'); if(v&&v.dataset.vue!==_ccdVue) ccdVue(v.dataset.vue); }catch(e){}
   _defiler(z);
-  _ccdAllumerPuce(id);
   if(arcReduit()) return;
   const t=z.closest('.cc-sect')?.querySelector('.cc-sect-t');
   if(!t) return;
@@ -18768,13 +18857,6 @@ function ccdAller(id){
   void t.offsetWidth;
   t.classList.add('cc-vise');
 }
-function _ccdAllumerPuce(id){
-  try{
-    document.querySelectorAll('#ccd-ancres .pf-chip').forEach(b=>{
-      b.classList.toggle('active',b.dataset.ancre===id);
-    });
-  }catch(e){}
-}
 // ARME UNE SEULE FOIS, et pas a chaque openClientDetail : la fonction est
 // rappelee toutes les 30 s par la boucle de synchro. L'observateur tolere une
 // cible non rendue — .cc-sect:has(>.cc-sect-c:empty) masque les sections vides.
@@ -18783,16 +18865,10 @@ function _ccdArmerAncres(){
     const sa=document.querySelector('#s-coach-client>.scroll-area');
     const nav=document.getElementById('ccd-ancres');
     if(!sa||!nav) return;
-    if(!window._ccdAncresObs&&typeof IntersectionObserver==='function'){
-      const cibles=['ccd-pourquoi','ccd-tendances','ccd-nutrition','ccd-poids','ccd-journal']
-        .map(id=>document.getElementById(id)).filter(Boolean);
-      if(cibles.length){
-        window._ccdAncresObs=new IntersectionObserver(entrees=>{
-          entrees.forEach(e=>{ if(e.isIntersecting) _ccdAllumerPuce(e.target.id); });
-        },{root:sa,rootMargin:'0px 0px -62% 0px',threshold:0});
-        cibles.forEach(c=>window._ccdAncresObs.observe(c));
-      }
-    }
+    // L'OBSERVATEUR DE DEFILEMENT A ETE RETIRE. Il allumait la puce de la
+    // section qu'on traversait ; les puces designent maintenant un ONGLET, et
+    // c'est ccdVue qui les commande. Le laisser aurait fait clignoter la barre
+    // au fil du pouce, sur des sections qui ne sont plus toutes affichees.
     // LA BARRE SE RESSERRE au-dela de 120 px, et se rouvre sous 60 px.
     // L'HYSTERESIS EST OBLIGATOIRE : sans elle la barre pompe a chaque
     // micro-mouvement du pouce. L'ecoute est PASSIVE et amortie par une frame :
@@ -18815,6 +18891,13 @@ function _ccdArmerAncres(){
 }
 function openClientDetail(cid,_refresh){
   setTimeout(_ccdArmerAncres,0);
+  // L'ONGLET, POSE APRES LE RENDU. _refresh est la boucle de synchro, qui
+  // repasse ici toutes les 30 s : elle ne doit PAS ramener le coach sur
+  // Entrainement pendant qu'il lit la nutrition. Une ouverture franche, elle,
+  // repart du premier onglet — d'un athlete a l'autre, le dernier onglet lu
+  // n'a aucune raison d'etre le bon.
+  const _memeAthlete=(currentClientId===cid);
+  setTimeout(()=>ccdVue((_refresh&&_memeAthlete)?_ccdVue:'entrainement'),0);
   setTimeout(_majLiensClasser,0);
   currentClientId=cid;
   const c=getOwnedClient(cid);
