@@ -10702,6 +10702,23 @@ function testExercices(){
           const trouve=[...t].filter(c=>{const n=c.codePointAt(0);
             return (n>=0x1F300&&n<=0x1FAFF)||(n>=0x2600&&n<=0x27BF);});
           return trouve.length?_echec('emoji present : '+trouve.join(' ')):true;})());
+        ok('LE TITRE EST ROUGE, halo compris',(()=>{
+          // Demande de Kevin, 25/08/2026. Le halo est le piege : les crans
+          // --halo-1/2/3 sont definis sur :root, ou leur var(--halo-c) s est
+          // deja resolu — au BLANC par defaut. Poser --halo-c dans une regle
+          // laisse donc un titre rouge cercle de blanc : ca ne se voit qu a
+          // l oeil, et pas du tout dans le code. On lit les deux.
+          const t=document.querySelector('.pr-titre');
+          if(!t) return _echec('le titre a disparu');
+          const s=getComputedStyle(t);
+          if(s.color.replace(/\s/g,'')!=='rgb(224,32,32)')
+            return _echec('le titre n est pas rouge : '+s.color);
+          if(!/224,\s*32,\s*32/.test(s.textShadow))
+            return _echec('le halo n est pas rouge : '+s.textShadow);
+          // Et pas un flou de 30 px : sur un mot de 17 px, le cran 2 se lit
+          // comme un rectangle de surlignage, pas comme une lueur.
+          const flou=parseFloat((s.textShadow.match(/(\d+(?:\.\d+)?)px\s*$/)||[0,99])[1]);
+          return flou<=12?true:_echec('halo trop large : '+flou+' px');})());
         ok('Les quatre pictogrammes sont des SVG du jeu d\'icones',(()=>{
           const b=document.querySelector('.pr-bloc');
           if(!b) return _echec('le bloc a disparu');
