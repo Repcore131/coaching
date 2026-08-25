@@ -1497,6 +1497,52 @@ html{scroll-behavior:smooth}
    d'une hauteur de barre entiere — le coach voyait encore la fin de la section
    precedente et devait remonter a la main. */
 .cc-sect{scroll-margin-top:12px}
+/* ── LA FICHE ATHLETE, RESSERREE ─────────────────────────────────────────
+   « C'est pas du tout pratique et utilisable », Kevin, 25/08/2026. Ranger en
+   onglets ne suffisait pas : chaque section portait un bandeau de titre de
+   40 px, en degrade sur toute la largeur, pour un contenu qui tient parfois en
+   une ligne — « Aucune seance cette semaine. ». Le decor pesait plus lourd que
+   l'information. */
+.ccd-compteurs .metric-box{padding:7px 4px}
+.ccd-compteurs .metric-val{font-size:19px;line-height:1.05}
+.ccd-compteurs .metric-label{font-size:8.5px;letter-spacing:.8px;margin-top:1px}
+.ccd-actions{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:7px;margin-bottom:14px}
+.ccd-actions .btn{margin:0;min-height:42px;padding:0 8px;font-size:var(--fs-2xs);letter-spacing:1px}
+/* Le bandeau passe de 16 a 13,5 px et perd deux pixels de haut de chaque cote.
+   Il reste reconnaissable — meme accent, meme trame — mais il ne domine plus
+   ce qu'il annonce. */
+/* UN CADRE DANS UN CADRE. Mesure sur la fiche rendue : CHAQUE section porte
+   un contenu qui a deja sa propre bordure, son propre fond et son propre
+   rayon — les fonctions de rendu emballent toutes leur bloc. La section
+   ajoutait par-dessus un second cadre, un second fond et 24 px de marge
+   interieure, pour ne rien dire de plus.
+   LE BANDEAU DE TITRE SUFFIT A ANCRER. Il garde son accent, sa trame et son
+   filet de gauche ; ce qui disparait, c'est le cadre qui l'entourait. */
+#s-coach-client .cc-sect{margin-bottom:10px;border:none;border-radius:0;
+  background:none;box-shadow:none;overflow:visible}
+#s-coach-client .cc-sect::before{display:none}
+#s-coach-client .cc-sect-t{padding:6px 11px;cursor:pointer;user-select:none;
+  border-radius:8px}
+#s-coach-client .cc-sect.replie>.cc-sect-t{margin-bottom:0}
+#s-coach-client .cc-sect-t>span{font-size:13.5px;letter-spacing:1.8px}
+#s-coach-client .cc-sect-c{padding:8px 0 0}
+/* ── LES SECTIONS SE REPLIENT ────────────────────────────────────────────
+   C'EST CE QUI REND LA FICHE PARCOURABLE. Vingt-sept sections deployees font
+   un rouleau qu'on ne lit pas ; repliees, elles font un sommaire qu'on
+   parcourt. Le chevron dit l'etat, et le titre entier est la zone de clic —
+   viser une fleche de 12 px au pouce ne marche pas.
+   L'etat est retenu par section, pas par athlete : un coach qui replie
+   « Prises » ne veut pas la revoir chez le suivant non plus. */
+#s-coach-client .cc-sect-t::before{content:'';position:relative;flex:0 0 auto;
+  width:0;height:0;margin-right:1px;
+  border-left:5px solid transparent;border-right:5px solid transparent;
+  border-top:6px solid rgba(255,255,255,.75);
+  transform:rotate(0deg);transition:transform var(--t-1) var(--c-out)}
+#s-coach-client .cc-sect.replie>.cc-sect-t::before{transform:rotate(-90deg)}
+#s-coach-client .cc-sect.replie>.cc-sect-c{display:none}
+@media (prefers-reduced-motion:reduce){
+  #s-coach-client .cc-sect-t::before{transition:none}
+}
 /* LA MARQUE D'ARRIVEE. ::before est libre — ::after porte deja les hachures. */
 .cc-sect-t.cc-vise::before{content:'';position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(90deg,rgba(255,255,255,.30),transparent 55%);
@@ -4627,24 +4673,29 @@ const COACH_PHOTO='icons/coach.jpg';
   </nav>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <div class="card" style="margin-bottom:16px">
-        <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:12px">
-          <div id="ccd-avatar" style="width:64px;height:64px;border-radius:var(--r-full);background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);overflow:hidden;flex-shrink:0"></div>
+      <!-- L'EN-TETE, EN UNE SEULE CARTE. Il occupait cinq cents pixels avant
+           la moindre information : une carte d'identite avec un avatar de
+           64 px, puis quatre grosses tuiles en 2x2. Sur un telephone, le coach
+           faisait defiler un ecran entier pour atteindre le contenu. Identite
+           sur une ligne, compteurs sur une rangee de quatre, meme carte. -->
+      <div class="card ccd-tete" style="margin-bottom:12px;padding:12px 13px">
+        <div style="display:flex;gap:11px;align-items:center">
+          <div id="ccd-avatar" style="width:44px;height:44px;border-radius:var(--r-full);background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:var(--fs-md);overflow:hidden;flex-shrink:0"></div>
           <div style="flex:1;min-width:0">
-            <div style="font-weight:800;font-size:var(--fs-lg);margin-bottom:2px" id="ccd-name"></div>
-            <div class="sub" style="font-size:var(--fs-xs);margin-bottom:6px" id="ccd-info"></div>
-            <div id="ccd-badge"></div>
+            <div style="font-weight:800;font-size:var(--fs-md);line-height:1.2" id="ccd-name"></div>
+            <div class="sub" style="font-size:var(--fs-2xs);line-height:1.35" id="ccd-info"></div>
           </div>
+          <div id="ccd-badge" style="flex-shrink:0"></div>
         </div>
-        <div id="ccd-profile-details" style="display:none;border-top:1px solid var(--surface-2);padding-top:10px;flex-wrap:wrap;gap:10px"></div>
-      </div>
-      <div class="metric-box-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-        <div class="metric-box"><div class="metric-val" id="ccd-streak">0</div><div class="metric-label">Semaines</div></div>
         <!-- Le taux de complétion, à côté de la série. Rempli par
              openClientDetail via htmlTauxCompletion. -->
-        <div class="metric-box" id="ccd-taux"></div>
-        <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
-        <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
+        <div class="metric-box-row ccd-compteurs" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:11px">
+          <div class="metric-box"><div class="metric-val" id="ccd-streak">0</div><div class="metric-label">Semaines</div></div>
+          <div class="metric-box" id="ccd-taux"></div>
+          <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
+          <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
+        </div>
+        <div id="ccd-profile-details" style="display:none;border-top:1px solid var(--surface-2);padding-top:10px;margin-top:10px;flex-wrap:wrap;gap:10px"></div>
       </div>
       <!-- CONTRE-INDICATIONS — épinglées en permanence, jamais repliées.
            Santé, allergies et TCA conditionnent toute la programmation : les
@@ -4662,11 +4713,15 @@ const COACH_PHOTO='icons/coach.jpg';
       <a id="ccd-wa" href="#" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;gap:8px;min-height:46px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:var(--r-3);color:var(--green);text-decoration:none;font-size:var(--fs-md);font-weight:800;letter-spacing:.5px"></a>
       <!-- Sans ce lien, la fonctionnalité ne servirait qu'aux comptes créés
            après ce commit : aucun athlète existant n'a de numéro. -->
-      <button id="ccd-wa-set" onclick="setClientPhone()" style="display:block;width:100%;background:none;border:none;color:var(--sub);font-family:inherit;font-size:var(--fs-xs);text-decoration:underline;cursor:pointer;min-height:34px;margin-bottom:10px">Enregistrer son numéro</button>
-      <div class="gap" style="margin-bottom:20px">
-        <button class="btn btn-red" onclick="openCoachSessions()"> Gérer le programme</button>
-        <button class="btn btn-outline" onclick="openApplyTemplate()">🗂️ Appliquer un modèle</button>
-        <button class="btn btn-outline" onclick="viewClientBilans()"> Bilans complets</button>
+      <button id="ccd-wa-set" onclick="setClientPhone()" style="display:block;width:100%;background:none;border:none;color:var(--text-dim);font-family:inherit;font-size:var(--fs-2xs);text-decoration:underline;cursor:pointer;min-height:28px;margin:0 0 10px">Enregistrer son numéro</button>
+      <!-- TROIS ACTIONS SUR UNE RANGEE, et non trois barres pleine largeur
+           empilees : elles mangeaient deux cents pixels a elles seules, au
+           milieu du chemin vers le contenu. Le programme garde le rouge — c'est
+           celle qu'on vient faire. -->
+      <div class="ccd-actions">
+        <button class="btn btn-red" onclick="openCoachSessions()">Programme</button>
+        <button class="btn btn-outline" onclick="openApplyTemplate()">Modèle</button>
+        <button class="btn btn-outline" onclick="viewClientBilans()">Bilans</button>
       </div>
       <!-- LES QUATRE ONGLETS. Vingt-sept sections sur un seul rouleau,
            c'etait une barre d'ancres qui menait a un fil interminable. Le
@@ -4708,9 +4763,12 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-c" id="ccd-sessions-recap"></div>
       </section>
 
-      <!-- PDF PROGRAMME — dépôt direct sans passer par l'éditeur -->
-      <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:12px">Programme PDF</div>
+      <!-- PDF PROGRAMME — ne s'affiche QUE si un fichier a ete depose. Le depot
+           est ferme depuis que les seances se composent dans l'application :
+           sans PDF au dossier, ce cadre n'annoncait qu'une fonctionnalite
+           retiree, en plein milieu du chemin vers le contenu. -->
+      <div id="ccc-pdf-bloc" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:10px">
+        <div style="font-size:var(--fs-2xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Programme PDF</div>
         <div id="ccc-pdf-content"></div>
       </div>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirProgrammePrint(getOwnedClient(currentClientId))">Fiche programme à imprimer</button>
@@ -15802,10 +15860,14 @@ function htmlTauxCompletion(u,compact){
   // TROIS LIGNES DANS UNE BOITE QUI EN AFFICHE DEUX PARTOUT AILLEURS cassaient
   // l alignement de toute la rangee. La fenetre passe en title, comme le fait
   // deja la branche compacte.
+  // LES MEMES CLASSES QUE SES TROIS VOISINES. Ecrite en styles en ligne, cette
+  // tuile ignorait le resserrement de la rangee : elle gardait ses 32 px de
+  // chiffre et son libelle sur deux mots, qui passait a la ligne et decalait
+  // toute la rangee. « Faites » suffit : les trois autres disent deja de quoi
+  // il s'agit.
   return `<div style="text-align:center" title="${escapeHtml(r.fenetre)}">
-    <div style="font-family:var(--pile-titre);font-size:32px;line-height:1;
-      color:${gris?'var(--text-faint)':'var(--text)'}">${escapeHtml(val)}<span style="font-size:18px;color:var(--sub)">${fl?' '+fl:''}</span></div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-top:6px">Séances faites</div>
+    <div class="metric-val" style="color:${gris?'var(--text-faint)':'var(--text)'}">${escapeHtml(val)}<span style="font-size:.56em;color:var(--sub)">${fl?' '+fl:''}</span></div>
+    <div class="metric-label">Faites</div>
   </div>`;
 }
 // Tri du portefeuille. L urgence reste le tri PAR DEFAUT : le taux est une
@@ -18783,6 +18845,95 @@ function getOwnedClient(cid,users){
 // (par _defiler, qui respecte la preference systeme la ou scrollIntoView ne le
 // fait pas), la marque d'arrivee sur le titre de la section atteinte, et la
 // puce qui s'allume — .pf-chip.active existait et n'etait posee nulle part.
+// ══════ REPLIER UNE SECTION DE LA FICHE ═══════════════════════════════════
+// « C'est pas du tout pratique et utilisable », Kevin, 25/08/2026. Les onglets
+// rangeaient, mais chaque onglet restait un rouleau de sections toutes
+// deployees : l'onglet Données en aligne onze.
+//
+// REPLIEES, ELLES FONT UN SOMMAIRE. C'est la différence entre une fiche qu'on
+// parcourt et une fiche qu'on subit.
+//
+// L'ETAT EST RETENU PAR SECTION, PAS PAR ATHLETE : un coach qui replie
+// « Prises » ne veut pas la revoir chez le suivant non plus. Un seul objet dans
+// le stockage local, une clef par section.
+const CCD_REPLI_CLE='rc_ccd_replis';
+// Repliees a la premiere ouverture : tout l'onglet Données, qui est le
+// fourre-tout, plus les trois blocs de reference qu'on ne consulte pas chaque
+// jour. Le reste s'ouvre — l'entrainement et la nutrition sont ce qu'on vient
+// voir.
+const CCD_REPLI_DEFAUT=['ccd-journal','ccd-bilans','ccd-poids','ccd-pp',
+  'ccd-photos-progression','ccd-prises','ccd-dossier','ccd-reds','ccd-securite',
+  'ccd-suspension','ccd-sessions-recap','ccd-rite','ccd-micro'];
+function _ccdReplis(){
+  try{ const o=JSON.parse(localStorage.getItem(CCD_REPLI_CLE)||'null');
+    return (o&&typeof o==='object')?o:null; }catch(e){ return null; }
+}
+function _ccdPoserRepli(id,replie){
+  try{
+    const o=_ccdReplis()||{};
+    o[id]=!!replie;
+    localStorage.setItem(CCD_REPLI_CLE,JSON.stringify(o));
+  }catch(e){}
+}
+// Applique l'etat retenu a toutes les sections rendues. Appelee a chaque
+// ouverture de fiche : les sections sont les memes elements d'un athlete a
+// l'autre, mais leur visibilite change, et une section masquee puis remontree
+// doit retrouver son etat.
+function ccdAppliquerReplis(){
+  try{
+    const memo=_ccdReplis();
+    document.querySelectorAll('#s-coach-client .cc-sect').forEach(s=>{
+      const c=s.querySelector(':scope>.cc-sect-c');
+      const id=c&&c.id; if(!id) return;
+      const r=memo&&Object.prototype.hasOwnProperty.call(memo,id)
+        ? !!memo[id]
+        : CCD_REPLI_DEFAUT.indexOf(id)>=0;
+      s.classList.toggle('replie',r);
+      const t=s.querySelector(':scope>.cc-sect-t');
+      if(t){
+        // Le titre EST le bouton : viser un chevron de 12 px au pouce ne marche
+        // pas. aria-expanded dit l'etat a qui n'a pas le chevron sous les yeux.
+        t.setAttribute('role','button');
+        t.setAttribute('tabindex','0');
+        t.setAttribute('aria-expanded',String(!r));
+      }
+    });
+  }catch(e){}
+}
+function ccdReplier(id){
+  const c=document.getElementById(id);
+  const s=c&&c.closest('.cc-sect');
+  if(!s) return false;
+  const r=!s.classList.contains('replie');
+  s.classList.toggle('replie',r);
+  const t=s.querySelector(':scope>.cc-sect-t');
+  if(t) t.setAttribute('aria-expanded',String(!r));
+  _ccdPoserRepli(id,r);
+  return r;
+}
+// UN SEUL ECOUTEUR, DELEGUE, ARME UNE FOIS. Poser un onclick sur chacun des
+// vingt-sept titres aurait demande de le reposer a chaque rendu — et un rendu
+// oublie aurait laisse une section qui ne repond plus.
+function _ccdArmerReplis(){
+  if(window._ccdReplisArmes) return;
+  const e=document.getElementById('s-coach-client');
+  if(!e) return;
+  window._ccdReplisArmes=true;
+  const bascule=ev=>{
+    const t=ev.target&&ev.target.closest&&ev.target.closest('.cc-sect-t');
+    if(!t||!e.contains(t)) return;
+    const c=t.parentElement&&t.parentElement.querySelector(':scope>.cc-sect-c');
+    if(!c||!c.id) return;
+    ev.preventDefault();
+    ccdReplier(c.id);
+  };
+  e.addEventListener('click',bascule);
+  e.addEventListener('keydown',ev=>{
+    if(ev.key!=='Enter'&&ev.key!==' ') return;
+    bascule(ev);
+  });
+}
+
 // ══════ LES QUATRE ONGLETS DE LA FICHE ATHLÈTE ════════════════════════════
 // Demande de Kevin, 25/08/2026 : ranger la fiche avec un onglet entraînement /
 // programme, un nutrition, un lifestyle et un données complémentaires.
@@ -18897,7 +19048,8 @@ function openClientDetail(cid,_refresh){
   // repart du premier onglet — d'un athlete a l'autre, le dernier onglet lu
   // n'a aucune raison d'etre le bon.
   const _memeAthlete=(currentClientId===cid);
-  setTimeout(()=>ccdVue((_refresh&&_memeAthlete)?_ccdVue:'entrainement'),0);
+  setTimeout(()=>{ _ccdArmerReplis(); ccdAppliquerReplis();
+    ccdVue((_refresh&&_memeAthlete)?_ccdVue:'entrainement'); },0);
   setTimeout(_majLiensClasser,0);
   currentClientId=cid;
   const c=getOwnedClient(cid);
@@ -18993,11 +19145,12 @@ function openClientDetail(cid,_refresh){
       const _tel=_telAthlete(c);
       const _pre=c.fname||'cet athlète';
       _wa.href=safeUrlRaw(waLink(_tel,'Salut '+(c.fname||'')+' 💪'));
-      _wa.innerHTML=_tel
-        ?'💬 Écrire à '+escapeHtml(_pre)
-        :'💬 Écrire à '+escapeHtml(_pre)+' <span style="font-weight:400;font-size:var(--fs-xs);color:var(--orange)">('
-          +(_telInutilisable(c)?'numéro sans indicatif pays':'numéro non enregistré')+')</span>';
-      _wa.style.display='flex';
+      _wa.innerHTML='💬 Écrire à '+escapeHtml(_pre);
+      // SANS NUMERO, LA BANNIERE NE S'AFFICHE PAS. Elle proposait d'ecrire a
+      // quelqu'un dont on n'a pas le numero, et le lien pour l'enregistrer
+      // s'affichait juste en dessous : deux lignes pour dire qu'il manque une
+      // donnee. Le lien seul le dit mieux, et il reste juste en dessous.
+      _wa.style.display=_tel?'flex':'none';
       const _def=document.getElementById('ccd-wa-set');
       if(_def) _def.textContent=_tel?'Modifier le numéro':'Enregistrer son numéro';
     }
@@ -21849,15 +22002,15 @@ function renderClientPdfCard(c){
   // Drapeau baisse : le bouton d'extraction ne s'affiche plus du tout. Le
   // PDF lui-meme reste consultable — c'est la fiche programme de l'athlete.
   const parseBtn=(hasPdf&&_importLegacyOuvert())?`<button onclick="triggerPdfProgrammeImport(${JSON.stringify(c.email)})" style="width:100%;margin-bottom:10px;padding:11px;background:linear-gradient(180deg,#0a1a00,#080f00);border:1px solid #1a3a0a;border-radius:var(--r-2);color:var(--green);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:7px"> Lire PDF → Importer les séances</button>`:'';
-  // Le DÉPÔT est fermé : les séances se composent dans l'application, et
-  // l'athlète n'a plus d'encart PDF sur son accueil — déposer ici n'aurait
-  // donc mené nulle part. Ce qui a déjà été déposé reste affiché, avec sa
-  // croix : un ancien dossier ne se retrouve pas coincé avec un fichier qu'on
-  // ne peut plus retirer.
-  el.innerHTML=`${existHtml}${parseBtn}
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">${hasPdf
-      ? 'Ce PDF n\'est plus montré à l\'athlète : les séances se composent désormais dans l\'application. Tu peux le retirer.'
-      : 'Le programme en PDF a été retiré : les séances se composent dans l\'application, dans l\'éditeur de séances.'}</div>`;
+  // SANS PDF AU DOSSIER, LE CADRE ENTIER DISPARAIT. Le depot est ferme : dire
+  // « le programme en PDF a ete retire » a chaque ouverture de fiche, en plein
+  // milieu du chemin vers le contenu, ne renseigne personne. Ce qui a deja ete
+  // depose reste affiche, avec sa croix — un ancien dossier ne se retrouve pas
+  // coince avec un fichier qu'on ne peut plus retirer.
+  const bloc=document.getElementById('ccc-pdf-bloc');
+  if(bloc) bloc.style.display=hasPdf?'block':'none';
+  el.innerHTML=hasPdf?`${existHtml}${parseBtn}
+    <div style="font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.6">Ce PDF n'est plus montré à l'athlète : les séances se composent désormais dans l'application. Tu peux le retirer.</div>`:'';
 }
 async function uploadCoachPdfInline(input){
   const f=input.files[0];if(!f) return;
@@ -55390,10 +55543,10 @@ function _htmlPhaseCoach(c){
         l'athlète. À suivre de près hors de l'application.
       </div>`;
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
-      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Phase</span>
-      ${p?`<span style="font-size:var(--fs-2xs);color:var(--text-faint)">${ordinalSemaine(semainesPhase(c))} · ${p.definiPar==='coach'?'définie par toi':'choisie par l\'athlète'}</span>`:''}
-    </div>
+    <!-- LE TITRE INTERNE A ETE RETIRE : le bandeau de la section dit deja
+         « PHASE », juste au-dessus. Il ne restait que la repetition. La mention
+         de semaine, elle, n'est ecrite nulle part ailleurs. -->
+    ${p?`<div style="text-align:right;font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:7px">${ordinalSemaine(semainesPhase(c))} · ${p.definiPar==='coach'?'définie par toi':'choisie par l\'athlète'}</div>`:''}
     <div style="display:flex;gap:6px;flex-wrap:wrap">${boutons}</div>
     ${p?'':`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px">Aucune phase définie. Les écrans de cet athlète restent neutres : aucune direction n'est présentée comme un progrès.</div>`}
     ${combi}

@@ -22415,6 +22415,72 @@ function testExercices(){
             return true;
           } finally { z.innerHTML=avant; if(sect) sect.style.display=dsp; _ccdMajAlertes(); }})());
 
+        ok('LES SECTIONS SE REPLIENT, ET L\'ETAT EST RETENU',(()=>{
+          // Vingt-sept sections deployees font un rouleau qu'on ne lit pas ;
+          // repliees, elles font un sommaire qu'on parcourt.
+          const sv=localStorage.getItem(CCD_REPLI_CLE);
+          try{
+            const c=document.getElementById('ccd-volume');
+            const s=c&&c.closest('.cc-sect');
+            if(!s) return _echec('section de reference introuvable');
+            const avant=s.classList.contains('replie');
+            const r1=ccdReplier('ccd-volume');
+            if(r1===avant) return _echec('la bascule n\'a rien change');
+            if(s.classList.contains('replie')!==r1)
+              return _echec('la classe ne suit pas la bascule');
+            // Le titre porte l'etat pour qui n'a pas le chevron sous les yeux.
+            const t=s.querySelector(':scope>.cc-sect-t');
+            if(!t||t.getAttribute('aria-expanded')!==String(!r1))
+              return _echec('aria-expanded ne dit pas l\'etat');
+            // RETENU : un coach qui replie une section ne veut pas la revoir.
+            const memo=JSON.parse(localStorage.getItem(CCD_REPLI_CLE)||'{}');
+            if(memo['ccd-volume']!==r1)
+              return _echec('l\'etat n\'est pas ecrit dans le stockage local');
+            ccdAppliquerReplis();
+            return s.classList.contains('replie')===r1?true
+              :_echec('l\'etat retenu n\'est pas reapplique');
+          } finally {
+            try{ if(sv==null) localStorage.removeItem(CCD_REPLI_CLE);
+                 else localStorage.setItem(CCD_REPLI_CLE,sv); }catch(e){}
+            try{ ccdAppliquerReplis(); }catch(e){}
+          }})());
+
+        ok('L\'ONGLET DONNEES S\'OUVRE REPLIE, l\'entrainement non',(()=>{
+          // Donnees est le fourre-tout : onze sections deployees d'un coup n'y
+          // servent personne. Entrainement et nutrition sont ce qu'on vient
+          // voir — les replier ferait un clic de plus a chaque ouverture.
+          const sv=localStorage.getItem(CCD_REPLI_CLE);
+          try{
+            localStorage.removeItem(CCD_REPLI_CLE);   // premiere ouverture
+            ccdAppliquerReplis();
+            const replie=id=>{ const c=document.getElementById(id);
+              const s=c&&c.closest('.cc-sect');
+              return s?s.classList.contains('replie'):null; };
+            for(const id of ['ccd-journal','ccd-bilans','ccd-poids','ccd-dossier'])
+              if(replie(id)===false) return _echec(id+' s\'ouvre deploye');
+            for(const id of ['ccd-nutrition','ccd-phase','ccd-volume'])
+              if(replie(id)===true) return _echec(id+' s\'ouvre replie');
+            return true;
+          } finally {
+            try{ if(sv==null) localStorage.removeItem(CCD_REPLI_CLE);
+                 else localStorage.setItem(CCD_REPLI_CLE,sv); }catch(e){}
+            try{ ccdAppliquerReplis(); }catch(e){}
+          }})());
+
+        ok('L\'EN-TETE TIENT EN UNE SEULE CARTE',(()=>{
+          // Il occupait cinq cents pixels avant la moindre information : une
+          // carte d'identite, puis quatre grosses tuiles en 2x2, en dehors.
+          const tete=document.querySelector('#s-coach-client .ccd-tete');
+          if(!tete) return _echec('la carte d\'en-tete a disparu');
+          for(const id of ['ccd-avatar','ccd-name','ccd-info','ccd-badge',
+                           'ccd-streak','ccd-taux','ccd-sessions','ccd-weight'])
+            if(!tete.querySelector('#'+id))
+              return _echec(id+' est sorti de la carte d\'en-tete');
+          // Les quatre compteurs sur UNE rangee, et non deux.
+          const g=tete.querySelector('.ccd-compteurs');
+          if(!g) return _echec('la rangee de compteurs a disparu');
+          return /repeat\(4,\s*1fr\)/.test(g.getAttribute('style')||'')
+            ?true:_echec('les compteurs ne sont plus sur une seule rangee');})());
         ok('ccdAller ouvre l\'onglet de sa cible avant d\'y mener',(()=>{
           // Sinon elle faisait defiler vers un bloc masque, et il ne se passait
           // rien du tout.
