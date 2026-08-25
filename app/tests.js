@@ -106,8 +106,71 @@ function testExercices(){
        videosPour('MONTEE DE CORDE').map(v=>v.lbl).join('/'));
     ok('Exercice sans vidéo : liste vide',videosPour('MACHINE INCONNUE DU FOND').length===0);
     ok('Nom vide : liste vide',videosPour('').length===0);
-    ok('URL reconstruite depuis l\'identifiant',
-       videosPour('CURL BARRE')[0]?.url==='https://youtu.be/iz4IwoFnKHA');
+    // CETTE ASSERTION EPINGLAIT UNE POSITION, PAS UNE RECONSTRUCTION. Elle
+    // exigeait que la PREMIERE video de CURL BARRE soit iz4IwoFnKHA. Le guide
+    // du 25/08/2026 en donne trois pour cet exercice — serree, large, normale —
+    // et iz4IwoFnKHA est passe troisieme. Rien n'etait casse : le coach avait
+    // reordonne son document. On verifie donc ce que la fonction PROMET, sur
+    // les 228 videos a la fois, plutot qu'un rang que le guide a le droit de
+    // changer.
+    ok('URL reconstruite depuis l\'identifiant, pour toutes les vidéos',(()=>{
+      let n=0;
+      for(const nom in EX_VIDEOS){
+        for(const v of videosPour(nom)){
+          n++;
+          if(v.url!=='https://youtu.be/'+v.id)
+            return _echec(nom+' : '+v.url+' pour l\'identifiant '+v.id);
+          // Onze caracteres : c'est la forme d'un identifiant YouTube. Un
+          // parametre ?si= qui aurait survecu a l'extraction se verrait ici.
+          if(!/^[A-Za-z0-9_-]{11}$/.test(v.id))
+            return _echec(nom+' : identifiant douteux « '+v.id+' »');
+        }
+      }
+      return n>=200?true:_echec('seulement '+n+' vidéos, le guide en porte 228');})());
+    ok('CURL BARRE porte bien ses trois versions du guide',(()=>{
+      const v=videosPour('CURL BARRE');
+      if(v.length!==3) return _echec(v.length+' vidéo(s) au lieu de 3');
+      const ids=v.map(x=>x.id);
+      return ids.indexOf('iz4IwoFnKHA')>=0?true
+        :_echec('la version « normale » a disparu : '+ids.join(','));})());
+
+    // ── LE LIEN VIDÉO ATTEINT LES PROGRAMMES DÉJÀ PUBLIÉS ────────────────
+    // Demande de Kevin, 25/08/2026 : mettre à jour les programmes des élèves
+    // avec les bons liens. RIEN N'EST RÉÉCRIT dans les dossiers : la vidéo se
+    // résout par le NOM à l'affichage, comme l'illustration. C'est ce qui rend
+    // la mise à jour instantanée pour tout le monde — et ce qui casserait en
+    // silence si quelqu'un remettait une lecture directe de ex.videoUrl.
+    ok('LE LIEN DU COACH PASSE TOUJOURS DEVANT CELUI DU GUIDE',(()=>{
+      // Il vise une exécution précise, parfois filmée pour cet athlète-là.
+      const v=videosExo({name:'BURPEES',videoUrl:'https://youtu.be/AAAAAAAAAAA'});
+      if(v.length!==1) return _echec(v.length+' vidéo(s), une seule attendue');
+      if(v[0].url.indexOf('AAAAAAAAAAA')<0) return _echec('le guide est passé devant : '+v[0].url);
+      return v[0].guide===false?true:_echec('le lien du coach est marqué comme venant du guide');})());
+    ok('SANS LIEN PROPRE, LE GUIDE PREND LE RELAIS',(()=>{
+      // C'est le cas de tous les programmes déjà publiés : le coach n'a jamais
+      // rempli le champ, et l'exercice n'avait donc aucune vidéo.
+      const v=videosExo({name:'BURPEES'});
+      if(!v.length) return _echec('aucune vidéo alors que le guide en porte une');
+      if(v[0].guide!==true) return _echec('la provenance n\'est pas marquée');
+      return v[0].url===videosPour('BURPEES')[0].url?true
+        :_echec('ce n\'est pas la vidéo du guide : '+v[0].url);})());
+    ok('Un exercice hors guide et sans lien n\'affiche aucune pastille',(()=>{
+      if(videosExo({name:'MACHINE INCONNUE DU FOND'}).length)
+        return _echec('une vidéo sortie de nulle part');
+      // Un rang de boutons morts dirait qu'il y a quelque chose à regarder.
+      return htmlVideosExo({name:'MACHINE INCONNUE DU FOND'})===''
+        ?true:_echec('des pastilles sont rendues sans vidéo');})());
+    ok('videosExo ne lève sur aucune entrée douteuse',(()=>{
+      // Cette fonction est appelée pour CHAQUE exercice de CHAQUE carte : une
+      // exception y viderait l'écran de la séance.
+      for(const e of [null,undefined,{},{name:null},{name:123},{videoUrl:'pas une url'},
+                      {name:'BURPEES',videoUrl:'javascript:alert(1)'}]){
+        try{ videosExo(e); htmlVideosExo(e); }
+        catch(err){ return _echec('exception sur '+JSON.stringify(e)+' : '+err.message); }
+      }
+      // Et une URL non exploitable ne doit pas ressortir en pastille.
+      const v=videosExo({name:'MACHINE INCONNUE DU FOND',videoUrl:'pas une url'});
+      return v.length===0?true:_echec('une URL invalide est proposée : '+JSON.stringify(v));})());
 
     // ── Régression : noms que le guide collait à leur description ──
     // Cinq exercices étaient enregistrés avec leur description accolée et ne

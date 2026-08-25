@@ -1,4 +1,14 @@
-const CACHE = 'repcore-v1050';
+const CACHE = 'repcore-v1051';
+// LA SEULE VERSION QUI NE REPORTE PAS LES ILLUSTRATIONS.
+// Le report d'un cache a l'autre traite /exercices/ en PRIORITAIRE : c'est
+// ce qui evite de retelecharger 3,3 Mo a chaque deploiement. Mais le
+// 25/08/2026, 273 photos ont ete remplacees SOUS LE MEME NOM DE FICHIER,
+// depuis le nouveau guide du coach. Reportees, elles auraient masque les
+// nouvelles pour toujours chez ceux qui avaient deja ouvert l'app.
+// On les laisse donc repartir du reseau — une fois, pour cette version-la.
+// Les versions suivantes reprennent le report normal : il suffit que cette
+// constante ne vaille plus CACHE.
+const PURGE_EXERCICES = 'repcore-v1051';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -181,7 +191,8 @@ self.addEventListener('activate', e => {
       // PRÉCÉDENTE. C'est aussi le seul fichier dont une copie périmée se
       // recopierait indéfiniment : chaque report la reconduirait.
       const _exclu = u => /\/index\.html$/.test(u) || /\/tests\.js$/.test(u)
-        || /\/sw\.js$/.test(u);
+        || /\/sw\.js$/.test(u)
+        || (PURGE_EXERCICES === CACHE && /\/exercices\//.test(u));
       // LA BASE ALIMENTAIRE D'ABORD, ET HORS BUDGET. Elle n'entre dans le
       // cache que par un prefetch explicite, et le report ne la connaissait
       // pas : elle passait après vendor/ et les 407 illustrations, donc

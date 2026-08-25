@@ -19652,108 +19652,214 @@ const EX_GUIDE_CARDIO='BATTLE ROPE~CORDE A SAUTER~ESCALIERS~LE SKIERG~RAMEUR~TAP
 // rattaché aux ABDOS.
 const EX_GUIDE_POSING='ABDOMINALS AND THIGHS~BACK DOUBLE BICEPS~FRONT DOUBLE BICEPS~FRONT LAT SPREAD~ICARUS POSE~MOON POSE~MOST MUSCULAR POSE~PRIEST MANTIS POSE~QUARTER TURN~REAR LAT SPREAD~SIDE CHEST~THE CHRISTMAS THREE~THE KNEEL~VACUUM POSE~ZYZZ POSE';
 
-// Videos YouTube tirees du guide du coach : 96 exercices, 104 videos.
+// Videos YouTube tirees du guide du coach : 198 exercices, 228 videos.
+// Releve le 25/08/2026 sur « Guide des methodes et des exercices de
+// musculation » — 102 exercices en gagnent une, 20 voient la leur changer.
 // Seul l'identifiant est stocke, les parametres ?si= des liens de partage
 // n'etant que du suivi. Les variantes gardent leur libelle (« prise serree »,
 // « poulie », « avec les jambes ») : c'est ce qui permet de proposer la bonne.
-// Les 504 autres lignes « Lien video » du guide portent un « H » : ce sont
-// les videos que le coach n'a pas encore tournees, pas des liens casses.
+// LES ENTREES ABSENTES DU NOUVEAU GUIDE SONT CONSERVEES : le coach a pu
+// retirer une ligne du document sans vouloir retirer la video de l'app.
+// Les autres lignes « Lien video » du guide portent un « H » : ce sont les
+// videos que le coach n'a pas encore tournees, pas des liens casses.
 const EX_VIDEOS={
   'ABDOMINALS AND THIGHS':'wdbFj-jhKl4',
   'ABDUCTEUR A LA MACHINE':'R_1BY8RDQu8',
+  'ARRIERE EPAULE A LA MACHINE':'aLF9qNYRMKU',
   'BACK DOUBLE BICEPS':'kuHtzeXfN_Y',
   'BARBELL THUSTERS':'L219ltL15zk',
-  'BATTLE ROPE':'UZTrXSjDH4E|cordes alternés',
-  'BURPEES':'Y5-5Nbf9o1k~ldOFlxX77Lg|variante sans la pompe',
+  'BARRE AU FRONT':'NKfXisq8jjk',
+  'BARRE AU FRONT BANC INCLINE':'hdnCvMzF620',
+  'BATTLE ROPE':'re5BD58vVzA|cordes alternés',
+  'BICEPS BRAS EN CROIX':'wjAiS5WcidU',
+  'BOBINE DANDRIEU':'atdyliYSDXI',
+  'BODYWEIGHT SKULL CRUSHER':'vnJDy1-yzj0',
+  'BURPEES':'xWWz7LMuUo8',
   'CHEST PRESS DEBOUT':'9d4TlKZxD70',
   'CHEST PRESS DEBOUT TRICEPS':'Ds15qWADF9Q',
-  'CHUTE DE BOX SAUT':'3JY0pxIPaC4',
+  'CHUTE DE BOX SAUT':'A1nnzQwqgfA',
   'CLEAN AND JERK':'9HyWjAk7fhY',
-  'CORDE A SAUTER':'PqWwILQRjJE',
+  'CORDE A SAUTER':'9m_rS_ICI08',
   'CRUNCH A LA POULIE':'mmGtxvXQpPg',
-  'CURL BARRE':'iz4IwoFnKHA|normale',
-  'CURL BARRE POULIE ELASTIQUE':'vii41RdW4PM|poulie',
-  'CURL LARRY SCOTT':'CEPo7pK2hWc|barre EZ',
-  'CURL LARRY SCOTT MACHINE GUIDEE':'wC0-TYPfhKw|double',
+  'CURL A LA POULIE BASSE EN UNILATERAL':'0bXQcxy_FEw',
+  'CURL ACCROUPI':'c77vxrRe7mg',
+  'CURL ALLONGE POULIE':'lUvCqi4BPE4',
+  'CURL ALLONGE POULIE HAUTE':'ggiXGXfOwhk',
+  'CURL BARRE':'lK0sjFDTKFE|serrée~oVJdzW5NR7c|large~iz4IwoFnKHA|normale',
+  'CURL BARRE BALLET SAC':'KOqhQSNSPLU',
+  'CURL BARRE POULIE ELASTIQUE':'vii41RdW4PM|poulie~oVJdzW5NR7c|élastique',
+  'CURL CONCENTRE':'LVl3f_xARBE',
+  'CURL HALTERES SUR BANC':'bhfIW9J1UsI',
+  'CURL LARRY SCOTT':'CEPo7pK2hWc|barre ez',
+  'CURL LARRY SCOTT HALTERES':'Ccp6KkDf0hw|unilatérale~UBIlOzpp2NY|double',
+  'CURL LARRY SCOTT MACHINE GUIDEE':'CqYKhuThjqs|unilatérale~wC0-TYPfhKw|double',
+  'CURL LARRY SCOTT POULIE BASSE':'sBfP7jVwqbw|unilatérale~9UO3nhbw4Us|double',
+  'CURL MARTEAU':'k0o-UsnVnHE|devant soi~poX9Ps1Purg|à lintérieur',
+  'CURL MARTEAU POULIE':'PIgRGPdPtRc|unilatérale~D3VZ8CY9AJY',
+  'CURL MARTEAU SUR BANC':'Rh9u6u2gMGs',
+  'CURL POULIE HAUTE':'ZQXaDtakh5E',
+  'CURL ROTATION':'9ft7IBuCYHI|alterné~AZEyqRwpXpo|ensemble',
+  'CURL ROTATION ASSIS':'ttrlcilhW-8|alterné~PZ3POAJfD2U|ensemble',
+  'CURL SUR BANC INCLINE':'ZGVxFWenBmU|alterné~WVyGDP9E3cc|ensemble',
+  'CURL SUR BANC POULIE':'Uj-Gg0kEdZA',
+  'CURL UNILATERAL POULIE BASSE AVEC COUDE EN ARRIERE':'PKjnEjzG-b8',
   'DEVELOPPE A LA MACHINE ASSIS':'sCD47T_vLTE',
   'DEVELOPPE A LA MACHINE CONVERGENTE HAUT DE PECS':'DVQ6nW2o7K4',
-  'DEVELOPPE COUCHE BARRE':'XkngJgHvL1Q|3 CT~wQd3fKk9IFU|version intermédiaire',
+  'DEVELOPPE COUCHE BARRE':'XkngJgHvL1Q|3 ct~wQd3fKk9IFU|version intermédiaire',
   'DEVELOPPE COUCHE HALTERE':'eRglSFbnRro',
+  'DEVELOPPE COUCHE MACHINE':'rukZ4RKk3XM|prise pronation',
+  'DEVELOPPE COUCHE PRISE SEREE':'m2W1WX_B-d8',
+  'DEVELOPPE COUCHE SMITH MACHINE':'ZNzkQdorY_s',
+  'DEVELOPPE DECLINE BARRE':'4QXM_sYrTYs',
+  'DEVELOPPE DECLINE HALTERE':'3642quR1wUQ',
+  'DEVELOPPE EPAULE AU LANDMINE':'zAKujF8uT5A',
+  'DEVELOPPE EPAULES BARRE':'uexfWeHcOzI',
+  'DEVELOPPE EPAULES HALTERES':'qNBafnsRHSk',
+  'DEVELOPPE INCLINE BARRE':'ppMl-G-czaI',
+  'DEVELOPPE INCLINE HALTERE':'22lgyhmVdwE',
   'DEVELOPPE INCLINE SMITH MACHINE':'Wku24QRTfIk',
+  'DEVELOPPE MILITAIRE BARRE':'d1lml54ghD4',
+  'DEVELOPPE MILITAIRE ELASTIQUE':'qRUPx5rP4lY',
+  'DEVELOPPE MILITAIRE HALTERES':'NE30b5jUlQk',
   'DEVELOPPE MILITAIRE MACHINE':'SSJHA6FsMrA',
+  'DEVELOPPE MILITAIRE SMITH MACHINE':'u7pE85qgADo',
+  'DEVELOPPE NUQUE BARRE':'yVzQwgnFIY0',
+  'DEVELOPPE NUQUE SMITH MACHINE':'O584VfZH_Tc',
+  'DIPS':'FzKJXdDd3sg|sans poids~XhukGFy1GIM|lesté~zSb4rtKsJcw|élastique',
   'DIPS ASSISTE':'0cVzj1QY22A',
+  'DIPS AUX ANNEAUX':'gi681RswruA',
+  'DIPS MACHINE':'OGIk68Ns8OE',
   'DIPS MACHINE GUIDEE':'0cVzj1QY22A',
+  'DIPS SUR BARRE':'x-w4hOidKiI|sans poids~8PyYBvQsMIU|lesté~dfwkWHaQeIA|élastique',
   'ECARTE MACHINE':'zaea9fS7ruI',
+  'ECARTE POULIE BASSE':'JHl-Z7oCKAk',
+  'ECARTE POULIE BASSE EN UNILATERAL':'FmaXbWtn7rI',
+  'ECARTE POULIE HAUT EN UNILATERAL':'yTuLxE8uaaM',
+  'ECARTE POULIE HAUTE':'oFuT5qWukeo',
   'ECARTE POULIE SUR BANC INCLINE':'nhvitIIWnkQ',
+  'ELEVATION ARRIERE EPAULE POULIE':'NrhkoAHnDXk',
+  'ELEVATION ARRIERE POULIE COUCHEE':'6AjckaPPW0Y',
+  'ELEVATION FRONTALE BOUTEILLES':'t2PDnkhsHRU',
+  'ELEVATION FRONTALE DISQUE DE POIDS':'DG-3UC75-qo',
+  'ELEVATION FRONTALE HALTERES':'03Q3Uo6gWB8',
   'ELEVATION FRONTALE MACHINE':'dFvS3-tNfsU',
+  'ELEVATION FRONTALE POULIE':'hyjPzqipGYU|poulie',
+  'ELEVATION FRONTALE SUR BANC INCLINE':'9MhPsjrAOzg',
+  'ELEVATION LATERALE ASSIS SUR BANC':'o-Jj6dJMdUo',
   'ELEVATION LATERALE HALTERE':'D0cB-ZHzv18|haltères',
+  'ELEVATION LATERALE HALTERE UNILATERAL':'wWpuwLUFNNU~aT6wLu1nJEE',
   'ELEVATION LATERALE MACHINE DEBOUT':'S6ya3suTFZg',
+  'ELEVATION LATERALE POULIE':'xbGG35-XBsE',
+  'ELEVATION LATERALE POULIE BASSE UNILATERAL':'FSO2KR7Wf_k',
+  'ELEVATION LATERALE SUR BANC A 60':'_3ieqodrwQE',
+  'ELEVATION Y':'UoAyRRuls_0',
   'ESCALIERS':'9hMV5iT03fU|1 marche',
   'EXTENSION DE HANCHE POULIE BASSE':'74GuQRTF9Dg',
+  'EXTENSION TRICEPS AU DESSU DE LA TETE':'NoqCbDfjhwo',
+  'EXTENSIONS POULIE BASSE TRICEPS':'MM4B1gnFr48',
+  'EXTENSIONS TRICEPS POULIE EN X':'23Py4_e49fQ',
+  'EXTENSIONS TRICEPS SUR LE COTE POULIE':'eag3x-Nai-I',
+  'EXTENSIONS VERTICALES TRICEPS':'8iptJB_eZGI',
+  'EXTENSIONS VERTICALES TRICEPS BARRE':'4hPD84bSQQc',
+  'EXTENSIONS VERTICALES TRICEPS UNILATERALE':'Xb2mXvnWkYc',
+  'EXTENTION TRICEPS POULIE BASSE':'NowCcJtxKYQ|banc incliné',
+  'EXTENTION TRICEPS SUR BANC':'MrjCpXXfYso|alterné~EZc87x3kUGE|ensemble',
+  'EXTENTION TRICEPS SUR BANC UNILATERALE':'MrjCpXXfYso',
+  'FACE PULL':'xDce-6LlSdQ',
   'FACE PULL ASSIS':'ABbvATHFdCw',
   'FENTES HALTERE':'hvfdPZgQIL8',
+  'FLEXION AVANT BRAS A LA BARRE DEBOUT':'tfnq_ivEhk0',
+  'FLEXION AVANT BRAS A LA BARRE SUR BANC PRONATION':'d0xDarAqFtw',
+  'FLEXION AVANT BRAS A LA BARRE SUR BANC SUPINATION':'gnYulhY7BBs',
+  'FLEXION AVANT BRAS UNILATERAL PRISE NEUTRE':'d8_b34NFj1Y',
   'FRONT DOUBLE BICEPS':'ibtM-lYpuWY',
   'FRONT LAT SPREAD':'RLT7zJGXiho',
   'HIP THRUST':'33V0XER5Msw',
+  'HIP THRUST MACHINE':'npL42UPPf-w',
   'HIP THRUST MACHINE 1':'npL42UPPf-w',
   'ICARUS POSE':'jWoFo0-Jd8c',
   'ISO LATERAL FRONT LAT PULLDOWN':'KIudKxRZxjg',
-  'KETTLEBELL SWING':'1cVT3ee9mgU',
+  'KETTLEBELL SWING':'mkB6XT_Q8xI',
+  'KICKBACK HALTERE':'r6VgOCmmtHk',
+  'KICKBACK POULIE':'pMDoP3lJ3Wc',
   'LATERAL RAISE':'3GMXX4YncEg',
   'LE SKIERG':'44YUR_dln0k',
   'LEG CURL ALLONGE':'E6BljjBe75o',
   'LEG CURL ASSIS':'RhyYQ8t8wnQ',
   'LEG EXTENSION':'6iwU5rNMPyY',
   'LEG EXTENTION':'6iwU5rNMPyY',
-  'MARCHE DU FERMIER':'aCPBG3f2STY|haltères~O5jMg81036A|strongman',
+  'MARCHE DU FERMIER':'lpGhRqO0SdM|haltères',
   'MOLLETS A LA SMITH MACHINE':'lD4CUFENxUw',
   'MONTEE DE CORDE':'Pa4QUC9AvuA|avec les jambes~784mHikopwc|sans les jambes',
   'MOON POSE':'20tiRyvSfs8',
   'MOST MUSCULAR POSE':'wGfhU25o5dU',
-  'MUSCLE UP':'oVBMHBa-_WM',
+  'MUSCLE UP':'yiEeE7zl4Nk',
+  'OISEAUX BUSTE PENCHE':'LVB0b1hqS18',
   'OISEAUX BUSTE PENCHE MACHINE':'I_4JAVPasCg',
+  'OISEAUX BUSTE PENCHE POULIE':'s8PvcZ6uoJQ',
+  'OISEAUX BUSTE PENCHE SUR BANC':'yyQTOUang8U',
+  'OISEAUX SUR BANC INCLINE':'BCmcPvPy8UU',
   'PENDULUM SQUAT':'G62rKjS1uZg',
+  'PIKE PUSH UP':'yck9CKTGRKg',
   'POMPES SAUTEES ALTERNEES SUR BALLON':'AInbAD5dEmw',
+  'POMPES SERREES':'8aHryrZXbl8',
   'POWER CLEAN':'O32-Ae8SNIc',
   'PRESSE A CUISSE INCLINE':'MYC-woyTDjY|pieds en haut~1GMcszqB5nU|pieds au milieu',
   'PRIEST MANTIS POSE':'JXNO7K3xai4',
   'PULL OVER SUR BANC INCLINE':'WL64uMYteHk|prise neutre',
   'PULL OVER UNILATERAL':'6Cl7Ap-ZVKA',
-  'PUSH PRESS':'iaBVSJm78ko',
+  'PUSH PRESS':'Dc9_4c3QHAY',
   'QUAD STOMP':'f_BLLy-sWRc',
   'QUARTER TURN':'IeoES8f2pzI',
   'RAMEUR':'5dszXoVUBpE',
   'REAR LAT SPREAD':'aP6zi0nLoRQ',
-  'RENVERSEMENT DE PNEU':'aEL9f81F8Do',
+  'RENVERSEMENT DE PNEU':'oLRpfZ9tBAg',
+  'REVERSE CURL BARRE':'gOpm8cGMcro',
+  'REVERSE CURL HALTERE':'NkDpQA4Z65Q|alterné~jD50Edvd3Fk|ensemble',
   'ROWING HALTERE UNILATERAL SUR BANC':'3XL0po4GBf8|prise neutre',
   'ROWING POWER SMITH DORS':'aQRo16_sOic',
   'ROWING POWER SMITH TRAP':'LNwMKf14RA8',
   'ROWING TRAPEZES POULIE HAUTE':'aUmInYG11Og',
-  'SAUT SUR LES COTES':'sxjMnCx9Tbg',
-  'SAUTS SUR PLACE AVEC ELASTIQUE':'lz6BM6WyJ0k',
-  'SHOULDER PRESS':'SSJHA6FsMrA',
+  'SAUT SUR LES COTES':'oxbIJkTtd1I',
+  'SAUTS SUR PLACE AVEC ELASTIQUE':'MqBV79Kh2DM',
+  'SHOULDER PRESS':'iKyWSbytzwc~SSJHA6FsMrA',
+  'SHOULDER PRESS PURE METEOR':'F33kVe_jihM',
   'SIDE CHEST':'Z-DvXUks_HA',
   'SIDE TRICEPS':'lZhMqbyAF-c',
   'SLEDGE':'gdtO9qeaiCE|Pull~QwscR2BhdEg|Push',
+  'SLEDGE PUSH':'v3gLFHixRZw~erTO5v_jUTw',
   'SNATCH':'UBc5N_-xdqo',
   'SOULEVE DE TERRE ROUMAIN HALTERES':'KZXyPNBJZ1c',
+  'SPIDER CURL':'NhQbhiiMeKk',
+  'SPIDER CURL HALTERE':'SaG0U9Zigrs',
+  'SPIDER CURL HALTERE UNILATERALE':'rSnAnAmJ-6I',
   'SQUAT':'r9S7bn3AQB8|hight barre',
   'SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES':'lUuPEpfdgrs',
   'SQUAT BULGAR HALTERE':'QqhYbQ8JV9s|grand pas',
-  'TAPIS DE COURSE':'_ynGR8PzXMo|Courir~1Vd_9cmUGek|Marché avec pentes~M3lUil8OpVs',
+  'TAPIS DE COURSE':'_ynGR8PzXMo|courir~1Vd_9cmUGek|marché avec pentes~M3lUil8OpVs',
   'THE CHRISTMAS THREE':'N667RCOkLbI',
   'THE KNEEL':'EYMaT5QRp70',
   'TIRAGE HORIZONTAL SERRE':'br_sJJabsoY|classique',
+  'TIRAGE MENTON BALET SAC':'9_WVB00Iw34',
+  'TIRAGE MENTON BARRE':'nFIOrSLImAY',
+  'TIRAGE MENTON POULIE':'G_WDCDUx7NI',
   'TIRAGE POITRINE LARGE':'Xj79RNchjHY',
   'TIRAGE POITRINE LARGEUR EPAULE':'T--lg679EZM|classique',
   'TIRAGE POITRINE SUPINATION':'ywyizyYwIDM',
   'TIRAGE UNILATERAL SUR BANC':'A8Yz6smLOxY',
+  'TRACTION PRISE SERREE':'PEdscaySscs~9jKSAZs1O2E|lesté',
   'TRACTIONS LESTE':'njg3c4HgmBk',
+  'TRICEPS A LA POULIE HAUTE BARRE':'TgLkrK3UE2A',
   'TRICEPS A LA POULIE HAUTE CORDE':'vzfUXQdMKdg|1 corde',
+  'TRICEPS A LA POULIE HAUTE POIGNEE':'fs0vfBZJn4k',
+  'TRICEPS A LA POULIE HAUTE UNILATERALE':'qmD9EgEX4UQ',
+  'TRICEPS DIPS':'k1w4e_5yakI',
   'VACUUM POSE':'-BCjyR3GqeM',
   'VELO D INTERIEUR':'T8rfSakJhF0',
-  'VELO ELLIPTIQUE':'K2bR5HqYdDo',
-  'WALL BALL':'fpUD0mcFp_0',
+  'VELO DINTERIEUR':'T8rfSakJhF0',
+  'VELO ELLIPTIQUE':'K2bR5HqYdDo~VrSUAg_CAaE~MCLtFq7UZbc',
+  'VIKING PRESS PRISE NEUTRE':'-gTayX931dM~aMjqmQepfMI',
+  'WALL BALL':'kXKncyavm5s',
   'ZYZZ POSE':'CmsLRVuHKNg'
 };
 
@@ -26103,16 +26209,35 @@ function _apLigne(ex,i){
   // VIDE dans un chemin fermé par LEGACY_PDF_IMPORT. `ex.description` fait le
   // même travail, et lui est saisissable.
   const note=(ex.description||'').trim();
+  // LA VIGNETTE S'AGRANDIT AU DOIGT. Demande de Kevin, 25/08/2026 : « quand
+  // les gens arrivent sur la liste des exos de la séance, la possibilité
+  // d'agrandir l'image en cliquant dessus ». La visionneuse plein écran
+  // existait déjà — elle servait l'encart CONSIGNE pendant la séance ; il n'y
+  // avait qu'à lui donner cette entrée-là.
+  //
+  // LE CLIC NE DOIT PAS DÉPLIER LA LIGNE. Le bouton vit dans le <summary> d'un
+  // <details> : sans preventDefault, chaque agrandissement ouvrirait ou
+  // refermerait la fiche derrière la visionneuse, et on la retrouverait dans
+  // l'autre état en fermant. stopPropagation seul n'y suffit pas — c'est le
+  // comportement natif du <summary> qu'il faut couper, pas la remontée.
+  //
   // LA VIGNETTE NE RECADRE PLUS. `cover` coupait les bords de chaque
   // illustration : sur un pendulum squat, la machine sortait du cadre et il ne
   // restait qu'un morceau de cuisse. `contain` montre l'image ENTIÈRE, quitte
   // à laisser du blanc autour, et le carré passe de 52×38 à 76×76 — c'est la
   // vignette qu'on reconnaît d'un coup d'œil en salle, pas une décoration.
+  const _nomEx=String(ex.name||'');
   const vign=img
-    ? `<div style="position:relative;flex-shrink:0;width:76px;height:76px;border-radius:var(--r-3);
-         background:transparent;border:1px solid rgba(255,255,255,.10);overflow:hidden">
+    ? `<button type="button" onclick="event.preventDefault();event.stopPropagation();ouvrirIllustration('${escapeHtml(_nomEx).replace(/'/g,"&#39;")}')"
+         aria-label="Agrandir l'illustration de ${escapeHtml(_nomEx)}"
+         style="position:relative;flex-shrink:0;width:76px;height:76px;padding:0;
+         border-radius:var(--r-3);background:transparent;cursor:zoom-in;
+         border:1px solid rgba(255,255,255,.10);overflow:hidden;line-height:0">
         <img src="${escapeHtml(img)}" alt="" loading="lazy" width="76" height="76"
-          style="width:100%;height:100%;object-fit:contain;display:block"></div>`
+          style="width:100%;height:100%;object-fit:contain;display:block">
+        <span aria-hidden="true" style="position:absolute;right:3px;bottom:3px;
+          width:17px;height:17px;border-radius:var(--r-1);background:rgba(0,0,0,.62);
+          color:#e8e8e8;font-size:11px;line-height:17px;text-align:center">⤢</span></button>`
     : `<div style="flex-shrink:0;width:76px;height:76px;border-radius:var(--r-3);
          background:linear-gradient(145deg,#181818,#0d0d0d);border:1px solid var(--border);
          display:flex;align-items:center;justify-content:center;color:var(--border);
@@ -26150,6 +26275,10 @@ function _apLigne(ex,i){
       ${l('RIR',ex.rir)}
       ${note?`<div style="margin-top:8px;font-size:var(--fs-sm);color:#bbb;line-height:1.6;
         border-left:2px solid var(--border);padding-left:9px">${escapeHtml(note)}</div>`:''}
+      <!-- LA VIDEO DU GUIDE ARRIVE JUSQU'ICI. Cet ecran n'en montrait aucune :
+           un athlete qui prepare sa seance la veille n'avait nulle part ou
+           verifier l'execution d'un mouvement qu'il ne connait pas. -->
+      ${htmlVideosExo(ex)}
     </div>
   </details>`;
 }
@@ -26285,6 +26414,49 @@ function _migrateFoundationIfNeeded(){
   _pushSessionsHistory(currentUser); // rollback possible depuis l'historique
   currentUser.sessions_config=null;initSessionsConfig();
 }
+// ══════ LES VIDÉOS D'UN EXERCICE, TELLES QU'ON DOIT LES MONTRER ══════
+// Demande de Kevin, 25/08/2026 : « les élèves affiliés à un coach qui utilise
+// déjà l'application, mets à jour leurs programmes avec les bonnes images et
+// liens vidéo ».
+//
+// RIEN N'EST RÉÉCRIT DANS LES DOSSIERS, ET C'EST TOUT L'INTÉRÊT. La vidéo se
+// résout PAR LE NOM au moment de l'affichage, exactement comme l'illustration
+// le fait déjà (voir illustrationDe). Publier un guide à jour met donc à jour
+// tous les programmes déjà en circulation d'un coup, sans migration, sans
+// écriture, et sans qu'un athlète hors ligne se retrouve avec un dossier à
+// moitié converti. Un guide corrigé demain les corrigera tous de la même façon.
+//
+// LE LIEN POSÉ PAR LE COACH GAGNE TOUJOURS. Il vise une exécution précise,
+// parfois filmée pour cet athlète-là ; une correspondance de nom ne doit
+// jamais passer devant. C'est la même règle que celle de l'ancien import.
+function videosExo(ex){
+  const propres=[];
+  for(const champ of ['videoUrl','videoUrl2']){
+    let u=''; try{ u=normaliserUrlVideo((ex||{})[champ]); }catch(e){ u=''; }
+    if(u) propres.push({url:u,lbl:'',guide:false});
+  }
+  if(propres.length) return propres;
+  try{
+    return videosPour((ex||{}).name).map(v=>({url:v.url,lbl:v.lbl||'',guide:true}));
+  }catch(e){ return []; }
+}
+// Les pastilles. Rendent une chaîne VIDE sans vidéo : un rang de boutons morts
+// dirait qu'il y a quelque chose à regarder.
+function htmlVideosExo(ex){
+  const v=videosExo(ex);
+  if(!v.length) return '';
+  // Le libellé du guide ne s'affiche que s'il y a DEUX versions à distinguer.
+  // Seul, « prise serrée » sur l'unique vidéo d'un exercice n'apprend rien.
+  const nommer=(x,i)=>(v.length>1&&x.lbl)?x.lbl.toUpperCase():('VIDÉO '+(i+1));
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">`
+    +v.map((x,i)=>`<a href="${safeUrl(x.url)}" target="_blank" rel="noopener"
+        style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;
+        border:1px solid #3a0a0a;border-radius:var(--r-2);padding:5px 10px;
+        color:var(--red-light);font-size:var(--fs-xs);font-weight:800;
+        text-decoration:none;letter-spacing:1px">▶ ${escapeHtml(nommer(x,i))}</a>`).join('')
+    +`</div>`;
+}
+
 function _renderExCard(ex,idx){
   const pr=parseReps(ex.reps);
   const badge=pr.type==='degressive'?`<span style="background:#3a0a00;color:#fca5a5;padding:2px 7px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase">DÉGRESSIVE</span>`:
@@ -26296,10 +26468,7 @@ function _renderExCard(ex,idx){
       <div class="ex-detail" style="margin-top:3px">${ex.series} séries · ${escapeHtml(ex.reps)} reps${ex.repos?' · '+escapeHtml(ex.repos):''}</div>
       ${badge?`<div style="margin-top:5px">${badge}</div>`:''}
       ${ex.description?`<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px;line-height:1.5;border-left:2px solid var(--border);padding-left:8px">${escapeHtml(ex.description)}</div>`:''}
-      ${(ex.videoUrl||ex.videoUrl2)?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-        ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;border:1px solid #3a0a0a;border-radius:var(--r-2);padding:5px 10px;color:var(--red-light);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1px">▶ VIDÉO 1</a>`:''}
-        ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;border:1px solid #3a0a0a;border-radius:var(--r-2);padding:5px 10px;color:var(--red-light);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1px">▶ VIDÉO 2</a>`:''}
-      </div>`:''}
+      ${htmlVideosExo(ex)}
     </div>
   </div></div>`;
 }
