@@ -55337,6 +55337,16 @@ function coachSetPhase(t){
   const envoi=CLOUD.pushOne(c.email,c);
   renderPhaseCoach(c);
   try{ renderPoidsCoach(c); }catch(e){}
+  // ET LA NUTRITION. Signale par Kevin le 25/08/2026 : « je viens de cliquer
+  // sur prise de masse, les chiffres n'ont pas bouge ». La phase commande le
+  // delta calorique et la fourchette de vitesse ; en calcul automatique, les
+  // cibles en dependent directement. Ce bloc redessinait la phase et le poids
+  // et s'arretait la : la grille gardait les chiffres de la phase precedente,
+  // et le premier enregistrement les aurait envoyes tels quels.
+  //
+  // Les autres reglages — proteines, lipides, correction, vitesse — appelaient
+  // deja ce rendu depuis leur propre gestionnaire.
+  try{ renderCoachNutriSection(c); }catch(e){}
   toastSync(ok,envoi,phaseCourante(c)?PHASES[t].lib+' enregistrée':'Phase retirée','la phase est');
 }
 

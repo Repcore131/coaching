@@ -22387,6 +22387,33 @@ function testExercices(){
           if(!(bs.on.g-bs.off.g>0)) return _echec('l\'ecart disparait quand le plancher mord');
           return true;})());
 
+        ok('CHANGER DE PHASE RECALCULE LES CIBLES',(()=>{
+          // Signale par Kevin le 25/08/2026 : « je viens de cliquer sur prise de
+          // masse, les chiffres n'ont pas bouge ». coachSetPhase redessinait la
+          // phase et le poids, et s'arretait la : la grille gardait les chiffres
+          // de la phase precedente, et le premier enregistrement les aurait
+          // envoyes tels quels a l'athlete.
+          const c=poser('seche');
+          // On repasse par le vrai dossier : coachSetPhase ecrit dans la carte.
+          const u=DB.get('users')||{}; u['ap@t.fr']=c; DB.set('users',u);
+          currentUser={id:'Cp',email:'cp@t.fr',role:'coach'};
+          u['cp@t.fr']=currentUser; DB.set('users',u);
+          if(!c.nutrition) c.nutrition={};
+          c.nutrition.manuel=false;
+          renderCoachNutriSection(getOwnedClient('Ap'));
+          const lire=()=>{ const e=document.getElementById('ccd-on-kcal');
+            return e?Number(e.value):null; };
+          const avant=lire();
+          if(!(avant>0)) return _echec('aucune cible avant le changement');
+          coachSetPhase('masse');
+          const apres=lire();
+          if(!(apres>0)) return _echec('plus aucune cible apres le changement');
+          if(apres===avant) return _echec('les cibles n\'ont pas bouge : '+avant+' kcal');
+          // Une prise de masse mange PLUS qu'une seche. Verifier seulement que
+          // « ca bouge » laisserait passer un recalcul qui part dans le mauvais
+          // sens.
+          return apres>avant?true
+            :_echec('la prise de masse mange moins que la seche : '+apres+' contre '+avant);})());
         ok('UNE DIETE NON CYCLEE GARDE SES DEUX JOURNEES IDENTIQUES',(()=>{
           // Le correctif ne doit pas introduire d'ecart la ou le coach n'en veut
           // aucun.
