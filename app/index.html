@@ -47359,8 +47359,25 @@ function besoinsProposes(user,opts){
     const j=_relevePlancher(_bloc(r.p,r.l,r.g),user);
     on=j; off=Object.assign({},j);
   } else {
-    on=_relevePlancher(_bloc(r.p,r.l,Math.round(r.g*(1+CYCLE_GLUC))),user);
-    off=_relevePlancher(_bloc(r.p,r.l,Math.round(r.g*(1-CYCLE_GLUC))),user);
+    // LE PLANCHER ÉCRASAIT LE CYCLE. Signalé par Kevin le 25/08/2026 : « pas
+    // normal que ce soit les mêmes chiffres en ON et OFF ».
+    //
+    // Les deux journées étaient relevées SÉPARÉMENT. Sur une sèche un peu
+    // marquée, les deux tombaient sous le plancher, et _relevePlancher les
+    // remontait toutes les deux à la MÊME valeur : deux colonnes identiques,
+    // un cycle annoncé qui n'existait plus, et rien à l'écran pour le dire.
+    //
+    // On relève donc la journée BASSE, et on reporte le même nombre de grammes
+    // sur la haute. L'écart voulu — deux fois CYCLE_GLUC des glucides de base —
+    // est conservé exactement, aucune journée ne passe sous le plancher, et le
+    // supplément est le même des deux côtés. Le total servi monte d'autant,
+    // mais c'est déjà ce que la ligne « kcal servies » annonce, et le
+    // commentaire de deltaServi juste en dessous le dit depuis toujours.
+    const gOn=Math.round(r.g*(1+CYCLE_GLUC)), gOff=Math.round(r.g*(1-CYCLE_GLUC));
+    const offRel=_relevePlancher(_bloc(r.p,r.l,gOff),user);
+    const lift=offRel.g-gOff;                 // 0 quand le plancher ne mord pas
+    off=offRel;
+    on=_relevePlancher(_bloc(r.p,r.l,gOn+lift),user);
   }
   // La vitesse ANNONCÉE est celle que produit le total RÉELLEMENT servi — pas
   // celle visée, pas même celle retenue après plafond. Quand le plancher relève

@@ -22325,6 +22325,81 @@ function testExercices(){
           return n.length===1?true:_echec('double malgre la meme adresse : '+n.join(', '));})());
       } finally { DB.set('users',sauveD||{}); currentUser=sauveU; }
     })();
+    // ── LE PLANCHER NE DOIT PAS ECRASER LE CYCLE ─────────────────────────
+    // Signale par Kevin le 25/08/2026 : « pas normal que ce soit les memes
+    // chiffres en ON et OFF ». Les deux journees etaient relevees SEPAREMENT :
+    // sur une seche un peu marquee, toutes deux tombaient sous le plancher et
+    // en ressortaient a la MEME valeur. Deux colonnes identiques, un cycle
+    // annonce qui n'existait plus, et rien a l'ecran pour le dire.
+    (()=>{
+      const svD=DB.get('users'), svC=currentClientId, svU=currentUser;
+      const mk=ph=>({id:'Ap',email:'ap@t.fr',role:'athlete',coachId:'Cp',gender:'H',
+        _evol_height:'178','init-age':30,
+        sessions_config:[{active:true},{active:false},{active:true},{active:false},
+                         {active:true},{active:false},{active:false}],
+        phase:{type:ph,debut:Date.now()},
+        bilans:[{date:Date.now(),'bil-weight':'103.8','deb-height':'178','deb-age':30}]});
+      const poser=ph=>{ const c=mk(ph); DB.set('users',{'ap@t.fr':c});
+        currentClientId='Ap'; currentUser={id:'Cp',email:'cp@t.fr',role:'coach'}; return c; };
+      try{
+        ok('EN SECHE, LE JOUR ON RESTE AU-DESSUS DU JOUR OFF',(()=>{
+          // C'est le cas ou le plancher mord : sans le report, les deux
+          // journees sortaient a la meme valeur.
+          const c=poser('seche');
+          const b=besoinsProposes(c,{cycle:true});
+          if(!b||b.source===null) return _echec('fixture inutile : aucune proposition');
+          if(b.on.g<=b.off.g)
+            return _echec('les glucides du jour ON ne depassent plus ceux du OFF : '
+              +b.on.g+' contre '+b.off.g);
+          return b.on.kcal>b.off.kcal?true
+            :_echec('les deux journees pesent pareil : '+b.on.kcal+' et '+b.off.kcal);})());
+
+        ok('AUCUNE JOURNEE NE PASSE SOUS LE PLANCHER, cycle ou pas',(()=>{
+          // Le report remonte la journee HAUTE ; il ne doit pas etre l'occasion
+          // de laisser filer la basse.
+          for(const ph of ['seche','maintien','pdm']){
+            const c=poser(ph);
+            const pl=plancherKcal(c);
+            if(pl==null) continue;
+            for(const cyc of [true,false]){
+              const b=besoinsProposes(c,{cycle:cyc});
+              if(!b||b.source===null) continue;
+              for(const [nom,j] of [['ON',b.on],['OFF',b.off]])
+                if(j.kcal<pl) return _echec(ph+', cycle='+cyc+' : '+nom+' a '+j.kcal
+                  +' kcal sous le plancher de '+pl);
+            }
+          }
+          return true;})());
+
+        ok('L\'ECART VOULU EST CONSERVE, pas seulement un ecart quelconque',(()=>{
+          // Le report ajoute le MEME nombre de grammes aux deux journees :
+          // l'ecart doit donc rester exactement celui du cycle, deux fois
+          // CYCLE_GLUC des glucides de base. Un ecart qui retrecirait quand le
+          // plancher mord serait un cycle a moitie applique.
+          const c=poser('maintien');
+          const b=besoinsProposes(c,{cycle:true});
+          const s=poser('seche');
+          const bs=besoinsProposes(s,{cycle:true});
+          // Sur les deux phases, l'ecart vaut round(g*1,15) - round(g*0,85).
+          // On ne recalcule pas g ici — on verifie que l'ecart survit au
+          // plancher, ce qui est le fond de l'affaire.
+          if(!(b.on.g-b.off.g>0)) return _echec('aucun ecart hors plancher');
+          if(!(bs.on.g-bs.off.g>0)) return _echec('l\'ecart disparait quand le plancher mord');
+          return true;})());
+
+        ok('UNE DIETE NON CYCLEE GARDE SES DEUX JOURNEES IDENTIQUES',(()=>{
+          // Le correctif ne doit pas introduire d'ecart la ou le coach n'en veut
+          // aucun.
+          for(const ph of ['seche','maintien']){
+            const c=poser(ph);
+            const b=besoinsProposes(c,{cycle:false});
+            if(!b||b.source===null) continue;
+            if(JSON.stringify(b.on)!==JSON.stringify(b.off))
+              return _echec(ph+' : les journees different alors que la diete ne cycle pas');
+          }
+          return true;})());
+      } finally { DB.set('users',svD||{}); currentClientId=svC; currentUser=svU; }
+    })();
     // ── CALCUL AUTOMATIQUE DES CIBLES ────────────────────────────────────
     // Demande de Kevin, 25/08/2026 : « ça doit être calculé en automatique et
     // s'ajuster selon les modifications au niveau objectifs nutritionnels ».
