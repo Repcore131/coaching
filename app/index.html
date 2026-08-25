@@ -18518,7 +18518,7 @@ const NOTE_APERCU=3;
 // l'export de l'athlète lit SON dossier, et la note n'y est pas. C'est donc une
 // obligation manuelle du coach, et elle est écrite comme telle.
 const NOTE_MENTION='Note privée : elle reste dans ton dossier et l\'athlète ne '
-  +'la voit nulle part dans l\'application. Mais elle porte sur lui — elle lui '
+  +'la voit nulle part dans l\'application. Mais elle porte sur lui , elle lui '
   +'est donc communicable s\'il exerce son droit d\'accès, et RepCore ne peut '
   +'pas le faire à ta place. Écris ce que tu assumerais de lui montrer.';
 // PURE. Le fil d'un athlète, quel que soit l'état du champ. Une entrée sans
@@ -18675,7 +18675,7 @@ function renderJournalCoach(c){
        +'<textarea id="jr-texte" rows="2" maxlength="'+NOTE_TEXTE_MAX+'" placeholder="Ce que tu veux retrouver la prochaine fois"'
        +' style="width:100%;resize:vertical"></textarea>'
        +'<div style="display:flex;gap:6px;margin-top:7px">'
-       +'<select id="jr-tag" style="flex:1;min-width:0"><option value="">— sans étiquette —</option>'+opts+'</select>'
+       +'<select id="jr-tag" style="flex:1;min-width:0"><option value="">Sans étiquette</option>'+opts+'</select>'
        +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="jrAjouter()">Noter</button>'
        +'</div>'
        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">'+escapeHtml(NOTE_MENTION)+'</div>'
