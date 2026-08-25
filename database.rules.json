@@ -512,6 +512,45 @@
       "n": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 1000000" },
       "$autre": { ".validate": false }
     },
+    // ── L annuaire d un coach : QUI sont ses eleves, et rien de plus ───────
+    //
+    // Signale par Kevin le 25/08/2026 : son second eleve existait sur son
+    // telephone, et son tableau de bord sur ordinateur ne l avait jamais vu.
+    //
+    // LE COACH NE POUVAIT DECOUVRIR PERSONNE, et c est une consequence directe
+    // de la regle de /users : elle n accorde la lecture que d une CLE PRECISE,
+    // jamais de la collection. Une requete `orderBy=coachEmailKey` exigerait un
+    // .read sur /users entier — c est-a-dire ouvrir tous les dossiers a tout
+    // compte authentifie. Hors de question. Le coach peut donc lire le dossier
+    // de ses athletes, mais il lui faut leur adresse, et rien ne la lui donnait.
+    //
+    // C EST L ATHLETE QUI S INSCRIT ICI, jamais le coach qui l y ajoute. La
+    // condition d ecriture est la meme que celle de canaux/$coachKey/reactions,
+    // dont ce noeud reprend la forme : etre le titulaire de l adresse, ET que
+    // son propre dossier designe deja ce coach. Un coach ne peut pas se
+    // declarer les eleves d un autre, ni s inventer un portefeuille.
+    //
+    // LA LECTURE EST AU COACH SEUL. Un athlete n a aucune raison de connaitre
+    // les autres eleves : ce serait la liste des clients, deduite d un noeud
+    // technique. Il garde .read sur SA propre feuille, un cran plus bas, pour
+    // pouvoir verifier ce qu il a ecrit — comme pour /reactions.
+    //
+    // DEUX CHAMPS, ET "$autre": false. L adresse et une date. Le nom, l age,
+    // les bilans vivent dans le dossier que le coach ira chercher ensuite ; les
+    // recopier ici les mettrait a un second endroit sans rien apporter, et un
+    // noeud qui grossirait sans contrainte finirait par porter autre chose.
+    "annuaire_coach": {
+      "$coachKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+        "$athleteKey": {
+          ".read":  "auth != null && auth.token.email.replace('.', ',') === $athleteKey",
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey",
+          "email": { ".validate": "newData.isString() && newData.val().length <= 200" },
+          "maj":   { ".validate": "newData.isNumber()" },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
 
     // Banque d exercices : 406 fiches, illustration mise a part.
     //

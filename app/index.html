@@ -8738,6 +8738,75 @@ const CLOUD={
     return true;
   },
 
+  // ══════ L'ANNUAIRE D'UN COACH ══════════════════════════════════════════
+  // Signalé par Kevin le 25/08/2026 : son second élève existe, mais sur son
+  // TÉLÉPHONE — l'ordinateur d'où il regarde son tableau de bord ne l'avait
+  // jamais vu.
+  //
+  // LE COACH NE POUVAIT DÉCOUVRIR PERSONNE. syncRelevantUsers ne rafraîchit que
+  // les athlètes DÉJÀ présents dans le stockage de l'appareil, et
+  // _rafraichirCodesEleves ne connaît que les invitations émises par lien.
+  // Un élève inscrit sur son propre téléphone n'entrait donc dans aucun des
+  // deux, et n'existait nulle part côté coach.
+  //
+  // ET LA CHERCHER CÔTÉ SERVEUR EST IMPOSSIBLE, DÉLIBÉRÉMENT. Les règles
+  // n'accordent la lecture que de /users/<clef> précise, jamais de /users :
+  // une requête `orderBy=coachEmailKey` exigerait un .read sur la collection
+  // entière, c'est-à-dire l'ouvrir à tous les comptes authentifiés. Le coach
+  // peut lire le dossier de SES athlètes, mais il faut qu'il connaisse leur
+  // adresse — et c'est exactement ce qui manquait.
+  //
+  // D'où ce petit annuaire. C'EST L'ATHLÈTE QUI S'Y INSCRIT, pas le coach qui
+  // l'y ajoute : les règles n'acceptent l'écriture que du titulaire de
+  // l'adresse, et seulement si son propre dossier désigne déjà ce coach. Un
+  // coach ne peut pas s'y déclarer les élèves d'un autre. Même patron que
+  // canaux/$coachKey/reactions, dont il reprend la forme mot pour mot.
+  //
+  // DEUX CHAMPS, ET RIEN D'AUTRE : l'adresse et une date. Le nom, l'âge, les
+  // bilans vivent dans le dossier que le coach ira chercher ensuite ; les
+  // recopier ici les mettrait à un second endroit sans rien apporter.
+  _urlAnnuaire(coachKey,athleteKey){
+    return this._fbUrl.replace('users.json','annuaire_coach/'+coachKey
+      +(athleteKey?'/'+athleteKey:'')+'.json');
+  },
+  // Côté athlète. Idempotent et minuscule : on le repose à chaque ouverture
+  // plutôt que de tenir un drapeau qui finirait par mentir après un changement
+  // de coach. Ne lève jamais — c'est du confort pour le coach, pas une étape
+  // du parcours de l'athlète.
+  async pushAnnuaire(user){
+    try{
+      const u=user||currentUser;
+      if(!u||!u.email||u.role==='coach') return false;
+      const ck=cleCoachDe(u);
+      if(!ck) return false;
+      const token=await this._getToken();
+      if(!token) return false;
+      const r=await fetch(this._urlAnnuaire(ck,u.email.replace(/\./g,','))+'?auth='+token,
+        {method:'PUT',headers:{'Content-Type':'application/json'},
+         body:JSON.stringify({email:u.email,maj:Date.now()})});
+      return !!(r&&r.ok);
+    }catch(e){ return false; }
+  },
+  // Côté coach. Rend les adresses inscrites, ou [] — jamais null : l'appelant
+  // boucle dessus, et distinguer « aucun élève » de « lecture en échec » n'y
+  // changerait rien.
+  async pullAnnuaire(user){
+    try{
+      const u=user||currentUser;
+      if(!u||u.role!=='coach'||!u.email) return [];
+      const token=await this._getToken();
+      if(!token) return [];
+      const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),8000);
+      const r=await fetch(this._urlAnnuaire(u.email.replace(/\./g,','))+'?auth='+token,
+        {signal:ctrl.signal});
+      if(!r.ok) return [];
+      const t=await r.text();
+      try{ _quotaCompter('in',t.length); }catch(e){}
+      const d=t?JSON.parse(t):null;
+      if(!d||typeof d!=='object') return [];
+      return _annuaireAdresses(d);
+    }catch(e){ return []; }
+  },
   async pullProfilCoach(key){
     if(!key) return null;
     const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
@@ -12190,6 +12259,12 @@ function linkToCoach(coach){
 // Le bilan reste demandé — carte permanente sur l'accueil, relance à la fin de
 // la première séance — mais il ne conditionne plus l'accès à l'app.
 function _apresRattachement(){
+  // L INSCRIPTION A L ANNUAIRE DE SON COACH. C est le seul moyen pour lui de
+  // DECOUVRIR ce dossier depuis un autre appareil : les regles lui
+  // interdisent de parcourir /users. Sans await et sans traitement d echec —
+  // c est du confort pour le coach, pas une etape de ce parcours-ci, et
+  // l ouverture suivante la reposera de toute facon.
+  try{ CLOUD.pushAnnuaire(currentUser); }catch(e){}
   go('s-client-home');
   loadClientHome();
 }
@@ -17446,6 +17521,48 @@ function renderClientRow(c){
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;
 }
+// ══════ ANNUAIRE : LES DEUX DÉCISIONS, SORTIES DU RÉSEAU ═══════════════════
+// Elles vivaient dans le corps de pullAnnuaire et de _rapatrierElevesInconnus,
+// derrière un `await` — donc intestables depuis une suite synchrone. Ce sont
+// pourtant elles qui décident QUI apparaît sur le tableau de bord : autant les
+// mettre là où on peut les éprouver.
+//
+// PURES : ni DOM, ni réseau, ni currentUser.
+
+// Les adresses d'un nœud d'annuaire, tel que Firebase le rend.
+// LA CLEF EST L'ADRESSE, virgules à la place des points. On lit quand même le
+// champ `email` quand il est là : inverser la clef marche, mais dépendre d'une
+// inversion là où la valeur est écrite noir sur blanc serait fragile pour rien.
+// L'inversion reste le REPLI — une entrée écrite par une version antérieure,
+// ou tronquée, ne doit pas faire disparaître l'élève de la liste.
+function _annuaireAdresses(noeud){
+  if(!noeud||typeof noeud!=='object') return [];
+  return Object.keys(noeud).map(k=>{
+    const v=noeud[k];
+    const e=(v&&typeof v.email==='string'&&v.email)?v.email:String(k).replace(/,/g,'.');
+    return String(e).toLowerCase();
+  }).filter(Boolean);
+}
+// Celles dont cet appareil n'a pas encore le dossier.
+// SANS CE FILTRE, 40 ATHLÈTES FONT 40 ALLERS-RETOURS à chaque ouverture du
+// tableau de bord, pour retélécharger ce qu'on a déjà. La comparaison est
+// insensible à la casse : les adresses servent de clefs de stockage, et une
+// majuscule saisie à l'inscription suffirait à créer un doublon.
+function _annuaireManquants(adresses,connues){
+  const vus=new Set((connues||[]).map(k=>String(k||'').toLowerCase()));
+  const out=[];
+  for(const a of (adresses||[])){
+    // TRIM : une entree d'annuaire faite d'espaces passait le filtre — elle
+    // est non vide au sens de JavaScript — et partait en synchronisation
+    // vers /users/  .json. Trouve par l'assertion, pas en production.
+    const e=String(a||'').trim().toLowerCase();
+    if(!e||vus.has(e)) continue;
+    vus.add(e);                       // et pas deux fois la même dans un lot
+    out.push(e);
+  }
+  return out;
+}
+
 // Releve des codes consommes. Un athlete qui saisit un code sur un appareil
 // neuf n'existe nulle part chez le coach : ni dans ses users locaux, ni dans
 // sa liste clients. Le seul lien est le noeud /rc_codes/{token}, que l'athlete
@@ -17453,6 +17570,39 @@ function renderClientRow(c){
 // ouverture du tableau de bord, et on tire le dossier correspondant.
 // Sans reseau, la fonction ne fait rien et n'affiche pas d'erreur : ce n'est
 // pas une action demandee par le coach.
+// Rapatrie les élèves que cet appareil n'a jamais vus.
+//
+// Le tableau de bord ne montrait que les athlètes DÉJÀ dans le stockage local :
+// ceux venus d'une invitation par lien, et ceux inscrits sur ce même appareil.
+// Un élève qui a créé son compte sur son propre téléphone n'était nulle part —
+// c'est le cas signalé par Kevin le 25/08/2026.
+//
+// L'annuaire donne les ADRESSES ; c'est syncUser qui va chercher les dossiers,
+// un par un, exactement comme pour les autres. Les règles décident : un dossier
+// qui ne désigne pas ce coach répond 401 et n'entre pas.
+//
+// SANS AWAIT DANS L'APPELANT : le tableau de bord s'affiche tout de suite avec
+// ce qu'on a, et se complète quand le réseau répond. Même traitement que
+// _rafraichirCodesEleves, juste à côté.
+async function _rapatrierElevesInconnus(){
+  if(!currentUser||currentUser.role!=='coach'||!CLOUD.ok()) return 0;
+  let adresses=[];
+  try{ adresses=await CLOUD.pullAnnuaire(currentUser); }catch(e){ return 0; }
+  if(!adresses.length) return 0;
+  const manquants=_annuaireManquants(adresses,Object.keys(DB.get('users')||{}));
+  if(!manquants.length) return 0;
+  let venus=0;
+  for(const e of manquants){
+    // Un échec ne doit pas arrêter les suivants : un dossier peut avoir été
+    // supprimé, ou son rattachement défait, pendant que les autres vont bien.
+    try{ if(await CLOUD.syncUser(e)) venus++; }catch(err){}
+  }
+  // Re-rendu seulement si le coach est encore sur son tableau de bord : la
+  // requête est longue, il a pu naviguer ailleurs entre-temps.
+  if(venus&&document.getElementById('s-coach-home')?.classList.contains('active'))
+    loadCoachHome();
+  return venus;
+}
 async function _rafraichirCodesEleves(){
   const codes=(currentUser&&currentUser.studentCodes)||[];
   const actifs=codes.filter(c=>c&&c.token&&c.active!==false);
@@ -18002,6 +18152,10 @@ function loadCoachHome(){
   // Sans await : le tableau de bord s'affiche tout de suite avec ce qu'on a,
   // et se complete quand les codes ont repondu.
   _rafraichirCodesEleves();
+  // ET LES ELEVES QUE CET APPAREIL N A JAMAIS VUS. Ceux qui se sont inscrits
+  // sur leur propre telephone n entraient dans aucune des deux voies
+  // existantes : ils n avaient ni invitation par lien, ni dossier local.
+  _rapatrierElevesInconnus();
   const u=currentUser;
   // Entrée du tunnel : chiffres du produit, donc créateur uniquement. Le
   // masquage n'est qu'un confort d'affichage — loadMetrics refait le contrôle.
@@ -24184,6 +24338,13 @@ function _repeindreSiJourChange(){
 function loadClientHome(){
   // Posé À CHAQUE rendu : c’est lui qui vient d’écrire la date.
   _jourAffiche=localISODate(new Date());
+  // RATTRAPAGE DE L'ANNUAIRE, une fois par session. Les athlètes déjà
+  // rattachés avant l'existence de ce nœud n'y figurent pas : sans cette
+  // ligne, leur coach ne les découvrirait qu'après un nouveau rattachement,
+  // c'est-à-dire jamais. Une seule fois : loadClientHome est rappelée par la
+  // boucle de synchronisation et par chaque retour sur l'accueil.
+  if(!window._annuairePose){ window._annuairePose=true;
+    try{ CLOUD.pushAnnuaire(currentUser); }catch(e){} }
   go('s-client-home');
   // ANIMATION 12. Armé ici, et l'action est loadClientHome elle-même : tirer
   // rejoue EXACTEMENT ce que fait déjà l'arrivée sur l'accueil — la même

@@ -22109,6 +22109,121 @@ function testExercices(){
             :_echec('sans utilisateur, la liste s\'ouvre');})());
       } finally { currentUser=sauve; progEx=sauveEx; _progExDirty=sauveD; }
     })();
+    // ── L'ANNUAIRE : COMMENT UN COACH DECOUVRE UN ELEVE QU'IL N'A JAMAIS VU ──
+    // Signale par Kevin le 25/08/2026 : son second eleve existait sur son
+    // telephone, et son tableau de bord sur ordinateur ne l'avait jamais vu.
+    // Les regles interdisent de parcourir /users — il faut donc que l'athlete
+    // depose son adresse quelque part que le coach puisse lire.
+    (()=>{
+      const svU=currentUser, svF=window.fetch, svT=CLOUD._getToken,
+            svS=CLOUD.syncUser, svP=CLOUD.pullAnnuaire, svO=CLOUD.ok,
+            svD=DB.get('users'), svL=window.loadCoachHome;
+      const _sync=(f)=>{ // rejoue une promesse deja resolue, sans await
+        let v,pris=false; f().then(x=>{v=x;pris=true;});
+        return {lu:()=>pris,val:()=>v};
+      };
+      try{
+        ok('L\'URL de l\'annuaire vise le bon noeud',(()=>{
+          const a=CLOUD._urlAnnuaire('c@t,fr'), b=CLOUD._urlAnnuaire('c@t,fr','a@t,fr');
+          if(a.indexOf('/annuaire_coach/c@t,fr.json')<0) return _echec('coach : '+a);
+          return b.indexOf('/annuaire_coach/c@t,fr/a@t,fr.json')>=0?true:_echec('athlete : '+b);})());
+
+        ok('SEUL UN ATHLETE RATTACHE S\'INSCRIT, et il n\'y a pas de requete sinon',(()=>{
+          // Une requete partie pour rien coute un aller-retour a chaque
+          // ouverture, sur tous les comptes sans coach. Et un coach qui
+          // s'inscrirait dans son propre annuaire s'y compterait comme eleve.
+          let parties=0;
+          window.fetch=()=>{ parties++; return Promise.resolve({ok:true,text:async()=>'{}'}); };
+          CLOUD._getToken=async()=>'JETON';
+          const cas=[['athlete sans coach',{id:'A',email:'a@t.fr',role:'athlete'}],
+                     ['coach',{id:'C',email:'c@t.fr',role:'coach',coachEmailKey:'x@t,fr'}],
+                     ['dossier sans adresse',{id:'B',role:'athlete',coachEmailKey:'x@t,fr'}]];
+          for(const [nom,u] of cas){
+            currentUser=u; parties=0;
+            const r=_sync(()=>CLOUD.pushAnnuaire());
+            if(parties) return _echec(nom+' : '+parties+' requete(s) partie(s)');
+            if(r.lu()&&r.val()!==false) return _echec(nom+' : rend '+r.val()+' au lieu de false');
+          }
+          return true;})());
+
+        ok('La lecture de l\'annuaire est refusee a un athlete',(()=>{
+          // La vraie barriere est dans database.rules.json — .read du coach
+          // seul. Celle-ci evite la requete, et dit l'intention dans le code.
+          let parties=0;
+          window.fetch=()=>{ parties++; return Promise.resolve({ok:true,text:async()=>'{}'}); };
+          currentUser={id:'A',email:'a@t.fr',role:'athlete',coachEmailKey:'c@t,fr'};
+          _sync(()=>CLOUD.pullAnnuaire());
+          return parties===0?true:_echec(parties+' requete(s) partie(s)');})());
+
+        ok('UNE ENTREE SANS CHAMP email SE RELIT DEPUIS SA CLEF',(()=>{
+          // La clef Firebase EST l'adresse, virgules a la place des points. Une
+          // entree ecrite par une version anterieure, ou tronquee, ne doit pas
+          // faire disparaitre l'eleve de la liste.
+          const v=_annuaireAdresses({'kevin,g@t,fr':{email:'kevin.g@t.fr',maj:1},
+                                     'sans,champ@t,fr':{maj:2},
+                                     'vide@t,fr':{email:''}});
+          if(v.indexOf('sans.champ@t.fr')<0)
+            return _echec('entree sans champ email perdue : '+JSON.stringify(v));
+          if(v.indexOf('vide@t.fr')<0)
+            return _echec('un champ email vide n\'est pas retombe sur la clef');
+          if(v.length!==3) return _echec(v.length+' adresse(s) au lieu de 3');
+          // Et rien ne sort d'un noeud absent : Firebase rend `null` pour un
+          // annuaire vide, et l'appelant boucle dessus.
+          for(const rien of [null,undefined,'',0,[]])
+            if(_annuaireAdresses(rien).length)
+              return _echec('quelque chose est sorti de '+JSON.stringify(rien));
+          return true;})());
+
+        ok('LE RAPATRIEMENT NE REDEMANDE PAS CE QU\'ON A DEJA',(()=>{
+          // 40 athletes, c'est 40 allers-retours a chaque ouverture si on ne
+          // filtre pas.
+          const m=_annuaireManquants(['claire@t.fr','kevin.g@t.fr','casse@t.fr'],
+                                     ['coach@t.fr','claire@t.fr']);
+          if(m.indexOf('claire@t.fr')>=0) return _echec('un dossier deja local est redemande');
+          if(m.length!==2) return _echec(JSON.stringify(m));
+          // LA CASSE NE DOIT PAS CREER DE DOUBLON : l'adresse sert de clef de
+          // stockage, et une majuscule saisie a l'inscription suffirait.
+          if(_annuaireManquants(['Claire@T.FR'],['claire@t.fr']).length)
+            return _echec('une difference de casse fait retelecharger');
+          // Ni deux fois la meme dans un meme lot.
+          if(_annuaireManquants(['a@t.fr','A@t.fr'],[]).length!==1)
+            return _echec('le meme eleve est demande deux fois');
+          // Ni les entrees vides.
+          return _annuaireManquants([null,'','  '],[]).length===0
+            ?true:_echec('une adresse vide part en synchro');})());
+
+        ok('Le rapatriement lit bien l\'annuaire avant de synchroniser',(()=>{
+          // Ces deux decisions sont pures, mais leur ENCHAINEMENT est
+          // asynchrone : on verifie sur la source que le corps les emploie
+          // toujours, plutot que de faire semblant de l'attendre.
+          const s=String(_rapatrierElevesInconnus);
+          if(s.indexOf('pullAnnuaire')<0) return _echec('l\'annuaire n\'est plus lu');
+          if(s.indexOf('_annuaireManquants')<0) return _echec('le filtre a saute');
+          if(s.indexOf('syncUser')<0) return _echec('les dossiers ne sont plus tires');
+          // Le garde de role : sans lui, chaque athlete interrogerait un noeud
+          // que les regles lui refusent, a chaque ouverture.
+          return /role!=='coach'/.test(s)?true:_echec('le garde de role a saute');})());
+
+        ok('Le rapatriement ne fait rien pour un athlete, ni sans annuaire',(()=>{
+          const demandes=[];
+          CLOUD.syncUser=async e=>{ demandes.push(e); return true; };
+          CLOUD.pullAnnuaire=async()=>['x@t.fr'];
+          currentUser={id:'A1',email:'a@t.fr',role:'athlete'};
+          const a=_sync(()=>_rapatrierElevesInconnus());
+          if(demandes.length) return _echec('un athlete a declenche '+demandes.length+' synchro(s)');
+          if(a.lu()&&a.val()!==0) return _echec('rend '+a.val()+' au lieu de 0');
+          // Et une lecture en echec ne doit pas remonter : c'est du confort,
+          // pas une etape du parcours.
+          currentUser={id:'C1',email:'coach@t.fr',role:'coach'};
+          CLOUD.pullAnnuaire=async()=>{ throw new Error('reseau coupe'); };
+          const b=_sync(()=>_rapatrierElevesInconnus());
+          return (!b.lu()||b.val()===0)?true:_echec('rend '+b.val()+' apres un echec');})());
+      } finally {
+        window.fetch=svF; CLOUD._getToken=svT; CLOUD.syncUser=svS;
+        CLOUD.pullAnnuaire=svP; CLOUD.ok=svO; window.loadCoachHome=svL;
+        DB.set('users',svD||{}); currentUser=svU;
+      }
+    })();
     // ── LE TABLEAU DE BORD MONTRE-T-IL TOUS LES ELEVES ? ─────────────────
     // Signale par Kevin le 25/08/2026 : deux eleves rattaches, un seul
     // affiche. getClients ne reconnaissait le rattachement que par coachId,
