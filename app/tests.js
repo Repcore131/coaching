@@ -22109,6 +22109,85 @@ function testExercices(){
             :_echec('sans utilisateur, la liste s\'ouvre');})());
       } finally { currentUser=sauve; progEx=sauveEx; _progExDirty=sauveD; }
     })();
+    // ── LE TABLEAU DE BORD MONTRE-T-IL TOUS LES ELEVES ? ─────────────────
+    // Signale par Kevin le 25/08/2026 : deux eleves rattaches, un seul
+    // affiche. getClients ne reconnaissait le rattachement que par coachId,
+    // alors que c'est coachEmailKey que les regles serveur exigent pour ouvrir
+    // le dossier au coach — donc le seul champ garanti present sur un athlete
+    // que ce coach peut LIRE.
+    (()=>{
+      const sauveU=currentUser, sauveD=DB.get('users');
+      const CLE='guellec,coachingpro@gmail,com';
+      const coach={id:'C1',email:'guellec.coachingpro@gmail.com',role:'coach',studentCodes:[]};
+      const poser=(gens,codes)=>{
+        const u={}; gens.forEach(g=>u[g.email]=g);
+        coach.studentCodes=codes||[]; u[coach.email]=coach;
+        DB.set('users',u); currentUser=coach;
+      };
+      const noms=()=>getClients().map(c=>((c.fname||'')+' '+(c.lname||'')).trim());
+      try{
+        ok('UN ATHLETE RATTACHE PAR coachEmailKey SEUL EST BIEN LISTE',(()=>{
+          // C'est le cas exact du bug : Claire portait coachId, Kevin non.
+          poser([{id:'A1',email:'a@t.fr',role:'athlete',fname:'Claire',lname:'B',coachId:'C1'},
+                 {id:'A2',email:'b@t.fr',role:'athlete',fname:'Kevin',lname:'G',coachEmailKey:CLE}]);
+          const n=noms();
+          if(n.length!==2) return _echec(n.length+' athlete(s) au lieu de 2 : '+n.join(', '));
+          return n.indexOf('Kevin G')>=0?true:_echec('le rattachement par clef d\'adresse est ignore');})());
+
+        ok('Un coachId perime ne fait plus disparaitre l\'athlete',(()=>{
+          // Un coach qui recree son compte change d'id ; l'adresse, elle, ne
+          // bouge pas. Les dossiers deja rattaches gardent l'ancien id.
+          poser([{id:'A4',email:'d@t.fr',role:'athlete',fname:'Ancien',lname:'Id',
+                  coachId:'C0-perime',coachEmailKey:CLE}]);
+          return noms().length===1?true:_echec('perdu malgre une clef d\'adresse valide');})());
+
+        ok('Un dossier sans role explicite compte comme athlete',(()=>{
+          // `role!=='coach'` est le predicat qu'emploient deja syncRelevantUsers,
+          // la liste des modeles et le transfert de portefeuille. getClients
+          // exigeait `role==='athlete'` et divergeait des trois.
+          poser([{id:'A3',email:'c@t.fr',fname:'Sans',lname:'Role',coachId:'C1'}]);
+          return noms().length===1?true:_echec('ecarte alors que le reste de l\'app le compte');})());
+
+        ok('L\'ATHLETE D\'UN AUTRE COACH N\'ENTRE PAS DANS LA LISTE',(()=>{
+          // L'elargissement ne doit pas devenir une passoire : c'est le
+          // dossier medical d'un tiers.
+          poser([{id:'A5',email:'e@t.fr',role:'athlete',fname:'Autre',lname:'Coach',
+                  coachId:'C9',coachEmailKey:'un.autre@gmail,com'},
+                 {id:'A6',email:'f@t.fr',role:'athlete',fname:'Sans',lname:'Coach'}]);
+          const n=noms();
+          return n.length===0?true:_echec('a laisse passer : '+n.join(', '));})());
+        ok('Un COACH n\'est jamais liste comme son propre eleve',(()=>{
+          poser([{id:'C2',email:'g@t.fr',role:'coach',fname:'Un',lname:'Coach',coachEmailKey:CLE}]);
+          return noms().length===0?true:_echec('un coach est apparu dans la liste');})());
+
+        ok('UNE INVITATION SANS NOM NE DISPARAIT PLUS',(()=>{
+          // `if(name && ...)` ecartait en silence toute invitation creee sans
+          // nommer l'eleve — precisement le cas ou le coach a besoin de la voir
+          // pour la relancer.
+          poser([],[{codeId:'k1',token:'t1',studentName:'',athleteEmail:'nouveau@t.fr'}]);
+          const n=noms();
+          return n.length===1?true:_echec(n.length+' ligne(s) : '+n.join(', '));})());
+        ok('Un code sans drapeau actif est liste, comme il est deja rafraichi',(()=>{
+          // _rafraichirCodesEleves emploie `active!==false` ; getClients
+          // exigeait `active` vrai. Le code etait donc rafraichi depuis le
+          // reseau a chaque ouverture, puis ecarte de la liste qu'il alimentait.
+          poser([],[{codeId:'k2',token:'t2',studentName:'Marie D'}]);
+          if(noms().length!==1) return _echec('un code sans drapeau reste invisible');
+          // Et un code EXPLICITEMENT desactive reste ecarte.
+          poser([],[{codeId:'k3',token:'t3',studentName:'Partie',active:false}]);
+          return noms().length===0?true:_echec('un code desactive est reapparu');})());
+        ok('Un code deja honore ne double pas l\'athlete enregistre',(()=>{
+          poser([{id:'A1',email:'a@t.fr',role:'athlete',fname:'Claire',lname:'B',coachId:'C1'}],
+                [{codeId:'k4',token:'t4',studentName:'Claire B',athleteEmail:'a@t.fr'}]);
+          const n=noms();
+          return n.length===1?true:_echec('Claire compte double : '+n.join(', '));})());
+        ok('Un code sans nom ne double pas non plus, il se reconnait a l\'adresse',(()=>{
+          poser([{id:'A1',email:'a@t.fr',role:'athlete',fname:'Claire',lname:'B',coachId:'C1'}],
+                [{codeId:'k5',token:'t5',studentName:'',athleteEmail:'A@T.FR'}]);
+          const n=noms();
+          return n.length===1?true:_echec('double malgre la meme adresse : '+n.join(', '));})());
+      } finally { DB.set('users',sauveD||{}); currentUser=sauveU; }
+    })();
     // ══════════════ TEMPS DE REPOS ══════════════
     // ── parseRepos : toutes les écritures rencontrées dans les programmes ──
     const _rpCas=[

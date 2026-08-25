@@ -8923,7 +8923,10 @@ const CLOUD={
     const pulls=[];
     if(currentUser.role==='coach'){
       pulls.push(this.syncUser(currentUser.email));
-      const athletes=Object.values(users).filter(u=>u.coachId===currentUser.id&&u.email);
+      // MEME PREDICAT QUE LE TABLEAU DE BORD. Filtrer sur le seul coachId
+      // laissait hors synchro les athletes rattaches par coachEmailKey :
+      // affiches mais jamais rafraichis, donc figes sur ce qu on avait.
+      const athletes=Object.values(users).filter(u=>u.email&&_estMonAthlete(u,currentUser));
       for(const a of athletes) pulls.push(this.syncUser(a.email));
     } else {
       pulls.push(this.syncUser(currentUser.email));
@@ -18109,32 +18112,79 @@ function loadCoachHome(){
     }
   }).catch(()=>{});
 }
+// UN ATHLÈTE EST RATTACHÉ PAR L'UN OU L'AUTRE DE DEUX CHAMPS, ET LE TABLEAU
+// DE BORD N'EN REGARDAIT QU'UN.
+//
+// Signalé par Kevin le 25/08/2026 : deux élèves rattachés, un seul affiché.
+//
+// `coachId` désigne l'identifiant du compte coach. `coachEmailKey` désigne son
+// adresse. Les deux sont posés au rattachement — mais pas par tous les chemins,
+// et pas toujours ensemble :
+//   • _appliquerPayloadCode pose les deux, et coachEmailKey depuis le PAYLOAD
+//     et non depuis le cache local ; son propre commentaire le dit : « c'est la
+//     seule valeur qui ouvre le dossier au coach côté serveur ».
+//   • Le repli qu'il porte dérive coachEmailKey de coachEmail pour les codes
+//     émis avant son existence — donc pour des dossiers où coachId peut être
+//     absent.
+//   • Un coach qui recrée son compte change d'id : les dossiers déjà rattachés
+//     gardent l'ancien, alors que l'adresse, elle, n'a pas bougé.
+//
+// C'est bien coachEmailKey que database.rules.json exige pour ouvrir le
+// dossier au coach. Un athlète que le coach PEUT LIRE porte donc forcément ce
+// champ — et pouvait n'apparaître nulle part sur son tableau de bord.
+//
+// canalAccessible admettait déjà les deux (`u.coachId||u.coachEmailKey`).
+// C'est cette lecture-là qui fait foi ; getClients était en retard.
+//
+// `role!=='coach'` ET NON `role==='athlete'` : c'est le prédicat qu'emploient
+// déjà les trois autres endroits qui parcourent les athlètes d'un coach
+// (syncRelevantUsers, la liste des modèles, le transfert de portefeuille). Un
+// dossier sans rôle explicite y était compté, et ne l'était pas ici.
+function _estMonAthlete(u,coach){
+  if(!u||!coach||u.role==='coach') return false;
+  if(u.coachId&&coach.id&&u.coachId===coach.id) return true;
+  const k=coach.email?String(coach.email).toLowerCase().replace(/\./g,','):'';
+  return !!(k&&u.coachEmailKey&&String(u.coachEmailKey).toLowerCase()===k);
+}
 function getClients(){
   const users=DB.get('users')||{};
   const allUsers=Object.values(users);
 
   // 1. Athlètes enregistrés sur cet appareil liés à ce coach
-  const registered=allUsers.filter(u=>u.role==='athlete'&&u.coachId===currentUser.id);
-  const registeredNames=new Set(registered.map(u=>(u.fname+' '+u.lname).toLowerCase().trim()));
+  const registered=allUsers.filter(u=>_estMonAthlete(u,currentUser));
+  const registeredNames=new Set(registered.map(u=>((u.fname||'')+' '+(u.lname||'')).toLowerCase().trim()));
 
   // 2. Élèves issus des codes (même si pas encore enregistrés / autre appareil)
+  //
+  // `active!==false` ET NON `active` : _rafraichirCodesEleves emploie déjà ce
+  // prédicat-là. Un code créé sans le drapeau — undefined, et non false — était
+  // donc rafraîchi depuis le réseau à chaque ouverture, puis écarté de la liste
+  // qu'il venait d'alimenter. L'élève n'apparaissait jamais.
   const codes=currentUser.studentCodes||[];
-  codes.filter(c=>c.active).forEach(c=>{
+  codes.filter(c=>c&&c.active!==false).forEach(c=>{
     const name=(c.studentName||'').toLowerCase().trim();
-    if(name&&!registeredNames.has(name)){
-      // Créer un profil minimal depuis le code
-      registered.push({
-        id:'_code_'+c.codeId,
-        fname:(c.studentName||'Élève').split(' ')[0],
-        lname:(c.studentName||'').split(' ').slice(1).join(' '),
-        role:'athlete',
-        coachId:currentUser.id,
-        status:'COACHING_SUIVI',
-        sessions:[],bilans:[],streak:0,
-        _fromCode:true,
-        _codeInfo:c
-      });
-    }
+    // ON NE PERD PLUS UN CODE SANS NOM. `if(name && ...)` écartait en silence
+    // toute invitation créée sans nommer l'élève : elle n'apparaissait sur
+    // aucune ligne, alors que c'est précisément le cas où le coach a besoin de
+    // la voir pour la relancer. Sans nom, on affiche l'adresse, sinon le code.
+    const dejaLa=name?registeredNames.has(name)
+      :(c.athleteEmail&&registered.some(u=>(u.email||'').toLowerCase()===String(c.athleteEmail).toLowerCase()));
+    if(dejaLa) return;
+    const libelle=(c.studentName||c.usedBy||c.athleteEmail||'Élève sans nom').trim();
+    // Créer un profil minimal depuis le code
+    registered.push({
+      id:'_code_'+c.codeId,
+      fname:libelle.split(' ')[0],
+      lname:libelle.split(' ').slice(1).join(' '),
+      email:c.athleteEmail||'',
+      role:'athlete',
+      coachId:currentUser.id,
+      status:'COACHING_SUIVI',
+      sessions:[],bilans:[],streak:0,
+      _fromCode:true,
+      _codeInfo:c
+    });
+    if(name) registeredNames.add(name);
   });
 
   return registered;
