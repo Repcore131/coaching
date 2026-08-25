@@ -22144,13 +22144,39 @@ const _exAClasser=new Set();
 // Écriture opportuniste : un rattachement trouvé automatiquement est mémorisé
 // dans user.exMuscles avec src:'auto', ce qui évite de refaire le travail et
 // laisse une trace corrigeable. Un choix manuel n'est JAMAIS réécrit.
+// ── UN DOSSIER MUSCULAIRE QUI REVIENT DE FIREBASE A PERDU SES TABLEAUX VIDES ──
+// La base ne stocke pas un tableau sans element : elle supprime la clef. Un
+// exercice classe avec des muscles PRIMAIRES et aucun secondaire est ecrit
+// {p:['pecs'],s:[]} et relu {p:['pecs']}. Tout appelant qui fait `r.s.map` leve
+// alors — et c est precisement ce qui empechait Kevin d ouvrir ses seances, sur
+// ses DEUX profils : le meme dossier est lu par l ecran athlete et par la fiche
+// coach.
+//
+// C EST LA MEME CAUSE RACINE QUE LE BUG DES SEANCES corrige la veille, ou
+// sessions_config revenait en objet a trous. Firebase et les tableaux, encore.
+//
+// ON REPARE SUR PLACE plutot que de rendre une copie : le dossier stocke est
+// remis d aplomb pour de bon, et il repart correct a la prochaine ecriture. Une
+// copie aurait masque le defaut a l affichage en le laissant en base, ou il
+// aurait ressurgi au prochain appelant qui ne se garde pas.
+//
+// TROIS APPELANTS FAISAIENT .map OU .slice SANS GARDE — _ligneMuscles,
+// ouvrirSelecteurMuscles et le selecteur du classement. On corrige donc a LA
+// SOURCE : les deux resolveurs. Garder chaque point de chute laisserait passer
+// le quatrieme.
+function _normaliserMuscles(r){
+  if(!r||typeof r!=='object') return r;
+  if(!Array.isArray(r.p)) r.p=[];
+  if(!Array.isArray(r.s)) r.s=[];
+  return r;
+}
 function resoudreMuscles(nom,ex){
   if(!currentUser) return null;
   let k=exKey(nom);
   if(!k) return null;
   k=resoudreAlias(k);
   const dejaVu=currentUser.exMuscles&&currentUser.exMuscles[k];
-  if(dejaVu) return dejaVu;
+  if(dejaVu) return _normaliserMuscles(dejaVu);
   // Cardio : aucun rattachement, et surtout pas de mise en file.
   if((ex&&isCardio(ex))||_exGuideEstCardio(k)||_exGuideEstPosing(k)) return null;
   // 1. Le guide du coach fait foi.
@@ -32352,7 +32378,7 @@ function resoudreMusclesLecture(nom,ex,user){
   const k=_aliasPour(k0,user);
   // Même ordre que resoudreMuscles : un choix déjà enregistré fait foi.
   const dejaVu=user&&user.exMuscles&&user.exMuscles[k];
-  if(dejaVu) return dejaVu;
+  if(dejaVu) return _normaliserMuscles(dejaVu);
   if((ex&&isCardio(ex))||_exGuideEstCardio(k)||_exGuideEstPosing(k)) return VOL_CARDIO;
   const g=_exGuide().get(k);
   if(g) return {p:g.p.slice(),s:g.s.slice(),src:'auto'};

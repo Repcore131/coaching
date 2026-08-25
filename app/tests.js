@@ -19674,6 +19674,62 @@ function testExercices(){
 
 
 
+    // ══════ FIREBASE RETIRE LES TABLEAUX VIDES : LES MUSCLES AUSSI ══════
+    // La panne de Kevin, du 25/08/2026, sur ses DEUX profils. Un exercice
+    // classe avec des muscles PRIMAIRES et aucun secondaire est ecrit
+    // {p:['pecs'],s:[]} et relu {p:['pecs']} : la base ne stocke pas un tableau
+    // vide, elle supprime la clef. `r.s.map` levait alors, et la seance ne
+    // s ouvrait plus. Meme cause racine que sessions_config rendu en objet.
+    (function(){
+      const _sU=currentUser, _sP=(typeof progEx!=='undefined'?progEx:null);
+      const _sSave=window.saveUser;
+      try{
+        window.saveUser=()=>true;
+        const NOM='Développé couché';
+        const monter=(dossier)=>{
+          currentUser={id:'m1',email:'m1@t',role:'athlete',exAlias:{},sessions:[],
+            programs:{},bilans:[],nutrition:{},exMuscles:{}};
+          currentUser.exMuscles[exKey(NOM)]=dossier;
+          return currentUser;
+        };
+        ok('Un dossier SANS secondaires ne fait plus lever le rendu',(()=>{
+          monter({p:['pecs'],src:'manuel'});
+          const r=resoudreMuscles(NOM,{name:NOM});
+          if(!r) return _echec('aucun dossier rendu');
+          if(!Array.isArray(r.s)) return _echec('s vaut '+JSON.stringify(r.s));
+          // Le vrai geste : c est .map qui levait.
+          try{ [...r.p.map(x=>x),...r.s.map(x=>x)]; }
+          catch(e){ return _echec('leve encore : '+e.message); }
+          return true;})());
+        ok('Un dossier sans p NI s tient aussi',(()=>{
+          monter({src:'manuel'});
+          const r=resoudreMuscles(NOM,{name:NOM});
+          return (Array.isArray(r.p)&&Array.isArray(r.s))
+            ?true:_echec(JSON.stringify(r));})());
+        ok('LE DOSSIER EST REPARE SUR PLACE, pas seulement a l\'affichage',(()=>{
+          // Une copie aurait masque le defaut a l ecran en le laissant en base,
+          // ou il aurait ressurgi au prochain appelant qui ne se garde pas.
+          const u=monter({p:['pecs'],src:'manuel'});
+          resoudreMuscles(NOM,{name:NOM});
+          const stocke=u.exMuscles[exKey(NOM)];
+          return Array.isArray(stocke.s)
+            ?true:_echec('le dossier stocke garde son trou');})());
+        ok('La lecture COTE COACH est gardee de la meme facon',(()=>{
+          // resoudreMusclesLecture sert la fiche client : le meme dossier
+          // troue y arrivait par le meme chemin.
+          const u={id:'a9',email:'a9@t',role:'athlete',exAlias:{},exMuscles:{}};
+          u.exMuscles[exKey(NOM)]={p:['pecs'],src:'manuel'};
+          const r=resoudreMusclesLecture(NOM,{name:NOM},u);
+          return (r&&Array.isArray(r.s))?true:_echec(JSON.stringify(r));})());
+        ok('Le normaliseur ne touche pas ce qui n\'est pas un dossier',(()=>{
+          if(_normaliserMuscles(null)!==null) return _echec('null modifie');
+          if(_normaliserMuscles(undefined)!==undefined) return _echec('undefined modifie');
+          const s='x';
+          return _normaliserMuscles(s)===s?true:_echec('une chaine a ete modifiee');})());
+      } finally {
+        currentUser=_sU; if(_sP!==null) progEx=_sP; window.saveUser=_sSave;
+      }
+    })();
     // ══════ LE FILET D OUVERTURE NOMME CE QU IL ATTRAPE ══════
     // Kevin voit « cette seance n a pas pu etre ouverte » sur ses deux profils.
     // Trente-trois formes de donnees hostiles ont ete essayees sans reproduire
