@@ -40752,7 +40752,13 @@ function htmlMacrosCoachLecture(c,mon,moff){
     </div>`;
   };
   const note=macroNoteGlucidesZero(mon)||macroNoteGlucidesZero(moff);
-  const corps=ligne('ON',mon)+ligne('OFF',moff);
+  // UNE SEULE LIGNE SUR UNE DIETE NON CYCLEE. Les deux journees y portent les
+  // memes cibles : deux lignes « ON » et « OFF » cote a cote laisseraient
+  // croire a une repartition qui n'existe plus, et pendant la bascule elles
+  // afficheraient meme deux valeurs differentes le temps d'un enregistrement.
+  const corps=dieteCyclee(c)
+    ?(ligne('ON',mon)+ligne('OFF',moff))
+    :ligne('',mon);
   if(!corps) return '';
   return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Autrement dit</div>
@@ -41074,7 +41080,10 @@ function _renderStrictMacroRings(nut,jourAff){
   // qui n ont pas de valeur de sel, comptent pour zero. On le DIT plutot que
   // d afficher un total qui aurait l air complet.
   const _selManquant=entries.filter(e=>e&&e.sel==null).length;
-  const dayBadge=isOn
+  // PAS DE BADGE SUR UNE DIÈTE NON CYCLÉE. Les deux jours portent alors les
+  // mêmes cibles : annoncer « JOUR OFF » ferait croire à un total réduit qui
+  // n'existe pas. Le badge dit une différence, il se tait quand il n'y en a pas.
+  const dayBadge=!dieteCyclee(currentUser)?'':isOn
     ?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-1);padding:3px 10px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   // L HABILLAGE EST CELUI DE LA CARTE DE L ACCUEIL, et rien d autre : meme
@@ -46317,7 +46326,10 @@ function _renderFjDaySummary(date){
   const repasLabels={matin:'Petit-déjeuner',dejeuner:'Déjeuner',diner:'Dîner',collation:'Collation',coucher:'Avant de se coucher'};
   const grouped={};
   entries.forEach(e=>{const r=e.repas||'dejeuner';if(!grouped[r])grouped[r]=[];grouped[r].push(e);});
-  const dayBadge=isOn
+  // PAS DE BADGE SUR UNE DIÈTE NON CYCLÉE. Les deux jours portent alors les
+  // mêmes cibles : annoncer « JOUR OFF » ferait croire à un total réduit qui
+  // n'existe pas. Le badge dit une différence, il se tait quand il n'y en a pas.
+  const dayBadge=!dieteCyclee(currentUser)?'':isOn
     ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-1);padding:2px 7px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
     : `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);padding:2px 7px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   // PLUS DE CADRE ROUGE AUTOUR DU JOURNAL. Demande de Kevin, 24/08/2026 : la
@@ -47385,12 +47397,20 @@ function besoinsProposes(user,opts){
 // le coach n'a pas cliqué sur son bouton habituel.
 let _propProt=null;      // null = valeur suggérée par la phase
 let _propLip=null;       // null = valeur suggérée par le dossier
-let _propCycle=true;
+// null = « suis le reglage ecrit dans le dossier ». Cette variable ne servait
+// qu'a la proposition de point de depart, et donnait un SECOND selecteur pour
+// la meme question que celui de la fiche — deux controles qui pouvaient se
+// contredire a l'ecran. Le selecteur de la proposition a ete retire ; il ne
+// reste que celui qui ecrit, et la proposition le suit.
+let _propCycle=null;
 function _propReglages(){
   const p=_propProt, l=_propLip;
   return {protGparKg:(typeof p==='number')?p:undefined,
     lipGparKg:(typeof l==='number')?l:undefined,
-    correctionMB:(typeof _propCorr==='number')?_propCorr:undefined,cycle:_propCycle,
+    correctionMB:(typeof _propCorr==='number')?_propCorr:undefined,
+    cycle:(_propCycle===null)
+      ?(()=>{ try{ return dieteCyclee(getOwnedClient(currentClientId)); }catch(e){ return true; } })()
+      :_propCycle,
     // null = milieu. La remise a zero au changement de phase se fait ICI,
     // au moment de lire, plutot que dans un ecouteur qui pourrait manquer.
     vitesse:_propVitesseCourante(getOwnedClient(currentClientId))};
@@ -47751,12 +47771,6 @@ function _htmlDepartCoach(c){
       <select onchange="_propSetLip(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700">${optsLip}</select>
     </div>
     ${noteSopk}
-    <div style="display:flex;gap:6px;margin-bottom:8px">
-      <select onchange="_propSetCycle(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700">
-        <option value="1"${b.cycle?' selected':''}>Diète cyclée</option>
-        <option value="0"${b.cycle?'':' selected'}>Même total 7 j</option>
-      </select>
-    </div>
     ${_htmlVitesseCoach(c)}
     <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="proposerPointDepart()">Proposer un point de départ</button>
   </div>`;
@@ -47769,6 +47783,117 @@ function _htmlDepartHypotheses(c){
 }
 // PRÉ-REMPLIT les champs et rien d'autre. Aucune écriture, aucun push : le
 // coach relit, corrige, puis clique sur « Enregistrer » comme d'habitude.
+// ══════ DIÈTE CYCLÉE OU NON ═══════════════════════════════════════════════
+// Demande de Kevin, 25/08/2026 : pouvoir régler une diète NON cyclée — les
+// mêmes valeurs tous les jours — au lieu du couple jour ON / jour OFF.
+//
+// Le choix existait déjà, mais UNIQUEMENT dans la proposition de point de
+// départ (_propCycle), en mémoire et jamais écrit : la grille de saisie
+// affichait deux colonnes quoi qu'il arrive, et l'athlète voyait toujours un
+// badge « JOUR OFF » les jours sans séance.
+//
+// LE MODÈLE DE DONNÉES NE CHANGE PAS, et c'est délibéré. Une diète non cyclée
+// écrit les MÊMES valeurs dans `on` et dans `off`. Tout ce qui lit ces cibles
+// — le journal, les anneaux, la diète stricte, les alertes, l'export — continue
+// de fonctionner sans une ligne de changement, et un retour au cyclé ne
+// demande aucune migration. Introduire une troisième forme (`macros.tous`)
+// aurait obligé chacun de ces lecteurs à connaître les deux, et le premier
+// oublié aurait servi des cibles vides.
+//
+// `!==false` : les dossiers existants, qui ne portent pas ce champ, restent
+// cyclés. C'est le comportement d'avant, et personne ne doit voir sa diète
+// changer parce qu'une version est passée.
+function dieteCyclee(user){
+  const n=user&&user.nutrition;
+  return !(n&&n.cycle===false);
+}
+function saveClientNutriCycle(v){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  if(!c.nutrition) c.nutrition={};
+  const cycle=(String(v)==='1');
+  c.nutrition.cycle=cycle;
+  // LES CIBLES SUIVENT IMMÉDIATEMENT. Basculer en non cyclé sans recopier ON
+  // sur OFF laisserait l'athlète avec deux totaux différents alors que l'écran
+  // du coach n'en montre plus qu'un — il croirait avoir réglé une chose, et
+  // son élève en verrait une autre les jours de repos.
+  const m=c.nutrition.macros;
+  if(!cycle&&m&&m.on) m.off=Object.assign({},m.on);
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  // La proposition de point de départ suit le même réglage : deux sources pour
+  // la même question finiraient par se contredire à l'écran.
+  try{ _propCycle=cycle; }catch(e){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),
+    cycle?'Diète cyclée ✓':'Diète non cyclée : mêmes valeurs tous les jours ✓',
+    'le réglage est');
+  renderCoachNutriSection(c);
+  return true;
+}
+// ══════ REMETTRE LES CALCULS AU POINT DE DÉPART ═══════════════════════════
+// Demande de Kevin : « si la personne lâche sa sèche ou sa PDM quelque temps ».
+//
+// CE N'EST PAS UNE SUPPRESSION. L'historique des phases, le journal
+// alimentaire, les bilans et les pesées ne sont pas touchés : ce sont les
+// données de l'athlète, et une remise à zéro qui les emporterait serait une
+// perte, pas un redémarrage.
+//
+// Ce qui est remis à zéro, ce sont les trois choses qui décrivent une course
+// en cours et qui deviennent fausses après un arrêt :
+//   • les cibles, recalculées depuis le DERNIER bilan — c'est tout l'intérêt,
+//     le poids a bougé pendant l'interruption ;
+//   • le compteur de semaines, qui affichait « 4e semaine » d'une phase
+//     abandonnée depuis un mois ;
+//   • la pause et la transition en attente, qui parlent d'un déroulé fini.
+function _resumeReinit(c){
+  const b=besoinsProposes(c,_propReglages());
+  if(!b||b.source===null) return null;
+  const sem=(()=>{ try{ return semainesPhase(c); }catch(e){ return null; } })();
+  return {b,sem,pause:!!(c.phase&&c.phase.pause),
+          transi:!!(c.phase&&c.phase.transition)};
+}
+async function reinitialiserCalculs(){
+  const c0=getOwnedClient(currentClientId);
+  if(!c0) return false;
+  const r=_resumeReinit(c0);
+  if(!r){ toast('Données de base incomplètes : rien à recalculer','var(--orange)'); return false; }
+  const lignes=['Les cibles seront recalculées depuis son dernier bilan : '
+    +r.b.on.kcal+' kcal'+(dieteCyclee(c0)?' les jours ON, '+r.b.off.kcal+' les jours OFF.':' tous les jours.')];
+  if(r.sem>1) lignes.push('Le compteur de phase repart de la 1re semaine (il en est à la '
+    +(r.sem)+'e).');
+  if(r.pause) lignes.push('La pause en cours est levée.');
+  if(r.transi) lignes.push('La transition proposée est annulée.');
+  lignes.push('Son historique, son journal et ses bilans ne sont pas touchés.');
+  const ok=await rcConfirm('Remettre les calculs au point de départ ?',
+    lignes.join('\n\n'),'Remettre à zéro');
+  if(!ok) return false;
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  const b=besoinsProposes(c,_propReglages());
+  if(!b||b.source===null){ toast('Données de base incomplètes','var(--orange)'); return false; }
+  if(!c.nutrition) c.nutrition={};
+  const cycle=dieteCyclee(c);
+  // Non cyclée : le même total tous les jours, dans les deux colonnes.
+  const on=Object.assign({},b.on), off=cycle?Object.assign({},b.off):Object.assign({},b.on);
+  c.nutrition.macros=Object.assign({},c.nutrition.macros,
+    {on,off,origine:'reinit',origineDate:Date.now()});
+  if(c.phase){
+    // LE DÉPART REPART D'AUJOURD'HUI, le type de phase ne change pas : c'est au
+    // coach de dire s'il repasse en sèche ou en maintien, pas à ce bouton.
+    c.phase.debut=Date.now();
+    delete c.phase.pause;
+    delete c.phase.transition;
+  }
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ecrit=DB.set('users',users);
+  try{ _viderCachePlateau(); _viderCacheSignaux(); }catch(e){}
+  toastSync(ecrit,CLOUD.pushOne(c.email,c),'Calculs remis au point de départ ✓','la remise à zéro est');
+  try{ renderCoachNutriSection(getOwnedClient(currentClientId)); }catch(e){}
+  return true;
+}
+
 function proposerPointDepart(){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
@@ -47777,6 +47902,8 @@ function proposerPointDepart(){
   // Le sucre n'est pas proposé : aucune cible de sucre ajouté ne sort du
   // calcul, et en inventer une sur un écran de santé serait pire que la
   // laisser vide. Le coach la remplit s'il le souhaite.
+  // `if(el)` couvre deja le cas non cycle, ou le champ OFF n existe pas : on
+  // remplit ce qui est a l ecran, et rien d autre.
   for(const [col,j] of [['on',b.on],['off',b.off]])
     for(const k of ['kcal','p','g','l','f']){
       const el=document.getElementById('ccd-'+col+'-'+k);
@@ -48024,13 +48151,19 @@ function renderCoachNutriSection(c){
     // saisit pas. Les valeurs déjà en base ne sont pas effacées.
     {k:'f',label:'FIBRES g ℹ',color:'#94a3b8',ph:'indicatif'},
   ];
+  // UNE SEULE COLONNE QUAND LA DIÈTE N'EST PAS CYCLÉE. Le champ OFF n'est pas
+  // rendu du tout, plutôt que masqué : saveClientNutriMacros le lit par son
+  // identifiant, et un champ cache mais present aurait continue de fournir une
+  // valeur que le coach ne voit plus.
+  const _cyc=dieteCyclee(c);
+  const _cols=_cyc?'90px 1fr 1fr':'90px 1fr';
+  const _champ=(id,ph,val)=>`<input id="${id}" type="number" min="0" placeholder="${ph}" value="${val||''}"
+        style="padding:7px 10px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;outline:none;width:100%;box-sizing:border-box">`;
   const macroRows=fields.map(f=>`
-    <div style="display:grid;grid-template-columns:90px 1fr 1fr;align-items:center;gap:6px;margin-bottom:7px">
+    <div style="display:grid;grid-template-columns:${_cols};align-items:center;gap:6px;margin-bottom:7px">
       <div style="font-size:var(--fs-xs);font-weight:800;color:${f.color};letter-spacing:1px">${f.label}</div>
-      <input id="ccd-on-${f.k}" type="number" min="0" placeholder="${f.ph}" value="${mon[f.k]||''}"
-        style="padding:7px 10px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;outline:none;width:100%;box-sizing:border-box">
-      <input id="ccd-off-${f.k}" type="number" min="0" placeholder="${f.ph}" value="${moff[f.k]||''}"
-        style="padding:7px 10px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;outline:none;width:100%;box-sizing:border-box">
+      ${_champ('ccd-on-'+f.k,f.ph,mon[f.k])}
+      ${_cyc?_champ('ccd-off-'+f.k,f.ph,moff[f.k]):''}
     </div>`).join('')
     // LECTURE SEULE, sous les champs. Les dix champs restent en grammes :
     // convertir leur contenu ferait partir un « 30 » tape en pourcentage
@@ -48052,20 +48185,38 @@ function renderCoachNutriSection(c){
         </select>
         <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:var(--fs-xs)">▼</span>
       </div>
+      <!-- CYCLEE OU NON. Demande de Kevin : pouvoir regler les memes valeurs
+           tous les jours. Le reglage est ECRIT dans le dossier — celui de la
+           proposition de point de depart ne vivait qu en memoire, et la grille
+           de saisie montrait deux colonnes quoi qu il arrive. -->
+      <div style="position:relative;margin-bottom:20px">
+        <select id="ccd-cycle-sel" onchange="saveClientNutriCycle(this.value)"
+          style="width:100%;padding:11px 36px 11px 14px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
+          <option value="1" ${_cyc?'selected':''}>Diète cyclée — jour ON / jour OFF</option>
+          <option value="0" ${_cyc?'':'selected'}>Non cyclée — mêmes valeurs tous les jours</option>
+        </select>
+        <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:var(--fs-xs)">▼</span>
+      </div>
       <!-- Objectifs macro -->
       <div style="margin-bottom:16px">
         <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">🎯 Objectifs nutritionnels</div>
         ${_htmlDepartCoach(c)}
-        <div style="display:grid;grid-template-columns:90px 1fr 1fr;gap:6px;margin-bottom:8px">
+        <div style="display:grid;grid-template-columns:${_cols};gap:6px;margin-bottom:8px">
           <div></div>
-          <div style="font-size:var(--fs-xs);font-weight:800;color:var(--success);letter-spacing:1px;text-align:center;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-2);padding:4px">⚡ JOUR ON</div>
-          <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:4px">💤 JOUR OFF</div>
+          <div style="font-size:var(--fs-xs);font-weight:800;color:var(--success);letter-spacing:1px;text-align:center;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-2);padding:4px">${_cyc?'⚡ JOUR ON':'TOUS LES JOURS'}</div>
+          ${_cyc?'<div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:4px">💤 JOUR OFF</div>':''}
         </div>
         ${macroRows}
         ${_htmlViolationsCoach(c)}
     ${_htmlAjustement(c,true)}
     ${_htmlDepartHypotheses(c)}
         <button onclick="saveClientNutriMacros()" style="width:100%;margin-top:6px;padding:11px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">💾 ENREGISTRER LES OBJECTIFS</button>
+        <!-- REMISE AU POINT DE DEPART. Demande de Kevin : « si la personne lache
+             sa seche ou sa PDM quelque temps ». Discret et separe du bouton
+             rouge : il ecrit et remet le compteur de phase a zero, il ne doit
+             pas se cliquer par erreur a la place de l enregistrement. -->
+        <button class="btn btn-outline btn-sm" onclick="reinitialiserCalculs()"
+          style="width:100%;margin:8px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)">Remettre les calculs au point de départ</button>
       </div>
       <!-- Accès à la diète stricte -->
       ${dt==='strict'?_htmlStrictAccesCoach(c):''}
@@ -48110,9 +48261,17 @@ function saveClientNutriMacros(malgrePlancher){
   if(!c) return;
   if(!c.nutrition) c.nutrition={};
   const g=id=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?undefined:v;};
+  const _on={kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),f:g('ccd-on-f')};
+  // DIÈTE NON CYCLÉE : OFF REÇOIT LES MÊMES VALEURS QUE ON. Les champs OFF ne
+  // sont pas rendus dans ce mode ; les lire donnerait undefined partout, et
+  // l'athlète se retrouverait sans aucune cible les jours de repos. Le modèle
+  // de données ne change pas — c'est ce qui permet à tout ce qui lit ces
+  // cibles de continuer sans rien savoir de ce réglage.
+  const _cyc=dieteCyclee(c);
   const saisie={
-    on:{kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),f:g('ccd-on-f')},
-    off:{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),f:g('ccd-off-f')},
+    on:_on,
+    off:_cyc?{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),f:g('ccd-off-f')}
+            :Object.assign({},_on),
   };
   // CONTRÔLE AVANT ÉCRITURE. Rien n'est écrit tant que le coach n'a pas vu.
   const viol=controlerMacros(saisie,c);

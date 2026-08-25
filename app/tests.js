@@ -22303,6 +22303,133 @@ function testExercices(){
           return n.length===1?true:_echec('double malgre la meme adresse : '+n.join(', '));})());
       } finally { DB.set('users',sauveD||{}); currentUser=sauveU; }
     })();
+    // ── DIETE CYCLEE OU NON, ET REMISE AU POINT DE DEPART ────────────────
+    // Demande de Kevin, 25/08/2026. Le choix existait dans la proposition de
+    // point de depart, en memoire et jamais ecrit : la grille de saisie
+    // montrait deux colonnes quoi qu'il arrive.
+    (()=>{
+      const svU=currentUser, svD=DB.get('users'), svC=currentClientId,
+            svT=window.toastSync, svP=CLOUD.pushOne, svPc=_propCycle;
+      const COACH={id:'C1',email:'c@t.fr',role:'coach'};
+      const mk=(cyc)=>({id:'A1',email:'a@t.fr',role:'athlete',fname:'T',lname:'X',
+        coachId:'C1',gender:'H',_evol_height:'178','init-age':30,
+        sessions_config:[{active:true},{active:false},{active:true},{active:false},
+                         {active:true},{active:false},{active:false}],
+        phase:{type:'seche',debut:Date.now()-40*864e5},
+        bilans:[{date:Date.now()-3*864e5,'bil-weight':'103.8','deb-height':'178','deb-age':30}],
+        nutrition:Object.assign({macros:{on:{kcal:3000,p:285,g:243,l:98,f:45},
+                                         off:{kcal:2600,p:247,g:211,l:82,f:39}}},
+                                cyc===null?{}:{cycle:cyc})});
+      const poser=cyc=>{ DB.set('users',{'c@t.fr':COACH,'a@t.fr':mk(cyc)});
+        currentUser=COACH; currentClientId='A1'; _propCycle=null; };
+      try{
+        window.toastSync=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
+
+        ok('LES DOSSIERS EXISTANTS RESTENT CYCLES',(()=>{
+          // Personne ne doit voir sa diete changer parce qu'une version est
+          // passee : le champ est absent partout aujourd'hui.
+          if(dieteCyclee({nutrition:{}})!==true) return _echec('un dossier sans le champ n\'est plus cycle');
+          if(dieteCyclee({})!==true||dieteCyclee(null)!==true) return _echec('un dossier vide n\'est plus cycle');
+          if(dieteCyclee({nutrition:{cycle:false}})!==false) return _echec('cycle:false ignore');
+          return dieteCyclee({nutrition:{cycle:true}})===true?true:_echec('cycle:true ignore');})());
+
+        ok('LA GRILLE PERD SA COLONNE OFF QUAND LA DIETE N\'EST PAS CYCLEE',(()=>{
+          const z=document.getElementById('ccd-nutrition');
+          if(!z) return _echec('l\'ecran de nutrition du coach est introuvable');
+          const cpt=()=>({on:z.querySelectorAll('[id^=ccd-on-]').length,
+                          off:z.querySelectorAll('[id^=ccd-off-]').length});
+          poser(null); renderCoachNutriSection(getOwnedClient('A1'));
+          let a=cpt();
+          if(a.on!==5||a.off!==5) return _echec('cyclee : '+JSON.stringify(a)+' au lieu de 5/5');
+          poser(false); renderCoachNutriSection(getOwnedClient('A1'));
+          a=cpt();
+          // LE CHAMP OFF N'EST PAS MASQUE, IL N'EST PAS RENDU :
+          // saveClientNutriMacros le lit par son identifiant, et un champ cache
+          // mais present aurait continue de fournir une valeur invisible.
+          if(a.off!==0) return _echec('non cyclee : '+a.off+' champ(s) OFF subsistent');
+          if(a.on!==5) return _echec('non cyclee : '+a.on+' champ(s) au lieu de 5');
+          if(z.textContent.indexOf('TOUS LES JOURS')<0) return _echec('l\'en-tete ne dit pas « tous les jours »');
+          return true;})());
+
+        ok('NON CYCLEE : OFF RECOIT LES MEMES VALEURS QUE ON',(()=>{
+          // Sans cette recopie, l'athlete se retrouverait SANS AUCUNE cible les
+          // jours de repos — les champs OFF n'existent plus a l'ecran, et les
+          // lire donnerait undefined partout.
+          poser(false); renderCoachNutriSection(getOwnedClient('A1'));
+          const v={kcal:2800,p:200,g:260,l:80,f:40};
+          for(const k in v){ const el=document.getElementById('ccd-on-'+k); if(!el) return _echec('champ '+k+' absent'); el.value=v[k]; }
+          saveClientNutriMacros();
+          const m=(getOwnedClient('A1').nutrition||{}).macros||{};
+          if(!m.off||m.off.kcal!==2800) return _echec('OFF n\'a pas suivi : '+JSON.stringify(m.off));
+          return JSON.stringify(m.on)===JSON.stringify(m.off)
+            ?true:_echec('OFF differe de ON : '+JSON.stringify(m));})());
+
+        ok('Basculer en non cyclee aligne les cibles TOUT DE SUITE',(()=>{
+          // Sinon le coach ne voit plus qu'une colonne pendant que son eleve
+          // garde deux totaux differents les jours de repos.
+          poser(null);
+          saveClientNutriCycle('0');
+          const m=(getOwnedClient('A1').nutrition||{}).macros||{};
+          return (m.off&&m.off.kcal===3000)?true
+            :_echec('OFF est reste a '+(m.off&&m.off.kcal));})());
+
+        ok('LA PROPOSITION SUIT LE REGLAGE ECRIT, il n\'y a plus deux selecteurs',(()=>{
+          // Le selecteur de la proposition a ete retire : deux controles pour la
+          // meme question finissaient par se contredire a l'ecran.
+          poser(false);
+          if(_propReglages().cycle!==false) return _echec('la proposition reste cyclee');
+          poser(null);
+          if(_propReglages().cycle!==true) return _echec('la proposition n\'est plus cyclee par defaut');
+          const z=document.getElementById('ccd-nutrition');
+          renderCoachNutriSection(getOwnedClient('A1'));
+          return z.innerHTML.indexOf('_propSetCycle')<0
+            ?true:_echec('le second selecteur est encore rendu');})());
+
+        ok('LA REMISE A ZERO NE TOUCHE NI L\'HISTORIQUE NI LE JOURNAL',(()=>{
+          // Ce sont les donnees de l'athlete. Une remise a zero qui les
+          // emporterait serait une perte, pas un redemarrage. On lit la SOURCE :
+          // la fonction est asynchrone, et ce qu'elle epargne doit etre verifie
+          // meme si la confirmation n'est pas jouable ici.
+          const s=String(reinitialiserCalculs);
+          for(const interdit of ['bilans','historique','nutrition.log','sessions'])
+            if(new RegExp('delete[^;]*'+interdit.replace('.','\\.')).test(s))
+              return _echec('la remise a zero supprime '+interdit);
+          if(s.indexOf('rcConfirm')<0) return _echec('elle s\'execute sans confirmation');
+          // Et ce qu'elle DOIT remettre a zero.
+          if(s.indexOf('phase.debut=Date.now()')<0) return _echec('le compteur de semaines ne repart pas');
+          if(!/delete c\.phase\.pause/.test(s)) return _echec('la pause n\'est pas levee');
+          if(!/delete c\.phase\.transition/.test(s)) return _echec('la transition n\'est pas annulee');
+          if(s.indexOf('besoinsProposes')<0) return _echec('les cibles ne sont pas recalculees');
+          return /origine:'reinit'/.test(s)?true:_echec('la provenance n\'est pas tracee');})());
+
+        ok('Le bouton de remise a zero est atteignable, et separe du bouton rouge',(()=>{
+          const z=document.getElementById('ccd-nutrition');
+          poser(null); renderCoachNutriSection(getOwnedClient('A1'));
+          if(z.innerHTML.indexOf('reinitialiserCalculs()')<0)
+            return _echec('le bouton a disparu');
+          // Il ecrit et remet le compteur de phase a zero : il ne doit pas se
+          // cliquer par erreur a la place de l'enregistrement.
+          return z.innerHTML.indexOf('saveClientNutriMacros()')<z.innerHTML.indexOf('reinitialiserCalculs()')
+            ?true:_echec('il passe devant l\'enregistrement');})());
+
+        ok('AUCUN BADGE JOUR ON / JOUR OFF sur une diete non cyclee',(()=>{
+          // Les deux jours portent alors les memes cibles : annoncer « JOUR OFF »
+          // ferait croire a un total reduit qui n'existe pas. DEUX ecrans le
+          // rendent, et l'oublier sur l'un des deux suffit a rendre la diete
+          // non cyclee incomprehensible.
+          for(const [nom,f] of [['les anneaux de la diete stricte',_renderStrictMacroRings],
+                                ['le resume du journal',_renderFjDaySummary]]){
+            const s=String(f);
+            if(s.indexOf('dayBadge')<0) return _echec(nom+' : plus de badge du tout ?');
+            if(s.indexOf('dieteCyclee')<0)
+              return _echec(nom+' affiche le badge sans regarder si la diete est cyclee');
+          }
+          return true;})());
+      } finally {
+        window.toastSync=svT; CLOUD.pushOne=svP; _propCycle=svPc;
+        DB.set('users',svD||{}); currentUser=svU; currentClientId=svC;
+      }
+    })();
     // ══════════════ TEMPS DE REPOS ══════════════
     // ── parseRepos : toutes les écritures rencontrées dans les programmes ──
     const _rpCas=[
