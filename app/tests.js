@@ -33136,6 +33136,48 @@ vendredi 78 6h 44m
         // Une ellipse ici, c'est le retour des taches rondes.
         return /<ellipse/.test(h)?_echec('une ellipse traîne dans le calque'):true;})());
 
+      ok('UNE ATHLETE FEMME RECOIT LA PLANCHE FEMININE, quelle que soit la convention',(()=>{
+        // Signalé par Kevin le 25/08/2026 : « le petit bonhomme qui évolue
+        // avec les muscles rouges est masculin sur un profil féminin ».
+        // woGenreAvatar lisait `.gender` seul et le comparait à 'F'. Les trois
+        // premiers cas ci-dessous tombaient sur la planche masculine, dont le
+        // plus courant de tous : _evol_gender n'existe qu'à partir du premier
+        // bilan, et une athlète créée par son coach porte son sexe là.
+        const F=[['gender F',{gender:'F'}],
+                 ['gender f',{gender:'f'}],
+                 ['gender femme',{gender:'femme'}],
+                 ['_evol_gender F, gender vide',{_evol_gender:'F',gender:''}],
+                 ['_evol_gender F seul',{_evol_gender:'F'}],
+                 // Le bilan fait foi sur la fiche d'inscription, comme partout
+                 // ailleurs dans l'app (Fondation, masse grasse, modeles).
+                 ['_evol_gender F sur gender H',{_evol_gender:'F',gender:'H'}]];
+        for(const [nom,u] of F)
+          if(woGenreAvatar(u)!=='f') return _echec(nom+' -> planche masculine');
+        // ET LE REPLI TIENT. Un genre non renseigne ne doit pas laisser un trou
+        // a la place du personnage : tout ce qui n est pas feminin prend le jeu
+        // masculin, comme le reste de l application.
+        for(const [nom,u] of [['gender H',{gender:'H'}],['gender homme',{gender:'homme'}],
+                              ['dossier vide',{}],['null',null],['undefined',undefined]])
+          if(woGenreAvatar(u)!=='h') return _echec(nom+' -> ne retombe plus sur le masculin');
+        // Jusqu au fichier : c est lui qu on voit a l ecran.
+        if(woSrcAvatar(4,woGenreAvatar({_evol_gender:'F'}),'face')!=='./icons/avatar/n4-f.png')
+          return _echec('la vignette servie n est pas la feminine');
+        return woSrcAvatar(7,woGenreAvatar({gender:'femme'}),'dos')==='./icons/avatar/n7-f-dos.png'
+          ?true:_echec('la planche de dos feminine n est pas servie');})());
+
+      ok('Les contours feminins ne sont pas une copie des masculins',(()=>{
+        // Une regeneration ratee du pipeline (scripts/avatar) qui recopierait
+        // la table masculine dans la feminine ne se verrait pas : les zones
+        // s allumeraient, simplement au mauvais endroit sur une autre
+        // silhouette. 182 contours, aucun ne doit coincider.
+        let id=0,ex='';
+        for(const v of ['face','dos']) for(let n=1;n<=WO_AVA_NIV;n++){
+          const H=((WO_ZONES.h||{})[v]||{})[n]||{}, Fm=((WO_ZONES.f||{})[v]||{})[n]||{};
+          for(const m in H) if(JSON.stringify(H[m])===JSON.stringify(Fm[m])){
+            id++; if(!ex) ex=v+'/n'+n+'/'+m;
+          }
+        }
+        return id?_echec(id+' contour(s) identiques, p.ex. '+ex):true;})());
       ok('La silhouette ne se retourne que si TOUS les primaires sont dorsaux',(()=>{
         if(woVueAvatar(['DORSAUX','BICEPS'])!=='face')
           return _echec('un exercice mixte bascule au dos');

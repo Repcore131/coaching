@@ -26920,11 +26920,23 @@ function woNiveauAvatar(ecran,total){
   const e=Math.max(0,Math.min(Number(ecran)||0,total-1));
   return 1+Math.round(e*(WO_AVA_NIV-1)/(total-1));
 }
-// Le jeu d'images. Tout ce qui n'est pas « F » prend le jeu masculin : c'est le
-// repli du reste de l'application, et un genre non renseigné ne doit pas
-// laisser un trou à la place du personnage.
+// LE GENRE SE LIT COMME PARTOUT AILLEURS : _evol_gender d'abord, .gender
+// ensuite, et isFemale pour trancher. Cette fonction lisait `.gender` seul et
+// le comparait à 'F' — d'où une athlète femme devant un bonhomme masculin,
+// signalé par Kevin le 25/08/2026. Trois cas sur quatre tombaient à côté :
+//   • `_evol_gender:'F'` sans .gender — c'est le cas COURANT. _evol_gender
+//     n'existe qu'à partir du premier bilan ; une athlète créée par son coach
+//     porte son sexe là et nulle part ailleurs.
+//   • `_evol_gender:'F'` avec .gender vide — même chose, chaîne vide.
+//   • `.gender:'femme'` — une convention historique du dépôt, qu'isFemale
+//     absorbe déjà et que le test à 'F' ratait.
+// Le même piège avait été relevé et corrigé côté coach (voir la Fondation et
+// _coachEditClient) ; l'avatar de séance était resté en arrière.
+// LES 28 PLANCHES EXISTENT DEPUIS TOUJOURS — 7 niveaux × h/f × face/dos — et
+// WO_ZONES porte les contours musculaires des deux. Il n'y avait rien à
+// dessiner : seulement à choisir la bonne.
 function woGenreAvatar(u){
-  return String((u&&u.gender)||'').toUpperCase()==='F' ? 'f' : 'h';
+  return isFemale(u&&(u._evol_gender||u.gender)) ? 'f' : 'h';
 }
 function woSrcAvatar(niv,genre,vue){
   return './icons/avatar/n'+niv+'-'+genre+(vue==='dos'?'-dos':'')+'.png';
