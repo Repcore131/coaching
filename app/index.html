@@ -4840,7 +4840,14 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <div><label for="prog-name">Nom du programme</label><input id="prog-name" placeholder="Ex: Prise de masse : Semaine 1"></div>
+      <!-- « NOM DE LA SEANCE », et non du programme. Ce champ ecrit s.name,
+           sc.name ou sa.name selon l appelant — c est le nom de la SEANCE dans
+           les trois cas, jamais celui du programme qui la contient. Le libelle
+           disait l inverse depuis toujours, et l exemple aussi : « Prise de
+           masse : Semaine 1 » est un nom de programme. Corrige a la demande de
+           Kevin, 25/08/2026. Le champ cpt-name, lui, nomme bien un programme
+           et garde son libelle. -->
+      <div><label for="prog-name">Nom de la séance</label><input id="prog-name" placeholder="Ex: DOS &amp; ABDOS"></div>
 
       <!-- IMPORT PHOTO PROGRAMME -->
       <div style="margin-top:16px">
