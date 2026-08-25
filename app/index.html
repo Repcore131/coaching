@@ -1132,6 +1132,97 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   .cs-actions{gap:7px}
   .cs-btn{padding:8px 11px;letter-spacing:.2px}
 }
+/* ══ PROTOCOLES DE SEANCE ══════════════════════════════════════════════════
+   Demande de Kevin, 25/08/2026 : « ca fait enfant et pas classe ». Le bloc
+   etait un aplat gris avec des emojis et des pastilles pleines tres saturees —
+   du a-plat pur, la ou tout le reste de l app a du grain, du degrade et de la
+   profondeur. Il reprend ici le meme langage que les cartes de seance : trame
+   diagonale, degrade sur deux arrets, ombre sur deux rayons, filet interieur.
+
+   AUCUN EMOJI. Les quatre — feu, posture, livre, disquette — passent aux
+   icones au trait du jeu, comme les quarante-huit autres de l application. Un
+   emoji se rend differemment sur chaque systeme et casse l alignement ; c est
+   aussi ce qui donnait l air enfantin. */
+.pr-bloc{position:relative;overflow:hidden;margin-top:20px;padding:16px 15px 15px;
+  border-radius:var(--r-4);
+  background:linear-gradient(168deg,#141414,#0e0e0e 55%,#090909);
+  border:1px solid var(--border);
+  box-shadow:0 10px 26px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.04)}
+.pr-bloc::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(-50deg,transparent,transparent 13px,rgba(255,255,255,.02) 13px,rgba(255,255,255,.02) 14px)}
+.pr-bloc>*{position:relative}
+/* ── L en-tete ───────────────────────────────────────────────────────── */
+.pr-tete{display:flex;flex-direction:column;align-items:flex-start;gap:11px;
+  margin-bottom:15px}
+/* Le skew, jamais font-style:italic : Bebas n est chargee qu en romain. */
+.pr-titre{font-family:var(--pile-titre);font-size:17px;line-height:1;
+  letter-spacing:2.2px;text-transform:uppercase;color:var(--text);
+  transform:skewX(-9deg);transform-origin:left center}
+.pr-cmds{display:flex;width:100%;gap:7px;align-items:center;flex-wrap:wrap}
+.pr-cmd{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  flex:1 1 auto;min-height:34px;padding:7px 9px;border-radius:var(--r-2);
+  cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
+  letter-spacing:.8px;text-transform:uppercase;color:var(--sub);
+  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
+  border:1px solid var(--border);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.pr-cmd svg{color:var(--text-dim)}
+/* ── Une phase : echauffement, retour au calme ───────────────────────── */
+.pr-phase{--c:#8a8a8a}
+.pr-phase+.pr-phase{margin-top:16px;padding-top:15px;
+  border-top:1px solid rgba(255,255,255,.06)}
+.pr-sect{display:flex;align-items:center;gap:9px;margin-bottom:3px}
+.pr-ico{flex-shrink:0;width:27px;height:27px;border-radius:8px;
+  display:inline-grid;place-items:center;color:var(--c);
+  border:1px solid color-mix(in srgb,var(--c) 42%,transparent);
+  background:color-mix(in srgb,var(--c) 11%,transparent);
+  box-shadow:0 0 11px color-mix(in srgb,var(--c) 20%,transparent)}
+.pr-lbl{display:inline;margin:0;font-size:var(--fs-xs);font-weight:800;
+  letter-spacing:1.9px;text-transform:uppercase;color:var(--text-strong)}
+.pr-type{font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.4px;
+  margin:0 0 9px 36px}
+/* ── Une carte de protocole ──────────────────────────────────────────── */
+.pr-carte{--c:#8a8a8a;position:relative;overflow:hidden;display:block;width:100%;
+  text-align:left;padding:10px 12px 10px 15px;margin-bottom:7px;
+  border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;
+  background:linear-gradient(180deg,#151515,#0f0f0f);border:1px solid #1e1e1e;
+  box-shadow:0 3px 10px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.035)}
+/* LE RAIL, A LA PLACE DE L APLAT. L objectif se lisait sur une pastille pleine
+   et tres saturee — vert vif, violet vif — qui tirait l oeil avant le nom du
+   protocole. La couleur passe sur un filet de 3 px au bord gauche : elle
+   classe la carte sans lui voler son titre. */
+.pr-carte::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--c);box-shadow:0 0 10px color-mix(in srgb,var(--c) 70%,transparent)}
+.pr-carte[data-pose]{border-color:rgba(34,197,94,.42);
+  background:linear-gradient(180deg,#0f1a0f,#0b120b);
+  box-shadow:0 0 16px rgba(34,197,94,.14),inset 0 1px 0 rgba(255,255,255,.04)}
+.pr-haut{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pr-nom{font-size:var(--fs-sm);font-weight:800;color:var(--text);letter-spacing:.2px}
+/* AU CONTOUR, PAS EN APLAT : sur un fond sombre, un aplat sature a la
+   luminosite d un bouton et se lit comme une action a faire. */
+.pr-obj{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.1px;
+  padding:2px 7px;border-radius:var(--r-1);text-transform:uppercase;
+  color:var(--c);border:1px solid color-mix(in srgb,var(--c) 48%,transparent);
+  background:color-mix(in srgb,var(--c) 10%,transparent)}
+.pr-duree{font-size:var(--fs-2xs);color:var(--text-faint);
+  font-variant-numeric:tabular-nums}
+.pr-pose{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;
+  color:var(--success)}
+.pr-desc{font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;line-height:1.5}
+.pr-ci{font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.45}
+/* ── « Voir tous les protocoles » ─────────────────────────────────────── */
+/* Un lien souligne au milieu de cartes en relief faisait brouillon. Il devient
+   une commande discrete, de la meme famille que celles de l en-tete. */
+.pr-tous{display:inline-flex;align-items:center;gap:7px;min-height:32px;
+  padding:6px 11px;margin-top:2px;border-radius:var(--r-2);cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
+  letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);
+  background:none;border:1px dashed var(--border)}
+.pr-champ{margin-top:9px}
+@media (max-width:400px){
+  .pr-bloc{padding:13px 12px 12px}
+  .pr-titre{font-size:15px;letter-spacing:1.6px}
+}
 /* ── LA CONSIGNE DU JOURNAL ──────────────────────────────────────────── */
 /* UN FOND QUI COUVRE, ET NON UNE SURFACE TRANSLUCIDE. La carte porte un ciel
    d eclairs derriere elle : a travers var(--surface-1), les traits rouges
@@ -4858,28 +4949,47 @@ const COACH_PHOTO='icons/coach.jpg';
            Sheet ; c est le guide qui tient ce role desormais, et il porte deja
            la video et l illustration de chaque mouvement. -->
       <!-- PROTOCOLES DE SÉANCE -->
-      <div style="margin-top:20px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Protocoles de séance</div>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      <!-- « Ça fait enfant et pas classe », Kevin, 25/08/2026. Le bloc était un
+           aplat gris posé sur une page qui, partout ailleurs, a du grain et du
+           relief. Il reprend ici le langage des cartes de séance : trame
+           diagonale, dégradé, ombre portée, filet intérieur — voir .pr-* dans
+           la feuille de style.
+           LES QUATRE ÉMOJIS DISPARAISSENT (📖 💾 🔥 🧘). Un émoji se rend
+           différemment sur chaque système, ne suit pas la couleur du texte et
+           casse l'alignement des lignes ; c'est aussi lui qui donnait l'air
+           enfantin. Ils passent aux icônes au trait du jeu, inlinées telles que
+           icon() les rendrait — ce gabarit est statique, il n'a pas de JS. -->
+      <div class="pr-bloc">
+        <div class="pr-tete">
+          <div class="pr-titre">Protocoles de séance</div>
+          <div class="pr-cmds">
           <!-- Consultation des 20 protocoles, les deux phases mêlées et sans
                champ à remplir. Les liens « Voir tous les protocoles » plus bas
                ouvrent le même écran, mais filtré sur une phase et prêt à
                écrire dans le champ correspondant. -->
-          <button class="btn btn-outline btn-sm" style="font-size:var(--fs-xs);color:var(--sub);padding:4px 10px" onclick="ouvrirProtocoles('',null,'s-coach-program')">📖 Bibliothèque</button>
-          <button class="btn btn-outline btn-sm" style="font-size:var(--fs-xs);color:var(--sub);padding:4px 10px" onclick="saveWarmupTemplate()">💾 Mémoriser comme modèle</button>
+          <button type="button" class="pr-cmd" onclick="ouvrirProtocoles('',null,'s-coach-program')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Bibliothèque</button>
+          <button type="button" class="pr-cmd" onclick="saveWarmupTemplate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>Mémoriser comme modèle</button>
           </div>
         </div>
-        <div>
-          <label for="prog-warmup" style="margin-top:0">🔥 Échauffement</label>
-          <div id="proto-type-seance" style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:6px"></div>
-          <div id="proto-sug-warmup" style="margin-bottom:8px"></div>
-          <textarea id="prog-warmup" rows="2" placeholder="Ex: 10 min vélo léger, 2×10 squats vide, rotations épaules..."></textarea>
+        <!-- La couleur de la phase se pose UNE FOIS, sur --c, et redescend sur
+             la pastille et le halo de l'icône : deux orange écrits à la main
+             finiraient par diverger. -->
+        <div class="pr-phase" style="--c:#f97316">
+          <div class="pr-sect">
+            <span class="pr-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></span>
+            <label class="pr-lbl" for="prog-warmup">Échauffement</label>
+          </div>
+          <div id="proto-type-seance" class="pr-type"></div>
+          <div id="proto-sug-warmup"></div>
+          <textarea id="prog-warmup" class="pr-champ" rows="2" placeholder="Ex: 10 min vélo léger, 2×10 squats vide, rotations épaules..."></textarea>
         </div>
-        <div style="margin-top:8px">
-          <label for="prog-cooldown">🧘 Étirements / Retour au calme</label>
-          <div id="proto-sug-cooldown" style="margin-bottom:8px"></div>
-          <textarea id="prog-cooldown" rows="2" placeholder="Ex: 3×30s quadriceps, 2×30s ischio, 5 min marche..."></textarea>
+        <div class="pr-phase" style="--c:#3b82f6">
+          <div class="pr-sect">
+            <span class="pr-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
+            <label class="pr-lbl" for="prog-cooldown">Étirements / Retour au calme</label>
+          </div>
+          <div id="proto-sug-cooldown"></div>
+          <textarea id="prog-cooldown" class="pr-champ" rows="2" placeholder="Ex: 3×30s quadriceps, 2×30s ischio, 5 min marche..."></textarea>
         </div>
       </div>
 
@@ -59610,18 +59720,24 @@ function _rendreSuggestionsProto(){
       // Comparaison sur la ligne d'en-tête entière, pas sur un préfixe : deux
       // protocoles peuvent partager un début de nom.
       const pose=actuel&&actuel.split('\n')[0].trim()===protoTexte(p).split('\n')[0];
-      return `<button onclick="_appliquerProto('${p.slug}','${champ}')" style="text-align:left;background:${pose?'#101a10':'var(--surface-1)'};border:1px solid ${pose?'var(--success)':'var(--border)'};border-radius:var(--r-2);padding:9px 11px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--text);width:100%;margin-bottom:6px">
-        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-          <span style="font-size:var(--fs-sm);font-weight:800">${escapeHtml(p.nom)}</span>
-          <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:var(--r-3);background:${o.c};color:#08080a">${o.lib.toUpperCase()}</span>
-          <span style="font-size:var(--fs-2xs);color:var(--sub)">${p.dureeMin===p.dureeMax?p.dureeMin:p.dureeMin+' à '+p.dureeMax} min</span>
-          ${pose?'<span style="font-size:var(--fs-2xs);color:var(--success);font-weight:800">EN PLACE</span>':''}
+      const duree=p.dureeMin===p.dureeMax?p.dureeMin:p.dureeMin+' à '+p.dureeMax;
+      // LA COULEUR DE L'OBJECTIF DESCEND PAR --c, ET RIEN D'AUTRE. Elle peint
+      // le rail de gauche et le contour de la pastille ; elle ne remplit plus
+      // celle-ci. Un aplat saturé sur fond noir a la luminosité d'un bouton :
+      // il se lisait comme une action à faire, et surtout il passait devant le
+      // nom du protocole, qui est pourtant ce qu'on vient lire.
+      return `<button type="button" class="pr-carte"${pose?' data-pose':''} style="--c:${o.c}" onclick="_appliquerProto('${p.slug}','${champ}')">
+        <div class="pr-haut">
+          <span class="pr-nom">${escapeHtml(p.nom)}</span>
+          <span class="pr-obj">${escapeHtml(o.lib.toUpperCase())}</span>
+          ${pose?'<span class="pr-pose">En place</span>':''}
+          <span class="pr-duree">${duree} min</span>
         </div>
-        <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:3px;line-height:1.4">${escapeHtml(p.desc)}</div>
-        ${p.contreInd.length?`<div style="font-size:var(--fs-2xs);color:var(--orange);margin-top:3px">À éviter si : ${p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', ')}</div>`:''}
+        <div class="pr-desc">${escapeHtml(p.desc)}</div>
+        ${p.contreInd.length?`<div class="pr-ci">À éviter si : ${escapeHtml(p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', '))}</div>`:''}
       </button>`;
     }).join('')
-    +`<button onclick="ouvrirProtocoles('${phase==='warmup'?'WARMUP':'COOLDOWN'}','${champ}')" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 0">Voir tous les protocoles</button>`;
+    +`<button type="button" class="pr-tous" onclick="ouvrirProtocoles('${phase==='warmup'?'WARMUP':'COOLDOWN'}','${champ}')">Voir tous les protocoles</button>`;
   }
   const t=document.getElementById('proto-type-seance');
   if(t) t.textContent=type?('Séance reconnue : '+_PROTO_TYPE_LIB[type]):'Type de séance indéterminé, suggestions générales';

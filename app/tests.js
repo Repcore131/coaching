@@ -10687,6 +10687,76 @@ function testExercices(){
             return _echec('le champ de collage est encore la');
           return document.getElementById('prog-paste-zone')
             ?_echec('la zone de collage est encore la'):true;})());
+        // ── LE BLOC DES PROTOCOLES, RHABILLE LE 25/08/2026 ──────────────
+        // « Ça fait enfant et pas classe », Kevin. Trois choses ont changé et
+        // sont faciles à défaire sans s'en apercevoir : les émojis, l'aplat de
+        // la pastille, et la ligne des deux commandes.
+        ok('PLUS UN SEUL EMOJI dans le bloc des protocoles',(()=>{
+          const b=document.querySelector('.pr-bloc');
+          if(!b) return _echec('le bloc a disparu');
+          // Les quatre etaient 📖 💾 🔥 🧘. On ne cherche pas ces quatre-la
+          // mais TOUTE la plage des pictogrammes : un emoji rajoute demain
+          // serait le meme probleme — rendu different sur chaque systeme,
+          // insensible a la couleur du texte, et c est lui qui faisait enfant.
+          const t=b.textContent||'';
+          const trouve=[...t].filter(c=>{const n=c.codePointAt(0);
+            return (n>=0x1F300&&n<=0x1FAFF)||(n>=0x2600&&n<=0x27BF);});
+          return trouve.length?_echec('emoji present : '+trouve.join(' ')):true;})());
+        ok('Les quatre pictogrammes sont des SVG du jeu d\'icones',(()=>{
+          const b=document.querySelector('.pr-bloc');
+          if(!b) return _echec('le bloc a disparu');
+          const cmd=b.querySelectorAll('.pr-cmd svg'),ico=b.querySelectorAll('.pr-ico svg');
+          if(cmd.length!==2) return _echec(cmd.length+' icone(s) sur les commandes, 2 attendues');
+          if(ico.length!==2) return _echec(ico.length+' icone(s) de phase, 2 attendues');
+          // Meme trace que icon() : sans stroke a currentColor, elles ne
+          // suivraient pas --c et le halo de la phase tomberait a cote.
+          for(const s of [...cmd,...ico])
+            if(s.getAttribute('stroke')!=='currentColor')
+              return _echec('une icone ne suit pas la couleur du texte');
+          return true;})());
+        ok('LA PASTILLE D\'OBJECTIF PREND LA COULEUR EN TEXTE, plus en aplat',(()=>{
+          // Avant, l objectif etait peint `background:${o.c};color:#08080a` —
+          // un aplat sature sur fond noir a la luminosite d un bouton : il se
+          // lisait comme une action a faire, et passait devant le nom du
+          // protocole, qui est pourtant ce qu on vient lire.
+          const h=document.createElement('div');
+          h.innerHTML='<button class="pr-carte" style="--c:#22c55e">'
+            +'<span class="pr-obj">MOBILITE</span></button>';
+          document.body.appendChild(h);
+          try{
+            const s=getComputedStyle(h.querySelector('.pr-obj'));
+            if(s.color.replace(/\s/g,'')!=='rgb(34,197,94)')
+              return _echec('le texte ne prend pas la couleur de l objectif : '+s.color);
+            // Un fond OPAQUE se serialise « rgb(r, g, b) » sans alpha.
+            if(/^rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)$/.test(s.backgroundColor))
+              return _echec('la pastille est redevenue un aplat : '+s.backgroundColor);
+            return true;
+          } finally { h.remove(); }})());
+        ok('Le rail de la carte descend de --c, pose une seule fois',(()=>{
+          const src=String(_rendreSuggestionsProto);
+          if(src.indexOf('--c:')<0) return _echec('la couleur ne descend plus par --c');
+          if(src.indexOf('#08080a')>=0) return _echec('le texte noir de l aplat est revenu');
+          // Le rail est un ::before de 3 px : il ne peut pas etre ecrit en
+          // ligne, et c est voulu — une seule declaration pour cinq objectifs.
+          const css=[...document.styleSheets].some(f=>{try{
+            return [...f.cssRules].some(r=>r.selectorText==='.pr-carte::before'
+              &&/var\(--c\)/.test(r.style.background||r.cssText));}catch(e){return false;}});
+          return css?true:_echec('la regle .pr-carte::before est introuvable');})());
+        ok('Les deux commandes tiennent sur une ligne dans la colonne de l\'app',(()=>{
+          // 368 px utiles a 440, 303 sur un 375 : cote a cote quand ca rentre,
+          // l une sous l autre sinon — sans une seule requete de media, par
+          // flex:1 1 auto + wrap. C est le reglage qui casse en premier si on
+          // rallonge un libelle.
+          const b=document.querySelector('.pr-bloc');
+          if(!b) return _echec('le bloc a disparu');
+          const c=b.querySelectorAll('.pr-cmd');
+          if(c.length!==2) return _echec(c.length+' commande(s), 2 attendues');
+          for(const x of c){
+            const s=getComputedStyle(x);
+            if(s.flexGrow!=='1') return _echec('une commande ne s etire plus');
+          }
+          const p=getComputedStyle(b.querySelector('.pr-cmds'));
+          return p.flexWrap==='wrap'?true:_echec('la ligne des commandes ne se replie plus');})());
         ok('Aucune commande d\'extraction n\'est atteignable dans le parcours',(()=>{
           // Critère d'acceptation nº1. On rend l'éditeur et on regarde ce qui
           // est RÉELLEMENT visible, plutôt que de faire confiance au drapeau.
