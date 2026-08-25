@@ -47404,7 +47404,15 @@ let _propLip=null;       // null = valeur suggérée par le dossier
 // reste que celui qui ecrit, et la proposition le suit.
 let _propCycle=null;
 function _propReglages(){
-  const p=_propProt, l=_propLip;
+  // LA MEMOIRE D'ABORD, LE DOSSIER ENSUITE. Les curseurs de la session priment —
+  // le coach est en train de les manipuler — mais a l'ouverture ils valent null,
+  // et c'est le dossier qui doit repondre. Sans ce repli, un calcul dit
+  // « automatique » aurait change tout seul d'un rechargement a l'autre : les
+  // reglages retombaient sur les valeurs suggerees.
+  const _c=(()=>{ try{ return getOwnedClient(currentClientId); }catch(e){ return null; } })();
+  const _r=reglagesCalcul(_c);
+  const p=(typeof _propProt==='number')?_propProt:_r.prot;
+  const l=(typeof _propLip==='number')?_propLip:_r.lip;
   return {protGparKg:(typeof p==='number')?p:undefined,
     lipGparKg:(typeof l==='number')?l:undefined,
     correctionMB:(typeof _propCorr==='number')?_propCorr:undefined,
@@ -47413,7 +47421,10 @@ function _propReglages(){
       :_propCycle,
     // null = milieu. La remise a zero au changement de phase se fait ICI,
     // au moment de lire, plutot que dans un ecouteur qui pourrait manquer.
-    vitesse:_propVitesseCourante(getOwnedClient(currentClientId))};
+    // La vitesse aussi : _propVitesseCourante rend null a l'ouverture, et le
+    // milieu de fourchette n'est pas forcement celui que le coach avait pose.
+    vitesse:(()=>{ const v=_propVitesseCourante(_c);
+      return (v!=null)?v:((_r.vitesse!=null)?_r.vitesse:null); })()};
 }
 
 // ══════════════ VITESSE VISÉE : LE COACH CHOISIT DANS LA FOURCHETTE ═══════
@@ -47772,7 +47783,8 @@ function _htmlDepartCoach(c){
     </div>
     ${noteSopk}
     ${_htmlVitesseCoach(c)}
-    <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="proposerPointDepart()">Proposer un point de départ</button>
+    ${saisieManuelle(c)?`<button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="proposerPointDepart()">Proposer un point de départ</button>`
+      :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;text-align:center">Les cibles ci-dessous suivent ces réglages. Le bouton de proposition n'a plus d'objet : c'est ce que fait le calcul automatique, en continu.</div>`}
   </div>`;
 }
 function _htmlDepartHypotheses(c){
@@ -47783,6 +47795,118 @@ function _htmlDepartHypotheses(c){
 }
 // PRÉ-REMPLIT les champs et rien d'autre. Aucune écriture, aucun push : le
 // coach relit, corrige, puis clique sur « Enregistrer » comme d'habitude.
+// ══════ CALCUL AUTOMATIQUE DES CIBLES, ET SAISIE MANUELLE EN SECOURS ══════
+// Demande de Kevin, 25/08/2026 : « ça doit être calculé en automatique et
+// s'ajuster selon les modifications au niveau objectifs nutritionnels ; mettre
+// en dessous un bouton on/off pour le manuel ».
+//
+// PAR DÉFAUT, AUTOMATIQUE. Les dix champs se remplissent depuis
+// besoinsProposes et se recalculent à chaque changement de protéines, de
+// lipides, de correction du métabolisme ou de vitesse visée. Le coach qui veut
+// poser ses propres chiffres lève l'interrupteur.
+//
+// LE DÉFAUT DÉPEND DE CE QUE PORTE DÉJÀ LE DOSSIER, et ce n'est pas un
+// caprice. Kevin veut l'automatique par défaut, et c'est ce que reçoit tout
+// athlète dont les cibles ne sont pas encore posées.
+//
+// MAIS UN DOSSIER QUI PORTE DÉJÀ DES GRAMMES PORTE UNE PRESCRIPTION. Ces
+// chiffres ont été saisis et relus par un coach, parfois ajustés séance après
+// séance. Les passer d'office en automatique aurait affiché le calcul à la
+// place, et le premier enregistrement — fait pour une tout autre raison —
+// aurait remplacé la diète de l'athlète sans que personne ne l'ait demandé.
+// Ces dossiers-là démarrent donc en manuel, et le coach bascule quand il veut.
+//
+// Une fois le champ écrit, il fait foi : ce repli ne sert qu'aux dossiers qui
+// n'ont jamais vu cet interrupteur.
+function saisieManuelle(user){
+  const n=(user&&user.nutrition)||{};
+  if(typeof n.manuel==='boolean') return n.manuel;
+  const m=n.macros||{};
+  const pose=o=>!!(o&&(Number(o.kcal)>0||Number(o.p)>0||Number(o.g)>0||Number(o.l)>0));
+  return pose(m.on)||pose(m.off);
+}
+// ══════ LES RÉGLAGES DE CALCUL, ÉCRITS DANS LE DOSSIER ════════════════════
+// SANS EUX, L'AUTOMATIQUE N'AURAIT RIEN D'AUTOMATIQUE. _propProt, _propLip et
+// _propVitesse vivent en mémoire : à la prochaine ouverture — ou sur un autre
+// appareil — ils repartent à null, la proposition retombe sur les valeurs
+// suggérées, et les cibles de l'athlète changeraient toutes seules sans que
+// personne n'ait rien touché. Le commentaire de SOPK_MIGRATION le constate
+// déjà : « le g/kg de lipides n'a JAMAIS été persisté ».
+//
+// correctionMB fait exception : elle a déjà son champ dans le dossier
+// (user.correctionMB), et on ne la déplace pas.
+function reglagesCalcul(user){
+  const r=(user&&user.nutrition&&user.nutrition.reglages)||{};
+  const n=v=>{ const x=Number(v); return isFinite(x)?x:undefined; };
+  return {prot:n(r.prot),lip:n(r.lip),vitesse:(r.vitesse==null?undefined:n(r.vitesse))};
+}
+// Écrit ce qui a servi au calcul. Appelé au MÊME moment que les grammes : les
+// deux décrivent la même décision, et les séparer ferait un dossier dont les
+// cibles ne correspondent plus à ses propres réglages.
+function _poserReglagesCalcul(c){
+  if(!c) return;
+  if(!c.nutrition) c.nutrition={};
+  const o=_propReglages();
+  const r=c.nutrition.reglages||{};
+  if(typeof o.protGparKg==='number') r.prot=o.protGparKg;
+  if(typeof o.lipGparKg==='number')  r.lip=o.lipGparKg;
+  if(o.vitesse!=null&&isFinite(o.vitesse)) r.vitesse=o.vitesse;
+  c.nutrition.reglages=r;
+  // La correction du métabolisme garde son champ historique.
+  if(typeof o.correctionMB==='number') c.correctionMB=o.correctionMB;
+}
+function saveClientNutriManuel(v){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  if(!c.nutrition) c.nutrition={};
+  const manuel=!!v;
+  c.nutrition.manuel=manuel;
+  // EN REPASSANT EN AUTOMATIQUE, LES CIBLES SONT RECALCULÉES ET ÉCRITES tout
+  // de suite. Les laisser telles quelles afficherait des chiffres calculés à
+  // l'écran pendant que l'athlète en garderait d'autres — l'écran du coach
+  // dirait une chose, le journal de son élève une autre.
+  if(!manuel){
+    const b=besoinsProposes(c,_propReglages());
+    if(b&&b.source!==null){
+      const cyc=dieteCyclee(c);
+      c.nutrition.macros=Object.assign({},c.nutrition.macros,
+        {on:Object.assign({},b.on),
+         off:cyc?Object.assign({},b.off):Object.assign({},b.on),
+         origine:'auto',origineDate:Date.now()});
+      _poserReglagesCalcul(c);
+    }
+  }
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),
+    manuel?'Saisie manuelle activée ✓':'Calcul automatique rétabli ✓','le réglage est');
+  renderCoachNutriSection(c);
+  return true;
+}
+// L'interrupteur, sous la grille. Même habillage que celui de l'accès à la
+// diète stricte : c'est le même geste, et deux dessins pour un même
+// interrupteur se liraient comme deux mécanismes différents.
+function _htmlManuelCoach(c){
+  const man=saisieManuelle(c);
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;
+      margin-top:10px;padding:9px 11px;background:var(--surface-2);
+      border:1px solid ${man?'var(--warning-border)':'var(--border)'};border-radius:var(--r-2)">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--text);letter-spacing:.4px">Saisie manuelle</div>
+      <div style="font-size:var(--fs-2xs);color:${man?'var(--orange)':'var(--text-faint)'};line-height:1.5;margin-top:2px">${man
+        ?'Tes chiffres priment. Ils ne bougeront plus si tu changes les protéines, les lipides ou la vitesse.'
+        :'Les cibles se recalculent seules à chaque changement d\'objectif. Enregistre pour les envoyer à ton athlète.'}</div>
+    </div>
+    <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
+      <input type="checkbox" ${man?'checked':''} onchange="saveClientNutriManuel(this.checked)" style="opacity:0;width:0;height:0;position:absolute">
+      <span style="position:absolute;inset:0;background:${man?'var(--orange)':'var(--border)'};border-radius:var(--r-3);transition:background var(--t-2);pointer-events:none">
+        <span style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:var(--r-full);transition:transform var(--t-2);transform:translateX(${man?'20px':'0px'})"></span>
+      </span>
+    </label>
+  </div>`;
+}
+
 // ══════ DIÈTE CYCLÉE OU NON ═══════════════════════════════════════════════
 // Demande de Kevin, 25/08/2026 : pouvoir régler une diète NON cyclée — les
 // mêmes valeurs tous les jours — au lieu du couple jour ON / jour OFF.
@@ -48157,18 +48281,39 @@ function renderCoachNutriSection(c){
   // valeur que le coach ne voit plus.
   const _cyc=dieteCyclee(c);
   const _cols=_cyc?'90px 1fr 1fr':'90px 1fr';
-  const _champ=(id,ph,val)=>`<input id="${id}" type="number" min="0" placeholder="${ph}" value="${val||''}"
-        style="padding:7px 10px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;outline:none;width:100%;box-sizing:border-box">`;
+  // EN AUTOMATIQUE, LES CHAMPS AFFICHENT LE CALCUL, pas ce qui est au dossier.
+  // C'est ce qui les fait bouger des que le coach change les proteines, les
+  // lipides, la correction du metabolisme ou la vitesse : chacun de ces
+  // selecteurs rappelle deja renderCoachNutriSection.
+  const _man=saisieManuelle(c);
+  const _calc=_man?null:(()=>{ try{ const b=besoinsProposes(c,_propReglages());
+    return (b&&b.source!==null)?b:null; }catch(e){ return null; } })();
+  const _vOn =k=>_calc?_calc.on[k] :mon[k];
+  const _vOff=k=>_calc?(_cyc?_calc.off[k]:_calc.on[k]):moff[k];
+  // `readonly` ET NON `disabled` : un champ desactive ne rend pas sa valeur a
+  // l'enregistrement, et saveClientNutriMacros les lit par leur identifiant.
+  // On garde donc la lecture, on interdit la frappe.
+  const _ro=_man?'':' readonly';
+  const _fond=_man?'#111':'#0c0c0c';
+  const _teinte=_man?'var(--text)':'var(--text-dim)';
+  const _champ=(id,ph,val)=>`<input id="${id}" type="number" min="0" placeholder="${ph}" value="${val||''}"${_ro}
+        style="padding:7px 10px;background:${_fond};border:1px solid var(--border);border-radius:var(--r-2);color:${_teinte};font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;outline:none;width:100%;box-sizing:border-box${_man?'':';cursor:default'}">`;
   const macroRows=fields.map(f=>`
     <div style="display:grid;grid-template-columns:${_cols};align-items:center;gap:6px;margin-bottom:7px">
       <div style="font-size:var(--fs-xs);font-weight:800;color:${f.color};letter-spacing:1px">${f.label}</div>
-      ${_champ('ccd-on-'+f.k,f.ph,mon[f.k])}
-      ${_cyc?_champ('ccd-off-'+f.k,f.ph,moff[f.k]):''}
+      ${_champ('ccd-on-'+f.k,f.ph,_vOn(f.k))}
+      ${_cyc?_champ('ccd-off-'+f.k,f.ph,_vOff(f.k)):''}
     </div>`).join('')
     // LECTURE SEULE, sous les champs. Les dix champs restent en grammes :
     // convertir leur contenu ferait partir un « 30 » tape en pourcentage
     // comme 30 grammes de proteines vers le dossier.
-    +(()=>{ try{ return htmlMacrosCoachLecture(c,mon,moff); }catch(e){ return ''; } })();
+    // LE MEME JEU DE CHIFFRES QUE LES CHAMPS. En automatique, mon et moff
+    // portent ce qui est ENREGISTRE, pas ce qui est calcule : le bloc restait
+    // vide sur un dossier neuf, et affichait les anciennes valeurs des qu'un
+    // reglage bougeait. Il lit donc la meme source que la grille.
+    +(()=>{ try{ return htmlMacrosCoachLecture(c,
+        _calc?_calc.on:mon,
+        _calc?(_cyc?_calc.off:_calc.on):moff); }catch(e){ return ''; } })();
   // EN TÊTE : c’est le seul chiffre du bloc qui dise si les cibles réglées
   // en dessous sont tenues. Le lire après les avoir modifiées serait le lire
   // trop tard.
@@ -48207,6 +48352,7 @@ function renderCoachNutriSection(c){
           ${_cyc?'<div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:4px">💤 JOUR OFF</div>':''}
         </div>
         ${macroRows}
+        ${_htmlManuelCoach(c)}
         ${_htmlViolationsCoach(c)}
     ${_htmlAjustement(c,true)}
     ${_htmlDepartHypotheses(c)}
@@ -48261,7 +48407,13 @@ function saveClientNutriMacros(malgrePlancher){
   if(!c) return;
   if(!c.nutrition) c.nutrition={};
   const g=id=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?undefined:v;};
-  const _on={kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),f:g('ccd-on-f')};
+  // EN AUTOMATIQUE, ON RECALCULE PLUTOT QUE DE RELIRE L'ECRAN. Les champs
+  // portent bien le calcul, mais les relire ferait dependre le dossier de
+  // l'etat du DOM — un rendu a moitie remplace, et on ecrirait des cases vides.
+  const _auto=!saisieManuelle(c)&&(()=>{ try{ const b=besoinsProposes(c,_propReglages());
+    return (b&&b.source!==null)?b:null; }catch(e){ return null; } })();
+  const _on=_auto?Object.assign({},_auto.on)
+    :{kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),f:g('ccd-on-f')};
   // DIÈTE NON CYCLÉE : OFF REÇOIT LES MÊMES VALEURS QUE ON. Les champs OFF ne
   // sont pas rendus dans ce mode ; les lire donnerait undefined partout, et
   // l'athlète se retrouverait sans aucune cible les jours de repos. Le modèle
@@ -48270,8 +48422,9 @@ function saveClientNutriMacros(malgrePlancher){
   const _cyc=dieteCyclee(c);
   const saisie={
     on:_on,
-    off:_cyc?{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),f:g('ccd-off-f')}
-            :Object.assign({},_on),
+    off:!_cyc?Object.assign({},_on)
+      :(_auto?Object.assign({},_auto.off)
+            :{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),f:g('ccd-off-f')}),
   };
   // CONTRÔLE AVANT ÉCRITURE. Rien n'est écrit tant que le coach n'a pas vu.
   const viol=controlerMacros(saisie,c);
@@ -48316,7 +48469,14 @@ function saveClientNutriMacros(malgrePlancher){
       email:c.email||null,
       date:Date.now(),violations:viol.map(v=>({champ:v.champ,valeur:v.valeur,plancher:v.plancher}))};
   }
+  saisie.origine=_auto?'auto':'coach';
+  saisie.origineDate=Date.now();
   c.nutrition.macros=saisie;
+  // LES REGLAGES QUI ONT SERVI AU CALCUL PARTENT AVEC LES GRAMMES. Les deux
+  // decrivent la meme decision ; les separer ferait un dossier dont les
+  // cibles ne correspondent plus a ses propres reglages, et le calcul
+  // automatique repartirait des valeurs suggerees a la prochaine ouverture.
+  _poserReglagesCalcul(c);
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
   // Apres un echec d'ecriture AUSSI : une confirmation qui survit a un echec

@@ -15326,6 +15326,12 @@ function testExercices(){
           seenBilans:{},alertStatus:{},studentCodes:[]};
         const poser=extra=>{
           const c=_u('H',80,Object.assign({id:'plc',email:'plc@t.fr',coachId:'coPL'},extra||{}));
+          // SAISIE MANUELLE : tout ce bloc porte sur des chiffres TAPES sous le
+          // plancher. En calcul automatique la question ne se pose pas —
+          // _relevePlancher releve les journees avant meme de les proposer, et il
+          // n'y a plus de derogation a confirmer.
+          if(!c.nutrition) c.nutrition={};
+          c.nutrition.manuel=true;
           const u={}; u[c.email]=c; DB.set('users',u); currentClientId=c.id;
           window._plDerniereViol=null; _plConfirme=null;
           renderCoachNutriSection(c);
@@ -16932,10 +16938,26 @@ function testExercices(){
           renderCoachNutriSection(c);
           return c;
         };
-        ok('Le bouton « Proposer » est rendu quand le calcul est possible',(()=>{
-          poser();
+        ok('La proposition est offerte quand le calcul est possible',(()=>{
+          // CETTE ASSERTION EXIGEAIT LE BOUTON, TOUJOURS. Depuis que la grille se
+          // calcule d'elle-meme (25/08/2026), le bouton n'a plus d'objet en mode
+          // automatique : il remplirait les champs avec ce qu'ils portent deja.
+          // Ce qui doit rester vrai, c'est que le coach ait acces a la
+          // proposition des qu'elle est calculable — par le bouton s'il saisit a
+          // la main, par les champs eux-memes sinon.
           const z=document.getElementById('ccd-nutrition');
-          return !!z&&/Proposer un point de départ/.test(z.innerHTML);})());
+          // Saisie manuelle : le bouton, comme avant.
+          const cm=poser({nutrition:{manuel:true}});
+          if(!z||!/Proposer un point de départ/.test(z.innerHTML))
+            return _echec('le bouton manque en saisie manuelle');
+          // Automatique : pas de bouton, mais les cibles calculees a l'ecran.
+          poser({nutrition:{manuel:false}});
+          if(/Proposer un point de départ/.test(z.innerHTML))
+            return _echec('le bouton subsiste alors qu\'il n\'a plus d\'objet');
+          const v=document.getElementById('ccd-on-kcal');
+          if(!v) return _echec('les champs ont disparu');
+          return Number(v.value)>0?true
+            :_echec('le champ ne porte aucune cible calculee : « '+v.value+' »');})());
         ok('Critère 1 : aucun bouton quand la taille manque',(()=>{
           const c=poser({_evol_height:null,height:null,
             bilans:[{type:'suivi',date:Date.now()-2*864e5,
@@ -22302,6 +22324,136 @@ function testExercices(){
           const n=noms();
           return n.length===1?true:_echec('double malgre la meme adresse : '+n.join(', '));})());
       } finally { DB.set('users',sauveD||{}); currentUser=sauveU; }
+    })();
+    // ── CALCUL AUTOMATIQUE DES CIBLES ────────────────────────────────────
+    // Demande de Kevin, 25/08/2026 : « ça doit être calculé en automatique et
+    // s'ajuster selon les modifications au niveau objectifs nutritionnels ».
+    (()=>{
+      const svU=currentUser, svD=DB.get('users'), svC=currentClientId,
+            svT=window.toastSync, svP=CLOUD.pushOne,
+            svPr=_propProt, svL=_propLip, svPc=_propCycle;
+      const COACH={id:'C9',email:'c9@t.fr',role:'coach'};
+      const mk=nut=>({id:'A9',email:'a9@t.fr',role:'athlete',fname:'T',lname:'X',
+        coachId:'C9',gender:'H',_evol_height:'178','init-age':30,
+        sessions_config:[{active:true},{active:false},{active:true},{active:false},
+                         {active:true},{active:false},{active:false}],
+        phase:{type:'seche',debut:Date.now()-10*864e5},
+        bilans:[{date:Date.now()-3*864e5,'bil-weight':'80','deb-height':'178','deb-age':30}],
+        nutrition:nut||{}});
+      const poser=nut=>{ DB.set('users',{'c9@t.fr':COACH,'a9@t.fr':mk(nut)});
+        currentUser=COACH; currentClientId='A9';
+        _propProt=null; _propLip=null; _propCycle=null;
+        renderCoachNutriSection(getOwnedClient('A9'));
+        return getOwnedClient('A9'); };
+      try{
+        window.toastSync=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
+
+        ok('UN DOSSIER SANS CIBLES DEMARRE EN AUTOMATIQUE',(()=>{
+          if(saisieManuelle(mk({}))!==false) return _echec('un dossier vierge demarre en manuel');
+          return saisieManuelle(mk({macros:{on:{},off:{}}}))===false
+            ?true:_echec('des macros VIDES suffisent a le passer en manuel');})());
+
+        ok('UN DOSSIER QUI PORTE DEJA DES GRAMMES DEMARRE EN MANUEL',(()=>{
+          // Ces chiffres ont ete saisis et relus par un coach. Les passer d'office
+          // en automatique aurait affiche le calcul a la place, et le premier
+          // enregistrement — fait pour une tout autre raison — aurait remplace la
+          // diete de l'athlete sans que personne ne l'ait demande.
+          if(saisieManuelle(mk({macros:{on:{kcal:3000},off:{kcal:2600}}}))!==true)
+            return _echec('une prescription existante bascule en automatique');
+          // Le champ, une fois ecrit, fait foi dans les deux sens.
+          if(saisieManuelle(mk({manuel:false,macros:{on:{kcal:3000}}}))!==false)
+            return _echec('le choix explicite « automatique » est ignore');
+          return saisieManuelle(mk({manuel:true}))===true
+            ?true:_echec('le choix explicite « manuel » est ignore');})());
+
+        ok('EN AUTOMATIQUE, LES CHAMPS PORTENT LE CALCUL ET NE SE TAPENT PAS',(()=>{
+          poser({});
+          const e=document.getElementById('ccd-on-kcal');
+          if(!e) return _echec('aucun champ rendu');
+          if(!(Number(e.value)>0)) return _echec('le champ est vide : « '+e.value+' »');
+          // `readonly` ET NON `disabled` : un champ desactive ne rend pas sa
+          // valeur, et le reste de l'ecran les lit par leur identifiant.
+          if(!e.hasAttribute('readonly')) return _echec('le champ se laisse taper');
+          return !e.disabled?true:_echec('le champ est desactive, sa valeur ne sortira pas');})());
+
+        ok('LES CIBLES SUIVENT LES OBJECTIFS NUTRITIONNELS',(()=>{
+          // C'est la demande meme : changer les proteines par kilo doit changer
+          // les cibles, sans rien taper.
+          poser({});
+          const avant=Number(document.getElementById('ccd-on-p').value);
+          _propSetProt('2.8');
+          const apres=Number(document.getElementById('ccd-on-p').value);
+          if(!(avant>0&&apres>0)) return _echec('cibles illisibles : '+avant+' puis '+apres);
+          if(avant===apres) return _echec('les proteines n\'ont pas bouge : '+avant);
+          // Et les lipides aussi.
+          const lAvant=Number(document.getElementById('ccd-on-l').value);
+          _propSetLip('1.2');
+          const lApres=Number(document.getElementById('ccd-on-l').value);
+          if(lAvant===lApres) return _echec('les lipides n\'ont pas bouge : '+lAvant);
+          // ET LE BLOC « AUTREMENT DIT » SUIT LA MEME SOURCE. Il lisait les
+          // grammes ENREGISTRES : il restait vide sur un dossier neuf, et
+          // affichait les anciennes valeurs des qu'un reglage bougeait.
+          const z=document.getElementById('ccd-nutrition');
+          const gk=(z.textContent.match(/P ([0-9,]+) g\/kg/)||[])[1];
+          return gk==='2,8'?true
+            :_echec('le bloc de lecture annonce « '+gk+' » au lieu de 2,8 g/kg');})());
+
+        ok('EN MANUEL, LES CIBLES NE BOUGENT PLUS',(()=>{
+          // C'est tout l'objet de l'interrupteur : les chiffres du coach priment.
+          poser({manuel:true,macros:{on:{kcal:3000,p:285,g:243,l:98,f:45},
+                                     off:{kcal:2600,p:247,g:211,l:82,f:39}}});
+          const avant=document.getElementById('ccd-on-p').value;
+          _propSetProt('1.6');
+          const apres=document.getElementById('ccd-on-p').value;
+          if(avant!==apres) return _echec('les cibles ont bouge malgre la saisie manuelle : '
+            +avant+' -> '+apres);
+          return document.getElementById('ccd-on-p').hasAttribute('readonly')
+            ?_echec('le champ reste verrouille en saisie manuelle'):true;})());
+
+        ok('REPASSER EN AUTOMATIQUE REECRIT LES CIBLES TOUT DE SUITE',(()=>{
+          // Les laisser telles quelles afficherait le calcul a l'ecran du coach
+          // pendant que l'athlete garderait les anciens chiffres dans son journal.
+          poser({manuel:true,macros:{on:{kcal:9999,p:1,g:1,l:1,f:1},
+                                     off:{kcal:9999,p:1,g:1,l:1,f:1}}});
+          saveClientNutriManuel(false);
+          const m=(getOwnedClient('A9').nutrition||{}).macros||{};
+          if(!m.on||m.on.kcal===9999) return _echec('les cibles sont restees a 9999');
+          return m.origine==='auto'?true:_echec('la provenance n\'est pas tracee : '+m.origine);})());
+
+        ok('LES REGLAGES DE CALCUL SONT ECRITS AVEC LES GRAMMES',(()=>{
+          // SANS EUX, L'AUTOMATIQUE N'AURAIT RIEN D'AUTOMATIQUE : _propProt et
+          // _propLip vivent en memoire, et repartent a null a la prochaine
+          // ouverture. Les cibles de l'athlete changeraient toutes seules.
+          poser({});
+          _propSetProt('2.8'); _propSetLip('1.2');
+          saveClientNutriMacros();
+          const r=((getOwnedClient('A9').nutrition||{}).reglages)||{};
+          if(Number(r.prot)!==2.8) return _echec('les proteines ne sont pas ecrites : '+r.prot);
+          if(Number(r.lip)!==1.2) return _echec('les lipides ne sont pas ecrits : '+r.lip);
+          // Et la lecture les retrouve, memoire videe.
+          _propProt=null; _propLip=null;
+          const o=_propReglages();
+          if(Number(o.protGparKg)!==2.8) return _echec('la relecture perd les proteines : '+o.protGparKg);
+          return Number(o.lipGparKg)===1.2?true
+            :_echec('la relecture perd les lipides : '+o.lipGparKg);})());
+
+        ok('L\'ENREGISTREMENT EN AUTOMATIQUE NE DEPEND PAS DE L\'ECRAN',(()=>{
+          // Les champs portent bien le calcul, mais les RELIRE ferait dependre le
+          // dossier de l'etat du DOM : un rendu a moitie remplace, et on ecrirait
+          // des cases vides dans la diete de l'athlete.
+          poser({});
+          for(const k of ['kcal','p','g','l','f']){
+            const e=document.getElementById('ccd-on-'+k); if(e) e.value='';
+          }
+          saveClientNutriMacros();
+          const m=(getOwnedClient('A9').nutrition||{}).macros||{};
+          return (m.on&&Number(m.on.kcal)>0)?true
+            :_echec('des champs vides ont ete ecrits : '+JSON.stringify(m.on));})());
+      } finally {
+        window.toastSync=svT; CLOUD.pushOne=svP;
+        _propProt=svPr; _propLip=svL; _propCycle=svPc;
+        DB.set('users',svD||{}); currentUser=svU; currentClientId=svC;
+      }
     })();
     // ── DIETE CYCLEE OU NON, ET REMISE AU POINT DE DEPART ────────────────
     // Demande de Kevin, 25/08/2026. Le choix existait dans la proposition de
@@ -29223,7 +29375,7 @@ function testExercices(){
             fname:'A',lname:'B',gender:'H',_evol_gender:'H',_evol_height:178,
             exAlias:{},exMuscles:{},sessions:[],bilans:[{type:'suivi',
               date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
-              'deb-age':'32','deb-gender':'Homme'}],nutrition:{}},extra||{});
+              'deb-age':'32','deb-gender':'Homme'}],nutrition:{manuel:true}},extra||{});
           const u=DB.get('users')||{}; u[email]=c; DB.set('users',u);
           currentClientId=c.id;
           window._plDerniereViol=null; _plConfirme=null;
@@ -29280,7 +29432,9 @@ function testExercices(){
             gender:'H',_evol_gender:'H',_evol_height:178,exAlias:{},exMuscles:{},
             sessions:[],bilans:[{type:'suivi',date:Date.now()-2*864e5,
               'deb-weight':'80','deb-height':'178','deb-age':'32','deb-gender':'Homme'}],
-            nutrition:{}};
+            // Saisie manuelle : c'est un chiffre TAPE sous le plancher qu'on
+            // eprouve ici, pas un calcul — le calcul releve avant de proposer.
+            nutrition:{manuel:true}};
           const u=DB.get('users')||{}; u['_sansmail']=c; DB.set('users',u);
           currentClientId=c.id;
           window._plDerniereViol=null; _plConfirme=null;
