@@ -21963,6 +21963,89 @@ function testExercices(){
     ok('Une série normale n\'affiche aucune bannière',
        banniereTechnique({name:'X',reps:'10'},0)==='');
     ok('Une série normale n\'affiche aucun badge',badgeTechnique({name:'X',reps:'10'})==='');
+    // ── LE CATALOGUE EST RESERVE AU COACH ────────────────────────────────
+    // Demande de Kevin, 25/08/2026 : « la liste des techniques doit etre
+    // disponible uniquement aux coachs, les athletes sont obliges de taper
+    // manuellement ». Meme regle que le guide des exercices, tranchee la
+    // veille. Ces assertions rendent l'editeur pour de vrai et lisent ce qui
+    // en sort — le drapeau seul ne prouverait rien.
+    (()=>{
+      const sauve=currentUser, sauveEx=progEx, sauveD=_progExDirty;
+      const rendu=(role,ex)=>{ currentUser={id:'x',role:role,email:'x@t'};
+        progEx=[ex]; return _selecteurTechnique(ex,0); };
+      const POSEE={name:'DEVELOPPE COUCHE',series:4,reps:'10',
+                   methode:'dropset_type_1',methodeSeries:'dernière'};
+      const VIDE={name:'SQUAT',series:4,reps:'10'};
+      try{
+        ok('AUCUNE LISTE DE TECHNIQUES POUR UN ATHLETE',(()=>{
+          for(const ex of [POSEE,VIDE]){
+            const h=rendu('client',ex);
+            if(/<select/.test(h)) return _echec('le selecteur est encore rendu');
+            if(/<option/.test(h)) return _echec('des options sont encore rendues');
+            // Le vrai test : AUCUN nom du catalogue ne doit fuir. Chercher
+            // « <select » ne suffirait pas — une liste de boutons, une datalist
+            // ou un menu maison passeraient a travers.
+            const fuite=Object.values(TECHNIQUES).filter(t=>h.indexOf(t.nom)>=0
+              &&t.nom!==((methodeDe(ex)||{}).nom));
+            if(fuite.length) return _echec(fuite.length+' methode(s) proposees, p.ex. '+fuite[0].nom);
+          }
+          return true;})());
+
+        ok('Le coach garde les 30 methodes, et le choix « Aucune »',(()=>{
+          const h=rendu('coach',VIDE);
+          if(!/<select/.test(h)) return _echec('le selecteur a disparu du cote coach');
+          const n=(h.match(/<option/g)||[]).length;
+          const att=Object.keys(TECHNIQUES).length+1;
+          return n===att?true:_echec(n+' options pour '+att+' attendues');})());
+
+        ok('L\'ATHLETE LIT TOUJOURS CE QUE SON COACH A PRESCRIT',(()=>{
+          // Retirer le selecteur ne doit pas lui cacher son propre programme :
+          // le nom, la consigne et les series visees restent lisibles.
+          const h=rendu('client',POSEE);
+          const m=TECHNIQUES.dropset_type_1;
+          if(h.indexOf(m.nom)<0) return _echec('le nom de la methode a disparu');
+          if(h.indexOf('dernière')<0) return _echec('les series visees ont disparu');
+          if(h.indexOf(escapeHtml(m.desc).slice(0,30))<0)
+            return _echec('la consigne a disparu');
+          // Et rien d'editable : ni champ de saisie, ni bouton.
+          return /<input|<button|<textarea/.test(h)
+            ?_echec('un controle modifiable traine dans la vue en lecture'):true;})());
+
+        ok('Sans technique posee, l\'athlete est renvoye au champ libre',(()=>{
+          const h=rendu('client',VIDE);
+          return h.indexOf('Description / Technique')>=0?true
+            :_echec('rien ne lui dit ou ecrire sa technique');})());
+
+        ok('LA RESTRICTION N\'EST PAS QU\'UN HABILLAGE : l\'ecriture est gardee',(()=>{
+          // _progExTechnique est une fonction globale. Si seule la vue etait
+          // retiree, un gabarit garde en cache ou un rendu a moitie remplace
+          // suffirait a poser une methode depuis un dossier d'athlete.
+          currentUser={id:'a',role:'client',email:'a@t'};
+          progEx=[{name:'SQUAT',series:4,reps:'10'}]; _progExDirty=false;
+          _progExTechnique(0,'rest_in_pause');
+          if(progEx[0].methode) return _echec('un athlete a pose '+progEx[0].methode);
+          // ET LE PROGRAMME N'EST PAS SALI POUR RIEN : un appel refuse ne doit
+          // pas declencher la sauvegarde de quelque chose qui n'a pas change.
+          if(_progExDirty) return _echec('un appel refuse a marque le programme modifie');
+          currentUser={id:'c',role:'coach',email:'c@t'};
+          progEx=[{name:'SQUAT',series:4,reps:'10'}]; _progExDirty=false;
+          _progExTechnique(0,'rest_in_pause');
+          return progEx[0].methode==='rest_in_pause'?true
+            :_echec('le coach ne peut plus poser de methode');})());
+
+        ok('peutChoisirTechnique distingue undefined de null',(()=>{
+          // Meme convention que peutConsulterBanque : undefined designe
+          // l'utilisateur courant, null designe PERSONNE.
+          currentUser={id:'c',role:'coach',email:'c@t'};
+          if(peutChoisirTechnique()!==true) return _echec('le coach courant est refuse');
+          if(peutChoisirTechnique(null)!==false) return _echec('null a repondu oui');
+          if(peutChoisirTechnique({role:'client'})!==false)
+            return _echec('un athlete explicite a repondu oui');
+          currentUser=null;
+          return peutChoisirTechnique()===false?true
+            :_echec('sans utilisateur, la liste s\'ouvre');})());
+      } finally { currentUser=sauve; progEx=sauveEx; _progExDirty=sauveD; }
+    })();
     // ══════════════ TEMPS DE REPOS ══════════════
     // ── parseRepos : toutes les écritures rencontrées dans les programmes ──
     const _rpCas=[

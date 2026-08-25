@@ -23072,15 +23072,54 @@ function badgeTechnique(ex){
   const txt=m?m.nom.toUpperCase():(LIB_FAMILLE_BADGE[fam]||fam.toUpperCase());
   return `<span style="background:${c[0]};color:${c[1]};padding:2px 7px;border-radius:var(--r-4);font-size:var(--fs-xs);font-weight:700">${escapeHtml(txt)}</span>`;
 }
+// LA LISTE DES TECHNIQUES EST L'OUTIL DU COACH, PAS CELUI DE L'ATHLÈTE.
+// Demande de Kevin, 25/08/2026 : « la liste des techniques d'intensification
+// doit être disponible uniquement aux coachs ; les athlètes sont obligés de
+// taper manuellement s'ils veulent mettre une technique ». C'est la même règle
+// que pour le guide des exercices, tranchée la veille : le catalogue est la
+// référence du coach, l'élève écrit à la main.
+//
+// Même convention d'appel que peutConsulterBanque : `undefined` désigne
+// l'utilisateur courant, `null` désigne PERSONNE. Les confondre ferait
+// répondre « oui » à une question posée sur aucun dossier.
+function peutChoisirTechnique(user){
+  const u=(user===undefined)?currentUser:user;
+  return !!(u&&u.role==='coach');
+}
+// CE QUE L'ATHLÈTE VOIT À LA PLACE. Il n'a plus le catalogue, mais il continue
+// de LIRE ce que son coach a prescrit : le nom, la consigne, la vidéo, et sur
+// quelles séries. Masquer la prescription en même temps que le sélecteur
+// reviendrait à lui cacher son propre programme.
+function _techniqueLecture(ex,i,m,cardio){
+  if(!m){
+    // Rien de posé : on lui dit où écrire, et une seule fois — sur du cardio
+    // aucune de ces méthodes n'a de sens, la phrase n'aurait rien à désigner.
+    if(cardio) return '';
+    return `<div style="margin-bottom:10px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6">`
+      +`Pour poser une technique d'intensification, écris-la dans « Description / Technique », plus bas.</div>`;
+  }
+  const s=String((ex&&ex.methodeSeries)||'').trim();
+  return `<div style="margin-bottom:10px">
+    <label>Technique</label>
+    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);padding:9px 11px">
+      <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(m.nom)}${m.sous?`<span style="font-weight:400;color:var(--sub)"> · ${escapeHtml(m.sous)}</span>`:''}</div>
+      ${s?`<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:3px">Séries : ${escapeHtml(s)}</div>`:''}
+      <div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(m.desc)}
+        ${m.video?`<a href="${safeUrl(m.video)}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap">· voir la vidéo</a>`:''}</div>
+    </div>
+    ${_avertissementTechnique(ex,i)}
+  </div>`;
+}
 // Le sélecteur est désactivé sur un exercice cardio : aucune de ces méthodes
 // n'a de sens sur du vélo, et proposer un choix inopérant est pire que rien.
 function _selecteurTechnique(ex,i){
   const cardio=(()=>{ try{ return isCardio(ex); }catch(e){ return false; } })();
+  const m=methodeDe(ex);
+  if(!peutChoisirTechnique()) return _techniqueLecture(ex,i,m,cardio);
   const cles=Object.keys(TECHNIQUES);
   const sel=ex&&ex.methode&&TECHNIQUES[ex.methode]?ex.methode:'';
   const opts='<option value="">Aucune (série normale)</option>'
     +cles.map(k=>`<option value="${k}"${sel===k?' selected':''}>${escapeHtml(TECHNIQUES[k].nom+(TECHNIQUES[k].sous?' ('+TECHNIQUES[k].sous+')':''))}</option>`).join('');
-  const m=methodeDe(ex);
   return `<div style="margin-bottom:10px">
     <label>Technique ${cardio?'<span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(sans objet sur du cardio)</span>':''}</label>
     <select ${cardio?'disabled':''} onchange="_progExTechnique(${i},this.value)"
@@ -23126,6 +23165,12 @@ function _avertissementTechnique(ex,i){
 }
 function _progExTechnique(i,cle){
   if(!progEx[i]) return;
+  // LE CATALOGUE NE S'ECRIT QUE DEPUIS UN DOSSIER DE COACH. Le selecteur
+  // n'est deja plus rendu pour un athlete ; cette garde est la pour que la
+  // regle tienne meme si l'appel arrive d'ailleurs — un gabarit garde en
+  // cache, un rendu a moitie remplace. Sans elle, la restriction ne serait
+  // qu'un habillage.
+  if(!peutChoisirTechnique()) return;
   _progExDirty=true;
   if(cle&&TECHNIQUES[cle]){
     progEx[i].methode=cle;
