@@ -10644,18 +10644,28 @@ function testExercices(){
             if(parti) return _echec('une requête est partie malgré le drapeau');
           } finally { window.fetch=vrai; }
           return true;})());
-        ok('Le téléversement de PHOTO n\'est pas coupé : c\'est la vignette',(()=>{
-          // La photo de séance est AUSSI la vignette du sélecteur côté
-          // athlète. Retirer l'upload retirerait la vignette — c'est le piège
-          // de ce lot, et il est nommé.
-          for(const nom of ['loadProgPhoto','uploadSessionPhoto','dropProgPhoto']){
-            if(typeof window[nom]!=='function') return _echec('disparue : '+nom);
-            if(String(window[nom]).indexOf('_importLegacyOuvert')>=0)
-              return _echec(nom+' a été gardée à tort');
-          }
-          // La zone de dépôt est toujours dans le DOM.
-          return document.getElementById('prog-photo-input')
-            ?true:_echec('la zone de téléversement a disparu');})());
+        ok('LE TELEVERSEMENT DE PHOTO EST COUPE, mais la vignette survit',(()=>{
+          // CETTE ASSERTION DISAIT L INVERSE JUSQU AU 25/08/2026, et son
+          // commentaire nommait le piege : « la photo de seance est AUSSI la
+          // vignette du selecteur cote athlete ». Kevin a tranche — « seul le
+          // guide des exercices avec les liens YouTube et illustration sera la
+          // reference pour les coachs » — et les deux zones de depot ont quitte
+          // l ecran. Le piege, lui, reste vrai : c est ce qu on verifie ici.
+          if(document.getElementById('prog-photo-input'))
+            return _echec('la zone de televersement est encore la');
+          if(document.getElementById('prog-photo2-input'))
+            return _echec('la zone des liens est encore la');
+          // ET AUCUNE PHOTO DEJA DEPOSEE N EST EFFACEE. _prepProgEditor remet
+          // progPhotoData a null ; si l enregistrement ecrivait cette valeur,
+          // il viderait le champ de toutes les seances a la premiere
+          // sauvegarde. La ligne qui ecrit est gardee par `if(progPhotoData)`.
+          const src=String(saveProgram);
+          if(src.indexOf('sa.photo=progPhotoData')>=0
+             &&src.indexOf('if(progPhotoData)')<0)
+            return _echec('l enregistrement peut effacer la photo');
+          // Et le selecteur de seance sait toujours l afficher.
+          return String(openSessionPicker).indexOf('sp-photo')>=0
+            ?true:_echec('la vignette ne lit plus la photo');})());
         ok('Les QUATRE autres chemins de fichier sont intacts',(()=>{
           // Vidéo d'exécution, photos de bilan, photo du coach, fiche
           // programme PDF : aucun rapport avec l'import de séance, et les
@@ -10667,12 +10677,16 @@ function testExercices(){
               return _echec(nom+' a été gardée à tort');
           }
           return true;})());
-        ok('Le collage MANUEL de liens survit : ce n\'est pas de l\'extraction',(()=>{
-          if(typeof togglePasteLiens!=='function') return _echec('la zone de collage a disparu');
-          if(String(togglePasteLiens).indexOf('_importLegacyOuvert')>=0)
-            return _echec('le collage manuel a été gardé à tort');
-          return document.getElementById('prog-paste-input')
-            ?true:_echec('le champ de collage n\'est plus dans le DOM');})());
+        ok('LE COLLAGE DE LIENS A QUITTE L ECRAN, avec le reste',(()=>{
+          // Cette assertion protegeait le collage manuel quand seule
+          // l EXTRACTION automatique avait ete coupee. Le 25/08/2026 Kevin a
+          // retire le bloc entier : la reference du coach est le guide des
+          // exercices, qui porte deja la video et l illustration de chaque
+          // mouvement. Il n y a plus de liens a coller a la main.
+          if(document.getElementById('prog-paste-input'))
+            return _echec('le champ de collage est encore la');
+          return document.getElementById('prog-paste-zone')
+            ?_echec('la zone de collage est encore la'):true;})());
         ok('Aucune commande d\'extraction n\'est atteignable dans le parcours',(()=>{
           // Critère d'acceptation nº1. On rend l'éditeur et on regarde ce qui
           // est RÉELLEMENT visible, plutôt que de faire confiance au drapeau.

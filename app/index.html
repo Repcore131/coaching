@@ -4849,72 +4849,14 @@ const COACH_PHOTO='icons/coach.jpg';
            et garde son libelle. -->
       <div><label for="prog-name">Nom de la séance</label><input id="prog-name" placeholder="Ex: DOS &amp; ABDOS"></div>
 
-      <!-- IMPORT PHOTO PROGRAMME -->
-      <div style="margin-top:16px">
-        <label for="prog-photo-input">Photo de ta fiche programme (référence visuelle)</label>
-        <div id="prog-photo-zone" onclick="document.getElementById('prog-photo-input').click()"
-          style="border:2px dashed var(--border);border-radius:var(--r-4);padding:20px;text-align:center;cursor:pointer;transition:border-color var(--t-2);margin-top:6px;position:relative;overflow:hidden"
-          ondragover="event.preventDefault();this.style.borderColor='var(--red)'"
-          ondrop="dropProgPhoto(event)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-          <input type="file" id="prog-photo-input" accept="image/*" onchange="loadProgPhoto(this)" style="display:none">
-          <img id="prog-photo-preview" style="display:none;width:100%;border-radius:var(--r-3);margin-bottom:10px">
-          <div id="prog-photo-ph">
-            <div style="font-weight:700;font-size:var(--fs-md)">Importe ta fiche programme</div>
-            <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Photo de ton Google Sheet, PDF ou tableau papier<br>Elle s'affichera en référence pendant la création</div>
-          </div>
-        </div>
-        <div id="prog-photo-actions" style="display:none;margin-top:8px;display:flex;gap:8px">
-          <button class="btn btn-outline btn-sm" onclick="document.getElementById('prog-photo-input').click()">Changer</button>
-          <button class="btn btn-outline btn-sm" onclick="clearProgPhoto()" style="color:var(--sub)">Supprimer</button>
-        </div>
-      </div>
-
-      <!-- LIENS YOUTUBE : coller / photo / pdf (cachés des athlètes) -->
-      <div style="margin-top:10px">
-        <div style="font-size:var(--fs-xs);color:var(--green);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:6px"> Liens YouTube <span style="opacity:.5;font-size:var(--fs-xs)">(cachés : IA seulement)</span></div>
-        <div id="prog-photo2-ph" style="display:flex;gap:6px">
-          <!-- Coller les liens — option principale -->
-          <div onclick="togglePasteLiens()" id="prog-paste-btn"
-            style="flex:1.2;border:1px dashed var(--green);border-radius:var(--r-2);padding:10px;text-align:center;cursor:pointer;background:#0a1a00"
-            onmouseover="this.style.borderColor='#86efac'" onmouseout="this.style.borderColor='var(--green)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-            <div style="font-size:var(--fs-xl);margin-bottom:3px">✏️</div>
-            <div style="font-size:var(--fs-xs);color:var(--green);font-weight:700">Coller liens</div>
-          </div>
-          <div id="prog-photo2-photo" onclick="document.getElementById('prog-photo2-input').click()"
-            style="flex:1;border:1px dashed var(--border);border-radius:var(--r-2);padding:10px;text-align:center;cursor:pointer"
-            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-            <input type="file" id="prog-photo2-input" accept="image/*" style="display:none" onchange="loadProgPhoto2(this)">
-            <div style="font-size:var(--fs-xl);margin-bottom:3px">📷</div>
-            <div style="font-size:var(--fs-xs);color:var(--sub);font-weight:700">Photo</div>
-          </div>
-          <div id="prog-photo2-pdf" onclick="document.getElementById('prog-pdf-links-input').click()"
-            style="flex:1;border:1px dashed var(--border);border-radius:var(--r-2);padding:10px;text-align:center;cursor:pointer"
-            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-            <input type="file" id="prog-pdf-links-input" accept="application/pdf" style="display:none" onchange="importVideoLinksFromPdf(this)">
-            <div style="font-size:var(--fs-xl);margin-bottom:3px">📄</div>
-            <div style="font-size:var(--fs-xs);color:var(--sub);font-weight:700">PDF</div>
-          </div>
-        </div>
-        <!-- Zone coller les liens -->
-        <div id="prog-paste-zone" style="display:none;margin-top:6px;background:#0a1a00;border:1px solid #1a3a0a;border-radius:var(--r-2);padding:10px">
-          <div style="font-size:var(--fs-xs);color:var(--green);font-weight:700;margin-bottom:6px">Colle tes liens YouTube (un par ligne) :</div>
-          <textarea id="prog-paste-input" rows="4" placeholder="https://youtu.be/...&#10;https://youtu.be/...&#10;https://youtu.be/..."
-            style="width:100%;font-size:var(--fs-xs);padding:8px;background:#060f00;border:1px solid #2a3a2a;border-radius:var(--r-2);color:#ccc;font-family:monospace;box-sizing:border-box;resize:vertical"></textarea>
-          <button onclick="savePastedLinks()" style="margin-top:6px;width:100%;padding:8px;background:#166534;border:none;border-radius:var(--r-2);color:var(--green);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer"> Valider les liens</button>
-        </div>
-        <div id="prog-photo2-ready" style="display:none;margin-top:4px;background:#0a1a00;border:1px solid #1a3a0a;border-radius:var(--r-2);padding:8px 12px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span id="prog-photo2-label" style="color:var(--green);font-size:var(--fs-xs);font-weight:700;flex:1">✓ Liens prêts</span>
-            <button onclick="clearProgPhoto2()" style="background:none;border:none;color:var(--red-light);font-size:var(--fs-xl);cursor:pointer;padding:0 4px;line-height:1">×</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- BOUTON ANALYSER -->
-      <button id="prog-analyze-btn" onclick="analyzeProgPhotos()" style="display:none;width:100%;margin-top:10px;padding:12px;background:linear-gradient(180deg,#1a0000,#110000);border:1px solid #3a0a0a;border-radius:var(--r-1);color:var(--red-light);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase;align-items:center;justify-content:center;gap:8px">
-         Analyser → Importer les exercices
-      </button>
-
+      <!-- L IMPORT DE FICHE PROGRAMME A ETE RETIRE, avec les liens YouTube et
+           le bouton d analyse. Demande de Kevin, 25/08/2026 : « seul le guide
+           des exercices avec les liens YouTube et illustration sera la
+           reference pour les coachs ; les eleves, eux, ont uniquement la
+           possibilite d ecrire manuellement l exo ».
+           Le coach composait sa seance en regardant une capture de son Google
+           Sheet ; c est le guide qui tient ce role desormais, et il porte deja
+           la video et l illustration de chaque mouvement. -->
       <!-- PROTOCOLES DE SÉANCE -->
       <div style="margin-top:20px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -20546,19 +20488,25 @@ function cptRenameSession(i,val){
   sessions[i].name=val;
 }
 
-function _prepProgEditor({name='',notes='',warmup='',cooldown='',photo=null,photo2=null}={}){
+// LA PHOTO N EST PLUS MONTEE ICI. Sa zone a quitte l ecran le 25/08/2026, a la
+// demande de Kevin : le guide des exercices est desormais la seule reference du
+// coach. Ce montage-la deferencait `prog-photo-preview` et `prog-photo-ph` sans
+// garde — une fois les elements partis, il levait, et l editeur ne s ouvrait
+// plus du tout. C est exactement le symptome que Kevin venait de signaler, pour
+// une autre cause ; je l ai reproduit en retirant le bloc.
+//
+// progPhotoData ET progPhoto2Data SONT REMIS A null, et les parametres `photo`
+// et `photo2` disparaissent : plus rien ne peut en charger. Ils ne sont pas
+// supprimes du fichier — l enregistrement les lit encore, et c est ce qui
+// PROTEGE les photos deja deposees, voir savePlanCoach et ses jumelles.
+function _prepProgEditor({name='',notes='',warmup='',cooldown=''}={}){
   document.getElementById('prog-name').value=name||'';
   document.getElementById('prog-notes').value=notes||'';
   document.getElementById('prog-warmup').value=warmup||'';
   document.getElementById('prog-cooldown').value=cooldown||'';
-  progPhotoData=photo||null;
-  progPhoto2Data=photo2||null;
+  progPhotoData=null;
+  progPhoto2Data=null;
   _pdfVideoLinks=null;
-  const img=document.getElementById('prog-photo-preview');
-  const ph=document.getElementById('prog-photo-ph');
-  const acts=document.getElementById('prog-photo-actions');
-  if(progPhotoData){img.src=progPhotoData;img.style.display='block';ph.style.display='none';if(acts)acts.style.display='flex';}
-  else{img.style.display='none';ph.style.display='block';if(acts)acts.style.display='none';}
 }
 function openProgTemplateSessionExercises(idx){
   if(_editProgTemplateIdx===null) return;
@@ -24970,9 +24918,10 @@ function openSessionExercises(idx){
     name:cfg[idx].name,
     notes:cfg[idx].notes,
     warmup:cfg[idx].warmup??currentUser._defaultWarmup,
-    cooldown:cfg[idx].cooldown??currentUser._defaultCooldown,
-    photo:cfg[idx].photo,
-    photo2:cfg[idx].photo2
+    cooldown:cfg[idx].cooldown??currentUser._defaultCooldown
+    // `photo` et `photo2` ne sont plus passees : _prepProgEditor ne les monte
+    // plus, et rien ne peut plus en charger. Elles restent DANS le dossier —
+    // c est la vignette du selecteur de seance, et on ne l efface pas.
   });
   // Indicateur photo2 (spécifique à la vue athlète)
   const p2ph=document.getElementById('prog-photo2-ph');
