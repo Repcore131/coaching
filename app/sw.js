@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1072';
+const CACHE = 'repcore-v1073';
 // LA SEULE VERSION QUI NE REPORTE PAS LES ILLUSTRATIONS.
 // Le report d'un cache a l'autre traite /exercices/ en PRIORITAIRE : c'est
 // ce qui evite de retelecharger 3,3 Mo a chaque deploiement. Mais le
@@ -8,7 +8,10 @@ const CACHE = 'repcore-v1072';
 // On les laisse donc repartir du reseau — une fois, pour cette version-la.
 // Les versions suivantes reprennent le report normal : il suffit que cette
 // constante ne vaille plus CACHE.
-const PURGE_EXERCICES = 'repcore-v1051';
+//
+// LE 26/08/2026, MEME CAS : 49 photos de pectoraux reecrites sous leur nom.
+// La constante revient donc a CACHE le temps de cette version-ci.
+const PURGE_EXERCICES = 'repcore-v1073';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
