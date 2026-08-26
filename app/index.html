@@ -25580,6 +25580,55 @@ function _progExTechnique(i,cle){
 //
 // Consequence assumee, deja dite au lot 1 : corriger une description dans la
 // banque ne met pas a jour les seances deja ecrites.
+// PURE. La fiche de banque, posee sur un exercice existant. Ne mute rien :
+// rend un objet neuf, comme le fait deja dupliquerSeance.
+// Le repos de la fiche n'ecrase PAS celui du coach : la fiche decrit le
+// mouvement en general, le coach a regle SA seance.
+function exRemplaceParFiche(ex,f){
+  const src=(ex&&typeof ex==='object')?ex:{};
+  if(!f||!f.nom) return Object.assign({},src);
+  return Object.assign({},src,{
+    name:f.nom,
+    description:f.execution||'',
+    materiel:f.materiel||'',
+    videoUrl:(f.videos&&f.videos[0])?('https://youtu.be/'+f.videos[0].id):'',
+    videoUrl2:(f.videos&&f.videos[1])?('https://youtu.be/'+f.videos[1].id):'',
+    exSlug:f.slug,
+    // L'IMAGE EST RETIREE, pas remplacee. Une photo collee a la main sur
+    // l'ancien mouvement montrerait l'ancien mouvement sous le nouveau nom :
+    // c'est le slug qui va chercher l'illustration du guide.
+    image:null
+  });
+}
+// Remplacer l'exercice de rang `i` depuis la bibliotheque du guide.
+async function remplacerDepuisBanque(i){
+  if(!peutConsulterBanque()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
+  const ex=Array.isArray(progEx)?progEx[i]:null;
+  if(!ex){ toast('Exercice introuvable : rouvre la séance.','var(--orange)'); return false; }
+  // UN NOM DEJA ECRIT NE SE REMPLACE PAS SANS DEMANDER. Meme discipline que
+  // _confirmerEcrasement pour un jour deja garni.
+  const nom=String(ex.name||'').trim();
+  if(nom){
+    const nl=String.fromCharCode(10);
+    if(!await rcConfirm('Remplacer « '+nom+' » ?'+nl+nl
+      +'Le mouvement change — nom, photo, vidéos, exécution. Tes séries, reps, '
+      +'repos et RIR cible sont conservés.',null,'Choisir dans la bibliothèque')) return false;
+  }
+  return ouvrirBanque(f=>{
+    // Le rang est relu a l'arrivee : entre le depart vers la banque et le
+    // retour, rien ne reordonne progEx — mais un exercice supprime depuis un
+    // autre onglet laisserait un trou, et on ecrirait a cote.
+    if(!Array.isArray(progEx)||!progEx[i]){
+      toast('Exercice introuvable : il a été retiré entre-temps.','var(--orange)');
+      return;
+    }
+    progEx[i]=exRemplaceParFiche(progEx[i],f);
+    _progExDirty=true;
+    renderProgEx();
+    setTimeout(()=>{ try{ _viserExercice(f.nom); }catch(e){} },60);
+    toast('Remplacé par « '+f.nom+' » ✓','var(--green)');
+  },'s-coach-program');
+}
 function ajouterDepuisBanque(){
   return ouvrirBanque(f=>{
     if(!Array.isArray(progEx)) progEx=[];
@@ -25608,6 +25657,9 @@ function ajouterDepuisBanque(){
   },'s-coach-program');
 }
 function renderProgEx(){
+  // Lu UNE FOIS pour tout le rendu : peutConsulterBanque relit currentUser a
+  // chaque appel, et une carte de dix exercices l'appellerait dix fois.
+  const _bqDispo=(()=>{ try{ return !!peutConsulterBanque(); }catch(e){ return false; } })();
   // Le bouton n'apparait que pour un coach : la banque lui est reservee.
   const _bq=document.getElementById('prog-banque');
   if(_bq) _bq.style.display=peutConsulterBanque()?'block':'none';
@@ -25660,6 +25712,18 @@ function renderProgEx(){
         </span>
       </div>
       <div style="padding:12px">
+        <!-- DEUX FACONS DE CHANGER D'EXERCICE, et elles sont dites. A la main,
+             c'est le champ du nom juste au-dessus — il a toujours marche, mais
+             rien ne le presentait comme un choix. Depuis la bibliotheque,
+             c'est le bouton : la fiche du guide arrive avec sa photo, ses
+             liens video et son execution.
+             RESERVE AUX COACHS : la banque leur est fermee cote athlete, et le
+             bouton n'apparait donc pas dans SON editeur de seance. -->
+        ${_bqDispo?`<div class="px-grp">Changer l'exercice</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i})">Bibliothèque</button>
+          <span style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;flex:1;min-width:140px">Ou tape son nom au-dessus. La bibliothèque apporte la photo, les vidéos et l'exécution ; tes séries, reps et repos ne bougent pas.</span>
+        </div>`:''}
         <div class="px-grp">PRESCRIPTION</div>
         <!-- Séries / Reps / Repos -->
         <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;margin-bottom:8px">

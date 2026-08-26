@@ -24384,6 +24384,67 @@ function testExercices(){
         if(s.indexOf('_cdgMotifs(a)')<0) return _echec('la liste ne rend pas les motifs');
         return /DB\.set|CLOUD\.push/.test(String(_cdgMotifs))
           ?_echec('la lecture des motifs écrit'):true;})());
+
+      ok('REMPLACER UN EXERCICE : l\'identite change, la prescription reste',(()=>{
+        if(typeof exRemplaceParFiche!=='function') return _echec('aucune substitution');
+        const ex={name:'BENCH COMP',series:5,reps:'4',repos:'3 min',rirCible:'2',
+          ss:true,methodeSeries:'rest-pause',description:'vieille description',
+          videoUrl:'https://youtu.be/AAA',videoUrl2:'https://youtu.be/BBB',
+          materiel:'Barre',exSlug:'ancien-slug',image:'data:image/png;base64,XXX'};
+        const f={nom:'DEVELOPPE COUCHE BARRE',slug:'developpe-couche-barre',
+          execution:'Scapulas serrées, barre au sternum.',materiel:'Barre olympique',
+          repos:'02 min',videos:[{id:'V1'},{id:'V2'}]};
+        const r=exRemplaceParFiche(ex,f);
+        // L'IDENTITE DU MOUVEMENT SUIT LA FICHE.
+        if(r.name!==f.nom) return _echec('le nom ne suit pas');
+        if(r.description!==f.execution) return _echec('l’exécution ne suit pas');
+        if(r.materiel!==f.materiel) return _echec('le matériel ne suit pas');
+        if(r.videoUrl.indexOf('V1')<0||r.videoUrl2.indexOf('V2')<0)
+          return _echec('les vidéos ne suivent pas : '+r.videoUrl+' / '+r.videoUrl2);
+        if(r.exSlug!==f.slug) return _echec('le slug ne suit pas');
+        // L'IMAGE EST RETIREE, PAS REMPLACEE : une photo collée à la main sur
+        // l'ancien mouvement montrerait l'ancien mouvement sous le nouveau nom.
+        if(r.image!==null) return _echec('l’ancienne photo survit');
+        // LA PRESCRIPTION RESTE. C'est tout l'intérêt de « remplacer » plutôt
+        // que « supprimer puis ajouter ».
+        for(const k of ['series','reps','repos','rirCible','ss','methodeSeries'])
+          if(JSON.stringify(r[k])!==JSON.stringify(ex[k]))
+            return _echec(k+' a été perdu : '+JSON.stringify(r[k]));
+        // LE REPOS DE LA FICHE N'ECRASE PAS CELUI DU COACH : la fiche décrit le
+        // mouvement en général, le coach a réglé SA séance.
+        if(r.repos==='02 min') return _echec('le repos de la fiche a écrasé celui du coach');
+        // PURE : la source n'est pas mutée.
+        if(ex.name!=='BENCH COMP') return _echec('la source a été mutée');
+        // UNE FICHE VIDE NE CASSE RIEN.
+        if(exRemplaceParFiche(ex,null).name!=='BENCH COMP')
+          return _echec('une fiche absente efface l’exercice');
+        // LA PHOTO SUIT LE NOM : illustrationDe résout par le nom, pas par le
+        // slug — c'est ce qui la fait s'adapter toute seule.
+        return String(illustrationDe).indexOf('exSlug(nom)')>=0
+          ?true:_echec('l’illustration ne se résout plus par le nom');})());
+
+      ok('REMPLACER UN EXERCICE : la bibliotheque est reservee aux coachs',(()=>{
+        if(typeof remplacerDepuisBanque!=='function') return _echec('aucun chemin vers la bibliothèque');
+        const s=String(remplacerDepuisBanque);
+        // LA MEME GARDE que le bouton d'ajout : la banque est fermée à
+        // l'athlète par la règle RTDB, et l'interface le dit avant.
+        if(s.indexOf('peutConsulterBanque()')<0)
+          return _echec('la garde de rôle manque');
+        // UN NOM DEJA ECRIT NE SE REMPLACE PAS SANS DEMANDER.
+        if(s.indexOf('rcConfirm')<0) return _echec('un exercice nommé est remplacé sans confirmation');
+        // ON REUTILISE LA BANQUE EXISTANTE, on n'en écrit pas une seconde.
+        if(s.indexOf('ouvrirBanque(')<0) return _echec('la banque est réécrite au lieu d’être ouverte');
+        // ET LE RANG EST RELU A L'ARRIVEE : entre le départ vers la banque et
+        // le retour, l'exercice a pu être retiré.
+        if(s.indexOf('!progEx[i]')<0) return _echec('on écrit sans vérifier que l’exercice existe encore');
+        // LE BOUTON N'APPARAIT QUE POUR UN COACH.
+        const r=String(renderProgEx);
+        if(r.indexOf('_bqDispo')<0) return _echec('le bouton ne dépend pas du rôle');
+        if(r.indexOf('remplacerDepuisBanque(')<0) return _echec('aucun bouton dans la carte');
+        // LA VOIE MANUELLE N'A PAS BOUGE : le champ du nom écrit toujours
+        // directement dans progEx.
+        return /progEx\[\$\{i\}\]\.name=this\.value\.toUpperCase\(\)/.test(r)
+          ?true:_echec('la saisie manuelle du nom a changé');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
