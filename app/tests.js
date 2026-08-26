@@ -16704,12 +16704,17 @@ function testExercices(){
         const src=String(_depensePourPlafond);
         return /facteurNEAT/.test(src)&&/kcalSportParJour/.test(src)&&b.depense>0
           ?true:_echec('le plafond garde son ancienne formule');})());
-      ok('facteurActivite existe toujours et n\'a pas bougé',(()=>{
-        // Elle n'alimente plus la dépense, mais elle reste exportée : la
-        // supprimer sortait du lot.
-        const a=facteurActivite({sessions_config:Array.from({length:5},()=>({active:true}))});
-        return typeof facteurActivite==='function'&&a.f===ACT_SEANCES[5-0]
-          ?true:_echec('facteur '+a.f);})());
+      ok('N2.17 — facteurActivite et ACT_SEANCES ont bien disparu',(()=>{
+        // Ce pin disait « elle reste exportée : la supprimer sortait du lot ».
+        // Le lot est arrivé. Il ne reste QUE ce qui alimente encore
+        // facteurNEAT — moyennePas14j, ACT_PAS, ACT_MIN et ACT_MAX — et cette
+        // assertion garde la porte fermée : reintroduire un facteur tire du
+        // nombre de creneaux, c'est reintroduire le double comptage.
+        if(typeof facteurActivite!=='undefined') return _echec('facteurActivite est encore là');
+        if(typeof ACT_SEANCES!=='undefined') return _echec('ACT_SEANCES est encore là');
+        if(typeof moyennePas14j!=='function') return _echec('moyennePas14j est parti avec');
+        return (typeof ACT_MIN==='number'&&typeof ACT_MAX==='number')
+          ?true:_echec('les bornes du NEAT sont parties avec');})());
 
       // ── Les widgets du bilan ──
       (function(){
@@ -16898,30 +16903,15 @@ function testExercices(){
         const b=besoinsProposes(u,{protGparKg:1.8});
         return b.gParKg===1.8&&b.on.p===Math.round(1.8*80);})());
 
-      // ── Le facteur d'activité ──
-      ok('Le facteur monte avec le nombre de créneaux actifs',(()=>{
-        const f=n=>facteurActivite({sessions_config:Array.from({length:n},()=>({active:true}))}).f;
-        return f(0)<f(2)&&f(2)<f(4)&&f(4)<=f(6);})());
-      ok('Les créneaux inactifs ne comptent pas',(()=>{
-        const a=facteurActivite({sessions_config:[{active:true},{active:false},{active:false}]});
-        const b=facteurActivite({sessions_config:[{active:true}]});
-        return a.f===b.f&&a.seances===1;})());
-      ok('Les pas ajustent le facteur, dans les deux sens',(()=>{
-        const cfg=[{active:true},{active:true},{active:true}];
-        const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
-        const bas=facteurActivite({sessions_config:cfg,stepsLog:[j(1,2000),j(2,2500)]});
-        const neutre=facteurActivite({sessions_config:cfg});
-        const haut=facteurActivite({sessions_config:cfg,stepsLog:[j(1,14000),j(2,13000)]});
-        return bas.f<neutre.f&&neutre.f<haut.f;})());
+      // ── La moyenne de pas ──
+      // N2.17 — les quatre autres assertions de cette section eprouvaient
+      // facteurActivite, qui n'avait plus d'appelant en production : elles ne
+      // verifiaient plus qu'elles-memes. Celle-ci reste, parce que
+      // moyennePas14j alimente encore facteurNEAT.
       ok('Les pas de plus de quatorze jours sont ignorés',(()=>{
         const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
         return moyennePas14j({stepsLog:[j(30,20000)]})===null
           &&moyennePas14j({stepsLog:[j(3,8000),j(30,20000)]})===8000;})());
-      ok('Le facteur reste dans ses bornes',(()=>{
-        const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
-        const f=facteurActivite({sessions_config:Array.from({length:20},()=>({active:true})),
-          stepsLog:[j(1,50000)]}).f;
-        return f<=ACT_MAX&&facteurActivite({}).f>=ACT_MIN;})());
 
       // ── Masse maigre : le MÊME chemin que l'écran % de gras ──
       ok('La masse maigre vient de calcBF, pas d\'une formule parallèle',(()=>{
@@ -17060,7 +17050,7 @@ function testExercices(){
       ok('Aucune de mes fonctions ne double un nom existant',(()=>{
         const src=document.documentElement.outerHTML;
         const miens=['_htmlDepartCoach','_htmlDepartHypotheses','_htmlDepartAthlete',
-          'besoinsProposes','mbMifflin','mbKatch','masseMaigreDuBilan','facteurActivite',
+          'besoinsProposes','mbMifflin','mbKatch','masseMaigreDuBilan',
           'facteurProfession','depenseSportsParJour','niveauMetier','chercherMetiers',
           'bMetier','bSports','proposerPointDepart','utiliserBesoinsProposes'];
         const doubles=miens.filter(n=>
@@ -17073,10 +17063,10 @@ function testExercices(){
         const avant=JSON.stringify(u);
         besoinsProposes(u); besoinsProposes(u,{protGparKg:2.0,cycle:false});
         return JSON.stringify(u)===avant;})());
-      ok('mbMifflin, mbKatch et facteurActivite n\'écrivent rien',(()=>{
+      ok('mbMifflin, mbKatch et moyennePas14j n\'écrivent rien',(()=>{
         const u=_ath();
         const avant=JSON.stringify(u);
-        mbMifflin(80,178,32,'H'); mbKatch(65); facteurActivite(u); moyennePas14j(u);
+        mbMifflin(80,178,32,'H'); mbKatch(65); moyennePas14j(u);
         masseMaigreDuBilan(u);
         return JSON.stringify(u)===avant;})());
 
@@ -23115,6 +23105,118 @@ function testExercices(){
         if(p2.depenseExercice!==0) return _echec('une dépense sort de nulle part : '+p2.depenseExercice);
         return direRegplePlancher(p2).indexOf('d’entraînement')<0
           ?true:_echec('une dépense nulle est quand même annoncée');})());
+
+      ok('N2.19 — UNE DATE ABSENTE NE PRODUIT PLUS UNE PHASE PAR ACCIDENT',(()=>{
+        const j=Date.now();
+        const iso=d=>new Date(d).toISOString().slice(0,10);
+        const u={id:'CY',email:'cy@t.fr',role:'athlete',gender:'Femme',_evol_gender:'F',
+          cycle:{enabled:true,lastPeriodDate:iso(j-25*864e5),cycleLength:28,sensibilitePms:true},
+          sessions_config:Array.from({length:7},()=>({active:false})),
+          bilans:[],sessions:[],
+          nutrition:{dietType:'flexible',macros:{on:{kcal:2000,p:130,g:200,l:60},
+                                                 off:{kcal:2000,p:130,g:200,l:60}}}};
+        // AVANT : new Date('nullT00:00:00'), diffDays a NaN, aucune borne
+        // franchie, et la fonction rendait « stable ». Un echec silencieux.
+        for(const d of [null,undefined,'','pas-une-date'])
+          if(phaseCycle(u,d)!==null)
+            return _echec('date '+JSON.stringify(d)+' rend « '+phaseCycle(u,d)+' »');
+        // ET L'APERCU DU COACH APPLIQUE BIEN L'ADAPTATION. C'est le grief :
+        // planCiblesJour(c,true,null) l'ignorait en silence.
+        const today=localISODate(new Date());
+        if(phaseCycle(u,today)!=='luteal_late') return true;   // hors phase : rien a prouver
+        const sansDate=planCiblesJour(u,false,null);
+        const avecDate=planCiblesJour(u,false,today);
+        if(sansDate.kcal!==avecDate.kcal)
+          return _echec('l’aperçu sans date annonce '+sansDate.kcal
+            +' et l’écran de l’athlète '+avecDate.kcal);
+        return sansDate.kcal!==2000
+          ?true:_echec('l’adaptation de cycle n’est toujours pas appliquée');})());
+
+      ok('N2.16 — L\'EXEMPLE DU CHAMP SUIT LE MODE DE DIETE',(()=>{
+        const s=String(renderCoachNutriSection);
+        if(/ph:'ex : 2200 \/ 1900'/.test(s))
+          return _echec('l’exemple à deux valeurs est encore figé');
+        if(s.indexOf('_ph(2200,1900)')<0) return _echec('les exemples ne passent plus par le mode');
+        // Le libelle a deux valeurs n'a de sens que quand deux colonnes sont
+        // rendues : c'est exactement ce que dit _cols.
+        return /_cyc\?\('ex : '\+on\+' \/ '\+off\)/.test(s)
+          ?true:_echec('le mode ne conditionne pas l’exemple');})());
+
+      ok('N2.18 — _renderMacroTargets a disparu, avec sa colonne SUCRE',(()=>{
+        if(typeof _renderMacroTargets!=='undefined')
+          return _echec('la fonction morte est encore là');
+        // La colonne SUCRE etait sa derniere trace : le reste du produit l'a
+        // retiree, et un objectif que rien ne compare ne se saisit pas.
+        return _prodSrc().indexOf('SUCRE ℹ')<0
+          ?true:_echec('la colonne SUCRE subsiste ailleurs');})());
+
+      ok('N2.20 — UN REGLAGE HORS ECHELLE EST MONTRE, pas masqué',(()=>{
+        if(typeof _optionsEchelle!=='function') return _echec('aucune garde');
+        // Le cas du doc : 2,8 g/kg enregistré sous PES, PES retiré depuis.
+        const h=_optionsEchelle([2.4,2.3,2.2,2.1,2.0,1.9,1.8],2.8,' g/kg',2.2);
+        const d=document.createElement('select'); d.innerHTML=h;
+        const sel=d.querySelector('option[selected]');
+        if(!sel) return _echec('aucune option sélectionnée : le navigateur affichera la première');
+        if(Number(sel.value)!==2.8) return _echec('option retenue : '+sel.value);
+        if((sel.textContent||'').indexOf('hors échelle')<0)
+          return _echec('la valeur hors échelle n’est pas signalée : '+sel.textContent);
+        // ET L'ECHELLE RESTE TRIEE : une valeur ajoutee en fin de liste se
+        // lirait comme une anomalie de rendu.
+        const vals=Array.from(d.querySelectorAll('option')).map(o=>Number(o.value));
+        for(let i=1;i<vals.length;i++)
+          if(vals[i]>vals[i-1]) return _echec('échelle désordonnée : '+vals.join(' '));
+        // DANS L'ECHELLE, RIEN NE CHANGE : le suggéré reste marqué comme avant.
+        const h2=_optionsEchelle([2.4,2.2,1.8],2.2,' g/kg',2.2);
+        if(h2.indexOf('hors échelle')>=0) return _echec('une valeur de l’échelle est dite hors échelle');
+        return h2.indexOf('suggéré')>=0?true:_echec('le suggéré n’est plus marqué');})());
+
+      ok('N2.21 — LA CIBLE DE SEL EST DITE AU COACH, et c\'est la même',(()=>{
+        const s=String(_htmlAthleteVoit);
+        if(s.indexOf('_selPourGrille')<0) return _echec('le moteur sodique n’est pas lu');
+        const j=Date.now();
+        const u={id:'SD',email:'sd@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+          _evol_height:'178','init-age':32,createdAt:j-200*864e5,
+          weightLog:[{date:new Date(j-2*864e5).toISOString().slice(0,10),kg:80}],
+          sessions_config:Array.from({length:7},()=>({active:false})),
+          bilans:[{type:'debut',date:j-100*864e5,'deb-weight':'80','deb-height':'178',
+                   'deb-age':'32','deb-gender':'Homme'}],
+          sessions:[],videos:[],
+          nutrition:{dietType:'flexible',manuel:true,
+            macros:{on:{kcal:2400,p:180,g:250,l:70},off:{kcal:2400,p:180,g:250,l:70}}}};
+        const today=localISODate(new Date());
+        const vu=_getEffectiveMacros(u.nutrition,nutIsOnDay(today,u),today,u);
+        const attendu=_selPourGrille(u,today,vu);
+        const t=_htmlAthleteVoit(u,vu,vu,false).replace(/<[^>]*>/g,' ');
+        if(attendu&&attendu.cible&&attendu.cible.targetSaltG>0){
+          const nb=String(Math.round(attendu.cible.targetSaltG*10)/10).replace('.',',');
+          if(t.indexOf(nb+' g')<0)
+            return _echec('le coach ne lit pas les '+nb+' g de sa grille à lui : '+t.slice(0,220));
+        }
+        // NULL RESTE NULL : sans poids connu, le moteur se tait et on se tait
+        // avec lui plutot que d'afficher un zero.
+        const v=JSON.parse(JSON.stringify(u));
+        v.weightLog=[]; v.bilans=[]; v['init-weight']='';
+        const t2=_htmlAthleteVoit(v,{kcal:2400,p:180,g:250,l:70},{kcal:2400,p:180,g:250,l:70},false);
+        return t2.indexOf('0 g</b>')<0?true:_echec('un zéro est affiché faute de poids');})());
+
+      ok('N2.22 — L\'ORIGINE DES CIBLES EST MONTREE, avec sa date',(()=>{
+        if(typeof _htmlOrigineCibles!=='function') return _echec('l’origine n’est jamais lue');
+        const j=Date.now();
+        const f=(o,d)=>_htmlOrigineCibles({nutrition:{macros:{origine:o,origineDate:d}}})
+          .replace(/<[^>]*>/g,' ');
+        // LE CAS QUI COMPTE : l'athlete a modifie ses propres cibles.
+        const a=f('ajustement',j-3*864e5);
+        if(a.indexOf('ajustement')<0) return _echec('l’ajustement n’est pas nommé : '+a);
+        if(a.indexOf('athlète')<0) return _echec('on ne dit pas QUI l’a appliqué : '+a);
+        if(!/\d{2} /.test(a)) return _echec('la date manque : '+a);
+        // Et les deux autres provenances se distinguent.
+        if(f('coach',j)===a||f('auto',j)===a) return _echec('les provenances ne se distinguent pas');
+        // RIEN N'EST ECRIT : cette ligne LIT ce qui existe deja.
+        const s=String(_htmlOrigineCibles);
+        if(/DB\.set|saveUser|CLOUD\.push/.test(s)) return _echec('la ligne écrit dans le dossier');
+        // Sans origine au dossier — les anciens dossiers — rien ne s'affiche.
+        return _htmlOrigineCibles({nutrition:{macros:{}}})===''
+          ?true:_echec('une origine est inventée pour un dossier qui n’en a pas');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

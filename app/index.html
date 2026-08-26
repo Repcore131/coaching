@@ -30344,7 +30344,7 @@ function hydratationMoyenne(user,jours){
     nSeances:vals.length};
 }
 // ── Repère de besoin ────────────────────────────────────────────────────────
-// Comme REPERES_VOLUME et ACT_SEANCES, ces deux nombres sont des repères de
+// Comme REPERES_VOLUME, ces deux nombres sont des repères de
 // PRATIQUE DE TERRAIN et non une mesure. Le besoin réel dépend de la chaleur,
 // de l'altitude, de ce que l'athlète transpire, de ce qu'il mange et de ce qu'il
 // boit par ailleurs. Aucun calcul ne remplace le fait de regarder la couleur de
@@ -40924,6 +40924,13 @@ function phaseCycle(user,dateISO){
   // La longueur OBSERVÉE prime sur la longueur déclarée dès qu'elle existe.
   // Bornée comme l'autre : une médiane reste une estimation.
   const len=Math.max(20,Math.min(40,longueurObservee(user)||conf.cycleLength||28));
+  // N2.19 — UNE DATE ABSENTE EST UN REFUS, PAS UNE PHASE. Le composeur de plan
+  // appelait planCiblesJour(c,true,null) : ce null arrivait ici, produisait
+  // new Date('nullT00:00:00'), un diffDays a NaN, aucune des trois bornes
+  // franchie — et la fonction rendait « stable ». L'adaptation de cycle
+  // n'etait donc JAMAIS appliquee dans l'apercu du coach, sans erreur ni
+  // message. Un echec silencieux vaut moins que pas de reponse du tout.
+  if(typeof dateISO!=='string'||!/^\d{4}-\d{2}-\d{2}/.test(dateISO)) return null;
   const diffDays=Math.floor((new Date(dateISO+'T00:00:00')-new Date(conf.lastPeriodDate+'T00:00:00'))/86400000);
   if(diffDays<0) return null;
   const jour=diffDays+1;
@@ -41427,45 +41434,19 @@ function saveCycleNutSettings(field,value){
   _renderNutriContent(typeDiete(currentUser.nutrition));
 }
 
-function _renderMacroTargets(nut){
-  const mon=nut.macros?.on||{};
-  const moff=nut.macros?.off||{};
-  const hasData=mon.kcal||mon.p||mon.g||mon.l||moff.kcal||moff.p||moff.g||moff.l;
-  if(!hasData) return '';
-  const macros=[
-    {k:'kcal',label:'KCAL',unit:'',color:'var(--red)'},
-    {k:'p',label:'PROT',unit:'g',color:'#60a5fa'},
-    {k:'g',label:'GLUC',unit:'g',color:'var(--green)'},
-    {k:'l',label:'LIP',unit:'g',color:'#fb923c'},
-    {k:'s',label:'SUCRE ℹ',unit:'g',color:'#a78bfa'},
-    {k:'f',label:'FIBRES ℹ',unit:'g',color:'#94a3b8'},
-  ];
-  const col=(m)=>macros.map(x=>`<div style="background:var(--surface-1);border-radius:var(--r-2);padding:8px 4px;text-align:center">
-    <div style="font-size:var(--fs-md);font-weight:800;color:${x.color};line-height:1">${m[x.k]||'—'}${m[x.k]?`<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${x.unit?'&thinsp;'+x.unit:''}</span>`:''}</div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;margin-top:3px;text-transform:uppercase">${x.label}</div>
-  </div>`).join('');
-  return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">🎯 Objectifs nutritionnels</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div>
-        <div style="font-size:var(--fs-xs);font-weight:800;color:var(--success);letter-spacing:1.5px;padding:4px 8px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-2);text-align:center;margin-bottom:6px">⚡ JOUR ON</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">${col(mon)}</div>
-      </div>
-      <div>
-        <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1.5px;padding:4px 8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);text-align:center;margin-bottom:6px">💤 JOUR OFF</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">${col(moff)}</div>
-      </div>
-    </div>
-  </div>`;
-}
+// N2.18 — _renderMacroTargets EST PARTIE le 26/08/2026. Quarante lignes sans
+// aucun appelant, et son propre commentaire le disait deja. Elle portait en
+// outre une colonne « SUCRE » que le reste du produit a retiree : un objectif
+// que rien ne compare ne se saisit pas.
 // ── Proposition côté athlète ───────────────────────────────────────────────
 // Elle ne s'affiche QUE si personne n'a rempli les objectifs. Dès qu'un coach
 // a écrit des macros, cette carte disparaît : le coach prime, toujours, et il
 // n'y a pas de bouton capable d'écraser son travail.
 //
-// Note : la zone annoncée dans le cahier des charges, _renderMacroTargets,
-// n'est appelée nulle part — c'est du code mort. La carte est donc posée dans
-// _renderNutriContent, l'écran où l'athlète regarde réellement ses macros.
+// Note : la zone annoncée dans le cahier des charges n'existe pas — la
+// fonction qui la rendait n'était appelée nulle part, et elle a été retirée.
+// La carte est donc posée dans _renderNutriContent, l'écran où l'athlète
+// regarde réellement ses macros.
 function macrosRemplies(nut){
   const m=(nut&&nut.macros)||{};
   const rempli=o=>!!o&&['kcal','p','g','l'].some(k=>Number(o[k])>0);
@@ -43432,8 +43413,14 @@ function planPalierCourant(plan,user){
 // l'échelle, précisément parce que c'est là qu'il faut protéger le muscle.
 function planCiblesJour(porteur,isOn,dateStr){
   const nut=(porteur&&porteur.nutrition)||{};
+  // N2.19 — LA DATE DU JOUR, EXPLICITEMENT. Cinq appels du composeur de plan
+  // passent null ; sans ce repli, l'apercu du coach ignorait l'adaptation de
+  // cycle que son athlete recoit bel et bien, et les deux ecrans annoncaient
+  // des grammages de glucides differents pour le meme jour.
+  let _d=dateStr;
+  if(!_d){ try{ _d=localISODate(new Date()); }catch(e){ _d=null; } }
   let base={};
-  try{ base=_getEffectiveMacros(nut,isOn,dateStr,porteur)||{}; }catch(e){ base={}; }
+  try{ base=_getEffectiveMacros(nut,isOn,_d,porteur)||{}; }catch(e){ base={}; }
   const out={kcal:_planNb(base.kcal),p:_planNb(base.p),c:_planNb(base.g),
     l:_planNb(base.l),f:_planNb(base.f),
     palier:null,mult:1,plancherAtteint:false,kcalAvantPalier:_planNb(base.kcal)};
@@ -47889,16 +47876,22 @@ function masseMaigreDuBilan(user){
   return Math.round((w-mg)*10)/10;
 }
 
-// ── Facteur d'activité, déduit de ce que l'app sait DÉJÀ ────────────────────
-// Aucune question nouvelle : le nombre de créneaux actifs du programme, et la
-// moyenne de pas sur quatorze jours quand elle existe.
+// ── L'ajustement par les pas ────────────────────────────────────────────────
+// N2.17 — ACT_SEANCES ET facteurActivite SONT PARTIS le 26/08/2026.
+// Le facteur d'activite tire du NOMBRE DE CRENEAUX a ete remplace par
+// facteurNEAT, qui n'utilisait plus ce bareme : le commentaire de « UNE seule
+// convention de depense », juste en dessous, explique pourquoi — l'ancienne
+// table montait jusqu'a 1,65, un multiplicateur qui englobe l'entrainement,
+// et c'etait la racine du double comptage. La fonction n'avait plus aucun
+// appelant en production ; elle n'etait plus tenue que par cinq assertions
+// qui ne verifiaient qu'elle-meme. Elles sont parties avec.
 //
-// Comme REPERES_VOLUME, ce barème est un repère de PRATIQUE DE TERRAIN et non
-// une mesure. Les facteurs publiés varient d'une source à l'autre, la dépense
-// réelle d'une même personne varie d'un jour à l'autre, et le compteur de pas
-// d'un téléphone posé sur un bureau ne vaut rien. C'est un point de départ que
-// le coach ajuste, jamais un verdict.
-const ACT_SEANCES=Object.freeze([1.20,1.30,1.375,1.45,1.55,1.65]);
+// CE QUI RESTE EST VIVANT : moyennePas14j et ACT_PAS alimentent facteurNEAT,
+// ACT_MIN et ACT_MAX le bornent.
+//
+// Comme REPERES_VOLUME, ce bareme est un repere de PRATIQUE DE TERRAIN et non
+// une mesure. Le compteur de pas d'un telephone pose sur un bureau ne vaut
+// rien : c'est un point de depart que le coach ajuste, jamais un verdict.
 const ACT_PAS=Object.freeze([
   Object.freeze({max:4000,  d:-0.05}),
   Object.freeze({max:7500,  d: 0    }),
@@ -47914,20 +47907,10 @@ function moyennePas14j(user){
   if(!l.length) return null;
   return Math.round(l.reduce((s,e)=>s+Number(e.count),0)/l.length);
 }
-function facteurActivite(user){
-  const actifs=((user&&user.sessions_config)||[]).filter(s=>s&&s.active).length;
-  const base=ACT_SEANCES[Math.min(actifs,ACT_SEANCES.length-1)];
-  const pas=moyennePas14j(user);
-  let d=0;
-  if(pas!=null) for(const b of ACT_PAS) if(pas<=b.max){ d=b.d; break; }
-  const f=Math.min(ACT_MAX,Math.max(ACT_MIN,base+d));
-  return {f:Math.round(f*1000)/1000,seances:actifs,pas};
-}
-
 // ── UNE seule convention de dépense ────────────────────────────────────────
 // Deux modèles exclusifs cohabitaient : profession reconnue → NEAT × facteur
 // plus les sports en kcal ; profession inconnue → facteur tiré du NOMBRE DE
-// CRÉNEAUX, sports entièrement ignorés. Deux athlètes identiques obtenaient
+// CRÉNEAUX (l'ancienne table ACT_SEANCES, retirée depuis), sports ignorés. Deux athlètes identiques obtenaient
 // donc deux dépenses différentes selon que leur intitulé de poste était
 // reconnu, un footballeur voyait ses six heures compter zéro, et un athlète
 // qui n'avait pas listé « Musculation » voyait son entraînement compter zéro.
@@ -47940,8 +47923,8 @@ function facteurActivite(user){
 // calcul part de 1,20 et rajoute les créneaux en kcal — la dépense baisse
 // nettement, et c'était précisément le double comptage qu'on corrige.
 const NEAT_BASE=1.20;
-// Facteur d'activité HORS SPORT. ACT_SEANCES n'y participe plus : le nombre de
-// créneaux est du sport, il se compte en kcal, pas en multiplicateur.
+// Facteur d'activité HORS SPORT : le nombre de créneaux est du sport, il se
+// compte en kcal, pas en multiplicateur.
 function facteurNEAT(user){
   const metier=_dernierChamp(user,'deb-job');
   const prof=facteurProfession(metier);
@@ -48226,7 +48209,7 @@ const FIBRES_PAR_1000=14;
 const CYCLE_GLUC=0.15;           // jour ON : +15 % de glucides, OFF : −15 %
 
 // ── Point de départ calorique, dérivé de la vitesse visée ───────────────────
-// Comme REPERES_VOLUME et ACT_SEANCES, ces trois nombres sont des repères de
+// Comme REPERES_VOLUME, ces trois nombres sont des repères de
 // PRATIQUE DE TERRAIN et non une mesure. 7700 kcal par kilo est la conversion
 // d'usage pour du tissu adipeux : la composition réelle du poids perdu ou pris
 // n'est jamais purement grasse, elle varie d'une personne à l'autre et au fil
@@ -48853,6 +48836,31 @@ const BESOINS_ECHEC='Le point de départ n’a pas pu être calculé sur ce doss
 function _htmlBesoinsEchec(){
   return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-bottom:10px">${escapeHtml(BESOINS_ECHEC)}</div>`;
 }
+// N2.20 — LE SELECTEUR AFFICHE TOUJOURS LA VALEUR QUE LE CALCUL UTILISE.
+// L'etendue de l'echelle des proteines depend de DECLARATIONS DE L'ATHLETE —
+// PES, menopause. Si l'une est retiree apres que le coach a enregistre un g/kg
+// qui n'appartenait qu'a l'echelle elargie, aucune option n'etait marquee
+// selected : le navigateur affichait la PREMIERE de la liste pendant que
+// besoinsProposes continuait de calculer sur la valeur enregistree. Le coach
+// lisait donc un g/kg de proteines qui n'etait pas celui applique.
+//
+// La valeur hors echelle est AJOUTEE et signalee, jamais masquee : la masquer
+// etait exactement le probleme. protEchelle et protSuggeree ne changent pas.
+function _optionsEchelle(echelle,courant,suffixe,suggere){
+  const liste=(echelle||[]).slice();
+  const hors=(typeof courant==='number')&&liste.indexOf(courant)<0;
+  if(hors){
+    liste.push(courant);
+    // Meme sens de tri que les echelles du fichier : du plus haut au plus bas.
+    liste.sort((a,b)=>b-a);
+  }
+  return liste.map(v=>{
+    const nb=String(v).replace('.',',');
+    const marque=(v===courant&&hors)?' · hors échelle'
+      :((v===suggere)?' · suggéré':'');
+    return `<option value="${v}"${courant===v?' selected':''}>${nb}${suffixe}${marque}</option>`;
+  }).join('');
+}
 function _htmlDepartCoach(c){
   const b=_besoinsSurs(c);
   // null = le calcul a LEVE. {source:null} = il manque une donnee de base.
@@ -48865,7 +48873,7 @@ function _htmlDepartCoach(c){
   }
   const phase=typePhase(c);
   const suggere=protSuggeree(c,phase);
-  const opts=protEchelle(c).map(v=>`<option value="${v}"${b.gParKg===v?' selected':''}>${String(v).replace('.',',')} g/kg${v===suggere?' · suggéré':''}</option>`).join('');
+  const opts=_optionsEchelle(protEchelle(c),b.gParKg,' g/kg',suggere);
   // Le g/kg de lipides, réglable pour TOUT LE MONDE. La suggestion se décale
   // sous SOPK, elle ne s'impose pas.
   const lipSug=lipSuggere(c);
@@ -48877,7 +48885,9 @@ function _htmlDepartCoach(c){
   const _regLip=(()=>{ try{ return reglagesCalcul(c).lip; }catch(e){ return undefined; } })();
   const lipCour=(typeof _propLip==='number')?_propLip
     :((typeof _regLip==='number')?_regLip:lipSug);
-  const optsLip=LIP_ECHELLE.map(v=>`<option value="${v}"${lipCour===v?' selected':''}>${String(v).replace('.',',')} g/kg lip.${v===lipSug?' · suggéré':''}</option>`).join('');
+  // Meme garde pour les lipides : LIP_ECHELLE est fixe, mais un reglage
+  // enregistre hors bareme aurait produit le meme mensonge silencieux.
+  const optsLip=_optionsEchelle(LIP_ECHELLE,lipCour,' g/kg lip.',lipSug);
   // La correction métabolique. Elle vit en mémoire comme les autres curseurs,
   // et n'est écrite dans le dossier qu'au bouton d'enregistrement habituel.
   const corrSug=correctionMBSuggeree(c);
@@ -49033,6 +49043,32 @@ function saveClientNutriManuel(v){
 // L'interrupteur, sous la grille. Même habillage que celui de l'accès à la
 // diète stricte : c'est le même geste, et deux dessins pour un même
 // interrupteur se liraient comme deux mécanismes différents.
+// N2.22 — D'OU VIENNENT LES CIBLES EN COURS.
+// nutrition.macros.origine est ecrit a trois endroits — 'auto' et 'coach' par
+// saveClientNutriMacros, 'ajustement' par appliquerAjustement — avec sa date,
+// et AUCUN ecran ne le lisait. Le coach ne pouvait donc pas savoir que son
+// athlete avait modifie ses propres cibles depuis son ecran d'ajustement.
+// Rien de nouveau n'est ecrit : cette ligne LIT ce qui existe deja.
+const NUT_ORIGINE=Object.freeze({
+  coach:'saisies par toi',
+  auto:'calculées automatiquement',
+  ajustement:'issues d’un ajustement appliqué par ton athlète'});
+function _htmlOrigineCibles(c){
+  const m=((c&&c.nutrition)||{}).macros||{};
+  const dit=NUT_ORIGINE[m.origine];
+  if(!dit) return '';
+  let quand='';
+  if(m.origineDate>0){
+    try{ quand=' le '+new Date(m.origineDate).toLocaleDateString('fr-FR',
+      {day:'2-digit',month:'short',year:'numeric'}); }catch(e){}
+  }
+  // L'ajustement vient de l'athlete : c'est le seul cas que le coach n'a pas
+  // decide lui-meme, et le seul qu'il faut donc distinguer a l'oeil.
+  const alerte=(m.origine==='ajustement');
+  return '<div style="margin-top:8px;font-size:var(--fs-2xs);line-height:1.55;color:'
+    +(alerte?'var(--orange)':'var(--text-faint)')+'">'
+    +'Cibles enregistrées '+dit+quand+'.</div>';
+}
 function _htmlManuelCoach(c){
   const man=saisieManuelle(c);
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -49471,6 +49507,24 @@ function _htmlAthleteVoit(c,grilleOn,grilleOff,cyc){
     return a!==null&&s!==null&&a!==s;
   }).map(f=>f[1]);
   const jour=cyc?(isOn?'jour ON':'jour OFF'):'tous les jours';
+  // N2.21 — LA CIBLE DE SEL DU JOUR. Le moteur sodique complet — cibleSodiumJour,
+  // phraseCibleSodium — n'avait qu'un seul point d'affichage, la grille de
+  // l'athlete. Le coach compose pourtant le plan qui porte ce sel, et n'en
+  // voyait rien. On passe par _selPourGrille, exactement comme l'ecran de
+  // l'athlete : meme jour, memes macros effectives, meme nombre.
+  // NULL RESTE NULL : poids inconnu, grossesse ou allaitement declares — le
+  // moteur se tait, et on se tait avec lui plutot que d'afficher un zero.
+  const _sel=(()=>{ try{ return _selPourGrille(c,today,vu); }catch(e){ return null; } })();
+  const selHtml=(_sel&&_sel.cible&&_sel.cible.targetSaltG>0)
+    ? '<div style="margin-top:9px;padding-top:8px;border-top:1px solid var(--border)">'
+      +'<span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;'
+      +'text-transform:uppercase;font-weight:800">Sel</span> '
+      +'<b style="font-size:var(--fs-sm);color:var(--text-strong)">'
+      +String(Math.round(_sel.cible.targetSaltG*10)/10).replace('.',',')+' g</b>'
+      +(_sel.note?'<div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-top:3px">'
+        +escapeHtml(_sel.note)+'</div>':'')
+      +'</div>'
+    : '';
   let alertes='';
   if(ecartChamp.length) alertes+='<div style="margin-top:9px;padding:8px 10px;background:var(--surface-2);'
     +'border-left:3px solid var(--orange);border-radius:var(--r-2);font-size:var(--fs-xs);'
@@ -49487,6 +49541,7 @@ function _htmlAthleteVoit(c,grilleOn,grilleOff,cyc){
     +'<div style="font-size:var(--fs-sm);line-height:1.9">'+ligne+'</div>'
     +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:5px">Lu par le même chemin que '
     +'son écran à lui. Aucun de ces chiffres n’est recalculé ici.</div>'
+    +selHtml
     +alertes;
 }
 function renderCoachNutriSection(c){
@@ -49508,11 +49563,17 @@ function renderCoachNutriSection(c){
   const _pauseHtml=_htmlPauseProposition(c)+_htmlPauseEnCours(c)+_htmlFinPrevue(c);
   const mon=nut.macros?.on||{};
   const moff=nut.macros?.off||{};
+  // N2.16 — L'EXEMPLE SUIT LE MODE DE DIETE. « ex : 2200 / 1900 » donne la
+  // valeur du jour ON puis celle du jour OFF ; en diete non cyclee une seule
+  // colonne est rendue, et le coach lisait deux nombres dans un champ qui n'en
+  // accepte qu'un. Le second exemple n'est ecrit que s'il y a un second champ.
+  const _cyc=dieteCyclee(c);
+  const _ph=(on,off)=>_cyc?('ex : '+on+' / '+off):('ex : '+on);
   const fields=[
-    {k:'kcal',label:'KCAL',color:'var(--red)',ph:'ex : 2200 / 1900'},
-    {k:'p',label:'PROT g',color:'#60a5fa',ph:'ex : 180 / 160'},
-    {k:'g',label:'GLUC g',color:'var(--green)',ph:'ex : 250 / 180'},
-    {k:'l',label:'LIP g',color:'#fb923c',ph:'ex : 70 / 65'},
+    {k:'kcal',label:'KCAL',color:'var(--red)',ph:_ph(2200,1900)},
+    {k:'p',label:'PROT g',color:'#60a5fa',ph:_ph(180,160)},
+    {k:'g',label:'GLUC g',color:'var(--green)',ph:_ph(250,180)},
+    {k:'l',label:'LIP g',color:'#fb923c',ph:_ph(70,65)},
     // Le sucre n'a plus de lecteur : Ciqual n'en porte aucune donnée, et la
     // tuile du journal a été retirée. Un objectif que rien ne compare ne se
     // saisit pas. Les valeurs déjà en base ne sont pas effacées.
@@ -49522,7 +49583,6 @@ function renderCoachNutriSection(c){
   // rendu du tout, plutôt que masqué : saveClientNutriMacros le lit par son
   // identifiant, et un champ cache mais present aurait continue de fournir une
   // valeur que le coach ne voit plus.
-  const _cyc=dieteCyclee(c);
   const _cols=_cyc?'90px 1fr 1fr':'90px 1fr';
   // EN AUTOMATIQUE, LES CHAMPS AFFICHENT LE CALCUL, pas ce qui est au dossier.
   // C'est ce qui les fait bouger des que le coach change les proteines, les
@@ -49625,6 +49685,7 @@ function renderCoachNutriSection(c){
         ${_cyc?'<div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:4px">💤 JOUR OFF</div>':''}
       </div>
       ${macroRows}
+      ${(()=>{ try{ return _htmlOrigineCibles(c); }catch(e){ return ''; } })()}
       ${_htmlManuelCoach(c)}
       ${_htmlViolationsCoach(c)}
       ${_htmlAjustement(c,true)}
@@ -54678,7 +54739,7 @@ const PLANCHER_MAJORATION_TCA=1.15;
 // homme de 140 kg obtenait 3080 kcal — proche de sa dépense — et aucune baisse
 // ne lui était jamais proposée.
 //
-// Comme KCAL_PLANCHER_PAR_KG et ACT_SEANCES, 30 est un repère de PRATIQUE DE
+// Comme KCAL_PLANCHER_PAR_KG, 30 est un repère de PRATIQUE DE
 // TERRAIN et non une mesure : la dépense d'un kilo de masse maigre varie d'un
 // tissu à l'autre et d'une personne à l'autre, et la masse maigre elle-même
 // n'est ici qu'une ESTIMATION par tours de taille et de cou. C'est une borne
