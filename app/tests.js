@@ -14532,6 +14532,65 @@ function testExercices(){
         return _echec('les cellules du coach ne distinguent pas un report');
       return /reportées du bilan précédent/.test(s)?true
         :_echec('le gris n’est expliqué nulle part côté coach');})());
+    // ── LES TROUS DEJA AU DOSSIER SE COMBLENT A LA LECTURE ───────────────
+    // Kevin, 26/08/2026 : « ce qui est troué, c'est exactement le même que le
+    // bilan précédent, donc fais en sorte que les chiffres se mettent. » Le
+    // correctif d'enregistrement ne vaut que pour les bilans à venir ; ceux
+    // déjà validés ont perdu leurs reprises et gardaient un « — ».
+    const _bo=(bilans)=>bilansOrdonnes({bilans});
+    const _J=n=>Date.now()-n*864e5;
+    ok('Un trou se comble par la dernière valeur relevée, et se marque',(()=>{
+      const l=_bo([{date:_J(38),'bil-bicep-r':'44','bil-waist':'88.5'},
+                   {date:_J(0),'bil-waist':'88'}]);
+      if(getBM(l[1],'bicep-r')!==44) return _echec('le trou n’est pas comblé');
+      if(!bmReportee(l[1],'bicep-r')) return _echec('la valeur comblée passe pour un relevé');
+      // LA MESURE VRAIMENT RELEVÉE N'EST PAS TOUCHÉE.
+      if(getBM(l[1],'waist')!==88) return _echec('une mesure relevée a été écrasée');
+      return !bmReportee(l[1],'waist')?true:_echec('un relevé frais est marqué comme report');})());
+    ok('Le dossier n’est pas réécrit : c’est une lecture',(()=>{
+      const b2={date:_J(0),'bil-waist':'88'};
+      const u={bilans:[{date:_J(38),'bil-bicep-r':'44'},b2]};
+      const l=bilansOrdonnes(u);
+      if(getBM(l[1],'bicep-r')!==44) return _echec('le trou n’est pas comblé');
+      if(b2['bil-bicep-r']!==undefined)
+        return _echec('le bilan du dossier a été modifié — ça remonterait au serveur');
+      return (b2.reprises===undefined)?true:_echec('une trace a été écrite dans le dossier');})());
+    ok('Le poids n’est jamais comblé',(()=>{
+      // Il alimente une moyenne mobile et une VITESSE dont sort un ajustement
+      // calorique : un poids reporté y ferait un point neuf, daté du jour.
+      const l=_bo([{date:_J(38),'bil-weight':'103.8','bil-bicep-r':'44'},
+                   {date:_J(0),'bil-bicep-r':'44'}]);
+      return getBW(l[1])===null?true:_echec('un poids a été reporté : '+getBW(l[1]));})());
+    ok('Au-delà de deux mois, le trou reste un trou',(()=>{
+      // Dire « rien n'a bougé » sur six mois serait une affirmation, pas un
+      // report. La borne est celle du pré-remplissage : BIL_REPRISE_MAX_JOURS.
+      const l=_bo([{date:_J(200),'bil-bicep-r':'44'},{date:_J(0),'bil-waist':'88'}]);
+      if(getBM(l[1],'bicep-r')!==null)
+        return _echec('une mesure vieille de 200 jours a comblé le trou');
+      // ET JUSTE EN DEÇÀ, il se comble bien : la borne ne doit pas devenir un
+      // refus général.
+      const l2=_bo([{date:_J(50),'bil-bicep-r':'44'},{date:_J(0),'bil-waist':'88'}]);
+      return getBM(l2[1],'bicep-r')===44?true:_echec('un relevé de 50 jours ne comble plus rien');})());
+    ok('Un report ne comble pas le report suivant',(()=>{
+      // Sinon une valeur relevée une fois se recopierait de proche en proche,
+      // et la borne des deux mois ne tomberait jamais.
+      const l=_bo([{date:_J(70),'bil-bicep-r':'44'},
+                   {date:_J(25),'bil-waist':'88'},
+                   {date:_J(0),'bil-waist':'87'}]);
+      // Le relevé est à 45 jours du bilan du milieu — comblé — et à 70 jours du
+      // dernier : hors borne. Si le report du milieu servait de source, le
+      // dernier serait comblé à 25 jours. C'est la seule géométrie qui sépare
+      // les deux lectures.
+      if(getBM(l[1],'bicep-r')!==44) return _echec('le premier trou n’est pas comblé');
+      return getBM(l[2],'bicep-r')===null?true
+        :_echec('la chaîne de reports a franchi les deux mois');})());
+    ok('Une mesure jamais relevée avant reste vide',(()=>{
+      const l=_bo([{date:_J(38),'bil-waist':'88.5'},{date:_J(0),'bil-waist':'88'}]);
+      return getBM(l[0],'bicep-r')===null&&getBM(l[1],'bicep-r')===null
+        ?true:_echec('une mesure a été inventée sans source');})());
+    ok('Un seul bilan ne comble rien',
+       _bo([{date:_J(0),'bil-waist':'88'}]).length===1
+       &&getBM(_bo([{date:_J(0),'bil-waist':'88'}])[0],'bicep-r')===null);
     ok('Un « 0 cm » ne se peint pas en vert',(()=>{
       // Le vert disait « ça descend », pensé pour une sèche. Zéro n'est ni une
       // baisse ni une hausse : c'est la stagnation que Kevin veut voir, et la

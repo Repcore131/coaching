@@ -21006,7 +21006,60 @@ function _ecrireTailleDeduite(){
 // Un seul ordre, un seul filtre, une seule fonction. Aucun calcul de
 // mensuration n'est touche : c'est l'ORDRE de lecture qui est unifie.
 function bilansOrdonnes(u){
-  return ((u&&u.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+  return _comblerMensurations(
+    ((u&&u.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date));
+}
+// PURE. Les trous de mensuration comblés par la dernière valeur RELEVÉE.
+//
+// Kevin, 26/08/2026 : « ce qui est troué, c'est exactement le même que le
+// bilan précédent, donc fais en sorte que les chiffres se mettent. » Le
+// correctif d'enregistrement ne vaut que pour les bilans à venir : ceux déjà
+// au dossier ont perdu leurs reprises au moment où ils ont été validés, et un
+// biceps à 44 cm inchangé depuis le bilan d'avant y reste un « — ».
+//
+// ON NE RÉÉCRIT RIEN. C'est une lecture : les bilans du dossier ne bougent
+// pas, on rend des COPIES comblées. Rien ne remonte au serveur, et le jour où
+// la vraie mesure arrive elle prend simplement la place du report.
+//
+// TROIS BORNES, parce que combler un trou, c'est affirmer quelque chose :
+//   • JAMAIS LE POIDS. Il alimente une moyenne mobile et une vitesse dont sort
+//     un ajustement calorique ; un poids reporté y ferait un point neuf. Les
+//     mensurations, elles, ne se lisent que d'un bilan à l'autre.
+//   • LA VALEUR VIENT DU DERNIER RELEVÉ, jamais d'un report : sans quoi un
+//     report comblerait le suivant, de proche en proche, et la borne ci-dessous
+//     ne tomberait jamais.
+//   • BIL_REPRISE_MAX_JOURS. C'est déjà la réponse de l'app à « combien de
+//     temps une mesure peut-elle tenir lieu de la mesure d'aujourd'hui »,
+//     posée pour le pré-remplissage du formulaire. Au-delà de deux mois le
+//     trou reste un trou : dire « rien n'a bougé » sur six mois serait une
+//     affirmation, pas un report.
+//
+// ET CHAQUE VALEUR COMBLÉE EST MARQUÉE dans `reprises` — la même trace que
+// pose l'enregistrement. Les deux tableaux l'écrivent en gris : elle compte
+// pour lire une stagnation, elle ne se donne jamais pour un relevé du jour.
+function _comblerMensurations(l){
+  if(!l||l.length<2) return l||[];
+  const limite=BIL_REPRISE_MAX_JOURS*24*3600*1000;
+  const out=l.slice();
+  // Dernier relevé RÉEL de chaque mesure : {valeur, date}.
+  const vus={};
+  for(let i=0;i<out.length;i++){
+    let b=out[i],copie=false;
+    for(const m of MEAS){
+      const v=getBM(b,m.k);
+      if(v!=null){
+        // Un report déjà marqué ne devient pas une référence.
+        if(!bmReportee(b,m.k)) vus[m.k]={v,date:Number(b.date)};
+        continue;
+      }
+      const src=vus[m.k];
+      if(!src||Number(b.date)-src.date>limite) continue;
+      if(!copie){ b=Object.assign({},b); b.reprises=(b.reprises||[]).slice(); out[i]=b; copie=true; }
+      b['bil-'+m.k]=String(src.v);
+      if(b.reprises.indexOf('bil-'+m.k)<0) b.reprises.push('bil-'+m.k);
+    }
+  }
+  return out;
 }
 function renderBilanEvolution(c){
   const bilans=bilansOrdonnes(c);
