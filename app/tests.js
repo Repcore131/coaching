@@ -10780,7 +10780,17 @@ function testExercices(){
           const t=document.querySelector('.pr-titre');
           if(!t) return _echec('le titre a disparu');
           const s=getComputedStyle(t);
-          if(s.color.replace(/\s/g,'')!=='rgb(224,32,32)')
+          // N5.13 — LE JETON A CHANGE DE VALEUR, PAS DE ROLE. --red-text est
+          // passe de #E02020 a #FF5A4A pour atteindre AA sur du petit texte :
+          // ce titre reste rouge, et c'est le JETON qu'on verifie, pas un
+          // nombre en dur. Un nombre en dur aurait fait tomber cette sonde a
+          // chaque reglage de lisibilite, sans que rien ne soit casse.
+          const _jeton=getComputedStyle(document.documentElement)
+            .getPropertyValue('--red-text').trim();
+          const _norm=v=>{ const d=document.createElement('div');
+            d.style.color=v; document.body.appendChild(d);
+            const c=getComputedStyle(d).color.replace(/\s/g,''); d.remove(); return c; };
+          if(s.color.replace(/\s/g,'')!==_norm(_jeton))
             return _echec('le titre n est pas rouge : '+s.color);
           if(!/224,\s*32,\s*32/.test(s.textShadow))
             return _echec('le halo n est pas rouge : '+s.textShadow);
@@ -23920,6 +23930,121 @@ function testExercices(){
         if(t.indexOf('_estMonAthlete')<0) return _echec('la liste n’emploie pas le prédicat commun');
         return t.indexOf('u.id!==currentClientId')>=0
           ?true:_echec('on peut se porter une séance à soi-même');})());
+
+      ok('N5.5 — LES TROIS FAMILLES LES PLUS CLIQUEES REPONDENT AU SURVOL',(()=>{
+        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        for(const [sel,quoi] of [['.ch-chip:hover','les puces de tri'],
+                                 ['.pf-chip:hover','les onglets du dossier'],
+                                 ['#s-coach-client .cc-sect-t:hover','les en-têtes repliables']])
+          if(css.indexOf(sel)<0) return _echec(quoi+' n’ont aucun état de survol');
+        // AUCUN SURVOL ECRIT EN ATTRIBUT dans le document : onze paires
+        // onmouseover/onmouseout compensaient a la main ce que le CSS ne
+        // faisait pas. Le rendu qui en FABRIQUE une, parametree, reste : c'est
+        // une fabrique, pas une duplication.
+        if(document.querySelectorAll('[onmouseover]').length)
+          return _echec(document.querySelectorAll('[onmouseover]').length+' éléments gardent un survol en attribut');
+        // ET LE SURVOL NE CHANGE PAS LA HAUTEUR d'une ligne de tableau : sur
+        // .cc-sect-t, le fond seul, aucun deplacement vertical.
+        const i=css.indexOf('#s-coach-client .cc-sect-t:hover');
+        const bloc=css.slice(i,css.indexOf('}',i));
+        if(/transform|translate|padding|margin/.test(bloc))
+          return _echec('le survol d’un en-tête déplace quelque chose : '+bloc);
+        return true;})());
+
+      ok('N5.13 — LES DEUX JETONS DE TEXTE ATTEIGNENT AA',(()=>{
+        // Contraste WCAG, calcule ici meme : un jeton qui porte du texte de
+        // moins de 18 px doit atteindre 4,5:1 sur les fonds de l'app.
+        const lin=c=>{ c/=255; return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4); };
+        const lum=h=>{ h=h.replace('#','');
+          const v=[0,2,4].map(i=>parseInt(h.slice(i,i+2),16));
+          return 0.2126*lin(v[0])+0.7152*lin(v[1])+0.0722*lin(v[2]); };
+        const ratio=(a,b)=>{ const x=lum(a),y=lum(b);
+          return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05); };
+        const jeton=n=>getComputedStyle(document.documentElement)
+          .getPropertyValue(n).trim();
+        const FONDS=['#080808','#090909','#111111','#1a1a1a'];
+        for(const n of ['--red-text','--text-faint']){
+          const v=jeton(n);
+          if(!/^#[0-9a-f]{6}$/i.test(v)) return _echec(n+' n’est pas une couleur lisible : '+v);
+          for(const f of FONDS){
+            const r=ratio(v,f);
+            if(r<4.5) return _echec(n+' ('+v+') donne '+r.toFixed(2)+':1 sur '+f);
+          }
+        }
+        // ET --red LUI-MEME N'A PAS BOUGE : fonds, filets et bordures en
+        // dependent, et le lot s'interdit d'y toucher.
+        return jeton('--red').toUpperCase()==='#E02020'
+          ?true:_echec('--red a changé : '+jeton('--red'));})());
+
+      ok('N5.14 — LES CINQ ZONES DEFILANTES ONT LE MEME ASCENSEUR',(()=>{
+        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        for(const id of ['ct-dashboard','ct-codes','ct-profil','ct-monetisation','ch-sidebar'])
+          if(css.indexOf('#'+id+'::-webkit-scrollbar')<0)
+            return _echec('#'+id+' garde l’ascenseur du système');
+        // ON NE LE MASQUE PAS : sur PC il sert d'indicateur de position.
+        const i=css.indexOf('#ch-sidebar::-webkit-scrollbar{');
+        if(i<0) return _echec('la règle de largeur est introuvable');
+        const bloc=css.slice(i,css.indexOf('}',i));
+        if(/display:none|width:0/.test(bloc)) return _echec('l’ascenseur est masqué : '+bloc);
+        // Firefox n'a pas ::-webkit-scrollbar : les deux propriétés standard
+        // doivent y suppléer.
+        return css.indexOf('scrollbar-width:thin')>=0
+          ?true:_echec('Firefox garde l’ascenseur du système');})());
+
+      ok('N5.12 — UN SEUL ETAT ACTIF, une seule apparence',(()=>{
+        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        // Les deux noms de classe sont acceptés — `active` est posé par ccdVue
+        // et bqOnglet, `actif` par setFiltreClients et setTriClients — et ils
+        // rendent la MEME chose.
+        if(css.indexOf('.pf-chip.active,.pf-chip.actif')<0)
+          return _echec('les deux noms d’état ne convergent pas');
+        const i=css.indexOf('.pf-chip.active,.pf-chip.actif');
+        const bloc=css.slice(i,css.indexOf('}',i));
+        if(bloc.indexOf('var(--red-bg)')<0)
+          return _echec('l’onglet actif garde l’aplat rouge plein : '+bloc);
+        // Et l'état actif de .ch-chip, la référence, n'a pas bougé.
+        return css.indexOf('.ch-chip.actif{background:var(--red-bg)')>=0
+          ?true:_echec('l’état actif de référence a changé');})());
+
+      ok('N5.1 et N5.16 — L\'EN-TETE DU TABLEAU S\'AFFICHE, et ses libelles tiennent',(()=>{
+        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        // N5.1 — `.cr-head{display:none}` est declare PLUS BAS a specificite
+        // egale : il gagnait la cascade, requete de media ou pas, et l'en-tete
+        // n'apparaissait a AUCUNE largeur. La regle large doit donc etre plus
+        // specifique, comme tout le reste de son bloc.
+        if(css.indexOf('#ch-clients-list .cr-head{')<0)
+          return _echec('la règle de l’en-tête n’a pas la spécificité nécessaire');
+        const iN=css.indexOf('.cr-head{display:none}');
+        const iG=css.indexOf('#ch-clients-list .cr-head{');
+        if(iN<0) return _echec('la règle mobile a disparu');
+        if(!(iN>iG)) return true;   // l'ordre a change : la specificite n'est plus requise
+        // N5.16 — DIX COLONNES, et « Progres » et « Bilans » assez larges. La
+        // case de selection de N4.13 en a ajoute une : sans elle, le bloc
+        // central visé par nth-child(2) ne se dissolvait plus.
+        const m=css.match(/--cr-cols:([^}]+)/);
+        if(!m) return _echec('la définition des colonnes a disparu');
+        const cols=m[1].split(/\s+(?![^(]*\))/).filter(Boolean);
+        if(cols.length!==10) return _echec(cols.length+' colonnes au lieu de 10');
+        if(css.indexOf('.client-row>div:nth-child(3){display:contents}')<0)
+          return _echec('le bloc central n’est plus dissous au bon rang');
+        // Les deux colonnes serrees ont ete elargies : mesure a 1440 px, les
+        // libelles demandaient 62 et 49 px pour 54 et 40 disponibles.
+        if(cols[7]!=='66px') return _echec('« Progrès » dispose de '+cols[7]);
+        return cols[8]==='52px'?true:_echec('« Bilans » dispose de '+cols[8]);})());
+
+      ok('N5.17 — LE TITRE DE SECTION PASSE PAR LE JETON D\'IDENTITE',(()=>{
+        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        const i=css.indexOf('.cc-sect-t>span{');
+        if(i<0) return _echec('la règle a disparu');
+        const bloc=css.slice(i,css.indexOf('}',i));
+        if(/font-family:'Bebas Neue'/.test(bloc))
+          return _echec('la pile est encore écrite à la main : '+bloc);
+        if(bloc.indexOf('var(--pile-titre)')<0)
+          return _echec('le titre ne passe pas par le jeton');
+        // ET LE JETON PORTE BIEN LES DEUX REPLIS que la pile manuelle perdait.
+        const p=getComputedStyle(document.documentElement).getPropertyValue('--pile-titre');
+        return /Haettenschweiler/.test(p)&&/Franklin Gothic/.test(p)
+          ?true:_echec('le jeton a perdu ses replis : '+p);})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
