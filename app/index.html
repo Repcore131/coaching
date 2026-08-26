@@ -21836,7 +21836,10 @@ function _exGuideEstPosing(k){ _exGuide(); return _exGuidePosing.has(k); }
 // Rend [] si l'exercice n'y figure pas : la moitié des exercices du guide
 // n'ont pas encore de vidéo tournée, et c'est un état normal, pas une erreur.
 function videosPour(nom){
-  const k=resoudreAlias(exKey(nom));
+  return _videosDeCle(resoudreAlias(exKey(nom)));
+}
+// PURE. Les videos du guide pour une clef DEJA resolue.
+function _videosDeCle(k){
   if(!k) return [];
   const brut=EX_VIDEOS[k];
   if(!brut) return [];
@@ -21844,6 +21847,14 @@ function videosPour(nom){
     const [id,lbl]=v.split('|');
     return {id,lbl:lbl||'',url:'https://youtu.be/'+id};
   });
+}
+// PURE. Les videos du guide pour un SLUG de fiche. exSlug est la seule
+// fonction qui produit ces slugs — clef en majuscules, espaces en tirets — et
+// le chemin inverse est donc exact.
+function videosPourSlug(slug){
+  const s=String(slug||'').trim();
+  if(!s) return [];
+  return _videosDeCle(resoudreAlias(s.replace(/-/g,' ').toUpperCase()));
 }
 
 // ══════════════ PROTOCOLES D'ÉCHAUFFEMENT ET DE FIN DE SÉANCE ══════════════
@@ -25688,9 +25699,17 @@ async function remplacerDepuisBanque(i,mode){
     _progExDirty=true;
     renderProgEx();
     setTimeout(()=>{ try{ _viserExercice(progEx[i].name); }catch(e){} },60);
+    // CE QUI EST ARRIVE, ET CE QUI MANQUAIT. Une fiche peut etre illustree
+    // sans etre filmee, ou l'inverse : le dire evite de chercher pourquoi.
+    const _ap=progEx[i];
+    const _photo=(()=>{ try{ return !!illustrationExo(_ap); }catch(e){ return false; } })();
+    const _nv=(()=>{ try{ return videosExo(_ap).length; }catch(e){ return 0; } })();
+    const _dit=[_photo?'photo':'', _nv?(_nv+' vidéo'+(_nv>1?'s':'')):''].filter(Boolean).join(' · ')
+      ||'aucun média sur cette fiche';
     toast(maj
-      ?('« '+progEx[i].name+' » mis à jour ✓ — historique conservé')
-      :('Remplacé par « '+f.nom+' » ✓'),'var(--green)');
+      ?('« '+_ap.name+' » mis à jour ✓ — historique conservé · '+_dit)
+      :('Remplacé par « '+f.nom+' » ✓ · '+_dit),
+      (_photo||_nv)?'var(--green)':'var(--orange)');
   },'s-coach-program');
 }
 function ajouterDepuisBanque(){
@@ -28925,6 +28944,12 @@ function videosExo(ex){
     if(u) propres.push({url:u,lbl:'',guide:false});
   }
   if(propres.length) return propres;
+  // LE SLUG D'ABORD quand l'exercice en porte un : « Mettre a jour » garde le
+  // nom du coach, et c'est le slug qui dit de quelle fiche du guide il s'agit.
+  try{
+    const parSlug=videosPourSlug((ex||{}).exSlug);
+    if(parSlug.length) return parSlug.map(v=>({url:v.url,lbl:v.lbl||'',guide:true}));
+  }catch(e){}
   try{
     return videosPour((ex||{}).name).map(v=>({url:v.url,lbl:v.lbl||'',guide:true}));
   }catch(e){ return []; }

@@ -24525,6 +24525,60 @@ function testExercices(){
           return _echec('la mise à jour ne dit pas qu’elle les garde');
         return true;})());
 
+      ok('LES VIDEOS DU GUIDE SE RESOLVENT AUSSI PAR LE SLUG',(()=>{
+        if(typeof videosPourSlug!=='function') return _echec('aucune résolution par slug');
+        // Signalé par Kevin : « les vidéos et images ne se mettent pas à chaque
+        // fois ». Le guide est indexé sur exKey(nom) — c'est ce qui permet à un
+        // guide corrigé demain de corriger tous les programmes en circulation.
+        // Mais « Mettre à jour » garde le nom du coach : « BENCH COMP » ne
+        // trouvait rien, et l'exercice ne recevait que ce que la fiche portait
+        // EN PROPRE. Or 234 fiches sur 432 sont illustrées sans être filmées.
+        const cles=Object.keys(EX_VIDEOS||{});
+        if(!cles.length) return _echec('le guide est vide : la sonde ne prouve rien');
+        const k=cles[0];
+        const slug=exSlug(k);
+        const parNom=videosPour(k), parSlug=videosPourSlug(slug);
+        if(!parNom.length) return _echec('la lecture par nom ne rend plus rien');
+        if(parSlug.length!==parNom.length)
+          return _echec('les deux chemins divergent : '+parSlug.length+' contre '+parNom.length);
+        if(parSlug[0].url!==parNom[0].url) return _echec('ils ne rendent pas la même vidéo');
+        // UN SLUG INCONNU NE REND RIEN, jamais une vidéo au hasard.
+        if(videosPourSlug('exercice-qui-nexiste-pas').length)
+          return _echec('un slug inconnu rend une vidéo');
+        if(videosPourSlug('').length||videosPourSlug(null).length)
+          return _echec('un slug vide rend une vidéo');
+        // UN EXERCICE MIS A JOUR RECOIT LES VIDEOS DU GUIDE, même quand la
+        // fiche n'en porte aucune en propre.
+        const maj=exMisAJourParFiche({name:'BENCH COMP',series:5},
+          {nom:k,slug,execution:'…',materiel:'Barre',videos:[]});
+        if(maj.videoUrl!=='') return _echec('la fixture porte déjà une vidéo : elle ne prouve rien');
+        if(!videosExo(maj).length)
+          return _echec('un exercice mis à jour ne reçoit aucune vidéo du guide');
+        // LE LIEN POSE PAR LE COACH GAGNE TOUJOURS : il vise une exécution
+        // précise, parfois filmée pour cet athlète-là.
+        const perso=Object.assign({},maj,{videoUrl:'https://youtu.be/PERSO'});
+        const v=videosExo(perso);
+        if(!v.length||v[0].url.indexOf('PERSO')<0)
+          return _echec('le lien du coach ne passe plus devant le guide');
+        // ET LE REPLI PAR LE NOM TIENT : un exercice sans slug se résout comme
+        // avant, sinon on aurait cassé tous les programmes en circulation.
+        return videosExo({name:k}).length===parNom.length
+          ?true:_echec('un exercice sans slug ne se résout plus par son nom');})());
+
+      ok('LE TOAST DIT CE QUE L\'EXERCICE A REELLEMENT RECU',(()=>{
+        // « Ça ne se met pas à chaque fois » : parfois il n'y a rien à mettre.
+        // 234 fiches sur 432 sont illustrées sans être filmées. Le dire évite
+        // de chercher pourquoi.
+        const s=String(remplacerDepuisBanque);
+        if(s.indexOf('aucun média sur cette fiche')<0)
+          return _echec('le cas « rien à mettre » n’est pas annoncé');
+        if(s.indexOf('illustrationExo(_ap)')<0) return _echec('la photo n’est pas constatée');
+        if(s.indexOf('videosExo(_ap)')<0) return _echec('les vidéos ne sont pas comptées');
+        // ET LA COULEUR SUIT : orange quand rien n'est arrivé, vert sinon. Un
+        // « ✓ » vert sur un exercice qui n'a rien reçu serait un mensonge.
+        return /\(_photo\|\|_nv\)\?'var\(--green\)':'var\(--orange\)'/.test(s)
+          ?true:_echec('un exercice sans média reçoit quand même un ✓ vert');})());
+
       ok('UN SEUL CHAMP « RIR CIBLE », et c\'est un menu deroulant',(()=>{
         // Defaut introduit par N6.3, signale par Kevin : un champ en saisie
         // libre existait DEJA, ecrivant ex.rir ; N6.3 en a ajoute un second, en
