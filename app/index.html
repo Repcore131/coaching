@@ -24008,8 +24008,22 @@ async function chargerIndexIllustrations(){
 // n'est pas chargé : jamais une URL qui produirait une image cassée.
 function illustrationDe(nom){
   const sl=exSlug(nom);
+  return _illustrationParSlug(sl);
+}
+// PURE. L'illustration d'un slug deja calcule. Null tant que l'index n'est pas
+// charge : jamais une URL qui produirait une image cassee.
+function _illustrationParSlug(sl){
   if(!sl||!_exoIndex||!_exoIndex.has(sl)) return null;
   return EXO_IMG_DOSSIER+sl+'.webp';
+}
+// L'illustration d'un EXERCICE, slug d'abord. Un exercice mis a jour depuis la
+// bibliotheque garde le nom que le coach lui a donne — c'est ce qui preserve
+// son historique de charge — et porte le slug de la fiche du guide. Sans cette
+// lecture, il resterait sans photo.
+function illustrationExo(ex){
+  if(!ex||typeof ex!=='object') return null;
+  const parSlug=_illustrationParSlug(String(ex.exSlug||'').trim());
+  return parSlug||illustrationDe(ex.name);
 }
 
 // ── Accès à la banque : coachs seulement ─────────────────────────────────
@@ -25623,18 +25637,43 @@ function exRemplaceParFiche(ex,f){
     image:null
   });
 }
+// PURE. La fiche posee sur un exercice existant SANS toucher a son nom.
+// Meme exercice, donc meme identite, donc memes suggestions de charge, memes
+// records, meme detection de plateau. Il gagne seulement ce que le guide sait
+// de lui : la photo — par le slug —, les videos, l'execution, le materiel.
+function exMisAJourParFiche(ex,f){
+  const src=(ex&&typeof ex==='object')?ex:{};
+  if(!f||!f.nom) return Object.assign({},src);
+  const maj=exRemplaceParFiche(src,f);
+  // LE NOM NE BOUGE PAS. C'est toute la difference avec le remplacement, et
+  // c'est ce que « juste une mise a jour » veut dire.
+  maj.name=src.name;
+  return maj;
+}
 // Remplacer l'exercice de rang `i` depuis la bibliotheque du guide.
-async function remplacerDepuisBanque(i){
+// `mode` vaut 'remplacer' — un autre mouvement — ou 'maj' — le meme, enrichi.
+async function remplacerDepuisBanque(i,mode){
   if(!peutConsulterBanque()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
+  const maj=(mode==='maj');
   const ex=Array.isArray(progEx)?progEx[i]:null;
   if(!ex){ toast('Exercice introuvable : rouvre la séance.','var(--orange)'); return false; }
+  if(maj&&!String(ex.name||'').trim()){
+    toast('Nomme d’abord l’exercice : la mise à jour garde son nom.','var(--orange)');
+    return false;
+  }
   // UN NOM DEJA ECRIT NE SE REMPLACE PAS SANS DEMANDER. Meme discipline que
   // _confirmerEcrasement pour un jour deja garni.
   const nom=String(ex.name||'').trim();
-  if(nom){
-    const nl=String.fromCharCode(10);
+  const nl=String.fromCharCode(10);
+  if(maj){
+    if(!await rcConfirm('Mettre à jour « '+nom+' » ?'+nl+nl
+      +'Il garde son nom, donc son historique et ses suggestions de charge. Il '
+      +'reçoit la photo, les vidéos et l’exécution de la fiche que tu vas '
+      +'choisir.',null,'Choisir la fiche')) return false;
+  } else if(nom){
     if(!await rcConfirm('Remplacer « '+nom+' » ?'+nl+nl
-      +'Le mouvement change — nom, photo, vidéos, exécution. Tes séries, reps, '
+      +'Le mouvement change — nom, photo, vidéos, exécution. C’est un AUTRE '
+      +'exercice : son historique de charge repart de zéro. Tes séries, reps, '
       +'repos et RIR cible sont conservés.',null,'Choisir dans la bibliothèque')) return false;
   }
   return ouvrirBanque(f=>{
@@ -25645,11 +25684,13 @@ async function remplacerDepuisBanque(i){
       toast('Exercice introuvable : il a été retiré entre-temps.','var(--orange)');
       return;
     }
-    progEx[i]=exRemplaceParFiche(progEx[i],f);
+    progEx[i]=maj?exMisAJourParFiche(progEx[i],f):exRemplaceParFiche(progEx[i],f);
     _progExDirty=true;
     renderProgEx();
-    setTimeout(()=>{ try{ _viserExercice(f.nom); }catch(e){} },60);
-    toast('Remplacé par « '+f.nom+' » ✓','var(--green)');
+    setTimeout(()=>{ try{ _viserExercice(progEx[i].name); }catch(e){} },60);
+    toast(maj
+      ?('« '+progEx[i].name+' » mis à jour ✓ — historique conservé')
+      :('Remplacé par « '+f.nom+' » ✓'),'var(--green)');
   },'s-coach-program');
 }
 function ajouterDepuisBanque(){
@@ -25744,8 +25785,9 @@ function renderProgEx(){
              bouton n'apparait donc pas dans SON editeur de seance. -->
         ${_bqDispo?`<div class="px-grp">Changer l'exercice</div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-          <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i})">Bibliothèque</button>
-          <span style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;flex:1;min-width:140px">Ou tape son nom au-dessus. La bibliothèque apporte la photo, les vidéos et l'exécution ; tes séries, reps et repos ne bougent pas.</span>
+          <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i},'remplacer')">Remplacer</button>
+          <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i},'maj')">Mettre à jour</button>
+          <span style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;flex:1;min-width:180px"><b style="color:var(--sub)">Remplacer</b> : un autre mouvement, l'historique repart de zéro. <b style="color:var(--sub)">Mettre à jour</b> : le même, qui gagne la photo et les vidéos du guide et garde ses suggestions de charge. Ou tape son nom au-dessus.</span>
         </div>`:''}
         <div class="px-grp">PRESCRIPTION</div>
         <!-- Séries / Reps / Repos -->
@@ -28502,10 +28544,12 @@ function _nomSeance(sessConfig,slotIdx){
 // 267×150 px pour ~7,5 Ko. Servir une vignette séparée aurait ajouté 1,5 Mo
 // au dépôt pour économiser trois kilo-octets par affichage. Mesuré au lot 1.
 function _htmlVignetteExo(ex){
-  const img=illustrationDe((ex||{}).name);
+  const img=illustrationExo(ex);
   if(!img) return '';
   const nom=String((ex||{}).name||'');
-  return `<button type="button" onclick="ouvrirIllustration('${escapeHtml(nom).replace(/'/g,"&#39;")}')"
+  // Le slug d'abord : c'est lui qui a servi a trouver l'image.
+  const ref=String((ex||{}).exSlug||'').trim()||nom;
+  return `<button type="button" onclick="ouvrirIllustration('${escapeHtml(ref).replace(/'/g,"&#39;")}')"
     aria-label="Agrandir l'illustration de ${escapeHtml(nom)}"
     style="flex-shrink:0;padding:0;border:1px solid var(--border);border-radius:var(--r-2);
     background:#fff;cursor:zoom-in;line-height:0;width:96px;height:70px">
@@ -28517,9 +28561,17 @@ function _htmlVignetteExo(ex){
 // parce qu'aucune n'est évidente pour tout le monde — et qu'une visionneuse
 // dont on ne sait pas sortir est pire que pas de visionneuse.
 const ILLUS_SEUIL_GLISSEMENT=60;   // px avant de considérer que c'est un geste
-function ouvrirIllustration(nom){
-  const img=illustrationDe(nom);
+// `ref` est un NOM, ou un slug de fiche. La vignette passe le slug quand
+// l'exercice en porte un : sans ca, un exercice mis a jour depuis la
+// bibliotheque affichait sa photo et n'ouvrait rien au clic — la vignette
+// resout par le slug, la visionneuse resolvait par le nom.
+function ouvrirIllustration(ref){
+  const r=String(ref||'').trim();
+  const img=_illustrationParSlug(r)||illustrationDe(r);
   if(!img) return false;
+  // LE TITRE SOUS L'IMAGE. Quand la reference est un slug, on le rend
+  // lisible plutot que d'afficher « developpe-couche-barre » a l'ecran.
+  const nom=/-/.test(r)&&!/\s/.test(r)?r.replace(/-/g,' ').toUpperCase():r;
   const ov=document.createElement('div');
   ov.id='illus-plein';
   ov.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);'
@@ -28633,7 +28685,7 @@ function commencerDepuisApercu(){
 // Une ligne dépliable. <details> natif : il gère le clavier, le lecteur
 // d'écran et l'état ouvert/fermé sans une ligne de JavaScript.
 function _apLigne(ex,i){
-  const img=illustrationDe(ex.name);
+  const img=illustrationExo(ex);
   const sr=_apSeriesReps(ex);
   // Lignes zébrées et valeur en gras : déplié, ce panneau se lit debout entre
   // deux séries, pas assis au calme.
@@ -28665,7 +28717,7 @@ function _apLigne(ex,i){
   // vignette qu'on reconnaît d'un coup d'œil en salle, pas une décoration.
   const _nomEx=String(ex.name||'');
   const vign=img
-    ? `<button type="button" onclick="event.preventDefault();event.stopPropagation();ouvrirIllustration('${escapeHtml(_nomEx).replace(/'/g,"&#39;")}')"
+    ? `<button type="button" onclick="event.preventDefault();event.stopPropagation();ouvrirIllustration('${escapeHtml(String(ex.exSlug||'').trim()||_nomEx).replace(/'/g,"&#39;")}')"
          aria-label="Agrandir l'illustration de ${escapeHtml(_nomEx)}"
          style="position:relative;flex-shrink:0;width:76px;height:76px;padding:0;
          border-radius:var(--r-3);background:transparent;cursor:zoom-in;
@@ -29908,7 +29960,7 @@ function _blocExo(idx,estSS){
 
       ${_htmlMonteeCharge(sug,ex,idx)}
       ${_blocContrainteSeance(ex,idx)}
-      ${(ex.description||ex.materiel||ex.tempo||illustrationDe(ex.name))?`<div style="background:var(--surface-2);border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px">
+      ${(ex.description||ex.materiel||ex.tempo||illustrationExo(ex))?`<div style="background:var(--surface-2);border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red-text);margin-bottom:5px">CONSIGNE</div>
         ${blocTempo(ex)}
         <!-- LE MATÉRIEL EN PREMIER : c'est ce qu'on va chercher avant de

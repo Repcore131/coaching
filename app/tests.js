@@ -24450,6 +24450,81 @@ function testExercices(){
         return /progEx\[\$\{i\}\]\.name=this\.value\.toUpperCase\(\)/.test(r)
           ?true:_echec('la saisie manuelle du nom a changé');})());
 
+      ok('METTRE A JOUR UN EXERCICE : la photo arrive, l\'historique reste',(()=>{
+        if(typeof exMisAJourParFiche!=='function') return _echec('aucune mise à jour');
+        const ex={name:'BENCH COMP',series:5,reps:'4',repos:'3 min',rir:'2',
+          description:'ancienne',videoUrl:'',materiel:'',exSlug:'',image:null};
+        const f={nom:'DEVELOPPE COUCHE BARRE',slug:'developpe-couche-barre',
+          execution:'Scapulas serrées.',materiel:'Barre olympique',
+          videos:[{id:'V1'},{id:'V2'}]};
+        const maj=exMisAJourParFiche(ex,f);
+        const rep=exRemplaceParFiche(ex,f);
+        // TOUTE L'APP IDENTIFIE UN EXERCICE PAR exKey(nom) : la charge
+        // suggérée, les records, la détection de plateau. Changer le nom, c'est
+        // changer d'exercice.
+        if(exKey(maj.name)!==exKey(ex.name))
+          return _echec('la mise à jour change l’identité : '+maj.name);
+        if(exKey(rep.name)===exKey(ex.name))
+          return _echec('le remplacement garde l’identité : ce n’est plus un remplacement');
+        // ELLE PREND LE MEDIA DU GUIDE.
+        if(maj.exSlug!==f.slug) return _echec('le slug de la fiche n’est pas repris');
+        if(maj.description!==f.execution) return _echec('l’exécution n’est pas reprise');
+        if(maj.materiel!==f.materiel) return _echec('le matériel n’est pas repris');
+        if(maj.videoUrl.indexOf('V1')<0||maj.videoUrl2.indexOf('V2')<0)
+          return _echec('les vidéos ne sont pas reprises');
+        // ET GARDE LA PRESCRIPTION, comme le remplacement.
+        for(const k of ['series','reps','repos','rir'])
+          if(maj[k]!==ex[k]) return _echec(k+' a été perdu');
+        // PURE : la source n'est pas mutée.
+        if(ex.name!=='BENCH COMP'||ex.exSlug!=='') return _echec('la source a été mutée');
+        // UNE FICHE ABSENTE NE CASSE RIEN.
+        if(exMisAJourParFiche(ex,null).name!=='BENCH COMP')
+          return _echec('une fiche absente efface l’exercice');
+        return true;})());
+
+      ok('L\'ILLUSTRATION SUIT LE SLUG, pas seulement le nom',(()=>{
+        if(typeof illustrationExo!=='function') return _echec('aucune résolution par exercice');
+        // C'est le point qui fait tenir la mise à jour : garder « BENCH COMP »
+        // aurait gardé une carte sans photo, puisque illustrationDe résout par
+        // le nom. L'exercice porte déjà exSlug — la fiche du guide dont il
+        // vient — et c'est lui qui désigne l'illustration.
+        const s=String(illustrationExo);
+        if(s.indexOf('exSlug')<0) return _echec('le slug n’est pas lu');
+        if(s.indexOf('illustrationDe(ex.name)')<0)
+          return _echec('le repli sur le nom a disparu');
+        // LE REPLI TIENT : un exercice sans slug se résout comme avant.
+        const parNom=illustrationDe('DEVELOPPE COUCHE BARRE');
+        if(illustrationExo({name:'DEVELOPPE COUCHE BARRE'})!==parNom)
+          return _echec('un exercice sans slug ne se résout plus par son nom');
+        // ET LE SLUG PRIME : c'est ce qui distingue la mise à jour.
+        if(parNom&&illustrationExo({name:'BENCH COMP',exSlug:'developpe-couche-barre'})!==parNom)
+          return _echec('le slug ne prime pas sur le nom');
+        // LA VISIONNEUSE ACCEPTE LES DEUX : sans cela, un exercice mis à jour
+        // affichait sa vignette et n’ouvrait rien au clic.
+        const v=String(ouvrirIllustration);
+        return v.indexOf('_illustrationParSlug(r)')>=0
+          ?true:_echec('la visionneuse résout encore par le seul nom');})());
+
+      ok('DEUX BOUTONS, ET ILS NE DISENT PAS LA MEME CHOSE',(()=>{
+        const r=String(renderProgEx);
+        if(r.indexOf("remplacerDepuisBanque(${i},'remplacer')")<0)
+          return _echec('le bouton « Remplacer » a disparu');
+        if(r.indexOf("remplacerDepuisBanque(${i},'maj')")<0)
+          return _echec('le bouton « Mettre à jour » a disparu');
+        const s=String(remplacerDepuisBanque);
+        if(s.indexOf("mode==='maj'")<0) return _echec('les deux modes ne sont pas distingués');
+        // LA MISE A JOUR EXIGE UN NOM : elle garde celui de l'exercice, et un
+        // exercice sans nom n'a rien à garder.
+        if(s.indexOf('maj&&!String(ex.name||\'\').trim()')<0)
+          return _echec('la mise à jour accepte un exercice sans nom');
+        // LES DEUX CONFIRMATIONS DISENT CE QUI ARRIVE A L'HISTORIQUE : c'est la
+        // seule différence qui compte, et elle doit être écrite.
+        if(s.indexOf('repart de zéro')<0)
+          return _echec('le remplacement ne dit pas que l’historique repart de zéro');
+        if(s.indexOf('suggestions de charge')<0)
+          return _echec('la mise à jour ne dit pas qu’elle les garde');
+        return true;})());
+
       ok('UN SEUL CHAMP « RIR CIBLE », et c\'est un menu deroulant',(()=>{
         // Defaut introduit par N6.3, signale par Kevin : un champ en saisie
         // libre existait DEJA, ecrivant ex.rir ; N6.3 en a ajoute un second, en
