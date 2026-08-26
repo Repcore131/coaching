@@ -10976,8 +10976,12 @@ function testExercices(){
           // chiffres sous le même mot, sur le même écran, était le piège.
           const tout=_prodSrc();
           const prod=tout;
-          if(prod.indexOf('>Actifs 14 j<')<0) return _echec('la case du tableau de bord n\'est pas datée');
+          // LE LIBELLE RESTE DATE, ou qu il vive. Depuis N1.11 la case n est
+          // plus un metric-box du balisage mais une entree de la table de
+          // renderPortefeuille : on cherche le LIBELLE, pas sa balise.
+          if(prod.indexOf('Actifs 14 j')<0) return _echec('la case du tableau de bord n’est pas datée');
           if(prod.indexOf('metric-label">Actifs<')>=0) return _echec('un libellé « Actifs » nu subsiste');
+          if(/'Actifs'\s*,/.test(prod)) return _echec('un compteur « Actifs » nu subsiste dans la barre');
           // Les deux définitions restent DISTINCTES : aligner l'une sur
           // l'autre changerait la facturation.
           if(!/14\*864e5/.test(String(isActive))) return _echec('isActive a changé de fenêtre');
@@ -22727,6 +22731,62 @@ function testExercices(){
           if((document.getElementById(id).getAttribute('style')||'').indexOf('display:none')<0)
             return _echec(id+' n\'est plus eteint par defaut');
         return true;})());
+
+      ok('N1.11 — UNE SEULE BARRE D\'ETAT, et chaque nombre ouvre SA liste',(()=>{
+        if(typeof renderPortefeuille!=='function') return _echec('aucune barre d\'etat');
+        // LES PREDICATS DE COMPTAGE ET DE FILTRAGE SONT LES MEMES, un par un.
+        // C'est la seule chose qui rende un compteur cliquable honnete, et le
+        // commentaire de renderClientList le disait deja des trois premiers.
+        const j=Date.now();
+        const mk=(n,o)=>Object.assign({id:'N'+n,email:'n'+n+'@t.fr',role:'athlete',
+          fname:'N'+n,lname:'X',coachId:'CX',createdAt:j-40*864e5,
+          bilans:[],sessions:[],videos:[]},o||{});
+        const l=[mk(1),
+          mk(2,{sessions:[{date:j-2*864e5,name:'S'}],bilans:[{type:'suivi',date:j-3*864e5}]}),
+          mk(3,{_fromCode:true,email:''}),
+          mk(4,{sessions:[{date:j-30*864e5,name:'S'}],bilans:[{type:'suivi',date:j-1*864e5}]})];
+        let r;
+        try{ r=agregerPortefeuille(l,{now:j}); }catch(e){ return _echec('agregation : '+e.message); }
+        const p=r.portefeuille;
+        // La table apparie le nombre annonce et le predicat de la liste. Elle
+        // reproduit renderClientList : si l'un des deux bouge sans l'autre,
+        // cette assertion tombe, ce qui est exactement le but.
+        const paires=[
+          ['pf-traiter',   r.aTraiter,        c=>urgencyScore(c)>=PIL_SEUIL_TRAITER],
+          ['pf-decrochage',r.decrochage,      c=>_pilEligibleSignaux(c)&&signauxEntrainement(c).decrochage],
+          ['pf-acces',     r.accesExpirent,   c=>_pilEligibleSignaux(c)&&_pilAccesExpire(c,j)],
+          ['traiter',      p.alertes,         c=>needsAlert(c)||hasNewBilan(c)],
+          ['pf-jamais',    p.jamaisDemarres,  c=>neverStarted(c)],
+          ['attente',      p.enAttente,       c=>c._fromCode||!c.email],
+          ['pf-actifs',    p.actifs,          c=>isActive(c)],
+          ['tous',         p.total,           ()=>true]];
+        const src=String(renderClientList);
+        for(const [cle,n,pred] of paires){
+          let reel=0;
+          for(const c of l){ try{ if(pred(c)) reel++; }catch(e){} }
+          if(reel!==n)
+            return _echec(cle+' annonce '+n+' et sa liste en montre '+reel);
+          // ET LE FILTRE EXISTE VRAIMENT dans renderClientList : un compteur
+          // dont la clef n'y est pas rendrait la liste entiere, sans un mot.
+          if(cle!=='tous'&&src.indexOf("==='"+cle+"'")<0)
+            return _echec('aucun filtre pour la clef '+cle);
+        }
+        // LES DEUX AUTRES DESCRIPTIONS ONT DISPARU. Le meme portefeuille etait
+        // dit trois fois dans le meme panneau : les trois metric-box muets, la
+        // bande « Portefeuille » du volet, et les compteurs du volet.
+        const pan=document.getElementById('ct-dashboard');
+        if(!pan) return _echec('panneau absent');
+        for(const id of ['ch-total','ch-active','ch-alerts','ch-filtres'])
+          if(pan.querySelector('#'+id)) return _echec(id+' est encore la');
+        if(/_tt\('Portefeuille'\)/.test(String(renderPilotage)))
+          return _echec('le volet redit le portefeuille');
+        if(/_pilCompteur\(/.test(String(renderPilotage)))
+          return _echec('les compteurs sont restes dans le volet');
+        if(!/_pilCompteur\(/.test(String(renderPortefeuille)))
+          return _echec('la barre n\'utilise pas les compteurs existants');
+        // « Tous » NE SE RETIRE PAS LUI-MEME : c'est deja le retour en arriere.
+        return /cle!=='tous'/.test(String(_pilCompteur))
+          ?true:_echec('re-cliquer « Tous » le desactive');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

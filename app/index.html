@@ -795,6 +795,16 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .pil-compteur[aria-pressed="true"]::after{opacity:1}
 .pil-compteur:hover{border-color:#3a3a3a;transform:translateY(-1px)}
 @media(prefers-reduced-motion:reduce){.pil-compteur{transition:none}.pil-compteur:hover{transform:none}}
+/* N1.11 — LA BARRE D ETAT DU PORTEFEUILLE. Huit compteurs, pas trois : elle
+   absorbe les trois metric-box muets de la tete du panneau, la bande
+   « Portefeuille » du volet et les trois puces de filtre. flex:1 1 96px et non
+   1 1 0 : a huit, une repartition egale les ecraserait a 50 px de large. Ils
+   s enroulent — quatre par ligne sur telephone, huit sur grand ecran — et la
+   barre entiere tient dans ce que prenait UNE des trois representations. */
+.ch-pf{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.ch-pf .pil-compteur{flex:1 1 96px;min-height:52px;padding:9px 5px}
+.ch-pf .pil-val{font-size:var(--fs-xl)}
+.ch-pf .pil-lib{font-size:10px;margin-top:4px}
 
 /* LES VOLETS DE CONTEXTE. Une classe A COTE de .plan-src et non a sa place :
    celle-ci sert aussi a l'éditeur de plan, qui n'a aucune raison de changer
@@ -4447,11 +4457,11 @@ const COACH_PHOTO='icons/coach.jpg';
              n ont pas bouge d un caractere : ils sont ranges. La recherche, les
              filtres et le pilotage restent HORS de #ch-clients-list — c est ce
              conteneur que le rafraichissement reecrit. -->
-        <div style="display:flex;gap:10px;margin-bottom:20px;padding-top:4px">
-          <div class="metric-box"><div class="metric-val" id="ch-total">0</div><div class="metric-label">Athlètes</div></div>
-          <div class="metric-box"><div class="metric-val" id="ch-active" style="color:var(--green)">0</div><div class="metric-label">Actifs 14 j</div></div>
-          <div class="metric-box"><div class="metric-val" id="ch-alerts" style="color:var(--red-text)">0</div><div class="metric-label">Alertes</div></div>
-        </div>
+        <!-- N1.11 — LES TROIS METRIC-BOX ONT DISPARU D ICI. Ils annoncaient un
+             total, des actifs et des alertes sans ouvrir aucune liste, en tete
+             d un panneau ou les memes nombres etaient redits deux fois plus
+             bas. Ils sont dans la barre d etat, juste au-dessus de la liste
+             qu ils filtrent — la ou un nombre sert a quelque chose. -->
         <!-- Premiers pas. Rempli par _renderPremiersPas, et seulement tant que
              le coach n'a aucun athlète : au-delà, ch-todo a mieux à dire. -->
         <!-- Compteur permanent. Rempli par loadCoachHome avec le cache DEJA
@@ -4483,6 +4493,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Barre de pilotage : trois compteurs qui filtrent la liste, et trois
              volets de contexte. HORS de #ch-clients-list, comme la recherche,
              pour survivre au rafraichissement. -->
+        <!-- N1.11 — LA BARRE D ETAT DU PORTEFEUILLE. Rendue par
+             renderPortefeuille, appelee par renderClientList. HORS de
+             #ch-clients-list, comme la recherche et le pilotage : c est ce
+             conteneur-la que le rafraichissement reecrit. -->
+        <div id="ch-portefeuille" class="ch-pf"></div>
         <div id="ch-pilotage" style="margin-bottom:12px"></div>
         <!-- Barre de recherche et filtres. VOLONTAIREMENT HORS de
              #ch-clients-list : c'est ce conteneur-la que le rafraichissement
@@ -4493,11 +4508,11 @@ const COACH_PHOTO='icons/coach.jpg';
           <input type="search" id="ch-search" placeholder="Rechercher un athlète"
             oninput="renderClientList()" autocomplete="off"
             style="width:100%;padding:11px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);min-height:44px">
-          <div style="display:flex;gap:6px;flex-wrap:wrap" id="ch-filtres">
-            <button class="ch-chip actif" data-filtre="tous" onclick="setFiltreClients('tous')">Tous</button>
-            <button class="ch-chip" data-filtre="traiter" onclick="setFiltreClients('traiter')">A traiter</button>
-            <button class="ch-chip" data-filtre="attente" onclick="setFiltreClients('attente')">En attente d'inscription</button>
-          </div>
+          <!-- N1.11 — LES TROIS PUCES DE FILTRE ONT DISPARU. Elles ouvraient
+               « Tous », « A traiter » et « En attente d inscription » sans
+               jamais dire combien chacune contenait, pendant que les compteurs
+               annoncaient ces memes nombres sans rien ouvrir. La barre d etat
+               fait les deux : meme cle de filtre, meme predicat. -->
           <div class="sub" id="ch-count" style="font-size:var(--fs-xs);letter-spacing:.5px"></div>
           <!-- Colonne triable : urgence par defaut, taux a la demande. -->
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -14905,7 +14920,11 @@ function agregerPortefeuille(clients,opts){
     ?o.depuis:(now-PIL_VISITE_DEFAUT_JOURS*864e5);
   let aTraiter=0,decrochage=0,accesExpirent=0;
   const changements=[];
-  const portefeuille={total:0,actifs:0,jamaisDemarres:0,enAttente:0};
+  // `alertes` porte EXACTEMENT le predicat du filtre 'traiter' de
+  // renderClientList — needsAlert ou bilan sans reponse. Il etait compte a
+  // part dans loadCoachHome, avec le seul needsAlert : le metric-box annoncait
+  // donc un nombre que la puce de filtre n ouvrait pas.
+  const portefeuille={total:0,actifs:0,jamaisDemarres:0,enAttente:0,alertes:0};
   const charge={bilansSansReponse:0,videosEnAttente:0};
   for(const c of l){
     if(!c) continue;
@@ -14913,6 +14932,7 @@ function agregerPortefeuille(clients,opts){
     const invite=!!(c._fromCode||!c.email);
     if(invite) portefeuille.enAttente++;
     try{ if(isActive(c)) portefeuille.actifs++; }catch(e){}
+    try{ if(needsAlert(c)||hasNewBilan(c)) portefeuille.alertes++; }catch(e){}
     let jamais=false;
     try{ jamais=neverStarted(c); }catch(e){}
     if(jamais) portefeuille.jamaisDemarres++;
@@ -14972,7 +14992,9 @@ function _pilEligibleSignaux(c){
 function _pilCompteur(cle,lib,n,couleur){
   const vide=!(n>0);
   const actif=(_filtreClients===cle);
-  return `<button onclick="setFiltreClients('${actif?'tous':cle}')"
+  // « Tous » EST le retour en arriere : se re-cliquer ne peut pas le retirer.
+  const cible=(actif&&cle!=='tous')?'tous':cle;
+  return `<button onclick="setFiltreClients('${cible}')"
     aria-pressed="${actif?'true':'false'}"
     class="pil-compteur" data-vide="${vide?1:0}"
     style="color:${couleur};border-left-color:${actif?couleur:(vide?'var(--border)':couleur+'66')};
@@ -14980,6 +15002,41 @@ function _pilCompteur(cle,lib,n,couleur){
     <div class="pil-val" style="color:${vide?'#6a6a6a':couleur};text-shadow:${vide?'none':`0 0 16px ${couleur}99`}">${n}</div>
     <div class="pil-lib" style="color:${vide?'#8a8a8a':'#c4c4c4'}">${lib}</div>
   </button>`;
+}
+// N1.11 — LA BARRE D ETAT DU PORTEFEUILLE, EN UN SEUL ENDROIT.
+// CHAQUE NOMBRE OUVRE SA PROPRE LISTE. C etait le grief : trois metric-box
+// muets annoncaient un total, des actifs et des alertes sans offrir aucun
+// chemin vers les athletes concernes ; la bande « Portefeuille » du volet
+// redisait les memes nombres, repliee ; et les puces de filtre ouvraient des
+// listes sans jamais dire combien elles contenaient.
+//
+// LES PREDICATS DE COMPTAGE ET CEUX DU FILTRAGE SONT LES MEMES, un par un —
+// c est la seule chose qui rende un compteur cliquable honnete. agregerPorte-
+// feuille compte, renderClientList filtre, et la table ci-dessous les apparie
+// nommement. Un compteur qui n ouvrirait pas exactement sa propre liste serait
+// pire que pas de compteur du tout.
+//
+// L ORDRE EST CELUI DE L ACTION : ce qui demande un geste d abord, ce qui
+// decrit l etat ensuite, « Tous » en dernier parce qu il n est pas une
+// information mais un retour en arriere.
+function renderPortefeuille(clients){
+  const el=document.getElementById('ch-portefeuille');
+  if(!el) return;
+  const l=clients||(typeof getClients==='function'?getClients():[]);
+  let r;
+  try{ r=agregerPortefeuille(l,{depuis:currentUser&&currentUser.lastCoachVisit}); }
+  catch(e){ el.innerHTML=''; return; }
+  const p=r.portefeuille;
+  const cases=[
+    ['pf-traiter',    'À traiter',            r.aTraiter,        '#E02020'],
+    ['pf-decrochage', 'Séances écourtées',    r.decrochage,      '#f5c518'],
+    ['pf-acces',      'Accès qui expirent',   r.accesExpirent,   '#22c55e'],
+    ['traiter',       'Alertes',              p.alertes,         '#E02020'],
+    ['pf-jamais',     'Jamais démarrés',      p.jamaisDemarres,  '#f5c518'],
+    ['attente',       'En attente',           p.enAttente,       '#8a8a8a'],
+    ['pf-actifs',     'Actifs 14 j',          p.actifs,          '#22c55e'],
+    ['tous',          'Tous',                 p.total,           '#c4c4c4']];
+  el.innerHTML=cases.map(c=>_pilCompteur(c[0],c[1],c[2],c[3])).join('');
 }
 function _pilBande(cle,titre,corps,resume){
   return `<details class="plan-src pil-bande" style="margin:0 0 7px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
@@ -15002,10 +15059,10 @@ function renderPilotage(clients){
     ? montres.map(x=>`<div style="padding:2px 0"><span style="color:var(--text-faint)">${dateCourte(x.date)}</span> · <b>${escapeHtml(x.qui)}</b> ${escapeHtml(x.quoi)}</div>`).join('')
       +(ch.length>montres.length?`<button onclick="pilVoirTout()" style="background:none;border:none;color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;padding:8px 0 0;text-decoration:underline">Voir tout (${ch.length})</button>`:'')
     : 'Rien de neuf depuis ta dernière visite.';
-  // ── Bande B : portefeuille, quatre nombres en une ligne ──
-  const p=r.portefeuille;
-  const corpsB=`${p.total} athlète${p.total>1?'s':''} · ${p.actifs} actif${p.actifs>1?'s':''} · `
-    +`${p.jamaisDemarres} jamais démarré${p.jamaisDemarres>1?'s':''} · ${p.enAttente} en attente d'inscription`;
+  // N1.11 — LA BANDE « PORTEFEUILLE » A DISPARU D ICI. Ses quatre nombres
+  // sont ceux de la barre d etat, qui les affiche en permanence et ouvre la
+  // liste correspondante. Les redire dans un volet replie, sans lien, etait
+  // la troisieme description du meme portefeuille dans le meme panneau.
   // ── Bande C : charge de travail ──
   // « Programmes figés » n'y figure pas : aucun horodatage de programme
   // n'existe au dossier, et l'inventer donnerait un nombre faux en silence.
@@ -15029,7 +15086,6 @@ function renderPilotage(clients){
   const corpsSep='<div style="height:1px;background:#1e1e1e;margin:9px 0"></div>';
   const _tt=t=>`<div style="font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">${t}</div>`;
   const corpsA2=_tt('Depuis ta dernière visite')+corpsA;
-  const corpsB2=_tt('Portefeuille')+corpsB;
   const corpsC2=_tt('Charge de travail')+corpsC;
   // LES TROIS LIENS ONT QUITTE LE VOLET. Ils etaient la seule porte de trois
   // ecrans complets — la file de reprise, l'activite du portefeuille et la
@@ -15041,13 +15097,11 @@ function renderPilotage(clients){
   // remontes, ils quittent le volet, qui garde ce qu'il sait faire — lire une
   // periode.
   const corpsLiens=corpsSep;
+  // N1.11 — LES TROIS COMPTEURS ONT REJOINT LA BARRE D ETAT. Ils y sont
+  // ENTIERS, meme cle de filtre et meme couleur : ils ne sont pas dupliques,
+  // ils ont demenage. Le volet garde ce qu il sait faire — lire une periode.
   el.innerHTML=`
-    <div style="display:flex;gap:6px;margin-bottom:10px">
-      ${_pilCompteur('pf-traiter','À traiter',r.aTraiter,'#E02020')}
-      ${_pilCompteur('pf-decrochage','Séances écourtées',r.decrochage,'#f5c518')}
-      ${_pilCompteur('pf-acces','Accès qui expirent',r.accesExpirent,'#22c55e')}
-    </div>
-    ${_pilBande('vue',"Vue d'ensemble",corpsA2+corpsSep+corpsB2+corpsSep+corpsC2+corpsLiens,String(g.bilansSansReponse+g.videosEnAttente))}`;
+    ${_pilBande('vue',"Vue d'ensemble",corpsA2+corpsSep+corpsC2+corpsLiens,String(g.bilansSansReponse+g.videosEnAttente))}`;
 }
 // La visite est horodatée À LA SORTIE de l'écran, pas à l'entrée : la datant à
 // l'entrée, la bande A serait vide dès la seconde ouverture de la journée.
@@ -16210,9 +16264,9 @@ function norm(s){
 let _filtreClients='tous';
 function setFiltreClients(f){
   _filtreClients=f;
-  document.querySelectorAll('#ch-filtres .ch-chip').forEach(b=>{
-    b.classList.toggle('actif',b.dataset.filtre===f);
-  });
+  // N1.11 — plus de puces a marquer : renderClientList repeint la barre
+  // d etat, qui lit _filtreClients pour son propre aria-pressed. Un seul
+  // endroit ou l etat actif est ecrit, un seul endroit ou il est lu.
   renderClientList();
 }
 
@@ -16732,6 +16786,10 @@ function renderClientList(clients){
   else if(_filtreClients==='pf-traiter') vus=vus.filter(c=>urgencyScore(c)>=PIL_SEUIL_TRAITER);
   else if(_filtreClients==='pf-decrochage') vus=vus.filter(c=>_pilEligibleSignaux(c)&&signauxEntrainement(c).decrochage);
   else if(_filtreClients==='pf-acces') vus=vus.filter(c=>_pilEligibleSignaux(c)&&_pilAccesExpire(c,Date.now()));
+  // N1.11 — les deux etats que les metric-box decrivaient sans les ouvrir.
+  // MEMES predicats que agregerPortefeuille, aux memes fonctions.
+  else if(_filtreClients==='pf-jamais') vus=vus.filter(c=>neverStarted(c));
+  else if(_filtreClients==='pf-actifs') vus=vus.filter(c=>isActive(c));
   if(_triClients==='taux') vus.sort((a,b)=>_triTaux(b)-_triTaux(a));
   else if(_triClients==='charge') vus.sort((a,b)=>_triCharge(b)-_triCharge(a));
   else if(_triClients==='progression') vus.sort((a,b)=>_triProgres(b)-_triProgres(a));
@@ -16742,6 +16800,7 @@ function renderClientList(clients){
   // Bilans auxquels le coach n'a pas encore ecrit. « Sans reponse » et non
   // « non lus » : ouvrir ne compte plus.
   renderPilotage(tous);
+  renderPortefeuille(tous);
   // La ligne « Bilans sans reponse » a demenage dans le volet « Vue
   // d'ensemble » du pilotage. L'element qu'on vidait ici n'existe plus.
   const cnt=document.getElementById('ch-count');
@@ -18689,9 +18748,9 @@ function loadCoachHome(){
     if(_za) _za.innerHTML=_htmlAlertePalier(u,_cacheUsers);
     _rendreInvitations();
   }catch(e){}
-  document.getElementById('ch-total').textContent=clients.length;
-  document.getElementById('ch-active').textContent=clients.filter(c=>isActive(c)).length;
-  document.getElementById('ch-alerts').textContent=clients.filter(c=>needsAlert(c)).length;
+  // N1.11 — les trois compteurs sont comptes par agregerPortefeuille, avec
+  // les memes fonctions, et rendus par renderPortefeuille depuis
+  // renderClientList. Un seul comptage, un seul rendu.
   try{ const _av=avancementCharges(), _e=document.getElementById('ch-charges-av');
     if(_e) _e.textContent=_av.pose+'/'+_av.total+(_av.pose<_av.total?' — à compléter':' ✓'); }catch(e){}
   const elList=document.getElementById('ch-clients-list');
