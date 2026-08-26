@@ -335,40 +335,30 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      `s-coach-` casserait la regle « ecrans athlete : rien ne change ».
    Toute reprise de cette liste doit reconduire ces trois exclusions.
 
-   LA LISTE COUVRE LES VINGT-DEUX AUTRES. Elle en couvrait douze : neuf
-   ecrans coach — la file de reprise, l'activite du portefeuille, le
-   rapport, la fiche a imprimer, la vitrine, le classement d'exercices,
-   l'editeur de protocoles, la bibliotheque de protocoles et les compteurs
-   — restaient en colonne de 480 px sur un moniteur de 1440. Aucun n'etait
-   mentionne dans les trois exclusions ci-dessus : c'etaient des oublis.
+   LA LISTE EST PORTEE PAR LES ECRANS EUX-MEMES, class="screen ecran-coach".
+   Elle a d'abord ete ecrite ici, en toutes lettres, et RECOPIEE TROIS FOIS :
+   la largeur, la barre laterale, le decalage du contenu. Vingt-deux
+   selecteurs par bloc, soixante-six au total, tenus a la main et devant
+   rester identiques — un ecran elargi sans barre perd la navigation, un
+   ecran avec barre mais etroit la voit mordre sur le contenu.
 
-   ELLE SERT AUSSI DE LISTE DES ECRANS COACH pour la barre laterale, plus
-   bas. Les deux doivent rester identiques : un ecran elargi sans barre
-   perdrait la navigation, un ecran avec barre mais etroit la verrait
-   mordre sur le contenu. */
+   L'OUBLI EST ARRIVE. s-seance-apercu, ou le coach verifie une seance avant
+   de la publier, n'etait dans aucune des trois : il retombait en colonne de
+   480 px, sans barre laterale, au milieu d'un espace par ailleurs entierement
+   elargi. Ce n'etait pas un choix — il n'apparaissait dans aucune des
+   exclusions ci-dessus. C'est le defaut qu'une liste recopiee produit tot ou
+   tard, et le prochain ecran neuf l'aurait produit a nouveau.
+
+   LA CLASSE EST DONC LA SEULE SOURCE. Trois selecteurs remplacent
+   soixante-six, et la decision « cet ecran est-il un ecran coach ? » se prend
+   LA OU L'ECRAN EST ECRIT, une fois. Un ecran neuf qui l'oublie garde les
+   480 px — la degradation d'avant, jamais une casse.
+
+   :has() TIENT TOUJOURS LE RAISONNEMENT. Le critere reste `.active`, pose par
+   go() a chaque navigation : aucune ligne de JS n'est ajoutee, et rien ne
+   depend d'un attribut qu'un chemin de navigation pourrait oublier. */
 @media(min-width:1025px){
-  body:has(#s-coach-home.active),
-  body:has(#s-coach-client.active),
-  body:has(#s-coach-sessions.active),
-  body:has(#s-coach-programs.active),
-  body:has(#s-coach-prog-template.active),
-  body:has(#s-coach-prog-assign.active),
-  body:has(#s-coach-decharge.active),
-  body:has(#s-coach-bilan-evo.active),
-  body:has(#s-coach-plan.active),
-  body:has(#s-coach-canal.active),
-  body:has(#s-coach-charge.active),
-  body:has(#s-coach-banque.active),
-  body:has(#s-charges.active),
-  body:has(#s-coach-file.active),
-  body:has(#s-coach-activite.active),
-  body:has(#s-rapport.active),
-  body:has(#s-programme-print.active),
-  body:has(#s-vitrine.active),
-  body:has(#s-ex-classify.active),
-  body:has(#s-proto-edit.active),
-  body:has(#s-protocoles.active),
-  body:has(#s-metrics.active){max-width:1440px}
+  body:has(.ecran-coach.active){max-width:1440px}
 
   /* ── BARRE LATERALE — TOUS LES ECRANS COACH ──
      ELLE ETAIT UN ENFANT DE #s-coach-home, et disparaissait donc des que le
@@ -396,56 +386,14 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      qui repose display:none a chaque synchronisation de fond. Une declaration author
      !important passe devant l'inline, et devant l'autre !important puisqu'elle
      est plus specifique. AUCUNE ligne de JS n'a besoin de changer. */
-  body:has(#s-coach-home.active) #ch-sidebar,
-  body:has(#s-coach-client.active) #ch-sidebar,
-  body:has(#s-coach-sessions.active) #ch-sidebar,
-  body:has(#s-coach-programs.active) #ch-sidebar,
-  body:has(#s-coach-prog-template.active) #ch-sidebar,
-  body:has(#s-coach-prog-assign.active) #ch-sidebar,
-  body:has(#s-coach-decharge.active) #ch-sidebar,
-  body:has(#s-coach-bilan-evo.active) #ch-sidebar,
-  body:has(#s-coach-plan.active) #ch-sidebar,
-  body:has(#s-coach-canal.active) #ch-sidebar,
-  body:has(#s-coach-charge.active) #ch-sidebar,
-  body:has(#s-coach-banque.active) #ch-sidebar,
-  body:has(#s-charges.active) #ch-sidebar,
-  body:has(#s-coach-file.active) #ch-sidebar,
-  body:has(#s-coach-activite.active) #ch-sidebar,
-  body:has(#s-rapport.active) #ch-sidebar,
-  body:has(#s-programme-print.active) #ch-sidebar,
-  body:has(#s-vitrine.active) #ch-sidebar,
-  body:has(#s-ex-classify.active) #ch-sidebar,
-  body:has(#s-proto-edit.active) #ch-sidebar,
-  body:has(#s-protocoles.active) #ch-sidebar,
-  body:has(#s-metrics.active) #ch-sidebar{
+  body:has(.ecran-coach.active) #ch-sidebar{
     display:flex!important;position:fixed;top:0;bottom:0;
     left:max(0px,calc(50% - 720px));width:260px;z-index:20;
     overflow-y:auto;overscroll-behavior:contain}
   /* Le contenu se decale d'autant. Le padding porte sur l'ECRAN et non sur
      .pad : la topbar collante est un enfant de l'ecran, et elle passerait
      sinon sous la barre. */
-  body:has(#s-coach-home.active) .screen.active,
-  body:has(#s-coach-client.active) .screen.active,
-  body:has(#s-coach-sessions.active) .screen.active,
-  body:has(#s-coach-programs.active) .screen.active,
-  body:has(#s-coach-prog-template.active) .screen.active,
-  body:has(#s-coach-prog-assign.active) .screen.active,
-  body:has(#s-coach-decharge.active) .screen.active,
-  body:has(#s-coach-bilan-evo.active) .screen.active,
-  body:has(#s-coach-plan.active) .screen.active,
-  body:has(#s-coach-canal.active) .screen.active,
-  body:has(#s-coach-charge.active) .screen.active,
-  body:has(#s-coach-banque.active) .screen.active,
-  body:has(#s-charges.active) .screen.active,
-  body:has(#s-coach-file.active) .screen.active,
-  body:has(#s-coach-activite.active) .screen.active,
-  body:has(#s-rapport.active) .screen.active,
-  body:has(#s-programme-print.active) .screen.active,
-  body:has(#s-vitrine.active) .screen.active,
-  body:has(#s-ex-classify.active) .screen.active,
-  body:has(#s-proto-edit.active) .screen.active,
-  body:has(#s-protocoles.active) .screen.active,
-  body:has(#s-metrics.active) .screen.active{padding-left:260px}
+  body:has(.ecran-coach.active) .screen.active{padding-left:260px}
 
   /* Regle 7. La barre d'onglets SUBSISTE dans le document et reste la
      navigation sous 1025 px ; au-dessus, la barre laterale porte les memes
@@ -2090,6 +2038,17 @@ html{scroll-behavior:smooth}
   font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;
   letter-spacing:1px;display:flex;align-items:center;gap:10px}
 .sb-lien:hover{background:var(--surface-1);color:var(--text)}
+/* B2.1 — L'ETAT COURANT DES CINQ DESTINATIONS DE TRAVAIL. Elles n'en avaient
+   aucun : seul :hover existait. Des que le coach ouvrait ACTIVITE, A RELANCER,
+   CHARGES, MES PROGRAMMES ou DECHARGE GROUPEE, la barre continuait d'allumer
+   « ATHLETES » — et de lui poser aria-current="page". Le commentaire de
+   coachTab condamnait deja exactement ce defaut : « une surbrillance qui ment
+   sur la page ouverte est pire que pas de surbrillance du tout. »
+   MEME HABILLAGE QUE LES ONGLETS, a la lettre : fond de surface, filet rouge a
+   gauche, texte plein. Deux formes differentes pour un meme etat feraient lire
+   deux choses differentes. */
+.sb-lien[aria-current="page"]{background:var(--surface-1);color:var(--text);
+  box-shadow:inset 3px 0 0 var(--red)}
 .ccd-vue{display:none}
 .ccd-vue.actif{display:block}
 /* LA PASTILLE DE SECURITE. Un onglet ferme ne doit jamais cacher un signal :
@@ -4024,11 +3983,11 @@ const COACH_PHOTO='icons/coach.jpg';
     <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--surface-1);border:none;border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
       ATHLÈTES
     </button>
-    <button onclick="openCoachPrograms()" class="sb-lien">MES PROGRAMMES</button>
-    <button onclick="loadFileReprise()" class="sb-lien">À RELANCER</button>
-    <button onclick="openDechargeGroupee()" class="sb-lien">DÉCHARGE GROUPÉE</button>
-    <button onclick="loadCoachActivite()" class="sb-lien">ACTIVITÉ</button>
-    <button onclick="loadCharges()" class="sb-lien">CHARGES ARTICULAIRES</button>
+    <button onclick="openCoachPrograms()" class="sb-lien" data-ecran="s-coach-programs">MES PROGRAMMES</button>
+    <button onclick="loadFileReprise()" class="sb-lien" data-ecran="s-coach-file">À RELANCER</button>
+    <button onclick="openDechargeGroupee()" class="sb-lien" data-ecran="s-coach-decharge">DÉCHARGE GROUPÉE</button>
+    <button onclick="loadCoachActivite()" class="sb-lien" data-ecran="s-coach-activite">ACTIVITÉ</button>
+    <button onclick="loadCharges()" class="sb-lien" data-ecran="s-charges">CHARGES ARTICULAIRES</button>
     <div style="height:1px;background:#1a0000;margin:12px 6px"></div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:2px;font-weight:800;text-transform:uppercase;padding:0 14px 7px">Réglages</div>
     <button id="sb-tab-codes" onclick="coachTab('codes')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
@@ -4581,7 +4540,7 @@ const COACH_PHOTO='icons/coach.jpg';
      notification et ne modifie aucun état. -->
 <!-- FILE DE REPRISE. Ecran du coach seul. Aucune ecriture dans le dossier
      d un athlete : les trois actions ecrivent chez le coach. -->
-<div id="s-coach-file" class="screen">
+<div id="s-coach-file" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="loadCoachHome()">←</button>
     <span class="topbar-title">Reprise</span><span></span>
@@ -4596,7 +4555,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<div id="s-coach-activite" class="screen">
+<div id="s-coach-activite" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="loadCoachHome()">←</button>
     <span class="topbar-title">Activité</span><span></span>
@@ -4611,7 +4570,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<div id="s-coach-home" class="screen" style="flex-direction:column;height:100vh;height:100dvh;overflow:hidden">
+<div id="s-coach-home" class="screen ecran-coach" style="flex-direction:column;height:100vh;height:100dvh;overflow:hidden">
 
   <!-- SIDEBAR (desktop only) -->
 
@@ -5174,7 +5133,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div><!-- end #ch-main-area -->
 </div>
 <!-- COACH CLIENT DETAIL -->
-<div id="s-coach-client" class="screen">
+<div id="s-coach-client" class="screen ecran-coach">
   <div class="topbar"><button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button><span class="topbar-title" id="ccd-title">Athlète</span><span class="coach-sync-badge rc-sync-badge" style="font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px"></span></div>
   <!-- QUATRE ONGLETS POUR VINGT-CINQ SECTIONS. Ce commentaire annoncait cinq
        ANCRES : la barre menait alors a une section dans un rouleau. Elle
@@ -5443,7 +5402,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- COACH SESSION MANAGER -->
-<div id="s-coach-sessions" class="screen">
+<div id="s-coach-sessions" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-client')">←</button>
     <span class="topbar-title" id="csm-title">Séances</span>
@@ -5488,7 +5447,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- COACH PROGRAMMES LIST -->
-<div id="s-coach-programs" class="screen">
+<div id="s-coach-programs" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button>
     <span class="topbar-title">Mes programmes</span>
@@ -5503,7 +5462,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- COACH PROGRAMME TEMPLATE EDITOR -->
-<div id="s-coach-prog-template" class="screen">
+<div id="s-coach-prog-template" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-programs');loadCoachProgramsList()">←</button>
     <input id="cpt-name" placeholder="Nom du programme" style="flex:1;background:transparent;border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;outline:none;min-width:0;margin:0 8px" onchange="saveCoachProgTemplateName()">
@@ -5522,7 +5481,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- COACH PROGRAMME ASSIGN -->
-<div id="s-coach-prog-assign" class="screen">
+<div id="s-coach-prog-assign" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-programs');loadCoachProgramsList()">←</button>
     <span class="topbar-title" id="cpa-title">Assigner</span>
@@ -5543,7 +5502,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- DÉCHARGE GROUPÉE -->
-<div id="s-coach-decharge" class="screen">
+<div id="s-coach-decharge" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-home')">←</button>
     <span class="topbar-title">Décharge groupée</span>
@@ -5568,7 +5527,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- EVOLUTION BILANS COACH -->
-<div id="s-coach-bilan-evo" class="screen">
+<div id="s-coach-bilan-evo" class="screen ecran-coach">
   <div class="topbar"><button class="back-btn" onclick="go('s-coach-client')">←</button><span class="topbar-title" id="evo-title">Évolution</span><span></span></div>
   <div class="scroll-area" style="flex:1" id="evo-content"></div>
 </div>
@@ -5577,7 +5536,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- Un écran à part et non une carte de plus sur la fiche client : composer un
      squelette de repas et deux catalogues de sources demande de la place, et
      le préfixe « s-coach- » suffit à ce que go() refuse l'écran à un athlète. -->
-<div id="s-coach-plan" class="screen">
+<div id="s-coach-plan" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-client')">←</button>
     <span class="topbar-title">Plan alimentaire</span>
@@ -6593,7 +6552,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- CHARGES ARTICULAIRES (coach) -->
-<div id="s-charges" class="screen">
+<div id="s-charges" class="screen ecran-coach">
   <div class="topbar"><button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button><span class="topbar-title">Charges articulaires</span></div>
   <div class="scroll-area" style="flex:1"><div class="pad" id="charges-content"></div></div>
 </div>
@@ -7084,7 +7043,7 @@ const COACH_PHOTO='icons/coach.jpg';
      Nommé s-coach-canal et non s-canal-coach : le garde de rôle de go() filtre
      sur le préfixe « s-coach- ». L'écran est donc protégé sans une ligne de
      plus, et le resterait si quelqu'un le rendait atteignable autrement. -->
-<div id="s-coach-canal" class="screen">
+<div id="s-coach-canal" class="screen ecran-coach">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="go('s-coach-home')">←</button>
     <span class="topbar-title">Mon canal</span>
@@ -7117,7 +7076,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="pad"><div id="scan-corps"></div></div>
 </div>
 
-<div id="s-rapport" class="screen">
+<div id="s-rapport" class="screen ecran-coach">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="retourDe('s-rapport')">←</button>
     <span class="topbar-title">Rapport</span><span></span>
@@ -7147,7 +7106,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
      La barre d outils porte `rap-outils`, deja masquee a l impression par
      la meme regle que celle du rapport. -->
-<div id="s-programme-print" class="screen">
+<div id="s-programme-print" class="screen ecran-coach">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="retourDe('s-programme-print')">←</button>
     <span style="font-size:var(--fs-md);font-weight:800;letter-spacing:1px">PROGRAMME</span>
@@ -7222,7 +7181,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- PAS de prefixe s-coach- : go() refuse a tout athlete un ecran ainsi
      nomme (« Acces reserve au coach »), et cette vitrine est faite POUR lui.
      C est le nom qui portait le controle d acces, pas une regle explicite. -->
-<div id="s-vitrine" class="screen">
+<div id="s-vitrine" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-vitrine')">←</button>
     <span class="topbar-title">Ton coach</span>
@@ -7253,7 +7212,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- ══════ EXERCICES À CLASSER ══════ -->
-<div id="s-ex-classify" class="screen">
+<div id="s-ex-classify" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-ex-classify')">←</button>
     <span class="topbar-title">Exercices à classer</span>
@@ -7263,7 +7222,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- ══════ CRÉATION D'UN PROTOCOLE SUR MESURE ══════ -->
-<div id="s-proto-edit" class="screen">
+<div id="s-proto-edit" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="_peQuitter()">←</button>
     <span class="topbar-title" id="pe-titre">Nouveau protocole</span>
@@ -7287,7 +7246,7 @@ const COACH_PHOTO='icons/coach.jpg';
      s-coach-charge et non s-charge : le prefixe fait heriter la garde de
      role de go(), qui renvoie tout non-coach vers son accueil. C est un
      instrument de programmation, pas un ecran d athlete. -->
-<div id="s-coach-charge" class="screen">
+<div id="s-coach-charge" class="screen ecran-coach">
   <div class="topbar">
     <!-- On revient a la FICHE : c'est de la qu'on vient desormais. retourDe
          suit le couloir de retour pose par goAvecRetour ; a defaut, la fiche. -->
@@ -7300,7 +7259,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<div id="s-coach-banque" class="screen">
+<div id="s-coach-banque" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="fermerBanque()">←</button>
     <span class="topbar-title">Banque d'exercices</span>
@@ -7327,7 +7286,7 @@ const COACH_PHOTO='icons/coach.jpg';
      tout scanner en dix secondes. Le bouton « Commencer » est collant en bas
      — sur une séance de dix exercices, il serait sinon hors de portée du
      pouce sans faire défiler jusqu'au bout. -->
-<div id="s-seance-apercu" class="screen">
+<div id="s-seance-apercu" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="fermerApercu()">←</button>
     <span class="topbar-title" id="ap-titre">Ma séance</span>
@@ -7342,7 +7301,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<div id="s-protocoles" class="screen">
+<div id="s-protocoles" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="_pfRetourner()">←</button>
     <span class="topbar-title">Protocoles</span>
@@ -7367,7 +7326,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- ══════ TUNNEL D'ACQUISITION (créateur uniquement) ══════ -->
-<div id="s-metrics" class="screen">
+<div id="s-metrics" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-home');coachTab('monetisation')">←</button>
     <span class="topbar-title">Tunnel : 7 jours</span>
@@ -8973,6 +8932,34 @@ const CLOUD={
     // sait qu'un dossier PART — un dossier ecrit localement sans etre pousse
     // n'a aucune raison d'etre horodate.
     try{ if(user&&typeof user==='object') user.updatedAt=Date.now(); }catch(e){}
+    // B1.2 — ET LA COPIE LOCALE PORTE LE MEME HORODATAGE.
+    //
+    // Les sept ecritures du coach appellent DB.set('users',users) AVANT
+    // CLOUD.pushOne : la version deposee dans localStorage portait donc
+    // l'ancien updatedAt, et le serveur le nouveau. _mergeUser compare
+    // `distant.updatedAt > safe.updatedAt` et jugeait le distant plus recent A
+    // TOUS LES COUPS — y compris pour ecraser une modification locale faite
+    // entre-temps et pas encore poussee. Le dossier partait juste, la copie
+    // qui reste sur l'appareil mentait sur son age.
+    //
+    // ICI, ET NON DANS LES SEPT APPELANTS : c'est le meme raisonnement que
+    // pour l'horodatage lui-meme, pose ci-dessus en un seul endroit. La
+    // huitieme ecriture ajoutee demain en heritera.
+    //
+    // setLocal ET NON set : `set` pousse, et reparer l'horodatage d'un envoi
+    // cible declencherait un envoi complet de tous les dossiers.
+    //
+    // LE DOSSIER COURANT AUSSI. `rc_session` porte une seconde copie du
+    // dossier de l'utilisateur connecte ; laissee en arriere, elle reintroduit
+    // exactement le meme ecart au prochain demarrage.
+    try{
+      if(user&&user.updatedAt){
+        const _us=DB.get('users');
+        if(_us&&_us[email]){ _us[email].updatedAt=user.updatedAt; DB.setLocal('users',_us); }
+        const _se=DB.get('session');
+        if(_se&&_se.email===email){ _se.updatedAt=user.updatedAt; DB.setLocal('session',_se); }
+      }
+    }catch(e){}
     const key='_one_'+email;
     clearTimeout(this._pushTimers?.[key]);
     const p=this._doPushOne(email,user);
@@ -9925,6 +9912,16 @@ const DB={
   // dans le catch sautait CLOUD.push, donc un stockage saturé faisait perdre
   // la donnée des DEUX côtés. On avertit, et on pousse quand même.
   set(k,v){
+    const localOk=this.setLocal(k,v);
+    if(k==='users') CLOUD.push(v);
+    return localOk;
+  },
+  // ECRIT SANS POUSSER. Meme gestion du quota, sans l'effet de bord — c'est
+  // `set` qui decide de pousser, et lui seul. Sert a CLOUD.pushOne, qui doit
+  // reparer l'horodatage d'un dossier DEJA en cours d'envoi : passer par `set`
+  // y programmerait un envoi COMPLET de tous les dossiers a chaque ecriture du
+  // coach.
+  setLocal(k,v){
     let localOk=true;
     try{
       localStorage.setItem('rc_'+k,JSON.stringify(v));
@@ -9934,7 +9931,6 @@ const DB={
         toast('Stockage local plein : tes données sont envoyées au cloud mais ne seront pas disponibles hors ligne.','var(--orange)');
       } else throw e;
     }
-    if(k==='users') CLOUD.push(v);
     return localOk;
   },
   del(k){localStorage.removeItem('rc_'+k)},
@@ -11274,6 +11270,10 @@ function go(id){
   // Après l'affichage : la barre suit l'écran courant, quel que soit le chemin
   // emprunté pour y arriver (onglet, flèche retour, redirection interne).
   _majTabbar(id);
+  // B2.1 — ET LA BARRE LATERALE DU BUREAU AUSSI, pour exactement la meme
+  // raison et au meme endroit. Elle designait le dernier ONGLET visite, pas
+  // l'ecran ouvert.
+  _majBarreCoach();
   // Pre-remplissage du code en attente, pose ICI et non chez les appelants :
   // cinq chemins menent a s-client-code (doRegister, doLogin, la reprise de
   // session, doNewPwdRecovery, les boutons « entrer un code ») et seuls deux
@@ -61043,6 +61043,40 @@ async function loadMetrics(){
 // ET ON NE RECHARGE PAS LE TABLEAU DE BORD QUAND ON Y EST DEJA : coachTab est
 // appele par la barre d'onglets du telephone a chaque bascule, et
 // loadCoachHome y refait tout le rendu de la liste pour rien.
+// B2.1 — EXACTEMENT UN ELEMENT COURANT DANS LA BARRE, TOUJOURS.
+//
+// L'etat etait pose par coachTab, qui ne connait que les quatre onglets du
+// tableau de bord : les cinq destinations de travail n'en recevaient jamais, et
+// le dernier onglet visite restait allume par-dessus l'ecran ouvert.
+//
+// LE CRITERE EST L'ECRAN REELLEMENT ACTIF, comme pour la mise en page : `.active`
+// est pose par go() a chaque navigation, quel que soit le chemin — un lien, un
+// retour arriere, un rechargement. Aucun appelant n'a a se souvenir de
+// prevenir la barre.
+//
+// SUR s-coach-home, C'EST L'ONGLET QUI COMMANDE : les cinq liens s'eteignent et
+// coachTab garde la main sur les quatre sb-tab-*. Ailleurs, l'inverse — le lien
+// de l'ecran s'allume et les quatre onglets s'eteignent, y compris celui que le
+// coach regardait avant de partir.
+function _majBarreCoach(){
+  try{
+    const act=document.querySelector('.screen.active');
+    const id=act?act.id:'';
+    const home=(id==='s-coach-home');
+    document.querySelectorAll('#ch-sidebar .sb-lien[data-ecran]').forEach(b=>{
+      if(!home&&b.dataset.ecran===id) b.setAttribute('aria-current','page');
+      else b.removeAttribute('aria-current');
+    });
+    if(!home) ['dashboard','codes','monetisation','profil'].forEach(k=>{
+      const sb=document.getElementById('sb-tab-'+k);
+      if(!sb) return;
+      sb.style.background='none';
+      sb.style.color='var(--sub)';
+      sb.style.boxShadow='none';
+      sb.removeAttribute('aria-current');
+    });
+  }catch(e){}
+}
 function coachTab(tab){
   try{
     const act=document.querySelector('.screen.active');

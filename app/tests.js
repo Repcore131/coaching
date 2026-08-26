@@ -7458,17 +7458,54 @@ function testExercices(){
           // le catch redonnerait exactement le defaut d'origine, et les trois
           // assertions ci-dessus resteraient vertes si le push venait AVANT
           // l'ecriture locale.
-          const src=String(DB.set);
-          const iCatch=src.indexOf('catch');
+          //
+          // B1.2 — LE CORPS A DEMENAGE DANS DB.setLocal, qui ecrit SANS pousser.
+          // CLOUD.pushOne en a besoin pour reparer l'horodatage d'un envoi deja
+          // cible : passer par `set` y programmerait un envoi COMPLET de tous
+          // les dossiers a chaque ecriture du coach. La propriete defendue ici
+          // ne bouge pas — un quota sature ne saute pas le push — elle se lit
+          // simplement sur les deux fonctions.
+          const src=String(DB.set), loc=String(DB.setLocal);
+          const iEcr=src.indexOf('setLocal');
           const iPush=src.indexOf("k==='users'");
           const iRet=src.indexOf('return localOk');
-          if(iCatch<0||iPush<0||iRet<0) return _echec('la forme de DB.set a changé');
-          if(!(iCatch<iPush)) return _echec('le push précède le catch');
+          if(iEcr<0||iPush<0||iRet<0) return _echec('la forme de DB.set a changé');
+          if(!(iEcr<iPush)) return _echec('le push précède l\'écriture locale');
           if(!(iPush<iRet)) return _echec('le retour précède le push');
-          // Aucun `return` entre la reconnaissance du quota et la fin du catch.
-          const bloc=src.slice(src.indexOf('QuotaExceededError'),iPush);
+          // `set` NE RATTRAPE RIEN : si elle entourait setLocal d'un try/catch,
+          // un quota sature y reprendrait la main et pourrait sauter le push.
+          if(src.indexOf('catch')>=0) return _echec('un catch est revenu dans DB.set');
+          // Et dans setLocal, aucun `return` entre la reconnaissance du quota et
+          // la fin du catch : c'est ce return-la qui sautait le push.
+          if(loc.indexOf('QuotaExceededError')<0)
+            return _echec('setLocal ne reconnaît plus le quota');
+          const bloc=loc.slice(loc.indexOf('QuotaExceededError'),loc.indexOf('return localOk'));
           return bloc.indexOf('return')<0
             ?true:_echec('un return est revenu dans le catch');})());
+        ok('L\'horodatage d\'un envoi ciblé atteint la copie locale',(()=>{
+          // B1.2 — pushOne horodate le dossier qui PART ; les sept ecritures du
+          // coach avaient deja ecrit la copie locale AVANT d'appeler pushOne.
+          // _mergeUser comparait ensuite un local plus vieux qu'il ne l'etait,
+          // et jugeait le distant plus recent a tous les coups — y compris pour
+          // ecraser une modification locale faite entre-temps.
+          const s=String(CLOUD.pushOne);
+          if(s.indexOf('user.updatedAt=Date.now()')<0)
+            return _echec('l\'horodatage n\'est plus posé dans pushOne');
+          if(s.indexOf("DB.setLocal('users'")<0)
+            return _echec('la carte des dossiers ne reçoit pas l\'horodatage');
+          if(s.indexOf("DB.setLocal('session'")<0)
+            return _echec('le dossier courant garde un horodatage périmé');
+          // setLocal ET NON set : `set` pousse, et reparer l'horodatage d'un
+          // envoi cible declencherait un envoi complet de tous les dossiers.
+          //
+          // LES COMMENTAIRES SONT RETIRES AVANT DE CHERCHER. String(fn) les
+          // rend avec le code, et celui de pushOne CITE « DB.set('users',users) »
+          // pour expliquer le defaut qu'il corrige : la sonde se declenchait
+          // sur la phrase qui decrit le bug, pas sur un appel.
+          const code=s.replace(/\/\/.*/g,'');
+          return /DB\.set\('users'/.test(code)
+            ?_echec('pushOne repasse par DB.set : chaque écriture pousserait tout')
+            :true;})());
         // ══════ PHOTOS HORS LIGNE : ÉCRIRE, PRÉVENIR, PURGER ══════
         ok('_setPhotoLS dit la vérité : écrit, ou rend false ET prévient',(()=>{
           // Cinq sites écrivent des photos dans localStorage. Trois avalaient
@@ -25053,40 +25090,122 @@ function testExercices(){
         's-coach-decharge','s-coach-bilan-evo','s-coach-plan','s-coach-canal',
         's-coach-charge','s-coach-banque','s-charges','s-coach-file',
         's-coach-activite','s-rapport','s-programme-print','s-vitrine',
-        's-ex-classify','s-proto-edit','s-protocoles','s-metrics'];
+        's-ex-classify','s-proto-edit','s-protocoles','s-metrics',
+        // B1.1 — L'OUBLI. Le coach qui verifie une seance avant de la publier
+        // retombait en colonne de 480 px, sans barre laterale, au milieu d'un
+        // espace par ailleurs entierement elargi.
+        's-seance-apercu'];
 
       ok('LA BARRE LATERALE N\'EST PLUS ENFERMEE DANS LE TABLEAU DE BORD',(()=>{
         // Elle etait un enfant de #s-coach-home et disparaissait des que le
         // coach ouvrait un athlete : il ne lui restait qu'une fleche retour.
         const sb=document.getElementById('ch-sidebar');
         if(!sb) return _echec('la barre a disparu du document');
-        if(sb.closest('.screen'))
-          return _echec('elle est encore dans l\'ecran « '+sb.closest('.screen').id+' »');
-        // Et elle est allumee sur CHAQUE ecran coach, par une regle qui nomme
-        // l'ecran — jamais par le role du compte : un meme compte peut etre
-        // coach ET athlete sans rechargement.
-        const css=Array.from(document.querySelectorAll('style'))
-          .map(s=>s.textContent).join('\n');
-        const manquants=ECRANS_COACH.filter(e=>
-          css.indexOf('body:has(#'+e+'.active) #ch-sidebar')<0);
-        return manquants.length
-          ?_echec('sans barre : '+manquants.join(', ')):true;})());
+        return sb.closest('.screen')
+          ?_echec('elle est encore dans l\'ecran « '+sb.closest('.screen').id+' »'):true;})());
 
+      // B1.1 + B1.4 — LA LISTE DES ECRANS COACH EST PORTEE PAR LES ECRANS.
+      //
+      // Elle etait ecrite en CSS, en toutes lettres, et RECOPIEE TROIS FOIS :
+      // largeur, barre laterale, decalage. Cette assertion cherchait donc
+      // « body:has(#<id>.active) #ch-sidebar » pour chacun des vingt-deux —
+      // elle verifiait le MECANISME, pas l'invariant. Et le mecanisme a laisse
+      // passer s-seance-apercu, qu'aucune des trois listes ne portait : les
+      // assertions ne pouvaient pas le voir, puisqu'il n'etait pas dans leur
+      // propre liste non plus. Deux listes recopiees ne se surveillent pas.
+      //
+      // ON EPINGLE DONC L'INVARIANT : cet ecran-la est-il un ecran coach ?
+      ok('Chaque ecran coach porte la classe qui l\'elargit',(()=>{
+        const manquants=ECRANS_COACH.filter(e=>{
+          const n=document.getElementById(e);
+          return !n||!n.classList.contains('ecran-coach');});
+        return manquants.length
+          ?_echec('sans la classe : '+manquants.join(', ')):true;})());
       ok('AUCUN ECRAN ATHLETE, ET AUCUNE DES TROIS EXCLUSIONS, NE PORTE LA BARRE',(()=>{
+        const fuites=Array.from(document.querySelectorAll('.screen.ecran-coach'))
+          .map(e=>e.id).filter(id=>ECRANS_COACH.indexOf(id)<0);
+        if(fuites.length) return _echec('ecran non coach elargi : '+fuites.join(', '));
+        // s-coach-program est l'editeur PARTAGE : un athlete y entre pour SA
+        // propre seance. Il reste hors de la classe, comme les deux ecrans de
+        // connexion — il n'est elargi que par son attribut de contexte, et
+        // seulement quand c'est le coach qui l'ouvre.
+        for(const e of ['s-coach-program','s-coach-entry','s-coach-code']){
+          const n=document.getElementById(e);
+          if(n&&n.classList.contains('ecran-coach'))
+            return _echec(e+' porte la classe alors qu\'il est exclu');
+        }
+        return true;})());
+      ok('Trois regles suffisent, et elles lisent la classe',(()=>{
         const css=Array.from(document.querySelectorAll('style'))
           .map(s=>s.textContent).join('\n');
-        const athlete=Array.from(document.querySelectorAll('.screen'))
-          .map(e=>e.id).filter(id=>ECRANS_COACH.indexOf(id)<0);
-        const fuites=athlete.filter(e=>
-          css.indexOf('body:has(#'+e+'.active) #ch-sidebar')>=0);
-        if(fuites.length) return _echec('barre sur : '+fuites.join(', '));
-        // s-coach-program est l'editeur PARTAGE : un athlete y entre pour SA
-        // propre seance. Il doit rester hors de la liste, comme les deux
-        // ecrans de connexion.
-        for(const e of ['s-coach-program','s-coach-entry','s-coach-code'])
-          if(css.indexOf('body:has(#'+e+'.active) #ch-sidebar')>=0)
-            return _echec(e+' porte la barre alors qu\'il est exclu');
-        return true;})());
+        for(const r of ['body:has(.ecran-coach.active){max-width:1440px}',
+                        'body:has(.ecran-coach.active) #ch-sidebar',
+                        'body:has(.ecran-coach.active) .screen.active'])
+          if(css.indexOf(r)<0) return _echec('regle absente : '+r);
+        // ET LES SOIXANTE-SIX SELECTEURS ONT DISPARU. S'ils revenaient, la
+        // liste serait de nouveau tenue a deux endroits — et c'est ainsi que
+        // s-seance-apercu avait ete oublie.
+        return css.indexOf('body:has(#s-coach-client.active) #ch-sidebar')<0
+          ?true:_echec('la liste recopiee est revenue');})());
+
+      // B2.1 — EXACTEMENT UN ELEMENT COURANT DANS LA BARRE, ET C'EST LE BON.
+      //
+      // Les cinq destinations de travail n'avaient aucun etat actif : seul
+      // :hover existait. coachTab ne pose l'etat que sur les quatre sb-tab-*,
+      // si bien qu'en ouvrant ACTIVITE, A RELANCER, CHARGES, MES PROGRAMMES ou
+      // DECHARGE GROUPEE, la barre continuait d'allumer « ATHLETES » et de lui
+      // laisser aria-current="page". Le commentaire de coachTab condamnait deja
+      // ce defaut : « une surbrillance qui ment sur la page ouverte est pire
+      // que pas de surbrillance du tout. »
+      ok('Chaque lien de la barre dit ou il mene',(()=>{
+        const liens=Array.from(document.querySelectorAll('#ch-sidebar .sb-lien'));
+        if(liens.length<5) return _echec(liens.length+' lien(s) au lieu de 5');
+        const sans=liens.filter(b=>!b.dataset.ecran);
+        if(sans.length) return _echec(sans.length+' lien(s) sans destination');
+        // ET LA DESTINATION EXISTE. Un data-ecran qui ne designe aucun ecran
+        // n'allumerait jamais rien, en silence.
+        const morts=liens.filter(b=>!document.getElementById(b.dataset.ecran));
+        return morts.length
+          ?_echec('destination inconnue : '+morts.map(b=>b.dataset.ecran).join(', ')):true;})());
+      ok('Un seul element de la barre est courant, et c\'est l\'ecran ouvert',(()=>{
+        const sv=Array.from(document.querySelectorAll('.screen.active'));
+        const marques=()=>Array.from(document.querySelectorAll(
+          '#ch-sidebar [aria-current="page"]'));
+        try{
+          const poser=id=>{
+            document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+            const n=document.getElementById(id); if(n) n.classList.add('active');
+            _majBarreCoach();
+          };
+          // SUR UN ECRAN DE TRAVAIL : son lien, et lui seul.
+          for(const id of ['s-coach-activite','s-charges','s-coach-programs']){
+            poser(id);
+            const m=marques();
+            if(m.length!==1) return _echec(id+' : '+m.length+' element(s) allume(s)');
+            if(m[0].dataset.ecran!==id)
+              return _echec(id+' allume « '+(m[0].textContent||'').trim()+' »');
+          }
+          // DE RETOUR SUR LE TABLEAU DE BORD : plus aucun lien allume. C'est
+          // l'onglet qui commande, et coachTab garde la main.
+          poser('s-coach-home');
+          const restants=marques().filter(b=>b.classList.contains('sb-lien'));
+          return restants.length
+            ?_echec('un lien reste allume sur le tableau de bord'):true;
+        } finally {
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          sv.forEach(e=>e.classList.add('active'));
+          try{ _majBarreCoach(); }catch(e){}
+        }})());
+      ok('go() previent la barre, et l\'etat a une forme en CSS',(()=>{
+        // Pose dans go(), a cote de _majTabbar : le seul point par ou passe
+        // toute navigation — un lien, une fleche retour, une redirection.
+        // Aucun appelant n'a a se souvenir de prevenir la barre.
+        if(String(go).indexOf('_majBarreCoach()')<0)
+          return _echec('go() ne previent pas la barre laterale');
+        const css=Array.from(document.querySelectorAll('style'))
+          .map(s=>s.textContent).join('\n');
+        return css.indexOf('.sb-lien[aria-current="page"]')>=0
+          ?true:_echec('l\'etat courant des liens n\'a aucune forme');})());
 
       ok('LES TROIS ECRANS DU VOLET ONT UNE PLACE STABLE, sans doublon',(()=>{
         // « A relancer », « Activite du portefeuille » et « Decharge groupee »
