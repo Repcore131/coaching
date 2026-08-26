@@ -14424,6 +14424,123 @@ function testExercices(){
        !/<circle/.test(_courbePesee(_ps(20,()=>80))));
     ok('Une série parfaitement plate ne divise pas par zéro',
        !/NaN|Infinity/.test(_courbePesee(_ps(20,()=>80))));
+
+    // ── DEUX PESÉES ÉLOIGNÉES DONNENT QUAND MÊME UN TRACÉ ────────────────
+    // Signalé par Kevin le 26/08/2026 : « le graphique poids ne s'affiche pas
+    // alors que le bilan est fait ». mm7 exige quatre pesées dans une fenêtre
+    // de sept jours et segmentsWeight coupe au-delà de trente : l'athlète qui
+    // ne se pèse qu'aux bilans n'avait NI moyenne, NI trait, NI aire — deux
+    // points isolés sur fond noir, que personne ne lit comme un graphique.
+    ok('Deux pesées espacées donnent un tracé, en pointillé',(()=>{
+      const h=_courbePesee([{date:_pj(0),kg:103.8},{date:_pj(38),kg:100.9}]);
+      if(!h) return _echec('aucun tracé');
+      if(_trTraits(h)) return _echec('un trait de moyenne est apparu là où mm7 ne peut rien');
+      if(!/stroke-dasharray="3 2\.5"/.test(h)) return _echec('le relevé n’est pas en pointillé');
+      if(_trPoints(h)!==2) return _echec(_trPoints(h)+' point(s) au lieu de 2');
+      // ET LA LÉGENDE SUIT. Un pointillé annoncé « moyenne 7 j » serait pire
+      // que pas de trait : il ferait lire une tendance là où il n'y a que
+      // deux mesures reliées.
+      if(_courbePesee.dernierTrait!=='pesees')
+        return _echec('le tracé ne se déclare pas comme un relevé');
+      return /pesées reliées/.test(h)?true:_echec('rien ne dit ce qu’est ce trait');})());
+    ok('Une série dense garde sa moyenne mobile, sans pointillé',(()=>{
+      const h=_courbePesee(_ps(20,i=>80-i/14));
+      if(_trTraits(h)!==1) return _echec('la moyenne a disparu');
+      if(/stroke-dasharray/.test(h)) return _echec('le relevé s’est ajouté à la moyenne');
+      return _courbePesee.dernierTrait==='moyenne'?true
+        :_echec('la courbe se déclare relevé alors qu’elle trace une moyenne');})());
+    ok('La légende du bloc Poids suit le trait réellement dessiné',(()=>{
+      const s=String(blocPoids);
+      if(s.indexOf('_courbePesee.dernierTrait')<0)
+        return _echec('la légende ne consulte pas le tracé');
+      // La courbe est construite AVANT la légende : dans l'autre sens elle
+      // annoncerait un trait qui n'existe pas encore.
+      return s.indexOf('const svgCourbe=')<s.indexOf('const legende=')
+        ?true:_echec('la légende est construite avant la courbe');})());
+
+    // ── UNE MENSURATION INCHANGÉE RESTE UNE MENSURATION ──────────────────
+    // Même signalement : « les mensurations restées identiques et inchangées
+    // devraient être affichées et comptées même dans les graphiques — le but,
+    // voir aussi si la personne stagne. » Toutes les reprises non touchées
+    // étaient effacées du bilan enregistré : un biceps re-mesuré à 44 cm,
+    // identique au bilan d'avant, disparaissait. La stagnation était le seul
+    // cas que l'app ne savait pas montrer.
+    ok('Le poids repris reste effacé, les mensurations non',(()=>{
+      const s=String(saveBilanFinal);
+      if(!/\/-weight\$\/\.test\(k\)/.test(s))
+        return _echec('l’effacement ne distingue plus le poids des mensurations');
+      if(s.indexOf('bi.reprises=_rep')<0)
+        return _echec('rien ne garde la trace de ce qui a été reporté');
+      // LE GARDE-FOU DU BILAN VIDE NE BOUGE PAS : il compte sur _saisi, qui
+      // reste privé des reprises. Sans lui, un bilan où rien n'est touché
+      // s'enregistrerait et repousserait le rappel de quinze jours.
+      return String(bilNext).indexOf('_bilSansReprises(bilData,_bilReprises)')>=0
+        ?true:_echec('le garde-fou du bilan vide ne s’appuie plus sur les saisies');})());
+    ok('Une valeur reportée se reconnaît, et elle seule',(()=>{
+      const b={'bil-bicep-r':'44','bil-waist':'88',reprises:['bil-bicep-r']};
+      if(getBM(b,'bicep-r')!==44) return _echec('la valeur reportée ne se lit pas');
+      if(!bmReportee(b,'bicep-r')) return _echec('un report n’est pas reconnu');
+      if(bmReportee(b,'waist')) return _echec('un relevé frais passe pour un report');
+      // AUCUN BILAN D'AVANT LE CORRECTIF N'EST MARQUÉ : ils n'ont pas de
+      // `reprises`, et tout ce qu'ils portent a bel et bien été relevé.
+      return !bmReportee({'bil-waist':'88'},'waist')&&!bmReportee(null,'waist')
+        ?true:_echec('un bilan sans reprises voit des reports');})());
+    ok('La carte ne réclame plus un bilan qui existe déjà',(()=>{
+      const s=String(showProgressTab);
+      if(s.indexOf('Une courbe demande deux bilans')<0)
+        return _echec('le cas « un seul bilan » ne se dit plus');
+      if(s.indexOf('bl.length<2')<0)
+        return _echec('la phrase ne distingue pas « un seul bilan » de « une seule mesure »');
+      return /relevée qu’une fois/.test(s)?true
+        :_echec('rien ne dit que c’est la MESURE qui manque, pas le bilan');})());
+    ok('Le tableau des mensurations grise ce qui a été reporté',(()=>{
+      const s=String(showProgressTab);
+      if(s.indexOf('bmReportee(bl[ci],m.k)')<0)
+        return _echec('les cellules ne distinguent pas un report d’un relevé');
+      return /reportées du bilan précédent/.test(s)?true
+        :_echec('le gris n’est expliqué nulle part');})());
+    // UN REPORT NE RAFRAÎCHIT PAS UN REPORT. Conséquence directe du correctif
+    // précédent : le report est maintenant ENREGISTRÉ dans le bilan, et
+    // mensurationsReprises y lisait la date du « dernier bilan qui porte la
+    // valeur ». Chaque bilan aurait donc repoussé la borne des deux mois, et
+    // une mesure jamais re-relevée serait restée pré-remplie indéfiniment,
+    // en se recopiant d'elle-même de bilan en bilan.
+    ok('La borne des deux mois se juge sur le dernier RELEVÉ',(()=>{
+      const J=n=>Date.now()-n*864e5;
+      // Relevé il y a 80 jours, puis reporté il y a 5 jours.
+      const u={bilans:[
+        {date:J(80),'bil-bicep-r':'44'},
+        {date:J(5),'bil-bicep-r':'44',reprises:['bil-bicep-r']}]};
+      const r=mensurationsReprises(u);
+      if(r['bil-bicep-r']!==undefined)
+        return _echec('une mesure relevée il y a 80 jours est encore proposée pré-remplie');
+      // ET UN VRAI RELEVÉ RÉCENT EST BIEN REPRIS : la borne ne doit pas
+      // devenir un refus général.
+      const u2={bilans:[
+        {date:J(80),'bil-bicep-r':'43'},
+        {date:J(5),'bil-bicep-r':'44'}]};
+      const r2=mensurationsReprises(u2);
+      return r2['bil-bicep-r']==='44'?true
+        :_echec('un relevé de cinq jours n’est plus repris : '+r2['bil-bicep-r']);})());
+    ok('Le coach voit aussi ce qui a été reporté',(()=>{
+      // Les deux rendus des mensurations sont distincts — athlète et coach —
+      // et c'est le COACH qui lit la stagnation. Marquer d'un seul côté
+      // laisserait l'autre prendre un report pour un relevé du jour.
+      const s=String(renderBilanEvolution||'');
+      if(!s) return _echec('le rendu coach est introuvable');
+      if(s.indexOf('bmReportee(bilans[ci],m.key)')<0)
+        return _echec('les cellules du coach ne distinguent pas un report');
+      return /reportées du bilan précédent/.test(s)?true
+        :_echec('le gris n’est expliqué nulle part côté coach');})());
+    ok('Un « 0 cm » ne se peint pas en vert',(()=>{
+      // Le vert disait « ça descend », pensé pour une sèche. Zéro n'est ni une
+      // baisse ni une hausse : c'est la stagnation que Kevin veut voir, et la
+      // peindre en vert la fait lire comme une réussite.
+      const s=String(showProgressTab);
+      if(!/diff===0\?'var\(--sub\)'/.test(s))
+        return _echec('un écart nul garde une couleur de verdict');
+      return /diff<0\?'var\(--green\)'/.test(s)?true
+        :_echec('une vraie baisse a perdu son vert');})());
     // ══════════════ PHASE ══════════════
     const _mkPh=(t,jours,fin)=>({phase:{type:t,debut:Date.now()-(jours||0)*864e5,
       finPrevue:fin||null,definiPar:'athlete',historique:[]}});

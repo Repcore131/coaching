@@ -21069,9 +21069,18 @@ function renderBilanEvolution(c){
     const rows=MEAS.map(m=>({
       label:m.label,labelBg:m.color||'var(--border)',labelColor:'var(--text)',
       values:Array.from({length:maxB},(_,i)=>{const v=bilans[i]?bVal(bilans[i],m.key):0;return v||null;}),
-      valueStyleFn:(v,ci,empty)=>empty?'background:#080808;color:var(--sub);':'background:var(--dark);color:var(--text);'
+      // REPORTÉE, DONC GRISE — cote coach aussi. C'est lui qui lit la
+      // stagnation, et il doit distinguer d'un coup d'oeil une mesure reprise
+      // d'un relevé du jour.
+      valueStyleFn:(v,ci,empty)=>empty?'background:#080808;color:var(--sub);'
+        :('background:var(--dark);color:'
+          +(bilans[ci]&&bmReportee(bilans[ci],m.key)?'var(--text-faint)':'var(--text)')+';')
     }));
-    return renderDataTable(columns,rows,{stickyCol0:true,firstColMinWidth:'130px',pad:'4px 6px',mb:'24px'});
+    return renderDataTable(columns,rows,{stickyCol0:true,firstColMinWidth:'130px',pad:'4px 6px',mb:'24px'})
+      +(bilans.some(b=>b&&MEAS.some(m=>bmReportee(b,m.key)))
+        ?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:-18px 0 24px">
+           Les valeurs en gris ont été reportées du bilan précédent, sans être
+           re-mesurées : l'athlète a confirmé qu'elles n'avaient pas bougé.</div>`:'');
   };
 
   // ── Mini graphiques par groupe ──────────────────────────────────────
@@ -36129,10 +36138,17 @@ function mensurationsReprises(u){
   const _limite=Date.now()-BIL_REPRISE_MAX_JOURS*24*3600*1000;
   const _frais=b=>Number(b&&b.date)>=_limite;
   for(const m of MEAS){
+    let val=null,releve=null;
     for(let i=l.length-1;i>=0;i--){
       const v=getBM(l[i],m.k);
-      if(v!=null){ if(_frais(l[i])) out['bil-'+m.k]=String(v); break; }
+      if(v==null) continue;
+      if(val===null) val=v;
+      // LE DERNIER RELEVÉ, et non le dernier report : sans quoi un report
+      // rafraîchirait le report suivant, et la borne des deux mois ne
+      // tomberait jamais.
+      if(!bmReportee(l[i],m.k)){ releve=l[i]; break; }
     }
+    if(val!==null&&releve&&_frais(releve)) out['bil-'+m.k]=String(val);
   }
   for(let i=l.length-1;i>=0;i--){
     const w=getBW(l[i]);
@@ -38915,16 +38931,41 @@ function saveBilanFinal(){
     const _g=_gMap[bilData['deb-gender']]||bilData['deb-gender'];
     if(!currentUser._evol_gender) currentUser._evol_gender=_g;
   }
-  // LES REPRISES NON TOUCHÉES NE SONT PAS DES MESURES DE CE BILAN. Écrites
-  // ici, elles porteraient la DATE DU JOUR : une mesure d’il y a deux semaines
-  // deviendrait un point neuf sur la courbe et nourrirait l’estimation de
-  // masse grasse. Un trou se lit comme un trou ; une mesure inventée, non.
+  // UNE MENSURATION INCHANGÉE RESTE UNE MENSURATION. Signalé par Kevin le
+  // 26/08/2026 : « les mensurations restées identiques et inchangées devraient
+  // être affichées et comptées même dans les graphiques — le but, voir aussi si
+  // la personne stagne. »
+  //
+  // Toutes les reprises non touchées étaient effacées du bilan enregistré. Un
+  // biceps re-mesuré à 44 cm, identique au bilan d'avant, disparaissait : la
+  // ligne du tableau affichait « — » et la carte annonçait « une courbe demande
+  // deux bilans, il en manque encore un » alors que deux bilans existaient. La
+  // stagnation — le signal que le coach cherche justement — était le seul cas
+  // que l'app ne savait pas montrer.
+  //
+  // LE POIDS RESTE EFFACÉ, ET LUI SEUL. C'est la seule valeur qui alimente une
+  // moyenne mobile et une VITESSE : un poids repris porterait la date du jour,
+  // ferait un point neuf sur la courbe, et la pente qui en sort déciderait d'un
+  // ajustement calorique. Les mensurations, elles, ne se lisent que d'un bilan
+  // à l'autre — reprendre la valeur d'il y a quinze jours au bilan d'aujourd'hui
+  // dit ce qu'on veut dire : rien n'a bougé.
+  //
+  // ET ON GARDE LA TRACE. `bi.reprises` liste ce qui a été reporté sans être
+  // re-mesuré : le tableau et les courbes le marquent, et rien ne fait passer
+  // un report pour un relevé frais.
   //
   // Sur `bi` seulement : `bilData` a déjà servi plus haut à propager le poids,
-  // la taille et l’âge vers le profil, et ces propagations réécrivent la même
+  // la taille et l'âge vers le profil, et ces propagations réécrivent la même
   // valeur que le profil portait déjà.
   try{
-    if(_bilReprises&&_bilReprises.size) for(const k of _bilReprises) delete bi[k];
+    if(_bilReprises&&_bilReprises.size){
+      const _rep=[];
+      for(const k of _bilReprises){
+        if(/-weight$/.test(k)){ delete bi[k]; continue; }
+        if(bi[k]!==undefined&&bi[k]!=='') _rep.push(k);
+      }
+      if(_rep.length) bi.reprises=_rep;
+    }
   }catch(e){}
   _bilReprises=null;
   if(!currentUser.bilans) currentUser.bilans=[];
@@ -39778,6 +39819,13 @@ function loadProgress(){
 /* --- helpers --- */
 function getBW(b){const v=parseFloat(b['bil-weight']||b['deb-weight']||b.weight);return isNaN(v)?null:v;}
 function getBM(b,k){const v=parseFloat(b['bil-'+k]||b['deb-'+k]||b[k]);return isNaN(v)?null:v;}
+// PURE. Cette mesure a-t-elle été RELEVÉE à ce bilan, ou seulement reportée du
+// précédent parce que rien n'avait bougé ? La valeur est la même et compte
+// pareil ; ce qui change, c'est ce qu'on en dit — un report ne se donne jamais
+// pour un relevé frais.
+function bmReportee(b,k){
+  try{ return ((b&&b.reprises)||[]).indexOf('bil-'+k)>=0; }catch(e){ return false; }
+}
 function calcBF(waist,neck,hips,height,gender){
   // Formule US Navy (mesures en cm)
   if(!waist||!neck||!height) return null;
@@ -41164,7 +41212,8 @@ function showProgressTab(tab,btn){
       const filtered=mainVals.filter(v=>v!==null);
       const tracable=g.items.some(it=>bl.filter(b=>getBM(b,it.k)!==null).length>1);
       const diff=filtered.length>1?parseFloat((filtered[filtered.length-1]-filtered[0]).toFixed(1)):null;
-      const col=diff===null?'var(--sub)':diff<=0?'var(--green)':'var(--red)';
+      const col=diff===null?'var(--sub)':diff===0?'var(--sub)'
+        :diff<0?'var(--green)':'var(--red)';
       // Le filet de gauche prend la couleur de la mesure : c'est ce qui
       // rattache la carte à sa courbe sans avoir à lire le titre.
       miniCharts+=`<div class="evo-carte" style="padding:12px;margin-bottom:0;border-left:3px solid ${g.items[0].color}">
@@ -41176,7 +41225,11 @@ function showProgressTab(tab,btn){
         ${tracable
           ?`<canvas id="mc-${g.items.map(i=>i.k).join('-')}" height="96" style="width:100%;display:block"></canvas>`
           :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;padding:12px 2px 4px">
-             Une courbe demande deux bilans. Il en manque encore un.</div>`}
+             ${bl.length<2
+               ?'Une courbe demande deux bilans. Il en manque encore un.'
+               :'Cette mesure n’a été relevée qu’une fois, au '+bilLabels[
+                  bl.findIndex(b=>g.items.some(it=>getBM(b,it.k)!==null))]
+                 +'. Reprends-la au prochain bilan : c’est ce qui dira si elle bouge.'}</div>`}
       </div>`;
       groupsToRender.push(g);
     });
@@ -41184,12 +41237,20 @@ function showProgressTab(tab,btn){
     c.innerHTML=renderDataTable(
       ['PARTIES MESURÉES',...bilLabels],
       MEAS.map(m=>({label:m.l,labelColor:'var(--text-strong)',
-        values:bl.map(b=>{const v=getBM(b,m.k);return v!==null?v:null;})})),
+        values:bl.map(b=>{const v=getBM(b,m.k);return v!==null?v:null;}),
+        // REPORTÉE, DONC GRISE. Elle vaut autant qu'une autre pour lire une
+        // stagnation, et rien ne doit la faire passer pour un relevé du jour.
+        valueStyleFn:(v,ci,empty)=>empty?'color:var(--sub);'
+          :(bmReportee(bl[ci],m.k)?'color:var(--text-faint);':'color:var(--text);')})),
       {stickyCol0:true,firstColMinWidth:'130px',bodyLabelBg:'var(--dark)',
        wrapperStyle:'border-radius:var(--r-3);border:1px solid var(--border);background:var(--dark)',
        pad:'7px 14px',cellBorder:'#141414',cellBorderSide:'bottom',mb:'16px',
        emptyColor:'var(--sub)',valueColor:'var(--text)',zebre:true,unite:'cm'}
-    )+miniCharts;
+    )+(bl.some(b=>MEAS.some(m=>bmReportee(b,m.k)))
+      ?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:-10px 0 16px">
+         Les valeurs en gris ont été reportées du bilan précédent, sans être
+         re-mesurées : rien n’avait bougé.</div>`:'')
+    +miniCharts;
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
     setTimeout(()=>{
       groupsToRender.forEach(g=>{
@@ -58312,6 +58373,16 @@ function _courbePesee(serie){
     traits.push(`<path d="${d.join(' ')}" fill="none" stroke="var(--red)" stroke-width="1.8"
       stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`);
   });
+  // AUCUNE MOYENNE TRACABLE : on relie les pesees elles-memes, en pointille.
+  // C'est le cas de l'athlete qui ne se pese qu'aux bilans — deux points a
+  // cinq semaines d'ecart, et jusqu'ici un graphique vide.
+  const brut=!traits.length;
+  if(brut){
+    const d=pts.map((e,i)=>(i?'L':'M')+X(e.date).toFixed(2)+' '+Y(e.kg).toFixed(2)).join(' ');
+    traits.push(`<path d="${d}" fill="none" stroke="var(--red)" stroke-width="1.6"
+      stroke-dasharray="3 2.5" stroke-linejoin="round" stroke-linecap="round"
+      vector-effect="non-scaling-stroke" opacity=".85"/>`);
+  }
   // Le degrade est declare en style inline : var() n'est substitue que dans
   // une declaration CSS, et stop-color en attribut ne le resoudrait pas
   // partout de la meme facon.
@@ -58319,12 +58390,17 @@ function _courbePesee(serie){
       <stop offset="0" style="stop-color:var(--red);stop-opacity:.30"/>
       <stop offset="1" style="stop-color:var(--red);stop-opacity:0"/>
     </linearGradient></defs>`;
+  _courbePesee.dernierTrait=brut?'pesees':'moyenne';
   return `<svg class="arc-courbe" viewBox="0 0 ${L} ${H}" preserveAspectRatio="none" style="width:100%;height:120px;overflow:visible" aria-hidden="true">
       ${defs}${aires.join('')}${bruts}${traits.join('')}${dernier}
     </svg>
     <div style="display:flex;justify-content:space-between;font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">
       <span>${_fmtJourCourt(pts[0].date)}</span><span>${mn.toFixed(1)} – ${mx.toFixed(1)} kg</span><span>${_fmtJourCourt(fin)}</span>
-    </div>`;
+    </div>
+    ${brut?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:6px">
+       Trait en pointillé : les pesées reliées entre elles. La moyenne sur sept
+       jours demande quatre pesées dans la même semaine — elle prendra le relais
+       dès que tu te pèseras plus souvent.</div>`:''}`;
 }
 function _fmtJourCourt(iso){
   const [a,m,j]=String(iso).split('-');
@@ -58386,6 +58462,12 @@ function blocPoids(user){
       <div class="metric-box"><div class="metric-val">${act??'—'}kg</div><div class="metric-label">Actuel</div></div>
       <div class="metric-box"><div class="metric-val" style="color:${colEvol}">${diff!=null?(diff>0?'+':'')+diff+'kg':'—'}</div><div class="metric-label">Évolution</div></div>
     </div>`;
+  // LA COURBE D'ABORD : c'est elle qui sait si le trait est une moyenne ou
+  // les pesées reliées, et la légende ne peut le dire qu'après.
+  const svgCourbe=_courbePesee(serie);
+  const legende=!svgCourbe?'points = pesées'
+    :(_courbePesee.dernierTrait==='pesees'?'points = pesées · trait = relevé'
+                                          :'points = pesées · trait = moyenne 7 j');
   const courbe=`<div class="evo-carte" style="padding:16px">
       <!-- LE TITRE ET SA VALEUR TIENNENT SUR UNE LIGNE, la legende passe
            dessous. Mesure au navigateur, ecran de 375 px : la ligne offre
@@ -58400,9 +58482,9 @@ function blocPoids(user){
            a cote, sans regle supplementaire. -->
       <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;margin-bottom:10px">
         <span class="evo-titre" style="margin-bottom:0">Évolution du poids${act!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text-strong);letter-spacing:1px;margin-left:9px">${act} kg</span>`:''}</span>
-        <span style="font-size:var(--fs-2xs);color:var(--text-faint)">points = pesées · trait = moyenne 7 j</span>
+        <span style="font-size:var(--fs-2xs);color:var(--text-faint)">${legende}</span>
       </div>
-      ${_courbePesee(serie)||'<div style="font-size:var(--fs-xs);color:var(--sub)">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>'}
+      ${svgCourbe||'<div style="font-size:var(--fs-xs);color:var(--sub)">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>'}
     </div>`;
   const vitesse=neutre?'':`<div class="evo-carte" style="padding:13px">
       <div class="evo-titre">Vitesse</div>
