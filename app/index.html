@@ -60729,7 +60729,35 @@ async function loadMetrics(){
     }catch(e){}
   }
 }
+// LES ONGLETS DE LA BARRE LATERALE RAMENENT AU TABLEAU DE BORD.
+// Signale par Kevin, 26/08/2026 : depuis « Charges articulaires », cliquer sur
+// PROFIL, CODES ACCES ou PAIEMENTS ne faisait RIEN.
+//
+// La cause : ces quatre panneaux — #ct-dashboard, #ct-codes, #ct-monetisation,
+// #ct-profil — vivent A L'INTERIEUR de #s-coach-home. Tant que la barre
+// laterale n'etait allumee que sur le tableau de bord, basculer un panneau
+// suffisait. Depuis N1.15 elle accompagne les vingt-deux ecrans coach : depuis
+// l'un des vingt et un autres, coachTab changeait bien le panneau — mais un
+// panneau qu'aucun ecran visible ne portait. Le coach cliquait dans le vide, et
+// rien ne le lui disait.
+//
+// ON NAVIGUE D'ABORD, ON BASCULE ENSUITE. L'ordre compte : go() ne touche pas
+// aux panneaux, mais le faire apres garantit que l'affichage pose ici est le
+// dernier mot.
+//
+// ET ON NE RECHARGE PAS LE TABLEAU DE BORD QUAND ON Y EST DEJA : coachTab est
+// appele par la barre d'onglets du telephone a chaque bascule, et
+// loadCoachHome y refait tout le rendu de la liste pour rien.
 function coachTab(tab){
+  try{
+    const act=document.querySelector('.screen.active');
+    if(!act||act.id!=='s-coach-home'){
+      go('s-coach-home');
+      // Le meme geste que le bouton de retour de ces ecrans : on revient sur
+      // une liste a jour, pas sur celle d'il y a dix minutes.
+      try{ loadCoachHome(); }catch(e){}
+    }
+  }catch(e){}
   ['dashboard','codes','monetisation','profil'].forEach(function(id){
     var p=document.getElementById('ct-'+id);
     if(p){

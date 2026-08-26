@@ -24445,6 +24445,51 @@ function testExercices(){
         // directement dans progEx.
         return /progEx\[\$\{i\}\]\.name=this\.value\.toUpperCase\(\)/.test(r)
           ?true:_echec('la saisie manuelle du nom a changé');})());
+
+      ok('LA BARRE LATERALE RAMENE AU TABLEAU DE BORD depuis n\'importe quel ecran coach',(()=>{
+        // Signale par Kevin le 26/08/2026 : depuis « Charges articulaires »,
+        // cliquer PROFIL, CODES ACCES ou PAIEMENTS ne faisait RIEN. Les quatre
+        // panneaux vivent DANS #s-coach-home ; depuis un autre ecran, coachTab
+        // basculait un panneau qu'aucun ecran visible ne portait.
+        const s=String(coachTab);
+        if(s.indexOf("go('s-coach-home')")<0)
+          return _echec('coachTab ne revient pas au tableau de bord');
+        if(s.indexOf("act.id!=='s-coach-home'")<0)
+          return _echec('la navigation n’est pas conditionnelle');
+        // ET ON NE RECHARGE PAS QUAND ON Y EST DEJA : la barre d'onglets du
+        // telephone appelle coachTab a chaque bascule, et loadCoachHome y
+        // referait tout le rendu de la liste pour rien.
+        const iCond=s.indexOf("act.id!=='s-coach-home'");
+        const iLoad=s.indexOf('loadCoachHome()');
+        if(iLoad<0) return _echec('la liste n’est pas rafraîchie au retour');
+        if(iLoad<iCond) return _echec('le tableau de bord est rechargé même quand on y est déjà');
+        // LE GESTE, EN VRAI. On ouvre un autre ecran coach, puis on clique un
+        // onglet de la barre.
+        const sv=[...document.querySelectorAll('.screen.active')];
+        try{
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          const ch=document.getElementById('s-charges');
+          if(!ch) return _echec('l’écran des charges a disparu');
+          ch.classList.add('active');
+          coachTab('profil');
+          const act=document.querySelector('.screen.active');
+          if(!act||act.id!=='s-coach-home')
+            return _echec('on reste sur « '+(act&&act.id)+' »');
+          const p=document.getElementById('ct-profil');
+          if(!p||getComputedStyle(p).display==='none')
+            return _echec('le panneau visé n’est pas affiché');
+          // Les trois autres panneaux sont bien eteints : un panneau oublie
+          // ouvert empilerait deux ecrans l'un sur l'autre.
+          for(const id of ['ct-dashboard','ct-codes','ct-monetisation']){
+            const q=document.getElementById(id);
+            if(q&&getComputedStyle(q).display!=='none')
+              return _echec(id+' est resté ouvert sous le panneau visé');
+          }
+          return true;
+        } finally {
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          sv.forEach(e=>e.classList.add('active'));
+        }})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
