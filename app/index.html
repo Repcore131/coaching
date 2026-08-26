@@ -6665,6 +6665,18 @@ const COACH_PHOTO='icons/coach.jpg';
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:3px">g / 100 g (facultatif)</div>
           </div>
+          <div style="flex:1;min-width:0">
+            <!-- N2.14 — L'ALCOOL SE SAISIT. Il comptait pour 7 kcal/g au
+                 controle Open Food Facts et pour ZERO ici : le meme
+                 spiritueux etait declare incoherent d'un cote et correct de
+                 l'autre. Facultatif, et vide pour presque tout : c'est
+                 pourquoi il est en fin de rangee, avec les fibres et le sel. -->
+            <label for="perso-alcool" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Alcool</label>
+            <input type="number" id="perso-alcool" inputmode="decimal" step="any" min="0" placeholder="—"
+              style="width:100%;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
+              oninput="majPersoCoherence()">
+            <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:3px">g / 100 g (facultatif)</div>
+          </div>
       </div>
       <div id="perso-coherence" style="margin-bottom:18px"></div>
       <button class="btn btn-red" onclick="enregistrerAlimentPerso()" style="font-size:var(--fs-md);letter-spacing:1px">ENREGISTRER</button>
@@ -30015,7 +30027,7 @@ function _dieteKcal(o){
   const k=Number((o||{}).kcal);
   if(k>0) return k;
   const pr=Number((o||{}).p)||0, gl=Number((o||{}).g!=null?o.g:(o||{}).c)||0, li=Number((o||{}).l)||0;
-  const somme=pr*4+gl*4+li*9;
+  const somme=kcalDesMacros(pr,gl,li);
   return somme>0?somme:0;
 }
 // PURE. Ce que la case annonce sous son pourcentage. Il ne suffisait pas de
@@ -41542,6 +41554,24 @@ async function utiliserBesoinsProposes(){
 // corps » pour 100 g de riz ne veut rien dire.
 const MACRO_UNITES=Object.freeze(['g','pct','gkg']);
 const MACRO_KCAL=Object.freeze({p:4,c:4,g:4,l:9});
+// N2.14 — L'ALCOOL A SA CONSTANTE, comme les trois autres. Il valait 7 en dur
+// dans nutriAtwater et ZERO dans _kcalAtwater : le meme spiritueux recevait
+// deux verdicts de coherence selon l'ecran d'ou on le regardait.
+const ALCOOL_KCAL=7;
+// N2.14 — LA CONVERSION DES MACROS EN CALORIES, EN UN SEUL ENDROIT.
+// Le facteur 4/4/9 etait reecrit a la main une quinzaine de fois alors que
+// MACRO_KCAL existait deja et ne servait qu'a partsPourcent. Cette fonction
+// est la forme POSITIONNELLE ; nutriAtwater en est la forme objet, et toutes
+// deux rendent exactement les memes nombres qu'avant.
+//
+// L'ALCOOL COMPTE. Une seule regle desormais : 7 kcal/g, partout. Sans lui, un
+// spiritueux affiche un ecart delirant — mesure sur la table Ciqual : 62 900 %
+// sur le whisky, 3 192 % sur le vin blanc sec, parce que ses calories ne
+// viennent d'aucune des trois macros.
+function kcalDesMacros(p,c,l,alcool){
+  return (p||0)*MACRO_KCAL.p+(c||0)*MACRO_KCAL.c
+        +(l||0)*MACRO_KCAL.l+(alcool||0)*ALCOOL_KCAL;
+}
 const MACRO_UNITE_CLE='rc_macro_unite';
 const MACRO_GLUC_ZERO='Les protéines et les lipides saturent déjà la cible : '
   +'il ne reste rien pour les glucides. Ce n\'est pas un objectif à zéro, '
@@ -43098,7 +43128,7 @@ function planMacrosItem(item,chercher){
   } else return null;
   const k=planParUnite(unite)?q:q/100;
   const p=per.p*k,c=per.c*k,l=per.l*k;
-  return {p,c,l,kcal:4*p+4*c+9*l};
+  return {p,c,l,kcal:kcalDesMacros(p,c,l)};
 }
 // Nom affiché d'une ligne, quelle que soit son origine.
 function planNomItem(item,chercher){
@@ -43232,7 +43262,7 @@ function planTotalRepas(r,rest,nSrc){
     const n=(nSrc&&nSrc[x.source])||1;
     if(x.source==='p') p+=cible/n; else c+=cible/n;
   }
-  return {p,c,l,kcal:4*p+4*c+9*l};
+  return {p,c,l,kcal:kcalDesMacros(p,c,l)};
 }
 function planTotalRepasHtml(t){
   if(!t||!(t.kcal>0)) return '';
@@ -43415,8 +43445,10 @@ function planCiblesJour(porteur,isOn,dateStr){
   let pl=null;
   try{ pl=plancherKcal(porteur); }catch(e){}
   if(pl!=null&&cible<pl){ cible=pl; out.plancherAtteint=true; }
-  const c=Math.max(0,Math.round((cible-4*p-9*l)/4));
-  const kcal=Math.round(4*p+4*c+9*l);
+  // La conversion INVERSE passe par les memes facteurs : ce qui reste de la
+  // cible une fois les proteines et les lipides payes, converti en glucides.
+  const c=Math.max(0,Math.round((cible-MACRO_KCAL.p*p-MACRO_KCAL.l*l)/MACRO_KCAL.c));
+  const kcal=Math.round(kcalDesMacros(p,c,l));
   out.palier=pal; out.mult=pal.mult;
   out.kcal=kcal; out.c=c;
   out.f=Math.round(FIBRES_PAR_1000*kcal/1000);
@@ -45819,12 +45851,9 @@ const NUTRI_SEUIL_CONFIRME=50;    // sous ce score, l interface exigera un accor
 function nutriAtwater(a){
   if(!a) return null;
   if(a.p==null&&a.c==null&&a.l==null) return null;
-  // L ALCOOL COMPTE POUR 7 kcal/g et n est ni protéine, ni glucide, ni lipide.
-  // Sans lui, un spiritueux affiche un écart délirant — mesuré sur la table
-  // Ciqual : 62 900 % sur le whisky, 3 192 % sur le vin blanc sec, parce que
-  // ses calories ne viennent d aucune des trois macros. Ciqual ne publie pas
-  // ce champ dans notre export ; Open Food Facts si, et on le lit.
-  return (a.p||0)*4+(a.c||0)*4+(a.l||0)*9+(a.alcool||0)*7;
+  // Ciqual ne publie pas le champ alcool dans notre export ; Open Food Facts
+  // si, et on le lit. La regle elle-meme vit dans kcalDesMacros.
+  return kcalDesMacros(a.p,a.c,a.l,a.alcool);
 }
 function nutriEcartAtwater(a){
   const th=nutriAtwater(a);
@@ -46099,7 +46128,9 @@ function offValide(a){
   // valeurs par portion illisibles, ecart aux calories declarees.
   const _ctrl=nutriControle(a);
   if(!_ctrl.valide) return {ok:false,raison:_ctrl.rejets[0]};
-  const calcul=4*a.p+4*a.c+9*a.l;
+  // N2.14 — la MEME regle que nutriEcartAtwater, alcool compris : un aliment
+  // alcoolise etait rejete ici et accepte la-bas.
+  const calcul=nutriAtwater(a);
   if(a.k>0&&Math.abs(calcul-a.k)/a.k>OFF_ECART_MACRO)
     return {ok:false,raison:'Les macros ne collent pas aux calories déclarées ('+Math.round(calcul)+' kcal calculées contre '+Math.round(a.k)+' annoncées). La fiche est incohérente.'};
   return {ok:true};
@@ -46922,6 +46953,7 @@ function ouvrirAlimentPerso(id,prefill){
   _persoPrefill=(!id&&prefill)?prefill:null;
   v('perso-nom',a.n); v('perso-kcal',a.k); v('perso-p',a.p);
   v('perso-c',a.c); v('perso-l',a.l); v('perso-f',a.f); v('perso-e',a.e);
+  v('perso-alcool',a.alcool);
   const t=document.getElementById('perso-titre');
   if(t) t.textContent=_persoEdit?'Modifier mon aliment':'Créer un aliment';
   const sup=document.getElementById('perso-supprimer');
@@ -46949,13 +46981,18 @@ function _persoDire(msg,couleur){
 // etiquette peut legitimement s en ecarter, les fibres et les polyols comptant
 // autrement — mais un ecart de plus d un quart signale presque toujours une
 // faute de frappe ou une colonne « par portion » lue par erreur.
-function _kcalAtwater(pr,gl,li){
-  if(pr==null&&gl==null&&li==null) return null;
-  return (pr||0)*4+(gl||0)*4+(li||0)*9;
+// N2.14 — CETTE FONCTION NE CALCULE PLUS RIEN DE SON COTE. Elle ignorait
+// l'alcool, si bien que le meme aliment alcoolise etait declare incoherent sur
+// l'ecran d'aliment perso et coherent au controle Open Food Facts.
+function _kcalAtwater(pr,gl,li,al){
+  if(pr==null&&gl==null&&li==null&&al==null) return null;
+  return kcalDesMacros(pr,gl,li,al);
 }
 function majPersoCoherence(){
   const pr=_persoNb('perso-p'), gl=_persoNb('perso-c'), li=_persoNb('perso-l');
-  const th=_kcalAtwater(pr,gl,li);
+  // N2.14 — l'alcool compte ici comme partout ailleurs.
+  const al=_persoNb('perso-alcool');
+  const th=_kcalAtwater(pr,gl,li,al);
   const el=document.getElementById('perso-coherence');
   if(!el) return;
   const k=_persoNb('perso-kcal');
@@ -46981,7 +47018,9 @@ function enregistrerAlimentPerso(){
   if(nom.length<2){ _persoDire('Donne un nom à cet aliment.','var(--orange)'); return; }
   if(nom.length>80){ _persoDire('Nom trop long (80 caractères maximum).','var(--orange)'); return; }
   const ch={k:_persoNb('perso-kcal'),p:_persoNb('perso-p'),c:_persoNb('perso-c'),
-            l:_persoNb('perso-l'),f:_persoNb('perso-f'),e:_persoNb('perso-e')};
+            l:_persoNb('perso-l'),f:_persoNb('perso-f'),e:_persoNb('perso-e'),
+            // N2.14 — sous le nom que lit nutriAtwater, pas un second nom.
+            alcool:_persoNb('perso-alcool')};
   // Une valeur negative ou delirante ne se corrige pas toute seule plus loin :
   // elle contaminerait tous les totaux du jour.
   for(const k in ch){
@@ -46994,7 +47033,7 @@ function enregistrerAlimentPerso(){
   if(ch.k==null&&ch.p==null&&ch.c==null&&ch.l==null){
     _persoDire('Renseigne au moins l&apos;énergie ou une macro.','var(--orange)'); return; }
   // La somme des macros ne peut pas depasser 100 g pour 100 g de produit.
-  const somme=(ch.p||0)+(ch.c||0)+(ch.l||0);
+  const somme=(ch.p||0)+(ch.c||0)+(ch.l||0)+(ch.alcool||0);
   if(somme>100){ _persoDire('Protéines + glucides + lipides dépassent 100 g pour 100 g.','var(--orange)'); return; }
   if(!currentUser.nutrition) currentUser.nutrition={};
   const liste=_alimsPerso().slice();

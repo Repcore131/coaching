@@ -23037,6 +23037,42 @@ function testExercices(){
         // violations ait de quoi s'afficher.
         return /_plDerniereViol/.test(s)
           ?true:_echec('aucune trace de violation n’est posee');})());
+
+      ok('N2.14 — UNE SEULE REGLE ATWATER, alcool compris',(()=>{
+        if(typeof kcalDesMacros!=='function') return _echec('aucune source unique');
+        // LES VALEURS NE BOUGENT PAS : 4/4/9, exactement comme avant.
+        if(kcalDesMacros(10,20,5)!==10*4+20*4+5*9)
+          return _echec('les facteurs ont change : '+kcalDesMacros(10,20,5));
+        if(MACRO_KCAL.p!==4||MACRO_KCAL.c!==4||MACRO_KCAL.l!==9)
+          return _echec('MACRO_KCAL a change');
+        if(ALCOOL_KCAL!==7) return _echec('l’alcool ne vaut plus 7 kcal/g');
+        // LE MEME ALIMENT ALCOOLISE, LE MEME VERDICT DES DEUX ECRANS. C'etait
+        // tout le grief : nutriAtwater comptait l'alcool, _kcalAtwater non.
+        const whisky={n:'Whisky',p:0,c:0.1,l:0,alcool:40,k:250};
+        const parObjet=nutriAtwater(whisky);
+        const parChamps=_kcalAtwater(whisky.p,whisky.c,whisky.l,whisky.alcool);
+        if(parObjet!==parChamps)
+          return _echec('deux verdicts pour un meme aliment : '+parObjet+' contre '+parChamps);
+        if(!(parObjet>250)) return _echec('l’alcool n’est pas compte : '+parObjet);
+        // ET SANS ALCOOL, LE RESULTAT EST CELUI D'AVANT, au chiffre pres.
+        const pain={p:8,c:50,l:1.2};
+        if(_kcalAtwater(pain.p,pain.c,pain.l)!==8*4+50*4+1.2*9)
+          return _echec('un aliment sans alcool a change de valeur');
+        // Rien du tout reste rien : le contrat de _kcalAtwater ne change pas.
+        if(_kcalAtwater(null,null,null)!==null)
+          return _echec('un aliment vide rend un nombre');
+        // LES CONVERSIONS EN DUR SONT PARTIES. Le facteur ne doit plus etre
+        // reecrit a la main dans les fonctions que le doc nomme.
+        for(const f of [_dieteKcal,nutriAtwater,_kcalAtwater]){
+          const s=String(f).replace(/\/\/.*/g,'');
+          if(/\*4\+.*\*4\+.*\*9|4\*[a-z].*\+4\*[a-z].*\+9\*/.test(s))
+            return _echec(f.name+' reecrit encore le facteur a la main');
+        }
+        // Et le champ de saisie existe, sous le nom que lit nutriAtwater.
+        if(!document.getElementById('perso-alcool'))
+          return _echec('l’alcool ne peut pas se saisir sur l’aliment perso');
+        return /alcool:_persoNb\('perso-alcool'\)/.test(String(enregistrerAlimentPerso))
+          ?true:_echec('l’alcool saisi n’est pas enregistre');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
