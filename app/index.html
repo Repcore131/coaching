@@ -48954,11 +48954,34 @@ function saveClientNutriManuel(v){
     const b=_besoinsSurs(c);
     if(b&&b.source!==null){
       const cyc=dieteCyclee(c);
-      c.nutrition.macros=Object.assign({},c.nutrition.macros,
-        {on:Object.assign({},b.on),
-         off:cyc?Object.assign({},b.off):Object.assign({},b.on),
-         origine:'auto',origineDate:Date.now()});
-      _poserReglagesCalcul(c);
+      const saisie={on:Object.assign({},b.on),
+                    off:cyc?Object.assign({},b.off):Object.assign({},b.on)};
+      // N2.15 — LE MEME CONTROLE QUE LE BOUTON D'ENREGISTREMENT.
+      // Cette ecriture est une PRESCRIPTION : elle pose les cibles que
+      // l'athlete va suivre. Elle passait pourtant a cote de controlerMacros
+      // et de la trace de confirmation qu'exige saveClientNutriMacros. C'est
+      // aujourd'hui sans consequence — le chemin automatique releve deja les
+      // journees au plancher par _relevePlancher — mais un changement de
+      // repartition ouvrirait la breche sans qu'aucun test ne le voie.
+      //
+      // AUCUNE VIOLATION : la bascule reste immediate, exactement comme avant.
+      // UNE VIOLATION : le MODE bascule quand meme — c'est un mode
+      // d'affichage — mais AUCUNE cible n'est ecrite sans le geste explicite
+      // du bouton, et la section « Ce que voit ton athlete » montrera l'ecart.
+      const viol=controlerMacros(saisie,c);
+      if(!viol.length){
+        c.nutrition.macros=Object.assign({},c.nutrition.macros,
+          Object.assign({},saisie,{origine:'auto',origineDate:Date.now()}));
+        _poserReglagesCalcul(c);
+      } else {
+        const pl=plancherEffectif(c);
+        _plConfirme=null;
+        window._plDerniereViol={email:c.email,liste:viol};
+        toast((pl.tca||pl.deficit)
+          ?'Le calcul passe sous le plancher : aucune cible écrite, et aucune dérogation possible ici'
+          :'Le calcul passe sous le plancher : les cibles ne sont pas ecrites, passe par ENREGISTRER',
+          'var(--red)');
+      }
     }
   }
   c.updatedAt=Date.now(); users[c.email]=c;
@@ -54080,6 +54103,18 @@ function _htmlDeficit(user,lectureSeule){
     ${blocDisclaimerSante()}
   </div>`;
 }
+// N2.13 — L'historique de la derniere proposition, sorti de _htmlAjustement.
+// Il y etait rendu apres quatre `return` et n'etait donc atteint que si aucune
+// explication ne sortait. Fiche COACH uniquement : c'est lui qui doit voir ce
+// que son athlete a fait de la proposition.
+function _htmlDernierAjust(nut){
+  const h=((nut&&nut.ajustHisto)||[]).slice(-1)[0];
+  if(!h) return '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Dernier ajustement proposé</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) — vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
+  </div>`;
+}
 function _htmlAjustement(user,lectureSeule){
   const nut=(user&&user.nutrition)||{};
   // ORDRE DE PRIORITÉ, décidé et testé : le BLOCAGE remplace tout — il dit
@@ -54098,26 +54133,35 @@ function _htmlAjustement(user,lectureSeule){
     // explique POURQUOI le plancher bloque, et un renvoi médical vaut mieux
     // que « regarde ton sommeil ». Elle vient APRÈS le blocage de déficit,
     // testé plus haut, qui reste au-dessus de tout.
+    // N2.13 — L'HISTORIQUE N'EST PLUS PRE-EMPTE. Il etait rendu tout en bas,
+    // apres quatre `return` : des qu'une des explications sortait — et elles
+    // sortent maintenant aussi cote coach — le coach perdait la trace de ce
+    // que son athlete avait fait de la derniere proposition. Les deux
+    // informations ne se remplacent pas, elles s'ajoutent.
+    const _histo=lectureSeule?_htmlDernierAjust(nut):'';
+    // N2.13 — LES TROIS GARDES !lectureSeule SONT TOMBES. Ces blocs disent
+    // POURQUOI rien n'est propose : c'est exactement ce que le coach cherche
+    // quand il ouvre le panneau et n'y trouve aucune proposition. Seuls les
+    // boutons d'action restent a l'athlete — il n'y en a aucun ici.
     const _stagHtml=_htmlStagnation(user,lectureSeule);
-    if(_stagHtml&&!lectureSeule) return _defHtml+_stagHtml;
+    if(_stagHtml) return _defHtml+_stagHtml+_histo;
     const pl=_ajustPlancherAtteint(user);
-    if(pl&&!lectureSeule) return _defHtml+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
+    const _plDit=pl&&(pl.plancher!=null
+      ?(pl.regle||'sous le plancher')+' ('+pl.plancher+' kcal)'
+      :'sous le plancher');
+    if(pl) return _defHtml+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
-      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?(pl.regle||'sous ton plancher')+' ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs : sommeil, pas quotidiens, régularité, et s'il n'y a pas une cause médicale.</div>
-      ${blocDisclaimerSante()}
-    </div>`;
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${lectureSeule
+        ?`La ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, et aucune baisse n’est proposée : les cibles seraient ${escapeHtml(_plDit)}. Ce qui reste à regarder : sommeil, pas quotidiens, régularité, cause médicale.`
+        :`Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?(pl.regle||'sous ton plancher')+' ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs : sommeil, pas quotidiens, régularité, et s'il n'y a pas une cause médicale.`}</div>
+      ${lectureSeule?'':blocDisclaimerSante()}
+    </div>`+_histo;
     // Le plancher a la priorite : il vient d'etre teste juste au-dessus et rend
     // deja son propre bloc. L'adherence ne parle que si le plancher se tait.
     const _adhHtml=_htmlAdherenceRefus(user,lectureSeule);
-    if(_adhHtml) return _defHtml+_adhHtml;
-    if(_defHtml) return _defHtml;
-    // Historique : le coach doit voir ce qui a été proposé et ce qui a été fait.
-    const h=(nut.ajustHisto||[]).slice(-1)[0];
-    if(lectureSeule&&h) return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Dernier ajustement proposé</div>
-      <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) — vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
-    </div>`;
-    return '';
+    if(_adhHtml) return _defHtml+_adhHtml+_histo;
+    if(_defHtml) return _defHtml+_histo;
+    return _histo;
   }
   const ph=PHASES[a.phase]||{apres:'phase'};
   const jourLib=a.jour==='off'?'les jours OFF':'les jours d\'entraînement';
@@ -54337,22 +54381,36 @@ function _ajustStagnationBloque(user,finISO){
 const THY_TEXTE_ATHLETE='Tes apports sont suivis et ton poids ne bouge pas. '
   +'Ce n\'est pas normal, et ce n\'est pas ta faute. Avant de descendre plus '
   +'bas, parles-en à un médecin : il existe des causes médicales à ça.';
+// N2.13 — LE MEME CONSTAT, DIT A UN PROFESSIONNEL. Meme declencheur, meme
+// conclusion : c'est la formulation qui change, pas le fond. Le coach n'a pas
+// besoin d'etre rassure, il a besoin de savoir POURQUOI aucun ajustement n'est
+// propose — et que c'est un renvoi medical, pas un oubli de l'application.
+const THY_TEXTE_COACH='Apports suivis et poids stable : aucun ajustement n’est '
+  +'proposé. Descendre encore n’aurait pas de sens tant qu’une cause médicale '
+  +'n’a pas été écartée. C’est le message que ton athlète lit de son côté.';
 function _htmlStagnation(user,lectureSeule){
   const r=_ajustStagnationBloque(user);
   if(!r) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--orange)55;border-radius:var(--r-4);padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);color:var(--orange);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
-    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(THY_TEXTE_ATHLETE)}</div>
-    ${blocDisclaimerSante()}
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(lectureSeule?THY_TEXTE_COACH:THY_TEXTE_ATHLETE)}</div>
+    ${lectureSeule?'':blocDisclaimerSante()}
   </div>`;
 }
 // Le texte dit l'écart DANS SON SENS. « Tu manges plus que prévu » et « tu manges
 // moins que prévu » n'appellent pas la même conversation, et une seule phrase
 // pour les deux serait fausse dans un cas sur deux.
-function phraseAdherence(adh){
+function phraseAdherence(adh,coach){
   if(!adh) return '';
   const sur=adh.ecartKcal>0;
   const n=Math.abs(adh.ecartKcal);
+  // N2.13 — la version du coach dit le MEME ecart, sans le tutoiement ni
+  // l'invitation a en parler : c'est lui qui va ouvrir la conversation.
+  if(coach) return 'La vitesse ne suit pas la cible, mais les apports sont en '
+    +'moyenne '+(sur?'+':'−')+n+' kcal '+(sur?'au-dessus':'en dessous')
+    +' des objectifs sur les '+adh.nJours+' jour'+(adh.nJours>1?'s':'')
+    +' journalisé'+(adh.nJours>1?'s':'')+'. Aucun ajustement n’est proposé : '
+    +'modifier la cible ne corrigerait pas l’écart.';
   return 'Ta vitesse ne suit pas la cible, mais tu es en moyenne '
     +(sur?'+':'−')+n+' kcal '+(sur?'au-dessus':'en dessous')
     +' de tes objectifs sur les '+adh.nJours+' jours que tu as journalisés. '
@@ -54372,8 +54430,8 @@ function _htmlAdherenceRefus(user,lectureSeule){
   }
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
-    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(phraseAdherence(r.adh))}</div>
-    ${blocDisclaimerSante()}
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(phraseAdherence(r.adh,!!lectureSeule))}</div>
+    ${lectureSeule?'':blocDisclaimerSante()}
   </div>`;
 }
 // ── Fiche coach ─────────────────────────────────────────────────────────────

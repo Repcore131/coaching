@@ -22981,6 +22981,62 @@ function testExercices(){
         // RENDUE UNE SEULE FOIS : un deplacement qui duplique serait pire.
         return document.querySelectorAll('#ccd-prises').length===1
           ?true:_echec('la section est rendue deux fois');})());
+
+      ok('N2.13 — LE COACH LIT LES MEMES BLOCAGES QUE SON ATHLETE',(()=>{
+        const s=String(_htmlAjustement);
+        // LES TROIS GARDES SONT TOMBES. C'etait tout le grief : l'athlete
+        // lisait une phrase que son coach ne voyait nulle part.
+        if(/_stagHtml&&!lectureSeule/.test(s)) return _echec('la stagnation reste cachee au coach');
+        if(/pl&&!lectureSeule/.test(s)) return _echec('le plancher reste cache au coach');
+        // ET AUCUN BOUTON N'EST PASSE AVEC : ils appartiennent a l'athlete.
+        // Le contrat existait deja, il ne doit pas casser.
+        const j=Date.now();
+        const u={id:'AJ',email:'aj@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+          _evol_height:'178','init-age':32,createdAt:j-300*864e5,
+          bilans:[{type:'debut',date:j-100*864e5,'deb-weight':'70','deb-height':'178',
+                   'deb-age':'32','deb-gender':'Homme'}],
+          sessions:[],videos:[],
+          nutrition:{manuel:true,macros:{on:{kcal:1200,p:150,g:80,l:40}},
+            ajustHisto:[{date:j-9*864e5,sens:'baisse',kcalDelta:-150,jour:'off',
+                         gDelta:-37,mesuree:-0.1,decision:'refuse'}]}};
+        const hc=_htmlAjustement(u,true);
+        if(/<button|appliquerAjustement|refuserAjustement/.test(hc))
+          return _echec('un bouton d’athlete est passe dans la version coach');
+        // L'HISTORIQUE N'EST PLUS PRE-EMPTE. Il etait rendu apres quatre
+        // `return` : des qu'une explication sortait, le coach perdait la trace
+        // de ce que son athlete avait fait de la derniere proposition.
+        if(typeof _htmlDernierAjust!=='function') return _echec('aucun bloc d’historique');
+        if(hc.indexOf('Dernier ajustement')<0)
+          return _echec('l’historique a ete pre-empte par une explication');
+        // ET L'ATHLETE NE LIT PAS LA VERSION COACH.
+        const ha=_htmlAjustement(u,false);
+        if(ha.indexOf('Dernier ajustement')>=0)
+          return _echec('l’historique du coach est passe chez l’athlete');
+        if(typeof THY_TEXTE_COACH!=='string'||THY_TEXTE_COACH===THY_TEXTE_ATHLETE)
+          return _echec('la stagnation n’a pas de formulation professionnelle');
+        // La phrase d'adherence aussi a ses deux voix, et elles disent le meme
+        // ecart.
+        const adh={ecartKcal:-180,nJours:9,ecartProt:-12};
+        const pa=phraseAdherence(adh,false), pc=phraseAdherence(adh,true);
+        if(pa===pc) return _echec('l’adherence n’a qu’une seule voix');
+        return (pa.indexOf('180')>=0&&pc.indexOf('180')>=0)
+          ?true:_echec('les deux voix ne disent pas le meme ecart');})());
+
+      ok('N2.15 — REPASSER EN AUTOMATIQUE PASSE PAR LE CONTROLE DU PLANCHER',(()=>{
+        const s=String(saveClientNutriManuel);
+        if(s.indexOf('controlerMacros')<0)
+          return _echec('la bascule ecrit les cibles sans controle');
+        // LA BASCULE RESTE IMMEDIATE QUAND RIEN NE VIOLE : c'est la consigne.
+        if(!/if\(!viol\.length\)/.test(s))
+          return _echec('l’ecriture n’est plus conditionnee a l’absence de violation');
+        // ET LE REFUS DUR EST LE MEME : antecedent alimentaire ou signaux de
+        // deficit, aucune derogation n'est offerte ici.
+        if(!/pl\.tca\|\|pl\.deficit/.test(s))
+          return _echec('le refus dur n’est pas repris');
+        // La trace est posee comme sur l'autre chemin, pour que la section des
+        // violations ait de quoi s'afficher.
+        return /_plDerniereViol/.test(s)
+          ?true:_echec('aucune trace de violation n’est posee');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
