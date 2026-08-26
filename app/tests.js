@@ -24085,6 +24085,55 @@ function testExercices(){
         const bloc=css.slice(i,css.indexOf('}',i));
         return /border-left:3px solid var\(--cc-accent/.test(bloc)
           ?true:_echec('le filet de gauche ne porte plus l’accent');})());
+
+      ok('N5.9 — LA TOPBAR COLLE SUR TOUS LES ECRANS COACH',(()=>{
+        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        // Les ecrans que la mise en page large reconnait deja comme coach, moins
+        // #s-coach-home qui a son propre modele et les deux ecrans de connexion.
+        const ECRANS=['s-coach-client','s-coach-sessions','s-coach-program',
+          's-coach-programs','s-coach-plan','s-coach-banque','s-coach-decharge',
+          's-coach-file','s-coach-activite','s-coach-canal','s-charges'];
+        const manque=ECRANS.filter(id=>css.indexOf('#'+id+'>.topbar')<0);
+        if(manque.length)
+          return _echec(manque.length+' écrans perdent leur en-tête : '+manque.join(', '));
+        // #s-coach-home GARDE SON MODELE : defilement interne, en-tete conserve
+        // sans colle. Lui poser un sticky serait un second mecanisme pour rien.
+        if(css.indexOf('#s-coach-home>.topbar{position:sticky')>=0)
+          return _echec('le tableau de bord a reçu une colle dont il n’a pas besoin');
+        // ET L'ORDRE DE SUPERPOSITION TIENT : #ccd-ancres et le bandeau de
+        // brouillon collent eux aussi, et doivent passer DESSOUS.
+        const anc=document.getElementById('ccd-ancres');
+        if(anc&&Number(getComputedStyle(anc).zIndex)>=6)
+          return _echec('la barre d’ancres passe au-dessus de l’en-tête');
+        const tb=document.querySelector('#s-coach-client>.topbar');
+        if(!tb) return _echec('la topbar du dossier a disparu');
+        const sv=[...document.querySelectorAll('.screen.active')];
+        try{
+          document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+          document.getElementById('s-coach-client').classList.add('active');
+          const s=getComputedStyle(tb);
+          if(s.position!=='sticky') return _echec('elle ne colle pas : '+s.position);
+          return s.top==='0px'?true:_echec('elle colle à '+s.top);
+        } finally {
+          document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+          sv.forEach(e=>e.classList.add('active'));
+        }})());
+
+      ok('N5.10 — LES DEUX ACTIONS PRIMAIRES PORTENT LA CLASSE DE LA CHARTE',(()=>{
+        const b=document.getElementById('csm-publier');
+        if(!b) return _echec('le bouton PUBLIER a disparu');
+        if(!b.classList.contains('btn')||!b.classList.contains('btn-red'))
+          return _echec('PUBLIER n’est toujours pas un .btn : '+b.className);
+        // Le rayon vient des jetons, plus d'un choix au hasard parmi quatre.
+        const st=(b.getAttribute('style')||'');
+        if(/border-radius/.test(st)) return _echec('PUBLIER garde son rayon en attribut');
+        if(/background:/.test(st)) return _echec('PUBLIER garde son fond en attribut');
+        // « + CRÉER », l'autre action primaire nommee par le document.
+        const c=[...document.querySelectorAll('button')]
+          .find(x=>(x.getAttribute('onclick')||'').indexOf('createCoachProgTemplate')>=0);
+        if(!c) return _echec('le bouton de création a disparu');
+        return c.classList.contains('btn')&&c.classList.contains('btn-red')
+          ?true:_echec('« + CRÉER » n’est toujours pas un .btn : '+c.className);})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

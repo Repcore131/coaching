@@ -1787,12 +1787,41 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    pour dire ou l on passe de ce qu on PRESCRIT a ce qui se PASSE en salle. */
 /* LES SECTIONS DU DOSSIER ATHLETE. Trente blocs se suivaient sans un titre :
    le coach devait reconnaitre chacun a son contenu. */
-/* LA TOPBAR COLLE, SUR CES TROIS ECRANS SEULEMENT. Pas en general :
-   #s-coach-home est en height:100dvh;overflow:hidden et n en a pas besoin, et
-   les modales en position:fixed portent leur propre topbar. */
+/* N5.9 — LA TOPBAR COLLE SUR TOUS LES ECRANS COACH, plus sur trois seulement.
+   Deux modeles de defilement cohabitaient : #s-coach-home defile a l'interieur
+   de son panneau et garde son en-tete, tous les autres defilent avec le
+   document et n'en gardaient un que sur les trois ecrans qui avaient recu un
+   position:sticky ponctuel. Sur les autres — mes programmes, le plan
+   alimentaire, la banque d'exercices — l'en-tete partait au premier
+   defilement, avec le bouton de retour et le titre qui dit ou l'on est. Sur
+   PC, cette incoherence se voit a chaque clic.
+   #s-coach-home GARDE SON MODELE : height:100dvh et overflow:hidden, il n'a
+   pas besoin de colle. Les modales en position:fixed portent leur propre
+   topbar et ne sont pas concernees.
+   z-index:6 : au-dessus de #ccd-ancres (5) et du bandeau de brouillon (5), qui
+   collent eux aussi et doivent passer DESSOUS. */
+body:has(#s-charges.active) #s-charges>.topbar,
+body:has(#s-coach-activite.active) #s-coach-activite>.topbar,
+body:has(#s-coach-banque.active) #s-coach-banque>.topbar,
+body:has(#s-coach-bilan-evo.active) #s-coach-bilan-evo>.topbar,
+body:has(#s-coach-canal.active) #s-coach-canal>.topbar,
+body:has(#s-coach-charge.active) #s-coach-charge>.topbar,
 body:has(#s-coach-client.active) #s-coach-client>.topbar,
+body:has(#s-coach-decharge.active) #s-coach-decharge>.topbar,
+body:has(#s-coach-file.active) #s-coach-file>.topbar,
+body:has(#s-coach-plan.active) #s-coach-plan>.topbar,
+body:has(#s-coach-prog-assign.active) #s-coach-prog-assign>.topbar,
+body:has(#s-coach-prog-template.active) #s-coach-prog-template>.topbar,
+body:has(#s-coach-program.active) #s-coach-program>.topbar,
+body:has(#s-coach-programs.active) #s-coach-programs>.topbar,
 body:has(#s-coach-sessions.active) #s-coach-sessions>.topbar,
-body:has(#s-coach-program.active) #s-coach-program>.topbar{position:sticky;top:0;z-index:6}
+body:has(#s-ex-classify.active) #s-ex-classify>.topbar,
+body:has(#s-metrics.active) #s-metrics>.topbar,
+body:has(#s-programme-print.active) #s-programme-print>.topbar,
+body:has(#s-proto-edit.active) #s-proto-edit>.topbar,
+body:has(#s-protocoles.active) #s-protocoles>.topbar,
+body:has(#s-rapport.active) #s-rapport>.topbar,
+body:has(#s-vitrine.active) #s-vitrine>.topbar{position:sticky;top:0;z-index:6}
 html{scroll-behavior:smooth}
 .cc-sect{position:relative;overflow:hidden;background:linear-gradient(180deg,var(--surface-1),var(--dark));
   border:1px solid var(--surface-2);border-radius:14px;margin-bottom:14px;
@@ -5400,7 +5429,11 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-client')">←</button>
     <span class="topbar-title" id="csm-title">Séances</span>
-    <button id="csm-publier" onclick="saveCoachSessions()" style="background:var(--red);border:none;color:var(--text);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">PUBLIER</button>
+    <!-- N5.10 — DEUX ACTIONS PRIMAIRES QUI NE RESSEMBLAIENT A AUCUN .btn de
+         la charte. Elles sont stylees en attribut, avec leur propre fond,
+         leur propre retrait et un rayon pris au hasard parmi quatre. La
+         classe existe : .btn .btn-red .btn-sm. -->
+    <button id="csm-publier" class="btn btn-red btn-sm" onclick="saveCoachSessions()" style="margin:0;letter-spacing:1px;padding:7px 14px;min-height:0">PUBLIER</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -5441,7 +5474,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button>
     <span class="topbar-title">Mes programmes</span>
-    <button onclick="createCoachProgTemplate()" style="background:var(--red);border:none;color:var(--text);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">+ CRÉER</button>
+    <button class="btn btn-red btn-sm" onclick="createCoachProgTemplate()" style="margin:0;letter-spacing:1px;padding:7px 14px;min-height:0">+ CRÉER</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
