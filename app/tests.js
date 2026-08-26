@@ -23339,6 +23339,116 @@ function testExercices(){
           return _echec('la plus ancienne a survécu à l’éviction');
         return u.supprimes.sessions['k'+(SUPPRESSIONS_MAX+9)]!==undefined
           ?true:_echec('la plus récente a été évincée');})());
+
+      ok('N3.8 — UN SEUL PREDICAT D\'APPARTENANCE, celui de la liste',(()=>{
+        // Un eleve rattache par code depuis son propre telephone etait liste,
+        // synchronise, affiche — et refuse a la moindre ecriture.
+        if(String(getOwnedClient).indexOf('_estMonAthlete(c,currentUser)')<0)
+          return _echec('getOwnedClient garde son propre prédicat');
+        const svU=currentUser, svC=currentClientId;
+        const av=localStorage.getItem('rc_users');
+        try{
+          const coach={id:'CO',email:'co@t.fr',role:'coach'};
+          const parCle={id:'A_CLE',email:'acle@t.fr',role:'athlete',coachEmailKey:'co@t,fr'};
+          const parId={id:'A_ID',email:'aid@t.fr',role:'athlete',coachId:'CO'};
+          const autre={id:'A_AUTRE',email:'aut@t.fr',role:'athlete',coachId:'XX',coachEmailKey:'xx@t,fr'};
+          const map={'co@t.fr':coach,'acle@t.fr':parCle,'aid@t.fr':parId,'aut@t.fr':autre};
+          localStorage.setItem('rc_users',JSON.stringify(map));
+          currentUser=coach;
+          if(!getOwnedClient('A_CLE',map)) return _echec('un athlète rattaché par coachEmailKey est refusé');
+          if(!getOwnedClient('A_ID',map)) return _echec('un athlète rattaché par coachId est refusé');
+          // ET L'ACCES N'EST PAS ELARGI : l'athlete d'un autre coach reste dehors.
+          if(getOwnedClient('A_AUTRE',map)) return _echec('l’athlète d’un autre coach est accepté');
+          // Le meme predicat que celui qui peuple la liste, au sens strict.
+          for(const u of [parCle,parId,autre])
+            if(!!getOwnedClient(u.id,map)!==_estMonAthlete(u,coach))
+              return _echec('les deux prédicats divergent sur '+u.id);
+          return true;
+        } finally {
+          currentUser=svU; currentClientId=svC;
+          if(av==null) localStorage.removeItem('rc_users');
+          else localStorage.setItem('rc_users',av);
+        }})());
+
+      ok('N3.9 — LE TEXTE NON ENVOYE SURVIT AU RAFRAICHISSEMENT',(()=>{
+        if(typeof rbNoterBrouillon!=='function') return _echec('aucun brouillon de réponse');
+        const av=localStorage.getItem(RB_BROUILLON_CLE);
+        try{
+          localStorage.removeItem(RB_BROUILLON_CLE);
+          rbNoterBrouillon('z@t.fr','b1','Ce que je retiens');
+          if(rbBrouillon('z@t.fr','b1')!=='Ce que je retiens')
+            return _echec('le brouillon ne se relit pas');
+          // UNE CLEF PAR BILAN : la fiche rend un bloc par bilan, et un
+          // brouillon commun les melangerait.
+          if(rbBrouillon('z@t.fr','b2')!=='') return _echec('les bilans partagent un brouillon');
+          if(rbBrouillon('autre@t.fr','b1')!=='') return _echec('les athlètes partagent un brouillon');
+          // LE BLOC AFFICHE LE BROUILLON, ET LE DIT.
+          const b={date:1,type:'suivi',reponseCoach:'Version envoyée'};
+          const id=_idBilan(b);
+          rbNoterBrouillon('z@t.fr',id,'Version en cours');
+          const h=blocReponseBilan(b,{email:'z@t.fr',fname:'Z'});
+          if(h.indexOf('Version en cours')<0)
+            return _echec('le brouillon ne revient pas dans le champ');
+          if(h.indexOf('Brouillon non envoyé')<0)
+            return _echec('rien ne dit que ce texte n’a pas été envoyé');
+          // SANS BROUILLON, RIEN NE CHANGE : la réponse envoyée revient.
+          rbOublierBrouillon('z@t.fr',id);
+          const h2=blocReponseBilan(b,{email:'z@t.fr',fname:'Z'});
+          if(h2.indexOf('Version envoyée')<0) return _echec('la réponse envoyée a disparu du champ');
+          if(h2.indexOf('Brouillon non envoyé')>=0) return _echec('un brouillon inexistant est annoncé');
+          // ET IL MEURT A L'ENVOI, pas avant.
+          if(String(saveReponseBilan).indexOf('rbOublierBrouillon')<0)
+            return _echec('le brouillon survit à l’envoi');
+          // RIEN NE MONTE AU CLOUD : c'est un brouillon local, comme celui de
+          // l'editeur de seances.
+          const s=String(rbNoterBrouillon);
+          if(/CLOUD\.push|DB\.set\('users'/.test(s))
+            return _echec('le brouillon atteint le dossier ou le cloud');
+          // BORNE DANS LE TEMPS : un brouillon de trois semaines ne decrit plus rien.
+          const o=JSON.parse(localStorage.getItem(RB_BROUILLON_CLE)||'{}');
+          o['z@t.fr|vieux']={t:'perime',ts:Date.now()-(RB_BROUILLON_JOURS+1)*864e5};
+          localStorage.setItem(RB_BROUILLON_CLE,JSON.stringify(o));
+          return rbBrouillon('z@t.fr','vieux')===''
+            ?true:_echec('un brouillon périmé est encore proposé');
+        } finally {
+          if(av==null) localStorage.removeItem(RB_BROUILLON_CLE);
+          else localStorage.setItem(RB_BROUILLON_CLE,av);
+        }})());
+
+      ok('N3.10 — LE BROUILLON DE SEANCES NE PART PAS CHEZ UN AUTRE ATHLETE',(()=>{
+        const s=String(saveCoachSessions);
+        // Le contenu vient de _coachEditClient, la cible de currentClientId, et
+        // rien ne verifiait que les deux designent la meme personne.
+        if(!/c\.id&&currentClientId&&c\.id!==currentClientId/.test(s))
+          return _echec('la publication ne vérifie pas l’appartenance du brouillon');
+        if(s.indexOf('_coachEditClient=null')<0)
+          return _echec('un brouillon étranger reste en mémoire après le refus');
+        // ET IL EST ABANDONNE AU CHANGEMENT D'ATHLETE : il n'etait remis a null
+        // nulle part, ni au changement de fiche, ni au changement de compte.
+        if(String(openClientDetail).indexOf('_coachEditClient=null')<0)
+          return _echec('ouvrir la fiche d’un autre athlète garde le brouillon');
+        return String(_comptesRemiseAZero).indexOf('_coachEditClient=null')>=0
+          ?true:_echec('le brouillon survit au changement de compte');})());
+
+      ok('N3.11 — LA DECHARGE SE RETIRE OU ELLE SE POSE, et aussi vite',(()=>{
+        const s=String(programmerDecharge);
+        // La pose et le retrait sont le MEME chemin, parametre : deux chemins
+        // divergeraient tot ou tard.
+        if(!/pose!==false/.test(s)) return _echec('le retrait n’est pas le même chemin');
+        // LES DEUX SENS HORODATENT : sans updatedAt, _mergeUser n'applique pas
+        // le dossier distant et l'envoi suivant de l'athlète écrase le retrait.
+        if(s.indexOf('c.updatedAt=Date.now()')<0) return _echec('l’écriture n’horodate pas');
+        if(s.indexOf('CLOUD.pushOne')<0) return _echec('le retrait n’atteint pas l’athlète');
+        // AUCUN DECOCHAGE AUTOMATIQUE : c'est le coach qui decide, et le texte
+        // de confirmation le dit.
+        if(s.indexOf('Aucun décochage automatique')<0)
+          return _echec('la règle du décochage manuel n’est plus dite');
+        // ET LES DEUX BOUTONS SONT AU MEME ENDROIT, sur la fiche.
+        const prod=_prodSrc();
+        if(prod.indexOf('programmerDecharge(false)')<0)
+          return _echec('aucun bouton de retrait');
+        return prod.indexOf('Retirer la décharge')>=0
+          ?true:_echec('le bouton de retrait n’est pas nommé');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

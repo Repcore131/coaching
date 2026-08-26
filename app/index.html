@@ -10541,6 +10541,11 @@ function peutBasculer(){
 // Remise à zéro de tout ce qui n'appartient PAS au compte d'arrivée.
 function _comptesRemiseAZero(){
   currentClientId=null;
+  // N3.10 — LE BROUILLON DE SEANCES PART AVEC LE COMPTE. Il porte le
+  // dossier COMPLET d'un athlete, copie profonde prise a l'ouverture de
+  // l'editeur : le laisser derriere soi sur un appareil partage, c'est y
+  // laisser les seances, les notes et les photos de quelqu'un d'autre.
+  try{ _coachEditClient=null; }catch(e){}
   try{ if(woState&&woState.timerInterval) clearInterval(woState.timerInterval); }catch(e){}
   woState={};
   try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
@@ -19529,7 +19534,18 @@ function getOwnedClient(cid,users){
   }
   const all=users||(DB.get('users')||{});
   const c=Object.values(all).find(u=>u.id===cid);
-  if(!c||c.coachId!==currentUser.id){toast('Élève introuvable ou non autorisé','var(--orange)');return null;}
+  // N3.8 — LE MEME PREDICAT QUE LA LISTE, ET UN SEUL.
+  // Deux predicats d'appartenance coexistaient et ne disaient pas la meme
+  // chose : _estMonAthlete accepte le rattachement par coachId OU par
+  // coachEmailKey, et peuple le tableau de bord ; celui-ci n'acceptait que
+  // coachId, et gardait les soixante-neuf points d'ecriture de la fiche.
+  // Un eleve rattache par code depuis son propre telephone etait donc
+  // liste, synchronise, affiche — et refuse a la moindre action, avec un
+  // « Eleve introuvable ou non autorise » que rien n'expliquait.
+  // L'ACCES N'EST PAS ELARGI : la regle .write de /users/$emailKey autorise
+  // deja exactement ces deux rattachements, coachEmailKey compris. C'est le
+  // client qui etait plus restrictif que le serveur, pas l'inverse.
+  if(!c||!_estMonAthlete(c,currentUser)){toast('Élève introuvable ou non autorisé','var(--orange)');return null;}
   return c;
 }
 // LA NAVIGATION PAR ANCRES DE LA FICHE ATHLETE. Trois choses : le saut lui-meme
@@ -19838,6 +19854,10 @@ function openClientDetail(cid,_refresh){
     // les trois autres, dont le contenu vient d'etre rendu.
     _ccdMajColonnes(); },0);
   setTimeout(_majLiensClasser,0);
+  // N3.10 — LE BROUILLON DE SEANCES APPARTIENT A UN ATHLETE. Ouvrir la fiche
+  // d'un autre abandonne celui qui restait en memoire : il n'etait remis a
+  // null nulle part, et survivait donc a tout le reste de la navigation.
+  if(currentClientId!==cid&&_coachEditClient&&_coachEditClient.id!==cid) _coachEditClient=null;
   currentClientId=cid;
   const c=getOwnedClient(cid);
   if(!c) return;
@@ -22737,6 +22757,22 @@ function _htmlBandeauBrouillon(){
 function saveCoachSessions(){
   const c=_coachEditClient;
   if(!c) return;
+  // N3.10 — LE CONTENU ET LA CIBLE VIENNENT DE DEUX SOURCES : le programme
+  // publie est lu dans _coachEditClient, l'athlete destinataire dans
+  // currentClientId, et RIEN ne verifiait que les deux designent la meme
+  // personne. Le getOwnedClient ci-dessous ne controle que la propriete de la
+  // CIBLE — pas l'appartenance du brouillon.
+  // _coachEditClient n'est pose que par _seancesCoachPreparer et n'etait remis
+  // a null nulle part : ni par _comptesRemiseAZero, ni au changement d'athlete.
+  // Publier le programme de A dans le dossier de B est le pire accident que
+  // cet ecran puisse produire, et il ne s'annonce par rien.
+  // On refuse, on le DIT, et le brouillon est abandonne au changement de
+  // contexte (voir openClientDetail).
+  if(c.id&&currentClientId&&c.id!==currentClientId){
+    _coachEditClient=null;
+    toast('Ce brouillon est celui d’un autre athlète : rouvre son programme depuis sa fiche.','var(--red)');
+    return;
+  }
   const users=DB.get('users')||{};
   if(!getOwnedClient(currentClientId,users)) return;
   const emailKey=Object.keys(users).find(k=>users[k]?.id===currentClientId);
@@ -37105,6 +37141,10 @@ function saveReponseBilan(email,bilanId,taId){
   b.reponseVue=false;
   users[email]=c;
   const ok=DB.set('users',users);
+  // N3.9 — LE BROUILLON MEURT ICI, et pas avant : tant que l'envoi n'a pas eu
+  // lieu, le texte doit survivre a tout. Il est oublie APRES l'ecriture
+  // locale, qui est ce qui rend la reponse reelle.
+  try{ rbOublierBrouillon(email,bilanId); }catch(e){}
   const envoi=CLOUD.pushOne(email,c);
   toastSync(ok,envoi,'Réponse envoyée. '+(c.fname||'Ton athlète')+' la verra à sa prochaine ouverture.',
     'la réponse est');
@@ -37130,6 +37170,63 @@ function saveReponseBilan(email,bilanId,taId){
 // Deux fonctions plutot qu une concatenation a chaque endroit : la forme de la
 // cle est lue par _renderQuickCommentChips, qui doit retrouver le champ a
 // partir du conteneur de chips.
+// ══════ N3.9 — LE TEXTE NON ENVOYE SURVIT AU RAFRAICHISSEMENT ═════════════
+// La boucle de synchro rappelle openClientDetail(currentClientId,true) toutes
+// les cinq minutes ; le bloc des bilans est alors reecrit EN ENTIER, et la
+// zone de reponse reconstruite depuis b.reponseCoach. Le garde de saisie ne
+// couvre que le cas ou un champ a le focus AU MOMENT du reveil.
+//
+// Sur PC la fiche s'affiche en deux colonnes : le coach redige une reponse,
+// clique dans la colonne de droite pour relire une mensuration, revient — son
+// texte a disparu, et rien ne l'a prevenu. C'est le geste normal de cet ecran.
+//
+// MEME PATRON QUE LE BROUILLON DE L'EDITEUR DE SEANCES : une ecriture dans le
+// stockage local, pas dans le dossier. Rien ne monte au cloud, rien n'atteint
+// l'athlete — c'est le bouton « Envoyer ma reponse » qui publie, et lui seul.
+//
+// UNE CLEF PAR BILAN, pas une seule pour l'ecran : la fiche rend un bloc par
+// bilan, et un brouillon commun les melangerait.
+//
+// BORNE ET DATE. Un brouillon oublie il y a trois semaines ne decrit plus
+// rien : on le laisse expirer plutot que de le reafficher sous les yeux du
+// coach comme s'il venait de l'ecrire.
+const RB_BROUILLON_CLE='rc_rb_brouillons';
+const RB_BROUILLON_JOURS=14;
+function _rbBrouillons(){
+  try{ const o=JSON.parse(localStorage.getItem(RB_BROUILLON_CLE)||'null');
+    return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; }
+}
+function _rbCle(email,bilanId){ return String(email||'')+'|'+String(bilanId||''); }
+function rbNoterBrouillon(email,bilanId,txt){
+  try{
+    const o=_rbBrouillons();
+    const k=_rbCle(email,bilanId);
+    const t=String(txt||'');
+    if(!t.trim()) delete o[k];
+    else o[k]={t:t.slice(0,2000),ts:Date.now()};
+    // Purge des perimes a chaque ecriture : ce stockage ne doit pas grossir
+    // indefiniment, et c'est le seul moment ou on le tient deja en main.
+    const limite=Date.now()-RB_BROUILLON_JOURS*864e5;
+    for(const c of Object.keys(o)) if(!o[c]||!(o[c].ts>limite)) delete o[c];
+    localStorage.setItem(RB_BROUILLON_CLE,JSON.stringify(o));
+  }catch(e){}
+  return true;
+}
+function rbBrouillon(email,bilanId){
+  try{
+    const d=_rbBrouillons()[_rbCle(email,bilanId)];
+    if(!d||!(d.ts>Date.now()-RB_BROUILLON_JOURS*864e5)) return '';
+    return String(d.t||'');
+  }catch(e){ return ''; }
+}
+function rbOublierBrouillon(email,bilanId){
+  try{
+    const o=_rbBrouillons();
+    delete o[_rbCle(email,bilanId)];
+    localStorage.setItem(RB_BROUILLON_CLE,JSON.stringify(o));
+  }catch(e){}
+  return true;
+}
 function _qcIdBilan(id){ return 'qc-chips-bilan_'+id; }
 function _taIdBilan(id){ return 'rb-texte_'+id; }
 function blocReponseBilan(b,c){
@@ -37146,7 +37243,19 @@ function blocReponseBilan(b,c){
       Les chiffres de poids sont masqués dans son application. Évite de les citer par message.
     </div>`:''}
     <div id="${_qcIdBilan(id)}" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;scrollbar-width:none;-ms-overflow-style:none"></div>
-    <textarea id="${_taIdBilan(id)}" rows="3" placeholder="Ce que tu retiens de ce bilan, et ce qu'on ajuste." style="width:100%;box-sizing:border-box">${escapeHtml(b.reponseCoach||'')}</textarea>
+    ${(()=>{
+      // N3.9 — LE BROUILLON PRIME SUR LA REPONSE ENVOYEE. S'il y a un texte
+      // non envoye, c'est celui que le coach etait en train d'ecrire : le
+      // remplacer par la version publiee serait exactement la perte qu'on
+      // corrige. Sans brouillon, rien ne change — la reponse envoyee revient,
+      // comme avant.
+      const bro=rbBrouillon(c.email,id);
+      const val=bro||(b.reponseCoach||'');
+      return `<textarea id="${_taIdBilan(id)}" rows="3" oninput="rbNoterBrouillon('${escapeHtml(c.email||'')}','${escapeHtml(id)}',this.value)" placeholder="Ce que tu retiens de ce bilan, et ce qu'on ajuste." style="width:100%;box-sizing:border-box">${escapeHtml(val)}</textarea>`
+        +(bro&&bro!==(b.reponseCoach||'')
+          ?`<div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-top:4px">Brouillon non envoyé, retrouvé tel que tu l’avais laissé.</div>`
+          :'');
+    })()}
     <button class="btn btn-red btn-sm" onclick="saveReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}','${_taIdBilan(id)}')"
       style="margin-top:8px;letter-spacing:1px">Envoyer ma réponse</button>
   </div>`;
