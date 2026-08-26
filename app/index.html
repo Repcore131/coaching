@@ -5114,6 +5114,18 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Nutrition</span></div>
         <div class="cc-sect-c" id="ccd-nutrition"></div>
       </section>
+      <!-- N2.11 — LA REPARTITION DES PROTEINES, REMONTEE DE « DONNEES » LE
+           26/08/2026. Elle etait le sixieme bloc de l onglet Donnees, entre
+           « Photos » et « Dossier », pendant que les trois autres blocs
+           nutritionnels vivaient ici. Et son libelle, « Prises », ne disait
+           pas de quoi elle parlait : c est la repartition protéique du jour,
+           et elle derive directement du bloc Nutrition sous lequel elle est
+           maintenant posee. renderRepartitionPrisesCoach cherche #ccd-prises
+           par identifiant : le balisage seul a bouge. -->
+      <section class="cc-sect" style="--cc-accent:var(--green)">
+        <div class="cc-sect-t"><span>Protéines par prise</span></div>
+        <div class="cc-sect-c" id="ccd-prises"></div>
+      </section>
       <!-- Compléments coach -->
       <section class="cc-sect" style="--cc-accent:var(--green)">
         <div class="cc-sect-t"><span>Compléments</span></div>
@@ -5179,10 +5191,6 @@ const COACH_PHOTO='icons/coach.jpg';
       <section class="cc-sect" style="--cc-accent:var(--link)">
         <div class="cc-sect-t"><span>Photos</span></div>
         <div class="cc-sect-c" id="ccd-photos-progression"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--orange)">
-        <div class="cc-sect-t"><span>Prises</span></div>
-        <div class="cc-sect-c" id="ccd-prises"></div>
       </section>
       <section class="cc-sect" style="--cc-accent:var(--orange)">
         <div class="cc-sect-t"><span>Dossier</span></div>
@@ -40179,9 +40187,24 @@ function _htmlRepartitionPrises(user,macrosJour){
 // La vue coach : la répartition, le plancher, et la tension s'il y en a une.
 // Aucun motif de santé n'est nommé — le coach voit le plancher relevé, pas
 // pourquoi. La ménopause a son propre encart, qui appartient à l'athlète.
+// N2.10 — CE QUE LA GRILLE AFFICHE, EN UN SEUL ENDROIT.
+// La grille de macros montre, en mode automatique, le resultat de
+// besoinsProposes recalcule ; le bloc « Proteines par prise » lisait, lui,
+// nutrition.macros.on — la valeur ENREGISTREE. Sur un dossier pas encore
+// enregistre, la meme fiche annoncait donc 190 g dans le champ PROT et
+// « 4 x 44 g = 176 g » juste en dessous.
+// Les deux passent maintenant par ici. Aucun recalcul n'est ajoute : c'est
+// exactement ce que renderCoachNutriSection faisait deja pour lui seul.
+function _calcAffiche(c){
+  if(saisieManuelle(c)) return null;
+  try{ const b=besoinsProposes(c,_propReglages());
+    return (b&&b.source!==null)?b:null; }catch(e){ return null; }
+}
 function _htmlRepartitionPrisesCoach(c){
   let r=null;
-  try{ r=repartitionPrises(c,((c&&c.nutrition&&c.nutrition.macros)||{}).on); }catch(e){ r=null; }
+  const _k=_calcAffiche(c);
+  const _on=_k?_k.on:((c&&c.nutrition&&c.nutrition.macros)||{}).on;
+  try{ r=repartitionPrises(c,_on); }catch(e){ r=null; }
   if(!r) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 13px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Protéines par prise</div>
@@ -49444,8 +49467,9 @@ function renderCoachNutriSection(c){
   // lipides, la correction du metabolisme ou la vitesse : chacun de ces
   // selecteurs rappelle deja renderCoachNutriSection.
   const _man=saisieManuelle(c);
-  const _calc=_man?null:(()=>{ try{ const b=besoinsProposes(c,_propReglages());
-    return (b&&b.source!==null)?b:null; }catch(e){ return null; } })();
+  // N2.10 — la MEME lecture que le bloc « Proteines par prise », qui annoncait
+  // un total different du champ PROT tant que rien n'etait enregistre.
+  const _calc=_calcAffiche(c);
   const _vOn =k=>_calc?_calc.on[k] :mon[k];
   const _vOff=k=>_calc?(_cyc?_calc.off[k]:_calc.on[k]):moff[k];
   // `readonly` ET NON `disabled` : un champ desactive ne rend pas sa valeur a
@@ -54995,6 +55019,38 @@ function _htmlRecuperationAthlete(user){
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(RECUP_PHRASE_ATHLETE)}</div>
   </div>`;
 }
+// N2.8 — LE MESSAGE NOMME LA REGLE QUI A REELLEMENT PRODUIT LE NOMBRE.
+// Il citait TOUJOURS KCAL_PLANCHER_PAR_KG — « 22 kcal/kg » — alors que
+// plancherEffectif rend un champ `regle` qui peut valoir masse_maigre (30 kcal
+// par kilo de masse maigre), poids_total ou absolu, et un drapeau `plafonne`
+// quand la valeur a ete ramenee a 85 % de la depense estimee. Des qu'un
+// athlete avait ses tours de mesure au dossier, le chiffre annonce et la regle
+// citee a cote ne correspondaient plus : le coach ne pouvait pas refaire le
+// calcul a la main, ce qui est le seul usage d'un message pareil.
+//
+// PURE, et elle ne CHOISIT rien : elle DIT ce que plancherEffectif a decide.
+// Aucune valeur de plancher ne change, aucun ordre de calcul non plus.
+function direRegplePlancher(pl){
+  if(!pl) return '';
+  const nb=v=>String(Math.round(v*10)/10).replace('.',',');
+  let coeur;
+  if(pl.regle==='masse_maigre'&&pl.masseMaigre!=null)
+    coeur=KCAL_PLANCHER_PAR_KG_MM+' kcal/kg de masse maigre pour '
+      +nb(pl.masseMaigre)+' kg de masse maigre';
+  else if(pl.regle==='poids_total'&&pl.poids!=null)
+    coeur=KCAL_PLANCHER_PAR_KG+' kcal/kg pour '+nb(pl.poids)+' kg';
+  else if(pl.regle==='absolu')
+    coeur='minimum absolu de '+pl.abs+' kcal'
+      +(pl.poids==null?', poids inconnu':', au-dessus de la règle proportionnelle');
+  else return '';
+  // LE PLAFONNEMENT SE DIT QUAND IL A JOUE. Sans lui, le coach retrouve un
+  // nombre plus grand que celui affiche et croit a une erreur.
+  const plaf=pl.plafonne
+    ? ', ramené à '+Math.round(PLANCHER_PLAFOND_DEPENSE*100)+' % de la dépense estimée'
+    : '';
+  return ' ('+coeur+plaf
+    +(pl.regle==='absolu'?'':', minimum absolu '+pl.abs)+')';
+}
 function controlerMacros(macros,user){
   const out=[];
   if(!macros||typeof macros!=='object') return out;
@@ -55010,7 +55066,7 @@ function controlerMacros(macros,user){
     if(isFinite(kcal)&&kcal>0&&kcal<pl.kcal)
       out.push({champ:pref+'kcal',valeur:kcal,plancher:pl.kcal,
         message:kcal+' kcal'+lib+' pour un plancher de '+pl.kcal+' kcal'
-          +(pl.poids!=null?' ('+KCAL_PLANCHER_PAR_KG+' kcal/kg pour '+pl.poids+' kg, minimum absolu '+pl.abs+')':' (minimum absolu, poids inconnu)')
+          +direRegplePlancher(pl)
           +(pl.tca?' — plancher majoré de 15 % : antécédent déclaré au bilan':'')});
     const p=Number(j.p);
     if(pl.p!=null&&isFinite(p)&&p>0&&p<pl.p)

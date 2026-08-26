@@ -22420,7 +22420,10 @@ function testExercices(){
             // le sommeil et les pas.
             'ccd-micro':'nutrition',
             'ccd-journal':'donnees','ccd-bilans':'donnees','ccd-poids':'donnees',
-            'ccd-prises':'donnees','ccd-dossier':'donnees','ccd-reds':'donnees',
+            // LA REPARTITION PROTEIQUE EST PASSEE EN NUTRITION le 26/08/2026 :
+            // elle derive du bloc Nutrition, sous lequel elle est posee.
+            'ccd-prises':'nutrition',
+            'ccd-dossier':'donnees','ccd-reds':'donnees',
             'ccd-securite':'donnees','ccd-suspension':'donnees'};
           for(const id in attendu)
             if(ou(id)!==attendu[id])
@@ -22893,6 +22896,91 @@ function testExercices(){
         if(rv.kg!==80||rv.source!=='initial') return _echec('dernier recours : '+JSON.stringify(rv));
         return htmlPoidsReference(v).indexOf('jamais mesuré')>=0
           ?true:_echec('le poids d’inscription n’est pas signale comme non mesure');})());
+
+      ok('N2.8 — LE MESSAGE DE PLANCHER NOMME LA REGLE QUI A GAGNE',(()=>{
+        if(typeof direRegplePlancher!=='function') return _echec('la regle n’est pas dite');
+        const j=Date.now();
+        // DEUX DOSSIERS, comme le demande le doc : l'un avec tours de taille et
+        // de cou — la masse maigre est calculable, c'est la regle a 30 kcal/kg
+        // de masse maigre qui gagne — l'autre sans, ou c'est le poids total.
+        const base=(o)=>Object.assign({id:'PL',email:'pl@t.fr',role:'athlete',
+          gender:'H',_evol_gender:'H',_evol_height:'178','init-age':32,
+          createdAt:j-300*864e5,weightLog:[{date:new Date(j-2*864e5).toISOString().slice(0,10),kg:80}],
+          sessions:[],videos:[]},o||{});
+        const sans=base({bilans:[{type:'debut',date:j-100*864e5,'deb-weight':'80',
+          'deb-height':'178','deb-age':'32','deb-gender':'Homme'}]});
+        const pSans=plancherEffectif(sans);
+        const mSans=direRegplePlancher(pSans);
+        // LE COACH DOIT POUVOIR REFAIRE LE NOMBRE A LA MAIN : la regle citee et
+        // le nombre annonce decrivent la meme grandeur.
+        if(pSans.regle==='poids_total'){
+          if(mSans.indexOf(KCAL_PLANCHER_PAR_KG+' kcal/kg')<0)
+            return _echec('regle poids_total non citee : '+mSans);
+          if(mSans.indexOf('masse maigre')>=0)
+            return _echec('la masse maigre est citee alors qu’elle n’a pas servi : '+mSans);
+        } else if(pSans.regle==='absolu'){
+          if(mSans.indexOf('minimum absolu')<0) return _echec('regle absolu non citee : '+mSans);
+        }
+        // Le second dossier porte les tours : masse maigre calculable.
+        const avec=base({bilans:[{type:'debut',date:j-100*864e5,'deb-weight':'80',
+          'deb-height':'178','deb-age':'32','deb-gender':'Homme',
+          'deb-waist':'88','deb-neck':'39'}]});
+        const pAvec=plancherEffectif(avec);
+        if(pAvec.regle==='masse_maigre'){
+          const m=direRegplePlancher(pAvec);
+          if(m.indexOf(KCAL_PLANCHER_PAR_KG_MM+' kcal/kg de masse maigre')<0)
+            return _echec('regle masse_maigre non citee : '+m);
+          if(m.indexOf(KCAL_PLANCHER_PAR_KG+' kcal/kg pour')>=0)
+            return _echec('les 22 kcal/kg sont cites alors qu’ils n’ont pas servi : '+m);
+        }
+        // LE PLAFONNEMENT SE DIT QUAND IL A JOUE, sinon le coach retrouve a la
+        // main un nombre plus grand que celui affiche et croit a une erreur.
+        const plafonne={regle:'masse_maigre',masseMaigre:70,poids:80,abs:1500,plafonne:true};
+        if(direRegplePlancher(plafonne).indexOf('% de la dépense estimée')<0)
+          return _echec('le plafonnement n’est pas dit');
+        if(direRegplePlancher(Object.assign({},plafonne,{plafonne:false}))
+             .indexOf('dépense estimée')>=0)
+          return _echec('un plafonnement inexistant est annonce');
+        // ET LE MESSAGE DE controlerMacros PORTE CETTE PHRASE, pas une autre.
+        const v=controlerMacros({kcal:900,p:200,l:80},avec);
+        const mk=(v.find(x=>x.champ==='kcal')||{}).message||'';
+        return mk.indexOf(direRegplePlancher(pAvec))>=0
+          ?true:_echec('le message ne porte pas la regle : '+mk);})());
+
+      ok('N2.10 — « Proteines par prise » lit la MEME source que le champ PROT',(()=>{
+        if(typeof _calcAffiche!=='function') return _echec('aucune lecture commune');
+        // Le grief : sur un dossier en calcul automatique jamais enregistre, le
+        // champ affichait 190 g et le bloc en dessous « 4 x 44 g = 176 g ».
+        const s=String(_htmlRepartitionPrisesCoach);
+        if(/nutrition&&c\.nutrition\.macros\)\|\|\{\}\)\.on\)/.test(s))
+          return _echec('le bloc lit encore la valeur enregistree directement');
+        if(s.indexOf('_calcAffiche')<0) return _echec('le bloc ne passe pas par la lecture commune');
+        if(String(renderCoachNutriSection).indexOf('_calcAffiche')<0)
+          return _echec('la grille ne passe pas par la lecture commune');
+        // EN MANUEL, c'est le dossier qui fait foi — des deux cotes.
+        const man={email:'m@t.fr',nutrition:{manuel:true,macros:{on:{kcal:2000,p:190,g:200,l:60}}}};
+        if(_calcAffiche(man)!==null) return _echec('le mode manuel recalcule');
+        // AUCUN RECALCUL AJOUTE : repartitionPrises n'est pas touchee.
+        return /repartitionPrises\(c,_on\)/.test(s)
+          ?true:_echec('la repartition ne recoit pas la cible affichee');})());
+
+      ok('N2.11 — LA REPARTITION PROTEIQUE EST DANS L\'ONGLET NUTRITION',(()=>{
+        const z=document.getElementById('ccd-prises');
+        if(!z) return _echec('la section a disparu');
+        const v=z.closest('.ccd-vue');
+        if(!v||v.dataset.vue!=='nutrition')
+          return _echec('elle est dans « '+(v?v.dataset.vue:'hors onglet')+' »');
+        // SOUS LE BLOC DONT ELLE DERIVE.
+        const n=document.getElementById('ccd-nutrition');
+        if(!n||!(n.compareDocumentPosition(z)&Node.DOCUMENT_POSITION_FOLLOWING))
+          return _echec('elle ne suit pas le bloc Nutrition');
+        // ET SON LIBELLE DIT CE QU'ELLE CONTIENT. « Prises » ne le disait pas.
+        const t=z.closest('.cc-sect').querySelector('.cc-sect-t');
+        if(!t||!/Protéines/.test(t.textContent))
+          return _echec('libelle : « '+(t?t.textContent.trim():'aucun')+' »');
+        // RENDUE UNE SEULE FOIS : un deplacement qui duplique serait pire.
+        return document.querySelectorAll('#ccd-prises').length===1
+          ?true:_echec('la section est rendue deux fois');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
