@@ -127,6 +127,89 @@ function testExercices(){
         }
       }
       return n>=200?true:_echec('seulement '+n+' vidéos, le guide en porte 228');})());
+    // ══════ B3.1 — L'INTENSITE PRESCRITE REVIENT AU COACH ═══════════════
+    // La boucle cassait au quatrieme maillon : le coach prescrit « RIR 2 »,
+    // l'athlete saisit son RIR serie par serie, la fiche affiche une moyenne
+    // REALISEE — et rien ne rapprochait les deux.
+    (()=>{
+      const _sess=(nom,rirs,jours)=>({date:Date.now()-(jours||0)*864e5,
+        data:{[nom]:{sets:rirs.map(r=>({done:true,rir:r}))}}});
+      const _u=(rir,sessions)=>({
+        sessions_config:[{active:true,exercises:[{name:'DEVELOPPE COUCHE',rirCible:rir}]}],
+        sessions});
+
+      ok('L\'ecart entre l\'intensite demandee et celle faite est calcule',(()=>{
+        const l=ecartRirPrescrit(_u('2',[_sess('DEVELOPPE COUCHE',[3,4,3],0)]));
+        if(l.length!==1) return _echec(l.length+' ligne(s) au lieu de 1');
+        const x=l[0];
+        if(x.prescrit!==2) return _echec('prescrit lu a '+x.prescrit);
+        if(x.realise!==3.33) return _echec('realise a '+x.realise);
+        if(x.n!==3) return _echec(x.n+' serie(s) comptee(s)');
+        return x.ecart===1.33?true:_echec('ecart a '+x.ecart);})());
+
+      ok('« Echec » vaut RIR 0, comme partout ailleurs',(()=>{
+        // rirMoyenSeance le fait deja pour la moyenne affichee juste au-dessus :
+        // deux echelles pour un meme chiffre en feraient deux chiffres
+        // incomparables sur la meme carte.
+        const l=ecartRirPrescrit(_u('2',[_sess('DEVELOPPE COUCHE',['echec','echec'],0)]));
+        if(l.length!==1) return _echec('rien calcule');
+        return l[0].realise===0&&l[0].ecart===-2
+          ?true:_echec('realise '+l[0].realise+', ecart '+l[0].ecart);})());
+
+      ok('Sans consigne, rien de neuf n\'apparait',(()=>{
+        // L'ABSENCE DE CONSIGNE SE LIT COMME UNE ABSENCE, jamais comme un zero :
+        // zero signifie « jusqu'a l'echec », et ce serait le contresens le plus
+        // grave possible ici.
+        const u={sessions_config:[{active:true,exercises:[{name:'DEVELOPPE COUCHE'}]}],
+                 sessions:[_sess('DEVELOPPE COUCHE',[3,3],0)]};
+        if(ecartRirPrescrit(u).length) return _echec('un exercice sans consigne est compte');
+        if(_htmlEcartRir(u)!=='') return _echec('la carte s\'affiche quand meme');
+        // NI SUR UN DOSSIER VIDE, ni sur un dossier sans seance.
+        if(ecartRirPrescrit(null).length||ecartRirPrescrit({}).length)
+          return _echec('un dossier vide produit des lignes');
+        return ecartRirPrescrit(_u('2',[])).length===0
+          ?true:_echec('une consigne sans seance produit une ligne');})());
+
+      ok('Un creneau eteint ne prescrit rien',(()=>{
+        const u={sessions_config:[{active:false,exercises:[{name:'DEVELOPPE COUCHE',rirCible:'2'}]}],
+                 sessions:[_sess('DEVELOPPE COUCHE',[4],0)]};
+        return ecartRirPrescrit(u).length===0
+          ?true:_echec('un creneau desactive compte encore');})());
+
+      ok('Seules les series FAITES et renseignees comptent',(()=>{
+        const u=_u('2',[{date:Date.now(),data:{'DEVELOPPE COUCHE':{sets:[
+          {done:true,rir:'4'},{done:false,rir:'0'},{done:true,rir:''},{done:true,rir:null}]}}}]);
+        const l=ecartRirPrescrit(u);
+        if(l.length!==1) return _echec('rien calcule');
+        return l[0].n===1&&l[0].realise===4
+          ?true:_echec(l[0].n+' serie(s), realise '+l[0].realise);})());
+
+      ok('Le mot dit le sens, et le sens n\'est pas l\'intuition',(()=>{
+        // UN RIR PLUS HAUT QUE PRESCRIT = PLUS FACILE : il reste plus de
+        // repetitions en reserve. C'est l'inverse de ce qu'on lit d'instinct,
+        // d'ou le mot en toutes lettres plutot qu'une fleche.
+        const facile=_htmlEcartRir(_u('1',[_sess('DEVELOPPE COUCHE',[4,4],0)]));
+        if(facile.indexOf('plus facile que demandé')<0)
+          return _echec('un RIR au-dessus de la consigne n\'est pas dit plus facile');
+        const dur=_htmlEcartRir(_u('4',[_sess('DEVELOPPE COUCHE',[1,1],0)]));
+        if(dur.indexOf('plus dur que demandé')<0)
+          return _echec('un RIR au-dessous de la consigne n\'est pas dit plus dur');
+        // ET UN ECART MINUSCULE N'EST PAS UN ECART : 0,1 de moyenne sur trois
+        // series est du bruit, pas une derive a signaler.
+        const conforme=_htmlEcartRir(_u('2',[_sess('DEVELOPPE COUCHE',[2,2,2],0)]));
+        return /conforme à la consigne/.test(conforme)
+          ?true:_echec('un ecart nul est presente comme un ecart');})());
+
+      ok('La fiche coach affiche l\'ecart d\'intensite',(()=>{
+        const s=String(renderVolumeCoach);
+        if(s.indexOf('_htmlEcartRir(c)')<0)
+          return _echec('la carte n\'est pas rendue');
+        // ET ecartPrescritRealise, QUI TRAITE LE VOLUME, CONTINUE : ce sont
+        // deux questions differentes, et l'une ne remplace pas l'autre.
+        return s.indexOf('_htmlEcartPrescrit(c)')>=0
+          ?true:_echec('l\'ecart de volume a disparu');})());
+    })();
+
     ok('CURL BARRE porte bien ses trois versions du guide',(()=>{
       const v=videosPour('CURL BARRE');
       if(v.length!==3) return _echec(v.length+' vidéo(s) au lieu de 3');

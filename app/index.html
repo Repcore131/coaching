@@ -40424,6 +40424,111 @@ function _htmlRirMoyen(c){
     <div style="font-size:var(--fs-xs);color:var(--text-strong)">${String(moy).replace('.',',')}${derive}${manquantes?`<span style="color:var(--text-faint)"> · ${manquantes} série${manquantes>1?'s':''} sans RIR, exclue${manquantes>1?'s':''} du calcul</span>`:''}</div>
   </div>`;
 }
+// ══════ B3.1 — L'INTENSITE PRESCRITE CONTRE L'INTENSITE FAITE ══════════
+//
+// LA BOUCLE CASSAIT AU QUATRIEME MAILLON. Le coach prescrit « RIR 2 »,
+// l'athlete saisit son RIR serie par serie, la fiche coach affiche une moyenne
+// REALISEE — et rien, nulle part, ne rapprochait les deux. Le coach ne pouvait
+// pas savoir si sa consigne d'intensite avait ete suivie : il voyait un chiffre
+// sans le sien a cote.
+//
+// PAR EXERCICE, ET NON EN BLOC. Une moyenne generale melange un developpe
+// couche prescrit a RIR 1 et un curl prescrit a RIR 3 : leur moyenne ne dit
+// rien de ni l'un ni l'autre. C'est exercice par exercice que le coach ajuste.
+//
+// L'ABSENCE DE CONSIGNE SE LIT COMME UNE ABSENCE. _rirPrescrit rend '' quand
+// rien n'est prescrit, et un exercice sans consigne est ECARTE — jamais compte
+// pour un zero, qui signifie « jusqu'a l'echec » et serait le contresens le
+// plus grave possible ici.
+//
+// L'ECHELLE EST CELLE QUI EXISTE, et « echec » vaut RIR 0 — exactement comme
+// rirMoyenSeance le fait deja pour la moyenne affichee juste au-dessus. Deux
+// echelles pour un meme chiffre en feraient deux chiffres incomparables.
+const RIR_ECART_MINI=0.3;   // en deca, l'ecart n'est pas un ecart : c'est du bruit
+// PURE. Rend [{nom, prescrit, realise, n, ecart}], du plus grand ecart au plus
+// petit. Vide quand aucune consigne n'est posee, ou qu'aucune serie prescrite
+// n'a encore ete faite.
+function ecartRirPrescrit(user){
+  const out=[];
+  if(!user) return out;
+  // LA CONSIGNE, PAR CLEF D'EXERCICE. exKey est l'identite d'un exercice
+  // partout ailleurs — charge suggeree, records, plateau : la meme ici, sinon
+  // « Developpe couche » et « DEVELOPPE COUCHE » seraient deux exercices.
+  const pres={};
+  try{
+    const cfg=Array.isArray(user.sessions_config)?user.sessions_config:[];
+    for(const s of cfg){
+      if(!s||s.active!==true||!Array.isArray(s.exercises)) continue;
+      for(const ex of s.exercises){
+        const r=_rirPrescrit(ex);
+        if(r==='') continue;
+        const k=exKey((ex&&ex.name)||'');
+        if(k&&pres[k]==null) pres[k]=Number(r);
+      }
+    }
+  }catch(e){ return out; }
+  if(!Object.keys(pres).length) return out;
+  // LE REALISE, SUR LA MEME FENETRE QUE LA MOYENNE AFFICHEE AU-DESSUS.
+  // Deux fenetres differentes sur une meme carte feraient lire deux verites.
+  const faits={};
+  try{
+    const ss=((user.sessions)||[]).filter(x=>x&&x.date&&x.data)
+      .slice().sort((a,b)=>b.date-a.date).slice(0,RIR_DERNIERES);
+    for(const sess of ss){
+      for(const nom of Object.keys(sess.data||{})){
+        const k=exKey(nom);
+        if(pres[k]==null) continue;
+        const d=sess.data[nom];
+        if(!d||!Array.isArray(d.sets)) continue;
+        for(const s of d.sets){
+          if(!s||s.done!==true) continue;
+          if(s.rir===''||s.rir==null) continue;
+          const v=(s.rir==='echec')?0:(parseInt(s.rir,10)||0);
+          const f=faits[k]||(faits[k]={somme:0,n:0,nom});
+          f.somme+=v; f.n++;
+        }
+      }
+    }
+  }catch(e){ return out; }
+  for(const k in faits){
+    const f=faits[k];
+    if(!f.n) continue;
+    const realise=Math.round(f.somme/f.n*100)/100;
+    out.push({nom:f.nom,prescrit:pres[k],realise,n:f.n,
+              ecart:Math.round((realise-pres[k])*100)/100});
+  }
+  out.sort((a,b)=>Math.abs(b.ecart)-Math.abs(a.ecart));
+  return out;
+}
+// LE MOT COMPTE PLUS QUE LE CHIFFRE. « RIR 3,4 pour 2 » ne dit rien tant qu'on
+// n'a pas fait la soustraction ; « plus facile que demande » se lit d'un coup.
+// UN RIR PLUS HAUT QUE PRESCRIT = PLUS FACILE : il reste plus de repetitions en
+// reserve. C'est le sens inverse de l'intuition, et c'est pour cela qu'on
+// l'ecrit en toutes lettres plutot qu'en fleche.
+function _htmlEcartRir(c){
+  let l=[];
+  try{ l=ecartRirPrescrit(c); }catch(e){ return ''; }
+  if(!l.length) return '';
+  const ligne=x=>{
+    const dur=x.ecart<=-RIR_ECART_MINI, fac=x.ecart>=RIR_ECART_MINI;
+    const mot=dur?'plus dur que demandé':fac?'plus facile que demandé':'conforme';
+    const col=dur?'var(--orange)':fac?'var(--orange)':'var(--green)';
+    const nb=v=>String(v).replace('.',',');
+    return `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:5px">
+      <span style="font-size:var(--fs-2xs);color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
+      <span style="font-size:var(--fs-2xs);color:${col};white-space:nowrap">${mot} <span style="color:var(--text-faint)">· ${nb(x.realise)} pour ${nb(x.prescrit)}</span></span>
+    </div>`;
+  };
+  const horsCible=l.filter(x=>Math.abs(x.ecart)>=RIR_ECART_MINI);
+  return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Intensité demandée · faite</div>
+    ${(horsCible.length?horsCible:l).slice(0,RIR_ECART_MAX).map(ligne).join('')}
+    ${horsCible.length?'':`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px">Tout est conforme à la consigne.</div>`}
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Un RIR plus haut que prescrit veut dire plus facile : il reste plus de répétitions en réserve. Sur les ${RIR_DERNIERES} dernières séances.</div>
+  </div>`;
+}
+// Cinq lignes au plus : au-dela, la carte devient une liste qu'on ne lit plus.
+const RIR_ECART_MAX=5;
 // Fiche coach : ce qui est prescrit contre ce qui est fait.
 function _htmlEcartPrescrit(c){
   const l=ecartPrescritRealise(c).filter(x=>x.part!=null);
@@ -40514,6 +40619,7 @@ function renderVolumeCoach(c){
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
     ${_axPrio?'':_axial}
     ${_htmlRirMoyen(c)}
+    ${_htmlEcartRir(c)}
     ${_htmlEcartPrescrit(c)}
     ${_htmlAdherenceCoach(c)}
     ${_htmlCarteDecharge(c)}
