@@ -508,13 +508,21 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
 
      transform:none au survol : soulever une ligne d'un pixel la decale de ses
      voisines. On garde la couleur, qui suffit a designer la ligne visee. */
+  body:has(#s-coach-home.active) #ch-clients-list{
+    --cr-cols:44px minmax(150px,1.3fr) minmax(130px,1.1fr) minmax(96px,1.2fr) minmax(84px,.8fr) 66px 54px 40px 120px}
   body:has(#s-coach-home.active) #ch-clients-list .client-row{
     display:grid;
     /* NEUF colonnes depuis les trois cellules de mesure. Le compte DOIT suivre
        le nombre d’enfants réels de la ligne — avatar, les sept cellules du
        bloc en display:contents, puis le badge — sinon la grille repasse à la
        ligne et le tableau se disloque. */
-    grid-template-columns:44px minmax(150px,1.3fr) minmax(130px,1.1fr) minmax(96px,1.2fr) minmax(84px,.8fr) 66px 54px 40px 120px;
+    /* N5.1 — UNE SEULE SOURCE DE VERITE. .cr-head heritait par
+       grid-template-columns:inherit, mais son parent #ch-clients-list n'est
+       PAS une grille : la valeur heritee valait `none` et les neuf libelles
+       s'empilaient verticalement au lieu de former une ligne d'en-tete. La
+       definition passe dans une variable, que la ligne ET l'en-tete lisent —
+       impossible de les faire diverger en en modifiant une seule. */
+    grid-template-columns:var(--cr-cols);
     align-items:center;gap:12px;box-shadow:none;border-radius:0 3px 3px 0;
     margin-bottom:0;border-bottom:1px solid #1e1e1e}
   body:has(#s-coach-home.active) #ch-clients-list .client-row>div:nth-child(2){display:contents}
@@ -528,7 +536,7 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
   /* L en-tete de colonnes n existe QUE dans ce mode : sous le point de
      rupture, la ligne est une carte empilee et neuf intitules n auraient
      rien a surmonter. Il herite de la grille de la ligne. */
-  .cr-head{display:grid;grid-template-columns:inherit;gap:12px;padding:0 14px 7px;
+  .cr-head{display:grid;grid-template-columns:var(--cr-cols);gap:12px;padding:0 14px 7px;
     font-size:10.5px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;
     color:var(--sub);border-bottom:1px solid #242424;margin-bottom:6px}
 }
@@ -792,12 +800,28 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 /* LE POINTILLE DIT L ATTENTE. Une bordure pleine orange se confond avec le
    bilan a lire ; le pointille dit qu on attend quelque chose qui n est pas
    encore la. border-image le rend, la couleur de border-left ne sert plus. */
+/* N5.4 — L'ETAT « ATTENTE » N'EST JAMAIS ATTENUE. renderClientRow posait
+   row-inactive des que l'athlete n'etait ni actif, ni en alerte, ni porteur
+   d'un nouveau bilan — ce qui inclut celui qui doit souscrire un abonnement.
+   Cette regle ne retablissait pas l'opacite : la ligne heritait de
+   .row-inactive{opacity:.5}, son badge orange tombait a 2,43:1 et son texte
+   secondaire a 2,16:1. C'est la seule ligne de l'ecran qui coute de l'argent,
+   et c'etait la plus effacee. L'OPACITE NE HIERARCHISE PLUS UNE LIGNE
+   ACTIONNABLE : le filet hachure et le badge suffisent a la designer. */
 #ch-clients-list .client-row[data-etat='attente']{border-left:5px solid transparent;
   border-image:repeating-linear-gradient(-45deg,#f97316 0 4px,#7c2d12 4px 8px) 5;
+  opacity:1;
   box-shadow:var(--elev-1),-3px 0 16px rgba(249,115,22,.24)}
 #ch-clients-list .client-row[data-etat='actif']{border-left:2px solid #22c55e}
+/* Lecture et dormant gardent une attenuation, mais elle ne porte plus sur le
+   NOM ni sur le badge : a 0,82 le nom d'un athlete dormant passait sous 4,5:1.
+   Le filet gris et la teinte du reste suffisent a dire l'etat. */
 #ch-clients-list .client-row[data-etat='lecture']{border-left:2px solid #8a8a8a;opacity:.88}
 #ch-clients-list .client-row[data-etat='dormant']{border-left:2px solid #666666;opacity:.82}
+#ch-clients-list .client-row[data-etat='lecture'] .cr-nom,
+#ch-clients-list .client-row[data-etat='dormant'] .cr-nom,
+#ch-clients-list .client-row[data-etat='lecture'] .cr-badge,
+#ch-clients-list .client-row[data-etat='dormant'] .cr-badge{opacity:1;color:var(--text)}
 #ch-clients-list .client-row:hover{background:
     repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.026) 12px,rgba(255,255,255,.026) 13px),
     linear-gradient(168deg,#242424,#161616 52%,#0d0d0d);border-color:var(--border)}
@@ -5115,6 +5139,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad" style="padding-top:16px">
+  <div id="cpt-report"></div>
       <div id="cpt-session-slots"></div>
     </div>
   </div>
@@ -5147,6 +5172,10 @@ const COACH_PHOTO='icons/coach.jpg';
     <button class="back-btn" onclick="go('s-coach-home')">←</button>
     <span class="topbar-title">Décharge groupée</span>
     <button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:#222;color:var(--text-dim);border:none;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1)">APPLIQUER</button>
+    <!-- Le retrait groupe : meme selection, meme recapitulatif nomme, meme
+         rapport d echecs. Un booleen distingue les deux gestes, il n y a pas
+         deux mecanismes de decharge a tenir d accord. -->
+    <button id="cdg-retirer" onclick="confirmDechargeGroupee(false)" disabled style="background:none;color:var(--text-dim);border:1px solid var(--border);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1);margin-left:7px">RETIRER</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -8363,8 +8392,14 @@ const CLOUD={
           await this._doPushOne(email,u);
           renvoyes++;
         }catch(e){
-          // Toujours hors ligne ou toujours refusé : _doPushOne a déjà remis la
-          // clé dans la file. Inutile d'insister sur les suivantes maintenant.
+          // UN REFUS DEFINITIF NE BLOQUE PLUS LA FILE. Le `break` supposait que
+          // tout echec etait passager — hors ligne, jeton expire. Un 401 sur une
+          // clef que les regles refusent PAR CONSTRUCTION ne passera jamais : il
+          // arretait le rejeu de toutes les clefs suivantes, et le dossier de
+          // l'athlete lui-meme cessait d'etre renvoye. On defile la clef refusee
+          // et on continue ; les echecs de reseau, eux, gardent le break.
+          const _def=e&&(e._refus===true||/40[13]/.test(String(e.message||'')));
+          if(_def){ this._defiler(email); continue; }
           break;
         }
       }
@@ -8537,6 +8572,19 @@ const CLOUD={
   // Retourne la promesse de _doPushOne — les appelants peuvent l'await (ou .then/.catch)
   // pour afficher un toast de succès/erreur ; les fire-and-forget l'ignorent simplement.
   pushOne(email,user){
+    // N3.1 — TOUTE POUSSEE HORODATE LE DOSSIER, ICI ET NULLE PART AILLEURS.
+    // syncUser refuse de telecharger un dossier dont le updatedAt distant n'est
+    // pas STRICTEMENT plus recent que le local. Sept ecritures du coach —
+    // phase, demande de video, annulation, reponse au bilan, habitudes, levee
+    // de drapeau — poussaient sans y toucher : le toast annoncait « ton athlete
+    // la verra a sa prochaine ouverture », l'athlete rouvrait, la sonde
+    // repondait « rien de neuf », et il ne voyait jamais la reponse.
+    //
+    // ICI PLUTOT QUE DANS LES SEPT : la huitieme ecriture ajoutee demain en
+    // heritera sans que personne n'y pense. Et c'est le seul point ou l'on
+    // sait qu'un dossier PART — un dossier ecrit localement sans etre pousse
+    // n'a aucune raison d'etre horodate.
+    try{ if(user&&typeof user==='object') user.updatedAt=Date.now(); }catch(e){}
     const key='_one_'+email;
     clearTimeout(this._pushTimers?.[key]);
     const p=this._doPushOne(email,user);
@@ -8667,11 +8715,22 @@ const CLOUD={
         safe.coachEmailKey = null;
       }
       // Supprimer photo2 (base64 temporaire pour OCR) de chaque session avant push RTDB
-      if(safe.sessions_config) safe.sessions_config=safe.sessions_config.map(s=>{
-        if(!s.photo2) return s;
-        const {photo2,...rest}=s; return rest;
-      });
-      if(safe.bilans) safe.bilans=await Promise.all(safe.bilans.map(async b=>{
+      // N3.5 — UN OBJET A CLEFS NUMERIQUES EST VRAI, ET N'A PAS DE .map.
+      // Firebase rend sessions_config sous forme d'objet des qu'un creneau
+      // manque. L'exception partait AVANT le fetch : le catch enfilait la clef
+      // dans rc_sync_queue, et _queueRetry rejouait exactement le meme echec
+      // par paliers, indefiniment. Le dossier de cet athlete n'etait plus
+      // jamais synchronise, quelle que soit la donnee modifiee.
+      const _tab=v=>Array.isArray(v)?v:(v&&typeof v==='object'?Object.keys(v)
+        .sort((a,b)=>Number(a)-Number(b)).map(k=>v[k]):null);
+      if(safe.sessions_config){
+        const _sc=_tab(safe.sessions_config);
+        if(_sc) safe.sessions_config=_sc.map(s=>{
+          if(!s||!s.photo2) return s;
+          const {photo2,...rest}=s; return rest;
+        });
+      }
+      if(safe.bilans&&_tab(safe.bilans)) safe.bilans=await Promise.all(_tab(safe.bilans).map(async b=>{
         const cl={...b};
         for(const k of Object.keys(cl)){
           if(k.includes('photo')&&cl[k]&&typeof cl[k]==='string'&&cl[k].startsWith('data:')){
@@ -17606,6 +17665,18 @@ function renderTodoBlock(clients){
   if(noStart.length) rows.push({type:'nostart',icon:'🆕',color:'var(--red)',label:'Inscrit, n\'a jamais commencé',list:noStart});
   if(newBil.length) rows.push({type:'bilan',icon:'📥',color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',15),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
+  // N6.8 — LES VIDEOS A CORRIGER REMONTENT ICI. La donnee existait,
+  // videoNonCorrigee disait deja lesquelles attendent, et agregerPortefeuille
+  // les comptait pour le volet « Vue d'ensemble » — un volet ferme a chaque
+  // ouverture. Un athlete pouvait deposer une video et attendre une semaine.
+  // Entre les bilans et les acces qui expirent : c'est du travail de coach,
+  // pas de l'intendance, mais ca ne prime pas sur un bilan en retard.
+  const _vids=clients.filter(c=>{
+    try{ return (c.videos||[]).some(videoNonCorrigee)&&!isAlertSnoozed('videos',c.id); }
+    catch(e){ return false; }
+  });
+  if(_vids.length) rows.push({type:'videos',icon:icon('video',15),color:'var(--orange)',
+    label:'Vidéo'+(_vids.length>1?'s':'')+' à corriger',list:_vids});
   if(expiring.length) rows.push({type:'expiring',icon:'⏳',color:'var(--orange)',label:'Accès expire dans <14j',list:expiring});
   // RITE DE FIN DE CYCLE : niveau administratif. urgencyScore ne le connaît
   // pas et ne le connaîtra pas — la ligne se voit, elle ne remonte personne.
@@ -17666,6 +17737,9 @@ function renderTodoBlock(clients){
       // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
       // la fiche comme avant : elles ne décrivent pas une série à traiter.
       onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`
+        // La file de correction des videos est deja ecrite : la ligne y entre,
+        // elle n'ouvre pas une fiche que le coach devrait ensuite fouiller.
+        :r.type==='videos'?`_entrerFileVideos()`
         :r.type==='rite'?`_ouvrirRiteClient('${r.list[0].id}')`
         :`openClientDetail('${r.list[0].id}')`,
       style:'cursor:pointer;transition:background var(--t-1);'};
@@ -17701,12 +17775,38 @@ function _accesExpire(c){
 // cinq semaines d’historique, _exercicesEnProgres un couple comparable, et un
 // athlète sans bilan en attente n’a rien à afficher. Un « 0 » ou un « — » se
 // lirait comme un constat, alors que c’est une absence de mesure.
+// N6.5 — LE RAPPORT AIGU / CHRONIQUE RECOIT ENFIN UNE LECTURE.
+// Le pourcentage etait calcule, affiche a la ligne d'athlete et a la fiche, et
+// jamais interprete : le coach lisait « +38 % » sans savoir si c'etait normal.
+//
+// LES DEUX BANDES, EN UN SEUL ENDROIT. Au-dela de +30 %, la charge de la
+// semaine depasse d'un tiers la moyenne des quatre precedentes : c'est le seuil
+// au-dela duquel la litterature sur le rapport charge aigue / charge chronique
+// situe l'augmentation du risque de blessure. En dessous de -30 %, la semaine
+// est un creux — decharge voulue, ou semaine manquee, et le coach doit savoir
+// laquelle. Entre les deux, rien ne se dit : une variation ordinaire n'a pas
+// besoin d'etre commentee.
+//
+// PAS DE QUATRIEME TEINTE SUR LA LIGNE. Le filet gauche porte deja l'etat de
+// l'athlete ; la lecture se fait par un MOT, a cote du chiffre, qui reste
+// ecrit. Ajouter une couleur affaiblirait le filet — voir le commentaire de
+// _etatAthlete.
+const CHARGE_BANDE=30;   // % d'ecart a la moyenne des 4 semaines precedentes
+function lectureChargeHebdo(pct){
+  if(pct==null||!isFinite(pct)) return '';
+  if(pct>=CHARGE_BANDE) return 'pic';
+  if(pct<=-CHARGE_BANDE) return 'creux';
+  return '';
+}
 function _crCharge(c){
   let r=null; try{ r=_chargeHebdo(c); }catch(e){ r=null; }
   // `pct` peut être null alors que l’objet existe : moyenne de référence à
   // zéro, aucun pourcentage n’a alors de sens.
   if(!r||r.pct==null) return '';
-  return (r.pct>0?'+':'')+r.pct+' %';
+  // La colonne du tableau est etroite : le mot y tient en abrege, et le
+  // chiffre reste ecrit a cote — c'est lui qu'on compare d'une ligne a l'autre.
+  const l=lectureChargeHebdo(r.pct);
+  return (r.pct>0?'+':'')+r.pct+' %'+(l?' · '+l:'');
 }
 function _crProgres(c){
   let r=null; try{ r=_exercicesEnProgres(c); }catch(e){ r=null; }
@@ -18724,9 +18824,28 @@ function _buildSessionCard(s){
   const rows=Object.entries(s.data||{}).map(([nm,d])=>{
     const done=(d.sets||[]).filter(x=>x.done&&(x.weight||x.reps));
     if(!done.length) return '';
-    const line=done.map(x=>x.degressive
+    // N6.9 — LE RIR ET LA DOULEUR, SERIE PAR SERIE. Les deux sont collectes a
+    // chaque serie et lus ailleurs — rir alimente e1rm et rirMoyenSeance, pain
+    // alimente la detection de douleur — mais le recapitulatif du coach les
+    // masquait : il lisait « 80kg×8 » sans savoir si c'etait 8 a RIR 3 ou 8 a
+    // l'echec, ni si l'athlete avait signale quelque chose.
+    //
+    // RIEN PLUTOT QU'UN ZERO. Un historique anterieur au champ rir n'a pas de
+    // RIR ; afficher « RIR 0 » y ferait lire « a l'echec » sur des seances ou
+    // personne n'a rien note. Zero est d'ailleurs une valeur LEGITIME — c'est
+    // l'echec — donc le test porte sur la presence du champ, pas sur sa verite.
+    const _sfx=x=>{
+      const out=[];
+      if(x.rir!==''&&x.rir!=null&&isFinite(Number(x.rir))) out.push('RIR '+Number(x.rir));
+      // La douleur ne s'affiche que si elle a ete signalee : « douleur 0 » sur
+      // une serie sans probleme allongerait chaque ligne pour ne rien dire.
+      const d=Number(x.pain);
+      if(x.pain!==''&&x.pain!=null&&isFinite(d)&&d>0) out.push('douleur '+d);
+      return out.length?' ('+out.join(', ')+')':'';
+    };
+    const line=done.map(x=>(x.degressive
       ?`${x.weight||'?'}kg×${x.reps||'?'} / ${x.weight2||'?'}kg×${x.p2reps||'?'}`
-      :`${x.weight||'?'}kg×${x.reps||'?'}`
+      :`${x.weight||'?'}kg×${x.reps||'?'}`)+_sfx(x)
     ).join(' · ');
     return `<div style="padding:7px 0;border-top:1px solid #141414">
       <div style="font-size:var(--fs-xs);font-weight:700;color:#ccc;margin-bottom:2px">${escapeHtml(nm)}</div>
@@ -21235,6 +21354,52 @@ function _cptSeances(p,genre){
   });
   return t;
 }
+// N4.4 — REPORTER UN ONGLET DE GENRE SUR L'AUTRE.
+// Un modele porte DEUX jeux de sept seances, sessions_H et sessions_F, tenus
+// separes par _cptSeances. Rien ne permettait de reporter le travail de l'un
+// sur l'autre : le coach qui avait fini l'onglet HOMME refaisait tout dans
+// l'onglet FEMME, exercice par exercice.
+//
+// COPIE PROFONDE, ET RIEN D'AUTRE. Le fichier a deja eu ce bug — voir le
+// commentaire de saveCoachSessionsAsTemplate : sans clone, un tableau imbrique
+// restait partage entre les deux onglets, et modifier la copie modifiait la
+// source. On repasse par JSON, comme lui.
+//
+// RIEN N'EST ECRIT AVANT « SAUVEGARDER ». C'est la regle de cet ecran, posee
+// par cptCopyDay : le report vit dans currentUser.coachPrograms en memoire, et
+// le bouton d'enregistrement de l'ecran le persiste comme le reste.
+async function cptReporterGenre(){
+  if(_editProgTemplateIdx===null) return false;
+  const p=(currentUser.coachPrograms||[])[_editProgTemplateIdx];
+  if(!p) return false;
+  const src=_editProgTemplateGender, dst=(src==='H')?'F':'H';
+  const lS=(src==='H')?'HOMME':'FEMME', lD=(dst==='H')?'HOMME':'FEMME';
+  const a=_cptSeances(p,src)||[], b=_cptSeances(p,dst)||[];
+  const nSrc=a.filter(s=>s&&s.active&&(s.exercises||[]).length).length;
+  if(!nSrc){ toast('L’onglet '+lS+' n’a aucune séance à reporter.','var(--orange)'); return false; }
+  // CONFIRMATION QUAND LA DESTINATION PORTE DEJA QUELQUE CHOSE, comme
+  // _confirmerEcrasement le fait pour un jour. Un report qui efface en silence
+  // le travail de l'autre onglet serait pire que pas de report du tout.
+  const nDst=b.filter(s=>s&&s.active&&(s.exercises||[]).length).length;
+  const nl=String.fromCharCode(10);
+  let txt='Reporter les '+nSrc+' séance'+(nSrc>1?'s':'')+' de l’onglet '+lS
+    +' vers l’onglet '+lD+' ?';
+  if(nDst) txt+=nl+nl+'L’onglet '+lD+' porte déjà '+nDst+' séance'+(nDst>1?'s':'')
+    +' : elle'+(nDst>1?'s seront remplacées':' sera remplacée')+'.';
+  txt+=nl+nl+'Rien n’est enregistré tant que tu n’as pas appuyé sur SAUVEGARDER.';
+  if(!await rcConfirm(txt,null,'Reporter')) return false;
+  const cle=(dst==='H')?'sessions_H':'sessions_F';
+  p[cle]=a.map(s=>({
+    day:s.day,name:s.name||'',active:!!s.active,notes:s.notes||'',
+    warmup:s.warmup||'',cooldown:s.cooldown||'',photo:null,photo2:null,
+    exercises:JSON.parse(JSON.stringify(s.exercises||[]))
+  }));
+  // On BASCULE sur l'onglet destination : le coach vient de le remplir, c'est
+  // lui qu'il veut relire et ajuster.
+  loadProgTemplateSlots(dst);
+  toast('Reporté vers '+lD+'. Appuie sur SAUVEGARDER pour l’enregistrer.');
+  return true;
+}
 function loadProgTemplateSlots(gender){
   _editProgTemplateGender=gender;
   if(_editProgTemplateIdx===null) return;
@@ -21244,6 +21409,11 @@ function loadProgTemplateSlots(gender){
   const tH=document.getElementById('cpt-tab-h'),tF=document.getElementById('cpt-tab-f');
   if(tH){tH.style.color=gender==='H'?'var(--red)':'var(--sub)';tH.style.borderBottomColor=gender==='H'?'var(--red)':'transparent';}
   if(tF){tF.style.color=gender==='F'?'var(--red)':'var(--sub)';tF.style.borderBottomColor=gender==='F'?'var(--red)':'transparent';}
+  // N4.4 — LE REPORT D UN GENRE VERS L AUTRE, en tete de la liste. Le libelle
+  // nomme les deux onglets : « reporter » sans dire dans quel sens obligerait
+  // a essayer pour savoir.
+  const zr=document.getElementById('cpt-report');
+  if(zr) zr.innerHTML=`<button class="btn btn-outline btn-sm" onclick="cptReporterGenre()" style="width:100%;margin:0 0 14px;letter-spacing:1px;font-size:var(--fs-2xs)">Reporter ${gender==='H'?'HOMME → FEMME':'FEMME → HOMME'}</button>`;
   const container=document.getElementById('cpt-session-slots');if(!container)return;
   container.innerHTML=sessions.map((s,i)=>`
     <div style="background:var(--surface-1);border-radius:var(--r-4);margin-bottom:14px;overflow:hidden;border:1.5px solid ${s.active?'var(--red)':'var(--border)'}">
@@ -25047,15 +25217,18 @@ function loadClientHome(){
             if(!mc.teamName&&_preSync.teamName) mc.teamName=_preSync.teamName;
             if(!mc.catchphrase&&_preSync.catchphrase) mc.catchphrase=_preSync.catchphrase;
             if(!mc.phone&&_preSync.phone) mc.phone=_preSync.phone;
-            // Sauvegarder la version fusionnée et pousser vers Firebase
+            // N3.3 — ON N'ENVOIE PLUS LE DOSSIER DU COACH DEPUIS L'ATHLETE.
+            // La regle .write de /users/$emailKey refuse cette ecriture PAR
+            // CONSTRUCTION : l'echec enfilait la clef du coach dans
+            // rc_sync_queue, et viderFile sortait par break au premier refus —
+            // le dossier de l'athlete lui-meme cessait alors d'etre renvoye.
+            // La restauration locale, elle, reste : elle repare l'affichage de
+            // cet appareil. La vitrine du coach a son propre noeud, coach_public,
+            // publie par le coach seul.
             if(mc.coachPhoto||mc.teamName||mc.catchphrase){
-              mc.updatedAt=Date.now();
               mu[ce]=mc;
               localStorage.setItem('rc_users',JSON.stringify(mu));
-              CLOUD.pushOne(ce,mc);
             }
-          } else if(mc.coachPhoto||mc.teamName||mc.catchphrase){
-            CLOUD.pushOne(ce,mc);
           }
         }
         _applyCoachData(DB.get('users')||{});
@@ -29537,8 +29710,11 @@ function phraseChargeHebdo(u){
   // `pct` peut être null alors que l’objet existe : moyenne de référence à
   // zéro, aucun pourcentage n’a alors de sens. Même réponse — on se tait.
   if(!c||c.pct==null) return '';
+  const l=lectureChargeHebdo(c.pct);
   return 'Charge de la semaine : '+(c.pct>0?'+':'')+c.pct
-    +' % sur la moyenne des 4 précédentes';
+    +' % sur la moyenne des 4 précédentes'
+    +(l==='pic'?' — pic de charge : au-delà d’un tiers d’écart, le risque de blessure augmente.'
+     :l==='creux'?' — creux : décharge voulue, ou semaine manquée ?':'');
 }
 function phraseExercicesEnProgres(u){
   let p=null; try{ p=_exercicesEnProgres(u); }catch(e){ p=null; }
@@ -37373,7 +37549,8 @@ function renderLeveeCoach(c){
   z.innerHTML=h;
 }
 async function coachLeverDrapeau(quoi){
-  const c=getOwnedClient(currentClientId);
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
   if(!c) return false;
   const lib=(quoi==='general')?'ce signalement général':'ce drapeau rouge';
   if(!await rcConfirm('Lever '+lib+' ? L\'entraînement reprendra, avec une séance de retour en volume réduit.',null,'Lever')) return false;
@@ -37383,7 +37560,8 @@ async function coachLeverDrapeau(quoi){
   // La synchronisation referme le nœud et rend sa valeur à la série. Elle est
   // appelée ICI, sur le dossier de l'athlète, avant la remontée.
   try{ suspensionSynchroniser(c); }catch(e){}
-  const ok=saveUser();
+  if(c.email) users[c.email]=c;
+  const ok=DB.set('users',users);
   try{ CLOUD.pushOne(c.email,c); }catch(e){}
   try{ _viderCacheSignaux(); }catch(e){}
   renderLeveeCoach(c);
@@ -37489,8 +37667,15 @@ function renderHabitudesCoach(c){
   let h=''; try{ h=c?htmlHabitudesCoach(c):''; }catch(e){ h=''; }
   z.innerHTML=h;
 }
+// N3.2 — LE DOSSIER ENREGISTRE EST CELUI DE L'ATHLETE. getOwnedClient sans
+// second argument rend un objet DETACHE : DB.get reparse le JSON a chaque
+// appel. La mutation partait bien au serveur par pushOne, mais saveUser ne
+// range que currentUser — le coach. L'habitude reapparaissait donc effacee a
+// la reouverture de la fiche. On passe la carte, comme le fait deja
+// coachSetPhase.
 function habCoachAjouter(){
-  const c=getOwnedClient(currentClientId);
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
   if(!c) return false;
   const cat=(document.getElementById('hab-cat')||{}).value||'';
   const libre=((document.getElementById('hab-libre')||{}).value||'').trim();
@@ -37500,18 +37685,21 @@ function habCoachAjouter(){
   const cle=cat||('libre-'+exKey(libre).toLowerCase().replace(/ /g,'-').slice(0,24));
   const r=habitudeAjouter(c,cle,libre);
   if(!r.ok) return toast(r.raison,'var(--orange)');
-  const ok=saveUser();
+  if(c.email) users[c.email]=c;
+  const ok=DB.set('users',users);
   try{ CLOUD.pushOne(c.email,c); }catch(e){}
   renderHabitudesCoach(c);
   toastEcriture(ok,'Habitude ajoutée','l\'habitude est');
   return true;
 }
 async function habCoachRetirer(cle){
-  const c=getOwnedClient(currentClientId);
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
   if(!c) return false;
   if(!await rcConfirm('Retirer cette habitude ? Les coches déjà faites sont conservées.',null,'Retirer')) return false;
   if(!habitudeRetirer(c,cle)) return false;
-  const ok=saveUser();
+  if(c.email) users[c.email]=c;
+  const ok=DB.set('users',users);
   try{ CLOUD.pushOne(c.email,c); }catch(e){}
   renderHabitudesCoach(c);
   toastEcriture(ok,'Habitude retirée','le retrait est');
@@ -38377,9 +38565,17 @@ function _htmlBoutonDecharge(c){
   const actifs=((c&&c.sessions_config)||[]).filter(x=>x&&x.active);
   if(!actifs.length) return '';
   const dejaTout=actifs.every(x=>x.deload);
+  const enDecharge=actifs.some(x=>x.deload);
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
     ${dejaTout?`<div style="font-size:var(--fs-xs);color:var(--info);line-height:1.6;margin-bottom:8px">Semaine de décharge programmée sur les ${actifs.length} créneaux actifs. Les séances de décharge sortent de la détection de plateau. À toi de la retirer quand elle est passée.</div>`:''}
-    <button class="btn btn-outline btn-sm" onclick="programmerDecharge()" style="letter-spacing:1px;font-size:var(--fs-2xs)">${dejaTout?'Décharge déjà programmée':'Programmer une semaine de décharge'}</button>
+    <!-- N4.3 — LE RETRAIT EST A COTE DE LA POSE. Il n avait qu un seul point
+         d ecriture dans tout le fichier : la case a cocher d un creneau, dans
+         l editeur de seances. Sept clics par athlete pour defaire un geste qui
+         en coutait un. -->
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      ${dejaTout?'':`<button class="btn btn-outline btn-sm" onclick="programmerDecharge()" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Programmer une semaine de décharge</button>`}
+      ${enDecharge?`<button class="btn btn-outline btn-sm" onclick="programmerDecharge(false)" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Retirer la décharge</button>`:''}
+    </div>
   </div>`;
 }
 // ══════════════ DÉCHARGE GROUPÉE ══════════════
@@ -38394,7 +38590,14 @@ function _nomAthlete(a){
 }
 // Phase LOCALE, synchrone et testable : qui peut être traité, qui ne peut pas
 // et pourquoi. Ne touche ni au stockage ni au réseau, et ne modifie rien.
-function _preparerDechargeGroupee(ids,users){
+// N4.3 — LE RETRAIT EMPRUNTE LE MEME CHEMIN QUE LA POSE. Poser une decharge
+// se faisait d'un clic, sur un athlete ou sur un lot. La RETIRER n'avait qu'un
+// seul point d'ecriture dans tout le fichier : la case a cocher d'un creneau,
+// dans l'editeur de seances — sept clics par athlete, cent cinq pour quinze.
+// `pose` distingue les deux gestes ; tout le reste est partage, pour qu'il n'y
+// ait jamais deux mecanismes de decharge a tenir d'accord.
+function _preparerDechargeGroupee(ids,users,pose){
+  const _p=(pose!==false);
   const cibles=[], echecs=[];
   const tous=users||{};
   for(const id of (ids||[])){
@@ -38404,21 +38607,27 @@ function _preparerDechargeGroupee(ids,users){
     // refuse déjà un par un, on le refuse ici AVEC son nom.
     if(c._fromCode||!c.email){
       echecs.push({nom:_nomAthlete(c),raison:'dossier non synchronisé'}); continue; }
-    const actifs=((c.sessions_config)||[]).map((x,i)=>({x,i})).filter(o=>o.x&&o.x.active);
-    if(!actifs.length){ echecs.push({nom:_nomAthlete(c),raison:'aucun créneau actif'}); continue; }
-    cibles.push({c,nom:_nomAthlete(c),n:actifs.length,index:actifs.map(o=>o.i)});
+    // ON N'ECRIT RIEN SUR UN CRENEAU INACTIF, dans les deux sens. Au retrait,
+    // on ne vise que ceux qui portent EFFECTIVEMENT une decharge : un athlete
+    // qui n'en a pas est un echec nomme, pas une ecriture silencieuse.
+    const vises=((c.sessions_config)||[]).map((x,i)=>({x,i}))
+      .filter(o=>o.x&&o.x.active&&(_p?!o.x.deload:!!o.x.deload));
+    if(!vises.length){ echecs.push({nom:_nomAthlete(c),
+      raison:_p?'aucun créneau actif à charger':'aucune décharge à retirer'}); continue; }
+    cibles.push({c,nom:_nomAthlete(c),n:vises.length,index:vises.map(o=>o.i)});
   }
   return {cibles,echecs};
 }
 // Écriture, athlète par athlète, par le chemin de programmerDecharge : carte
 // users + DB.set + CLOUD.pushOne. Un envoi refusé n'arrête pas les suivants et
 // ne perd pas l'écriture locale — il est simplement rapporté.
-async function appliquerDechargeGroupee(ids){
+async function appliquerDechargeGroupee(ids,pose){
+  const _p=(pose!==false);
   const users=DB.get('users')||{};
-  const {cibles,echecs}=_preparerDechargeGroupee(ids,users);
+  const {cibles,echecs}=_preparerDechargeGroupee(ids,users,_p);
   const faits=[];
   for(const cible of cibles){
-    cible.index.forEach(i=>{ cible.c.sessions_config[i].deload=true; });
+    cible.index.forEach(i=>{ cible.c.sessions_config[i].deload=_p; });
     cible.c.updatedAt=Date.now();
     users[cible.c.email]=cible.c;
     const localOk=DB.set('users',users);
@@ -38430,13 +38639,14 @@ async function appliquerDechargeGroupee(ids){
   // à chaque athlète ne ferait que répéter le même travail.
   _viderCachePlateau();
   _viderCacheSignaux();
-  return {faits,echecs,total:(ids||[]).length};
+  return {faits,echecs,total:(ids||[]).length,pose:_p};
 }
 // « Décharge appliquée à 6 athlètes sur 8. Échec pour Untel (dossier non
 // synchronisé) et Unetelle (envoi refusé). » Aucun échec silencieux.
 function _rapportDecharge(r){
   const n=r.faits.length;
-  let s='Décharge appliquée à '+n+' athlète'+(n>1?'s':'')+' sur '+r.total+'.';
+  let s=(r.pose===false?'Décharge retirée chez ':'Décharge appliquée à ')
+    +n+' athlète'+(n>1?'s':'')+' sur '+r.total+'.';
   if(r.echecs.length){
     const l=r.echecs.map(e=>e.nom+' ('+e.raison+')');
     const dernier=l.pop();
@@ -38491,6 +38701,14 @@ function _cdgMajBouton(){
   b.style.background=n?'var(--red)':'#222';
   b.style.color=n?'var(--text)':'var(--text-dim)';
   b.style.cursor=n?'pointer':'not-allowed';
+  // Le bouton de RETRAIT suit la meme selection. Discret : il defait, il ne
+  // doit pas se cliquer a la place de la pose.
+  const r=document.getElementById('cdg-retirer');
+  if(r){
+    r.disabled=!n;
+    r.style.color=n?'var(--sub)':'var(--text-dim)';
+    r.style.cursor=n?'pointer':'not-allowed';
+  }
 }
 function cdgSelectAll(v){
   document.querySelectorAll('#cdg-athletes input[type=checkbox]').forEach(cb=>{cb.checked=v;});
@@ -38498,13 +38716,14 @@ function cdgSelectAll(v){
 }
 // Récapitulatif NOMMÉ avant d'écrire : le coach voit qui est touché, sur
 // combien de créneaux, et qui ne le sera pas.
-async function confirmDechargeGroupee(){
+async function confirmDechargeGroupee(pose){
+  const _p=(pose!==false);
   const ids=_cdgCoches();
   if(!ids.length) return;
   const users=DB.get('users')||{};
-  const prep=_preparerDechargeGroupee(ids,users);
+  const prep=_preparerDechargeGroupee(ids,users,_p);
   const nl=String.fromCharCode(10);
-  let txt='Programmer une semaine de décharge ?'+nl+nl;
+  let txt=(_p?'Programmer une semaine de décharge ?':'Retirer la semaine de décharge ?')+nl+nl;
   txt+=prep.cibles.length
     ?prep.cibles.map(x=>'· '+x.nom+' — '+x.n+' créneau'+(x.n>1?'x':'')).join(nl)
     :'Aucun athlète traitable dans cette sélection.';
@@ -38512,7 +38731,7 @@ async function confirmDechargeGroupee(){
     +prep.echecs.map(e=>'· '+e.nom+' ('+e.raison+')').join(nl);
   if(!prep.cibles.length){ await rcAlerte(txt); return; }
   if(!await rcConfirm(txt,null,'Confirmer')) return;
-  const r=await appliquerDechargeGroupee(ids);
+  const r=await appliquerDechargeGroupee(ids,_p);
   loadDechargeAthletes();
   // Une liste d'échecs ne se lit pas en deux secondes de toast.
   // Une liste d’échecs ne se lit pas en deux secondes de toast, et l’écran
@@ -38520,7 +38739,8 @@ async function confirmDechargeGroupee(){
   if(r.echecs.length) await rcAlerte(_rapportDecharge(r)); else toast(_rapportDecharge(r));
 }
 
-async function programmerDecharge(){
+async function programmerDecharge(pose){
+  const _p=(pose!==false);
   // Ecriture par la carte des utilisateurs, comme toute autre modification
   // depuis la fiche athlete : _coachEditClient est une copie profonde reservee
   // a l'editeur de seances et n'est pas forcement renseigne ici.
@@ -38528,12 +38748,19 @@ async function programmerDecharge(){
   const c=getOwnedClient(currentClientId,users);
   if(!c) return;
   if(!c.email){ toast('Cet élève n\'a pas encore de dossier synchronisé','var(--orange)'); return; }
-  const actifs=((c.sessions_config)||[]).map((x,i)=>({x,i})).filter(o=>o.x&&o.x.active);
-  if(!actifs.length){ toast('Aucun créneau actif','var(--orange)'); return; }
-  if(!await rcConfirm('Programmer une semaine de décharge ?'+String.fromCharCode(10)+String.fromCharCode(10)
-    +'Les '+actifs.length+' séances actives seront marquées « décharge » et sortiront de la détection de plateau.'
-    +String.fromCharCode(10)+'Aucun décochage automatique : c\'est toi qui la retires ensuite.',null,'Programmer')) return;
-  actifs.forEach(o=>{ c.sessions_config[o.i].deload=true; });
+  // On ne vise que les creneaux CONCERNES : ceux a charger a la pose, ceux qui
+  // portent deja une decharge au retrait. Rien n'est ecrit sur un creneau
+  // inactif, ni dans un sens ni dans l'autre.
+  const actifs=((c.sessions_config)||[]).map((x,i)=>({x,i}))
+    .filter(o=>o.x&&o.x.active&&(_p?!o.x.deload:!!o.x.deload));
+  if(!actifs.length){ toast(_p?'Aucun créneau actif':'Aucune décharge à retirer','var(--orange)'); return; }
+  if(!await rcConfirm((_p?'Programmer une semaine de décharge ?':'Retirer la semaine de décharge ?')
+    +String.fromCharCode(10)+String.fromCharCode(10)
+    +(_p?('Les '+actifs.length+' séances actives seront marquées « décharge » et sortiront de la détection de plateau.'
+        +String.fromCharCode(10)+'Aucun décochage automatique : c\'est toi qui la retires ensuite.')
+       :('Les '+actifs.length+' séances en décharge repassent en séances normales et rentrent à nouveau dans la détection de plateau.')),
+    null,_p?'Programmer':'Retirer')) return;
+  actifs.forEach(o=>{ c.sessions_config[o.i].deload=_p; });
   // HORODATÉ. Sans ça, _mergeUser n'applique pas le dossier distant sur
   // l'appareil de l'athlète, et son envoi suivant écrase la décharge. C'était
   // la seule écriture coach→athlète du fichier à l’omettre.
@@ -38544,7 +38771,7 @@ async function programmerDecharge(){
   _viderCachePlateau();
   _viderCacheSignaux();
   try{ renderVolumeCoach(getOwnedClient(currentClientId)); }catch(e){}
-  toastSync(ok,envoi,'Décharge programmée sur '+actifs.length+' séances','la décharge est');
+  toastSync(ok,envoi,(_p?'Décharge programmée sur ':'Décharge retirée sur ')+actifs.length+' séances','la décharge est');
 }
 
 // ── Volume PRESCRIT : ce que le programme impose, avant publication ─────────
@@ -48273,10 +48500,35 @@ function _propSetCycle(v){
 }
 // Le bloc de commande + la ligne d'hypothèses. Rendu vide quand la proposition
 // est impossible : pas de bouton qui ne mènerait à rien.
+// N2.5 — SIX APPELS A besoinsProposes N'ETAIENT PAS PROTEGES, alors que les
+// six autres du fichier le sont. Deux d'entre eux sont interpoles directement
+// dans le innerHTML du panneau nutrition : une exception y laissait TOUT le
+// panneau vide, sans un mot. Le risque est reel — besoinsProposes traverse
+// kcalSportParJour et facteurNEAT, qui appellent .filter sur sessions_config,
+// et Firebase rend ce tableau sous forme d'objet des qu'un creneau manque.
+//
+// ON NE MASQUE PAS L'ERREUR : _besoinsSurs rend null, et chaque appelant dit
+// au coach que le point de depart n'a pas pu etre calcule. Un panneau vide ne
+// lui apprend rien ; une phrase, si.
+function _besoinsSurs(c){
+  try{ const b=besoinsProposes(c,_propReglages()); return b||null; }
+  catch(e){ try{ console.error('besoinsProposes',e); }catch(err){} return null; }
+}
+const BESOINS_ECHEC='Le point de départ n’a pas pu être calculé sur ce dossier. '
+  +'Ses données de base sont peut-être incomplètes, ou sa configuration de '
+  +'séances est revenue du serveur sous une forme inattendue. Les cibles déjà '
+  +'enregistrées, elles, restent intactes.';
+function _htmlBesoinsEchec(){
+  return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-bottom:10px">${escapeHtml(BESOINS_ECHEC)}</div>`;
+}
 function _htmlDepartCoach(c){
-  const b=besoinsProposes(c,_propReglages());
-  if(!b||b.source===null){
-    const m=(b&&b.manque||[]).join(', ');
+  const b=_besoinsSurs(c);
+  // null = le calcul a LEVE. {source:null} = il manque une donnee de base.
+  // Les deux laissaient la meme phrase, qui parlait du bilan alors que le
+  // bilan n'y etait pour rien.
+  if(!b) return _htmlMigrationSopk(c)+_htmlBesoinsEchec();
+  if(b.source===null){
+    const m=(b.manque||[]).join(', ');
     return `${_htmlMigrationSopk(c)}<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:10px">Point de départ calculable dès que son bilan porte ${escapeHtml(m||'les données de base')}.</div>`;
   }
   const phase=typePhase(c);
@@ -48285,11 +48537,20 @@ function _htmlDepartCoach(c){
   // Le g/kg de lipides, réglable pour TOUT LE MONDE. La suggestion se décale
   // sous SOPK, elle ne s'impose pas.
   const lipSug=lipSuggere(c);
-  const lipCour=(typeof _propLip==='number')?_propLip:lipSug;
+  // N2.2 — LE SELECTEUR AFFICHE CE QUE LE CALCUL UTILISE. Il retombait sur
+  // lipSuggere, une constante, pendant que le calcul retombait sur le reglage
+  // ECRIT dans le dossier : les deux lisaient deux sources differentes des
+  // qu'un g/kg avait ete enregistre. Meme ordre de priorite que _propReglages :
+  // le curseur de session, puis le dossier, puis la suggestion.
+  const _regLip=(()=>{ try{ return reglagesCalcul(c).lip; }catch(e){ return undefined; } })();
+  const lipCour=(typeof _propLip==='number')?_propLip
+    :((typeof _regLip==='number')?_regLip:lipSug);
   const optsLip=LIP_ECHELLE.map(v=>`<option value="${v}"${lipCour===v?' selected':''}>${String(v).replace('.',',')} g/kg lip.${v===lipSug?' · suggéré':''}</option>`).join('');
   // La correction métabolique. Elle vit en mémoire comme les autres curseurs,
   // et n'est écrite dans le dossier qu'au bouton d'enregistrement habituel.
   const corrSug=correctionMBSuggeree(c);
+  // Meme chose pour la correction du metabolisme : correctionMB LIT deja le
+  // dossier, l'ordre etait donc juste — on le laisse tel quel.
   const corrCour=(typeof _propCorr==='number')?_propCorr:correctionMB(c);
   const optsCorr=CORRECTION_MB_ECHELLE.map(v=>{
     const pct=Math.round((v-1)*100);
@@ -48317,8 +48578,9 @@ function _htmlDepartCoach(c){
   </div>`;
 }
 function _htmlDepartHypotheses(c){
-  const b=besoinsProposes(c,_propReglages());
-  if(!b||b.source===null) return '';
+  const b=_besoinsSurs(c);
+  if(!b) return _htmlBesoinsEchec();
+  if(b.source===null) return '';
   const nom=b.source==='katch'?'Katch-McArdle':'Mifflin-St Jeor';
   return `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">${escapeHtml(nom)} · ${b.mb} kcal au repos · dépense estimée ${b.depense} kcal — ${escapeHtml(b.hypotheses.join(' · '))}. Repère de départ, à ajuster.</div>`;
 }
@@ -48396,7 +48658,7 @@ function saveClientNutriManuel(v){
   // l'écran pendant que l'athlète en garderait d'autres — l'écran du coach
   // dirait une chose, le journal de son élève une autre.
   if(!manuel){
-    const b=besoinsProposes(c,_propReglages());
+    const b=_besoinsSurs(c);
     if(b&&b.source!==null){
       const cyc=dieteCyclee(c);
       c.nutrition.macros=Object.assign({},c.nutrition.macros,
@@ -48500,7 +48762,7 @@ function saveClientNutriCycle(v){
 //     abandonnée depuis un mois ;
 //   • la pause et la transition en attente, qui parlent d'un déroulé fini.
 function _resumeReinit(c){
-  const b=besoinsProposes(c,_propReglages());
+  const b=_besoinsSurs(c);
   if(!b||b.source===null) return null;
   const sem=(()=>{ try{ return semainesPhase(c); }catch(e){ return null; } })();
   return {b,sem,pause:!!(c.phase&&c.phase.pause),
@@ -48524,7 +48786,7 @@ async function reinitialiserCalculs(){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return false;
-  const b=besoinsProposes(c,_propReglages());
+  const b=_besoinsSurs(c);
   if(!b||b.source===null){ toast('Données de base incomplètes','var(--orange)'); return false; }
   if(!c.nutrition) c.nutrition={};
   const cycle=dieteCyclee(c);
@@ -48550,7 +48812,7 @@ async function reinitialiserCalculs(){
 function proposerPointDepart(){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
-  const b=besoinsProposes(c,_propReglages());
+  const b=_besoinsSurs(c);
   if(!b||b.source===null){ toast('Données de base incomplètes','var(--orange)'); return; }
   // Le sucre n'est pas proposé : aucune cible de sucre ajouté ne sort du
   // calcul, et en inventer une sur un écran de santé serait pire que la
@@ -48568,8 +48830,22 @@ function proposerPointDepart(){
 // Toute ouverture de fiche remet la confirmation a zero si elle ne vise pas
 // CET athlete. Le simple fait de changer d'ecran ne doit jamais transporter
 // un accord donne ailleurs.
+// N2.1 — TOUS LES CURSEURS DE CALCUL, ET PLUS SEULEMENT LA CONFIRMATION.
+// _propProt, _propLip, _propCorr, _propCycle et _propVitesse sont des
+// variables de MODULE : elles survivaient au changement d'athlete. Le coach
+// reglait les lipides de A sans enregistrer, ouvrait B, et voyait les cibles
+// de B calculees avec le curseur de A — sur un ecran qui affiche des calories.
+// Seule _plConfirme etait protegee.
+let _ccdDernierAthlete=null;
 function _plOublierSiAutreAthlete(email){
   if(_plConfirme&&_plConfirme.email!==email) _plConfirme=null;
+  if(email!==undefined&&email!==_ccdDernierAthlete){
+    _ccdDernierAthlete=email;
+    // null = « suis le dossier ouvert ». _propReglages retombe alors sur
+    // nutrition.reglages, puis sur la suggestion : jamais sur le precedent.
+    _propProt=null; _propLip=null; _propCorr=null; _propCycle=null;
+    _propVitesse=null; _propVitessePhase=null;
+  }
 }
 // L'interrupteur d'accès, avec sous les yeux du coach CE QUE VOIT SON
 // ATHLÈTE. Un interrupteur qui dit seulement « ouvert / fermé » laisse croire
@@ -54048,9 +54324,20 @@ function _plEmpreinte(saisie){
 // ajoute.
 function _plSaisieCourante(){
   const g=id=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?undefined:v;};
+  const on={kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),f:g('ccd-on-f')};
+  // N2.4 — EN DIETE NON CYCLEE, LE JOUR OFF EST UNE COPIE DU JOUR ON.
+  // Les champs ccd-off-* ne sont alors PAS rendus : cette fonction rendait un
+  // jour OFF vide, pendant que l'enregistrement, lui, recopiait le jour ON.
+  // Les deux empreintes divergeaient systematiquement, _plConfirmeValide rendait
+  // toujours faux, et le coach ne pouvait JAMAIS valider une derogation au
+  // plancher sur une diete non cyclee — meme en cochant la case.
+  // L'empreinte doit porter sur ce qui est reellement enregistre.
+  const cyc=(()=>{ try{ return dieteCyclee(getOwnedClient(currentClientId)); }
+                   catch(e){ return true; } })();
   return {
-    on:{kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),f:g('ccd-on-f')},
-    off:{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),f:g('ccd-off-f')}
+    on,
+    off:cyc?{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),f:g('ccd-off-f')}
+           :Object.assign({},on)
   };
 }
 // Un athlete SANS EMAIL ne peut pas recevoir de derogation : il n'y a aucun

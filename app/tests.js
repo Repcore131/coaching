@@ -18678,14 +18678,41 @@ function testExercices(){
       ok('Le bouton n\'apparaît pas sans créneau actif',(()=>{
         const c=faireClient(); c.sessions_config.forEach(s=>{s.active=false;});
         return _htmlBoutonDecharge(c)==='';})());
-      ok('Le bouton s\'affiche, puis annonce la décharge déjà programmée',(()=>{
+      ok('Le bouton de pose cède la place au bouton de retrait',(()=>{
+        // N4.3 — la carte n'annonce plus « décharge déjà programmée » sur un
+        // bouton mort : elle propose le RETRAIT, qui n'avait qu'un seul point
+        // d'écriture dans tout le fichier, sept clics plus loin.
         const c=faireClient();
         const avant=_htmlBoutonDecharge(c);
+        if(!/Programmer une semaine de décharge/.test(avant))
+          return _echec('la pose n\'est plus proposée');
+        if(/Retirer la décharge/.test(avant))
+          return _echec('le retrait est proposé alors qu\'il n\'y a rien à retirer');
         c.sessions_config.forEach(s=>{ if(s.active) s.deload=true; });
         const apres=_htmlBoutonDecharge(c);
-        return /Programmer une semaine de décharge/.test(avant)
-          &&/Décharge déjà programmée/.test(apres)
-          &&/2 créneaux actifs/.test(apres);})());
+        if(/Programmer une semaine de décharge/.test(apres))
+          return _echec('la pose est encore proposée alors que tout est chargé');
+        if(!/Retirer la décharge/.test(apres))
+          return _echec('aucun retrait proposé');
+        return /2 créneaux actifs/.test(apres)
+          ?true:_echec('le nombre de créneaux a disparu');})());
+      ok('LE RETRAIT N\'ÉCRIT QUE SUR LES CRÉNEAUX EN DÉCHARGE',(()=>{
+        // Ni sur les créneaux inactifs, ni sur ceux qui n'en portent pas.
+        const users=DB.get('users')||{};
+        const c=users['dch1@t.fr'];
+        if(!c) return _echec('fixture absente');
+        c.sessions_config.forEach((s,i)=>{ s.deload=(i===0); });
+        users['dch1@t.fr']=c; DB.set('users',users);
+        const p=_preparerDechargeGroupee([c.id],DB.get('users')||{},false);
+        if(!p.cibles.length) return _echec('aucune cible au retrait : '+JSON.stringify(p.echecs));
+        if(p.cibles[0].index.length!==1||p.cibles[0].index[0]!==0)
+          return _echec('créneaux visés : '+JSON.stringify(p.cibles[0].index));
+        // Et sans aucune décharge, c'est un échec NOMMÉ, pas une écriture vide.
+        c.sessions_config.forEach(s=>{ s.deload=false; });
+        users['dch1@t.fr']=c; DB.set('users',users);
+        const q=_preparerDechargeGroupee([c.id],DB.get('users')||{},false);
+        return (!q.cibles.length&&/décharge à retirer/.test((q.echecs[0]||{}).raison||''))
+          ?true:_echec('le refus n\'est pas nommé : '+JSON.stringify(q.echecs));})());
       ok('Aucun décochage automatique : rejouer ne remet rien à false',(()=>{
         try{ programmerDecharge(); }catch(e){ return _echec('exception: '+e.message); }
         const c=(DB.get('users')||{})['dch1@t.fr'];
@@ -22495,6 +22522,157 @@ function testExercices(){
           return _ccdVue==='lifestyle'?true:_echec('l\'onglet n\'a pas suivi : '+_ccdVue);})());
       } finally { try{ ccdVue(svVue); }catch(e){} }
     })();
+    // ══════ AUDIT COACH PC DU 25/08/2026 — LES 17 CRITIQUES « PETITS » ══════
+    (()=>{
+      ok('N3.1 — TOUTE POUSSEE HORODATE LE DOSSIER, en un seul endroit',(()=>{
+        // syncUser refuse de telecharger un dossier dont le updatedAt distant
+        // n'est pas STRICTEMENT plus recent. Sept ecritures du coach poussaient
+        // sans y toucher : le toast promettait que l'athlete verrait la reponse,
+        // et l'athlete ne la voyait jamais.
+        if(!/user\.updatedAt=Date\.now\(\)/.test(String(CLOUD.pushOne)))
+          return _echec('pushOne n\'horodate pas');
+        // ET EN UN SEUL ENDROIT : la huitieme ecriture ajoutee demain doit en
+        // heriter sans que personne n'y pense.
+        const av=Date.now()-5000;
+        const u={email:'x@t.fr',updatedAt:av};
+        const svF=window.fetch, svT=CLOUD._getToken;
+        try{
+          CLOUD._getToken=async()=>null;
+          window.fetch=()=>Promise.resolve({ok:true,text:async()=>'{}'});
+          try{ CLOUD.pushOne('x@t.fr',u); }catch(e){}
+        } finally { window.fetch=svF; CLOUD._getToken=svT; }
+        return u.updatedAt>av?true:_echec('le dossier part au timestamp inchange');})());
+
+      ok('N3.2 — TROIS ECRITURES VISENT LE DOSSIER DE L\'ATHLETE, plus celui du coach',(()=>{
+        // Elles mutaient un objet DETACHE — DB.get reparse le JSON — puis
+        // appelaient saveUser, qui ne range que currentUser. L'habitude
+        // reapparaissait effacee a la reouverture de la fiche.
+        for(const f of [coachLeverDrapeau,habCoachAjouter,habCoachRetirer]){
+          const s=String(f);
+          if(/const ok=saveUser\(\)/.test(s))
+            return _echec(f.name+' enregistre encore le dossier du coach');
+          if(!/getOwnedClient\(currentClientId,users\)/.test(s))
+            return _echec(f.name+' ne passe pas par la carte des utilisateurs');
+          if(!/DB\.set\('users',users\)/.test(s))
+            return _echec(f.name+' n\'ecrit pas la carte');
+        }
+        return true;})());
+
+      ok('N3.5 — UN sessions_config EN OBJET NE BLOQUE PLUS L\'ENVOI A VIE',(()=>{
+        // Firebase rend ce tableau sous forme d'objet des qu'un creneau manque.
+        // Le .map nu levait AVANT le fetch : la clef partait dans rc_sync_queue,
+        // et _queueRetry rejouait indefiniment le meme echec.
+        const s=String(CLOUD._doPushOne);
+        if(/safe\.sessions_config=safe\.sessions_config\.map/.test(s))
+          return _echec('le .map nu est encore la');
+        if(!/_tab/.test(s)) return _echec('aucune normalisation avant l\'envoi');
+        // Et un refus DEFINITIF ne bloque plus le rejeu des clefs suivantes.
+        return /_refus|40\[13\]|40/.test(String(CLOUD.viderFile))
+          ?true:_echec('viderFile sort encore par break sur tout echec');})());
+
+      ok('N3.3 — L\'ESPACE ATHLETE NE POUSSE PLUS LE DOSSIER DE SON COACH',(()=>{
+        // La regle .write de /users/$emailKey refuse cette ecriture PAR
+        // CONSTRUCTION : elle empoisonnait la file de renvoi a vie, et le
+        // dossier de l'athlete lui-meme cessait d'etre synchronise.
+        const s=String(loadClientHome);
+        return /CLOUD\.pushOne\(ce,mc\)/.test(s)
+          ?_echec('la poussee vers le dossier du coach subsiste'):true;})());
+
+      ok('N2.5 — LES SIX APPELS A besoinsProposes SONT PROTEGES',(()=>{
+        // Deux d'entre eux sont interpoles dans le innerHTML du panneau
+        // nutrition : une exception y laissait TOUT le panneau vide, sans un mot.
+        if(typeof _besoinsSurs!=='function') return _echec('aucun garde-fou');
+        for(const f of [_htmlDepartCoach,_htmlDepartHypotheses,saveClientNutriManuel,
+                        _resumeReinit,reinitialiserCalculs,proposerPointDepart]){
+          const s=String(f).replace(/\/\/.*/g,'');
+          if(/besoinsProposes\(/.test(s)&&!/try\{/.test(s))
+            return _echec(f.name+' appelle encore besoinsProposes a nu');
+        }
+        // ET L'ERREUR EST DITE. Un panneau vide n'apprend rien au coach.
+        const svB=window.besoinsProposes;
+        try{
+          window.besoinsProposes=()=>{ throw new Error('objet a trous'); };
+          const h=_htmlDepartCoach({email:'z@t.fr'});
+          if(h.indexOf('n’a pas pu être calculé')<0)
+            return _echec('l\'echec de calcul est avale en silence');
+        } finally { window.besoinsProposes=svB; }
+        return true;})());
+
+      ok('N2.1 — LES CURSEURS DE CALCUL NE SURVIVENT PLUS AU CHANGEMENT D\'ATHLETE',(()=>{
+        // Le coach reglait les lipides de A sans enregistrer, ouvrait B, et
+        // voyait les cibles de B calculees avec le curseur de A.
+        const sv=[_propProt,_propLip,_propCorr,_propCycle];
+        try{
+          _propProt=2.9; _propLip=1.4; _propCorr=1.1; _propCycle=false;
+          _plOublierSiAutreAthlete('autre@t.fr');
+          if(_propProt!==null||_propLip!==null||_propCorr!==null||_propCycle!==null)
+            return _echec('un curseur a survecu : '+[_propProt,_propLip,_propCorr,_propCycle].join(','));
+          // Et le MEME athlete ne les efface pas : le coach est en train de les
+          // manipuler.
+          _propProt=2.9;
+          _plOublierSiAutreAthlete('autre@t.fr');
+          return _propProt===2.9?true:_echec('les curseurs sautent sur le meme athlete');
+        } finally { _propProt=sv[0]; _propLip=sv[1]; _propCorr=sv[2]; _propCycle=sv[3]; }})());
+
+      ok('N2.4 — L\'EMPREINTE PORTE SUR CE QUI EST REELLEMENT ENREGISTRE',(()=>{
+        // En diete non cyclee les champs OFF ne sont pas rendus : l'empreinte
+        // rendait un jour OFF vide pendant que l'enregistrement recopiait le
+        // jour ON. Les deux divergeaient, et la derogation au plancher etait
+        // impossible a valider — meme en cochant la case.
+        const s=String(_plSaisieCourante);
+        if(!/dieteCyclee/.test(s))
+          return _echec('l\'empreinte ignore le mode cycle');
+        return /Object\.assign\(\{\},on\)/.test(s)
+          ?true:_echec('le jour OFF n\'est pas recopie depuis le jour ON');})());
+
+      ok('N6.5 — LE RAPPORT DE CHARGE A UNE LECTURE, et un seuil nomme',(()=>{
+        if(typeof CHARGE_BANDE!=='number') return _echec('aucun seuil nomme');
+        if(lectureChargeHebdo(CHARGE_BANDE)!=='pic') return _echec('le pic n\'est pas signale');
+        if(lectureChargeHebdo(-CHARGE_BANDE)!=='creux') return _echec('le creux n\'est pas signale');
+        if(lectureChargeHebdo(0)!=='') return _echec('une variation ordinaire est commentee');
+        // pct null : rien ne s'affiche. Ce contrat existait deja.
+        return (lectureChargeHebdo(null)===''&&lectureChargeHebdo(undefined)==='')
+          ?true:_echec('un pct absent produit du texte');})());
+
+      ok('N6.9 — LE RIR ET LA DOULEUR FIGURENT SERIE PAR SERIE',(()=>{
+        const s=String(_buildSessionCard);
+        if(!/RIR /.test(s)) return _echec('le RIR n\'est pas affiche');
+        if(!/douleur /.test(s)) return _echec('la douleur n\'est pas affichee');
+        // RIEN PLUTOT QU'UN ZERO : un historique anterieur au champ rir n'a pas
+        // de RIR, et zero est une valeur LEGITIME — c'est l'echec.
+        const h=_buildSessionCard({name:'S',date:Date.now(),data:{EX:{sets:[
+          {done:true,weight:80,reps:8},
+          {done:true,weight:80,reps:8,rir:0},
+          {done:true,weight:80,reps:6,rir:2,pain:3},
+          {done:true,weight:80,reps:6,pain:0}]}}},0);
+        if(/RIR undefined|RIR NaN|douleur 0/.test(h))
+          return _echec('une valeur absente est rendue : '+h.slice(0,200));
+        if(h.indexOf('RIR 0')<0) return _echec('RIR 0 — l\'echec — n\'est pas montre');
+        return h.indexOf('douleur 3')>=0?true:_echec('la douleur signalee n\'apparait pas');})());
+
+      ok('N6.8 — LES VIDEOS A CORRIGER REMONTENT DANS « A TRAITER »',(()=>{
+        const s=String(renderTodoBlock);
+        if(!/videoNonCorrigee/.test(s)) return _echec('la ligne n\'est pas construite');
+        if(!/type:'videos'/.test(s)) return _echec('aucune ligne de type videos');
+        // Le clic entre dans la file de correction DEJA ECRITE.
+        if(!/_entrerFileVideos\(\)/.test(s)) return _echec('le clic n\'ouvre pas la file');
+        // Reportable comme les autres : elle ne porte pas nonReportable.
+        return /isAlertSnoozed\('videos'/.test(s)
+          ?true:_echec('la ligne n\'est pas reportable de 7 jours');})());
+
+      ok('N4.4 — UN MODELE SE REPORTE D\'UN GENRE A L\'AUTRE, en copie profonde',(()=>{
+        if(typeof cptReporterGenre!=='function') return _echec('aucune commande de report');
+        const s=String(cptReporterGenre);
+        // COPIE PROFONDE : le fichier a deja eu ce bug, un tableau imbrique
+        // restait partage et modifier la copie modifiait la source.
+        if(!/JSON\.parse\(JSON\.stringify/.test(s))
+          return _echec('le report partage les tableaux imbriques');
+        // CONFIRMATION quand la destination porte deja quelque chose.
+        if(!/rcConfirm/.test(s)) return _echec('le report ecrase sans demander');
+        // RIEN N'EST ECRIT AVANT SAUVEGARDER : c'est la regle de cet ecran.
+        return !/DB\.set|CLOUD\.push/.test(s)
+          ?true:_echec('le report enregistre avant le bouton SAUVEGARDER');})());
+    })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
       const ECRANS_COACH=['s-coach-home','s-coach-client','s-coach-sessions',
@@ -23056,7 +23234,10 @@ function testExercices(){
           if(s.indexOf('phase.debut=Date.now()')<0) return _echec('le compteur de semaines ne repart pas');
           if(!/delete c\.phase\.pause/.test(s)) return _echec('la pause n\'est pas levee');
           if(!/delete c\.phase\.transition/.test(s)) return _echec('la transition n\'est pas annulee');
-          if(s.indexOf('besoinsProposes')<0) return _echec('les cibles ne sont pas recalculees');
+          // Le calcul passe desormais par _besoinsSurs, qui protege l'appel :
+          // six appels nus laissaient tout le panneau nutrition vide quand
+          // sessions_config revenait du serveur sous forme d'objet.
+          if(!/besoinsProposes|_besoinsSurs/.test(s)) return _echec('les cibles ne sont pas recalculees');
           return /origine:'reinit'/.test(s)?true:_echec('la provenance n\'est pas tracee');})());
 
         ok('Le bouton de remise a zero est atteignable, et separe du bouton rouge',(()=>{
