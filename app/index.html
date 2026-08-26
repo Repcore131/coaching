@@ -49250,6 +49250,89 @@ function _htmlDieteCoach(c){
     ${sub?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:5px">${escapeHtml(sub)}</div>`:''}
   </div>`;
 }
+// ══════ N2.3 ET N2.7 — CE QUE L'ATHLETE VOIT, DIT AU COACH ════════════════
+// DEUX ECRANS QUI DIVERGENT TOUT SEULS. Les dix champs du panneau coach
+// affichent, en mode automatique, le resultat de besoinsProposes RECALCULE a
+// chaque rendu — lequel depend de la moyenne de pas sur 14 jours et du dernier
+// bilan. L'ecran de l'athlete, lui, lit nutrition.macros, fige au dernier
+// enregistrement. Un athlete qui marche davantage faisait donc bouger les
+// chiffres du coach sans que les siens ne bougent, et rien a l'ecran ne disait
+// lequel faisait foi.
+//
+// ET L'ADAPTATION DE CYCLE N'ETAIT VISIBLE NULLE PART. _getEffectiveMacros
+// applique le modificateur de cycle menstruel — jusqu'a +4 % de kcal en
+// luteale tardive un jour OFF, ou 40 kcal deplacees des lipides vers les
+// glucides un jour de regles difficiles. Le panneau coach lisait
+// nutrition.macros brut et n'appelait jamais cette fonction : la banniere de
+// transition, elle, ne se declenche qu'en diete stricte.
+//
+// ON NE RECALCULE RIEN ET ON N'ECRIT RIEN. C'est toujours le bouton
+// d'enregistrement qui envoie. Ce bloc LIT, par le meme chemin que l'ecran de
+// l'athlete — nutIsOnDay puis _getEffectiveMacros, avec `c` comme porteur — et
+// dit l'ecart quand il y en a un.
+const _NUT_VUE=[['kcal','kcal',''],['p','prot','g'],['g','gluc','g'],['l','lip','g']];
+function _htmlAthleteVoit(c,grilleOn,grilleOff,cyc){
+  if(!c) return '';
+  const nut=c.nutrition||{};
+  // AUCUNE CIBLE AU DOSSIER : l'athlete ne voit aucun anneau, et l'annoncer
+  // vaut mieux qu'un bloc de zeros. C'est aussi le cas du dossier neuf.
+  const base=(nut.macros&&(nut.macros.on||nut.macros.off))||null;
+  if(!base||!(Number(base.kcal)>0)) return '<div class="sub" style="font-size:var(--fs-xs);line-height:1.6">'
+    +'Aucune cible n’est enregistrée : ton athlète ne voit encore aucun anneau. '
+    +'Les chiffres réglés en dessous ne l’atteindront qu’après l’enregistrement.</div>';
+  let today='', isOn=false, vu={};
+  try{ today=localISODate(new Date()); }catch(e){ return ''; }
+  try{ isOn=!!nutIsOnDay(today,c); }catch(e){ isOn=false; }
+  // ON NE FORCE PAS isOn EN DIETE NON CYCLEE, meme si les deux colonnes
+  // portent les memes valeurs. _applyNutCycleModifier teste `!isOn` pour le
+  // bonus de luteale tardive : le forcer a vrai retirerait, ICI SEULEMENT, une
+  // adaptation que l'athlete recoit bel et bien — nutIsOnDay est le seul juge,
+  // sur son ecran comme ici. Seul le LIBELLE du jour change.
+  try{ vu=_getEffectiveMacros(nut,isOn,today,c)||{}; }catch(e){ vu={}; }
+  // AU DOSSIER, avant l'adaptation de cycle : c'est ce que le coach a
+  // enregistre la derniere fois.
+  const stock=(isOn?nut.macros.on:nut.macros.off)||nut.macros.on||{};
+  // DANS LES CHAMPS, ce que le panneau affiche pour ce meme jour.
+  const grille=(isOn?grilleOn:(cyc?grilleOff:grilleOn))||{};
+  const n=v=>{ const x=Number(v); return isFinite(x)?Math.round(x):null; };
+  const ligne=_NUT_VUE.map(f=>{
+    const a=n(vu[f[0]]);
+    return a===null?'':'<span style="white-space:nowrap"><b style="color:var(--text-strong)">'
+      +a+f[2]+'</b> <span style="color:var(--text-faint)">'+f[1]+'</span></span>';
+  }).filter(Boolean).join('<span style="color:var(--text-faint)"> · </span>');
+  // ── LES DEUX ECARTS, NOMMES SEPAREMENT ────────────────────────────────
+  // 1. Le champ ne dit pas ce qui est au dossier : le calcul a bouge depuis
+  //    le dernier enregistrement, ou le coach vient de deplacer un curseur.
+  const ecartChamp=_NUT_VUE.filter(f=>{
+    const g=n(grille[f[0]]), s=n(stock[f[0]]);
+    return g!==null&&s!==null&&g!==s;
+  }).map(f=>f[1]);
+  // 2. L'adaptation de cycle deplace ce que l'athlete voit, par rapport a ce
+  //    qui est au dossier. Ce n'est PAS une erreur : c'est voulu, et le coach
+  //    doit simplement le savoir.
+  const ecartCycle=_NUT_VUE.filter(f=>{
+    const a=n(vu[f[0]]), s=n(stock[f[0]]);
+    return a!==null&&s!==null&&a!==s;
+  }).map(f=>f[1]);
+  const jour=cyc?(isOn?'jour ON':'jour OFF'):'tous les jours';
+  let alertes='';
+  if(ecartChamp.length) alertes+='<div style="margin-top:9px;padding:8px 10px;background:var(--surface-2);'
+    +'border-left:3px solid var(--orange);border-radius:var(--r-2);font-size:var(--fs-xs);'
+    +'color:var(--text-strong);line-height:1.55">⚠ Les champs en dessous affichent autre chose '
+    +'('+ecartChamp.join(', ')+') : ce que tu lis est le <b>calcul du moment</b>, pas ce qui est '
+    +'au dossier. Tant que tu n’as pas enregistré, ton athlète garde les chiffres ci-dessus.</div>';
+  if(ecartCycle.length) alertes+='<div style="margin-top:9px;padding:8px 10px;background:var(--surface-2);'
+    +'border-left:3px solid var(--link);border-radius:var(--r-2);font-size:var(--fs-xs);'
+    +'color:var(--text-strong);line-height:1.55">Adaptation de cycle active aujourd’hui : '
+    +ecartCycle.join(', ')+' s’écarte'+(ecartCycle.length>1?'nt':'')+' de la cible enregistrée. '
+    +'C’est voulu — la cible de base, elle, ne bouge pas.</div>';
+  return '<div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;'
+    +'text-transform:uppercase;font-weight:800;margin-bottom:6px">Aujourd’hui · '+jour+'</div>'
+    +'<div style="font-size:var(--fs-sm);line-height:1.9">'+ligne+'</div>'
+    +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:5px">Lu par le même chemin que '
+    +'son écran à lui. Aucun de ces chiffres n’est recalculé ici.</div>'
+    +alertes;
+}
 function renderCoachNutriSection(c){
   _plOublierSiAutreAthlete(c&&c.email);
   const el=document.getElementById('ccd-nutrition');
@@ -49320,6 +49403,14 @@ function renderCoachNutriSection(c){
   // en dessous sont tenues. Le lire après les avoir modifiées serait le lire
   // trop tard.
   const _diete=(()=>{ try{ return _htmlDieteCoach(c); }catch(e){ return ''; } })();
+  // N2.3 et N2.7 — ce que l'athlete a REELLEMENT sous les yeux aujourd'hui,
+  // lu par son propre chemin. On passe la grille telle qu'elle est affichee
+  // pour que l'ecart soit constate, pas devine.
+  const _vuAthlete=(()=>{ try{
+    const gOn={}, gOff={};
+    for(const f of fields){ gOn[f.k]=_vOn(f.k); gOff[f.k]=_vOff(f.k); }
+    return _htmlAthleteVoit(c,gOn,gOff,_cyc);
+  }catch(e){ return ''; } })();
   // ══════ DEUX ENSEMBLES, ET L'ETAT CONSTATE D'ABORD ══════════════════════
   // L'assemblage placait dans cet ordre : les selecteurs de diete, le point de
   // depart, les dix champs, les boutons, l'acces au plan, et TOUT EN DERNIER le
@@ -49388,6 +49479,7 @@ function renderCoachNutriSection(c){
     `${_diete}${_transi}${_pauseHtml}`
     + _sect('ccd-nut-journal','Journal alimentaire','var(--green)',_journal)
     + _sect('ccd-nut-cibles','Cibles en cours','var(--green)',_lecture)
+    + _sect('ccd-nut-athlete','Ce que voit ton athlète','var(--link)',_vuAthlete)
     // ── CE QUE LE COACH REGLE ──────────────────────────────────────────────
     + _sect('ccd-nut-reglages','Régler les objectifs','var(--red)',_reglages)
     + _sect('ccd-nut-strict','Diète stricte','var(--orange)',_strict);

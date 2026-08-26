@@ -22787,6 +22787,65 @@ function testExercices(){
         // « Tous » NE SE RETIRE PAS LUI-MEME : c'est deja le retour en arriere.
         return /cle!=='tous'/.test(String(_pilCompteur))
           ?true:_echec('re-cliquer « Tous » le desactive');})());
+
+      ok('N2.3 et N2.7 — LE COACH VOIT CE QUE SON ATHLETE VOIT, au chiffre pres',(()=>{
+        if(typeof _htmlAthleteVoit!=='function') return _echec('aucun bloc de lecture');
+        const j=Date.now();
+        const iso=d=>new Date(d).toISOString().slice(0,10);
+        // Femme, diete flexible, cycle actif, sensibilite PMS, jour OFF :
+        // luteale tardive ajoute 4 % de kcal chez l'athlete. Le panneau coach
+        // lisait nutrition.macros brut et ne le montrait nulle part.
+        const A={id:'AV',email:'av@t.fr',role:'athlete',fname:'C',lname:'B',
+          gender:'Femme',_evol_gender:'F',_evol_height:'168','init-age':29,
+          createdAt:j-200*864e5,
+          sessions_config:[{active:false},{active:false},{active:false},{active:false},
+            {active:false},{active:false},{active:false}],
+          cycle:{enabled:true,lastPeriodDate:iso(j-25*864e5),cycleLength:28,sensibilitePms:true},
+          bilans:[{type:'suivi',date:j-3*864e5,'bil-weight':'59'}],
+          sessions:[],videos:[],
+          nutrition:{dietType:'flexible',cycle:false,manuel:true,
+            macros:{on:{kcal:2000,p:130,g:200,l:60},off:{kcal:2000,p:130,g:200,l:60}}}};
+        const today=localISODate(new Date());
+        if(phaseCycle(A,today)!=='luteal_late') return true;  // fixture hors phase : rien a prouver
+        const isOn=nutIsOnDay(today,A);
+        const vrai=_getEffectiveMacros(A.nutrition,isOn,today,A)||{};
+        // LE MEME CHEMIN, LE MEME NOMBRE. C'est tout le grief : la grille
+        // n'appelait jamais _getEffectiveMacros.
+        const g={kcal:2000,p:130,g:200,l:60};
+        const h=_htmlAthleteVoit(A,g,g,false);
+        if(!h) return _echec('aucun rendu');
+        const t=h.replace(/<[^>]*>/g,' ');
+        if(t.indexOf(String(Math.round(vrai.kcal)))<0)
+          return _echec('le bloc n’annonce pas les '+Math.round(vrai.kcal)+' kcal de ses anneaux : '+t.slice(0,180));
+        if(Math.round(vrai.kcal)===2000)
+          return _echec('l’adaptation de cycle n’a pas joue — la sonde ne prouve rien');
+        // L'ECART DE CYCLE EST DIT, et dit comme VOULU : ce n'est pas une erreur.
+        if(t.indexOf('Adaptation de cycle')<0)
+          return _echec('l’adaptation de cycle n’est pas signalee');
+        // ET L'ECART DE CALCUL EST DIT SEPAREMENT : le champ affiche le calcul
+        // du moment, l'athlete garde ce qui est enregistre tant qu'on n'a pas
+        // appuye sur le bouton.
+        const h2=_htmlAthleteVoit(A,{kcal:1603,p:120,g:150,l:55},{kcal:1603,p:120,g:150,l:55},false);
+        if(h2.replace(/<[^>]*>/g,' ').indexOf('calcul du moment')<0)
+          return _echec('un champ qui diverge du dossier n’est pas signale');
+        // AUCUNE ECRITURE : ce bloc LIT, et c'est toujours le bouton
+        // d'enregistrement qui envoie.
+        const s=String(_htmlAthleteVoit);
+        return (!/DB\.set|saveUser|CLOUD\.push/.test(s))
+          ?true:_echec('le bloc de lecture ecrit dans le dossier');})());
+
+      ok('N2.3 — LE PANNEAU PORTE LA SECTION, et nutIsOnDay reste le seul juge',(()=>{
+        const s=String(renderCoachNutriSection);
+        if(s.indexOf('ccd-nut-athlete')<0) return _echec('la section n’est pas assemblee');
+        if(s.indexOf('_htmlAthleteVoit')<0) return _echec('le bloc n’est pas appele');
+        // La section est rendue AVANT les reglages : le coach lit ce que son
+        // athlete a sous les yeux avant de toucher aux champs.
+        if(s.indexOf('ccd-nut-athlete')>s.indexOf('ccd-nut-reglages'))
+          return _echec('la section est rendue apres les reglages');
+        // Le jour ON/OFF vient de nutIsOnDay, jamais d'une deduction locale :
+        // _applyNutCycleModifier teste `!isOn` pour le bonus de luteale.
+        return /nutIsOnDay\(today,c\)/.test(String(_htmlAthleteVoit))
+          ?true:_echec('le jour n’est pas lu par nutIsOnDay');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
