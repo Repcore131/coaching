@@ -54616,7 +54616,11 @@ function ajustementPropose(user){
 function libelleReglePlancher(pl){
   if(!pl) return 'sous ton plancher';
   if(pl.regle==='masse_maigre')
-    return 'sous '+KCAL_PLANCHER_PAR_KG_MM+' kcal par kilo de masse maigre';
+    // N2.9 — la phrase dit la GRANDEUR bornee. « Sous 30 kcal par kilo de
+    // masse maigre » decrivait l'apport total ; le seuil porte sur ce qui
+    // reste une fois l'entrainement paye.
+    return 'sous '+KCAL_PLANCHER_PAR_KG_MM+' kcal par kilo de masse maigre '
+      +'une fois l’entraînement payé';
   if(pl.regle==='poids_total')
     return 'sous '+KCAL_PLANCHER_PAR_KG+' kcal par kilo de poids';
   return 'sous le plancher de '+pl.abs+' kcal';
@@ -54679,7 +54683,19 @@ const PLANCHER_MAJORATION_TCA=1.15;
 // tissu à l'autre et d'une personne à l'autre, et la masse maigre elle-même
 // n'est ici qu'une ESTIMATION par tours de taille et de cou. C'est une borne
 // basse de sécurité, pas un besoin calculé.
-const KCAL_PLANCHER_PAR_KG_MM=30;      // par kilo de MASSE MAIGRE
+// N2.9 — CE SEUIL EST UN SEUIL DE DISPONIBILITE ENERGETIQUE, et il est
+// applique comme tel depuis le 26/08/2026 (arbitrage de Kevin).
+// Dans la litterature, 30 kcal par kilo de masse maigre borne l'APPORT MOINS
+// LA DEPENSE D'EXERCICE — pas l'apport total. Il bornait ici l'apport total :
+// un athlete qui depense 700 kcal par jour a l'entrainement passait donc sous
+// le vrai seuil sans qu'aucune violation ne se declenche, alors meme que
+// kcalSportParJour existe dans le fichier et que _depensePourPlafond
+// l'utilise deja.
+// Le plancher proportionnel vaut donc 30 x masse maigre PLUS la depense
+// d'entrainement. Le plafond a 85 % de la depense estimee reste en place et
+// borne le resultat : sans lui, un gros volume rendrait toute seche
+// impossible tout en pretendant proteger.
+const KCAL_PLANCHER_PAR_KG_MM=30;      // par kilo de MASSE MAIGRE, EN DISPONIBILITE
 // Part de la dépense estimée que le plancher PROPORTIONNEL ne peut pas
 // dépasser. Sans elle, un plancher qui frôle la dépense interdit toute sèche
 // tout en prétendant protéger l'athlète.
@@ -54746,7 +54762,17 @@ function plancherEffectif(user,brut){
   // sinon on retombe sur le poids total, et la règle affichée le DIT plutôt que
   // de laisser croire à une précision qu'on n'a pas.
   const mm=masseMaigreDuBilan(user);
-  const parMM=(mm!=null&&mm>0)?KCAL_PLANCHER_PAR_KG_MM*mm:null;
+  // N2.9 — LA DEPENSE D'ENTRAINEMENT EST AJOUTEE AU SEUIL. 30 kcal/kg de masse
+  // maigre est un seuil de DISPONIBILITE : pour que l'athlete dispose de ce
+  // qu'il faut une fois l'entrainement paye, l'apport doit couvrir les deux.
+  // Un echec de lecture rend zero, jamais NaN : le plancher retombe alors sur
+  // l'ancien comportement plutot que de disparaitre.
+  let _dexo=0;
+  // kcalSportParJour rend un OBJET — c'est `.jour` que lisent besoinsProposes
+  // et _depensePourPlafond, et c'est ce que ce plancher doit lire aussi.
+  try{ const v=(kcalSportParJour(user)||{}).jour;
+    if(isFinite(v)&&v>0) _dexo=v; }catch(e){}
+  const parMM=(mm!=null&&mm>0)?(KCAL_PLANCHER_PAR_KG_MM*mm+_dexo):null;
   const parPoids=poids!=null?KCAL_PLANCHER_PAR_KG*poids:null;
   let proportionnel=(parMM!=null)?parMM:parPoids;
   const regleProp=(parMM!=null)?'masse_maigre':(parPoids!=null?'poids_total':null);
@@ -54768,6 +54794,7 @@ function plancherEffectif(user,brut){
     p:poids!=null?Math.round(PROT_PLANCHER_G_KG*poids*maj*10)/10:null,
     l:poids!=null?Math.round(LIP_PLANCHER_G_KG*poids*maj*10)/10:null,
     poids,masseMaigre:mm,tca,deficit,majoration:maj,abs,plafonne,
+    depenseExercice:Math.round(_dexo),
     proportionnel:proportionnel!=null?Math.round(proportionnel*maj):null,
     parKg:parPoids!=null?Math.round(parPoids*maj):null};
 }
@@ -55133,7 +55160,10 @@ function direRegplePlancher(pl){
   let coeur;
   if(pl.regle==='masse_maigre'&&pl.masseMaigre!=null)
     coeur=KCAL_PLANCHER_PAR_KG_MM+' kcal/kg de masse maigre pour '
-      +nb(pl.masseMaigre)+' kg de masse maigre';
+      +nb(pl.masseMaigre)+' kg de masse maigre'
+      // N2.9 — le coach doit pouvoir refaire le nombre a la main : la depense
+      // d'entrainement en fait partie, et elle est donc ecrite.
+      +(pl.depenseExercice>0?', plus '+pl.depenseExercice+' kcal d’entraînement':'');
   else if(pl.regle==='poids_total'&&pl.poids!=null)
     coeur=KCAL_PLANCHER_PAR_KG+' kcal/kg pour '+nb(pl.poids)+' kg';
   else if(pl.regle==='absolu')

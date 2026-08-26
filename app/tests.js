@@ -23073,6 +23073,48 @@ function testExercices(){
           return _echec('l’alcool ne peut pas se saisir sur l’aliment perso');
         return /alcool:_persoNb\('perso-alcool'\)/.test(String(enregistrerAlimentPerso))
           ?true:_echec('l’alcool saisi n’est pas enregistre');})());
+
+      ok('N2.9 — LE PLANCHER ET SON LIBELLE DECRIVENT LA MEME GRANDEUR',(()=>{
+        const j=Date.now();
+        // Le dossier du doc : six seances par semaine, tours de mesure
+        // renseignes. Avant, 30 x masse maigre bornait l'apport TOTAL, et cet
+        // athlete passait sous le vrai seuil sans qu'aucune violation ne
+        // sorte.
+        const u={id:'EA',email:'ea@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+          _evol_height:'180','init-age':30,createdAt:j-300*864e5,
+          weightLog:[{date:new Date(j-2*864e5).toISOString().slice(0,10),kg:80}],
+          sessions_config:Array.from({length:7},(_,i)=>({day:'J'+i,name:'S',
+            active:i<6,exercises:[{name:'DC',series:4,reps:'8'}]})),
+          bilans:[{type:'debut',date:j-100*864e5,'deb-weight':'80','deb-height':'180',
+            'deb-age':'30','deb-gender':'Homme','deb-waist':'85','deb-neck':'38'}],
+          sessions:[],videos:[]};
+        const pl=plancherEffectif(u);
+        if(pl.regle!=='masse_maigre') return _echec('règle '+pl.regle+' : la sonde ne prouve rien');
+        if(!(pl.depenseExercice>0)) return _echec('aucune dépense d’entraînement relevée');
+        // LE COACH DOIT POUVOIR REFAIRE LE NOMBRE. Sans plafonnement, c'est
+        // exactement 30 x masse maigre plus la dépense ; avec, c'est 85 % de
+        // la dépense estimée — et le message le dit dans les deux cas.
+        const mm=masseMaigreDuBilan(u);
+        const brut=Math.round(KCAL_PLANCHER_PAR_KG_MM*mm)+pl.depenseExercice;
+        if(!pl.plafonne&&Math.abs(pl.kcal-brut)>2)
+          return _echec(pl.kcal+' au lieu de '+brut+', sans plafonnement');
+        if(pl.plafonne&&!(pl.kcal<brut))
+          return _echec('plafonné mais pas plus bas que '+brut);
+        // ET LE PLANCHER A REELLEMENT MONTE : c'est tout l'objet du lot.
+        if(!(pl.kcal>Math.round(KCAL_PLANCHER_PAR_KG_MM*mm)))
+          return _echec('le plancher n’a pas bougé : '+pl.kcal);
+        // LES DEUX MESSAGES DISENT LA GRANDEUR BORNEE.
+        if(libelleReglePlancher(pl).indexOf('entraînement')<0)
+          return _echec('le libellé décrit encore l’apport total : '+libelleReglePlancher(pl));
+        const dit=direRegplePlancher(pl);
+        if(dit.indexOf(pl.depenseExercice+' kcal d’entraînement')<0)
+          return _echec('la dépense n’est pas écrite : '+dit);
+        // SANS ENTRAINEMENT, RIEN N'EST AJOUTE ni annonce.
+        const s=JSON.parse(JSON.stringify(u)); s.sessions_config=[];
+        const p2=plancherEffectif(s);
+        if(p2.depenseExercice!==0) return _echec('une dépense sort de nulle part : '+p2.depenseExercice);
+        return direRegplePlancher(p2).indexOf('d’entraînement')<0
+          ?true:_echec('une dépense nulle est quand même annoncée');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
@@ -31174,10 +31216,17 @@ function testExercices(){
           u.bilans[0]['deb-job']='Maçon';
           const pl=plancherEffectif(u);
           const mm=masseMaigreDuBilan(u);
-          const attendu=Math.round(KCAL_PLANCHER_PAR_KG_MM*mm);
+          // N2.9 — LE SEUIL PORTE SUR LA DISPONIBILITE, pas sur l'apport
+          // total : 30 kcal/kg de masse maigre PLUS la depense d'entrainement.
+          // La fixture porte quatre creneaux actifs, elle en a donc une, et
+          // l'attendu ne peut plus etre le seul produit 30 x mm.
+          const attendu=Math.round(KCAL_PLANCHER_PAR_KG_MM*mm)+pl.depenseExercice;
           if(pl.regle!=='masse_maigre') return _echec('règle '+pl.regle);
-          return Math.abs(pl.kcal-attendu)<=2&&Math.abs(pl.kcal-2220)<=80
-            ?true:_echec(pl.kcal+' au lieu de '+attendu);})());
+          if(!(pl.depenseExercice>0))
+            return _echec('aucune dépense d\'entraînement : la sonde ne prouve rien');
+          return Math.abs(pl.kcal-attendu)<=2
+            ?true:_echec(pl.kcal+' au lieu de '+attendu
+              +' (30 x '+mm+' + '+pl.depenseExercice+' kcal d\'entraînement)');})());
         ok('Sans métier reconnu, le plafond de 85 % passe DEVANT la masse maigre',(()=>{
           // Le lot « une seule convention de dépense » fait tomber le NEAT à
           // 1,20 pour qui n'a pas de profession reconnue. Conséquence directe :
@@ -31199,15 +31248,36 @@ function testExercices(){
           if(pl.kcal>=ancien) return _echec(pl.kcal+' ne descend pas sous '+ancien);
           return pl.kcal<3000&&Math.abs(pl.kcal-2310)<=140
             ?true:_echec(pl.kcal+' (règle '+pl.regle+', plafonné '+pl.plafonne+')');})());
-        ok('Critère : femme 48 kg, masse maigre 37 kg → 1200, règle absolue',(()=>{
+        ok('Critère : femme 48 kg, masse maigre 37 kg → l\'absolu tient SANS entraînement',(()=>{
+          // N2.9 — LA FIXTURE PERD SES CRENEAUX. Depuis que le plancher porte
+          // sur la disponibilite, 30 x 37 = 1110 PLUS la depense d'une athlete
+          // qui s'entraine quatre fois par semaine passe au-dessus des 1200 de
+          // l'absolu : la regle proportionnelle gagnerait, et ce critere-la
+          // ne mesurerait plus l'absolu mais l'entrainement.
+          // Ce qu'il doit prouver reste vrai : a masse maigre tres basse et
+          // SANS depense d'exercice, c'est le minimum vital qui tient.
           const u=_athMM(48,37,'F',162,29,31,92);
+          u.sessions_config=[];
           const mm=masseMaigreDuBilan(u);
           if(mm==null) return _echec('masse maigre incalculable, fixture inutile');
           if(KCAL_PLANCHER_PAR_KG_MM*mm>=KCAL_PLANCHER_ABS.F)
             return _echec('fixture inutile : '+Math.round(KCAL_PLANCHER_PAR_KG_MM*mm)+' dépasse déjà l\'absolu');
           const pl=plancherEffectif(u);
+          if(pl.depenseExercice!==0)
+            return _echec('la fixture porte encore '+pl.depenseExercice+' kcal d\'entraînement');
           return pl.kcal===KCAL_PLANCHER_ABS.F&&pl.regle==='absolu'
             ?true:_echec(pl.kcal+' règle '+pl.regle);})());
+        ok('N2.9 — ET AVEC DE L\'ENTRAÎNEMENT, la même athlète remonte au-dessus de l\'absolu',(()=>{
+          // Le pendant du critère ci-dessus, et la preuve que le lot fait
+          // quelque chose : c'est exactement le cas que le document decrit —
+          // une athlete qui passait sous le vrai seuil sans qu'aucune
+          // violation ne se declenche.
+          const u=_athMM(48,37,'F',162,29,31,92);
+          const pl=plancherEffectif(u);
+          if(!(pl.depenseExercice>0))
+            return _echec('la fixture n\'a pas de dépense d\'entraînement');
+          return pl.kcal>KCAL_PLANCHER_ABS.F
+            ?true:_echec(pl.kcal+' : l\'entraînement n\'a pas relevé le plancher');})());
         ok('Critère : masse maigre incalculable → repli poids total, et il le dit',(()=>{
           // Même raison qu'au-dessus : sans métier lourd, le plafond de 85 %
           // rendrait 2368 et le repli poids total (2640) ne serait jamais visible.
