@@ -20258,6 +20258,10 @@ function viewClientBilans(){
   if(!c.bilans?.length){toast('Aucun bilan disponible','var(--orange)');return;}
   document.getElementById('evo-title').textContent=c.fname+' : Évolution';
   renderBilanEvolution(c);
+  // N3.15 — L'ECRITURE EST ICI, apres le rendu et sur un GESTE : le coach
+  // vient d'ouvrir l'evolution de son athlete. Le rendu, lui, peut etre
+  // rappele par le rafraichissement periodique sans rien ecrire.
+  try{ _ecrireTailleDeduite(); }catch(e){}
   go('s-coach-bilan-evo');
 }
 
@@ -20383,6 +20387,30 @@ function drawLineChart(canvas,datasets,labels){
   });
 }
 
+// N3.15 — La taille deduite d'un bilan, retenue par le rendu et ecrite par
+// _ecrireTailleDeduite, qu'openClientDetail appelle APRES avoir rendu. Deux
+// gestes distincts parce qu'un rendu qui ecrit est un rendu qu'on ne peut plus
+// appeler librement — et celui-ci est rappele toutes les cinq minutes.
+let _tailleARetenir=null;
+function _ecrireTailleDeduite(){
+  const t=_tailleARetenir;
+  _tailleARetenir=null;
+  if(!t||!t.id||!(t.height>0)) return false;
+  try{
+    const users=DB.get('users')||{};
+    const at=Object.values(users).find(u=>u.id===t.id);
+    // RELUE AU MOMENT D'ECRIRE : entre le rendu et ici, une synchronisation a
+    // pu descendre un dossier qui porte deja la taille.
+    if(!at||at._evol_height||at['init-height']) return false;
+    if(!_estMonAthlete(at,currentUser)) return false;
+    at._evol_height=t.height;
+    at.updatedAt=Date.now();
+    users[at.email]=at;
+    DB.set('users',users);
+    CLOUD.pushOne(at.email,at);
+    return true;
+  }catch(e){ return false; }
+}
 function renderBilanEvolution(c){
   const bilans=c.bilans||[];
   const maxB=bilans.length;
@@ -20390,12 +20418,17 @@ function renderBilanEvolution(c){
   const deb=bilans.find(b=>b.type==='depart');
   const heightFromBilans=bilans.map(b=>parseFloat(b['deb-height']||b['bil-height']||0)).find(h=>h>100)||0;
   const height=parseFloat(c._evol_height||c['init-height']||c.height||deb?.['deb-height']||c['deb-height']||heightFromBilans||0);
-  // Auto-sauvegarder la taille sur le profil si trouvée dans les bilans mais pas encore sur le profil
-  if(height&&!c._evol_height&&!c['init-height']){
-    const users=DB.get('users')||{};
-    const at=Object.values(users).find(u=>u.id===c.id);
-    if(at&&!at._evol_height){at._evol_height=height;at.updatedAt=Date.now();users[at.email]=at;DB.set('users',users);CLOUD.pushOne(at.email,at);}
-  }
+  // N3.15 — UN RENDU N'ECRIT PLUS DANS LE DOSSIER, ET NE POUSSE PLUS.
+  // Cette ligne ecrivait _evol_height, posait updatedAt, enregistrait et
+  // poussait au serveur — depuis une fonction d'AFFICHAGE, rappelee par le
+  // rafraichissement de cinq minutes. Une fiche laissee ouverte produisait
+  // donc des requetes d'ecriture toutes les cinq minutes, et l'horodatage
+  // qu'elle posait etait le seul effet de bord reseau declenche par un simple
+  // affichage dans tout le perimetre coach.
+  // LA FONCTIONNALITE RESTE : une taille trouvee dans un bilan finit toujours
+  // sur le profil — mais par une ecriture EXPLICITE, hors du chemin de rendu.
+  // C'est la regle que le fichier applique deja ailleurs.
+  if(height&&!c._evol_height&&!c['init-height']) _tailleARetenir={id:c.id,height};
   const gender=c._evol_gender||c.gender||'H';
   const female=isFemale(gender);
 
@@ -20523,7 +20556,27 @@ function renderBilanEvolution(c){
 
   // ── Photos évolution ──────────────────────────────────────────────
   const buildPhotos=()=>{
-    const getP=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||localStorage.getItem('rc_photo_'+b.date+'_bil-photo-'+t)||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-'+t)||null;
+    // N3.14 — DEUX VERSIONS DE LA MEME PHOTO, ET ON DIT LAQUELLE ON REGARDE.
+    // addBilanPhoto compresse en 1080x1440 et garde une copie sous
+    // rc_photo_<date>_<champ> — une clef LOCALE, qui ne vit que sur l'appareil
+    // ou la photo a ete ajoutee. _doPushOne, lui, recompresse toute photo de
+    // bilan en 220x300 avant l'envoi : c'est cette version-la que l'athlete
+    // voit, et c'est celle qui redescend chez le coach.
+    // Le coach jugeait donc une photo de progression sans savoir s'il regardait
+    // la haute definition restee sur son appareil ou la version transmise.
+    // ON NE RELEVE PAS LA LIMITE DE 220x300 : elle existe pour ne pas saturer
+    // le quota, et la bouger sans mesure ferait grossir chaque dossier pousse.
+    // On NOMME la version, c'est tout — et le poids du dossier ne change pas
+    // d'un octet.
+    const getP=(b,t)=>{
+      const dossier=b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||null;
+      if(dossier) return {src:dossier,locale:false};
+      // Le repli sur la copie locale n'existe QUE sur l'appareil qui a pris la
+      // photo : ailleurs, cette clef est absente.
+      const cache=localStorage.getItem('rc_photo_'+b.date+'_bil-photo-'+t)
+                ||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-'+t)||null;
+      return cache?{src:cache,locale:true}:null;
+    };
     const VIEWS=[
       {k:'face',label:'De Face',icon:'🧍'},
       {k:'back',label:'De Dos',icon:'🔙'},
@@ -20538,7 +20591,8 @@ function renderBilanEvolution(c){
 
     const viewSections=VIEWS.map(v=>{
       const cards=bilanPhotos.map(({b,i,date,photos})=>{
-        const img=photos[v.k];
+        const _p=photos[v.k];
+        const img=_p&&_p.src;
         const safeCap=(c.fname||'').replace(/'/g,'').replace(/"/g,'')+'  B'+(i+1);
         return img
           ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
@@ -20546,6 +20600,7 @@ function renderBilanEvolution(c){
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:var(--text);font-size:var(--fs-xs);font-weight:800;padding:2px 7px;border-radius:var(--r-4);letter-spacing:1px;z-index:1">B${i+1}</div>
               <img src="${img}" style="width:110px;height:160px;object-fit:cover;display:block">
               <div style="padding:5px 6px;font-size:var(--fs-xs);color:#888;font-weight:700;text-align:center">${date}</div>
+              <div style="padding:0 6px 5px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
             </div>`
           :`<label style="flex-shrink:0;width:110px;border-radius:var(--r-3);background:var(--surface-2);border:1px dashed var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
@@ -22415,13 +22470,19 @@ async function restaurerSessionsConfig(i){
   const e=hist[i];
   if(!e||!e.sessions_config) return;
   const d=new Date(e.ts).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  // N3.12 — LE BOUTON DE CET ECRAN S'APPELLE PUBLIER. Ces deux messages
+  // envoyaient le coach chercher un « SAUVEGARDER » qui appartient a l'editeur
+  // d'exercices, un autre ecran : il ne le trouvait pas, quittait, et la
+  // restauration etait perdue — l'athlete gardait le programme d'avant.
+  // Le comportement ne change pas : rien n'est enregistre tant qu'il n'a pas
+  // valide.
   if(!await rcConfirm("Restaurer la configuration du "+d+" ?\n\n"
     +"Le programme affiché sera remplacé. Rien n'est enregistré tant que tu n'as "
-    +"pas touché SAUVEGARDER.",null,'Confirmer')) return;
+    +"pas touché PUBLIER.",null,'Confirmer')) return;
   _coachEditClient.sessions_config=JSON.parse(JSON.stringify(e.sessions_config));
   loadCoachSessionSlots();
   renderSessionsHistory();
-  toast('Version du '+d+' chargee : valide par SAUVEGARDER','var(--orange)');
+  toast('Version du '+d+' chargée : valide par PUBLIER','var(--orange)');
 }
 function loadCoachSessionSlots(){
   // Redessine aussi l'historique : l'ecran peut etre rouvert apres qu'un
@@ -37131,7 +37192,16 @@ function saveReponseBilan(email,bilanId,taId){
   if(!txt){ toast('Écris ta réponse avant d\'envoyer.','var(--orange)'); return false; }
   const users=DB.get('users')||{};
   const c=users[email];
-  if(!c||!Array.isArray(c.bilans)){ toast('Athlète introuvable','var(--red)'); return false; }
+  // N3.13 — LE MEME CONTROLE D'APPARTENANCE QUE LES SOIXANTE-NEUF AUTRES
+  // ECRITURES. L'adresse vient d'un attribut onclick, et le cache local peut
+  // porter des dossiers etrangers — sur un appareil ou plusieurs comptes se
+  // cotoient, notamment. Cette fonction ecrivait et poussait sans jamais
+  // verifier que cet athlete est bien celui du coach connecte.
+  // Le message est celui des autres refus : un refus qui se lit autrement se
+  // diagnostique autrement.
+  if(!c||!_estMonAthlete(c,currentUser)){
+    toast('Élève introuvable ou non autorisé','var(--orange)'); return false; }
+  if(!Array.isArray(c.bilans)){ toast('Athlète introuvable','var(--red)'); return false; }
   const b=c.bilans.find(x=>_idBilan(x)===bilanId);
   if(!b){ toast('Bilan introuvable','var(--red)'); return false; }
   b.reponseCoach=txt.slice(0,2000);

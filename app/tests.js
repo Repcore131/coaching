@@ -23449,6 +23449,68 @@ function testExercices(){
           return _echec('aucun bouton de retrait');
         return prod.indexOf('Retirer la décharge')>=0
           ?true:_echec('le bouton de retrait n’est pas nommé');})());
+
+      ok('N3.12 — LES MESSAGES DE L\'ECRAN DES SEANCES NOMMENT LE BOUTON QUI EXISTE',(()=>{
+        // Les COMMENTAIRES tombent d'abord : celui qui explique la correction
+        // cite justement l'ancien libelle, et un String() nu se trouve lui-meme.
+        const s=String(restaurerSessionsConfig).replace(/\/\/.*/g,'');
+        if(/SAUVEGARDER/.test(s))
+          return _echec('la restauration renvoie encore vers un bouton d’un autre écran');
+        if(!/PUBLIER/.test(s)) return _echec('elle ne nomme aucun bouton');
+        // ET LE BOUTON EXISTE VRAIMENT, sous ce nom.
+        const b=document.getElementById('csm-publier');
+        if(!b) return _echec('le bouton de validation a disparu');
+        if((b.textContent||'').indexOf('PUBLIER')<0)
+          return _echec('le bouton s’appelle « '+b.textContent.trim()+' »');
+        // LE COMPORTEMENT NE CHANGE PAS : la restauration reste non enregistrée.
+        return !/DB\.set|CLOUD\.push/.test(s)
+          ?true:_echec('la restauration enregistre désormais toute seule');})());
+
+      ok('N3.13 — REPONDRE A UN BILAN PASSE PAR LE CONTROLE D\'APPARTENANCE',(()=>{
+        const s=String(saveReponseBilan);
+        if(s.indexOf('_estMonAthlete(c,currentUser)')<0)
+          return _echec('l’écriture ne vérifie pas à qui appartient le dossier');
+        // LE MESSAGE EST CELUI DES AUTRES REFUS : un refus qui se lit autrement
+        // se diagnostique autrement.
+        if(s.indexOf('Élève introuvable ou non autorisé')<0)
+          return _echec('le refus n’emploie pas le message des autres refus');
+        // ET L'ENCHAINEMENT VERS LE BILAN SUIVANT EST INTACT.
+        return s.indexOf('_proposerBilanSuivant')>=0
+          ?true:_echec('l’enchaînement vers le bilan suivant a disparu');})());
+
+      ok('N3.14 — LE COACH SAIT QUELLE VERSION DE LA PHOTO IL REGARDE',(()=>{
+        const s=String(renderBilanEvolution);
+        if(s.indexOf('Version transmise')<0)
+          return _echec('rien ne dit que la photo est celle que l’athlète voit');
+        if(s.indexOf('Haute déf')<0)
+          return _echec('rien ne distingue la copie locale haute définition');
+        // ET LA LIMITE N'A PAS BOUGE : elle existe pour ne pas saturer le
+        // quota, et la relever ferait grossir chaque dossier poussé.
+        const p=_prodSrc();
+        if(!/220/.test(String(CLOUD._compressPhoto)))
+          return _echec('la compression d’envoi a changé de définition');
+        return /locale:true/.test(s)&&/locale:false/.test(s)
+          ?true:_echec('la provenance n’est pas portée par la lecture');})());
+
+      ok('N3.15 — UN RENDU N\'ECRIT PLUS DANS LE DOSSIER, et ne pousse plus',(()=>{
+        const s=String(renderBilanEvolution);
+        if(/DB\.set\('users'|CLOUD\.pushOne/.test(s))
+          return _echec('le rendu écrit ou pousse encore');
+        if(typeof _ecrireTailleDeduite!=='function')
+          return _echec('l’écriture explicite n’existe pas');
+        // LA FONCTIONNALITE RESTE : une taille trouvee dans un bilan finit
+        // toujours sur le profil, mais par un geste.
+        const e=String(_ecrireTailleDeduite);
+        if(e.indexOf('_evol_height')<0) return _echec('la taille n’est plus reportée');
+        if(e.indexOf('CLOUD.pushOne')<0) return _echec('la taille ne monte plus');
+        // ET ELLE RELIT AVANT D'ECRIRE : entre le rendu et l'ecriture, une
+        // synchronisation a pu descendre un dossier qui la porte deja.
+        if(e.indexOf("DB.get('users')")<0) return _echec('elle écrit sur une lecture périmée');
+        if(e.indexOf('_estMonAthlete')<0) return _echec('elle écrit sans contrôle d’appartenance');
+        // RIEN SANS RIEN : sans taille retenue, aucune écriture.
+        _tailleARetenir=null;
+        return _ecrireTailleDeduite()===false
+          ?true:_echec('une écriture part alors que rien n’a été déduit');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
