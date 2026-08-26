@@ -5276,6 +5276,15 @@ const COACH_PHOTO='icons/coach.jpg';
            attend encore une publication. -->
       <div id="cs-bandeau-brouillon" style="position:sticky;top:0;z-index:5"></div>
       <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.6">Active/désactive les jours et modifie chaque séance. Le Programme Fondation est pré-chargé jusqu'à personnalisation.</p>
+      <!-- N4.1 — LE BLOC DE PLUSIEURS SEMAINES. Le modele existait,
+           documente et lu par quatre fonctions, et AUCUNE ligne du fichier
+           ne le creait : un bloc de quatre semaines coutait quatre fois la
+           manoeuvre complete, plus une republication a la main chaque lundi.
+           Rempli par renderCoachSessionsBloc, appele par
+           loadCoachSessionSlots. Le programme ci-dessous reste le GABARIT :
+           le bloc dit sur combien de semaines il court et lesquelles sont
+           des decharges, il ne le duplique pas. -->
+      <div id="csm-bloc"></div>
       <!-- Versions precedentes. Le confirm d'application d'un modele promet
            « rollback possible » et _snapshotSessionsConfig ecrit bien
            l'historique, mais aucun ecran ne permettait de s'en servir : la
@@ -22193,10 +22202,253 @@ function loadProgTemplateSlots(gender){
 // ── Copier une séance sur un autre jour ─────────────────────────────────────
 // Rangée de boutons compacts, aucun écran nouveau. Les six autres jours en
 // initiales : à 375 px un menu déroulant coûterait deux appuis de plus.
+// ══════ N4.17 — PORTER UNE SEANCE CHEZ UN AUTRE ATHLETE ═══════════════════
+// Les boutons « Copier vers » ne travaillaient qu'entre les sept jours d'un
+// MEME athlete. Pour porter une seule seance chez un autre, il fallait
+// enregistrer les sept jours comme modele, le nommer, puis l'appliquer chez
+// l'autre — ce qui ecrase ses sept jours. Deux ecrans, une saisie, et le tout
+// ou rien sur la semaine entiere pour une seance.
+//
+// LA COPIE ATTERRIT DANS LE BROUILLON DU DESTINATAIRE, PAS CHEZ LUI. C'est la
+// regle de cet ecran et elle ne bouge pas : seul saveCoachSessions publie. Le
+// coach retrouvera la seance a l'ouverture du programme de l'autre athlete,
+// avec le bandeau de reprise que le brouillon declenche deja.
+//
+// ON REUTILISE dupliquerSeance : elle sait deja la copie profonde, le nom
+// unique dans la semaine d'arrivee, et le fait de ne PAS recopier la photo —
+// du base64 qui doublerait le poids du dossier pour une image identique.
+function _cibleCopieAthlete(){
+  const users=DB.get('users')||{};
+  return Object.values(users)
+    .filter(u=>_estMonAthlete(u,currentUser)&&u.id!==currentClientId&&u.email)
+    .sort((a,b)=>((a.fname||'')+(a.lname||'')).localeCompare((b.fname||'')+(b.lname||'')));
+}
+async function copierSeanceVersAthlete(i){
+  const src=_coachEditClient&&(_coachEditClient.sessions_config||[])[i];
+  if(!src||!src.active||!((src.exercises||[]).length)){
+    toast('Ce créneau est vide : rien à porter.','var(--orange)'); return false;
+  }
+  const cibles=_cibleCopieAthlete();
+  if(!cibles.length){ toast('Aucun autre athlète à qui porter cette séance.','var(--orange)'); return false; }
+  const nl=String.fromCharCode(10);
+  const liste=cibles.map((a,n)=>(n+1)+'. '+(((a.fname||'')+' '+(a.lname||'')).trim()||a.email)).join(nl);
+  const rep=await rcSaisie('Porter « '+(src.name||DAYS[i])+' » chez qui ?'+nl+nl
+    +liste+nl+nl+'Écris le numéro.','',{libelleOk:'Choisir',inputmode:'numeric'});
+  const n=parseInt(String(rep||'').trim(),10);
+  if(!isFinite(n)||n<1||n>cibles.length) return false;
+  const dest=cibles[n-1];
+  const nom=((dest.fname||'')+' '+(dest.lname||'')).trim()||dest.email;
+  // LE JOUR D'ARRIVEE. Le meme par defaut : porter le lundi de l'un sur le
+  // lundi de l'autre est ce qu'on veut neuf fois sur dix.
+  const jr=await rcSaisie('Quel jour chez '+nom+' ?'+nl+nl
+    +DAYS.map((d,k)=>(k+1)+'. '+d).join(nl),String(i+1),
+    {libelleOk:'Porter',inputmode:'numeric'});
+  const j=parseInt(String(jr||'').trim(),10)-1;
+  if(!isFinite(j)||j<0||j>=DAYS.length) return false;
+  // LE BROUILLON DU DESTINATAIRE, ou son dossier s'il n'en a pas encore.
+  const base=_brouillonSessionsDe(dest)||_normaliserSessionsConfig(dest).map(s=>JSON.parse(JSON.stringify(s)));
+  const dst=base[j];
+  if(dst&&dst.active&&((dst.exercises||[]).length)){
+    if(!await rcConfirm('Chez '+nom+', '+DAYS[j]+' porte déjà « '+(dst.name||'une séance')
+      +' » et ses '+(dst.exercises||[]).length+' exercices.'+nl+nl+'La remplacer ?',null,'Remplacer')) return false;
+  }
+  // dupliquerSeance travaille DANS un tableau : on y pose la source le temps
+  // de la copie, sur un creneau qu'on retire ensuite.
+  const atelier=base.slice();
+  atelier.push(JSON.parse(JSON.stringify(src)));
+  const r=dupliquerSeance(atelier,atelier.length-1,j);
+  atelier.pop();
+  if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
+  // LE NOM GARDE LE SIEN QUAND IL EST LIBRE. _nomSeanceLibre ajoute TOUJOURS
+  // une lettre : elle est faite pour dupliquer DANS une meme semaine, ou le
+  // nom de base est par construction deja pris. Porter chez quelqu'un d'autre
+  // est un autre geste — « Haut du corps » arrivait en « Haut du corps B »
+  // alors que rien de ce nom n'existait dans sa semaine. On ne suffixe que
+  // s'il y a vraiment un homonyme.
+  const _voulu=String(src.name||'').trim();
+  const _pris=atelier.some((s,k)=>k!==j&&s&&s.name
+    &&String(s.name).trim().toUpperCase()===_voulu.toUpperCase());
+  atelier[j].name=(_voulu&&!_pris)?_voulu:_nomSeanceLibre(atelier,src.name,j);
+  r.nom=atelier[j].name;
+  if(!_poserBrouillonSessions(dest,atelier)){
+    toast('Brouillon non enregistré : stockage plein.','var(--red)'); return false;
+  }
+  try{ saveUser(); }catch(e){}
+  toast('« '+r.nom+' » portée chez '+nom+' en brouillon. Publie depuis son programme.','var(--success)');
+  return true;
+}
+// Le brouillon d'un athlete, tel que enregistrerBrouillon l'ecrit — meme
+// stockage, meme forme. Rendre null et non un tableau vide : « pas de
+// brouillon » et « brouillon vide » ne sont pas la meme chose.
+function _brouillonSessionsDe(dest){
+  try{
+    const b=_brouillons(currentUser)[dest.id];
+    return (b&&Array.isArray(b.sessions_config))
+      ?b.sessions_config.map(s=>JSON.parse(JSON.stringify(s))):null;
+  }catch(e){ return null; }
+}
+function _poserBrouillonSessions(dest,cfg){
+  try{
+    _brouillons(currentUser)[dest.id]={
+      at:Date.now(),
+      nom:dest.fname||'',
+      sessions_config:cfg.map(sc=>({
+        day:sc.day, name:sc.name||'', active:!!sc.active, notes:sc.notes||'',
+        warmup:sc.warmup||'', cooldown:sc.cooldown||'', deload:!!sc.deload,
+        exercises:(sc.exercises||[]).map(e=>Object.assign({},e))
+      }))
+    };
+    _brouillonsElaguer(currentUser);
+    return true;
+  }catch(e){ return false; }
+}
+// ══════ N4.1 — LE BLOC DE PLUSIEURS SEMAINES SE CREE ENFIN ════════════════
+// user.programme = {debut, semaines, decharges, ecarts} etait documente et lu
+// par QUATRE fonctions — programmeDe, indexSemaineBloc, getSemaineEffective,
+// semainesDuBloc — et ECRIT PAR AUCUNE : aucune ligne du fichier ne le creait.
+// Un bloc de quatre semaines coutait donc quatre fois la manoeuvre complete,
+// plus une republication a la main chaque lundi.
+//
+// AUCUN CHAMP NOUVEAU. On se sert exactement de la forme deja documentee, y
+// compris des ecarts par semaine, pour que les quatre lecteurs fonctionnent
+// sans etre touches. sessions_config reste le GABARIT et ne change pas de
+// forme : le bloc dit sur combien de semaines il court et lesquelles sont des
+// decharges, il ne duplique pas le programme.
+//
+// RIEN N'ATTEINT L'ATHLETE SANS PUBLIER — comme tout ce qui se regle sur cet
+// ecran. Le bloc est ecrit dans le dossier par le meme chemin que le reste,
+// horodate, et pousse.
+function _progBlocLundiProchain(){
+  const d=_lundiDe(new Date());
+  // Le lundi de la semaine EN COURS, pas le suivant : un bloc qui commence
+  // dans six jours ne decrit pas la semaine que l'athlete est en train de
+  // faire, et les quatre lecteurs rendraient null jusqu'a lundi.
+  return d.getTime();
+}
+function htmlBlocProgramme(c){
+  const p=(()=>{ try{ return programmeDe(c); }catch(e){ return null; } })();
+  const t=(s)=>'<div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;'
+    +'text-transform:uppercase;font-weight:800;margin-bottom:6px">'+s+'</div>';
+  if(!p) return '<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-3);padding:12px 13px;margin-bottom:14px">'
+    +t('Bloc d’entraînement')
+    +'<div class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:9px">'
+    +'Aucun bloc défini : le programme ci-dessous vaut semaine après semaine, '
+    +'sans début ni fin, et sans décharge planifiée.</div>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
+    +'onclick="reglerBlocProgramme()">Définir un bloc</button></div>';
+  const dep=new Date(p.debut);
+  const fin=new Date(p.debut+(p.semaines-1)*604800000);
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+  const i=(()=>{ try{ return indexSemaineBloc(c,Date.now()); }catch(e){ return null; } })();
+  const dech=p.decharges.length
+    ? p.decharges.map(x=>'S'+(x+1)).join(', ')
+    : 'aucune';
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-left:3px solid var(--red);border-radius:var(--r-3);padding:12px 13px;margin-bottom:14px">'
+    +t('Bloc d’entraînement')
+    +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">'
+    +'<b>'+p.semaines+' semaine'+(p.semaines>1?'s':'')+'</b>, du '+fmt(dep)+' au '+fmt(fin)+'</div>'
+    +'<div class="sub" style="font-size:var(--fs-xs);line-height:1.6">Décharges : '+escapeHtml(dech)
+    +(i===null?' · <span style="color:var(--orange)">hors bloc aujourd’hui</span>'
+              :' · semaine '+(i+1)+' en cours')+'</div>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px">'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
+    +'onclick="reglerBlocProgramme()">Modifier le bloc</button>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
+    +'onclick="retirerBlocProgramme()">Retirer</button>'
+    +'</div></div>';
+}
+async function reglerBlocProgramme(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  if(!c.email){ toast('Cet élève n’a pas encore de dossier synchronisé','var(--orange)'); return false; }
+  const nl=String.fromCharCode(10);
+  const actuel=(()=>{ try{ return programmeDe(c); }catch(e){ return null; } })();
+  // ── Combien de semaines ──
+  const rn=await rcSaisie('Combien de semaines ?'+nl+nl
+    +'De '+PROG_SEMAINES_MIN+' à '+PROG_SEMAINES_MAX+'. Le programme ci-dessous sert de '
+    +'gabarit à chacune d’elles.',
+    String(actuel?actuel.semaines:4),{libelleOk:'Suivant',inputmode:'numeric'});
+  if(rn===null||rn===undefined) return false;
+  const n=Math.round(Number(String(rn).trim()));
+  if(!isFinite(n)||n<PROG_SEMAINES_MIN||n>PROG_SEMAINES_MAX){
+    toast('Il faut un nombre entre '+PROG_SEMAINES_MIN+' et '+PROG_SEMAINES_MAX+'.','var(--orange)');
+    return false;
+  }
+  // ── Quand il commence ──
+  const parDefaut=new Date(actuel?actuel.debut:_progBlocLundiProchain());
+  const iso=d=>{ const m=String(d.getMonth()+1).padStart(2,'0');
+    const j=String(d.getDate()).padStart(2,'0'); return d.getFullYear()+'-'+m+'-'+j; };
+  const rd=await rcSaisie('Le bloc commence quand ?'+nl+nl
+    +'La semaine part toujours du LUNDI : une date en milieu de semaine sera '
+    +'ramenée au lundi qui la précède.',
+    iso(parDefaut),{libelleOk:'Suivant',type:'date'});
+  if(rd===null||rd===undefined) return false;
+  const d=new Date(String(rd).trim()+'T00:00:00');
+  if(!isFinite(d.getTime())){ toast('Date illisible.','var(--orange)'); return false; }
+  // ── Lesquelles sont des décharges ──
+  const rdech=await rcSaisie('Quelles semaines sont des décharges ?'+nl+nl
+    +'Leurs numéros, séparés par des virgules — « 4 » pour la quatrième, « 4,8 » '
+    +'pour deux. Laisse vide s’il n’y en a aucune.',
+    (actuel?actuel.decharges.map(x=>x+1).join(','):''),{libelleOk:'Enregistrer'});
+  if(rdech===null||rdech===undefined) return false;
+  const dech=String(rdech).split(',').map(x=>Math.round(Number(String(x).trim()))-1)
+    .filter(x=>isFinite(x)&&x>=0&&x<n);
+  // ── L'écriture, par le même chemin que le reste de la fiche ──
+  if(!c.programme||typeof c.programme!=='object') c.programme={};
+  c.programme.debut=_lundiDe(d).getTime();
+  c.programme.semaines=n;
+  c.programme.decharges=[...new Set(dech)].sort((a,b)=>a-b);
+  // LES ECARTS SONT CONSERVES : ils portent le travail semaine par semaine, et
+  // raccourcir un bloc ne doit pas effacer ce qui a ete ecrit pour la semaine 6
+  // si le coach le rallonge demain. programmeDe ignore deja ce qui sort du bloc.
+  if(!c.programme.ecarts||typeof c.programme.ecarts!=='object') c.programme.ecarts={};
+  c.updatedAt=Date.now();
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  try{ renderCoachSessionsBloc(); }catch(e){}
+  toastSync(ok,envoi,'Bloc de '+n+' semaine'+(n>1?'s':'')+' enregistré','le bloc est');
+  return true;
+}
+async function retirerBlocProgramme(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c||!c.email) return false;
+  const nl=String.fromCharCode(10);
+  if(!await rcConfirm('Retirer le bloc ?'+nl+nl
+    +'Le programme continue de s’appliquer semaine après semaine, sans début ni '
+    +'fin. Les écarts déjà écrits pour chaque semaine sont conservés.',
+    null,'Retirer')) return false;
+  if(c.programme&&typeof c.programme==='object'){
+    delete c.programme.debut;
+    delete c.programme.semaines;
+    delete c.programme.decharges;
+  }
+  c.updatedAt=Date.now();
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  try{ renderCoachSessionsBloc(); }catch(e){}
+  toastSync(ok,envoi,'Bloc retiré','le retrait est');
+  return true;
+}
+function renderCoachSessionsBloc(){
+  const z=document.getElementById('csm-bloc');
+  if(!z) return;
+  const c=getOwnedClient(currentClientId);
+  z.innerHTML=c?htmlBlocProgramme(c):'';
+}
 function _boutonsCopieJour(fn,i){
   return `<div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
     <span class="sub" style="font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">Copier vers</span>
     ${DAYS.map((d,j)=>j===i?'':`<button onclick="${fn}(${i},${j})" title="Copier vers ${d}" aria-label="Copier cette séance vers ${d}" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);min-width:44px;min-height:44px;padding:4px 8px;font-size:var(--fs-xs);font-weight:700;cursor:pointer;font-family:inherit">${DAY_ICONS[j]}</button>`).join('')}
+    <!-- N4.17 — ET CHEZ UN AUTRE ATHLETE. Seulement depuis la fiche d'un
+         athlete : un MODELE n'a pas de destinataire, et coachCopyDay est le
+         seul appelant qui en ait un. -->
+    ${fn==='coachCopyDay'?`<button onclick="copierSeanceVersAthlete(${i})" title="Porter cette séance chez un autre athlète" aria-label="Porter cette séance chez un autre athlète" style="background:none;border:1px dashed var(--red);color:var(--red-text);border-radius:var(--r-2);min-height:44px;padding:4px 11px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">→ AUTRE ATHLÈTE</button>`:''}
   </div>`;
 }
 function _copierSeance(src,dst){
@@ -22779,6 +23031,9 @@ function loadCoachSessionSlots(){
   // Redessine aussi l'historique : l'ecran peut etre rouvert apres qu'un
   // modele a ete applique, donc apres qu'une version a ete archivee.
   try{renderSessionsHistory();}catch(e){}
+  // N4.1 — et le bloc de plusieurs semaines, qui se lit au-dessus de la
+  // grille : c'est le cadre dans lequel elle s'applique.
+  try{renderCoachSessionsBloc();}catch(e){}
   try{
     const _bb=document.getElementById('cs-bandeau-brouillon');
     if(_bb) _bb.innerHTML=_htmlBandeauBrouillon();

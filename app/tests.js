@@ -23852,6 +23852,74 @@ function testExercices(){
           return String(cplDeplacer).indexOf('saveUser()')>=0
             ?true:_echec('l’ordre ne survit pas à un rechargement');
         } finally { currentUser.coachPrograms=sv; }})());
+
+      ok('N4.1 — LE BLOC DE PLUSIEURS SEMAINES SE CREE, et les quatre lecteurs suivent',(()=>{
+        if(typeof reglerBlocProgramme!=='function') return _echec('aucun moyen de créer un bloc');
+        // AUCUN CHAMP NOUVEAU : exactement la forme documentée, celle que
+        // programmeDe sait relire.
+        const s=String(reglerBlocProgramme);
+        for(const k of ['programme.debut','programme.semaines','programme.decharges'])
+          if(s.indexOf('c.'+k)<0) return _echec(k+' n’est pas écrit');
+        if(/programme\.[a-z]+=/.test(s.replace(/programme\.(debut|semaines|decharges|ecarts)=/g,'')))
+          return _echec('un champ hors du modèle documenté est écrit');
+        // LES ECARTS SONT CONSERVES : ils portent le travail semaine par
+        // semaine, et raccourcir un bloc ne doit pas effacer la semaine 6.
+        if(s.indexOf('delete c.programme.ecarts')>=0)
+          return _echec('les écarts sont effacés au réglage');
+        if(String(retirerBlocProgramme).indexOf('delete c.programme.ecarts')>=0)
+          return _echec('les écarts sont effacés au retrait');
+        // LES QUATRE LECTEURS RELISENT CE QU'ON ECRIT. On monte le dossier à
+        // la main, comme le fait la fonction, et on interroge les lecteurs.
+        const lundi=_lundiDe(new Date()).getTime();
+        const u={id:'BL',email:'bl@t.fr',role:'athlete',
+          programme:{debut:lundi,semaines:4,decharges:[3],ecarts:{}},
+          sessions_config:Array.from({length:7},(_,k)=>({day:DAYS[k],name:k===0?'H':'',
+            active:k===0,exercises:k===0?[{name:'DC',series:4,reps:'8'}]:[]}))};
+        const p=programmeDe(u);
+        if(!p) return _echec('programmeDe rend encore null sur un athlète réglé');
+        if(p.semaines!==4) return _echec(p.semaines+' semaines au lieu de 4');
+        if(p.decharges.join(',')!=='3') return _echec('décharges : '+p.decharges.join(','));
+        if(indexSemaineBloc(u,Date.now())!==0)
+          return _echec('la semaine courante n’est pas la première : '+indexSemaineBloc(u,Date.now()));
+        if(semainesDuBloc(u).length!==4)
+          return _echec('semainesDuBloc rend '+semainesDuBloc(u).length+' semaines');
+        // HORS BLOC : la cinquième semaine n'en fait pas partie.
+        if(indexSemaineBloc(u,lundi+4*604800000)!==null)
+          return _echec('une date hors bloc reçoit un index');
+        // LES BORNES SONT CELLES DU MODELE.
+        if(PROG_SEMAINES_MIN!==1||PROG_SEMAINES_MAX!==24)
+          return _echec('les bornes du bloc ont changé');
+        // ET LE GABARIT NE CHANGE PAS DE FORME : le bloc dit sur combien de
+        // semaines il court, il ne duplique pas le programme.
+        return s.indexOf('sessions_config')<0
+          ?true:_echec('le réglage du bloc touche à sessions_config');})());
+
+      ok('N4.17 — PORTER UNE SEANCE CHEZ UN AUTRE ATHLETE, dans son brouillon',(()=>{
+        if(typeof copierSeanceVersAthlete!=='function') return _echec('aucune copie inter-athlète');
+        const s=String(copierSeanceVersAthlete);
+        // ELLE ATTERRIT DANS LE BROUILLON, PAS CHEZ LUI : seule
+        // saveCoachSessions publie, et c'est la règle de cet écran.
+        if(/DB\.set\('users'|CLOUD\.push/.test(s))
+          return _echec('la copie écrit dans le dossier du destinataire');
+        if(s.indexOf('_poserBrouillonSessions')<0)
+          return _echec('la copie ne passe pas par le brouillon');
+        // ON REUTILISE dupliquerSeance : copie profonde, nom unique, photo non
+        // recopiée. On ne réécrit pas ce travail-là.
+        if(s.indexOf('dupliquerSeance(')<0)
+          return _echec('la copie profonde est réécrite au lieu d’être réutilisée');
+        // CONFIRMATION QUAND LE CRENEAU VISE EST OCCUPE.
+        if(s.indexOf('rcConfirm')<0) return _echec('un créneau occupé est écrasé sans demander');
+        // LE NOM GARDE LE SIEN QUAND IL EST LIBRE : _nomSeanceLibre suffixe
+        // TOUJOURS, parce qu'elle est faite pour dupliquer dans une même
+        // semaine. Porter chez quelqu'un d'autre est un autre geste.
+        if(s.indexOf('_pris')<0)
+          return _echec('le nom est suffixé même quand il est libre chez le destinataire');
+        // ET LA LISTE DES DESTINATAIRES EXCLUT L'ATHLETE COURANT, et emploie
+        // le prédicat d'appartenance unifié.
+        const t=String(_cibleCopieAthlete);
+        if(t.indexOf('_estMonAthlete')<0) return _echec('la liste n’emploie pas le prédicat commun');
+        return t.indexOf('u.id!==currentClientId')>=0
+          ?true:_echec('on peut se porter une séance à soi-même');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
