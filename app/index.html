@@ -417,6 +417,29 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
     left:max(0px,calc(50% - 720px));width:260px;z-index:20;
     overflow-y:auto;overscroll-behavior:contain}
   body:has(#s-coach-program.active[data-ctx="coach"]) .screen.active{padding-left:260px}
+  /* B2.3 — LARGE NE SUFFIT PAS, IL FAUT QUE LA LARGEUR SERVE.
+     L'ecran recevait max-width:1440px et padding-left:260px, et rien d'autre :
+     aucune regle ne visait #prog-exercises. Les cartes s'etiraient donc sur
+     environ 1 128 px et le champ Tempo — « 3-1-1-0 », sept caracteres —
+     occupait toute la ligne. La largeur n'affichait pas une donnee de plus :
+     elle allongeait le trajet de l'oeil entre le libelle et sa valeur.
+
+     DEUX GESTES, ET DEUX SEULEMENT. Tempo et Materiel se lisent ensemble : ils
+     se posent cote a cote. Les champs qui portent quelques caracteres — repos,
+     charge cible, tempo — sont bornes a leur mesure utile. Aucun champ n'est
+     ajoute, aucun n'est deplace d'un groupe a l'autre : le but est de
+     raccourcir le trajet de l'oeil, pas de reorganiser un ecran que le coach
+     connait par coeur.
+
+     BORNEE AU COACH, comme les trois regles au-dessus : l'athlete qui compose
+     SA seance entre dans le meme ecran et ne doit rien voir changer. Et bornee
+     a 1025 px : sous cette largeur, la carte est rigoureusement celle
+     d'aujourd'hui — .px-duo n'y est qu'un div sans style, ses deux enfants
+     gardent leur propre marge. */
+  body:has(#s-coach-program.active[data-ctx="coach"]) #prog-exercises .px-duo{
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
+  body:has(#s-coach-program.active[data-ctx="coach"]) #prog-exercises .px-court{
+    max-width:220px}
   /* LA MESURE DE LECTURE, SUR LES NEUF ECRANS QUI VIENNENT D'ETRE ELARGIS.
      Mesure a 1440 px : la file de reprise servait des lignes de 112
      caracteres, l'activite du portefeuille 117. Au-dela d'une centaine,
@@ -25925,7 +25948,7 @@ function renderProgEx(){
             <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" class="f-c">
             <div style="margin-top:4px">${badge}</div>
           </div>
-          <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" class="f-c f-sm"></div>
+          <div><label>Repos</label><input class="px-court" value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" class="f-c f-sm"></div>
         </div>
         <!-- CHARGE ET RIR CIBLES. Les deux étaient LUS depuis toujours —
              _apLigne les affiche dans l’aperçu de séance, PP_COLS en fait
@@ -25943,7 +25966,7 @@ function renderProgEx(){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div>
             <label>Charge cible</label>
-            <input value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg">
+            <input class="px-court" value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg">
           </div>
           <div>
             <!-- N6.3 — L'INTENSITE SE CHOISIT, elle ne se tape plus. Meme
@@ -25971,10 +25994,16 @@ function renderProgEx(){
              description. -->
         ${_selecteurTechnique(ex,i)}
         <div class="px-grp">EXÉCUTION</div>
+        <!-- B2.3 — TEMPO ET MATERIEL SE LISENT ENSEMBLE, donc ils se posent
+             ensemble des qu'il y a la place. Le conteneur ne fait RIEN sous
+             1025 px : deux div empiles, chacun avec sa marge, exactement comme
+             avant. C'est la seule regle CSS qui le met en deux colonnes, et
+             elle est bornee au coach. -->
+        <div class="px-duo">
         <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
         <div style="margin-bottom:8px">
           <label style="margin-top:0">Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 — descente, bas, montée, haut)</span></label>
-          <input value="${escapeHtml(ex.tempo||'')}" onchange="_progExDirty=true;progEx[${i}].tempo=this.value" placeholder="3-1-1-0">
+          <input class="px-court" value="${escapeHtml(ex.tempo||'')}" onchange="_progExDirty=true;progEx[${i}].tempo=this.value" placeholder="3-1-1-0">
         </div>
         <!-- Matériel : son propre champ depuis que la banque le pré-remplit.
              Il se retapait dans le NOM de l'exercice, ce qui le rendait
@@ -25982,6 +26011,7 @@ function renderProgEx(){
         <div style="margin-bottom:8px">
           <label>Matériel</label>
           <input value="${escapeHtml(ex.materiel||'')}" onchange="_progExDirty=true;progEx[${i}].materiel=this.value" placeholder="Ex : haltères, banc incliné">
+        </div>
         </div>
         ${_blocAvertissementContrainte(ex,i)}
         ${_ligneMuscles(ex,i)}

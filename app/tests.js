@@ -20200,10 +20200,18 @@ function testExercices(){
         return s.length===1&&s[0].durationMin===150
           ?true:_echec(JSON.stringify(s));})());
       ok('Deux séances le même jour comptent DEUX fois',(()=>{
-        const auj=localISODate(new Date());
-        const u=_dos({sessions:[{id:'a',date:Date.now(),duration:60,data:{},metrics:{}},
-          {id:'b',date:Date.now()-3600e3,duration:45,data:{},metrics:{}}]});
-        const s=_sodiumContexteDe(u,auj,u.nutrition.macros.on,Date.now()).sessions;
+        // MIDI, ET NON « MAINTENANT ». La fixture posait la seconde seance a
+        // Date.now()-1 h : lancee entre minuit et une heure, cette heure-la
+        // tombait la VEILLE, une seule seance restait dans la journee et
+        // l'assertion echouait. Elle est passee au rouge toute seule le
+        // 27/08/2026, sans qu'une ligne de code applicatif ait bouge — le
+        // genre de faux signal qui use la confiance dans toute la suite.
+        const midi=new Date(); midi.setHours(12,0,0,0);
+        const t=midi.getTime();
+        const auj=localISODate(midi);
+        const u=_dos({sessions:[{id:'a',date:t,duration:60,data:{},metrics:{}},
+          {id:'b',date:t-3600e3,duration:45,data:{},metrics:{}}]});
+        const s=_sodiumContexteDe(u,auj,u.nutrition.macros.on,t).sessions;
         return s.length===2&&s[0].durationMin+s[1].durationMin===105
           ?true:_echec(JSON.stringify(s));})());
       ok('Un jour PASSÉ sans séance enregistrée n\'invente aucune sudation',(()=>{
@@ -25240,6 +25248,49 @@ function testExercices(){
       // laisser aria-current="page". Le commentaire de coachTab condamnait deja
       // ce defaut : « une surbrillance qui ment sur la page ouverte est pire
       // que pas de surbrillance du tout. »
+      // B2.3 — LARGE NE SUFFIT PAS, IL FAUT QUE LA LARGEUR SERVE.
+      // L'ecran recevait max-width:1440px et padding-left:260px, et rien
+      // d'autre : aucune regle ne visait #prog-exercises. Les cartes
+      // s'etiraient sur ~1 128 px et « 3-1-1-0 » — sept caracteres — occupait
+      // toute la ligne. La largeur n'affichait pas une donnee de plus : elle
+      // allongeait le trajet de l'oeil entre le libelle et sa valeur.
+      ok('La carte d\'exercice groupe et borne ce qui se lit ensemble',(()=>{
+        const css=Array.from(document.querySelectorAll('style'))
+          .map(s=>s.textContent).join('\n');
+        const base='body:has(#s-coach-program.active[data-ctx="coach"]) #prog-exercises';
+        if(css.indexOf(base+' .px-duo')<0)
+          return _echec('tempo et materiel ne sont pas groupes');
+        if(css.indexOf(base+' .px-court')<0)
+          return _echec('aucun champ court n\'est borne');
+        // BORNEE AU COACH, comme les trois regles voisines : l'athlete entre
+        // dans le MEME ecran pour composer sa seance, et ne doit rien voir
+        // changer. Une regle qui viserait #prog-exercises sans l'attribut de
+        // contexte casserait « ecrans athlete : rien ne change ».
+        // LES COMMENTAIRES SONT RETIRES D'ABORD : celui de la regle CITE
+        // « #prog-exercises » pour expliquer le defaut qu'elle corrige, et la
+        // sonde se declenchait sur la phrase qui decrit le bug, pas sur une
+        // regle. Meme piege que pour DB.set — String(fn) et textContent
+        // rendent la prose avec le code.
+        const regles=css.replace(/\/\*[\s\S]*?\*\//g,'');
+        const sans=regles.split('\n').filter(l=>l.indexOf('#prog-exercises')>=0
+          &&l.indexOf('data-ctx="coach"')<0);
+        return sans.length
+          ?_echec('regle non bornee au coach : '+sans[0].trim()):true;})());
+      ok('Le rendu pose bien les marqueurs que le CSS attend',(()=>{
+        // Deux moities d'un meme correctif : la classe dans le rendu, la regle
+        // dans la feuille. L'une sans l'autre ne fait rien, en silence.
+        const s=String(renderProgEx);
+        if(s.indexOf('class="px-duo"')<0)
+          return _echec('le conteneur de tempo/materiel a disparu du rendu');
+        if((s.match(/px-court/g)||[]).length<3)
+          return _echec('moins de trois champs courts marques');
+        // ET AUCUNE CLEF DE progEx N'A BOUGE : le correctif est une mise en
+        // page, il ne touche ni aux handlers ni a ce qui est ecrit.
+        for(const k of ['].tempo=this.value','].materiel=this.value',
+                        '].repos=this.value','].charge=this.value'])
+          if(s.indexOf(k)<0) return _echec('handler perdu : '+k);
+        return true;})());
+
       ok('Chaque lien de la barre dit ou il mene',(()=>{
         const liens=Array.from(document.querySelectorAll('#ch-sidebar .sb-lien'));
         if(liens.length<5) return _echec(liens.length+' lien(s) au lieu de 5');
