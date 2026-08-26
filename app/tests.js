@@ -24204,6 +24204,186 @@ function testExercices(){
         const nu={id:'NU',sessions_config:[]};
         return (programmeDe(nu)===null&&semaineEstDecharge(nu,new Date())===false)
           ?true:_echec('un athlète sans bloc ne se comporte plus comme avant');})());
+
+      ok('N6.4 et N6.12 — TROIS MESURES DE PLUS SUR LA LIGNE, et le tri devient visible',(()=>{
+        for(const f of ['_crAssidu','_crPoids','_crDiete'])
+          if(typeof window[f]!=='function') return _echec(f+' n’existe pas');
+        // LE SILENCE EST RESPECTE : chaque fonction rend une chaine vide quand
+        // la mesure n'est pas etablie. Jamais un zero, jamais un tiret invente.
+        const vide={id:'V',sessions_config:[],sessions:[],bilans:[],weightLog:[],nutrition:{}};
+        for(const [f,n] of [[_crAssidu,'assiduité'],[_crPoids,'poids'],[_crDiete,'diète']])
+          if(f(vide)!=='') return _echec('la '+n+' invente une valeur sur un dossier vide : "'+f(vide)+'"');
+        // vitesseHebdo rend un OBJET : lire le nombre directement rendait NaN.
+        if(String(_crPoids).indexOf('kgSem')<0)
+          return _echec('la vitesse de poids ne lit pas kgSem');
+        // LES CELLULES SONT EMISES MEME VIDES, comme l'objectif et la phase :
+        // une cellule absente decalerait toutes les colonnes suivantes.
+        const h=renderClientRow({id:'x',fname:'A',lname:'B'});
+        const d=document.createElement('div'); d.innerHTML=h;
+        for(const cls of ['cr-assidu','cr-poids','cr-diete']){
+          const el=d.querySelector('.'+cls);
+          if(!el) return _echec('.'+cls+' n’est pas émise');
+          if(el.innerHTML!=='') return _echec('.'+cls+' n’est pas vide sur un dossier sans mesure');
+        }
+        // ET LA GRILLE SUIT LE NOMBRE D'ENFANTS. Treize colonnes a 1440,
+        // dix en dessous : le tableau de 1360 est deja sature — mesure, 1017 px
+        // pour 1010 disponibles — et trois colonnes de plus n'y tiennent pas.
+        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        const m=css.match(/@media\(min-width:1440px\)[\s\S]*?--cr-cols:([^}]+)/);
+        if(!m) return _echec('aucune grille de treize colonnes');
+        const cols=m[1].split(/\s+(?![^(]*\))/).filter(Boolean);
+        if(cols.length!==13) return _echec(cols.length+' colonnes au lieu de 13 à 1440 px');
+        // N6.12 — le tri « Séances faites » trie sur tauxCompletion, et la
+        // colonne d'assiduité le rend enfin visible.
+        return String(_triTaux).indexOf('tauxCompletion')>=0
+          ?true:_echec('le tri ne lit plus tauxCompletion');})());
+
+      ok('N6.6 — UNE ACTION ADDITIVE, et seulement devant un volume insuffisant',(()=>{
+        if(AJ_ACTIONS.indexOf('ajouter_serie')<0) return _echec('aucune action additive');
+        // LE SYMETRIQUE EXACT DU RETRAIT, plafond compris.
+        const cfg=[{active:true,exercises:[{name:'DC',series:3}]}];
+        const plus=appliquerAjustementSeances(cfg,[{slot:0,idxExercice:0}],{type:'ajouter_serie'});
+        if(plus[0].exercises[0].series!==4) return _echec('la série n’est pas ajoutée : '+plus[0].exercises[0].series);
+        // Le plafond tient : au-dela, on ne repare plus un manque de volume.
+        const haut=[{active:true,exercises:[{name:'DC',series:AJ_SERIES_MAX}]}];
+        const bloque=appliquerAjustementSeances(haut,[{slot:0,idxExercice:0}],{type:'ajouter_serie'});
+        if(bloque[0].exercises[0].series!==AJ_SERIES_MAX)
+          return _echec('le plafond ne tient pas : '+bloque[0].exercises[0].series);
+        // PURE : la configuration d'origine n'est pas mutee.
+        if(cfg[0].exercises[0].series!==3) return _echec('la configuration source a été modifiée');
+        // LE RETRAIT N'A PAS CHANGE.
+        const moins=appliquerAjustementSeances(cfg,[{slot:0,idxExercice:0}],{type:'retirer_serie'});
+        if(moins[0].exercises[0].series!==2) return _echec('le retrait a changé de comportement');
+        // ELLE N'EST OFFERTE QUE DEVANT UN VOLUME INSUFFISANT : devant une
+        // douleur ou un volume deja eleve, ajouter serait le contraire de ce
+        // que le signal demande.
+        const s=String(_ajVolumeInsuffisant);
+        if(!/sg\.sousMEV/.test(s)) return _echec('la condition ne lit pas le signal de volume');
+        if(!/!sg\.volumeHaut/.test(s)) return _echec('elle s’offre aussi sur un volume élevé');
+        // Et le signal de volume insuffisant designe enfin un exercice, sans
+        // quoi la feuille s'ouvrait sans cible.
+        return String(exerciceDuSignal).indexOf('d.sousMEV')>=0
+          ?true:_echec('le volume insuffisant ne désigne aucun exercice');})());
+
+      ok('N6.7 — LE RAPPORT PORTE LA DIETE, LES MENSURATIONS ET LES PHOTOS',(()=>{
+        const cles=RAP_BLOCS.map(b=>b.cle);
+        for(const c of ['diete','mensurations','photos'])
+          if(cles.indexOf(c)<0) return _echec('le bloc « '+c+' » n’est pas cochable');
+        // LE MOT DU COACH RESTE DERNIER : il ferme le document.
+        if(cles[cles.length-1]!=='mot') return _echec('le mot du coach n’est plus le dernier bloc');
+        const j=Date.now();
+        const u={id:'RP',email:'rp@t.fr',role:'athlete',fname:'C',
+          bilans:[{type:'debut',date:j-35*864e5,'deb-weight':'62','deb-waist':'72',
+                   'deb-photo-face':'data:image/png;base64,AAA'},
+                  {type:'suivi',date:j-5*864e5,'bil-weight':'60','bil-waist':'70',
+                   'bil-photo-face':'data:image/png;base64,BBB'}],
+          sessions:[],weightLog:[],videos:[],nutrition:{}};
+        const r=rapportPeriode(u,j-40*864e5,j);
+        if(!r.mensurations.present) return _echec('les mensurations ne sont pas relevées');
+        const t=r.mensurations.lignes.find(x=>/taille/i.test(x.lib));
+        if(!t||t.delta!==-2) return _echec('l’écart de tour de taille : '+(t&&t.delta));
+        if(!r.photos.present||r.photos.vue!=='face')
+          return _echec('les deux photos de la même vue ne sont pas retenues');
+        // SANS DONNEE : RAP_INSUFFISANT, jamais un zero — la regle du module.
+        const vide={id:'V',email:'v@t.fr',role:'athlete',bilans:[],sessions:[],weightLog:[],nutrition:{}};
+        const h=htmlRapport(rapportPeriode(vide,j-40*864e5,j));
+        if(/>0 %<|>0 cm</.test(h)) return _echec('un zéro est inventé');
+        if(h.indexOf(RAP_INSUFFISANT)<0) return _echec('l’insuffisance n’est pas dite');
+        // GRAPHIQUES EN SVG, JAMAIS EN CANVAS : le canvas s'imprime flou, la
+        // raison est ecrite dans le module.
+        return htmlRapport(r).indexOf('<canvas')<0
+          ?true:_echec('un canvas est entré dans le rapport');})());
+
+      ok('N6.10 — LE RIR MOYEN A UNE DERIVE, et elle dit le SENS',(()=>{
+        if(typeof _rirTranche!=='function') return _echec('aucune dérive');
+        const j=Date.now();
+        const seance=(k,rir)=>({id:'s'+k,date:j-k*3*864e5,
+          data:{DC:{sets:[{done:true,weight:80,reps:8,rir},{done:true,weight:80,reps:8,rir}]}}});
+        // Huit seances : quatre recentes a RIR 1, quatre anciennes a RIR 3.
+        const c={sessions:[]};
+        for(let k=0;k<4;k++) c.sessions.push(seance(k,1));
+        for(let k=4;k<8;k++) c.sessions.push(seance(k,3));
+        const h=_htmlRirMoyen(c).replace(/<[^>]*>/g,' ');
+        if(h.indexOf('1')<0) return _echec('la moyenne courante a changé : '+h);
+        if(h.indexOf('▼')<0) return _echec('la dérive ne dit pas le sens : '+h);
+        if(h.indexOf('2')<0) return _echec('l’écart n’est pas chiffré : '+h);
+        // ET RIEN DU TOUT quand la fenetre precedente n'existe pas : une derive
+        // calculee sur une fenetre incomplete dirait le contraire de la verite.
+        const court={sessions:[seance(0,1),seance(1,1),seance(2,1),seance(3,1)]};
+        const h2=_htmlRirMoyen(court);
+        if(/▲|▼/.test(h2)) return _echec('une dérive sort sans fenêtre précédente');
+        if(!h2) return _echec('la moyenne elle-même a disparu');
+        // LE CHIFFRE ACTUEL N'A PAS BOUGE D'UN CENTIEME.
+        return h2.indexOf('1')>=0?true:_echec('la moyenne courante a changé de valeur');})());
+
+      ok('N6.11 — LE RAPPORT POUSSEE / TIRAGE, et on situe sans noter',(()=>{
+        if(typeof ratioPousseeTirage!=='function') return _echec('aucun rapport');
+        const cfg=[
+          {active:true,exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4},{name:'FACE PULL',series:4},
+            {name:'TAPIS',series:1,reps:'20 min'}]},
+          {active:false,exercises:[{name:'DEVELOPPE COUCHE BARRE',series:9}]}];
+        const r=ratioPousseeTirage(cfg,null);
+        if(!r) return _echec('aucun rapport sur un programme classé');
+        if(r.poussee!==4||r.tirage!==4) return _echec('comptage : '+r.poussee+' / '+r.tirage);
+        if(r.ratio!==1) return _echec('rapport : '+r.ratio);
+        // LE CRENEAU INACTIF ET LE CARDIO SONT ECARTES, comme dans
+        // volumePrescrit : deux fonctions qui compteraient differemment
+        // finiraient par ne plus dire la meme chose du meme programme.
+        if(r.horsSchema!==0) return _echec(r.horsSchema+' séries hors schéma alors que tout est classé');
+        // AUCUN EXERCICE CLASSE : rien plutot qu'un rapport de zero.
+        if(ratioPousseeTirage([{active:true,exercises:[{name:'ZZZ INCONNU',series:4}]}],null)!==null)
+          return _echec('un programme sans exercice classé rend un rapport');
+        // TIRAGE NUL : le rapport n'existe pas, les deux nombres restent.
+        const p=ratioPousseeTirage([{active:true,exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4}]}],null);
+        if(p.ratio!==null||p.poussee!==4) return _echec('tirage nul mal traité : '+JSON.stringify(p));
+        // ON SITUE, ON NE NOTE PAS : aucune couleur d'alerte dans le rendu.
+        const h=_htmlRatioPousseeTirage(cfg,null);
+        return !/var\(--red\)|var\(--orange\)/.test(h)
+          ?true:_echec('un verdict de couleur est posé');})());
+
+      ok('N6.13 — UNE NOTE PORTE UNE ECHEANCE, et elle remonte',(()=>{
+        if(typeof notesEchues!=='function') return _echec('aucune échéance');
+        const j=Date.now();
+        const iso=d=>new Date(d).toISOString().slice(0,10);
+        let n={};
+        // SANS ECHEANCE : rien ne change, et rien ne remonte.
+        let r=noteAjouter(n,'A1','Note simple',null,j);
+        n=r.notes;
+        if(r.note.echeance!==undefined) return _echec('une échéance sort de nulle part');
+        // ECHUE : elle remonte. A VENIR : elle attend.
+        n=noteAjouter(n,'A1','À revoir',null,j,iso(j-2*864e5)).notes;
+        n=noteAjouter(n,'A1','Plus tard',null,j,iso(j+20*864e5)).notes;
+        if(notesEchues(n,'A1').length!==1)
+          return _echec(notesEchues(n,'A1').length+' notes échues au lieu d’une');
+        // ILLISIBLE OU TROP LOINTAINE : refusee. Une echeance a NaN ferait
+        // remonter la note tous les jours, pour toujours.
+        if(_noteEcheanceValide('demain')!==null) return _echec('une date illisible est acceptée');
+        if(_noteEcheanceValide(iso(j+3*365*864e5))!==null) return _echec('une échéance à trois ans est acceptée');
+        // LA LIGNE EST ADMINISTRATIVE ET REPORTABLE, comme le rite.
+        const s=String(renderTodoBlock);
+        if(s.indexOf("type:'notes'")<0) return _echec('aucune ligne dans « À traiter »');
+        if(s.indexOf("isAlertSnoozed('notes'")<0) return _echec('la ligne n’est pas reportable');
+        // LES NOTES RESTENT CHEZ LE COACH : c'est un choix de confidentialité.
+        return String(noteAjouter).indexOf('users')<0
+          ?true:_echec('l’écriture touche au dossier de l’athlète');})());
+
+      ok('N6.14 — LA DECHARGE GROUPEE DIT LE MOTIF, athlète par athlète',(()=>{
+        if(typeof _cdgMotifs!=='function') return _echec('aucun motif');
+        // RIEN DU TOUT quand scoreFatigue n'est pas exploitable : une absence
+        // de motif n'est pas un motif vide, et le module s'interdit deja toute
+        // proposition muette.
+        if(_cdgMotifs({id:'V',sessions:[],sessions_config:[]})!=='')
+          return _echec('un motif sort sur un dossier sans données');
+        // BORNEE : a vingt athletes, la page deviendrait un mur de texte.
+        if(typeof CDG_MOTIFS_MAX!=='number'||CDG_MOTIFS_MAX>4)
+          return _echec('les motifs ne sont pas bornés : '+CDG_MOTIFS_MAX);
+        if(String(_cdgMotifs).indexOf('CDG_MOTIFS_MAX')<0)
+          return _echec('la borne n’est pas appliquée');
+        // ET LA LISTE LES REND, sans toucher a la selection ni a l'application.
+        const s=String(loadDechargeAthletes);
+        if(s.indexOf('_cdgMotifs(a)')<0) return _echec('la liste ne rend pas les motifs');
+        return /DB\.set|CLOUD\.push/.test(String(_cdgMotifs))
+          ?_echec('la lecture des motifs écrit'):true;})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

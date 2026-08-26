@@ -631,6 +631,24 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
     font-size:10.5px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;
     color:var(--sub);border-bottom:1px solid #242424;margin-bottom:6px}
 }
+/* N6.4 — LES TROIS MESURES QUI MANQUAIENT, A PARTIR DE 1440 PX.
+   Assiduite, vitesse de poids et taux de diete sont les trois mesures les plus
+   decisives du suivi, et elles restaient dans la fiche : le coach de quinze
+   athletes ouvrait quinze fiches pour savoir qui s'entraine, qui mange et qui
+   bouge sur la balance.
+   PAS A 1360 PX, ET C'EST MESURE. Le tableau a dix colonnes y occupe deja
+   1017 px pour 1010 disponibles : trois colonnes de plus n'y tiennent pas, et
+   les forcer ferait deborder la ligne. A 1440 la zone offre 1128 px, et les
+   treize colonnes en demandent 1076. Le seuil est donc celui de la place
+   reelle, pas un chiffre rond.
+   Entre 1360 et 1439, le tableau reste celui de dix colonnes, inchange. */
+@media(min-width:1440px){
+  body:has(#s-coach-home.active) #ch-clients-list{
+    --cr-cols:18px 44px minmax(124px,1.3fr) minmax(106px,1.1fr) minmax(80px,1.2fr) minmax(70px,.8fr) 58px 74px 52px 66px 66px 52px 108px}
+  body:has(#s-coach-home.active) #ch-clients-list .cr-assidu,
+  body:has(#s-coach-home.active) #ch-clients-list .cr-poids,
+  body:has(#s-coach-home.active) #ch-clients-list .cr-diete{display:block}
+}
 
 /* ====== GRAIN TEXTURE GLOBAL ====== */
 body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-events:none;opacity:1;
@@ -2277,7 +2295,7 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
    @media(min-width:1025px) les rallume en display:block, et les neuf
    colonnes de la grille supposent que les sept cellules du bloc
    `display:contents` sont TOUJOURS presentes, vides comprises. */
-.cr-charge,.cr-progres,.cr-bilans{display:none}
+.cr-charge,.cr-progres,.cr-bilans,.cr-assidu,.cr-poids,.cr-diete{display:none}
 /* ══════════ PLAN ALIMENTAIRE — DIÈTE STRICTE ══════════
    Même langage visuel que la diète flexible : carte en dégradé, filet
    diagonal, ombre portée, titre en Bebas sur un bandeau accentué. Le plan
@@ -17250,8 +17268,15 @@ function renderClientList(clients){
     // demanderait au JS de connaitre la largeur de la fenetre.
     // Deux colonnes sans titre en tete : celle de la case de sélection et
     // celle de l'avatar. Les libellés doivent tomber sous LEUR colonne.
+    // N6.4 — LES TROIS INTITULES PORTENT LA CLASSE DE LEUR CELLULE. Emis
+    // toujours, comme les autres, et eteints par la meme regle tant que la
+    // fenetre ne les porte pas : un intitule de plus que de colonnes, et la
+    // grille de l'en-tete repasse a la ligne.
     el.innerHTML='<div class="cr-head"><span></span><span></span><span>Athlète</span><span>Activité</span>'
-      +'<span>Objectif</span><span>Phase</span><span>Charge</span><span>Progrès</span>'
+      +'<span>Objectif</span><span>Phase</span>'
+      +'<span class="cr-assidu">Assidu.</span><span class="cr-poids">Poids</span>'
+      +'<span class="cr-diete">Diète</span>'
+      +'<span>Charge</span><span>Progrès</span>'
       +'<span>Bilans</span><span>État</span></div>'
       +vus.map(renderClientRow).join('');
     // LA CASCADE NE JOUE QU'AU PREMIER REMPLISSAGE de la visite. Les rendus
@@ -17549,7 +17574,14 @@ function _texteSignal(type,c,sg){
 // déjà employé par removeCoachPdf — resolveClient, DB.set, CLOUD.pushOne. Ce
 // n'est pas un second chemin d'écriture : saveCoachSessions, lui, lit
 // _coachEditClient et finit par un go() qui ferait quitter l'écran.
-const AJ_ACTIONS=Object.freeze(['substituer','retirer_serie']);
+// N6.6 — 'ajouter_serie' rejoint les deux autres. Elle n'est OFFERTE que
+// devant un volume insuffisant : les signaux de douleur, de decrochage et de
+// volume eleve gardent exactement leurs deux actions.
+const AJ_ACTIONS=Object.freeze(['substituer','retirer_serie','ajouter_serie']);
+// Au-dela, on ne repare plus un manque de volume : on en fabrique un autre.
+// Le coach garde la main — il peut rappeler l'action — mais l'outil ne monte
+// pas tout seul un exercice a douze series.
+const AJ_SERIES_MAX=8;
 // PURE. La clé de rapprochement, et la SEULE correcte.
 //
 // Le nom porté par un signal vient de sessions[n].data — le nom tel qu'il a
@@ -17581,6 +17613,29 @@ function exerciceDuSignal(type,details,user){
     return {nom:d.douleur.nom,tous:((d.douleurTous||[]).map(x=>x&&x.nom).filter(Boolean))||[]};
   if(type==='douleurdiff'&&d.douleurDiffuse&&(d.douleurDiffuse.exercices||[]).length)
     return {nom:d.douleurDiffuse.exercices[0],tous:d.douleurDiffuse.exercices.slice()};
+  // N6.6 — LE VOLUME INSUFFISANT DESIGNE UN EXERCICE. Sans cela, la feuille
+  // d'ajustement s'ouvrait sans cible et n'offrait aucune action : le signal
+  // se voyait, et rien ne permettait d'y repondre.
+  // On vise les exercices dont ce muscle est le PRIMAIRE : ajouter une serie
+  // sur un exercice ou il n'est que secondaire ne remonterait presque pas son
+  // volume, et gonflerait celui d'un autre.
+  if(type==='entrainement'&&!d.plateauMuscle&&d.sousMEV&&user){
+    try{
+      const m=d.sousMEV.muscle;
+      const noms=[];
+      for(const sc of ((user.sessions_config)||[])){
+        if(!sc||!sc.active||!Array.isArray(sc.exercises)) continue;
+        for(const e of sc.exercises){
+          if(!e||!e.name||isCardio(e)) continue;
+          let cls=null;
+          try{ cls=resoudreMusclesLecture(e.name,e,user); }catch(err){ continue; }
+          if(!cls||cls===VOL_CARDIO) continue;
+          if((cls.p||[]).indexOf(m)>=0&&noms.indexOf(e.name)<0) noms.push(e.name);
+        }
+      }
+      if(noms.length) return {nom:noms[0],tous:noms};
+    }catch(e){}
+  }
   if(type==='entrainement'&&d.plateauMuscle&&user){
     try{
       const m=d.plateauMuscle.muscle;
@@ -17735,6 +17790,10 @@ function appliquerAjustementSeances(sessionsConfig,cibles,action){
       // Jamais zéro : un exercice à zéro série n'est pas un exercice allégé,
       // c'est un exercice supprimé — et ce lot ne supprime rien.
       ex.series=Math.max(1,n-1);
+    }else if(type==='ajouter_serie'){
+      // N6.6 — LE SYMETRIQUE EXACT du retrait, plafond compris.
+      const n=Math.max(0,parseInt(ex.series,10)||0);
+      ex.series=Math.min(AJ_SERIES_MAX,n+1);
     }else if(type==='substituer'){
       const nv=String((action.nom||'')).trim();
       if(!nv) continue;
@@ -17846,6 +17905,7 @@ function _ajRendre(){
     }
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
       +'<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajListeSubstituts()">Substituer</button>'
+      +_ajBoutonAjouter(c)
       +'<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajRetirerSerie()">Retirer une série</button>'
       +'</div>';
     // « Baisser l'intensité » n'est PAS rendu : aucun champ d'intensité
@@ -17926,6 +17986,26 @@ function _ajEcrire(action){
   return true;
 }
 function ajRetirerSerie(){ return _ajEcrire({type:'retirer_serie'}); }
+// N6.6 — L'ACTION ADDITIVE, OFFERTE SEULEMENT DEVANT UN VOLUME INSUFFISANT.
+// Devant une douleur, un decrochage ou un volume deja eleve, ajouter une serie
+// serait exactement le contraire de ce que le signal demande.
+function _ajVolumeInsuffisant(c){
+  if(!_ajCtx||_ajCtx.type!=='entrainement') return false;
+  let sg=null; try{ sg=signauxEntrainement(c); }catch(e){ return false; }
+  // Le plateau et la restriction prolongee partagent le type 'entrainement' et
+  // ne reclament pas plus de volume : on exige le signal LUI-MEME.
+  return !!(sg&&sg.sousMEV&&!sg.volumeHaut&&!sg.plateauMuscle);
+}
+function _ajBoutonAjouter(c){
+  if(!_ajVolumeInsuffisant(c)) return '';
+  return '<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;'
+    +'letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajAjouterSerie()">Ajouter une série</button>';
+}
+function ajAjouterSerie(){
+  const c=_ajClient();
+  if(!c||!_ajVolumeInsuffisant(c)) return false;
+  return _ajEcrire({type:'ajouter_serie'});
+}
 function ajSubstituer(nom){ return _ajEcrire({type:'substituer',nom}); }
 function ajReporter(){
   const c=_ajClient();
@@ -18301,6 +18381,18 @@ function renderTodoBlock(clients){
   });
   if(_vids.length) rows.push({type:'videos',icon:icon('video',15),color:'var(--orange)',
     label:'Vidéo'+(_vids.length>1?'s':'')+' à corriger',list:_vids});
+  // N6.13 — LES NOTES DONT L'ECHEANCE EST ATTEINTE. Niveau administratif,
+  // comme le rite : urgencyScore ne les connait pas et ne les connaitra pas —
+  // la ligne se voit, elle ne remonte personne dans le tri.
+  // REPORTABLE de sept jours comme les autres lignes de ce niveau, via
+  // dismissTodoRow, qui n'ecrit que dans alertStatus du COACH.
+  const _notes=clients.filter(c=>{
+    try{ return notesEchues(currentUser&&currentUser.coachNotes,c.id).length
+      &&!isAlertSnoozed('notes',c.id); }
+    catch(e){ return false; }
+  });
+  if(_notes.length) rows.push({type:'notes',icon:'📌',color:'var(--sub)',
+    label:'Note'+(_notes.length>1?'s':'')+' à revoir',list:_notes});
   if(expiring.length) rows.push({type:'expiring',icon:'⏳',color:'var(--orange)',label:'Accès expire dans <14j',list:expiring});
   // RITE DE FIN DE CYCLE : niveau administratif. urgencyScore ne le connaît
   // pas et ne le connaîtra pas — la ligne se voit, elle ne remonte personne.
@@ -18440,6 +18532,37 @@ function _crProgres(c){
 function _crBilans(c){
   let n=0; try{ n=bilansSansReponse(c); }catch(e){ n=0; }
   return n>0?String(n):'';
+}
+// N6.4 — L'ASSIDUITE. tauxCompletion rend deja un objet qui dit s'il est
+// interpretable : sans programme, en reprise, sous suspension, il ne l'est pas
+// et tauxCompletionLib rend « — ». On prefere le VIDE au tiret : dans une
+// colonne de tableau, un tiret par ligne fait une colonne de tirets.
+function _crAssidu(c){
+  let r=null; try{ r=tauxCompletion(c); }catch(e){ r=null; }
+  if(!r||!r.interpretable||r.taux==null) return '';
+  return r.taux+' %';
+}
+// N6.4 — LE POIDS. vitesseHebdo rend des kilos par semaine, ou null tant qu'il
+// n'y a pas deux semaines de recul depuis la derniere reprise. Le signe est
+// ECRIT : « 0,3 » sans signe se lit comme une prise autant que comme une perte.
+function _crPoids(c){
+  // vitesseHebdo rend un OBJET — {kgSem, pctSem, points, regime} — et non un
+  // nombre : c'est `kgSem` qu'on affiche, la meme grandeur que la fiche.
+  let r=null;
+  try{ r=vitesseHebdo(serieWeight(c)); }catch(e){ r=null; }
+  const v=r?r.kgSem:null;
+  if(v==null||!isFinite(v)) return '';
+  const n=Math.round(v*10)/10;
+  // « kg » ET NON « kg/sem » : la colonne fait 74 px, et l'intitule dit deja
+  // qu'il s'agit d'une vitesse. Le titre du survol porte la phrase entiere.
+  return (n>0?'+':(n<0?'−':''))+String(Math.abs(n)).replace('.',',')+' kg';
+}
+// N6.4 — LA DIETE. _tauxDieteRespectee rend null quand aucun jour n'a pu etre
+// juge — pas de cible, pas de journal — et c'est un silence, pas un zero.
+function _crDiete(c){
+  let r=null; try{ r=_tauxDieteRespectee(c); }catch(e){ r=null; }
+  if(!r||r.pct==null) return '';
+  return r.pct+' %';
 }
 // LES NON MESURABLES EN FIN DE LISTE. Un sentinelle très négative et non -1 :
 // une charge peut légitimement valoir -20 %, et -1 la placerait AU-DESSUS
@@ -18595,6 +18718,11 @@ function renderClientRow(c){
   const chLine=_cel('cr-charge',_crCharge(c),'Charge de la semaine, sur la moyenne des 4 précédentes');
   const prLine=_cel('cr-progres',_crProgres(c),'Exercices en hausse sur 28 jours');
   const biLine=_cel('cr-bilans',_crBilans(c),'Bilans sans réponse');
+  // N6.4 — les trois mesures qui manquaient, sur le meme patron : emises MEME
+  // VIDES, effacees sous le seuil du tableau par la regle :empty existante.
+  const asLine=_cel('cr-assidu',_crAssidu(c),'Séances faites sur séances prévues');
+  const poLine=_cel('cr-poids',_crPoids(c),'Vitesse de poids, sur les dernières pesées');
+  const diLine=_cel('cr-diete',_crDiete(c),'Jours où la cible a été tenue');
   const _nm=(escapeHtml(c.fname||'')+' '+escapeHtml(c.lname||'')).trim()||'Profil incomplet';
   // L'ETAT est porte par un attribut plutot que par une classe : il pilote la
   // couleur du filet gauche, et c est ce qui permet de balayer la liste sans
@@ -18609,7 +18737,7 @@ function renderClientRow(c){
       onclick="selAthleteBascule('${c.id}',event)"
       aria-label="Sélectionner ${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète')}">
     <div class="avatar" style="width:44px;height:44px;font-size:var(--fs-lg);overflow:hidden;flex-shrink:0">${avatarHtml}</div>
-    <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div><div class="cr-act">${activityLine}</div>${objLine}${phLine}${chLine}${prLine}${biLine}</div>
+    <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div><div class="cr-act">${activityLine}</div>${objLine}${phLine}${asLine}${poLine}${diLine}${chLine}${prLine}${biLine}</div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;
 }
@@ -19730,7 +19858,32 @@ function _noteId(fil,at){
   return base+'-'+fil.length;
 }
 // PURE, NE MUTE RIEN. Rend {ok:true,notes,note} ou {ok:false,raison}.
-function noteAjouter(notes,athleteId,texte,tag,now){
+// N6.13 — PURE. Une echeance lisible, ou rien. On accepte une date ISO ou un
+// horodatage, on refuse tout le reste : une echeance illisible qui deviendrait
+// NaN ferait remonter la note tous les jours, pour toujours.
+const NOTE_ECHEANCE_MAX_JOURS=365;
+function _noteEcheanceValide(v){
+  if(v==null||v==='') return null;
+  let t=null;
+  if(typeof v==='number'&&isFinite(v)) t=v;
+  else{
+    const s=String(v).trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+    const d=new Date(s+'T12:00:00');
+    if(isNaN(d.getTime())) return null;
+    t=d.getTime();
+  }
+  // Bornee : une echeance a trois ans n'est pas un rappel, c'est un oubli.
+  const max=Date.now()+NOTE_ECHEANCE_MAX_JOURS*864e5;
+  if(t>max) return null;
+  return t;
+}
+// PURE. Les notes dont l'echeance est atteinte, pour un athlete.
+function notesEchues(coachNotes,athleteId,maintenant){
+  const t=isFinite(Number(maintenant))?Number(maintenant):Date.now();
+  return _notesFil(coachNotes,athleteId).filter(n=>n&&n.echeance&&n.echeance<=t);
+}
+function noteAjouter(notes,athleteId,texte,tag,now,echeance){
   const id=String(athleteId||'');
   if(!id) return {ok:false,raison:'Aucun athlète sélectionné.'};
   // Un élève créé par code n'a pas encore de dossier : son identifiant est
@@ -19745,7 +19898,11 @@ function noteAjouter(notes,athleteId,texte,tag,now){
   if(fil.length>=NOTE_MAX_PAR_ATHLETE)
     return {ok:false,raison:'Ce fil est plein ('+NOTE_MAX_PAR_ATHLETE+' notes). Supprime avant d\'ajouter.'};
   const at=isFinite(Number(now))?Number(now):Date.now();
+  // N6.13 — L'ECHEANCE EST OPTIONNELLE, et absente veut dire absente : une
+  // note sans « a revoir le … » ne remonte nulle part, comme avant.
   const note={id:_noteId(fil,at),at,texte:t,tag:NOTE_TAGS.indexOf(tag)>=0?tag:null};
+  const _ech=_noteEcheanceValide(echeance);
+  if(_ech) note.echeance=_ech;
   const sortie=_notesCopie(notes);
   sortie[id]=[note].concat(fil);
   return {ok:true,notes:sortie,note};
@@ -19863,6 +20020,10 @@ function renderJournalCoach(c){
        +' style="width:100%;resize:vertical"></textarea>'
        +'<div style="display:flex;gap:6px;margin-top:7px">'
        +'<select id="jr-tag" style="flex:1;min-width:0"><option value="">Sans étiquette</option>'+opts+'</select>'
+       // N6.13 — L'ECHEANCE. Vide par defaut : une note est d'abord une note,
+       // et la plupart n'ont rien a rappeler.
+       +'<input type="date" id="jr-echeance" title="À revoir le… (facultatif)"'
+       +' style="flex:1;min-width:0"'+'>'
        +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="jrAjouter()">Noter</button>'
        +'</div>'
        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">'+escapeHtml(NOTE_MENTION)+'</div>'
@@ -19890,7 +20051,8 @@ function jrAjouter(){
   if(!c) return false;
   const t=(document.getElementById('jr-texte')||{}).value||'';
   const tag=(document.getElementById('jr-tag')||{}).value||null;
-  const r=noteAjouter(currentUser.coachNotes,c.id,t,tag,Date.now());
+  const ech=(document.getElementById('jr-echeance')||{}).value||null;
+  const r=noteAjouter(currentUser.coachNotes,c.id,t,tag,Date.now(),ech);
   if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
   currentUser.coachNotes=r.notes;
   // saveUser rend faux quand localStorage déborde : la note serait alors dans
@@ -32598,6 +32760,11 @@ const RAP_BLOCS=Object.freeze([
   {cle:'tendances',  lib:'Tendances'},
   {cle:'poids',      lib:'Poids'},
   {cle:'signaux',    lib:'Signaux détectés'},
+  // N6.7 — Trois blocs OPTIONNELS, coches comme les huit autres. Places avant
+  // le mot du coach : il ferme le document, il reste dernier.
+  {cle:'diete',      lib:'Diète'},
+  {cle:'mensurations',lib:'Mensurations'},
+  {cle:'photos',     lib:'Photos'},
   {cle:'mot',        lib:'Mot du coach'}
 ]);
 // PURE. Le mois calendaire PRÉCÉDENT, borne à borne.
@@ -32825,6 +32992,58 @@ function rapSanteAutorisee(u){
 }
 // PURE. Aucune écriture, aucun champ ajouté au document `user` : les cases
 // retirées vivent dans une variable d'écran, pas dans le dossier.
+// N6.7 — LA DIETE SUR LA PERIODE. _tauxDieteRespectee travaille sur une
+// fenetre glissante qui se termine aujourd'hui : on ne peut pas la rejouer sur
+// un mois ecoule, et le bloc le DIT — exactement comme les tendances, qui sont
+// dans le meme cas et l'annoncent deja.
+function rapDiete(u){
+  let r=null; try{ r=_tauxDieteRespectee(u); }catch(e){ r=null; }
+  if(!r||r.pct==null) return {present:false};
+  return {present:true,pct:r.pct,tenus:r.tenus,juges:r.juges,flexible:r.flexible};
+}
+// N6.7 — LES MENSURATIONS, DEBUT CONTRE FIN DE PERIODE. On compare le premier
+// et le dernier bilan de la periode qui portent la mesure : deux bilans hors
+// periode diraient l'evolution d'autre chose.
+const RAP_MESURES=Object.freeze([
+  {cle:'waist',lib:'Tour de taille'},{cle:'hips',lib:'Tour de hanches'},
+  {cle:'neck', lib:'Tour de cou'},   {cle:'chest',lib:'Tour de poitrine'},
+  {cle:'bicep-r',lib:'Biceps droit'},{cle:'thigh-r',lib:'Cuisse droite'}
+]);
+function rapMensurations(u,debut,fin){
+  const bl=bilansOrdonnes(u).filter(b=>b.date>=debut&&b.date<=fin);
+  if(bl.length<2) return {present:false};
+  const lignes=[];
+  for(const m of RAP_MESURES){
+    let a=null,b=null;
+    for(const x of bl){
+      let v=null; try{ v=getBM(x,m.cle); }catch(e){ v=null; }
+      if(!(v>0)) continue;
+      if(a===null) a=v;
+      b=v;
+    }
+    // UNE SEULE MESURE NE DIT AUCUNE EVOLUTION : il en faut deux, et
+    // differentes de rang — a et b viennent du premier et du dernier bilan qui
+    // la portent.
+    if(a===null||b===null||a===b&&bl.length<2) continue;
+    if(a===null||b===null) continue;
+    lignes.push({lib:m.lib,debut:a,fin:b,delta:Math.round((b-a)*10)/10});
+  }
+  return lignes.length?{present:true,lignes}:{present:false};
+}
+// N6.7 — DEUX PHOTOS, LA PREMIERE ET LA DERNIERE DE LA PERIODE, de la meme
+// vue. Comparer une photo de face a une photo de dos ne compare rien.
+function rapPhotos(u,debut,fin){
+  const bl=bilansOrdonnes(u).filter(b=>b.date>=debut&&b.date<=fin);
+  const lire=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||null;
+  for(const vue of ['face','back','side']){
+    const avec=bl.filter(b=>lire(b,vue));
+    if(avec.length<2) continue;
+    return {present:true,vue,
+      avant:{date:avec[0].date,src:lire(avec[0],vue)},
+      apres:{date:avec[avec.length-1].date,src:lire(avec[avec.length-1],vue)}};
+  }
+  return {present:false};
+}
 function rapportPeriode(u,debut,fin,opts){
   const o=opts||{};
   const now=(typeof o.now==='number')?o.now:Date.now();
@@ -32850,6 +33069,10 @@ function rapportPeriode(u,debut,fin,opts){
       progres:phraseExercicesEnProgres(u)
     },
     sante:rapSanteAutorisee(u),
+    // N6.7 — les trois blocs manquants.
+    diete:rapDiete(u),
+    mensurations:rapMensurations(u,debut,fin),
+    photos:rapPhotos(u,debut,fin),
     // RÈGLE 6 : le mot du coach est VIDE. Il n'est pas pré-rempli, il n'est pas
     // suggéré, et aucune phrase par défaut ne l'habite.
     mot:''
@@ -32900,7 +33123,8 @@ function _rapBarreVolume(m){
   </svg>`;
 }
 // ── Le document ───────────────────────────────────────────────────────────
-let _rapBlocs={entete:true,assiduite:true,volume:true,progression:true,tendances:true,poids:true,signaux:true,mot:true};
+let _rapBlocs={entete:true,assiduite:true,volume:true,progression:true,tendances:true,poids:true,signaux:true,
+  diete:true,mensurations:true,photos:true,mot:true};
 let _rapDebut=null,_rapFin=null,_rapCible=null;
 // Les trois fenêtres qu’on demande réellement. Remplir deux champs date à la
 // main, sur téléphone, pour chaque athlète, était le prix de la moindre
@@ -33082,6 +33306,38 @@ function htmlRapport(r){
     else h+=`<ul class="rap-liste">${r.signaux.liste.map(s=>
       `<li>${escapeHtml(s.lib)}${s.fenetre?' <span class="rap-u">— '+escapeHtml(s.fenetre)+'</span>':''}</li>`).join('')}</ul>
       <p class="rap-note">Constaté le ${new Date(r.signaux.constateLe).toLocaleDateString('fr-FR')}. Chaque signal porte la fenêtre sur laquelle il a été établi : l'application ne conserve pas de date de survenue, et le rapport n'en invente pas.</p>`;
+    h+=`</section>`;
+  }
+  // N6.7 — (8) LA DIETE. Sous RAP_MIN_SEANCES ou sans donnee, on ecrit
+  // RAP_INSUFFISANT, jamais un zero — la regle du module.
+  if(B.diete){
+    h+=`<section class="rap-bloc"><h2>Diète</h2>`;
+    if(!r.diete||!r.diete.present) h+=`<p class="rap-note">${RAP_INSUFFISANT}</p>`;
+    else h+=`<p class="rap-chiffre">${r.diete.pct} %</p>
+      <p class="rap-note">${r.diete.tenus} jour${r.diete.tenus>1?'s':''} tenu${r.diete.tenus>1?'s':''} sur ${r.diete.juges} jugé${r.diete.juges>1?'s':''}. Constaté à l'édition, sur la fenêtre glissante : l'application ne sait pas rejouer ce calcul sur un mois écoulé.</p>`;
+    h+=`</section>`;
+  }
+  // N6.7 — (9) LES MENSURATIONS, debut contre fin.
+  if(B.mensurations){
+    h+=`<section class="rap-bloc"><h2>Mensurations</h2>`;
+    if(!r.mensurations||!r.mensurations.present) h+=`<p class="rap-note">${RAP_INSUFFISANT}</p>`;
+    else h+=`<table class="rap-tbl"><thead><tr><th>Mesure</th><th>Début</th><th>Fin</th><th>Écart</th></tr></thead><tbody>`
+      +r.mensurations.lignes.map(l=>`<tr><td>${escapeHtml(l.lib)}</td><td>${String(l.debut).replace('.',',')} cm</td><td>${String(l.fin).replace('.',',')} cm</td><td>${l.delta>0?'+':''}${String(l.delta).replace('.',',')} cm</td></tr>`).join('')
+      +`</tbody></table>`;
+    h+=`</section>`;
+  }
+  // N6.7 — (10) DEUX PHOTOS DE LA MEME VUE. En <img>, jamais en canvas : le
+  // canvas s'imprime flou, la raison est ecrite plus haut dans ce module.
+  if(B.photos){
+    h+=`<section class="rap-bloc rap-photos"><h2>Photos</h2>`;
+    if(!r.photos||!r.photos.present) h+=`<p class="rap-note">${RAP_INSUFFISANT}</p>`;
+    else{
+      const d=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'});
+      h+=`<div style="display:flex;gap:12px;align-items:flex-start">
+        <figure style="flex:1;min-width:0;margin:0"><img src="${r.photos.avant.src}" alt="" style="width:100%;border-radius:6px;display:block"><figcaption class="rap-note">${d(r.photos.avant.date)}</figcaption></figure>
+        <figure style="flex:1;min-width:0;margin:0"><img src="${r.photos.apres.src}" alt="" style="width:100%;border-radius:6px;display:block"><figcaption class="rap-note">${d(r.photos.apres.date)}</figcaption></figure>
+      </div>`;
+    }
     h+=`</section>`;
   }
   // (7) Mot du coach — VIDE, et il le reste.
@@ -39806,16 +40062,41 @@ function _htmlRecords(user){
 }
 // Fiche coach : le RIR moyen des quatre dernières séances.
 const RIR_DERNIERES=4;
+// PURE. La moyenne de RIR d'une TRANCHE de seances, deja triees de la plus
+// recente a la plus ancienne. Rend null quand aucune seance de la tranche ne
+// porte de RIR : une tranche muette n'est pas une tranche a zero.
+function _rirTranche(triees,depuis,combien){
+  const l=triees.slice(depuis,depuis+combien).map(x=>rirMoyenSeance(x)).filter(Boolean);
+  if(!l.length) return null;
+  return {moy:l.reduce((a,r)=>a+r.moyenne,0)/l.length,
+          n:l.length,
+          manquantes:l.reduce((a,r)=>a+(r.nTotal-r.nRenseignees),0)};
+}
 function _htmlRirMoyen(c){
-  const ss=((c&&c.sessions)||[]).filter(x=>x&&x.date&&x.data)
-    .slice().sort((a,b)=>b.date-a.date).slice(0,RIR_DERNIERES);
+  const triees=((c&&c.sessions)||[]).filter(x=>x&&x.date&&x.data)
+    .slice().sort((a,b)=>b.date-a.date);
+  const ss=triees.slice(0,RIR_DERNIERES);
   const l=ss.map(x=>({d:x.date,r:rirMoyenSeance(x)})).filter(x=>x.r);
   if(!l.length) return '';
   const moy=Math.round(l.reduce((a,x)=>a+x.r.moyenne,0)/l.length*100)/100;
   const manquantes=l.reduce((a,x)=>a+(x.r.nTotal-x.r.nRenseignees),0);
+  // N6.10 — LA DERIVE. Fenetre precedente de MEME LONGUEUR, et rien du tout
+  // quand elle n'existe pas : une derive calculee sur une fenetre incomplete
+  // dirait le contraire de la verite un mois sur deux.
+  const _av=_rirTranche(triees,RIR_DERNIERES,RIR_DERNIERES);
+  let derive='';
+  if(_av&&_av.n===RIR_DERNIERES&&l.length===RIR_DERNIERES){
+    const d=Math.round((moy-_av.moy)*100)/100;
+    // Un ecart NUL ne se commente pas : une fleche horizontale ajouterait du
+    // bruit a une information qui dit « rien n'a bouge ».
+    if(Math.abs(d)>=0.05){
+      const fl=d>0?'▲':'▼';
+      derive=`<span style="color:var(--text-faint)"> · ${fl} ${String(Math.abs(d)).replace('.',',')} sur les ${RIR_DERNIERES} précédentes</span>`;
+    }
+  }
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">RIR moyen · ${l.length} dernière${l.length>1?'s':''} séance${l.length>1?'s':''}</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-strong)">${String(moy).replace('.',',')}${manquantes?`<span style="color:var(--text-faint)"> · ${manquantes} série${manquantes>1?'s':''} sans RIR, exclue${manquantes>1?'s':''} du calcul</span>`:''}</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong)">${String(moy).replace('.',',')}${derive}${manquantes?`<span style="color:var(--text-faint)"> · ${manquantes} série${manquantes>1?'s':''} sans RIR, exclue${manquantes>1?'s':''} du calcul</span>`:''}</div>
   </div>`;
 }
 // Fiche coach : ce qui est prescrit contre ce qui est fait.
@@ -40178,11 +40459,33 @@ function loadDechargeAthletes(){
       <input type="checkbox" id="cdg-cb-${escapeHtml(a.id)}" value="${escapeHtml(a.id)}" onchange="_cdgMajBouton()" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cdg-cb-${escapeHtml(a.id)}" style="flex:1;cursor:pointer;min-width:0">
         <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(_nomAthlete(a))}</div>
+        ${empeche?'':_cdgMotifs(a)}
         <div class="sub" style="font-size:var(--fs-xs);color:${empeche?'var(--orange)':'var(--sub)'}">${empeche?escapeHtml(empeche):(n+' créneau'+(n>1?'x':'')+' actif'+(n>1?'s':''))}</div>
       </label>
     </div>`;
   }).join('');
   _cdgMajBouton();
+}
+// N6.14 — LES MOTIFS D'UN ATHLETE, EN UNE LIGNE.
+// RIEN DU TOUT quand scoreFatigue n'est pas exploitable : une absence de motif
+// n'est pas un motif vide, et le module s'interdit deja toute proposition
+// muette. Le coach voit alors la ligne sans commentaire, ce qui est
+// l'information juste — on ne sait pas.
+// BORNEE A TROIS : a vingt athletes, la page deviendrait un mur de texte. Les
+// motifs arrivent deja par poids decroissant.
+const CDG_MOTIFS_MAX=3;
+function _cdgMotifs(a){
+  let r=null;
+  try{ r=scoreFatigue(a); }catch(e){ r=null; }
+  if(!r||!r.exploitable||!(r.motifs||[]).length) return '';
+  const l=r.motifs.slice(0,CDG_MOTIFS_MAX).map(m=>{
+    const v=(m.valeur==null||m.valeur==='')?'':(' '+m.valeur+(m.unite||''));
+    return escapeHtml(String(m.libelle||'')+v);
+  }).filter(Boolean);
+  if(!l.length) return '';
+  const reste=r.motifs.length-l.length;
+  return '<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.45;margin-top:2px">'
+    +l.join(' · ')+(reste>0?' · +'+reste:'')+'</div>';
 }
 function _cdgCoches(){
   return [...document.querySelectorAll('#cdg-athletes input[type=checkbox]:checked')]
@@ -40507,6 +40810,50 @@ function volumePrescrit(cfg,user){
   }
   return out;
 }
+// N6.11 — PURE. Les series de poussee et de tirage d'un programme prescrit.
+// MEME PARCOURS QUE volumePrescrit : creneaux ACTIFS, cardio ecarte, series
+// entieres et positives. Deux fonctions qui compteraient differemment
+// finiraient par ne plus dire la meme chose du meme programme.
+// LES NON RESOLUS NE COMPTENT NI AU NUMERATEUR NI AU DENOMINATEUR, et leur
+// nombre est annonce : c'est la discipline que volumePrescrit tient deja pour
+// ses series non rattachees.
+const SCHEMAS_POUSSEE=Object.freeze(['poussee-verticale','poussee-horizontale']);
+const SCHEMAS_TIRAGE=Object.freeze(['tirage-vertical','tirage-horizontal']);
+function ratioPousseeTirage(cfg,user){
+  let poussee=0,tirage=0,horsSchema=0;
+  for(const s of (cfg||[])){
+    if(!s||!s.active||!Array.isArray(s.exercises)) continue;
+    for(const ex of s.exercises){
+      if(!ex||!ex.name||isCardio(ex)) continue;
+      const nb=Math.max(0,parseInt(ex.series)||0);
+      if(!nb) continue;
+      let sc=null; try{ sc=schemaDe(ex,user); }catch(e){ sc=null; }
+      if(SCHEMAS_POUSSEE.indexOf(sc)>=0) poussee+=nb;
+      else if(SCHEMAS_TIRAGE.indexOf(sc)>=0) tirage+=nb;
+      else horsSchema+=nb;
+    }
+  }
+  // AUCUN EXERCICE CLASSE : rien plutot qu'un rapport de zero. Un programme
+  // entierement compose d'exercices inconnus ne dit rien sur l'equilibre.
+  if(!poussee&&!tirage) return null;
+  return {poussee,tirage,horsSchema,
+          // Le rapport n'existe que si les deux cotes existent : diviser par
+          // zero rendrait l'infini, et « poussee seule » se lit deja aux deux
+          // nombres ecrits a cote.
+          ratio:tirage?Math.round(poussee/tirage*100)/100:null};
+}
+function _htmlRatioPousseeTirage(cfg,user){
+  const r=ratioPousseeTirage(cfg,user);
+  if(!r) return '';
+  const nb=v=>String(v).replace('.',',');
+  return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:9px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+      <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800">Poussée / tirage</span>
+      <span style="font-size:var(--fs-xs);color:var(--text-strong);white-space:nowrap">${r.ratio!=null?nb(r.ratio):'—'} · ${r.poussee} / ${r.tirage} séries</span>
+    </div>
+    ${r.horsSchema?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">${r.horsSchema} série${r.horsSchema>1?'s':''} sur exercice au schéma non résolu, hors du compte.</div>`:''}
+  </div>`;
+}
 function renderVolumePrescrit(cfg,user){
   const z=document.getElementById('csm-volume');
   if(!z) return;
@@ -40531,6 +40878,7 @@ function renderVolumePrescrit(cfg,user){
         </div>
         ${_volBarre(m,v.muscles[m],rep,false,u)}
       </div>`;}).join('')}
+    ${(()=>{ try{ return _htmlRatioPousseeTirage(cfg,u); }catch(e){ return ''; } })()}
     ${v.nonRattaches?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">${v.nonRattaches} série${v.nonRattaches>1?'s':''} sur exercice non classé</div>`:''}
   </div>`;
 }
