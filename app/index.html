@@ -1800,6 +1800,18 @@ html{scroll-behavior:smooth}
 .cc-sect::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(-50deg,
   transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none}
 .cc-sect>*{position:relative}
+/* N5.11 — DEUX NIVEAUX D'ACCENT, ET DEUX SEULEMENT.
+   Les vingt-sept sections du dossier portaient CINQ couleurs simultanees —
+   rouge, orange, vert, bleu, dore — chacune avec son bandeau en degrade.
+   Empilees dans une colonne, elles faisaient une echelle qui ne hierarchisait
+   plus rien : tout appelait, donc rien n'appelait.
+   ROUGE = UNE DECISION DU COACH EST ATTENDUE : pourquoi ce dossier, alertes,
+   douleur, signaux RED-S, securite, suspension. Six sections sur vingt-sept.
+   NEUTRE = TOUT LE RESTE. Le domaine est deja porte par l'onglet : une section
+   « Cafeine » n'a pas besoin d'etre verte pour qu'on sache qu'on est dans
+   NUTRITION.
+   La trame et le filet de gauche ne changent pas : ils font partie de
+   l'identite, et c'est la COULEUR du filet qui porte le niveau. */
 .cc-sect-t{position:relative;display:flex;align-items:baseline;gap:9px;padding:9px 13px;
   border-left:3px solid var(--cc-accent,#ff2d2d);
   background:linear-gradient(90deg,color-mix(in srgb,var(--cc-accent,#E02020) 55%,transparent),
@@ -5163,11 +5175,11 @@ const COACH_PHOTO='icons/coach.jpg';
            Santé, allergies et TCA conditionnent toute la programmation : les
            laisser au fond du questionnaire de départ revenait à demander au
            coach de s'en souvenir. Rempli par openClientDetail. -->
-      <section class="cc-sect" style="--cc-accent:var(--orange)">
+      <section class="cc-sect" style="--cc-accent:var(--red)">
         <div class="cc-sect-t"><span>Pourquoi ce dossier</span></div>
         <div class="cc-sect-c" id="ccd-pourquoi"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--orange);display:none">
+      <section class="cc-sect" style="--cc-accent:var(--red);display:none">
         <div class="cc-sect-t"><span>Alertes</span></div>
         <div class="cc-sect-c" id="ccd-alertes"></div>
       </section>
@@ -5208,27 +5220,27 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Charge de la semaine et exercices en hausse. Masqué tant que
            l'historique ne permet pas de les établir : c'est le contrat des
            deux fonctions qui les calculent. -->
-      <section class="cc-sect" style="--cc-accent:var(--red);display:none">
+      <section class="cc-sect" style="--cc-accent:var(--border);display:none">
         <div class="cc-sect-t"><span>Tendances</span></div>
         <div class="cc-sect-c" id="ccd-tendances"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Forme</span></div>
         <div class="cc-sect-c" id="ccd-forme"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Volume</span></div>
         <div class="cc-sect-c" id="ccd-volume"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Plateaux</span></div>
         <div class="cc-sect-c" id="ccd-plateaux"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--orange)">
+      <section class="cc-sect" style="--cc-accent:var(--red)">
         <div class="cc-sect-t"><span>Douleur</span></div>
         <div class="cc-sect-c" id="ccd-douleur"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Récapitulatif des séances</span></div>
         <div class="cc-sect-c" id="ccd-sessions-recap"></div>
       </section>
@@ -5261,7 +5273,7 @@ const COACH_PHOTO='icons/coach.jpg';
            autres coutait trois changements d'onglet et une perte de contexte a
            chaque macro-cycle. Le balisage seul a bouge — renderPhaseCoach
            cherche #ccd-phase par identifiant. -->
-      <section class="cc-sect" style="--cc-accent:var(--red)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Phase</span></div>
         <div class="cc-sect-c" id="ccd-phase"></div>
       </section>
@@ -5270,11 +5282,11 @@ const COACH_PHOTO='icons/coach.jpg';
            sommeil et les pas. L onglet Nutrition ne portait que trois
            sections pour la moitie du volume rendu ; il en porte une de plus,
            et Lifestyle en cede une qu il n aurait pas du avoir. -->
-      <section class="cc-sect" style="--cc-accent:var(--orange);display:none">
+      <section class="cc-sect" style="--cc-accent:var(--border);display:none">
         <div class="cc-sect-t"><span>Micro-signaux</span></div>
         <div class="cc-sect-c" id="ccd-micro"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--green)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Nutrition</span></div>
         <div class="cc-sect-c" id="ccd-nutrition"></div>
       </section>
@@ -5286,17 +5298,17 @@ const COACH_PHOTO='icons/coach.jpg';
            et elle derive directement du bloc Nutrition sous lequel elle est
            maintenant posee. renderRepartitionPrisesCoach cherche #ccd-prises
            par identifiant : le balisage seul a bouge. -->
-      <section class="cc-sect" style="--cc-accent:var(--green)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Protéines par prise</span></div>
         <div class="cc-sect-c" id="ccd-prises"></div>
       </section>
       <!-- Compléments coach -->
-      <section class="cc-sect" style="--cc-accent:var(--green)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Compléments</span></div>
         <div class="cc-sect-c" id="ccd-supplements"></div>
       </section>
       <!-- Caféine coach (lecture seule) -->
-      <section class="cc-sect" style="--cc-accent:var(--green)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Caféine</span></div>
         <div class="cc-sect-c" id="ccd-caffeine"></div>
       </section>
@@ -5305,15 +5317,15 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Sommeil et pas : les CHIFFRES BRUTS, sans seuil ni jugement. Le
            verdict, lui, reste au bloc Récupération. Masqués tant que rien
            n’a été saisi. -->
-      <section class="cc-sect" style="--cc-accent:var(--link);display:none">
+      <section class="cc-sect" style="--cc-accent:var(--border);display:none">
         <div class="cc-sect-t"><span>Sommeil</span></div>
         <div class="cc-sect-c" id="ccd-sommeil"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--link);display:none">
+      <section class="cc-sect" style="--cc-accent:var(--border);display:none">
         <div class="cc-sect-t"><span>Pas</span></div>
         <div class="cc-sect-c" id="ccd-pas"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--green)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Habitudes</span></div>
         <div class="cc-sect-c" id="ccd-habitudes"></div>
       </section>
@@ -5323,7 +5335,7 @@ const COACH_PHOTO='icons/coach.jpg';
            onglets du 25/08/2026 il ouvre l onglet DONNEES, et c est toujours
            la premiere chose qu on
            veut relire avant de parler a quelqu un. -->
-      <section class="cc-sect" style="--cc-accent:var(--info)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Mes notes de coach</span></div>
         <div class="cc-sect-c" id="ccd-journal"></div>
       </section>
@@ -5335,40 +5347,40 @@ const COACH_PHOTO='icons/coach.jpg';
            une question à laquelle quelqu'un attend une réponse.
            Le balisage seul a bougé : renderCoachRite cherche #ccd-rite par
            identifiant, où qu'il soit. -->
-      <section class="cc-sect" style="--cc-accent:var(--info);display:none">
+      <section class="cc-sect" style="--cc-accent:var(--border);display:none">
         <div class="cc-sect-t"><span>Rite de cycle</span></div>
         <div class="cc-sect-c" id="ccd-rite"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--info)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Bilans</span></div>
         <div class="cc-sect-c" id="ccd-bilans"></div>
       </section>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
-      <section class="cc-sect" style="--cc-accent:var(--link)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Poids et mesures</span></div>
         <div class="cc-sect-c" id="ccd-poids"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--link)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Photos de progression</span></div>
         <div class="cc-sect-c" id="ccd-pp"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--link)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Photos</span></div>
         <div class="cc-sect-c" id="ccd-photos-progression"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--orange)">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Dossier</span></div>
         <div class="cc-sect-c" id="ccd-dossier"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--orange)">
+      <section class="cc-sect" style="--cc-accent:var(--red)">
         <div class="cc-sect-t"><span>Signaux RED-S</span></div>
         <div class="cc-sect-c" id="ccd-reds"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--orange)">
+      <section class="cc-sect" style="--cc-accent:var(--red)">
         <div class="cc-sect-t"><span>Sécurité</span></div>
         <div class="cc-sect-c" id="ccd-securite"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--orange)">
+      <section class="cc-sect" style="--cc-accent:var(--red)">
         <div class="cc-sect-t"><span>Suspension</span></div>
         <div class="cc-sect-c" id="ccd-suspension"></div>
       </section>
@@ -50940,12 +50952,17 @@ function renderCoachNutriSection(c){
   el.innerHTML=
     // ── CE QUI EST CONSTATE ────────────────────────────────────────────────
     `${_diete}${_transi}${_pauseHtml}`
-    + _sect('ccd-nut-journal','Journal alimentaire','var(--green)',_journal)
-    + _sect('ccd-nut-cibles','Cibles en cours','var(--green)',_lecture)
-    + _sect('ccd-nut-athlete','Ce que voit ton athlète','var(--link)',_vuAthlete)
+    // N5.11 — DEUX NIVEAUX ICI AUSSI. Ces cinq sections sont fabriquees par le
+    // rendu et non par le balisage : elles echappaient au comptage, et leurs
+    // quatre couleurs remettaient l'echelle qu'on venait de retirer. Aucune de
+    // ces cinq n'attend une decision du coach — elles decrivent et elles se
+    // reglent — donc toutes neutres.
+    + _sect('ccd-nut-journal','Journal alimentaire','var(--border)',_journal)
+    + _sect('ccd-nut-cibles','Cibles en cours','var(--border)',_lecture)
+    + _sect('ccd-nut-athlete','Ce que voit ton athlète','var(--border)',_vuAthlete)
     // ── CE QUE LE COACH REGLE ──────────────────────────────────────────────
-    + _sect('ccd-nut-reglages','Régler les objectifs','var(--red)',_reglages)
-    + _sect('ccd-nut-strict','Diète stricte','var(--orange)',_strict);
+    + _sect('ccd-nut-reglages','Régler les objectifs','var(--border)',_reglages)
+    + _sect('ccd-nut-strict','Diète stricte','var(--border)',_strict);
 }
 
 function saveClientNutriDiet(type){

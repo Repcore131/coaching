@@ -24045,6 +24045,46 @@ function testExercices(){
         const p=getComputedStyle(document.documentElement).getPropertyValue('--pile-titre');
         return /Haettenschweiler/.test(p)&&/Franklin Gothic/.test(p)
           ?true:_echec('le jeton a perdu ses replis : '+p);})());
+
+      ok('N5.11 — DEUX NIVEAUX D\'ACCENT, et le rouge dit qu\'on attend une décision',(()=>{
+        const s=document.getElementById('s-coach-client');
+        if(!s) return _echec('la fiche a disparu');
+        const sects=[...s.querySelectorAll('.cc-sect')];
+        if(sects.length<20) return _echec(sects.length+' sections seulement : la sonde ne prouve rien');
+        const jeton=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+        const rouge=jeton('--red'), neutre=jeton('--border');
+        const vus={};
+        const alerte=[];
+        for(const el of sects){
+          const a=(el.getAttribute('style')||'').match(/--cc-accent:\s*var\((--[a-z-]+)\)/);
+          const nom=a?a[1]:'(aucun)';
+          vus[nom]=(vus[nom]||0)+1;
+          if(nom==='--red'){
+            const t=el.querySelector('.cc-sect-t>span');
+            alerte.push(t?t.textContent.trim():'?');
+          }
+        }
+        // DEUX NIVEAUX, PAS CINQ. Une sixieme couleur ajoutee demain fait
+        // tomber cette sonde, ce qui est exactement le but.
+        const noms=Object.keys(vus).sort();
+        if(noms.length>2)
+          return _echec(noms.length+' accents simultanés : '+noms.join(', '));
+        for(const n of noms)
+          if(n!=='--red'&&n!=='--border')
+            return _echec('accent inattendu : '+n);
+        // LE ROUGE EST RESERVE A CE QUI EXIGE UNE DECISION.
+        const ATTENDU=['Alertes','Douleur','Pourquoi ce dossier','Signaux RED-S',
+                       'Sécurité','Suspension'];
+        const trop=alerte.filter(x=>ATTENDU.indexOf(x)<0);
+        if(trop.length) return _echec('en rouge sans décision à prendre : '+trop.join(', '));
+        // ET AUCUNE SECTION N'A DISPARU : seul l'accent change.
+        if(!vus['--red']) return _echec('plus aucune section d’alerte');
+        // LA TRAME ET LE FILET RESTENT : ils font partie de l'identite.
+        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const i=css.indexOf('.cc-sect-t{position:relative');
+        const bloc=css.slice(i,css.indexOf('}',i));
+        return /border-left:3px solid var\(--cc-accent/.test(bloc)
+          ?true:_echec('le filet de gauche ne porte plus l’accent');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
