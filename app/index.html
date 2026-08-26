@@ -282,7 +282,19 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
    · s-coach-program est l'editeur d'exercices PARTAGE : un athlete y entre
      pour SA propre seance (go(), l. 6332). L'elargir sur le seul prefixe
      `s-coach-` casserait la regle « ecrans athlete : rien ne change ».
-   Toute reprise de cette liste doit reconduire ces trois exclusions. */
+   Toute reprise de cette liste doit reconduire ces trois exclusions.
+
+   LA LISTE COUVRE LES VINGT-DEUX AUTRES. Elle en couvrait douze : neuf
+   ecrans coach — la file de reprise, l'activite du portefeuille, le
+   rapport, la fiche a imprimer, la vitrine, le classement d'exercices,
+   l'editeur de protocoles, la bibliotheque de protocoles et les compteurs
+   — restaient en colonne de 480 px sur un moniteur de 1440. Aucun n'etait
+   mentionne dans les trois exclusions ci-dessus : c'etaient des oublis.
+
+   ELLE SERT AUSSI DE LISTE DES ECRANS COACH pour la barre laterale, plus
+   bas. Les deux doivent rester identiques : un ecran elargi sans barre
+   perdrait la navigation, un ecran avec barre mais etroit la verrait
+   mordre sur le contenu. */
 @media(min-width:1025px){
   body:has(#s-coach-home.active),
   body:has(#s-coach-client.active),
@@ -296,26 +308,93 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
   body:has(#s-coach-canal.active),
   body:has(#s-coach-charge.active),
   body:has(#s-coach-banque.active),
-  body:has(#s-charges.active){max-width:1440px}
+  body:has(#s-charges.active),
+  body:has(#s-coach-file.active),
+  body:has(#s-coach-activite.active),
+  body:has(#s-rapport.active),
+  body:has(#s-programme-print.active),
+  body:has(#s-vitrine.active),
+  body:has(#s-ex-classify.active),
+  body:has(#s-proto-edit.active),
+  body:has(#s-protocoles.active),
+  body:has(#s-metrics.active){max-width:1440px}
 
-  /* ── BARRE LATERALE — s-coach-home UNIQUEMENT ──
-     #ch-sidebar est un ENFANT de #s-coach-home : elle n'existe que sur cet
-     ecran. La rendre « persistante » sur s-coach-client ou s-coach-sessions
-     imposerait de DEPLACER le noeud hors de son ecran — ce que « aucun
-     element ajoute au document » exclut. Elle vit ici, et ici seul.
+  /* ── BARRE LATERALE — TOUS LES ECRANS COACH ──
+     ELLE ETAIT UN ENFANT DE #s-coach-home, et disparaissait donc des que le
+     coach ouvrait un athlete, une seance, un programme ou son canal : il ne
+     lui restait qu'une fleche retour, et changer d'athlete imposait de
+     repasser par le tableau de bord. Le noeud a ete SORTI de l'ecran pour
+     devenir un frere des ecrans, et la barre une navigation d'application.
+
+     position:fixed PLUTOT QUE FLEX SUR body. body porte soixante et onze
+     enfants directs — cinquante-huit ecrans, onze modales, un svg et un
+     script : le passer en flex-direction:row aurait fait du svg et du script
+     des elements de mise en page. Fixe, la barre ne touche a rien, et le
+     decalage du contenu tient en un padding sur l'ecran actif.
+
+     left:max(0px,calc(50% - 720px)) : le corps est centre et plafonne a
+     1440 px sur ces ecrans. La barre se cale donc sur son bord gauche, et
+     retombe a zero des que la fenetre est plus etroite que le corps.
+
+     LE CRITERE RESTE L'ECRAN REELLEMENT ACTIF, jamais le role du compte : un
+     meme compte peut etre coach ET athlete sans rechargement, et une barre
+     posee sur le role suivrait l'athlete jusque dans ses ecrans.
 
      display:flex!important : la barre est eteinte par TROIS couches — la
      regle globale plus haut, l'attribut inline sur le noeud, et loadCoachHome
      qui repose display:none toutes les 30 secondes. Une declaration author
      !important passe devant l'inline, et devant l'autre !important puisqu'elle
-     est plus specifique : (0,2,1,1) contre (0,1,0,0). AUCUNE ligne de JS n'a
-     donc besoin de changer — c'est ce qui garde ce lot purement CSS.
-
-     overflow-y:auto : #s-coach-home porte height:100dvh;overflow:hidden. Sans
-     cela, une liste d'onglets plus haute que l'ecran serait coupee net. */
-  body:has(#s-coach-home.active) #s-coach-home{flex-direction:row!important}
-  body:has(#s-coach-home.active) #ch-sidebar{
-    display:flex!important;width:260px;flex-shrink:0;overflow-y:auto}
+     est plus specifique. AUCUNE ligne de JS n'a besoin de changer. */
+  body:has(#s-coach-home.active) #ch-sidebar,
+  body:has(#s-coach-client.active) #ch-sidebar,
+  body:has(#s-coach-sessions.active) #ch-sidebar,
+  body:has(#s-coach-programs.active) #ch-sidebar,
+  body:has(#s-coach-prog-template.active) #ch-sidebar,
+  body:has(#s-coach-prog-assign.active) #ch-sidebar,
+  body:has(#s-coach-decharge.active) #ch-sidebar,
+  body:has(#s-coach-bilan-evo.active) #ch-sidebar,
+  body:has(#s-coach-plan.active) #ch-sidebar,
+  body:has(#s-coach-canal.active) #ch-sidebar,
+  body:has(#s-coach-charge.active) #ch-sidebar,
+  body:has(#s-coach-banque.active) #ch-sidebar,
+  body:has(#s-charges.active) #ch-sidebar,
+  body:has(#s-coach-file.active) #ch-sidebar,
+  body:has(#s-coach-activite.active) #ch-sidebar,
+  body:has(#s-rapport.active) #ch-sidebar,
+  body:has(#s-programme-print.active) #ch-sidebar,
+  body:has(#s-vitrine.active) #ch-sidebar,
+  body:has(#s-ex-classify.active) #ch-sidebar,
+  body:has(#s-proto-edit.active) #ch-sidebar,
+  body:has(#s-protocoles.active) #ch-sidebar,
+  body:has(#s-metrics.active) #ch-sidebar{
+    display:flex!important;position:fixed;top:0;bottom:0;
+    left:max(0px,calc(50% - 720px));width:260px;z-index:20;
+    overflow-y:auto;overscroll-behavior:contain}
+  /* Le contenu se decale d'autant. Le padding porte sur l'ECRAN et non sur
+     .pad : la topbar collante est un enfant de l'ecran, et elle passerait
+     sinon sous la barre. */
+  body:has(#s-coach-home.active) .screen.active,
+  body:has(#s-coach-client.active) .screen.active,
+  body:has(#s-coach-sessions.active) .screen.active,
+  body:has(#s-coach-programs.active) .screen.active,
+  body:has(#s-coach-prog-template.active) .screen.active,
+  body:has(#s-coach-prog-assign.active) .screen.active,
+  body:has(#s-coach-decharge.active) .screen.active,
+  body:has(#s-coach-bilan-evo.active) .screen.active,
+  body:has(#s-coach-plan.active) .screen.active,
+  body:has(#s-coach-canal.active) .screen.active,
+  body:has(#s-coach-charge.active) .screen.active,
+  body:has(#s-coach-banque.active) .screen.active,
+  body:has(#s-charges.active) .screen.active,
+  body:has(#s-coach-file.active) .screen.active,
+  body:has(#s-coach-activite.active) .screen.active,
+  body:has(#s-rapport.active) .screen.active,
+  body:has(#s-programme-print.active) .screen.active,
+  body:has(#s-vitrine.active) .screen.active,
+  body:has(#s-ex-classify.active) .screen.active,
+  body:has(#s-proto-edit.active) .screen.active,
+  body:has(#s-protocoles.active) .screen.active,
+  body:has(#s-metrics.active) .screen.active{padding-left:260px}
 
   /* Regle 7. La barre d'onglets SUBSISTE dans le document et reste la
      navigation sous 1025 px ; au-dessus, la barre laterale porte les memes
@@ -323,6 +402,35 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      duplication interdite. On eteint l'une pendant que l'autre est allumee.
      !important : loadCoachHome repose display:flex en inline. */
   body:has(#s-coach-home.active) #coach-tabs-bar{display:none!important}
+
+  /* LA MESURE DE LECTURE, SUR LES NEUF ECRANS QUI VIENNENT D'ETRE ELARGIS.
+     Mesure a 1440 px : la file de reprise servait des lignes de 112
+     caracteres, l'activite du portefeuille 117. Au-dela d'une centaine,
+     l'oeil perd la ligne suivante en revenant a gauche.
+     72ch ET NON 92 : `ch` mesure la largeur du ZERO, plus large que la
+     lettre moyenne. A 92ch la ligne servait encore 112 caracteres reels —
+     mesure. 72ch en donnent environ 88.
+     BORNEE A CES NEUF-LA. Les douze ecrans deja elargis passent tous sous
+     la centaine : leur imposer la meme borne deplacerait une mise en page
+     livree, sans rien corriger. */
+  body:has(#s-coach-file.active) #s-coach-file p,
+  body:has(#s-coach-file.active) #s-coach-file .sub,
+  body:has(#s-coach-activite.active) #s-coach-activite p,
+  body:has(#s-coach-activite.active) #s-coach-activite .sub,
+  body:has(#s-rapport.active) #s-rapport p,
+  body:has(#s-rapport.active) #s-rapport .sub,
+  body:has(#s-programme-print.active) #s-programme-print p,
+  body:has(#s-programme-print.active) #s-programme-print .sub,
+  body:has(#s-vitrine.active) #s-vitrine p,
+  body:has(#s-vitrine.active) #s-vitrine .sub,
+  body:has(#s-ex-classify.active) #s-ex-classify p,
+  body:has(#s-ex-classify.active) #s-ex-classify .sub,
+  body:has(#s-proto-edit.active) #s-proto-edit p,
+  body:has(#s-proto-edit.active) #s-proto-edit .sub,
+  body:has(#s-protocoles.active) #s-protocoles p,
+  body:has(#s-protocoles.active) #s-protocoles .sub,
+  body:has(#s-metrics.active) #s-metrics p,
+  body:has(#s-metrics.active) #s-metrics .sub{max-width:72ch}
 
   /* L'en-tete RESTE : il porte le selecteur de compte ⇄, et ouvrirComptes()
      n'a aucun autre point d'entree dans tout le fichier. On lui retire son
@@ -3610,6 +3718,48 @@ const COACH_PHOTO='icons/coach.jpg';
 </svg>
 
 <!-- SPLASH -->
+<!-- LA BARRE LATERALE DU COACH, FRERE DES ECRANS ET NON ENFANT DE L UN
+     D EUX. Elle vivait dans #s-coach-home et disparaissait des que le
+     coach ouvrait un athlete. Elle est masquee par defaut et allumee par
+     la requete @media(min-width:1025px), ecran coach actif par ecran coach
+     actif — jamais sur un ecran athlete, jamais sur le seul role. -->
+<div id="ch-sidebar" style="display:none;flex-direction:column;background:#040404;border-right:1px solid #1a0000">
+  <div style="padding:20px 16px;border-bottom:1px solid #1a0000">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
+      <div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800">COACH</div>
+        <div style="font-size:var(--fs-md);font-weight:900" id="ch-name-sidebar"></div>
+      </div>
+    </div>
+    <div style="font-size:var(--fs-xs);color:var(--text-dim);font-family:monospace;letter-spacing:1px" id="ch-code-sidebar"></div>
+  </div>
+  <div style="padding:12px 8px;flex:1">
+    <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--surface-1);border:none;border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+      ATHLÈTES
+    </button>
+    <button id="sb-tab-codes" onclick="coachTab('codes')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+      CODES ACCÈS
+    </button>
+    <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+      PAIEMENTS
+    </button>
+    <button id="sb-tab-profil" onclick="coachTab('profil')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+      PROFIL
+    </button>
+  </div>
+  <div style="padding:16px">
+    <button onclick="showCoachCode()" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px;margin-bottom:8px">MON CODE</button>
+    <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer">DÉCONNEXION</button>
+    <!-- Pied coach : la barre latérale est visible depuis tout le tableau de
+         bord, le lien est donc à un clic une fois connecté. -->
+    <div style="margin-top:12px;font-size:var(--fs-xs);color:var(--text-dim);text-align:center;line-height:1.9">
+      <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--text-dim);text-decoration:underline">Mentions légales</a>
+      &nbsp;·&nbsp;
+      <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--text-dim);text-decoration:underline">Confidentialité</a>
+    </div>
+  </div>
+</div>
 <div id="s-splash" class="screen active carbon-bg" style="align-items:center;justify-content:center;position:relative;overflow:hidden">
   <!-- Screen flash overlay -->
   <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;opacity:0;z-index:0"></div>
@@ -4171,43 +4321,6 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-coach-home" class="screen" style="flex-direction:column;height:100vh;height:100dvh;overflow:hidden">
 
   <!-- SIDEBAR (desktop only) -->
-  <div id="ch-sidebar" style="display:none;flex-direction:column;background:#040404;border-right:1px solid #1a0000">
-    <div style="padding:20px 16px;border-bottom:1px solid #1a0000">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
-        <div>
-          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800">COACH</div>
-          <div style="font-size:var(--fs-md);font-weight:900" id="ch-name-sidebar"></div>
-        </div>
-      </div>
-      <div style="font-size:var(--fs-xs);color:var(--text-dim);font-family:monospace;letter-spacing:1px" id="ch-code-sidebar"></div>
-    </div>
-    <div style="padding:12px 8px;flex:1">
-      <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--surface-1);border:none;border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        ATHLÈTES
-      </button>
-      <button id="sb-tab-codes" onclick="coachTab('codes')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        CODES ACCÈS
-      </button>
-      <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        PAIEMENTS
-      </button>
-      <button id="sb-tab-profil" onclick="coachTab('profil')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        PROFIL
-      </button>
-    </div>
-    <div style="padding:16px">
-      <button onclick="showCoachCode()" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px;margin-bottom:8px">MON CODE</button>
-      <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer">DÉCONNEXION</button>
-      <!-- Pied coach : la barre latérale est visible depuis tout le tableau de
-           bord, le lien est donc à un clic une fois connecté. -->
-      <div style="margin-top:12px;font-size:var(--fs-xs);color:var(--text-dim);text-align:center;line-height:1.9">
-        <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--text-dim);text-decoration:underline">Mentions légales</a>
-        &nbsp;·&nbsp;
-        <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--text-dim);text-decoration:underline">Confidentialité</a>
-      </div>
-    </div>
-  </div>
 
   <!-- MAIN AREA -->
   <div id="ch-main-area" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">
@@ -4277,6 +4390,26 @@ const COACH_PHOTO='icons/coach.jpg';
         <button onclick="loadCharges()" class="content-card pil-lien" style="margin-bottom:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
           <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">CHARGES ARTICULAIRES</span>
           <span id="ch-charges-av" style="font-size:var(--fs-xs);color:var(--sub)"></span>
+        </button>
+        <!-- TROIS ECRANS REMONTES DEPUIS LE VOLET DE PILOTAGE. « A relancer »,
+             « Activite du portefeuille » et « Decharge groupee » n'etaient
+             atteignables que par trois liens soulignes de onze pixels, a
+             l'interieur d'un volet FERME a chaque ouverture de l'application :
+             son etat ne vivait que dans _pilOuvert, jamais enregistre. Trois
+             ecrans complets pour un depliage. Ils prennent ici le rang de
+             « Mes programmes » et « Charges articulaires », et ont quitte le
+             volet — aucun lien n'est duplique. -->
+        <button onclick="loadFileReprise()" class="content-card pil-lien" style="margin-bottom:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">À RELANCER</span>
+          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
+        </button>
+        <button onclick="loadCoachActivite()" class="content-card pil-lien" style="margin-bottom:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">ACTIVITÉ DU PORTEFEUILLE</span>
+          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
+        </button>
+        <button onclick="openDechargeGroupee()" class="content-card pil-lien" style="margin-bottom:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">DÉCHARGE GROUPÉE</span>
+          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
         </button>
         <!-- LE TITRE PREND SA PROPRE LIGNE. Cote a cote avec trois boutons, il
              passait a la ligne — « MES / ATHLETES » — et un titre coupe en deux
@@ -4698,7 +4831,7 @@ const COACH_PHOTO='icons/coach.jpg';
        la fiche affiche. Une pastille rouge s'allume sur l'onglet qui
        porte un signal de securite, pour qu'un onglet ferme n'en cache
        jamais un. -->
-  <nav id="ccd-ancres" style="position:sticky;top:52px;z-index:5;display:flex;gap:6px;overflow-x:auto;padding:8px 14px;background:#090909;border-bottom:1px solid var(--border);-webkit-overflow-scrolling:touch">
+  <nav id="ccd-ancres" style="position:sticky;top:0;z-index:5;display:flex;gap:6px;overflow-x:auto;padding:8px 14px;background:#090909;border-bottom:1px solid var(--border);-webkit-overflow-scrolling:touch">
     <button class="pf-chip" data-vue="entrainement" onclick="ccdVue('entrainement')">ENTRAÎNEMENT</button>
     <button class="pf-chip" data-vue="nutrition" onclick="ccdVue('nutrition')">NUTRITION</button>
     <button class="pf-chip" data-vue="lifestyle" onclick="ccdVue('lifestyle')">LIFESTYLE</button>
@@ -4805,10 +4938,26 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="ccc-pdf-content"></div>
       </div>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirProgrammePrint(getOwnedClient(currentClientId))">Fiche programme à imprimer</button>
+      <!-- CHARGE DU BLOC. L'ecran s-coach-charge, sa fonction d'ouverture et
+           son export existaient depuis leur ecriture SANS AUCUN APPELANT : une
+           recherche sur tout le fichier ne trouvait ni onclick, ni gabarit, ni
+           appel indirect — seules deux references dans la suite de tests. La
+           fonction prend un ATHLETE en parametre : sa place est ici, dans
+           l'onglet Entrainement de la fiche, a cote de la fiche a imprimer. -->
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirGrilleCharge(getOwnedClient(currentClientId))">Charge du bloc</button>
       <div id="ccd-demandes-video"></div>
       <div id="ccd-videos"></div>
       </div>
       <div class="ccd-vue" data-vue="nutrition">
+      <!-- MICRO-SIGNAUX, REMONTE DE LIFESTYLE LE 26/08/2026. Ce sont des
+           signaux nutritionnels : ils se lisent avec le journal, pas avec le
+           sommeil et les pas. L onglet Nutrition ne portait que trois
+           sections pour la moitie du volume rendu ; il en porte une de plus,
+           et Lifestyle en cede une qu il n aurait pas du avoir. -->
+      <section class="cc-sect" style="--cc-accent:var(--orange);display:none">
+        <div class="cc-sect-t"><span>Micro-signaux</span></div>
+        <div class="cc-sect-c" id="ccd-micro"></div>
+      </section>
       <section class="cc-sect" style="--cc-accent:var(--green)">
         <div class="cc-sect-t"><span>Nutrition</span></div>
         <div class="cc-sect-c" id="ccd-nutrition"></div>
@@ -4849,10 +4998,6 @@ const COACH_PHOTO='icons/coach.jpg';
       </section>
 
       <!-- Nutrition coach -->
-      <section class="cc-sect" style="--cc-accent:var(--orange);display:none">
-        <div class="cc-sect-t"><span>Micro-signaux</span></div>
-        <div class="cc-sect-c" id="ccd-micro"></div>
-      </section>
       </div>
       <div class="ccd-vue" data-vue="donnees">
       <!-- Journal du coach. En TETE de fiche : c est la premiere chose qu on
@@ -6727,7 +6872,9 @@ const COACH_PHOTO='icons/coach.jpg';
      instrument de programmation, pas un ecran d athlete. -->
 <div id="s-coach-charge" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-coach-home')">←</button>
+    <!-- On revient a la FICHE : c'est de la qu'on vient desormais. retourDe
+         suit le couloir de retour pose par goAvecRetour ; a defaut, la fiche. -->
+    <button class="back-btn" onclick="retourDe('s-coach-charge','s-coach-client')">←</button>
     <span class="topbar-title">Charge du bloc</span>
     <button onclick="exporterGrilleCharge()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:6px 10px" aria-label="Exporter en image">⤓</button>
   </div>
@@ -14694,15 +14841,16 @@ function renderPilotage(clients){
   const corpsA2=_tt('Depuis ta dernière visite')+corpsA;
   const corpsB2=_tt('Portefeuille')+corpsB;
   const corpsC2=_tt('Charge de travail')+corpsC;
-  // Les trois chemins de sortie, dans le volet : ils prolongent ce qu'on
-  // vient de lire, ils n'ouvrent pas un quatrieme sujet.
-  const _ln='background:none;border:none;padding:0;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;color:var(--red-text);text-decoration:underline;cursor:pointer';
-  const corpsLiens=corpsSep
-    +`<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center">`
-    +`<button type="button" onclick="loadFileReprise()" style="${_ln}">À relancer →</button>`
-    +`<button type="button" onclick="loadCoachActivite()" style="${_ln}">Activité du portefeuille →</button>`
-    +`<button type="button" onclick="openDechargeGroupee()" style="${_ln}">Décharge groupée →</button>`
-    +`</div>`;
+  // LES TROIS LIENS ONT QUITTE LE VOLET. Ils etaient la seule porte de trois
+  // ecrans complets — la file de reprise, l'activite du portefeuille et la
+  // decharge groupee — et ce volet est FERME a chaque ouverture de
+  // l'application : _pilOuvert n'est jamais enregistre. Trois ecrans entiers
+  // dependaient donc d'un depliage et d'un lien souligne de onze pixels.
+  // Ils sont remontes dans la navigation du tableau de bord, au meme rang que
+  // « Mes programmes » et « Charges articulaires ». On ne les DUPLIQUE pas :
+  // remontes, ils quittent le volet, qui garde ce qu'il sait faire — lire une
+  // periode.
+  const corpsLiens=corpsSep;
   el.innerHTML=`
     <div style="display:flex;gap:6px;margin-bottom:10px">
       ${_pilCompteur('pf-traiter','À traiter',r.aTraiter,'#E02020')}
@@ -18896,7 +19044,13 @@ const CCD_REPLI_CLE='rc_ccd_replis';
 // voir.
 const CCD_REPLI_DEFAUT=['ccd-journal','ccd-bilans','ccd-poids','ccd-pp',
   'ccd-photos-progression','ccd-prises','ccd-dossier','ccd-reds','ccd-securite',
-  'ccd-suspension','ccd-sessions-recap','ccd-rite','ccd-micro'];
+  'ccd-suspension','ccd-sessions-recap','ccd-rite',
+  // LES REGLAGES DE NUTRITION S OUVRENT REPLIES. Le coach vient d abord LIRE
+  // ce que son athlete a mange — le journal et les cibles en cours restent
+  // deployes — et ne regle qu ensuite. C est aussi ce qui ramene l onglet
+  // Nutrition a une hauteur du meme ordre que les trois autres : il portait
+  // la moitie du volume rendu du dossier.
+  'ccd-nut-reglages','ccd-nut-strict','ccd-supplements','ccd-caffeine'];
 function _ccdReplis(){
   try{ const o=JSON.parse(localStorage.getItem(CCD_REPLI_CLE)||'null');
     return (o&&typeof o==='object')?o:null; }catch(e){ return null; }
@@ -18988,8 +19142,64 @@ const CCD_VUES=['entrainement','nutrition','lifestyle','donnees'];
 const CCD_ALERTES={entrainement:['ccd-douleur'],
   donnees:['ccd-reds','ccd-securite','ccd-suspension']};
 let _ccdVue='entrainement';
+// C'EST LE DOCUMENT QUI DEFILE, PAS .scroll-area. Celle-ci ne deborde jamais :
+// .screen est en min-height sans height, et .scroll-area en flex:1 — le
+// commentaire de go() l'explique deja en detail, celui de s-protocoles le
+// redit. Deux consequences, corrigees ici :
+//   • ccdVue posait scrollTop=0 sur un element qui vaut deja zero : le coach
+//     qui basculait d'onglet a 2 000 px de haut restait a 2 000 px, au milieu
+//     d'un autre contenu ;
+//   • l'ecouteur de defilement etait pose sur ce meme element, qui n'emet
+//     jamais l'evenement : #ccd-ancres[data-serre] ne se declenchait jamais.
+//
+// REMONTEE INSTANTANEE. html porte scroll-behavior:smooth : un defilement
+// anime de deux mille pixels au changement d'onglet serait pire que le defaut.
+// On neutralise le comportement le temps du saut plutot que de passer
+// behavior:'instant', que les navigateurs anciens ignorent silencieusement —
+// ils feraient alors le defilement anime qu'on cherche a eviter.
+function _ccdRemonter(){
+  try{
+    const h=document.documentElement;
+    const av=h.style.scrollBehavior;
+    h.style.scrollBehavior='auto';
+    window.scrollTo(0,0);
+    h.style.scrollBehavior=av;
+  }catch(e){ try{ window.scrollTo(0,0); }catch(err){} }
+}
+// LA BARRE D'ONGLETS SE CALE SOUS LA TOPBAR, QUELLE QUE SOIT SA HAUTEUR.
+// Elle etait collee a top:52px — un chiffre herite d'un commentaire qui decrit
+// une topbar disparue. La vraie mesure 73 px : 14 de marge, un bouton retour de
+// 44 au minimum, 14 de marge et 1 de bordure. La topbar portant z-index:6
+// contre 5, les vingt et un pixels superieurs des puces passaient dessous des
+// que la page defilait, et les libelles etaient rognes.
+//
+// AUCUNE VALEUR EN DUR : la hauteur est MESUREE, et un ResizeObserver la
+// reprend si elle change — changer le bouton retour, la police du titre ou le
+// padding ne redemandera pas de corriger un chiffre ici.
+function _ccdCalerAncres(){
+  try{
+    const e=document.getElementById('s-coach-client');
+    const tb=e&&e.querySelector(':scope>.topbar');
+    const nav=document.getElementById('ccd-ancres');
+    if(!tb||!nav) return;
+    const poser=()=>{
+      const h=Math.round(tb.getBoundingClientRect().height);
+      if(h>0) nav.style.top=h+'px';
+    };
+    poser();
+    if(!window._ccdTopObs&&typeof ResizeObserver==='function'){
+      window._ccdTopObs=new ResizeObserver(poser);
+      window._ccdTopObs.observe(tb);
+    }
+  }catch(e){}
+}
 function ccdVue(nom){
   const v=CCD_VUES.indexOf(nom)>=0?nom:'entrainement';
+  // LE RAFRAICHISSEMENT DE FOND NE DOIT PAS RAMENER LE COACH EN HAUT.
+  // openClientDetail repasse ici toutes les 30 s avec l'onglet DEJA ouvert :
+  // remonter a chaque passage arracherait la page sous ses yeux pendant
+  // qu'il lit. On ne remonte que sur un vrai changement d'onglet.
+  const _change=(v!==_ccdVue);
   _ccdVue=v;
   try{
     document.querySelectorAll('#s-coach-client .ccd-vue').forEach(z=>{
@@ -19000,8 +19210,7 @@ function ccdVue(nom){
     });
     // On remonte : garder la position d'un onglet en montrerait un autre par
     // son milieu, sur une hauteur qui n'a aucune raison de correspondre.
-    const sa=document.querySelector('#s-coach-client>.scroll-area');
-    if(sa) sa.scrollTop=0;
+    if(_change) _ccdRemonter();
   }catch(e){}
   _ccdMajAlertes();
   _ccdMajColonnes();
@@ -19074,9 +19283,9 @@ function ccdAller(id){
 // cible non rendue — .cc-sect:has(>.cc-sect-c:empty) masque les sections vides.
 function _ccdArmerAncres(){
   try{
-    const sa=document.querySelector('#s-coach-client>.scroll-area');
     const nav=document.getElementById('ccd-ancres');
-    if(!sa||!nav) return;
+    if(!nav) return;
+    _ccdCalerAncres();
     // L'OBSERVATEUR DE DEFILEMENT A ETE RETIRE. Il allumait la puce de la
     // section qu'on traversait ; les puces designent maintenant un ONGLET, et
     // c'est ccdVue qui les commande. Le laisser aurait fait clignoter la barre
@@ -19088,12 +19297,13 @@ function _ccdArmerAncres(){
     if(!window._ccdSerreArme){
       window._ccdSerreArme=true;
       let tic=false;
-      sa.addEventListener('scroll',()=>{
+      // SUR window, ET NON SUR .scroll-area : c'est le document qui defile.
+      window.addEventListener('scroll',()=>{
         if(tic) return;
         tic=true;
         requestAnimationFrame(()=>{
           tic=false;
-          const y=sa.scrollTop;
+          const y=window.scrollY||document.documentElement.scrollTop||0;
           if(y>120) nav.setAttribute('data-serre','');
           else if(y<60) nav.removeAttribute('data-serre');
         });
@@ -33263,7 +33473,9 @@ let _gcAthlete=null;
 function ouvrirGrilleCharge(athlete){
   if(!currentUser||currentUser.role!=='coach'){ toast('Réservé aux coachs.','var(--orange)'); return false; }
   _gcAthlete=athlete||_coachEditClient||null;
-  go('s-coach-charge');
+  // goAvecRetour pose le couloir de retour : on revient d'ou l'on vient, et
+  // non sur un ecran choisi a l'ecriture.
+  goAvecRetour('s-coach-charge');
   _rendreGrilleCharge();
   return true;
 }
@@ -48620,26 +48832,45 @@ function renderCoachNutriSection(c){
       <div style="font-size:var(--fs-xs);font-weight:800;color:${f.color};letter-spacing:1px">${f.label}</div>
       ${_champ('ccd-on-'+f.k,f.ph,_vOn(f.k))}
       ${_cyc?_champ('ccd-off-'+f.k,f.ph,_vOff(f.k)):''}
-    </div>`).join('')
-    // LECTURE SEULE, sous les champs. Les dix champs restent en grammes :
-    // convertir leur contenu ferait partir un « 30 » tape en pourcentage
-    // comme 30 grammes de proteines vers le dossier.
-    // LE MEME JEU DE CHIFFRES QUE LES CHAMPS. En automatique, mon et moff
-    // portent ce qui est ENREGISTRE, pas ce qui est calcule : le bloc restait
-    // vide sur un dossier neuf, et affichait les anciennes valeurs des qu'un
-    // reglage bougeait. Il lit donc la meme source que la grille.
-    +(()=>{ try{ return htmlMacrosCoachLecture(c,
-        _calc?_calc.on:mon,
-        _calc?(_cyc?_calc.off:_calc.on):moff); }catch(e){ return ''; } })();
+    </div>`).join('');
+  // LE RESUME DE LECTURE SORT DE macroRows. Il decrit ce que les cibles SONT,
+  // pas ce qu'on est en train de regler : il appartient a l'etat constate, et
+  // il est monte dans sa propre section, plus bas.
+  // En automatique, mon et moff portent ce qui est ENREGISTRE et non ce qui
+  // est calcule : il lit donc la meme source que la grille.
+  const _lecture=(()=>{ try{ return htmlMacrosCoachLecture(c,
+      _calc?_calc.on:mon,
+      _calc?(_cyc?_calc.off:_calc.on):moff); }catch(e){ return ''; } })();
   // EN TÊTE : c’est le seul chiffre du bloc qui dise si les cibles réglées
   // en dessous sont tenues. Le lire après les avoir modifiées serait le lire
   // trop tard.
   const _diete=(()=>{ try{ return _htmlDieteCoach(c); }catch(e){ return ''; } })();
-  el.innerHTML=`${_diete}${_transi}${_pauseHtml}
-    <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:16px">
-      <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">🍎 Nutrition</div>
+  // ══════ DEUX ENSEMBLES, ET L'ETAT CONSTATE D'ABORD ══════════════════════
+  // L'assemblage placait dans cet ordre : les selecteurs de diete, le point de
+  // depart, les dix champs, les boutons, l'acces au plan, et TOUT EN DERNIER le
+  // journal alimentaire. Or le coach vient d'abord LIRE ce que son athlete a
+  // mange, et ne regle les cibles qu'ensuite : l'ordre etait inverse par
+  // rapport a l'usage.
+  //
+  // ET LE BLOC EST DECOUPE. Il empilait quatorze sous-blocs d'un seul tenant :
+  // trois des vingt-cinq sections du dossier concentraient la moitie du volume
+  // rendu. Chaque ensemble devient une SECTION de meme nature que les autres —
+  // meme balisage .cc-sect / .cc-sect-t / .cc-sect-c — et herite donc du repli
+  // deja en place, du chevron et de la memoire par section.
+  //
+  // AUCUN IDENTIFIANT DE CHAMP NE CHANGE : saveClientNutriMacros lit les dix
+  // champs par leur id, et aucun calcul n'est touche. Les sous-blocs sont
+  // deplaces, pas reecrits.
+  const _sect=(id,titre,accent,corps)=>corps?`<section class="cc-sect" style="--cc-accent:${accent}">
+      <div class="cc-sect-t"><span>${titre}</span></div>
+      <div class="cc-sect-c" id="${id}">${corps}</div>
+    </section>`:'';
+  const _journal=(()=>{ try{ return _htmlJournalCoach(c); }catch(e){ return ''; } })();
+  const _strict=dt==='strict'
+    ? (_htmlStrictAccesCoach(c)+_htmlPlanResumeCoach(c)) : '';
+  const _reglages=`
       <!-- Type de diète -->
-      <div style="position:relative;margin-bottom:20px">
+      <div style="position:relative;margin-bottom:14px">
         <select id="ccd-diet-sel" onchange="saveClientNutriDiet(this.value)"
           style="width:100%;padding:11px 36px 11px 14px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
           <option value="strict" ${dt==='strict'?'selected':''}>Diète Stricte</option>
@@ -48651,7 +48882,7 @@ function renderCoachNutriSection(c){
            tous les jours. Le reglage est ECRIT dans le dossier — celui de la
            proposition de point de depart ne vivait qu en memoire, et la grille
            de saisie montrait deux colonnes quoi qu il arrive. -->
-      <div style="position:relative;margin-bottom:20px">
+      <div style="position:relative;margin-bottom:14px">
         <select id="ccd-cycle-sel" onchange="saveClientNutriCycle(this.value)"
           style="width:100%;padding:11px 36px 11px 14px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
           <option value="1" ${_cyc?'selected':''}>Diète cyclée — jour ON / jour OFF</option>
@@ -48659,34 +48890,32 @@ function renderCoachNutriSection(c){
         </select>
         <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:var(--fs-xs)">▼</span>
       </div>
-      <!-- Objectifs macro -->
-      <div style="margin-bottom:16px">
-        <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">🎯 Objectifs nutritionnels</div>
-        ${_htmlDepartCoach(c)}
-        <div style="display:grid;grid-template-columns:${_cols};gap:6px;margin-bottom:8px">
-          <div></div>
-          <div style="font-size:var(--fs-xs);font-weight:800;color:var(--success);letter-spacing:1px;text-align:center;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-2);padding:4px">${_cyc?'⚡ JOUR ON':'TOUS LES JOURS'}</div>
-          ${_cyc?'<div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:4px">💤 JOUR OFF</div>':''}
-        </div>
-        ${macroRows}
-        ${_htmlManuelCoach(c)}
-        ${_htmlViolationsCoach(c)}
-    ${_htmlAjustement(c,true)}
-    ${_htmlDepartHypotheses(c)}
-        <button onclick="saveClientNutriMacros()" style="width:100%;margin-top:6px;padding:11px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">💾 ENREGISTRER LES OBJECTIFS</button>
-        <!-- REMISE AU POINT DE DEPART. Demande de Kevin : « si la personne lache
-             sa seche ou sa PDM quelque temps ». Discret et separe du bouton
-             rouge : il ecrit et remet le compteur de phase a zero, il ne doit
-             pas se cliquer par erreur a la place de l enregistrement. -->
-        <button class="btn btn-outline btn-sm" onclick="reinitialiserCalculs()"
-          style="width:100%;margin:8px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)">Remettre les calculs au point de départ</button>
+      ${_htmlDepartCoach(c)}
+      <div style="display:grid;grid-template-columns:${_cols};gap:6px;margin-bottom:8px">
+        <div></div>
+        <div style="font-size:var(--fs-xs);font-weight:800;color:var(--success);letter-spacing:1px;text-align:center;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-2);padding:4px">${_cyc?'⚡ JOUR ON':'TOUS LES JOURS'}</div>
+        ${_cyc?'<div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:4px">💤 JOUR OFF</div>':''}
       </div>
-      <!-- Accès à la diète stricte -->
-      ${dt==='strict'?_htmlStrictAccesCoach(c):''}
-      <!-- Plan alimentaire composé (stricte uniquement) -->
-      ${dt==='strict'?_htmlPlanResumeCoach(c):''}
-    </div>
-    ${(()=>{ try{ return _htmlJournalCoach(c); }catch(e){ return ''; } })()}`;
+      ${macroRows}
+      ${_htmlManuelCoach(c)}
+      ${_htmlViolationsCoach(c)}
+      ${_htmlAjustement(c,true)}
+      ${_htmlDepartHypotheses(c)}
+      <button onclick="saveClientNutriMacros()" style="width:100%;margin-top:6px;padding:11px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">💾 ENREGISTRER LES OBJECTIFS</button>
+      <!-- REMISE AU POINT DE DEPART. Demande de Kevin : « si la personne lache
+           sa seche ou sa PDM quelque temps ». Discret et separe du bouton
+           rouge : il ecrit et remet le compteur de phase a zero, il ne doit
+           pas se cliquer par erreur a la place de l enregistrement. -->
+      <button class="btn btn-outline btn-sm" onclick="reinitialiserCalculs()"
+        style="width:100%;margin:8px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)">Remettre les calculs au point de départ</button>`;
+  el.innerHTML=
+    // ── CE QUI EST CONSTATE ────────────────────────────────────────────────
+    `${_diete}${_transi}${_pauseHtml}`
+    + _sect('ccd-nut-journal','Journal alimentaire','var(--green)',_journal)
+    + _sect('ccd-nut-cibles','Cibles en cours','var(--green)',_lecture)
+    // ── CE QUE LE COACH REGLE ──────────────────────────────────────────────
+    + _sect('ccd-nut-reglages','Régler les objectifs','var(--red)',_reglages)
+    + _sect('ccd-nut-strict','Diète stricte','var(--orange)',_strict);
 }
 
 function saveClientNutriDiet(type){

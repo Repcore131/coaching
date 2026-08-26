@@ -22372,7 +22372,11 @@ function testExercices(){
             'ccd-nutrition':'nutrition','ccd-supplements':'nutrition',
             'ccd-caffeine':'nutrition',
             'ccd-sommeil':'lifestyle','ccd-pas':'lifestyle',
-            'ccd-habitudes':'lifestyle','ccd-rite':'lifestyle','ccd-micro':'lifestyle',
+            'ccd-habitudes':'lifestyle','ccd-rite':'lifestyle',
+            // MICRO-SIGNAUX EST PASSE EN NUTRITION le 26/08/2026 : ce sont des
+            // signaux nutritionnels, ils se lisent avec le journal et non avec
+            // le sommeil et les pas.
+            'ccd-micro':'nutrition',
             'ccd-journal':'donnees','ccd-bilans':'donnees','ccd-poids':'donnees',
             'ccd-prises':'donnees','ccd-dossier':'donnees','ccd-reds':'donnees',
             'ccd-securite':'donnees','ccd-suspension':'donnees'};
@@ -22490,6 +22494,135 @@ function testExercices(){
           ccdAller('ccd-sommeil');
           return _ccdVue==='lifestyle'?true:_echec('l\'onglet n\'a pas suivi : '+_ccdVue);})());
       } finally { try{ ccdVue(svVue); }catch(e){} }
+    })();
+    // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
+    (()=>{
+      const ECRANS_COACH=['s-coach-home','s-coach-client','s-coach-sessions',
+        's-coach-programs','s-coach-prog-template','s-coach-prog-assign',
+        's-coach-decharge','s-coach-bilan-evo','s-coach-plan','s-coach-canal',
+        's-coach-charge','s-coach-banque','s-charges','s-coach-file',
+        's-coach-activite','s-rapport','s-programme-print','s-vitrine',
+        's-ex-classify','s-proto-edit','s-protocoles','s-metrics'];
+
+      ok('LA BARRE LATERALE N\'EST PLUS ENFERMEE DANS LE TABLEAU DE BORD',(()=>{
+        // Elle etait un enfant de #s-coach-home et disparaissait des que le
+        // coach ouvrait un athlete : il ne lui restait qu'une fleche retour.
+        const sb=document.getElementById('ch-sidebar');
+        if(!sb) return _echec('la barre a disparu du document');
+        if(sb.closest('.screen'))
+          return _echec('elle est encore dans l\'ecran « '+sb.closest('.screen').id+' »');
+        // Et elle est allumee sur CHAQUE ecran coach, par une regle qui nomme
+        // l'ecran — jamais par le role du compte : un meme compte peut etre
+        // coach ET athlete sans rechargement.
+        const css=Array.from(document.querySelectorAll('style'))
+          .map(s=>s.textContent).join('\n');
+        const manquants=ECRANS_COACH.filter(e=>
+          css.indexOf('body:has(#'+e+'.active) #ch-sidebar')<0);
+        return manquants.length
+          ?_echec('sans barre : '+manquants.join(', ')):true;})());
+
+      ok('AUCUN ECRAN ATHLETE, ET AUCUNE DES TROIS EXCLUSIONS, NE PORTE LA BARRE',(()=>{
+        const css=Array.from(document.querySelectorAll('style'))
+          .map(s=>s.textContent).join('\n');
+        const athlete=Array.from(document.querySelectorAll('.screen'))
+          .map(e=>e.id).filter(id=>ECRANS_COACH.indexOf(id)<0);
+        const fuites=athlete.filter(e=>
+          css.indexOf('body:has(#'+e+'.active) #ch-sidebar')>=0);
+        if(fuites.length) return _echec('barre sur : '+fuites.join(', '));
+        // s-coach-program est l'editeur PARTAGE : un athlete y entre pour SA
+        // propre seance. Il doit rester hors de la liste, comme les deux
+        // ecrans de connexion.
+        for(const e of ['s-coach-program','s-coach-entry','s-coach-code'])
+          if(css.indexOf('body:has(#'+e+'.active) #ch-sidebar')>=0)
+            return _echec(e+' porte la barre alors qu\'il est exclu');
+        return true;})());
+
+      ok('LES TROIS ECRANS DU VOLET ONT UNE PLACE STABLE, sans doublon',(()=>{
+        // « A relancer », « Activite du portefeuille » et « Decharge groupee »
+        // n'etaient atteignables que par trois liens soulignes de onze pixels,
+        // dans un volet FERME a chaque ouverture : _pilOuvert n'est jamais
+        // enregistre. Trois ecrans complets pour un depliage.
+        for(const f of ['loadFileReprise()','loadCoachActivite()','openDechargeGroupee()']){
+          const b=Array.from(document.querySelectorAll('button'))
+            .filter(x=>(x.getAttribute('onclick')||'')===f);
+          if(!b.length) return _echec('plus aucun point d\'entree pour '+f);
+          if(b.length>1) return _echec(f+' est duplique ('+b.length+' boutons)');
+          const e=b[0].closest('.screen');
+          if(!e||e.id!=='s-coach-home')
+            return _echec(f+' n\'est pas sur le tableau de bord');
+        }
+        // Et ils ont QUITTE le volet : remontes, ils n'y sont plus.
+        return String(renderPilotage).indexOf('loadFileReprise()')<0
+          ?true:_echec('le lien subsiste dans le volet de pilotage');})());
+
+      ok('L\'ECRAN « CHARGE DU BLOC » A ENFIN UN APPELANT',(()=>{
+        // ouvrirGrilleCharge existait sans aucun appelant : ni onclick, ni
+        // gabarit, ni appel indirect. Sa fonction prend un ATHLETE : sa place
+        // est dans l'onglet Entrainement de la fiche.
+        const b=Array.from(document.querySelectorAll('button'))
+          .filter(x=>/ouvrirGrilleCharge/.test(x.getAttribute('onclick')||''));
+        if(!b.length) return _echec('toujours aucun point d\'entree');
+        const v=b[0].closest('.ccd-vue');
+        if(!v||v.dataset.vue!=='entrainement')
+          return _echec('il n\'est pas dans l\'onglet Entrainement');
+        // Et il revient d'ou l'on vient, pas sur un ecran choisi a l'ecriture.
+        return /goAvecRetour/.test(String(ouvrirGrilleCharge))
+          ?true:_echec('l\'ecran ne pose pas de couloir de retour');})());
+
+      ok('LA BARRE D\'ONGLETS SE CALE SOUS LA TOPBAR, sans valeur en dur',(()=>{
+        // Elle etait collee a top:52px, chiffre herite d'un commentaire qui
+        // decrit une topbar disparue. La vraie mesure 73 px, et les vingt et un
+        // pixels superieurs des puces passaient sous elle des que la page
+        // defilait.
+        const nav=document.getElementById('ccd-ancres');
+        if(!nav) return _echec('la barre d\'onglets a disparu');
+        if(/top:\s*52px/.test(nav.getAttribute('style')||''))
+          return _echec('le 52 px en dur est encore la');
+        if(String(_ccdCalerAncres).indexOf('getBoundingClientRect')<0)
+          return _echec('la hauteur n\'est pas mesuree');
+        return /ResizeObserver/.test(String(_ccdCalerAncres))
+          ?true:_echec('un changement de hauteur ne serait pas repris');})());
+
+      ok('LE DEFILEMENT PORTE SUR LE DOCUMENT, pas sur .scroll-area',(()=>{
+        // .scroll-area ne deborde jamais : .screen est en min-height sans
+        // height et .scroll-area en flex:1. ccdVue posait donc scrollTop=0 sur
+        // un element qui vaut deja zero, et l'ecouteur de resserrement etait
+        // pose sur un element qui n'emet jamais l'evenement.
+        // COMMENTAIRES OTES AVANT DE CHERCHER : les deux fonctions NOMMENT
+        // .scroll-area pour dire qu'elles ne s'y adressent plus, et une sonde
+        // qui lirait les commentaires condamnerait cette precision.
+        const _nu=f=>String(f).replace(/\/\/.*/g,'');
+        if(/scroll-area/.test(_nu(ccdVue)))
+          return _echec('ccdVue vise encore .scroll-area');
+        if(/scroll-area/.test(_nu(_ccdArmerAncres)))
+          return _echec('_ccdArmerAncres ecoute encore .scroll-area');
+        if(!/window\.addEventListener\('scroll'/.test(String(_ccdArmerAncres)))
+          return _echec('personne n\'ecoute le defilement du document');
+        // REMONTEE INSTANTANEE : html porte scroll-behavior:smooth, et un
+        // defilement anime de deux mille pixels serait pire que le defaut.
+        if(!/scrollBehavior/.test(String(_ccdRemonter)))
+          return _echec('la remontee sera animee');
+        // ET PAS AU RAFRAICHISSEMENT : openClientDetail repasse toutes les
+        // 30 s avec l'onglet deja ouvert.
+        return /_change/.test(String(ccdVue))
+          ?true:_echec('le rafraichissement de fond remonte le coach en haut');})());
+
+      ok('LE MEGABLOC NUTRITION EST DECOUPE EN SECTIONS REPLIABLES',(()=>{
+        // Trois des vingt-cinq sections concentraient la moitie du volume
+        // rendu, parce que #ccd-nutrition empilait quatorze sous-blocs.
+        const src=String(renderCoachNutriSection);
+        for(const id of ['ccd-nut-journal','ccd-nut-cibles','ccd-nut-reglages','ccd-nut-strict'])
+          if(src.indexOf(id)<0) return _echec('section manquante : '+id);
+        // L'ETAT CONSTATE AVANT LES REGLAGES : le coach vient d'abord lire ce
+        // que son athlete a mange.
+        if(!(src.indexOf('ccd-nut-journal')<src.indexOf('ccd-nut-reglages')))
+          return _echec('les reglages passent avant le journal');
+        // Les identifiants de champ n'ont pas bouge : saveClientNutriMacros
+        // les lit par leur id.
+        for(const k of ['kcal','p','g','l','f'])
+          if(src.indexOf("'ccd-on-'+f.k")<0&&src.indexOf('ccd-on-'+k)<0)
+            return _echec('les champs ON ne sont plus emis');
+        return true;})());
     })();
     // ── LE DOSSIER EN DEUX COLONNES, SUR LARGE ECRAN ─────────────────────
     // La grille etait posee sur .pad, dont les enfants directs etaient les
@@ -33203,10 +33336,18 @@ vendredi 78 6h 44m
     // sur ce qui est ECRIT dans le fichier livre, pas sur ce qu'un moteur en a
     // reconstruit. Meme principe que _testSW pour sw.js, sans l'asynchrone —
     // aucune mesure, aucun rendu, aucune fenetre a redimensionner.
+    // LES NEUF DERNIERS ONT ETE AJOUTES LE 26/08/2026. Ils etaient absents du
+    // bloc — et de cette liste — alors qu'aucun ne figure dans les trois
+    // exclusions ecrites : c'etaient des oublis, pas des decisions. Cette
+    // liste dit ce qu'est un ECRAN COACH ; l'assertion « aucun ecran athlete »
+    // en deduit les ecrans athlete par difference, et un oubli ici ferait donc
+    // passer un ecran coach pour un ecran athlete.
     const ECRANS_LARGE=['s-coach-home','s-coach-client','s-coach-sessions',
       's-coach-programs','s-coach-prog-template','s-coach-prog-assign',
       's-coach-decharge','s-coach-bilan-evo','s-coach-plan','s-coach-canal',
-      's-coach-charge','s-coach-banque','s-charges'];
+      's-coach-charge','s-coach-banque','s-charges',
+      's-coach-file','s-coach-activite','s-rapport','s-programme-print',
+      's-vitrine','s-ex-classify','s-proto-edit','s-protocoles','s-metrics'];
     // Les commentaires tombent AVANT la recherche, jamais apres : plusieurs
     // d'entre eux CITENT « @media(min-width:1025px) » en toutes lettres pour
     // expliquer le rapport entre l'etat par defaut et le contexte large. Un
