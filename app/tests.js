@@ -3572,7 +3572,13 @@ function testExercices(){
           if(!b||b.source===null) return _echec('aucune proposition');
           // Le métabolisme vaut la formule, sans coefficient.
           const mm=masseMaigreDuBilan(u);
-          const attendu=(mm!=null)?mbKatch(mm):mbMifflin(70,178,32,'Homme');
+          // N2.6 — LE POIDS DE REFERENCE EST CELUI DE LA PESEE LA PLUS
+          // RECENTE, plus celui du bilan : ce dossier porte 46 jours de
+          // journal de pesees, et sa derniere entree n'est pas 70 kg. Le
+          // nombre en dur decrivait l'ancienne source, pas l'attendu.
+          const _pr=poidsNutritionnel(u);
+          if(_pr.source!=='pesee') return _echec('la source du poids est « '+_pr.source+' »');
+          const attendu=(mm!=null)?mbKatch(mm):mbMifflin(_pr.kg,178,32,'Homme');
           if(b.mb!==attendu) return _echec(b.mb+' au lieu de '+attendu);
           return !b.hypotheses.some(h=>/métabolisme corrigé/.test(h))
             ?true:_echec('une hypothèse de correction est annoncée');})());
@@ -22846,6 +22852,47 @@ function testExercices(){
         // _applyNutCycleModifier teste `!isOn` pour le bonus de luteale.
         return /nutIsOnDay\(today,c\)/.test(String(_htmlAthleteVoit))
           ?true:_echec('le jour n’est pas lu par nutIsOnDay');})());
+
+      ok('N2.6 — UN SEUL POIDS DE REFERENCE, et les trois lectures s\'y ramenent',(()=>{
+        if(typeof poidsNutritionnel!=='function') return _echec('aucune source unique');
+        const j=Date.now();
+        const iso=d=>new Date(d).toISOString().slice(0,10);
+        // LE DOSSIER DU DOC : le dernier bilan ne porte PAS de poids, mais le
+        // journal de pesees est a jour. Avant, besoinsProposes retombait sur
+        // init-weight (80 kg, l'inscription), poidsReference remontait au
+        // bilan qui en portait un (74) et le plancher lisait la pesee (71) :
+        // trois nombres, trois lignes du meme panneau.
+        const u={id:'PN',email:'pn@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+          _evol_height:'178','init-age':32,'init-weight':'80',
+          createdAt:j-300*864e5,
+          bilans:[{type:'debut',date:j-120*864e5,'deb-weight':'74','deb-height':'178',
+                   'deb-age':'32','deb-gender':'Homme'},
+                  {type:'suivi',date:j-2*864e5,'bil-mood':'4'}],
+          weightLog:[{date:iso(j-30*864e5),kg:73},{date:iso(j-3*864e5),kg:71}],
+          sessions:[],videos:[]};
+        const r=poidsNutritionnel(u);
+        if(r.kg!==71) return _echec('le poids de reference vaut '+r.kg+' et non la derniere pesee (71)');
+        if(r.source!=='pesee') return _echec('provenance annoncee : '+r.source);
+        // LES TROIS LECTURES RENDENT LE MEME NOMBRE.
+        if(poidsReference(u)!==71) return _echec('les g/kg lisent '+poidsReference(u));
+        if(_poidsPourPlancher(u)!==71) return _echec('le plancher lit '+_poidsPourPlancher(u));
+        const b=besoinsProposes(u);
+        if(!b||b.source===null) return _echec('aucune proposition : '+((b&&b.manque)||[]).join(', '));
+        // Le metabolisme doit etre celui de 71 kg, pas celui de 80.
+        if(b.mb!==mbMifflin(71,178,32,'Homme'))
+          return _echec('les grammages sont cales sur un autre poids : mb='+b.mb
+            +' contre '+mbMifflin(71,178,32,'Homme')+' a 71 kg');
+        // ET LE POIDS EST AFFICHE, avec sa provenance.
+        const h=htmlPoidsReference(u).replace(/<[^>]*>/g,' ');
+        if(h.indexOf('71')<0) return _echec('le poids n’est pas affiche');
+        if(h.indexOf('pesée')<0) return _echec('la provenance n’est pas affichee : '+h.slice(0,140));
+        // SANS AUCUNE PESEE NI BILAN CHIFFRE : le poids d'inscription sert de
+        // dernier recours, et il est dit comme n'ayant jamais ete mesure.
+        const v={id:'PV',email:'pv@t.fr','init-weight':'80',bilans:[],weightLog:[]};
+        const rv=poidsNutritionnel(v);
+        if(rv.kg!==80||rv.source!=='initial') return _echec('dernier recours : '+JSON.stringify(rv));
+        return htmlPoidsReference(v).indexOf('jamais mesuré')>=0
+          ?true:_echec('le poids d’inscription n’est pas signale comme non mesure');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

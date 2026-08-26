@@ -4922,11 +4922,16 @@ const COACH_PHOTO='icons/coach.jpg';
             <button onclick="offboardCoach(currentUser?.id)" style="width:100%;background:none;border:1px solid var(--red);border-radius:var(--r-2);padding:10px;color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px">RÉASSIGNER MES ATHLÈTES</button>
           </div>
 
-          <div style="border-top:1px solid #1a1a1a;padding-top:16px;margin-top:0">
-            <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Exporter mes données</div>
-            <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">RGPD (Art. 20) : récupère l'intégralité de ton dossier dans un fichier JSON — bilans, séances, nutrition, mensurations et photos. Les mots de passe en sont exclus.</div>
-            <button onclick="exportMyData()" style="width:100%;background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:10px;color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Exporter mes données (JSON)</button>
-          </div>
+          <!-- DEUX EXPORTS RGPD COHABITAIENT SUR CET ECRAN. Celui-ci, le plus
+               ancien, ne lisait que le dossier local ; celui du groupe « Mon
+               compte et mes donnees » passe par _chargerExportComplet et porte
+               le manifeste, la sante privee et la marche a suivre pour les
+               medias. Le regroupement de N1.17 les a mis cote a cote, et deux
+               boutons qui promettent « l integralite de ton dossier » sans
+               rendre la meme chose valent moins qu un seul.
+               exportMyData RESTE dans le code : l ecran de l athlete,
+               s-athlete-profile, s en sert encore. Arbitrage de Kevin,
+               26/08/2026. -->
           <div style="border-top:1px solid #2a0000;padding-top:16px">
             <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Supprimer mon compte</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">Action irréversible. Conformément au RGPD (Art. 17), toutes tes données personnelles seront effacées. Les données financières sont conservées 5 ans (obligation légale).</div>
@@ -41550,15 +41555,77 @@ function partsPourcent(p,l,g){
 // PURE. Le poids de référence : celui du DERNIER BILAN, comme partout ailleurs
 // dans le produit. Rend null quand il n'y en a pas — et le mode g/kg devient
 // alors indisponible, ce que l'écran dit.
-function poidsReference(user){
-  const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
-  for(let i=bl.length-1;i>=0;i--){
-    let v=null;
-    try{ v=getBW(bl[i]); }catch(e){ v=null; }
-    if(v>0) return v;
-  }
+// ══════ N2.6 — UN SEUL POIDS DE REFERENCE NUTRITIONNEL ════════════════════
+// TROIS DEFINITIONS CONCURRENTES alimentaient trois lignes du MEME panneau :
+//   • besoinsProposes prenait getBW(dernier bilan), puis init-weight — un
+//     bilan sans pesee le faisait donc retomber sur le poids DECLARE A
+//     L'INSCRIPTION, parfois vieux de plusieurs mois ;
+//   • poidsReference remontait les bilans jusqu'a en trouver un qui porte un
+//     poids, mais ignorait le journal de pesees ;
+//   • _poidsPourPlancher lisait la derniere pesee du journal.
+// Le coach lisait donc, sur un meme ecran, des grammages cales sur un poids,
+// des g/kg sur un autre, et un plancher calorique sur un troisieme — avec
+// plusieurs kilos d'ecart possibles.
+//
+// LA SOURCE UNIQUE EST LA PESEE LA PLUS RECENTE (arbitrage de Kevin, 26/08/
+// 2026). serieWeight fusionne DEJA les bilans et le journal de pesees, les
+// borne a PESEE_MIN/PESEE_MAX, les range par jour et marque la provenance de
+// chacun : la derniere entree est, par construction, la mesure la plus
+// fraiche. Elle ne peut jamais revenir en arriere, ce que faisait le repli sur
+// init-weight de besoinsProposes.
+//
+// AUCUNE FORMULE N'EST TOUCHEE : c'est l'ENTREE des trois lectures qui est
+// unifiee, pas leur calcul.
+function poidsNutritionnel(user){
+  try{
+    const s=serieWeight(user);
+    if(s.length){
+      const d=s[s.length-1];
+      return {kg:d.kg,source:d.source,date:d.date};
+    }
+  }catch(e){}
+  // Dernier recours : le poids declare a l'inscription. Il n'a jamais ete
+  // mesure par personne, et c'est pour cela qu'il est dit comme tel.
   const init=parseFloat((user&&user['init-weight'])||0);
-  return init>0?init:null;
+  return (init>0)?{kg:init,source:'initial',date:null}
+                 :{kg:null,source:null,date:null};
+}
+// PURE. Le poids de reference et sa provenance, en une ligne. Le doc demande
+// qu'il soit affiche UNE FOIS, en clair : tout ce qui est calcule en dessous
+// en depend, et il etait jusqu'ici invisible.
+function htmlPoidsReference(user){
+  const r=poidsNutritionnel(user);
+  if(!(r.kg>0)) return '<div class="sub" style="font-size:var(--fs-2xs);line-height:1.6;margin-bottom:10px">'
+    +'Aucun poids connu : ni pesée, ni bilan, ni poids d’inscription. Rien ne peut être calculé.</div>';
+  const dit={pesee:'dernière pesée',bilan:'dernier bilan',initial:'poids d’inscription, jamais mesuré'};
+  let quand='';
+  if(r.date){
+    try{
+      const [y,m,d]=r.date.split('-').map(Number);
+      quand=' du '+new Date(y,m-1,d).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+    }catch(e){}
+  }
+  // Le poids d'inscription est signale en orange : il n'a ete mesure par
+  // personne, et tout ce qui en decoule herite de cette incertitude.
+  const alerte=(r.source==='initial');
+  return '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:12px;'
+    +'padding:8px 10px;background:var(--surface-1);border:1px solid var(--border);'
+    +'border-left:3px solid '+(alerte?'var(--orange)':'var(--link)')+';border-radius:var(--r-2)">'
+    +'<span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;'
+    +'text-transform:uppercase;font-weight:800">Poids de référence</span>'
+    +'<b style="font-size:var(--fs-md);color:var(--text-strong)">'
+    +String(r.kg).replace('.',',')+' kg</b>'
+    +'<span class="sub" style="font-size:var(--fs-2xs)">'
+    +escapeHtml(dit[r.source]||'source inconnue')+quand+'</span>'
+    +'<span class="sub" style="font-size:var(--fs-2xs);flex-basis:100%;line-height:1.5">'
+    +'Les grammages, les g/kg et le plancher calorique s’y réfèrent tous les trois.</span>'
+    +'</div>';
+}
+// N2.6 — CETTE FONCTION NE DECIDE PLUS RIEN. Elle remontait les bilans de son
+// cote pendant que deux autres lectures en faisaient autant, differemment.
+// Elle rend maintenant le poids de reference commun, et rien d'autre.
+function poidsReference(user){
+  return poidsNutritionnel(user).kg;
 }
 // PURE. Le sélecteur a-t-il le droit de proposer g/kg ?
 function macroUniteDisponible(unite,poidsRef){
@@ -48158,7 +48225,11 @@ function besoinsProposes(user,opts){
   const hypotheses=[];
   const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
   const b=bl[bl.length-1]||{};
-  const poids=getBW(b)||parseFloat((user&&user['init-weight'])||0)||null;
+  // N2.6 — LA MEME SOURCE QUE LE PLANCHER ET LES g/kg. getBW(dernier bilan)
+  // puis init-weight faisait retomber le calcul sur le poids DECLARE A
+  // L'INSCRIPTION des que le dernier bilan ne portait pas de pesee : les
+  // grammages revenaient alors des mois en arriere, en silence.
+  const poids=poidsNutritionnel(user).kg;
   const taille=parseFloat((user&&(user._evol_height||user['init-height']))||b['deb-height']||(user&&user.height)||0)||null;
   const age=parseFloat(b['deb-age']||(user&&user['init-age'])||(user&&user.age)||0)||null;
   const sexe=(user&&(user._evol_gender||user.gender))||b['deb-gender']||'';
@@ -49435,6 +49506,11 @@ function renderCoachNutriSection(c){
   const _strict=dt==='strict'
     ? (_htmlStrictAccesCoach(c)+_htmlPlanResumeCoach(c)) : '';
   const _reglages=`
+      <!-- N2.6 — LE POIDS DE REFERENCE, DIT UNE FOIS. Tout ce qui est reglé
+           en dessous en depend — les grammages, les g/kg, le plancher — et il
+           etait invisible, alors que trois lectures concurrentes pouvaient en
+           donner trois valeurs differentes sur le meme dossier. -->
+      ${(()=>{ try{ return htmlPoidsReference(c); }catch(e){ return ''; } })()}
       <!-- Type de diète -->
       <div style="position:relative;margin-bottom:14px">
         <select id="ccd-diet-sel" onchange="saveClientNutriDiet(this.value)"
@@ -54495,7 +54571,9 @@ function _depensePourPlafond(user){
   try{
     const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
     const b=bl[bl.length-1]||{};
-    const poids=getBW(b)||parseFloat((user&&user['init-weight'])||0)||null;
+    // N2.6 — meme source que besoinsProposes, dont cette fonction refait le
+    // chemin a la main pour ne pas refermer la boucle du plancher.
+    const poids=poidsNutritionnel(user).kg;
     const taille=parseFloat((user&&(user._evol_height||user['init-height']))||b['deb-height']||(user&&user.height)||0)||null;
     const age=parseFloat(b['deb-age']||(user&&user['init-age'])||(user&&user.age)||0)||null;
     const sexe=(user&&(user._evol_gender||user.gender))||b['deb-gender']||'';
@@ -54510,15 +54588,11 @@ function _depensePourPlafond(user){
   }catch(e){ return null; }
 }
 
+// N2.6 — MEME SOURCE QUE LES DEUX AUTRES LECTURES. Celle-ci etait deja la
+// plus juste des trois : c'est la sienne qui a ete retenue, et les deux
+// autres s'y sont ralliees.
 function _poidsPourPlancher(user){
-  try{
-    const s=serieWeight(user);
-    if(s.length) return s[s.length-1].kg;
-  }catch(e){}
-  const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
-  const b=bl[bl.length-1];
-  const v=b?getBW(b):null;
-  return (v>0)?v:null;
+  return poidsNutritionnel(user).kg;
 }
 // Planchers effectifs pour CET athlète. Toujours un objet, jamais null : sans
 // poids connu, les bornes par kilo sont absentes mais l'absolu tient.
