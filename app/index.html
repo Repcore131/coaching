@@ -10546,6 +10546,23 @@ function _comptesRemiseAZero(){
   // l'editeur : le laisser derriere soi sur un appareil partage, c'est y
   // laisser les seances, les notes et les photos de quelqu'un d'autre.
   try{ _coachEditClient=null; }catch(e){}
+  // N3.17 — SIX ETATS APPARTENAIENT ENCORE AU COMPTE QUITTE.
+  // La bascule purgeait currentClientId, woState, bilData, le brouillon de
+  // bilan et trois caches, et laissait derriere elle : le brouillon de
+  // seances, le plan alimentaire en composition, la video en cours de
+  // correction, les messages du canal, le profil coach mis en cache sous
+  // une clef UNIQUE — non indexee par compte — et les deux drapeaux de
+  // session qui empechent de republier la vitrine jusqu'au rechargement.
+  // Un aller-retour coach -> athlete -> coach repartait donc avec le
+  // travail du compte precedent sous les yeux, et une vitrine qui ne
+  // remontait plus.
+  try{ _cplPlan=null; }catch(e){}
+  try{ window._vcEmail=null; window._vcVideoId=null; }catch(e){}
+  try{ window._canalMsgsCoach={}; }catch(e){}
+  try{ localStorage.removeItem('rc_coach_profil'); }catch(e){}
+  // Les deux drapeaux sont des « deja fait POUR CE COMPTE » : les laisser
+  // vrais fait croire au suivant que son profil est deja publie.
+  try{ window._ratProfilFait=false; window._profilCoachPublie=false; }catch(e){}
   try{ if(woState&&woState.timerInterval) clearInterval(woState.timerInterval); }catch(e){}
   woState={};
   try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
@@ -12986,10 +13003,13 @@ function _appliquerPayloadCode(payload){
     const _u1=DB.set('users',users),_s1=DB.set('session',currentUser);
     // Envoi immediat : sans lui, le coach ne voit rien tant que l'athlete
     // n'a pas declenche une autre ecriture.
-    CLOUD.pushOne(currentUser.email,currentUser);
+    // N3.18 — LE « ✓ » ATTEND LES DEUX DESTINATIONS. C'est l'ecriture la plus
+    // consequente de tout le parcours de l'athlete : reseau coupe, il lisait
+    // « Acces active ✓ » et son coach ne le voyait jamais apparaitre.
+    const _envoi=CLOUD.pushOne(currentUser.email,currentUser);
     // Idem : succes confirme, le code en attente n'a plus lieu d'etre.
     _oublierCodeVerifie();
-    toastEcriture(_u1&&_s1,'Accès activé ✓','ton accès est');
+    toastSync(_u1&&_s1,_envoi,'Accès activé ✓','ton accès est');
     _apresRattachement();
   } else {
     // Code NON athlète (invitation coach) : le paiement reste le chemin
@@ -20411,8 +20431,20 @@ function _ecrireTailleDeduite(){
     return true;
   }catch(e){ return false; }
 }
+// N3.16 — « BILAN 3 » DOIT DESIGNER LE MEME RELEVE DES DEUX COTES.
+// Le coach lisait c.bilans TEL QUEL et nommait ses colonnes par position dans
+// le tableau ; l'athlete triait par date. _mergeUser trie lui aussi, mais
+// toute ecriture locale posterieure ajoute EN FIN de tableau : un bilan
+// antidate s'intercalait en position 2 chez l'athlete et restait en 3 chez le
+// coach. Les deux commentaient « le bilan 3 » en designant deux releves
+// differents.
+// Un seul ordre, un seul filtre, une seule fonction. Aucun calcul de
+// mensuration n'est touche : c'est l'ORDRE de lecture qui est unifie.
+function bilansOrdonnes(u){
+  return ((u&&u.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+}
 function renderBilanEvolution(c){
-  const bilans=c.bilans||[];
+  const bilans=bilansOrdonnes(c);
   const maxB=bilans.length;
   // Height: chercher dans le profil, puis dans tous les bilans (pris une fois, valable à vie)
   const deb=bilans.find(b=>b.type==='depart');
@@ -38131,11 +38163,16 @@ async function coachLeverDrapeau(quoi){
   try{ suspensionSynchroniser(c); }catch(e){}
   if(c.email) users[c.email]=c;
   const ok=DB.set('users',users);
-  try{ CLOUD.pushOne(c.email,c); }catch(e){}
+  // N3.18 — LE SUCCES ATTEND LES DEUX DESTINATIONS. Le try/catch synchrone qui
+  // entourait cette poussee ne pouvait rien capter d'une promesse, et
+  // toastEcriture annoncait un « ✓ » vert sur la foi de la seule ecriture
+  // locale : reseau coupe, le coach lisait « Pause levée » et son athlete ne
+  // voyait rien.
+  const envoi=CLOUD.pushOne(c.email,c);
   try{ _viderCacheSignaux(); }catch(e){}
   renderLeveeCoach(c);
   try{ renderDouleurCoach(c); }catch(e){}
-  toastEcriture(ok,'Pause levée','la levée est');
+  toastSync(ok,envoi,'Pause levée','la levée est');
   return true;
 }
 
@@ -38256,9 +38293,11 @@ function habCoachAjouter(){
   if(!r.ok) return toast(r.raison,'var(--orange)');
   if(c.email) users[c.email]=c;
   const ok=DB.set('users',users);
-  try{ CLOUD.pushOne(c.email,c); }catch(e){}
+  // N3.18 — meme correction : le try/catch ne captait rien, et le « ✓ » vert
+  // partait avant que le serveur ait repondu.
+  const envoi=CLOUD.pushOne(c.email,c);
   renderHabitudesCoach(c);
-  toastEcriture(ok,'Habitude ajoutée','l\'habitude est');
+  toastSync(ok,envoi,'Habitude ajoutée','l\'habitude est');
   return true;
 }
 async function habCoachRetirer(cle){
@@ -38269,9 +38308,10 @@ async function habCoachRetirer(cle){
   if(!habitudeRetirer(c,cle)) return false;
   if(c.email) users[c.email]=c;
   const ok=DB.set('users',users);
-  try{ CLOUD.pushOne(c.email,c); }catch(e){}
+  // N3.18 — meme correction.
+  const envoi=CLOUD.pushOne(c.email,c);
   renderHabitudesCoach(c);
-  toastEcriture(ok,'Habitude retirée','le retrait est');
+  toastSync(ok,envoi,'Habitude retirée','le retrait est');
   return true;
 }
 function renderWoReminderCard(){
@@ -39611,7 +39651,8 @@ function showProgressTab(tab,btn){
   document.querySelectorAll('#prog-tabs button').forEach(b=>{b.className='btn btn-outline btn-sm';b.style.whiteSpace='nowrap';});
   if(btn){btn.className='btn btn-red btn-sm';btn.style.whiteSpace='nowrap';}
   const c=document.getElementById('progress-content');
-  const bl=(currentUser.bilans||[]).slice().sort((a,b)=>a.date-b.date);
+  // N3.16 — le MEME ordre et le MEME filtre que la fiche du coach.
+  const bl=bilansOrdonnes(currentUser);
   const ss=currentUser.sessions||[];
   const bilLabels=bl.map((_,i)=>'Bilan '+(i+1));
 
@@ -61740,9 +61781,10 @@ async function toggleStudentCode(i){
   DB.set('users',users);DB.set('session',currentUser);
   // Sans ce push, l’état ne suivait pas le coach d’un appareil à l’autre :
   // il rouvrait l’application sur son autre téléphone et lisait « actif ».
-  CLOUD.pushOne(currentUser.email,currentUser);
+  // N3.18 — et le toast plus bas l'annoncait sans l'attendre.
+  const _envoiCode=CLOUD.pushOne(currentUser.email,currentUser);
   loadStudentCodes();
-  toast(nouveau?'Code activé':'Code désactivé');
+  toastSync(true,_envoiCode,nouveau?'Code activé':'Code désactivé','le code est');
 }
 async function extendStudentCode(i){
   if(!currentUser.studentCodes||!currentUser.studentCodes[i]) return;

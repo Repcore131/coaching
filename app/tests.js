@@ -23511,6 +23511,78 @@ function testExercices(){
         _tailleARetenir=null;
         return _ecrireTailleDeduite()===false
           ?true:_echec('une écriture part alors que rien n’a été déduit');})());
+
+      ok('N3.16 — « BILAN 3 » DESIGNE LE MEME RELEVE DES DEUX COTES',(()=>{
+        if(typeof bilansOrdonnes!=='function') return _echec('aucun ordre commun');
+        // LE DOSSIER DU DOC : un bilan ANTIDATE, ajoute en fin de tableau par
+        // une ecriture locale posterieure. Chez l'athlete il s'intercalait en
+        // position 2, chez le coach il restait en 3.
+        const u={bilans:[
+          {date:1000,type:'depart'},
+          {date:3000,type:'suivi'},
+          {date:2000,type:'suivi'},          // antidate, ajoute apres
+          {type:'suivi'},                     // sans date : ecarte des deux cotes
+          null]};
+        const l=bilansOrdonnes(u);
+        if(l.length!==3) return _echec(l.length+' bilans retenus au lieu de 3');
+        if(l[1].date!==2000) return _echec('l’antidaté n’a pas repris son rang : '+l.map(b=>b.date).join(','));
+        // ET LES DEUX RENDUS LISENT CETTE FONCTION-LA, pas leur propre tri.
+        if(String(renderBilanEvolution).indexOf('bilansOrdonnes(c)')<0)
+          return _echec('la fiche du coach garde son propre ordre');
+        if(String(showProgressTab).indexOf('bilansOrdonnes(currentUser)')<0)
+          return _echec('l’écran de l’athlète garde son propre tri');
+        // PURE : elle ne touche pas au dossier qu'on lui passe.
+        const av=JSON.stringify(u);
+        bilansOrdonnes(u);
+        return JSON.stringify(u)===av?true:_echec('l’ordre commun réécrit le dossier');})());
+
+      ok('N3.17 — LA BASCULE DE COMPTE LAISSE UNE ARDOISE PROPRE',(()=>{
+        const s=String(_comptesRemiseAZero);
+        // Les six etats qui appartenaient encore au compte quitte.
+        const attendus=[['_coachEditClient','le brouillon de séances'],
+                        ['_cplPlan','le plan alimentaire en composition'],
+                        ['_vcEmail','la vidéo en cours de correction'],
+                        ['_canalMsgsCoach','les messages du canal'],
+                        ['rc_coach_profil','le profil coach en cache'],
+                        ['_ratProfilFait','le drapeau de publication du profil'],
+                        ['_profilCoachPublie','le drapeau de publication de la vitrine']];
+        for(const [cle,quoi] of attendus)
+          if(s.indexOf(cle)<0) return _echec(quoi+' survit à la bascule');
+        // LES DEUX DRAPEAUX REPARTENT A FAUX, pas seulement effacés : les
+        // laisser vrais fait croire au compte suivant que sa vitrine est
+        // déjà publiée, et rien ne remonte plus jusqu’au rechargement.
+        if(!/_ratProfilFait=false/.test(s)||!/_profilCoachPublie=false/.test(s))
+          return _echec('les drapeaux ne repartent pas à faux');
+        // ET CE QU'ELLE FAISAIT DEJA N'A PAS BOUGE.
+        for(const cle of ['currentClientId','woState','bilData','BIL_DRAFT_KEY'])
+          if(s.indexOf(cle)<0) return _echec(cle+' n’est plus purgé');
+        return true;})());
+
+      ok('N3.18 — AUCUN « ✓ » VERT N\'EST ANNONCE AVANT LES DEUX DESTINATIONS',(()=>{
+        // UN try/catch SYNCHRONE NE CAPTE RIEN D'UNE PROMESSE : le rejet arrive
+        // apres la sortie du bloc, et pushOne pose deja un p.catch de filet.
+        // L'echec etait doublement muet pendant qu'un toast vert partait.
+        const prod=_prodSrc();
+        if(/try\{\s*CLOUD\.pushOne\([^)]*\);\s*\}catch/.test(prod))
+          return _echec('un try/catch synchrone entoure encore une poussée');
+        // LES CINQ ECRITURES QUI ANNONCENT UN SUCCES L'ATTENDENT.
+        for(const f of [coachLeverDrapeau,habCoachAjouter,habCoachRetirer]){
+          const s=String(f).replace(/\/\/.*/g,'');
+          if(/toastEcriture\(/.test(s))
+            return _echec(f.name+' annonce encore sur la seule écriture locale');
+          if(!/toastSync\(/.test(s)) return _echec(f.name+' n’attend pas la poussée');
+        }
+        // Le rattachement par code : l'ecriture la plus consequente du parcours
+        // de l'athlete.
+        if(!/toastSync\(_u1&&_s1,_envoi,'Accès activé/.test(prod))
+          return _echec('« Accès activé ✓ » part encore sans attendre l’envoi');
+        // L'activation d'un code d'acces.
+        if(!/toastSync\(true,_envoiCode/.test(prod))
+          return _echec('« Code activé » part encore sans attendre l’envoi');
+        // ET LES POUSSEES DE FOND N'ONT PAS ETE RENDUES BLOQUANTES : toastSync
+        // rend une promesse qui n'echoue jamais, exactement pour ca.
+        return /return Promise\.resolve\(promesse\)\.then\(/.test(String(toastSync))
+          ?true:_echec('toastSync ne protège plus des rejets non capturés');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
