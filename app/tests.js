@@ -23260,6 +23260,85 @@ function testExercices(){
           else localStorage.setItem('rc_users',av);
         }
         return true;})());
+
+      ok('N3.6 — LE COACH SAIT QUAND CE DOSSIER EST DESCENDU, et peut le forcer',(()=>{
+        if(typeof actualiserClient!=='function') return _echec('aucun geste de synchronisation');
+        if(typeof htmlFraicheurClient!=='function') return _echec('aucune ligne de fraîcheur');
+        // LE GESTE NE CONTOURNE PAS LA SONDE DE FRAICHEUR : syncUser interroge
+        // updatedAt et ne tire le dossier que s'il est strictement plus recent.
+        // C'est ce qui le rend aussi peu couteux qu'un reveil du sondage.
+        if(String(actualiserClient).indexOf('CLOUD.syncUser')<0)
+          return _echec('le geste ne passe pas par syncUser');
+        if(String(CLOUD.syncUser).indexOf('pullUpdatedAt')<0)
+          return _echec('syncUser ne sonde plus la fraîcheur');
+        // ET IL NE REPEINT PAS LA FICHE PENDANT UNE SAISIE.
+        if(String(actualiserClient).indexOf('_saisieEnCours()')<0)
+          return _echec('la fiche peut être repeinte sous les doigts du coach');
+        // NI LISTENER FIREBASE, NI BIBLIOTHEQUE : le plan Spark l'interdit, et
+        // le sondage doit rester la mecanique de fond.
+        const s=_prodSrc();
+        for(const motif of ['onValue(','EventSource','new WebSocket'])
+          if(s.indexOf(motif)>=0) return _echec('temps réel introduit : '+motif);
+        // LA TRACE EXISTE, PAR ATHLETE, et « rien de neuf » compte comme une
+        // descente reussie — c'est le cas ordinaire.
+        CLOUD._descentes={};
+        if(htmlFraicheurClient({email:'x@t.fr'}).indexOf('Pas encore vérifié')<0)
+          return _echec('un dossier jamais vérifié annonce autre chose');
+        CLOUD._noterDescente('x@t.fr',false);
+        const d=CLOUD.derniereDescente('x@t.fr');
+        if(!d||!(d.ts>0)) return _echec('la descente n’est pas horodatée');
+        if(d.change!==false) return _echec('« rien de neuf » est noté comme une nouveauté');
+        const h=htmlFraicheurClient({email:'x@t.fr'});
+        if(h.indexOf('Dernière descente')<0) return _echec('la ligne ne dit pas la descente : '+h);
+        if(h.indexOf('du nouveau')>=0) return _echec('« du nouveau » est annoncé sans nouveauté');
+        CLOUD._descentes['x@t.fr']={ts:Date.now()-14*60000,change:true};
+        const h2=htmlFraicheurClient({email:'x@t.fr'}).replace(/<[^>]*>/g,' ');
+        if(h2.indexOf('14 min')<0) return _echec('l’ancienneté n’est pas dite : '+h2);
+        return h2.indexOf('du nouveau')>=0
+          ?true:_echec('une descente qui a ramené du nouveau ne le dit pas');})());
+
+      ok('N3.7 — UNE SUPPRESSION DISTANTE REDESCEND, une saisie hors ligne survit',(()=>{
+        if(typeof marquerSupprime!=='function') return _echec('aucune pierre tombale');
+        // LE DOSSIER LOCAL porte trois seances et deux bilans.
+        const loc={email:'m@t.fr',updatedAt:1000,
+          sessions:[{id:'s1',date:1},{id:'s2',date:2},{id:'horsligne',date:3}],
+          bilans:[{date:10,type:'suivi'},{date:20,type:'suivi'}]};
+        // LE DOSSIER DISTANT : s2 et le bilan du 20 ont ete supprimes, et le
+        // dossier le DIT. « horsligne » n'y est pas non plus — mais parce
+        // qu'il n'est jamais monte, et rien ne le nomme.
+        const dist={email:'m@t.fr',updatedAt:2000,
+          sessions:[{id:'s1',date:1}],
+          bilans:[{date:10,type:'suivi'}],
+          supprimes:{sessions:{s2:1500},bilans:{'20|suivi':1500}}};
+        const merged={'m@t.fr':JSON.parse(JSON.stringify(loc))};
+        CLOUD._mergeUser(merged,'m@t.fr',JSON.parse(JSON.stringify(dist)));
+        const r=merged['m@t.fr'];
+        const ids=(r.sessions||[]).map(x=>x.id);
+        if(ids.indexOf('s2')>=0) return _echec('la séance supprimée est revenue : '+ids.join(','));
+        // LA PROTECTION HORS LIGNE TIENT : c'est tout l'interet de l'union.
+        if(ids.indexOf('horsligne')<0)
+          return _echec('une saisie hors ligne a été effacée : '+ids.join(','));
+        if(ids.indexOf('s1')<0) return _echec('une séance distante a disparu');
+        const dates=(r.bilans||[]).map(x=>x.date);
+        if(dates.indexOf(20)>=0) return _echec('le bilan supprimé est revenu');
+        if(dates.indexOf(10)<0) return _echec('le bilan distant a disparu');
+        // LES DEUX COTES COMPTENT LE MEME NOMBRE, une fois la saisie hors
+        // ligne remontee : deux distantes, plus celle qui n'etait pas montee.
+        if(ids.length!==2) return _echec(ids.length+' séances au lieu de 2');
+        // LA CLEF EST CELLE DE L'UNION, pas une autre.
+        if(cleSuppressionBilan({date:20,type:'suivi'})!=='20|suivi')
+          return _echec('la clef de bilan ne correspond pas à celle de l’union');
+        if(cleSuppressionSeance({id:'s2'})!=='s2')
+          return _echec('la clef de séance ne correspond pas à celle de l’union');
+        // BORNEE, et les plus ANCIENNES sortent en premier.
+        const u={};
+        for(let i=0;i<SUPPRESSIONS_MAX+10;i++) marquerSupprime(u,'sessions','k'+i);
+        const n=Object.keys(u.supprimes.sessions).length;
+        if(n>SUPPRESSIONS_MAX) return _echec(n+' pierres tombales conservées');
+        if(u.supprimes.sessions.k0!==undefined)
+          return _echec('la plus ancienne a survécu à l’éviction');
+        return u.supprimes.sessions['k'+(SUPPRESSIONS_MAX+9)]!==undefined
+          ?true:_echec('la plus récente a été évincée');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

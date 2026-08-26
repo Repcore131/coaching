@@ -5041,6 +5041,18 @@ const COACH_PHOTO='icons/coach.jpg';
         <button class="btn btn-outline" onclick="openApplyTemplate()">Modèle</button>
         <button class="btn btn-outline" onclick="viewClientBilans()">Bilans</button>
       </div>
+      <!-- N3.6 — QUAND CE DOSSIER EST-IL REELLEMENT DESCENDU, ET COMMENT LE
+           FORCER. La synchronisation est un sondage de cinq minutes — trente
+           en quota degrade — et sur PC l'onglet du coach reste visible, donc
+           le raccourci du retour au premier plan ne joue jamais. Le coach
+           publiait un programme, appelait son athlete, et n'avait aucun moyen
+           de savoir si sa modification etait arrivee. Rempli par
+           _majFraicheur, appele par openClientDetail. -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-6px 0 14px;padding:0 2px">
+        <div id="ccd-fraicheur" style="flex:1;min-width:0;line-height:1.4"></div>
+        <button type="button" onclick="actualiserClient()" title="Redescendre son dossier maintenant"
+          style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:7px 12px;min-height:32px;cursor:pointer">Actualiser</button>
+      </div>
       <!-- LES QUATRE ONGLETS. Vingt-sept sections sur un seul rouleau,
            c'etait une barre d'ancres qui menait a un fil interminable. Le
            dossier se lit maintenant par domaine, et un onglet ne montre que
@@ -9035,6 +9047,41 @@ const CLOUD={
     return'https://firebasestorage.googleapis.com/v0/b/'+d.bucket+'/o/'+encodedName+'?alt=media&token='+d.downloadTokens;
   },
 
+  // ══════ N3.7 — UNE SUPPRESSION DOIT POUVOIR REDESCENDRE ═════════════════
+  // Les tableaux `bilans` et `sessions` sont fusionnes par UNION : une entree
+  // presente en local et absente du cloud est conservee. C'est ce qui protege
+  // un appareil reste hors ligne — une seance saisie dans une salle sans
+  // reseau ne doit pas disparaitre a la premiere synchro — et il faut le
+  // garder. Mais cela rend aussi toute suppression IRREVERSIBLE DANS LE
+  // MAUVAIS SENS : une seance aberrante retiree du dossier remonte amputee
+  // dans Firebase, puis ressuscite sur le telephone de l'athlete a chaque
+  // descente. Les deux cotes cessent alors de compter le meme nombre de
+  // seances.
+  //
+  // LA PIERRE TOMBALE EST CE QUI DISTINGUE LES DEUX CAS. Une entree absente
+  // du cloud ET nommee dans `supprimes` a ete reellement supprimee : on la
+  // retire. Une entree absente du cloud et absente de `supprimes` n'est jamais
+  // montee : l'union la garde, exactement comme avant.
+  //
+  // LA CLEF EST CELLE DE L'UNION, pas une autre : `id` pour une seance,
+  // `date|type` pour un bilan. Deux clefs differentes pour un meme objet, et
+  // la pierre tombale ne recouvrirait jamais la bonne tombe.
+  //
+  // BORNEE. Un dossier qui accumulerait ses suppressions depuis des annees
+  // finirait par peser plus lourd que ce qu'il decrit. Les plus anciennes
+  // sortent en premier : une entree supprimee il y a deux ans a eu le temps
+  // de disparaitre de tous les appareils.
+  _cleBilan(b){ return b?String(b.date)+'|'+String(b.type||''):''; },
+  _pierresTombales(u){
+    const s=(u&&u.supprimes)||{};
+    const lire=o=>{
+      const m=new Set();
+      if(!o||typeof o!=='object') return m;
+      for(const k of Object.keys(o)) m.add(String(k));
+      return m;
+    };
+    return {sessions:lire(s.sessions),bilans:lire(s.bilans)};
+  },
   // Fusionner un seul utilisateur cloud → localStorage
   _mergeUser(merged,email,cloudUser){
     // N3.4 — le dossier distant est remis a plat DES SON ARRIVEE : il est
@@ -9042,11 +9089,18 @@ const CLOUD={
     // sessions_config en objet aurait donc traverse la porte d'entree.
     try{ _aplatirSessionsConfig(cloudUser); }catch(e){}
     const loc=merged[email];
+    // N3.7 — les pierres tombales DISTANTES : ce que quelqu'un a reellement
+    // supprime, ailleurs. Les locales ne comptent pas ici — elles n'ont pas
+    // encore ete poussees, et c'est le dossier local qui les porte deja.
+    const _mort=this._pierresTombales(cloudUser);
     // Merge bilans (union par date+type)
     const cloudBilans=cloudUser.bilans||[];
     const localBilans=loc?.bilans||[];
     const allBilans=[...cloudBilans];
     for(const lb of localBilans){
+      // Absent du cloud ET nomme dans les pierres tombales : supprime pour de
+      // bon. Absent du cloud et absent des pierres : jamais monte, on garde.
+      if(_mort.bilans.has(this._cleBilan(lb))) continue;
       const idx=allBilans.findIndex(cb=>cb.date===lb.date&&cb.type===lb.type);
       if(idx===-1){allBilans.push(lb);}
       else{Object.keys(lb).filter(k=>k.includes('photo')).forEach(k=>{allBilans[idx][k]=lb[k];});}
@@ -9054,7 +9108,7 @@ const CLOUD={
     allBilans.sort((a,b)=>a.date-b.date);
     // Merge sessions (union par id — évite qu'un sync écrase des séances locales)
     const cloudSessions=cloudUser.sessions||[];
-    const localSessions=loc?.sessions||[];
+    const localSessions=(loc?.sessions||[]).filter(s=>!(s&&_mort.sessions.has(String(s.id))));
     const sessMap=new Map();
     [...cloudSessions,...localSessions].forEach(s=>{if(s?.id&&!sessMap.has(s.id))sessMap.set(s.id,s);});
     const allSessions=[...sessMap.values()].sort((a,b)=>(a.date||0)-(b.date||0));
@@ -9449,13 +9503,39 @@ const CLOUD={
   },
   // Renvoie TRUE si quelque chose a change, FALSE sinon. Les appelants s'en
   // servent pour ne pas repeindre un ecran identique.
+  // N3.6 — L'HEURE DE LA DERNIERE DESCENTE, PAR ATHLETE.
+  // La synchronisation est un SONDAGE : cinq minutes en marche normale, trente
+  // en quota degrade. Sur PC l'onglet du coach reste visible, donc le raccourci
+  // du retour au premier plan ne se declenche jamais. Le coach publiait un
+  // programme, appelait son athlete, et celui-ci ne le voyait pas avant cinq
+  // minutes — sans qu'aucun ecran ne dise pourquoi.
+  // On ne change PAS la mecanique de fond : ni listener Firebase, ni
+  // bibliotheque, ni dependance — le plan Spark et le budget de quota
+  // l'interdisent. On rend simplement compte de ce que le sondage a fait, et
+  // on offre un geste pour ne pas l'attendre.
+  //
+  // « Descente » COMPTE AUSSI QUAND RIEN NE CHANGE : verifier et trouver le
+  // dossier a jour est une descente reussie. C'est meme le cas ordinaire, et
+  // l'afficher comme un echec serait faux.
+  _descentes:{},
+  _noterDescente(email,change){
+    try{
+      if(!email) return;
+      this._descentes[email]={ts:Date.now(),change:!!change};
+    }catch(e){}
+  },
+  derniereDescente(email){
+    try{ return (this._descentes||{})[email]||null; }catch(e){ return null; }
+  },
   async syncUser(email){
     const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
     const localAt=(local[email]&&local[email].updatedAt)||0;
     // On ne tire le dossier que si le distant est STRICTEMENT plus recent.
     // Egalite = rien de neuf : c'est le cas de l'immense majorite des reveils.
     const distantAt=await this.pullUpdatedAt(email);
-    if(distantAt!==null&&localAt&&distantAt<=localAt) return false;
+    // La sonde a repondu et le dossier est deja a jour : c'est une descente
+    // reussie, et c'est le cas de l'immense majorite des reveils.
+    if(distantAt!==null&&localAt&&distantAt<=localAt){ this._noterDescente(email,false); return false; }
     const cloudUser=await this.pullUser(email);
     if(!cloudUser) return false;
     const merged=Object.assign({},local);
@@ -9465,6 +9545,7 @@ const CLOUD={
     // async dont personne n'attend le resultat — donc une unhandled rejection,
     // et une synchro silencieusement perdue.
     DB.set('users',merged);
+    this._noterDescente(email,true);
     return true;
   },
   // Sync ciblée — coach : lui-même + ses athlètes uniquement ; athlète : lui-même + son coach
@@ -9623,6 +9704,37 @@ const DB={
   },
   del(k){localStorage.removeItem('rc_'+k)},
 };
+// ══════ N3.7 — MARQUER UNE ENTREE COMME SUPPRIMEE ═════════════════════════
+// TOUTE suppression d'une seance ou d'un bilan doit passer par ici, sinon
+// l'union de CLOUD._mergeUser la ressuscitera a la prochaine descente sur
+// chacun des appareils de l'athlete.
+// Elle ne retire RIEN elle-meme : elle pose la pierre tombale, et l'appelant
+// retire l'entree du tableau. Deux gestes distincts parce que l'ordre importe
+// — la pierre doit exister dans le dossier qui part, meme si le retrait
+// echoue.
+const SUPPRESSIONS_MAX=200;
+function marquerSupprime(user,type,cle){
+  if(!user||typeof user!=='object') return false;
+  if(type!=='sessions'&&type!=='bilans') return false;
+  const k=String(cle||'');
+  if(!k) return false;
+  if(!user.supprimes||typeof user.supprimes!=='object') user.supprimes={};
+  if(!user.supprimes[type]||typeof user.supprimes[type]!=='object') user.supprimes[type]={};
+  const m=user.supprimes[type];
+  m[k]=Date.now();
+  // BORNEE, et les plus ANCIENNES sortent : une entree supprimee il y a deux
+  // ans a eu le temps de disparaitre de tous les appareils.
+  const clefs=Object.keys(m);
+  if(clefs.length>SUPPRESSIONS_MAX){
+    clefs.sort((a,b)=>(m[a]||0)-(m[b]||0));
+    for(const vieux of clefs.slice(0,clefs.length-SUPPRESSIONS_MAX)) delete m[vieux];
+  }
+  return true;
+}
+// La MEME clef que celle de l'union, pour que la pierre recouvre la bonne
+// tombe. Exposee parce que l'appelant doit la calculer avant de retirer.
+function cleSuppressionBilan(b){ return b?String(b.date)+'|'+String(b.type||''):''; }
+function cleSuppressionSeance(s){ return s?String(s.id):''; }
 // ── Validation des paquets URL (coachpkg / athletepkg) ─────────────────────
 // SÉCURITÉ — Ces paquets JSON-base64 ne sont PAS signés : n'importe qui peut en
 // forger un. Ce mécanisme ne doit JAMAIS écraser des champs sensibles d'un compte
@@ -19711,6 +19823,9 @@ function _ccdArmerAncres(){
 }
 function openClientDetail(cid,_refresh){
   setTimeout(_ccdArmerAncres,0);
+  // N3.6 — la ligne de fraicheur est repeinte a chaque ouverture, et a
+  // chaque passage de la boucle de synchro : « il y a 4 min » doit vieillir.
+  setTimeout(_majFraicheur,0);
   // L'ONGLET, POSE APRES LE RENDU. _refresh est la boucle de synchro, qui
   // repasse ici toutes les 30 s : elle ne doit PAS ramener le coach sur
   // Entrainement pendant qu'il lit la nutrition. Une ouverture franche, elle,
@@ -49514,6 +49629,75 @@ function _htmlDieteCoach(c){
 // l'athlete — nutIsOnDay puis _getEffectiveMacros, avec `c` comme porteur — et
 // dit l'ecart quand il y en a un.
 const _NUT_VUE=[['kcal','kcal',''],['p','prot','g'],['g','gluc','g'],['l','lip','g']];
+// N3.6 — LE GESTE EXPLICITE : descendre CE dossier, maintenant.
+// Il ne contourne PAS la sonde de fraicheur : syncUser interroge d'abord
+// updatedAt et ne tire le dossier que s'il est strictement plus recent. Le
+// geste n'est donc pas plus couteux qu'un reveil du sondage — c'est le meme
+// chemin, declenche a la main.
+let _majEnCours=false;
+function _saisieEnCours(){
+  try{
+    const a=document.activeElement;
+    if(!a) return false;
+    if(!/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;
+    return !!a.closest('#s-coach-client');
+  }catch(e){ return false; }
+}
+async function actualiserClient(){
+  if(_majEnCours) return false;
+  const c=getOwnedClient(currentClientId);
+  if(!c||!c.email){ toast('Ce dossier n’est pas synchronisé.','var(--orange)'); return false; }
+  _majEnCours=true;
+  try{
+    const z=document.getElementById('ccd-fraicheur');
+    if(z) z.innerHTML='<span class="sub" style="font-size:var(--fs-2xs)">Vérification…</span>';
+    let change=false;
+    try{ change=await CLOUD.syncUser(c.email); }
+    catch(e){ toast('Impossible de joindre le cloud.','var(--red)'); return false; }
+    if(!change){
+      toast('Son dossier est déjà à jour.','var(--sub)');
+      _majFraicheur();
+      return false;
+    }
+    // NE PAS REPEINDRE PENDANT UNE SAISIE. Le coach peut etre en train de
+    // taper une note ou un grammage : lui reecrire la fiche sous les doigts
+    // perdrait sa saisie. On le dit, et il rouvrira quand il aura fini.
+    if(_saisieEnCours()){
+      toast('Du nouveau est arrivé — termine ta saisie, la fiche se mettra à jour ensuite.','var(--info)');
+      _majFraicheur();
+      return true;
+    }
+    toast('Dossier mis à jour ✓','var(--success)');
+    try{ openClientDetail(currentClientId); }catch(e){}
+    return true;
+  } finally {
+    _majEnCours=false;
+    _majFraicheur();
+  }
+}
+// PURE. Ce que le coach lit a cote du bouton.
+function htmlFraicheurClient(c){
+  const d=(c&&c.email)?CLOUD.derniereDescente(c.email):null;
+  if(!d) return '<span class="sub" style="font-size:var(--fs-2xs)">Pas encore vérifié depuis l’ouverture de l’app.</span>';
+  const min=Math.floor((Date.now()-d.ts)/60000);
+  let quand;
+  if(min<1) quand='à l’instant';
+  else if(min<60) quand='il y a '+min+' min';
+  else{
+    try{ quand='à '+new Date(d.ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+    catch(e){ quand='il y a '+Math.floor(min/60)+' h'; }
+  }
+  return '<span class="sub" style="font-size:var(--fs-2xs)">Dernière descente '+quand
+    +(d.change?' · du nouveau':'')+'</span>';
+}
+function _majFraicheur(){
+  try{
+    const z=document.getElementById('ccd-fraicheur');
+    if(!z) return;
+    const c=getOwnedClient(currentClientId);
+    z.innerHTML=htmlFraicheurClient(c);
+  }catch(e){}
+}
 function _htmlAthleteVoit(c,grilleOn,grilleOff,cyc){
   if(!c) return '';
   const nut=c.nutrition||{};
