@@ -22392,7 +22392,12 @@ function testExercices(){
             if(!z) return 'ABSENT';
             const v=z.closest('.ccd-vue'); return v?v.dataset.vue:'hors'; };
           const attendu={
-            'ccd-tendances':'entrainement','ccd-phase':'entrainement',
+            'ccd-tendances':'entrainement',
+            // LA PHASE EST PASSEE EN NUTRITION le 26/08/2026 : elle commande le
+            // delta calorique et la fourchette de vitesse, et coachSetPhase
+            // rappelle renderCoachNutriSection a la fin. Elle vivait a un onglet
+            // des cibles qu'elle fixe.
+            'ccd-phase':'nutrition',
             'ccd-volume':'entrainement','ccd-plateaux':'entrainement',
             'ccd-forme':'entrainement','ccd-douleur':'entrainement',
             'ccd-sessions-recap':'entrainement','ccc-pdf-content':'entrainement',
@@ -23583,6 +23588,105 @@ function testExercices(){
         // rend une promesse qui n'echoue jamais, exactement pour ca.
         return /return Promise\.resolve\(promesse\)\.then\(/.test(String(toastSync))
           ?true:_echec('toastSync ne protège plus des rejets non capturés');})());
+
+      ok('N4.5 — DU RETOUR DE SEANCE A LA PRESCRIPTION, en un clic',(()=>{
+        if(typeof allerVersPrescription!=='function') return _echec('aucun chemin direct');
+        // LE JOUR EST DEDUIT DU NOM, par exKey — la meme normalisation que
+        // partout ailleurs.
+        const c={sessions_config:[
+          {active:true,exercises:[{name:'DEVELOPPE COUCHE BARRE'},{name:'ROWING BARRE'}]},
+          {active:false,exercises:[{name:'SQUAT'}]},
+          {active:true,exercises:[{name:'SQUAT'}]}]};
+        if(_slotDeLExercice(c,'ROWING BARRE')!==0)
+          return _echec('mauvais créneau : '+_slotDeLExercice(c,'ROWING BARRE'));
+        // UN CRENEAU INACTIF NE COMPTE PAS : le squat du créneau 1 est éteint,
+        // c'est le 2 qui doit répondre.
+        if(_slotDeLExercice(c,'SQUAT')!==2)
+          return _echec('un créneau inactif a été retenu : '+_slotDeLExercice(c,'SQUAT'));
+        // ABSENT DU PROGRAMME : on ne mène nulle part, et on le dira.
+        if(_slotDeLExercice(c,'MACHINE INEXISTANTE')!==-1)
+          return _echec('un exercice absent trouve un créneau');
+        // LA LIGNE DU RECAP EST UN BOUTON, pas un div : elle se prend au
+        // clavier et s'annonce comme un chemin.
+        const h=_buildSessionCard({name:'S',date:Date.now(),data:{'ROWING BARRE':{sets:[
+          {done:true,weight:50,reps:10}]}}},0);
+        if(h.indexOf('allerVersPrescription(')<0)
+          return _echec('la ligne d’exercice ne mène nulle part');
+        if(!/<button[^>]*allerVersPrescription/.test(h))
+          return _echec('le chemin n’est pas un bouton');
+        // AUCUN SECOND CHEMIN D'ECRITURE : ce raccourci NAVIGUE, il n'écrit
+        // pas. Le circuit reste brouillon d'abord, PUBLIER ensuite.
+        const s=String(allerVersPrescription);
+        if(/DB\.set|CLOUD\.push|saveUser/.test(s))
+          return _echec('le raccourci écrit');
+        if(s.indexOf('_seancesCoachPreparer()')<0)
+          return _echec('il n’emprunte pas la préparation du brouillon');
+        return s.indexOf('openCoachSessionExercises')>=0
+          ?true:_echec('il n’ouvre pas l’éditeur');})());
+
+      ok('N4.6 — LA PHASE EST AU-DESSUS DES CIBLES QU\'ELLE COMMANDE',(()=>{
+        const p=document.getElementById('ccd-phase');
+        if(!p) return _echec('le bloc Phase a disparu');
+        const v=p.closest('.ccd-vue');
+        if(!v||v.dataset.vue!=='nutrition')
+          return _echec('la phase est dans « '+(v?v.dataset.vue:'hors onglet')+' »');
+        const n=document.getElementById('ccd-nutrition');
+        if(!n) return _echec('le bloc Nutrition a disparu');
+        if(!(p.compareDocumentPosition(n)&Node.DOCUMENT_POSITION_FOLLOWING))
+          return _echec('la phase est passée SOUS les cibles');
+        // RENDUE UNE SEULE FOIS : un déplacement qui duplique serait pire.
+        if(document.querySelectorAll('#ccd-phase').length!==1)
+          return _echec('le bloc Phase est rendu deux fois');
+        // Et coachSetPhase rappelle toujours le rendu des cibles : c'est ce
+        // lien-la qui justifie le rapprochement.
+        return String(coachSetPhase).indexOf('renderCoachNutriSection')>=0
+          ?true:_echec('la phase ne recalcule plus les cibles');})());
+
+      ok('N4.7 — L\'INTERRUPTEUR EST AU-DESSUS DE LA GRILLE QU\'IL DEVERROUILLE',(()=>{
+        const s=String(renderCoachNutriSection);
+        const i=s.indexOf('_htmlManuelCoach(c)');
+        const g=s.indexOf('${macroRows}');
+        if(i<0||g<0) return _echec('l’assemblage a changé de forme');
+        if(i>g) return _echec('l’interrupteur est encore rendu après la grille');
+        // LE MECANISME readonly NE CHANGE PAS : il est délibéré, et `disabled`
+        // ne rendrait pas sa valeur à l’enregistrement.
+        if(s.indexOf("_man?'':' readonly'")<0)
+          return _echec('le mécanisme readonly a été touché');
+        return String(saveClientNutriManuel).indexOf('_besoinsSurs')>=0
+          ?true:_echec('le passage auto → manuel → auto ne recalcule plus');})());
+
+      ok('N4.8 — CREER UN EXERCICE L\'AJOUTE A LA SEANCE EN COURS',(()=>{
+        const s=String(_validerCreationExo);
+        if(s.indexOf('bqChoisir(')<0) return _echec('la création ne s’enchaîne pas sur l’ajout');
+        // SEULEMENT QUAND LA BANQUE A ETE OUVERTE AVEC UN RAPPEL : ouverte
+        // pour consultation, elle ne doit rien ajouter nulle part.
+        if(s.indexOf('_bqCb')<0) return _echec('l’ajout ne dépend pas du rappel');
+        // ET SEULEMENT SI L'ENREGISTREMENT A REUSSI : un exercice que le quota
+        // fera disparaître ne doit pas entrer dans une séance.
+        if(!/ok&&_bqCb/.test(s))
+          return _echec('un exercice non enregistré peut être ajouté');
+        // bqChoisir fait deja tout le reste : noter le recent, enregistrer,
+        // fermer, rendre la fiche. On ne duplique pas son travail.
+        const b=String(bqChoisir);
+        return /noterRecent/.test(b)&&/fermerBanque/.test(b)
+          ?true:_echec('bqChoisir ne fait plus ce sur quoi on s’appuie');})());
+
+      ok('N4.11 — PUBLIER NE DEPLACE PLUS LE COACH',(()=>{
+        const s=String(saveCoachSessions).replace(/\/\/.*/g,'');
+        if(/go\('s-coach-client'\)/.test(s))
+          return _echec('la publication renvoie encore de force sur la fiche');
+        // LE RETOUR VISUEL RESTE ENTIER, et le verrou contre le double appui
+        // avec lui : c'est ce qui empêche de publier deux fois.
+        if(s.indexOf("'PUBLIÉ ✓'")<0) return _echec('le bouton ne dit plus que c’est parti');
+        if(s.indexOf('_b.disabled=true')<0) return _echec('le verrou anti-double-appui a sauté');
+        // ET IL REPREND LA MAIN une fois la célébration finie : sur un écran où
+        // le coach continue de travailler, un bouton mort n'a pas de sens.
+        if(!/b\.disabled=false/.test(s)) return _echec('le bouton reste mort après publication');
+        // AUCUNE ECRITURE N'EST AVANCEE NI RETARDEE : tout ce qui précède le
+        // setTimeout est synchrone et doit le rester.
+        const av=s.indexOf("DB.set('users',users)");
+        const ap=s.indexOf('setTimeout(');
+        return (av>=0&&av<ap)?true:_echec('une écriture est passée après le délai');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

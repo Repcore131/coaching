@@ -5069,10 +5069,6 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-c" id="ccd-tendances"></div>
       </section>
       <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Phase</span></div>
-        <div class="cc-sect-c" id="ccd-phase"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
         <div class="cc-sect-t"><span>Forme</span></div>
         <div class="cc-sect-c" id="ccd-forme"></div>
       </section>
@@ -5113,6 +5109,18 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-videos"></div>
       </div>
       <div class="ccd-vue" data-vue="nutrition">
+      <!-- N4.6 — LA PHASE, REMONTEE D'ENTRAINEMENT LE 26/08/2026, ET EN TETE.
+           Elle COMMANDE les cibles qui la suivent : coachSetPhase rappelle
+           renderCoachNutriSection a la fin, et son propre commentaire explique
+           que la phase fixe le delta calorique et la fourchette de vitesse.
+           Elle vivait pourtant dans un autre onglet : regler l'une puis les
+           autres coutait trois changements d'onglet et une perte de contexte a
+           chaque macro-cycle. Le balisage seul a bouge — renderPhaseCoach
+           cherche #ccd-phase par identifiant. -->
+      <section class="cc-sect" style="--cc-accent:var(--red)">
+        <div class="cc-sect-t"><span>Phase</span></div>
+        <div class="cc-sect-c" id="ccd-phase"></div>
+      </section>
       <!-- MICRO-SIGNAUX, REMONTE DE LIFESTYLE LE 26/08/2026. Ce sont des
            signaux nutritionnels : ils se lisent avec le journal, pas avec le
            sommeil et les pas. L onglet Nutrition ne portait que trois
@@ -19230,6 +19238,72 @@ function showMoreCoachSessions(){
   const shown=document.getElementById('ccd-sr-list').children.length;
   _renderSessionBatch(shown,5);
 }
+// ══════ N4.5 — DU RETOUR DE SEANCE A LA PRESCRIPTION QU'IL CORRIGE ════════
+// Le recapitulatif des seances affiche « 80kg x 8 · 80kg x 7 » en lecture
+// seule. Pour corriger la charge apres avoir lu ce retour, le coach devait
+// remonter la fiche, ouvrir « Programme », trouver le bon jour, ouvrir
+// « Modifier les exercices », defiler jusqu'a la bonne carte, corriger,
+// Sauvegarder, puis PUBLIER : quatre ecrans et sept clics pour un nombre —
+// et il le fait pour chaque athlete apres chaque seance.
+//
+// AUCUN SECOND CHEMIN D'ECRITURE. Ce raccourci ne fait que NAVIGUER : il
+// prepare le brouillon comme le fait le bouton « Programme », ouvre l'editeur
+// sur le bon jour et marque la bonne carte. Le circuit reste celui d'avant —
+// brouillon d'abord, PUBLIER ensuite — et rien n'atteint l'athlete sans lui.
+//
+// LE JOUR EST DEDUIT DU NOM DE L'EXERCICE, par exKey, la meme normalisation
+// que partout ailleurs : un exercice fait le lundi et le jeudi ouvre le
+// premier creneau actif qui le porte, et le coach voit lequel dans le titre.
+function _slotDeLExercice(c,nom){
+  const cfg=(c&&c.sessions_config)||[];
+  let k='';
+  try{ k=exKey(nom); }catch(e){ k=String(nom||'').toUpperCase(); }
+  if(!k) return -1;
+  for(let i=0;i<cfg.length;i++){
+    const s=cfg[i];
+    if(!s||!s.active||!Array.isArray(s.exercises)) continue;
+    for(const e of s.exercises){
+      let ek='';
+      try{ ek=exKey(e&&e.name); }catch(err){ ek=String((e&&e.name)||'').toUpperCase(); }
+      if(ek&&ek===k) return i;
+    }
+  }
+  return -1;
+}
+function allerVersPrescription(nom){
+  const c=getOwnedClient(currentClientId);
+  if(!c){ return false; }
+  if(c._fromCode){ toast('Cet athlète n’a pas encore créé son compte.','var(--orange)'); return false; }
+  const idx=_slotDeLExercice(c,nom);
+  if(idx<0){
+    toast('« '+nom+' » n’est dans aucune séance active de son programme.','var(--orange)');
+    return false;
+  }
+  // MEME PREPARATION QUE LE BOUTON « PROGRAMME » : c'est elle qui pose le
+  // brouillon _coachEditClient, et l'editeur ne lit que lui.
+  if(!_seancesCoachPreparer()) return false;
+  openCoachSessionExercises(idx);
+  // LA CARTE EST MARQUEE, pas seulement atteinte : sur une seance de huit
+  // exercices, « c'est quelque part plus bas » ne vaut guere mieux que rien.
+  setTimeout(()=>{ try{ _viserExercice(nom); }catch(e){} },60);
+  return true;
+}
+function _viserExercice(nom){
+  let k=''; try{ k=exKey(nom); }catch(e){ k=String(nom||'').toUpperCase(); }
+  const cartes=document.querySelectorAll('#s-coach-program [data-ex-nom]');
+  for(const el of cartes){
+    let ek=''; try{ ek=exKey(el.getAttribute('data-ex-nom')); }
+    catch(e){ ek=String(el.getAttribute('data-ex-nom')||'').toUpperCase(); }
+    if(ek!==k) continue;
+    try{ _defiler(el); }catch(e){}
+    if(arcReduit()) return true;
+    el.classList.remove('cc-vise');
+    void el.offsetWidth;
+    el.classList.add('cc-vise');
+    return true;
+  }
+  return false;
+}
 function _buildSessionCard(s){
   const dt=new Date(s.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
   const complete=s.complete!==false;
@@ -19259,8 +19333,14 @@ function _buildSessionCard(s){
       ?`${x.weight||'?'}kg×${x.reps||'?'} / ${x.weight2||'?'}kg×${x.p2reps||'?'}`
       :`${x.weight||'?'}kg×${x.reps||'?'}`)+_sfx(x)
     ).join(' · ');
+    // N4.5 — LE NOM DE L'EXERCICE EST LE CHEMIN. Un bouton et non un div : il
+    // se prend au clavier, il s'annonce comme un bouton, et le reste de la
+    // ligne — ce que l'athlete a REELLEMENT fait — reste du texte.
+    const _nomEch=escapeHtml(nm).replace(/'/g,'&#39;');
     return `<div style="padding:7px 0;border-top:1px solid #141414">
-      <div style="font-size:var(--fs-xs);font-weight:700;color:#ccc;margin-bottom:2px">${escapeHtml(nm)}</div>
+      <button type="button" onclick="allerVersPrescription('${_nomEch}')"
+        title="Corriger cet exercice dans son programme"
+        style="display:block;width:100%;text-align:left;background:none;border:none;padding:0;margin:0 0 2px;font-family:inherit;font-size:var(--fs-xs);font-weight:700;color:#ccc;cursor:pointer;text-decoration:underline;text-decoration-color:#333;text-underline-offset:3px">${escapeHtml(nm)}</button>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">${escapeHtml(line)}</div>
     </div>`;
   }).filter(Boolean).join('');
@@ -22909,11 +22989,27 @@ function saveCoachSessions(){
     _b.disabled=true;
     if(!arcReduit()) _b.classList.add('celebrate');
   }
-  // 620 ms et non 420 : la celebration dure 320 ms et le go() partait a la
-  // milliseconde exacte ou elle finissait — le coach voyait un vert qui n'avait
-  // pas le temps de retomber. Ce delai ne retarde AUCUNE ecriture : tout ce qui
-  // precede s'est execute de facon synchrone.
-  setTimeout(()=>go('s-coach-client'),620);
+  // N4.11 — PUBLIER NE RENVOIE PLUS LE COACH AILLEURS. Il etait ramene de
+  // force sur la fiche apres 620 ms : celui qui publie pour continuer a
+  // travailler la grille des sept jours devait rouvrir « Programme », deux
+  // clics a chaque publication — quinze fois par semaine de decharge retiree.
+  // La sortie devient EXPLICITE : la fleche de retour de l'ecran, qui existe
+  // deja et ne demandera plus de confirmation puisqu'il n'y a plus rien
+  // d'enregistre a perdre.
+  // LE RETOUR VISUEL RESTE ENTIER — « PUBLIÉ ✓ », le verrou contre le double
+  // appui, la celebration — et AUCUNE ecriture n'est avancee ni retardee : ce
+  // qui precede est synchrone et le reste. Le bouton reprend simplement son
+  // libelle une fois la celebration finie, sinon le coach a devant lui un
+  // bouton mort sur un ecran ou il continue de travailler.
+  setTimeout(()=>{
+    try{
+      const b=document.getElementById('csm-publier');
+      if(!b) return;
+      b.classList.remove('celebrate');
+      b.textContent='PUBLIER';
+      b.disabled=false;
+    }catch(e){}
+  },620);
   toastSync(localOk,CLOUD.pushOne(emailKey,stocke),' Séances sauvegardées !','les séances sont');
 }
 
@@ -23481,6 +23577,25 @@ function _validerCreationExo(){
   let ok=false;
   try{ ok=saveUser(); }catch(e){}
   closeModal();
+  // N4.8 — LA CREATION S'ENCHAINE SUR L'AJOUT. Le coach qui vient d'ecrire une
+  // fiche voulait s'en servir : il devait la retrouver dans la liste et
+  // cliquer dessus. Le rappel pose par ouvrirBanque est pourtant encore arme,
+  // et bqChoisir sait deja noter le recent, enregistrer, fermer l'ecran et
+  // rendre la fiche a l'appelant.
+  //
+  // SEULEMENT QUAND LA BANQUE A ETE OUVERTE AVEC UN RAPPEL : ouverte pour
+  // consultation depuis le tableau de bord, elle ne doit rien ajouter nulle
+  // part, et le comportement d'avant tient.
+  //
+  // ET SEULEMENT SI L'ENREGISTREMENT A REUSSI. L'exercice n'existe pour
+  // l'instant que dans currentUser : si le quota deborde il disparait au
+  // rechargement, et batir une seance autour d'un exercice perdu est pire que
+  // de demander un clic de plus.
+  const _slug=(r.fiche&&r.fiche.slug)||null;
+  if(ok&&_bqCb&&_slug&&bqChoisir(_slug)){
+    toast('Exercice créé et ajouté ✓');
+    return true;
+  }
   bqOnglet('perso');
   toastEcriture(ok,'Exercice créé ✓','l\'exercice est');
   return true;
@@ -24764,7 +24879,7 @@ function renderProgEx(){
       pr.type==='unilateral'?`<span style="background:#1e3a5f;color:#93c5fd;padding:2px 7px;border-radius:var(--r-4);font-size:var(--fs-xs);font-weight:700">UNILATÉRAL</span>`:
       pr.type==='range'?`<span style="background:#1a3322;color:#86efac;padding:2px 7px;border-radius:var(--r-4);font-size:var(--fs-xs);font-weight:700">PLAGE</span>`:'';
     return `${lien}
-    <div id="px-carte-${i}" data-px-idx="${i}" style="background:var(--surface-1);border-radius:var(--r-4);margin-bottom:14px;overflow:hidden;border:1px solid ${enSS?'var(--orange)':'var(--border)'}">
+    <div id="px-carte-${i}" data-px-idx="${i}" data-ex-nom="${escapeHtml(ex.name||'')}" style="background:var(--surface-1);border-radius:var(--r-4);margin-bottom:14px;overflow:hidden;border:1px solid ${enSS?'var(--orange)':'var(--border)'}">
       <!-- Numéro + Nom -->
       <div style="background:var(--red);padding:8px 14px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
@@ -50139,9 +50254,15 @@ function renderCoachNutriSection(c){
         <div style="font-size:var(--fs-xs);font-weight:800;color:var(--success);letter-spacing:1px;text-align:center;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-2);padding:4px">${_cyc?'⚡ JOUR ON':'TOUS LES JOURS'}</div>
         ${_cyc?'<div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:4px">💤 JOUR OFF</div>':''}
       </div>
+      <!-- N4.7 — L'INTERRUPTEUR EST AU-DESSUS DE LA GRILLE QU'IL DEVERROUILLE.
+           En calcul automatique les dix champs sont en readonly : le coach
+           cliquait dedans, rien ne se passait, et rien ne le lui disait tant
+           qu'il n'avait pas fait defiler jusqu'en dessous. Le mecanisme
+           readonly ne change pas — il est delibere — seul son commutateur
+           remonte a portee de regard. -->
+      ${_htmlManuelCoach(c)}
       ${macroRows}
       ${(()=>{ try{ return _htmlOrigineCibles(c); }catch(e){ return ''; } })()}
-      ${_htmlManuelCoach(c)}
       ${_htmlViolationsCoach(c)}
       ${_htmlAjustement(c,true)}
       ${_htmlDepartHypotheses(c)}
