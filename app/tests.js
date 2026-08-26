@@ -23217,6 +23217,49 @@ function testExercices(){
         // Sans origine au dossier — les anciens dossiers — rien ne s'affiche.
         return _htmlOrigineCibles({nutrition:{macros:{}}})===''
           ?true:_echec('une origine est inventée pour un dossier qui n’en a pas');})());
+
+      ok('N3.4 — UN sessions_config EN OBJET EST REMIS A PLAT A L\'ENTREE',(()=>{
+        if(typeof _aplatirSessionsConfig!=='function') return _echec('aucune remise à plat');
+        // LE DOSSIER DU DOC : Firebase rend {0:…,3:…} des qu'un creneau manque.
+        const brut={sessions_config:{0:{day:'Lundi',name:'Haut',active:true,exercises:[]},
+                                     3:{day:'Jeudi',name:'Bas',active:true,exercises:[]}}};
+        const u=JSON.parse(JSON.stringify(brut));
+        _aplatirSessionsConfig(u);
+        const c=u.sessions_config;
+        if(!Array.isArray(c)) return _echec('toujours un objet');
+        // LES CLEFS REPRENNENT LEUR RANG : lundi et jeudi, pas les deux
+        // premiers jours. Le jour est porte par la POSITION dans toute l'app.
+        if(c[0].name!=='Haut'||c[3].name!=='Bas')
+          return _echec('les rangs ont été tassés : '+c.map(x=>x&&x.name).join(','));
+        if(c[1]!==undefined) return _echec('un trou est devenu un créneau');
+        // ET LA PORTE D'ENTREE EST BIEN GARDEE : c'est DB.get qui remet a plat,
+        // pas chacun des vingt-deux lecteurs.
+        const s=String(DB.get);
+        if(s.indexOf('_aplatirTousSessionsConfig')<0)
+          return _echec('DB.get ne remet pas à plat la carte des dossiers');
+        if(s.indexOf('_aplatirSessionsConfig')<0)
+          return _echec('DB.get ne remet pas à plat la session courante');
+        if(String(CLOUD._mergeUser).indexOf('_aplatirSessionsConfig')<0)
+          return _echec('un dossier distant entre encore en objet');
+        // UNE SEULE DEFINITION de ce que « remettre à plat » veut dire.
+        const n=String(_normaliserSessionsConfig);
+        if(n.indexOf('_aplatirSessionsConfig')<0)
+          return _echec('_normaliserSessionsConfig garde sa propre conversion');
+        // ET LE PASSAGE PAR LE STOCKAGE LE PROUVE, bout en bout.
+        const av=localStorage.getItem('rc_users');
+        try{
+          localStorage.setItem('rc_users',JSON.stringify({'z@t.fr':brut}));
+          const relu=(DB.get('users')||{})['z@t.fr'];
+          if(!relu||!Array.isArray(relu.sessions_config))
+            return _echec('la lecture du stockage rend encore un objet');
+          // Les six appels non protégés du panneau nutrition partaient d'ici.
+          try{ kcalSportParJour(relu); }
+          catch(e){ return _echec('kcalSportParJour lève encore : '+e.message); }
+        } finally {
+          if(av==null) localStorage.removeItem('rc_users');
+          else localStorage.setItem('rc_users',av);
+        }
+        return true;})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

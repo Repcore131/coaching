@@ -9037,6 +9037,10 @@ const CLOUD={
 
   // Fusionner un seul utilisateur cloud → localStorage
   _mergeUser(merged,email,cloudUser){
+    // N3.4 — le dossier distant est remis a plat DES SON ARRIVEE : il est
+    // range dans currentUser sans repasser par le stockage local, et un
+    // sessions_config en objet aurait donc traverse la porte d'entree.
+    try{ _aplatirSessionsConfig(cloudUser); }catch(e){}
     const loc=merged[email];
     // Merge bilans (union par date+type)
     const cloudBilans=cloudUser.bilans||[];
@@ -9543,8 +9547,64 @@ const CLOUD={
   }
 };
 
+// ══════ N3.4 — UN TABLEAU A TROU REVIENT DE FIREBASE EN OBJET ═════════════
+// Firebase RTDB rend `sessions_config` sous la forme {0:…,3:…} des qu'un
+// creneau manque. Toute methode de tableau LEVE alors — et dans une fonction
+// async, le rejet n'est capte par personne : le panneau nutrition du coach
+// restait vide sans un mot, « Programmer une decharge » ne faisait rien, le
+// bandeau « Non publie » disparaissait.
+// Vingt-deux sites appelaient une methode de tableau directement sur ce champ.
+// Les garder un par un, c'etait accepter que le vingt-troisieme, ecrit demain,
+// retombe dans le meme trou.
+//
+// LA REMISE A PLAT SE FAIT DONC A L'ENTREE : la ou un dossier entre dans
+// l'application — la lecture du stockage local et la fusion d'un dossier
+// distant — et plus aucun lecteur n'a a se garder lui-meme.
+//
+// LES CLEFS NUMERIQUES REPRENNENT LEUR RANG. `{0:…,3:…}` redonne le lundi et
+// le jeudi, pas les deux premiers jours : le jour est porte par la POSITION
+// dans toute l'app, et tasser les trous decalerait tout le programme d'un
+// athlete sans que rien ne le dise. C'est exactement la semantique de
+// _normaliserSessionsConfig, qui delegue desormais ici pour qu'il n'y ait
+// qu'une seule definition de ce que « remettre a plat » veut dire.
+//
+// CETTE FONCTION NE FAIT QUE LA STRUCTURE. Elle ne cree pas les sept jours,
+// n'assainit aucun exercice et ne signale rien : elle est appelee sur chaque
+// dossier a chaque lecture du stockage, et doit rester de l'ordre du test de
+// type. Le reste est le travail de _normaliserSessionsConfig, appele la ou on
+// s'apprete a ECRIRE.
+function _aplatirSessionsConfig(u){
+  if(!u||typeof u!=='object') return u;
+  const cfg=u.sessions_config;
+  if(cfg&&!Array.isArray(cfg)&&typeof cfg==='object'){
+    const t=[];
+    for(const k of Object.keys(cfg)){
+      const i=parseInt(k,10);
+      if(Number.isInteger(i)&&i>=0&&i<64) t[i]=cfg[k];
+    }
+    u.sessions_config=t;
+  }
+  return u;
+}
+function _aplatirTousSessionsConfig(m){
+  if(!m||typeof m!=='object') return m;
+  for(const k in m) _aplatirSessionsConfig(m[k]);
+  return m;
+}
 const DB={
-  get(k){try{return JSON.parse(localStorage.getItem('rc_'+k))}catch{return null}},
+  // N3.4 — LES DEUX CLEFS QUI PORTENT DES DOSSIERS SONT REMISES A PLAT ICI.
+  // `users` est la carte de tous les dossiers, `session` est le dossier
+  // courant : ce sont les deux seules portes par lesquelles un sessions_config
+  // venu de Firebase entre dans le code qui le lit.
+  get(k){
+    let v=null;
+    try{ v=JSON.parse(localStorage.getItem('rc_'+k)); }catch(e){ return null; }
+    try{
+      if(k==='users') _aplatirTousSessionsConfig(v);
+      else if(k==='session') _aplatirSessionsConfig(v);
+    }catch(e){}
+    return v;
+  },
   // Le quota local ne doit pas empêcher l'envoi au cloud : l'ancien `return`
   // dans le catch sautait CLOUD.push, donc un stockage saturé faisait perdre
   // la donnée des DEUX côtés. On avertit, et on pousse quand même.
@@ -21468,23 +21528,14 @@ function _assainirExercices(seance){
 function _normaliserSessionsConfig(dossier,rapport){
   const _noter=n=>{ if(rapport&&n) rapport.repares=(rapport.repares||0)+n; };
   if(!dossier||typeof dossier!=='object') return [];
+  // N3.4 — LA STRUCTURE EST REMISE A PLAT PAR _aplatirSessionsConfig, une
+  // seule definition pour toute l'app. Ce qui reste ici est ce qu'elle ne fait
+  // pas, et ne doit pas faire a chaque lecture : creer les sept jours,
+  // assainir les exercices, et COMPTER les reparations pour le rapport.
   let cfg=dossier.sessions_config;
   if(!Array.isArray(cfg)){
-    if(cfg&&typeof cfg==='object'){
-      // Les clefs numériques REPRENNENT LEUR RANG : `{0:…,3:…}` redonne le
-      // lundi et le jeudi, pas les deux premiers jours. Le jour est porté par
-      // la POSITION dans toute l'app — DAYS[i], DAY_ICONS[i], l'index passé
-      // aux boutons — et tasser les trous décalerait tout le programme d'un
-      // athlète sans que rien ne le dise.
-      const t=[];
-      for(const k of Object.keys(cfg)){
-        const i=parseInt(k,10);
-        if(Number.isInteger(i)&&i>=0&&i<64) t[i]=cfg[k];
-      }
-      cfg=t;
-    } else {
-      cfg=[];
-    }
+    _aplatirSessionsConfig(dossier);
+    cfg=Array.isArray(dossier.sessions_config)?dossier.sessions_config:[];
     _noter(1);
   }
   DAYS.forEach((day,i)=>{
