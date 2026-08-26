@@ -23687,6 +23687,171 @@ function testExercices(){
         const av=s.indexOf("DB.set('users',users)");
         const ap=s.indexOf('setTimeout(');
         return (av>=0&&av<ap)?true:_echec('une écriture est passée après le délai');})());
+
+      ok('N4.12 — QUATRE RACCOURCIS, ET TROIS GARDES',(()=>{
+        if(typeof raccourciCoach!=='function') return _echec('aucun raccourci');
+        const faux=(k,cible)=>({key:k,ctrlKey:false,metaKey:false,altKey:false,
+          preventDefault(){this._pd=true;},target:cible});
+        const svE=document.querySelectorAll('.screen.active');
+        const remettre=[...svE];
+        try{
+          document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+          // GARDE 1 : PAS SUR UN ECRAN ATHLETE. Il a les mêmes touches sous
+          // les doigts sur ses propres écrans.
+          const ath=document.getElementById('s-client-home');
+          if(ath){
+            ath.classList.add('active');
+            if(raccourciCoach(faux('p'))!==false) return _echec('un raccourci part sur un écran athlète');
+            ath.classList.remove('active');
+          }
+          // Sur l'écran des séances, « p » atteint le bouton PUBLIER.
+          const s=document.getElementById('s-coach-sessions');
+          const b=document.getElementById('csm-publier');
+          if(!s||!b) return _echec('l’écran ou le bouton a disparu');
+          s.classList.add('active');
+          let clique=0;
+          const svClick=b.click; b.click=()=>{clique++;};
+          const svDis=b.disabled; b.disabled=false;
+          try{
+            raccourciCoach(faux('p'));
+            if(clique!==1) return _echec('« p » n’atteint pas PUBLIER');
+            // GARDE 2 : PAS PENDANT UNE SAISIE. Même garde que le lecteur de
+            // correction vidéo, plus le contenteditable qu’il n’avait pas.
+            const inp=document.createElement('input');
+            document.body.appendChild(inp); inp.focus();
+            clique=0;
+            raccourciCoach(faux('p'));
+            const pendantSaisie=clique;
+            inp.remove();
+            if(pendantSaisie!==0) return _echec('un raccourci part pendant une saisie');
+            // LE BOUTON PORTE L'ETAT : desactive apres publication, le clavier
+            // ne doit pas passer devant lui.
+            b.disabled=true; clique=0;
+            raccourciCoach(faux('p'));
+            if(clique!==0) return _echec('le clavier contourne le verrou du bouton');
+            // GARDE 3 : AUCUNE COMBINAISON. Ctrl+P imprime, et c'est au
+            // navigateur.
+            b.disabled=false; clique=0;
+            raccourciCoach({key:'p',ctrlKey:true,preventDefault(){}});
+            if(clique!==0) return _echec('Ctrl+P est intercepté');
+          } finally { b.click=svClick; b.disabled=svDis; s.classList.remove('active'); }
+          // ET LES RACCOURCIS SONT ANNONCES : un raccourci que rien ne dit
+          // n'existe pas.
+          _rcAnnoncerRaccourcis();
+          if((b.getAttribute('title')||'').indexOf('(P)')<0)
+            return _echec('le bouton n’annonce pas sa touche : '+b.getAttribute('title'));
+          return true;
+        } finally {
+          document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+          remettre.forEach(e=>e.classList.add('active'));
+        }})());
+
+      ok('N4.13 — LA SELECTION MULTIPLE VIT DANS LA LISTE, et lui survit',(()=>{
+        if(typeof SEL_ATHLETES==='undefined') return _echec('aucune sélection');
+        // LA CASE RELIT LE Set A CHAQUE RENDU : c'est ce qui la fait survivre à
+        // la réécriture de #ch-clients-list toutes les 30 s.
+        const s=String(renderClientRow);
+        if(s.indexOf('SEL_ATHLETES.has(c.id)')<0)
+          return _echec('la case ne relit pas la sélection');
+        if(s.indexOf('selAthleteBascule')<0) return _echec('la case ne bascule rien');
+        // LA BARRE EST HORS DU CONTENEUR REECRIT, comme la recherche.
+        const z=document.getElementById('ch-selection');
+        const l=document.getElementById('ch-clients-list');
+        if(!z) return _echec('aucune barre d’actions');
+        if(l&&l.contains(z)) return _echec('la barre est dans le conteneur réécrit');
+        // COCHER PUIS DECOCHER, et la barre suit.
+        SEL_ATHLETES.clear(); _selMaj();
+        if(z.style.display!=='none') return _echec('la barre est visible sans sélection');
+        selAthleteBascule('ZZ1'); selAthleteBascule('ZZ2');
+        if(SEL_ATHLETES.size!==2) return _echec('la sélection ne retient pas');
+        if(z.style.display==='none') return _echec('la barre reste cachée avec 2 cochés');
+        if(z.textContent.indexOf('2')<0) return _echec('la barre ne dit pas combien');
+        selAthleteBascule('ZZ1');
+        if(SEL_ATHLETES.size!==1) return _echec('recliquer ne décoche pas');
+        // CE QUI N'EST PLUS DANS LA LISTE SORT : un athlète libéré ne doit pas
+        // continuer à compter.
+        _selElaguer([{id:'ZZ9'}]);
+        if(SEL_ATHLETES.size!==0) return _echec('un athlète disparu reste sélectionné');
+        // ET LES ACTIONS GROUPEES NE SONT PAS REECRITES : la barre les OUVRE.
+        for(const f of [selVersDecharge,selVersProgramme]){
+          const t=String(f);
+          if(/DB\.set|CLOUD\.push/.test(t)) return _echec(f.name+' écrit de son côté');
+        }
+        if(String(selVersDecharge).indexOf('openDechargeGroupee()')<0)
+          return _echec('la décharge groupée est réécrite au lieu d’être ouverte');
+        SEL_ATHLETES.clear(); _selMaj();
+        return true;})());
+
+      ok('N4.14 — TROIS MODALES S\'ELARGISSENT, et trois seulement',(()=>{
+        const p=_prodSrc();
+        // Les trois feuilles portent la classe ; aucun élément n'a été ajouté.
+        if((p.match(/class="mdl-large/g)||[]).length!==3)
+          return _echec('mauvais nombre de feuilles marquées');
+        if(p.indexOf('mdl-video')<0) return _echec('le lecteur vidéo n’est pas distingué');
+        // LA REGLE NE VAUT QU'AU-DELA DE 1025 PX.
+        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const i=css.indexOf('.mdl-large{max-width:960px');
+        if(i<0) return _echec('aucune largeur pour les modales larges');
+        const av=css.lastIndexOf('@media(min-width:1025px)',i);
+        if(av<0) return _echec('la règle n’est pas bornée à 1025 px');
+        // Le plafond de 480 px est en style EN LIGNE : sans !important la
+        // règle ne peut pas le reprendre.
+        if(css.indexOf('max-width:960px!important')<0)
+          return _echec('la règle ne peut pas reprendre le style en ligne');
+        // ET LE MECANISME DE REMPLACEMENT DE FEUILLE N'EST PAS TOUCHE.
+        return typeof _vcRemplacer==='function'
+          ?true:_echec('le remplacement de feuille a disparu');})());
+
+      ok('N4.15 — LA DECHARGE RESTE ATTEIGNABLE SANS AUCUNE SEANCE',(()=>{
+        const s=String(renderVolumeCoach);
+        if(/sessions\.length\)\{ z\.innerHTML=''; return; \}/.test(s))
+          return _echec('le conteneur est encore vidé sans condition');
+        if(s.indexOf('_htmlBoutonDecharge(c)')<0)
+          return _echec('le bouton n’est pas rendu quand il n’y a pas de séance');
+        // QUATRE CRENEAUX ACTIFS, AUCUNE SEANCE : le bouton doit être là.
+        const avec={sessions:[],sessions_config:Array.from({length:4},()=>({active:true,exercises:[{name:'DC'}]}))};
+        if(_htmlBoutonDecharge(avec).indexOf('programmerDecharge')<0)
+          return _echec('un athlète programmé n’a pas accès à la décharge');
+        // AUCUN CRENEAU ACTIF : il ne doit toujours pas être là.
+        if(_htmlBoutonDecharge({sessions:[],sessions_config:[{active:false}]})!=='')
+          return _echec('le bouton apparaît sans aucun créneau actif');
+        return true;})());
+
+      ok('N4.16 — LE PRE-REMPLISSAGE FONDATION EST UN CHOIX, la Fondation par défaut',(()=>{
+        const s=String(createCoachProgTemplate);
+        if(s.indexOf('rcConfirm')<0) return _echec('la Fondation est encore imposée');
+        if(s.indexOf('avecFondation')<0) return _echec('le choix n’est pas porté');
+        // LA FONDATION RESTE LE DEFAUT : c'est le bouton de gauche de rcConfirm,
+        // celui qui vaut « oui ».
+        if(!/'Fondation','Modèle vide'/.test(s))
+          return _echec('le défaut n’est pas la Fondation');
+        // ET LE MODELE VIDE EST VRAIMENT VIDE, avec ses sept créneaux.
+        const v=_cptSeancesVides();
+        if(v.length!==7) return _echec(v.length+' créneaux au lieu de 7');
+        if(v.some(x=>x.active||(x.exercises||[]).length))
+          return _echec('le modèle « vide » porte encore quelque chose');
+        return v.every((x,i)=>x.day===DAYS[i])
+          ?true:_echec('les jours ne sont pas nommés dans l’ordre');})());
+
+      ok('N4.18 — L\'ORDRE DES MODELES SE REGLE, et les index suivent',(()=>{
+        if(typeof cplDeplacer!=='function') return _echec('aucun réordonnancement');
+        const sv=currentUser.coachPrograms;
+        try{
+          currentUser.coachPrograms=[{id:'a',name:'A'},{id:'b',name:'B'},{id:'c',name:'C'}];
+          cplDeplacer(2,-1);
+          const ordre=currentUser.coachPrograms.map(p=>p.id).join(',');
+          if(ordre!=='a,c,b') return _echec('ordre obtenu : '+ordre);
+          // LES BORNES : on ne sort pas du tableau.
+          if(cplDeplacer(0,-1)!==false) return _echec('le premier peut encore monter');
+          if(cplDeplacer(2,1)!==false) return _echec('le dernier peut encore descendre');
+          // C'est le TABLEAU qui bouge, pas seulement l'affichage : les quatre
+          // boutons passent l'index du tableau et restent donc justes.
+          if(String(cplDeplacer).indexOf('loadCoachProgramsList()')<0)
+            return _echec('la liste n’est pas re-rendue après déplacement');
+          // ET L'ORDRE EST PERSISTE.
+          return String(cplDeplacer).indexOf('saveUser()')>=0
+            ?true:_echec('l’ordre ne survit pas à un rechargement');
+        } finally { currentUser.coachPrograms=sv; }})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

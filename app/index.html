@@ -252,18 +252,43 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
    valeurs en inline a chaque rafraichissement, et sans lui le bloc large ne
    pourrait pas les reprendre. */
 #ch-sidebar{display:none!important}
-  /* N1.13 — LA ZONE MORTE ENTRE 1025 ET 1359 PX. La liste ne devient un
-     tableau qu'a 1360 ; entre les deux — 1280 x 800, la fenetre la plus
-     courante — la barre laterale prend 260 px et chaque ligne restait une
-     carte de 980 px de large pour un avatar de 44 px et sept lignes de
-     texte. Deux colonnes de cartes : la largeur sert, et le tableau garde
-     son seuil. Bloc a part, borne des deux cotes : il ne vaut QUE dans
-     l'intervalle, et le grand ecran retrouve son tableau intact. */
-  @media(min-width:1025px) and (max-width:1359px){
-    body:has(#s-coach-home.active) #ch-clients-list{
-      display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
-    body:has(#s-coach-home.active) #ch-clients-list .client-row{margin-bottom:0}
-  }
+/* N4.13 — LA COLONNE DE SELECTION. Discrete au repos — un athlete ne se
+   coche pas tous les jours — et pleinement visible des qu'elle porte quelque
+   chose. accent-color, comme les cases des deux ecrans groupes. */
+.cr-coche{width:17px;height:17px;flex-shrink:0;margin:0 2px 0 0;cursor:pointer;
+  accent-color:var(--red);opacity:.4;transition:opacity var(--t-1)}
+.cr-coche:checked,.cr-coche:hover,.cr-coche:focus-visible{opacity:1}
+.client-row:hover .cr-coche{opacity:.8}
+@media(prefers-reduced-motion:reduce){.cr-coche{transition:none}}
+/* N1.13 — LA ZONE MORTE ENTRE 1025 ET 1359 PX. La liste ne devient un tableau
+   qu'a 1360 ; entre les deux — 1280 x 800, la fenetre la plus courante — la
+   barre laterale prend 260 px et chaque ligne restait une carte de 980 px de
+   large pour un avatar de 44 px et sept lignes de texte. Deux colonnes de
+   cartes : la largeur sert, et le tableau garde son seuil.
+   Bloc a part, borne des DEUX cotes : il ne vaut QUE dans l'intervalle, et le
+   grand ecran retrouve son tableau intact. */
+@media(min-width:1025px) and (max-width:1359px){
+  body:has(#s-coach-home.active) #ch-clients-list{
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+  body:has(#s-coach-home.active) #ch-clients-list .client-row{margin-bottom:0}
+}
+/* N4.14 — TROIS MODALES S'ELARGISSENT, ET TROIS SEULEMENT.
+   Les trente-deux feuilles de l'application sont plafonnees a 480 px : sur un
+   ecran de 1440, la correction video, la fiche de banque et l'application d'un
+   modele travaillaient dans 440 px utiles. Pour la correction video — une
+   video qu'on analyse image par image, aux fleches du clavier — c'etait le
+   geste le plus frequent du coach qui etait le plus contraint.
+   !important PARCE QUE LE PLAFOND EST EN STYLE EN LIGNE : les trois sites
+   l'ecrivent dans l'attribut style de leur feuille, et une regle sans
+   !important ne peut pas le reprendre. Les corriger a la source aurait demande
+   d'aller modifier trois fonctions de rendu pour une question de largeur.
+   SOUS 1025 PX, RIEN NE BOUGE : la classe ne vaut que dans cette requete. */
+@media(min-width:1025px){
+  #modal-overlay>.mdl-large{max-width:960px!important}
+  /* La place gagnee va au LECTEUR, pas aux marges : c'est lui qu'on regarde. */
+  #modal-overlay>.mdl-video{max-width:1120px!important;max-height:94vh!important}
+  #modal-overlay>.mdl-video video{width:100%;max-height:72vh}
+}
 #coach-tabs-bar{display:flex!important}
 #s-coach-home{height:100vh;height:100dvh;overflow:hidden}
 
@@ -430,12 +455,6 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
     left:max(0px,calc(50% - 720px));width:260px;z-index:20;
     overflow-y:auto;overscroll-behavior:contain}
   body:has(#s-coach-program.active[data-ctx="coach"]) .screen.active{padding-left:260px}
-  /* N1.13 — LA ZONE MORTE ENTRE 1025 ET 1359 PX. La liste ne devient un
-     tableau qu'a 1360 ; entre les deux — 1280 x 800, la fenetre la plus
-     courante — la barre prenait 260 px et chaque ligne restait une carte de
-     980 px de large pour un avatar de 44 px et sept lignes de texte. Deux
-     colonnes de cartes : la largeur sert, et le tableau garde son seuil. */
-
   /* LA MESURE DE LECTURE, SUR LES NEUF ECRANS QUI VIENNENT D'ETRE ELARGIS.
      Mesure a 1440 px : la file de reprise servait des lignes de 112
      caracteres, l'activite du portefeuille 117. Au-dela d'une centaine,
@@ -4523,6 +4542,11 @@ const COACH_PHOTO='icons/coach.jpg';
             <button class="ch-chip" data-tri="progression" onclick="setTriClients('progression')">Progression</button>
           </div>
         </div>
+        <!-- N4.13 — LA BARRE D'ACTIONS DE LA SELECTION. HORS de
+             #ch-clients-list, comme la recherche et les filtres : c'est ce
+             conteneur-la que le rafraichissement reecrit toutes les trente
+             secondes. Rendue par _selMaj, et vide tant que rien n'est coche. -->
+        <div id="ch-selection" style="display:none;margin-bottom:10px"></div>
         <div id="ch-clients-list"></div>
         <div id="ch-paliers"></div>
         <!-- Alerte anti-falaise et propositions de palier. Jamais bloquante,
@@ -17031,6 +17055,10 @@ function renderClientList(clients){
   // « non lus » : ouvrir ne compte plus.
   renderPilotage(tous);
   renderPortefeuille(tous);
+  // N4.13 — la selection est ELAGUEE de ce qui n'existe plus, puis la barre
+  // est repeinte. On elague sur `tous` et non sur `vus` : un athlete masque
+  // par un filtre reste selectionne, c'est le filtre qui change, pas lui.
+  try{ _selElaguer(tous); _selMaj(); }catch(e){}
   // La ligne « Bilans sans reponse » a demenage dans le volet « Vue
   // d'ensemble » du pilotage. L'element qu'on vidait ici n'existe plus.
   const cnt=document.getElementById('ch-count');
@@ -18269,6 +18297,96 @@ function etatAthlete(c){
 // La couleur du filet, par etat. Meme table pour les trois ecrans.
 const ETAT_FILET=Object.freeze({alerte:'#E02020',bilan:'#f97316',attente:'#f97316',
   actif:'#22c55e',lecture:'#8a8a8a',dormant:'#666666'});
+// ══════ N4.13 — COCHER DES ATHLETES SANS QUITTER LA LISTE ═════════════════
+// Les cases a cocher existaient, mais sur deux ecrans separes et mono-usage :
+// l'un pour assigner un programme, l'autre pour la decharge groupee. Toute
+// action en lot demandait donc de quitter la liste, d'aller sur un ecran
+// special et de re-selectionner — deux navigations par action, et une seule
+// action par ecran.
+//
+// LA SELECTION VIT HORS DU CONTENEUR REECRIT. #ch-clients-list est reecrit
+// toutes les trente secondes par la boucle de synchro : c'est exactement pour
+// cela que la recherche et les filtres sont places au-dessus de lui. Meme
+// discipline ici — la selection est un Set en memoire, et chaque ligne rendue
+// y relit son etat. Cocher puis attendre une minute ne perd rien.
+//
+// ON NE REECRIT PAS LES ACTIONS GROUPEES : elles existent, elles sont
+// eprouvees, et elles ont leur ecran. La barre les OUVRE avec la selection
+// deja cochee — ce qui etait la seule chose qui manquait.
+const SEL_ATHLETES=new Set();
+function selAthleteBascule(id,ev){
+  // La ligne entiere ouvre la fiche : sans ce coup d'arret, cocher ouvrirait
+  // l'athlete qu'on voulait seulement designer.
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  if(SEL_ATHLETES.has(id)) SEL_ATHLETES.delete(id);
+  else SEL_ATHLETES.add(id);
+  _selMaj();
+  return true;
+}
+function selAthleteVider(){
+  SEL_ATHLETES.clear();
+  try{ renderClientList(); }catch(e){ _selMaj(); }
+  return true;
+}
+// Les identifiants d'athletes qui ne sont PLUS dans la liste sortent : un
+// athlete libere ou supprime ne doit pas continuer a compter dans la barre.
+function _selElaguer(vus){
+  if(!Array.isArray(vus)) return;
+  const presents=new Set(vus.map(c=>c&&c.id).filter(Boolean));
+  for(const id of Array.from(SEL_ATHLETES)) if(!presents.has(id)) SEL_ATHLETES.delete(id);
+}
+function _selMaj(){
+  const z=document.getElementById('ch-selection');
+  if(!z) return;
+  const n=SEL_ATHLETES.size;
+  // ELLE N'APPARAIT QUE COCHEE : une barre d'actions permanente sur un
+  // tableau de bord deja dense serait un bandeau de plus a lire.
+  if(!n){ z.innerHTML=''; z.style.display='none'; return; }
+  z.style.display='';
+  z.innerHTML='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;'
+    +'padding:9px 11px;background:var(--surface-1);border:1px solid var(--red);'
+    +'border-radius:var(--r-3)">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);letter-spacing:.4px">'
+    +n+' athlète'+(n>1?'s':'')+' sélectionné'+(n>1?'s':'')+'</span>'
+    +'<div style="flex:1"></div>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersDecharge()">Décharge</button>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersProgramme()">Programme</button>'
+    +'<button type="button" onclick="selAthleteVider()" title="Tout décocher" style="background:none;border:none;color:var(--sub);font-family:inherit;font-size:var(--fs-xs);cursor:pointer;padding:4px 6px;min-height:30px">✕</button>'
+    +'</div>';
+}
+// Les cases de l'ecran de destination sont cochees APRES son rendu : c'est lui
+// qui les fabrique, et il les fabrique toutes decochees.
+function _selCocherSur(conteneur){
+  let n=0;
+  try{
+    document.querySelectorAll('#'+conteneur+' input[type=checkbox]').forEach(cb=>{
+      const veut=SEL_ATHLETES.has(cb.value);
+      cb.checked=veut;
+      if(veut) n++;
+    });
+  }catch(e){}
+  return n;
+}
+function selVersDecharge(){
+  if(!SEL_ATHLETES.size) return false;
+  openDechargeGroupee();
+  setTimeout(()=>{ _selCocherSur('cdg-athletes'); try{ _cdgMajBouton(); }catch(e){} },0);
+  return true;
+}
+function selVersProgramme(){
+  if(!SEL_ATHLETES.size) return false;
+  const progs=(currentUser&&currentUser.coachPrograms)||[];
+  if(!progs.length){
+    toast('Tu n’as encore aucun programme à assigner.','var(--orange)');
+    return false;
+  }
+  // L'ecran d'assignation demande QUEL programme : on ouvre la liste des
+  // programmes, ou le coach choisit, et la selection l'attend a l'arrivee.
+  openCoachPrograms();
+  toast(SEL_ATHLETES.size+' athlète'+(SEL_ATHLETES.size>1?'s':'')
+    +' en attente : choisis le programme à leur assigner.','var(--info)');
+  return true;
+}
 function renderClientRow(c){
   const badge=_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire</span>'
     :_accesExpire(c)?'<span class="badge badge-gray">Lecture seule</span>'
@@ -18307,7 +18425,13 @@ function renderClientRow(c){
   // lire un seul badge. Le classement suit CELUI DU BADGE, a la lettre — deux
   // regles differentes donneraient une carte rouge a badge vert.
   const _etat=etatAthlete(c);
+  // N4.13 — LA CASE RELIT LE Set A CHAQUE RENDU : c'est ce qui la fait
+  // survivre a la reecriture du conteneur toutes les trente secondes.
+  const _coche=SEL_ATHLETES.has(c.id)?' checked':'';
   return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" data-cid="${c.id}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <input type="checkbox" class="cr-coche"${_coche} value="${c.id}"
+      onclick="selAthleteBascule('${c.id}',event)"
+      aria-label="Sélectionner ${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète')}">
     <div class="avatar" style="width:44px;height:44px;font-size:var(--fs-lg);overflow:hidden;flex-shrink:0">${avatarHtml}</div>
     <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div><div class="cr-act">${activityLine}</div>${objLine}${phLine}${chLine}${prLine}${biLine}</div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
@@ -21691,6 +21815,15 @@ function loadCoachProgramsList(){
         · créé le ${new Date(p.createdAt||Date.now()).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}
       </div>
       <div style="display:flex;gap:8px">
+        <!-- N4.18 — L'ORDRE DES MODELES SE REGLE. La liste etait celle du
+             tableau, et duplicateCoachProgTemplate ajoute toujours en fin :
+             elle devenait vite illisible. Les MEMES fleches que l'editeur
+             d'exercices, plutot qu'une seconde mecanique de glisser-deposer
+             pour une liste qu'on reordonne trois fois par an. -->
+        <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+          <button type="button" class="px-mini" onclick="cplDeplacer(${i},-1)" ${i===0?'disabled':''} aria-label="Monter ce programme">▲</button>
+          <button type="button" class="px-mini" onclick="cplDeplacer(${i},1)" ${i===progs.length-1?'disabled':''} aria-label="Descendre ce programme">▼</button>
+        </div>
         <button class="btn btn-outline btn-sm" style="flex:1" onclick="editCoachProgTemplate(${i})">✏️ Modifier</button>
         <button class="btn btn-red btn-sm" style="flex:1" onclick="openAssignProgram(${i})">▶ Assigner</button>
         <button onclick="duplicateCoachProgTemplate(${i})" title="Dupliquer ce programme" aria-label="Dupliquer ce programme" style="background:none;border:1px solid var(--border);color:#888;border-radius:var(--r-2);padding:7px 10px;font-size:var(--fs-md);cursor:pointer;line-height:1">⧉</button>
@@ -21702,11 +21835,54 @@ function loadCoachProgramsList(){
 
 function _cptCount(sessions){return sessions?sessions.filter(s=>s.active&&s.exercises?.length).length:0;}
 
-function createCoachProgTemplate(){
+// N4.18 — DEPLACER UN MODELE DANS LA LISTE.
+// ATTENTION AUX INDEX : Modifier, Assigner, Dupliquer et Supprimer passent
+// tous l'index du TABLEAU. Reordonner le tableau lui-meme, puis re-rendre,
+// garde donc les quatre boutons justes — c'est la seule facon de le faire
+// sans avoir a les toucher.
+// L'ORDRE EST PERSISTE : saveUser, comme tout ce qui vit dans coachPrograms.
+function cplDeplacer(i,sens){
+  const l=(currentUser&&currentUser.coachPrograms)||[];
+  const j=i+sens;
+  if(!l[i]||j<0||j>=l.length) return false;
+  const t=l[i]; l[i]=l[j]; l[j]=t;
+  try{ saveUser(); }catch(e){}
+  loadCoachProgramsList();
+  return true;
+}
+
+// N4.16 — LE PRE-REMPLISSAGE EST UTILE, MAIS IL DOIT ETRE CHOISI.
+// Creer un modele copiait la Fondation dans les DEUX genres : trois jours
+// actifs de six exercices chacun, soit trente-six exercices a effacer un par
+// un — un clic par exercice, sans confirmation ni annulation — pour un coach
+// qui ne programme pas la Fondation.
+// On ne la retire pas : elle rend service a qui debute. On la PROPOSE, et
+// elle reste le defaut pour ne surprendre personne.
+// RIEN N'EST ECRIT AVANT SAUVEGARDER, comme sur tout cet ecran : le modele
+// naît dans currentUser.coachPrograms et c'est le bouton de l'ecran qui le
+// persiste — saveUser ici ne fait que ce que la fonction faisait deja.
+const CPT_VIDE=Object.freeze([]);
+function _cptSeancesVides(){
+  // Sept creneaux eteints, la meme forme que la Fondation : les fonctions de
+  // rendu attendent un tableau de sept, pas un tableau vide.
+  return DAYS.map((day)=>({day,name:'',active:false,exercises:[],notes:'',warmup:'',cooldown:''}));
+}
+async function createCoachProgTemplate(){
   if(!currentUser.coachPrograms) currentUser.coachPrograms=[];
+  const nl=String.fromCharCode(10);
+  const avecFondation=await rcConfirm(
+    'Partir du Programme Fondation ?'+nl+nl
+    +'La Fondation garnit trois jours de six exercices, dans les deux genres — '
+    +'un point de depart si tu debutes.'+nl
+    +'Sinon, tu obtiens sept jours vides a remplir toi-meme.',
+    null,'Fondation','Modèle vide');
   const p={id:Date.now().toString(36),name:'Nouveau programme',createdAt:Date.now(),
-    sessions_H:FONDATION_H.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))})),
-    sessions_F:FONDATION_F.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}))};
+    sessions_H:avecFondation
+      ?FONDATION_H.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}))
+      :_cptSeancesVides(),
+    sessions_F:avecFondation
+      ?FONDATION_F.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}))
+      :_cptSeancesVides()};
   currentUser.coachPrograms.push(p);
   saveUser();
   editCoachProgTemplate(currentUser.coachPrograms.length-1);
@@ -22236,7 +22412,10 @@ function openAssignProgram(idx){
 
 function loadAssignAthletes(){
   const users=DB.get('users')||{};
-  const athletes=Object.values(users).filter(u=>u.coachId===currentUser.id&&u.role!=='coach');
+  // N4.13 — LE MEME PREDICAT QUE LA LISTE. Filtrer sur le seul coachId
+  // laissait hors de l'assignation les athletes rattaches par coachEmailKey :
+  // visibles au tableau de bord, absents ici.
+  const athletes=Object.values(users).filter(u=>_estMonAthlete(u,currentUser));
   const container=document.getElementById('cpa-athletes');if(!container)return;
   if(!athletes.length){container.innerHTML=`<div style="text-align:center;padding:24px;color:var(--sub);font-size:var(--fs-sm)">Aucun athlète lié à ton compte.</div>`;return;}
   container.innerHTML=athletes.map(a=>{
@@ -22393,7 +22572,7 @@ function openApplyTemplate(){
       </div>
     </div>`).join('');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
+  <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">🗂️ Appliquer un modèle</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:6px">à ${escapeHtml((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète'} : version ${genreDefaut==='F'?'F':'H'} pré-sélectionnée</p>
     ${lignes}
@@ -23503,7 +23682,7 @@ function ouvrirFicheBanque(slug,ev){
   // serait un jugement de métier qu'aucune donnée ne soutient ici.
   const variantes=f.schema?catalogueCoach().filter(x=>x.schema===f.schema&&x.slug!==f.slug).slice(0,6):[];
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:10px;font-size:var(--fs-lg)">${escapeHtml(f.nom)}</h2>
     ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" style="width:100%;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3);margin-bottom:12px">`
       :`<div class="sub" style="font-size:var(--fs-xs);text-align:center;padding:16px;background:var(--surface-1);border-radius:var(--r-3);margin-bottom:12px">Aucune illustration pour cet exercice.</div>`}
@@ -39171,7 +39350,20 @@ function _htmlEcartPrescrit(c){
 function renderVolumeCoach(c){
   const z=document.getElementById('ccd-volume');
   if(!z) return;
-  if(!c||!Array.isArray(c.sessions)||!c.sessions.length){ z.innerHTML=''; return; }
+  // N4.15 — LE BOUTON DE DECHARGE SURVIT A L'ABSENCE DE SEANCE. Cette
+  // fonction vidait son conteneur et sortait des que l'athlete n'avait encore
+  // rien fait — or c'est elle, et elle seule, qui rend le bouton de decharge.
+  // Un athlete fraichement programme, avec quatre creneaux actifs et aucune
+  // seance realisee, n'avait aucun acces a la decharge depuis sa fiche : il
+  // fallait passer par l'ecran groupe, deux navigations de plus.
+  // LE BLOC « VOLUME » NE REAPPARAIT PAS POUR AUTANT : le vide est delibere
+  // quand il n'y a rien a mesurer. Seul le bouton reste, et
+  // _htmlBoutonDecharge s'impose deja la bonne condition — au moins un
+  // creneau actif, sinon il ne rend rien.
+  if(!c||!Array.isArray(c.sessions)||!c.sessions.length){
+    z.innerHTML=_htmlBoutonDecharge(c);
+    return;
+  }
   const cle=semaineISO(new Date());
   const res=_calculSemaine(c,cle);
   if(!res.seances){
@@ -39285,6 +39477,101 @@ function cdRefuser(){
 // deload existant, le meme que la case a cocher de l'editeur de seances : rien
 // de neuf en base, et le bandeau que l'athlete voit deja en seance s'allume
 // sans qu'on ait a en creer un second.
+// ══════ N4.12 — QUATRE RACCOURCIS, ET PAS UN DE PLUS ══════════════════════
+// L'espace coach se travaille au clavier — des noms d'exercices, des nombres,
+// des notes — et tout s'y validait a la souris : aucun accesskey dans le
+// fichier, et trois seuls gestionnaires de touches, tous locaux.
+//
+// QUATRE GESTES, CEUX QU'ON REPETE : enregistrer l'editeur d'exercices,
+// publier le programme, ajouter un exercice, atteindre la recherche
+// d'athletes. Chacun APPELLE LE BOUTON EXISTANT plutot que sa fonction : le
+// bouton porte l'etat — desactive apres publication, absent hors contexte —
+// et le rejouer par le clavier contournerait ce verrou.
+//
+// TROIS GARDES, ET LES TROIS COMPTENT :
+//   • l'ecran actif doit etre un ecran COACH — un athlete a les memes touches
+//     sous les doigts sur ses propres ecrans ;
+//   • le focus ne doit pas etre dans un champ — meme garde que le lecteur de
+//     correction video, qui l'ecrit deja : INPUT, TEXTAREA, SELECT, plus le
+//     contenteditable que celui-la n'avait pas ;
+//   • aucune modale ouverte — Echap lui appartient, et le reste aussi.
+const RACCOURCIS_COACH=Object.freeze([
+  {ecran:'s-coach-program', touche:'s', bouton:'cp-sauver',    dit:'Enregistrer'},
+  {ecran:'s-coach-sessions',touche:'p', bouton:'csm-publier',  dit:'Publier'},
+  {ecran:'s-coach-program', touche:'e', action:'addExercise',  dit:'Ajouter un exercice'},
+  {ecran:'s-coach-home',    touche:'/', champ:'ch-search',     dit:'Rechercher'}
+]);
+function _rcSaisieActive(){
+  const a=document.activeElement;
+  if(!a) return false;
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+  return a.isContentEditable===true;
+}
+function _rcEcranActif(){
+  const e=document.querySelector('.screen.active');
+  return e?e.id:'';
+}
+function _rcModaleOuverte(){
+  try{
+    const m=document.getElementById('modal-overlay');
+    return !!(m&&m.style.display!=='none'&&m.offsetParent!==null);
+  }catch(e){ return false; }
+}
+function raccourciCoach(ev){
+  if(!ev||ev.ctrlKey||ev.metaKey||ev.altKey) return false;
+  if(_rcSaisieActive()||_rcModaleOuverte()) return false;
+  const ecran=_rcEcranActif();
+  const t=String(ev.key||'').toLowerCase();
+  for(const r of RACCOURCIS_COACH){
+    if(r.ecran!==ecran||r.touche!==t) continue;
+    if(r.champ){
+      const c=document.getElementById(r.champ);
+      if(!c) return false;
+      ev.preventDefault();
+      c.focus();
+      try{ c.select(); }catch(e){}
+      return true;
+    }
+    if(r.bouton){
+      const b=document.getElementById(r.bouton);
+      // LE BOUTON PORTE L'ETAT : desactive apres publication, absent hors
+      // contexte. Le clavier ne doit pas passer devant lui.
+      if(!b||b.disabled||b.offsetParent===null) return false;
+      ev.preventDefault();
+      b.click();
+      return true;
+    }
+    if(r.action&&typeof window[r.action]==='function'){
+      ev.preventDefault();
+      try{ window[r.action](); }catch(e){}
+      return true;
+    }
+  }
+  return false;
+}
+// ANNONCE DANS L'INTERFACE. Un raccourci que rien ne dit n'existe pas : le
+// titre du bouton le porte, la ou l'oeil le cherche deja.
+function _rcAnnoncerRaccourcis(){
+  for(const r of RACCOURCIS_COACH){
+    if(!r.bouton) continue;
+    const b=document.getElementById(r.bouton);
+    if(!b) continue;
+    const av=b.getAttribute('title')||'';
+    if(av.indexOf('('+r.touche.toUpperCase()+')')>=0) continue;
+    b.setAttribute('title',(av?av+' ':r.dit+' ')+'('+r.touche.toUpperCase()+')');
+  }
+  const c=document.getElementById('ch-search');
+  if(c&&(c.getAttribute('title')||'').indexOf('/')<0)
+    c.setAttribute('title','Rechercher un athlète (touche /)');
+}
+try{
+  document.addEventListener('keydown',raccourciCoach);
+  // Le document peut deja etre pret quand ce script s'execute : l'evenement ne
+  // se rejouerait alors jamais, et les titres resteraient muets.
+  if(document.readyState==='loading')
+    document.addEventListener('DOMContentLoaded',_rcAnnoncerRaccourcis);
+  else setTimeout(_rcAnnoncerRaccourcis,0);
+}catch(e){}
 function _htmlBoutonDecharge(c){
   const actifs=((c&&c.sessions_config)||[]).filter(x=>x&&x.active);
   if(!actifs.length) return '';
@@ -39386,8 +39673,8 @@ function openDechargeGroupee(){
 }
 function loadDechargeAthletes(){
   const users=DB.get('users')||{};
-  const athletes=Object.values(users)
-    .filter(u=>u&&u.coachId===(currentUser&&currentUser.id)&&u.role!=='coach');
+  // N4.13 — meme predicat que la liste, pour la meme raison.
+  const athletes=Object.values(users).filter(u=>_estMonAthlete(u,currentUser));
   const el=document.getElementById('cdg-athletes');
   if(!el) return;
   if(!athletes.length){
@@ -53582,7 +53869,7 @@ function openVideoCorrection(email,videoId){
   const corps=_vcCorpsHtml(email,videoId);
   if(corps==null) return;
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto">${corps}</div></div>`;
+  <div class="mdl-large mdl-video" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto">${corps}</div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   _vcApres();
 }
