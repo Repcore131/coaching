@@ -342,12 +342,45 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
   body:has(#s-coach-home.active) #ch-main-area>div:last-child{display:none}
 
   /* ── DOSSIER ATHLETE EN DEUX COLONNES ──
-     align-items:start est ce qui fait tenir la chose : sans lui, chaque bloc
-     s'etirerait a la hauteur du plus haut de sa rangee et le dossier serait
-     un damier de vides. Les blocs gardent leur hauteur propre et se posent en
-     deux colonnes dans l'ordre du document. */
-  body:has(#s-coach-client.active) #s-coach-client>.scroll-area>.pad{
+     LA GRILLE A CHANGE DE PORTEUR le 25/08/2026. Elle etait posee sur .pad, et
+     ses enfants directs etaient alors les vingt-cinq sections du dossier. Les
+     onglets les ont enfermees dans quatre conteneurs .ccd-vue dont un seul est
+     monte : .pad n'a plus que six enfants, et l'onglet visible — un seul bloc —
+     retombait tout entier dans la colonne de gauche. Sur un moniteur de
+     1440 px, la moitie droite restait noire.
+     C'est donc l'onglet ACTIF qui porte la grille, et .pad qui redevient une
+     simple colonne : le bandeau d'identite, les contre-indications et la
+     rangee des trois actions gardent toute la largeur, au-dessus.
+     align-items:start est ce qui fait tenir la chose : sans lui, chaque
+     section s'etirerait a la hauteur de la plus haute de sa rangee et le
+     dossier serait un damier de vides. Les sections gardent leur hauteur
+     propre et se posent en deux colonnes dans l'ordre du document. */
+  body:has(#s-coach-client.active) #s-coach-client>.scroll-area>.pad{display:block}
+  body:has(#s-coach-client.active) .ccd-vue.actif{
     display:grid;grid-template-columns:1fr 1fr;gap:0 24px;align-items:start}
+  /* UN ONGLET QUI N'A QU'UNE SECTION VISIBLE NE SE COUPE PAS EN DEUX : la
+     seconde colonne serait vide sur toute la hauteur. Le drapeau est pose par
+     _ccdMajColonnes, qui compte ce qui est reellement affiche — une section
+     masquee par son rendu n'occupe aucune piste. */
+  body:has(#s-coach-client.active) .ccd-vue.actif[data-solo]{display:block}
+  /* CES DEUX REGLES NE VALENT QUE LARGE. Sous 1025 px la fiche doit rester
+     rigoureusement identique : c'est la consigne de ce lot, et un ecart de
+     seize pixels ailleurs serait un changement non demande. */
+  /* SEIZE PIXELS MORTS AU PIED DE CHAQUE SECTION. Les fonctions de rendu
+     posent un margin-bottom sur leur propre carte — il separait deux cartes
+     quand elles se suivaient dans .pad. En deux colonnes la carte est seule
+     dans sa section : cette marge ne separe plus rien, elle allonge, et une
+     colonne plus longue que l'autre se voit. Mesure : 16 px sur Phase et sur
+     Nutrition.
+     !important PARCE QUE LA MARGE EST EN STYLE EN LIGNE : les fonctions de
+     rendu l'ecrivent dans l'attribut style de leur carte, et une regle sans
+     !important ne peut pas la reprendre. La corriger a la source aurait
+     demande de toucher aux fonctions de rendu, ce que ce lot s'interdit. */
+  body:has(#s-coach-client.active) .cc-sect-c>*:last-child{margin-bottom:0!important}
+  /* UN CONTENEUR VIDE NE PREND PAS DE CELLULE. Un div a remplir mais encore
+     vide occupait une case de la grille et decalait tout ce qui suit. Il
+     reapparait des que son rendu l'a rempli. */
+  body:has(#s-coach-client.active) .ccd-vue>div:empty{display:none}
 }
 /* LA LISTE EN TABLEAU DEMANDE PLUS QUE 1025 PX. A neuf colonnes dont trois de
    mesure, 1025 px les tassait sous leur libelle. Elle a son propre point de
@@ -18971,7 +19004,35 @@ function ccdVue(nom){
     if(sa) sa.scrollTop=0;
   }catch(e){}
   _ccdMajAlertes();
+  _ccdMajColonnes();
   return v;
+}
+// Compte ce qui est REELLEMENT affiche dans chaque onglet, et pose `data-solo`
+// sur ceux qui n'ont qu'un bloc. Au-dela de 1025 px, l'onglet actif se met en
+// deux colonnes ; avec un seul bloc, la seconde resterait vide sur toute la
+// hauteur — mieux vaut alors la pleine largeur.
+//
+// LE COMPTAGE SE FAIT SUR LE DISPLAY CALCULE, pas sur offsetParent : les blocs
+// d'un onglet ferme ont tous un offsetParent nul, et l'onglet serait declare
+// solo a tort des qu'on le quitte. Le display calcule d'un enfant, lui, ne
+// depend pas de celui de son parent.
+//
+// Une section vide est deja masquee par .cc-sect:has(>.cc-sect-c:empty) : elle
+// n'occupe aucune piste de la grille, et ne doit donc pas compter.
+//
+// Appele au changement d'onglet et a l'ouverture de la fiche. PAS au repli :
+// replier change une hauteur, jamais un nombre de blocs.
+function _ccdMajColonnes(){
+  try{
+    document.querySelectorAll('#s-coach-client .ccd-vue').forEach(z=>{
+      let n=0;
+      for(const e of z.children){
+        if(getComputedStyle(e).display!=='none'&&++n>1) break;
+      }
+      if(n<=1) z.setAttribute('data-solo','');
+      else z.removeAttribute('data-solo');
+    });
+  }catch(e){}
 }
 // PURE au sens de l'écran : elle ne lit que ce qui est rendu. Une section vide
 // est masquée par la règle .cc-sect:has(>.cc-sect-c:empty), et son onglet
@@ -19049,7 +19110,10 @@ function openClientDetail(cid,_refresh){
   // n'a aucune raison d'etre le bon.
   const _memeAthlete=(currentClientId===cid);
   setTimeout(()=>{ _ccdArmerReplis(); ccdAppliquerReplis();
-    ccdVue((_refresh&&_memeAthlete)?_ccdVue:'entrainement'); },0);
+    ccdVue((_refresh&&_memeAthlete)?_ccdVue:'entrainement');
+    // ccdVue le fait deja pour l'onglet visible ; ce second appel couvre
+    // les trois autres, dont le contenu vient d'etre rendu.
+    _ccdMajColonnes(); },0);
   setTimeout(_majLiensClasser,0);
   currentClientId=cid;
   const c=getOwnedClient(cid);

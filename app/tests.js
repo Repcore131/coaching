@@ -22491,6 +22491,110 @@ function testExercices(){
           return _ccdVue==='lifestyle'?true:_echec('l\'onglet n\'a pas suivi : '+_ccdVue);})());
       } finally { try{ ccdVue(svVue); }catch(e){} }
     })();
+    // ── LE DOSSIER EN DEUX COLONNES, SUR LARGE ECRAN ─────────────────────
+    // La grille etait posee sur .pad, dont les enfants directs etaient les
+    // vingt-cinq sections. Les onglets les ont enfermees dans quatre
+    // conteneurs : .pad n'avait plus que six enfants, et l'onglet visible —
+    // un seul bloc — retombait entier dans la colonne de gauche. Sur un
+    // moniteur de 1440 px, la moitie droite restait noire.
+    //
+    // LES REGLES SONT LUES DANS LA FEUILLE DE STYLE, pas mesurees a l'ecran :
+    // la suite tourne a la largeur qu'on lui donne, et une assertion qui
+    // dependrait de cette largeur passerait ou non selon la fenetre.
+    (()=>{
+      const _mediaDossier=()=>{
+        for(const f of document.styleSheets){
+          let regles=null;
+          try{ regles=f.cssRules; }catch(e){ continue; }
+          for(const r of regles){
+            if(r.type!==CSSRule.MEDIA_RULE) continue;
+            if(!/min-width:\s*1025px/.test(r.conditionText||r.media.mediaText)) continue;
+            for(const s of r.cssRules)
+              if(s.selectorText&&/s-coach-client/.test(s.selectorText)) return r;
+          }
+        }
+        return null;
+      };
+      const _regle=(m,motif)=>{
+        for(const s of m.cssRules)
+          if(s.selectorText&&motif.test(s.selectorText.replace(/\s*>\s*/g,'>'))) return s;
+        return null;
+      };
+      ok('LA GRILLE EST PORTEE PAR L\'ONGLET ACTIF, plus par .pad',(()=>{
+        const m=_mediaDossier();
+        if(!m) return _echec('la requete de media du dossier est introuvable');
+        const pad=_regle(m,/scroll-area>\.pad$/);
+        if(!pad) return _echec('la regle de .pad a disparu');
+        if(pad.style.display!=='block')
+          return _echec('.pad est encore en « '+pad.style.display+' » : l\'onglet entier retombe dans une colonne');
+        const vue=_regle(m,/\.ccd-vue\.actif$/);
+        if(!vue) return _echec('aucune regle ne met l\'onglet actif en colonnes');
+        if(vue.style.display!=='grid')
+          return _echec('l\'onglet actif n\'est pas une grille : '+vue.style.display);
+        if(!/1fr\s+1fr/.test(vue.style.gridTemplateColumns||''))
+          return _echec('ce ne sont pas deux colonnes : '+vue.style.gridTemplateColumns);
+        // SANS align-items:start, chaque section s'etirerait a la hauteur de la
+        // plus haute de sa rangee et le dossier serait un damier de vides.
+        return vue.style.alignItems==='start'
+          ?true:_echec('align-items vaut « '+vue.style.alignItems+' » : les sections vont s\'etirer');})());
+
+      ok('SOUS 1025 PX, RIEN NE CHANGE : les regles larges sont dans la requete',(()=>{
+        // La consigne est explicite : la fiche etroite doit rester identique.
+        // Une seule de ces regles posee hors requete la modifierait partout.
+        //
+        // `.ccd-vue.actif{display:block}` EST LEGITIME hors requete : c'est elle
+        // qui montre l'onglet ouvert sur telephone. Ce qu'on traque, c'est la
+        // MISE EN COLONNES, la marge forcee et l'effacement des conteneurs
+        // vides — trois choses qui n'ont de sens que large.
+        const dehors=[];
+        for(const f of document.styleSheets){
+          let regles=null;
+          try{ regles=f.cssRules; }catch(e){ continue; }
+          for(const r of regles){
+            if(r.type!==CSSRule.STYLE_RULE||!r.selectorText) continue;
+            const sel=r.selectorText.replace(/\s*>\s*/g,'>');
+            if(/\.ccd-vue\.actif/.test(sel)&&r.style.display==='grid') dehors.push(sel+' {grid}');
+            if(/\.cc-sect-c>\*:last-child/.test(sel)) dehors.push(sel);
+            if(/\.ccd-vue>div:empty/.test(sel)) dehors.push(sel);
+          }
+        }
+        return dehors.length?_echec('hors requete de media : '+dehors.join(' ; ')):true;})());
+
+      ok('UN ONGLET A UN SEUL BLOC NE SE COUPE PAS EN DEUX',(()=>{
+        // Avec un bloc, la seconde colonne resterait vide sur toute la hauteur.
+        const z=document.querySelector('.ccd-vue[data-vue="lifestyle"]');
+        if(!z) return _echec('onglet de reference introuvable');
+        const etat=[...z.children].map(e=>e.style.display);
+        try{
+          // Un seul enfant visible.
+          [...z.children].forEach((e,i)=>{ e.style.display=i===0?'block':'none'; });
+          _ccdMajColonnes();
+          if(!z.hasAttribute('data-solo')) return _echec('un onglet a un bloc n\'est pas marque solo');
+          // Deux : la grille reprend.
+          if(z.children.length>1){
+            z.children[1].style.display='block';
+            _ccdMajColonnes();
+            if(z.hasAttribute('data-solo'))
+              return _echec('un onglet a deux blocs reste marque solo');
+          }
+          // Aucun bloc visible : solo aussi — une grille vide ne sert a rien.
+          [...z.children].forEach(e=>{ e.style.display='none'; });
+          _ccdMajColonnes();
+          return z.hasAttribute('data-solo')?true:_echec('un onglet vide n\'est pas marque solo');
+        } finally {
+          [...z.children].forEach((e,i)=>{ e.style.display=etat[i]; });
+          try{ _ccdMajColonnes(); }catch(e){}
+        }})());
+
+      ok('Le compte des blocs ne depend pas de l\'onglet ouvert',(()=>{
+        // offsetParent est nul pour TOUS les blocs d'un onglet ferme : compter
+        // avec lui aurait declare chaque onglet solo des qu'on le quitte.
+        const s=String(_ccdMajColonnes);
+        if(/offsetParent/.test(s))
+          return _echec('le comptage passe par offsetParent');
+        return /getComputedStyle/.test(s)
+          ?true:_echec('le comptage ne lit pas le display calcule');})());
+    })();
     // ── LE PLANCHER NE DOIT PAS ECRASER LE CYCLE ─────────────────────────
     // Signale par Kevin le 25/08/2026 : « pas normal que ce soit les memes
     // chiffres en ON et OFF ». Les deux journees etaient relevees SEPAREMENT :
