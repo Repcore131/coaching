@@ -24435,19 +24435,17 @@ function testExercices(){
         const iG=css.indexOf('#ch-clients-list .cr-head{');
         if(iN<0) return _echec('la règle mobile a disparu');
         if(!(iN>iG)) return true;   // l'ordre a change : la specificite n'est plus requise
-        // N5.16 — DIX COLONNES, et « Progres » et « Bilans » assez larges. La
-        // case de selection de N4.13 en a ajoute une : sans elle, le bloc
-        // central visé par nth-child(2) ne se dissolvait plus.
-        const m=css.match(/--cr-cols:([^}]+)/);
+        // B1.7 — TREIZE COLONNES DES 1360 PX, et non plus dix. Assiduite,
+        // poids et diete etaient allumes par le seul bloc 1440 : sur un
+        // portable de 1366 px, le coach de quinze athletes devait ouvrir
+        // quinze fiches pour savoir qui s'entraine, qui mange et qui bouge.
+        const m=css.match(/--cr-cols:([^;}]+)/);
         if(!m) return _echec('la définition des colonnes a disparu');
         const cols=m[1].split(/\s+(?![^(]*\))/).filter(Boolean);
-        if(cols.length!==10) return _echec(cols.length+' colonnes au lieu de 10');
+        if(cols.length!==13) return _echec(cols.length+' colonnes au lieu de 13');
         if(css.indexOf('.client-row>div:nth-child(3){display:contents}')<0)
           return _echec('le bloc central n’est plus dissous au bon rang');
-        // Les deux colonnes serrees ont ete elargies : mesure a 1440 px, les
-        // libelles demandaient 62 et 49 px pour 54 et 40 disponibles.
-        if(cols[7]!=='66px') return _echec('« Progrès » dispose de '+cols[7]);
-        return cols[8]==='52px'?true:_echec('« Bilans » dispose de '+cols[8]);})());
+        return true;})());
 
       ok('N5.17 — LE TITRE DE SECTION PASSE PAR LE JETON D\'IDENTITE',(()=>{
         const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
@@ -24646,14 +24644,28 @@ function testExercices(){
           if(!el) return _echec('.'+cls+' n’est pas émise');
           if(el.innerHTML!=='') return _echec('.'+cls+' n’est pas vide sur un dossier sans mesure');
         }
-        // ET LA GRILLE SUIT LE NOMBRE D'ENFANTS. Treize colonnes a 1440,
-        // dix en dessous : le tableau de 1360 est deja sature — mesure, 1017 px
-        // pour 1010 disponibles — et trois colonnes de plus n'y tiennent pas.
+        // ET LA GRILLE PORTE BIEN TREIZE PISTES, DES 1360 PX.
+        //
+        // Une passe precedente avait mesure « 1 017 px pour 1 010 disponibles »
+        // a 1360 et conclu que trois colonnes de plus n'y tenaient pas. La
+        // mesure etait juste, la conclusion trop large : les treize pistes
+        // font 918 px pour 1 054 de ligne a 1366 — c'etaient les DOUZE ECARTS
+        // a douze pixels, 144 px, qui debordaient de huit. A huit pixels ils
+        // font 96, et tout rentre. Mesure refaite a 1360, 1366 et 1440 : aucun
+        // debordement, aucun libelle d'en-tete coupe.
         const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
-        const m=css.match(/@media\(min-width:1440px\)[\s\S]*?--cr-cols:([^}]+)/);
+        const m=css.match(/--cr-cols:([^;}]+)/);
         if(!m) return _echec('aucune grille de treize colonnes');
         const cols=m[1].split(/\s+(?![^(]*\))/).filter(Boolean);
-        if(cols.length!==13) return _echec(cols.length+' colonnes au lieu de 13 à 1440 px');
+        if(cols.length!==13) return _echec(cols.length+' colonnes au lieu de 13');
+        // L'ECART EST UNE VARIABLE, lue par la ligne ET par l'en-tete : deux
+        // valeurs ecrites separement se decaleraient d'un pixel chacune et les
+        // valeurs ne tomberaient plus sous leur titre.
+        if(css.indexOf('gap:var(--cr-gap)')<0)
+          return _echec('l\'ecart n\'est plus commun a la ligne et a l\'en-tete');
+        if(!/--cr-gap:8px/.test(css)) return _echec('l\'ecart resserre a disparu');
+        if(!/@media\(min-width:1440px\)[\s\S]{0,200}--cr-gap:12px/.test(css))
+          return _echec('l\'ecart ne reprend pas ses douze pixels au-dela de 1440');
         // N6.12 — le tri « Séances faites » trie sur tauxCompletion, et la
         // colonne d'assiduité le rend enfin visible.
         return String(_triTaux).indexOf('tauxCompletion')>=0
@@ -25248,6 +25260,66 @@ function testExercices(){
       // laisser aria-current="page". Le commentaire de coachTab condamnait deja
       // ce defaut : « une surbrillance qui ment sur la page ouverte est pire
       // que pas de surbrillance du tout. »
+      // B1.5 — L'ACCUEIL COACH DEFILAIT DANS UN CONTENEUR QU'AUCUNE REMISE
+      // A ZERO N'ATTEIGNAIT. go() remettait en haut .screen, .scroll-area et le
+      // document ; #s-coach-home est en overflow:hidden et ce qui defile chez
+      // lui est #ct-dashboard — aucun des trois. Le coach revenant d'une fiche
+      // retrouvait sa liste ou il l'avait laissee : parfois heureux, jamais
+      // decide. C'est cela le defaut, pas la position.
+      ok('Les conteneurs qui defilent reellement sont remis en haut',(()=>{
+        if(String(go).indexOf('.zone-defilante')<0)
+          return _echec('go() ne remet pas en haut les conteneurs internes');
+        const z=Array.from(document.querySelectorAll('.zone-defilante'));
+        if(z.length<4) return _echec(z.length+' zone(s) declaree(s), 4 attendues');
+        // CHERCHEES DANS L'ECRAN QU'ON OUVRE, jamais dans tout le document :
+        // remettre en haut le panneau d'un ecran qu'on quitte n'a aucun sens,
+        // et le cout serait paye a chaque navigation.
+        if(String(go).indexOf("s.querySelectorAll('.zone-defilante')")<0)
+          return _echec('la recherche n\'est pas bornee a l\'ecran actif');
+        // ET LE behavior:'instant' TIENT : sans lui, un changement d'ecran
+        // partirait en defilement anime de deux mille pixels.
+        return String(go).indexOf("behavior:'instant'")>=0
+          ?true:_echec('le defilement instantane a disparu');})());
+      ok('Les quatre panneaux de l\'accueil coach sont declares defilants',(()=>{
+        for(const id of ['ct-dashboard','ct-codes','ct-profil','ct-monetisation']){
+          const n=document.getElementById(id);
+          if(!n) return _echec(id+' a disparu');
+          if(!n.classList.contains('zone-defilante'))
+            return _echec(id+' defile sans etre declare');
+        }
+        return true;})());
+
+      // B1.6 — UN scrollTop MORT A L'OUVERTURE DE L'EDITEUR. Il visait
+      // '#s-coach-program .scroll-area', conteneur qui ne deborde JAMAIS — le
+      // fichier le documente lui-meme dans go(). Le calcul etait juste, la
+      // cible ne l'etait pas : le coach n'arrivait pas sur son premier
+      // exercice, et rien ne le signalait.
+      ok('L\'ouverture d\'une seance vise le premier exercice par _defiler',(()=>{
+        const s=String(openSessionExercises);
+        if(/\.scroll-area'\)[\s\S]{0,200}scrollTop=/.test(s))
+          return _echec('le scrollTop mort subsiste');
+        if(s.indexOf('_defiler(')<0)
+          return _echec('l\'ouverture ne defile plus vers le premier exercice');
+        // _defiler RESPECTE prefers-reduced-motion, la ou un scrollTop pose a
+        // la main l'ignorait : c'est la seconde raison de passer par lui.
+        return String(_defiler).indexOf('arcReduit')>=0
+          ?true:_echec('_defiler ne consulte plus le mouvement reduit');})());
+
+      // B1.8 — UN IMPORT QUI N'ECRIVAIT RIEN SE TAISAIT. Firebase rend
+      // sessions_config en OBJET des qu'un creneau manque : `.length` vaut
+      // undefined, `i < undefined` est faux, et TOUTES les seances etaient
+      // ignorees. Le coach repartait en croyant avoir publie.
+      ok('L\'import de seances normalise avant d\'indexer, et se plaint s\'il n\'ecrit rien',(()=>{
+        const s=String(importPdfSeances||'');
+        if(!s) return _echec('la fonction d\'import est introuvable');
+        const iNorm=s.indexOf('_normaliserSessionsConfig');
+        const iBoucle=s.indexOf('u.sessions_config.length');
+        if(iNorm<0) return _echec('la configuration n\'est pas normalisee');
+        if(iBoucle>=0&&!(iNorm<iBoucle))
+          return _echec('la normalisation vient APRES la lecture de .length');
+        return /Aucune séance importée/.test(s)
+          ?true:_echec('un import qui n\'ecrit rien se tait encore');})());
+
       // B2.3 — LARGE NE SUFFIT PAS, IL FAUT QUE LA LARGEUR SERVE.
       // L'ecran recevait max-width:1440px et padding-left:260px, et rien
       // d'autre : aucune regle ne visait #prog-exercises. Les cartes

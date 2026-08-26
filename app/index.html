@@ -552,7 +552,32 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
        mesure faite dans la police reelle, a 10,5 px et 1,1 px d'interlettrage,
        ils demandaient 62 et 49. Les vingt-quatre pixels sont pris sur les
        MINIMUMS des colonnes souples, qui en avaient de reste. */
-    --cr-cols:18px 44px minmax(140px,1.3fr) minmax(120px,1.1fr) minmax(90px,1.2fr) minmax(78px,.8fr) 66px 66px 52px 120px}
+    /* B1.7 — TREIZE COLONNES DES 1360 PX, ET NON 1440.
+       Assiduite, poids et diete etaient allumes par le seul bloc 1440 px. Sur
+       un portable de 1366 px — la definition la plus repandue du parc PC — le
+       coach de quinze athletes devait ouvrir quinze fiches pour savoir qui
+       s'entraine, qui mange et qui bouge. Les trois valeurs etaient pourtant
+       deja calculees.
+       LES PISTES DU BLOC 1440 PX, REPRISES A L'IDENTIQUE : elles ont ete
+       mesurees pour treize colonnes, et les recalculer ici en donnerait deux
+       jeux a tenir. A 1360 px les colonnes souples se resserrent d'autant —
+       c'est ce que `minmax` est fait pour faire, et leurs minimums tiennent. */
+    --cr-cols:18px 44px minmax(124px,1.3fr) minmax(106px,1.1fr) minmax(80px,1.2fr) minmax(70px,.8fr) 58px 74px 52px 66px 66px 52px 108px;
+    /* L'ECART, ET C'EST LUI QUI MANQUAIT. Les treize pistes font 918 px a
+       1366 — mesure — pour 1 054 px de ligne : elles tiennent largement. Ce
+       sont les DOUZE ECARTS a douze pixels, 144 px, qui faisaient deborder de
+       huit pixels. A huit, ils font 96 et la ligne retombe a 1 014 pour 1 054.
+       Une passe precedente avait mesure « 1 017 px pour 1 010 disponibles » et
+       conclu que trois colonnes de plus ne tenaient pas a 1360. La mesure
+       etait juste, la conclusion trop large : c'etait l'ecart qu'il fallait
+       reprendre, pas les colonnes.
+       HUIT PIXELS SEPARENT ENCORE DEUX VALEURS, et aucun libelle d'en-tete ne
+       se coupe — verifie a 1360 et a 1366. Au-dela de 1440 l'ecart revient a
+       douze : la place y est, et rien n'oblige a serrer. */
+    --cr-gap:8px}
+  body:has(#s-coach-home.active) #ch-clients-list .cr-assidu,
+  body:has(#s-coach-home.active) #ch-clients-list .cr-poids,
+  body:has(#s-coach-home.active) #ch-clients-list .cr-diete{display:block}
   body:has(#s-coach-home.active) #ch-clients-list .client-row{
     display:grid;
     /* NEUF colonnes depuis les trois cellules de mesure. Le compte DOIT suivre
@@ -566,7 +591,7 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
        definition passe dans une variable, que la ligne ET l'en-tete lisent —
        impossible de les faire diverger en en modifiant une seule. */
     grid-template-columns:var(--cr-cols);
-    align-items:center;gap:12px;box-shadow:none;border-radius:0 3px 3px 0;
+    align-items:center;gap:var(--cr-gap);box-shadow:none;border-radius:0 3px 3px 0;
     margin-bottom:0;border-bottom:1px solid #1e1e1e}
   /* LE BLOC CENTRAL EST LE TROISIEME ENFANT depuis que la case de selection
      ouvre la ligne. Vise au deuxieme rang, il ne se dissolvait plus : ses
@@ -596,7 +621,7 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
        plus bas et rend 14 px de retrait, 2 px de filet d'etat a gauche et
        1 px de bordure a droite. L'en-tete les reprend a l'identique, en
        transparent pour ne rien dessiner. */
-    display:grid;grid-template-columns:var(--cr-cols);gap:12px;
+    display:grid;grid-template-columns:var(--cr-cols);gap:var(--cr-gap);
     padding:0 14px 7px;border-left:2px solid transparent;
     border-right:1px solid transparent;
     font-size:10.5px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;
@@ -613,12 +638,14 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
    treize colonnes en demandent 1076. Le seuil est donc celui de la place
    reelle, pas un chiffre rond.
    Entre 1360 et 1439, le tableau reste celui de dix colonnes, inchange. */
+/* B1.7 — LES TREIZE COLONNES SONT MONTEES DANS LE BLOC 1360 PX, qui les
+   allume donc 80 px plus tot : sur un portable de 1366 px, la definition la
+   plus repandue du parc PC, le coach voit enfin qui s'entraine, qui mange et
+   qui bouge sans ouvrir quinze fiches.
+   IL NE RESTE ICI QUE L'ECART. Au-dela de 1440 px la place est la, et rien
+   n'oblige a serrer les colonnes a huit pixels. */
 @media(min-width:1440px){
-  body:has(#s-coach-home.active) #ch-clients-list{
-    --cr-cols:18px 44px minmax(124px,1.3fr) minmax(106px,1.1fr) minmax(80px,1.2fr) minmax(70px,.8fr) 58px 74px 52px 66px 66px 52px 108px}
-  body:has(#s-coach-home.active) #ch-clients-list .cr-assidu,
-  body:has(#s-coach-home.active) #ch-clients-list .cr-poids,
-  body:has(#s-coach-home.active) #ch-clients-list .cr-diete{display:block}
+  body:has(#s-coach-home.active) #ch-clients-list{--cr-gap:12px}
 }
 
 /* ====== GRAIN TEXTURE GLOBAL ====== */
@@ -4628,7 +4655,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- Tab panels -->
-    <div id="ct-dashboard" style="display:flex;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <div id="ct-dashboard" class="zone-defilante" style="display:flex;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <!-- N1.10 — LA LISTE D ATHLETES REMONTE. Elle etait le quatorzieme et
              dernier bloc du panneau : mille pixels la precedaient, dont trois
@@ -4750,7 +4777,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
     </div>
 
-    <div id="ct-codes" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <div id="ct-codes" class="zone-defilante" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
         <h2 style="margin-bottom:4px">Codes accès élèves</h2>
@@ -4827,7 +4854,7 @@ const COACH_PHOTO='icons/coach.jpg';
          cela ne parle d'argent, d'ou la separation d'avec PAIEMENTS.
          Rempli par loadMonetisationTab, appelee par les deux onglets : elle
          cherche ses elements par identifiant, sans se soucier du panneau. -->
-    <div id="ct-profil" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <div id="ct-profil" class="zone-defilante" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
         <!-- 🏷️ Identité coach / team -->
@@ -4975,7 +5002,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
     </div>
 
-    <div id="ct-monetisation" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <div id="ct-monetisation" class="zone-defilante" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <!-- N1.17 — RANGE PAR SUJET, PAS PAR ECRAN. Ce panneau melangeait huit
              sujets sans rapport : le tunnel d acquisition, l abonnement du coach,
@@ -11287,6 +11314,24 @@ function go(id){
     // débordement à `.scroll-area`, c'est elle qu'il faudra remettre en haut.
     s.scrollTop=0;
     try{ const _z=s.querySelector('.scroll-area'); if(_z) _z.scrollTop=0; }catch(_e){}
+    // B1.5 — ET LES CONTENEURS QUI DEFILENT REELLEMENT, LE CAS ECHEANT.
+    //
+    // Les trois remises a zero ci-dessus ne touchaient pas l'accueil coach :
+    // #s-coach-home est en overflow:hidden, et ce qui defile chez lui est
+    // #ct-dashboard — ni .screen, ni .scroll-area, ni le document. Le coach
+    // qui revenait d'une fiche athlete retrouvait sa liste a la profondeur ou
+    // il l'avait laissee. Parfois heureux, jamais decide : c'est cela le
+    // defaut, et non la position elle-meme.
+    //
+    // UNE CLASSE PLUTOT QUE L'IDENTIFIANT DU PANNEAU. Quatre panneaux defilent
+    // sur cet ecran et un cinquieme s'ajoutera : la classe dit ce qu'ils sont,
+    // et le prochain en herite sans qu'on revienne ici. Elle est cherchee DANS
+    // l'ecran qu'on ouvre — jamais dans tout le document.
+    //
+    // MEME COMPORTEMENT QUE LE RESTE : on arrive en haut. C'est le choix
+    // deja fait pour .screen et pour le document, et deux regles opposees sur
+    // un meme geste seraient pires qu'une regle qu'on discute.
+    try{ s.querySelectorAll('.zone-defilante').forEach(_z=>{ _z.scrollTop=0; }); }catch(_e){}
     try{ window.scrollTo({top:0,left:0,behavior:'instant'}); }
     catch(_e){ try{ window.scrollTo(0,0); }catch(_e2){} }
   }
@@ -27846,10 +27891,24 @@ function openSessionExercises(idx){
   go('s-coach-program');
   _progExDirty=false;
   }catch(e){ return _echecOuvertureEditeur(e); }
+  // B1.6 — CE DEFILEMENT NE SE PRODUISAIT PAS.
+  //
+  // Il calculait la position du premier exercice puis la posait sur
+  // '#s-coach-program .scroll-area'. Or ce conteneur ne deborde JAMAIS — le
+  // fichier le documente lui-meme dans go() : « c'est le DOCUMENT qui
+  // defile », .scroll-area est en min-height sans overflow et son scrollTop
+  // vaut toujours 0. Le calcul etait juste, la cible ne l'etait pas, et le
+  // coach qui ouvrait une seance n'arrivait pas sur son premier exercice.
+  //
+  // _defiler EST LE GESTE QUI MARCHE, et il est deja utilise a deux pas d'ici
+  // par _viserExercice. Il respecte prefers-reduced-motion — meme resultat,
+  // sans animation — la ou un scrollTop pose a la main l'ignorait.
   setTimeout(()=>{
-    const scrollArea=document.querySelector('#s-coach-program .scroll-area');
-    const exHeader=document.querySelector('#s-coach-program .exo-chip');
-    if(scrollArea&&exHeader){scrollArea.scrollTop=exHeader.closest('div')?.offsetTop-16||0;}
+    try{
+      const puce=document.querySelector('#s-coach-program .exo-chip');
+      const cible=puce&&puce.closest('div');
+      if(cible) _defiler(cible);
+    }catch(e){}
   },80);
 }
 
@@ -60769,6 +60828,16 @@ function importPdfSeances(){
   // Contrôle d'appartenance : soi-même ou un élève de son propre coaching uniquement
   if(u.email!==currentUser?.email&&u.coachId!==currentUser?.id){toast('Élève introuvable ou non autorisé','var(--orange)');return;}
   if(!u.sessions_config) u.sessions_config=Array.from({length:7},(_,i)=>({day:DAYS[i],name:'',exercises:[],active:false,notes:''}));
+  // B1.8 — LA CONFIGURATION EST NORMALISEE AVANT D'ETRE INDEXEE.
+  //
+  // Firebase rend sessions_config sous forme d'OBJET des qu'un creneau manque :
+  // {0:…, 3:…}. `.length` vaut alors undefined, `i < undefined` est faux, et la
+  // boucle ci-dessous ignorait TOUTES les seances — sans erreur, sans message,
+  // sans rien. Le coach importait un programme et repartait en croyant l'avoir
+  // publie. Le fichier dispose deja de _normaliserSessionsConfig, utilise a
+  // quatre endroits pour exactement ce risque : c'est le cinquieme.
+  try{ _normaliserSessionsConfig(u); }catch(e){}
+  let _ecrites=0;
   seances.forEach((s,i)=>{
     if(i<u.sessions_config.length){
       u.sessions_config[i].name=s.name;
@@ -60776,8 +60845,16 @@ function importPdfSeances(){
       u.sessions_config[i].active=true;
       // Séance issue du PDF du coach : publiée, donc plus un exemple.
       delete u.sessions_config[i]._essai;delete u.sessions_config[i]._foundation;
+      _ecrites++;
     }
   });
+  // ET UN IMPORT QUI N'ECRIT RIEN LE DIT. Se taire etait le vrai defaut : la
+  // normalisation ci-dessus couvre le cas connu, elle ne couvre pas celui
+  // qu'on n'a pas vu.
+  if(!_ecrites){
+    toast('Aucune séance importée : la configuration de cet athlète n’a pas pu être lue.','var(--red)');
+    return;
+  }
   u.updatedAt=Date.now();
   users[email]=u;
   let ok=DB.set('users',users);
