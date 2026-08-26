@@ -9351,6 +9351,12 @@ const CLOUD={
     // Jamais montée, donc absente du dossier distant : sans cette retenue,
     // l'écrasement l'effacerait à chaque réveil.
     const locGross=loc?loc.grossesse:undefined;
+    // Les champs d'identite et de vitrine du coach. Ils MONTENT — la liste
+    // CHAMPS_PROFIL_COACH les nomme — mais un dossier pousse par un appareil
+    // qui ne les portait pas revient sans eux et les efface en arrivant.
+    const locProfil={};
+    if(loc) for(const k of CLOUD.CHAMPS_PROFIL_COACH)
+      if(loc[k]!==undefined&&loc[k]!==''&&loc[k]!==null) locProfil[k]=loc[k];
     if(!loc||((cloudUser.updatedAt||0)>=(loc.updatedAt||0))){
       merged[email]={...cloudUser};
       delete merged[email].pwd;delete merged[email].pwdHash;
@@ -9364,6 +9370,11 @@ const CLOUD={
     if(locContra!==undefined&&merged[email]&&(merged[email].cycle||{}).contraception===undefined){
       merged[email].cycle={...(merged[email].cycle||{}),contraception:locContra};
     }
+    // ABSENT N'EST PAS VIDE : on ne repose que ce que le distant IGNORE. Un
+    // champ vide cote distant est un champ efface volontairement ailleurs, et
+    // cet effacement doit atteindre cet appareil.
+    if(merged[email]) for(const k in locProfil)
+      if(merged[email][k]===undefined) merged[email][k]=locProfil[k];
   },
   // Les blocs masqués vivent hors de users/ : sans cette lecture, un athlète
   // qui change d'appareil retrouvait son dossier SANS eux — exactement ce que
@@ -10443,7 +10454,19 @@ window.onload=()=>{
         currentUser=sess;
         // Données locales d'abord — la sync cloud se fait en arrière-plan (accueil instantané)
         const users=DB.get('users')||{};
-        if(users[currentUser.email]) currentUser=users[currentUser.email];
+        // FUSION ET NON REMPLACEMENT, la meme regle que la boucle de synchro,
+        // qui la dit deja en toutes lettres. La carte des utilisateurs peut
+        // avoir perdu un champ qu'une synchro maladroite a efface pendant que
+        // la session, elle, le gardait : remplacer ferait gagner la version
+        // amputee a chaque rechargement.
+        // L'ordre compte : la carte est la reference — c'est elle que les
+        // ecritures visent — et la session ne comble que ce qui y manque.
+        if(users[currentUser.email]){
+          const _sess=currentUser;
+          currentUser=users[currentUser.email];
+          for(const k in _sess)
+            if(currentUser[k]===undefined&&_sess[k]!==undefined) currentUser[k]=_sess[k];
+        }
         // age est une VUE de birthdate : figé à l'inscription, il annoncerait
         // encore 16 ans à quelqu'un qui en a 19. On le recalcule à chaque
         // démarrage quand la date de naissance est connue.

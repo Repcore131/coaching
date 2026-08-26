@@ -24527,6 +24527,62 @@ function testExercices(){
           sv.forEach(e=>e.classList.add('active'));
         }})());
 
+      ok('LE PROFIL DU COACH SURVIT A UNE DESCENTE QUI L\'IGNORE',(()=>{
+        // Signalé par Kevin le 26/08/2026 : « j'ai beau enregistrer, ça
+        // s'efface après quelque temps ». _mergeUser REMPLACE le dossier local
+        // par le distant dès que celui-ci est aussi récent ; un dossier poussé
+        // par un appareil qui ne portait pas ces champs revenait sans eux.
+        const j=Date.now();
+        const local={id:'C1',email:'cp@t.fr',role:'coach',fname:'K',lname:'G',
+          updatedAt:j-1000,teamName:'TEAM',catchphrase:'phrase',
+          bio:'parcours',vision:'méthode',bilans:[],sessions:[]};
+        const distant={id:'C1',email:'cp@t.fr',role:'coach',fname:'K',lname:'G',
+          updatedAt:j,bilans:[],sessions:[]};   // PLUS RECENT : il gagne
+        const m={'cp@t.fr':JSON.parse(JSON.stringify(local))};
+        CLOUD._mergeUser(m,'cp@t.fr',JSON.parse(JSON.stringify(distant)));
+        for(const k of ['teamName','catchphrase','bio','vision'])
+          if(m['cp@t.fr'][k]!==local[k])
+            return _echec(k+' effacé par la descente : '+JSON.stringify(m['cp@t.fr'][k]));
+        // ABSENT N'EST PAS VIDE. Un champ vide côté distant est un champ que
+        // quelqu'un a effacé volontairement ailleurs, et cet effacement doit
+        // atteindre cet appareil — sinon on ne pourrait plus rien vider.
+        const efface=Object.assign({},distant,{teamName:''});
+        const m2={'cp@t.fr':JSON.parse(JSON.stringify(local))};
+        CLOUD._mergeUser(m2,'cp@t.fr',efface);
+        if(m2['cp@t.fr'].teamName!=='')
+          return _echec('un effacement volontaire est annulé : '+JSON.stringify(m2['cp@t.fr'].teamName));
+        // Et le champ que le distant ignore, lui, est toujours gardé.
+        if(m2['cp@t.fr'].vision!==local.vision)
+          return _echec('un champ absent du distant a été perdu');
+        // LA LISTE EST CELLE QUI MONTE, pas une seconde écrite à la main : une
+        // vitrine ajoutée demain sera couverte sans qu'on y revienne.
+        const s=String(CLOUD._mergeUser);
+        if(s.indexOf('CHAMPS_PROFIL_COACH')<0)
+          return _echec('la retenue recopie la liste au lieu de la lire');
+        for(const k of ['teamName','catchphrase','bio','vision','coachPhoto','photoVitrine'])
+          if(CLOUD.CHAMPS_PROFIL_COACH.indexOf(k)<0)
+            return _echec(k+' n’est pas dans la liste qui monte');
+        return true;})());
+
+      ok('LE DEMARRAGE FUSIONNE LA SESSION ET LA CARTE, il ne remplace pas',(()=>{
+        // La boucle de synchro fait déjà un Object.assign et le dit : « fusion
+        // et non remplacement : currentUser porte des champs de travail que le
+        // distant ignore ». Le démarrage ne suivait pas cette règle — la carte
+        // amputée gagnait à chaque rechargement, d'où « après quelque temps ».
+        const p=_prodSrc();
+        if(/if\(users\[currentUser\.email\]\) currentUser=users\[currentUser\.email\];/.test(p))
+          return _echec('le démarrage remplace encore la session par la carte');
+        if(p.indexOf('FUSION ET NON REMPLACEMENT')<0)
+          return _echec('la règle n’est pas écrite là où elle s’applique');
+        // LA CARTE RESTE LA REFERENCE : c'est elle que les écritures visent, et
+        // la session ne comble QUE ce qui y manque.
+        const i=p.indexOf('FUSION ET NON REMPLACEMENT');
+        const bloc=p.slice(i,i+900);
+        if(bloc.indexOf('currentUser=users[currentUser.email]')<0)
+          return _echec('la carte n’est plus la référence');
+        return /currentUser\[k\]===undefined/.test(bloc)
+          ?true:_echec('la session écrase la carte au lieu de la compléter');})());
+
       ok('LA BARRE LATERALE RAMENE AU TABLEAU DE BORD depuis n\'importe quel ecran coach',(()=>{
         // Signale par Kevin le 26/08/2026 : depuis « Charges articulaires »,
         // cliquer PROFIL, CODES ACCES ou PAIEMENTS ne faisait RIEN. Les quatre
