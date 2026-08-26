@@ -24156,7 +24156,11 @@ function testExercices(){
         if(_rirPrescrit({rir:'3'})!=='3') return _echec('l’ancien champ n’est plus lu');
         if(_rirPrescrit({rirCible:'1',rir:'4'})!=='1') return _echec('l’ancien champ prime sur le nouveau');
         // UN EXERCICE NEUF NAIT SANS CONSIGNE.
-        if(String(addExercise).indexOf("rirCible:''")<0)
+        // Le champ est `rir`, celui que l'apercu de seance et la fiche
+        // imprimable lisent depuis toujours. `rirCible`, ajoute puis retire le
+        // 26/08/2026, faisait DOUBLON avec lui dans la meme carte : deux
+        // champs, meme libelle, deux destinations.
+        if(String(addExercise).indexOf("rir:''")<0)
           return _echec('un exercice neuf ne porte pas le champ');
         // LA COLONNE DE LA FICHE IMPRIMABLE N'APPARAIT QUE REMPLIE.
         const sans={sessions_config:[{day:'Lundi',name:'H',active:true,
@@ -24445,6 +24449,83 @@ function testExercices(){
         // directement dans progEx.
         return /progEx\[\$\{i\}\]\.name=this\.value\.toUpperCase\(\)/.test(r)
           ?true:_echec('la saisie manuelle du nom a changé');})());
+
+      ok('UN SEUL CHAMP « RIR CIBLE », et c\'est un menu deroulant',(()=>{
+        // Defaut introduit par N6.3, signale par Kevin : un champ en saisie
+        // libre existait DEJA, ecrivant ex.rir ; N6.3 en a ajoute un second, en
+        // menu deroulant, ecrivant ex.rirCible. Deux champs, meme libelle, deux
+        // destinations — le coach ne pouvait pas savoir lequel comptait.
+        const sv=[...document.querySelectorAll('.screen.active')];
+        const svEx=progEx, svU=currentUser;
+        try{
+          currentUser={id:'C1',email:'c@t.fr',role:'coach'};
+          progEx=[{name:'BENCH COMP',series:5,reps:'4',repos:'3 min'}];
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          document.getElementById('s-coach-program').classList.add('active');
+          renderProgEx();
+          const carte=document.querySelector('#prog-exercises [data-px-idx="0"]');
+          if(!carte) return _echec('la carte ne se rend pas');
+          const rir=[...carte.querySelectorAll('label')].filter(l=>/^RIR cible/.test(l.textContent.trim()));
+          if(rir.length!==1) return _echec(rir.length+' champs « RIR cible » dans la même carte');
+          const champ=rir[0].parentElement.querySelector('select,input');
+          if(!champ||champ.tagName!=='SELECT')
+            return _echec('l’intensité se tape encore à la main');
+          // IL ECRIT LE CHAMP ETABLI, celui que l'apercu de seance et la fiche
+          // imprimable lisent depuis toujours.
+          if((champ.getAttribute('onchange')||'').indexOf('.rir=')<0)
+            return _echec('le menu n’écrit pas dans le champ établi');
+          // UNE VALEUR HORS ECHELLE DEJA ECRITE EST GARDEE, jamais effacee.
+          const h=_optionsRirCible('2-3');
+          if(h.indexOf('2-3')<0) return _echec('une valeur hors échelle est perdue');
+          if(h.indexOf('hors échelle')<0) return _echec('elle n’est pas signalée');
+          if(_optionsRirCible('2').indexOf('hors échelle')>=0)
+            return _echec('une valeur de l’échelle est dite hors échelle');
+          return true;
+        } finally {
+          progEx=svEx; currentUser=svU;
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          sv.forEach(e=>e.classList.add('active'));
+        }})());
+
+      ok('LA TECHNIQUE D\'INTENSIFICATION : menu pour le coach, lecture pour l\'athlete',(()=>{
+        // Regle posee par Kevin le 25/08/2026, et rappelee le 26 : le coach
+        // choisit dans une liste, l'athlete qui veut une technique la tape
+        // dans la description.
+        const sv=[...document.querySelectorAll('.screen.active')];
+        const svEx=progEx, svU=currentUser;
+        try{
+          progEx=[{name:'BENCH COMP',series:5,reps:'4',repos:'3 min'}];
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          document.getElementById('s-coach-program').classList.add('active');
+          const menuPour=role=>{
+            currentUser={id:'U',email:'u@t.fr',role};
+            renderProgEx();
+            const carte=document.querySelector('#prog-exercises [data-px-idx="0"]');
+            const lab=[...carte.querySelectorAll('label')].find(l=>/^Technique/.test(l.textContent.trim()));
+            if(!lab) return null;
+            return lab.parentElement.querySelector('select');
+          };
+          const mc=menuPour('coach');
+          if(!mc) return _echec('le coach n’a aucun menu de technique');
+          if(mc.options.length<10) return _echec('le catalogue est vide : '+mc.options.length+' options');
+          if(menuPour('athlete')) return _echec('l’athlète a le catalogue');
+          // IL EST AVEC LA PRESCRIPTION D'EFFORT, pas apres le materiel : c'est
+          // ce qui le rendait introuvable.
+          currentUser={id:'U',email:'u@t.fr',role:'coach'};
+          renderProgEx();
+          const carte=document.querySelector('#prog-exercises [data-px-idx="0"]');
+          const grp=[...carte.querySelectorAll('.px-grp')];
+          const iExec=grp.findIndex(g=>/EXÉCUTION/.test(g.textContent));
+          const lab=[...carte.querySelectorAll('label')].find(l=>/^Technique/.test(l.textContent.trim()));
+          if(iExec<0||!lab) return _echec('la carte a changé de structure');
+          if(!(lab.compareDocumentPosition(grp[iExec])&Node.DOCUMENT_POSITION_FOLLOWING))
+            return _echec('la technique est encore rangée sous EXÉCUTION');
+          return true;
+        } finally {
+          progEx=svEx; currentUser=svU;
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          sv.forEach(e=>e.classList.add('active'));
+        }})());
 
       ok('LA BARRE LATERALE RAMENE AU TABLEAU DE BORD depuis n\'importe quel ecran coach',(()=>{
         // Signale par Kevin le 26/08/2026 : depuis « Charges articulaires »,

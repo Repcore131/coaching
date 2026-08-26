@@ -25735,20 +25735,6 @@ function renderProgEx(){
           </div>
           <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" class="f-c f-sm"></div>
         </div>
-        <!-- N6.3 — L'INTENSITE CIBLE. Meme echelle que le RIR que l'athlete
-             saisit serie par serie : 0 est l'echec, 5 est tres facile. Le champ
-             vide vaut « pas de consigne », et c'est le defaut. -->
-        <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px">
-          <div>
-            <label style="margin-top:0">RIR cible</label>
-            <select onchange="_progExDirty=true;progEx[${i}].rirCible=this.value" class="f-c f-sm">
-              ${RIR_CIBLE_ECHELLE.map(o=>`<option value="${o.v}"${String(ex.rirCible||'')===o.v?' selected':''}>${o.lib}</option>`).join('')}
-            </select>
-          </div>
-          <div style="align-self:end">
-            <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;padding-bottom:9px">${escapeHtml(_direRirCible(ex.rirCible))}</div>
-          </div>
-        </div>
         <!-- CHARGE ET RIR CIBLES. Les deux étaient LUS depuis toujours —
              _apLigne les affiche dans l’aperçu de séance, PP_COLS en fait
              deux colonnes de la fiche imprimable — et ÉCRITS nulle part.
@@ -25768,10 +25754,30 @@ function renderProgEx(){
             <input value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg">
           </div>
           <div>
+            <!-- N6.3 — L'INTENSITE SE CHOISIT, elle ne se tape plus. Meme
+                 echelle que le RIR que l'athlete saisit serie par serie : 0 est
+                 l'echec, 5 est tres facile. Le champ vide vaut « pas de
+                 consigne », et c'est le defaut.
+                 UNE VALEUR HORS ECHELLE DEJA ECRITE EST GARDEE et signalee,
+                 jamais effacee : un « 2-3 » tape a la main avant ce lot ne doit
+                 pas disparaitre parce que la liste ne le connait pas. -->
             <label>RIR cible</label>
-            <input value="${escapeHtml(ex.rir||'')}" onchange="_progExDirty=true;progEx[${i}].rir=this.value" placeholder="Ex : 2">
+            <select onchange="_progExDirty=true;progEx[${i}].rir=this.value">
+              ${_optionsRirCible(ex.rir)}
+            </select>
+            ${_direRirCible(ex.rir)?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;margin-top:4px">${escapeHtml(_direRirCible(ex.rir))}</div>`:''}
           </div>
         </div>
+        <!-- LA TECHNIQUE D'INTENSIFICATION, AVEC LA PRESCRIPTION D'EFFORT.
+             Elle etait rangee sous EXECUTION, apres le tempo et le materiel :
+             le coach ne la trouvait pas. C'est une prescription d'effort, comme
+             le RIR cible juste au-dessus — elle dit combien on force, pas
+             comment on tient l'engin.
+             MENU DEROULANT POUR LE COACH, LECTURE SEULE POUR L'ATHLETE :
+             _selecteurTechnique s'en charge, et c'est la regle posee par Kevin
+             le 25/08/2026 — l'athlete qui veut une technique la tape dans la
+             description. -->
+        ${_selecteurTechnique(ex,i)}
         <div class="px-grp">EXÉCUTION</div>
         <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
         <div style="margin-bottom:8px">
@@ -25785,7 +25791,6 @@ function renderProgEx(){
           <label>Matériel</label>
           <input value="${escapeHtml(ex.materiel||'')}" onchange="_progExDirty=true;progEx[${i}].materiel=this.value" placeholder="Ex : haltères, banc incliné">
         </div>
-        ${_selecteurTechnique(ex,i)}
         ${_blocAvertissementContrainte(ex,i)}
         ${_ligneMuscles(ex,i)}
         <!-- Description technique -->
@@ -25981,15 +25986,24 @@ const RIR_CIBLE_SENS=Object.freeze({
   '4':'Quatre en réserve : travail léger, reprise ou décharge.',
   '5':'Cinq en réserve : très facile, échauffement ou récupération.'
 });
+// PURE. Les options du menu, la valeur courante toujours presente.
+function _optionsRirCible(courant){
+  const v=String(courant==null?'':courant).trim();
+  const connu=RIR_CIBLE_ECHELLE.some(o=>o.v===v);
+  const liste=RIR_CIBLE_ECHELLE.slice();
+  if(v&&!connu) liste.push({v,lib:v+' · hors échelle'});
+  return liste.map(o=>`<option value="${escapeHtml(o.v)}"${v===o.v?' selected':''}>${escapeHtml(o.lib)}</option>`).join('');
+}
 function _direRirCible(v){
   const k=String(v==null?'':v).trim();
   return RIR_CIBLE_SENS[k]||'';
 }
 function addExercise(){
-  // N6.3 — `rirCible` NAIT VIDE, comme description et videoUrl : un exercice
-  // neuf ne porte aucune consigne d'intensite tant que le coach n'en a pas
-  // ecrit une.
-  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:'',ss:false,methodeSeries:'',rirCible:''});
+  // N6.3 — `rir` NAIT VIDE, comme description et videoUrl : un exercice neuf
+  // ne porte aucune consigne d'intensite tant que le coach n'en a pas choisi
+  // une. C'est le champ etabli, celui que l'apercu de seance et la fiche
+  // imprimable lisent depuis toujours.
+  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:'',ss:false,methodeSeries:'',rir:''});
   _progExDirty=true;
   renderProgEx();
   // Scroll vers le nouvel exercice
