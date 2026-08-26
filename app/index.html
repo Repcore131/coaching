@@ -252,6 +252,18 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
    valeurs en inline a chaque rafraichissement, et sans lui le bloc large ne
    pourrait pas les reprendre. */
 #ch-sidebar{display:none!important}
+  /* N1.13 — LA ZONE MORTE ENTRE 1025 ET 1359 PX. La liste ne devient un
+     tableau qu'a 1360 ; entre les deux — 1280 x 800, la fenetre la plus
+     courante — la barre laterale prend 260 px et chaque ligne restait une
+     carte de 980 px de large pour un avatar de 44 px et sept lignes de
+     texte. Deux colonnes de cartes : la largeur sert, et le tableau garde
+     son seuil. Bloc a part, borne des deux cotes : il ne vaut QUE dans
+     l'intervalle, et le grand ecran retrouve son tableau intact. */
+  @media(min-width:1025px) and (max-width:1359px){
+    body:has(#s-coach-home.active) #ch-clients-list{
+      display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+    body:has(#s-coach-home.active) #ch-clients-list .client-row{margin-bottom:0}
+  }
 #coach-tabs-bar{display:flex!important}
 #s-coach-home{height:100vh;height:100dvh;overflow:hidden}
 
@@ -342,7 +354,7 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
 
      display:flex!important : la barre est eteinte par TROIS couches — la
      regle globale plus haut, l'attribut inline sur le noeud, et loadCoachHome
-     qui repose display:none toutes les 30 secondes. Une declaration author
+     qui repose display:none a chaque synchronisation de fond. Une declaration author
      !important passe devant l'inline, et devant l'autre !important puisqu'elle
      est plus specifique. AUCUNE ligne de JS n'a besoin de changer. */
   body:has(#s-coach-home.active) #ch-sidebar,
@@ -402,6 +414,27 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      duplication interdite. On eteint l'une pendant que l'autre est allumee.
      !important : loadCoachHome repose display:flex en inline. */
   body:has(#s-coach-home.active) #coach-tabs-bar{display:none!important}
+  /* N1.15 — LA MEME DESTINATION N'EST OFFERTE QU'UNE FOIS. La barre laterale
+     porte desormais les destinations de travail ; les memes boutons, au
+     milieu du panneau, feraient deux chemins vers un seul ecran. On eteint
+     l'un pendant que l'autre est allume — exactement ce que fait la regle de
+     #coach-tabs-bar juste au-dessus. Sous 1025 px, ou la barre n'existe pas,
+     ils restent la seule voie. */
+  body:has(#s-coach-home.active) .ch-nav-large{display:none}
+  /* N1.12 — L'EDITEUR D'EXERCICES, POUR LE COACH SEULEMENT. Le selecteur
+     porte l'attribut de contexte pose par _majCtxEditeur : un athlete qui
+     compose SA seance n'a pas cet attribut, et ne voit donc rien changer. */
+  body:has(#s-coach-program.active[data-ctx="coach"]){max-width:1440px}
+  body:has(#s-coach-program.active[data-ctx="coach"]) #ch-sidebar{
+    display:flex!important;position:fixed;top:0;bottom:0;
+    left:max(0px,calc(50% - 720px));width:260px;z-index:20;
+    overflow-y:auto;overscroll-behavior:contain}
+  body:has(#s-coach-program.active[data-ctx="coach"]) .screen.active{padding-left:260px}
+  /* N1.13 — LA ZONE MORTE ENTRE 1025 ET 1359 PX. La liste ne devient un
+     tableau qu'a 1360 ; entre les deux — 1280 x 800, la fenetre la plus
+     courante — la barre prenait 260 px et chaque ligne restait une carte de
+     980 px de large pour un avatar de 44 px et sept lignes de texte. Deux
+     colonnes de cartes : la largeur sert, et le tableau garde son seuil. */
 
   /* LA MESURE DE LECTURE, SUR LES NEUF ECRANS QUI VIENNENT D'ETRE ELARGIS.
      Mesure a 1440 px : la file de reprise servait des lignes de 112
@@ -1656,7 +1689,11 @@ html{scroll-behavior:smooth}
    c est le CSS qui decide. :has() est deja employe dans ce fichier. */
 .cc-sect:has(>.cc-sect-c:empty),
 .cc-sect:has(>.cc-sect-c[style*="display:none"]){display:none}
-/* LE CONTENEUR DE DEFILEMENT EST #s-coach-client>.scroll-area, et il commence
+/* CE N EST PAS .scroll-area QUI DEFILE, MAIS LE DOCUMENT — .screen est en
+   min-height sans height et .scroll-area en flex:1, voir le commentaire de
+   go(). Cette affirmation a coute deux scrollTop morts et un ecouteur pose
+   sur un element qui n emet jamais l evenement. Ce qui suit reste vrai : la
+   zone commence
    DEJA sous la topbar et sous #ccd-ancres : ce sont ses freres en colonne
    flex, ils ne recouvrent rien. Les 104 px decalaient la cible vers le bas
    d'une hauteur de barre entiere — le coach voyait encore la fin de la section
@@ -1844,7 +1881,9 @@ html{scroll-behavior:smooth}
 /* Memes valeurs que .btn-outline:active, rien de neuf. */
 .pf-chip:active{transform:scale(var(--arc-scale-charge))}
 /* ── LA BARRE D'ANCRES SE RESSERRE AU DEFILEMENT ─────────────────────────
-   Sur un ecran de 375 px, la topbar (52 px) et la barre d'ancres (46 px)
+   Sur un ecran de 375 px, la topbar (73 px mesures — le chiffre de 52 ecrit
+   ici decrivait une topbar disparue, et il a servi a caler la barre
+   d'onglets, qui passait donc dessous) et la barre d'onglets (46 px)
    mangeaient une centaine de pixels en permanence sans jamais en rendre un.
    padding, min-height et font-size declenchent bien un relayout : il est
    BORNE A CINQ PUCES SUR UNE SEULE LIGNE, jamais a la liste de 27 sections.
@@ -1853,6 +1892,14 @@ html{scroll-behavior:smooth}
 /* LES QUATRE VUES DE LA FICHE. Une seule est montee a la fois : les autres
    restent dans le document — leurs identifiants sont remplis par
    openClientDetail, qui ne sait rien des onglets et n'a pas a le savoir. */
+/* N1.15 — LES DESTINATIONS DE TRAVAIL DE LA BARRE LATERALE. Meme habillage
+   que les quatre onglets qu'elle portait deja, pour qu'un groupe ne se lise
+   pas comme un mecanisme different de l'autre. */
+.sb-lien{width:100%;text-align:left;padding:12px 14px;background:none;border:none;
+  border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;
+  font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;
+  letter-spacing:1px;display:flex;align-items:center;gap:10px}
+.sb-lien:hover{background:var(--surface-1);color:var(--text)}
 .ccd-vue{display:none}
 .ccd-vue.actif{display:block}
 /* LA PASTILLE DE SECURITE. Un onglet ferme ne doit jamais cacher un signal :
@@ -3759,9 +3806,23 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="font-size:var(--fs-xs);color:var(--text-dim);font-family:monospace;letter-spacing:1px" id="ch-code-sidebar"></div>
   </div>
   <div style="padding:12px 8px;flex:1">
+    <!-- N1.15 — DEUX GROUPES, SEPARES D'UN FILET. La barre ne menait qu'a des
+         REGLAGES : trois de ses quatre boutons sont des ecrans qu'un coach
+         ouvre quelques fois par an, pendant que ses destinations quotidiennes
+         vivaient ailleurs — deux boutons perdus au milieu du panneau, une puce
+         dans l'en-tete de la liste, et trois ecrans dans un volet ferme.
+         En haut ce qu'on ouvre tous les jours, en bas ce qu'on regle. -->
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:2px;font-weight:800;text-transform:uppercase;padding:0 14px 7px">Travail</div>
     <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--surface-1);border:none;border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
       ATHLÈTES
     </button>
+    <button onclick="openCoachPrograms()" class="sb-lien">MES PROGRAMMES</button>
+    <button onclick="loadFileReprise()" class="sb-lien">À RELANCER</button>
+    <button onclick="openDechargeGroupee()" class="sb-lien">DÉCHARGE GROUPÉE</button>
+    <button onclick="loadCoachActivite()" class="sb-lien">ACTIVITÉ</button>
+    <button onclick="loadCharges()" class="sb-lien">CHARGES ARTICULAIRES</button>
+    <div style="height:1px;background:#1a0000;margin:12px 6px"></div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:2px;font-weight:800;text-transform:uppercase;padding:0 14px 7px">Réglages</div>
     <button id="sb-tab-codes" onclick="coachTab('codes')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
       CODES ACCÈS
     </button>
@@ -4379,6 +4440,13 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Tab panels -->
     <div id="ct-dashboard" style="display:flex;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
+        <!-- N1.10 — LA LISTE D ATHLETES REMONTE. Elle etait le quatorzieme et
+             dernier bloc du panneau : mille pixels la precedaient, dont trois
+             qui ne demandent aucune action. Elle suit maintenant « A traiter »,
+             et ce qui ne s actionne pas est passe dessous. Les blocs eux-memes
+             n ont pas bouge d un caractere : ils sont ranges. La recherche, les
+             filtres et le pilotage restent HORS de #ch-clients-list — c est ce
+             conteneur que le rafraichissement reecrit. -->
         <div style="display:flex;gap:10px;margin-bottom:20px;padding-top:4px">
           <div class="metric-box"><div class="metric-val" id="ch-total">0</div><div class="metric-label">Athlètes</div></div>
           <div class="metric-box"><div class="metric-val" id="ch-active" style="color:var(--green)">0</div><div class="metric-label">Actifs 14 j</div></div>
@@ -4393,48 +4461,10 @@ const COACH_PHOTO='icons/coach.jpg';
              defiler pour voir ce qui l attend. Les cinq autres gardent leur
              ordre relatif entre eux. -->
         <div id="ch-todo"></div>
-        <div id="ch-paliers"></div>
         <!-- Invitations emises qui n ont pas abouti. Rempli par
              _rendreInvitations, appele par loadCoachHome. -->
         <div id="ch-invitations"></div>
-        <!-- Alerte anti-falaise et propositions de palier. Jamais bloquante,
-             jamais une bascule : elle DIT, le coach decide. -->
-        <div id="ch-alerte-palier"></div>
         <div id="ch-premiers-pas"></div>
-        <!-- Croissance hebdomadaire. Elle etait AU-DESSUS des notifications —
-             « la photo d'ensemble avant le detail de ce qui presse ». Ce lot
-             renverse ce choix : la photo d'ensemble ne demande rien, « A
-             traiter » si, et c'est ce qui doit se voir sans defiler.
-             Rempli par loadCoachHome. -->
-        <div id="ch-croissance"></div>
-        <button onclick="openCoachPrograms()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
-          <span>🗂️ MES PROGRAMMES (H/F)</span>
-          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
-        </button>
-        <button onclick="loadCharges()" class="content-card pil-lien" style="margin-bottom:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
-          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">CHARGES ARTICULAIRES</span>
-          <span id="ch-charges-av" style="font-size:var(--fs-xs);color:var(--sub)"></span>
-        </button>
-        <!-- TROIS ECRANS REMONTES DEPUIS LE VOLET DE PILOTAGE. « A relancer »,
-             « Activite du portefeuille » et « Decharge groupee » n'etaient
-             atteignables que par trois liens soulignes de onze pixels, a
-             l'interieur d'un volet FERME a chaque ouverture de l'application :
-             son etat ne vivait que dans _pilOuvert, jamais enregistre. Trois
-             ecrans complets pour un depliage. Ils prennent ici le rang de
-             « Mes programmes » et « Charges articulaires », et ont quitte le
-             volet — aucun lien n'est duplique. -->
-        <button onclick="loadFileReprise()" class="content-card pil-lien" style="margin-bottom:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
-          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">À RELANCER</span>
-          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
-        </button>
-        <button onclick="loadCoachActivite()" class="content-card pil-lien" style="margin-bottom:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
-          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">ACTIVITÉ DU PORTEFEUILLE</span>
-          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
-        </button>
-        <button onclick="openDechargeGroupee()" class="content-card pil-lien" style="margin-bottom:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
-          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">DÉCHARGE GROUPÉE</span>
-          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
-        </button>
         <!-- LE TITRE PREND SA PROPRE LIGNE. Cote a cote avec trois boutons, il
              passait a la ligne — « MES / ATHLETES » — et un titre coupe en deux
              n'est plus un titre. -->
@@ -4479,6 +4509,44 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
         </div>
         <div id="ch-clients-list"></div>
+        <div id="ch-paliers"></div>
+        <!-- Alerte anti-falaise et propositions de palier. Jamais bloquante,
+             jamais une bascule : elle DIT, le coach decide. -->
+        <div id="ch-alerte-palier"></div>
+        <!-- Croissance hebdomadaire. Elle etait AU-DESSUS des notifications —
+             « la photo d'ensemble avant le detail de ce qui presse ». Ce lot
+             renverse ce choix : la photo d'ensemble ne demande rien, « A
+             traiter » si, et c'est ce qui doit se voir sans defiler.
+             Rempli par loadCoachHome. -->
+        <div id="ch-croissance"></div>
+        <button onclick="openCoachPrograms()" class="content-card ch-nav-large" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
+          <span>🗂️ MES PROGRAMMES (H/F)</span>
+          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
+        </button>
+        <button onclick="loadCharges()" class="content-card ch-nav-large pil-lien" style="margin-bottom:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">CHARGES ARTICULAIRES</span>
+          <span id="ch-charges-av" style="font-size:var(--fs-xs);color:var(--sub)"></span>
+        </button>
+        <!-- TROIS ECRANS REMONTES DEPUIS LE VOLET DE PILOTAGE. « A relancer »,
+             « Activite du portefeuille » et « Decharge groupee » n'etaient
+             atteignables que par trois liens soulignes de onze pixels, a
+             l'interieur d'un volet FERME a chaque ouverture de l'application :
+             son etat ne vivait que dans _pilOuvert, jamais enregistre. Trois
+             ecrans complets pour un depliage. Ils prennent ici le rang de
+             « Mes programmes » et « Charges articulaires », et ont quitte le
+             volet — aucun lien n'est duplique. -->
+        <button onclick="loadFileReprise()" class="content-card ch-nav-large pil-lien" style="margin-bottom:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">À RELANCER</span>
+          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
+        </button>
+        <button onclick="loadCoachActivite()" class="content-card ch-nav-large pil-lien" style="margin-bottom:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">ACTIVITÉ DU PORTEFEUILLE</span>
+          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
+        </button>
+        <button onclick="openDechargeGroupee()" class="content-card ch-nav-large pil-lien" style="margin-bottom:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">DÉCHARGE GROUPÉE</span>
+          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
+        </button>
       </div>
     </div>
 
@@ -4709,7 +4777,23 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <div id="ct-monetisation" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
+        <!-- N1.17 — RANGE PAR SUJET, PAS PAR ECRAN. Ce panneau melangeait huit
+             sujets sans rapport : le tunnel d acquisition, l abonnement du coach,
+             la configuration Cloudinary, la synchro Cloud, l export RGPD, la liste
+             des abonnes, l offboarding d un coach tiers et la fermeture definitive
+             du compte. Fermer son compte n est pas un paiement, et personne n ira
+             le chercher sous « Paiements ».
+             Quatre groupes titres, dans l ordre de ce qu on vient y faire. AUCUN
+             identifiant n a change : loadMonetisationTab cherche ses elements par
+             id, quel que soit le groupe qui les porte. -->
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin:26px 0 14px">
+          <div style="width:20px;height:2px;background:var(--red);flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:var(--fs-xs);letter-spacing:3px;font-weight:800;text-transform:uppercase;color:var(--red-text)">L'argent</div>
+            <div class="sub" style="font-size:var(--fs-xs);margin-top:2px">Ton abonnement, et ceux que tes athlètes souscrivent dans l'app.</div>
+          </div>
+        </div>
 
         <!-- Tunnel — chiffres produit, pas chiffres d'un coach : réservé au
              créateur, comme la génération de codes gratuits. Affiché par
@@ -4729,6 +4813,37 @@ const COACH_PHOTO='icons/coach.jpg';
              loadMonetisationTab : cette carte s adresse a TOUS les coachs,
              contrairement au bloc du tunnel juste au-dessus. -->
         <div id="coach-abo"></div>
+
+        <h2 style="margin-bottom:4px">Paiements</h2>
+        <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px">Abonnements souscrits directement dans l'application, par les athlètes inscrits sans code de coach.</p>
+
+        <!-- Stats -->
+        <div class="metric-row-compacte" style="display:flex;gap:10px;margin-bottom:20px">
+          <div class="metric-box"><div class="metric-val" id="pp-total-subs" style="color:var(--green)">0</div><div class="metric-label">Abonnes actifs</div></div>
+          <div class="metric-box"><div class="metric-val" id="pp-mrr" style="color:var(--green)">0 EUR</div><div class="metric-label">MRR estime</div></div>
+          <div class="metric-box"><div class="metric-val" id="pp-cancelled">0</div><div class="metric-label">Annules</div></div>
+        </div>
+
+        <!-- Subscribers -->
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <div style="width:20px;height:2px;background:var(--red)"></div>
+            <h3>Abonnes autonomie</h3>
+          </div>
+          <div id="pp-subs-list">
+            <div style="text-align:center;padding:40px 20px;color:var(--text-dim)">
+              <div style="font-size:var(--fs-3xl);margin-bottom:12px;opacity:0.4">💳</div>
+              <div style="font-size:var(--fs-md)">Aucun abonné pour l'instant.</div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin:26px 0 14px">
+          <div style="width:20px;height:2px;background:var(--red);flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:var(--fs-xs);letter-spacing:3px;font-weight:800;text-transform:uppercase;color:var(--red-text)">Configuration technique</div>
+            <div class="sub" style="font-size:var(--fs-xs);margin-top:2px">Où vivent les vidéos, et comment tes appareils se parlent.</div>
+          </div>
+        </div>
 
         <!-- 🎥 Cloudinary vidéos -->
         <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:18px;margin-bottom:18px">
@@ -4759,6 +4874,13 @@ const COACH_PHOTO='icons/coach.jpg';
           <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:14px">Synchronisation automatique et sécurisée. Tes données sont partagées en temps réel sur tous tes appareils connectés avec les mêmes identifiants.</p>
           <div id="cloud-sw-version" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:12px"></div>
         </div>
+        <div style="display:flex;align-items:center;gap:10px;margin:26px 0 14px">
+          <div style="width:20px;height:2px;background:var(--red);flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:var(--fs-xs);letter-spacing:3px;font-weight:800;text-transform:uppercase;color:var(--red-text)">Mon compte et mes données</div>
+            <div class="sub" style="font-size:var(--fs-xs);margin-top:2px">Ce que RepCore sait de toi, et comment partir avec.</div>
+          </div>
+        </div>
 
         <!-- Mes données : article 15 (accès) et article 20 (portabilité).
              Cet écran est celui du COACH. Le bloc jumeau, pour l'athlète, vit
@@ -4773,40 +4895,6 @@ const COACH_PHOTO='icons/coach.jpg';
           <div id="cloud-qr-btn" style="display:none;margin-bottom:12px">
             <button class="btn btn-red" onclick="CLOUD.showQR()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Scanner sur un autre appareil →</button>
           </div>
-        </div>
-
-        <h2 style="margin-bottom:4px">Paiements</h2>
-        <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px">Abonnements souscrits directement dans l'application, par les athlètes inscrits sans code de coach.</p>
-
-        <!-- Stats -->
-        <div class="metric-row-compacte" style="display:flex;gap:10px;margin-bottom:20px">
-          <div class="metric-box"><div class="metric-val" id="pp-total-subs" style="color:var(--green)">0</div><div class="metric-label">Abonnes actifs</div></div>
-          <div class="metric-box"><div class="metric-val" id="pp-mrr" style="color:var(--green)">0 EUR</div><div class="metric-label">MRR estime</div></div>
-          <div class="metric-box"><div class="metric-val" id="pp-cancelled">0</div><div class="metric-label">Annules</div></div>
-        </div>
-
-        <!-- Subscribers -->
-        <div>
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-            <div style="width:20px;height:2px;background:var(--red)"></div>
-            <h3>Abonnes autonomie</h3>
-          </div>
-          <div id="pp-subs-list">
-            <div style="text-align:center;padding:40px 20px;color:var(--text-dim)">
-              <div style="font-size:var(--fs-3xl);margin-bottom:12px;opacity:0.4">💳</div>
-              <div style="font-size:var(--fs-md)">Aucun abonné pour l'instant.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Admin : offboarding d'un coach tiers — visible créateur seulement -->
-        <div id="coach-admin-offboard" style="display:none;background:#0d0d00;border:1px solid #3a3a00;border-radius:var(--r-4);padding:18px;margin-top:24px">
-          <div style="font-size:var(--fs-xs);color:#a3a300;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:10px">⚙ Admin : Offboarding coach</div>
-          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:12px;line-height:1.5">Réassigner les athlètes d'un coach avant de désactiver son compte.</div>
-          <select id="admin-offboard-select" style="width:100%;margin-bottom:10px;padding:10px;background:#1a1a08;border:1px solid #3a3a00;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-family:Montserrat,sans-serif">
-            <option value="">— Sélectionne un coach —</option>
-          </select>
-          <button onclick="_adminOffboardSelected()" style="width:100%;background:#a3a300;border:none;border-radius:var(--r-2);padding:10px;color:#000;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px">OFFBOARDER CE COACH →</button>
         </div>
 
         <!-- Zone dangereuse : self-service -->
@@ -4830,6 +4918,23 @@ const COACH_PHOTO='icons/coach.jpg';
             <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:var(--r-2);padding:10px;color:#cc0000;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px">SUPPRIMER MON COMPTE DÉFINITIVEMENT</button>
           </div>
         </div>
+        <div style="display:flex;align-items:center;gap:10px;margin:26px 0 14px">
+          <div style="width:20px;height:2px;background:var(--red);flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:var(--fs-xs);letter-spacing:3px;font-weight:800;text-transform:uppercase;color:var(--red-text)">Administration</div>
+            <div class="sub" style="font-size:var(--fs-xs);margin-top:2px">Réservé au créateur : gérer le compte d'un autre coach.</div>
+          </div>
+        </div>
+
+        <!-- Admin : offboarding d'un coach tiers — visible créateur seulement -->
+        <div id="coach-admin-offboard" style="display:none;background:#0d0d00;border:1px solid #3a3a00;border-radius:var(--r-4);padding:18px;margin-top:24px">
+          <div style="font-size:var(--fs-xs);color:#a3a300;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:10px">⚙ Admin : Offboarding coach</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:12px;line-height:1.5">Réassigner les athlètes d'un coach avant de désactiver son compte.</div>
+          <select id="admin-offboard-select" style="width:100%;margin-bottom:10px;padding:10px;background:#1a1a08;border:1px solid #3a3a00;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-family:Montserrat,sans-serif">
+            <option value="">— Sélectionne un coach —</option>
+          </select>
+          <button onclick="_adminOffboardSelected()" style="width:100%;background:#a3a300;border:none;border-radius:var(--r-2);padding:10px;color:#000;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px">OFFBOARDER CE COACH →</button>
+        </div>
 
       </div>
     </div>
@@ -4848,7 +4953,10 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- COACH CLIENT DETAIL -->
 <div id="s-coach-client" class="screen">
   <div class="topbar"><button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button><span class="topbar-title" id="ccd-title">Athlète</span><span class="coach-sync-badge rc-sync-badge" style="font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px"></span></div>
-  <!-- CINQ ANCRES POUR VINGT-SEPT SECTIONS. Le dossier se lit en cinq temps ;
+  <!-- QUATRE ONGLETS POUR VINGT-CINQ SECTIONS. Ce commentaire annoncait cinq
+       ANCRES : la barre menait alors a une section dans un rouleau. Elle
+       CHOISIT desormais ce que la fiche affiche ; le dossier se lit en
+       quatre domaines, et un onglet ne montre que ce qui le concerne.
        la barre les nomme et y mene, elle ne double pas la liste des sections. -->
   <!-- QUATRE ONGLETS, ET NON CINQ ANCRES. La barre ne mene plus a une
        section perdue dans un rouleau de vingt-sept : elle CHOISIT ce que
@@ -5013,24 +5121,28 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Habitudes</span></div>
         <div class="cc-sect-c" id="ccd-habitudes"></div>
       </section>
-      <!-- Rite de fin de cycle : la question de l'athlète, et la réponse du
-           coach. Avant les bilans, parce qu'il porte une question POSÉE —
-           quelqu'un attend au bout. -->
+      </div>
+      <div class="ccd-vue" data-vue="donnees">
+      <!-- Journal du coach. Il etait en TETE de fiche ; depuis la mise en
+           onglets du 25/08/2026 il ouvre l onglet DONNEES, et c est toujours
+           la premiere chose qu on
+           veut relire avant de parler a quelqu un. -->
+      <section class="cc-sect" style="--cc-accent:var(--info)">
+        <div class="cc-sect-t"><span>Mes notes de coach</span></div>
+        <div class="cc-sect-c" id="ccd-journal"></div>
+      </section>
+      <h3 style="margin-bottom:12px">Bilans récents</h3>
+      <!-- RITE DE FIN DE CYCLE, DESCENDU DE LIFESTYLE LE 26/08/2026. C'est un
+           bilan de quatre semaines, avec une question posée et une réponse
+           écrite : la même famille que les Bilans, sous lesquels il vivait à
+           deux onglets de distance. Il passe AVANT eux, parce que lui porte
+           une question à laquelle quelqu'un attend une réponse.
+           Le balisage seul a bougé : renderCoachRite cherche #ccd-rite par
+           identifiant, où qu'il soit. -->
       <section class="cc-sect" style="--cc-accent:var(--info);display:none">
         <div class="cc-sect-t"><span>Rite de cycle</span></div>
         <div class="cc-sect-c" id="ccd-rite"></div>
       </section>
-
-      <!-- Nutrition coach -->
-      </div>
-      <div class="ccd-vue" data-vue="donnees">
-      <!-- Journal du coach. En TETE de fiche : c est la premiere chose qu on
-           veut relire avant de parler a quelqu un. -->
-      <section class="cc-sect" style="--cc-accent:var(--info)">
-        <div class="cc-sect-t"><span>Journal de bord</span></div>
-        <div class="cc-sect-c" id="ccd-journal"></div>
-      </section>
-      <h3 style="margin-bottom:12px">Bilans récents</h3>
       <section class="cc-sect" style="--cc-accent:var(--info)">
         <div class="cc-sect-t"><span>Bilans</span></div>
         <div class="cc-sect-c" id="ccd-bilans"></div>
@@ -9765,6 +9877,24 @@ let currentUser=null,currentClientId=null;
 //   mode 'athlete'       : l'athlete edite sa propre seance         (+sessionIdx)
 //   mode 'clientProgram' : coach edite le programme d'un athlete
 let _progEditorCtx={mode:'clientProgram'};
+// N1.12 — L'EDITEUR D'EXERCICES S'ELARGIT POUR LE COACH, JAMAIS POUR
+// L'ATHLETE. C'est l'ecran ou le coach passe le plus de temps, et il y
+// travaillait en colonne de 480 px sur un moniteur de 1440 — parce qu'un
+// athlete y entre AUSSI, pour composer sa propre seance, et que la regle
+// « ecrans athlete : rien ne change » interdisait de l'elargir sur son seul
+// identifiant.
+// Le contexte etait deja distingue en memoire ; il est simplement POSE sur
+// l'ecran, ou une requete de media peut le lire. Rien ne change pour
+// l'athlete : mode vaut alors 'clientProgram', et l'attribut est retire.
+function _majCtxEditeur(){
+  try{
+    const e=document.getElementById('s-coach-program');
+    if(!e) return;
+    const m=(_progEditorCtx&&_progEditorCtx.mode)||'';
+    if(m==='coachClient'||m==='template') e.setAttribute('data-ctx','coach');
+    else e.removeAttribute('data-ctx');
+  }catch(err){}
+}
 // Index de seance uniquement quand l'athlete edite la sienne (photo2 localStorage, OCR)
 function _athleteSessionIdx(){
   return _progEditorCtx.mode==='athlete'&&typeof _progEditorCtx.sessionIdx==='number'
@@ -10596,7 +10726,8 @@ function go(id){
   closeModal();
   // Une question sans réponse ne doit pas s'évanouir. closeModal() ci-dessus
   // efface AUSSI la demande de confirmation d'import, et le rafraîchissement de
-  // fond appelle loadCoachHome() — donc go() — toutes les 30 secondes : mesuré,
+  // fond appelle loadCoachHome() — donc go() — a chaque synchronisation, soit
+  // toutes les 5 minutes (SYNC_PERIODE_MS) : mesuré,
   // la modale disparaissait au bout d'une demi-minute en laissant le paquet en
   // attente, sans plus aucun moyen ni de l'accepter ni de le refuser.
   // Restaurée seulement si elle avait déjà été montrée : sinon elle s'ouvrirait
@@ -18498,7 +18629,7 @@ function loadCoachHome(){
   // écrans que le changement de jour doit rafraîchir.
   _jourAffiche=localISODate(new Date());
   // UNE FOIS PAR SESSION, et pas à chaque appel : loadCoachHome est rappelée
-  // par la boucle de synchronisation toutes les 30 secondes, et par chaque
+  // par la boucle de synchronisation toutes les 5 minutes, et par chaque
   // retour vers le tableau de bord.
   //
   // Le drapeau est celui de go(), QUI GARDE DÉJÀ CETTE FONCTION. Un second
@@ -19054,7 +19185,11 @@ function renderJournalCoach(c){
   const opts=NOTE_TAGS.map(t=>'<option value="'+t+'">'+escapeHtml(NOTE_TAG_LIB[t])+'</option>').join('');
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">'
-    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Journal</span>'
+    // N1.16 — « Journal » tout court se confondait avec le JOURNAL
+    // ALIMENTAIRE de l'athlete, une section plus haut dans un autre onglet.
+    // Le carnet du coach porte ses notes ; il n'a rien a voir avec ce que
+    // l'athlete a mange.
+    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Mes notes</span>'
     +'</div>'
     +'<input id="jr-q" type="search" inputmode="search" placeholder="Chercher dans tous tes fils"'
     +' value="'+escapeHtml(_jrQ)+'" oninput="jrChercher()" style="width:100%;margin-bottom:10px">'
@@ -21635,11 +21770,12 @@ function openProgTemplateSessionExercises(idx){
   progEx=JSON.parse(JSON.stringify(s.exercises||[]));_photographierProgEx();
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown});
   _progEditorCtx={mode:'template',sessionIdx:idx,progIdx:_editProgTemplateIdx,gender:_editProgTemplateGender};
+  _majCtxEditeur();
   const backBtn=document.querySelector('#s-coach-program .back-btn');
   // MÊME GARDE-FOU QUE LES DEUX AUTRES ÉDITEURS. Sans lui, un ← jetait tout
   // le travail en cours sans un mot — et c’est le seul des trois qui édite un
   // MODÈLE, donc du travail réutilisé sur plusieurs athlètes.
-  if(backBtn) backBtn.onclick=async ()=>{if(_progExDirty&&!await rcConfirm('Modifications non enregistrées : quitter quand même ?',null,'Quitter'))return;_progEditorCtx={mode:'clientProgram'};go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);};
+  if(backBtn) backBtn.onclick=async ()=>{if(_progExDirty&&!await rcConfirm('Modifications non enregistrées : quitter quand même ?',null,'Quitter'))return;_progEditorCtx={mode:'clientProgram'};_majCtxEditeur();go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(s.name||DAYS[idx])+' ('+_editProgTemplateGender+') : Exercices';
   renderProgEx();go('s-coach-program');
@@ -22179,7 +22315,7 @@ function openCoachSessionExercises(idx){
   const c=_coachEditClient;
   // UN BOUTON QUI NE FAIT RIEN N APPREND RIEN. Ce garde sortait en silence : si
   // le dossier a ete remplace entre le rendu et le clic — la synchronisation
-  // tourne toutes les 30 secondes — le coach appuyait dans le vide.
+  // tourne toutes les 5 minutes — le coach appuyait dans le vide.
   if(!c?.sessions_config?.[idx]){
     try{ toast("Séance introuvable : rouvre la fiche de l'athlète.",'var(--orange)'); }catch(e){}
     return;
@@ -22194,8 +22330,9 @@ function openCoachSessionExercises(idx){
   progEx=JSON.parse(JSON.stringify(s.exercises||[]));_photographierProgEx();
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown||currentUser._defaultCooldown});
   _progEditorCtx={mode:'coachClient',sessionIdx:idx};
+  _majCtxEditeur();
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=async ()=>{if(_progExDirty&&!await rcConfirm('Modifications non enregistrées : quitter quand même ?',null,'Quitter'))return;_progEditorCtx={mode:'clientProgram'};go('s-coach-sessions');loadCoachSessionSlots();};
+  if(backBtn) backBtn.onclick=async ()=>{if(_progExDirty&&!await rcConfirm('Modifications non enregistrées : quitter quand même ?',null,'Quitter'))return;_progEditorCtx={mode:'clientProgram'};_majCtxEditeur();go('s-coach-sessions');loadCoachSessionSlots();};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(s.name||DAYS[idx])+' : Exercices';
   renderProgEx();go('s-coach-program');
@@ -24513,6 +24650,7 @@ function saveProgram(){
       s.name=_f('prog-name');s.notes=_f('prog-notes');
       s.warmup=_f('prog-warmup');s.cooldown=_f('prog-cooldown');
       _progEditorCtx={mode:'clientProgram'};
+      _majCtxEditeur();
       toastEcriture(saveUser(),' Séance sauvegardée !','la séance est');
       go('s-coach-prog-template');loadProgTemplateSlots(_ctx.gender);return;
     }
@@ -24525,6 +24663,7 @@ function saveProgram(){
       sc.name=_f('prog-name');sc.notes=_f('prog-notes');
       sc.warmup=_f('prog-warmup');sc.cooldown=_f('prog-cooldown');
       _progEditorCtx={mode:'clientProgram'};
+      _majCtxEditeur();
       // Le brouillon est posé ICI, et non à chaque frappe : une écriture par
       // séance terminée suffit à ne rien perdre, et le dossier du coach n'est
       // pas réécrit à chaque caractère tapé.
@@ -24548,6 +24687,7 @@ function saveProgram(){
       if(progPhoto2Data) sa.photo2=progPhoto2Data;
       const _ok=saveUser();
       _progEditorCtx={mode:'clientProgram'};
+      _majCtxEditeur();
       // Cette séance embarque jusqu'à deux images base64 : c'est le cas le plus
       // exposé au débordement de quota de tout l'éditeur de programme.
       toastEcriture(_ok,' Séance sauvegardée !','la séance est');

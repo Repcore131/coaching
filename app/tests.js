@@ -22399,7 +22399,12 @@ function testExercices(){
             'ccd-nutrition':'nutrition','ccd-supplements':'nutrition',
             'ccd-caffeine':'nutrition',
             'ccd-sommeil':'lifestyle','ccd-pas':'lifestyle',
-            'ccd-habitudes':'lifestyle','ccd-rite':'lifestyle',
+            'ccd-habitudes':'lifestyle',
+            // LE RITE DE CYCLE EST PASSE EN DONNEES le 26/08/2026 : c'est un
+            // bilan de quatre semaines, avec une question posee et une reponse
+            // ecrite. Il vit desormais JUSTE AU-DESSUS des Bilans, dont il est
+            // de la meme famille.
+            'ccd-rite':'donnees',
             // MICRO-SIGNAUX EST PASSE EN NUTRITION le 26/08/2026 : ce sont des
             // signaux nutritionnels, ils se lisent avec le journal et non avec
             // le sommeil et les pas.
@@ -22672,6 +22677,56 @@ function testExercices(){
         // RIEN N'EST ECRIT AVANT SAUVEGARDER : c'est la regle de cet ecran.
         return !/DB\.set|CLOUD\.push/.test(s)
           ?true:_echec('le report enregistre avant le bouton SAUVEGARDER');})());
+
+      // ══════ N1.14 ET N1.17 — LE RANGEMENT PAR SUJET ══════
+      ok('N1.14 — LE RITE DE CYCLE PRECEDE LES BILANS, dont il est la famille',(()=>{
+        const r=document.getElementById('ccd-rite'), b=document.getElementById('ccd-bilans');
+        if(!r||!b) return _echec('une des deux sections a disparu');
+        const vr=r.closest('.ccd-vue'), vb=b.closest('.ccd-vue');
+        if(!vr||vr!==vb) return _echec('elles ne sont pas dans le meme onglet');
+        // AVANT les bilans : lui porte une question POSEE, quelqu'un attend au
+        // bout. compareDocumentPosition rend FOLLOWING quand b suit r.
+        if(!(r.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING))
+          return _echec('le rite est passe SOUS les bilans');
+        // ccdAller retrouve encore son onglet : il le deduit du DOM, pas d'une
+        // table — c'est ce qui rend le deplacement sans risque.
+        return /closest\('\.ccd-vue'\)/.test(String(ccdAller))
+          ?true:_echec('ccdAller ne deduit plus l\'onglet du balisage');})());
+
+      ok('N1.17 — LE PANNEAU PAIEMENTS EST RANGE PAR SUJET, rien n\'a disparu',(()=>{
+        const p=document.getElementById('ct-monetisation');
+        if(!p) return _echec('panneau absent');
+        // LES DOUZE BLOCS SONT TOUJOURS LA. Un regroupement qui perd un bloc
+        // serait pire que le desordre : loadMonetisationTab remplit par id.
+        const ids=['ch-lien-tunnel','coach-abo','pp-total-subs','pp-mrr','pp-cancelled',
+          'pp-subs-list','cld-cloud-name','cld-preset','cloud-status','cloud-sw-version',
+          'exp-manifeste','cloud-qr-btn','coach-admin-offboard','admin-offboard-select'];
+        const perdus=ids.filter(id=>!p.querySelector('#'+id));
+        if(perdus.length) return _echec('sorti(s) du panneau : '+perdus.join(', '));
+        // L'ORDRE DES QUATRE GROUPES. On le lit sur des ancres reelles, pas sur
+        // les titres : un titre se renomme, un identifiant non.
+        const rang=id=>Array.prototype.indexOf.call(p.querySelectorAll('*'),p.querySelector('#'+id));
+        const suite=[['argent','pp-subs-list'],['technique','cld-cloud-name'],
+                     ['compte','exp-manifeste'],['administration','admin-offboard-select']];
+        for(let i=1;i<suite.length;i++)
+          if(rang(suite[i][1])<rang(suite[i-1][1]))
+            return _echec(suite[i][0]+' remonte avant '+suite[i-1][0]);
+        // FERMER SON COMPTE N'EST PAS UN PAIEMENT : la zone dangereuse est
+        // passee SOUS le groupe du compte, plus au milieu des abonnes.
+        // On la repere par son GESTE — la suppression de compte — et non par
+        // son texte : le panneau entier contient ce texte, et un find sur le
+        // texte remonte au conteneur au lieu du bloc.
+        const sup=p.querySelector('[onclick*="requestAccountDeletion"]');
+        if(!sup) return _echec('la zone dangereuse a disparu');
+        const tous=Array.prototype.slice.call(p.querySelectorAll('*'));
+        if(rang('exp-manifeste')>tous.indexOf(sup))
+          return _echec('la zone dangereuse precede l\'export RGPD');
+        // LES BLOCS DU CREATEUR RESTENT ETEINTS pour les autres comptes : c'est
+        // loadCoachDashboard qui les allume, jamais le balisage.
+        for(const id of ['ch-lien-tunnel','coach-admin-offboard'])
+          if((document.getElementById(id).getAttribute('style')||'').indexOf('display:none')<0)
+            return _echec(id+' n\'est plus eteint par defaut');
+        return true;})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
@@ -22724,10 +22779,18 @@ function testExercices(){
           const b=Array.from(document.querySelectorAll('button'))
             .filter(x=>(x.getAttribute('onclick')||'')===f);
           if(!b.length) return _echec('plus aucun point d\'entree pour '+f);
-          if(b.length>1) return _echec(f+' est duplique ('+b.length+' boutons)');
-          const e=b[0].closest('.screen');
-          if(!e||e.id!=='s-coach-home')
-            return _echec(f+' n\'est pas sur le tableau de bord');
+          // UN SEUL CHEMIN VISIBLE A CHAQUE LARGEUR. Depuis N1.15 la barre
+          // laterale porte les memes destinations au-dela de 1025 px : les
+          // boutons du panneau y sont eteints par .ch-nav-large, comme
+          // #coach-tabs-bar l'est deja. Deux noeuds, jamais deux chemins.
+          if(b.length>2) return _echec(f+' est duplique ('+b.length+' boutons)');
+          const dansPanneau=b.filter(x=>x.closest('#ct-dashboard'));
+          const dansBarre=b.filter(x=>x.closest('#ch-sidebar'));
+          if(!dansPanneau.length) return _echec(f+' a quitte le tableau de bord');
+          if(b.length===2&&!dansBarre.length)
+            return _echec(f+' est en double dans le meme panneau');
+          if(b.length===2&&!/ch-nav-large/.test(dansPanneau[0].className))
+            return _echec(f+' reste allume sur le panneau alors que la barre le porte');
         }
         // Et ils ont QUITTE le volet : remontes, ils n'y sont plus.
         return String(renderPilotage).indexOf('loadFileReprise()')<0
@@ -33560,21 +33623,46 @@ vendredi 78 6h 44m
     // CONTIENT `#s-coach-program`, qui est l'editeur PARTAGE avec l'athlete.
     // Un includes() rendrait un verdict faux dans les deux sens — verifie.
     const _idsDe=s=>(s.match(/#[a-zA-Z0-9_-]+/g)||[]).map(x=>x.slice(1));
+    // L'EDITEUR D'EXERCICES EST PARTAGE, et n'entre ici QUE QUALIFIE. Depuis
+    // N1.12 il s'elargit pour le coach — mais un athlete y entre AUSSI, pour
+    // composer sa propre seance. Ce que _majCtxEditeur pose sur l'ecran,
+    // data-ctx="coach", est le discriminant : sans lui le selecteur toucherait
+    // les deux, et l'ecran de l'athlete changerait de largeur.
+    const _qualifie=s=>/#s-coach-program\b[^ ,>+~]*\[data-ctx="coach"\]/.test(s);
+    const _idsNus=s=>_idsDe(s).filter(id=>!(id==='s-coach-program'&&_qualifie(s)));
     ok('100 % des selecteurs sont portes par un ecran coach',(()=>{
-      const hors=_selLarge.filter(s=>!_idsDe(s).some(id=>ECRANS_LARGE.includes(id)));
+      const hors=_selLarge.filter(s=>!_qualifie(s)
+        &&!_idsDe(s).some(id=>ECRANS_LARGE.includes(id)));
       return hors.length
         ?_echec(hors.length+' hors contexte coach : '+hors.join(' | ')):true;})());
     ok('Aucun ecran athlete ne figure dans le bloc',(()=>{
       const athlete=Array.from(document.querySelectorAll('.screen'))
         .map(e=>e.id).filter(id=>!ECRANS_LARGE.includes(id));
-      const fuites=_selLarge.filter(s=>_idsDe(s).some(id=>athlete.includes(id)));
+      const fuites=_selLarge.filter(s=>_idsNus(s).some(id=>athlete.includes(id)));
       return fuites.length?_echec('ecran(s) athlete : '+fuites.join(' | ')):true;})());
-    // Ces trois-la sont exclus VOLONTAIREMENT : deux ecrans de connexion, et
-    // l'editeur d'exercices ou un athlete entre pour sa propre seance.
-    ok('s-coach-program, s-coach-entry et s-coach-code restent hors du bloc',(()=>{
-      const interdits=['s-coach-program','s-coach-entry','s-coach-code'];
+    // Les deux ecrans de connexion restent exclus SANS CONDITION : il n'y a rien
+    // a y elargir. L'editeur, lui, n'a le droit d'entrer que qualifie — et s'il
+    // entre, l'attribut doit reellement etre pose par le code.
+    ok('s-coach-entry et s-coach-code restent hors du bloc, l\'editeur n\'entre que qualifie',(()=>{
+      const interdits=['s-coach-entry','s-coach-code'];
       const vus=_selLarge.filter(s=>_idsDe(s).some(id=>interdits.includes(id)));
-      return vus.length?_echec('present(s) : '+vus.join(' | ')):true;})());
+      if(vus.length) return _echec('present(s) : '+vus.join(' | '));
+      const nus=_selLarge.filter(s=>_idsDe(s).includes('s-coach-program')&&!_qualifie(s));
+      if(nus.length) return _echec('editeur non qualifie : '+nus.join(' | '));
+      if(!_selLarge.some(_qualifie)) return true;   // il n'y entre pas : rien a verifier
+      if(typeof _majCtxEditeur!=='function')
+        return _echec('le selecteur attend un attribut que personne ne pose');
+      const e=document.getElementById('s-coach-program');
+      const sv=_progEditorCtx;
+      try{
+        _progEditorCtx={mode:'coachClient',sessionIdx:0}; _majCtxEditeur();
+        if(e.getAttribute('data-ctx')!=='coach')
+          return _echec('le contexte coach ne pose pas l\'attribut');
+        _progEditorCtx={mode:'clientProgram'}; _majCtxEditeur();
+        if(e.hasAttribute('data-ctx'))
+          return _echec('l\'attribut survit au retour sur l\'espace athlete');
+      } finally { _progEditorCtx=sv; _majCtxEditeur(); }
+      return true;})());
     ok('Le seuil est STRICTEMENT au-dessus de 1024 px',
        !!_cssLarge&&!/@media\(min-width:(?:1024|1023)px\)/.test(_cssNu));
     // Le tableau du grand ecran compte sur un nombre de colonnes constant.
