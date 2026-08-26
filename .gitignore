@@ -19,3 +19,6 @@ docs/audit/
 app/b55.html
 _site/
 .firebase/
+
+# Python : caches des scripts de portage du guide
+__pycache__/

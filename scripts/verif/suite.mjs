@@ -52,6 +52,12 @@ await new Promise(r => setTimeout(r, 6000));
 // passaient pour absentes, et un lot pouvait en casser sans qu'on le voie.
 console.log('ciqual :', await ev(`(async()=>{ try{ await _loadCiqual(); return 'chargee'; }
   catch(e){ return 'echec '+String(e&&e.message||e); } })()`));
+// L'INDEX DES ILLUSTRATIONS AUSSI. Il se charge d'ordinaire au premier
+// affichage d'une fiche ; la suite, elle, n'en affiche aucune. Sans ce
+// chargement, l'assertion qui verifie que les nouvelles fiches ont bien une
+// photo ne verifierait qu'une chose : que l'index n'est pas charge.
+console.log('illustrations :', await ev(`(async()=>{ try{ const s=await chargerIndexIllustrations();
+  return s.size+' fiches'; }catch(e){ return 'echec '+String(e&&e.message||e); } })()`));
 const rap = await ev(`(async()=>{ try{ const r=await chargerTests();
   return {total:r.total,echecs:r.echecs,
     liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:''))}; }

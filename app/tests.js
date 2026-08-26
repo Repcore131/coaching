@@ -134,6 +134,87 @@ function testExercices(){
       return ids.indexOf('iz4IwoFnKHA')>=0?true
         :_echec('la version « normale » a disparu : '+ids.join(','));})());
 
+    // ── LES PECTORAUX DU GUIDE DU 26/08/2026 ─────────────────────────────
+    // Kevin a refilme et reillustre toute la section des pectoraux, et le
+    // document a change quatre noms au passage. Le NOM EST LA CLEF : c'est
+    // par lui que l'exercice trouve sa video et sa photo. Un nom laisse en
+    // arriere ne casse rien de visible — la fiche s'affiche, simplement sans
+    // sa video —, et c'est exactement le genre de panne qu'on ne voit pas.
+    ok('Les quatre écartés ont pris le nom du guide',(()=>{
+      const tout=EX_GUIDE_BRUT['PECTORAUX,DELT_ANT,TRICEPS'].split('~')
+        .concat(SCHEMAS_BRUT['poussee-horizontale'].split('~'));
+      const restes=tout.filter(n=>/ELASTIQUE (BAS|HAUT)/.test(n));
+      if(restes.length) return _echec('ancien nom encore au catalogue : '+restes.join(', '));
+      const courts=['ECARTE POULIE BASSE','ECARTE POULIE BASSE EN UNILATERAL',
+                    'ECARTE POULIE HAUTE','ECARTE POULIE HAUT EN UNILATERAL'];
+      const manquants=courts.filter(n=>tout.indexOf(n)<0);
+      return manquants.length?_echec('nom du guide absent : '+manquants.join(', ')):true;})());
+
+    // LES QUATRE EXERCICES NEUFS. Sans entree au catalogue, le guide les
+    // decrit mais l'application ne les connait pas : ni recherche du coach,
+    // ni comptage du volume.
+    ok('Les quatre exercices neufs du guide sont au catalogue',(()=>{
+      const neufs=['BUTTERFLY UNILATERAL','ECARTE POULIE BASSE SUR BANC',
+        'ECARTE POULIE HAUTE BUSTE PENCHE','ECARTE POULIE HAUTE CONTRE BANC'];
+      const cat=EX_GUIDE_BRUT['PECTORAUX,DELT_ANT,TRICEPS'].split('~');
+      const abs=neufs.filter(n=>cat.indexOf(n)<0);
+      if(abs.length) return _echec('hors catalogue : '+abs.join(', '));
+      const sansSchema=neufs.filter(n=>!_SCHEMA_INDEX[exKey(n)]);
+      if(sansSchema.length) return _echec('sans schéma moteur : '+sansSchema.join(', '));
+      const sansVideo=neufs.filter(n=>!videosPour(n).length);
+      return sansVideo.length?_echec('sans vidéo : '+sansVideo.join(', ')):true;})());
+
+    // VINGT-QUATRE VIDEOS DE PLUS, et toutes doivent porter sur un exercice
+    // que le catalogue connait : une video rangee sous un nom absent du
+    // catalogue ne s'affiche nulle part.
+    ok('Les vidéos des pectoraux portent sur des exercices du catalogue',(()=>{
+      const cat=EX_GUIDE_BRUT['PECTORAUX,DELT_ANT,TRICEPS'].split('~').map(exKey);
+      const ajouts=['BUTTERFLY','BUTTERFLY UNILATERAL','DEVELOPPE A LA MACHINE CONVERGENTE',
+        'DEVELOPPE A LA MACHINE CONVERGENTE UNILATERAL','DEVELOPPE COUCHE BARRE AVEC CALLE',
+        'DEVELOPPE COUCHE LARSEN','DEVELOPPE DECLINE BARRE SMITH MACHINE',
+        'DIPS BAS DE PECS','DIPS MACHINE BAS DE PECS','ECARTE HALTERE SUR BANC',
+        'ECARTE HALTERE SUR BANC DECLINE','ECARTE HALTERE SUR BANC INCLINE',
+        'ECARTE POULIE BASSE SUR BANC','ECARTE POULIE HAUTE BUSTE PENCHE',
+        'ECARTE POULIE HAUTE CONTRE BANC','ECARTE POULIE SUR BANC','FLOOR PRESS',
+        'POMPE AUX ANNEAUX','POMPES','POMPES AVEC ELASTIQUE','POMPES DECLINE',
+        'POMPES INCLINE','POMPES LESTEE','POMPES SAUTES'];
+      const sans=ajouts.filter(n=>!videosPour(n).length);
+      if(sans.length) return _echec('vidéo perdue : '+sans.join(', '));
+      const hors=ajouts.filter(n=>cat.indexOf(exKey(n))<0);
+      return hors.length?_echec('filmé mais hors catalogue : '+hors.join(', ')):true;})());
+
+    // L'EFFECTIF ANNONCE PAR SCHEMAS_META EST CELUI DE LA LISTE. Il n'est
+    // qu'affiche, mais un chiffre faux dans un document qu'on relit trompe
+    // aussi surement qu'un bug.
+    ok('Chaque schéma annonce son effectif réel',(()=>{
+      for(const k in SCHEMAS_META){
+        const reel=String(SCHEMAS_BRUT[k]||'').split('~').filter(Boolean).length;
+        if(SCHEMAS_META[k].nb!==reel)
+          return _echec(k+' annonce '+SCHEMAS_META[k].nb+' exercices pour '+reel);
+      }
+      return true;})());
+
+    // L'INDEX DES ILLUSTRATIONS CONNAIT LES NOUVELLES FICHES. C'est lui, et
+    // non le fichier .webp, qui decide si la photo s'affiche : illustrationDe
+    // rend null pour un slug absent de l'index, meme quand l'image existe.
+    // Quatre photos ecrites sans toucher a l'index, et Kevin aurait revu
+    // « les images ne se mettent pas ».
+    ok('L\'index des illustrations connaît les nouvelles fiches',(()=>{
+      if(!_exoIndex||!_exoIndex.size)
+        return _echec('index non chargé — lance « await chargerIndexIllustrations() » avant testExercices()');
+      const neufs=['BUTTERFLY UNILATERAL','ECARTE POULIE BASSE SUR BANC',
+        'ECARTE POULIE HAUTE BUSTE PENCHE','ECARTE POULIE HAUTE CONTRE BANC'];
+      const sans=neufs.filter(n=>!illustrationDe(n));
+      if(sans.length) return _echec('sans illustration : '+sans.join(', '));
+      // ET LES ANCIENS NOMS GARDENT LA LEUR : des programmes deja ecrits les
+      // portent, et une fiche qui perd sa photo est une regression muette.
+      const vieux=['ECARTE POULIE BASSE ELASTIQUE BAS',
+        'ECARTE POULIE BASSE ELASTIQUE BAS EN UNILATERAL',
+        'ECARTE POULIE HAUTE ELASTIQUE HAUTE',
+        'ECARTE POULIE HAUT ELASTIQUE HAUT EN UNILATERAL'];
+      const perdus=vieux.filter(n=>!illustrationDe(n));
+      return perdus.length?_echec('ancien nom sans illustration : '+perdus.join(', ')):true;})());
+
     // ── LE LIEN VIDÉO ATTEINT LES PROGRAMMES DÉJÀ PUBLIÉS ────────────────
     // Demande de Kevin, 25/08/2026 : mettre à jour les programmes des élèves
     // avec les bons liens. RIEN N'EST RÉÉCRIT dans les dossiers : la vidéo se
@@ -21975,17 +22056,49 @@ function testExercices(){
       return techniqueDe({name:'X',reps:'12',ss:true,methode:'dropset_type_1'})==='degressive';})());
 
     // ── Catalogue issu du guide ──
-    ok('Les 30 méthodes du guide sont présentes',Object.keys(TECHNIQUES).length===30,
+    // Le guide du 26/08/2026 en ajoute treize aux trente d'aout : pre-fatigue,
+    // repetitions forcees, cluster sets, myo-reps, repetitions allongees,
+    // serie geante, running the rack, negatives pures, contrast training, reps
+    // tricheur, occlusion/BFR, constant tension, DC training.
+    ok('Les 43 méthodes du guide sont présentes',Object.keys(TECHNIQUES).length===43,
        String(Object.keys(TECHNIQUES).length));
     ok('Chaque méthode a une famille valide',
        Object.values(TECHNIQUES).every(t=>FAMILLES_TECHNIQUE.indexOf(t.famille)>=0));
     ok('Chaque méthode porte le texte du guide',
        Object.values(TECHNIQUES).every(t=>t.desc&&t.desc.length>20));
-    ok('Presque toutes portent la vidéo du coach',
+    // VINGT-NEUF SONT FILMEES, et quatorze ne le sont pas — le guide ne leur
+    // donne aucun lien. Un lien invente serait pire : le selecteur n'affiche la
+    // pastille que s'il y en a un, et une pastille qui n'ouvre rien ment.
+    ok('Vingt-neuf méthodes portent la vidéo du coach',
        Object.values(TECHNIQUES).filter(t=>/^https:\/\/youtu\.be\//.test(t.video)).length===29,
        String(Object.values(TECHNIQUES).filter(t=>t.video).length));
-    ok('Aucune méthode hors périmètre n\'a été inventée',
-       !/occlusion|kaatsu|cluster|excentrique surcharg/i.test(JSON.stringify(TECHNIQUES)));
+    ok('Aucune vidéo inventée : ou un lien YouTube, ou rien',
+       Object.values(TECHNIQUES).every(t=>t.video===''||/^https:\/\/youtu\.be\/[\w-]+$/.test(t.video)),
+       String((Object.values(TECHNIQUES).find(t=>t.video&&!/^https:\/\/youtu\.be\/[\w-]+$/.test(t.video))||{}).video||''));
+    // AUCUNE METHODE HORS DU GUIDE. La sonde citait quatre noms interdits — dont
+    // « occlusion » et « cluster », que le guide du 26/08 apporte pour de bon :
+    // une liste de proscrits ne peut pas dire ce qui est legitime. On epingle
+    // donc les NOMS, tous : une quarante-quatrieme methode inventee demain fait
+    // tomber cette assertion, et c'est exactement ce qu'on lui demande.
+    ok('Aucune méthode hors du guide',(()=>{
+      const attendus=['Dropset type 1','Dropset type 2','Dropset type 3',
+        'Méthode 5 répétitions / 10 secondes','Méthode 10 répétitions / 10 secondes',
+        'Méthode lourd / léger','Rest in pause','Stop and go','Maximum','Unilatérale',
+        'Superset','Méthode curl barre','Méthode 1 des demis répétitions',
+        'Méthode isométrie type 1','Méthode isométrie type 2','Triset','FST 7',
+        'Répétition partielle','20/10/10/20','Bulgare','Isotention','Isométrie max',
+        'Méthode 2 des demis répétitions','Méthode isométrie type 3','Méthode 7/7/7',
+        'Excentrique ralentit','Méthode trinité','Méthode Infinité','Méthode SST',
+        '8 reps puis 5 / 5s',
+        'Pré-fatigue','Répétitions forcées','Cluster sets','Myo-reps',
+        'Répétitions allongées','Série géante','Running the rack','Négatives pures',
+        'Contrast training','Reps tricheur','Occlusion / BFR','Constant tension',
+        'DC Training'];
+      const vus=Object.values(TECHNIQUES).map(t=>t.nom);
+      const enTrop=vus.filter(n=>attendus.indexOf(n)<0);
+      if(enTrop.length) return _echec('hors guide : '+enTrop.join(', '));
+      const manquants=attendus.filter(n=>vus.indexOf(n)<0);
+      return manquants.length?_echec('manquantes : '+manquants.join(', ')):true;})());
     ok('Rest in pause suit le guide : une seule relance',
        /15 s de repos puis finissez votre série/.test(TECHNIQUES.rest_in_pause.desc));
 
@@ -25776,10 +25889,14 @@ function testExercices(){
       for(const sig in EX_GUIDE_BRUT) EX_GUIDE_BRUT[sig].split('~').forEach(x=>{ if(x) n.add(x); });
       EX_GUIDE_POSING.split('~').forEach(x=>{ if(x) n.add(x); });
       return n;};
-    ok('Les 408 exercices du guide ont un schéma',(()=>{
+    // QUATRE DE PLUS DEPUIS LE 26/08/2026 : le guide ajoute le butterfly
+    // unilateral et trois ecartes de poulie. Le compte est ecrit en toutes
+    // lettres pour que l'ajout d'un exercice soit un GESTE — sans quoi une
+    // ligne perdue au catalogue passerait inapercue.
+    ok('Les 412 exercices du guide ont un schéma',(()=>{
       const noms=_guideNoms();
       const sans=[...noms].filter(n=>!schemaDe({name:n}));
-      return noms.size===408&&sans.length===0;})(),
+      return noms.size===412&&sans.length===0;})(),
       (()=>{const n=_guideNoms();
         const sans=[...n].filter(x=>!schemaDe({name:x}));
         return n.size+' noms'+(sans.length?', sans schéma : '+sans.slice(0,3).join(' | '):'');})());
