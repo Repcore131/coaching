@@ -24134,6 +24134,76 @@ function testExercices(){
         if(!c) return _echec('le bouton de création a disparu');
         return c.classList.contains('btn')&&c.classList.contains('btn-red')
           ?true:_echec('« + CRÉER » n’est toujours pas un .btn : '+c.className);})());
+
+      ok('N6.3 — L\'INTENSITE SE PRESCRIT, sur la meme echelle que le retour',(()=>{
+        if(typeof _rirPrescrit!=='function') return _echec('aucune intensité prescrite');
+        // LA MEME ECHELLE QUE sets[].rir : 0 est l'échec, 5 est très facile.
+        // Deux échelles pour une même notion, et le retour cesserait de se
+        // comparer à la consigne.
+        const v=RIR_CIBLE_ECHELLE.map(o=>o.v);
+        if(v[0]!=='') return _echec('l’échelle ne commence pas par « pas de consigne »');
+        if(v.slice(1).join(',')!=='0,1,2,3,4,5') return _echec('échelle : '+v.join(','));
+        // UN CHAMP VIDE RESTE VIDE : une absence de consigne n'est pas une
+        // consigne. C'est la règle de la fiche imprimable, elle vaut ici.
+        for(const ex of [{},{rirCible:''},{rirCible:null},{rirCible:'  '}])
+          if(_rirPrescrit(ex)!=='') return _echec('une consigne sort de nulle part : '+JSON.stringify(ex));
+        // Hors bornes ou illisible : rien, jamais un nombre invente.
+        for(const ex of [{rirCible:'9'},{rirCible:-1},{rirCible:'x'}])
+          if(_rirPrescrit(ex)!=='') return _echec('valeur hors échelle acceptée : '+JSON.stringify(ex));
+        if(_rirPrescrit({rirCible:2})!=='2') return _echec('un nombre n’est pas lu');
+        // Un dossier ancien qui porterait `rir` continue d'être lu ; le champ
+        // que l'éditeur écrit prime.
+        if(_rirPrescrit({rir:'3'})!=='3') return _echec('l’ancien champ n’est plus lu');
+        if(_rirPrescrit({rirCible:'1',rir:'4'})!=='1') return _echec('l’ancien champ prime sur le nouveau');
+        // UN EXERCICE NEUF NAIT SANS CONSIGNE.
+        if(String(addExercise).indexOf("rirCible:''")<0)
+          return _echec('un exercice neuf ne porte pas le champ');
+        // LA COLONNE DE LA FICHE IMPRIMABLE N'APPARAIT QUE REMPLIE.
+        const sans={sessions_config:[{day:'Lundi',name:'H',active:true,
+          exercises:[{name:'DC',series:4,reps:'8'}]}]};
+        const avec=JSON.parse(JSON.stringify(sans));
+        avec.sessions_config[0].exercises[0].rirCible='2';
+        if(htmlProgrammePrint(sans).indexOf('<th>RIR</th>')>=0)
+          return _echec('la colonne RIR sort sans qu’aucun exercice ne la porte');
+        const h=htmlProgrammePrint(avec);
+        if(h.indexOf('<th>RIR</th>')<0) return _echec('la consigne ne s’imprime pas');
+        if(h.indexOf('<td>2</td>')<0) return _echec('la valeur ne s’imprime pas');
+        // ET LA CONSIGNE ARRIVE JUSQU'A L'ATHLETE : sans cela, le coach
+        // l'écrirait pour lui-même.
+        const c=String(_renderExCard);
+        return c.indexOf('_rirPrescrit(ex)')>=0
+          ?true:_echec('la carte d’exercice de l’athlète ne montre pas la consigne');})());
+
+      ok('N6.1 et N6.2 — LE BLOC SE CREE, ET L\'ECRAN QUI LE LIT A UNE PORTE',(()=>{
+        // N6.2 — ouvrirGrilleCharge n'avait AUCUN appelant : le coach n'avait
+        // jamais vu la vue qui lui dit comment son volume se repartit.
+        const b=[...document.querySelectorAll('#s-coach-client button')]
+          .find(x=>(x.getAttribute('onclick')||'').indexOf('ouvrirGrilleCharge')>=0);
+        if(!b) return _echec('aucune entrée vers la grille de charge');
+        if((b.getAttribute('onclick')||'').indexOf('currentClientId')<0)
+          return _echec('l’athlète courant n’est pas passé à la fonction');
+        // Elle est dans l'onglet ENTRAINEMENT, a cote de la fiche a imprimer.
+        const v=b.closest('.ccd-vue');
+        if(!v||v.dataset.vue!=='entrainement')
+          return _echec('le bouton est dans « '+(v?v.dataset.vue:'hors onglet')+' »');
+        // ET LA GARDE DE ROLE DE LA FONCTION EST INTACTE.
+        if(String(ouvrirGrilleCharge).indexOf('coach')<0)
+          return _echec('la garde de rôle a sauté');
+        // N6.1 — le bloc se cree, et semaineEstDecharge repond dessus : c'est
+        // la verification que le document demande.
+        const lundi=_lundiDe(new Date()).getTime();
+        const u={id:'PB',email:'pb@t.fr',role:'athlete',
+          programme:{debut:lundi,semaines:4,decharges:[3],ecarts:{}},
+          sessions_config:Array.from({length:7},(_,k)=>({day:DAYS[k],name:'',active:false,exercises:[]}))};
+        if(!programmeDe(u)) return _echec('programmeDe rend null sur un bloc écrit');
+        if(!semaineEstDecharge(u,new Date(lundi+3*604800000)))
+          return _echec('la semaine cochée n’est pas une décharge');
+        if(semaineEstDecharge(u,new Date(lundi)))
+          return _echec('la première semaine est prise pour une décharge');
+        // ET LES ATHLETES SANS BLOC SE COMPORTENT EXACTEMENT COMME AVANT.
+        const nu={id:'NU',sessions_config:[]};
+        return (programmeDe(nu)===null&&semaineEstDecharge(nu,new Date())===false)
+          ?true:_echec('un athlète sans bloc ne se comporte plus comme avant');})());
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{

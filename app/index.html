@@ -25509,6 +25509,20 @@ function renderProgEx(){
           </div>
           <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" class="f-c f-sm"></div>
         </div>
+        <!-- N6.3 — L'INTENSITE CIBLE. Meme echelle que le RIR que l'athlete
+             saisit serie par serie : 0 est l'echec, 5 est tres facile. Le champ
+             vide vaut « pas de consigne », et c'est le defaut. -->
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px">
+          <div>
+            <label style="margin-top:0">RIR cible</label>
+            <select onchange="_progExDirty=true;progEx[${i}].rirCible=this.value" class="f-c f-sm">
+              ${RIR_CIBLE_ECHELLE.map(o=>`<option value="${o.v}"${String(ex.rirCible||'')===o.v?' selected':''}>${o.lib}</option>`).join('')}
+            </select>
+          </div>
+          <div style="align-self:end">
+            <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;padding-bottom:9px">${escapeHtml(_direRirCible(ex.rirCible))}</div>
+          </div>
+        </div>
         <!-- CHARGE ET RIR CIBLES. Les deux étaient LUS depuis toujours —
              _apLigne les affiche dans l’aperçu de séance, PP_COLS en fait
              deux colonnes de la fiche imprimable — et ÉCRITS nulle part.
@@ -25717,8 +25731,39 @@ function loadExImage(idx,input){
   compressImage(f,800,0.75,data=>{cible.image=data;renderProgEx();});
 }
 
+// N6.3 — L'ECHELLE DU RIR PRESCRIT. Celle que l'athlete saisit deja, et
+// aucune autre : deux echelles pour une meme notion, et le retour cesserait de
+// se comparer a la consigne.
+// La valeur vide OUVRE la liste : c'est le defaut, et c'est ce que portent
+// tous les programmes existants.
+const RIR_CIBLE_ECHELLE=Object.freeze([
+  {v:'',  lib:'—'},
+  {v:'0', lib:'RIR 0'},
+  {v:'1', lib:'RIR 1'},
+  {v:'2', lib:'RIR 2'},
+  {v:'3', lib:'RIR 3'},
+  {v:'4', lib:'RIR 4'},
+  {v:'5', lib:'RIR 5'}
+]);
+// PURE. Ce que la consigne veut dire, en clair. Vide : rien — une absence de
+// consigne n'est pas une consigne.
+const RIR_CIBLE_SENS=Object.freeze({
+  '0':'À l’échec : la dernière répétition ne passe pas.',
+  '1':'Une répétition en réserve.',
+  '2':'Deux répétitions en réserve — le réglage le plus courant.',
+  '3':'Trois en réserve : technique et volume avant l’intensité.',
+  '4':'Quatre en réserve : travail léger, reprise ou décharge.',
+  '5':'Cinq en réserve : très facile, échauffement ou récupération.'
+});
+function _direRirCible(v){
+  const k=String(v==null?'':v).trim();
+  return RIR_CIBLE_SENS[k]||'';
+}
 function addExercise(){
-  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:'',ss:false,methodeSeries:''});
+  // N6.3 — `rirCible` NAIT VIDE, comme description et videoUrl : un exercice
+  // neuf ne porte aucune consigne d'intensite tant que le coach n'en a pas
+  // ecrit une.
+  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:'',ss:false,methodeSeries:'',rirCible:''});
   _progExDirty=true;
   renderProgEx();
   // Scroll vers le nouvel exercice
@@ -28594,7 +28639,11 @@ function _renderExCard(ex,idx){
     <div style="width:28px;height:28px;background:var(--red);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;flex-shrink:0;color:var(--text)">${idx+1}</div>
     <div style="flex:1">
       <div class="ex-name">${escapeHtml(ex.name)}</div>
-      <div class="ex-detail" style="margin-top:3px">${ex.series} séries · ${escapeHtml(ex.reps)} reps${ex.repos?' · '+escapeHtml(ex.repos):''}</div>
+      <!-- N6.3 — LA CONSIGNE D'INTENSITE ARRIVE JUSQU'A L'ATHLETE. Sans cela,
+           le coach l'ecrirait pour lui-meme : le decrochage ne mesurait qu'un
+           nombre de series, jamais un effort. Rien ne s'affiche quand il n'y a
+           pas de consigne. -->
+      <div class="ex-detail" style="margin-top:3px">${ex.series} séries · ${escapeHtml(ex.reps)} reps${ex.repos?' · '+escapeHtml(ex.repos):''}${_rirPrescrit(ex)?' · RIR '+escapeHtml(_rirPrescrit(ex)):''}</div>
       ${badge?`<div style="margin-top:5px">${badge}</div>`:''}
       ${ex.description?`<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px;line-height:1.5;border-left:2px solid var(--border);padding-left:8px">${escapeHtml(ex.description)}</div>`:''}
       ${htmlVideosExo(ex)}
@@ -28939,7 +28988,7 @@ function _renderWeeklyInto(el,sc){
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:18px;height:18px;background:rgba(0,0,0,.3);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:rgba(255,255,255,.65);flex-shrink:0">${i+1}</div>
               <div style="font-size:var(--fs-xs);color:var(--text);font-weight:700;text-transform:uppercase;letter-spacing:.3px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ex.name)}</div>
-              <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}</div>
+              <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}${_rirPrescrit(ex)?' @RIR'+escapeHtml(_rirPrescrit(ex)):''}</div>
             </div>`).join('')}
         </div>`:''}
         ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;justify-content:flex-end;gap:8px">
@@ -33134,11 +33183,26 @@ const PP_COLS=Object.freeze([
   {cle:'series',  lib:'Séries',  v:ex=>ex.series},
   {cle:'reps',    lib:'Reps',    v:ex=>ex.reps},
   {cle:'charge',  lib:'Charge',  v:ex=>ex.charge||ex.poids},
-  {cle:'rir',     lib:'RIR',     v:ex=>ex.rir},
+  // N6.3 — `rirCible` est le champ que l'editeur ecrit desormais ; `rir` etait
+  // deja lu ici mais rien ne le remplissait. On garde les deux : un dossier
+  // ancien qui porterait `rir` continue de s'imprimer.
+  // LA COLONNE N'APPARAIT QUE SI QUELQU'UN LA REMPLIT — _ppColonnes ne retient
+  // que les colonnes non vides. Une absence de consigne n'est pas une consigne.
+  {cle:'rir',     lib:'RIR',     v:ex=>_rirPrescrit(ex)},
   {cle:'repos',   lib:'Repos',   v:ex=>ex.repos},
   {cle:'tempo',   lib:'Tempo',   v:ex=>ex.tempo}
 ]);
 function _ppTexte(v){ return String(v==null?'':v).trim(); }
+// N6.3 — PURE. L'intensite prescrite d'un exercice, quel que soit le champ qui
+// la porte. Vide quand il n'y a pas de consigne, et vide veut dire vide.
+function _rirPrescrit(ex){
+  if(!ex||typeof ex!=='object') return '';
+  const v=(ex.rirCible!=null&&String(ex.rirCible).trim()!=='')?ex.rirCible:ex.rir;
+  const s=String(v==null?'':v).trim();
+  if(s==='') return '';
+  const n=Number(s);
+  return (isFinite(n)&&n>=0&&n<=5)?String(Math.round(n)):'';
+}
 // PURE. Les créneaux actifs, avec leur INDICE de jour conservé : filtrer
 // d’abord perdrait la correspondance avec DAYS, et la fiche annoncerait le
 // mauvais jour dès qu’un créneau est éteint.
