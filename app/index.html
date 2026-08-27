@@ -5321,14 +5321,34 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-videos"></div>
       </div>
       <div class="ccd-vue" data-vue="nutrition">
-      <!-- N4.6 — LA PHASE, REMONTEE D'ENTRAINEMENT LE 26/08/2026, ET EN TETE.
-           Elle COMMANDE les cibles qui la suivent : coachSetPhase rappelle
-           renderCoachNutriSection a la fin, et son propre commentaire explique
-           que la phase fixe le delta calorique et la fourchette de vitesse.
-           Elle vivait pourtant dans un autre onglet : regler l'une puis les
-           autres coutait trois changements d'onglet et une perte de contexte a
-           chaque macro-cycle. Le balisage seul a bouge — renderPhaseCoach
-           cherche #ccd-phase par identifiant. -->
+      <!-- B1.9 — L'ORDRE EST TRANCHE ICI : LA LECTURE D'ABORD, LE REGLAGE
+           JUSTE APRES. Deux correctifs de la passe precedente se
+           contredisaient a cet endroit precis. N1.3 reprochait a la nutrition
+           de mettre les reglages avant les lectures. N4.6 a remonte « Phase »
+           depuis l'onglet Entrainement pour la coller aux macros qu'elle
+           commande — et l'a posee EN TETE. Chacune est defendable ; leur
+           somme ne l'etait pas : l'onglet s'ouvrait sur un reglage, avant la
+           grille de cibles que le coach vient lire.
+
+           LE COACH OUVRE CET ONGLET POUR LIRE. Neuf fois sur dix il verifie
+           des cibles ; la dixieme il change de phase. C'est la lecture qui
+           passe devant — le grief d'origine du commanditaire, et la regle
+           appliquee partout ailleurs dans la fiche.
+
+           L'ACQUIS DE N4.6 EST INTACT : la phase reste dans CET onglet, et
+           directement sous les macros qu'elle commande. Elle n'a pas besoin
+           d'etre premiere pour etre a cote — c'etait la proximite qui
+           comptait, pas le rang. coachSetPhase rappelle toujours
+           renderCoachNutriSection : cliquer une phase met a jour les cibles
+           juste au-dessus, sans changer d'onglet.
+
+           AUCUN IDENTIFIANT NE BOUGE — renderPhaseCoach, renderCoachNutriSection
+           et renderRepartitionPrisesCoach cherchent #ccd-phase, #ccd-nutrition
+           et #ccd-prises par id. Seul l'ordre du balisage change. -->
+      <section class="cc-sect" style="--cc-accent:var(--border)">
+        <div class="cc-sect-t"><span>Nutrition</span></div>
+        <div class="cc-sect-c" id="ccd-nutrition"></div>
+      </section>
       <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Phase</span></div>
         <div class="cc-sect-c" id="ccd-phase"></div>
@@ -5341,10 +5361,6 @@ const COACH_PHOTO='icons/coach.jpg';
       <section class="cc-sect" style="--cc-accent:var(--border);display:none">
         <div class="cc-sect-t"><span>Micro-signaux</span></div>
         <div class="cc-sect-c" id="ccd-micro"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Nutrition</span></div>
-        <div class="cc-sect-c" id="ccd-nutrition"></div>
       </section>
       <!-- N2.11 — LA REPARTITION DES PROTEINES, REMONTEE DE « DONNEES » LE
            26/08/2026. Elle etait le sixieme bloc de l onglet Donnees, entre
@@ -5566,7 +5582,12 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
       <h1 style="font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">Décharge groupée</h1>
-      <p class="sub" style="font-size:var(--fs-sm);margin-bottom:4px;line-height:1.6">Les séances actives des athlètes cochés seront marquées « décharge » et sortiront de la détection de plateau. Aucun décochage automatique : c'est toi qui la retires ensuite.</p>
+      <!-- B1.10 — LES DEUX GESTES, ET CE QUI LES DISTINGUE. Le texte annoncait
+           « Aucun decochage automatique : c'est toi qui la retires ensuite »,
+           alors que le bouton RETIRER pose par N4.3 fait exactement cela, sur
+           la meme selection et avec le meme recapitulatif. Le coach lisait une
+           consigne qui decrivait la contrainte qu'on venait de lui enlever. -->
+      <p class="sub" style="font-size:var(--fs-sm);margin-bottom:4px;line-height:1.6">Coche des athlètes, puis pose ou retire la décharge sur tous d'un coup. Poser marque leurs séances actives « décharge » et les sort du calcul de volume ; retirer les y ramène. Rien ne se décoche tout seul : une décharge reste jusqu'à ce que tu la retires.</p>
       <div style="display:flex;gap:8px;margin-bottom:16px;margin-top:12px">
         <button onclick="cdgSelectAll(true)" class="btn btn-outline btn-sm" style="flex:1">Tout sélectionner</button>
         <button onclick="cdgSelectAll(false)" class="btn btn-outline btn-sm" style="flex:1">Tout décocher</button>
@@ -19804,8 +19825,29 @@ function allerVersPrescription(nom){
   openCoachSessionExercises(idx);
   // LA CARTE EST MARQUEE, pas seulement atteinte : sur une seance de huit
   // exercices, « c'est quelque part plus bas » ne vaut guere mieux que rien.
-  setTimeout(()=>{ try{ _viserExercice(nom); }catch(e){} },60);
+  setTimeout(()=>{ _viserOuLeDire(nom); },60);
   return true;
+}
+// B1.11 — UN CIBLAGE QUI RATE NE SE TAIT PLUS.
+//
+// Les deux appelants enveloppaient _viserExercice d'un try{…}catch(e){} vide,
+// et jetaient sa valeur de retour. Or elle dit exactement ce qui nous
+// interesse : false quand aucune carte ne porte ce nom. Si le ciblage echouait
+// — nom renomme, carte pas encore rendue a 60 ms — rien ne se voyait : le
+// coach venait de remplacer un exercice, la page ne bougeait pas, et le toast
+// « Remplace ✓ » qui suit rendait le silence plus trompeur encore.
+//
+// L'OPERATION, ELLE, A BIEN EU LIEU. On ne transforme pas un echec de ciblage
+// en echec de remplacement : le message dit que la carte n'a pas ete
+// retrouvee, pas que le geste a echoue. Et il est discret — orange, pas rouge.
+function _viserOuLeDire(nom){
+  let ok=false;
+  try{ ok=_viserExercice(nom); }
+  catch(e){ console.warn('ciblage d\'exercice : ', e); }
+  if(ok) return true;
+  console.warn('ciblage d\'exercice : « '+nom+' » introuvable parmi les cartes rendues');
+  try{ toast('Modification enregistrée — la carte « '+nom+' » n’a pas pu être retrouvée à l’écran.','var(--orange)'); }catch(e){}
+  return false;
 }
 function _viserExercice(nom){
   let k=''; try{ k=exKey(nom); }catch(e){ k=String(nom||'').toUpperCase(); }
@@ -25874,7 +25916,7 @@ async function remplacerDepuisBanque(i,mode){
     progEx[i]=maj?exMisAJourParFiche(progEx[i],f):exRemplaceParFiche(progEx[i],f);
     _progExDirty=true;
     renderProgEx();
-    setTimeout(()=>{ try{ _viserExercice(progEx[i].name); }catch(e){} },60);
+    setTimeout(()=>{ _viserOuLeDire(progEx[i].name); },60);
     // CE QUI EST ARRIVE, ET CE QUI MANQUAIT. Une fiche peut etre illustree
     // sans etre filmee, ou l'inverse : le dire evite de chercher pourquoi.
     const _ap=progEx[i];

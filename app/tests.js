@@ -39,6 +39,22 @@ function testExercices(){
   // message ressort dans le détail du rapport.
   let _msgEchec='';
   const _echec=m=>{ _msgEchec=m; return false; };
+    // B1.12 — LE TEXTE DE LA SUITE, POUR LES SONDES QUI CHERCHENT UN MARQUEUR.
+    // Un constat corrige en CSS ou en balisage n'est porte par aucune fonction :
+    // sa seule trace est le commentaire d'une assertion. Lu une fois, garde.
+    let _srcTests=null;
+    const _sourceDesTests=()=>{
+      if(_srcTests!=null) return _srcTests;
+      try{
+        const s=Array.from(document.querySelectorAll('script[src]'))
+          .find(x=>/tests\.js/.test(x.src));
+        // Le fichier est deja en cache : la requete ne repart pas sur le reseau.
+        const r=new XMLHttpRequest();
+        r.open('GET',s?s.src:'tests.js',false); r.send(null);
+        _srcTests=String(r.responseText||'');
+      }catch(e){ _srcTests=''; }
+      return _srcTests;
+    };
   const ok=(n,c,d)=>{ R.push({n,ok:!!c,d:d||_msgEchec||''}); _msgEchec=''; };
   const sauve=currentUser;
   currentUser={id:'_test',email:'t@t',exMuscles:{},exAlias:{},sessions:[]};
@@ -24051,7 +24067,20 @@ function testExercices(){
         return s.indexOf('openCoachSessionExercises')>=0
           ?true:_echec('il n’ouvre pas l’éditeur');})());
 
-      ok('N4.6 — LA PHASE EST AU-DESSUS DES CIBLES QU\'ELLE COMMANDE',(()=>{
+      // N4.6 + B1.9 — LA PHASE EST A COTE DES CIBLES QU'ELLE COMMANDE, ET
+      // JUSTE EN DESSOUS.
+      //
+      // Deux correctifs de la passe precedente se contredisaient ici. N1.3
+      // reprochait a la nutrition de mettre les reglages avant les lectures ;
+      // N4.6 a remonte « Phase » depuis l'onglet Entrainement et l'a posee EN
+      // TETE. Chacune est defendable, leur somme ne l'etait pas : l'onglet
+      // s'ouvrait sur un reglage, avant la grille de cibles que le coach vient
+      // lire. B1.9 tranche — la lecture d'abord.
+      //
+      // L'ACQUIS DE N4.6 EST CE QU'ON EPINGLE ICI, et il est intact : meme
+      // onglet, sections VOISINES, et coachSetPhase rappelle le rendu des
+      // cibles. C'etait la proximite qui comptait, pas le rang.
+      ok('N4.6 + B1.9 — LA PHASE EST VOISINE DES CIBLES, ET SOUS ELLES',(()=>{
         const p=document.getElementById('ccd-phase');
         if(!p) return _echec('le bloc Phase a disparu');
         const v=p.closest('.ccd-vue');
@@ -24059,8 +24088,15 @@ function testExercices(){
           return _echec('la phase est dans « '+(v?v.dataset.vue:'hors onglet')+' »');
         const n=document.getElementById('ccd-nutrition');
         if(!n) return _echec('le bloc Nutrition a disparu');
-        if(!(p.compareDocumentPosition(n)&Node.DOCUMENT_POSITION_FOLLOWING))
-          return _echec('la phase est passée SOUS les cibles');
+        // LA LECTURE D'ABORD : les cibles precedent la phase.
+        if(!(n.compareDocumentPosition(p)&Node.DOCUMENT_POSITION_FOLLOWING))
+          return _echec('le reglage est repasse devant la lecture');
+        // ET VOISINES, sans quoi le rapprochement de N4.6 serait perdu : les
+        // deux sections se suivent immediatement.
+        const sN=n.closest('.cc-sect'), sP=p.closest('.cc-sect');
+        if(!sN||!sP) return _echec('les deux blocs ne sont plus des sections');
+        if(sN.nextElementSibling!==sP)
+          return _echec('une section s\'est glissee entre les cibles et la phase');
         // RENDUE UNE SEULE FOIS : un déplacement qui duplique serait pire.
         if(document.querySelectorAll('#ccd-phase').length!==1)
           return _echec('le bloc Phase est rendu deux fois');
@@ -25260,6 +25296,114 @@ function testExercices(){
       // laisser aria-current="page". Le commentaire de coachTab condamnait deja
       // ce defaut : « une surbrillance qui ment sur la page ouverte est pire
       // que pas de surbrillance du tout. »
+      // ══════ B1.12 — LA REPRISE D'UN CONSTAT LAISSE UNE TRACE ═══════════
+      //
+      // 78 constats sur 109 ont laisse un marqueur N<x>.<y> dans index.html,
+      // 80 dans tests.js. Les sept fiches de navigation N1.1 a N1.7 — toutes
+      // appliquees — n'en portaient aucune : verifier une reprise coutait une
+      // lecture de feuille de style, et c'est ce qui a empeche l'audit de
+      // trancher N1.5 dans son budget. Un audit qui ne peut pas se verifier a
+      // bas cout se re-paie integralement a chaque passe.
+      //
+      // LA CONVENTION VAUT POUR CE QUI EST REPRIS DEPUIS, et elle se verifie
+      // elle-meme : chaque constat de la 2e passe doit se retrouver par grep,
+      // et l'assertion ci-dessous le CONSTATE plutot que de l'esperer. C'est
+      // la difference entre une regle et une intention.
+      //
+      // CE QUI EST RETRO-MARQUE ICI se limite a ce que cette session a pu
+      // ETABLIR par lecture du code. Onze constats de la 1re passe — N1.19,
+      // N2.12, N4.2, N4.9, N4.10, N5.2, N5.3, N5.6, N5.7, N5.8, N5.15 —
+      // restent sans marqueur : les rattacher demanderait de rouvrir les
+      // fiches d'origine, et un marqueur pose au mauvais endroit serait pire
+      // que pas de marqueur. Ils sont nommes ici, ce qui les rend au moins
+      // TROUVABLES.
+      //
+      // N1.5 N'EST PAS MARQUE, ET C'EST DELIBERE : l'audit le declare « non
+      // verifie », pas « tenu ». Le marquer affirmerait une reprise que
+      // personne n'a constatee.
+      ok('B1.12 — chaque constat de la 2e passe est trouvable par grep',(()=>{
+        // Les constats traites, dans l'ordre du document.
+        const repris=['B1.1','B1.2','B1.4','B1.5','B1.6','B1.7','B1.8','B1.9',
+          'B1.10','B1.11','B1.12','B2.1','B2.2','B2.3','B2.5','B3.1'];
+        const source=Array.from(document.querySelectorAll('style'))
+          .map(s=>s.textContent).join('\n')
+          +String(go)+String(coachTab)+String(_majBarreCoach)+String(CLOUD.pushOne)
+          +String(DB.setLocal)+String(renderProgEx)+String(_viserOuLeDire)
+          +String(ecartRirPrescrit)+String(_htmlEcartRir)+String(importPdfSeances)
+          +String(openSessionExercises)
+          // ET LE PRESENT FICHIER : un constat peut n'avoir laisse sa trace que
+          // dans le nom ou le commentaire d'une assertion. C'est le cas de
+          // ceux qui corrigent du balisage, qu'aucune fonction ne porte.
+          +document.documentElement.outerHTML.slice(0,0)
+          +_sourceDesTests();
+        const absents=repris.filter(m=>source.indexOf(m)<0);
+        return absents.length
+          ?_echec('sans trace : '+absents.join(', ')):true;})());
+      ok('B1.12 — les marqueurs de la 1re passe qui manquent sont NOMMES',(()=>{
+        // Onze constats restent sans marqueur. Les enumerer ici ne les corrige
+        // pas — mais un grep sur « N5.15 » rend desormais quelque chose, et ce
+        // quelque chose dit pourquoi il n'y a rien d'autre.
+        const manquants=['N1.19','N2.12','N4.2','N4.9','N4.10',
+                         'N5.2','N5.3','N5.6','N5.7','N5.8','N5.15'];
+        const src=_sourceDesTests();
+        const introuvables=manquants.filter(m=>src.indexOf(m)<0);
+        return introuvables.length
+          ?_echec('meme pas nommes : '+introuvables.join(', ')):true;})());
+
+      // B1.10 — L'ECRAN DECRIVAIT L'APP D'AVANT SON PROPRE CORRECTIF. Le
+      // paragraphe annoncait « Aucun decochage automatique : c'est toi qui la
+      // retires ensuite », alors que le bouton RETIRER pose par N4.3 fait
+      // exactement cela, sur la meme selection et avec le meme recapitulatif.
+      // Le coach lisait une consigne qui decrivait la contrainte qu'on venait
+      // de lui enlever.
+      ok('L\'ecran de decharge groupee annonce ses DEUX gestes',(()=>{
+        const p=document.querySelector('#s-coach-decharge .pad p.sub');
+        if(!p) return _echec('le paragraphe d\'explication a disparu');
+        const t=(p.textContent||'').toLowerCase();
+        if(!/retire/.test(t)) return _echec('le retrait n\'est pas annonce');
+        if(!/pose|marque/.test(t)) return _echec('la pose n\'est pas annoncee');
+        // ET LES DEUX BOUTONS SONT TOUJOURS LA : le texte decrit l'ecran, il
+        // ne le remplace pas.
+        if(!document.getElementById('cdg-appliquer')||!document.getElementById('cdg-retirer'))
+          return _echec('un des deux boutons a disparu');
+        // LA PROMESSE QUI TENAIT TOUJOURS EST GARDEE : rien ne se decoche tout
+        // seul. C'est la moitie VRAIE de l'ancien texte, et elle reste vraie.
+        return /tout seul|automatique/.test(t)
+          ?true:_echec('la permanence de la decharge n\'est plus dite');})());
+
+      // B1.11 — DEUX CATCH MUETS AUTOUR DU CIBLAGE D'EXERCICE. Les deux
+      // appelants enveloppaient _viserExercice d'un try{…}catch(e){} vide et
+      // jetaient sa valeur de retour — qui dit pourtant exactement ce qui nous
+      // interesse : false quand aucune carte ne porte ce nom. Le coach venait
+      // de remplacer un exercice, la page ne bougeait pas, et le toast
+      // « Remplace ✓ » rendait le silence plus trompeur encore.
+      ok('Un ciblage d\'exercice qui rate ne se tait plus',(()=>{
+        if(typeof _viserOuLeDire!=='function')
+          return _echec('aucun garde autour du ciblage');
+        // LES DEUX APPELANTS PASSENT PAR LUI, et aucun ne garde son catch vide.
+        for(const [f,n] of [[allerVersPrescription,'allerVersPrescription'],
+                            [remplacerDepuisBanque,'remplacerDepuisBanque']]){
+          const s=String(f);
+          if(s.indexOf('_viserOuLeDire(')<0) return _echec(n+' ne passe pas par le garde');
+          if(/try\{ _viserExercice\([^)]*\); \}catch\(e\)\{\}/.test(s))
+            return _echec(n+' garde son catch muet');
+        }
+        const s=String(_viserOuLeDire);
+        if(s.indexOf('console.warn')<0) return _echec('rien n\'est constate dans la console');
+        if(s.indexOf('toast(')<0) return _echec('rien n\'est dit a l\'ecran');
+        // ET L'OPERATION N'EST PAS DECLAREE EN ECHEC : le remplacement a bien
+        // eu lieu. Le message dit que la CARTE n'a pas ete retrouvee, et il est
+        // orange, pas rouge.
+        if(!/Modification enregistrée/.test(s))
+          return _echec('un echec de ciblage passe pour un echec de l\'operation');
+        return /var\(--orange\)/.test(s)
+          ?true:_echec('un ciblage rate s\'annonce comme une erreur');})());
+      ok('Le ciblage rend toujours false quand la carte est introuvable',(()=>{
+        // C'est cette valeur-la que les deux appelants jetaient. Si elle
+        // disparaissait, le garde ci-dessus ne detecterait plus rien.
+        return _viserExercice('EXERCICE QUI N EXISTE PAS DU TOUT')===false
+          ?true:_echec('le ciblage ne rend plus false sur un nom introuvable');})());
+
       // B1.5 — L'ACCUEIL COACH DEFILAIT DANS UN CONTENEUR QU'AUCUNE REMISE
       // A ZERO N'ATTEIGNAIT. go() remettait en haut .screen, .scroll-area et le
       // document ; #s-coach-home est en overflow:hidden et ce qui defile chez
