@@ -143,6 +143,118 @@ function testExercices(){
         }
       }
       return n>=200?true:_echec('seulement '+n+' vidéos, le guide en porte 228');})());
+    // ══════ B3.5 a B3.8 ════════════════════════════════════════════════
+    (()=>{
+      const _s=(nom,rirs,fige)=>Object.assign({date:Date.now(),
+        data:{[nom]:{sets:rirs.map(r=>({done:true,rir:r}))}}},fige?{rirPlanned:fige}:{});
+      const _u=(rir,sessions)=>({
+        sessions_config:[{active:true,exercises:[{name:'DEVELOPPE COUCHE',rirCible:rir,series:4}]}],
+        sessions});
+
+      // B3.5 — LE RIR PRESCRIT N'ETAIT PAS FIGE DANS LA SEANCE. Toute lecture
+      // retrospective comparait un realise de mars au gabarit d'AUJOURD'HUI —
+      // et depuis que le bloc se periodise, cette comparaison est fausse par
+      // construction. C'est le motif qui a fait naitre setsPlanned.
+      ok('B3.5 — l\'ecart se lit sur la consigne DU JOUR, pas celle d\'aujourd\'hui',(()=>{
+        // Le gabarit dit RIR 2 aujourd'hui ; la seance a ete faite sous RIR 4.
+        const l=ecartRirPrescrit(_u('2',[_s('DEVELOPPE COUCHE',[4,4],{'DEVELOPPE COUCHE':4})]));
+        if(l.length!==1) return _echec('rien calcule');
+        if(l[0].prescrit!==4) return _echec('la consigne du jour vaut '+l[0].prescrit);
+        if(l[0].ecart!==0) return _echec('un ecart apparait la ou il n\'y en a pas : '+l[0].ecart);
+        // ET UNE SEANCE ANTERIEURE AU CHAMP RESTE LISIBLE : elle se compare au
+        // gabarit, faute de mieux — jamais a un zero.
+        const v=ecartRirPrescrit(_u('2',[_s('DEVELOPPE COUCHE',[4,4])]));
+        return v.length===1&&v[0].prescrit===2&&v[0].ecart===2
+          ?true:_echec('une seance ancienne n\'est plus lisible : '+JSON.stringify(v[0]||null));})());
+      ok('B3.5 — la consigne est figee a l\'enregistrement, et absente s\'il n\'y en a pas',(()=>{
+        const s=String(finishWorkout||'');
+        if(!s) return _echec('l\'enregistrement de seance est introuvable');
+        if(s.indexOf('rirPlanned')<0) return _echec('la consigne n\'est pas figee');
+        if(s.indexOf('_rirPrescrit(ex)')<0) return _echec('elle n\'est pas lue sur le programme');
+        // ABSENT PLUTOT QUE VIDE : un objet vide vaudrait « consigne a zero »,
+        // soit « jusqu'a l'echec ».
+        return /rirPlanned\?\{rirPlanned\}:\{\}/.test(s)
+          ?true:_echec('un objet vide est ecrit quand aucune consigne n\'existe');})());
+
+      // B3.6 — LA DERIVE DU RIR ETAIT AFFICHEE, JAMAIS INTERPRETEE. Le coach
+      // lisait une fleche sans savoir si elle etait bonne : un RIR qui baisse
+      // peut etre une montee d'intensite voulue ou une fatigue qui s'installe.
+      ok('B3.6 — la derive du RIR se lit en un mot, et se tait dans la bande',(()=>{
+        if(typeof lectureDeriveRir!=='function') return _echec('aucune lecture de la derive');
+        // LE SILENCE PAR DEFAUT : une variation ordinaire ne se commente pas.
+        if(lectureDeriveRir(0.3,null)!=='') return _echec('une variation ordinaire est commentee');
+        if(lectureDeriveRir(-0.4,null)!=='') return _echec('idem dans l\'autre sens');
+        if(lectureDeriveRir(null,null)!=='') return _echec('une derive absente produit un mot');
+        // LE MOT DISTINGUE UNE INTENSIFICATION D'UN AFFAISSEMENT.
+        if(lectureDeriveRir(-1,null)!=='intensification')
+          return _echec('un RIR qui baisse donne « '+lectureDeriveRir(-1,null)+' »');
+        if(lectureDeriveRir(1,null)!=='affaissement')
+          return _echec('un RIR qui monte donne « '+lectureDeriveRir(1,null)+' »');
+        // ET LE VOLUME ARBITRE : monter l'intensite EN montant le volume n'est
+        // pas monter l'intensite seule.
+        if(lectureDeriveRir(-1,40)!=='surcharge') return _echec('les deux leviers qui montent ne se disent pas');
+        return lectureDeriveRir(1,-40)==='allègement'
+          ?true:_echec('les deux qui baissent ne se disent pas');})());
+      ok('B3.6 — la regle d\'abstention de _rirTranche n\'a pas bouge',(()=>{
+        // Pas de derive sur une fenetre incomplete : c'est ce qui garantit
+        // qu'un athlete avec moins de huit seances n'affiche aucun mot.
+        const s=String(_htmlRirMoyen);
+        if(s.indexOf('_av.n===RIR_DERNIERES')<0)
+          return _echec('la fenetre incomplete produit desormais une derive');
+        return s.indexOf('lectureDeriveRir(')>=0
+          ?true:_echec('la derive n\'est toujours pas interpretee');})());
+
+      // B3.7 — LE RAPPORT POUSSEE/TIRAGE ETAIT AFFICHE SANS REPERE, ET
+      // SEULEMENT DANS L'EDITEUR. Le coach lisait « 1,4 » sans savoir si
+      // c'etait acceptable, et le chiffre n'existait pas la ou il juge.
+      ok('B3.7 — le rapport porte un repere, et se tait dans la bande',(()=>{
+        if(typeof lectureRatioPousseeTirage!=='function') return _echec('aucun repere');
+        if(lectureRatioPousseeTirage(1)!=='') return _echec('un rapport equilibre est commente');
+        if(lectureRatioPousseeTirage(1.2)!=='') return _echec('1,2 sort de la bande');
+        if(lectureRatioPousseeTirage(1.6)!=='poussée dominante')
+          return _echec('1,6 donne « '+lectureRatioPousseeTirage(1.6)+' »');
+        if(lectureRatioPousseeTirage(0.6)!=='tirage dominant')
+          return _echec('0,6 donne « '+lectureRatioPousseeTirage(0.6)+' »');
+        if(lectureRatioPousseeTirage(null)!=='') return _echec('un rapport absent produit un mot');
+        // ET LA REGLE D'ABSTENTION DU CALCUL TIENT : un programme entierement
+        // compose d'exercices non classes n'affiche toujours rien.
+        const r=ratioPousseeTirage([{active:true,exercises:[{name:'ZZZ INCONNU',series:4}]}],{});
+        if(r!==null) return _echec('un programme non classe produit un rapport');
+        // IL VIT AUSSI SUR LA FICHE, la ou le coach juge.
+        return String(renderVolumeCoach).indexOf('_htmlRatioPousseeTirage(')>=0
+          ?true:_echec('le rapport n\'existe toujours que dans l\'editeur');})());
+
+      // B3.8 — L'ECRAN AFFIRMAIT QUE L'INTENSITE N'ETAIT PAS PRESCRITE, SOUS
+      // LE CHAMP QUI LA PRESCRIT. Et le calcul lui donnait raison.
+      ok('B3.8 — sans consigne, les chiffres sont EXACTEMENT ceux d\'avant',(()=>{
+        // C'est la condition qui permet de ne pas toucher aux reperes auxquels
+        // ce volume est compare.
+        const cfg=[{active:true,exercises:[{name:'DEVELOPPE COUCHE',series:4}]}];
+        const v=volumePrescrit(cfg,{});
+        const attendu=4*POIDS_RIR_ABSENT*POIDS_ROLE.PRIMAIRE;
+        const pec=v.muscles.PECTORAUX;
+        if(Math.abs(pec-attendu)>0.001)
+          return _echec('le volume sans consigne a change : '+pec+' au lieu de '+attendu);
+        return v.sansConsigne===4&&v.avecConsigne===0
+          ?true:_echec('le compte des series sans consigne est faux');})());
+      ok('B3.8 — avec consigne, l\'intensite compte, et par la MEME table',(()=>{
+        // RIR 5 pese 0 dans POIDS_RIR : une serie prescrite tres facile ne
+        // fabrique pas de volume dur. C'est la table du volume REALISE,
+        // reutilisee — deux ponderations pour une meme notion finiraient par ne
+        // plus dire la meme chose du meme programme.
+        const cfg=[{active:true,exercises:[{name:'DEVELOPPE COUCHE',series:4,rirCible:'5'}]}];
+        const v=volumePrescrit(cfg,{});
+        if((v.muscles.PECTORAUX||0)!==0)
+          return _echec('une serie a RIR 5 fabrique encore du volume dur : '+v.muscles.PECTORAUX);
+        if(v.avecConsigne!==4) return _echec('les series avec consigne ne sont pas comptees');
+        // ET LE TEXTE DIT LA VERITE. Il affirmait le contraire de ce que le
+        // coach venait de saisir.
+        const s=String(renderVolumePrescrit);
+        if(s.indexOf('v.avecConsigne')<0) return _echec('le texte ne distingue plus les deux cas');
+        return /Aucune intensité n’est prescrite/.test(s)
+          ?true:_echec('le cas « aucune consigne » ne se dit plus');})());
+    })();
+
     // ══════ B3.4 — UN GESTE QUI PORTE ENFIN SUR L'INTENSITE ════════════
     //
     // Les trois gestes offerts au coach agissaient sur le VOLUME ou sur le

@@ -18799,6 +18799,37 @@ function _accesExpire(c){
 // ecrit. Ajouter une couleur affaiblirait le filet — voir le commentaire de
 // _etatAthlete.
 const CHARGE_BANDE=30;   // % d'ecart a la moyenne des 4 semaines precedentes
+// B3.6 — LA DERIVE DU RIR, EN UN MOT.
+//
+// La carte affichait « 2,1 · ▼ 0,4 sur les 4 precedentes » : le coach lisait
+// une fleche sans savoir si elle etait bonne. Un RIR qui baisse peut etre une
+// montee d'intensite VOULUE ou une fatigue qui s'installe — et c'est le
+// croisement avec le volume qui tranche. Le rapport aigu/chronique a recu ce
+// traitement ; la derive du RIR ne l'avait pas recu.
+//
+// LE SEUIL EST UN DEMI-POINT DE RIR. En deca, sur quatre seances, l'ecart
+// tient a la facon dont l'athlete a estime ses series ce jour-la : ce n'est pas
+// une derive, c'est du bruit. Le silence est donc le comportement par defaut —
+// une variation ordinaire ne se commente pas.
+const RIR_DERIVE_BANDE=0.5;
+// PURE. `d` est la derive du RIR (positive = plus facile), `dVol` la variation
+// de volume sur la meme fenetre, en pourcentage, ou null si on ne la connait
+// pas. Rend '' quand il n'y a rien a dire.
+function lectureDeriveRir(d,dVol){
+  if(d==null||!isFinite(d)) return '';
+  if(Math.abs(d)<RIR_DERIVE_BANDE) return '';
+  // UN RIR QUI BAISSE = ON POUSSE PLUS FORT. Reste a savoir si c'est voulu.
+  if(d<0){
+    // Le volume monte AUSSI : les deux leviers montent ensemble, et c'est la
+    // definition d'une surcharge. On le dit, prudemment.
+    if(dVol!=null&&isFinite(dVol)&&dVol>=CHARGE_BANDE) return 'surcharge';
+    return 'intensification';
+  }
+  // UN RIR QUI MONTE = on pousse moins. Avec un volume qui baisse aussi, c'est
+  // un relachement ; sinon, un affaissement de l'intensite seule.
+  if(dVol!=null&&isFinite(dVol)&&dVol<=-CHARGE_BANDE) return 'allègement';
+  return 'affaissement';
+}
 function lectureChargeHebdo(pct){
   if(pct==null||!isFinite(pct)) return '';
   if(pct>=CHARGE_BANDE) return 'pic';
@@ -31180,10 +31211,38 @@ function finishWorkout(incomplete=false){
   // sets = réalisé, setsPlanned = prévu. Les deux sont conservés : sans le
   // second, un « 5 » isolé ne dit pas s'il vaut pour 5 sur 5 ou 5 sur 12, et
   // l'historique ne permet plus de reconstituer l'écart après coup.
+  // B3.5 — L'INTENSITE PRESCRITE CE JOUR-LA, FIGEE COMME LE VOLUME PREVU.
+  //
+  // La seance portait le RIR REALISE et un setsPlanned, mais aucune trace de
+  // la consigne en vigueur. Toute lecture retrospective comparait donc un
+  // realise de mars au gabarit d'AUJOURD'HUI — et depuis que le bloc peut
+  // varier d'une semaine a l'autre (B3.2), cette comparaison est fausse par
+  // construction. C'est exactement le motif qui a fait naitre setsPlanned.
+  //
+  // PAR EXERCICE, sous le nom ecrit dans la seance : c'est la clef que porte
+  // deja `data`, et la seule qui permette de rapprocher les deux plus tard.
+  // Une seance sans consigne du tout n'ecrit RIEN — un objet vide vaudrait
+  // « consigne a zero », soit « jusqu'a l'echec », et ce serait un contresens.
+  const rirPlanned=(()=>{
+    const o={};
+    try{
+      for(const ex of (woState.exercises||[])){
+        if(!ex||!ex.name) continue;
+        const r=_rirPrescrit(ex);
+        if(r!=='') o[ex.name]=Number(r);
+      }
+    }catch(e){}
+    return Object.keys(o).length?o:null;
+  })();
   const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data,
     // Planifiee par le coach : cette seance sort de la serie temporelle et ne
     // peut donc pas passer pour un recul.
     deload:!!woState.deload,
+    // B3.5 — ABSENT quand aucune consigne n'etait posee. Une seance
+    // anterieure a ce champ reste lisible et sort de toute comparaison, jamais
+    // traitee comme un zero : c'est la regle deja appliquee aux seances
+    // anterieures a setsPlanned.
+    ...(rirPlanned?{rirPlanned}:{}),
     // Substitutions de la seance : l'athlete a remplace un exercice pour
     // AUJOURD'HUI. sessions_config n'a pas bouge, le coach doit le voir.
     substitutions:(woState.substitutions||[]).slice()};
@@ -40963,7 +41022,13 @@ function _htmlRirMoyen(c){
     // bruit a une information qui dit « rien n'a bouge ».
     if(Math.abs(d)>=0.05){
       const fl=d>0?'▲':'▼';
-      derive=`<span style="color:var(--text-faint)"> · ${fl} ${String(Math.abs(d)).replace('.',',')} sur les ${RIR_DERNIERES} précédentes</span>`;
+      // B3.6 — ET LE MOT QUI DIT CE QUE LA FLECHE VEUT DIRE, quand il y a
+      // quelque chose a dire. Le volume de la semaine sert d'arbitre : monter
+      // l'intensite en montant le volume n'est pas monter l'intensite seule.
+      let _dVol=null;
+      try{ const _ch=_chargeHebdo(c); if(_ch&&_ch.pct!=null) _dVol=_ch.pct; }catch(e){}
+      const mot=lectureDeriveRir(d,_dVol);
+      derive=`<span style="color:var(--text-faint)"> · ${fl} ${String(Math.abs(d)).replace('.',',')} sur les ${RIR_DERNIERES} précédentes${mot?' · '+mot:''}</span>`;
     }
   }
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
@@ -41022,17 +41087,22 @@ function ecartRirPrescrit(user){
     const ss=((user.sessions)||[]).filter(x=>x&&x.date&&x.data)
       .slice().sort((a,b)=>b.date-a.date).slice(0,RIR_DERNIERES);
     for(const sess of ss){
+      // B3.5 — LA CONSIGNE DE CE JOUR-LA D'ABORD. `rirPlanned` fige ce qui
+      // etait prescrit au moment de la seance ; le gabarit d'aujourd'hui n'est
+      // qu'un repli, pour les seances anterieures a ce champ.
+      const fige=(sess.rirPlanned&&typeof sess.rirPlanned==='object')?sess.rirPlanned:null;
       for(const nom of Object.keys(sess.data||{})){
         const k=exKey(nom);
-        if(pres[k]==null) continue;
+        const cons=fige&&fige[nom]!=null?Number(fige[nom]):pres[k];
+        if(cons==null) continue;
         const d=sess.data[nom];
         if(!d||!Array.isArray(d.sets)) continue;
         for(const s of d.sets){
           if(!s||s.done!==true) continue;
           if(s.rir===''||s.rir==null) continue;
           const v=(s.rir==='echec')?0:(parseInt(s.rir,10)||0);
-          const f=faits[k]||(faits[k]={somme:0,n:0,nom});
-          f.somme+=v; f.n++;
+          const f=faits[k]||(faits[k]={somme:0,n:0,nom,sommeCons:0});
+          f.somme+=v; f.n++; f.sommeCons+=cons;
         }
       }
     }
@@ -41041,8 +41111,11 @@ function ecartRirPrescrit(user){
     const f=faits[k];
     if(!f.n) continue;
     const realise=Math.round(f.somme/f.n*100)/100;
-    out.push({nom:f.nom,prescrit:pres[k],realise,n:f.n,
-              ecart:Math.round((realise-pres[k])*100)/100});
+    // LA CONSIGNE MOYENNE SUR LA FENETRE, et non celle d'aujourd'hui : elle a
+    // pu changer d'une semaine a l'autre depuis que le bloc se periodise.
+    const prescrit=Math.round(f.sommeCons/f.n*100)/100;
+    out.push({nom:f.nom,prescrit,realise,n:f.n,
+              ecart:Math.round((realise-prescrit)*100)/100});
   }
   out.sort((a,b)=>Math.abs(b.ecart)-Math.abs(a.ecart));
   return out;
@@ -41167,6 +41240,7 @@ function renderVolumeCoach(c){
     ${_axPrio?'':_axial}
     ${_htmlRirMoyen(c)}
     ${_htmlEcartRir(c)}
+    ${(()=>{ try{ return _htmlRatioPousseeTirage((c&&c.sessions_config)||[],c); }catch(e){ return ''; } })()}
     ${_htmlEcartPrescrit(c)}
     ${_htmlAdherenceCoach(c)}
     ${_htmlCarteDecharge(c)}
@@ -41665,9 +41739,24 @@ async function programmerDecharge(pose){
 }
 
 // ── Volume PRESCRIT : ce que le programme impose, avant publication ─────────
-// Σ séries × poids de rôle sur les créneaux actifs. Aucune notion d'intensité
-// ici : le RIR n'est pas prescrit, il est constaté. Ce chiffre est donc un
-// MAJORANT du volume dur, pas une prévision.
+// Σ séries × poids de rôle × poids d'intensité, sur les créneaux actifs.
+//
+// B3.8 — CE COMMENTAIRE AFFIRMAIT LE CONTRAIRE, et il avait raison quand il a
+// été écrit : « le RIR n'est pas prescrit, il est constaté ». Depuis, l'éditeur
+// d'exercices porte un sélecteur de RIR cible, sur le MÊME écran que ce
+// chiffre. Le coach lisait donc, sous le champ où il venait d'écrire « RIR 2 »,
+// une phrase lui disant que l'intensité n'était pas prescrite — et le calcul
+// lui donnait raison, en pondérant chaque série comme si aucune consigne
+// n'existait.
+//
+// UNE ABSENCE DE CONSIGNE N'EST PAS UNE CONSIGNE. Sans RIR prescrit, la série
+// pèse POIDS_RIR_ABSENT — soit 1, exactement comme avant : un programme sans
+// aucune consigne rend les MÊMES chiffres qu'hier, au dixième près. C'est ce
+// qui permet de ne pas toucher aux repères auxquels ce volume est comparé.
+//
+// Avec une consigne, c'est poidsIntensite qui tranche — LA MÊME table que le
+// volume réalisé, jamais une seconde : deux pondérations pour une même notion
+// finiraient par ne plus dire la même chose du même programme.
 // ══════════════ RECORDS, TONNAGE, RIR MOYEN, PRESCRIT / RÉALISÉ ══════════════
 // Quatre indicateurs entièrement DÉRIVÉS. Aucun champ n'est ajouté au dossier :
 // tout se recalcule à la lecture, avec le cache de la détection de plateau —
@@ -41885,7 +41974,7 @@ function _badgeRecord(idx,i){
 }
 
 function volumePrescrit(cfg,user){
-  const out={muscles:{},nonRattaches:0};
+  const out={muscles:{},nonRattaches:0,avecConsigne:0,sansConsigne:0};
   for(const s of (cfg||[])){
     if(!s||!s.active||!Array.isArray(s.exercises)) continue;
     for(const ex of s.exercises){
@@ -41894,8 +41983,16 @@ function volumePrescrit(cfg,user){
       const nb=Math.max(0,parseInt(ex.series)||0);
       if(!nb) continue;
       if(!cls||cls===VOL_CARDIO){ if(!cls) out.nonRattaches+=nb; continue; }
-      for(const m of (cls.p||[])) out.muscles[m]=(out.muscles[m]||0)+nb*POIDS_ROLE.PRIMAIRE;
-      for(const m of (cls.s||[])) out.muscles[m]=(out.muscles[m]||0)+nb*POIDS_ROLE.SECONDAIRE;
+      // B3.8 — L'INTENSITE PRESCRITE COMPTE, QUAND ELLE EST PRESCRITE.
+      // poidsIntensite lit `rir` ; _rirPrescrit sait aussi lire `rirCible`,
+      // l'ancien champ. On lui passe donc ce qu'il a resolu, ce qui evite de
+      // rater une consigne ecrite avant le lot qui a change de champ.
+      const _r=_rirPrescrit(ex);
+      const pi=poidsIntensite({rir:_r===''?null:_r});
+      if(_r!=='') out.avecConsigne=(out.avecConsigne||0)+nb;
+      else out.sansConsigne=(out.sansConsigne||0)+nb;
+      for(const m of (cls.p||[])) out.muscles[m]=(out.muscles[m]||0)+nb*pi*POIDS_ROLE.PRIMAIRE;
+      for(const m of (cls.s||[])) out.muscles[m]=(out.muscles[m]||0)+nb*pi*POIDS_ROLE.SECONDAIRE;
     }
   }
   return out;
@@ -41932,14 +42029,34 @@ function ratioPousseeTirage(cfg,user){
           // nombres ecrits a cote.
           ratio:tirage?Math.round(poussee/tirage*100)/100:null};
 }
+// B3.7 — LA BANDE OU RIEN NE SE DIT.
+//
+// Le coach lisait « 1,4 » sans savoir si c'etait acceptable. Meme traitement
+// que lectureChargeHebdo : une bande centrale silencieuse, un mot quand on en
+// sort, dans un sens comme dans l'autre.
+//
+// 0,8 A 1,3, ET LE SEUIL EST ASSUME. L'equilibre de reference en musculature
+// du haut du corps est 1:1 — autant de series de tirage que de poussee — et la
+// pratique tolere une legere dominante de poussee, d'ou la bande dissymetrique.
+// En sortir dans un sens ou dans l'autre est un choix qui se defend ; ne pas
+// le SAVOIR n'en est pas un.
+const PT_BANDE_BAS=0.8, PT_BANDE_HAUT=1.3;
+// PURE. Rend '' dans la bande, un mot en dehors, '' si le rapport n'existe pas.
+function lectureRatioPousseeTirage(ratio){
+  if(ratio==null||!isFinite(ratio)) return '';
+  if(ratio>PT_BANDE_HAUT) return 'poussée dominante';
+  if(ratio<PT_BANDE_BAS) return 'tirage dominant';
+  return '';
+}
 function _htmlRatioPousseeTirage(cfg,user){
   const r=ratioPousseeTirage(cfg,user);
   if(!r) return '';
   const nb=v=>String(v).replace('.',',');
+  const mot=lectureRatioPousseeTirage(r.ratio);
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:9px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800">Poussée / tirage</span>
-      <span style="font-size:var(--fs-xs);color:var(--text-strong);white-space:nowrap">${r.ratio!=null?nb(r.ratio):'—'} · ${r.poussee} / ${r.tirage} séries</span>
+      <span style="font-size:var(--fs-xs);color:var(--text-strong);white-space:nowrap">${r.ratio!=null?nb(r.ratio):'—'}${mot?`<span style="color:var(--orange)"> · ${mot}</span>`:''} · ${r.poussee} / ${r.tirage} séries</span>
     </div>
     ${r.horsSchema?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">${r.horsSchema} série${r.horsSchema>1?'s':''} sur exercice au schéma non résolu, hors du compte.</div>`:''}
   </div>`;
@@ -41955,8 +42072,12 @@ function renderVolumePrescrit(cfg,user){
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:4px">Volume prescrit</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:10px;line-height:1.5">
-      Séries programmées sur les créneaux actifs. L'intensité n'étant pas prescrite,
-      c'est un maximum : le volume réellement dur sera au plus égal.
+      ${v.avecConsigne
+        ? (v.sansConsigne
+            ? 'Séries programmées sur les créneaux actifs, pondérées par l’intensité que tu as prescrite. '
+              +v.sansConsigne+' série'+(v.sansConsigne>1?'s':'')+' sans consigne comptent pour un maximum.'
+            : 'Séries programmées sur les créneaux actifs, pondérées par l’intensité que tu as prescrite.')
+        : 'Séries programmées sur les créneaux actifs. Aucune intensité n’est prescrite : c’est un maximum, le volume réellement dur sera au plus égal.'}
     </div>
     ${lignes.map(m=>{
       const rep=reperesEffectifs(u,m);
