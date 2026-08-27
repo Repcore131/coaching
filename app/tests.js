@@ -143,6 +143,166 @@ function testExercices(){
         }
       }
       return n>=200?true:_echec('seulement '+n+' vidéos, le guide en porte 228');})());
+    // ══════ B3.2 + B3.3 — LE BLOC PEUT ENFIN ETRE PERIODISE ════════════
+    //
+    // `programme.ecarts` etait documente, lu par getSemaineEffective — donc
+    // par semainesDuBloc et grilleCharge — et ECRIT PAR UNE SEULE LIGNE du
+    // fichier : son initialisation a objet vide. « Bloc de douze semaines »
+    // signifiait « la meme semaine douze fois », et la grille de charge
+    // affichait douze colonnes identiques.
+    (()=>{
+      const _lundi=()=>{ const d=new Date(); d.setHours(0,0,0,0);
+        d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.getTime(); };
+      const _dos=(sem)=>({email:'a@x.fr',sessions_config:[
+          {day:'Lundi',active:true,name:'A',exercises:[
+            {name:'DEVELOPPE COUCHE',series:4,rir:'2'},
+            {name:'ROWING BARRE LARGE',series:4,rir:'2'}]},
+          {day:'Mardi',active:false,name:'',exercises:[]}],
+        programme:{debut:_lundi(),semaines:sem||4,decharges:[],ecarts:{}}});
+
+      ok('B3.2 — un ecart change UNE semaine, et elle seule',(()=>{
+        const u=_dos(4);
+        const n=poserEcartSemaine(u,2,{series:-1});
+        if(n!==1) return _echec(n+' creneau(x) touche(s) au lieu de 1');
+        const l=semainesDuBloc(u);
+        if(l.length!==4) return _echec(l.length+' semaine(s) au lieu de 4');
+        const ser=i=>l[i].creneaux[0].exercises.map(x=>x.series).join(',');
+        if(ser(2)!=='3,3') return _echec('la semaine visee porte '+ser(2));
+        // LES AUTRES SUIVENT LE GABARIT : c'est la raison d'etre du modele.
+        for(const i of [0,1,3])
+          if(ser(i)!=='4,4') return _echec('la semaine '+(i+1)+' a bouge : '+ser(i));
+        // ET LE GABARIT LUI-MEME N'A PAS BOUGE. getSemaineEffective rend une
+        // vue, pas une reference : un ecart qui muterait sessions_config
+        // contaminerait tout le bloc.
+        return u.sessions_config[0].exercises[0].series===4
+          ?true:_echec('le gabarit a ete modifie');})());
+
+      ok('B3.2 — retirer l\'ecart remet la semaine au gabarit',(()=>{
+        const u=_dos(4);
+        poserEcartSemaine(u,1,{series:2,rir:-1});
+        if(!semainePorteEcart(u,1)) return _echec('l\'ecart n\'a pas ete pose');
+        if(!retirerEcartSemaine(u,1)) return _echec('le retrait ne rend pas true');
+        if(semainePorteEcart(u,1)) return _echec('l\'ecart survit au retrait');
+        const l=semainesDuBloc(u);
+        const ser=l[1].creneaux[0].exercises.map(x=>x.series).join(',');
+        const rir=l[1].creneaux[0].exercises.map(x=>_rirPrescrit(x)).join(',');
+        if(ser!=='4,4') return _echec('les series ne sont pas revenues : '+ser);
+        if(rir!=='2,2') return _echec('l\'intensite n\'est pas revenue : '+rir);
+        // RETIRER CE QUI N'EXISTE PAS NE MENT PAS.
+        return retirerEcartSemaine(u,3)===false
+          ?true:_echec('retirer un ecart absent rend true');})());
+
+      ok('B3.2 — l\'intensite se module sur la MEME echelle, et jamais depuis rien',(()=>{
+        const u=_dos(4);
+        u.sessions_config[0].exercises[1]={name:'CURL BARRE',series:3};  // sans consigne
+        poserEcartSemaine(u,0,{rir:1});
+        const c=semainesDuBloc(u)[0].creneaux[0];
+        if(_rirPrescrit(c.exercises[0])!=='3')
+          return _echec('RIR 2 + 1 donne '+_rirPrescrit(c.exercises[0]));
+        // L'ABSENCE DE CONSIGNE RESTE UNE ABSENCE : un exercice sans RIR n'en
+        // recoit pas un par la bande. Zero signifierait « jusqu'a l'echec ».
+        if(_rirPrescrit(c.exercises[1])!=='')
+          return _echec('un exercice sans consigne en a recu une : '+_rirPrescrit(c.exercises[1]));
+        // ET L'ECHELLE EST BORNEE : 0 est l'echec, 5 tres facile.
+        const v=_dos(4); poserEcartSemaine(v,0,{rir:9});
+        return _rirPrescrit(semainesDuBloc(v)[0].creneaux[0].exercises[0])==='5'
+          ?true:_echec('l\'echelle deborde');})());
+
+      ok('B3.2 — une serie reste une serie : le plancher tient',(()=>{
+        const u=_dos(4);
+        poserEcartSemaine(u,0,{series:-9});
+        const ser=semainesDuBloc(u)[0].creneaux[0].exercises.map(x=>x.series).join(',');
+        if(ser!=='1,1') return _echec('plancher franchi : '+ser);
+        // UNE MODULATION QUI NE CHANGE RIEN NE S'ECRIT PAS : un ecart qui ne
+        // pese rien alourdirait le dossier pour rien.
+        const v=_dos(4);
+        if(poserEcartSemaine(v,0,{series:0,rir:0})!==0)
+          return _echec('un ecart nul a ete ecrit');
+        return !semainePorteEcart(v,0)?true:_echec('un ecart vide subsiste');})());
+
+      // B3.3 — UNE SEMAINE DE DECHARGE PLANIFIEE NE DECHARGEAIT RIEN.
+      // appliquerDecharge se contentait d'ajouter l'index dans
+      // programme.decharges : faute d'ecart, la semaine marquee « dech. »
+      // prescrivait EXACTEMENT le meme travail que les autres. La decharge
+      // n'etait qu'un bandeau chez l'athlete et une exclusion des calculs de
+      // plateau. Un coach qui planifiait une decharge en S5 croyait avoir
+      // allege la semaine ; il ne l'avait pas fait.
+      ok('B3.3 — une decharge planifiee prescrit reellement moins',(()=>{
+        const u=_dos(6);
+        if(!appliquerDecharge(u,4)) return _echec('la decharge n\'a pas ete posee');
+        const l=semainesDuBloc(u);
+        const ser=i=>l[i].creneaux[0].exercises.map(x=>x.series).join(',');
+        const rir=i=>l[i].creneaux[0].exercises.map(x=>_rirPrescrit(x)).join(',');
+        // 60 % de 4 series = 2,4 arrondi a 2. Et une repetition de plus en
+        // reserve : une decharge qui ne toucherait qu'au volume laisserait
+        // l'athlete pousser jusqu'a l'echec sur ce qui reste.
+        if(ser(4)!=='2,2') return _echec('la semaine de decharge porte '+ser(4)+' series');
+        if(rir(4)!=='3,3') return _echec('l\'intensite n\'a pas baisse : RIR '+rir(4));
+        // LES AUTRES SEMAINES NE BOUGENT PAS.
+        if(ser(3)!=='4,4') return _echec('la semaine d\'avant a bouge : '+ser(3));
+        // ET LE VOLUME PREVISIONNEL LE VOIT : c'est lui que la grille affiche.
+        const vD=_volumePrevisionnel(l[4],u), vN=_volumePrevisionnel(l[3],u);
+        const somme=o=>Object.keys(o).reduce((a,k)=>a+o[k],0);
+        if(!(somme(vD)<somme(vN)))
+          return _echec('la grille montrera deux colonnes identiques : '+somme(vD)+' contre '+somme(vN));
+        // LE PONT VERS LA DETECTION DE PLATEAU TIENT TOUJOURS.
+        return semaineEstDecharge(u,new Date(u.programme.debut+4*604800000))
+          ?true:_echec('la semaine n\'est plus reconnue comme decharge');})());
+
+      ok('B3.3 — retirer la decharge remet la semaine a son niveau',(()=>{
+        const u=_dos(6);
+        appliquerDecharge(u,2);
+        if(!semainePorteEcart(u,2)) return _echec('la decharge n\'a pose aucun allegement');
+        // Le coach retire la semaine de la liste, par le meme chemin que
+        // l'ecran du bloc.
+        u.programme.decharges=[];
+        const n=synchroniserEcartsDecharge(u);
+        if(!n) return _echec('la synchronisation n\'a rien fait');
+        if(semainePorteEcart(u,2)) return _echec('l\'allegement survit a la decharge');
+        const ser=semainesDuBloc(u)[2].creneaux[0].exercises.map(x=>x.series).join(',');
+        if(ser!=='4,4') return _echec('la semaine n\'est pas revenue : '+ser);
+        // ET UN ECART ECRIT A LA MAIN N'EST JAMAIS TOUCHE : seuls ceux qui
+        // portent la marque de la decharge sont poses et retires.
+        const v=_dos(6);
+        poserEcartSemaine(v,1,{series:1});
+        v.programme.decharges=[];
+        synchroniserEcartsDecharge(v);
+        return semainePorteEcart(v,1)
+          ?true:_echec('un ecart ecrit a la main a ete efface');})());
+
+      ok('B3.3 — la branche hors bloc n\'a pas bouge',(()=>{
+        // C'est le geste existant, et il fonctionne : un dossier sans
+        // programme pose deload sur les creneaux actifs.
+        const u={email:'b@x.fr',sessions_config:[
+          {active:true,exercises:[{name:'DC',series:3}]},
+          {active:false,exercises:[]}]};
+        if(!appliquerDecharge(u)) return _echec('la decharge hors bloc ne s\'applique plus');
+        if(u.sessions_config[0].deload!==true) return _echec('le drapeau deload n\'est plus pose');
+        return u.sessions_config[1].deload===undefined
+          ?true:_echec('un creneau inactif a recu le drapeau');})());
+
+      ok('B3.2 — le geste existe, et il passe par le chemin d\'ecriture de la fiche',(()=>{
+        if(typeof ajusterSemaineBloc!=='function')
+          return _echec('aucun moyen de modifier une semaine');
+        const s=String(ajusterSemaineBloc)+String(_gcEnregistrer);
+        if(s.indexOf('poserEcartSemaine(')<0) return _echec('le geste n\'ecrit aucun ecart');
+        if(s.indexOf('retirerEcartSemaine(')<0) return _echec('on ne peut pas defaire');
+        if(s.indexOf("DB.set('users'")<0||s.indexOf('CLOUD.pushOne(')<0)
+          return _echec('l\'ecriture ne passe pas par le chemin de la fiche');
+        // RESERVE AUX COACHS, comme l'ecran qui le porte.
+        if(s.indexOf("role!=='coach'")<0) return _echec('un athlete pourrait periodiser son bloc');
+        // ET LA GRILLE OFFRE LA POIGNEE.
+        return String(_rendreGrilleCharge).indexOf('ajusterSemaineBloc(')>=0
+          ?true:_echec('la grille n\'offre aucun point d\'entree');})());
+
+      ok('B3.2 — getSemaineEffective reste PURE',(()=>{
+        // Une vue qui parcourt vingt-quatre semaines l'appelle vingt-quatre
+        // fois : le moindre effet de bord s'y multiplierait.
+        const s=String(getSemaineEffective);
+        return /DB\.set|CLOUD\.push|saveUser|updatedAt=/.test(s)
+          ?_echec('getSemaineEffective ecrit'):true;})());
+    })();
+
     // ══════ B3.1 — L'INTENSITE PRESCRITE REVIENT AU COACH ═══════════════
     // La boucle cassait au quatrieme maillon : le coach prescrit « RIR 2 »,
     // l'athlete saisit son RIR serie par serie, la fiche affiche une moyenne

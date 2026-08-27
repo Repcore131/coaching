@@ -14689,6 +14689,11 @@ function reporterDecharge(user){
 // plus loin, on l'AVANCE au lieu d'en ajouter une seconde. Sans bloc, on
 // retombe sur le geste existant : `deload` sur les créneaux actifs, les
 // inactifs intacts.
+// B3.3 — L'ALLEGEMENT PAR DEFAUT D'UNE SEMAINE DE DECHARGE. Nommes, pour
+// qu'on puisse en discuter : ce sont des reglages de coaching, pas des
+// constantes techniques.
+const DECHARGE_FACTEUR_SERIES=0.6;   // 60 % du volume du gabarit
+const DECHARGE_RIR_PLUS=1;           // une repetition de plus en reserve
 function appliquerDecharge(user,semaine){
   const u=_dossier(user);
   if(!u) return false;
@@ -14701,6 +14706,26 @@ function appliquerDecharge(user,semaine){
     const l=pr.decharges.filter(x=>x!==avancee);
     if(l.indexOf(idx)<0) l.push(idx);
     u.programme.decharges=l.sort((a,b)=>a-b);
+    // B3.3 — ET LA SEMAINE PRESCRIT REELLEMENT MOINS.
+    //
+    // Cette branche se contentait d'ajouter l'index dans programme.decharges.
+    // Faute d'ecart, la semaine marquee « dech. » prescrivait EXACTEMENT le
+    // meme travail que les autres : _volumePrevisionnel lit les creneaux,
+    // c'est-a-dire le gabarit. La decharge n'etait qu'un bandeau chez
+    // l'athlete et une exclusion de la detection de plateau. Un coach qui
+    // planifiait une decharge en S5 croyait avoir allege la semaine ; il ne
+    // l'avait pas fait.
+    //
+    // MOINS DE SERIES ET PLUS DE RIR, les deux ensemble : une decharge qui ne
+    // toucherait qu'au volume laisserait l'athlete pousser jusqu'a l'echec sur
+    // ce qui reste, et ce n'est pas une decharge.
+    //
+    // 60 % DES SERIES ET +1 DE RIR : c'est l'allegement le plus courant en
+    // periodisation, et il est ECRIT — donc visible dans la grille, et
+    // modifiable comme n'importe quel autre ecart. Un allegement silencieux
+    // dont le coach ignorerait l'existence serait pire que pas d'allegement.
+    try{ poserEcartSemaine(u,idx,{facteurSeries:DECHARGE_FACTEUR_SERIES,
+                                  rir:DECHARGE_RIR_PLUS,_decharge:true}); }catch(e){}
     fait=true;
   }else{
     const cfg=Array.isArray(u.sessions_config)?u.sessions_config:[];
@@ -23048,6 +23073,9 @@ async function reglerBlocProgramme(){
   // raccourcir un bloc ne doit pas effacer ce qui a ete ecrit pour la semaine 6
   // si le coach le rallonge demain. programmeDe ignore deja ce qui sort du bloc.
   if(!c.programme.ecarts||typeof c.programme.ecarts!=='object') c.programme.ecarts={};
+  // B3.3 — ET LES ALLEGEMENTS SUIVENT LA LISTE QU'ON VIENT D'ECRIRE : une
+  // semaine ajoutee aux decharges recoit le sien, une semaine retiree le perd.
+  try{ synchroniserEcartsDecharge(c); }catch(e){}
   c.updatedAt=Date.now();
   users[c.email]=c;
   const ok=DB.set('users',users);
@@ -35750,8 +35778,16 @@ function _rendreGrilleCharge(){
     +'<tr><th style="'+th+';text-align:left;position:sticky;left:0;background:var(--bg)">Muscle</th>';
   for(const i of semaines){
     const m=meta[i]||{};
+    // B3.2 — L'EN-TETE DE COLONNE EST LA POIGNEE DE LA SEMAINE. Le coach a
+    // sous les yeux ce qu'il veut changer : c'est la, et nulle part ailleurs,
+    // qu'il faut pouvoir le changer.
+    const ecart=(()=>{ try{ return semainePorteEcart(u,i); }catch(e){ return false; } })();
     h+='<th style="'+th+';text-align:center'+(m.decharge?';color:var(--info)':'')+'">'
-      +'S'+(i+1)+(m.decharge?'<br>déch.':'')+'</th>';
+      +'<button type="button" onclick="ajusterSemaineBloc('+i+')" '
+      +'title="Modifier cette semaine" '
+      +'style="background:none;border:none;padding:2px 4px;cursor:pointer;font:inherit;'
+      +'color:'+(m.decharge?'var(--info)':(ecart?'var(--red-text)':'inherit'))+'">'
+      +'S'+(i+1)+(m.decharge?'<br>déch.':(ecart?'<br>modifiée':''))+'</button></th>';
   }
   h+='</tr>';
   for(const mu of muscles){
@@ -35788,10 +35824,81 @@ function _rendreGrilleCharge(){
     +'<span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);color:var(--sub)">'
     +'<span style="width:11px;height:11px;border-radius:var(--r-1);border:1px dashed var(--sub)"></span>prévisionnel</span>'
     +'</div>';
-  h+='<p class="sub" style="font-size:var(--fs-2xs);line-height:1.6;margin-top:12px">Lecture seule. '
-    +'L\'intensité de la case suit la charge relative à la semaine la plus chargée du bloc.</p>';
+  h+='<p class="sub" style="font-size:var(--fs-2xs);line-height:1.6;margin-top:12px">'
+    +'L\'intensité de la case suit la charge relative à la semaine la plus chargée du bloc. '
+    +'Touche le numéro d\'une semaine pour en changer le volume ou l\'intensité — '
+    +'les autres ne bougent pas.</p>';
   z.innerHTML=h;
   return true;
+}
+
+// ══════ B3.2 — MODIFIER UNE SEMAINE DU BLOC ════════════════════════════
+//
+// C'est le geste qui manquait : `programme.ecarts` etait lu par trois
+// fonctions et ecrit par aucune. « Bloc de douze semaines » signifiait « la
+// meme semaine douze fois », et un coach ne pouvait pas monter le volume de S1
+// a S3 puis le redescendre — il ne pouvait pas periodiser.
+//
+// DEUX LEVIERS, PAS UN DE PLUS : les series et l'intensite cible. Ce sont ceux
+// que la fiche demande, et ceux que le reste de l'app sait deja lire.
+//
+// RELATIF ET NON ABSOLU. « +1 serie » se comprend sur une seance de sept
+// exercices ou chacun a son propre compte ; « 4 series » ne voudrait rien dire.
+// C'est aussi ce qui permet de garder le gabarit comme reference : l'ecart ne
+// pese que ce qu'il change.
+//
+// ET ON PEUT TOUT DEFAIRE : une valeur vide remet la semaine au gabarit. Un
+// ecart qu'on ne peut pas retirer est une copie deguisee.
+async function ajusterSemaineBloc(i){
+  const u=_gcAthlete;
+  if(!u){ toast('Aucun athlète ouvert.','var(--orange)'); return false; }
+  if(!currentUser||currentUser.role!=='coach'){ toast('Réservé aux coachs.','var(--orange)'); return false; }
+  const nl='\n';
+  const porte=(()=>{ try{ return semainePorteEcart(u,i); }catch(e){ return false; } })();
+  const r=await rcSaisie('Semaine '+(i+1)+' — écart au gabarit'+nl+nl
+    +'Séries, puis intensité, séparées par une virgule.'+nl
+    +'« +1,0 » ajoute une série à chaque exercice. « -1,+1 » en retire une et laisse '
+    +'une répétition de plus en réserve.'+nl+nl
+    +(porte?'Laisse vide pour remettre cette semaine au gabarit.'
+           :'Laisse vide pour ne rien changer.'),
+    '',{libelleOk:'Appliquer'});
+  if(r===null||r===undefined) return false;
+  const txt=String(r).trim();
+  if(!txt){
+    // VIDE = REMETTRE AU GABARIT, et le dire quand il n'y avait rien a defaire.
+    if(!porte){ toast('Cette semaine suit déjà le gabarit.','var(--orange)'); return false; }
+    let ote=false;
+    try{ ote=retirerEcartSemaine(u,i); }catch(e){}
+    if(!ote) return false;
+    return _gcEnregistrer(u,'Semaine '+(i+1)+' remise au gabarit');
+  }
+  const parts=txt.split(',');
+  const dS=Math.round(Number(String(parts[0]||'0').replace('+','').trim()))||0;
+  const dR=Math.round(Number(String(parts[1]||'0').replace('+','').trim()))||0;
+  if(!dS&&!dR){ toast('Rien à appliquer : les deux valeurs sont à zéro.','var(--orange)'); return false; }
+  let n=0;
+  try{ n=poserEcartSemaine(u,i,{series:dS,rir:dR}); }catch(e){}
+  if(!n){
+    // AUCUN CRENEAU TOUCHE : soit la semaine n'a pas de seance active, soit la
+    // modulation ne changeait rien — un -1 sur des exercices deja a une serie.
+    toast('Aucune séance n’a changé : vérifie que la semaine a des séances actives.','var(--orange)');
+    return false;
+  }
+  return _gcEnregistrer(u,'Semaine '+(i+1)+' : '+n+' séance'+(n>1?'s':'')+' modifiée'+(n>1?'s':''));
+}
+// L'ECRITURE, PAR LE MEME CHEMIN QUE LE RESTE DE LA FICHE COACH :
+// DB.set puis CLOUD.pushOne, et le toast dit ce qui est parti.
+function _gcEnregistrer(u,message){
+  try{
+    const users=DB.get('users')||{};
+    u.updatedAt=Date.now();
+    users[u.email]=u;
+    const ok=DB.set('users',users);
+    const envoi=CLOUD.pushOne(u.email,u);
+    _rendreGrilleCharge();
+    toastSync(ok,envoi,message,'la semaine est');
+    return true;
+  }catch(e){ toast('Enregistrement impossible.','var(--red)'); return false; }
 }
 
 // ══════ EXPORT IMAGE ══════
@@ -36057,6 +36164,146 @@ function getSemaineEffective(user,date){
     // Le nombre de séances RÉELLEMENT prévues cette semaine-là : c'est lui
     // qui change entre une semaine normale et une décharge.
     seancesPrevues:creneaux.filter(c=>c&&c.active).length};
+}
+// ══════ B3.2 — ECRIRE UN ECART, ET NON SEULEMENT LE LIRE ═══════════════
+//
+// `programme.ecarts` etait documente, lu par getSemaineEffective — donc par
+// semainesDuBloc et grilleCharge — et ECRIT PAR UNE SEULE LIGNE du fichier :
+// son initialisation a objet vide. Aucun ecran ne permettait de faire differer
+// une semaine d'une autre : « bloc de douze semaines » signifiait « la meme
+// semaine douze fois », et la grille de charge affichait douze colonnes
+// identiques. Un coach ne pouvait pas periodiser.
+//
+// UN ECART EST UNE MODULATION, PAS UNE COPIE. C'est la raison d'etre du
+// modele, ecrite plus haut : un bloc de douze semaines copie integralement,
+// c'est douze fois sept seances dans un dossier qui pese deja 1,7 Mo. On ne
+// stocke donc que les exercices du creneau touche, avec leurs series et leur
+// RIR modifies — le reste du creneau continue de suivre le gabarit par
+// Object.assign.
+//
+// LES DEUX LEVIERS D'UNE PROGRESSION, et pas un de plus : le nombre de series
+// et l'intensite cible. Ce sont ceux que la fiche demande, et ce sont ceux que
+// le reste de l'app sait deja lire — _volumePrevisionnel compte les series,
+// _rirPrescrit lit le RIR.
+const ECART_SERIES_MIN=1;      // une serie reste une serie : on ne descend pas a zero
+const ECART_SERIES_MAX=12;
+// PURE. Le creneau tel qu'il serait avec cette modulation. Rend null quand la
+// modulation ne change rien — un ecart qui ne pese rien n'a pas a etre ecrit.
+function _creneauModule(sc,mod){
+  if(!sc||!Array.isArray(sc.exercises)||!sc.exercises.length) return null;
+  const dS=Math.round(Number(mod&&mod.series)||0);
+  const dR=Math.round(Number(mod&&mod.rir)||0);
+  const fS=Number(mod&&mod.facteurSeries);
+  if(!dS&&!dR&&!(isFinite(fS)&&fS>0&&fS!==1)) return null;
+  let change=false;
+  const ex=sc.exercises.map(x=>{
+    const c=Object.assign({},x);
+    const n0=Math.max(0,parseInt(c.series,10)||0);
+    if(n0){
+      let n=n0;
+      if(isFinite(fS)&&fS>0&&fS!==1) n=Math.round(n0*fS);
+      n+=dS;
+      n=Math.max(ECART_SERIES_MIN,Math.min(ECART_SERIES_MAX,n));
+      if(n!==n0){ c.series=n; change=true; }
+    }
+    if(dR){
+      // MEME ECHELLE QUE PARTOUT : 0 est l'echec, 5 tres facile. Un exercice
+      // SANS consigne n'en recoit pas une par la bande — l'absence de consigne
+      // se lit comme une absence, jamais comme un zero.
+      const r0=_rirPrescrit(c);
+      if(r0!==''){
+        const r=Math.max(0,Math.min(5,Number(r0)+dR));
+        if(String(r)!==String(r0)){ c.rir=String(r); change=true; }
+      }
+    }
+    return c;
+  });
+  return change?{exercises:ex}:null;
+}
+// Pose une modulation sur TOUS les creneaux actifs d'une semaine du bloc.
+// ECRIT dans le dossier — l'appelant enregistre et pousse, comme partout.
+// Rend le nombre de creneaux touches, 0 si rien n'a bouge.
+function poserEcartSemaine(user,semaine,mod){
+  const u=_dossier(user);
+  if(!u) return 0;
+  let p=null; try{ p=programmeDe(u); }catch(e){}
+  if(!p||!(semaine>=0&&semaine<p.semaines)) return 0;
+  const cfg=Array.isArray(u.sessions_config)?u.sessions_config:[];
+  if(!u.programme.ecarts||typeof u.programme.ecarts!=='object') u.programme.ecarts={};
+  const cle=String(semaine);
+  const sem=Object.assign({},u.programme.ecarts[cle]||{});
+  let n=0;
+  cfg.forEach((sc,idx)=>{
+    if(!sc||sc.active!==true) return;
+    const e=_creneauModule(sc,mod);
+    if(!e) return;
+    sem[String(idx)]=e;
+    n++;
+  });
+  if(!n) return 0;
+  // B3.3 — UN ECART POSE PAR LA DECHARGE SE RECONNAIT. C'est ce qui permet de
+  // le RETIRER quand le coach retire la decharge, sans toucher a un ecart
+  // qu'il aurait ecrit lui-meme pour la meme semaine. La clef n'est pas un
+  // indice de creneau : getSemaineEffective ne lit que des indices numeriques,
+  // elle l'ignore donc entierement.
+  if(mod&&mod._decharge) sem._decharge=true;
+  u.programme.ecarts[cle]=sem;
+  try{ _viderCacheVolume(); }catch(e){}
+  return n;
+}
+// Retire tout ecart d'une semaine : elle redevient STRICTEMENT le gabarit.
+// C'est la contrepartie exigee par le modele — un ecart qu'on ne peut pas
+// defaire est une copie deguisee.
+function retirerEcartSemaine(user,semaine){
+  const u=_dossier(user);
+  if(!u||!u.programme||!u.programme.ecarts) return false;
+  const cle=String(semaine);
+  if(!(cle in u.programme.ecarts)) return false;
+  delete u.programme.ecarts[cle];
+  try{ _viderCacheVolume(); }catch(e){}
+  return true;
+}
+// B3.3 — LES ECARTS DE DECHARGE SUIVENT LA LISTE DES DECHARGES.
+//
+// Sans cela, retirer une semaine de la liste laisserait son allegement en
+// place : la grille montrerait un creux sur une semaine qui n'est plus une
+// decharge, et le coach n'aurait aucun moyen de comprendre pourquoi. C'est la
+// contrepartie exacte de B3.3 — « retirer la decharge remet la semaine a son
+// niveau ».
+//
+// UN ECART ECRIT A LA MAIN N'EST JAMAIS TOUCHE : seuls ceux qui portent la
+// marque `_decharge` sont poses et retires ici.
+function synchroniserEcartsDecharge(user){
+  const u=_dossier(user);
+  if(!u||!u.programme) return 0;
+  let p=null; try{ p=programmeDe(u); }catch(e){}
+  if(!p) return 0;
+  if(!u.programme.ecarts||typeof u.programme.ecarts!=='object') u.programme.ecarts={};
+  const ec=u.programme.ecarts;
+  let n=0;
+  // Ce qui n'est plus une decharge perd son allegement.
+  for(const cle of Object.keys(ec)){
+    const i=Number(cle);
+    if(!isFinite(i)) continue;
+    if(ec[cle]&&ec[cle]._decharge&&p.decharges.indexOf(i)<0){ delete ec[cle]; n++; }
+  }
+  // Ce qui en est une, et n'en portait pas, le recoit.
+  for(const i of p.decharges){
+    const cle=String(i);
+    if(ec[cle]) continue;
+    if(poserEcartSemaine(u,i,{facteurSeries:DECHARGE_FACTEUR_SERIES,
+                              rir:DECHARGE_RIR_PLUS,_decharge:true})) n++;
+  }
+  return n;
+}
+// PURE. Cette semaine porte-t-elle un ecart ?
+function semainePorteEcart(user,semaine){
+  try{
+    const p=programmeDe(user);
+    if(!p) return false;
+    const e=p.ecarts[String(semaine)];
+    return !!(e&&typeof e==='object'&&Object.keys(e).length);
+  }catch(e){ return false; }
 }
 // PURE. Toutes les semaines du bloc, dans l'ordre. Vide sans programme.
 function semainesDuBloc(user){
