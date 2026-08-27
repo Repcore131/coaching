@@ -143,6 +143,89 @@ function testExercices(){
         }
       }
       return n>=200?true:_echec('seulement '+n+' vidéos, le guide en porte 228');})());
+    // ══════ B3.4 — UN GESTE QUI PORTE ENFIN SUR L'INTENSITE ════════════
+    //
+    // Les trois gestes offerts au coach agissaient sur le VOLUME ou sur le
+    // choix du mouvement. Devant un plateau — le signal qui appelle le plus
+    // souvent une reponse d'intensite — le seul geste disponible restait
+    // « retirer une serie » ou « substituer ». Le levier d'intensite venait
+    // d'etre cree pour l'editeur et n'etait branche nulle part sur l'aide a
+    // la decision.
+    (()=>{
+      const _cfg=(rir)=>[{active:true,exercises:[
+        {name:'DEVELOPPE COUCHE',series:4,rir:rir},
+        {name:'CURL BARRE',series:3}]}];   // le second SANS consigne
+      const _cib=[{slot:0,idxExercice:0},{slot:0,idxExercice:1}];
+
+      ok('B3.4 — « pousser plus fort » descend le RIR d\'un cran',(()=>{
+        const out=appliquerAjustementSeances(_cfg('3'),_cib,{type:'durcir_rir'});
+        const ex=out[0].exercises;
+        if(_rirPrescrit(ex[0])!=='2')
+          return _echec('RIR 3 durci donne '+_rirPrescrit(ex[0]));
+        // L'ABSENCE DE CONSIGNE RESTE UNE ABSENCE : zero signifierait
+        // « jusqu'a l'echec », et ce serait le contresens le plus grave.
+        if(_rirPrescrit(ex[1])!=='')
+          return _echec('un exercice sans consigne en a recu une : '+_rirPrescrit(ex[1]));
+        // LE VOLUME NE BOUGE PAS : c'est un geste d'intensite.
+        if(ex[0].series!==4||ex[1].series!==3)
+          return _echec('les series ont bouge');
+        // PURE : la configuration source n'est pas mutee.
+        const src=_cfg('3');
+        appliquerAjustementSeances(src,_cib,{type:'durcir_rir'});
+        return _rirPrescrit(src[0].exercises[0])==='3'
+          ?true:_echec('la configuration source a ete modifiee');})());
+
+      ok('B3.4 — le plancher est 1, et non 0',(()=>{
+        // RIR 0 est l'echec : le proposer d'un clic devant un plateau
+        // reviendrait a prescrire l'echec a chaque serie.
+        const out=appliquerAjustementSeances(_cfg('1'),_cib,{type:'durcir_rir'});
+        return _rirPrescrit(out[0].exercises[0])==='1'
+          ?true:_echec('plancher franchi : '+_rirPrescrit(out[0].exercises[0]));})());
+
+      ok('B3.4 — l\'ancien champ suit, sinon il gagnerait sur le neuf',(()=>{
+        // _rirPrescrit lit rirCible EN PRIORITE : le laisser en place ferait
+        // gagner l'ancienne valeur sur celle qu'on vient d'ecrire.
+        const cfg=[{active:true,exercises:[{name:'DC',series:4,rir:'3',rirCible:'3'}]}];
+        const out=appliquerAjustementSeances(cfg,[{slot:0,idxExercice:0}],{type:'durcir_rir'});
+        return _rirPrescrit(out[0].exercises[0])==='2'
+          ?true:_echec('l\'ancien champ gagne encore : '+_rirPrescrit(out[0].exercises[0]));})());
+
+      ok('B3.4 — le geste n\'est propose que quand le signal l\'appelle',(()=>{
+        const s=String(_ajIntensiteAReprendre);
+        // UN PLATEAU OU UN VOLUME DEJA HAUT : dans les deux cas, ajouter du
+        // volume serait la mauvaise reponse.
+        if(s.indexOf('plateauMuscle')<0||s.indexOf('volumeHaut')<0)
+          return _echec('le geste ne lit pas les signaux qui l\'appellent');
+        // PAS UNE DOULEUR, PAS UN DECROCHAGE : devant l'une on allege, devant
+        // l'autre on reprend contact.
+        if(s.indexOf('douleur')<0||s.indexOf('decrochage')<0)
+          return _echec('le geste serait propose devant une douleur');
+        // ET IL FAUT UNE CONSIGNE A DURCIR : sinon le bouton ne ferait rien.
+        if(typeof _ajRirPrescritSurCible!=='function')
+          return _echec('rien ne verifie qu\'une consigne existe');
+        // LA DIRECTION EST MOTIVEE A L'ECRAN.
+        const b=String(_ajBoutonDurcir);
+        if(b.indexOf('réserve')<0) return _echec('le bouton n\'explique pas ce qu\'il fait');
+        return /Pousser plus fort/.test(b)
+          ?true:_echec('le libelle dit « -1 RIR » plutot que le sens');})());
+
+      ok('B3.4 — il passe par le meme cadre que les trois autres',(()=>{
+        // Instantane avant modification, horodatage, envoi au meme moment, et
+        // la garde de drapeau reposee au clic.
+        if(String(ajDurcirRir).indexOf('_ajEcrire(')<0)
+          return _echec('le geste n\'emprunte pas le cadre commun');
+        const e=String(_ajEcrire);
+        if(e.indexOf('_pushSessionsHistory(c)')<0) return _echec('plus d\'instantane avant modification');
+        if(e.indexOf('drapeauQuelconqueActif(c)')<0) return _echec('la garde de drapeau a saute');
+        if(e.indexOf('updatedAt=Date.now()')<0) return _echec('le dossier n\'est plus horodate');
+        if(e.indexOf('CLOUD.pushOne')<0&&e.indexOf('pushOne')<0)
+          return _echec('rien ne part au serveur');
+        // ET LES TROIS ACTIONS D'ORIGINE N'ONT PAS BOUGE.
+        for(const a of ['substituer','retirer_serie','ajouter_serie'])
+          if(AJ_ACTIONS.indexOf(a)<0) return _echec('action perdue : '+a);
+        return AJ_ACTIONS.length===4?true:_echec(AJ_ACTIONS.length+' actions');})());
+    })();
+
     // ══════ B3.2 + B3.3 — LE BLOC PEUT ENFIN ETRE PERIODISE ════════════
     //
     // `programme.ecarts` etait documente, lu par getSemaineEffective — donc

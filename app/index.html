@@ -17798,7 +17798,21 @@ function _texteSignal(type,c,sg){
 // N6.6 — 'ajouter_serie' rejoint les deux autres. Elle n'est OFFERTE que
 // devant un volume insuffisant : les signaux de douleur, de decrochage et de
 // volume eleve gardent exactement leurs deux actions.
-const AJ_ACTIONS=Object.freeze(['substituer','retirer_serie','ajouter_serie']);
+// B3.4 — QUATRE GESTES, DONT UN QUI PORTE SUR L'INTENSITE.
+//
+// Les trois premiers agissent sur le VOLUME ou sur le choix du mouvement. Or
+// devant un plateau — le signal qui appelle le plus souvent une reponse
+// d'intensite — le seul geste disponible restait « retirer une serie » ou
+// « substituer ». Le levier d'intensite venait d'etre cree pour l'editeur, et
+// il n'etait branche nulle part sur l'aide a la decision.
+const AJ_ACTIONS=Object.freeze(['substituer','retirer_serie','ajouter_serie','durcir_rir']);
+// UN CRAN, ET UN SEUL, PAR GESTE. Le coach peut le rejouer ; l'outil ne
+// descend pas tout seul un athlete de RIR 3 a RIR 0.
+const AJ_RIR_PAS=1;
+// LE PLANCHER EST 1, ET NON 0. RIR 0 est l'echec : le proposer comme
+// ajustement automatique devant un plateau reviendrait a prescrire l'echec a
+// chaque serie, ce qu'aucun coach ne ferait d'un clic.
+const AJ_RIR_MIN=1;
 // Au-dela, on ne repare plus un manque de volume : on en fabrique un autre.
 // Le coach garde la main — il peut rappeler l'action — mais l'outil ne monte
 // pas tout seul un exercice a douze series.
@@ -18015,6 +18029,21 @@ function appliquerAjustementSeances(sessionsConfig,cibles,action){
       // N6.6 — LE SYMETRIQUE EXACT du retrait, plafond compris.
       const n=Math.max(0,parseInt(ex.series,10)||0);
       ex.series=Math.min(AJ_SERIES_MAX,n+1);
+    }else if(type==='durcir_rir'){
+      // B3.4 — ON DESCEND LE RIR : moins de repetitions en reserve, donc plus
+      // d'intensite. C'est le sens inverse de l'intuition, et c'est pour cela
+      // que le libelle dit « pousser plus fort » et non « -1 RIR ».
+      //
+      // L'ABSENCE DE CONSIGNE RESTE UNE ABSENCE : un exercice sans RIR
+      // prescrit n'en recoit pas un par la bande. Zero signifierait
+      // « jusqu'a l'echec », et ce serait le contresens le plus grave.
+      const r0=_rirPrescrit(ex);
+      if(r0==='') continue;
+      const r=Math.max(AJ_RIR_MIN,Number(r0)-AJ_RIR_PAS);
+      ex.rir=String(r);
+      // rirCible est l'ancien champ, encore lu par _rirPrescrit : le laisser
+      // en place ferait gagner l'ancienne valeur sur la nouvelle.
+      if(ex.rirCible!=null) ex.rirCible=String(r);
     }else if(type==='substituer'){
       const nv=String((action.nom||'')).trim();
       if(!nv) continue;
@@ -18127,6 +18156,7 @@ function _ajRendre(){
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
       +'<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajListeSubstituts()">Substituer</button>'
       +_ajBoutonAjouter(c)
+      +_ajBoutonDurcir(c)
       +'<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajRetirerSerie()">Retirer une série</button>'
       +'</div>';
     // « Baisser l'intensité » n'est PAS rendu : aucun champ d'intensité
@@ -18216,6 +18246,46 @@ function _ajVolumeInsuffisant(c){
   // Le plateau et la restriction prolongee partagent le type 'entrainement' et
   // ne reclament pas plus de volume : on exige le signal LUI-MEME.
   return !!(sg&&sg.sousMEV&&!sg.volumeHaut&&!sg.plateauMuscle);
+}
+// B3.4 — QUAND LE SIGNAL APPELLE UNE REPONSE D'INTENSITE, ET LA SEULEMENT.
+//
+// Un plateau, ou un volume deja haut : dans les deux cas, ajouter du volume
+// serait la mauvaise reponse — c'est l'intensite qu'il faut reprendre.
+// PAS UNE DOULEUR, PAS UN DECROCHAGE : devant l'une on allege, devant l'autre
+// on reprend contact. Durcir y serait au mieux inutile, au pire nuisible.
+// Meme forme de garde que _ajVolumeInsuffisant, pour la meme raison.
+function _ajIntensiteAReprendre(c){
+  if(!_ajCtx||_ajCtx.type!=='entrainement') return false;
+  let sg=null; try{ sg=signauxEntrainement(c); }catch(e){ return false; }
+  if(!sg) return false;
+  if(sg.douleur||sg.decrochage) return false;
+  return !!(sg.plateauMuscle||sg.volumeHaut);
+}
+// ET IL FAUT QU'IL Y AIT UNE CONSIGNE A DURCIR. Proposer le geste sur des
+// exercices qui n'en portent aucune afficherait un bouton qui ne fait rien.
+function _ajRirPrescritSurCible(c){
+  try{
+    const cfg=Array.isArray(c&&c.sessions_config)?c.sessions_config:[];
+    return _ajCibles().some(x=>{
+      const sc=cfg[x.slot];
+      const ex=sc&&Array.isArray(sc.exercises)&&sc.exercises[x.idxExercice];
+      return !!(ex&&_rirPrescrit(ex)!=='');
+    });
+  }catch(e){ return false; }
+}
+function _ajBoutonDurcir(c){
+  if(!_ajIntensiteAReprendre(c)||!_ajRirPrescritSurCible(c)) return '';
+  // LA DIRECTION EST MOTIVEE A L'ECRAN : le coach doit pouvoir refuser en
+  // connaissance de cause, pas deviner ce que le bouton va faire.
+  return '<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;'
+    +'letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajDurcirRir()" '
+    +'title="Une répétition de moins en réserve : plus d’intensité, à volume égal">'
+    +'Pousser plus fort</button>';
+}
+function ajDurcirRir(){
+  const c=_ajClient();
+  if(!c||!_ajIntensiteAReprendre(c)) return false;
+  return _ajEcrire({type:'durcir_rir'});
 }
 function _ajBoutonAjouter(c){
   if(!_ajVolumeInsuffisant(c)) return '';
