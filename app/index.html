@@ -4081,23 +4081,23 @@ const COACH_PHOTO='icons/coach.jpg';
          dans l'en-tete de la liste, et trois ecrans dans un volet ferme.
          En haut ce qu'on ouvre tous les jours, en bas ce qu'on regle. -->
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:2px;font-weight:800;text-transform:uppercase;padding:0 14px 7px">Travail</div>
-    <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" class="sb-lien" aria-current="page">
+    <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" class="sb-lien" aria-current="page" data-icone="users">
       ATHLÈTES
     </button>
-    <button onclick="openCoachPrograms()" class="sb-lien" data-ecran="s-coach-programs">MES PROGRAMMES</button>
-    <button onclick="loadFileReprise()" class="sb-lien" data-ecran="s-coach-file">À RELANCER</button>
-    <button onclick="openDechargeGroupee()" class="sb-lien" data-ecran="s-coach-decharge">DÉCHARGE GROUPÉE</button>
-    <button onclick="loadCoachActivite()" class="sb-lien" data-ecran="s-coach-activite">ACTIVITÉ</button>
-    <button onclick="loadCharges()" class="sb-lien" data-ecran="s-charges">CHARGES ARTICULAIRES</button>
+    <button onclick="openCoachPrograms()" class="sb-lien" data-ecran="s-coach-programs" data-icone="folder">MES PROGRAMMES</button>
+    <button onclick="loadFileReprise()" class="sb-lien" data-ecran="s-coach-file" data-icone="bell">À RELANCER</button>
+    <button onclick="openDechargeGroupee()" class="sb-lien" data-ecran="s-coach-decharge" data-icone="moon">DÉCHARGE GROUPÉE</button>
+    <button onclick="loadCoachActivite()" class="sb-lien" data-ecran="s-coach-activite" data-icone="trending-up">ACTIVITÉ</button>
+    <button onclick="loadCharges()" class="sb-lien" data-ecran="s-charges" data-icone="biceps">CHARGES ARTICULAIRES</button>
     <div style="height:1px;background:#1a0000;margin:12px 6px"></div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:2px;font-weight:800;text-transform:uppercase;padding:0 14px 7px">Réglages</div>
-    <button id="sb-tab-codes" onclick="coachTab('codes')" class="sb-lien">
+    <button id="sb-tab-codes" onclick="coachTab('codes')" class="sb-lien" data-icone="key">
       CODES ACCÈS
     </button>
-    <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" class="sb-lien">
+    <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" class="sb-lien" data-icone="chart-bar">
       PAIEMENTS
     </button>
-    <button id="sb-tab-profil" onclick="coachTab('profil')" class="sb-lien">
+    <button id="sb-tab-profil" onclick="coachTab('profil')" class="sb-lien" data-icone="user">
       PROFIL
     </button>
   </div>
@@ -12550,6 +12550,22 @@ function arcTirerPourRafraichir(zone,action){
 // donc disparaitre au bout de 300 ms. Courant sur toastSync, qui annonce le
 // local puis le cloud.
 let _toastMinuteur=null;
+// B2.12 — PURE. Sommes-nous sur un ecran coach, en affichage large ?
+//
+// LES DEUX CONDITIONS, ET PAS UNE SEULE. Le seuil de 1025 px est celui de tout
+// le reste du travail PC ; la classe `ecran-coach` est la meme source unique
+// que la mise en page (B1.4). Sous 1025 px, et pour l'athlete a n'importe
+// quelle largeur, rien ne change — c'est la regle du dossier.
+function _toastCoachLarge(){
+  try{
+    if(!window.matchMedia||!matchMedia('(min-width:1025px)').matches) return false;
+    const a=document.querySelector('.screen.active');
+    if(a&&a.classList.contains('ecran-coach')) return true;
+    // L'editeur d'exercices est un ecran coach SEULEMENT quand c'est le coach
+    // qui l'ouvre : meme critere que sa mise en page.
+    return !!(a&&a.id==='s-coach-program'&&a.getAttribute('data-ctx')==='coach');
+  }catch(e){ return false; }
+}
 function toast(msg,c='var(--green)'){
   const t=document.getElementById('toast');
   // L'erreur se reconnaît à sa COULEUR, seule chose que les cent sites d'appel
@@ -12560,12 +12576,29 @@ function toast(msg,c='var(--green)'){
   const poser=()=>{
     t.textContent=msg;
     t.style.borderLeft='4px solid '+(erreur?'var(--arc-danger)':c);
+    // B2.12 — EN HAUT, SOUS LA BARRE DE TITRE, SUR UN GRAND ECRAN COACH.
+    // C'est la que se trouvent les boutons qui declenchent l'essentiel des
+    // messages — Sauvegarder, Publier — et c'est la que l'oeil revient.
+    // AUCUN SITE D'APPEL N'EST TOUCHE : la centaine d'appelants ne fournit
+    // qu'un message et une couleur, et n'a pas a savoir ou il s'affiche.
+    if(_toastCoachLarge()){
+      t.style.top='72px'; t.style.bottom='auto';
+    } else {
+      t.style.removeProperty('top'); t.style.removeProperty('bottom');
+    }
     t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';
     if(erreur){ _arcCourtCircuit(t); arcHaptique('moyenne'); }
+    // B2.12 — PLUS LONGTEMPS SUR UN GRAND ECRAN COACH. 2 800 ms suffisent
+    // quand le message apparait a deux centimetres du doigt ; ils ne
+    // suffisent pas quand il faut d'abord le CHERCHER, et encore moins apres
+    // une action declenchee au clavier, ou l'oeil n'a pas suivi la main.
+    const _large=_toastCoachLarge();
     _toastMinuteur=setTimeout(()=>{
-      t.style.opacity='0';t.style.transform='translateX(-50%) translateY(80px)';
+      t.style.opacity='0';
+      t.style.transform=_large?'translateX(-50%) translateY(-40px)'
+                              :'translateX(-50%) translateY(80px)';
       _toastMinuteur=null;
-    },2800);
+    },_large?4500:2800);
   };
   // LE RELAIS. Un toast deja affiche sort en 90 ms avant que le suivant entre :
   // sans lui, le texte etait remplace sur place et rien ne disait qu'un nouveau
@@ -41032,6 +41065,28 @@ function _rcAnnoncerRaccourcis(){
   const c=document.getElementById('ch-search');
   if(c&&(c.getAttribute('title')||'').indexOf('/')<0)
     c.setAttribute('title','Rechercher un athlète (touche /)');
+  // B2.13 — CHAQUE DESTINATION PORTE SA FORME. Les neuf boutons reservaient
+  // deja la place — display:flex;align-items:center;gap:10px — pour un
+  // pictogramme qui n'avait jamais ete pose : neuf mots en capitales, meme
+  // graisse, meme taille, que le coach relisait a chaque fois.
+  //
+  // LE JEU EXISTANT, jamais un second : icon() rend les cinquante-deux formes
+  // deja utilisees partout ailleurs dans la zone coach. Aucun emoji — ils ne
+  // suivent ni la couleur du texte ni son etat.
+  //
+  // POSE ICI ET NON DANS LE GABARIT parce qu'icon() est une fonction JS et que
+  // cette barre est du balisage statique. Une seule fois : le test `firstChild`
+  // empeche le doublon si l'annonce est rejouee.
+  try{
+    document.querySelectorAll('#ch-sidebar .sb-lien[data-icone]').forEach(b=>{
+      if(b.querySelector('svg')) return;
+      const s=icon(b.dataset.icone,16);
+      if(!s) return;
+      // flex:none : sans lui, le picto se comprime quand le libelle est long,
+      // et « DECHARGE GROUPEE » l'ecrasait a quelques pixels.
+      b.insertAdjacentHTML('afterbegin','<span style="flex:none;display:flex;opacity:.7">'+s+'</span>');
+    });
+  }catch(e){}
   // B2.6 — ET LA BARRE LATERALE PORTE LA PORTE D'ENTREE, en toutes lettres :
   // c'est le seul endroit visible sur tous les ecrans coach, et une touche
   // qu'aucun texte ne nomme reste aussi introuvable qu'avant.

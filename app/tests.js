@@ -25507,6 +25507,58 @@ function testExercices(){
           if(s.indexOf(k)<0) return _echec('handler perdu : '+k);
         return true;})());
 
+      // B2.12 — LE SEUL ACCUSE DE RECEPTION ARRIVAIT LA OU L'OEIL N'EST PAS.
+      // toast() s'affiche en bas au centre et disparait en 2 800 ms. Sur un
+      // moniteur de 1440 px, le regard du coach est en haut a gauche (le
+      // tableau) ou au centre (la carte qu'il edite) : le message arrivait a
+      // l'endroit le plus eloigne du geste. Sur mobile la distance faisait
+      // quelques centimetres ; sur PC elle fait la diagonale de l'ecran.
+      ok('B2.12 — le message se pose ou l\'oeil travaille, et seulement la',(()=>{
+        if(typeof _toastCoachLarge!=='function')
+          return _echec('rien ne distingue l\'affichage large du coach');
+        const s=String(_toastCoachLarge);
+        // LES DEUX CONDITIONS, ET PAS UNE SEULE. Le seuil de 1025 px est celui
+        // de tout le reste du travail PC ; `ecran-coach` est la meme source
+        // unique que la mise en page.
+        if(s.indexOf('min-width:1025px')<0) return _echec('le seuil PC n\'est pas consulte');
+        if(s.indexOf('ecran-coach')<0) return _echec('l\'ecran coach n\'est pas reconnu');
+        // L'editeur d'exercices compte SEULEMENT quand c'est le coach qui
+        // l'ouvre : meme critere que sa mise en page.
+        if(s.indexOf("data-ctx")<0) return _echec('l\'editeur coach est traite comme un ecran athlete');
+        const t=String(toast);
+        if(t.indexOf('_toastCoachLarge()')<0) return _echec('toast ne consulte pas le contexte');
+        // PLUS LONGTEMPS : 2 800 ms suffisent quand le message apparait a deux
+        // centimetres du doigt, pas quand il faut le CHERCHER — et encore
+        // moins apres une action declenchee au clavier.
+        if(t.indexOf('4500')<0) return _echec('la duree ne s\'allonge pas sur grand ecran');
+        if(t.indexOf('2800')<0) return _echec('la duree d\'origine a disparu');
+        // AUCUN SITE D'APPEL N'EST TOUCHE : la centaine d'appelants ne fournit
+        // qu'un message et une couleur. Et les trois acquis tiennent.
+        if(t.indexOf('erreur')<0) return _echec('le court-circuit d\'erreur a saute');
+        if(t.indexOf('90')<0) return _echec('le relais entre deux messages a saute');
+        return t.indexOf('arcReduit()')>=0
+          ?true:_echec('le mouvement reduit n\'est plus respecte');})());
+
+      // B2.13 — NEUF LIBELLES A LIRE, AUCUNE FORME A RECONNAITRE. Les neuf
+      // boutons declaraient deja display:flex;align-items:center;gap:10px —
+      // une gouttiere qui ne separait rien, place prevue pour un pictogramme
+      // jamais pose.
+      ok('B2.13 — chaque destination de la barre porte sa forme',(()=>{
+        const b=Array.from(document.querySelectorAll('#ch-sidebar .sb-lien[data-icone]'));
+        if(b.length<9) return _echec(b.length+' bouton(s) sur 9 portent une icone');
+        // DISTINCTES : deux destinations qui partagent une forme ne se
+        // distinguent pas mieux qu'avant.
+        const vues=b.map(x=>x.dataset.icone);
+        if(new Set(vues).size!==vues.length)
+          return _echec('deux boutons partagent la meme forme');
+        // LE JEU EXISTANT, jamais un second, jamais un emoji : ils ne suivent
+        // ni la couleur du texte ni son etat.
+        const inconnues=vues.filter(n=>!icon(n,16));
+        if(inconnues.length) return _echec('forme inconnue : '+inconnues.join(', '));
+        // ET LES LIBELLES RESTENT : le picto s'ajoute, il ne remplace pas.
+        const muets=b.filter(x=>!(x.textContent||'').trim());
+        return muets.length?_echec(muets.length+' bouton(s) sans libelle'):true;})());
+
       // B2.9 — LE NEUF SE RECONNAISSAIT A L'OEIL. Series, Reps et Repos
       // portaient .f-c ; Charge cible et RIR cible, ajoutes par un lot
       // ulterieur, ne portaient rien. Trois champs centres au-dessus, deux
