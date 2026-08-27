@@ -663,7 +663,101 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
   body:has(#s-coach-home.active) #ch-clients-list{--cr-gap:12px}
 }
 
-/* ====== GRAIN TEXTURE GLOBAL ====== */
+/* ══ B2.4 — DEUX ECRANS OU LA LARGEUR SERT ENFIN A TRAVAILLER ═════════
+   Vingt-et-un ecrans coach recevaient max-width:1440px et rien de plus ; neuf
+   etaient meme rebornes a 72ch, c'est-a-dire ramenes a une colonne de lecture
+   centree dans un vide. Elargir n'est pas exploiter.
+
+   LES DEUX CHOISIS, et pourquoi ceux-la. Le critere n'est pas « lequel est le
+   plus vide » mais « lequel fait perdre un aller-retour chaque jour » :
+
+   · L'EDITEUR DE SEANCES (s-coach-sessions). Il porte le bloc de semaines, le
+     volume prescrit, l'historique — ET les sept creneaux du programme. Le
+     coach modifie une seance, puis DEFILE pour voir ce que ca fait au volume,
+     puis remonte corriger. Cote a cote, il voit la consequence pendant qu'il
+     ecrit la cause. C'est le geste le plus repete de sa semaine.
+
+   · LE RAPPORT (s-rapport). Sa barre d'outils commande la periode et le
+     contenu, et le rapport se recalcule a chaque changement — mais il est
+     dessous, hors de vue des que le rapport est long. Le coach reglait a
+     l'aveugle et defilait pour voir. Cote a cote, il regle EN voyant.
+
+   AUCUN BLOC NE BOUGE DANS L'ORDRE DU DOCUMENT : c'est la grille qui les
+   place. L'impression, la lecture au clavier et le repli sous 1360 px lisent
+   tous l'ordre source, et il est inchange.
+
+   align-items:start — sans lui, une colonne s'etirerait a la hauteur de sa
+   voisine et un bloc de 200 px se retrouverait haut de 900.
+
+   REPLI AUTOMATIQUE EN UNE COLONNE quand un seul bloc est visible : les
+   selecteurs :has() ci-dessous ne s'appliquent que si l'autre colonne a
+   quelque chose a montrer. Un rapport vide ne laisse pas la moitie droite
+   beante. */
+@media(min-width:1360px){
+  /* L'EDITEUR DE SEANCES. Les sept creneaux a gauche — c'est le travail — et
+     le contexte a droite : bloc, volume, historique, modele. */
+  body:has(#s-coach-sessions.active) #s-coach-sessions .pad:has(#coach-session-slots:not(:empty)){
+    display:grid;grid-template-columns:minmax(0,1fr) 340px;
+    gap:0 20px;align-items:start}
+  body:has(#s-coach-sessions.active) #s-coach-sessions .pad:has(#coach-session-slots:not(:empty))>*{
+    grid-column:2}
+  /* LA MEME CONTEXTUALISATION QUE LA REGLE CI-DESSUS, et ce n'est pas
+     decoratif : la specificite de :has() prend celle de son argument le plus
+     specifique, donc  compte DEUX
+     identifiants. Sans le meme :has() ici, la regle generique gagnait et les
+     sept creneaux partaient dans la colonne de droite — mesure. */
+  body:has(#s-coach-sessions.active) #s-coach-sessions .pad:has(#coach-session-slots:not(:empty))>#coach-session-slots{
+    grid-column:1;grid-row:1 / 200}
+  /* Le bandeau de brouillon reste PLEINE LARGEUR : il annonce un travail non
+     publie, et le reduire a un tiers d'ecran le ferait manquer. */
+  body:has(#s-coach-sessions.active) #s-coach-sessions #cs-bandeau-brouillon{
+    grid-column:1 / -1}
+
+  /* LE RAPPORT. Les outils a gauche, le rapport a droite. */
+  body:has(#s-rapport.active) #s-rapport .pad:has(#rap-corps:not(:empty)){
+    display:grid;grid-template-columns:320px minmax(0,1fr);
+    gap:0 20px;align-items:start}
+  body:has(#s-rapport.active) #s-rapport .pad:has(#rap-corps:not(:empty)) .rap-outils{
+    position:sticky;top:64px}
+}
+/* A L'IMPRESSION, JAMAIS DEUX COLONNES. Le rapport est fait pour sortir sur
+   une A4 : la grille y couperait le corps en deux et la barre d'outils, deja
+   masquee, laisserait sa colonne vide. */
+@media print{
+  #s-rapport .pad{display:block!important}
+}
+
+/* ══ B2.F2 — LE SOMMAIRE DE LA SEANCE EN COURS D'EDITION ══════════════
+   ETEINT PAR DEFAUT, et le cadre n'est qu'un div : sous 1360 px et chez
+   l'athlete, l'editeur est rigoureusement celui d'aujourd'hui. */
+.pe-sommaire{display:none}
+@media(min-width:1360px){
+  body:has(#s-coach-program.active[data-ctx="coach"]) .pe-cadre{
+    display:grid;grid-template-columns:200px 1fr;gap:16px;align-items:start}
+  body:has(#s-coach-program.active[data-ctx="coach"]) .pe-sommaire{
+    /* Le repli dvh suit le vh, comme partout dans ce fichier : sur mobile la
+       barre d'adresse fait mentir 100vh, et une regle qui n'aurait que vh
+       laisserait le sommaire deborder sous elle. */
+    display:block;position:sticky;top:64px;
+    max-height:calc(100vh - 96px);max-height:calc(100dvh - 96px);
+    overflow-y:auto;overscroll-behavior:contain;
+    background:var(--surface-1);border:1px solid var(--border);
+    border-radius:var(--r-3);padding:10px 8px}
+}
+/* Le lien d'une entree. Il porte le rang, puis le nom — c'est le rang que
+   l'oeil suit quand il cherche « le sixieme ». */
+.pe-lien{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;
+  background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:var(--r-1);
+  color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);
+  font-weight:700;line-height:1.35;transition:background var(--t-1),color var(--t-1)}
+.pe-lien:hover{background:var(--surface-2);color:var(--text)}
+.pe-lien:focus-visible{outline-offset:-2px}
+.pe-lien[aria-current="true"]{background:var(--surface-2);color:var(--text);
+  box-shadow:inset 2px 0 0 var(--red)}
+.pe-lien .pe-rang{flex:none;color:var(--red-text);font-variant-numeric:tabular-nums}
+.pe-lien .pe-nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+
+
 body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-events:none;opacity:1;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
   background-repeat:repeat;background-size:300px 300px;}
@@ -5690,6 +5784,15 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- COACH PROGRAM EDITOR -->
 <div id="s-coach-program" class="screen">
   <div class="topbar"><button class="back-btn" onclick="go('s-coach-client')">←</button><span class="topbar-title">Programme</span>
+    <!-- B2.F3 — L'ETAT D'ENREGISTREMENT, VISIBLE EN PERMANENCE.
+         Le seul signal etait porte par le bouton lui-meme : bien fait, mais il
+         ne vit qu'a l'endroit du bouton. Un coach qui edite le sixieme
+         exercice d'une longue seance ne savait pas, sans remonter, si son
+         travail etait a jour — et rien ne disait quand le dernier
+         enregistrement avait eu lieu.
+         DANS LA BARRE DE TITRE, qui est collante : c'est le seul endroit qui
+         reste sous les yeux quel que soit l'exercice qu'on edite. -->
+    <span id="cp-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;margin-right:8px"></span>
     <button id="cp-sauver" class="btn btn-red btn-sm" onclick="saveProgram()">Sauvegarder</button>
   </div>
   <div class="scroll-area" style="flex:1">
@@ -5782,7 +5885,20 @@ const COACH_PHOTO='icons/coach.jpg';
         <button class="btn btn-outline" style="width:100%" onclick="ajouterDepuisBanque()">
           + Depuis la banque</button>
       </div>
-      <div id="prog-exercises"></div>
+      <!-- B2.F2 — LE SOMMAIRE DE LA SEANCE.
+           Les cartes sont empilees : sur une seance de huit exercices, le
+           coach defilait a l'aveugle pour atteindre le sixieme et n'avait
+           aucune vue d'ensemble de ce qu'il venait de composer. renderProgEx
+           se terminait d'ailleurs par un defilement automatique vers la
+           derniere carte — l'aveu que la position etait deja un probleme.
+           IL NAVIGUE, IL NE MODIFIE PAS : aucun controle n'y est double.
+           N'EXISTE QU'AU-DELA DE 1360 PX ET POUR LE COACH ; en dessous, et
+           pour l'athlete qui compose sa propre seance, il est eteint et le
+           conteneur des cartes reprend toute la largeur. -->
+      <div class="pe-cadre">
+        <nav id="prog-sommaire" class="pe-sommaire" aria-label="Sommaire de la séance"></nav>
+        <div id="prog-exercises"></div>
+      </div>
       <div><label for="prog-notes">Notes pour l'athlète</label><textarea id="prog-notes" rows="3" placeholder="Conseils, focus, intensité..."></textarea></div>
       <div style="height:30px"></div>
     </div>
@@ -11386,6 +11502,37 @@ function go(id){
     // débordement à `.scroll-area`, c'est elle qu'il faudra remettre en haut.
     s.scrollTop=0;
     try{ const _z=s.querySelector('.scroll-area'); if(_z) _z.scrollTop=0; }catch(_e){}
+    // B2.F4 — SAUF QUAND ON REVIENT SUR LE TABLEAU DE BORD.
+    //
+    // B1.5 a decide que l'arrivee sur un ecran se fait EN HAUT, et c'est la
+    // bonne regle pour une navigation avant. Le retour depuis la fiche d'un
+    // athlete est le seul cas ou elle dessert : sur quinze athletes tries par
+    // urgence, le coach devait re-parcourir la liste pour retrouver ou il en
+    // etait. C'est la donnee qu'on memorise d'un ecran a l'autre parce qu'elle
+    // n'est plus visible.
+    //
+    // EN MEMOIRE SEULEMENT, jamais dans le stockage : la position ne survit ni
+    // a une deconnexion, ni a un changement de compte, ni a un rechargement.
+    // La liste, elle, continue d'etre rechargee — on rend une position, pas un
+    // contenu perime, et c'est pourquoi la restitution passe par
+    // requestAnimationFrame : le rendu doit avoir eu lieu.
+    if(id==='s-coach-home'&&_retourAccueilCoach){
+      _retourAccueilCoach=false;
+      const _y=_posAccueilCoach, _revoir=_ligneARevoir;
+      _ligneARevoir=null;
+      try{
+        requestAnimationFrame(()=>{
+          try{
+            const pan=document.getElementById('ct-dashboard');
+            if(pan&&_y>0) pan.scrollTop=_y;
+            _signalerLigneAthlete(_revoir);
+          }catch(e){}
+        });
+      }catch(e){}
+      try{ window.scrollTo({top:0,left:0,behavior:'instant'}); }
+      catch(_e){ try{ window.scrollTo(0,0); }catch(_e2){} }
+      return;
+    }
     // B1.5 — ET LES CONTENEURS QUI DEFILENT REELLEMENT, LE CAS ECHEANT.
     //
     // Les trois remises a zero ci-dessus ne touchaient pas l'accueil coach :
@@ -20742,7 +20889,40 @@ function _ccdArmerAncres(){
     }
   }catch(e){}
 }
+// ══════ B2.F4 — LA POSITION DE LA LISTE, LE TEMPS D'UN ALLER-RETOUR ════
+// Deux variables de module, et rien de persistant.
+let _posAccueilCoach=0, _retourAccueilCoach=false, _ligneARevoir=null;
+// On retient en QUITTANT la liste, et on arme le retour. Ici plutot que dans
+// go() : c'est le seul geste qui ouvre un athlete, et c'est celui dont on veut
+// pouvoir revenir.
+function _retenirPositionAccueil(id){
+  try{
+    const pan=document.getElementById('ct-dashboard');
+    _posAccueilCoach=pan?pan.scrollTop:0;
+    _ligneARevoir=id||null;
+    _retourAccueilCoach=true;
+  }catch(e){}
+}
+// LA LIGNE QU'ON VIENT DE QUITTER SE SIGNALE, brievement : c'est ce qui evite
+// de la chercher des yeux dans quinze lignes qui se ressemblent.
+// NEUTRALISE SOUS prefers-reduced-motion — la classe existante .cc-vise porte
+// deja cette garde, on la reutilise plutot que d'en ecrire une seconde.
+function _signalerLigneAthlete(id){
+  try{
+    if(!id||arcReduit()) return;
+    const l=document.getElementById('ch-clients-list');
+    if(!l) return;
+    const n=l.querySelector('[data-cid="'+String(id).replace(/"/g,'')+'"]');
+    if(!n) return;
+    n.classList.remove('cc-vise');
+    void n.offsetWidth;
+    n.classList.add('cc-vise');
+  }catch(e){}
+}
 function openClientDetail(cid,_refresh){
+  // B2.F4 — ON RETIENT OU L'ON ETAIT AVANT DE QUITTER LA LISTE. Pas au
+  // rafraichissement : celui-la ne quitte pas l'ecran.
+  if(!_refresh) _retenirPositionAccueil(cid);
   setTimeout(_ccdArmerAncres,0);
   // N3.6 — la ligne de fraicheur est repeinte a chaque ouverture, et a
   // chaque passage de la boucle de synchro : « il y a 4 min » doit vieillir.
@@ -26372,6 +26552,85 @@ function renderProgEx(){
     _bs.classList.toggle('btn-attente',_progExDirty);
     _bs.textContent=_progExDirty?'SAUVEGARDER •':'Sauvegarder';
   }
+  _majEtatEnregistrement();
+  _majSommaireSeance();
+}
+// ══════ B2.F2 — LE SOMMAIRE, CONSTRUIT DEPUIS progEx ═══════════════════
+//
+// DEPUIS LE TABLEAU, jamais depuis le DOM rendu : progEx est la source de
+// verite de l'editeur, et c'est elle qui bouge quand un exercice est ajoute,
+// supprime, renomme ou reordonne. Rendu a la fin de renderProgEx, il suit donc
+// tout cela sans qu'aucun appelant ait a y penser.
+//
+// IL NAVIGUE, IL NE MODIFIE PAS. Aucun controle n'y est double — le seul geste
+// est « amene-moi a cette carte ».
+function _majSommaireSeance(){
+  try{
+    const z=document.getElementById('prog-sommaire');
+    if(!z) return;
+    const l=Array.isArray(progEx)?progEx:[];
+    if(!l.length){ z.innerHTML=''; return; }
+    z.innerHTML='<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;'
+      +'text-transform:uppercase;color:var(--text-faint);padding:2px 8px 8px">'
+      +l.length+' exercice'+(l.length>1?'s':'')+'</div>'
+      +l.map((ex,i)=>{
+        const nom=String((ex&&ex.name)||'').trim();
+        return '<button type="button" class="pe-lien" data-rang="'+i+'" '
+          +'onclick="_sauterVersExercice('+i+')">'
+          +'<span class="pe-rang">'+(i+1)+'</span>'
+          +'<span class="pe-nom">'+escapeHtml(nom||'Sans nom')+'</span></button>';
+      }).join('');
+  }catch(e){}
+}
+// AMENE LA CARTE A L'ECRAN, par le meme moyen que le reste de l'editeur :
+// _defiler respecte prefers-reduced-motion, la ou un scrollTop pose a la main
+// l'ignorerait (voir B1.6).
+function _sauterVersExercice(i){
+  try{
+    const cartes=document.querySelectorAll('#prog-exercises [data-ex-nom]');
+    const c=cartes[i];
+    if(c) _defiler(c);
+    // ET LE SOMMAIRE DIT OU L'ON EST. Marque ici plutot qu'a l'observation du
+    // defilement : le coach vient de designer une carte, c'est celle-la qu'il
+    // regarde, et un observateur de position couterait un calcul a chaque
+    // pixel pour dire la meme chose.
+    document.querySelectorAll('#prog-sommaire .pe-lien').forEach(b=>{
+      if(Number(b.dataset.rang)===i) b.setAttribute('aria-current','true');
+      else b.removeAttribute('aria-current');
+    });
+  }catch(e){}
+}
+// ══════ B2.F3 — TROIS ETATS, ET UN SEUL POINT DE VERITE ════════════════
+//
+// _progExDirty RESTE LA SOURCE UNIQUE : cet indicateur la LIT, il ne la
+// double pas. La garde de sortie continue de l'interroger, le bouton continue
+// de basculer — rien de tout cela ne change.
+//
+//   • enregistrement en cours  : une ecriture est partie, on attend
+//   • non enregistre           : _progExDirty
+//   • a jour                   : depuis quand, en clair
+//
+// L'HEURE PLUTOT QU'UN DELAI : un coach qui revient a son ecran apres un appel
+// telephonique lit une heure juste, la ou « il y a 3 min » mentirait jusqu'au
+// prochain rendu.
+let _cpEnregistreA=null, _cpEnCours=false;
+function _majEtatEnregistrement(){
+  try{
+    const z=document.getElementById('cp-etat');
+    if(!z) return;
+    if(_cpEnCours){ z.textContent='enregistrement…'; z.style.color='var(--text-faint)'; return; }
+    if(_progExDirty){ z.textContent='non enregistré'; z.style.color='var(--orange)'; return; }
+    if(_cpEnregistreA){
+      const d=new Date(_cpEnregistreA);
+      z.textContent='à jour · '+String(d.getHours()).padStart(2,'0')+':'
+        +String(d.getMinutes()).padStart(2,'0');
+      z.style.color='var(--text-faint)';
+      return;
+    }
+    // RIEN TANT QUE RIEN N'A ETE ENREGISTRE dans cette session d'edition :
+    // « a jour » sans horodatage ne dirait rien de plus que le bouton.
+    z.textContent='';
+  }catch(e){}
 }
 
 // Lier ou délier un exercice avec celui du dessus.
@@ -26605,7 +26864,19 @@ function addExercise(){
   // Scroll vers le nouvel exercice
   setTimeout(()=>{const el=document.getElementById('prog-exercises');if(el)_defiler(el.lastElementChild);},100);
 }
+// B2.F3 — L'INDICATEUR SUIT L'ECRITURE, du depart a l'arrivee. Le corps est
+// inchange : on l'encadre, on ne le reecrit pas. SYNCHRONE comme avant — une
+// trentaine d'appelants l'appellent sans await.
 function saveProgram(){
+  _cpEnCours=true; _majEtatEnregistrement();
+  try{ return _saveProgramInterne(); }
+  finally{
+    _cpEnCours=false;
+    if(!_progExDirty) _cpEnregistreA=Date.now();
+    _majEtatEnregistrement();
+  }
+}
+function _saveProgramInterne(){
   _progExDirty=false;
   // Comparaison des exKey avant/après AVANT que progEx ne parte dans la séance.
   // La modale, elle, s'affiche après la navigation de sortie : posée ici, elle

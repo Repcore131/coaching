@@ -10730,7 +10730,13 @@ function testExercices(){
             try{ return eval('typeof '+n)!=='undefined'; }catch(e){ return false; }});
           if(vivants.length) return _echec('encore définis : '+vivants.join(', '));
           // Et saveProgram route sur le MODE, pas sur des drapeaux.
-          const src=String(saveProgram);
+          //
+          // B2.F3 — LE CORPS A DEMENAGE DANS _saveProgramInterne : saveProgram
+          // l'encadre desormais pour tenir l'indicateur d'enregistrement a
+          // jour, et ne le reecrit pas. La propriete defendue ici ne bouge
+          // pas — on la lit sur les deux fonctions.
+          const src=String(saveProgram)
+            +(typeof _saveProgramInterne==='function'?String(_saveProgramInterne):'');
           const manque=['template','coachClient','athlete']
             .filter(m=>src.indexOf("case '"+m+"'")<0);
           if(manque.length) return _echec('cas absents du switch : '+manque.join(', '));
@@ -25997,6 +26003,127 @@ function testExercices(){
                         '].repos=this.value','].charge=this.value'])
           if(s.indexOf(k)<0) return _echec('handler perdu : '+k);
         return true;})());
+
+      // B2.4 — « LARGE » AVAIT ETE LIVRE, « UTILE » PAS ENCORE. Vingt-et-un
+      // ecrans coach recevaient max-width:1440px et rien de plus ; neuf
+      // etaient meme rebornes a 72ch — une colonne de lecture centree dans un
+      // vide. Elargir n'est pas exploiter.
+      ok('B2.4 — deux ecrans posent enfin deux blocs cote a cote',(()=>{
+        const css=Array.from(document.querySelectorAll('style'))
+          .map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+        for(const [ecran,cle] of [['s-coach-sessions','#coach-session-slots'],
+                                  ['s-rapport','#rap-corps']]){
+          const i=css.indexOf('#'+ecran+' .pad:has('+cle);
+          if(i<0) return _echec(ecran+' n\'a pas de mise en page a deux colonnes');
+          const bloc=css.slice(i,css.indexOf('}',i));
+          if(bloc.indexOf('display:grid')<0) return _echec(ecran+' : pas de grille');
+          // align-items:start — sans lui, une colonne s'etirerait a la hauteur
+          // de sa voisine et un bloc de 200 px se retrouverait haut de 900.
+          if(bloc.indexOf('align-items:start')<0)
+            return _echec(ecran+' : les colonnes s\'etireront l\'une sur l\'autre');
+          // REPLI AUTOMATIQUE : la grille ne s'applique que si l'autre colonne
+          // a quelque chose a montrer. `:not(:empty)` porte cette condition.
+          if(css.indexOf(cle+':not(:empty)')<0)
+            return _echec(ecran+' : la grille tient meme quand un bloc est vide');
+        }
+        // A L'IMPRESSION, JAMAIS DEUX COLONNES : le rapport sort sur une A4.
+        return /@media print\{[\s\S]{0,120}#s-rapport \.pad\{display:block/.test(css)
+          ?true:_echec('le rapport s\'imprimerait en deux colonnes');})());
+
+      // B2.F2 — LE SOMMAIRE DE LA SEANCE EN COURS D'EDITION. Les cartes sont
+      // empilees : sur une seance de huit exercices, le coach defilait a
+      // l'aveugle, au point que le rendu se terminait par un defilement
+      // automatique vers la derniere carte.
+      ok('B2.F2 — le sommaire suit progEx, et il navigue sans modifier',(()=>{
+        if(typeof _majSommaireSeance!=='function') return _echec('aucun sommaire');
+        const sv=progEx;
+        try{
+          progEx=[{name:'A'},{name:'B'},{name:'C'}];
+          _majSommaireSeance();
+          const z=document.getElementById('prog-sommaire');
+          if(!z) return _echec('le noeud du sommaire n\'existe pas');
+          if(z.querySelectorAll('.pe-lien').length!==3)
+            return _echec(z.querySelectorAll('.pe-lien').length+' entree(s) au lieu de 3');
+          // IL SUIT : un exercice retire, une entree de moins.
+          progEx=[{name:'A'}];
+          _majSommaireSeance();
+          if(z.querySelectorAll('.pe-lien').length!==1)
+            return _echec('le sommaire ne suit pas la suppression');
+          // ET UN EXERCICE SANS NOM RESTE ATTEIGNABLE : c'est le rang qu'on
+          // suit du regard, pas le nom.
+          progEx=[{name:''}];
+          _majSommaireSeance();
+          if(!/Sans nom/.test(z.innerHTML)) return _echec('un exercice sans nom disparait');
+          // IL NAVIGUE, IL NE MODIFIE PAS : aucun controle double.
+          const s=String(_majSommaireSeance)+String(_sauterVersExercice);
+          if(/progEx\[[^\]]*\]\s*=/.test(s)||s.indexOf('_progExDirty=true')>=0)
+            return _echec('le sommaire ecrit dans progEx');
+          // ET IL AMENE LA CARTE PAR _defiler, qui respecte le mouvement reduit.
+          return String(_sauterVersExercice).indexOf('_defiler(')>=0
+            ?true:_echec('le saut ne passe pas par _defiler');
+        } finally { progEx=sv; try{ _majSommaireSeance(); }catch(e){} }})());
+
+      // B2.F3 — DIRE OU EN EST L'ENREGISTREMENT, LA OU LE COACH TRAVAILLE. Le
+      // seul signal etait porte par le bouton : bien fait, mais il ne vit qu'a
+      // l'endroit du bouton.
+      ok('B2.F3 — trois etats, et _progExDirty reste la source unique',(()=>{
+        const z=document.getElementById('cp-etat');
+        if(!z) return _echec('aucun indicateur d\'etat');
+        const sv=_progExDirty, svA=_cpEnregistreA, svC=_cpEnCours;
+        try{
+          _cpEnCours=false; _cpEnregistreA=null; _progExDirty=true;
+          _majEtatEnregistrement();
+          if(!/non enregistré/.test(z.textContent)) return _echec('l\'etat modifie ne se dit pas');
+          _progExDirty=false; _cpEnregistreA=Date.now();
+          _majEtatEnregistrement();
+          if(!/à jour · \d\d:\d\d/.test(z.textContent))
+            return _echec('l\'etat a jour ne porte pas d\'heure : '+z.textContent);
+          _cpEnCours=true; _majEtatEnregistrement();
+          if(!/enregistrement/.test(z.textContent)) return _echec('l\'ecriture en cours ne se dit pas');
+          // RIEN TANT QUE RIEN N'A ETE ENREGISTRE : « a jour » sans horodatage
+          // ne dirait rien de plus que le bouton.
+          _cpEnCours=false; _cpEnregistreA=null; _progExDirty=false;
+          _majEtatEnregistrement();
+          if(z.textContent!=='') return _echec('un etat s\'affiche avant tout enregistrement');
+          // LA SOURCE N'EST PAS DOUBLEE : l'indicateur LIT _progExDirty.
+          return String(_majEtatEnregistrement).indexOf('_progExDirty')>=0
+            ?true:_echec('l\'indicateur tient un second etat');
+        } finally { _progExDirty=sv; _cpEnregistreA=svA; _cpEnCours=svC;
+                    try{ _majEtatEnregistrement(); }catch(e){} }})());
+      ok('B2.F3 — le bouton et la garde de sortie n\'ont pas bouge',(()=>{
+        const s=String(renderProgEx);
+        if(s.indexOf("btn-attente")<0) return _echec('le bouton ne bascule plus');
+        if(s.indexOf("'SAUVEGARDER •'")<0) return _echec('le libelle d\'attente a disparu');
+        // saveProgram RESTE SYNCHRONE : une trentaine d'appelants l'appellent
+        // sans await, et la passer en async changerait son contrat.
+        return String(saveProgram).indexOf('async')<0
+          ?true:_echec('saveProgram est devenue asynchrone');})());
+
+      // B2.F4 — REVENIR AU TABLEAU DE BORD A L'ENDROIT QU'ON AVAIT QUITTE. La
+      // liste repartait du haut : sur quinze athletes tries par urgence, le
+      // coach devait re-parcourir pour retrouver ou il en etait.
+      ok('B2.F4 — la position se retient en memoire, et rien de plus',(()=>{
+        if(typeof _retenirPositionAccueil!=='function') return _echec('rien ne retient la position');
+        // BORNE AUX DEUX FONCTIONS DE F4 : go() lit legitimement
+        // localStorage pour le code en attente, et l'y chercher ferait
+        // echouer la sonde sur une lecture qui n'a rien a voir.
+        const s=String(_retenirPositionAccueil)+String(_signalerLigneAthlete);
+        // RIEN DE PERSISTANT : la position ne survit ni a une deconnexion, ni
+        // a un changement de compte, ni a un rechargement.
+        if(/localStorage|sessionStorage|DB\.set/.test(s))
+          return _echec('la position est ecrite quelque part');
+        // ELLE EST PRISE EN QUITTANT, sur le seul geste qui ouvre un athlete —
+        // et pas au rafraichissement, qui ne quitte pas l'ecran.
+        if(String(openClientDetail).indexOf('_retenirPositionAccueil(cid)')<0)
+          return _echec('la position n\'est pas prise a l\'ouverture d\'un athlete');
+        if(String(openClientDetail).indexOf('if(!_refresh)')<0)
+          return _echec('le rafraichissement ecrase la position');
+        // LE CONTENEUR EST LE BON : sur l'accueil coach, c'est #ct-dashboard
+        // qui defile, pas le document.
+        if(s.indexOf('ct-dashboard')<0) return _echec('le mauvais conteneur est vise');
+        // ET LE SIGNALEMENT EST NEUTRALISE SOUS prefers-reduced-motion.
+        return String(_signalerLigneAthlete).indexOf('arcReduit()')>=0
+          ?true:_echec('la ligne clignote malgre le mouvement reduit');})());
 
       // B2.12 — LE SEUL ACCUSE DE RECEPTION ARRIVAIT LA OU L'OEIL N'EST PAS.
       // toast() s'affiche en bas au centre et disparait en 2 800 ms. Sur un
