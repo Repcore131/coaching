@@ -621,6 +621,21 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
        plus bas et rend 14 px de retrait, 2 px de filet d'etat a gauche et
        1 px de bordure a droite. L'en-tete les reprend a l'identique, en
        transparent pour ne rien dessiner. */
+    /* B2.11 — IL RESTE EN HAUT PENDANT QU'ON PARCOURT LA LISTE.
+       A 1440 px la ligne porte treize colonnes. Passe les premieres lignes,
+       les intitules sortaient de l'ecran et il ne restait que des colonnes de
+       chiffres nus : le coach de quinze athletes remontait pour verifier
+       quelle colonne il lisait.
+       LE CONTEXTE DE DEFILEMENT EST #ct-dashboard, ET NON LE DOCUMENT. C'est
+       l'exception de l'accueil coach — #s-coach-home est en overflow:hidden
+       (voir B1.5) — et c'est ce qui rend `top:0` juste ici : l'en-tete se cale
+       sur le haut du panneau qui defile, pas sur le haut de la fenetre.
+       RIEN AU-DESSUS DE LUI DANS CE PANNEAU n'est colle : la recherche, les
+       filtres et la barre de selection defilent avec le contenu. L'en-tete ne
+       glisse donc sous rien.
+       LE FOND EST OBLIGATOIRE : sans lui, les lignes defileraient EN
+       TRANSPARENCE derriere les intitules. */
+    position:sticky;top:0;z-index:4;background:var(--bg);
     display:grid;grid-template-columns:var(--cr-cols);gap:var(--cr-gap);
     padding:0 14px 7px;border-left:2px solid transparent;
     border-right:1px solid transparent;
@@ -728,7 +743,16 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);background:#0d00
    difference entre deux d entre eux ne veut rien dire. Il n en reste que deux,
    plus le nom. */
 .f-sm{font-size:12px!important;padding:9px 11px!important}
+/* B2.9 — LES CINQ CHAMPS DE PRESCRIPTION SE PRESENTENT PAREIL. Series, Reps
+   et Repos portaient .f-c ; Charge cible et RIR cible, ajoutes plus tard, ne
+   portaient rien. Trois champs centres au-dessus, deux alignes a gauche en
+   dessous, dans le meme groupe : le neuf se reconnaissait a l'oeil.
+   UN <select> NE SE CENTRE PAS COMME UN <input>. text-align le centre bien,
+   mais il garde la place de sa fleche a droite : sans text-align-last, le
+   texte ferme d'une option paraissait decale d'une dizaine de pixels par
+   rapport aux trois champs du dessus. Mesure faite dans le navigateur. */
 .f-c{text-align:center}
+select.f-c{text-align-last:center}
 .f-inline{background:transparent!important;border:none!important;padding:0!important;
   font-weight:800;font-size:14px}
 select option{background:#111}
@@ -26051,8 +26075,23 @@ function renderProgEx(){
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
           <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i},'remplacer')">Remplacer</button>
           <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i},'maj')">Mettre à jour</button>
-          <span style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;flex:1;min-width:180px"><b style="color:var(--sub)">Remplacer</b> : un autre mouvement, l'historique repart de zéro. <b style="color:var(--sub)">Mettre à jour</b> : le même, qui gagne la photo et les vidéos du guide et garde ses suggestions de charge. Ou tape son nom au-dessus.</span>
-        </div>`:''}
+          </div>
+        <!-- B2.10 — L'EXPLICATION NE S'IMPOSE PLUS DANS CHAQUE CARTE.
+             Ces quarante mots etaient rendus par renderProgEx dans CHAQUE
+             exercice : sur une seance de huit, le coach faisait defiler huit
+             fois le meme paragraphe, et la prescription — la seule chose
+             qu'il vient ecrire — reculait d'autant.
+             LE TEXTE N'EST NI RACCOURCI NI REECRIT : c'est sa repetition
+             qui posait probleme, pas son contenu. La distinction entre
+             remplacer et mettre a jour n'est pas devinable, elle reste donc
+             a portee — d'un clic, depuis n'importe quelle carte.
+             <details> ET NON UN PANNEAU : natif, refermable, sans une ligne
+             de JS, et il garde son etat ouvert tant que le coach ne le
+             referme pas. -->
+        <details style="margin-bottom:8px">
+          <summary style="font-size:var(--fs-2xs);color:var(--text-faint);cursor:pointer;list-style:none">Quelle différence ?</summary>
+          <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;padding:6px 0 0"><b style="color:var(--sub)">Remplacer</b> : un autre mouvement, l'historique repart de zéro. <b style="color:var(--sub)">Mettre à jour</b> : le même, qui gagne la photo et les vidéos du guide et garde ses suggestions de charge. Ou tape son nom au-dessus.</div>
+        </details>`:''}
         <div class="px-grp">PRESCRIPTION</div>
         <!-- Séries / Reps / Repos -->
         <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;margin-bottom:8px">
@@ -26080,7 +26119,7 @@ function renderProgEx(){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div>
             <label>Charge cible</label>
-            <input class="px-court" value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg">
+            <input class="px-court f-c" value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg">
           </div>
           <div>
             <!-- N6.3 — L'INTENSITE SE CHOISIT, elle ne se tape plus. Meme
@@ -26091,7 +26130,7 @@ function renderProgEx(){
                  jamais effacee : un « 2-3 » tape a la main avant ce lot ne doit
                  pas disparaitre parce que la liste ne le connait pas. -->
             <label>RIR cible</label>
-            <select onchange="_progExDirty=true;progEx[${i}].rir=this.value">
+            <select class="f-c" onchange="_progExDirty=true;progEx[${i}].rir=this.value">
               ${_optionsRirCible(ex.rir)}
             </select>
             ${_direRirCible(ex.rir)?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;margin-top:4px">${escapeHtml(_direRirCible(ex.rir))}</div>`:''}

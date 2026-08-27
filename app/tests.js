@@ -25507,6 +25507,68 @@ function testExercices(){
           if(s.indexOf(k)<0) return _echec('handler perdu : '+k);
         return true;})());
 
+      // B2.9 — LE NEUF SE RECONNAISSAIT A L'OEIL. Series, Reps et Repos
+      // portaient .f-c ; Charge cible et RIR cible, ajoutes par un lot
+      // ulterieur, ne portaient rien. Trois champs centres au-dessus, deux
+      // alignes a gauche en dessous, dans le MEME groupe PRESCRIPTION.
+      ok('B2.9 — les cinq champs de prescription se presentent pareil',(()=>{
+        const s=String(renderProgEx);
+        if(!/class="px-court f-c" value="\$\{escapeHtml\(ex\.charge/.test(s))
+          return _echec('la charge cible ne suit pas ses voisins');
+        if(s.indexOf('<select class="f-c"')<0)
+          return _echec('le RIR cible ne suit pas ses voisins');
+        // UN <select> NE SE CENTRE PAS COMME UN <input> : text-align le centre,
+        // mais il garde la place de sa fleche a droite. Sans text-align-last,
+        // le texte paraissait decale d'une dizaine de pixels.
+        const css=Array.from(document.querySelectorAll('style'))
+          .map(x=>x.textContent).join('\n');
+        if(css.indexOf('select.f-c{text-align-last:center}')<0)
+          return _echec('le selecteur n\'est pas centre comme les champs');
+        // AUCUN HANDLER N'A BOUGE : c'est une presentation, pas un correctif.
+        return s.indexOf('].charge=this.value')>=0&&s.indexOf('].rir=this.value')>=0
+          ?true:_echec('un handler de prescription a disparu');})());
+
+      // B2.10 — QUARANTE MOTS REPETES DANS CHAQUE CARTE. Sur une seance de
+      // huit exercices, le coach faisait defiler huit fois le meme
+      // paragraphe, et la prescription — la seule chose qu'il vient ecrire —
+      // reculait d'autant.
+      ok('B2.10 — l\'explication reste accessible sans occuper chaque carte',(()=>{
+        const s=String(renderProgEx);
+        if(s.indexOf('<details')<0) return _echec('l\'explication est encore depliee');
+        // LE TEXTE N'EST NI RACCOURCI NI REECRIT : c'est sa repetition qui
+        // posait probleme, pas son contenu.
+        if(s.indexOf('Remplacer</b> : un autre mouvement')<0)
+          return _echec('le texte a ete reecrit ou perdu');
+        if(s.indexOf('Mettre à jour</b>')<0&&s.indexOf('Mettre a jour</b>')<0)
+          return _echec('la moitie du texte a disparu');
+        // ET LES DEUX BOUTONS N'ONT PAS BOUGE.
+        if((s.match(/remplacerDepuisBanque\(/g)||[]).length<2)
+          return _echec('un des deux boutons a disparu');
+        // GARDE RESERVE AUX COACHS : la banque est fermee cote athlete.
+        return s.indexOf('_bqDispo')>=0
+          ?true:_echec('le bloc n\'est plus reserve aux coachs');})());
+
+      // B2.11 — L'EN-TETE DU TABLEAU N'ETAIT PAS COLLANT. A 1440 px la ligne
+      // porte treize colonnes ; passe les premieres lignes, les intitules
+      // sortaient de l'ecran et il ne restait que des colonnes de chiffres
+      // nus. Mesure : apres 1 218 px de defilement, l'en-tete se cale
+      // exactement sur le haut du panneau.
+      ok('B2.11 — l\'en-tete du tableau reste visible pendant le defilement',(()=>{
+        const css=Array.from(document.querySelectorAll('style'))
+          .map(x=>x.textContent).join('\n');
+        const i=css.indexOf('#ch-clients-list .cr-head{');
+        if(i<0) return _echec('la regle de l\'en-tete a disparu');
+        const bloc=css.slice(i,css.indexOf('}',i));
+        if(bloc.indexOf('position:sticky')<0) return _echec('l\'en-tete n\'est pas collant');
+        if(bloc.indexOf('top:0')<0) return _echec('il n\'a pas de reference de calage');
+        // LE FOND EST OBLIGATOIRE : sans lui, les lignes defileraient EN
+        // TRANSPARENCE derriere les intitules.
+        if(bloc.indexOf('background:')<0) return _echec('les lignes defileront derriere');
+        // ET --cr-cols RESTE LA SEULE SOURCE PARTAGEE : deux jeux de pistes
+        // decaleraient les intitules de leurs colonnes.
+        return bloc.indexOf('var(--cr-cols)')>=0
+          ?true:_echec('l\'en-tete ne lit plus la meme grille que la ligne');})());
+
       // ══════ B2.6 — LES RACCOURCIS SE VOIENT ═══════════════════════════
       // Quatre raccourcis existaient, annonces dans un attribut title= : une
       // infobulle qui n'apparait qu'apres une seconde de survol, SUR LE BOUTON
