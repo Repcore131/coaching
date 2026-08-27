@@ -143,6 +143,142 @@ function testExercices(){
         }
       }
       return n>=200?true:_echec('seulement '+n+' vidéos, le guide en porte 228');})());
+    // B3.9 — LA CHARGE CIBLE ETAIT UN TEXTE LIBRE, JAMAIS RAPPROCHEE DU
+    // 1RM QUE L'APP CALCULE. Un coach ne pouvait ni prescrire « 75 % », ni
+    // savoir, en ecrivant 80 kg, si c'etait lourd pour CET athlete sur CE
+    // mouvement. C'est le geste de prescription le plus courant du metier, et
+    // la donnee existait deja.
+    ok('B3.9 — le repere de l\'athlete s\'affiche sous la charge cible',(()=>{
+      if(typeof _htmlRepereCharge!=='function') return _echec('aucun repere');
+      const sv=_coachEditClient;
+      try{
+        // RIEN SANS HISTORIQUE : pas de maximum invente, pas de zero.
+        _coachEditClient={email:'z@x.fr',sessions:[]};
+        if(_htmlRepereCharge({name:'DEVELOPPE COUCHE'})!=='')
+          return _echec('un exercice jamais fait affiche un repere');
+        if(_htmlRepereCharge({name:''})!=='') return _echec('un exercice sans nom affiche un repere');
+        // AVEC HISTORIQUE, le repere sort — et il vient de recordsExercice,
+        // dont les garde-fous ne sont pas touches.
+        _coachEditClient={email:'y@x.fr',sessions:[{id:'s1',date:Date.now(),
+          data:{'DEVELOPPE COUCHE':{sets:[{done:true,weight:100,reps:5,rir:'2'}]}}}]};
+        const h=_htmlRepereCharge({name:'DEVELOPPE COUCHE',charge:'80 kg'});
+        if(!h) return _echec('aucun repere sur un exercice avec historique');
+        if(h.indexOf('record 100 kg')<0) return _echec('le record n\'est pas affiche : '+h);
+        if(h.indexOf('max estimé')<0) return _echec('le maximum estime manque');
+        // ET CE QUE VAUT LA CONSIGNE ECRITE : c'est la seule facon de savoir
+        // si 80 kg est lourd.
+        if(h.indexOf('% du max')<0) return _echec('le pourcentage n\'est pas calcule');
+        // LE CHAMP RESTE LIBRE : rien n'y est ecrit, et une consigne qui n'est
+        // pas en kilos n'empeche pas le repere de s'afficher.
+        const libre=_htmlRepereCharge({name:'DEVELOPPE COUCHE',charge:'au feeling'});
+        if(!libre) return _echec('une consigne en texte libre fait disparaitre le repere');
+        return libre.indexOf('% du max')<0
+          ?true:_echec('un pourcentage est calcule sur une consigne sans kilos');
+      } finally { _coachEditClient=sv; }})());
+    ok('B3.9 — le champ accepte toujours ce qu\'il acceptait',(()=>{
+      const s=String(renderProgEx);
+      if(s.indexOf('].charge=this.value')<0) return _echec('le handler a change');
+      if(s.indexOf('_htmlRepereCharge(ex)')<0) return _echec('le repere n\'est pas rendu');
+      // L'exemple invite desormais au pourcentage, sans rien imposer.
+      return /placeholder="Ex : 80 kg ou 75 %"/.test(s)
+        ?true:_echec('l\'exemple n\'a pas suivi');})());
+
+    // ══════ B3.10 a B3.13 ══════════════════════════════════════════════
+    (()=>{
+      const _lundi=()=>{ const d=new Date(); d.setHours(0,0,0,0);
+        d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.getTime(); };
+
+      // B3.13 — L'ECART PRESCRIT/REALISE IGNORAIT LA SEMAINE EFFECTIVE.
+      // Il comparait le realise au GABARIT, jamais a ce qui etait prevu CETTE
+      // semaine-la. Une semaine de decharge etait deja comparee a une semaine
+      // pleine — le coach lisait « il en a fait 40 % de moins » d'un athlete
+      // qui avait fait exactement ce qu'on lui demandait. Depuis B3.2, ce
+      // chiffre serait faux toutes les semaines qui portent un ecart.
+      ok('B3.13 — la comparaison porte sur la semaine effective',(()=>{
+        const s=String(ecartPrescritRealise);
+        if(s.indexOf('getSemaineEffective(')<0)
+          return _echec('la comparaison lit encore le gabarit seul');
+        // ET UN ATHLETE SANS BLOC DATE NE PERD RIEN : le repli sur le gabarit
+        // reste ecrit, apres.
+        const i=s.indexOf('getSemaineEffective('), j=s.indexOf('user.sessions_config||[]');
+        if(j<0) return _echec('le repli sur le gabarit a disparu');
+        if(!(i<j)) return _echec('le gabarit passe encore devant la semaine effective');
+        // ON NE DIVISE PAS PAR ZERO POUR ANNONCER UN DEPASSEMENT INFINI.
+        return s.indexOf('p>0')>=0
+          ?true:_echec('la regle d\'abstention sans prescription a saute');})());
+      ok('B3.13 — une semaine de decharge se compare a ce qui etait prevu POUR ELLE',(()=>{
+        const u={email:'a@x.fr',sessions:[],
+          sessions_config:[{day:'Lundi',active:true,name:'A',
+            exercises:[{name:'DEVELOPPE COUCHE',series:10,rir:'2'}]}],
+          programme:{debut:_lundi(),semaines:4,decharges:[],ecarts:{}}};
+        const plein=ecartPrescritRealise(u).find(x=>x.muscle==='PECTORAUX');
+        if(!plein) return _echec('aucun ecart calcule sur le gabarit');
+        // La semaine courante devient une decharge : le prescrit doit BAISSER.
+        appliquerDecharge(u,0);
+        const dech=ecartPrescritRealise(u).find(x=>x.muscle==='PECTORAUX');
+        if(!dech) return _echec('plus rien n\'est calcule apres la decharge');
+        return dech.prescrit<plein.prescrit
+          ?true:_echec('le prescrit n\'a pas baisse : '+dech.prescrit+' contre '+plein.prescrit);})());
+      ok('B3.13 — sans bloc date, les chiffres sont EXACTEMENT ceux d\'avant',(()=>{
+        const u={email:'b@x.fr',sessions:[],
+          sessions_config:[{day:'Lundi',active:true,name:'A',
+            exercises:[{name:'DEVELOPPE COUCHE',series:10}]}]};
+        const l=ecartPrescritRealise(u).find(x=>x.muscle==='PECTORAUX');
+        if(!l) return _echec('aucun ecart sans programme');
+        const attendu=Math.round(10*POIDS_RIR_ABSENT*POIDS_ROLE.PRIMAIRE*10)/10;
+        return l.prescrit===attendu
+          ?true:_echec('le prescrit vaut '+l.prescrit+' au lieu de '+attendu);})());
+
+      // B3.10 — rirCible : un champ lu par une fonction, ecrit par personne.
+      // Rien ne cassait ; c'est le COMMENTAIRE qui mentait, et le prochain
+      // lecteur aurait cherche la consigne dans le mauvais champ.
+      ok('B3.10 — le repli fonctionne, et le code dit lequel est ecrit',(()=>{
+        // L'EDITEUR ECRIT `rir` : c'est la clef qui doit gagner quand les deux
+        // existent... non : `rirCible` est lu EN PRIORITE, et B3.4 le met a
+        // jour en meme temps. On epingle donc les deux lectures.
+        if(_rirPrescrit({rir:'2'})!=='2') return _echec('le repli sur rir ne marche plus');
+        if(_rirPrescrit({rirCible:'3'})!=='3') return _echec('rirCible n\'est plus lu');
+        if(_rirPrescrit({rirCible:'3',rir:'2'})!=='3')
+          return _echec('la priorite a change sans que le commentaire suive');
+        // ET UN CHAMP VIDE N'EST PAS UNE CONSIGNE.
+        if(_rirPrescrit({rirCible:'',rir:'2'})!=='2')
+          return _echec('un rirCible vide masque la consigne');
+        if(_rirPrescrit({})!=='') return _echec('un exercice sans consigne en recoit une');
+        return String(renderProgEx).indexOf('].rir=this.value')>=0
+          ?true:_echec('l\'editeur n\'ecrit plus rir');})());
+
+      // B3.11 — DEUX ECHELLES QUI NE COINCIDENT PAS TOUT A FAIT, et la
+      // difference est voulue : l'athlete peut CONSTATER un echec, le coach ne
+      // peut pas le PRESCRIRE. Ce qui compte est qu'elles se comparent.
+      ok('B3.11 — « echec » vaut RIR 0 partout ou les deux se rencontrent',(()=>{
+        // rirMoyenSeance, ecartRirPrescrit et la ponderation du volume doivent
+        // dire la meme chose du meme « echec ».
+        const s=String(rirMoyenSeance)+String(ecartRirPrescrit);
+        const n=(s.match(/'echec'/g)||[]).length;
+        if(n<2) return _echec('une des deux lectures ne connait plus « echec »');
+        if(!/echec.{0,12}\?0/.test(s)) return _echec('« echec » ne vaut plus zero');
+        // LE COACH NE PEUT PAS PRESCRIRE « ECHEC » : l'echelle prescrite est
+        // une echelle de nombres.
+        return RIR_CIBLE_ECHELLE.every(o=>String(o&&o.v!=null?o.v:o)!=='echec')
+          ?true:_echec('« echec » est devenu prescriptible');})());
+
+      // B3.12 — LA CONSIGNE DISPARAISSAIT AU MOMENT OU L'ATHLETE EN A BESOIN.
+      // Elle s'affichait dans l'en-tete de la carte, souvent hors ecran au
+      // moment ou l'athlete choisit sa charge et note son effort.
+      ok('B3.12 — la consigne reste presente a la saisie, et se tait sans elle',(()=>{
+        const s=String(renderSets);
+        if(s.indexOf('_rirPrescrit(ex)')<0)
+          return _echec('la consigne n\'est pas rappelee au niveau des series');
+        if(s.indexOf("_cons===''")<0)
+          return _echec('un exercice sans consigne afficherait quelque chose');
+        // UN RAPPEL, PAS UN JUGEMENT : pas de rouge, pas de blocage.
+        if(/var\(--red\)/.test(s.slice(s.indexOf('_consRappel'),s.indexOf('_consRappel')+900)))
+          return _echec('l\'ecart s\'annonce comme une erreur');
+        // L'ECART NE SE LIT QUE SUR CE QUI EST DEJA SAISI.
+        return s.indexOf("s.rir===''")>=0
+          ?true:_echec('l\'ecart se calcule avant meme la reponse');})());
+    })();
+
     // ══════ B3.5 a B3.8 ════════════════════════════════════════════════
     (()=>{
       const _s=(nom,rirs,fige)=>Object.assign({date:Date.now(),

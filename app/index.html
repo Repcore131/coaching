@@ -26281,7 +26281,8 @@ function renderProgEx(){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div>
             <label>Charge cible</label>
-            <input class="px-court f-c" value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg">
+            <input class="px-court f-c" value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg ou 75 %">
+            ${_htmlRepereCharge(ex)}
           </div>
           <div>
             <!-- N6.3 — L'INTENSITE SE CHOISIT, elle ne se tape plus. Meme
@@ -26499,9 +26500,23 @@ function loadExImage(idx,input){
   compressImage(f,800,0.75,data=>{cible.image=data;renderProgEx();});
 }
 
-// N6.3 — L'ECHELLE DU RIR PRESCRIT. Celle que l'athlete saisit deja, et
-// aucune autre : deux echelles pour une meme notion, et le retour cesserait de
-// se comparer a la consigne.
+// N6.3 + B3.11 — L'ECHELLE DU RIR PRESCRIT, ET CE QU'ELLE N'A PAS.
+//
+// Elle va de 0 a 5. Celle que l'athlete SAISIT, RIR_OPTS, ajoute « echec » en
+// tete — et le commentaire d'origine affirmait pourtant que c'etait « celle que
+// l'athlete saisit deja, et aucune autre ». Ce n'est pas tout a fait vrai, et
+// la difference est voulue :
+//
+//   • L'ATHLETE PEUT REPONDRE « ECHEC », parce que c'est ce qui lui est
+//     arrive : la serie s'est terminee toute seule. C'est un CONSTAT.
+//   • LE COACH NE PEUT PAS PRESCRIRE « ECHEC » ici. RIR 0 dit deja « jusqu'a
+//     ne plus pouvoir » et se compare a tout le reste ; « echec » comme
+//     consigne serait un mot dans une echelle de nombres.
+//
+// LES DEUX SE COMPARENT QUAND MEME, et c'est ce qui compte : partout ou le
+// realise rencontre le prescrit — rirMoyenSeance, ecartRirPrescrit, la
+// ponderation du volume — « echec » vaut RIR 0. Une seule regle, ecrite au
+// meme endroit dans les trois.
 // La valeur vide OUVRE la liste : c'est le defaut, et c'est ce que portent
 // tous les programmes existants.
 const RIR_CIBLE_ECHELLE=Object.freeze([
@@ -26524,6 +26539,50 @@ const RIR_CIBLE_SENS=Object.freeze({
   '5':'Cinq en réserve : très facile, échauffement ou récupération.'
 });
 // PURE. Les options du menu, la valeur courante toujours presente.
+// ══════ B3.9 — LE REPERE DE CET ATHLETE SUR CE MOUVEMENT ═══════════════
+//
+// Le champ « Charge cible » est un texte libre dont l'exemple etait « 80 kg ».
+// Rien ne le rapprochait de ce que l'athlete souleve REELLEMENT, alors que
+// l'application estime deja un 1RM par exercice et tient les records. Un coach
+// ne pouvait donc ni prescrire « 75 % », ni savoir, en ecrivant 80 kg, si
+// c'etait lourd ou leger pour CET athlete sur CE mouvement. C'est le geste de
+// prescription le plus courant du metier, et la donnee existait deja.
+//
+// RIEN SANS HISTORIQUE. Un exercice jamais fait n'affiche aucun repere : pas
+// de maximum invente, pas de zero. recordsExercice rend deja null dans ce cas.
+//
+// LE CALCUL N'EST PAS TOUCHE, ni ses garde-fous : une seance dont les RIR
+// manquent est ecartee du maximum estime, et au-dela de douze repetitions le
+// modele n'est pas applique. On se contente de LIRE ce qu'il rend.
+//
+// LE POURCENTAGE EST CALCULE ICI ET AFFICHE, jamais ecrit dans le champ : le
+// texte libre continue d'accepter ce qu'il acceptait — « 80 kg », « 3x5 »,
+// « au feeling » — et les programmes existants ne perdent rien.
+function _htmlRepereCharge(ex){
+  try{
+    const u=_coachEditClient;
+    if(!u||!ex||!ex.name) return '';
+    let r=null; try{ r=recordsExercice(u,ex.name); }catch(e){ return ''; }
+    if(!r) return '';
+    const mc=r.meilleureCharge, me=r.meilleurE1rm;
+    const bouts=[];
+    if(mc&&mc.kg>0) bouts.push('record '+mc.kg+' kg'+(mc.reps?(' × '+mc.reps):''));
+    if(me&&me.valeur>0) bouts.push('max estimé '+me.valeur+' kg');
+    if(!bouts.length) return '';
+    // ET CE QUE VAUT LA CONSIGNE ECRITE, quand elle est en kilos et qu'un
+    // maximum existe : c'est la seule facon de savoir si 80 kg est lourd.
+    let pct='';
+    if(me&&me.valeur>0){
+      const m=String(ex.charge||'').match(/(\d+(?:[.,]\d+)?)\s*kg/i);
+      if(m){
+        const kg=parseFloat(String(m[1]).replace(',','.'));
+        if(kg>0) pct=' · '+Math.round(kg/me.valeur*100)+' % du max';
+      }
+    }
+    return `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;margin-top:4px">`
+      +escapeHtml(bouts.join(' · '))+escapeHtml(pct)+`</div>`;
+  }catch(e){ return ''; }
+}
 function _optionsRirCible(courant){
   const v=String(courant==null?'':courant).trim();
   const connu=RIR_CIBLE_ECHELLE.some(o=>o.v===v);
@@ -30720,11 +30779,36 @@ function renderSets(ex,data,idx){
 
     // Cycle cell
 
+    // ── B3.12 — LA CONSIGNE DU COACH, LA OU L'ATHLETE REPOND ──────────
+    //
+    // Elle s'affichait dans l'EN-TETE de la carte d'exercice — « · RIR 2 » —
+    // et nulle part ailleurs. Au moment ou l'athlete choisit sa charge et note
+    // son effort, la consigne etait plus haut dans la page, souvent hors
+    // ecran : le coach prescrivait une intensite que l'athlete lisait une fois
+    // puis oubliait. C'est le maillon 2 de la boucle, et il etait faible.
+    //
+    // RIEN QUAND IL N'Y A PAS DE CONSIGNE. Une absence de consigne n'est pas
+    // une consigne — c'est la regle deja tenue par l'en-tete de la carte.
+    //
+    // UN RAPPEL, PAS UN JUGEMENT : aucune alerte, aucun blocage, aucune
+    // couleur d'erreur. L'ecart se signale en orange quand il depasse un cran
+    // — plus loin que ca, ce serait dire a l'athlete qu'il a mal fait, et ce
+    // n'est pas a l'app de le dire.
+    const _cons=(()=>{ try{ return _rirPrescrit(ex); }catch(e){ return ''; } })();
+    const _consRappel=(()=>{
+      if(_cons==='') return '';
+      // L'ECART SE LIT SUR CE QUI EST DEJA SAISI, et seulement alors : avant
+      // de repondre, il n'y a rien a comparer.
+      const v=(s.rir===''||s.rir==null)?null:(s.rir==='echec'?0:parseInt(s.rir,10));
+      const loin=(v!=null&&isFinite(v)&&Math.abs(v-Number(_cons))>1);
+      return `<span style="font-size:var(--fs-2xs);color:${loin?'var(--orange)':'var(--text-faint)'};`
+        +`white-space:nowrap;flex:none" title="Intensité demandée par ton coach">cible ${_cons}</span>`;
+    })();
     // RIR dropdown
     const rirSelect=`<select class="set-input" onchange="${onChR}" ${dis} style="padding:4px 2px;font-size:var(--fs-xs);min-width:44px;min-height:38px">
       <option value="">RIR</option>
       ${RIR_OPTS.map(v=>`<option value="${v}" ${String(s.rir)===v?'selected':''}>${v==='echec'?'Échec':v==='0'?'0 ':v}</option>`).join('')}
-    </select>`;
+    </select>${_consRappel}`;
 
     // Pain dropdown
     // PAS DE `${dis}` ICI, et c'est le seul champ dans ce cas. Une douleur se
@@ -34112,9 +34196,20 @@ const PP_COLS=Object.freeze([
   {cle:'series',  lib:'Séries',  v:ex=>ex.series},
   {cle:'reps',    lib:'Reps',    v:ex=>ex.reps},
   {cle:'charge',  lib:'Charge',  v:ex=>ex.charge||ex.poids},
-  // N6.3 — `rirCible` est le champ que l'editeur ecrit desormais ; `rir` etait
-  // deja lu ici mais rien ne le remplissait. On garde les deux : un dossier
-  // ancien qui porterait `rir` continue de s'imprimer.
+  // N6.3 + B3.10 — DEUX CLEFS, ET C'EST `rir` QUI EST ECRITE.
+  //
+  // Le commentaire disait exactement l'inverse : « rirCible est le champ que
+  // l'editeur ecrit desormais ». Rien ne cassait — _rirPrescrit lit rirCible
+  // puis se replie sur rir, et comme personne n'ecrivait rirCible, le repli
+  // s'appliquait toujours. Mais le prochain lecteur aurait cherche la consigne
+  // dans le mauvais champ.
+  //
+  // POURQUOI LES DEUX COHABITENT : `rirCible` n'est ecrit par aucune ligne du
+  // fichier, mais un dossier deja en circulation peut en porter un — il suffit
+  // qu'une version anterieure l'ait ecrit, ou qu'un import l'ait pose. Le
+  // supprimer ferait perdre sa consigne a cet athlete-la, en silence. Il reste
+  // donc LU EN PRIORITE, et B3.4 le met a jour en meme temps que `rir` quand
+  // il existe, pour qu'il ne gagne jamais sur une valeur plus recente.
   // LA COLONNE N'APPARAIT QUE SI QUELQU'UN LA REMPLIT — _ppColonnes ne retient
   // que les colonnes non vides. Une absence de consigne n'est pas une consigne.
   {cle:'rir',     lib:'RIR',     v:ex=>_rirPrescrit(ex)},
@@ -41884,8 +41979,28 @@ function rirMoyenSeance(sess){
 function ecartPrescritRealise(user){
   const out=[];
   if(!user) return out;
-  const pres=(function(){ try{ return volumePrescrit(user.sessions_config||[],user); }
-    catch(e){ return {muscles:{}}; } })();
+  // B3.13 — LA SEMAINE EFFECTIVE, ET NON LE GABARIT.
+  //
+  // La comparaison portait sur volumePrescrit(user.sessions_config) : ce qui
+  // etait prevu EN GENERAL, jamais ce qui etait prevu CETTE SEMAINE-LA. Tant
+  // que `ecarts` restait vide, les deux coincidaient — mais une semaine de
+  // decharge etait deja comparee a une semaine pleine, et l'ecart affiche au
+  // coach disait « il en a fait 40 % de moins » d'un athlete qui avait fait
+  // exactement ce qu'on lui demandait. Depuis que le bloc se periodise (B3.2),
+  // ce chiffre serait faux toutes les semaines qui portent un ecart.
+  //
+  // getSemaineEffective EXISTE PRECISEMENT POUR CELA, et elle est PURE.
+  //
+  // ET UN ATHLETE SANS BLOC DATE NE PERD RIEN : sans programme, on retombe sur
+  // le gabarit, exactement comme avant.
+  const pres=(function(){
+    try{
+      const w=getSemaineEffective(user,new Date());
+      if(w&&Array.isArray(w.creneaux)) return volumePrescrit(w.creneaux,user);
+    }catch(e){}
+    try{ return volumePrescrit(user.sessions_config||[],user); }
+    catch(e){ return {muscles:{}}; }
+  })();
   const c=(function(){ try{ return _calculSemaine(user,_volCleDecalee(0)); }
     catch(e){ return {muscles:{}}; } })();
   const noms={};
