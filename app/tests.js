@@ -25507,11 +25507,121 @@ function testExercices(){
           if(s.indexOf(k)<0) return _echec('handler perdu : '+k);
         return true;})());
 
+      // ══════ B2.6 — LES RACCOURCIS SE VOIENT ═══════════════════════════
+      // Quatre raccourcis existaient, annonces dans un attribut title= : une
+      // infobulle qui n'apparait qu'apres une seconde de survol, SUR LE BOUTON
+      // QU'ON S'APPRETAIT DEJA A CLIQUER. On n'apprend pas un raccourci en
+      // survolant ce qu'on allait faire a la souris.
+      ok('La liste des raccourcis se construit depuis la table, pas a la main',(()=>{
+        if(typeof raccourcisDeLEcran!=='function')
+          return _echec('aucun filtre par ecran');
+        // FILTREE SUR L'ECRAN : annoncer « P publier » sur l'accueil
+        // apprendrait une touche qui n'y fait rien.
+        const prog=raccourcisDeLEcran('s-coach-program').map(r=>r.touche).sort();
+        if(prog.join(',')!=='?,e,s') return _echec('sur l\'editeur : '+prog.join(','));
+        const home=raccourcisDeLEcran('s-coach-home').map(r=>r.touche).sort();
+        if(home.join(',')!=='/,?') return _echec('sur l\'accueil : '+home.join(','));
+        // UN RACCOURCI SANS `ecran` VAUT PARTOUT — c'est ce qui permet a « ? »
+        // de repondre meme la ou il n'y a rien d'autre a annoncer.
+        const nulle=raccourcisDeLEcran('s-ecran-qui-n-existe-pas').map(r=>r.touche);
+        if(nulle.join(',')!=='?') return _echec('sur un ecran inconnu : '+nulle.join(','));
+        // ET LE PANNEAU LIT CE FILTRE, jamais une liste recopiee : sinon il
+        // mentirait au premier ajout.
+        return String(ouvrirAideRaccourcis).indexOf('raccourcisDeLEcran(')>=0
+          ?true:_echec('le panneau ne lit pas la table');})());
+      ok('Le panneau s\'ouvre, se ferme, et n\'existe qu\'en un exemplaire',(()=>{
+        try{
+          ouvrirAideRaccourcis();
+          const n=document.getElementById('rc-aide-raccourcis');
+          if(!n) return _echec('le panneau ne s\'ouvre pas');
+          if(n.getAttribute('role')!=='dialog') return _echec('ce n\'est pas un dialogue');
+          // DEUX APPELS N'EN FONT PAS DEUX : ouvrir refermait d'abord.
+          ouvrirAideRaccourcis();
+          if(document.querySelectorAll('#rc-aide-raccourcis').length!==1)
+            return _echec('le panneau s\'est duplique');
+          fermerAideRaccourcis();
+          return document.getElementById('rc-aide-raccourcis')
+            ?_echec('il ne se ferme pas'):true;
+        } finally { try{ fermerAideRaccourcis(); }catch(e){} }})());
+      ok('La touche « ? » passe par les memes gardes que les autres',(()=>{
+        // Rien pendant une saisie, rien quand une modale est ouverte, aucune
+        // touche modificatrice : les gardes ne sont pas dupliquees, c'est
+        // raccourciCoach qui recoit la touche.
+        const s=String(raccourciCoach);
+        if(s.indexOf('_rcSaisieActive()')<0||s.indexOf('_rcModaleOuverte()')<0)
+          return _echec('les gardes ont disparu du gestionnaire');
+        if(s.indexOf('ctrlKey')<0) return _echec('les modificateurs ne sont plus ecartes');
+        // ET LE GESTIONNAIRE ACCEPTE UN RACCOURCI SANS `ecran`.
+        if(!/r\.ecran&&r\.ecran!==ecran/.test(s))
+          return _echec('un raccourci sans ecran ne vaut plus partout');
+        // ECHAP FERME SANS PASSER PAR LUI : le panneau EST une modale, et le
+        // gestionnaire refuse de repondre quand une modale est ouverte.
+        return RACCOURCIS_COACH.some(r=>r.touche==='?'&&!r.ecran)
+          ?true:_echec('« ? » n\'est pas dans la table, ou il nomme un ecran');})());
+      ok('Les infobulles d\'origine sont gardees, pas remplacees',(()=>{
+        // Elles servent celui qui a deja la souris sur le bouton ; le panneau
+        // sert celui qui ne sait pas encore qu'il y a des touches.
+        const s=String(_rcAnnoncerRaccourcis);
+        if(s.indexOf("setAttribute('title'")<0)
+          return _echec('les title= ont ete retires');
+        // ET LA BARRE PORTE LA PORTE D'ENTREE EN TOUTES LETTRES : une touche
+        // qu'aucun texte ne nomme reste aussi introuvable qu'avant.
+        return s.indexOf('rc-aide-lien')>=0
+          ?true:_echec('rien ne nomme la touche dans l\'interface');})());
+
+      // B2.7 — LES NEUF BOUTONS DE LA BARRE SONT HABILLES AU MEME ENDROIT.
+      // Les quatre onglets repetaient EN LIGNE, mot pour mot, les quinze
+      // declarations que .sb-lien pose deja pour leurs cinq voisins immediats.
+      ok('B2.7 — les neuf boutons de la barre partagent leur habillage',(()=>{
+        const tabs=['dashboard','codes','monetisation','profil']
+          .map(k=>document.getElementById('sb-tab-'+k));
+        if(tabs.some(b=>!b)) return _echec('un onglet a disparu de la barre');
+        const sansClasse=tabs.filter(b=>!b.classList.contains('sb-lien'));
+        if(sansClasse.length)
+          return _echec(sansClasse.length+' onglet(s) gardent leur habillage en ligne');
+        // AUCUN NE REDECLARE CE QUE LA CLASSE PORTE. Un style en ligne subsiste
+        // pour l'ETAT — coachTab ecrit background, color et boxShadow — mais pas
+        // pour la geometrie ni la typographie.
+        const fautifs=tabs.filter(b=>/padding|font-family|letter-spacing/.test(b.getAttribute('style')||''));
+        if(fautifs.length) return _echec('habillage encore en ligne sur '+fautifs.length+' onglet(s)');
+        // ET L'ETAT COURANT CONTINUE DE FONCTIONNER : coachTab ecrit en ligne,
+        // ce qui gagne sur la classe.
+        const s=String(coachTab);
+        return /sb\.style\.background=/.test(s)&&/sb\.style\.boxShadow=/.test(s)
+          ?true:_echec('coachTab n\'allume plus l\'onglet courant');})());
+
+      // B2.8 — LE FOCUS CLAVIER DEBORDAIT DE LA BARRE. La regle globale pose
+      // un contour a 3 px de decalage EXTERIEUR : sur un bouton large de
+      // 260 px moins ses marges, il sortait de la barre et se faisait couper
+      // par son bord.
+      ok('B2.8 — le focus clavier reste dans la barre',(()=>{
+        const css=Array.from(document.querySelectorAll('style'))
+          .map(s=>s.textContent).join('\n');
+        if(css.indexOf('.sb-lien:focus-visible')<0)
+          return _echec('aucune regle de focus sur les liens de la barre');
+        if(!/\.sb-lien:focus-visible\{outline-offset:-2px\}/.test(css))
+          return _echec('le contour n\'est pas rentre a l\'interieur');
+        // :focus-visible ET NON :focus — la souris ne doit rien allumer.
+        if(/\.sb-lien:focus\{/.test(css))
+          return _echec('le focus a la souris allume le bouton');
+        // ET LE BOUTON REPOND AU DOIGT : .sb-lien n'avait ni :active ni
+        // transition.
+        return /\.sb-lien:active\{/.test(css)
+          ?true:_echec('aucun retour au clic');})());
+
       ok('Chaque lien de la barre dit ou il mene',(()=>{
-        const liens=Array.from(document.querySelectorAll('#ch-sidebar .sb-lien'));
-        if(liens.length<5) return _echec(liens.length+' lien(s) au lieu de 5');
-        const sans=liens.filter(b=>!b.dataset.ecran);
-        if(sans.length) return _echec(sans.length+' lien(s) sans destination');
+        // TOUS LES BOUTONS DE LA BARRE NE MENENT PAS A UN ECRAN, et c'est
+        // voulu. Les quatre sb-tab-* sont des onglets d'un meme ecran, tenus
+        // par coachTab (B2.7, depuis qu'ils partagent l'habillage de leurs
+        // voisins) ; « ? RACCOURCIS » ouvre un panneau de lecture (B2.6). Ce
+        // qu'on epingle, c'est que les CINQ DESTINATIONS DE TRAVAIL soient la,
+        // et qu'aucune annonce ne soit morte.
+        const attendus=['s-coach-programs','s-coach-file','s-coach-decharge',
+                        's-coach-activite','s-charges'];
+        const liens=Array.from(document.querySelectorAll('#ch-sidebar .sb-lien[data-ecran]'));
+        const vus=liens.map(b=>b.dataset.ecran);
+        const manquants=attendus.filter(e=>vus.indexOf(e)<0);
+        if(manquants.length) return _echec('destination absente : '+manquants.join(', '));
         // ET LA DESTINATION EXISTE. Un data-ecran qui ne designe aucun ecran
         // n'allumerait jamais rien, en silence.
         const morts=liens.filter(b=>!document.getElementById(b.dataset.ecran));

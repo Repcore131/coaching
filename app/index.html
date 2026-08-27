@@ -2099,6 +2099,33 @@ html{scroll-behavior:smooth}
    deux choses differentes. */
 .sb-lien[aria-current="page"]{background:var(--surface-1);color:var(--text);
   box-shadow:inset 3px 0 0 var(--red)}
+/* B2.7 — LES NEUF BOUTONS DE LA BARRE SONT HABILLES AU MEME ENDROIT.
+   Les quatre onglets repetaient EN LIGNE, mot pour mot, les quinze
+   declarations que .sb-lien pose deja pour leurs cinq voisins immediats :
+   meme padding, meme famille, meme graisse, meme interlettrage, meme
+   gouttiere. Quinze fois quatre, a deux lignes de la classe qui les porte.
+   C'est la raison mecanique pour laquelle l'espace coach ne se lit pas comme
+   un produit unique — rien ne peut etre corrige une fois pour toutes.
+   L'APPARENCE NE CHANGE PAS. La seule difference tenait au fond et a la
+   couleur du texte de l'onglet ouvert, et c'est un ETAT, pas un habillage :
+   il est desormais porte par aria-current, que la regle ci-dessus lit deja.
+   coachTab continue d'ecrire background, color et boxShadow en ligne pour
+   marquer l'onglet courant, et le style en ligne gagne sur la classe : rien
+   a changer dans la fonction.
+
+   B2.8 — ET LE FOCUS CLAVIER NE DEBORDE PLUS DE LA BARRE.
+   La regle globale button:focus-visible pose un contour de 2 px a 3 px de
+   decalage EXTERIEUR. Sur un bouton large de 260 px moins ses marges, ce
+   contour sortait de la barre et se faisait couper par son bord droit : le
+   coach au clavier voyait un rectangle tronque, ou rien du tout du cote
+   coupe. Le contour rentre a l'interieur — meme epaisseur, meme couleur,
+   meme role — et reste entierement visible.
+   :focus-visible ET NON :focus : la souris ne doit rien allumer. */
+.sb-lien:focus-visible{outline-offset:-2px}
+/* Le retour au clic, comme les autres boutons de l'app. .sb-lien n'avait ni
+   :active ni transition : le bouton ne repondait pas au doigt. */
+.sb-lien{transition:background var(--t-1),color var(--t-1)}
+.sb-lien:active{background:var(--surface-2)}
 .ccd-vue{display:none}
 .ccd-vue.actif{display:block}
 /* LA PASTILLE DE SECURITE. Un onglet ferme ne doit jamais cacher un signal :
@@ -4030,7 +4057,7 @@ const COACH_PHOTO='icons/coach.jpg';
          dans l'en-tete de la liste, et trois ecrans dans un volet ferme.
          En haut ce qu'on ouvre tous les jours, en bas ce qu'on regle. -->
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:2px;font-weight:800;text-transform:uppercase;padding:0 14px 7px">Travail</div>
-    <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--surface-1);border:none;border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+    <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" class="sb-lien" aria-current="page">
       ATHLÈTES
     </button>
     <button onclick="openCoachPrograms()" class="sb-lien" data-ecran="s-coach-programs">MES PROGRAMMES</button>
@@ -4040,13 +4067,13 @@ const COACH_PHOTO='icons/coach.jpg';
     <button onclick="loadCharges()" class="sb-lien" data-ecran="s-charges">CHARGES ARTICULAIRES</button>
     <div style="height:1px;background:#1a0000;margin:12px 6px"></div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:2px;font-weight:800;text-transform:uppercase;padding:0 14px 7px">Réglages</div>
-    <button id="sb-tab-codes" onclick="coachTab('codes')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+    <button id="sb-tab-codes" onclick="coachTab('codes')" class="sb-lien">
       CODES ACCÈS
     </button>
-    <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+    <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" class="sb-lien">
       PAIEMENTS
     </button>
-    <button id="sb-tab-profil" onclick="coachTab('profil')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+    <button id="sb-tab-profil" onclick="coachTab('profil')" class="sb-lien">
       PROFIL
     </button>
   </div>
@@ -40828,8 +40855,18 @@ const RACCOURCIS_COACH=Object.freeze([
   {ecran:'s-coach-program', touche:'s', bouton:'cp-sauver',    dit:'Enregistrer'},
   {ecran:'s-coach-sessions',touche:'p', bouton:'csm-publier',  dit:'Publier'},
   {ecran:'s-coach-program', touche:'e', action:'addExercise',  dit:'Ajouter un exercice'},
-  {ecran:'s-coach-home',    touche:'/', champ:'ch-search',     dit:'Rechercher'}
+  {ecran:'s-coach-home',    touche:'/', champ:'ch-search',     dit:'Rechercher'},
+  // B2.6 — LA TOUCHE QUI MONTRE LES AUTRES. Sans `ecran` : elle vaut partout
+  // dans l'espace coach, y compris la ou aucun autre raccourci n'existe — c'est
+  // la seule facon d'apprendre qu'il n'y en a pas ici.
+  {touche:'?',              action:'ouvrirAideRaccourcis', dit:'Voir les raccourcis'}
 ]);
+// PURE. Les raccourcis utiles sur un ecran donne : ceux qui le nomment, plus
+// ceux qui valent partout. Une liste recopiee a la main mentirait au premier
+// ajout — c'est tout l'objet de la fiche.
+function raccourcisDeLEcran(ecran){
+  return RACCOURCIS_COACH.filter(r=>!r.ecran||r.ecran===ecran);
+}
 function _rcSaisieActive(){
   const a=document.activeElement;
   if(!a) return false;
@@ -40851,8 +40888,11 @@ function raccourciCoach(ev){
   if(_rcSaisieActive()||_rcModaleOuverte()) return false;
   const ecran=_rcEcranActif();
   const t=String(ev.key||'').toLowerCase();
+  // B2.6 — UN RACCOURCI SANS `ecran` VAUT PARTOUT. Les quatre premiers
+  // nomment le leur ; « ? » n'en nomme aucun, et c'est ce qui lui permet de
+  // repondre meme la ou il n'y a rien d'autre a annoncer.
   for(const r of RACCOURCIS_COACH){
-    if(r.ecran!==ecran||r.touche!==t) continue;
+    if((r.ecran&&r.ecran!==ecran)||r.touche!==t) continue;
     if(r.champ){
       const c=document.getElementById(r.champ);
       if(!c) return false;
@@ -40878,8 +40918,69 @@ function raccourciCoach(ev){
   }
   return false;
 }
+// ══════ B2.6 — LES RACCOURCIS SE VOIENT ════════════════════════════════
+//
+// Quatre raccourcis existaient, annonces dans un attribut title= : une
+// infobulle qui n'apparait qu'apres une seconde de survol, SUR LE BOUTON QU'ON
+// S'APPRETAIT DEJA A CLIQUER. Le gain de decouverte etait nul — on n'apprend
+// pas un raccourci en survolant ce qu'on allait faire a la souris.
+//
+// CONSTRUIT DEPUIS LA TABLE, jamais recopie : une liste ecrite a la main
+// mentirait au premier ajout, et c'est exactement ce que la fiche interdit.
+// Filtre sur l'ecran actif, parce qu'annoncer « P publier » sur l'accueil
+// apprendrait une touche qui n'y fait rien.
+//
+// LES GARDES SONT CELLES DU GESTIONNAIRE, et elles ne sont pas dupliquees :
+// c'est raccourciCoach qui recoit la touche, donc _rcSaisieActive et
+// _rcModaleOuverte s'appliquent avant meme qu'on arrive ici. Une touche tapee
+// dans un champ n'ouvre rien.
+const AIDE_RC_ID='rc-aide-raccourcis';
+function ouvrirAideRaccourcis(){
+  try{
+    fermerAideRaccourcis();
+    const ecran=_rcEcranActif();
+    const l=raccourcisDeLEcran(ecran);
+    const n=document.createElement('div');
+    n.id=AIDE_RC_ID;
+    n.setAttribute('role','dialog');
+    n.setAttribute('aria-label','Raccourcis clavier');
+    n.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);'
+      +'display:flex;align-items:center;justify-content:center;padding:20px';
+    n.innerHTML='<div style="background:var(--surface-2);border:1px solid var(--border);'
+      +'border-radius:var(--r-4);padding:18px 20px;max-width:340px;width:100%">'
+      +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;'
+      +'text-transform:uppercase;color:var(--sub);margin-bottom:12px">Raccourcis clavier</div>'
+      +(l.length?l.map(r=>'<div style="display:flex;align-items:baseline;gap:12px;'
+        +'justify-content:space-between;margin-bottom:8px">'
+        +'<span style="font-size:var(--fs-xs);color:var(--text-strong)">'+escapeHtml(r.dit)+'</span>'
+        +'<kbd style="font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;'
+        +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);'
+        +'padding:3px 8px;color:var(--text);white-space:nowrap">'
+        +escapeHtml(r.touche.toUpperCase())+'</kbd></div>').join('')
+        :'<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55">'
+         +'Aucun raccourci sur cet écran.</div>')
+      +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:12px;'
+      +'line-height:1.5">Échap pour fermer.</div></div>';
+    // FERME AU CLIC N'IMPORTE OU : c'est un panneau de lecture, il n'y a rien
+    // a y valider.
+    n.addEventListener('click',fermerAideRaccourcis);
+    document.body.appendChild(n);
+  }catch(e){}
+}
+function fermerAideRaccourcis(){
+  try{ const n=document.getElementById(AIDE_RC_ID); if(n) n.remove(); }catch(e){}
+}
+// ECHAP FERME, et sans passer par raccourciCoach : ce panneau EST une modale,
+// et le gestionnaire refuse de repondre quand une modale est ouverte.
+try{
+  document.addEventListener('keydown',ev=>{
+    if(ev&&ev.key==='Escape'&&document.getElementById(AIDE_RC_ID)) fermerAideRaccourcis();
+  });
+}catch(e){}
 // ANNONCE DANS L'INTERFACE. Un raccourci que rien ne dit n'existe pas : le
 // titre du bouton le porte, la ou l'oeil le cherche deja.
+// GARDE, ET NON REMPLACE : l'infobulle sert celui qui a deja la souris sur le
+// bouton, le panneau sert celui qui ne sait pas encore qu'il y a des touches.
 function _rcAnnoncerRaccourcis(){
   for(const r of RACCOURCIS_COACH){
     if(!r.bouton) continue;
@@ -40892,6 +40993,22 @@ function _rcAnnoncerRaccourcis(){
   const c=document.getElementById('ch-search');
   if(c&&(c.getAttribute('title')||'').indexOf('/')<0)
     c.setAttribute('title','Rechercher un athlète (touche /)');
+  // B2.6 — ET LA BARRE LATERALE PORTE LA PORTE D'ENTREE, en toutes lettres :
+  // c'est le seul endroit visible sur tous les ecrans coach, et une touche
+  // qu'aucun texte ne nomme reste aussi introuvable qu'avant.
+  try{
+    const sb=document.getElementById('ch-sidebar');
+    if(sb&&!document.getElementById('rc-aide-lien')){
+      const b=document.createElement('button');
+      b.id='rc-aide-lien';
+      b.type='button';
+      b.className='sb-lien';
+      b.style.cssText='margin-top:auto;font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1.5px';
+      b.textContent='? RACCOURCIS';
+      b.onclick=ouvrirAideRaccourcis;
+      sb.appendChild(b);
+    }
+  }catch(e){}
 }
 try{
   document.addEventListener('keydown',raccourciCoach);
