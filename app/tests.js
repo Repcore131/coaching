@@ -24460,6 +24460,85 @@ function testExercices(){
         return _htmlOrigineCibles({nutrition:{macros:{}}})===''
           ?true:_echec('une origine est inventée pour un dossier qui n’en a pas');})());
 
+      // ══════ AUCUNE ECRITURE LOCALE NE TOMBE EN SILENCE ══════════════
+      //
+      // Le stockage de cet utilisateur est sature a 81 % par du base64
+      // d'images — une photo brute de 1,85 Mo relevee. Ces echecs ne sont pas
+      // theoriques : ils arrivent, et ils arrivaient sans un mot.
+      //
+      // REGLE DU PROJET : aucune perte silencieuse. Une ecriture qui echoue le
+      // DIT, et ne fait jamais tomber le geste qui la suit.
+      ok('Toutes les ecritures locales passent par un filet',(()=>{
+        const src=_prodSrc();
+        const lignes=src.split('\n');
+        const nus=[];
+        lignes.forEach((l,i)=>{
+          if(l.indexOf('localStorage.setItem')<0) return;
+          if(l.trim().indexOf('//')===0) return;
+          // Un `try{` ouvert dans les vingt lignes au-dessus et pas encore
+          // referme : c'est la portee qui compte, pas la ligne elle-meme.
+          // LA PORTEE EST CELLE DE LA FONCTION, et rien d'autre. Deux
+          // heuristiques plus simples se sont trompees avant celle-ci, et
+          // toutes les deux dans le sens qui use la confiance — elles criaient
+          // au loup sur des ecritures parfaitement protegees :
+          //   · comparer la position du dernier `try{` a celle du dernier
+          //     `}catch` : un try IMBRIQUE et deja referme juste au-dessus
+          //     faisait croire que la portee etait fermee ;
+          //   · compter le solde sur une fenetre de lignes fixe : elle
+          //     enjambait la fin de la fonction PRECEDENTE et y ramassait un
+          //     `}catch` sans son `try{`.
+          // On remonte donc jusqu'a la declaration de la fonction, et on
+          // compte le solde a l'interieur d'elle seule.
+          let deb=i;
+          while(deb>0&&!/^\s*(async\s+)?function\s|^\s*[a-zA-Z_$][\w$]*\s*\([^)]*\)\s*\{\s*$/.test(lignes[deb])) deb--;
+          const fen=lignes.slice(deb,i).join('\n');
+          const ouverts=(fen.match(/try\s*\{/g)||[]).length;
+          const fermes=(fen.match(/\}\s*catch/g)||[]).length;
+          if(ouverts<=fermes&&l.indexOf('try{')<0) nus.push((i+1)+' : '+l.trim().slice(0,60));
+        });
+        return nus.length?_echec(nus.length+' écriture(s) sans filet — '+nus[0]):true;})());
+
+      ok('Le code coach en attente ne bloque plus l\'inscription',(()=>{
+        // SYMPTOME : « VÉRIFICATION… » puis plus rien. L'exception de quota
+        // emportait le go() qui suivait — un écran mort, sans un mot, sur le
+        // tout premier geste d'un nouvel athlète.
+        if(typeof _poserCodeEnAttente!=='function')
+          return _echec('l\'écriture du code n\'est pas isolée');
+        const s=String(_poserCodeEnAttente);
+        if(s.indexOf('catch')<0) return _echec('elle peut encore lever');
+        if(s.indexOf('toast(')<0) return _echec('un échec resterait silencieux');
+        // ET LES DEUX SITES L'UTILISENT : le diagnostic n'en nommait qu'un,
+        // il y en a deux, avec le même geste et le même symptôme.
+        const prod=_prodSrc();
+        const restes=(prod.match(/localStorage\.setItem\('pendingCode'/g)||[]).length;
+        if(restes>1) return _echec(restes+' écritures directes de pendingCode subsistent');
+        return (prod.match(/_poserCodeEnAttente\(/g)||[]).length>=3
+          ?true:_echec('un des deux points d\'entrée n\'a pas été repris');})());
+
+      ok('La restauration du profil coach passe par DB.setLocal',(()=>{
+        // C'est l'écriture la plus GROSSE du lot — elle restaure une photo de
+        // coach en base64 — donc la plus exposée au quota.
+        const prod=_prodSrc();
+        if(/localStorage\.setItem\('rc_users'/.test(prod))
+          return _echec('rc_users est encore écrit en direct');
+        // setLocal ET NON set : on répare l'affichage de cet appareil, on ne
+        // republie rien.
+        return prod.indexOf("DB.setLocal('users',mu)")>=0
+          ?true:_echec('la restauration n\'utilise pas DB.setLocal');})());
+
+      ok('L\'instantane de seance previent une fois, et une seule',(()=>{
+        // woPersist se déclenche à chaque série validée, à chaque minuteur, à
+        // chaque passage en arrière-plan : un toast par appel serait pire que
+        // le problème signalé. C'est le patron de _bilEcrireDraft.
+        const s=String(woPersist);
+        if(s.indexOf('_woSnapAvertiPlein')<0)
+          return _echec('aucune garde contre la répétition du message');
+        if(s.indexOf('toast(')<0) return _echec('l\'échec reste silencieux');
+        // ET LE MESSAGE DIT QUOI FAIRE : « termine-la sans fermer » est une
+        // consigne actionnable, « erreur de stockage » n'en est pas une.
+        return /sans fermer|sans quitter/.test(s)
+          ?true:_echec('le message ne dit pas quoi faire');})());
+
       // ══════ UN MODELE DE PROGRAMME NE SE VIDE PLUS ══════════════════
       //
       // MEME PIEGE QUE LA SYNCHRO, ET C'EST CELUI QUI COUTE LE PLUS CHER. Un

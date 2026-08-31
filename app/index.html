@@ -13517,6 +13517,26 @@ function genCode(){
   const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return 'GCP-'+Array.from({length:6},()=>c[Math.floor(Math.random()*c.length)]).join('');
 }
+// ══════ LE CODE COACH EN ATTENTE, SANS BLOQUER SI LE STOCKAGE EST PLEIN ══
+//
+// Ce n'est PAS une donnee de l'utilisateur : c'est un relais de quelques
+// caracteres entre deux ecrans, et l'ecran d'arrivee sait le redemander. Son
+// echec ne doit donc jamais couter plus que lui-meme — surtout pas le go() qui
+// le suit, comme c'etait le cas.
+//
+// ON LE DIT QUAND MEME. Regle du projet : aucune perte silencieuse. L'athlete
+// qui devra retaper son code doit savoir pourquoi, sinon il croit que le lien
+// de son coach est casse.
+function _poserCodeEnAttente(code){
+  try{
+    localStorage.setItem('pendingCode',code||'');
+    return true;
+  }catch(e){
+    console.warn('[RepCore] pendingCode non enregistré :',e);
+    try{ toast('Stockage plein : garde ton code sous la main, il te sera redemandé à l’écran suivant.','var(--orange)'); }catch(_){}
+    return false;
+  }
+}
 function localISODate(d){
   const m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
   return d.getFullYear()+'-'+m+'-'+day;
@@ -13580,7 +13600,16 @@ async function doAthleteCode(){
         // on retombe sur le code GCP — le rattachement même-appareil.
         if(_INVITE_RE.test(inv)){ _invDuLien=inv; }
         else {
-          localStorage.setItem('pendingCode',coach.code||'');
+          // LE QUOTA NE DOIT PAS BLOQUER L'INSCRIPTION. Sur un stockage
+          // sature — 81 % de base64 d'images chez cet utilisateur — cette
+          // ecriture levait, et l'exception emportait le go() qui suit : l'app
+          // affichait « VERIFICATION… » et ne faisait plus rien. Un ecran mort,
+          // sans un mot, sur le tout premier geste d'un nouvel athlete.
+          //
+          // MEME COMPORTEMENT QUE DB.setLocal : on avertit, et ON CONTINUE. Le
+          // code sera redemande a l'ecran suivant — c'est une gene, pas une
+          // impasse, et c'est infiniment mieux qu'un bouton qui ne repond plus.
+          _poserCodeEnAttente(coach.code||'');
           go('s-register');
           setTimeout(()=>selectRole('athlete'),50);
           return;
@@ -13652,7 +13681,8 @@ async function doAthleteCode(){
   // Check coach's main GCP code
   const directCoach=allCoaches.find(u=>u.code&&u.code.toUpperCase()===code);
   if(directCoach){
-    localStorage.setItem('pendingCode', code);
+    // Meme geste, meme risque : voir _poserCodeEnAttente.
+    _poserCodeEnAttente(code);
     go('s-register');
     setTimeout(()=>selectRole('athlete'),50);
     return;
@@ -13812,7 +13842,9 @@ function _memeCoachQueLien(coachDuLien,user){
 function _annoncerInvitation(coach){
   if(!coach) return null;
   const code=window._invitationCode||coach.code||'';
-  if(code){ try{ localStorage.setItem('pendingCode',code); }catch(e){} }
+  // MEME CHEMIN QUE LES DEUX AUTRES : l'echec etait avale en silence ici, et
+  // l'athlete ne comprenait pas pourquoi son code lui etait redemande.
+  if(code) _poserCodeEnAttente(code);
   const prenom=(coach.fname||coach.lname||'ton coach').trim();
   // DÉJÀ SUIVI PAR QUELQU'UN D'AUTRE : on ne promet rien. « Valide ton accès »
   // annoncerait exactement ce que _annoncerDejaRattache va refuser au clic
@@ -28130,7 +28162,13 @@ function loadClientHome(){
             // publie par le coach seul.
             if(mc.coachPhoto||mc.teamName||mc.catchphrase){
               mu[ce]=mc;
-              localStorage.setItem('rc_users',JSON.stringify(mu));
+              // DB.setLocal ET NON localStorage.setItem : lui seul reconnait le
+              // depassement de quota et le DIT. Ecrite en direct, cette ligne
+              // levait sur un stockage sature — et comme elle restaure une
+              // PHOTO de coach en base64, c'est precisement l'ecriture la plus
+              // grosse du lot, donc la plus exposee. setLocal et non set : on
+              // repare l'affichage de cet appareil, on ne republie rien.
+              DB.setLocal('users',mu);
             }
           }
         }
@@ -29468,8 +29506,24 @@ function woPersist(){
       // reprise après une interruption repartait avec une checklist vierge.
       ckEtat:_ckEtat
     }));
-  }catch{}
+  }catch(e){
+    // LE PATRON DE _bilEcrireDraft, pour la meme raison exactement : woPersist
+    // se declenche a chaque serie validee, a chaque minuteur, a chaque passage
+    // en arriere-plan. Un toast par appel serait pire que le probleme signale.
+    //
+    // ET IL FAUT LE DIRE, une fois : sans instantane, une seance interrompue
+    // par un appel telephonique est PERDUE — series validees, charges saisies,
+    // reponses de douleur. L'athlete qui l'apprend peut finir sa seance sans
+    // quitter l'app ; celui qui ne l'apprend pas la refait.
+    if(!_woSnapAvertiPlein){
+      _woSnapAvertiPlein=true;
+      console.warn('[RepCore] instantané de séance non enregistré :',e);
+      try{ toast('Stockage plein : ta séance ne sera pas récupérable si tu quittes l\'app. Termine-la sans fermer.','var(--orange)'); }catch(_){}
+    }
+  }
 }
+// Une seule alerte par session, comme pour le brouillon de bilan.
+let _woSnapAvertiPlein=false;
 // PURE. L’instantané de séance est-il celui du compte courant ?
 //
 // Copie exacte de _bilDraftAMoi, y compris son refus quand l’adresse MANQUE :
@@ -65275,7 +65329,7 @@ function _retenirCodeVerifie(code,payload){
   try{localStorage.setItem(_CLE_CODE,brut);}catch(e){}
   // pendingCode reste écrit pour le pré-remplissage de s-client-code : c'est
   // lui que lit le rattrapage, et cinq chemins en dépendent encore.
-  try{localStorage.setItem('pendingCode',code);}catch(e){}
+  _poserCodeEnAttente(code);
 }
 function _codeVerifieEnAttente(){
   for(const st of [sessionStorage,localStorage]){
