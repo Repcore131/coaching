@@ -26004,6 +26004,65 @@ function testExercices(){
           if(s.indexOf(k)<0) return _echec('handler perdu : '+k);
         return true;})());
 
+      // B2.F1 — LE TIROIR DE DETAIL. Ouvrir un athlete remplacait
+      // s-coach-home par s-coach-client : la liste disparaissait, et revenir
+      // imposait de retrouver sa ligne. C'est le geste le plus frequent du
+      // coach, et il fermait a chaque fois le contexte ou il travaillait.
+      ok('B2.F1 — le tiroir ne s\'ouvre qu\'ou la place existe',(()=>{
+        if(typeof _tiroirDisponible!=='function') return _echec('aucun tiroir');
+        const s=String(_tiroirDisponible);
+        // DEUX CONDITIONS, ET LES DEUX COMPTENT : la largeur — 1440 px, mesure
+        // faite : a 1440 le tableau a treize colonnes consomme 1 076 px sur
+        // 1 128, il ne reste rien — et l'ecran, parce que la liste d'athletes
+        // ne vit que sur l'accueil coach.
+        if(s.indexOf('1440')<0&&s.indexOf('TIROIR_LARGEUR_MIN')<0)
+          return _echec('le seuil de largeur n\'est pas consulte');
+        if(s.indexOf("s-coach-home")<0) return _echec('l\'ecran n\'est pas verifie');
+        // ET LE CLIC LE CONSULTE AVANT DE NAVIGUER.
+        const o=String(openClientDetail);
+        if(o.indexOf('_tiroirDisponible()')<0)
+          return _echec('le clic ouvre la fiche sans regarder la place');
+        // LE SECOND CLIC, celui du bouton « Ouvrir la fiche », FORCE : sinon
+        // il rouvrirait le tiroir indefiniment.
+        if(o.indexOf('_force')<0) return _echec('le bouton du tiroir ne force pas l\'ouverture');
+        return /_htmlTiroirAthlete[\s\S]{0,900}Ouvrir la fiche/.test(String(_htmlTiroirAthlete))
+          ||String(_htmlTiroirAthlete).indexOf('Ouvrir la fiche')>=0
+          ?true:_echec('le tiroir n\'offre pas d\'ouverture complete');})());
+      ok('B2.F1 — le tiroir n\'invente rien et ne duplique pas la fiche',(()=>{
+        // IL RAPPELLE CE QUE LA LIGNE CALCULE DEJA, en clair plutot qu'en
+        // colonnes de trois caracteres. Aucune donnee nouvelle.
+        const s=String(_htmlTiroirAthlete);
+        for(const f of ['_crAssidu','_crPoids','_crDiete','_crCharge','_crProgres','_crBilans'])
+          if(s.indexOf(f)<0) return _echec('le tiroir n\'utilise pas '+f);
+        // IL NE REPRODUIT PAS LE RENDU DE LA FICHE.
+        if(/openClientDetail\(cid,true\)|renderCoachClientDetail|ccd-/.test(s))
+          return _echec('le tiroir rejoue le rendu de la fiche');
+        // RIEN QUAND RIEN N'EST MESURE : un panneau de six tirets ferait
+        // croire a une panne.
+        const vide=_htmlTiroirAthlete({id:'X',fname:'A',lname:'B'});
+        if(!/Aucune mesure encore/.test(vide))
+          return _echec('un athlete sans mesure remplit le tiroir de vide');
+        // ET UN ATHLETE ABSENT NE PRODUIT RIEN.
+        return _htmlTiroirAthlete(null)===''
+          ?true:_echec('un athlete absent produit un tiroir');})());
+      ok('B2.F1 — le tableau retombe a dix colonnes, et la ligne se designe',(()=>{
+        const css=Array.from(document.querySelectorAll('style'))
+          .map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+        // LE TIROIR NE PREND PAS DE PLACE TANT QU'IL EST VIDE : sans :has(),
+        // une colonne de 340 px resterait beante avant le premier clic.
+        if(css.indexOf('#ch-tiroir:not(:empty)')<0)
+          return _echec('le tiroir occupe la place avant d\'etre ouvert');
+        if(css.indexOf('min-width:1440px')<0)
+          return _echec('le tiroir n\'est pas borne a 1440 px');
+        // LES TROIS MESURES CEDENT LA PLACE : elles sont dans le tiroir, pour
+        // l'athlete qu'on regarde.
+        if(css.indexOf('.cr-assidu,')<0&&css.indexOf('.cr-assidu{')<0)
+          return _echec('les colonnes fines ne cedent pas la place');
+        // LA LIGNE CHOISIE SE DISTINGUE, sinon le tiroir parlerait d'un
+        // athlete qu'on ne saurait plus designer.
+        return css.indexOf('.client-row[aria-selected="true"]')>=0
+          ?true:_echec('rien ne designe la ligne choisie');})());
+
       // B2.4 — « LARGE » AVAIT ETE LIVRE, « UTILE » PAS ENCORE. Vingt-et-un
       // ecrans coach recevaient max-width:1440px et rien de plus ; neuf
       // etaient meme rebornes a 72ch — une colonne de lecture centree dans un

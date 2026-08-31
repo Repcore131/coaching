@@ -663,6 +663,44 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
   body:has(#s-coach-home.active) #ch-clients-list{--cr-gap:12px}
 }
 
+/* ══ B2.F1 — LE TIROIR DE DETAIL ═════════════════════════════════════
+   ETEINT PAR DEFAUT : sous 1440 px le conteneur n'est qu'un div, la liste
+   occupe toute la largeur et le clic ouvre la fiche comme aujourd'hui.
+
+   1440 PX ET NON 1360. Mesure : a 1440 le corps offre 1 128 px et le tableau
+   a treize colonnes en consomme 1 076 — il ne reste rien. Le tableau a DIX
+   colonnes, lui, en prend 1 017 : la place d'un panneau existe des qu'on
+   accepte d'y retomber, et c'est le marche que fait cette regle. Les trois
+   mesures les plus fines — assiduite, poids, diete — cedent la place au
+   panneau qui les redit toutes les trois, en clair, pour l'athlete choisi.
+
+   LE TIROIR NE PREND PAS DE PLACE TANT QU'IL EST VIDE : sans :has(), une
+   colonne de 340 px resterait beante avant le premier clic. */
+.ch-avec-tiroir{display:block}
+@media(min-width:1440px){
+  body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)){
+    display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:0 18px;align-items:start}
+  /* LE TABLEAU RETOMBE A DIX COLONNES quand le tiroir est ouvert. C'est le
+     prix de la place, et il est assume : les trois valeurs qui disparaissent
+     sont dans le tiroir, pour l'athlete qu'on regarde. */
+  body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list{
+    --cr-cols:18px 44px minmax(140px,1.3fr) minmax(120px,1.1fr) minmax(90px,1.2fr) minmax(78px,.8fr) 66px 66px 52px 120px;
+    --cr-gap:12px}
+  body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list .cr-assidu,
+  body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list .cr-poids,
+  body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list .cr-diete{display:none}
+  body:has(#s-coach-home.active) #ch-tiroir:not(:empty){
+    position:sticky;top:0;background:var(--surface-1);border:1px solid var(--border);
+    border-radius:var(--r-3);padding:14px;
+    /* Le repli dvh suit le vh sur la MEME ligne : c'est la forme que la sonde
+       de la suite epingle, et elle a raison — separes, on en oublie un. */
+    max-height:calc(100vh - 120px);max-height:calc(100dvh - 120px);
+    overflow-y:auto;overscroll-behavior:contain}
+}
+/* La ligne choisie se distingue : sans cela, le tiroir parlerait d'un athlete
+   qu'on ne saurait plus designer dans la liste. */
+.client-row[aria-selected="true"]{box-shadow:inset 3px 0 0 var(--red)}
+
 /* ══ B2.4 — DEUX ECRANS OU LA LARGEUR SERT ENFIN A TRAVAILLER ═════════
    Vingt-et-un ecrans coach recevaient max-width:1440px et rien de plus ; neuf
    etaient meme rebornes a 72ch, c'est-a-dire ramenes a une colonne de lecture
@@ -4880,7 +4918,19 @@ const COACH_PHOTO='icons/coach.jpg';
              conteneur-la que le rafraichissement reecrit toutes les trente
              secondes. Rendue par _selMaj, et vide tant que rien n'est coche. -->
         <div id="ch-selection" style="display:none;margin-bottom:10px"></div>
-        <div id="ch-clients-list"></div>
+        <!-- B2.F1 — LE TIROIR DE DETAIL. Ouvrir un athlete remplacait
+             s-coach-home par s-coach-client : la liste disparaissait, et
+             revenir imposait de retrouver sa ligne. C'est le geste le plus
+             frequent du coach, et il fermait a chaque fois le contexte ou il
+             travaillait.
+             AU-DELA DE 1440 PX SEULEMENT. En dessous, le clic continue
+             d'ouvrir la fiche comme aujourd'hui : la place d'un panneau
+             n'existe qu'a partir de la, et encore, en acceptant que le tableau
+             retombe a dix colonnes. -->
+        <div class="ch-avec-tiroir">
+          <div id="ch-clients-list"></div>
+          <aside id="ch-tiroir" aria-live="polite"></aside>
+        </div>
         <div id="ch-paliers"></div>
         <!-- Alerte anti-falaise et propositions de palier. Jamais bloquante,
              jamais une bascule : elle DIT, le coach decide. -->
@@ -20889,6 +20939,76 @@ function _ccdArmerAncres(){
     }
   }catch(e){}
 }
+// ══════ B2.F1 — LE TIROIR DE DETAIL ═══════════════════════════════════
+//
+// PURE. Le tiroir est-il le bon geste ici ? Deux conditions, et les deux
+// comptent : la largeur — la place n'existe qu'a partir de 1440 px — et
+// l'ecran, parce que la liste d'athletes ne vit que sur l'accueil coach.
+const TIROIR_LARGEUR_MIN=1440;
+function _tiroirDisponible(){
+  try{
+    if(!window.matchMedia
+      ||!matchMedia('(min-width:'+TIROIR_LARGEUR_MIN+'px)').matches) return false;
+    const a=document.querySelector('.screen.active');
+    return !!(a&&a.id==='s-coach-home');
+  }catch(e){ return false; }
+}
+// AUCUNE DONNEE INVENTEE, ET AUCUN RENDU DUPLIQUE : le tiroir rappelle ce que
+// la LIGNE calcule deja — _crAssidu, _crPoids, _crDiete, _crCharge, _crProgres,
+// _crBilans — en clair plutot qu'en colonnes de trois caracteres. Il ne
+// reproduit pas la fiche : il dit juste s'il faut l'ouvrir.
+function _htmlTiroirAthlete(c){
+  if(!c) return '';
+  const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Athlète';
+  const ligne=(lib,v)=>{
+    const t=String(v==null?'':v).trim();
+    if(!t) return '';
+    return '<div style="display:flex;align-items:baseline;justify-content:space-between;'
+      +'gap:10px;margin-top:7px">'
+      +'<span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;'
+      +'text-transform:uppercase;font-weight:800">'+escapeHtml(lib)+'</span>'
+      +'<span style="font-size:var(--fs-xs);color:var(--text-strong);text-align:right">'
+      +t+'</span></div>';
+  };
+  const _sr=f=>{ try{ return f(c); }catch(e){ return ''; } };
+  const corps=ligne('Assiduité',_sr(_crAssidu))+ligne('Poids',_sr(_crPoids))
+    +ligne('Diète',_sr(_crDiete))+ligne('Charge',_sr(_crCharge))
+    +ligne('Progrès',_sr(_crProgres))+ligne('Bilans',_sr(_crBilans));
+  return '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">'
+    +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text);overflow:hidden;'
+    +'text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nom)+'</span>'
+    +'<button type="button" onclick="_tiroirFermer()" aria-label="Fermer le panneau" '
+    +'style="background:none;border:none;color:var(--sub);font-size:var(--fs-md);'
+    +'cursor:pointer;line-height:1;flex:none">×</button></div>'
+    // RIEN QUAND RIEN N'EST MESURE : un panneau de six tirets ne dirait rien
+    // de plus qu'une ligne vide, et il ferait croire a une panne.
+    +(corps||'<div style="font-size:var(--fs-2xs);color:var(--text-faint);'
+      +'line-height:1.55;margin-top:8px">Aucune mesure encore.</div>')
+    +'<button type="button" class="btn btn-red btn-sm" style="width:100%;margin-top:14px" '
+    +'onclick="openClientDetail(\''+String(c.id||'').replace(/'/g,'')+'\',false,true)">Ouvrir la fiche</button>';
+}
+function _tiroirOuvrir(cid){
+  try{
+    const z=document.getElementById('ch-tiroir');
+    if(!z) return false;
+    const c=(function(){ try{ return getOwnedClient(cid); }catch(e){ return null; } })();
+    if(!c) return false;
+    z.innerHTML=_htmlTiroirAthlete(c);
+    document.querySelectorAll('#ch-clients-list .client-row').forEach(n=>{
+      if(n.dataset.cid===String(cid)) n.setAttribute('aria-selected','true');
+      else n.removeAttribute('aria-selected');
+    });
+    return true;
+  }catch(e){ return false; }
+}
+function _tiroirFermer(){
+  try{
+    const z=document.getElementById('ch-tiroir');
+    if(z) z.innerHTML='';
+    document.querySelectorAll('#ch-clients-list .client-row[aria-selected]')
+      .forEach(n=>n.removeAttribute('aria-selected'));
+  }catch(e){}
+}
 // ══════ B2.F4 — LA POSITION DE LA LISTE, LE TEMPS D'UN ALLER-RETOUR ════
 // Deux variables de module, et rien de persistant.
 let _posAccueilCoach=0, _retourAccueilCoach=false, _ligneARevoir=null;
@@ -20919,7 +21039,12 @@ function _signalerLigneAthlete(id){
     n.classList.add('cc-vise');
   }catch(e){}
 }
-function openClientDetail(cid,_refresh){
+function openClientDetail(cid,_refresh,_force){
+  // B2.F1 — AU-DELA DE 1440 PX, LE PREMIER CLIC REMPLIT LE TIROIR et ne quitte
+  // pas la liste. Le bouton « Ouvrir la fiche » du tiroir rappelle cette meme
+  // fonction avec _force : c'est le second clic, celui qui decide vraiment.
+  // Sous 1440 px, ou hors de l'accueil coach, rien de tout cela ne s'applique.
+  if(!_refresh&&!_force&&_tiroirDisponible()&&_tiroirOuvrir(cid)) return;
   // B2.F4 — ON RETIENT OU L'ON ETAIT AVANT DE QUITTER LA LISTE. Pas au
   // rafraichissement : celui-la ne quitte pas l'ecran.
   if(!_refresh) _retenirPositionAccueil(cid);
