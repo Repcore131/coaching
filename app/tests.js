@@ -24388,6 +24388,69 @@ function testExercices(){
         return _htmlOrigineCibles({nutrition:{macros:{}}})===''
           ?true:_echec('une origine est inventée pour un dossier qui n’en a pas');})());
 
+      // ══════ UN TABLEAU A TROUS NE FAIT PLUS TOMBER LA SYNCHRO ═══════
+      //
+      // FIREBASE NE STOCKE PAS DE TABLEAUX : il rend un objet des qu'une clef
+      // manque, {0:…,3:…}. _mergeUser ETALE `bilans` et `sessions` — [...x] —
+      // et un objet n'est pas iterable. La TypeError partait dans syncUser,
+      // methode async dont personne n'attend le resultat : rejet non capture,
+      // DB.set('users',merged) jamais atteint, synchro arretee SANS UN MOT.
+      // Un athlete dont une seule seance manquait au milieu de sa liste ne se
+      // synchronisait plus du tout, sur aucun appareil.
+      ok('Un dossier distant a trous se fusionne sans lever',(()=>{
+        const cloud={updatedAt:2,
+          bilans:{0:{date:10,type:'depart'},2:{date:30,type:'suivi'}},
+          sessions:{0:{id:'a',date:10},3:{id:'b',date:40}},
+          sessions_config:{0:{day:'Lundi',active:true},3:{day:'Jeudi',active:true}}};
+        const merged={'k@x.fr':{updatedAt:1,bilans:[],sessions:[]}};
+        try{ CLOUD._mergeUser(merged,'k@x.fr',cloud); }
+        catch(e){ return _echec('la fusion lève encore : '+e.message); }
+        const u=merged['k@x.fr'];
+        if(!Array.isArray(u.bilans)||u.bilans.length!==2)
+          return _echec('bilans : '+JSON.stringify(u.bilans));
+        if(!Array.isArray(u.sessions)||u.sessions.length!==2)
+          return _echec('sessions : '+JSON.stringify(u.sessions));
+        // LES TROUS SONT RETIRES sur bilans et seances : un `undefined` au
+        // milieu n'est pas un bilan, et les lecteurs en aval ne le
+        // reconnaissent pas.
+        if(u.bilans.some(x=>x===undefined)||u.sessions.some(x=>x===undefined))
+          return _echec('un trou est resté dans la liste');
+        // MAIS sessions_config LES GARDE : l'indice y est le JOUR, et tasser
+        // decalerait le jeudi sur le mardi.
+        const c=u.sessions_config;
+        return (Array.isArray(c)&&c[3]&&c[3].day==='Jeudi'&&c[1]===undefined)
+          ?true:_echec('les créneaux ont été tassés');})());
+      ok('L\'echec de fusion remonte au badge au lieu de se perdre',(()=>{
+        const s=String(CLOUD.syncUser);
+        const i=s.indexOf('_mergeUser');
+        if(i<0) return _echec('syncUser ne fusionne plus');
+        // ENTOUREE D'UN try, et l'echec DIT quelque chose : sans cela,
+        // l'utilisateur voit « Synchronise » sur une synchro qui n'a pas eu
+        // lieu — exactement la lecon deja tiree du quota, deux lignes plus bas.
+        const avant=s.slice(0,i);
+        if(avant.lastIndexOf('try{')<avant.lastIndexOf('}catch'))
+          return _echec('la fusion n\'est pas protégée');
+        if(s.indexOf('_setSyncStatus(false)')<0)
+          return _echec('l\'échec ne remonte pas à l\'indicateur de synchronisation');
+        return s.indexOf('_noterDescente(email,false)')>=0
+          ?true:_echec('la descente ratée n\'est pas notée');})());
+      ok('Le profil public du coach resiste aussi aux trous',(()=>{
+        // MEME PIEGE, AUTRE NOEUD : `diplomes` et `promoBanners` sont des
+        // listes dans coach_public. Un diplôme retiré du milieu suffit à les
+        // rendre en objet — .filter et .forEach tombaient, et trois lecteurs
+        // de .length lisaient `undefined`, donc « vitrine vide », en silence.
+        const s=String(CLOUD.pullProfilCoach);
+        for(const c of ['diplomes','promoBanners'])
+          if(s.indexOf("_aplatirChamp(d,'"+c+"')")<0)
+            return _echec(c+' entre encore en objet');
+        // ET LA REMISE A PLAT EST LA MEME FONCTION PARTOUT : une seconde
+        // variante derivrait de la premiere.
+        const d={diplomes:{0:{titre:'A'},2:{titre:'B'}}};
+        _aplatirChamp(d,'diplomes');
+        return (Array.isArray(d.diplomes)&&d.diplomes.length===2
+          &&d.diplomes.filter(x=>x&&x.titre).length===2)
+          ?true:_echec('diplômes : '+JSON.stringify(d.diplomes));})());
+
       ok('N3.4 — UN sessions_config EN OBJET EST REMIS A PLAT A L\'ENTREE',(()=>{
         if(typeof _aplatirSessionsConfig!=='function') return _echec('aucune remise à plat');
         // LE DOSSIER DU DOC : Firebase rend {0:…,3:…} des qu'un creneau manque.
@@ -24409,7 +24472,11 @@ function testExercices(){
           return _echec('DB.get ne remet pas à plat la carte des dossiers');
         if(s.indexOf('_aplatirSessionsConfig')<0)
           return _echec('DB.get ne remet pas à plat la session courante');
-        if(String(CLOUD._mergeUser).indexOf('_aplatirSessionsConfig')<0)
+        // LE DOSSIER DISTANT ENTRE A PLAT, ET SUR LES TROIS CHAMPS : la
+        // remise a plat de _mergeUser passe par _aplatirDossier, qui les nomme
+        // en un seul endroit. Chercher le seul _aplatirSessionsConfig ici
+        // laissait passer bilans et sessions — c'etait le bug.
+        if(String(CLOUD._mergeUser).indexOf('_aplatirDossier')<0)
           return _echec('un dossier distant entre encore en objet');
         // UNE SEULE DEFINITION de ce que « remettre à plat » veut dire.
         const n=String(_normaliserSessionsConfig);

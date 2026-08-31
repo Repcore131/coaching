@@ -9615,7 +9615,18 @@ const CLOUD={
     // N3.4 — le dossier distant est remis a plat DES SON ARRIVEE : il est
     // range dans currentUser sans repasser par le stockage local, et un
     // sessions_config en objet aurait donc traverse la porte d'entree.
-    try{ _aplatirSessionsConfig(cloudUser); }catch(e){}
+    //
+    // ET PAS SEULEMENT sessions_config. `bilans` et `sessions` sont ETALES
+    // quelques lignes plus bas — `[...cloudBilans]`, `[...cloudSessions]` — et
+    // un objet n'est pas iterable : la TypeError partait dans syncUser, methode
+    // async dont personne n'attend le resultat, donc en rejet non capture.
+    // DB.set('users',merged) n'etait jamais atteint. L'athlete dont une seule
+    // seance manquait au milieu de sa liste ne se synchronisait plus DU TOUT,
+    // sur aucun appareil, et rien ne le disait.
+    //
+    // AVANT TOUT USAGE, et sur les trois champs a la fois : _aplatirDossier
+    // les nomme en un seul endroit.
+    try{ _aplatirDossier(cloudUser); }catch(e){}
     const loc=merged[email];
     // N3.7 — les pierres tombales DISTANTES : ce que quelqu'un a reellement
     // supprime, ailleurs. Les locales ne comptent pas ici — elles n'ont pas
@@ -9892,6 +9903,13 @@ const CLOUD={
       if(!r.ok) return null;
       const d=await r.json();
       if(!d) return null;
+      // MEME PIEGE, AUTRE NOEUD. `diplomes` et `promoBanners` sont des listes
+      // dans coach_public, et Firebase les rend en objet des qu'un rang manque
+      // — un diplome retire du milieu suffit. Leurs lecteurs font `.filter` et
+      // `.forEach` : la vitrine tombait. Et trois autres lisent `.length`, qui
+      // vaut `undefined` sur un objet : la vitrine se croyait vide et ne
+      // s'affichait pas, sans erreur ni trace.
+      try{ _aplatirChamp(d,'diplomes'); _aplatirChamp(d,'promoBanners'); }catch(e){}
       // Rangé HORS de currentUser : la photo du coach est en base64 et les
       // bannières peuvent être lourdes. Dans le dossier de l'athlète, elles
       // repartiraient vers Firebase à chaque synchronisation, dupliquées
@@ -10078,7 +10096,19 @@ const CLOUD={
     const cloudUser=await this.pullUser(email);
     if(!cloudUser) return false;
     const merged=Object.assign({},local);
-    this._mergeUser(merged,email,cloudUser);
+    // LA FUSION PEUT LEVER, ET SON ECHEC NE DOIT PLUS DISPARAITRE. Personne
+    // n'attend le resultat de syncUser : une exception y devient un rejet non
+    // capture, l'ecriture qui suit n'a pas lieu, et l'utilisateur voit un badge
+    // « Synchronise » sur une synchro qui ne s'est jamais faite. C'est la meme
+    // lecon que le quota ci-dessous, et elle vaut pour tout ce bloc.
+    try{
+      this._mergeUser(merged,email,cloudUser);
+    }catch(e){
+      console.error('[RepCore] fusion du dossier '+email+' :',e);
+      this._setSyncStatus(false);
+      this._noterDescente(email,false);
+      return false;
+    }
     // DB.set et non localStorage.setItem : lui seul gere le debordement de
     // quota. L'ecriture brute levait une QuotaExceededError dans une fonction
     // async dont personne n'attend le resultat — donc une unhandled rejection,
@@ -10193,22 +10223,52 @@ const CLOUD={
 // dossier a chaque lecture du stockage, et doit rester de l'ordre du test de
 // type. Le reste est le travail de _normaliserSessionsConfig, appele la ou on
 // s'apprete a ECRIRE.
-function _aplatirSessionsConfig(u){
+// PURE-ISH. Remet a plat UN champ rendu par Firebase sous forme d'objet.
+//
+// FIREBASE NE STOCKE PAS DE TABLEAUX. Il rend un tableau quand les clefs sont
+// 0,1,2… sans trou, et un OBJET des qu'il en manque une : {0:…,3:…}. Un objet
+// est vrai, il n'a pas de .map, et il n'est pas iterable — donc `[...x]` leve
+// une TypeError. Dans une methode async dont personne n'attend le resultat,
+// cette exception devient un rejet non capture : l'ecriture qui suit n'est
+// jamais atteinte, et la synchronisation s'arrete SANS LE MOINDRE MESSAGE.
+//
+// LE PLAFOND EST PASSE EN PARAMETRE parce qu'il n'a pas le meme sens partout :
+// soixante-quatre pour des creneaux, mais un athlete peut porter des centaines
+// de seances. Un plafond trop bas ne protegerait de rien — il TRONQUERAIT
+// l'historique, en silence, ce qui est pire que l'exception qu'on corrige.
+function _aplatirChamp(u,champ,max){
   if(!u||typeof u!=='object') return u;
-  const cfg=u.sessions_config;
-  if(cfg&&!Array.isArray(cfg)&&typeof cfg==='object'){
+  const v=u[champ];
+  if(v&&!Array.isArray(v)&&typeof v==='object'){
+    const plafond=(typeof max==='number')?max:100000;
     const t=[];
-    for(const k of Object.keys(cfg)){
+    for(const k of Object.keys(v)){
       const i=parseInt(k,10);
-      if(Number.isInteger(i)&&i>=0&&i<64) t[i]=cfg[k];
+      if(Number.isInteger(i)&&i>=0&&i<plafond) t[i]=v[k];
     }
-    u.sessions_config=t;
+    // LES TROUS SONT RETIRES pour bilans et seances : `[...t]` sur un tableau
+    // clairseme rendrait des `undefined` que les lecteurs en aval ne
+    // reconnaissent pas. sessions_config, lui, garde ses trous : l'INDICE y
+    // est le jour de la semaine, et le tasser decalerait le mardi sur le lundi.
+    u[champ]=(champ==='sessions_config')?t:t.filter(x=>x!==undefined);
   }
+  return u;
+}
+// Le creneau hebdomadaire : sept cases, l'indice EST le jour. Le plafond a 64
+// est large a dessein — il ecarte une clef aberrante sans jamais tronquer.
+function _aplatirSessionsConfig(u){ return _aplatirChamp(u,'sessions_config',64); }
+// LES TROIS PORTES D'UN DOSSIER. Elles sont nommees ici, une fois, pour que
+// chaque endroit qui fait entrer un dossier venu du reseau les traite toutes —
+// et pour qu'en ajouter une quatrieme demain soit un geste, pas un oubli.
+function _aplatirDossier(u){
+  _aplatirSessionsConfig(u);
+  _aplatirChamp(u,'bilans');
+  _aplatirChamp(u,'sessions');
   return u;
 }
 function _aplatirTousSessionsConfig(m){
   if(!m||typeof m!=='object') return m;
-  for(const k in m) _aplatirSessionsConfig(m[k]);
+  for(const k in m) _aplatirDossier(m[k]);
   return m;
 }
 const DB={
