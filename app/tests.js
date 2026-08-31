@@ -24460,6 +24460,89 @@ function testExercices(){
         return _htmlOrigineCibles({nutrition:{macros:{}}})===''
           ?true:_echec('une origine est inventée pour un dossier qui n’en a pas');})());
 
+      // ══════ UN MODELE DE PROGRAMME NE SE VIDE PLUS ══════════════════
+      //
+      // MEME PIEGE QUE LA SYNCHRO, ET C'EST CELUI QUI COUTE LE PLUS CHER. Un
+      // modele porte deux jeux de sept seances, sessions_H et sessions_F.
+      // Firebase les rend en OBJET des qu'un jour est vide — un modele sans
+      // seance le mercredi suffit. _cptSeances repondait `p[cle]=[]` : elle ne
+      // reconstruisait pas, elle REMPLACAIT par un tableau vide. Et comme elle
+      // mute le modele lui-meme, le premier clic sur Sauvegarder gravait la
+      // perte. Le coach retrouvait sept jours vides, sans un mot.
+      ok('Un modele dont le jour 2 est vide revient avec ses autres jours intacts',(()=>{
+        // CE QUE FIREBASE REND vraiment : les rangs 0,1,3,4 presents, le 2
+        // absent — c'est un objet, pas un tableau.
+        const p={nom:'Prise de masse',sessions_H:{
+          0:{day:'Lundi',   name:'Pecs',  active:true, exercises:[{name:'DC',series:4}],notes:'',warmup:''},
+          1:{day:'Mardi',   name:'Dos',   active:true, exercises:[{name:'ROW',series:4}],notes:'',warmup:''},
+          3:{day:'Jeudi',   name:'Jambes',active:true, exercises:[{name:'SQUAT',series:5}],notes:'',warmup:''},
+          4:{day:'Vendredi',name:'Bras',  active:true, exercises:[{name:'CURL',series:3}],notes:'',warmup:''}}};
+        const t=_cptSeances(p,'H');
+        if(!t) return _echec('le modèle a été refusé alors qu’il est lisible');
+        if(!Array.isArray(t)) return _echec('toujours pas un tableau');
+        if(t.length!==7) return _echec(t.length+' jours au lieu de 7');
+        // LES QUATRE JOURS SONT INTACTS, ET A LEUR RANG. Le jour est porte par
+        // la POSITION : tasser mettrait jeudi a la place de mercredi.
+        for(const [i,nom,ex] of [[0,'Pecs','DC'],[1,'Dos','ROW'],
+                                 [3,'Jambes','SQUAT'],[4,'Bras','CURL']]){
+          if(!t[i]) return _echec('le jour '+i+' a disparu');
+          if(t[i].name!==nom) return _echec('jour '+i+' : « '+t[i].name+' » au lieu de « '+nom+' »');
+          if(!t[i].exercises||t[i].exercises.length!==1||t[i].exercises[0].name!==ex)
+            return _echec('les exercices du jour '+i+' sont perdus');
+          if(t[i].active!==true) return _echec('le jour '+i+' a perdu son activation');
+        }
+        // LE TROU EST COMBLE PAR UN JOUR VIDE, pas supprime : sept jours, et le
+        // mercredi est le mercredi.
+        if(!t[2]||t[2].name!==''||t[2].active===true)
+          return _echec('le jour vide n’est pas rendu neutre : '+JSON.stringify(t[2]));
+        if(t[2].day!==DAYS[2]) return _echec('le jour 2 s’appelle « '+t[2].day+' »');
+        // ET LE MODELE LUI-MEME EST REPARE, pas seulement la valeur rendue :
+        // c'est lui que saveUser enregistrera.
+        return Array.isArray(p.sessions_H)&&p.sessions_H[3]&&p.sessions_H[3].name==='Jambes'
+          ?true:_echec('le modèle n’a pas été réparé, seule la copie rendue l’est');})());
+      ok('Un modele neuf ou absent continue de s’initialiser',(()=>{
+        // LE GARDE-FOU D'ORIGINE VISAIT CE CAS-LA, et il avait raison : un
+        // modele cree avant que les deux genres existent n'a que sessions_H.
+        // On ne le casse pas en corrigeant l'autre.
+        const p={nom:'X',sessions_H:[]};
+        const f=_cptSeances(p,'F');
+        if(!Array.isArray(f)||f.length!==7) return _echec('le genre absent ne s’initialise plus');
+        if(f.some(s=>!s||s.active!==false)) return _echec('un jour neuf arrive actif');
+        return _cptSeances(null,'H')===null?true:_echec('un modèle absent ne rend plus null');})());
+      ok('Un modele non vide ne peut pas etre ecrase par un resultat vide',(()=>{
+        // LE FILET DE DERNIERE MAIN. Si une forme qu'on n'a pas prevue arrivait
+        // ici, elle ne doit pas pouvoir effacer le travail du coach en silence :
+        // on ne touche a rien, on rend null, et on le DIT.
+        const s=String(_cptSeances);
+        if(s.indexOf('_cptContenu')<0) return _echec('rien ne mesure le contenu avant d’écraser');
+        if(!/n’a PAS été modifié|n'a PAS été modifié/.test(s))
+          return _echec('l’utilisateur n’est pas prévenu');
+        // _cptContenu SAIT distinguer un modele neuf d'un modele rempli : sans
+        // cela, le filet se declencherait sur chaque modele vide et bloquerait
+        // la creation.
+        if(_cptContenu([{name:'',active:false,exercises:[]}])!==0)
+          return _echec('un modèle neuf est compté comme du contenu');
+        if(_cptContenu([{name:'Pecs',active:true,exercises:[{name:'DC'}]}])!==1)
+          return _echec('un modèle rempli n’est pas compté');
+        return _cptContenu(null)===0&&_cptContenu({0:{name:'A'}})===1
+          ?true:_echec('_cptContenu ne lit pas les objets Firebase');})());
+      ok('Les modeles sont remis a plat a la porte d’entree',(()=>{
+        // AVANT MEME D'ETRE LUS : DB.get est la porte par laquelle un dossier
+        // entre, et c'est la que sessions_config est deja remis a plat.
+        if(typeof _aplatirModeles!=='function') return _echec('aucune remise à plat des modèles');
+        if(String(_aplatirDossier).indexOf('_aplatirModeles')<0)
+          return _echec('la porte d’entrée ne traite pas les modèles');
+        const u={coachPrograms:[{sessions_H:{0:{name:'A'},2:{name:'B'}},
+                                 sessions_F:{1:{name:'C'}}}]};
+        _aplatirModeles(u);
+        const p=u.coachPrograms[0];
+        if(!Array.isArray(p.sessions_H)||!Array.isArray(p.sessions_F))
+          return _echec('les deux jeux ne sont pas remis à plat');
+        // LES TROUS SONT GARDES : l'indice est le jour.
+        return (p.sessions_H[2]&&p.sessions_H[2].name==='B'&&p.sessions_H[1]===undefined
+          &&p.sessions_F[1]&&p.sessions_F[1].name==='C')
+          ?true:_echec('les rangs ont été tassés : '+JSON.stringify(p.sessions_H));})());
+
       // ══════ UN TABLEAU A TROUS NE FAIT PLUS TOMBER LA SYNCHRO ═══════
       //
       // FIREBASE NE STOCKE PAS DE TABLEAUX : il rend un objet des qu'une clef

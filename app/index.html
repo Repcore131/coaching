@@ -10236,7 +10236,7 @@ const CLOUD={
 // soixante-quatre pour des creneaux, mais un athlete peut porter des centaines
 // de seances. Un plafond trop bas ne protegerait de rien — il TRONQUERAIT
 // l'historique, en silence, ce qui est pire que l'exception qu'on corrige.
-function _aplatirChamp(u,champ,max){
+function _aplatirChamp(u,champ,max,garderTrous){
   if(!u||typeof u!=='object') return u;
   const v=u[champ];
   if(v&&!Array.isArray(v)&&typeof v==='object'){
@@ -10246,17 +10246,44 @@ function _aplatirChamp(u,champ,max){
       const i=parseInt(k,10);
       if(Number.isInteger(i)&&i>=0&&i<plafond) t[i]=v[k];
     }
-    // LES TROUS SONT RETIRES pour bilans et seances : `[...t]` sur un tableau
-    // clairseme rendrait des `undefined` que les lecteurs en aval ne
-    // reconnaissent pas. sessions_config, lui, garde ses trous : l'INDICE y
-    // est le jour de la semaine, et le tasser decalerait le mardi sur le lundi.
-    u[champ]=(champ==='sessions_config')?t:t.filter(x=>x!==undefined);
+    // GARDER LES TROUS OU LES RETIRER : c'est une propriete de la DONNEE, pas
+    // de son nom. Quand l'indice porte un sens — le jour de la semaine, pour un
+    // creneau comme pour une seance de modele — un trou est le mardi vide, et
+    // le tasser decalerait le mercredi sur le mardi. Quand il n'en porte pas —
+    // bilans, seances — un `undefined` au milieu de la liste n'est pas un
+    // bilan, et les lecteurs en aval ne le reconnaissent pas.
+    //
+    // C'ETAIT DEDUIT DU NOM DU CHAMP. Trois champs gardent desormais leurs
+    // trous, et deduire d'un nom ce qui est une propriete de la donnee finit
+    // toujours par se tromper de champ.
+    u[champ]=garderTrous?t:t.filter(x=>x!==undefined);
   }
   return u;
 }
 // Le creneau hebdomadaire : sept cases, l'indice EST le jour. Le plafond a 64
 // est large a dessein — il ecarte une clef aberrante sans jamais tronquer.
-function _aplatirSessionsConfig(u){ return _aplatirChamp(u,'sessions_config',64); }
+function _aplatirSessionsConfig(u){ return _aplatirChamp(u,'sessions_config',64,true); }
+// ══════ LES MODELES DE PROGRAMME DU COACH ══════════════════════════════
+//
+// MEME PIEGE, ET C'EST CELUI QUI COUTE LE PLUS CHER. Un modele porte deux jeux
+// de sept seances, sessions_H et sessions_F. Firebase les rend en OBJET des
+// qu'un jour est vide — un modele sans seance le mercredi suffit. _cptSeances
+// repondait alors `p[cle]=[]` : elle ne reconstruisait pas, elle REMPLACAIT
+// par un tableau vide. Et comme elle mute le modele lui-meme, le premier clic
+// sur Sauvegarder gravait la perte. Le coach retrouvait un modele de sept
+// jours vides, sans un mot, et son travail de plusieurs heures avec.
+//
+// L'INDICE EST LE JOUR : les trous se gardent, comme pour sessions_config.
+function _aplatirModeles(u){
+  const l=u&&u.coachPrograms;
+  if(!Array.isArray(l)) return u;
+  for(const p of l){
+    if(!p||typeof p!=='object') continue;
+    _aplatirChamp(p,'sessions_H',64,true);
+    _aplatirChamp(p,'sessions_F',64,true);
+  }
+  return u;
+}
 // LES TROIS PORTES D'UN DOSSIER. Elles sont nommees ici, une fois, pour que
 // chaque endroit qui fait entrer un dossier venu du reseau les traite toutes —
 // et pour qu'en ajouter une quatrieme demain soit un geste, pas un oubli.
@@ -10264,6 +10291,10 @@ function _aplatirDossier(u){
   _aplatirSessionsConfig(u);
   _aplatirChamp(u,'bilans');
   _aplatirChamp(u,'sessions');
+  // Les modeles ne vivent que dans le dossier du COACH, mais la porte est la
+  // meme pour tout le monde : la fonction sort d'elle-meme sur un dossier qui
+  // n'en porte pas.
+  _aplatirModeles(u);
   return u;
 }
 function _aplatirTousSessionsConfig(m){
@@ -23295,13 +23326,61 @@ function _echecOuvertureEditeur(e){
 function _cptSeances(p,genre){
   if(!p) return null;
   const cle=(genre==='H')?'sessions_H':'sessions_F';
-  if(!Array.isArray(p[cle])) p[cle]=[];
+  // `p[cle]=[]` EFFACAIT LE MODELE. Le garde-fou visait `undefined` — un modele
+  // cree avant que les deux genres existent — et il avait raison pour ce
+  // cas-la. Mais un objet a trous rendu par Firebase n'est pas un tableau non
+  // plus, et il tombait dans la meme branche : sept jours de travail remplaces
+  // par un tableau vide, puis graves au premier Sauvegarder.
+  //
+  // ON RECONSTRUIT PAR POSITION, comme pour sessions_config. Les trous sont
+  // gardes : l'indice est le jour.
+  if(p[cle]&&!Array.isArray(p[cle])&&typeof p[cle]==='object')
+    _aplatirChamp(p,cle,64,true);
+  // ET ON REFUSE DE VIDER CE QUI NE L'ETAIT PAS. C'est le filet de derniere
+  // main : si une forme qu'on n'a pas prevue arrivait ici, elle ne doit pas
+  // pouvoir effacer le travail du coach en silence. On compte AVANT ce qui
+  // ressemble a du contenu, et on refuse de rendre un jeu vide a la place.
+  const _avant=_cptContenu(p[cle]);
+  if(!Array.isArray(p[cle])){
+    if(_avant){
+      // On ne touche a rien : mieux vaut un ecran qui ne s'affiche pas qu'un
+      // modele efface. Et on le DIT — c'est la seule facon que le coach ne
+      // reecrive pas par-dessus.
+      try{ toast('Ce modèle n’a pas pu être lu et n’a PAS été modifié. Recharge la page ; s’il manque encore, dis-le avant d’enregistrer.','var(--red)'); }catch(e){}
+      console.error('[RepCore] modèle illisible, écrasement refusé :',cle,p[cle]);
+      return null;
+    }
+    p[cle]=[];
+  }
   const t=p[cle];
   DAYS.forEach((day,i)=>{
     if(!t[i]) t[i]={day,name:'',active:false,photo:null,exercises:[],notes:'',warmup:''};
     _assainirExercices(t[i]);
   });
+  // LE CONTENU N'A PAS PU DISPARAITRE EN CHEMIN. Les sept jours vides ajoutes
+  // ci-dessus sont normaux ; perdre ce qui existait ne l'est pas.
+  if(_avant&&!_cptContenu(t)){
+    try{ toast('Ce modèle n’a pas pu être lu et n’a PAS été modifié. Recharge la page avant d’enregistrer.','var(--red)'); }catch(e){}
+    console.error('[RepCore] modèle vidé par la normalisation, refusé :',cle);
+    return null;
+  }
   return t;
+}
+// PURE. Y a-t-il du travail la-dedans ? Un jeu de sept jours vides n'est pas du
+// contenu — c'est ce que rend un modele neuf. Un seul exercice, un seul nom de
+// seance, un seul jour actif suffit.
+function _cptContenu(v){
+  if(!v||typeof v!=='object') return 0;
+  const l=Array.isArray(v)?v:Object.keys(v).map(k=>v[k]);
+  let n=0;
+  for(const s of l){
+    if(!s||typeof s!=='object') continue;
+    if((Array.isArray(s.exercises)&&s.exercises.length)
+      ||(s.name&&String(s.name).trim())
+      ||s.active===true
+      ||(s.notes&&String(s.notes).trim())) n++;
+  }
+  return n;
 }
 // N4.4 — REPORTER UN ONGLET DE GENRE SUR L'AUTRE.
 // Un modele porte DEUX jeux de sept seances, sessions_H et sessions_F, tenus
