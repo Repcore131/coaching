@@ -6641,6 +6641,26 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
   </div>
 </div>
+<!-- ══════ PROGRAMMATION D'UN EXERCICE (coach) ══════
+     Une FEUILLE, comme les autres modales de l'app : elle monte du bas, elle
+     ne remplace pas l'ecran. Le coach garde sa seance derriere, et fermer ne
+     lui fait rien perdre — la feuille travaille sur une copie, et seul
+     « Enregistrer » touche l'exercice. -->
+<div id="prog-ex-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
+  onclick="if(event.target===this)_progExFermer()">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:560px;max-height:86vh;max-height:86dvh;overflow-y:auto;overscroll-behavior:contain">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px">
+      <span style="font-size:var(--fs-md);font-weight:800;letter-spacing:.5px">Programmation</span>
+      <button onclick="_progExFermer()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer;line-height:1">×</button>
+    </div>
+    <div id="prog-ex-corps"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-outline btn-sm" style="flex:1" onclick="retirerProgEx()">Retirer</button>
+      <button class="btn btn-red btn-sm" style="flex:2" onclick="validerProgEx()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <div id="wo-pause-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px">
     <div style="font-size:var(--fs-md);font-weight:800;letter-spacing:.5px;margin-bottom:4px">Séance en cours</div>
@@ -26623,6 +26643,7 @@ function renderProgEx(){
              le 25/08/2026 — l'athlete qui veut une technique la tape dans la
              description. -->
         ${_selecteurTechnique(ex,i)}
+        ${_bqDispo?_htmlBoutonProgEx(ex,i):''}
         <div class="px-grp">EXÉCUTION</div>
         <!-- B2.3 — TEMPO ET MATERIEL SE LISENT ENSEMBLE, donc ils se posent
              ensemble des qu'il y a la place. Le conteneur ne fait RIEN sous
@@ -26767,6 +26788,199 @@ function _majEtatEnregistrement(){
   }catch(e){}
 }
 
+// ══════ LA PROGRAMMATION D'UN EXERCICE, COTE COACH ═════════════════════
+//
+// RESERVE AU COACH, comme le remplacement depuis la banque : c'est lui qui
+// prescrit. _bqDispo porte deja cette distinction dans la carte, on la
+// reutilise plutot que d'en ecrire une seconde.
+//
+// LE BOUTON DIT L'ETAT. Sans programmation il propose de la mettre en place ;
+// avec, il resume en une ligne ce qui est prescrit cette semaine — c'est ce
+// que le coach vient verifier, et l'ouvrir pour le lire serait un clic de
+// trop.
+function _htmlBoutonProgEx(ex,i){
+  const c=(()=>{ try{ return consigneProgEx(ex); }catch(e){ return null; } })();
+  const p=(()=>{ try{ return progExDe(ex); }catch(e){ return null; } })();
+  const fin=(()=>{ try{ return finProgExProche(ex); }catch(e){ return null; } })();
+  let resume='';
+  if(c){
+    resume=`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:5px">
+      Semaine ${c.semaine+1} / ${c.total} · ${c.series}×${c.reps} @${c.rpe}
+      ${c.kg!=null?`· <b style="color:var(--sub)">${c.kg} kg</b> (${String(c.pct).replace('.',',')} % de ${c.max} kg)`
+                  :`· <span style="color:var(--orange)">charge non calculable au-delà de ${RPE_REPS_MAX} répétitions</span>`}
+      ${fin!=null&&fin<=PROG_EX_FIN_PREVENIR+1?`<span style="color:var(--orange)"> · ${fin===1?'dernière semaine':fin+' semaines restantes'}</span>`:''}
+    </div>`;
+  } else if(p){
+    // UNE PROGRAMMATION QUI NE S'APPLIQUE PAS SE DIT. Terminee, pas encore
+    // commencee, ou semaine incomplete : dans les trois cas l'athlete ne
+    // recoit rien, et le coach doit le savoir sans ouvrir la feuille.
+    resume=`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:5px">
+      Programmation de ${p.semaines.length} semaine${p.semaines.length>1?'s':''} — aucune consigne active cette semaine.</div>`;
+  }
+  return `<div class="px-grp">Programmation</div>
+    <div style="margin-bottom:8px">
+      <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)"
+        onclick="ouvrirProgEx(${i})">${p?'Modifier la programmation':'Mettre en place une programmation'}</button>
+      ${resume}
+    </div>`;
+}
+// L'INDICE DE L'EXERCICE EN COURS D'EDITION. Une variable de module et non un
+// argument recopie dans quinze gestionnaires : la feuille se referme sur
+// elle-meme, et l'indice ne survit pas a sa fermeture.
+let _progExIdx=null;
+function ouvrirProgEx(i){
+  if(!Array.isArray(progEx)||!progEx[i]) return;
+  _progExIdx=i;
+  // UNE COPIE DE TRAVAIL. Tant que le coach n'a pas valide, l'exercice n'est
+  // pas touche : fermer la feuille ne doit rien laisser derriere.
+  const p=(()=>{ try{ return progExDe(progEx[i]); }catch(e){ return null; } })();
+  _progExBrouillon=p?{max:p.max,debut:p.debut,
+      semaines:p.semaines.map(s=>({series:s.series,reps:s.reps,rpe:s.rpe}))}
+    :{max:'',debut:_lundiDe(new Date()).getTime(),
+      semaines:Array.from({length:4},()=>({series:null,reps:null,rpe:''}))};
+  _rendreProgEx();
+  _feuilleOuvrir('prog-ex-modal');
+}
+let _progExBrouillon=null;
+function _progExFermer(){ _feuilleFermer('prog-ex-modal'); _progExIdx=null; _progExBrouillon=null; }
+// LE NOMBRE DE SEMAINES : on ajoute ou on retire des LIGNES, on ne les
+// reconstruit pas. Reduire puis rallonger ne doit pas effacer ce qui a ete
+// saisi entre-temps.
+function _progExSemaines(n){
+  if(!_progExBrouillon) return;
+  const v=Math.max(1,Math.min(PROG_EX_SEMAINES_MAX,Math.round(Number(n)||0)));
+  const l=_progExBrouillon.semaines;
+  while(l.length<v) l.push({series:null,reps:null,rpe:''});
+  if(l.length>v) l.length=v;
+  _rendreProgEx();
+}
+function _progExChamp(i,cle,val){
+  if(!_progExBrouillon||!_progExBrouillon.semaines[i]) return;
+  if(cle==='rpe') _progExBrouillon.semaines[i].rpe=String(val||'');
+  else{
+    const n=Math.round(Number(val));
+    _progExBrouillon.semaines[i][cle]=(isFinite(n)&&n>0)?n:null;
+  }
+  _rendreProgEx();
+}
+function _progExMax(v){
+  if(!_progExBrouillon) return;
+  const n=Number(String(v||'').replace(',','.'));
+  _progExBrouillon.max=isFinite(n)?n:'';
+  _rendreProgEx();
+}
+// LA LIGNE D'UNE SEMAINE. Elle montre la charge PENDANT la saisie : c'est la
+// seule facon de voir qu'une progression monte trop vite, et le coach n'a pas
+// a valider pour s'en rendre compte.
+function _htmlLigneProgEx(s,i,max){
+  const pct=(()=>{ try{ return (s.rpe&&s.reps)?pctDe1RM(s.rpe,s.reps):null; }catch(e){ return null; } })();
+  const kg=(pct!=null&&max>0)?_arrondirCharge(max*pct/100):null;
+  const opt=v=>`<option value="${v}" ${s.rpe===v?'selected':''}>@${v}</option>`;
+  return `<tr>
+    <td style="padding:5px 4px;font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap">S${i+1}</td>
+    <td style="padding:5px 4px"><input type="number" min="1" max="20" inputmode="numeric" value="${s.series==null?'':s.series}"
+      onchange="_progExChamp(${i},'series',this.value)" aria-label="Séries semaine ${i+1}"
+      style="width:100%;text-align:center;padding:6px 4px;margin:0"></td>
+    <td style="padding:5px 4px"><input type="number" min="1" max="${RPE_REPS_MAX}" inputmode="numeric" value="${s.reps==null?'':s.reps}"
+      onchange="_progExChamp(${i},'reps',this.value)" aria-label="Répétitions semaine ${i+1}"
+      style="width:100%;text-align:center;padding:6px 4px;margin:0"></td>
+    <td style="padding:5px 4px"><select onchange="_progExChamp(${i},'rpe',this.value)" aria-label="RPE semaine ${i+1}"
+      style="width:100%;padding:6px 4px;margin:0"><option value="">—</option>${RPE_ECHELLE.slice().reverse().map(opt).join('')}</select></td>
+    <td style="padding:5px 4px;text-align:right;white-space:nowrap;font-size:var(--fs-2xs)">
+      ${kg!=null?`<b style="color:var(--text-strong)">${kg} kg</b><span style="color:var(--text-faint)"> · ${String(pct).replace('.',',')} %</span>`
+        :(s.reps>RPE_REPS_MAX?`<span style="color:var(--orange)">hors table</span>`:`<span style="color:var(--text-faint)">—</span>`)}
+    </td>
+  </tr>`;
+}
+function _rendreProgEx(){
+  const z=document.getElementById('prog-ex-corps');
+  if(!z||!_progExBrouillon) return;
+  const b=_progExBrouillon;
+  const max=Number(b.max)||0;
+  const nom=(progEx[_progExIdx]&&progEx[_progExIdx].name)||'';
+  const rec=(()=>{ try{ return _htmlRappelRecord(nom); }catch(e){ return ''; } })();
+  z.innerHTML=`
+    <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1px;
+      text-transform:uppercase;margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(nom)}</div>
+    <label style="margin-top:0">Charge maximale sur 1 répétition (kg)</label>
+    <input id="prog-ex-max" type="number" min="${PROG_EX_MAX_MIN}" max="${PROG_EX_MAX_MAX}" step="0.5" inputmode="decimal"
+      value="${b.max===''?'':b.max}" onchange="_progExMax(this.value)" placeholder="Ex : 145">
+    ${rec}
+    <label>Nombre de semaines</label>
+    <input type="number" min="1" max="${PROG_EX_SEMAINES_MAX}" inputmode="numeric" value="${b.semaines.length}"
+      onchange="_progExSemaines(this.value)">
+    <div style="overflow-x:auto;margin-top:12px" data-scroll-fade>
+      <table style="width:100%;border-collapse:collapse;min-width:320px">
+        <thead><tr>
+          <th style="font-size:var(--fs-2xs);color:var(--sub);text-align:left;padding:0 4px 4px"></th>
+          <th style="font-size:var(--fs-2xs);color:var(--sub);padding:0 4px 4px">Séries</th>
+          <th style="font-size:var(--fs-2xs);color:var(--sub);padding:0 4px 4px">Reps</th>
+          <th style="font-size:var(--fs-2xs);color:var(--sub);padding:0 4px 4px">RPE</th>
+          <th style="font-size:var(--fs-2xs);color:var(--sub);text-align:right;padding:0 4px 4px">Charge</th>
+        </tr></thead>
+        <tbody>${b.semaines.map((s,i)=>_htmlLigneProgEx(s,i,max)).join('')}</tbody>
+      </table>
+    </div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">
+      La charge est calculée depuis la table de pourcentages du guide : elle dépend du RPE visé et
+      du nombre de répétitions. Elle s'affichera pré-remplie chez ton athlète, qui pourra la corriger.
+      Au-delà de ${RPE_REPS_MAX} répétitions, la table ne dit rien et aucune charge n'est suggérée.
+    </div>`;
+  try{ z.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el)); }catch(e){}
+}
+// LE RECORD DEJA AU DOSSIER, s'il existe : le coach n'a pas a aller le
+// chercher ailleurs pour saisir un 1RM. On LIT ce que recordsExercice rend —
+// la meme source que le repere de charge affiche sous le champ « Charge
+// cible » — et on ne pose rien : le maximum estime est une estimation, c'est
+// au coach de decider ce qu'il en fait.
+function _htmlRappelRecord(nom){
+  let r=null;
+  try{ r=recordsExercice(_coachEditClient,nom); }catch(e){ r=null; }
+  if(!r) return '';
+  const mc=r.meilleureCharge, me=r.meilleurE1rm;
+  const bouts=[];
+  if(mc&&mc.kg>0) bouts.push('record '+mc.kg+' kg'+(mc.reps?(' × '+mc.reps):''));
+  if(me&&me.valeur>0) bouts.push('max estimé '+me.valeur+' kg');
+  if(!bouts.length) return '';
+  return `<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">
+    ${bouts.join(' · ')}${me&&me.valeur>0?` · <button type="button" onclick="_progExMax(${me.valeur});document.getElementById('prog-ex-max').value=${me.valeur}"
+      style="background:none;border:none;color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer;padding:0;text-decoration:underline">reprendre</button>`:''}</div>`;
+}
+// VALIDER : c'est ICI, et seulement ici, que l'exercice est touche.
+function validerProgEx(){
+  if(_progExIdx==null||!_progExBrouillon) return;
+  const b=_progExBrouillon;
+  const max=Number(b.max);
+  if(!isFinite(max)||max<PROG_EX_MAX_MIN||max>PROG_EX_MAX_MAX){
+    toast('Renseigne la charge maximale sur 1 répétition.','var(--orange)'); return;
+  }
+  // UNE SEMAINE INCOMPLETE NE PRESCRIT RIEN, et l'app le dit AVANT plutot que
+  // de laisser l'athlete arriver devant une seance sans consigne.
+  const trous=b.semaines.map((s,i)=>(!s.series||!s.reps||!s.rpe)?(i+1):0).filter(Boolean);
+  if(trous.length===b.semaines.length){
+    toast('Renseigne au moins une semaine complète.','var(--orange)'); return;
+  }
+  progEx[_progExIdx].prog={max,debut:b.debut,
+    semaines:b.semaines.map(s=>({series:s.series,reps:s.reps,rpe:s.rpe}))};
+  _progExDirty=true;
+  const n=b.semaines.length-trous.length;
+  toast(trous.length
+    ?('Programmation enregistrée · '+n+' semaine'+(n>1?'s':'')+' sur '+b.semaines.length
+      +' — semaine'+(trous.length>1?'s':'')+' '+trous.join(', ')+' incomplète'+(trous.length>1?'s':''))
+    :('Programmation sur '+b.semaines.length+' semaine'+(b.semaines.length>1?'s':'')+' ✓'),
+    trous.length?'var(--orange)':'var(--green)');
+  _progExFermer();
+  renderProgEx();
+}
+async function retirerProgEx(){
+  if(_progExIdx==null) return;
+  if(!await rcConfirm('Retirer la programmation de cet exercice ?\n\nLes charges ne seront plus suggérées, et l\'athlète retrouvera son champ RIR.',null,'Retirer')) return;
+  delete progEx[_progExIdx].prog;
+  _progExDirty=true;
+  toast('Programmation retirée.','var(--sub)');
+  _progExFermer();
+  renderProgEx();
+}
 // Lier ou délier un exercice avec celui du dessus.
 function _basculerSS(i){
   if(i<=0||!progEx[i]) return;
@@ -30817,6 +31031,37 @@ function _blocExo(idx,estSS){
   const pr=parseReps(ex.reps);
   if(!woState.sessionData[idx]) woState.sessionData[idx]={sets:Array.from({length:ex.series},(_,si)=>({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2}))};
   const data=woState.sessionData[idx];
+  // ══ LA PROGRAMMATION DU COACH, SI ELLE EST ACTIVE CETTE SEMAINE ══════
+  //
+  // Elle donne trois choses d'un coup : le nombre de series, celui de
+  // repetitions, et la charge — calculee depuis le 1RM et la table de
+  // pourcentages. C'est la consigne, elle remplace le champ RIR par le RPE
+  // demande, et l'athlete ne la modifie pas.
+  //
+  // LA CHARGE, ELLE, RESTE MODIFIABLE. C'est une SUGGESTION : la barre du
+  // jour, la fatigue, une blessure naissante — l'athlete est le seul a
+  // savoir. On pre-remplit, on ne verrouille pas.
+  const _cons=(()=>{ try{ return consigneProgEx(ex); }catch(e){ return null; } })();
+  if(_cons){
+    // LES SERIES SUIVENT LA CONSIGNE. On AJOUTE ce qui manque et on ne retire
+    // jamais une serie deja faite : une seance commencee ne se raccourcit pas
+    // sous les pieds de celui qui la fait.
+    while(data.sets.length<_cons.series)
+      data.sets.push({weight:'',weight2:'',reps:_cons.reps,rir:'',pain:'',done:false});
+    for(const s of data.sets){
+      if(s.done) continue;
+      s.reps=_cons.reps;
+      // LE RPE DEMANDE EST POSE SUR LA SERIE, et il est bien distinct de
+      // `rir` : `rir` est ce que l'ATHLETE a ressenti, `rpeCible` ce que le
+      // coach a DEMANDE. Les confondre ferait passer une prescription pour
+      // une mesure — et rirMoyenSeance, l'e1RM et l'ecart prescrit/realise
+      // liraient tous une valeur que personne n'a constatee.
+      s.rpeCible=_cons.rpe;
+      if(_cons.kg!=null&&!s.userEdited&&!String(s.weight||'').trim()){
+        s.weight=_cons.kg; s.isAuto=true;
+      }
+    }
+  }
   const prev=getPrevPerf(ex.name,woState.slot,woState.progName);
   const cycle=getCycleFactor();
   const cycleLabel=getCycleLabel();
@@ -31138,6 +31383,12 @@ function renderSets(ex,data,idx){
   for(let i=0;i<data.sets.length-1;i++){
     const s=data.sets[i];
     const w=parseFloat(s.weight);
+    // SUR UN EXERCICE PROGRAMME, LA CHARGE NE DERIVE PAS. Le coach a fixe un
+    // RPE pour toutes les series de la semaine : la faire monter d'un palier
+    // parce que la serie precedente etait facile contredirait la consigne
+    // qu'on vient d'afficher. Et de toute facon `rir` reste vide ici — c'est
+    // le RPE qui est demande, pas le RIR qui est saisi.
+    if(s.rpeCible) continue;
     if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
       const nextW=chargeSuivante(w,s.rir,_isCW);
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
@@ -31209,8 +31460,26 @@ function renderSets(ex,data,idx){
       return `<span style="font-size:var(--fs-2xs);color:${loin?'var(--orange)':'var(--text-faint)'};`
         +`white-space:nowrap;flex:none" title="Intensité demandée par ton coach">cible ${_cons}</span>`;
     })();
-    // RIR dropdown
-    const rirSelect=`<select class="set-input" onchange="${onChR}" ${dis} style="padding:4px 2px;font-size:var(--fs-xs);min-width:44px;min-height:38px">
+    // ══ LA COLONNE D'INTENSITE : RIR SAISI, OU RPE PRESCRIT ═══════════
+    //
+    // Demande de Kevin, 27/08/2026 : « sur les tableaux exercices que l'eleve
+    // a, la colonne avec les RIR va automatiquement se transformer en RPE. La
+    // personne ne pourra pas modifier cette colonne-la. »
+    //
+    // CE QUE CELA COUTE, ET IL FAUT LE SAVOIR : sur un exercice programme,
+    // l'app cesse de recueillir ce que l'athlete a RESSENTI. Elle affiche ce
+    // qui a ete DEMANDE. rirMoyenSeance, l'e1RM et l'ecart prescrit/realise
+    // n'ont donc plus rien a lire pour cet exercice-la — et c'est PREFERABLE a
+    // l'alternative : recopier le RPE prescrit dans `rir` ferait passer une
+    // consigne pour une mesure, et le coach lirait sa propre prescription en
+    // croyant lire son athlete.
+    const rirSelect=s.rpeCible
+      ?`<div class="set-input" role="img" aria-label="RPE demandé par ton coach : ${s.rpeCible} sur 10"
+          title="Intensité demandée par ton coach — tu ne la règles pas"
+          style="padding:4px 2px;font-size:var(--fs-xs);min-width:44px;min-height:38px;display:flex;
+            align-items:center;justify-content:center;background:var(--surface-2);color:var(--text-strong);
+            border:1px solid var(--border);border-radius:var(--r-1);white-space:nowrap">@${s.rpeCible}</div>`
+      :`<select class="set-input" onchange="${onChR}" ${dis} style="padding:4px 2px;font-size:var(--fs-xs);min-width:44px;min-height:38px">
       <option value="">RIR</option>
       ${RIR_OPTS.map(v=>`<option value="${v}" ${String(s.rir)===v?'selected':''}>${v==='echec'?'Échec':v==='0'?'0 ':v}</option>`).join('')}
     </select>${_consRappel}`;
@@ -36722,6 +36991,140 @@ function grilleCharge(user,opts){
 // pèse déjà 1,7 Mo. Un écart ne pèse que ce qu'il change.
 const PROG_SEMAINES_MAX=24;
 const PROG_SEMAINES_MIN=1;
+// ══════════ PROGRAMMATION D'UN EXERCICE — DEMANDE DE KEVIN, 27/08/2026 ═══
+//
+// « Le coach doit pouvoir, a cote de chaque exo, mettre en place une
+// programmation : la charge maximale sur une repetition, le nombre de
+// semaines, puis par semaine le nombre de series, de repetitions et le RPE
+// vise. L'app en deduit la charge suggeree. »
+//
+// RPE ET NON RIR, ET LES DEUX COEXISTENT DEJA DANS L'APP. Le RIR compte les
+// repetitions qu'il reste en reserve ; le RPE dit l'effort percu sur dix. Ils
+// se repondent — RPE 8 = RIR 2 — mais ne se confondent pas : le coach
+// programme en RPE parce que la table de pourcentages ci-dessous est ecrite
+// en RPE, et c'est elle qui donne la charge.
+//
+// LA TABLE EST RECOPIEE TELLE QUE KEVIN L'A FOURNIE, ligne par ligne. Elle
+// n'est PAS calculee : les formules d'Epley, Brzycki ou Lombardi donnent
+// toutes des valeurs voisines mais differentes, et une charge de travail
+// n'est pas un endroit ou improviser une approximation. C'est la meme regle
+// que pour la table Ciqual et le tableau du sodium — une reference fournie se
+// recopie, elle ne se reconstitue pas.
+//
+// LECTURE : RPE_PCT['8'][3] est le pourcentage du 1RM pour 4 repetitions a
+// RPE 8 — l'indice est le rang, donc `reps - 1`.
+const RPE_PCT=Object.freeze({
+  '10' :[100.0,95.5,92.2,89.2,86.3,83.7,81.1,78.6,76.2,73.9,70.7,68.0],
+  '9.5':[97.8,93.9,90.7,87.8,85.0,82.4,79.9,77.4,75.1,72.3,69.4,66.7],
+  '9'  :[95.5,92.2,89.2,86.3,83.7,81.1,78.6,76.2,73.9,70.7,68.0,65.3],
+  '8.5':[93.9,90.7,87.8,85.0,82.4,79.9,77.4,75.1,72.3,69.4,66.7,64.0],
+  '8'  :[92.2,89.2,86.3,83.7,81.1,78.6,76.2,73.9,70.7,68.0,65.3,62.6],
+  '7.5':[90.7,87.8,85.0,82.4,79.9,77.4,75.1,72.3,69.4,66.7,64.0,61.3],
+  '7'  :[89.2,86.3,83.7,81.1,78.6,76.2,73.9,70.7,68.0,65.3,62.6,59.9],
+  '6.5':[87.8,85.0,82.4,79.9,77.4,75.1,72.3,69.4,66.7,64.0,61.3,58.6],
+  '6'  :[86.5,83.7,81.0,78.5,75.9,73.6,70.7,67.8,65.0,62.3,59.6,56.9]
+});
+// L'ECHELLE, DU PLUS FACILE AU PLUS DUR : c'est l'ordre d'un selecteur, et
+// c'est aussi celui de la table lue a l'envers.
+const RPE_ECHELLE=Object.freeze(['6','6.5','7','7.5','8','8.5','9','9.5','10']);
+const RPE_REPS_MAX=12;                 // la table s'arrete la, et on ne l'invente pas
+const PROG_EX_SEMAINES_MAX=PROG_SEMAINES_MAX;   // meme plafond que le bloc
+const PROG_EX_FIN_PREVENIR=1;          // on previent une semaine avant la fin
+// 1RM plausibles. Bornes larges : ce n'est pas a l'app de juger d'une force,
+// seulement d'ecarter une faute de frappe evidente.
+const PROG_EX_MAX_MIN=1, PROG_EX_MAX_MAX=600;
+
+// PURE. Le pourcentage du 1RM, ou null. Null quand la table ne dit rien —
+// jamais une extrapolation : au-dela de douze repetitions, la relation
+// charge/repetitions cesse d'etre lineaire et un chiffre invente serait une
+// charge de travail fausse.
+function pctDe1RM(rpe,reps){
+  const r=String(rpe==null?'':rpe).trim();
+  const n=Math.round(Number(reps));
+  if(!RPE_PCT[r]) return null;
+  if(!isFinite(n)||n<1||n>RPE_REPS_MAX) return null;
+  return RPE_PCT[r][n-1];
+}
+// PURE. La charge arrondie a ce qu'on peut reellement charger sur une barre.
+// MEMES PALIERS QUE chargeSuivante : 2,5 kg, et 1,25 sous 20 kg — au-dessous,
+// deux kilos et demi font plus de dix pour cent de la charge.
+function _arrondirCharge(kg){
+  const v=Number(kg);
+  if(!isFinite(v)||v<=0) return null;
+  const pas=(v<20)?1.25:2.5;
+  return Math.round(v/pas)*pas;
+}
+// PURE. La programmation d'un exercice, normalisee — ou null.
+//
+// TOUT EST VERIFIE ICI, une fois : un dossier revenu de Firebase peut avoir
+// perdu son tableau (objet a trous), porter un 1RM en chaine, ou une semaine
+// sans RPE. Les lecteurs en aval n'ont pas a se le redemander.
+function progExDe(ex){
+  const p=ex&&ex.prog;
+  if(!p||typeof p!=='object') return null;
+  const max=Number(p.max);
+  if(!isFinite(max)||max<PROG_EX_MAX_MIN||max>PROG_EX_MAX_MAX) return null;
+  const debut=Number(p.debut);
+  if(!isFinite(debut)||debut<=0) return null;
+  // Firebase rend un tableau a trous sous forme d'objet : on remet a plat, par
+  // rang, comme le fait _normaliserSessionsConfig pour les creneaux.
+  const brut=Array.isArray(p.semaines)?p.semaines
+    :(p.semaines&&typeof p.semaines==='object'
+      ?Object.keys(p.semaines).sort((a,b)=>Number(a)-Number(b)).map(k=>p.semaines[k])
+      :null);
+  if(!brut||!brut.length) return null;
+  const sem=brut.slice(0,PROG_EX_SEMAINES_MAX).map(s=>{
+    const o=(s&&typeof s==='object')?s:{};
+    const series=Math.round(Number(o.series));
+    const reps=Math.round(Number(o.reps));
+    const rpe=String(o.rpe==null?'':o.rpe).trim();
+    return {series:(isFinite(series)&&series>0)?series:null,
+            reps:(isFinite(reps)&&reps>0)?reps:null,
+            rpe:RPE_PCT[rpe]?rpe:''};
+  });
+  return {max,debut:_lundiDe(new Date(debut)).getTime(),semaines:sem};
+}
+// PURE. Le rang de la semaine a une date, ou null hors programmation.
+// ALIGNE SUR LE LUNDI, comme le bloc : une programmation qui changerait de
+// semaine un mercredi ferait deux consignes dans la meme seance.
+function semaineProgEx(prog,date){
+  if(!prog) return null;
+  const t=(date instanceof Date)?date.getTime():Number(date==null?Date.now():date);
+  if(!isFinite(t)) return null;
+  const i=Math.round((_lundiDe(new Date(t)).getTime()-prog.debut)/604800000);
+  return (i>=0&&i<prog.semaines.length)?i:null;
+}
+// PURE. La consigne de la semaine en cours : series, repetitions, RPE, charge.
+// Rend null hors programmation, ou quand la semaine est incomplete — une
+// ligne a moitie remplie ne prescrit rien.
+function consigneProgEx(ex,date){
+  const p=progExDe(ex);
+  if(!p) return null;
+  const i=semaineProgEx(p,date);
+  if(i===null) return null;
+  const s=p.semaines[i];
+  if(!s||!s.series||!s.reps||!s.rpe) return null;
+  const pct=pctDe1RM(s.rpe,s.reps);
+  const kg=(pct==null)?null:_arrondirCharge(p.max*pct/100);
+  return {semaine:i,total:p.semaines.length,series:s.series,reps:s.reps,
+          rpe:s.rpe,pct,kg,max:p.max,
+          // RIR EQUIVALENT, pour l'athlete qui lit en RIR depuis toujours.
+          // 10 - RPE, la conversion usuelle ; affichee, jamais enregistree
+          // comme une mesure — voir la carte des series.
+          rir:Math.round((10-Number(s.rpe))*10)/10};
+}
+// PURE. La programmation touche-t-elle a sa fin ? Rend le nombre de semaines
+// restantes, fin comprise, ou null. Sert au coach : une programmation qui
+// s'acheve sans que rien ne le dise laisse l'athlete sans consigne le lundi
+// suivant.
+function finProgExProche(ex,date){
+  const p=progExDe(ex);
+  if(!p) return null;
+  const i=semaineProgEx(p,date);
+  if(i===null) return null;
+  const restantes=p.semaines.length-i;
+  return (restantes<=PROG_EX_FIN_PREVENIR+1)?restantes:null;
+}
 
 // PURE. Le programme, ou null s'il est absent, incomplet ou corrompu. AUCUNE
 // exception ne sort d'ici : un dossier abîmé fait disparaître la vue, il ne
@@ -41649,6 +42052,54 @@ function _htmlEcartRir(c){
 }
 // Cinq lignes au plus : au-dela, la carte devient une liste qu'on ne lit plus.
 const RIR_ECART_MAX=5;
+
+// ══════ LES PROGRAMMATIONS QUI S'ACHEVENT ══════════════════════════════
+//
+// Demande de Kevin, 27/08/2026 : « une semaine avant la fin de la
+// programmation, le coach aura la notification comme quoi le bloc arrive a sa
+// fin et il va falloir en remettre une en place. »
+//
+// UNE SEMAINE AVANT, ET PAS LE JOUR OU CA TOMBE : le lundi ou la derniere
+// semaine commence, il est trop tard pour preparer la suite sans bousculer
+// l'athlete. Prevenir pendant la derniere semaine laisse sept jours.
+//
+// PURE. Rend [{nom, restantes, jour}] — les exercices dont la programmation
+// s'acheve, tous creneaux confondus, du plus urgent au moins urgent.
+function progExQuiFinissent(user,date){
+  const out=[];
+  try{
+    const cfg=Array.isArray(user&&user.sessions_config)?user.sessions_config:[];
+    cfg.forEach((s,slot)=>{
+      if(!s||s.active!==true||!Array.isArray(s.exercises)) return;
+      for(const ex of s.exercises){
+        const r=(()=>{ try{ return finProgExProche(ex,date); }catch(e){ return null; } })();
+        if(r==null) return;
+        out.push({nom:(ex&&ex.name)||'',restantes:r,
+                  jour:(typeof DAYS!=='undefined'&&DAYS[slot])?DAYS[slot]:''});
+      }
+    });
+  }catch(e){ return out; }
+  out.sort((a,b)=>a.restantes-b.restantes);
+  return out;
+}
+// LA CARTE. Orange et non rouge : ce n'est pas une alerte, c'est une echeance
+// — rien n'est casse, il y a simplement quelque chose a preparer.
+function _htmlFinProgEx(c){
+  let l=[];
+  try{ l=progExQuiFinissent(c); }catch(e){ return ''; }
+  if(!l.length) return '';
+  const dit=x=>x.restantes<=1?'dernière semaine'
+    :(x.restantes+' semaines restantes');
+  return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+    <div style="font-size:var(--fs-2xs);color:var(--orange);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Programmation à renouveler</div>
+    ${l.slice(0,RIR_ECART_MAX).map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:5px">
+      <span style="font-size:var(--fs-2xs);color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}${x.jour?`<span style="color:var(--text-faint)"> · ${escapeHtml(x.jour)}</span>`:''}</span>
+      <span style="font-size:var(--fs-2xs);color:var(--orange);white-space:nowrap">${dit(x)}</span>
+    </div>`).join('')}
+    ${l.length>RIR_ECART_MAX?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px">et ${l.length-RIR_ECART_MAX} de plus</div>`:''}
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Sans nouvelle programmation, ces exercices repasseront en charge libre et l’athlète notera son RIR comme avant.</div>
+  </div>`;
+}
 // Fiche coach : ce qui est prescrit contre ce qui est fait.
 function _htmlEcartPrescrit(c){
   const l=ecartPrescritRealise(c).filter(x=>x.part!=null);
@@ -41739,6 +42190,7 @@ function renderVolumeCoach(c){
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
     ${_axPrio?'':_axial}
     ${_htmlRirMoyen(c)}
+    ${_htmlFinProgEx(c)}
     ${_htmlEcartRir(c)}
     ${(()=>{ try{ return _htmlRatioPousseeTirage((c&&c.sessions_config)||[],c); }catch(e){ return ''; } })()}
     ${_htmlEcartPrescrit(c)}

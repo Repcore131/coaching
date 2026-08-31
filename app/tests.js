@@ -634,6 +634,162 @@ function testExercices(){
           ?_echec('getSemaineEffective ecrit'):true;})());
     })();
 
+    // ══════ PROGRAMMATION D'UN EXERCICE — 27/08/2026 ═══════════════════
+    // Le coach fixe un 1RM, un nombre de semaines, et par semaine des series,
+    // des repetitions et un RPE. L'app en deduit la charge depuis la table de
+    // pourcentages fournie par Kevin.
+    (()=>{
+      const _lun=n=>{ const d=new Date(); d.setHours(0,0,0,0);
+        d.setDate(d.getDate()-((d.getDay()+6)%7)+7*n); return d.getTime(); };
+      const _ex=(sem,max,dec)=>({name:'DEVELOPPE COUCHE',series:3,reps:'5',
+        prog:{max:max||145,debut:_lun(dec||0),semaines:sem}});
+
+      ok('La table des pourcentages est celle du guide, recopiee',(()=>{
+        // ELLE N'EST PAS CALCULEE : Epley, Brzycki et Lombardi donnent des
+        // valeurs voisines mais differentes, et une charge de travail n'est pas
+        // un endroit ou improviser une approximation.
+        if(pctDe1RM('10',1)!==100) return _echec('@10 × 1 vaut '+pctDe1RM('10',1));
+        if(pctDe1RM('8',4)!==83.7) return _echec('@8 × 4 vaut '+pctDe1RM('8',4));
+        if(pctDe1RM('6',12)!==56.9) return _echec('@6 × 12 vaut '+pctDe1RM('6',12));
+        // NEUF LIGNES, DOUZE COLONNES, et aucune case manquante.
+        for(const r of RPE_ECHELLE){
+          if(!RPE_PCT[r]) return _echec('ligne @'+r+' absente');
+          if(RPE_PCT[r].length!==RPE_REPS_MAX)
+            return _echec('@'+r+' porte '+RPE_PCT[r].length+' colonnes');
+          for(const v of RPE_PCT[r])
+            if(!(v>0&&v<=100)) return _echec('@'+r+' porte une valeur hors bornes : '+v);
+        }
+        // AU-DELA DE LA TABLE, RIEN. Extrapoler donnerait une charge fausse :
+        // au-dela de douze repetitions la relation cesse d'etre lineaire.
+        if(pctDe1RM('8',13)!==null) return _echec('la table s\'extrapole au-dela de 12');
+        if(pctDe1RM('8',0)!==null||pctDe1RM('8.25',5)!==null)
+          return _echec('une entree hors echelle rend une valeur');
+        return pctDe1RM('',5)===null?true:_echec('un RPE vide rend une valeur');})());
+
+      ok('La charge suggeree sort du 1RM et de la table',(()=>{
+        // 145 kg, 4 reps a RPE 8 → 83,7 % = 121,4 kg → 122,5 kg (palier 2,5).
+        const c=consigneProgEx(_ex([{series:5,reps:4,rpe:'8'}]));
+        if(!c) return _echec('aucune consigne');
+        if(c.pct!==83.7) return _echec('pourcentage '+c.pct);
+        if(c.kg!==122.5) return _echec('charge '+c.kg+' kg au lieu de 122,5');
+        if(c.series!==5||c.reps!==4) return _echec('series/reps : '+c.series+'×'+c.reps);
+        // LE RIR EQUIVALENT EST AFFICHE, jamais enregistre comme une mesure.
+        return c.rir===2?true:_echec('RIR equivalent '+c.rir);})());
+      ok('Les paliers de charge sont ceux de la salle',(()=>{
+        // 2,5 kg, et 1,25 sous 20 kg : au-dessous, deux kilos et demi font
+        // plus de dix pour cent de la charge.
+        if(_arrondirCharge(121.4)!==122.5) return _echec('121,4 → '+_arrondirCharge(121.4));
+        if(_arrondirCharge(12.9)!==12.5) return _echec('12,9 → '+_arrondirCharge(12.9));
+        return _arrondirCharge(0)===null&&_arrondirCharge('x')===null
+          ?true:_echec('une charge nulle rend un nombre');})());
+
+      ok('La semaine suit le calendrier, et s\'arrete avec la programmation',(()=>{
+        const sem=[{series:5,reps:5,rpe:'7'},{series:5,reps:4,rpe:'8'},{series:3,reps:3,rpe:'9'}];
+        const ex=_ex(sem);
+        const c=consigneProgEx(ex);
+        if(!c||c.semaine!==0) return _echec('semaine '+(c&&c.semaine));
+        // LA SEMAINE PROCHAINE, LA DEUXIEME LIGNE.
+        const c2=consigneProgEx(ex,new Date(_lun(1)+864e5));
+        if(!c2||c2.semaine!==1||c2.reps!==4) return _echec('semaine 2 : '+JSON.stringify(c2));
+        // APRES LA FIN, PLUS RIEN — jamais la derniere ligne repetee.
+        if(consigneProgEx(ex,new Date(_lun(3))))
+          return _echec('la programmation continue apres sa fin');
+        // AVANT LE DEBUT NON PLUS.
+        return consigneProgEx(_ex(sem,145,1))===null
+          ?true:_echec('une programmation future s\'applique deja');})());
+
+      ok('Une semaine incomplete ne prescrit rien',(()=>{
+        // Une ligne a moitie remplie ne prescrit rien : mieux vaut aucune
+        // consigne qu'une consigne inventee.
+        if(consigneProgEx(_ex([{series:5,reps:4,rpe:''}])))
+          return _echec('une semaine sans RPE prescrit');
+        if(consigneProgEx(_ex([{series:null,reps:4,rpe:'8'}])))
+          return _echec('une semaine sans series prescrit');
+        // ET UN DOSSIER ABIME NE FAIT RIEN TOMBER : Firebase rend le tableau
+        // des semaines en OBJET des qu'un rang manque.
+        const objet={name:'DC',prog:{max:100,debut:_lun(0),
+          semaines:{0:{series:3,reps:5,rpe:'8'}}}};
+        const c=consigneProgEx(objet);
+        if(!c||c.reps!==5) return _echec('un tableau rendu en objet n\'est pas relu');
+        // 1RM ABSURDE OU MANQUANT : rien, plutot qu'une charge fausse.
+        return !consigneProgEx({name:'DC',prog:{max:0,debut:_lun(0),semaines:[{series:3,reps:5,rpe:'8'}]}})
+          &&!consigneProgEx({name:'DC'})&&!consigneProgEx(null)
+          ?true:_echec('un 1RM absent produit une charge');})());
+
+      ok('Au-dela de douze repetitions, aucune charge n\'est suggeree',(()=>{
+        const c=consigneProgEx(_ex([{series:3,reps:15,rpe:'8'}]));
+        if(!c) return _echec('la consigne disparait alors que series/reps/RPE sont la');
+        // LA CONSIGNE TIENT — 3 × 15 @8 reste ce que le coach a demande — mais
+        // la CHARGE, elle, n'est pas inventee.
+        return c.kg===null&&c.pct===null
+          ?true:_echec('une charge est suggeree hors table : '+c.kg);})());
+
+      ok('Le RPE prescrit n\'est jamais ecrit dans le RIR realise',(()=>{
+        // C'EST LA PROPRIETE QUI COMPTE. Recopier le RPE prescrit dans `rir`
+        // ferait passer une consigne pour une mesure : rirMoyenSeance, l'e1RM
+        // et l'ecart prescrit/realise liraient tous une valeur que personne
+        // n'a constatee, et le coach lirait sa propre prescription en croyant
+        // lire son athlete.
+        const s=String(_blocExo);
+        if(s.indexOf('s.rpeCible=_cons.rpe')<0)
+          return _echec('le RPE demande n\'est pas pose sur la serie');
+        if(/s\.rir\s*=\s*_cons/.test(s))
+          return _echec('la prescription est recopiee dans le RIR realise');
+        // ET LA COLONNE DEVIENT UN AFFICHAGE, pas un champ : l'athlete ne la
+        // regle pas.
+        const r=String(renderSets);
+        if(r.indexOf('s.rpeCible')<0) return _echec('la colonne ne lit pas le RPE prescrit');
+        // LA CHARGE, ELLE, RESTE MODIFIABLE : c'est une suggestion.
+        return s.indexOf('s.isAuto=true')>=0
+          ?true:_echec('la charge suggeree n\'est pas marquee comme automatique');})());
+
+      ok('Sur un exercice programme, la charge ne derive pas d\'une serie a l\'autre',(()=>{
+        // Le coach a fixe UN RPE pour toutes les series de la semaine : monter
+        // d'un palier parce que la precedente etait facile contredirait la
+        // consigne qu'on vient d'afficher.
+        const s=String(renderSets);
+        const i=s.indexOf('chargeSuivante(');
+        if(i<0) return _echec('la progression par paliers a disparu');
+        return s.lastIndexOf('if(s.rpeCible) continue;',i)>=0
+          ?true:_echec('la progression s\'applique aussi aux exercices programmes');})());
+
+      ok('Le coach est prevenu une semaine avant la fin',(()=>{
+        const u=s=>({sessions_config:[{active:true,exercises:[_ex(s)]}]});
+        // Trois semaines, on est dans la premiere : rien a signaler.
+        if(progExQuiFinissent(u([{series:3,reps:5,rpe:'8'},{series:3,reps:5,rpe:'8'},
+                                 {series:3,reps:5,rpe:'8'}])).length)
+          return _echec('on previent des la premiere semaine');
+        // Deux semaines, on est dans la premiere : il en reste deux, on
+        // previent — sept jours pour preparer la suite.
+        const deux=progExQuiFinissent(u([{series:3,reps:5,rpe:'8'},{series:3,reps:5,rpe:'8'}]));
+        if(deux.length!==1||deux[0].restantes!==2)
+          return _echec('pas de signalement a deux semaines : '+JSON.stringify(deux));
+        // Une seule semaine : derniere.
+        const une=progExQuiFinissent(u([{series:3,reps:5,rpe:'8'}]));
+        if(une.length!==1||une[0].restantes!==1)
+          return _echec('la derniere semaine ne se signale pas');
+        // UN CRENEAU ETEINT NE COMPTE PAS, et un exercice sans programmation
+        // non plus.
+        const eteint={sessions_config:[{active:false,exercises:[_ex([{series:3,reps:5,rpe:'8'}])]}]};
+        if(progExQuiFinissent(eteint).length) return _echec('un creneau eteint est signale');
+        return progExQuiFinissent({sessions_config:[{active:true,exercises:[{name:'DC'}]}]}).length===0
+          ?true:_echec('un exercice sans programmation est signale');})());
+
+      ok('La feuille du coach travaille sur une copie',(()=>{
+        // Tant que « Enregistrer » n'est pas presse, l'exercice n'est pas
+        // touche : fermer ne doit rien laisser derriere.
+        const o=String(ouvrirProgEx), v=String(validerProgEx);
+        if(/progEx\[i\]\.prog\s*=/.test(o))
+          return _echec('l\'ouverture ecrit deja dans l\'exercice');
+        if(v.indexOf('progEx[_progExIdx].prog=')<0)
+          return _echec('la validation n\'ecrit pas la programmation');
+        if(v.indexOf('_progExDirty=true')<0)
+          return _echec('la validation ne marque pas la seance comme modifiee');
+        // ET LE RETRAIT DEMANDE CONFIRMATION : c'est du travail de coach.
+        return String(retirerProgEx).indexOf('rcConfirm')>=0
+          ?true:_echec('le retrait ne demande pas confirmation');})());
+    })();
+
     // ══════ B3.1 — L'INTENSITE PRESCRITE REVIENT AU COACH ═══════════════
     // La boucle cassait au quatrieme maillon : le coach prescrit « RIR 2 »,
     // l'athlete saisit son RIR serie par serie, la fiche affiche une moyenne
