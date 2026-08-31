@@ -22661,6 +22661,17 @@ function testExercices(){
         if(!document.getElementById('clh-nutri-dots')
           ||!document.getElementById('clh-nutri-score'))
           return _echec('les emplacements n\'existent pas');
+        // LE COMPTEUR EST ANIME, et ces deux assertions lisent textContent
+        // SYNCHRONEMENT, juste apres le rendu : elles y voyaient la premiere
+        // image de l'interpolation, pas la valeur d'arrivee. Ce n'est pas ce
+        // qu'elles veulent prouver — elles portent sur la LOGIQUE du score,
+        // pas sur la montee du chiffre.
+        //
+        // ON DEMANDE DONC LE MOUVEMENT REDUIT le temps du test : arcChiffre y
+        // pose la valeur d'arrivee sans detour. C'est exactement ce que voit un
+        // utilisateur qui a coche « reduire les animations » dans son systeme,
+        // donc un chemin de production, pas un contournement.
+        const _mqSauve=_arcMq; _arcMq={matches:true};
         const _sv=currentUser, _ss=window.saveUser;
         try{
           window.saveUser=()=>true;
@@ -22711,11 +22722,14 @@ function testExercices(){
           //    qui est que le score ne reste pas au gris du texte courant.
           return /red/.test(e.couleur)
             ?true:_echec('le score n\'est pas peint en rouge : '+e.couleur);
-        } finally { currentUser=_sv; window.saveUser=_ss; }})());
+        } finally { currentUser=_sv; window.saveUser=_ss; _arcMq=_mqSauve; }})());
           ok('Sur 40 jours d\'historique, le score compte exactement les pastilles vertes',(()=>{
             // L'INVARIANT DU LOT : le score et les pastilles lisent les MÊMES sept
             // clés. Vérifier « 1/7 » sur un cas précis ne le dit pas — un décalage
             // d'un jour dans l'une des deux fenêtres survivrait à ce test.
+            // Meme raison qu'au-dessus : le compteur est anime, la lecture est
+            // synchrone. Voir la note de l'assertion precedente.
+            const _mqSauve=_arcMq; _arcMq={matches:true};
             const _sv=currentUser, _ss=window.saveUser;
             try{
               window.saveUser=()=>true;
@@ -22778,7 +22792,79 @@ function testExercices(){
               currentUser.nutrition.days=Object.assign({},fond);
               return lire().score==='0/7'
                 ?true:_echec('une semaine vide ne fait pas 0/7 : '+lire().score);
+            } finally { currentUser=_sv; window.saveUser=_ss; _arcMq=_mqSauve; }})());
+
+          // ══════ LE SCORE NE PEUT PLUS S'EMBALLER ═══════════════════════
+          //
+          // LE BUG SE MORDAIT LA QUEUE. Le score « 3/7 » etait ranime depuis la
+          // valeur PRECEDEMMENT AFFICHEE, relue dans textContent puis nettoyee
+          // par replace(/[^\d.-]/g,''). Cette expression retire le « / » :
+          // « 3/7 » devient « 37 », lu 37 au lieu de 3. arcChiffre ecrivait
+          // alors « 37/7 », que le rendu suivant relisait « 377 », puis
+          // « 3777 »… d'ou le 7777777/7 observe.
+          //
+          // TROIS RENDUS SUCCESSIFS, ET C'EST LE MINIMUM : le defaut ne se
+          // voyait pas au premier — il fallait qu'une valeur affichee soit
+          // relue pour que l'emballement demarre. Un seul rendu serait reste
+          // vert pendant toute la regression.
+          //
+          // ON N'ETEINT PAS L'ANIMATION ICI, volontairement, contrairement aux
+          // deux assertions ci-dessus : c'est justement pendant l'interpolation
+          // que les valeurs aberrantes apparaissaient. Une image intermediaire
+          // reste bornee ; « 37/7 » ne l'est pas.
+          ok('Le score reste borne entre 0 et 7 sur trois rendus successifs',(()=>{
+            const _sv=currentUser, _ss=window.saveUser;
+            try{
+              window.saveUser=()=>true;
+              const auj=new Date(), lundi=new Date(auj);
+              lundi.setDate(auj.getDate()-((auj.getDay()+6)%7));
+              const cle=n=>{const d=new Date(lundi);d.setDate(lundi.getDate()+n);return localISODate(d);};
+              const jours={};
+              for(let i=0;i<7;i++) jours[cle(i)]={respected:true};
+              currentUser={id:'sc',email:'sc@t',role:'athlete',exAlias:{},exMuscles:{},
+                programs:{},sessions:[],bilans:[],nutrition:{days:jours}};
+              const el=document.getElementById('clh-nutri-score');
+              if(!el) return _echec('l’emplacement du score n’existe pas');
+              const vus=[];
+              for(let n=0;n<3;n++){
+                renderNutriDots();
+                const t=String(el.textContent||'');
+                vus.push(t);
+                // LA FORME D'ABORD : « N/7 », et rien d'autre. C'est elle qui
+                // partait en vrille, et un chiffre borne dans un texte mal
+                // forme resterait un defaut.
+                const m=/^(\d+)\/7$/.exec(t);
+                if(!m) return _echec('rendu '+(n+1)+' : forme « '+t+' »');
+                const v=Number(m[1]);
+                if(!(v>=0&&v<=7))
+                  return _echec('rendu '+(n+1)+' : '+v+' hors de [0,7] — '+vus.join(' → '));
+              }
+              // ET LA VALEUR COMMISE EST EXACTE, elle : data-valeur porte le
+              // score et non sa mise en forme. C'est ce que l'animation vise,
+              // quelle que soit l'image qu'on surprend en chemin.
+              if(el.dataset.valeur!=='7')
+                return _echec('data-valeur vaut « '+el.dataset.valeur+' » au lieu de 7');
+              // LE TEXTE AFFICHE N'EST JAMAIS RELU. C'est la cause meme du
+              // defaut : une mise en forme n'est pas inversible a coup sur.
+              const s=String(renderNutriDots);
+              return /textContent[^)]*replace\(\/\[\^/.test(s)
+                ?_echec('le score est encore reconstruit depuis le texte affiché'):true;
             } finally { currentUser=_sv; window.saveUser=_ss; }})());
+          ok('Les compteurs animes lisent une valeur, jamais leur mise en forme',(()=>{
+            if(typeof arcCompteur!=='function') return _echec('aucun compteur commun');
+            const s=String(arcCompteur);
+            if(s.indexOf('dataset.valeur')<0)
+              return _echec('la valeur précédente ne vient pas d’un attribut dédié');
+            // LA CIBLE EST RANGEE AVANT D'ANIMER : si un second rendu tombe
+            // pendant l'interpolation, il repart de la cible et non d'une image
+            // intermediaire. C'est la seconde moitie du defaut d'origine.
+            if(s.indexOf('dataset.valeur')>s.indexOf('arcChiffre('))
+              return _echec('la cible est rangée après l’animation');
+            // LES DEUX COMPTEURS QUI RELISAIENT LEUR TEXTE PASSENT PAR LUI.
+            const prod=_prodSrc();
+            const restes=(prod.match(/textContent\|\|''\)\.replace\(\/\[\^/g)||[]).length;
+            return restes===0
+              ?true:_echec(restes+' compteur(s) relisent encore leur propre texte');})());
 
 
       currentUser=sauveU;

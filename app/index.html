@@ -12458,6 +12458,39 @@ function arcDernierPoint(fraicheur){
 // largeurs différentes font trembler ce qui les suit.
 // requestAnimationFrame et non setInterval : la boucle s'arrête d'elle-même
 // quand l'onglet passe en arrière-plan, au lieu de peindre pour personne.
+// ══════ UN COMPTEUR ANIME NE SE RELIT PAS DANS SON PROPRE TEXTE ════════
+//
+// LE BUG, ET IL SE MORD LA QUEUE. Le score hebdomadaire « 3/7 » etait ranime
+// depuis la valeur PRECEDEMMENT AFFICHEE, relue dans textContent puis nettoyee
+// par replace(/[^\d.-]/g,''). Cette expression retire le « / » : « 3/7 »
+// devient « 37 », lu 37 au lieu de 3. arcChiffre ecrit alors « 37/7 » dans le
+// DOM, que le rendu suivant relit « 377 », puis « 3777 »… C'est l'origine
+// exacte du 7777777/7 observe.
+//
+// LE TEXTE AFFICHE N'EST PAS UNE DONNEE. Il est mis en forme — une fraction,
+// une unite, un separateur de milliers — et toute mise en forme est une
+// transformation qu'on ne sait pas inverser a coup sur. On garde donc la
+// valeur A COTE, dans un attribut qui n'appartient qu'a elle, et on la lit
+// telle quelle.
+//
+// C'EST DEJA CE QUE FONT LES METRIQUES D'ACCUEIL, qui lisent data-num et n'ont
+// jamais eu ce defaut. Cette fonction generalise leur patron aux compteurs qui,
+// eux, doivent partir de la valeur precedente et non de zero.
+function arcCompteur(el,vers,o){
+  if(!el) return;
+  const brut=el.dataset?el.dataset.valeur:undefined;
+  const de=(brut===undefined||brut==='')?NaN:Number(brut);
+  // ON RANGE LA VALEUR D'ARRIVEE TOUT DE SUITE, avant meme d'animer : si un
+  // second rendu tombe pendant l'interpolation, il repart de la cible et non
+  // d'une image intermediaire. C'est la seconde moitie du defaut d'origine.
+  try{ if(el.dataset) el.dataset.valeur=String(vers); }catch(e){}
+  const fmt=(o&&o.format)||(x=>String(Math.round(x)));
+  // PREMIER RENDU, ou valeur inchangee : on pose, on n'anime pas. Animer depuis
+  // rien ferait partir le compteur de zero a chaque ouverture d'ecran.
+  if(!isFinite(de)||de===vers){ el.textContent=fmt(vers); return; }
+  try{ el.style.fontVariantNumeric='tabular-nums'; }catch(e){}
+  arcChiffre(el,de,vers,o);
+}
 const _arcChiffres=new WeakMap();
 function arcChiffre(el,de,vers,o){
   o=o||{};
@@ -28045,11 +28078,11 @@ function loadClientHome(){
   // les metriques : elle reste consultable dans l'onglet Perfs.
   const _sv=document.getElementById('clh-streak-val');
   if(_sv){
-    const _av=parseFloat(String(_sv.textContent||'').replace(/[^\d.-]/g,''));
-    if(isFinite(_av)&&_av!==s){
-      _sv.style.fontVariantNumeric='tabular-nums';
-      arcChiffre(_sv,_av,s,{duree:ARC.release});
-    } else _sv.textContent=s;
+    // MEME MECANISME QUE LE SCORE, et donc le meme piege — dormant seulement
+    // parce que ce compteur-ci affiche un nombre NU. Le jour ou il porterait
+    // une unite — « 12 sem. » — il casserait a l'identique. On ne laisse pas
+    // deux compteurs voisins tenus par deux regles differentes.
+    arcCompteur(_sv,s,{duree:ARC.release});
   }
   document.getElementById('clh-greeting').textContent=salutation()+' '+u.fname+'.';
   const _dStr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
@@ -28528,12 +28561,10 @@ function renderNutriDots(){
     _htmlLigneDots(weekKeys.map(k=>nut.days?.[k]?.respected),26,days);
   const score=weekKeys.filter(k=>nut.days?.[k]?.respected===true).length;
   const scoreEl=document.getElementById('clh-nutri-score');
-  // Meme regle que les trois metriques : on ne compte que si la valeur a change.
-  const _avS=parseFloat(String(scoreEl.textContent||'').replace(/[^\d.-]/g,''));
-  if(isFinite(_avS)&&_avS!==score){
-    scoreEl.style.fontVariantNumeric='tabular-nums';
-    arcChiffre(scoreEl,_avS,score,{duree:ARC.release,format:v=>Math.round(v)+'/7'});
-  } else scoreEl.textContent=score+'/7';
+  // LA VALEUR PRECEDENTE VIENT DE data-valeur, JAMAIS DU TEXTE AFFICHE. Le
+  // texte porte une fraction : le nettoyer retirait le « / » et collait le
+  // numerateur au denominateur — voir arcCompteur.
+  arcCompteur(scoreEl,score,{duree:ARC.release,format:v=>Math.round(v)+'/7'});
   // LE VERT, PAS LE JAUNE DES GLUCIDES. Un score de 5/7 peint dans la couleur
   // exacte de l anneau glucides se lit comme une macro, pas comme un compte de
   // jours tenus. Le vert est la couleur de ce qui est fait, partout ailleurs.
@@ -33011,13 +33042,24 @@ function _majMetriquesAccueil(u){
   const met=(id,val,sub)=>{
     const a=document.getElementById(id), b=document.getElementById(id+'-sub');
     if(a){
-      const av=parseFloat(String(a.textContent||'').replace(/[^\d.-]/g,''));
+      // LE QUATRIEME COMPTEUR, et il relisait lui aussi son propre texte. Il
+      // fonctionnait — « 75 % » nettoye rend bien 75 — mais par la seule grace
+      // de son suffixe : il est en FIN de chaine. Le score hebdomadaire, lui,
+      // portait un « / » au MILIEU, et c'est ce qui l'a fait s'emballer
+      // jusqu'a 7777777/7. La difference entre les deux tient a la position
+      // d'un caractere, pas a un raisonnement — donc a rien.
+      //
+      // ON NE LAISSE PAS UN COMPTEUR JUSTE PAR CHANCE. Il passe par le meme
+      // arcCompteur que les deux autres : la valeur precedente vient de
+      // data-valeur, jamais du texte.
+      //
+      // LA VALEUR D'ARRIVEE, ELLE, se lit toujours dans `val` : c'est la
+      // SOURCE, pas un affichage, et la nettoyer est legitime. « — » n'a pas de
+      // valeur numerique et se pose tel quel, comme avant.
       const ap=parseFloat(String(val).replace(/[^\d.-]/g,''));
       const suf=/%/.test(String(val))?' %':'';
-      if(isFinite(av)&&isFinite(ap)&&av!==ap){
-        a.style.fontVariantNumeric='tabular-nums';
-        arcChiffre(a,av,ap,{duree:ARC.release,format:v=>Math.round(v)+suf});
-      } else a.textContent=val;
+      if(isFinite(ap)) arcCompteur(a,ap,{duree:ARC.release,format:v=>Math.round(v)+suf});
+      else { a.textContent=val; try{ delete a.dataset.valeur; }catch(e){} }
       // Le drapeau suit la VALEUR AFFICHEE, pas le calcul : « — » et « 0 » sont
       // les deux facons dont cette app dit « rien ». closest() remonte au
       // conteneur, qui porte le style.
