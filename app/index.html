@@ -9422,6 +9422,19 @@ const CLOUD={
           const {photo2,...rest}=s; return rest;
         });
       }
+      // safe.sessions PARTAIT SANS ETRE NORMALISE, seul des trois. Un trou au
+      // moment de l'envoi — une seance supprimee, un tableau reconstruit a la
+      // main — et Firebase stocke un OBJET : tout appareil qui redescendra le
+      // dossier en heritera. La lecture sait desormais s'en remettre, mais on
+      // ne pousse pas sciemment une forme qu'on devra reparer a l'arrivee.
+      //
+      // PAR SYMETRIE AVEC LES DEUX AUTRES, et au meme endroit : trois champs,
+      // trois normalisations, cote a cote. Un quatrieme ajoute demain se verra
+      // manquer.
+      if(safe.sessions){
+        const _ss=_tab(safe.sessions);
+        if(_ss) safe.sessions=_ss;
+      }
       if(safe.bilans&&_tab(safe.bilans)) safe.bilans=await Promise.all(_tab(safe.bilans).map(async b=>{
         const cl={...b};
         for(const k of Object.keys(cl)){
@@ -9440,6 +9453,34 @@ const CLOUD={
       const distant=await this.pullUser(email);
       if(distant&&(distant.updatedAt||0)>(safe.updatedAt||0)){
         const volume=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length);
+        // LE PROGRAMME ETAIT LE SEUL CHAMP DISPUTE QUE LA DEFENSE NE REGARDAIT
+        // PAS — et c'est le plus dispute de tous : le coach l'edite depuis son
+        // ordinateur pendant que le telephone de l'athlete pousse son propre
+        // dossier. Une seance ecrite par le coach pouvait donc etre effacee par
+        // un envoi parti d'un appareil qui ne l'avait pas encore vue, sans que
+        // le garde-fou bronche : il ne comptait que l'historique.
+        //
+        // PAS AVEC LE MEME COMPTEUR, ET C'EST DELIBERE. sessions_config fait
+        // TOUJOURS sept cases : sa longueur ne dit rien. Ce qui compte est le
+        // TRAVAIL qu'il porte — un exercice, un nom de seance, un jour actif —
+        // et _cptContenu mesure exactement cela, sur cette forme-la, depuis
+        // qu'il a ete ecrit pour les modeles du coach. Une seule definition de
+        // « y a-t-il du travail la-dedans », pour les deux endroits.
+        //
+        // ET DEUX MESSAGES DISTINCTS : melanger sept creneaux a un historique
+        // de seances rendrait le chiffre annonce incomprehensible, et un
+        // message qu'on ne comprend pas est un message qu'on clique sans lire.
+        const travail=o=>{ try{ return _cptContenu((o&&o.sessions_config)||[]); }catch(e){ return 0; } };
+        const _tS=travail(safe), _tD=travail(distant);
+        if(_tS<_tD){
+          this._setSyncStatus(false);
+          const refus=new Error('Le programme distant est plus récent et plus complet ('
+            +_tD+' séance'+(_tD>1?'s':'')+' contre '+_tS
+            +') : envoi annulé pour ne pas écraser le travail de ton coach.');
+          refus._nonRejouable=true;
+          refus._actionnable=true;
+          throw refus;
+        }
         if(volume(safe)<volume(distant)){
           this._setSyncStatus(false);
           const refus=new Error('Version distante plus récente et plus complète ('

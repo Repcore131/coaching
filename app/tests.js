@@ -24460,6 +24460,69 @@ function testExercices(){
         return _htmlOrigineCibles({nutrition:{macros:{}}})===''
           ?true:_echec('une origine est inventée pour un dossier qui n’en a pas');})());
 
+      // ══════ CE QUI PART VERS FIREBASE, ET CE QU'ON REFUSE D'ECRASER ══
+      ok('Les trois champs de liste sont normalises A L\'ENVOI',(()=>{
+        // safe.sessions partait SANS normalisation, seul des trois. Un trou au
+        // moment de l'envoi et Firebase stocke un OBJET : tout appareil qui
+        // redescendra le dossier en herite. La lecture sait desormais s'en
+        // remettre, mais on ne pousse pas sciemment une forme qu'on devra
+        // reparer a l'arrivee.
+        // LE PIEGE DE LA SOUS-CHAINE, et il a fait passer cette sonde au vert
+        // alors que le defaut etait la : « safe.sessions » est un PREFIXE de
+        // « safe.sessions_config ». Chercher l'un trouvait l'autre. On exige
+        // donc que le nom soit suivi d'autre chose qu'une lettre.
+        const s=String(CLOUD._doPushOne)
+          .replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+        const i=s.indexOf('const _tab=');
+        if(i<0) return _echec('la normalisation d\'envoi a disparu');
+        // BORNE AU BLOC DE NORMALISATION : plus loin, safe.sessions est lu pour
+        // d'autres raisons, et les compter direait le contraire de la verite.
+        const bloc=s.slice(i,s.indexOf('const distant=',i));
+        const manquants=['sessions_config','bilans','sessions']
+          .filter(c=>!(new RegExp('_tab\\(safe\\.'+c+'(?![A-Za-z_])').test(bloc)));
+        return manquants.length
+          ?_echec('non normalisé(s) à l\'envoi : '+manquants.join(', ')):true;})());
+
+      ok('Le programme entre dans la defense en profondeur',(()=>{
+        // C'ETAIT LE SEUL CHAMP DISPUTE QUE LA DEFENSE NE REGARDAIT PAS — et
+        // le plus disputé de tous : le coach l'édite depuis son ordinateur
+        // pendant que le téléphone de l'athlète pousse son propre dossier.
+        const s=String(CLOUD._doPushOne);
+        if(s.indexOf('sessions_config')<0||s.indexOf('_cptContenu')<0)
+          return _echec('le programme n\'est pas défendu');
+        // PAS AVEC LE COMPTEUR DES ENTREES : sessions_config fait TOUJOURS
+        // sept cases, sa longueur ne dit rien. C'est le TRAVAIL qu'il porte
+        // qui compte.
+        if(/volume=o=>[^;]*sessions_config/.test(s))
+          return _echec('le programme est compté comme des entrées d\'historique');
+        // DEUX MESSAGES DISTINCTS : mélanger sept créneaux à un historique de
+        // séances rendrait le chiffre annoncé incompréhensible, et un message
+        // qu'on ne comprend pas est un message qu'on clique sans lire.
+        if(s.indexOf('le travail de ton coach')<0)
+          return _echec('le refus ne dit pas ce qui est en jeu');
+        // ET IL NE SE REJOUE PAS : un refus délibéré rejoué à chaque démarrage
+        // échouerait à l'identique indéfiniment.
+        const j=s.indexOf('le travail de ton coach');
+        return s.slice(j,j+400).indexOf('_nonRejouable')>=0
+          ?true:_echec('le refus du programme repart dans la file');})());
+
+      ok('Desactiver un jour ne bloque pas l\'envoi',(()=>{
+        // LE FAUX POSITIF QU'IL FALLAIT ECARTER. Si desactiver un jour faisait
+        // baisser le compte, l'athlete ne pourrait plus jamais pousser ce
+        // geste-la — un programme deviendrait irreversible.
+        const plein=[{name:'Pecs',active:true,exercises:[{name:'DC'}]},
+                     {name:'Dos', active:true,exercises:[{name:'ROW'}]},
+                     {name:'',    active:false,exercises:[]}];
+        const desactive=[Object.assign({},plein[0],{active:false}),plein[1],plein[2]];
+        if(_cptContenu(desactive)!==_cptContenu(plein))
+          return _echec('désactiver un jour fait baisser le compte : '
+            +_cptContenu(desactive)+' contre '+_cptContenu(plein));
+        // ET UN CRENEAU REELLEMENT VIDE, LUI, COMPTE MOINS : c'est ce qui doit
+        // alerter quand l'envoi vient d'un appareil perime.
+        const vide=[{name:'',active:false,exercises:[]},plein[1],plein[2]];
+        return _cptContenu(vide)<_cptContenu(plein)
+          ?true:_echec('vider un créneau ne se voit pas');})());
+
       // ══════ AUCUNE ECRITURE LOCALE NE TOMBE EN SILENCE ══════════════
       //
       // Le stockage de cet utilisateur est sature a 81 % par du base64
