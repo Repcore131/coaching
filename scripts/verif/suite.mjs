@@ -58,6 +58,17 @@ console.log('ciqual :', await ev(`(async()=>{ try{ await _loadCiqual(); return '
 // photo ne verifierait qu'une chose : que l'index n'est pas charge.
 console.log('illustrations :', await ev(`(async()=>{ try{ const s=await chargerIndexIllustrations();
   return s.size+' fiches'; }catch(e){ return 'echec '+String(e&&e.message||e); } })()`));
+// LES REGLES DE LA BASE, comme Ciqual et l'index : la sonde qui compare la
+// liste blanche de coach_public a CHAMPS_PROFIL_COACH ne peut rien verifier
+// sans elles, et un vert muet laisserait croire qu'elle l'a fait. La ligne
+// ci-dessous dit si elles ont ete lues — servir la RACINE du depot, et non
+// app/, est ce qui les rend accessibles.
+console.log('regles :', await ev(`(async()=>{ try{
+  const r=await fetch('../database.rules.json',{cache:'no-store'});
+  if(!r.ok) return 'NON SERVIES (HTTP '+r.status+') — lance le serveur a la racine du depot';
+  window._RC_RULES=await r.text();
+  return 'chargees ('+window._RC_RULES.length+' o)';
+}catch(e){ return 'NON SERVIES : '+String(e&&e.message||e); } })()`));
 const rap = await ev(`(async()=>{ try{ const r=await chargerTests();
   return {total:r.total,echecs:r.echecs,
     liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:''))}; }

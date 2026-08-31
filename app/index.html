@@ -66621,6 +66621,22 @@ async function chargerTests(){
       window._RC_SRC_PROD=r.ok?await r.text():'';
     }catch(e){ window._RC_SRC_PROD=''; }
   }
+  // LES REGLES DE LA BASE, POUR LA MEME RAISON ET AU MEME MOMENT. Une sonde
+  // compare la liste blanche de coach_public a CHAMPS_PROFIL_COACH : un champ
+  // ecrit par le code et absent des regles fait rejeter le PUT ENTIER par
+  // Firebase, donc le profil public cesse DEFINITIVEMENT de se publier. C'est
+  // arrive avec « dispo ».
+  //
+  // ELLES NE SONT PAS SERVIES PAR LE SITE DEPLOYE — _site/ ne contient que
+  // app/ — et la sonde le dit alors plutot que de tomber. Le lanceur de la
+  // suite, lui, sert la racine du depot : c'est la que la verification a un
+  // sens, et c'est la qu'elle tourne.
+  if(window._RC_RULES===undefined){
+    try{
+      const r=await fetch('../database.rules.json',{cache:'no-store'});
+      window._RC_RULES=r.ok?await r.text():null;
+    }catch(e){ window._RC_RULES=null; }
+  }
   if(typeof testExercices!=='function'){
     await new Promise((res,rej)=>{
       const s=document.createElement('script');

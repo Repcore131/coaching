@@ -634,6 +634,75 @@ function testExercices(){
           ?_echec('getSemaineEffective ecrit'):true;})());
     })();
 
+    // ══════ LA LISTE BLANCHE DES REGLES COUVRE CE QUE LE CODE ECRIT ════
+    //
+    // LE BUG QU'ON NE VEUT PLUS JAMAIS. coach_public est une liste blanche
+    // fermee par "$autre": {".validate": false}. pushProfilCoach reconstruit
+    // le profil ENTIER depuis CHAMPS_PROFIL_COACH et l'envoie d'un seul PUT :
+    // un champ present dans la liste du code mais absent des regles ne fait
+    // pas rejeter CE CHAMP, il fait rejeter TOUTE L'ECRITURE. Le profil public
+    // du coach cesse alors de se publier — photo, phrase, vitrine comprises —
+    // et chaque tentative suivante repart avec le meme champ fautif, donc
+    // echoue pareil. C'est ce qui s'est passe avec « dispo » : declarer sa
+    // disponibilite gelait definitivement sa vitrine.
+    //
+    // LA SONDE LIT LES DEUX SOURCES, jamais une copie : la liste vient de
+    // CLOUD.CHAMPS_PROFIL_COACH, les regles du fichier lui-meme, pre-charge
+    // par chargerTests. Une troisieme liste recopiee ici derivrait a son tour.
+    ok('Les regles de coach_public couvrent tout ce que le code y ecrit',(()=>{
+      const src=(typeof window!=='undefined')?window._RC_RULES:null;
+      // NON SERVIES ICI : _site/ ne contient que app/, et le site deploye ne
+      // publie donc pas les regles. On le DIT — un vert muet laisserait croire
+      // que la verification a eu lieu.
+      // `ok` de cette suite ne porte de detail QUE sur un echec : un vert ne
+      // peut rien dire. On le dit donc en console, et le LANCEUR l'affiche —
+      // « regles : chargees » ou non — comme il le fait deja pour Ciqual et
+      // l'index des illustrations. C'est la que le manque se verrait.
+      if(src==null){
+        try{ console.warn('coach_public : regles non servies ici, verification faite a la racine du depot'); }catch(e){}
+        return true;
+      }
+      // La liste blanche de coach_public/$emailKey : les clefs declarees au
+      // premier niveau, jusqu'au "$autre" qui la ferme.
+      const i=src.indexOf('"coach_public"');
+      if(i<0) return _echec('le noeud coach_public a disparu des règles');
+      const j=src.indexOf('"$emailKey"',i);
+      if(j<0) return _echec('coach_public n\'a plus de $emailKey');
+      // On borne au bloc de $emailKey : sans borne, on ramasserait les clefs
+      // des noeuds voisins et la sonde passerait au vert a tort.
+      const bloc=(()=>{
+        let p=src.indexOf('{',j), n=0;
+        for(let k=p;k<src.length;k++){
+          if(src[k]==='{') n++;
+          else if(src[k]==='}'){ n--; if(!n) return src.slice(p,k+1); }
+        }
+        return '';
+      })();
+      if(!bloc) return _echec('bloc $emailKey illisible');
+      // LES CLEFS DE PREMIER NIVEAU SEULEMENT. Une clef imbriquee — « mode »
+      // sous « contact » — n'est pas un champ de profil, et la compter
+      // masquerait un vrai manque.
+      const niveau1=new Set();
+      { let n=0;
+        const re=/"([^"]+)"\s*:/g; let m;
+        for(let k=0;k<bloc.length;k++){
+          if(bloc[k]==='{') n++;
+          else if(bloc[k]==='}') n--;
+          else if(bloc[k]==='"'&&n===1){
+            re.lastIndex=k; m=re.exec(bloc);
+            if(m&&m.index===k){ niveau1.add(m[1]); k=re.lastIndex-1; }
+          }
+        }
+      }
+      if(niveau1.size<5) return _echec('seulement '+niveau1.size+' clef(s) lues : lecture des règles cassée');
+      const manquants=CLOUD.CHAMPS_PROFIL_COACH.filter(c=>!niveau1.has(c));
+      if(manquants.length)
+        return _echec('écrit par le code, absent des règles — Firebase rejettera TOUT le profil : '
+          +manquants.join(', '));
+      // ET « maj », que pushProfilCoach ajoute hors liste, doit y etre aussi.
+      return niveau1.has('maj')?true
+        :_echec('« maj » est envoyé par pushProfilCoach et absent des règles');})());
+
     // ══════ PROGRAMMATION D'UN EXERCICE — 27/08/2026 ═══════════════════
     // Le coach fixe un 1RM, un nombre de semaines, et par semaine des series,
     // des repetitions et un RPE. L'app en deduit la charge depuis la table de

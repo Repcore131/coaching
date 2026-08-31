@@ -193,6 +193,69 @@
             "$x": { ".validate": false }
           }
         },
+
+        // ── Disponibilite : le delai de reponse habituel du coach ──────────
+        //
+        // POURQUOI CE NOEUD MANQUAIT, ET CE QUE CA CASSAIT. 'dispo' figure dans
+        // CHAMPS_PROFIL_COACH depuis que l ecran de disponibilite existe, mais
+        // pas ici. Or pushProfilCoach fait un PUT du profil ENTIER reconstruit
+        // depuis cette liste : le "$autre" ferme ci-dessous rejetait donc la
+        // BRANCHE COMPLETE, pas seulement le champ inconnu. Des que le coach
+        // enregistrait une disponibilite, son profil public cessait
+        // DEFINITIVEMENT de se publier — photo, phrase et vitrine comprises —
+        // et chaque tentative suivante repartait avec le meme 'dispo'.
+        // C est la panne que produit une liste blanche fermee quand le code qui
+        // ecrit et les regles qui valident ne sont pas tenus d accord ; la sonde
+        // « CHAMPS_PROFIL_COACH » de tests.js compare desormais les deux.
+        //
+        // LA FORME EST CELLE QUE saveCoachDispo ENVOIE, ni plus ni moins :
+        //   { delaiH, plages, absence:{ actif, du, au, message } }
+        //
+        // RIEN N EST DECLARE OBLIGATOIRE, et c est voulu : Firebase SUPPRIME
+        // les clefs dont la valeur est nulle. Un coach qui n a pas saisi de
+        // delai envoie delaiH:null, et le noeud arrive donc SANS delaiH. Exiger
+        // sa presence reproduirait exactement le bug qu on corrige. Meme raison
+        // pour du/au, nuls tant qu aucune absence n est datee, et pour plages,
+        // tableau vide que Firebase ne stocke pas.
+        "dispo": {
+          // 1 h a 7 jours — les memes bornes que DISPO_DELAI_MIN_H et
+          // DISPO_DELAI_MAX_H, que saveCoachDispo refuse deja de franchir.
+          // ENTIER : le code passe par Math.round, la regle le verifie plutot
+          // que de faire confiance.
+          "delaiH": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 168 && newData.val() % 1 == 0"
+          },
+          // Les plages horaires. AUCUN CHEMIN DU CODE NE LES REMPLIT
+          // aujourd hui : saveCoachDispo recopie celles qui existent deja et
+          // n en cree jamais. La forme validee ici est celle que dispoEstDansPlage
+          // LIT — jour 0-6, debut et fin en HH:MM — pour que le jour ou un ecran
+          // les ecrira, la regle soit deja juste plutot qu ouverte.
+          "plages": {
+            ".validate": "newData.hasChildren()",
+            "$i": {
+              "jour":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6" },
+              "debut": { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{1,2}:[0-9]{2}$/)" },
+              "fin":   { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{1,2}:[0-9]{2}$/)" },
+              "$x": { ".validate": false }
+            }
+          },
+          // L absence declaree. `du` et `au` sont des horodatages en
+          // millisecondes — Date.parse d une date AAAA-MM-JJ — et non des
+          // chaines : c est ce que _dispoLireDate rend.
+          "absence": {
+            "actif":   { ".validate": "newData.isBoolean()" },
+            "du":      { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "au":      { ".validate": "newData.isNumber() && newData.val() > 0" },
+            // 140 caracteres : saveCoachDispo tronque a cette longueur, la
+            // regle la borne. `<=` et non `<`, sinon un message de exactement
+            // 140 caracteres — celui que le coach vient d ecrire — serait
+            // refuse.
+            "message": { ".validate": "newData.isString() && newData.val().length <= 140" },
+            "$autre": { ".validate": false }
+          },
+          "$autre": { ".validate": false }
+        },
+
         "$autre": {
           ".validate": false
         }
