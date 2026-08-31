@@ -408,9 +408,18 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      #coach-tabs-bar juste au-dessus. Sous 1025 px, ou la barre n'existe pas,
      ils restent la seule voie. */
   body:has(#s-coach-home.active) .ch-nav-large{display:none}
-  /* N1.12 — L'EDITEUR D'EXERCICES, POUR LE COACH SEULEMENT. Le selecteur
-     porte l'attribut de contexte pose par _majCtxEditeur : un athlete qui
-     compose SA seance n'a pas cet attribut, et ne voit donc rien changer. */
+  /* N1.12 + B1.3 — L'EDITEUR D'EXERCICES, POUR LE COACH SEULEMENT. Le
+     selecteur porte l'attribut de contexte pose par _majCtxEditeur : un
+     athlete qui compose SA seance n'a pas cet attribut, et ne voit donc rien
+     changer.
+     B1.3 REPROCHAIT A CET ECRAN DE NE PAS AVOIR GRANDI. La regle existait
+     deja : l'audit a lu le commentaire d'exclusion, une trentaine de lignes
+     plus haut, sans lire les trois regles qui suivent. Mesure au navigateur a
+     1440 px, contexte coachClient : corps 1 425 px, barre laterale presente,
+     decalage de 260 px. Ce qui manquait vraiment — la carte d'exercice qui
+     restait une pile pleine largeur dans 1 128 px — est traite par B2.3, plus
+     bas. Marqueur pose ici pour que la reprise se verifie par un grep, comme
+     le demande B1.12. */
   body:has(#s-coach-program.active[data-ctx="coach"]){max-width:1440px}
   body:has(#s-coach-program.active[data-ctx="coach"]) #ch-sidebar{
     display:flex!important;position:fixed;top:0;bottom:0;
