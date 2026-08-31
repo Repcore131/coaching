@@ -12504,6 +12504,78 @@ function testExercices(){
           if(cles.size!==10) return _echec('deux semaines partagent une clé');
           return semainesDuBloc(_prog({})).length===0
             ?true:_echec('un dossier sans programme rend des semaines');})());
+        // ══════ UN BLOC QUI ENJAMBE LE CHANGEMENT D'HEURE ═══════════════
+        //
+        // LE DERNIER DIMANCHE D'OCTOBRE DURE VINGT-CINQ HEURES. Les semaines
+        // etaient construites par `debut + i*604800000` : au passage a l'heure
+        // d'hiver, la semaine 1 d'un bloc parti le lundi 19 octobre tombait le
+        // dimanche 25 a 23 h. _lundiDe la ramenait au lundi 19 — la semaine 1
+        // portait donc la MEME clef ISO que la semaine 0. Une semaine
+        // apparaissait deux fois dans la grille de charge, une autre
+        // disparaissait, sans erreur ni trace.
+        //
+        // LA DATE EST FIXE, ET C'EST LE POINT. L'assertion voisine part du
+        // lundi courant : elle ne tombait que les mois ou le bloc enjambait un
+        // changement d'heure, ce qui l'a laissee dans la base des echecs sans
+        // qu'on sache pourquoi. Celle-ci vise le week-end fautif, toujours.
+        ok('Un bloc enjambant le dernier week-end d\'octobre rend N semaines distinctes',(()=>{
+          // Le dernier dimanche d'octobre 2026 est le 25 ; le lundi qui ouvre
+          // cette semaine-la est le 19. Un bloc de 4 semaines part donc juste
+          // avant le basculement et le traverse.
+          const debut=new Date(2026,9,19,0,0,0,0).getTime();
+          const u=_prog({programme:{debut,semaines:4,decharges:[]}});
+          const l=semainesDuBloc(u);
+          if(l.length!==4) return _echec(l.length+' semaines au lieu de 4');
+          // QUATRE CLEFS DISTINCTES : c'est le doublon qu'on traque.
+          const cles=l.map(w=>w.cle);
+          if(new Set(cles).size!==4)
+            return _echec('clés en double : '+cles.join(' '));
+          // ET CONSECUTIVES : chaque lundi tombe SEPT JOURS DE CALENDRIER
+          // apres le precedent — 168 h avant le basculement, 169 apres. On
+          // compare donc des DATES, pas des durees.
+          for(let i=0;i<4;i++){
+            const d=new Date(l[i].lundi);
+            if(d.getDay()!==1)
+              return _echec('la semaine '+i+' ne commence pas un lundi : '+d.toString().slice(0,15));
+            if(d.getHours()!==0)
+              return _echec('la semaine '+i+' ne commence pas a minuit : '+d.getHours()+' h');
+            const attendu=new Date(2026,9,19+i*7);
+            if(d.getFullYear()!==attendu.getFullYear()||d.getMonth()!==attendu.getMonth()
+               ||d.getDate()!==attendu.getDate())
+              return _echec('semaine '+i+' : '+d.toDateString()+' au lieu de '+attendu.toDateString());
+            if(l[i].index!==i) return _echec('rang rompu en '+i);
+          }
+          // ET LE CHEMIN INVERSE TIENT : la date du milieu de chaque semaine
+          // retrouve bien son rang. Sans cela, la grille afficherait la bonne
+          // liste mais rangerait les seances dans la mauvaise colonne.
+          for(let i=0;i<4;i++){
+            const mercredi=new Date(2026,9,19+i*7+2,12,0,0,0).getTime();
+            if(indexSemaineBloc(u,mercredi)!==i)
+              return _echec('le mercredi de la semaine '+i+' est rangé en '
+                +indexSemaineBloc(u,mercredi));
+          }
+          return true;})());
+        ok('Les frontieres de calendrier ne s\'additionnent plus en millisecondes',(()=>{
+          // LA SONDE TIENT MEME HORS D'UN FUSEAU A CHANGEMENT D'HEURE. Celle
+          // du dessus ne prouve rien sur une machine reglee en UTC : ici on
+          // epingle le GESTE, qui, lui, est le meme partout.
+          if(typeof _datePlusJours!=='function')
+            return _echec('aucun outil de décalage en calendrier');
+          // LES COMMENTAIRES SONT RETIRES : ceux de ces deux fonctions CITENT
+          // « p.debut + i*604800000 » pour expliquer le defaut corrige, et la
+          // sonde se declenchait sur la phrase qui decrit le bug.
+          const s=(String(getSemaineEffective)+String(semainesDuBloc))
+            .replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+          if(/\*\s*604800000|604800000\s*\*/.test(s))
+            return _echec('une semaine est encore construite en millisecondes');
+          if(s.indexOf('_datePlusJours')<0)
+            return _echec('les semaines ne passent pas par le calendrier');
+          // ET L'OUTIL FAIT BIEN CE QU'IL PROMET, changement d'heure compris :
+          // du 19 octobre 2026, sept jours plus tard, c'est le 26 a minuit —
+          // pas le 25 a 23 h.
+          const d=_datePlusJours(new Date(2026,9,19).getTime(),7);
+          return (d.getDate()===26&&d.getMonth()===9&&d.getHours()===0)
+            ?true:_echec('sept jours après le 19/10 donnent '+d.toString().slice(0,24));})());
         // ── Grille de charge ────────────────────────────────────────────
         const _lunG=_lundiDe(new Date()).getTime();
         // Un dossier avec un bloc de 4 semaines et des seances loggees sur

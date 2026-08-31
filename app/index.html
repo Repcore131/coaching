@@ -14837,7 +14837,11 @@ function _semainesFatigue(user,dateRef){
   const lundi=_lundiDe(new Date(ref)).getTime();
   let n=0;
   for(let i=1;i<=FATIGUE_SEMAINES_MIN+9;i++){
-    const d=lundi-i*604800000, f=d+604800000;
+    // EN CALENDRIER : une borne de semaine posee en millisecondes derive d'une
+    // heure au changement d'horaire, et une seance du dimanche soir bascule
+    // alors dans la semaine voisine — ici, elle romprait la serie et ferait
+    // sous-estimer l'anciennete de la charge.
+    const d=_datePlusJours(lundi,-i*7).getTime(), f=_datePlusJours(lundi,-(i-1)*7).getTime();
     if(ss.some(x=>x.date>=d&&x.date<f)) n++; else break;
   }
   return n;
@@ -15150,7 +15154,10 @@ function _microDerniersJours(ref){
   const base=(ref instanceof Date)?ref:new Date();
   const out=[];
   for(let i=MICRO_JOURS_FENETRE-1;i>=0;i--)
-    out.push(localISODate(new Date(base.getTime()-i*864e5)));
+    // EN CALENDRIER : au passage a l'heure d'hiver, reculer de 24 h depuis
+    // minuit rend 23 h la veille de la veille — un jour serait saute, un autre
+    // compte deux fois, et la fenetre des micro-signaux mentirait d'un jour.
+    out.push(localISODate(_datePlusJours(base,-i)));
   return out;
 }
 // Phrase du journal. La mention de fiabilité est OBLIGATOIRE dès que la part
@@ -15193,7 +15200,7 @@ function _microNorm(s){
 // n'y en a pas assez pour que le mot « moyenne » veuille dire quelque chose.
 function _microSommeil(user,ref){
   const maintenant=(ref instanceof Date)?ref.getTime():Date.now();
-  const limite=localISODate(new Date(maintenant-MICRO_SOMMEIL_JOURS*864e5));
+  const limite=localISODate(_datePlusJours(maintenant,-MICRO_SOMMEIL_JOURS));
   const nuits=((user&&user.sleepLog)||[])
     .filter(e=>e&&e.date&&String(e.date)>=limite&&Number(e.duration)>0)
     .map(e=>Number(e.duration));
@@ -19568,6 +19575,28 @@ const CROISSANCE_SEMAINES=12;
 function _lundiDe(t){
   const d=new Date(t); d.setHours(0,0,0,0);
   d.setDate(d.getDate()-((d.getDay()+6)%7));
+  return d;
+}
+// ══════════ N JOURS APRES, EN CALENDRIER ET NON EN MILLISECONDES ═══════
+//
+// LE DERNIER DIMANCHE D'OCTOBRE DURE VINGT-CINQ HEURES. Ajouter 7 x 864e5 a un
+// lundi de minuit rend donc le dimanche a 23 h, pas le lundi suivant — et tout
+// ce qui range cette date dans une semaine la range dans la PRECEDENTE. Le
+// commentaire de croissanceHebdo le dit deja pour ses propres bornes ; cette
+// fonction-ci le rend disponible partout, pour que la lecon n'ait pas a etre
+// reapprise a chaque nouveau calcul.
+//
+// setDate ACCEPTE LES DEBORDEMENTS et les negatifs : le 35 janvier devient le
+// 4 fevrier, le 0 janvier le 31 decembre. C'est le moteur de dates du langage
+// qui fait le calendrier, avec ses mois inegaux, ses annees bissextiles et ses
+// changements d'heure — on ne le refait pas.
+//
+// setHours APRES setDate, et pas avant : c'est le decalage du jour d'ARRIVEE
+// qui compte, pas celui du depart.
+function _datePlusJours(t,n){
+  const d=new Date(t);
+  d.setDate(d.getDate()+Math.round(Number(n)||0));
+  d.setHours(0,0,0,0);
   return d;
 }
 // PURE. Une entrée par semaine, de la plus ancienne à la semaine en cours.
@@ -35942,7 +35971,7 @@ function habJourValide(dateISO,now){
   const t=(typeof now==='number')?now:Date.now();
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(dateISO||''))) return false;
   for(let i=0;i<=HAB_RETRO_JOURS;i++)
-    if(localISODate(new Date(t-i*864e5))===dateISO) return true;
+    if(localISODate(_datePlusJours(t,-i))===dateISO) return true;
   return false;
 }
 // PURE.
@@ -35973,7 +36002,7 @@ function habTaux(u,cle,jours,now){
   const n=(jours>0?jours:HAB_FENETRE_JOURS);
   let faits=0,total=0;
   for(let i=1;i<=n;i++){
-    const d=localISODate(new Date(t-i*864e5));
+    const d=localISODate(_datePlusJours(t,-i));
     total++;
     if(habCoche(u,cle,d)) faits++;
   }
@@ -37245,7 +37274,13 @@ function getSemaineEffective(user,date){
       fusion.exercises=e.exercises.map(x=>Object.assign({},x));
     return fusion;
   });
-  const lundi=new Date(p.debut+i*604800000);
+  // LE LUNDI DE LA SEMAINE i, EN CALENDRIER. `p.debut + i*604800000` derivait
+  // d'une heure au passage a l'heure d'hiver : la semaine 1 d'un bloc parti le
+  // 19 octobre tombait le dimanche 25 a 23 h, _lundiDe la ramenait au lundi 19,
+  // et la semaine 1 portait alors la MEME clef ISO que la semaine 0. Une
+  // semaine apparaissait deux fois dans la grille de charge, une autre
+  // disparaissait — sans erreur, sans trace.
+  const lundi=_lundiDe(_datePlusJours(p.debut,i*7));
   return {index:i,cle:semaineISO(lundi),lundi:lundi.getTime(),
     decharge:p.decharges.indexOf(i)>=0,
     // « Passée » se juge sur la semaine COURANTE, pas sur l'instant : une
@@ -37403,7 +37438,10 @@ function semainesDuBloc(user){
   if(!p) return [];
   const out=[];
   for(let i=0;i<p.semaines;i++){
-    const w=getSemaineEffective(user,new Date(p.debut+i*604800000));
+    // MEME RAISON QU'AU-DESSUS, et il faut les deux : celle-ci choisit la date
+    // qu'on interroge, celle-la nomme la semaine obtenue. Une seule des deux
+    // corrigee laissait la derive entrer par l'autre.
+    const w=getSemaineEffective(user,_datePlusJours(p.debut,i*7));
     if(w) out.push(w);
   }
   return out;
@@ -44460,7 +44498,10 @@ function ppSemaines(user,now){
   const t=(typeof now==='number')?now:Date.now();
   const d=new Date(e.date+'T00:00:00');
   if(isNaN(d.getTime())) return null;
-  const sem=Math.floor((t-d.getTime())/(7*864e5));
+  // Math.floor, ET NON round : une derive d'une heure fait basculer le rang
+  // juste au bord. On compte les jours en calendrier, puis on en fait des
+  // semaines — la division ne porte plus alors sur des millisecondes.
+  const sem=Math.floor(Math.round((t-d.getTime())/864e5)/7);
   return sem>=0?sem:null;
 }
 // PURE. Un cran en arrière, jamais en dessous de la plus prudente.
