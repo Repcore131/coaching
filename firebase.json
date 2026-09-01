@@ -16,7 +16,7 @@
   ],
   "hosting": {
     "public": "_site",
-    "//": "/i sert index.html de l'app. Une adresse courte se dicte a l'oral et s'imprime sur un flyer ; surtout, un QR qui encode moins de caracteres a des modules plus gros, donc se lit de plus loin. Firebase applique les rewrites APRES avoir cherche un fichier reel : aucune ressource existante n'est masquee, et les regles headers ci-dessous continuent de s'appliquer sur le chemin SERVI (**/*.html couvre donc /i, qui rend index.html).",
+    "//": "/i sert index.html de l'app. Une adresse courte se dicte a l'oral et s'imprime sur un flyer ; surtout, un QR qui encode moins de caracteres a des modules plus gros, donc se lit de plus loin. Firebase applique les rewrites APRES avoir cherche un fichier reel : aucune ressource existante n'est masquee. ATTENTION : les regles headers portent sur le chemin DEMANDE et non sur le fichier servi — **/*.html ne couvre donc PAS /i, mesure au deploiement (Cache-Control: max-age=3600 au lieu de no-cache). Sans la regle ajoutee plus bas, quiconque entre par le lien court recevait une page vieille d'une heure.",
     "rewrites": [
       { "source": "/i", "destination": "/app/index.html" }
     ],
@@ -24,6 +24,16 @@
       "**/.*"
     ],
     "headers": [
+      {
+        "//": "Le lien court sert index.html mais ne finit pas par .html : la regle **/*.html ne le voit pas. Sans cette entree il heritait du max-age=3600 par defaut, et une mise a jour de l'app mettait une heure a atteindre ceux qui entrent par /i.",
+        "source": "/i",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
       {
         "source": "/app/sw.js",
         "headers": [
