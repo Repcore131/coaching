@@ -3797,6 +3797,15 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 }
 .rep-anneau{position:absolute;inset:0;width:100%;height:100%;display:block;
   transform:rotate(-90deg)}
+/* LE TRAIT GLISSE D'UNE SECONDE A L'AUTRE. Le bandeau est reconstruit a chaque
+   tick : sans transition, l'anneau avancait par crans d'un soixantieme de tour,
+   visibles a l'oeil. Une seconde LINEAIRE, exactement la cadence du decompte —
+   toute autre courbe ferait accelerer puis ralentir un temps qui, lui, passe a
+   vitesse constante.
+   LE DEPART EST EXCLU EN JS et non ici : c'est le seul moment ou le decalage
+   diminue, et une transition l'y ferait balayer un tour a l'envers. La regle de
+   mouvement reduit, plus bas, la retire entierement. */
+#rep-arc{transition:stroke-dashoffset 1s linear}
 /* Le cœur du cadran : l'éclair, le décompte, l'état. */
 .rep-centre{position:absolute;inset:0;display:flex;flex-direction:column;
   align-items:center;justify-content:center;pointer-events:none}
@@ -26210,7 +26219,7 @@ function _monterRepos(z){
         <circle cx="100" cy="100" r="98" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1.1"/>
         <circle cx="100" cy="100" r="${REPOS_R}" fill="none" stroke="#2b2b2b" stroke-width="8.5"/>
         <circle id="rep-arc" cx="100" cy="100" r="${REPOS_R}" fill="none" stroke="var(--red)" stroke-width="8.5"
-          stroke-linecap="round" stroke-dasharray="${REPOS_C.toFixed(2)}" stroke-dashoffset="${REPOS_C.toFixed(2)}"/>
+          stroke-linecap="round" stroke-dasharray="${REPOS_C.toFixed(2)}" stroke-dashoffset="0"/>
         <circle cx="100" cy="100" r="75" fill="url(#repDisque)"/>
         <circle cx="100" cy="100" r="75" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
         ${_reposGraduations()}
@@ -26325,7 +26334,41 @@ function _peindreRepos(){
   const anneau=fini?'var(--green)':(bientot?'var(--text)':'var(--red)');
   const cad=bientot?ARC.ambient/2:ARC.ambient;
   if(arc){
-    arc.style.strokeDashoffset=(REPOS_C*(100-pc)/100).toFixed(2);
+    // ══ L'ANNEAU SE VIDE, IL NE SE REMPLIT PAS ═══════════════════════
+    //
+    // `pc` est le pourcentage ECOULE : 0 au depart, 100 a l'echeance. Le
+    // decalage valait C*(100-pc)/100 — donc C au depart (trait entierement
+    // masque, anneau VIDE) et 0 a la fin (trait entier, anneau PLEIN). Un
+    // decompte circulaire se lit dans l'autre sens : on part d'un cercle
+    // complet, et il se vide a mesure que le temps s'en va. Le chiffre du
+    // centre etait juste ; c'est le repere visuel qui disait le contraire de
+    // ce qu'il montrait.
+    //
+    // C*pc/100 : 0 au depart — trait entier, anneau PLEIN — et C a l'echeance.
+    const _off=REPOS_C*pc/100;
+    // ══ ET AUCUN SAUT AU PASSAGE ═════════════════════════════════════
+    //
+    // La transition posee en CSS fait glisser le trait d'une seconde a l'autre,
+    // au lieu du cran d'un soixantieme de tour que le bandeau produisait a
+    // chaque reconstruction. Mais elle ne doit PAS jouer quand le minuteur
+    // REPART : le decalage retombe alors de C a 0, et l'anneau balaierait un
+    // tour complet a l'envers avant de commencer a se vider.
+    //
+    // LE SENS DU MOUVEMENT SUFFIT A DISTINGUER LES DEUX CAS : en marche normale
+    // le decalage ne fait que CROITRE. S'il diminue, c'est un depart — on pose
+    // la valeur sans transition, et la seconde suivante reprend le glissement.
+    const _prec=parseFloat(arc.style.strokeDashoffset);
+    if(!isFinite(_prec)||_off<_prec-0.01){
+      arc.style.transition='none';
+      arc.style.strokeDashoffset=_off.toFixed(2);
+      // Une lecture force le navigateur a appliquer la valeur AVANT de rendre
+      // la transition : sans elle, les deux ecritures seraient regroupees et le
+      // glissement rejouerait le retour en arriere qu'on veut eviter.
+      void arc.getBoundingClientRect();
+      arc.style.transition='';
+    } else {
+      arc.style.strokeDashoffset=_off.toFixed(2);
+    }
     arc.style.stroke=anneau;
     // LE HALO SUIT LA TEINTE DE L'ARC. Deux drop-shadow sur un cadran de
     // 118 px, redessinés pendant la transition d'une seconde : la règle 3 les

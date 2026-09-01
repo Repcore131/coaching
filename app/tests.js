@@ -38821,16 +38821,60 @@ vendredi 78 6h 44m
           // ne bougeait. Le trait bouge — mesuré sur la version servie, il
           // passe de 279,60 à 32,62 entre 60 s et 7 s restantes.
           //
-          // MAIS IL BOUGE DANS L'AUTRE SENS. Un décalage qui DIMINUE, c'est un
-          // anneau qui se REMPLIT à mesure que le repos s'achève, pas un
-          // anneau qui se vide. Ce test demande l'inverse, et il le demande
-          // dans son titre. La divergence est donc réelle et reste rouge :
-          // c'est un choix d'affichage, pas une sonde à recaler, et personne
-          // d'autre que Kevin ne peut trancher lequel des deux il veut.
+          // IL BOUGEAIT DANS L'AUTRE SENS, et ce test est resté rouge le temps
+          // que Kevin tranche : un décalage qui DIMINUE, c'est un anneau qui se
+          // REMPLIT à mesure que le repos s'achève. Ce test demandait l'inverse,
+          // et il le demandait dans son titre — on ne recale pas une sonde pour
+          // faire taire un choix d'affichage que son auteur seul peut faire.
+          //
+          // TRANCHÉ LE 01/09/2026 : l'anneau se VIDE. Le décalage vaut désormais
+          // C*pc/100 — zéro au départ, donc trait entier et cercle complet, puis
+          // il croît jusqu'à la circonférence à l'échéance. Mesure sur la
+          // version servie : 0 → 186 → 550 pour un repos de 60 s lu à 60, 40 et
+          // 1 seconde restantes.
           ok('L\'anneau se VIDE : le trait recule quand le temps passe',(()=>{
             const a=e1.offset, b=e2.offset;
             if(a==null||b==null||isNaN(a)||isNaN(b)) return _echec('offset illisible');
             return b>a?true:_echec(a+' → '+b+' : le trait AVANCE, l\'anneau se remplit au lieu de se vider');})());
+          ok('L\'anneau part PLEIN, balisage compris',(()=>{
+            // L'ETAT INITIAL DU BALISAGE DOIT SUIVRE LE SENS. Pose a la
+            // circonference, il affichait un cercle VIDE le temps du premier
+            // rendu — un clignotement a chaque depart de repos, dans le sens
+            // exactement contraire a celui qu'on vient de choisir.
+            const m=/id="rep-arc"[\s\S]{0,240}?stroke-dashoffset="([^"]*)"/.exec(_prodSrc());
+            if(!m) return _echec('l’arc a perdu son décalage initial');
+            const v=parseFloat(m[1]);
+            if(!(Math.abs(v)<0.01))
+              return _echec('le balisage part à '+m[1]+' : l’anneau s’affiche vide avant le premier rendu');
+            // ET LE CALCUL VA BIEN DANS CE SENS : C*pc/100, pas C*(100-pc)/100.
+            const s=String(_peindreRepos).replace(/\/\/.*/g,'');
+            if(/REPOS_C\s*\*\s*\(\s*100\s*-\s*pc\s*\)/.test(s))
+              return _echec('le calcul remplit encore l’anneau');
+            return /REPOS_C\s*\*\s*pc\s*\/\s*100/.test(s)
+              ?true:_echec('le décalage ne suit plus le temps écoulé');})());
+          ok('Aucun saut au redepart du minuteur',(()=>{
+            // LE TRAIT GLISSE d'une seconde a l'autre — sans transition, le
+            // bandeau etant reconstruit a chaque tick, l'anneau avancait par
+            // crans visibles.
+            const css=Array.from(document.querySelectorAll('style'))
+              .map(x=>x.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+            if(!/#rep-arc\{transition:stroke-dashoffset/.test(css))
+              return _echec('le trait avance encore par crans');
+            // MAIS PAS AU REDEPART : le decalage retombe alors de C a 0, et la
+            // transition ferait balayer un tour COMPLET a l'envers avant que le
+            // decompte ne commence. Le sens du mouvement distingue les deux —
+            // en marche normale le decalage ne fait que croitre.
+            const s=String(_peindreRepos);
+            if(s.indexOf("transition='none'")<0)
+              return _echec('le redémarrage balaierait un tour à l’envers');
+            // UNE LECTURE FORCE L'APPLICATION avant de rendre la transition :
+            // sans elle, les deux ecritures sont regroupees et le glissement
+            // rejoue le retour en arriere qu'on veut eviter.
+            if(s.indexOf('getBoundingClientRect()')<0)
+              return _echec('rien ne force l’application avant de rendre la transition');
+            // ET LE MOUVEMENT REDUIT LA RETIRE ENTIEREMENT.
+            return /#rep-arc\{transition:none!important/.test(css)
+              ?true:_echec('la transition survit au mouvement réduit');})());
         } finally { try{ annulerRepos(); }catch(e){} woState=sauveWo; }
       })();
       ok('L\'avertissement de fin de repos est le motif déjà connu',(()=>{
