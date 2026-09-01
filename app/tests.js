@@ -39669,6 +39669,48 @@ function _testSW(R,src){
     // JSON est attendu.
     return /if \(!url\.startsWith\(self\.location\.origin\)\) return;/.test(src)
       ?true:_echec('le garde cross-origin a disparu');})());
+  ok('Les fichiers de diagnostic ne passent JAMAIS par le cache',(()=>{
+    // TROIS EXCLUSIONS ETAIENT ECRITES ET SANS EFFET. tests.js etait declare
+    // hors cache en deux endroits — absent d'ASSETS, ecarte du report par
+    // _exclu — et la branche generique, tout en bas du handler, le rattrapait
+    // au premier chargement et le mettait en cache comme n'importe quel asset.
+    // On pouvait donc eprouver l'application avec la version d'HIER de ses
+    // propres tests : une assertion corrigee le matin continuait de tomber, et
+    // rien a l'ecran ne distinguait ca d'un vrai echec.
+    //
+    // LE RETOUR ANTICIPE EST LA SEULE FORME QUI TIENNE. Un fichier « exclu du
+    // cache » par une liste, mais servi par une branche qui met tout en cache,
+    // n'est pas exclu : il entre par la porte de derriere. C'est pour cette
+    // raison exacte que sw.js avait deja son return.
+    const _av=src.indexOf('if (!url.startsWith(self.location.origin)) return;');
+    const _put=src.indexOf('put asset');
+    if(_av<0||_put<0) return _echec('le handler fetch a changé de forme');
+    const RETOURS=[['sw.js','/\\/sw\\.js$/.test(_chemin)'],
+                   ['tests.js','/\\/tests\\.js$/.test(_chemin)'],
+                   ['database.rules.json','/\\/database\\.rules\\.json$/.test(_chemin)']];
+    for(const [nom,motif] of RETOURS){
+      const i=src.indexOf(motif);
+      if(i<0) return _echec(nom+' n’a pas de retour anticipé');
+      // ET IL EST AVANT LA BRANCHE QUI MET EN CACHE. Un return placé après
+      // n'empêche rien du tout — c'était exactement le défaut.
+      if(!(i>_av&&i<_put))
+        return _echec(nom+' : son retour n’est pas avant la mise en cache');
+    }
+    // LE REPORT LES ECARTE AUSSI. Un cache d'AVANT ce lot en garde une copie ;
+    // sans cette exclusion, le report la ferait passer de version en version,
+    // indéfiniment, pour un fichier que plus personne ne lira jamais.
+    const ex=/const _exclu = u =>([\s\S]{0,400}?);/.exec(src);
+    if(!ex) return _echec('_exclu introuvable');
+    for(const f of ['tests\\.js','sw\\.js','database\\.rules\\.json','index\\.html'])
+      if(ex[1].indexOf(f)<0)
+        return _echec(f.split('\\').join('')+' n’est plus écarté du report');
+    // ET AUCUN DES TROIS N'EST DANS ASSETS : l'y mettre le ferait télécharger
+    // d'office par tous les athlètes, ce que l'externalisation de la suite
+    // cherchait justement à éviter.
+    const as=src.match(/const\s+ASSETS\s*=\s*\[([^\]]*)\]/);
+    if(!as) return _echec('ASSETS introuvable');
+    return /tests\.js|database\.rules/.test(as[1])
+      ?_echec('un fichier de diagnostic est entré dans ASSETS'):true;})());
   ok('activate ne purge QUE si le nouveau cache porte index.html',(()=>{
     if(!/await neuf\.match\('\.\/index\.html'\)/.test(src))
       return _echec('aucune vérification avant purge');

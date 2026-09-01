@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1082';
+const CACHE = 'repcore-v1083';
 // LA SEULE VERSION QUI NE REPORTE PAS LES ILLUSTRATIONS.
 // Le report d'un cache a l'autre traite /exercices/ en PRIORITAIRE : c'est
 // ce qui evite de retelecharger 3,3 Mo a chaque deploiement. Mais le
@@ -193,8 +193,15 @@ self.addEventListener('activate', e => {
       // le transporter d'une version à l'autre lui faisait annoncer la
       // PRÉCÉDENTE. C'est aussi le seul fichier dont une copie périmée se
       // recopierait indéfiniment : chaque report la reconduirait.
+      //
+      // database.rules.json REJOINT LA LISTE. Il n'a jamais eu sa place dans un
+      // cache — la suite le lit pour comparer les regles de la base au code — et
+      // depuis que le handler fetch le laisse au reseau, aucune version neuve ne
+      // peut plus en contenir. Mais un cache d'AVANT ce lot en garde une copie,
+      // et sans cette ligne le report la ferait passer de version en version,
+      // indefiniment, pour un fichier que plus personne ne lira jamais.
       const _exclu = u => /\/index\.html$/.test(u) || /\/tests\.js$/.test(u)
-        || /\/sw\.js$/.test(u)
+        || /\/sw\.js$/.test(u) || /\/database\.rules\.json$/.test(u)
         || (PURGE_EXERCICES === CACHE && /\/exercices\//.test(u));
       // LA BASE ALIMENTAIRE D'ABORD, ET HORS BUDGET. Elle n'entre dans le
       // cache que par un prefetch explicite, et le report ne la connaissait
@@ -326,7 +333,36 @@ self.addEventListener('fetch', e => {
   //
   // Ni lecture ni écriture : on rend la main au navigateur, qui sait gérer le
   // script d'un service worker mieux que nous.
-  if (/\/sw\.js$/.test(url.split('?')[0])) return;
+  //
+  // ══ ET LES DEUX FICHIERS DE DIAGNOSTIC AVEC LUI ═══════════════════════
+  //
+  // tests.js ÉTAIT DÉJÀ DÉCLARÉ EXCLU en deux endroits — il n'est pas dans
+  // ASSETS, et _exclu l'écarte du report d'un cache à l'autre — mais la branche
+  // générique, tout en bas, le rattrapait au premier chargement et le mettait
+  // en cache comme n'importe quel asset. Les deux exclusions étaient donc
+  // exactes et sans effet : le fichier entrait par la porte de derrière.
+  //
+  // LA CONSÉQUENCE EST LA PIRE POSSIBLE POUR UN OUTIL DE DIAGNOSTIC : on
+  // pouvait éprouver l'application avec la version d'HIER de ses propres
+  // tests. Une assertion corrigée le matin continuait de tomber, une
+  // assertion neuve n'existait pas, et rien à l'écran ne le disait — le
+  // symptôme se lit exactement comme un vrai échec.
+  //
+  // database.rules.json POUR LA MÊME RAISON. La suite le lit en {cache:
+  // 'no-store'} pour comparer la liste blanche de coach_public à
+  // CHAMPS_PROFIL_COACH — la sonde née du jour où « dispo » a fait cesser
+  // DÉFINITIVEMENT la publication du profil coach. Mais no-store ne parle
+  // qu'au cache HTTP, jamais au service worker, exactement comme pour sw.js
+  // juste au-dessus : la branche générique servait une copie, et la sonde
+  // validait les règles de la veille en annonçant celles du jour.
+  //
+  // AUCUN DES TROIS N'A DE RAISON DE FONCTIONNER HORS LIGNE. Ce sont des
+  // outils de diagnostic : sans réseau ils doivent manquer franchement — le
+  // chargeur de tests.js dit déjà « il faut être en ligne » — et non répondre
+  // avec une version périmée d'eux-mêmes.
+  const _chemin = url.split('?')[0];
+  if (/\/sw\.js$/.test(_chemin) || /\/tests\.js$/.test(_chemin)
+      || /\/database\.rules\.json$/.test(_chemin)) return;
   // Assets same-origin : cache-first, sans fallback HTML (évite de servir HTML
   // a la place d un asset). La reponse reseau REJOINT desormais le cache : sans
   // ce put, la branche lisait le cache sans jamais l alimenter, et vendor/
