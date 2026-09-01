@@ -22,3 +22,6 @@ _site/
 
 # Python : caches des scripts de portage du guide
 __pycache__/
+
+# Bac a sable de test OCR etiquettes : images tierces, jamais commitees.
+.tmp-etiq/

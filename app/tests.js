@@ -8781,6 +8781,139 @@ function testExercices(){
         // ══════ ÉCRANS À ENCOCHE ══════
         // Trois réglages qui ne se voient jamais sur un écran de bureau, et dont
         // l'absence rend l'app inutilisable sur un iPhone récent en PWA.
+        // ══════ LA LECTURE D'UNE ETIQUETTE NUTRITIONNELLE ══════
+        //
+        // LES TEXTES CI-DESSOUS NE SONT PAS INVENTES. Ce sont les sorties
+        // REELLES du moteur embarque sur dix photos d'etiquettes prises par
+        // d'autres que nous — des photos de rayon, floues, courbes, mal
+        // eclairees, telles qu'un athlete en prend. Une etiquette imaginee pour
+        // le test se lit toujours bien ; c'est le bruit reel qui casse, et lui
+        // seul qu'il faut geler ici.
+        //
+        // AVANT CE LOT, sur ces dix photos : 7 valeurs justes et 5 FAUSSES.
+        // Apres : 11 justes, 0 fausse. Le nombre qui compte est le second — une
+        // case vide se remplit a la main, une macro fausse fausse la journee.
+        (()=>{
+          // Muesli Bjorg. La photo est bonne, le tableau bien cadre.
+          const MUESLI=[
+            'etes SONNELLES -éréale',
+            'MOYENNES Pour 100 9 de ce',
+            'Énergie 1485 kJ 885 kJ',
+            '352 kcal 210 kcal',
+            'Matières grasses 589 3,5 0',
+            '- dont acides gras saturés 0,9 0,59',
+            'Glucides 59 g 35 9',
+            '- dont sucres 149 840',
+            'Fibres alimentaires 10g 6,0 g',
+            'Protèines Mg 689',
+            'Sal 0,03 g 0,02 ,'].join('\n');
+          ok('« Pour 100 g » survit au g lu 9',(()=>{
+            // C'ETAIT UN AVERTISSEMENT A TORT : la mention est bien la, le
+            // moteur l'a rendue « Pour 100 9 », et l'app repondait « ce sont
+            // peut-etre les valeurs par portion » sur une lecture juste. Le
+            // doute jete sur une bonne lecture use la confiance aussi surement
+            // qu'une valeur fausse.
+            if(!_etiqAnalyser(MUESLI).pour100)
+              return _echec('« Pour 100 9 » n’est pas reconnu');
+            // Et les deux autres formes rencontrees sur les memes photos.
+            if(!_etiqAnalyser('POUR 1005 :').pour100) return _echec('« POUR 1005 » non reconnu');
+            return _etiqAnalyser('| 1009 | 459(%")').pour100
+              ?true:_echec('« 1009 » non reconnu');})());
+          ok('Un intitule abime par la lecture ne fait pas perdre sa ligne',(()=>{
+            // « Sal » pour « Sel » : l'intitule ne matchait pas, et la valeur
+            // pourtant nette juste a cote etait perdue.
+            const r=_etiqAnalyser(MUESLI);
+            if(r.e!==0.03) return _echec('le sel lu « Sal » n’est pas rattrapé : '+r.e);
+            // Les deux autres avaries relevees sur ces photos.
+            if(_etiqAnalyser('Matières rasses 5,8 g').l!==5.8)
+              return _echec('« Matières rasses » perd sa valeur');
+            return _etiqAnalyser('Hibres alimentaires 10 g').f===10
+              ?true:_echec('« Hibres » perd sa valeur');})());
+          ok('Une macro illisible reste VIDE, elle ne devient pas un nombre',(()=>{
+            // « 5,8 g » rendu « 589 », « 11 g » rendu « 119 » : la virgule et le
+            // g se perdent ensemble, et rien dans le nombre obtenu ne dit
+            // lequel des deux manque. 589 peut valoir 5,8 ou 58,9. On ne
+            // devine pas — la case reste vide et l'athlete la remplit.
+            const r=_etiqAnalyser(MUESLI);
+            if(r.l!=null&&Math.abs(r.l-5.8)>0.6)
+              return _echec('une valeur inventée pour les lipides : '+r.l);
+            if(r.p!=null) return _echec('« Protèines Mg » a produit '+r.p);
+            // CE QUI EST LISIBLE PASSE : les glucides et les fibres de la meme
+            // photo sont nets, et ils doivent arriver.
+            if(r.c!==59) return _echec('glucides : '+r.c);
+            return r.k===352?true:_echec('énergie : '+r.k);})());
+
+          ok('Les 2000 kcal des apports de reference ne sont pas ceux du produit',(()=>{
+            // Toute etiquette europeenne imprime « (8400 kJ / 2000 kcal) ».
+            // Quand la ligne d'energie du tableau se lisait mal, c'est ce 2000
+            // qui partait dans le formulaire. Mesure sur un sachet d'amandes :
+            // 2000 kcal ecrites pour 621 reelles.
+            const AMANDES=[
+              'A Typical values per 100g perserving 30g %RI* sites ,',
+              'Fat 53.39 kr 23%',
+              'Ye | SRélerence intake of an average adult (&400k3/2000kcal'].join('\n');
+            const r=_etiqAnalyser(AMANDES);
+            return r.k==null?true:_echec('énergie lue sur la ligne de référence : '+r.k);})());
+          ok('Une energie hors de toute plausibilite est refusee',(()=>{
+            // 7305 kcal pour 100 g de creme : deux nombres colles. Aucun aliment
+            // ne depasse 900 — l'huile pure plafonne a 900.
+            const CREME=['/ N pour 1006','y notre creme 1260',
+              'Énergie 7305 kcal@','Matières grasses // 280'].join('\n');
+            if(_etiqAnalyser(CREME).k!=null)
+              return _echec('7305 kcal acceptées');
+            // ET LE NOMBRE NE SORT PAS D'UN MOT : « K@kcalfis9kcal », du bruit
+            // lu sur une canette, donnait 9 kcal pour 42.
+            return _etiqAnalyser('- K@kcalfis9kcal (7)').k==null
+              ?true:_echec('un nombre collé à des lettres est lu comme une énergie');})());
+
+          ok('Des macros qui ne collent pas aux calories sont ECARTEES',(()=>{
+            // LE PIRE N'EST PAS LA CASE VIDE. La virgule disparait souvent :
+            // « 0,8 g » ressort « 8 », « 8,9 g » ressort « 93 » — et ces
+            // nombres restent sous 100, donc la borne du dessus ne les voit pas
+            // passer. Mesure sur un jus d'orange : 8 g de proteines et 93 g de
+            // glucides posees dans le formulaire pour 0,8 et 8,9.
+            //
+            // 4 kcal le gramme de proteine et de glucide, 9 pour le lipide : la
+            // somme doit tomber SOUS l'energie annoncee juste au-dessus.
+            const JUS=['Pour100mi Pour 150mi 4%»',
+              '- Énergie 172kJ/40kcal 258 k1/61 keat 3%',
+              'Matières grasses 0 g 0g : 4',
+              'Glucides 93 14g',
+              'Protéines 08g 129',
+              'Sel 0g 0g 0%'].join('\n');
+            const r=_etiqAnalyser(JUS);
+            if(r.p!=null||r.c!=null) return _echec('macros incohérentes conservées : p='+r.p+' c='+r.c);
+            if(!r.incoherent) return _echec('l’incohérence n’est pas signalée');
+            // ON GARDE L'ENERGIE, elle : lue sur sa propre ligne, avec son
+            // unite ecrite, c'est la valeur la plus sure du tableau.
+            if(r.k!==40) return _echec('l’énergie a été jetée avec les macros : '+r.k);
+            // ET UNE ETIQUETTE COHERENTE NE DECLENCHE RIEN.
+            const bon=_etiqAnalyser(['Énergie 352 kcal','Glucides 59 g',
+              'Protéines 11 g','Matières grasses 5,8 g'].join('\n'));
+            return !bon.incoherent&&bon.p===11
+              ?true:_echec('une étiquette juste est déclarée incohérente');})());
+
+          ok('La deuxieme lecture ne remplace jamais la premiere',(()=>{
+            // DEUX LECTURES, et la seconde ne sert qu'a COMPLETER : deux
+            // lectures qui se contredisent ne se departagent pas, et prendre la
+            // seconde au hasard reviendrait a tirer a pile ou face sur une
+            // macro. Mesure : deux passes rendent 11 justes et 0 fausse ; une
+            // troisieme monterait a 14 justes mais ramenerait 4 fausses.
+            const src=String(lireEtiquette).replace(/\/\/.*/g,'');
+            if(!/r\[k\]==null&&r2\[k\]!=null/.test(src))
+              return _echec('la seconde lecture écrase la première');
+            // ELLE EST DISQUALIFIEE EN BLOC si ses macros ne tiennent pas
+            // ensemble : on ne pioche pas une valeur dans une lecture fausse.
+            if(!/if\(!r2\.incoherent\)/.test(src))
+              return _echec('une seconde lecture incohérente peut compléter la première');
+            // ET LE MODE DE SEGMENTATION EST RENDU. Il vit sur le worker, qui
+            // sert aussi l'import des captures de pas : le laisser en place
+            // ferait lire la capture suivante avec le découpage d'un tableau.
+            const lc=String(_lireCaptureStats);
+            return /tessedit_pageseg_mode:'3'/.test(lc)
+              ?true:_echec('le mode de segmentation n’est pas remis');})());
+        })();
+
         // ══════ LE PLANCHER TYPOGRAPHIQUE ══════
         // 11 px est la plus petite taille admise. En dessous, un libellé en
         // majuscules très espacées — ceux qui portent le sens — n'est plus

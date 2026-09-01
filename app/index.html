@@ -51512,13 +51512,33 @@ function _etiqNombre(ligne){
 // le total. En revanche, sur les etiquettes qui impriment « Matieres grasses
 // dont saturees 21 g » sur UNE ligne, l exclusion jetait la ligne entiere et
 // faisait perdre la valeur. Mesure : lipides et glucides passaient a null.
+//
+// LES INTITULES SONT ABIMES PAR LA LECTURE, et exiger le mot exact perdait la
+// ligne entiere. Mesure sur dix etiquettes reelles : « Matieres rasses » (le g
+// de grasses avale par le fond bleu), « Hibres alimentaires », « Sal » pour
+// « Sel ». Chaque fois, l intitule ne matchait pas et la valeur, pourtant
+// lisible a cote, etait perdue. Les variantes admises restent des variantes
+// D UN SEUL MOT : on n elargit pas jusqu a matcher n importe quoi, la valeur
+// retenue etant de toute facon bornee par les gardes plus bas.
 const ETIQ_CHAMPS=[
-  {k:'l',re:/(matieres? grasses|lipides)/},
+  {k:'l',re:/(mati[e]res? g?r?asses|lipides)/},
   {k:'c',re:/glucides/},
-  {k:'f',re:/fibres/},
-  {k:'p',re:/proteines/},
-  {k:'e',re:/\bsel\b|sodium/},
+  {k:'f',re:/[fh]ibres/},
+  {k:'p',re:/prot[e]?[ie]?nes/},
+  {k:'e',re:/\bs[ea][l1i]\b|sodium/},
 ];
+// LA LIGNE DES APPORTS DE REFERENCE N EST PAS CELLE DU PRODUIT. Toute etiquette
+// europeenne imprime « Apport de reference pour un adulte-type (8400 kJ /
+// 2000 kcal) », et les colonnes de pourcentage portent AR*, RI* ou NRV. Quand
+// la ligne d energie du tableau se lisait mal, c est ce 2000 qui etait pris
+// pour l energie du produit : mesure sur les amandes, 2000 kcal ecrites pour
+// 621 reelles. Une valeur fausse a la place d une case vide.
+const ETIQ_REFERENCE=/reference|apport|adulte-type|adulte type|nrv|ar\*|ri\*/;
+// Aucun aliment ne depasse 900 kcal pour 100 g — l huile pure plafonne a 900.
+// Ce qui sort de la n est pas une energie : c est un kilojoule pris pour une
+// calorie, deux nombres colles, ou du bruit. Mesure : 7305 et 9305 lus sur une
+// creme a 305, 2000 sur les amandes.
+const ETIQ_KCAL_MAX=900;
 function _etiqAnalyser(texte){
   const t=_etiqNormaliser(texte);
   const lignes=t.split(/\n+/).map(x=>x.trim()).filter(Boolean);
@@ -51526,13 +51546,22 @@ function _etiqAnalyser(texte){
   // L energie : la ligne porte souvent les DEUX unites (« 1570 kj / 375 kcal »).
   // On vise le nombre colle a « kcal », jamais le premier de la ligne.
   for(const L of lignes){
-    const m=L.match(/(\d+(?:\.\d+)?)\s*k?\s*cal/);
-    if(m){ out.k=parseFloat(m[1]); break; }
+    if(ETIQ_REFERENCE.test(L)) continue;
+    // LE NOMBRE NE DOIT PAS SORTIR D UN MOT. « K@kcalfis9kcal » — du bruit lu
+    // sur une canette — donnait 9 kcal pour 42 : le 9 etait colle a des
+    // lettres. Un vrai nombre est precede d un espace ou d un debut de ligne.
+    // ET « kcal » S ECRIT DE TRAVERS : keal, kal, kcaI, kca. On accepte la
+    // famille, pas n importe quoi.
+    const m=L.match(/(?:^|[^a-z0-9])(\d+(?:\.\d+)?)\s*k?\s*[ce][ai]?[ail]\b/);
+    if(m){
+      const v=parseFloat(m[1]);
+      if(v>0&&v<=ETIQ_KCAL_MAX&&v!==2000){ out.k=v; break; }
+    }
   }
   for(const c of ETIQ_CHAMPS){
     for(let i=0;i<lignes.length;i++){
       const L=lignes[i];
-      if(!c.re.test(L)) continue;
+      if(!c.re.test(L)||ETIQ_REFERENCE.test(L)) continue;
       // Une ligne du tableau est COURTE et commence par son intitule. Sans
       // cette garde, « Sans sel ajouté » imprime en facade passe pour la ligne
       // de sel, et le repli sur la ligne suivante lit le 100 de « pour 100 g ».
@@ -51557,9 +51586,39 @@ function _etiqAnalyser(texte){
   // ajoute » imprime ailleurs sur l emballage annulerait la conversion, et la
   // valeur sortirait 2,5 fois trop basse.
   const _ls=out['_l_e']||'';
-  if(out.e!=null&&/sodium/.test(_ls)&&!/\bsel\b/.test(_ls)) out.e=Math.round(out.e*2.5*100)/100;
+  if(out.e!=null&&/sodium/.test(_ls)&&!/\bs[ea][l1i]\b/.test(_ls)) out.e=Math.round(out.e*2.5*100)/100;
   for(const _k in out) if(_k.indexOf('_l_')===0) delete out[_k];
-  out.pour100=/pour\s*100\s*(g|ml)|par\s*100\s*(g|ml)|100\s*(g|ml)/.test(t);
+  // ══ LA GARDE DE COHERENCE : 4 / 4 / 9 ═══════════════════════════════════
+  //
+  // C EST ELLE QUI EMPECHE LE PIRE, et le pire n est pas une case vide. La
+  // virgule decimale disparait tres souvent a la lecture — « 0,8 g » ressort
+  // « 8 », « 8,9 g » ressort « 93 » — et le nombre obtenu reste sous 100 : la
+  // borne du dessus ne le voit pas passer. Mesure sur un jus d orange : 8 g de
+  // proteines et 93 g de glucides ecrites pour 0,8 et 8,9. Un facteur dix sur
+  // une macro, pose dans le formulaire comme une valeur lue.
+  //
+  // Les macros ne peuvent pas peser plus lourd que l energie annoncee juste
+  // au-dessus d elles. 4 kcal le gramme de proteine et de glucide, 9 pour le
+  // lipide : la somme doit tomber SOUS l energie, jamais nettement au-dessus.
+  // La marge de 15 % couvre les fibres, les polyols et l arrondi legal.
+  //
+  // ON GARDE L ENERGIE ET ON JETTE LES MACROS, pas l inverse : l energie est
+  // lue sur sa propre ligne, avec son unite ecrite en toutes lettres, et c est
+  // la valeur la plus sure du tableau. Les macros, elles, viennent de tomber
+  // ensemble — on ne sait pas laquelle est fausse, donc aucune n est gardee.
+  if(out.k!=null){
+    const _somme=4*(out.p||0)+4*(out.c||0)+9*(out.l||0);
+    if(_somme>out.k*1.15){
+      out.incoherent=Math.round(_somme);
+      delete out.p; delete out.c; delete out.l; delete out.f;
+    }
+  }
+  // « POUR 100 G » SURVIT AU g LU 9, 5 ou 6. C est la confusion la plus frequente de
+  // toutes, et elle declenchait l avertissement « ce sont peut-etre les valeurs
+  // par portion » sur des lectures parfaitement bonnes : « Pour 100 9 »,
+  // « POUR 1005 », « 1009 ». Le doute jete sur une lecture juste use la
+  // confiance aussi surement qu une valeur fausse.
+  out.pour100=/(pour|par)\s*100\s*(g|9|5|6|s|ml|mi|$)|100\s*(g|9|ml)\b/.test(t);
   return out;
 }
 let _etiqEnCours=false;
@@ -51589,15 +51648,56 @@ async function lireEtiquette(input){
       catch(e){ clearTimeout(t); rej(e); }
     });
     if(!dataUrl){ _persoDire('Image illisible.','var(--orange)'); return; }
-    const texte=await _lireCaptureStats(dataUrl);
-    const r=_etiqAnalyser(texte);
+    // ══ DEUX LECTURES, PAS UNE ══════════════════════════════════════════
+    //
+    // Le meme tableau ne se lit pas pareil selon la taille a laquelle on le
+    // presente au moteur et la facon dont il decoupe la page. Ce n'est pas une
+    // impression : sur dix etiquettes reelles photographiees par d'autres que
+    // nous, la premiere lecture rendait 7 valeurs justes et la seconde en
+    // rattrapait 5 de plus que la premiere avait manquees — le sel et les
+    // fibres d'un muesli, l'energie d'une creme, trois macros d'un jus.
+    //
+    // La seconde presente l'image plus GRANDE — la virgule decimale d'un
+    // « 5,8 g » ne fait que deux pixels apres la reduction de la premiere, et
+    // c'est elle qui, en disparaissant, transforme 5,8 en 58 — et demande le
+    // decoupage en colonne unique, qui suit mieux un tableau a deux colonnes.
+    //
+    // ON NE FUSIONNE QUE LES CASES RESTEES VIDES. La premiere lecture garde la
+    // main sur ce qu'elle a lu : deux lectures qui se contredisent ne se
+    // departagent pas, et prendre la seconde au hasard reviendrait a tirer a
+    // pile ou face sur une macro. Mesure : la fusion en deux passes rend 12
+    // valeurs justes et AUCUNE fausse ; en ajouter une troisieme monte a 14
+    // justes mais en ramene 4 fausses, ce qu'on ne veut a aucun prix.
+    const r=_etiqAnalyser(await _lireCaptureStats(dataUrl));
+    try{
+      const _manque=['k','p','c','l','f','e'].some(k=>r[k]==null);
+      if(_manque&&!r.incoherent){
+        const _grand=await _resizeImage(f,1800,2400,0.9);
+        if(_grand){
+          const r2=_etiqAnalyser(await _lireCaptureStats(_grand,{psm:4}));
+          // L INCOHERENCE DE LA SECONDE LA DISQUALIFIE ENTIEREMENT : si ses
+          // macros ne tiennent pas ensemble, aucune de ses valeurs ne vient
+          // completer celles de la premiere.
+          if(!r2.incoherent)
+            for(const k of ['k','p','c','l','f','e'])
+              if(r[k]==null&&r2[k]!=null) r[k]=r2[k];
+          if(!r.pour100&&r2.pour100) r.pour100=true;
+        }
+      }
+    }catch(e){}
     const mis=[];
     const pose=(id,v)=>{ if(v==null) return; const e=document.getElementById(id);
       if(e){ e.value=v; mis.push(id); } };
     pose('perso-kcal',r.k); pose('perso-p',r.p); pose('perso-c',r.c);
     pose('perso-l',r.l);    pose('perso-f',r.f); pose('perso-e',r.e);
     majPersoCoherence();
-    if(!mis.length){
+    if(r.incoherent){
+      // ON LE DIT, plutot que de rendre une case vide sans raison : les macros
+      // ont bien ete lues, elles ont ete ECARTEES, et l'athlete doit savoir que
+      // ce n'est pas la photo qui etait mauvaise mais la lecture qui se
+      // contredisait. Sans ce message, il recadre et recommence pour rien.
+      _persoDire('Les macros lues ne collent pas aux calories ('+r.incoherent+' kcal contre '+r.k+') : elles ont été écartées plutôt que posées fausses. Saisis-les à la main.','var(--orange)');
+    } else if(!mis.length){
       _persoDire('Rien n&apos;a pu être lu. Cadre le tableau nutritionnel bien à plat, ou saisis les valeurs à la main.','var(--orange)');
     } else if(!r.pour100){
       _persoDire(mis.length+' valeur(s) lue(s), mais « pour 100 g » n&apos;apparaît pas : vérifie que ce ne sont pas les valeurs par portion.','var(--orange)');
@@ -61331,12 +61431,26 @@ async function _libererLecteurTexte(){
   try{ await w.terminate(); }catch(e){}
   return true;
 }
-async function _lireCaptureStats(dataUrl){
+// `psm` : le mode de segmentation de page. Absent, on ne touche a rien et le
+// moteur garde son mode automatique — c'est le cas de tous les appels
+// historiques. Le passer permet la deuxieme lecture d'etiquette, qui decoupe la
+// page autrement.
+//
+// IL EST TOUJOURS REMIS A '3' ENSUITE, y compris en cas d'echec : le reglage
+// vit sur le worker, qui est partage avec l'import des captures de pas et de
+// sommeil. Le laisser en place ferait lire la capture suivante avec le decoupage
+// d'un tableau nutritionnel, sans que rien ne le dise.
+async function _lireCaptureStats(dataUrl,opts){
   _lecteursEnCours++;
   try{
     const w=await _chargerLecteurTexte();
-    const {data}=await w.recognize(dataUrl);
-    return (data&&data.text)||'';
+    if(opts&&opts.psm) try{ await w.setParameters({tessedit_pageseg_mode:String(opts.psm)}); }catch(e){}
+    try{
+      const {data}=await w.recognize(dataUrl);
+      return (data&&data.text)||'';
+    } finally {
+      if(opts&&opts.psm) try{ await w.setParameters({tessedit_pageseg_mode:'3'}); }catch(e){}
+    }
   } finally { _lecteursEnCours--; }
 }
 // L'analyse est VOLONTAIREMENT indépendante de la mise en page. Le texte rendu
