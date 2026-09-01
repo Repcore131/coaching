@@ -8216,6 +8216,27 @@ const APP_BASE_URL=(()=>{
     : strip(location.href);
 })();
 
+// ══════════ LE LIEN COURT ══════════════════════════════════════════════
+//
+// repcore-sync.web.app/i — dictable a l'oral, imprimable sur un flyer, et
+// surtout COURT : un QR encode moins de donnees, donc des modules plus gros,
+// donc une lecture qui se fait de plus loin. C'est la seule raison technique
+// qui compte ici.
+//
+// DEDUIT, JAMAIS CODE EN DUR, comme APP_BASE_URL juste au-dessus et pour la
+// meme raison. La reecriture /i n'existe que sur l'hebergement Firebase, ou
+// l'application vit sous /app/ : c'est a cette forme-la qu'on la reconnait.
+// Servie depuis un sous-dossier — GitHub Pages sous /coaching/app/, ou un
+// fichier local — /i n'existe pas, et on rend l'adresse longue plutot qu'un
+// lien mort. Un QR qui ne mene nulle part est pire que pas de QR.
+const RC_LIEN_COURT=(()=>{
+  try{
+    if(location.origin&&location.origin!=='null'&&location.pathname.indexOf('/app/')===0)
+      return location.origin+'/i';
+  }catch(e){}
+  return APP_BASE_URL;
+})();
+
 // PAYPAL_CLIENT_ID / PAYPAL_PLAN_ID : liés au compte PayPal du créateur
 //   (App créée sur developer.paypal.com avec guellec.coachingpro@gmail.com).
 //   Abonnement : 9,95 EUR/mois — Plan RepCore Mensuel.
@@ -64180,6 +64201,46 @@ function rcEcranDeDepart(frag){
 // l'installation prendrait toujours la branche C, et le repli resterait a
 // jamais non verifie.
 function rcInstallInvite(){ return deferredPrompt; }
+// ══════════ LE QR, DESSINE ICI ET NULLE PART AILLEURS ══════════════════
+//
+// AUCUN APPEL RESEAU. L'encodeur vit dans vendor/qr.js, embarque depuis le lot
+// qui a retire le service tiers — celui-ci recevait l'adresse IP de chaque
+// personne ouvrant la fenetre de synchronisation, pour dessiner des carres
+// noirs. Un generateur en ligne ajouterait un sous-traitant a privacy.html, et
+// certains transforment le lien en redirection qu'ils controlent.
+//
+// NOIR SUR BLANC, SANS COULEUR DE MARQUE. Le contraste conditionne la lecture,
+// et un QR rouge sur fond carbone se lit mal ou pas du tout. La marge de
+// quatre modules est imposee par la norme et versCanvas la pose deja.
+//
+// 240 PIXELS AU MINIMUM, et on le VERIFIE plutot que de l'esperer : versCanvas
+// arrondit la taille d'un module a l'entier inferieur, donc la toile rendue est
+// TOUJOURS plus petite que la taille demandee, et de combien depend du nombre
+// de modules — lui-meme fonction de la longueur de l'adresse. On redemande donc
+// jusqu'a depasser le plancher, plutot que d'etirer une image en CSS : un QR
+// etire perd la nettete de ses bords, qui est exactement ce que le lecteur
+// cherche.
+function _rcQrDessiner(){
+  const z=document.getElementById('rc-qr');
+  if(!z) return false;
+  z.innerHTML='';
+  let cv=null;
+  try{
+    if(window.RepCoreQR&&RepCoreQR.versCanvas){
+      for(let t=260;t<=460&&(!cv||cv.width<240);t+=40) cv=RepCoreQR.versCanvas(RC_LIEN_COURT,t);
+    }
+  }catch(e){ cv=null; }
+  if(cv&&cv.width>=240){
+    cv.style.display='block';
+    z.style.width=z.style.height=cv.width+'px';
+    z.appendChild(cv);
+    return true;
+  }
+  // L'ENCODEUR MANQUE OU A ECHOUE : on ne laisse pas un carre blanc. L'adresse
+  // est deja sous le code, en toutes lettres — on le dit, et on s'efface.
+  z.style.display='none';
+  return false;
+}
 // PURE. Déjà installé : la question ne se pose plus.
 function rcInstallAutonome(){
   try{
@@ -64294,11 +64355,11 @@ function rcInstallDecider(){
     montrer('rc-inst-bureau');
     dire('Scanne avec ton téléphone pour installer.');
     const a=document.getElementById('rc-inst-adresse');
-    if(a){
-      let url='';
-      try{ url=location.origin+location.pathname.replace(/index\.html$/,''); }catch(e){}
-      a.textContent=url||'repcore-sync.web.app/app/';
-    }
+    // L'ADRESSE EN TOUTES LETTRES SOUS LE CODE, et selectionnable : un QR ne
+    // se copie pas, et certains preferent taper. C'est aussi le seul repli si
+    // l'encodeur manque.
+    if(a) a.textContent=RC_LIEN_COURT.replace(/^https?:\/\//,'');
+    _rcQrDessiner();
     // Le bouton local n'apparaît que si le navigateur a vraiment de quoi
     // installer : un bouton qui ne ferait rien vaut moins que pas de bouton.
     if(ici&&rcInstallInvite()) ici.style.display='block';

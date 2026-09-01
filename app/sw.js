@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1090';
+const CACHE = 'repcore-v1091';
 // LA SEULE VERSION QUI NE REPORTE PAS LES ILLUSTRATIONS.
 // Le report d'un cache a l'autre traite /exercices/ en PRIORITAIRE : c'est
 // ce qui evite de retelecharger 3,3 Mo a chaque deploiement. Mais le
@@ -291,7 +291,18 @@ self.addEventListener('fetch', e => {
   // index.html : network-first AVEC DÉLAI DE GARDE. Toujours pas cache-first —
   // la mise à jour doit rester rapide — mais le réseau ne peut plus retenir
   // l'affichage au-delà de SW_DELAI_RESEAU_MS quand une copie existe.
-  if (url.includes('index.html') || url.endsWith('/') || url.endsWith('/coaching/')) {
+  // ⚠ /i EST UNE NOUVELLE ENTREE DE CACHE, et c'est le piege de cette route.
+  // Le handler met en cache PAR URL : sans cette ligne, /i tombait dans la
+  // branche generique — cache-first, sans mise a jour reseau — et quiconque
+  // entre par le lien court restait sur la version du jour de sa premiere
+  // visite, indefiniment. Il sert index.html : il doit etre traite comme lui,
+  // en reseau-d'abord avec le meme delai de garde.
+  //
+  // On compare le CHEMIN, pas la fin de l'URL : endsWith('/i') attraperait
+  // aussi n'importe quel fichier nomme « i » ailleurs sur le site.
+  const _chemin0 = (() => { try { return new URL(url).pathname; } catch (e) { return ''; } })();
+  if (url.includes('index.html') || url.endsWith('/') || url.endsWith('/coaching/')
+      || _chemin0 === '/i') {
     e.respondWith((async () => {
       const reseau = fetch(e.request).then(r => {
         // La mise en cache est DÉTACHÉE de la réponse servie : si le quota

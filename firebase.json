@@ -16,6 +16,10 @@
   ],
   "hosting": {
     "public": "_site",
+    "//": "/i sert index.html de l'app. Une adresse courte se dicte a l'oral et s'imprime sur un flyer ; surtout, un QR qui encode moins de caracteres a des modules plus gros, donc se lit de plus loin. Firebase applique les rewrites APRES avoir cherche un fichier reel : aucune ressource existante n'est masquee, et les regles headers ci-dessous continuent de s'appliquer sur le chemin SERVI (**/*.html couvre donc /i, qui rend index.html).",
+    "rewrites": [
+      { "source": "/i", "destination": "/app/index.html" }
+    ],
     "ignore": [
       "**/.*"
     ],

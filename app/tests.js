@@ -9183,6 +9183,118 @@ async function testExercices(){
               ?true:_echec('le mode de segmentation n’est pas remis');})());
         })();
 
+        // ══════ LE QR DE L'ÉCRAN D'INSTALLATION ══════
+        (()=>{
+          // LES HUIT CHAÎNES DE FORMAT VALIDES DU NIVEAU M, recopiées de la
+          // norme ISO/IEC 18004 et NON lues dans le fichier : une sonde qui
+          // relirait la table de l'encodeur validerait n'importe quelle table.
+          // C'est un oracle indépendant, et c'est tout son intérêt ici.
+          const FORMATS_M=[0x5412,0x5125,0x5E7C,0x5B4B,0x45F9,0x40CE,0x4F97,0x4AA0];
+          // Les quinze bits, LUS DANS LA MATRICE, du plus fort au plus faible.
+          const _format=(m)=>{
+            const n=m.length;
+            const c1=[m[8][0],m[8][1],m[8][2],m[8][3],m[8][4],m[8][5],m[8][7],m[8][8],
+                      m[7][8],m[5][8],m[4][8],m[3][8],m[2][8],m[1][8],m[0][8]];
+            const c2=[m[n-1][8],m[n-2][8],m[n-3][8],m[n-4][8],m[n-5][8],m[n-6][8],m[n-7][8],
+                      m[8][n-8],m[8][n-7],m[8][n-6],m[8][n-5],m[8][n-4],m[8][n-3],m[8][n-2],m[8][n-1]];
+            const val=(t)=>t.reduce((a,b)=>(a<<1)|(b?1:0),0);
+            return {c1:val(c1),c2:val(c2)};
+          };
+          ok('Le QR porte une information de format VALIDE',(()=>{
+            // ⚠ C'EST LE DÉFAUT QUI RENDAIT TOUT ILLISIBLE. Les quinze bits
+            // étaient écrits À L'ENVERS — bit de poids faible en premier. La
+            // structure était pourtant juste : repères, timing, module sombre,
+            // séparateurs. Un lecteur trouvait donc ses trois repères, lisait
+            // une chaîne de format absente de toute table, et abandonnait.
+            // Mesure sur « A » : 0x1F3D, qui retourné bit à bit vaut 0x5E7C —
+            // exactement la valeur attendue. La donnée était bonne, l'ordre non.
+            //
+            // AUCUN QR PRODUIT PAR CE FICHIER N'AVAIT JAMAIS PU ÊTRE SCANNÉ, y
+            // compris celui de la fenêtre de synchronisation, en service depuis
+            // août. Six cas sur six illisibles avant, six sur six décodés après.
+            if(!window.RepCoreQR||!RepCoreQR.matrice) return _echec('l’encodeur a disparu');
+            for(const s of ['A','HELLO','http://a.fr','https://repcore-sync.web.app/i',
+                            'https://repcore-sync.web.app/app/']){
+              const m=RepCoreQR.matrice(s);
+              if(!m) return _echec('aucune matrice pour « '+s+' »');
+              const f=_format(m);
+              if(FORMATS_M.indexOf(f.c1)<0)
+                return _echec('« '+s+' » : format 0x'+f.c1.toString(16).toUpperCase()+' hors table');
+              // LES DEUX COPIES DISENT LA MÊME CHOSE. Elles étaient déjà
+              // cohérentes quand elles étaient fausses : ce n'est donc pas
+              // suffisant, mais c'est nécessaire.
+              if(f.c1!==f.c2) return _echec('les deux copies de format divergent sur « '+s+' »');
+            }
+            return true;})());
+          ok('La structure du QR respecte la norme',(()=>{
+            // Ce qui était DÉJÀ juste, et qu'il ne faut pas casser en réparant
+            // le format : sans ces motifs, un lecteur ne trouve même pas le code.
+            const m=RepCoreQR.matrice('https://repcore-sync.web.app/i');
+            if(!m) return _echec('aucune matrice');
+            const n=m.length;
+            // Timing : une ligne et une colonne alternées, à l'indice 6.
+            for(let i=8;i<n-8;i++){
+              if(m[6][i]!==((i%2)?0:1)) return _echec('timing horizontal rompu en '+i);
+              if(m[i][6]!==((i%2)?0:1)) return _echec('timing vertical rompu en '+i);
+            }
+            // Le module toujours sombre, et les séparateurs des repères.
+            if(!m[n-8][8]) return _echec('le module sombre manque');
+            for(let i=0;i<8;i++) if(m[7][i]) return _echec('séparateur du repère haut-gauche non vide');
+            return true;})());
+          ok('Le QR encode le lien COURT, et rien d\'autre',(()=>{
+            // Court par nécessité, pas par coquetterie : moins de caractères,
+            // c'est moins de modules, donc des modules plus gros à taille égale,
+            // donc une lecture qui se fait de plus loin.
+            if(typeof RC_LIEN_COURT!=='string'||!RC_LIEN_COURT)
+              return _echec('le lien court n’existe pas');
+            // DÉDUIT, JAMAIS CODÉ EN DUR : servi depuis un sous-dossier, /i
+            // n’existe pas, et on doit rendre l’adresse longue plutôt qu’un
+            // lien mort.
+            const src=String(rcInstallDecider)+String(_rcQrDessiner);
+            if(src.indexOf('RC_LIEN_COURT')<0) return _echec('le QR n’encode pas le lien court');
+            const d=String((()=>RC_LIEN_COURT));
+            if(/repcore-sync\.web\.app/.test(_prodSrc().slice(_prodSrc().indexOf('const RC_LIEN_COURT'),
+                _prodSrc().indexOf('const RC_LIEN_COURT')+700)))
+              return _echec('le domaine est codé en dur dans le lien court');
+            return true;})());
+          okA('Le QR est dessiné à 240 px au moins, en noir sur blanc',(async()=>{
+            // LE CONTRASTE CONDITIONNE LA LECTURE : pas de couleur de marque
+            // ici. Et la taille se VÉRIFIE — versCanvas arrondit le module à
+            // l’entier inférieur, donc la toile est toujours plus petite que la
+            // taille demandée, et de combien dépend de la longueur de l’adresse.
+            const z=document.getElementById('rc-qr');
+            if(!z) return _echec('le conteneur du QR a disparu');
+            const _mm=window.matchMedia,_iw=window.innerWidth,_ua=navigator.userAgent;
+            try{
+              Object.defineProperty(window,'innerWidth',{value:1440,configurable:true});
+              Object.defineProperty(navigator,'userAgent',{value:'Mozilla/5.0 (Windows NT 10.0) Chrome/152 Safari/537.36',configurable:true});
+              Object.defineProperty(navigator,'standalone',{value:false,configurable:true});
+              window.matchMedia=(q)=>({matches:false,media:q,addListener(){},removeListener(){},
+                addEventListener(){},removeEventListener(){}});
+              if(rcInstallDecider()!=='E') return _echec('la branche ordinateur n’est pas prise');
+              const cv=z.querySelector('canvas');
+              if(!cv) return _echec('aucun QR dessiné');
+              if(cv.width<240) return _echec('QR de '+cv.width+' px : sous le plancher de 240');
+              if(cv.width!==cv.height) return _echec('le QR n’est pas carré');
+              // NOIR SUR BLANC, lu dans les pixels : deux valeurs, et seulement
+              // deux. Une teinte de marque ferait chuter le contraste.
+              const g=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;
+              const vus=new Set();
+              for(let i=0;i<g.length;i+=4*97) vus.add(g[i]+','+g[i+1]+','+g[i+2]);
+              for(const c of vus)
+                if(c!=='0,0,0'&&c!=='255,255,255') return _echec('couleur inattendue : '+c);
+              // ET L'ADRESSE EN TOUTES LETTRES SOUS LE CODE : un QR ne se copie
+              // pas, et certains préfèrent taper.
+              const a=document.getElementById('rc-inst-adresse');
+              return (a&&a.textContent&&a.textContent.length>4)
+                ?true:_echec('l’adresse en clair manque sous le QR');
+            } finally {
+              window.matchMedia=_mm;
+              Object.defineProperty(window,'innerWidth',{value:_iw,configurable:true});
+              Object.defineProperty(navigator,'userAgent',{value:_ua,configurable:true});
+            }}));
+        })();
+
         // ══════ LES NAVIGATEURS INTÉGRÉS ══════
         //
         // LES CHAINES CI-DESSOUS SONT REELLES, relevees le 02/09/2026 sur
