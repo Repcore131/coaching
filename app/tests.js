@@ -24643,6 +24643,81 @@ function testExercices(){
         return _cptContenu(vide)<_cptContenu(plein)
           ?true:_echec('vider un créneau ne se voit pas');})());
 
+      // ══════ LA CHARGE PROGRAMMEE ATTEINT L'ATHLETE ═════════════════
+      //
+      // La programmation calcule une charge — 1RM, pourcentage de la table, RPE
+      // de la semaine — et l'expose par consigneProgEx(ex).kg. Mais l'apercu de
+      // seance et la fiche imprimee ne lisaient que ex.charge, le champ texte
+      // libre : le coach voyait sa charge calculee dans l'editeur, et l'athlete
+      // recevait une case vide. La consigne existait et n'arrivait pas.
+      (()=>{
+        const _lun=n=>{ const d=new Date(); d.setHours(0,0,0,0);
+          d.setDate(d.getDate()-((d.getDay()+6)%7)+7*n); return d.getTime(); };
+        const _prog=(sem,max)=>({name:'DEVELOPPE COUCHE',series:3,reps:'5',
+          prog:{max:max||145,debut:_lun(0),semaines:sem}});
+
+        ok('La charge prescrite suit la meme regle que le RIR prescrit',(()=>{
+          if(typeof _chargePrescrite!=='function')
+            return _echec('aucune fonction de charge prescrite');
+          // LA PROGRAMMATION D'ABORD. 145 kg, 4 reps a RPE 8 → 83,7 % → 122,5.
+          const ex=_prog([{series:5,reps:4,rpe:'8'}]);
+          ex.charge='80 kg';   // une vieille note, qui ne doit pas gagner
+          const v=_chargePrescrite(ex);
+          if(!/122,5/.test(v)) return _echec('la charge calculée ne passe pas devant : « '+v+' »');
+          // LE REPLI SUR LE TEXTE LIBRE quand il n'y a pas de programmation —
+          // exactement ce que fait _rirPrescrit avec `rir`.
+          if(_chargePrescrite({charge:'80 kg'})!=='80 kg')
+            return _echec('le texte libre n’est plus lu sans programmation');
+          if(_chargePrescrite({poids:'75 kg'})!=='75 kg')
+            return _echec('l’ancien champ poids n’est plus lu');
+          // ET VIDE VEUT DIRE VIDE : une absence n'est jamais comblee.
+          if(_chargePrescrite({})!==''||_chargePrescrite(null)!=='')
+            return _echec('une absence de consigne produit une valeur');
+          // HORS TABLE — au-dela de douze repetitions — la programmation ne
+          // donne pas de charge : on retombe sur le texte libre plutot que de
+          // n'afficher rien.
+          const hors=_prog([{series:3,reps:15,rpe:'8'}]);
+          hors.charge='60 kg';
+          return _chargePrescrite(hors)==='60 kg'
+            ?true:_echec('hors table, le repli ne joue pas : « '+_chargePrescrite(hors)+' »');})());
+
+        ok('L\'apercu et la fiche imprimee lisent la consigne, plus le texte brut',(()=>{
+          const ap=String(_apLigne), pp=JSON.stringify(PP_COLS.map(c=>String(c.v)));
+          if(ap.indexOf('_chargePrescrite(ex)')<0)
+            return _echec('l’aperçu lit encore le champ brut');
+          if(pp.indexOf('_chargePrescrite(ex)')<0)
+            return _echec('la fiche imprimée lit encore le champ brut');
+          // ET L'APERCU LISAIT AUSSI `ex.rir` EN DIRECT, dans la ligne d'a
+          // cote : meme defaut, meme fonction, meme convention. Une consigne
+          // posee dans rirCible n'y arrivait pas non plus.
+          if(ap.indexOf('_rirPrescrit(ex)')<0)
+            return _echec('l’aperçu lit encore le RIR brut');
+          return /ex\.charge\|\|ex\.poids/.test(ap+pp)
+            ?_echec('un repli brut subsiste hors de _chargePrescrite'):true;})());
+
+        ok('Une programmation ne suit pas un changement de mouvement',(()=>{
+          // Le commentaire de _oublierAncienMouvement le dit deja pour la
+          // charge : « quatre-vingts kilos sur un squat ne sont pas
+          // quatre-vingts kilos sur une presse ». Un MAXIMUM l'est encore plus :
+          // garder la programmation ferait suggerer, semaine apres semaine, des
+          // charges calculees depuis un maximum jamais souleve sur ce
+          // mouvement-la.
+          const ex=_prog([{series:5,reps:4,rpe:'8'}]);
+          ex.charge='120 kg';
+          const _t=window.toast; let dit=null;
+          try{
+            window.toast=(m)=>{dit=String(m);};
+            ex.name='PRESSE A CUISSE';
+            _oublierAncienMouvement(ex);
+            if(ex.prog) return _echec('la programmation a suivi le nouveau mouvement');
+            if(ex.charge) return _echec('la charge a suivi');
+            // ET ON LE DIT : un 1RM et N semaines de series, ce n'est pas une
+            // note, c'est du travail. Rien ne disparait en silence.
+            return (dit&&/programmation/i.test(dit))
+              ?true:_echec('la programmation disparaît sans un mot');
+          } finally { window.toast=_t; }})());
+      })();
+
       // ══════ UN BROUILLON SANS ADRESSE N'EST PAS CELUI D'UN AUTRE ════
       //
       // _bilEcrireDraft ecrit `email:(currentUser&&currentUser.email)||''`. Un

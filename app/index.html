@@ -18426,6 +18426,21 @@ function _oublierAncienMouvement(ex){
   // Quatre-vingts kilos sur un squat ne sont pas quatre-vingts kilos sur une
   // presse : un poids est attaché à un mouvement.
   delete ex.charge; delete ex.poids;
+  // ET LA PROGRAMMATION AVEC, pour exactement la même raison — en plus fort.
+  // Elle repose sur une charge maximale sur UNE répétition, mesurée sur le
+  // mouvement qu'on vient de retirer : la garder ferait suggérer, semaine après
+  // semaine, des charges calculées depuis un maximum que l'athlète n'a jamais
+  // soulevé sur ce mouvement-là. Un poids faux une fois est une note à
+  // corriger ; un maximum faux est une progression entière qui part de travers.
+  //
+  // ON LE DIT, parce que ce n'est pas une note mais du travail : un 1RM et N
+  // semaines de séries, répétitions et RPE. La règle du projet vaut ici — rien
+  // ne disparaît en silence. Le geste de remplacement, lui, reste celui du
+  // coach : on ne le bloque pas, on l'informe.
+  if(ex.prog){
+    delete ex.prog;
+    try{ toast('La programmation de cet exercice a été retirée : elle reposait sur un maximum mesuré sur l’ancien mouvement.','var(--orange)'); }catch(e){}
+  }
   // La technique et les séries qu’elle visait décrivaient l’ancien geste.
   delete ex.methode; delete ex.methodeSeries;
   // Et la justification portait sur une contrainte évaluée pour l’ancien nom.
@@ -30246,8 +30261,8 @@ function _apLigne(ex,i){
       ${l('Tempo',ex.tempo)}
       ${l('Technique',_libTechniqueSeries(ex))}
       ${l('Matériel',ex.materiel)}
-      ${l('Charge cible',ex.charge||ex.poids||'')}
-      ${l('RIR',ex.rir)}
+      ${l('Charge cible',_chargePrescrite(ex))}
+      ${l('RIR',_rirPrescrit(ex))}
       ${note?`<div style="margin-top:8px;font-size:var(--fs-sm);color:#bbb;line-height:1.6;
         border-left:2px solid var(--border);padding-left:9px">${escapeHtml(note)}</div>`:''}
       <!-- LA VIDEO DU GUIDE ARRIVE JUSQU'ICI. Cet ecran n'en montrait aucune :
@@ -35202,7 +35217,10 @@ const PP_COLS=Object.freeze([
   {cle:'materiel',lib:'Matériel',v:ex=>ex.materiel},
   {cle:'series',  lib:'Séries',  v:ex=>ex.series},
   {cle:'reps',    lib:'Reps',    v:ex=>ex.reps},
-  {cle:'charge',  lib:'Charge',  v:ex=>ex.charge||ex.poids},
+  // La programmation passe devant le texte libre — voir _chargePrescrite.
+  // Comme pour le RIR, LA COLONNE N'APPARAIT QUE SI QUELQU'UN LA REMPLIT :
+  // _ppColonnes ne retient que les colonnes non vides.
+  {cle:'charge',  lib:'Charge',  v:ex=>_chargePrescrite(ex)},
   // N6.3 + B3.10 — DEUX CLEFS, ET C'EST `rir` QUI EST ECRITE.
   //
   // Le commentaire disait exactement l'inverse : « rirCible est le champ que
@@ -35224,6 +35242,34 @@ const PP_COLS=Object.freeze([
   {cle:'tempo',   lib:'Tempo',   v:ex=>ex.tempo}
 ]);
 function _ppTexte(v){ return String(v==null?'':v).trim(); }
+// PURE. La charge prescrite d'un exercice, quel que soit le champ qui la porte.
+// Vide quand il n'y a pas de consigne, et vide veut dire vide.
+//
+// MEME REGLE QUE _rirPrescrit, juste en dessous, et volontairement : le champ
+// STRUCTURE passe devant le champ TEXTE LIBRE, on se replie sur l'ancien quand
+// le nouveau n'a rien a dire, et une absence n'est jamais comblee. Ecrire une
+// seconde convention aurait donne deux fonctions voisines qui arbitrent la meme
+// question de deux facons.
+//
+// CE QU'ELLE REPARE. La programmation par exercice calcule une charge — 1RM,
+// pourcentage de la table, RPE de la semaine — et l'expose par
+// consigneProgEx(ex).kg. Mais l'apercu de seance et la fiche imprimee ne
+// lisaient que ex.charge, le champ texte libre : le coach voyait sa charge
+// calculee dans l'editeur, et l'athlete recevait une case vide. La consigne
+// existait et n'arrivait pas.
+//
+// LA PROGRAMMATION D'ABORD, et c'est le sens : elle est datee, calculee et
+// tenue a jour semaine par semaine, la ou ex.charge est une note que personne
+// ne relit. Hors programmation — semaine passee, ligne incomplete, au-dela de
+// douze repetitions ou la table ne dit rien — on retombe sur le texte libre,
+// qui reste ce qu'il a toujours ete.
+function _chargePrescrite(ex){
+  if(!ex||typeof ex!=='object') return '';
+  const c=(()=>{ try{ return consigneProgEx(ex); }catch(e){ return null; } })();
+  if(c&&c.kg!=null) return String(c.kg).replace('.',',')+' kg';
+  const v=(ex.charge!=null&&String(ex.charge).trim()!=='')?ex.charge:ex.poids;
+  return String(v==null?'':v).trim();
+}
 // N6.3 — PURE. L'intensite prescrite d'un exercice, quel que soit le champ qui
 // la porte. Vide quand il n'y a pas de consigne, et vide veut dire vide.
 function _rirPrescrit(ex){
