@@ -9183,6 +9183,102 @@ async function testExercices(){
               ?true:_echec('le mode de segmentation n’est pas remis');})());
         })();
 
+        // ══════ LA CAPTURE DE L'INVITATION, ET LE MANIFESTE ══════
+        ok('L\'invitation est capturée AVANT tout le reste du fichier',(()=>{
+          // beforeinstallprompt NE SE REJOUE PAS : le navigateur le tire une
+          // fois, tôt, et s'il ne trouve pas d'écouteur il passe. Celui-ci
+          // vivait à plus de quatre mégaoctets d'ici — après l'analyse de tout
+          // le fichier — et sur un téléphone lent l'événement partait avant.
+          // Le bouton d'installation ne s'affichait alors jamais.
+          const src=_prodSrc();
+          const iCap=src.indexOf("addEventListener('beforeinstallprompt'");
+          if(iCap<0) return _echec('plus aucune capture de l’invitation');
+          // AVANT LE PREMIER SCRIPT DE TRAVAIL : la balise du manifeste sert de
+          // repère, elle est dans le <head> et le bloc de capture la précède.
+          const iManif=src.indexOf('rel="manifest"');
+          if(!(iCap<iManif)) return _echec('la capture est posée après le <head>');
+          // ET DANS LE PREMIER DIXIÈME DU FICHIER : la mesure vaut mieux qu’une
+          // impression. Elle était à 94 % de la longueur.
+          if(iCap>src.length*0.1)
+            return _echec('la capture est à '+Math.round(100*iCap/src.length)+' % du fichier');
+          // UN SEUL ÉCOUTEUR. Deux, c’étaient deux vérités sur l’installabilité,
+          // et celle du bas gagnait — donc la plus tardive, donc la plus vide.
+          const n=src.split("addEventListener('beforeinstallprompt'").length-1;
+          return n===1?true:_echec(n+' écouteurs sur beforeinstallprompt');})());
+
+        ok('Les trois globales de la tête existent et sont défensives',(()=>{
+          if(!('__rcInstallEvt' in window)) return _echec('__rcInstallEvt absent');
+          if(typeof window.__rcInstall!=='function') return _echec('__rcInstall absent');
+          if(typeof window.__rcInstalled!=='boolean') return _echec('__rcInstalled absent');
+          // LE BLOC EST DANS UN try/catch : il s’exécute avant tout le reste, et
+          // s’il levait il emporterait le démarrage de l’application entière.
+          const src=_prodSrc();
+          const i=src.indexOf('window.__rcInstallEvt=null');
+          if(i<0) return _echec('l’initialisation a disparu');
+          const avant=src.slice(Math.max(0,i-400),i);
+          if(avant.lastIndexOf('try{')<0) return _echec('le bloc de tête n’est pas protégé');
+          // TROIS ISSUES, ET NON UN BOOLÉEN : « refusé » et « impossible » ne se
+          // traitent pas pareil — l’un se represente plus tard, l’autre jamais.
+          const f=String(window.__rcInstall);
+          for(const m of ['indisponible','dismissed','userChoice'])
+            if(f.indexOf(m)<0) return _echec(m+' a disparu de __rcInstall');
+          return true;})());
+
+        okA('Sans invitation, __rcInstall rend « indisponible » sans lever',(async()=>{
+          const g=window.__rcInstallEvt;
+          try{
+            window.__rcInstallEvt=null;
+            return (await window.__rcInstall())==='indisponible'
+              ?true:_echec('elle ne dit pas que rien n’est possible');
+          } finally { window.__rcInstallEvt=g; }}));
+
+        okA('Le manifeste porte son identité, ses captures et ses raccourcis',(async()=>{
+          let m=null;
+          try{ m=await (await fetch('./manifest.json',{cache:'no-store'})).json(); }
+          catch(e){ return _echec('manifeste illisible : '+((e&&e.message)||e)); }
+          // ⚠ L'IDENTITÉ EST start_url, PAS LE DOSSIER. Quand `id` est absent,
+          // la norme prend start_url : les installations existantes portent donc
+          // /app/index.html. Écrire /app/ CHANGERAIT cette identité et poserait
+          // une SECONDE icône sur l'écran d'accueil de ceux qui l'ont déjà —
+          // exactement ce que le champ existe pour empêcher.
+          if(m.id!=='/app/index.html')
+            return _echec('id = '+m.id+' : les installations existantes se dédoubleraient');
+          if(m.start_url!=='./index.html') return _echec('start_url a bougé : '+m.start_url);
+          if(m.name!=='RepCore'||m.short_name!=='RepCore') return _echec('le nom a bougé');
+          if(m.scope!=='./') return _echec('scope = '+m.scope);
+          if(!Array.isArray(m.display_override)||m.display_override[0]!=='standalone')
+            return _echec('display_override : '+JSON.stringify(m.display_override));
+          if(m.lang!=='fr'||m.dir!=='ltr') return _echec('lang/dir : '+m.lang+'/'+m.dir);
+          if(!(m.categories||[]).includes('fitness')) return _echec('categories : '+JSON.stringify(m.categories));
+          // TROIS CAPTURES AU MOINS, et au bon format : sans elles Android
+          // retombe sur la petite barre grise au lieu de la fiche pleine page.
+          const sc=m.screenshots||[];
+          if(sc.length<3) return _echec(sc.length+' capture(s)');
+          for(const s of sc){
+            if(s.sizes!=='1080x1920') return _echec('taille '+s.sizes);
+            if(s.form_factor!=='narrow') return _echec('form_factor '+s.form_factor);
+            if(s.type!=='image/png') return _echec('type '+s.type);
+            if(!s.label) return _echec('une capture sans libellé');
+          }
+          // ET ELLES SONT VRAIMENT SERVIES. Chrome les ignore EN SILENCE quand
+          // elles manquent : c'est le seul moyen de s'en apercevoir.
+          for(const s of sc){
+            let r=null;
+            try{ r=await fetch(s.src,{method:'HEAD'}); }catch(e){}
+            if(!r||!r.ok) return _echec('capture absente du serveur : '+s.src);
+          }
+          // LES RACCOURCIS NE MENENT PAS DANS LE VIDE : chaque URL correspond a
+          // un parametre que le demarrage sait lire.
+          const src=_prodSrc();
+          for(const r of (m.shortcuts||[])){
+            const q=(r.url.split('?')[1]||'').split('=')[0];
+            if(!q||src.indexOf("params.get('"+q+"')")<0)
+              return _echec('raccourci sans lien profond : '+r.url);
+            if(!(r.icons||[]).some(i=>i.sizes==='96x96'))
+              return _echec('raccourci sans icône 96x96 : '+r.name);
+          }
+          return true;}));
+
         // ══════ L'ÉCRAN D'INSTALLATION ══════
         //
         // SIX SITUATIONS, ET JAMAIS DEUX BLOCS A LA FOIS. C'est la seule
@@ -10133,7 +10229,14 @@ async function testExercices(){
           const prod=tout;
           const i=prod.indexOf('function importFromURL');
           if(i<0) return _echec('l\'IIFE d\'import a disparu');
-          const corps=prod.slice(i,i+3000);
+          // ⚠ LA FENETRE ETAIT FIGEE A 3 000 CARACTERES, et c'est une fausse
+          // limite : le jour ou un parametre de plus est ajoute a cette
+          // fonction — ce qui est arrive avec ?diete=1 — le replaceState sort
+          // de la fenetre et la sonde annonce un nettoyage disparu qui est
+          // toujours la. On borne sur la FIN REELLE de la fonction : la
+          // declaration suivante en debut de ligne.
+          const _fin=prod.slice(i+10).search(/\r?\nfunction \w/);
+          const corps=prod.slice(i,_fin>0?i+10+_fin:i+8000);
           if(corps.indexOf('history.replaceState')<0)
             return _echec('l\'adresse n\'est plus nettoyée');
           const iF=corps.indexOf('finally'), iR=corps.indexOf('history.replaceState');

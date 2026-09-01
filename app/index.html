@@ -2,6 +2,65 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<!-- ══════════ LA CAPTURE DE L'INVITATION D'INSTALLATION ══════════════════
+     PREMIER SCRIPT DE LA PAGE, ET CE N'EST PAS UN CAPRICE DE RANGEMENT.
+     beforeinstallprompt ne se rejoue pas : le navigateur le tire une fois,
+     tot, et s'il ne trouve pas d'ecouteur il passe. L'ecouteur vivait a plus
+     de quatre megaoctets d'ici, dans le grand bloc de script du bas — soit
+     apres l'analyse de tout le fichier. Sur un telephone lent l'evenement
+     partait AVANT, personne ne l'attrapait, et le bouton d'installation ne
+     s'affichait jamais. Le defaut ne se voyait pas au rechargement rapide
+     d'un poste de developpement, ou l'analyse est instantanee.
+
+     AUTONOME ET DEFENSIF. Ce bloc ne depend de RIEN : ni d'une constante, ni
+     d'une fonction, ni du DOM. Il est entoure d'un try/catch parce qu'il
+     s'execute avant tout le reste — s'il echouait, il emporterait le
+     demarrage de l'application entiere pour un bouton.
+
+     IL NE FAIT QUE RETENIR. La decision d'afficher quoi que ce soit
+     appartient a rcInstallDecider, quatre megaoctets plus bas ; ici on garde
+     l'evenement sous la main et on previent par un evenement a nous, pour
+     ceux qui seront analyses plus tard. -->
+<script>
+try{
+  window.__rcInstallEvt=null;
+  window.__rcInstalled=false;
+  window.addEventListener('beforeinstallprompt',function(e){
+    // preventDefault : sans lui, Chrome affiche sa propre mini-barre au bas de
+    // l'ecran, et l'application perd la main sur le moment de la demande.
+    try{ e.preventDefault(); }catch(err){}
+    window.__rcInstallEvt=e;
+    // ON PREVIENT PLUTOT QUE D'ETRE INTERROGE. Le reste du fichier n'est pas
+    // encore analyse quand ceci s'execute : il ne peut pas nous demander
+    // quoi que ce soit, mais il peut ecouter.
+    try{ window.dispatchEvent(new Event('rc-install-dispo')); }catch(err){}
+  });
+  window.addEventListener('appinstalled',function(){
+    window.__rcInstalled=true;
+    // L'INVITATION EST CONSOMMEE. La garder ferait proposer d'installer ce qui
+    // vient de l'etre, et .prompt() leverait sur un evenement deja utilise.
+    window.__rcInstallEvt=null;
+    try{ window.dispatchEvent(new Event('rc-install-fait')); }catch(err){}
+  });
+  // Rend 'accepted', 'dismissed', ou 'indisponible' quand il n'y a rien a
+  // demander. Trois issues et non un booleen : « refuse » et « impossible » ne
+  // se traitent pas pareil — l'un se represente plus tard, l'autre jamais.
+  //
+  // L'EVENEMENT NE SERT QU'UNE FOIS : on le retire AVANT d'appeler .prompt(),
+  // pas apres, sinon un double clic rapide leve une InvalidStateError.
+  window.__rcInstall=function(){
+    var e=window.__rcInstallEvt;
+    if(!e||typeof e.prompt!=='function') return Promise.resolve('indisponible');
+    window.__rcInstallEvt=null;
+    try{
+      e.prompt();
+      return Promise.resolve(e.userChoice)
+        .then(function(c){ return (c&&c.outcome)||'dismissed'; })
+        .catch(function(){ return 'indisponible'; });
+    }catch(err){ return Promise.resolve('indisponible'); }
+  };
+}catch(e){}
+</script>
 <link rel="icon" type="image/png" href="icons/icon-192x192.png">
 <!-- viewport-fit=cover (avec les tirets) : c'est ce token qui étend la page
      sous l'encoche et qui donne une valeur non nulle à env(safe-area-inset-*).
@@ -10682,7 +10741,7 @@ function _validateAthletePkg(o){
   try{
     const params=new URLSearchParams(window.location.search);
     aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
-      ||params.get('bilan')==='1'||params.get('wo')==='1');
+      ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1');
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -10724,6 +10783,13 @@ function _validateAthletePkg(o){
     if(_bilanDeepLink) window._pendingBilanOpen=true;
     const _woDeepLink=params.get('wo')==='1';
     if(_woDeepLink) window._pendingWoOpen=true;
+    // ?diete=1 — AJOUTE POUR LE RACCOURCI DU MANIFESTE. « Nouvelle séance »
+    // avait déjà son ?wo=1 ; la diète n'avait aucune adresse, et un raccourci
+    // qui ouvre l'accueil au lieu de l'écran promis est un lien mort qui ne
+    // dit pas son nom. Même patron que les deux au-dessus, à la ligne près :
+    // un drapeau ici, sa consommation dans la même liste plus bas.
+    const _dieteDeepLink=params.get('diete')==='1';
+    if(_dieteDeepLink) window._pendingDieteOpen=true;
   }catch(e){}
   finally{
     if(aNettoyer){
@@ -11577,6 +11643,10 @@ function routeUser(){
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
   if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}
+  // MEME DELAI ECHELONNE que ses deux voisins : le routage de démarrage doit
+  // avoir posé son écran avant qu'on en pousse un autre par-dessus.
+  if(window._pendingDieteOpen){window._pendingDieteOpen=false;
+    setTimeout(()=>{ try{ go('s-nutrition'); loadNutrition(); }catch(e){} },1000);}
 }
 // ARBITRAGE ASSUMÉ (24/07/2026, plan Spark) — status, paymentStatus et
 // paypalSubscriptionId ne sont protégés par AUCUNE règle serveur :
@@ -63888,7 +63958,18 @@ async function createAthlete(){
 // Sur un ordinateur, le geste utile est de faire passer l'adresse au téléphone.
 // L'installation locale reste offerte, en second rang, quand le navigateur la
 // propose — on ne retire pas une capacité, on choisit ce qu'on met devant.
-let deferredPrompt=null;
+// L'INVITATION N'EST PLUS CAPTUREE ICI. Elle l'est dans le <head>, avant tout
+// le reste : ce bloc-ci est analyse apres quatre megaoctets de code, et
+// l'evenement etait souvent deja passe. On CONSOMME ce que la tete a retenu.
+//
+// UN SEUL ECOUTEUR SUR beforeinstallprompt, celui de la tete. Deux ecouteurs
+// sur le meme evenement, c'etait deux verites sur l'etat d'installabilite, et
+// celle du bas gagnait — donc la plus tardive, donc la plus souvent vide.
+Object.defineProperty(window,'deferredPrompt',{
+  get(){ return window.__rcInstallEvt; },
+  set(v){ window.__rcInstallEvt=v; },
+  configurable:true
+});
 
 // PROVISOIRE, ET REMPLAÇABLE. La détection fine des navigateurs intégrés
 // appartient au lot suivant : si une implémentation plus complète est posée
@@ -63934,10 +64015,13 @@ function rcEcranDeDepart(frag){
   return 's-install';
 }
 // L'INVITATION DU NAVIGATEUR, LUE PAR UNE FONCTION et non directement.
-// `deferredPrompt` est un `let` de portée module : rien ne peut l'atteindre
-// depuis l'extérieur, donc rien ne peut ÉPROUVER la branche F — un Chrome qui
-// offre vraiment l'installation prend toujours la branche C, et le repli reste
-// à jamais non vérifié. Une fonction, elle, se remplace le temps d'un test.
+// Elle vit desormais dans le <head>, sous window.__rcInstallEvt, et
+// `deferredPrompt` n'est plus qu'un accesseur qui pointe dessus — la capture
+// tardive d'ici ne servait a rien.
+// LA FONCTION RESTE, et c'est deliberе : c'est la couture par laquelle la
+// suite eprouve la branche F. Sans elle, un Chrome qui offre vraiment
+// l'installation prendrait toujours la branche C, et le repli resterait a
+// jamais non verifie.
 function rcInstallInvite(){ return deferredPrompt; }
 // PURE. Déjà installé : la question ne se pose plus.
 function rcInstallAutonome(){
@@ -64067,24 +64151,46 @@ function rcInstallDecider(){
   dire('Ton navigateur installe RepCore depuis son menu.');
   return 'F';
 }
-window.addEventListener('beforeinstallprompt',(e)=>{
-  e.preventDefault();deferredPrompt=e;
+// CE QUE L'ON FAIT QUAND L'INVITATION EST LA — appele DEUX FOIS, et il le faut :
+// une fois tout de suite au cas ou la tete l'aurait deja retenue, une fois sur
+// notre propre evenement au cas ou elle arriverait plus tard. Le navigateur ne
+// declenche beforeinstallprompt qu'une fois SES criteres reunis, ce qui peut
+// tomber avant comme apres l'analyse de ce bloc.
+function _rcInviteArrivee(){
   const b=document.getElementById('install-btn');
   if(b) b.style.display='flex';
-  // L'ÉVÉNEMENT ARRIVE APRÈS LA PREMIÈRE DÉCISION, et régulièrement : le
-  // navigateur ne le déclenche qu'une fois ses propres critères réunis. Sans
-  // ce second passage, un Android éligible restait sur la branche F et se
-  // voyait expliquer un menu alors qu'un bouton suffisait.
+  // Sans ce second passage, un Android eligible restait sur la branche F de
+  // l'ecran d'installation et se voyait expliquer un menu alors qu'un bouton
+  // suffisait.
   try{
     if(document.getElementById('s-install')?.classList.contains('active')) rcInstallDecider();
   }catch(err){}
+}
+// DEJA LA ? On ne l'attend pas : c'est le cas normal desormais, la tete est
+// analysee bien avant ce bloc.
+try{ if(window.__rcInstallEvt) _rcInviteArrivee(); }catch(e){}
+window.addEventListener('rc-install-dispo',_rcInviteArrivee);
+// MEME REGLE POUR L'INSTALLATION FAITE : la tete pose le drapeau et previent,
+// on se contente d'ecouter. `document.getElementById(...).style` levait quand
+// le bouton n'existe pas encore — l'evenement peut arriver avant le DOM.
+window.addEventListener('rc-install-fait',()=>{
+  const b=document.getElementById('install-btn');
+  if(b) b.style.display='none';
+  try{ toast('RepCore installé sur ton téléphone ✓'); }catch(e){}
+  // L'ECRAN D'INSTALLATION N'A PLUS RIEN A PROPOSER : il repasse en branche A.
+  try{ if(document.getElementById('s-install')?.classList.contains('active')) go('s-welcome'); }catch(e){}
 });
-window.addEventListener('appinstalled',()=>{
-  document.getElementById('install-btn').style.display='none';
-  toast(' RepCore installé sur ton téléphone !');
-});
+// LE GESTE, EN UN SEUL ENDROIT. __rcInstall vit dans la tete et connait les
+// trois issues ; installApp n'est plus qu'un nom conserve pour ses appelants.
 function installApp(){
-  if(deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.then(()=>{deferredPrompt=null;});}
+  try{
+    return window.__rcInstall().then(r=>{
+      // « dismissed » n'est pas un echec : quelqu'un a dit non, et le lui
+      // redire serait insister. On ne dit rien.
+      if(r==='indisponible') toast('Ton navigateur ne propose pas l\'installation ici.','var(--orange)');
+      return r;
+    });
+  }catch(e){ return Promise.resolve('indisponible'); }
 }
 // iOS : beforeinstallprompt ne se déclenche jamais — guide manuel
 (function(){
