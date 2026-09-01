@@ -946,7 +946,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .fq-carte[data-serre] .fq-titre{font-size:var(--fs-2xl)}
 .tab-bar{display:flex;background:#0c0c0c;border-top:1px solid rgba(255,255,255,.08);box-shadow:0 -10px 24px rgba(0,0,0,.65);padding:6px 0 10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));flex-shrink:0;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
-.tab-btn{flex:1 1 auto;min-width:0;overflow:hidden;position:relative;background:none;border:none;color:#8a8a8a;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 3px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.2px;transition:color var(--t-2),transform var(--arc-strike) var(--arc-c-discharge);white-space:nowrap}
+.tab-btn{flex:1 1 auto;min-width:0;overflow:hidden;position:relative;background:none;border:none;color:#8a8a8a;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 3px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.2px;transition:color var(--t-2),transform var(--arc-strike) var(--arc-c-discharge);white-space:nowrap}
 /* 6 onglets doivent tenir sans debordement horizontal. La taille ne descend
    plus pour y arriver — c'est l'interlettrage et les marges qui cedent.
    Mesure a 375px : « ÉVOLUTION » demandait 66px pour 63 disponibles et poussait
@@ -964,7 +964,34 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    On garde les SEPT libelles entiers plutot que d'abreger « Evolution », qui
    est un ecran installe depuis des mois : rapetisser une police se corrige, un
    onglet renomme desoriente. La contrepartie est reelle et assumee — 10px au
-   lieu de 11 sous 420px de large. */
+   lieu de 11 sous 420px de large.
+
+   MAIS ELLE NE VAUT QUE LA, et c'est ce qui manquait : la regle de BASE portait
+   elle aussi 10px, donc sur TOUS les ecrans. L'exception mesuree pour un iPhone
+   de 375px s'appliquait a un moniteur de 1280, ou la place ne manque pas. Les
+   sept libelles y etaient sous le plancher sans qu'aucune mesure ne le demande.
+   La base repasse a 11px ; la requete media ci-dessous, elle, ne bouge pas —
+   c'est la seule exception, et elle reste mesuree.
+
+   REMESURE LE 01/09/2026, meme methode (flex fige, largeur reelle des sept) :
+     base, 11px / 3px / .2px  -> 416px requis. La regle prend a partir de 421px
+                                 d'ecran : 5px de marge au pire. Verifie en
+                                 contraignant la barre — a 421px de large, sept
+                                 libelles entiers sur une ligne, rien de tronque.
+                                 SEUL RESIDU : une FENETRE de bureau de 421 a
+                                 430px avec un ascenseur classique laisse 406px a
+                                 la barre, et cinq libelles perdent 1px chacun —
+                                 le flanc d'une lettre, pas un caractere, et
+                                 toujours sur une ligne. Deplacer le seuil a 430
+                                 couterait plus : c'est la largeur exacte d'un
+                                 iPhone 15 Pro Max, qui n'a pas d'ascenseur et
+                                 tient les 416px sans peine.
+     media, 11px / 2px / 0    -> 392px requis : deborde encore sur 375 comme sur
+                                 390, exactement ce que disait la mesure d'aout.
+     media, 10px / 2px / 0    -> 359px requis : inchange, et c'est ce qui tient.
+   Les deux chiffres d'aout se retrouvent au pixel pres a la methode pres ; le
+   seul qui change est celui de la base, parce que personne ne l'avait mesure
+   pour ce qu'elle est — une regle de grand ecran. */
 @media(max-width:420px){.tab-btn{letter-spacing:0;padding:6px 2px;font-size:var(--fs-2xs);flex:1 1 auto}}
 /* Sous 360px (iPhone SE = 320px) : meme a 10px, 359px ne rentrent plus. Plutot
    que de rapetisser encore ou de tronquer, la barre defile — les derniers
@@ -3608,7 +3635,9 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .gv-flocon svg{width:15px;height:15px;display:block;
   animation:gvTourne var(--t-boucle) linear infinite}
 @keyframes gvTourne{to{transform:rotate(360deg)}}
-.gv-past-txt{font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;
+/* 10.5px fige : sous le plancher, et pour rien — la mention tient large a 11px,
+   meme sur 375px de large ou elle partage la ligne avec le glacon. */
+.gv-past-txt{font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
   letter-spacing:2px;text-transform:uppercase;color:#8fc2f0;line-height:1}
 
 /* ── Le texte ────────────────────────────────────────────────────────── */

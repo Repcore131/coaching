@@ -8848,22 +8848,37 @@ function testExercices(){
               // les sept libellés sont le premier élément que le plancher
               // visait. Quinze autres règles passent sous 11 px sur d'autres
               // écrans — hors portée d'ici, et signalées comme telles.
-              // LA BARRE D ONGLETS EST HORS PLANCHER, et c est mesure, pas
-              // concede : sept libelles a 11px demandent 412px de large et
-              // debordent sur 375 comme sur 390. A 10px ils tiennent des
-              // 359px. Un libelle rapetisse reste lisible ; deux libelles qui
-              // se chevauchent, non. Le plancher tient partout ailleurs.
-              // La barre d onglets est la SEULE exception, et elle est mesuree :
-              // sept libelles a 11px demandent 412px et debordent sur 375 comme
-              // sur 390. A 10px ils tiennent des 359px. Un libelle rapetisse
-              // reste lisible, deux libelles qui se chevauchent non.
-              if(/tab-btn|tab-bar|client-tabbar/.test(r.selectorText)) continue;
+              // LA BARRE D ONGLETS EST HORS PLANCHER SUR UN PETIT ECRAN, et
+              // c est mesure, pas concede : sept libelles a 11px demandent
+              // 392px de large — interlettrage nul, 2px de marge — et debordent
+              // sur 375 comme sur 390. A 10px ils tiennent des 359px. Un
+              // libelle rapetisse reste lisible ; deux qui se chevauchent, non.
+              //
+              // MAIS L EXCEPTION S ARRETE LA, et c est ce qui manquait ici : la
+              // regle de BASE portait 10px elle aussi, donc sur un moniteur de
+              // 1280 ou la place ne manque pas. Une mesure faite pour un iPhone
+              // de 375px gouvernait tous les ecrans. Cette sonde sautait les
+              // regles .tab-btn en bloc et ne pouvait pas le voir.
+              //
+              // On distingue donc les deux : sous la requete media qui vise
+              // 420px ou moins, 10px est admis ; PARTOUT AILLEURS le plancher
+              // s applique, barre d onglets comprise.
+              const _petitEcran=/max-width\s*:\s*(\d+)px/.exec(ou||'');
+              const _exempte=!!(_petitEcran&&parseInt(_petitEcran[1],10)<=420);
+              const _onglet=/tab-btn|tab-bar|client-tabbar/.test(r.selectorText);
+              if(_onglet&&_exempte) continue;
               // Le plancher tient partout ailleurs — y compris sur le cadenas
               // d onglet, qui n a aucune raison d y echapper.
-              if(!/tab-lock/.test(r.selectorText)) continue;
+              if(!_onglet&&!/tab-lock/.test(r.selectorText)) continue;
               const v=(r.style.getPropertyValue('font-size')||'').trim();
+              // LES JETONS COMPTENT AUTANT QUE LES PIXELS. La base ne dit plus
+              // « 10px » mais « var(--fs-2xs) », qui vaut 10 : une sonde qui ne
+              // lirait que les valeurs figees laisserait revenir le defaut sous
+              // son autre nom.
+              const _jetons={'var(--fs-2xs)':10,'var(--fs-xs)':11};
               const m=/^([0-9.]+)px$/.exec(v);
-              if(m&&parseFloat(m[1])<11)
+              const px=m?parseFloat(m[1]):(_jetons[v]!==undefined?_jetons[v]:null);
+              if(px!==null&&px<11)
                 fautes.push((ou?ou+' ':'')+r.selectorText+' → '+v);
             }
           };
@@ -8878,6 +8893,44 @@ function testExercices(){
           // Et l'échelle existe toujours, avec son plancher à 11.
           const xs=getComputedStyle(document.documentElement).getPropertyValue('--fs-xs').trim();
           return xs==='11px'?true:_echec('--fs-xs vaut '+xs);})());
+        ok('L\'exception de la barre d\'onglets survit, et elle seule',(()=>{
+          // LES DEUX MOITIES DE LA MEME REGLE, et il faut les deux : sans la
+          // base au plancher, les sept libelles restent sous 11px sur tous les
+          // ecrans ; sans l exception, ils debordent sur un iPhone de 375px.
+          // Corriger l une en cassant l autre est le risque exact de ce lot.
+          const css=Array.from(document.querySelectorAll('style'))
+            .map(x=>x.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+          const base=/\.tab-btn\{[^}]*font-size:var\(--fs-xs\)/.test(css);
+          if(!base) return _echec('la règle de base ne pose plus le plancher');
+          if(!/@media\(max-width:420px\)\{\.tab-btn\{[^}]*font-size:var\(--fs-2xs\)/.test(css))
+            return _echec('l’exception mesurée du petit écran a disparu');
+          // ET LE DEFILEMENT SOUS 360px, qui est le vrai filet : meme a 10px,
+          // 359px ne rentrent pas dans 320. On ne rapetisse pas plus, on fait
+          // defiler.
+          return /@media\(max-width:359px\)/.test(css)
+            ?true:_echec('le repli en défilement sous 360px a disparu');})());
+        ok('Les sept libelles d\'onglet tiennent sur une ligne',(()=>{
+          // LE RISQUE DE CE LOT, mesure plutot que suppose : une police plus
+          // grande peut faire passer un libelle a la ligne, ou le tronquer.
+          const bar=document.getElementById('client-tabbar');
+          if(!bar) return _echec('barre d’onglets introuvable');
+          const vis=bar.classList.contains('show');
+          bar.classList.add('show');
+          try{
+            const btns=[...bar.querySelectorAll('.tab-btn')];
+            if(btns.length<7) return _echec(btns.length+' onglet(s) seulement');
+            // UNE SEULE LIGNE : toutes les hauteurs egales. Un libelle qui
+            // passe a la ligne rend son bouton plus haut que les autres.
+            const h=[...new Set(btns.map(b=>Math.round(b.getBoundingClientRect().height)))];
+            if(h.length>1) return _echec('hauteurs inégales, un libellé est passé à la ligne : '+h.join('/'));
+            // ET RIEN N EST COUPE. .tab-btn porte overflow:hidden : un
+            // debordement ne se voit pas, il ronge la fin du mot en silence.
+            const coupes=btns.filter(b=>b.scrollWidth>b.clientWidth+1)
+              .map(b=>b.textContent.trim());
+            if(coupes.length) return _echec('libellé(s) tronqué(s) : '+coupes.join(', '));
+            return bar.scrollWidth<=bar.clientWidth+1
+              ?true:_echec('la barre déborde de '+Math.round(bar.scrollWidth-bar.clientWidth)+'px');
+          } finally { if(!vis) bar.classList.remove('show'); }})());
 
         // ══════ AUCUNE COMMANDE INVISIBLE ══════
         ok('Aucun bouton rendu n\'est dépourvu de glyphe',(()=>{
