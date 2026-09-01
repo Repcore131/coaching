@@ -8825,6 +8825,91 @@ async function testExercices(){
         // ══════ ÉCRANS À ENCOCHE ══════
         // Trois réglages qui ne se voient jamais sur un écran de bureau, et dont
         // l'absence rend l'app inutilisable sur un iPhone récent en PWA.
+        // ══════ UNE POUSSEE QUI RATE NE PART PLUS EN SILENCE ══════
+        //
+        // Sur les 59 points de poussee du fichier, 24 passent par toastSync et
+        // parlent deja a l'endroit du geste. SEPT ne disaient rien du tout.
+        // Trois d'entre eux le meritaient — les quatre autres non, et c'est
+        // aussi un resultat : une poussee en boucle sur N athletes pendant une
+        // suppression de compte, ou l'ecriture d'une taille DEDUITE que personne
+        // n'a demandee, n'ont rien a annoncer.
+        okA('Un envoi qui rate le dit — un envoi qui passe se tait',(async()=>{
+          // ⚠ LE JOURNAL DES TOASTS N'EST PAS A NOUS. Ces assertions sont
+          // DIFFEREES : elles s'executent apres le corps synchrone, et les
+          // poussees « lance et oublie » declenchees par les fixtures
+          // precedentes se resolvent pendant nos `await`. Un premier jet
+          // comptait tous les toasts vus et tombait sur « Accès activé ✓ »
+          // emis par un autre test — un echec qui ne disait rien de notre code.
+          //
+          // ON NE RETIENT DONC QUE CE QUI PORTE NOTRE SENTINELLE.
+          const SENT='ZZ-SONDE-'+Math.floor(Math.random()*1e6);
+          const _t=window.toast; const tous=[];
+          const vus={get length(){return tous.filter(m=>m.indexOf(SENT)>=0).length;},
+                     get 0(){return tous.filter(m=>m.indexOf(SENT)>=0)[0];},
+                     join(s){return tous.filter(m=>m.indexOf(SENT)>=0).join(s);},
+                     vider(){tous.length=0;}};
+          try{
+            window.toast=(m)=>{tous.push(String(m));};
+            // LE SILENCE EN CAS DE SUCCES EST LA MOITIE DU LOT. C'est ce qui
+            // distingue ce helper de toastSync : les trois gestes annoncent deja
+            // leur resultat autrement — le code s'affiche, la ligne disparait, la
+            // date change — et un second message dirait deux fois la meme chose.
+            if(await direSiEnvoiEchoue(Promise.resolve(),SENT)!==true)
+              return _echec('un envoi réussi ne rend pas true');
+            if(vus.length) return _echec('un envoi réussi a parlé : '+vus.join(' | '));
+            // LA PANNE ORDINAIRE : elle est deja dans rc_sync_queue et sera
+            // rejouee. On le dit, plutot que d'alarmer pour une panne dont l'app
+            // s'occupe deja.
+            const r=await direSiEnvoiEchoue(Promise.reject(new Error('boum')),
+              SENT+' La suppression','ton athlète verra encore ce complément');
+            if(r!==false) return _echec('un envoi raté ne rend pas false');
+            if(vus.length!==1) return _echec(vus.length+' message(s) pour un échec');
+            if(!/réessaiera/.test(vus[0])) return _echec('la relance n’est pas annoncée : '+vus[0]);
+            // ET LA CONSEQUENCE EST NOMMEE : « pas encore envoyé » ne veut rien
+            // dire tout seul.
+            if(!/ton athlète verra encore/.test(vus[0]))
+              return _echec('la conséquence n’est pas dite : '+vus[0]);
+            // LE REFUS DELIBERE NE SERA JAMAIS REJOUE — le promettre serait un
+            // mensonge. Son propre message part tel quel.
+            vus.vider();
+            const refus=new Error(SENT+' Le programme distant est plus récent : envoi annulé.');
+            refus._nonRejouable=true;
+            await direSiEnvoiEchoue(Promise.reject(refus),SENT,'peu importe');
+            if(vus.length!==1) return _echec('le refus délibéré ne parle pas');
+            if(/réessaiera/.test(vus[0]))
+              return _echec('on promet une relance qui n’aura jamais lieu : '+vus[0]);
+            return /plus récent/.test(vus[0])
+              ?true:_echec('le message du refus est perdu : '+vus[0]);
+          } finally { window.toast=_t; }}));
+        okA('Le helper ne rejette JAMAIS',(async()=>{
+          // Ses appelants sont des « lance et oublie » : un rejet non capturé ne
+          // doit pas sortir d'un helper dont tout l'objet est de rendre les
+          // échecs visibles.
+          const _t=window.toast;
+          try{
+            window.toast=()=>{};
+            await direSiEnvoiEchoue(Promise.reject(new Error('x')),'X');
+            await direSiEnvoiEchoue(Promise.reject(null),'X');
+            return true;
+          }catch(e){ return _echec('il a rejeté : '+((e&&e.message)||e)); }
+          finally { window.toast=_t; }}));
+        ok('Les trois poussees les plus couteuses sont branchees',(()=>{
+          // LE CODE D'ACCES EST LE PLUS COUTEUX DES SEPT SILENCES : un code vit
+          // dans /rc_codes cote serveur, et si la poussee echoue il n'existe que
+          // sur l'appareil du coach. Il le lit a l'ecran, le donne a son athlete,
+          // et le code ne marche pas — sans qu'aucun des deux ne comprenne.
+          const nu=f=>String(f).replace(/\/\/.*/g,'');
+          const cas=[['generateStudentCode',generateStudentCode],
+                     ['_extendAccessCode',_extendAccessCode],
+                     ['deleteClientSuppEntry',deleteClientSuppEntry]];
+          const manque=cas.filter(([,f])=>nu(f).indexOf('direSiEnvoiEchoue(')<0).map(([n])=>n);
+          if(manque.length) return _echec('muet(s) : '+manque.join(', '));
+          // ET AUCUNE DES TROIS N'EST PASSEE A toastSync : ce serait ajouter un
+          // toast de SUCCES la ou le resultat est deja visible a l'ecran.
+          const enTrop=cas.filter(([,f])=>nu(f).indexOf('toastSync(')>=0).map(([n])=>n);
+          return enTrop.length
+            ?_echec('un toast de succès a été ajouté : '+enTrop.join(', ')):true;})());
+
         // ══════ CE QUI NE CHARGE PAS DOIT LE DIRE ══════
         //
         // Trois echecs etaient MUETS : une video purgee chez l'hebergeur laissait

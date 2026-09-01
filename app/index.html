@@ -55382,7 +55382,12 @@ function deleteClientSuppEntry(index){
     const c=getOwnedClient(currentClientId,users);
     if(!c||!Array.isArray(c.nutrition?.supplements)) return;
     c.nutrition.supplements.splice(index,1);
-    c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
+    // GESTE DESTRUCTEUR SUR LE DOSSIER D'UN AUTRE, et la ligne disparait de
+    // l'ecran du coach quoi qu'il arrive : sans ce mot, il croit le complement
+    // retire alors que son athlete le voit encore dans sa liste.
+    c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);
+    direSiEnvoiEchoue(CLOUD.pushOne(c.email,c),'La suppression',
+      'ton athlète verra encore ce complément');
     renderCoachSuppSection(c);
   });
 }
@@ -62310,6 +62315,48 @@ function saveUser(){
 // n'existe nulle part. `perdu` est une proposition complète fournie par
 // l'appelant, ce qui règle l'accord en genre (« la photo est », « le programme
 // est ») sans que le helper ait à le deviner.
+// ══ QUAND CA RATE, ET SEULEMENT QUAND CA RATE ═══════════════════════════
+//
+// POURQUOI PAS toastSync. Celle-ci parle AUSSI en cas de succes, et c'est ce
+// qu'on ne veut pas ici : les trois gestes qu'elle couvre annoncent deja leur
+// resultat autrement — le code s'affiche a l'ecran, la ligne du complement
+// disparait, la date d'acces se met a jour. Un second message dirait deux fois
+// la meme chose, et l'utilisateur finirait par ne plus lire ni l'un ni l'autre.
+//
+// CE QUI RESTE MUET, EN REVANCHE, C'EST L'ECHEC — et il ne l'est plus.
+//
+// LE MESSAGE DEPEND DE LA NATURE DE L'ECHEC, et c'est tout l'interet de ne pas
+// se contenter d'un texte unique :
+//
+//   - PANNE ORDINAIRE (reseau coupe, 5xx) : _doPushOne l'a deja mise dans
+//     rc_sync_queue et arme une relance, rejouee au demarrage suivant et apres
+//     chaque authentification. La poussee se REPARE toute seule, et le dire
+//     evite d'alarmer pour une panne dont l'app s'occupe deja.
+//
+//   - REFUS DELIBERE (`_nonRejouable`) : le serveur porte une version plus
+//     complete et l'envoi a ete annule pour ne pas ecraser le travail du coach.
+//     Celui-la NE SERA JAMAIS REJOUE — le promettre serait un mensonge. On rend
+//     donc son message tel quel : il est deja ecrit pour etre lu, et il dit la
+//     seule chose utile.
+//
+// `quoi` nomme le geste et `consequence` dit ce que ca change POUR QUELQU'UN :
+// « pas encore envoye » ne veut rien dire tout seul ; « ton athlete ne la verra
+// pas encore » se comprend d'un coup.
+//
+// NE REJETTE JAMAIS : ses appelants sont des « lance et oublie », et un rejet
+// non capture ne doit pas sortir d'un helper dont tout l'objet est de rendre
+// les echecs visibles.
+function direSiEnvoiEchoue(promesse,quoi,consequence){
+  return Promise.resolve(promesse).then(()=>true,e=>{
+    if(e&&e._nonRejouable&&e.message){ try{ toast(e.message,'var(--orange)'); }catch(_e){} return false; }
+    try{
+      toast((quoi||'Ce changement')+' est enregistré ici mais pas encore envoyé'
+        +(consequence?' : '+consequence+'.':'.')
+        +' RepCore réessaiera tout seul.','var(--orange)');
+    }catch(_e){}
+    return false;
+  });
+}
 function toastEcriture(ok,succes,perdu){
   if(ok){toast(succes);return true;}
   toast('Stockage plein : '+perdu+' dans le cloud uniquement, pas sur cet appareil','var(--orange)');
@@ -66090,7 +66137,12 @@ async function _extendAccessCode(codeId,addMonths,token){
   if(data&&data.athleteEmail){
     const users=DB.get('users')||{};
     const ath=users[data.athleteEmail];
-    if(ath){ath.accessExpiry=newExpiry;ath.updatedAt=Date.now();users[data.athleteEmail]=ath;DB.set('users',users);CLOUD.pushOne(data.athleteEmail,ath);appliedImmediately=true;}
+    // La prolongation touche le dossier de QUELQU'UN D'AUTRE : le coach voit sa
+    // nouvelle date, l'athlete garde l'ancienne tant que l'envoi n'est pas parti.
+    if(ath){ath.accessExpiry=newExpiry;ath.updatedAt=Date.now();users[data.athleteEmail]=ath;DB.set('users',users);
+      direSiEnvoiEchoue(CLOUD.pushOne(data.athleteEmail,ath),'La prolongation',
+        'ton athlète ne la verra pas encore');
+      appliedImmediately=true;}
   }
   return {token,payload,appliedImmediately};
 }
@@ -66159,7 +66211,12 @@ async function generateStudentCode(){
   const users=DB.get('users')||{};
   users[currentUser.email]=currentUser;
   DB.set('users',users);DB.set('session',currentUser);
-  CLOUD.pushOne(currentUser.email,currentUser);
+  // LE PLUS COUTEUX DES SEPT SILENCES. Un code vit dans /rc_codes cote serveur :
+  // si la poussee echoue, il existe sur l'appareil du coach et NULLE PART
+  // AILLEURS. Le coach le lit a l'ecran, le donne a son athlete, et le code ne
+  // marche pas — sans qu'aucun des deux ne puisse comprendre pourquoi.
+  direSiEnvoiEchoue(CLOUD.pushOne(currentUser.email,currentUser),'Ce code',
+    'il ne fonctionnera pas tant qu\'il n\'est pas parti, attends d\'être en ligne avant de le donner');
   // Display
   lastGeneratedCode=token;
   document.getElementById('sc-code-val').textContent=token;
