@@ -40456,10 +40456,39 @@ function _nomsRemplacement(){
 // PURE. Les candidats, filtrés par la recherche. L'exercice courant ne se
 // propose pas lui-même. Tous les mots doivent être présents, comme dans la
 // banque : un ET, pas un OU.
-// LE CATALOGUE EST RESERVE AU COACH. Un athlete ne recoit AUCUN candidat :
-// il saisit lui-meme le nom du mouvement qu il a fait. La garde est ici, a
-// la source, et non dans le rendu — un ecran qui n affiche pas une liste
-// qu il a quand meme construite reste une fuite en attente.
+// LE CATALOGUE CHERCHABLE EST RESERVE AU COACH. Un athlete ne recoit AUCUN
+// candidat : il saisit lui-meme, en texte libre, le nom du mouvement qu il a
+// fait. La garde est ici, a la source, et non dans le rendu — un ecran qui
+// n affiche pas une liste qu il a quand meme construite reste une fuite en
+// attente.
+//
+// TRANCHE PAR KEVIN LE 02/09/2026, la question ayant ete reposee. Ce qui a ete
+// pese, et qui reste vrai :
+//
+//   • LA DONNEE EST DEJA CHEZ L ATHLETE. SCHEMAS_BRUT est une constante de ce
+//     fichier — 10 272 octets, 414 noms — livree a tout le monde et mise en
+//     cache hors ligne par le service worker. La garde ne protege donc AUCUNE
+//     ressource distante, et ouvrir la recherche n aurait coute aucune requete.
+//     A ne pas confondre avec la banque du coach (chargerBanque), qui est du
+//     reseau et que peutConsulterBanque protege : ce n est pas elle qu on lit
+//     ici.
+//
+//   • LE PRIX EST CONNU ET ACCEPTE. Le coach lit ce que l athlete a tape —
+//     « presse inclinee », « Presse Incliné », « prese inclinee » — trois
+//     ecritures qu exKey ne rapproche pas, donc aucun historique de charge ne
+//     se construit sur ces remplacements. C est le prix d un athlete qui
+//     RAPPORTE ce qu il a fait au lieu de CHOISIR dans un menu ; le menu se
+//     lirait comme une invitation a composer son programme, et le programme
+//     appartient au coach.
+//
+// ⚠ « FUITE EN ATTENTE » NE VEUT PAS DIRE QUE LES NOMS N ATTEIGNENT JAMAIS L
+// ATHLETE, et le croire ferait ecrire un jour une garde qui n a pas lieu d
+// etre. substitutsDe(), appelee par _blocContrainteSeance pendant la seance,
+// lit le MEME SCHEMAS_BRUT et n a aucune garde de role : quand l athlete
+// signale une gene, il voit jusqu a trois exercices nommes. C est voulu et
+// c est autre chose — une suggestion de SANTE, filtree par zone douloureuse et
+// bornee a trois, pas un catalogue qu on fouille. La regle porte sur la
+// RECHERCHE LIBRE dans les 414 noms, pas sur le fait qu un nom soit prononce.
 function candidatsRemplacement(nomCourant,q){
   if(!currentUser||currentUser.role!=='coach') return [];
   const cur=exKey(nomCourant||'');
