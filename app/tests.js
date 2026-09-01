@@ -7172,8 +7172,16 @@ function testExercices(){
           if(iRole<0) return _echec('la réassignation n\'est plus cantonnée au coach');
           if(!(iRole<iOff)) return _echec('offboardCoach est atteignable par un athlète');
           // Et le bloc se referme AVANT la confirmation : sinon un athlete
-          // n'atteindrait jamais le confirm.
-          const iConf=src.indexOf('const ok=confirm(');
+          // n'atteindrait jamais la question.
+          //
+          // CETTE SONDE A ETE ROUGE POUR RIEN. Elle cherchait la chaine exacte
+          // « const ok=confirm( » ; le jour ou confirm() a laisse la place a
+          // rcConfirm(), l'indexOf est passe a -1 et la comparaison iOff<-1 a
+          // vire au rouge en annoncant un enfermement qui n'existait pas. Le
+          // code, lui, n'a jamais eu ce defaut. On vise desormais l'APPEL, quel
+          // que soit le nom du poseur de question.
+          const iConf=src.search(/const\s+ok\s*=\s*await\s+rcConfirm\(/);
+          if(iConf<0) return _echec('la confirmation a disparu de la suppression');
           return (iOff<iConf)
             ?true:_echec('la confirmation est enfermée dans la branche coach');})());
         ok('Le profil athlète porte sa zone dangereuse, et elle NOMME la santé',(()=>{
@@ -7205,10 +7213,48 @@ function testExercices(){
           // dossier sans lien avec lui.
           if(!/u\.coachId===currentUser\.id&&k!==myKey/.test(src))
             return _echec('la déliaison a changé de filtre');
-          // Et le balayage local est TOTAL : l'appareil de celui qui part ne
-          // garde pas les dossiers des autres.
-          return /k\.indexOf\('rc_'\)===0/.test(src)
-            ?true:_echec('des traces locales survivent');})());
+          // ET LE BALAYAGE LOCAL EST CIBLE — cette sonde demandait L'INVERSE.
+          //
+          // Elle exigeait `k.indexOf('rc_')===0`, le balayage de TOUTES les
+          // clefs du prefixe. C'etait bien le code d'origine, et c'etait un
+          // defaut : il emportait rc_users, le dossier de tous les comptes de
+          // l'appareil, et rc_comptes, le registre du multi-compte. Supprimer
+          // son compte effacait donc celui d'a cote. Le correctif a remplace le
+          // balayage par un retrait cible ; la sonde, restee telle quelle,
+          // reclamait le retour du defaut.
+          //
+          // CE QU'ON VERIFIE MAINTENANT : que le balayage aveugle ne revienne
+          // pas, et que le retrait cible couvre bien les trois prefixes qui
+          // portent des images du corps.
+          const nu=src.replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+          if(/k\.indexOf\('rc_'\)===0/.test(nu))
+            return _echec('le balayage aveugle est revenu : il emporterait les autres comptes');
+          for(const p of ["rc_p2_","rc_photo_","rc_pendingphoto_"])
+            if(nu.indexOf(p)<0) return _echec(p+' n’est plus effacé');
+          return true;})());
+        ok('Les photos d\'un bilan JAMAIS TERMINE partent aussi',(()=>{
+          // ARTICLE 17. rc_pendingphoto_<champ> porte les photos de mensuration
+          // d'un bilan commence et ni valide ni annule : elles ne passent en
+          // rc_photo_ qu'a la validation. La suppression effacait rc_photo_ et
+          // rc_p2_ et laissait celles-la — des photos du corps survivant a un
+          // effacement que l'interface annonce comme total.
+          const nu=String(requestAccountDeletion)
+            .replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+          if(!/_bilPurgerPhotos\('depart'\)/.test(nu)||!/_bilPurgerPhotos\('coaching'\)/.test(nu))
+            return _echec('les deux types de bilan ne sont pas purgés');
+          // LE MECANISME LUI-MEME, en vrai : la fonction appelee efface bien.
+          const temoins=['rc_pendingphoto_deb-photo-face','rc_pendingphoto_bil-photo-dos'];
+          try{
+            temoins.forEach(k=>localStorage.setItem(k,'x'));
+            _bilPurgerPhotos('depart'); _bilPurgerPhotos('coaching');
+            const restants=temoins.filter(k=>localStorage.getItem(k)!==null);
+            if(restants.length) return _echec('survit à la purge : '+restants.join(', '));
+          } finally { temoins.forEach(k=>{try{localStorage.removeItem(k);}catch(e){}}); }
+          // ET LE FILET, pour un troisieme type de bilan que _bilPhotoPrefixe
+          // ne connaitrait pas : une photo de corps oubliee ne se signale
+          // jamais d'elle-meme.
+          return /indexOf\('rc_pendingphoto_'\)===0/.test(nu)
+            ?true:_echec('un préfixe inconnu passerait au travers');})());
 
 
         // ── Le repli de lecture, sans migration ──────────────────────────

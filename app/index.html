@@ -65095,6 +65095,34 @@ async function requestAccountDeletion(){
           if(_datesSet.has(_d)) localStorage.removeItem(k);
         }
       }
+      // ── LES PHOTOS D'UN BILAN JAMAIS TERMINÉ ────────────────────────
+      //
+      // rc_pendingphoto_<champ> : les photos de mensuration d'un bilan
+      // COMMENCÉ et ni validé ni annulé. Elles ne passent en rc_photo_ qu'à la
+      // validation — avant ça, elles n'existent que là. La suppression
+      // effaçait rc_photo_ et rc_p2_, et les laissait : un athlète qui avait
+      // ouvert un bilan, photographié son corps, puis fermé l'application
+      // gardait ces photos sur l'appareil après un effacement que l'interface
+      // annonce comme total. Manquement à l'article 17, sur les données les
+      // plus intimes de toutes.
+      //
+      // AUCUNE CONDITION, et c'est délibéré : ces clés ne portent NI adresse NI
+      // date, seulement un nom de champ. Rien ne pourra donc les rattacher à un
+      // compte plus tard. Le même raisonnement que pour les blobs IndexedDB
+      // — sauf qu'ici il n'y a même pas de doute à lever, parce que le
+      // BROUILLON qui les accompagne, BIL_DRAFT_KEY, part déjà sans condition
+      // juste au-dessus. Le texte du bilan et ses photos décrivent la même
+      // saisie inachevée : en effacer un et garder l'autre n'a de sens dans
+      // aucun des deux sens.
+      _bilPurgerPhotos('depart'); _bilPurgerPhotos('coaching');
+      // ET LE RESTE DU PRÉFIXE, s'il en reste. Les deux appels ci-dessus
+      // passent par _bilPhotoPrefixe, qui ne connaît que 'deb-' et 'bil-'. Un
+      // troisième type de bilan ajouté plus tard glisserait au travers en
+      // silence, et le silence est exactement ce qu'on ne peut pas se permettre
+      // ici : une photo de corps oubliée ne se signale jamais d'elle-même.
+      for(const k of Object.keys(localStorage))
+        if(k.indexOf('rc_pendingphoto_')===0)
+          try{ localStorage.removeItem(k); }catch(e){}
       // sessionStorage est propre à cet onglet et ne survit pas : rien d'un
       // autre compte n'y vit durablement.
       sessionStorage.clear();
