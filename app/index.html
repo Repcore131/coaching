@@ -4400,6 +4400,103 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- WELCOME -->
+<!-- ══════════ L'ÉCRAN D'INSTALLATION ══════════════════════════════════════
+     Il précède s-welcome dans le DOM et dans le parcours : arriver sur RepCore,
+     c'est d'abord se voir proposer de l'installer. Le lien « Continuer sans
+     installer » existe, mais il reste un lien — l'installation est le chemin,
+     pas l'exception.
+
+     MÊME VOCABULAIRE QUE s-welcome, délibérément : fond carbone, rougeur
+     haut-centre, vignette de bords, logo, var(--pile-titre), #E02020, boutons
+     pleine largeur en majuscules espacées. Deux écrans consécutifs qui ne se
+     ressembleraient pas donneraient l'impression d'avoir changé d'application
+     entre le premier et le deuxième geste.
+
+     UN SEUL BLOC EST VISIBLE À LA FOIS. rcInstallDecider() les cache tous puis
+     n'en rallume qu'un : c'est la seule façon d'être sûr qu'aucune combinaison
+     d'agent utilisateur n'en affiche deux. -->
+<div id="s-install" class="screen carbon-bg" style="flex-direction:column;height:100vh;height:100dvh;position:relative;overflow:hidden">
+
+  <!-- Rougeur subtile haut-centre — reprise de s-welcome -->
+  <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:400px;background:radial-gradient(ellipse at 50% 0%,rgba(224,32,32,.18) 0%,transparent 65%);pointer-events:none;z-index:0"></div>
+  <!-- Diagonales de texture -->
+  <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 28px,rgba(255,255,255,.012) 28px,rgba(255,255,255,.012) 29px);pointer-events:none;z-index:0"></div>
+  <!-- Vignette de bords -->
+  <div style="position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 88% 78% at 50% 42%,transparent 22%,rgba(0,0,0,.5) 58%,rgba(0,0,0,.92) 100%)"></div>
+
+  <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding:24px 28px 0;overflow-y:auto">
+
+    <div style="animation:wFadeUp 0.45s var(--c-out) 0s both;min-height:0;flex-shrink:0">
+      <img src="./icons/logo.png" alt="RepCore" style="display:block;width:132px;height:132px;height:min(132px,20dvh);width:auto;aspect-ratio:1;filter:drop-shadow(5px 8px 16px rgba(0,0,0,.95)) drop-shadow(2px 4px 6px rgba(0,0,0,.7))">
+    </div>
+
+    <div style="margin-top:28px;margin-top:min(28px,3.4dvh);text-align:center;animation:wFadeUp var(--t-4) var(--c-out) 0.18s both;opacity:0">
+      <div style="font-size:var(--fs-2xl);font-weight:900;line-height:1.1;letter-spacing:-1.2px;color:var(--text);text-shadow:0 2px 20px rgba(0,0,0,.95),0 0 50px rgba(0,0,0,.8)">Installe<br><span style="color:#E02020;--halo-c:rgba(224,32,32,.5);text-shadow:var(--halo-3),0 2px 14px rgba(0,0,0,.9)">RepCore.</span></div>
+      <div id="rc-inst-sous" style="margin-top:14px;font-size:var(--fs-sm);color:rgba(255,255,255,.5);line-height:1.6;max-width:340px"></div>
+    </div>
+
+    <!-- ── B. NAVIGATEUR INTÉGRÉ ─────────────────────────────────────────
+         Instagram, Facebook, Messenger, TikTok, LinkedIn, Snapchat, X : leur
+         navigateur maison n'installe RIEN. Aucun bouton ne peut y aboutir, et
+         en proposer un serait promettre ce qui ne se produira pas. -->
+    <div id="rc-inst-integre" class="rc-inst-bloc" style="display:none;margin-top:22px;width:100%;max-width:380px;text-align:center">
+      <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.3);border-radius:var(--r-3);padding:15px 16px;font-size:var(--fs-sm);color:#f0d6d6;line-height:1.65">
+        Tu es dans le navigateur intégré d'une application.<br>
+        <b style="color:var(--text)">Il ne sait pas installer RepCore.</b>
+      </div>
+    </div>
+
+    <!-- ── E. ORDINATEUR : le téléphone est ailleurs ─────────────────────
+         Rien à installer ici : RepCore s'utilise en salle, pas au bureau. Le
+         QR fait passer l'adresse d'un écran à l'autre sans la retaper. -->
+    <div id="rc-inst-bureau" class="rc-inst-bloc" style="display:none;margin-top:22px;width:100%;max-width:380px;text-align:center">
+      <div id="rc-qr" style="width:180px;height:180px;margin:0 auto;background:#fff;border-radius:var(--r-3);display:flex;align-items:center;justify-content:center"></div>
+      <div id="rc-inst-adresse" style="margin-top:12px;font-size:var(--fs-xs);color:rgba(255,255,255,.55);line-height:1.6;word-break:break-all"></div>
+    </div>
+
+    <!-- ── F. REPLI : le menu du navigateur ──────────────────────────────
+         Firefox Android et les navigateurs exotiques installent tous, mais
+         chacun par son menu. On dessine l'icône plutôt que de la nommer : les
+         trois points et les trois trais ne portent pas le même mot d'un
+         téléphone à l'autre. -->
+    <div id="rc-inst-menu" class="rc-inst-bloc" style="display:none;margin-top:22px;width:100%;max-width:380px">
+      <div style="display:flex;align-items:center;gap:13px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.13);border-radius:var(--r-3);padding:14px 16px">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#E02020" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0">
+          <circle cx="12" cy="5" r="1.4" fill="#E02020" stroke="none"></circle>
+          <circle cx="12" cy="12" r="1.4" fill="#E02020" stroke="none"></circle>
+          <circle cx="12" cy="19" r="1.4" fill="#E02020" stroke="none"></circle>
+        </svg>
+        <div style="font-size:var(--fs-sm);color:#ccc;line-height:1.6">Ouvre le menu de ton navigateur et choisis <b style="color:var(--text)">« Ajouter à l'écran d'accueil »</b>.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BOTTOM : l'action. flex-shrink:0 — c'est le bloc du haut qui cède. -->
+  <div style="padding:20px 28px 40px;padding:min(20px,3dvh) 28px min(40px,5dvh);flex-shrink:0;z-index:1;animation:wSlideUp var(--t-4) var(--c-out) 0.24s both;opacity:0">
+
+    <!-- C et D partagent ce bouton : seuls son texte et son geste changent. -->
+    <button class="hv-rouge" id="rc-inst-principal" onclick="rcInstallAgir()"
+      style="display:none;width:100%;padding:20px;background:#E02020;color:var(--text);border:none;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:background var(--t-1);box-shadow:var(--e-inset),var(--glow-red)"
+     >INSTALLER REPCORE</button>
+
+    <!-- SUR ORDINATEUR, l'installation locale reste possible quand le
+         navigateur l'offre — mais en second rang : le message principal reste
+         « prends ton téléphone ». -->
+    <button class="hv-teinte" id="rc-inst-ici" onclick="rcInstallLocal()"
+      style="display:none;width:100%;margin-top:12px;padding:13px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:var(--pile-titre);font-size:var(--fs-sm);font-weight:400;letter-spacing:3px;cursor:pointer;text-transform:uppercase;transition:background var(--t-1)"
+     >Installer sur cet ordinateur</button>
+
+    <div style="text-align:center;margin-top:18px">
+      <!-- JAMAIS UN BOUTON PLEIN. L'installation est le chemin par défaut ;
+           ce lien est la sortie, il ne doit pas peser autant qu'elle. -->
+      <a href="#" id="rc-inst-passer" onclick="rcInstallPasser();return false;"
+        style="display:inline-block;padding:8px 12px;font-size:var(--fs-sm);color:rgba(255,255,255,.45);text-decoration:underline;text-underline-offset:3px;font-family:Montserrat,sans-serif;cursor:pointer">Continuer sans installer</a>
+    </div>
+  </div>
+
+</div>
+
 <div id="s-welcome" class="screen carbon-bg" style="flex-direction:column;height:100vh;height:100dvh;position:relative;overflow:hidden">
 
   <!-- Rougeur subtile haut-centre -->
@@ -11065,7 +11162,7 @@ window.onload=()=>{
           }
         },350);
       } else {
-        go('s-welcome');
+        go(rcEcranDeDepart());
       }
       // ── L'INVITATION, SESSION DÉJÀ OUVERTE ────────────────────────────
       // Hors de la chaîne de `else` ci-dessus, et APRÈS son routage : le
@@ -63773,11 +63870,214 @@ async function createAthlete(){
   loadCoachHome();
 }
 
-// ======= PWA INSTALL =======
+// ══════════════ L'ÉCRAN D'INSTALLATION : QUI VOIT QUOI ══════════════════
+//
+// Cinq situations, cinq messages, et JAMAIS DEUX À LA FOIS. La règle
+// d'exclusion n'est pas décorative : un téléphone Android dans le navigateur
+// d'Instagram satisfait à la fois « Chromium » et « navigateur intégré », et
+// lui montrer un bouton d'installation qui ne peut pas aboutir est pire que
+// de ne rien lui montrer. On éteint donc tout, puis on rallume UN bloc.
+//
+// L'ORDRE DES TESTS EST LA DÉCISION. Il se lit du plus contraignant au plus
+// permissif : déjà installé, puis prisonnier d'un navigateur intégré, puis
+// devant un ordinateur, puis les deux chemins qui installent vraiment.
+//
+// ⚠ L'ORDINATEUR PASSE AVANT LE BOUTON D'INSTALLATION, contrairement à l'ordre
+// de la demande, et c'est délibéré : Chrome de bureau déclenche
+// beforeinstallprompt lui aussi, et RepCore s'utilise en salle, pas au bureau.
+// Sur un ordinateur, le geste utile est de faire passer l'adresse au téléphone.
+// L'installation locale reste offerte, en second rang, quand le navigateur la
+// propose — on ne retire pas une capacité, on choisit ce qu'on met devant.
 let deferredPrompt=null;
+
+// PROVISOIRE, ET REMPLAÇABLE. La détection fine des navigateurs intégrés
+// appartient au lot suivant : si une implémentation plus complète est posée
+// plus tard sous ce nom, elle prend la place de celle-ci sans que rien d'autre
+// ne bouge. En attendant, ces sept-là couvrent l'essentiel du trafic social.
+if(typeof window.rcNavigateurIntegre!=='function'){
+  window.rcNavigateurIntegre=function(){
+    const u=String(navigator.userAgent||'');
+    // FBAN/FBAV : Facebook et Messenger. Instagram et les autres se nomment.
+    return /FBAN|FBAV|FB_IAB|Instagram|Messenger|TikTok|BytedanceWebview|LinkedInApp|Snapchat|Twitter/i.test(u);
+  };
+}
+// De même : le lot suivant écrira la sortie vers le vrai navigateur. Tant
+// qu'elle n'existe pas, on ne fait pas semblant — on dit quoi faire à la main.
+if(typeof window.rcOuvrirDansNavigateur!=='function'){
+  window.rcOuvrirDansNavigateur=function(){
+    try{ toast('Touche les trois points en haut à droite, puis « Ouvrir dans le navigateur ».','var(--orange)'); }catch(e){}
+    return false;
+  };
+}
+// L'ÉCRAN DE DÉPART. Trois cas rendent la proposition d'installation inutile
+// ou insistante, et dans ces trois cas on entre comme avant :
+//   • l'application tourne DÉJÀ en autonome — il n'y a plus rien à installer ;
+//   • deux refus ont été comptés — la troisième fois, c'est du harcèlement ;
+//   • une session est ouverte — quelqu'un qui revient veut son écran, pas une
+//     offre. Il installera par le bouton de l'accueil, qui n'a pas bougé.
+//
+// LE FRAGMENT #install FORCE L'ÉCRAN, et c'est le lien de la page de vente :
+// « INSTALLER L'APPLICATION » pointe sur app/#install. Il passe devant le
+// compteur de refus — on vient de demander à installer, ce n'est pas le moment
+// de faire valoir un refus d'hier.
+// `frag` EST UN PARAMETRE, et il vaut le fragment courant par defaut. Sans lui,
+// eprouver la regle du #install obligeait a ECRIRE dans location.hash — une
+// ecriture qui survit a l'assertion, change l'URL de la page pour tout ce qui
+// suit, et rend la suite non rejouable. Mesure : la sonde passait au premier
+// tour et tombait aux suivants. Un parametre ne laisse rien derriere lui.
+function rcEcranDeDepart(frag){
+  const _h=(frag===undefined?(function(){ try{ return location.hash; }catch(e){ return ''; } })():frag);
+  try{ if(String(_h||'').toLowerCase()==='#install'&&!rcInstallAutonome()) return 's-install'; }catch(e){}
+  if(rcInstallAutonome()) return 's-welcome';
+  try{ if((parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)>=2) return 's-welcome'; }catch(e){}
+  try{ if(localStorage.getItem('rc_session')) return 's-welcome'; }catch(e){}
+  return 's-install';
+}
+// L'INVITATION DU NAVIGATEUR, LUE PAR UNE FONCTION et non directement.
+// `deferredPrompt` est un `let` de portée module : rien ne peut l'atteindre
+// depuis l'extérieur, donc rien ne peut ÉPROUVER la branche F — un Chrome qui
+// offre vraiment l'installation prend toujours la branche C, et le repli reste
+// à jamais non vérifié. Une fonction, elle, se remplace le temps d'un test.
+function rcInstallInvite(){ return deferredPrompt; }
+// PURE. Déjà installé : la question ne se pose plus.
+function rcInstallAutonome(){
+  try{
+    if(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches) return true;
+  }catch(e){}
+  return navigator.standalone===true;
+}
+// PURE. Un ordinateur : pas de pointeur grossier, et de la largeur.
+function rcInstallBureau(){
+  try{
+    const grossier=window.matchMedia&&window.matchMedia('(pointer: coarse)').matches;
+    return !grossier&&window.innerWidth>900;
+  }catch(e){ return false; }
+}
+// PURE. iOS, quel que soit le navigateur — aucun n'y déclenche
+// beforeinstallprompt, tous passent par « Sur l'écran d'accueil ».
+function rcInstalliOS(){
+  const u=String(navigator.userAgent||'');
+  if(/iphone|ipad|ipod/i.test(u)) return true;
+  // iPadOS 13+ se déclare « Macintosh » : le tactile le trahit.
+  return /Macintosh/.test(u)&&navigator.maxTouchPoints>1;
+}
+// Le geste du bouton principal. Il change de sens selon la branche, et c'est
+// rcInstallDecider qui l'a posé — pas ce lecteur-ci.
+let _rcInstGeste=null;
+function rcInstallAgir(){ try{ if(_rcInstGeste) _rcInstGeste(); }catch(e){} return true; }
+// L'installation par le navigateur. __rcInstall appartient au lot suivant ;
+// tant qu'elle n'existe pas, installApp() fait exactement le même geste.
+function rcInstallLocal(){
+  try{
+    if(typeof window.__rcInstall==='function'){ window.__rcInstall(); return true; }
+  }catch(e){}
+  try{ installApp(); }catch(e){}
+  return true;
+}
+// LE REFUS EST COMPTÉ. Au deuxième, l'écran ne se remet plus devant : insister
+// une troisième fois ne convainc personne, ça agace. Le compteur vit dans le
+// stockage local, protégé — un stockage plein ne doit pas empêcher de passer.
+const RC_INST_REFUS='rc_install_refus';
+function rcInstallPasser(){
+  try{
+    const n=(parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)+1;
+    localStorage.setItem(RC_INST_REFUS,String(n));
+  }catch(e){}
+  go('s-welcome');
+  return true;
+}
+// L'AIGUILLAGE. Rend la lettre de la branche retenue — 'A' à 'F' — ce qui rend
+// la décision observable depuis la console et depuis la suite de tests.
+function rcInstallDecider(){
+  const ecran=document.getElementById('s-install');
+  if(!ecran) return 'A';
+  const sous=document.getElementById('rc-inst-sous');
+  const principal=document.getElementById('rc-inst-principal');
+  const ici=document.getElementById('rc-inst-ici');
+  // TOUT S'ÉTEINT D'ABORD. C'est ce qui garantit l'exclusivité, quelle que
+  // soit la branche prise et quel que soit l'état laissé par un appel
+  // précédent — beforeinstallprompt peut arriver après le premier passage.
+  ecran.querySelectorAll('.rc-inst-bloc').forEach(b=>{ b.style.display='none'; });
+  // LE LIBELLÉ PART AVEC L'AFFICHAGE : un bouton caché qui garde le texte de la
+  // branche précédente le montrerait le temps d'une image si une branche future
+  // l'affichait avant de le nommer.
+  if(principal){ principal.style.display='none'; principal.textContent=''; }
+  if(ici) ici.style.display='none';
+  _rcInstGeste=null;
+  const dire=(t)=>{ if(sous) sous.textContent=t||''; };
+  const montrer=(id)=>{ const b=document.getElementById(id); if(b) b.style.display='block'; };
+
+  // A — déjà installé : on ne propose pas ce qui est fait.
+  if(rcInstallAutonome()) return 'A';
+
+  // B — navigateur intégré : aucun bouton ne peut aboutir ici.
+  if(rcNavigateurIntegre()){
+    montrer('rc-inst-integre');
+    dire('Ouvre RepCore dans ton navigateur : c\'est de là que l\'installation se fait.');
+    if(principal){
+      principal.textContent='OUVRIR DANS LE NAVIGATEUR';
+      principal.style.display='block';
+      _rcInstGeste=()=>{ rcOuvrirDansNavigateur(); };
+    }
+    return 'B';
+  }
+
+  // E — ordinateur : le téléphone est ailleurs, on lui passe l'adresse.
+  if(rcInstallBureau()){
+    montrer('rc-inst-bureau');
+    dire('Scanne avec ton téléphone pour installer.');
+    const a=document.getElementById('rc-inst-adresse');
+    if(a){
+      let url='';
+      try{ url=location.origin+location.pathname.replace(/index\.html$/,''); }catch(e){}
+      a.textContent=url||'repcore-sync.web.app/app/';
+    }
+    // Le bouton local n'apparaît que si le navigateur a vraiment de quoi
+    // installer : un bouton qui ne ferait rien vaut moins que pas de bouton.
+    if(ici&&rcInstallInvite()) ici.style.display='block';
+    return 'E';
+  }
+
+  // D — iOS : aucun navigateur n'y déclenche beforeinstallprompt. La modale
+  // qui explique le geste existe déjà, on la réutilise telle quelle.
+  if(rcInstalliOS()){
+    dire('Deux gestes dans Safari, et RepCore est sur ton écran d\'accueil.');
+    if(principal){
+      principal.textContent='AJOUTER À L\'ÉCRAN D\'ACCUEIL';
+      principal.style.display='block';
+      _rcInstGeste=()=>{ try{ showIosInstallGuide(); }catch(e){} };
+    }
+    return 'D';
+  }
+
+  // C — le navigateur a de quoi installer, et il nous l'a dit.
+  if(rcInstallInvite()){
+    dire('Installation directe, sans passer par un magasin d\'applications.');
+    if(principal){
+      principal.textContent='INSTALLER REPCORE';
+      principal.style.display='block';
+      _rcInstGeste=()=>{ rcInstallLocal(); };
+    }
+    return 'C';
+  }
+
+  // F — tout le reste : Firefox Android, navigateurs exotiques. Ils installent
+  // tous, mais chacun par son menu, et aucun ne nous prévient.
+  montrer('rc-inst-menu');
+  dire('Ton navigateur installe RepCore depuis son menu.');
+  return 'F';
+}
 window.addEventListener('beforeinstallprompt',(e)=>{
   e.preventDefault();deferredPrompt=e;
-  document.getElementById('install-btn').style.display='flex';
+  const b=document.getElementById('install-btn');
+  if(b) b.style.display='flex';
+  // L'ÉVÉNEMENT ARRIVE APRÈS LA PREMIÈRE DÉCISION, et régulièrement : le
+  // navigateur ne le déclenche qu'une fois ses propres critères réunis. Sans
+  // ce second passage, un Android éligible restait sur la branche F et se
+  // voyait expliquer un menu alors qu'un bouton suffisait.
+  try{
+    if(document.getElementById('s-install')?.classList.contains('active')) rcInstallDecider();
+  }catch(err){}
 });
 window.addEventListener('appinstalled',()=>{
   document.getElementById('install-btn').style.display='none';

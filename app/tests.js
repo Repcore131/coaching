@@ -9183,6 +9183,144 @@ async function testExercices(){
               ?true:_echec('le mode de segmentation n’est pas remis');})());
         })();
 
+        // ══════ L'ÉCRAN D'INSTALLATION ══════
+        //
+        // SIX SITUATIONS, ET JAMAIS DEUX BLOCS A LA FOIS. C'est la seule
+        // propriete qui compte vraiment : un Android dans le navigateur
+        // d'Instagram satisfait « Chromium » ET « navigateur integre », et lui
+        // montrer un bouton qui ne peut pas aboutir est pire que de ne rien
+        // montrer.
+        (()=>{
+          const _vrai={mm:window.matchMedia,ua:navigator.userAgent,iw:window.innerWidth,
+                       inv:window.rcInstallInvite};
+          const _poser=(o)=>{
+            Object.defineProperty(navigator,'userAgent',{value:o.ua||_vrai.ua,configurable:true});
+            Object.defineProperty(navigator,'standalone',{value:!!o.standalone,configurable:true});
+            Object.defineProperty(navigator,'maxTouchPoints',{value:o.touch||0,configurable:true});
+            Object.defineProperty(window,'innerWidth',{value:o.largeur||390,configurable:true});
+            // L'INVITE EST UNE FONCTION, et c'est ce qui rend la branche F
+            // eprouvable : `deferredPrompt` est un `let` de portee module, donc
+            // hors d'atteinte, et un Chrome qui offre l'installation prendrait
+            // toujours la branche C.
+            window.rcInstallInvite=()=>(o.invite?{}:null);
+            window.matchMedia=(q)=>({matches:/display-mode: standalone/.test(q)?!!o.autonome
+              :/pointer: coarse/.test(q)?!!o.coarse:false,media:q,
+              addListener(){},removeListener(){},addEventListener(){},removeEventListener(){}});
+          };
+          const _rendre=()=>{ window.matchMedia=_vrai.mm; window.rcInstallInvite=_vrai.inv;
+            Object.defineProperty(navigator,'userAgent',{value:_vrai.ua,configurable:true});
+            Object.defineProperty(window,'innerWidth',{value:_vrai.iw,configurable:true}); };
+          const _visibles=()=>['rc-inst-integre','rc-inst-bureau','rc-inst-menu']
+            .filter(i=>{ const b=document.getElementById(i); return b&&b.style.display!=='none'; });
+
+          ok('L\'écran d\'installation précède s-welcome dans le DOM',(()=>{
+            const i=document.getElementById('s-install'), w=document.getElementById('s-welcome');
+            if(!i) return _echec('s-install n’existe pas');
+            if(!w) return _echec('s-welcome a disparu');
+            if(!i.classList.contains('screen')||!i.classList.contains('carbon-bg'))
+              return _echec('il ne porte pas la classe des écrans : '+i.className);
+            // L'ORDRE DU DOM EST L'ORDRE DU PARCOURS : arriver sur RepCore,
+            // c'est d'abord se voir proposer de l'installer.
+            return (i.compareDocumentPosition(w)&Node.DOCUMENT_POSITION_FOLLOWING)
+              ?true:_echec('s-install est placé APRÈS s-welcome');})());
+
+          ok('Les six situations donnent six branches, et une seule à la fois',(()=>{
+            const cas=[
+              ['A',{autonome:true,coarse:true},[]],
+              ['B',{ua:'Android Instagram 300.0',coarse:true},['rc-inst-integre']],
+              ['E',{ua:'Windows Chrome/152',coarse:false,largeur:1440},['rc-inst-bureau']],
+              ['D',{ua:'iPhone; CPU iPhone OS 17_0 Safari/605',coarse:true},[]],
+              ['F',{ua:'Android Firefox/120.0',coarse:true},['rc-inst-menu']],
+              ['C',{ua:'Android Chrome/152 Mobile',coarse:true,invite:true},[]]
+            ];
+            try{
+              for(const [attendue,o,blocs] of cas){
+                _poser(o);
+                const b=rcInstallDecider();
+                if(b!==attendue) return _echec(o.ua+' → branche '+b+' au lieu de '+attendue);
+                const v=_visibles();
+                if(v.join(',')!==blocs.join(','))
+                  return _echec('branche '+attendue+' : blocs visibles '+(v.join(',')||'aucun')
+                    +' au lieu de '+(blocs.join(',')||'aucun'));
+              }
+              return true;
+            } finally { _rendre(); }})());
+
+          ok('Un navigateur intégré ne se voit JAMAIS proposer d\'installer',(()=>{
+            // Le piège exact : Android + Instagram. Les deux conditions sont
+            // vraies, et l'ordre des tests décide. Si la branche C passait
+            // devant, le bouton promettrait ce qui ne peut pas se produire.
+            try{
+              _poser({ua:'Mozilla/5.0 (Linux; Android 13) Instagram 300.0',coarse:true,invite:true});
+              if(rcInstallDecider()!=='B') return _echec('le navigateur intégré a été dépassé');
+              const p=document.getElementById('rc-inst-principal');
+              return /NAVIGATEUR/i.test(p.textContent)
+                ?true:_echec('le bouton propose autre chose : '+p.textContent);
+            } finally { _rendre(); }})());
+
+          ok('« Continuer sans installer » est un lien, jamais un bouton plein',(()=>{
+            // L'installation est le chemin par défaut. Une sortie qui pèse
+            // autant que l'entrée n'est plus une sortie, c'est un choix.
+            const l=document.getElementById('rc-inst-passer');
+            if(!l) return _echec('le lien de sortie a disparu');
+            if(l.tagName!=='A') return _echec('c’est un '+l.tagName+', pas un lien');
+            const st=l.getAttribute('style')||'';
+            if(/background:\s*(#|rgb|var\(--red)/i.test(st))
+              return _echec('il porte un fond plein');
+            if(!/rcInstallPasser\(\)/.test(l.getAttribute('onclick')||''))
+              return _echec('il ne compte pas le refus');
+            return /go\('s-welcome'\)/.test(String(rcInstallPasser))
+              ?true:_echec('il ne mène pas à l’accueil');})());
+
+          ok('L\'écran de départ cède la place dans les trois cas prévus',(()=>{
+            const CLE='rc_install_refus';
+            const _r=localStorage.getItem(CLE), _s=localStorage.getItem('rc_session');
+            try{
+              _poser({coarse:true});
+              localStorage.removeItem(CLE); localStorage.removeItem('rc_session');
+              if(rcEcranDeDepart()!=='s-install') return _echec('un visiteur neuf n’arrive pas sur l’installation');
+              // DEUX REFUS SUFFISENT : insister une troisième fois n'est plus
+              // une proposition, c'est du harcèlement.
+              localStorage.setItem(CLE,'2');
+              if(rcEcranDeDepart()!=='s-welcome') return _echec('deux refus ne suffisent pas');
+              localStorage.setItem(CLE,'1');
+              if(rcEcranDeDepart()!=='s-install') return _echec('un seul refus ferme déjà la porte');
+              localStorage.removeItem(CLE);
+              localStorage.setItem('rc_session','{}');
+              if(rcEcranDeDepart()!=='s-welcome') return _echec('une session ouverte revoit l’offre');
+              localStorage.removeItem('rc_session');
+              // ET DÉJÀ INSTALLÉ : il n'y a plus rien à proposer.
+              _poser({autonome:true,coarse:true});
+              if(rcEcranDeDepart()!=='s-welcome') return _echec('l’app autonome repropose l’installation');
+              // LE FRAGMENT #install PASSE DEVANT LE COMPTEUR : c'est le lien
+              // « INSTALLER L'APPLICATION » de la page de vente, et on vient de
+              // demander à installer.
+              _poser({coarse:true});
+              localStorage.setItem(CLE,'5');
+              // LE FRAGMENT EST PASSE, PAS ECRIT. L'ecrire changerait l'URL de
+              // la page pour tout ce qui suit — la sonde passait au premier tour
+              // et tombait aux suivants, ce qui est exactement le defaut que le
+              // lanceur d'idempotence est la pour attraper.
+              if(rcEcranDeDepart('#install')!=='s-install')
+                return _echec('#install ne force pas l’écran');
+              if(rcEcranDeDepart('')!=='s-welcome')
+                return _echec('sans fragment, cinq refus ne ferment plus la porte');
+              return true;
+            } finally {
+              _rendre();
+              if(_r===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_r);
+              if(_s===null) localStorage.removeItem('rc_session'); else localStorage.setItem('rc_session',_s);
+            }})());
+
+          ok('La modale iOS existante est réutilisée, pas réécrite',(()=>{
+            // Elle explique le geste « Partager → Sur l'écran d'accueil » et
+            // elle marche : la réécrire aurait été refaire ce qui existe.
+            if(!document.getElementById('ios-install-modal'))
+              return _echec('la modale iOS a disparu');
+            return /showIosInstallGuide\(\)/.test(String(rcInstallDecider))
+              ?true:_echec('la branche iOS ne l’ouvre pas');})());
+        })();
+
         // ══════ LE PLANCHER TYPOGRAPHIQUE ══════
         // 11 px est la plus petite taille admise. En dessous, un libellé en
         // majuscules très espacées — ceux qui portent le sens — n'est plus
