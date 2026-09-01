@@ -14728,12 +14728,94 @@ async function testExercices(){
             // n'est contacté. cloudfunctions.net n'apparaît que dans _callFn,
             // vestige sans aucun appelant — le déclarer sous-traitant serait
             // aussi faux que d'omettre un sous-traitant réel. w3.org est
-            // l'espace de noms XML des SVG (jamais téléchargé) ; anses.fr et
-            // repcore131 sont des liens que l'utilisateur clique.
+            // l'espace de noms XML des SVG (jamais téléchargé) ; repcore131 est
+            // un lien que l'utilisateur clique.
+            //
+            // ⚠ anses.fr A QUITTÉ CETTE LISTE, et c'est le sens de ce lot : il
+            // n'existe que dans un COMMENTAIRE — la source des références
+            // nutritionnelles, citée en clair. Depuis que le scanner retire les
+            // commentaires, il n'y a plus rien à excuser. Une exception qui ne
+            // couvre plus rien est une invitation à en ajouter une de trop.
             'cloudfunctions.net',
-            'w3.org','anses.fr','repcore131.github.io'];
-          const tout=_prodSrc();
-          const prod=tout;
+            'w3.org','repcore131.github.io'];
+          // ══ LE SCANNER LISAIT LES COMMENTAIRES ═══════════════════════
+          //
+          // Il cherchait dans le source BRUT. Une adresse citée en commentaire —
+          // la source d'une donnée, un exemple de format — ressortait donc comme
+          // un appel réseau, et il fallait l'excuser dans la liste ci-dessus.
+          // C'est ainsi que « id.gs1.org », cité une fois comme exemple de lien
+          // GS1, faisait tomber cette assertion sans qu'aucun appel n'existe.
+          //
+          // DEUX PIÈGES, et le second est le vrai :
+          //   • « https://… » contient « // » : un découpage naïf coupe l'URL en
+          //     deux et fait disparaître l'appel qu'on cherche ;
+          //   • une expression régulière comme /[^'"]/ contient un guillemet.
+          //     Un découpage qui ne connaît que les chaînes y entre en mode
+          //     chaîne, avale le code jusqu'au guillemet suivant et se
+          //     DÉSYNCHRONISE — après quoi il ne reconnaît plus un seul
+          //     commentaire. Mesuré : une chaîne fantôme de 4 026 caractères
+          //     ouverte sur « return /[";\\n\\r]/ », ligne 14660 du produit.
+          //     Un mot-clé avant le « / » n'en fait donc PAS une division.
+          const _sansComm=(js)=>{
+            const MOTS=['return','typeof','case','in','of','delete','void','new',
+                        'do','else','yield','await','instanceof','throw'];
+            const FIN=/[)\]}\w$]/;
+            let out='',dernier='',i=0;
+            const n=js.length;
+            while(i<n){
+              const c=js[i];
+              if(c==='\''||c==='"'||c==='`'){
+                const q=c; out+=c; i++;
+                while(i<n){
+                  if(js[i]==='\\'){ out+=js.substr(i,2); i+=2; continue; }
+                  out+=js[i];
+                  if(js[i]===q){ i++; break; }
+                  i++;
+                }
+                dernier=q; continue;
+              }
+              if(c==='/'&&i+1<n){
+                if(js[i+1]==='/'){ while(i<n&&js[i]!=='\n') i++; continue; }
+                if(js[i+1]==='*'){ const j=js.indexOf('*/',i+2); i=j<0?n:j+2; continue; }
+                const q=out.slice(-24).replace(/\s+$/,'');
+                const motCle=MOTS.some(k=>q.endsWith(k)&&(q.length===k.length
+                  ||!/[\w$]/.test(q[q.length-k.length-1])));
+                if(!FIN.test(dernier)||motCle){
+                  let j=i+1,classe=false;
+                  while(j<n){
+                    const d=js[j];
+                    if(d==='\\'){ j+=2; continue; }
+                    if(d==='\n') break;
+                    if(d==='[') classe=true;
+                    else if(d===']') classe=false;
+                    else if(d==='/'&&!classe){ j++; break; }
+                    j++;
+                  }
+                  out+=' '; dernier=')'; i=j; continue;
+                }
+              }
+              out+=c;
+              if(!/\s/.test(c)) dernier=c;
+              i++;
+            }
+            return out;
+          };
+          const _net=(html)=>{
+            let s=html.replace(/<!--[\s\S]*?-->/g,' ');
+            return s.replace(/<(script|style)\b[^>]*>([\s\S]*?)<\/\1>/gi,
+              (t,bal,corps)=>bal.toLowerCase()==='style'
+                ?corps.replace(/\/\*[\s\S]*?\*\//g,' ')
+                :_sansComm(corps));
+          };
+          const prod=_net(_prodSrc());
+          // TÉMOINS DU DÉCOUPAGE. Sans eux, un découpage cassé rendrait « aucun
+          // domaine non déclaré » sur un fichier entièrement fautif — et cette
+          // assertion, qui garde une obligation légale, passerait au vert en
+          // n'ayant rien lu.
+          if(prod.indexOf('id.gs1.org')>=0||prod.indexOf('anses.fr')>=0)
+            return _echec('le découpage ne retire pas les commentaires');
+          for(const t of ['identitytoolkit.googleapis.com','world.openfoodfacts.org','wa.me'])
+            if(prod.indexOf(t)<0) return _echec('le découpage a mangé un appel réel : '+t);
           const trouves=new Set();
           const re=/https?:\/\/([a-zA-Z0-9.-]+)/g;
           let m;
