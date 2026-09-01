@@ -25334,6 +25334,38 @@ function bqFavori(slug,ev){
   _bqRendre();
 }
 
+// UNE ILLUSTRATION QUI NE CHARGE PAS BASCULE SUR LE MESSAGE DEJA ECRIT. Les
+// deux rendus portaient chacun leur repli — « Aucune illustration pour cet
+// exercice » sur la fiche, un cadre neutre de meme taille dans la liste — mais
+// aucun des deux ne servait quand l'URL existait et que l'image, elle, ne
+// chargeait pas : le guide republie sous d'autres noms de fichier, un index
+// plus recent que les images, un cache a moitie rempli. On voyait alors
+// l'icone cassee du navigateur, qui ne veut rien dire pour personne.
+//
+// LE REPLI EST CELUI DU CONTEXTE, pas un troisieme message : sur la fiche on
+// prend la place de l'image et on l'explique ; dans la liste on rend le cadre
+// neutre, parce que c'est la HAUTEUR qui compte — sans lui la ligne se
+// decalerait et la liste deviendrait un escalier.
+//
+// onerror EST RETIRE AVANT DE REMPLACER : sans ca, un repli qui echouerait a
+// son tour rappellerait la fonction indefiniment.
+function _illusAbsente(el){
+  if(!el||!el.parentNode) return false;
+  try{ el.onerror=null; }catch(e){}
+  const fiche=el.style&&el.style.width==='100%';
+  const d=document.createElement('div');
+  if(fiche){
+    d.className='sub';
+    d.style.cssText='font-size:var(--fs-xs);text-align:center;padding:16px;'
+      +'background:var(--surface-1);border-radius:var(--r-3);margin-bottom:12px';
+    d.textContent='Aucune illustration pour cet exercice.';
+  } else {
+    d.style.cssText='width:64px;height:48px;border-radius:8px;background:var(--surface-2);'
+      +'border:1px solid var(--border);flex-shrink:0';
+  }
+  el.replaceWith(d);
+  return true;
+}
 // ── Rendu ────────────────────────────────────────────────────────────────
 function _bqLigne(f){
   const img=illustrationDe(f.nom);
@@ -25347,6 +25379,7 @@ function _bqLigne(f){
     border:1px solid var(--border);border-radius:var(--r-3);padding:9px 11px;margin-bottom:8px;
     cursor:pointer;min-height:66px">
     ${img?`<img src="${escapeHtml(img)}" alt="" loading="lazy" width="64" height="48"
+      onerror="_illusAbsente(this)"
       style="width:64px;height:48px;object-fit:cover;border-radius:8px;background:#f4f4f4;
       box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);flex-shrink:0">`
       // Pas d'illustration : un cadre neutre de la MÊME taille. Sans lui, la
@@ -25459,7 +25492,7 @@ function ouvrirFicheBanque(slug,ev){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:10px;font-size:var(--fs-lg)">${escapeHtml(f.nom)}</h2>
-    ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" style="width:100%;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3);margin-bottom:12px">`
+    ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" onerror="_illusAbsente(this)" style="width:100%;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3);margin-bottom:12px">`
       :`<div class="sub" style="font-size:var(--fs-xs);text-align:center;padding:16px;background:var(--surface-1);border-radius:var(--r-3);margin-bottom:12px">Aucune illustration pour cet exercice.</div>`}
     ${l('Muscles',(f.muscles||[]).map(m=>(MUSCLES[m]||{}).lib||m).join(', '))}
     ${l('Schéma',SCHEMA_LIB[f.schema]||f.schema||'')}
@@ -32507,6 +32540,22 @@ function finishWorkout(incomplete=false){
     if(suspensionSynchroniser(currentUser)) scheduleWoNotif();
   }catch(e){}
   saveUser();
+  // ══ LA SEANCE EST ENREGISTREE. TOUT CE QUI SUIT N'EST QUE DU RENDU ══════
+  //
+  // Et ce rendu est le plus charge de l'application : trois chiffres, la
+  // comparaison a la seance precedente, le message, les etats musculaires, la
+  // carte « a filmer », le retour au calme, six curseurs, la carte de forme, la
+  // relance de bilan. Une seule exception dans ce train laissait l'ecran a
+  // moitie peint — sans records, sans message, sans retour au calme — et,
+  // pire, SANS go('s-workout-done') : l'athlete restait sur l'ecran de seance
+  // avec l'impression que sa seance n'avait pas ete prise, alors qu'elle
+  // venait d'etre ecrite dans le dossier une ligne plus haut.
+  //
+  // LE MINIMUM VITAL EST DONC L'ECRAN LUI-MEME ET UNE PHRASE QUI DIT LA
+  // VERITE : la seance est enregistree, c'est son detail qui manque. Chaque
+  // geste du repli est isole a son tour — celui qui n'a plus de DOM ne doit pas
+  // empecher les autres.
+  try{
   document.getElementById('wd-time').textContent=mins+'min';
   // « 5/12 » plutôt que « 5 » : l'écart devient lisible au lieu d'être noyé.
   // Même formatage que la fiche coach, via fmtSeries — les deux écrans parlent
@@ -32555,6 +32604,18 @@ function finishWorkout(incomplete=false){
   // reduites » _feterFinSeance sort en premiere ligne et ils sont alors la
   // seule ecriture.
   _feterFinSeance({mins,sets,setsPlanned,vol,records:(_cmp&&_cmp.records&&_cmp.records.length)|0});
+  }catch(e){
+    try{ console.error('[RepCore] rendu de fin de seance',e); }catch(_e){}
+    // L'ECRAN D'ABORD : c'est lui qui dit que la seance est finie.
+    try{ go('s-workout-done'); }catch(_e){}
+    try{
+      const m=document.getElementById('wd-msg');
+      if(m) m.textContent='Séance enregistrée ✓ Le détail de fin de séance n\'a pas pu s\'afficher, mais rien n\'est perdu.';
+    }catch(_e){}
+    // ET UN TOAST, parce que l'ecran de fin peut lui-meme etre reste vide : le
+    // message ci-dessus vit dans un noeud qui n'existe peut-etre plus.
+    try{ toast('Séance enregistrée ✓ (affichage de fin incomplet)','var(--orange)'); }catch(_e){}
+  }
 }
 
 // LA CELEBRATION DE FIN DE SEANCE.
@@ -56607,11 +56668,58 @@ function saveCaffeineCustom(){
 }
 
 // ======= VIDEOS =======
+// LE REPLI D'UNE VIDEO QUI NE CHARGE PAS. Sans lui, le navigateur laissait son
+// lecteur noir, muet, avec un bouton de lecture qui ne fait rien : l'athlete
+// touchait dix fois avant de conclure que l'application etait cassee.
+//
+// LE CAS EST PREVU AILLEURS DANS LE FICHIER, en toutes lettres : « plan Spark :
+// pas de suppression distante Cloudinary [...] le fichier peut etre purge depuis
+// le dashboard ». Une video purgee la-bas laisse donc son URL dans le dossier,
+// et c'est exactement ce que cette fonction rencontre.
+//
+// LE BOUTON DE RETRAIT EST LA VRAIE REPARATION : la ligne ne sert plus a rien,
+// et sans lui l'athlete n'a aucun moyen de s'en debarrasser. On ne retire QUE
+// l'entree locale — le fichier distant, lui, n'a jamais ete joignable d'ici.
+//
+// L'IDENTIFIANT SE LIT SUR L'ELEMENT, pas dans l'attribut : le construire dans
+// une chaine onerror demanderait un echappement de plus, sur une valeur qui
+// vient du dossier. `vc-video-<id>` est pose par _buildVideoCard ; l'ecran du
+// coach, lui, passe l'identifiant par defaut et n'offre donc pas le retrait.
+function _videoIndisponible(el){
+  if(!el||!el.parentNode) return false;
+  const id=String(el.id||'').startsWith('vc-video-')?el.id.slice('vc-video-'.length):'';
+  const mail=(currentUser&&currentUser.email)||'';
+  const d=document.createElement('div');
+  d.className='video-absente';
+  d.style.cssText='margin-top:8px;padding:14px;border:1px dashed var(--border);'
+    +'border-radius:var(--r-2);background:var(--surface-2);text-align:center';
+  d.innerHTML='<div style="font-size:var(--fs-sm);font-weight:800;margin-bottom:4px">Vidéo indisponible</div>'
+    +'<div class="sub" style="font-size:var(--fs-xs);line-height:1.55">Le fichier n\'est plus chez l\'hébergeur. '
+    +'Le lien reste dans ta liste, mais il ne mène plus à rien.</div>';
+  if(id&&mail){
+    const b=document.createElement('button');
+    b.className='btn btn-outline btn-sm';
+    b.style.cssText='margin-top:10px';
+    b.textContent='Retirer de ma liste';
+    // Fonction NOMMEE et non attribut : un `await` dans un onclick en ligne ne
+    // compile pas, et le gestionnaire n'existe alors tout simplement pas.
+    b.onclick=()=>{ _retirerVideoAbsente(mail,id); };
+    d.appendChild(b);
+  }
+  el.replaceWith(d);
+  return true;
+}
+async function _retirerVideoAbsente(email,id){
+  if(!await rcConfirm('Retirer cette vidéo de ta liste ?',
+    'Le fichier n\'est plus chez l\'hébergeur : seule l\'entrée disparaît.','Retirer')) return false;
+  await deleteVideo(email,id);
+  return true;
+}
 function _videoEmbed(url,vidId='vc-video'){
   if(!url) return '';
   const ytM=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
   if(ytM) return `<iframe src="https://www.youtube.com/embed/${ytM[1]}" frameborder="0" allowfullscreen style="width:100%;height:190px;border-radius:var(--r-2);margin-top:8px"></iframe>`;
-  if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${vidId}" src="${url}" controls preload="none" playsinline webkit-playsinline style="width:100%;border-radius:var(--r-2);margin-top:8px;max-height:220px;background:#000"></video>`;
+  if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${vidId}" src="${url}" controls preload="none" playsinline webkit-playsinline onerror="_videoIndisponible(this)" style="width:100%;border-radius:var(--r-2);margin-top:8px;max-height:220px;background:#000"></video>`;
   return `<a href="${url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:10px 14px;background:var(--surface-2);border-radius:var(--r-2);color:var(--red-text);font-size:var(--fs-sm);font-weight:700;text-decoration:none">▶ Voir la vidéo</a>`;
 }
 
@@ -56693,7 +56801,22 @@ async function _buildVideoCard(v){
   const tsInner=_renderTsAnnotations(v.feedbackTimestamps||[],{readonly:true,videoId:'vc-video-'+v.id});
   const tsBlock=tsInner?`<div style="margin-top:8px">${tsInner}</div>`:'';
   const fbBlock=hasFb?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px;margin-top:10px;font-size:var(--fs-sm)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:var(--fs-xs);font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:var(--fs-xs);color:var(--text-dim)">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}</div>`:'';
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="if(await rcConfirm('Supprimer cette vidéo ?',null,'Supprimer'))deleteVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_videoEmbed(v.url,'vc-video-'+v.id)}${fbBlock}</div>`;
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_videoEmbed(v.url,'vc-video-'+v.id)}${fbBlock}</div>`;
+}
+// LE BOUTON « × » NE FAISAIT RIEN, ET AUCUNE ERREUR N'EN SORTAIT. Il portait
+// `onclick="if(await rcConfirm(...))deleteVideo(...)"` : le contenu d'un
+// gestionnaire en ligne est compile comme le corps d'une fonction ORDINAIRE, et
+// un `await` y est une erreur de syntaxe. Le gestionnaire n'etait donc jamais
+// cree — verifie : `typeof bouton.onclick` vaut « object », c'est-a-dire null,
+// et le clic ne declenche rien du tout. Depuis le passage de confirm() a
+// rcConfirm(), supprimer une video etait impossible, en silence.
+//
+// UNE FONCTION NOMMEE, donc, appelee en « lance et oublie » comme partout
+// ailleurs dans le fichier.
+async function _demanderSuppressionVideo(email,id){
+  if(!await rcConfirm('Supprimer cette vidéo ?',null,'Supprimer')) return false;
+  await deleteVideo(email,id);
+  return true;
 }
 async function deleteVideo(email,videoId){
   const users=DB.get('users')||{};

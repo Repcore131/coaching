@@ -8825,6 +8825,125 @@ async function testExercices(){
         // ══════ ÉCRANS À ENCOCHE ══════
         // Trois réglages qui ne se voient jamais sur un écran de bureau, et dont
         // l'absence rend l'app inutilisable sur un iPhone récent en PWA.
+        // ══════ CE QUI NE CHARGE PAS DOIT LE DIRE ══════
+        //
+        // Trois echecs etaient MUETS : une video purgee chez l'hebergeur laissait
+        // un lecteur noir qui ne fait rien, une illustration invalide laissait
+        // l'icone cassee du navigateur, et une exception dans le rendu de fin de
+        // seance laissait l'ecran a moitie peint sur une seance pourtant ecrite.
+        (()=>{
+          ok('Une video qui ne charge pas le DIT, et propose le retrait',(()=>{
+            const h=_videoEmbed('https://res.cloudinary.com/x/video/upload/v1/a.mp4','vc-video-42');
+            if(h.indexOf('onerror="_videoIndisponible(this)"')<0)
+              return _echec('aucun repli sur la vidéo');
+            // LE REPLI LUI-MEME, joue en vrai : une sonde de source ne dirait
+            // rien d'un message reste dans une branche que personne n'atteint.
+            const _cu=currentUser;
+            const d=document.createElement('div');
+            document.body.appendChild(d);
+            try{
+              currentUser={email:'lea@t.fr',id:'a1',role:'athlete'};
+              d.innerHTML=h;
+              const v=d.querySelector('video');
+              if(!v) return _echec('aucun élément vidéo rendu');
+              if(_videoIndisponible(v)!==true) return _echec('le repli refuse de jouer');
+              if(d.querySelector('video')) return _echec('la vidéo morte est toujours là');
+              const t=(d.textContent||'').replace(/\s+/g,' ');
+              if(!/Vidéo indisponible/.test(t)) return _echec('rien ne dit que la vidéo manque : '+t.slice(0,80));
+              // LE BOUTON DE RETRAIT EST LA VRAIE REPARATION : sans lui la ligne
+              // reste dans la liste pour toujours.
+              const b=d.querySelector('button');
+              if(!b) return _echec('aucun bouton de retrait');
+              if(typeof b.onclick!=='function') return _echec('le bouton de retrait n’a pas de gestionnaire');
+              // ET PAS DE BOUTON SANS IDENTIFIANT : l'ecran du coach passe
+              // l'identifiant par defaut, il n'a rien a retirer.
+              const d2=document.createElement('div'); document.body.appendChild(d2);
+              try{
+                d2.innerHTML=_videoEmbed('https://x/a.mp4');
+                _videoIndisponible(d2.querySelector('video'));
+                return d2.querySelector('button')===null
+                  ?true:_echec('un bouton de retrait sans identifiant de vidéo');
+              } finally { d2.remove(); }
+            } finally { d.remove(); currentUser=_cu; }})());
+          ok('Le bouton × d\'une vidéo a un gestionnaire QUI COMPILE',(()=>{
+            // IL N'EN AVAIT PLUS. « onclick="if(await rcConfirm(...))..." » : le
+            // contenu d'un gestionnaire en ligne est compile comme le corps
+            // d'une fonction ORDINAIRE, et un `await` y est une erreur de
+            // syntaxe. Le gestionnaire n'etait donc jamais cree, et supprimer
+            // une video etait impossible — sans le moindre message.
+            // ⚠ LA SONDE MATCHAIT SON PROPRE COMMENTAIRE. Le correctif explique
+            // le defaut en citant le gestionnaire fautif ; scanner le fichier
+            // brut retrouvait donc la citation et declarait le defaut present.
+            // On retire les lignes de commentaire avant de chercher — ancrees
+            // en DEBUT DE LIGNE, jamais sur un « // » quelconque, qui vit aussi
+            // au milieu des URL.
+            const src=_prodSrc().split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+            if(/onclick="[^"]*await /.test(src))
+              return _echec('un gestionnaire en ligne contient encore un await');
+            if(typeof _demanderSuppressionVideo!=='function')
+              return _echec('la fonction nommée de suppression a disparu');
+            // ET LE GESTIONNAIRE EXISTE VRAIMENT une fois la carte rendue.
+            const d=document.createElement('div');
+            d.innerHTML='<button onclick="_demanderSuppressionVideo(\'a@b.fr\',\'42\')">×</button>';
+            return typeof d.firstChild.onclick==='function'
+              ?true:_echec('le gestionnaire ne compile pas');})());
+          ok('Une illustration qui ne charge pas bascule sur le message écrit',(()=>{
+            const src=_prodSrc();
+            if((src.match(/onerror="_illusAbsente\(this\)"/g)||[]).length<2)
+              return _echec('les deux rendus n’ont pas tous les deux leur repli');
+            // LE REPLI DE LA FICHE reprend le message deja ecrit ; celui de la
+            // liste rend le cadre neutre, parce que c'est la HAUTEUR qui compte.
+            const d=document.createElement('div'); document.body.appendChild(d);
+            try{
+              d.innerHTML='<img src="x" style="width:100%;max-height:260px">';
+              _illusAbsente(d.querySelector('img'));
+              if(!/Aucune illustration/.test(d.textContent||''))
+                return _echec('la fiche ne reprend pas son message : '+(d.textContent||''));
+              d.innerHTML='<img src="x" width="64" height="48" style="width:64px;height:48px">';
+              _illusAbsente(d.querySelector('img'));
+              if(d.textContent) return _echec('la liste affiche du texte au lieu d’un cadre');
+              const c=d.firstChild;
+              if(!c||c.style.width!=='64px'||c.style.height!=='48px')
+                return _echec('le cadre neutre n’a pas la taille de l’image');
+              // ET LE REPLI NE SE RAPPELLE PAS LUI-MEME : sans le retrait de
+              // onerror, un repli qui echouerait a son tour boucherait.
+              return /el\.onerror=null/.test(String(_illusAbsente))
+                ?true:_echec('onerror n’est pas retiré avant le remplacement');
+            } finally { d.remove(); }})());
+          ok('Le rendu de fin de seance ne peut plus laisser l\'ecran a moitie peint',(()=>{
+            // La seance est ENREGISTREE une ligne avant : une exception dans le
+            // train de rendu qui suit laissait l'athlete sur l'ecran de seance,
+            // persuade que rien n'avait ete pris.
+            const src=String(finishWorkout);
+            const iSave=src.indexOf('saveUser();');
+            const iTry=src.indexOf('try{',iSave);
+            // LE DERNIER, et pas le premier venu : le train de rendu contient
+            // deja des try/catch locaux — « try{ renderFormeSeance(); }catch(e){} »
+            // en est un — et le premier trouve apres le try tombait sur l'un
+            // d'eux. Les rattrapages internes du repli, eux, nomment leur
+            // exception _e : le dernier « }catch(e){ } » est donc bien celui qui
+            // ferme l'enveloppe.
+            const iCatch=src.lastIndexOf('}catch(e){');
+            if(iSave<0||iTry<0||iCatch<0) return _echec('aucun try/catch après l’enregistrement');
+            // ON VISE LA FETE, PAS LE go(). « go('s-workout-done') » apparait
+            // DEJA plus haut dans la fonction, sur le chemin de la seance
+            // interrompue — la premiere sonde le trouvait la, avant même
+            // l'enregistrement, et concluait que rien n'etait enveloppe.
+            // _feterFinSeance, elle, est la DERNIERE ligne du train de rendu :
+            // la voir entre le try et le catch, c'est voir tout le train dedans.
+            const iFete=src.indexOf('_feterFinSeance(');
+            if(!(iSave<iTry&&iTry<iFete&&iFete<iCatch))
+              return _echec('le rendu n’est pas enveloppé');
+            const rattrapage=src.slice(iCatch,iCatch+900);
+            // L'ECRAN D'ABORD : c'est lui qui dit que la seance est finie.
+            if(rattrapage.indexOf("go('s-workout-done')")<0)
+              return _echec('le repli ne ramène pas sur l’écran de fin');
+            // ET UNE PHRASE QUI DIT LA VERITE : la seance est enregistree, c'est
+            // son detail qui manque.
+            return /enregistrée/.test(rattrapage)
+              ?true:_echec('le repli ne confirme pas l’enregistrement');})());
+        })();
+
         // ══════ LA LECTURE D'UNE ETIQUETTE NUTRITIONNELLE ══════
         //
         // LES TEXTES CI-DESSOUS NE SONT PAS INVENTES. Ce sont les sorties
