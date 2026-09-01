@@ -38501,6 +38501,47 @@ vendredi 78 6h 44m
           return a.some((v,i)=>Math.abs(v-b[i])>0.001);
         }).map(([n,j])=>n+' : css «'+(_v(n)||'ABSENTE')+'» ≠ js «'+j+'»');
         return faux.length?_echec(faux.join(' | ')):true;})());
+      ok('La décharge reste UN alias, et snap n\'est pas --c-snap',(()=>{
+        // TROIS FACONS DE FAIRE DIVERGER A NOUVEAU CES DEUX SOURCES, et
+        // l'assertion ci-dessus n'en voit aucune : elle compare des valeurs
+        // resolues, or les trois pieges portent sur la FORME de la declaration.
+
+        // 1. RELITTERALISER L'ALIAS. --arc-c-discharge:var(--c-out) et
+        //    --arc-c-charge:var(--c-in) doivent rester des renvois. Recopier la
+        //    valeur en dur les rendrait egaux au JS le jour de la copie, donc
+        //    verts ici — et muets le jour ou --c-out bougerait, qui gouverne 95
+        //    appels directs dans le reste de la feuille.
+        if(!/--arc-c-discharge\s*:\s*var\(--c-out\)/.test(_cssArc))
+          return _echec('--arc-c-discharge n’est plus un alias de --c-out');
+        if(!/--arc-c-charge\s*:\s*var\(--c-in\)/.test(_cssArc))
+          return _echec('--arc-c-charge n’est plus un alias de --c-in');
+
+        // 2. LAISSER --arc-c-snap VIDE. Elle a manque pendant des semaines,
+        //    parce qu'aucune regle CSS ne l'appelait — mais ARC.snap existait,
+        //    et une regle qui aurait ecrit var(--arc-c-snap) n'aurait rien recu
+        //    et serait retombee sur `ease` sans le dire.
+        if(!_v('--arc-c-snap')) return _echec('--arc-c-snap est de nouveau vide');
+
+        // 3. CONFONDRE LES DEUX SNAP. --c-snap DEPASSE puis revient — c'est la
+        //    courbe des deux « pop » de badge. --arc-c-snap ne depasse pas ; le
+        //    depassement du cycle ARC vient des paliers de scale. Les aliaser
+        //    l'une sur l'autre priverait les deux pops de leur rebond.
+        if(_v('--arc-c-snap')===_v('--c-snap'))
+          return _echec('les deux courbes « snap » ont été confondues');
+
+        // ET LA PREUVE PAR LE RENDU : une animation reellement construite avec
+        // ARC.discharge doit rapporter la courbe que le CSS resout. C'est le
+        // seul point ou les deux mondes se touchent vraiment.
+        const el=document.createElement('div');
+        const an=el.animate?el.animate([{opacity:0},{opacity:1}],
+          {duration:ARC.strike,easing:ARC.discharge}):null;
+        if(!an) return true;                   // pas de WAAPI : rien a prouver
+        const applique=an.effect.getTiming().easing;
+        try{ an.cancel(); }catch(e){}
+        const nbs=s=>{const m=String(s).match(/-?\d*\.?\d+/g);return m?m.map(Number):[];};
+        const x=nbs(applique), y=nbs(_v('--arc-c-discharge'));
+        return (x.length===4&&y.length===4&&x.every((v,i)=>Math.abs(v-y[i])<0.001))
+          ?true:_echec('l’animation joue «'+applique+'» quand le CSS pose «'+_v('--arc-c-discharge')+'»');})());
       ok('Les amplitudes ARC sont les mêmes en CSS et en JS',(()=>{
         const paires=[['--arc-scale-charge',ARC.scaleCharge],
           ['--arc-scale-impact',ARC.scaleImpact],['--arc-scale-settle',ARC.scaleSettle],

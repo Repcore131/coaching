@@ -3153,11 +3153,24 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
      entre deux tokens equivalents a chaque nouvelle regle. */
   --arc-attack:var(--t-0);--arc-strike:var(--t-1);--arc-release:var(--t-3);
   --arc-afterglow:var(--t-4);--arc-ambient:var(--t-boucle);--arc-plat:var(--t-1);
-  /* Trois courbes, pas neuf. --arc-c-charge etait le doublon exact de
-     --c-in ; --arc-c-snap n'avait aucun appel CSS et vit desormais dans le
-     seul objet JS ARC, sous la cle snap. */
+  /* Trois courbes, pas neuf. --arc-c-charge et --arc-c-discharge sont les
+     doublons exacts de --c-in et --c-out : des ALIAS, donc, et c'est --c-out
+     qui gouverne la sortie de toute l'application, pas seulement ARC.
+
+     --arc-c-snap EST DECLAREE ICI, elle, et en valeur pleine. Elle avait ete
+     retiree parce qu'aucune regle CSS ne l'appelait — mais ARC.snap, lui,
+     existait toujours en JS, et l'assertion qui verrouille les deux sources
+     comparait donc une valeur a du vide. Elle est restee rouge depuis. Une
+     regle qui aurait ecrit var(--arc-c-snap) n'aurait rien recu et serait
+     retombee sur `ease` sans le dire.
+
+     ET CE N'EST PAS --c-snap, malgre le nom. --c-snap vaut .2,1.5,.4,1 : il
+     DEPASSE puis revient — c'est la courbe des deux « pop » de badge. Celle-ci
+     ne depasse pas ; le depassement du cycle ARC vient des paliers de scale,
+     pas de la courbe. Aucune des deux ne peut donc etre l'alias de l'autre. */
   --arc-c-charge:var(--c-in);
   --arc-c-discharge:var(--c-out);
+  --arc-c-snap:cubic-bezier(.2,0,0,1);
   --arc-scale-charge:0.94;--arc-scale-impact:1.14;--arc-scale-settle:0.97;
   --arc-translate:24px;--arc-glow-radius:18px;--arc-glow-rest:6px;
   --arc-flash-peak:0.85}
@@ -12155,8 +12168,27 @@ const ARC=Object.freeze({
   // ambient=--t-boucle, plat=--t-1. Une seule echelle, deux ecritures.
   attack:90, strike:120, release:320, afterglow:620, ambient:2400,
   plat:120,                                   // variante « animations réduites »
+  // ET CES TROIS COURBES DOIVENT RESTER EGALES AUX TOKENS CSS
+  // --arc-c-charge / --arc-c-discharge / --arc-c-snap. Meme courbe, deux
+  // ecritures — le CSS ecrit « .16,1,.3,1 », le JS « 0.16,1.00,0.30,1.00 ».
   charge:'cubic-bezier(0.40,0.00,0.90,0.20)',
-  discharge:'cubic-bezier(0.05,0.70,0.10,1.00)',
+  // LA DECHARGE A DIVERGE, et longtemps : le JS jouait 0.05,0.70,0.10,1.00 quand
+  // le CSS jouait 0.16,1,0.30,1. Deux textures de mouvement dans la meme
+  // interface, sur le meme geste, selon que l'animation venait d'une transition
+  // ou de la Web Animations API.
+  //
+  // C'EST LE CSS QUI A GAGNE, et le comptage ne laissait pas le choix : sur
+  // l'application chargee, 198 elements rendus portent 0.16,1,0.30,1 —
+  // --arc-c-discharge n'en est qu'un alias, la vraie source est --c-out, le
+  // token de sortie de TOUTE l'application, appele 95 fois en direct. La valeur
+  // du JS, elle, n'etait portee par AUCUN element : elle ne vivait que dans les
+  // dix-sept appels a element.animate(). Aligner dix-sept appels sur cent
+  // dix-huit regles, et non l'inverse.
+  discharge:'cubic-bezier(0.16,1.00,0.30,1.00)',
+  // SNAP N'EST PAS --c-snap, malgre le nom. --c-snap vaut .2,1.5,.4,1 : il
+  // DEPASSE puis revient, c'est la courbe des deux « pop » de badge. Celle-ci ne
+  // depasse pas — le depassement du cycle ARC vient des paliers de scale, pas de
+  // la courbe. Deux gestes differents, deux courbes differentes, un mot commun.
   snap:'cubic-bezier(0.20,0.00,0.00,1.00)',
   scaleCharge:0.94, scaleImpact:1.14, scaleSettle:0.97,
   translate:24, glowRadius:18, glowRest:6, flashPeak:0.85
