@@ -37871,16 +37871,52 @@ let _bilPhotoEssais=0;
 // Le questionnaire de départ compte une quinzaine d'étapes. Fermer l'onglet en
 // cours de route effaçait toute la saisie : bilData ne vivait qu'en mémoire.
 const BIL_DRAFT_KEY='rc_bil_draft';
-// PURE. Le brouillon est-il celui du compte courant ?
+// PURE. A qui appartient ce brouillon ? Rend 'moi', 'autre' ou 'incertain'.
 //
 // Une seule clé pour tout l’appareil, un contenu qui n’appartient qu’à une
 // personne : sans cette question, la reprise de bilan traversait les comptes.
-// Un brouillon SANS adresse date d’avant ce champ — on refuse plutôt que de
-// deviner, et c’est le sens sûr.
-function _bilDraftAMoi(d){
+//
+// POURQUOI CE N'EST PLUS BINAIRE. La règle d'origine refusait tout brouillon
+// SANS adresse, avec ce raisonnement : « il date d'avant ce champ, on refuse
+// plutôt que de deviner ». Le raisonnement était juste à l'époque, il ne l'est
+// plus — parce que _bilEcrireDraft écrit `email:(currentUser&&currentUser.email)
+// ||''`. Un brouillon écrit AUJOURD'HUI, alors que le compte n'est pas encore
+// identifié, porte donc une adresse VIDE. « Sans adresse » ne veut plus dire
+// « ancien » : ça veut dire « on ne sait pas ».
+//
+// ET NE PAS SAVOIR N'EST PAS SAVOIR QUE C'EST QUELQU'UN D'AUTRE. Le refus
+// entraînait toute la chaîne : jamais proposé en reprise, jamais compté comme
+// « bilan en cours », donc jamais annoncé avant d'être écrasé. L'athlète
+// perdait ses réponses sans un mot.
+//
+// TROIS ETATS, PARCE QU'IL Y A TROIS SITUATIONS. Les confondre est précisément
+// ce qui a produit la perte : « incertain » traité comme « autre ».
+function _bilDraftProprio(d){
   const moi=(currentUser&&currentUser.email)||null;
-  if(!moi||!d||!d.email) return false;
-  return String(d.email)===String(moi);
+  if(!d) return 'autre';
+  const sien=d.email?String(d.email):'';
+  if(!sien) return 'incertain';
+  if(!moi) return 'incertain';
+  return sien===String(moi)?'moi':'autre';
+}
+// PURE. Le brouillon est-il SUREMENT celui du compte courant ?
+//
+// Un brouillon sans adresse l'est quand UN SEUL COMPTE existe sur l'appareil :
+// il n'y a personne d'autre a qui il puisse appartenir, et le refuser revient a
+// jeter le travail du seul utilisateur present. Des qu'il y en a plusieurs, on
+// ne devine pas — on DEMANDE, ailleurs, plutot que d'ecarter en silence.
+function _bilDraftAMoi(d){
+  const p=_bilDraftProprio(d);
+  if(p==='moi') return true;
+  if(p==='autre') return false;
+  return _bilUnSeulCompte();
+}
+// Un seul compte connu de l'appareil ? Le registre du multi-compte fait foi.
+// VIDE COMPTE POUR UN : le registre n'est ecrit qu'a partir du second compte
+// sur certains chemins, et un appareil sans registre n'a jamais eu qu'un
+// utilisateur.
+function _bilUnSeulCompte(){
+  try{ return comptesConnectes().length<=1; }catch(e){ return true; }
 }
 const BIL_DRAFT_TTL=7*24*3600*1000;
 let _bilDraftTimer=null,_bilDraftAvertiPlein=false;
@@ -38258,6 +38294,24 @@ async function openBilan(type,forcerReprise){
   // court-circuite volontairement le type, pas le propriétaire. Sans elle, le
   // brouillon d’un AUTRE compte déclenchait encore la question « tu as un
   // bilan en cours », en nommant un bilan qui n’est pas le sien.
+  // UN BROUILLON SANS ADRESSE, SUR UN APPAREIL A PLUSIEURS COMPTES : on ne
+  // devine pas, mais on n'ecarte pas en silence non plus. On demande.
+  // POSEE AVANT TOUT LE RESTE : la reponse decide si ce brouillon existe pour
+  // la suite de cette fonction — y compris pour l'avertissement d'ecrasement.
+  if(ancien&&_bilDraftProprio(ancien)==='incertain'&&!_bilUnSeulCompte()){
+    const n=_bilDraftRempli(ancien);
+    if(n>0){
+      const sien=await rcConfirm('Un '+_bilNomType(ancien.bilType)+' commencé avec '+n
+        +' réponse'+(n>1?'s':'')+' a été trouvé sur cet appareil, sans compte identifié.'
+        +'\n\nPlusieurs comptes sont connectés ici. Est-ce le tien ?',null,'C’est le mien');
+      // NON : il reste ou il est. On ne le supprime pas — son proprietaire le
+      // retrouvera en se connectant, et c'est la meme doctrine que pour
+      // l'instantane de seance : la lecture ne detruit rien.
+      if(!sien) return false;
+      ancien.email=(currentUser&&currentUser.email)||'';
+      try{ localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify(ancien)); }catch(e){}
+    }
+  }
   if(ancien&&!_bilDraftAMoi(ancien)) ancien=null;
   const autreType=!!(ancien&&ancien.bilType&&ancien.bilType!==type);
   // POSÉE AVANT DE TOUCHER AUX VARIABLES DU MODULE : refuser doit tout laisser
@@ -38281,6 +38335,22 @@ async function openBilan(type,forcerReprise){
     bilData={...brouillon.bilData};
     _bilRestaurerPhotos(type);
   } else if(brut){
+    // JAMAIS D'EFFACEMENT MUET. Les deux questions ci-dessus ne couvrent que
+    // le brouillon RECONNU — celui d'un autre type, ou celui qu'on vient de
+    // s'attribuer. Tout le reste tombait ici et etait efface sans un mot :
+    // brouillon perime, brouillon d'un autre compte, brouillon refuse a la
+    // question de reprise. Le dernier cas est un choix de l'athlete et ne se
+    // rediscute pas ; les deux autres, non.
+    //
+    // ON NE DEMANDE QUE S'IL Y A QUELQUE CHOSE A PERDRE : un brouillon vide
+    // s'efface sans ceremonie, c'est le cas de tous les jours.
+    const _perdu=(()=>{ try{ return _bilDraftRempli(JSON.parse(brut)); }catch(e){ return 0; } })();
+    if(_perdu>0&&!(brouillon&&_bilDraftRempli(brouillon)>0)){
+      if(!await rcConfirm('Un bilan commencé avec '+_perdu+' réponse'+(_perdu>1?'s':'')
+        +' est encore sur cet appareil, et n’a pas pu être repris.'
+        +'\n\nOuvrir un nouveau bilan l’effacera définitivement.\n\nContinuer ?',
+        null,'Effacer et continuer')) return false;
+    }
     // Brouillon refusé, périmé, ou d'un autre type : on repart à zéro pour de
     // bon, photos en attente comprises — sinon elles reviendraient plus tard.
     //

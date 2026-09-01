@@ -17172,7 +17172,18 @@ function testExercices(){
         const _sv=localStorage.getItem(BIL_DRAFT_KEY);
         try{
           const poser=o=>localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify(o));
-          const plein={bilType:'coaching',bilStep:2,bilData:{poids:'72'},ts:Date.now()};
+          // LE BROUILLON PORTE L'ADRESSE DU COMPTE COURANT, et il le faut : ce
+          // test parle de la PEREMPTION et du TYPE, pas de la propriete. Sa
+          // fixture n'en portait aucune, et elle tombait donc sur la question
+          // de propriete — « sans adresse, sur un appareil a deux comptes, on
+          // ne devine pas » — pour un test qui ne cherchait pas a le savoir.
+          // C'est ce qui le laissait rouge dans la base sans qu'on comprenne.
+          //
+          // LE CAS SANS ADRESSE A SA PROPRE ASSERTION, plus bas : « un
+          // brouillon sans adresse est propose quand un seul compte est
+          // connecte ». Chacune eprouve une chose.
+          const plein={bilType:'coaching',bilStep:2,bilData:{poids:'72'},ts:Date.now(),
+            email:(currentUser&&currentUser.email)||''};
           poser(plein);
           if(!_bilLoadDraft('coaching')) return _echec('un brouillon valide est rejeté');
           // Un questionnaire de départ abandonné ne doit pas s'inviter dans
@@ -17264,8 +17275,13 @@ function testExercices(){
         const _ph=localStorage.getItem(CLE);
         try{
           window.go=()=>{}; window.renderBilStep=()=>{};
+          // NOMME, comme la fixture de la peremption : ce test-ci eprouve
+          // l'avertissement d'AUTRE TYPE, pas la propriete. Sans adresse, il
+          // tombait d'abord sur la question de propriete et n'atteignait jamais
+          // celle qu'il voulait observer.
           localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({bilType:'depart',bilStep:3,
-            bilData:{poids:'70',objectif:'masse'},ts:Date.now()}));
+            bilData:{poids:'70',objectif:'masse'},ts:Date.now(),
+            email:(currentUser&&currentUser.email)||''}));
           localStorage.setItem(CLE,'data:image/jpeg;base64,DEPART');
           let question=null;
           window.confirm=(m)=>{question=m;return false;};
@@ -17298,8 +17314,26 @@ function testExercices(){
         const _ph=localStorage.getItem(CLE);
         try{
           window.go=()=>{}; window.renderBilStep=()=>{};
+          // UN BROUILLON VIDE, et c'est desormais le seul cas qui reste
+          // SYNCHRONE — donc observable par cette assertion.
+          //
+          // CE QUI A CHANGE. Ce brouillon-ci n'a pas de champ email. Il etait
+          // jete d'office — « sans adresse, donc pas a moi » — et l'effacement
+          // se faisait sans la moindre question, donc sans await. Depuis qu'un
+          // brouillon sans adresse appartient au compte courant quand il est
+          // seul sur l'appareil, un brouillon REMPLI declenche une question :
+          // soit la reprise, soit l'avertissement avant effacement. Les deux
+          // sont asynchrones, et une assertion synchrone ne peut plus voir ce
+          // qui se passe apres.
+          //
+          // CE QU'ON GARDE ICI : un brouillon VIDE s'efface sans ceremonie,
+          // photos en attente comprises — c'est le cas de tous les jours, et
+          // c'est l'invariant que ce test defend depuis toujours : une photo
+          // refusee ne doit pas revenir s'inviter au bilan suivant. La question
+          // posee sur un brouillon REMPLI est eprouvee par l'assertion
+          // suivante, sur la forme.
           localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({bilType:'coaching',bilStep:2,
-            bilData:{poids:'72.4'},ts:Date.now()}));
+            bilData:{},ts:Date.now()}));
           localStorage.setItem(CLE,'data:image/jpeg;base64,PHOTOFACE');
           window.confirm=()=>false;
           openBilan('coaching');
@@ -24608,6 +24642,74 @@ function testExercices(){
         const vide=[{name:'',active:false,exercises:[]},plein[1],plein[2]];
         return _cptContenu(vide)<_cptContenu(plein)
           ?true:_echec('vider un créneau ne se voit pas');})());
+
+      // ══════ UN BROUILLON SANS ADRESSE N'EST PAS CELUI D'UN AUTRE ════
+      //
+      // _bilEcrireDraft ecrit `email:(currentUser&&currentUser.email)||''`. Un
+      // brouillon ecrit alors que le compte n'est pas encore identifie porte
+      // donc une adresse VIDE. La regle d'origine refusait tout brouillon sans
+      // adresse — « il date d'avant ce champ » — et ce raisonnement, juste a
+      // l'epoque, ne l'est plus.
+      //
+      // LE REFUS ENTRAINAIT TOUTE LA CHAINE : jamais propose en reprise, jamais
+      // compte comme « bilan en cours », donc jamais annonce avant d'etre
+      // efface. L'athlete perdait ses reponses sans un mot.
+      ok('Un brouillon sans adresse est propose quand un seul compte est connecte',(()=>{
+        const _sv=currentUser, _cpt=localStorage.getItem(CPT_CLE);
+        try{
+          currentUser={email:'seul@t',role:'athlete'};
+          // UN SEUL COMPTE sur l'appareil : il n'y a personne d'autre a qui ce
+          // brouillon puisse appartenir.
+          localStorage.setItem(CPT_CLE,JSON.stringify([{email:'seul@t'}]));
+          const sansMail={bilType:'coaching',bilStep:2,bilData:{poids:'72.4'},ts:Date.now()};
+          if(_bilDraftProprio(sansMail)!=='incertain')
+            return _echec('un brouillon sans adresse est jugé « '+_bilDraftProprio(sansMail)+' »');
+          if(!_bilDraftAMoi(sansMail))
+            return _echec('il est encore écarté alors qu’un seul compte existe');
+          // ET IL EST BIEN CHARGE PAR LA REPRISE — c'est le bout de la chaine
+          // qui comptait : sans cela il n'est jamais propose.
+          const _br=localStorage.getItem(BIL_DRAFT_KEY);
+          try{
+            localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify(sansMail));
+            const d=_bilLoadDraft('coaching');
+            if(!d) return _echec('le chargeur le refuse toujours');
+            if(_bilDraftRempli(d)!==1) return _echec('ses réponses ne sont pas comptées');
+          } finally {
+            if(_br===null) localStorage.removeItem(BIL_DRAFT_KEY);
+            else localStorage.setItem(BIL_DRAFT_KEY,_br);
+          }
+          // AVEC PLUSIEURS COMPTES, on ne devine plus : il reste « incertain »
+          // et la reprise DEMANDE, au lieu d'ecarter en silence.
+          localStorage.setItem(CPT_CLE,JSON.stringify([{email:'seul@t'},{email:'autre@t'}]));
+          if(_bilDraftAMoi(sansMail))
+            return _echec('il est attribué d’office alors que deux comptes coexistent');
+          // ET UN BROUILLON D'UN AUTRE COMPTE RESTE A LUI, dans tous les cas.
+          const aLui={bilType:'coaching',bilStep:1,bilData:{poids:'80'},ts:Date.now(),email:'autre@t'};
+          return _bilDraftProprio(aLui)==='autre'&&!_bilDraftAMoi(aLui)
+            ?true:_echec('un brouillon nommément à quelqu’un d’autre est réclamé');
+        } finally {
+          currentUser=_sv;
+          if(_cpt===null) localStorage.removeItem(CPT_CLE);
+          else localStorage.setItem(CPT_CLE,_cpt);
+        }})());
+      ok('Aucun brouillon non vide n\'est efface sans avertir',(()=>{
+        const s=String(openBilan);
+        // TROIS PORTES MENENT A L'EFFACEMENT, et chacune doit poser sa question.
+        if(s.indexOf('l’effacera')<0&&s.indexOf("l'effacera")<0)
+          return _echec('l’ouverture d’un autre type n’avertit plus');
+        if(s.indexOf('n’a pas pu être repris')<0)
+          return _echec('un brouillon non repris est encore effacé en silence');
+        if(s.indexOf('Est-ce le tien ?')<0)
+          return _echec('un brouillon sans compte identifié est écarté sans question');
+        // ON NE DEMANDE QUE S'IL Y A QUELQUE CHOSE A PERDRE : un brouillon vide
+        // s'efface sans ceremonie, sinon la question tomberait tous les jours
+        // et personne ne la lirait plus.
+        if(s.indexOf('_perdu>0')<0)
+          return _echec('la question tombe même sur un brouillon vide');
+        // ET REFUSER NE DETRUIT RIEN : on rend la main, le brouillon reste.
+        const i=s.indexOf('n’a pas pu être repris');
+        return s.slice(i,i+400).indexOf('return false')>=0
+          ?true:_echec('refuser l’effacement l’efface quand même');})());
 
       // ══════ UN IMPORT N'EFFACE PAS UNE SAISIE A LA MAIN ═════════════
       //
