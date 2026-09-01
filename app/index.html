@@ -3230,8 +3230,18 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 /* ══ L'INDICATEUR DE SEMAINES ═════════════════════════════════════════════
    Un cadre qui brûle. Trois pièces : la flambée derrière, le cadre néon, et
    le cadran à gauche du compte.
-   Tout est dimensionné à partir de --sk-d, le diamètre du cadran. */
-.sk-badge{--sk-d:29px;--sk-f:calc(var(--sk-d)*.76);position:relative;flex-shrink:0}
+   Tout est dimensionné à partir de --sk-d, le diamètre du cadran.
+
+   MAIS LE CHIFFRE, LUI, EST PLAFONNÉ PAR L'ÉCHELLE. 29 × 0,76 fait 22,04 px, et
+   l'échelle s'arrête à --fs-xl, 20 px : le compteur pesait donc deux points de
+   plus que le chiffre des cases voisines, sans qu'aucune règle ne l'ait décidé —
+   il l'avait pris en héritant du diamètre.
+
+   ON PLAFONNE PLUTÔT QUE DE RÉTRÉCIR LE CADRAN. Ramener --sk-d à 26 px ferait
+   bien tomber le chiffre à 19,76, mais emporterait AUSSI le cadran, la flambée
+   et le cadre néon — trois pièces dessinées à 29, qu'aucun constat ne remet en
+   cause. Le min() ne touche qu'au corps du chiffre, qui est le seul écart. */
+.sk-badge{--sk-d:29px;--sk-f:min(calc(var(--sk-d)*.76),var(--fs-xl));position:relative;flex-shrink:0}
 /* ── La flambée ────────────────────────────────────────────────────────────
    DERRIÈRE le cadre, et c'est tout le principe : le corps noir du cadre
    masque le milieu des langues, et il n'en reste que les léchures autour du
@@ -21908,16 +21918,22 @@ function drawLineChart(canvas,datasets,labels){
   // Les coordonnees restent en unites CSS : l echelle est portee ici, une fois.
   ctx.setTransform(_dpr,0,0,_dpr,0,0);
   ctx.clearRect(0,0,W,H);
-  // ANIMATION 9. Cette fonction ne passe pas par _setupCanvas : sans ce
-  // rappel-ci, les graphiques du bilan seraient les seuls à ne pas se tracer.
-  canvas.dataset.arcPret='1';
-  try{ requestAnimationFrame(()=>arcTracerCourbes(canvas)); }catch(e){}
   const pad={t:16,b:28,l:36,r:12};
   const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
   // Compute global min/max across all datasets
   const allVals=datasets.flatMap(d=>d.data.filter(v=>v>0));
   if(!allVals.length)return;
+  // ANIMATION 9. Cette fonction ne passe pas par _setupCanvas : sans ce
+  // rappel-ci, les graphiques du bilan seraient les seuls à ne pas se tracer.
+  //
+  // APRES LE TEST, ET PAS AVANT. Le drapeau et la trame etaient poses en tete de
+  // fonction, donc AUSSI quand il n'y a rien a tracer — un athlete sans pesee
+  // faisait jouer une traversee sur un canevas vide. Le drapeau promet « celle-ci
+  // sera peinte » ; le poser sur un canevas qui sort une ligne plus bas en fait
+  // une promesse fausse, et arcTracerCourbes depense une frame a la tenir.
   const mn=Math.min(...allVals),mx=Math.max(...allVals);
+  canvas.dataset.arcPret='1';
+  try{ requestAnimationFrame(()=>arcTracerCourbes(canvas)); }catch(e){}
   const range=mx-mn||1;
   const yMin=mn-range*0.12,yMax=mx+range*0.12;
   // Grid
@@ -32385,7 +32401,8 @@ function woNav(dir){
   _arcGlissement(dir);
 }
 // ── ANIMATION 6 : LA TRANSITION ENTRE EXERCICES ────────────────────────────
-// Un glissement de 24 px, JAMAIS un fondu — et c'est le sens du glissement qui
+// Un glissement de --arc-translate, JAMAIS un fondu — et c'est le sens du
+// glissement qui
 // porte l'information : le contenu de l'exercice suivant arrive par la droite
 // et se pose en glissant vers la gauche ; un retour arrive par la gauche.
 // L'athlète sait donc où il va sans lire un mot, et sans compter les écrans.
@@ -32404,10 +32421,25 @@ function _arcGlissement(dir){
     if(arcReduit())
       return z.animate([{opacity:0.55},{opacity:1}],
         {duration:ARC.plat,easing:'linear',fill:'none'});
-    // 180 ms et 28 px, et non plus 140 / 24 : le glissement n'est plus double
-    // par le fondu de anim-in, il porte seul la phrase. Un fondu dirait
-    // « quelque chose a change » quand le glissement dit « tu avances ».
-    const d=(dir>0?1:-1)*28;
+    // ══ L'AMPLITUDE REVIENT AU JETON ══════════════════════════════════
+    //
+    // Elle valait 28 en dur, avec pour motif que « le glissement n'est plus
+    // double par le fondu de anim-in, il porte seul la phrase ». Le motif est
+    // bon et il reste vrai — mais il explique pourquoi le glissement doit
+    // PORTER SEUL, pas pourquoi il lui faut exactement 28 plutot que 24.
+    //
+    // ET LE JETON GOUVERNE LE MEME GESTE AILLEURS : --arc-translate fait entrer
+    // et sortir les feuilles modales, ARC.translate porte le seul autre
+    // glissement horizontal du fichier. Un 28 ecrit ici, et lui seul, c'est
+    // exactement ainsi qu'une echelle meurt — une valeur a la fois, chacune avec
+    // sa bonne raison.
+    //
+    // L'ASSERTION LE DEMANDAIT DEJA : elle compare a ARC.translate depuis le
+    // debut et tombait sur « suivant part de 28 ». Elle avait raison.
+    //
+    // Si 24 se revele trop discret a l'usage, c'est le JETON qu'on monte — les
+    // trois mouvements bougeront ensemble, ce qui est le propre d'une echelle.
+    const d=(dir>0?1:-1)*ARC.translate;
     return z.animate(
       [{transform:'translateX('+d+'px)'},{transform:'translateX(0)'}],
       {duration:180,easing:ARC.discharge,fill:'none'});

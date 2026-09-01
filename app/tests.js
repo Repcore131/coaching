@@ -29276,6 +29276,39 @@ async function testExercices(){
       if(!(px<=20)) return _echec('le compteur mesure '+px+' px, au-dessus du cran xl (20 px)');
       return !halo?true:_echec('le halo est revenu : '+cs.textShadow);})());
     ok('Le compteur de streak reste affiché',!!document.getElementById('clh-streak-val'));
+    ok('Le corps du compteur est PLAFONNE par l\'echelle, pas par le cadran',(()=>{
+      // 29 × 0,76 fait 22,04 px — deux points au-dessus du dernier cran. Le
+      // compteur n'avait pas GRANDI par decision : il l'avait pris en heritant
+      // du diametre du cadran, que rien ne relie a l'echelle typographique.
+      //
+      // ON PLAFONNE PLUTOT QUE DE RETRECIR --sk-d : le ramener a 26 ferait bien
+      // tomber le chiffre a 19,76, mais emporterait aussi le cadran, la flambee
+      // et le cadre neon — trois pieces dessinees a 29 qu'aucun constat ne
+      // remet en cause.
+      const css=Array.from(document.querySelectorAll('style'))
+        .map(x=>x.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+      if(!/--sk-f:min\(/.test(css))
+        return _echec('le corps du chiffre n’est plus plafonné');
+      if(!/--sk-d:29px/.test(css))
+        return _echec('le cadran a été rétréci au lieu de plafonner le chiffre');
+      // ET LE PLAFOND EST LE CRAN, pas un nombre ecrit une seconde fois.
+      return /min\(calc\(var\(--sk-d\)\*\.76\),var\(--fs-xl\)\)/.test(css)
+        ?true:_echec('le plafond n’est plus le cran --fs-xl');})());
+    ok('Un graphique sans donnee ne consomme pas de traversee',(()=>{
+      // Le drapeau arcPret et la programmation de la traversee etaient poses en
+      // TETE de drawLineChart, donc aussi quand il n'y a rien a tracer : un
+      // athlete sans pesee faisait jouer une animation sur un canevas vide.
+      // Le drapeau promet « celui-ci sera peint » ; le poser sur un canevas qui
+      // sort une ligne plus bas en fait une promesse fausse.
+      const src=String(drawLineChart);
+      const iGarde=src.indexOf('if(!allVals.length)return;');
+      const iPret=src.indexOf("dataset.arcPret='1'");
+      const iTrace=src.indexOf('arcTracerCourbes(canvas)');
+      if(iGarde<0) return _echec('le garde de liste vide a disparu');
+      if(iPret<0||iTrace<0) return _echec('le tracé a disparu du graphique');
+      if(!(iPret>iGarde)) return _echec('le drapeau est encore posé avant le test');
+      return iTrace>iGarde
+        ?true:_echec('la traversée est encore programmée avant le test');})());
     // Test qui manquait : appeler loadClientHome EN ENTIER. Les tests ne
     // sollicitaient que _majMetriquesAccueil, si bien qu'une ecriture vers une
     // case supprimee interrompait toute la fonction sans qu'aucun test tombe.
