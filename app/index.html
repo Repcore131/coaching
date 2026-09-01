@@ -62819,32 +62819,42 @@ function resizeForOcr(dataUrl,maxPx=1500){
   });
 }
 
-function dataURLtoBlob(dataURL){
-  const arr=dataURL.split(',');const mime=arr[0].match(/:(.*?);/)[1];
-  const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);
-  while(n--) u8[n]=bstr.charCodeAt(n);
-  return new Blob([u8],{type:mime});
-}
-
+// ══ LE CHEMIN VERS api.ocr.space EST RETIRE, CLEF COMPRISE ═══════════════
+//
+// CE QUI ETAIT LA : une requete vers api.ocr.space portant une clef d'API
+// ECRITE EN CLAIR dans le fichier. Le drapeau LEGACY_PDF_IMPORT etant a false,
+// la garde ci-dessous levait avant la requete et plus rien ne partait — mais
+// LA CLEF, ELLE, PARTAIT QUAND MEME : index.html est servi publiquement, et
+// n'importe qui ouvrant l'application pouvait la lire dans le source. Un
+// verrou sur le chemin d'appel ne verrouille rien du tout quand le secret est
+// dans le texte de la page.
+//
+// ET ELLE ETAIT VIVANTE. Verifie le 02/09/2026 par deux requetes comparees :
+// avec cette clef, api.ocr.space repond « E400: No content provided » — donc
+// l'authentification est passee ; avec une clef inventee, « E555: API key not
+// valid ». Elle a ete revoquee depuis, mais elle ne devait pas etre la.
+//
+// POURQUOI RETIRER PLUTOT QUE GARDER SOUS DRAPEAU. La fonctionnalite n'est pas
+// « en pause » : elle a ete REMPLACEE, et deux fois. L'import de seance passe
+// par la banque d'exercices, et la lecture de texte par le moteur Tesseract
+// embarque sous ./vendor — un choix pose pour que l'image ne quitte jamais le
+// telephone. Rien de tout cela ne revient a un sous-traitant distant. Garder
+// une clef publique pour une hypothese, c'est payer tous les jours le prix d'un
+// retour qui n'aura pas lieu ; et s'il avait lieu, il faudrait de toute facon
+// une clef neuve, celle-ci etant grillee.
+//
+// LA GARDE RESTE, ET LA FONCTION AUSSI : quinze appels la nomment encore, tous
+// derriere le meme drapeau. Elle leve desormais sans rien tenter, ce qui est
+// exactement ce qu'elle faisait deja — sans porter de secret.
+//
+// dataURLtoBlob part avec elle : elle n'existait que pour empaqueter l'image de
+// cette requete, et n'avait aucun autre appelant.
+//
+// LA POLITIQUE DE CONFIDENTIALITE GARDE SA LIGNE OCR.space, mise a jour : le
+// sous-traitant a figure dans le produit, le dire reste honnete, et la ligne
+// precise maintenant que le code a ete retire et non seulement desactive.
 async function _ocrImage(dataUrl,opts={}){
-  // DERNIER VERROU. api.ocr.space n'est appelé QUE par l'import de séance —
-  // les huit appelants ont été relevés un par un. Drapeau baissé, plus une
-  // seule requête ne part vers ce sous-traitant, quel que soit le chemin.
-  if(!_importLegacyOuvert()) throw new Error('Reconnaissance de texte désactivée.');
-  const blob=dataURLtoBlob(dataUrl);
-  const fd=new FormData();
-  fd.append('file',blob,'img.jpg');
-  fd.append('apikey','K81774208988957');
-  fd.append('language', opts.language||'fre');
-  fd.append('isTable', opts.isTable===false?'false':'true');
-  fd.append('scale','true');
-  fd.append('OCREngine', String(opts.engine||2));
-  fd.append('isCreateSearchablePDF','false');
-  const res=await fetch('https://api.ocr.space/parse/image',{method:'POST',body:fd});
-  if(!res.ok) throw new Error('Service OCR indisponible ('+res.status+')');
-  const d=await res.json();
-  if(d.IsErroredOnProcessing) throw new Error(d.ErrorMessage?.[0]||'Erreur OCR');
-  return(d.ParsedResults?.[0]?.ParsedText||'').trim();
+  throw new Error('Reconnaissance de texte désactivée.');
 }
 
 // Tente d'associer chaque URL à l'exercice dont le numéro apparaît dans les lignes

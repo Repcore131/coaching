@@ -12095,9 +12095,17 @@ async function testExercices(){
         ok('TOUTES les fonctions d\'extraction refusent, drapeau baissé',(()=>{
           // Le cahier des charges est explicite : une règle d'accès ne se
           // résume jamais à un bouton masqué. Chaque fonction se garde.
+          // ⚠ _ocrImage N'EST PLUS DANS CETTE LISTE, et c'est une EXCEPTION
+          // assumee, pas un oubli. Son corps portait une clef d'API ECRITE EN
+          // CLAIR : index.html etant servi publiquement, la clef etait lisible
+          // par n'importe qui, drapeau baisse ou non. Un garde sur le chemin
+          // d'appel ne verrouille rien quand le secret est dans le texte de la
+          // page. Le corps a donc ete retire — voir l'assertion dediee juste
+          // apres, qui verifie qu'elle leve TOUJOURS et ne porte plus ni clef
+          // ni point d'acces.
           const attendues=['analyzeProgPhotos','analyzePhotoWithClaude',
             'importVideoLinksFromPdf','loadProgPhoto2','parsePdfProgramme',
-            'triggerPdfProgrammeImport','_parsePdfFromDriveFile','_ocrImage'];
+            'triggerPdfProgrammeImport','_parsePdfFromDriveFile'];
           for(const nom of attendues){
             const f=window[nom];
             if(typeof f!=='function') return _echec('disparue : '+nom);
@@ -12105,20 +12113,49 @@ async function testExercices(){
               return _echec(nom+' n\'est pas gardée');
           }
           return true;})());
-        ok('Le code d\'extraction est DÉSACTIVÉ, pas supprimé',(()=>{
-          // Couper une fonctionnalité dont on ne peut pas prouver que plus
-          // personne ne s'en sert, c'est la désactiver — pas l'effacer.
-          // Remettre le drapeau à true doit tout rouvrir.
+        ok('Le code d\'extraction est DÉSACTIVÉ, pas supprimé — sauf _ocrImage',(()=>{
+          // La règle du projet : couper une fonctionnalité dont on ne peut pas
+          // prouver que plus personne ne s'en sert, c'est la DÉSACTIVER, pas
+          // l'effacer. Remettre le drapeau à true doit tout rouvrir.
+          //
+          // ⚠ UNE EXCEPTION, ET UNE SEULE. _ocrImage portait une clef d'API en
+          // clair dans un fichier servi publiquement — vivante, vérifiée le
+          // 02/09/2026. Une règle de préservation ne peut pas justifier de
+          // laisser un secret public en place, et le vider était le seul moyen
+          // de le retirer d'index.html.
+          //
+          // LA CONSÉQUENCE EST RÉELLE ET ELLE EST ÉCRITE ICI : remettre
+          // LEGACY_PDF_IMPORT à true rouvrirait les sept autres fonctions mais
+          // PAS la lecture de texte. Restaurer celle-ci demanderait une clef
+          // neuve — et alors, de ne plus l'écrire dans le fichier.
           for(const nom of ['analyzeProgPhotos','parsePdfProgramme','_ocrImage',
                             'importVideoLinksFromPdf','_loadPdfJs']){
             if(typeof window[nom]!=='function') return _echec('supprimée : '+nom);
           }
           // Le corps est toujours là : une fonction réduite à son refus ferait
-          // moins de 200 caractères.
+          // moins de 200 caractères. _ocrImage est justement celle-là.
           if(String(analyzeProgPhotos).length<400) return _echec('analyzeProgPhotos est vidée');
-          if(String(_ocrImage).indexOf('ocr.space')<0&&String(_ocrImage).length<300)
-            return _echec('_ocrImage est vidée');
+          if(String(parsePdfProgramme).length<400) return _echec('parsePdfProgramme est vidée');
           return true;})());
+        ok('Aucune clef d\'API n\'est écrite dans le fichier servi',(()=>{
+          // LE FICHIER EST PUBLIC. index.html est servi tel quel : tout secret
+          // qui y figure est lisible par n'importe quel visiteur, quel que soit
+          // le drapeau qui garde le chemin d'appel.
+          const src=_prodSrc();
+          // La clef OCR.space retirée le 02/09/2026, et sa forme générale : un
+          // K suivi de quatorze chiffres.
+          const k=src.match(/\bK\d{14}\b/g);
+          if(k) return _echec('clef de type OCR.space : '+k[0]);
+          // ET LE POINT D'ACCÈS AVEC ELLE — hors commentaires, qui racontent
+          // précisément ce retrait et le nomment donc forcément.
+          const nu=src.split('\n').filter(l=>!/^\s*(\/\/|\*)/.test(l)).join('\n');
+          if(/fetch\([^)]*api\.ocr\.space/.test(nu))
+            return _echec('l’appel à api.ocr.space est revenu');
+          // _ocrImage LÈVE TOUJOURS, sans rien tenter.
+          const s=String(_ocrImage);
+          if(s.indexOf('apikey')>=0) return _echec('_ocrImage porte encore une clef');
+          return /throw new Error/.test(s)
+            ?true:_echec('_ocrImage ne refuse plus');})());
         ok('Le sous-traitant OCR n\'est plus appelé du tout',(()=>{
           // api.ocr.space n'est appelé QUE par l'import de séance : on a
           // vérifié les huit appelants. Drapeau baissé, plus une requête ne
