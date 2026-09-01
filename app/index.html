@@ -29568,7 +29568,20 @@ function woPersist(){
       // la suggestion repartirait sur le repli par nom, et l'enregistrement
       // final ne porterait plus de slot.
       slot:woState.slot??null,
-      sessionPhoto:woState.sessionPhoto||null,
+      // sessionPhoto NE PART PLUS DANS L'INSTANTANE. C'est l'illustration que
+      // le COACH pose sur son creneau — sessions_config[slot].photo — et non
+      // une photo prise par l'athlete : elle n'entre dans aucun bilan, elle
+      // n'est qu'affichee en tete de l'ecran de seance.
+      //
+      // ET C'ETAIT LE PLUS GROS ELEMENT DE L'INSTANTANE : une image en base64,
+      // recopiee a chaque serie validee, a chaque minuteur, a chaque passage en
+      // arriere-plan, sur un stockage deja sature a 81 % par du base64. C'est
+      // elle qui faisait echouer l'ecriture, donc perdre la SEANCE — series,
+      // charges, reponses de douleur — pour sauver une illustration.
+      //
+      // RIEN N'EST PERDU POUR AUTANT : le creneau est dans l'instantane, et
+      // woResumeAndGo va rechercher la photo a la source. On stocke la
+      // reference, pas la copie.
       // Sans eux, une séance reprise après pause perdrait sa fin de séance,
       // qui est justement ce qui reste à faire au moment de la reprise.
       deload:!!woState.deload,
@@ -29669,6 +29682,21 @@ function woResumeAndGo(){
   // ressortir sur des séries qui ne sont pas des records.
   _resetRecordsVus();
   woState={...snap};
+  // L'ILLUSTRATION DU CRENEAU, RETROUVEE A LA SOURCE plutot que recopiee dans
+  // l'instantane — voir woPersist. Le creneau y est, la photo est dans
+  // sessions_config : la reprise la remet sans avoir eu a la porter.
+  //
+  // SI ELLE A CHANGE ENTRE-TEMPS, c'est la nouvelle qui s'affiche. C'est le
+  // comportement juste : la seance reprise est celle du creneau tel qu'il est
+  // aujourd'hui, et ce n'est qu'une image.
+  //
+  // AUCUN CRENEAU — une seance libre — et il n'y a simplement pas d'image,
+  // exactement comme au lancement.
+  try{
+    const _sc=currentUser&&currentUser.sessions_config;
+    const _cr=(snap.slot!=null&&_sc)?_sc[snap.slot]:null;
+    woState.sessionPhoto=(_cr&&_cr.photo)||null;
+  }catch(e){ woState.sessionPhoto=null; }
   // Puis reconstruit sur ce qui vient d'être repris : les badges de CETTE
   // séance-là sont justes, et un rechargement les avait jusqu'ici perdus.
   _rebatirRecordsVus();

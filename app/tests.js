@@ -24609,6 +24609,59 @@ function testExercices(){
         return _cptContenu(vide)<_cptContenu(plein)
           ?true:_echec('vider un créneau ne se voit pas');})());
 
+      // ══════ L'INSTANTANE DE SEANCE NE PORTE PLUS L'ILLUSTRATION ═════
+      //
+      // sessionPhoto n'est PAS une photo de l'athlete : c'est l'illustration
+      // que le coach pose sur son creneau — sessions_config[slot].photo. Elle
+      // n'entre dans aucun bilan, elle n'est qu'affichee en tete de l'ecran de
+      // seance. Et c'etait le plus gros element de l'instantane : une image en
+      // base64 recopiee a chaque serie validee, a chaque minuteur, a chaque
+      // passage en arriere-plan — sur un stockage deja sature a 81 % par du
+      // base64. C'est elle qui faisait echouer l'ecriture, donc perdre la
+      // SEANCE pour sauver une illustration.
+      //
+      // MESURE : 361 octets au lieu de 300 383 sur une photo de 300 Ko.
+      ok('L\'instantane de seance ne recopie plus l\'illustration du creneau',(()=>{
+        const _sv=currentUser, _sw=(typeof woState!=='undefined')?woState:null;
+        const _brut=(()=>{ try{ return localStorage.getItem('rc_wo_state'); }catch(e){ return null; } })();
+        try{
+          const photo='data:image/jpeg;base64,'+'A'.repeat(20000);
+          currentUser={email:'ph@t',role:'athlete',
+            sessions_config:[{day:'Lundi',photo,exercises:[]}]};
+          woState={exercises:[{name:'DC',series:2,reps:'8'}],currentEx:0,
+            startTime:Date.now(),timerInterval:null,
+            sessionData:{0:{sets:[{weight:'80',reps:'8',rir:'2',done:true}]}},
+            slot:0,progName:'S1',sessionPhoto:photo,
+            substitutions:[],aFilmer:[],douleurChoix:{}};
+          try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
+          woPersist();
+          const txt=localStorage.getItem('rc_wo_state')||'';
+          const snap=JSON.parse(txt||'{}');
+          if('sessionPhoto' in snap)
+            return _echec('l’illustration est encore recopiée dans l’instantané');
+          // L'INSTANTANE RESTE PETIT : c'est tout l'objet. Le seuil est large —
+          // on ne mesure pas un octet pres, on verifie qu'une image n'y est pas.
+          if(txt.length>5000)
+            return _echec('l’instantané pèse '+txt.length+' o : une image y est restée');
+          // LE CRENEAU, LUI, EST CONSERVE — c'est la reference qui remplace la
+          // copie. Sans lui, la reprise n'aurait plus rien pour retrouver
+          // l'image.
+          if(snap.slot!==0) return _echec('le créneau est perdu : '+snap.slot);
+          // ET LA REPRISE LA RETROUVE A LA SOURCE.
+          const s=String(woResumeAndGo);
+          if(s.indexOf('sessions_config')<0||s.indexOf('sessionPhoto')<0)
+            return _echec('la reprise ne va pas rechercher l’illustration');
+          // SANS CRENEAU — une seance libre — pas d'image, et surtout pas
+          // d'exception : c'est le cas d'une seance lancee hors programme.
+          return /snap\.slot!=null/.test(s)
+            ?true:_echec('une séance sans créneau ferait lever la reprise');
+        } finally {
+          currentUser=_sv;
+          if(_sw!==null) woState=_sw;
+          try{ if(_brut===null) localStorage.removeItem('rc_wo_state');
+               else localStorage.setItem('rc_wo_state',_brut); }catch(e){}
+        }})());
+
       // ══════ AUCUNE ECRITURE LOCALE NE TOMBE EN SILENCE ══════════════
       //
       // Le stockage de cet utilisateur est sature a 81 % par du base64
