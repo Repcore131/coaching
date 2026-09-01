@@ -30,7 +30,20 @@ function _prodSrc(){
   return s;
 }
 
-function testExercices(){
+// ELLE EST DEVENUE `async`, ET IL LE FALLAIT. Le produit est passe de
+// confirm()/prompt() natifs — qui BLOQUENT le fil — aux modales maison
+// rcConfirm/rcSaisie, qui rendent une promesse. Les fonctions qui les appellent
+// sont donc devenues `async`, et onze assertions ont continue de les appeler
+// comme avant : elles lisaient l'etat AVANT que la fonction ait rien ecrit, et
+// surchargeaient un window.confirm que plus personne n'appelle.
+//
+// Sept tombaient bruyamment. LES AUTRES SONT PASSEES AU VERT SANS RIEN
+// MESURER — ce sont celles qui verifient qu'une ecriture N'A PAS eu lieu, et
+// une fonction qui n'a pas encore commence n'a evidemment rien ecrit.
+//
+// Son unique appelant, chargerTests(), est deja `async` et fait
+// `return testExercices()` : une promesse y est attendue d'elle-meme.
+async function testExercices(){
   const R=[];
   // Un test qui rend une CHAÎNE passerait : ok ne regarde que la véracité de
   // son second argument, et « exception: … » est vrai. Ces retours servaient à
@@ -56,6 +69,37 @@ function testExercices(){
       return _srcTests;
     };
   const ok=(n,c,d)=>{ R.push({n,ok:!!c,d:d||_msgEchec||''}); _msgEchec=''; };
+  // ── LES ASSERTIONS QUI DOIVENT ATTENDRE ────────────────────────────────
+  //
+  // `ok` recoit une VALEUR deja calculee. Lui passer une fonction asynchrone
+  // lui donnerait une Promesse, et `!!Promesse` vaut toujours vrai : le test
+  // serait vert quoi qu'il arrive. C'est le piege exact que ce lot repare, et
+  // il ne faut surtout pas le reintroduire en le deplacant.
+  //
+  // okA range la fonction et la joue A LA FIN, une fois le corps synchrone
+  // termine. Une exception devient un echec nomme plutot qu'un arret de la
+  // suite entiere — un test asynchrone qui explose emportait sinon les 4 000
+  // autres avec lui.
+  const _diff=[];
+  const okA=(n,f)=>_diff.push(async()=>{
+    let v;
+    try{ v=await f(); }catch(e){ v=_echec('exception : '+((e&&e.message)||e)); }
+    ok(n,v);
+  });
+  // LES DEUX BOUCHONS DE MODALE, ecrits une fois. Ils rendent une PROMESSE, et
+  // non la valeur nue : un appelant du produit qui oublierait son `await`
+  // recevrait un objet Promesse — toujours vrai — et le test doit pouvoir le
+  // voir, pas le masquer.
+  //
+  // `question` retient le texte pose : plusieurs assertions verifient que la
+  // question NOMME ce qui va disparaitre, ce qu'aucune sonde de source ne peut
+  // faire.
+  const _modale={question:null,demande:false};
+  const _poserConfirm=rep=>{ window.rcConfirm=(t)=>{
+    _modale.question=String(t==null?'':t); return Promise.resolve(rep); }; };
+  const _poserSaisie=rep=>{ window.rcSaisie=(t)=>{
+    _modale.question=String(t==null?'':t); _modale.demande=true;
+    return Promise.resolve(rep); }; };
   const sauve=currentUser;
   currentUser={id:'_test',email:'t@t',exMuscles:{},exAlias:{},sessions:[]};
   try{
@@ -12989,7 +13033,25 @@ function testExercices(){
           // Drapeau levé : le bouton revient.
           return _htmlBoutonRemplacer(0,woState.exercises[0])!==''
             ?true:_echec('le bouton ne revient pas après la levée');})());
-        ok('La liste ne propose jamais l\'exercice courant lui-même',(()=>{
+        // ══ LE CATALOGUE EST RESERVE AU COACH ════════════════════════════
+        //
+        // Les quatre assertions qui suivent interrogeaient candidatsRemplacement
+        // depuis le fixture ATHLETE pose en tete de ce bloc. Le produit a change
+        // depuis — « la possibilite de changer l'exercice de deux facons, pour
+        // les coachs uniquement » — et la garde est desormais A LA SOURCE :
+        // `if(currentUser.role!=='coach') return []`. L'athlete, lui, ecrit
+        // librement le nom du mouvement qu'il a fait.
+        //
+        // DEUX D'ENTRE ELLES TOMBAIENT, les deux autres PASSAIENT SUR DU VIDE :
+        // « la liste est alphabetique » est vrai d'une liste vide, et « l'ordre
+        // ne change pas selon l'exercice » aussi. Ce n'est pas une regression du
+        // produit : ce sont les sondes qui decrivaient un comportement retire.
+        //
+        // Elles passent donc par un coach, et le chemin de l'athlete — qui
+        // n'etait couvert nulle part — recoit sa propre assertion plus bas.
+        const _coach=f=>{ const _r=currentUser.role; currentUser.role='coach';
+          try{ return f(); } finally { currentUser.role=_r; } };
+        ok('La liste ne propose jamais l\'exercice courant lui-même',(()=>_coach(()=>{
           const l=candidatsRemplacement('DEVELOPPE COUCHE BARRE','');
           if(!l.length) return _echec('liste vide');
           if(l.some(n=>exKey(n)===exKey('DEVELOPPE COUCHE BARRE')))
@@ -12997,8 +13059,41 @@ function testExercices(){
           // Le posing n'est pas un mouvement de remplacement.
           if(l.some(n=>/DOUBLE BICEPS|LAT SPREAD|VACUUM/.test(n)))
             return _echec('le posing est proposé');
-          return true;})());
-        ok('La recherche ignore accents et casse, et exige TOUS les mots',(()=>{
+          return true;})()));
+        ok('Un athlète ne reçoit AUCUN candidat, et saisit lui-même',(()=>{
+          // LA GARDE EST A LA SOURCE, et le commentaire du produit dit pourquoi :
+          // « un ecran qui n'affiche pas une liste qu'il a quand meme construite
+          // reste une fuite en attente ». On le verifie donc sur la fonction, et
+          // pas seulement sur ce que la modale montre.
+          if(currentUser.role==='coach') return _echec('le fixture n’est plus un athlète');
+          if(candidatsRemplacement('DEVELOPPE COUCHE BARRE','').length)
+            return _echec('un athlète reçoit des candidats');
+          if(candidatsRemplacement('','couché').length)
+            return _echec('la recherche rend des candidats à un athlète');
+          // ET IL A UN CHEMIN : la saisie libre, sinon le bouton ne mènerait
+          // nulle part.
+          const _wo=(typeof woState!=='undefined')?woState:undefined;
+          try{
+            woState={exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8'}],
+              sessionData:{},currentEx:0};
+            if(!ouvrirRemplacement(0)) return _echec('la modale ne s’ouvre pas');
+            if(document.getElementById('rempl-liste'))
+              return _echec('la liste du coach est rendue à un athlète');
+            const i=document.getElementById('rempl-manuel');
+            if(!i) return _echec('aucune saisie libre');
+            // Le nom est NETTOYE mais jamais devine — et trois caractères au
+            // moins, sinon le coach lit une initiale.
+            i.value='ab';
+            if(validerRemplacementManuel()!==false) return _echec('deux caractères passent');
+            i.value='DEVELOPPE COUCHE BARRE';
+            if(validerRemplacementManuel()!==false)
+              return _echec('on peut « remplacer » par le mouvement en cours');
+            i.value='  presse   inclinée  ';
+            if(validerRemplacementManuel()!==true) return _echec('une saisie valable est refusée');
+            return woState.exercises[0].name==='presse inclinée'
+              ?true:_echec('nom appliqué : '+woState.exercises[0].name);
+          } finally { closeModal(); woState=_wo; }})());
+        ok('La recherche ignore accents et casse, et exige TOUS les mots',(()=>_coach(()=>{
           const a=candidatsRemplacement('','couché barre');
           if(!a.length) return _echec('« couché barre » ne rend rien');
           if(!a.some(n=>exKey(n)==='DEVELOPPE COUCHE BARRE'))
@@ -13008,8 +13103,8 @@ function testExercices(){
             return _echec('deux mots élargissent au lieu de resserrer');
           // Une requête qui ne correspond à rien rend zéro, pas tout.
           return candidatsRemplacement('','zorglub').length===0
-            ?true:_echec('une requête absurde rend des résultats');})());
-        ok('Le lot 1 ne CLASSE rien : la liste ne dépend pas de l\'exercice',(()=>{
+            ?true:_echec('une requête absurde rend des résultats');})()));
+        ok('Le lot 1 ne CLASSE rien : la liste ne dépend pas de l\'exercice',(()=>_coach(()=>{
           // Garde-fou de périmètre. Si un tri par pertinence apparaissait ici,
           // le lot 2 aurait été livré en douce avec le lot 1.
           const a=candidatsRemplacement('DEVELOPPE COUCHE BARRE','');
@@ -13019,13 +13114,20 @@ function testExercices(){
           for(let i=1;i<ordreA.length;i++) if(ordreA[i]<ordreA[i-1])
             return _echec('l\'ordre change selon l\'exercice remplacé');
           // Et l'ordre est bien alphabétique, pas un classement déguisé.
+          // ET LA LISTE N'EST PAS VIDE : sans ce garde, « elle est alphabétique »
+          // et « son ordre ne change pas » sont vrais de rien du tout. C'est
+          // exactement ainsi que cette assertion est restée verte pendant que le
+          // catalogue lui était fermé.
+          if(!a.length||!b.length) return _echec('liste vide : le test ne mesure rien');
           const trie=a.slice().sort();
           return a.join('|')===trie.join('|')
-            ?true:_echec('la liste n\'est pas alphabétique');})());
+            ?true:_echec('la liste n\'est pas alphabétique');})()));
         ok('Choisir remplace pour aujourd\'hui, sans toucher au programme',(()=>{
           // Réutilise _appliquerSubstitut tel quel : journal, séries remises à
           // zéro, sessions_config intact.
-          currentUser={id:'a1',email:'a@t',role:'athlete',
+          // COACH : c'est lui qui a la liste. Le chemin de l'athlète — saisie
+          // libre — est couvert par l'assertion dédiée plus haut.
+          currentUser={id:'a1',email:'a@t',role:'coach',
             sessions_config:[{day:'Lundi',name:'HAUT',active:true,
               exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8'}]}]};
           woState={exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8'}],
@@ -36120,28 +36222,28 @@ function testExercices(){
         // if(false && !confirm(...)) laisse le mot « confirm » dans le code, et
         // un test de source passerait au vert. On répond NON à la boîte et on
         // vérifie que rien n'a été écrit.
-        ok('Un déficit refusé n\'écrit AUCUNE macro',(()=>{
-          const sauveU=currentUser, sauveC=window.confirm;
+        okA('Un déficit refusé n\'écrit AUCUNE macro',(async()=>{
+          const sauveU=currentUser, sauveC=window.rcConfirm;
           try{
             currentUser=_ath(62,'seche');
             currentUser.nutrition={dietType:'flexible'};
-            let vue=false;
-            window.confirm=(m)=>{ vue=/déficit/.test(String(m)); return false; };
-            utiliserBesoinsProposes();
-            if(!vue) return _echec('aucune confirmation chiffrée n\'a été posée');
+            _modale.question=null; _poserConfirm(false);
+            await utiliserBesoinsProposes();
+            if(!/déficit/.test(_modale.question||''))
+              return _echec('aucune confirmation chiffrée n\'a été posée : « '+_modale.question+' »');
             const m=(currentUser.nutrition||{}).macros;
             return !m?true:_echec('des macros ont été écrites malgré le refus');
-          } finally { currentUser=sauveU; window.confirm=sauveC; }})());
-        ok('Un déficit accepté écrit bien les macros',(()=>{
-          const sauveU=currentUser, sauveC=window.confirm;
+          } finally { currentUser=sauveU; window.rcConfirm=sauveC; }}));
+        okA('Un déficit accepté écrit bien les macros',(async()=>{
+          const sauveU=currentUser, sauveC=window.rcConfirm;
           try{
             currentUser=_ath(62,'seche');
             currentUser.nutrition={dietType:'flexible'};
-            window.confirm=()=>true;
-            utiliserBesoinsProposes();
+            _poserConfirm(true);
+            await utiliserBesoinsProposes();
             const m=(currentUser.nutrition||{}).macros;
             return (m&&m.origine==='auto')?true:_echec('rien écrit après acceptation');
-          } finally { currentUser=sauveU; window.confirm=sauveC; }})());
+          } finally { currentUser=sauveU; window.rcConfirm=sauveC; }}));
         ok('Des protéines très hautes ne fabriquent pas de glucides négatifs',(()=>{
           // Le curseur protéines du coach peut demander plus que la cible ne
           // permet : sans la garde, le reste devient négatif et les glucides
@@ -36600,8 +36702,8 @@ function testExercices(){
               ?true:_echec('rien n\'explique le refus : '+vus.join(' | '));
           } finally { closeModal(); currentUser=_cu; window.toast=_t;
                       window.getOwnedClient=_gc; }})());
-        ok('Remplacer un programme existant demande confirmation, et la respecte',(()=>{
-          const _cu=currentUser,_cc=window.currentClientId,_t=window.toast,_c=window.confirm,
+        okA('Remplacer un programme existant demande confirmation, et la respecte',(async()=>{
+          const _cu=currentUser,_cc=window.currentClientId,_t=window.toast,_c=window.rcConfirm,
                 _oc=window.openClientDetail,_p=CLOUD.pushOne,_si=Storage.prototype.setItem;
           try{
             window.toast=()=>{}; window.openClientDetail=()=>{};
@@ -36615,17 +36717,17 @@ function testExercices(){
               DB.set('users',u); return u; };
             _atGenre={0:'H'};
             // 1. Le coach refuse : RIEN ne doit bouger.
-            poser(); window.confirm=()=>false;
-            applyTemplateToClient(0);
+            poser(); _poserConfirm(false);
+            await applyTemplateToClient(0);
             let a=(DB.get('users')||{})['lea@t.fr'];
             if(a.sessions_config[0].name!=='ANCIEN')
               return _echec('le refus n\'a pas été respecté');
             if(a.assignedProgramName) return _echec('une trace est écrite malgré le refus');
             // 2. Il accepte : le programme est remplacé et tracé.
-            let question=null;
-            window.confirm=(m)=>{question=m;return true;};
+            _modale.question=null; _poserConfirm(true);
             _atGenre={0:'H'};
-            applyTemplateToClient(0);
+            await applyTemplateToClient(0);
+            const question=_modale.question;
             a=(DB.get('users')||{})['lea@t.fr'];
             if(a.sessions_config[0].name!=='NEUF') return _echec('le modèle n\'a pas été appliqué');
             if(a.assignedProgramName!=='Fondation') return _echec('la trace manque');
@@ -36635,8 +36737,8 @@ function testExercices(){
             return /rollback/.test(question||'')
               ?true:_echec('la question ne mentionne pas le retour en arrière');
           } finally { currentUser=_cu; window.currentClientId=_cc; window.toast=_t;
-            window.confirm=_c; window.openClientDetail=_oc; CLOUD.pushOne=_p;
-            Storage.prototype.setItem=_si; }})());
+            window.rcConfirm=_c; window.openClientDetail=_oc; CLOUD.pushOne=_p;
+            Storage.prototype.setItem=_si; }}));
         ok('La fiche affiche le modèle appliqué ET sa date',(()=>{
           // « Programme : Fondation — assigné le 25/07 ». Sans la date, le
           // coach ne sait pas si le programme date d'hier ou de six mois.
@@ -36682,11 +36784,11 @@ function testExercices(){
             return currentUser.coachPrograms.length===avant
               ?true:_echec('un index inconnu crée un programme');
           } finally { currentUser=_cu; window.toast=_t; }})());
-        ok('Copier une séance sur un autre jour : tout est repris, rien n\'est lié',(()=>{
+        okA('Copier une séance sur un autre jour : tout est repris, rien n\'est lié',(async()=>{
           const _cu=currentUser,_i=window._editProgTemplateIdx,_g=window._editProgTemplateGender,
-                _t=window.toast,_c=window.confirm,_l=window.loadProgTemplateSlots;
+                _t=window.toast,_c=window.rcConfirm,_l=window.loadProgTemplateSlots;
           try{
-            window.toast=()=>{}; window.confirm=()=>true; window.loadProgTemplateSlots=()=>{};
+            window.toast=()=>{}; _poserConfirm(true); window.loadProgTemplateSlots=()=>{};
             const jours=['Lundi','Mardi','Mercredi','Jeudi'];
             currentUser={email:'c@t.fr',id:'c1',role:'coach',coachPrograms:[{id:'p1',name:'P',
               sessions_H:jours.map((d,k)=>k===0
@@ -36694,7 +36796,7 @@ function testExercices(){
                   exercises:[{name:'DC',series:4,sets:[{kg:60}]}]}
                 :{day:d,name:'',active:false,exercises:[]}),sessions_F:[]}]};
             _editProgTemplateIdx=0; _editProgTemplateGender='H';
-            cptCopyDay(0,3);                       // lundi → jeudi
+            await cptCopyDay(0,3);                 // lundi → jeudi
             const S=currentUser.coachPrograms[0].sessions_H;
             // Les cinq champs demandés, et le jour cible ACTIVÉ — sans quoi la
             // séance recopiée resterait invisible pour l'athlète.
@@ -36715,32 +36817,32 @@ function testExercices(){
             return src.indexOf('saveUser()')<0
               ?true:_echec('cptCopyDay écrit alors que l\'écran ne le fait qu\'au bouton');
           } finally { currentUser=_cu; window._editProgTemplateIdx=_i;
-            window._editProgTemplateGender=_g; window.toast=_t; window.confirm=_c;
-            window.loadProgTemplateSlots=_l; }})());
-        ok('Écraser une séance déjà écrite demande confirmation',(()=>{
+            window._editProgTemplateGender=_g; window.toast=_t; window.rcConfirm=_c;
+            window.loadProgTemplateSlots=_l; }}));
+        okA('Écraser une séance déjà écrite demande confirmation',(async()=>{
           // C'est le seul endroit de ce lot où l'on peut détruire du travail.
           const plein={day:'Jeudi',active:true,exercises:[{name:'X'},{name:'Y'}]};
           const vide={day:'Jeudi',active:false,exercises:[]};
           const inactifMaisRempli={day:'Jeudi',active:false,exercises:[{name:'X'}]};
-          const _c=window.confirm;
+          const _c=window.rcConfirm;
           try{
-            let question=null;
-            window.confirm=(m)=>{question=m;return false;};
-            if(_confirmerEcrasement({day:'Lundi'},vide)!==true)
+            _modale.question=null; _poserConfirm(false);
+            if(await _confirmerEcrasement({day:'Lundi'},vide)!==true)
               return _echec('un créneau vide demande confirmation pour rien');
-            if(question) return _echec('une question est posée sur un créneau vide');
-            if(_confirmerEcrasement({day:'Lundi'},inactifMaisRempli)!==true)
+            if(_modale.question) return _echec('une question est posée sur un créneau vide');
+            if(await _confirmerEcrasement({day:'Lundi'},inactifMaisRempli)!==true)
               return _echec('un créneau inactif demande confirmation pour rien');
-            const r=_confirmerEcrasement({day:'Lundi'},plein);
+            const r=await _confirmerEcrasement({day:'Lundi'},plein);
             if(r!==false) return _echec('le refus n\'est pas respecté');
+            const question=_modale.question;
             if(!question) return _echec('aucune confirmation sur un créneau rempli');
             // La question DIT ce qui va disparaître : « 2 exercices », et d'où
             // vient le remplacement. Sans cela le coach ne peut pas décider.
             return /2 exercices/.test(question)&&/Lundi/.test(question)&&/Jeudi/.test(question)
               ?true:_echec('la question ne situe pas : '+question);
-          } finally { window.confirm=_c; }})());
-        ok('Le programme d\'un athlète devient un modèle assignable',(()=>{
-          const _cu=currentUser,_ce=window._coachEditClient,_p=window.prompt,_t=window.toast;
+          } finally { window.rcConfirm=_c; }}));
+        okA('Le programme d\'un athlète devient un modèle assignable',(async()=>{
+          const _cu=currentUser,_ce=window._coachEditClient,_p=window.rcSaisie,_t=window.toast;
           try{
             window.toast=()=>{};
             currentUser={email:'c@t.fr',id:'c1',role:'coach'};
@@ -36749,8 +36851,8 @@ function testExercices(){
                photo:'data:image/jpeg;base64,LOURD',photo2:'x',
                exercises:[{name:'DC',series:4,sets:[{kg:60}]}]},
               {day:'Mardi',name:'',active:false,exercises:[]}]};
-            window.prompt=()=>'Prise de masse Léa';
-            saveCoachSessionsAsTemplate();
+            _poserSaisie('Prise de masse Léa');
+            await saveCoachSessionsAsTemplate();
             const L=currentUser.coachPrograms||[];
             if(L.length!==1) return _echec(L.length+' modèle(s) créé(s)');
             const m=L[0];
@@ -36773,35 +36875,40 @@ function testExercices(){
               return _echec('le modèle partage ses séries avec l\'athlète');
             return true;
           } finally { currentUser=_cu; window._coachEditClient=_ce;
-                      window.prompt=_p; window.toast=_t; }})());
-        ok('Un programme vide ne devient pas un modèle, et le dit',(()=>{
+                      window.rcSaisie=_p; window.toast=_t; }}));
+        // ⚠ CELLE-CI PASSAIT AU VERT SANS RIEN MESURER, et c'est le cas le plus
+        // dangereux des onze : elle verifie qu'un modele n'a PAS ete cree.
+        // saveCoachSessionsAsTemplate etant devenue asynchrone, elle rendait la
+        // main avant d'avoir rien fait — et « rien n'a ete cree » etait vrai
+        // pour la mauvaise raison. Un test qui ne peut plus tomber est pire
+        // qu'un test absent : il occupe la place et rassure.
+        okA('Un programme vide ne devient pas un modèle, et le dit',(async()=>{
           // Un modèle sans exercice est un piège : il s'assigne, et l'athlète
           // se retrouve sans séance.
-          const _cu=currentUser,_ce=window._coachEditClient,_p=window.prompt,_t=window.toast;
+          const _cu=currentUser,_ce=window._coachEditClient,_p=window.rcSaisie,_t=window.toast;
           try{
             const vus=[];
             window.toast=(m)=>{vus.push(String(m));};
-            let demande=false;
-            window.prompt=()=>{demande=true;return 'X';};
+            _modale.demande=false; _poserSaisie('X');
             currentUser={email:'c@t.fr',id:'c1',role:'coach'};
             _coachEditClient={fname:'Léa',sessions_config:[
               {day:'Lundi',name:'',active:true,exercises:[]},
               {day:'Mardi',name:'PUSH',active:false,exercises:[{name:'DC'}]}]};
-            saveCoachSessionsAsTemplate();
+            await saveCoachSessionsAsTemplate();
             if((currentUser.coachPrograms||[]).length)
               return _echec('un modèle vide a été créé');
-            if(demande) return _echec('le nom est demandé avant de vérifier le contenu');
+            if(_modale.demande) return _echec('le nom est demandé avant de vérifier le contenu');
             if(!vus.length||!/Aucune séance/.test(vus[0]))
               return _echec('rien n\'explique le refus : '+vus.join(' | '));
             // Nom vide ou annulation : on n'écrit rien non plus.
             _coachEditClient.sessions_config[0]={day:'Lundi',name:'P',active:true,
               exercises:[{name:'DC'}]};
-            window.prompt=()=>null;
-            saveCoachSessionsAsTemplate();
+            _poserSaisie(null);
+            await saveCoachSessionsAsTemplate();
             return !(currentUser.coachPrograms||[]).length
               ?true:_echec('annuler la question crée quand même un modèle');
           } finally { currentUser=_cu; window._coachEditClient=_ce;
-                      window.prompt=_p; window.toast=_t; }})());
+                      window.rcSaisie=_p; window.toast=_t; }}));
 
         ok('Critère : la duplication copie tous les exercices',(()=>{
           const cfg=[_jour('Lundi','PUSH',[_ex('SQUAT'),_ex('DIPS')]),
@@ -39597,6 +39704,10 @@ vendredi 78 6h 44m
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
 
+  // LES ASSERTIONS DIFFEREES, JOUEES ICI. Elles arrivent en fin de rapport
+  // plutot qu'a leur place d'origine : c'est le prix de l'attente, et il est
+  // sans consequence — le rapport se lit par son nom, pas par son rang.
+  for(const _f of _diff) await _f();
   const ko=R.filter(r=>!r.ok);
   console.log('%c'+R.length+' vérifications, '+ko.length+' en échec',
     'font-weight:bold;color:'+(ko.length?'#e05050':'#22c55e'));
