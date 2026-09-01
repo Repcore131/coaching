@@ -24609,6 +24609,69 @@ function testExercices(){
         return _cptContenu(vide)<_cptContenu(plein)
           ?true:_echec('vider un créneau ne se voit pas');})());
 
+      // ══════ UN IMPORT N'EFFACE PAS UNE SAISIE A LA MAIN ═════════════
+      //
+      // _recordSleep reconstruisait un objet neuf — {date,duration} plus bed et
+      // wake SEULEMENT s'ils etaient fournis — et l'affectait par-dessus
+      // l'ancien : sleepLog[idx]=entry. L'import par capture d'ecran appelle
+      // _recordSleep(date,{duration}) sans bed ni wake, puisque l'application
+      // de montre ne les donne pas. Les heures saisies a la main pour cette
+      // nuit-la disparaissaient.
+      //
+      // ET CE N'EST PAS QU'UN AFFICHAGE : `bed` alimente l'alerte de cafeine
+      // residuelle. Perdre l'heure de coucher eteignait silencieusement cette
+      // alerte pour la nuit importee.
+      ok('Un import de duree ne perd ni le coucher ni le lever',(()=>{
+        const _sv=currentUser;
+        try{
+          currentUser={email:'sl@t',role:'athlete',sleepLog:[]};
+          const j=localISODate(new Date());
+          // 1. Saisie a la main : coucher, lever, duree calculee.
+          if(!_recordSleep(j,{bed:'23:00',wake:'06:30',duration:7.5}))
+            return _echec('la saisie manuelle est refusée');
+          const a=currentUser.sleepLog.find(e=>e.date===j);
+          if(!a||a.bed!=='23:00'||a.wake!=='06:30')
+            return _echec('la saisie manuelle n’a pas été enregistrée');
+          // 2. L'IMPORT, qui ne fournit QUE la duree.
+          if(!_recordSleep(j,{duration:8}))
+            return _echec('l’import est refusé');
+          const b=currentUser.sleepLog.find(e=>e.date===j);
+          if(!b) return _echec('la nuit a disparu');
+          // LA DUREE EST CELLE DE L'IMPORT — le champ fourni gagne.
+          if(b.duration!==8) return _echec('durée '+b.duration+' au lieu de 8');
+          // ET LE COUCHER ET LE LEVER ONT SURVECU.
+          if(b.bed!=='23:00') return _echec('le coucher est perdu : '+b.bed);
+          if(b.wake!=='06:30') return _echec('le lever est perdu : '+b.wake);
+          // UNE SEULE ENTREE POUR CETTE NUIT : on met a jour, on n'empile pas.
+          if(currentUser.sleepLog.filter(e=>e.date===j).length!==1)
+            return _echec('la nuit est en double');
+          // 3. ET UNE SAISIE MANUELLE ULTERIEURE ECRASE BIEN, elle : les champs
+          // FOURNIS gagnent toujours, sinon on ne pourrait plus se corriger.
+          _recordSleep(j,{bed:'22:45',wake:'07:00',duration:8.25});
+          const c=currentUser.sleepLog.find(e=>e.date===j);
+          return (c.bed==='22:45'&&c.wake==='07:00'&&c.duration===8.25)
+            ?true:_echec('une correction manuelle ne passe plus : '+JSON.stringify(c));
+        } finally { currentUser=_sv; }})());
+      ok('Les trois journaux mettent a jour le champ, aucun ne remplace l\'entree',(()=>{
+        // L'INVARIANT DE FAMILLE. _recordWeight et _recordSteps l'ont toujours
+        // tenu ; _recordSleep etait le seul a s'en ecarter, et c'est ce qui
+        // faisait la perte. Une sonde sur la forme, pour que la prochaine
+        // fonction de journal soit ecrite comme ses soeurs.
+        const prod=_prodSrc();
+        const nus=[];
+        for(const [f,journal] of [['_recordWeight','weightLog'],
+                                  ['_recordSteps','stepsLog'],
+                                  ['_recordSleep','sleepLog']]){
+          const i=prod.indexOf('function '+f+'(');
+          if(i<0){ nus.push(f+' introuvable'); continue; }
+          const corps=prod.slice(i,i+2600).replace(/\/\/.*/g,'');
+          // « currentUser.<journal>[idx]= » suivi d'autre chose que d'un point
+          // est un remplacement d'entree ; « [idx].champ= » est une mise a jour.
+          if(new RegExp('currentUser\\.'+journal+'\\[idx\\]\\s*=[^=]').test(corps))
+            nus.push(f+' remplace l’entrée entière');
+        }
+        return nus.length?_echec(nus.join(' ; ')):true;})());
+
       // ══════ L'INSTANTANE DE SEANCE NE PORTE PLUS L'ILLUSTRATION ═════
       //
       // sessionPhoto n'est PAS une photo de l'athlete : c'est l'illustration

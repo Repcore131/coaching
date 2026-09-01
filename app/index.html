@@ -61498,12 +61498,36 @@ function _recordSleep(dateStr,{bed,wake,duration}={}){
   // Même plafond que calcSleepDuration : au-delà de 18 h ce n'est pas une nuit.
   if(!dateStr||!Number.isFinite(d)||d<=0||d>18) return false;
   if(!currentUser.sleepLog) currentUser.sleepLog=[];
-  const entry={date:dateStr,duration:d};
-  if(bed) entry.bed=bed;
-  if(wake) entry.wake=wake;
   const idx=currentUser.sleepLog.findIndex(e=>e.date===dateStr);
-  if(idx>=0) currentUser.sleepLog[idx]=entry;
-  else currentUser.sleepLog.push(entry);
+  // ON MET A JOUR CE QUI CHANGE, ON NE REMPLACE PAS L'ENTREE. C'est ce que
+  // font deja _recordWeight — `weightLog[idx].kg=…` — et _recordSteps —
+  // `stepsLog[idx].count=…` : seule cette fonction-ci reconstruisait un objet
+  // neuf et l'affectait par-dessus l'ancien.
+  //
+  // CE QUE CA EFFACAIT. L'import par capture d'ecran appelle
+  // _recordSleep(date,{duration}) SANS bed ni wake — l'application de montre ne
+  // les fournit pas. L'entree neuve n'avait donc pas ces champs, et les heures
+  // de coucher et de lever saisies A LA MAIN pour cette nuit-la disparaissaient.
+  //
+  // ET CE N'EST PAS QU'UN AFFICHAGE : `bed` alimente l'alerte de cafeine
+  // residuelle — cafeineResiduelle(jours, nuit.bed) compare la cafeine encore
+  // presente a l'heure du coucher. Perdre l'heure de coucher eteignait
+  // silencieusement cette alerte pour la nuit importee.
+  //
+  // LES CHAMPS FOURNIS GAGNENT, LES AUTRES SURVIVENT : une saisie manuelle qui
+  // porte bed et wake les met a jour, un import qui n'a que la duree ne touche
+  // qu'a elle.
+  if(idx>=0){
+    const e=currentUser.sleepLog[idx];
+    e.duration=d;
+    if(bed) e.bed=bed;
+    if(wake) e.wake=wake;
+  } else {
+    const entry={date:dateStr,duration:d};
+    if(bed) entry.bed=bed;
+    if(wake) entry.wake=wake;
+    currentUser.sleepLog.push(entry);
+  }
   const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
   currentUser.sleepLog=currentUser.sleepLog.filter(e=>e.date>=cutoff);
   return true;
