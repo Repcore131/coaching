@@ -4500,8 +4500,20 @@ const COACH_PHOTO='icons/coach.jpg';
          en proposer un serait promettre ce qui ne se produira pas. -->
     <div id="rc-inst-integre" class="rc-inst-bloc" style="display:none;margin-top:22px;width:100%;max-width:380px;text-align:center">
       <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.3);border-radius:var(--r-3);padding:15px 16px;font-size:var(--fs-sm);color:#f0d6d6;line-height:1.65">
-        Tu es dans le navigateur intégré d'une application.<br>
+        Tu es dans le navigateur intégré de <b id="rc-inst-app" style="color:var(--text)">cette application</b>.<br>
         <b style="color:var(--text)">Il ne sait pas installer RepCore.</b>
+      </div>
+      <!-- LA SORTIE MANUELLE. Masquée tant qu'une sortie automatique reste
+           possible : sur Android l'URL intent fait le travail toute seule, et
+           montrer des instructions avant d'avoir essayé serait donner du
+           travail à quelqu'un qui n'en a pas besoin. -->
+      <div id="rc-inst-sortie" style="display:none;margin-top:12px;text-align:left">
+        <div id="rc-inst-copie" style="display:none;font-size:var(--fs-sm);font-weight:800;margin-bottom:8px;text-align:center"></div>
+        <div id="rc-inst-quoi" style="font-size:var(--fs-sm);color:#ccc;line-height:1.7"></div>
+        <!-- L'ADRESSE EN TOUTES LETTRES, en repli ultime : si le
+             presse-papier a échoué et que le menu est introuvable, il reste à
+             la lire. user-select:all — un appui long la prend en entier. -->
+        <div id="rc-inst-lien" style="margin-top:10px;padding:9px 11px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--sub);word-break:break-all;line-height:1.55;-webkit-user-select:all;user-select:all"></div>
       </div>
     </div>
 
@@ -8037,7 +8049,15 @@ const CREATOR_EMAIL='guellec.coachingpro@gmail.com';
 const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
-  'first_workout_started','first_workout_completed','first_bilan_completed'];
+  'first_workout_started','first_workout_completed','first_bilan_completed',
+  // ── LE TRAFIC QUI ARRIVE PAR UN NAVIGATEUR INTEGRE ──────────────────
+  // Un compteur par application, et non un seul « iab_detecte » : savoir que
+  // 30 % du trafic ne peut pas installer est utile ; savoir que ce sont des
+  // visiteurs d'Instagram dit QUOI FAIRE — changer la forme du lien la-bas.
+  // Ces noms doivent rester en accord avec la liste fermee de
+  // database.rules.json : le serveur refuse toute cle qui n'y figure pas.
+  'iab_instagram','iab_facebook','iab_tiktok','iab_linkedin','iab_snapchat',
+  'iab_twitter','iab_autre'];
 // ══════════ SONDE DE QUOTA : UNE PENTE, PAS UNE VÉRITÉ ══════════
 // Le plan Spark plafonne à 10 Go téléchargés par mois, et le dépassement est
 // SILENCIEUX : l'application cesse simplement de répondre. Cette sonde ne
@@ -63971,24 +63991,161 @@ Object.defineProperty(window,'deferredPrompt',{
   configurable:true
 });
 
-// PROVISOIRE, ET REMPLAÇABLE. La détection fine des navigateurs intégrés
-// appartient au lot suivant : si une implémentation plus complète est posée
-// plus tard sous ce nom, elle prend la place de celle-ci sans que rien d'autre
-// ne bouge. En attendant, ces sept-là couvrent l'essentiel du trafic social.
-if(typeof window.rcNavigateurIntegre!=='function'){
-  window.rcNavigateurIntegre=function(){
+// ══════════ LES NAVIGATEURS INTÉGRÉS ═══════════════════════════════════
+//
+// LE LIEN DE L'APPLICATION SE DIFFUSE DEPUIS INSTAGRAM, et un lien ouvert
+// depuis Instagram, Messenger, TikTok ou LinkedIn ne s'ouvre pas dans le
+// navigateur du téléphone : il s'ouvre dans le navigateur MAISON de ces
+// applications. Là, l'installation est strictement impossible —
+// beforeinstallprompt ne se déclenche jamais sur Android, et le menu
+// « Partager → Sur l'écran d'accueil » n'existe pas sur iOS.
+//
+// ON FAIT DONC SORTIR, ON NE PROPOSE PAS D'INSTALLER. Un bouton qui ne peut
+// pas aboutir se lit comme un bug de l'application, pas comme une limite du
+// navigateur — et c'est RepCore qu'on accuse.
+//
+// ⚠ CES CHAÎNES CHANGENT AVEC LES VERSIONS. Chacune est commentée avec ce
+// qu'elle vise et un exemple réel relevé le 02/09/2026, pour que le prochain
+// qui les relit sache ce qu'il tient. La détection d'agent utilisateur est
+// approximative par nature : c'est pourquoi rien ici ne BLOQUE — l'écran
+// garde toujours sa sortie vers l'accueil.
+//
+// Rend le NOM de l'application, ou null. Un nom plutôt qu'un booléen parce
+// que l'instruction à donner en dépend : le menu n'est pas au même endroit
+// dans Instagram et dans Messenger.
+const RC_IAB=[
+  // « Instagram 309.0.0.40.113 Android (34/14; …) » côté Android, et
+  // « … Mobile/15E148 Instagram 147.0.0.30.121 (iPhone9,3; …) » côté iOS :
+  // le nom est écrit en clair dans les deux.
+  {cle:'instagram', nom:'Instagram', re:/Instagram/i},
+  // FBAN = Facebook App, FBAV = Facebook App Version, FB_IAB = Facebook
+  // In-App Browser. Messenger se présente sous « FB_IAB/MESSENGER » et
+  // « FB_IAB/Orca-Android », le Facebook iOS sous « FBAN/FBIOS ».
+  {cle:'facebook',  nom:'Messenger', re:/FBAN|FBAV|FB_IAB|Messenger/i},
+  // BytedanceWebview est le moteur de TikTok ; musical_ly est l'ancien nom de
+  // l'application, encore présent dans des versions en circulation.
+  {cle:'tiktok',    nom:'TikTok',    re:/BytedanceWebview|TikTok|musical_ly/i},
+  {cle:'linkedin',  nom:'LinkedIn',  re:/LinkedInApp/i},
+  {cle:'snapchat',  nom:'Snapchat',  re:/Snapchat/i},
+  // X n'a pas renommé son jeton : il s'annonce toujours « Twitter ».
+  {cle:'twitter',   nom:'X',         re:/Twitter/i}
+];
+function rcNavigateurIntegre(){
+  try{
     const u=String(navigator.userAgent||'');
-    // FBAN/FBAV : Facebook et Messenger. Instagram et les autres se nomment.
-    return /FBAN|FBAV|FB_IAB|Instagram|Messenger|TikTok|BytedanceWebview|LinkedInApp|Snapchat|Twitter/i.test(u);
-  };
+    for(const a of RC_IAB) if(a.re.test(u)) return a.nom;
+    // ── LE FILET GÉNÉRIQUE, iOS SEULEMENT ──────────────────────────────
+    //
+    // Toute vue web iOS embarquée passe par WebKit et n'a PAS le jeton
+    // « Safari » que le vrai Safari écrit en fin d'agent. C'est ce qui
+    // attrape les applications qu'on n'a pas nommées.
+    //
+    // navigator.standalone DÉPARTAGE LES DEUX CAS QUI RESTENT : Safari le
+    // pose à false, une application installée à true, et une vue embarquée
+    // ne le pose PAS DU TOUT. Sans lui, l'application déjà installée serait
+    // prise pour un navigateur intégré — et se verrait proposer d'en sortir.
+    if(/iPhone|iPad|iPod/i.test(u)&&/AppleWebKit/i.test(u)
+       &&!/Safari/i.test(u)&&navigator.standalone===undefined) return 'une application';
+  }catch(e){}
+  return null;
 }
-// De même : le lot suivant écrira la sortie vers le vrai navigateur. Tant
-// qu'elle n'existe pas, on ne fait pas semblant — on dit quoi faire à la main.
-if(typeof window.rcOuvrirDansNavigateur!=='function'){
-  window.rcOuvrirDansNavigateur=function(){
-    try{ toast('Touche les trois points en haut à droite, puis « Ouvrir dans le navigateur ».','var(--orange)'); }catch(e){}
-    return false;
-  };
+// La CLÉ de compteur associée au nom rendu ci-dessus. Séparée du nom affiché :
+// l'un se lit à l'écran, l'autre part dans /metrics et doit rester stable.
+function _rcIabCle(nom){
+  for(const a of RC_IAB) if(a.nom===nom) return 'iab_'+a.cle;
+  return 'iab_autre';
+}
+// ══════════ LA SORTIE ══════════════════════════════════════════════════
+function rcOuvrirDansNavigateur(){
+  const u=(()=>{ try{ return location.href; }catch(e){ return ''; } })();
+  const nom=rcNavigateurIntegre()||'cette application';
+  const est_iOS=(()=>{ try{ return /iPhone|iPad|iPod/i.test(navigator.userAgent||''); }catch(e){ return false; } })();
+  // ── ANDROID : l'URL intent, qui existe pour exactement ça ────────────
+  //
+  // Elle demande au système d'ouvrir l'adresse dans Chrome plutôt que dans
+  // la vue embarquée. S.browser_fallback_url est la porte de secours prévue
+  // par le format lui-même quand le paquet nommé n'est pas installé.
+  if(!est_iOS){
+    try{
+      const a=document.createElement('a'); a.href=u;
+      const cible='intent://'+a.host+a.pathname+a.search
+        +'#Intent;scheme=https;package=com.android.chrome;'
+        +'S.browser_fallback_url='+encodeURIComponent(u)+';end';
+      // SI RIEN NE SE PASSE, ON NE LAISSE PAS L'ÉCRAN MUET. Chrome peut ne
+      // pas être installé, et certaines vues embarquées refusent purement et
+      // simplement le schéma intent — sans erreur, sans rien. Une seconde et
+      // demie plus tard, on retombe sur la sortie manuelle, qui marche
+      // partout.
+      let parti=false;
+      try{ document.addEventListener('visibilitychange',()=>{ if(document.hidden) parti=true; },{once:true}); }catch(e){}
+      setTimeout(()=>{ if(!parti) _rcSortieManuelle(nom,u); },1500);
+      window.location.href=cible;
+      return true;
+    }catch(e){ /* on retombe sur la sortie manuelle */ }
+  }
+  // ── iOS : AUCUN ÉQUIVALENT N'EXISTE ──────────────────────────────────
+  // Pas d'URL intent, pas d'API pour changer de navigateur. Tout ce qu'on
+  // peut faire, c'est mettre l'adresse dans le presse-papier et dire où
+  // toucher. C'est peu, et c'est tout ce qu'il y a.
+  _rcSortieManuelle(nom,u);
+  return true;
+}
+// La copie, avec son repli. navigator.clipboard n'existe pas avant iOS 13.4
+// et exige un contexte sécurisé ; execCommand('copy') sur un champ caché
+// marche depuis toujours, et c'est le seul filet pour les vieux Safari.
+function _rcCopier(txt){
+  return new Promise(res=>{
+    try{
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(txt).then(()=>res(true),()=>res(_rcCopierVieux(txt)));
+        return;
+      }
+    }catch(e){}
+    res(_rcCopierVieux(txt));
+  });
+}
+function _rcCopierVieux(txt){
+  try{
+    const i=document.createElement('textarea');
+    i.value=txt;
+    // HORS DE L'ÉCRAN MAIS PAS display:none : un champ non rendu n'est pas
+    // sélectionnable, et la copie échoue en silence.
+    i.style.cssText='position:fixed;top:-1000px;left:-1000px;opacity:0';
+    i.setAttribute('readonly','');
+    document.body.appendChild(i);
+    i.select(); i.setSelectionRange(0,txt.length);
+    const ok=document.execCommand('copy');
+    i.remove();
+    return !!ok;
+  }catch(e){ return false; }
+}
+// Ce qu'on montre quand aucune sortie automatique n'est possible. Le bloc vit
+// dans l'écran d'installation, il est rempli ici.
+function _rcSortieManuelle(nom,u){
+  const z=document.getElementById('rc-inst-sortie');
+  const adr=document.getElementById('rc-inst-lien');
+  if(adr) adr.textContent=u;
+  // L'INSTRUCTION DÉPEND DE L'APPLICATION : le menu n'est pas au même endroit,
+  // et « touche le menu » sans dire où ne sert à personne.
+  const où=nom==='Instagram'
+      ? 'Touche le menu <b>en haut à droite</b>, puis « Ouvrir dans le navigateur ».'
+    : nom==='Messenger'
+      ? 'Touche le menu <b>en bas à droite</b>, puis « Ouvrir dans Safari ».'
+      : 'Ouvre Safari et colle le lien.';
+  const q=document.getElementById('rc-inst-quoi');
+  if(q) q.innerHTML=où;
+  if(z) z.style.display='block';
+  _rcCopier(u).then(ok=>{
+    const c=document.getElementById('rc-inst-copie');
+    if(c){
+      // ON NE DIT « COPIÉ » QUE SI ÇA L'EST. Un accusé de réception faux fait
+      // coller dans le vide, et c'est pire que pas d'accusé du tout.
+      c.textContent=ok?'✓ Lien copié':'Sélectionne l’adresse ci-dessous et copie-la.';
+      c.style.color=ok?'var(--green)':'var(--orange)';
+      c.style.display='block';
+    }
+  });
+  return true;
 }
 // L'ÉCRAN DE DÉPART. Trois cas rendent la proposition d'installation inutile
 // ou insistante, et dans ces trois cas on entre comme avant :
@@ -64087,6 +64244,12 @@ function rcInstallDecider(){
   // l'affichait avant de le nommer.
   if(principal){ principal.style.display='none'; principal.textContent=''; }
   if(ici) ici.style.display='none';
+  // Le libellé de la sortie est REPOSÉ à chaque décision : la branche B le
+  // change, et un second passage sur une autre branche le garderait sinon.
+  const _sortie=document.getElementById('rc-inst-passer');
+  if(_sortie) _sortie.textContent='Continuer sans installer';
+  const _sm=document.getElementById('rc-inst-sortie');
+  if(_sm) _sm.style.display='none';
   _rcInstGeste=null;
   const dire=(t)=>{ if(sous) sous.textContent=t||''; };
   const montrer=(id)=>{ const b=document.getElementById(id); if(b) b.style.display='block'; };
@@ -64094,15 +64257,35 @@ function rcInstallDecider(){
   // A — déjà installé : on ne propose pas ce qui est fait.
   if(rcInstallAutonome()) return 'A';
 
-  // B — navigateur intégré : aucun bouton ne peut aboutir ici.
-  if(rcNavigateurIntegre()){
+  // B — navigateur intégré. PRIORITAIRE SUR TOUT LE RESTE, et c'est le sens
+  // même de cette branche : un Android dans Instagram satisfait aussi les
+  // conditions de la branche C, et un bouton d'installation y serait un
+  // bouton mort. AUCUN bouton d'installation ici — le seul geste offert est
+  // la SORTIE.
+  const _app=rcNavigateurIntegre();
+  if(_app){
     montrer('rc-inst-integre');
+    const _n=document.getElementById('rc-inst-app');
+    if(_n) _n.textContent=_app;
     dire('Ouvre RepCore dans ton navigateur : c\'est de là que l\'installation se fait.');
     if(principal){
       principal.textContent='OUVRIR DANS LE NAVIGATEUR';
       principal.style.display='block';
       _rcInstGeste=()=>{ rcOuvrirDansNavigateur(); };
     }
+    // ET LA SORTIE DE SECOURS CHANGE DE MOT. « Continuer sans installer » ne
+    // veut rien dire ici : personne n'a le choix d'installer. « Continuer
+    // quand même » dit ce que c'est — un passage en force, prévu pour le jour
+    // où la détection se trompe. Une détection d'agent utilisateur se trompe.
+    const _p=document.getElementById('rc-inst-passer');
+    if(_p) _p.textContent='Continuer quand même';
+    // LE COMPTEUR. Il dira quelle part du trafic arrive par ce chemin — et
+    // cette part décide si le lien doit changer de forme sur Instagram.
+    // Une seule fois par session : rejouer la décision à l'arrivée de
+    // beforeinstallprompt ne doit pas compter deux fois le même visiteur.
+    try{
+      if(!window._rcIabCompte){ window._rcIabCompte=true; rcm(_rcIabCle(_app)); }
+    }catch(e){}
     return 'B';
   }
 
@@ -64242,7 +64425,15 @@ const RCM_TUNNEL=[
   {cles:['subscription_activated'],lib:'Abonnement activé'},
   {cles:['first_workout_started'],lib:'1re séance lancée'},
   {cles:['first_workout_completed'],lib:'1re séance terminée'},
-  {cles:['first_bilan_completed'],lib:'1er bilan rempli'}
+  {cles:['first_bilan_completed'],lib:'1er bilan rempli'},
+  // HORS TUNNEL : ce n'est pas une etape, c'est une fuite. Ces visiteurs ne
+  // peuvent PAS installer, et la plupart ne reviendront pas par un autre
+  // chemin. Le detail nomme l'application pour que le chiffre soit
+  // actionnable.
+  {cles:['iab_instagram','iab_facebook','iab_tiktok','iab_linkedin','iab_snapchat','iab_twitter','iab_autre'],
+   lib:'Arrive par un navigateur integre',horsTunnel:true,
+   detail:['iab_instagram','Instagram','iab_facebook','Messenger','iab_tiktok','TikTok',
+           'iab_linkedin','LinkedIn','iab_snapchat','Snapchat','iab_twitter','X','iab_autre','autre']}
 ];
 async function loadMetrics(){
   // Même garde que la génération de codes gratuits : ce sont les chiffres du

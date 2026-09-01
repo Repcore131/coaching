@@ -530,7 +530,11 @@
     // Mesure de tunnel — DES COMPTEURS, RIEN D'AUTRE.
     // Un noeud par jour, un entier par etape. Aucun identifiant, aucun email,
     // aucune donnee de sante ne peut y entrer : la validation n'accepte qu'un
-    // nombre, sous une cle appartenant a une liste fermee de 15 noms. Toute
+    // nombre, sous une cle appartenant a une liste fermee de 22 noms — les 15
+    // etapes du tunnel, plus 7 compteurs « iab_ » qui disent depuis quelle
+    // application le lien a ete ouvert quand c'est un navigateur integre. Un
+    // nom d'application, jamais un identifiant : « iab_instagram » ne dit pas
+    // QUI, il dit COMBIEN. Toute
     // autre cle ou tout autre type est refuse par le serveur — la garantie ne
     // repose donc pas sur la bonne conduite du client.
     // Ecriture non authentifiee : le visiteur de la page d'accueil n'a pas de
@@ -546,7 +550,7 @@
         ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
         "$evenement": {
           ".write": true,
-          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed)$/)"
+          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre)$/)"
         }
       }
     },

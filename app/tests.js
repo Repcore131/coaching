@@ -9183,6 +9183,159 @@ async function testExercices(){
               ?true:_echec('le mode de segmentation n’est pas remis');})());
         })();
 
+        // ══════ LES NAVIGATEURS INTÉGRÉS ══════
+        //
+        // LES CHAINES CI-DESSOUS SONT REELLES, relevees le 02/09/2026 sur
+        // user-agents.net et useragents.io. Une chaine inventee se detecte
+        // toujours ; ce sont les vraies qui decident.
+        (()=>{
+          const _v={ua:navigator.userAgent};
+          const _poser=(ua,sa)=>{
+            Object.defineProperty(navigator,'userAgent',{value:ua,configurable:true});
+            Object.defineProperty(navigator,'standalone',{value:sa,configurable:true});
+          };
+          const _rendre=()=>{
+            Object.defineProperty(navigator,'userAgent',{value:_v.ua,configurable:true});
+            try{ delete navigator.standalone; }catch(e){}
+          };
+          ok('Les six applications sont reconnues sur leurs vraies chaînes',(()=>{
+            const cas=[
+              ['Mozilla/5.0 (Linux; Android 14; SM-S916U; wv) AppleWebKit/537.36 Chrome/119.0.6045.66 Mobile Safari/537.36 Instagram 309.0.0.40.113 Android (34/14)',false,'Instagram'],
+              ['Mozilla/5.0 (iPhone; CPU iPhone OS 12_4_1 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 147.0.0.30.121 (iPhone9,3)',undefined,'Instagram'],
+              ['Mozilla/5.0 (Linux; Android 7.1.2; Nexus 5X; wv) AppleWebKit/537.36 Chrome/57 Mobile Safari/537.36 [FB_IAB/MESSENGER;FBAV/114.0.0.21.71;]',false,'Messenger'],
+              ['Mozilla/5.0 (Linux; Android 12; wv) AppleWebKit/537.36 Chrome/114 Mobile Safari/537.36 [FB_IAB/Orca-Android;FBAV/414.0.0.17.61;]',false,'Messenger'],
+              ['Mozilla/5.0 (iPad; CPU OS 6_1_3 like Mac OS X) AppleWebKit/536.26 Mobile/10B329 [FBAN/FBIOS;FBAV/5.6;FBBV/144493]',undefined,'Messenger'],
+              ['Mozilla/5.0 (Linux; Android 13; wv) AppleWebKit/537.36 Chrome/116 Mobile Safari/537.36 BytedanceWebview/d8a21c6 musical_ly_31.5.3',false,'TikTok'],
+              ['Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 [LinkedInApp]',undefined,'LinkedIn'],
+              ['Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/116 Mobile Safari/537.36 Snapchat/12.47.0.42',false,'Snapchat'],
+              ['Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Twitter for iPhone/10.15',undefined,'X']
+            ];
+            try{
+              for(const [ua,sa,att] of cas){
+                _poser(ua,sa);
+                const d=rcNavigateurIntegre();
+                if(d!==att) return _echec(att+' → « '+d+' » sur : '+ua.slice(-46));
+              }
+              return true;
+            } finally { _rendre(); }})());
+
+          ok('Le filet iOS attrape l\'anonyme SANS attraper Safari ni l\'app installée',(()=>{
+            // TROIS AGENTS QUASI IDENTIQUES, et c'est tout le piège. Une vue
+            // web embarquée n'a pas le jeton « Safari » ; Safari l'a. Et une
+            // application DÉJÀ INSTALLÉE ne l'a pas non plus — c'est
+            // navigator.standalone qui les sépare : false pour Safari, true
+            // pour l'app installée, ABSENT pour une vue embarquée. Sans ce
+            // troisième point, l'app installée se verrait proposer de sortir
+            // d'elle-même.
+            const base='Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
+            try{
+              _poser(base,undefined);
+              if(rcNavigateurIntegre()!=='une application')
+                return _echec('la vue embarquée anonyme n’est pas vue');
+              _poser(base+' Version/17.0 Safari/604.1',false);
+              if(rcNavigateurIntegre()!==null) return _echec('Safari est pris pour un navigateur intégré');
+              _poser(base,true);
+              if(rcNavigateurIntegre()!==null) return _echec('l’application installée est prise pour un navigateur intégré');
+              _poser('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/152 Mobile Safari/537.36',false);
+              return rcNavigateurIntegre()===null
+                ?true:_echec('Chrome Android est pris pour un navigateur intégré');
+            } finally { _rendre(); }})());
+
+          ok('La branche B passe DEVANT l\'invitation d\'installation',(()=>{
+            // Un Android dans Instagram satisfait aussi la branche C. Si elle
+            // passait devant, le bouton promettrait une installation qui ne
+            // peut pas avoir lieu — et c'est RepCore qu'on accuserait.
+            const _inv=window.rcInstallInvite, _mm=window.matchMedia;
+            try{
+              _poser('Mozilla/5.0 (Linux; Android 14; wv) AppleWebKit/537.36 Chrome/119 Mobile Safari/537.36 Instagram 309.0.0.40.113',false);
+              window.rcInstallInvite=()=>({});             // le navigateur dit pouvoir installer
+              window.matchMedia=(q)=>({matches:/pointer: coarse/.test(q),media:q,
+                addListener(){},removeListener(){},addEventListener(){},removeEventListener(){}});
+              if(rcInstallDecider()!=='B') return _echec('la branche C est passée devant');
+              // AUCUN BOUTON D'INSTALLATION : le seul geste offert est la sortie.
+              const p=document.getElementById('rc-inst-principal');
+              if(!/NAVIGATEUR/i.test(p.textContent||''))
+                return _echec('le bouton propose autre chose : '+p.textContent);
+              if((document.getElementById('rc-inst-ici')||{}).style?.display!=='none')
+                return _echec('le bouton d’installation locale est visible');
+              // L'APPLICATION EST NOMMÉE : « le navigateur intégré d'une
+              // application » ne dit pas où toucher.
+              if((document.getElementById('rc-inst-app')||{}).textContent!=='Instagram')
+                return _echec('l’application n’est pas nommée');
+              // ET LA SORTIE CHANGE DE MOT : personne n'a le choix d'installer,
+              // « Continuer sans installer » ne voudrait rien dire.
+              return /quand même/.test((document.getElementById('rc-inst-passer')||{}).textContent||'')
+                ?true:_echec('la sortie ne dit pas « Continuer quand même »');
+            } finally { _rendre(); window.rcInstallInvite=_inv; window.matchMedia=_mm; }})());
+
+          ok('Un faux positif n\'enferme jamais personne',(()=>{
+            // Une détection d'agent utilisateur SE TROMPE. La sortie vers
+            // l'accueil doit exister dans toutes les branches, sans exception.
+            const l=document.getElementById('rc-inst-passer');
+            if(!l||l.tagName!=='A') return _echec('la sortie n’est plus un lien');
+            return /go\('s-welcome'\)/.test(String(rcInstallPasser))
+              ?true:_echec('la sortie ne mène plus à l’accueil');})());
+
+          ok('La sortie manuelle dit OÙ toucher, et laisse l\'adresse lisible',(()=>{
+            const src=String(_rcSortieManuelle);
+            // L'INSTRUCTION DÉPEND DE L'APPLICATION : le menu n'est pas au même
+            // endroit dans Instagram et dans Messenger, et « touche le menu »
+            // sans dire où ne sert à personne.
+            if(!/en haut à droite/.test(src)) return _echec('l’instruction Instagram a disparu');
+            if(!/en bas à droite/.test(src)) return _echec('l’instruction Messenger a disparu');
+            if(!/Ouvre Safari/.test(src)) return _echec('le repli générique a disparu');
+            // ON NE DIT « COPIÉ » QUE SI ÇA L'EST : un accusé faux fait coller
+            // dans le vide, ce qui est pire que pas d'accusé.
+            if(!/ok\?'✓ Lien copié'/.test(src)) return _echec('le « copié » n’est plus conditionnel');
+            const z=document.getElementById('rc-inst-lien');
+            if(!z) return _echec('l’adresse en clair a disparu de l’écran');
+            // Sélectionnable d'un appui long : c'est le repli ultime.
+            return /user-select:all/.test(z.getAttribute('style')||'')
+              ?true:_echec('l’adresse n’est pas sélectionnable');})());
+
+          ok('La copie a son repli pour les vieux Safari',(()=>{
+            // navigator.clipboard n'existe pas avant iOS 13.4 et exige un
+            // contexte sécurisé. execCommand sur un champ hors écran marche
+            // depuis toujours — et le champ doit être RENDU, pas display:none,
+            // sinon il n'est pas sélectionnable et la copie échoue en silence.
+            if(typeof _rcCopierVieux!=='function') return _echec('le repli a disparu');
+            // ⚠ LA SONDE MATCHAIT SON PROPRE COMMENTAIRE : le correctif explique
+            // qu'il ne faut PAS display:none, et scanner la source brute
+            // retrouvait la citation. On retire les commentaires d'abord.
+            const src=String(_rcCopierVieux).replace(/\/\/.*/g,'');
+            if(src.indexOf("execCommand('copy')")<0) return _echec('execCommand a disparu');
+            if(/display:\s*none/.test(src)) return _echec('le champ est masqué : la copie échouera');
+            if(!/position:fixed/.test(src)) return _echec('le champ n’est plus sorti de l’écran');
+            // ET IL NE LÈVE PAS quand la copie est refusée — c'est le cas
+            // normal hors d'un geste utilisateur.
+            let leve=false;
+            try{ _rcCopierVieux('x'); }catch(e){ leve=true; }
+            return !leve?true:_echec('le repli lève quand la copie est refusée');})());
+
+          ok('Le compteur nomme l\'application, et le serveur l\'accepte',(()=>{
+            // UN COMPTEUR PAR APPLICATION : savoir que 30 % du trafic ne peut
+            // pas installer est utile ; savoir que ce sont des visiteurs
+            // d'Instagram dit QUOI FAIRE.
+            const paires=[['Instagram','iab_instagram'],['Messenger','iab_facebook'],
+              ['TikTok','iab_tiktok'],['LinkedIn','iab_linkedin'],['Snapchat','iab_snapchat'],
+              ['X','iab_twitter'],['une application','iab_autre']];
+            for(const [nom,cle] of paires){
+              if(_rcIabCle(nom)!==cle) return _echec(nom+' → '+_rcIabCle(nom));
+              // rcm() REFUSE TOUT NOM HORS LISTE, et le serveur aussi : une clé
+              // absente de RCM_EVENEMENTS part dans le vide sans rien dire.
+              if(RCM_EVENEMENTS.indexOf(cle)<0) return _echec(cle+' n’est pas dans RCM_EVENEMENTS');
+            }
+            // ET LA LISTE FERMÉE DU SERVEUR SUIT CELLE DU CLIENT. Sans ça le
+            // PUT est rejeté par les règles et le compteur reste à zéro — en
+            // silence, ce qui est le pire des deux mondes.
+            if(typeof window._RC_RULES!=='string'||!window._RC_RULES)
+              return true;                       // règles non servies : la sonde le dit ailleurs
+            for(const [,cle] of paires)
+              if(window._RC_RULES.indexOf(cle)<0)
+                return _echec(cle+' manque dans database.rules.json : le serveur le refusera');
+            return true;})());
+        })();
+
         // ══════ LA CAPTURE DE L'INVITATION, ET LE MANIFESTE ══════
         ok('L\'invitation est capturée AVANT tout le reste du fichier',(()=>{
           // beforeinstallprompt NE SE REJOUE PAS : le navigateur le tire une
