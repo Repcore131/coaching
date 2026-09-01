@@ -30419,6 +30419,15 @@ async function testExercices(){
         const _u=currentUser,_save=window.saveUser,_toast=window.toastEcriture,
               _ls=window.loadSupplements,_ln=window.loadNutrition,
               _sn=window.scheduleSuppNotif;
+        // `supp-edit-idx` PORTE UN IDENTIFIANT, pas un rang, malgre son nom :
+        // openSuppEdit y ecrit `s.id` et saveSuppEntry le resout par
+        // _suppIndexParId. La sonde y posait encore un INDEX — 0 pour la
+        // premiere entree — et _suppIndexParId ne trouvait evidemment aucun
+        // complement d'identifiant 0 : au lieu de modifier la ligne existante,
+        // l'enregistrement en AJOUTAIT une seconde, et « la forme a-t-elle ete
+        // effacee ? » se lisait sur une ligne qui n'avait jamais eu de forme.
+        // Le nom du champ est trompeur ; c'est la sonde qui s'y est laissee
+        // prendre, pas le produit.
         const remplir=(nom,forme,idx)=>{
           el['supp-name'].value=nom; el['supp-qty'].value='400';
           el['supp-unit'].value='mg'; el['supp-notes'].value='';
@@ -30439,11 +30448,13 @@ async function testExercices(){
             l.length===1&&l[0].forme==='bisglycinate',JSON.stringify(l[0]));
           ok('Le moment de prise a bien été lu',
             JSON.stringify((l[0]||{}).timings)==='["soir"]');
-          remplir('Magnésium','',0);
+          remplir('Magnésium','',l[0].id);
           saveSuppEntry();
+          const l2=currentUser.nutrition.supplements;
+          ok('Modifier un complément ne le DUPLIQUE pas',l2.length===1,
+            l2.length+' entrées : '+JSON.stringify(l2.map(x=>x.name)));
           ok('Revenir à « Non précisée » EFFACE la forme',
-            !('forme' in currentUser.nutrition.supplements[0]),
-            JSON.stringify(currentUser.nutrition.supplements[0]));
+            !('forme' in l2[0]),JSON.stringify(l2[0]));
           currentUser={id:'t',email:'t@t',nutrition:{supplements:[]}};
           remplir('Glutamine','',-1);
           saveSuppEntry();
@@ -31184,6 +31195,71 @@ async function testExercices(){
       ok('L\'athlète lit le canal de SON coach',(()=>{
         const u=U('lea@t.fr'); u.coachEmailKey='kev@t,fr';
         return canalCle(u)==='kev@t,fr'?true:_echec(String(canalCle(u)));})());
+
+      // ── QUAND LE CANAL NE S'OUVRE PAS, DIRE LAQUELLE DES DEUX CAUSES ───
+      ok('Une clef de coach absente n\'est pas une panne de reseau',(()=>{
+        // « Reviens quand tu auras du réseau » était dit AUSSI quand le réseau
+        // allait très bien. Un athlète rattaché par l'ancienne méthode —
+        // coachId posé, coachEmailKey jamais posé — n'a aucune clef : il
+        // pouvait attendre le réseau indéfiniment, le canal ne se serait
+        // jamais ouvert. Le conseil était faux de bout en bout.
+        const src=String(_canalCharger).replace(/\/\/.*/g,'');
+        const iRes=src.indexOf('!CLOUD.ok()');
+        const iCle=src.indexOf('if(!cle)');
+        if(iRes<0||iCle<0) return _echec('les deux causes ne sont plus distinguées');
+        // LE RESEAU D'ABORD : sans lui on ne peut même pas essayer.
+        if(!(iRes<iCle)) return _echec('la clef est jugée avant le réseau');
+        // ET LE MESSAGE DE LA CLEF NE PARLE PAS DE RESEAU. C'est tout l'objet
+        // de ce lot : le conseil doit être celui qui débloque.
+        const bloc=src.slice(iCle,iCle+700);
+        if(/hors connexion|réseau/.test(bloc))
+          return _echec('le message de la clef parle encore de réseau');
+        return /nouveau code/.test(bloc)
+          ?true:_echec('le message ne dit pas quoi faire : '+bloc.slice(0,120));})());
+      okA('L\'écran le dit vraiment, pas seulement le source',(async()=>{
+        // Rendu RÉEL : une sonde de source ne dirait rien d'un message resté
+        // dans une branche que personne n'atteint.
+        const _cu=currentUser,_ok=CLOUD.ok;
+        const fil=document.getElementById('canal-fil');
+        if(!fil) return _echec('le fil du canal n’existe pas dans l’écran');
+        const _av=fil.innerHTML;
+        try{
+          CLOUD.ok=()=>true;                       // le réseau va bien
+          currentUser={email:'lea@t.fr',id:'a1',role:'athlete',coachId:'co'};
+          await _canalCharger();
+          const t=(fil.textContent||'').replace(/\s+/g,' ');
+          if(/hors connexion|réseau/.test(t))
+            return _echec('l’écran parle de réseau alors qu’il va bien : '+t.slice(0,90));
+          return /code/.test(t)
+            ?true:_echec('l’écran ne dit pas quoi faire : '+t.slice(0,90));
+        } finally { currentUser=_cu; CLOUD.ok=_ok; fil.innerHTML=_av; }}));
+      ok('cleCoachDe retente par le cache avant d\'abandonner',(()=>{
+        // SUR LE TELEPHONE DE L'ATHLETE, `users` NE CONTIENT QUE SON PROPRE
+        // DOSSIER — les règles RTDB refusent celui du coach. La recherche par
+        // coachId n'y rend donc jamais rien, et c'était le seul repli.
+        const CLE='rc_coach_profil';
+        const _av=localStorage.getItem(CLE);
+        const _db=DB.get('users');
+        try{
+          DB.set('users',{'lea@t.fr':{id:'a1',email:'lea@t.fr',coachId:'co'}});
+          const u={id:'a1',email:'lea@t.fr',role:'athlete',coachId:'co'};
+          localStorage.removeItem(CLE);
+          if(cleCoachDe(u)!==null) return _echec('une clef sort de nulle part');
+          localStorage.setItem(CLE,JSON.stringify({key:'kev@t,fr',d:{fname:'Kev'}}));
+          if(cleCoachDe(u)!=='kev@t,fr')
+            return _echec('le cache n’est pas relu : '+cleCoachDe(u));
+          // LE CHAMP DU DOSSIER RESTE PRIORITAIRE : le cache est un dernier
+          // recours, pas une source concurrente.
+          const v={...u,coachEmailKey:'autre@t,fr'};
+          if(cleCoachDe(v)!=='autre@t,fr') return _echec('le cache passe devant le dossier');
+          // ET UN COACH N'Y TOUCHE PAS. Il n'a pas de coachId et sort avant :
+          // sans cet ordre il ramasserait la clef d'un cache qui n'est pas le
+          // sien.
+          return cleCoachDe({email:'kev@t.fr',role:'coach'})===null
+            ?true:_echec('un coach récupère la clef du cache');
+        } finally {
+          if(_av===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_av);
+          if(_db) DB.set('users',_db); }})());
 
       // ── La pastille : une sonde, pas un fil ─────────────────────────────
       ok('Un message plus récent que la dernière visite allume la pastille',

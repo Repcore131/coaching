@@ -16334,7 +16334,27 @@ function cleCoachDe(u){
   if(!u.coachId) return null;
   const users=DB.get("users")||{};
   const e=Object.keys(users).find(k=>users[k]&&users[k].id===u.coachId);
-  return e?e.replace(/\./g,','):null;
+  if(e) return e.replace(/\./g,',');
+  // DERNIER RECOURS, ET IL EST BORNE. Sur le telephone de l'athlete, `users` ne
+  // contient QUE son propre dossier — les regles RTDB refusent celui du coach —
+  // donc la recherche ci-dessus n'y rend jamais rien. La clef mise de cote avec
+  // le profil public, elle, est locale et porte l'adresse du coach.
+  //
+  // CE QU'ELLE RATTRAPE, ET CE QU'ELLE NE RATTRAPE PAS. Le cache n'est ecrit que
+  // par pullProfilCoach, qui recoit deja la clef : il ne peut donc pas la faire
+  // apparaitre chez un athlete qui ne l'a JAMAIS eue. Il la rend a celui qui
+  // l'avait et l'a perdue — un dossier ecrase par une copie distante plus
+  // ancienne, une restauration depuis un export d'avant coachEmailKey. C'est
+  // etroit, et c'est gratuit ; ce n'est pas une raison de ne pas le faire.
+  //
+  // APRES le garde coachId, jamais avant : un coach n'a pas de coachId et sort
+  // plus haut, sans quoi il recuperait ici la clef d'un cache qui n'est pas le
+  // sien.
+  try{
+    const b=JSON.parse(localStorage.getItem("rc_coach_profil")||"null");
+    if(b&&b.key) return b.key;
+  }catch(err){}
+  return null;
 }
 // Profil public du coach, tel que rapatrie a la derniere connexion. Sert aussi
 // hors ligne : c est la seule copie que l athlete possede.
@@ -16913,8 +16933,25 @@ async function _canalCharger(){
   const cle=canalCle(currentUser);
   const fil=document.getElementById('canal-fil');
   if(!fil) return;
-  if(!cle||!CLOUD.ok()){
+  // ══ DEUX CAUSES, ET UN SEUL MESSAGE POUR LES DEUX ═════════════════════
+  //
+  // « Reviens quand tu auras du réseau » etait dit AUSSI quand le reseau allait
+  // tres bien. Un athlete rattache par l'ancienne methode — coachId pose, mais
+  // pas coachEmailKey — n'a aucune clef de coach : canalCle rend null, et le
+  // conseil donne etait alors faux de bout en bout. Il pouvait attendre le
+  // reseau indefiniment, le canal ne se serait jamais ouvert.
+  //
+  // LE RESEAU D'ABORD : sans lui on ne peut meme pas essayer, et c'est la
+  // seule chose a faire. La clef ensuite, et elle a son propre conseil — le
+  // seul qui debloque quoi que ce soit, parce que la clef ne peut revenir que
+  // par un code d'acces neuf.
+  if(!CLOUD.ok()){
     fil.innerHTML=_canalVide('Canal indisponible hors connexion.','Reviens quand tu auras du réseau.');
+    return;
+  }
+  if(!cle){
+    fil.innerHTML=_canalVide('Rattachement à ton coach incomplet.',
+      'Ton compte est bien lié à lui, mais la référence qui ouvre son canal manque sur cet appareil. Demande-lui un nouveau code d\'accès et saisis-le : le canal s\'ouvrira.');
     return;
   }
   const moi=(currentUser.email||'').replace(/\./g,',');
@@ -17032,7 +17069,11 @@ async function basculerReaction(msgId,emoji){
   if(!canalAccessible(currentUser)) return;
   const cle=canalCle(currentUser);
   const moi=(currentUser.email||'').replace(/\./g,',');
-  if(!cle||!CLOUD.ok()){ toast('Réaction impossible hors connexion','var(--orange)'); return; }
+  // MEME DISTINCTION QU'AU CHARGEMENT, et pour la meme raison : une clef
+  // absente n'est pas une panne de reseau, et le dire ainsi envoie l'athlete
+  // attendre quelque chose qui n'arrivera pas.
+  if(!CLOUD.ok()){ toast('Réaction impossible hors connexion','var(--orange)'); return; }
+  if(!cle){ toast('Rattachement à ton coach incomplet : demande-lui un nouveau code d\'accès.','var(--orange)'); return; }
   const miennes=window._canalMiennes||(window._canalMiennes={});
   const compteurs=window._canalCompteurs||(window._canalCompteurs={});
   const avant=miennes[msgId]||'';
@@ -54778,15 +54819,35 @@ function _renderSuppTable(list, isCoach, editFn){
 
   // Le dépli « à savoir ». Il ne tient pas sur la ligne de tous les jours :
   // c'est une information d'achat, pas une information de prise.
-  const depli=(s,x,pose)=>x.fiche?`<details onclick="event.stopPropagation()" style="flex-shrink:0;${pose||''}">
+  // TOUT LE DEPLI ETAIT SUSPENDU A LA FICHE DE REFERENCE, et c'etait un defaut
+  // silencieux : l'athlete qui renomme son produit — « Mon magnesium a moi » —
+  // ne correspond plus a aucune fiche, et voyait disparaitre de l'ecran la
+  // FORME qu'il avait lui-meme choisie. Elle etait toujours dans son dossier ;
+  // seul l'affichage l'avait perdue. Or c'est precisement l'information qu'on
+  // relit devant un rayon.
+  //
+  // Trois autres subissaient la meme suspension pour la meme mauvaise raison :
+  // sa note personnelle, l'ecart entre le moment de prise et celui conseille, et
+  // le rappel de duree. Aucune des quatre n'a besoin d'une fiche pour exister.
+  //
+  // ON ASSEMBLE DONC LE CONTENU D'ABORD, et le depli ne s'affiche que s'il a
+  // quelque chose a montrer — un chevron qui n'ouvre sur rien est pire qu'un
+  // chevron absent.
+  const depli=(s,x,pose)=>{
+    const bloc=(t,st)=>t?`<div style="font-size:var(--fs-xs);${st};margin-top:4px;white-space:normal">${escapeHtml(t)}</div>`:'';
+    const corps=
+      (x.fiche?`<div style="font-size:var(--fs-xs);color:#ccc;line-height:1.6;margin-top:5px;white-space:normal">${escapeHtml(x.fiche.note)}</div>`:'')
+      +(x.fiche?_htmlFormesFiche(x.fiche,s.forme):'')
+      +(s.forme?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px;font-weight:700">Forme : ${escapeHtml(_libelleForme(x.fiche,s.forme))}</div>`:'')
+      +bloc(phraseDureeJugement(x.fiche),'color:var(--text-dim);line-height:1.5')
+      +bloc(s.notes,'color:var(--text-dim);font-style:italic')
+      +bloc(_suppEcartMoment(s),'color:var(--text-dim);line-height:1.5');
+    if(!corps) return '';
+    return `<details onclick="event.stopPropagation()" style="flex-shrink:0;${pose||''}">
       <summary style="font-size:var(--fs-sm);color:var(--sub);cursor:pointer;list-style:none;padding:0 2px">▾</summary>
-      <div style="font-size:var(--fs-xs);color:#ccc;line-height:1.6;margin-top:5px;white-space:normal">${escapeHtml(x.fiche.note)}</div>
-      ${_htmlFormesFiche(x.fiche,s.forme)}
-      ${s.forme?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px;font-weight:700">Forme : ${escapeHtml(_libelleForme(x.fiche,s.forme))}</div>`:''}
-      ${phraseDureeJugement(x.fiche)?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;line-height:1.5;white-space:normal">${escapeHtml(phraseDureeJugement(x.fiche))}</div>`:''}
-      ${s.notes?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;font-style:italic;white-space:normal">${escapeHtml(s.notes)}</div>`:''}
-      ${_suppEcartMoment(s)?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;line-height:1.5;white-space:normal">${escapeHtml(_suppEcartMoment(s))}</div>`:''}
-    </details>`:'';
+      ${corps}
+    </details>`;
+  };
 
   // LA QUANTITE DE CETTE PRISE, plus celle de la journee entiere. Le total
   // et son « · 3× » disaient six scoops la ou l athlete devait en servir
@@ -54881,7 +54942,15 @@ function _renderSuppTable(list, isCoach, editFn){
              basculait sur une seconde ligne et coutait 20 px de hauteur a la
              bande. La ligne du dessous ne porte qu une incise courte : il y
              tient sans rien deplacer, et le nom retrouve sa ligne entiere. -->
-        ${x.fiche?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">${reference(x)}${depli(s,x)}</div>`:''}
+        ${(()=>{
+          // LA RANGEE AUSSI ETAIT SUSPENDUE A LA FICHE, et c'est elle qui
+          // portait le defaut jusqu'au bout : le depli avait beau savoir quoi
+          // montrer, la ligne qui l'accueille n'etait pas rendue. La reference
+          // vient de la fiche et disparait avec elle, c'est normal ; le depli,
+          // lui, existe des que l'athlete a quelque chose a y lire.
+          const _r=x.fiche?reference(x):'', _d=depli(s,x);
+          return (_r||_d)?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">${_r}${_d}</div>`:'';
+        })()}
       </div>
       <div style="position:relative;flex-shrink:0;text-align:right">${chiffre(x,'var(--fs-2xl)',true)}</div>
     </div>`;
@@ -63445,8 +63514,18 @@ async function createAthlete(){
   // Le message ne distingue pas créateur et affilié : les deux accordent
   // l'accès, et annoncer autre chose serait faux.
   const _aFaire=" Envoie-lui le CODE (copié) : tant qu'il ne l'a pas saisi à sa première connexion, sa fiche reste vide chez toi.";
+  // « IL PEUT SE CONNECTER », et non « il se connecte » : c'est le mot que le
+  // commentaire ci-dessus defend, et il porte tout le sens. Le compte
+  // d'authentification existe — la possibilite est donc exacte — mais rien n'est
+  // fait tant que l'athlete n'a pas saisi son code, ce que la phrase suivante
+  // dit. « Il se connecte » se lisait comme un fait accompli, soit exactement le
+  // sous-entendu que ce commentaire existe pour ecarter.
+  //
+  // ET RIEN NE S'INTERCALE ENTRE `motDePasseActif` ET SON `?` : une sonde de la
+  // suite lit ce ternaire d'un bloc pour verifier que les deux cas restent
+  // distingues, et un commentaire pose au milieu suffit a la rendre aveugle.
   const messageFinal=(motDePasseActif
-    ? '✓ '+fn+' créé : il se connecte avec cet email et ce mot de passe.'
+    ? '✓ '+fn+' créé : il peut se connecter avec cet email et ce mot de passe.'
     : '✓ '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe.')
     +_aFaire+' Accès jusqu\'au '+exp;
   toastEcriture(okU&&okS,messageFinal,'le compte est');
