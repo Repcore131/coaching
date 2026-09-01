@@ -100,8 +100,29 @@ async function testExercices(){
   const _poserSaisie=rep=>{ window.rcSaisie=(t)=>{
     _modale.question=String(t==null?'':t); _modale.demande=true;
     return Promise.resolve(rep); }; };
+  // ══ LES PREREQUIS SONT CHARGES ICI, PLUS PAR L'APPELANT ═══════════════
+  //
+  // Deux jeux de donnees sont indispensables : l'index des illustrations et la
+  // table Ciqual. Sans eux la suite s'arretait vers 2 200 assertions sur 4 142 —
+  // et le rapport annoncait « 2 200 verifications, N en echec », ce qui se lit
+  // exactement comme une suite qui a tout passe. Il fallait savoir qu'on devait
+  // taper `await chargerIndexIllustrations()` et `await _loadCiqual()` AVANT, et
+  // ce savoir ne vivait que dans la tete de celui qui l'avait ecrit.
+  //
+  // ELLE LES CHARGE DONC ELLE-MEME. Idempotents tous les deux — chacun garde son
+  // resultat — les rappeler ne coute rien quand le lanceur les a deja appeles.
+  // Un echec de chargement n'arrete pas la suite : il devient une assertion
+  // rouge NOMMEE, et les sondes qui en dependent tomberont a leur tour en le
+  // disant. Mieux vaut une suite qui accuse un manque qu'une suite qui s'arrete.
+  for(const [nom,f] of [['index des illustrations',typeof chargerIndexIllustrations==='function'?chargerIndexIllustrations:null],
+                        ['table Ciqual',typeof _loadCiqual==='function'?_loadCiqual:null]]){
+    if(!f){ ok('Prérequis : '+nom,false,'la fonction de chargement est introuvable'); continue; }
+    try{ await f(); }
+    catch(e){ ok('Prérequis : '+nom,false,'chargement impossible : '+((e&&e.message)||e)); }
+  }
   const sauve=currentUser;
   currentUser={id:'_test',email:'t@t',exMuscles:{},exAlias:{},sessions:[]};
+  const _avantBloc=R.length;
   try{
     // ── exKey : 12 cas ──
     const cas=[
@@ -17899,8 +17920,24 @@ async function testExercices(){
         // doit déléguer, pas recopier.
         if(!/_bilCompterReponses\(/.test(String(_bilDraftRempli)))
           return _echec('_bilDraftRempli a sa propre copie de la règle');
-        if(!/_bilCompterReponses\(bilData\)/.test(String(bilNext)))
+        // ⚠ ELLE EXIGEAIT L'ARGUMENT LITTERAL `bilData`, et c'est ce qui l'a
+        // rendue fausse. bilNext compte desormais sur
+        // `_bilSansReprises(bilData,_bilReprises)` — les mensurations
+        // pre-remplies ne sont pas des reponses, et les compter faisait passer
+        // le garde-fou a un bilan coaching ou rien n'avait ete touche. La regle
+        // « une seule facon de compter » n'a pas bouge ; c'est ce sur QUOI on
+        // compte qui a change, et la sonde lisait l'argument au lieu de la
+        // regle.
+        const _bn=String(bilNext);
+        if(!/_bilCompterReponses\s*\(/.test(_bn))
           return _echec('bilNext ne compte pas avec la même');
+        // ET IL COMPTE BIEN SUR LA SAISIE, pas sur autre chose : ce qu'il passe
+        // derive de bilData. Sans ce second point, compter sur un objet vide
+        // satisferait la sonde.
+        if(!/_bilCompterReponses\s*\(\s*(bilData|_saisi)\s*\)/.test(_bn))
+          return _echec('bilNext compte sur autre chose que la saisie');
+        if(/_saisi/.test(_bn)&&!/_saisi\s*=\s*_bilSansReprises\(bilData/.test(_bn))
+          return _echec('_saisi ne vient plus de bilData');
         const o={a:'',b:null,c:[],d:[1],e:'x',f:0};
         return _bilCompterReponses(o)===3
           ?true:_echec('comptage : '+_bilCompterReponses(o)+' au lieu de 3');})());
@@ -22605,9 +22642,27 @@ async function testExercices(){
         if(!/_scanFlux=null/.test(src)) return _echec('le flux n\'est pas relâché');
         if(!/srcObject=null/.test(src)) return _echec('la vidéo reste attachée');
         // Porte 1 : la fermeture de l'écran.
-        if(!/scanArreter/.test(String(scanFermer))) return _echec('la fermeture ne coupe pas');
+        //
+        // ⚠ ELLE NE COUPE PAS ELLE-MEME, ET C'EST MIEUX AINSI. scanFermer appelle
+        // scanLibererTout, qui appelle scanArreter ET purge le module ZXing —
+        // plusieurs mégaoctets de WebAssembly que l'ancien chemin laissait en
+        // mémoire. La sonde exigeait le nom « scanArreter » dans le corps de
+        // scanFermer et ne voyait donc plus rien : elle annonçait une caméra
+        // restée allumée alors que la chaîne la coupe et libère davantage.
+        //
+        // ON SUIT LA CHAINE plutôt qu'un nom : le libérateur compte comme une
+        // porte s'il mène bien à l'arrêt. Un intermédiaire qui cesserait de
+        // couper ferait tomber cette assertion, ce qu'un simple « accepte les
+        // deux noms » ne garantirait pas.
+        const _coupe=f=>{
+          const s=String(f);
+          if(/scanArreter\s*\(/.test(s)) return true;
+          return /scanLibererTout\s*\(/.test(s)
+            && /scanArreter\s*\(/.test(String(scanLibererTout));
+        };
+        if(!_coupe(scanFermer)) return _echec('la fermeture ne coupe pas');
         // Porte 2 : TOUT changement d'écran, pas seulement le bouton retour.
-        if(!/scanArreter/.test(String(go))) return _echec('le changement d\'écran ne coupe pas');
+        if(!_coupe(go)) return _echec('le changement d\'écran ne coupe pas');
         // Porte 3 : le passage en arrière-plan.
         return /visibilitychange/.test(String(loadClientHome))
           ?true:_echec('aucun écouteur de visibilité');})());
@@ -39805,6 +39860,24 @@ vendredi 78 6h 44m
         finally{ if(z&&p) p.insertBefore(z,s); }
         return true;})());
 
+      // ── CE QUI PASSE PAR UN OBSERVATEUR NE SE LIT PAS DANS LA FOULEE ────
+      //
+      // _auChamp est un IntersectionObserver : ce qu'il declenche n'existe pas a
+      // la ligne suivante. Plusieurs sondes lisaient le resultat en synchrone et
+      // annoncaient « aucune animation » sur un produit qui en pose une — elles
+      // mesuraient la synchronie, pas le trace.
+      //
+      // On attend par IMAGES et non par delai : une attente en millisecondes est
+      // soit trop courte sur une machine chargee, soit du temps perdu a chaque
+      // execution. On sort des que la condition tient.
+      const _attendreImages=async(cond,max)=>{
+        for(let i=0;i<(max||30);i++){
+          try{ if(cond()) return true; }catch(e){}
+          await new Promise(r=>requestAnimationFrame(r));
+        }
+        try{ return !!cond(); }catch(e){ return false; }
+      };
+
       // ── La traversée ────────────────────────────────────────────────────
       ok('La traversée ne bouge QU\'UNE translation',(()=>{
         // Le parent porte le gabarit et la découpe, l'enfant seul se déplace :
@@ -39898,10 +39971,28 @@ vendredi 78 6h 44m
       ok('La sortie n\'est JAMAIS plus lente que l\'entrée',(()=>{
         // Une fermeture qui traîne donne le sentiment d'une application qui
         // résiste. L'entrée dure 180 ms, la sortie 140.
-        const ent=/#modal-overlay\{[^}]*animation:arcVoile (\d+)ms/.exec(_cssArc);
+        // ⚠ ELLE CHERCHAIT UN LITTERAL EN MS, et la regle n'en porte plus :
+        // « animation:arcVoile var(--t-2) … ». La sonde ne trouvait donc plus
+        // rien et annoncait « duree d'entree introuvable » — pas un ralenti a
+        // la fermeture, juste une echelle passee par des jetons.
+        //
+        // ON LIT LE JETON ET ON LE RESOUT. Extraire la valeur du fichier ne
+        // suffirait pas : c'est getComputedStyle qui dit ce que le navigateur
+        // applique vraiment, et c'est la seule mesure qui vaille.
+        const ent=/#modal-overlay\{[^}]*animation:arcVoile\s+([^\s;}]+)/.exec(_cssArc);
         if(!ent) return _echec('durée d\'entrée introuvable');
-        return ARC.strike<=parseInt(ent[1],10)
-          ?true:_echec('sortie '+ARC.strike+'ms > entrée '+ent[1]+'ms');})());
+        const _ms=v=>{
+          v=String(v).trim();
+          const j=/^var\(\s*(--[\w-]+)\s*\)$/.exec(v);
+          if(j) v=getComputedStyle(document.documentElement).getPropertyValue(j[1]).trim();
+          const n=parseFloat(v);
+          if(!isFinite(n)) return NaN;
+          return /ms\s*$/.test(v)?n:(/s\s*$/.test(v)?n*1000:NaN);
+        };
+        const dEnt=_ms(ent[1]);
+        if(!isFinite(dEnt)) return _echec('durée d\'entrée illisible : « '+ent[1]+' »');
+        return ARC.strike<=dEnt
+          ?true:_echec('sortie '+ARC.strike+'ms > entrée '+dEnt+'ms');})());
       ok('closeModal retire l\'IDENTIFIANT tout de suite, le nœud après',(()=>{
         // Sans ça, fermer puis rouvrir dans la foulée ferait pointer tout le
         // code sur la feuille en train de mourir : invisible en lecture,
@@ -39954,7 +40045,7 @@ vendredi 78 6h 44m
         if(arcReduit()) return (un===0&&deux===0)?true:_echec('tracé malgré la préférence');
         if(un!==1) return _echec('premier passage : '+un);
         return deux===0?true:_echec('rejoué au second passage : '+deux);})());
-      ok('Le tracé SVG est un vrai stroke-dashoffset, sur 620 ms',(()=>{
+      okA('Le tracé SVG est un vrai stroke-dashoffset, sur 620 ms',(async()=>{
         // La seule entorse revendiquée à « transform et opacity seuls » : le
         // cahier des charges nomme explicitement cette propriété, et aucun
         // transform ne trace une courbe.
@@ -39966,6 +40057,12 @@ vendredi 78 6h 44m
         document.body.appendChild(h);
         arcTracerCourbes(h);
         const p=h.querySelector('path');
+        // ⚠ L'ANIMATION N'EST PAS POSEE TOUT DE SUITE. Le trace attend l'entree
+        // dans le champ — _auChamp, un IntersectionObserver — pour que les
+        // courbes sous la ligne de flottaison ne jouent pas leurs 620 ms hors
+        // de l'ecran. La sonde lisait getAnimations() dans la foulee de l'appel
+        // et ne trouvait rien : elle mesurait la synchronie, pas le trace.
+        await _attendreImages(()=>p.getAnimations().length>0);
         const an=p.getAnimations()[0];
         if(!an){ h.remove(); return _echec('aucune animation'); }
         const k=an.effect.getKeyframes();
@@ -39975,38 +40072,57 @@ vendredi 78 6h 44m
         if(d!==ARC.afterglow) return _echec(d+' ms au lieu de '+ARC.afterglow);
         const dernier=parseFloat(k[k.length-1].strokeDashoffset);
         return (parseFloat(k[0].strokeDashoffset)>0&&dernier===0)
-          ?true:_echec(JSON.stringify(k.map(x=>x.strokeDashoffset)));})());
-      ok('Un canvas reçoit la traversée, faute de trait à tracer',(()=>{
+          ?true:_echec(JSON.stringify(k.map(x=>x.strokeDashoffset)));}));
+      okA('Un canvas reçoit la traversée, faute de trait à tracer',(async()=>{
         // Un canvas n'a ni chemin ni trait, juste des pixels : stroke-dashoffset
         // n'y existe pas. Les tracer vraiment supposerait de réécrire les quatre
         // fonctions de dessin en SVG — un chantier, pas une animation.
+        //
+        // ⚠ DEUX RETARDS DANS CETTE SONDE, et le produit n'y est pour rien.
+        //   • LE DRAPEAU. arcTracerCourbes ignore une toile qui ne porte pas
+        //     dataset.arcPret : les dimensions sont posees avant le dessin, les
+        //     lire ne dit rien, et seul le peintre sait quand il a fini. La
+        //     sonde ne le posait pas et repartait donc avec zero.
+        //   • L'ATTENTE. Le noeud de traversee est pose dans _auChamp, un
+        //     IntersectionObserver : il n'existe pas encore a la ligne suivante.
         if(arcReduit()) return true;
         const c=document.createElement('canvas');
         c.width=200;c.height=60;
         c.style.cssText='position:fixed;left:0;top:0;width:200px;height:60px';
+        c.dataset.arcPret='1';
         document.body.appendChild(c);
         const avant=_arcCalque().childElementCount;
         const un=arcTracerCourbes(c);
+        await _attendreImages(()=>_arcCalque().childElementCount>avant);
         const pose=_arcCalque().childElementCount-avant;
         const deux=arcTracerCourbes(c);
         _arcCalque().querySelectorAll('.arc-trace').forEach(n=>n.remove());
         c.remove();
         if(un!==1||pose!==1) return _echec('premier passage : '+un+' / '+pose+' nœud');
-        return deux===0?true:_echec('rejoué : '+deux);})());
-      ok('Un graphique encore masqué garde son droit au tracé',(()=>{
-        // Le marquer alors qu'il mesure zéro l'aurait privé de son tracé POUR
-        // DE BON : il n'aurait jamais rien joué, et rien ne l'aurait signalé.
+        return deux===0?true:_echec('rejoué : '+deux);}));
+      ok('Un graphique pas encore peint garde son droit au tracé',(()=>{
+        // Le marquer alors qu'il n'a rien à montrer l'aurait privé de son tracé
+        // POUR DE BON : le WeakSet ne relâche jamais, il n'aurait jamais rien
+        // joué, et rien ne l'aurait signalé.
+        //
+        // ⚠ « PAS ENCORE PRET » A CHANGE DE FORME, et c'est ce que la sonde
+        // n'avait pas suivi. Elle le disait par display:none — une toile qui
+        // « mesure zéro ». Le produit ne mesure plus rien du tout : les
+        // dimensions sont posées AVANT le dessin, donc les lire ne dit rien, et
+        // c'est le peintre qui pose dataset.arcPret quand il a fini. La sonde
+        // exprime donc l'attente de la même façon que le produit.
         if(arcReduit()) return true;
         const c=document.createElement('canvas');
-        c.width=200;c.height=60;c.style.display='none';
-        document.body.appendChild(c);
-        const masque=arcTracerCourbes(c);
+        c.width=200;c.height=60;
         c.style.cssText='position:fixed;left:0;top:0;width:200px;height:60px';
-        const visible=arcTracerCourbes(c);
+        document.body.appendChild(c);
+        const pasPret=arcTracerCourbes(c);          // aucun drapeau : ignorée
+        c.dataset.arcPret='1';                      // le peintre a fini
+        const pret=arcTracerCourbes(c);
         _arcCalque().querySelectorAll('.arc-trace').forEach(n=>n.remove());
         c.remove();
-        if(masque!==0) return _echec('tracé alors qu\'il ne mesurait rien');
-        return visible===1?true:_echec('perdu son tracé une fois visible');})());
+        if(pasPret!==0) return _echec('tracé alors qu’elle n’avait rien à montrer');
+        return pret===1?true:_echec('perdu son tracé une fois peinte');})());
       ok('Le tracé se déclenche au DESSIN, pas au défilement',(()=>{
         // Les deux rappels sont posés là où la toile est réellement peinte.
         const a=_setupCanvas.toString().indexOf('arcTracerCourbes')>=0;
@@ -40133,7 +40249,24 @@ vendredi 78 6h 44m
         return woVueAvatar([])==='face'?true
           :_echec('sans muscle, la face n\'est plus la vue par défaut');})());
     })();
-  }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
+  }catch(e){
+    // ══ UNE INTERRUPTION NE DOIT PAS SE LIRE COMME UNE REUSSITE ═════════
+    //
+    // Ce catch existait, et il posait bien une ligne « EXCEPTION » — mais UNE
+    // ligne parmi des milliers, et le total, lui, retombait sans un mot. Une
+    // suite arretee a 2 200 annonce « 2 200 verifications, 3 en echec » : le
+    // compte est juste, la conclusion est fausse, et rien ne dit que la moitie
+    // du travail n'a pas eu lieu.
+    //
+    // ON DIT COMBIEN, ET OU. Le nombre d'assertions jouees avant l'arret situe
+    // la panne mieux qu'un message d'exception seul, et la ligne se lit dans le
+    // rapport sans avoir a ouvrir la console.
+    const _jouees=R.length-_avantBloc;
+    R.push({n:'⛔ SUITE INTERROMPUE — le rapport ci-dessous est INCOMPLET',ok:false,
+      d:((e&&e.message)||e)+' — arrêt après '+_jouees+' assertion(s) de ce bloc, '
+        +R.length+' au total. Tout ce qui suivait n’a PAS été joué.'});
+    try{ console.error('[RepCore] suite interrompue',e); }catch(_e){}
+  }
   finally{ currentUser=sauve; }
 
   // LES ASSERTIONS DIFFEREES, JOUEES ICI. Elles arrivent en fin de rapport
