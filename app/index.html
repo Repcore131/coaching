@@ -27807,7 +27807,7 @@ function renderProgEx(){
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
           <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i},'remplacer')">Remplacer</button>
           <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i},'maj')">Mettre à jour</button>
-          </div>
+          </div>
         <!-- B2.10 — L'EXPLICATION NE S'IMPOSE PLUS DANS CHAQUE CARTE.
              Ces quarante mots etaient rendus par renderProgEx dans CHAQUE
              exercice : sur une seance de huit, le coach faisait defiler huit
@@ -65299,6 +65299,8 @@ function rcInstallAgir(){ try{ if(_rcInstGeste) _rcInstGeste(); }catch(e){} retu
 // L'installation par le navigateur. __rcInstall appartient au lot suivant ;
 // tant qu'elle n'existe pas, installApp() fait exactement le même geste.
 function rcInstallLocal(){
+  // MEME GARDE QUE installApp : voir _rcInstallDetourner.
+  try{ if(_rcInstallDetourner()) return true; }catch(e){}
   try{
     if(typeof window.__rcInstall==='function'){
       // L'INVITE EST COMPTEE AVANT D'ETRE DEMANDEE, et seulement s'il y a
@@ -65460,6 +65462,42 @@ try{ if(rcInstallAutonome()) rcmVue('lancement_autonome'); }catch(e){}
 
 // L'AIGUILLAGE. Rend la lettre de la branche retenue — 'A' à 'F' — ce qui rend
 // la décision observable depuis la console et depuis la suite de tests.
+// ══════════ LA GARDE EST SUR LE GESTE, PAS SUR L'ECRAN ═════════════════
+//
+// ⚠ LE DEFAUT QUE CE BLOC CORRIGE, ET IL ETAIT LE MIEN. La branche S de
+// rcInstallDecider detournait bien l'ecran d'installation — mais l'ecran
+// SUIVANT, s-welcome, porte son propre bouton « ⬇ Installer l'app sur ce
+// telephone » qui appelle installApp() en direct. Aucune garde dessus. Kevin
+// passait l'ecran d'installation, arrivait sur l'accueil, touchait CE
+// bouton-la, et Samsung ouvrait « Ajouter ce site a l'ecran Applis » — donc
+// la fabrication de WebAPK, donc le refus d'Android. Trois lots pour rien :
+// je gardais une porte pendant qu'une autre restait ouverte a cote.
+//
+// UNE SEULE PORTE DESORMAIS. Tout ce qui declenche l'invitation du navigateur
+// passe par ici : installApp (bouton de l'accueil), rcInstallLocal (ecran
+// d'installation, branche C et bureau). Ajouter un troisieme appelant sans
+// garde redeviendrait possible, mais il faudrait pour cela appeler
+// window.__rcInstall directement — et une sonde l'interdit.
+//
+// PURE. Rend la raison du blocage, ou null.
+function rcInstallBloquePar(){
+  try{ if(rcNavigateurSamsung()) return 'samsung'; }catch(e){}
+  return null;
+}
+// Rend true quand elle a pris la main — l'appelant s'arrete alors la.
+function _rcInstallDetourner(){
+  if(rcInstallBloquePar()!=='samsung') return false;
+  // ON NE DEMANDE PAS L'INVITATION. Sur ce navigateur et a partir d'Android
+  // 14, ce que le serveur de Samsung fabrique est refuse par le telephone :
+  // appeler prompt() ici, c'est promener quelqu'un jusqu'a un mur.
+  try{
+    go('s-install');
+    rcInstallDecider();
+    rcGuideSamsung();
+  }catch(e){}
+  try{ toast('Sur Samsung Internet, passe par « Ajouter la page à → Écran d\'accueil ».','var(--orange)'); }catch(e){}
+  return true;
+}
 // Le guide du raccourci. Il ne NAVIGUE nulle part : tout se passe dans le
 // menu du navigateur, et l'application n'a aucun moyen de l'ouvrir a la place
 // de l'utilisateur. Tout ce qu'elle peut faire est de dire ou toucher.
@@ -65581,14 +65619,17 @@ function rcInstallDecider(){
     // revenait ici meme.
     const _ch=document.getElementById('rc-inst-chrome');
     if(_ch) _ch.style.display='block';
-    // ET L'INSTALLATION LOCALE RESTE OFFERTE, EN DERNIER RANG. Samsung
-    // corrigera son serveur un jour, et ce jour-la ce detour deviendra inutile
-    // sans que rien ici ne le sache. On ne RETIRE donc pas la capacite : on
-    // choisit ce qu'on met devant. Le libelle dit ce qui risque d'arriver.
-    if(ici&&rcInstallInvite()){
-      ici.textContent='Installer ici quand même';
-      ici.style.display='block';
-    }
+    // ⚠ PLUS D'« INSTALLER ICI QUAND MEME ». Je l'avais garde par principe —
+    // « on ne retire pas une capacite, on choisit ce qu'on met devant » — et
+    // c'etait une erreur de jugement : sur ce navigateur et a partir
+    // d'Android 14, cette capacite N'EN EST PAS UNE. Elle mene a « Ajouter ce
+    // site a l'ecran Applis », puis au refus du telephone. Offrir un bouton
+    // dont on SAIT qu'il finit sur un mur, c'est fabriquer l'echec qu'on
+    // pretend eviter — et le libelle, en le presentant comme le vrai chemin,
+    // aggravait le piege.
+    //
+    // LE JOUR OU SAMSUNG CORRIGE SON SERVEUR, une seule constante bouge :
+    // RC_SAMSUNG_ANDROID_MINI. Rien d'autre n'est a defaire.
     // Le compteur dira quelle part du trafic arrive par la, donc ce que ce
     // detour coute en abandons. Une seule fois par session.
     try{
@@ -65663,6 +65704,14 @@ function rcInstallDecider(){
 function _rcInviteArrivee(){
   const b=document.getElementById('install-btn');
   if(b) b.style.display='flex';
+  // LE LIBELLE DIT CE QUE LE BOUTON FAIT VRAIMENT. Sur Samsung Internet il ne
+  // demande plus l'invitation du navigateur — il mene au guide du raccourci.
+  // Le laisser promettre « Installer l'app » serait reconduire le meme piege
+  // d'un cran plus loin : la personne toucherait en croyant installer.
+  try{
+    if(b&&rcInstallBloquePar()==='samsung')
+      b.textContent='⬇ Ajouter RepCore à l\'écran d\'accueil';
+  }catch(e){}
   // Sans ce second passage, un Android eligible restait sur la branche F de
   // l'ecran d'installation et se voyait expliquer un menu alors qu'un bouton
   // suffisait.
@@ -65699,6 +65748,10 @@ window.addEventListener('rc-install-fait',()=>{
 // LE GESTE, EN UN SEUL ENDROIT. __rcInstall vit dans la tete et connait les
 // trois issues ; installApp n'est plus qu'un nom conserve pour ses appelants.
 function installApp(){
+  // ⚠ LE BOUTON DE L'ACCUEIL PASSE PAR ICI, et c'est par lui que le defaut
+  // arrivait : « ⬇ Installer l'app sur ce telephone », sur s-welcome, sans
+  // aucun rapport avec l'ecran d'installation et sa branche Samsung.
+  try{ if(_rcInstallDetourner()) return Promise.resolve('detourne'); }catch(e){}
   try{
     return window.__rcInstall().then(r=>{
       // « dismissed » n'est pas un echec : quelqu'un a dit non, et le lui

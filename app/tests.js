@@ -10202,7 +10202,7 @@ async function testExercices(){
                 try{ rcInstallDecider(); }catch(e){}
               }}));
 
-            okA('Elle dit que ce n\'est pas RepCore, et laisse installer quand même',(async()=>{
+            okA('Elle dit que ce n\'est pas RepCore, et n\'offre plus le mur',(async()=>{
               const _evt=window.__rcInstallEvt, _mm=window.matchMedia;
               const _iw=Object.getOwnPropertyDescriptor(window,'innerWidth');
               try{
@@ -10249,13 +10249,17 @@ async function testExercices(){
                 if(!_lc||_lc.style.display==='none') return _echec('Chrome n’est plus proposé du tout');
                 if(String(_lc.innerHTML).indexOf('sansRepli:true')<0)
                   return _echec('le lien Chrome garde le repli qui reboucle sur Samsung Internet');
-                // LA CAPACITÉ N'EST PAS RETIRÉE, elle est mise en second rang :
-                // Samsung corrigera son serveur un jour, et ce jour-là ce
-                // détour deviendra inutile sans que rien ici ne le sache.
+                // ⚠ CETTE SONDE EXIGEAIT L'INVERSE, ET ELLE AVAIT TORT. Elle
+                // vérifiait que « Installer ici quand même » restait offert, au
+                // nom de « on ne retire pas une capacité ». Mais sur ce
+                // navigateur cette capacité N'EN EST PAS UNE : elle mène à
+                // « Ajouter ce site à l'écran Applis », puis au refus du
+                // téléphone. C'est précisément ce bouton que Kevin touchait.
+                // Une sonde peut verrouiller une mauvaise décision : celle-ci
+                // l'a fait pendant deux lots.
                 const ici=document.getElementById('rc-inst-ici');
-                if(!ici||ici.style.display==='none') return _echec('plus aucun moyen d’installer ici');
-                if(ici.textContent.indexOf('quand même')<0)
-                  return _echec('le second rang ne dit pas ce qu’il est : « '+ici.textContent+' »');
+                if(ici&&ici.style.display!=='none')
+                  return _echec('le bouton qui mène au mur est de nouveau offert : « '+ici.textContent+' »');
                 return true;
               } finally {
                 window.__rcInstallEvt=_evt; window.matchMedia=_mm;
@@ -10359,6 +10363,53 @@ async function testExercices(){
               const iCond=s.indexOf('opts&&opts.sansRepli');
               const iRepli=s.indexOf('S.browser_fallback_url');
               return iCond<iRepli?true:_echec('la condition ne gouverne pas le repli');})());
+
+            ok('AUCUN chemin ne demande l’invitation sur Samsung Internet',(()=>{
+              // ⚠ LE DEFAUT QUI A COUTE TROIS LOTS. La branche S detournait
+              // l’ECRAN d’installation ; l’ecran SUIVANT, s-welcome, porte son
+              // propre bouton « Installer l’app sur ce telephone » qui appelle
+              // installApp() en direct. Kevin passait l’ecran, arrivait sur
+              // l’accueil, touchait ce bouton, et Samsung ouvrait « Ajouter ce
+              // site a l’ecran Applis » — donc la fabrication de WebAPK, donc
+              // le refus d’Android. Je gardais une porte pendant qu’une autre
+              // restait ouverte a cote.
+              //
+              // LA GARDE EST DESORMAIS SUR LE GESTE. Les deux appelants la
+              // traversent, et cette sonde verifie qu’ils la traversent
+              // ENCORE — c’est elle qui empechera un troisieme bouton non garde.
+              for(const [nom,f] of [['installApp',installApp],['rcInstallLocal',rcInstallLocal]]){
+                const s=String(f).replace(/^\s*\/\/.*$/gm,'');
+                if(s.indexOf('_rcInstallDetourner()')<0)
+                  return _echec(nom+' declenche l’invitation sans garde');
+                // ET LA GARDE PASSE AVANT L’APPEL, sinon elle ne garde rien.
+                const iG=s.indexOf('_rcInstallDetourner()');
+                const iP=s.indexOf('__rcInstall');
+                if(iP>=0&&iG>iP) return _echec(nom+' garde APRES avoir demande');
+              }
+              // PERSONNE N’APPELLE window.__rcInstall EN DIRECT hors de ces deux
+              // fonctions : c’est ce qui rend la garde exhaustive plutot
+              // qu’esperee. La tete du fichier la DEFINIT, elle ne l’appelle pas.
+              const src=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+              const n=(src.match(/window\.__rcInstall\(\)/g)||[]).length;
+              if(n>2) return _echec(n+' appels directs a __rcInstall : la garde est contournable');
+              return true;})());
+
+            ok('La branche S n’offre plus le bouton qui mene au mur',(()=>{
+              // Je l’avais garde par principe — « on ne retire pas une
+              // capacite » — et c’etait une erreur : sur ce navigateur, cette
+              // capacite N’EN EST PAS UNE. Elle mene a « Ajouter ce site a
+              // l’ecran Applis », puis au refus du telephone.
+              const s=String(rcInstallDecider).replace(/^\s*\/\/.*$/gm,'');
+              const iS=s.indexOf('rcNavigateurSamsung()');
+              const iE=s.indexOf("return 'S'");
+              if(iS<0||iE<0) return _echec('la branche S a disparu');
+              const bloc=s.slice(iS,iE);
+              if(/ici\.style\.display='block'/.test(bloc))
+                return _echec('la branche S rallume encore le bouton d’installation locale');
+              // Le bouton existe toujours POUR LES AUTRES BRANCHES — l’ordinateur
+              // s’en sert. On ne l’a pas supprime, on l’a retire d’ICI.
+              return /ici\.style\.display='block'/.test(s)
+                ?true:_echec('le bouton local a disparu de toutes les branches');})());
 
             ok('Le compteur nav_samsung est accepté du client ET du serveur',(()=>{
               if(RCM_EVENEMENTS.indexOf('nav_samsung')<0)
