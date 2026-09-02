@@ -4588,6 +4588,27 @@ const COACH_PHOTO='icons/coach.jpg';
         Tu es dans le navigateur intégré de <b id="rc-inst-app" style="color:var(--text)">cette application</b>.<br>
         <b style="color:var(--text)">Il ne sait pas installer RepCore.</b>
       </div>
+      <!-- ── LE GESTE QUI MARCHE SANS CHROME ────────────────────────────
+           Samsung Internet sait poser un RACCOURCI sur l'écran d'accueil, et
+           un raccourci n'est pas un paquet : rien n'est fabriqué, rien n'est
+           installé, donc Android n'a rien à refuser. C'est le seul chemin qui
+           ne dépende ni de Chrome ni du serveur de Samsung. -->
+      <div id="rc-inst-sam-guide" style="display:none;margin-top:12px;text-align:left;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
+        <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--text);text-transform:uppercase;margin-bottom:8px">Trois gestes</div>
+        <div style="font-size:var(--fs-sm);color:#ccc;line-height:1.8">
+          <b style="color:var(--text)">1.</b> Touche les <b style="color:var(--text)">trois traits ☰</b> en bas à droite.<br>
+          <b style="color:var(--text)">2.</b> Choisis <b style="color:var(--text)">« Ajouter la page à »</b>.<br>
+          <b style="color:var(--text)">3.</b> Choisis <b style="color:var(--text)">« Écran d'accueil »</b>.
+        </div>
+        <!-- ON NOMME CE QU'IL NE FAUT PAS TOUCHER. Le même menu propose
+             « Applications », qui passe par le serveur de Samsung — c'est-à-dire
+             exactement le chemin qui déclenche le refus d'Android. Deux entrées
+             voisines, deux résultats opposés : se taire ici, c'est laisser une
+             chance sur deux. -->
+        <div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6;margin-top:9px">
+          Pas « Applications » : c'est celle-là qui déclenche l'avertissement.
+        </div>
+      </div>
       <!-- LA SORTIE MANUELLE. Masquée tant qu'une sortie automatique reste
            possible : sur Android l'URL intent fait le travail toute seule, et
            montrer des instructions avant d'avoir essayé serait donner du
@@ -4642,6 +4663,15 @@ const COACH_PHOTO='icons/coach.jpg';
     <button class="hv-teinte" id="rc-inst-ici" onclick="rcInstallLocal()"
       style="display:none;width:100%;margin-top:12px;padding:13px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:var(--pile-titre);font-size:var(--fs-sm);font-weight:400;letter-spacing:3px;cursor:pointer;text-transform:uppercase;transition:background var(--t-1)"
      >Installer sur cet ordinateur</button>
+
+    <!-- ── CHROME, EN SECOND RANG ET SUR LA SEULE BRANCHE S ─────────────
+         Il n'est pas le chemin principal, et c'est mesuré : sur un téléphone
+         sans Chrome, l'ancien bouton principal renvoyait dans Samsung
+         Internet. Ici il est offert, pas imposé. -->
+    <div id="rc-inst-chrome" style="display:none;text-align:center;margin-top:10px">
+      <a href="#" onclick="rcOuvrirDansNavigateur({sansRepli:true});return false;"
+        style="display:inline-block;padding:8px 12px;font-size:var(--fs-sm);color:rgba(255,255,255,.55);text-decoration:underline;text-underline-offset:3px;font-family:Montserrat,sans-serif;cursor:pointer">J'ai Chrome — ouvrir dedans</a>
+    </div>
 
     <div style="text-align:center;margin-top:18px">
       <!-- JAMAIS UN BOUTON PLEIN. L'installation est le chemin par défaut ;
@@ -65057,7 +65087,19 @@ function _rcIabCle(nom){
   return 'iab_autre';
 }
 // ══════════ LA SORTIE ══════════════════════════════════════════════════
-function rcOuvrirDansNavigateur(){
+// `opts.sansRepli` — SANS S.browser_fallback_url.
+//
+// ⚠ LE REPLI RENVOIE DANS LE NAVIGATEUR PAR DEFAUT, ET C'EST UNE BOUCLE quand
+// c'est LUI qu'on essaie de quitter. Signale par Kevin le 02/09/2026 :
+// « ça persiste et envoie sur le navigateur samsung ». Le format intent prevoit
+// S.browser_fallback_url pour le cas ou le paquet nomme n'est pas installe —
+// Android ouvre alors cette adresse dans le navigateur par defaut. Depuis une
+// vue embarquee, ce navigateur est un VRAI navigateur : c'est exactement la
+// sortie qu'on cherche. Depuis Samsung Internet, le navigateur par defaut EST
+// Samsung Internet : on revient d'ou l'on part, et la page se recharge, ce qui
+// tue au passage le minuteur de 1,5 s qui aurait montre les instructions.
+// Sans repli, l'intent echoue franchement, le minuteur tire, et on explique.
+function rcOuvrirDansNavigateur(opts){
   const u=(()=>{ try{ return location.href; }catch(e){ return ''; } })();
   const nom=rcNavigateurIntegre()||(rcNavigateurSamsung()?'Samsung Internet':'cette application');
   const est_iOS=(()=>{ try{ return /iPhone|iPad|iPod/i.test(navigator.userAgent||''); }catch(e){ return false; } })();
@@ -65071,7 +65113,8 @@ function rcOuvrirDansNavigateur(){
       const a=document.createElement('a'); a.href=u;
       const cible='intent://'+a.host+a.pathname+a.search
         +'#Intent;scheme=https;package=com.android.chrome;'
-        +'S.browser_fallback_url='+encodeURIComponent(u)+';end';
+        +((opts&&opts.sansRepli)?'':'S.browser_fallback_url='+encodeURIComponent(u)+';')
+        +'end';
       // SI RIEN NE SE PASSE, ON NE LAISSE PAS L'ÉCRAN MUET. Chrome peut ne
       // pas être installé, et certaines vues embarquées refusent purement et
       // simplement le schéma intent — sans erreur, sans rien. Une seconde et
@@ -65417,6 +65460,20 @@ try{ if(rcInstallAutonome()) rcmVue('lancement_autonome'); }catch(e){}
 
 // L'AIGUILLAGE. Rend la lettre de la branche retenue — 'A' à 'F' — ce qui rend
 // la décision observable depuis la console et depuis la suite de tests.
+// Le guide du raccourci. Il ne NAVIGUE nulle part : tout se passe dans le
+// menu du navigateur, et l'application n'a aucun moyen de l'ouvrir a la place
+// de l'utilisateur. Tout ce qu'elle peut faire est de dire ou toucher.
+function rcGuideSamsung(){
+  const g=document.getElementById('rc-inst-sam-guide');
+  if(!g) return false;
+  g.style.display='block';
+  const p=document.getElementById('rc-inst-principal');
+  // LE BOUTON A FAIT SON TRAVAIL : il s'efface. Le laisser inviterait a le
+  // retoucher, et un second appui ne ferait rien de plus.
+  if(p) p.style.display='none';
+  try{ g.scrollIntoView({block:'nearest',behavior:arcReduit()?'auto':'smooth'}); }catch(e){}
+  return true;
+}
 function rcInstallDecider(){
   const ecran=document.getElementById('s-install');
   if(!ecran) return 'A';
@@ -65450,6 +65507,13 @@ function rcInstallDecider(){
   // serait au mieux inutile, au pire un cul-de-sac de plus.
   const _apk=document.getElementById('rc-inst-apk');
   if(_apk) _apk.style.display='none';
+  // LE GUIDE ET LE LIEN CHROME REPARTENT CACHES, comme tout le reste : une
+  // seule branche les rallume, et un second passage sur une autre branche les
+  // laisserait sinon a l'ecran.
+  const _sg=document.getElementById('rc-inst-sam-guide');
+  if(_sg) _sg.style.display='none';
+  const _lc=document.getElementById('rc-inst-chrome');
+  if(_lc) _lc.style.display='none';
   _rcInstGeste=null;
   const dire=(t)=>{ if(sous) sous.textContent=t||''; };
   const montrer=(id)=>{ const b=document.getElementById(id); if(b) b.style.display='block'; };
@@ -65500,15 +65564,24 @@ function rcInstallDecider(){
     if(_msg) _msg.innerHTML='Tu es dans <b style="color:var(--text)">Samsung Internet</b>.<br>'
       +'<b style="color:var(--text)">Android refuse ce qu\'il installe.</b><br>'
       +'<span style="font-size:var(--fs-xs);color:#bbb">Ce n\'est pas RepCore : Samsung Internet fabrique un paquet qu\'Android juge trop ancien. Depuis Chrome, l\'installation se fait sans un mot.</span>';
-    dire('Ouvre RepCore dans Chrome : l\'installation y passe sans avertissement.');
+    dire('Trois gestes depuis le menu de ton navigateur, et RepCore est sur ton écran d\'accueil.');
     if(principal){
-      principal.textContent='OUVRIR DANS CHROME';
+      // ⚠ LE GESTE PRINCIPAL NE SUPPOSE PLUS CHROME INSTALLE. La premiere
+      // version envoyait vers Chrome ; sur un telephone qui ne l'a pas — le
+      // cas de Kevin — l'intent retombait dans Samsung Internet et la boucle
+      // etait complete. Le raccourci d'ecran d'accueil, lui, ne depend de
+      // RIEN : ni de Chrome, ni du serveur de Samsung. Aucun paquet n'est
+      // fabrique, donc Android n'a rien a refuser.
+      principal.textContent='AJOUTER À L\'ÉCRAN D\'ACCUEIL';
       principal.style.display='block';
-      // MEME SORTIE QUE LES NAVIGATEURS INTEGRES : l'URL intent et son repli
-      // manuel existent deja, sont eprouves, et font exactement ce geste-la.
-      _rcInstGeste=()=>{ rcOuvrirDansNavigateur(); };
+      _rcInstGeste=()=>{ rcGuideSamsung(); };
     }
-    // ET L'INSTALLATION LOCALE RESTE OFFERTE, EN SECOND RANG. Samsung
+    // ET CHROME EN SECOND, POUR CEUX QUI L'ONT. `sansRepli` : voir
+    // rcOuvrirDansNavigateur — avec le repli, un telephone sans Chrome
+    // revenait ici meme.
+    const _ch=document.getElementById('rc-inst-chrome');
+    if(_ch) _ch.style.display='block';
+    // ET L'INSTALLATION LOCALE RESTE OFFERTE, EN DERNIER RANG. Samsung
     // corrigera son serveur un jour, et ce jour-la ce detour deviendra inutile
     // sans que rien ici ne le sache. On ne RETIRE donc pas la capacite : on
     // choisit ce qu'on met devant. Le libelle dit ce qui risque d'arriver.

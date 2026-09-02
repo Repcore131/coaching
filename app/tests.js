@@ -10223,7 +10223,32 @@ async function testExercices(){
                   return _echec('on ne dit pas que RepCore n’y est pour rien');
                 const p=document.getElementById('rc-inst-principal');
                 if(!p||p.style.display==='none') return _echec('aucun bouton');
-                if(p.textContent.indexOf('CHROME')<0) return _echec('le bouton ne mène pas à Chrome : « '+p.textContent+' »');
+                // ⚠ LE GESTE PRINCIPAL NE SUPPOSE PAS CHROME INSTALLÉ. La
+                // première version envoyait vers Chrome ; sur un téléphone qui
+                // ne l'a pas, l'URL intent retombait — par son propre repli —
+                // dans le navigateur par défaut, c'est-à-dire Samsung Internet.
+                // La boucle était complète et rien ne la signalait.
+                if(p.textContent.indexOf('ÉCRAN D’ACCUEIL')<0&&p.textContent.indexOf("ÉCRAN D'ACCUEIL")<0)
+                  return _echec('le bouton principal ne mène pas au raccourci : « '+p.textContent+' »');
+                // ET LE GESTE OUVRE VRAIMENT LE GUIDE.
+                const _g=document.getElementById('rc-inst-sam-guide');
+                if(!_g) return _echec('le guide du raccourci n’existe pas');
+                if(_g.style.display!=='none') return _echec('le guide est ouvert avant qu’on le demande');
+                rcInstallAgir();
+                if(_g.style.display==='none') return _echec('le bouton n’ouvre pas le guide');
+                // IL NOMME LE PIÈGE : la même entrée de menu propose
+                // « Applications », qui passe par le serveur de Samsung — donc
+                // exactement le chemin qui déclenche le refus.
+                const _t=_g.textContent||'';
+                if(_t.indexOf('Écran d’accueil')<0&&_t.indexOf("Écran d'accueil")<0)
+                  return _echec('le guide ne nomme pas la bonne entrée');
+                if(_t.indexOf('Applications')<0)
+                  return _echec('le guide ne met pas en garde contre « Applications »');
+                // CHROME RESTE OFFERT, MAIS EN SECOND, ET SANS REPLI.
+                const _lc=document.getElementById('rc-inst-chrome');
+                if(!_lc||_lc.style.display==='none') return _echec('Chrome n’est plus proposé du tout');
+                if(String(_lc.innerHTML).indexOf('sansRepli:true')<0)
+                  return _echec('le lien Chrome garde le repli qui reboucle sur Samsung Internet');
                 // LA CAPACITÉ N'EST PAS RETIRÉE, elle est mise en second rang :
                 // Samsung corrigera son serveur un jour, et ce jour-là ce
                 // détour deviendra inutile sans que rien ici ne le sache.
@@ -10316,6 +10341,24 @@ async function testExercices(){
               return /rcNavigateurSamsung\(\)\s*\?\s*'Samsung Internet'/.test(
                 String(rcOuvrirDansNavigateur))
                 ?true:_echec('la sortie ne nomme pas Samsung Internet');})());
+
+            ok('Le repli de l\'URL intent ne reboucle pas sur le navigateur qu\'on quitte',(()=>{
+              // S.browser_fallback_url fait ouvrir l'adresse par le navigateur
+              // PAR DÉFAUT quand le paquet nommé manque. Depuis une vue
+              // embarquée c'est exactement la sortie cherchée ; depuis Samsung
+              // Internet, le navigateur par défaut EST Samsung Internet — on
+              // revient d'où l'on part, et la page se recharge, ce qui tue au
+              // passage le minuteur qui aurait montré les instructions.
+              const s=String(rcOuvrirDansNavigateur).replace(/^\s*\/\/.*$/gm,'');
+              if(s.indexOf('opts&&opts.sansRepli')<0)
+                return _echec('le repli est toujours posé sans condition');
+              if(s.indexOf('S.browser_fallback_url')<0)
+                return _echec('le repli a disparu : les navigateurs intégrés en ont besoin');
+              // LE CAS DES VUES EMBARQUÉES N'EST PAS TOUCHÉ : appelée sans
+              // options, la fonction pose toujours le repli.
+              const iCond=s.indexOf('opts&&opts.sansRepli');
+              const iRepli=s.indexOf('S.browser_fallback_url');
+              return iCond<iRepli?true:_echec('la condition ne gouverne pas le repli');})());
 
             ok('Le compteur nav_samsung est accepté du client ET du serveur',(()=>{
               if(RCM_EVENEMENTS.indexOf('nav_samsung')<0)
