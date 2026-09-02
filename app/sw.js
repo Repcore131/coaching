@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1092';
+const CACHE = 'repcore-v1093';
 // LA SEULE VERSION QUI NE REPORTE PAS LES ILLUSTRATIONS.
 // Le report d'un cache a l'autre traite /exercices/ en PRIORITAIRE : c'est
 // ce qui evite de retelecharger 3,3 Mo a chaque deploiement. Mais le

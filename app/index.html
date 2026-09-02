@@ -8071,7 +8071,23 @@ const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_
   // Ces noms doivent rester en accord avec la liste fermee de
   // database.rules.json : le serveur refuse toute cle qui n'y figure pas.
   'iab_instagram','iab_facebook','iab_tiktok','iab_linkedin','iab_snapchat',
-  'iab_twitter','iab_autre'];
+  'iab_twitter','iab_autre',
+  // ── LE TUNNEL D'INSTALLATION ────────────────────────────────────────
+  // Il vient AVANT tout le reste du parcours : « application ouverte » ne
+  // veut rien dire tant qu'on ne sait pas combien de gens l'ont sur leur
+  // ecran d'accueil. Ces sept-la repondent a une seule question — a qui
+  // avons-nous propose d'installer, et qui l'a fait.
+  //
+  // TROIS ISSUES A L'INVITATION, DEUX COMPTEURS. « accepte » et « refuse »
+  // se comptent ; « indisponible » n'est pas une reponse, c'est une invite
+  // qui n'a pas eu lieu — la compter ferait un refus de chaque navigateur
+  // incapable.
+  //
+  // « lancement_autonome » n'est pas une etape du tunnel mais sa preuve :
+  // une installation qui ne sert jamais ne vaut rien. Compte une fois par
+  // session, comme les vues d'ecran.
+  'install_ecran_vu','install_invite_montree','install_accepte','install_refuse',
+  'install_guide_ios','install_fait','lancement_autonome'];
 // ══════════ SONDE DE QUOTA : UNE PENTE, PAS UNE VÉRITÉ ══════════
 // Le plan Spark plafonne à 10 Go téléchargés par mois, et le dépassement est
 // SILENCIEUX : l'application cesse simplement de répondre. Cette sonde ne
@@ -12115,6 +12131,10 @@ function go(id){
   // n'en instrumenter qu'un donnerait un tunnel faux sans que ça se voie.
   if(id==='s-welcome') rcmVue('welcome_view');
   if(id==='s-register') rcmVue('register_started');
+  // L'ECRAN D'INSTALLATION EST LE HAUT DU TUNNEL, et il se rejoint par trois
+  // chemins : le demarrage, le fragment #install, et un retour arriere. La
+  // meme raison que les deux lignes ci-dessus impose de le compter ici.
+  if(id==='s-install') rcmVue('install_ecran_vu');
   // ANIMATION 9 — les courbes SVG. Posé ICI et pas chez les appelants pour la
   // même raison que les deux lignes ci-dessus : _courbePesee et _rapCourbePoids
   // rendent des CHAÎNES, insérées au milieu d'un innerHTML bien plus grand par
@@ -64304,7 +64324,21 @@ function rcInstallAgir(){ try{ if(_rcInstGeste) _rcInstGeste(); }catch(e){} retu
 // tant qu'elle n'existe pas, installApp() fait exactement le même geste.
 function rcInstallLocal(){
   try{
-    if(typeof window.__rcInstall==='function'){ window.__rcInstall(); return true; }
+    if(typeof window.__rcInstall==='function'){
+      // L'INVITE EST COMPTEE AVANT D'ETRE DEMANDEE, et seulement s'il y a
+      // vraiment quelque chose a montrer : __rcInstall CONSOMME l'evenement
+      // des sa premiere ligne, donc apres l'appel il n'y a plus rien a lire.
+      // La compter apres coup donnerait zero a chaque fois.
+      try{ if(window.__rcInstallEvt) rcm('install_invite_montree'); }catch(err){}
+      // TROIS ISSUES, DEUX COMPTEURS — voir RCM_EVENEMENTS. La promesse est
+      // enveloppee : __rcInstall en rend une, mais un doublon de test peut
+      // rendre une chaine nue, et .then() leverait alors.
+      Promise.resolve(window.__rcInstall()).then(c=>{
+        if(c==='accepted') rcm('install_accepte');
+        else if(c==='dismissed') rcm('install_refuse');
+      }).catch(()=>{});
+      return true;
+    }
   }catch(e){}
   try{ installApp(); }catch(e){}
   return true;
@@ -64321,6 +64355,19 @@ function rcInstallPasser(){
   go('s-welcome');
   return true;
 }
+// ══════════ LA PREUVE : L'APPLICATION EST LANCEE DEPUIS SON ICONE ══════
+//
+// SEPTIEME COMPTEUR, ET IL N'EST PAS UNE ETAPE. Les six autres decrivent le
+// chemin vers l'installation ; celui-ci dit si elle sert. Une icone posee
+// puis jamais touchee est un echec que le tunnel seul montrerait comme une
+// reussite.
+//
+// AU CHARGEMENT ET NON DANS go() : ce n'est pas un ecran, c'est le mode
+// d'affichage de la fenetre, connu des la premiere image. rcmVue le borne a
+// une fois par session — sans quoi une journee d'usage normal compterait
+// vingt lancements pour une seule personne.
+try{ if(rcInstallAutonome()) rcmVue('lancement_autonome'); }catch(e){}
+
 // L'AIGUILLAGE. Rend la lettre de la branche retenue — 'A' à 'F' — ce qui rend
 // la décision observable depuis la console et depuis la suite de tests.
 function rcInstallDecider(){
@@ -64469,6 +64516,11 @@ window.addEventListener('rc-install-dispo',_rcInviteArrivee);
 // on se contente d'ecouter. `document.getElementById(...).style` levait quand
 // le bouton n'existe pas encore — l'evenement peut arriver avant le DOM.
 window.addEventListener('rc-install-fait',()=>{
+  // LE SEUL COMPTEUR QUI COMPTE VRAIMENT. Il ne vient pas de nous : c'est le
+  // navigateur qui tire `appinstalled`, une fois, quand l'icone est posee.
+  // Un accord a l'invite n'est pas une installation — l'un se clique, l'autre
+  // se termine, et l'ecart entre les deux est exactement ce qu'on cherche.
+  try{ rcm('install_fait'); }catch(e){}
   const b=document.getElementById('install-btn');
   if(b) b.style.display='none';
   try{ toast('RepCore installé sur ton téléphone ✓'); }catch(e){}
@@ -64504,6 +64556,11 @@ function installApp(){
   }
 })();
 function showIosInstallGuide(){
+  // COMPTE ICI ET NON DANS LA BRANCHE D : cette modale s'ouvre aussi depuis
+  // le bouton #ios-install-btn de l'accueil. N'instrumenter qu'un des deux
+  // chemins donnerait un tunnel faux sans que ca se voie.
+  // rcmVue et non rcm : rouvrir le guide n'est pas un second iPhone.
+  try{ rcmVue('install_guide_ios'); }catch(e){}
   const m=document.getElementById('ios-install-modal');
   if(m){m.style.display='flex';}
 }
@@ -64523,8 +64580,34 @@ document.addEventListener('DOMContentLoaded',initLogos);
 // ── Tableau de bord du tunnel ───────────────────────────────────────────────
 // Ordre d'affichage = ordre du parcours réel. Une étape peut regrouper
 // plusieurs compteurs (le rôle en a deux) : `cles` est donc toujours un tableau.
+// FIREBASE REND LES TABLEAUX SOUS FORME D'OBJETS DES QU'UNE CLE MANQUE — et
+// la reciproque mord ici : si TOUTES les cles d'une journee etaient
+// numeriques, la base rendrait un TABLEAU, et `parJour[j][nom]` vaudrait
+// undefined pour chaque compteur. Zero partout, sans une seule erreur.
+// Aucun nom d'evenement n'est numerique aujourd'hui, donc le cas ne se
+// produit pas ; ce garde existe pour qu'il ne PUISSE pas se produire, et
+// parce qu'il coute une ligne. Il rend aussi {} sur null, ce que faisait
+// deja le `||{}` qu'il remplace.
+const _rcmObjet=v=>(v&&typeof v==='object'&&!Array.isArray(v))?v:{};
 const RCM_TUNNEL=[
   {cles:['landing_view'],lib:'Page de vente vue'},
+  // ── L'INSTALLATION, EN AMONT DE TOUT LE RESTE ───────────────────────
+  // Dans l'ordre reel du parcours : on voit l'ecran, le navigateur propose,
+  // on accepte, l'icone se pose. Trois lignes sortent de la chaine — voir
+  // `horsTunnel` et `neutre` plus bas.
+  {cles:['install_ecran_vu'],lib:'Écran d\'installation vu'},
+  {cles:['install_invite_montree'],lib:'Invitation du navigateur montrée'},
+  {cles:['install_accepte'],lib:'Installation acceptée'},
+  // UN VRAI DEPART : celui-la ne reviendra probablement pas.
+  {cles:['install_refuse'],lib:'Installation refusée',horsTunnel:true},
+  // PAS UNE FUITE, UNE AUTRE ROUTE. iOS ne declenche jamais l'invitation du
+  // navigateur : ces gens passent de l'ecran au guide, puis a l'icone, sans
+  // jamais toucher « accepte ». Hors chaine pour ne pas fausser le taux qui
+  // suit, mais `neutre` pour ne pas etre peint comme un echec.
+  {cles:['install_guide_ios'],lib:'Guide iOS ouvert',horsTunnel:true,neutre:true},
+  {cles:['install_fait'],lib:'Application installée'},
+  // LA PREUVE PLUTOT QUE L'ETAPE : voir le septieme compteur.
+  {cles:['lancement_autonome'],lib:'Lancée depuis l\'écran d\'accueil',horsTunnel:true,neutre:true},
   {cles:['welcome_view'],lib:'Application ouverte'},
   {cles:['role_selected_coach','role_selected_athlete'],lib:'Rôle choisi',detail:['role_selected_athlete','athlète','role_selected_coach','coach']},
   {cles:['code_entered'],lib:'Code saisi'},
@@ -64567,14 +64650,55 @@ async function loadMetrics(){
   await Promise.all(jours.map(async j=>{
     try{
       const r=await fetch(RCM_BASE+'/'+j+'.json'+(tok?'?auth='+tok:''));
-      parJour[j]=(r.ok?await r.json():null)||{};
+      parJour[j]=_rcmObjet(r.ok?await r.json():null);
     }catch(e){parJour[j]={};}
   }));
   const total=cle=>jours.reduce((n,j)=>n+(parseInt(parJour[j][cle],10)||0),0);
   const totalEtape=e=>e.cles.reduce((n,c)=>n+total(c),0);
-  const reference=totalEtape(RCM_TUNNEL[0])||totalEtape(RCM_TUNNEL[1])||0;
+  // LA REFERENCE EST LA PREMIERE ETAPE NON VIDE, ET NON RCM_TUNNEL[0].
+  // Elle se lisait par INDICE — [0] sinon [1] — ce qui revenait a nommer
+  // « page de vente » et « application ouverte » par leur POSITION dans le
+  // tableau. Inserer les sept etapes d'installation devant a decale ces
+  // indices : la reference serait devenue « ecran d'installation vu », et
+  // toutes les barres auraient ete mesurees contre le mauvais denominateur,
+  // sans qu'aucune erreur ne le signale. Par parcours, l'ordre peut bouger.
+  let reference=0;
+  for(const e of RCM_TUNNEL){
+    if(e.horsTunnel) continue;
+    const n=totalEtape(e);
+    if(n>0){ reference=n; break; }
+  }
+  // DEUX TEINTES POUR CE QUI SORT DE LA CHAINE, parce que sortir de la chaine
+  // recouvre deux choses opposees : un refus est une fuite et se lit en
+  // orange ; un guide iOS ou un lancement depuis l'icone n'est pas un echec —
+  // il ne casse simplement pas le taux de l'etape suivante.
+  const teinte=(e,def)=>e.horsTunnel?(e.neutre?'var(--sub)':'var(--orange)'):def;
+  // ── LA SYNTHESE, EN TETE ────────────────────────────────────────────
+  // UN SEUL CHIFFRE DECIDE DE TOUS LES AUTRES : combien de gens a qui on a
+  // propose d'installer l'ont fait. Tout le tunnel est en aval — personne ne
+  // revient une deuxieme fois sans icone sur son ecran d'accueil.
+  //
+  // DIVISION PAR ZERO : le denominateur est nul tant que personne n'a vu
+  // l'ecran — le premier jour, et apres chaque redeploiement des regles. On
+  // ne rend PAS « 0 % », qui se lirait comme un echec cuisant alors qu'il
+  // n'y a rien a lire ; on dit qu'il n'y a rien a lire.
+  const _instVus=total('install_ecran_vu');
+  const _instFaits=total('install_fait');
+  const _tauxInst=_instVus>0?Math.round(_instFaits/_instVus*100):null;
   let precedent=null;
-  let html='';
+  // data-num REECRIT TOUT LE CONTENU de l'element qu'il anime — son format
+  // rend le nombre et rien d'autre. Le « % » vit donc dans un frere, sinon il
+  // disparaitrait a la premiere image de l'animation.
+  let html='<div style="background:var(--surface-2);border-radius:var(--r-2);padding:12px 14px;margin-bottom:18px">'
+    +'<div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:.08em;text-transform:uppercase;font-weight:700;margin-bottom:4px">Taux d\'installation</div>'
+    +(_tauxInst===null
+      ? '<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.5">Pas encore mesurable : personne n\'a vu l\'écran d\'installation sur les 7 derniers jours.</div>'
+      : '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">'
+        +'<span style="white-space:nowrap"><strong data-num="'+_tauxInst+'" data-num-duree="520" style="font-size:var(--fs-2xl);color:var(--text-strong);font-variant-numeric:tabular-nums">'+_tauxInst+'</strong>'
+        +'<span style="font-size:var(--fs-xl);color:var(--text-strong)"> %</span></span>'
+        +'<span style="font-size:var(--fs-sm);color:var(--sub)">'+_instFaits+' installation'+(_instFaits>1?'s':'')+' pour '+_instVus+' écran'+(_instVus>1?'s':'')+' vu'+(_instVus>1?'s':'')+'</span>'
+        +'</div>')
+    +'</div>';
   for(const e of RCM_TUNNEL){
     const n=totalEtape(e);
     const largeur=reference>0?Math.max(2,Math.round(n/reference*100)):0;
@@ -64589,12 +64713,12 @@ async function loadMetrics(){
     }
     html+='<div style="margin-bottom:12px">'
       +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:5px">'
-      +'<span style="font-size:var(--fs-sm);font-weight:700;color:'+(e.horsTunnel?'var(--orange)':'var(--text)')+'">'+escapeHtml(e.lib)+'</span>'
+      +'<span style="font-size:var(--fs-sm);font-weight:700;color:'+teinte(e,'var(--text)')+'">'+escapeHtml(e.lib)+'</span>'
       +'<span style="font-size:var(--fs-sm);color:var(--sub);white-space:nowrap"><strong data-num="'+n+'" data-num-duree="520" style="color:var(--text);font-size:var(--fs-md);font-variant-numeric:tabular-nums">'+n+'</strong>'
       +(taux?' <span style="color:var(--sub)">('+taux+')</span>':'')+'</span>'
       +'</div>'
       +'<div style="height:6px;background:var(--surface-2);border-radius:var(--r-1);overflow:hidden">'
-      +'<div class="rc-barre" data-bar-w="'+largeur+'" style="height:100%;width:0;background:'+(e.horsTunnel?'var(--orange)':'var(--red)')+';transition:width 520ms var(--c-out) var(--rcf-d,0ms)"></div>'
+      +'<div class="rc-barre" data-bar-w="'+largeur+'" style="height:100%;width:0;background:'+teinte(e,'var(--red)')+';transition:width 520ms var(--c-out) var(--rcf-d,0ms)"></div>'
       +'</div>'
       +(detail?'<div class="sub" style="font-size:var(--fs-2xs);margin-top:3px">'+escapeHtml(detail.slice(3))+'</div>':'')
       +'</div>';
@@ -64607,7 +64731,7 @@ async function loadMetrics(){
   for(const j of jours) tbl+='<th style="padding:4px 6px;color:var(--sub);font-weight:700">'+j.slice(8)+'/'+j.slice(5,7)+'</th>';
   tbl+='</tr>';
   for(const e of RCM_TUNNEL){
-    tbl+='<tr><td style="padding:4px 8px 4px 0;color:'+(e.horsTunnel?'var(--orange)':'var(--text-strong)')+'">'+escapeHtml(e.lib)+'</td>';
+    tbl+='<tr><td style="padding:4px 8px 4px 0;color:'+teinte(e,'var(--text-strong)')+'">'+escapeHtml(e.lib)+'</td>';
     for(const j of jours){
       const n=e.cles.reduce((s,c)=>s+(parseInt(parJour[j][c],10)||0),0);
       tbl+='<td style="padding:4px 6px;text-align:center;color:'+(n?'var(--text)':'#444')+'">'+(n||'—')+'</td>';

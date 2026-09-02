@@ -9446,6 +9446,144 @@ async function testExercices(){
               if(window._RC_RULES.indexOf(cle)<0)
                 return _echec(cle+' manque dans database.rules.json : le serveur le refusera');
             return true;})());
+
+          // ══════ LE TUNNEL D'INSTALLATION ══════
+          const _INST7=['install_ecran_vu','install_invite_montree','install_accepte',
+            'install_refuse','install_guide_ios','install_fait','lancement_autonome'];
+
+          ok('Les sept compteurs d\'installation sont acceptés du client ET du serveur',(()=>{
+            // DEUX LISTES FERMÉES, ET ELLES DOIVENT RESTER JUMELLES. rcm()
+            // refuse tout nom hors RCM_EVENEMENTS ; les règles refusent tout
+            // nom hors du motif. Un ajout d'un seul côté ne lève rien : le
+            // compteur reste simplement à zéro pour toujours.
+            for(const c of _INST7){
+              if(RCM_EVENEMENTS.indexOf(c)<0) return _echec(c+' n’est pas dans RCM_EVENEMENTS');
+            }
+            if(typeof window._RC_RULES!=='string'||!window._RC_RULES) return true;
+            for(const c of _INST7)
+              if(window._RC_RULES.indexOf(c)<0)
+                return _echec(c+' manque dans database.rules.json : le serveur le refusera');
+            return true;})());
+
+          ok('Le tableau de bord les montre, et AVANT « application ouverte »',(()=>{
+            // L'installation précède tout : « application ouverte » ne veut
+            // rien dire tant qu'on ignore combien de gens ont l'icône.
+            const plates=RCM_TUNNEL.map(e=>e.cles.join(','));
+            const iW=RCM_TUNNEL.findIndex(e=>e.cles.indexOf('welcome_view')>=0);
+            if(iW<0) return _echec('welcome_view a disparu du tunnel');
+            for(const c of _INST7){
+              const i=RCM_TUNNEL.findIndex(e=>e.cles.indexOf(c)>=0);
+              if(i<0) return _echec(c+' n’apparaît pas dans RCM_TUNNEL');
+              if(i>iW) return _echec(c+' est placé APRÈS « application ouverte »');
+            }
+            // ET CHAQUE ÉTAPE PORTE UN LIBELLÉ : une barre sans nom ne se lit pas.
+            for(const e of RCM_TUNNEL) if(!e.lib) return _echec('une étape sans libellé');
+            return plates.length===RCM_TUNNEL.length?true:_echec('tableau incohérent');})());
+
+          ok('Le refus casse la chaîne, le guide iOS et le lancement ne la cassent pas',(()=>{
+            // horsTunnel A DEUX SENS OPPOSÉS ici, et c'est délibéré. Un refus
+            // est une FUITE : orange. Un guide iOS ou un lancement depuis
+            // l'icône n'est pas un échec — il sort de la chaîne pour ne pas
+            // fausser le taux de l'étape suivante, rien de plus, et `neutre`
+            // l'empêche d'être peint comme un échec.
+            const par=c=>RCM_TUNNEL.find(e=>e.cles.indexOf(c)>=0)||{};
+            if(par('install_refuse').horsTunnel!==true) return _echec('le refus reste dans la chaîne');
+            if(par('install_refuse').neutre) return _echec('le refus n’est pas neutre : c’est une fuite');
+            for(const c of ['install_guide_ios','lancement_autonome']){
+              if(par(c).horsTunnel!==true) return _echec(c+' casserait la chaîne');
+              if(par(c).neutre!==true) return _echec(c+' serait peint comme un échec');
+            }
+            // ET LES TROIS ÉTAPES DE LA CHAÎNE Y RESTENT.
+            for(const c of ['install_ecran_vu','install_invite_montree','install_accepte','install_fait'])
+              if(par(c).horsTunnel) return _echec(c+' est sorti de la chaîne');
+            return true;})());
+
+          ok('La référence des barres ne se lit plus par indice',(()=>{
+            // ELLE SE LISAIT RCM_TUNNEL[0] SINON [1] — soit « page de vente »
+            // et « application ouverte » nommées par leur POSITION. Insérer
+            // sept étapes devant a décalé ces indices : la référence serait
+            // devenue « écran d'installation vu » et toutes les barres
+            // auraient été mesurées contre le mauvais dénominateur, en
+            // silence. On retire les commentaires : le correctif cite le
+            // défaut qu'il corrige.
+            const src=String(loadMetrics).replace(/\/\/.*/g,'');
+            if(/RCM_TUNNEL\[[01]\]/.test(src))
+              return _echec('la référence est de nouveau lue par indice');
+            if(!/for\s*\(\s*const\s+e\s+of\s+RCM_TUNNEL/.test(src))
+              return _echec('la référence ne parcourt plus le tunnel');
+            return true;})());
+
+          ok('Le taux d\'installation ne divise pas par zéro',(()=>{
+            const src=String(loadMetrics).replace(/\/\/.*/g,'');
+            if(src.indexOf("total('install_ecran_vu')")<0) return _echec('le dénominateur a disparu');
+            if(src.indexOf("total('install_fait')")<0) return _echec('le numérateur a disparu');
+            // LE GARDE EST DANS L'EXPRESSION MÊME, et il ne rend pas « 0 % » :
+            // zéro se lirait comme un échec cuisant là où il n'y a rien à lire.
+            if(!/_instVus\s*>\s*0\s*\?/.test(src)) return _echec('aucun garde sur la division');
+            if(!/_tauxInst===null/.test(src)) return _echec('le cas « rien à lire » n’est plus distingué');
+            return true;})());
+
+          ok('Ce que rend Firebase est ramené à un objet avant lecture',(()=>{
+            // LE PIÈGE DU PROJET, PRIS PAR L'AUTRE BOUT : Firebase rend un
+            // TABLEAU quand toutes les clés sont numériques, et parJour[j][nom]
+            // vaudrait alors undefined pour chaque compteur — zéro partout,
+            // sans une erreur.
+            if(typeof _rcmObjet!=='function') return _echec('_rcmObjet a disparu');
+            if(_rcmObjet(null)===null||typeof _rcmObjet(null)!=='object') return _echec('null ne donne pas {}');
+            if(Object.keys(_rcmObjet(null)).length) return _echec('null ne donne pas {} vide');
+            if(Object.keys(_rcmObjet([1,2,3])).length) return _echec('un tableau passe encore');
+            if(_rcmObjet('x').welcome_view!==undefined) return _echec('une chaîne passe encore');
+            const o={welcome_view:4};
+            return _rcmObjet(o)===o?true:_echec('un objet normal ne passe plus');})());
+
+          ok('L\'invitation est comptée AVANT d\'être consommée',(()=>{
+            // __rcInstall MET __rcInstallEvt A NULL DES SA PREMIERE LIGNE.
+            // Compter l'invite après l'appel donnerait zéro à chaque fois.
+            const src=String(rcInstallLocal).replace(/\/\/.*/g,'');
+            const iC=src.indexOf("rcm('install_invite_montree')");
+            const iA=src.indexOf('__rcInstall()');
+            if(iC<0) return _echec('l’invite n’est plus comptée');
+            if(iA<0) return _echec('__rcInstall n’est plus appelée');
+            if(iC>iA) return _echec('l’invite est comptée après avoir été consommée : toujours zéro');
+            // ET « indisponible » N'EST NI UN ACCORD NI UN REFUS.
+            if(src.indexOf("c==='accepted'")<0) return _echec('l’accord n’est plus compté');
+            if(src.indexOf("c==='dismissed'")<0) return _echec('le refus n’est plus compté');
+            if(/indisponible/.test(src)) return _echec('« indisponible » est compté comme une réponse');
+            return true;})());
+
+          ok('Les quatre gestes sont instrumentés là où ils se produisent',(()=>{
+            const s=_prodSrc();
+            // L'ÉCRAN, DANS go() : trois chemins y mènent, n'en instrumenter
+            // qu'un donnerait un tunnel faux sans que ça se voie.
+            if(s.indexOf("if(id==='s-install') rcmVue('install_ecran_vu')")<0)
+              return _echec('l’écran d’installation n’est plus compté dans go()');
+            // LE GUIDE iOS, DANS LA MODALE et non dans la branche D : le
+            // bouton #ios-install-btn de l'accueil l'ouvre aussi.
+            if(!/rcmVue\('install_guide_ios'\)/.test(String(showIosInstallGuide)))
+              return _echec('le guide iOS n’est pas compté dans la modale');
+            // L'INSTALLATION FAITE VIENT DU NAVIGATEUR, pas de nous.
+            const iF=s.indexOf("addEventListener('rc-install-fait'");
+            if(iF<0) return _echec('l’écouteur d’installation a disparu');
+            if(s.slice(iF,iF+900).indexOf("rcm('install_fait')")<0)
+              return _echec('l’installation faite n’est pas comptée');
+            // ET LE LANCEMENT AUTONOME, AU CHARGEMENT : ce n'est pas un écran.
+            if(!/if\(rcInstallAutonome\(\)\) rcmVue\('lancement_autonome'\)/.test(s))
+              return _echec('le lancement depuis l’icône n’est pas compté');
+            return true;})());
+
+          ok('Aucun compteur ne transporte autre chose qu\'un entier',(()=>{
+            // LE POINT 6 BIS DE privacy.html AFFIRME QU'AUCUN DESTINATAIRE
+            // N'EST AJOUTÉ, et qu'il ne part rien d'autre qu'un « +1 ».
+            // Cette sonde garde l'affirmation vraie.
+            const src=String(rcm).replace(/\/\/.*/g,'');
+            if(src.indexOf("{'.sv':{'increment':1}}")<0) return _echec('le corps n’est plus un simple +1');
+            if(/currentUser|localStorage|navigator\.userAgent|email/.test(src))
+              return _echec('rcm() lit quelque chose qui identifie');
+            // ET LE SERVEUR NE PREND QUE DES NOMBRES.
+            if(typeof window._RC_RULES==='string'&&window._RC_RULES
+               &&window._RC_RULES.indexOf('newData.isNumber()')<0)
+              return _echec('les règles n’exigent plus un nombre');
+            return true;})());
         })();
 
         // ══════ LA CAPTURE DE L'INVITATION, ET LE MANIFESTE ══════
