@@ -15960,27 +15960,31 @@ async function testExercices(){
           // demandé qu'une seule fois ». Les NEUF routes vers l'inscription
           // connaissaient déjà le rôle ; aucune ne le disait au formulaire.
           const bloc=document.getElementById('r-role-bloc');
-          const rappel=document.getElementById('r-role-rappel');
-          if(!bloc||!rappel) return _echec('le bloc de rôle ou son rappel a disparu');
+          const sep=document.getElementById('r-role-sep');
+          if(!bloc||!sep) return _echec('le bloc de rôle ou son séparateur a disparu');
           const _av=selRole;
           try{
-            // Venu par un chemin qui SAIT : on ne repose pas la question.
+            // Venu par un chemin qui SAIT : la première réponse fait foi, et
+            // le formulaire n'en reparle pas du tout.
             selectRole('athlete',true);
             if(bloc.style.display!=='none') return _echec('la question est reposée alors que le rôle est connu');
-            if(rappel.style.display!=='block') return _echec('rien ne rappelle le rôle retenu');
-            const mot=(document.getElementById('r-role-mot')||{}).textContent||'';
-            if(mot.indexOf('athlète')<0) return _echec('le rappel ne nomme pas le bon rôle : « '+mot+' »');
-            // ON NE RETIRE PAS LE CHOIX : « ce n'est pas ça ? » le rouvre, et
-            // le rôle déjà retenu reste sélectionné — rouvrir n'est pas
-            // remettre à zéro.
+            if(sep.style.display!=='none')
+              return _echec('le trait de séparation reste : il annonce une section qui n’existe plus');
+            // RIEN NE REPARLE DU RÔLE. Un premier correctif laissait une ligne
+            // « Tu crées un compte athlète — ce n'est pas ça ? » ; c'était
+            // encore du bruit sur une question déjà répondue.
+            if(document.getElementById('r-role-rappel'))
+              return _echec('la ligne de rappel est revenue');
+            // MAIS LE BLOC EST MASQUÉ, PAS SUPPRIMÉ : si une route future
+            // arrivait sans rôle, la question doit pouvoir être posée plutôt
+            // que de laisser un formulaire qui refuse de partir.
             rcRoleRouvrir();
-            if(bloc.style.display==='none') return _echec('le choix ne se rouvre pas');
+            if(bloc.style.display==='none') return _echec('le choix a été supprimé, pas masqué');
             if(selRole!=='athlete') return _echec('rouvrir a effacé le rôle retenu');
-            // Un clic RÉEL, lui, laisse le bloc ouvert : c'est la personne qui
-            // choisit, il n'y a rien à lui rappeler.
+            // Un clic RÉEL laisse le bloc ouvert : c'est la personne qui
+            // choisit, elle doit voir ce qu'elle a coché.
             selectRole('coach');
             if(bloc.style.display==='none') return _echec('un clic réel referme le choix');
-            if(rappel.style.display!=='none') return _echec('un clic réel affiche quand même le rappel');
             return true;
           } finally { try{ selectRole(_av||'athlete',true); }catch(e){} }})());
 

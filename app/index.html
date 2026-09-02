@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1107';
+window.RC_BUILD='1108';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -5057,22 +5057,24 @@ const COACH_PHOTO='icons/coach.jpg';
     <div><label for="r-gender">Genre</label>
       <select id="r-gender"><option value="">-- Sélectionner --</option><option value="H">Homme</option><option value="F">Femme</option></select>
     </div>
-    <div class="divider"></div>
+    <div class="divider" id="r-role-sep"></div>
     <!-- ── LE ROLE EST DEJA CONNU EN ARRIVANT ICI ───────────────────────
-         Les NEUF chemins qui menent a cet ecran presel'ectionnent le role :
+         Les NEUF chemins qui menent a cet ecran preselectionnent le role :
          « ESPACE COACH » et « ESPACE ATHLETE » de l'accueil, la saisie d'un
          code d'acces, un lien d'invitation, une invitation coach. La question
          etait donc posee une SECONDE fois a quelqu'un qui venait d'y repondre
          — signale par Kevin le 03/09/2026 : « ca ne devrait etre demande
          qu'une seule fois ».
-         On ne RETIRE pas le choix : on cesse de le POSER. La ligne ci-dessous
-         rappelle la reponse et laisse la corriger, ce qui couvre le clic
-         malheureux sans imposer une question de plus. -->
-    <div id="r-role-rappel" style="display:none;margin:0 0 4px">
-      <span style="font-size:var(--fs-sm);color:var(--sub)">Tu crées un compte <b id="r-role-mot" style="color:var(--text)">athlète</b>.</span>
-      <a href="#" onclick="rcRoleRouvrir();return false;"
-        style="margin-left:8px;font-size:var(--fs-xs);color:var(--link);text-decoration:underline;text-underline-offset:3px;cursor:pointer">ce n'est pas ça ?</a>
-    </div>
+         LA PREMIERE REPONSE FAIT FOI, ET RIEN N'EN REPARLE. Un premier
+         correctif laissait une ligne de rappel avec « ce n'est pas ça ? » :
+         c'etait encore du bruit sur une question deja repondue. Se tromper de
+         bouton se corrige par la fleche de retour, qui ramene exactement la
+         ou le choix a ete fait — un lien de plus dans le formulaire ne
+         rattrapait rien que la fleche ne rattrape deja.
+         Le bloc reste VISIBLE PAR DEFAUT : si une route future arrivait sans
+         role, la question serait posee plutot que de laisser un formulaire
+         qui refuse de partir. Une sonde compte les routes et les
+         preselections pour que ce repli ne serve jamais. -->
     <div id="r-role-bloc">
     <label style="margin:0">Je suis :</label>
     <div class="row2">
@@ -13656,18 +13658,21 @@ let selRole='';
 // d'invitation. La question etait pourtant reposee au formulaire, a
 // quelqu'un qui venait d'y repondre. Signale par Kevin le 03/09/2026.
 //
-// ON NE RETIRE PAS LE CHOIX, ON CESSE DE LE POSER. Un rappel d'une ligne dit
-// ce qui a ete retenu et laisse le corriger : le clic malheureux reste
-// rattrapable, sans imposer une question de plus a tous les autres.
+// LA PREMIERE REPONSE FAIT FOI, ET RIEN N'EN REPARLE. Un premier correctif
+// laissait a la place une ligne « Tu crées un compte athlète — ce n'est pas
+// ça ? » : c'etait encore du bruit sur une question deja repondue. Se tromper
+// de bouton se corrige par la fleche de retour, qui ramene exactement la ou le
+// choix a ete fait.
+//
+// LE SEPARATEUR PART AVEC LE BLOC : un trait horizontal seul, entre le genre
+// et la promesse, annoncerait une section qui n'existe plus.
 function selectRole(r,implicite){
   selRole=r;
   try{
     const _b=document.getElementById('r-role-bloc');
-    const _r=document.getElementById('r-role-rappel');
-    const _m=document.getElementById('r-role-mot');
-    if(_m) _m.textContent=(r==='coach')?'coach':'athlète';
+    const _s=document.getElementById('r-role-sep');
     if(_b) _b.style.display=implicite?'none':'';
-    if(_r) _r.style.display=implicite?'block':'none';
+    if(_s) _s.style.display=implicite?'none':'';
   }catch(e){}
   document.getElementById('role-coach').classList.toggle('sel',r==='coach');
   document.getElementById('role-athlete').classList.toggle('sel',r==='athlete');
@@ -13685,14 +13690,16 @@ function selectRole(r,implicite){
   if(_ri) _ri.style.display=(r==='coach')?'block':'none';
   rcmVue(r==='coach'?'role_selected_coach':'role_selected_athlete');
 }
-// « Ce n'est pas ça ? » — on rouvre le choix, et le rappel s'efface. Le role
-// deja retenu reste selectionne : rouvrir n'est pas remettre a zero.
+// CONSERVEE, MAIS PLUS AUCUN LIEN NE L'APPELLE. Le formulaire ne reparle plus
+// du role du tout ; cette fonction reste la porte de service qui rouvre le
+// choix — depuis la console, ou depuis la suite de tests qui verifie que le
+// bloc masque est bien masque et non supprime.
 function rcRoleRouvrir(){
   try{
     const _b=document.getElementById('r-role-bloc');
-    const _r=document.getElementById('r-role-rappel');
+    const _s=document.getElementById('r-role-sep');
     if(_b) _b.style.display='';
-    if(_r) _r.style.display='none';
+    if(_s) _s.style.display='';
   }catch(e){}
   return true;
 }
