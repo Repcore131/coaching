@@ -20,8 +20,10 @@
     "rewrites": [
       { "source": "/i", "destination": "/app/index.html" }
     ],
+    "//ignore": "⚠ .well-known EST EXEMPTE, ET C'EST L'ETAPE QUE TOUT LE MONDE RATE. La regle **/.* exclut du deploiement tout fichier ou dossier commencant par un point — .well-known/assetlinks.json en fait partie. Sans exemption il n'est jamais publie, Android ne peut pas verifier que le domaine autorise l'application, et la TWA s'ouvre AVEC LA BARRE D'ADRESSE : elle se comporte comme un onglet de navigateur deguise. Le defaut ne dit rien, il se constate a l'ecran.",
     "ignore": [
-      "**/.*"
+      "**/.*",
+      "!.well-known/**"
     ],
     "headers": [
       {

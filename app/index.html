@@ -4564,6 +4564,20 @@ const COACH_PHOTO='icons/coach.jpg';
       <a href="#" id="rc-inst-passer" onclick="rcInstallPasser();return false;"
         style="display:inline-block;padding:8px 12px;font-size:var(--fs-sm);color:rgba(255,255,255,.45);text-decoration:underline;text-underline-offset:3px;font-family:Montserrat,sans-serif;cursor:pointer">Continuer sans installer</a>
     </div>
+    <!-- ── LE FICHIER APK, EN TROISIÈME RANG ET SUR ANDROID SEULEMENT ────
+         Il reste TERTIAIRE, et ce n'est pas de la modestie : installer un
+         fichier hors magasin déclenche « Applications inconnues », puis un
+         écran Play Protect qui parle d'application « non vérifiée ». Une
+         partie des gens s'arrête là — et ceux-là auraient installé la PWA
+         sans un mot. On ne met donc pas devant ce qui fait peur.
+         Il existe quand même : certains Android bloquent l'installation
+         directe, et sans ce fichier ceux-là n'ont rien. -->
+    <div id="rc-inst-apk" style="display:none;text-align:center;margin-top:2px">
+      <a href="/download/RepCore.apk" download
+        style="display:inline-block;padding:6px 10px;font-size:var(--fs-xs);color:rgba(255,255,255,.32);text-decoration:underline;text-underline-offset:3px;font-family:Montserrat,sans-serif">Ou télécharger le fichier APK</a>
+      <a href="/aide-apk.html" target="_blank" rel="noopener"
+        style="display:inline-block;padding:6px 6px;font-size:var(--fs-xs);color:rgba(255,255,255,.32);font-family:Montserrat,sans-serif">· aide</a>
+    </div>
   </div>
 
 </div>
@@ -64311,6 +64325,11 @@ function rcInstallDecider(){
   if(_sortie) _sortie.textContent='Continuer sans installer';
   const _sm=document.getElementById('rc-inst-sortie');
   if(_sm) _sm.style.display='none';
+  // LE LIEN APK REPART CACHE A CHAQUE DECISION. Une seule branche le rallume :
+  // proposer un fichier Android sur un iPhone ou dans un navigateur integre
+  // serait au mieux inutile, au pire un cul-de-sac de plus.
+  const _apk=document.getElementById('rc-inst-apk');
+  if(_apk) _apk.style.display='none';
   _rcInstGeste=null;
   const dire=(t)=>{ if(sous) sous.textContent=t||''; };
   const montrer=(id)=>{ const b=document.getElementById(id); if(b) b.style.display='block'; };
@@ -64386,6 +64405,12 @@ function rcInstallDecider(){
       principal.style.display='block';
       _rcInstGeste=()=>{ rcInstallLocal(); };
     }
+    // ET LE FICHIER APK EN TROISIEME RANG, sur Android uniquement. Le test
+    // porte sur le systeme et non sur la presence de l'invitation : un
+    // Chromebook peut installer sans etre un telephone Android.
+    try{
+      if(_apk&&/Android/i.test(navigator.userAgent||'')) _apk.style.display='block';
+    }catch(e){}
     return 'C';
   }
 

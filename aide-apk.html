@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Installer le fichier APK — RepCore</title>
+<link rel="icon" type="image/png" href="app/icons/icon-192x192.png">
+<style>
+  :root{ --fond:#080808; --carte:#111; --bord:#242424; --texte:#eee; --sub:#9a9a9a; --rouge:#E02020; }
+  *{ box-sizing:border-box }
+  body{ margin:0; background:var(--fond); color:var(--texte);
+        font:15px/1.7 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap{ max-width:640px; margin:0 auto; padding:28px 20px 64px }
+  h1{ font-size:26px; line-height:1.2; margin:0 0 6px }
+  h2{ font-size:18px; margin:32px 0 10px }
+  p{ margin:0 0 14px }
+  .sub{ color:var(--sub) }
+  a{ color:var(--rouge) }
+  .carte{ background:var(--carte); border:1px solid var(--bord); border-radius:12px; padding:16px 18px; margin:16px 0 }
+  .avert{ border-color:rgba(224,32,32,.35); background:rgba(224,32,32,.06) }
+  ol{ margin:0; padding-left:22px } li{ margin-bottom:10px }
+  .ecran{ border:1px solid var(--bord); border-radius:10px; padding:13px 15px; margin:10px 0;
+          background:#0c0c0c; font-size:14px }
+  .ecran b{ color:#fff }
+  .bouton{ display:inline-block; background:var(--rouge); color:#fff; text-decoration:none;
+           padding:13px 22px; border-radius:8px; font-weight:700; letter-spacing:1px; margin-top:8px }
+  code{ background:#1a1a1a; padding:2px 6px; border-radius:4px; font-size:13px }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Installer RepCore par le fichier APK</h1>
+  <p class="sub">Cette page ne sert que si l'installation directe n'a pas marché sur ton téléphone.</p>
+
+  <div class="carte avert">
+    <p style="margin:0"><b>La voie normale est plus simple.</b> Sur la page d'installation, le bouton
+    « Installer RepCore » pose l'application en un geste, sans aucun des avertissements
+    décrits ci-dessous. Le fichier APK n'est là que pour les téléphones qui refusent
+    cette voie.</p>
+  </div>
+
+  <h2>Android va t'avertir deux fois. C'est normal.</h2>
+  <p>Android traite tout fichier qui ne vient pas du Play Store comme suspect par principe —
+  il ne sait pas d'où il vient, donc il prévient. Voici les deux écrans que tu vas voir,
+  dans l'ordre, et ce qu'ils veulent dire.</p>
+
+  <div class="ecran">
+    <p style="margin:0 0 6px"><b>1. « Pour votre sécurité, votre téléphone n'est pas autorisé à installer des applications inconnues provenant de cette source »</b></p>
+    <p class="sub" style="margin:0">Touche <b>Paramètres</b> dans la boîte, puis active
+    <b>Autoriser depuis cette source</b>. Tu autorises ton navigateur, pas RepCore —
+    et tu peux le désactiver juste après l'installation.</p>
+  </div>
+
+  <div class="ecran">
+    <p style="margin:0 0 6px"><b>2. Play Protect : « Application non validée » ou « Envoyer l'application pour analyse ? »</b></p>
+    <p class="sub" style="margin:0">Touche <b>Installer quand même</b> (parfois derrière
+    <b>Plus de détails</b>). Play Protect dit qu'il ne connaît pas ce fichier, pas qu'il
+    y a trouvé quelque chose.</p>
+  </div>
+
+  <h2>Les étapes</h2>
+  <div class="carte">
+    <ol>
+      <li>Télécharge le fichier avec le bouton en bas de cette page.</li>
+      <li>Ouvre-le depuis la barre de notifications, ou par <b>Fichiers → Téléchargements</b>.</li>
+      <li>Traverse les deux écrans ci-dessus.</li>
+      <li>RepCore apparaît sur ton écran d'accueil.</li>
+    </ol>
+  </div>
+
+  <h2>Ce que tu installes</h2>
+  <p>Le fichier pèse <b>2,5 Mo</b>. Il ne contient pas l'application : il contient une
+  fenêtre qui ouvre <code>repcore-sync.web.app</code> en plein écran. RepCore reste donc
+  <b>toujours à jour</b> — il n'y a jamais de nouvelle version de ce fichier à réinstaller —
+  et il continue de fonctionner hors ligne exactement comme dans le navigateur.</p>
+
+  <p class="sub">Éditeur : Kevin Guellec. Le fichier est signé par une clé qui m'appartient,
+  et l'empreinte de cette clé est publiée sur
+  <a href="/.well-known/assetlinks.json">ce domaine</a> — c'est ce qui permet à Android de
+  vérifier que le site et l'application vont bien ensemble.</p>
+
+  <p style="text-align:center;margin-top:28px">
+    <a class="bouton" href="/download/RepCore.apk" download>TÉLÉCHARGER LE FICHIER (2,5 Mo)</a>
+  </p>
+  <p style="text-align:center"><a href="/app/">← Revenir à l'application</a></p>
+
+</div>
+</body>
+</html>
