@@ -8341,9 +8341,20 @@ const RC_APK_URL='';
 // lien mort. Un QR qui ne mene nulle part est pire que pas de QR.
 const RC_LIEN_COURT=(()=>{
   try{
-    if(location.origin&&location.origin!=='null'&&location.pathname.indexOf('/app/')===0)
-      return location.origin+'/i';
+    if(location.origin&&location.origin!=='null'){
+      const _p=location.pathname;
+      // ARRIVER PAR /i PROUVE QUE LA REECRITURE EXISTE — c'est elle qui a
+      // servi cette page. Sans ce cas, le QR affiche sur ordinateur pointait
+      // vers la RACINE, c'est-a-dire la page de vente, au lieu de l'ecran
+      // d'installation. Et il le faisait precisement pour les gens venus par
+      // le lien court : ceux a qui on l'a donne, donc tout le monde.
+      // Mesure du 02/09/2026 sur https://repcore-sync.web.app/i :
+      // RC_LIEN_COURT valait « https://repcore-sync.web.app/ ».
+      if(_p.indexOf('/app/')===0||_p==='/i'||_p==='/i/') return location.origin+'/i';
+    }
   }catch(e){}
+  // SERVI DEPUIS UN SOUS-DOSSIER, /i N'EXISTE PAS : on rend l'adresse longue
+  // plutot qu'un lien mort.
   return APP_BASE_URL;
 })();
 

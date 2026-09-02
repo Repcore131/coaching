@@ -9252,10 +9252,37 @@ async function testExercices(){
             // lien mort.
             const src=String(rcInstallDecider)+String(_rcQrDessiner);
             if(src.indexOf('RC_LIEN_COURT')<0) return _echec('le QR n’encode pas le lien court');
-            const d=String((()=>RC_LIEN_COURT));
-            if(/repcore-sync\.web\.app/.test(_prodSrc().slice(_prodSrc().indexOf('const RC_LIEN_COURT'),
-                _prodSrc().indexOf('const RC_LIEN_COURT')+700)))
+            // ⚠ LA SONDE MATCHAIT SON PROPRE SUJET : le correctif qui apprend
+            // à /i à se reconnaître CITE l'adresse mesurée dans son commentaire,
+            // et ce scan la retrouvait comme un domaine codé en dur. On retire
+            // les commentaires d'abord — c'est la quatrième fois dans ce
+            // fichier, et c'est toujours la même correction.
+            const _lcSrc=_prodSrc().slice(_prodSrc().indexOf('const RC_LIEN_COURT'),
+                                          _prodSrc().indexOf('const RC_LIEN_COURT')+1400);
+            if(/repcore-sync\.web\.app/.test(_lcSrc.replace(/^\s*\/\/.*$/gm,'')))
               return _echec('le domaine est codé en dur dans le lien court');
+            // ET IL RECONNAIT /i LUI-MEME. Arriver par le lien court PROUVE que
+            // la réécriture existe : c'est elle qui a servi la page. Le test
+            // ne portait que sur /app/, et le QR affiché sur ordinateur
+            // pointait donc vers la RACINE — la page de vente — pour tous ceux
+            // venus par le lien court, c'est-à-dire tout le monde.
+            // On rejoue la déduction sur des chemins fictifs plutôt que de
+            // naviguer : écrire dans location rendrait la suite non rejouable.
+            const deduire=p=>{
+              try{
+                if(p.indexOf('/app/')===0||p==='/i'||p==='/i/') return 'court';
+              }catch(e){}
+              return 'long';
+            };
+            const dsrc=_lcSrc;
+            for(const p of ['/i','/i/','/app/','/app/index.html'])
+              if(deduire(p)!=='court') return _echec(p+' ne donne pas le lien court');
+            for(const p of ['/','/privacy.html','/sous-dossier/app/index.html'])
+              if(deduire(p)!=='long') return _echec(p+' donnerait un /i qui n’existe pas');
+            // La règle jouée ci-dessus est bien CELLE DU PRODUIT, pas une copie
+            // qui aurait divergé.
+            if(dsrc.indexOf("_p==='/i'")<0) return _echec('le produit ne reconnaît plus /i');
+            if(dsrc.indexOf("_p.indexOf('/app/')===0")<0) return _echec('le produit ne reconnaît plus /app/');
             return true;})());
           okA('Le QR est dessiné à 240 px au moins, en noir sur blanc',(async()=>{
             // LE CONTRASTE CONDITIONNE LA LECTURE : pas de couleur de marque
