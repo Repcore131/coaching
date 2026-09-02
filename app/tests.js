@@ -15953,6 +15953,50 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        ok('Le rôle n\'est demandé qu\'une seule fois',(()=>{
+          // ⚠ IL L'ÉTAIT DEUX FOIS. « ESPACE ATHLÈTE » sur l'accueil, puis
+          // « Je suis : COACH / ATHLÈTE » sur le formulaire — à quelqu'un qui
+          // venait de répondre. Signalé par Kevin : « ça ne devrait être
+          // demandé qu'une seule fois ». Les NEUF routes vers l'inscription
+          // connaissaient déjà le rôle ; aucune ne le disait au formulaire.
+          const bloc=document.getElementById('r-role-bloc');
+          const rappel=document.getElementById('r-role-rappel');
+          if(!bloc||!rappel) return _echec('le bloc de rôle ou son rappel a disparu');
+          const _av=selRole;
+          try{
+            // Venu par un chemin qui SAIT : on ne repose pas la question.
+            selectRole('athlete',true);
+            if(bloc.style.display!=='none') return _echec('la question est reposée alors que le rôle est connu');
+            if(rappel.style.display!=='block') return _echec('rien ne rappelle le rôle retenu');
+            const mot=(document.getElementById('r-role-mot')||{}).textContent||'';
+            if(mot.indexOf('athlète')<0) return _echec('le rappel ne nomme pas le bon rôle : « '+mot+' »');
+            // ON NE RETIRE PAS LE CHOIX : « ce n'est pas ça ? » le rouvre, et
+            // le rôle déjà retenu reste sélectionné — rouvrir n'est pas
+            // remettre à zéro.
+            rcRoleRouvrir();
+            if(bloc.style.display==='none') return _echec('le choix ne se rouvre pas');
+            if(selRole!=='athlete') return _echec('rouvrir a effacé le rôle retenu');
+            // Un clic RÉEL, lui, laisse le bloc ouvert : c'est la personne qui
+            // choisit, il n'y a rien à lui rappeler.
+            selectRole('coach');
+            if(bloc.style.display==='none') return _echec('un clic réel referme le choix');
+            if(rappel.style.display!=='none') return _echec('un clic réel affiche quand même le rappel');
+            return true;
+          } finally { try{ selectRole(_av||'athlete',true); }catch(e){} }})());
+
+        ok('Toutes les routes vers l\'inscription posent le rôle',(()=>{
+          // C'EST CE QUI PERMET DE NE PLUS POSER LA QUESTION. Si une route
+          // arrivait sans rôle, le formulaire devrait la reposer — et cette
+          // sonde tombe avant que quelqu'un ne se retrouve devant un
+          // formulaire qui refuse de partir sans qu'on sache pourquoi.
+          const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+          const routes=(s.match(/go\('s-register'\)/g)||[]).length;
+          const poses=(s.match(/selectRole\('(?:coach|athlete)',true\)/g)||[]).length;
+          if(!routes) return _echec('plus aucune route vers l’inscription');
+          if(poses<routes)
+            return _echec(poses+' présélection(s) pour '+routes+' routes : une au moins ne pose pas le rôle');
+          return true;})());
+
         ok('Critère : coller le lien complet mène à l\'inscription, coach lié',(()=>{
           const _sv=currentUser, _su=localStorage.getItem('rc_users');
           const _pc=localStorage.getItem('pendingCode'), _ss=window.saveUser;
@@ -15976,8 +16020,12 @@ async function testExercices(){
               return _echec('pendingCode : '+localStorage.getItem('pendingCode'));
             // Le role est pose dans un setTimeout : on epingle l'appel plutot
             // que d'attendre, une suite synchrone ne peut pas l'observer.
-            return /selectRole\('athlete'\)/.test(String(doAthleteCode))
-              ?true:_echec('le rôle athlète n\'est plus présélectionné');
+            // ET LA PRÉSÉLECTION EST IMPLICITE : le second argument dit que le
+            // rôle vient du CHEMIN et non d'un clic. C'est lui qui évite de
+            // reposer au formulaire une question à laquelle l'athlète vient
+            // de répondre en saisissant son code.
+            return /selectRole\('athlete',true\)/.test(String(doAthleteCode))
+              ?true:_echec('le rôle athlète n\'est plus présélectionné implicitement');
           } finally { currentUser=_sv; window.saveUser=_ss;
             if(_su!==null) localStorage.setItem('rc_users',_su);
             if(_pc!==null) localStorage.setItem('pendingCode',_pc);

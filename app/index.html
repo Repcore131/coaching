@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1106';
+window.RC_BUILD='1107';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -5058,11 +5058,28 @@ const COACH_PHOTO='icons/coach.jpg';
       <select id="r-gender"><option value="">-- Sélectionner --</option><option value="H">Homme</option><option value="F">Femme</option></select>
     </div>
     <div class="divider"></div>
+    <!-- ── LE ROLE EST DEJA CONNU EN ARRIVANT ICI ───────────────────────
+         Les NEUF chemins qui menent a cet ecran presel'ectionnent le role :
+         « ESPACE COACH » et « ESPACE ATHLETE » de l'accueil, la saisie d'un
+         code d'acces, un lien d'invitation, une invitation coach. La question
+         etait donc posee une SECONDE fois a quelqu'un qui venait d'y repondre
+         — signale par Kevin le 03/09/2026 : « ca ne devrait etre demande
+         qu'une seule fois ».
+         On ne RETIRE pas le choix : on cesse de le POSER. La ligne ci-dessous
+         rappelle la reponse et laisse la corriger, ce qui couvre le clic
+         malheureux sans imposer une question de plus. -->
+    <div id="r-role-rappel" style="display:none;margin:0 0 4px">
+      <span style="font-size:var(--fs-sm);color:var(--sub)">Tu crées un compte <b id="r-role-mot" style="color:var(--text)">athlète</b>.</span>
+      <a href="#" onclick="rcRoleRouvrir();return false;"
+        style="margin-left:8px;font-size:var(--fs-xs);color:var(--link);text-decoration:underline;text-underline-offset:3px;cursor:pointer">ce n'est pas ça ?</a>
+    </div>
+    <div id="r-role-bloc">
     <label style="margin:0">Je suis :</label>
     <div class="row2">
       <div class="role-card" id="role-coach" onclick="selectRole('coach')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon" data-icon="users"></div><div style="font-weight:800;font-size:var(--fs-lg)">COACH</div><div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Gérer mes athlètes</div></div>
       <div class="role-card" id="role-athlete" onclick="selectRole('athlete')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon" data-icon="dumbbell"></div><div style="font-weight:800;font-size:var(--fs-lg)">ATHLÈTE</div><div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Suivre ma progression</div></div>
     </div>
+    </div><!-- /r-role-bloc -->
     <!-- Promesse affichée à l'inscription. « Premier client », jamais une
          durée : un compte Libre ne se referme pas, et annoncer un essai de
          N jours dirait exactement le contraire de ce que le produit fait. -->
@@ -13632,8 +13649,26 @@ function toast(msg,c='var(--green)'){
 
 // ======= AUTH =======
 let selRole='';
-function selectRole(r){
+// `implicite` : LE ROLE VIENT DU CHEMIN, PAS D'UN CLIC.
+//
+// Les neuf routes vers l'inscription connaissent deja le role — « ESPACE
+// COACH » et « ESPACE ATHLETE » de l'accueil, un code d'acces, un lien
+// d'invitation. La question etait pourtant reposee au formulaire, a
+// quelqu'un qui venait d'y repondre. Signale par Kevin le 03/09/2026.
+//
+// ON NE RETIRE PAS LE CHOIX, ON CESSE DE LE POSER. Un rappel d'une ligne dit
+// ce qui a ete retenu et laisse le corriger : le clic malheureux reste
+// rattrapable, sans imposer une question de plus a tous les autres.
+function selectRole(r,implicite){
   selRole=r;
+  try{
+    const _b=document.getElementById('r-role-bloc');
+    const _r=document.getElementById('r-role-rappel');
+    const _m=document.getElementById('r-role-mot');
+    if(_m) _m.textContent=(r==='coach')?'coach':'athlète';
+    if(_b) _b.style.display=implicite?'none':'';
+    if(_r) _r.style.display=implicite?'block':'none';
+  }catch(e){}
   document.getElementById('role-coach').classList.toggle('sel',r==='coach');
   document.getElementById('role-athlete').classList.toggle('sel',r==='athlete');
   // Deux compteurs distincts plutôt qu'une propriété « role » : la validation
@@ -13649,6 +13684,17 @@ function selectRole(r){
   if(_pc){ _pc.textContent=PROMESSE_COACH; _pc.style.display=(r==='coach')?'block':'none'; }
   if(_ri) _ri.style.display=(r==='coach')?'block':'none';
   rcmVue(r==='coach'?'role_selected_coach':'role_selected_athlete');
+}
+// « Ce n'est pas ça ? » — on rouvre le choix, et le rappel s'efface. Le role
+// deja retenu reste selectionne : rouvrir n'est pas remettre a zero.
+function rcRoleRouvrir(){
+  try{
+    const _b=document.getElementById('r-role-bloc');
+    const _r=document.getElementById('r-role-rappel');
+    if(_b) _b.style.display='';
+    if(_r) _r.style.display='none';
+  }catch(e){}
+  return true;
 }
 // Consomme l'intention de retour posée par goRegisterPourSouscrire. Renvoie
 // true quand la navigation a été prise en charge, pour que l'appelant n'envoie
@@ -14352,7 +14398,7 @@ function showErr(id,msg,champId){
 // l'écran d'inscription. On ouvre une porte, on n'en condamne pas une.
 function goRegisterCoach(){
   go('s-register');
-  setTimeout(()=>selectRole('coach'),50);
+  setTimeout(()=>selectRole('coach',true),50);
 }
 function ouvrirInviteCoach(){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
@@ -14383,14 +14429,14 @@ function _validerInviteCoach(){
   // couvre le cas d'un appel depuis ailleurs.
   go('s-register');
   setTimeout(()=>{
-    selectRole('coach');
+    selectRole('coach',true);
     const l=document.getElementById('r-invite-line');
     if(l){l.textContent='Invitation : '+v;l.style.display='block';}
   },50);
 }
 function goRegisterAthlete(){
   go('s-register');
-  setTimeout(()=>selectRole('athlete'),50);
+  setTimeout(()=>selectRole('athlete',true),50);
 }
 function aeToggleCode(){
   const zone=document.getElementById('ae-code-zone');
@@ -14538,7 +14584,7 @@ async function doAthleteCode(){
           // impasse, et c'est infiniment mieux qu'un bouton qui ne repond plus.
           _poserCodeEnAttente(coach.code||'');
           go('s-register');
-          setTimeout(()=>selectRole('athlete'),50);
+          setTimeout(()=>selectRole('athlete',true),50);
           return;
         }
       }
@@ -14556,7 +14602,7 @@ async function doAthleteCode(){
       rcm('code_valid');
       _retenirCodeVerifie(_invDuLien,payload);
       go('s-register');
-      setTimeout(()=>selectRole('athlete'),50);
+      setTimeout(()=>selectRole('athlete',true),50);
     }catch(e){
       rcm('code_invalid');
       errEl.textContent=e.message||'Code invalide.';
@@ -14592,7 +14638,7 @@ async function doAthleteCode(){
       rcm('code_valid');
       _retenirCodeVerifie(code,payload);
       go('s-register');
-      setTimeout(()=>selectRole('athlete'),50);
+      setTimeout(()=>selectRole('athlete',true),50);
     }catch(e){
       rcm('code_invalid');
       errEl.textContent=e.message||'Code invalide.';
@@ -14611,7 +14657,7 @@ async function doAthleteCode(){
     // Meme geste, meme risque : voir _poserCodeEnAttente.
     _poserCodeEnAttente(code);
     go('s-register');
-    setTimeout(()=>selectRole('athlete'),50);
+    setTimeout(()=>selectRole('athlete',true),50);
     return;
   }
   // Le lien d'invitation vient d'être tenté sans succès : ne pas le recommander.
@@ -68583,7 +68629,7 @@ function copyExistingCode(i){
 // auprès de Firebase, et un rechargement en cours de route perdrait le fil.
 function goRegisterPourSouscrire(){
   try{sessionStorage.setItem('rc_apres_inscription','s-subscribe');}catch(e){}
-  go('s-register');selectRole('athlete');
+  go('s-register');selectRole('athlete',true);
 }
 // ═══════════════════════════════════════════════════
 // ── Paliers d'abonnement : rendu et sélection ───────────────────────────────
@@ -68736,7 +68782,7 @@ function initPaypalSubscription(){
   // si un appel arrivait par un autre chemin que le bouton de loadSubscribePage.
   if(!currentUser){
     toast('Crée ton compte avant de souscrire.','var(--orange)');
-    go('s-register');selectRole('athlete');
+    go('s-register');selectRole('athlete',true);
     return;
   }
   const clientId=PAYPAL_CLIENT_ID;
