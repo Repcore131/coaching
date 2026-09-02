@@ -15953,6 +15953,168 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LA DISPONIBILITÉ ══════
+        (()=>{
+          const J=n=>localISODate(_datePlusJours(new Date(),-n));
+          const T=n=>Date.now()-n*86400000;
+          // Un dormeur régulier à 8 h, avec `h` heures les deux dernières nuits.
+          const dort=h=>{ const l=[]; for(let i=0;i<30;i++) l.push({date:J(i),duration:i<2?h:8}); return l; };
+          const seances=(n,pain)=>{ const l=[];
+            for(let i=1;i<=n;i++) l.push({date:T(i),data:{curl:{sets:[
+              {done:true,weight:'20',reps:'10',pain:pain||'',rir:'2'}]}}});
+            return l; };
+
+          ok('Sous deux entrées : pas de donnée, pas d\'avis',(()=>{
+            // Une note bâtie sur une seule mesure porterait tout le poids
+            // d'une seule saisie, et un oubli de la veille ferait annuler une
+            // séance.
+            const vide=disponibilite({email:'d@t.fr',sessions:[],sleepLog:[]},J(0));
+            if(vide.note!==null) return _echec('une note sort de rien : '+vide.note);
+            if(vide.drapeau!=='vert') return _echec('drapeau '+vide.drapeau+' sans donnée');
+            if(vide.donneesManquantes.length!==4) return _echec('les quatre absences ne sont pas listées');
+            // UNE seule entrée : toujours null.
+            const une=disponibilite({email:'d@t.fr',sessions:[],sleepLog:dort(4)},J(0));
+            if(une.note!==null) return _echec('une seule entrée produit une note : '+une.note);
+            return une.drapeau==='vert'?true:_echec('drapeau '+une.drapeau+' sur une entrée');})());
+
+          ok('Une entrée absente est retirée, son poids redistribué',(()=>{
+            // ON NE REMPLACE JAMAIS UNE ABSENCE PAR UNE MOYENNE : inventer
+            // « 50 » pour un sommeil non renseigné, c'est fabriquer une mesure
+            // et la faire peser 40 %.
+            const u={email:'d@t.fr',sessions:seances(6,''),sleepLog:dort(8)};
+            const d=disponibilite(u,J(0));
+            if(d.note===null) return _echec('aucune note avec deux entrées');
+            const dispo=Object.keys(d.sousScores||{});
+            if(dispo.length<2) return _echec(dispo.length+' entrée(s) disponible(s)');
+            // La note vaut EXACTEMENT la moyenne pondérée des entrées présentes,
+            // les poids étant ramenés à leur somme — pas à 100.
+            let poids=0,somme=0;
+            for(const k of dispo){ poids+=DISPO_POIDS[k]; somme+=d.sousScores[k]*DISPO_POIDS[k]; }
+            const attendu=Math.round(somme/poids);
+            if(d.note!==attendu) return _echec('note '+d.note+' au lieu de '+attendu+' (poids non redistribués)');
+            // Et les absentes sont NOMMÉES, pas silencieuses.
+            for(const k of Object.keys(DISPO_POIDS))
+              if(!dispo.includes(k)&&!d.donneesManquantes.includes(k))
+                return _echec(k+' est absente et non signalée');
+            return true;})());
+
+          ok('En vert, rien ne s\'affiche',(()=>{
+            // LE SILENCE EST L'ÉTAT NORMAL. Pas un encart gris, pas un
+            // « tout va bien » : au-dessus du seuil, la note ne dit rien.
+            const u={email:'d@t.fr',sessions:seances(6,''),sleepLog:dort(8)};
+            const d=disponibilite(u,J(0));
+            if(d.drapeau!=='vert') return _echec('un athlète reposé et sans douleur n’est pas vert : '+d.note);
+            if(d.motif!==null) return _echec('un motif sort en vert : « '+d.motif+' »');
+            const _sv=currentUser;
+            try{
+              currentUser=u;
+              if(_htmlDispo(0)!=='') return _echec('l’encart s’affiche en vert');
+              // Et sans donnée non plus.
+              currentUser={email:'d@t.fr',sessions:[],sleepLog:[]};
+              if(_htmlDispo(0)!=='') return _echec('l’encart s’affiche sans donnée');
+            } finally { currentUser=_sv; }
+            return true;})());
+
+          ok('Le motif nomme UNE cause, jamais deux',(()=>{
+            // Une phrase qui liste trois facteurs n'est plus une consigne,
+            // c'est un tableau de bord — exactement ce que ce lot évite.
+            const u={email:'d@t.fr',sessions:seances(6,'3'),sleepLog:dort(4)};
+            const d=disponibilite(u,J(0));
+            if(d.drapeau==='vert') return _echec('deux entrées dégradées restent vertes');
+            if(!d.motif) return _echec('aucun motif hors du vert');
+            if(!d.cause) return _echec('aucune cause nommée');
+            // La cause retenue est bien la PIRE, et une seule.
+            let pire=null;
+            for(const k of Object.keys(d.sousScores))
+              if(pire===null||d.sousScores[k]<d.sousScores[pire]) pire=k;
+            if(d.cause!==pire) return _echec('cause '+d.cause+' au lieu de '+pire);
+            // ⚠ ON PARCOURT LES HUIT MOTIFS, pas seulement celui que
+            // l'échantillon déclenche. La première version testait la phrase
+            // produite par SON cas — celle de la douleur — et laissait passer
+            // deux causes citées dans la phrase du sommeil. Mesuré en
+            // cassant : la sonde restait verte.
+            const familles=[/nuit/i,/douleur/i,/échec|echec/i,/charge/i];
+            for(const cause of ['sommeil','douleur','rir','charge'])
+              for(const dr of ['orange','rouge']){
+                const p=_dispoMotif(cause,dr,u,J(0));
+                if(!p) return _echec('aucun motif pour '+cause+'/'+dr);
+                // ⚠ ON NE COMPTE LES CAUSES QUE DANS LA PREMIÈRE PHRASE. Le
+                // motif est « <cause>. <action> », et l'action de chaque
+                // niveau orange dit « Garde la charge » : chercher les
+                // familles dans tout le texte accusait un motif correct de
+                // citer deux facteurs. Mesuré sur le code sain.
+                const cle=String(p).split('.')[0];
+                const n=familles.filter(re=>re.test(cle)).length;
+                if(n>1) return _echec(n+' facteurs cités ('+cause+'/'+dr+') : « '+cle+' »');
+                // ET IL DIT QUOI FAIRE : « ta note est de 58 » n'aide
+                // personne, « enlève la dernière série » si.
+                if(!/série|repos|légère|coach/i.test(p))
+                  return _echec('le motif ne dit pas quoi faire ('+cause+'/'+dr+') : « '+p+' »');
+                // AUCUN CHIFFRE DE NOTE : il inviterait à optimiser la note.
+                if(/\b\d{2,3}\s*\/\s*100\b/.test(p)) return _echec('le motif affiche un score');
+              }
+            return true;})());
+
+          ok('L\'allègement appliqué est journalisé et visible du coach',(()=>{
+            const _sv=currentUser, _ss=window.saveUser, _sc=window.CLOUD, _st=window.toastSync;
+            try{
+              window.saveUser=()=>{}; window.toastSync=()=>{};
+              window.CLOUD=Object.assign({},_sc,{pushOne:()=>Promise.resolve()});
+              currentUser={email:'d@t.fr',sessions:[],sleepLog:[],
+                sessions_config:[{active:true,exercises:[
+                  {name:'developpe couche',series:4},{name:'curl',series:3}]}]};
+              if(!dispoAllegerSeance(0,{cause:'sommeil'})) return _echec('l’allègement n’a pas été posé');
+              const a=currentUser.allegementJour;
+              if(!a) return _echec('aucune intention enregistrée');
+              // LE DERNIER EXERCICE, pas le premier : retirer une série au
+              // travail principal amputerait la séance.
+              if(a.exercice!=='curl') return _echec('l’allègement porte sur '+a.exercice);
+              if(a.avant!==3||a.apres!==2) return _echec('séries '+a.avant+' → '+a.apres);
+              // LE PROGRAMME DU COACH N'EST PAS TOUCHÉ : une séance allégée un
+              // mardi ne doit pas alléger tous les mardis suivants.
+              if(currentUser.sessions_config[0].exercises[1].series!==3)
+                return _echec('le programme a été modifié');
+              // JOURNALISÉ, et lisible côté coach.
+              const j=currentUser.journalSeance||[];
+              if(!j.length) return _echec('rien dans le journal');
+              if(j[j.length-1].origine!=='dispo_allegement') return _echec('mauvaise origine');
+              if(j[j.length-1].cause!=='sommeil') return _echec('la cause n’est pas journalisée');
+              const h=_htmlJournalSeance(currentUser);
+              if(!h||h.indexOf('curl')<0) return _echec('le coach ne voit pas l’allègement');
+              if(h.indexOf('sommeil court')<0) return _echec('le coach ne voit pas la cause');
+              // ET IL SE CONSOMME UNE FOIS, sur la copie de travail.
+              const copie=[{name:'developpe couche',series:4},{name:'curl',series:3}];
+              if(!_dispoConsommerAllegement(copie,0)) return _echec('l’allègement ne se consomme pas');
+              if(copie[1].series!==2) return _echec('la copie n’est pas allégée : '+copie[1].series);
+              if(currentUser.allegementJour) return _echec('l’intention survit à sa consommation');
+              const copie2=[{name:'curl',series:3}];
+              return _dispoConsommerAllegement(copie2,0)?_echec('consommé deux fois'):true;
+            } finally { currentUser=_sv; window.saveUser=_ss; window.CLOUD=_sc; window.toastSync=_st; }})());
+
+          ok('Aucune surface d\'affichage hors de l\'aperçu, aucune notification',(()=>{
+            // AUCUN AFFICHAGE sur l'accueil, dans l'onglet évolution ou dans
+            // le rapport. AUCUNE notification poussée sur ce score — jamais.
+            const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+            const n=(s.match(/_htmlDispo\(/g)||[]).length;
+            // Deux : la déclaration et l'unique appel, dans _renderApercu.
+            if(n>2) return _echec(n+' appels de l’encart : il déborde de l’aperçu');
+            const i=s.indexOf('_htmlDispo(_apIdx)');
+            if(i<0) return _echec('l’encart n’est plus posé sur l’aperçu');
+            // ET LE CYCLE MENSTRUEL N'ENTRE PAS DANS LE CALCUL : l'arbitrage
+            // d'août 2026 l'a écarté sur des effets de 0,01 à 0,14.
+            for(const f of [disponibilite,_dispoSommeil,_dispoDouleur,_dispoEcartRir,_dispoCharge]){
+              const src=String(f).replace(/^\s*\/\/.*$/gm,'');
+              if(/phaseCycle|confCycle|luteal|folliculaire/i.test(src))
+                return _echec(f.name+' module par la phase du cycle');
+              // AUCUN VOCABULAIRE MÉDICAL : l'app ne mesure ni HRV ni stress
+              // physiologique, et leur emprunter le nom serait leur emprunter
+              // une autorité qu'elle n'a pas.
+              if(/HRV|variabilit|physiologique/i.test(src))
+                return _echec(f.name+' emprunte un vocabulaire médical');
+            }
+            return true;})());
+        })();
+
         // ══════ LA BOUCLE DE RETOUR PAR MUSCLE ══════
         (()=>{
           const S=n=>{ let c=semaineISO(new Date()); for(let i=0;i<n;i++) c=_semainePrecedente(c); return c; };

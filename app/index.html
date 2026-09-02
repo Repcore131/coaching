@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1109';
+window.RC_BUILD='1110';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -31360,7 +31360,11 @@ function _renderApercu(){
     <div class="st-lbl">${escapeHtml(lib)}</div></div>`;
   const notes=(sess.notes||'').trim();
   z.innerHTML=
-    `<div style="display:flex;gap:8px;margin:12px 0 14px">
+    // LA SEULE SURFACE D'AFFICHAGE DE LA DISPONIBILITE, et elle rend '' tant
+    // que le drapeau est vert — c'est-a-dire presque toujours. Le silence est
+    // l'etat normal : « le seul logiciel de coaching qui sait se taire ».
+    (()=>{ try{ return _htmlDispo(_apIdx); }catch(e){ return ''; } })()
+    +`<div style="display:flex;gap:8px;margin:12px 0 14px">
       ${chiffre(r?r.exercices:0,'exercices')}
       ${chiffre(r?r.series:0,'séries')}
       ${chiffre(r?('~'+r.minutes+' min'):'—','durée',true)}
@@ -31420,6 +31424,11 @@ function launchWorkout(sessConfig,slotIdx){
     ...ex,
     series:Math.max(1,ex.series||3)
   }));
+  // L'ALLEGEMENT DU JOUR SE CONSOMME ICI, sur la COPIE de travail. Toucher
+  // sessConfig alleg erait tous les mardis suivants : le programme du coach
+  // n'est pas la memoire d'une mauvaise nuit.
+  const _slotAl=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
+  try{ _dispoConsommerAllegement(exercises,_slotAl); }catch(e){}
   const _slot=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
   woState={exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
     progName:_nomSeance(sessConfig,_slot),sessionPhoto:sessConfig.photo||null,
@@ -39381,6 +39390,411 @@ function reperesEffectifs(user,muscle){
   r.source=bouge(o)?'coach':(bouge(a)?'perso':'table');
   return r;
 }
+// ══════════ LA DISPONIBILITE ═══════════════════════════════════════════
+//
+// « LE SEUL LOGICIEL DE COACHING QUI SAIT SE TAIRE ». Un score affiche tous
+// les jours viole ce positionnement : il transforme une app d'entrainement en
+// tableau de bord qu'on consulte, et il apprend a l'athlete a chercher une
+// permission avant de s'entrainer. Cette note EXISTE pour rester invisible :
+// au-dessus du seuil, elle ne dit rien, et c'est son etat normal.
+//
+// QUATRE ENTREES, ET RIEN D'AUTRE. Tout ce que l'application collecte deja,
+// chacun dans son ecran, et que personne ne lisait ensemble. Aucune mesure
+// nouvelle n'est demandee a l'athlete : la donnee est la, elle n'etait pas
+// croisee.
+//
+// AUCUNE MODULATION PAR LE CYCLE MENSTRUEL. L'arbitrage d'aout 2026 l'a
+// ecartee sur des effets de 0,01 a 0,14 (McNulty 2020, Colenso-Semple 2023) :
+// une note qui bougerait de deux points selon la phase donnerait a une
+// incertitude l'apparence d'une mesure. Ne pas la reintroduire par ce chemin.
+//
+// AUCUN VOCABULAIRE MEDICAL. « Disponibilite », pas « recuperation HRV », pas
+// « stress physiologique » : l'application ne mesure aucun de ces deux-la, et
+// leur emprunter le nom serait leur emprunter une autorite qu'elle n'a pas.
+const DISPO_POIDS=Object.freeze({sommeil:40,douleur:25,rir:20,charge:15});
+const DISPO_SEUIL_VERT=70;
+const DISPO_SEUIL_ORANGE=50;
+const DISPO_ENTREES_MIN=2;      // sous deux entrees : pas de donnee, pas d'avis
+const DISPO_SOMMEIL_JOURS=30;   // la mediane personnelle, pas une norme
+const DISPO_CHARGE_JOURS=28;
+
+// PURE. Une date ISO en objet Date, a minuit LOCAL. `new Date('2026-09-03')`
+// seul serait interprete en UTC : a Paris en ete, la date recule d'un jour et
+// toutes les fenetres glissantes sont decalees de 24 h.
+function _dateDeISO(iso){
+  const d=new Date(String(iso||'')+'T00:00:00');
+  return isNaN(d.getTime())?new Date():d;
+}
+// PURE. La mediane d'une liste, ou null. _mediane rend 0 sur une liste vide,
+// ce qui se lirait ici comme « mediane nulle » — un athlete parfaitement
+// repose plutot qu'un athlete inconnu.
+function _dispoMediane(l){
+  const t=(l||[]).filter(x=>typeof x==='number'&&isFinite(x));
+  return t.length?_mediane(t):null;
+}
+// PURE. Un rapport a la reference, ramene sur 0..100.
+//
+// CENT AU-DESSUS DE LA REFERENCE, ET LA PENTE NE PUNIT QUE LA BAISSE. Dormir
+// plus que d'habitude ne rend pas plus disponible que « disponible » : le
+// plafond est a 100, et le supplement de sommeil n'achete pas de credit.
+function _dispoRatio(valeur,reference,pentePourCent){
+  if(valeur==null||reference==null||!(reference>0)) return null;
+  const ecart=(valeur-reference)/reference;
+  if(ecart>=0) return 100;
+  return Math.max(0,Math.min(100,Math.round(100+ecart*100/(pentePourCent/100))));
+}
+// PURE. SOMMEIL — les deux dernieres nuits contre la mediane sur 30 jours.
+//
+// LA MEDIANE PERSONNELLE, JAMAIS UNE NORME. « Huit heures » est une moyenne de
+// population ; quelqu'un qui dort six heures depuis dix ans n'est pas en dette
+// de deux heures, il est a son point d'equilibre. On compare l'athlete a
+// lui-meme, ce qui est aussi la seule comparaison qu'on ait le droit de faire.
+//
+// DEUX NUITS, PAS UNE. Une nuit courte est un evenement ; deux d'affilee sont
+// un etat. Une seule nuit renseignee suffit pourtant a repondre : refuser de
+// se prononcer parce qu'il manque la seconde ferait taire l'entree la plus
+// lourde exactement les jours ou elle compte.
+function _dispoSommeil(user,dateISO){
+  const log=((user&&user.sleepLog)||[])
+    .filter(e=>e&&e.date&&Number(e.duration)>0);
+  if(!log.length) return null;
+  const fin=dateISO||localISODate(new Date());
+  const debut30=localISODate(_datePlusJours(_dateDeISO(fin),-DISPO_SOMMEIL_JOURS));
+  const ref=_dispoMediane(log.filter(e=>e.date>debut30&&e.date<=fin).map(e=>Number(e.duration)));
+  const j1=localISODate(_datePlusJours(_dateDeISO(fin),-1));
+  const j2=localISODate(_datePlusJours(_dateDeISO(fin),-2));
+  const deux=log.filter(e=>e.date===fin||e.date===j1||e.date===j2).map(e=>Number(e.duration));
+  if(!deux.length||ref==null) return null;
+  const moy=deux.reduce((a,b)=>a+b,0)/deux.length;
+  // 30 % SOUS SA MEDIANE = ZERO. Deux nuits a quatre heures pour quelqu'un qui
+  // en dort sept : la note doit s'effondrer, pas glisser.
+  return _dispoRatio(moy,ref,30);
+}
+// PURE. DOULEUR — le nombre de series douloureuses sur sept jours.
+//
+// TOUTE DOULEUR DECLAREE COMPTE, pas seulement celle qui depasse le seuil des
+// signaux coach. Ici on ne cherche pas a alerter quelqu'un, on cherche a
+// savoir si le corps a envoye des signes : un « 1 » repete est une
+// information, meme s'il ne merite pas de remonter au coach.
+const DISPO_DOULEUR_ZERO=8;     // huit series douloureuses en sept jours = 0
+function _dispoDouleur(user,dateISO){
+  const ss=((user&&user.sessions)||[]).filter(s=>s&&s.date&&s.data);
+  if(!ss.length) return null;
+  const fin=_dateDeISO(dateISO||localISODate(new Date())).getTime()+86400000;
+  const debut=fin-7*86400000;
+  let n=0, vues=0;
+  for(const sess of ss){
+    if(!(sess.date>=debut&&sess.date<fin)) continue;
+    vues++;
+    for(const nom of Object.keys(sess.data)){
+      const d=sess.data[nom];
+      for(const s of ((d&&d.sets)||[])){
+        const p=parseInt(s&&s.pain,10);
+        if(isFinite(p)&&p>0) n++;
+      }
+    }
+  }
+  // AUCUNE SEANCE DANS LA FENETRE : on ne sait pas, on ne dit pas « zero
+  // douleur ». Une semaine sans entrainement n'est pas une semaine sans mal.
+  if(!vues) return null;
+  return Math.max(0,Math.round(100-n*100/DISPO_DOULEUR_ZERO));
+}
+// PURE. ECART RIR — moyenne de (atteint - prescrit) sur sept jours.
+//
+// LE SIGNE COMPTE, ET IL EST CONTRE-INTUITIF. Un RIR ATTEINT plus BAS que
+// prescrit veut dire que l'athlete est alle plus pres de l'echec que demande :
+// il a puise davantage. C'est donc l'ecart NEGATIF qui degrade la
+// disponibilite, pas le positif.
+//
+// PASSE PAR rirCorrige : c'est une lecture de decision, et deux athletes qui
+// declarent « RIR 2 » ne sont pas au meme endroit — voir le calibrage.
+const DISPO_RIR_ZERO=2;         // deux repetitions sous la consigne = 0
+function _dispoEcartRir(user,dateISO){
+  const u=user;
+  if(!u||!Array.isArray(u.sessions)) return null;
+  const fin=_dateDeISO(dateISO||localISODate(new Date())).getTime()+86400000;
+  const debut=fin-7*86400000;
+  // La consigne du jour d'abord — rirPlanned fige ce qui etait prescrit au
+  // moment de la seance ; le gabarit d'aujourd'hui n'est qu'un repli.
+  const pres={};
+  try{
+    for(const s of (Array.isArray(u.sessions_config)?u.sessions_config:[])){
+      if(!s||s.active!==true||!Array.isArray(s.exercises)) continue;
+      for(const ex of s.exercises){
+        const r=_rirPrescrit(ex);
+        if(r==='') continue;
+        const k=exKey((ex&&ex.name)||'');
+        if(k&&pres[k]==null) pres[k]=Number(r);
+      }
+    }
+  }catch(e){}
+  let somme=0, n=0;
+  for(const sess of u.sessions){
+    if(!sess||!sess.data||!(sess.date>=debut&&sess.date<fin)) continue;
+    const fige=(sess.rirPlanned&&typeof sess.rirPlanned==='object')?sess.rirPlanned:null;
+    for(const nom of Object.keys(sess.data)){
+      const cons=(fige&&fige[nom]!=null)?Number(fige[nom]):pres[exKey(nom)];
+      if(cons==null||!isFinite(cons)) continue;
+      const d=sess.data[nom];
+      for(const s of ((d&&d.sets)||[])){
+        if(!s||s.done!==true||s.rir===''||s.rir==null) continue;
+        const brut=(s.rir==='echec')?0:(parseInt(s.rir,10)||0);
+        let v=brut; try{ v=rirCorrige(u,brut); }catch(e){ v=brut; }
+        somme+=(v-cons); n++;
+      }
+    }
+  }
+  if(!n) return null;
+  const ecart=somme/n;
+  if(ecart>=0) return 100;      // plus facile que demande : rien a signaler
+  return Math.max(0,Math.min(100,Math.round(100+ecart*100/DISPO_RIR_ZERO)));
+}
+// PURE. CHARGE — le tonnage de sept jours contre la mediane de vingt-huit.
+//
+// C'EST LA HAUSSE QUI DEGRADE, pas la baisse : une semaine legere ne rend
+// personne indisponible. On ne mesure ici qu'un saut de charge.
+const DISPO_CHARGE_ZERO=60;     // +60 % de tonnage sur la semaine = 0
+function _dispoCharge(user,dateISO){
+  if(!user||!Array.isArray(user.sessions)) return null;
+  const fin=_dateDeISO(dateISO||localISODate(new Date())).getTime()+86400000;
+  const par7=[];
+  for(let b=0;b<4;b++){
+    const f=fin-b*7*86400000, d=f-7*86400000;
+    let kg=0, vues=0;
+    for(const sess of user.sessions){
+      if(!sess||!sess.data||!(sess.date>=d&&sess.date<f)) continue;
+      vues++;
+      for(const nom of Object.keys(sess.data)){
+        const dd=sess.data[nom];
+        if(!dd||!Array.isArray(dd.sets)) continue;
+        const ex={name:nom,reps:String((dd.sets[0]&&dd.sets[0].reps)||''),
+          methode:dd.methode,technique:dd.technique};
+        for(const s of dd.sets) kg+=tonnageSerie(s,ex);
+      }
+    }
+    par7.push(vues?kg:null);
+  }
+  const courant=par7[0];
+  const ref=_dispoMediane(par7.slice(1));
+  if(courant==null||ref==null||!(ref>0)) return null;
+  const hausse=(courant-ref)/ref;
+  if(hausse<=0) return 100;
+  return Math.max(0,Math.min(100,Math.round(100-hausse*100/(DISPO_CHARGE_ZERO/100))));
+}
+// PURE. La disponibilite. AUCUN ACCES AU DOM, aucune ecriture : l'affichage
+// est ailleurs, et c'est ce qui la rend testable.
+//
+// UNE ENTREE ABSENTE EST RETIREE, SON POIDS REDISTRIBUE. On ne remplace jamais
+// une absence par une moyenne : inventer « 50 » pour un sommeil non renseigne,
+// c'est fabriquer une mesure et la faire peser 40 %.
+//
+// SOUS DEUX ENTREES : PAS DE DONNEE, PAS D'AVIS. Une note batie sur une seule
+// mesure porterait tout le poids d'une seule saisie, et un oubli de la veille
+// ferait annuler une seance.
+function disponibilite(user,dateISO){
+  const vide={note:null,drapeau:'vert',motif:null,donneesManquantes:[]};
+  const u=(user===undefined)?currentUser:user;
+  if(!u) return vide;
+  const d=dateISO||localISODate(new Date());
+  const sous={};
+  const manquantes=[];
+  const calc={sommeil:_dispoSommeil,douleur:_dispoDouleur,rir:_dispoEcartRir,charge:_dispoCharge};
+  for(const k of Object.keys(DISPO_POIDS)){
+    let v=null; try{ v=calc[k](u,d); }catch(e){ v=null; }
+    if(v==null||!isFinite(v)) manquantes.push(k); else sous[k]=v;
+  }
+  const dispo=Object.keys(sous);
+  if(dispo.length<DISPO_ENTREES_MIN)
+    return {note:null,drapeau:'vert',motif:null,donneesManquantes:manquantes};
+  let poidsTotal=0;
+  for(const k of dispo) poidsTotal+=DISPO_POIDS[k];
+  let note=0;
+  for(const k of dispo) note+=sous[k]*DISPO_POIDS[k]/poidsTotal;
+  note=Math.max(0,Math.min(100,Math.round(note)));
+  const drapeau=note>=DISPO_SEUIL_VERT?'vert':(note>=DISPO_SEUIL_ORANGE?'orange':'rouge');
+  // UNE SEULE CAUSE, JAMAIS DEUX. Une phrase qui liste trois facteurs n'est
+  // plus une consigne, c'est un tableau de bord — et on retombe dans ce que
+  // ce lot existe pour eviter. On nomme l'entree la plus degradee, et elle
+  // seule.
+  let motif=null;
+  if(drapeau!=='vert'){
+    let pire=null;
+    for(const k of dispo) if(pire===null||sous[k]<sous[pire]) pire=k;
+    motif=_dispoMotif(pire,drapeau,u,d);
+  }
+  return {note:note,drapeau:drapeau,motif:motif,donneesManquantes:manquantes,
+    // `sous` sort pour la suite de tests et la fiche coach. Il ne s'affiche
+    // JAMAIS a l'athlete : quatre sous-scores, c'est le tableau de bord.
+    sousScores:sous,cause:drapeau==='vert'?null:(function(){
+      let p=null; for(const k of dispo) if(p===null||sous[k]<sous[p]) p=k; return p;})()};
+}
+// PURE. La phrase. Elle nomme une cause et dit QUOI FAIRE : « ta note est de
+// 58 » n'aide personne, « enleve la derniere serie » si.
+function _dispoMotif(cause,drapeau,user,dateISO){
+  const rouge=(drapeau==='rouge');
+  if(cause==='sommeil')
+    return rouge
+      ? 'Deux nuits nettement plus courtes que d’habitude. Séance légère ou repos — dis-le à ton coach.'
+      : 'Deux nuits courtes. Garde la charge, enlève la dernière série.';
+  if(cause==='douleur'){
+    let n=0;
+    try{
+      const fin=_dateDeISO(dateISO).getTime()+86400000, deb=fin-7*86400000;
+      for(const s of ((user&&user.sessions)||[])){
+        if(!s||!s.data||!(s.date>=deb&&s.date<fin)) continue;
+        if(Object.keys(s.data).some(nom=>((s.data[nom]||{}).sets||[])
+          .some(x=>isFinite(parseInt(x&&x.pain,10))&&parseInt(x.pain,10)>0))) n++;
+      }
+    }catch(e){}
+    return rouge
+      ? (n?n+' séances avec douleur cette semaine. ':'')+'Séance légère ou repos — dis-le à ton coach.'
+      : 'Des douleurs déclarées cette semaine. Garde la charge, enlève la dernière série.';
+  }
+  if(cause==='rir')
+    return rouge
+      ? 'Tu es allé nettement plus près de l’échec que prévu cette semaine. Séance légère ou repos — dis-le à ton coach.'
+      : 'Tu pousses plus près de l’échec que prévu. Garde la charge, enlève la dernière série.';
+  return rouge
+    ? 'Ta charge a beaucoup augmenté cette semaine. Séance légère ou repos — dis-le à ton coach.'
+    : 'Charge en nette hausse cette semaine. Garde la charge, enlève la dernière série.';
+}
+// ══════════ L'EFFET REEL ═══════════════════════════════════════════════
+//
+// UNE SEULE SURFACE : l'apercu de seance, et seulement quand le drapeau n'est
+// pas vert. Pas d'accueil, pas d'onglet evolution, pas de rapport, et AUCUNE
+// notification poussee — jamais. Un score qu'on peut aller consulter devient
+// un score qu'on consulte, puis une permission qu'on attend.
+//
+// PROPOSER, JAMAIS IMPOSER. Le bouton allege ; il n'annule rien tout seul, et
+// l'athlete peut l'ignorer et commencer sa seance telle quelle. Une
+// application qui deciderait a sa place cesserait d'etre un outil.
+//
+// SANS EFFET, CE SERAIT DE LA DECORATION. Une note qui affiche « 58 » et ne
+// change rien apprend a etre ignoree en trois semaines.
+const DISPO_JOURNAL_MAX=12;
+// Le journal des seances, distinct de celui de la nutrition.
+//
+// ⚠ ECART ASSUME AVEC LA DEMANDE, QUI NOMMAIT _pauseJournaliser : celle-ci
+// ecrit dans user.nutrition.ajustHisto. Y ranger un allegement de SEANCE
+// melangerait deux histoires qui n'ont ni la meme duree de vie ni les memes
+// lecteurs — et le jour ou l'on exporte le journal nutrition, on exporterait
+// des decisions d'entrainement. Meme discipline, meme fenetre de douze, autre
+// tiroir.
+function _journalSeance(user,quoi,extra){
+  const u=_dossier(user);
+  if(!u) return false;
+  if(!Array.isArray(u.journalSeance)) u.journalSeance=[];
+  u.journalSeance.push(Object.assign({date:Date.now(),origine:quoi},extra||{}));
+  if(u.journalSeance.length>DISPO_JOURNAL_MAX)
+    u.journalSeance=u.journalSeance.slice(-DISPO_JOURNAL_MAX);
+  return true;
+}
+// PURE. Le dernier exercice allegeable d'une seance : le dernier qui ne soit
+// ni du cardio ni deja a une seule serie. Rend son index, ou -1.
+//
+// LE DERNIER, ET C'EST LE MOINS COUTEUX. Retirer une serie au premier
+// exercice ampute le travail principal ; la retirer a la fin retire ce que la
+// fatigue a deja degrade.
+function _dispoIndexAlleger(exercices){
+  const l=Array.isArray(exercices)?exercices:[];
+  for(let i=l.length-1;i>=0;i--){
+    const ex=l[i];
+    if(!ex||!ex.name) continue;
+    try{ if(isCardio(ex)) continue; }catch(e){}
+    if(Math.max(1,Number(ex.series)||3)<=1) continue;
+    return i;
+  }
+  return -1;
+}
+// LE GESTE ORANGE. Pose une intention datee, consommee au lancement — le
+// programme du coach n'est JAMAIS modifie : une seance allegee un mardi ne
+// doit pas alleger tous les mardis suivants.
+function dispoAllegerSeance(idx,d){
+  const u=currentUser;
+  if(!u) return false;
+  const cfg=(Array.isArray(u.sessions_config)?u.sessions_config:[]);
+  const sess=cfg[idx];
+  if(!sess) return false;
+  const i=_dispoIndexAlleger(sess.exercises);
+  if(i<0){ try{ toast('Rien à alléger sur cette séance.','var(--orange)'); }catch(e){} return false; }
+  const ex=sess.exercises[i];
+  const avant=Math.max(1,Number(ex.series)||3);
+  u.allegementJour={date:localISODate(new Date()),idx:idx,exercice:ex.name,
+    avant:avant,apres:avant-1,cause:(d&&d.cause)||null,note:(d&&d.note)||null};
+  // JOURNALISE AU GESTE, pas au lancement : le coach doit voir que l'athlete
+  // a demande un allegement meme s'il ne commence finalement pas la seance.
+  // C'est la meme information, et elle est plus utile tot.
+  _journalSeance(u,'dispo_allegement',{exercice:ex.name,avant:avant,apres:avant-1,
+    cause:(d&&d.cause)||null,note:(d&&d.note)||null});
+  try{ saveUser(); }catch(e){}
+  const _envoi=CLOUD.pushOne(u.email,u);
+  toastSync(true,_envoi,'Dernière série retirée sur '+ex.name+' ✓','l’allègement est');
+  try{ _renderApercu(); }catch(e){}
+  return true;
+}
+// CONSOMME AU LANCEMENT, ET UNE SEULE FOIS. L'intention porte sa date et son
+// creneau : ouvrir un autre jour, ou une autre seance, ne la depense pas.
+function _dispoConsommerAllegement(exercices,slotIdx){
+  const u=currentUser;
+  const a=u&&u.allegementJour;
+  if(!a||a.date!==localISODate(new Date())) return false;
+  if(typeof a.idx==='number'&&typeof slotIdx==='number'&&a.idx!==slotIdx) return false;
+  const i=_dispoIndexAlleger(exercices);
+  if(i<0) return false;
+  exercices[i].series=Math.max(1,(Number(exercices[i].series)||3)-1);
+  try{ delete u.allegementJour; saveUser(); }catch(e){}
+  return true;
+}
+// LE GESTE ROUGE. Reutilise le mecanisme de decharge plutot que d'en ecrire un
+// second : deux allegements qui ne se ressembleraient pas finiraient par ne
+// plus dire la meme chose de la meme semaine.
+async function dispoReporterSeance(d){
+  const u=currentUser;
+  if(!u) return false;
+  let ok=false;
+  try{ ok=await rcConfirm('Alléger la semaine ?',
+    'Tes séances de cette semaine passeront en décharge : moins de séries, plus de réserve. Ton coach le verra.',
+    'Alléger','Annuler'); }catch(e){ ok=false; }
+  if(!ok) return false;
+  let fait=false;
+  try{ fait=appliquerDecharge(u); }catch(e){ fait=false; }
+  if(!fait){ try{ toast('Aucune séance active à alléger.','var(--orange)'); }catch(e){} return false; }
+  _journalSeance(u,'dispo_decharge',{cause:(d&&d.cause)||null,note:(d&&d.note)||null});
+  try{ saveUser(); }catch(e){}
+  const _envoi=CLOUD.pushOne(u.email,u);
+  toastSync(true,_envoi,'Semaine allégée ✓','l’allègement est');
+  try{ _renderApercu(); }catch(e){}
+  return true;
+}
+// L'ENCART. Rend '' quand le drapeau est vert — c'est-a-dire presque toujours,
+// et c'est le but.
+function _htmlDispo(idx){
+  let d=null;
+  try{ d=disponibilite(currentUser,localISODate(new Date())); }catch(e){ return ''; }
+  // VERT, OU PAS DE DONNEE : RIEN. Pas un encart gris, pas un « tout va
+  // bien » — le silence EST le message.
+  if(!d||d.drapeau==='vert'||!d.motif) return '';
+  const rouge=(d.drapeau==='rouge');
+  const c=rouge?'var(--red)':'var(--orange)';
+  const dejaAllege=!!(currentUser&&currentUser.allegementJour
+    &&currentUser.allegementJour.date===localISODate(new Date()));
+  return '<div style="background:'+(rouge?'rgba(224,32,32,.07)':'rgba(245,158,11,.07)')
+    +';border:1px solid '+c+';border-radius:var(--r-3);padding:13px 15px;margin-bottom:14px">'
+    // AUCUN CHIFFRE. « 58/100 » invite a comparer, a suivre, a optimiser la
+    // note — et la note n'est pas l'objectif. On donne la consigne.
+    +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
+    +escapeHtml(d.motif)+'</div>'
+    +(dejaAllege
+      ? '<div style="font-size:var(--fs-xs);color:var(--success);margin-top:9px">✓ Dernière série retirée pour aujourd’hui.</div>'
+      : '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="'
+        +(rouge?'dispoReporterSeance':'dispoAllegerSeance')
+        +'('+(rouge?'':idx+',')+JSON.stringify({cause:d.cause,note:d.note}).replace(/"/g,'&quot;')+')">'
+        +(rouge?'Alléger la semaine':'Appliquer')+'</button>')
+    +(rouge
+      ? '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:7px" onclick="clientTab(\'canal\')">En parler à ton coach</button>'
+      : '')
+    +'</div>';
+}
 // ══════════ LA BOUCLE DE RETOUR PAR MUSCLE ═════════════════════════════
 //
 // LES REPERES DE LA TABLE SONT LES MEMES POUR TOUT LE MONDE, et le commentaire
@@ -39830,6 +40244,35 @@ function mentionSourceRepere(user,muscle){
   if(r.source==='perso') return 'ajusté sur tes retours';
   if(r.source==='coach') return 'fixé par ton coach';
   return '';
+}
+// LE JOURNAL, COTE COACH. Sans lui, l'allegement serait un secret entre
+// l'athlete et l'application : le coach verrait une serie de moins dans
+// l'historique sans savoir qu'elle a ete retiree, ni pourquoi. Un allegement
+// silencieux dont le coach ignore l'existence est pire que pas d'allegement.
+const DISPO_LIB_CAUSE=Object.freeze({sommeil:'sommeil court',douleur:'douleurs déclarées',
+  rir:'effort au-delà de la consigne',charge:'charge en hausse'});
+function _htmlJournalSeance(c){
+  const u=_dossier(c);
+  const l=Array.isArray(u&&u.journalSeance)?u.journalSeance.slice().reverse():[];
+  if(!l.length) return '';
+  const dat=t=>t?new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
+  const ligne=e=>{
+    const cause=DISPO_LIB_CAUSE[e&&e.cause]||'';
+    const quoi=(e&&e.origine==='dispo_decharge')
+      ? 'Semaine allégée'
+      : ('Dernière série retirée'+(e&&e.exercice?' — '+escapeHtml(e.exercice):''));
+    return '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">'
+      +'<span style="font-size:var(--fs-xs);color:var(--text);min-width:0">'+quoi+'</span>'
+      +'<span style="font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap;flex-shrink:0">'
+      +(cause?escapeHtml(cause)+' · ':'')+dat(e&&e.date)+'</span></div>';
+  };
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Allègements</span>'
+    +'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">décidés par l’athlète</span></div>'
+    +l.slice(0,6).map(ligne).join('')
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:7px;line-height:1.5">'
+    +'Proposés par l’application quand le sommeil, la douleur, l’effort ou la charge sortent de l’ordinaire. Jamais imposés.</div></div>';
 }
 // LA MAIN DU COACH, RENDUE. Le bouton n'existe QUE s'il y a quelque chose a
 // annuler : proposer « revenir aux reperes de reference » a un athlete dont
@@ -44702,6 +45145,7 @@ function renderVolumeCoach(c){
     ${res.nonRattachees?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
     ${_axPrio?'':_axial}
+    ${(()=>{ try{ return _htmlJournalSeance(c); }catch(e){ return ''; } })()}
     ${_htmlRirMoyen(c)}
     ${_htmlFinProgEx(c)}
     ${_htmlEcartRir(c)}
