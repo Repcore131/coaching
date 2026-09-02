@@ -16033,20 +16033,53 @@ async function testExercices(){
             if(_alias===undefined) delete b.dataset.alias; else b.dataset.alias=_alias;
           }})());
 
-        ok('Les deux refus « adresse prise » offrent la sortie, et eux seuls',(()=>{
+        ok('L\'inscription ne refuse plus sur le CACHE de l\'appareil',(()=>{
+          // C'ÉTAIT LA VRAIE SOURCE DES « adresses jamais utilisées ». `users`
+          // n'est pas le registre des comptes : c'est le cache local, et il porte
+          // le coach, TOUS ses athlètes, ceux qu'il a créés, ceux arrivés par
+          // import, et tout compte ayant un jour vécu sur l'appareil — la
+          // déconnexion n'en retire rien. Refuser là-dessus, c'était refuser une
+          // adresse parce qu'un TÉLÉPHONE en avait entendu parler.
+          const dr=String(doRegister);
+          if(/Email déjà utilisé/.test(dr))
+            return _echec('le refus sur le cache local est revenu');
+          // L'AUTORITÉ EST FIREBASE, et elle est consultée AVANT toute écriture.
+          const iAuth=dr.indexOf('await CLOUD.signIn(');
+          const iEcrit=dr.indexOf('users[em]=user;DB.set');
+          if(iAuth<0||iEcrit<0) return _echec('structure de doRegister inattendue');
+          if(!(iAuth<iEcrit)) return _echec('on écrit avant d\'avoir demandé à Firebase');
+          // ET UN DOSSIER DÉJÀ LÀ EST ADOPTÉ, jamais écrasé : distant d'abord,
+          // local à défaut. C'est la garantie que l'ancienne garde prétendait
+          // donner, sans jamais laisser entrer personne.
+          const iAdopt=dr.indexOf('const dossierExistant=cloudUser||users[em]');
+          if(iAdopt<0) return _echec('l\'adoption ne couvre plus le dossier local');
+          return iAdopt<iEcrit?true:_echec('l\'adoption vient APRÈS l\'écriture');})());
+
+        ok('La sortie « second compte » n\'est offerte que sur une adresse prise',(()=>{
           // STRUCTURELLE, comme ses voisines : doRegister cède la main sur
           // « await CLOUD.signIn » et un appel depuis une sonde synchrone se
           // terminerait avant la branche. Le comportement, lui, a été vérifié en
-          // navigateur sur les deux refus.
+          // navigateur.
           const dr=String(doRegister);
           if(dr.indexOf('_masquerSecondCompte()')<0)
             return _echec('la proposition n\'est pas remise à zéro à chaque tentative');
           const n=dr.split('_proposerSecondCompte(em)').length-1;
-          if(n!==2) return _echec(n+' branche(s) offrent la sortie au lieu de 2');
-          // LA BRANCHE FIREBASE NE L'OFFRE QUE SUR « adresse prise » : un hors
-          // ligne ou une adresse mal formée n'ont pas de second compte à proposer.
+          if(n!==1) return _echec(n+' branche(s) offrent la sortie au lieu d\'une seule');
+          // UN HORS LIGNE OU UNE ADRESSE MAL FORMÉE n'ont pas de second compte à
+          // proposer : seul « mot de passe faux sur adresse prise » l'offre.
           const i=dr.indexOf('CLOUD._signInErr===\'wrong_password\') _proposerSecondCompte(em)');
-          return i>=0?true:_echec('la branche Firebase l\'offre sur n\'importe quel refus');})());
+          if(i<0) return _echec('la branche Firebase l\'offre sur n\'importe quel refus');
+          // ET LE COACH QUI S'AJOUTE COMME ATHLÈTE l'a aussi, depuis son propre
+          // formulaire : c'est là qu'il se heurte à sa propre adresse.
+          const ca=String(createAthlete);
+          if(ca.indexOf('_aliasSecondCompte(em,\'athlete\',users)')<0)
+            return _echec('l\'ajout d\'athlète n\'offre aucune sortie');
+          // ET IL NOMME CE QU'IL A TROUVÉ : trois situations sortaient sous la
+          // même phrase, et aucune ne disait quoi faire.
+          if(ca.indexOf('ton adresse de coach')<0)
+            return _echec('sa propre adresse n\'est plus reconnue comme telle');
+          return /est déjà dans tes athlètes/.test(ca)
+            ?true:_echec('un athlète déjà présent n\'est plus nommé');})());
         ok('Un compte créé entre au registre de l\'appareil, même sans code coach',(()=>{
           // LE SÉLECTEUR EST CE QUI REND LE SECOND COMPTE UTILISABLE : sans lui, on
           // vient de créer kevin+athlete@gmail.com et rien ne permet d'y revenir

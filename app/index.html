@@ -5047,6 +5047,16 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="r-2e-txt" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6"></div>
       <button type="button" id="r-2e-btn" onclick="_appliquerSecondCompte()" class="btn btn-outline btn-sm"
         style="width:100%;margin-top:10px;letter-spacing:1px;font-size:var(--fs-xs);display:none">Utiliser cette adresse</button>
+      <!-- L'AUTRE ISSUE, quand un compte existe déjà sous cette adresse mais
+           dans l'AUTRE rôle : rejoindre ce compte-là. Elle est en second rang,
+           en lien plutôt qu'en bouton — quelqu'un qui vient de demander un
+           compte athlète voulait un compte athlète, pas retomber sur son
+           compte coach sans l'avoir choisi. C'est précisément ce que faisait
+           l'adoption silencieuse. -->
+      <a href="#" id="r-2e-rejoindre" onclick="_rejoindreCompteExistant();return false;"
+        style="display:none;margin-top:10px;text-align:center;font-size:var(--fs-xs);
+        color:rgba(255,255,255,.5);text-decoration:underline;text-underline-offset:3px;
+        font-family:Montserrat,sans-serif;cursor:pointer"></a>
     </div>
     <button class="btn btn-red" onclick="doRegister()">Créer mon compte</button>
     <div style="height:30px"></div>
@@ -13620,13 +13630,36 @@ function _aliasSecondCompte(email,role,pris){
 function _masquerSecondCompte(){
   const z=document.getElementById('r-2e-compte');
   if(z) z.style.display='none';
+  const j=document.getElementById('r-2e-rejoindre');
+  if(j) j.style.display='none';
+}
+// L'ADRESSE POUR LAQUELLE ON A DÉJÀ DIT OUI. Elle ne vaut que pour l'appel
+// suivant et pour ELLE : changer d'adresse repose la question.
+let _rcRejoindre=null;
+function _rejoindreCompteExistant(){
+  const inp=document.getElementById('r-email');
+  _rcRejoindre=((inp&&inp.value)||'').trim().toLowerCase()||null;
+  _masquerSecondCompte();
+  // ON REJOUE L'INSCRIPTION ENTIÈRE plutôt que d'extraire la branche
+  // d'adoption : elle route, applique un code en attente et mène à l'écran
+  // d'arrivée. Un second chemin vers tout ça finirait par diverger du premier.
+  return doRegister();
 }
 // Rend l'adresse proposée, ou null si le bloc n'a qu'un constat à donner.
-function _proposerSecondCompte(email){
+// `rejoindre` porte le rôle du compte déjà en place quand il diffère de celui
+// demandé : il fait apparaître la seconde issue.
+function _proposerSecondCompte(email,rejoindre){
   const z=document.getElementById('r-2e-compte');
   const t=document.getElementById('r-2e-txt');
   const b=document.getElementById('r-2e-btn');
+  const j=document.getElementById('r-2e-rejoindre');
   if(!z||!t||!b) return null;
+  if(j){
+    if(rejoindre){
+      j.textContent='Ou me connecter à mon compte '+rejoindre;
+      j.style.display='block';
+    } else j.style.display='none';
+  }
   const alias=_aliasSecondCompte(email,selRole,DB.get('users')||{});
   // CE QU'ON SAIT, ET RIEN DE PLUS : le rôle de l'autre compte n'est connu que
   // dans la branche locale. On nomme donc le rôle DE CELUI-CI, qui est certain.
@@ -13763,14 +13796,37 @@ async function doRegister(){
     if(selRole==='coach'&&!_coachInviteCode()&&!(await placeLibreDisponible()))
       return showErr('r-err',LIBRE_ATTENTE_TEXTE);
     const users=DB.get('users')||{};
-    if(users[em]){
-      showErr('r-err','Email déjà utilisé.','r-email');
-      // LA SORTIE EST OFFERTE ICI AUSSI, et pas seulement sur le refus venu de
-      // Firebase : c'est ce refus-ci que voit un coach qui tente son propre
-      // compte athlète depuis l'appareil où son compte coach vit déjà.
-      _proposerSecondCompte(em);
-      return;
-    }
+    // ══ LE REFUS SEC SUR `users[em]` PORTAIT SUR UN CACHE, PAS SUR UN FAIT ══
+    //
+    // ⚠ LE MESSAGE N'EST PAS RECOPIÉ ICI, ET C'EST VOULU : une sonde vérifie
+    // qu'il a disparu de cette fonction, et elle le retrouverait dans ce
+    // commentaire même. C'est la cinquième fois que le dépôt apprend qu'une
+    // sonde peut matcher son propre sujet.
+    //
+    // Il y avait ici un refus sec sur `users[em]`, rendu tel quel à l'écran,
+    // et c'est de LUI que venaient les refus sur des adresses « jamais
+    // utilisées ». `users` n'est pas le registre des comptes : c'est le cache
+    // local de cet appareil, et il porte bien plus que le compte de celui qui
+    // s'inscrit —
+    //   • le dossier du coach, et TOUS ceux de ses athlètes (syncRelevantUsers
+    //     les descend à chaque réveil) ;
+    //   • les athlètes qu'il a créés lui-même (createAthlete les écrit ici) ;
+    //   • les dossiers arrivés par un paquet d'import ;
+    //   • tout compte ayant un jour vécu sur l'appareil — la déconnexion ne
+    //     retire RIEN de ce cache, c'est ce qui fait marcher le multi-compte
+    //     et le hors-ligne.
+    // Une adresse jamais inscrite nulle part se voyait donc refuser parce
+    // qu'un TÉLÉPHONE en avait entendu parler. Et le refus était un
+    // cul-de-sac : même avec le bon mot de passe, on ne pouvait pas entrer.
+    //
+    // L'AUTORITÉ, C'EST FIREBASE, PAS LE TÉLÉPHONE. On laisse donc la suite
+    // trancher : CLOUD.signIn plus bas dit sans ambiguïté si l'adresse est
+    // prise (mot de passe faux → « un compte existe déjà », avec la
+    // proposition de second compte), et si elle ne l'est pas, le compte se
+    // crée. Un dossier déjà présent — ici ou dans la base — est ADOPTÉ
+    // quelques lignes plus bas au lieu d'être écrasé : c'est la garantie que
+    // cette garde était censée donner, et la branche d'adoption la donne
+    // vraiment.
     const uid='u_'+Date.now();
     const user={id:uid,fname:fn,lname:ln,email:em,
       role:selRole,gender:gn,
@@ -13821,11 +13877,41 @@ async function doRegister(){
     // le push suivant répliquait dans la RTDB, effaçant séances et bilans.
     // On adopte le profil distant au lieu de le remplacer.
     const cloudUser=await CLOUD.pullUser(em);
-    if(cloudUser){
+    // ET LE DOSSIER PUREMENT LOCAL, À DÉFAUT. C'est le cas de celui qui s'est
+    // déjà inscrit sur CE téléphone et recommence : la base n'a rien à rendre
+    // (un athlète FREE n'a encore rien poussé), mais l'appareil, si. C'est
+    // exactement la situation que l'ancienne garde attrapait — sauf qu'elle la
+    // renvoyait dans le mur au lieu d'ouvrir la session. Le mot de passe vient
+    // d'être validé par Firebase deux lignes plus haut : il n'y a plus rien à
+    // vérifier.
+    const dossierExistant=cloudUser||users[em]||null;
+    if(dossierExistant){
+      // ══ LES RÔLES DIVERGENT : ON NE DÉCIDE PAS À SA PLACE ════════════════
+      //
+      // Quelqu'un demande un compte ATHLÈTE sur une adresse qui porte déjà un
+      // compte COACH — c'est le cas du coach qui veut s'entraîner lui-même, et
+      // c'est la demande d'origine. L'adoption silencieuse le connectait sur
+      // son compte coach et l'y laissait, sans un mot : il avait demandé une
+      // chose et en obtenait une autre.
+      //
+      // On pose donc la question, avec ses deux réponses : l'adresse
+      // sous-adressée pour un VRAI second compte, ou rejoindre celui qui
+      // existe. Les rôles identiques, eux, ne posent aucune question — c'est
+      // la réinstallation, et elle doit rester muette.
+      const _roleLa=dossierExistant.role==='coach'?'coach':'athlète';
+      if(dossierExistant.role!==selRole&&_rcRejoindre!==em){
+        showErr('r-err','Cette adresse porte déjà un compte '+_roleLa+'.','r-email');
+        _proposerSecondCompte(em,_roleLa);
+        return;
+      }
+      // CONSOMMÉE : le oui vaut pour cette fois, pas pour la suivante.
+      _rcRejoindre=null;
       showErr('r-err','Ce compte existe déjà, connexion en cours…');
-      toast('Ce compte existe déjà : tes données ont été récupérées.','var(--green)');
-      users[em]=cloudUser;DB.set('users',users);
-      currentUser=cloudUser;DB.set('session',cloudUser);
+      toast(cloudUser
+        ?'Ce compte existe déjà : tes données ont été récupérées.'
+        :'Ce compte est déjà sur cet appareil : te voilà connecté.','var(--green)');
+      users[em]=dossierExistant;DB.set('users',users);
+      currentUser=dossierExistant;DB.set('session',dossierExistant);
       // ── LE COMPTE ENTRE AU REGISTRE DE L'APPAREIL DÈS QU'IL EXISTE ──────
       //
       // routeUser() le faisait, et le fait toujours — mais un athlète au statut
@@ -13845,7 +13931,7 @@ async function doRegister(){
       try{ comptesEnregistrer(currentUser); }catch(e){}
       // routeUser() déconnecterait un athlète encore en statut FREE ; on le mène
       // à l'écran de code, comme le fait doLogin dans la même situation.
-      if(cloudUser.role!=='coach'&&(cloudUser.status||'FREE')==='FREE'){
+      if(dossierExistant.role!=='coach'&&(dossierExistant.status||'FREE')==='FREE'){
         if(_retourApresInscription()) return;
         // Même règle que pour une inscription neuve : un code déjà vérifié
         // s'applique tout seul. Ce chemin est celui du réinstallateur, qui n'a
@@ -13868,7 +13954,7 @@ async function doRegister(){
 
     // Consommation de l'invitation : ICI et pas plus haut, pour ne pas brûler un
     // code au profit de quelqu'un qui ne fait que récupérer un compte existant
-    // (branche cloudUser ci-dessus, qui sort avant d'arriver là).
+    // (branche dossierExistant ci-dessus, qui sort avant d'arriver là).
     // Sans code saisi, il n'y a rien à consommer et rien à refuser : le compte
     // se crée au palier Libre. Avec un code, le comportement est EXACTEMENT
     // celui d'avant ce lot — verification serveur, PATCH redeemed, refus parlant.
@@ -64653,7 +64739,65 @@ async function createAthlete(){
   if(!fn||!ln||!em||!pw){_err('Tous les champs sont obligatoires.');return;}
   if(pw.length<6){_err('Le mot de passe doit faire au moins 6 caractères.');return;}
   const users=DB.get('users')||{};
-  if(users[em]){_err('Email déjà utilisé.');return;}
+  // ══ ICI LA GARDE RESTE, MAIS ELLE DOIT DIRE CE QU'ELLE A TROUVÉ ════════
+  //
+  // ⚠ L'ANCRE D'ÉCRITURE N'EST PAS RECOPIÉE ICI : une sonde voisine repère la
+  // ligne qui pose la fiche pour vérifier qu'elle vient APRÈS la création du
+  // compte Auth, et elle retrouvait l'ancre dans ce commentaire même.
+  //
+  // Contrairement à l'inscription, ce chemin-ci pose la fiche de l'athlète
+  // sous cette adresse sans rien adopter : le lever écraserait le dossier qui
+  // porte déjà l'adresse — au pire celui du coach lui-même. La garde tient
+  // donc.
+  //
+  // Ce qui ne tenait pas, c'est « Email déjà utilisé. » : trois situations
+  // très différentes sortaient sous la même phrase, et aucune ne disait quoi
+  // faire. Le coach qui essaie SA PROPRE adresse pour s'ajouter comme
+  // athlète — le cas le plus courant — lisait un refus qui ressemblait à un
+  // bug, puisque cette adresse est « la sienne », pas une adresse « déjà
+  // utilisée » par quelqu'un d'autre.
+  if(users[em]){
+    const _d=users[em]||{};
+    const _nom=((_d.fname||'')+' '+(_d.lname||'')).trim();
+    let _msg;
+    // DÉJÀ SON ATHLÈTE : rien à proposer. Le coach vient de le retrouver, pas
+    // de buter sur une adresse — lui offrir une adresse de rechange ferait
+    // passer un rappel pour un obstacle.
+    let _sansSortie=false;
+    if(currentUser&&em===String(currentUser.email||'').toLowerCase())
+      _msg='C\'est ton adresse de coach : elle porte déjà ton compte.';
+    else if(_estMonAthlete(_d,currentUser)){
+      _msg=(_nom||em)+' est déjà dans tes athlètes : sa fiche est sur ton tableau de bord.';
+      _sansSortie=true;
+    } else
+      _msg='Cette adresse porte déjà un dossier sur cet appareil'+(_nom?' ('+_nom+')':'')+'.';
+    // LA SORTIE, quand le fournisseur la permet : le sous-adressage donne au
+    // coach son compte athlète sans seconde boîte mail. Hors liste blanche,
+    // on ne promet rien — voir _aliasSecondCompte.
+    const _alias=_sansSortie?null:_aliasSecondCompte(em,'athlete',users);
+    const _e=document.getElementById('aa-err');
+    if(_alias&&_e){
+      _e.innerHTML=escapeHtml(_msg)
+        +' Pour un compte athlète EN PLUS sur la même boîte mail, utilise '
+        +'<b style="color:var(--text);word-break:break-all">'+escapeHtml(_alias)+'</b>.'
+        +'<button type="button" id="aa-alias-btn" class="btn btn-outline btn-sm"'
+        +' style="width:100%;margin-top:9px;letter-spacing:1px;font-size:var(--fs-xs)">'
+        +'Utiliser cette adresse</button>';
+      _e.style.display='block';
+      // Le gestionnaire est POSÉ EN JS, jamais écrit dans l'attribut : une
+      // adresse peut contenir une apostrophe, et elle casserait le onclick.
+      const _bt=document.getElementById('aa-alias-btn');
+      if(_bt) _bt.onclick=()=>{
+        const _i=document.getElementById('aa-email');
+        if(_i){ _i.value=_alias; try{ _i.focus(); }catch(e){} }
+        _e.style.display='none';
+      };
+    } else {
+      _err(_sansSortie?_msg
+        :_msg+' Pour un compte athlète en plus, il te faut une autre adresse email.');
+    }
+    return;
+  }
 
   // Le compte Firebase Auth est créé AVANT d'écrire l'athlète : sans lui, la
   // fiche existait dans la base mais le mot de passe annoncé au coach n'ouvrait
