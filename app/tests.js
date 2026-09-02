@@ -15862,6 +15862,97 @@ async function testExercices(){
           const si=String(CLOUD.signIn);
           return /_signInErr='wrong_password'/.test(si)&&/_signInErr='network'/.test(si)
             ?true:_echec('signIn ne pose plus ces motifs');})());
+        // ══ LA PROTECTION CONTRE L'ÉNUMÉRATION A RENDU LE CODE MENTEUR ═══════
+        //
+        // Le projet Firebase a « email enumeration protection » activée. Sous ce
+        // réglage, accounts:signInWithPassword répond INVALID_LOGIN_CREDENTIALS
+        // pour une adresse PARFAITEMENT INCONNUE, exactement comme pour un mot de
+        // passe faux — c'est tout l'objet de la protection : ne plus laisser
+        // deviner qui a un compte. Mesuré le 02/09/2026 sur repcore-sync, avec
+        // une adresse jamais vue : INVALID_LOGIN_CREDENTIALS, et non
+        // EMAIL_NOT_FOUND.
+        //
+        // signIn concluait « mauvais mot de passe » et sortait AVANT son repli
+        // signUp. Résultat : doRegister affichait « Un compte existe déjà avec cet
+        // email » sur des adresses que personne n'avait jamais utilisées, et PLUS
+        // AUCUNE INSCRIPTION ne pouvait aboutir.
+        //
+        // CETTE SONDE JOUE LA LOGIQUE, elle ne lit pas la source. Une sonde de
+        // texte n'aurait rien vu : le code fautif était parfaitement lisible et
+        // parfaitement raisonnable — c'est le SERVEUR qui a changé de réponse.
+        okA('Une adresse inconnue n\'est plus annoncée « déjà prise »',(async()=>{
+          const _fetch=window.fetch;
+          const _tok=CLOUD._idToken,_ref=CLOUD._refreshToken,_exp=CLOUD._tokenExpiry;
+          const _save=CLOUD._saveAuth,_push=CLOUD._doPush,_vider=CLOUD.viderFile;
+          const appels=[];
+          const bouchon=r=>{ window.fetch=async(url)=>{
+            const ep=String(url).indexOf('accounts:signUp')>=0?'signUp':'signIn';
+            appels.push(ep);
+            return {ok:true,json:async()=>r[ep]};
+          }; };
+          // Les effets de bord de signIn sont neutralisés : un succès simulé ne
+          // doit ni écraser le jeton réel, ni pousser quoi que ce soit.
+          CLOUD._saveAuth=()=>{}; CLOUD._doPush=()=>{}; CLOUD.viderFile=async()=>{};
+          try{
+            // 1. ADRESSE LIBRE — le cas qui était cassé.
+            appels.length=0;
+            bouchon({signIn:{error:{message:'INVALID_LOGIN_CREDENTIALS'}},
+                     signUp:{idToken:'T',refreshToken:'R',expiresIn:'3600'}});
+            if(await CLOUD.signIn('libre@exemple.fr','MotDePasse1')!==true)
+              return _echec('une adresse libre est refusée');
+            if(appels.indexOf('signUp')<0)
+              return _echec('le repli signUp n\'est jamais atteint : c\'est le bug d\'origine');
+            if(CLOUD._signInErr)
+              return _echec('un motif de refus est posé sur un succès : '+CLOUD._signInErr);
+            // 2. ADRESSE PRISE, MOT DE PASSE FAUX — signUp le dit sans ambiguïté.
+            bouchon({signIn:{error:{message:'INVALID_LOGIN_CREDENTIALS'}},
+                     signUp:{error:{message:'EMAIL_EXISTS'}}});
+            if(await CLOUD.signIn('pris@exemple.fr','MauvaisMdp')!==false)
+              return _echec('un mot de passe faux ouvre la session');
+            if(CLOUD._signInErr!=='wrong_password')
+              return _echec('motif « '+CLOUD._signInErr+' » au lieu de wrong_password');
+            // 3. MOT DE PASSE TROP COURT SUR UNE ADRESSE LIBRE : nommé, pas noyé
+            //    dans le « Réessaie » générique.
+            bouchon({signIn:{error:{message:'INVALID_LOGIN_CREDENTIALS'}},
+                     signUp:{error:{message:'WEAK_PASSWORD : Password should be at least 6 characters'}}});
+            if(await CLOUD.signIn('libre2@exemple.fr','abc')!==false)
+              return _echec('un mot de passe trop court passe');
+            if(CLOUD._signInErr!=='weak_password')
+              return _echec('motif « '+CLOUD._signInErr+' » au lieu de weak_password');
+            // 4. ADRESSE MAL FORMÉE : aucun aller-retour de plus.
+            appels.length=0;
+            bouchon({signIn:{error:{message:'INVALID_EMAIL'}},
+                     signUp:{error:{message:'INVALID_EMAIL'}}});
+            if(await CLOUD.signIn('pas-une-adresse','MotDePasse1')!==false)
+              return _echec('une adresse invalide passe');
+            if(CLOUD._signInErr!=='invalid_email')
+              return _echec('motif « '+CLOUD._signInErr+' » au lieu de invalid_email');
+            if(appels.indexOf('signUp')>=0)
+              return _echec('signUp est appelé pour rien sur une adresse mal formée');
+            return true;
+          } finally {
+            window.fetch=_fetch;
+            CLOUD._idToken=_tok;CLOUD._refreshToken=_ref;CLOUD._tokenExpiry=_exp;
+            CLOUD._signInErr=null;
+            // Les deux rappels différés de signIn — push à 300 ms, file à 1 200 ms —
+            // tirent APRÈS cette sonde. On ne rend les vraies fonctions qu'une fois
+            // qu'ils ont tiré à vide, sinon ils partiraient sur un jeton fictif.
+            setTimeout(()=>{ CLOUD._saveAuth=_save;CLOUD._doPush=_push;CLOUD.viderFile=_vider; },2000);
+          }}));
+        ok('« Mot de passe oublié » ne promet plus un envoi qu\'il ne constate pas',(()=>{
+          // sendOobCode répond « succès » même sur une adresse inconnue quand la
+          // protection contre l'énumération est active (mesuré le 02/09/2026) :
+          // annoncer « Email envoyé » sans réserve, c'est envoyer quelqu'un
+          // fouiller ses spams pour un courrier qui ne partira jamais.
+          const fp=String(forgotPassword);
+          if(/✅ Email envoyé à/.test(fp))
+            return _echec('l\'envoi est encore annoncé comme certain');
+          if(!/Si un compte existe/.test(fp))
+            return _echec('la réserve n\'est pas dite');
+          // ET ON DIT QUOI FAIRE si rien n'arrive : sans ça, la réserve laisse
+          // l'utilisateur sans geste suivant.
+          return /Créer un compte/.test(fp)
+            ?true:_echec('rien n\'est proposé à qui ne reçoit rien');})());
         ok('Un e-mail déjà inscrit N\'ÉCRASE JAMAIS le dossier existant',(()=>{
           const dr=String(doRegister);
           const iCloud=dr.indexOf('const cloudUser=await CLOUD.pullUser(em)');

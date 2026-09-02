@@ -9526,22 +9526,50 @@ const CLOUD={
     let d=await call('signInWithPassword');
     if(!d.idToken){
       const errCode=d.error?.message||'';
-      // Mauvais mot de passe : ne pas tenter signUp (ne pas créer un nouveau compte)
-      if(errCode.includes('INVALID_PASSWORD')||errCode.includes('INVALID_LOGIN_CREDENTIALS')){
-        this._signInErr='wrong_password';return false;
-      }
-      // ADRESSE MAL FORMÉE : on ne tente pas signUp non plus, il échouerait
-      // exactement pareil. Un aller-retour réseau épargné, et surtout un cas
-      // nommé — sans lui l'appelant retombait sur son message générique.
+      // ADRESSE MAL FORMÉE : on ne tente pas signUp, il échouerait exactement
+      // pareil. Un aller-retour réseau épargné, et surtout un cas nommé — sans
+      // lui l'appelant retombait sur son message générique.
       if(errCode.includes('INVALID_EMAIL')){
         this._signInErr='invalid_email';return false;
       }
-      // Compte inconnu dans Firebase Auth → créer
+      // ══ INVALID_LOGIN_CREDENTIALS NE DIT PLUS RIEN, ET C'ÉTAIT LE BUG ══════
+      //
+      // Ce code s'arrêtait ici sur INVALID_PASSWORD *ou*
+      // INVALID_LOGIN_CREDENTIALS, en concluant « mauvais mot de passe » — la
+      // lecture était juste au moment où elle a été écrite. Elle ne l'est plus :
+      // le projet a la PROTECTION CONTRE L'ÉNUMÉRATION DES ADRESSES activée, et
+      // Firebase répond alors INVALID_LOGIN_CREDENTIALS AUSSI pour une adresse
+      // parfaitement inconnue. C'est tout l'objet de cette protection : ne plus
+      // laisser deviner qui a un compte.
+      //
+      // Mesuré le 02/09/2026 sur ce projet, avec une adresse jamais vue :
+      //   signInWithPassword -> INVALID_LOGIN_CREDENTIALS  (et non EMAIL_NOT_FOUND)
+      //   createAuthUri      -> plus aucun champ `registered`
+      //   sendOobCode        -> succes, meme sur une adresse inexistante
+      // Le repli signUp n'était donc PLUS JAMAIS atteint : toute inscription
+      // sortait sur « Un compte existe déjà avec cet email », pour des adresses
+      // que personne n'avait jamais utilisées. Plus une seule inscription ne
+      // pouvait aboutir.
+      //
+      // ON NE DEVINE PLUS, ON DEMANDE. signUp est le seul point de l'API qui
+      // discrimine encore, et sa réponse est sans ambiguïté :
+      //   • EMAIL_EXISTS -> l'adresse est bien prise, le mot de passe est faux ;
+      //   • un jeton     -> l'adresse était libre, le compte vient d'être créé.
+      // Il ne peut RIEN détourner : sur un compte existant il refuse, quel que
+      // soit le mot de passe présenté. Le tour de réseau supplémentaire ne
+      // coute que dans le cas d'echec.
       if(!this._signInErr) d=await call('signUp');
-      // signUp peut le dire à son tour : l'adresse n'a pas été jugée par le
-      // premier appel si celui-ci a échoué pour une autre raison.
-      if(!d.idToken&&!this._signInErr&&String(d.error?.message||'').includes('INVALID_EMAIL'))
-        this._signInErr='invalid_email';
+      if(!d.idToken&&!this._signInErr){
+        const e2=String(d.error?.message||'');
+        // L'ADRESSE EXISTE : c'est signUp qui vient de le prouver, pas une
+        // supposition tirée d'un code d'erreur devenu muet.
+        if(e2.includes('EMAIL_EXISTS'))       this._signInErr='wrong_password';
+        else if(e2.includes('INVALID_EMAIL')) this._signInErr='invalid_email';
+        // MOT DE PASSE TROP COURT SUR UNE ADRESSE LIBRE. Sans ce cas nommé, la
+        // création échouait sous le message générique « Réessaie » — et
+        // réessayer ne pouvait pas marcher.
+        else if(e2.includes('WEAK_PASSWORD'))  this._signInErr='weak_password';
+      }
     }
     if(d.idToken){
       this._idToken=d.idToken;this._refreshToken=d.refreshToken;
@@ -13654,7 +13682,9 @@ async function doRegister(){
             ? 'Pas de connexion : impossible de créer le compte maintenant.'
             : CLOUD._signInErr==='invalid_email'
               ? 'Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.'
-              : 'Inscription impossible. Réessaie.');
+              : CLOUD._signInErr==='weak_password'
+                ? 'Mot de passe trop court : 6 caractères minimum.'
+                : 'Inscription impossible. Réessaie.');
     }
     // Le compte peut exister CÔTÉ SERVEUR sans exister sur cet appareil :
     // réinstallation, nouveau téléphone, cache vidé. signIn réussit alors avec le
@@ -13773,6 +13803,8 @@ async function doLogin(){
           return showErr('l-err','Mot de passe incorrect. Utilisez "Mot de passe oublié ?" pour le réinitialiser par email.','l-pwd');
         if(CLOUD._signInErr==='invalid_email')
           return showErr('l-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.','l-email');
+        if(CLOUD._signInErr==='weak_password')
+          return showErr('l-err','Mot de passe trop court : 6 caractères minimum.','l-pwd');
         return showErr('l-err','Impossible de se connecter. Essayez "Mot de passe oublié ?" ou vérifiez votre connexion.');
       }
       toast('Récupération du compte…');
@@ -13857,11 +13889,18 @@ async function forgotPassword(){
   const ok=await CLOUD.resetPassword(em);
   if(btn){btn.textContent='Mot de passe oublié ?';btn.style.pointerEvents='';}
   if(ok){
-    showErr('l-err','✅ Email envoyé à '+em+'. Vérifie aussi les spams / courriers indésirables.');
+    // ON NE PROMET PLUS UN ENVOI QU'ON NE PEUT PLUS CONSTATER. La protection
+    // contre l'énumération des adresses fait répondre « succès » à sendOobCode
+    // même pour une adresse inconnue (mesuré le 02/09/2026) : dire « email
+    // envoyé » sans réserve, c'est envoyer quelqu'un guetter un courrier qui
+    // ne partira jamais, et fouiller ses spams pour rien.
+    showErr('l-err','Si un compte existe à '+em+', l\'email vient de partir. Regarde aussi dans les spams. Rien reçu d\'ici quelques minutes ? C\'est que cette adresse n\'a pas de compte : passe par « Créer un compte ».');
     document.getElementById('l-err').style.color='#86efac';
     return;
   }
   const err=CLOUD._resetErr||'';
+  // GARDÉ, MAIS DEVENU RARE : sans la protection contre l'énumération, Firebase
+  // nomme encore l'adresse inconnue.
   if(err.includes('EMAIL_NOT_FOUND')||err.includes('USER_NOT_FOUND')){
     showErr('l-err','Cet email n\'est pas enregistré dans notre système. Essaie de te connecter directement avec ton mot de passe : un compte sera créé automatiquement.');
   } else if(err==='network'){
