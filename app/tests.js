@@ -10113,6 +10113,226 @@ async function testExercices(){
                 ?true:_echec('une phrase sort d’un biais null');})());
           })();
 
+          // ══════ SAMSUNG INTERNET : LE NAVIGATEUR QUI INSTALLE MAL ══════
+          (()=>{
+            const UA={
+              sam15:'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36',
+              sam14:'Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36',
+              sam13:'Mozilla/5.0 (Linux; Android 13; SM-A536B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/21.0 Chrome/110.0.0.0 Mobile Safari/537.36',
+              chrome:'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+              insta:'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36 Instagram 309.0.0.40.113',
+              iphone:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+            };
+            // L'agent se REPOSE toujours : sans ça la sonde suivante hérite
+            // d'un téléphone Samsung et la suite cesse d'être rejouable.
+            const avecUA=(ua,f)=>{
+              const d=Object.getOwnPropertyDescriptor(navigator,'userAgent');
+              try{
+                Object.defineProperty(navigator,'userAgent',{get:()=>ua,configurable:true});
+                return f();
+              } finally {
+                try{ if(d) Object.defineProperty(navigator,'userAgent',d);
+                     else delete navigator.userAgent; }catch(e){}
+              }
+            };
+
+            ok('Samsung Internet est reconnu, et seulement sur Android 14+',(()=>{
+              // EN DEÇÀ D'ANDROID 14, LA WEBAPK DE SAMSUNG S'INSTALLE : y
+              // détourner les gens leur ferait faire un détour pour rien.
+              if(avecUA(UA.sam15,()=>rcNavigateurSamsung())!=='27.0')
+                return _echec('Android 15 non reconnu');
+              if(avecUA(UA.sam14,()=>rcNavigateurSamsung())!=='23.0')
+                return _echec('Android 14 non reconnu');
+              if(avecUA(UA.sam13,()=>rcNavigateurSamsung())!==null)
+                return _echec('Android 13 détourné alors qu’il n’est pas concerné');
+              if(avecUA(UA.chrome,()=>rcNavigateurSamsung())!==null)
+                return _echec('Chrome pris pour Samsung Internet');
+              // ET LA VERSION D'ANDROID SE LIT : un agent qui ne la porte pas
+              // ne dit rien, on ne détourne pas sur une supposition.
+              const sansAndroid='Mozilla/5.0 (Linux) AppleWebKit/537.36 SamsungBrowser/27.0 Safari/537.36';
+              return avecUA(sansAndroid,()=>rcNavigateurSamsung())===null
+                ?true:_echec('détourné sans savoir quelle version d’Android');})());
+
+            ok('La branche S passe DEVANT la branche C, sinon rien n\'est corrigé',(()=>{
+              // C'EST TOUT LE CORRECTIF. Samsung Internet déclenche
+              // beforeinstallprompt : la branche C s'allumait, offrait
+              // « INSTALLER REPCORE », et le téléphone refusait le paquet
+              // fabriqué. Le bouton marchait, l'installation non.
+              // On retire les commentaires : le correctif cite la branche C.
+              const s=String(rcInstallDecider).replace(/^\s*\/\/.*$/gm,'');
+              const iS=s.indexOf('rcNavigateurSamsung()');
+              const iC=s.indexOf('rcInstallInvite()');
+              if(iS<0) return _echec('la branche Samsung a disparu');
+              if(iC<0) return _echec('la branche C a disparu');
+              if(iS>iC) return _echec('Samsung passe après C : l’installation resterait cassée');
+              // ET APRÈS LA BRANCHE B : un Samsung ouvert dans Instagram est
+              // d'abord un problème de navigateur intégré.
+              const iB=s.indexOf('rcNavigateurIntegre()');
+              if(iB<0||iB>iS) return _echec('le navigateur intégré ne passe plus en premier');
+              return true;})());
+
+            okA('Six agents, six branches, et aucune ne bouge sauf celle-là',(async()=>{
+              const _evt=window.__rcInstallEvt, _mm=window.matchMedia;
+              const _iw=Object.getOwnPropertyDescriptor(window,'innerWidth');
+              try{
+                // Invitation disponible ET pointeur grossier : le cas exact
+                // qui piégeait Samsung dans la branche C.
+                window.__rcInstallEvt={prompt(){}};
+                window.matchMedia=q=>({matches:/coarse/.test(String(q)),
+                  addEventListener(){},removeEventListener(){}});
+                Object.defineProperty(window,'innerWidth',{get:()=>400,configurable:true});
+                const attendu=[[UA.sam15,'S'],[UA.sam14,'S'],[UA.sam13,'C'],
+                               [UA.chrome,'C'],[UA.insta,'B'],[UA.iphone,'D']];
+                for(const [ua,br] of attendu){
+                  const r=avecUA(ua,()=>{ try{ window._rcSamCompte=false; }catch(e){}
+                    return rcInstallDecider(); });
+                  if(r!==br) return _echec(ua.slice(0,40)+'… → branche '+r+' au lieu de '+br);
+                }
+                return true;
+              } finally {
+                window.__rcInstallEvt=_evt; window.matchMedia=_mm;
+                // ⚠ innerWidth N'EST PAS UNE PROPRIÉTÉ PROPRE DE window : c'est
+                // un accesseur du prototype. getOwnPropertyDescriptor rend donc
+                // undefined, et un « if(_iw) » ne restaurait RIEN — la fenêtre
+                // restait bloquée à 400 px pour tout le reste de la page.
+                // Mesuré : la suite passait à 4213/18 puis 4213/20 au second
+                // tour, avec deux fantômes dans la file d'envoi.
+                try{ if(_iw) Object.defineProperty(window,'innerWidth',_iw);
+                     else delete window.innerWidth; }catch(e){}
+                try{ rcInstallDecider(); }catch(e){}
+              }}));
+
+            okA('Elle dit que ce n\'est pas RepCore, et laisse installer quand même',(async()=>{
+              const _evt=window.__rcInstallEvt, _mm=window.matchMedia;
+              const _iw=Object.getOwnPropertyDescriptor(window,'innerWidth');
+              try{
+                window.__rcInstallEvt={prompt(){}};
+                window.matchMedia=q=>({matches:/coarse/.test(String(q)),
+                  addEventListener(){},removeEventListener(){}});
+                Object.defineProperty(window,'innerWidth',{get:()=>400,configurable:true});
+                const r=avecUA(UA.sam15,()=>{ try{ window._rcSamCompte=false; }catch(e){}
+                  return rcInstallDecider(); });
+                if(r!=='S') return _echec('branche '+r);
+                const t=(document.getElementById('rc-inst-msg')||{}).textContent||'';
+                // ON NOMME LE COUPABLE. « Ça ne marche pas » laisse croire que
+                // c'est l'application ; « Android refuse ce que Samsung
+                // fabrique » dit quoi faire.
+                if(t.indexOf('Samsung Internet')<0) return _echec('le navigateur n’est pas nommé : « '+t.slice(0,80)+' »');
+                if(t.indexOf('Android refuse')<0) return _echec('on ne dit pas qui refuse');
+                if(t.indexOf('Ce n’est pas RepCore')<0&&t.indexOf("Ce n'est pas RepCore")<0)
+                  return _echec('on ne dit pas que RepCore n’y est pour rien');
+                const p=document.getElementById('rc-inst-principal');
+                if(!p||p.style.display==='none') return _echec('aucun bouton');
+                if(p.textContent.indexOf('CHROME')<0) return _echec('le bouton ne mène pas à Chrome : « '+p.textContent+' »');
+                // LA CAPACITÉ N'EST PAS RETIRÉE, elle est mise en second rang :
+                // Samsung corrigera son serveur un jour, et ce jour-là ce
+                // détour deviendra inutile sans que rien ici ne le sache.
+                const ici=document.getElementById('rc-inst-ici');
+                if(!ici||ici.style.display==='none') return _echec('plus aucun moyen d’installer ici');
+                if(ici.textContent.indexOf('quand même')<0)
+                  return _echec('le second rang ne dit pas ce qu’il est : « '+ici.textContent+' »');
+                return true;
+              } finally {
+                window.__rcInstallEvt=_evt; window.matchMedia=_mm;
+                // ⚠ innerWidth N'EST PAS UNE PROPRIÉTÉ PROPRE DE window : c'est
+                // un accesseur du prototype. getOwnPropertyDescriptor rend donc
+                // undefined, et un « if(_iw) » ne restaurait RIEN — la fenêtre
+                // restait bloquée à 400 px pour tout le reste de la page.
+                // Mesuré : la suite passait à 4213/18 puis 4213/20 au second
+                // tour, avec deux fantômes dans la file d'envoi.
+                try{ if(_iw) Object.defineProperty(window,'innerWidth',_iw);
+                     else delete window.innerWidth; }catch(e){}
+                try{ rcInstallDecider(); }catch(e){}
+              }}));
+
+            okA('Le message du bloc partagé repart neuf à chaque décision',(async()=>{
+              // DEUX BRANCHES ÉCRIVENT DANS LE MÊME BLOC. Sans remise, un
+              // navigateur intégré visité après un Samsung lirait « Tu es dans
+              // Samsung Internet » — et l'inverse.
+              //
+              // ⚠ ON JOUE LA SÉQUENCE, ON NE LIT PAS LE SOURCE. La première
+              // version de cette sonde cherchait la ligne de remise dans le
+              // texte de la fonction : neutraliser cette ligne par un
+              // `if(false)` la laissait verte, puisque la ligne y était encore.
+              // Mesuré en cassant délibérément.
+              const _evt=window.__rcInstallEvt, _mm=window.matchMedia;
+              const _iw=Object.getOwnPropertyDescriptor(window,'innerWidth');
+              try{
+                window.__rcInstallEvt={prompt(){}};
+                window.matchMedia=q=>({matches:/coarse/.test(String(q)),
+                  addEventListener(){},removeEventListener(){}});
+                Object.defineProperty(window,'innerWidth',{get:()=>400,configurable:true});
+                const lire=()=>(document.getElementById('rc-inst-msg')||{}).textContent||'';
+                // Samsung d'abord : le bloc porte son message.
+                avecUA(UA.sam15,()=>{ try{ window._rcSamCompte=false; }catch(e){} return rcInstallDecider(); });
+                if(lire().indexOf('Samsung Internet')<0) return _echec('la branche Samsung n’écrit pas son message');
+                // Puis Instagram : le message précédent ne doit PAS survivre.
+                avecUA(UA.insta,()=>{ try{ window._rcIabCompte=false; }catch(e){} return rcInstallDecider(); });
+                const t=lire();
+                if(t.indexOf('Samsung Internet')>=0)
+                  return _echec('le message de Samsung survit dans un navigateur intégré : « '+t.slice(0,70)+' »');
+                if(t.indexOf('navigateur intégré')<0)
+                  return _echec('le message d’origine n’est pas revenu : « '+t.slice(0,70)+' »');
+                // MÊME RÈGLE POUR LE LIBELLÉ DU BOUTON LOCAL, que la branche S
+                // renomme : un ordinateur visité ensuite le garderait.
+                avecUA(UA.sam15,()=>{ try{ window._rcSamCompte=false; }catch(e){} return rcInstallDecider(); });
+                avecUA(UA.chrome,()=>rcInstallDecider());
+                const ici=document.getElementById('rc-inst-ici');
+                if(ici&&ici.textContent.indexOf('quand même')>=0)
+                  return _echec('le libellé « quand même » survit hors de la branche Samsung');
+                return true;
+              } finally {
+                window.__rcInstallEvt=_evt; window.matchMedia=_mm;
+                // ⚠ innerWidth N'EST PAS UNE PROPRIÉTÉ PROPRE DE window : c'est
+                // un accesseur du prototype. getOwnPropertyDescriptor rend donc
+                // undefined, et un « if(_iw) » ne restaurait RIEN — la fenêtre
+                // restait bloquée à 400 px pour tout le reste de la page.
+                // Mesuré : la suite passait à 4213/18 puis 4213/20 au second
+                // tour, avec deux fantômes dans la file d'envoi.
+                try{ if(_iw) Object.defineProperty(window,'innerWidth',_iw);
+                     else delete window.innerWidth; }catch(e){}
+                try{ rcInstallDecider(); }catch(e){}
+              }}));
+
+            ok('L\'instruction de secours ne dit pas « Safari » à un Android',(()=>{
+              // L'URL intent peut échouer — Chrome absent, schéma refusé. Le
+              // repli manuel s'affiche alors, et il doit nommer CHROME : un
+              // téléphone Samsung n'a pas de Safari.
+              const s=String(_rcSortieManuelle).replace(/^\s*\/\/.*$/gm,'');
+              if(s.indexOf("nom==='Samsung Internet'")<0)
+                return _echec('aucune instruction propre à Samsung Internet');
+              // ⚠ UNE FENÊTRE DE 320 CARACTÈRES DÉBORDAIT sur l'arme
+              // SUIVANTE du ternaire — le repli générique, qui dit « Ouvre
+              // Safari » à juste titre. La sonde accusait donc un code
+              // correct. On borne sur la vraie fin de l'arme Samsung.
+              const i=s.indexOf("nom==='Samsung Internet'");
+              const fin=s.indexOf('Play Store',i);
+              if(fin<0) return _echec('l’instruction Samsung ne mène plus au Play Store');
+              const bloc=s.slice(i,fin);
+              if(bloc.indexOf('Chrome')<0) return _echec('le repli ne nomme pas Chrome');
+              if(/Safari/.test(bloc)) return _echec('le repli parle de Safari sur un Android');
+              // ET rcOuvrirDansNavigateur SAIT NOMMER CETTE BRANCHE, sinon le
+              // repli retomberait sur « cette application ».
+              return /rcNavigateurSamsung\(\)\s*\?\s*'Samsung Internet'/.test(
+                String(rcOuvrirDansNavigateur))
+                ?true:_echec('la sortie ne nomme pas Samsung Internet');})());
+
+            ok('Le compteur nav_samsung est accepté du client ET du serveur',(()=>{
+              if(RCM_EVENEMENTS.indexOf('nav_samsung')<0)
+                return _echec('nav_samsung n’est pas dans RCM_EVENEMENTS');
+              // DISTINCT DES iab_* : ceux-là ne peuvent pas installer du tout,
+              // celui-ci installe quelque chose qu'Android refuse.
+              if(_rcIabCle('Samsung Internet')!=='iab_autre')
+                return _echec('Samsung Internet est compté comme un navigateur intégré');
+              const e=RCM_TUNNEL.find(x=>x.cles.indexOf('nav_samsung')>=0);
+              if(!e) return _echec('nav_samsung n’apparaît pas dans le tableau de bord');
+              if(e.horsTunnel!==true) return _echec('une fuite ne doit pas casser la chaîne');
+              if(e.neutre) return _echec('ce n’est pas neutre : ces gens partent');
+              if(typeof window._RC_RULES!=='string'||!window._RC_RULES) return true;
+              return window._RC_RULES.indexOf('nav_samsung')>=0
+                ?true:_echec('nav_samsung manque dans database.rules.json : le serveur le refusera');})());
+          })();
+
           ok('Aucun compteur ne transporte autre chose qu\'un entier',(()=>{
             // LE POINT 6 BIS DE privacy.html AFFIRME QU'AUCUN DESTINATAIRE
             // N'EST AJOUTÉ, et qu'il ne part rien d'autre qu'un « +1 ».
@@ -15937,7 +16157,17 @@ async function testExercices(){
             // Les deux rappels différés de signIn — push à 300 ms, file à 1 200 ms —
             // tirent APRÈS cette sonde. On ne rend les vraies fonctions qu'une fois
             // qu'ils ont tiré à vide, sinon ils partiraient sur un jeton fictif.
-            setTimeout(()=>{ CLOUD._saveAuth=_save;CLOUD._doPush=_push;CLOUD.viderFile=_vider; },2000);
+            //
+            // ⚠ ON ATTEND, ON NE PROGRAMME PLUS. Un setTimeout rendait la main
+            // tout de suite : le bouchon `viderFile` — un async()=>{} vide —
+            // restait donc en place APRÈS la fin de la suite. Rejouée sur la
+            // même page, la passe suivante lisait ce bouchon, et les deux
+            // sondes qui inspectent String(CLOUD.viderFile) tombaient :
+            // « Un renvoi impossible ne VIDE pas la file » et « N3.5 ». Deux
+            // fantômes, aucun rapport avec le produit. Ce await coûte deux
+            // secondes une fois par suite, et rend la page rejouable.
+            await new Promise(r=>setTimeout(r,2000));
+            CLOUD._saveAuth=_save;CLOUD._doPush=_push;CLOUD.viderFile=_vider;
           }}));
         ok('« Mot de passe oublié » ne promet plus un envoi qu\'il ne constate pas',(()=>{
           // sendOobCode répond « succès » même sur une adresse inconnue quand la

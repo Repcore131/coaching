@@ -4579,7 +4579,12 @@ const COACH_PHOTO='icons/coach.jpg';
          navigateur maison n'installe RIEN. Aucun bouton ne peut y aboutir, et
          en proposer un serait promettre ce qui ne se produira pas. -->
     <div id="rc-inst-integre" class="rc-inst-bloc" style="display:none;margin-top:22px;width:100%;max-width:380px;text-align:center">
-      <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.3);border-radius:var(--r-3);padding:15px 16px;font-size:var(--fs-sm);color:#f0d6d6;line-height:1.65">
+      <!-- DEUX BRANCHES PARTAGENT CE BLOC, et c'est ce qui evite d'en
+           dupliquer un second avec sa propre sortie manuelle : le navigateur
+           integre, qui ne SAIT PAS installer, et Samsung Internet, qui sait
+           mais dont le paquet est refuse par Android. Le decideur repose ce
+           message a chaque decision — voir rcInstallDecider. -->
+      <div id="rc-inst-msg" style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.3);border-radius:var(--r-3);padding:15px 16px;font-size:var(--fs-sm);color:#f0d6d6;line-height:1.65">
         Tu es dans le navigateur intégré de <b id="rc-inst-app" style="color:var(--text)">cette application</b>.<br>
         <b style="color:var(--text)">Il ne sait pas installer RepCore.</b>
       </div>
@@ -8216,7 +8221,10 @@ const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_
   // une installation qui ne sert jamais ne vaut rien. Compte une fois par
   // session, comme les vues d'ecran.
   'install_ecran_vu','install_invite_montree','install_accepte','install_refuse',
-  'install_guide_ios','install_fait','lancement_autonome'];
+  'install_guide_ios','install_fait','lancement_autonome',
+  // LE NAVIGATEUR QUI INSTALLE MAL. Distinct des iab_* : ceux-la ne peuvent
+  // pas installer du tout, celui-ci installe quelque chose qu'Android refuse.
+  'nav_samsung'];
 // ══════════ SONDE DE QUOTA : UNE PENTE, PAS UNE VÉRITÉ ══════════
 // Le plan Spark plafonne à 10 Go téléchargés par mois, et le dépassement est
 // SILENCIEUX : l'application cesse simplement de répondre. Cette sonde ne
@@ -65002,6 +65010,46 @@ function rcNavigateurIntegre(){
   }catch(e){}
   return null;
 }
+// ══════════ SAMSUNG INTERNET : LE NAVIGATEUR QUI INSTALLE MAL ══════════
+//
+// CE N'EST PAS UN NAVIGATEUR INTEGRE, et les confondre serait faux : Samsung
+// Internet est le navigateur par defaut de tous les telephones Samsung, il
+// declenche bien beforeinstallprompt, et il SAIT installer. Le probleme est
+// ailleurs, et il est entier.
+//
+// UNE PWA NE S'INSTALLE PAS TOUTE SEULE SUR ANDROID : le navigateur envoie le
+// manifeste a un serveur qui FABRIQUE une vraie APK — une « WebAPK » — et la
+// renvoie signee. Celui de Chrome la fabrique avec targetSdkVersion ≥ 34.
+// Celui de Samsung la fabrique EN DESSOUS, et Android 14 et suivants refusent
+// alors l'installation : « conçue pour une version plus ancienne d'Android,
+// n'inclut pas les derniers dispositifs de protection ».
+//
+// AUCUN CHAMP DU MANIFESTE NE CHANGE CA. Le manifeste de RepCore est valide —
+// Page.getAppManifest, c'est-a-dire l'analyseur de Chrome lui-meme, ne rend
+// aucune erreur dessus — et la meme PWA s'installe sans un mot depuis Chrome.
+// Le defaut est chez Samsung ; la seule chose que RepCore puisse faire est de
+// ne pas y envoyer les gens. Signale le 02/09/2026 par Kevin sur son propre
+// telephone, Android 15.
+//
+// SEULEMENT A PARTIR D'ANDROID 14. En deca, la WebAPK de Samsung s'installe
+// normalement : detourner ces gens-la vers Chrome leur ferait faire un detour
+// pour rien.
+const RC_SAMSUNG_ANDROID_MINI=14;
+// PURE. Rend la version de Samsung Internet, ou null.
+function rcNavigateurSamsung(){
+  try{
+    const u=String(navigator.userAgent||'');
+    const m=u.match(/SamsungBrowser\/([0-9]+(?:\.[0-9]+)?)/i);
+    if(!m) return null;
+    // LA VERSION D'ANDROID SE LIT, ELLE NE SE SUPPOSE PAS. Un agent qui ne la
+    // porte pas ne dit rien : on ne detourne pas sur une supposition, on
+    // laisse la branche normale faire son travail.
+    const a=u.match(/Android\s+([0-9]+)/i);
+    const v=a?parseInt(a[1],10):0;
+    if(!(v>=RC_SAMSUNG_ANDROID_MINI)) return null;
+    return m[1];
+  }catch(e){ return null; }
+}
 // La CLÉ de compteur associée au nom rendu ci-dessus. Séparée du nom affiché :
 // l'un se lit à l'écran, l'autre part dans /metrics et doit rester stable.
 function _rcIabCle(nom){
@@ -65011,7 +65059,7 @@ function _rcIabCle(nom){
 // ══════════ LA SORTIE ══════════════════════════════════════════════════
 function rcOuvrirDansNavigateur(){
   const u=(()=>{ try{ return location.href; }catch(e){ return ''; } })();
-  const nom=rcNavigateurIntegre()||'cette application';
+  const nom=rcNavigateurIntegre()||(rcNavigateurSamsung()?'Samsung Internet':'cette application');
   const est_iOS=(()=>{ try{ return /iPhone|iPad|iPod/i.test(navigator.userAgent||''); }catch(e){ return false; } })();
   // ── ANDROID : l'URL intent, qui existe pour exactement ça ────────────
   //
@@ -65084,6 +65132,12 @@ function _rcSortieManuelle(nom,u){
       ? 'Touche le menu <b>en haut à droite</b>, puis « Ouvrir dans le navigateur ».'
     : nom==='Messenger'
       ? 'Touche le menu <b>en bas à droite</b>, puis « Ouvrir dans Safari ».'
+    // SAMSUNG INTERNET N'EST PAS UNE VUE EMBARQUEE : il n'a pas de « ouvrir
+    // dans le navigateur », puisqu'il EST le navigateur. Le seul geste qui
+    // reste est d'ouvrir Chrome et d'y coller l'adresse — deja copiee.
+    // Sans ce cas, un Android lisait « ouvre Safari ».
+    : nom==='Samsung Internet'
+      ? 'Ouvre <b>Chrome</b> et colle le lien dans sa barre d\'adresse. Si Chrome n\'est pas installé, prends-le sur le Play Store.'
       : 'Ouvre Safari et colle le lien.';
   const q=document.getElementById('rc-inst-quoi');
   if(q) q.innerHTML=où;
@@ -65377,7 +65431,14 @@ function rcInstallDecider(){
   // branche précédente le montrerait le temps d'une image si une branche future
   // l'affichait avant de le nommer.
   if(principal){ principal.style.display='none'; principal.textContent=''; }
-  if(ici) ici.style.display='none';
+  // LE LIBELLE DU BOUTON LOCAL REPART LUI AUSSI. La branche S le renomme
+  // « Installer ici quand même » ; sans cette remise, un ordinateur visite
+  // ensuite garderait ce texte-la sous un QR code.
+  if(ici){ ici.style.display='none'; ici.textContent='Installer sur cet ordinateur'; }
+  // ET LE MESSAGE DU BLOC PARTAGE. Deux branches l'ecrivent ; sans remise, la
+  // seconde afficherait la phrase de la premiere.
+  const _msg=document.getElementById('rc-inst-msg');
+  if(_msg) _msg.innerHTML='Tu es dans le navigateur intégré de <b id="rc-inst-app" style="color:var(--text)">cette application</b>.<br><b style="color:var(--text)">Il ne sait pas installer RepCore.</b>';
   // Le libellé de la sortie est REPOSÉ à chaque décision : la branche B le
   // change, et un second passage sur une autre branche le garderait sinon.
   const _sortie=document.getElementById('rc-inst-passer');
@@ -65426,6 +65487,41 @@ function rcInstallDecider(){
       if(!window._rcIabCompte){ window._rcIabCompte=true; rcm(_rcIabCle(_app)); }
     }catch(e){}
     return 'B';
+  }
+
+  // S — SAMSUNG INTERNET SUR ANDROID 14+, ET AVANT LA BRANCHE C : c'est tout
+  // le correctif. Samsung Internet declenche beforeinstallprompt, donc la
+  // branche C s'allumait, offrait « INSTALLER REPCORE », et le telephone
+  // refusait le paquet fabrique. Le bouton marchait, l'installation non — et
+  // rien a l'ecran ne disait pourquoi.
+  const _sam=rcNavigateurSamsung();
+  if(_sam){
+    montrer('rc-inst-integre');
+    if(_msg) _msg.innerHTML='Tu es dans <b style="color:var(--text)">Samsung Internet</b>.<br>'
+      +'<b style="color:var(--text)">Android refuse ce qu\'il installe.</b><br>'
+      +'<span style="font-size:var(--fs-xs);color:#bbb">Ce n\'est pas RepCore : Samsung Internet fabrique un paquet qu\'Android juge trop ancien. Depuis Chrome, l\'installation se fait sans un mot.</span>';
+    dire('Ouvre RepCore dans Chrome : l\'installation y passe sans avertissement.');
+    if(principal){
+      principal.textContent='OUVRIR DANS CHROME';
+      principal.style.display='block';
+      // MEME SORTIE QUE LES NAVIGATEURS INTEGRES : l'URL intent et son repli
+      // manuel existent deja, sont eprouves, et font exactement ce geste-la.
+      _rcInstGeste=()=>{ rcOuvrirDansNavigateur(); };
+    }
+    // ET L'INSTALLATION LOCALE RESTE OFFERTE, EN SECOND RANG. Samsung
+    // corrigera son serveur un jour, et ce jour-la ce detour deviendra inutile
+    // sans que rien ici ne le sache. On ne RETIRE donc pas la capacite : on
+    // choisit ce qu'on met devant. Le libelle dit ce qui risque d'arriver.
+    if(ici&&rcInstallInvite()){
+      ici.textContent='Installer ici quand même';
+      ici.style.display='block';
+    }
+    // Le compteur dira quelle part du trafic arrive par la, donc ce que ce
+    // detour coute en abandons. Une seule fois par session.
+    try{
+      if(!window._rcSamCompte){ window._rcSamCompte=true; rcm('nav_samsung'); }
+    }catch(e){}
+    return 'S';
   }
 
   // E — ordinateur : le téléphone est ailleurs, on lui passe l'adresse.
@@ -65596,6 +65692,9 @@ const RCM_TUNNEL=[
   // on accepte, l'icone se pose. Trois lignes sortent de la chaine — voir
   // `horsTunnel` et `neutre` plus bas.
   {cles:['install_ecran_vu'],lib:'Écran d\'installation vu'},
+  // UNE FUITE, PAS UNE ETAPE : ces gens doivent changer de navigateur avant de
+  // pouvoir installer, et une partie ne le fera pas. Orange, comme le refus.
+  {cles:['nav_samsung'],lib:'Arrive par Samsung Internet',horsTunnel:true},
   {cles:['install_invite_montree'],lib:'Invitation du navigateur montrée'},
   {cles:['install_accepte'],lib:'Installation acceptée'},
   // UN VRAI DEPART : celui-la ne reviendra probablement pas.
