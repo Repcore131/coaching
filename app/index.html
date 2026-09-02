@@ -5024,6 +5024,30 @@ const COACH_PHOTO='icons/coach.jpg';
          le coach ne voit nulle part que son code a bien été pris en compte. -->
     <div id="r-invite-line" style="display:none;font-size:var(--fs-xs);color:var(--green);font-family:monospace;letter-spacing:1px;margin-bottom:4px"></div>
     <div id="r-err" style="color:var(--red-light);font-size:var(--fs-md);display:none"></div>
+    <!-- ── LE SECOND COMPTE, SUR LA MÊME BOÎTE MAIL ──────────────────────
+         Une adresse = un compte, et ce n'est pas un choix de mise en page :
+         le dossier local, le nœud /users et l'identité Firebase Auth sont
+         TOUS les trois classés par adresse. Firebase Auth, en particulier,
+         n'admet qu'un compte par adresse — rien, côté application, ne peut
+         passer outre.
+
+         LE SOUS-ADRESSAGE EST LA SORTIE, et c'en est une vraie : le courrier
+         adressé à kevin+athlete@gmail.com arrive dans la boîte de
+         kevin@gmail.com, alors que RepCore, Firebase et tout le reste y
+         voient une adresse distincte. Un coach obtient ainsi son compte
+         athlète sans seconde boîte mail, et le sélecteur de comptes déjà en
+         place le fait basculer de l'un à l'autre sans mot de passe.
+
+         MASQUÉ PAR DÉFAUT, et proposé UNIQUEMENT quand l'adresse est déjà
+         prise : le montrer d'emblée inviterait à se créer un doublon là où
+         « Se connecter » était la bonne réponse. C'est aussi pourquoi il
+         reste sous le message d'erreur, en second rang. -->
+    <div id="r-2e-compte" style="display:none;margin-top:10px;padding:13px 14px;background:var(--surface-1);
+      border:1px solid var(--border);border-radius:var(--r-3);text-align:left">
+      <div id="r-2e-txt" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6"></div>
+      <button type="button" id="r-2e-btn" onclick="_appliquerSecondCompte()" class="btn btn-outline btn-sm"
+        style="width:100%;margin-top:10px;letter-spacing:1px;font-size:var(--fs-xs);display:none">Utiliser cette adresse</button>
+    </div>
     <button class="btn btn-red" onclick="doRegister()">Créer mon compte</button>
     <div style="height:30px"></div>
   </div>
@@ -13546,9 +13570,103 @@ function _retourApresInscription(){
   goAvecRetour('s-subscribe');loadSubscribePage();
   return true;
 }
+// ══════════ UN SECOND COMPTE SUR LA MÊME BOÎTE MAIL ══════════════════════
+//
+// UNE ADRESSE = UN COMPTE, ET CE N'EST PAS NÉGOCIABLE DEPUIS ICI. Le dossier
+// local (DB « users »), le nœud RTDB /users/<adresse> et l'identité Firebase
+// Auth sont TOUS LES TROIS classés par adresse ; la dernière, en particulier,
+// refuse net une seconde inscription sur la même adresse — accounts:signUp
+// répond EMAIL_EXISTS, quoi qu'en dise l'application.
+//
+// LE SOUS-ADRESSAGE EST LA SORTIE, et c'en est une vraie. Le courrier envoyé
+// à kevin+athlete@gmail.com arrive dans la boîte de kevin@gmail.com, tandis
+// que RepCore, Firebase et le reste du monde y voient une adresse distincte.
+// Un coach obtient ainsi son compte athlète sans ouvrir une seconde boîte, et
+// le sélecteur de comptes déjà en place (comptesConnectes / basculerCompte)
+// le fait passer de l'un à l'autre sans ressaisir de mot de passe.
+//
+// ON NE LE PROPOSE PAS À TOUT LE MONDE, et c'est le point délicat. Le « + »
+// est une convention, pas une norme : Gmail, Outlook, iCloud, Proton et
+// Fastmail la respectent ; orange.fr, free.fr, sfr.fr, laposte.net ne la
+// respectent pas. Proposer l'alias à quelqu'un de chez Orange, c'est lui
+// fabriquer un compte dont il ne recevra JAMAIS le courrier — donc dont il ne
+// pourra jamais réinitialiser le mot de passe. Hors liste, on dit la vérité :
+// il faut une autre adresse.
+const SOUS_ADRESSAGE_OK=['gmail.com','googlemail.com','outlook.com','outlook.fr',
+  'outlook.be','hotmail.com','hotmail.fr','hotmail.be','live.com','live.fr',
+  'live.be','msn.com','icloud.com','me.com','mac.com','proton.me',
+  'protonmail.com','pm.me','fastmail.com'];
+// PURE. Rend l'adresse à proposer, ou null quand on ne peut rien promettre.
+// `pris` est le dossier des comptes de cet appareil : proposer une adresse
+// déjà occupée ferait retomber sur le même refus au clic suivant.
+function _aliasSecondCompte(email,role,pris){
+  const em=String(email||'').trim().toLowerCase();
+  const at=em.lastIndexOf('@');
+  if(at<1) return null;
+  const domaine=em.slice(at+1);
+  if(SOUS_ADRESSAGE_OK.indexOf(domaine)<0) return null;
+  // UNE SEULE ÉTIQUETTE, JAMAIS DEUX : on repart de la base, sinon une adresse
+  // déjà sous-adressée donnerait kevin+athlete+athlete@gmail.com.
+  const base=em.slice(0,at).split('+')[0];
+  if(!base) return null;
+  const mot=(role==='coach')?'coach':'athlete';
+  const occupe=a=>!!(pris&&Object.prototype.hasOwnProperty.call(pris,a));
+  let a=base+'+'+mot+'@'+domaine;
+  for(let n=2;occupe(a)&&n<=9;n++) a=base+'+'+mot+n+'@'+domaine;
+  return occupe(a)?null:a;
+}
+// MASQUÉ À CHAQUE TENTATIVE. Sans cette remise à zéro, la proposition d'un
+// refus précédent survivait à un refus d'une tout autre nature.
+function _masquerSecondCompte(){
+  const z=document.getElementById('r-2e-compte');
+  if(z) z.style.display='none';
+}
+// Rend l'adresse proposée, ou null si le bloc n'a qu'un constat à donner.
+function _proposerSecondCompte(email){
+  const z=document.getElementById('r-2e-compte');
+  const t=document.getElementById('r-2e-txt');
+  const b=document.getElementById('r-2e-btn');
+  if(!z||!t||!b) return null;
+  const alias=_aliasSecondCompte(email,selRole,DB.get('users')||{});
+  // CE QU'ON SAIT, ET RIEN DE PLUS : le rôle de l'autre compte n'est connu que
+  // dans la branche locale. On nomme donc le rôle DE CELUI-CI, qui est certain.
+  const roleMot=(selRole==='coach')?'coach':'athlète';
+  if(!alias){
+    t.textContent='Cette adresse porte déjà un compte, et une adresse n\u2019en porte qu\u2019un. '
+      +'Pour un second compte, il te faut une autre adresse email.';
+    b.style.display='none';
+  } else {
+    t.innerHTML='Tu veux un <b style="color:var(--text)">second compte</b> — celui-ci en '
+      +roleMot+' — sur la même boîte mail ? Utilise '
+      +'<b style="color:var(--text);word-break:break-all">'+escapeHtml(alias)+'</b>. '
+      +'Le courrier arrive au même endroit, et le sélecteur de comptes te fera '
+      +'passer de l\u2019un à l\u2019autre sans ressaisir ton mot de passe.';
+    b.textContent='Utiliser cette adresse';
+    b.dataset.alias=alias;
+    b.style.display='block';
+  }
+  z.style.display='block';
+  return alias;
+}
+// LE CHAMP EST REMPLI, PAS LE FORMULAIRE ENVOYÉ. Créer le compte d'un seul
+// clic sur une adresse que la personne n'a pas encore lue serait lui faire
+// signer ce qu'elle n'a pas vu — et c'est l'adresse par laquelle elle se
+// connectera ensuite.
+function _appliquerSecondCompte(){
+  const b=document.getElementById('r-2e-btn');
+  const a=b&&b.dataset&&b.dataset.alias;
+  if(!a) return false;
+  const inp=document.getElementById('r-email');
+  if(inp){ inp.value=a; try{ inp.focus(); }catch(e){} }
+  _masquerSecondCompte();
+  const e=document.getElementById('r-err');
+  if(e) e.style.display='none';
+  return true;
+}
 async function doRegister(){
   const fn=v('r-fname'),ln=v('r-lname'),em=v('r-email').toLowerCase(),pw=v('r-pwd'),pw2=v('r-pwd2'),gn=v('r-gender');
   const err=document.getElementById('r-err');err.style.display='none';
+  _masquerSecondCompte();
   if(!fn||!ln||!em||!pw){return showErr('r-err','Tous les champs sont obligatoires.');}
   // LA FORME DE L'ADRESSE, avant le moindre appel réseau. Sans ce contrôle,
   // une adresse sans arobase partait jusqu'à Firebase, qui répondait
@@ -13645,7 +13763,14 @@ async function doRegister(){
     if(selRole==='coach'&&!_coachInviteCode()&&!(await placeLibreDisponible()))
       return showErr('r-err',LIBRE_ATTENTE_TEXTE);
     const users=DB.get('users')||{};
-    if(users[em]) return showErr('r-err','Email déjà utilisé.','r-email');
+    if(users[em]){
+      showErr('r-err','Email déjà utilisé.','r-email');
+      // LA SORTIE EST OFFERTE ICI AUSSI, et pas seulement sur le refus venu de
+      // Firebase : c'est ce refus-ci que voit un coach qui tente son propre
+      // compte athlète depuis l'appareil où son compte coach vit déjà.
+      _proposerSecondCompte(em);
+      return;
+    }
     const uid='u_'+Date.now();
     const user={id:uid,fname:fn,lname:ln,email:em,
       role:selRole,gender:gn,
@@ -13675,6 +13800,10 @@ async function doRegister(){
     // et il bloque ensuite la vraie connexion.
     const authOk=await CLOUD.signIn(em,pw);
     if(!authOk){
+      // L'ADRESSE EST PRISE CÔTÉ SERVEUR — le compte peut très bien ne pas être
+      // sur CET appareil : c'est le cas du coach qui s'inscrit en athlète depuis
+      // un autre téléphone.
+      if(CLOUD._signInErr==='wrong_password') _proposerSecondCompte(em);
       return showErr('r-err',
         CLOUD._signInErr==='wrong_password'
           ? 'Un compte existe déjà avec cet email. Utilise « Se connecter » ou « Mot de passe oublié ? ».'

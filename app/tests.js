@@ -15953,6 +15953,100 @@ async function testExercices(){
           // l'utilisateur sans geste suivant.
           return /Créer un compte/.test(fp)
             ?true:_echec('rien n\'est proposé à qui ne reçoit rien');})());
+        // ══ LE SECOND COMPTE SUR LA MÊME BOÎTE MAIL ═════════════════════════
+        //
+        // Une adresse ne porte qu'un compte, et ce n'est pas une règle de
+        // l'application : Firebase Auth refuse net une seconde inscription sur la
+        // même adresse. Le sous-adressage est la seule sortie qui ne demande ni
+        // seconde boîte mail ni réécriture de l'identité des dossiers.
+        ok('L\'adresse de second compte se déduit, sans jamais empiler deux étiquettes',(()=>{
+          const cas=[
+            // Le cas nominal, et celui pour lequel tout ceci existe : un coach
+            // qui veut SON compte athlète.
+            [['kevin@gmail.com','athlete',{}],'kevin+athlete@gmail.com'],
+            [['kevin@gmail.com','coach',{}],'kevin+coach@gmail.com'],
+            // DÉJÀ SOUS-ADRESSÉE : on repart de la base, sinon on obtiendrait
+            // kevin+athlete+athlete@gmail.com, que plus personne ne relit.
+            [['kevin+perso@gmail.com','athlete',{}],'kevin+athlete@gmail.com'],
+            // L'ÉTIQUETTE EST DÉJÀ PRISE sur cet appareil : proposer la même
+            // ferait retomber sur le refus au clic suivant.
+            [['kevin@gmail.com','athlete',{'kevin+athlete@gmail.com':1}],'kevin+athlete2@gmail.com'],
+            // LA CASSE NE COMPTE PAS : l'adresse est normalisée partout ailleurs.
+            [['KEVIN@GMAIL.COM','athlete',{}],'kevin+athlete@gmail.com'],
+            // ⚠ ORANGE, FREE, SFR, LAPOSTE NE FONT PAS DE SOUS-ADRESSAGE. Proposer
+            // l'alias là, c'est fabriquer un compte dont le courrier n'arrivera
+            // JAMAIS — donc dont le mot de passe ne pourra jamais être
+            // réinitialisé. On ne propose rien plutôt que de promettre ça.
+            [['kevin@orange.fr','athlete',{}],null],
+            [['kevin@free.fr','athlete',{}],null],
+            [['pas-une-adresse','athlete',{}],null],
+            [['@gmail.com','athlete',{}],null]
+          ];
+          for(const [args,attendu] of cas){
+            const r=_aliasSecondCompte(args[0],args[1],args[2]);
+            if(r!==attendu)
+              return _echec(args[0]+' ('+args[1]+') donne '+r+' au lieu de '+attendu);
+          }
+          return true;})());
+
+        ok('La proposition ne sort QUE sur une adresse prise, et ne valide rien',(()=>{
+          const z=document.getElementById('r-2e-compte');
+          const b=document.getElementById('r-2e-btn');
+          const t=document.getElementById('r-2e-txt');
+          if(!z||!b||!t) return _echec('le bloc du second compte a disparu de l\'écran');
+          const _role=selRole,_champ=document.getElementById('r-email');
+          const _val=_champ?_champ.value:'';
+          const _aff=z.style.display,_alias=b.dataset.alias,_bt=b.style.display;
+          try{
+            // MASQUÉ AU REPOS : le montrer d'emblée inviterait à se faire un
+            // doublon là où « Se connecter » était la bonne réponse.
+            _masquerSecondCompte();
+            if(z.style.display!=='none') return _echec('le bloc reste visible au repos');
+            selRole='athlete';
+            const a=_proposerSecondCompte('kevin@gmail.com');
+            if(a!=='kevin+athlete@gmail.com') return _echec('adresse proposée : '+a);
+            if(z.style.display==='none') return _echec('le bloc ne s\'affiche pas');
+            if(b.style.display==='none') return _echec('le bouton reste caché');
+            if(t.textContent.indexOf('second compte')<0) return _echec('le texte ne dit pas de quoi il s\'agit');
+            // LE CLIC REMPLIT, IL NE SOUMET PAS : l'adresse de connexion future
+            // ne doit pas être posée sans avoir été lue.
+            if(_champ) _champ.value='kevin@gmail.com';
+            if(_appliquerSecondCompte()!==true) return _echec('le bouton ne fait rien');
+            if(_champ&&_champ.value!=='kevin+athlete@gmail.com')
+              return _echec('le champ porte « '+(_champ&&_champ.value)+' »');
+            if(z.style.display!=='none') return _echec('le bloc survit à son propre bouton');
+            // HORS LISTE : un constat, et AUCUN bouton — voir la sonde ci-dessus.
+            const b2=_proposerSecondCompte('kevin@orange.fr');
+            if(b2!==null) return _echec('une adresse est proposée chez un fournisseur sans sous-adressage');
+            if(b.style.display!=='none') return _echec('le bouton est offert sans adresse à proposer');
+            if(t.textContent.indexOf('autre adresse')<0) return _echec('le constat ne dit pas quoi faire');
+            return true;
+          } finally {
+            selRole=_role;
+            if(_champ) _champ.value=_val;
+            // ET LE FOCUS EST RENDU. _appliquerSecondCompte pose le curseur dans le
+            // champ — c'est son travail — mais un champ resté actif fait taire les
+            // raccourcis clavier du reste de l'app, et c'est une sonde de l'écran
+            // coach, quatre-vingts assertions plus loin, qui l'a dit.
+            try{ if(_champ) _champ.blur(); }catch(e){}
+            z.style.display=_aff; b.style.display=_bt;
+            if(_alias===undefined) delete b.dataset.alias; else b.dataset.alias=_alias;
+          }})());
+
+        ok('Les deux refus « adresse prise » offrent la sortie, et eux seuls',(()=>{
+          // STRUCTURELLE, comme ses voisines : doRegister cède la main sur
+          // « await CLOUD.signIn » et un appel depuis une sonde synchrone se
+          // terminerait avant la branche. Le comportement, lui, a été vérifié en
+          // navigateur sur les deux refus.
+          const dr=String(doRegister);
+          if(dr.indexOf('_masquerSecondCompte()')<0)
+            return _echec('la proposition n\'est pas remise à zéro à chaque tentative');
+          const n=dr.split('_proposerSecondCompte(em)').length-1;
+          if(n!==2) return _echec(n+' branche(s) offrent la sortie au lieu de 2');
+          // LA BRANCHE FIREBASE NE L'OFFRE QUE SUR « adresse prise » : un hors
+          // ligne ou une adresse mal formée n'ont pas de second compte à proposer.
+          const i=dr.indexOf('CLOUD._signInErr===\'wrong_password\') _proposerSecondCompte(em)');
+          return i>=0?true:_echec('la branche Firebase l\'offre sur n\'importe quel refus');})());
         ok('Un e-mail déjà inscrit N\'ÉCRASE JAMAIS le dossier existant',(()=>{
           const dr=String(doRegister);
           const iCloud=dr.indexOf('const cloudUser=await CLOUD.pullUser(em)');
