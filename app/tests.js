@@ -10136,22 +10136,62 @@ async function testExercices(){
               }
             };
 
-            ok('Samsung Internet est reconnu, et seulement sur Android 14+',(()=>{
-              // EN DEÇÀ D'ANDROID 14, LA WEBAPK DE SAMSUNG S'INSTALLE : y
-              // détourner les gens leur ferait faire un détour pour rien.
-              if(avecUA(UA.sam15,()=>rcNavigateurSamsung())!=='27.0')
-                return _echec('Android 15 non reconnu');
-              if(avecUA(UA.sam14,()=>rcNavigateurSamsung())!=='23.0')
-                return _echec('Android 14 non reconnu');
-              if(avecUA(UA.sam13,()=>rcNavigateurSamsung())!==null)
-                return _echec('Android 13 détourné alors qu’il n’est pas concerné');
+            ok('Samsung Internet est reconnu, QUELLE QUE SOIT la version d\'Android',(()=>{
+              // ⚠ CETTE SONDE EXIGEAIT L'INVERSE, ET C'EST CE QUI A COÛTÉ
+              // TROIS LOTS. J'avais lu « Android 14+ » dans un rapport de
+              // bogue, puis posé cette borne comme une VÉRIFICATION — alors
+              // que je n'avais aucun moyen de connaître la version du
+              // téléphone de Kevin. Sur un Android 13, la détection rendait
+              // null, la branche S ne se levait pas, la branche C offrait son
+              // bouton, et le refus tombait comme avant. La sonde, elle,
+              // restait verte : elle vérifiait mon hypothèse, pas le produit.
+              //
+              // LE COÛT DES DEUX ERREURS N'EST PAS LE MÊME. Détourner un
+              // Samsung qui aurait pu installer coûte un geste de menu.
+              // Ne pas le détourner coûte une installation impossible.
+              for(const [ua,att] of [[UA.sam15,'27.0'],[UA.sam14,'23.0'],[UA.sam13,'21.0']])
+                if(avecUA(ua,()=>rcNavigateurSamsung())!==att)
+                  return _echec(ua.slice(0,46)+'… → '+avecUA(ua,()=>rcNavigateurSamsung()));
               if(avecUA(UA.chrome,()=>rcNavigateurSamsung())!==null)
                 return _echec('Chrome pris pour Samsung Internet');
-              // ET LA VERSION D'ANDROID SE LIT : un agent qui ne la porte pas
-              // ne dit rien, on ne détourne pas sur une supposition.
+              // ET AUCUNE VERSION D'ANDROID N'ENTRE PLUS DANS LA DÉCISION :
+              // un agent qui ne la porte pas est traité comme les autres.
               const sansAndroid='Mozilla/5.0 (Linux) AppleWebKit/537.36 SamsungBrowser/27.0 Safari/537.36';
-              return avecUA(sansAndroid,()=>rcNavigateurSamsung())===null
-                ?true:_echec('détourné sans savoir quelle version d’Android');})());
+              if(avecUA(sansAndroid,()=>rcNavigateurSamsung())!=='27.0')
+                return _echec('un agent sans version d’Android n’est plus reconnu');
+              const src=String(rcNavigateurSamsung).replace(/^\s*\/\/.*$/gm,'');
+              return /Android/i.test(src)
+                ?_echec('la version d’Android est revenue dans la détection'):true;})());
+
+            ok('Sur Android, seuls Chrome et Edge ont le droit de demander l\'invitation',(()=>{
+              // LISTE BLANCHE, ET NON LISTE NOIRE. Les seuls navigateurs
+              // Android dont on SAIT qu'ils fabriquent une WebAPK acceptée
+              // sont Chrome et Edge. Une liste noire aurait laissé passer le
+              // prochain navigateur inconnu ; celle-ci ne laisse passer que
+              // ce qui est vérifié — et le chemin manuel, lui, marche partout
+              // puisqu'il n'installe aucun paquet.
+              const cas=[
+                [UA.chrome,null,'Chrome Android'],
+                [UA.sam15,'samsung','Samsung Internet'],
+                [UA.iphone,null,'iPhone : pas de WebAPK'],
+                ['Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36 EdgA/125.0','','Edge Android'],
+                ['Mozilla/5.0 (Linux; Android 14; RMX) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36 OPR/79.0','autre','Opera Android'],
+                ['Mozilla/5.0 (Linux; Android 13; M2101) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36 MiuiBrowser/17.0','autre','Mi Browser'],
+                // Firefox Android ne fabrique AUCUNE WebAPK et ne déclenche
+                // jamais beforeinstallprompt : il pose un raccourci depuis son
+                // propre menu. 'autre' l'envoie sur la branche F, qui dit
+                // exactement cela. C'est le bon traitement, pas une exclusion.
+                ['Mozilla/5.0 (Android 14; Mobile; rv:130.0) Gecko/130.0 Firefox/130.0','autre','Firefox Android']
+              ];
+              for(const [ua,att,nom] of cas){
+                const r=avecUA(ua,()=>rcInstallBloquePar());
+                // Edge et Firefox : deux issues acceptables selon la liste, on
+                // exige seulement que Chrome et Edge NE soient PAS bloqués.
+                if(att===null&&r!==null) return _echec(nom+' est bloqué à tort : '+r);
+                if(att===''&&r!==null) return _echec(nom+' est bloqué à tort : '+r);
+                if(att&&r!==att) return _echec(nom+' → '+r+' au lieu de '+att);
+              }
+              return true;})());
 
             ok('La branche S passe DEVANT la branche C, sinon rien n\'est corrigé',(()=>{
               // C'EST TOUT LE CORRECTIF. Samsung Internet déclenche
@@ -10160,14 +10200,19 @@ async function testExercices(){
               // fabriqué. Le bouton marchait, l'installation non.
               // On retire les commentaires : le correctif cite la branche C.
               const s=String(rcInstallDecider).replace(/^\s*\/\/.*$/gm,'');
-              const iS=s.indexOf('rcNavigateurSamsung()');
+              // ⚠ ON ANCRE SUR LA BRANCHE, PAS SUR LE NOM DE LA FONCTION.
+              // rcNavigateurSamsung est aussi appelée tout en haut, par le
+              // repère de version : chercher la première occurrence du nom
+              // faisait croire que la branche Samsung était passée devant le
+              // navigateur intégré, ce qui était faux.
+              const iS=s.indexOf('const _sam=rcNavigateurSamsung()');
               const iC=s.indexOf('rcInstallInvite()');
               if(iS<0) return _echec('la branche Samsung a disparu');
               if(iC<0) return _echec('la branche C a disparu');
               if(iS>iC) return _echec('Samsung passe après C : l’installation resterait cassée');
               // ET APRÈS LA BRANCHE B : un Samsung ouvert dans Instagram est
               // d'abord un problème de navigateur intégré.
-              const iB=s.indexOf('rcNavigateurIntegre()');
+              const iB=s.indexOf('const _app=rcNavigateurIntegre()');
               if(iB<0||iB>iS) return _echec('le navigateur intégré ne passe plus en premier');
               return true;})());
 
@@ -10181,7 +10226,9 @@ async function testExercices(){
                 window.matchMedia=q=>({matches:/coarse/.test(String(q)),
                   addEventListener(){},removeEventListener(){}});
                 Object.defineProperty(window,'innerWidth',{get:()=>400,configurable:true});
-                const attendu=[[UA.sam15,'S'],[UA.sam14,'S'],[UA.sam13,'C'],
+                // Android 13 attend désormais 'S' comme les autres : la borne
+                // de version était une hypothèse à moi, pas une mesure.
+                const attendu=[[UA.sam15,'S'],[UA.sam14,'S'],[UA.sam13,'S'],
                                [UA.chrome,'C'],[UA.insta,'B'],[UA.iphone,'D']];
                 for(const [ua,br] of attendu){
                   const r=avecUA(ua,()=>{ try{ window._rcSamCompte=false; }catch(e){}

@@ -35,6 +35,46 @@ try{
   var _rcP=location.pathname;
   if(_rcP==='/i'||_rcP==='/i/') location.replace('/app/'+(location.search||'')+'#install');
 }catch(e){}
+// ══════════ LE NUMERO DE VERSION, LISIBLE A L'ECRAN ════════════════════
+// Sans lui, personne — ni Kevin sur son telephone, ni moi ici — ne peut dire
+// si l'appareil tourne sur le code qu'on vient de livrer. Quatre correctifs
+// successifs ont ete indiscernables les uns des autres pour cette seule
+// raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
+// disait. Il se pose ici, dans le premier script du document, pour etre vrai
+// meme si tout le reste echoue.
+window.RC_BUILD='1106';
+// ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
+//
+// LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
+// 2 500 ms sur un fichier de 4,4 Mo : sur un reseau mobile le cache gagne
+// presque toujours, donc le premier lancement apres une mise en ligne montre
+// encore la page d'hier. Recharger n'y change rien — c'est le meme cache.
+//
+// VIDER LES DONNEES DU SITE MARCHE, mais c'est six niveaux de menus dans les
+// reglages du navigateur, et ca efface aussi la session. Cette adresse fait
+// le meme travail en un lien : on retire le service worker, on vide ses
+// caches, et on recharge UNE fois — le drapeau est retire de l'adresse avant
+// le rechargement, sans quoi on bouclerait.
+try{
+  if(/[?&]nosw=1(&|$)/.test(location.search)){
+    (async function(){
+      try{
+        if('serviceWorker' in navigator){
+          var rs=await navigator.serviceWorker.getRegistrations();
+          for(var i=0;i<rs.length;i++) await rs[i].unregister();
+        }
+        if(window.caches){
+          var ks=await caches.keys();
+          for(var j=0;j<ks.length;j++) await caches.delete(ks[j]);
+        }
+      }catch(e){}
+      try{
+        var propre=location.search.replace(/([?&])nosw=1(&|$)/,'$1').replace(/[?&]$/,'');
+        location.replace(location.pathname+propre+(location.hash||''));
+      }catch(e){ location.reload(); }
+    })();
+  }
+}catch(e){}
 </script>
 <!-- ══════════ LA CAPTURE DE L'INVITATION D'INSTALLATION ══════════════════
      PREMIER SCRIPT DE LA PAGE, ET CE N'EST PAS UN CAPRICE DE RANGEMENT.
@@ -4672,6 +4712,13 @@ const COACH_PHOTO='icons/coach.jpg';
       <a href="#" onclick="rcOuvrirDansNavigateur({sansRepli:true});return false;"
         style="display:inline-block;padding:8px 12px;font-size:var(--fs-sm);color:rgba(255,255,255,.55);text-decoration:underline;text-underline-offset:3px;font-family:Montserrat,sans-serif;cursor:pointer">J'ai Chrome — ouvrir dedans</a>
     </div>
+
+    <!-- ── LE REPERE DE VERSION ─────────────────────────────────────────
+         Minuscule, gris, en bas. Il ne sert a personne d'autre qu'a nous
+         deux : sans lui, impossible de savoir si le telephone tourne sur le
+         code qu'on vient de livrer ou sur celui d'hier. Quatre lots ont ete
+         indiscernables faute de cette ligne. -->
+    <div id="rc-inst-version" style="text-align:center;margin-top:14px;font-size:var(--fs-2xs);color:rgba(255,255,255,.28);font-family:Montserrat,sans-serif"></div>
 
     <div style="text-align:center;margin-top:18px">
       <!-- JAMAIS UN BOUTON PLEIN. L'installation est le chemin par défaut ;
@@ -65061,23 +65108,47 @@ function rcNavigateurIntegre(){
 // ne pas y envoyer les gens. Signale le 02/09/2026 par Kevin sur son propre
 // telephone, Android 15.
 //
-// SEULEMENT A PARTIR D'ANDROID 14. En deca, la WebAPK de Samsung s'installe
-// normalement : detourner ces gens-la vers Chrome leur ferait faire un detour
-// pour rien.
-const RC_SAMSUNG_ANDROID_MINI=14;
 // PURE. Rend la version de Samsung Internet, ou null.
 function rcNavigateurSamsung(){
   try{
+    const m=String(navigator.userAgent||'')
+      .match(/SamsungBrowser\/([0-9]+(?:\.[0-9]+)?)/i);
+    return m?m[1]:null;
+  }catch(e){ return null; }
+}
+// ⚠ LA CONDITION « ANDROID 14 OU PLUS » A ETE RETIREE, ET C'ETAIT LA MIENNE.
+// Je l'avais deduite d'un rapport de bogue qui parlait d'Android 14+, puis
+// posee comme une VERIFICATION alors que je n'avais aucun moyen de connaitre
+// la version du telephone de Kevin. Sur un Android 13, rcNavigateurSamsung
+// rendait null, la branche S ne se levait pas, la branche C offrait son bouton
+// d'installation — et le refus tombait exactement comme avant. Trois lots
+// livres, trois fois « ca persiste », et la cause etait une condition que
+// j'avais inventee.
+//
+// LE COUT DES DEUX ERREURS N'EST PAS LE MEME. Detourner un Samsung qui aurait
+// pu installer coute un geste de menu en plus. Ne PAS le detourner coute une
+// installation impossible et une personne qui abandonne. On detourne.
+//
+// PURE. Rend la raison pour laquelle l'invitation du navigateur ne doit pas
+// etre demandee ici, ou null.
+//
+// LISTE BLANCHE, ET NON LISTE NOIRE. Les seuls navigateurs Android dont on
+// SAIT qu'ils fabriquent une WebAPK acceptee sont Chrome et Edge. Tout le
+// reste part sur le chemin manuel — qui, lui, marche partout, puisqu'il
+// n'installe aucun paquet. Une liste noire aurait laisse passer le prochain
+// navigateur inconnu ; celle-ci ne laisse passer que ce qui est verifie.
+const RC_ANDROID_SAIT_INSTALLER=/Chrome\/[0-9]/i;
+const RC_ANDROID_PAS_CHROME=/SamsungBrowser|OPR\/|OPX\/|UCBrowser|MiuiBrowser|HeyTapBrowser|VivoBrowser|OppoBrowser|QuarkBrowser|Whale|YaBrowser|DuckDuckGo|Brave|Ecosia|Instagram|FBAN|FBAV|FB_IAB/i;
+function rcInstallBloquePar(){
+  try{
     const u=String(navigator.userAgent||'');
-    const m=u.match(/SamsungBrowser\/([0-9]+(?:\.[0-9]+)?)/i);
-    if(!m) return null;
-    // LA VERSION D'ANDROID SE LIT, ELLE NE SE SUPPOSE PAS. Un agent qui ne la
-    // porte pas ne dit rien : on ne detourne pas sur une supposition, on
-    // laisse la branche normale faire son travail.
-    const a=u.match(/Android\s+([0-9]+)/i);
-    const v=a?parseInt(a[1],10):0;
-    if(!(v>=RC_SAMSUNG_ANDROID_MINI)) return null;
-    return m[1];
+    // iOS et ordinateur ne passent pas par une WebAPK : rien a bloquer.
+    if(!/Android/i.test(u)) return null;
+    if(/SamsungBrowser/i.test(u)) return 'samsung';
+    const edge=/EdgA\//i.test(u);
+    if(edge) return null;
+    if(RC_ANDROID_SAIT_INSTALLER.test(u)&&!RC_ANDROID_PAS_CHROME.test(u)) return null;
+    return 'autre';
   }catch(e){ return null; }
 }
 // La CLÉ de compteur associée au nom rendu ci-dessus. Séparée du nom affiché :
@@ -65479,23 +65550,25 @@ try{ if(rcInstallAutonome()) rcmVue('lancement_autonome'); }catch(e){}
 // garde redeviendrait possible, mais il faudrait pour cela appeler
 // window.__rcInstall directement — et une sonde l'interdit.
 //
-// PURE. Rend la raison du blocage, ou null.
-function rcInstallBloquePar(){
-  try{ if(rcNavigateurSamsung()) return 'samsung'; }catch(e){}
-  return null;
-}
 // Rend true quand elle a pris la main — l'appelant s'arrete alors la.
 function _rcInstallDetourner(){
-  if(rcInstallBloquePar()!=='samsung') return false;
+  const r=rcInstallBloquePar();
+  if(!r) return false;
   // ON NE DEMANDE PAS L'INVITATION. Sur ce navigateur et a partir d'Android
   // 14, ce que le serveur de Samsung fabrique est refuse par le telephone :
   // appeler prompt() ici, c'est promener quelqu'un jusqu'a un mur.
   try{
     go('s-install');
     rcInstallDecider();
-    rcGuideSamsung();
+    // LE GUIDE N'EST OUVERT QUE QUAND ON SAIT QUOI DIRE. Pour un navigateur
+    // qu'on ne connait pas, la branche F explique deja d'ouvrir son menu —
+    // inventer un chemin precis serait envoyer quelqu'un chercher une entree
+    // qui n'existe peut-etre pas chez lui.
+    if(r==='samsung') rcGuideSamsung();
   }catch(e){}
-  try{ toast('Sur Samsung Internet, passe par « Ajouter la page à → Écran d\'accueil ».','var(--orange)'); }catch(e){}
+  try{ toast(r==='samsung'
+    ? 'Sur Samsung Internet, passe par « Ajouter la page à '+String.fromCharCode(8594)+' Écran d'+"\u2019"+'accueil ».'
+    : 'Ton navigateur installe depuis son propre menu.','var(--orange)'); }catch(e){}
   return true;
 }
 // Le guide du raccourci. Il ne NAVIGUE nulle part : tout se passe dans le
@@ -65553,6 +65626,19 @@ function rcInstallDecider(){
   const _lc=document.getElementById('rc-inst-chrome');
   if(_lc) _lc.style.display='none';
   _rcInstGeste=null;
+  // LE REPERE, POSE A CHAQUE DECISION. Il porte la branche retenue et la
+  // version du cache : deux chiffres qui disent en un coup d'oeil si le
+  // telephone tourne sur le code livre, et quel chemin il a pris.
+  try{
+    const _v=document.getElementById('rc-inst-version');
+    // PAS DE LETTRE DE BRANCHE ICI : le repère se pose en TÊTE du décideur,
+    // avant que la branche ne soit choisie. Ce qu'il porte suffit — le numéro
+    // de build dit si le téléphone tourne sur le code livré, et la raison de
+    // blocage dit si la garde s'est levée.
+    if(_v) _v.textContent='build '+(window.RC_BUILD||'?')
+      +' · '+(rcInstallBloquePar()||'invitation ok')
+      +(rcNavigateurSamsung()?' · SI '+rcNavigateurSamsung():'');
+  }catch(e){}
   const dire=(t)=>{ if(sous) sous.textContent=t||''; };
   const montrer=(id)=>{ const b=document.getElementById(id); if(b) b.style.display='block'; };
 
