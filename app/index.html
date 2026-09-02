@@ -4573,7 +4573,7 @@ const COACH_PHOTO='icons/coach.jpg';
          Il existe quand même : certains Android bloquent l'installation
          directe, et sans ce fichier ceux-là n'ont rien. -->
     <div id="rc-inst-apk" style="display:none;text-align:center;margin-top:2px">
-      <a href="/download/RepCore.apk" download
+      <a id="rc-apk-lien" href="/download/RepCore.apk" download
         style="display:inline-block;padding:6px 10px;font-size:var(--fs-xs);color:rgba(255,255,255,.32);text-decoration:underline;text-underline-offset:3px;font-family:Montserrat,sans-serif">Ou télécharger le fichier APK</a>
       <a href="/aide-apk.html" target="_blank" rel="noopener"
         style="display:inline-block;padding:6px 6px;font-size:var(--fs-xs);color:rgba(255,255,255,.32);font-family:Montserrat,sans-serif">· aide</a>
@@ -8229,6 +8229,25 @@ const APP_BASE_URL=(()=>{
     ? location.origin+strip(location.pathname)
     : strip(location.href);
 })();
+
+// ══════════ OU VIT LE FICHIER APK ══════════════════════════════════════
+//
+// VIDE TANT QU'AUCUN HEBERGEUR NE LE SERT, et le lien reste alors cache.
+//
+// ⚠ FIREBASE HOSTING NE PEUT PAS LE SERVIR. Ce n'est pas une question de
+// quota : le plan Spark REFUSE les fichiers executables, et le deploiement
+// echoue avec « Executable files are forbidden on the Spark billing plan ».
+// Un .apk en fait partie. Le mettre dans _site fait echouer le deploiement
+// ENTIER, pas seulement le fichier — mesure le 02/09/2026.
+//
+// Il faut donc un hebergeur tiers, et en choisir un est une decision qui
+// appartient a Kevin : cela ajoute un sous-traitant au tableau de
+// privacy.html, et cela suppose d'ouvrir un compte. Le jour ou l'adresse
+// existe, elle se pose ICI et le lien reapparait — une ligne, rien d'autre.
+//
+// Le fichier, lui, existe : 2,47 Mo, signe, empreinte verifiee contre
+// assetlinks.json.
+const RC_APK_URL='';
 
 // ══════════ LE LIEN COURT ══════════════════════════════════════════════
 //
@@ -64409,7 +64428,14 @@ function rcInstallDecider(){
     // porte sur le systeme et non sur la presence de l'invitation : un
     // Chromebook peut installer sans etre un telephone Android.
     try{
-      if(_apk&&/Android/i.test(navigator.userAgent||'')) _apk.style.display='block';
+      // TROIS CONDITIONS, ET LA PREMIERE EST QU'IL Y AIT QUELQUE CHOSE AU BOUT.
+      // Un lien de telechargement vers un fichier qui n'est pas heberge est un
+      // 404 promis : mieux vaut ne rien proposer.
+      if(_apk&&RC_APK_URL&&/Android/i.test(navigator.userAgent||'')){
+        const _l=document.getElementById('rc-apk-lien');
+        if(_l) _l.href=RC_APK_URL;
+        _apk.style.display='block';
+      }
     }catch(e){}
     return 'C';
   }
