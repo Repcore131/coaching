@@ -9862,6 +9862,257 @@ async function testExercices(){
               } finally { rcBanniereInstallCacher(); _poser(g); }})());
           })();
 
+          // ══════ LE CALIBRAGE DU RIR ══════
+          (()=>{
+            // Un test fabriqué : on choisit l'écart, la fonction fait le reste.
+            const T=(ecart,date)=>({date:date||Date.now(),exercice:'curl',chargeKg:20,
+              repsAnnoncees:10,rirAnnonce:2,repsReelles:12+ecart});
+
+            ok('Le repère est une MÉDIANE, jamais une moyenne',(()=>{
+              // UN TEST RATÉ NE DOIT PAS DÉPLACER LE REPÈRE. L'athlète qui
+              // s'acharne bien après la perte d'amplitude produit un écart
+              // énorme ; une moyenne le laisserait tirer la correction de tout
+              // le reste de son entraînement, la médiane l'ignore.
+              const m=calculerCalibrageRir([T(1),T(1),T(1),T(1),T(9)]);
+              // Médiane de [1,1,1,1,9] = 1. Moyenne = 2,6, bornée à 2,6.
+              if(m.biais!==1) return _echec('biais '+m.biais+' au lieu de 1 : ce n’est pas une médiane');
+              // ET LE TEST ABERRANT RESTE ENREGISTRÉ. C'est peut-être le
+              // protocole qui a dérapé, et l'effacer empêcherait de s'en
+              // apercevoir plus tard.
+              if(m.n!==5) return _echec('un test a disparu : '+m.n+' au lieu de 5');
+              // Cas pair : moyenne des deux du milieu, comme _mediane.
+              const p=calculerCalibrageRir([T(0),T(2)]);
+              if(p.biais!==1) return _echec('médiane paire : '+p.biais+' au lieu de 1');
+              return true;})());
+
+            ok('Seuls les cinq derniers tests comptent',(()=>{
+              // LA PERCEPTION S'AMÉLIORE : un test d'il y a un an ferait tirer
+              // le repère par quelqu'un qui n'existe plus.
+              const m=calculerCalibrageRir([T(3),T(3),T(3),T(0),T(0),T(0),T(0),T(0)]);
+              if(m.biais!==0) return _echec('biais '+m.biais+' : les vieux tests pèsent encore');
+              // n compte TOUS les tests — c'est lui qui porte la fiabilité.
+              return m.n===8?true:_echec('n vaut '+m.n+' au lieu de 8');})());
+
+            ok('Le repère est borné à ±3',(()=>{
+              // AU-DELÀ, C'EST LE PROTOCOLE QUI A ÉTÉ MAL EXÉCUTÉ, pas la
+              // perception : personne ne se trompe de sept répétitions.
+              const h=calculerCalibrageRir([T(9),T(9),T(9)]);
+              if(h.biais!==3) return _echec('biais haut non borné : '+h.biais);
+              const b=calculerCalibrageRir([T(-9),T(-9),T(-9)]);
+              if(b.biais!==-3) return _echec('biais bas non borné : '+b.biais);
+              // La borne porte sur le REPÈRE, pas sur les tests : la donnée
+              // brute survit telle qu'elle a été saisie.
+              const brut=h.tests.map(biaisTestCalibrage);
+              return brut.every(x=>x===9)?true:_echec('les tests bruts ont été écrasés : '+brut.join(','));})());
+
+            ok('Aucun test : le biais est null, jamais zéro',(()=>{
+              // UNE ABSENCE NE SE COMBLE PAS PAR UN DÉFAUT. « biais 0 » veut
+              // dire « perception juste, mesurée » ; null veut dire « on ne
+              // sait pas ». Les confondre ferait affirmer ce qu'on ignore.
+              const m=calculerCalibrageRir([]);
+              if(m.biais!==null) return _echec('biais '+m.biais+' au lieu de null');
+              if(m.n!==0) return _echec('n vaut '+m.n);
+              if(m.maj!==null) return _echec('maj inventée');
+              return m.fiabilite==='faible'?true:_echec('fiabilité '+m.fiabilite);})());
+
+            ok('Trois paliers de fiabilité, aux bons seuils',(()=>{
+              const att=[[0,'faible'],[1,'faible'],[2,'moyenne'],[3,'moyenne'],
+                         [4,'bonne'],[9,'bonne']];
+              for(const [n,f] of att)
+                if(fiabiliteCalibrage(n)!==f)
+                  return _echec('n='+n+' → '+fiabiliteCalibrage(n)+' au lieu de '+f);
+              return true;})());
+
+            ok('En fiabilité faible, rirCorrige ne corrige RIEN',(()=>{
+              // CORRIGER SUR UN SEUL TEST SERAIT PIRE QUE NE PAS CORRIGER :
+              // toutes les décisions d'un athlète se déplaceraient à partir
+              // d'une seule série, possiblement ratée.
+              const u1={sessions:[],calibrageRir:calculerCalibrageRir([T(2)])};
+              if(u1.calibrageRir.fiabilite!=='faible') return _echec('un test devrait être « faible »');
+              for(const r of [0,1,2,3,4,5])
+                if(rirCorrige(u1,r)!==r) return _echec('RIR '+r+' corrigé à '+rirCorrige(u1,r)+' sur un seul test');
+              // Aucun calibrage du tout : idem.
+              if(rirCorrige({sessions:[]},2)!==2) return _echec('corrigé sans aucun calibrage');
+              if(rirCorrige(null,2)!==2) return _echec('corrigé sans dossier');
+              // DEUX tests, et là seulement la correction s'applique.
+              const u2={sessions:[],calibrageRir:calculerCalibrageRir([T(2),T(2)])};
+              if(u2.calibrageRir.fiabilite!=='moyenne') return _echec('deux tests devraient être « moyenne »');
+              return rirCorrige(u2,1)===3?true:_echec('RIR 1 + biais 2 → '+rirCorrige(u2,1)+' au lieu de 3');})());
+
+            ok('Le sens de la correction suit la définition du biais',(()=>{
+              // biais = repsRéelles − (repsAnnoncées + rirAnnoncé)
+              //       = RIR vrai − RIR annoncé
+              // donc RIR vrai = RIR annoncé + biais. Un biais POSITIF veut dire
+              // « il en avait encore sous le pied » : sa série à RIR 2 déclaré
+              // était en réalité une série à RIR 4. Retrancher dirait l'inverse
+              // et DOUBLERAIT l'erreur — le coach lirait « plus dur que
+              // demandé » chez quelqu'un qui s'entraîne trop facile.
+              const tot=(ra,ri,rr)=>({date:Date.now(),exercice:'curl',chargeKg:20,
+                repsAnnoncees:ra,rirAnnonce:ri,repsReelles:rr});
+              // Annonce : 10 faites, 2 en réserve → 12 prévues. Réel : 14.
+              const t=tot(10,2,14);
+              if(biaisTestCalibrage(t)!==2) return _echec('biais de série : '+biaisTestCalibrage(t));
+              const u={sessions:[],calibrageRir:calculerCalibrageRir([t,t])};
+              // Sa série déclarée RIR 2 valait un vrai RIR 4.
+              if(rirCorrige(u,2)!==4) return _echec('RIR 2 déclaré → '+rirCorrige(u,2)+' au lieu de 4');
+              // Et l'athlète qui va PLUS loin qu'il ne le pense va dans l'autre sens.
+              const t2=tot(10,2,10);
+              const u2={sessions:[],calibrageRir:calculerCalibrageRir([t2,t2])};
+              if(biaisTestCalibrage(t2)!==-2) return _echec('biais négatif : '+biaisTestCalibrage(t2));
+              return rirCorrige(u2,3)===1?true:_echec('RIR 3 déclaré → '+rirCorrige(u2,3)+' au lieu de 1');})());
+
+            ok('Le RIR corrigé reste dans l\'échelle de saisie [0,5]',(()=>{
+              const u=(e)=>({sessions:[],calibrageRir:calculerCalibrageRir([T(e),T(e),T(e),T(e)])});
+              if(rirCorrige(u(3),4)!==5) return _echec('plafond : '+rirCorrige(u(3),4));
+              if(rirCorrige(u(-3),1)!==0) return _echec('plancher : '+rirCorrige(u(-3),1));
+              // ET CE QUI N'EST PAS UN NOMBRE RESSORT INTACT : '' et 'echec'
+              // ont un sens ailleurs, les convertir en 0 inventerait une valeur.
+              if(rirCorrige(u(3),'')!=='') return _echec('la chaîne vide a été convertie');
+              if(rirCorrige(u(3),'echec')!=='echec') return _echec('« echec » a été converti');
+              return true;})());
+
+            ok('rirCorrige n\'est JAMAIS appelée dans la fabrication du CSV',(()=>{
+              // LE CSV MONTRE CE QUE L'ATHLÈTE A TAPÉ. C'est sa donnée, c'est
+              // celle qu'il exporte au titre du RGPD, et c'est la seule qu'il
+              // reconnaîtra. Y écrire un chiffre corrigé serait lui répondre
+              // qu'il n'a pas saisi ce qu'il a saisi.
+              const src=String(_csvSeances).replace(/^\s*\/\/.*$/gm,'');
+              if(/rirCorrige|_perfRir|calibrageRir/.test(src))
+                return _echec('le CSV passe par le biais de perception');
+              if(src.indexOf('st.rir')<0) return _echec('le CSV n’écrit plus le RIR brut');
+              // ET LA MÊME RÈGLE POUR L'EXPORT COMPLET : les trois fabricants
+              // de CSV lisent le dossier, aucun ne corrige.
+              for(const f of [_csvJournalAlimentaire,_csvPesees])
+                if(/rirCorrige/.test(String(f))) return _echec('un autre CSV corrige');
+              return true;})());
+
+            ok('Le RIR corrigé n\'est pas non plus affiché à l\'athlète',(()=>{
+              // MÊME RÈGLE QUE LE CSV, ET ELLE EST PLUS FACILE À VIOLER : il
+              // suffit qu'un lot futur passe `currentUser` à _perfRir dans une
+              // fonction de rendu. Ces deux-là sont des RAPPORTS, pas des
+              // décisions : le rite de fin de cycle et le PDF de progression.
+              for(const [nom,f] of [['_riteRecords',_riteRecords],['rapProgression',rapProgression]]){
+                const s=String(f).replace(/^\s*\/\/.*$/gm,'');
+                if(/rirCorrige/.test(s)) return _echec(nom+' affiche un RIR corrigé');
+              }
+              return true;})());
+
+            ok('L\'écriture refuse un protocole impossible',(()=>{
+              // repsRéelles < repsAnnoncées est impossible par construction :
+              // on ne peut pas avoir fait MOINS que ce qu'on avait déjà fait au
+              // moment de l'annonce. L'accepter poserait un biais massivement
+              // négatif qui fausserait tout l'aval.
+              const u={sessions:[],calibrageRir:null};
+              const cas=[
+                [{exercice:'curl',chargeKg:20,repsAnnoncees:10,rirAnnonce:2,repsReelles:8},'reps totales inférieures'],
+                [{exercice:'curl',chargeKg:20,repsAnnoncees:0,rirAnnonce:2,repsReelles:12},'zéro rep annoncée'],
+                [{exercice:'curl',chargeKg:20,repsAnnoncees:10,rirAnnonce:9,repsReelles:12},'RIR hors échelle'],
+                [{exercice:'curl',chargeKg:0,repsAnnoncees:10,rirAnnonce:2,repsReelles:12},'charge nulle'],
+                [{exercice:'',chargeKg:20,repsAnnoncees:10,rirAnnonce:2,repsReelles:12},'exercice sans nom']
+              ];
+              for(const [t,quoi] of cas){
+                const r=enregistrerTestCalibrage(u,t);
+                if(r.ok) return _echec(quoi+' : accepté');
+                if(!r.raison) return _echec(quoi+' : refusé sans raison');
+              }
+              // Le dossier n'a rien gardé de ces cinq refus.
+              if(u.calibrageRir) return _echec('un test refusé a quand même été écrit');
+              return true;})());
+
+            okA('Un test valide s\'enregistre et vide les caches de verdict',(async()=>{
+              // LES CACHES PORTENT DES VERDICTS QUE LE BIAIS VIENT DE CHANGER :
+              // un e1RM et un état de plateau calculés avec l'ancien repère
+              // resteraient servis jusqu'au rechargement de la page.
+              const u={email:'cal@test.fr',sessions:[],calibrageRir:null};
+              const r=enregistrerTestCalibrage(u,{exercice:'curl',chargeKg:20,
+                repsAnnoncees:10,rirAnnonce:2,repsReelles:14});
+              if(!r.ok) return _echec('refusé : '+r.raison);
+              if(!u.calibrageRir||u.calibrageRir.n!==1) return _echec('le test n’est pas dans le dossier');
+              const t=u.calibrageRir.tests[0];
+              if(t.repsReelles!==14||t.rirAnnonce!==2||t.repsAnnoncees!==10)
+                return _echec('la saisie brute a été altérée');
+              if(!(t.date>0)) return _echec('le test n’est pas daté');
+              const s=String(enregistrerTestCalibrage).replace(/^\s*\/\/.*$/gm,'');
+              if(s.indexOf('_viderCachePlateau()')<0) return _echec('le cache de plateau survit au test');
+              if(s.indexOf('_cacheSignaux.clear()')<0) return _echec('le cache de signaux survit au test');
+              return true;}));
+
+            ok('Le test ne se propose que sur un exercice sans charge axiale',(()=>{
+              // UNE SÉRIE MENÉE À L'ÉCHEC TECHNIQUE RÉEL : jamais sous charge
+              // axiale. Une dernière répétition ratée au squat se paie sur le
+              // rachis, et aucune mesure ne vaut ça.
+              const u={sessions:[],contraintes:[]};
+              // Les schémas d'isolation portent rachis-lombaire dans `hors` :
+              // chargeLombaireSchema y rend 0 quelle que soit la grille.
+              const iso=Object.keys(SCHEMAS_META).filter(k=>
+                (SCHEMAS_META[k].hors||[]).indexOf('rachis-lombaire')>=0);
+              if(!iso.length) return _echec('aucun schéma hors rachis lombaire : la sonde ne prouve rien');
+              for(const k of iso)
+                if(chargeLombaireSchema(k,{})!==0) return _echec(k+' devrait valoir 0');
+              // Et le squat, lui, N'EST PAS dans cette liste.
+              if(iso.indexOf('squat')>=0) return _echec('le squat compte comme sans charge lombaire');
+              // NULL EST REFUSÉ COMME 3 : une absence n'est pas un zéro.
+              if(chargeLombaireSchema('squat',{})!==null)
+                return _echec('un schéma non noté ne rend plus null');
+              const ex={name:'deep squat'};
+              if(exerciceCalibrable(ex,u,{})) return _echec('le squat est proposé au test');
+              if(exerciceCalibrable({name:'nom qui n’existe dans aucun schéma'},u,{}))
+                return _echec('un exercice sans schéma est proposé');
+              return true;})());
+
+            ok('Le signal du coach est de l\'entretien, pas une urgence',(()=>{
+              // IL N'ENTRE PAS DANS urgencyScore : un calibrage périmé ne
+              // remonte personne dans la liste, il ajoute une ligne en bas.
+              const s=String(urgencyScore).replace(/^\s*\/\/.*$/gm,'');
+              if(/calibrage/i.test(s)) return _echec('le calibrage pèse dans le classement d’urgence');
+              // ET IL EST AU DERNIER RANG des lignes d'entraînement : sous la
+              // douleur, le décrochage et le plateau.
+              const l=String(_lignesEntrainement).replace(/^\s*\/\/.*$/gm,'');
+              const iCal=l.indexOf("cle:'calibrageDu'");
+              if(iCal<0) return _echec('la ligne de calibrage n’existe pas');
+              for(const c of ["cle:'douleur'","cle:'decrochage'"]){
+                const i=l.indexOf(c);
+                if(i<0) return _echec(c+' a disparu');
+                if(i>iCal) return _echec(c+' est passé sous le calibrage');
+              }
+              if(l.indexOf("lib:'Progression bloquée'")>iCal)
+                return _echec('le plateau est passé sous le calibrage');
+              return true;})());
+
+            ok('Le signal se lève après 8 séances, et se rendort une fois mesuré',(()=>{
+              const seances=n=>Array.from({length:n},(_,i)=>({date:Date.now()-i*864e5,data:{}}));
+              // Avant neuf séances : rien. L'athlète a autre chose à apprendre
+              // que d'aller à l'échec technique.
+              if(calibrageRirDu({sessions:seances(8)})) return _echec('proposé dès 8 séances');
+              if(!calibrageRirDu({sessions:seances(9)})) return _echec('jamais proposé après 9 séances');
+              // Mesuré hier : plus rien à demander.
+              const frais={sessions:seances(20),
+                calibrageRir:{tests:[T(1)],biais:1,n:1,maj:Date.now()-864e5,fiabilite:'faible'}};
+              if(calibrageRirDu(frais)) return _echec('redemandé le lendemain du test');
+              // Mesuré il y a plus de trois mois : la perception a bougé.
+              const vieux={sessions:seances(20),
+                calibrageRir:{tests:[T(1)],biais:1,n:1,maj:Date.now()-91*864e5,fiabilite:'faible'}};
+              return calibrageRirDu(vieux)?true:_echec('un calibrage de 91 jours n’est pas redemandé');})());
+
+            ok('La phrase de retour dit quoi faire, jamais un score',(()=>{
+              const ph=b=>phraseCalibrageRir({biais:b,fiabilite:'moyenne'});
+              if(ph(0)!=='Ta perception est juste.') return _echec('biais 0 → « '+ph(0)+' »');
+              if(ph(2).indexOf('deux répétitions trop tôt')<0) return _echec('biais +2 → « '+ph(2)+' »');
+              if(ph(-2).indexOf('plus loin')<0) return _echec('biais −2 → « '+ph(-2)+' »');
+              // AUCUN CHIFFRE BRUT : « biais +2 » se lit comme une note.
+              for(const b of [0,1,2,-2,3])
+                if(/biais|\+[0-9]|score/i.test(ph(b))) return _echec('la phrase montre un score : « '+ph(b)+' »');
+              // ET ON NE PROMET RIEN QU'ON NE TIENNE : en fiabilité faible,
+              // rirCorrige ne corrige pas encore.
+              const f=phraseCalibrageRir({biais:2,fiabilite:'faible'});
+              if(f.indexOf('à partir de maintenant')>=0)
+                return _echec('promesse tenue par personne : « '+f+' »');
+              if(f.indexOf('deuxième test')<0) return _echec('la suite n’est pas annoncée : « '+f+' »');
+              // Biais null : aucune phrase, on n'invente pas.
+              return phraseCalibrageRir({biais:null,fiabilite:'faible'})===''
+                ?true:_echec('une phrase sort d’un biais null');})());
+          })();
+
           ok('Aucun compteur ne transporte autre chose qu\'un entier',(()=>{
             // LE POINT 6 BIS DE privacy.html AFFIRME QU'AUCUN DESTINATAIRE
             // N'EST AJOUTÉ, et qu'il ne part rien d'autre qu'un « +1 ».

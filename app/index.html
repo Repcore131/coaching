@@ -15122,7 +15122,7 @@ const _cacheSignaux=new Map();
 function _viderCacheSignaux(){ _cacheSignaux.clear(); }
 const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage:false,chuteAssiduite:false,
   plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
-  restrictionLongue:false,details:Object.freeze({})});
+  restrictionLongue:false,calibrageDu:false,details:Object.freeze({})});
 
 // opts.complet : ne PAS court-circuiter les signaux de rang 6 quand un rang
 // superieur est deja acquis. Le classement n en a pas besoin — un 6 ne peut
@@ -15155,7 +15155,7 @@ function signauxEntrainement(c,opts){
   if(_cacheSignaux.has(cle)) return _cacheSignaux.get(cle);
   const r={douleur:false,douleurDiffuse:false,decrochage:false,chuteAssiduite:false,
     plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
-    restrictionLongue:false,details:{}};
+    restrictionLongue:false,calibrageDu:false,details:{}};
   // La restriction prolongée ne dépend pas des séances : elle se calcule ICI,
   // avant le retour anticipé. Placée plus bas, un athlète en sèche longue qui
   // ne journalise aucune séance ne serait jamais remonté au coach.
@@ -15262,6 +15262,19 @@ function signauxEntrainement(c,opts){
     }
   }catch(e){}
 
+  // ── LE CALIBRAGE DU RIR EST-IL A REFAIRE ? ──
+  // CE N'EST PAS UNE URGENCE, C'EST DE L'ENTRETIEN. Le signal n'entre pas dans
+  // urgencyScore — deliberement : un calibrage perime ne remonte personne dans
+  // la liste du coach, il ajoute seulement une ligne en bas de ses taches.
+  // Trois mois, parce que la perception s'affine avec l'entrainement : un
+  // repere pris au huitieme mois ne dit plus rien au vingtieme.
+  try{ if(calibrageRirDu(c)){
+    r.calibrageDu=true;
+    const _cal=calibrageRirDe(c);
+    r.details.calibrageDu={n:(_cal&&_cal.n)||0,maj:(_cal&&_cal.maj)||null,
+      seances:ss.length,
+      jours:(_cal&&_cal.maj)?Math.floor((Date.now()-_cal.maj)/864e5):null};
+  } }catch(e){}
   try{
     const [s1,s2]=_semainesRevolues(2);
     const recentes=_semainesRevolues(SIG_MEV_SEMAINES_CANDIDAT);
@@ -18668,6 +18681,15 @@ function _texteSignal(type,c,sg){
     const x=d.decrochage;
     return x.faits+' séries réalisées sur '+x.prevus+' prévues sur les '+x.seances+' dernières séances.';
   }
+  if(type==='calibrage'&&d.calibrageDu){
+    const x=d.calibrageDu;
+    // ON DIT CE QUE CA COUTE DE NE PAS LE FAIRE, pas seulement qu'il est du :
+    // « calibrage à refaire » ne dit pas au coach pourquoi il devrait s'en
+    // occuper. Le RIR alimente l'e1RM, le plateau et ses propres consignes.
+    return x.n===0
+      ? 'perception du RIR jamais mesurée après '+x.seances+' séances : ses RIR déclarés alimentent l\'e1RM et la détection de plateau sans avoir jamais été vérifiés.'
+      : 'dernier calibrage du RIR il y a '+Math.floor(x.jours/30)+' mois. La perception change avec l\'entraînement : le repère mérite d\'être repris.';
+  }
   if(type==='entrainement'){
     if(d.restrictionLongue) return 'sèche depuis '+d.restrictionLongue.semaines
       +' semaines à '+d.restrictionLongue.kcal+' kcal, pour un plancher de '
@@ -19230,7 +19252,12 @@ function _lignesEntrainement(clients){
     {type:'douleur',    cle:'douleur',       icon:'🩹',color:'var(--red)',   lib:'Douleur répétée'},
     {type:'douleurdiff',cle:'douleurDiffuse',icon:'🩹',color:'var(--red)',   lib:'Douleurs diffuses'},
     {type:'decrochage', cle:'decrochage',    icon:'📉',color:'var(--orange)',lib:'Séances écourtées'},
-    {type:'entrainement',cle:null,           icon:'⚠️',color:'var(--orange)',lib:'Progression bloquée'}
+    {type:'entrainement',cle:null,           icon:'⚠️',color:'var(--orange)',lib:'Progression bloquée'},
+    // DERNIER RANG, ET C'EST SA PLACE. `vus` fait que l'athlete deja remonte
+    // pour une douleur, un decrochage ou un plateau n'apparait pas ici : on ne
+    // parle pas d'entretien a un coach qui a un probleme de sante a traiter.
+    // Gris et non orange : rien ne va mal, il manque juste une mesure.
+    {type:'calibrage',  cle:'calibrageDu',   icon:'🎯',color:'var(--sub)',   lib:'Calibrage RIR à faire'}
   ];
   for(const n of NIV){
     for(const c of clients){
@@ -31859,6 +31886,7 @@ function renderWoEx(){
           </div>
         </div>
       </div>`:''}
+      ${(()=>{ try{ return _carteCalibrageRir(groupe,gi===grs.length-1); }catch(e){ return ''; } })()}
     </div>`;
 
   // Handlers posés en JS, hors attribut. Auparavant les trois valeurs etaient
@@ -33093,6 +33121,334 @@ const ABERRATION_FACTEUR=1.5;// au-delà de 1,5 × la médiane des 5 précédent
 const ABERRATION_FENETRE=5;
 const PART_RIR_MANQUANT=0.5;// séance à plus de 50 % de RIR vides : écartée du max
 
+// ══════════ LE BIAIS DE PERCEPTION DU RIR ══════════════════════════════
+//
+// LE RIR ALIMENTE TOUT ET N'ETAIT JAMAIS VERIFIE. La consigne du coach, le
+// e1RM, la detection de plateau, les signaux, les decharges : tous lisent un
+// chiffre que l'athlete DECLARE, et que personne n'a jamais confronte a ce
+// qu'il pouvait reellement faire. Un debutant qui annonce « RIR 2 » a souvent
+// quatre repetitions sous le pied — et toute la chaine en aval travaille sur
+// une intensite qui n'a pas eu lieu.
+//
+// ON MESURE L'ECART, ON NE REECRIT JAMAIS LA SAISIE. La donnee brute reste
+// celle que l'athlete a tapee : c'est elle qu'il relit, qu'il exporte, et
+// c'est la seule qu'il reconnaitra. Le biais vit a cote, et ne s'applique
+// qu'aux lectures qui DECIDENT quelque chose.
+//
+// ⚠ LE SENS DE LA CORRECTION EST +, PAS −, ET LA DEFINITION L'IMPOSE :
+//     biaisSerie = repsReelles − (repsAnnoncees + rirAnnonce)
+//                = (RIR vrai a l'instant de l'annonce) − (RIR annonce)
+//   donc RIR vrai = RIR annonce + biais. Un biais de +2 veut dire « il en
+//   avait deux de plus sous le pied » : sa serie a RIR 2 declare etait en
+//   realite une serie a RIR 4. Retrancher le biais dirait l'inverse — que la
+//   serie etait PLUS dure que declaree — et doublerait l'erreur au lieu de
+//   l'annuler. Le coach lirait « plus dur que demande » chez quelqu'un qui
+//   s'entraine trop facile, et baisserait l'intensite.
+const CAL_RIR_BORNE=3;             // au-dela, c'est le protocole qui a derape
+const CAL_RIR_DERNIERS=5;          // la fenetre de la mediane
+const CAL_RIR_PERIME_JOURS=90;     // un calibrage vieillit : la perception bouge
+const CAL_RIR_SEANCES_MINI=8;      // avant, l'athlete a autre chose a apprendre
+const CAL_RIR_MAX=5;               // l'echelle de saisie de l'application
+
+// PURE. L'ecart d'UNE serie de test. Positif : il s'arrete trop tot.
+function biaisTestCalibrage(t){
+  if(!t||typeof t!=='object') return null;
+  const ra=Number(t.repsAnnoncees), ri=Number(t.rirAnnonce), rr=Number(t.repsReelles);
+  if(!isFinite(ra)||!isFinite(ri)||!isFinite(rr)) return null;
+  return rr-(ra+ri);
+}
+// PURE. Trois paliers, et le premier ne corrige RIEN — voir rirCorrige.
+// n=0 tombe dans 'faible' : c'est voulu, il n'y a rien a dire d'un athlete
+// qu'on n'a jamais mesure.
+function fiabiliteCalibrage(n){
+  const k=Number(n)||0;
+  if(k<2) return 'faible';
+  if(k<4) return 'moyenne';
+  return 'bonne';
+}
+// PURE. Le modele complet, recalcule depuis la liste des tests.
+//
+// MEDIANE ET NON MOYENNE. Un test rate — l'athlete s'arrete a la premiere
+// gene, ou au contraire s'acharne bien apres la perte d'amplitude — produit
+// un ecart enorme. Une moyenne sur cinq points le laisserait deplacer le
+// repere de plus d'une repetition ; la mediane l'ignore.
+//
+// LES CINQ DERNIERS, ET NON TOUS. La perception S'AMELIORE : garder un test
+// d'il y a un an ferait tirer le repere par quelqu'un qui n'existe plus.
+function calculerCalibrageRir(tests){
+  const l=Array.isArray(tests)?tests.filter(t=>biaisTestCalibrage(t)!==null):[];
+  const n=l.length;
+  if(!n) return {tests:l,biais:null,n:0,maj:null,fiabilite:'faible'};
+  const ecarts=l.slice(-CAL_RIR_DERNIERS).map(biaisTestCalibrage);
+  // LE BORNAGE PORTE SUR LE REPERE, PAS SUR LES TESTS. Un test aberrant reste
+  // enregistre tel quel — c'est peut-etre le protocole qui a ete mal execute,
+  // et l'effacer empecherait de s'en rendre compte plus tard.
+  const brut=_mediane(ecarts);
+  const biais=Math.max(-CAL_RIR_BORNE,Math.min(CAL_RIR_BORNE,brut));
+  const maj=l.reduce((m,t)=>Math.max(m,Number(t.date)||0),0)||null;
+  return {tests:l,biais,n,maj,fiabilite:fiabiliteCalibrage(n)};
+}
+// PURE. Le modele range dans le dossier, ou null. Une forme abimee rend null
+// plutot que de laisser passer un biais fantaisiste dans tout l'aval.
+function calibrageRirDe(user){
+  const u=_dossier(user);
+  const c=u&&u.calibrageRir;
+  if(!c||typeof c!=='object') return null;
+  const b=(c.biais===null||c.biais===undefined)?null:Number(c.biais);
+  if(b!==null&&(!isFinite(b)||Math.abs(b)>CAL_RIR_BORNE)) return null;
+  return {biais:b,n:Number(c.n)||0,maj:Number(c.maj)||null,
+    fiabilite:(c.fiabilite==='bonne'||c.fiabilite==='moyenne')?c.fiabilite:'faible',
+    tests:Array.isArray(c.tests)?c.tests:[]};
+}
+// PURE. LA SEULE PORTE par laquelle le biais entre dans une decision.
+//
+// ELLE NE S'APPELLE JAMAIS A L'ECRITURE NI A L'AFFICHAGE. Le CSV, l'historique
+// de seance et tout ce que l'athlete relit montrent le chiffre SAISI. Corriger
+// ce qu'il voit reviendrait a lui dire qu'il n'a pas tape ce qu'il a tape.
+//
+// FIABILITE FAIBLE : ON NE CORRIGE PAS. Sur un seul test, le repere est un
+// point unique — corriger dessus deplacerait toutes les decisions d'un athlete
+// a partir d'une seule serie, possiblement ratee. Ne rien faire est alors
+// strictement meilleur que faire n'importe quoi.
+//
+// UNE ENTREE QUI N'EST PAS UN NOMBRE RESSORT INTACTE. '' et 'echec' ont un sens
+// ailleurs dans le fichier ; les convertir ici en 0 inventerait une valeur.
+function rirCorrige(user,rirBrut){
+  // ⚠ Number('') VAUT ZERO, PAS NaN. Un simple isFinite(Number(x)) laissait
+  // donc passer la chaine vide — c'est-a-dire « RIR non renseigne » — comme
+  // un RIR de 0, puis la corrigeait. La saisie vide serait ressortie d'ici en
+  // valeur mesuree. On teste le TYPE avant de convertir.
+  const r=(typeof rirBrut==='number')?rirBrut
+    :(typeof rirBrut==='string'&&rirBrut.trim()!=='')?Number(rirBrut):NaN;
+  if(!isFinite(r)) return rirBrut;
+  const c=calibrageRirDe(user);
+  if(!c||c.biais===null||c.fiabilite==='faible') return r;
+  return Math.max(0,Math.min(CAL_RIR_MAX,r+c.biais));
+}
+// PURE. Le test est-il du : jamais fait, ou vieux de plus de trois mois ?
+// ET SEULEMENT APRES HUIT SEANCES. Demander a quelqu'un qui debute d'aller a
+// l'echec technique sur un exercice qu'il ne maitrise pas encore, c'est
+// mesurer sa technique et non sa perception.
+function calibrageRirDu(user){
+  const u=_dossier(user);
+  if(!u) return false;
+  const n=((u.sessions)||[]).length;
+  if(n<=CAL_RIR_SEANCES_MINI) return false;
+  const c=calibrageRirDe(u);
+  if(!c||!c.n) return true;
+  if(!c.maj) return true;
+  return (Date.now()-c.maj)>CAL_RIR_PERIME_JOURS*864e5;
+}
+// PURE. FAUT-IL LE PROPOSER AUJOURD'HUI ? Ce n'est PAS calibrageRirDu, et les
+// deux ne peuvent pas fusionner : celui du coach dit « ce dossier n'a pas de
+// repere valide », celui-ci dit « offrons-lui d'en poser un maintenant ».
+//
+// SANS LUI, LE MODELE N'ATTEINDRAIT JAMAIS SA FIABILITE. La regle des 90 jours
+// suffit a l'entretien d'un repere deja sur, mais il faut QUATRE tests pour y
+// arriver : proposes tous les 90 jours, cela ferait neuf mois avant la
+// premiere correction. On propose donc tant que le repere n'est pas sur, avec
+// une semaine d'ecart au minimum — le test coute une serie a l'echec, et deux
+// dans la meme semaine mesureraient surtout la fatigue.
+const CAL_RIR_ESPACEMENT_JOURS=7;
+function calibrageRirAProposer(user){
+  const u=_dossier(user);
+  if(!u) return false;
+  if(((u.sessions)||[]).length<=CAL_RIR_SEANCES_MINI) return false;
+  const c=calibrageRirDe(u);
+  if(!c||!c.n||!c.maj) return true;
+  const jours=(Date.now()-c.maj)/864e5;
+  if(jours<CAL_RIR_ESPACEMENT_JOURS) return false;
+  if(c.fiabilite!=='bonne') return true;
+  return jours>CAL_RIR_PERIME_JOURS;
+}
+
+// L'EXERCICE PEUT-IL PORTER LE TEST ?
+//
+// UNE SERIE MENEE A L'ECHEC TECHNIQUE REEL, donc jamais sous charge axiale :
+// une derniere repetition ratee au squat ou au souleve de terre se paie sur
+// le rachis, et aucune mesure ne vaut ca. On reutilise la charge lombaire du
+// SCHEMA, deja notee pour l'indicateur de charge axiale, plutot que d'inventer
+// une seconde liste d'exercices interdits qui divergerait de la premiere.
+//
+// EXACTEMENT ZERO, ET NULL EST REFUSE COMME 3. `chargeLombaireSchema` rend
+// null quand le schema n'a pas encore ete note : une absence n'est pas un
+// zero, c'est la regle du projet, et c'est ici qu'elle protege quelqu'un.
+// Restent les isolations, les mollets et tout ce que le coach a note 0 —
+// c'est-a-dire les machines et les mouvements guides que le protocole demande.
+//
+// _axialContrainteLombaire N'EST PAS UN FILTRE DE PLUS, et c'est deliberе :
+// exiger une charge lombaire nulle rend deja le test sans effet sur le rachis,
+// donc sans danger pour une lombalgie declaree. Lui interdire en plus un curl
+// biceps serait une precaution qui ne protege de rien.
+function exerciceCalibrable(ex,user,grille){
+  if(!ex||!(ex.name||typeof ex==='string')) return false;
+  try{ if(isCardio(ex)) return false; }catch(e){}
+  let sch=null;
+  try{ sch=schemaDe(ex,user); }catch(e){ return false; }
+  if(!sch) return false;
+  let ch=null;
+  try{ ch=chargeLombaireSchema(sch,grille); }catch(e){ return false; }
+  if(ch!==0) return false;
+  // ET AUCUNE CONTRAINTE DECLAREE SUR CET EXERCICE-LA. Meme garde que
+  // l'editeur du coach : ce qui merite un avertissement avant une serie
+  // normale ne se mene pas a l'echec.
+  try{ if(contraintesPourExercice(ex,user).length) return false; }catch(e){}
+  return true;
+}
+// L'ECRITURE. Rend {ok:true, modele} ou {ok:false, raison}.
+//
+// LE PROTOCOLE SE VERIFIE AVANT D'ETRE ENREGISTRE. repsReelles < repsAnnoncees
+// est impossible par construction — on ne peut pas avoir fait MOINS que ce
+// qu'on avait deja fait au moment de l'annonce. C'est une faute de saisie, et
+// l'accepter poserait un biais massivement negatif qui fausserait tout l'aval.
+function enregistrerTestCalibrage(user,t){
+  const u=_dossier(user);
+  if(!u) return {ok:false,raison:'Aucun dossier ouvert.'};
+  const ra=Math.round(Number(t&&t.repsAnnoncees));
+  const ri=Math.round(Number(t&&t.rirAnnonce));
+  const rr=Math.round(Number(t&&t.repsReelles));
+  const kg=Number(t&&t.chargeKg);
+  const nom=String((t&&t.exercice)||'').trim();
+  if(!nom) return {ok:false,raison:'Exercice inconnu.'};
+  if(!(ra>=1)) return {ok:false,raison:'Le nombre de répétitions annoncé doit être au moins 1.'};
+  if(!(ri>=0&&ri<=CAL_RIR_MAX)) return {ok:false,raison:'Le RIR annoncé doit aller de 0 à '+CAL_RIR_MAX+'.'};
+  if(!(rr>=ra)) return {ok:false,raison:'Tu ne peux pas avoir fait moins de répétitions au total que celles déjà faites à l’annonce.'};
+  if(!(kg>0)) return {ok:false,raison:'Charge manquante.'};
+  const liste=(Array.isArray(u.calibrageRir&&u.calibrageRir.tests)?u.calibrageRir.tests:[]).slice();
+  liste.push({date:Date.now(),exercice:nom,chargeKg:kg,
+    repsAnnoncees:ra,rirAnnonce:ri,repsReelles:rr});
+  u.calibrageRir=calculerCalibrageRir(liste);
+  try{ saveUser(); }catch(e){}
+  // LES CACHES PORTENT DES VERDICTS QUE LE BIAIS VIENT DE CHANGER. Meme geste
+  // que la decharge, pour la meme raison : un e1RM et un etat de plateau
+  // calcules avec l'ancien repere resteraient servis jusqu'au rechargement.
+  try{ _viderCachePlateau(); _viderCacheVolume(); _cacheSignaux.clear(); }catch(e){}
+  return {ok:true,modele:u.calibrageRir};
+}
+// LA PHRASE DE RETOUR, JAMAIS UN SCORE. « Biais +2 » ne dit rien a personne et
+// se lit comme une note ; « tu t'arretes deux repetitions trop tot » se lit
+// d'un coup et dit quoi faire. Le chiffre reste dans le dossier, pour le coach.
+function phraseCalibrageRir(modele){
+  if(!modele||modele.biais===null||modele.biais===undefined) return '';
+  const b=Number(modele.biais);
+  if(!isFinite(b)) return '';
+  const n=Math.round(Math.abs(b));
+  const mot=x=>x===1?'une répétition':(x===2?'deux répétitions':(x===3?'trois répétitions':x+' répétitions'));
+  // ARRONDI A ZERO : un biais de −0,5 ou +0,5 n'est pas un ecart, c'est du
+  // bruit de mesure sur des entiers. On ne fabrique pas une consigne dessus.
+  if(n===0) return 'Ta perception est juste.';
+  // FIABILITE FAIBLE : ON DIT CE QU'ON A VU, ET ON NE PROMET RIEN. La seconde
+  // phrase serait un mensonge — rirCorrige ne corrige rien a ce stade.
+  const applique=(modele.fiabilite!=='faible')
+    ? ' Les consignes en tiennent compte à partir de maintenant.'
+    : ' Un deuxième test et les consignes en tiendront compte.';
+  return (b>0
+    ? 'Tu t\'arrêtes environ '+mot(n)+' trop tôt.'
+    : 'Tu vas environ '+mot(n)+' plus loin que tu ne le penses.')+applique;
+}
+
+// ══════════ L'ENCART DE TEST, DANS LA SEANCE ══════════════════════════
+//
+// PAS DE NOUVEL ECRAN, et sur le DERNIER exercice seulement. Le test coute une
+// serie menee a l'echec technique : la placer en debut de seance abimerait
+// tout ce qui suit. En fin de seance, la fatigue accumulee est deja la, et le
+// cout marginal est celui d'une serie.
+//
+// PROPOSE, JAMAIS IMPOSE. L'encart n'interrompt rien et ne bloque aucun
+// bouton ; il se referme en le rouvrant. Une mesure de perception faite a
+// contrecoeur ne mesure rien.
+function _calChargeDerniereSerie(idx){
+  try{
+    const sets=((woState.sessionData||{})[idx]||{}).sets||[];
+    for(let i=sets.length-1;i>=0;i--){
+      const w=parseFloat(sets[i]&&sets[i].weight);
+      if(w>0) return w;
+    }
+  }catch(e){}
+  return 0;
+}
+// PURE. Le premier exercice du groupe qui puisse porter le test, ou -1.
+// Un superset en compte plusieurs ; on ne teste que sur l'un d'eux.
+function _calIndexTestable(groupe,user,grille){
+  for(const i of (groupe||[])){
+    const ex=(woState.exercises||[])[i];
+    if(ex&&exerciceCalibrable(ex,user,grille)) return i;
+  }
+  return -1;
+}
+function _carteCalibrageRir(groupe,dernier){
+  if(!dernier) return '';
+  try{
+    if(!calibrageRirAProposer(currentUser)) return '';
+    const g=(()=>{ try{ return _grilleCharges(); }catch(e){ return null; } })();
+    const i=_calIndexTestable(groupe,currentUser,g);
+    // AUCUN EXERCICE ELIGIBLE : ON NE DIT RIEN. Expliquer a l'athlete pourquoi
+    // il ne peut pas faire un test qu'il n'a pas demande serait du bruit — et
+    // la carte reviendra d'elle-meme la prochaine seance qui s'y prete.
+    if(i<0) return '';
+    const ex=woState.exercises[i];
+    const kg=_calChargeDerniereSerie(i);
+    // SANS CHARGE SAISIE, IL N'Y A RIEN A ENREGISTRER. On propose quand meme :
+    // l'athlete n'a simplement pas encore rempli sa serie, et il la remplira.
+    return `<div id="cal-encart" style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px">
+      <div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Perception du RIR</div>
+      <div style="font-size:var(--fs-xs);color:#bbb;line-height:1.6">Va jusqu'à ne plus pouvoir en faire une propre. On compare avec ce que tu avais annoncé.</div>
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px">Sur ${escapeHtml(ex.name)}${kg>0?' · '+kg+' kg':''}</div>
+      <button id="cal-ouvrir" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="calOuvrirTest(${i})">Tester ma perception</button>
+      <div id="cal-form" style="display:none;margin-top:11px">
+        <!-- LA REGLE GLOBALE « label » MET EN MAJUSCULES ET ESPACE LES LETTRES,
+             et sur trois colonnes de 100 px chaque intitule passait sur deux
+             lignes. Meme derogation que « Filmer cet exercice », plus haut dans
+             cet ecran, et pour la meme raison : ce sont des mots, pas des
+             intitules de formulaire administratif. -->
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;min-width:0"><label for="cal-ra" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal;font-weight:600">Reps faites</label><input type="number" inputmode="numeric" min="1" id="cal-ra" placeholder="8"></div>
+          <div style="flex:1;min-width:0"><label for="cal-ri" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal;font-weight:600">RIR annoncé</label><input type="number" inputmode="numeric" min="0" max="5" id="cal-ri" placeholder="2"></div>
+          <div style="flex:1;min-width:0"><label for="cal-rr" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal;font-weight:600">Reps au total</label><input type="number" inputmode="numeric" min="1" id="cal-rr" placeholder="12"></div>
+        </div>
+        <div id="cal-err" style="color:var(--red-light);font-size:var(--fs-xs);margin-top:7px;display:none"></div>
+        <button class="btn btn-red btn-sm" style="width:100%;margin-top:9px" onclick="calEnregistrer(${i})">Enregistrer le test</button>
+      </div>
+      <div id="cal-retour" style="display:none;margin-top:10px;font-size:var(--fs-xs);color:var(--text);line-height:1.6"></div>
+    </div>`;
+  }catch(e){ return ''; }
+}
+function calOuvrirTest(){
+  const f=document.getElementById('cal-form');
+  const b=document.getElementById('cal-ouvrir');
+  if(!f) return false;
+  const ouvert=f.style.display!=='none';
+  f.style.display=ouvert?'none':'block';
+  if(b) b.textContent=ouvert?'Tester ma perception':'Annuler';
+  return true;
+}
+function calEnregistrer(idx){
+  const err=document.getElementById('cal-err');
+  const dire=m=>{ if(err){ err.textContent=m; err.style.display='block'; } };
+  if(err) err.style.display='none';
+  const ex=(woState.exercises||[])[idx];
+  if(!ex) return dire('Exercice introuvable.'),false;
+  const kg=_calChargeDerniereSerie(idx);
+  // LA CHARGE VIENT DE LA SERIE, PAS D'UN CHAMP. Trois champs et pas quatre :
+  // la charge est deja saisie juste au-dessus, la redemander serait la faire
+  // taper deux fois — et ouvrir la porte a deux valeurs differentes.
+  if(!(kg>0)) return dire('Renseigne d’abord la charge d’une série de cet exercice.'),false;
+  const v=id=>{ const e=document.getElementById(id); return e?e.value:''; };
+  const r=enregistrerTestCalibrage(currentUser,{exercice:ex.name,chargeKg:kg,
+    repsAnnoncees:v('cal-ra'),rirAnnonce:v('cal-ri'),repsReelles:v('cal-rr')});
+  if(!r.ok) return dire(r.raison),false;
+  const f=document.getElementById('cal-form');
+  const b=document.getElementById('cal-ouvrir');
+  const z=document.getElementById('cal-retour');
+  if(f) f.style.display='none';
+  if(b) b.style.display='none';
+  // UNE PHRASE, JAMAIS UN SCORE. Voir phraseCalibrageRir : « biais +2 » se lit
+  // comme une note, et personne ne sait quoi en faire.
+  if(z){ z.textContent=phraseCalibrageRir(r.modele); z.style.display='block'; }
+  try{ arcHaptique('legere'); }catch(e){}
+  return true;
+}
+
 // Une seule définition de l'e1RM dans le fichier. Elle vivait dans calcSug,
 // qui n'avait plus aucun appelant ; calcSug l'utilise désormais aussi, ce qui
 // évite d'en avoir deux versions qui divergeraient.
@@ -33106,17 +33462,26 @@ function e1rm(poids,reps,rir){
 }
 const PERF_REPS_MAX_E1RM=12;  // au-delà, l'e1RM n'est plus fiable
 
-function _perfRir(s){
+// `user` EST FACULTATIF, ET SON ABSENCE VAUT « PAS DE CORRECTION ». C'est la
+// valeur par defaut la plus sure : tout appelant qui n'a pas explicitement
+// choisi de decider avec le biais lit la donnee brute. On n'a donc pas eu a
+// auditer les appelants pour savoir lesquels corrigeaient par accident — il
+// n'y en a aucun, par construction.
+function _perfRir(s,user){
   // '' et absent donnent 0, donc « à l'échec » : c'est ce qui SURESTIME l'e1RM
   // et justifie d'écarter du maximum les séances où le RIR est majoritairement
   // vide, sans quoi une séance mal renseignée deviendrait un record imbattable.
-  return (s&&s.rir==='echec')?0:(parseInt(s&&s.rir)||0);
+  const brut=(s&&s.rir==='echec')?0:(parseInt(s&&s.rir)||0);
+  return (user===undefined||user===null)?brut:rirCorrige(user,brut);
 }
 function _perfReps(s){
   return (s&&s.repsDone!=null)?Number(s.repsDone):repsToNumber(s&&s.reps);
 }
 
-function perfExercice(sess,exNom){
+// LECTURE DE DECISION quand `user` est fourni : c'est ce score qui alimente
+// l'etat d'exercice, donc la detection de plateau. Sans dossier, elle reste
+// exactement ce qu'elle etait.
+function perfExercice(sess,exNom,user){
   const d=_dataDeSeance(sess,exNom);
   if(!d||!Array.isArray(d.sets)) return null;
   let score=0, metrique=null, vus={}, retenues=0, sansRir=0;
@@ -33129,7 +33494,7 @@ function perfExercice(sess,exNom){
     const r=_perfReps(s);
     const m=r<=PERF_REPS_MAX_E1RM?'e1RM':'volume-serie';
     vus[m]=true;
-    const v=m==='e1RM'?e1rm(w,r,_perfRir(s)):w*r;
+    const v=m==='e1RM'?e1rm(w,r,_perfRir(s,user)):w*r;
     if(v>score){ score=v; metrique=m; }
   }
   if(!retenues) return null;
@@ -33141,7 +33506,7 @@ function perfExercice(sess,exNom){
 }
 
 // Série temporelle d'un exercice sur un créneau, prête à être jugée.
-function _serieExercice(seances,exNom,slot,progName){
+function _serieExercice(seances,exNom,slot,progName,user){
   const out=[];
   for(const sess of (seances||[])){
     if(!sess||!sess.date) continue;
@@ -33150,7 +33515,7 @@ function _serieExercice(seances,exNom,slot,progName){
     // apparaîtra.
     if(sess.deload) continue;
     if(!_memeCreneau(sess,slot,progName)) continue;
-    const p=perfExercice(sess,exNom);
+    const p=perfExercice(sess,exNom,user);
     if(!p||!(p.score>0)) continue;
     out.push({date:sess.date,score:p.score,metrique:p.metrique,
               mixte:p.mixte,sansRirDominant:p.sansRirDominant,id:sess.id});
@@ -33183,12 +33548,17 @@ function _marquerAberrations(serie){
 function etatExercice(user,exNom,slot,progName){
   const cle=(user&&user.email||'?')+'|'+exKey(exNom)+'|'+slot+'|'+(progName||'');
   if(_cachePlateau[cle]) return _cachePlateau[cle];
-  return (_cachePlateau[cle]=_calculEtat((user&&user.sessions)||[],exNom,slot,progName));
+  return (_cachePlateau[cle]=_calculEtat((user&&user.sessions)||[],exNom,slot,progName,user));
 }
-function _calculEtat(seances,exNom,slot,progName){
+// LE DOSSIER DESCEND JUSQU'ICI POUR UNE SEULE RAISON : le biais de perception.
+// Le calcul, lui, prend toujours une LISTE de seances — c'est ce qui permet de
+// le rejouer sans la derniere. Le cache, lui, est vide a chaque test de
+// calibrage : voir enregistrerTestCalibrage. Sans cela il servirait des etats
+// calcules avec l'ancien repere jusqu'au rechargement de la page.
+function _calculEtat(seances,exNom,slot,progName,user){
   const rendre=(o)=>o;
 
-  let serie=_serieExercice(seances,exNom,slot,progName);
+  let serie=_serieExercice(seances,exNom,slot,progName,user);
   if(!serie.length) return rendre({etat:'insuffisant',n:0,T:0});
 
   // Un changement de métrique COUPE la série : comparer un e1RM à un volume de
@@ -33373,7 +33743,7 @@ function _listeEtats(user){
   const out=[];
   for(const [nom,ref] of vus){
     const e=etatExercice(user,nom,ref.slot,ref.name);
-    const serie=_serieExercice(user.sessions||[],nom,ref.slot,ref.name);
+    const serie=_serieExercice(user.sessions||[],nom,ref.slot,ref.name,user);
     out.push({nom,...e,points:serie.map(p=>p.score)});
   }
   // Les exercices sans recul suffisant ferment la liste : ils n'ont rien à dire.
@@ -43092,7 +43462,13 @@ function ecartRirPrescrit(user){
         for(const s of d.sets){
           if(!s||s.done!==true) continue;
           if(s.rir===''||s.rir==null) continue;
-          const v=(s.rir==='echec')?0:(parseInt(s.rir,10)||0);
+          // LECTURE DE DECISION, DONC CORRIGEE. C'est la comparaison meme que
+          // le calibrage existe pour rendre juste : un athlete qui declare
+          // « RIR 2 » avec deux repetitions de reserve en plus n'a PAS suivi
+          // une consigne de RIR 2 — il s'est entraine plus facile qu'on ne le
+          // lui demandait, et c'est exactement ce que le coach doit lire.
+          // Sans correction, il lisait l'inverse et baissait l'intensite.
+          const v=rirCorrige(user,(s.rir==='echec')?0:(parseInt(s.rir,10)||0));
           const f=faits[k]||(faits[k]={somme:0,n:0,nom,sommeCons:0});
           f.somme+=v; f.n++; f.sommeCons+=cons;
         }
@@ -43830,7 +44206,7 @@ function _serieRecords(user,nomEx){
     if(!sess||!sess.date||sess.deload) continue;
     const nom=_nomDansSeance(sess,nomEx,user);
     if(!nom) continue;
-    const p=perfExercice(sess,nom);
+    const p=perfExercice(sess,nom,user);
     if(!p||!(p.score>0)) continue;
     out.push({date:sess.date,score:p.score,sansRirDominant:p.sansRirDominant,
       nom,sess});
@@ -43861,7 +44237,7 @@ function recordsExercice(user,nomEx){
       // perfExercice bascule déjà sur le tonnage-série — même règle ici.
       if(pt.sansRirDominant) continue;
       if(!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
-      const v=e1rm(w,r,_perfRir(s));
+      const v=e1rm(w,r,_perfRir(s,user));
       if(v>0&&(!me||v>me.valeur)) me={valeur:Math.round(v*10)/10,date:pt.date};
     }
   }
@@ -44015,7 +44391,7 @@ function estNouveauRecord(user,nomEx,serie){
   const mc=rec.meilleureCharge, me=rec.meilleurE1rm;
   if(mc&&w>mc.kg) return true;
   if(r>0&&r<=PERF_REPS_MAX_E1RM){
-    const v=e1rm(w,r,_perfRir(serie));
+    const v=e1rm(w,r,_perfRir(serie,user));
     if(v>0&&(!me||v>me.valeur)) return true;
   }
   return !mc&&!me;
