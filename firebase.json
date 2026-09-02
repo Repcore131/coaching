@@ -19,7 +19,11 @@
     "//": "/i est le lien court : dictable a l'oral, imprimable sur un flyer, et surtout COURT — un QR qui encode moins de caracteres a des modules plus gros, donc se lit de plus loin. Il REDIRIGE vers /app/#install (voir //redirects ci-dessous) au lieu de servir la page sous son propre chemin : servie sous /i, l'application cherchait ses ressources relatives a la racine et ne trouvait ni son logo, ni son manifeste, ni son service worker. Firebase applique redirections et reecritures APRES avoir cherche un fichier reel : aucune ressource existante n'est masquee. ATTENTION : les regles headers portent sur le chemin DEMANDE et non sur le fichier servi — la regle no-cache sur /i reste donc utile, elle empeche la redirection elle-meme d'etre mise en cache une heure.",
     "//redirects": "⚠ UNE REDIRECTION, ET SURTOUT PAS UNE REECRITURE. La reecriture servait /app/index.html SOUS l'adresse /i : la page arrivait, mais le navigateur la croyait posee a la racine, et toutes ses adresses relatives — ./icons/logo.png, ./manifest.json, ./sw.js — se resolvaient une case trop haut, donc en 404. Mesure du 02/09/2026 sur https://repcore-sync.web.app/i : logo en image cassee, aucun service worker, AUCUN MANIFESTE — donc pas de beforeinstallprompt, donc un ecran d'installation qui n'installe rien. Le lien court est celui du QR et du flyer : les seuls a qui on demande d'installer etaient les seuls a ne pas le pouvoir. La 302 renvoie le navigateur sur /app/, ou tout se resout, et le fragment #install force l'ecran meme apres deux refus.",
     "redirects": [
-      { "source": "/i", "destination": "/app/#install", "type": 302 }
+      {
+        "source": "/i",
+        "destination": "/app/#install",
+        "type": 302
+      }
     ],
     "//ignore": "⚠ .well-known EST EXEMPTE, ET C'EST L'ETAPE QUE TOUT LE MONDE RATE. La regle **/.* exclut du deploiement tout fichier ou dossier commencant par un point — .well-known/assetlinks.json en fait partie. Sans exemption il n'est jamais publie, Android ne peut pas verifier que le domaine autorise l'application, et la TWA s'ouvre AVEC LA BARRE D'ADRESSE : elle se comporte comme un onglet de navigateur deguise. Le defaut ne dit rien, il se constate a l'ecran.",
     "ignore": [
@@ -27,6 +31,16 @@
       "!.well-known/**"
     ],
     "headers": [
+      {
+        "//": "MEME PIEGE QUE /i, ET IL A COUTE QUATRE LOTS. Les en-tetes suivent le chemin DEMANDE, pas le fichier servi : /app/ n'a pas d'extension, la regle **/*.html ne le voit donc pas, et cette adresse — celle du lien court, du QR et de la page de vente, donc celle que TOUT LE MONDE ouvre — heritait du max-age=3600 par defaut. Mesure le 03/09/2026 : /app/index.html rendait no-cache et /app/ rendait max-age=3600 pour le meme fichier. Consequence : chaque mise en ligne mettait jusqu'a une heure a atteindre un telephone qui avait deja ouvert l'app, PAR-DESSUS le cache du service worker.",
+        "source": "/app",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
       {
         "//": "Le lien court ne finit pas par .html : la regle **/*.html ne le voit pas. Sans cette entree, la redirection vers /app/#install heriterait du max-age=3600 par defaut et resterait figee une heure chez qui l'a suivie une fois.",
         "source": "/i",
