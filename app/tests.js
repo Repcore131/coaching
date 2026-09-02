@@ -16019,6 +16019,10 @@ async function testExercices(){
             const b2=_proposerSecondCompte('kevin@orange.fr');
             if(b2!==null) return _echec('une adresse est proposée chez un fournisseur sans sous-adressage');
             if(b.style.display!=='none') return _echec('le bouton est offert sans adresse à proposer');
+            // ET L'ADRESSE PRÉCÉDENTE NE RESTE PAS ACCROCHÉE : invisible tant que
+            // le bouton est caché, mais prête à remplir le champ avec l'adresse de
+            // quelqu'un d'autre le jour où une branche le rallumerait.
+            if(b.dataset.alias) return _echec('l’adresse précédente reste accrochée : '+b.dataset.alias);
             if(t.textContent.indexOf('autre adresse')<0) return _echec('le constat ne dit pas quoi faire');
             return true;
           } finally {

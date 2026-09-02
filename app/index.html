@@ -13668,6 +13668,11 @@ function _proposerSecondCompte(email,rejoindre){
     t.textContent='Cette adresse porte déjà un compte, et une adresse n\u2019en porte qu\u2019un. '
       +'Pour un second compte, il te faut une autre adresse email.';
     b.style.display='none';
+    // L'ADRESSE PART AVEC LE BOUTON. Sans ca, celle d'une proposition
+    // precedente restait accrochee a `dataset` : invisible tant que le bouton
+    // est cache, mais prete a remplir le champ avec l'adresse de quelqu'un
+    // d'autre le jour ou une branche le rallumerait.
+    delete b.dataset.alias;
   } else {
     t.innerHTML='Tu veux un <b style="color:var(--text)">second compte</b> — celui-ci en '
       +roleMot+' — sur la même boîte mail ? Utilise '
