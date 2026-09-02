@@ -10360,6 +10360,130 @@ async function testExercices(){
               return _echec('la modale iOS a disparu');
             return /showIosInstallGuide\(\)/.test(String(rcInstallDecider))
               ?true:_echec('la branche iOS ne l’ouvre pas');})());
+
+          // ══ CE QUI DECIDE, ET QUAND ══════════════════════════════════════
+          //
+          // LES SIX BRANCHES CI-DESSUS SONT JUSTES DEPUIS LE PREMIER JOUR, et
+          // la suite le verifiait — en APPELANT rcInstallDecider elle-meme.
+          // Le produit, lui, ne l'appelait QUE depuis _rcInviteArrivee, c'est
+          // a dire uniquement quand le navigateur envoyait
+          // beforeinstallprompt. Tous les autres chemins — le routage de
+          // demarrage, le fragment #install de la page de vente, la banniere
+          // de relance — ouvraient l'ecran tel qu'il est ecrit dans le
+          // document : tous les blocs caches, le bouton sans libelle, le
+          // sous-titre vide. Il ne restait que « Installe RepCore. » et le
+          // lien de sortie.
+          //
+          // C'est le defaut que six assertions vertes ne pouvaient pas voir :
+          // elles eprouvaient la decision, jamais son declenchement. La sonde
+          // OUVRE donc l'ecran comme l'application l'ouvre, et regarde.
+          ok('Ouvrir l\'écran d\'installation le décide, sans attendre l\'invitation',(()=>{
+            const _avant=document.querySelector('.screen.active')?.id;
+            // ON REND L'ECRAN COMME ON L'A TROUVE, et pas seulement les bouchons.
+            // Les branches A, E et F VIDENT le libelle du bouton principal : le
+            // laisser vide faisait tomber « Aucun bouton rendu n'est depourvu de
+            // glyphe » quatre-vingts assertions plus loin, sur un defaut qui
+            // n'existait que dans l'etat laisse par cette sonde-ci.
+            const _p=document.getElementById('rc-inst-principal');
+            const _s=document.getElementById('rc-inst-sous');
+            const _x=document.getElementById('rc-inst-passer');
+            const BLOCS=['rc-inst-integre','rc-inst-bureau','rc-inst-menu'];
+            const _etat={p:_p&&_p.textContent,pd:_p&&_p.style.display,s:_s&&_s.textContent,
+              x:_x&&_x.textContent,b:BLOCS.map(i=>{const b=document.getElementById(i);
+                return b?b.style.display:null;})};
+            try{
+              // Firefox Android : la branche F, celle qui n'a besoin d'aucune
+              // invitation du navigateur — donc celle qui prouve que la
+              // decision est prise a l'ouverture et non a l'arrivee de
+              // beforeinstallprompt.
+              _poser({ua:'Mozilla/5.0 (Android 13; Mobile) Firefox/120.0',coarse:true});
+              // ON REPART DE L'ECRAN MUET, celui du document : sinon un appel
+              // precedent aurait deja tout allume et la sonde ne mesurerait
+              // que son propre passe.
+              document.getElementById('rc-inst-sous').textContent='';
+              ['rc-inst-integre','rc-inst-bureau','rc-inst-menu']
+                .forEach(i=>{ const b=document.getElementById(i); if(b) b.style.display='none'; });
+              go('s-install');
+              if(!document.getElementById('rc-inst-sous').textContent)
+                return _echec('l’écran s’ouvre sans un mot d’explication');
+              const v=_visibles();
+              if(v.join(',')!=='rc-inst-menu')
+                return _echec('blocs visibles : '+(v.join(',')||'aucun')+' au lieu de rc-inst-menu');
+              // ET LA REGLE VIT DANS go(), pas chez un appelant : quatre
+              // chemins menent a cet ecran et go() est le seul par lequel ils
+              // passent tous.
+              return /rcInstallDecider\(\)/.test(String(go))
+                ?true:_echec('go() ne décide plus rien : la règle est repartie chez les appelants');
+            } finally {
+              _rendre();
+              if(_p){ _p.textContent=_etat.p; _p.style.display=_etat.pd; }
+              if(_s) _s.textContent=_etat.s;
+              if(_x) _x.textContent=_etat.x;
+              BLOCS.forEach((i,n)=>{ const b=document.getElementById(i);
+                if(b&&_etat.b[n]!=null) b.style.display=_etat.b[n]; });
+              if(_avant) go(_avant);
+            }})());
+
+          // ══ LE LIEN COURT ════════════════════════════════════════════════
+          //
+          // /i EST UNE ADRESSE, PAS UN EMPLACEMENT. L'hebergement le
+          // REECRIVAIT vers /app/index.html : la page arrivait, mais le
+          // navigateur la croyait posee a la racine, et chacune de ses
+          // adresses relatives se resolvait une case trop haut.
+          //   ./icons/logo.png -> /icons/logo.png -> 404
+          //   ./manifest.json  -> /manifest.json  -> 404
+          //   ./sw.js          -> /sw.js          -> 404
+          // Mesure du 02/09/2026 sur https://repcore-sync.web.app/i : le logo
+          // en image cassee, aucun service worker, et AUCUN MANIFESTE — donc
+          // pas de beforeinstallprompt, donc un ecran d'installation qui
+          // n'installe rien. Le lien court est celui du QR et du flyer : les
+          // seuls a qui on demande d'installer etaient les seuls a ne pas le
+          // pouvoir.
+          ok('Arrivé par le lien court, le document repart de /app/',(()=>{
+            const s=_prodSrc();
+            const g=s.indexOf('location.replace(\'/app/\'');
+            if(g<0) return _echec('le filet du lien court a disparu');
+            if(s.indexOf('_rcP===\'/i\'')<0) return _echec('il ne reconnaît plus /i');
+            // AVANT TOUT LE RESTE, et la capture de l'invitation est le
+            // premier script du document : un document qu'on va remplacer ne
+            // merite ni qu'on analyse ses quatre megaoctets, ni qu'on y pose
+            // des ecouteurs.
+            // ⚠ LA SONDE MATCHAIT SON PROPRE SUJET : le commentaire du filet
+            // NOMME beforeinstallprompt pour expliquer ce qui manquait, et le mot
+            // arrivait donc avant lui. On vise la POSE de l'ecouteur, pas le mot.
+            const b=s.indexOf('addEventListener(\'beforeinstallprompt\'');
+            if(b>=0&&g>b) return _echec('le filet arrive après la capture de l’invitation');
+            // ET IL NE PEUT PAS BOUCLER : apres remplacement le chemin vaut
+            // /app/, et la condition est fausse.
+            const _rejoue=p=>(p==='/i'||p==='/i/');
+            return _rejoue('/app/')?_echec('la condition se rejouerait sur /app/'):true;})());
+
+          okA('L\'hébergement REDIRIGE le lien court, il ne le réécrit pas',(async()=>{
+            // LA DIFFERENCE EST TOUT LE DEFAUT. Une reecriture sert la page
+            // SOUS /i ; une redirection renvoie le navigateur sur /app/, ou
+            // les adresses relatives se resolvent. Le fragment #install force
+            // l'ecran meme apres deux refus — on vient de scanner un QR qui
+            // dit « installe », ce n'est pas le moment de faire valoir un
+            // refus d'hier.
+            let t=null;
+            try{ const r=await fetch('../firebase.json',{cache:'no-store'});
+                 if(r.ok) t=await r.text(); }catch(e){}
+            // SERVI DEPUIS _site/, LE FICHIER N'EST PAS LA — _site ne contient
+            // que app/. La sonde ne vaut que la ou la racine du depot est
+            // servie, et elle le dit plutot que de tomber, comme celle des
+            // regles de la base.
+            if(t==null) return true;
+            let j; try{ j=JSON.parse(t); }
+            catch(e){ return _echec('firebase.json est illisible : '+((e&&e.message)||e)); }
+            const h=(j&&j.hosting)||{};
+            const rw=(h.rewrites||[]).find(x=>String(x&&x.source)==='/i');
+            if(rw) return _echec('/i est encore RÉÉCRIT vers '+rw.destination
+              +' : la page arriverait sous /i et chercherait ses ressources à la racine');
+            const rd=(h.redirects||[]).find(x=>String(x&&x.source)==='/i');
+            if(!rd) return _echec('/i ne mène plus nulle part');
+            if(String(rd.destination||'').indexOf('/app/')!==0)
+              return _echec('/i ne renvoie pas dans /app/ : '+rd.destination);
+            return true;}));
         })();
 
         // ══════ LE PLANCHER TYPOGRAPHIQUE ══════

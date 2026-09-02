@@ -2,6 +2,40 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<!-- ══════════ LE LIEN COURT NE SERT PLUS LA PAGE : IL Y MENE ════════════
+     /i EST UNE ADRESSE, PAS UN EMPLACEMENT. L'hebergement la reecrivait vers
+     /app/index.html : la page arrivait bien, mais le navigateur la croyait
+     posee a la RACINE. Toutes les adresses relatives du document — et elles
+     le sont toutes, deliberement, pour que l'app tienne aussi sous un
+     sous-dossier — se resolvaient alors une case trop haut :
+
+       ./icons/logo.png  ->  /icons/logo.png   404
+       ./manifest.json   ->  /manifest.json    404
+       ./sw.js           ->  /sw.js            404
+
+     CE QUE CA DONNAIT A L'ECRAN, mesure le 02/09/2026 sur /i : le logo en
+     image cassee, aucun service worker, et surtout AUCUN MANIFESTE — donc
+     Chrome ne tire jamais beforeinstallprompt, donc l'ecran d'installation
+     retombe sur « ouvre le menu de ton navigateur ». Le lien court est
+     precisement celui du QR et du flyer : ceux a qui on demande d'installer
+     etaient les seuls a ne pas le pouvoir.
+
+     LA CORRECTION TIENT D'ABORD DANS firebase.json — une redirection 302
+     remplace la reecriture, et le navigateur repart de /app/ ou tout se
+     resout. CE BLOC EST LE FILET : il rattrape la page deja en cache chez
+     quelqu'un, ou un hebergement ou la redirection manque. Il ne peut pas
+     boucler — apres remplacement, le chemin vaut /app/ et la condition est
+     fausse.
+
+     PREMIER SCRIPT DU DOCUMENT, avant meme la capture de l'invitation : un
+     document qu'on va remplacer ne merite pas qu'on analyse ses quatre
+     megaoctets. -->
+<script>
+try{
+  var _rcP=location.pathname;
+  if(_rcP==='/i'||_rcP==='/i/') location.replace('/app/'+(location.search||'')+'#install');
+}catch(e){}
+</script>
 <!-- ══════════ LA CAPTURE DE L'INVITATION D'INSTALLATION ══════════════════
      PREMIER SCRIPT DE LA PAGE, ET CE N'EST PAS UN CAPRICE DE RANGEMENT.
      beforeinstallprompt ne se rejoue pas : le navigateur le tire une fois,
@@ -12166,6 +12200,21 @@ function go(id){
   // raison et au meme endroit. Elle designait le dernier ONGLET visite, pas
   // l'ecran ouvert.
   _majBarreCoach();
+  // ── L'ÉCRAN D'INSTALLATION SE DÉCIDE À L'OUVERTURE ────────────────────
+  //
+  // C'ETAIT LE DEFAUT : rcInstallDecider() n'etait appelee QUE depuis
+  // _rcInviteArrivee(), c'est-a-dire uniquement quand le navigateur envoyait
+  // beforeinstallprompt. Partout ailleurs — le routage de demarrage, le
+  // fragment #install de la page de vente, la banniere de relance — l'ecran
+  // s'ouvrait tel qu'il est ecrit dans le document : TOUS les blocs en
+  // display:none, le bouton principal cache et sans libelle, le sous-titre
+  // vide. Il ne restait a l'ecran que « Installe RepCore. » et le lien de
+  // sortie. Un ecran d'installation sans aucun moyen d'installer.
+  //
+  // ICI ET NON CHEZ LES APPELANTS, pour la meme raison que le pre-remplissage
+  // du code juste en dessous : quatre chemins menent a s-install et go() est
+  // le seul par lequel ils passent tous.
+  if(id==='s-install'){ try{ rcInstallDecider(); }catch(e){} }
   // Pre-remplissage du code en attente, pose ICI et non chez les appelants :
   // cinq chemins menent a s-client-code (doRegister, doLogin, la reprise de
   // session, doNewPwdRecovery, les boutons « entrer un code ») et seuls deux
