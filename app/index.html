@@ -13826,6 +13826,23 @@ async function doRegister(){
       toast('Ce compte existe déjà : tes données ont été récupérées.','var(--green)');
       users[em]=cloudUser;DB.set('users',users);
       currentUser=cloudUser;DB.set('session',cloudUser);
+      // ── LE COMPTE ENTRE AU REGISTRE DE L'APPAREIL DÈS QU'IL EXISTE ──────
+      //
+      // routeUser() le faisait, et le fait toujours — mais un athlète au statut
+      // FREE part sur s-client-code et NE PASSE PAS par routeUser. Le compte
+      // qu'on vient de créer restait donc hors du sélecteur : invisible dans
+      // « Changer de compte », impossible à retrouver sans ressaisir l'adresse
+      // et le mot de passe. Le compte ACTIF n'était même pas dans sa propre
+      // liste.
+      //
+      // Ça se voit surtout depuis le second compte sur une même boîte mail : on
+      // vient de créer kevin+athlete@gmail.com, et rien ne permet d'y revenir
+      // sauf à se souvenir de l'alias. La proposition de l'écran d'inscription
+      // promet le sélecteur ; il doit tenir.
+      //
+      // Idempotente — elle remplace l'entrée de même adresse — donc la rejouer
+      // depuis routeUser ne fabrique aucun doublon.
+      try{ comptesEnregistrer(currentUser); }catch(e){}
       // routeUser() déconnecterait un athlète encore en statut FREE ; on le mène
       // à l'écran de code, comme le fait doLogin dans la même situation.
       if(cloudUser.role!=='coach'&&(cloudUser.status||'FREE')==='FREE'){
@@ -13862,6 +13879,23 @@ async function doRegister(){
 
     users[em]=user;DB.set('users',users);
     currentUser=user;DB.set('session',user);
+    // ── LE COMPTE ENTRE AU REGISTRE DE L'APPAREIL DÈS QU'IL EXISTE ──────
+    //
+    // routeUser() le faisait, et le fait toujours — mais un athlète au statut
+    // FREE part sur s-client-code et NE PASSE PAS par routeUser. Le compte
+    // qu'on vient de créer restait donc hors du sélecteur : invisible dans
+    // « Changer de compte », impossible à retrouver sans ressaisir l'adresse
+    // et le mot de passe. Le compte ACTIF n'était même pas dans sa propre
+    // liste.
+    //
+    // Ça se voit surtout depuis le second compte sur une même boîte mail : on
+    // vient de créer kevin+athlete@gmail.com, et rien ne permet d'y revenir
+    // sauf à se souvenir de l'alias. La proposition de l'écran d'inscription
+    // promet le sélecteur ; il doit tenir.
+    //
+    // Idempotente — elle remplace l'entrée de même adresse — donc la rejouer
+    // depuis routeUser ne fabrique aucun doublon.
+    try{ comptesEnregistrer(currentUser); }catch(e){}
     // Ici et pas plus haut : le compte existe vraiment à cette ligne. Les deux
     // sorties précédentes (compte déjà présent côté cloud, invitation coach
     // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.

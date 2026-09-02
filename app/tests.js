@@ -16047,6 +16047,32 @@ async function testExercices(){
           // ligne ou une adresse mal formée n'ont pas de second compte à proposer.
           const i=dr.indexOf('CLOUD._signInErr===\'wrong_password\') _proposerSecondCompte(em)');
           return i>=0?true:_echec('la branche Firebase l\'offre sur n\'importe quel refus');})());
+        ok('Un compte créé entre au registre de l\'appareil, même sans code coach',(()=>{
+          // LE SÉLECTEUR EST CE QUI REND LE SECOND COMPTE UTILISABLE : sans lui, on
+          // vient de créer kevin+athlete@gmail.com et rien ne permet d'y revenir
+          // sauf à se souvenir de l'alias. La proposition de l'écran d'inscription
+          // le promet — il doit tenir.
+          const dr=String(doRegister);
+          const n=dr.split('comptesEnregistrer(currentUser)').length-1;
+          if(n!==2) return _echec(n+' branche(s) inscrivent le compte au registre au lieu de 2');
+          // AVANT LA SORTIE VERS L'ÉCRAN DE CODE. routeUser() écrit déjà le
+          // registre, mais un athlète au statut FREE part sur s-client-code et n'y
+          // passe JAMAIS : c'est lui qui restait hors du sélecteur.
+          const iReg=dr.indexOf('comptesEnregistrer(currentUser)');
+          const iCode=dr.indexOf('go(\'s-client-code\')');
+          if(iCode>=0&&!(iReg<iCode))
+            return _echec('le registre est écrit APRÈS la sortie vers l\'écran de code');
+          // ET REJOUER N'AJOUTE RIEN : routeUser la rappelle juste après, et deux
+          // lignes pour un même compte dédoubleraient le sélecteur.
+          const _av=comptesConnectes();
+          try{
+            _comptesEcrire([]);
+            const faux={email:'sonde-registre@exemple.fr',fname:'S',lname:'R',role:'athlete'};
+            comptesEnregistrer(faux); comptesEnregistrer(faux);
+            const l=comptesConnectes().filter(c=>c&&c.email==='sonde-registre@exemple.fr');
+            if(l.length!==1) return _echec(l.length+' entrée(s) pour un seul compte');
+            return true;
+          } finally { try{ _comptesEcrire(_av); }catch(e){} }})());
         ok('Un e-mail déjà inscrit N\'ÉCRASE JAMAIS le dossier existant',(()=>{
           const dr=String(doRegister);
           const iCloud=dr.indexOf('const cloudUser=await CLOUD.pullUser(em)');
