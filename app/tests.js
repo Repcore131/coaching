@@ -15953,6 +15953,168 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LA BOUCLE DE RETOUR PAR MUSCLE ══════
+        (()=>{
+          const S=n=>{ let c=semaineISO(new Date()); for(let i=0;i<n;i++) c=_semainePrecedente(c); return c; };
+          const faux=r=>({email:'rm@test.fr',sessions:[],retourMuscle:{PECTORAUX:r},reperesAuto:{}});
+          const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};
+            try{ return f(); } finally { window.saveUser=s; } };
+
+          ok('Le repère bougé reste dans ses bornes dures',(()=>{
+            // LES BORNES SE MESURENT CONTRE LA TABLE, jamais contre le repère
+            // déjà déplacé : sinon douze semaines de « +1 » plafonnées sur le
+            // résultat de la précédente feraient dériver le repère sans fin.
+            const T=reperesTable('PECTORAUX');
+            if(!T) return _echec('les pectoraux n’ont plus de repère de table');
+            return sansSave(()=>{
+              // MONTER : plafonné à mavMin de la table.
+              let u=faux([{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}]);
+              let r=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(r.bouge!=='mev'||r.vers!==T.mev+1) return _echec('MEV : '+r.de+' → '+r.vers);
+              u=faux([{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'hausse'}]);
+              u.reperesAuto.PECTORAUX={mev:T.mavMin};
+              r=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(r.bouge) return _echec('le MEV dépasse mavMin : '+r.vers);
+              // DESCENDRE : plancher à mavMin de la table.
+              u=faux([{semaineISO:S(1),congestion:'correcte',courbatures:'encore',perfDelta:'stable'}]);
+              r=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(r.bouge!=='mrv'||r.vers!==T.mrv-1) return _echec('MRV : '+r.de+' → '+r.vers);
+              u=faux([{semaineISO:S(1),congestion:'correcte',courbatures:'encore',perfDelta:'stable'}]);
+              u.reperesAuto.PECTORAUX={mrv:T.mavMin};
+              r=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(r.bouge) return _echec('le MRV passe sous mavMin : '+r.vers);
+              return true;});})());
+
+          ok('Jamais deux bornes dans la même semaine, ni deux fois la même semaine',(()=>{
+            // Refermer la fenêtre par les deux bouts sur une seule semaine
+            // d'observation n'est pas une mesure, c'est une panique.
+            return sansSave(()=>{
+              const u=faux([{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}]);
+              const a=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(!a.bouge) return _echec('rien n’a bougé');
+              const e=u.reperesAuto.PECTORAUX;
+              if(typeof e.mev==='number'&&typeof e.mrv==='number')
+                return _echec('les deux bornes ont bougé la même semaine');
+              // REJOUER LA MEME SEMAINE NE DOIT RIEN FAIRE : deux passages
+              // déplaceraient la borne de deux séries pour une observation.
+              const b=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              return b.bouge?_echec('la semaine a été rejouée'):true;});})());
+
+          ok('Une seule baisse ne suffit pas, deux de suite oui',(()=>{
+            // Une baisse isolée est un mauvais jour, une nuit courte, un repas
+            // sauté. La traiter comme un dépassement de récupération ferait
+            // retirer du volume à chaque accident.
+            return sansSave(()=>{
+              let u=faux([{semaineISO:S(1),congestion:'correcte',courbatures:'legeres',perfDelta:'baisse'}]);
+              if(appliquerRetourMuscle(u,'PECTORAUX',S(1)).bouge)
+                return _echec('une baisse isolée déplace le repère');
+              u=faux([{semaineISO:S(2),congestion:'correcte',courbatures:'legeres',perfDelta:'baisse'},
+                      {semaineISO:S(1),congestion:'correcte',courbatures:'legeres',perfDelta:'baisse'}]);
+              return appliquerRetourMuscle(u,'PECTORAUX',S(1)).bouge==='mrv'
+                ?true:_echec('deux baisses de suite ne descendent pas le MRV');});})());
+
+          ok('Un muscle sans repère est ignoré, à l\'écriture comme au déplacement',(()=>{
+            // LOMBAIRES, ABDUCTEURS, ADDUCTEURS : la table les exclut
+            // volontairement. Ils n'ont ni MEV ni MRV à déplacer, et récolter
+            // un retour qu'on ne pourra pas appliquer, c'est poser une
+            // question pour rien.
+            return sansSave(()=>{
+              for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS']){
+                if(reperesTable(m)) return _echec(m+' a un repère de table');
+                const u={email:'x@t.fr',sessions:[],reperesAuto:{},retourMuscle:{}};
+                u.retourMuscle[m]=[{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}];
+                if(appliquerRetourMuscle(u,m,S(1)).bouge) return _echec(m+' a bougé');
+                const e=enregistrerRetourMuscle(u,m,{congestion:'forte'});
+                if(e.ok) return _echec('un retour est accepté sur '+m);
+              }
+              return true;});})());
+
+          ok('Deux semaines muettes gèlent le repère, sans revenir à la table',(()=>{
+            // Revenir en silence changerait les seuils de quelqu'un qui n'a
+            // rien demandé, et il le découvrirait par une jauge qui change de
+            // couleur sans raison.
+            return sansSave(()=>{
+              const u=faux([{semaineISO:S(4),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}]);
+              u.reperesAuto.PECTORAUX={mev:9,derniereSemaine:S(4)};
+              if(!calibrageMuscleGele(u,'PECTORAUX',S(1))) return _echec('pas gelé après 4 semaines muettes');
+              appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(u.reperesAuto.PECTORAUX.mev!==9)
+                return _echec('le repère gelé a bougé : '+u.reperesAuto.PECTORAUX.mev);
+              // ET IL EST TOUJOURS LU : geler n'est pas oublier.
+              if(reperesEffectifs(u,'PECTORAUX').mev!==9) return _echec('le repère gelé n’est plus lu');
+              const frais=faux([{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}]);
+              return calibrageMuscleGele(frais,'PECTORAUX',S(1))
+                ?_echec('gelé alors que la semaine révolue porte un retour'):true;});})());
+
+          ok('Le coach garde le dernier mot, et la source le dit',(()=>{
+            // Une mesure automatique qui écraserait la décision de quelqu'un
+            // qui connaît l'athlète serait un système qui s'arroge le dernier
+            // mot. Et sans `source`, le coach ne sait pas lequel il a le droit
+            // de contredire.
+            const u=faux([]);
+            if(reperesEffectifs(u,'PECTORAUX').source!=='table')
+              return _echec('sans rien, la source n’est pas « table »');
+            u.reperesAuto={PECTORAUX:{mev:9}};
+            if(reperesEffectifs(u,'PECTORAUX').source!=='perso') return _echec('l’ajustement n’est pas annoncé');
+            u.reperesVolume={PECTORAUX:{mev:15}};
+            const r=reperesEffectifs(u,'PECTORAUX');
+            if(r.source!=='coach') return _echec('la surcharge coach n’est pas annoncée');
+            return r.mev===15?true:_echec('le coach ne gagne pas : mev '+r.mev);})());
+
+          ok('Aucune lecture directe de la table hors de la couche de repères',(()=>{
+            // TOUTES LES LECTURES PASSENT PAR reperesEffectifs, sinon un écran
+            // continue d'afficher le repère de référence pendant que les
+            // autres montrent celui de l'athlète — et personne ne comprend
+            // pourquoi deux écrans ne disent pas la même chose.
+            // On retire les commentaires : plusieurs citent la table.
+            const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+            const n=(s.match(/REPERES_VOLUME\[/g)||[]).length;
+            // Deux, et deux seulement : reperesEffectifs et reperesTable.
+            if(n>2) return _echec(n+' lectures directes de la table au lieu de 2');
+            for(const f of [reperesEffectifs,reperesTable])
+              if(String(f).indexOf('REPERES_VOLUME[')<0) return _echec('la couche ne lit plus la table');
+            return true;})());
+
+          ok('La question ne se pose qu\'une fois par semaine et par muscle',(()=>{
+            // Poser les questions à chaque séance est la façon la plus sûre de
+            // détruire la donnée : dès la troisième semaine on répond au
+            // hasard pour faire disparaître l'encart.
+            return sansSave(()=>{
+              const u=faux([]);
+              u.sessions=[{date:Date.now(),data:{'developpe couche':{sets:[{done:true,weight:'60',reps:'10'}]}}}];
+              const sess=u.sessions[0];
+              const avant=musclesAInterroger(u,sess);
+              // La réponse déjà donnée cette semaine ferme la question.
+              if(avant.length){
+                u.retourMuscle[avant[0]]=[{semaineISO:semaineISO(new Date()),congestion:'forte'}];
+                if(musclesAInterroger(u,sess).indexOf(avant[0])>=0)
+                  return _echec('la question revient alors qu’elle a déjà une réponse');
+              }
+              // TROIS AU PLUS : une séance de dos touche sept muscles, et sept
+              // encarts à la suite sont le péage qu'on voulait éviter.
+              const s=String(musclesAInterroger).replace(/^\s*\/\/.*$/gm,'');
+              return /slice\(0,3\)/.test(s)?true:_echec('le nombre de questions n’est plus borné');});})());
+
+          ok('Le retour de l\'athlète survit à la remise à zéro du coach',(()=>{
+            // C'est une observation de l'athlète, pas une décision de
+            // l'application : l'effacer empêcherait de comprendre pourquoi le
+            // repère avait bougé.
+            return sansSave(()=>{
+              const u=faux([{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}]);
+              u.reperesAuto={PECTORAUX:{mev:9},DORSAUX:{mrv:24}};
+              const r=reinitialiserReperesMuscle(u,'PECTORAUX');
+              if(r.n!==1) return _echec(r.n+' repère(s) annulé(s) au lieu de 1');
+              if(u.reperesAuto.PECTORAUX) return _echec('le repère n’est pas parti');
+              if(!u.reperesAuto.DORSAUX) return _echec('un autre muscle a été emporté');
+              if(!retoursMuscle(u,'PECTORAUX').length) return _echec('le retour brut a été effacé');
+              // ET C'EST JOURNALISÉ, comme les ajustements nutrition.
+              const src=String(reinitialiserReperesMuscle).replace(/^\s*\/\/.*$/gm,'');
+              if(src.indexOf('_pauseJournaliser')<0) return _echec('la remise à zéro n’est pas journalisée');
+              // Tous les muscles d'un coup.
+              const t=reinitialiserReperesMuscle(u);
+              return t.n===1?true:_echec('la remise à zéro globale a annulé '+t.n+' repère(s)');});})());
+        })();
+
         ok('Le rôle n\'est demandé qu\'une seule fois',(()=>{
           // ⚠ IL L'ÉTAIT DEUX FOIS. « ESPACE ATHLÈTE » sur l'accueil, puis
           // « Je suis : COACH / ATHLÈTE » sur le formulaire — à quelqu'un qui

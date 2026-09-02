@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1108';
+window.RC_BUILD='1109';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -6653,6 +6653,10 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="font-size:var(--fs-xs);color:var(--sub)" id="clh-resume-bilan-sub">Reprendre là où tu t'es arrêté →</div>
       </div>
 
+      <!-- LES COURBATURES, EN DIFFERE. Posees au RETOUR dans l'app et non a
+           chaud : « as-tu des courbatures ? » dix minutes apres la seance n'a
+           pas de sens physiologique, et la reponse serait toujours « aucune ». -->
+      <div id="clh-retour-zone" style="display:none;margin-bottom:16px"></div>
       <!-- 1er BILAN EN ATTENTE -->
       <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div class="eyebrow" style="color:var(--info);margin-bottom:5px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
@@ -7172,6 +7176,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <p style="text-align:center;font-size:var(--fs-sm);color:#ccc;line-height:1.6;padding:0 14px" id="wd-msg"></p>
       </div>
       <div id="wd-comparison"></div>
+      <!-- LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps : une fois
+           par semaine et par muscle, sur la derniere seance qui le touche. -->
+      <div id="wd-retour-zone" style="display:none;margin-bottom:18px"></div>
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <div class="stat-tile"><div class="st-val" id="wd-time">—</div><div class="st-lbl">Durée</div></div>
         <div class="stat-tile"><div class="st-val" id="wd-sets">—</div><div class="st-lbl">Séries</div></div>
@@ -18598,9 +18605,15 @@ function riteContenu(u,now){
   let vol=null;
   try{ vol=volumeSemaine(u,localISODate(new Date(t))); }catch(e){}
   const muscles=[];
+  // ⚠ CETTE LIGNE LISAIT LA TABLE EN DIRECT, ET ELLE LISAIT `mav` — un champ
+  // qui n'existe PAS dans REPERES_VOLUME, dont les bornes sont mavMin et
+  // mavMax. Le rite annonçait donc un MAV undefined depuis l'origine. Passer
+  // par reperesEffectifs corrige les deux d'un coup : le repère de l'athlète
+  // au lieu de celui de la table, et une borne qui existe.
   if(vol) for(const m in vol){
-    const rep=(typeof REPERES_VOLUME!=='undefined')?REPERES_VOLUME[m]:null;
-    muscles.push({muscle:m,series:vol[m],mev:rep&&rep.mev,mav:rep&&rep.mav,mrv:rep&&rep.mrv});
+    let rep=null; try{ rep=reperesEffectifs(u,m); }catch(e){ rep=null; }
+    muscles.push({muscle:m,series:vol[m],mev:rep&&rep.mev,
+      mav:rep&&rep.mavMin,mrv:rep&&rep.mrv,source:rep&&rep.source});
   }
   // PHASE LUTÉALE : aucune minoration n'existe dans le fichier (le facteur de
   // charge y vaut 1,00, seule la SÉRIE est réduite). On ne minore donc rien —
@@ -29096,6 +29109,13 @@ function loadClientHome(){
   // boucle de synchronisation et par chaque retour sur l'accueil.
   if(!window._annuairePose){ window._annuairePose=true;
     try{ CLOUD.pushAnnuaire(currentUser); }catch(e){} }
+  // LES SEMAINES REVOLUES SE RATTRAPENT ICI, une fois par session : l'athlete
+  // qui ouvre l'app le lundi doit trouver ses reperes a jour sans avoir rien a
+  // faire. appliquerRetourMuscle refuse de rejouer une semaine deja traitee,
+  // donc un second passage ne deplace rien.
+  if(!window._retoursAppliques){ window._retoursAppliques=true;
+    try{ appliquerRetoursEnAttente(currentUser); }catch(e){} }
+  try{ rcRendreRetourAccueil(); }catch(e){}
   go('s-client-home');
   // ANIMATION 12. Armé ici, et l'action est loadClientHome elle-même : tirer
   // rejoue EXACTEMENT ce que fait déjà l'arrivée sur l'accueil — la même
@@ -33485,6 +33505,9 @@ function finishWorkout(incomplete=false){
   // deux relances doivent apparaître et disparaître ensemble.
   const _wdBil=document.getElementById('wd-first-bilan-card');
   if(_wdBil) _wdBil.style.display=(currentUser.bilans||[]).some(b=>b.type==='depart')?'none':'block';
+  // LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps — une fois par
+  // semaine et par muscle, sur la derniere seance qui le touche.
+  try{ rcRendreRetourSeance((currentUser.sessions||[]).slice(-1)[0]); }catch(e){}
   go('s-workout-done');
   // Les trois textContent ci-dessus restent le repli : sous « animations
   // reduites » _feterFinSeance sort en premiere ligne et ils sont alors la
@@ -36080,11 +36103,13 @@ function rapVolume(u,debut,fin){
     for(const m in v) somme[m]=(somme[m]||0)+v[m];
   }
   const out=[];
+  // MEME CORRECTION QUE POUR LE RITE : lecture directe de la table, et `mav`
+  // qui n'y existe pas. Le rapport affichait un MAV vide.
   for(const m in somme){
-    const rep=(typeof REPERES_VOLUME!=='undefined')?REPERES_VOLUME[m]:null;
+    let rep=null; try{ rep=reperesEffectifs(u,m); }catch(e){ rep=null; }
     if(!rep) continue;
     out.push({muscle:m,series:Math.round(somme[m]/n*10)/10,
-      mev:rep.mev,mav:rep.mav,mrv:rep.mrv});
+      mev:rep.mev,mav:rep.mavMin,mrv:rep.mrv,source:rep.source});
   }
   out.sort((a,b)=>b.series-a.series);
   // Assez de séances mais AUCUN muscle reconnu (exercices non classés, semaines
@@ -36347,7 +36372,7 @@ function _rapBarreVolume(m){
       stroke="currentColor" stroke-opacity=".45" stroke-width="1" stroke-dasharray="2 2"/>
     <text x="${Math.min(W-16,px(v)+2).toFixed(1)}" y="9" class="rap-lgd-s" fill="currentColor" fill-opacity=".55">${lib}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
-    aria-label="Volume ${escapeHtml(m.muscle)} : ${m.series} séries, MEV ${m.mev}, MAV ${m.mav}, MRV ${m.mrv}" style="display:block">
+    aria-label="Volume ${escapeHtml(m.muscle)} : ${m.series} séries, MEV ${m.mev}, MAV ${m.mav}, MRV ${m.mrv}${m.source==='perso'?', repères ajustés sur ses retours':(m.source==='coach'?', repères fixés par le coach':'')}" style="display:block">
     <rect class="rap-piste" x="0" y="9" width="${W}" height="8" fill="currentColor" fill-opacity=".08" rx="4"/>
     <rect x="0" y="9" width="${px(m.series).toFixed(1)}" height="8" fill="#e02020" rx="4"/>
     ${rep(m.mev,'MEV')}${rep(m.mav,'MAV')}${rep(m.mrv,'MRV')}
@@ -39325,13 +39350,556 @@ function _libFrequence(user,cle,muscle){
 // Surcharge partielle : le coach peut ne remonter que le MRV, les autres
 // bornes gardent leur défaut. Rend null pour un muscle sans repère : l'écran
 // affiche alors le volume sans le juger.
+//
+// TROIS ETAGES, ET L'ORDRE EST UNE HIERARCHIE D'AUTORITE :
+//   1. REPERES_VOLUME      — le repere de pratique de terrain, identique pour
+//                            tous, jamais modifie ;
+//   2. user.reperesAuto    — ce que la boucle de retour hebdomadaire a mesure
+//                            SUR CET ATHLETE (voir appliquerRetourMuscle) ;
+//   3. user.reperesVolume  — la surcharge du COACH, qui passe en dernier et
+//                            gagne donc sur les deux autres.
+//
+// LE COACH GAGNE, ET CE N'EST PAS NEGOCIABLE. Une mesure automatique qui
+// ecraserait une decision prise par quelqu'un qui connait l'athlete serait un
+// systeme qui s'arroge le dernier mot. Il peut lire ce que la boucle propose,
+// il decide.
+//
+// `source` DIT D'OU VIENT LE CHIFFRE. Sans elle, le coach ne peut plus
+// arbitrer : un repere de reference et un repere mesure se lisent pareil, et
+// il ne sait pas lequel il a le droit de contredire.
 function reperesEffectifs(user,muscle){
   const d=REPERES_VOLUME[muscle];
+  const a=user&&user.reperesAuto&&user.reperesAuto[muscle];
   const o=user&&user.reperesVolume&&user.reperesVolume[muscle];
-  if(!d&&!o) return null;
-  const r=Object.assign({},d||{},o||{});
+  if(!d&&!a&&!o) return null;
+  const r=Object.assign({},d||{},a||{},o||{});
   for(const b of ['mev','mavMin','mavMax','mrv']) if(typeof r[b]!=='number') return null;
+  // Un etage superieur qui ne fait que RECOPIER la valeur du dessous ne change
+  // rien : l'annoncer « ajuste » ferait lire une mesure la ou il n'y en a pas.
+  const bouge=(src)=>!!src&&['mev','mavMin','mavMax','mrv']
+    .some(b=>typeof src[b]==='number'&&(!d||src[b]!==d[b]));
+  r.source=bouge(o)?'coach':(bouge(a)?'perso':'table');
   return r;
+}
+// ══════════ LA BOUCLE DE RETOUR PAR MUSCLE ═════════════════════════════
+//
+// LES REPERES DE LA TABLE SONT LES MEMES POUR TOUT LE MONDE, et le commentaire
+// de REPERES_VOLUME l'assume : c'est un repere de pratique de terrain, pas une
+// mesure. Deux athletes n'ont pourtant ni la meme capacite de recuperation ni
+// le meme point de rendement decroissant. Cette boucle deplace les bornes DE
+// CET ATHLETE, une serie a la fois, sur ce qu'il rapporte de sa semaine.
+//
+// LA TABLE N'EST JAMAIS TOUCHEE. Elle reste le fond contre lequel tout se
+// mesure — voir reperesTable : la regle se borne sur la REFERENCE et non sur
+// le repere deja deplace, sinon chaque semaine partirait du resultat de la
+// precedente et la derive n'aurait plus de fond.
+//
+// DEUX QUESTIONS, PAS TROIS. La performance ne se demande pas : l'historique
+// la sait. Demander a quelqu'un ce que la donnee connait deja, c'est lui faire
+// payer notre paresse et recolter une reponse moins fiable que le calcul.
+const RETOUR_SEMAINES_MAX=12;      // meme fenetre glissante qu'ajustHisto
+const RETOUR_CONGESTION=Object.freeze(['aucune','correcte','forte']);
+const RETOUR_COURBATURES=Object.freeze(['aucune','legeres','marquees','encore']);
+// Deux semaines muettes : on GELE le repere perso, on ne revient pas a la
+// table. Revenir en silence changerait les seuils de quelqu'un qui n'a rien
+// demande, et il le decouvrirait par une jauge qui change de couleur.
+const RETOUR_GEL_SEMAINES=2;
+// Sous ce seuil, la variation d'e1RM est du bruit de mesure : une charge
+// arrondie au demi-kilo et une repetition de plus suffisent a la produire.
+const RETOUR_PERF_SEUIL=0.02;      // 2 %
+
+// PURE. Les retours d'un muscle, du plus ancien au plus recent.
+function retoursMuscle(user,muscle){
+  const u=_dossier(user);
+  const l=u&&u.retourMuscle&&u.retourMuscle[muscle];
+  return Array.isArray(l)?l.filter(x=>x&&x.semaineISO):[];
+}
+// PURE. Le retour d'une semaine donnee, ou null.
+function retourSemaine(user,muscle,cle){
+  return retoursMuscle(user,muscle).find(x=>x.semaineISO===cle)||null;
+}
+// PURE. L'e1RM moyen des exercices dont CE muscle est primaire, sur une
+// semaine. Rend null quand la semaine n'a rien d'exploitable — une absence
+// n'est pas un zero, et un zero ferait lire « effondrement ».
+//
+// PRIMAIRE SEULEMENT. Un developpe couche fait travailler les triceps, mais sa
+// charge ne dit presque rien de leur progression : melanger les secondaires
+// noierait le signal du muscle qu'on interroge.
+function _perfMuscleSemaine(user,muscle,cle){
+  const u=_dossier(user);
+  const lundi=_lundiDeSemaine(cle);
+  if(!lundi||!u||!Array.isArray(u.sessions)) return null;
+  const debut=lundi.getTime(), fin=debut+7*86400000;
+  let somme=0, n=0;
+  for(const sess of u.sessions){
+    if(!sess||!sess.data||sess.deload) continue;
+    if(!(sess.date>=debut&&sess.date<fin)) continue;
+    for(const nom of Object.keys(sess.data)){
+      let cls=null; try{ cls=resoudreMusclesLecture(nom,{name:nom},u); }catch(e){ continue; }
+      if(!cls||cls===VOL_CARDIO||(cls.p||[]).indexOf(muscle)<0) continue;
+      const d=sess.data[nom];
+      if(!d||!Array.isArray(d.sets)) continue;
+      for(const s of d.sets){
+        if(!s||s.done!==true) continue;
+        const w=parseFloat(s.weight);
+        const r=_perfReps(s);
+        if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+        // LE RIR CORRIGE : c'est une lecture de DECISION. Voir rirCorrige —
+        // la perception se mesure, et deux athletes qui declarent « RIR 2 »
+        // ne sont pas au meme endroit.
+        const v=e1rm(w,r,_perfRir(s,u));
+        if(v>0){ somme+=v; n++; }
+      }
+    }
+  }
+  return n?somme/n:null;
+}
+// PURE. 'hausse' | 'stable' | 'baisse' | null. Comparee a la MEME semaine de
+// la table : la precedente, et non une moyenne — la regle parle de « la meme
+// seance la semaine passee ».
+function perfDeltaMuscle(user,muscle,cle){
+  const a=_perfMuscleSemaine(user,muscle,cle);
+  const b=_perfMuscleSemaine(user,muscle,_semainePrecedente(cle));
+  if(a==null||b==null||!(b>0)) return null;
+  const d=(a-b)/b;
+  if(d>RETOUR_PERF_SEUIL) return 'hausse';
+  if(d<-RETOUR_PERF_SEUIL) return 'baisse';
+  return 'stable';
+}
+// PURE. La clef de la semaine precedant celle passee.
+function _semainePrecedente(cle){
+  const l=_lundiDeSemaine(cle);
+  if(!l) return cle;
+  const d=new Date(l); d.setDate(d.getDate()-7);
+  return semaineISO(d);
+}
+// L'ECRITURE D'UN RETOUR. La performance est CALCULEE ici, jamais demandee.
+// Rend {ok:true} ou {ok:false,raison}.
+function enregistrerRetourMuscle(user,muscle,r){
+  const u=_dossier(user);
+  if(!u) return {ok:false,raison:'Aucun dossier ouvert.'};
+  // UN MUSCLE SANS REPERE N'A NI MEV NI MRV A DEPLACER. La garde existe deja
+  // pour les signaux — lombaires, abducteurs, adducteurs — et vaut ici pour la
+  // meme raison : recolter un retour qu'on ne pourra pas appliquer, c'est
+  // poser une question pour rien.
+  if(!reperesTable(muscle)) return {ok:false,raison:'Ce muscle n’a pas de repère.'};
+  const c=String((r&&r.congestion)||'');
+  const k=String((r&&r.courbatures)||'');
+  if(RETOUR_CONGESTION.indexOf(c)<0) return {ok:false,raison:'Congestion non renseignée.'};
+  // Les courbatures se posent EN DIFFERE : un retour peut donc exister avec la
+  // congestion seule, et se completer au retour dans l'app.
+  if(k&&RETOUR_COURBATURES.indexOf(k)<0) return {ok:false,raison:'Courbatures non renseignées.'};
+  const cle=(r&&r.semaineISO)||semaineISO(new Date());
+  if(!u.retourMuscle||typeof u.retourMuscle!=='object') u.retourMuscle={};
+  // FIREBASE REND LES TABLEAUX EN OBJETS des qu'une clef manque : on normalise
+  // avant toute methode de tableau, sinon .findIndex leve dans une fonction
+  // async et l'echec est avale.
+  const l=_tabRetours(u.retourMuscle[muscle]);
+  const i=l.findIndex(x=>x&&x.semaineISO===cle);
+  const perf=(r&&r.perfDelta!==undefined)?r.perfDelta:perfDeltaMuscle(u,muscle,cle);
+  const e=Object.assign({},i>=0?l[i]:{},{semaineISO:cle,congestion:c,maj:Date.now()});
+  if(k) e.courbatures=k;
+  e.perfDelta=perf;
+  if(i>=0) l[i]=e; else l.push(e);
+  l.sort((x,y)=>String(x.semaineISO).localeCompare(String(y.semaineISO)));
+  u.retourMuscle[muscle]=l.slice(-RETOUR_SEMAINES_MAX);
+  try{ saveUser(); }catch(e2){}
+  return {ok:true,retour:e};
+}
+// PURE. Normalise ce que Firebase peut avoir rendu en objet.
+function _tabRetours(v){
+  if(Array.isArray(v)) return v.slice();
+  if(v&&typeof v==='object') return Object.keys(v).map(k=>v[k]).filter(Boolean);
+  return [];
+}
+// ══════════ LA REGLE DE DEPLACEMENT ════════════════════════════════════
+//
+// UNE SEULE REGLE, ET L'IMMOBILITE EST LE CAS NORMAL. Un systeme qui bouge a
+// chaque semaine ne mesure plus rien : il suit son propre bruit. Deux
+// situations seulement font bouger une borne, et tout le reste ne fait rien.
+//
+// JAMAIS DEUX BORNES DANS LA MEME SEMAINE POUR LE MEME MUSCLE. Monter le MEV
+// et descendre le MRV d'un coup, c'est refermer la fenetre par les deux bouts
+// sur une seule semaine d'observation. Les deux conditions s'excluent d'ailleurs
+// par construction — on ne peut pas etre a la fois sous son potentiel et
+// au-dela de sa recuperation — mais l'ordre des tests le garantit meme si un
+// retour incoherent arrivait.
+//
+// LES BORNES DURES SE MESURENT CONTRE LA TABLE, pas contre le repere courant.
+// Sans cela, douze semaines de « +1 » plafonnees a chaque fois sur le resultat
+// de la precedente feraient deriver le repere sans fin.
+const RETOUR_MEV_MIN_DELTA=-2;     // mevPerso >= mev - 2
+const RETOUR_MRV_MAX_DELTA=4;      // mrvPerso <= mrv + 4
+
+// PURE. Que dit la semaine ? 'monter' | 'descendre' | null.
+//
+// `precedent` sert au SEUL cas qui demande deux semaines : « perf en baisse
+// deux semaines de suite ». Une baisse isolee est un mauvais jour, une nuit
+// courte, un repas saute — la traiter comme un depassement de recuperation
+// ferait retirer du volume a chaque accident.
+function _verdictRetour(r,precedent){
+  if(!r) return null;
+  const c=r.congestion, k=r.courbatures, p=r.perfDelta;
+  // ── LE VOLUME EST SOUS LE POTENTIEL ──
+  // Congestion forte, recuperation intacte, performance qui ne recule pas :
+  // le muscle encaisse plus que ce qu'on lui donne.
+  if(c==='forte'
+     &&(k==='aucune'||k==='legeres')
+     &&(p==='hausse'||p==='stable')) return 'monter';
+  // ── LA RECUPERATION EST DEPASSEE ──
+  // Des courbatures encore presentes a la seance suivante sont un fait, pas
+  // une impression : le muscle n'a pas fini de recuperer qu'on le recharge.
+  if(k==='encore') return 'descendre';
+  // Deux baisses consecutives. La seconde seule ne suffit pas.
+  if(p==='baisse'&&precedent&&precedent.perfDelta==='baisse') return 'descendre';
+  return null;
+}
+// PURE. Depuis combien de semaines ce muscle est-il muet ? Rend 0 quand la
+// semaine revolue porte un retour.
+function _semainesMuettes(user,muscle,cleRevolue){
+  let c=cleRevolue, n=0;
+  for(let i=0;i<RETOUR_SEMAINES_MAX;i++){
+    if(retourSemaine(user,muscle,c)) return n;
+    n++; c=_semainePrecedente(c);
+  }
+  return n;
+}
+// PURE. Le repere perso serait-il gele ? Deux semaines sans retour et on ne
+// touche plus a rien — NI POUR LE DEPLACER, NI POUR REVENIR A LA TABLE.
+// Revenir en silence changerait les seuils de quelqu'un qui n'a rien demande,
+// et il le decouvrirait par une jauge qui change de couleur sans raison.
+function calibrageMuscleGele(user,muscle,cleRevolue){
+  const c=cleRevolue||_semainePrecedente(semaineISO(new Date()));
+  return _semainesMuettes(user,muscle,c)>=RETOUR_GEL_SEMAINES;
+}
+// L'APPLICATION, UNE FOIS PAR SEMAINE REVOLUE ET PAR MUSCLE.
+// Rend {bouge:'mev'|'mrv'|null, de, vers, raison}.
+function appliquerRetourMuscle(user,muscle,cleRevolue){
+  const u=_dossier(user);
+  const vide={bouge:null};
+  if(!u) return vide;
+  // Un muscle sans repere n'a rien a deplacer — meme garde que les signaux.
+  const t=reperesTable(muscle);
+  if(!t) return vide;
+  const cle=cleRevolue||_semainePrecedente(semaineISO(new Date()));
+  // DEJA TRAITEE ? On ne rejoue pas une semaine : deux passages
+  // deplaceraient la borne de deux series pour une seule observation.
+  if(!u.reperesAuto||typeof u.reperesAuto!=='object') u.reperesAuto={};
+  const etat=u.reperesAuto[muscle]||{};
+  if(etat.derniereSemaine===cle) return vide;
+  if(calibrageMuscleGele(u,muscle,cle)) return vide;
+  const r=retourSemaine(u,muscle,cle);
+  if(!r) return vide;
+  const v=_verdictRetour(r,retourSemaine(u,muscle,_semainePrecedente(cle)));
+  if(!v) return vide;
+  const courant=Object.assign({},t,etat);
+  let bouge=null, de=null, vers=null;
+  if(v==='monter'){
+    // PLAFONNE A mavMin DE LA TABLE : au-dela, ce n'est plus un minimum
+    // efficace, c'est le milieu de la zone de travail — le MEV cesserait de
+    // vouloir dire quelque chose.
+    de=courant.mev;
+    vers=Math.min(de+1,t.mavMin);                     // plafond de la regle
+    vers=Math.max(t.mev+RETOUR_MEV_MIN_DELTA,vers);   // borne dure basse
+    if(vers!==de){ etat.mev=vers; bouge='mev'; }
+  } else {
+    // PLANCHER A mavMin DE LA TABLE : sous ce seuil, le MRV passerait sous le
+    // volume de travail habituel et toute la zone verte deviendrait rouge.
+    de=courant.mrv;
+    vers=Math.max(de-1,t.mavMin);                     // plancher de la regle
+    vers=Math.min(t.mrv+RETOUR_MRV_MAX_DELTA,vers);   // borne dure haute
+    if(vers!==de){ etat.mrv=vers; bouge='mrv'; }
+  }
+  // LA SEMAINE EST MARQUEE MEME QUAND RIEN NE BOUGE : une borne au plafond ne
+  // doit pas etre reexaminee indefiniment.
+  etat.derniereSemaine=cle;
+  etat.maj=Date.now();
+  u.reperesAuto[muscle]=etat;
+  try{ saveUser(); }catch(e){}
+  // Les caches portent des verdicts de zone que ce deplacement change.
+  try{ _viderCacheVolume(); _cacheSignaux.clear(); }catch(e){}
+  return {bouge:bouge,de:de,vers:vers,raison:v,semaine:cle};
+}
+// Toutes les semaines revolues non encore traitees, du plus ancien au plus
+// recent. Appelee au demarrage : l'athlete qui ouvre l'app le lundi doit
+// trouver ses reperes a jour sans avoir rien a faire.
+function appliquerRetoursEnAttente(user){
+  const u=_dossier(user);
+  if(!u||!u.retourMuscle) return [];
+  const faits=[];
+  for(const m of Object.keys(u.retourMuscle)){
+    // On remonte au plus douze semaines : au-dela, la fenetre glissante a
+    // deja efface les retours.
+    let cle=_semainePrecedente(semaineISO(new Date()));
+    const aFaire=[];
+    for(let i=0;i<RETOUR_SEMAINES_MAX;i++){ aFaire.unshift(cle); cle=_semainePrecedente(cle); }
+    for(const c of aFaire){
+      let r=null; try{ r=appliquerRetourMuscle(u,m,c); }catch(e){ r=null; }
+      if(r&&r.bouge) faits.push(Object.assign({muscle:m},r));
+    }
+  }
+  return faits;
+}
+// ══════════ QUAND POSER LA QUESTION ════════════════════════════════════
+//
+// UNE FOIS PAR SEMAINE ET PAR MUSCLE, SUR LA DERNIERE SEANCE QUI LE TOUCHE.
+// Poser les questions a chaque seance est la facon la plus sure de detruire
+// la donnee : des la troisieme semaine on repond au hasard pour faire
+// disparaitre l'encart, et le bruit devient la mesure.
+//
+// « LA DERNIERE » NE SE DEVINE PAS, ELLE SE COMPTE. On ne peut pas savoir
+// qu'une seance est la derniere de la semaine — sauf en comparant les seances
+// DEJA faites sur ce muscle aux seances PREVUES par les creneaux actifs. Quand
+// les deux se rejoignent, la semaine de ce muscle est finie.
+//
+// SANS PROGRAMME, ON DEMANDE A LA PREMIERE. Un athlete sans creneaux actifs
+// n'a pas de « derniere seance » calculable ; ne jamais demander serait pire
+// que demander tot.
+
+// PURE. Combien de creneaux ACTIFS touchent ce muscle en primaire ?
+function _seancesPrevuesMuscle(user,muscle){
+  const u=_dossier(user);
+  const cfg=(u&&Array.isArray(u.sessions_config))?u.sessions_config:[];
+  let n=0;
+  for(const s of cfg){
+    if(!s||s.active!==true||!Array.isArray(s.exercises)) continue;
+    const touche=s.exercises.some(ex=>{
+      if(!ex||!ex.name) return false;
+      let cls=null; try{ cls=resoudreMusclesLecture(ex.name,ex,u); }catch(e){ return false; }
+      return !!(cls&&cls!==VOL_CARDIO&&(cls.p||[]).indexOf(muscle)>=0);
+    });
+    if(touche) n++;
+  }
+  return n;
+}
+// PURE. Combien de seances DEJA faites cette semaine touchent ce muscle ?
+function _seancesFaitesMuscle(user,muscle,cle){
+  const u=_dossier(user);
+  const lundi=_lundiDeSemaine(cle||semaineISO(new Date()));
+  if(!lundi||!u||!Array.isArray(u.sessions)) return 0;
+  const debut=lundi.getTime(), fin=debut+7*86400000;
+  let n=0;
+  for(const sess of u.sessions){
+    if(!sess||!sess.data) continue;
+    if(!(sess.date>=debut&&sess.date<fin)) continue;
+    const touche=Object.keys(sess.data).some(nom=>{
+      let cls=null; try{ cls=resoudreMusclesLecture(nom,{name:nom},u); }catch(e){ return false; }
+      return !!(cls&&cls!==VOL_CARDIO&&(cls.p||[]).indexOf(muscle)>=0);
+    });
+    if(touche) n++;
+  }
+  return n;
+}
+// PURE. Les muscles a interroger apres CETTE seance. Vide la plupart du temps,
+// et c'est voulu : l'encart doit etre une surprise rare, pas un peage.
+function musclesAInterroger(user,sess){
+  const u=_dossier(user);
+  const out=[];
+  if(!u||!sess||!sess.data) return out;
+  const cle=semaineISO(new Date(sess.date||Date.now()));
+  const vus={};
+  for(const nom of Object.keys(sess.data)){
+    let cls=null; try{ cls=resoudreMusclesLecture(nom,{name:nom},u); }catch(e){ continue; }
+    if(!cls||cls===VOL_CARDIO) continue;
+    for(const m of (cls.p||[])) vus[m]=true;
+  }
+  for(const m of Object.keys(vus)){
+    if(!reperesTable(m)) continue;                       // rien a deplacer
+    if(retourSemaine(u,m,cle)) continue;                 // deja repondu cette semaine
+    const prevues=_seancesPrevuesMuscle(u,m);
+    const faites=_seancesFaitesMuscle(u,m,cle);
+    if(prevues>0&&faites<prevues) continue;              // ce n'est pas la derniere
+    out.push(m);
+  }
+  // TROIS MUSCLES AU PLUS, ET LES PLUS TRAVAILLES D'ABORD. Une seance de dos
+  // en touche sept ; sept encarts a la suite, c'est le peage qu'on voulait
+  // eviter. Les autres reviendront la semaine prochaine.
+  let vol={}; try{ vol=volumeSemaine(u,cle)||{}; }catch(e){ vol={}; }
+  out.sort((a,b)=>(vol[b]||0)-(vol[a]||0));
+  return out.slice(0,3);
+}
+// PURE. Les retours en attente de leurs courbatures : la congestion a ete
+// donnee, la question du lendemain n'a pas encore ete posee.
+//
+// PAS AVANT LE LENDEMAIN. Demander « as-tu des courbatures ? » dix minutes
+// apres la seance n'a pas de sens physiologique, et la reponse serait
+// toujours « aucune ».
+const RETOUR_COURBATURES_DELAI_MS=20*3600*1000;   // 20 h : le lendemain matin
+function retoursEnAttenteCourbatures(user){
+  const u=_dossier(user);
+  const out=[];
+  if(!u||!u.retourMuscle) return out;
+  for(const m of Object.keys(u.retourMuscle)){
+    for(const r of _tabRetours(u.retourMuscle[m])){
+      if(!r||r.courbatures) continue;
+      if(!(Date.now()-(Number(r.maj)||0)>RETOUR_COURBATURES_DELAI_MS)) continue;
+      out.push({muscle:m,semaineISO:r.semaineISO});
+    }
+  }
+  return out;
+}
+// ══════════ LES DEUX ENCARTS ═══════════════════════════════════════════
+//
+// UN CHOIX UNIQUE, TROIS OU QUATRE BOUTONS, AUCUN CHAMP LIBRE. La question
+// doit se repondre d'un doigt en sortant de la salle. Un curseur ou un champ
+// texte ferait sauter l'encart, et un encart qu'on saute ne mesure rien.
+const RETOUR_LIB_CONGESTION=Object.freeze({aucune:'Aucune',correcte:'Correcte',forte:'Forte'});
+const RETOUR_LIB_COURBATURES=Object.freeze({aucune:'Aucune',legeres:'Légères',
+  marquees:'Marquées',encore:'Encore là à la séance suivante'});
+
+function _htmlChoixRetour(muscle,champ,libs){
+  const lib=(MUSCLES[muscle]||{}).lib||muscle;
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-bottom:10px" data-retour="'+escapeHtml(muscle)+'">'
+    +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">'
+    +escapeHtml(lib)+'</div>'
+    +'<div style="font-size:var(--fs-sm);color:#ccc;line-height:1.5;margin-bottom:9px">'
+    +(champ==='congestion'?'Congestion pendant la séance ?':'Courbatures le lendemain ?')+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +Object.keys(libs).map(v=>'<button type="button" class="btn btn-outline btn-sm" '
+      +'style="flex:1 1 auto;min-width:0;padding:9px 8px;font-size:var(--fs-xs)" '
+      +'onclick="rcRepondreRetour(this,'+JSON.stringify(muscle).replace(/"/g,'&quot;')+','
+      +JSON.stringify(champ).replace(/"/g,'&quot;')+','+JSON.stringify(v).replace(/"/g,'&quot;')+')">'
+      +escapeHtml(libs[v])+'</button>').join('')
+    +'</div></div>';
+}
+// LE GESTE. Enregistre, puis retire SA carte — pas tout l'encart : une seance
+// peut en poser trois, et les faire disparaitre ensemble ferait perdre les
+// deux reponses non encore donnees.
+function rcRepondreRetour(btn,muscle,champ,valeur){
+  const donnees={};
+  donnees[champ]=valeur;
+  if(champ==='courbatures'){
+    // La congestion existe deja : on ne la redemande pas, on complete.
+    const r=retourSemaine(currentUser,muscle,semaineISO(new Date()))
+      ||retoursMuscle(currentUser,muscle).slice(-1)[0];
+    donnees.congestion=(r&&r.congestion)||'correcte';
+    if(r&&r.semaineISO) donnees.semaineISO=r.semaineISO;
+  }
+  let res=null;
+  try{ res=enregistrerRetourMuscle(currentUser,muscle,donnees); }catch(e){ res=null; }
+  try{
+    const carte=btn&&btn.closest('[data-retour]');
+    if(carte) carte.remove();
+  }catch(e){}
+  try{
+    if(res&&res.ok) toast('Noté ✓');
+    else if(res&&res.raison) toast(res.raison,'var(--orange)');
+  }catch(e){}
+  // PLUS RIEN A REMPLIR : la zone entiere s'efface plutot que de laisser un
+  // titre au-dessus du vide.
+  try{
+    for(const id of ['wd-retour-zone','clh-retour-zone']){
+      const z=document.getElementById(id);
+      if(z&&!z.querySelector('[data-retour]')) z.style.display='none';
+    }
+  }catch(e){}
+  return true;
+}
+// L'ENCART DE FIN DE SEANCE : la congestion, a chaud.
+function rcRendreRetourSeance(sess){
+  const z=document.getElementById('wd-retour-zone');
+  if(!z) return false;
+  z.style.display='none'; z.innerHTML='';
+  let l=[];
+  try{ l=musclesAInterroger(currentUser,sess); }catch(e){ l=[]; }
+  if(!l.length) return false;
+  z.innerHTML='<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Ta semaine sur ces muscles</div>'
+    +l.map(m=>_htmlChoixRetour(m,'congestion',RETOUR_LIB_CONGESTION)).join('');
+  z.style.display='block';
+  return true;
+}
+// L'ENCART DE L'ACCUEIL : les courbatures, en differe.
+function rcRendreRetourAccueil(){
+  const z=document.getElementById('clh-retour-zone');
+  if(!z) return false;
+  z.style.display='none'; z.innerHTML='';
+  let l=[];
+  try{ l=retoursEnAttenteCourbatures(currentUser); }catch(e){ l=[]; }
+  if(!l.length) return false;
+  z.innerHTML='<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Depuis ta dernière séance</div>'
+    +l.slice(0,3).map(x=>_htmlChoixRetour(x.muscle,'courbatures',RETOUR_LIB_COURBATURES)).join('');
+  z.style.display='block';
+  return true;
+}
+// PURE. La mention de source, ou ''. « MEV 12 · ajusté sur tes retours » :
+// le coach doit distinguer un repere de reference d'un repere mesure, sinon
+// il ne sait pas lequel il a le droit de contredire.
+function mentionSourceRepere(user,muscle){
+  let r=null; try{ r=reperesEffectifs(user,muscle); }catch(e){ return ''; }
+  if(!r) return '';
+  if(r.source==='perso') return 'ajusté sur tes retours';
+  if(r.source==='coach') return 'fixé par ton coach';
+  return '';
+}
+// LA MAIN DU COACH, RENDUE. Le bouton n'existe QUE s'il y a quelque chose a
+// annuler : proposer « revenir aux reperes de reference » a un athlete dont
+// aucun repere n'a bouge donnerait a croire qu'il y a eu un ajustement.
+function _htmlBoutonReperes(c){
+  const u=_dossier(c);
+  const l=(u&&u.reperesAuto&&typeof u.reperesAuto==='object')
+    ? Object.keys(u.reperesAuto).filter(m=>{
+        const e=u.reperesAuto[m];
+        return e&&(typeof e.mev==='number'||typeof e.mrv==='number');
+      })
+    : [];
+  if(!l.length) return '';
+  const noms=l.map(m=>(MUSCLES[m]||{}).lib||m).join(', ');
+  return '<div style="margin-top:9px;padding-top:9px;border-top:1px solid var(--border)">'
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:6px">'
+    +'Repères ajustés sur ses retours : '+escapeHtml(noms)+'.</div>'
+    +'<button class="btn btn-outline btn-sm" style="width:100%" '
+    +'onclick="rcReinitReperes()">Revenir aux repères de référence</button></div>';
+}
+// LE GESTE. Confirme avant d'agir : les seuils de l'athlete changent, et sa
+// jauge changera de couleur sans qu'il ait rien fait.
+async function rcReinitReperes(muscle){
+  const c=(typeof currentClientId!=='undefined'&&currentClientId)?getOwnedClient(currentClientId):null;
+  if(!c){ try{ toast('Aucun athlète ouvert.','var(--orange)'); }catch(e){} return false; }
+  const quoi=muscle?((MUSCLES[muscle]||{}).lib||muscle):'tous les muscles';
+  let ok=false;
+  try{ ok=await rcConfirm('Revenir aux repères de référence pour '+quoi+' ? Les retours de l’athlète sont conservés, seuls les repères déplacés sont annulés.'); }
+  catch(e){ ok=false; }
+  if(!ok) return false;
+  let r=null;
+  try{ r=reinitialiserReperesMuscle(c,muscle); }catch(e){ r=null; }
+  if(!r||!r.n){ try{ toast('Aucun repère à annuler.','var(--orange)'); }catch(e){} return false; }
+  try{ renderVolumeCoach(c); }catch(e){}
+  // LE « ✓ » ATTEND LES DEUX DESTINATIONS. Un try/catch synchrone autour de
+  // la poussee annoncerait le succes avant que le reseau ait repondu : le
+  // coach lirait « ramené ✓ » et l'athlete garderait ses seuils deplaces.
+  // toastSync est le chemin deja emprunte par toutes les ecritures coach.
+  const _envoi=CLOUD.pushOne(c.email,c);
+  toastSync(true,_envoi,r.n+' repère'+(r.n>1?'s ramenés':' ramené')+' à la référence ✓',
+    'le retour aux repères de référence est');
+  return true;
+}
+// LA MAIN DU COACH. Supprime le repere ajuste d'un muscle, ou de tous.
+// Le retour brut, lui, N'EST PAS EFFACE : c'est une observation de l'athlete,
+// pas une decision de l'application, et l'effacer empecherait de comprendre
+// pourquoi le repere avait bouge.
+function reinitialiserReperesMuscle(user,muscle){
+  const u=_dossier(user);
+  if(!u||!u.reperesAuto) return {ok:true,n:0};
+  const cibles=muscle?[muscle]:Object.keys(u.reperesAuto);
+  let n=0;
+  for(const m of cibles) if(u.reperesAuto[m]){ delete u.reperesAuto[m]; n++; }
+  if(!n) return {ok:true,n:0};
+  try{ saveUser(); }catch(e){}
+  try{ _viderCacheVolume(); _cacheSignaux.clear(); }catch(e){}
+  // JOURNALISE COMME LES AJUSTEMENTS NUTRITION. Un repere qui revient a la
+  // reference change des seuils : l'athlete doit pouvoir savoir quand, et le
+  // coach doit pouvoir dire pourquoi.
+  try{ _pauseJournaliser(u,'reperes_reinit',{muscle:muscle||'tous',n:n}); }catch(e){}
+  return {ok:true,n:n};
+}
+
+// PURE. Le repere de REFERENCE, sans aucun etage. Sert a borner les
+// deplacements automatiques : la regle se mesure contre la table, jamais
+// contre le repere deja deplace — sinon chaque semaine partirait du resultat
+// de la precedente et la derive n'aurait plus de fond.
+function reperesTable(muscle){
+  const d=REPERES_VOLUME[muscle];
+  return d?Object.assign({},d):null;
 }
 // En déficit énergétique la capacité de récupération diminue : le volume qui
 // faisait progresser à l'entretien devient du volume qu'on ne récupère plus.
@@ -43521,7 +44089,7 @@ function renderVolume(){
     }
     return `<div style="margin-bottom:13px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">
-        <span style="font-size:var(--fs-sm);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}</span>
+        <span style="font-size:var(--fs-sm);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
         <span style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''}${freq?' · '+freq+'×/sem':''}${delta}</span>
       </div>
       ${_volBarre(m,n,rep,c.aberrants[m],u)}
@@ -44106,7 +44674,7 @@ function renderVolumeCoach(c){
     const _fq=_libFrequence(c,cle,m);
     return `<div style="margin-bottom:9px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
-        <span style="font-size:var(--fs-xs);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}</span>
+        <span style="font-size:var(--fs-xs);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
         <span style="font-size:var(--fs-2xs);color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''}${_fq?' · <span style="color:var(--sub)">'+escapeHtml(_fq)+'</span>':''} · ${zo?zo.lib:'pas de repère'}</span>
       </div>
       ${_volBarre(m,n,rep,res.aberrants[m],c)}
@@ -45001,7 +45569,7 @@ function renderVolumePrescrit(cfg,user){
       const zo=zoneVolume(v.muscles[m],rep,u);
       return `<div style="margin-bottom:9px">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
-          <span style="font-size:var(--fs-xs);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}</span>
+          <span style="font-size:var(--fs-xs);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
           <span style="font-size:var(--fs-2xs);color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(v.muscles[m])} série${v.muscles[m]>=2?'s':''}${zo?' · '+zo.lib:''}</span>
         </div>
         ${_volBarre(m,v.muscles[m],rep,false,u)}
@@ -69907,4 +70475,5 @@ async function chargerTests(){
   return testExercices();
 }
 </script>
-</body></html>
+</body></html>
+    ${_htmlBoutonReperes(c)}
