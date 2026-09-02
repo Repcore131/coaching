@@ -9555,7 +9555,7 @@ async function testExercices(){
             const s=_prodSrc();
             // L'ÉCRAN, DANS go() : trois chemins y mènent, n'en instrumenter
             // qu'un donnerait un tunnel faux sans que ça se voie.
-            if(s.indexOf("if(id==='s-install') rcmVue('install_ecran_vu')")<0)
+            if(!/if\(id==='s-install'\)\s*\{[\s\S]{0,80}rcmVue\('install_ecran_vu'\)/.test(s))
               return _echec('l’écran d’installation n’est plus compté dans go()');
             // LE GUIDE iOS, DANS LA MODALE et non dans la branche D : le
             // bouton #ios-install-btn de l'accueil l'ouvre aussi.
@@ -9570,6 +9570,270 @@ async function testExercices(){
             if(!/if\(rcInstallAutonome\(\)\) rcmVue\('lancement_autonome'\)/.test(s))
               return _echec('le lancement depuis l’icône n’est pas compté');
             return true;})());
+
+          // ══════ LA RELANCE : UNE BANNIERE, UNE FOIS, AU BON MOMENT ══════
+          // Chaque sonde REPOSE l'etat qu'elle a change. Sans ca la premiere
+          // eteindrait toutes les suivantes — et la suite doit rester
+          // rejouable trois fois de suite sur la meme page.
+          (()=>{
+            const _etat=()=>({
+              r:localStorage.getItem('rc_install_refus'),
+              v:localStorage.getItem('rc_install_vue'),
+              e:sessionStorage.getItem('rc_inst_ecran'),
+              b:sessionStorage.getItem('rc_ban_vue'),
+              show:document.getElementById('rc-ban-install')?.classList.contains('show'),
+              cls:document.body.classList.contains('rc-ban')
+            });
+            const _poser=s=>{
+              const p=(k,v)=>{ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v); }catch(e){} };
+              const q=(k,v)=>{ try{ v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v); }catch(e){} };
+              p('rc_install_refus',s.r); p('rc_install_vue',s.v);
+              q('rc_inst_ecran',s.e); q('rc_ban_vue',s.b);
+              const el=document.getElementById('rc-ban-install');
+              if(el) el.classList.toggle('show',!!s.show);
+              document.body.classList.toggle('rc-ban',!!s.cls);
+              try{ _majHauteurBanniere(); }catch(e){}
+            };
+            const _vierge=()=>{
+              try{ localStorage.removeItem('rc_install_refus'); }catch(e){}
+              try{ localStorage.removeItem('rc_install_vue'); }catch(e){}
+              try{ sessionStorage.removeItem('rc_inst_ecran'); }catch(e){}
+              try{ sessionStorage.removeItem('rc_ban_vue'); }catch(e){}
+            };
+
+            ok('La bannière ne s\'affiche jamais deux fois dans la même visite',(()=>{
+              const g=_etat();
+              try{
+                _vierge();
+                rcBanniereInstallCacher();
+                // Premier passage : elle s'affiche et POSE sa marque de visite.
+                const un=rcBanniereInstallMontrer();
+                if(!un) return _echec('elle ne s’affiche pas alors que rien ne l’en empêche : '+rcBanniereInstallRaison());
+                if(!sessionStorage.getItem('rc_ban_vue')) return _echec('la marque de visite n’est pas posée');
+                rcBanniereInstallCacher();
+                // Second passage : la marque tient, sans toucher au compteur
+                // de refus — une bannière vue n'est pas une bannière refusée.
+                if(rcBanniereInstallMontrer()) return _echec('elle revient dans la même visite');
+                if(rcBanniereInstallRaison()!=='deja-vue') return _echec('mauvaise raison : '+rcBanniereInstallRaison());
+                if((parseInt(localStorage.getItem('rc_install_refus'),10)||0)!==0)
+                  return _echec('s’afficher a compté comme un refus');
+                return true;
+              } finally { rcBanniereInstallCacher(); _poser(g); }})());
+
+            ok('Deux fermetures et c\'est un non — le rechargement n\'y change rien',(()=>{
+              const g=_etat();
+              try{
+                _vierge();
+                rcBanniereInstallCacher();
+                // Première fermeture : comptée, et elle pourra revenir.
+                rcBanniereInstallMontrer();
+                rcBanniereInstallFermer();
+                if(document.getElementById('rc-ban-install').classList.contains('show'))
+                  return _echec('la fermeture ne ferme pas');
+                if((parseInt(localStorage.getItem('rc_install_refus'),10)||0)!==1)
+                  return _echec('la première fermeture n’est pas comptée');
+                // Seconde fermeture. On efface les marques de VISITE : c'est
+                // exactement ce que ferait un rechargement de page, et c'est
+                // le seul cas qui compte — le refus doit survivre à ça.
+                try{ sessionStorage.removeItem('rc_ban_vue'); }catch(e){}
+                try{ localStorage.removeItem('rc_install_vue'); }catch(e){}
+                rcBanniereInstallMontrer();
+                rcBanniereInstallFermer();
+                if((parseInt(localStorage.getItem('rc_install_refus'),10)||0)!==2)
+                  return _echec('la seconde fermeture n’est pas comptée');
+                try{ sessionStorage.removeItem('rc_ban_vue'); }catch(e){}
+                try{ localStorage.removeItem('rc_install_vue'); }catch(e){}
+                if(rcBanniereInstallMontrer()) return _echec('elle revient après deux refus');
+                if(rcBanniereInstallRaison()!=='refus') return _echec('mauvaise raison : '+rcBanniereInstallRaison());
+                // ET L'ÉCRAN ENTIER S'ÉTEINT AUSSI : rcEcranDeDepart lit le
+                // même compteur. Deux refus valent pour les deux surfaces.
+                if(rcEcranDeDepart('')!=='s-welcome') return _echec('l’écran d’installation revient après deux refus');
+                return true;
+              } finally { rcBanniereInstallCacher(); _poser(g); }})());
+
+            ok('Aucun réarmement caché : rien ne baisse le compteur de refus',(()=>{
+              // ON NE NÉGOCIE PAS UN NON. Cette sonde interdit qu'un lot
+              // futur remette rc_install_refus à zéro, le supprime, ou le
+              // périme au bout d'un délai. Commentaires retirés : celui du
+              // correctif cite le mot « réarmement ».
+              const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+              if(/removeItem\(\s*['\"]rc_install_refus/.test(s))
+                return _echec('quelque chose supprime le compteur de refus');
+              if(/removeItem\(\s*RC_INST_REFUS/.test(s))
+                return _echec('quelque chose supprime le compteur de refus');
+              if(/setItem\(\s*RC_INST_REFUS\s*,\s*['\"]0/.test(s))
+                return _echec('quelque chose remet le compteur à zéro');
+              // Le seul écrivain légitime écrit n+1, et ils sont deux :
+              // « Continuer sans installer » et la croix de la bannière.
+              const ecrit=(s.match(/setItem\(RC_INST_REFUS,String\(n\)\)/g)||[]).length;
+              return ecrit===2?true:_echec(ecrit+' écriture(s) du compteur au lieu de 2');})());
+
+            ok('Elle ne recouvre pas la barre de navigation : les deux bandes s\'empilent',(()=>{
+              const g=_etat();
+              const bar=document.getElementById('client-tabbar');
+              const _barShow=bar&&bar.classList.contains('show');
+              try{
+                _vierge();
+                // On force les DEUX à l'écran, ce qui est le cas serré :
+                // l'accueil athlète après une séance enregistrée.
+                if(bar) bar.classList.add('show');
+                document.body.classList.add('with-tabbar');
+                try{ _majHauteurTabbar(); }catch(e){}
+                if(!rcBanniereInstallMontrer()) return _echec('elle ne s’affiche pas : '+rcBanniereInstallRaison());
+                const b=document.getElementById('rc-ban-install');
+                const rb=b.getBoundingClientRect(), rt=bar.getBoundingClientRect();
+                if(rb.height<50) return _echec('bannière haute de '+Math.round(rb.height)+'px, moins que les ~56 attendus');
+                // AUCUN RECOUVREMENT : le bas de la bannière ne descend pas
+                // sous le haut de la barre. 1px de tolérance pour l'arrondi
+                // sous-pixel du navigateur.
+                if(rb.bottom>rt.top+1)
+                  return _echec('la bannière descend '+Math.round(rb.bottom-rt.top)+'px sous la barre');
+                // ET L'ÉCRAN REND LA PLACE DES DEUX, sinon son dernier
+                // élément passe dessous — décaler, pas se superposer.
+                const act=document.querySelector('.screen.active');
+                if(act){
+                  const pad=parseFloat(getComputedStyle(act).paddingBottom)||0;
+                  if(pad<rb.height+rt.height-2)
+                    return _echec('l’écran ne rend que '+Math.round(pad)+'px pour '+Math.round(rb.height+rt.height)+'px de bandes');
+                }
+                return true;
+              } finally {
+                rcBanniereInstallCacher();
+                if(bar) bar.classList.toggle('show',!!_barShow);
+                document.body.classList.toggle('with-tabbar',!!_barShow);
+                _poser(g);
+              }})());
+
+            ok('Quota plein : ni l\'affichage ni la fermeture ne lèvent',(()=>{
+              // LE PIÈGE DU PROJET. 81 % du stockage local sont des images en
+              // base64 et une photo brute pèse 1,85 Mo : setItem LÈVE quand le
+              // quota est plein. Une exception ici casserait la fin de séance,
+              // qui appelle la bannière — et la séance serait perdue pour une
+              // bannière. On remplit pour de vrai plutôt que de simuler.
+              const g=_etat();
+              const bourre=[];
+              try{
+                _vierge();
+                // ON REMPLIT PAR BLOCS DÉCROISSANTS. Un remplissage par blocs de
+                // 64 Ko s'arrête à 64 Ko près du plafond — et il restait alors
+                // assez de place pour la clé d'un octet de la bannière. Mesuré :
+                // la sonde passait au vert même en retirant le try/catch qu'elle
+                // prétend surveiller. On serre jusqu'à ce que rien ne passe.
+                for(const t of [64*1024,4096,256,16,1]){
+                  const p='x'.repeat(t);
+                  try{
+                    for(let i=0;i<8192;i++){ const k='__q'+t+'_'+i; localStorage.setItem(k,p); bourre.push(k); }
+                  }catch(e){ /* c'est le but : ce calibre ne passe plus */ }
+                }
+                if(bourre.length===0) return _echec('impossible de remplir le stockage : la sonde ne prouve rien');
+                // ON PROUVE LA PRÉCONDITION AVANT DE TESTER LE COMPORTEMENT.
+                // Sans cette ligne, une sonde qui ne remplit rien passe au vert
+                // en n'ayant rien éprouvé du tout.
+                let plein=false;
+                try{ localStorage.setItem('__q_temoin','1'); localStorage.removeItem('__q_temoin'); }
+                catch(e){ plein=true; }
+                if(!plein) return _echec('le stockage n’est pas réellement plein : la sonde ne prouve rien');
+                // setItem va donc lever à l'intérieur des deux fonctions.
+                let leve=null;
+                let montree=false;
+                try{ montree=rcBanniereInstallMontrer(); }catch(e){ leve='affichage : '+((e&&e.message)||e); }
+                if(leve) return _echec(leve);
+                // ET ELLE S'AFFICHE QUAND MÊME. C'est la vraie exigence, et
+                // « ne lève pas » ne suffit pas à la prouver : la fonction porte
+                // aussi un try/catch ENGLOBANT, qui rattrape tout et rend false.
+                // Mesuré : en retirant le filet de l'écriture, la sonde restait
+                // verte — elle constatait le filet extérieur, pas le bon.
+                if(!montree) return _echec('quota plein : la bannière ne s’affiche plus du tout');
+                if(!document.getElementById('rc-ban-install').classList.contains('show'))
+                  return _echec('quota plein : la bannière est annoncée mais pas affichée');
+                try{ rcBanniereInstallFermer(); }catch(e){ leve='fermeture : '+((e&&e.message)||e); }
+                if(leve) return _echec(leve);
+                // ET LA FERMETURE FERME QUAND MÊME, alors que le compteur n'a
+                // pas pu s'écrire : on cache d'abord, on compte ensuite.
+                if(document.getElementById('rc-ban-install').classList.contains('show'))
+                  return _echec('quota plein : la bannière reste à l’écran après fermeture');
+                // La raison se lit sans lever, elle aussi.
+                try{ rcBanniereInstallRaison(); }catch(e){ return _echec('la décision lève : '+((e&&e.message)||e)); }
+                return true;
+              } finally {
+                for(const k of bourre){ try{ localStorage.removeItem(k); }catch(e){} }
+                rcBanniereInstallCacher(); _poser(g);
+              }})());
+
+            ok('Elle se déclenche APRÈS une séance allée au bout, et pas ailleurs',(()=>{
+              const s=String(finishWorkout).replace(/^\s*\/\/.*$/gm,'');
+              const i=s.indexOf('rcBanniereInstallMontrer');
+              if(i<0) return _echec('la fin de séance ne propose plus rien');
+              // SEULEMENT SI LA SÉANCE EST ALLÉE AU BOUT. Une séance
+              // abandonnée n'a rendu aucun service : c'est le pire moment.
+              if(!/if\(!incomplete\)/.test(s)) return _echec('une séance abandonnée déclencherait la bannière');
+              if(s.lastIndexOf('if(!incomplete)')>i) return _echec('le garde vient après l’appel');
+              // APRÈS le try/catch : la séance est enregistrée dans les deux
+              // cas, donc la proposition a lieu d'être dans les deux cas.
+              const iC=s.lastIndexOf('affichage de fin incomplet');
+              if(iC>=0&&i<iC) return _echec('l’appel est dans le try : un rendu raté l’emporterait');
+              // ET NULLE PART AILLEURS : un seul site d'appel dans tout le
+              // fichier, sinon « un seul déclenchement » ne veut plus rien dire.
+              // ⚠ LA SONDE MATCHAIT SON PROPRE COMMENTAIRE, encore : le gabarit
+              // porte un commentaire HTML qui NOMME cette fonction pour dire
+              // qu'elle est le seul chemin. Les commentaires // ne suffisent
+              // donc pas — on retire aussi les <!-- -->.
+              const tout=(_prodSrc().replace(/<!--[\s\S]*?-->/g,'').replace(/^\s*\/\/.*$/gm,'').match(/rcBanniereInstallMontrer\(\)/g)||[]).length;
+              // deux occurrences : la déclaration de la fonction et son unique appel
+              return tout<=2?true:_echec(tout+' appels de la bannière au lieu d’un seul');})());
+
+            ok('Le message d\'après-installation dit quoi FAIRE, pas que ça a marché',(()=>{
+              const s=_prodSrc();
+              const i=s.indexOf("addEventListener('rc-install-fait'");
+              if(i<0) return _echec('l’écouteur d’installation a disparu');
+              const bloc=s.slice(i,i+1400);
+              // ' DANS LA SOURCE, C'EST DEUX CARACTERES — la contre-oblique et
+              // l'apostrophe. Un point n'en couvre qu'un, et la sonde tombait
+              // sur un message pourtant intact.
+              if(!/écran d.{1,2}accueil/.test(bloc)) return _echec('le message ne dit plus où est l’app');
+              if(!/fermer cet onglet/.test(bloc)) return _echec('le message ne dit plus de quitter l’onglet');
+              if(!/depuis l.{1,2}icône/.test(bloc)) return _echec('le message ne dit plus par où relancer');
+              // ET LA BANNIÈRE S'ÉTEINT : elle n'a plus rien à proposer.
+              if(bloc.indexOf('rcBanniereInstallCacher()')<0)
+                return _echec('la bannière reste affichée sous une app installée');
+              // LE TOAST ENVELOPPE. Quinze mots sans max-width débordaient de
+              // l'écran sur un téléphone étroit : min-width était la seule
+              // contrainte de largeur.
+              const t=document.getElementById('toast');
+              const mw=t?getComputedStyle(t).maxWidth:'none';
+              if(!t||mw==='none') return _echec('le toast n’a pas de largeur maximale : le message débordera');
+              return true;})());
+
+            ok('Cinq éteignoirs, et chacun rend sa raison',(()=>{
+              const g=_etat();
+              try{
+                _vierge();
+                if(rcBanniereInstallRaison()!=='ok') return _echec('rien ne l’empêche et pourtant : '+rcBanniereInstallRaison());
+                // 3. L'écran d'installation a déjà posé la question.
+                try{ sessionStorage.setItem('rc_inst_ecran','1'); }catch(e){}
+                if(rcBanniereInstallRaison()!=='ecran-deja-vu') return _echec('le premier lancement ne l’arrête pas');
+                _vierge();
+                // 6. Les 72 heures. 71 h : elle se tait. 73 h : elle revient.
+                try{ localStorage.setItem('rc_install_vue',String(Date.now()-71*3600*1000)); }catch(e){}
+                if(rcBanniereInstallRaison()!=='repos') return _echec('elle revient avant 72 h');
+                try{ localStorage.setItem('rc_install_vue',String(Date.now()-73*3600*1000)); }catch(e){}
+                if(rcBanniereInstallRaison()!=='ok') return _echec('elle ne revient pas après 72 h');
+                _vierge();
+                // 1. Mode autonome : il n'y a plus rien à proposer.
+                const _au=window.rcInstallAutonome;
+                try{
+                  window.rcInstallAutonome=()=>true;
+                  if(rcBanniereInstallRaison()!=='autonome') return _echec('elle s’affiche dans l’app installée');
+                } finally { window.rcInstallAutonome=_au; }
+                // 2. Navigateur intégré : le bouton serait mort.
+                const _ni=window.rcNavigateurIntegre;
+                try{
+                  window.rcNavigateurIntegre=()=>'Instagram';
+                  if(rcBanniereInstallRaison()!=='integre') return _echec('elle s’affiche dans un navigateur intégré');
+                } finally { window.rcNavigateurIntegre=_ni; }
+                return true;
+              } finally { rcBanniereInstallCacher(); _poser(g); }})());
+          })();
 
           ok('Aucun compteur ne transporte autre chose qu\'un entier',(()=>{
             // LE POINT 6 BIS DE privacy.html AFFIRME QU'AUCUN DESTINATAIRE

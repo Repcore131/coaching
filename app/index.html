@@ -1312,8 +1312,54 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    sinon sur cette regle. La valeur de repli ci-dessous ne sert qu'avant la
    premiere mesure : _majHauteurTabbar() releve la hauteur reelle au boot puis
    a chaque affichage de la barre. */
-:root{--tabbar-h:64px}
-body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
+:root{--tabbar-h:64px;--rc-ban-h:0px}
+/* HAUTEUR EFFECTIVE DE LA BARRE : zero quand elle n'est pas affichee.
+   --tabbar-h vaut toujours 64px, meme sur les ecrans qui n'ont pas de barre
+   — s-workout-done en fait partie. La banniere s'y serait posee 64px au-dessus
+   du vide. Cette variable-ci dit ce qu'il y a REELLEMENT en bas. */
+body{--tabbar-eff:0px}
+body.with-tabbar{--tabbar-eff:var(--tabbar-h)}
+/* ON DECALE LE CONTENU, ON NE SE SUPERPOSE PAS. Les deux bandes s'empilent :
+   la barre d'onglets au ras du bas, la banniere juste au-dessus, et l'ecran
+   rend la place des deux. Un seul calc pour les quatre combinaisons — avec
+   ou sans barre, avec ou sans banniere — parce que chaque terme vaut zero
+   quand son element est absent. */
+body.with-tabbar .screen.active,
+body.rc-ban .screen.active{padding-bottom:calc(var(--tabbar-eff) + var(--rc-ban-h))!important}
+
+/* ══════ LA RELANCE D'INSTALLATION ══════════════════════════════════════
+   PAS UNE MODALE, ET C'EST TOUT LE PROPOS. Une modale interrompt ; celle-ci
+   se pose sous le contenu et attend. Elle ne recouvre jamais la barre
+   d'onglets : elle se pose DESSUS, et l'ecran se raccourcit d'autant.
+   min-height et non height : sous 360px le texte passe sur deux lignes, et
+   une hauteur figee couperait la seconde. */
+#rc-ban-install{position:fixed;bottom:var(--tabbar-eff);left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;box-sizing:border-box;min-height:56px;
+  z-index:var(--z-bar);display:none;align-items:center;gap:10px;
+  padding:9px 10px calc(9px + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(rgba(224,32,32,.08),rgba(224,32,32,.08)),#0c0c0c;
+  border-top:1px solid var(--red);
+  box-shadow:0 -8px 20px rgba(0,0,0,.5)}
+/* LA ZONE SURE EST DEJA PAYEE PAR LA BARRE quand elle est la : la lui faire
+   payer deux fois laisserait une bande morte de 34px sur un iPhone. */
+body.with-tabbar #rc-ban-install{padding-bottom:9px}
+#rc-ban-install.show{display:flex}
+#rc-ban-txt{flex:1 1 auto;min-width:0;font-family:Montserrat,sans-serif;
+  font-size:var(--fs-sm);font-weight:600;color:var(--text);line-height:1.35}
+#rc-ban-oui{flex:0 0 auto;background:var(--red);color:#fff;border:none;
+  border-radius:var(--r-1);padding:10px 14px;min-height:40px;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;
+  text-transform:uppercase;letter-spacing:.4px;cursor:pointer}
+/* LA CROIX A LA MEME SURFACE DE DOIGT QUE LE BOUTON, alors qu'elle est dix
+   fois plus petite a l'oeil. Une sortie difficile a viser est une sortie
+   qu'on ne prend pas — et c'est exactement ce qu'on ne veut pas ici. */
+#rc-ban-non{flex:0 0 auto;background:none;border:none;color:rgba(255,255,255,.45);
+  font-size:var(--fs-lg);line-height:1;cursor:pointer;
+  min-width:40px;min-height:40px;padding:8px}
+@media(max-width:380px){
+  #rc-ban-txt{font-size:var(--fs-xs)}
+  #rc-ban-oui{padding:10px 11px}
+}
 /* ====== METRIC BOXES ====== */
 /* LES TROIS CHIFFRES. Grain double, halo rouge derriere la valeur, ombre
    sur deux rayons et liserés haut/bas : c est ce qui donne l epaisseur
@@ -7716,7 +7762,10 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- TOAST -->
-<div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(28px);background:#222;color:var(--text);padding:12px 20px;border-radius:var(--r-3);font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:opacity var(--t-2) var(--c-out),transform var(--t-2) var(--c-out);opacity:0;min-width:200px;text-align:center;pointer-events:none"></div>
+<!-- max-width : le message d'apres-installation fait quinze mots, et sans
+     borne le toast s'etendait au-dela de l'ecran sur un telephone etroit —
+     min-width etait la seule contrainte de largeur. Il enveloppe desormais. -->
+<div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(28px);background:#222;color:var(--text);padding:12px 20px;border-radius:var(--r-3);font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:opacity var(--t-2) var(--c-out),transform var(--t-2) var(--c-out);opacity:0;min-width:200px;max-width:min(92vw,420px);line-height:1.4;text-align:center;pointer-events:none"></div>
 
 <!-- ══════ BARRE D'ONGLETS ATHLÈTE ══════
      Sœur des écrans, et non enfant de #s-client-home : c'est ce qui lui permet
@@ -7736,6 +7785,18 @@ const COACH_PHOTO='icons/coach.jpg';
        n'annoncerait aucune raison, alors qu'il mène justement à la saisie du
        code coach. -->
   <button class="tab-btn" data-tab="canal" data-icon="bell" onclick="clientTab('canal')"><span class="tab-dot" aria-hidden="true"></span><span class="tab-lock" aria-hidden="true">🔒</span>Canal</button>
+</div>
+<!-- ══════ LA RELANCE D'INSTALLATION ══════════════════════════════════
+     SŒUR DES ECRANS, comme la barre d'onglets, et pour la meme raison :
+     elle doit survivre a un changement d'ecran. Quelqu'un qui quitte la fin
+     de seance pour son accueil n'a pas repondu — la proposition reste.
+     Elle n'est JAMAIS affichee par ce gabarit : rcBanniereInstallMontrer()
+     est le seul chemin, et il verifie cinq conditions avant. -->
+<div id="rc-ban-install" role="region" aria-label="Installer RepCore">
+  <span id="rc-ban-txt">Installe RepCore sur ton téléphone</span>
+  <button type="button" id="rc-ban-oui" onclick="rcBanniereInstallAgir()">Installer</button>
+  <button type="button" id="rc-ban-non" aria-label="Fermer et ne plus proposer"
+    onclick="rcBanniereInstallFermer()">✕</button>
 </div>
 <!-- ══════ ACCESS GATE ══════ -->
 <!-- PAS de prefixe s-coach- : go() refuse a tout athlete un ecran ainsi
@@ -11155,6 +11216,10 @@ window.onload=()=>{
   // avec la zone sûre en rotation.
   window.addEventListener('resize',_majHauteurTabbar);
   window.addEventListener('orientationchange',()=>setTimeout(_majHauteurTabbar,150));
+  // MEME RAISON POUR LA BANNIERE : sous 380px son texte passe sur deux lignes
+  // et elle grandit de 17px. Une rotation change cette largeur.
+  window.addEventListener('resize',_majHauteurBanniere);
+  window.addEventListener('orientationchange',()=>setTimeout(_majHauteurBanniere,150));
   // Mêmes mécanique et source que ci-dessus, pour les deux cartes de rôle de
   // l'inscription : le conteneur .role-icon avait perdu son glyphe et laissait
   // 40px de vide au-dessus de « COACH » et « ATHLÈTE ». Passer par ICONS plutôt
@@ -12134,7 +12199,16 @@ function go(id){
   // L'ECRAN D'INSTALLATION EST LE HAUT DU TUNNEL, et il se rejoint par trois
   // chemins : le demarrage, le fragment #install, et un retour arriere. La
   // meme raison que les deux lignes ci-dessus impose de le compter ici.
-  if(id==='s-install') rcmVue('install_ecran_vu');
+  if(id==='s-install'){
+    rcmVue('install_ecran_vu');
+    // ET LA BANNIERE SE TAIT POUR TOUTE LA VISITE. « Jamais au premier
+    // lancement » veut dire : jamais dans une session ou l'ecran a deja
+    // pose la question. Les trois chemins qui menent ici passent par go(),
+    // donc ce marquage les couvre tous.
+    // sessionStorage ET NON localStorage : c'est la VISITE qu'on borne, pas
+    // la vie de l'appareil — et le stockage local est deja sature.
+    try{ sessionStorage.setItem('rc_inst_ecran','1'); }catch(e){}
+  }
   // ANIMATION 9 — les courbes SVG. Posé ICI et pas chez les appelants pour la
   // même raison que les deux lignes ci-dessus : _courbePesee et _rapCourbePoids
   // rendent des CHAÎNES, insérées au milieu d'un innerHTML bien plus grand par
@@ -32908,6 +32982,24 @@ function finishWorkout(incomplete=false){
     // ET UN TOAST, parce que l'ecran de fin peut lui-meme etre reste vide : le
     // message ci-dessus vit dans un noeud qui n'existe peut-etre plus.
     try{ toast('Séance enregistrée ✓ (affichage de fin incomplet)','var(--orange)'); }catch(_e){}
+  }
+  // ── LA RELANCE D'INSTALLATION, ICI ET NULLE PART AILLEURS ───────────
+  //
+  // APRES le try/catch et non dedans : la seance est enregistree dans les
+  // deux cas, donc la proposition a lieu d'etre dans les deux cas. Dedans,
+  // un rendu de fin qui echoue l'aurait emportee.
+  //
+  // SEULEMENT SI LA SEANCE EST ALLEE AU BOUT. Une seance abandonnee n'a
+  // rendu aucun service — c'est le pire moment pour demander quoi que ce
+  // soit, et c'est exactement l'inverse de ce que cherche cette relance.
+  //
+  // 2 200 ms : la celebration de fin dure environ deux secondes. Se poser
+  // pendant serait une interruption, et l'ecran de fin est le seul moment
+  // ou l'application se felicite — on ne marche pas dessus.
+  if(!incomplete){
+    try{
+      setTimeout(()=>{ try{ rcBanniereInstallMontrer(); }catch(_e){} },2200);
+    }catch(_e){}
   }
 }
 
@@ -64347,6 +64439,120 @@ function rcInstallLocal(){
 // une troisième fois ne convainc personne, ça agace. Le compteur vit dans le
 // stockage local, protégé — un stockage plein ne doit pas empêcher de passer.
 const RC_INST_REFUS='rc_install_refus';
+// ══════ LA RELANCE : UNE BANNIERE, UNE FOIS, AU BON MOMENT ═════════════
+//
+// PRESQUE PERSONNE N'INSTALLE AU PREMIER CONTACT. On installe ce qu'on a
+// deja utilise. L'ecran s-install s'adresse a quelqu'un qui ne connait pas
+// encore l'application : la plupart le traversent, et ils ont raison.
+//
+// LE MOMENT EST LE FOND DU SUJET, PAS LA BANNIERE. « Juste apres une seance
+// enregistree » est le seul instant ou l'installation se comprend sans
+// explication : l'outil vient de servir, et le geste suivant est de le
+// retrouver demain. Ailleurs, c'est de la publicite.
+//
+// AUCUN REARMEMENT. Deux fermetures valent un non definitif : ni delai qui
+// le perime, ni compteur remis a zero, ni « une derniere fois ». Un non
+// n'est pas une etape de negociation.
+//
+// LE COMPTEUR EST PARTAGE AVEC L'ECRAN. rc_install_refus est deja
+// incremente par « Continuer sans installer » : passer l'ecran une fois PUIS
+// fermer la banniere une fois suffit donc a eteindre les deux pour de bon.
+// C'est voulu — ce sont deux refus de la meme proposition.
+const RC_INST_VUE='rc_install_vue';
+const RC_INST_REPOS_MS=72*3600*1000;
+// Rend 'ok', ou la RAISON du refus. Une chaine et non un booleen, pour la
+// meme raison que rcInstallDecider rend une lettre : la decision devient
+// lisible depuis la console et depuis la suite, sans avoir a reconstituer
+// cinq etats pour comprendre pourquoi rien ne s'affiche.
+function rcBanniereInstallRaison(){
+  // 1. DEJA INSTALLEE : il n'y a plus rien a proposer.
+  try{ if(rcInstallAutonome()) return 'autonome'; }catch(e){}
+  // 2. NAVIGATEUR INTEGRE : le bouton serait mort. s-install a une branche
+  //    entiere pour ce cas ; la banniere n'a pas a la refaire en petit.
+  try{ if(rcNavigateurIntegre()) return 'integre'; }catch(e){}
+  // 3. PREMIER LANCEMENT : l'ecran a deja pose la question dans cette visite.
+  try{ if(sessionStorage.getItem('rc_inst_ecran')) return 'ecran-deja-vu'; }catch(e){}
+  // 4. UNE SEULE FOIS PAR VISITE.
+  try{ if(sessionStorage.getItem('rc_ban_vue')) return 'deja-vue'; }catch(e){}
+  // 5. DEUX REFUS, ET C'EST UN NON. Aucun code au-dela de cette ligne ne
+  //    peut rallumer la banniere.
+  try{ if((parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)>=2) return 'refus'; }catch(e){}
+  // 6. SOIXANTE-DOUZE HEURES DE REPOS entre deux propositions.
+  try{
+    const t=parseInt(localStorage.getItem(RC_INST_VUE),10)||0;
+    if(t>0&&Date.now()-t<RC_INST_REPOS_MS) return 'repos';
+  }catch(e){}
+  return 'ok';
+}
+// Hauteur mesuree et non devinee — meme raison que _majHauteurTabbar : sous
+// 380px le texte passe sur deux lignes et la bande grandit de 17px. Une
+// constante en dur cacherait le dernier element de l'ecran.
+function _majHauteurBanniere(){
+  const b=document.getElementById('rc-ban-install');
+  if(!b) return;
+  const h=b.classList.contains('show')?b.offsetHeight:0;
+  try{ document.documentElement.style.setProperty('--rc-ban-h',(h>0?h:0)+'px'); }catch(e){}
+}
+function rcBanniereInstallCacher(){
+  const b=document.getElementById('rc-ban-install');
+  if(b) b.classList.remove('show');
+  try{ document.body.classList.remove('rc-ban'); }catch(e){}
+  _majHauteurBanniere();
+  return true;
+}
+// NE LEVE JAMAIS. Elle est appelee depuis la fin de seance : une banniere
+// qui echoue ne doit pas emporter l'enregistrement de la seance.
+function rcBanniereInstallMontrer(){
+  try{
+    if(rcBanniereInstallRaison()!=='ok') return false;
+    const b=document.getElementById('rc-ban-install');
+    if(!b) return false;
+    b.classList.add('show');
+    document.body.classList.add('rc-ban');
+    _majHauteurBanniere();
+    // DEUX ECRITURES, DEUX try/catch SEPARES, ET APRES L'AFFICHAGE. Le
+    // stockage local est sature a 81 % par des images en base64 : setItem
+    // LEVE quand le quota est plein. Groupees, la premiere qui leve
+    // emporterait la seconde ; avant l'affichage, elles emporteraient la
+    // banniere. On n'evince rien pour faire de la place — c'est interdit
+    // dans ce projet, et une photo d'athlete vaut mieux qu'une banniere.
+    //
+    // QUOTA PLEIN, CONSEQUENCE ASSUMEE : l'horodatage n'est pas ecrit, donc
+    // les 72 heures ne courent pas et la proposition pourra revenir a la
+    // prochaine visite. C'est le moins mauvais des deux : l'autre serait de
+    // supprimer quelque chose qui appartient a l'utilisateur.
+    try{ sessionStorage.setItem('rc_ban_vue','1'); }catch(e){}
+    try{ localStorage.setItem(RC_INST_VUE,String(Date.now())); }catch(e){}
+    return true;
+  }catch(e){ return false; }
+}
+// LA FERMETURE : ON CACHE D'ABORD, ON COMPTE ENSUITE. Si le quota est plein,
+// setItem leve — et la banniere doit disparaitre quand meme. L'ordre inverse
+// laisserait a l'ecran une banniere qu'on vient de refuser.
+function rcBanniereInstallFermer(){
+  rcBanniereInstallCacher();
+  try{
+    const n=(parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)+1;
+    localStorage.setItem(RC_INST_REFUS,String(n));
+  }catch(e){}
+  return true;
+}
+// LE GESTE. Il n'incremente RIEN : accepter n'est pas refuser, et refermer
+// l'invitation du navigateur non plus — ce refus-la a son propre compteur de
+// mesure, pas celui qui eteint la banniere.
+function rcBanniereInstallAgir(){
+  rcBanniereInstallCacher();
+  // iOS N'A PAS D'INVITATION A DEMANDER : aucun navigateur n'y declenche
+  // beforeinstallprompt. Le guide explique les deux gestes de Safari.
+  try{ if(rcInstalliOS()){ showIosInstallGuide(); return true; } }catch(e){}
+  try{ if(rcInstallInvite()){ rcInstallLocal(); return true; } }catch(e){}
+  // NI iOS NI INVITATION — Firefox Android, navigateurs exotiques. Le bouton
+  // n'aurait rien a declencher ici, et un bouton qui ne fait rien est pire
+  // que pas de bouton. L'ecran d'installation a une branche pour chaque cas,
+  // dont celle qui explique le menu du navigateur : on y renvoie.
+  try{ go('s-install'); }catch(e){}
+  return true;
+}
 function rcInstallPasser(){
   try{
     const n=(parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)+1;
@@ -64523,7 +64729,14 @@ window.addEventListener('rc-install-fait',()=>{
   try{ rcm('install_fait'); }catch(e){}
   const b=document.getElementById('install-btn');
   if(b) b.style.display='none';
-  try{ toast('RepCore installé sur ton téléphone ✓'); }catch(e){}
+  // LA BANNIERE N'A PLUS RIEN A PROPOSER. Sans ca elle resterait affichee
+  // sous une application qui vient d'etre installee.
+  try{ rcBanniereInstallCacher(); }catch(e){}
+  // LE MESSAGE DIT QUOI FAIRE ENSUITE, et c'est tout son interet. « Installé
+  // ✓ » constate ; les gens restent alors dans l'onglet du navigateur et
+  // n'ouvrent jamais l'icone — l'installation ne sert a rien. La phrase
+  // nomme les deux gestes suivants.
+  try{ toast('RepCore est sur ton écran d\'accueil — tu peux fermer cet onglet et lancer l\'app depuis l\'icône'); }catch(e){}
   // L'ECRAN D'INSTALLATION N'A PLUS RIEN A PROPOSER : il repasse en branche A.
   try{ if(document.getElementById('s-install')?.classList.contains('active')) go('s-welcome'); }catch(e){}
 });
