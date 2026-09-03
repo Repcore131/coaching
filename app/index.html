@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1121';
+window.RC_BUILD='1122';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -5911,6 +5911,19 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Alertes</span></div>
         <div class="cc-sect-c" id="ccd-alertes"></div>
       </section>
+      <!-- CE QUE L'ATHLETE A ECRIT, TEL QUEL. Juste sous les alertes : ce
+           n'est pas une alerte — et c'est pourtant ce qui explique le plus
+           souvent celles qui la precedent. Section VISIBLE en permanence, a la
+           difference de « Alertes » : un champ qui ne se montre que lorsqu'il
+           est rempli n'est jamais rempli. -->
+      <!-- ACCENT NEUTRE, ET C'EST UNE REGLE DE LA FICHE : le rouge est
+           reserve a ce qui exige une DECISION du coach. Un mot se lit, il
+           ne se traite pas. Sans cet attribut, la section faisait un
+           troisieme etat d'accent — l'assertion N5.11 l'a vu. -->
+      <section class="cc-sect" style="--cc-accent:var(--border)">
+        <div class="cc-sect-t"><span>Son mot</span></div>
+        <div class="cc-sect-c" id="ccd-mot"></div>
+      </section>
       <!-- Lien WhatsApp de l'athlète : libellé et cible posés par openClientDetail -->
       <a id="ccd-wa" href="#" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;gap:8px;min-height:46px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:var(--r-3);color:var(--green);text-decoration:none;font-size:var(--fs-md);font-weight:800;letter-spacing:.5px"></a>
       <!-- Sans ce lien, la fonctionnalité ne servirait qu'aux comptes créés
@@ -6584,6 +6597,10 @@ const COACH_PHOTO='icons/coach.jpg';
            temps. Placé avant la carte du coach : c'est la seule chose de cet
            écran qui a une date limite. -->
       <div id="clh-echeance"></div>
+      <!-- LE MOT AU COACH. Sous l'en-tete, au-dessus des cartes de suivi :
+           c'est une chose qu'on ecrit en passant, pas une section a aller
+           chercher au fond d'un ecran. -->
+      <div id="clh-mot"></div>
 
       <!-- COACH BANNER -->
       <div id="clh-coach-banner" style="display:none;margin-bottom:16px"></div>
@@ -21772,6 +21789,184 @@ function toggleSCard(hdr){
 // Retourne l'élève seulement s'il appartient au coach courant ; toast + null sinon.
 // Passe `users` (déjà chargé) pour éviter un double DB.get dans les fonctions d'écriture.
 // ══════════════ JOURNAL DE COACH ══════════════
+// ══════════════ LE MOT AU COACH ════════════════════════════════════════
+//
+// La moitie de ce qu'un coach a besoin de savoir n'entre dans aucune case. Le
+// bilan pose des questions ; ce champ-ci n'en pose aucune. Un seul champ
+// libre, remonte TEL QUEL, et hors du bilan : ce qui compte se dit le jour ou
+// ca arrive, pas le jour ou le bilan tombe.
+//
+// ⚠ AUCUNE LECTURE AUTOMATIQUE DE CE TEXTE. Pas de mots-clefs, pas de
+// detection de detresse, pas de classement par etiquette. Le projet a
+// DELIBEREMENT retire la regex sur texte libre pour lui substituer le
+// depistage SCOFF, qui est un questionnaire valide : y remettre un scanner
+// serait revenir sur cet arbitrage par la petite porte, et un scanner qui se
+// trompe sur un texte libre se trompe sur quelqu'un. Le coach lit, c'est tout.
+//
+// ⚠ ET IL EST BORNE, POUR LA MEME RAISON QUE LES NOTES DU COACH : chaque
+// saveUser est un PUT du document ENTIER. Un texte libre non borne, dans un
+// document reecrit a chaque sauvegarde, finit par deborder le quota — c'est le
+// plafond reel de RepCore. La regle RTDB le borne aussi, comme coachNotes.
+const MOT_COACH_MAX=600;
+const MOT_COACH_MENTION='Ton coach le lit tel quel, tu peux le modifier ou '
+  +'l’effacer quand tu veux. Ce n’est pas un message : il n’y a pas de '
+  +'notification, il le verra en ouvrant ton dossier.';
+
+// PURE. Le mot tel qu'il est stocke, ou null. Rend TOUJOURS la meme forme —
+// un dossier revenu de Firebase peut avoir perdu l'objet et ne garder que la
+// chaine, et les lecteurs en aval n'ont pas a s'en soucier.
+function motCoach(user){
+  const u=_dossier(user);
+  const m=u&&u.motCoach;
+  if(typeof m==='string'){
+    const t=m.trim();
+    return t?{texte:t.slice(0,MOT_COACH_MAX),maj:0}:null;
+  }
+  if(!m||typeof m!=='object') return null;
+  const t=String(m.texte||'').trim();
+  if(!t) return null;
+  return {texte:t.slice(0,MOT_COACH_MAX),maj:Number(m.maj)||0};
+}
+// L'ECRITURE. Rend {ok} ou {ok:false,raison}. Vider EFFACE : un champ qu'on ne
+// peut pas retirer devient un texte qu'on n'ose plus ecrire.
+function poserMotCoach(user,texte){
+  const u=_dossier(user);
+  if(!u) return {ok:false,raison:'Aucun dossier ouvert.'};
+  const brut=String(texte==null?'':texte);
+  if(brut.length>MOT_COACH_MAX)
+    return {ok:false,raison:'Ton mot fait '+brut.length+' caractères. Le maximum est '
+      +MOT_COACH_MAX+' — l’essentiel tient dedans, et le reste se dit de vive voix.'};
+  const t=brut.trim();
+  if(!t){ delete u.motCoach; try{ saveUser(); }catch(e){} return {ok:true,efface:true}; }
+  // ⚠ LE TEXTE EST STOCKE TEL QUEL. Pas de normalisation, pas de majuscule
+  // initiale, pas de ponctuation ajoutee : « remonte tel quel » commence a
+  // l'ecriture. Le seul traitement est l'echappement A L'AFFICHAGE.
+  u.motCoach={texte:t,maj:Date.now()};
+  try{ saveUser(); }catch(e){}
+  return {ok:true};
+}
+// PURE. Le mot est-il NOUVEAU pour ce coach ? Le marqueur de lecture vit dans
+// le dossier DU COACH — comme les notes — et non dans celui de l'athlete :
+// ecrire chez l'athlete a chaque coup d'oeil ferait un PUT de son document
+// entier pour un accuse de lecture.
+function motCoachNouveau(coach,athlete){
+  const m=motCoach(athlete);
+  if(!m) return false;
+  if(!(m.maj>0)) return false;
+  const c=_dossier(coach);
+  const id=String((athlete&&(athlete.id||athlete.email))||'');
+  const lus=(c&&c.motsLus&&typeof c.motsLus==='object')?c.motsLus:{};
+  const lu=Number(lus[id])||0;
+  return m.maj>lu;
+}
+function marquerMotCoachLu(coach,athlete){
+  const c=_dossier(coach);
+  const m=motCoach(athlete);
+  if(!c||!m||!(m.maj>0)) return false;
+  const id=String((athlete&&(athlete.id||athlete.email))||'');
+  if(!id) return false;
+  if(!c.motsLus||typeof c.motsLus!=='object') c.motsLus={};
+  if(Number(c.motsLus[id])>=m.maj) return false;   // deja lu : aucune ecriture
+  c.motsLus[id]=m.maj;
+  try{ saveUser(); }catch(e){}
+  return true;
+}
+// ── LA SURFACE DE L'ATHLETE ────────────────────────────────────────────
+//
+// REPLIE PAR DEFAUT QUAND IL EST VIDE : une zone de texte ouverte en
+// permanence sur l'accueil est une question posee tous les jours, et une
+// question posee tous les jours finit par ne plus rien recevoir.
+let _motEdition=false;
+function renderMotCoach(){
+  const z=document.getElementById('clh-mot');
+  if(!z) return false;
+  // AUCUN COACH, AUCUN CHAMP : ecrire a personne n'a pas de sens, et la
+  // promesse « ton coach le lit » serait fausse.
+  if(!currentUser||!currentUser.coachId){ z.innerHTML=''; return true; }
+  const m=motCoach(currentUser);
+  const enc='background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-3);padding:12px 13px;margin-bottom:16px';
+  if(_motEdition){
+    z.innerHTML='<div style="'+enc+'">'
+      +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
+      +'text-transform:uppercase;margin-bottom:7px">À dire à ton coach</div>'
+      +'<textarea id="mot-texte" rows="4" maxlength="'+MOT_COACH_MAX+'" '
+      +'placeholder="Ce qui n’entre dans aucune case : une douleur, une semaine compliquée, '
+      +'un truc qui te bloque, une bonne nouvelle." '
+      +'style="width:100%;box-sizing:border-box;resize:vertical">'
+      +escapeHtml(m?m.texte:'')+'</textarea>'
+      +'<div style="display:flex;gap:6px;margin-top:8px">'
+      +'<button class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="motEnregistrer()">Enregistrer</button>'
+      +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0" onclick="motAnnuler()">Annuler</button>'
+      +'</div>'
+      +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">'
+      +escapeHtml(MOT_COACH_MENTION)+'</div></div>';
+    const t=document.getElementById('mot-texte'); if(t) t.focus();
+    return true;
+  }
+  if(!m){
+    z.innerHTML='<div style="'+enc+';display:flex;align-items:center;gap:10px">'
+      +'<div style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--sub);line-height:1.55">'
+      +'Quelque chose à dire à ton coach ?</div>'
+      +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0" '
+      +'onclick="motOuvrir()">Écrire</button></div>';
+    return true;
+  }
+  z.innerHTML='<div style="'+enc+'">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
+    +'text-transform:uppercase">À dire à ton coach</span>'
+    +(m.maj?'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">'
+      +new Date(m.maj).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</span>':'')
+    +'</div>'
+    // pre-wrap : les retours a la ligne de l'athlete sont a lui.
+    +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;white-space:pre-wrap">'
+    +escapeHtml(m.texte)+'</div>'
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin:9px 0 0" '
+    +'onclick="motOuvrir()">Modifier</button></div>';
+  return true;
+}
+function motOuvrir(){ _motEdition=true; renderMotCoach(); return true; }
+function motAnnuler(){ _motEdition=false; renderMotCoach(); return true; }
+function motEnregistrer(){
+  const t=document.getElementById('mot-texte');
+  const r=poserMotCoach(currentUser,t?t.value:'');
+  if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
+  _motEdition=false;
+  renderMotCoach();
+  toast(r.efface?'Mot effacé':'Ton coach le verra en ouvrant ton dossier');
+  return true;
+}
+// ── LA SURFACE DU COACH ────────────────────────────────────────────────
+//
+// TEL QUEL, ET RIEN D'AUTRE : pas de resume, pas de mise en forme, pas
+// d'etiquette deduite. Le seul traitement est l'echappement.
+function renderMotCoachFiche(c){
+  const z=document.getElementById('ccd-mot');
+  if(!z) return false;
+  const m=motCoach(c);
+  if(!m){
+    z.innerHTML='<div class="sub" style="font-size:var(--fs-xs);line-height:1.6">'
+      +'Rien d’écrit. Ce champ est le sien : il y met ce qui n’entre dans aucune case.</div>';
+    return true;
+  }
+  const neuf=(()=>{ try{ return motCoachNouveau(currentUser,c); }catch(e){ return false; } })();
+  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-3);padding:12px 13px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">'
+    +(neuf?'<span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
+      +'color:var(--red-text);text-transform:uppercase">Nouveau</span>':'<span></span>')
+    +(m.maj?'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">'
+      +new Date(m.maj).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'})
+      +'</span>':'')
+    +'</div>'
+    +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;white-space:pre-wrap">'
+    +escapeHtml(m.texte)+'</div></div>';
+  // LU AU MOMENT OU C'EST AFFICHE, et une seule ecriture : marquerMotCoachLu
+  // sort de lui-meme quand le marqueur est deja a jour.
+  try{ marquerMotCoachLu(currentUser,c); }catch(e){}
+  return true;
+}
 // Un fil de notes horodatées par athlète. Il vit dans le document DU COACH,
 // jamais dans celui de l'athlète, et ce choix n'est pas une commodité : c'est
 // ce qui rend la note inaccessible à l'athlète MÊME s'il interroge la base
@@ -22523,6 +22718,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderPlateauxCoach(c); }catch(e){}
   try{ renderMethodesCoach(c); }catch(e){}
   try{ renderAsymetrieCoach(c); }catch(e){}
+  try{ renderMotCoachFiche(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
   try{ renderLeveeCoach(c); }catch(e){}
   // BILAN DE SECURITE : une ligne, sans le detail des reponses — le coach
@@ -30022,6 +30218,9 @@ function loadClientHome(){
   if(!window._retoursAppliques){ window._retoursAppliques=true;
     try{ appliquerRetoursEnAttente(currentUser); }catch(e){} }
   try{ rcRendreRetourAccueil(); }catch(e){}
+  // LE MOT AU COACH. Repeint a chaque retour sur l'accueil : l'edition en
+  // cours est portee par _motEdition, elle ne se perd donc pas au passage.
+  try{ renderMotCoach(); }catch(e){}
   try{
     const _z=document.getElementById('clh-echeance');
     const _l=ligneEcheance(currentUser);

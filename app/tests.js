@@ -15963,6 +15963,163 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LE MOT AU COACH ══════
+        (()=>{
+          const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};
+            try{ return f(); } finally { window.saveUser=s; } };
+
+          ok('Le texte est remonté TEL QUEL, sans retouche',(()=>{
+            // « Remonté tel quel » commence à l'écriture : pas de
+            // normalisation, pas de majuscule initiale, pas de ponctuation
+            // ajoutée. Le seul traitement est l'échappement à l'affichage.
+            return sansSave(()=>{
+              const u={email:'m@t.fr',coachId:'c1'};
+              const brut='  j’ai mal au dos depuis mardi.\n\net mon boulot est INFERNAL — 3 nuits à 4h.  ';
+              if(!poserMotCoach(u,brut).ok) return _echec('l’écriture échoue');
+              // Trim aux extrémités, RIEN à l'intérieur.
+              if(u.motCoach.texte!==brut.trim())
+                return _echec('le texte a été retouché : « '+u.motCoach.texte+' »');
+              if(u.motCoach.texte.indexOf('\n\n')<0) return _echec('les retours à la ligne sont perdus');
+              if(u.motCoach.texte.indexOf('INFERNAL')<0) return _echec('les majuscules sont perdues');
+              if(!(u.motCoach.maj>0)) return _echec('aucune date de mise à jour');
+              if(motCoach(u).texte!==brut.trim()) return _echec('la relecture change le texte');
+              // VIDER EFFACE : un champ qu'on ne peut pas retirer devient un
+              // texte qu'on n'ose plus écrire.
+              poserMotCoach(u,'   ');
+              if(u.motCoach!==undefined) return _echec('le champ survit à un effacement');
+              return motCoach(u)===null?true:_echec('la relecture voit encore un mot');});})());
+
+          ok('Il est BORNÉ : le document entier est réécrit à chaque sauvegarde',(()=>{
+            // ⚠ MÊME RAISON QUE LES NOTES DU COACH, et elle n'a rien à voir
+            // avec la confidentialité : chaque saveUser est un PUT du document
+            // ENTIER. Un texte libre non borné, dans un document réécrit à
+            // chaque fois, finit par déborder le quota — c'est le plafond réel
+            // de RepCore, pas le nombre d'utilisateurs.
+            return sansSave(()=>{
+              const u={email:'b@t.fr',coachId:'c1'};
+              const r=poserMotCoach(u,'x'.repeat(MOT_COACH_MAX+1));
+              if(r.ok) return _echec('un texte au-delà de la borne passe');
+              // LE REFUS EXPLIQUE, et il ne coupe pas en silence : tronquer
+              // ferait disparaître la fin d'une phrase sans le dire.
+              if(!r.raison||r.raison.indexOf(String(MOT_COACH_MAX))<0)
+                return _echec('le refus ne dit pas la borne : « '+r.raison+' »');
+              if(u.motCoach!==undefined) return _echec('un texte trop long a été écrit quand même');
+              if(!poserMotCoach(u,'y'.repeat(MOT_COACH_MAX)).ok)
+                return _echec('la longueur maximale est refusée');
+              if(motCoach(u).texte.length!==MOT_COACH_MAX)
+                return _echec('longueur écrite : '+motCoach(u).texte.length);
+              // ET LA RÈGLE RTDB BORNE AUSSI, comme coachNotes : le client
+              // seul ne protège rien d'un dossier écrit ailleurs.
+              // ⚠ LE NOM DE LA VARIABLE EST _RC_RULES. Le premier jet lisait
+              // _RC_REGLES, qui n'existe pas : le `||''` faisait sortir
+              // l'assertion par le haut, et elle passait au vert sans avoir
+              // ouvert la moindre règle.
+              const rg=(typeof window!=='undefined'&&window._RC_RULES)||'';
+              if(!rg) return _echec('les règles ne sont pas chargées : le test ne mord pas');
+              if(rg.indexOf('"motCoach"')<0) return _echec('aucune règle ne borne le champ');
+              return /motCoach[\s\S]{0,400}length <= 600/.test(rg)
+                ?true:_echec('la règle ne borne pas la longueur');});})());
+
+          ok('AUCUNE lecture automatique du texte, et il n\'entre dans aucun score',(()=>{
+            // ⚠ LE PROJET A DÉLIBÉRÉMENT RETIRÉ LA REGEX SUR TEXTE LIBRE pour
+            // lui substituer le dépistage SCOFF, qui est un questionnaire
+            // validé. Y remettre un scanner serait revenir sur cet arbitrage
+            // par la petite porte — et un scanner qui se trompe sur un texte
+            // libre se trompe sur quelqu'un.
+            const src=_prodSrc();
+            const i=src.indexOf('const MOT_COACH_MAX');
+            const j=src.indexOf('function marquerMotCoachLu');
+            if(i<0||j<0||j<i) return _echec('le module a bougé');
+            const bloc=src.slice(i,j).replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+            if(/(douleur|blessure|triste|abandon|dépress)/i.test(bloc))
+              return _echec('des mots-clefs sont cherchés dans le texte');
+            if(bloc.indexOf('SCOFF')>=0) return _echec('le mot passe par le dépistage');
+            if(/\.match\(|new RegExp/.test(bloc)) return _echec('le texte est analysé');
+            // ET IL N'ENTRE DANS AUCUN SCORE : ni urgence, ni signaux. Un mot
+            // n'est pas une alerte, et le faire remonter comme telle
+            // détournerait le classement des athlètes.
+            const u={email:'s@t.fr',motCoach:{texte:'je souffre le martyre',maj:Date.now()}};
+            let e=[]; try{ e=expliquerUrgence(u); }catch(err){ return _echec('expliquerUrgence lève'); }
+            if(e.some(x=>/martyre/.test(x.motif))) return _echec('le texte entre dans l’urgence');
+            if(e.some(x=>/\bmot\b/i.test(x.motif))) return _echec('un motif « mot » est poussé');
+            let sg=null; try{ sg=signauxEntrainement(u); }catch(err){ return _echec('signauxEntrainement lève'); }
+            return JSON.stringify(sg).indexOf('martyre')<0
+              ?true:_echec('le texte entre dans les signaux');})());
+
+          ok('Le coach le voit, l\'athlète sans coach n\'a pas le champ',(()=>{
+            // Écrire à personne n'a pas de sens, et la promesse « ton coach le
+            // lit » serait fausse.
+            const hote=document.createElement('div');
+            hote.innerHTML='<div id="clh-mot"></div><div id="ccd-mot"></div>';
+            document.body.appendChild(hote);
+            const _cu=currentUser;
+            try{
+              return sansSave(()=>{
+                currentUser={email:'a@t.fr',coachId:'c1',
+                  motCoach:{texte:'<b>gras</b> & co',maj:Date.now()}};
+                renderMotCoach();
+                const h=document.getElementById('clh-mot').innerHTML;
+                // ÉCHAPPÉ : c'est le seul traitement appliqué au texte.
+                if(h.indexOf('<b>gras')>=0) return _echec('le texte n’est pas échappé');
+                if(h.indexOf('&lt;b&gt;')<0) return _echec('le texte a disparu');
+                // pre-wrap : les retours à la ligne sont à lui.
+                if(h.indexOf('pre-wrap')<0) return _echec('les retours à la ligne sont écrasés');
+                currentUser={email:'solo@t.fr'};
+                renderMotCoach();
+                if(document.getElementById('clh-mot').innerHTML!=='')
+                  return _echec('un athlète sans coach se voit proposer le champ');
+                // CÔTÉ COACH : tel quel, et une invite quand c'est vide.
+                currentUser={email:'c@t.fr',role:'coach'};
+                const ath={id:'a1',email:'a@t.fr',motCoach:{texte:'ça coince au boulot',maj:1000}};
+                renderMotCoachFiche(ath);
+                if(document.getElementById('ccd-mot').innerHTML.indexOf('ça coince au boulot')<0)
+                  return _echec('le coach ne voit pas le mot');
+                renderMotCoachFiche({id:'z',email:'z@t.fr'});
+                return document.getElementById('ccd-mot').innerHTML.indexOf('Rien d')>=0
+                  ?true:_echec('rien n’est dit quand le champ est vide');});
+            } finally { currentUser=_cu; hote.remove(); }})());
+
+          ok('Le marqueur de lecture vit chez le COACH, pas chez l\'athlète',(()=>{
+            // ⚠ ÉCRIRE CHEZ L'ATHLÈTE À CHAQUE COUP D'ŒIL ferait un PUT de son
+            // document entier pour un accusé de lecture — le plafond, encore.
+            // Même choix que le fil de notes du coach.
+            return sansSave(()=>{
+              const ath={id:'a1',email:'a@t.fr',motCoach:{texte:'coucou',maj:1000}};
+              const coach={email:'c@t.fr',role:'coach'};
+              if(!motCoachNouveau(coach,ath)) return _echec('un mot jamais lu n’est pas neuf');
+              marquerMotCoachLu(coach,ath);
+              if(motCoachNouveau(coach,ath)) return _echec('il reste neuf après lecture');
+              if(coach.motsLus['a1']!==1000) return _echec('le marqueur est mal posé');
+              // RIEN N'A ÉTÉ ÉCRIT CHEZ L'ATHLÈTE.
+              if(ath.lu!==undefined||ath.motCoach.lu!==undefined)
+                return _echec('un marqueur a été posé sur le dossier de l’athlète');
+              if(Object.keys(ath).sort().join(',')!=='email,id,motCoach')
+                return _echec('le dossier de l’athlète a gagné un champ');
+              // IL RÉÉCRIT : c'est de nouveau neuf.
+              ath.motCoach={texte:'en fait non',maj:2000};
+              if(!motCoachNouveau(coach,ath)) return _echec('une réécriture ne redevient pas neuve');
+              // Et marquer deux fois n'écrit qu'une fois.
+              marquerMotCoachLu(coach,ath);
+              if(marquerMotCoachLu(coach,ath)!==false)
+                return _echec('le second marquage réécrit');
+              return motCoachNouveau(coach,{id:'a2',email:'b@t.fr'})===false
+                ?true:_echec('un athlète sans mot est « neuf »');});})());
+
+          ok('Un dossier revenu de Firebase se lit sous toutes ses formes',(()=>{
+            // Le champ peut revenir en CHAÎNE NUE au lieu de l'objet — c'est
+            // la forme qu'aurait un dossier écrit par une version antérieure,
+            // et motCoach doit rendre la même chose dans les deux cas.
+            const c=motCoach({email:'x',motCoach:'juste du texte'});
+            if(!c||c.texte!=='juste du texte') return _echec('la chaîne nue n’est pas lue');
+            if(c.maj!==0) return _echec('une date est inventée pour une chaîne nue');
+            for(const [cas,v] of [['vide',''],['blancs','   '],['absent',undefined],
+                                  ['null',null],['objet vide',{texte:'  ',maj:5}],
+                                  ['nombre',42],['tableau',[1,2]]])
+              if(motCoach({email:'x',motCoach:v})!==null)
+                return _echec(cas+' : un mot sort de nulle part');
+            return true;})());
+        })();
+
         // ══════ LA STRUCTURE DU BLOC, CÔTÉ ATHLÈTE ══════
         (()=>{
           const L=_lundiDe(new Date()).getTime();
