@@ -7828,8 +7828,18 @@ async function testExercices(){
         ok('Aucune promesse de gratuité illimitée n\'a pris leur place',(()=>{
           // Une limitation technique annoncée comme un avantage devient une
           // promesse contractuelle dont on ne revient pas.
+          //
+          // \u26a0 ELLE NE SCANNE QUE CE QUE L'UTILISATEUR PEUT LIRE. Cette sonde
+          // lisait le fichier ENTIER, commentaires compris, et accusait donc
+          // un commentaire qui explique un plafond de VOLUME \u2014 \u00ab sans plafond,
+          // prioriser voudrait dire ajouter \u00bb. Une promesse contractuelle se
+          // fait dans une cha\u00eene AFFICH\u00c9E, jamais dans un commentaire que
+          // personne ne voit. Cinqui\u00e8me fois qu'une sonde de ce fichier accuse
+          // un commentaire : on retire les deux formes avant de chercher.
           const tout=_prodSrc();
           const prod=tout
+            .replace(/\/\*[\s\S]*?\*\//g,'')
+            .replace(/^\s*\/\/.*$/gm,'')
             .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
           const interdits=['gratuit sans limite','sans plafond','athletes illimites',
             'autant d athletes que tu veux','gratuit a vie'];
@@ -15953,6 +15963,166 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LE BLOC DE PRIORITÉ ══════
+        (()=>{
+          const neuf=()=>({email:'bp@test.fr',id:'u_bp',sessions:[],blocPriorite:null});
+          const avecBloc=(hauts,bas,semaines,depuis)=>({email:'bp@test.fr',id:'u_bp',sessions:[],
+            blocPriorite:{debut:Date.now()-(depuis||0)*604800000,semaines:semaines||6,
+              hauts:hauts||[],bas:bas||[],note:''}});
+          // volumeSemaine stubée : le plafond est de l'arithmétique, et la
+          // tester à travers un historique fabriqué mesurerait surtout la
+          // fabrication de l'historique.
+          const avecVolume=(v,f)=>{ const s=window.volumeSemaine;
+            try{ window.volumeSemaine=()=>Object.assign({},v); return f(); }
+            finally { window.volumeSemaine=s; } };
+
+          ok('Le quatrième muscle prioritaire est refusé, et le refus explique',(()=>{
+            // LA CONTRAINTE EST DURE, PAS UN CONSEIL. Au-delà de trois, il n'y
+            // a plus de priorité : le budget de récupération se répartit sur
+            // tout et rien ne progresse plus vite.
+            const u=neuf();
+            for(const m of ['DELT_LAT','PECTORAUX','BICEPS'])
+              if(!blocAjouterHaut(u,m).ok) return _echec(m+' refusé alors qu’il y a de la place');
+            if(u.blocPriorite.hauts.length!==3) return _echec(u.blocPriorite.hauts.length+' prioritaires');
+            const r=blocAjouterHaut(u,'TRICEPS');
+            if(r.ok) return _echec('un quatrième muscle est accepté');
+            if(!r.raison) return _echec('refusé sans un mot');
+            // LE REFUS DIT QUOI FAIRE À LA PLACE, il ne se contente pas de bloquer.
+            if(!/retire|deux blocs/i.test(r.raison)) return _echec('le refus ne propose rien : « '+r.raison+' »');
+            if(u.blocPriorite.hauts.length!==3) return _echec('le quatrième a quand même été ajouté');
+            // Et un muscle sans repère n'est jamais priorisable.
+            const s=blocAjouterHaut(neuf(),'LOMBAIRES');
+            return s.ok?_echec('un muscle sans repère est priorisé'):true;})());
+
+          ok('Le plafond des 10 % est OPPOSABLE, et il dit quoi retirer',(()=>{
+            // C'EST LE CŒUR DE LA FONCTIONNALITÉ. Sans ce plafond,
+            // « prioriser » veut juste dire « ajouter », et l'athlète
+            // s'écroule en trois semaines.
+            return avecVolume({DELT_LAT:10,QUADRICEPS:12,PECTORAUX:8},()=>{
+              // Dernière semaine d'un bloc de 6 : la cible a grimpé vers mrv-1.
+              const u=avecBloc(['DELT_LAT'],[],6,5);
+              const a=blocArbitrage(u,Date.now());
+              const p=blocPlafond(u,a,Date.now());
+              if(p.reference!==30) return _echec('référence '+p.reference+' au lieu de 30');
+              if(p.plafond!==33) return _echec('plafond '+p.plafond+' au lieu de 33');
+              if(p.ok) return _echec('la hausse de '+p.hausse+' % passe le plafond');
+              if(!(p.depasse>0)) return _echec('dépassement non chiffré');
+              if(!p.aRetirer.length) return _echec('le refus ne dit pas quoi retirer');
+              // ON NE PROPOSE JAMAIS DE ROGNER UN MUSCLE PRIORITAIRE : cela
+              // viderait le bloc de son sens.
+              for(const x of p.aRetirer)
+                if(x.muscle&&u.blocPriorite.hauts.indexOf(x.muscle)>=0)
+                  return _echec('on propose de rogner un muscle prioritaire');
+              // NI UN MUSCLE EN MAINTIEN : il est déjà à son MEV.
+              const u2=avecBloc(['DELT_LAT'],['QUADRICEPS'],6,5);
+              const p2=blocPlafond(u2,blocArbitrage(u2,Date.now()),Date.now());
+              for(const x of (p2.aRetirer||[]))
+                if(x.muscle&&u2.blocPriorite.bas.indexOf(x.muscle)>=0)
+                  return _echec('on propose de rogner un muscle en maintien');
+              // ET LE MOTEUR REFUSE VRAIMENT D'ÉCRIRE quand le plafond saute.
+              const _g=window.getOwnedClient, _t=window.toast;
+              let ecrit=false;
+              const _be=window._blocEcrire;
+              try{
+                window.getOwnedClient=()=>u;
+                window.toast=()=>{};
+                window._blocEcrire=()=>{ ecrit=true; return true; };
+                blocAppliquerSeries('u_bp');
+              } finally { window.getOwnedClient=_g; window.toast=_t; window._blocEcrire=_be; }
+              return ecrit?_echec('les séries sont appliquées malgré le plafond'):true;});})());
+
+          ok('Un muscle en maintien ne descend jamais sous son MEV',(()=>{
+            // LE MAINTIEN N'EST PAS L'ABANDON : sous le MEV on perd du tissu
+            // pendant le bloc, et on paierait la priorité d'un muscle par la
+            // fonte d'un autre.
+            return avecVolume({QUADRICEPS:20,DELT_LAT:10},()=>{
+              const u=avecBloc(['DELT_LAT'],['QUADRICEPS'],6,0);
+              const a=blocArbitrage(u,Date.now());
+              const q=a.lignes.find(l=>l.muscle==='QUADRICEPS');
+              if(!q) return _echec('le muscle en maintien a disparu de l’arbitrage');
+              if(q.role!=='bas') return _echec('rôle '+q.role);
+              if(q.cible!==q.rep.mev) return _echec('cible '+q.cible+' au lieu du MEV '+q.rep.mev);
+              return q.cible<q.rep.mev?_echec('la cible passe sous le MEV'):true;});})());
+
+          ok('La cible d\'un muscle prioritaire garde une série sous le MRV',(()=>{
+            // LA DERNIÈRE SÉRIE AVANT LE MRV coûte le plus et rend le moins :
+            // viser mrv-1 laisse de quoi absorber une mauvaise nuit.
+            const rep=reperesTable('DELT_LAT');
+            for(let s=1;s<=6;s++){
+              const v=blocCibleHaut(rep,s,6,0);
+              if(v>rep.mrv-1) return _echec('semaine '+s+' : cible '+v+' pour un MRV de '+rep.mrv);
+              if(v<rep.mev) return _echec('semaine '+s+' : cible '+v+' sous le MEV');
+            }
+            // ⚠ ET ELLE NE FAIT JAMAIS BAISSER LE MUSCLE PRIORISÉ. Partir du
+            // MEV proposait 8 à quelqu'un qui faisait déjà 10 : « prioriser »
+            // ne peut pas commencer par retirer du volume au muscle prioritaire.
+            // Trouvé en éprouvant le moteur.
+            if(blocCibleHaut(rep,1,6,10)<10)
+              return _echec('la première semaine fait baisser un muscle prioritaire');
+            return blocCibleHaut(rep,6,6,10)===rep.mrv-1
+              ?true:_echec('la dernière semaine n’atteint pas mrv-1');})());
+
+          ok('Rien ne s\'écrit dans sessions_config sans un geste du coach',(()=>{
+            // LE MOTEUR PROPOSE, LE COACH APPLIQUE. Aucune des fonctions de
+            // calcul ne doit toucher au programme : les lire ne doit rien
+            // changer. On retire les commentaires, plusieurs citent le champ.
+            for(const f of [blocPriorite,blocAvancement,blocArbitrage,blocPlafond,
+                            blocSynthese,blocCibleHaut,blocGestesSeries,blocFrequenceProposee]){
+              const s=String(f).replace(/^\s*\/\/.*$/gm,'');
+              if(/\.sessions_config\s*=/.test(s))
+                return _echec(f.name+' écrit dans sessions_config');
+              if(/DB\.set|CLOUD\.push|saveUser\(/.test(s))
+                return _echec(f.name+' écrit ou envoie');
+            }
+            // ET LES ÉCRITURES PASSENT PAR L'APPLICATEUR EXISTANT, avec son
+            // instantané : deux mécanismes d'ajustement finiraient par ne plus
+            // appliquer la même chose.
+            const e=String(_blocEcrire).replace(/^\s*\/\/.*$/gm,'');
+            if(e.indexOf('appliquerAjustementSeances')<0)
+              return _echec('_blocEcrire n’utilise pas l’applicateur existant');
+            if(e.indexOf('_pushSessionsHistory')<0)
+              return _echec('aucun instantané avant modification');
+            if(e.indexOf('drapeauQuelconqueActif')<0)
+              return _echec('la garde du drapeau rouge a sauté');
+            // LE PIÈGE FIREBASE : sessions_config revient en objet dès qu'une
+            // clef manque. _blocExercicesDe et l'ordre le normalisent avant
+            // toute méthode de tableau.
+            for(const f of [_blocExercicesDe,blocAppliquerOrdre])
+              if(String(f).indexOf('_aplatirSessionsConfig')<0)
+                return _echec(f.name+' lit sessions_config sans l’aplatir');
+            return true;})());
+
+          ok('Le bloc terminé remonte au coach, et rien ne se reconduit',(()=>{
+            const u=avecBloc(['PECTORAUX'],[],6,7);   // échu depuis une semaine
+            const av=blocAvancement(u,Date.now());
+            if(!av||!av.fini) return _echec('un bloc de 6 semaines ouvert il y a 7 n’est pas fini');
+            // LE BLOC N'EST PAS SUPPRIMÉ À L'ÉCHÉANCE : c'est le signal qui
+            // s'en sert, et le coach décide.
+            if(!blocPriorite(u)) return _echec('le bloc s’efface tout seul à l’échéance');
+            // La ligne existe chez le coach, en DERNIER rang.
+            const l=String(_lignesEntrainement).replace(/^\s*\/\/.*$/gm,'');
+            const iB=l.indexOf("cle:'blocPrioriteFini'");
+            if(iB<0) return _echec('aucune ligne pour le bloc terminé');
+            for(const c of ["cle:'douleur'","cle:'decrochage'","cle:'calibrageDu'"])
+              if(l.indexOf(c)>iB) return _echec(c+' passe sous le bloc terminé');
+            // ET IL N'ENTRE PAS DANS urgencyScore : une échéance n'est pas une
+            // urgence.
+            if(/blocPriorite/i.test(String(urgencyScore).replace(/^\s*\/\/.*$/gm,'')))
+              return _echec('le bloc terminé pèse dans le classement d’urgence');
+            // La phrase nomme le muscle, la durée, et dit quoi décider.
+            const t=_texteSignal('blocfini',u,{details:{blocPrioriteFini:
+              {semaines:6,hauts:['PECTORAUX'],mesure:{lib:'Tour de poitrine',delta:0.8}}}});
+            if(!t) return _echec('aucune phrase');
+            if(t.indexOf('pectoraux')<0) return _echec('le muscle n’est pas nommé');
+            if(t.indexOf('6 semaines')<0) return _echec('la durée n’est pas dite');
+            if(t.indexOf('+0,8 cm')<0) return _echec('la mesure n’est pas rapprochée : « '+t+' »');
+            if(!/reconduire/i.test(t)) return _echec('la décision n’est pas rendue au coach');
+            // SANS MESURE, ON LE DIT — une conclusion sans donnée serait pire.
+            const t2=_texteSignal('blocfini',u,{details:{blocPrioriteFini:
+              {semaines:6,hauts:['DELT_LAT'],mesure:null}}});
+            return /aucune mensuration/i.test(t2)?true:_echec('l’absence de mesure est passée sous silence');})());
+        })();
+
         // ══════ LA DISPONIBILITÉ ══════
         (()=>{
           const J=n=>localISODate(_datePlusJours(new Date(),-n));

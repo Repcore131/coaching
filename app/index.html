@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1110';
+window.RC_BUILD='1111';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -5957,6 +5957,10 @@ const COACH_PHOTO='icons/coach.jpg';
       <section class="cc-sect" style="--cc-accent:var(--red)">
         <div class="cc-sect-t"><span>Douleur</span></div>
         <div class="cc-sect-c" id="ccd-douleur"></div>
+        <!-- LE BLOC DE PRIORITE, SOUS LES SIGNAUX. Il ne s'affiche que quand
+             le coach en ouvre un : un panneau vide a trois colonnes vides
+             serait du mobilier. -->
+        <div class="cc-sect-c" id="ccd-bloc"></div>
       </section>
       <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Récapitulatif des séances</span></div>
@@ -15609,7 +15613,8 @@ const _cacheSignaux=new Map();
 function _viderCacheSignaux(){ _cacheSignaux.clear(); }
 const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage:false,chuteAssiduite:false,
   plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
-  restrictionLongue:false,calibrageDu:false,details:Object.freeze({})});
+  restrictionLongue:false,calibrageDu:false,blocPrioriteFini:false,
+  details:Object.freeze({})});
 
 // opts.complet : ne PAS court-circuiter les signaux de rang 6 quand un rang
 // superieur est deja acquis. Le classement n en a pas besoin — un 6 ne peut
@@ -15642,7 +15647,7 @@ function signauxEntrainement(c,opts){
   if(_cacheSignaux.has(cle)) return _cacheSignaux.get(cle);
   const r={douleur:false,douleurDiffuse:false,decrochage:false,chuteAssiduite:false,
     plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
-    restrictionLongue:false,calibrageDu:false,details:{}};
+    restrictionLongue:false,calibrageDu:false,blocPrioriteFini:false,details:{}};
   // La restriction prolongée ne dépend pas des séances : elle se calcule ICI,
   // avant le retour anticipé. Placée plus bas, un athlète en sèche longue qui
   // ne journalise aucune séance ne serait jamais remonté au coach.
@@ -15749,6 +15754,22 @@ function signauxEntrainement(c,opts){
     }
   }catch(e){}
 
+  // ── LE BLOC DE PRIORITE EST-IL ARRIVE A ECHEANCE ? ──
+  // RIEN NE SE RECONDUIT TOUT SEUL. A l'echeance, le coach decide de
+  // reconduire, d'inverser ou de revenir a plat — et pour decider il lui faut
+  // le rapprochement avec les mensurations, qui ferme la boucle : le volume a
+  // bouge, est-ce que le corps a suivi ?
+  try{
+    const _av=blocAvancement(c);
+    if(_av&&_av.fini){
+      const _b=blocPriorite(c);
+      r.blocPrioriteFini=true;
+      const _m=(_b&&_b.hauts.length)
+        ? blocMesureBilan(c,_b.hauts[0],_b.debut,Date.now()) : null;
+      r.details.blocPrioriteFini={semaines:_av.total,
+        hauts:(_b&&_b.hauts)||[],mesure:_m};
+    }
+  }catch(e){}
   // ── LE CALIBRAGE DU RIR EST-IL A REFAIRE ? ──
   // CE N'EST PAS UNE URGENCE, C'EST DE L'ENTRETIEN. Le signal n'entre pas dans
   // urgencyScore — deliberement : un calibrage perime ne remonte personne dans
@@ -19174,6 +19195,23 @@ function _texteSignal(type,c,sg){
     const x=d.decrochage;
     return x.faits+' séries réalisées sur '+x.prevus+' prévues sur les '+x.seances+' dernières séances.';
   }
+  if(type==='blocfini'&&d.blocPrioriteFini){
+    const x=d.blocPrioriteFini;
+    const noms=(x.hauts||[]).map(m=>((MUSCLES[m]||{}).lib||m).toLowerCase()).join(' et ');
+    // LE RAPPROCHEMENT FERME LA BOUCLE : le volume a bouge, est-ce que le
+    // corps a suivi ? Sans mesure, on le DIT — annoncer un bloc « reussi »
+    // sans rien pour l'etayer serait une conclusion sans donnee.
+    // ⚠ PAS volAffiche ICI : elle arrondit au demi pres, ce qui convient a des
+    // SERIES et detruit une mesure — +0,8 cm devenait « +1 cm », soit un
+    // quart de plus que ce qui a ete mesure. Un centimetre se dit au dixieme.
+    const _cm=v=>String(Math.round(Number(v)*10)/10).replace('.',',');
+    const mes=x.mesure
+      ? ' Mesures : '+(x.mesure.delta>=0?'+':'')+_cm(x.mesure.delta)+' cm ('
+        +x.mesure.lib.toLowerCase()+').'
+      : ' Aucune mensuration ne suit ce muscle sur la période.';
+    return 'bloc '+(noms||'de priorité')+' terminé ('+x.semaines+' semaines).'+mes
+      +' À reconduire, inverser, ou revenir à plat.';
+  }
   if(type==='calibrage'&&d.calibrageDu){
     const x=d.calibrageDu;
     // ON DIT CE QUE CA COUTE DE NE PAS LE FAIRE, pas seulement qu'il est du :
@@ -19750,7 +19788,11 @@ function _lignesEntrainement(clients){
     // pour une douleur, un decrochage ou un plateau n'apparait pas ici : on ne
     // parle pas d'entretien a un coach qui a un probleme de sante a traiter.
     // Gris et non orange : rien ne va mal, il manque juste une mesure.
-    {type:'calibrage',  cle:'calibrageDu',   icon:'🎯',color:'var(--sub)',   lib:'Calibrage RIR à faire'}
+    {type:'calibrage',  cle:'calibrageDu',   icon:'🎯',color:'var(--sub)',   lib:'Calibrage RIR à faire'},
+    // ECHEANCE DE BLOC : une decision a prendre, pas une alerte. Dernier rang,
+    // gris, et hors d'urgencyScore comme le calibrage — un bloc qui se termine
+    // ne remonte personne dans la liste.
+    {type:'blocfini',   cle:'blocPrioriteFini',icon:'🏁',color:'var(--sub)', lib:'Bloc de priorité terminé'}
   ];
   for(const n of NIV){
     for(const c of clients){
@@ -19796,6 +19838,9 @@ function blocDouleurCoach(c){
   </div>`;
 }
 function renderDouleurCoach(c){
+  // Le panneau de bloc suit le meme rendu que la douleur : meme ecran, meme
+  // instant, et une seule fonction a appeler chez l'appelant.
+  try{ renderBlocPriorite(c); }catch(e){}
   const z=document.getElementById('ccd-douleur');
   if(!z) return;
   let html='';
@@ -39389,6 +39434,579 @@ function reperesEffectifs(user,muscle){
     .some(b=>typeof src[b]==='number'&&(!d||src[b]!==d[b]));
   r.source=bouge(o)?'coach':(bouge(a)?'perso':'table');
   return r;
+}
+// ══════════ LE BLOC DE PRIORITE ════════════════════════════════════════
+//
+// PRIORISER, C'EST ARBITRER — PAS AJOUTER. Sans plafond, « je priorise les
+// epaules » veut dire « j'ajoute six series aux epaules », le budget de
+// recuperation est depasse en silence, et l'athlete s'ecroule en trois
+// semaines. Le plafond des 10 % est le coeur de cette fonctionnalite : c'est
+// lui qui force le coach a retirer quelque part ce qu'il ajoute ailleurs.
+//
+// TROIS MUSCLES AU MAXIMUM, ET LA CONTRAINTE EST DURE. Au-dela, il n'y a plus
+// de priorite : il y a un programme plus long. Un quatrieme muscle prioritaire
+// est refuse avec la phrase qui l'explique — pas grise, pas ignore, refuse.
+const BLOC_HAUTS_MAX=3;
+const BLOC_PLAFOND_HAUSSE=0.10;   // +10 % de series ponderees, pas un de plus
+const BLOC_SEMAINES_REF=4;        // la moyenne contre laquelle on mesure
+// UNE SERIE DE MARGE SOUS LE MRV, TOUJOURS. La derniere serie avant le maximum
+// recuperable est celle qui coute le plus et rend le moins : viser mrv-1 laisse
+// de quoi absorber une mauvaise nuit sans basculer en surcharge.
+const BLOC_MARGE_MRV=1;
+
+// PURE. Le bloc en cours, ou null. Un bloc echu n'est PAS supprime — c'est le
+// signal de fin qui s'en sert, et le coach decide de reconduire ou non.
+function blocPriorite(user){
+  const u=_dossier(user);
+  const b=u&&u.blocPriorite;
+  if(!b||typeof b!=='object') return null;
+  const debut=Number(b.debut)||0;
+  const semaines=Math.round(Number(b.semaines)||0);
+  if(!(debut>0)||!(semaines>0)) return null;
+  return {debut:debut,semaines:semaines,
+    hauts:_tabBloc(b.hauts).slice(0,BLOC_HAUTS_MAX),
+    bas:_tabBloc(b.bas),note:String(b.note||'')};
+}
+// PURE. Normalise ce que Firebase peut avoir rendu en objet — meme piege que
+// sessions_config : une clef qui manque et le tableau revient en {0:…,2:…}.
+function _tabBloc(v){
+  if(Array.isArray(v)) return v.filter(Boolean);
+  if(v&&typeof v==='object') return Object.keys(v).map(k=>v[k]).filter(Boolean);
+  return [];
+}
+// PURE. Ou en est le bloc ? {semaine:1..n, reste, fini}.
+function blocAvancement(user,maintenant){
+  const b=blocPriorite(user);
+  if(!b) return null;
+  const t=Number(maintenant)||Date.now();
+  const ecoulees=Math.floor((t-b.debut)/604800000);
+  const semaine=Math.min(b.semaines,Math.max(1,ecoulees+1));
+  return {semaine:semaine,total:b.semaines,reste:Math.max(0,b.semaines-ecoulees),
+    fini:ecoulees>=b.semaines};
+}
+// L'AJOUT D'UN MUSCLE PRIORITAIRE. Rend {ok} ou {ok:false,raison}.
+//
+// LE REFUS EXPLIQUE, il ne se contente pas de bloquer. « Maximum atteint » ne
+// dit pas pourquoi ; la phrase ci-dessous dit ce qu'il faut faire a la place.
+function blocAjouterHaut(user,muscle){
+  const u=_dossier(user);
+  if(!u) return {ok:false,raison:'Aucun athlète ouvert.'};
+  if(!reperesTable(muscle))
+    return {ok:false,raison:'Ce muscle n’a pas de repère de volume : il ne peut pas être priorisé.'};
+  if(!u.blocPriorite||typeof u.blocPriorite!=='object')
+    u.blocPriorite={debut:Date.now(),semaines:6,hauts:[],bas:[],note:''};
+  const b=u.blocPriorite;
+  b.hauts=_tabBloc(b.hauts); b.bas=_tabBloc(b.bas);
+  if(b.hauts.indexOf(muscle)>=0) return {ok:true,deja:true};
+  if(b.hauts.length>=BLOC_HAUTS_MAX)
+    return {ok:false,raison:'Trois muscles prioritaires au maximum. Au-delà, il n’y a plus de priorité : '
+      +'le budget de récupération se répartit sur tout et rien ne progresse plus vite. '
+      +'Retire-en un, ou fais deux blocs à la suite.'};
+  // Un muscle ne peut pas etre prioritaire ET en maintien.
+  const i=b.bas.indexOf(muscle); if(i>=0) b.bas.splice(i,1);
+  b.hauts.push(muscle);
+  return {ok:true};
+}
+function blocAjouterBas(user,muscle){
+  const u=_dossier(user);
+  if(!u) return {ok:false,raison:'Aucun athlète ouvert.'};
+  if(!u.blocPriorite||typeof u.blocPriorite!=='object')
+    u.blocPriorite={debut:Date.now(),semaines:6,hauts:[],bas:[],note:''};
+  const b=u.blocPriorite;
+  b.hauts=_tabBloc(b.hauts); b.bas=_tabBloc(b.bas);
+  const i=b.hauts.indexOf(muscle); if(i>=0) b.hauts.splice(i,1);
+  if(b.bas.indexOf(muscle)<0) b.bas.push(muscle);
+  return {ok:true};
+}
+function blocRetirer(user,muscle){
+  const u=_dossier(user);
+  const b=u&&u.blocPriorite;
+  if(!b) return {ok:true};
+  b.hauts=_tabBloc(b.hauts).filter(m=>m!==muscle);
+  b.bas=_tabBloc(b.bas).filter(m=>m!==muscle);
+  return {ok:true};
+}
+// PURE. LA CIBLE D'UN MUSCLE PRIORITAIRE a la semaine `s` sur `n`.
+//
+// PROGRESSION LINEAIRE VERS mrv-1, EN PARTANT DE CE QU'IL FAIT DEJA.
+//
+// ⚠ LE DEPART EST max(mev, actuel), ET NON mev. Partir du MEV faisait BAISSER
+// un muscle qu'on venait de declarer prioritaire : un athlete deja a dix
+// series de deltoides lateraux, dont le MEV est a huit, se voyait proposer
+// huit. « Prioriser » ne peut pas commencer par retirer du volume au muscle
+// prioritaire — c'est le contraire de ce que le mot annonce. Trouve en
+// eprouvant le moteur, pas au banc.
+//
+// La cible est une TRAJECTOIRE, pas un palier : la premiere semaine part du
+// point ou l'athlete est, la derniere arrive a une serie sous le MRV.
+function blocCibleHaut(rep,s,n,actuel){
+  if(!rep) return null;
+  const bas=Math.max(rep.mev,Math.round(Number(actuel)||0));
+  const haut=Math.max(bas,rep.mrv-BLOC_MARGE_MRV);
+  if(!(n>1)) return haut;
+  const t=Math.min(1,Math.max(0,(s-1)/(n-1)));
+  return Math.round(bas+(haut-bas)*t);
+}
+// PURE. L'arbitrage complet, muscle par muscle. AUCUNE ECRITURE.
+//
+// LE MAINTIEN N'EST PAS L'ABANDON : un muscle en bas descend exactement a son
+// MEV, jamais en dessous — sous le MEV on perd du tissu pendant le bloc, et on
+// paierait la priorite d'un muscle par la fonte d'un autre.
+function blocArbitrage(user,maintenant){
+  const u=_dossier(user);
+  const b=blocPriorite(u);
+  if(!b) return null;
+  const av=blocAvancement(u,maintenant);
+  const cle=semaineISO(new Date(Number(maintenant)||Date.now()));
+  let vol={}; try{ vol=volumeSemaine(u,cle)||{}; }catch(e){ vol={}; }
+  const lignes=[];
+  const vus={};
+  for(const m of b.hauts.concat(b.bas)) vus[m]=true;
+  for(const m in vol) vus[m]=true;
+  for(const m of Object.keys(vus)){
+    const rep=(function(){ try{ return reperesEffectifs(u,m); }catch(e){ return null; } })();
+    // Un muscle sans repere ne peut etre ni priorise ni mis en maintien : il
+    // n'a ni MEV ni MRV. Meme garde que partout ailleurs.
+    if(!rep) continue;
+    const actuel=Number(vol[m])||0;
+    let role='normal', cible=actuel;
+    if(b.hauts.indexOf(m)>=0){ role='haut'; cible=blocCibleHaut(rep,av?av.semaine:1,b.semaines,actuel); }
+    else if(b.bas.indexOf(m)>=0){ role='bas'; cible=rep.mev; }
+    lignes.push({muscle:m,role:role,actuel:Math.round(actuel*10)/10,
+      cible:cible,ecart:Math.round((cible-actuel)*10)/10,rep:rep});
+  }
+  lignes.sort((x,y)=>({haut:0,bas:1,normal:2})[x.role]-({haut:0,bas:1,normal:2})[y.role]
+    ||y.actuel-x.actuel);
+  return {bloc:b,avancement:av,lignes:lignes};
+}
+// PURE. LE PLAFOND, ET IL EST OPPOSABLE.
+//
+// LA SOMME PONDEREE DE LA SEMAINE ne doit pas depasser de plus de 10 % la
+// moyenne des quatre semaines precedentes. Si la repartition demandee la
+// depasse, le moteur REFUSE et dit ce qu'il faudrait retirer — il ne rabote pas
+// tout seul : choisir OU retirer est une decision de coach.
+function blocPlafond(user,arb,maintenant){
+  const u=_dossier(user);
+  const a=arb||blocArbitrage(u,maintenant);
+  if(!a) return null;
+  // La reference : la moyenne des quatre semaines revolues, en series
+  // ponderees — la meme unite que volumeSemaine, donc comparable sans
+  // conversion.
+  const refs=[];
+  for(let i=1;i<=BLOC_SEMAINES_REF;i++){
+    let v={}; try{ v=volumeSemaine(u,_volCleDecalee(i))||{}; }catch(e){ v={}; }
+    let s=0, vu=false;
+    for(const m in v){ s+=Number(v[m])||0; vu=true; }
+    if(vu) refs.push(s);
+  }
+  const reference=refs.length?refs.reduce((x,y)=>x+y,0)/refs.length:null;
+  let apres=0, avant=0;
+  for(const l of a.lignes){ avant+=l.actuel; apres+=l.cible; }
+  const plafond=(reference==null)?null:reference*(1+BLOC_PLAFOND_HAUSSE);
+  const hausse=(reference&&reference>0)?(apres-reference)/reference:null;
+  // SANS REFERENCE, PAS DE PLAFOND OPPOSABLE. Un athlete sans historique n'a
+  // pas de budget connu : on ne l'invente pas, on le dit.
+  if(reference==null)
+    return {ok:true,reference:null,avant:Math.round(avant*10)/10,
+      apres:Math.round(apres*10)/10,hausse:null,depasse:0,aRetirer:[],
+      raison:'Pas encore quatre semaines d’historique : le plafond ne peut pas être calculé.'};
+  const depasse=Math.max(0,apres-plafond);
+  // CE QU'IL FAUDRAIT RETIRER, et OU. On propose les muscles NORMAUX les plus
+  // volumineux d'abord : ce sont ceux dont le retrait coute le moins au bloc.
+  // Les prioritaires ne sont jamais proposes — les rogner viderait le bloc de
+  // son sens ; les muscles en maintien non plus, ils sont deja a leur MEV.
+  const aRetirer=[];
+  if(depasse>0){
+    let reste=depasse;
+    const candidats=a.lignes.filter(l=>l.role==='normal'&&l.rep&&l.actuel>l.rep.mev)
+      .sort((x,y)=>(y.actuel-y.rep.mev)-(x.actuel-x.rep.mev));
+    for(const l of candidats){
+      if(reste<=0) break;
+      const dispo=l.actuel-l.rep.mev;
+      const pris=Math.min(dispo,reste);
+      if(pris>0){ aRetirer.push({muscle:l.muscle,series:Math.ceil(pris)}); reste-=pris; }
+    }
+    // Rien a rogner : le budget ne peut pas etre libere, il faut raccourcir le
+    // bloc ou renoncer a un muscle prioritaire. On le dit plutot que de laisser
+    // une liste vide et un refus sans issue.
+    if(reste>0) aRetirer.push({muscle:null,series:Math.ceil(reste)});
+  }
+  return {ok:depasse<=0,reference:Math.round(reference*10)/10,
+    avant:Math.round(avant*10)/10,apres:Math.round(apres*10)/10,
+    plafond:Math.round(plafond*10)/10,
+    hausse:hausse==null?null:Math.round(hausse*1000)/10,
+    depasse:Math.round(depasse*10)/10,aRetirer:aRetirer,raison:null};
+}
+// PURE. LA PHRASE DE SYNTHESE. Le coach doit lire l'arbitrage COMPLET en une
+// phrase avant d'appliquer quoi que ce soit : « +6 series sur les epaules,
+// -4 sur les quadriceps, total hebdomadaire +2 % ».
+function blocSynthese(user,arb,pla){
+  const a=arb||blocArbitrage(user);
+  if(!a) return '';
+  const p=pla||blocPlafond(user,a);
+  const nom=m=>((MUSCLES[m]||{}).lib||m).toLowerCase();
+  const monte=a.lignes.filter(l=>l.ecart>=0.5)
+    .sort((x,y)=>y.ecart-x.ecart).slice(0,2)
+    .map(l=>'+'+volAffiche(l.ecart)+' sur les '+nom(l.muscle));
+  const baisse=a.lignes.filter(l=>l.ecart<=-0.5)
+    .sort((x,y)=>x.ecart-y.ecart).slice(0,2)
+    .map(l=>volAffiche(l.ecart)+' sur les '+nom(l.muscle));
+  const parts=monte.concat(baisse);
+  if(!parts.length) return 'Aucun écart : la répartition demandée est déjà en place.';
+  const tot=(p&&p.hausse!=null)
+    ? ', total hebdomadaire '+(p.hausse>=0?'+':'')+String(p.hausse).replace('.',',')+' %'
+    : '';
+  return parts.join(', ')+tot+'.';
+}
+// ══════════ LES PROPOSITIONS, ET LEUR ECRITURE ═════════════════════════
+//
+// LE MOTEUR PROPOSE, LE COACH APPLIQUE. Rien ne s'ecrit dans sessions_config
+// sans un geste, et chaque proposition est un bouton DISTINCT : appliquer les
+// series sans toucher a l'ordre, ou l'inverse, doit rester possible. Un « tout
+// appliquer » ferait porter au coach une decision qu'il n'a pas prise.
+
+// PURE. Les exercices dont ce muscle est PRIMAIRE, avec leur position.
+// _aplatirSessionsConfig d'abord : Firebase rend ce tableau en objet des
+// qu'une clef manque, et .map leverait alors dans une fonction async.
+function _blocExercicesDe(c,muscle){
+  const u=_dossier(c);
+  let cfg=[]; try{ cfg=_aplatirSessionsConfig(u)||[]; }catch(e){ cfg=[]; }
+  const out=[];
+  cfg.forEach((s,slot)=>{
+    if(!s||s.active!==true||!Array.isArray(s.exercises)) return;
+    s.exercises.forEach((ex,i)=>{
+      if(!ex||!ex.name) return;
+      let cls=null; try{ cls=resoudreMusclesLecture(ex.name,ex,u); }catch(e){ return; }
+      if(!cls||cls===VOL_CARDIO||(cls.p||[]).indexOf(muscle)<0) return;
+      out.push({slot:slot,idxExercice:i,nom:ex.name,series:Math.max(1,parseInt(ex.series,10)||0)});
+    });
+  });
+  return out;
+}
+// PURE. LES GESTES DE SERIES a poser pour atteindre les cibles. Rend une liste
+// de {slot,idxExercice,sens} — une SERIE par entree, pour que le coach voie
+// exactement combien de gestes il applique.
+//
+// ON REPARTIT SUR LES EXERCICES, on n'empile pas tout sur le premier : quatre
+// series de plus sur un seul mouvement, c'est un autre exercice, pas le meme
+// en plus long.
+function blocGestesSeries(c,arb){
+  const a=arb||blocArbitrage(c);
+  if(!a) return [];
+  const out=[];
+  for(const l of a.lignes){
+    if(l.role==='normal') continue;
+    let reste=Math.round(l.ecart);
+    if(!reste) continue;
+    const exs=_blocExercicesDe(c,l.muscle);
+    if(!exs.length) continue;
+    const sens=reste>0?'ajouter_serie':'retirer_serie';
+    let i=0, garde=0;
+    while(reste!==0&&garde++<40){
+      const ex=exs[i%exs.length];
+      // Les memes bornes que l'ajustement existant : jamais zero serie, jamais
+      // au-dela du plafond. C'est appliquerAjustementSeances qui les tient ;
+      // on les repose ici pour ne pas proposer un geste sans effet.
+      if(sens==='retirer_serie'&&ex.series<=1){ i++; if(i>exs.length*3) break; continue; }
+      if(sens==='ajouter_serie'&&ex.series>=AJ_SERIES_MAX){ i++; if(i>exs.length*3) break; continue; }
+      ex.series+=(sens==='ajouter_serie'?1:-1);
+      out.push({slot:ex.slot,idxExercice:ex.idxExercice,sens:sens,
+        muscle:l.muscle,nom:ex.nom});
+      reste+=(sens==='ajouter_serie'?-1:1);
+      i++;
+    }
+  }
+  return out;
+}
+// L'ECRITURE. Meme discipline que _ajEcrire — drapeau, instantane, DB.set,
+// toastSync — et le MEME applicateur, appliquerAjustementSeances.
+//
+// ⚠ _ajEcrire ELLE-MEME N'EST PAS APPELABLE ICI : elle lit _ajCtx, le contexte
+// de la feuille d'ajustement ouverte depuis une alerte. Il n'y en a pas quand
+// le coach travaille dans le panneau de bloc. On reprend sa discipline, pas sa
+// signature — et surtout le meme applicateur, pour qu'un correctif porte sur
+// les deux chemins.
+function _blocEcrire(clientId,gestes,libelle){
+  const res=(function(){ try{ return resolveClient(clientId); }catch(e){ return null; } })();
+  if(!res) return false;
+  const c=res.c, users=res.users;
+  let bloque=false;
+  try{ bloque=drapeauQuelconqueActif(c); }catch(e){}
+  if(bloque){ toast('Un drapeau est levé : aucun ajustement.','var(--orange)'); return false; }
+  if(!gestes||!gestes.length){ toast('Rien à appliquer.','var(--orange)'); return false; }
+  _pushSessionsHistory(c);
+  for(const g of gestes){
+    c.sessions_config=appliquerAjustementSeances(c.sessions_config,
+      [{slot:g.slot,idxExercice:g.idxExercice}],{type:g.sens});
+  }
+  c.updatedAt=Date.now();
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  try{ _viderCacheVolume(); _cacheSignaux.clear(); }catch(e){}
+  try{ _journalSeance(c,'bloc_priorite',{quoi:libelle||'séries',n:gestes.length}); }catch(e){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),libelle||'Programme ajusté','l\'ajustement est');
+  return true;
+}
+// GESTE 1 — LES SERIES. Refuse quand le plafond est depasse : c'est tout
+// l'interet du plafond qu'il soit OPPOSABLE, pas indicatif.
+function blocAppliquerSeries(clientId){
+  const c=(function(){ try{ return getOwnedClient(clientId); }catch(e){ return null; } })();
+  if(!c) return false;
+  const a=blocArbitrage(c);
+  if(!a){ toast('Aucun bloc en cours.','var(--orange)'); return false; }
+  const p=blocPlafond(c,a);
+  if(p&&!p.ok){
+    // ON DIT CE QU'IL FAUDRAIT RETIRER, on ne rabote pas tout seul : choisir OU
+    // retirer est une decision de coach, et la faire a sa place reviendrait a
+    // decider du programme sans lui.
+    const l=(p.aRetirer||[]).map(x=>x.muscle
+      ? volAffiche(x.series)+' série'+(x.series>1?'s':'')+' sur les '+(((MUSCLES[x.muscle]||{}).lib||x.muscle).toLowerCase())
+      : volAffiche(x.series)+' série'+(x.series>1?'s':'')+' qu’aucun muscle non prioritaire ne peut céder');
+    toast('Plafond dépassé de '+volAffiche(p.depasse)+' séries. À retirer : '+l.join(', ')+'.','var(--red)');
+    return false;
+  }
+  const g=blocGestesSeries(c,a);
+  if(!g.length){ toast('Aucun écart de séries à appliquer.','var(--orange)'); return false; }
+  const fait=_blocEcrire(clientId,g,g.length+' série'+(g.length>1?'s':'')+' ajustée'+(g.length>1?'s':''));
+  if(fait) try{ renderBlocPriorite(getOwnedClient(clientId)); }catch(e){}
+  return fait;
+}
+// GESTE 2 — L'ORDRE. Un muscle prioritaire se travaille EN PREMIER, quand la
+// seance est encore fraiche. Remonter ses exercices en tete ne change ni le
+// volume ni l'intensite : c'est le geste le moins couteux du lot, et souvent
+// le plus rentable.
+function blocAppliquerOrdre(clientId){
+  const res=(function(){ try{ return resolveClient(clientId); }catch(e){ return null; } })();
+  if(!res) return false;
+  const c=res.c, users=res.users;
+  const b=blocPriorite(c);
+  if(!b||!b.hauts.length){ toast('Aucun muscle prioritaire.','var(--orange)'); return false; }
+  let cfg=[]; try{ cfg=_aplatirSessionsConfig(c)||[]; }catch(e){ cfg=[]; }
+  let bouge=0;
+  const out=cfg.map(s=>{
+    if(!s||s.active!==true||!Array.isArray(s.exercises)) return s;
+    const prio=[], reste=[];
+    for(const ex of s.exercises){
+      let cls=null; try{ cls=resoudreMusclesLecture(ex&&ex.name,ex,c); }catch(e){ cls=null; }
+      const est=!!(cls&&cls!==VOL_CARDIO&&(cls.p||[]).some(m=>b.hauts.indexOf(m)>=0));
+      (est?prio:reste).push(ex);
+    }
+    if(!prio.length||!reste.length) return s;
+    // DEJA EN TETE : on ne touche a rien. Un instantane et un envoi pour un
+    // ordre inchange, c'est du bruit dans l'historique du coach.
+    const dejaEnTete=s.exercises.slice(0,prio.length).every(x=>prio.indexOf(x)>=0);
+    if(dejaEnTete) return s;
+    bouge++;
+    return Object.assign({},s,{exercises:prio.concat(reste)});
+  });
+  if(!bouge){ toast('Les exercices prioritaires sont déjà en tête.','var(--orange)'); return false; }
+  _pushSessionsHistory(c);
+  c.sessions_config=out;
+  c.updatedAt=Date.now();
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  try{ _journalSeance(c,'bloc_priorite',{quoi:'ordre des exercices',n:bouge}); }catch(e){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),bouge+' séance'+(bouge>1?'s réordonnées':' réordonnée'),'la réorganisation est');
+  try{ renderBlocPriorite(getOwnedClient(clientId)); }catch(e){}
+  return true;
+}
+// PURE. Faut-il une seance de plus ? La cible est-elle hors d'atteinte a
+// frequence constante ?
+//
+// LE PLAFOND PAR SEANCE EST UN REPERE DE TERRAIN, comme les autres : au-dela
+// d'une dizaine de series dures sur un meme muscle dans la meme seance, les
+// dernieres n'apportent plus grand-chose. On ne le presente donc pas comme une
+// verite, mais comme la raison d'une proposition.
+const BLOC_SERIES_PAR_SEANCE=10;
+function blocFrequenceProposee(c,arb){
+  const a=arb||blocArbitrage(c);
+  if(!a) return null;
+  for(const l of a.lignes){
+    if(l.role!=='haut') continue;
+    const exs=_blocExercicesDe(c,l.muscle);
+    const seances=new Set(exs.map(x=>x.slot)).size;
+    if(!seances) continue;
+    if(l.cible/seances>BLOC_SERIES_PAR_SEANCE)
+      return {muscle:l.muscle,seances:seances,cible:l.cible,
+        parSeance:Math.round(l.cible/seances*10)/10};
+  }
+  return null;
+}
+// PURE. LA MESURE QUI SUIT CE MUSCLE, ou null. Toutes n'en ont pas une : les
+// deltoides n'ont aucun tour de bras qui les isole, et inventer un
+// rapprochement serait pire que de dire qu'il n'y en a pas.
+const BLOC_MESURE_DE=Object.freeze({
+  PECTORAUX:'chest', BICEPS:'bicep-r', TRICEPS:'bicep-r',
+  QUADRICEPS:'thigh-r', ISCHIOS:'thigh-r', FESSIERS:'hips', DORSAUX:'chest'
+});
+// PURE. L'evolution de la mesure liee, sur la duree du bloc. Rend
+// {lib,delta} ou null.
+function blocMesureBilan(user,muscle,debut,fin){
+  const cle=BLOC_MESURE_DE[muscle];
+  if(!cle) return null;
+  let r=null; try{ r=rapMensurations(_dossier(user),debut,fin); }catch(e){ return null; }
+  if(!r||!r.present) return null;
+  const lib=(RAP_MESURES.find(x=>x.cle===cle)||{}).lib;
+  const l=(r.lignes||[]).find(x=>x.lib===lib);
+  return l?{lib:l.lib,delta:l.delta}:null;
+}
+// ══════════ LE PANNEAU DU COACH ════════════════════════════════════════
+//
+// LA SYNTHESE EN TETE, ET AVANT TOUT BOUTON. Le coach doit lire l'arbitrage
+// COMPLET en une phrase — « +6 sur les epaules, -4 sur les quadriceps, total
+// +2 % » — avant d'appliquer quoi que ce soit. Une liste de muscles sans total
+// laisse croire qu'on ajoute sans retirer, et c'est exactement l'erreur que ce
+// lot existe pour empecher.
+const BLOC_ROLES=Object.freeze([
+  {cle:'haut',   lib:'Prioritaire', c:'var(--red)'},
+  {cle:'normal', lib:'Normal',      c:'var(--sub)'},
+  {cle:'bas',    lib:'Maintien',    c:'var(--info)'}
+]);
+function _blocLigne(c,l){
+  const nom=(MUSCLES[l.muscle]||{}).lib||l.muscle;
+  const e=l.ecart;
+  const sig=e>0.05?'+':'';
+  const teinte=e>0.05?'var(--success)':(e<-0.05?'var(--orange)':'var(--sub)');
+  return '<div style="margin-bottom:10px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;color:'+((MUSCLES[l.muscle]||{}).c||'var(--text)')+'">'
+    +escapeHtml(nom)+'</span>'
+    +'<span style="font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap">'
+    +volAffiche(l.actuel)+' → <b style="color:var(--text)">'+volAffiche(l.cible)+'</b>'
+    +(Math.abs(e)>0.05?' <span style="color:'+teinte+'">('+sig+volAffiche(e)+')</span>':'')
+    +'</span></div>'
+    // LA BARRE EXISTANTE, pas une seconde. _volBarre porte deja les zones, le
+    // trait de MRV et le marquage d'aberration : en redessiner une ici, c'est
+    // garantir que les deux divergeront au premier correctif.
+    +_volBarre(l.muscle,l.actuel,l.rep,false,c)
+    +'</div>';
+}
+function _htmlBlocPriorite(c){
+  const u=_dossier(c);
+  const b=blocPriorite(u);
+  // PAS DE BLOC : un bouton pour en ouvrir un, et rien d'autre. Un panneau
+  // vide avec trois colonnes vides serait du mobilier.
+  if(!b){
+    return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">'
+      +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">'
+      +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Bloc de priorité</span></div>'
+      +'<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-bottom:9px">'
+      +'Concentrer le volume sur un à trois muscles, à budget de récupération constant. '
+      +'Ce qu’on ajoute quelque part se retire ailleurs.</div>'
+      +'<button class="btn btn-outline btn-sm" style="width:100%" onclick="blocOuvrir()">Ouvrir un bloc</button></div>';
+  }
+  const a=blocArbitrage(u);
+  const p=blocPlafond(u,a);
+  const av=a&&a.avancement;
+  const freq=blocFrequenceProposee(u,a);
+  const parRole={haut:[],normal:[],bas:[]};
+  for(const l of ((a&&a.lignes)||[])) (parRole[l.role]||parRole.normal).push(l);
+  const colonne=r=>{
+    const l=parRole[r.cle]||[];
+    return '<div style="margin-bottom:12px">'
+      +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:'+r.c
+      +';text-transform:uppercase;margin-bottom:6px">'+r.lib+' ('+l.length+')</div>'
+      +(l.length?l.map(x=>_blocLigne(u,x)).join('')
+        :'<div style="font-size:var(--fs-2xs);color:var(--text-faint)">aucun</div>')
+      +'</div>';
+  };
+  const depasse=!!(p&&!p.ok);
+  return '<div style="background:var(--surface-1);border:1px solid '+(depasse?'var(--red)':'var(--border)')
+    +';border-radius:var(--r-3);padding:13px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Bloc de priorité</span>'
+    +'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">'
+    +(av?('semaine '+av.semaine+'/'+av.total):'')+'</span></div>'
+    // LA PHRASE, EN TETE.
+    +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:'
+    +(depasse?'6px':'11px')+'">'+escapeHtml(blocSynthese(u,a,p))+'</div>'
+    +(depasse
+      ? '<div style="font-size:var(--fs-xs);color:var(--red-light);line-height:1.6;margin-bottom:11px">'
+        +'Plafond dépassé de '+volAffiche(p.depasse)+' séries pondérées ('
+        +String(p.hausse).replace('.',',')+' % contre +10 % permis). À retirer : '
+        +escapeHtml(((p.aRetirer||[]).map(x=>x.muscle
+            ? volAffiche(x.series)+' sur les '+(((MUSCLES[x.muscle]||{}).lib||x.muscle).toLowerCase())
+            : volAffiche(x.series)+' qu’aucun muscle non prioritaire ne peut céder').join(', ')))
+        +'.</div>'
+      : (p&&p.raison
+        ? '<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:11px">'+escapeHtml(p.raison)+'</div>'
+        : ''))
+    +BLOC_ROLES.map(colonne).join('')
+    // TROIS BOUTONS DISTINCTS, REFUSABLES UN PAR UN. Rien ne s'applique en
+    // bloc : le coach garde la main sur chaque geste.
+    +'<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">'
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:7px"'
+    +(depasse?' disabled style="width:100%;margin-bottom:7px;opacity:.45"':'')
+    +' onclick="blocAppliquerSeries('+JSON.stringify(String((u&&u.id)||'')).replace(/"/g,'&quot;')+')">'
+    +'Appliquer les séries</button>'
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:7px" onclick="blocAppliquerOrdre('
+    +JSON.stringify(String((u&&u.id)||'')).replace(/"/g,'&quot;')+')">'
+    +'Remonter les prioritaires en tête de séance</button>'
+    +(freq
+      ? '<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:7px">'
+        +escapeHtml(((MUSCLES[freq.muscle]||{}).lib||freq.muscle))+' : '+volAffiche(freq.cible)
+        +' séries sur '+freq.seances+' séance'+(freq.seances>1?'s':'')+', soit '+volAffiche(freq.parSeance)
+        +' par séance. Une séance de plus les répartirait mieux.</div>'
+      : '')
+    +'<button class="btn btn-outline btn-sm" style="width:100%" onclick="blocFermer()">Clore le bloc</button>'
+    +'</div></div>';
+}
+function renderBlocPriorite(c){
+  const z=document.getElementById('ccd-bloc');
+  if(!z) return false;
+  let h=''; try{ h=c?_htmlBlocPriorite(c):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+  try{ _animerJauges(z); }catch(e){}
+  return true;
+}
+// L'OUVERTURE et la CLOTURE. Rien ne se reconduit tout seul : a l'echeance, le
+// signal remonte au coach et c'est lui qui decide de reconduire, d'inverser ou
+// de revenir a plat.
+async function blocOuvrir(){
+  const c=(function(){ try{ return getOwnedClient(currentClientId); }catch(e){ return null; } })();
+  if(!c){ toast('Aucun athlète ouvert.','var(--orange)'); return false; }
+  let n=null;
+  try{ n=await rcSaisie('Durée du bloc','Combien de semaines ?','6'); }catch(e){ n=null; }
+  if(n===null) return false;
+  const s=Math.round(Number(String(n).replace(',','.')));
+  if(!(s>=2&&s<=16)){ toast('Entre 2 et 16 semaines.','var(--orange)'); return false; }
+  c.blocPriorite={debut:Date.now(),semaines:s,hauts:[],bas:[],note:''};
+  return _blocSauver(c,'Bloc ouvert sur '+s+' semaines');
+}
+async function blocFermer(){
+  const c=(function(){ try{ return getOwnedClient(currentClientId); }catch(e){ return null; } })();
+  if(!c||!c.blocPriorite) return false;
+  let ok=false;
+  try{ ok=await rcConfirm('Clore le bloc ?','Le programme reste tel quel : clore ne défait rien, cela ferme seulement la période.','Clore','Annuler'); }
+  catch(e){ ok=false; }
+  if(!ok) return false;
+  delete c.blocPriorite;
+  return _blocSauver(c,'Bloc clos');
+}
+function blocBasculer(muscle,role){
+  const c=(function(){ try{ return getOwnedClient(currentClientId); }catch(e){ return null; } })();
+  if(!c) return false;
+  let r={ok:true};
+  if(role==='haut') r=blocAjouterHaut(c,muscle);
+  else if(role==='bas') r=blocAjouterBas(c,muscle);
+  else r=blocRetirer(c,muscle);
+  // LE REFUS S'AFFICHE, IL NE SE DEVINE PAS. Un bouton qui ne repond pas
+  // laisse croire a une panne ; la phrase dit pourquoi et quoi faire.
+  if(!r.ok){ toast(r.raison||'Impossible.','var(--orange)'); return false; }
+  return _blocSauver(c,null);
+}
+function _blocSauver(c,libelle){
+  const res=(function(){ try{ return resolveClient(c&&c.id); }catch(e){ return null; } })();
+  if(!res) return false;
+  const cible=res.c, users=res.users;
+  cible.blocPriorite=c.blocPriorite;
+  cible.updatedAt=Date.now();
+  users[cible.email]=cible;
+  const ok=DB.set('users',users);
+  const _envoi=CLOUD.pushOne(cible.email,cible);
+  if(libelle) toastSync(ok,_envoi,libelle,'le bloc est');
+  try{ renderBlocPriorite(getOwnedClient(cible.id)); }catch(e){}
+  return true;
 }
 // ══════════ LA DISPONIBILITE ═══════════════════════════════════════════
 //
