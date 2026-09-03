@@ -15963,6 +15963,133 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LA CHARGE INTERNE ══════
+        (()=>{
+          const J=n=>Date.now()-n*86400000;
+          // l : liste de {j, srpe, duree}
+          const U=l=>({email:'c@t.fr',sessions:l.map(x=>({id:'s'+x.j,date:J(x.j),
+            duration:x.duree,data:{},srpe:x.srpe}))});
+          const serie=(de,a,pas,srpe,duree)=>{ const l=[];
+            for(let j=de;j<=a;j+=pas) l.push({j,srpe,duree}); return l; };
+
+          ok('Le produit est RECALCULÉ, jamais stocké',(()=>{
+            // UN PRODUIT FIGÉ NE SE RECALCULE PAS quand on corrige la durée :
+            // la séance de 90 minutes saisie à 9 garderait sa charge fausse
+            // pour toujours, et le ratio avec elle.
+            const s={duration:60,srpe:'soutenue'};
+            if(chargeSeance(s)!==360) return _echec('charge '+chargeSeance(s)+' au lieu de 360');
+            s.duration=90;
+            if(chargeSeance(s)!==540) return _echec('après correction : '+chargeSeance(s));
+            // RIEN N'A ÉTÉ ÉCRIT DANS LA SÉANCE : ni charge, ni produit.
+            for(const k of Object.keys(s))
+              if(/charge|produit|load/i.test(k)) return _echec('la séance porte « '+k+' »');
+            // Et l'écriture de la note ne stocke pas le produit non plus.
+            const src=String(noterSeance).replace(/^\s*\/\/.*$/gm,'');
+            if(/\.charge\s*=/.test(src)) return _echec('noterSeance stocke la charge');
+            return src.indexOf('s.srpe=cle')>=0?true:_echec('la note n’est pas stockée');})());
+
+          ok('La note est facultative : une séance sans note reste valide',(()=>{
+            // LA FRICTION EN FIN DE SÉANCE TUE UNE COLLECTE. Une séance sans
+            // note ne vaut pas zéro — elle n'entre simplement pas dans le
+            // calcul, et la couverture s'en charge.
+            if(chargeSeance({duration:60})!==null) return _echec('une charge sort sans note');
+            if(chargeSeance({srpe:'dure'})!==null) return _echec('une charge sort sans durée');
+            if(chargeSeance({duration:60,srpe:'inconnue'})!==null)
+              return _echec('une note hors échelle est acceptée');
+            // Les cinq pas sont libellés en MOTS : un athlète ne note pas sa
+            // séance sur dix, il la qualifie.
+            if(SRPE_ECHELLE.length!==5) return _echec(SRPE_ECHELLE.length+' pas au lieu de 5');
+            for(const e of SRPE_ECHELLE){
+              if(!e.lib||/^\d+$/.test(e.lib)) return _echec('le pas '+e.cle+' est un chiffre');
+              if(!(e.v>=2&&e.v<=10)) return _echec(e.cle+' vaut '+e.v);
+            }
+            // ET LA SORTIE EST AUSSI GRANDE QUE LES RÉPONSES : une sortie
+            // difficile à viser transforme une question facultative en péage.
+            const h=String(rcRendreSrpe).replace(/^\s*\/\/.*$/gm,'');
+            if(h.indexOf('rcPasserSrpe()')<0) return _echec('aucune sortie sur l’encart');
+            return /min-width:40px;min-height:40px/.test(h)
+              ?true:_echec('la sortie est plus petite que les réponses');})());
+
+          ok('Le ratio est null sous trois semaines ET sous couverture',(()=>{
+            // UN RATIO CALCULÉ SUR DES TROUS EST UN CHIFFRE FAUX QUI A L'AIR
+            // JUSTE. Deux gardes, aucune négociable.
+            const jeune=U(serie(1,12,2,'soutenue',60));
+            if(ratioCharge(jeune)!==null)
+              return _echec('un ratio sort de 12 jours d’historique : '+ratioCharge(jeune));
+            // Trois semaines pleines, tout noté : le ratio existe.
+            const plein=U(serie(1,27,2,'soutenue',60));
+            const r=ratioCharge(plein);
+            if(r===null) return _echec('aucun ratio sur trois semaines complètes');
+            if(couvertureCharge(plein)!==1) return _echec('couverture '+couvertureCharge(plein));
+            // Une séance notée sur trois : sous le seuil, on ne rend RIEN.
+            const troue=U(serie(1,27,2,'soutenue',60).map((x,i)=>
+              Object.assign({},x,{srpe:(i%3===0)?'soutenue':undefined})));
+            const cv=couvertureCharge(troue);
+            if(!(cv<CHARGE_COUVERTURE_MIN)) return _echec('couverture '+cv+' pas sous le seuil');
+            if(ratioCharge(troue)!==null)
+              return _echec('un ratio sort d’une couverture de '+Math.round(cv*100)+' %');
+            // LES DEUX TERMES SONT DANS LA MÊME UNITÉ : l'aiguë est une somme
+            // sur 7 jours, la chronique une MOYENNE hebdomadaire sur 28 —
+            // sans quoi le ratio vaudrait systématiquement un quart.
+            //
+            // ⚠ ON VÉRIFIE LES DEUX CONTRE DES VALEURS CALCULÉES À LA MAIN, pas
+            // l'un contre l'autre : comparer le ratio à aiguë/chronique laisse
+            // passer toute erreur COMMUNE aux deux. Mesuré — en remplaçant la
+            // moyenne chronique par une somme, la sonde restait verte.
+            //
+            // `plein` : une séance tous les deux jours de J-1 à J-27, chacune
+            // « soutenue » (6) × 60 min = 360.
+            //   aiguë     = les 4 séances de J-1 à J-7        → 4 × 360 = 1440
+            //   chronique = les 14 séances de J-1 à J-27, / 4 → 14 × 360 / 4 = 1260
+            const a=chargeAigue(plein), c=chargeChronique(plein);
+            const nAigu=plein.sessions.filter(s=>s.date>Date.now()-7*86400000).length;
+            const nChro=plein.sessions.length;
+            if(a!==nAigu*360) return _echec('aiguë '+a+' au lieu de '+(nAigu*360));
+            if(c!==Math.round(nChro*360/4))
+              return _echec('chronique '+c+' au lieu de '+Math.round(nChro*360/4)
+                +' — somme au lieu de moyenne hebdomadaire ?');
+            return Math.abs(a/c-r)<0.02?true:_echec('ratio '+r+' contre '+(a/c));})());
+
+          ok('Le saut de charge exige DEUX semaines de suite',(()=>{
+            // Une semaine chargée est un choix d'entraînement ; deux d'affilée
+            // au-dessus de la moitié de la moyenne du mois, c'est une dérive
+            // que personne n'a décidée.
+            const base=serie(15,40,2,'facile',45);
+            // Une seule semaine lourde : rien.
+            const une=U(base.concat(serie(1,6,1,'maximale',90)));
+            if(sautDeCharge(une)) return _echec('le signal se lève sur une seule semaine');
+            // Deux semaines lourdes : le signal.
+            const deux=U(base.concat(serie(1,14,1,'maximale',90)));
+            const s=sautDeCharge(deux);
+            if(!s) return _echec('le signal ne se lève pas sur deux semaines');
+            if(!(s.ratio>CHARGE_RATIO_SEUIL)) return _echec('ratio '+s.ratio+' sous le seuil');
+            // AUCUN SEUIL BAS SYMÉTRIQUE : une semaine légère est déjà
+            // couverte par les décharges programmées.
+            const src=String(sautDeCharge).replace(/^\s*\/\/.*$/gm,'');
+            if(/<\s*0\.\d|ratio<|baisse/i.test(src))
+              return _echec('un seuil bas symétrique est apparu');
+            // Et le signal remonte au coach avec sa phrase.
+            const sg=signauxEntrainement(Object.assign({id:'c1'},deux));
+            if(!sg.sautDeCharge) return _echec('le signal n’atteint pas signauxEntrainement');
+            const t=_texteSignal('saut_charge',deux,sg);
+            if(!t||t.indexOf('%')<0) return _echec('la phrase ne dit pas de combien : « '+t+' »');
+            return /ratio/i.test(t)?_echec('la phrase montre un ratio brut'):true;})());
+
+          ok('Le tonnage n\'est retiré de nulle part',(()=>{
+            // LES DEUX MESURES DISENT DES CHOSES DIFFÉRENTES et l'athlète
+            // connaît le tonnage : on ajoute, on ne remplace pas.
+            for(const f of ['tonnageSemaine','tonnageSerie'])
+              if(typeof window[f]!=='function') return _echec(f+' a disparu');
+            const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+            if(s.indexOf('tonnageSerie(')<0) return _echec('le tonnage n’est plus calculé');
+            // LE RATIO NE S'AFFICHE PAS À L'ATHLÈTE : c'est une donnée de
+            // pilotage de coach. Seuls la disponibilité (qui n'affiche aucun
+            // chiffre) et le signal coach le lisent.
+            const n=(s.match(/ratioCharge\(/g)||[]).length;
+            if(n>4) return _echec(n+' lectures du ratio : il déborde du pilotage coach');
+            return true;})());
+        })();
+
         // ══════ LE RENDEMENT PAR EXERCICE ══════
         (()=>{
           const J=n=>Date.now()-n*86400000;

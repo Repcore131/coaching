@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1113';
+window.RC_BUILD='1114';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -7182,6 +7182,10 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="wd-comparison"></div>
       <!-- LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps : une fois
            par semaine et par muscle, sur la derniere seance qui le touche. -->
+      <!-- UNE SEULE QUESTION, FACULTATIVE, IGNORABLE EN UN GESTE. Elle passe
+           AVANT le retour par muscle : c'est la plus courte des deux, et
+           l'ordre inverse ferait abandonner les deux. -->
+      <div id="wd-srpe-zone" style="display:none;margin-bottom:14px"></div>
       <div id="wd-retour-zone" style="display:none;margin-bottom:18px"></div>
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <div class="stat-tile"><div class="st-val" id="wd-time">—</div><div class="st-lbl">Durée</div></div>
@@ -15614,7 +15618,7 @@ function _viderCacheSignaux(){ _cacheSignaux.clear(); }
 const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage:false,chuteAssiduite:false,
   plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
   restrictionLongue:false,calibrageDu:false,blocPrioriteFini:false,
-  details:Object.freeze({})});
+  sautDeCharge:false,details:Object.freeze({})});
 
 // opts.complet : ne PAS court-circuiter les signaux de rang 6 quand un rang
 // superieur est deja acquis. Le classement n en a pas besoin — un 6 ne peut
@@ -15647,7 +15651,8 @@ function signauxEntrainement(c,opts){
   if(_cacheSignaux.has(cle)) return _cacheSignaux.get(cle);
   const r={douleur:false,douleurDiffuse:false,decrochage:false,chuteAssiduite:false,
     plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
-    restrictionLongue:false,calibrageDu:false,blocPrioriteFini:false,details:{}};
+    restrictionLongue:false,calibrageDu:false,blocPrioriteFini:false,
+    sautDeCharge:false,details:{}};
   // La restriction prolongée ne dépend pas des séances : elle se calcule ICI,
   // avant le retour anticipé. Placée plus bas, un athlète en sèche longue qui
   // ne journalise aucune séance ne serait jamais remonté au coach.
@@ -15769,6 +15774,14 @@ function signauxEntrainement(c,opts){
       r.details.blocPrioriteFini={semaines:_av.total,
         hauts:(_b&&_b.hauts)||[],mesure:_m};
     }
+  }catch(e){}
+  // ── LA CHARGE A-T-ELLE SAUTE ? ──
+  // DEUX SEMAINES DE SUITE, PAS UNE. Une semaine chargee est un choix
+  // d'entrainement ; deux d'affilee au-dessus de la moitie de la moyenne du
+  // mois, c'est une derive que personne n'a decidee.
+  try{
+    const _sc=sautDeCharge(c);
+    if(_sc){ r.sautDeCharge=true; r.details.sautDeCharge=_sc; }
   }catch(e){}
   // ── LE CALIBRAGE DU RIR EST-IL A REFAIRE ? ──
   // CE N'EST PAS UNE URGENCE, C'EST DE L'ENTRETIEN. Le signal n'entre pas dans
@@ -19212,6 +19225,14 @@ function _texteSignal(type,c,sg){
     return 'bloc '+(noms||'de priorité')+' terminé ('+x.semaines+' semaines).'+mes
       +' À reconduire, inverser, ou revenir à plat.';
   }
+  if(type==='saut_charge'&&d.sautDeCharge){
+    const x=d.sautDeCharge;
+    // LE CHIFFRE BRUT NE DIT RIEN — « ratio 1,7 » demande de savoir ce qu'est
+    // un ratio. La phrase dit le fait : la semaine pese la moitie de plus que
+    // le mois.
+    return 'la charge de la semaine dépasse de '
+      +Math.round((x.ratio-1)*100)+' % la moyenne du mois, deux semaines de suite.';
+  }
   if(type==='calibrage'&&d.calibrageDu){
     const x=d.calibrageDu;
     // ON DIT CE QUE CA COUTE DE NE PAS LE FAIRE, pas seulement qu'il est du :
@@ -19783,6 +19804,10 @@ function _lignesEntrainement(clients){
     {type:'douleur',    cle:'douleur',       icon:'🩹',color:'var(--red)',   lib:'Douleur répétée'},
     {type:'douleurdiff',cle:'douleurDiffuse',icon:'🩹',color:'var(--red)',   lib:'Douleurs diffuses'},
     {type:'decrochage', cle:'decrochage',    icon:'📉',color:'var(--orange)',lib:'Séances écourtées'},
+    // LA CHARGE PASSE DEVANT LE PLATEAU. Un plateau se corrige la semaine
+    // prochaine ; une charge qui a saute de moitie deux semaines de suite se
+    // regarde maintenant.
+    {type:'saut_charge', cle:'sautDeCharge',  icon:'📈',color:'var(--orange)',lib:'Charge en hausse marquée'},
     {type:'entrainement',cle:null,           icon:'⚠️',color:'var(--orange)',lib:'Progression bloquée'},
     // DERNIER RANG, ET C'EST SA PLACE. `vus` fait que l'athlete deja remonte
     // pour une douleur, un decrochage ou un plateau n'apparait pas ici : on ne
@@ -33689,6 +33714,7 @@ function finishWorkout(incomplete=false){
   if(_wdBil) _wdBil.style.display=(currentUser.bilans||[]).some(b=>b.type==='depart')?'none':'block';
   // LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps — une fois par
   // semaine et par muscle, sur la derniere seance qui le touche.
+  try{ rcRendreSrpe(); }catch(e){}
   try{ rcRendreRetourSeance((currentUser.sessions||[]).slice(-1)[0]); }catch(e){}
   go('s-workout-done');
   // Les trois textContent ci-dessus restent le repli : sous « animations
@@ -39563,6 +39589,194 @@ function reperesEffectifs(user,muscle){
   r.source=bouge(o)?'coach':(bouge(a)?'perso':'table');
   return r;
 }
+// ══════════ LA CHARGE INTERNE ══════════════════════════════════════════
+//
+// LE TONNAGE NE DIT PAS TOUT, ET IL NE DISPARAIT PAS POUR AUTANT. Deux cents
+// tonnes deplacees en quarante minutes et les memes en quatre-vingts ne
+// coutent pas la meme chose ; inversement, une seance legere mais interminable
+// pese. Les deux mesures disent des choses differentes, et l'athlete connait
+// deja le tonnage : on ajoute, on ne remplace pas.
+//
+// UNE SEULE QUESTION, ET ELLE EST FACULTATIVE. Une seance sans note reste une
+// seance valide — la friction en fin de seance est ce qui tue une collecte.
+//
+// EN MOTS, PAS EN CHIFFRES. Un athlete ne note pas sa seance sur dix, il la
+// qualifie. « Soutenue » se repond sans reflechir ; « 6 sur 10 » demande une
+// conversion mentale que personne ne fait deux fois pareil.
+const SRPE_ECHELLE=Object.freeze([
+  {cle:'tres_facile',lib:'Très facile',v:2},
+  {cle:'facile',     lib:'Facile',     v:4},
+  {cle:'soutenue',   lib:'Soutenue',   v:6},
+  {cle:'dure',       lib:'Dure',       v:8},
+  {cle:'maximale',   lib:'Maximale',   v:10}
+]);
+const CHARGE_AIGU_JOURS=7;
+const CHARGE_CHRONIQUE_JOURS=28;
+const CHARGE_SEMAINES_MIN=3;        // sous trois semaines, aucun ratio
+const CHARGE_COUVERTURE_MIN=2/3;    // deux seances notees sur trois, au moins
+const CHARGE_RATIO_SEUIL=1.5;
+const CHARGE_SAUT_SEMAINES=2;       // deux semaines de suite, pas une
+
+// PURE. La valeur interne d'une note, ou null.
+function _srpeValeur(cle){
+  const e=SRPE_ECHELLE.find(x=>x.cle===cle);
+  return e?e.v:null;
+}
+// PURE. LA CHARGE D'UNE SEANCE — RECALCULEE, JAMAIS STOCKEE.
+//
+// ON STOCKE LA NOTE ET LA DUREE, PAS LE PRODUIT. Un produit fige ne se
+// recalcule pas quand on corrige la duree : la seance de 90 minutes saisie a
+// 9 minutes garderait sa charge fausse pour toujours, et le ratio avec elle.
+function chargeSeance(sess){
+  if(!sess) return null;
+  const v=_srpeValeur(sess.srpe);
+  const d=Number(sess.duration);
+  if(v==null||!isFinite(d)||!(d>0)) return null;
+  return v*d;
+}
+// PURE. Les seances d'une fenetre, avec leur charge quand elle existe.
+function _chargesFenetre(user,jours,maintenant){
+  const u=_dossier(user);
+  const fin=Number(maintenant)||Date.now();
+  const debut=fin-jours*86400000;
+  const out=[];
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!s.date) continue;
+    if(!(s.date>debut&&s.date<=fin)) continue;
+    out.push({date:s.date,charge:chargeSeance(s)});
+  }
+  return out;
+}
+// PURE. La somme des charges sur sept jours glissants. Rend null quand aucune
+// seance notee : zero se lirait comme « aucune charge », pas comme « on ne
+// sait pas ».
+function chargeAigue(user,maintenant){
+  const l=_chargesFenetre(user,CHARGE_AIGU_JOURS,maintenant).filter(x=>x.charge!=null);
+  if(!l.length) return null;
+  return Math.round(l.reduce((s,x)=>s+x.charge,0));
+}
+// PURE. La moyenne HEBDOMADAIRE sur vingt-huit jours — pas la somme : les deux
+// termes du ratio doivent etre dans la meme unite, sans quoi il vaudrait
+// systematiquement un quart de ce qu'il devrait.
+function chargeChronique(user,maintenant){
+  const l=_chargesFenetre(user,CHARGE_CHRONIQUE_JOURS,maintenant).filter(x=>x.charge!=null);
+  if(!l.length) return null;
+  return Math.round(l.reduce((s,x)=>s+x.charge,0)/(CHARGE_CHRONIQUE_JOURS/7));
+}
+// PURE. LA COUVERTURE : part des seances de la fenetre qui portent une note.
+function couvertureCharge(user,maintenant){
+  const l=_chargesFenetre(user,CHARGE_CHRONIQUE_JOURS,maintenant);
+  if(!l.length) return null;
+  return l.filter(x=>x.charge!=null).length/l.length;
+}
+// PURE. LE RATIO AIGU/CHRONIQUE, ou null.
+//
+// UN RATIO CALCULE SUR DES TROUS EST UN CHIFFRE FAUX QUI A L'AIR JUSTE. Deux
+// gardes, et aucune n'est negociable : trois semaines d'historique au moins,
+// et deux seances notees sur trois au moins. En dessous, on ne rend rien —
+// pas une valeur prudente, RIEN.
+function ratioCharge(user,maintenant){
+  const u=_dossier(user);
+  const fin=Number(maintenant)||Date.now();
+  // Trois semaines d'historique : mesurees sur la PREMIERE seance connue, pas
+  // sur la date d'inscription — quelqu'un qui s'inscrit et ne s'entraine pas
+  // pendant un mois n'a pas trois semaines d'historique.
+  let plusAncienne=null;
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!s.date) continue;
+    if(plusAncienne===null||s.date<plusAncienne) plusAncienne=s.date;
+  }
+  if(plusAncienne===null) return null;
+  if((fin-plusAncienne)<CHARGE_SEMAINES_MIN*7*86400000) return null;
+  const cv=couvertureCharge(u,fin);
+  if(cv==null||cv<CHARGE_COUVERTURE_MIN) return null;
+  const a=chargeAigue(u,fin), c=chargeChronique(u,fin);
+  if(a==null||c==null||!(c>0)) return null;
+  return Math.round(a/c*100)/100;
+}
+// PURE. Le ratio d'il y a `n` semaines — sert au signal, qui exige deux
+// semaines de suite.
+function _ratioIlYA(user,n,maintenant){
+  const t=(Number(maintenant)||Date.now())-n*7*86400000;
+  return ratioCharge(user,t);
+}
+// PURE. LE SAUT DE CHARGE. Vrai quand le ratio depasse le seuil DEUX semaines
+// de suite.
+//
+// AUCUN SEUIL BAS SYMETRIQUE. Une semaine legere est deja couverte par les
+// decharges programmees, et un second signal pour la meme chose ferait du
+// bruit — le coach cesserait de lire les deux.
+function sautDeCharge(user,maintenant){
+  const a=ratioCharge(user,maintenant);
+  if(a==null||!(a>CHARGE_RATIO_SEUIL)) return null;
+  for(let n=1;n<CHARGE_SAUT_SEMAINES;n++){
+    const b=_ratioIlYA(user,n,maintenant);
+    if(b==null||!(b>CHARGE_RATIO_SEUIL)) return null;
+  }
+  return {ratio:a,seuil:CHARGE_RATIO_SEUIL,
+    aigue:chargeAigue(user,maintenant),chronique:chargeChronique(user,maintenant)};
+}
+// L'ENCART DE FIN DE SEANCE. Une seule question, cinq boutons, et une sortie.
+//
+// « IGNORABLE EN UN GESTE » N'EST PAS UNE FORMULE : la croix est aussi grande
+// que les boutons de reponse. Une sortie difficile a viser transforme une
+// question facultative en peage, et l'athlete finit par repondre n'importe
+// quoi pour faire disparaitre l'encart — ce qui detruit la mesure qu'on
+// cherchait a prendre.
+function rcRendreSrpe(){
+  const z=document.getElementById('wd-srpe-zone');
+  if(!z) return false;
+  z.style.display='none'; z.innerHTML='';
+  const u=currentUser;
+  const s=(u&&Array.isArray(u.sessions)&&u.sessions.length)?u.sessions[u.sessions.length-1]:null;
+  // DEJA NOTEE, OU SANS DUREE : rien a demander. Une seance sans duree ne
+  // produirait aucune charge, et la question serait posee pour rien.
+  if(!s||s.srpe||!(Number(s.duration)>0)) return false;
+  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">'
+    +'<span style="font-size:var(--fs-sm);color:var(--text);font-weight:700">Cette séance, c’était comment ?</span>'
+    +'<button type="button" aria-label="Passer" onclick="rcPasserSrpe()" '
+    +'style="background:none;border:none;color:rgba(255,255,255,.45);font-size:var(--fs-lg);line-height:1;'
+    +'cursor:pointer;min-width:40px;min-height:40px;padding:8px;flex-shrink:0">✕</button></div>'
+    +'<div style="display:flex;gap:5px;flex-wrap:wrap">'
+    +SRPE_ECHELLE.map(e=>'<button type="button" class="btn btn-outline btn-sm" '
+      +'style="flex:1 1 auto;min-width:0;padding:9px 6px;font-size:var(--fs-xs)" '
+      +'onclick="rcNoterSeance('+JSON.stringify(e.cle).replace(/"/g,'&quot;')+')">'
+      +escapeHtml(e.lib)+'</button>').join('')
+    +'</div></div>';
+  z.style.display='block';
+  return true;
+}
+function rcPasserSrpe(){
+  const z=document.getElementById('wd-srpe-zone');
+  if(z){ z.style.display='none'; z.innerHTML=''; }
+  // AUCUNE TRACE D'UN REFUS. On ne compte pas les fois ou quelqu'un n'a pas
+  // repondu : la seance reste valide, et la couverture s'en charge deja.
+  return true;
+}
+function rcNoterSeance(cle){
+  const u=currentUser;
+  let r=null;
+  try{ r=noterSeance(u,cle); }catch(e){ r=null; }
+  const z=document.getElementById('wd-srpe-zone');
+  if(z){ z.style.display='none'; z.innerHTML=''; }
+  if(!r||!r.ok) return false;
+  try{ direSiEnvoiEchoue(CLOUD.pushOne(u.email,u),
+    'Ta note de séance','ton coach ne la verra pas encore'); }catch(e){}
+  try{ toast('Noté ✓'); }catch(e){}
+  return true;
+}
+// L'ECRITURE DE LA NOTE. Elle porte sur la DERNIERE seance enregistree.
+function noterSeance(user,cle){
+  const u=_dossier(user);
+  if(!u||!Array.isArray(u.sessions)||!u.sessions.length) return {ok:false};
+  if(_srpeValeur(cle)==null) return {ok:false,raison:'Note inconnue.'};
+  const s=u.sessions[u.sessions.length-1];
+  s.srpe=cle;
+  try{ saveUser(); }catch(e){}
+  try{ _viderCacheSignaux(); }catch(e){}
+  return {ok:true,charge:chargeSeance(s)};
+}
 // ══════════ LE RENDEMENT D'UN EXERCICE ═════════════════════════════════
 //
 // TROIS TERMES, TOUS TIRES DE DONNEES DEJA COLLECTEES. Chaque serie porte
@@ -40922,37 +41136,30 @@ function _dispoEcartRir(user,dateISO){
   if(ecart>=0) return 100;      // plus facile que demande : rien a signaler
   return Math.max(0,Math.min(100,Math.round(100+ecart*100/DISPO_RIR_ZERO)));
 }
-// PURE. CHARGE — le tonnage de sept jours contre la mediane de vingt-huit.
+// PURE. CHARGE — le rapport aigu/chronique de la charge INTERNE.
+//
+// LE TONNAGE A CEDE LA PLACE, ET C'EST LA MEME INTENTION MIEUX MESUREE. Ce
+// terme cherchait « la semaine a-t-elle ete plus lourde que d'habitude » ;
+// le tonnage n'en donnait qu'une moitie — il ignore la duree et l'effort
+// percu, donc il ne voit pas une semaine courte et brutale. Le ratio les
+// integre. Le tonnage, lui, N'EST RETIRE DE NULLE PART : il reste affiche,
+// l'athlete le connait, et les deux mesures disent des choses differentes.
 //
 // C'EST LA HAUSSE QUI DEGRADE, pas la baisse : une semaine legere ne rend
-// personne indisponible. On ne mesure ici qu'un saut de charge.
-const DISPO_CHARGE_ZERO=60;     // +60 % de tonnage sur la semaine = 0
+// personne indisponible.
+//
+// SANS RATIO, PAS DE TERME. ratioCharge rend null sous trois semaines
+// d'historique ou sous deux notes sur trois : l'entree sort alors du calcul
+// et son poids se redistribue, plutot que d'inventer une valeur moyenne.
+const DISPO_CHARGE_RATIO_ZERO=1.6;   // ratio a partir duquel le terme vaut 0
 function _dispoCharge(user,dateISO){
   if(!user||!Array.isArray(user.sessions)) return null;
   const fin=_dateDeISO(dateISO||localISODate(new Date())).getTime()+86400000;
-  const par7=[];
-  for(let b=0;b<4;b++){
-    const f=fin-b*7*86400000, d=f-7*86400000;
-    let kg=0, vues=0;
-    for(const sess of user.sessions){
-      if(!sess||!sess.data||!(sess.date>=d&&sess.date<f)) continue;
-      vues++;
-      for(const nom of Object.keys(sess.data)){
-        const dd=sess.data[nom];
-        if(!dd||!Array.isArray(dd.sets)) continue;
-        const ex={name:nom,reps:String((dd.sets[0]&&dd.sets[0].reps)||''),
-          methode:dd.methode,technique:dd.technique};
-        for(const s of dd.sets) kg+=tonnageSerie(s,ex);
-      }
-    }
-    par7.push(vues?kg:null);
-  }
-  const courant=par7[0];
-  const ref=_dispoMediane(par7.slice(1));
-  if(courant==null||ref==null||!(ref>0)) return null;
-  const hausse=(courant-ref)/ref;
-  if(hausse<=0) return 100;
-  return Math.max(0,Math.min(100,Math.round(100-hausse*100/(DISPO_CHARGE_ZERO/100))));
+  let r=null; try{ r=ratioCharge(user,fin); }catch(e){ r=null; }
+  if(r==null) return null;
+  if(r<=1) return 100;
+  const t=(r-1)/(DISPO_CHARGE_RATIO_ZERO-1);
+  return Math.max(0,Math.min(100,Math.round(100-t*100)));
 }
 // PURE. La disponibilite. AUCUN ACCES AU DOM, aucune ecriture : l'affichage
 // est ailleurs, et c'est ce qui la rend testable.
