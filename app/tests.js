@@ -15963,6 +15963,165 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LE BILAN DE SÉANCE EN IMAGE ══════
+        (()=>{
+          const SESS=()=>({id:'s1',date:new Date('2026-09-03T18:30:00').getTime(),
+            name:'Push — Pecs',slot:1,duration:67,sets:18,setsPlanned:20,volume:12480,
+            data:{
+              // ⚠ LA DERNIERE SERIE EST LA PLUS LEGERE, et c'est ce qui rend la
+              // fixture utile : sans elle, « la plus lourde » et « la derniere
+              // validee » donnaient la meme reponse, et remplacer l'une par
+              // l'autre ne faisait rien tomber.
+              'Développé couché barre':{sets:[
+                {weight:'82.5',reps:'8',done:true},{weight:'85',reps:'6',done:true},
+                {weight:'85',reps:'7',done:true},{weight:'70',reps:'12',done:true}]},
+              'Tractions strictes':{sets:[{reps:'12',done:true},{reps:'10',done:true}]},
+              'Jamais validé':{sets:[{weight:'50',reps:'10',done:false}]}}});
+
+          ok('L\'image reprend les chiffres de l\'écran, elle ne les recalcule pas',(()=>{
+            // Deux calculs du même tonnage finiraient par ne plus dire la même
+            // chose, et l'image contredirait l'écran qu'on venait de lire.
+            const s=SESS();
+            const d=bilanSeanceDonnees(s,null);
+            if(!d) return _echec('aucune donnée');
+            if(d.volume!==12480) return _echec('volume : '+d.volume);
+            if(d.mins!==67||d.series!==18||d.seriesPrevues!==20)
+              return _echec('chiffres : '+d.mins+'/'+d.series+'/'+d.seriesPrevues);
+            // On change le tonnage de la séance : l'image SUIT, elle ne
+            // recompte pas.
+            const s2=Object.assign({},s,{volume:99999,duration:5});
+            const d2=bilanSeanceDonnees(s2,null);
+            if(d2.volume!==99999||d2.mins!==5)
+              return _echec('l’image recalcule au lieu de reprendre');
+            // Et le dessin ne relit pas le dossier : il ne prend que l'objet.
+            const src=_prodSrc();
+            const i=src.indexOf('function _dessinerBilanSeance');
+            const bloc=src.slice(i,src.indexOf('function',i+40));
+            if(/currentUser|tonnageSerie|\.sessions\b/.test(bloc))
+              return _echec('le dessin va chercher des données ailleurs');
+            return true;})());
+
+          ok('Une série non validée n\'entre pas, un exercice sans charge si',(()=>{
+            const d=bilanSeanceDonnees(SESS(),null);
+            if(d.ex.some(e=>/JAMAIS VALID/.test(e.nom)))
+              return _echec('un exercice jamais validé est publié');
+            // ⚠ « 0 kg » SERAIT FAUX sur des tractions strictes : elles ont
+            // bien été faites. L'image annonce alors le nombre de séries.
+            const tr=d.ex.filter(e=>/TRACTIONS/.test(e.nom))[0];
+            if(!tr) return _echec('un exercice au poids du corps est exclu');
+            if(tr.kg!==null) return _echec('une charge est inventée : '+tr.kg);
+            if(tr.series!==2) return _echec('séries comptées : '+tr.series);
+            // ⚠ ET LE DESSIN DOIT EN TENIR COMPTE. La donnée peut être juste et
+            // l'image écrire « 0 kg » quand même : un canvas ne se relit pas en
+            // texte, donc c'est la BRANCHE qu'on garde, dans la source. Mesuré
+            // en la retirant : la donnée restait bonne et rien ne tombait.
+            const sd=_prodSrc();
+            const k=sd.indexOf('function _dessinerBilanSeance');
+            const dess=sd.slice(k,k+9000);
+            if(!/e\.kg!=null[\s\S]{0,200}série/.test(dess))
+              return _echec('le dessin n’a plus de branche « sans charge »');
+            // LA SÉRIE LA PLUS LOURDE représente l'exercice, et à charge égale
+            // celle qui a le plus de répétitions.
+            const dc=d.ex.filter(e=>/COUCHÉ/.test(e.nom))[0];
+            if(dc.kg!==85) return _echec('charge montrée : '+dc.kg);
+            if(dc.reps!==7) return _echec('à 85 kg, c’est la série de 7 qui compte, pas '+dc.reps);
+            // Une séance sans rien de validé ne se poste pas.
+            for(const [cas,s] of [
+              ['sans date',{data:{a:{sets:[{weight:'1',reps:'1',done:true}]}}}],
+              ['sans data',{date:1}],
+              ['data vide',{date:1,data:{}}],
+              ['rien validé',{date:1,data:{a:{sets:[{weight:'1',reps:'1',done:false}]}}}]])
+              if(bilanSeanceDonnees(s,null)!==null)
+                return _echec(cas+' : une image sort quand même');
+            return true;})());
+
+          ok('L\'image porte le nom de l\'app — c\'est tout son objet',(()=>{
+            // Le canal de diffusion est Instagram : ce qui en sort doit dire
+            // d'où ça vient, sans quoi la séance circule et RepCore reste
+            // invisible.
+            const src=_prodSrc();
+            const i=src.indexOf('function _dessinerBilanSeance');
+            if(i<0) return _echec('le dessin a disparu');
+            const bloc=src.slice(i,i+9000);
+            if(bloc.indexOf('REPCORE')<0) return _echec('la signature a disparu');
+            // ET ELLE OCCUPE TOUTE L'IMAGE : un fond, pas un autocollant.
+            if(!/cv\.width=STORY_L;\s*cv\.height=STORY_H/.test(bloc))
+              return _echec('l’image ne fait plus le format story');
+            if(bloc.indexOf('fillRect(0,0,STORY_L,STORY_H)')<0)
+              return _echec('le fond a disparu : l’image redevient transparente');
+            // ⚠ ET LA CARTE DU PROGRAMME N'A PAS BOUGÉ. Elle est délibérément
+            // SANS fond et SANS signature — « juste le carré rouge », pour
+            // qu'on la POSE sur l'arrière-plan d'une story. Deux objets, deux
+            // décisions : les fusionner ferait perdre l'un ou l'autre.
+            // ⚠ LA BORNE DE DECOUPE EST LE BLOC SUIVANT, PAS _texteEspace :
+            // celui-ci vient APRES le dessin du bilan, si bien que la tranche
+            // englobait le REPCORE du bilan et accusait la carte de porter une
+            // signature qu'elle n'a pas.
+            const j=src.indexOf('function _dessinerStorySeance');
+            const fin=src.indexOf('LE BILAN DE SEANCE, EN IMAGE',j);
+            if(j<0||fin<0||fin<j) return _echec('les deux dessins ont bougé');
+            const carte=src.slice(j,fin);
+            if(carte.indexOf('REPCORE')>=0)
+              return _echec('une signature a été ajoutée à la carte de programme');
+            return /const CW=STORY_L-144/.test(carte)
+              ?true:_echec('la carte de programme a changé de taille');})());
+
+          ok('Le tonnage s\'écrit court, et 999 kg ne devient pas 1 t',(()=>{
+            // « 12 400 kg » se lit ; « 12,4 t » se lit mieux sur une image
+            // regardée deux secondes.
+            const cas=[[999,'999 kg'],[1000,'1 t'],[4520,'4,52 t'],
+                       [12480,'12,5 t'],[125000,'125 t'],[0,'0 kg']];
+            for(const [v,att] of cas)
+              if(bilanVolumeLib(v)!==att)
+                return _echec(v+' → « '+bilanVolumeLib(v)+' » au lieu de « '+att+' »');
+            return true;})());
+
+          ok('Une seule sortie pour les deux images, et la règle iOS y vit',(()=>{
+            // ⚠ CE BLOC ÉTAIT ÉCRIT DEUX FOIS. Une troisième image en aurait
+            // fait quatre copies — et la règle qui vit dedans est celle qu'on
+            // ne peut pas laisser diverger : Safari refuse la navigation de
+            // premier niveau vers une URL `data:`, et l'échec est MUET.
+            if(typeof _storySortirTelechargement!=='function')
+              return _echec('la sortie commune a disparu');
+            const s=String(_storySortirTelechargement);
+            if(s.indexOf('_estIOS()')<0) return _echec('la règle iOS a quitté la sortie');
+            if(s.indexOf('_ouvrirApercuStory')<0) return _echec('l’aperçu iOS a disparu');
+            // LES QUATRE GESTES PASSENT PAR LÀ, et aucun ne refait le travail.
+            for(const [nom,f] of [['télécharger séance',telechargerSeanceDuJour],
+                                  ['partager séance',partagerSeanceDuJour],
+                                  ['télécharger bilan',telechargerBilanSeance],
+                                  ['partager bilan',partagerBilanSeance]]){
+              const t=String(f);
+              if(!/_storySortir(Telechargement|Partage)\(/.test(t))
+                return _echec(nom+' ne passe pas par la sortie commune');
+              if(t.indexOf('toDataURL')>=0)
+                return _echec(nom+' refait le rendu de son côté');
+            }
+            // Le partage retombe sur le téléchargement quand il n'existe pas :
+            // on ne laisse pas l'athlète sans rien.
+            return String(partagerBilanSeance).indexOf('telechargerBilanSeance()')>=0
+              ?true:_echec('le partage ne retombe sur rien');})());
+
+          ok('Les records viennent de l\'écran de fin, et c\'est un TABLEAU',(()=>{
+            // ⚠ _cmp.records EST UN TABLEAU — c'est ainsi que _feterFinSeance le
+            // lit. Le prendre pour un nombre donnait Number(tableau) = NaN puis
+            // 0 : l'image n'aurait jamais annoncé le moindre record, sans
+            // erreur et sans que rien ne le montre.
+            const src=_prodSrc();
+            // ⚠ ON VISE L'AFFECTATION, PAS LA DECLARATION. `let _bilanRecords=0;`
+            // vient en premier dans le fichier : indexOf tombait dessus et
+            // lisait « 0 », ce qui n'apprend rien sur la lecture des records.
+            const i=src.indexOf('  _bilanRecords=(_cmp');
+            if(i<0) return _echec('le compte de records n’est plus posé par l’écran de fin');
+            const l=src.slice(i,i+120);
+            if(l.indexOf('.records.length')<0)
+              return _echec('les records sont lus comme un nombre : '+l.split('\n')[0]);
+            // La même lecture que la célébration de fin de séance, deux lignes
+            // plus bas : un seul compte, pas deux.
+            return /_feterFinSeance\([^)]*records:\(_cmp&&_cmp\.records&&_cmp\.records\.length\)/.test(src)
+              ?true:_echec('les deux lectures des records ont divergé');})());
+        })();
+
         // ══════ LE MOT AU COACH ══════
         (()=>{
           const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};

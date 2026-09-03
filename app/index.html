@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1122';
+window.RC_BUILD='1123';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -7255,6 +7255,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="stat-tile"><div class="st-val" id="wd-sets">—</div><div class="st-lbl">Séries</div></div>
         <div class="stat-tile"><div class="st-val" id="wd-vol">—</div><div class="st-lbl">Volume</div></div>
       </div>
+      <!-- L'IMAGE PARTAGEABLE. Sous les trois chiffres qu'elle reprend : on
+           voit ce qu'on va publier avant de toucher le bouton. -->
+      <div id="wd-partage"></div>
       <div id="wd-etats"></div>
       <div id="wd-cooldown"></div>
       <div id="wd-afilmer"></div>
@@ -32813,6 +32816,200 @@ function _dessinerStorySeance(d){
   // le decide, pas sous elle.
   return cv;
 }
+// ══════════════ LE BILAN DE SEANCE, EN IMAGE ═══════════════════════════
+//
+// ⚠ CE N'EST PAS LA MEME IMAGE QUE LA CARTE DE SEANCE, ET IL FAUT LE DIRE.
+// _dessinerStorySeance rend la carte du PROGRAMME : sans fond, sans ombre,
+// sans signature — « juste le carre rouge », arbitre pour qu'on la POSE sur
+// l'arriere-plan d'une story. C'etait le bon choix pour un autocollant.
+//
+// Celle-ci est un autre objet : une seance FAITE, publiee telle quelle. Elle
+// occupe donc les 1080x1920 entiers, elle porte un fond, et elle PORTE LE NOM
+// DE L'APP — le canal de diffusion est Instagram, et ce qui en sort doit dire
+// d'ou ca vient. L'ancienne carte n'est pas touchee : deux objets, deux
+// decisions, et fusionner les deux ferait perdre l'un ou l'autre.
+//
+// AUCUN CHIFFRE N'EST RECALCULE ICI. Durée, séries, volume et records sont
+// ceux que l'ecran de fin de seance vient d'afficher : deux calculs du meme
+// tonnage finiraient par ne plus dire la meme chose, et l'image contredirait
+// l'ecran qu'on venait de lire.
+const BILAN_EX_MAX=6;               // au-dela, l'image devient un tableau
+
+// PURE. Ce qu'il y a a dessiner, ou null. Prend la SEANCE ENREGISTREE — celle
+// que finishWorkout vient d'ecrire — et rien d'autre.
+function bilanSeanceDonnees(sess,user){
+  const s=sess||{};
+  if(!s.date) return null;
+  const data=(s.data&&typeof s.data==='object')?s.data:{};
+  const noms=Object.keys(data);
+  if(!noms.length) return null;      // une seance vide ne se poste pas
+  const ex=[];
+  for(const nom of noms){
+    const sets=((data[nom]||{}).sets)||[];
+    let n=0, meilleure=null;
+    for(const st of sets){
+      if(!st||st.done!==true) continue;
+      n++;
+      const w=parseFloat(st.weight);
+      const r=(typeof _perfReps==='function')?Number(_perfReps(st)):Number(st.reps);
+      if(!(w>0)||!(r>0)) continue;
+      // LA SERIE LA PLUS LOURDE, et a charge egale celle qui a le plus de
+      // repetitions. C'est ce qu'on montre d'un exercice : le haut de la pile.
+      if(!meilleure||w>meilleure.kg||(w===meilleure.kg&&r>meilleure.reps))
+        meilleure={kg:w,reps:r};
+    }
+    if(!n) continue;                 // exercice ouvert mais jamais valide
+    ex.push({nom:String(nom).toUpperCase(),series:n,
+      kg:meilleure?meilleure.kg:null,reps:meilleure?meilleure.reps:null});
+  }
+  if(!ex.length) return null;
+  // Les plus lourds d'abord : c'est l'ordre de lecture d'une seance publiee.
+  // Un exercice sans charge — poids du corps, gainage — ferme la liste sans
+  // etre exclu : il a bien ete fait.
+  ex.sort((a,b)=>(b.kg||0)-(a.kg||0)||b.series-a.series);
+  const d=new Date(Number(s.date));
+  return {
+    titre:String(s.name||'SÉANCE').toUpperCase(),
+    date:d.toLocaleDateString('fr-FR',{day:'2-digit',month:'long'}).toUpperCase(),
+    mins:Math.max(0,Math.round(Number(s.duration)||0)),
+    series:Math.max(0,Math.round(Number(s.sets)||0)),
+    seriesPrevues:Math.max(0,Math.round(Number(s.setsPlanned)||0)),
+    volume:Math.max(0,Math.round(Number(s.volume)||0)),
+    // LES RECORDS SONT PASSES PAR L'APPELANT, pas recalcules : c'est l'ecran
+    // de fin qui les a comptes, et il n'y en a qu'un compte qui vaille.
+    records:0,
+    ex:ex.slice(0,BILAN_EX_MAX),
+    autres:Math.max(0,ex.length-BILAN_EX_MAX)};
+}
+// PURE. Le tonnage, ecrit court. « 12 400 kg » se lit ; « 12,4 t » se lit
+// mieux sur une image regardee deux secondes.
+function bilanVolumeLib(kg){
+  const v=Number(kg)||0;
+  if(v>=10000) return String(Math.round(v/100)/10).replace('.',',')+' t';
+  if(v>=1000) return String(Math.round(v/10)/100).replace('.',',')+' t';
+  return v+' kg';
+}
+// LE DESSIN. Toutes les mesures sont en pixels de l'image finale : ce dessin
+// ne depend d'aucune mise en page, exactement comme celui de la carte.
+function _dessinerBilanSeance(d){
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const rr=(x,y,w,h,r)=>{ g.beginPath();
+    g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
+    g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); };
+  // ── LE FOND. Noir profond, halo rouge en haut : c'est l'app. ─────────
+  g.fillStyle='#070707'; g.fillRect(0,0,STORY_L,STORY_H);
+  const halo=g.createRadialGradient(STORY_L/2,-120,60,STORY_L/2,-120,900);
+  halo.addColorStop(0,'rgba(224,32,32,.42)'); halo.addColorStop(1,'rgba(224,32,32,0)');
+  g.fillStyle=halo; g.fillRect(0,0,STORY_L,900);
+  // La trame diagonale de l'app, sur toute la hauteur.
+  g.save(); g.strokeStyle='rgba(255,255,255,.028)'; g.lineWidth=2;
+  for(let x=-STORY_H;x<STORY_L+STORY_H;x+=30){
+    g.beginPath(); g.moveTo(x,0); g.lineTo(x+STORY_H,STORY_H); g.stroke(); }
+  g.restore();
+
+  const M=88;                                   // la marge laterale
+  const ch=210;                                 // hauteur d'une case de chiffre
+  const LH=92;                                  // hauteur d'une ligne d'exercice
+  // ⚠ ANCRAGE HAUT FIXE, ET C'EST UN RETOUR EN ARRIERE ASSUME. J'avais centre
+  // le contenu verticalement pour combler le creux qui pend sous une liste de
+  // six exercices. Mesure faite sur une seance de trois : le bloc descendait a
+  // 470 px du haut, avec 570 px de noir dessous — la seance courte devenait
+  // une image vide au milieu. Un titre se lit en haut ; le bas d'une story est
+  // de toute facon couvert par les commandes d'Instagram.
+  //
+  // A six exercices — le maximum — le contenu s'arrete vers 1520, et la
+  // signature est a 1788 : il n'y a pas de collision a craindre.
+  let y=250;
+  // ── L'EN-TETE ────────────────────────────────────────────────────────
+  g.textAlign='left'; g.textBaseline='alphabetic';
+  g.fillStyle='rgba(255,255,255,.55)'; g.font='800 30px '+MONT;
+  _texteEspace(g,'SÉANCE TERMINÉE',M,y,10);
+  y+=104;
+  g.fillStyle=_tok('--text','#efefef'); g.font='700 106px '+BEBAS;
+  _texteAjuste(g,d.titre,M,y,STORY_L-M*2,106,BEBAS);
+  y+=52;
+  g.fillStyle='rgba(255,255,255,.5)'; g.font='600 30px '+MONT;
+  g.fillText(d.date,M,y);
+
+  // ── LES TROIS CHIFFRES ───────────────────────────────────────────────
+  y+=76;
+  const cw=(STORY_L-M*2-32)/3;
+  // ⚠ « 67 » SEUL NE DIT RIEN. La case portait la valeur nue sous le libelle
+  // « DURÉE » : soixante-sept quoi ? Le champ `u` etait prevu et n'etait
+  // jamais lu. L'unite entre donc dans la VALEUR, comme « 12,5 t » a cote —
+  // les trois cases se lisent alors de la meme facon.
+  const cases=[
+    {v:d.mins+' MIN',l:'Durée'},
+    {v:d.series+(d.seriesPrevues?'/'+d.seriesPrevues:''),l:'Séries'},
+    {v:bilanVolumeLib(d.volume).toUpperCase(),l:'Volume'}];
+  cases.forEach((c,i)=>{
+    const x=M+i*(cw+16);
+    rr(x,y,cw,ch,26); g.fillStyle='rgba(255,255,255,.045)'; g.fill();
+    g.strokeStyle='rgba(255,255,255,.09)'; g.lineWidth=2; g.stroke();
+    g.textAlign='center';
+    g.fillStyle=_tok('--red-text','#ff4d4d'); g.font='700 84px '+BEBAS;
+    // _texteAjuste respecte textAlign : centre ici, x est donc le milieu.
+    _texteAjuste(g,c.v,x+cw/2,y+124,cw-32,84,BEBAS);
+    g.fillStyle='rgba(255,255,255,.45)'; g.font='800 24px '+MONT;
+    _texteEspace(g,c.l.toUpperCase(),x+cw/2,y+170,6,true);
+  });
+  g.textAlign='left';
+  y+=ch+72;
+
+  // ── LES RECORDS, s'il y en a ─────────────────────────────────────────
+  if(d.records>0){
+    rr(M,y-52,STORY_L-M*2,84,20);
+    g.fillStyle='rgba(224,32,32,.16)'; g.fill();
+    g.strokeStyle='rgba(224,32,32,.5)'; g.lineWidth=2; g.stroke();
+    g.fillStyle=_tok('--red-text','#ff4d4d'); g.font='800 30px '+MONT;
+    g.fillText(d.records+' nouveau'+(d.records>1?'x':'')+' record'
+      +(d.records>1?'s':''),M+30,y+2);
+    y+=112;
+  }
+
+  // ── LES EXERCICES ────────────────────────────────────────────────────
+  g.strokeStyle='rgba(255,255,255,.13)'; g.lineWidth=2;
+  g.beginPath(); g.moveTo(M,y-40); g.lineTo(STORY_L-M,y-40); g.stroke();
+  d.ex.forEach((e,i)=>{
+    const yy=y+i*LH;
+    rr(M,yy-34,46,46,10); g.fillStyle='rgba(255,255,255,.07)'; g.fill();
+    g.fillStyle='rgba(255,255,255,.6)'; g.font='800 26px '+MONT;
+    g.textAlign='center'; g.fillText(String(i+1),M+23,yy-2);
+    // LA CHARGE A DROITE, et « — » quand il n'y en a pas : un exercice au
+    // poids du corps a bien ete fait, il ne doit pas afficher « 0 kg ».
+    const det=(e.kg!=null)
+      ? String(e.kg).replace('.',',')+' kg × '+e.reps
+      : e.series+' série'+(e.series>1?'s':'');
+    g.textAlign='right'; g.fillStyle='rgba(255,255,255,.55)'; g.font='700 30px '+MONT;
+    const dl=g.measureText(det).width;
+    g.fillText(det,STORY_L-M,yy);
+    g.textAlign='left'; g.fillStyle=_tok('--text','#efefef'); g.font='800 32px '+MONT;
+    _texteCoupe(g,e.nom,M+70,yy,STORY_L-M*2-70-dl-28);
+  });
+  let yb=y+d.ex.length*LH;
+  if(d.autres){
+    g.fillStyle='rgba(255,255,255,.4)'; g.font='700 28px '+MONT;
+    g.fillText('+ '+d.autres+' autre'+(d.autres>1?'s':'')+' exercice'
+      +(d.autres>1?'s':''),M+70,yb);
+  }
+
+  // ── LA SIGNATURE. C'EST TOUT L'OBJET DE CETTE IMAGE. ─────────────────
+  //
+  // Le canal de diffusion est Instagram : ce qui en sort doit porter le nom de
+  // l'app, sans quoi la seance circule et RepCore reste invisible. En bas, a
+  // gauche, discret mais lisible a la taille d'un ecran de telephone.
+  const ys=STORY_H-132;
+  g.fillStyle=_tok('--red-text','#ff4d4d'); g.font='700 66px '+BEBAS;
+  g.textAlign='left';
+  _texteEspace(g,'REPCORE',M,ys,4);
+  g.fillStyle='rgba(255,255,255,.34)'; g.font='600 26px '+MONT;
+  g.fillText('Coaching Guellec',M,ys+42);
+  return cv;
+}
 // Ecrit un texte en l espacant, l API canvas n ayant pas de letter-spacing
 // fiable partout.
 function _texteEspace(g,t,x,y,esp,centre){
@@ -32905,6 +33102,44 @@ function _estIOS(){
     return /Mac/.test(p)&&(n.maxTouchPoints||0)>1;
   }catch(e){ return false; }
 }
+// ══ LA SORTIE D'UNE IMAGE : UN SEUL CHEMIN POUR LES DEUX ═══════════════
+//
+// Ce bloc etait ecrit deux fois, dans telechargerSeanceDuJour et dans
+// partagerSeanceDuJour. Une troisieme image — le bilan de seance — en aurait
+// fait quatre copies, et la regle iOS qui vit dedans est precisement celle
+// qu'on ne peut pas se permettre de laisser diverger : Safari refuse la
+// navigation de premier niveau vers une URL `data:`, et l'echec est MUET —
+// a.click() ne rend ni evenement, ni promesse, ni exception.
+//
+// TOUT EST SYNCHRONE, et ce n'est pas un detail : le moindre await
+// consommerait le geste utilisateur, et iOS refuserait le partage.
+function _storySortirTelechargement(cv,nomFichier){
+  const dataUrl=cv.toDataURL('image/png');
+  cv.width=0; cv.height=0;            // 8 Mo rendus tout de suite
+  if(_estIOS()){ _ouvrirApercuStory(dataUrl); return true; }
+  const a=document.createElement('a');
+  a.href=dataUrl;                     // pas d'URL d'objet : rien a liberer,
+  a.download=nomFichier;              // et rien qui puisse expirer trop tot
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  toast('Image téléchargée','var(--green)');
+  return true;
+}
+// Rend false quand le partage natif n'existe pas : l'appelant retombe alors
+// sur le telechargement, qui est ce que l'athlete attendait de toute facon.
+function _storySortirPartage(cv,nomFichier){
+  const dataUrl=cv.toDataURL('image/png');
+  cv.width=0; cv.height=0;
+  const blob=_b64versBlob(dataUrl);
+  let f=null;
+  try{ f=new File([blob],nomFichier,{type:'image/png'}); }catch(e){}
+  if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
+    navigator.share({files:[f]}).catch(()=>{});
+    return true;
+  }
+  return false;
+}
 let _storyEnCours=false;
 // TELECHARGER. Rien d autre. La feuille de partage native n existe pas
 // partout — navigator.share est absent de beaucoup de navigateurs de bureau
@@ -32922,32 +33157,69 @@ function telechargerSeanceDuJour(){
   if(!d){ toast('Aucune séance à partager aujourd’hui.','var(--orange)'); return false; }
   _storyEnCours=true;
   try{
-    const cv=_dessinerStorySeance(d);
-    const dataUrl=cv.toDataURL('image/png');
-    cv.width=0; cv.height=0;          // 8 Mo rendus tout de suite
-    // SUR iOS, L'APERÇU. Safari refuse la navigation de premier niveau vers une
-    // URL `data:`, et c'est exactement ce que porte ce lien. On ne peut pas non
-    // plus détecter l'échec : `a.click()` ne rend rien — ni événement, ni
-    // promesse, ni exception. On choisit donc d'après la plateforme.
-    //
-    // L'aperçu n'est pas un pis-aller : l'appui long sur une image est le seul
-    // geste qui marche sur TOUS les téléphones, et il porte lui-même un lien de
-    // téléchargement pour les cas où celui-ci passe.
-    if(_estIOS()){ _ouvrirApercuStory(dataUrl); return true; }
-    const a=document.createElement('a');
-    a.href=dataUrl;                   // pas d URL d objet : rien a liberer,
-    a.download='repcore-seance.png';  // et rien qui puisse expirer trop tot
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    toast('Image téléchargée','var(--green)');
-    return true;
+    // LA SORTIE EST PARTAGEE avec le bilan de seance : voir
+    // _storySortirTelechargement, ou vit desormais la regle iOS.
+    return _storySortirTelechargement(_dessinerStorySeance(d),'repcore-seance.png');
   }catch(e){
     toast('Téléchargement impossible : '+((e&&e.message)||'erreur'),'var(--orange)');
     return false;
   }finally{
     _storyEnCours=false;
   }
+}
+// ══ LE BILAN DE SEANCE : TELECHARGER, PARTAGER ═════════════════════════
+//
+// La seance affichee est celle qui vient d'etre enregistree — la derniere du
+// dossier. On ne la recalcule pas : finishWorkout l'a ecrite, l'ecran de fin
+// la lit, l'image la lit aussi.
+let _bilanRecords=0;
+function _bilanSeanceCourante(){
+  const l=(currentUser&&currentUser.sessions)||[];
+  const s=l[l.length-1];
+  const d=bilanSeanceDonnees(s,currentUser);
+  if(!d) return null;
+  // LES RECORDS VIENNENT DE L'ECRAN DE FIN, qui les a comptes. Zero par
+  // defaut : mieux vaut ne rien annoncer qu'annoncer un compte a nous.
+  d.records=Math.max(0,Math.round(Number(_bilanRecords)||0));
+  return d;
+}
+function telechargerBilanSeance(){
+  if(_storyEnCours) return false;
+  const d=_bilanSeanceCourante();
+  if(!d){ toast('Aucune séance à partager.','var(--orange)'); return false; }
+  _storyEnCours=true;
+  try{ return _storySortirTelechargement(_dessinerBilanSeance(d),'repcore-bilan.png'); }
+  catch(e){ toast('Téléchargement impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); return false; }
+  finally{ _storyEnCours=false; }
+}
+function partagerBilanSeance(){
+  if(_storyEnCours) return false;
+  const d=_bilanSeanceCourante();
+  if(!d){ toast('Aucune séance à partager.','var(--orange)'); return false; }
+  _storyEnCours=true;
+  try{
+    if(_storySortirPartage(_dessinerBilanSeance(d),'repcore-bilan.png')) return true;
+    _storyEnCours=false;
+    return telechargerBilanSeance();
+  }catch(e){
+    toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)');
+    return false;
+  }finally{ _storyEnCours=false; }
+}
+// LES DEUX BOUTONS, sur l'ecran de fin de seance. « Partager » n'apparait que
+// la ou il fonctionne : un bouton qui retomberait sur le telechargement ferait
+// deux boutons pour un seul geste.
+function renderPartageBilan(){
+  const z=document.getElementById('wd-partage');
+  if(!z) return false;
+  if(!_bilanSeanceCourante()){ z.innerHTML=''; return true; }
+  const part=(typeof navigator!=='undefined'&&navigator.share)
+    ?'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" '
+      +'onclick="partagerBilanSeance()">Partager</button>':'';
+  z.innerHTML='<div style="display:flex;gap:8px;margin-bottom:16px">'
+    +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" '
+    +'onclick="telechargerBilanSeance()">Télécharger l’image</button>'+part+'</div>';
+  return true;
 }
 // Le partage natif, en plus et jamais a la place. Tout est SYNCHRONE : le
 // moindre await consommerait le geste utilisateur, et iOS refuserait.
@@ -32957,16 +33229,7 @@ function partagerSeanceDuJour(){
   if(!d){ toast('Aucune séance à partager aujourd’hui.','var(--orange)'); return false; }
   _storyEnCours=true;
   try{
-    const cv=_dessinerStorySeance(d);
-    const dataUrl=cv.toDataURL('image/png');
-    cv.width=0; cv.height=0;
-    const blob=_b64versBlob(dataUrl);
-    let f=null;
-    try{ f=new File([blob],'repcore-seance.png',{type:'image/png'}); }catch(e){}
-    if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
-      navigator.share({files:[f]}).catch(()=>{});
-      return true;
-    }
+    if(_storySortirPartage(_dessinerStorySeance(d),'repcore-seance.png')) return true;
     // Pas de partage natif ici : on ne laisse pas l athlete sans rien, on
     // telecharge. C est ce qu il attendait de toute facon.
     _storyEnCours=false;
@@ -34832,6 +35095,14 @@ function finishWorkout(incomplete=false){
   // seance s'interrompait donc juste apres l'enregistrement, sans jamais
   // afficher l'ecran de fin.
   const _cmp=buildSessionComparison(vol,data);
+  // LE COMPTE DE RECORDS DE CET ECRAN, et c'est le seul : l'image le reprend
+  // au lieu d'en refaire un.
+  // ⚠ _cmp.records EST UN TABLEAU, pas un nombre — c'est ainsi que
+  // _feterFinSeance le lit deux lignes plus bas. Le prendre tel quel donnait
+  // Number(tableau) = NaN, puis 0 : l'image n'aurait jamais annonce le moindre
+  // record, sans erreur et sans que rien ne le montre.
+  _bilanRecords=(_cmp&&_cmp.records&&_cmp.records.length)|0;
+  try{ renderPartageBilan(); }catch(e){}
   document.getElementById('wd-msg').textContent=_messageFinSeance(sets,setsPlanned,mins,_cmp.records,_cmp.delta,_cmp.jour,incomplete);
   document.getElementById('wd-comparison').innerHTML=_cmp.html;
   // Seuls les exercices dont l'état vient de CHANGER, et jamais pour annoncer
