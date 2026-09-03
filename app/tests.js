@@ -15963,6 +15963,155 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LE RENDEMENT PAR EXERCICE ══════
+        (()=>{
+          const J=n=>Date.now()-n*86400000;
+          // n séances sur un exercice, charge croissante de `pas` par séance.
+          const faire=(nom,n,w0,pas,opt)=>{
+            const o=opt||{}; const s=[];
+            for(let i=0;i<n;i++){
+              const set={done:true,weight:String(w0+i*pas),reps:'8',rir:o.rir||'2'};
+              if(o.pain) set.pain=o.pain;
+              const d={}; d[nom]={sets:[set]};
+              s.push({date:J((n-i)*3),data:d});
+            }
+            return s;
+          };
+          const cfg=(nom,slots)=>{ const l=[];
+            for(let i=0;i<slots;i++) l.push({active:true,exercises:[{name:nom,series:3,rir:'2'}]});
+            return l; };
+
+          ok('Sous six séances, le score est null — et la mention le dit',(()=>{
+            // UNE PENTE SUR TROIS POINTS N'EST PAS UNE PENTE, c'est un dessin.
+            // L'absence de mesure est une information : elle reste visible,
+            // sans chiffre. Une case vide se lirait comme un zéro.
+            for(const n of [0,1,3,5]){
+              const r=rendementExercice({email:'r@t.fr',sessions:faire('DEEP SQUAT',n,80,2),
+                sessions_config:cfg('DEEP SQUAT',1)},'DEEP SQUAT');
+              if(r.rendement!==null) return _echec(n+' séances donnent un score : '+r.rendement);
+              if(n<REND_SEANCES_MIN&&r.raison!=='pas assez de séances')
+                return _echec(n+' séances : raison « '+r.raison+' »');
+            }
+            // À six, le score existe.
+            const six=rendementExercice({email:'r@t.fr',sessions:faire('DEEP SQUAT',6,80,2),
+              sessions_config:cfg('DEEP SQUAT',1)},'DEEP SQUAT');
+            if(six.rendement===null) return _echec('six séances ne suffisent pas : '+six.raison);
+            return six.n===6?true:_echec('n vaut '+six.n+' au lieu de 6');})());
+
+          ok('L\'objet porte les trois termes, jamais un scalaire',(()=>{
+            // « 0,42 » ne dit pas au coach LEQUEL des trois décroche — et
+            // c'est exactement ce qu'il doit savoir : un exercice qui ne
+            // progresse plus ne se traite pas comme un qu'on ne fait jamais.
+            const r=rendementExercice({email:'r@t.fr',sessions:faire('DEEP SQUAT',8,80,2.5),
+              sessions_config:cfg('DEEP SQUAT',1)},'DEEP SQUAT');
+            if(typeof r!=='object'||r===null) return _echec('la fonction rend un scalaire');
+            for(const k of ['progression','cout','regularite','rendement','n'])
+              if(!(k in r)) return _echec(k+' manque dans l’objet');
+            for(const k of ['progression','cout','regularite','rendement'])
+              if(typeof r[k]!=='number') return _echec(k+' n’est pas un nombre : '+r[k]);
+            // ET LE CALCUL EST CELUI ANNONCÉ : (progression − coût) × régularité.
+            const attendu=Math.round((r.progression-r.cout)*r.regularite*1000)/1000;
+            return r.rendement===attendu
+              ?true:_echec('rendement '+r.rendement+' au lieu de '+attendu);})());
+
+          ok('La régularité est croisée avec le journal des écarts',(()=>{
+            // UN EXERCICE REMPLACÉ UNE FOIS SUR TROIS NE REND RIEN, quelle que
+            // soit sa pente. Sans ce croisement, un mouvement qu'on évite parce
+            // que la machine est prise afficherait une belle progression sur
+            // les rares fois où il est fait, et le coach le garderait.
+            const base={email:'r@t.fr',sessions:faire('BUTTERFLY',8,30,1),
+              sessions_config:cfg('BUTTERFLY',2)};
+            const sans=rendementExercice(Object.assign({},base,{ecartsSeance:[]}),'BUTTERFLY');
+            const avec=rendementExercice(Object.assign({},base,{ecartsSeance:[
+              {date:J(2),exoPrevu:'BUTTERFLY',exoFait:'POMPES',motif:'absent'},
+              {date:J(5),exoPrevu:'BUTTERFLY',exoFait:'POMPES',motif:'absent'},
+              {date:J(9),exoPrevu:'BUTTERFLY',exoFait:'POMPES',motif:'absent'}]}),'BUTTERFLY');
+            if(!(avec.regularite<sans.regularite))
+              return _echec('les écarts ne pèsent pas : '+avec.regularite+' contre '+sans.regularite);
+            if(!(avec.rendement<sans.rendement))
+              return _echec('le rendement ne baisse pas malgré trois remplacements');
+            // UN ÉCART SUR UN AUTRE EXERCICE NE COMPTE PAS.
+            const autre=rendementExercice(Object.assign({},base,{ecartsSeance:[
+              {date:J(2),exoPrevu:'DEEP SQUAT',exoFait:'POMPES',motif:'absent'}]}),'BUTTERFLY');
+            if(autre.regularite!==sans.regularite)
+              return _echec('un écart sur un autre exercice pèse ici');
+            // ET LA RÉGULARITÉ NE DÉPASSE JAMAIS 1 : on ne récompense pas
+            // quelqu'un d'avoir fait plus que demandé.
+            const zele=rendementExercice({email:'r@t.fr',sessions:faire('DEEP SQUAT',20,80,1),
+              sessions_config:cfg('DEEP SQUAT',1)},'DEEP SQUAT');
+            return zele.regularite<=1?true:_echec('régularité '+zele.regularite);})());
+
+          ok('Un exercice qui progresse n\'est JAMAIS proposé à la rotation',(()=>{
+            // Un mouvement qui fait mal ET qui fait progresser est un
+            // arbitrage de coach : il pèse la douleur contre le résultat avec
+            // ce qu'il sait de l'athlète et que l'application ignore. Un calcul
+            // qui trancherait à sa place retirerait le meilleur exercice de
+            // quelqu'un parce qu'il est exigeant.
+            const s=String(propositionsRotation).replace(/^\s*\/\/.*$/gm,'');
+            if(!/progression>0/.test(s)) return _echec('la garde sur la progression a disparu');
+            // Et elle s'applique VRAIMENT : un exercice qui monte, coûte cher
+            // et serait dans le tiers bas ne doit pas sortir.
+            const u={email:'r@t.fr',
+              sessions:faire('DEEP SQUAT',8,80,3)
+                .concat(faire('LEG EXTENSION',8,40,0,{pain:'3'}))
+                .concat(faire('BUTTERFLY',8,30,0.2,{pain:'3'})),
+              sessions_config:[{active:true,exercises:[
+                {name:'DEEP SQUAT',series:3,rir:'2'},
+                {name:'LEG EXTENSION',series:3,rir:'2'},
+                {name:'BUTTERFLY',series:3,rir:'2'}]}],
+              programme:{debut:Date.now()-6*7*86400000,semaines:6}};
+            const p=propositionsRotation(u);
+            if(!p.actif) return _echec('la rotation ne se déclenche pas en fin de bloc : '+p.raison);
+            for(const l of p.lignes){
+              const r=rendementExercice(u,l.nom);
+              if(r.progression>0) return _echec(l.nom+' progresse (+'+r.progression+') et est proposé');
+            }
+            return true;})());
+
+          ok('La rotation ne se propose qu\'à la fin d\'un bloc',(()=>{
+            // CHANGER UN EXERCICE AU MILIEU D'UN BLOC détruit la seule chose
+            // qui rende sa pente lisible : la répétition.
+            const seances=faire('DEEP SQUAT',8,80,0)
+              .concat(faire('LEG EXTENSION',8,40,0))
+              .concat(faire('BUTTERFLY',8,30,0));
+            const conf=[{active:true,exercises:[{name:'DEEP SQUAT',series:3},
+              {name:'LEG EXTENSION',series:3},{name:'BUTTERFLY',series:3}]}];
+            // Semaine 1 sur 8 : en plein bloc.
+            const debut={email:'r@t.fr',sessions:seances,sessions_config:conf,
+              programme:{debut:Date.now()-2*86400000,semaines:8}};
+            const p1=propositionsRotation(debut);
+            if(p1.actif) return _echec('la rotation se propose en cours de bloc');
+            if(!p1.raison||p1.raison.indexOf('fin d’un bloc')<0)
+              return _echec('le refus n’explique pas : « '+p1.raison+' »');
+            // Dernière semaine : on y est.
+            const fin={email:'r@t.fr',sessions:seances,sessions_config:conf,
+              programme:{debut:Date.now()-7*7*86400000,semaines:8}};
+            return propositionsRotation(fin).actif
+              ?true:_echec('la rotation ne s’ouvre pas en dernière semaine');})());
+
+          ok('Le classement est réservé au coach, et le sans-score reste visible',(()=>{
+            // L'ATHLÈTE NE VOIT PAS DE CLASSEMENT DE SES EXERCICES : ce serait
+            // une invitation à changer sans raison, et le meilleur exercice
+            // reste celui qu'on répète assez longtemps.
+            const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+            const n=(s.match(/_htmlRendement\(/g)||[]).length;
+            // Deux : la déclaration et l'unique appel, dans la fiche client.
+            if(n>2) return _echec(n+' appels de la vue : elle déborde de la fiche coach');
+            // Les exercices sans score ferment la liste mais Y FIGURENT.
+            const u={email:'r@t.fr',
+              sessions:faire('DEEP SQUAT',8,80,2).concat(faire('BUTTERFLY',2,30,1)),
+              sessions_config:[{active:true,exercises:[{name:'DEEP SQUAT',series:3},
+                {name:'BUTTERFLY',series:3}]}]};
+            const l=rendementsBloc(u);
+            if(l.length!==2) return _echec(l.length+' lignes au lieu de 2');
+            if(l[0].rendement==null) return _echec('le noté ne passe pas devant');
+            if(l[1].rendement!==null) return _echec('le sans-score a un rendement');
+            if(l[1].raison!=='pas assez de séances') return _echec('le sans-score n’est pas motivé');
+            const h=_htmlRendement(u);
+            return (h.indexOf('pas assez de séances')>=0)
+              ?true:_echec('la mention n’apparaît pas dans la vue');})());
+        })();
+
         // ══════ LES SALLES ET LE REMPLACEMENT ══════
         (()=>{
           const u0=()=>({email:'sl@test.fr',id:'u_sl',sessions:[]});

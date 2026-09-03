@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1112';
+window.RC_BUILD='1113';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -39563,6 +39563,380 @@ function reperesEffectifs(user,muscle){
   r.source=bouge(o)?'coach':(bouge(a)?'perso':'table');
   return r;
 }
+// ══════════ LE RENDEMENT D'UN EXERCICE ═════════════════════════════════
+//
+// TROIS TERMES, TOUS TIRES DE DONNEES DEJA COLLECTEES. Chaque serie porte
+// {weight, reps, rir, pain} depuis toujours, le journal des ecarts existe, les
+// creneaux disent ce qui etait prevu. Rien de neuf n'est demande a personne :
+// ce qui manquait, c'etait de les lire ensemble.
+//
+// ON REND L'OBJET, JAMAIS LE SEUL NOMBRE. « 0,42 » ne dit pas au coach lequel
+// des trois termes decroche, et c'est exactement ce qu'il doit savoir : un
+// exercice qui ne progresse plus ne se traite pas comme un exercice qu'on ne
+// fait jamais, ni comme un exercice qui fait mal.
+//
+// SOUS SIX SEANCES, LE SCORE EST null ET NE S'AFFICHE PAS. Une pente calculee
+// sur trois points n'est pas une pente, c'est un dessin. L'absence de mesure
+// est une information — l'ecran la montre, sans chiffre.
+const REND_SEMAINES=6;
+const REND_SEANCES_MIN=6;
+// Deux repetitions sous la consigne : le cout de RIR sature. Au-dela, ce n'est
+// plus un ecart, c'est une autre seance.
+const REND_RIR_SATURE=2;
+
+// PURE. La pente d'une droite des moindres carres, en unites de y par unite de
+// x. Rend null sous deux points distincts : une pente a besoin de deux abscisses.
+function _rendPente(pts){
+  const l=(pts||[]).filter(p=>p&&isFinite(p.x)&&isFinite(p.y));
+  if(l.length<2) return null;
+  const n=l.length;
+  const mx=l.reduce((s,p)=>s+p.x,0)/n, my=l.reduce((s,p)=>s+p.y,0)/n;
+  let num=0, den=0;
+  for(const p of l){ num+=(p.x-mx)*(p.y-my); den+=(p.x-mx)*(p.x-mx); }
+  if(!(den>0)) return null;          // toutes les seances le meme jour
+  return num/den;
+}
+// PURE. Les points (semaine, e1RM) d'un exercice sur la fenetre.
+//
+// UN POINT PAR SEANCE, ET C'EST LE MEILLEUR e1RM DE LA SEANCE. La moyenne
+// diluerait la serie lourde dans les series de rappel ; le maximum est ce que
+// l'athlete a demontre ce jour-la.
+//
+// LE RIR EST CORRIGE : c'est une lecture de decision. Deux athletes qui
+// declarent « RIR 2 » ne sont pas au meme endroit — voir le calibrage.
+function _rendPoints(user,nom,maintenant){
+  const u=_dossier(user);
+  const k=exKey(nom);
+  const fin=Number(maintenant)||Date.now();
+  const debut=fin-REND_SEMAINES*7*86400000;
+  const pts=[];
+  for(const sess of ((u&&u.sessions)||[])){
+    if(!sess||!sess.data||!sess.date) continue;
+    if(!(sess.date>=debut&&sess.date<=fin)) continue;
+    // Les seances de decharge sortent : elles prescrivent moins, et leur
+    // e1RM plus bas se lirait comme une regression.
+    if(sess.deload) continue;
+    let best=0;
+    for(const n2 of Object.keys(sess.data)){
+      if(exKey(n2)!==k) continue;
+      for(const s of (((sess.data[n2]||{}).sets)||[])){
+        if(!s||s.done!==true) continue;
+        const w=parseFloat(s.weight), r=_perfReps(s);
+        if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+        const v=e1rm(w,r,_perfRir(s,u));
+        if(v>best) best=v;
+      }
+    }
+    if(best>0) pts.push({x:(sess.date-debut)/604800000,y:best,date:sess.date});
+  }
+  pts.sort((a,b)=>a.x-b.x);
+  return pts;
+}
+// PURE. LE COUT. Deux composantes, toutes deux ramenees sur 0..1.
+//
+// LA DOULEUR SE COMPTE EN PART DE SERIES, pas en nombre : dix series
+// douloureuses sur dix n'est pas la meme chose que dix sur cent.
+//
+// L'ECART DE RIR NE COMPTE QUE DANS UN SENS. Finir plus LOIN de l'echec que
+// prescrit ne coute rien — c'est une seance facile. Finir plus PRES coute :
+// l'athlete a puise davantage que ce que le programme prevoyait, et ce
+// supplement n'apparait nulle part ailleurs.
+function _rendCout(user,nom,maintenant){
+  const u=_dossier(user);
+  const k=exKey(nom);
+  const fin=Number(maintenant)||Date.now();
+  const debut=fin-REND_SEMAINES*7*86400000;
+  // La consigne : celle figee au moment de la seance d'abord, le gabarit
+  // ensuite — meme regle que partout ailleurs.
+  const pres={};
+  try{
+    for(const s of (Array.isArray(u.sessions_config)?u.sessions_config:[])){
+      if(!s||s.active!==true||!Array.isArray(s.exercises)) continue;
+      for(const ex of s.exercises){
+        const r=_rirPrescrit(ex);
+        if(r==='') continue;
+        const kk=exKey((ex&&ex.name)||'');
+        if(kk&&pres[kk]==null) pres[kk]=Number(r);
+      }
+    }
+  }catch(e){}
+  let series=0, douloureuses=0, ecart=0, nEcart=0;
+  for(const sess of ((u&&u.sessions)||[])){
+    if(!sess||!sess.data||!sess.date) continue;
+    if(!(sess.date>=debut&&sess.date<=fin)) continue;
+    const fige=(sess.rirPlanned&&typeof sess.rirPlanned==='object')?sess.rirPlanned:null;
+    for(const n2 of Object.keys(sess.data)){
+      if(exKey(n2)!==k) continue;
+      const cons=(fige&&fige[n2]!=null)?Number(fige[n2]):pres[k];
+      for(const s of (((sess.data[n2]||{}).sets)||[])){
+        if(!s||s.done!==true) continue;
+        series++;
+        const p=parseInt(s&&s.pain,10);
+        if(isFinite(p)&&p>0) douloureuses++;
+        if(cons==null||!isFinite(cons)) continue;
+        if(s.rir===''||s.rir==null) continue;
+        const brut=(s.rir==='echec')?0:(parseInt(s.rir,10)||0);
+        let v=brut; try{ v=rirCorrige(u,brut); }catch(e){ v=brut; }
+        const d=cons-v;                       // positif : plus pres de l'echec
+        if(d>0){ ecart+=d; }
+        nEcart++;
+      }
+    }
+  }
+  if(!series) return null;
+  const partDouleur=douloureuses/series;
+  const partRir=nEcart?Math.min(1,(ecart/nEcart)/REND_RIR_SATURE):0;
+  // MOITIE-MOITIE. La douleur et le sur-effort coutent autant l'une que
+  // l'autre : privilegier l'une reviendrait a decider a la place du coach
+  // laquelle des deux compte, et rien dans la donnee ne le dit.
+  return {valeur:Math.min(1,partDouleur*0.5+partRir*0.5),
+    partDouleur:Math.round(partDouleur*1000)/1000,
+    partRir:Math.round(partRir*1000)/1000,series:series};
+}
+// PURE. LA REGULARITE. Part des occasions prevues ou l'exercice a ete
+// REELLEMENT fait — croisee avec le journal des ecarts.
+//
+// UN EXERCICE REMPLACE UNE FOIS SUR TROIS EST UN EXERCICE QUI NE REND RIEN,
+// quelle que soit sa pente. Sans ce croisement, un mouvement qu'on evite parce
+// que la machine est toujours prise afficherait une belle progression sur les
+// rares fois ou il est fait, et le coach le garderait.
+function _rendRegularite(user,nom,maintenant){
+  const u=_dossier(user);
+  const k=exKey(nom);
+  const fin=Number(maintenant)||Date.now();
+  const debut=fin-REND_SEMAINES*7*86400000;
+  // Combien de creneaux ACTIFS le portent ? C'est le rythme prevu.
+  let parSemaine=0;
+  try{
+    for(const s of (Array.isArray(u.sessions_config)?u.sessions_config:[])){
+      if(!s||s.active!==true||!Array.isArray(s.exercises)) continue;
+      if(s.exercises.some(ex=>ex&&exKey(ex.name||'')===k)) parSemaine++;
+    }
+  }catch(e){}
+  // Fait combien de fois ?
+  let faites=0;
+  for(const sess of ((u&&u.sessions)||[])){
+    if(!sess||!sess.data||!sess.date) continue;
+    if(!(sess.date>=debut&&sess.date<=fin)) continue;
+    if(Object.keys(sess.data).some(n2=>exKey(n2)===k)) faites++;
+  }
+  // Remplace combien de fois ? Le journal des ecarts le dit, et c'est la
+  // seule trace : woState.substitutions meurt avec la seance.
+  let remplace=0;
+  try{
+    for(const e of _tabBloc(u&&u.ecartsSeance)){
+      if(!e||!e.date||e.date<debut||e.date>fin) continue;
+      if(exKey(e.exoPrevu||'')===k) remplace++;
+    }
+  }catch(e){}
+  const prevues=parSemaine*REND_SEMAINES;
+  // AUCUN CRENEAU NE LE PORTE : il n'etait pas prevu, on ne peut pas parler
+  // de regularite. null, et le terme sort du calcul plutot que de valoir 1.
+  if(!(prevues>0)) return null;
+  // Les occasions manquees comprennent les remplacements : l'exercice etait
+  // prevu, il n'a pas ete fait.
+  const honorees=Math.max(0,Math.min(prevues,faites));
+  return {valeur:Math.max(0,Math.min(1,(honorees-Math.min(remplace,honorees))/prevues)),
+    prevues:prevues,faites:faites,remplace:remplace};
+}
+// PURE. LE RENDEMENT. Rend TOUJOURS l'objet complet, jamais un scalaire.
+function rendementExercice(user,nom,maintenant){
+  const u=_dossier(user);
+  const pts=_rendPoints(u,nom,maintenant);
+  const n=pts.length;
+  const vide={nom:nom,n:n,progression:null,cout:null,regularite:null,
+    rendement:null,raison:n<REND_SEANCES_MIN?'pas assez de séances':null};
+  // SOUS SIX SEANCES : PAS DE SCORE. Une pente sur trois points est un dessin.
+  if(n<REND_SEANCES_MIN) return vide;
+  const pente=_rendPente(pts);
+  const base=pts[0].y;
+  // PENTE NORMALISEE PAR LE e1RM INITIAL : +2 kg par semaine ne veut pas dire
+  // la meme chose a 60 kg qu'a 200. On compare l'athlete a lui-meme.
+  const progression=(pente==null||!(base>0))?null:Math.round(pente/base*1000)/1000;
+  const c=_rendCout(u,nom,maintenant);
+  const r=_rendRegularite(u,nom,maintenant);
+  if(progression==null||!c) return Object.assign({},vide,{raison:'mesure impossible'});
+  // LA REGULARITE PONDERE, elle ne s'additionne pas : un exercice fait une
+  // fois sur trois ne rend pas « un peu moins », il rend le tiers.
+  // Absente — aucun creneau ne le porte — elle vaut 1 : on ne punit pas un
+  // exercice de ce qu'on ne lui a jamais demande.
+  const reg=r?r.valeur:1;
+  const rendement=Math.round((progression-c.valeur)*reg*1000)/1000;
+  return {nom:nom,n:n,progression:progression,cout:Math.round(c.valeur*1000)/1000,
+    regularite:Math.round(reg*1000)/1000,rendement:rendement,raison:null,
+    detail:{douleur:c.partDouleur,rir:c.partRir,series:c.series,
+      prevues:r?r.prevues:null,faites:r?r.faites:null,remplace:r?r.remplace:null}};
+}
+// PURE. Tous les exercices des creneaux actifs, du meilleur rendement au pire.
+// Ceux sans score ferment la liste : ils n'ont rien a dire, mais leur absence
+// de mesure EST une information et doit rester visible.
+function rendementsBloc(user,maintenant){
+  const u=_dossier(user);
+  const vus={}, out=[];
+  try{
+    for(const s of (Array.isArray(u.sessions_config)?u.sessions_config:[])){
+      if(!s||s.active!==true||!Array.isArray(s.exercises)) continue;
+      for(const ex of s.exercises){
+        if(!ex||!ex.name) continue;
+        try{ if(isCardio(ex)) continue; }catch(e){}
+        const k=exKey(ex.name);
+        if(!k||vus[k]) continue;
+        vus[k]=true;
+        out.push(rendementExercice(u,ex.name,maintenant));
+      }
+    }
+  }catch(e){}
+  out.sort((a,b)=>{
+    const av=a.rendement==null?1:0, bv=b.rendement==null?1:0;
+    if(av!==bv) return av-bv;                       // les sans-score en dernier
+    if(av) return String(a.nom).localeCompare(String(b.nom));
+    return b.rendement-a.rendement;
+  });
+  return out;
+}
+// ══════════ LA ROTATION DE FIN DE BLOC ═════════════════════════════════
+//
+// A LA FIN D'UN BLOC, JAMAIS EN COURS. Changer un exercice au milieu d'un bloc
+// detruit la seule chose qui rende sa pente lisible : la repetition. Le
+// meilleur exercice reste celui qu'on repete assez longtemps pour en tirer une
+// progression, et proposer d'en changer chaque semaine reviendrait a
+// s'interdire toute mesure.
+//
+// ⚠ ON NE FAIT JAMAIS TOURNER UN EXERCICE QUI PROGRESSE, meme si son cout est
+// eleve. Un mouvement qui fait mal ET qui fait progresser est un arbitrage de
+// coach — il pese la douleur contre le resultat, avec ce qu'il sait de
+// l'athlete et que l'application ignore. Un calcul qui trancherait a sa place
+// ferait retirer le meilleur exercice de quelqu'un parce qu'il est exigeant.
+const ROT_REMPLACANTS=2;
+
+// PURE. Sommes-nous en fin de bloc ?
+//
+// DEUX BLOCS COEXISTENT dans l'application : la programmation en semaines
+// (programmeDe) et le bloc de priorite musculaire. L'un ou l'autre suffit —
+// c'est le moment de faire le point qui compte, pas lequel des deux s'acheve.
+function finDeBloc(user,maintenant){
+  const u=_dossier(user);
+  const t=Number(maintenant)||Date.now();
+  try{
+    const b=blocAvancement(u,t);
+    if(b&&(b.fini||b.reste<=1)) return true;
+  }catch(e){}
+  try{
+    const p=programmeDe(u);
+    if(p){
+      const i=indexSemaineBloc(u,t);
+      // Hors bloc : le bloc est passe, donc fini. Derniere semaine : on y est.
+      if(i===null||i>=p.semaines-1) return true;
+    }
+  }catch(e){}
+  return false;
+}
+// PURE. LES PROPOSITIONS. Rend {actif:Boolean, raison, lignes:[...]}.
+//
+// LE TIERS BAS **ET** UNE PROGRESSION NULLE OU NEGATIVE. Les deux, pas l'un ou
+// l'autre : un exercice mal classe mais qui monte encore n'a pas a bouger, et
+// un exercice a plat mais bien classe non plus — s'il tient le haut du panier
+// malgre une pente nulle, c'est que les autres font pire.
+function propositionsRotation(user,maintenant){
+  const u=_dossier(user);
+  const t=Number(maintenant)||Date.now();
+  if(!finDeBloc(u,t))
+    return {actif:false,raison:'La rotation se propose à la fin d’un bloc, pas en cours.',lignes:[]};
+  const tous=rendementsBloc(u,t).filter(x=>x.rendement!=null);
+  if(tous.length<3)
+    return {actif:false,raison:'Pas encore assez d’exercices mesurés pour comparer.',lignes:[]};
+  // LE TIERS BAS SE MESURE SUR CE QUI EST MESURABLE. Les exercices sans score
+  // n'entrent pas dans le classement : les compter comme mauvais reviendrait a
+  // les condamner pour n'avoir pas ete assez faits.
+  const seuil=tous[Math.max(0,Math.ceil(tous.length*2/3)-1)].rendement;
+  const salle=(function(){ try{ return salleActive(u); }catch(e){ return null; } })();
+  const lignes=[];
+  for(const x of tous){
+    if(x.rendement>seuil) continue;
+    // LA GARDE QUI COMPTE : il progresse, on ne touche a rien.
+    if(x.progression>0) continue;
+    let subs=[];
+    try{ subs=(substitutsSalle(u,x.nom,salle).liste||[]); }catch(e){ subs=[]; }
+    // PATRON DIFFERENT DE PREFERENCE : changer d'angle est le but meme de la
+    // rotation. Un substitut du meme patron travaille le muscle de la meme
+    // facon, et reproduirait le plateau qu'on cherche a sortir.
+    subs=subs.slice().sort((a,b)=>(a.memePatron?1:0)-(b.memePatron?1:0));
+    if(!subs.length) continue;
+    lignes.push({nom:x.nom,rendement:x.rendement,progression:x.progression,
+      cout:x.cout,regularite:x.regularite,n:x.n,
+      remplacants:subs.slice(0,ROT_REMPLACANTS).map(s=>s.nom),
+      pourquoi:_rotPourquoi(x)});
+  }
+  return {actif:true,raison:null,seuil:seuil,lignes:lignes};
+}
+// PURE. LA PHRASE. Elle nomme le terme qui decroche, et lui seul : « rendement
+// 0,12 » ne dit pas quoi faire, « il ne progresse plus depuis six semaines »
+// si. Meme discipline que le motif de disponibilite.
+function _rotPourquoi(x){
+  if(x.regularite!=null&&x.regularite<0.6)
+    return 'Fait '+Math.round(x.regularite*100)+' % des fois prévues : trop irrégulier pour rendre quoi que ce soit.';
+  if(x.cout>=0.4)
+    return 'Ne progresse plus, et coûte cher — douleurs ou effort au-delà de la consigne.';
+  return 'Plus de progression sur '+REND_SEMAINES+' semaines et '+x.n+' séances.';
+}
+// LA VUE COACH. Une seule, dans la fiche client.
+//
+// L'ATHLETE NE VOIT PAS DE CLASSEMENT DE SES EXERCICES. Ce serait une
+// invitation a changer sans raison, et le meilleur exercice reste celui qu'on
+// repete assez longtemps pour en tirer une progression lisible.
+function _htmlRendement(c){
+  const u=_dossier(c);
+  let l=[];
+  try{ l=rendementsBloc(u); }catch(e){ return ''; }
+  if(!l.length) return '';
+  const num=(v)=>v==null?'—':(v>=0?'+':'')+String(Math.round(v*100)/100).replace('.',',');
+  const pc=(v)=>v==null?'—':Math.round(v*100)+' %';
+  const ligne=x=>{
+    // PAS DE SCORE : LA MENTION, PAS UNE CASE VIDE. L'absence de mesure est
+    // une information — le coach doit savoir qu'il ne sait pas encore.
+    if(x.rendement==null)
+      return '<tr><td style="padding:4px 8px 4px 0;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">'
+        +escapeHtml(x.nom)+'</td>'
+        +'<td colspan="3" style="padding:4px 6px;color:var(--text-faint);font-size:var(--fs-2xs)">pas assez de séances</td>'
+        +'<td style="padding:4px 0 4px 6px;text-align:right;color:var(--text-faint);font-variant-numeric:tabular-nums">'+x.n+'</td></tr>';
+    const c2=x.rendement>0?'var(--success)':(x.rendement<0?'var(--orange)':'var(--sub)');
+    return '<tr><td style="padding:4px 8px 4px 0;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">'
+      +escapeHtml(x.nom)+'</td>'
+      +'<td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:'
+      +(x.progression>0?'var(--success)':'var(--orange)')+'">'+num(x.progression)+'</td>'
+      +'<td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:var(--sub)">'+pc(x.cout)+'</td>'
+      +'<td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:var(--sub)">'+pc(x.regularite)+'</td>'
+      +'<td style="padding:4px 0 4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:'+c2+';font-weight:800">'
+      +num(x.rendement)+'</td></tr>';
+  };
+  let rot='';
+  try{
+    const p=propositionsRotation(u);
+    if(p.actif&&p.lignes.length){
+      rot='<div style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border)">'
+        +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--orange);text-transform:uppercase;margin-bottom:6px">Rotation proposée · fin de bloc</div>'
+        +p.lignes.map(x=>'<div style="margin-bottom:8px">'
+          +'<div style="font-size:var(--fs-xs);color:var(--text);font-weight:700">'+escapeHtml(x.nom)+'</div>'
+          +'<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.5">'+escapeHtml(x.pourquoi)+'</div>'
+          +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:2px">→ '
+          +x.remplacants.map(escapeHtml).join(' · ')+'</div></div>').join('')
+        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5">Aucun exercice en progression n’est proposé, quel que soit son coût.</div>'
+        +'</div>';
+    }
+  }catch(e){ rot=''; }
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Rendement · '+REND_SEMAINES+' semaines</span>'
+    +'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">progression − coût, pondéré</span></div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:var(--fs-xs);white-space:nowrap">'
+    +'<tr><th style="text-align:left;padding:0 8px 5px 0;color:var(--sub);font-weight:700">Exercice</th>'
+    +'<th style="text-align:right;padding:0 6px 5px;color:var(--sub);font-weight:700">Prog.</th>'
+    +'<th style="text-align:right;padding:0 6px 5px;color:var(--sub);font-weight:700">Coût</th>'
+    +'<th style="text-align:right;padding:0 6px 5px;color:var(--sub);font-weight:700">Régul.</th>'
+    +'<th style="text-align:right;padding:0 0 5px 6px;color:var(--sub);font-weight:700">Rend.</th>'
+    +'<th style="text-align:right;padding:0 0 5px 6px;color:var(--sub);font-weight:700">n</th></tr>'
+    +l.map(ligne).join('')+'</table></div></div>';
+}
 // ══════════ LES SALLES ═════════════════════════════════════════════════
 //
 // UN ATHLETE EN A SOUVENT DEUX : la sienne, et celle des vacances ou du
@@ -46236,6 +46610,7 @@ function renderVolumeCoach(c){
     ${res.nonRattachees?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
     ${_axPrio?'':_axial}
+    ${(()=>{ try{ return _htmlRendement(c); }catch(e){ return ''; } })()}
     ${(()=>{ try{ return _htmlEcartsCoach(c); }catch(e){ return ''; } })()}
     ${(()=>{ try{ return _htmlJournalSeance(c); }catch(e){ return ''; } })()}
     ${_htmlRirMoyen(c)}
