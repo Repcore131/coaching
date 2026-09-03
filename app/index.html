@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1111';
+window.RC_BUILD='1112';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -23892,12 +23892,139 @@ const PROTO_OBJECTIFS={
   MOBILITE    :{lib:'Mobilité',     c:'#22c55e'},
   PREVENTION  :{lib:'Prévention',   c:'#a855f7'}
 };
+// UNE SEULE TABLE DE MATERIEL, ETENDUE — JAMAIS UNE SECONDE A COTE. Celle-ci
+// servait aux protocoles d'echauffement et de recuperation ; elle sert
+// desormais aussi a decrire les salles et a filtrer les substituts. Deux
+// tables finiraient par diverger, et un « HALTERES » d'un cote ne
+// reconnaitrait pas un « HALTERE » de l'autre.
+//
+// LES TREIZE PREMIERES CLEFS N'ONT PAS BOUGE : les protocoles existants les
+// lisent, et un renommage aurait vide leur filtre en silence.
 const PROTO_MATERIEL={
   AUCUN:'Sans matériel', TAPIS:'Tapis', VELO:'Vélo', RAMEUR:'Rameur',
   ESCALIER:'Escalier', ELASTIQUE:'Élastique', FOAM_ROLLER:'Foam roller',
   PISTOLET_MASSAGE:'Pistolet', SAUNA:'Sauna', HYDROMASSAGE:'Hydromassage',
-  AIRBIKE:'Airbike', CORDE:'Corde', BARRE:'Barre'
+  AIRBIKE:'Airbike', CORDE:'Corde', BARRE:'Barre',
+  // ── L'EXTENSION MUSCULATION ────────────────────────────────────────
+  HALTERES:'Haltères', POULIE:'Poulie', MACHINE:'Machine guidée',
+  SMITH:'Smith machine', BANC_DECLINE:'Banc décliné', HACK:'Hack squat',
+  PRESSE:'Presse à cuisses', POULIE_HAUTE:'Poulie haute',
+  POULIE_BASSE:'Poulie basse', BARRE_EZ:'Barre EZ',
+  KETTLEBELL:'Kettlebell', TRACTION:'Barre de traction', DIPS:'Barres à dips'
 };
+// Le materiel qui decrit une SALLE : on retire ce qui releve du soin et non de
+// l'entrainement. Proposer « sauna » dans l'inventaire d'une salle de sport ne
+// changerait aucun substitut.
+const SALLE_MATERIEL=Object.freeze(['BARRE','BARRE_EZ','HALTERES','KETTLEBELL',
+  'POULIE','POULIE_HAUTE','POULIE_BASSE','MACHINE','SMITH','HACK','PRESSE',
+  'BANC_DECLINE','TRACTION','DIPS','ELASTIQUE','RAMEUR','VELO','TAPIS','AUCUN']);
+// ══════════ LE MATERIEL D'UN EXERCICE, DEDUIT DE SON NOM ═══════════════
+//
+// QUATRE CENT DEUX EXERCICES, ET AUCUN N'EST ETIQUETE A LA MAIN. Le nom porte
+// deja l'information — « developpe couche haltere », « tirage poulie haute »,
+// « presse a cuisse inclinee » — et une table de mots-clefs la lit. Etiqueter
+// 402 exercices un par un aurait produit 402 occasions de se tromper, et une
+// table que personne ne maintiendrait.
+//
+// L'ORDRE COMPTE : les motifs les plus specifiques d'abord. « poulie haute »
+// doit gagner sur « poulie », et « barre ez » sur « barre ».
+const EX_MATERIEL_MOTS=Object.freeze([
+  [/\bpoulie haute\b|\blat pulldown\b|\bpulldown\b/,'POULIE_HAUTE'],
+  [/\bpoulie basse\b|\bcable row\b/,'POULIE_BASSE'],
+  [/\bpoulie|\bcable\b|\bcrossover\b|\bvis a vis\b/,'POULIE'],
+  [/\bbarre ez\b|\bez bar\b/,'BARRE_EZ'],
+  [/\bsmith\b|\bbarre guidee\b/,'SMITH'],
+  [/\bhack ?squat\b|\bhacksquat\b/,'HACK'],
+  [/\bpresse a cuisse|\bleg press\b|\bpresse inclinee\b/,'PRESSE'],
+  [/\bkettlebell\b|\bkb\b/,'KETTLEBELL'],
+  [/\btraction|\bpull ?up\b|\bchin ?up\b|\bmuscle up\b/,'TRACTION'],
+  [/\bdips\b/,'DIPS'],
+  [/\bbanc decline\b|\bdecline\b/,'BANC_DECLINE'],
+  [/\bhaltere|\bdumbbell\b|\bdb\b/,'HALTERES'],
+  [/\belastique\b|\bband\b/,'ELASTIQUE'],
+  [/\brameur\b/,'RAMEUR'], [/\bvelo\b|\bbike\b/,'VELO'],
+  [/\btapis\b|\btreadmill\b/,'TAPIS'],
+  [/\bmachine\b|\bbutterfly\b|\bpec deck\b|\bchest press\b|\bleg curl\b|\bleg extension\b|\babducteur a la machine\b|\bconvergente\b/,'MACHINE'],
+  [/\bbarre\b|\bbarbell\b|\blandmine\b/,'BARRE'],
+  // LE POIDS DU CORPS, RECONNU EXPLICITEMENT. Ces exercices-la se font
+  // partout : les laisser « inconnus » revenait a ne jamais pouvoir affirmer
+  // qu'une salle depannee peut les recevoir, alors que c'est le seul groupe
+  // dont on en soit certain. Motifs volontairement etroits — « crunch sur
+  // banc incline » demande un banc, il reste donc inconnu plutot que declare
+  // faisable partout.
+  [/\bau sol\b|\bpompes?\b|\bplanche\b|\bplank\b|\bgainage\b|\bburpees?\b|\bjumping jack\b|\bmontee de genoux\b|\bfire hydrant\b|\bsuperman\b|\bchaise\b/,'AUCUN']
+]);
+// LES CLEFS GENERIQUES S'EFFACENT DEVANT LES SPECIFIQUES.
+//
+// ⚠ SANS CETTE TABLE, « curl barre EZ » exigeait BARRE_EZ **ET** BARRE : une
+// salle equipee d'une barre EZ mais sans barre droite se voyait refuser
+// l'exercice. Meme defaut pour « fentes arriere barre smith machine », qui
+// reclamait SMITH, BARRE et MACHINE a la fois. Une machine Smith n'est pas une
+// barre libre, et une presse n'est pas une machine quelconque.
+const EX_MATERIEL_EFFACE=Object.freeze({
+  BARRE_EZ:['BARRE'], SMITH:['BARRE','MACHINE'],
+  HACK:['MACHINE'], PRESSE:['MACHINE'],
+  POULIE_HAUTE:['POULIE'], POULIE_BASSE:['POULIE'],
+  AUCUN:['BARRE','HALTERES','MACHINE','POULIE']
+});
+// PURE. Le materiel exige par un exercice, deduit de son nom. Rend [] quand
+// le nom ne dit rien.
+//
+// ⚠ UNE LISTE VIDE N'EST PAS « AUCUN MATERIEL » : c'est « on ne sait pas ».
+// Les deux se traitent differemment — un exercice au poids du corps se fait
+// partout, un exercice inconnu ne se refuse pas pour autant. Voir
+// exFaisableDans : l'inconnu passe, il ne se classe simplement pas devant.
+function materielExercice(nom){
+  const n=String(nom||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  if(!n) return [];
+  let out=[];
+  for(const [re,cle] of EX_MATERIEL_MOTS)
+    if(re.test(n)&&out.indexOf(cle)<0) out.push(cle);
+  // ON GARDE LE PLUS SPECIFIQUE, ET LUI SEUL — voir EX_MATERIEL_EFFACE.
+  const efface={};
+  for(const c of out) for(const e of (EX_MATERIEL_EFFACE[c]||[])) efface[e]=true;
+  out=out.filter(c=>!efface[c]);
+  return out;
+}
+// PURE. Un exercice unilateral se fait un cote a la fois : c'est une
+// caracteristique du mouvement, et elle se lit dans le nom.
+function exUnilateral(nom){
+  const n=String(nom||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  return /\bunilateral|\bun bras\b|\bune jambe\b|\balterne/.test(n);
+}
+// PURE. Cet exercice est-il faisable dans cette salle ?
+//
+// L'INCONNU PASSE. Un exercice dont le nom ne nomme aucun materiel est le plus
+// souvent au poids du corps ou generique : le refuser viderait la liste de
+// substituts. On ne peut pas AFFIRMER qu'il est faisable — il ne se classera
+// donc pas devant celui dont on le sait — mais on ne l'interdit pas.
+// PURE. L'INVENTAIRE D'UNE SALLE, ETENDU. Une salle qui declare « poulie »
+// sans preciser a, dans les faits, une poulie haute et une poulie basse :
+// demander a l'athlete de cocher les trois serait lui faire remplir un
+// formulaire pour une distinction qu'il ne fait pas en salle.
+function _salleEtendue(materiel){
+  const l=(Array.isArray(materiel)?materiel:[]).slice();
+  if(l.indexOf('POULIE')>=0)
+    for(const k of ['POULIE_HAUTE','POULIE_BASSE']) if(l.indexOf(k)<0) l.push(k);
+  return l;
+}
+function exFaisableDans(nom,materielSalle){
+  const dispo=Array.isArray(materielSalle)?_salleEtendue(materielSalle):null;
+  if(!dispo) return true;                    // aucune salle declaree : on ne filtre pas
+  const need=materielExercice(nom);
+  if(!need.length) return true;              // inconnu : on ne refuse pas
+  return need.every(m=>m==='AUCUN'||dispo.indexOf(m)>=0);
+}
+// PURE. Materiel CONFIRME disponible — plus strict que exFaisableDans, et
+// c'est lui qui decide du message « rien d'equivalent ici ». Un exercice dont
+// on ignore le materiel ne prouve pas qu'il y ait une solution dans la salle.
+function exMaterielConfirme(nom,materielSalle){
+  const dispo=Array.isArray(materielSalle)?_salleEtendue(materielSalle):null;
+  const need=materielExercice(nom);
+  if(!need.length) return false;
+  if(!dispo) return true;
+  return need.every(m=>m==='AUCUN'||dispo.indexOf(m)>=0);
+}
 // Types de séance reconnus. TOUS signifie « compatible avec n'importe laquelle ».
 const PROTO_TYPES=['PUSH','PULL','JAMBES_QUADRI','JAMBES_HANCHE','FULL_BODY',
   'FORCE_MAX','METABOLIQUE','CARDIO','REPOS_ACTIF'];
@@ -32400,6 +32527,7 @@ function renderWoEx(){
   document.getElementById('wo-content').innerHTML=`
     <div>
       ${(()=>{ try{ return htmlRepriseSeance(currentUser); }catch(e){ return ''; } })()}
+      ${(()=>{ try{ return _htmlSelecteurSalle(); }catch(e){ return ''; } })()}
       ${woState.deload?`<div style="display:flex;align-items:center;gap:9px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:10px 13px;margin-bottom:12px">
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
         <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.</span>
@@ -39435,6 +39563,259 @@ function reperesEffectifs(user,muscle){
   r.source=bouge(o)?'coach':(bouge(a)?'perso':'table');
   return r;
 }
+// ══════════ LES SALLES ═════════════════════════════════════════════════
+//
+// UN ATHLETE EN A SOUVENT DEUX : la sienne, et celle des vacances ou du
+// week-end. Sans inventaire, l'application propose des substituts a la poulie
+// dans un garage qui n'en a pas — c'est-a-dire une aide qui ne sert a rien au
+// seul moment ou elle serait utile.
+//
+// LA SALLE ACTIVE VIT DANS LA SEANCE, PAS DANS LE PROGRAMME. Changer de salle
+// un samedi ne doit rien modifier chez le coach : c'est une circonstance, pas
+// une decision d'entrainement.
+function salles(user){
+  const u=_dossier(user);
+  let l=[];
+  try{ l=_aplatirChamp?_aplatirChamp(u,'salles',12,true)||[]:[]; }catch(e){ l=[]; }
+  if(!l.length&&u&&u.salles) l=_tabBloc(u.salles);
+  return l.filter(s=>s&&s.id).map(s=>({id:String(s.id),nom:String(s.nom||'Salle'),
+    materiel:_tabBloc(s.materiel).filter(m=>SALLE_MATERIEL.indexOf(m)>=0),
+    parDefaut:!!s.parDefaut}));
+}
+// PURE. La salle par defaut, ou la premiere, ou null.
+function salleParDefaut(user){
+  const l=salles(user);
+  return l.find(s=>s.parDefaut)||l[0]||null;
+}
+// LA SALLE ACTIVE DE LA SEANCE EN COURS. woState la porte, et rien d'autre :
+// elle meurt avec la seance.
+function salleActive(user){
+  try{
+    if(woState&&woState.salleId){
+      const s=salles(user).find(x=>x.id===woState.salleId);
+      if(s) return s;
+    }
+  }catch(e){}
+  return salleParDefaut(user);
+}
+function choisirSalle(id){
+  try{
+    if(!woState) return false;
+    woState.salleId=String(id||'')||null;
+    try{ woPersist(); }catch(e){}
+    try{ renderWoEx(); }catch(e){}
+  }catch(e){ return false; }
+  return true;
+}
+function ajouterSalle(user,nom,materiel){
+  const u=_dossier(user);
+  if(!u) return {ok:false,raison:'Aucun dossier ouvert.'};
+  const n=String(nom||'').trim();
+  if(!n) return {ok:false,raison:'Donne un nom à cette salle.'};
+  const l=salles(u);
+  const s={id:'s_'+Date.now(),nom:n,
+    materiel:_tabBloc(materiel).filter(m=>SALLE_MATERIEL.indexOf(m)>=0),
+    parDefaut:!l.length};
+  u.salles=l.concat([s]);
+  try{ saveUser(); }catch(e){}
+  return {ok:true,salle:s};
+}
+
+// ══════════ LE MOTEUR D'EQUIVALENCE ════════════════════════════════════
+//
+// QUATRE CRITERES, ET LE PREMIER N'EST PAS NEGOCIABLE. Meme muscle primaire,
+// sinon ce n'est pas un substitut : c'est un autre exercice. Les trois autres
+// classent, ils ne filtrent pas — sauf le materiel, qui decide du message
+// « rien d'equivalent ici ».
+//
+// TROIS CANDIDATS, JAMAIS PLUS. Une liste de quinze substituts en pleine
+// seance n'est pas une aide : c'est une decision de plus a prendre, debout,
+// entre deux series, et elle sera prise au hasard.
+const SUBST_MAX=3;
+// PURE. Le muscle primaire d'un exercice, ou null.
+function _substPrimaire(nom,user){
+  let cls=null; try{ cls=resoudreMusclesLecture(nom,{name:nom},user); }catch(e){ return null; }
+  if(!cls||cls===VOL_CARDIO) return null;
+  return (cls.p||[])[0]||null;
+}
+// PURE. Tous les noms de la banque, une fois.
+let _substNoms=null;
+function _banqueNoms(){
+  if(_substNoms) return _substNoms;
+  const v=[];
+  try{
+    for(const s in SCHEMAS_BRUT)
+      for(const n of SCHEMAS_BRUT[s].split('~')) if(n) v.push(n);
+  }catch(e){}
+  _substNoms=v;
+  return v;
+}
+// PURE. L'athlete a-t-il deja fait cet exercice, et a quelle charge ?
+// Rend {vu:Boolean, charge:Number|null, date}.
+//
+// AUCUNE TRANSPOSITION DE CHARGE. Si l'exercice n'a jamais ete fait, on ne
+// propose RIEN — deduire une charge d'un autre mouvement par un ratio serait
+// une invention pure, et l'athlete la prendrait pour une mesure.
+function historiqueExercice(user,nom){
+  const u=_dossier(user);
+  const k=exKey(nom);
+  let charge=null, date=null, vu=false;
+  for(const sess of ((u&&u.sessions)||[])){
+    if(!sess||!sess.data||!sess.date) continue;
+    for(const n2 of Object.keys(sess.data)){
+      if(exKey(n2)!==k) continue;
+      vu=true;
+      for(const s of (((sess.data[n2]||{}).sets)||[])){
+        if(!s||s.done!==true) continue;
+        const w=parseFloat(s.weight);
+        if(w>0&&(date===null||sess.date>=date)){ charge=w; date=sess.date; }
+      }
+    }
+  }
+  return {vu:vu,charge:charge,date:date};
+}
+// PURE. LES SUBSTITUTS DE SALLE. Rend {liste:[...], raison:String|null}.
+//
+// ⚠ ELLE NE S'APPELLE PAS substitutsPour, ET C'EST DELIBERE : ce nom est PRIS
+// depuis toujours par la substitution du COACH — substitutsPour(nom,
+// contraintes), qui ecarte les exercices incompatibles avec une contrainte de
+// sante. Deux fonctions du meme nom dans la meme portee : la seconde masque la
+// premiere, et la substitution coach cessait de fonctionner sans un mot.
+// Attrape par la suite, pas au banc.
+function substitutsSalle(user,nom,salle){
+  const u=_dossier(user);
+  const prim=_substPrimaire(nom,u);
+  const vide={liste:[],raison:null};
+  if(!prim) return Object.assign({},vide,
+    {raison:'Cet exercice n’est rattaché à aucun muscle : impossible de proposer un équivalent.'});
+  const mat=salle&&Array.isArray(salle.materiel)?salle.materiel:null;
+  const patron=(function(){ try{ return schemaDe({name:nom},u); }catch(e){ return null; } })();
+  const k0=exKey(nom);
+  const cand=[];
+  for(const n2 of _banqueNoms()){
+    if(exKey(n2)===k0) continue;
+    // (a) MEME MUSCLE PRIMAIRE — obligatoire, jamais negociable.
+    if(_substPrimaire(n2,u)!==prim) continue;
+    if(!exFaisableDans(n2,mat)) continue;
+    const p2=(function(){ try{ return schemaDe({name:n2},u); }catch(e){ return null; } })();
+    const h=historiqueExercice(u,n2);
+    cand.push({nom:n2,
+      memePatron:!!(patron&&p2&&patron===p2),          // (b)
+      confirme:exMaterielConfirme(n2,mat),             // (c)
+      vu:h.vu,charge:h.charge,                         // (d)
+      materiel:materielExercice(n2)});
+  }
+  if(!cand.length)
+    return Object.assign({},vide,
+      {raison:'Rien d’équivalent ici. Passe à la suite, on en parle avec ton coach.'});
+  // AUCUN CANDIDAT DONT LE MATERIEL SOIT CONFIRME DANS CETTE SALLE : on le dit
+  // franchement plutot que de proposer un pis-aller. Une proposition dont on
+  // ignore si elle est realisable fait perdre plus de temps qu'elle n'en fait
+  // gagner, debout entre deux series.
+  if(mat&&!cand.some(c=>c.confirme))
+    return Object.assign({},vide,
+      {raison:'Rien d’équivalent ici. Passe à la suite, on en parle avec ton coach.'});
+  // ⚠ LE MATERIEL CONFIRME PASSE DEVANT LE PATRON, ET C'EST UN ECART ASSUME
+  // A L'ORDRE DEMANDE (b puis c). La raison : « inconnu » n'est pas une valeur
+  // du critere materiel, c'est une ABSENCE — et une absence ne devance jamais
+  // une mesure, c'est la regle du projet.
+  //
+  // MESURE : dans une salle sans materiel, la presse a cuisses proposait trois
+  // mouvements dont on IGNORE la faisabilite (meme patron, materiel inconnu),
+  // alors qu'un mouvement confirme faisable existait juste en dessous. En
+  // seance, proposer ce qu'on ne peut pas faire coute plus cher que proposer
+  // un patron voisin qu'on peut faire.
+  //
+  // Entre deux candidats CONFIRMES, l'ordre demande reprend : patron, puis
+  // historique.
+  cand.sort((x,y)=>
+    (y.confirme?1:0)-(x.confirme?1:0)
+    ||(y.memePatron?1:0)-(x.memePatron?1:0)
+    ||(y.vu?1:0)-(x.vu?1:0)
+    ||String(x.nom).localeCompare(String(y.nom)));
+  return {liste:cand.slice(0,SUBST_MAX),raison:null};
+}
+
+// ══════════ LE JOURNAL DES ECARTS ══════════════════════════════════════
+//
+// TROIS FOIS LE MEME ECART N'EST PAS UN INCIDENT, C'EST UN PROGRAMME A
+// CORRIGER. Le coach ne doit pas lire trois lignes : il doit lire « trois
+// remplacements cette semaine, tous sur la presse a cuisses ».
+const ECART_MOTIFS=Object.freeze({
+  materiel_occupe:'Matériel occupé',
+  absent:'Absent de la salle',
+  douleur:'Douleur',
+  autre:'Autre'
+});
+const ECART_MAX=40;
+function journaliserEcart(user,e){
+  const u=_dossier(user);
+  if(!u||!e) return {ok:false};
+  const motif=ECART_MOTIFS[e.motif]?e.motif:'autre';
+  if(!Array.isArray(u.ecartsSeance)) u.ecartsSeance=_tabBloc(u.ecartsSeance);
+  u.ecartsSeance.push({date:Date.now(),seance:String(e.seance||''),
+    exoPrevu:String(e.exoPrevu||''),exoFait:String(e.exoFait||''),motif:motif});
+  if(u.ecartsSeance.length>ECART_MAX) u.ecartsSeance=u.ecartsSeance.slice(-ECART_MAX);
+  try{ saveUser(); }catch(e2){}
+  return {ok:true,motif:motif};
+}
+// PURE. Le resume des sept derniers jours, ou ''.
+function resumeEcarts(user,maintenant){
+  const u=_dossier(user);
+  const t=Number(maintenant)||Date.now();
+  const l=_tabBloc(u&&u.ecartsSeance).filter(x=>x&&x.date>t-7*86400000);
+  if(!l.length) return '';
+  const par={};
+  for(const x of l){ const k=exKey(x.exoPrevu)||'?'; (par[k]=par[k]||{n:0,nom:x.exoPrevu}).n++; }
+  const cles=Object.keys(par).sort((a,b)=>par[b].n-par[a].n);
+  const n=l.length;
+  const tete=par[cles[0]];
+  // « TOUS SUR » N'EST VRAI QUE SI C'EST VRAI. Un seul exercice concerne : on
+  // le dit. Plusieurs : on nomme le plus frequent sans pretendre a l'unicite.
+  const ou=(cles.length===1)
+    ? ', tous sur '+tete.nom.toLowerCase()
+    : (tete.n>1?', dont '+tete.n+' sur '+tete.nom.toLowerCase():'');
+  return n+' remplacement'+(n>1?'s':'')+' cette semaine'+ou+'.';
+}
+// ══════════ LE REMPLACEMENT EN SEANCE ══════════════════════════════════
+//
+// L'ATHLETE N'AVAIT AUCUN RECOURS. Le coach peut substituer depuis sa fiche ;
+// l'athlete, debout devant une presse occupee, n'avait que deux options —
+// sauter l'exercice sans rien dire, ou en choisir un au hasard. Les deux
+// sortent du programme sans que personne ne le sache.
+//
+// LE PROGRAMME N'EST JAMAIS MODIFIE. Le remplacement vit dans woState et dans
+// le journal : c'est un ECART, pas une decision d'entrainement. Le coach le
+// lit, il decide s'il corrige le programme.
+// LE SELECTEUR DE SALLE, dans l'en-tete de seance. Il n'apparait qu'a partir
+// de DEUX salles : un selecteur a une seule entree est un ornement.
+function _htmlSelecteurSalle(){
+  const l=salles(currentUser);
+  if(l.length<2) return '';
+  const a=salleActive(currentUser);
+  return '<div style="display:flex;align-items:center;gap:7px;margin-bottom:12px">'
+    +'<span style="font-size:var(--fs-2xs);color:var(--sub);flex-shrink:0">Salle</span>'
+    +'<select onchange="choisirSalle(this.value)" style="flex:1;min-width:0;background:var(--surface-2);'
+    +'border:1px solid var(--border);color:var(--text);padding:7px 9px;border-radius:var(--r-2);'
+    +'font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">'
+    +l.map(s=>'<option value="'+escapeHtml(s.id)+'"'+((a&&a.id===s.id)?' selected':'')+'>'
+      +escapeHtml(s.nom)+'</option>').join('')
+    +'</select></div>';
+}
+// LA LIGNE DU COACH. Trois fois le meme ecart n'est pas un incident, c'est un
+// programme a corriger — et c'est CA que le coach doit lire, pas la liste des
+// trois.
+function _htmlEcartsCoach(c){
+  let t=''; try{ t=resumeEcarts(c); }catch(e){ t=''; }
+  if(!t) return '';
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
+    +'padding:11px 13px;margin-bottom:16px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
+    +'text-transform:uppercase;margin-bottom:5px">Écarts au programme</div>'
+    +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'+escapeHtml(t)+'</div>'
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px;line-height:1.5">'
+    +'Remplacements décidés en séance. Le programme n’a pas été modifié.</div></div>';
+}
 // ══════════ LE BLOC DE PRIORITE ════════════════════════════════════════
 //
 // PRIORISER, C'EST ARBITRER — PAS AJOUTER. Sans plafond, « je priorise les
@@ -43336,12 +43717,32 @@ function candidatsRemplacement(nomCourant,q){
   if(!currentUser||currentUser.role!=='coach') return [];
   const cur=exKey(nomCourant||'');
   const mots=_normRech(q).split(' ').filter(Boolean);
-  return _nomsRemplacement().filter(n=>{
+  const l=_nomsRemplacement().filter(n=>{
     if(exKey(n)===cur) return false;
     if(!mots.length) return true;
     const c=_normRech(n);
     return mots.every(m=>c.indexOf(m)>=0);
   });
+  // ── LE CLASSEMENT PAR PERTINENCE, annonce comme « le lot suivant » ────
+  //
+  // SANS RECHERCHE, ON REMONTE LES TROIS PLUS PROCHES EN TETE. La liste
+  // restait alphabetique et le commentaire du lot precedent le disait
+  // franchement ; elle est desormais triee par muscle primaire, patron de
+  // mouvement, materiel de la salle active et historique — exactement les
+  // quatre criteres, dans cet ordre.
+  //
+  // DES QUE LE COACH TAPE, ON NE TOUCHE PLUS A RIEN : il cherche un nom
+  // precis, et reordonner sous ses doigts lui ferait rater sa cible.
+  if(mots.length) return l;
+  let tete=[];
+  try{
+    tete=substitutsSalle(currentUser,nomCourant,salleActive(currentUser))
+      .liste.map(x=>x.nom);
+  }catch(e){ tete=[]; }
+  if(!tete.length) return l;
+  const vus={};
+  for(const n of tete) vus[exKey(n)]=true;
+  return tete.filter(n=>l.indexOf(n)>=0).concat(l.filter(n=>!vus[exKey(n)]));
 }
 // Le bouton. Rien sur un cardio — il n'y a pas de mouvement à échanger — et
 // rien sous drapeau : tant qu'un drapeau est levé, l'app ne propose plus, elle
@@ -43391,6 +43792,60 @@ function ouvrirRemplacement(idx){
   else setTimeout(()=>{ const i=document.getElementById('rempl-manuel'); if(i) i.focus(); },120);
   return true;
 }
+// LE MOTIF, EN UN GESTE ET APRES COUP. Quatre boutons, aucun champ libre :
+// debout entre deux series, un champ texte se saute — et un ecart sans motif
+// n'apprend rien au coach. On le demande APRES avoir applique le
+// remplacement : l'echange est deja fait, la question ne bloque donc rien, et
+// la fermer sans repondre laisse simplement « autre ».
+let _motifIdx=null;
+function _demanderMotifEcart(idx){
+  _motifIdx=idx;
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px">'
+    +'<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:3px">Pourquoi ce changement ?</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">'
+    +'Ton coach le verra. Trois fois le même échange, c’est le programme qu’il faut corriger.</div>'
+    +Object.keys(ECART_MOTIFS).map(m=>
+      '<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:7px" '
+      +'onclick="_poserMotifEcart('+JSON.stringify(m).replace(/"/g,'&quot;')+')">'
+      +escapeHtml(ECART_MOTIFS[m])+'</button>').join('')
+    +'</div></div>');
+  return true;
+}
+function _poserMotifEcart(motif){
+  const u=currentUser;
+  try{
+    const l=_tabBloc(u&&u.ecartsSeance);
+    // LE DERNIER ECART EST CELUI QU'ON VIENT D'ECRIRE : on le complete plutot
+    // que d'en ajouter un second, sinon un remplacement compterait double.
+    if(l.length){ l[l.length-1].motif=ECART_MOTIFS[motif]?motif:'autre'; u.ecartsSeance=l; }
+  }catch(e){}
+  // LE MOTIF « DOULEUR » ALIMENTE LE SIGNAL EXISTANT, il ne vit pas en double.
+  // La douleur se declare par serie dans le champ `pain` depuis toujours ; un
+  // second stockage ferait deux comptes de la meme chose, et le coach lirait
+  // deux verites.
+  if(motif==='douleur'){
+    try{
+      const d=(woState.sessionData||{})[_motifIdx];
+      if(d&&Array.isArray(d.sets)&&d.sets.length&&!d.sets[0].pain)
+        d.sets[0].pain=String(SIG_PAIN_SEUIL);
+      woPersist();
+    }catch(e){}
+  }
+  try{ saveUser(); }catch(e){}
+  // SILENCIEUX EN CAS DE SUCCES, PARLANT EN CAS D'ECHEC. Un try/catch nu
+  // autour d'une poussee avale l'echec : l'ecart resterait sur le telephone et
+  // le coach ne verrait jamais le remplacement. direSiEnvoiEchoue ne dit rien
+  // quand tout va bien, et nomme la consequence quand ca ne va pas.
+  try{ direSiEnvoiEchoue(CLOUD.pushOne(u.email,u),
+    'Le motif du remplacement','ton coach ne le verra pas encore'); }catch(e){}
+  _motifIdx=null;
+  try{ closeModal(); }catch(e){}
+  try{ renderWoEx(); }catch(e){}
+  return true;
+}
 // La saisie libre de l athlete. Le nom est NETTOYE mais jamais devine : on
 // ne corrige pas son orthographe, on ne rapproche pas d une entree du guide.
 // Ce qu il a ecrit est ce que le coach lira.
@@ -43405,7 +43860,11 @@ function validerRemplacementManuel(){
   if(!ex){ dire('Cet exercice n’existe plus.'); return false; }
   if(exKey(nom)===exKey(ex.name||'')){ dire('C’est déjà le mouvement en cours.'); return false; }
   dire('');
-  _appliquerSubstitut(_remplIdx,nom);
+  const _i=_remplIdx;
+  _appliquerSubstitut(_i,nom);
+  // ON DEMANDE LE MOTIF APRES : l'echange est deja fait, la question ne bloque
+  // rien, et la fermer sans repondre laisse simplement « autre ».
+  try{ _demanderMotifEcart(_i); }catch(e){}
   return true;
 }
 function _rendreListeRemplacement(){
@@ -43421,18 +43880,32 @@ function _rendreListeRemplacement(){
   }
   const vus=l.slice(0,REMPL_MAX_LISTE);
   // Le reste n'est pas caché en silence : on dit combien, et quoi faire.
-  z.innerHTML=vus.map(n=>`<button onclick="_appliquerSubstitut(${_remplIdx},${JSON.stringify(n).replace(/"/g,'&quot;')})"
+  z.innerHTML=vus.map(n=>`<button onclick="_appliquerSubstitut(${_remplIdx},${JSON.stringify(n).replace(/"/g,'&quot;')});_demanderMotifEcart(${_remplIdx})"
       class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:9px 12px;margin-bottom:6px;font-size:var(--fs-sm);color:var(--text-strong);cursor:pointer">`
       +escapeHtml(n.toLowerCase())+'</button>').join('')
     +(l.length>vus.length?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;padding:4px 2px 2px">'
       +(l.length-vus.length)+' autres mouvements. Affine ta recherche pour les voir.</div>':'');
   return true;
 }
-function _appliquerSubstitut(idx,nom){
+function _appliquerSubstitut(idx,nom,motif){
   const ex=(woState.exercises||[])[idx];
   if(!ex) return;
   if(!woState.substitutions) woState.substitutions=[];
   woState.substitutions.push({de:ex.name,vers:nom,date:Date.now()});
+  // LE JOURNAL DES ECARTS. woState.substitutions meurt avec la seance ; le
+  // journal, lui, survit et remonte au coach — trois fois le meme echange
+  // n'est pas un incident, c'est un programme a corriger.
+  try{ journaliserEcart(currentUser,{seance:(woState&&woState.progName)||'',
+    exoPrevu:ex.name,exoFait:nom,motif:motif||'autre'}); }catch(e){}
+  // LA CHARGE NE SE TRANSPOSE PAS. On ne pre-remplit QUE si l'athlete a deja
+  // fait CE mouvement : deduire une charge d'un autre exercice par un ratio
+  // serait une invention, et elle serait prise pour une mesure.
+  try{
+    const h=historiqueExercice(currentUser,nom);
+    const d=(woState.sessionData||{})[idx];
+    if(d&&Array.isArray(d.sets)&&h.charge>0)
+      for(const s of d.sets) if(!s.weight) s.weight=String(h.charge);
+  }catch(e){}
   // MÉMORISÉ AVANT L'AFFECTATION : woState.aFilmer contient des NOMS, et
   // celui-ci est sur le point de disparaître.
   const _ancienNom=ex.name;
@@ -45763,6 +46236,7 @@ function renderVolumeCoach(c){
     ${res.nonRattachees?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
     ${_axPrio?'':_axial}
+    ${(()=>{ try{ return _htmlEcartsCoach(c); }catch(e){ return ''; } })()}
     ${(()=>{ try{ return _htmlJournalSeance(c); }catch(e){ return ''; } })()}
     ${_htmlRirMoyen(c)}
     ${_htmlFinProgEx(c)}
@@ -71537,5 +72011,5 @@ async function chargerTests(){
   return testExercices();
 }
 </script>
-</body></html>
+</body></html>
     ${_htmlBoutonReperes(c)}

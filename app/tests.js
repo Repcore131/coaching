@@ -15963,6 +15963,154 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LES SALLES ET LE REMPLACEMENT ══════
+        (()=>{
+          const u0=()=>({email:'sl@test.fr',id:'u_sl',sessions:[]});
+          const club={id:'a',nom:'Club',materiel:['BARRE','HALTERES','POULIE','MACHINE',
+            'SMITH','PRESSE','TRACTION','DIPS','ELASTIQUE','AUCUN']};
+          const garage={id:'b',nom:'Garage',materiel:['HALTERES','ELASTIQUE','AUCUN']};
+
+          ok('Un seul vocabulaire de matériel, jamais deux',(()=>{
+            // DEUX TABLES FINIRAIENT PAR DIVERGER : un « HALTERES » d'un côté
+            // ne reconnaîtrait pas un « HALTERE » de l'autre. PROTO_MATERIEL
+            // sert aux protocoles ET aux salles ; SALLE_MATERIEL n'en est
+            // qu'un sous-ensemble, pas une seconde source.
+            for(const m of SALLE_MATERIEL)
+              if(!PROTO_MATERIEL[m]) return _echec(m+' n’existe pas dans PROTO_MATERIEL');
+            // LES CLEFS D'ORIGINE N'ONT PAS BOUGÉ : les protocoles les lisent,
+            // et un renommage aurait vidé leur filtre en silence.
+            for(const m of ['AUCUN','TAPIS','VELO','RAMEUR','ELASTIQUE','FOAM_ROLLER','BARRE'])
+              if(!PROTO_MATERIEL[m]) return _echec(m+' a disparu de la table d’origine');
+            // Et tout matériel déduit d'un nom appartient à la même table.
+            for(const n of ['DEVELOPPE COUCHE HALTERE','TIRAGE POULIE HAUTE','DIPS','POMPES'])
+              for(const k of materielExercice(n))
+                if(!PROTO_MATERIEL[k]) return _echec(k+' est hors table (déduit de « '+n+' »)');
+            return true;})());
+
+          ok('Le muscle primaire n\'est JAMAIS changé, et trois candidats au plus',(()=>{
+            // (a) EST OBLIGATOIRE : un substitut qui ne travaille pas le même
+            // muscle n'est pas un substitut, c'est un autre exercice — et
+            // l'athlète croirait avoir fait sa séance.
+            const u=u0();
+            const prim=n=>_substPrimaire(n,u);
+            for(const cible of ['PRESSE A CUISSE INCLINE','DEVELOPPE COUCHE','CURL BARRE']){
+              const r=substitutsSalle(u,cible,club);
+              if(r.liste.length>SUBST_MAX)
+                return _echec(r.liste.length+' candidats pour '+cible);
+              for(const c of r.liste)
+                if(prim(c.nom)!==prim(cible))
+                  return _echec(c.nom+' ('+prim(c.nom)+') proposé pour '+cible+' ('+prim(cible)+')');
+              // L'exercice ne se propose jamais lui-même.
+              if(r.liste.some(c=>exKey(c.nom)===exKey(cible)))
+                return _echec(cible+' se propose lui-même');
+            }
+            return true;})());
+
+          ok('Le matériel de la salle filtre vraiment, et le refus est franc',(()=>{
+            const u=u0();
+            const club2=substitutsSalle(u,'PRESSE A CUISSE INCLINE',club);
+            const gar=substitutsSalle(u,'PRESSE A CUISSE INCLINE',garage);
+            if(!club2.liste.length) return _echec('aucun substitut dans une salle complète');
+            // AUCUN CANDIDAT NE DEMANDE CE QUE LE GARAGE N'A PAS.
+            for(const c of gar.liste)
+              if(!exFaisableDans(c.nom,garage.materiel))
+                return _echec(c.nom+' proposé au garage alors qu’il demande '+c.materiel.join('+'));
+            // Une salle vide : on le dit franchement plutôt que de proposer un
+            // pis-aller. Un mouvement qui ne travaille pas le même muscle
+            // ferait croire à l'athlète qu'il a fait sa séance.
+            // UNE SALLE SANS MATERIEL PEUT QUAND MEME ACCUEILLIR DU POIDS DU
+            // CORPS, et c'est correct : des pompes ne demandent rien. Le refus
+            // franc se teste donc sur un muscle qui n'a AUCUNE alternative au
+            // poids du corps dans la banque — le biceps.
+            const vide={id:'c',nom:'Rien',materiel:[]};
+            const pompes=substitutsSalle(u,'BUTTERFLY',vide);
+            if(!pompes.liste.length) return _echec('aucune pompe proposée dans une salle vide');
+            const rien=substitutsSalle(u,'CURL BARRE',vide);
+            if(rien.liste.length) return _echec('des substituts au curl sortent d’une salle sans matériel');
+            if(!rien.raison||rien.raison.indexOf('coach')<0)
+              return _echec('le refus ne renvoie pas vers le coach : « '+rien.raison+' »');
+            // ⚠ LA SPÉCIFICITÉ : « curl barre EZ » ne doit pas exiger AUSSI une
+            // barre droite. Mesuré — une salle avec barre EZ mais sans barre
+            // se voyait refuser l'exercice.
+            const ez=materielExercice('CURL BARRE EZ');
+            if(ez.indexOf('BARRE')>=0) return _echec('barre EZ exige aussi une barre droite : '+ez.join('+'));
+            // Et une salle qui déclare « poulie » couvre haute et basse.
+            return exFaisableDans('TIRAGE POULIE HAUTE',['POULIE'])
+              ?true:_echec('une salle avec poulie ne couvre pas la poulie haute');})());
+
+          ok('Aucune charge transposée sans historique sur CE mouvement',(()=>{
+            // DÉDUIRE UNE CHARGE D'UN AUTRE EXERCICE PAR UN RATIO serait une
+            // invention pure, et l'athlète la prendrait pour une mesure.
+            // Champ vide, et c'est correct.
+            const vierge=u0();
+            const h=historiqueExercice(vierge,'DEEP SQUAT');
+            if(h.vu||h.charge!==null) return _echec('une charge sort d’un dossier vide');
+            const avec={email:'sl@test.fr',id:'u_sl',sessions:[
+              {date:Date.now()-864e5,data:{'DEEP SQUAT':{sets:[{done:true,weight:'70',reps:'5'}]}}},
+              {date:Date.now(),data:{'DEEP SQUAT':{sets:[{done:true,weight:'80',reps:'5'}]}}}]};
+            const h2=historiqueExercice(avec,'DEEP SQUAT');
+            if(h2.charge!==80) return _echec('charge '+h2.charge+' au lieu de la dernière, 80');
+            // ET AUCUN RATIO NULLE PART : la seule source est l'historique.
+            const s=String(_appliquerSubstitut).replace(/^\s*\/\/.*$/gm,'');
+            if(/\*\s*0\.\d|ratio|coeff/i.test(s))
+              return _echec('une charge est transposée par un coefficient');
+            return s.indexOf('historiqueExercice')>=0
+              ?true:_echec('la charge ne vient pas de l’historique');})());
+
+          ok('Le motif « douleur » alimente le signal existant, sans doublon',(()=>{
+            // LA DOULEUR SE DÉCLARE PAR SÉRIE dans le champ `pain` depuis
+            // toujours. Un second stockage ferait deux comptes de la même
+            // chose, et le coach lirait deux vérités.
+            const s=String(_poserMotifEcart).replace(/^\s*\/\/.*$/gm,'');
+            if(s.indexOf("motif==='douleur'")<0) return _echec('le motif douleur n’est plus distingué');
+            if(s.indexOf('SIG_PAIN_SEUIL')<0)
+              return _echec('la douleur n’alimente pas le seuil du signal existant');
+            if(s.indexOf('.pain')<0) return _echec('elle n’écrit pas dans le champ pain');
+            // AUCUN SECOND STOCKAGE : pas de compteur de douleur à côté.
+            if(/douleurCount|nbDouleur|painLog/i.test(_prodSrc().replace(/^\s*\/\/.*$/gm,'')))
+              return _echec('un second stockage de la douleur est apparu');
+            // Les quatre motifs, et pas un champ libre.
+            const cles=Object.keys(ECART_MOTIFS);
+            if(cles.length!==4) return _echec(cles.length+' motifs au lieu de 4');
+            return cles.indexOf('douleur')>=0?true:_echec('« douleur » n’est pas un motif');})());
+
+          ok('Le remplacement ne touche jamais au programme du coach',(()=>{
+            // IL VIT DANS woState ET DANS LE JOURNAL. Le programme reste celui
+            // du coach : un échange un mardi ne doit pas changer tous les
+            // mardis suivants.
+            for(const f of [_appliquerSubstitut,journaliserEcart,_poserMotifEcart]){
+              const s=String(f).replace(/^\s*\/\/.*$/gm,'');
+              if(/sessions_config\s*=|sessions_config\[/.test(s))
+                return _echec(f.name+' touche à sessions_config');
+            }
+            // ET LA SALLE ACTIVE MEURT AVEC LA SÉANCE : elle vit dans woState.
+            const c=String(choisirSalle).replace(/^\s*\/\/.*$/gm,'');
+            if(c.indexOf('woState')<0) return _echec('la salle active ne vit pas dans la séance');
+            if(/sessions_config/.test(c)) return _echec('changer de salle modifie le programme');
+            return true;})());
+
+          ok('Le coach lit le motif, pas la liste des trois',(()=>{
+            // TROIS FOIS LE MÊME ÉCART N'EST PAS UN INCIDENT, c'est un
+            // programme à corriger — et c'est ÇA que le coach doit lire.
+            const u={email:'sl@test.fr',id:'u_sl',sessions:[],ecartsSeance:[
+              {date:Date.now()-1000,exoPrevu:'PRESSE A CUISSE INCLINE',exoFait:'DEEP SQUAT',motif:'absent'},
+              {date:Date.now()-2000,exoPrevu:'PRESSE A CUISSE INCLINE',exoFait:'DEEP SQUAT',motif:'absent'},
+              {date:Date.now()-3000,exoPrevu:'PRESSE A CUISSE INCLINE',exoFait:'HACKSQUAT',motif:'materiel_occupe'}]};
+            const t=resumeEcarts(u);
+            if(!t) return _echec('aucun résumé');
+            if(t.indexOf('3 remplacements')<0) return _echec('le nombre n’est pas dit : « '+t+' »');
+            if(t.indexOf('tous sur')<0) return _echec('l’exercice commun n’est pas nommé : « '+t+' »');
+            // « TOUS SUR » N'EST VRAI QUE SI C'EST VRAI.
+            const u2=Object.assign({},u,{ecartsSeance:u.ecartsSeance.concat(
+              [{date:Date.now(),exoPrevu:'DEVELOPPE COUCHE',exoFait:'BUTTERFLY',motif:'autre'}])});
+            const t2=resumeEcarts(u2);
+            if(t2.indexOf('tous sur')>=0) return _echec('« tous sur » alors que deux exercices : « '+t2+' »');
+            // Hors fenêtre de sept jours : rien.
+            const vieux={email:'sl@test.fr',ecartsSeance:[
+              {date:Date.now()-30*864e5,exoPrevu:'X',exoFait:'Y',motif:'autre'}]};
+            return resumeEcarts(vieux)===''?true:_echec('un écart d’il y a un mois est résumé');})());
+        })();
+
         // ══════ LE BLOC DE PRIORITÉ ══════
         (()=>{
           const neuf=()=>({email:'bp@test.fr',id:'u_bp',sessions:[],blocPriorite:null});
