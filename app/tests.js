@@ -15963,6 +15963,238 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LA VIDÉO RATTACHÉE ET LE COMPARATEUR ══════
+        (()=>{
+          const CLE=exKey('Développé couché barre');
+          const V=(id,j,kg,reps)=>({id:id,name:'Dev',url:'https://res.cloudinary.com/x/'+id+'.mp4',
+            date:j,lien:{exerciceCle:CLE,exerciceNom:'Développé couché barre',
+              chargeKg:kg,reps:reps,rir:2,serieIdx:0,seance:'PUSH',slot:1,date:j}});
+          const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};
+            try{ return f(); } finally { window.saveUser=s; } };
+
+          ok('AUCUNE vidéo, aucune vignette, n\'entre dans le document',(()=>{
+            // ⚠ LE VRAI RISQUE, ET L'AUDIT D'AOÛT EST FORMEL : le plafond de
+            // RepCore n'est pas un nombre d'utilisateurs, c'est le volume
+            // Firebase — _doPushOne RELIT ET RÉÉCRIT LE DOCUMENT ENTIER à
+            // chaque poussée, et les photos de bilan y sont déjà en base64.
+            // Une vidéo dans le document ferait sauter le plafond seule.
+            const src=_prodSrc();
+            const i=src.indexOf('async function uploadVideoFile');
+            if(i<0) return _echec('l’envoi de vidéo a disparu');
+            const bloc=src.slice(i,i+4000);
+            // LE FICHIER PART SUR CLOUDINARY, et il n'est jamais lu en base64.
+            if(bloc.indexOf('api.cloudinary.com')<0)
+              return _echec('la vidéo ne part plus sur Cloudinary');
+            for(const interdit of ['readAsDataURL','toDataURL','createObjectURL'])
+              if(bloc.indexOf(interdit)>=0)
+                return _echec(interdit+' sur le chemin vidéo : des octets vont entrer dans le document');
+            // L'ENTRÉE ÉCRITE NE PORTE QUE DES MÉTADONNÉES. On la reconstruit
+            // telle que la fonction l'écrit, et on pèse.
+            const entry={id:'v_1',name:'Dev',url:'https://res.cloudinary.com/x/a.mp4',
+              date:2000,size:'12.4 Mo',feedback:null,cloudinaryPublicId:'repcore/x/a',
+              cloudinaryName:'dntu57ml',
+              lien:lienVideoSerie({name:'Développé couché barre'},
+                {weight:'82.5',reps:'8',rir:'2'},{seance:'PUSH',slot:1,serieIdx:2,date:2000})};
+            const json=JSON.stringify(entry);
+            if(/data:[a-z]+\/[a-z0-9.+-]+;base64,/i.test(json))
+              return _echec('l’entrée porte une charge base64');
+            if(json.indexOf('blob:')>=0) return _echec('l’entrée porte une URL blob');
+            // Un ordre de grandeur, pas une mesure fine : une entrée de vidéo
+            // pèse quelques centaines d'octets, une vignette en pèserait des
+            // dizaines de milliers.
+            if(json.length>2000) return _echec('une entrée pèse '+json.length+' octets');
+            // ET L'ANNOTATION AUDIO NON PLUS : seule son URL entre.
+            return sansSave(()=>{
+              const u={email:'p@t.fr',videos:[V('a',1000,80,8),V('b',2000,85,8)]};
+              const p=pairePrises(u,CLE);
+              ajouterAnnotationPaire(u,p,{sec:12.4,sur:'apres',
+                audioUrl:'https://res.cloudinary.com/x/a.webm'});
+              return /data:[a-z]+\/[a-z0-9.+-]+;base64,/i.test(JSON.stringify(u.comparaisons))
+                ?_echec('l’annotation porte une charge base64'):true;});})());
+
+          ok('La charge et les reps viennent de la SÉRIE, et ne s\'inventent pas',(()=>{
+            // Une vidéo sans charge n'est qu'un souvenir : ce sont la charge et
+            // les répétitions qui rendent deux prises comparables.
+            const ex={name:'Développé couché barre',reps:'8'};
+            const l=lienVideoSerie(ex,{weight:'82.5',reps:'8',rir:'2'},
+              {seance:'PUSH',slot:1,serieIdx:2,date:1000});
+            if(l.chargeKg!==82.5) return _echec('charge : '+l.chargeKg);
+            if(l.reps!==8) return _echec('reps : '+l.reps);
+            if(l.rir!==2) return _echec('rir : '+l.rir);
+            if(l.serieIdx!==2||l.seance!=='PUSH'||l.slot!==1)
+              return _echec('le créneau n’est pas rattaché');
+            if(l.exerciceCle!==CLE) return _echec('clef : '+l.exerciceCle);
+            // « échec » vaut RIR 0, comme partout ailleurs — pas null.
+            if(lienVideoSerie(ex,{weight:'80',reps:'6',rir:'echec'},{}).rir!==0)
+              return _echec('l’échec n’est pas lu comme un RIR de 0');
+            // Les MÊMES répétitions que la performance : repsDone d'abord.
+            if(lienVideoSerie(ex,{weight:'80',reps:'8',repsDone:6},{}).reps!==6)
+              return _echec('repsDone n’est pas prioritaire');
+            // ⚠ ET LA CHARGE NE S'INVENTE JAMAIS. Un envoi depuis l'écran
+            // Vidéos ne connaît pas la charge : champ VIDE, pas de zéro. Une
+            // charge devinée ferait comparer deux prises sur un chiffre que
+            // personne n'a mesuré.
+            const sans=lienVideoSerie(ex,{weight:'',reps:'8',rir:''},{});
+            if(sans.chargeKg!==null) return _echec('charge inventée : '+sans.chargeKg);
+            if(sans.rir!==null) return _echec('RIR inventé : '+sans.rir);
+            if(lienVideoSerie(ex,{weight:'0',reps:'8'},{}).chargeKg!==null)
+              return _echec('une charge de 0 est retenue');
+            // Le libellé de surimpression n'annonce que ce qui est connu.
+            if(libLienVideo(sans).indexOf('kg')>=0)
+              return _echec('la surimpression annonce une charge absente');
+            // ⚠ UN NOM VIDE NE FABRIQUE PAS DE CLEF. `ex.name||ex` retombait
+            // sur l'objet, et String(objet) donnait « [object Object] » :
+            // toutes les vidéos d'exercices sans nom se seraient retrouvées
+            // sous la clef « OBJECT OBJECT », et se seraient comparées entre
+            // elles. Mesuré sur {name:''}.
+            if(lienVideoSerie({name:''},{weight:'80'},{})!==null)
+              return _echec('un exercice sans nom produit un rattachement');
+            return lienVideoSerie(null,{weight:'80'},{})===null
+              ?true:_echec('un exercice absent produit un rattachement');})());
+
+          ok('Le décalage s\'applique aux DEUX lecteurs',(()=>{
+            // Sans lui, deux vidéos qui ne démarrent pas au même instant du
+            // mouvement ne se comparent pas : on met une descente en face
+            // d'une montée et on en tire des conclusions sur la technique.
+            const z=cmpInstants(10,0);
+            if(z.avant!==10||z.apres!==10) return _echec('à zéro, les deux ne sont pas alignés');
+            // POSITIF : la seconde prise est retardée. NÉGATIF : la première.
+            const p=cmpInstants(10,1.5);
+            if(p.avant!==10||p.apres!==8.5) return _echec('décalage positif : '+JSON.stringify(p));
+            const n=cmpInstants(10,-1.5);
+            if(n.avant!==8.5||n.apres!==10) return _echec('décalage négatif : '+JSON.stringify(n));
+            // ⚠ AUCUN DES DEUX NE PASSE SOUS ZÉRO. Un currentTime négatif est
+            // silencieusement ramené à 0 par le navigateur : le curseur
+            // mentirait sans qu'on le voie.
+            if(cmpInstants(0.5,2).apres!==0) return _echec('la seconde passe sous zéro');
+            if(cmpInstants(0.5,-2).avant!==0) return _echec('la première passe sous zéro');
+            // ET UNE SEULE DÉFINITION DE LA RÈGLE : le pas à pas et la lecture
+            // ne calculent pas le décalage chacun de leur côté.
+            const s=String(_cmpAppliquerDecalage);
+            if(s.indexOf('cmpInstants(')<0)
+              return _echec('l’application du décalage recalcule la règle');
+            // Elle écrit bien LES DEUX lecteurs.
+            if(!/a\.currentTime=/.test(s)||!/b\.currentTime=/.test(s))
+              return _echec('un seul lecteur est déplacé');
+            // Et le pas à pas la réapplique, sinon les deux dérivent.
+            return String(cmpImage).indexOf('_cmpAppliquerDecalage()')>=0
+              ?true:_echec('le pas à pas ne réapplique pas le décalage');})());
+
+          ok('L\'annotation est rattachée à la PAIRE, pas à une vidéo',(()=>{
+            // Un commentaire qui dit « là, tu casses moins le dos qu'avant » ne
+            // parle ni de l'une ni de l'autre : il parle des deux.
+            return sansSave(()=>{
+              const u={email:'c@t.fr',videos:[V('v3',3000,90,6),V('v1',1000,80,8),V('v2',2000,85,7)]};
+              const p=pairePrises(u,CLE);
+              if(!p) return _echec('aucune paire');
+              // UN SEUL MODE DE SÉLECTION : la plus ancienne contre la
+              // dernière. Une liste de douze dates ferait de la comparaison un
+              // travail de recherche.
+              if(p.avant.id!=='v1'||p.apres.id!=='v3')
+                return _echec('la paire est '+p.avant.id+'/'+p.apres.id);
+              ajouterAnnotationPaire(u,p,{sec:12.4,sur:'apres',audioUrl:'https://x/a.webm'});
+              const cles=Object.keys(u.comparaisons||{});
+              if(cles.length!==1) return _echec(cles.length+' clefs écrites');
+              // ⚠ ON NE COMPARE PAS clePaire À ELLE-MÊME. La première version
+              // vérifiait `cles[0]===clePaire(p)` : les deux côtés changeaient
+              // ensemble, et une clef réduite au seul identifiant de la
+              // dernière vidéo passait au vert. L'assertion regardait le code
+              // se donner raison. On vérifie donc ce que la clef DOIT porter.
+              const k=cles[0];
+              for(const [quoi,part] of [['l’exercice',CLE],['la plus ancienne','v1'],
+                                        ['la dernière','v3']])
+                if(k.indexOf(part)<0) return _echec('la clef ne porte pas '+quoi+' : « '+k+' »');
+              // ET DEUX PAIRES QUI PARTAGENT LA DERNIÈRE PRISE SE DISTINGUENT :
+              // c'est ce qu'une clef réduite à `apres` ne saurait pas faire.
+              if(clePaire(p)===clePaire({cle:CLE,avant:{id:'v2'},apres:{id:'v3'}}))
+                return _echec('deux paires différentes ont la même clef');
+              // RIEN SUR LES VIDÉOS ELLES-MÊMES.
+              if(p.avant.annotations!==undefined||p.apres.annotations!==undefined)
+                return _echec('une annotation est posée sur une vidéo');
+              // UNE AUTRE PAIRE NE LES VOIT PAS.
+              if(annotationsPaire(u,{cle:CLE,avant:{id:'v1'},apres:{id:'v2'}}).length!==0)
+                return _echec('une autre paire voit ces annotations');
+              // L'HORODATAGE EST GARDÉ, ET IL DIT SUR QUELLE VIDÉO.
+              const l=annotationsPaire(u,p);
+              if(l[0].sec!==12.4||l[0].sur!=='apres') return _echec('horodatage perdu');
+              // ET IL SE DÉCLENCHE AU BON MOMENT, sur le BON lecteur.
+              if(!annotationAJouer(l,'apres',12.4,{})) return _echec('ne se déclenche pas à l’instant pile');
+              if(!annotationAJouer(l,'apres',12.7,{})) return _echec('la fenêtre est trop étroite');
+              if(annotationAJouer(l,'apres',13.5,{})) return _echec('se déclenche trop tard');
+              if(annotationAJouer(l,'avant',12.4,{})) return _echec('se déclenche sur l’autre lecteur');
+              if(annotationAJouer(l,'apres',12.4,{0:true})) return _echec('se déclenche deux fois');
+              // Il faut DEUX prises : comparer une vidéo à elle-même n'apprend
+              // rien, et une vidéo sans rattachement ne dit pas ce qu'elle
+              // montre — elle n'entre pas.
+              if(pairePrises({email:'s@t.fr',videos:[V('a',1,80,8)]},CLE))
+                return _echec('une seule prise fait une paire');
+              const mixte={email:'m@t.fr',videos:[V('a',1,80,8),V('b',2,85,8),
+                {id:'x',url:'https://x/x.mp4',date:3}]};
+              return prisesExercice(mixte,CLE).length===2
+                ?true:_echec('une vidéo sans rattachement entre dans la comparaison');});})());
+
+          ok('Deux gestes pour filmer, deux pour répondre',(()=>{
+            // Le flux de correction technique passe par Instagram. Ce module
+            // n'a d'intérêt que s'il est PLUS RAPIDE qu'un message : à cinq
+            // gestes, l'athlète repart sur Instagram et le code est mort.
+            const src=_prodSrc();
+            // (1) toucher « Filmer » — la caméra du téléphone s'ouvre. C'est
+            // `capture` qui l'ouvre : sans lui, le téléphone propose un
+            // sélecteur de fichiers, et il faut sortir de l'app pour filmer.
+            //
+            // ⚠ ON REGARDE L'ENTRÉE DE LA SÉANCE, PAS LE FICHIER. Trois autres
+            // champs portent déjà `capture="environment"` — l'étiquette
+            // produit et les poses. Chercher la chaîne dans toute la source
+            // passait au vert alors que l'attribut venait d'être retiré de
+            // CETTE entrée-là : l'assertion regardait l'appareil photo d'un
+            // autre écran.
+            const _e=document.getElementById('wo-video-input');
+            if(!_e) return _echec('l’entrée de capture de séance a disparu');
+            if(_e.getAttribute('capture')!=='environment')
+              return _echec('l’attribut capture a disparu : la caméra ne s’ouvre plus');
+            if(!/^video\//.test(_e.getAttribute('accept')||''))
+              return _echec('l’entrée n’accepte plus la vidéo');
+            const f=String(filmerSerie);
+            if(f.indexOf('.click()')<0) return _echec('« Filmer » n’ouvre plus la caméra');
+            // (2) filmer et valider. AUCUNE QUESTION ENTRE LES DEUX.
+            for(const q of ['prompt(','rcSaisie(','rcConfirm('])
+              if(f.indexOf(q)>=0) return _echec('« Filmer » pose une question : '+q);
+            const e=String(_videoSerieEnvoyer);
+            for(const q of ['prompt(','rcSaisie(','rcConfirm('])
+              if(e.indexOf(q)>=0) return _echec('l’envoi pose une question : '+q);
+            // ET LE COACH RÉPOND EN DEUX GESTES. ⚠ L'horodatage EXISTAIT déjà
+            // mais se TAPAIT : confirmAudioAnnotation refuse l'envoi tant que
+            // le champ « m:ss » est vide — lire l'instant, ouvrir le clavier,
+            // taper « 0:12 », puis enregistrer. Ici il est pris tout seul.
+            const m=String(_cmpDemarrerMicro);
+            if(m.indexOf('currentTime')<0)
+              return _echec('l’instant n’est plus pris sur le lecteur');
+            if(/getElementById\('cmp-ts'\)|value.*m:ss/.test(m))
+              return _echec('un champ d’horodatage est à remplir');
+            // Un seul bouton, qui bascule : démarrer puis arrêter.
+            return /state==='recording'/.test(String(cmpBasculerMicro))
+              ?true:_echec('le micro n’est plus une bascule');})());
+
+          ok('Une vidéo de plus de douze mois est PROPOSÉE, jamais supprimée',(()=>{
+            // C'est la seule trace vidéo d'une période : l'effacer sans le dire
+            // serait retirer à quelqu'un ce qu'il croyait gardé.
+            const u={email:'p@t.fr',videos:[
+              {id:'a',url:'x',date:Date.now()-400*86400000},
+              {id:'b',url:'x',date:Date.now()-30*86400000}]};
+            const avant=u.videos.length;
+            const l=videosAPurger(u);
+            if(l.length!==1||l[0].id!=='a') return _echec(l.length+' vidéo(s) proposée(s)');
+            // RIEN N'A ÉTÉ SUPPRIMÉ : la fonction propose, elle n'agit pas.
+            if(u.videos.length!==avant) return _echec('la liste a été modifiée');
+            if(!/supprimer/.test(phraseVideosAPurger(u))) return _echec('la phrase ne propose rien');
+            if(phraseVideosAPurger({email:'q@t.fr',videos:[]})!=='')
+              return _echec('une phrase sort sans vidéo ancienne');
+            // AUCUN APPEL AUTOMATIQUE À LA SUPPRESSION depuis la purge.
+            const s=String(videosAPurger)+String(phraseVideosAPurger);
+            return /deleteVideo|splice|filter\(v=>v\.id/.test(s)
+              ?_echec('la purge touche à la liste'):true;})());
+        })();
+
         // ══════ L'ÉCART GAUCHE / DROITE ══════
         (()=>{
           const J=n=>Date.now()-n*86400000;
