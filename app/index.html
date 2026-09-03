@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1119';
+window.RC_BUILD='1120';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -33245,7 +33245,8 @@ function renderWoEx(){
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
         <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.</span>
       </div>`:''}
-      ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body',true):''}
+      ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body',true,
+        (()=>{ try{ return chargeReferenceEchauffement(0); }catch(e){ return null; } })()):''}
       ${photoHtml}
       ${estSS?`<div style="display:flex;align-items:center;gap:9px;background:#1a0f00;border:1px solid var(--orange);border-radius:var(--r-3);padding:10px 13px;margin-bottom:12px">
         <svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="flex-shrink:0"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
@@ -74295,13 +74296,114 @@ function _ckMajEntete(cle){
   el.style.color=n>=tot&&tot?'var(--success)':'var(--sub)';
 }
 
-function _carteProtocole(txt,titre,couleur,id,replie){
+// ══════════════ LES MONTEES EN CHARGE, EN KILOS ════════════════════════
+//
+// « Montees en charge 40 / 60 / 80 % » demande un calcul mental au moment ou
+// l'on est le moins dispose a en faire un : debout devant la barre, avant la
+// premiere serie. Rendus en kilos, les paliers se chargent sans reflechir.
+//
+// ⚠ DEUX ECARTS ENTRE LA DEMANDE ET LE CODE :
+//
+// 1. _choisirPalier N'A RIEN A VOIR AVEC LES CHARGES. C'est le selecteur de
+//    palier d'ABONNEMENT — mensuel, trimestriel, annuel — qui pilote le
+//    bouton PayPal. On n'y touche pas. La fonction utile est _arrondirCharge,
+//    et elle fait exactement ce qu'il faut.
+//
+// 2. IL N'EXISTE AUCUN INVENTAIRE DE DISQUES dans le projet. L'inventaire des
+//    salles porte du materiel — barre, halteres, poulie — pas des
+//    denominations de disques. « Arrondi aux disques disponibles » se lit donc
+//    comme l'increment realiste que _arrondirCharge tient deja : 2,5 kg, soit
+//    un disque de 1,25 kg de chaque cote, et 1,25 kg sous 20 kg ou les petits
+//    disques sont la regle. Inventer une table de disques par salle serait
+//    demander a l'athlete de saisir un inventaire pour un arrondi qu'il fait
+//    de tete.
+
+// PURE. Les pourcentages annonces par une etape, ou []. On ne lit QUE la forme
+// « 40 / 60 / 80 % » : une etape qui dit « 2×10 » ou « 3 min » n'annonce aucun
+// palier, et y voir des pourcentages inventerait une consigne.
+const MONTEE_PCT_MIN=20, MONTEE_PCT_MAX=100;
+function pctMontee(txt){
+  const t=String(txt||'');
+  // Une suite de nombres separes par « / », suivie d'un signe pourcent.
+  const m=t.match(/(\d{1,3}(?:\s*\/\s*\d{1,3})+)\s*%/);
+  if(!m) return [];
+  const l=m[1].split('/').map(x=>Number(String(x).trim()));
+  if(l.some(x=>!isFinite(x)||x<MONTEE_PCT_MIN||x>MONTEE_PCT_MAX)) return [];
+  // Une montee MONTE : une suite qui redescend n'est pas un echauffement, et
+  // c'est le signe qu'on a lu autre chose que des paliers.
+  for(let i=1;i<l.length;i++) if(l[i]<=l[i-1]) return [];
+  return l;
+}
+// PURE. Les paliers en kilos reels, arrondis. Rend [] sans reference — et []
+// n'est pas « zero kilo », c'est « on ne sait pas », ce que l'appelant traduit
+// en laissant le texte tel quel.
+function paliersMontee(txt,refKg){
+  const pcts=pctMontee(txt);
+  const ref=Number(refKg);
+  if(!pcts.length||!isFinite(ref)||!(ref>0)) return [];
+  // ⚠ L'ARRONDI EST CELUI QUI EXISTE DEJA. Un second arrondi, meme identique
+  // aujourd'hui, finirait par ne plus donner les memes kilos que la charge
+  // suggeree de la serie suivante — et l'athlete lirait deux chiffres
+  // differents pour le meme mouvement, a trente secondes d'intervalle.
+  const out=[];
+  for(const p of pcts){
+    const kg=_arrondirCharge(ref*p/100);
+    if(kg==null||!(kg>0)) return [];
+    out.push(kg);
+  }
+  return out;
+}
+// PURE. L'etape, augmentee de ses kilos. SANS REFERENCE, LE TEXTE NE BOUGE
+// PAS : les pourcentages restent, et le coach garde sa consigne intacte.
+function etapeMontee(txt,refKg){
+  const t=String(txt||'');
+  const kg=paliersMontee(t,refKg);
+  if(!kg.length) return t;
+  return t+' — '+kg.map(k=>String(k).replace('.',','))
+    .join(' · ')+' kg';
+}
+
+// LA CHARGE DE REFERENCE DU PREMIER EXERCICE. Deux sources, dans cet ordre :
+//   1. la programmation de la semaine, quand le coach en a pose une — c'est
+//      une consigne, elle prime sur toute deduction ;
+//   2. la charge suggeree pour la premiere serie, celle que l'ecran affiche
+//      deja juste en dessous.
+// Rien d'autre. Une moyenne d'historique donnerait un troisieme chiffre, et
+// l'echauffement annoncerait des kilos que la premiere serie contredirait.
+function chargeReferenceEchauffement(idx){
+  const i=(typeof idx==='number')?idx:0;
+  const ex=woState&&woState.exercises&&woState.exercises[i];
+  if(!ex||!ex.name) return null;
+  try{ if(isCardio(ex)) return null; }catch(e){}
+  // CONTREPOIDS EXCLU : sur des tractions assistees, le poids affiche est
+  // l'ASSISTANCE. « 40 % de l'assistance » ne veut rien dire, et les kilos
+  // rendus seraient l'inverse de ce qu'il faut charger.
+  try{ if(isCounterweightEx(ex.name)) return null; }catch(e){}
+  try{
+    const c=consigneProgEx(ex);
+    if(c&&c.kg>0) return c.kg;
+  }catch(e){}
+  try{
+    const prev=getPrevPerf(ex.name,woState.slot,woState.progName);
+    if(prev&&prev.weight){
+      const isCW=isCounterweightEx(ex.name);
+      const s=chargeSuivante(prev.weight,prev.rir,isCW);
+      if(s>0) return s;
+    }
+  }catch(e){}
+  return null;
+}
+function _carteProtocole(txt,titre,couleur,id,replie,refKg){
   const t=String(txt||'').trim();
   if(!t) return '';
   const lignes=t.split('\n').map(x=>x.trim()).filter(Boolean);
   // Première ligne « Nom (12 à 15 min) » : c'est un protocole, pas du texte libre.
   const entete=/^.+\(\d+( à \d+)? min\)$/.test(lignes[0])?lignes.shift():null;
-  const etapes=lignes.filter(l=>/^\d+\.\s/.test(l)).map(l=>l.replace(/^\d+\.\s*/,''));
+  // LES KILOS SONT POSES ICI, sur le texte affiche, et JAMAIS ecrits dans le
+  // protocole : la bibliotheque garde ses pourcentages, qui valent pour tout
+  // le monde. Sans reference, etapeMontee rend le texte inchange.
+  const etapes=lignes.filter(l=>/^\d+\.\s/.test(l)).map(l=>l.replace(/^\d+\.\s*/,''))
+    .map(e=>etapeMontee(e,refKg));
   const cle=id;
   const et=_ckEtat[cle]||{};
   const corps=etapes.length

@@ -15963,6 +15963,160 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LES MONTÉES EN CHARGE, EN KILOS ══════
+        (()=>{
+          ok('Les pourcentages ne se lisent que quand ce sont des paliers',(()=>{
+            // « 2×15 », « 3 min », « 2×10 » ne sont pas des montées en charge.
+            // Y voir des pourcentages inventerait une consigne sur des étapes
+            // qui n'en portent aucune.
+            for(const t of ['Montées en charge 40 / 60 / 80 %','Montées 40 / 60 / 80 %','40/60/80%'])
+              if(pctMontee(t).join(',')!=='40,60,80') return _echec(t+' → '+pctMontee(t));
+            // LA SUITE COMPLÈTE D'UN PROTOCOLE RÉEL, six paliers.
+            if(pctMontee('Montées 30 / 50 / 65 / 80 / 90 / 95 %').join(',')!=='30,50,65,80,90,95')
+              return _echec('les six paliers ne sont pas lus');
+            for(const t of ['Montées en charge','Montées progressives','Barre à vide, 2×10',
+                            'Rotations externes d\'épaule, 2×15','Rameur ou élastique, 3 min',
+                            'Goblet squat avec pause, 2×8',
+                            // ⚠ UNE ÉTAPE RÉELLE DU PROTOCOLE QUADRICEPS, et
+                            // le piège de cette lecture : deux nombres séparés
+                            // par une barre, tous deux dans la plage.
+                            '90/90 hanches, 2×8',
+                            // Le signe pourcent est ce qui distingue des
+                            // paliers d'une durée ou d'une distance.
+                            'Marche rapide 30 / 60 s','Rameur 250 / 500 m'])
+              if(pctMontee(t).length) return _echec('« '+t+' » lu comme des paliers');
+            // UNE MONTÉE MONTE : une suite qui redescend n'est pas un
+            // échauffement, c'est le signe qu'on a lu autre chose.
+            if(pctMontee('80 / 60 / 40 %').length) return _echec('une suite descendante passe');
+            // Les bornes : au-delà de 100 % ce n'est plus un échauffement, et
+            // sous 20 % la barre à vide dit déjà ce qu'il faut.
+            if(pctMontee('40 / 60 / 120 %').length) return _echec('120 % passe');
+            if(pctMontee('10 / 20 %').length) return _echec('10 % passe');
+            // Un seul pourcentage n'est pas une montée.
+            return pctMontee('50 %').length?_echec('un seul palier passe'):true;})());
+
+          ok('Les kilos sortent de l\'arrondi EXISTANT, et rien sans référence',(()=>{
+            // ⚠ UN SECOND ARRONDI, même identique aujourd'hui, finirait par ne
+            // plus donner les mêmes kilos que la charge suggérée de la série
+            // suivante : l'athlète lirait deux chiffres pour le même mouvement,
+            // à trente secondes d'intervalle.
+            const k=paliersMontee('Montées 40 / 60 / 80 %',82.5);
+            const attendu=[40,60,80].map(p=>_arrondirCharge(82.5*p/100));
+            if(k.join(',')!==attendu.join(',')) return _echec(k.join(',')+' ≠ '+attendu.join(','));
+            if(k.join(',')!=='32.5,50,65') return _echec('82,5 kg → '+k.join(','));
+            if(paliersMontee('Montées 40 / 60 / 80 %',100).join(',')!=='40,60,80')
+              return _echec('100 kg mal arrondi');
+            // Sous 20 kg, le pas de 1,25 s'applique — c'est le même arrondi.
+            if(paliersMontee('Montées 40 / 60 / 80 %',15).join(',')!=='6.25,8.75,12.5')
+              return _echec('15 kg → '+paliersMontee('Montées 40 / 60 / 80 %',15).join(','));
+            // ⚠ SANS RÉFÉRENCE, RIEN — et surtout pas des zéros. « 0 kg »
+            // affiché sur une montée en charge serait une consigne fausse.
+            for(const [cas,ref] of [['null',null],['zéro',0],['négative',-50],
+                                    ['non numérique','x'],['absente',undefined]])
+              if(paliersMontee('Montées 40 / 60 / 80 %',ref).length)
+                return _echec('référence '+cas+' : des kilos sortent quand même');
+            return paliersMontee('Montées progressives',100).length
+              ?_echec('des kilos sortent sans pourcentage'):true;})());
+
+          ok('Sans référence, le texte du coach ne bouge pas',(()=>{
+            // Les pourcentages restent : ils valent pour tout le monde, et
+            // c'est la consigne telle que le coach l'a écrite.
+            const t='Montées en charge 40 / 60 / 80 %';
+            if(etapeMontee(t,null)!==t) return _echec('le texte a changé : « '+etapeMontee(t,null)+' »');
+            if(etapeMontee(t,100)!==t+' — 40 · 60 · 80 kg')
+              return _echec('rendu : « '+etapeMontee(t,100)+' »');
+            // LES POURCENTAGES SURVIVENT À L'AJOUT : on augmente, on ne
+            // remplace pas.
+            if(etapeMontee(t,100).indexOf('40 / 60 / 80 %')<0)
+              return _echec('les pourcentages ont disparu');
+            // La virgule décimale, comme partout dans l'app.
+            if(etapeMontee('Montées 40 / 60 / 80 %',82.5).indexOf('32,5')<0)
+              return _echec('le point décimal est resté');
+            // Une étape sans paliers n'est pas touchée.
+            for(const e of ['Rameur ou élastique, 3 min','Montées progressives','Barre à vide, 2×10'])
+              if(etapeMontee(e,100)!==e) return _echec('« '+e+' » a été modifiée');
+            // ⚠ ET LE PROTOCOLE LUI-MÊME N'EST JAMAIS RÉÉCRIT. Les kilos sont
+            // posés sur le texte AFFICHÉ : la bibliothèque garde ses
+            // pourcentages, qui ne valent pas que pour cet athlète-là.
+            const p=PROTOCOLES.filter(x=>x.slug==='echauffement_push')[0];
+            const avant=JSON.stringify(p.etapes);
+            etapeMontee(p.etapes[4],100);
+            _carteProtocole('x (10 min)\n1. '+p.etapes[4],'É','var(--orange)','tst-proto',true,100);
+            return JSON.stringify(p.etapes)===avant
+              ?true:_echec('le protocole a été réécrit');})());
+
+          ok('Le chronomètre d\'étape n\'est pas perturbé par les kilos',(()=>{
+            // dureeEtape lit les durées dans le texte : « 40 · 60 · 80 kg » ne
+            // doit pas en fabriquer une, sinon un bouton de chronomètre
+            // apparaîtrait sur une montée en charge.
+            const t='Montées en charge 40 / 60 / 80 %';
+            if(dureeEtape(t)!==null) return _echec('la prémisse a changé : une durée était déjà lue');
+            if(dureeEtape(etapeMontee(t,100))!==null)
+              return _echec('les kilos fabriquent une durée : '+dureeEtape(etapeMontee(t,100)));
+            // Et une étape qui a VRAIMENT une durée la garde.
+            const r='Rameur ou élastique, 3 min';
+            return dureeEtape(etapeMontee(r,100))===dureeEtape(r)
+              ?true:_echec('la durée du rameur a bougé');})());
+
+          ok('La carte n\'affiche des kilos que si une référence existe',(()=>{
+            // ⚠ NE PAS CHERCHER « kg » DANS LE RENDU : `bacKGround` en contient
+            // un dans chaque style en ligne, et la sonde répondait « oui » sur
+            // une carte sans le moindre kilo. On cherche la forme exacte que
+            // etapeMontee produit.
+            const txt='Push (10 min)\n1. Rameur, 3 min\n2. Montées en charge 40 / 60 / 80 %';
+            const avec=_carteProtocole(txt,'É','var(--orange)','tst-a',true,100);
+            const sans=_carteProtocole(txt,'É','var(--orange)','tst-b',true);
+            if(avec.indexOf('40 · 60 · 80 kg')<0) return _echec('les kilos n’arrivent pas dans la carte');
+            if(/—\s[0-9]/.test(sans)) return _echec('des kilos sortent sans référence');
+            if(avec.indexOf('40 / 60 / 80 %')<0) return _echec('les pourcentages ont disparu de la carte');
+            // La référence est FACULTATIVE et arrive en dernier : la carte de
+            // fin de séance appelle toujours à cinq arguments.
+            const s=_prodSrc();
+            return /_carteProtocole\(woState&&woState\.cooldown[^)]*\)/.test(s)
+              ?true:_echec('l’appel de fin de séance a changé');})());
+
+          ok('La référence : la programmation d\'abord, jamais un contrepoids',(()=>{
+            // ⚠ isCounterweightEx EXCLUT LE CONTREPOIDS, et c'est le piège de
+            // cette fonctionnalité : sur des tractions assistées, le poids
+            // affiché est l'ASSISTANCE. « 40 % de l'assistance » ne veut rien
+            // dire, et les kilos rendus seraient l'inverse de ce qu'il faut.
+            const sauve=woState;
+            try{
+              woState={currentEx:0,slot:1,progName:'PUSH',
+                exercises:[{name:'Développé couché barre',reps:'8'}],sessionData:[{sets:[]}]};
+              // Sans historique ni programmation : rien, et le texte reste.
+              if(chargeReferenceEchauffement(0)!==null)
+                return _echec('une référence sort de nulle part');
+              // LA PROGRAMMATION PRIME : c'est une consigne du coach, elle
+              // passe avant toute déduction d'historique.
+              woState.exercises[0].prog={max:120,debut:_lundiDe(new Date()).getTime(),
+                semaines:[{series:4,reps:5,rpe:'8'}]};
+              const c=consigneProgEx(woState.exercises[0]);
+              if(!c||!(c.kg>0)) return _echec('la consigne programmée ne rend pas de charge');
+              if(chargeReferenceEchauffement(0)!==c.kg)
+                return _echec('la référence ('+chargeReferenceEchauffement(0)+') ≠ la consigne ('+c.kg+')');
+              // CONTREPOIDS : aucune référence. ⚠ ET IL LUI FAUT UNE
+              // PROGRAMMATION POUR QUE LE TEST MORDE : sans elle, la fonction
+              // rendait null de toute façon, faute d'historique — l'assertion
+              // passait au vert sans jamais éprouver la garde. Mesuré en
+              // retirant isCounterweightEx : rien ne tombait.
+              woState.exercises=[{name:'Traction assistée machine',reps:'8',
+                prog:{max:60,debut:_lundiDe(new Date()).getTime(),
+                      semaines:[{series:4,reps:5,rpe:'8'}]}}];
+              if(!isCounterweightEx('Traction assistée machine'))
+                return _echec('la prémisse a changé : ce n’est plus un contrepoids');
+              const cc=consigneProgEx(woState.exercises[0]);
+              if(!cc||!(cc.kg>0))
+                return _echec('la fixture contrepoids ne porte pas de charge : le test ne mord pas');
+              if(chargeReferenceEchauffement(0)!==null)
+                return _echec('un contrepoids donne une référence');
+              // CARDIO : rien à charger.
+              woState.exercises=[{name:'Vélo',reps:'20',cardio:true}];
+              return chargeReferenceEchauffement(0)===null
+                ?true:_echec('un cardio donne une référence');
+            } finally { woState=sauve; }})());
+        })();
+
         // ══════ LA VIDÉO RATTACHÉE ET LE COMPARATEUR ══════
         (()=>{
           const CLE=exKey('Développé couché barre');
