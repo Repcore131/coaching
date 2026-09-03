@@ -15963,6 +15963,205 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LES RÈGLES D'EMPLOI DES MÉTHODES ══════
+        (()=>{
+          const GRILLE={'charniere-hanche':{'rachis-lombaire':3},'squat':{'rachis-lombaire':3}};
+          const S2=()=>({email:'m2@t.fr',sessions:[],sessions_config:[],
+            blocPriorite:{debut:Date.now()-8*86400000,semaines:6,hauts:[],bas:[]}});
+          const S5=()=>({email:'m5@t.fr',sessions:[],sessions_config:[],
+            blocPriorite:{debut:Date.now()-30*86400000,semaines:6,hauts:[],bas:[]}});
+          const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};
+            try{ return f(); } finally { window.saveUser=s; } };
+
+          ok('Le refus est EXPLICATIF, jamais silencieux',(()=>{
+            // Une règle qui bloque sans dire pourquoi est contournée dans la
+            // semaine et désactivée dans le mois : le coach ne comprend pas ce
+            // qu'on lui reproche, et il a raison de passer outre.
+            const ex={name:'Soulevé de terre',methode:'rest_in_pause',methodeSeries:'dernière'};
+            const ev=evaluerMethode(ex,S2(),{grille:GRILLE});
+            if(ev.ok) return _echec('rest-pause en semaine 2 sur du soulevé de terre : accepté');
+            if(!ev.phrase) return _echec('refus sans phrase');
+            // ELLE NOMME LES TROIS CHOSES : la méthode, où elle est posée, et
+            // ce qui cloche. Un « non conforme » n'apprend rien à personne.
+            if(ev.phrase.indexOf('Rest-pause')<0) return _echec('la méthode n’est pas nommée');
+            if(!/semaine 2/.test(ev.phrase)) return _echec('la semaine n’est pas nommée');
+            if(ev.phrase.indexOf('Soulevé de terre')<0) return _echec('l’exercice n’est pas nommé');
+            if(!/accumulation/.test(ev.phrase)) return _echec('la phase n’est pas dite');
+            if(!/colonne/.test(ev.phrase)) return _echec('la charge axiale n’est pas dite');
+            // Les DEUX causes remontent, pas seulement la première.
+            const c=(ev.raisons||[]).map(r=>r.code);
+            if(c.indexOf('phase')<0||c.indexOf('axial')<0)
+              return _echec('causes remontées : '+c.join(','));
+            // ET CHAQUE RÈGLE PORTE SON MOTIF : une table dont un motif serait
+            // vide produirait un refus muet le jour où cette règle mordrait.
+            for(const m of METHODES){
+              if(!m.motif||m.motif.length<40) return _echec(m.cle+' : motif absent ou creux');
+              if(!m.consigne||m.consigne.length<20) return _echec(m.cle+' : consigne absente');
+            }
+            // ⚠ LE MOTIF NE SE COLLE PAS SOUS N'IMPORTE QUEL REFUS. Sous un
+            // refus de fréquence il parlait de phase et d'axial — d'autre
+            // chose que du refus.
+            const uP={email:'p@t.fr',blocPriorite:{debut:Date.now()-30*86400000,semaines:6,hauts:[],bas:[]},
+              sessions_config:[{active:true,exercises:[
+                {name:'Leg curl assis',methode:'rest_in_pause'},
+                {name:'Leg extension machine',methode:'rest_in_pause'}]}]};
+            const evP=evaluerMethode({name:'Curl haltère',methode:'rest_in_pause'},uP,{grille:GRILLE});
+            if(evP.ok) return _echec('la troisième fois passe');
+            if(/se paie sur le dos/.test(evP.phrase))
+              return _echec('le motif de phase est collé sous un refus de fréquence');
+            return /déjà posée 2 fois/.test(evP.phrase)
+              ?true:_echec('le refus de fréquence ne dit pas le compte : '+evP.phrase);})());
+
+          ok('Le coach passe outre en un geste, et c\'est journalisé',(()=>{
+            // C'est LUI le coach : la règle est un avis de métier, pas une
+            // autorisation. Ce qu'on garde, c'est la trace.
+            return sansSave(()=>{
+              const u=S2();
+              const ex={name:'Soulevé de terre',methode:'rest_in_pause'};
+              const ev=evaluerMethode(ex,u,{grille:GRILLE});
+              if(ev.ok) return _echec('rien à passer outre');
+              const r=forcerMethode(u,ex,ev);
+              if(!r.ok) return _echec('le passage outre échoue');
+              // LE DÉPASSEMENT SE POSE SUR L'EXERCICE : sans ça l'éditeur
+              // reposerait la question à chaque ouverture.
+              if(ex.methodeForcee!==true) return _echec('l’exercice ne porte pas la décision');
+              // ET IL EST JOURNALISÉ, AVEC CE QUI A ÉTÉ PASSÉ OUTRE.
+              const j=_tabBloc(u.methodesForcees);
+              if(j.length!==1) return _echec(j.length+' entrées au journal');
+              if(j[0].regle!=='rest-pause') return _echec('la règle n’est pas nommée');
+              if(j[0].exercice!=='Soulevé de terre') return _echec('l’exercice n’est pas nommé');
+              if((j[0].codes||[]).indexOf('axial')<0) return _echec('les causes ne sont pas gardées');
+              if(!j[0].phrase) return _echec('la phrase du refus n’est pas gardée');
+              // VISIBLE DANS LA FICHE : sept jours.
+              if(resumeMethodesForcees(u).length!==1) return _echec('invisible dans la fiche');
+              const vieux={email:'v@t.fr',methodesForcees:[{date:Date.now()-9*86400000,regle:'x'}]};
+              if(resumeMethodesForcees(vieux).length!==0)
+                return _echec('un dépassement de la semaine dernière remonte encore');
+              // Le journal des méthodes est SÉPARÉ de celui des écarts de
+              // séance et de celui de la nutrition : trois faits différents.
+              if(u.ecartsSeance&&u.ecartsSeance.length)
+                return _echec('le passage outre pollue le journal des écarts de séance');
+              if(u.nutrition&&(u.nutrition.ajustHisto||[]).length)
+                return _echec('le passage outre pollue le journal de nutrition');
+              return true;});})());
+
+          ok('« Exercice axial » a UNE définition, et elle est partagée',(()=>{
+            // ⚠ _axialContrainteLombaire NE DIT PAS SI UN EXERCICE EST AXIAL :
+            // elle dit si l'ATHLÈTE a une contrainte lombaire déclarée. Les
+            // confondre aurait fait refuser le soulevé de terre aux seuls
+            // athlètes déjà blessés. La notion d'exercice axial existait
+            // ailleurs — chargeLombaireSchema, qui lit la grille du coach — et
+            // c'est elle qu'on branche.
+            if(typeof chargeLombaireSchema!=='function')
+              return _echec('la définition partagée a disparu');
+            if(typeof _axialContrainteLombaire!=='function')
+              return _echec('la garde de contrainte a disparu');
+            const s=String(methodeSchemaAxial);
+            if(s.indexOf('chargeLombaireSchema')<0)
+              return _echec('la règle n’utilise pas la définition existante');
+            // AUCUNE SECONDE DÉFINITION : pas de liste d'exercices axiaux
+            // recopiée dans la table des méthodes.
+            const src=_prodSrc();
+            const i=src.indexOf('const METHODES=Object.freeze');
+            const bloc=src.slice(i,src.indexOf('function methodesRegles'));
+            if(/souleve|soulevé|deadlift|squat|rachis/i.test(bloc))
+              return _echec('une liste d’exercices axiaux est recopiée dans la table');
+            // La mesure, sur le schéma et sur l'exercice.
+            if(methodeSchemaAxial('charniere-hanche',GRILLE)!==true)
+              return _echec('la charnière de hanche n’est pas vue comme axiale');
+            if(methodeExerciceAxial({name:'Leg curl assis'},null,GRILLE)!==false)
+              return _echec('une isolation genou est vue comme axiale');
+            // ⚠ UNE NOTE ABSENTE N'EST PAS UN ZÉRO, ET PAS DAVANTAGE UN
+            // REFUS : on ne bloque pas sur une case que le coach n'a pas
+            // remplie.
+            return methodeExerciceAxial({name:'Soulevé de terre'},null,{})===false
+              ?true:_echec('un schéma non noté est déclaré axial');})());
+
+          ok('Le compteur hebdomadaire, sur des méthodes multiples',(()=>{
+            // Somme des coûts de fatigue, tous exercices et toutes méthodes
+            // confondus. 2 rest-pause (3) + 1 dropset (2) + 1 myo-reps (2) = 10.
+            const u={email:'c@t.fr',sessions_config:[
+              {active:true,exercises:[{name:'A',methode:'rest_in_pause'},
+                                      {name:'B',methode:'methode_infinite'},
+                                      {name:'C',methode:'dropset_type_2'}]},
+              {active:true,exercises:[{name:'D',methode:'myo_reps'}]},
+              // Une semaine de décharge n'est pas une semaine chargée.
+              {active:true,deload:true,exercises:[{name:'E',methode:'rest_in_pause'}]},
+              // Un créneau éteint ne prescrit rien.
+              {active:false,exercises:[{name:'F',methode:'rest_in_pause'}]}]};
+            const c=chargeMethodesSemaine(u);
+            if(c.total!==10) return _echec('total '+c.total+' au lieu de 10');
+            if(c.n!==4) return _echec(c.n+' méthodes comptées au lieu de 4');
+            if(c.detail['rest-pause']!==2) return _echec('rest-pause compté '+c.detail['rest-pause']);
+            if(c.detail['dropset']!==1||c.detail['myo-reps']!==1)
+              return _echec('détail faux : '+JSON.stringify(c.detail));
+            // LA PHRASE AU-DELÀ DE 6, ET PAS AVANT.
+            const p=phraseChargeMethodes(u);
+            if(!/Semaine chargée/.test(p)) return _echec('aucune phrase à 10');
+            // UNE PHRASE, PAS UNE ALERTE ROUGE : le coach sait ce qu'il fait.
+            if(/⚠|attention|danger|trop/i.test(p)) return _echec('la phrase alarme : '+p);
+            const sous={email:'s@t.fr',sessions_config:[{active:true,exercises:[
+              {name:'A',methode:'rest_in_pause'},{name:'B',methode:'methode_infinite'}]}]};
+            if(chargeMethodesSemaine(sous).total!==6) return _echec('le seuil n’est pas à 6');
+            if(phraseChargeMethodes(sous)!=='') return _echec('la phrase sort à 6 pile');
+            // ET LE RENDU NE PEINT AUCUNE COULEUR D'ALARME.
+            const r=String(renderMethodesCoach);
+            return /--red|--danger|--orange/.test(r)
+              ?_echec('la fiche peint une alerte'):true;})());
+
+          ok('La technique précise passe avant sa famille',(()=>{
+            // cluster_sets EST rangé dans la famille rest_pause. Sans priorité
+            // à la technique, il aurait hérité des règles du rest-pause —
+            // interdit sous charge axiale — alors que porter du lourd est tout
+            // son propos.
+            if(TECHNIQUES['cluster_sets'].famille!=='rest_pause')
+              return _echec('la prémisse a changé : cluster_sets n’est plus dans rest_pause');
+            const r=regleMethode({methode:'cluster_sets'});
+            if(!r||r.cle!=='cluster') return _echec('cluster_sets résolu en « '+(r&&r.cle)+' »');
+            if(regleMethode({methode:'rest_in_pause'}).cle!=='rest-pause')
+              return _echec('la résolution par famille est cassée');
+            // Le cluster passe là où le rest-pause est refusé.
+            const ev=evaluerMethode({name:'Soulevé de terre',methode:'cluster_sets'},S2(),{grille:GRILLE});
+            if(!ev.ok) return _echec('le cluster est refusé sous charge axiale : '+ev.phrase);
+            // Aucune méthode posée, ou méthode inconnue : aucune règle, aucun
+            // refus. Une absence de prescription n'est pas une infraction.
+            if(regleMethode({})!==null||regleMethode({methode:'nexistepas'})!==null)
+              return _echec('une règle sort de nulle part');
+            return evaluerMethode({name:'X'},S2(),{}).ok
+              ?true:_echec('un exercice sans méthode est refusé');})());
+
+          ok('La phase de bloc est DÉDUITE, et une phase inconnue ne refuse rien',(()=>{
+            // Aucun champ de phase n'existe dans le projet : elle se déduit du
+            // bloc de priorité — le dernier tiers est l'intensification.
+            if(phaseBloc(S2())!=='ACCUMULATION') return _echec('semaine 2/6 : '+phaseBloc(S2()));
+            if(phaseBloc(S5())!=='INTENSIFICATION') return _echec('semaine 5/6 : '+phaseBloc(S5()));
+            // ⚠ SANS BLOC, LA PHASE EST INCONNUE — ET UNE DONNÉE MANQUANTE
+            // N'EST PAS UN REFUS. Sans cette garde, tout athlète sans bloc
+            // ouvert se voyait refuser rest-pause ET cluster à la fois, deux
+            // règles qui demandent des phases opposées.
+            const sans={email:'z@t.fr',sessions_config:[]};
+            if(phaseBloc(sans)!==null) return _echec('une phase sort sans bloc');
+            const ev=evaluerMethode({name:'Leg curl assis',methode:'rest_in_pause'},sans,{grille:GRILLE});
+            if(!ev.ok) return _echec('sans bloc, la méthode est refusée : '+ev.phrase);
+            return evaluerMethode({name:'Leg curl assis',methode:'cluster_sets'},sans,{grille:GRILLE}).ok
+              ?true:_echec('sans bloc, le cluster est refusé aussi');})());
+
+          ok('Côté athlète : la consigne d\'exécution, en une phrase',(()=>{
+            // Une méthode mal exécutée ne vaut pas mieux qu'une méthode
+            // absente. La description du catalogue est un paragraphe : lue
+            // debout entre deux séries, elle n'est pas lue.
+            const r=regleMethode({methode:'rest_in_pause'});
+            if(!/échec/.test(r.consigne)||!/15 secondes/.test(r.consigne))
+              return _echec('la consigne rest-pause a changé : '+r.consigne);
+            // UNE PHRASE, pas un paragraphe.
+            for(const m of METHODES)
+              if(m.consigne.length>170) return _echec(m.cle+' : consigne de '+m.consigne.length+' signes');
+            // ELLE EST BIEN RENDUE EN SÉANCE, et le paragraphe reste dessous.
+            const s=String(banniereTechnique);
+            if(s.indexOf('regleMethode')<0) return _echec('la consigne n’est pas branchée en séance');
+            return /m\.desc/.test(s)?true:_echec('la description du catalogue a été retirée');})());
+        })();
+
         // ══════ LE TEMPO : LE FORMAT, LE GUIDE, LA MESURE ══════
         (()=>{
           ok('Les deux écritures normalisent à la même forme',(()=>{

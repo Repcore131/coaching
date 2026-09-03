@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1116';
+window.RC_BUILD='1117';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -5935,6 +5935,10 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="ccd-vue" data-vue="entrainement">
       <!-- Modèle appliqué : renseigné par openClientDetail -->
       <div id="ccd-assigned-prog" style="display:none;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 var(--r-2) var(--r-2) 0;line-height:1.5"></div>
+      <!-- LES TECHNIQUES D'INTENSIFICATION : une phrase quand la semaine est
+           chargee, les depassements de regle quand il y en a. Sous le
+           programme, parce que c'est du programme qu'elles parlent. -->
+      <div id="ccd-methodes"></div>
       <!-- Charge de la semaine et exercices en hausse. Masqué tant que
            l'historique ne permet pas de les établir : c'est le contrat des
            deux fonctions qui les calculent. -->
@@ -22431,6 +22435,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderJournalCoach(c); }catch(e){}
   try{ renderVolumeCoach(c); }catch(e){}
   try{ renderPlateauxCoach(c); }catch(e){}
+  try{ renderMethodesCoach(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
   try{ renderLeveeCoach(c); }catch(e){}
   // BILAN DE SECURITE : une ligne, sans le detail des reponses — le coach
@@ -27059,6 +27064,147 @@ const TECHNIQUES=Object.freeze({
 });
 const FAMILLES_TECHNIQUE=Object.freeze(['normale','degressive','rest_pause','myo_reps','superset','partielles','isometrie']);
 
+// ══════════════ LES REGLES D'EMPLOI DES METHODES ═══════════════════════
+//
+// Le catalogue TECHNIQUES dit ce QU'EST une methode. Rien ne disait OU elle
+// est acceptable : le coach pouvait poser un rest-pause en premiere semaine
+// sur du souleve de terre, et l'application n'avait pas un mot.
+//
+// ⚠ TROIS ECARTS ENTRE LA FICHE ET LE CODE, ET ILS SONT TRAITES ICI PLUTOT
+// QUE CONTOURNES :
+//
+// 1. LA FICHE PARLE DE QUATRE METHODES — dropset, rest-pause, myo-reps,
+//    cluster. Le catalogue en porte QUARANTE-CINQ, rangees en sept familles.
+//    Ces quatre-la sont donc trois FAMILLES (degressive, rest_pause,
+//    myo_reps) plus UNE technique precise (cluster_sets). La table s'accroche
+//    aux clefs qui existent deja : ecrire un second vocabulaire de methodes a
+//    cote du catalogue, c'est garantir qu'ils divergeront.
+//
+// 2. phasesBloc SUPPOSE UN CHAMP QUI N'EXISTE PAS. Aucune phase de bloc n'est
+//    stockee nulle part. Elle est DEDUITE du bloc de priorite existant : le
+//    dernier tiers d'un bloc est son intensification, ce qui avant est son
+//    accumulation. Sans bloc ouvert, la phase est `null` — et une phase
+//    inconnue ne refuse rien. Une donnee manquante n'est pas un refus.
+//
+// 3. _axialContrainteLombaire NE DIT PAS SI UN EXERCICE EST AXIAL. Elle dit
+//    si l'ATHLETE a une contrainte lombaire declaree. La notion d'exercice
+//    axial existe ailleurs, et elle est deja partagee : chargeLombaireSchema,
+//    qui lit la grille de charges articulaires du coach. C'est elle qu'on
+//    reutilise — les deux servent, mais pas a la meme question, et les
+//    confondre aurait fait refuser le souleve de terre uniquement aux
+//    athletes deja blesses.
+const METH_AXIAL_SEUIL=2;          // 2 ou 3 sur 3 : le schema charge la colonne
+const METH_CHARGE_SEMAINE_MAX=6;   // au-dela, la fiche client le dit
+
+// PURE. Un schema charge-t-il la colonne ? UNE SEULE DEFINITION, celle qui
+// existait deja. `null` — pas encore juge — n'est pas axial : on ne refuse
+// pas sur une case que le coach n'a pas remplie.
+function methodeSchemaAxial(schema,grille){
+  let v=null;
+  try{ v=chargeLombaireSchema(schema,grille); }catch(e){ v=null; }
+  return (typeof v==='number')&&v>=METH_AXIAL_SEUIL;
+}
+// PURE. L'exercice est-il axial ? Meme question, posee sur son schema.
+function methodeExerciceAxial(ex,user,grille){
+  let s=null;
+  try{ s=schemaDe(ex,user); }catch(e){ s=null; }
+  return s?methodeSchemaAxial(s,grille):false;
+}
+// PURE. La phase du bloc, DEDUITE — voir l'ecart n°2 ci-dessus.
+// Rend 'ACCUMULATION', 'INTENSIFICATION', ou null quand aucun bloc ne court.
+function phaseBloc(user,maintenant){
+  let av=null;
+  try{ av=blocAvancement(user,maintenant); }catch(e){ av=null; }
+  if(!av||!(av.total>0)) return null;
+  // Le dernier tiers, jamais moins d'une semaine : c'est la ou la cible de
+  // volume approche le MRV, et donc la ou une methode d'intensification a un
+  // sens. blocCibleHaut fait deja monter la charge de travail sur ce profil.
+  const finales=Math.max(1,Math.ceil(av.total/3));
+  return (av.semaine>av.total-finales)?'INTENSIFICATION':'ACCUMULATION';
+}
+
+// LA TABLE. Valeurs de depart, et le coach les ajuste — voir methodesRegles.
+//
+// `motif` PORTE LA PHRASE AFFICHEE QUAND LA REGLE REFUSE. Une regle qui
+// refuse sans dire pourquoi sera contournee ou desactivee : c'est la seule
+// facon dont une regle meurt.
+const METHODES=Object.freeze([
+  {cle:'dropset', lib:'Dropset',
+   familles:['degressive'], techniques:[],
+   phasesBloc:['ACCUMULATION','INTENSIFICATION'],
+   axialExclu:true, patronsExclus:['halterophilie'], patronsAutorises:null,
+   materielExclu:[], maxParSemaine:3, seriesConcernees:'derniere', coutFatigue:2,
+   consigne:'Dropset : va au bout de la série, baisse la charge sans repos, repars aussitôt.',
+   motif:'Baisser la charge à l’échec sur un mouvement qui charge la colonne, '
+     +'c’est demander une technique qui n’est déjà plus là.'},
+  {cle:'rest-pause', lib:'Rest-pause',
+   familles:['rest_pause'], techniques:[],
+   phasesBloc:['INTENSIFICATION'],
+   axialExclu:true, patronsExclus:['halterophilie'], patronsAutorises:null,
+   materielExclu:[], maxParSemaine:2, seriesConcernees:'derniere', coutFatigue:3,
+   consigne:'Rest-pause : va à l’échec, 15 secondes de pause, repars, trois fois.',
+   motif:'Aller à l’échec puis relancer deux fois demande une technique intacte : '
+     +'en accumulation la fatigue s’empile déjà, et sur un mouvement axial l’échec '
+     +'se paie sur le dos.'},
+  {cle:'myo-reps', lib:'Myo-reps',
+   familles:['myo_reps'], techniques:[],
+   phasesBloc:['INTENSIFICATION'],
+   axialExclu:true, patronsExclus:[],
+   // ISOLATION ET MACHINES UNIQUEMENT : la liste blanche est ecrite en
+   // patrons, pas en noms d'exercices, parce que c'est le patron qui dit si
+   // le mouvement se relance en dix secondes sans replacer personne.
+   patronsAutorises:['isolation-epaule','isolation-coude','isolation-genou',
+                     'isolation-hanche','mollets-cheville'],
+   materielAutorises:['MACHINE','POULIE','POULIE_HAUTE','POULIE_BASSE','PRESSE','HACK','SMITH'],
+   materielExclu:[], maxParSemaine:2, seriesConcernees:'derniere', coutFatigue:2,
+   consigne:'Myo-reps : une série d’activation près de l’échec, puis des mini-séries '
+     +'de 3 à 5 reps toutes les 15 secondes.',
+   motif:'Quinze secondes ne suffisent pas à se replacer sous une barre : la '
+     +'méthode ne tient que là où l’on reste en position.'},
+  {cle:'cluster', lib:'Cluster',
+   familles:[], techniques:['cluster_sets'],
+   phasesBloc:['ACCUMULATION'],
+   // ⚠ LE SEUL A NE PAS EXCLURE L'AXIAL, ET C'EST LE PROPOS DE LA METHODE :
+   // le cluster existe pour porter du lourd en fractionnant la serie.
+   axialExclu:false, patronsExclus:[], patronsAutorises:null,
+   materielExclu:[], maxParSemaine:2, seriesConcernees:'toutes', coutFatigue:2,
+   consigne:'Cluster : 2 à 3 reps lourdes, 10 à 15 secondes de repos, on repart, '
+     +'jusqu’à 12 à 15 reps au total.',
+   motif:'Le cluster sert à accumuler du volume lourd : en fin de bloc il ajoute '
+     +'de la fatigue là où il faudrait en retirer.'}
+]);
+
+// LES REGLES EFFECTIVES : la table, surchargee par le coach. Meme patron que
+// POIDS_TECHNIQUE et que reperesEffectifs — la table de depart ne bouge
+// jamais, l'ajustement vit sur le dossier.
+function methodesRegles(user){
+  const u=_dossier(user);
+  const perso=(u&&u.methodesRegles&&typeof u.methodesRegles==='object')?u.methodesRegles:{};
+  return METHODES.map(m=>{
+    const p=perso[m.cle];
+    if(!p||typeof p!=='object') return m;
+    const o=Object.assign({},m);
+    for(const k of ['maxParSemaine','coutFatigue'])
+      if(typeof p[k]==='number'&&isFinite(p[k])&&p[k]>=0) o[k]=p[k];
+    if(Array.isArray(p.phasesBloc)&&p.phasesBloc.length) o.phasesBloc=p.phasesBloc.slice();
+    if(typeof p.axialExclu==='boolean') o.axialExclu=p.axialExclu;
+    return o;
+  });
+}
+// PURE. La regle qui couvre un exercice, ou null. LA TECHNIQUE PRECISE PASSE
+// AVANT SA FAMILLE : cluster_sets est range dans la famille rest_pause, et
+// c'est pourtant sa propre regle qui doit s'appliquer.
+function regleMethode(ex,user){
+  const cle=String((ex&&ex.methode)||'');
+  if(!cle||!TECHNIQUES[cle]) return null;
+  const regles=methodesRegles(user);
+  for(const m of regles) if((m.techniques||[]).indexOf(cle)>=0) return m;
+  const fam=TECHNIQUES[cle].famille;
+  for(const m of regles) if((m.familles||[]).indexOf(fam)>=0) return m;
+  return null;
+}
+
+
 // Contribution d'une série au volume, PAR FAMILLE.
 // Aucune donnée ne permet aujourd'hui de dire ce que vaut un rest-pause en
 // séries dures. 1,0 est une CONVENTION affichée comme telle, pas une mesure.
@@ -28016,6 +28162,203 @@ function badgeTechnique(ex){
   const txt=m?m.nom.toUpperCase():(LIB_FAMILLE_BADGE[fam]||fam.toUpperCase());
   return `<span style="background:${c[0]};color:${c[1]};padding:2px 7px;border-radius:var(--r-4);font-size:var(--fs-xs);font-weight:700">${escapeHtml(txt)}</span>`;
 }
+// ══════════════ LE CONTROLE A LA PRESCRIPTION ══════════════════════════
+//
+// LE REFUS EST EXPLICATIF, JAMAIS SILENCIEUX. Une regle qui bloque sans dire
+// pourquoi est contournee dans la semaine et desactivee dans le mois : le
+// coach ne comprend pas ce qu'on lui reproche, et il a raison de passer
+// outre. La phrase nomme donc les trois choses : la methode, ou elle est
+// posee, et ce qui cloche.
+//
+// ET LE COACH PASSE OUTRE EN UN GESTE. C'est LUI le coach : la regle est un
+// avis de metier, pas une autorisation. Ce qu'on garde, c'est la trace.
+
+// PURE. Rend {ok:true} ou {ok:false, phrase, raisons:[{code,texte}], regle}.
+// Les seances de creneaux servent au comptage hebdomadaire ; `maintenant`
+// n'est la que pour rendre le calcul rejouable.
+function evaluerMethode(ex,user,options){
+  const o=options||{};
+  const regle=regleMethode(ex,user);
+  if(!regle) return {ok:true,regle:null};
+  const u=_dossier(user);
+  const nomEx=String((ex&&ex.name)||'').trim();
+  const raisons=[];
+
+  // ── LA PHASE DE BLOC. Une phase INCONNUE ne refuse rien. ──────────────
+  const phase=phaseBloc(u,o.maintenant);
+  let av=null; try{ av=blocAvancement(u,o.maintenant); }catch(e){ av=null; }
+  if(phase&&(regle.phasesBloc||[]).indexOf(phase)<0)
+    raisons.push({code:'phase',
+      texte:(phase==='ACCUMULATION'?'on est en accumulation':'on est en fin de bloc')});
+
+  // ── L'AXIAL. Une seule definition, celle de la grille du coach. ───────
+  if(regle.axialExclu&&methodeExerciceAxial(ex,u,o.grille))
+    raisons.push({code:'axial',texte:'cet exercice charge la colonne'});
+
+  // ── LE PATRON. Liste noire, puis liste blanche. ───────────────────────
+  let schema=null; try{ schema=schemaDe(ex,u); }catch(e){ schema=null; }
+  if(schema&&(regle.patronsExclus||[]).indexOf(schema)>=0)
+    raisons.push({code:'patron',texte:'ce patron de mouvement est exclu'});
+  if(schema&&Array.isArray(regle.patronsAutorises)){
+    const okPatron=regle.patronsAutorises.indexOf(schema)>=0;
+    // LE MATERIEL PEUT RATTRAPER LE PATRON : « isolation ou machines ». Un
+    // tirage a la poulie n'est pas une isolation, et se relance pourtant en
+    // quinze secondes.
+    let okMat=false;
+    if(Array.isArray(regle.materielAutorises)){
+      let mat=[]; try{ mat=materielExercice(nomEx); }catch(e){ mat=[]; }
+      okMat=mat.some(m=>regle.materielAutorises.indexOf(m)>=0);
+    }
+    if(!okPatron&&!okMat)
+      raisons.push({code:'patron',texte:'ce n’est ni une isolation ni une machine'});
+  }
+  if(nomEx&&(regle.materielExclu||[]).length){
+    let mat=[]; try{ mat=materielExercice(nomEx); }catch(e){ mat=[]; }
+    if(mat.some(m=>regle.materielExclu.indexOf(m)>=0))
+      raisons.push({code:'materiel',texte:'le matériel ne s’y prête pas'});
+  }
+
+  // ── LES SERIES CONCERNEES. Le champ de la table sert ici, sinon il ne
+  //    serait qu'un ornement dans un objet de configuration. ─────────────
+  const ms=String((ex&&ex.methodeSeries)||'').trim().toLowerCase();
+  if(regle.seriesConcernees==='derniere'&&/^toutes?$/.test(ms))
+    raisons.push({code:'series',texte:'elle est prévue pour la dernière série, pas pour toutes'});
+
+  // ── LE PLAFOND HEBDOMADAIRE, tous exercices confondus. ────────────────
+  const n=_methodesPosees(u,regle,ex,o);
+  if(regle.maxParSemaine>0&&n>=regle.maxParSemaine)
+    raisons.push({code:'frequence',
+      texte:'elle est déjà posée '+n+' fois cette semaine, le repère est '+regle.maxParSemaine});
+
+  if(!raisons.length) return {ok:true,regle:regle};
+  return {ok:false,regle:regle,raisons:raisons,
+    phrase:_phraseRefusMethode(regle,nomEx,av,raisons)};
+}
+// PURE. LA PHRASE. « Rest-pause en semaine 2 sur « Soulevé de terre » : on est
+// en accumulation, cet exercice charge la colonne. Aller à l'échec puis
+// relancer deux fois demande une technique intacte… »
+//
+// Deux temps, et l'ordre compte : D'ABORD OU L'ON EST — c'est ce que le coach
+// reconnait —, ENSUITE le motif de metier. L'inverse donnerait une lecon
+// avant un constat.
+//
+// ⚠ LE MOTIF N'EST PAS TOUJOURS AJOUTE, et c'est une correction. Il explique
+// POURQUOI la methode veut telle phase et tel type d'exercice : colle sous un
+// refus de FREQUENCE — « deja posee deux fois cette semaine » — il parlait
+// d'autre chose que du refus, et sous un refus de phase il repetait mot pour
+// mot le constat qui precede. Un texte qui se repete se lit une fois puis
+// plus du tout.
+const METH_RAISONS_SANS_MOTIF=Object.freeze(['frequence','series']);
+function _phraseRefusMethode(regle,nomEx,av,raisons){
+  const ou=[];
+  if(av&&av.semaine) ou.push('en semaine '+av.semaine);
+  if(nomEx) ou.push('sur « '+String(nomEx).trim()+' »');
+  const constat=raisons.map(r=>r.texte).join(', ');
+  const utile=raisons.some(r=>METH_RAISONS_SANS_MOTIF.indexOf(r.code)<0);
+  return regle.lib+(ou.length?' '+ou.join(' '):'')+' : '+constat+'.'
+    +(utile?' '+regle.motif:'');
+}
+// PURE. Combien de fois cette regle est deja posee dans les creneaux ACTIFS,
+// l'exercice en cours exclu. C'est la semaine du PROGRAMME : ce que le coach
+// a prescrit, pas ce que l'athlete a fait.
+//
+// ⚠ L'EDITEUR TRAVAILLE SUR progEx, PAS SUR sessions_config. Compter la seule
+// configuration enregistree ferait repondre « zero » a un coach en train de
+// poser sa troisieme methode dans le creneau ouvert : le plafond ne se serait
+// declenche qu'apres sauvegarde, c'est-a-dire trop tard pour l'avertir. Quand
+// l'appelant fournit le creneau en cours d'edition, il REMPLACE celui de la
+// configuration — on ne compte pas deux fois les memes exercices.
+function _methodesPosees(user,regle,exclure,options){
+  const u=_dossier(user);
+  if(!u) return 0;
+  const o=options||{};
+  try{ _aplatirSessionsConfig(u); }catch(e){}
+  const cfg=Array.isArray(u.sessions_config)?u.sessions_config:[];
+  const edite=(typeof o.creneauEdite==='number')?o.creneauEdite:null;
+  const listes=[];
+  for(let i=0;i<cfg.length;i++){
+    const sc=cfg[i];
+    if(edite!=null&&i===edite) continue;          // remplace par l'edition
+    if(!sc||!sc.active||!Array.isArray(sc.exercises)) continue;
+    listes.push(sc.exercises);
+  }
+  if(Array.isArray(o.exercicesEdites)) listes.push(o.exercicesEdites);
+  let n=0;
+  for(const l of listes)
+    for(const e of l){
+      if(!e||e===exclure) continue;
+      const r=regleMethode(e,u);
+      if(r&&r.cle===regle.cle) n++;
+    }
+  return n;
+}
+// PURE. LE COMPTEUR HEBDOMADAIRE, tous exercices et toutes methodes
+// confondus : la somme des couts de fatigue prescrits sur la semaine.
+function chargeMethodesSemaine(user){
+  const u=_dossier(user);
+  if(!u) return {total:0,detail:{},n:0};
+  try{ _aplatirSessionsConfig(u); }catch(e){}
+  const cfg=Array.isArray(u.sessions_config)?u.sessions_config:[];
+  const detail={}; let total=0, n=0;
+  for(const sc of cfg){
+    if(!sc||!sc.active||!Array.isArray(sc.exercises)) continue;
+    // UNE SEMAINE DE DECHARGE N'EST PAS UNE SEMAINE CHARGEE. Le creneau porte
+    // deja le drapeau : le compter reviendrait a signaler comme lourde une
+    // semaine dont tout le propos est d'alleger.
+    if(sc.deload) continue;
+    for(const e of (sc.exercises||[])){
+      const r=regleMethode(e,u);
+      if(!r) continue;
+      total+=Number(r.coutFatigue)||0; n++;
+      detail[r.cle]=(detail[r.cle]||0)+1;
+    }
+  }
+  return {total:total,detail:detail,n:n};
+}
+// PURE. La phrase de la fiche client, ou ''. UNE PHRASE, PAS UNE ALERTE : le
+// coach sait ce qu'il fait, il a juste besoin de le voir.
+function phraseChargeMethodes(user){
+  const c=chargeMethodesSemaine(user);
+  if(c.total<=METH_CHARGE_SEMAINE_MAX) return '';
+  return 'Semaine chargée en techniques d’intensification : '+c.n+' méthode'
+    +(c.n>1?'s':'')+' posée'+(c.n>1?'s':'')+', coût cumulé '+c.total+'.';
+}
+
+// ── LE PASSAGE OUTRE, ET SA TRACE ──────────────────────────────────────
+//
+// UN JOURNAL A PART, ET C'EST DELIBERE. `ecartsSeance` porte les
+// remplacements decides par l'ATHLETE debout dans sa salle ; `ajustHisto`
+// porte les ajustements de NUTRITION et se vide a douze entrees. Un coach qui
+// passe outre une regle d'emploi est un troisieme fait : le ranger dans l'un
+// des deux le rendrait illisible, et le plafond de douze le ferait disparaitre.
+const METH_FORCE_MAX=40;
+function forcerMethode(user,ex,evaluation){
+  const u=_dossier(user);
+  if(!u||!ex) return {ok:false};
+  const ev=evaluation||{};
+  if(!Array.isArray(u.methodesForcees)) u.methodesForcees=_tabBloc(u.methodesForcees);
+  u.methodesForcees.push({date:Date.now(),
+    methode:String(ex.methode||''),
+    regle:String((ev.regle&&ev.regle.cle)||''),
+    exercice:String(ex.name||''),
+    codes:(ev.raisons||[]).map(r=>String(r.code)).slice(0,6),
+    phrase:String(ev.phrase||'')});
+  if(u.methodesForcees.length>METH_FORCE_MAX)
+    u.methodesForcees=u.methodesForcees.slice(-METH_FORCE_MAX);
+  // LE DEPASSEMENT SE POSE SUR L'EXERCICE, pas seulement dans le journal :
+  // sans ca l'editeur reposerait la question a chaque ouverture, et le coach
+  // finirait par ne plus la lire.
+  ex.methodeForcee=true;
+  try{ saveUser(); }catch(e){}
+  return {ok:true};
+}
+// PURE. Les depassements des sept derniers jours, pour la fiche client.
+function resumeMethodesForcees(user,maintenant){
+  const u=_dossier(user);
+  const t=Number(maintenant)||Date.now();
+  const l=_tabBloc(u&&u.methodesForcees).filter(x=>x&&x.date>t-7*86400000);
+  return l;
+}
 // LA LISTE DES TECHNIQUES EST L'OUTIL DU COACH, PAS CELUI DE L'ATHLÈTE.
 // Demande de Kevin, 25/08/2026 : « la liste des techniques d'intensification
 // doit être disponible uniquement aux coachs ; les athlètes sont obligés de
@@ -28077,11 +28420,80 @@ function _selecteurTechnique(ex,i){
     ${m?`<div style="margin-top:7px">
       <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Sur quelle(s) série(s)</label>
       <input value="${escapeHtml((ex&&ex.methodeSeries)||'')}" maxlength="40"
-        onchange="_progExDirty=true;progEx[${i}].methodeSeries=this.value"
+        onchange="_progExDirty=true;progEx[${i}].methodeSeries=this.value;renderProgEx()"
         placeholder="dernière · 3 et 4 · toutes" class="f-sm" style="margin-top:4px">
     </div>`:''}
+    ${_blocRegleMethode(ex,i)}
     ${_avertissementTechnique(ex,i)}
   </div>`;
+}
+// L'EVALUATION TELLE QUE L'EDITEUR LA POSE. Elle porte le contexte que les
+// fonctions pures ne peuvent pas deviner : sur QUEL athlete on prescrit, et
+// quel creneau est ouvert — celui de l'ecran remplace celui de la
+// configuration enregistree, sinon le plafond hebdomadaire ne se declencherait
+// qu'apres sauvegarde.
+function _evaluerMethodeEditeur(ex){
+  const cible=_cibleContraintes();
+  // AUCUN ATHLETE : un modele de programme n'est rattache a personne. Pas de
+  // bloc, pas de creneaux, pas de grille — donc rien a evaluer, et surtout
+  // rien a refuser. Meme regle que _blocAvertissementContrainte juste a cote.
+  if(!cible) return {ok:true,regle:null};
+  let idx=null;
+  try{ if(typeof _progEditorCtx.sessionIdx==='number'
+          &&_progEditorCtx.mode!=='template') idx=_progEditorCtx.sessionIdx; }catch(e){}
+  try{
+    return evaluerMethode(ex,cible,
+      {creneauEdite:idx,exercicesEdites:(typeof progEx!=='undefined'?progEx:null)});
+  }catch(e){ return {ok:true,regle:null}; }
+}
+// LE BLOC DE REFUS. Il DIT, il propose de passer outre, et il ne bloque rien
+// d'autre : le selecteur reste utilisable, la methode reste posee.
+function _blocRegleMethode(ex,i){
+  if(!ex||!ex.methode) return '';
+  // DEPASSEMENT DEJA ASSUME : on rappelle la decision au lieu de reposer la
+  // question a chaque ouverture de l'editeur — meme geste que la
+  // justification de contrainte, quinze lignes plus bas.
+  if(ex.methodeForcee){
+    return '<div style="margin-top:6px;background:var(--surface-2);border:1px solid var(--border);'
+      +'border-radius:var(--r-2);padding:8px 10px;font-size:var(--fs-2xs);color:var(--sub);line-height:1.55">'
+      +'Règle d’emploi passée outre. C’est enregistré dans la fiche.'
+      +'<button onclick="_annulerForcageMethode('+i+')" style="background:none;border:none;padding:0 0 0 6px;'
+      +'color:var(--link);font-size:var(--fs-2xs);cursor:pointer">revoir</button></div>';
+  }
+  const ev=_evaluerMethodeEditeur(ex);
+  if(ev.ok) return '';
+  return '<div style="margin-top:6px;background:var(--warning-bg);border:1px solid var(--warning-border);'
+    +'border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-2xs);color:var(--text);line-height:1.6">'
+    +escapeHtml(ev.phrase)
+    +'<div style="margin-top:7px"><button onclick="_forcerMethode('+i+')" '
+    +'style="background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);'
+    +'font-family:inherit;font-size:var(--fs-2xs);padding:5px 9px;cursor:pointer">Poser quand même</button></div>'
+    +'</div>';
+}
+function _forcerMethode(i){
+  const ex=progEx&&progEx[i];
+  if(!ex) return false;
+  const cible=_cibleContraintes();
+  const ev=_evaluerMethodeEditeur(ex);
+  _progExDirty=true;
+  // LE JOURNAL VIT SUR LE DOSSIER DE L'ATHLETE, pas sur le brouillon
+  // d'editeur : c'est une decision prise SUR LUI, et elle doit survivre a
+  // l'abandon des modifications en cours.
+  if(cible) try{ forcerMethode(cible,ex,ev); }catch(e){}
+  ex.methodeForcee=true;
+  renderProgEx();
+  return true;
+}
+function _annulerForcageMethode(i){
+  const ex=progEx&&progEx[i];
+  if(!ex) return false;
+  _progExDirty=true;
+  delete ex.methodeForcee;
+  // LA TRACE RESTE. Revoir sa decision ne l'efface pas du journal : le
+  // depassement a eu lieu, et le journal dit ce qui s'est passe, pas ce que
+  // l'on pense aujourd'hui.
+  renderProgEx();
+  return true;
 }
 // Avertissements de l'éditeur. Ils DÉCRIVENT une situation inhabituelle, ils
 // n'empêchent rien : c'est le coach qui décide.
@@ -28116,6 +28528,10 @@ function _progExTechnique(i,cle){
   // qu'un habillage.
   if(!peutChoisirTechnique()) return;
   _progExDirty=true;
+  // ⚠ LE DEPASSEMENT PORTAIT SUR L'ANCIENNE METHODE. Le garder ferait taire
+  // la regle de la NOUVELLE, qui n'a jamais ete evaluee : le coach aurait
+  // passe outre une chose et obtenu le silence sur une autre.
+  delete progEx[i].methodeForcee;
   if(cle&&TECHNIQUES[cle]){
     progEx[i].methode=cle;
     // Superset et triset SONT le chaînage : on le pose, plutôt que d'ajouter
@@ -32479,8 +32895,15 @@ function banniereTechnique(ex,idx){
   // première chose à savoir quand on la lit debout entre deux séries.
   const _msTxt=String((ex&&ex.methodeSeries)||'').trim();
   const compteur=(fam==='rest_pause'||fam==='myo_reps')?_compteurRelances(idx):'';
+  // LA CONSIGNE D'EXECUTION, EN UNE PHRASE, ET AVANT LE RESTE. La
+  // description du catalogue est un paragraphe : lu debout entre deux séries,
+  // il n'est pas lu. Une méthode mal exécutée ne vaut pas mieux qu'une méthode
+  // absente. Le paragraphe reste dessous — on ajoute, on ne retire rien.
+  const _cons=(()=>{ try{ const r=regleMethode(ex,currentUser); return (r&&r.consigne)||''; }
+                     catch(e){ return ''; } })();
   return `<div style="background:${c[0]}22;border:1px solid ${c[0]};border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-sm);line-height:1.6;color:var(--text-strong)">
     <strong style="color:${c[1]}">${escapeHtml(m.nom)}${m.sous?' ('+escapeHtml(m.sous)+')':''}${_msTxt?' · séries : '+escapeHtml(_msTxt):''} :</strong>
+    ${_cons?`<div style="font-weight:700;color:var(--text);margin:4px 0 5px">${escapeHtml(_cons)}</div>`:''}
     ${escapeHtml(m.desc)}
     ${m.video?`<a href="${safeUrl(m.video)}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap"> · vidéo</a>`:''}
     ${compteur}
@@ -34915,6 +35338,36 @@ function _ligneEtat(x){
 // Uniquement ce qui appelle une décision : exercices en plateau ou en recul,
 // et muscles dont plusieurs exercices primaires sont bloqués. Ce qui progresse
 // n'a pas besoin du coach.
+// LA LIGNE DES METHODES. UNE PHRASE, PAS UNE ALERTE ROUGE : le coach sait ce
+// qu'il fait, il a juste besoin de le voir. Aucune couleur d'alarme, aucun
+// pictogramme — le gris du texte secondaire, comme les ecarts au programme.
+function renderMethodesCoach(c){
+  const z=document.getElementById('ccd-methodes');
+  if(!z) return false;
+  let phrase='', forces=[];
+  try{ phrase=phraseChargeMethodes(c); }catch(e){ phrase=''; }
+  try{ forces=resumeMethodesForcees(c); }catch(e){ forces=[]; }
+  if(!phrase&&!forces.length){ z.innerHTML=''; return true; }
+  let h='<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-3);padding:11px 13px;margin-bottom:16px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
+    +'text-transform:uppercase;margin-bottom:5px">Techniques d’intensification</div>';
+  if(phrase)
+    h+='<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
+      +escapeHtml(phrase)+'</div>';
+  if(forces.length){
+    h+='<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;margin-top:'
+      +(phrase?'7px':'0')+'">'
+      +forces.length+' règle'+(forces.length>1?'s':'')+' d’emploi passée'
+      +(forces.length>1?'s':'')+' outre cette semaine :</div>';
+    for(const f of forces.slice(-4))
+      h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:3px">'
+        +'· '+escapeHtml(f.exercice||'—')+' — '+escapeHtml(f.regle||'')+'</div>';
+  }
+  h+='</div>';
+  z.innerHTML=h;
+  return true;
+}
 function renderPlateauxCoach(c){
   const z=document.getElementById('ccd-plateaux');
   if(!z) return;
