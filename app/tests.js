@@ -15963,6 +15963,198 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LE TEMPO : LE FORMAT, LE GUIDE, LA MESURE ══════
+        (()=>{
+          ok('Les deux écritures normalisent à la même forme',(()=>{
+            // « 3-1-1-0 » et « 3110 » sont la MÊME consigne. Deux formes en
+            // base, ce sont deux consignes qui ne se comparent plus.
+            for(const t of ['3-1-1-0','3110','3 1 1 0','3/1/1/0','3.1.1.0'])
+              if(tempoNormalise(t)!=='3-1-1-0') return _echec(t+' → '+tempoNormalise(t));
+            // La forme compacte est de QUATRE CHIFFRES, un par phase : elle ne
+            // peut pas porter de valeur à deux chiffres. « 1010 » est
+            // 1-0-1-0, jamais 10-10, et cinq chiffres ne sont pas un tempo.
+            if(tempoNormalise('1010')!=='1-0-1-0') return _echec('1010 mal lu');
+            if(tempoNormalise('31100')!==null) return _echec('cinq chiffres acceptés');
+            // La forme séparée, elle, porte les valeurs à deux chiffres.
+            if(tempoNormalise('10-0-2-0')!=='10-0-2-0') return _echec('10-0-2-0 refusé');
+            // Ce qui ne prescrit rien n'est pas une consigne.
+            if(tempoNormalise('0000')!==null) return _echec('0000 accepté');
+            if(tempoNormalise('16-1-1-0')!==null) return _echec('16 s sur une phase accepté');
+            if(tempoNormalise('3-1-1')!==null) return _echec('trois temps acceptés');
+            if(tempoSecondes('3110').join(',')!=='3,1,1,0') return _echec('secondes fausses');
+            return tempoDureeRep('3-1-1-0')===5
+              ?true:_echec('durée de rep : '+tempoDureeRep('3-1-1-0'));})());
+
+          ok('Un tempo en texte libre n\'est JAMAIS réinterprété',(()=>{
+            // ⚠ RÉINTERPRÉTER APRÈS COUP CE QU'UN COACH A ÉCRIT À LA MAIN,
+            // c'est lui prêter une consigne qu'il n'a pas donnée. Le bloc
+            // découpait n'importe quel texte sur ses chiffres : « 2 séries à
+            // 3 s, 1 min de pause » ressortait en « 2 s pour descendre… ».
+            const libre='2 s en bas, explosif';
+            if(tempoNormalise(libre)!==null) return _echec('le texte libre est normalisé');
+            // AFFICHÉ TEL QUEL, et sans le détail chiffré qui l'inventerait.
+            if(tempoAffiche({tempo:libre})!==libre) return _echec('l’affichage a changé le texte');
+            const h=blocTempo({tempo:libre});
+            if(h.indexOf('2 s en bas, explosif')<0) return _echec('la consigne a disparu');
+            // ⚠ ON CHERCHE LA GLOSE INVENTÉE, PAS LE TEXTE DU COACH. Le
+            // premier jet cherchait « en bas, » — que la consigne elle-même
+            // contient : la sonde attrapait ce qu'elle affichait, et tombait
+            // au rouge sur du code juste. On vise donc les tournures que SEUL
+            // le détail chiffré produit.
+            if(/pour descendre|pour monter|s en haut/.test(h))
+              return _echec('un détail chiffré a été inventé');
+            // Et un texte qui contient QUATRE nombres n'en devient pas un
+            // tempo pour autant.
+            const piege='2 séries à 3 s, 1 min, 4 fois';
+            if(tempoNormalise(piege)!==null) return _echec('« '+piege+' » lu comme un tempo');
+            if(/pour descendre/.test(blocTempo({tempo:piege})))
+              return _echec('« '+piege+' » a reçu un détail chiffré');
+            // AUCUNE CONVERSION AUTOMATIQUE : la normalisation n'a qu'un seul
+            // appelant, la saisie du coach. Nulle part à la lecture.
+            const src=_prodSrc();
+            const n=(src.match(/tempoNormalise\(/g)||[]).length;
+            // 1 définition + tempoSecondes + _progTempoSaisie.
+            if(n>3) return _echec('tempoNormalise appelé '+n+' fois : une conversion se cache');
+            return src.indexOf('function _progTempoSaisie')>=0
+              ?true:_echec('la saisie du coach a disparu');})());
+
+          ok('tut null n\'est pas tut 0',(()=>{
+            // « Pas mesuré » et « zéro seconde sous tension » sont deux faits
+            // différents. Les confondre ferait entrer des zéros dans la
+            // moyenne qui juge un plateau, et tirerait tout vers le bas.
+            if(tutParRep({reps:'10'})!==null) return _echec('une série sans tut rend un nombre');
+            if(tutParRep({tut:null,reps:'10'})!==null) return _echec('tut null rend un nombre');
+            if(tutParRep({tut:0,reps:'10'})!==null) return _echec('tut 0 rend un nombre');
+            // Les bornes du téléphone posé : hors plage, on écrit null.
+            if(tutBorne(0)!==null||tutBorne(2)!==null) return _echec('un TUT trop court est retenu');
+            if(tutBorne(601)!==null) return _echec('un chronomètre oublié est retenu');
+            if(tutBorne(45.4)!==45) return _echec('45,4 s → '+tutBorne(45.4));
+            // ET LE null REMONTE : une séance sans mesure ne pèse pas zéro.
+            const sess={date:Date.now(),slot:1,name:'A',
+              data:{'Dév':{sets:[{weight:'80',reps:'10',done:true}]}}};
+            if(_tutSeance(sess,'Dév')!==null) return _echec('une séance sans mesure rend un nombre');
+            // Une série neuve n'hérite pas de la mesure de la précédente.
+            const s=_prodSrc();
+            const i=s.indexOf('function _nouvelleSerie');
+            return /delete s\.tut/.test(s.slice(i,i+1400))
+              ?true:_echec('le TUT de la série précédente est recopié');})());
+
+          ok('La comparaison porte sur tutParRep, jamais sur le TUT brut',(()=>{
+            // ⚠ LE CAS QUI SÉPARE LES DEUX, et il n'y en a qu'un qui compte :
+            // MÊME temps par répétition, MOINS de répétitions. Le TUT brut
+            // chute de 40 % sans que rien n'ait changé sous la barre. Lu sur
+            // le TUT brut, ce dossier déclencherait une « progression
+            // apparente » qui n'existe pas.
+            const J=n=>Date.now()-n*86400000;
+            const S=(j,kg,tut,reps)=>({date:J(j),slot:1,name:'A',
+              data:{'Dév':{sets:[{weight:String(kg),reps:String(reps),tut:tut,done:true}]}}});
+            const moinsDeReps=[S(26,100,40,10),S(22,100,40,10),S(6,110,24,6),S(2,112,24,6)];
+            if(tensionEnBaisse(moinsDeReps,'Dév',1,'A')!==null)
+              return _echec('le TUT brut a été comparé : moins de reps a suffi');
+            // LE VRAI CAS, lui, est vu : 4 s/rep → 2,4 s/rep, charge en hausse.
+            const vrai=[S(26,100,40,10),S(22,100,40,10),S(6,110,24,10),S(2,112,24,10)];
+            const t=tensionEnBaisse(vrai,'Dév',1,'A');
+            if(!t) return _echec('la baisse réelle n’est pas vue');
+            if(Math.abs(t.baisse-0.4)>0.001) return _echec('baisse mesurée à '+t.baisse);
+            // Charge STABLE : des séries plus courtes sans charge en hausse ne
+            // sont pas une progression apparente — il n'y a pas de progression.
+            const plat=[S(26,100,40,10),S(22,100,40,10),S(6,100,24,10),S(2,98,24,10)];
+            if(tensionEnBaisse(plat,'Dév',1,'A')) return _echec('sans hausse de charge, ça sort');
+            // Sous le seuil de 25 % : rien.
+            const petite=[S(26,100,40,10),S(22,100,40,10),S(6,110,32,10),S(2,112,32,10)];
+            if(tensionEnBaisse(petite,'Dév',1,'A')) return _echec('20 % de baisse déclenche');
+            // Aucune mesure : rien, et surtout pas un zéro.
+            const sans=[S(26,100,null,10),S(22,100,null,10),S(6,110,null,10),S(2,112,null,10)];
+            if(tensionEnBaisse(sans,'Dév',1,'A')) return _echec('sans mesure, ça sort');
+            // ET LA DÉTECTION DE PLATEAU REQUALIFIE : le même dossier passe de
+            // « progression » à « plateau », et il porte sa cause.
+            const u={email:'tut@t.fr',sessions:vrai};
+            const e=_calculEtat(vrai,'Dév',1,'A',u);
+            if(e.etat!=='plateau') return _echec('l’état reste « '+e.etat+' »');
+            if(e.cause!=='tension') return _echec('la cause n’est pas nommée');
+            if(_calculEtat(sans,'Dév',1,'A',u).etat!=='progression')
+              return _echec('sans mesure, l’état a bougé quand même');
+            // LA PHRASE DU COACH LE DIT EN CLAIR.
+            const p=phraseTensionEnBaisse('Développé');
+            if(!/monte en charge/.test(p)||!/raccourcissent/.test(p)||!/tension baisse/.test(p))
+              return _echec('la phrase ne dit plus les deux mouvements : '+p);
+            // ET L'ATHLÈTE N'A PAS DROIT À UNE PHRASE FAUSSE : « pas de
+            // nouveau maximum » serait un mensonge, sa charge monte.
+            const pa=_phraseEtat({etat:'plateau',cause:'tension',joursDepuisRecord:30},u);
+            return /nouveau maximum/.test(pa)
+              ?_echec('l’athlète lit « pas de nouveau maximum » alors que sa charge monte')
+              :true;})());
+
+          ok('AUCUN graphique de TUT : la donnée qualifie, elle ne se contemple pas',(()=>{
+            // Une courbe de temps sous tension inviterait à optimiser le
+            // chiffre, et on obtiendrait des séries lentes pour la courbe.
+            const src=_prodSrc();
+            if(/_sparkline\([^)]*tut/i.test(src)) return _echec('une sparkline de TUT existe');
+            if(/points:.*tut|tutParRep.*map\(/i.test(src))
+              return _echec('une série de points de TUT est construite');
+            // Le seul usage : qualifier un plateau.
+            const n=(src.match(/tensionEnBaisse\(/g)||[]).length;
+            // 1 définition + 1 appel dans _calculEtat.
+            return n<=2?true:_echec('tensionEnBaisse appelé '+n+' fois');})());
+
+          ok('Le guide est coupé par défaut, et rien ne le démarre tout seul',(()=>{
+            // Un métronome imposé sur chaque série est insupportable en trois
+            // séances : on l'aurait désactivé une fois pour toutes, et la
+            // mesure serait partie avec.
+            if(_tempoEtat.actif!==false) return _echec('le guide tourne au chargement');
+            if(_tempoEtat.guide!==false) return _echec('le guide est armé au chargement');
+            // TOUT DÉMARRAGE EST UN APPUI. Aucun appel de tempoDemarrer qui ne
+            // soit un onclick — ni depuis renderSets, ni depuis toggleSet, ni
+            // à l'ouverture de la séance.
+            const src=_prodSrc();
+            const lignes=src.split(/\r?\n/).filter(l=>l.indexOf('tempoDemarrer(')>=0);
+            if(lignes.length<2) return _echec('le démarrage a disparu de la source');
+            for(const l of lignes){
+              if(/function tempoDemarrer/.test(l)) continue;
+              if(l.indexOf('onclick=')>=0) continue;
+              return _echec('tempoDemarrer appelé hors d’un appui : '+l.trim().slice(0,70));
+            }
+            // ET LA MESURE MARCHE SANS LE GUIDE : le chronomètre est un geste
+            // séparé, appelé avec guide=false.
+            return /tempoDemarrer\([^)]*,false\)/.test(src)
+              ?true:_echec('le chronomètre seul n’existe plus');})());
+
+          ok('Sans navigator.vibrate, le guide visuel reste et rien ne lève',(()=>{
+            // iOS n'a pas l'API. Le repli est SILENCIEUX : annoncer « votre
+            // appareil ne vibre pas » à chaque série serait un reproche fait
+            // au téléphone.
+            //
+            // ⚠ vibrate VIT SUR Navigator.prototype. Un `delete
+            // navigator.vibrate` ne retire rien, et la sonde mesurerait un
+            // iOS qui vibre encore — c'est ce qui est arrivé au premier jet.
+            //
+            // ET IL FAUT RETIRER LES DEUX. Une assertion plus bas dans ce
+            // fichier fait `navigator.vibrate=v` pour se restaurer, ce qui
+            // pose une propriété PROPRE sur l'instance. Au deuxième passage de
+            // la suite, retirer la seule du prototype ne cachait plus rien :
+            // cette assertion tombait au rouge en passe 2 et 3, en fantôme.
+            const d=Object.getOwnPropertyDescriptor(Navigator.prototype,'vibrate');
+            const di=Object.getOwnPropertyDescriptor(navigator,'vibrate');
+            try{
+              delete Navigator.prototype.vibrate;
+              try{ delete navigator.vibrate; }catch(e){}
+              if(tempoVibrationDisponible()!==false)
+                return _echec('la vibration est encore annoncée disponible');
+              // _tempoVibrer rend false et ne lève pas.
+              if(_tempoVibrer(60)!==false) return _echec('_tempoVibrer prétend avoir vibré');
+              // Le point visuel est construit par la bande, sans dépendre de
+              // l'API : c'est lui qui reste sur iOS.
+              const s=String(_majBandeTempo);
+              if(s.indexOf('tempo-pt')<0) return _echec('le guide visuel a disparu');
+              if(/vibrate|vibration/i.test(s))
+                return _echec('la bande dépend de la vibration pour s’afficher');
+              return true;
+            } finally {
+              if(d) Object.defineProperty(Navigator.prototype,'vibrate',d);
+              if(di) Object.defineProperty(navigator,'vibrate',di);
+            }})());
+        })();
+
         // ══════ L'ÉCHÉANCE ══════
         (()=>{
           const J=n=>Date.now()+n*86400000;
@@ -30761,10 +30953,16 @@ async function testExercices(){
           return _echec('moins de trois champs courts marques');
         // ET AUCUNE CLEF DE progEx N'A BOUGE : le correctif est une mise en
         // page, il ne touche ni aux handlers ni a ce qui est ecrit.
-        for(const k of ['].tempo=this.value','].materiel=this.value',
+        for(const k of ['].materiel=this.value',
                         '].repos=this.value','].charge=this.value'])
           if(s.indexOf(k)<0) return _echec('handler perdu : '+k);
-        return true;})());
+        // LE TEMPO A CHANGÉ DE HANDLER, ET C'EST VOULU : il est le seul champ
+        // qui se normalise à l'enregistrement (« 3110 » et « 3-1-1-0 » sont
+        // la même consigne), ce qu'un `progEx[i].tempo=this.value` en attribut
+        // ne peut pas faire. La clef écrite, elle, n'a pas bougé.
+        if(s.indexOf('_progTempoSaisie(')<0) return _echec('la saisie de tempo a disparu');
+        return /progEx\[i\]\.tempo=val/.test(String(_progTempoSaisie))
+          ?true:_echec('_progTempoSaisie n’écrit plus dans progEx[i].tempo');})());
 
       // B2.F1 — LE TIROIR DE DETAIL. Ouvrir un athlete remplacait
       // s-coach-home par s-coach-client : la liste disparaissait, et revenir
@@ -31891,7 +32089,10 @@ async function testExercices(){
     ok('Rattrapage de saisie : c\'est la validation la PLUS RÉCENTE qui compte',
        _reposReelDepuis(_rpSets(1000000,1100000,null),2,1160000)===60);
 
-    // ── Tempo : consigne, jamais saisie ──
+    // ── Tempo : une consigne affichée, et depuis le lot « tempo » un guide
+    //    facultatif à côté. blocTempo, lui, n'a pas bougé de rôle : il
+    //    AFFICHE. Le chronomètre et le métronome vivent dans _majBandeTempo,
+    //    hors de ce bloc — c'est ce que garde l'assertion « jamais décompté ».
     ok('Critère 8 : le tempo est expliqué',(()=>{
       const h=blocTempo({tempo:'3-1-1-0'});
       return /Tempo 3-1-1-0/.test(h)&&/3 s pour descendre/.test(h)&&/1 s en bas/.test(h)
@@ -31899,9 +32100,19 @@ async function testExercices(){
     ok('Critère 8 : aucun champ de saisie de tempo en séance',
        !/<input|<select|onchange/.test(blocTempo({tempo:'3-1-1-0'})));
     ok('Sans tempo, aucun bloc',blocTempo({})===''&&blocTempo({tempo:'   '})==='');
-    ok('Un tempo libre est affiché tel quel avec une explication générique',(()=>{
+    ok('Un tempo libre est affiché tel quel, SANS glose de format',(()=>{
+      // ELLE ATTENDAIT « excentrique · pause basse · concentrique · pause
+      // haute, en secondes » sous un texte libre. Or c'est précisément la
+      // glose qui prête au coach un format qu'il n'a pas employé : sous
+      // « lent », elle annonçait quatre temps qui n'existent pas. Elle est
+      // remplacée par une ligne qui ne décrit rien — « Consigne de ton
+      // coach » — et le détail chiffré reste réservé aux tempos normalisés.
       const h=blocTempo({tempo:'lent'});
-      return /lent/.test(h)&&/excentrique/.test(h);})());
+      if(!/lent/.test(h)) return _echec('la consigne du coach a disparu');
+      if(/excentrique|pause basse|en secondes/.test(h))
+        return _echec('un format est encore annoncé sous un texte libre');
+      return /Consigne de ton coach/.test(h)
+        ?true:_echec('plus rien n’accompagne la consigne');})());
     ok('Le tempo n\'est jamais décompté ni mesuré',
        !/setInterval|Date\.now|reposFin/.test(String(blocTempo)));
 

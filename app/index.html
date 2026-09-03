@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1115';
+window.RC_BUILD='1116';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -27726,16 +27726,199 @@ function _majSonReglages(){
 // menti : on repeint depuis l'échéance, qui est la seule source de vérité.
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _peindreRepos(); });
 
-// Tempo : une CONSIGNE du coach, affichée telle quelle. Aucune saisie,
-// aucune mesure, aucun décompte — mesurer un temps sous tension déclaratif
-// coûterait une interaction par série pour une donnée sans valeur.
+// ══════════════ LE TEMPO ═══════════════════════════════════════════════
+//
+// CE COMMENTAIRE DISAIT L'INVERSE, ET IL EST REVU PLUTOT QUE LAISSE EN PLACE :
+// « aucune saisie, aucune mesure, aucun decompte — mesurer un temps sous
+// tension declaratif couterait une interaction par serie pour une donnee sans
+// valeur ». L'argument tenait tant que la mesure etait DECLARATIVE. Elle ne
+// l'est plus : le chronometre part et s'arrete au meme geste que le guide, et
+// le tempo prescrit devient executable au lieu de rester un texte que
+// personne ne suit. Ce qui reste vrai de l'ancien arbitrage est garde : le
+// guide est facultatif, coupe par defaut, et la mesure ne coute aucun champ a
+// remplir.
+//
+// ── LE FORMAT ──────────────────────────────────────────────────────────
+//
+// Quatre temps, en secondes : excentrique, pause basse, concentrique, pause
+// haute. Deux ecritures acceptees, « 3-1-1-0 » et « 3110 », normalisees a la
+// meme forme A L'ENREGISTREMENT.
+//
+// ⚠ ON NE CONVERTIT RIEN TOUT SEUL. Les tempos deja saisis en texte libre
+// sont conserves et affiches TELS QUELS. Reinterpreter apres coup ce qu'un
+// coach a ecrit a la main, c'est lui preter une consigne qu'il n'a pas
+// donnee — et « 2 s en bas, explosif » ne se replie sur aucun quadruplet sans
+// qu'on invente le reste.
+const TEMPO_PHASES=Object.freeze([
+  {cle:'exc', lib:'Descente'},
+  {cle:'bas', lib:'Pause basse'},
+  {cle:'con', lib:'Montée'},
+  {cle:'haut',lib:'Pause haute'}
+]);
+const TEMPO_S_MAX=15;              // 15 s sur une phase : c'est une faute de saisie
+
+// PURE. Rend la forme canonique « 3-1-1-0 », ou null si ce n'est pas un tempo
+// normalise. null n'est pas une erreur : c'est un texte libre, et il a le
+// droit d'exister.
+function tempoNormalise(txt){
+  const t=String(txt==null?'':txt).trim();
+  if(!t) return null;
+  let n=null;
+  // FORME COMPACTE : quatre chiffres colles, un par phase. Elle ne peut pas
+  // porter de valeur a deux chiffres — « 1010 » est 1-0-1-0, jamais 10-10.
+  if(/^[0-9]{4}$/.test(t)) n=t.split('').map(Number);
+  // FORME SEPAREE : n'importe quel separateur non chiffre, valeurs libres.
+  else if(/^[0-9]+([^0-9]+[0-9]+){3}$/.test(t))
+    n=t.split(/[^0-9]+/).filter(x=>x!=='').map(Number);
+  if(!n||n.length!==4) return null;
+  if(n.some(x=>!isFinite(x)||x<0||x>TEMPO_S_MAX)) return null;
+  // Un tempo entierement a zero ne prescrit rien : ce n'est pas une consigne.
+  if(n.every(x=>x===0)) return null;
+  return n.join('-');
+}
+// PURE. Les quatre durees en secondes, ou null. C'est ce que lit le guide.
+function tempoSecondes(txt){
+  const c=tempoNormalise(txt);
+  return c?c.split('-').map(Number):null;
+}
+// PURE. Duree d'une repetition complete, en secondes.
+function tempoDureeRep(txt){
+  const s=tempoSecondes(txt);
+  return s?s.reduce((a,b)=>a+b,0):null;
+}
+// PURE. Ce que le coach a ecrit, TEL QU'IL L'A ECRIT. La normalisation ne
+// s'applique qu'a la SAISIE ; l'affichage, lui, ne trahit jamais la source.
+function tempoAffiche(ex){
+  return String((ex&&ex.tempo)||'').trim();
+}
+
+// ── LA MESURE : LE TEMPS SOUS TENSION ──────────────────────────────────
+//
+// tut est en SECONDES, et il vaut null tant que rien n'a ete mesure. null
+// n'est pas 0 : « pas mesure » et « zero seconde sous tension » sont deux
+// faits differents, et les confondre ferait entrer des zeros dans une moyenne
+// qui sert a juger un plateau.
+//
+// LES BORNES SONT LA POUR LE TELEPHONE POSE. Un chronometre qu'on oublie
+// d'arreter rend vingt minutes de tension sur une serie de dix : on ecrit
+// null plutot qu'un chiffre faux, exactement comme _reposReelDepuis le fait
+// deja pour le repos reel.
+const TUT_MIN_S=3;
+const TUT_MAX_S=600;
+function tutBorne(sec){
+  const v=Number(sec);
+  if(!isFinite(v)) return null;
+  const s=Math.round(v);
+  if(s<TUT_MIN_S||s>TUT_MAX_S) return null;
+  return s;
+}
+// PURE. LA VALEUR COMPARABLE D'UNE SEMAINE A L'AUTRE. Le TUT brut suit le
+// nombre de repetitions : douze reps au lieu de dix allongent la serie sans
+// que rien n'ait change sous la barre. C'est le temps PAR REPETITION qui dit
+// quelque chose, et c'est lui — jamais le TUT brut — qui entre dans la
+// comparaison de la detection de plateau.
+function tutParRep(s){
+  if(!s||s.tut==null) return null;
+  const t=Number(s.tut);
+  if(!isFinite(t)||t<=0) return null;
+  // Les MEMES repetitions que la performance : repsDone si elle existe, la
+  // prescription sinon. Deux lectures de reps finiraient par diverger.
+  const r=_perfReps(s);
+  if(!isFinite(r)||!(r>0)) return null;
+  return t/r;
+}
+// PURE. Le temps par repetition d'une seance : moyenne des series mesurees.
+// Rend null quand aucune serie n'a ete mesuree — et non zero.
+function _tutSeance(sess,exNom){
+  const d=_dataDeSeance(sess,exNom);
+  if(!d||!Array.isArray(d.sets)) return null;
+  const v=[];
+  for(const s of d.sets){
+    if(!s||s.done!==true) continue;
+    const x=tutParRep(s);
+    if(x!=null) v.push(x);
+  }
+  if(!v.length) return null;
+  return v.reduce((a,b)=>a+b,0)/v.length;
+}
+// PURE. La charge de reference d'une seance : la plus lourde serie validee.
+function _chargeSeance(sess,exNom){
+  const d=_dataDeSeance(sess,exNom);
+  if(!d||!Array.isArray(d.sets)) return null;
+  let max=0;
+  for(const s of d.sets){
+    if(!s||s.done!==true) continue;
+    const w=parseFloat(s.weight);
+    if(w>max) max=w;
+  }
+  return max>0?max:null;
+}
+
+// ══ LA PROGRESSION APPARENTE ═══════════════════════════════════════════
+//
+// LE SEUL USAGE DE LA DONNEE, ET IL SUFFIT. La charge monte, les series
+// raccourcissent : l'athlete a change son execution, pas sa force. Le chiffre
+// progresse pendant que la tension baisse — c'est un plateau que la mesure de
+// charge, seule, declare en progression.
+//
+// AUCUN GRAPHIQUE DE TUT NULLE PART. La donnee sert a QUALIFIER un plateau,
+// pas a etre contemplee : une courbe de temps sous tension inviterait a
+// optimiser le chiffre, et on obtiendrait des series lentes pour la courbe.
+const TUT_BAISSE_SEUIL=0.25;       // 25 %
+const TUT_FENETRE_JOURS=28;        // quatre semaines
+const TUT_MIN_SEANCES=2;           // deux seances mesurees de chaque cote
+
+// PURE. Rend {baisse, chargeHausse, tutRecent, tutAncien, n} quand le cas est
+// avere, sinon null. Prend une LISTE de seances, comme _calculEtat : c'est ce
+// qui permet de rejouer le calcul sans la derniere seance.
+function tensionEnBaisse(seances,exNom,slot,progName,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const pts=[];
+  for(const sess of (seances||[])){
+    if(!sess||!sess.date||sess.deload) continue;
+    if(!_memeCreneau(sess,slot,progName)) continue;
+    const tp=_tutSeance(sess,exNom);
+    const ch=_chargeSeance(sess,exNom);
+    // UNE SEANCE SANS MESURE EST ECARTEE, PAS COMPTEE ZERO.
+    if(tp==null||ch==null) continue;
+    pts.push({date:sess.date,tut:tp,charge:ch});
+  }
+  pts.sort((a,b)=>a.date-b.date);
+  // Quatre semaines, coupees en deux moities de deux semaines.
+  const debut=t-TUT_FENETRE_JOURS*86400000;
+  const milieu=t-(TUT_FENETRE_JOURS/2)*86400000;
+  const anciens=pts.filter(p=>p.date>=debut&&p.date<milieu);
+  const recents=pts.filter(p=>p.date>=milieu);
+  if(anciens.length<TUT_MIN_SEANCES||recents.length<TUT_MIN_SEANCES) return null;
+  const moy=a=>a.reduce((x,p)=>x+p.tut,0)/a.length;
+  const moyC=a=>a.reduce((x,p)=>x+p.charge,0)/a.length;
+  const tA=moy(anciens), tR=moy(recents);
+  if(!(tA>0)) return null;
+  const baisse=(tA-tR)/tA;
+  const chargeHausse=moyC(recents)>moyC(anciens);
+  if(!chargeHausse||baisse<=TUT_BAISSE_SEUIL) return null;
+  return {baisse:baisse,chargeHausse:true,
+    tutRecent:tR,tutAncien:tA,n:anciens.length+recents.length};
+}
+// PURE. La phrase du coach, EN CLAIR. Elle nomme les deux mouvements
+// contraires : le chiffre monte, la tension baisse.
+function phraseTensionEnBaisse(exNom){
+  return 'Le '+String(exNom||'mouvement').toLowerCase()+' monte en charge mais '
+    +'les séries raccourcissent : la tension baisse pendant que le chiffre monte.';
+}
+
 function blocTempo(ex){
-  const t=(ex&&ex.tempo||'').trim();
+  const t=tempoAffiche(ex);
   if(!t) return '';
-  const n=t.split(/[^0-9]+/).filter(x=>x!=='').map(Number);
-  const expl=n.length===4
+  // ⚠ ON AFFICHE `t`, PAS LA FORME CANONIQUE. Le detail chiffre n'apparait que
+  // pour un tempo NORMALISE : l'ancienne version decoupait n'importe quel
+  // texte sur ses chiffres, si bien que « 2 series a 3 s, 1 min de pause »
+  // ressortait en « 2 s pour descendre, 3 s en bas… ». Elle prêtait au coach
+  // une consigne qu'il n'avait pas ecrite.
+  const n=tempoSecondes(t);
+  const expl=n
     ? n[0]+' s pour descendre, '+n[1]+' s en bas, '+n[2]+' s pour monter, '+n[3]+' s en haut.'
-    : 'excentrique · pause basse · concentrique · pause haute, en secondes.';
+    : 'Consigne de ton coach.';
   return `<div style="margin-bottom:7px">
     <span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">Tempo ${escapeHtml(t)}</span>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:2px">${escapeHtml(expl)}</div>
@@ -28218,7 +28401,7 @@ function renderProgEx(){
         <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
         <div style="margin-bottom:8px">
           <label style="margin-top:0">Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 — descente, bas, montée, haut)</span></label>
-          <input class="px-court" value="${escapeHtml(ex.tempo||'')}" onchange="_progExDirty=true;progEx[${i}].tempo=this.value" placeholder="3-1-1-0">
+          <input class="px-court" value="${escapeHtml(ex.tempo||'')}" onchange="_progTempoSaisie(${i},this)" placeholder="3-1-1-0" title="3-1-1-0 ou 3110 : descente, pause basse, montée, pause haute. Un autre texte est conservé tel quel.">
         </div>
         <!-- Matériel : son propre champ depuis que la banque le pré-remplit.
              Il se retapait dans le NOM de l'exercice, ce qui le rendait
@@ -32834,6 +33017,12 @@ function _blocExo(idx,estSS){
       </div>`:''}
 
       ${(!isCardio(ex)&&demandeVideoPour(ex.name,currentUser))?`<div class="wo-demande-video" style="display:flex;align-items:center;gap:9px;background:var(--surface-2);border-radius:var(--r-2);padding:10px 13px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6"><span style="flex-shrink:0">🎥</span><span>Ton coach t'a demandé une vidéo de cet exercice.</span></div>`:''}
+      <!-- LA BANDE DE TEMPO. Peinte par renderSets, comme les actions de
+           series : son libelle depend de la serie en cours et du chronometre,
+           qui changent tous les deux sans repasser par _blocExo. Elle vit HORS
+           du bloc CONSIGNE parce que la mesure existe MEME SANS TEMPO — un
+           exercice sans consigne se chronometre comme les autres. -->
+      ${!isCardio(ex)?`<div id="wo-tempo-${idx}"></div>`:''}
       ${isCardio(ex)?
         `<table class="series-table" style="width:100%"><thead><tr><th>#</th><th>Complété</th></tr></thead><tbody id="sets-body-${idx}"></tbody></table>`
       :`<div id="wo-sets-scroll-${idx}"${!isWide?' style="overflow-x:auto"':''}>
@@ -32863,6 +33052,24 @@ function _blocExo(idx,estSS){
 // Un plafond, pas une regle : vingt series sur un exercice, on est deja bien
 // au-dela de ce qu'un programme prescrit. Il protege d'un doigt reste appuye.
 const SERIES_MAX=20;
+// LA SAISIE D'UN TEMPO, COTE COACH. C'est le SEUL endroit ou une
+// normalisation a lieu : « 3110 » et « 3-1-1-0 » sont enregistres sous la
+// meme forme, et le champ affiche ce qui a ete retenu — sans quoi l'ecran
+// garderait « 3110 » pendant que le programme porte « 3-1-1-0 ».
+//
+// ⚠ CE QUI NE SE NORMALISE PAS EST CONSERVE TEL QUEL. Pas de refus, pas de
+// correction, pas de champ vide : un coach qui ecrit « 2 s en bas, explosif »
+// a ecrit une consigne, et elle vaut. Elle n'aura simplement pas de guide —
+// il n'y a rien a battre dans une phrase.
+function _progTempoSaisie(i,el){
+  _progExDirty=true;
+  const brut=String(el&&el.value!=null?el.value:'');
+  const c=tempoNormalise(brut);
+  const val=c||brut;
+  progEx[i].tempo=val;
+  if(el&&el.value!==val) el.value=val;
+  return val;
+}
 // LA SAISIE D'UNE CHARGE, EN UN SEUL ENDROIT. Elle vivait dans un attribut
 // onchange recopié à quatre exemplaires par le gabarit : un refus posé là ne
 // serait vérifiable nulle part, et les copies finiraient par diverger.
@@ -32926,6 +33133,9 @@ function _nouvelleSerie(idx){
   // c'est la prescription en cours, et c'est ce qu'on veut refaire.
   s.weight=''; s.weight2=''; s.rir=''; s.pain=''; s.done=false;
   delete s.userEdited; delete s.isAuto; delete s.reposReel; delete s.tValid;
+  // Le TUT decrit la serie PRECEDENTE : le recopier ferait entrer une mesure
+  // qui n'a jamais eu lieu dans la moyenne qui juge un plateau.
+  delete s.tut;
   return s;
 }
 // La charge n'est pas posee ici : renderSets la deduira du RIR de la serie
@@ -32995,6 +33205,168 @@ function _majActionsSeries(ex,data,idx){
         +'<path d="M5 12h14"/></svg></button>'
       :'')
     +'</div>';
+}
+// ══════════════ LE GUIDE DE TEMPO ET LE CHRONOMETRE ════════════════════
+//
+// ⚠ COUPE PAR DEFAUT, ET IL N'Y A AUCUN MOYEN DE LE RENDRE AUTOMATIQUE. Un
+// metronome impose sur chaque serie est insupportable en trois seances : on
+// l'aurait desactive une fois pour toutes, et la mesure serait partie avec.
+// D'ou la separation qui commande tout ce bloc — LE CHRONOMETRE ET LE GUIDE
+// SONT DEUX GESTES DIFFERENTS. Le chronometre marche seul, sans tempo, sans
+// vibration et sans point qui tourne ; le guide, lui, demarre le chronometre
+// en plus du metronome. On peut mesurer sans etre guide, jamais l'inverse.
+//
+// L'ETAT EST UNIQUE POUR TOUTE LA PAGE : une seule serie se fait a la fois.
+let _tempoEtat={actif:false,guide:false,idx:null,set:null,
+                debut:0,rep:0,repsCible:0,phase:0,minuteur:null,peintre:null};
+
+// PURE. La serie en cours d'un exercice : la premiere non validee. C'est
+// celle que l'athlete est en train de faire, et donc celle que la mesure doit
+// porter. Rend -1 quand tout est valide.
+function _tempoSetCourant(data){
+  const sets=(data&&data.sets)||[];
+  for(let i=0;i<sets.length;i++) if(sets[i]&&!sets[i].done) return i;
+  return -1;
+}
+// LA VIBRATION, AVEC REPLI SILENCIEUX. navigator.vibrate n'existe pas sur
+// iOS : le guide visuel doit continuer sans erreur et sans le dire — annoncer
+// « votre appareil ne vibre pas » a chaque serie serait un reproche fait au
+// telephone.
+function _tempoVibrer(ms){
+  try{
+    if(!navigator||typeof navigator.vibrate!=='function') return false;
+    return !!navigator.vibrate(ms);
+  }catch(e){ return false; }
+}
+function tempoVibrationDisponible(){
+  try{ return !!(navigator&&typeof navigator.vibrate==='function'); }catch(e){ return false; }
+}
+// LE DEMARRAGE. `guide` distingue les deux gestes ; le reste est commun,
+// parce que le chronometre est le meme dans les deux cas.
+function tempoDemarrer(idx,guide){
+  const ex=woState&&woState.exercises&&woState.exercises[idx];
+  const data=woState&&woState.sessionData&&woState.sessionData[idx];
+  if(!ex||!data) return false;
+  const i=_tempoSetCourant(data);
+  if(i<0) return false;
+  // Le guide ne part QUE sur un tempo normalise : sans quatre durees, il n'y
+  // a rien a battre. Le chronometre, lui, part toujours.
+  const sec=tempoSecondes(tempoAffiche(ex));
+  if(guide&&!sec) return false;
+  tempoArreter(false);
+  const reps=Number(_perfReps(data.sets[i]));
+  _tempoEtat={actif:true,guide:!!(guide&&sec),idx:idx,set:i,
+    debut:Date.now(),rep:0,repsCible:(isFinite(reps)&&reps>0)?reps:0,
+    phase:0,minuteur:null,peintre:null};
+  if(_tempoEtat.guide) _tempoPhase(sec,0);
+  // Le compteur de secondes se repeint sans toucher au tableau : redessiner
+  // les series une fois par seconde ferait perdre le focus d'un champ ouvert.
+  _tempoEtat.peintre=setInterval(()=>{ try{ _majBandeTempo(ex,data,idx); }catch(e){} },1000);
+  try{ _majBandeTempo(ex,data,idx); }catch(e){}
+  return true;
+}
+// LE METRONOME. Une phase, sa vibration, puis la suivante. Les pauses a zero
+// seconde sont traversees sans etre annoncees.
+function _tempoPhase(sec,p){
+  if(!_tempoEtat.actif||!_tempoEtat.guide) return;
+  // Fin de la repetition : on compte, et on s'arrete au nombre prescrit.
+  if(p>=4){
+    _tempoEtat.rep++;
+    if(_tempoEtat.repsCible>0&&_tempoEtat.rep>=_tempoEtat.repsCible){
+      // TROIS VIBRATIONS POUR LA FIN : distinctes du battement de phase.
+      _tempoVibrer([90,70,90,70,90]);
+      tempoArreter(true);
+      return;
+    }
+    p=0;
+  }
+  _tempoEtat.phase=p;
+  const d=Number(sec[p])||0;
+  // UNE PAUSE A ZERO N'EXISTE PAS : on enchaine sans battement ni attente.
+  if(d<=0){ _tempoPhase(sec,p+1); return; }
+  // Le battement marque le DEBUT de la phase : c'est le moment ou le geste
+  // change de sens, et c'est ce que l'athlete doit sentir.
+  _tempoVibrer(p===0||p===2?60:35);
+  try{ _tempoPeindrePoint(); }catch(e){}
+  _tempoEtat.minuteur=setTimeout(()=>_tempoPhase(sec,p+1),d*1000);
+}
+// L'ARRET. `mesurer` distingue la fin normale d'une annulation : un guide
+// interrompu au milieu de la troisieme repetition n'a pas mesure la serie.
+//
+// LA MESURE EST ECRITE ICI ET NULLE PART AILLEURS, et elle passe par tutBorne :
+// un chronometre oublie rend null, pas vingt minutes.
+function tempoArreter(mesurer){
+  const e=_tempoEtat;
+  if(e.minuteur) clearTimeout(e.minuteur);
+  if(e.peintre) clearInterval(e.peintre);
+  const idx=e.idx, i=e.set;
+  let ecrit=null;
+  if(e.actif&&mesurer&&idx!=null&&i!=null){
+    const data=woState&&woState.sessionData&&woState.sessionData[idx];
+    const s=data&&data.sets&&data.sets[i];
+    if(s){
+      s.tut=tutBorne((Date.now()-e.debut)/1000);
+      ecrit=s.tut;
+      try{ woPersist(); }catch(err){}
+    }
+  }
+  _tempoEtat={actif:false,guide:false,idx:null,set:null,
+              debut:0,rep:0,repsCible:0,phase:0,minuteur:null,peintre:null};
+  if(idx!=null){
+    const ex=woState&&woState.exercises&&woState.exercises[idx];
+    const data=woState&&woState.sessionData&&woState.sessionData[idx];
+    if(ex&&data) try{ _majBandeTempo(ex,data,idx); }catch(err){}
+  }
+  return ecrit;
+}
+// Le point qui parcourt les quatre phases. Repeint seul, sans passer par le
+// tableau : c'est quatre fois par repetition.
+function _tempoPeindrePoint(){
+  const z=document.getElementById('wo-tempo-point');
+  if(!z) return false;
+  z.textContent=TEMPO_PHASES[_tempoEtat.phase].lib;
+  const pts=z.parentNode?z.parentNode.querySelectorAll('.tempo-pt'):[];
+  for(let k=0;k<pts.length;k++)
+    pts[k].style.background=(k===_tempoEtat.phase)?'var(--red)':'var(--border)';
+  return true;
+}
+// LA BANDE. Deux boutons au plus, et rien quand il n'y a plus de serie a
+// faire — une bande de mesure sur un exercice termine n'est qu'un bouton de
+// plus a ne pas toucher.
+function _majBandeTempo(ex,data,idx){
+  const z=document.getElementById('wo-tempo-'+idx);
+  if(!z) return false;
+  const i=_tempoSetCourant(data);
+  const enCours=_tempoEtat.actif&&_tempoEtat.idx===idx;
+  if(i<0&&!enCours){ z.innerHTML=''; return true; }
+  const guidable=!!tempoSecondes(tempoAffiche(ex));
+  const B='style="flex:1;min-width:0"';
+  let h='<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">';
+  if(enCours){
+    const s=Math.max(0,Math.round((Date.now()-_tempoEtat.debut)/1000));
+    h+='<button class="btn btn-red btn-sm" '+B+' onclick="tempoArreter(true)">'
+      +'Terminer · '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0')+'</button>';
+    if(_tempoEtat.guide){
+      h+='<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px">'
+        +TEMPO_PHASES.map(()=>'<span class="tempo-pt" style="width:7px;height:7px;'
+          +'border-radius:var(--r-full);background:var(--border);flex:none"></span>').join('')
+        +'<span id="wo-tempo-point" style="font-size:var(--fs-2xs);color:var(--sub);'
+        +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span></div>';
+    }
+  } else {
+    h+='<button class="btn btn-outline btn-sm" '+B+' onclick="tempoDemarrer('+idx+',false)">'
+      +'Démarrer la série</button>';
+    // « Guider » n'apparait QUE sur un tempo normalise, et il ne part jamais
+    // seul : c'est un appui, a chaque serie, et c'est ce qui le rend
+    // supportable.
+    if(guidable)
+      h+='<button class="btn btn-outline btn-sm" '+B+' onclick="tempoDemarrer('+idx+',true)">'
+        +'Guider</button>';
+  }
+  h+='</div>';
+  z.innerHTML=h;
+  if(enCours&&_tempoEtat.guide) try{ _tempoPeindrePoint(); }catch(e){}
+  return true;
 }
 function renderSets(ex,data,idx){
   if(idx==null) idx=woState.currentEx;
@@ -33186,6 +33558,7 @@ function renderSets(ex,data,idx){
   // Le « − » n'existe que tant que la dernière série n'est pas validée : sa
   // présence dépend donc du tableau qui vient d'être repeint.
   _majActionsSeries(ex,data,idx);
+  try{ _majBandeTempo(ex,data,idx); }catch(e){}
   // Deux séries validées à 4 ou plus sur CET exercice : la carte apparaît.
   // Ici et pas dans toggleSet, parce que la douleur peut aussi être saisie
   // après coup sur une série déjà validée.
@@ -34351,7 +34724,25 @@ function _calculEtat(seances,exNom,slot,progName,user){
   else if(joursDepuisRecord>=JOURS_PLATEAU) etat='plateau';
   else etat='ralentissement';
 
-  return rendre(Object.assign({etat,maxGlobal,joursDepuisRecord,
+  // ══ LA PROGRESSION APPARENTE ═════════════════════════════════════════
+  //
+  // LE CAS QUE LA CHARGE SEULE NE PEUT PAS VOIR. Elle monte, l'etat dit
+  // « progression », et les series ont raccourci d'un quart : l'athlete a
+  // change son execution, pas sa force. C'est le SEUL usage de la mesure de
+  // temps sous tension, et il requalifie l'etat en plateau — sans quoi le
+  // coach lirait « progression » sur un mouvement qui ne progresse plus.
+  //
+  // SEULEMENT DEPUIS 'progression' : sur un plateau deja declare, la baisse
+  // de tension n'ajoute rien, et sur une regression elle ne fait que dire
+  // deux fois la meme chose.
+  let cause=null;
+  if(etat==='progression'){
+    let t=null;
+    try{ t=tensionEnBaisse(seances,exNom,slot,progName,serie[n-1].date); }catch(e){ t=null; }
+    if(t){ etat='plateau'; cause='tension'; }
+  }
+
+  return rendre(Object.assign({etat,cause,maxGlobal,joursDepuisRecord,
     // Nombre de séances réellement comparables au passé. À 0, « progression »
     // ne compare rien : la fenêtre récente couvre toute la série.
     fenetreHistorique:anciens.length,
@@ -34432,6 +34823,12 @@ function _phraseEtat(x,user){
   // échec ce qui est le déroulement normal de sa phase.
   const enSeche=typePhase(user)==='seche'
     ? ' Un plateau de force en déficit est attendu ; l\'objectif est de conserver, pas de progresser.' : '';
+  // LA PHRASE DE PLATEAU SERAIT FAUSSE ICI : la charge monte, il Y A de
+  // nouveaux maximums. Ce qui a change, c'est la duree des series — on le dit
+  // comme un fait, sans reprocher une execution.
+  if(x.etat==='plateau'&&x.cause==='tension')
+    return 'la charge monte, mais tes séries sont plus courtes qu\'il y a un '
+      +'mois. Ça vaut le coup d\'en parler à ton coach.';
   if(x.etat==='plateau')
     return 'pas de nouveau maximum depuis '+(sem>=2?sem+' semaines':'4 semaines')+'. Ça arrive. Parles-en à ton coach.'+enSeche;
   if(x.etat==='regression')
@@ -34534,9 +34931,12 @@ function renderPlateauxCoach(c){
     ${muscles.map(x=>`<div style="font-size:var(--fs-xs);color:var(--orange);font-weight:800;margin-bottom:7px">
         ${(MUSCLES[x.m]||{}).lib||x.m} : plateau musculaire, ${x.exercices.filter(e=>e.etat==='plateau'||e.etat==='regression').length} exercices bloqués
       </div>`).join('')}
-    ${bloques.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
-        <span style="font-size:var(--fs-xs);font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
-        <span style="font-size:var(--fs-2xs);color:${PERF_ETAT_COULEUR[x.etat]};white-space:nowrap">${PERF_ETAT_LIB[x.etat]}${_fragmentSiValeur(' · record du ',dat(x.dateRecord))}</span>
+    ${bloques.map(x=>`<div style="margin-bottom:6px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+          <span style="font-size:var(--fs-xs);font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
+          <span style="font-size:var(--fs-2xs);color:${PERF_ETAT_COULEUR[x.etat]};white-space:nowrap">${x.cause==='tension'?'progression apparente':PERF_ETAT_LIB[x.etat]}${_fragmentSiValeur(' · record du ',dat(x.dateRecord))}</span>
+        </div>
+        ${x.cause==='tension'?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-top:2px">${escapeHtml(phraseTensionEnBaisse(x.nom))}</div>`:''}
       </div>`).join('')}
     ${PERF_ENCADRE}
   </div>`;
