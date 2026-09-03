@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1120';
+window.RC_BUILD='1121';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -6969,6 +6969,10 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- HORS DU CADRE, a la demande de Kevin : le cadre rouge encadre la
            CITATION et sa photo, pas le commentaire qui les suit. -->
       <p class="ma-texte">À l'entraînement, ne vous mettez pas de barrières : essayez. Si vous voulez rester dans votre zone de confort, autant rester chez vous. Mais maîtrisez un mouvement avant d'y ajouter du poids. On n'est pas là pour entraîner son ego. Et si vous échouez, ne culpabilisez pas : il vous manque du travail et un temps d'adaptation, rien d'autre. Tant que vous donnez le maximum, vous valez déjà mieux que tous ceux qui abandonnent à la première difficulté.</p>
+      <!-- LA STRUCTURE DU BLOC. Au-DESSUS de la liste des jours : c'est le
+           cadre dans lequel les sept creneaux se lisent, et il se lit
+           avant eux. Vide tant qu'aucun bloc date n'existe. -->
+      <div id="sm-structure"></div>
       <div id="session-slots"></div>
       <!-- Discret et en bas : ce tri n'est utile que si quelque chose n'a pas
            été reconnu, et le compteur reste masqué tant que la file est vide. -->
@@ -16186,6 +16190,44 @@ function appliquerDecharge(user,semaine){
   // décharge sort de la détection de plateau.
   try{ _viderCachePlateau(); _viderCacheVolume(); _cacheSignaux.clear(); }catch(e){}
   return true;
+}
+// ══════════════ LA STRUCTURE DU BLOC, COTE ATHLETE ═════════════════════
+//
+// Le coach lit « 8 semaines, du 1er au 26 · Decharges : S3, S6 · semaine 3 en
+// cours ». L'athlete, lui, ne voyait rien : il traversait une semaine dure
+// sans savoir combien il en restait ni quand ca s'allegerait. Une semaine
+// dure qu'on sait etre l'avant-derniere se traverse ; la meme, sans horizon,
+// se negocie.
+//
+// UNE SEULE SOURCE : le programme date. Il porte le nombre de semaines ET les
+// decharges — le bloc de priorite, lui, n'a que des semaines, et melanger les
+// deux ferait une phrase dont les deux moities ne parleraient pas de la meme
+// chose.
+//
+// ⚠ LA DECHARGE ANNONCEE EST LA PROCHAINE, PAS LA PREMIERE. dechargePlanifiee-
+// Apres existe deja pour cela : sans elle, un athlete en semaine 5 d'un bloc
+// dont la decharge de S3 est passee se serait vu annoncer « decharge en
+// semaine 3 » — une consigne dans le passe.
+//
+// PURE. Rend '' quand il n'y a rien a dire : pas de programme, ou une date
+// hors bloc. Une absence de structure n'est pas une structure a annoncer.
+function ligneStructureBloc(user,maintenant){
+  const u=_dossier(user);
+  let p=null;
+  try{ p=programmeDe(u); }catch(e){ p=null; }
+  if(!p) return '';
+  const d=(maintenant instanceof Date)?maintenant:new Date(Number(maintenant)||Date.now());
+  let i=null;
+  try{ i=indexSemaineBloc(u,d); }catch(e){ i=null; }
+  if(i===null) return '';
+  const base='Semaine '+(i+1)+' sur '+p.semaines;
+  // CETTE SEMAINE EST LA DECHARGE : on le dit, et on ne renvoie pas vers une
+  // autre. C'est l'information la plus utile du jour.
+  if(p.decharges.indexOf(i)>=0) return base+' · c’est ta semaine de décharge.';
+  let suivante=null;
+  try{ suivante=dechargePlanifieeApres(u,i); }catch(e){ suivante=null; }
+  if(suivante===null) return base+'.';
+  return base+' · décharge en semaine '+(suivante+1)+'.';
 }
 // LE PONT. Une semaine planifiée en décharge dans le bloc ne posait `deload`
 // sur AUCUNE séance : le bandeau ne s'allumait pas, et les séances de cette
@@ -30819,6 +30861,25 @@ function loadSessionManager(){
   if(changed) saveUser();
   const sessions=currentUser.sessions_config;
   const container=document.getElementById('session-slots');
+  // LA STRUCTURE DU BLOC, UNE FOIS EN TETE D'ECRAN.
+  //
+  // ⚠ PAS DANS htmlCarteSeanceSlot, et c'est deliberе : cette carte est
+  // l'apercu EXACT de l'image de story, et son propre commentaire dit qu'un
+  // apercu ne montrant pas ce que le fichier contient serait pire qu'aucun
+  // apercu. Une ligne de plus a l'ecran ferait diverger les deux.
+  //
+  // UNE FOIS, ET NON PAR JOUR : la phrase est la meme pour les sept creneaux.
+  // Repetee sept fois, elle deviendrait un motif de fond qu'on ne lit plus.
+  const _zStruct=document.getElementById('sm-structure');
+  if(_zStruct){
+    let _l=''; try{ _l=ligneStructureBloc(currentUser); }catch(e){ _l=''; }
+    _zStruct.innerHTML=_l
+      ?'<div style="background:var(--surface-1);border:1px solid var(--border);'
+        +'border-left:3px solid var(--red);border-radius:var(--r-3);padding:10px 13px;'
+        +'margin-bottom:14px;font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
+        +escapeHtml(_l)+'</div>'
+      :'';
+  }
 
   container.innerHTML=sessions.map((s,i)=>`
     <div style="background:var(--surface-1);border-radius:var(--r-4);margin-bottom:14px;overflow:hidden;border:1.5px solid ${s.active?'var(--red)':'var(--border)'}">

@@ -15963,6 +15963,101 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LA STRUCTURE DU BLOC, CÔTÉ ATHLÈTE ══════
+        (()=>{
+          const L=_lundiDe(new Date()).getTime();
+          // Un bloc de 8 semaines parti il y a k semaines, décharges en S3 et S6.
+          const U=(k,dech,sem)=>({email:'st@t.fr',sessions_config:[],
+            programme:{debut:L-k*604800000,semaines:(sem==null?8:sem),
+                       decharges:(dech==null?[2,5]:dech)}});
+
+          ok('La ligne dit où l\'on est dans le bloc, et quand ça s\'allège',(()=>{
+            // Le coach lit la structure depuis toujours ; l'athlète traversait
+            // une semaine dure sans savoir combien il en restait. Une semaine
+            // dure qu'on sait être l'avant-dernière se traverse.
+            if(ligneStructureBloc(U(0))!=='Semaine 1 sur 8 · décharge en semaine 3.')
+              return _echec('S1 : « '+ligneStructureBloc(U(0))+' »');
+            if(ligneStructureBloc(U(3))!=='Semaine 4 sur 8 · décharge en semaine 6.')
+              return _echec('S4 : « '+ligneStructureBloc(U(3))+' »');
+            // LA SEMAINE DE DÉCHARGE SE NOMME, et ne renvoie pas ailleurs :
+            // c'est l'information la plus utile du jour.
+            if(ligneStructureBloc(U(2))!=='Semaine 3 sur 8 · c’est ta semaine de décharge.')
+              return _echec('pendant la décharge : « '+ligneStructureBloc(U(2))+' »');
+            // Sans décharge à venir, la ligne se contente de situer.
+            if(ligneStructureBloc(U(6))!=='Semaine 7 sur 8.')
+              return _echec('S7 : « '+ligneStructureBloc(U(6))+' »');
+            return ligneStructureBloc(U(2,[]))==='Semaine 3 sur 8.'
+              ?true:_echec('sans décharge planifiée : « '+ligneStructureBloc(U(2,[]))+' »');})());
+
+          ok('La décharge annoncée est la PROCHAINE, jamais une passée',(()=>{
+            // ⚠ SANS CETTE GARDE, un athlète en semaine 5 d'un bloc dont la
+            // décharge de S3 est derrière lui se voyait annoncer « décharge en
+            // semaine 3 » : une consigne située dans le passé, et la seule
+            // chose que la ligne devait lui éviter.
+            const l=ligneStructureBloc(U(4));
+            if(l.indexOf('semaine 3')>=0) return _echec('une décharge passée est annoncée : « '+l+' »');
+            if(l!=='Semaine 5 sur 8 · décharge en semaine 6.')
+              return _echec('S5 : « '+l+' »');
+            // Une seule décharge, déjà passée : plus rien à annoncer.
+            if(ligneStructureBloc(U(5,[1]))!=='Semaine 6 sur 8.')
+              return _echec('décharge passée : « '+ligneStructureBloc(U(5,[1]))+' »');
+            // ET C'EST LA FONCTION EXISTANTE QUI LE DIT : dechargePlanifiée-
+            // Après servait déjà à avancer une décharge côté coach. Une
+            // seconde recherche du « prochain index » finirait par ne plus
+            // désigner la même semaine que celle que le coach déplace.
+            if(typeof dechargePlanifieeApres!=='function')
+              return _echec('la fonction existante a disparu');
+            return String(ligneStructureBloc).indexOf('dechargePlanifieeApres')>=0
+              ?true:_echec('la ligne cherche la prochaine décharge de son côté');})());
+
+          ok('Sans bloc daté, la ligne se tait',(()=>{
+            // Une absence de structure n'est pas une structure à annoncer.
+            for(const [cas,u] of [
+              ['aucun programme',{email:'a@t.fr'}],
+              ['programme vide',{email:'b@t.fr',programme:{}}],
+              ['bloc terminé',U(20)],
+              ['bloc pas commencé',{email:'c@t.fr',
+                programme:{debut:L+3*604800000,semaines:8,decharges:[2]}}],
+              ['sans date',{email:'d@t.fr',programme:{semaines:8,decharges:[2]}}]])
+              if(ligneStructureBloc(u)!=='') return _echec(cas+' : « '+ligneStructureBloc(u)+' »');
+            return true;})());
+
+          ok('UNE seule surface, et surtout pas l\'aperçu de story',(()=>{
+            // ⚠ htmlCarteSeanceSlot EST LE MIROIR EXACT DE L'IMAGE PARTAGÉE.
+            // Son propre commentaire le dit : « un aperçu qui ne montrerait pas
+            // ce que le fichier contient serait pire qu'aucun aperçu ». Une
+            // ligne de plus à l'écran ferait diverger les deux — et la
+            // structure du bloc n'a rien à faire dans une story.
+            // ⚠ LE DOSSIER COURANT DOIT PORTER UN BLOC PENDANT CE TEST. Sans
+            // lui, ligneStructureBloc(currentUser) rend '' quoi qu'il arrive :
+            // la carte était propre pour la mauvaise raison, et la garde
+            // principale ne mesurait rien. Mesuré en faisant entrer la ligne
+            // dans la carte — seul le compte d'appels tombait.
+            const _cu=currentUser;
+            let carte='';
+            try{
+              currentUser={email:'sty@t.fr',sessions_config:[],
+                programme:{debut:L,semaines:8,decharges:[2,5]}};
+              if(ligneStructureBloc(currentUser)==='')
+                return _echec('la fixture ne produit pas de ligne : le test ne mord pas');
+              carte=htmlCarteSeanceSlot(0,{name:'PUSH',
+                exercises:[{name:'Développé',series:4,reps:'8'}]});
+            } finally { currentUser=_cu; }
+            if(/Semaine \d+ sur/.test(carte))
+              return _echec('la structure est entrée dans l’aperçu de story');
+            if(/décharge en semaine/.test(carte))
+              return _echec('la décharge est entrée dans l’aperçu de story');
+            // La ligne vit dans SON conteneur, et il existe.
+            const src=_prodSrc();
+            if(src.indexOf('id="sm-structure"')<0)
+              return _echec('le conteneur de la ligne a disparu');
+            // UN SEUL APPEL : la définition, plus l'écran des séances. Répétée
+            // par jour ou sur trois écrans, la phrase deviendrait un motif de
+            // fond qu'on ne lit plus.
+            const n=(src.match(/ligneStructureBloc\(/g)||[]).length;
+            return n<=2?true:_echec('ligneStructureBloc appelée '+(n-1)+' fois');})());
+        })();
+
         // ══════ LES MONTÉES EN CHARGE, EN KILOS ══════
         (()=>{
           ok('Les pourcentages ne se lisent que quand ce sont des paliers',(()=>{
