@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1114';
+window.RC_BUILD='1115';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -6657,6 +6657,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="font-size:var(--fs-xs);color:var(--sub)" id="clh-resume-bilan-sub">Reprendre là où tu t'es arrêté →</div>
       </div>
 
+      <!-- L'ECHEANCE : UNE SEULE LIGNE, et rien d'autre ne change dans
+           l'application. Une preparation ne doit pas repeindre l'interface. -->
+      <div id="clh-echeance" style="display:none;margin-bottom:14px"></div>
       <!-- LES COURBATURES, EN DIFFERE. Posees au RETOUR dans l'app et non a
            chaud : « as-tu des courbatures ? » dix minutes apres la seance n'a
            pas de sens physiologique, et la reponse serait toujours « aucune ». -->
@@ -7136,6 +7139,21 @@ const COACH_PHOTO='icons/coach.jpg';
       <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid var(--border);border-radius:var(--r-3);color:#aaa;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">⏸ Mettre en pause</button>
       <button onclick="cancelWorkout()" style="padding:14px;background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);color:#fca5a5;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">✕ Annuler la séance</button>
     </div>
+  </div>
+</div>
+
+<!-- ══════ ECHEANCE ══════════════════════════════════════════════════
+     UN SEUL ECRAN, atteint depuis la fiche client cote coach et depuis
+     l'accueil athlete quand une echeance est active. Rien d'autre ne change
+     dans l'application : une preparation ne doit pas repeindre l'interface. -->
+<div id="s-echeance" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="fermerEcheance()">←</button>
+    <span class="topbar-title" id="ech-titre">Échéance</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1;padding:0 14px 20px">
+    <div id="ech-contenu"></div>
   </div>
 </div>
 
@@ -29313,6 +29331,20 @@ function loadClientHome(){
   if(!window._retoursAppliques){ window._retoursAppliques=true;
     try{ appliquerRetoursEnAttente(currentUser); }catch(e){} }
   try{ rcRendreRetourAccueil(); }catch(e){}
+  try{
+    const _z=document.getElementById('clh-echeance');
+    const _l=ligneEcheance(currentUser);
+    if(_z){
+      _z.innerHTML=_l
+        ? '<div onclick="ouvrirEcheanceEcran()" role="button" tabindex="0" '
+          +'onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}" '
+          +'style="background:rgba(224,32,32,.07);border:1px solid var(--red);border-radius:var(--r-3);'
+          +'padding:11px 13px;cursor:pointer;font-size:var(--fs-sm);color:var(--text);font-weight:700">'
+          +escapeHtml(_l)+'</div>'
+        : '';
+      _z.style.display=_l?'block':'none';
+    }
+  }catch(e){}
   go('s-client-home');
   // ANIMATION 12. Armé ici, et l'action est loadClientHome elle-même : tirer
   // rejoue EXACTEMENT ce que fait déjà l'arrivée sur l'accueil — la même
@@ -39589,6 +39621,503 @@ function reperesEffectifs(user,muscle){
   r.source=bouge(o)?'coach':(bouge(a)?'perso':'table');
   return r;
 }
+// L'ENTREE COTE COACH. Une ligne dans la fiche client, et le bouton qui ouvre
+// une echeance quand il n'y en a pas.
+function _htmlEcheanceCoach(c){
+  const u=_dossier(c);
+  const e=echeance(u);
+  const j=e?echeanceJour(u):null;
+  const tete='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 13px;margin-bottom:16px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Échéance</div>';
+  if(!e)
+    return tete+'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:8px">'
+      +'Aucune échéance active. Une seule à la fois : en ouvrir une seconde remplace la première.</div>'
+      +'<button class="btn btn-outline btn-sm" style="width:100%" onclick="_echOuvrirDialogue()">Ouvrir une échéance</button></div>';
+  const lib=({COMPETITION:'Compétition',SHOOTING:'Shooting',OBJECTIF:'Objectif'})[e.type]||'Échéance';
+  return tete
+    +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
+    +escapeHtml(lib)+(j?(' · '+(j.j>=0?('J-'+j.j):('J+'+(-j.j)))):'')
+    +(e.federation?' · '+escapeHtml(e.federation):'')+'</div>'
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" '
+    +'onclick="ouvrirEcheanceEcran(getOwnedClient(currentClientId))">Ouvrir le compte à rebours</button></div>';
+}
+// L'OUVERTURE. Le remplacement est CONFIRME — deux echeances, ce sont deux
+// comptes a rebours et deux jeux de cibles pour le meme jour.
+async function _echOuvrirDialogue(){
+  const c=(typeof currentClientId!=='undefined'&&currentClientId)?getOwnedClient(currentClientId):null;
+  if(!c){ try{ toast('Aucun athlète ouvert.','var(--orange)'); }catch(e){} return false; }
+  const d=await rcSaisie('Date de l’échéance','Format JJ/MM/AAAA','','');
+  if(!d) return false;
+  const m=String(d).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(!m){ try{ toast('Date attendue au format JJ/MM/AAAA.','var(--orange)'); }catch(e){} return false; }
+  const ts=new Date(Number(m[3]),Number(m[2])-1,Number(m[1])).getTime();
+  if(echeance(c)){
+    let ok=false;
+    try{ ok=await rcConfirm('Remplacer l’échéance en cours ?',
+      'Une seule échéance à la fois. La précédente et ses fiches seront remplacées, et le remplacement sera journalisé.',
+      'Remplacer','Annuler'); }catch(e){ ok=false; }
+    if(!ok) return false;
+  }
+  const r=ouvrirEcheance(c,{date:ts,type:'COMPETITION'});
+  if(!r.ok){ try{ toast(r.raison,'var(--orange)'); }catch(e){} return false; }
+  try{ renderClientDetail(); }catch(e){}
+  try{
+    const _envoi=CLOUD.pushOne(c.email,c);
+    toastSync(true,_envoi,r.remplacee?'Échéance remplacée ✓':'Échéance ouverte ✓','l’échéance');
+  }catch(e){}
+  return true;
+}
+// L'EDITEUR D'UNE JOURNEE. Trois champs, et le refus est PARLANT : les bornes
+// disent ce qui est accepte et pourquoi, jamais « valeur invalide ».
+function _echEditer(n){
+  const u=_echCible||currentUser;
+  const e=echeance(u);
+  if(!e) return false;
+  const f=e.fiches['j'+n]||{};
+  const val=v=>v==null?'':String(v);
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:86vh;overflow-y:auto">'
+    +'<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:3px">J-'+n+'</div>'
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px">'
+    +escapeHtml(ECH_PHRASE_CANEVAS)+'</div>'
+    +'<div><label for="ech-glu" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal">Glucides (g)</label>'
+    +'<input type="number" inputmode="numeric" id="ech-glu" value="'+val(f.cibleGlucides)+'" placeholder="—"></div>'
+    +'<div><label for="ech-sel" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal">Sel (g)</label>'
+    +'<input type="number" inputmode="decimal" step="0.1" id="ech-sel" value="'+val(f.cibleSodium)+'" placeholder="—"></div>'
+    +'<div><label for="ech-eau" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal">Eau (L)</label>'
+    +'<input type="number" inputmode="decimal" step="0.1" id="ech-eau" value="'+val(f.cibleEau)+'" placeholder="—"></div>'
+    +'<div><label for="ech-seance" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal">Séance</label>'
+    +'<input type="text" maxlength="60" id="ech-seance" value="'+escapeHtml(f.seance||'')+'" placeholder="Ex : dos léger, 30 min"></div>'
+    +'<label class="hit44" style="font-size:var(--fs-xs);cursor:pointer;color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400;margin:10px 0;display:inline-flex;align-items:center;gap:6px">'
+    +'<input type="checkbox" id="ech-poses" style="width:auto;margin:0"'+(f.poses?' checked':'')+'>Séance de poses</label>'
+    +'<div id="ech-err" style="color:var(--red-light);font-size:var(--fs-xs);line-height:1.55;margin:6px 0;display:none"></div>'
+    +'<button class="btn btn-red" style="width:100%;margin-top:6px" onclick="_echEnregistrer('+n+')">Enregistrer</button>'
+    +'</div></div>');
+  return true;
+}
+function _echEnregistrer(n){
+  const u=_echCible||currentUser;
+  const v=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const err=document.getElementById('ech-err');
+  const r=poserFicheEcheance(u,n,{
+    cibleGlucides:v('ech-glu'),cibleSodium:v('ech-sel'),cibleEau:v('ech-eau'),
+    seance:v('ech-seance'),
+    poses:!!(document.getElementById('ech-poses')||{}).checked});
+  if(!r.ok){
+    // LE REFUS S'AFFICHE, IL NE SE TOASTE PAS : le coach doit pouvoir le lire
+    // en corrigeant son champ, pas le voir disparaitre en trois secondes.
+    if(err){ err.textContent=r.raison||'Enregistrement refusé.'; err.style.display='block'; }
+    return false;
+  }
+  try{ closeModal(); }catch(e){}
+  try{ _renderEcheance(); }catch(e){}
+  try{
+    const _envoi=CLOUD.pushOne(u.email,u);
+    toastSync(true,_envoi,'J-'+n+' enregistré ✓','cette journée');
+  }catch(e){}
+  return true;
+}
+// ══════════ L'ECRAN D'ECHEANCE ═════════════════════════════════════════
+let _echCible=null;        // le dossier affiche : l'athlete, ou le client du coach
+function ouvrirEcheanceEcran(user){
+  _echCible=user||currentUser;
+  go('s-echeance');
+  _renderEcheance();
+  return true;
+}
+function fermerEcheance(){
+  const coach=!!(currentUser&&currentUser.role==='coach');
+  _echCible=null;
+  if(coach){ go('s-coach-client'); try{ renderClientDetail(); }catch(e){} }
+  else { go('s-client-home'); try{ loadClientHome(); }catch(e){} }
+  return true;
+}
+// PURE. La mention medicale ne s'affiche QU'UNE FOIS par echeance. Repetee a
+// chaque ouverture, elle devient un bandeau qu'on ne lit plus — et c'est
+// exactement ce qu'une mention de ce genre ne doit pas devenir.
+function _echMentionAVoir(user){
+  const e=echeance(user);
+  return !!(e&&!e.vueLe);
+}
+function _echMarquerVue(user){
+  const u=_dossier(user);
+  if(u&&u.echeance&&!u.echeance.vueLe){ u.echeance.vueLe=Date.now();
+    try{ saveUser(); }catch(e){} }
+  return true;
+}
+function _renderEcheance(){
+  const z=document.getElementById('ech-contenu');
+  if(!z) return false;
+  const u=_echCible||currentUser;
+  const e=echeance(u);
+  const t=document.getElementById('ech-titre');
+  if(!e){
+    if(t) t.textContent='Échéance';
+    z.innerHTML='<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;padding:18px 0">'
+      +'Aucune échéance active.</div>';
+    return true;
+  }
+  const j=echeanceJour(u);
+  const estCoach=!!(currentUser&&currentUser.role==='coach');
+  if(t) t.textContent=({COMPETITION:'Compétition',SHOOTING:'Shooting',OBJECTIF:'Objectif'})[e.type]||'Échéance';
+  let h='';
+  // LA MENTION MEDICALE, UNE FOIS.
+  if(_echMentionAVoir(u)){
+    h+='<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:12px 14px;margin:12px 0 14px;font-size:var(--fs-xs);color:var(--text);line-height:1.6">'
+      +escapeHtml(ECH_PHRASE_MEDICALE)+'</div>';
+    _echMarquerVue(u);
+  }
+  // LE COMPTE A REBOURS.
+  h+='<div style="display:flex;align-items:baseline;gap:10px;margin:12px 0 6px">'
+    +'<span style="font-family:Bebas Neue,Montserrat,sans-serif;font-size:var(--fs-3xl);color:var(--red-text);line-height:1">'
+    +(j?(j.j>=0?('J-'+j.j):('J+'+(-j.j))):'—')+'</span>'
+    +'<span style="font-size:var(--fs-sm);color:var(--sub)">'
+    +new Date(e.date).toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})
+    +'</span></div>';
+  if(e.federation||e.categorie)
+    h+='<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-bottom:12px">'
+      +[e.federation,e.categorie].filter(Boolean).map(escapeHtml).join(' · ')+'</div>';
+  // LA SORTIE, a J+1 — et c'est la fonction EXISTANTE.
+  const sortie=echeancePropositionSortie(u);
+  if(sortie){
+    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-bottom:14px">'
+      +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'+escapeHtml(sortie.phrase)+'</div>'
+      +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="echeanceOuvrirSortie()">Revenir au maintien</button></div>';
+  }
+  if(j&&j.phase==='AFFUTAGE'){
+    // L'AFFUTAGE NE FAIT RIEN DE NEUF : il resserre ce qui existe. On le DIT,
+    // plutot que d'afficher des cibles qui n'existent pas.
+    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-bottom:14px">'
+      +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Affûtage</div>'
+      +'<div style="font-size:var(--fs-sm);color:#ccc;line-height:1.6">'
+      +'Rien de nouveau : tes macros suivent ta phase, ton sel reste à ta cible, '
+      +'et le volume descend vers ton minimum efficace. '
+      +(j.poses?'<b style="color:var(--text)">Séance de poses aujourd’hui.</b>':'Poses tous les deux jours.')
+      +'</div></div>';
+  }
+  if(j&&j.phase==='PEAK'){
+    h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:10px">'
+      +escapeHtml(ECH_PHRASE_CANEVAS)+'</div>';
+    h+=_echHtmlFiches(u,e,estCoach);
+  }
+  z.innerHTML=h;
+  // LES EQUIVALENTS ARRIVENT APRES : Ciqual pese, et l'ecran ne l'attend pas.
+  try{ _echPoserEquivalents(u,e); }catch(err){}
+  return true;
+}
+// LES SEPT FICHES. Le coach saisit ; l'athlete lit.
+function _echHtmlFiches(u,e,estCoach){
+  let h='';
+  for(let n=ECH_JOURS_PEAK;n>=0;n--){
+    const f=e.fiches['j'+n]||null;
+    const vide=!f||(f.cibleGlucides==null&&f.cibleSodium==null&&f.cibleEau==null);
+    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:11px 13px;margin-bottom:9px">'
+      +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">'
+      +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">J-'+n+'</span>'
+      +(f&&f.poses?'<span style="font-size:var(--fs-2xs);color:var(--red-text)">poses</span>':'')
+      +'</div>';
+    if(vide){
+      // UNE CIBLE NON POSEE N'EST PAS UN ZERO. On le dit, et on n'affiche
+      // aucun chiffre — surtout pas un zero, qui serait une consigne.
+      h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">'
+        +(estCoach?'À remplir.':'Ton coach n’a pas encore posé cette journée.')+'</div>';
+    } else {
+      const l=[];
+      if(f.cibleGlucides!=null) l.push('glucides '+Math.round(f.cibleGlucides)+' g');
+      if(f.cibleSodium!=null) l.push('sel '+String(Math.round(f.cibleSodium*10)/10).replace('.',',')+' g');
+      if(f.cibleEau!=null) l.push('eau '+String(f.cibleEau).replace('.',',')+' L');
+      h+='<div style="font-size:var(--fs-xs);color:#ccc;margin-top:3px;line-height:1.6">'+l.join(' · ')+'</div>';
+      if(f.seance) h+='<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">'+escapeHtml(f.seance)+'</div>';
+      if(f.cibleGlucides!=null)
+        h+='<div class="ech-equiv" data-jour="'+n+'" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px;line-height:1.5"></div>';
+    }
+    if(estCoach)
+      h+='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="_echEditer('+n+')">'
+        +(vide?'Poser cette journée':'Modifier')+'</button>';
+    h+='</div>';
+  }
+  return h;
+}
+// LES EQUIVALENTS, POSES APRES COUP. Ciqual pese trois megaoctets : l'ecran
+// s'affiche d'abord, les grammages arrivent ensuite.
+async function _echPoserEquivalents(u,e){
+  const zones=document.querySelectorAll('#ech-contenu .ech-equiv');
+  for(const z of zones){
+    const n=parseInt(z.getAttribute('data-jour'),10);
+    const f=e.fiches['j'+n];
+    if(!f||f.cibleGlucides==null) continue;
+    let eq=[];
+    try{ eq=await echeanceEquivalents(f.cibleGlucides); }catch(err){ eq=[]; }
+    if(!eq.length) continue;
+    z.textContent='≈ '+eq.map(x=>x.grammes+' g de '+x.lib).join(', ');
+  }
+  return true;
+}
+// ══════════ L'ECHEANCE ═════════════════════════════════════════════════
+//
+// ⚠ LE POINT DUR, ET IL COMMANDE TOUT LE RESTE : L'APPLICATION NE CALCULE
+// AUCUN PROTOCOLE. Pas de manipulation de glucides, pas de charge en eau, pas
+// de coupure de sodium. Trois raisons, et chacune suffirait :
+//   1. il n'existe aucun consensus publiable sur ces manipulations ;
+//   2. la litterature est mince, et ce qui existe porte sur des effectifs de
+//      dix a vingt culturistes masculins ;
+//   3. un protocole automatique sur des donnees de sante engage la
+//      responsabilite de l'editeur, et le dossier juridique de l'audit d'aout
+//      2026 est deja charge.
+//
+// LE CANEVAS EST DONC VIDE. RepCore affiche, rappelle et enregistre ce que le
+// coach pose ; il ne l'invente pas. En revanche il FAIT ce qu'il sait faire :
+// convertir une cible de glucides en grammes d'aliments avec Ciqual, une cible
+// de sodium en grammes de sel avec le moteur sodique, et REFUSER ce qui sort
+// des bornes de securite.
+const ECH_PHRASE_CANEVAS='Les cibles de peak week sont posées par ton coach. '
+  +'RepCore les affiche, les rappelle et les enregistre — il ne les invente pas.';
+const ECH_PHRASE_MEDICALE='Une préparation se prépare avec un professionnel. '
+  +'RepCore n\'est pas un dispositif médical et ne remplace ni un médecin, '
+  +'ni un diététicien.';
+const ECH_TYPES=Object.freeze(['COMPETITION','SHOOTING','OBJECTIF']);
+const ECH_JOURS_TOTAL=16;          // J-16 : l'echeance s'ouvre
+const ECH_JOURS_PEAK=7;            // J-7 : la peak week commence
+const ECH_POSES_TOUS_LES=2;        // une session de poses tous les deux jours
+
+// ══════════ LES BORNES DURES ═══════════════════════════════════════════
+//
+// ELLES REFUSENT L'ENREGISTREMENT, elles n'avertissent pas. Un avertissement
+// qu'on peut ignorer d'un clic n'est pas un garde-fou : c'est une case a
+// cocher avant de faire ce qu'on avait decide de faire.
+//
+// LE PLANCHER HYDRIQUE N'A PAS DE CONTREPARTIE HAUTE NEGOCIABLE. Le « water
+// cut » — la restriction hydrique des dernieres heures — ne sera pas outille
+// par RepCore. C'est la manipulation qui envoie des gens a l'hopital, et
+// l'outiller reviendrait a la recommander.
+const ECH_EAU_MAX_L=6;
+const ECH_EAU_MIN_L=1.5;
+const ECH_SEL_MAX_G=8;
+const ECH_GLUCIDES_MAX_G_KG=12;
+
+// PURE. Verifie une fiche de jour. Rend [] quand tout passe, sinon la liste
+// des refus EN CLAIR — « hors bornes » n'apprend rien a personne.
+function echeanceRefus(fiche,poidsKg){
+  const out=[];
+  const f=fiche||{};
+  const eau=Number(f.cibleEau);
+  const sel=Number(f.cibleSodium);
+  const glu=Number(f.cibleGlucides);
+  if(isFinite(eau)&&eau>0){
+    if(eau>ECH_EAU_MAX_L)
+      out.push('Eau : '+eau+' L par jour. Le maximum accepté est '+ECH_EAU_MAX_L
+        +' L — au-delà, le risque d\'hyponatrémie devient réel.');
+    if(eau<ECH_EAU_MIN_L)
+      out.push('Eau : '+eau+' L par jour. RepCore n\'enregistre pas de cible '
+        +'sous '+String(ECH_EAU_MIN_L).replace('.',',')+' L. La restriction hydrique '
+        +'ne sera pas outillée ici.');
+  }
+  if(isFinite(sel)&&sel>ECH_SEL_MAX_G)
+    out.push('Sel : '+sel+' g par jour. Le maximum accepté est '+ECH_SEL_MAX_G+' g.');
+  if(isFinite(glu)&&glu>0){
+    // ⚠ SANS POIDS, ON REFUSE — ON NE LAISSE PAS PASSER. La borne se mesurait
+    // « si le poids est connu », et disparaissait donc en silence pour un
+    // dossier sans pesee : 1 200 g de glucides passaient sans un mot. Un
+    // garde-fou qui s'efface quand une donnee manque n'est pas un garde-fou,
+    // c'est une case a cocher. Mesure faite sur un dossier sans pesee.
+    if(!(Number(poidsKg)>0)){
+      out.push('Impossible de vérifier cette cible de glucides : aucun poids '
+        +'récent pour cet athlète. Enregistre une pesée, puis repose la cible.');
+    } else {
+      const parKg=glu/Number(poidsKg);
+      if(parKg>ECH_GLUCIDES_MAX_G_KG)
+        out.push('Glucides : '+Math.round(parKg*10)/10+' g par kilo. Le maximum '
+          +'accepté est '+ECH_GLUCIDES_MAX_G_KG+' g/kg, soit '
+          +Math.round(ECH_GLUCIDES_MAX_G_KG*Number(poidsKg))+' g pour cet athlète.');
+    }
+  }
+  return out;
+}
+// PURE. L'echeance active, ou null. UNE SEULE A LA FOIS.
+function echeance(user){
+  const u=_dossier(user);
+  const e=u&&u.echeance;
+  if(!e||typeof e!=='object') return null;
+  const d=Number(e.date)||0;
+  if(!(d>0)) return null;
+  return {date:d,type:ECH_TYPES.indexOf(e.type)>=0?e.type:'OBJECTIF',
+    federation:e.federation||null,categorie:e.categorie||null,
+    poidsCible:(Number(e.poidsCible)>0)?Number(e.poidsCible):null,
+    fiches:(e.fiches&&typeof e.fiches==='object')?e.fiches:{},
+    journal:_tabBloc(e.journal),vueLe:Number(e.vueLe)||0};
+}
+// PURE. Le compte a rebours. Rend null hors fenetre.
+//
+// DEUX PHASES, PAS UNE. L'affutage ne fait RIEN DE NEUF : il resserre ce qui
+// existe deja — les macros suivent la phase en cours, le sodium reste a la
+// cible du moteur, le volume descend vers le MEV. La peak week, elle, porte
+// des cibles quotidiennes, et elles viennent du coach.
+function echeanceJour(user,maintenant){
+  const e=echeance(user);
+  if(!e) return null;
+  const t=Number(maintenant)||Date.now();
+  const j0=_dateDeISO(localISODate(new Date(e.date))).getTime();
+  const aujourd=_dateDeISO(localISODate(new Date(t))).getTime();
+  const j=Math.round((j0-aujourd)/86400000);        // J-n : positif avant
+  if(j>ECH_JOURS_TOTAL) return null;                 // pas encore ouverte
+  return {j:j,
+    phase:j<0?'APRES':(j<=ECH_JOURS_PEAK?'PEAK':'AFFUTAGE'),
+    // POSES TOUS LES DEUX JOURS pendant l'affutage, TOUS LES JOURS en peak
+    // week : la frise de sept jours cote a cote est le vrai livrable.
+    poses:(j<0)?false:(j<=ECH_JOURS_PEAK?true:(j%ECH_POSES_TOUS_LES===0)),
+    fiche:(j>=0&&j<=ECH_JOURS_PEAK)?(e.fiches['j'+j]||null):null,
+    echeance:e};
+}
+// L'OUVERTURE D'UNE ECHEANCE. Rend {ok} ou {ok:false,raison}.
+//
+// UNE DEUXIEME NE SE SUPERPOSE PAS : elle REMPLACE, et le remplacement est
+// confirme par l'appelant puis journalise. Deux echeances actives, ce sont
+// deux comptes a rebours et deux jeux de cibles pour le meme jour.
+function ouvrirEcheance(user,o){
+  const u=_dossier(user);
+  if(!u) return {ok:false,raison:'Aucun athlète ouvert.'};
+  const d=Number(o&&o.date)||0;
+  if(!(d>0)) return {ok:false,raison:'Donne une date d’échéance.'};
+  const type=(o&&ECH_TYPES.indexOf(o.type)>=0)?o.type:'OBJECTIF';
+  // LE GARDE-FOU TCA S'APPLIQUE INTEGRALEMENT. Une echeance avec un poids
+  // cible EST un objectif de perte : c'est le meme refus, la meme doctrine,
+  // et surtout la meme porte d'entree — refusObjectifPerte couvre deja la
+  // grossesse, le TCA declare et le depistage SCOFF positif.
+  if(Number(o&&o.poidsCible)>0){
+    let refus=null;
+    try{ refus=refusObjectifPerte(u); }catch(e){ refus=null; }
+    if(refus) return {ok:false,raison:refus};
+  }
+  const ancienne=echeance(u);
+  u.echeance={date:d,type:type,
+    federation:(o&&o.federation)||null,categorie:(o&&o.categorie)||null,
+    poidsCible:(Number(o&&o.poidsCible)>0)?Number(o.poidsCible):null,
+    fiches:{},journal:[],vueLe:0};
+  // JOURNALISE, comme les ajustements nutrition. Une echeance remplacee est
+  // une decision : elle doit laisser une trace lisible.
+  try{
+    _pauseJournaliser(u,ancienne?'echeance_remplacee':'echeance_ouverte',
+      {type:type,date:d,
+       ...(ancienne?{ancienneDate:ancienne.date,ancienType:ancienne.type}:{})});
+  }catch(e){}
+  try{ saveUser(); }catch(e){}
+  return {ok:true,remplacee:!!ancienne};
+}
+// L'ECRITURE D'UNE FICHE DE JOUR. Les bornes refusent, elles n'avertissent pas.
+function poserFicheEcheance(user,j,fiche){
+  const u=_dossier(user);
+  const e=echeance(u);
+  if(!e) return {ok:false,raison:'Aucune échéance active.'};
+  const n=Math.round(Number(j));
+  if(!(n>=0&&n<=ECH_JOURS_PEAK))
+    return {ok:false,raison:'Les fiches ne couvrent que J-'+ECH_JOURS_PEAK+' à J-0.'};
+  let poids=null;
+  try{ poids=_sodiumAthleteDe(u).weightKg; }catch(e2){ poids=null; }
+  const refus=echeanceRefus(fiche,poids);
+  if(refus.length) return {ok:false,raison:refus.join(' '),refus:refus};
+  if(!u.echeance.fiches||typeof u.echeance.fiches!=='object') u.echeance.fiches={};
+  const f=fiche||{};
+  u.echeance.fiches['j'+n]={jour:n,
+    cibleGlucides:_echNombreOuNull(f.cibleGlucides),
+    cibleSodium:_echNombreOuNull(f.cibleSodium),
+    cibleEau:_echNombreOuNull(f.cibleEau),
+    seance:String(f.seance||''),poses:!!f.poses,
+    gestes:_tabBloc(f.gestes).map(x=>String(x)).slice(0,8),
+    maj:Date.now()};
+  try{ saveUser(); }catch(e2){}
+  return {ok:true,fiche:u.echeance.fiches['j'+n]};
+}
+// PURE. UNE CIBLE NON POSEE RESTE null, JAMAIS ZERO. « 0 g de glucides » est
+// une consigne ; « pas encore posé » n'en est pas une, et les confondre ferait
+// afficher un protocole que personne n'a ecrit.
+function _echNombreOuNull(v){
+  if(v===''||v==null) return null;
+  const n=Number(v);
+  return isFinite(n)&&n>=0?n:null;
+}
+// ══════════ CE QUE L'APPLICATION SAIT FAIRE ════════════════════════════
+//
+// ELLE NE POSE AUCUNE CIBLE, ELLE LES TRADUIT. « 380 g de glucides » ne dit
+// pas quoi mettre dans l'assiette ; « 480 g de riz cuit » si. La conversion
+// n'invente rien : elle lit Ciqual, qui est une table de composition, pas une
+// recommandation.
+//
+// TROIS ALIMENTS DE REFERENCE, PAS QUINZE. Une liste longue redevient un choix
+// a faire, et ce n'est pas le moment.
+// ⚠ LE NOM EXACT, PAS UNE EXPRESSION APPROXIMATIVE. Ciqual compte 3 484
+// entrees et la premiere qui matche gagne : /^p[âa]tes.*cuites/ attrapait
+// « Pâtes fraîches farcies au fromage, cuites » — des raviolis — comme
+// reference de « pâtes cuites ». Mesure faite sur la table reelle.
+const ECH_ALIMENTS_REF=Object.freeze([
+  {cle:'riz',   nom:'Riz blanc, cuit, sans sel ajouté',        lib:'riz blanc cuit'},
+  {cle:'patate',nom:"Pomme de terre, bouillie/cuite à l'eau", lib:"pomme de terre à l'eau"},
+  {cle:'pates', nom:'Pâtes sèches, standard, cuites, sans sel ajouté',lib:'pâtes cuites'}
+]);
+// Rend [{lib, grammes}] pour une cible de glucides, ou [] si Ciqual n'est pas
+// chargee. ASYNCHRONE : la table pese, et l'ecran s'affiche sans l'attendre.
+async function echeanceEquivalents(cibleG){
+  const g=Number(cibleG);
+  if(!(g>0)) return [];
+  let db=[];
+  try{ db=await _loadCiqual(); }catch(e){ db=[]; }
+  if(!Array.isArray(db)||!db.length) return [];
+  const out=[];
+  for(const a of ECH_ALIMENTS_REF){
+    const f=db.find(x=>x&&x.n===a.nom&&Number(x.c)>0);
+    // L'ENTREE A DISPARU DE LA TABLE : on saute, on ne retombe pas sur un
+    // « a peu pres ». Une equivalence approximative en peak week vaut moins
+    // que pas d'equivalence du tout.
+    if(!f) continue;
+    // c : glucides pour 100 g. La regle de trois, et rien d'autre.
+    out.push({lib:a.lib,grammes:Math.round(g*100/Number(f.c))});
+  }
+  return out;
+}
+// PURE. La cible de sodium en grammes de SEL — le moteur sodique existant fait
+// la conversion, on ne la refait pas ici.
+function echeanceSelDeSodium(sodiumMg){
+  const mg=Number(sodiumMg);
+  if(!(mg>0)) return null;
+  return Math.round(sodiumMgToSaltG(mg)*10)/10;
+}
+// PURE. LA LIGNE D'ACCUEIL. Une seule, et rien d'autre ne change dans l'app :
+// une preparation ne doit pas repeindre l'interface.
+function ligneEcheance(user,maintenant){
+  const j=echeanceJour(user,maintenant);
+  if(!j||j.j<0) return '';
+  const p=[];
+  p.push('J-'+j.j);
+  const f=j.fiche;
+  if(f){
+    if(f.cibleGlucides!=null) p.push('glucides '+Math.round(f.cibleGlucides)+' g');
+    if(f.cibleSodium!=null) p.push('sel '+String(Math.round(f.cibleSodium*10)/10).replace('.',',')+' g');
+    if(f.cibleEau!=null) p.push('eau '+String(f.cibleEau).replace('.',',')+' L');
+  }
+  if(j.poses) p.push('poses ce soir');
+  return p.join(' · ');
+}
+// L'APRES. J+1 : on propose la sortie, ET LA SORTIE EXISTE DEJA.
+//
+// ⚠ ON BRANCHE ouvrirTransitionMaintien, ON N'EN ECRIT PAS UNE SECONDE. Deux
+// mecaniques de retour au maintien finiraient par ne plus dire la meme chose
+// du meme athlete, et c'est exactement le defaut que ce fichier passe son
+// temps a eviter.
+function echeancePropositionSortie(user,maintenant){
+  const j=echeanceJour(user,maintenant);
+  if(!j||j.j>=0) return null;
+  // Un seul jour apres : au-dela, la personne est passee a autre chose et la
+  // proposition devient un rappel de ce qui est fini.
+  if(j.j<-3) return null;
+  return {jours:-j.j,
+    phrase:'Ton échéance est passée. On remonte progressivement vers ton '
+      +'maintien plutôt que d’y revenir d’un coup.'};
+}
+function echeanceOuvrirSortie(){
+  // AUCUN DOUBLON : c'est la fonction existante, appelee telle quelle.
+  try{ return ouvrirTransitionMaintien(); }catch(e){ return false; }
+}
 // ══════════ LA CHARGE INTERNE ══════════════════════════════════════════
 //
 // LE TONNAGE NE DIT PAS TOUT, ET IL NE DISPARAIT PAS POUR AUTANT. Deux cents
@@ -46817,6 +47346,7 @@ function renderVolumeCoach(c){
     ${res.nonRattachees?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
     ${_axPrio?'':_axial}
+    ${(()=>{ try{ return _htmlEcheanceCoach(c); }catch(e){ return ''; } })()}
     ${(()=>{ try{ return _htmlRendement(c); }catch(e){ return ''; } })()}
     ${(()=>{ try{ return _htmlEcartsCoach(c); }catch(e){ return ''; } })()}
     ${(()=>{ try{ return _htmlJournalSeance(c); }catch(e){ return ''; } })()}

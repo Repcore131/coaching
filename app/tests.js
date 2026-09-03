@@ -15963,6 +15963,189 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ L'ÉCHÉANCE ══════
+        (()=>{
+          const J=n=>Date.now()+n*86400000;
+          // Les commentaires, retirés d'un EXTRAIT et jamais du fichier entier.
+          const _sansComm=s=>String(s).replace(/\/\*[\s\S]*?\*\//g,'')
+                                      .replace(/^\s*\/\/.*$/gm,'');
+          const U=()=>({email:'ech@test.fr',sessions:[],nutrition:{},
+            'init-weight':80,weightLog:[{date:localISODate(new Date()),kg:80}]});
+          const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};
+            try{ return f(); } finally { window.saveUser=s; } };
+
+          ok('Le canevas est VIDE par défaut : l\'app ne calcule aucune cible',(()=>{
+            // ⚠ LE POINT DUR DU MODULE. Aucun consensus publiable n'existe sur
+            // la manipulation de glucides, d'eau et de sodium ; la littérature
+            // est mince ; et un protocole automatique sur des données de santé
+            // engage la responsabilité de l'éditeur.
+            return sansSave(()=>{
+              const u=U();
+              if(!ouvrirEcheance(u,{date:J(16),type:'COMPETITION'}).ok)
+                return _echec('l’échéance ne s’ouvre pas');
+              const e=echeance(u);
+              if(Object.keys(e.fiches||{}).length)
+                return _echec(Object.keys(e.fiches).length+' fiche(s) pré-remplie(s)');
+              // AUCUNE DES SEPT JOURNÉES N'A DE CIBLE, et parcourir la peak
+              // week n'en fait pas apparaître une.
+              for(let n=0;n<=ECH_JOURS_PEAK;n++){
+                const j=echeanceJour(u,J(n));
+                if(!j) return _echec('J-'+n+' hors fenêtre');
+                if(j.fiche) return _echec('J-'+n+' est pré-rempli');
+              }
+              // ET LE CODE NE CALCULE RIEN. Les trois cibles n'ont qu'un seul
+              // écrivain — poserFicheEcheance — et il RECOPIE ce qu'on lui
+              // donne. Toute autre écriture serait un protocole maison.
+              // ⚠ ON DÉCOUPE AVANT DE NETTOYER. Retirer les commentaires /* */
+              // du fichier ENTIER en avalait 3,2 Mo sur 4,5 : un « /* » dans
+              // une chaîne de caractères ouvre un faux commentaire qui court
+              // jusqu'au premier « */ » venu, et emportait ce module avec lui.
+              // Trois assertions passaient alors au vert sans rien regarder.
+              const src=_prodSrc();
+              for(const cle of ['cibleGlucides','cibleSodium','cibleEau']){
+                const ecrit=src.match(new RegExp(cle+'\\s*:\\s*[^\\s]','g'))||[];
+                // Deux occurrences : la fiche écrite, et la valeur relue.
+                if(ecrit.length>2) return _echec(cle+' est écrit '+ecrit.length+' fois');
+              }
+              const i=src.indexOf('function poserFicheEcheance');
+              if(i<0) return _echec('poserFicheEcheance a disparu');
+              const bloc=_sansComm(src.slice(i,i+1700));
+              if(!/cibleGlucides:_echNombreOuNull\(f\.cibleGlucides\)/.test(bloc))
+                return _echec('la cible de glucides n’est plus une recopie');
+              if(/[*/]\s*(poids|weight|kg)|[*]\s*ECH_/.test(bloc))
+                return _echec('une cible est dérivée d’un calcul');
+              // La phrase le dit à l'utilisateur, pas seulement au code.
+              return /ne les invente pas/.test(ECH_PHRASE_CANEVAS)
+                ?true:_echec('la phrase du canevas ne dit plus qui pose les cibles');});})());
+
+          ok('Les bornes dures REFUSENT l\'enregistrement, elles n\'avertissent pas',(()=>{
+            // Un avertissement qu'on peut ignorer d'un clic n'est pas un
+            // garde-fou : c'est une case à cocher avant de faire ce qu'on
+            // avait décidé de faire.
+            return sansSave(()=>{
+              const u=U();
+              ouvrirEcheance(u,{date:J(16),type:'COMPETITION'});
+              const cas=[
+                [{cibleEau:8},'eau au-delà de '+ECH_EAU_MAX_L+' L'],
+                [{cibleSodium:15},'sel au-delà de '+ECH_SEL_MAX_G+' g'],
+                [{cibleGlucides:1200},'glucides au-delà de '+ECH_GLUCIDES_MAX_G_KG+' g/kg']
+              ];
+              for(const [f,quoi] of cas){
+                const r=poserFicheEcheance(u,3,f);
+                if(r.ok) return _echec(quoi+' : accepté');
+                if(!r.raison||r.raison.length<20) return _echec(quoi+' : refus sans explication');
+                // Le refus n'écrit RIEN : une fiche à moitié posée serait pire.
+                if((echeance(u).fiches||{})['j3']) return _echec(quoi+' : la fiche a été écrite');
+              }
+              // ⚠ ET LA BORNE GLUCIDES NE S'EFFACE PAS QUAND LE POIDS MANQUE.
+              // Elle se mesurait « si le poids est connu » et disparaissait
+              // donc en silence pour un dossier sans pesée : 1 200 g passaient
+              // sans un mot. Mesuré sur un dossier sans pesée.
+              const sansPoids={email:'x@t.fr',sessions:[],nutrition:{}};
+              ouvrirEcheance(sansPoids,{date:J(16),type:'OBJECTIF'});
+              const r2=poserFicheEcheance(sansPoids,3,{cibleGlucides:1200});
+              if(r2.ok) return _echec('1200 g de glucides passent sans poids connu');
+              return /poids/i.test(r2.raison||'')
+                ?true:_echec('le refus ne nomme pas le poids manquant');});})());
+
+          ok('Le plancher hydrique : aucune restriction ne sera outillée',(()=>{
+            // Le « water cut » est la manipulation qui envoie des gens à
+            // l'hôpital. L'outiller reviendrait à la recommander.
+            return sansSave(()=>{
+              const u=U();
+              ouvrirEcheance(u,{date:J(16),type:'COMPETITION'});
+              for(const eau of [0,0.5,1,1.4]){
+                const r=poserFicheEcheance(u,2,{cibleEau:eau});
+                if(eau>0&&r.ok) return _echec(eau+' L accepté, sous le plancher de '+ECH_EAU_MIN_L);
+              }
+              // Le plancher est un vrai plancher, pas un arrondi.
+              if(poserFicheEcheance(u,2,{cibleEau:1.49}).ok) return _echec('1,49 L accepté');
+              if(!poserFicheEcheance(u,2,{cibleEau:1.5}).ok) return _echec('1,5 L refusé');
+              const r=poserFicheEcheance(u,2,{cibleEau:1.2});
+              return /restriction hydrique/i.test(r.raison||'')
+                ?true:_echec('le refus n’explique pas la doctrine : « '+r.raison+' »');});})());
+
+          ok('Une seule échéance, et le remplacement est journalisé',(()=>{
+            return sansSave(()=>{
+              const u=U();
+              ouvrirEcheance(u,{date:J(16),type:'COMPETITION',federation:'IFBB'});
+              poserFicheEcheance(u,3,{cibleEau:4});
+              const r=ouvrirEcheance(u,{date:J(40),type:'SHOOTING'});
+              if(!r.remplacee) return _echec('le remplacement n’est pas signalé');
+              // L'objet est UNIQUE : pas un tableau, pas deux clefs.
+              if(Array.isArray(u.echeance)) return _echec('les échéances s’empilent');
+              if(echeance(u).type!=='SHOOTING') return _echec('l’ancienne a survécu');
+              // Les fiches de l'ancienne ne se reportent pas sur la nouvelle.
+              if(Object.keys(echeance(u).fiches||{}).length)
+                return _echec('les fiches de l’ancienne échéance ont survécu');
+              // JOURNALISÉ, comme les ajustements nutrition.
+              const h=(u.nutrition.ajustHisto||[]).map(x=>x.origine);
+              if(h.indexOf('echeance_ouverte')<0) return _echec('l’ouverture n’est pas journalisée');
+              return h.indexOf('echeance_remplacee')>=0
+                ?true:_echec('le remplacement n’est pas journalisé');});})());
+
+          ok('La sortie branche paliersTransition, pas un doublon',(()=>{
+            // DEUX MÉCANIQUES DE RETOUR AU MAINTIEN finiraient par ne plus dire
+            // la même chose du même athlète.
+            if(typeof paliersTransition!=='function') return _echec('paliersTransition a disparu');
+            if(typeof ouvrirTransitionMaintien!=='function')
+              return _echec('ouvrirTransitionMaintien a disparu');
+            const s=String(echeanceOuvrirSortie).replace(/^\s*\/\/.*$/gm,'');
+            if(s.indexOf('ouvrirTransitionMaintien()')<0)
+              return _echec('la sortie n’appelle pas la fonction existante');
+            // AUCUNE SECONDE MÉCANIQUE : le module ne recalcule pas de paliers.
+            const src=_prodSrc();
+            const j=src.indexOf('function echeancePropositionSortie');
+            if(j<0) return _echec('la proposition de sortie a disparu');
+            const bloc=_sansComm(src.slice(j,j+900));
+            if(/paliersTransition\s*\(|kcalMaintien|\bpaliers\s*=/.test(bloc))
+              return _echec('le module recalcule des paliers au lieu d’ouvrir l’écran');
+            // paliersTransition reste appelé UNE fois, par l'écran existant.
+            const n=(src.match(/paliersTransition\(/g)||[]).length;
+            return n>=1?true:_echec('plus personne n’appelle paliersTransition');})());
+
+          ok('Le garde-fou TCA s\'applique, et la mention ne s\'affiche qu\'une fois',(()=>{
+            // LE MÊME REFUS, LA MÊME DOCTRINE, LA MÊME PORTE D'ENTRÉE :
+            // refusObjectifPerte couvre déjà la grossesse, le TCA déclaré et
+            // le dépistage SCOFF positif. Une échéance avec un poids cible EST
+            // un objectif de perte.
+            const s=String(ouvrirEcheance).replace(/^\s*\/\/.*$/gm,'');
+            if(s.indexOf('refusObjectifPerte')<0)
+              return _echec('le garde-fou TCA n’est pas branché');
+            if(s.indexOf('poidsCible')<0) return _echec('la garde ne porte pas sur le poids cible');
+            // SCOFF est bien la source du dépistage — l'audit d'août
+            // recommandait de remplacer la regex sur texte libre, c'est fait.
+            if(typeof evaluerScoff!=='function') return _echec('SCOFF n’existe pas');
+            return sansSave(()=>{
+              const u=U();
+              ouvrirEcheance(u,{date:J(16),type:'COMPETITION'});
+              // La mention médicale est due une fois, puis plus jamais.
+              if(!_echMentionAVoir(u)) return _echec('la mention n’est pas due à l’ouverture');
+              _echMarquerVue(u);
+              if(_echMentionAVoir(u)) return _echec('la mention revient à chaque ouverture');
+              return /dispositif médical/.test(ECH_PHRASE_MEDICALE)
+                ?true:_echec('la mention ne dit plus ce qu’elle doit dire');});})());
+
+          ok('L\'échéance n\'appelle aucun domaine externe',(()=>{
+            // LA RÈGLE DU PROJET : tout domaine appelé est déclaré dans
+            // privacy.html. Le module n'en ajoute AUCUN — Ciqual est servi par
+            // l'application elle-même, le moteur sodique est local, et le reste
+            // est de l'affichage. privacy.html est un fichier séparé que la
+            // suite ne charge pas : la §2 y a été complétée à la main le
+            // 3 septembre 2026, et ce test garde ce qui est vérifiable d'ici,
+            // c'est-à-dire qu'il n'y a rien de neuf à y déclarer.
+            const src=_prodSrc();
+            const i=src.indexOf('function echeanceRefus');
+            const f=src.indexOf('function ligneEcheance');
+            if(i<0||f<0||f<i) return _echec('le module a bougé');
+            const bloc=_sansComm(src.slice(i,f));
+            if(/https?:\/\/|fetch\s*\(\s*['"`]\w/.test(bloc))
+              return _echec('le module contacte un domaine');
+            // Ciqual passe par le chargeur EXISTANT, qui est déjà déclaré.
+            return bloc.indexOf('_loadCiqual()')>=0
+              ?true:_echec('les équivalents n’utilisent plus le chargeur Ciqual');})());
+        })();
+
         // ══════ LA CHARGE INTERNE ══════
         (()=>{
           const J=n=>Date.now()-n*86400000;
