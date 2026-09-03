@@ -15963,6 +15963,199 @@ async function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ L'ÉCART GAUCHE / DROITE ══════
+        (()=>{
+          const J=n=>Date.now()-n*86400000;
+          // Un bilan tel que getBM le lit : les mesures sous 'bil-<clef>',
+          // les reports listés dans `reprises` sous 'bil-<clef>'.
+          const B=(j,o,reprises)=>{
+            const b={date:J(j),reprises:reprises||[]};
+            for(const k in o) b['bil-'+k]=String(o[k]);
+            return b;
+          };
+          const P=s=>ASYM_PAIRES.filter(x=>x.site===s)[0];
+          const TROIS=()=>[B(60,{'bicep-r':38.4,'bicep-l':36.8}),
+                           B(30,{'bicep-r':38.5,'bicep-l':36.9}),
+                           B(0, {'bicep-r':38.6,'bicep-l':37.0})];
+
+          ok('Une paire dont un côté est REPORTÉ est écartée',(()=>{
+            // ⚠ LE PIÈGE PRINCIPAL. Quand l'athlète confirme qu'un tour de
+            // bras n'a pas bougé, la valeur du bilan précédent est recopiée et
+            // marquée bmReportee. Comparer une mesure du jour à une mesure
+            // d'il y a six semaines fabrique une asymétrie qui n'existe pas :
+            // un côté a bougé, l'autre est figé.
+            const mes={'bicep-r':38.6,'bicep-l':37};
+            if(!ecartPaire(B(0,mes),P('bicep')))
+              return _echec('la prémisse est fausse : la paire complète n’est pas lue');
+            for(const r of [['bil-bicep-r'],['bil-bicep-l'],['bil-bicep-r','bil-bicep-l']])
+              if(ecartPaire(B(0,mes,r),P('bicep'))!==null)
+                return _echec('report sur '+r.join('+')+' : la paire est comparée quand même');
+            // ET UN REPORT COUPE LA SUITE, il ne se saute pas. Recoller
+            // par-dessus le trou reviendrait à dire « trois bilans
+            // consécutifs » d'une série qui ne l'est pas.
+            const troue=[B(60,{'bicep-r':38.4,'bicep-l':36.8}),
+                         B(30,{'bicep-r':38.5,'bicep-l':36.9},['bil-bicep-l']),
+                         B(0, {'bicep-r':38.6,'bicep-l':37.0})];
+            if(asymetrieSite(troue,'bicep')) return _echec('la suite est recollée par-dessus un report');
+            // La même série SANS le report est bien signalée : c'est le report
+            // qui l'écarte, pas autre chose.
+            return asymetrieSite(TROIS(),'bicep')
+              ?true:_echec('sans report, l’asymétrie n’est plus vue');})());
+
+          ok('Trois bilans CONSÉCUTIFS, et dans le même sens',(()=>{
+            // Une mesure isolée ne dit rien : le mètre-ruban a une erreur de
+            // l'ordre du demi-centimètre.
+            const a=asymetrieSite(TROIS(),'bicep');
+            if(!a) return _echec('trois bilans concordants ne sont pas vus');
+            if(a.bilans!==3) return _echec('la fenêtre n’est plus de trois bilans');
+            if(a.fort!=='droite') return _echec('le côté fort est « '+a.fort+' »');
+            // DEUX NE SUFFISENT PAS.
+            if(asymetrieSite(TROIS().slice(-2),'bicep')) return _echec('deux bilans suffisent');
+            if(asymetrieSite([],'bicep')) return _echec('zéro bilan suffit');
+            // MÊME SENS : un bras plus gros puis l'autre, c'est la main qui
+            // tient le mètre qui change, pas le corps.
+            const inverse=[B(60,{'bicep-r':38.4,'bicep-l':36.8}),
+                           B(30,{'bicep-r':36.9,'bicep-l':38.5}),
+                           B(0, {'bicep-r':38.6,'bicep-l':37.0})];
+            if(asymetrieSite(inverse,'bicep')) return _echec('le sens s’inverse et ça passe');
+            // AU-DESSUS DU SEUIL SUR LES TROIS, pas deux fois sur trois.
+            const oscille=[B(60,{'bicep-r':38.4,'bicep-l':36.8}),
+                           B(30,{'bicep-r':38.5,'bicep-l':36.9}),
+                           B(0, {'bicep-r':38.0,'bicep-l':37.6})];
+            if(asymetrieSite(oscille,'bicep')) return _echec('une valeur sous le seuil passe');
+            // ⚠ CE SONT LES TROIS DERNIERS BILANS, PAS LES TROIS MEILLEURS.
+            // Une asymétrie qui s'est corrigée ne doit plus être signalée.
+            const finie=[B(90,{'bicep-r':38.4,'bicep-l':36.8}),
+                         B(60,{'bicep-r':38.5,'bicep-l':36.9}),
+                         B(30,{'bicep-r':38.0,'bicep-l':37.9}),
+                         B(0, {'bicep-r':38.0,'bicep-l':38.0})];
+            return asymetrieSite(finie,'bicep')
+              ?_echec('une asymétrie corrigée est encore signalée'):true;})());
+
+          ok('Les seuils diffèrent par site : 3 % aux bras, 2,5 % aux cuisses',(()=>{
+            // En dessous, ce n'est pas une asymétrie, c'est du bruit de
+            // mesure : sur un bras de 38 cm, un demi-centimètre fait déjà
+            // 1,3 %.
+            if(P('bicep').seuil!==0.03) return _echec('seuil bras : '+P('bicep').seuil);
+            if(P('calf').seuil!==0.03) return _echec('seuil mollets : '+P('calf').seuil);
+            if(P('thigh').seuil!==0.025) return _echec('seuil cuisses : '+P('thigh').seuil);
+            // ⚠ LE CAS QUI SÉPARE LES DEUX SEUILS, et lui seul le prouve :
+            // 2,8 % passe le seuil des cuisses et pas celui des bras. Deux
+            // fixtures au-dessus des deux seuils ne diraient rien.
+            const cuisses=[0,1,2].map(i=>B(60-30*i,{'thigh-r':61.7,'thigh-l':60.0}));
+            const bras=[0,1,2].map(i=>B(60-30*i,{'bicep-r':38.05,'bicep-l':37.0}));
+            const rc=ecartPaire(cuisses[0],P('thigh')).ecartRelatif;
+            const rb=ecartPaire(bras[0],P('bicep')).ecartRelatif;
+            if(!(rc>0.025&&rc<0.03)) return _echec('la fixture cuisse est à '+rc);
+            if(!(rb>0.025&&rb<0.03)) return _echec('la fixture bras est à '+rb);
+            if(!asymetrieSite(cuisses,'thigh')) return _echec('2,8 % aux cuisses : pas signalé');
+            return asymetrieSite(bras,'bicep')
+              ?_echec('2,8 % aux bras : signalé alors que le seuil est à 3 %'):true;})());
+
+          ok('La colonne est VIDE, et surtout pas zéro, sur une paire incomplète',(()=>{
+            // Une paire incomplète ou reportée n'a pas un écart nul : elle n'a
+            // pas d'écart du tout. Afficher « 0 » ferait lire une symétrie
+            // parfaite là où l'on n'a rien mesuré — le contresens exact que
+            // cette fonctionnalité doit éviter.
+            const t=TROIS();
+            if(_cellEcartMensuration(t,'bicep-r')!=='+1,6')
+              return _echec('côté fort : « '+_cellEcartMensuration(t,'bicep-r')+' »');
+            if(_cellEcartMensuration(t,'bicep-l')!=='−1,6')
+              return _echec('côté faible : « '+_cellEcartMensuration(t,'bicep-l')+' »');
+            for(const [cas,bils,cle] of [
+              ['un seul côté',[B(0,{'bicep-r':38.6})],'bicep-r'],
+              ['aucun côté',[B(0,{})],'bicep-r'],
+              ['côté reporté',[B(0,{'bicep-r':38.6,'bicep-l':37},['bil-bicep-l'])],'bicep-r'],
+              ['mesure non bilatérale',t,'waist'],
+              ['aucun bilan',[],'bicep-r']]){
+              const v=_cellEcartMensuration(bils,cle);
+              if(v!==null) return _echec(cas+' : « '+v+' » au lieu de rien');
+            }
+            // ⚠ ET UN ÉCART RÉELLEMENT NUL SE DISTINGUE DU VIDE. Un nombre 0
+            // serait tombé dans le même trou : renderDataTable traite 0, '0'
+            // et '' comme des cases vides. La chaîne « 0,0 » dit ce qu'elle
+            // dit — les deux côtés mesurés, et identiques.
+            const nul=_cellEcartMensuration([B(0,{'bicep-r':38,'bicep-l':38})],'bicep-r');
+            if(nul!=='0,0') return _echec('écart nul rendu « '+nul+' »');
+            // Les deux tables — athlète et coach — portent la colonne, et
+            // elles ne lisent pas la même clef : m.key ici, m.k là.
+            const src=_prodSrc();
+            const n=(src.match(/_cellEcartMensuration\(/g)||[]).length;
+            return n>=3?true:_echec('la colonne n’est branchée que '+(n-1)+' fois');})());
+
+          ok('Le signal est de priorité BASSE, et ne propose aucun volume en plus',(()=>{
+            // ⚠ AJOUTER DES SÉRIES DU CÔTÉ FAIBLE EST LE RÉFLEXE ÉVIDENT, ET
+            // C'EST L'INVERSE DU PROTOCOLE : du volume unilatéral d'un seul
+            // côté crée une asymétrie DE FATIGUE par-dessus l'asymétrie de
+            // taille, et le côté faible récupère moins bien que celui qu'on
+            // voulait rattraper.
+            const u={email:'as@t.fr',bilans:TROIS(),sessions_config:[]};
+            const s=signalAsymetrie(u);
+            if(!s) return _echec('aucun signal');
+            if(s.code!=='asymetrie') return _echec('code « '+s.code+' »');
+            if(s.gravite!==ASYM_GRAVITE) return _echec('gravité '+s.gravite);
+            // BASSE : sous la douleur (9), sous le plateau (6), au rang des
+            // signaux administratifs.
+            if(s.gravite>=6) return _echec('la gravité remonte au-dessus du plateau');
+            if(s.phrase!=='Bras droit +1,6 cm sur trois bilans.')
+              return _echec('phrase : « '+s.phrase+' »');
+            if(!/côté gauche passent en premier/.test(s.geste))
+              return _echec('le geste ne fait pas passer le côté faible en premier');
+            if(!/s’aligne sur le nombre de répétitions/.test(s.geste))
+              return _echec('le geste n’aligne pas le côté fort sur le faible');
+            if(/ajoute|série de plus|supplémentaire|séries en plus/i.test(s.geste))
+              return _echec('le geste ajoute du volume : « '+s.geste+' »');
+            // AUCUN NOUVEAU GRAPHIQUE : les courbes gauche/droite existaient
+            // déjà, on n'en trace pas une de plus.
+            const src=_prodSrc();
+            if(/_sparkline\([^)]*ecart|canvas[^"]*asym/i.test(src))
+              return _echec('un graphique d’asymétrie a été ajouté');
+            // Il remonte dans l'explication d'urgence, au rang bas.
+            const m=expliquerUrgence(u).filter(x=>/Asym/.test(x.motif));
+            if(!m.length) return _echec('le signal ne remonte pas au coach');
+            return m[0].gravite===ASYM_GRAVITE
+              ?true:_echec('remonté au rang '+m[0].gravite);})());
+
+          ok('« Unilatéral » a un seul accesseur, la déclaration avant le nom',(()=>{
+            // Deux notions coexistaient : exUnilateral(nom) le devine du nom,
+            // et la fiche de banque porte un champ `unilateral` DÉCLARÉ. La
+            // déclaration gagne — c'est un fait saisi, pas une déduction — et
+            // le nom sert de repli. Un troisième chemin les ferait diverger.
+            if(typeof exUnilateral!=='function') return _echec('le repli par le nom a disparu');
+            const s=String(estUnilateral);
+            if(s.indexOf('ficheBanque')<0) return _echec('la déclaration n’est pas lue');
+            if(s.indexOf('exUnilateral')<0) return _echec('le repli par le nom n’est pas branché');
+            // Le repli fonctionne pour ce qui n'est pas dans la banque.
+            if(estUnilateral({name:'Leg curl allongé en unilatéral'})!==true)
+              return _echec('un nom explicite n’est pas vu comme unilatéral');
+            if(estUnilateral({name:'Développé couché barre'})!==false)
+              return _echec('un bilatéral est vu comme unilatéral');
+            return estUnilateral({})===false?true:_echec('un exercice vide est unilatéral');})());
+
+          ok('Il n\'existe aucune mesure d\'avant-bras : le seuil est posé, inerte',(()=>{
+            // LA FICHE PARLE DE « bras, avant-bras, mollets ». MEAS ne porte
+            // que trois paires — bicep, thigh, calf — et rien pour
+            // l'avant-bras. Le seuil est écrit pour le jour où la mesure
+            // existera plutôt qu'inventé à la hâte ce jour-là ; il ne peut
+            // rien signaler tant qu'aucun bilan ne porte ces clefs.
+            const p=ASYM_PAIRES.filter(x=>x.site==='forearm')[0];
+            if(!p) return _echec('le seuil de l’avant-bras a disparu de la table');
+            const cles=MEAS.map(m=>m.k||m.key);
+            if(cles.indexOf(p.g)>=0||cles.indexOf(p.d)>=0)
+              return _echec('la mesure d’avant-bras existe : le commentaire ment');
+            // Inerte, et sans lever : trois bilans complets ne produisent rien.
+            const t=TROIS();
+            if(asymetrieSite(t,'forearm')!==null)
+              return _echec('l’avant-bras signale quelque chose sans mesure');
+            // Et les trois paires réelles, elles, sont bien dans MEAS.
+            for(const q of ASYM_PAIRES){
+              if(q.site==='forearm') continue;
+              if(cles.indexOf(q.g)<0||cles.indexOf(q.d)<0)
+                return _echec(q.site+' : la paire n’existe pas dans MEAS');
+            }
+            return true;})());
+        })();
+
         // ══════ LES RÈGLES D'EMPLOI DES MÉTHODES ══════
         (()=>{
           const GRILLE={'charniere-hanche':{'rachis-lombaire':3},'squat':{'rachis-lombaire':3}};

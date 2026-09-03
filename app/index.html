@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1117';
+window.RC_BUILD='1118';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -5939,6 +5939,9 @@ const COACH_PHOTO='icons/coach.jpg';
            chargee, les depassements de regle quand il y en a. Sous le
            programme, parce que c'est du programme qu'elles parlent. -->
       <div id="ccd-methodes"></div>
+      <!-- L'ASYMETRIE : la phrase et le geste. Aucun graphique — la donnee
+           est deja tracee par les mini-courbes gauche/droite existantes. -->
+      <div id="ccd-asymetrie"></div>
       <!-- Charge de la semaine et exercices en hausse. Masqué tant que
            l'historique ne permet pas de les établir : c'est le contrat des
            deux fonctions qui les calculent. -->
@@ -16967,6 +16970,13 @@ function expliquerUrgence(c){
   }catch(e){}
   try{ if(!c._fromCode&&needsAlert(c)) ajout('Bilan en retard',4,dernier); }catch(e){}
   if(_pilAccesExpire(c,Date.now())) ajout('Accès qui expire',3,c.accessExpiry);
+  // PRIORITE BASSE, au meme rang que l'acces qui expire : une asymetrie de
+  // 3 % ne se corrige pas dans la semaine, et la faire remonter au-dessus
+  // d'une douleur deplacerait le regard du coach au mauvais endroit.
+  try{
+    const _as=signalAsymetrie(c);
+    if(_as) ajout('Asymétrie gauche/droite — '+_as.phrase,ASYM_GRAVITE,dernier);
+  }catch(e){}
   return out.sort((a,b)=>b.gravite-a.gravite);
 }
 
@@ -22436,6 +22446,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderVolumeCoach(c); }catch(e){}
   try{ renderPlateauxCoach(c); }catch(e){}
   try{ renderMethodesCoach(c); }catch(e){}
+  try{ renderAsymetrieCoach(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
   try{ renderLeveeCoach(c); }catch(e){}
   // BILAN DE SECURITE : une ligne, sans le detail des reponses — le coach
@@ -23099,16 +23110,21 @@ function renderBilanEvolution(c){
 
   // ── Table des mensurations ──────────────────────────────────────────
   const buildMeasTable=()=>{
-    const columns=['Parties mesurées',...bHeaders];
+    // LA COLONNE D'ECART FERME LA TABLE : elle porte le dernier bilan, et
+    // c'est la derniere chose qu'on lit apres avoir parcouru la ligne.
+    const columns=['Parties mesurées',...bHeaders,'Écart'];
     const rows=MEAS.map(m=>({
       label:m.label,labelBg:m.color||'var(--border)',labelColor:'var(--text)',
-      values:Array.from({length:maxB},(_,i)=>{const v=bilans[i]?bVal(bilans[i],m.key):0;return v||null;}),
+      values:Array.from({length:maxB},(_,i)=>{const v=bilans[i]?bVal(bilans[i],m.key):0;return v||null;})
+        .concat([(()=>{ try{ return _cellEcartMensuration(bilans,m.key); }catch(e){ return null; } })()]),
       // REPORTÉE, DONC GRISE — cote coach aussi. C'est lui qui lit la
       // stagnation, et il doit distinguer d'un coup d'oeil une mesure reprise
       // d'un relevé du jour.
-      valueStyleFn:(v,ci,empty)=>empty?'background:#080808;color:var(--sub);'
-        :('background:var(--dark);color:'
-          +(bilans[ci]&&bmReportee(bilans[ci],m.key)?'var(--text-faint)':'var(--text)')+';')
+      valueStyleFn:(v,ci,empty)=>ci>=maxB
+        ? (empty?'background:#080808;color:var(--sub);':'background:var(--dark);color:var(--sub);')
+        : (empty?'background:#080808;color:var(--sub);'
+          :('background:var(--dark);color:'
+            +(bilans[ci]&&bmReportee(bilans[ci],m.key)?'var(--text-faint)':'var(--text)')+';'))
     }));
     return renderDataTable(columns,rows,{stickyCol0:true,firstColMinWidth:'130px',pad:'4px 6px',mb:'24px'})
       +(bilans.some(b=>b&&MEAS.some(m=>bmReportee(b,m.key)))
@@ -35341,6 +35357,29 @@ function _ligneEtat(x){
 // LA LIGNE DES METHODES. UNE PHRASE, PAS UNE ALERTE ROUGE : le coach sait ce
 // qu'il fait, il a juste besoin de le voir. Aucune couleur d'alarme, aucun
 // pictogramme — le gris du texte secondaire, comme les ecarts au programme.
+// LA LIGNE D'ASYMETRIE. La phrase, puis le geste. Pas de couleur d'alarme :
+// c'est un signal de priorite BASSE, et il doit se lire comme tel.
+function renderAsymetrieCoach(c){
+  const z=document.getElementById('ccd-asymetrie');
+  if(!z) return false;
+  let s=null;
+  try{ s=signalAsymetrie(c); }catch(e){ s=null; }
+  if(!s){ z.innerHTML=''; return true; }
+  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-3);padding:11px 13px;margin-bottom:16px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
+    +'text-transform:uppercase;margin-bottom:5px">Asymétrie</div>'
+    +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
+    +escapeHtml(s.phrase)+'</div>'
+    +'<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;margin-top:5px">'
+    +escapeHtml(s.geste)+'</div>'
+    +(s.toutes.length>1
+      ?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">'
+        +s.toutes.slice(1).map(a=>escapeHtml(phraseAsymetrie(a))).join(' ')+'</div>'
+      :'')
+    +'</div>';
+  return true;
+}
 function renderMethodesCoach(c){
   const z=document.getElementById('ccd-methodes');
   if(!z) return false;
@@ -47392,6 +47431,232 @@ function getBM(b,k){const v=parseFloat(b['bil-'+k]||b['deb-'+k]||b[k]);return is
 function bmReportee(b,k){
   try{ return ((b&&b.reprises)||[]).indexOf('bil-'+k)>=0; }catch(e){ return false; }
 }
+// ══════════════ L'ECART GAUCHE / DROITE ════════════════════════════════
+//
+// ⚠ LE PIEGE PRINCIPAL, ET IL EST DEVANT LA PORTE : UNE VALEUR REPORTEE.
+// Quand l'athlete confirme qu'un tour de bras n'a pas bouge, RepCore recopie
+// la valeur du bilan precedent et la marque `bmReportee`. Comparer une mesure
+// du jour a une mesure d'il y a six semaines fabrique une asymetrie qui
+// n'existe pas : le cote re-mesure a bouge, l'autre est fige. TOUTE PAIRE
+// DONT L'UN DES DEUX COTES EST REPORTE EST ECARTEE — pas corrigee, pas
+// ponderee : ecartee.
+//
+// ⚠ ET DEUX ECARTS ENTRE LA FICHE ET LE CODE :
+//
+// 1. IL N'EXISTE AUCUNE MESURE D'AVANT-BRAS. MEAS porte trois paires —
+//    bicep, thigh, calf — et rien d'autre de bilateral. Le seuil de
+//    l'avant-bras est donc pose dans la table pour le jour ou la mesure
+//    existera, et il est INERTE aujourd'hui. L'ecrire vaut mieux que de
+//    l'omettre : le jour ou la paire arrive, le seuil est deja la et il ne
+//    sera pas invente a la hate.
+//
+// 2. LE SEUIL EST UNE FRONTIERE ENTRE MESURE ET BRUIT. Le metre-ruban a une
+//    erreur de l'ordre du demi-centimetre : sur un bras de 38 cm, c'est
+//    deja 1,3 %. Sous les seuils, ce n'est pas une petite asymetrie, c'est du
+//    bruit — et LE DIRE est plus utile que de tracer une ligne.
+const ASYM_PAIRES=Object.freeze([
+  {site:'bicep', lib:'Bras',       g:'bicep-l', d:'bicep-r', seuil:0.03},
+  {site:'thigh', lib:'Cuisse',     g:'thigh-l', d:'thigh-r', seuil:0.025},
+  {site:'calf',  lib:'Mollet',     g:'calf-l',  d:'calf-r',  seuil:0.03},
+  // INERTE : aucune de ces deux clefs n'existe dans MEAS aujourd'hui.
+  {site:'forearm',lib:'Avant-bras',g:'forearm-l',d:'forearm-r',seuil:0.03}
+]);
+const ASYM_BILANS=3;               // trois bilans consecutifs, pas deux
+
+// PURE. L'ecart d'UNE paire sur UN bilan, ou null.
+//
+// null couvre trois cas differents et ils se valent tous les trois ici : un
+// cote manquant, un cote a zero, un cote reporte. Aucun n'est un ecart de
+// zero — et les confondre ferait entrer des symetries parfaites imaginaires
+// dans une suite qui sert a decider.
+function ecartPaire(bilan,paire){
+  if(!bilan||!paire) return null;
+  if(bmReportee(bilan,paire.g)||bmReportee(bilan,paire.d)) return null;
+  const g=getBM(bilan,paire.g), d=getBM(bilan,paire.d);
+  const ng=Number(g), nd=Number(d);
+  if(!isFinite(ng)||!isFinite(nd)||!(ng>0)||!(nd>0)) return null;
+  const moy=(ng+nd)/2;
+  if(!(moy>0)) return null;
+  const brut=nd-ng;                                  // signe : + = droite plus grosse
+  return {site:paire.site,lib:paire.lib,gauche:ng,droite:nd,
+    ecart:Math.abs(brut),signe:brut>0?1:(brut<0?-1:0),
+    fort:brut>0?'droite':(brut<0?'gauche':null),
+    ecartRelatif:Math.abs(brut)/moy,seuil:paire.seuil};
+}
+// PURE. Tous les ecarts d'un bilan, paires ecartees comprises — elles rendent
+// null, et l'appelant sait alors qu'il n'y a rien a lire plutot que rien a
+// signaler.
+function ecartsBilan(bilan){
+  const out={};
+  for(const p of ASYM_PAIRES) out[p.site]=ecartPaire(bilan,p);
+  return out;
+}
+
+// PURE. LA QUALIFICATION. Rend l'asymetrie averee d'un site, ou null.
+//
+// TROIS BILANS CONSECUTIFS, ET DANS LE MEME SENS. Une mesure isolee ne dit
+// rien : c'est le metre-ruban, pas le muscle. « Consecutifs » se lit sur les
+// trois DERNIERS bilans du dossier — pas sur les trois derniers ou la paire
+// etait lisible. Un bilan ou l'un des cotes a ete reporte COUPE la suite : la
+// serie n'est pas continue, et on ne la recolle pas par-dessus le trou.
+function asymetrieSite(bilans,site,seuilPerso){
+  const p=ASYM_PAIRES.filter(x=>x.site===site)[0];
+  if(!p) return null;
+  const l=(bilans||[]).filter(b=>b&&typeof b.date==='number')
+                      .slice().sort((a,b)=>a.date-b.date);
+  if(l.length<ASYM_BILANS) return null;
+  const der=l.slice(-ASYM_BILANS);
+  const seuil=(typeof seuilPerso==='number'&&seuilPerso>0)?seuilPerso:p.seuil;
+  const e=[];
+  for(const b of der){
+    const x=ecartPaire(b,p);
+    // UN TROU COUPE LA SUITE. Reporte, incomplet, illisible : dans les trois
+    // cas la serie n'est plus consecutive.
+    if(!x) return null;
+    e.push(x);
+  }
+  // MEME SENS SUR LES TROIS. Un bras plus gros puis l'autre, c'est la main
+  // qui tient le metre qui change, pas le corps.
+  const s=e[0].signe;
+  if(s===0) return null;
+  if(!e.every(x=>x.signe===s)) return null;
+  // AU-DESSUS DU SEUIL SUR LES TROIS. Deux fois au-dessus et une fois en
+  // dessous, c'est une mesure qui oscille autour de la frontiere du bruit.
+  if(!e.every(x=>x.ecartRelatif>=seuil)) return null;
+  const dernier=e[e.length-1];
+  return {site:site,lib:p.lib,fort:dernier.fort,
+    ecart:dernier.ecart,ecartRelatif:dernier.ecartRelatif,
+    seuil:seuil,bilans:ASYM_BILANS,
+    // La suite complete : c'est elle qui permet au coach de voir que ce n'est
+    // pas un accident de mesure.
+    suite:e.map(x=>Math.round(x.ecart*10)/10)};
+}
+// PURE. Toutes les asymetries averees d'un dossier, la plus marquee d'abord.
+function asymetries(user){
+  const u=_dossier(user);
+  const b=(u&&u.bilans)||[];
+  const out=[];
+  for(const p of ASYM_PAIRES){
+    const a=asymetrieSite(b,p.site);
+    if(a) out.push(a);
+  }
+  return out.sort((x,y)=>y.ecartRelatif-x.ecartRelatif);
+}
+// ── LA CONSEQUENCE : LE SIGNAL, LA PHRASE, LE GESTE ────────────────────
+//
+// ⚠ DEUX NOTIONS D'« UNILATERAL » COEXISTAIENT, et il fallait choisir sans en
+// ecrire une troisieme : exUnilateral(nom) le devine du nom, et la fiche de
+// banque porte un champ `unilateral` DECLARE par le coach. La declaration
+// gagne quand elle existe — c'est un fait saisi, pas une deduction — et le
+// nom sert de repli pour tout ce qui n'est pas dans la banque. Un seul
+// accesseur, ici.
+function estUnilateral(ex,user){
+  const nom=String((ex&&(ex.name||ex))||'');
+  if(!nom) return false;
+  try{
+    const f=ficheBanque(nom,user);
+    if(f&&typeof f.unilateral==='boolean') return f.unilateral;
+  }catch(e){}
+  try{ return exUnilateral(nom); }catch(e){ return false; }
+}
+// Les patrons qui travaillent un site mesure. On passe par le SCHEMA et non
+// par le muscle : c'est le decoupage deja partage par la substitution, la
+// charge axiale et les regles d'emploi.
+const ASYM_SCHEMAS=Object.freeze({
+  bicep:['isolation-coude'],
+  thigh:['isolation-genou','squat','fente'],
+  calf:['mollets-cheville'],
+  forearm:['poignet-avant-bras']
+});
+// PURE. Les exercices unilateraux du programme qui touchent le site. Rend []
+// quand il n'y en a pas — et une liste vide N'EST PAS un echec : le geste
+// reste valable, il n'a simplement pas d'exercice a nommer.
+function exercicesUnilaterauxSite(user,site){
+  const u=_dossier(user);
+  if(!u) return [];
+  try{ _aplatirSessionsConfig(u); }catch(e){}
+  const schemas=ASYM_SCHEMAS[site]||[];
+  const out=[];
+  for(const sc of (Array.isArray(u.sessions_config)?u.sessions_config:[])){
+    if(!sc||!sc.active||!Array.isArray(sc.exercises)) continue;
+    for(const e of sc.exercises){
+      if(!e||!e.name) continue;
+      if(!estUnilateral(e,u)) continue;
+      let s=null; try{ s=schemaDe(e,u); }catch(err){ s=null; }
+      if(s&&schemas.indexOf(s)>=0&&out.indexOf(e.name)<0) out.push(e.name);
+    }
+  }
+  return out;
+}
+// PURE. LA PHRASE ET LE GESTE.
+//
+// ⚠ ON NE PROPOSE PAS DE SERIES SUPPLEMENTAIRES DU COTE FAIBLE. C'est le
+// reflexe evident et c'est l'inverse du protocole tenu par les coachs :
+// ajouter du volume unilateral d'un seul cote cree une asymetrie DE FATIGUE
+// par-dessus l'asymetrie de taille, et le cote faible recupere moins bien que
+// celui qu'on voulait rattraper. Le cote FORT s'aligne sur le faible, a
+// volume egal — et le cote faible passe en premier, quand il est frais.
+function phraseAsymetrie(a){
+  if(!a) return '';
+  const cm=String(Math.round(a.ecart*10)/10).replace('.',',');
+  const cote=a.fort==='droite'?'droit':'gauche';
+  // « sur trois bilans » et non « sur 3 bilans » : c'est une phrase, pas un
+  // releve, et le chiffre isole y ferait tache.
+  const n=({1:'un',2:'deux',3:'trois',4:'quatre'})[a.bilans]||String(a.bilans);
+  return a.lib+' '+cote+' +'+cm+' cm sur '+n+' bilans.';
+}
+function gesteAsymetrie(a,user){
+  if(!a) return '';
+  const faible=a.fort==='droite'?'gauche':'droit';
+  const ex=(user!==undefined)?exercicesUnilaterauxSite(user,a.site):[];
+  return 'Les exercices unilatéraux du côté '+faible+' passent en premier, et le '
+    +'côté fort s’aligne sur le nombre de répétitions du côté faible.'
+    +(ex.length?' Concernés : '+ex.slice(0,3).join(', ')+'.':'');
+}
+// PURE. Le signal complet, tel que la fiche coach le lit.
+// PRIORITE BASSE, et c'est deliberé : une asymetrie de 3 % ne se corrige pas
+// dans la semaine, et la faire remonter au-dessus d'une douleur serait
+// deplacer le regard du coach au mauvais endroit.
+const ASYM_GRAVITE=3;
+function signalAsymetrie(user){
+  const l=asymetries(user);
+  if(!l.length) return null;
+  const a=l[0];
+  return {code:'asymetrie',gravite:ASYM_GRAVITE,site:a.site,
+    phrase:phraseAsymetrie(a),geste:gesteAsymetrie(a,user),
+    ecart:a.ecart,ecartRelatif:a.ecartRelatif,toutes:l};
+}
+// PURE. LA CELLULE « ECART » D'UNE LIGNE DE MENSURATION, sur le DERNIER
+// bilan. Rend null — donc « — » a l'affichage — quand il n'y a rien a dire.
+//
+// ⚠ VIDE, ET SURTOUT PAS ZERO. Une paire incomplete ou reportee n'a pas un
+// ecart nul : elle n'a pas d'ecart du tout. Afficher « 0 » ferait lire une
+// symetrie parfaite la ou l'on n'a rien mesure — et sur ce sujet precis,
+// c'est exactement le contresens que la fonctionnalite doit eviter.
+//
+// ⚠ ET LA VALEUR EST UNE CHAINE, PAS UN NOMBRE. renderDataTable traite 0,
+// '0' et '' comme des cases vides : un ecart reellement nul — les deux cotes
+// a 38,0 — serait tombe dans le meme trou que « pas mesurable ». Formatee a
+// une decimale, « 0,0 » se distingue de « — » et dit ce qu'il dit.
+//
+// LES DEUX LIGNES D'UNE PAIRE PORTENT LE SIGNE : « +1,6 » du cote fort,
+// « −1,6 » du cote faible. Chaque ligne se lit alors seule, sans avoir a
+// chercher l'autre pour savoir de quel cote penche l'ecart.
+function _cellEcartMensuration(bilans,cle){
+  const l=(bilans||[]).filter(b=>b&&typeof b.date==='number');
+  if(!l.length) return null;
+  const dernier=l[l.length-1];
+  for(const p of ASYM_PAIRES){
+    if(p.g!==cle&&p.d!==cle) continue;
+    const e=ecartPaire(dernier,p);
+    if(!e) return null;
+    const signe=(cle===p.d)?e.signe:-e.signe;
+    const v=Math.round(e.ecart*10)/10;
+    if(v===0) return '0,0';
+    return (signe>0?'+':'−')+String(v).replace('.',',');
+  }
+  return null;                        // mesure non bilaterale : rien a dire
+}
 function calcBF(waist,neck,hips,height,gender){
   // Formule US Navy (mesures en cm)
   if(!waist||!neck||!height) return null;
@@ -49160,13 +49425,16 @@ function showProgressTab(tab,btn){
     });
     miniCharts+='</div>';
     c.innerHTML=renderDataTable(
-      ['PARTIES MESURÉES',...bilLabels],
+      ['PARTIES MESURÉES',...bilLabels,'ÉCART'],
       MEAS.map(m=>({label:m.l,labelColor:'var(--text-strong)',
-        values:bl.map(b=>{const v=getBM(b,m.k);return v!==null?v:null;}),
+        values:bl.map(b=>{const v=getBM(b,m.k);return v!==null?v:null;})
+          .concat([(()=>{ try{ return _cellEcartMensuration(bl,m.k); }catch(e){ return null; } })()]),
         // REPORTÉE, DONC GRISE. Elle vaut autant qu'une autre pour lire une
         // stagnation, et rien ne doit la faire passer pour un relevé du jour.
-        valueStyleFn:(v,ci,empty)=>empty?'color:var(--sub);'
-          :(bmReportee(bl[ci],m.k)?'color:var(--text-faint);':'color:var(--text);')})),
+        valueStyleFn:(v,ci,empty)=>ci>=bl.length
+          ? (empty?'color:var(--sub);':'color:var(--sub);')
+          : (empty?'color:var(--sub);'
+            :(bmReportee(bl[ci],m.k)?'color:var(--text-faint);':'color:var(--text);'))})),
       {stickyCol0:true,firstColMinWidth:'130px',bodyLabelBg:'var(--dark)',
        wrapperStyle:'border-radius:var(--r-3);border:1px solid var(--border);background:var(--dark)',
        pad:'7px 14px',cellBorder:'#141414',cellBorderSide:'bottom',mb:'16px',
