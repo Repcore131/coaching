@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1123';
+window.RC_BUILD='1124';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -6692,8 +6692,31 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- L'ECHEANCE : UNE SEULE LIGNE, et rien d'autre ne change dans
-           l'application. Une preparation ne doit pas repeindre l'interface. -->
-      <div id="clh-echeance" style="display:none;margin-bottom:14px"></div>
+           l'application. Une preparation ne doit pas repeindre l'interface.
+
+           ⚠ DEUX BANDEAUX D'ECHEANCE COEXISTENT SUR CET ECRAN, ET ILS N'ONT
+           RIEN A VOIR L'UN AVEC L'AUTRE :
+             · #clh-echeance, en tete d'ecran, dit que l'ACCES au coaching se
+               termine — c'est une echeance commerciale, ecrite par
+               _rendreEcheanceAcces ;
+             · #clh-echeance-prepa, ici, sous le resume de bilan, dit ou en est
+               une PREPARATION datee — competition, shooting, objectif.
+           Les deux emplacements sont voulus : le premier se lit avant tout le
+           reste, le second appartient au suivi.
+
+           ILS ONT PORTE LE MEME IDENTIFIANT, et getElementById ne rend que le
+           PREMIER. Le bloc de preparation s'executant AVANT
+           _rendreEcheanceAcces, il posait display:none sur le noeud d'ACCES
+           des que ligneEcheance rendait '' — le cas de presque tous les
+           athletes. L'avertissement de fin d'acces etait alors ecrit dans un
+           noeud masque, et ce noeud-ci ne recevait jamais rien. Aucune erreur,
+           aucune trace : le bandeau ne s'affichait plus, voila tout.
+
+           AUCUN DES DEUX NE LIT NI N'ECRIT LE NOEUD DE L'AUTRE, et chacun rend
+           son propre display. Ce n'est pas le doublon d'identifiant qui a rendu
+           le defaut invisible — c'est la dependance implicite : un bandeau qui
+           compte sur l'etat laisse par un voisin ne tombe pas, il se tait. -->
+      <div id="clh-echeance-prepa" style="display:none;margin-bottom:14px"></div>
       <!-- LES COURBATURES, EN DIFFERE. Posees au RETOUR dans l'app et non a
            chaud : « as-tu des courbatures ? » dix minutes apres la seance n'a
            pas de sens physiologique, et la reponse serait toujours « aucune ». -->
@@ -16986,7 +17009,12 @@ function _rendreEcheanceAcces(){
   if(!z) return null;
   const u=currentUser;
   const j=accesJoursRestants(u);
-  if(j==null){ z.innerHTML=''; return null; }
+  // CHACUN REND SON PROPRE display. Cette fonction posait innerHTML='' sans
+  // toucher au display : sans consequence tant qu'elle etait seule sur le
+  // noeud, mais elle dependait alors de l'etat que personne d'autre n'etait
+  // cense y laisser. Elle ne depend plus de rien.
+  if(j==null){ z.innerHTML=''; z.style.display='none'; return null; }
+  z.style.display='block';
   // Les deux derniers jours passent au rouge : le même bandeau orange pendant
   // une semaine finit par faire partie du décor.
   const urgent=j<=2;
@@ -30225,7 +30253,10 @@ function loadClientHome(){
   // cours est portee par _motEdition, elle ne se perd donc pas au passage.
   try{ renderMotCoach(); }catch(e){}
   try{
-    const _z=document.getElementById('clh-echeance');
+    // #clh-echeance-prepa, PAS #clh-echeance : le premier est le bandeau de
+    // fin d'acces, en tete d'ecran, et il ne nous appartient pas. Voir le
+    // commentaire pose sur le noeud.
+    const _z=document.getElementById('clh-echeance-prepa');
     const _l=ligneEcheance(currentUser);
     if(_z){
       _z.innerHTML=_l

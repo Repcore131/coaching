@@ -33982,6 +33982,78 @@ async function testExercices(){
     ok('Aucune ecriture vers une case supprimee ne subsiste',
        !/clh-sessions|clh-streak-nb|clh-weight/.test(String(loadClientHome)));
 
+    // ══════ DEUX BANDEAUX D'ÉCHÉANCE, DEUX NŒUDS ══════
+    //
+    // ⚠ ILS ONT PORTÉ LE MÊME IDENTIFIANT, et getElementById ne rend que le
+    // PREMIER. Le bloc de préparation s'exécutait AVANT _rendreEcheanceAcces
+    // et posait display:none sur le nœud d'accès dès que ligneEcheance rendait
+    // '' — le cas de presque tous les athlètes. L'avertissement de fin d'accès
+    // était donc écrit dans un nœud invisible, et le second nœud ne recevait
+    // jamais rien. Aucune erreur, aucune trace : le bandeau ne s'affichait
+    // simplement plus.
+    (()=>{
+      const J=n=>Date.now()+n*864e5;
+      // Un dossier minimal que loadClientHome sait traverser en entier.
+      const U=(sup)=>Object.assign({id:'a',email:'ech@t.fr',fname:'M',role:'athlete',
+        exAlias:{},exMuscles:{},bilans:[],sessions:[],sessions_config:[{active:true}],
+        programs:{}},sup||{});
+      const ACCES=()=>({status:'COACHING_SUIVI',accessExpiry:J(3)});
+      const PREPA=()=>({echeance:{date:J(5),type:'COMPETITION',fiches:{},journal:[],vueLe:0}});
+      const jouer=(sup)=>{
+        const sauve=currentUser, sv=window.saveUser;
+        window.saveUser=()=>{};
+        try{
+          currentUser=U(sup);
+          try{ loadClientHome(); }catch(e){}
+          const acc=document.getElementById('clh-echeance');
+          const pre=document.getElementById('clh-echeance-prepa');
+          const lire=el=>el?{rempli:(el.innerHTML||'').trim().length>0,
+                             display:getComputedStyle(el).display}:null;
+          return {acc:lire(acc),pre:lire(pre)};
+        } finally { currentUser=sauve; window.saveUser=sv; }
+      };
+
+      ok('L\'avertissement de fin d\'accès est VISIBLE après un loadClientHome complet',(()=>{
+        // C'est l'assertion qui aurait attrapé le défaut. Elle ne regarde pas
+        // le contenu écrit — il l'était déjà — mais ce que l'utilisateur VOIT.
+        if(accesJoursRestants(U(ACCES()))!==3)
+          return _echec('la prémisse est fausse : '+accesJoursRestants(U(ACCES()))+' jours au lieu de 3');
+        const r=jouer(ACCES());
+        if(!r.acc) return _echec('le nœud d’accès a disparu');
+        if(!r.acc.rempli) return _echec('le bandeau n’est pas écrit');
+        return r.acc.display!=='none'
+          ?true:_echec('le bandeau est écrit dans un nœud masqué : display « '+r.acc.display+' »');})());
+
+      ok('Sans préparation, le nœud de préparation est masqué et celui d\'accès intact',(()=>{
+        const r=jouer(ACCES());
+        if(!r.pre) return _echec('le nœud de préparation n’existe pas');
+        if(r.pre.rempli) return _echec('une ligne de préparation sort de nulle part');
+        if(r.pre.display!=='none') return _echec('le nœud vide reste affiché');
+        // ET CELUI D'ACCÈS N'A PAS ÉTÉ TOUCHÉ par le voisin.
+        return (r.acc&&r.acc.rempli&&r.acc.display!=='none')
+          ?true:_echec('le nœud d’accès a été affecté par la préparation');})());
+
+      ok('Les deux bandeaux actifs : chacun visible, chacun à sa place',(()=>{
+        const r=jouer(Object.assign(ACCES(),PREPA()));
+        if(!r.acc||!r.acc.rempli||r.acc.display==='none')
+          return _echec('le bandeau d’accès n’est pas visible');
+        if(!r.pre||!r.pre.rempli||r.pre.display==='none')
+          return _echec('la ligne de préparation n’est pas visible');
+        // CHACUN SON CONTENU : aucun des deux n'écrit dans l'autre.
+        const a=document.getElementById('clh-echeance').innerHTML;
+        const p=document.getElementById('clh-echeance-prepa').innerHTML;
+        if(a.indexOf('ouvrirEcheanceEcran')>=0)
+          return _echec('la préparation a écrit dans le nœud d’accès');
+        return p.indexOf('accès se termine')<0
+          ?true:_echec('l’accès a écrit dans le nœud de préparation');})());
+
+      ok('Un seul nœud porte l\'identifiant clh-echeance',(()=>{
+        const n=document.querySelectorAll('#clh-echeance').length;
+        if(n!==1) return _echec(n+' nœuds portent #clh-echeance');
+        return document.querySelectorAll('#clh-echeance-prepa').length===1
+          ?true:_echec('le nœud de préparation n’est pas unique');})());
+    })();
+
     // ── Message de fin de séance : la chaîne générique a disparu ──
     ok('« Excellent travail » n\'existe plus dans le produit',
        !/Excellent travail/.test(String(finishWorkout))
