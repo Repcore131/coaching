@@ -7911,6 +7911,25 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- ══════ TRAITEMENTS ═══════════════════════════════════════════════
+     SEPARE de l'ecran des complements, et pour la meme raison que l'objet
+     l'est du leur : un complement se conseille, un medicament ne se conseille
+     pas. Les deux ecrans se ressemblent ; ce qu'ils portent ne se ressemble
+     pas. -->
+<div id="s-traitements" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="go('s-supplements');loadSupplements()">←</button>
+    <span class="topbar-title">Traitements</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1;padding:0 14px 20px">
+    <div id="trt-limite"></div>
+    <div id="trt-interactions"></div>
+    <div id="trt-liste"></div>
+    <div id="trt-histo"></div>
+  </div>
+</div>
+
 <!-- STEPS -->
 <div id="s-steps" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
@@ -10019,6 +10038,33 @@ const CLOUD={
       safe.sante.journal=safe.sante.journal.filter(e=>e&&vu(e.bloc));
     return safe;
   },
+  // ⚠ LES TRAITEMENTS NE PARTENT QU'AMPUTES. Le noeud /users est lisible par
+  // le COACH de ce dossier : un nom de medicament y serait lisible par lui
+  // sans que l'athlete l'ait partage. On remplace donc le tableau par sa
+  // version masquee — les moments, et le nom seulement quand partageCoach est
+  // explicitement vrai.
+  //
+  // Meme patron que _retirerContraceptionSiNonPartagee : safe est une copie
+  // PLATE, donc safe.sante est LE MEME objet que user.sante. Sans le clone, le
+  // remplacement effacerait la vraie donnee locale.
+  //
+  // CONTREPARTIE ASSUMEE, ET A DIRE : ce qui n'est pas partage ne quitte pas
+  // l'appareil. Un changement de telephone perd le nom, la dose et le
+  // prescripteur des traitements non partages — exactement la contrepartie
+  // deja acceptee pour les constantes et les analyses avant qu'un noeud prive
+  // n'existe pour elles. `sante_privee` est le prolongement naturel de ce lot ;
+  // il n'y est pas.
+  _masquerTraitements(safe,user){
+    if(!safe||!safe.sante||typeof safe.sante!=='object') return safe;
+    if(!Array.isArray(safe.sante.traitements)) return safe;
+    safe.sante={...safe.sante};
+    try{ safe.sante.traitements=traitementsPourCoach(user); }
+    catch(e){ delete safe.sante.traitements; }
+    // LE RELEVE DE PRISE NE PART PAS DU TOUT. L'observance ne regarde pas le
+    // coach, et un releve qui remonterait ferait cesser de cocher.
+    delete safe.sante.prises;
+    return safe;
+  },
   _retirerContraceptionSiNonPartagee(safe){
     if(!safe||!safe.cycle||safe.cycle.contraceptionPartagee) return safe;
     // safe est une copie PLATE du dossier : safe.cycle est LE MÊME objet que
@@ -10043,7 +10089,10 @@ const CLOUD={
         throw sansJeton;
       }
       const safeKey=email.replace(/\./g,',');
-      const safe={...user};
+      let safe={...user};
+      // AVANT TOUT LE RESTE : les traitements ne doivent jamais traverser en
+      // clair, quelle que soit la suite du traitement de `safe`.
+      try{ safe=this._masquerTraitements(safe,user)||safe; }catch(e){}
       delete safe.pwd;delete safe.pwdHash;delete safe._st;delete safe._stb64;delete safe._sk;
       // seenBilans uses email addresses as keys (dots/@ invalid in Firebase) — strip before push
       delete safe.seenBilans;
@@ -60980,6 +61029,523 @@ const SUPP_TIMING_META={
   'apres-entrainement': {color:'#c2410c',svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6"/><polyline points="8.5 12 11 14.5 15.5 9.5"/>'},
   'toutes-4h':          {color:'#94a3b8',svg:'<circle cx="12" cy="12" r="9"/><polyline points="12 6.5 12 12 15.8 14"/>'}
 };
+// ══════════════ LES TRAITEMENTS ════════════════════════════════════════
+//
+// ⚠ UN OBJET SEPARE DES COMPLEMENTS, ET CE N'EST PAS COSMETIQUE. Un
+// complement se conseille ; un medicament ne se conseille pas. Un simple
+// champ `type` sur supplements ferait heriter aux traitements le classement
+// par NIVEAU DE PREUVE A/B/C — qui n'a aucun sens pour une ordonnance : on ne
+// note pas la « preuve » d'un traitement prescrit, on le prend.
+//
+// ⚠ ET IL VIT SOUS `sante`, PAS SOUS `nutrition`. C'est une donnee de sante au
+// sens du RGPD, et sa place dans l'objet doit le dire — c'est aussi ce qui le
+// fait tomber sous la machinerie de partage deja en place pour les autres
+// blocs de sante.
+//
+// LES MOMENTS SONT CEUX DES COMPLEMENTS. SUPP_ORDRE_JOURNEE, SUPP_TIMING_META
+// et TIMINGS_LIST sont reutilises tels quels : deux chronologies de journee
+// finiraient par diverger, et c'est precisement le croisement des deux listes
+// qui permet de detecter une interaction.
+const TRT_RYTHMES=Object.freeze(['quotidien','jours','cycle','ponctuel']);
+
+function _trtStore(user){
+  const u=_dossier(user);
+  if(!u) return [];
+  if(!u.sante||typeof u.sante!=='object') u.sante={};
+  if(!Array.isArray(u.sante.traitements)) u.sante.traitements=_tabBloc(u.sante.traitements);
+  return u.sante.traitements;
+}
+// PURE. La liste normalisee, quel que soit l'etat du champ revenu de Firebase.
+function traitements(user){
+  const u=_dossier(user);
+  const l=_tabBloc(u&&u.sante&&u.sante.traitements);
+  return l.filter(t=>t&&typeof t==='object'&&t.nom);
+}
+
+// PURE. LE RYTHME. Rend true si ce traitement est a prendre ce jour-la.
+//
+// ⚠ ON COMPARE DES JOURS DE CALENDRIER, JAMAIS DES MILLISECONDES. Un cycle
+// compte en jours civils : diviser un ecart de temps par 86 400 000 se decale
+// d'un jour a chaque changement d'heure — deux fois par an, un traitement
+// change de phase sans raison. _dateDeISO ramene chaque borne a minuit local,
+// et la difference se lit alors en jours pleins.
+function _trtJoursEntre(isoA,isoB){
+  const a=_dateDeISO(isoA), b=_dateDeISO(isoB);
+  if(!a||!b) return null;
+  // Midi local des deux cotes : un ecart de 23 h ou de 25 h — les deux nuits
+  // de changement d'heure — reste alors un jour plein, sans arrondi.
+  const ja=new Date(a.getFullYear(),a.getMonth(),a.getDate(),12,0,0).getTime();
+  const jb=new Date(b.getFullYear(),b.getMonth(),b.getDate(),12,0,0).getTime();
+  return Math.round((jb-ja)/86400000);
+}
+function aPrendreLe(traitement,dateISO){
+  const t=traitement||{};
+  const jour=String(dateISO||'').slice(0,10);
+  if(!jour||!/^\d{4}-\d{2}-\d{2}$/.test(jour)) return false;
+  if(t.actif===false) return false;
+  // HORS FENETRE : avant le debut, ou apres la fin. Un traitement TERMINE ne
+  // revient pas dans la journee — mais il reste dans le dossier, voir
+  // terminerTraitement.
+  if(t.debut){
+    const d=localISODate(new Date(Number(t.debut)));
+    if(jour<d) return false;
+  }
+  if(t.fin){
+    const f=localISODate(new Date(Number(t.fin)));
+    if(jour>f) return false;
+  }
+  const r=(t.rythme&&typeof t.rythme==='object')?t.rythme:{type:'quotidien'};
+  const type=TRT_RYTHMES.indexOf(r.type)>=0?r.type:'quotidien';
+  if(type==='quotidien') return true;
+  // ⚠ 'ponctuel' NE REND JAMAIS TRUE. « Au besoin » n'a pas de jour : le
+  // faire apparaitre dans la journee reviendrait a le prescrire. Il n'existe
+  // que dans la fiche.
+  if(type==='ponctuel') return false;
+  if(type==='jours'){
+    const l=_tabBloc(r.jours).map(x=>Math.round(Number(x)))
+      .filter(x=>isFinite(x)&&x>=0&&x<=6);
+    if(!l.length) return false;
+    // getDay() rend 0 pour dimanche ; la table est en 0..6 dans cet ordre,
+    // comme partout ailleurs dans le fichier.
+    return l.indexOf(_dateDeISO(jour).getDay())>=0;
+  }
+  if(type==='cycle'){
+    const on=Math.round(Number(r.cycleOn)), off=Math.round(Number(r.cycleOff));
+    if(!(on>0)||!(off>=0)) return false;
+    const ancre=Number(r.ancre)||Number(t.debut)||0;
+    if(!(ancre>0)) return false;
+    const n=_trtJoursEntre(localISODate(new Date(ancre)),jour);
+    if(n===null||n<0) return false;
+    return (n%(on+off))<on;
+  }
+  return false;
+}
+// PURE. Les traitements A PRENDRE ce jour-la, a ce moment-la.
+function traitementsDuMoment(user,moment,dateISO){
+  const j=dateISO||localISODate(new Date());
+  return traitements(user).filter(t=>
+    _tabBloc(t.moments).indexOf(moment)>=0 && aPrendreLe(t,j));
+}
+// PURE. Terminé ou non. Un traitement dont la fin est passee sort de la
+// journee mais reste dans le dossier.
+function traitementTermine(t,dateISO){
+  const j=String(dateISO||localISODate(new Date())).slice(0,10);
+  if(!t||!t.fin) return false;
+  return localISODate(new Date(Number(t.fin)))<j;
+}
+// ON NE SUPPRIME PAS UN TRAITEMENT, ON LE TERMINE. La trace est une donnee
+// medicale : savoir qu'un traitement a ete pris pendant six mois explique une
+// prise de poids, une fatigue ou un plateau, des annees plus tard.
+function terminerTraitement(user,id,quand){
+  const l=_trtStore(user);
+  const t=l.filter(x=>x&&x.id===id)[0];
+  if(!t) return {ok:false,raison:'Traitement introuvable.'};
+  t.fin=Number(quand)||Date.now();
+  t.actif=false;
+  try{ saveUser(); }catch(e){}
+  return {ok:true};
+}
+// ══════════════ LA TABLE D'INTERACTIONS ════════════════════════════════
+//
+// ⚠ RIEN N'ENTRE ICI SANS SOURCE CITABLE. Une fausse alerte sur un medicament
+// est PIRE que pas d'alerte du tout : elle apprend a ignorer les vraies. Trois
+// entrees, pas une de plus, et chacune porte sa source en clair — une
+// assertion refuse toute entree sans source.
+//
+// ⚠ ET LA QUATRIEME REGLE DEMANDEE N'Y EST PAS : « AINS a ne pas prendre a
+// jeun ». Verification faite avant d'ecrire : il n'existe AUCUNE etude
+// publiee montrant que prendre un AINS au cours d'un repas previent la lesion
+// gastrique. Le repas reduit la dyspepsie ressentie, pas le risque d'ulcere ;
+// la recommandation est une habitude ancienne, reprise par les notices, sans
+// donnee de qualite derriere. Elle ne passe donc pas le critere pose pour
+// cette table. Elle n'entrerait de toute facon pas dans sa forme : la table
+// dit « decale de tant de minutes », et il n'y a rien a decaler entre un
+// comprime et un repas absent.
+//   Rainsford KD et coll., « NSAIDs: take with food or after fasting? »,
+//   Journal of Pharmacy and Pharmacology, 2012.
+//
+// LES FAMILLES SONT DES MOTIFS SUR LE NOM, en minuscules sans accent. On ne
+// tient pas un dictionnaire de medicaments : on reconnait les quelques noms
+// que ces trois regles concernent, et rien d'autre. Un nom non reconnu ne
+// declenche RIEN — c'est le sens de la regle « aucune interaction inventee ».
+const INTERACTIONS=Object.freeze([
+  {
+    cle:'thyroide-mineraux',
+    // Les hormones thyroidiennes : levothyroxine et ses noms commerciaux.
+    motifs:[/l[ée]vothyrox/i,/levothyrox/i,/euthyral/i,/l[- ]?thyroxin/i],
+    contre:[/\bfer\b/i,/ferreu/i,/sulfate de fer/i,/bisglycinate de fer/i,
+            /calcium/i,/carbonate de calcium/i,/citrate de calcium/i],
+    delaiMin:240,
+    phrase:'Le fer et le calcium diminuent l’absorption de l’hormone '
+      +'thyroïdienne. Prends l’hormone à jeun, et attends 4 heures avant le fer '
+      +'ou le calcium.',
+    source:'NICE, British National Formulary — interaction lévothyroxine / sels '
+      +'de fer et de calcium : intervalle d’au moins 4 heures. Absorption '
+      +'réduite de 20 à 64 % (fer) et de 15 à 20 % (calcium).'
+  },
+  {
+    cle:'fer-calcium',
+    motifs:[/\bfer\b/i,/ferreu/i,/sulfate de fer/i,/bisglycinate de fer/i],
+    contre:[/calcium/i,/carbonate de calcium/i,/citrate de calcium/i],
+    delaiMin:120,
+    phrase:'Le calcium gêne l’absorption du fer quand les deux sont pris '
+      +'ensemble. Espace-les d’au moins 2 heures.',
+    source:'Interaction d’absorption documentée de longue date (compétition au '
+      +'niveau du transporteur DMT1) ; recommandation d’espacement reprise par '
+      +'l’ANSES et les notices de sels de fer.'
+  },
+  {
+    cle:'pamplemousse-statines',
+    // ⚠ SEULEMENT LES STATINES METABOLISEES PAR LE CYP3A4. Verification faite :
+    // simvastatine, lovastatine et atorvastatine sont concernees ;
+    // pravastatine, rosuvastatine, fluvastatine et pitavastatine NE LE SONT
+    // PAS — elles passent par le CYP2C9 ou par sulfatation. Alerter sur une
+    // rosuvastatine serait exactement la fausse alerte que cette table doit
+    // eviter, et c'est le genre d'erreur qu'on ne fait qu'une fois avant de
+    // n'etre plus jamais cru.
+    motifs:[/simvastatin/i,/lovastatin/i,/atorvastatin/i,/tahor/i,/zocor/i],
+    contre:[/pamplemousse/i,/grapefruit/i,/pomelo/i],
+    delaiMin:null,
+    phrase:'Le pamplemousse augmente fortement la concentration sanguine de '
+      +'cette statine. Ce n’est pas une question d’horaire : il est à éviter '
+      +'tant que dure le traitement. Parles-en à ton médecin.',
+    source:'Bailey DG et coll. ; Lee JW et coll., « Grapefruit Juice and '
+      +'Statins », The American Journal of Medicine, 2016. Simvastatine et '
+      +'lovastatine +260 %, atorvastatine +80 %. Pravastatine, rosuvastatine et '
+      +'fluvastatine NON concernées (CYP2C9 / sulfatation).'
+  }
+]);
+
+// PURE. Un nom correspond-il a l'un des motifs ?
+function _intCorrespond(nom,motifs){
+  const n=String(nom||'');
+  if(!n.trim()) return false;
+  return (motifs||[]).some(re=>{ try{ return re.test(n); }catch(e){ return false; } });
+}
+// PURE. LES INTERACTIONS D'UNE JOURNEE, moment par moment.
+//
+// ⚠ LE DECLENCHEMENT SE FAIT SUR LE MOMENT DE PRISE, pas sur la simple
+// coexistence dans le dossier. Deux produits en interaction pris a huit heures
+// d'intervalle ne posent aucun probleme : alerter la reviendrait a alerter
+// tous les jours, pour rien.
+//
+// La seule exception est `delaiMin:null` — le pamplemousse et les statines ne
+// se decalent pas, l'eviction est la seule reponse. Celle-la se signale des
+// que les deux sont presents le meme jour.
+function interactionsDuJour(user,dateISO){
+  const j=dateISO||localISODate(new Date());
+  const trts=traitements(user).filter(t=>aPrendreLe(t,j));
+  let comps=[];
+  try{ comps=(_dossier(user)&&_dossier(user).nutrition&&_dossier(user).nutrition.supplements)||[]; }catch(e){ comps=[]; }
+  comps=_tabBloc(comps).filter(s=>s&&s.active!==false&&s.name);
+  const out=[];
+  const vus={};
+  for(const r of INTERACTIONS){
+    for(const t of trts){
+      if(!_intCorrespond(t.nom,r.motifs)) continue;
+      for(const s of comps){
+        if(!_intCorrespond(s.name,r.contre)) continue;
+        const mT=_tabBloc(t.moments), mS=_tabBloc(s.timings);
+        // SANS DELAI : la coexistence suffit, le moment n'y change rien.
+        const communs=(r.delaiMin===null)
+          ? (mT.length&&mS.length?['*']:[])
+          : mT.filter(m=>mS.indexOf(m)>=0);
+        if(!communs.length) continue;
+        for(const m of communs){
+          const cle=r.cle+'|'+t.id+'|'+(s.id||s.name)+'|'+m;
+          if(vus[cle]) continue;
+          vus[cle]=true;
+          out.push({cle:r.cle,traitement:t.nom,complement:s.name,
+            moment:(m==='*'?null:m),delaiMin:r.delaiMin,
+            phrase:r.phrase,source:r.source,
+            // CE QU'IL FAUT DECALER, et non « quelque chose ». Le traitement
+            // prescrit ne bouge pas : c'est le complement qui s'ecarte.
+            aDecaler:(r.delaiMin===null)?null:s.name});
+        }
+      }
+    }
+  }
+  return out;
+}
+// ══════════════ LE SUIVI DE PRISE ══════════════════════════════════════
+//
+// UNE CASE PAR PRISE ET PAR JOUR. Le releve vit sous sante.prises, indexe par
+// jour puis par « id|moment » : c'est la granularite de la case cochee, et
+// c'est la seule qui permette de dire « le comprime du soir est oublie, celui
+// du matin non ».
+//
+// ⚠ IL N'ALIMENTE AUCUN SIGNAL VERS LE COACH. L'observance d'un traitement ne
+// le regarde pas : ce n'est pas lui qui l'a prescrit, et un athlete qui sait
+// son oubli remonte a son coach cesse de cocher. Le taux est pour l'athlete,
+// et pour lui seul.
+//
+// ⚠ ET LA COCHE N'EST PAS UNE CHRONOLOGIE DE PLUS. Les compléments n'avaient
+// AUCUNE coche de prise — il n'y avait donc rien a « reutiliser » : la voici,
+// ecrite une fois, et elle sert aux deux. `quoi` vaut 'trt' ou 'supp'.
+const PRISE_JOURS_MAX=120;          // au-dela, le releve ne sert plus a rien
+
+function _priseStore(user){
+  const u=_dossier(user);
+  if(!u) return {};
+  if(!u.sante||typeof u.sante!=='object') u.sante={};
+  if(!u.sante.prises||typeof u.sante.prises!=='object') u.sante.prises={};
+  return u.sante.prises;
+}
+function _priseCle(quoi,id,moment){ return String(quoi)+':'+String(id)+'|'+String(moment); }
+// PURE. Cette prise est-elle cochee ce jour-la ?
+function prisePrise(user,quoi,id,moment,dateISO){
+  const u=_dossier(user);
+  const p=(u&&u.sante&&u.sante.prises)||{};
+  const j=p[String(dateISO||localISODate(new Date())).slice(0,10)];
+  return !!(j&&typeof j==='object'&&j[_priseCle(quoi,id,moment)]);
+}
+// LA BASCULE. Decocher EFFACE au lieu d'ecrire `false` : un dossier reecrit en
+// entier a chaque sauvegarde n'a pas besoin de porter la trace de ce qui n'a
+// pas eu lieu.
+function basculerPrise(user,quoi,id,moment,dateISO){
+  const u=_dossier(user);
+  if(!u) return false;
+  const p=_priseStore(u);
+  const j=String(dateISO||localISODate(new Date())).slice(0,10);
+  if(!p[j]||typeof p[j]!=='object') p[j]={};
+  const c=_priseCle(quoi,id,moment);
+  const etait=!!p[j][c];
+  if(etait){ delete p[j][c]; if(!Object.keys(p[j]).length) delete p[j]; }
+  else p[j][c]=true;
+  // PURGE DES VIEUX JOURS, ici et pas ailleurs : le dossier entier repart a
+  // chaque sauvegarde, et un releve qui s'accumule sans borne finit par peser.
+  const jours=Object.keys(p).sort();
+  while(jours.length>PRISE_JOURS_MAX) delete p[jours.shift()];
+  try{ saveUser(); }catch(e){}
+  return !etait;
+}
+// PURE. LE TAUX DE PRISE sur `n` jours. Rend null quand rien n'etait DU sur la
+// periode : un taux de 0 % dirait « tout oublie » la ou il n'y avait rien a
+// prendre, et c'est un reproche fabrique.
+function tauxPrise(user,n,dateISO){
+  const jours=Math.max(1,Math.round(Number(n)||7));
+  const fin=_dateDeISO(String(dateISO||localISODate(new Date())).slice(0,10));
+  if(!fin) return null;
+  const l=traitements(user);
+  let du=0, fait=0;
+  for(let k=0;k<jours;k++){
+    const d=new Date(fin.getFullYear(),fin.getMonth(),fin.getDate()-k);
+    const j=localISODate(d);
+    for(const t of l){
+      if(!aPrendreLe(t,j)) continue;
+      for(const m of _tabBloc(t.moments)){
+        du++;
+        if(prisePrise(user,'trt',t.id,m,j)) fait++;
+      }
+    }
+  }
+  if(!du) return null;
+  return {du:du,fait:fait,pct:Math.round(fait/du*100),jours:jours};
+}
+
+// ══════════════ CE QUE LE COACH VOIT ═══════════════════════════════════
+//
+// ⚠ partageCoach VAUT FALSE PAR DEFAUT, et sans partage le coach voit qu'un
+// traitement est actif A TEL MOMENT — de quoi eviter de proposer un complement
+// qui entrerait en conflit — et RIEN DE PLUS : ni le nom, ni le dosage, ni le
+// prescripteur, ni les notes.
+//
+// C'est le minimum utile a la securite, et le maximum acceptable sans
+// consentement explicite. Un coach n'a pas a savoir que son athlete prend un
+// antidepresseur pour eviter de lui proposer du millepertuis : il lui suffit
+// de savoir qu'il y a QUELQUE CHOSE le soir.
+function traitementsPourCoach(user){
+  return traitements(user).filter(t=>t.actif!==false&&!traitementTermine(t))
+    .map(t=>{
+      const base={id:String(t.id||''),moments:_tabBloc(t.moments).slice(),
+        partage:t.partageCoach===true};
+      if(t.partageCoach!==true) return base;
+      // PARTAGE EXPLICITE : le nom et le dosage suivent, le reste non. Le
+      // prescripteur et les notes ne servent a aucune decision d'entrainement.
+      return Object.assign(base,{nom:String(t.nom||''),
+        dosage_quantite:(Number(t.dosage_quantite)>0)?Number(t.dosage_quantite):null,
+        dosage_unite:String(t.dosage_unite||'')});
+    });
+}
+// PURE. La phrase du coach. Elle ne nomme rien quand rien n'est partage.
+function phraseTraitementsCoach(user){
+  const l=traitementsPourCoach(user);
+  if(!l.length) return '';
+  const moments={};
+  for(const t of l) for(const m of t.moments) moments[m]=(moments[m]||0)+1;
+  const ordre=Object.keys(moments).sort((a,b)=>_rangMoment(a)-_rangMoment(b));
+  const lib=id=>{ const t=TIMINGS_LIST.filter(x=>x.id===id)[0]; return t?t.label.toLowerCase():id; };
+  const n=l.length;
+  return n+' traitement'+(n>1?'s':'')+' en cours'
+    +(ordre.length?' — '+ordre.map(lib).join(', '):'')
+    +'. Tiens-en compte avant de proposer un complément.';
+}
+// ══════════════ L'ECRAN DES TRAITEMENTS ════════════════════════════════
+//
+// LA LIMITE EST ECRITE DANS LE PRODUIT, PAS DANS UNE POLITIQUE QU'IL FAUDRAIT
+// ALLER CHERCHER. Elle s'affiche a l'ouverture, UNE FOIS : repetee a chaque
+// visite, elle deviendrait un bandeau qu'on ne lit plus — et c'est exactement
+// ce qu'une mention de ce genre ne doit pas devenir.
+const TRT_MENTION='RepCore n’est pas un dispositif médical. Il affiche et '
+  +'rappelle ce que ton médecin a prescrit, il ne le modifie pas et ne le '
+  +'conseille pas.';
+
+function _trtMentionVue(user){
+  const u=_dossier(user);
+  return !!(u&&u.sante&&u.sante.mentionTraitementsVue);
+}
+function _trtMarquerMention(user){
+  const u=_dossier(user);
+  if(!u) return false;
+  if(!u.sante||typeof u.sante!=='object') u.sante={};
+  if(u.sante.mentionTraitementsVue) return false;
+  u.sante.mentionTraitementsVue=Date.now();
+  try{ saveUser(); }catch(e){}
+  return true;
+}
+function ouvrirTraitements(){
+  go('s-traitements');
+  renderTraitements();
+  return true;
+}
+function renderTraitements(){
+  const j=localISODate(new Date());
+  // ── LA MENTION, UNE FOIS ─────────────────────────────────────────────
+  const zm=document.getElementById('trt-limite');
+  if(zm){
+    zm.innerHTML=_trtMentionVue(currentUser)?''
+      :'<div style="background:var(--info-bg);border:1px solid var(--info-border);'
+       +'border-radius:var(--r-3);padding:12px 14px;margin:12px 0 14px;'
+       +'font-size:var(--fs-xs);color:var(--text);line-height:1.6">'
+       +escapeHtml(TRT_MENTION)+'</div>';
+    if(!_trtMentionVue(currentUser)) _trtMarquerMention(currentUser);
+  }
+  // ── LES INTERACTIONS DU JOUR ─────────────────────────────────────────
+  const zi=document.getElementById('trt-interactions');
+  if(zi){
+    let l=[]; try{ l=interactionsDuJour(currentUser,j); }catch(e){ l=[]; }
+    zi.innerHTML=!l.length?'':l.map(x=>
+      '<div style="background:var(--warning-bg);border:1px solid var(--warning-border);'
+      +'border-radius:var(--r-3);padding:11px 13px;margin-bottom:10px">'
+      +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
+      +escapeHtml(x.phrase)+'</div>'
+      +'<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;margin-top:5px">'
+      +escapeHtml(x.traitement)+' · '+escapeHtml(x.complement)
+      +(x.aDecaler?' — décaler « '+escapeHtml(x.aDecaler)+' » de '
+        +(x.delaiMin>=60?(x.delaiMin/60)+' h':x.delaiMin+' min'):'')+'</div>'
+      // LA SOURCE EST LISIBLE, pas cachee dans le code : c'est ce qui
+      // distingue un avertissement d'une opinion.
+      +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">'
+      +escapeHtml(x.source)+'</div></div>').join('');
+  }
+  // ── LA LISTE DU JOUR ─────────────────────────────────────────────────
+  const zl=document.getElementById('trt-liste');
+  if(zl){
+    const actifs=traitements(currentUser).filter(t=>!traitementTermine(t,j)&&t.actif!==false);
+    const t7=tauxPrise(currentUser,7,j), t28=tauxPrise(currentUser,28,j);
+    let h='';
+    if(t7||t28){
+      h+='<div style="display:flex;gap:8px;margin-bottom:12px">'
+        +[[t7,'7 jours'],[t28,'28 jours']].map(([t,lib])=>
+          '<div style="flex:1;background:var(--surface-1);border:1px solid var(--border);'
+          +'border-radius:var(--r-3);padding:10px;text-align:center">'
+          +'<div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text)">'
+          +(t?t.pct+' %':'—')+'</div>'
+          +'<div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;'
+          +'text-transform:uppercase">'+lib+'</div></div>').join('')
+        +'</div>';
+    }
+    if(!actifs.length){
+      h+='<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;padding:14px 0">'
+        +'Aucun traitement en cours.</div>';
+    } else {
+      // PAR MOMENT DE JOURNEE, dans l'ordre des complements — la meme
+      // chronologie, lue au meme endroit.
+      const parMoment={};
+      for(const t of actifs){
+        if(!aPrendreLe(t,j)) continue;
+        for(const m of _tabBloc(t.moments)) (parMoment[m]=parMoment[m]||[]).push(t);
+      }
+      const moments=Object.keys(parMoment).sort((a,b)=>_rangMoment(a)-_rangMoment(b));
+      for(const m of moments){
+        const lib=(TIMINGS_LIST.filter(x=>x.id===m)[0]||{}).label||m;
+        h+='<div style="display:flex;align-items:center;gap:7px;margin:14px 0 6px">'
+          +_suppTimingIcon(m,15)
+          +'<span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;'
+          +'color:var(--sub);text-transform:uppercase">'+escapeHtml(lib)+'</span></div>';
+        for(const t of parMoment[m]){
+          const coche=prisePrise(currentUser,'trt',t.id,m,j);
+          const dose=(Number(t.dosage_quantite)>0)
+            ? String(t.dosage_quantite).replace('.',',')+' '+escapeHtml(t.dosage_unite||'') : '';
+          h+='<label style="display:flex;align-items:center;gap:10px;padding:9px 11px;'
+            +'background:var(--surface-1);border:1px solid var(--border);'
+            +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;'
+            +'text-transform:none;letter-spacing:normal;font-weight:400">'
+            +'<input type="checkbox" '+(coche?'checked':'')+' '
+            +'onchange="basculerPrise(currentUser,\'trt\',\''+escapeHtml(t.id)+'\',\''+m+'\');renderTraitements()" '
+            +'style="width:18px;height:18px;margin:0;accent-color:var(--red);flex-shrink:0">'
+            +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);color:'
+            +(coche?'var(--text-faint)':'var(--text)')+';'+(coche?'text-decoration:line-through':'')+'">'
+            +escapeHtml(t.nom)+(dose?' <span style="color:var(--sub)">· '+dose+'</span>':'')+'</span>'
+            +'<button type="button" class="btn btn-outline btn-sm" style="margin:0;flex:0 0 auto;'
+            +'font-size:var(--fs-2xs);padding:4px 8px" '
+            +'onclick="event.preventDefault();event.stopPropagation();ouvrirFicheTraitement(\''+escapeHtml(t.id)+'\')">Fiche</button>'
+            +'</label>';
+        }
+      }
+      // LES PONCTUELS : dans la fiche, jamais dans la journee. On les nomme
+      // quand meme, sans case a cocher — « au besoin » ne s'oublie pas.
+      const ponct=actifs.filter(t=>((t.rythme||{}).type)==='ponctuel');
+      if(ponct.length)
+        h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:14px">'
+          +'Au besoin, sans jour fixe : '+ponct.map(t=>escapeHtml(t.nom)).join(', ')+'.</div>';
+    }
+    zl.innerHTML=h;
+  }
+  // ── L'HISTORIQUE ─────────────────────────────────────────────────────
+  const zh=document.getElementById('trt-histo');
+  if(zh){
+    const finis=traitements(currentUser).filter(t=>traitementTermine(t,j));
+    zh.innerHTML=!finis.length?''
+      :'<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:12px">'
+       +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;'
+       +'color:var(--sub);text-transform:uppercase;margin-bottom:7px">Terminés</div>'
+       // ON NE SUPPRIME PAS UN TRAITEMENT : la trace est une donnee medicale,
+       // et elle explique parfois une periode entiere, des annees plus tard.
+       +finis.map(t=>'<div style="font-size:var(--fs-xs);color:var(--text-faint);'
+         +'line-height:1.6">'+escapeHtml(t.nom)+' — jusqu’au '
+         +new Date(Number(t.fin)).toLocaleDateString('fr-FR')+'</div>').join('')
+       +'</div>';
+  }
+  return true;
+}
+function ouvrirFicheTraitement(id){
+  const t=traitements(currentUser).filter(x=>x.id===id)[0];
+  if(!t) return false;
+  const r=(t.rythme&&t.rythme.type)||'quotidien';
+  const JOURS=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  const rythme=r==='quotidien'?'Tous les jours'
+    :r==='jours'?('Les '+_tabBloc(t.rythme.jours).map(n=>JOURS[n]).join(', '))
+    :r==='cycle'?(t.rythme.cycleOn+' jours de prise puis '+t.rythme.cycleOff+' d’arrêt')
+    :'Au besoin, sans jour fixe';
+  const NL=String.fromCharCode(10);
+  const l=[t.nom];
+  if(Number(t.dosage_quantite)>0)
+    l.push('Dose : '+String(t.dosage_quantite).replace('.',',')+' '+(t.dosage_unite||''));
+  l.push('Rythme : '+rythme);
+  if(t.prescripteur) l.push('Prescrit par : '+t.prescripteur);
+  if(t.notes) l.push(t.notes);
+  l.push(t.partageCoach===true
+    ? 'Ton coach voit le nom et la dose de ce traitement.'
+    : 'Ton coach voit seulement qu’un traitement est actif à ce moment de la journée — ni le nom, ni la dose.');
+  // ⚠ AUCUNE MODIFICATION DE POSOLOGIE DEPUIS L'APP. Ni ici, ni cote
+  // coach : la dose se change chez le medecin, et une application qui
+  // offrirait le geste laisserait croire qu'elle en a le droit. Cette fiche
+  // est en LECTURE, et rcAlerte n'offre qu'un bouton de fermeture.
+  l.push(TRT_MENTION);
+  try{ rcAlerte(l.join(NL+NL)); }catch(e){}
+  return true;
+}
 function _suppTimingIcon(id,size,color){
   const m=SUPP_TIMING_META[id];
   if(!m) return '';
@@ -61353,6 +61919,11 @@ function _htmlBlocSupplements(list,avant){
     </div>
     ${_htmlTraitementSupp(currentUser)}
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4);padding:14px">
+      <!-- LES TRAITEMENTS SONT AILLEURS, et le lien le dit : un complement se
+           conseille, un medicament ne se conseille pas. Les melanger sur le
+           meme ecran ferait croire qu'ils se lisent de la meme facon. -->
+      <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0 0 14px"
+        onclick="ouvrirTraitements()">Mes traitements</button>
       ${avant||''}${_renderSuppTable(list,false,'openSuppEdit')}
     </div>`;
 }

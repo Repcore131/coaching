@@ -45184,6 +45184,241 @@ vendredi 78 6h 44m
         return woVueAvatar([])==='face'?true
           :_echec('sans muscle, la face n\'est plus la vue par défaut');})());
     })();
+
+    // ══ LES TRAITEMENTS ══════════════════════════════════════════════════
+    //
+    // Un objet distinct des complements : un complement se conseille, un
+    // medicament ne se conseille pas. Ce qui suit garde la frontiere.
+    (()=>{
+      const T=(o)=>Object.assign({id:'t1',nom:'Test',moments:['matin'],actif:true,
+        debut:new Date('2026-01-01T08:00:00').getTime(),fin:null,
+        rythme:{type:'quotidien'}},o||{});
+
+      // ── LES QUATRE RYTHMES ─────────────────────────────────────────────
+      ok('Traitement quotidien : pris dans la fenêtre, pas avant le début',
+        aPrendreLe(T(),'2026-03-15')===true && aPrendreLe(T(),'2025-12-31')===false);
+      ok('Traitement inactif : jamais dû, même dans la fenêtre',
+        aPrendreLe(T({actif:false}),'2026-03-15')===false);
+
+      // 2026-09-07 est un lundi (getDay 1), 2026-09-10 un jeudi (4).
+      const j=T({rythme:{type:'jours',jours:[1,4]}});
+      ok('Rythme « jours » : lundi et jeudi oui, mardi et dimanche non',
+        aPrendreLe(j,'2026-09-07')===true && aPrendreLe(j,'2026-09-10')===true
+        && aPrendreLe(j,'2026-09-08')===false && aPrendreLe(j,'2026-09-13')===false);
+      // ⚠ FIREBASE REND LES TABLEAUX A TROUS EN OBJETS. Sans normalisation,
+      // jours.indexOf leve, et l'appel entier tombe dans un catch silencieux.
+      ok('Rythme « jours » : une liste rendue en objet par Firebase est lue pareil',
+        aPrendreLe(T({rythme:{type:'jours',jours:{0:1,1:4}}}),'2026-09-07')===true);
+      ok('Rythme « jours » : liste vide = jamais dû',
+        aPrendreLe(T({rythme:{type:'jours',jours:[]}}),'2026-09-07')===false);
+
+      const anc=new Date('2026-09-01T08:00:00').getTime();
+      const c=T({rythme:{type:'cycle',cycleOn:21,cycleOff:7,ancre:anc}});
+      ok('Rythme « cycle » 21/7 : dû du jour 0 au jour 20, pas du 21 au 27',
+        aPrendreLe(c,'2026-09-01')===true && aPrendreLe(c,'2026-09-21')===true
+        && aPrendreLe(c,'2026-09-22')===false && aPrendreLe(c,'2026-09-28')===false
+        && aPrendreLe(c,'2026-09-29')===true);
+
+      // ⚠ LES DEUX CHANGEMENTS D'HEURE, ET PAS UN SEUL.
+      //
+      // La premiere ecriture de cette assertion ne testait que la nuit d'octobre,
+      // celle de 25 heures — et une division brute de millisecondes la passait au
+      // vert : Math.floor(25/24) vaut 1, la bonne reponse par accident. La nuit
+      // qui discrimine est celle de MARS, qui ne dure que 23 heures :
+      // Math.floor(23/24) vaut 0, et le cycle recule d'un jour.
+      //
+      // ⚠ ET L'ASSERTION PROUVE SA PROPRE PRECONDITION. Sur une machine reglee
+      // sur UTC il n'y a pas de changement d'heure du tout, et tout ce qui suit
+      // passerait au vert sans rien avoir verifie. On mesure donc d'abord que ces
+      // deux nuits durent bien 23 et 25 heures.
+      const _nuit=(a,b)=>(_dateDeISO(b).getTime()-_dateDeISO(a).getTime())/3600000;
+      // ⚠ C'EST LA JOURNEE DU 29 MARS QUI DURE 23 HEURES, pas la nuit du 28 au
+      // 29 : la bascule tombe a 02 h le 29, donc minuit du 28 a minuit du 29 fait
+      // encore 24 heures pleines. Ecrit avec les mauvaises dates, ce controle
+      // annoncait « pas de changement d'heure » sur un fuseau qui en a deux.
+      const _court=_nuit('2026-03-29','2026-03-30'), _long=_nuit('2026-10-25','2026-10-26');
+      ok('Changement d’heure : le fuseau de la machine connaît bien les deux bascules',
+        _court===23 && _long===25,
+        'journée du 29 mars : '+_court+' h, du 25 octobre : '+_long+' h — sur un '
+        +'fuseau sans heure d’été, les deux assertions suivantes ne prouvent rien');
+      ok('Changement d’heure : la journée courte de mars (23 h) reste UN jour plein',
+        _trtJoursEntre('2026-03-29','2026-03-30')===1
+        && _trtJoursEntre('2026-03-01','2026-03-30')===29,
+        'obtenu : '+_trtJoursEntre('2026-03-29','2026-03-30')+' et '
+        +_trtJoursEntre('2026-03-01','2026-03-30'));
+      ok('Changement d’heure : la journée longue d’octobre (25 h) reste UN jour plein',
+        _trtJoursEntre('2026-10-25','2026-10-26')===1
+        && _trtJoursEntre('2026-09-01','2026-10-26')===55,
+        'obtenu : '+_trtJoursEntre('2026-10-25','2026-10-26')+' et '
+        +_trtJoursEntre('2026-09-01','2026-10-26'));
+      // Et la consequence, la seule qui compte pour l'utilisateur : un cycle 21/7
+      // ancre avant la bascule ne change pas de phase cette nuit-la.
+      // Ancre au 10 mars : le 29 et le 30 tombent aux jours 19 et 20, en plein
+      // milieu de la phase « on ». Une ancre au 1er mars les aurait places de
+      // part et d'autre de la bascule 21/7, ou le cycle DOIT changer de phase —
+      // l'assertion aurait echoue pour la bonne raison au mauvais endroit.
+      const cM=T({rythme:{type:'cycle',cycleOn:21,cycleOff:7,
+        ancre:new Date('2026-03-10T08:00:00').getTime()}});
+      ok('Changement d’heure : le cycle ne saute pas de phase, ni en mars ni en octobre',
+        aPrendreLe(cM,'2026-03-29')===aPrendreLe(cM,'2026-03-30')
+        && aPrendreLe(c,'2026-10-25')===aPrendreLe(c,'2026-10-26'));
+
+      ok('Rythme « ponctuel » : jamais dû un jour donné',
+        aPrendreLe(T({rythme:{type:'ponctuel'}}),'2026-09-07')===false
+        && aPrendreLe(T({rythme:{type:'ponctuel'}}),'2026-03-01')===false);
+
+      // ── TERMINE : ABSENT DU JOUR, PRESENT EN HISTORIQUE ────────────────
+      //
+      // ⚠ LA FIN EST INCLUSIVE. Un traitement arrete « le 30 juin » se prend
+      // encore le 30 juin : c'est ainsi qu'une ordonnance se lit, et une borne
+      // exclusive ferait sauter la derniere prise sans que personne ne le voie.
+      const fini=T({id:'tf',nom:'Fini',fin:new Date('2026-06-30T08:00:00').getTime()});
+      ok('Traitement terminé : dû pendant, dû le dernier jour, plus dû après',
+        aPrendreLe(fini,'2026-05-01')===true && aPrendreLe(fini,'2026-06-30')===true
+        && aPrendreLe(fini,'2026-07-01')===false);
+      ok('Traitement terminé : marqué terminé le lendemain, pas le dernier jour',
+        traitementTermine(fini,'2026-07-01')===true
+        && traitementTermine(fini,'2026-06-30')===false);
+      (()=>{
+        // ET IL RESTE DANS LE DOSSIER. Un traitement termine sort du jour, il ne
+        // sort pas de l'historique : ce qu'on a pris compte encore.
+        const u={email:'h@t.fr',sante:{traitements:[fini,T({id:'tv',nom:'Vivant'})]}};
+        const duJour=traitementsDuMoment(u,'matin','2026-07-01').map(x=>x.id);
+        const histo=traitements(u).map(x=>x.id);
+        ok('Traitement terminé : absent du jour, toujours présent dans l’historique',
+          duJour.indexOf('tf')<0 && duJour.indexOf('tv')>=0
+          && histo.indexOf('tf')>=0 && histo.length===2,
+          'jour : '+duJour.join(',')+' | historique : '+histo.join(','));
+      })();
+
+      // ── LE PARTAGE AU COACH ────────────────────────────────────────────
+      //
+      // ⚠ C'EST L'ASSERTION LA PLUS IMPORTANTE DU LOT. partageCoach vaut FALSE
+      // par defaut ; le coach voit qu'il y a QUELQUE CHOSE a tel moment, et rien
+      // de plus. Une fuite ici n'est pas un defaut d'affichage : c'est un nom de
+      // medicament lisible par un tiers sans consentement.
+      (()=>{
+        const u={email:'p@t.fr',sante:{traitements:[
+          T({id:'a',nom:'Lévothyrox 75 µg',dosage_quantite:75,dosage_unite:'µg',
+             prescripteur:'Dr Martin',note:'à jeun impérativement'}),
+          T({id:'b',nom:'Metformine 500 mg',dosage_quantite:500,dosage_unite:'mg',
+             partageCoach:true,prescripteur:'Dr Durand',note:'avec le repas'})]}};
+        const vu=traitementsPourCoach(u);
+        const brut=JSON.stringify(vu);
+        ok('Coach : sans partage, ni le nom ni le dosage ne sortent',
+          !/Lévothyrox/.test(brut) && !/75/.test(brut) && !/µg/.test(brut),
+          brut);
+        ok('Coach : sans partage, ni le prescripteur ni la note ne sortent',
+          !/Martin/.test(brut) && !/Durand/.test(brut)
+          && !/impérativement/.test(brut) && !/repas/.test(brut));
+        // CE QUI SORT QUAND MEME, et qui doit sortir : le moment.
+        const a=vu.filter(x=>x.id==='a')[0];
+        ok('Coach : sans partage, le MOMENT de prise reste visible',
+          !!a && a.partage===false && a.moments.join(',')==='matin');
+        // ET CE QUI SORT AVEC L'ACCORD EXPLICITE.
+        const b=vu.filter(x=>x.id==='b')[0];
+        ok('Coach : avec partage explicite, le nom et le dosage suivent',
+          !!b && b.partage===true && b.nom==='Metformine 500 mg'
+          && b.dosage_quantite===500 && b.dosage_unite==='mg');
+        ok('Coach : même partagé, le prescripteur et la note ne suivent pas',
+          !!b && b.prescripteur===undefined && b.note===undefined);
+        // ⚠ ET LA PHRASE NON PLUS NE NOMME RIEN.
+        ok('Coach : la phrase résumée ne nomme aucun traitement non partagé',
+          !/Lévothyrox/.test(phraseTraitementsCoach(u)));
+
+        // ── LE FILTRE DE POUSSEE ─────────────────────────────────────────
+        //
+        // La fonction ci-dessus ne sert a rien si le tableau complet part quand
+        // meme vers Firebase. On rejoue donc le masquage tel que _doPushOne
+        // l'applique, et on verifie les DEUX choses : que le nom ne part pas, et
+        // que la donnee LOCALE, elle, est intacte — safe est une copie PLATE,
+        // et sans clone du sous-objet le masquage effacerait le vrai dossier.
+        const safe=CLOUD._masquerTraitements({...u},u);
+        ok('Poussée : le tableau des traitements part masqué, pas en clair',
+          !/Lévothyrox/.test(JSON.stringify(safe.sante.traitements||[])));
+        ok('Poussée : le dossier local garde son nom de traitement intact',
+          u.sante.traitements[0].nom==='Lévothyrox 75 µg');
+        // LE RELEVE DE PRISE NE PART PAS DU TOUT.
+        const u2={email:'q@t.fr',sante:{traitements:[T({id:'a'})],
+          prises:{'2026-09-07':{'trt:a|matin':true}}}};
+        ok('Poussée : le relevé de prise ne quitte jamais l’appareil',
+          CLOUD._masquerTraitements({...u2},u2).sante.prises===undefined
+          && !!u2.sante.prises['2026-09-07']);
+      })();
+
+      // ── LA TABLE D'INTERACTIONS ────────────────────────────────────────
+      //
+      // ⚠ UNE FAUSSE ALERTE EST PIRE QUE PAS D'ALERTE : elle apprend a ignorer
+      // les vraies. Ces deux assertions sont la garde de cette regle, et elles
+      // valent pour toute entree ajoutee plus tard.
+      ok('Interactions : aucune entrée sans source citable',
+        INTERACTIONS.length>0 && INTERACTIONS.every(x=>
+          typeof x.source==='string' && x.source.trim().length>40),
+        INTERACTIONS.filter(x=>!(x.source&&x.source.trim().length>40))
+          .map(x=>x.cle).join(', ')||'—');
+      ok('Interactions : aucune clé en double dans la table',
+        INTERACTIONS.length===new Set(INTERACTIONS.map(x=>x.cle)).size,
+        INTERACTIONS.map(x=>x.cle).join(', '));
+      ok('Interactions : chaque entrée porte une phrase et des motifs',
+        INTERACTIONS.every(x=>x.phrase&&x.phrase.length>20
+          && Array.isArray(x.motifs)&&x.motifs.length
+          && Array.isArray(x.contre)&&x.contre.length));
+
+      (()=>{
+        const u={email:'i@t.fr',
+          sante:{traitements:[
+            T({id:'lt',nom:'Lévothyrox 75 µg',moments:['jeun']}),
+            T({id:'st',nom:'Atorvastatine 20 mg',moments:['soir']}),
+            T({id:'ro',nom:'Rosuvastatine 10 mg',moments:['soir']})]},
+          nutrition:{supplements:[
+            {id:1,name:'Fer bisglycinate',timings:['jeun'],active:true},
+            {id:3,name:'Jus de pamplemousse',timings:['matin'],active:true},
+            {id:4,name:'Créatine',timings:['jeun'],active:true}]}};
+        const l=interactionsDuJour(u,'2026-09-07');
+        ok('Interactions : le fer au même moment que l’hormone thyroïdienne est signalé',
+          l.some(x=>x.cle==='thyroide-mineraux' && x.aDecaler==='Fer bisglycinate'
+            && x.delaiMin===240 && x.moment==='jeun'));
+        // ⚠ CE QU'ON DECALE EST LE COMPLEMENT, jamais le traitement prescrit.
+        ok('Interactions : c’est le complément qu’on décale, jamais le traitement',
+          l.filter(x=>x.delaiMin!==null).every(x=>x.aDecaler!==x.traitement));
+        ok('Interactions : le pamplemousse et une statine CYP3A4 se signalent sans horaire',
+          l.some(x=>x.cle==='pamplemousse-statines'
+            && /Atorvastatine/.test(x.traitement) && x.moment===null));
+        // ⚠ LA ROSUVASTATINE PASSE PAR LE CYP2C9 : alerter serait exactement la
+        // fausse alerte que cette table doit eviter.
+        ok('Interactions : la rosuvastatine n’est PAS concernée par le pamplemousse',
+          !l.some(x=>/Rosuvastatine/.test(x.traitement)),
+          l.map(x=>x.cle+':'+x.traitement).join(' | '));
+        // LA CREATINE N'EST DANS AUCUNE REGLE : rien ne doit sortir pour elle.
+        ok('Interactions : un complément hors table ne déclenche rien',
+          !l.some(x=>/Créatine/.test(x.complement)));
+
+        // ⚠ LE DECLENCHEMENT SE FAIT SUR LE MOMENT PARTAGE. Deux produits pris a
+        // huit heures d'intervalle ne posent pas de probleme ; alerter la
+        // reviendrait a alerter tous les jours, pour rien.
+        const u2=JSON.parse(JSON.stringify(u));
+        u2.sante.traitements=[T({id:'lt',nom:'Lévothyrox 75 µg',moments:['jeun']})];
+        u2.nutrition.supplements=[{id:1,name:'Fer bisglycinate',timings:['soir'],active:true}];
+        ok('Interactions : moments disjoints, aucune alerte',
+          interactionsDuJour(u2,'2026-09-07').length===0);
+        // Un nom que la table ne connait pas ne declenche RIEN.
+        const u3=JSON.parse(JSON.stringify(u2));
+        u3.nutrition.supplements=[{id:1,name:'Poudre mystère',timings:['jeun'],active:true}];
+        ok('Interactions : un nom inconnu de la table ne déclenche rien',
+          interactionsDuJour(u3,'2026-09-07').length===0);
+      })();
+
+      // ── LE SUIVI DE PRISE ──────────────────────────────────────────────
+      //
+      // ⚠ RIEN NE DOIT DIRE « TOUT OUBLIE » LA OU IL N'Y AVAIT RIEN A PRENDRE.
+      // Un taux de 0 % sur une periode sans prise due est un reproche fabrique.
+      (()=>{
+        const u={email:'z@t.fr',sante:{traitements:[
+          T({id:'x',moments:['matin'],rythme:{type:'ponctuel'}})]}};
+        ok('Taux de prise : null quand rien n’était dû sur la période',
+          tauxPrise(u,7,'2026-09-07')===null);
+      })();
+    })();
   }catch(e){
     // ══ UNE INTERRUPTION NE DOIT PAS SE LIRE COMME UNE REUSSITE ═════════
     //

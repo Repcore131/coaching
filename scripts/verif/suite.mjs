@@ -15,6 +15,13 @@ await new Promise(r => ws.onopen = r);
 // vider les caches du service worker ne l'atteint pas.
 await cmd('Network.enable');
 await cmd('Network.setCacheDisabled', { cacheDisabled: true });
+// LE HEADLESS TOURNE EN UTC, ET AUCUN UTILISATEUR DE REPCORE N'Y VIT.
+// Mesure faite : entre le 28 et le 29 mars 2026, deux minuits locaux du harnais
+// sont separes de 24 heures pile — il n'y a pas de changement d'heure en UTC.
+// Toute assertion ecrite pour verifier qu'un calcul de jours resiste au passage
+// a l'heure d'ete passait donc au vert sans rien avoir traverse, y compris avec
+// une division brute de millisecondes. Le fuseau est celui des utilisateurs.
+await cmd('Emulation.setTimezoneOverride', { timezoneId: 'Europe/Paris' });
 await new Promise(r => setTimeout(r, 6000));
 const ev = async x => {
   const r = await cmd('Runtime.evaluate',
