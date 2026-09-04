@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1124';
+window.RC_BUILD='1125';
 // ══════════ ?nosw=1 : UNE PAGE FRAICHE, GARANTIE ═══════════════════════
 //
 // LE SERVICE WORKER MASQUE LES DEPLOIEMENTS. La course reseau/cache dure
@@ -38426,7 +38426,14 @@ function rapImprimer(){
 // écran : c’est la feuille @media print qui décide seule de ce qui sort.
 // Deux fonctions identiques auraient fini par diverger — celle du rapport
 // suffit, l’alias ne sert qu’à ce que le point d’appel dise ce qu’il fait.
-const ppImprimer=rapImprimer;
+//
+// ⚠ ET L'AFFECTATION PASSE PAR window, PAS PAR const. Un `const` de premier
+// niveau est visible depuis un attribut inline — la portée du script remonte
+// jusqu'à lui — mais il est ABSENT de window : invisible à toute sonde, et
+// cassé au premier appel programmatique. Sur les quelque 590 handlers
+// d'attribut du fichier, celui-ci était le seul dans ce cas. L'alias reste un
+// alias ; il est seulement atteignable.
+window.ppImprimer=rapImprimer;
 
 // LES COLONNES CHIFFREES, dans l’ordre où on les lit sur un banc. Le nom,
 // la méthode et la description ne sont PAS ici : ce sont des textes longs,

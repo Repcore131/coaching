@@ -1435,6 +1435,74 @@ async function testExercices(){
     ok('Plus aucun bouton retour sur history.back()',
        !Array.from(document.querySelectorAll('.back-btn'))
          .some(b=>/history\.back/.test(b.getAttribute('onclick')||'')));
+
+    // ══════ TOUT HANDLER D'ATTRIBUT EXISTE SUR window ══════
+    //
+    // Un attribut `onclick="foo()"` est compilé dans une portée qui remonte
+    // jusqu'à l'objet global : `foo` doit y être une fonction. Une déclaration
+    // `function foo(){}` de premier niveau y est ; un `const foo=…` de premier
+    // niveau, NON — il vit dans la portée du script, visible depuis l'attribut
+    // par accident de portée, mais absent de window. Il est alors invisible à
+    // toute sonde, et il casse au premier appel programmatique.
+    //
+    // ppImprimer était le seul des ~590 handlers dans ce cas.
+    ok('typeof window.ppImprimer est une fonction',
+       typeof window.ppImprimer==='function',typeof window.ppImprimer);
+
+    ok('Tout nom appelé depuis un attribut d\'événement est une fonction sur window',(()=>{
+      // ⚠ LA GARDE GÉNÉRALE, et elle vaut plus que le correctif qu'elle a
+      // motivé : elle tombera le jour où quelqu'un déclarera un handler en
+      // const, quel qu'il soit.
+      //
+      // ⚠ ON NE RETIRE PAS LES COMMENTAIRES PAR UNE EXPRESSION SUR .*\*\/ :
+      // elle avale les trois quarts du fichier — mesuré, 3,2 Mo sur 4,5. On
+      // écarte les LIGNES ENTIÈRES commençant par //, et rien d'autre.
+      const src=_prodSrc().split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+      const ATTRS='click|change|input|submit|keydown|keyup|keypress|focus|blur|'
+        +'touchstart|touchend|touchmove|error|load|mouseenter|mouseleave|mousedown|'
+        +'mouseup|paste|wheel|scroll|dblclick|contextmenu|drop|dragover|animationend|'
+        +'transitionend|pointerdown|pointerup';
+      const reAttr=new RegExp('\\bon('+ATTRS+')\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')','g');
+      // Mots-clefs et globales : ce ne sont pas des handlers du produit.
+      const NATIFS=new Set(('if,for,while,switch,catch,return,typeof,new,delete,void,'
+        +'function,do,else,try,finally,throw,in,of,instanceof,'
+        +'Number,String,Boolean,Array,Object,Math,JSON,Date,RegExp,Error,Promise,Set,Map,'
+        +'parseInt,parseFloat,isNaN,isFinite,encodeURIComponent,decodeURIComponent,'
+        +'alert,confirm,prompt,setTimeout,setInterval,clearTimeout,clearInterval,'
+        +'requestAnimationFrame,fetch,print,open,close,focus,blur,scrollTo').split(','));
+      const noms=new Set(); const ou={};
+      let m;
+      while((m=reAttr.exec(src))!==null){
+        let corps=(m[2]!==undefined?m[2]:m[3])||'';
+        if(!corps) continue;
+        // ⚠ LES CHAÎNES DU HANDLER SONT RETIRÉES D'ABORD. Sans cela,
+        // this.style.borderColor='var(--border)' faisait passer « var » pour un
+        // handler manquant : c'est une fonction CSS dans un littéral, pas un
+        // appel JS. Même classe de faux positif pour rgba(, calc(, et pour tout
+        // texte français portant une parenthèse.
+        corps=corps.replace(/&quot;[^&]*&quot;/g,'""')
+                   .replace(/'[^']*'/g,"''")
+                   .replace(/"[^"]*"/g,'""');
+        // Un identifiant suivi d'une parenthèse, NON précédé d'un point :
+        // this.click() et event.preventDefault() sont des méthodes.
+        const reAppel=new RegExp('(^|[^.\\w$])([A-Za-z_$][\\w$]*)\\s*\\(','g');
+        let a;
+        while((a=reAppel.exec(corps))!==null){
+          const nom=a[2];
+          if(NATIFS.has(nom)) continue;
+          noms.add(nom);
+          if(!ou[nom]) ou[nom]='on'+m[1];
+        }
+      }
+      // La sonde doit avoir trouvé quelque chose : à zéro nom elle ne prouve
+      // rien, et c'est exactement l'état dans lequel une regex trop gourmande
+      // la laisserait.
+      if(noms.size<400) return _echec(noms.size+' handlers extraits : la sonde ne regarde plus le fichier');
+      const absents=[...noms].filter(x=>typeof window[x]!=='function');
+      return absents.length
+        ? _echec(absents.length+' handler(s) absent(s) de window : '
+            +absents.slice(0,5).map(x=>x+' ('+ou[x]+')').join(', '))
+        : true;})());
     Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
     Object.assign(_ecranOrigine,_orSauve);
 
