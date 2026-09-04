@@ -14700,8 +14700,23 @@ async function testExercices(){
           if(!(iGarde<iEcrit)) return _echec('le garde vient après l\'écriture locale');
           if(!(iGarde<iLien)) return _echec('le garde vient après le rattachement');
           // Et il court-circuite : sans return, le rattachement suivrait.
-          return /if\(_annoncerDejaRattache\(coach\)\)return;/.test(src)
-            ?true:_echec('le garde ne court-circuite pas');})());
+          //
+          // ⚠ ON NE FIGE PLUS LA FORME DE LA CONDITION. Elle exigeait
+          // `if(_annoncerDejaRattache(coach))return;` au caractère près ; elle
+          // s'est enrichie et vaut désormais
+          // `if(!_memeCoachQueLien(coach)&&_annoncerDejaRattache(coach))return;`
+          // — le garde ne s'invite plus quand c'est le MÊME coach, ce que
+          // l'assertion juste au-dessus vérifie par ailleurs. C'est un progrès,
+          // pas une régression, et le test tombait dessus.
+          //
+          // Ce qui doit être garanti : l'appel au garde décide d'un `return`
+          // dans la MÊME instruction. La condition peut s'enrichir encore.
+          // [^;{]* et non [^)]* : la condition contient elle-même un appel —
+          // _memeCoachQueLien(coach) — dont la parenthèse fermante arrêtait le
+          // motif. On s'arrête à l'instruction, pas à la première parenthèse.
+          return /if\([^;{]*_annoncerDejaRattache\(coach\)\)return;/.test(src)
+            ?true:_echec('le garde ne court-circuite pas : « '
+              +((src.match(/.{0,60}_annoncerDejaRattache\(coach\).{0,30}/)||['(introuvable)'])[0])+' »');})());
         // ── F-31 : le bloc d'entraînement ────────────────────────────────
         // Un lundi fixe, pour que les assertions ne dépendent pas du jour où
         // elles tournent : le lundi de la semaine en cours.
@@ -21075,8 +21090,20 @@ async function testExercices(){
          Object.assign(_cTCA('seche'),{weightLog:_ps(20,i=>60-i*1.5/7)}))));
 
     // ── Ligne de phase dans la liste des athlètes ──
-    ok('Sans phase, la ligne d\'athlète n\'affiche rien de plus',
-       !/semaine/.test(renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[]})));
+    // ⚠ ELLE CHERCHAIT « semaine » DANS TOUT LE HTML, et l'attrapait dans un
+    // attribut sans rapport : la colonne de charge porte
+    // title="Charge de la semaine, sur la moyenne des 4 précédentes". Le test
+    // ne mesurait donc plus la ligne de phase mais une infobulle voisine.
+    // On vise la FORME de la ligne de phase — celle que l'assertion suivante
+    // exige quand la phase existe : « … · 7e semaine ».
+    ok('Sans phase, la ligne d\'athlète n\'affiche rien de plus',(()=>{
+      const h=renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[]});
+      if(/·\s*\d+e semaine/.test(h))
+        return _echec('une ligne de phase sort sans phase : « '
+          +((h.match(/.{0,40}·\s*\d+e semaine/)||[''])[0])+' »');
+      // Et aucun libellé de phase non plus.
+      return !/Prise de masse|Sèche|Maintien/.test(h)
+        ?true:_echec('un libellé de phase apparaît sans phase');})());
     ok('Avec phase, la ligne porte le libellé et la semaine',
        /Prise de masse · 7e semaine/.test(renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[],
          phase:{type:'masse',debut:Date.now()-44*864e5,definiPar:'coach',historique:[]}})));
@@ -22458,8 +22485,13 @@ async function testExercices(){
             ?true:_echec('un brouillon corrompu est accepté');
         } finally { if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
           else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
-      ok('Accepter la reprise restaure l\'étape, les réponses ET la photo',(()=>{
-        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _cf=window.confirm;
+      // ⚠ openBilan EST `async` ET PASSE PAR rcConfirm. Ce test surchargeait
+      // encore window.confirm — que plus personne n'appelle — et lisait l'état
+      // AVANT que la reprise ait eu lieu : la question n'était jamais vue, et
+      // « aucune proposition de reprise » disait vrai sans rien prouver.
+      // Même reliquat que les cinq déjà corrigées.
+      okA('Accepter la reprise restaure l\'étape, les réponses ET la photo',(async()=>{
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _rc=window.rcConfirm;
         const _bt=bilType, _bs=bilStep, _bd=bilData, _go=window.go, _r=window.renderBilStep;
         const CLE='rc_pendingphoto_bil-photo-face';
         const _ph=localStorage.getItem(CLE);
@@ -22468,9 +22500,9 @@ async function testExercices(){
           localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({bilType:'coaching',bilStep:2,
             bilData:{poids:'72.4',douleurs:['genou','epaule']},ts:Date.now()}));
           localStorage.setItem(CLE,'data:image/jpeg;base64,PHOTOFACE');
-          let question=null;
-          window.confirm=(m)=>{question=m;return true;};
-          openBilan('coaching');
+          _modale.question=null; _poserConfirm(true);
+          await openBilan('coaching');
+          const question=_modale.question;
           if(!question) return _echec('aucune proposition de reprise');
           // La question DIT où l'athlète en était : « reprendre ? » tout court
           // ne lui permet pas de décider.
@@ -22483,11 +22515,11 @@ async function testExercices(){
           if(bilData['bil-photo-face']!=='data:image/jpeg;base64,PHOTOFACE')
             return _echec('la photo n\'est pas restaurée');
           return true;
-        } finally { window.confirm=_cf; window.go=_go; window.renderBilStep=_r;
+        } finally { window.rcConfirm=_rc; window.go=_go; window.renderBilStep=_r;
           bilType=_bt; bilStep=_bs; bilData=_bd;
           if(_ph===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_ph);
           if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
-          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }}));
       ok('Le brouillon et la validation comptent avec le MÊME code',(()=>{
         // Deux copies de la même règle finissent par diverger : _bilDraftRempli
         // doit déléguer, pas recopier.
@@ -22533,10 +22565,12 @@ async function testExercices(){
           return enregistre===1?true:_echec('un bilan rempli n\'a pas été enregistré');
         } finally { bilData=_bd; bilStep=_bs; bilType=_bt;
           window.toast=_t; window.saveBilanFinal=_sv; window.confirm=_cf; }})());
-      ok('Un brouillon d\'un AUTRE type ne meurt pas en silence',(()=>{
+      // Même reliquat que ci-dessus : openBilan est `async` et passe par
+      // rcConfirm ; window.confirm n'était plus appelé par personne.
+      okA('Un brouillon d\'un AUTRE type ne meurt pas en silence',(async()=>{
         // Toucher « Bilan coaching » détruisait un questionnaire de départ à
         // moitié rempli, sans un mot.
-        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _cf=window.confirm;
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _rc=window.rcConfirm;
         const _bt=bilType, _bs=bilStep, _bd=bilData, _go=window.go, _r=window.renderBilStep;
         const CLE='rc_pendingphoto_deb-photo-face';
         const _ph=localStorage.getItem(CLE);
@@ -22550,9 +22584,9 @@ async function testExercices(){
             bilData:{poids:'70',objectif:'masse'},ts:Date.now(),
             email:(currentUser&&currentUser.email)||''}));
           localStorage.setItem(CLE,'data:image/jpeg;base64,DEPART');
-          let question=null;
-          window.confirm=(m)=>{question=m;return false;};
-          const r=openBilan('coaching');
+          _modale.question=null; _poserConfirm(false);
+          const r=await openBilan('coaching');
+          const question=_modale.question;
           if(!question) return _echec('aucune question posée');
           if(!/bilan de départ/.test(question)) return _echec('le bilan en cours n\'est pas nommé : '+question);
           if(!/2 réponses/.test(question)) return _echec('le nombre de réponses manque : '+question);
@@ -22563,16 +22597,16 @@ async function testExercices(){
           if(bilType!==_bt) return _echec('bilType a été écrasé avant la question');
           // ACCEPTER : le brouillon part, et ses photos AUSSI — sans quoi elles
           // reviendraient s'inviter au prochain questionnaire de départ.
-          window.confirm=()=>true;
-          openBilan('coaching');
+          _poserConfirm(true);
+          await openBilan('coaching');
           if(localStorage.getItem(BIL_DRAFT_KEY)) return _echec('le brouillon survit à l\'acceptation');
           return localStorage.getItem(CLE)===null
             ?true:_echec('la photo deb-photo-* reste orpheline dans le stockage');
-        } finally { window.confirm=_cf; window.go=_go; window.renderBilStep=_r;
+        } finally { window.rcConfirm=_rc; window.go=_go; window.renderBilStep=_r;
           bilType=_bt; bilStep=_bs; bilData=_bd;
           if(_ph===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_ph);
           if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
-          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }}));
       ok('Refuser la reprise efface TOUT, photos en attente comprises',(()=>{
         // Sinon les photos refusées reviendraient s'inviter au bilan suivant.
         const _sv=localStorage.getItem(BIL_DRAFT_KEY), _cf=window.confirm;
@@ -35262,12 +35296,25 @@ async function testExercices(){
         _suppEcartMoment({name:'Truc maison',timings:['coucher']})===''
         &&_suppEcartMoment({name:'Citrulline malate',timings:[]})==='');
       ok('L\'écart n\'empêche rien : la ligne reste cliquable et modifiable',(()=>{
-        const h=_renderSuppTable([{name:'Citrulline malate',dosage_quantity:6,
-          dosage_unit:'g',timings:['coucher'],active:true}],false,'openSuppEdit');
-        // Aucun blocage : le onclick d'édition est toujours là, et rien
-        // n'annonce un refus.
-        return h.indexOf('openSuppEdit(0)')>=0&&h.indexOf('disabled')<0
-          &&h.indexOf('Le plus souvent')>=0;})());
+        // ⚠ ELLE ATTENDAIT openSuppEdit(0), c'est-à-dire un INDEX. Le rendu
+        // passe désormais l'IDENTIFIANT du complément — _suppAssurerIds en pose
+        // un sur chaque entrée, et `editFn(${s.id})` l'utilise. Le test visait
+        // une signature révolue ; la ligne, elle, est restée cliquable.
+        //
+        // On lit l'id depuis la liste au lieu d'en figer un : il est généré, et
+        // le recopier ferait retomber le test au premier changement de forme.
+        const l=[{name:'Citrulline malate',dosage_quantity:6,
+          dosage_unit:'g',timings:['coucher'],active:true}];
+        const h=_renderSuppTable(l,false,'openSuppEdit');
+        const id=l[0].id;
+        if(id===undefined) return _echec('aucun identifiant posé sur le complément');
+        if(h.indexOf('openSuppEdit('+id+')')<0)
+          return _echec('la ligne n’ouvre plus l’édition : « '
+            +((h.match(/openSuppEdit\([^)]*\)/)||['(aucun appel)'])[0])+' »');
+        // Aucun blocage, et l'écart est bien dit.
+        if(h.indexOf('disabled')>=0) return _echec('la ligne est désactivée');
+        return h.indexOf('Le plus souvent')>=0
+          ?true:_echec('l’écart de moment n’est plus signalé');})());
 
       // ── Interactions ──────────────────────────────────────────────────────
       const _s=(nom,t)=>({name:nom,dosage_quantity:1,dosage_unit:'g',timings:t,active:true});
