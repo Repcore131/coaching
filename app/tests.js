@@ -33367,14 +33367,36 @@ async function testExercices(){
       const vu=z&&z.style.display!=='none'&&/Récup terminée/.test(z.innerHTML)&&z.innerHTML.indexOf('+00:12')>=0;
       annulerRepos(); woState=sauveWo;
       return !!vu;})(),(document.getElementById('wo-repos')||{}).innerHTML?'':'zone absente');
-    ok('Au-delà de la fenêtre, le bandeau est masqué',(()=>{
+    // ⚠ LE RETRAIT DU BANDEAU EST ANIMÉ : _reposRetirer fait glisser la carte
+    // sur ARC.strike avant de poser display:none, et le nettoyage vient de
+    // l'événement `finish` ou du filet setTimeout(une, ARC.strike+80). Lire le
+    // display dans la foulée rend « block » — le comportement de production
+    // est correct, c'est la lecture qui était trop tôt.
+    //
+    // LA DURÉE EST LUE DEPUIS ARC, pas écrite en dur : si la charge change, le
+    // test suit. Et _reposRetirer court-circuite l'animation sous
+    // arcReduit() — l'attente est alors inutile mais inoffensive, ce qui fait
+    // tenir l'assertion dans les DEUX états de préférence de mouvement.
+    const _attendreFilet=()=>new Promise(r=>setTimeout(r,
+      ((typeof ARC==='object'&&ARC&&Number(ARC.strike))||120)+120));
+    okA('Au-delà de la fenêtre, le bandeau est masqué',(async()=>{
       const sauveWo=woState, z=document.getElementById('wo-repos');
-      woState={exercises:[],sessionData:{},startTime:Date.now(),
-        reposFin:Date.now()-(REPOS_DEPASSEMENT+5)*1000,reposTotal:120,reposVibre:true};
-      _peindreRepos();
-      const cache=!z||z.style.display==='none';
-      woState=sauveWo;
-      return cache;})());
+      try{
+        // VISIBLE D'ABORD : sans cela _reposVisible est faux et _peindreRepos
+        // masque en synchrone — l'assertion passerait sans jamais éprouver le
+        // chemin animé, qui est le seul qui compte ici.
+        woState={exercises:[],sessionData:{},startTime:Date.now(),
+          reposFin:Date.now()+45000,reposTotal:120,reposVibre:true,reposLib:''};
+        _peindreRepos();
+        if(!z) return _echec('la zone du bandeau est absente');
+        if(z.style.display==='none') return _echec('le bandeau ne s’affiche pas : rien à retirer');
+        woState={exercises:[],sessionData:{},startTime:Date.now(),
+          reposFin:Date.now()-(REPOS_DEPASSEMENT+5)*1000,reposTotal:120,reposVibre:true};
+        _peindreRepos();
+        await _attendreFilet();
+        return z.style.display==='none'
+          ?true:_echec('le bandeau est encore affiché après le filet : « '+z.style.display+' »');
+      } finally { try{ annulerRepos(); }catch(e){} woState=sauveWo; }}));
     // Même format rembourré : voir la raison au-dessus de _fmtRepos.
     ok('Format : une minute pile',_fmtRepos(60)==='01:00');
     ok('Format : moins d\'une minute',_fmtRepos(7)==='00:07');
@@ -33455,15 +33477,24 @@ async function testExercices(){
     ok('Aucun son par défaut',!currentUser.sonRepos);
 
     // ── Persistance ──
-    ok('Critère 9 : un minuteur expiré n\'est pas réaffiché',(()=>{
-      const sauveWo=woState;
-      const z=document.getElementById('wo-repos');
-      woState={exercises:[],sessionData:{},startTime:Date.now(),
-        reposFin:Date.now()-20*60000,reposTotal:120};
-      _reprendreRepos();
-      const cache=!z||z.style.display==='none';
-      woState=sauveWo;
-      return cache;})());
+    // Même raison que « Au-delà de la fenêtre » : le retrait passe par
+    // _reposRetirer, qui pose display:none à la fin de l'animation ou par son
+    // filet. On attend ARC.strike, lu depuis la source.
+    okA('Critère 9 : un minuteur expiré n\'est pas réaffiché',(async()=>{
+      const sauveWo=woState, z=document.getElementById('wo-repos');
+      try{
+        // Le bandeau est visible AVANT : c'est le chemin animé qu'on éprouve.
+        woState={exercises:[],sessionData:{},startTime:Date.now(),
+          reposFin:Date.now()+45000,reposTotal:120,reposVibre:true,reposLib:''};
+        _peindreRepos();
+        if(!z) return _echec('la zone du bandeau est absente');
+        woState={exercises:[],sessionData:{},startTime:Date.now(),
+          reposFin:Date.now()-20*60000,reposTotal:120};
+        _reprendreRepos();
+        await _attendreFilet();
+        return z.style.display==='none'
+          ?true:_echec('un minuteur expiré est réaffiché : « '+z.style.display+' »');
+      } finally { try{ annulerRepos(); }catch(e){} woState=sauveWo; }}));
     ok('Un minuteur encore valide est réaffiché',(()=>{
       const sauveWo=woState;
       const z=document.getElementById('wo-repos');
@@ -33957,6 +33988,18 @@ async function testExercices(){
       ['clh-m1','clh-m2','clh-m3','clh-m1-sub','clh-m2-sub','clh-m3-sub']
         .forEach(id=>{const e=document.getElementById(id); g[id]=e?e.textContent:null;});
       const lire=id=>{const e=document.getElementById(id); return e?e.textContent:null;};
+      // ⚠ LA VALEUR D'ARRIVÉE, PAS L'IMAGE EN COURS. Les trois cases passent
+      // par arcCompteur, qui INTERPOLE de l'ancienne valeur vers la nouvelle :
+      // lire textContent juste après l'appel rend une image intermédiaire —
+      // « 0 » alors que la cible est 2, par exemple. arcCompteur range la cible
+      // dans dataset.valeur de façon SYNCHRONE, avant même d'animer, et c'est
+      // précisément la raison pour laquelle ce champ existe (voir son
+      // commentaire). Repli sur le texte pour « — », qui n'a pas de valeur
+      // numérique et dont le dataset est effacé.
+      const lireVal=id=>{const e=document.getElementById(id);
+        if(!e) return null;
+        const v=e.dataset?e.dataset.valeur:undefined;
+        return (v===undefined||v==='')?e.textContent:v;};
       ok('Les trois cases existent',
          !!document.getElementById('clh-m1')&&!!document.getElementById('clh-m2')
          &&!!document.getElementById('clh-m3'));
@@ -34005,9 +34048,11 @@ async function testExercices(){
       // LA CASE DU MILIEU CUMULE MAINTENANT LES SÉANCES, et sa seconde ligne
       // dit depuis QUAND. Mesuré sur la version servie avec les deux séances
       // posées ci-dessus : « 2 » et « depuis 5 jours ».
+      // dataset.valeur et non textContent : voir lireVal — le compteur est en
+      // cours d'interpolation à l'instant où on le lit.
       ok('Séances au total : le cumul et son ancienneté',
-         lire('clh-m2')==='2'&&/^depuis /.test(lire('clh-m2-sub')||''),
-         lire('clh-m2')+' | '+lire('clh-m2-sub'));
+         lireVal('clh-m2')==='2'&&/^depuis /.test(lire('clh-m2-sub')||''),
+         lireVal('clh-m2')+' | '+lire('clh-m2-sub'));
       // ⚠ LES DEUX ASSERTIONS SUIVANTES SONT CADUQUES et deviennent des
       // témoins. Elles mesuraient « Cinq exercices en progrès sur douze » et
       // « Charge totale : +50 % vs 4 dernières semaines » — deux cases qui
@@ -34034,9 +34079,11 @@ async function testExercices(){
          lire('clh-m2')!=='+50 %'&&!/vs 4 dernières semaines/.test(lire('clh-m2-sub')||''),
          lire('clh-m2')+' | '+lire('clh-m2-sub'));
       // ET ELLE CONTINUE DE COMPTER : six séances posées, six affichées.
+      // dataset.valeur et non textContent : voir lireVal — le compteur passe
+      // de 2 à 6, et l'image intermédiaire ne vaut ni l'un ni l'autre.
       ok('Séances au total : le cumul suit l\'historique',
-         lire('clh-m2')===String(ss.length),
-         lire('clh-m2')+' pour '+ss.length+' séances');
+         lireVal('clh-m2')===String(ss.length),
+         lireVal('clh-m2')+' pour '+ss.length+' séances');
       for(const id in g){ const e=document.getElementById(id); if(e&&g[id]!=null) e.textContent=g[id]; }
       currentUser=sauveU;
     })();
