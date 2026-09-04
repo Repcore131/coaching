@@ -45873,6 +45873,71 @@ vendredi 78 6h 44m
           /Saisir un traitement/.test(src));
       })();
     })();
+
+    // ══ RIEN NE DEPASSE DE LA PAGE ═══════════════════════════════════════
+    //
+    // ⚠ CE LOT EXISTE PARCE QU'UN FRAGMENT DE GABARIT A VECU HUIT JOURS APRES
+    // </body></html>. Une insertion ratee y avait colle « ${_htmlBoutonReperes(c)} » ;
+    // le navigateur remonte tout texte errant apres </body> DANS le corps, si
+    // bien que la chaine brute s'affichait en bas de chaque ecran de l'app,
+    // pour tout le monde. 4 419 assertions ne l'ont pas vu : aucune ne
+    // regardait le document en tant que document.
+    //
+    // Deux gardes, et la seconde est la generale.
+    (()=>{
+      const src=_prodSrc();
+      // ── 1. LE FICHIER SE TERMINE SUR SA BALISE FERMANTE ────────────────
+      const i=src.lastIndexOf('</html>');
+      ok('Page : rien ne suit </html> dans la source de production',
+        i>=0 && src.slice(i+7).trim()==='',
+        i<0?'aucun </html>':'«'+src.slice(i+7).trim().slice(0,120)+'»');
+
+      // ── 2. AUCUN GABARIT NON INTERPOLE N'EST VISIBLE ───────────────────
+      //
+      // La vraie garde : elle attrape le meme defaut ou qu'il tombe, et pas
+      // seulement en fin de fichier. On parcourt les noeuds de TEXTE du
+      // document — en sautant les scripts, les styles et les gabarits, dont
+      // le contenu n'est pas rendu — et on refuse toute marque « ${ » restee
+      // telle quelle. Un gabarit non interpole est TOUJOURS un defaut : il
+      // n'existe aucune raison d'ecrire ces deux caracteres dans du texte lu
+      // par un utilisateur.
+      const SAUTES={SCRIPT:1,STYLE:1,TEMPLATE:1,NOSCRIPT:1};
+      const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null);
+      const fuites=[];
+      let n;
+      while((n=w.nextNode())){
+        const p=n.parentNode;
+        if(!p||SAUTES[p.nodeName]) continue;
+        const t=String(n.nodeValue||'');
+        if(t.indexOf('${')<0) continue;
+        // On remonte le nom de l'ecran : « quelque part dans le document » ne
+        // se corrige pas, « dans s-traitements » se corrige.
+        let e=p, ou='';
+        while(e&&e!==document.body){ if(e.id){ ou=e.id; break; } e=e.parentNode; }
+        fuites.push((ou||'(hors écran)')+' → «'+t.trim().slice(0,60)+'»');
+      }
+      ok('Page : aucun gabarit ${…} n’est resté visible dans le document',
+        fuites.length===0, fuites.slice(0,4).join(' | '));
+
+      // ── 3. ET AUCUNE FONCTION DE RENDU N'EST ORPHELINE ─────────────────
+      //
+      // ⚠ LE FRAGMENT ERRANT ETAIT LE SEUL APPELANT DE _htmlBoutonReperes. Le
+      // supprimer laisse la fonction — et rcReinitReperes derriere elle —
+      // sans aucun chemin : « revenir aux reperes de reference » n'est
+      // atteignable par personne. Cette assertion NE DIT PAS que c'est un
+      // defaut a corriger tout de suite ; elle dit que la situation est CONNUE
+      // et qu'elle ne se degradera pas en silence. Le jour ou le bouton sera
+      // branche, elle echouera et il faudra retirer le nom de cette liste.
+      const ORPHELINES=['_htmlBoutonReperes'];
+      const compte=nom=>(src.match(new RegExp(nom.replace(/[$]/g,'\\$')+'\\s*\\(','g'))||[]).length;
+      ok('Page : _htmlBoutonReperes est déclarée et jamais appelée — état connu',
+        compte('_htmlBoutonReperes')===1,
+        compte('_htmlBoutonReperes')+' occurrence(s) : 1 = déclaration seule. '
+        +'Si tu viens de la brancher, retire-la de ORPHELINES.');
+      ok('Page : rcReinitReperes n’est atteignable que par ce bouton',
+        (src.match(/rcReinitReperes\s*\(/g)||[]).length===2,
+        'déclaration + l’appel du bouton orphelin');
+    })();
   }catch(e){
     // ══ UNE INTERRUPTION NE DOIT PAS SE LIRE COMME UNE REUSSITE ═════════
     //
