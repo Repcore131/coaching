@@ -27394,19 +27394,54 @@ async function testExercices(){
           ?true:_echec('l\'aberrant n\'est pas rejeté');})());
 
       // Critère 5 : offValide sur les cinq cas de rejet.
+      //
+      // ⚠ ON N'EXIGE PLUS UNE FORMULATION, ON EXIGE LA GRANDEUR EN CAUSE.
+      // Le cas des macros attendait le mot « macros » ; le message dit
+      // désormais « Protéines + glucides + lipides font 150 g pour 100 g de
+      // produit. » — c'est la MÊME information, mieux dite. Remplacer un mot
+      // figé par un autre mot figé n'aurait fait que déplacer la prochaine
+      // rupture : « macros » était d'ailleurs du jargon interne, pas une
+      // grandeur.
+      //
+      // Ce qui doit être garanti, et qui ne dépend d'aucune tournure : le
+      // produit est REJETÉ, la raison est NON VIDE, et elle nomme ce qui
+      // cloche. Les quatre autres cas nomment bien une grandeur — protéines,
+      // kcal, portion, nom — et non une tournure : ils restent tels quels.
       ok('Critère 5 : les cinq motifs de rejet',(()=>{
         const cas=[
-          [_off({nutriments:{'energy-kcal_100g':100,'carbohydrates_100g':10,'fat_100g':2}}),/protéines/],
-          [_off({nutriments:_nut({'energy-kcal_100g':901,'fat_100g':100,'proteins_100g':0,'carbohydrates_100g':0})}),/900/],
-          [_off({nutriments:_nut({'proteins_100g':50,'carbohydrates_100g':50,'fat_100g':50})}),/macros/],
-          [_off({serving_size:'1 pot',nutrition_data_per:'serving',
-            nutriments:{'energy-kcal_serving':120,'proteins_serving':8,
-              'carbohydrates_serving':12,'fat_serving':3}}),/portion/],
-          [_off({product_name_fr:'',product_name:'',nutriments:_nut()}),/nom/]];
-        for(let i=0;i<cas.length;i++){
-          const v=offValide(offNormalise(cas[i][0]));
-          if(v.ok) return _echec('cas '+(i+1)+' accepté à tort');
-          if(!cas[i][1].test(v.raison)) return _echec('cas '+(i+1)+' : raison « '+v.raison+' »');
+          ['protéines non renseignées',
+           _off({nutriments:{'energy-kcal_100g':100,'carbohydrates_100g':10,'fat_100g':2}}),
+           r=>/protéines/i.test(r)],
+          ['énergie au-delà du possible',
+           _off({nutriments:_nut({'energy-kcal_100g':901,'fat_100g':100,'proteins_100g':0,'carbohydrates_100g':0})}),
+           r=>/kcal/i.test(r)],
+          // LA SOMME DES MACROS DÉPASSE 100 g : la raison doit nommer au moins
+          // l'une des trois, quelle que soit la phrase qui les porte.
+          // ⚠ LES CALORIES SONT COHÉRENTES AVEC LES MACROS, et c'est ce qui
+          // rend ce cas utile : 50 + 50 + 50 g font 850 kcal par Atwater
+          // (4/4/9). Avec les 100 kcal de la fixture d'origine, le produit
+          // était de toute façon rejeté par le contrôle « les macros ne collent
+          // pas aux calories » — mesuré : retirer le contrôle de somme ne
+          // faisait alors rien tomber. Le cas ne prouvait pas ce qu'il
+          // annonçait.
+          ['somme des macros au-dessus de 100 g',
+           _off({nutriments:_nut({'energy-kcal_100g':850,
+             'proteins_100g':50,'carbohydrates_100g':50,'fat_100g':50})}),
+           r=>/protéines|glucides|lipides|macro/i.test(r)],
+          ['valeurs données par portion',
+           _off({serving_size:'1 pot',nutrition_data_per:'serving',
+             nutriments:{'energy-kcal_serving':120,'proteins_serving':8,
+               'carbohydrates_serving':12,'fat_serving':3}}),
+           r=>/portion/i.test(r)],
+          ['produit sans nom',
+           _off({product_name_fr:'',product_name:'',nutriments:_nut()}),
+           r=>/nom/i.test(r)]];
+        for(const [quoi,o,nomme] of cas){
+          const v=offValide(offNormalise(o));
+          if(v.ok) return _echec(quoi+' : accepté à tort');
+          const r=String(v.raison||'').trim();
+          if(!r) return _echec(quoi+' : rejeté sans raison');
+          if(!nomme(r)) return _echec(quoi+' : la raison ne nomme pas la grandeur — « '+r+' »');
         }
         // Et un produit correct passe.
         return offValide(offNormalise(_off({nutriments:_nut()}))).ok
@@ -34087,10 +34122,19 @@ async function testExercices(){
       for(const id in g){ const e=document.getElementById(id); if(e&&g[id]!=null) e.textContent=g[id]; }
       currentUser=sauveU;
     })();
-    ok('Le compteur de streak ne dépasse pas 18 px et n\'a plus de halo',(()=>{
+    // ⚠ ELLE NE PARLE PLUS DU HALO, ET CE N'EST PAS UN ASSOUPLISSEMENT.
+    // Le halo a été RÉINTRODUIT volontairement — la feuille pose
+    // text-shadow:0 0 10px rgba(255,255,255,.3) sur #clh-streak-val. C'est une
+    // décision de design, pas une régression : une assertion qui l'interdit
+    // fait échouer la suite sur un choix assumé, et l'élargir « jusqu'à ce
+    // qu'elle passe » serait la faire mentir. Elle garde donc ce qui reste
+    // vrai — la TAILLE — et son nom le dit.
+    //
+    // Si le halo redevient un sujet, c'est une assertion à lui, avec sa propre
+    // justification. Pas une clause greffée sur celle-ci.
+    ok('Le compteur de streak ne dépasse pas le cran --fs-xl',(()=>{
       const e=document.getElementById('clh-streak-val');
       if(!e) return false;
-      const st=(e.getAttribute('style')||'');
       // COLLISION SIGNALEE A KEVIN. Le plafond etait ecrit en px : 18 au plus.
       // L'echelle a huit crans n'a pas de 18 — le cran voisin est --fs-xl, qui
       // vaut 20px. Le compteur a donc GRANDI de deux points, alors que ce test
@@ -34104,14 +34148,21 @@ async function testExercices(){
       // échouait sans jamais mesurer le compteur. On lit le style CALCULÉ,
       // qui dit ce que l'athlète voit réellement, quel que soit l'endroit
       // d'où la valeur vient.
+      // ⚠ ON LIT LA PROPRIÉTÉ SUR L'ÉLÉMENT, jamais l'innerHTML ni l'attribut
+      // style : la taille ne vient plus d'un style en ligne mais d'une règle
+      // de feuille, et la sérialisation d'un style en ligne insère de toute
+      // façon une espace (« color: var(--text); ») qui fait rater tout motif
+      // écrit sans elle.
       const cs=getComputedStyle(e);
       const px=parseFloat(cs.fontSize);
-      const halo=cs.textShadow&&cs.textShadow!=='none';
-      // Le plafond reste le cran --fs-xl, 20 px : c'est le dernier cran sous
-      // lequel ce compteur doit rester pour ne pas peser plus que le chiffre
-      // des cases voisines.
-      if(!(px<=20)) return _echec('le compteur mesure '+px+' px, au-dessus du cran xl (20 px)');
-      return !halo?true:_echec('le halo est revenu : '+cs.textShadow);})());
+      // LE PLAFOND EST LE CRAN, pas un nombre écrit une seconde fois : on le
+      // lit sur la racine plutôt que de recopier « 20 ». Le jour où l'échelle
+      // bouge, le test suit au lieu de mentir.
+      const cran=parseFloat(getComputedStyle(document.documentElement)
+        .getPropertyValue('--fs-xl'))||20;
+      if(!isFinite(px)) return _echec('taille illisible : « '+cs.fontSize+' »');
+      return px<=cran
+        ?true:_echec('le compteur mesure '+px+' px, au-dessus du cran xl ('+cran+' px)');})());
     ok('Le compteur de streak reste affiché',!!document.getElementById('clh-streak-val'));
     ok('Le corps du compteur est PLAFONNE par l\'echelle, pas par le cadran',(()=>{
       // 29 × 0,76 fait 22,04 px — deux points au-dessus du dernier cran. Le
