@@ -34745,13 +34745,37 @@ async function testExercices(){
     (function(){
       const sauveU=currentUser;
       const sauveUsers=DB.get('users');
-      const ta=document.createElement('textarea'); ta.id='rb-texte'; document.body.appendChild(ta);
       const b=_rbB(2);
-      const client={id:'cl1',email:'cl1@t.fr',fname:'Léa',role:'athlete',bilans:[b]};
+      // ⚠ LA VRAIE CAUSE DES DEUX ÉCHECS, ET CE N'EST PAS L'IDENTIFIANT DE
+      // ZONE. saveReponseBilan a reçu un contrôle d'appartenance — N3.13, le
+      // même que les soixante-neuf autres écritures : l'adresse vient d'un
+      // attribut onclick, et le cache local peut porter des dossiers
+      // étrangers. La fixture n'a jamais été rattachée au coach, si bien que
+      // _estMonAthlete refusait et que la fonction rendait false. Mesuré :
+      // « Élève introuvable ou non autorisé ».
+      //
+      // Le refus était donc DEUX FOIS légitime — zone introuvable, puis
+      // athlète non rattaché. Corriger la zone seule ne suffisait pas.
+      const client={id:'cl1',email:'cl1@t.fr',fname:'Léa',role:'athlete',
+        coachId:'co',bilans:[b]};
       const users=Object.assign({},sauveUsers||{}); users['cl1@t.fr']=client;
       DB.set('users',users);
       currentUser={id:'co',email:'co@t.fr',role:'coach',exAlias:{},exMuscles:{},sessions:[],bilans:[]};
       const id=_idBilan(b);
+      // ⚠ LA ZONE QUE LA FONCTION IRA RÉELLEMENT CHERCHER, et non un
+      // identifiant fixe. saveReponseBilan résout sa zone par
+      // `taId || _taIdBilan(bilanId)` ; le test l'appelait à DEUX arguments et
+      // fabriquait un 'rb-texte' nu. getElementById rendait null, le texte
+      // était vu comme vide, et la fonction refusait — ce qui est LE BON
+      // COMPORTEMENT. Deux assertions tombaient donc sur un refus légitime.
+      //
+      // Et deux autres passaient au vert SANS RIEN MESURER : « texte vide » et
+      // « espaces uniquement » vérifient un refus, or la fonction refusait de
+      // toute façon, faute de trouver sa zone. Elles éprouvent maintenant ce
+      // qu'elles annoncent.
+      const idTa=_taIdBilan(id);
+      const ta=document.createElement('textarea'); ta.id=idTa;
+      document.body.appendChild(ta);
       ta.value='';
       ok('Texte vide : envoi refusé',saveReponseBilan('cl1@t.fr',id)===false);
       ta.value='   \n  ';
@@ -34772,6 +34796,42 @@ async function testExercices(){
         return x.reponseVue===false&&x.reponseCoach==='Finalement, on ajuste.';})());
       ok('Athlète introuvable : refus sans exception',saveReponseBilan('personne@t.fr',id)===false);
       ok('Bilan introuvable : refus sans exception',saveReponseBilan('cl1@t.fr','bil_0')===false);
+
+      // ⚠ LE LIEN QUI MANQUAIT, et c'est lui qui a laissé passer le décalage.
+      // Le test fabriquait SON PROPRE identifiant : il ne pouvait donc pas voir
+      // que la carte en produisait un autre. Une assertion qui invente les deux
+      // côtés d'une convention ne vérifie que sa propre invention.
+      //
+      // On lie donc les deux bouts : l'identifiant que _taIdBilan produit doit
+      // être exactement celui que la carte écrit dans le HTML, et exactement
+      // celui que le bouton d'envoi passe à saveReponseBilan.
+      ok('L\'identifiant de zone du test est CELUI que la carte rend',(()=>{
+        // ⚠ SA PROPRE FIXTURE, ET AVEC UNE RÉPONSE DEDANS. `_rbB(2)` nu ne
+        // porte aucun champ rempli : la carte n'a alors rien à quoi répondre
+        // et ne rend pas de formulaire — mesuré, aucun id="rb-texte…" dans la
+        // sortie. Elle est aussi découplée des mutations que les assertions
+        // précédentes ont faites sur le dossier.
+        const bb=_rbB(2,{'bil-motivation':'8'});
+        const idB=_idBilan(bb), idTa=_taIdBilan(idB);
+        const cli={id:'cl1',email:'cl1@t.fr',fname:'Léa',role:'athlete',bilans:[bb]};
+        const h=renderReponsesBilans([bb],cli);
+        if(!h) return _echec('la carte ne rend rien');
+        // Écrit sur la zone de saisie…
+        if(h.indexOf('id="'+idTa+'"')<0)
+          return _echec('la carte n’écrit pas id="'+idTa+'" : « '
+            +((h.match(/id="rb-texte[^"]*"/)||['(aucun)'])[0])+' »');
+        // …ET passé au bouton d'envoi, en troisième argument.
+        if(h.indexOf("saveReponseBilan('"+cli.email+"','"+idB+"','"+idTa+"')")<0)
+          return _echec('le bouton ne passe pas cet identifiant : « '
+            +((h.match(/saveReponseBilan\([^)]*\)/)||['(aucun)'])[0])+' »');
+        // ET LA CONVENTION EST BIEN CELLE DE _taIdBilan, pas un préfixe nu :
+        // c'est le suffixe qui distingue deux bilans affichés côte à côte.
+        if(idTa===_taIdBilan('')) return _echec('l’identifiant ne dépend plus du bilan');
+        return _taIdBilan('X')!==_taIdBilan('Y')
+          ?true:_echec('deux bilans partagent la même zone de saisie');})());
+
+      // La zone est retirée : laissée dans le document, elle fausserait les
+      // assertions suivantes qui comptent les champs de la page.
       ta.remove();
       if(sauveUsers) DB.set('users',sauveUsers);
       currentUser=sauveU;
