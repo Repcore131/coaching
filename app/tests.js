@@ -45419,6 +45419,278 @@ vendredi 78 6h 44m
           tauxPrise(u,7,'2026-09-07')===null);
       })();
     })();
+
+    // ══ LE SIGNAL D'APPORT EN MICRONUTRIMENTS ════════════════════════════
+    //
+    // Ce qui est verifie ici n'est pas la justesse d'une somme : c'est que
+    // l'app SE TAIT dans tous les cas ou elle ne sait pas, et qu'elle ne parle
+    // que d'apports alimentaires quand elle parle.
+    (()=>{
+      const FIN='2026-09-01';
+      const jr=k=>localISODate(_datePlusJours(_dateDeISO(FIN),-k));
+      // `bas` porte tous les micronutriments, dont un fer volontairement bas.
+      // `muet` n'en porte AUCUN — c'est l'aliment OpenFoodFacts type.
+      const bas =kc=>({kcal:kc,fe:1,ca:400,mg:200,zn:6,io:80,k_:1800,b12:3,b9:200});
+      const muet=kc=>({kcal:kc});
+      const dossier=(ks,faire,sexe)=>{
+        const log={};
+        for(const k of ks) log[jr(k)]={entries:faire()};
+        return {email:'mi@t.fr',gender:sexe||'H',nutrition:{log:log}};
+      };
+      const QUINZE=[]; for(let k=0;k<14;k++) QUINZE.push(k);
+
+      // ── NULL N'EST JAMAIS COMPTE ZERO ──────────────────────────────────
+      //
+      // ⚠ C'EST LE PIEGE CENTRAL DU LOT. Un produit OpenFoodFacts ne porte
+      // presque jamais l'iode ni la B12 ; le compter zero fabriquerait un
+      // manque a chaque fois qu'un code-barres entre au journal.
+      (()=>{
+        const u=dossier(QUINZE,()=>[bas(200),muet(200)]);
+        const s=microSemaine(u,FIN);
+        // 7 jours x 1 mg : l'aliment muet n'a RIEN retire.
+        ok('Micro : un champ absent ne dilue pas l’apport, il en sort',
+          s.fe===7 && s.joursRenseignes===7, 'fe='+s.fe+' jours='+s.joursRenseignes);
+        // Et la moyenne journaliere se lit sur le seul apport connu.
+        ok('Micro : la part se calcule sur l’apport connu, pas sur un zéro fabriqué',
+          s.part.fe===Math.round((7/7)/11*1000)/1000, 'part='+s.part.fe);
+        // La preuve par le contraire : le meme journal ou l'aliment muet porte
+        // un zero EXPLICITE donne le meme apport, mais une couverture pleine.
+        const u0=dossier(QUINZE,()=>[bas(200),Object.assign(muet(200),{fe:0})]);
+        const s0=microSemaine(u0,FIN);
+        ok('Micro : un zéro écrit et une donnée absente ne se comptent pas pareil',
+          s0.fe===s.fe && s0.couverture.fe===1 && s.couverture.fe===0.5,
+          'apports '+s.fe+'/'+s0.fe+' — couvertures '+s.couverture.fe+'/'+s0.couverture.fe);
+      })();
+
+      // ── LA COUVERTURE EST OPPOSABLE ────────────────────────────────────
+      //
+      // Elle n'est pas un ornement de la phrase : c'est elle qui decide si
+      // l'app a le droit de parler. Une couverture sous le seuil fait taire le
+      // signal MEME quand l'apport connu est tres bas.
+      (()=>{
+        const u=dossier(QUINZE,()=>[bas(200),muet(200)]);   // couverture 50 %
+        const s=microSemaine(u,FIN);
+        ok('Micro : la couverture est la part d’énergie venant d’aliments qui portent le nutriment',
+          s.couverture.fe===0.5 && s.kcal===2800, 'couv='+s.couverture.fe+' kcal='+s.kcal);
+        ok('Micro : couverture sous le seuil, l’app se tait malgré un apport bas',
+          s.part.fe<MICRO_SIGNAL_SEUIL && signalMicro(u,FIN)===null,
+          'part='+s.part.fe);
+      })();
+
+      // ── LE REPERE DU FER DIFFERE SELON LE SEXE ─────────────────────────
+      //
+      // ⚠ C'EST LE PLUS GRAND ECART DES HUIT — 11 contre 16 mg — et l'aplatir
+      // declarerait la moitie des femmes au-dessus du seuil, ou la moitie des
+      // hommes en dessous.
+      (()=>{
+        const uH=dossier(QUINZE,()=>[bas(200),muet(200)],'H');
+        const uF=dossier(QUINZE,()=>[bas(200),muet(200)],'F');
+        ok('Micro : le repère du fer distingue les sexes, celui du calcium non',
+          refMicro(uH,'fe').valeur===11 && refMicro(uF,'fe').valeur===16
+          && refMicro(uH,'ca').valeur===refMicro(uF,'ca').valeur);
+        // ET LA DIFFERENCE ARRIVE JUSQU'AU RESULTAT. Un repere distinct qui ne
+        // changerait pas la part serait un repere decoratif.
+        ok('Micro : le sexe change la part calculée, pas seulement le repère',
+          microSemaine(uH,FIN).part.fe > microSemaine(uF,FIN).part.fe,
+          'H='+microSemaine(uH,FIN).part.fe+' F='+microSemaine(uF,FIN).part.fe);
+        // Sexe inconnu : la reference LA PLUS ELEVEE, jamais la plus basse.
+        // Sous-estimer le repere gonflerait la part et eteindrait la question.
+        ok('Micro : sexe non renseigné, c’est le repère le plus exigeant qui sert',
+          refMicro({email:'x@t.fr'},'fe').valeur===16
+          && refMicro({email:'x@t.fr'},'fe').sexeConnu===false);
+      })();
+
+      // ── LES QUATRE GARDES, ET LA PERSISTANCE ───────────────────────────
+      (()=>{
+        const tousPortent=()=>[bas(200),Object.assign(muet(200),{fe:0,ca:400,
+          mg:200,zn:6,io:80,k_:1800,b12:3,b9:200})];
+        // Deux semaines pleines, couverture pleine, fer a 9 % : ca parle.
+        const ok2=dossier(QUINZE,tousPortent);
+        const s=signalMicro(ok2,FIN);
+        ok('Micro : quatre gardes franchies, un signal',
+          !!s && s.cle==='fe', s?s.cle+' '+s.pct+' %':'aucun signal');
+        // ⚠ QUATRE JOURS SUR SEPT : rien. Sans cette garde, l'app annoncerait
+        // un manque a quiconque saisit mal.
+        ok('Micro : sous 5 jours renseignés, aucun signal',
+          signalMicro(dossier([0,1,2,3,7,8,9,10],tousPortent),FIN)===null);
+        // Cinq jours suffisent — et la part n'est PAS diluee par les deux jours
+        // vides. Opposer cinq journees a une reference multipliee par sept
+        // donnerait 71 % au mieux : le manque serait fabrique par la garde
+        // censee l'eviter.
+        const s5=signalMicro(dossier([0,1,2,3,4,7,8,9,10,11],tousPortent),FIN);
+        ok('Micro : 5 jours sur 7 suffisent, et la part n’est pas diluée par les jours vides',
+          !!s5 && s5.joursRenseignes===5 && s5.pct===s.pct,
+          s5?s5.joursRenseignes+' jours, '+s5.pct+' % contre '+s.pct+' %':'aucun signal');
+        // ⚠ UNE SEULE SEMAINE : rien. C'est la garde qui coute le plus de
+        // signaux, et c'est celle qui rend les autres credibles.
+        ok('Micro : une seule semaine sous le seuil ne dit rien',
+          signalMicro(dossier([0,1,2,3,4,5,6],tousPortent),FIN)===null);
+        // Et la semaine precedente seule ne suffit pas davantage.
+        ok('Micro : la semaine d’avant seule ne dit rien non plus',
+          signalMicro(dossier([7,8,9,10,11,12,13],tousPortent),FIN)===null);
+      })();
+
+      // ── UN SEUL NUTRIMENT NOMME ────────────────────────────────────────
+      //
+      // ⚠ UNE PHRASE QUI EN LISTE TROIS N'EST PLUS UNE CONSIGNE.
+      (()=>{
+        // Trois nutriments sous le seuil en meme temps : le fer a 9 %, le zinc
+        // a 17 %, l'iode a 53 %. Un seul doit sortir, et c'est le plus bas.
+        const tout=()=>[{kcal:200,fe:0.5,ca:500,mg:250,zn:1,io:40,k_:2000,b12:3,b9:250},
+                        {kcal:200,fe:0.5,ca:500,mg:250,zn:1,io:40,k_:2000,b12:3,b9:250}];
+        const u=dossier(QUINZE,tout);
+        const s=signalMicro(u,FIN);
+        const p=phraseSignalMicro(s);
+        const noms=['fer','calcium','magnésium','zinc','iode','potassium','folates','vitamine b12']
+          .filter(m=>p.toLowerCase().indexOf(m)>=0);
+        ok('Micro : la phrase ne nomme qu’UN nutriment, le plus bas',
+          !!s && noms.length===1 && s.cle==='fe', noms.join(', ')+' — '+p);
+        ok('Micro : les autres nutriments en défaut sont comptés, pas nommés',
+          !!s && s.autres>0 && phraseSignalMicroCoach(s).indexOf('dans le même cas')>0,
+          'autres='+(s?s.autres:'—'));
+      })();
+
+      // ── LES ALIMENTS PROPOSES VIENNENT DES SIENS ───────────────────────
+      //
+      // ⚠ UN CONSEIL BATI SUR SES PROPRES ALIMENTS EST SUIVI ; une liste
+      // d'abats ne l'est pas.
+      (()=>{
+        if(!Array.isArray(_ciqualDB)||!_ciqualDB.length){
+          ok('Micro : aliments proposés — base Ciqual absente',false,
+            'la base n’est pas chargée : la sonde ne prouverait rien');
+          return;
+        }
+        const riches=_ciqualDB.filter(f=>f.fe!=null).sort((a,b)=>b.fe-a.fe);
+        // Trois aliments MOYENNEMENT riches, journalises par l'athlete.
+        const siens=_ciqualDB.filter(f=>f.fe!=null&&f.fe>=1.5&&f.fe<4).slice(0,3);
+        ok('Micro : la fixture tient trois aliments moyennement riches en fer',
+          siens.length===3);
+        const u={email:'h@t.fr',gender:'H',nutrition:{log:{}}};
+        u.nutrition.log[jr(0)]={entries:siens.map(f=>({kcal:100,alim_id:f.id,fe:1}))};
+        const prop=alimentsRichesEn(u,'fe',3,FIN);
+        ok('Micro : les trois aliments proposés sortent de son propre journal',
+          prop.length===3 && prop.every(x=>x.sien===true),
+          prop.map(x=>x.nom+(x.sien?'':' [base]')).join(' | '));
+        // ⚠ ET LE PLUS RICHE DE LA BASE EST ECARTE tant que les siens
+        // suffisent : c'est toute la regle.
+        ok('Micro : le plus riche de la base ne passe pas devant les siens',
+          prop.every(x=>x.id!==riches[0].id), 'base : '+riches[0].n);
+        // Sans historique, on retombe sur la base — et la base est BORNEE.
+        const vide=alimentsRichesEn({email:'v@t.fr',gender:'H'},'fe',3,FIN);
+        ok('Micro : sans historique, la base prend le relais',
+          vide.length===3 && vide.every(x=>x.sien===false));
+        // ⚠ LE PLAFOND DE PLAUSIBILITE. Trier la base par teneur au cent
+        // grammes remonte l'ao-nori sechee (205 mg de fer), la chlorelle
+        // (177) et le maerl (144) : rien de tout cela ne se mange au cent
+        // grammes, et le proposer contre un apport bas est la derniere fois
+        // que la phrase est lue.
+        const ref=refMicro({email:'v@t.fr',gender:'H'},'fe').valeur;
+        ok('Micro : la base ne propose rien qui livre plus de deux jours de repère en 100 g',
+          vide.every(x=>x.valeur<=ref*MICRO_RICHE_PLAFOND),
+          vide.map(x=>x.nom+' '+x.valeur).join(' | '));
+        ok('Micro : les épices, algues et boissons sont hors de la proposition',
+          vide.every(x=>{const f=_ciqualDB.find(y=>y.id===x.id);
+            return f && MICRO_GROUPES_EXCLUS.indexOf(String(f.g||''))<0;}),
+          vide.map(x=>(_ciqualDB.find(y=>y.id===x.id)||{}).g).join(' | '));
+        // Et un plancher : rien qui contienne le nutriment sans en apporter.
+        ok('Micro : rien n’est proposé sous un dixième du repère aux 100 g',
+          vide.every(x=>x.valeur>=ref*MICRO_RICHE_PART));
+      })();
+
+      // ── LE MOT INTERDIT ────────────────────────────────────────────────
+      //
+      // ⚠ CETTE ASSERTION N'INTERDIT PAS LE MOT DANS LE FICHIER : elle
+      // l'enferme dans MICRO_DISCLAIMER. L'app parle d'APPORTS ALIMENTAIRES —
+      // ce qui est entre dans le journal — et non d'un etat biologique,
+      // qu'elle n'a ni les moyens ni la qualite d'etablir. Le disclaimer, lui,
+      // dit exactement l'inverse et DOIT porter le mot : « seul un bilan
+      // sanguin peut etablir une carence ». Le bannir partout obligerait a
+      // reecrire la seule phrase du fichier qui protege le lecteur.
+      (()=>{
+        const src=_prodSrc();
+        const lignes=src.split('\n').filter(l=>/carence/i.test(l));
+        const hors=lignes.filter(l=>{
+          const t=l.trim();
+          if(t.indexOf('//')===0) return false;            // commentaire de doctrine
+          if(t.indexOf('const MICRO_DISCLAIMER=')===0) return false;
+          return true;
+        });
+        ok('Micro : le mot « carence » ne sort que par MICRO_DISCLAIMER',
+          hors.length===0, hors.map(l=>l.trim().slice(0,90)).join(' ⏎ ')||'—');
+        ok('Micro : et il est bien dans le disclaimer, qui doit le porter',
+          /carence/i.test(MICRO_DISCLAIMER));
+        // LES DEUX PHRASES DU PRODUIT, elles, ne le portent jamais.
+        const u=dossier(QUINZE,()=>[bas(200),Object.assign(muet(200),{fe:0,ca:400,
+          mg:200,zn:6,io:80,k_:1800,b12:3,b9:200})]);
+        const s=signalMicro(u,FIN);
+        ok('Micro : ni la phrase de l’athlète ni celle du coach ne disent « carence »',
+          !!s && !/carence/i.test(phraseSignalMicro(s))
+          && !/carence/i.test(phraseSignalMicroCoach(s)));
+      })();
+
+      // ── LE GARDE-FOU TCA, ET LA LIGNE ELLE-MEME ────────────────────────
+      (()=>{
+        const u=dossier(QUINZE,()=>[bas(200),Object.assign(muet(200),{fe:0,ca:400,
+          mg:200,zn:6,io:80,k_:1800,b12:3,b9:200})]);
+        const h=_htmlSignalMicro(u,FIN);
+        ok('Micro : la ligne existe quand il y a quelque chose à dire',
+          h.length>0 && h.indexOf('depuis deux semaines')>0);
+        ok('Micro : la ligne porte le rappel « pas un dispositif médical »',
+          h.indexOf('dispositif médical')>0);
+        // ⚠ ET RIEN DU TOUT QUAND IL N'Y A RIEN A DIRE. Pas d'emplacement
+        // vide, pas de titre orphelin : la rarete EST le dispositif.
+        const bon=dossier(QUINZE,()=>[{kcal:200,fe:9,ca:800,mg:400,zn:12,io:200,
+          k_:4000,b12:5,b9:400},{kcal:200,fe:9,ca:800,mg:400,zn:12,io:200,
+          k_:4000,b12:5,b9:400}]);
+        ok('Micro : rien à dire, rien du tout — pas même un cadre vide',
+          _htmlSignalMicro(bon,FIN)==='' && signalMicro(bon,FIN)===null);
+        // ⚠ LE GARDE-FOU TCA. Nommer un apport bas puis trois aliments a
+        // manger, a quelqu'un dont le depistage a conclu a un risque, est
+        // exactement ce que ce garde-fou existe pour empecher.
+        const uT=JSON.parse(JSON.stringify(u)); uT.tcaRisque=true;
+        ok('Micro : risque TCA déclaré, la ligne de l’athlète disparaît',
+          aTCA(uT)===true && _htmlSignalMicro(uT,FIN)==='');
+        // ET LE COACH CONTINUE DE LA VOIR : c'est un professionnel, et c'est a
+        // lui d'en faire quelque chose.
+        ok('Micro : le coach, lui, voit le signal même sous garde-fou TCA',
+          risquesMicro(uT,_dateDeISO(FIN)).filter(x=>/^couverture_/.test(x.cle)).length>0);
+      })();
+
+      // ── LE COACH NE DIT LE NUTRIMENT PERSISTANT QU'UNE FOIS ────────────
+      (()=>{
+        const u=dossier(QUINZE,()=>[bas(200),Object.assign(muet(200),{fe:0,ca:400,
+          mg:200,zn:6,io:80,k_:1800,b12:3,b9:200})]);
+        const l=risquesMicro(u,_dateDeISO(FIN)).filter(x=>/^couverture_/.test(x.cle));
+        const s=signalMicro(u,FIN);
+        ok('Micro coach : le nutriment persistant n’apparaît qu’une seule fois',
+          !!s && l.filter(x=>x.cle==='couverture_'+s.cle).length===1,
+          l.map(x=>x.cle).join(' | '));
+        ok('Micro coach : et c’est la version qui porte les deux semaines',
+          !!s && /deux semaines/.test(
+            (l.find(x=>x.cle==='couverture_'+s.cle)||{}).lib||''));
+        // Les autres nutriments gardent le format d'avant ce lot.
+        ok('Micro coach : les nutriments non persistants gardent leur format',
+          l.filter(x=>x.cle!=='couverture_'+s.cle)
+            .every(x=>['cle','lib','motif','question'].every(k=>typeof x[k]==='string'&&x[k])));
+      })();
+
+      // ── LA REGLE DE TROIS N'EXISTE QU'UNE FOIS ─────────────────────────
+      //
+      // Elle etait ecrite deux fois, mot pour mot. Deux copies d'un prorata ne
+      // divergent pas le jour ou on les ecrit : elles divergent le jour ou
+      // quelqu'un en corrige une.
+      (()=>{
+        const src=_prodSrc();
+        const n=(src.match(/_poserMicros\(/g)||[]).length;
+        ok('Micro : le prorata des micronutriments est écrit une fois et appelé deux',
+          n===3, n+' occurrence(s) — 1 définition + 2 appels attendus');
+        const e={};
+        _poserMicros(e,{fe:2,ca:100,zn:null},1.5);
+        ok('Micro : le prorata pose la clé au prorata, et saute ce qui est absent',
+          e.fe===3 && e.ca===150 && !('zn' in e) && !('io' in e),
+          JSON.stringify(e));
+      })();
+    })();
   }catch(e){
     // ══ UNE INTERRUPTION NE DOIT PAS SE LIRE COMME UNE REUSSITE ═════════
     //

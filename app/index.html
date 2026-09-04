@@ -16481,7 +16481,241 @@ function _htmlCouvertureMicro(user,ref){
   </div>`;
 }
 
+// PURE. LA REGLE DE TROIS DES MICRONUTRIMENTS, ECRITE UNE SEULE FOIS.
+//
+// Elle l'etait deux fois, mot pour mot : dans saveFoodEntry et dans l'entree
+// d'equivalence. Deux copies d'un prorata ne divergent pas le jour ou on les
+// ecrit, elles divergent le jour ou quelqu'un en corrige une.
+//
+// ⚠ LA CLE N'EST POSEE QUE SI L'ALIMENT PORTE LA VALEUR. Un aliment sans
+// donnee reste sans cle : il n'est JAMAIS ecrit a zero, ce qui reviendrait a
+// affirmer qu'il n'en contient pas. C'est toute la difference entre « on ne
+// sait pas » et « il n'y en a pas », et c'est le piege central de ce lot.
+//
+// Trois decimales : l'iode et la B12 se comptent en microgrammes, et un
+// arrondi au centieme y perdrait le dixieme de la reference journaliere.
+function _poserMicros(cible,f,r){
+  for(const _mc in MICRO_REFS){
+    const _v=f&&f[_mc];
+    if(_v!=null) cible[_mc]=parseFloat((_v*r).toFixed(3));
+  }
+  return cible;
+}
 const MICRO_DISCLAIMER="RepCore n'est pas un dispositif médical. Seul un bilan sanguin peut établir une carence.";
+
+// ══════════════ LE SIGNAL D'APPORT ═════════════════════════════════════════
+//
+// Ce qui precede CONSTATE, en huit lignes, chaque fois que le journal est
+// ouvert. Ce qui suit SIGNALE, au plus une fois, et seulement quand quatre
+// gardes sont franchies ensemble. Les deux ne se remplacent pas : l'un est un
+// tableau de bord, l'autre est une phrase qu'on lit parce qu'elle est rare.
+//
+// ⚠ LES REPERES SONT CEUX DE MICRO_REFS, et il n'en existe pas d'autres. Une
+// seconde table serait une seconde doctrine : le jour ou l'Anses revise le
+// zinc, l'une des deux serait corrigee et pas l'autre.
+//
+// ⚠ ILS NE SONT PAS MAJORES PAR L'ENTRAINEMENT, et ce n'est pas un oubli. Il
+// n'existe pas de reference nutritionnelle publiee pour le sportif sur ces
+// huit nutriments — seulement des fourchettes de revue, sans consensus. Une
+// majoration inventee, meme prudente, rendrait TOUT LE MONDE deficitaire et
+// ferait de ce signal un bruit permanent. Que personne ne « corrige » ceci
+// dans six mois sans une source qui le porte.
+const MICRO_SIGNAL_JOURS_MIN=5;      // sur les 7 de la fenetre
+const MICRO_SIGNAL_SEUIL=0.70;       // sous 70 % du repere journalier
+const MICRO_SIGNAL_SEMAINES=2;       // et vrai deux semaines de suite
+const MICRO_SIGNAL_N_ALIMENTS=3;
+// Un aliment n'est dit « riche » que si 100 g en apportent au moins un
+// dixieme de la reference du jour. Sans ce plancher, la liste se remplirait
+// d'aliments qui contiennent le nutriment sans en apporter : proposer une
+// salade verte contre un apport en fer bas, c'est perdre la confiance du
+// lecteur en une ligne.
+const MICRO_RICHE_PART=0.10;
+// ⚠ ET UN PLAFOND, QUI VAUT AUTANT QUE LE PLANCHER. Trier la base par teneur
+// au cent grammes remonte ce qui n'est pas mange au cent grammes : l'ao-nori
+// sechee (205 mg de fer), la chlorelle (177), le maerl (144), le sel marin, la
+// levure chimique. Mesure faite sur les 3 484 fiches Ciqual avant d'ecrire
+// cette ligne. Proposer de la chlorelle contre un apport en fer bas, c'est
+// pire qu'une liste d'abats : c'est la derniere fois que la phrase est lue.
+//
+// Deux filtres, et ils ne s'appliquent QU'A LA BASE :
+//  · un aliment qui livre plus de DEUX jours de reference en 100 g n'est pas
+//    mange en 100 g — c'est un condiment, une poudre ou une algue sechee ;
+//  · deux groupes Ciqual sortent en entier. « Aides culinaires et ingredients
+//    divers » contient les epices, les algues et les levures ; « eaux et
+//    autres boissons » remontait le cafe soluble sur le potassium et la
+//    feuille de the sur le fer. Les aliments infantiles n'ont rien a faire
+//    dans une proposition faite a un adulte.
+//
+// ⚠ CE QUE L'ATHLETE A DEJA JOURNALISE ECHAPPE AUX DEUX. S'il mange de
+// l'ao-nori, la lui proposer est juste : c'est la base qu'on borne, pas lui.
+const MICRO_RICHE_PLAFOND=2;
+const MICRO_GROUPES_EXCLUS=Object.freeze(['aides culinaires et ingrédients divers',
+  'eaux et autres boissons','aliments infantiles','']);
+
+// PURE. LA SEMAINE, SOMMEE. Les sept jours calendaires qui s'achevent a
+// `finISO`, celui-ci compris.
+//
+// ⚠ LA COMPARAISON SE FAIT EN MOYENNE JOURNALIERE, jamais en total sur sept.
+// La garde d'en dessous accepte 5 jours renseignes sur 7 ; opposer la somme de
+// cinq journees a une reference multipliee par sept donnerait au mieux 71 %, et
+// declarerait donc un manque a quiconque ne journalise pas le week-end. Le
+// manque serait fabrique par la garde censee l'eviter.
+//
+// ⚠ ET UN CHAMP ABSENT N'EST PAS UN ZERO. L'aliment sort de l'apport ET du
+// total : sa part d'energie est accumulee a part, dans `couverture`, qui dit
+// sur quelle fraction du journal le chiffre est calcule. Compter zero
+// fabriquerait un manque des qu'un produit OpenFoodFacts entre au journal —
+// et OFF ne porte presque jamais l'iode ni la B12.
+function microSemaine(user,finISO){
+  const u=_dossier(user);
+  const log=((u&&u.nutrition)||{}).log||{};
+  const fin=_dateDeISO(String(finISO||localISODate(new Date())).slice(0,10));
+  const jours=_microDerniersJours(fin);
+  const out={joursRenseignes:0,jours:jours.slice(),couverture:{},part:{},kcal:0};
+  const apport={}, kcalDoc={};
+  for(const cle in MICRO_REFS){ out[cle]=0; apport[cle]=0; kcalDoc[cle]=0; }
+  let kcalTotal=0;
+  for(const j of jours){
+    const es=(log[j]&&Array.isArray(log[j].entries))?log[j].entries:null;
+    if(!es||!es.length) continue;
+    out.joursRenseignes++;
+    for(const e of es){
+      if(!e) continue;
+      const kc=Number(e.kcal)||0;
+      kcalTotal+=kc;
+      for(const cle in MICRO_REFS){
+        const v=e[cle];
+        // undefined (journee saisie avant que la cle existe) et null (aliment
+        // sans donnee) tombent du meme cote : inconnu.
+        if(v==null) continue;
+        apport[cle]+=Number(v)||0;
+        kcalDoc[cle]+=kc;
+      }
+    }
+  }
+  out.kcal=Math.round(kcalTotal);
+  for(const cle in MICRO_REFS){
+    out[cle]=Math.round(apport[cle]*1000)/1000;
+    out.couverture[cle]=kcalTotal>0?Math.round(kcalDoc[cle]/kcalTotal*1000)/1000:0;
+    const r=refMicro(u,cle);
+    out.part[cle]=(out.joursRenseignes>0&&r&&r.valeur>0)
+      ? Math.round((apport[cle]/out.joursRenseignes)/r.valeur*1000)/1000
+      : null;
+  }
+  return out;
+}
+
+// PURE. LES NUTRIMENTS EN DEFAUT SUR UNE SEMAINE — trois des quatre gardes.
+// La quatrieme, la persistance, ne peut pas se juger sur une seule semaine :
+// elle est appliquee par signalMicro.
+function _microDefauts(user,finISO){
+  const s=microSemaine(user,finISO);
+  const out=[];
+  if(s.joursRenseignes<MICRO_SIGNAL_JOURS_MIN) return out;
+  for(const cle in MICRO_REFS){
+    if(!(s.couverture[cle]>MICRO_SIGNAL_SEUIL)) continue;
+    const p=s.part[cle];
+    if(p==null||!(p<MICRO_SIGNAL_SEUIL)) continue;
+    out.push({cle:cle,part:p,couverture:s.couverture[cle],
+      joursRenseignes:s.joursRenseignes});
+  }
+  return out;
+}
+
+// PURE. LE SIGNAL, OU RIEN. Quatre gardes ensemble, deux semaines de suite,
+// et UN SEUL nutriment nomme — le plus bas de la semaine courante.
+//
+// ⚠ UNE PHRASE QUI EN LISTE TROIS N'EST PLUS UNE CONSIGNE. Elle devient un
+// bulletin, on la lit une fois, et on ne la lit plus.
+function signalMicro(user,finISO){
+  const u=_dossier(user);
+  if(!u) return null;
+  const fin=String(finISO||localISODate(new Date())).slice(0,10);
+  const cette=_microDefauts(u,fin);
+  if(!cette.length) return null;
+  // LA SEMAINE PRECEDENTE, decalee de la largeur exacte de la fenetre.
+  const avant=_microDefauts(u,localISODate(
+    _datePlusJours(_dateDeISO(fin),-MICRO_JOURS_FENETRE)));
+  const persistants=cette.filter(x=>avant.some(y=>y.cle===x.cle));
+  if(!persistants.length) return null;
+  // LE PLUS BAS, et lui seul.
+  persistants.sort((a,b)=>a.part-b.part);
+  const g=persistants[0];
+  const r=refMicro(u,g.cle);
+  return {cle:g.cle,lib:r.lib,unite:r.unite,ref:r.valeur,sexeConnu:r.sexeConnu,
+    part:g.part,pct:Math.round(g.part*100),couverture:g.couverture,
+    joursRenseignes:g.joursRenseignes,semaines:MICRO_SIGNAL_SEMAINES,
+    autres:persistants.length-1};
+}
+
+// PURE. TROIS ALIMENTS RICHES, PRIS D'ABORD DANS LES SIENS.
+//
+// ⚠ UN CONSEIL BATI SUR SES PROPRES ALIMENTS EST SUIVI ; une liste d'abats ne
+// l'est pas. On balaie donc le journal ET le dictionnaire des aliments
+// frequents avant d'ouvrir la base, et chaque proposition dit d'ou elle vient.
+function alimentsRichesEn(user,cle,n,finISO){
+  const r=MICRO_REFS[cle];
+  if(!r) return [];
+  const combien=Math.max(1,Math.round(Number(n)||MICRO_SIGNAL_N_ALIMENTS));
+  const ref=refMicro(_dossier(user),cle);
+  const plancher=(ref&&ref.valeur>0)?ref.valeur*MICRO_RICHE_PART:0;
+  let base=[];
+  try{ base=Array.isArray(_ciqualDB)?_ciqualDB:[]; }catch(e){ base=[]; }
+  if(!base.length) return [];
+  // ── CE QU'IL A DEJA ENREGISTRE ────────────────────────────────────────
+  const siens={};
+  const u=_dossier(user);
+  const log=((u&&u.nutrition)||{}).log||{};
+  for(const j in log){
+    const es=log[j]&&log[j].entries;
+    if(!Array.isArray(es)) continue;
+    for(const e of es) if(e&&e.alim_id!=null) siens[String(e.alim_id)]=true;
+  }
+  try{ for(const k in (((u&&u.nutrition)||{}).usageFoods||{})) siens[k]=true; }catch(e){}
+  const trier=(a,b)=>(Number(b[cle])||0)-(Number(a[cle])||0);
+  const riche=f=>f&&f[cle]!=null&&Number(f[cle])>=plancher;
+  // Le plafond et l'exclusion de groupe ne bornent QUE la base.
+  const mangeable=f=>riche(f)
+    && Number(f[cle])<=(ref&&ref.valeur>0?ref.valeur*MICRO_RICHE_PLAFOND:Infinity)
+    && MICRO_GROUPES_EXCLUS.indexOf(String(f.g||''))<0;
+  const dedans=base.filter(f=>riche(f)&&siens[String(f.id)]).sort(trier)
+    .slice(0,combien).map(f=>({id:f.id,nom:f.n,valeur:Number(f[cle]),
+      unite:r.unite,sien:true}));
+  if(dedans.length>=combien) return dedans;
+  // ── ET SEULEMENT ENSUITE, LA BASE ─────────────────────────────────────
+  // Le complement est trie par teneur, mais on ecarte ce qui est deja retenu.
+  const pris={}; for(const x of dedans) pris[String(x.id)]=true;
+  const reste=base.filter(f=>mangeable(f)&&!pris[String(f.id)]).sort(trier)
+    .slice(0,combien-dedans.length).map(f=>({id:f.id,nom:f.n,
+      valeur:Number(f[cle]),unite:r.unite,sien:false}));
+  return dedans.concat(reste);
+}
+
+// ⚠ LE MOT « CARENCE » N'EST PAS ECRIT ICI, ET IL NE DOIT PAS L'ETRE. L'app
+// parle d'APPORTS ALIMENTAIRES — ce qui est entre dans le journal — et non
+// d'un etat biologique, qu'elle n'a ni les moyens ni la qualite d'etablir. Le
+// seul endroit du fichier ou le mot apparait est MICRO_DISCLAIMER, qui dit
+// justement que seul un bilan sanguin peut en etablir une.
+function phraseSignalMicro(s){
+  if(!s) return '';
+  let t='Tes apports en '+s.lib.toLowerCase()+' sont à '+s.pct
+    +' % du repère depuis deux semaines.';
+  if(!s.sexeConnu) t+=' Sexe non renseigné : le repère le plus élevé est retenu.';
+  return t;
+}
+// PURE. La ligne du coach. Meme rarete, meme unicite du nutriment ; ce qui
+// change est qu'elle porte la fiabilite du calcul, parce que c'est un
+// professionnel qui la lit et qu'il doit savoir sur quoi elle se fonde.
+function phraseSignalMicroCoach(s){
+  if(!s) return '';
+  return 'Ses apports en '+s.lib.toLowerCase()+' ressortent à '+s.pct
+    +' % du repère sur deux semaines consécutives, calculés sur '
+    +Math.round(s.couverture*100)+' % de ce qui a été journalisé ('
+    +s.joursRenseignes+' jours sur '+MICRO_JOURS_FENETRE+' la dernière semaine).'
+    +(s.autres>0?' '+s.autres+' autre'+(s.autres>1?'s':'')
+      +' nutriment'+(s.autres>1?'s':'')+' est dans le même cas.':'');
+}
+
 
 function _microNorm(s){
   return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
@@ -16594,7 +16828,22 @@ function risquesMicro(user,ref){
   // journal, lui, continue de montrer la faible fiabilite.
   {
     const _jours=_microDerniersJours(date);
+    // ⚠ LE SIGNAL PERSISTANT PASSE DEVANT, ET IL RETIRE SON NUTRIMENT DE LA
+    // BOUCLE. Deux lignes sur le meme fer — l'une disant « la derniere semaine
+    // journalisee », l'autre « deux semaines consecutives » — feraient lire la
+    // moins informative des deux, et laisseraient croire a deux constats
+    // independants la ou il n'y en a qu'un.
+    //
+    // Il ne remplace pas la boucle : un nutriment tombe UNE seule semaine reste
+    // dit, sans la persistance, exactement comme avant ce lot.
+    let _sig=null;
+    try{ _sig=signalMicro(user,localISODate(date)); }catch(e){ _sig=null; }
+    if(_sig) out.push({cle:'couverture_'+_sig.cle,
+      lib:'Couverture '+_sig.lib.toLowerCase()+' — deux semaines',
+      motif:phraseSignalMicroCoach(_sig),
+      question:'Un bilan sanguin récent existe-t-il ?'});
     for(const _cle in MICRO_REFS){
+      if(_sig&&_sig.cle===_cle) continue;
       const _c=couvertureMicro(user,_cle,_jours);
       if(!_c) continue;
       if(!(_c.part<MICRO_COUVERTURE_SEUIL)) continue;
@@ -52854,6 +53103,50 @@ function _libelleJourNut(dateISO){
 }
 // `jourAff` est OPTIONNELLE et retombe sur aujourd’hui : le rendu initial et
 // les tests intégrés, qui appellent avec le seul `nut`, ne changent pas.
+
+// ⚠ LE GARDE-FOU TCA S'APPLIQUE INTEGRALEMENT A CETTE LIGNE, et c'est la
+// seule de tout le lot qui parle a l'athlete. Dire « tes apports en fer sont a
+// 45 % du repere », puis nommer trois aliments a manger, a quelqu'un dont le
+// depistage a conclu a un risque de trouble du comportement alimentaire, c'est
+// exactement ce que ce garde-fou existe pour empecher. Le coach, lui, continue
+// de la voir : c'est un professionnel, et c'est a lui d'en faire quelque chose.
+//
+// ⚠ ELLE N'EXISTE PAS QUAND IL N'Y A RIEN A DIRE. Pas d'onglet, pas de sept
+// jauges, pas d'emplacement vide qui attend : la rarete EST le dispositif. Une
+// ligne toujours presente serait lue une fois puis jamais plus, et les quatre
+// gardes du calcul n'auraient servi a rien.
+function _htmlSignalMicro(user,finISO){
+  const u=_dossier(user);
+  if(!u) return '';
+  try{ if(aTCA(u)) return ''; }catch(e){}
+  let s=null;
+  try{ s=signalMicro(u,finISO); }catch(e){ return ''; }
+  if(!s) return '';
+  let l=[];
+  try{ l=alimentsRichesEn(u,s.cle,MICRO_SIGNAL_N_ALIMENTS,finISO); }catch(e){ l=[]; }
+  // LES SIENS D'ABORD, ET LA PHRASE LE DIT. « Parmi ce que tu manges deja »
+  // n'est pas un ornement : c'est la raison pour laquelle le conseil est
+  // suivi, et la taire reviendrait a rendre la liste indistincte d'un
+  // classement de la base.
+  const siens=l.filter(x=>x.sien);
+  const intro=l.length
+    ? (siens.length===l.length
+        ? 'Parmi ce que tu manges déjà, les plus riches en '+s.lib.toLowerCase()+' :'
+        : (siens.length
+            ? 'Les plus riches en '+s.lib.toLowerCase()+', dont '+siens.length
+              +' que tu manges déjà :'
+            : 'Les plus riches en '+s.lib.toLowerCase()+' :'))
+    : '';
+  return `<div style="margin-bottom:14px;background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:var(--r-3);padding:12px 13px">
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6;font-weight:600">${escapeHtml(phraseSignalMicro(s))}</div>
+    ${l.length?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px">${escapeHtml(intro)}</div>
+    <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.7;margin-top:3px">${
+      l.map(x=>'· '+escapeHtml(x.nom)+' <span style="color:var(--text-faint)">('
+        +escapeHtml(String(x.valeur))+' '+escapeHtml(x.unite)+' / 100 g)</span>').join('<br>')
+    }</div>`:''}
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:9px">${escapeHtml(MICRO_DISCLAIMER)}</div>
+  </div>`;
+}
 function _renderStrictMacroRings(nut,jourAff){
   const today=jourAff||localISODate(new Date());
   const estAuj=today===localISODate(new Date());
@@ -52929,6 +53222,18 @@ function _renderStrictMacroRings(nut,jourAff){
          non compte, lui, parle du TOTAL CONSOMME : sa place est sous la barre
          qui l affiche, pas sous une grille de cibles. -->
     ${_selManquant?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:right;margin-top:8px">sel non compté sur ${_selManquant} aliment${_selManquant>1?'s':''}</div>`:''}
+    <!-- LE SIGNAL D'APPORT, SOUS LES MACROS ET NULLE PART AILLEURS. Il rend la
+         chaine vide dans l'immense majorite des cas : c'est le comportement
+         attendu, pas une panne.
+         ⚠ IL N'EST PAS DANS htmlAnneauxMacros, ou il avait ete pose d'abord :
+         cette fonction-la est PARTAGEE avec la carte de l'accueil, et elle ne
+         recoit pas le jour affiche — la ligne y etait du code mort, avalee par
+         son propre try/catch sur un « jourAff » qui n'existait pas dans sa
+         portee. Ici, « today » est le jour reellement regarde.
+         ⚠ ET PAS D'ACCENT GRAVE DANS CE COMMENTAIRE : il vit A L'INTERIEUR
+         d'un template literal, ou le premier backtick venu ferme la chaine et
+         emporte le fichier entier. -->
+    ${(()=>{ try{ return _htmlSignalMicro(currentUser,today); }catch(e){ return ''; } })()}
     <!-- LES SIX CIBLES, EN TUILES. Elles ne repetent pas les anneaux : les
          anneaux disent OU EN EST la journee, les tuiles disent CE QU IL FAUT
          ATTEINDRE — et elles portent les deux cibles que les anneaux ne
@@ -56197,10 +56502,7 @@ function _eqConstruireEntree(f,qty,repas,id){
     sel:f.e!=null?parseFloat((f.e*r).toFixed(2)):null,
     periSeance:false
   };
-  for(const _mc in MICRO_REFS){
-    const _v=f[_mc];
-    if(_v!=null) e[_mc]=parseFloat((_v*r).toFixed(3));
-  }
+  _poserMicros(e,f,r);
   return e;
 }
 // ── L'écran ───────────────────────────────────────────────────────────────
@@ -58145,12 +58447,9 @@ async function saveFoodEntry(){
     // une valeur a inverser.
     periSeance:false,
   };
-  // Micronutriments : la cle n'est posee QUE si l'aliment porte la valeur.
-  // Trois decimales, l'iode et la B12 se comptant en microgrammes.
-  for(const _mc in MICRO_REFS){
-    const _v=f[_mc];
-    if(_v!=null) entry[_mc]=parseFloat((_v*r).toFixed(3));
-  }
+  // Micronutriments : meme prorata que les macros ci-dessus, et il n'existe
+  // qu'un seul endroit ou il est ecrit.
+  _poserMicros(entry,f,r);
   // PRODUIT DE MARQUE : deux champs, sur l ENTREE seulement. Le document
   // `user` n en recoit aucun, et rien n est migre. Contrainte ODbL : la
   // donnee OFF ne se recopie pas ailleurs que dans ce que l athlete a
