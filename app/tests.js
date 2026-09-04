@@ -25806,11 +25806,26 @@ async function testExercices(){
           _eqCtx=null;
           return appliquerEquivalence('1',100)===false
             ?true:_echec('une substitution a eu lieu hors contexte');})());
-        ok('La mention d\'absence de filtre allergène est affichée',(()=>{
+        // ⚠ CETTE ASSERTION EPINGLAIT UNE PHRASE, ET LA PHRASE EST DEVENUE
+        // FAUSSE. Elle exigeait « PAS filtrée par allergène » ; depuis le lot
+        // des évictions, la liste EST filtrée par ce que l'athlète déclare.
+        // Remplacer une formulation figée par une autre n'aurait repoussé le
+        // problème que d'un lot : on épingle donc l'INVARIANT, qui lui ne
+        // bougera pas — une réserve est toujours affichée, et elle ne promet
+        // jamais une absence.
+        ok('Équivalences : une réserve est toujours affichée sous la liste',(()=>{
           currentUser={id:'a',bilans:[],nutrition:{log:{}}};
           const h=_htmlEquivalents({id:1,alim_id:poulet.id,nom:poulet.n,qty:100});
-          return /PAS filtrée par allergène/.test(h)
-            ?true:_echec('la mention manque');})());
+          return h.indexOf(escapeHtml(EQ_RESERVE_ALLERGENE))>=0
+            ?true:_echec('la réserve manque');})());
+        ok('Équivalences : la réserve ne promet aucune absence',(()=>{
+          const t=EQ_RESERVE_ALLERGENE;
+          if(t.length<60) return _echec('réserve trop courte pour dire quoi que ce soit');
+          // Elle doit nommer la limite RÉELLE — la table ne porte pas
+          // d'allergènes — et renvoyer la décision au lecteur.
+          if(!/Ciqual/.test(t)) return _echec('la réserve ne nomme pas la source de la limite');
+          if(!/[Vv]érifie/.test(t)) return _echec('la réserve ne renvoie pas la décision au lecteur');
+          return true;})());
         ok('_eqConstruireEntree est le MIROIR de saveFoodEntry',(()=>{
           // Le seul garde-fou contre une divergence des deux chemins.
           const u={id:'m',nutrition:{log:{},recentFoods:[]}};
@@ -45937,6 +45952,241 @@ vendredi 78 6h 44m
       ok('Page : rcReinitReperes n’est atteignable que par ce bouton',
         (src.match(/rcReinitReperes\s*\(/g)||[]).length===2,
         'déclaration + l’appel du bouton orphelin');
+    })();
+
+    // ══ LES EVICTIONS ALIMENTAIRES ═══════════════════════════════════════
+    //
+    // Ce qui est verifie ici tient en une phrase : les six chemins qui menent a
+    // un aliment passent par LA MEME fonction, et les trois niveaux ne se
+    // ressemblent pas.
+    (()=>{
+      const EV=(o)=>Object.assign({id:'e1',libelle:'Arachide',niveau:'allergie',
+        cible:{type:'motif',valeur:'arachide, cacahuete'},depuis:Date.now()},o||{});
+      const U=(evs)=>({email:'ev@t.fr',sante:{evictions:evs}});
+      const base=Array.isArray(_ciqualDB)?_ciqualDB:[];
+      if(!base.length){
+        ok('Évictions : base Ciqual absente',false,'la sonde ne prouverait rien');
+        return;
+      }
+      const arachide=base.filter(f=>/arachide/i.test(f.n))[0];
+      const yaourt=base.filter(f=>/^Yaourt/i.test(f.n)&&/laitier/i.test(f.g||''))[0];
+      const poulet=base.filter(f=>/^Poulet/i.test(f.n))[0];
+      ok('Évictions : la fixture tient trois aliments de la table',
+        !!arachide&&!!yaourt&&!!poulet);
+
+      // ── LES TROIS TYPES DE CIBLE ───────────────────────────────────────
+      ok('Éviction « aliment » : elle vise un identifiant précis',
+        (evictionDe(U([EV({cible:{type:'aliment',valeur:String(poulet.id)}})]),poulet)||{})
+          .niveau==='allergie'
+        && evictionDe(U([EV({cible:{type:'aliment',valeur:String(poulet.id)}})]),yaourt)===null);
+      ok('Éviction « groupe » : elle vise un groupe Ciqual entier',
+        (evictionDe(U([EV({cible:{type:'groupe',valeur:yaourt.g}})]),yaourt)||{})
+          .niveau==='allergie');
+      // ⚠ LE MOTIF CHERCHE DANS LE NOM **ET** DANS LE GROUPE. « Yaourt à la
+      // grecque nature » ne porte le mot « laitier » nulle part : seul son
+      // groupe le porte. Un filtre qui ne lirait que le nom laisserait passer
+      // tous les produits laitiers de la table.
+      ok('Éviction « motif » : la fixture ne porte le mot que dans le GROUPE',
+        !/laitier/i.test(yaourt.n) && /laitier/i.test(yaourt.g),
+        yaourt.n+' | '+yaourt.g);
+      ok('Éviction « motif » : elle cherche dans le nom ET dans le groupe',
+        (evictionDe(U([EV({cible:{type:'motif',valeur:'laitier'}})]),yaourt)||{})
+          .niveau==='allergie'
+        && (evictionDe(U([EV()]),arachide)||{}).niveau==='allergie');
+      // ⚠ LES SYNONYMES SONT DECLARES, PAS DEVINES. « arachide » seul
+      // n'attrape pas « Beurre de cacahuète » — mesure faite sur la table.
+      ok('Éviction « motif » : la virgule sépare des synonymes, et l’un suffit',
+        !!evictionDe(U([EV()]),{n:'Beurre de cacahuète',g:''})
+        && !evictionDe(U([EV({cible:{type:'motif',valeur:'arachide'}})]),
+             {n:'Beurre de cacahuète',g:''}));
+
+      // ── LA GRAVITE L'EMPORTE SUR L'ORDRE DE SAISIE ─────────────────────
+      //
+      // Un aliment qui tombe sous deux evictions rend la PLUS GRAVE. Rendre la
+      // premiere trouvee ferait dependre l'avertissement de l'ordre dans lequel
+      // l'athlete a rempli sa liste.
+      (()=>{
+        const d=[EV({id:'a',niveau:'choix',libelle:'Choix',cible:{type:'motif',valeur:'poulet'}}),
+                 EV({id:'b',niveau:'allergie',libelle:'Volaille',cible:{type:'motif',valeur:'poulet'}})];
+        ok('Évictions : la plus grave gagne, quel que soit l’ordre de saisie',
+          (evictionDe(U(d),poulet)||{}).niveau==='allergie'
+          && (evictionDe(U(d.slice().reverse()),poulet)||{}).niveau==='allergie');
+      })();
+
+      // ── LES TROIS NIVEAUX, EFFETS DISTINCTS ────────────────────────────
+      (()=>{
+        const l=[poulet,arachide,yaourt];
+        const t=n=>evictionTrier(U([EV({niveau:n})]),l);
+        const a=t('allergie'), i=t('intolerance'), c=t('choix');
+        ok('Niveau « allergie » : l’aliment est retiré de la liste',
+          a.liste.length===2 && a.retirees===1 && a.releguees.length===0);
+        // ⚠ L'INTOLERANCE RESTE SAISISSABLE. Beaucoup de gens en tolerent une
+        // petite quantite ; un filtrage dur les priverait d'un aliment qu'ils
+        // utilisent volontairement.
+        ok('Niveau « intolérance » : l’aliment reste proposé, relégué en fin de liste',
+          i.liste.length===2 && i.retirees===0 && i.releguees.length===1
+          && i.releguees[0].aliment===arachide);
+        ok('Niveau « choix » : l’aliment sort de la liste, comme une allergie',
+          c.liste.length===2 && c.retirees===1 && c.releguees.length===0);
+      })();
+
+      // ── LE SILENCE DU NIVEAU « CHOIX » ─────────────────────────────────
+      //
+      // ⚠ RIEN DANS LE PRODUIT NE DOIT AVOIR L'AIR DE DISCUTER CE NIVEAU-LA.
+      // C'est une decision, pas un symptome, et elle n'a pas a etre justifiee
+      // a une application — le jour ou l'athlete la contredit moins encore.
+      (()=>{
+        const ch=evictionDe(U([EV({niveau:'choix'})]),arachide);
+        const it=evictionDe(U([EV({niveau:'intolerance'})]),arachide);
+        const al=evictionDe(U([EV({niveau:'allergie'})]),arachide);
+        ok('Niveau « choix » : aucune mention affichée',
+          evictionMention(ch)==='' && texteAvertissementEviction(ch,false)==='');
+        ok('Niveau « choix » : il n’apparaît pas dans le rappel du plan',
+          _htmlEvictionsRappelPlan(U([EV({niveau:'choix',libelle:'ZZTOP'})]))===''
+          && /ZZTOP/.test(_htmlEvictionsRappelPlan(U([EV({niveau:'allergie',libelle:'ZZTOP'})]))));
+        // L'intolerance, elle, se dit dans la liste mais n'avertit PAS a la
+        // saisie : la redire au moment de valider ferait d'un aliment toléré
+        // un aliment négocié.
+        ok('Niveau « intolérance » : mention dans la liste, aucun avertissement à la saisie',
+          evictionMention(it)!=='' && texteAvertissementEviction(it,false)==='');
+        // ⚠ ET L'ALLERGIE AVERTIT, EN NOMMANT L'EVICTION.
+        const t=texteAvertissementEviction(al,false);
+        ok('Niveau « allergie » : l’avertissement nomme l’éviction et ne bloque pas',
+          t!=='' && t.indexOf('Arachide')>0 && /ne bloque pas/.test(t), t.slice(0,120));
+      })();
+
+      // ── LE PRODUIT DE MARQUE : SIGNALER, JAMAIS GARANTIR ───────────────
+      //
+      // ⚠ C'EST LA GARDE QUI COMPTE LE PLUS DE CE LOT. Open Food Facts porte
+      // des listes d'allergenes saisies par des contributeurs, heterogenes et
+      // souvent incompletes. L'app peut SIGNALER une presence ; ecrire « ne
+      // contient pas de gluten » a partir de cette base serait la seule phrase
+      // de RepCore capable d'envoyer quelqu'un a l'hopital.
+      (()=>{
+        const off={n:'Biscuits fourrés',g:'',_off:{ean:'1',allergenes:'peanuts gluten',traces:''}};
+        ok('Marque : une étiquette OFF déclenche l’éviction que le nom seul ne verrait pas',
+          !!evictionDe(U([EV({cible:{type:'motif',valeur:'peanuts'}})]),off)
+          && evictionDe(U([EV({cible:{type:'motif',valeur:'peanuts'}})]),
+               {n:'Biscuits fourrés',g:''})===null);
+        ok('Marque : les étiquettes OFF sont mises à plat sans être traduites',
+          _offTags(['en:peanuts','fr:fruits-a-coque'])==='peanuts fruits a coque');
+        const al=evictionDe(U([EV()]),{n:'Cacahuètes grillées',g:'',_off:{ean:'2'}});
+        ok('Marque : l’avertissement porte la réserve Open Food Facts',
+          /Open Food Facts/.test(texteAvertissementEviction(al,true))
+          && !/Open Food Facts/.test(texteAvertissementEviction(al,false)));
+        // ⚠ AUCUNE GARANTIE D'ABSENCE N'EST FORMULEE NULLE PART. On cherche
+        // les tournures qui affirmeraient une absence, dans la source de
+        // production entiere, hors commentaires.
+        const src=_prodSrc();
+        // ⚠ « NE CONTIENT PAS » SEUL EST TROP LARGE, et la première écriture de
+        // cette sonde l'a prouvé : elle a épinglé trois phrases du scanner —
+        // « ce QR code ne contient pas de code produit ». Une sonde qui crie
+        // sur du bruit finit par être élargie jusqu'à ne plus rien voir. La
+        // tournure ne compte donc que si elle porte sur un ALIMENT.
+        const INTERDITS=[/sans allerg[eè]ne/i,/garanti[es]? sans/i,
+          /exempt de/i,/aucun allerg[eè]ne/i,
+          /ne contient (pas|aucun)[^.]{0,50}(allerg|gluten|lactose|arachide|cacahu|trace|lait|soja|oeuf|œuf)/i];
+        const lignes=src.split('\n').filter(l=>{
+          const t=l.trim();
+          if(t.indexOf('//')===0) return false;
+          return INTERDITS.some(re=>re.test(t));
+        });
+        ok('Marque : aucune garantie d’absence n’est formulée dans le produit',
+          lignes.length===0, lignes.map(l=>l.trim().slice(0,80)).join(' ⏎ ')||'—');
+        ok('Marque : la réserve dit qu’on signale une présence, jamais une absence',
+          /signaler une présence/.test(EV_OFF_RESERVE)
+          && /jamais garantir une absence/.test(EV_OFF_RESERVE));
+      })();
+
+      // ── LES SIX CHEMINS PASSENT BIEN PAR evictionDe ────────────────────
+      //
+      // ⚠ AUCUN CHEMIN NE FILTRE PAR LUI-MEME : c'est la seule facon qu'ils ne
+      // divergent pas. Six filtres ecrits six fois divergeraient au premier
+      // ajout, et le chemin oublie serait celui par lequel l'arachide passe.
+      // On lit donc la SOURCE : chaque fonction d'entree doit appeler soit
+      // evictionDe, soit evictionTrier, qui l'appelle.
+      (()=>{
+        const src=_prodSrc();
+        const corps=nom=>{
+          const i=src.indexOf('function '+nom+'(');
+          if(i<0) return '';
+          // Une tranche large, coupee au debut de la fonction suivante.
+          const j=src.indexOf('\nfunction ',i+10);
+          return src.slice(i,j<0?i+12000:j);
+        };
+        // ⚠ « LE NOM APPARAÎT » N'EST PAS « LE FILTRE AGIT », et la première
+        // écriture de cette sonde confondait les deux : retirer l'appel à
+        // evictionTrier de la recherche du plan la laissait verte, parce qu'un
+        // evictionDe subsistait quelques lignes plus bas — celui qui ANNOTE
+        // une ligne, pas celui qui la retire. On distingue donc les deux rôles.
+        //
+        // FILTRER : la fonction produit une LISTE, et la liste doit être
+        // triée. Rien d'autre que evictionTrier ne retire un aliment.
+        const FILTRENT=[
+          ['onFjSearch','recherche de l’athlète, aliments perso et du coach compris'],
+          ['onPlanSearch','recherche du plan, côté coach']];
+        // SIGNALER : la fonction ne construit pas de liste à filtrer, elle
+        // décide au cas par cas — un avertissement, une annotation, un conflit.
+        const SIGNALENT=[
+          ['saveFoodEntry','enregistrement, y compris après un scan'],
+          ['_htmlEquivalents','équivalences'],
+          ['planConflitsEviction','plan existant du coach'],
+          ['_htmlEvictionsCoach','fiche client']];
+        const muetsF=FILTRENT.filter(([n])=>{
+          const c=corps(n);
+          return !c || !/evictionTrier\s*\(/.test(c);
+        });
+        const muetsS=SIGNALENT.filter(([n])=>{
+          const c=corps(n);
+          return !c || !(/evictionDe\s*\(/.test(c)
+            ||/texteAvertissementEviction\s*\(/.test(c)||/planConflitsEviction\s*\(/.test(c));
+        });
+        ok('Évictions : les deux chemins qui produisent une liste la font TRIER',
+          muetsF.length===0, muetsF.map(x=>x[0]+' ('+x[1]+')').join(' | ')||'—');
+        ok('Évictions : les quatre autres chemins passent par le point unique',
+          muetsS.length===0, muetsS.map(x=>x[0]+' ('+x[1]+')').join(' | ')||'—');
+      })();
+
+      // ── LE PLAN EXISTANT : SIGNALER, NE PAS RETIRER ────────────────────
+      //
+      // ⚠ UNE SUPPRESSION SILENCIEUSE DANS UN PLAN EST PIRE QUE L'ERREUR :
+      // elle laisse un repas incomplet que personne ne sait lire, et le coach
+      // a peut-etre une raison — une reintroduction convenue de vive voix.
+      (()=>{
+        const c={email:'c@t.fr',sante:{evictions:[EV()]},
+          nutrition:{plan:{squelette:[{lib:'Beurre de cacahuète'},{lib:'Riz basmati'},
+            {lib:'Purée d’arachide'}]}}};
+        const l=planConflitsEviction(c);
+        ok('Plan du coach : les lignes en conflit sont signalées',
+          l.length===2 && l.every(x=>/cacahuète|arachide/i.test(x.libelle)),
+          l.map(x=>x.libelle).join(', '));
+        ok('Plan du coach : rien n’est retiré du plan',
+          c.nutrition.plan.squelette.length===3);
+        ok('Plan du coach : le bloc dit explicitement qu’il ne retire rien',
+          /ne retire rien du plan/.test(_htmlEvictionsCoach(c)));
+      })();
+
+      // ── LA VALIDATION, ET LES DEUX ECRANS ──────────────────────────────
+      (()=>{
+        const V=o=>_evValider(Object.assign({libelle:'X',niveau:'choix',
+          cible:{type:'motif',valeur:'lait'}},o));
+        ok('Éviction : un niveau inconnu est refusé', V({niveau:'zzz'})!=='');
+        ok('Éviction : une valeur vide est refusée',
+          V({cible:{type:'motif',valeur:'  '}})!=='');
+        // ⚠ UN MOTIF D'UNE LETTRE ATTRAPERAIT LA MOITIE DE LA TABLE, et
+        // l'athlète ne verrait plus rien sans comprendre pourquoi.
+        ok('Éviction : un motif d’une seule lettre est refusé',
+          V({cible:{type:'motif',valeur:'a'}})!==''
+          && V({cible:{type:'motif',valeur:'lait, a'}})!=='');
+        ok('Éviction : une déclaration complète passe', V({})==='');
+        ok('Éviction : les deux écrans existent',
+          !!document.getElementById('s-evictions')
+          && !!document.getElementById('s-eviction-edit'));
+        // Le coach LIT, il ne declare pas : une allergie est une donnee de
+        // sante que l'athlete seul peut affirmer.
+        ok('Éviction : le bloc du coach ne porte aucun bouton d’ajout',
+          !/Ajouter une éviction/.test(_htmlEvictionsCoach({email:'z@t.fr',sante:{evictions:[]}})));
+      })();
     })();
   }catch(e){
     // ══ UNE INTERRUPTION NE DOIT PAS SE LIRE COMME UNE REUSSITE ═════════
