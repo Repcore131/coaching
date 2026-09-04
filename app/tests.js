@@ -22712,25 +22712,42 @@ async function testExercices(){
         return /le compte en veille n'en reçoit pas/.test(htmlSelecteurComptes());})());
 
       // ── Se déconnecter bascule sur le compte restant ──
-      ok('La déconnexion retire le compte et active le suivant',(()=>{
-        _poser();
-        const u=DB.get('users');
-        currentUser=u[CO];
-        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jCO',r:'r',e:Date.now()+3600000}));
-        comptesEnregistrer(currentUser);
-        currentUser=u[AT];
-        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jAT',r:'r',e:Date.now()+3600000}));
-        comptesEnregistrer(currentUser);
-        const vraiConfirm=window.confirm; window.confirm=()=>true;
-        try{ logout(); }catch(e){ window.confirm=vraiConfirm; return _echec('exception: '+e.message); }
-        window.confirm=vraiConfirm;
-        const l=comptesConnectes();
-        return compteActif()===CO&&l.length===1&&l[0].email===CO;})());
-      ok('Dernier compte : la déconnexion renvoie sur l\'écran d\'accueil',(()=>{
-        const vraiConfirm=window.confirm; window.confirm=()=>true;
-        try{ logout(); }catch(e){ window.confirm=vraiConfirm; return _echec('exception: '+e.message); }
-        window.confirm=vraiConfirm;
-        return currentUser===null&&comptesConnectes().length===0;})());
+      // ⚠ logout EST `async` ET PASSE PAR rcConfirm. Ces deux assertions
+      // surchargeaient encore window.confirm — que plus personne n'appelle —
+      // et lisaient le registre AVANT que la déconnexion ait eu lieu. Même
+      // reliquat que les trois de la décharge.
+      //
+      // ⚠ ET LES DEUX SONT FUSIONNÉES EN UNE SEULE. okA diffère l'exécution à
+      // la fin de la suite : « dernier compte » lisait l'état laissé par
+      // « retire le compte et active le suivant », et deux corps différés
+      // n'ont plus rien qui garantisse cet enchaînement. La séquence est donc
+      // écrite d'un bloc — c'est d'ailleurs une seule histoire : on se
+      // déconnecte deux fois de suite, et on regarde ce qui reste.
+      okA('La déconnexion retire le compte, active le suivant, puis rend l\'accueil',(async()=>{
+        const sR=window.rcConfirm;
+        try{
+          _poser();
+          const u=DB.get('users');
+          currentUser=u[CO];
+          localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jCO',r:'r',e:Date.now()+3600000}));
+          comptesEnregistrer(currentUser);
+          currentUser=u[AT];
+          localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jAT',r:'r',e:Date.now()+3600000}));
+          comptesEnregistrer(currentUser);
+          if(comptesConnectes().length!==2)
+            return _echec('la prémisse est fausse : '+comptesConnectes().length+' compte(s) au registre');
+          _poserConfirm(true);
+          await logout();
+          const l=comptesConnectes();
+          if(l.length!==1) return _echec(l.length+' comptes restants au lieu d’un');
+          if(l[0].email!==CO) return _echec('le compte restant est '+l[0].email);
+          if(compteActif()!==CO) return _echec('le compte actif est '+compteActif());
+          // LE DERNIER COMPTE : on se déconnecte à nouveau, et il ne reste rien.
+          await logout();
+          if(currentUser!==null) return _echec('un utilisateur est encore en session');
+          return comptesConnectes().length===0
+            ?true:_echec('le registre n’est pas vide');
+        } finally { window.rcConfirm=sR; }}));
 
       // ── routeUser est le seul point d'accroche ──
       ok('routeUser inscrit le compte au registre, à lui seul',(()=>{
@@ -25112,25 +25129,55 @@ async function testExercices(){
                          {active:true,name:'Pull',exercises:[],deload:false}]});
       const poser=c=>{ const u={}; u[c.email]=c; DB.set('users',u); currentClientId=c.id; };
 
-      window.confirm=()=>false;
-      ok('Décharge : refuser la confirmation ne change rien',(()=>{
-        poser(faireClient());
-        try{ programmerDecharge(); }catch(e){ return _echec('exception: '+e.message); }
-        const c=(DB.get('users')||{})['dch1@t.fr'];
-        return c.sessions_config.every(s=>!s.deload);})());
+      // ⚠ programmerDecharge EST `async` ET PASSE PAR rcConfirm. Ces
+      // assertions surchargeaient encore window.confirm — que plus personne
+      // n'appelle — et lisaient DB AVANT que l'écriture ait eu lieu. Trois
+      // tombaient ; « refuser ne change rien » passait au VERT SANS RIEN
+      // MESURER, puisqu'une fonction qui n'a pas commencé n'a évidemment rien
+      // écrit. C'est le reliquat du lot documenté en tête de fichier.
+      //
+      // ⚠ ET CHACUNE POSE SA PROPRE FIXTURE. okA diffère l'exécution à la fin
+      // de la suite, donc APRÈS le `finally` de ce bloc qui restaure DB,
+      // currentUser et currentClientId : une assertion qui compterait sur
+      // l'état laissé par la précédente lirait un dossier déjà rendu.
+      const _dchPreparer=()=>{ const c=faireClient(); poser(c); return c; };
+      const _dchLire=()=>((DB.get('users')||{})['dch1@t.fr']||{sessions_config:[]});
+      const _dchCoach=()=>({id:'coachD',email:'cod@t.fr',role:'coach',
+        seenBilans:{},alertStatus:{}});
 
-      window.confirm=()=>true;
-      ok('Critère 6 : tous les créneaux ACTIFS passent en décharge',(()=>{
-        poser(faireClient());
-        try{ programmerDecharge(); }catch(e){ return _echec('exception: '+e.message); }
-        const c=(DB.get('users')||{})['dch1@t.fr'];
-        return c.sessions_config[0].deload===true&&c.sessions_config[2].deload===true;})());
-      ok('Critère 6 : un créneau inactif n\'est pas touché',(()=>{
-        const c=(DB.get('users')||{})['dch1@t.fr'];
-        return !c.sessions_config[1].deload;})());
-      ok('Aucun champ nouveau en base : seul deload bouge',(()=>{
-        const c=(DB.get('users')||{})['dch1@t.fr'];
-        return Object.keys(c.sessions_config[0]).sort().join(',')==='active,deload,exercises,name';})());
+      okA('Décharge : refuser la confirmation ne change rien',(async()=>{
+        const sU=currentUser, sC=currentClientId, sR=window.rcConfirm;
+        try{
+          currentUser=_dchCoach(); _dchPreparer(); _poserConfirm(false);
+          await programmerDecharge();
+          return _dchLire().sessions_config.every(s=>!s.deload)
+            ?true:_echec('une décharge a été posée malgré le refus');
+        } finally { currentUser=sU; currentClientId=sC; window.rcConfirm=sR; }}));
+
+      okA('Critère 6 : tous les créneaux ACTIFS passent en décharge',(async()=>{
+        const sU=currentUser, sC=currentClientId, sR=window.rcConfirm;
+        try{
+          currentUser=_dchCoach(); _dchPreparer(); _poserConfirm(true);
+          await programmerDecharge();
+          const c=_dchLire();
+          if(c.sessions_config[0].deload!==true) return _echec('le premier créneau actif n’est pas en décharge');
+          if(c.sessions_config[2].deload!==true) return _echec('le second créneau actif n’est pas en décharge');
+          // LE CRÉNEAU INACTIF N'EST PAS TOUCHÉ, et c'est la même écriture qui
+          // le prouve : le vérifier depuis une assertion voisine la rendrait
+          // dépendante de l'ordre.
+          if(c.sessions_config[1].deload) return _echec('un créneau inactif a été mis en décharge');
+          // AUCUN CHAMP NOUVEAU EN BASE : seul deload bouge.
+          const cles=Object.keys(c.sessions_config[0]).sort().join(',');
+          return cles==='active,deload,exercises,name'
+            ?true:_echec('champs du créneau : '+cles);
+        } finally { currentUser=sU; currentClientId=sC; window.rcConfirm=sR; }}));
+
+      ok('Critère 6 : un créneau inactif n\'est pas touché',
+         String(programmerDecharge).indexOf('active')>=0,
+         'programmerDecharge ne filtre plus sur `active`');
+      ok('Aucun champ nouveau en base : seul deload bouge',
+         !/\.(deloadDate|deloadPar|deloadAt)\s*=/.test(String(programmerDecharge)),
+         'un champ de décharge autre que `deload` est écrit');
       ok('Le bouton n\'apparaît pas sans créneau actif',(()=>{
         const c=faireClient(); c.sessions_config.forEach(s=>{s.active=false;});
         return _htmlBoutonDecharge(c)==='';})());
@@ -25154,6 +25201,14 @@ async function testExercices(){
           ?true:_echec('le nombre de créneaux a disparu');})());
       ok('LE RETRAIT N\'ÉCRIT QUE SUR LES CRÉNEAUX EN DÉCHARGE',(()=>{
         // Ni sur les créneaux inactifs, ni sur ceux qui n'en portent pas.
+        //
+        // ⚠ ELLE POSE SA PROPRE FIXTURE. Elle lisait celle qu'une assertion
+        // voisine avait écrite en appelant programmerDecharge ; ces appels
+        // sont passés en okA — donc différés à la fin de la suite — et le
+        // dossier n'existait plus ici. Mesuré : « fixture absente ». Une
+        // assertion qui dépend de l'ordre d'exécution de ses voisines tombe
+        // le jour où l'une d'elles change de nature.
+        _dchPreparer();
         const users=DB.get('users')||{};
         const c=users['dch1@t.fr'];
         if(!c) return _echec('fixture absente');
@@ -25169,10 +25224,21 @@ async function testExercices(){
         const q=_preparerDechargeGroupee([c.id],DB.get('users')||{},false);
         return (!q.cibles.length&&/décharge à retirer/.test((q.echecs[0]||{}).raison||''))
           ?true:_echec('le refus n\'est pas nommé : '+JSON.stringify(q.echecs));})());
-      ok('Aucun décochage automatique : rejouer ne remet rien à false',(()=>{
-        try{ programmerDecharge(); }catch(e){ return _echec('exception: '+e.message); }
-        const c=(DB.get('users')||{})['dch1@t.fr'];
-        return c.sessions_config[0].deload===true&&c.sessions_config[2].deload===true;})());
+      okA('Aucun décochage automatique : rejouer ne remet rien à false',(async()=>{
+        const sU=currentUser, sC=currentClientId, sR=window.rcConfirm;
+        try{
+          currentUser=_dchCoach(); _dchPreparer(); _poserConfirm(true);
+          // DEUX FOIS DE SUITE : c'est le propos de l'assertion. Rejouer la
+          // pose ne doit rien remettre à false — un « bascule » au lieu d'un
+          // « pose » retirerait la décharge au second clic.
+          await programmerDecharge();
+          await programmerDecharge();
+          const c=_dchLire();
+          if(c.sessions_config[0].deload!==true||c.sessions_config[2].deload!==true)
+            return _echec('rejouer a décoché un créneau');
+          return !c.sessions_config[1].deload
+            ?true:_echec('rejouer a touché le créneau inactif');
+        } finally { currentUser=sU; currentClientId=sC; window.rcConfirm=sR; }}));
 
       // Le second maillon : une séance RÉALISÉE en décharge sort du calcul de
       // plateau. Le premier maillon (sessions_config → woState → sess.deload)
