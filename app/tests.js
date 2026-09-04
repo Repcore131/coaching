@@ -68,7 +68,39 @@ async function testExercices(){
       }catch(e){ _srcTests=''; }
       return _srcTests;
     };
-  const ok=(n,c,d)=>{ R.push({n,ok:!!c,d:d||_msgEchec||''}); _msgEchec=''; };
+  // ══ D'OÙ VIENT CET ÉCHEC ═══════════════════════════════════════════════
+  //
+  // ⚠ UN NOM NE SUFFIT PAS À SITUER UNE ASSERTION. Beaucoup sont construites
+  // dynamiquement — « … → le garde ne court-circuite pas » — et le libellé
+  // affiché n'existe alors NULLE PART dans le fichier : on le cherche, on ne
+  // le trouve pas, et on finit par relire quatre mille lignes. Cinq échecs ont
+  // coûté cela.
+  //
+  // On capture donc la pile À L'APPEL, et on en garde le premier cadre qui
+  // n'est pas ok() elle-même. C'est le seul moment où l'information existe :
+  // une fois l'assertion rangée dans R, son origine est perdue.
+  //
+  // RÉSERVÉ AUX ÉCHECS À L'AFFICHAGE : quatre mille trois cents origines dans
+  // un rapport vert seraient illisibles. Le champ est néanmoins posé sur
+  // TOUTES les entrées — un outil qui relit `detail` peut en avoir besoin, et
+  // le coût est une chaîne courte.
+  const _origine=()=>{
+    try{
+      const l=String(new Error().stack||'').split('\n');
+      for(const ligne of l){
+        // On saute l'en-tête « Error » et les cadres internes : _origine
+        // elle-même, ok, okA, et le rappel différé qui joue okA.
+        if(/^\s*Error\b/.test(ligne)) continue;
+        if(/_origine|at ok\b|at okA\b/.test(ligne)) continue;
+        // « …/tests.js:1234:56 » — on garde fichier:ligne, sans la colonne ni
+        // le chemin complet, qui n'apprennent rien de plus.
+        const m=ligne.match(/([^\/\\ ()]+\.js):(\d+):\d+/);
+        if(m) return m[1]+':'+m[2];
+      }
+    }catch(e){}
+    return '';
+  };
+  const ok=(n,c,d)=>{ R.push({n,ok:!!c,d:d||_msgEchec||'',ou:_origine()}); _msgEchec=''; };
   // ── LES ASSERTIONS QUI DOIVENT ATTENDRE ────────────────────────────────
   //
   // `ok` recoit une VALEUR deja calculee. Lui passer une fonction asynchrone
@@ -81,11 +113,21 @@ async function testExercices(){
   // suite entiere — un test asynchrone qui explose emportait sinon les 4 000
   // autres avec lui.
   const _diff=[];
-  const okA=(n,f)=>_diff.push(async()=>{
-    let v;
-    try{ v=await f(); }catch(e){ v=_echec('exception : '+((e&&e.message)||e)); }
-    ok(n,v);
-  });
+  const okA=(n,f)=>{
+    // ⚠ L'ORIGINE EST CAPTURÉE ICI, À L'INSCRIPTION. Le corps est joué à la
+    // fin de la suite : appelée depuis là, _origine() désignerait la boucle
+    // qui rejoue les différées, jamais l'endroit où l'assertion est écrite.
+    const ou=_origine();
+    _diff.push(async()=>{
+      let v;
+      try{ v=await f(); }catch(e){ v=_echec('exception : '+((e&&e.message)||e)); }
+      ok(n,v);
+      // La dernière entrée est celle qu'on vient de pousser : on lui rend son
+      // origine réelle.
+      const der=R[R.length-1];
+      if(der&&ou) der.ou=ou;
+    });
+  };
   // LES DEUX BOUCHONS DE MODALE, ecrits une fois. Ils rendent une PROMESSE, et
   // non la valeur nue : un appelant du produit qui oublierait son `await`
   // recevrait un objet Promesse — toujours vrai — et le test doit pouvoir le
@@ -45122,7 +45164,10 @@ vendredi 78 6h 44m
   const ko=R.filter(r=>!r.ok);
   console.log('%c'+R.length+' vérifications, '+ko.length+' en échec',
     'font-weight:bold;color:'+(ko.length?'#e05050':'#22c55e'));
-  R.forEach(r=>console.log((r.ok?'  ok   ':'  ÉCHEC')+'  '+r.n+(r.d?'   → '+r.d:'')));
+  // L'ORIGINE N'EST AFFICHÉE QUE SUR LES ÉCHECS : c'est là qu'on la cherche,
+  // et quatre mille trois cents lignes vertes annotées seraient illisibles.
+  R.forEach(r=>console.log((r.ok?'  ok   ':'  ÉCHEC')+'  '+r.n+(r.d?'   → '+r.d:'')
+    +((!r.ok&&r.ou)?'   ['+r.ou+']':'')));
   return {total:R.length,echecs:ko.length,detail:R};
 }
 function getLastZeloRIRSafe(n){ return getLastZeroRIRWeight(n,0,'P'); }

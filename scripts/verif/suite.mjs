@@ -71,7 +71,7 @@ console.log('regles :', await ev(`(async()=>{ try{
 }catch(e){ return 'NON SERVIES : '+String(e&&e.message||e); } })()`));
 const rap = await ev(`(async()=>{ try{ const r=await chargerTests();
   return {total:r.total,echecs:r.echecs,
-    liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:''))}; }
+    liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:'')+(x.ou?'  ['+x.ou+']':''))}; }
   catch(e){ return {erreur:String(e&&e.message||e)}; } })()`);
 console.log(JSON.stringify(rap, null, 1).slice(0, 12000));
 await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`);
