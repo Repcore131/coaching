@@ -45691,6 +45691,188 @@ vendredi 78 6h 44m
           JSON.stringify(e));
       })();
     })();
+
+    // ══ LA SAISIE D'UN TRAITEMENT, DES DEUX COTES ════════════════════════
+    (()=>{
+      const T=(o)=>Object.assign({id:'t1',nom:'Test',moments:['matin'],actif:true,
+        debut:Date.now(),fin:null,rythme:{type:'quotidien'}},o||{});
+
+      // ── LE FILET DE POUSSEE ────────────────────────────────────────────
+      //
+      // ⚠ C'EST LA GARDE LA PLUS IMPORTANTE DU LOT, et elle repare une PERTE
+      // DE DONNEES : les regles de la base autorisent le coach a ecrire dans
+      // /users/<son athlete>, une trentaine d'ecritures du produit passent par
+      // pushOne, et la poussee est un PUT. Or le coach ne detient du tableau
+      // des traitements que la version MASQUEE. Sans ce filet, assigner une
+      // phase remplacait chez l'athlete le nom, la dose et le prescripteur de
+      // chacun de ses traitements par du vide.
+      (()=>{
+        const reel=[
+          T({id:'a',nom:'Lévothyrox 75 µg',dosage_quantite:75,dosage_unite:'µg',
+             prescripteur:'Dr Martin',note:'à jeun',saisiPar:'athlete',partageCoach:false}),
+          T({id:'b',nom:'Metformine',saisiPar:'coach',partageCoach:true})];
+        // Ce que le coach a REELLEMENT sous la main : « a » masque, « b » a lui.
+        const chezCoach=[
+          {id:'a',moments:['matin'],partage:false,saisiPar:'athlete'},
+          T({id:'b',nom:'Metformine 850 mg',saisiPar:'coach',partageCoach:true})];
+        const f=_fusionnerTraitementsPoussee(reel,chezCoach);
+        const a=f.filter(x=>x.id==='a')[0], b=f.filter(x=>x.id==='b')[0];
+        ok('Poussée du coach : le traitement privé de l’athlète est recopié intact',
+          !!a && a.nom==='Lévothyrox 75 µg' && a.dosage_quantite===75
+          && a.prescripteur==='Dr Martin' && a.note==='à jeun',
+          JSON.stringify(a));
+        ok('Poussée du coach : sa propre saisie, elle, est bien appliquée',
+          !!b && b.nom==='Metformine 850 mg');
+        // ⚠ UN COACH DESYNCHRONISE NE DOIT RIEN EFFACER. Une absence dans sa
+        // copie est une desynchronisation, pas une intention : la lire comme
+        // une suppression detruirait le dossier a la premiere ouverture.
+        const f0=_fusionnerTraitementsPoussee(reel,[]);
+        ok('Poussée du coach : une copie vide n’efface rien',
+          f0.length===2 && f0.filter(x=>x.id==='a')[0].nom==='Lévothyrox 75 µg');
+        // Un ajout du coach absent a distance entre bien.
+        const f2=_fusionnerTraitementsPoussee(reel,
+          chezCoach.concat([T({id:'c',nom:'Vitamine D',saisiPar:'coach'})]));
+        ok('Poussée du coach : un traitement qu’il vient d’ajouter entre dans le dossier',
+          f2.length===3 && f2.filter(x=>x.id==='c').length===1);
+        // ⚠ FIREBASE REND LES TABLEAUX A TROUS EN OBJETS.
+        ok('Poussée du coach : un tableau rendu en objet par Firebase est fusionné pareil',
+          _fusionnerTraitementsPoussee({0:reel[0],2:reel[1]},chezCoach).length===2);
+        // ET LA SOURCE DE VERITE EST LE DISTANT, jamais la copie du coach : un
+        // traitement que le distant ne porte pas et que le coach n'a pas saisi
+        // n'a rien a faire dans le resultat.
+        const f3=_fusionnerTraitementsPoussee([reel[0]],
+          chezCoach.concat([{id:'z',moments:['soir'],partage:false,saisiPar:'athlete'}]));
+        ok('Poussée du coach : une ligne masquée qu’il détient seul n’est pas réinjectée',
+          f3.filter(x=>x.id==='z').length===0, JSON.stringify(f3.map(x=>x.id)));
+      })();
+
+      // ── LA VALIDATION, HORS DU DOM ─────────────────────────────────────
+      (()=>{
+        const V=o=>_trtValider(Object.assign({nom:'X',moments:['matin'],
+          rythme:{type:'quotidien'}},o));
+        ok('Saisie : un traitement sans nom est refusé', V({nom:'  '})!=='');
+        ok('Saisie : un traitement sans moment est refusé', V({moments:[]})!=='');
+        // ⚠ SAUF LE PONCTUEL : « au besoin » n'a pas d'heure, et exiger une
+        // case ferait inventer une reponse.
+        ok('Saisie : un ponctuel n’exige aucun moment',
+          V({moments:[],rythme:{type:'ponctuel'}})==='');
+        ok('Saisie : un rythme « jours » sans jour coché est refusé',
+          V({rythme:{type:'jours',jours:[]}})!=='');
+        ok('Saisie : un cycle à zéro jour de prise est refusé',
+          V({rythme:{type:'cycle',cycleOn:0,cycleOff:7}})!=='');
+        // ⚠ UNE FIN AVANT LE DEBUT rendrait le traitement invisible partout
+        // sans qu'aucun ecran ne dise pourquoi.
+        ok('Saisie : une date de fin antérieure au début est refusée',
+          V({debut:2000,fin:1000})!=='');
+        ok('Saisie : un traitement complet passe', V({})==='');
+      })();
+
+      // ── LA SAISIE DE L'ATHLETE, PAR LE DOM ─────────────────────────────
+      const _sauve=currentUser;
+      try{
+        currentUser={email:'ath-trt@t.fr',role:'athlete',sante:{}};
+        ouvrirEditeurTraitement('ath-trt@t.fr',null,'s-traitements');
+        ok('Saisie athlète : l’éditeur s’ouvre sur son propre écran',
+          (document.querySelector('.screen.active')||{}).id==='s-traitement-edit');
+        // ⚠ L'INTERRUPTEUR DE PARTAGE LUI EST PROPOSE, ET IL VAUT NON. Un
+        // interrupteur pre-coche n'est pas un consentement.
+        const p=document.getElementById('trte-partage');
+        ok('Saisie athlète : le partage est proposé, et il n’est pas pré-coché',
+          !!p && p.checked===false);
+        document.getElementById('trte-nom').value='Lévothyrox 75 µg';
+        document.getElementById('trte-dq').value='75';
+        document.getElementById('trte-du').value='µg';
+        document.getElementById('trte-presc').value='Dr Martin';
+        Array.prototype.slice.call(document.querySelectorAll('.trte-m'))
+          .forEach(x=>{ x.checked=(x.value==='jeun'); });
+        sauverTraitement();
+        const l=traitements(currentUser);
+        ok('Saisie athlète : le traitement est écrit dans son dossier',
+          l.length===1 && l[0].nom==='Lévothyrox 75 µg' && l[0].dosage_quantite===75
+          && l[0].dosage_unite==='µg' && l[0].moments.join(',')==='jeun',
+          JSON.stringify(l[0]||null));
+        ok('Saisie athlète : elle est marquée comme venant de lui, et non partagée',
+          l[0].saisiPar==='athlete' && l[0].partageCoach===false);
+        // ⚠ ET LE COACH N'EN VOIT QUE LE MOMENT.
+        const vu=JSON.stringify(traitementsPourCoach(currentUser));
+        ok('Saisie athlète : son coach n’en voit que le moment',
+          !/Lévothyrox/.test(vu) && !/Martin/.test(vu) && /jeun/.test(vu), vu);
+      } finally { currentUser=_sauve; }
+
+      // ── LA SAISIE DU COACH ─────────────────────────────────────────────
+      (()=>{
+        const _sU=currentUser;
+        const _sUsers=DB.get('users');
+        try{
+          const users=DB.get('users')||{};
+          users['cli-trt@t.fr']={email:'cli-trt@t.fr',role:'athlete',sante:{}};
+          DB.setLocal('users',users);
+          currentUser={email:'coach-trt@t.fr',role:'coach'};
+          ouvrirEditeurTraitement('cli-trt@t.fr',null,'s-coach-client');
+          // ⚠ L'INTERRUPTEUR DE PARTAGE NE LUI EST MEME PAS PROPOSE : ce qu'il
+          // saisit lui est forcement visible, il vient de l'ecrire. Le ranger
+          // en « non partage » serait un mensonge d'interface.
+          ok('Saisie coach : l’interrupteur de partage ne lui est pas proposé',
+            !document.getElementById('trte-partage'));
+          ok('Saisie coach : l’écran dit qu’il écrit dans le dossier de son athlète',
+            /dossier de ton athlète/.test(
+              (document.getElementById('trte-corps')||{}).textContent||''));
+          document.getElementById('trte-nom').value='Metformine 850 mg';
+          Array.prototype.slice.call(document.querySelectorAll('.trte-m'))
+            .forEach(x=>{ x.checked=(x.value==='midi'); });
+          sauverTraitement();
+          // ⚠ RELU DEPUIS LE STOCKAGE, et pas depuis l'objet mute. DB.get rend
+          // une COPIE FRAICHE a chaque appel : muter le dossier rendu par un
+          // premier appel puis sauver celui d'un second jetait la modification
+          // en silence, et la saisie du coach paraissait reussir sans rien
+          // ecrire. C'est cette assertion-la qui l'a vu.
+          const c=(DB.get('users')||{})['cli-trt@t.fr'];
+          const l=traitements(c);
+          ok('Saisie coach : le traitement est écrit dans le dossier de l’athlète',
+            l.length===1 && l[0].nom==='Metformine 850 mg', JSON.stringify(l));
+          ok('Saisie coach : il est marqué « coach » et forcément partagé',
+            l.length===1 && l[0].saisiPar==='coach' && l[0].partageCoach===true);
+          // ── CE QUE LE BLOC DU COACH MONTRE ────────────────────────────
+          const c2={email:'cli2-trt@t.fr',sante:{traitements:[
+            {id:'a',moments:['soir'],partage:false,saisiPar:'athlete',nom:'SECRET'},
+            T({id:'b',nom:'Metformine 850 mg',moments:['midi'],saisiPar:'coach',
+               partageCoach:true})]}};
+          const h=_htmlTraitementsCoach(c2);
+          ok('Bloc coach : le nom d’un traitement non partagé n’est nulle part dans le balisage',
+            h.indexOf('SECRET')<0);
+          ok('Bloc coach : un traitement non partagé se dit sans se nommer',
+            /Un traitement en cours/.test(h) && /soir/.test(h));
+          // ⚠ ET IL NE PEUT MODIFIER QUE CE QU'IL A SAISI. Ouvrir l'editeur
+          // sur un traitement de l'athlete afficherait un formulaire vide — il
+          // n'en a que la version masquee — et l'enregistrer ecraserait le vrai.
+          ok('Bloc coach : un seul bouton « Modifier », sur sa propre saisie',
+            (h.match(/>Modifier</g)||[]).length===1);
+          ok('Bloc coach : le rappel « pas un dispositif médical » y est',
+            h.indexOf('dispositif médical')>0);
+        } finally {
+          currentUser=_sU;
+          try{ if(_sUsers) DB.setLocal('users',_sUsers); }catch(e){}
+        }
+      })();
+
+      // ── LES DEUX ECRANS EXISTENT ET SONT ATTEIGNABLES ──────────────────
+      (()=>{
+        const src=_prodSrc();
+        ok('Saisie : l’écran d’édition existe dans le document',
+          !!document.getElementById('s-traitement-edit'));
+        // ⚠ NI « s-coach- » NI « s-client- » : le garde de role de go() filtre
+        // sur ces deux prefixes. Renommer cet ecran l'un ou l'autre le
+        // fermerait a la moitie de ceux qui doivent l'ouvrir.
+        ok('Saisie : l’écran d’édition n’est fermé à aucun des deux rôles',
+          's-traitement-edit'.indexOf('s-coach-')!==0
+          && 's-traitement-edit'.indexOf('s-client-')!==0);
+        // Et il y a bien une porte d'entree de chaque cote.
+        ok('Saisie : l’athlète a un bouton d’ajout sur son écran des traitements',
+          /Ajouter un traitement/.test(src));
+        ok('Saisie : le coach a un bouton de saisie dans sa fiche client',
+          /Saisir un traitement/.test(src));
+      })();
+    })();
   }catch(e){
     // ══ UNE INTERRUPTION NE DOIT PAS SE LIRE COMME UNE REUSSITE ═════════
     //

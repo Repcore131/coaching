@@ -6075,6 +6075,14 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Compléments</span></div>
         <div class="cc-sect-c" id="ccd-supplements"></div>
       </section>
+      <!-- TRAITEMENTS COACH. Voisins des complements, et separes d'eux : un
+           complement se conseille, un medicament ne se conseille pas. Les
+           mettre dans la meme section ferait croire qu'ils se lisent de la
+           meme facon. -->
+      <section class="cc-sect" style="--cc-accent:var(--border)">
+        <div class="cc-sect-t"><span>Traitements</span></div>
+        <div class="cc-sect-c" id="ccd-traitements"></div>
+      </section>
       <!-- Caféine coach (lecture seule) -->
       <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Caféine</span></div>
@@ -7927,6 +7935,22 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="trt-interactions"></div>
     <div id="trt-liste"></div>
     <div id="trt-histo"></div>
+  </div>
+</div>
+
+<!-- ══════ EDITEUR DE TRAITEMENT — LES DEUX COTES ══════
+     Ni « s-coach- » ni « s-client- » : le garde de role de go() laisse donc
+     passer les deux, et c'est voulu. L'athlete saisit ses traitements ; son
+     coach peut saisir ceux qu'il lui prescrit ou qu'il connait. Un second
+     ecran, presque identique, aurait diverge au premier champ ajoute. -->
+<div id="s-traitement-edit" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="fermerEditeurTraitement()">←</button>
+    <span class="topbar-title" id="trte-titre">Traitement</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1;padding:0 14px 24px">
+    <div id="trte-corps"></div>
   </div>
 </div>
 
@@ -10200,6 +10224,24 @@ const CLOUD={
       // surcoût est une lecture par envoi ; à ce prix, une perte de données
       // devient impossible même si un autre garde-fou cède.
       const distant=await this.pullUser(email);
+      // ⚠ LES TRAITEMENTS D'UN AUTRE NE SE REECRIVENT PAS DEPUIS UNE COPIE
+      // MASQUEE. Meme patron que coachNotes vingt lignes plus haut : on regarde
+      // si le document pousse est celui de l'emetteur. Ici, le distant vient
+      // d'etre lu — c'est la seule version complete accessible, et elle sert de
+      // base. Le releve de prise, lui, ne se reecrit JAMAIS d'ailleurs que de
+      // l'appareil de l'athlete.
+      if(currentUser&&email!==currentUser.email){
+        try{
+          if(!safe.sante||typeof safe.sante!=='object') safe.sante={};
+          else safe.sante={...safe.sante};
+          const _dt=((distant||{}).sante||{}).traitements;
+          const _f=_fusionnerTraitementsPoussee(_dt,safe.sante.traitements);
+          if(_f.length) safe.sante.traitements=_f;
+          else delete safe.sante.traitements;
+          const _dp=((distant||{}).sante||{}).prises;
+          if(_dp!=null) safe.sante.prises=_dp; else delete safe.sante.prises;
+        }catch(e){}
+      }
       if(distant&&(distant.updatedAt||0)>(safe.updatedAt||0)){
         const volume=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length);
         // LE PROGRAMME ETAIT LE SEUL CHAMP DISPUTE QUE LA DEFENSE NE REGARDAIT
@@ -16481,6 +16523,46 @@ function _htmlCouvertureMicro(user,ref){
   </div>`;
 }
 
+// ══════════════ CE QUE LE COACH A LE DROIT DE REECRIRE ═════════════════
+//
+// ⚠ LE COACH PEUT ECRIRE DANS /users/<son athlete>. Les regles de la base le
+// permettent, et une trentaine d'ecritures du produit passent par pushOne :
+// assigner une phase, demander une video, repondre a un bilan. Or le coach ne
+// detient du tableau des traitements QUE la version masquee — id, moments, et
+// rien d'autre. La poussee est un PUT, un remplacement complet : sans ce qui
+// suit, la premiere phase assignee remplacait chez l'athlete le nom, la dose et
+// le prescripteur de chacun de ses traitements par du vide.
+//
+// LA VERITE EST LE NOEUD DISTANT. On repart de lui, et on n'y superpose que ce
+// que le coach a LUI-MEME saisi — `saisiPar:'coach'`. Tout le reste est
+// recopie verbatim, y compris ce que le coach ne peut pas lire.
+//
+// PURE, et separee pour cette raison : c'est la fonction qu'on peut casser
+// exprès pour verifier qu'une assertion la retient.
+function _fusionnerTraitementsPoussee(distant,localCoach){
+  const dist=_tabBloc(distant).filter(t=>t&&typeof t==='object');
+  const loc =_tabBloc(localCoach).filter(t=>t&&typeof t==='object');
+  // Ce que le coach a saisi, et lui seul. Un traitement de l'athlete present
+  // dans sa copie n'y est qu'en version masquee : le reprendre l'effacerait.
+  const siens={};
+  for(const t of loc) if(t.saisiPar==='coach'&&t.id!=null) siens[String(t.id)]=t;
+  const out=[];
+  const vus={};
+  for(const t of dist){
+    const k=String(t.id);
+    vus[k]=true;
+    // ⚠ RIEN N'EST JAMAIS RETIRE ICI. Un traitement ne se supprime pas — la
+    // trace est une donnee medicale, et elle explique parfois une periode
+    // entiere des annees plus tard ; on l'ARRETE, en posant une date de fin.
+    // Une absence dans la copie du coach est donc une desynchronisation, pas
+    // une intention, et la lire comme une suppression detruirait le dossier de
+    // l'athlete a la premiere ouverture d'un coach mal synchronise.
+    out.push(siens[k]||t);
+  }
+  // Les siens qui n'existent pas encore a distance : ce sont les ajouts.
+  for(const k in siens) if(!vus[k]) out.push(siens[k]);
+  return out;
+}
 // PURE. LA REGLE DE TROIS DES MICRONUTRIMENTS, ECRITE UNE SEULE FOIS.
 //
 // Elle l'etait deux fois, mot pour mot : dans saveFoodEntry et dans l'entree
@@ -17164,6 +17246,70 @@ function leverDeficit(motif){
   try{ renderCoachMicroSection(c); renderCoachNutriSection(c); }catch(e){}
   return true;
 }
+// ══════════════ LES TRAITEMENTS, COTE COACH ════════════════════════════
+//
+// ⚠ CE BLOC NE MONTRE QUE CE QUE traitementsPourCoach LAISSE PASSER. Il ne
+// relit pas le dossier : c'est la meme fonction que le filtre de poussee, et
+// deux lectures differentes de la meme regle finiraient par diverger — celle
+// qui affiche etant, par construction, la plus tentante a elargir.
+//
+// Ce que le coach voit d'un traitement non partage : qu'il existe, et a quel
+// moment. C'est le minimum qui lui evite de proposer un complement en conflit,
+// et le maximum admissible sans le consentement de l'athlete.
+function _htmlTraitementsCoach(c){
+  if(!c) return '';
+  let l=[];
+  try{ l=traitementsPourCoach(c); }catch(e){ l=[]; }
+  const lib=id=>{ const t=TIMINGS_LIST.filter(x=>x.id===id)[0]; return t?t.label.toLowerCase():id; };
+  const ligne=t=>{
+    const m=_tabBloc(t.moments).sort((a,b)=>_rangMoment(a)-_rangMoment(b)).map(lib).join(', ');
+    const dose=(Number(t.dosage_quantite)>0)
+      ? ' · '+String(t.dosage_quantite).replace('.',',')+' '+escapeHtml(t.dosage_unite||'') : '';
+    const nom=t.partage
+      ? escapeHtml(t.nom||'')+dose
+      // ⚠ ON N'ECRIT PAS « TRAITEMENT MASQUE » : ce serait pointer une absence
+      // et inviter a la demander. On dit ce qu'on sait, au present, sans
+      // designer ce qu'on ignore.
+      : '<span style="color:var(--text-dim)">Un traitement en cours</span>';
+    return '<div style="display:flex;align-items:center;gap:9px;padding:8px 0;'
+      +'border-bottom:1px solid var(--border)">'
+      +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text);line-height:1.5">'
+      +nom
+      +(m?'<span style="display:block;font-size:var(--fs-2xs);color:var(--sub);'
+        +'margin-top:2px">'+escapeHtml(m)+'</span>':'')
+      +(t.saisiPar==='coach'?'<span style="display:block;font-size:var(--fs-2xs);'
+        +'color:var(--text-faint);margin-top:1px">saisi par toi</span>':'')
+      +'</span>'
+      // ⚠ SEUL CE QU'IL A SAISI EST MODIFIABLE PAR LUI. Ouvrir l'editeur sur un
+      // traitement de l'athlete afficherait un formulaire vide — il n'en a que
+      // la version masquee — et l'enregistrer ecraserait le vrai.
+      +(t.saisiPar==='coach'
+        ? '<button type="button" class="btn btn-outline btn-sm" style="margin:0;flex:0 0 auto;'
+          +'font-size:var(--fs-2xs);padding:4px 8px" onclick="ouvrirEditeurTraitement(\''
+          +escapeHtml(c.email)+'\',\''+escapeHtml(t.id)+'\',\'s-coach-client\')">Modifier</button>'
+        : '')
+      +'</div>';
+  };
+  return '<div style="background:var(--dark);border:1px solid var(--border);'
+    +'border-radius:var(--r-3);padding:16px;margin-bottom:20px">'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;'
+    +'font-weight:700;text-transform:uppercase;margin-bottom:5px">Traitements</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;'
+    +'margin-bottom:10px">'
+    +escapeHtml('Ce que tu vois ici dépend de ce que ton athlète partage. '
+      +'Sans partage, tu sais qu’un traitement est pris à tel moment, et rien de plus '
+      +'— de quoi éviter de proposer un complément qui entrerait en conflit.')
+    +'</div>'
+    +(l.length?l.map(ligne).join('')
+      :'<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;'
+       +'padding:4px 0 10px">Aucun traitement en cours dans son dossier.</div>')
+    +'<button type="button" class="btn btn-outline" style="width:100%;margin:12px 0 0" '
+    +'onclick="ouvrirEditeurTraitement(\''+escapeHtml(c.email)
+    +'\',null,\'s-coach-client\')">+ Saisir un traitement</button>'
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;'
+    +'margin-top:8px">'+escapeHtml(MICRO_DISCLAIMER)+'</div>'
+    +'</div>';
+}
 function renderCoachMicroSection(c){
   const el=document.getElementById('ccd-micro');
   if(!el) return;
@@ -17179,6 +17325,12 @@ function renderCoachMicroSection(c){
   // Restitution, comme l'hydratation : elle s'affiche sans qu'aucun seuil ne
   // soit franchi, et n'entre dans aucun score d'urgence.
   let recup=''; try{ recup=_htmlRecuperationCoach(c); }catch(e){}
+  // ⚠ LES TRAITEMENTS NE SONT PAS ICI, ET DEUX ASSERTIONS DU BANC L'EXIGENT.
+  // « Micro-signaux » est une zone de LECTURE : aucun bouton, rien qu'on
+  // puisse faire disparaitre, et AUCUN bloc du tout quand il n'y a pas de
+  // question a poser. Un editeur y aurait rendu le rappel masquable et fait
+  // apparaitre un cadre sur toutes les fiches. Ils vivent dans leur propre
+  // section, a cote des complements — voir renderCoachTraitementsSection.
   if(!l.length&&!morpho&&!hydra&&!def&&!recup){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
   if(!l.length){ el.innerHTML=def+recup+morpho+hydra; return; }
@@ -22637,7 +22789,7 @@ const CCD_REPLI_DEFAUT=['ccd-journal','ccd-bilans','ccd-poids','ccd-pp',
   // deployes — et ne regle qu ensuite. C est aussi ce qui ramene l onglet
   // Nutrition a une hauteur du meme ordre que les trois autres : il portait
   // la moitie du volume rendu du dossier.
-  'ccd-nut-reglages','ccd-nut-strict','ccd-supplements','ccd-caffeine'];
+  'ccd-nut-reglages','ccd-nut-strict','ccd-supplements','ccd-traitements','ccd-caffeine'];
 function _ccdReplis(){
   try{ const o=JSON.parse(localStorage.getItem(CCD_REPLI_CLE)||'null');
     return (o&&typeof o==='object')?o:null; }catch(e){ return null; }
@@ -23243,6 +23395,7 @@ function openClientDetail(cid,_refresh,_force){
   renderCoachMicroSection(c);
   renderCoachNutriSection(c);
   renderCoachSuppSection(c);
+  try{ renderCoachTraitementsSection(c); }catch(e){}
   renderCoachCaffeineSection(c);
   try{ renderSommeilCoach(c); }catch(e){}
   try{ renderPasCoach(c); }catch(e){}
@@ -61441,7 +61594,13 @@ function terminerTraitement(user,id,quand){
   if(!t) return {ok:false,raison:'Traitement introuvable.'};
   t.fin=Number(quand)||Date.now();
   t.actif=false;
-  try{ saveUser(); }catch(e){}
+  // ⚠ SEULEMENT SI C'EST BIEN SON PROPRE DOSSIER. saveUser() ecrit et pousse
+  // le dossier de l'utilisateur CONNECTE : appele quand un coach arrete le
+  // traitement de son athlete, il sauvait le dossier du coach et laissait
+  // celui de l'athlete non pousse. L'appelant s'en charge.
+  const _u=_dossier(user);
+  if(!currentUser||!_u||_u===currentUser||_u.email===currentUser.email)
+    try{ saveUser(); }catch(e){}
   return {ok:true};
 }
 // ══════════════ LA TABLE D'INTERACTIONS ════════════════════════════════
@@ -61656,8 +61815,13 @@ function tauxPrise(user,n,dateISO){
 function traitementsPourCoach(user){
   return traitements(user).filter(t=>t.actif!==false&&!traitementTermine(t))
     .map(t=>{
+      // `saisiPar` PART TOUJOURS, meme sans partage. Il ne dit pas ce qu'est
+      // le traitement, il dit qui l'a tape : sans lui, un coach ne pourrait pas
+      // distinguer sa propre saisie de celle de son athlete, et le filet de
+      // poussee ne saurait pas ce qu'il a le droit de reecrire.
       const base={id:String(t.id||''),moments:_tabBloc(t.moments).slice(),
-        partage:t.partageCoach===true};
+        partage:t.partageCoach===true,
+        saisiPar:(t.saisiPar==='coach')?'coach':'athlete'};
       if(t.partageCoach!==true) return base;
       // PARTAGE EXPLICITE : le nom et le dosage suivent, le reste non. Le
       // prescripteur et les notes ne servent a aucune decision d'entrainement.
@@ -61754,6 +61918,12 @@ function renderTraitements(){
           +'text-transform:uppercase">'+lib+'</div></div>').join('')
         +'</div>';
     }
+    // ⚠ LE BOUTON D'AJOUT EST AU-DESSUS DE LA LISTE, ET IL Y EST MEME QUAND
+    // ELLE EST VIDE. Sans lui, le module n'avait aucune porte d'entree : il
+    // savait tout calculer et rien recevoir.
+    h+='<button type="button" class="btn" style="width:100%;margin:0 0 14px" '
+      +'onclick="ouvrirEditeurTraitement(currentUser.email,null,\'s-traitements\')">'
+      +'+ Ajouter un traitement</button>';
     if(!actifs.length){
       h+='<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;padding:14px 0">'
         +'Aucun traitement en cours.</div>';
@@ -61785,10 +61955,15 @@ function renderTraitements(){
             +'style="width:18px;height:18px;margin:0;accent-color:var(--red);flex-shrink:0">'
             +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);color:'
             +(coche?'var(--text-faint)':'var(--text)')+';'+(coche?'text-decoration:line-through':'')+'">'
-            +escapeHtml(t.nom)+(dose?' <span style="color:var(--sub)">· '+dose+'</span>':'')+'</span>'
+            +escapeHtml(t.nom)+(dose?' <span style="color:var(--sub)">· '+dose+'</span>':'')
+            // CE QUI VIENT DU COACH EST DIT. Une ligne apparue sans qu'on l'ait
+            // tapee, dans une liste de medicaments, doit s'expliquer d'elle-meme.
+            +(t.saisiPar==='coach'?'<span style="display:block;font-size:var(--fs-2xs);'
+              +'color:var(--text-faint);margin-top:2px">saisi par ton coach</span>':'')
+            +'</span>'
             +'<button type="button" class="btn btn-outline btn-sm" style="margin:0;flex:0 0 auto;'
             +'font-size:var(--fs-2xs);padding:4px 8px" '
-            +'onclick="event.preventDefault();event.stopPropagation();ouvrirFicheTraitement(\''+escapeHtml(t.id)+'\')">Fiche</button>'
+            +'onclick="event.preventDefault();event.stopPropagation();ouvrirEditeurTraitement(currentUser.email,\''+escapeHtml(t.id)+'\',\'s-traitements\')">Modifier</button>'
             +'</label>';
         }
       }
@@ -61797,7 +61972,13 @@ function renderTraitements(){
       const ponct=actifs.filter(t=>((t.rythme||{}).type)==='ponctuel');
       if(ponct.length)
         h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:14px">'
-          +'Au besoin, sans jour fixe : '+ponct.map(t=>escapeHtml(t.nom)).join(', ')+'.</div>';
+          +'Au besoin, sans jour fixe : '
+          // ATTEIGNABLES EUX AUSSI. Un ponctuel n'a pas de case a cocher : sans
+          // ce lien, il n'existait aucun chemin pour le modifier ni l'arreter.
+          +ponct.map(t=>'<a href="#" onclick="event.preventDefault();'
+            +'ouvrirEditeurTraitement(currentUser.email,\''+escapeHtml(t.id)+'\',\'s-traitements\')" '
+            +'style="color:var(--text-dim);text-decoration:underline">'
+            +escapeHtml(t.nom)+'</a>').join(', ')+'.</div>';
     }
     zl.innerHTML=h;
   }
@@ -61812,10 +61993,368 @@ function renderTraitements(){
        // ON NE SUPPRIME PAS UN TRAITEMENT : la trace est une donnee medicale,
        // et elle explique parfois une periode entiere, des annees plus tard.
        +finis.map(t=>'<div style="font-size:var(--fs-xs);color:var(--text-faint);'
-         +'line-height:1.6">'+escapeHtml(t.nom)+' — jusqu’au '
+         +'line-height:1.6">'
+         +'<a href="#" onclick="event.preventDefault();ouvrirFicheTraitement(\''
+         +escapeHtml(t.id)+'\')" style="color:var(--text-faint);text-decoration:underline">'
+         +escapeHtml(t.nom)+'</a> — jusqu’au '
          +new Date(Number(t.fin)).toLocaleDateString('fr-FR')+'</div>').join('')
        +'</div>';
   }
+  return true;
+}
+
+// ══════════════ LA SAISIE D'UN TRAITEMENT ══════════════════════════════
+//
+// UN SEUL EDITEUR POUR LES DEUX COTES. L'athlete saisit ce qu'il prend ; le
+// coach saisit ce qu'il sait. Deux formulaires auraient diverge au premier
+// champ ajoute, et c'est le genre de divergence qui finit par produire deux
+// dossiers qui ne se relisent pas.
+//
+// ⚠ CE QUE LE COACH SAISIT EST NECESSAIREMENT PARTAGE AVEC LUI. Il vient de
+// l'ecrire : le ranger en « non partage » serait un mensonge d'interface, et
+// il le verrait de toute facon dans sa propre copie. `partageCoach` est donc
+// force a vrai, et l'interrupteur ne lui est meme pas propose.
+//
+// ⚠ ET L'ATHLETE LE VOIT COMME VENANT DE SON COACH. `saisiPar` n'est pas un
+// champ d'audit : c'est ce qui permet a l'athlete de savoir qu'une ligne de sa
+// liste ne vient pas de lui, et au filet de poussee de savoir ce que le coach
+// a le droit de reecrire.
+const TRT_UNITES=Object.freeze(['mg','µg','g','ml','UI','comprimé','gélule','goutte','bouffée','patch','sachet']);
+const TRT_VOIES=Object.freeze([['orale','Par la bouche'],['cutanee','Sur la peau'],
+  ['inhalee','Inhalée'],['injectable','Injection'],['autre','Autre']]);
+const TRT_JOURS_LIB=Object.freeze(['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi']);
+const TRT_NOM_MAX=80, TRT_PRESC_MAX=60, TRT_NOTE_MAX=300;
+
+// {email, id, retour, parCoach}. En memoire, jamais persiste : un editeur
+// laisse ouvert d'une session a l'autre rouvrirait sur un dossier qui n'est
+// peut-etre plus celui qu'on regarde.
+let _trtEdit=null;
+
+// PURE. Le dossier vise. C'est le SEUL endroit qui decide sur quel document on
+// ecrit : partout ailleurs on manipule l'objet rendu ici.
+function _trtCible(email){
+  if(!email||(currentUser&&email===currentUser.email)) return currentUser;
+  const users=DB.get('users')||{};
+  return users[email]||null;
+}
+// L'ECRITURE, DES DEUX COTES — lecture, mutation et sauvegarde EN UN SEUL
+// PASSAGE.
+//
+// ⚠ DB.get('users') REND UNE COPIE FRAICHE A CHAQUE APPEL : c'est un
+// JSON.parse du stockage local, pas une reference. Muter le dossier rendu par
+// un premier appel puis sauvegarder l'objet rendu par un SECOND jette la
+// modification a la poubelle, en silence et sans erreur — la saisie du coach
+// paraissait reussir et rien n'etait ecrit. Le dossier mute et le dossier
+// sauve doivent etre le meme objet, et c'est tout l'objet de cette fonction.
+//
+// `muter` rend false pour annuler sans rien ecrire.
+function _trtEcrire(email,muter){
+  if(currentUser&&email===currentUser.email){
+    if(muter(currentUser)===false) return false;
+    try{ saveUser(); }catch(e){ return false; }
+    return true;
+  }
+  const users=DB.get('users')||{};
+  const u=users[email];
+  if(!u) return false;
+  if(muter(u)===false) return false;
+  // Un traitement saisi et pas pousse est un traitement perdu au changement
+  // d'appareil : la poussee fait partie de l'enregistrement, pas de la suite.
+  u.updatedAt=Date.now(); users[email]=u;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(email,u),'Traitement enregistré','le traitement est');
+  return ok;
+}
+
+function ouvrirEditeurTraitement(email,id,retour){
+  const u=_trtCible(email);
+  if(!u) return false;
+  _trtEdit={email:email||(currentUser&&currentUser.email),id:id||null,
+    retour:retour||'s-traitements',
+    parCoach:!!(currentUser&&currentUser.role==='coach'&&email!==currentUser.email)};
+  go('s-traitement-edit');
+  renderEditeurTraitement();
+  return true;
+}
+function fermerEditeurTraitement(){
+  const r=(_trtEdit&&_trtEdit.retour)||'s-traitements';
+  _trtEdit=null;
+  go(r);
+  try{ if(r==='s-traitements') renderTraitements(); }catch(e){}
+  try{ if(r==='s-coach-client') renderCoachMicroSection(getOwnedClient(currentClientId,DB.get('users')||{})); }catch(e){}
+  return true;
+}
+
+function renderEditeurTraitement(){
+  const z=document.getElementById('trte-corps');
+  if(!z||!_trtEdit) return false;
+  const u=_trtCible(_trtEdit.email);
+  const t=_trtEdit.id?(traitements(u).filter(x=>x.id===_trtEdit.id)[0]||null):null;
+  const ti=document.getElementById('trte-titre');
+  if(ti) ti.textContent=t?'Modifier':'Nouveau traitement';
+  const v=(x,d)=>escapeHtml(String(x==null?(d==null?'':d):x));
+  const moments=_tabBloc(t&&t.moments);
+  const ryt=((t&&t.rythme&&t.rythme.type)||'quotidien');
+  const jours=_tabBloc(t&&t.rythme&&t.rythme.jours);
+  const iso=ms=>{ const n=Number(ms); if(!n) return ''; try{ return localISODate(new Date(n)); }catch(e){ return ''; } };
+  const champ=(id,lbl,attrs,aide)=>
+    '<label style="display:block;margin-bottom:12px">'
+    +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
+    +'color:var(--sub);text-transform:uppercase;margin-bottom:5px">'+escapeHtml(lbl)+'</span>'
+    +'<input id="'+id+'" '+attrs+' style="width:100%;box-sizing:border-box;background:var(--surface-1);'
+    +'border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
+    +'padding:10px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
+    +(aide?'<span style="display:block;font-size:var(--fs-2xs);color:var(--text-faint);'
+      +'line-height:1.5;margin-top:4px">'+escapeHtml(aide)+'</span>':'')
+    +'</label>';
+
+  let h='';
+  // ⚠ LA MENTION AVANT LE PREMIER CHAMP, et non en bas de page. Ce qui borne
+  // ce que l'app fait d'une donnee de sante doit etre lu AVANT qu'elle soit
+  // saisie, pas apres.
+  h+='<div style="background:var(--info-bg);border:1px solid var(--info-border);'
+    +'border-radius:var(--r-3);padding:11px 13px;margin:12px 0 16px;'
+    +'font-size:var(--fs-2xs);color:var(--text);line-height:1.6">'
+    +escapeHtml(TRT_MENTION)+'</div>';
+  if(_trtEdit.parCoach)
+    h+='<div style="background:var(--warning-bg);border:1px solid var(--warning-border);'
+      +'border-radius:var(--r-3);padding:11px 13px;margin-bottom:16px;'
+      +'font-size:var(--fs-2xs);color:var(--text);line-height:1.6">'
+      +'Tu saisis ce traitement dans le dossier de ton athlète. Il y sera '
+      +'affiché comme venant de toi, et il pourra l’arrêter lui-même. '
+      +'Un traitement que tu saisis t’est forcément visible.</div>';
+
+  h+=champ('trte-nom','Nom du traitement',
+    'type="text" maxlength="'+TRT_NOM_MAX+'" value="'+v(t&&t.nom)+'" placeholder="Lévothyrox 75 µg"');
+
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
+    +champ('trte-dq','Dose','type="number" step="any" min="0" value="'
+      +v(t&&t.dosage_quantite)+'" placeholder="75"')
+    +'<label style="display:block;margin-bottom:12px">'
+    +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
+    +'color:var(--sub);text-transform:uppercase;margin-bottom:5px">Unité</span>'
+    +'<select id="trte-du" style="width:100%;box-sizing:border-box;background:var(--surface-1);'
+    +'border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
+    +'padding:10px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
+    +'<option value=""></option>'
+    +TRT_UNITES.map(x=>'<option value="'+escapeHtml(x)+'"'
+      +(((t&&t.dosage_unite)===x)?' selected':'')+'>'+escapeHtml(x)+'</option>').join('')
+    +'</select></label></div>';
+
+  h+='<label style="display:block;margin-bottom:12px">'
+    +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
+    +'color:var(--sub);text-transform:uppercase;margin-bottom:5px">Voie</span>'
+    +'<select id="trte-voie" style="width:100%;box-sizing:border-box;background:var(--surface-1);'
+    +'border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
+    +'padding:10px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
+    +TRT_VOIES.map(([id,lib])=>'<option value="'+id+'"'
+      +(((t&&t.voie)||'orale')===id?' selected':'')+'>'+escapeHtml(lib)+'</option>').join('')
+    +'</select></label>';
+
+  // ── LES MOMENTS ────────────────────────────────────────────────────────
+  // Dans l'ordre de la JOURNEE, celui des complements. Deux modules qui
+  // rangent les memes moments dans deux ordres differents se lisent mal l'un
+  // apres l'autre, et l'ecran des interactions les met cote a cote.
+  h+='<div style="margin-bottom:14px">'
+    +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
+    +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">Moments de prise</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px">'
+    +SUPP_ORDRE_JOURNEE.map(id=>{
+      const lib=(TIMINGS_LIST.filter(x=>x.id===id)[0]||{}).label||id;
+      const on=moments.indexOf(id)>=0;
+      return '<label style="display:inline-flex;align-items:center;gap:6px;'
+        +'background:'+(on?'var(--red-dim, var(--surface-2))':'var(--surface-1)')+';'
+        +'border:1px solid '+(on?'var(--red)':'var(--border)')+';border-radius:var(--r-2);'
+        +'padding:7px 10px;cursor:pointer;font-size:var(--fs-xs);color:var(--text);'
+        +'text-transform:none;letter-spacing:normal;font-weight:400">'
+        +'<input type="checkbox" class="trte-m" value="'+id+'"'+(on?' checked':'')
+        +' style="width:15px;height:15px;margin:0;accent-color:var(--red)">'
+        +escapeHtml(lib)+'</label>';
+    }).join('')
+    +'</div></div>';
+
+  // ── LE RYTHME ──────────────────────────────────────────────────────────
+  const rad=(val,lib)=>'<label style="display:flex;align-items:center;gap:8px;'
+    +'padding:9px 11px;background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;font-size:var(--fs-sm);'
+    +'color:var(--text);text-transform:none;letter-spacing:normal;font-weight:400">'
+    +'<input type="radio" name="trte-ryt" value="'+val+'"'+(ryt===val?' checked':'')
+    +' onchange="_trtMajRythme()" style="width:16px;height:16px;margin:0;accent-color:var(--red)">'
+    +escapeHtml(lib)+'</label>';
+  h+='<div style="margin-bottom:14px">'
+    +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
+    +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">Rythme</div>'
+    +rad('quotidien','Tous les jours')
+    +rad('jours','Certains jours de la semaine')
+    +rad('cycle','Par cycle : X jours de prise, Y d’arrêt')
+    +rad('ponctuel','Au besoin, sans jour fixe')
+    +'<div id="trte-jours" style="display:'+(ryt==='jours'?'flex':'none')+';flex-wrap:wrap;gap:6px;margin-top:8px">'
+    +[1,2,3,4,5,6,0].map(n=>'<label style="display:inline-flex;align-items:center;gap:5px;'
+      +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);'
+      +'padding:6px 9px;cursor:pointer;font-size:var(--fs-xs);color:var(--text);'
+      +'text-transform:none;letter-spacing:normal;font-weight:400">'
+      +'<input type="checkbox" class="trte-j" value="'+n+'"'
+      +(jours.indexOf(n)>=0?' checked':'')
+      +' style="width:14px;height:14px;margin:0;accent-color:var(--red)">'
+      +TRT_JOURS_LIB[n].slice(0,3)+'</label>').join('')
+    +'</div>'
+    +'<div id="trte-cycle" style="display:'+(ryt==='cycle'?'grid':'none')+';'
+    +'grid-template-columns:1fr 1fr;gap:9px;margin-top:8px">'
+    +champ('trte-on','Jours de prise','type="number" min="1" max="365" value="'
+      +v(t&&t.rythme&&t.rythme.cycleOn,21)+'"')
+    +champ('trte-off','Jours d’arrêt','type="number" min="0" max="365" value="'
+      +v(t&&t.rythme&&t.rythme.cycleOff,7)+'"')
+    +'</div>'
+    +'<div id="trte-ancre" style="display:'+(ryt==='cycle'?'block':'none')+';margin-top:2px">'
+    +champ('trte-ancred','Premier jour du cycle','type="date" value="'
+      +v(iso(t&&t.rythme&&t.rythme.ancre)||iso(t&&t.debut)||localISODate(new Date()))+'"',
+      'Le compte des jours part de cette date.')
+    +'</div></div>';
+
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
+    +champ('trte-debut','Début','type="date" value="'+v(iso(t&&t.debut)||localISODate(new Date()))+'"')
+    +champ('trte-fin','Fin (si connue)','type="date" value="'+v(iso(t&&t.fin))+'"')
+    +'</div>';
+  h+=champ('trte-presc','Prescripteur','type="text" maxlength="'+TRT_PRESC_MAX
+    +'" value="'+v(t&&t.prescripteur)+'" placeholder="Dr Martin"');
+  h+=champ('trte-note','Note','type="text" maxlength="'+TRT_NOTE_MAX
+    +'" value="'+v(t&&t.note)+'" placeholder="à jeun, 30 min avant le petit-déjeuner"');
+
+  // ── LE PARTAGE ─────────────────────────────────────────────────────────
+  // ⚠ IL N'EST PROPOSE QU'A L'ATHLETE, et il vaut NON tant qu'il n'y touche
+  // pas. Un interrupteur pre-coche n'est pas un consentement.
+  if(!_trtEdit.parCoach)
+    h+='<label style="display:flex;align-items:flex-start;gap:10px;padding:11px 12px;'
+      +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);'
+      +'margin:6px 0 16px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400">'
+      +'<input type="checkbox" id="trte-partage"'+((t&&t.partageCoach===true)?' checked':'')
+      +' style="width:18px;height:18px;margin:2px 0 0;accent-color:var(--red);flex-shrink:0">'
+      +'<span style="flex:1;min-width:0"><span style="display:block;font-size:var(--fs-sm);'
+      +'color:var(--text);line-height:1.5">Montrer ce traitement à mon coach</span>'
+      +'<span style="display:block;font-size:var(--fs-2xs);color:var(--text-faint);'
+      +'line-height:1.55;margin-top:3px">Sans ça, il voit seulement qu’un traitement '
+      +'est pris à ce moment de la journée — ni le nom, ni la dose, ni le '
+      +'prescripteur. Ce que tu ne partages pas ne quitte pas ce téléphone, et '
+      +'ne sera donc pas retrouvé si tu en changes.</span></span></label>';
+
+  h+='<button type="button" class="btn" style="width:100%;margin:4px 0 0" '
+    +'onclick="sauverTraitement()">Enregistrer</button>';
+  if(t&&!traitementTermine(t))
+    h+='<button type="button" class="btn btn-outline" style="width:100%;margin:9px 0 0" '
+      +'onclick="arreterTraitement()">Arrêter ce traitement</button>';
+  // ⚠ AUCUN BOUTON « SUPPRIMER ». On n'efface pas un traitement : la trace est
+  // une donnee medicale, et elle explique parfois une periode entiere des
+  // annees plus tard. On l'arrete, il passe dans les termines.
+  z.innerHTML=h;
+  return true;
+}
+// Le rythme choisi commande ce qui est visible. Ecrit une fois, appele par les
+// quatre boutons radio.
+function _trtMajRythme(){
+  const r=(document.querySelector('input[name="trte-ryt"]:checked')||{}).value||'quotidien';
+  const d=(id,on,mode)=>{ const e=document.getElementById(id); if(e) e.style.display=on?(mode||'block'):'none'; };
+  d('trte-jours',r==='jours','flex');
+  d('trte-cycle',r==='cycle','grid');
+  d('trte-ancre',r==='cycle','block');
+  return r;
+}
+
+// PURE. LA VALIDATION, SEPAREE DU DOM pour qu'une assertion puisse l'exercer
+// sans ouvrir d'ecran. Rend un message, ou la chaine vide.
+function _trtValider(t){
+  if(!t||!String(t.nom||'').trim()) return 'Donne un nom à ce traitement.';
+  if(String(t.nom).length>TRT_NOM_MAX) return 'Le nom est trop long.';
+  const r=(t.rythme||{}).type||'quotidien';
+  // ⚠ UN PONCTUEL N'A PAS DE MOMENT OBLIGATOIRE : « au besoin » n'a pas
+  // d'heure, et exiger une case ferait inventer une reponse.
+  if(r!=='ponctuel'&&!_tabBloc(t.moments).length)
+    return 'Choisis au moins un moment de prise.';
+  if(r==='jours'&&!_tabBloc(t.rythme.jours).length)
+    return 'Choisis au moins un jour de la semaine.';
+  if(r==='cycle'){
+    if(!(Number(t.rythme.cycleOn)>0)) return 'Le nombre de jours de prise doit être au moins 1.';
+    if(!(Number(t.rythme.cycleOff)>=0)) return 'Le nombre de jours d’arrêt ne peut pas être négatif.';
+  }
+  // ⚠ UNE FIN AVANT LE DEBUT rendrait le traitement invisible partout sans
+  // qu'aucun ecran ne dise pourquoi : aPrendreLe repondrait faux tous les
+  // jours, et la liste resterait vide.
+  if(t.debut&&t.fin&&Number(t.fin)<Number(t.debut))
+    return 'La date de fin est avant la date de début.';
+  return '';
+}
+
+function sauverTraitement(){
+  if(!_trtEdit) return false;
+  const u=_trtCible(_trtEdit.email);
+  if(!u) return false;
+  const g=id=>document.getElementById(id);
+  const txt=id=>String((g(id)||{}).value||'').trim();
+  const msDe=id=>{ const s=txt(id); if(!s) return null;
+    const d=_dateDeISO(s); return d?d.getTime():null; };
+  const ryt=(document.querySelector('input[name="trte-ryt"]:checked')||{}).value||'quotidien';
+  const rythme={type:ryt};
+  if(ryt==='jours')
+    rythme.jours=Array.prototype.slice.call(document.querySelectorAll('.trte-j'))
+      .filter(x=>x.checked).map(x=>parseInt(x.value,10));
+  if(ryt==='cycle'){
+    rythme.cycleOn=Math.max(1,parseInt(txt('trte-on'),10)||21);
+    rythme.cycleOff=Math.max(0,parseInt(txt('trte-off'),10)||0);
+    rythme.ancre=msDe('trte-ancred')||Date.now();
+  }
+  const ancien=_trtEdit.id?(traitements(u).filter(x=>x.id===_trtEdit.id)[0]||null):null;
+  const dq=parseFloat(txt('trte-dq'));
+  const t={
+    id:_trtEdit.id||('t'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),
+    nom:txt('trte-nom').slice(0,TRT_NOM_MAX),
+    dosage_quantite:(isFinite(dq)&&dq>0)?dq:null,
+    dosage_unite:String(((g('trte-du')||{}).value)||''),
+    voie:String(((g('trte-voie')||{}).value)||'orale'),
+    moments:Array.prototype.slice.call(document.querySelectorAll('.trte-m'))
+      .filter(x=>x.checked).map(x=>x.value),
+    rythme:rythme,
+    debut:msDe('trte-debut')||(ancien&&ancien.debut)||Date.now(),
+    fin:msDe('trte-fin'),
+    prescripteur:txt('trte-presc').slice(0,TRT_PRESC_MAX),
+    note:txt('trte-note').slice(0,TRT_NOTE_MAX),
+    actif:ancien?(ancien.actif!==false):true,
+    // ⚠ QUI L'A SAISI NE CHANGE PLUS JAMAIS. Un traitement saisi par le coach
+    // et modifie ensuite par l'athlete reste « du coach » : c'est ce que le
+    // filet de poussee lit pour savoir ce que le coach a le droit de reecrire,
+    // et le retourner ferait perdre la ligne au premier envoi.
+    saisiPar:(ancien&&ancien.saisiPar)||(_trtEdit.parCoach?'coach':'athlete'),
+    // ⚠ CE QUE LE COACH SAISIT LUI EST FORCEMENT VISIBLE. Il vient de l'ecrire.
+    partageCoach:_trtEdit.parCoach?true:!!((g('trte-partage')||{}).checked)
+  };
+  const err=_trtValider(t);
+  if(err){ try{ toast(err,'var(--orange)'); }catch(e){} return false; }
+  // ⚠ _trtStore REND LE TABLEAU LUI-MEME, deja normalise et deja accroche au
+  // dossier — pas l'objet `sante`. On ecrit donc dedans, sans le reposer, et
+  // SUR LE DOSSIER QUE _trtEcrire VA SAUVER : `u` ci-dessus n'a servi qu'a
+  // relire l'ancienne version.
+  if(!_trtEcrire(_trtEdit.email,d=>{
+    const l=_trtStore(d);
+    const i=l.findIndex(x=>x&&x.id===t.id);
+    if(i>=0) l[i]=t; else l.push(t);
+  })) return false;
+  try{ toast('Traitement enregistré','var(--success)'); }catch(e){}
+  fermerEditeurTraitement();
+  return true;
+}
+async function arreterTraitement(){
+  if(!_trtEdit||!_trtEdit.id) return false;
+  const u=_trtCible(_trtEdit.email);
+  if(!u) return false;
+  const t=traitements(u).filter(x=>x.id===_trtEdit.id)[0];
+  if(!t) return false;
+  const ok=await rcConfirm('Arrêter ce traitement',
+    'Il sortira de ta journée dès demain et passera dans les traitements '
+    +'terminés. Il n’est pas supprimé : la trace reste dans ton dossier.',
+    'Arrêter');
+  if(!ok) return false;
+  if(!_trtEcrire(_trtEdit.email,d=>{
+    if(!terminerTraitement(d,t.id).ok) return false;
+  })) return false;
+  fermerEditeurTraitement();
   return true;
 }
 function ouvrirFicheTraitement(id){
@@ -62402,6 +62941,16 @@ function deleteSuppEntry(id){
   _suppReturnToNutrition?loadNutrition():loadSupplements();
 }
 
+// ⚠ RENDUE MEME VIDE, contrairement aux micro-signaux : c'est la seule porte
+// par laquelle un coach peut saisir un traitement, et une porte qui n'apparait
+// que lorsqu'il y a deja quelque chose derriere n'est pas une porte. La
+// section est repliee par defaut, ce qui lui coute une ligne et pas un ecran.
+function renderCoachTraitementsSection(c){
+  const el=document.getElementById('ccd-traitements');
+  if(!el||!c) return false;
+  try{ el.innerHTML=_htmlTraitementsCoach(c); }catch(e){ el.innerHTML=''; }
+  return true;
+}
 // ======= SUPPLEMENTS COACH =======
 function renderCoachSuppSection(c){
   const el=document.getElementById('ccd-supplements');
