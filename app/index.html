@@ -5068,7 +5068,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <label style="cursor:pointer;flex-shrink:0">
               <div id="coach-photo-circle" style="width:72px;height:72px;border-radius:var(--r-full);background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
               <div style="text-align:center;font-size:var(--fs-xs);color:var(--text-dim);margin-top:5px;letter-spacing:1px">PHOTO</div>
-              <input type="file" accept="image/*" style="display:none" onchange="uploadCoachPhoto(this)">
+              <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="uploadCoachPhoto(this)">
             </label>
             <div style="flex:1;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Photo du coach<br>visible par tes athlètes sur leur accueil</div>
           </div>
@@ -5098,7 +5098,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div id="coach-photo-vitrine-apercu" style="flex:none;width:64px;height:64px;border-radius:var(--r-3);background:var(--surface-2);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:var(--fs-xl)">+</div>
   <div style="flex:1;min-width:0">
     <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Ajouter une image
-      <input type="file" accept="image/*" style="display:none" onchange="_majImageVitrine(this,'coach-photo-vitrine')">
+      <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="_majImageVitrine(this,'coach-photo-vitrine')">
     </label>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:5px">Une autre que celle du profil. Elle ouvre ta vitrine.</div>
   </div>
@@ -5111,7 +5111,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div id="coach-signature-apercu" style="flex:none;width:64px;height:64px;border-radius:var(--r-3);background:var(--surface-2);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:var(--fs-xl)">+</div>
   <div style="flex:1;min-width:0">
     <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Ajouter une image
-      <input type="file" accept="image/*" style="display:none" onchange="_majImageVitrine(this,'coach-signature')">
+      <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="_majImageVitrine(this,'coach-signature')">
     </label>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:5px">Un PNG à fond transparent rend mieux sur le fond sombre.</div>
   </div>
@@ -5128,7 +5128,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div id="coach-cartepro-apercu" style="flex:none;width:64px;height:64px;border-radius:var(--r-3);background:var(--surface-2);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:var(--fs-xl)">+</div>
   <div style="flex:1;min-width:0">
     <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Ajouter une image
-      <input type="file" accept="image/*" style="display:none" onchange="_majImageVitrine(this,'coach-cartepro')">
+      <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="_majImageVitrine(this,'coach-cartepro')">
     </label>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:5px">Facultative. Visible de tes athlètes rattachés.</div>
   </div>
@@ -6290,7 +6290,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <label style="cursor:pointer;text-align:center">
           <div id="atp-photo-circle" style="width:90px;height:90px;border-radius:var(--r-full);background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 auto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px;letter-spacing:1.5px;text-transform:uppercase">Changer la photo</div>
-          <input type="file" accept="image/*" style="display:none" onchange="uploadAthletePhoto(this)">
+          <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="uploadAthletePhoto(this)">
         </label>
       </div>
       <div class="card" style="margin-bottom:14px">
@@ -7115,7 +7115,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </p>
       <!-- La photo est lue SUR LE TELEPHONE, par le moteur deja embarque.
            Elle ne part sur aucun serveur et n est pas conservee. -->
-      <input type="file" id="perso-etiq-file" accept="image/*" capture="environment"
+      <input type="file" id="perso-etiq-file" accept="image/*,.heic,.heif,.hif" capture="environment"
         style="display:none" onchange="lireEtiquette(this)">
       <button type="button" id="perso-etiq-btn" class="btn btn-outline btn-sm" style="width:100%"
         onclick="document.getElementById('perso-etiq-file').click()">📷 Lire l'étiquette (photo)</button>
@@ -8888,49 +8888,151 @@ function renderDataTable(columns,rows,opts={}){
 
 // ======= DATA =======
 // ── Compression image universelle ──
-// Redimensionne et compresse en JPEG avant stockage localStorage
-// `onError` est OPTIONNEL et arrive en cinquieme : les appels existants ne
-// changent pas d'un iota. Sans lui, l'echec reste silencieux comme avant —
-// mais il ne laisse plus son appelant suspendu, puisque celui-ci peut
-// desormais le savoir.
+// Redimensionne et compresse en JPEG avant stockage localStorage.
 //
-// TROIS FACONS D'ECHOUER, toutes couvertes : le fichier illisible
-// (reader.onerror), le contenu qui n'est pas une image decodable
-// (img.onerror — c'est le cas d'un fichier renomme), et l'encodage qui
-// abandonne faute de memoire sur une image enorme (toDataURL qui jette).
-// Ce dernier survenait DANS un gestionnaire, donc personne ne le voyait.
-function compressImage(file, maxPx, quality, cb, onError){
-  // UN SEUL DES DEUX CHEMINS SORT. Un appelant qui rend un jeton dans chacun
-  // le rendrait deux fois, et son compteur passerait sous zero.
-  let fait=false;
-  const echec=()=>{ if(fait) return; fait=true; if(typeof onError==='function') onError(); };
-  const reader=new FileReader();
-  reader.onerror=echec;
-  reader.onload=ev=>{
-    const img=new Image();
-    img.onerror=echec;
-    img.onload=()=>{
-      let url;
-      // Le try n'enveloppe QUE l'encodage : une exception venue de `cb`
-      // lui-meme ne doit pas se faire passer pour une image illisible.
-      try{
-        let w=img.width,h=img.height;
-        if(w>maxPx||h>maxPx){
-          if(w>=h){h=Math.round(h*maxPx/w);w=maxPx;}
-          else{w=Math.round(w*maxPx/h);h=maxPx;}
-        }
-        const canvas=document.createElement('canvas');
-        canvas.width=w;canvas.height=h;
-        canvas.getContext('2d').drawImage(img,0,0,w,h);
-        url=canvas.toDataURL('image/jpeg',quality);
-      }catch(e){ echec(); return; }
-      if(fait) return;
-      fait=true;
-      cb(url);
+// UN SEUL CHEMIN DE DECODAGE POUR TOUT LE PRODUIT. compressImage et
+// _resizeImage en avaient chacun un, et le second n'avait ni reader.onerror
+// ni try autour de toDataURL : quand le decodage n'aboutissait pas, sa
+// promesse ne se reglait JAMAIS. L'athlete choisissait sa photo, le bouton
+// affichait « Compression... », et plus rien ne bougeait — sans un message,
+// sans un moyen de reessayer. C'est la panne que les gens decrivaient par
+// « je n'arrive pas a mettre ma photo ».
+//
+// Les deux fonctions s'appuient desormais sur imageVersJpeg : une correction
+// ici repare les onze points d'envoi de photo du produit d'un coup.
+
+// Aucun decodage ne peut durer plus longtemps que ca. Sans ce plafond, un
+// FileReader ou un decodeur qui n'appelle ni onload ni onerror — ca arrive,
+// notamment quand l'onglet passe en arriere-plan pendant la lecture — laisse
+// l'ecran suspendu indefiniment.
+const IMG_DECODE_MS=25000;
+
+// CE QUE L'UTILISATEUR PEUT FAIRE, pas ce que le navigateur a rate. Le cas de
+// tres loin le plus frequent est le HEIC de l'iPhone : Safari sait le lire,
+// Chrome et Firefox sur Android ne le savent pas, et le fichier arrive sous
+// cette forme des qu'il a transite par un partage, un mail ou l'appli Fichiers.
+// Rien, cote navigateur, ne permet de le convertir : la seule issue est une
+// action de la personne, donc le message la donne.
+const IMG_AIDE_FORMAT='Cette photo n\'est pas lisible par ton téléphone (souvent un fichier HEIC d\'iPhone). '
+  +'Fais une capture d\'écran de la photo, puis envoie la capture. La photo est facultative : tu peux continuer sans.';
+
+// Decodage d'un fichier image. Trois chemins, du plus econome au plus ancien,
+// essayes dans l'ordre :
+//  1. createImageBitmap(file) — decode SANS passer par une chaine base64 (le
+//     detour historique triplait la memoire occupee par une photo de 12 Mpx,
+//     et c'est ce qui faisait echouer les gros fichiers sur un vieux telephone)
+//     et s'appuie sur les codecs du systeme : c'est ce qui fait passer un HEIC
+//     partout ou le systeme sait le lire.
+//  2. blob: dans une <img> — meme economie de memoire, disponible partout.
+//  3. FileReader + dataURL — le chemin d'origine, garde en dernier recours.
+// Rend { src, w, h, liberer }. liberer() DOIT etre appele : sans lui le blob
+// et le bitmap restent en memoire pour la duree de la session.
+function _decoderImage(file){
+  return new Promise((resolve,reject)=>{
+    let fini=false,minuteur=null;
+    const gagne=d=>{ if(fini) return; fini=true; clearTimeout(minuteur); resolve(d); };
+    const perdu=()=>{ if(fini) return; fini=true; clearTimeout(minuteur); reject(); };
+    minuteur=setTimeout(perdu,IMG_DECODE_MS);
+    const depuisImg=(im,liberer)=>gagne({src:im,w:im.naturalWidth||im.width,
+      h:im.naturalHeight||im.height,liberer:liberer||function(){}});
+    // Chemin 3.
+    const parLecteur=()=>{
+      const r=new FileReader();
+      r.onerror=perdu; r.onabort=perdu;
+      r.onload=ev=>{
+        const im=new Image();
+        im.onerror=perdu;
+        im.onload=()=>depuisImg(im);
+        im.src=ev.target.result;
+      };
+      try{ r.readAsDataURL(file); }catch(e){ perdu(); }
     };
-    img.src=ev.target.result;
-  };
-  reader.readAsDataURL(file);
+    // Chemin 2. Son echec retombe sur le chemin 3 plutot que d'abandonner :
+    // quelques navigateurs anciens refusent un blob: comme source d'image.
+    const parBlob=()=>{
+      let url;
+      try{ url=URL.createObjectURL(file); }catch(e){ return parLecteur(); }
+      const rendre=()=>{ try{ URL.revokeObjectURL(url); }catch(e){} };
+      const im=new Image();
+      im.onerror=()=>{ rendre(); parLecteur(); };
+      im.onload=()=>depuisImg(im,rendre);
+      im.src=url;
+    };
+    // Chemin 1.
+    if(typeof createImageBitmap==='function'){
+      let p=null;
+      try{ p=createImageBitmap(file); }catch(e){ p=null; }
+      if(p&&typeof p.then==='function'){
+        p.then(bm=>gagne({src:bm,w:bm.width,h:bm.height,
+          liberer(){ try{ bm.close&&bm.close(); }catch(e){} }}),parBlob);
+        return;
+      }
+    }
+    parBlob();
+  });
+}
+
+// ENCODAGE, AVEC REPLI SUR PLUS PETIT. Deux echecs distincts sont couverts :
+// toDataURL qui JETTE faute de memoire, et — propre a iOS — toDataURL qui
+// rend « data:, » sans rien signaler. Le second passait pour une reussite :
+// une chaine vide etait enregistree A LA PLACE de la photo, l'emplacement
+// s'affichait vide au rechargement, et aucun message n'etait jamais apparu.
+// On redescend donc en taille jusqu'a obtenir un JPEG credible : une photo
+// plus petite vaut mieux qu'un emplacement vide.
+function _canvasVersJpeg(source,w,h,quality){
+  for(const ech of [1,0.7,0.5,0.35,0.22]){
+    const cw=Math.max(1,Math.round(w*ech)),ch=Math.max(1,Math.round(h*ech));
+    try{
+      const cv=document.createElement('canvas');
+      cv.width=cw; cv.height=ch;
+      const cx=cv.getContext('2d');
+      if(!cx) continue;
+      cx.imageSmoothingEnabled=true; cx.imageSmoothingQuality='high';
+      cx.drawImage(source,0,0,cw,ch);
+      const url=cv.toDataURL('image/jpeg',quality||0.75);
+      // 512 octets : un JPEG utile ne descend pas la-dessous, « data:, » si.
+      if(url&&url.length>512&&url.indexOf('data:image/jpeg')===0) return url;
+    }catch(e){}
+  }
+  return null;
+}
+
+// Le cœur partage : un fichier, une boite maximale, un JPEG en base64 — ou
+// null. Ne jette jamais et se regle TOUJOURS, c'est tout l'interet.
+function imageVersJpeg(file,maxW,maxH,quality){
+  return _decoderImage(file).then(d=>{
+    try{
+      if(!d||!d.w||!d.h) return null;
+      const sc=Math.min(maxW/d.w,maxH/d.h,1);
+      return _canvasVersJpeg(d.src,d.w*sc,d.h*sc,quality);
+    }finally{ try{ d&&d.liberer(); }catch(e){} }
+  },()=>null);
+}
+
+// LE MEME FICHIER, UNE SECONDE FOIS. Un <input type="file"> ne declenche
+// « change » que si sa valeur CHANGE : apres un echec, rechoisir exactement la
+// meme photo ne declenchait plus rien du tout. La personne touchait le bouton,
+// la galerie s'ouvrait, elle validait sa photo — et il ne se passait rien, sans
+// le moindre message. On vide donc le champ des que le fichier est en main :
+// l'objet File deja recupere, lui, reste parfaitement valide.
+function _viderChampFichier(input){ try{ if(input) input.value=''; }catch(e){} }
+
+// `onError` est OPTIONNEL et arrive en cinquieme : les appels existants ne
+// changent pas d'un iota. SANS LUI, L'ECHEC N'EST PLUS SILENCIEUX : sept des
+// onze appelants n'en fournissaient pas, et leur photo disparaissait sans un
+// mot. Le repli dit maintenant quoi faire.
+function compressImage(file, maxPx, quality, cb, onError){
+  imageVersJpeg(file,maxPx,maxPx,quality).then(url=>{
+    if(!url){
+      if(typeof onError==='function') onError();
+      else toast(IMG_AIDE_FORMAT,'var(--orange)');
+      return;
+    }
+    // Une exception venue de `cb` lui-meme ne doit pas se faire passer pour
+    // une image illisible : on la relance telle quelle, hors de la promesse,
+    // pour qu'elle remonte au rapport d'erreurs comme avant.
+    try{ cb(url); }catch(e){ setTimeout(()=>{ throw e; },0); }
+  });
 }
 
 // ── Cloud sync (Firebase Realtime Database — auth requise via Email/Password) ──
@@ -21733,6 +21835,12 @@ function viewClientBilans(){
 function addBilanPhoto(bilanDate,bilanType,view,inputEl){
   const file=inputEl.files[0];
   if(!file)return;
+  _viderChampFichier(inputEl);
+  // DIT TOUT DE SUITE QU'IL SE PASSE QUELQUE CHOSE. La compression d'une photo
+  // d'appareil prend plusieurs secondes, et rien ne bougeait a l'ecran pendant
+  // ce temps : le coach touchait le bouton une seconde fois, puis concluait
+  // que l'ajout ne marchait pas.
+  toast('Ajout de la photo…');
   // Compression AVANT tout stockage, comme uploadAthletePhoto et l'avatar coach.
   // Une photo de téléphone de 8 Mo devient un dataURL d'environ 11 Mo une fois
   // encodée en base64 : le double du quota localStorage à elle seule, et elle
@@ -21742,7 +21850,7 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
   // justement une photo d'appareil photo, et la compresser est le travail de
   // cette fonction, pas la refuser.
   _resizeImage(file,1080,1440,0.82).then(b64=>{
-    if(!b64){toast('Image illisible : réessaie avec une autre photo','var(--orange)');return;}
+    if(!b64){toast(IMG_AIDE_FORMAT,'var(--orange)');return;}
     const users=DB.get('users')||{};
     const cl=getOwnedClient(currentClientId,users);
     if(!cl)return;
@@ -22142,7 +22250,7 @@ function renderBilanEvolution(c){
               <div style="padding:0 6px 5px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
             </div>`
           :`<label style="flex-shrink:0;width:110px;border-radius:var(--r-3);background:var(--surface-2);border:1px dashed var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px;cursor:pointer">
-              <input type="file" accept="image/*" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
+              <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
               <div style="font-size:var(--fs-2xl);opacity:.5">📷</div>
               <div style="font-size:var(--fs-xs);color:#aaa;font-weight:700">B${i+1}</div>
               <div style="font-size:var(--fs-xs);color:#888">${date}</div>
@@ -24884,6 +24992,7 @@ function renderClientPdfCard(c){
 }
 async function uploadCoachPdfInline(input){
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   if(f.size>20*1024*1024){toast('PDF trop lourd (max 20 Mo). Compresse ou utilise un lien Drive.','var(--orange)');return;}
   const res=resolveClient(currentClientId);if(!res) return;
   const {c,users}=res;
@@ -26949,7 +27058,7 @@ function renderProgEx(){
         <!-- Image + Vidéo exercice -->
         <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
-            <input type="file" accept="image/*" style="display:none" onchange="_progExDirty=true;loadExImage(${i},this)">
+            <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="_progExDirty=true;loadExImage(${i},this)">
             ${ex.image?`<img src="${ex.image}" style="width:60px;height:60px;border-radius:var(--r-2);object-fit:cover">`:
             `<div style="width:60px;height:60px;border-radius:var(--r-2);background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);border:2px dashed var(--border)"></div>`}
           </label>
@@ -27374,6 +27483,7 @@ document.addEventListener('pointercancel',_pxDragFin);
 
 function loadExImage(idx,input){
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   // On retient l'OBJET exercice, pas son index : la compression est
   // asynchrone, et un réordonnancement pendant ce temps ferait atterrir la
   // photo sur un autre exercice.
@@ -28348,6 +28458,7 @@ async function _openPdfSrc(raw){
 }
 async function uploadAthletePdf(input){
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   if(f.size>20*1024*1024){toast('PDF trop lourd (max 20 Mo)','var(--orange)');return;}
   const emailKey=currentUser.email.toLowerCase().replace(/\./g,',');
   toast('Téléversement en cours…');
@@ -29033,6 +29144,7 @@ function _bandeauEssai(){
 
 function uploadSessionPhoto(idx,input){
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   compressImage(f,1200,0.75,data=>{
     if(!currentUser.sessions_config) initSessionsConfig();
     currentUser.sessions_config[idx].photo=data;
@@ -29043,6 +29155,7 @@ function uploadSessionPhoto(idx,input){
 }
 function uploadSessionPhoto2(idx,input){
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   compressImage(f,1200,0.75,data=>{
     if(!currentUser.sessions_config) initSessionsConfig();
     currentUser.sessions_config[idx].photo2=data;
@@ -35442,32 +35555,35 @@ function compressImageBlob(file,maxDim,quality){
     if(!file||!/^image\//.test(file.type||'')) return reject(new Error('Ce fichier n\'est pas une image.'));
     const md=maxDim>0?maxDim:PHP_MAX_DIM;
     const q=(quality>0&&quality<=1)?quality:PHP_QUALITE;
-    const reader=new FileReader();
-    reader.onerror=()=>reject(new Error('Lecture du fichier impossible.'));
-    reader.onload=ev=>{
-      const img=new Image();
-      img.onerror=()=>reject(new Error('Image illisible.'));
-      img.onload=()=>{
-        try{
-          let w=img.width,h=img.height;
-          if(!(w>0&&h>0)) return reject(new Error('Image sans dimensions.'));
-          if(w>md||h>md){
-            if(w>=h){h=Math.round(h*md/w);w=md;}
-            else{w=Math.round(w*md/h);h=md;}
-          }
-          const cv=document.createElement('canvas');
-          cv.width=w;cv.height=h;
-          cv.getContext('2d').drawImage(img,0,0,w,h);
-          if(!cv.toBlob) return reject(new Error('Compression indisponible sur ce navigateur.'));
-          cv.toBlob(b=>{
-            if(!b||!b.size) return reject(new Error('La compression a échoué.'));
-            resolve({blob:b,w,h,octets:b.size});
-          },'image/jpeg',q);
-        }catch(e){ reject(new Error('La compression a échoué.')); }
-      };
-      img.src=ev.target.result;
-    };
-    reader.readAsDataURL(file);
+    // LE MEME DECODEUR QUE LE RESTE DU PRODUIT. Le FileReader d'ici refusait un
+    // HEIC d'iPhone que le systeme sait pourtant lire, et faisait passer une
+    // photo de 12 Mpx par une chaine base64 — trois fois sa taille en memoire,
+    // de quoi faire tomber l'onglet sur un vieux telephone. _decoderImage tente
+    // les codecs du systeme d'abord, et porte le plafond de temps : la promesse
+    // se regle TOUJOURS, donc « Compression... » ne peut plus rester a l'ecran.
+    // Le garde-fou de type MIME, lui, reste intact au-dessus : l'original ne
+    // sort toujours par aucun chemin, seul le Blob issu du canvas sort.
+    _decoderImage(file).then(d=>{
+      try{
+        let w=d.w,h=d.h;
+        if(!(w>0&&h>0)) return reject(new Error('Image sans dimensions.'));
+        if(w>md||h>md){
+          if(w>=h){h=Math.round(h*md/w);w=md;}
+          else{w=Math.round(w*md/h);h=md;}
+        }
+        const cv=document.createElement('canvas');
+        cv.width=w;cv.height=h;
+        cv.getContext('2d').drawImage(d.src,0,0,w,h);
+        if(!cv.toBlob) return reject(new Error('Compression indisponible sur ce navigateur.'));
+        cv.toBlob(b=>{
+          if(!b||!b.size) return reject(new Error('La compression a échoué.'));
+          resolve({blob:b,w,h,octets:b.size});
+        },'image/jpeg',q);
+      }catch(e){ reject(new Error('La compression a échoué.')); }
+      // drawImage a deja copie les pixels : liberer ici ne prive pas toBlob,
+      // qui travaille sur le canvas.
+      finally{ try{ d.liberer(); }catch(e){} }
+    },()=>reject(new Error('Image illisible.')));
   });
 }
 
@@ -35801,7 +35917,7 @@ function htmlPhotosSeance(u){
           background:${faite?'rgba(34,197,94,.12)':'#111'};border:1px solid ${faite?'var(--green)':'var(--border)'};color:${faite?'var(--text)':'var(--sub)'}">
           <span style="font-size:var(--fs-lg)">${faite?'●':'○'}</span>
           <span style="font-size:var(--fs-xs);font-weight:800">${escapeHtml(p.lib)}</span>
-          <input type="file" accept="image/*" capture="environment" style="display:none"
+          <input type="file" accept="image/*,.heic,.heif,.hif" capture="environment" style="display:none"
             onchange="phpPrendrePose('${p.cle}',this)">
         </label>`;}).join('')}
     </div>
@@ -38618,6 +38734,18 @@ function posesGenre(prefix){
   else femme=isFemale(currentUser&&(currentUser._evol_gender||currentUser.gender));
   return femme?BPOSE_F:BPOSE;
 }
+// LA PHOTO N'A JAMAIS ETE OBLIGATOIRE — mais rien ne le disait. Trois grands
+// boutons rouges « AJOUTER » sous trois poses dessinees se lisent comme une
+// consigne, et des athletes restaient bloques sur leur bilan entier a cause
+// d'une photo qui ne passait pas. On l'ecrit donc, et on donne dans la foulee
+// la seule manœuvre qui debloque un HEIC d'iPhone sans rien regler : la
+// capture d'ecran, qui est toujours un PNG lisible par tout le monde.
+function _bilPhotoNote(){
+  return `<div style="margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:11px 13px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
+    <strong style="color:var(--text-strong)">Ces photos sont facultatives.</strong> Tu peux valider ton bilan sans elles et les ajouter plus tard.<br>
+    Une photo ne passe pas ? Fais une <strong style="color:var(--text-strong)">capture d’écran</strong> de cette photo, puis envoie la capture : elle passe à tous les coups.
+  </div>`;
+}
 // 3 cartes photo avec personnage neon : la pose a reproduire est montree au-dessus du bouton
 function bPhotoCards(prefix){
   const B=posesGenre(prefix);
@@ -38628,9 +38756,9 @@ function bPhotoCards(prefix){
     return `<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:var(--r-3);padding:14px 6px 12px;text-align:center">
       <img src="${p.img}" alt="${p.l}" style="height:118px;max-width:100%;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.4));margin-bottom:8px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#ccc;margin-bottom:9px">${p.l}</div>
-      <label style="display:inline-block;background:${done?'#001a00':'#1a0000'};border:1px solid ${done?'#22c55e':'var(--red)'};color:${done?'#22c55e':'var(--red)'};padding:6px 12px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:.5px">${done?' Ajoutée':'AJOUTER'} <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'${key}')"></label>
+      <label style="display:inline-block;background:${done?'#001a00':'#1a0000'};border:1px solid ${done?'#22c55e':'var(--red)'};color:${done?'#22c55e':'var(--red)'};padding:6px 12px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:.5px">${done?' Ajoutée':'AJOUTER'} <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="loadBilPhoto(this,'${key}')"></label>
     </div>`;
-  }).join('')+`</div>`;
+  }).join('')+`</div>`+_bilPhotoNote();
 }
 function bSlider(gid){
   const parsed=parseInt(String(bilData[gid]||'').match(/\d+/)?.[0]||0);
@@ -38950,6 +39078,7 @@ function bBodyFocus(id,on){
 function bLbl(txt){return`<div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:14px">${txt}</div>`;}
 function loadBilPhoto(input,key){
   const f=input.files[0];if(!f)return;
+  _viderChampFichier(input);
   _bilPhotoLoading++;
   const lbl=input.closest('label');
   // LE <input> VIT DANS LE <label> : écraser innerHTML le DÉTRUIT. On garde
@@ -38984,7 +39113,7 @@ function loadBilPhoto(input,key){
     _rendre();
     if(_gen!==_bilGen) return;
     if(lbl){ lbl.style.color=lblCoul; lbl.innerHTML=lblHtml; }
-    toast('Image illisible : réessaie avec une autre photo','var(--orange)');
+    toast(IMG_AIDE_FORMAT,'var(--orange)');
   });
 }
 
@@ -40709,7 +40838,7 @@ const BIL_STEPS=[
   // Step 6 : Photos de progression
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-2);padding:16px;margin-bottom:14px;text-align:center">`+
-    `<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:6px;color:var(--text)">Photos de progression${grossesseSuspend(currentUser)?' <span style="font-weight:600;color:var(--sub)">— facultatif</span>':''}</div>`+
+    `<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:6px;color:var(--text)">Photos de progression <span style="font-weight:600;color:var(--sub)">— facultatif</span></div>`+
     `<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous : même endroit, même lumière qu'au début :<br><strong style="color:var(--red-text)">Face · Dos · Profil</strong></div></div>`+
     bPhotoCards('bil')+
     `</div>`
@@ -40808,7 +40937,7 @@ const DEB_STEPS=[
   // Step 5 : Photos de départ
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de départ </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-2);padding:16px;margin-bottom:14px;text-align:center">`+
-    `<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:6px;color:var(--text)">Photos de départ</div>`+
+    `<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:6px;color:var(--text)">Photos de départ <span style="font-weight:600;color:var(--sub)">— facultatif</span></div>`+
     `<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, tenue légère, lumière naturelle : <strong style="color:var(--red-text)">touche AJOUTER sous chaque pose</strong>.</div></div>`+
     bPhotoCards('deb')+
     `</div>`
@@ -41745,6 +41874,7 @@ async function disableWoReminder(){
 }
 function loadPhoto(input,imgId){
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   compressImage(f,1200,0.75,data=>{
     const img=document.getElementById(imgId);img.src=data;img.style.display='block';
     const ph=document.getElementById(imgId+'-ph');if(ph) ph.style.display='none';
@@ -61319,7 +61449,7 @@ function _htmlCadreImportCapture(){
         Pas noté tes stats ? Envoie la capture d'écran de ton application de montre, pas ou sommeil, vue 7 jours de préférence : les chiffres sont lus et remplis tout seuls.
         <b style="color:var(--text-dim);font-weight:700">La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.</b>
       </div>
-      <input type="file" accept="image/*" style="display:none" onchange="importerCaptureStats(this)">
+      <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
       <button onclick="this.previousElementSibling.click()" style="width:100%;padding:10px;background:linear-gradient(180deg,#131313,#0c0c0c);border:1px solid var(--border);color:#a8a8a8;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;cursor:pointer">Envoyer une capture</button>
     </div>`;
 }
@@ -61938,6 +62068,7 @@ function _updateAnalyzeBtn(){
 }
 function loadProgPhoto(input){
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   compressImage(f,1200,0.75,data=>{
     progPhotoData=data;
     const img=document.getElementById('prog-photo-preview');
@@ -61967,6 +62098,7 @@ function clearProgPhoto(){
 function loadProgPhoto2(input){
   if(!_importLegacyOuvert()) return _refusImportLegacy();
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   compressImage(f,1600,0.92,data=>{
     progPhoto2Data=data;
     // Persist in localStorage — Firebase strips photo2 on every push
@@ -62910,6 +63042,7 @@ function showDrivePdfModal(driveUrl,targetEmail){
 async function _parsePdfFromDriveFile(input){
   if(!_importLegacyOuvert()) return _refusImportLegacy();
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   const targetEmail=_pendingPdfTarget;
   closeModal();
   toast('Lecture du PDF en cours…');
@@ -63531,35 +63664,28 @@ function saveCoachPhone(){
   _renderCoachPhonePreview(raw);
   _renderContactCoach();
 }
+// Meme contrat qu'avant — une promesse qui rend un JPEG en base64 ou null —
+// mais elle passe par imageVersJpeg. Les trois defauts de la version d'origine
+// disparaissent avec elle : le FileReader sans onerror et le toDataURL sans
+// try laissaient la promesse EN SUSPENS POUR TOUJOURS (photo du coach, photo
+// de l'athlete, photos de bilan cote coach, images de la vitrine : quatre
+// ecrans ou il ne se passait alors plus rien du tout), et un HEIC d'iPhone
+// etait refuse sans que le systeme ait eu sa chance de le decoder.
 function _resizeImage(file,maxW,maxH,quality){
-  return new Promise(resolve=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      const img=new Image();
-      img.onload=()=>{
-        const sc=Math.min(maxW/img.width,maxH/img.height,1);
-        const cv=document.createElement('canvas');
-        cv.width=Math.round(img.width*sc);cv.height=Math.round(img.height*sc);
-        cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-        resolve(cv.toDataURL('image/jpeg',quality||0.75));
-      };
-      img.onerror=()=>resolve(null);
-      img.src=e.target.result;
-    };
-    r.readAsDataURL(file);
-  });
+  return imageVersJpeg(file,maxW,maxH,quality||0.75);
 }
 function uploadCoachPhoto(input){
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   // 20 Mo, comme les envois de PDF de ce fichier. L'ancien plafond de 3 Mo
   // datait d'avant la compression : il refusait une photo de téléphone
   // ordinaire pour protéger un quota que le redimensionnement en 200×200
   // rend hors d'atteinte. Ce qui reste plafonné, c'est le décodage.
-  if(f.size>20*1024*1024){toast('Image trop lourde (max 20 Mo)','var(--orange)');return;}
+  if(f.size>40*1024*1024){toast('Image trop lourde (max 40 Mo) : envoie une capture d’écran de la photo.','var(--orange)');return;}
   _resizeImage(f,200,200,0.80).then(b64=>{
     // Le silence d'avant était le pire des cas : rien ne changeait à
     // l'écran, et rien ne disait pourquoi.
-    if(!b64){toast('Image illisible : réessaie avec une autre photo','var(--orange)');return;}
+    if(!b64){toast(IMG_AIDE_FORMAT,'var(--orange)');return;}
     currentUser.coachPhoto=b64;
     // La promesse est RETENUE : c’est elle que toastSync attend, et sans elle
     // le « ✓ » ne mesurait que l’écriture locale.
@@ -63583,11 +63709,12 @@ function uploadCoachPhoto(input){
 function _lireImage(input,maxW,maxH,apres){
   const f=input.files&&input.files[0];
   if(!f) return;
-  if(f.size>20*1024*1024){toast('Image trop lourde (max 20 Mo)','var(--orange)');return;}
+  _viderChampFichier(input);
+  if(f.size>40*1024*1024){toast('Image trop lourde (max 40 Mo) : envoie une capture d’écran de la photo.','var(--orange)');return;}
   _resizeImage(f,maxW,maxH,0.82).then(b64=>{
-    if(!b64){toast('Image illisible : réessaie avec une autre','var(--orange)');return;}
+    if(!b64){toast(IMG_AIDE_FORMAT,'var(--orange)');return;}
     apres(b64);
-  }).catch(()=>toast('Image illisible','var(--orange)'));
+  }).catch(()=>toast(IMG_AIDE_FORMAT,'var(--orange)'));
 }
 // Les trois images de la vitrine. L'apercu est mis a jour tout de suite :
 // sans lui, rien ne dit que le fichier a ete pris en compte.
@@ -64172,13 +64299,14 @@ function addCoachBannerRow(imageUrl, linkUrl){
   <label style="cursor:pointer;display:block">
     <div class="banner-preview">${previewHtml}</div>
     <div style="text-align:center;font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;letter-spacing:1px">APPUYER POUR CHANGER LA PHOTO</div>
-    <input type="file" accept="image/*" style="display:none" onchange="handleBannerImage(this)">
+    <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="handleBannerImage(this)">
   </label>
   <input type="url" placeholder="URL du lien au clic (https://…)" value="${escapeHtml(linkUrl||'')}" style="width:100%;font-size:var(--fs-sm);padding:8px 10px;box-sizing:border-box;border-radius:var(--r-1)">`;
   list.appendChild(row);
 }
 function handleBannerImage(input){
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   const row=input.closest('.banner-row');
   const prev=row?.querySelector('.banner-preview');
   if(prev) prev.innerHTML='<div class="skeleton fx-loop" style="height:90px;border-radius:var(--r-1)"></div>';
@@ -64186,6 +64314,9 @@ function handleBannerImage(input){
     if(!row) return;
     row.dataset.imageUrl=b64;
     if(prev) prev.innerHTML=`<img src="${b64}" style="width:100%;height:auto;border-radius:var(--r-1);display:block">`;
+  },()=>{
+    if(prev) prev.innerHTML='';
+    toast(IMG_AIDE_FORMAT,'var(--orange)');
   });
 }
 function saveCoachBanners(){
@@ -64216,11 +64347,12 @@ function _renderPromoBanners(coach){
 }
 function uploadAthletePhoto(input){
   const f=input.files[0];if(!f) return;
+  _viderChampFichier(input);
   // Même raison que pour l'avatar du coach : la compression en 300×300 rend
   // la taille du fichier d'origine indifférente au quota.
-  if(f.size>20*1024*1024){toast('Image trop lourde (max 20 Mo)','var(--orange)');return;}
+  if(f.size>40*1024*1024){toast('Image trop lourde (max 40 Mo) : envoie une capture d’écran de la photo.','var(--orange)');return;}
   _resizeImage(f,300,300,0.80).then(b64=>{
-    if(!b64){toast('Image illisible : réessaie avec une autre photo','var(--orange)');return;}
+    if(!b64){toast(IMG_AIDE_FORMAT,'var(--orange)');return;}
     currentUser.athletePhoto=b64;
     const ok=saveUser();
     const circle=document.getElementById('atp-photo-circle');
