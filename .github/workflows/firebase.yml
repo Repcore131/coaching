@@ -1,0 +1,78 @@
+# Deploiement de sync.web.app depuis GitHub, sans machine locale.
+#
+# POURQUOI CE FICHIER EXISTE. Le dossier _site que firebase.json publie est
+# dans .gitignore : il n'a jamais vecu que sur un disque, et ce disque a ete
+# perdu. On le reassemble donc ICI, a chaque deploiement, a partir des seuls
+# fichiers presents dans le depot — la source de verite.
+#
+# CE QUI ENTRE DANS _site : les pages publiques, l'app, le blog, les images.
+# CE QUI N'Y ENTRE PAS, deliberement : functions/, scripts/, docs/, les notes
+# de travail et database.rules.json. Rien de tout cela n'a a etre servi par
+# l'hebergement — et un deploiement REMPLACE le site entier.
+name: Deployer sur Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'functions/**'
+      - 'scripts/**'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: firebase-hosting
+  cancel-in-progress: false
+
+jobs:
+  deployer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Assembler _site
+        run: |
+          set -e
+          rm -rf _site && mkdir -p _site
+          cp -a app blog _site/
+          cp -a index.html legal.html privacy.html terms.html _site/
+          cp -a logo.png og-image.png robots.txt sitemap.xml _site/
+          if [ -f .nojekyll ]; then cp -a .nojekyll _site/; fi
+          echo "Fichiers assembles : $(find _site -type f | wc -l)"
+
+      # GARDE-FOU. Un deploiement remplace TOUT le site : si l'assemblage a
+      # rate, on prefere ne rien envoyer plutot que de vider sync.web.app.
+      - name: Verifier avant d'envoyer
+        run: |
+          set -e
+          test -f _site/index.html
+          test -f _site/app/index.html
+          test -f _site/app/sw.js
+          n=$(find _site -type f | wc -l)
+          if [ "$n" -lt 400 ]; then
+            echo "Seulement $n fichiers : assemblage suspect, on n'envoie rien."
+            exit 1
+          fi
+          echo "Version du service worker :"
+          head -1 _site/app/sw.js
+
+      - name: Deployer
+        env:
+          CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -e
+          if [ -z "$CLE" ]; then
+            echo "Le secret FIREBASE_SERVICE_ACCOUNT est absent."
+            echo "Depot > Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+          npm install -g firebase-tools
+          printf '%s' "$CLE" > "$RUNNER_TEMP/cle.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/cle.json"
+          firebase deploy --only hosting --project repcore-sync --non-interactive
+          rm -f "$RUNNER_TEMP/cle.json"
