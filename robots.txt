@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /i
 
 Sitemap: https://repcore131.github.io/coaching/sitemap.xml

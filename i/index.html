@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>RepCore — ton accès</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#080808">
+<link rel="icon" href="../app/icons/icon-192x192.png">
+<!--
+  POURQUOI CETTE PAGE EXISTE.
+  Le lien envoye en message prive est court : repcore-sync.web.app/i
+  Il n'a longtemps pointe sur RIEN — l'hebergement repondait « Page Not Found »
+  et l'athlete etait perdu des le premier clic. Cette page EST ce lien.
+
+  CE QU'ELLE FAIT, ET RIEN DE PLUS : elle amene sur /app/ en gardant les
+  parametres du lien. L'installation, elle, ne peut PAS se declencher ici :
+  le manifeste vit dans /app/ et n'a pas de "scope" — une page hors de ce
+  dossier ne peut pas proposer l'installation, le navigateur refuse. C'est
+  donc l'app qui propose son bouton, comme le dit le message envoye.
+
+  LE CAS QUI CASSE TOUT : le navigateur interne d'Instagram. Il n'installe
+  aucune PWA et ne garde rien. On ne redirige donc PAS depuis ce navigateur :
+  on explique, et on donne le lien a copier.
+-->
+<style>
+:root{--fond:#080808;--carte:#141414;--bord:#2a2a2a;--txt:#f2f2f2;--gris:#a8a8a8;--vif:#c9f24d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fond);color:var(--txt);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  padding:24px 16px;display:flex;justify-content:center}
+.boite{width:100%;max-width:520px}
+.logo{width:64px;height:64px;border-radius:16px;display:block;margin:8px auto 20px}
+h1{font-size:22px;margin:0 0 8px;text-align:center}
+p{margin:0 0 14px;color:var(--gris)}
+.carte{background:var(--carte);border:1px solid var(--bord);border-radius:14px;padding:16px;margin:16px 0}
+.bouton{display:block;width:100%;text-align:center;text-decoration:none;
+  background:var(--vif);color:#0a0a0a;font-weight:700;font-size:17px;
+  padding:15px 18px;border-radius:12px;border:0;cursor:pointer;margin:6px 0}
+.bouton.sec{background:transparent;color:var(--txt);border:1px solid var(--bord);font-weight:600;font-size:15px}
+ol{margin:0;padding-left:20px}li{margin:8px 0}
+code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 6px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;word-break:break-all}
+.petit{font-size:13px;color:var(--gris);text-align:center;margin-top:18px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="boite">
+  <img class="logo" src="../app/icons/icon-192x192.png" alt="RepCore">
+  <h1>Ton accès RepCore</h1>
+
+  <!-- Navigateur normal : on ouvre l'app. -->
+  <div id="ok" hidden>
+    <p style="text-align:center">Ouverture de l'application…</p>
+    <a class="bouton" id="go" href="../app/">Ouvrir RepCore</a>
+    <div class="carte">
+      <ol>
+        <li>L'app s'ouvre, un bouton te propose de <strong>l'installer</strong> sur ton écran d'accueil.</li>
+        <li>Elle te demande ensuite ton <strong>code d'invitation</strong> (format <code>RC-XXXX-XXXX</code>), celui que ton coach t'a envoyé.</li>
+      </ol>
+      <p style="margin:12px 0 0;font-size:14px">Sur iPhone, si aucun bouton n'apparaît : <strong>Partager</strong> puis <strong>Sur l'écran d'accueil</strong>.</p>
+    </div>
+  </div>
+
+  <!-- Navigateur interne d'une application (Instagram, Messenger, TikTok…). -->
+  <div id="interne" hidden>
+    <div class="carte">
+      <p style="color:var(--txt);margin-bottom:10px"><strong>⚠️ Tu es dans le navigateur d'Instagram.</strong>
+      L'application ne peut pas s'installer depuis ici.</p>
+      <ol>
+        <li>Touche le menu <strong>⋯</strong> (iPhone : <strong>Aa</strong> ou <strong>⋯</strong>) en haut de l'écran.</li>
+        <li>Choisis <strong>« Ouvrir dans le navigateur »</strong> (Safari sur iPhone, Chrome sur Android).</li>
+      </ol>
+      <p style="margin:12px 0 6px">Sinon, copie ce lien et colle-le dans Safari ou Chrome :</p>
+      <p><code id="lien"></code></p>
+      <button class="bouton" id="copier" type="button">Copier le lien</button>
+      <a class="bouton sec" id="quand-meme" href="../app/">Continuer ici quand même</a>
+    </div>
+  </div>
+
+  <p class="petit">RepCore — <a href="../" style="color:var(--gris)">en savoir plus</a></p>
+</div>
+<script>
+(function(){
+  var p=new URLSearchParams(location.search);
+  // « c » et « code » sont les raccourcis qu'on peut ecrire a la main dans un
+  // message ; l'app, elle, ne lit que « inv ». On traduit ici plutot que de
+  // demander a l'athlete de comprendre la difference.
+  var c=(p.get('c')||p.get('code')||'').trim().toUpperCase();
+  if(c&&!p.get('inv')) p.set('inv',c);
+  p.delete('c');p.delete('code');
+  var q=p.toString();
+  // Chemin RELATIF : la meme page sert sur repcore-sync.web.app/i/ et sur
+  // repcore131.github.io/coaching/i/, ou « /app/ » ne designerait rien.
+  var cible='../app/'+(q?'?'+q:'')+location.hash;
+
+  var ua=navigator.userAgent||'';
+  // Les navigateurs internes se declarent tous dans l'UA. On ne teste que
+  // ceux d'ou un lien RepCore arrive vraiment.
+  var interne=/Instagram|FBAN|FBAV|FB_IAB|FBIOS|Messenger|TikTok|musical_ly|Snapchat|Line\/|Twitter|Threads/i.test(ua);
+
+  document.getElementById('go').href=cible;
+  document.getElementById('quand-meme').href=cible;
+
+  if(interne){
+    var abs=new URL(cible,location.href).href;
+    document.getElementById('lien').textContent=abs;
+    document.getElementById('interne').hidden=false;
+    document.getElementById('copier').addEventListener('click',function(){
+      var b=this;
+      function fait(){b.textContent='Lien copié ✓';}
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(abs).then(fait,repli);
+      }else repli();
+      function repli(){
+        // execCommand est obsolete, mais c'est le SEUL recours dans les
+        // webviews qui refusent l'API presse-papier.
+        try{
+          var t=document.createElement('textarea');
+          t.value=abs;t.style.position='fixed';t.style.opacity='0';
+          document.body.appendChild(t);t.select();
+          document.execCommand('copy');document.body.removeChild(t);fait();
+        }catch(e){b.textContent='Copie impossible : garde le lien affiché.';}
+      }
+    });
+    return;
+  }
+
+  document.getElementById('ok').hidden=false;
+  // replace() et non href : le retour arriere doit ramener a Instagram, pas
+  // rejouer cette page en boucle.
+  setTimeout(function(){location.replace(cible);},900);
+})();
+</script>
+<noscript>
+  <p style="text-align:center"><a class="bouton" href="../app/">Ouvrir RepCore</a></p>
+</noscript>
+</body>
+</html>

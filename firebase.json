@@ -19,6 +19,12 @@
     "ignore": [
       "**/.*"
     ],
+    "rewrites": [
+      {
+        "source": "/i",
+        "destination": "/i/index.html"
+      }
+    ],
     "headers": [
       {
         "source": "/app/sw.js",
