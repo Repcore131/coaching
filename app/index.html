@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1167';
+window.RC_BUILD='1168';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -78221,58 +78221,124 @@ function saveCoachPhone(){
   _renderCoachPhonePreview(raw);
   _renderContactCoach();
 }
-// UNE PROMESSE QUI PEND EST PIRE QU'UNE ERREUR : elle n'affiche rien.
+// ══ DECODER L'IMAGE AVANT DE LA REDIMENSIONNER ═══════════════════════════
 //
-// Seul img.onerror etait traite. Si FileReader echouait — fichier retire de la
-// galerie entre la selection et la lecture, permission refusee, quota disque —
-// ou si l'utilisateur annulait, r.onload n'etait jamais appele et la promesse
-// ne se resolvait JAMAIS. Le .then() des appelants n'arrivait pas, aucun toast
-// ne sortait, le rond restait vide : la personne concluait que l'app etait
-// cassee, et elle n'avait pas tort.
+// LE VRAI DEFAUT ETAIT EN AMONT. _resizeImage passait par FileReader puis une
+// <img> alimentee en base64 : un seul chemin, et le plus fragile des trois.
+// Un HEIC d'iPhone n'y arrive pas, un fichier de 12 Mpx triple sa taille en
+// memoire au passage, et sur iOS toDataURL rend parfois « data:, » SANS RIEN
+// SIGNALER — une chaine vide etait alors enregistree A LA PLACE de la photo,
+// l'emplacement s'affichait vide au rechargement, et aucun message n'etait
+// jamais apparu. Rendre la photo facultative masquait ce defaut ; ceci le
+// corrige, et pour les onze points d'envoi du produit d'un coup.
 //
-// Trois sorties de plus, toutes vers resolve(null) — la valeur que TOUS les
-// appelants savent deja traiter :
-//   • r.onerror  : la lecture a echoue ;
-//   • r.onabort  : elle a ete interrompue ;
-//   • un delai de 15 s : le cas qu'aucun evenement ne couvre — un decodage
-//     qui part sur une image enorme et ne rend jamais la main. 15 s parce
-//     qu'une photo de 12 Mpx se redimensionne en 2 a 3 s sur un telephone
-//     ancien : au-dela, plus rien n'arrivera.
-//
-// CE QUE CA NE COUVRE PAS : une image que le navigateur decode mal sans le
-// dire — un HEIC rendu tout noir, par exemple. On rend alors un JPEG valide,
-// et seul l'oeil peut le voir.
+// Ces deux fonctions viennent de la branche ou elles avaient ete ecrites pour
+// ce probleme precis. Elles sont reprises telles quelles.
+const IMG_DECODE_MS=25000;
+// Decodage d'un fichier image. Trois chemins, du plus econome au plus ancien,
+// essayes dans l'ordre :
+//  1. createImageBitmap(file) — decode SANS passer par une chaine base64 (le
+//     detour historique triplait la memoire occupee par une photo de 12 Mpx,
+//     et c'est ce qui faisait echouer les gros fichiers sur un vieux telephone)
+//     et s'appuie sur les codecs du systeme : c'est ce qui fait passer un HEIC
+//     partout ou le systeme sait le lire.
+//  2. blob: dans une <img> — meme economie de memoire, disponible partout.
+//  3. FileReader + dataURL — le chemin d'origine, garde en dernier recours.
+// Rend { src, w, h, liberer }. liberer() DOIT etre appele : sans lui le blob
+// et le bitmap restent en memoire pour la duree de la session.
+function _decoderImage(file){
+  return new Promise((resolve,reject)=>{
+    let fini=false,minuteur=null;
+    const gagne=d=>{ if(fini) return; fini=true; clearTimeout(minuteur); resolve(d); };
+    const perdu=()=>{ if(fini) return; fini=true; clearTimeout(minuteur); reject(); };
+    minuteur=setTimeout(perdu,IMG_DECODE_MS);
+    const depuisImg=(im,liberer)=>gagne({src:im,w:im.naturalWidth||im.width,
+      h:im.naturalHeight||im.height,liberer:liberer||function(){}});
+    // Chemin 3.
+    const parLecteur=()=>{
+      const r=new FileReader();
+      r.onerror=perdu; r.onabort=perdu;
+      r.onload=ev=>{
+        const im=new Image();
+        im.onerror=perdu;
+        im.onload=()=>depuisImg(im);
+        im.src=ev.target.result;
+      };
+      try{ r.readAsDataURL(file); }catch(e){ perdu(); }
+    };
+    // Chemin 2. Son echec retombe sur le chemin 3 plutot que d'abandonner :
+    // quelques navigateurs anciens refusent un blob: comme source d'image.
+    const parBlob=()=>{
+      let url;
+      try{ url=URL.createObjectURL(file); }catch(e){ return parLecteur(); }
+      const rendre=()=>{ try{ URL.revokeObjectURL(url); }catch(e){} };
+      const im=new Image();
+      im.onerror=()=>{ rendre(); parLecteur(); };
+      im.onload=()=>depuisImg(im,rendre);
+      im.src=url;
+    };
+    // Chemin 1.
+    if(typeof createImageBitmap==='function'){
+      let p=null;
+      try{ p=createImageBitmap(file); }catch(e){ p=null; }
+      if(p&&typeof p.then==='function'){
+        p.then(bm=>gagne({src:bm,w:bm.width,h:bm.height,
+          liberer(){ try{ bm.close&&bm.close(); }catch(e){} }}),parBlob);
+        return;
+      }
+    }
+    parBlob();
+  });
+}
+// ENCODAGE, AVEC REPLI SUR PLUS PETIT. Deux echecs distincts sont couverts :
+// toDataURL qui JETTE faute de memoire, et — propre a iOS — toDataURL qui
+// rend « data:, » sans rien signaler. Le second passait pour une reussite :
+// une chaine vide etait enregistree A LA PLACE de la photo, l'emplacement
+// s'affichait vide au rechargement, et aucun message n'etait jamais apparu.
+// On redescend donc en taille jusqu'a obtenir un JPEG credible : une photo
+// plus petite vaut mieux qu'un emplacement vide.
+function _canvasVersJpeg(source,w,h,quality){
+  for(const ech of [1,0.7,0.5,0.35,0.22]){
+    const cw=Math.max(1,Math.round(w*ech)),ch=Math.max(1,Math.round(h*ech));
+    try{
+      const cv=document.createElement('canvas');
+      cv.width=cw; cv.height=ch;
+      const cx=cv.getContext('2d');
+      if(!cx) continue;
+      cx.imageSmoothingEnabled=true; cx.imageSmoothingQuality='high';
+      cx.drawImage(source,0,0,cw,ch);
+      const url=cv.toDataURL('image/jpeg',quality||0.75);
+      // 512 octets : un JPEG utile ne descend pas la-dessous, « data:, » si.
+      if(url&&url.length>512&&url.indexOf('data:image/jpeg')===0) return url;
+    }catch(e){}
+  }
+  return null;
+}
+// _resizeImage garde sa signature et son contrat — une promesse qui rend un
+// data-URL JPEG ou null, JAMAIS d'attente sans fin. Ses sept appelants n'ont
+// pas a savoir que le chemin a change.
 function _resizeImage(file,maxW,maxH,quality){
   return new Promise(resolve=>{
     let fini=false;
-    // Une seule sortie possible : sans ce garde, le delai de garde pourrait
-    // resoudre apres un succes et rien ne le signalerait.
     const sortir=v=>{ if(fini) return; fini=true; clearTimeout(minuteur); resolve(v); };
-    const minuteur=setTimeout(()=>sortir(null),15000);
-    const r=new FileReader();
-    r.onload=e=>{
-      const img=new Image();
-      img.onload=()=>{
-        try{
-          const sc=Math.min(maxW/img.width,maxH/img.height,1);
-          const cv=document.createElement('canvas');
-          cv.width=Math.round(img.width*sc);cv.height=Math.round(img.height*sc);
-          cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-          sortir(cv.toDataURL('image/jpeg',quality||0.75));
-        }catch(err){
-          // toDataURL leve sur un canvas « souille » ou une image de taille
-          // aberrante. Sans ce catch, l'exception partait dans le vide du
-          // gestionnaire d'evenement et la promesse pendait, elle aussi.
-          sortir(null);
-        }
-      };
-      img.onerror=()=>sortir(null);
-      img.src=e.target.result;
-    };
-    r.onerror=()=>sortir(null);
-    r.onabort=()=>sortir(null);
-    try{ r.readAsDataURL(file); }
-    catch(err){ sortir(null); }
+    // 30 s, soit APRES les 25 s de IMG_DECODE_MS : le delai du decodeur doit
+    // jouer en premier et rendre la main proprement. Celui-ci ne couvre que
+    // l'encodage, ou rien ne peut pendre en theorie — c'est une ceinture.
+    const minuteur=setTimeout(()=>sortir(null),30000);
+    let img=null;
+    try{
+      _decoderImage(file).then(d=>{
+        img=d;
+        if(!d||!(d.w>0)||!(d.h>0)) return sortir(null);
+        const sc=Math.min(maxW/d.w,maxH/d.h,1);
+        const url=_canvasVersJpeg(d.src,d.w*sc,d.h*sc,quality||0.75);
+        try{ d.liberer&&d.liberer(); }catch(e){}
+        sortir(url||null);
+      },()=>sortir(null)).catch(()=>{
+        try{ img&&img.liberer&&img.liberer(); }catch(e){}
+        sortir(null);
+      });
+    }catch(e){ sortir(null); }
   });
 }
 function uploadCoachPhoto(input){
