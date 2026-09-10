@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1168';
+window.RC_BUILD='1169';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5744,13 +5744,23 @@ const COACH_PHOTO='icons/coach.jpg';
     <div>
       <label for="r-photo">Photo de profil <span style="color:var(--text-faint);font-weight:500">(facultative)</span></label>
       <div style="display:flex;align-items:center;gap:14px">
-        <div id="r-photo-rond" style="width:76px;height:76px;border-radius:var(--r-full);
+        <!-- LE ROND EST LA CIBLE. Le champ natif se resume, sur Android, a un
+             bouton « Choisir un fichier » de huit millimetres : on le rate au
+             doigt, et « impossible de cliquer dessus » etait litteralement
+             vrai. Le rond de 76 px porte le meme <label for="r-photo"> et
+             ouvre donc le meme selecteur. -->
+        <label for="r-photo" id="r-photo-rond" style="width:76px;height:76px;border-radius:var(--r-full);
           overflow:hidden;flex-shrink:0;background:var(--surface-1);border:2px dashed var(--border);
           display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:var(--fs-2xs);
-          text-align:center;line-height:1.2;padding:6px;box-sizing:border-box">Aucune<br>photo</div>
+          text-align:center;line-height:1.2;padding:6px;box-sizing:border-box;cursor:pointer">Aucune<br>photo</label>
         <div style="flex:1;min-width:0">
-          <input type="file" id="r-photo" accept="image/*,.heic,.heif,.hif" onchange="_inscriptionPhoto(this)"
-            style="width:100%;font-size:var(--fs-xs)">
+          <!-- accept="image/*" ET RIEN D'AUTRE. La liste d'extensions ajoutee
+               plus tot (.heic/.heif/.hif) etait censee aider ; sur plusieurs
+               selecteurs Android elle fait l'inverse et GRISE tous les
+               fichiers. Le decodeur a trois chemins rend cette liste inutile :
+               il lit le HEIC par les codecs du systeme, quel que soit le nom. -->
+          <input type="file" id="r-photo" accept="image/*" onchange="_inscriptionPhoto(this)"
+            style="width:100%;font-size:var(--fs-xs);min-height:44px">
           <div class="sub" style="font-size:var(--fs-xs);margin-top:5px">Une photo de toi, de face : c'est ce que ton coach verra sur son tableau de bord. Tu peux continuer sans, et l'ajouter plus tard depuis ton profil.</div>
           <div id="r-photo-repli"></div>
         </div>
