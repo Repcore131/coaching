@@ -39201,6 +39201,27 @@ vendredi 78 6h 44m
           return _echec('un exercice tout dorsal reste de face');
         return woVueAvatar([])==='face'?true
           :_echec('sans muscle, la face n\'est plus la vue par défaut');})());
+      // ── LE REPERE DE VERSION DOIT DIRE VRAI ───────────────────────────
+      // window.RC_BUILD est le seul moyen de savoir, depuis un telephone, si
+      // l'app affichee est bien celle qu'on vient de livrer. Le 10/09/2026 il
+      // annoncait 1125 alors que le service worker livre etait en 1166 :
+      // quatre correctifs successifs ont ete indiscernables les uns des autres
+      // pour cette seule raison.
+      // On lit sw.js, PAS la source de ce fichier : une sonde qui lit sa
+      // propre source finit par se trouver elle-meme et passer au vert sans
+      // rien verifier — le depot s'est deja fait avoir cinq fois.
+      ok('Le repère de version correspond au service worker livré',(()=>{
+        let src='';
+        try{
+          const r=new XMLHttpRequest();
+          r.open('GET','sw.js?v='+Date.now(),false); r.send(null);
+          src=String(r.responseText||'');
+        }catch(e){ return _echec('sw.js illisible : '+e.message); }
+        const m=/CACHE\s*=\s*['"]repcore-v(\d+)['"]/.exec(src);
+        if(!m) return _echec('numéro de CACHE introuvable dans sw.js');
+        const build=String(window.RC_BUILD||'');
+        return build===m[1]?true
+          :_echec('RC_BUILD='+build+' alors que sw.js est en v'+m[1]);})());
     })();
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }

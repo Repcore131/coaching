@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1083';
+const CACHE = 'repcore-v1166';
 // LA SEULE VERSION QUI NE REPORTE PAS LES ILLUSTRATIONS.
 // Le report d'un cache a l'autre traite /exercices/ en PRIORITAIRE : c'est
 // ce qui evite de retelecharger 3,3 Mo a chaque deploiement. Mais le
@@ -11,7 +11,39 @@ const CACHE = 'repcore-v1083';
 //
 // LE 26/08/2026, MEME CAS : 49 photos de pectoraux reecrites sous leur nom.
 // La constante revient donc a CACHE le temps de cette version-ci.
-const PURGE_EXERCICES = 'repcore-v1073';
+//
+// LE 07/09/2026, TROISIEME FOIS : reprise du guide des exercices du coach.
+//
+// LA v1138 A PURGE POUR RIEN, ET LA LECON VAUT D'ETRE ECRITE. Elle portait
+// la tuyauterie des renommages, PAS les nouvelles images : la purge a joue
+// sur un dossier identique. Les images n'arrivent que maintenant, avec la
+// v1139 — et un client deja passe en v1138 ne repurgerait JAMAIS si on s'en
+// tenait a ce numero, puisque c'est le changement de CACHE qui declenche
+// activate. Regler PURGE_EXERCICES sans monter CACHE ne purge personne.
+//
+// 366 illustrations reecrites SOUS LE MEME NOM DE FICHIER, 24 neuves, et le
+// dossier passe de 3,3 a 8,2 Mo. La constante valait donc CACHE en v1139.
+//
+// LE 07/09/2026 ENCORE, v1140 : LES DEUX TAILLES. Les 427 fiches repassent de
+// 640 a 900 px SOUS LE MEME NOM — elles etaient floues des qu'on les affichait
+// en width:100% dans une modale de 480 px — et 427 vignettes de 256 px
+// arrivent dans app/exercices/vignettes/. Meme raison, meme remede : la
+// constante vaut CACHE une fois de plus.
+//
+// LES VIGNETTES SONT COUVERTES SANS RIEN CHANGER. _prioritaire teste
+// /\/vendor\/|\/exercices\// et la branche de purge /\/exercices\// :
+// « app/exercices/vignettes/squat.webp » contient « /exercices/ », il est donc
+// deja reporte en priorite ET deja purge avec le reste. Verifie, et une
+// assertion de testExercices() le tient desormais — le jour ou quelqu'un
+// resserrerait ce motif en /\/exercices\/[^/]+$/, les vignettes tomberaient du
+// report sans un mot.
+//
+// ET LA v1141 L'A REMISE A UNE VALEUR ANCIENNE, comme annonce. Les lots qui
+// ont suivi ne touchent AUCUNE image — EX_VIDEOS, les methodes
+// d'intensification et la video de methode vivent dans index.html. Le dossier
+// /exercices/ est donc reporte normalement, et les 12,7 Mo ne repartent pas du
+// reseau. La constante ne redeviendra CACHE qu'au prochain reseeding d'images.
+const PURGE_EXERCICES = 'repcore-v1140';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -193,8 +225,15 @@ self.addEventListener('activate', e => {
       // le transporter d'une version à l'autre lui faisait annoncer la
       // PRÉCÉDENTE. C'est aussi le seul fichier dont une copie périmée se
       // recopierait indéfiniment : chaque report la reconduirait.
+      //
+      // database.rules.json REJOINT LA LISTE. Il n'a jamais eu sa place dans un
+      // cache — la suite le lit pour comparer les regles de la base au code — et
+      // depuis que le handler fetch le laisse au reseau, aucune version neuve ne
+      // peut plus en contenir. Mais un cache d'AVANT ce lot en garde une copie,
+      // et sans cette ligne le report la ferait passer de version en version,
+      // indefiniment, pour un fichier que plus personne ne lira jamais.
       const _exclu = u => /\/index\.html$/.test(u) || /\/tests\.js$/.test(u)
-        || /\/sw\.js$/.test(u)
+        || /\/sw\.js$/.test(u) || /\/database\.rules\.json$/.test(u)
         || (PURGE_EXERCICES === CACHE && /\/exercices\//.test(u));
       // LA BASE ALIMENTAIRE D'ABORD, ET HORS BUDGET. Elle n'entre dans le
       // cache que par un prefetch explicite, et le report ne la connaissait
@@ -284,7 +323,18 @@ self.addEventListener('fetch', e => {
   // index.html : network-first AVEC DÉLAI DE GARDE. Toujours pas cache-first —
   // la mise à jour doit rester rapide — mais le réseau ne peut plus retenir
   // l'affichage au-delà de SW_DELAI_RESEAU_MS quand une copie existe.
-  if (url.includes('index.html') || url.endsWith('/') || url.endsWith('/coaching/')) {
+  // ⚠ /i EST UNE NOUVELLE ENTREE DE CACHE, et c'est le piege de cette route.
+  // Le handler met en cache PAR URL : sans cette ligne, /i tombait dans la
+  // branche generique — cache-first, sans mise a jour reseau — et quiconque
+  // entre par le lien court restait sur la version du jour de sa premiere
+  // visite, indefiniment. Il sert index.html : il doit etre traite comme lui,
+  // en reseau-d'abord avec le meme delai de garde.
+  //
+  // On compare le CHEMIN, pas la fin de l'URL : endsWith('/i') attraperait
+  // aussi n'importe quel fichier nomme « i » ailleurs sur le site.
+  const _chemin0 = (() => { try { return new URL(url).pathname; } catch (e) { return ''; } })();
+  if (url.includes('index.html') || url.endsWith('/') || url.endsWith('/coaching/')
+      || _chemin0 === '/i') {
     e.respondWith((async () => {
       const reseau = fetch(e.request).then(r => {
         // La mise en cache est DÉTACHÉE de la réponse servie : si le quota
@@ -326,7 +376,36 @@ self.addEventListener('fetch', e => {
   //
   // Ni lecture ni écriture : on rend la main au navigateur, qui sait gérer le
   // script d'un service worker mieux que nous.
-  if (/\/sw\.js$/.test(url.split('?')[0])) return;
+  //
+  // ══ ET LES DEUX FICHIERS DE DIAGNOSTIC AVEC LUI ═══════════════════════
+  //
+  // tests.js ÉTAIT DÉJÀ DÉCLARÉ EXCLU en deux endroits — il n'est pas dans
+  // ASSETS, et _exclu l'écarte du report d'un cache à l'autre — mais la branche
+  // générique, tout en bas, le rattrapait au premier chargement et le mettait
+  // en cache comme n'importe quel asset. Les deux exclusions étaient donc
+  // exactes et sans effet : le fichier entrait par la porte de derrière.
+  //
+  // LA CONSÉQUENCE EST LA PIRE POSSIBLE POUR UN OUTIL DE DIAGNOSTIC : on
+  // pouvait éprouver l'application avec la version d'HIER de ses propres
+  // tests. Une assertion corrigée le matin continuait de tomber, une
+  // assertion neuve n'existait pas, et rien à l'écran ne le disait — le
+  // symptôme se lit exactement comme un vrai échec.
+  //
+  // database.rules.json POUR LA MÊME RAISON. La suite le lit en {cache:
+  // 'no-store'} pour comparer la liste blanche de coach_public à
+  // CHAMPS_PROFIL_COACH — la sonde née du jour où « dispo » a fait cesser
+  // DÉFINITIVEMENT la publication du profil coach. Mais no-store ne parle
+  // qu'au cache HTTP, jamais au service worker, exactement comme pour sw.js
+  // juste au-dessus : la branche générique servait une copie, et la sonde
+  // validait les règles de la veille en annonçant celles du jour.
+  //
+  // AUCUN DES TROIS N'A DE RAISON DE FONCTIONNER HORS LIGNE. Ce sont des
+  // outils de diagnostic : sans réseau ils doivent manquer franchement — le
+  // chargeur de tests.js dit déjà « il faut être en ligne » — et non répondre
+  // avec une version périmée d'eux-mêmes.
+  const _chemin = url.split('?')[0];
+  if (/\/sw\.js$/.test(_chemin) || /\/tests\.js$/.test(_chemin)
+      || /\/database\.rules\.json$/.test(_chemin)) return;
   // Assets same-origin : cache-first, sans fallback HTML (évite de servir HTML
   // a la place d un asset). La reponse reseau REJOINT desormais le cache : sans
   // ce put, la branche lisait le cache sans jamais l alimenter, et vendor/
