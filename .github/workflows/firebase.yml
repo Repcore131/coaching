@@ -54,6 +54,16 @@ jobs:
           test -f _site/app/index.html
           test -f _site/i/index.html
           test -f _site/404.html
+          # AUCUN SERVICE WORKER A LA RACINE. Servi depuis /, il prend la
+          # portee / : il intercepte la page de vente et survit a la
+          # suppression du fichier. C'est arrive le 10/09/2026.
+          test ! -f _site/sw.js
+          # LA RACINE EST LA PAGE DE VENTE, PAS L'APP. Le meme jour,
+          # index.html racine a ete remplace par l'application : la balise
+          # canonical est ce qui les distingue a coup sur.
+          grep -q 'rel="canonical"' _site/index.html
+          # Le service worker de l'app, lui, doit bien etre la.
+          test -f _site/app/sw.js
           n=$(find _site -type f | wc -l)
           if [ "$n" -lt 400 ]; then
             echo "Seulement $n fichiers : assemblage suspect, on n'envoie rien."

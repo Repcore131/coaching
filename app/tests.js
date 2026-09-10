@@ -39222,6 +39222,56 @@ vendredi 78 6h 44m
         const build=String(window.RC_BUILD||'');
         return build===m[1]?true
           :_echec('RC_BUILD='+build+' alors que sw.js est en v'+m[1]);})());
+      // ══ LES DEFAUTS D'INSCRIPTION NE DOIVENT PAS REVENIR ═══════════════
+      // Chacune de ces sondes correspond a une panne payee une fois. Les
+      // motifs sont ASSEMBLES PAR MORCEAUX : une sonde ecrite en clair se
+      // trouve dans sa propre source et passe au vert sans rien verifier —
+      // le depot s'est deja fait avoir cinq fois.
+      // LES COMMENTAIRES COMPTENT DANS Function.toString(). signIn EXPLIQUE
+      // sur quatre lignes pourquoi elle ne lit plus ce code d'erreur : une
+      // sonde naive y trouverait le mot et tomberait sur l'explication du
+      // correctif. On ne cherche donc que dans le CODE.
+      const _sansCom=x=>String(x).replace(/\/\*[\s\S]*?\*\//g,'')
+                                 .split('\n').map(l=>l.replace(/\/\/.*$/,'')).join('\n');
+      ok('signIn ne conclut plus « mot de passe faux » sur un code ambigu',(()=>{
+        const src=_sansCom(CLOUD.signIn);
+        const interdit='INVALID_LOGIN'+'_CREDENTIALS';
+        return src.indexOf(interdit)===-1?true
+          :_echec('signIn lit encore '+interdit+', qui ne distingue plus rien');})());
+      ok('signIn demande à signUp avant de conclure qu\'une adresse est prise',(()=>{
+        const src=_sansCom(CLOUD.signIn);
+        if(src.indexOf('sign'+'Up')===-1) return _echec('le repli signUp a disparu');
+        return src.indexOf('EMAIL_'+'EXISTS')!==-1?true
+          :_echec('EMAIL_EXISTS n\'est plus la preuve utilisee');})());
+      ok('doRegister ne refuse plus sur le seul contenu de l\'appareil',(()=>{
+        const src=_sansCom(doRegister);
+        // LE MOTIF EST CELUI DU REFUS, pas de la lecture. `users[em]` sert
+        // legitimement deux fois dans cette fonction — a retrouver le dossier
+        // deja present sur l'appareil, et a l'y ranger. Chercher le nom seul
+        // ferait tomber la sonde sur du code sain.
+        const motif='if(users['+'em]) return show';
+        return src.indexOf(motif)===-1?true
+          :_echec('le refus sec sur le cache local est revenu dans doRegister');})());
+      ok('_resizeImage ne peut plus rester sans réponse',(()=>{
+        const src=_sansCom(_resizeImage);
+        if(src.indexOf('on'+'error')===-1) return _echec('onerror manque');
+        if(src.indexOf('on'+'abort')===-1) return _echec('onabort manque');
+        return src.indexOf('setTimeout')!==-1?true
+          :_echec('le délai de garde manque');})());
+      ok('L\'écouteur d\'installation est déclaré en tête de document',(()=>{
+        let src='';
+        try{
+          const r=new XMLHttpRequest();
+          r.open('GET','index.html?v='+Date.now(),false); r.send(null);
+          src=String(r.responseText||'');
+        }catch(e){ return _echec('index.html illisible : '+e.message); }
+        const motif='before'+'installprompt';
+        const i=src.indexOf(motif);
+        if(i===-1) return _echec('aucun écouteur '+motif);
+        const ligne=src.slice(0,i).split('\n').length;
+        // L'evenement se declenche avant la fin du gros bloc du bas : declare
+        // la-bas, il est manque, et le bouton d'installation ne parait jamais.
+        return ligne<=200?true:_echec('déclaré ligne '+ligne+', trop tard');})());
     })();
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }

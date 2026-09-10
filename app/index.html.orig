@@ -1459,14 +1459,6 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   border-radius:var(--r-full);background:var(--red);border:1.5px solid #0c0c0c;
   box-shadow:0 0 6px rgba(224,32,32,.9);display:none;pointer-events:none}
 .tab-dot.on{display:block}
-/* LA PASTILLE CHIFFREE. Neuf pixels ronds ne portent qu'une information : « il
-   y a du neuf ». Un message et six messages avaient donc la meme tete, et le
-   canal doublait l'annonce d'une banniere sur l'accueil. Le chiffre tient dans
-   la meme place, au meme endroit, et rend la banniere inutile.
-   width:auto ANNULE les 9px de .tab-dot : sans cela le chiffre deborde. */
-.tab-dot.chiffre{width:auto;min-width:16px;height:16px;padding:0 4px;top:0;
-  left:calc(50% + 2px);font-size:10px;line-height:13px;text-align:center;
-  font-weight:800;color:#fff;font-family:var(--pile-sans)}
 /* Onglet verrouille (canal sans coach rattache). Le cadenas occupe la place de
    la pastille, jamais les deux a la fois : un onglet inaccessible n'a rien de
    neuf a signaler. L'opacite reste au-dessus de .5 pour que le libelle demeure
@@ -5742,17 +5734,16 @@ const COACH_PHOTO='icons/coach.jpg';
          la photo de profil modifiable plus tard : le fichier d'origine, lui, ne
          quitte jamais l'appareil. -->
     <div>
-      <label for="r-photo">Photo de profil <span style="color:var(--text-faint);font-weight:500">(facultative)</span></label>
+      <label for="r-photo">Photo de profil</label>
       <div style="display:flex;align-items:center;gap:14px">
         <div id="r-photo-rond" style="width:76px;height:76px;border-radius:var(--r-full);
           overflow:hidden;flex-shrink:0;background:var(--surface-1);border:2px dashed var(--border);
           display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:var(--fs-2xs);
           text-align:center;line-height:1.2;padding:6px;box-sizing:border-box">Aucune<br>photo</div>
         <div style="flex:1;min-width:0">
-          <input type="file" id="r-photo" accept="image/*,.heic,.heif,.hif" onchange="_inscriptionPhoto(this)"
+          <input type="file" id="r-photo" accept="image/*" onchange="_inscriptionPhoto(this)"
             style="width:100%;font-size:var(--fs-xs)">
-          <div class="sub" style="font-size:var(--fs-xs);margin-top:5px">Une photo de toi, de face : c'est ce que ton coach verra sur son tableau de bord. Tu peux continuer sans, et l'ajouter plus tard depuis ton profil.</div>
-          <div id="r-photo-repli"></div>
+          <div class="sub" style="font-size:var(--fs-xs);margin-top:5px">Une photo de toi, de face. C'est ce que ton coach verra sur son tableau de bord.</div>
         </div>
       </div>
     </div>
@@ -5873,7 +5864,7 @@ const COACH_PHOTO='icons/coach.jpg';
         color:rgba(255,255,255,.5);text-decoration:underline;text-underline-offset:3px;
         font-family:Montserrat,sans-serif;cursor:pointer"></a>
     </div>
-    <button class="btn btn-red" id="r-submit" onclick="doRegister()">Créer mon compte</button>
+    <button class="btn btn-red" onclick="doRegister()">Créer mon compte</button>
     <div style="height:30px"></div>
   </div>
 </div>
@@ -6936,12 +6927,6 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Habitudes</span></div>
         <div class="cc-sect-c" id="ccd-habitudes"></div>
       </section>
-      <!-- LES COURBES, SOUS LES HABITUDES. Les deux sections « Sommeil » et
-           « Pas » ci-dessus disent une moyenne ; une moyenne ne montre pas
-           trois nuits courtes d'affilee, qui est precisement ce qu'on
-           regarde avant d'ajuster une charge. Rempli par
-           renderLifestyleGraphesCoach, vide si l'athlete n'a rien saisi. -->
-      <div id="ccd-life-graphes"></div>
       </div>
       <div class="ccd-vue" data-vue="donnees">
       <!-- Journal du coach. Il etait en TETE de fiche ; depuis la mise en
@@ -6967,15 +6952,6 @@ const COACH_PHOTO='icons/coach.jpg';
       <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Bilans</span></div>
         <div class="cc-sect-c" id="ccd-bilans"></div>
-      </section>
-      <!-- LE CALENDRIER. La section ci-dessus dit CE QUI a ete repondu ; elle
-           ne dit pas QUAND, ni quand rien ne l'a ete. Un mois par ecran, les
-           jours porteurs d'un bilan en rouge, les reponses du jour choisi
-           dessous. Place ici parce que c'est la meme matiere, lue autrement.
-           Rempli par renderCalendrierBilansCoach. -->
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Calendrier des bilans</span></div>
-        <div class="cc-sect-c" id="ccd-bil-cal"></div>
       </section>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
       <section class="cc-sect" style="--cc-accent:var(--border)">
@@ -10709,11 +10685,6 @@ const CLOUD={
   _signInErr:null,
   async signIn(email,password){
     this._signInErr=null;
-    // VRAI QUAND LE JETON VIENT DU REPLI signUp — l'adresse n'avait AUCUN
-    // compte et on vient d'en creer un. A l'inscription c'est le but ; a la
-    // CONNEXION c'est une faute de frappe, et le compte vide ainsi cree
-    // repondrait EMAIL_EXISTS a la vraie inscription du lendemain.
-    this._compteCree=false;
     if(!this._fbKey||this._fbKey==='REPLACE_WITH_FIREBASE_WEB_API_KEY') return false;
     const call=async ep=>{
       try{
@@ -10760,7 +10731,7 @@ const CLOUD={
       // Il ne peut RIEN détourner : sur un compte existant il refuse, quel que
       // soit le mot de passe présenté. Le tour de réseau supplémentaire ne
       // coute que dans le cas d'echec.
-      if(!this._signInErr){ d=await call('signUp'); if(d.idToken) this._compteCree=true; }
+      if(!this._signInErr) d=await call('signUp');
       if(!d.idToken&&!this._signInErr){
         const e2=String(d.error?.message||'');
         // L'ADRESSE EXISTE : c'est signUp qui vient de le prouver, pas une
@@ -10785,19 +10756,6 @@ const CLOUD={
       return true;
     }
     return false;
-  },
-  // DEFAIT LE COMPTE QUI VIENT D'ETRE CREE PAR ERREUR. Utilise par doLogin
-  // seulement. Rend true/false ; l'appelant ne doit PAS s'arreter sur un echec :
-  // un menage rate ne doit pas empecher de dire ce qui s'est passe.
-  async supprimerCompteCourant(){
-    if(!this._fbKey||!this._idToken) return false;
-    try{
-      const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:delete?key='+this._fbKey,{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({idToken:this._idToken})
-      });
-      return r.ok;
-    }catch(e){ return false; }
   },
   // Crée un compte Firebase Auth SANS toucher à la session en cours.
   // signIn() écrase _idToken / _refreshToken : l'utiliser ici déconnecterait le
@@ -13336,8 +13294,11 @@ function feedbacksNonVus(u){
 function _majPastilleVideos(){
   const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="videos"]');
   if(!btn) return;
-  _pastilleOnglet('videos',feedbacksNonVus(currentUser).length,
-    c=>'Vidéos : '+c+' retour'+(c>1?'s':'')+' du coach à consulter');
+  const dot=btn.querySelector('.tab-dot');
+  const n=feedbacksNonVus(currentUser).length;
+  if(dot) dot.classList.toggle('on',n>0);
+  if(n>0) btn.setAttribute('aria-label','Vidéos : '+n+' retour'+(n>1?'s':'')+' du coach à consulter');
+  else btn.removeAttribute('aria-label');
 }
 function _majTabbar(id){
   const bar=document.getElementById('client-tabbar');
@@ -15041,126 +15002,17 @@ function _appliquerSecondCompte(){
 // Une variable de module et non un champ cache : elle porte une image reduite,
 // et un <input type=file> ne se remplit pas par programme de toute facon.
 let _inscriptionPhotoB64=null;
-// ── L'ETAT DE LA PHOTO, EXPLICITE ───────────────────────────────────────
-// _inscriptionPhotoB64 se remplissait EN SILENCE, plusieurs secondes apres le
-// choix du fichier. Entre les deux, rien a l'ecran ne disait qu'un traitement
-// courait : qui touchait « Creer mon compte » pendant ce temps voyait sa photo
-// perdue — elle etait pourtant en train d'arriver. Une variable qui se remplit
-// toute seule ne se lit pas ; un etat, si. vide | encours | prete | echec.
-// La promesse est RETENUE, pour que doRegister l'attende au lieu de refuser.
-let _inscriptionPhotoEtat='vide';
-let _inscriptionPhotoPromesse=null;
-function _inscriptionPhotoBouton(actif){
-  const b=document.getElementById('r-submit');
-  if(!b) return;
-  b.disabled=!actif;
-  b.style.opacity=actif?'':'0.55';
-  b.textContent=actif?'Créer mon compte':'Photo en cours…';
-}
-// LE REPLI, APRES UN ECHEC ET SEULEMENT APRES. Quand toutes les photos de la
-// personne sont dans un format illisible — tout un iPhone en HEIC — « reessaie
-// avec une autre photo » est un mur : la suivante echouera pareil. Proposer de
-// renoncer AVANT d'avoir essaye serait inviter a renoncer ; apres, c'est une
-// sortie. Elle cree le compte normalement.
-function _inscriptionPhotoRepli(montrer){
-  const z=document.getElementById('r-photo-repli');
-  if(!z) return;
-  z.innerHTML=montrer
-    ? '<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" '
-      +'onclick="_inscriptionPhotoAbandonner()">Continuer sans photo pour l\'instant</button>'
-    : '';
-}
-function _inscriptionPhotoAbandonner(){
-  _inscriptionPhotoB64=null;
-  _inscriptionPhotoEtat='vide';
-  _inscriptionPhotoPromesse=null;
-  const i=document.getElementById('r-photo'); if(i) i.value='';
-  const e=document.getElementById('r-err'); if(e) e.style.display='none';
-  _inscriptionPhotoRepli(false);
-  _inscriptionPhotoBouton(true);
-  toast('Tu pourras l\'ajouter depuis ton profil','var(--green)');
-}
-// ── DEUX SORTIES DE SECOURS, POSEES SOUS LE MESSAGE D'ERREUR ────────────
-// En DOM et non en HTML dans la zone : showErr ecrit du texte, y injecter du
-// balisage exposerait la zone d'erreur a tout ce qui y transite.
-function _boutonSous(zoneId,cle,libelle,action){
-  const z=document.getElementById(zoneId);
-  if(!z||!z.parentNode) return;
-  const ancien=document.getElementById(cle);
-  if(ancien) ancien.remove();
-  const b=document.createElement('button');
-  b.id=cle; b.type='button'; b.className='btn btn-outline btn-sm';
-  b.style.cssText='width:100%;margin-top:8px';
-  b.textContent=libelle;
-  b.onclick=()=>action(b);
-  z.parentNode.insertBefore(b,z.nextSibling);
-}
-// Faute de frappe a la connexion : on emmene a l'inscription avec l'adresse
-// deja saisie, plutot que de laisser la retaper.
-function _lienVersInscription(em){
-  _boutonSous('l-err','l-vers-inscription','Créer mon compte avec cette adresse',()=>{
-    go('s-register');
-    const i=document.getElementById('r-email');
-    if(i) i.value=em||'';
-  });
-}
-// Inscription interrompue : l'adresse est prise, par soi-meme, et le mot de
-// passe ne revient pas. On envoyait chercher l'ecran de connexion PUIS le lien
-// « Mot de passe oublie ? » : deux ecrans de plus, au pire moment.
-function _boutonReprise(em){
-  _boutonSous('r-err','r-reprise','M\'envoyer un lien pour reprendre',async b=>{
-    b.textContent='Envoi…'; b.disabled=true;
-    let ok=false;
-    try{ ok=await CLOUD.resetPassword(em); }catch(e){ ok=false; }
-    b.disabled=false; b.textContent='M\'envoyer un lien pour reprendre';
-    // MEME RESERVE QUE forgotPassword : la protection contre l'enumeration des
-    // adresses fait repondre « succes » meme sur une adresse inconnue. On ne
-    // promet donc pas un envoi, on dit ou regarder.
-    toast(ok?'Si un compte existe, le lien part maintenant — pense aux spams'
-            :'Envoi impossible : verifie ta connexion',
-          ok?'var(--green)':'var(--orange)');
-  });
-}
 function _inscriptionPhoto(input){
   const f=input&&input.files&&input.files[0];
   const rond=document.getElementById('r-photo-rond');
-  if(!f){
-    _inscriptionPhotoB64=null; _inscriptionPhotoEtat='vide'; _inscriptionPhotoPromesse=null;
-    _inscriptionPhotoBouton(true); _inscriptionPhotoRepli(false);
-    return false;
-  }
+  if(!f){ _inscriptionPhotoB64=null; return false; }
   // Meme plafond que la photo modifiable plus tard : la reduction en 300x300
   // rend la taille d'origine indifferente au quota, mais lire un fichier de
   // 40 Mo sur un telephone ancien fige la page avant meme la reduction.
   if(f.size>20*1024*1024){ toast('Image trop lourde (max 20 Mo)','var(--orange)'); return false; }
-  _inscriptionPhotoEtat='encours';
-  _inscriptionPhotoBouton(false);
-  _inscriptionPhotoRepli(false);
-  if(rond){ rond.style.padding='6px'; rond.innerHTML='Lecture<br>en cours…'; }
-  _inscriptionPhotoPromesse=_resizeImage(f,300,300,0.80).then(b64=>{
-    if(!b64){
-      // CE QU'IL FAUT FAIRE, PAS SEULEMENT CE QUI NE MARCHE PAS. « Reessaie
-      // avec une autre photo » envoyait chercher une autre photo, qui venait
-      // du meme appareil et echouait pareil : le probleme n'est pas la photo,
-      // c'est son FORMAT. Une capture d'ecran, elle, est toujours un PNG.
-      // DANS LA ZONE D'ERREUR, PAS DANS UN TOAST : toast() s'efface en 2,8 s,
-      // et ce message demande d'aller faire une capture d'ecran avant de
-      // revenir. Un conseil qui disparait avant d'avoir ete suivi n'en est pas
-      // un. La zone, elle, reste jusqu'a la prochaine action.
-      _inscriptionPhotoEtat='echec';
-      _inscriptionPhotoB64=null;
-      if(rond){ rond.style.padding='6px'; rond.innerHTML='Aucune<br>photo'; }
-      _inscriptionPhotoBouton(true);
-      _inscriptionPhotoRepli(true);
-      showErr('r-err','Photo illisible par ton téléphone : c\'est souvent un fichier HEIC d\'iPhone. '
-        +'Fais une capture d\'écran de la photo, puis envoie la capture. '
-        +'Tu peux aussi continuer sans : elle est facultative.','r-photo');
-      return;
-    }
+  _resizeImage(f,300,300,0.80).then(b64=>{
+    if(!b64){ toast('Image illisible : réessaie avec une autre photo','var(--orange)'); return; }
     _inscriptionPhotoB64=b64;
-    _inscriptionPhotoEtat='prete';
-    _inscriptionPhotoBouton(true);
-    _inscriptionPhotoRepli(false);
     if(rond){
       rond.style.border='2px solid var(--red)';
       rond.style.padding='0';
@@ -15175,27 +15027,11 @@ async function doRegister(){
   const err=document.getElementById('r-err');err.style.display='none';
   _masquerSecondCompte();
   if(!fn||!ln||!em||!pw){return showErr('r-err','Tous les champs sont obligatoires.');}
-  // ATTENDRE, PAS REFUSER. Le redimensionnement dure une a trois secondes ; le
-  // formulaire se remplit pendant ce temps et le bouton se touche juste apres.
-  // _resizeImage se resout TOUJOURS desormais, delai de garde compris : cette
-  // attente ne peut pas pendre.
-  if(_inscriptionPhotoEtat==='encours'&&_inscriptionPhotoPromesse){
-    try{ await _inscriptionPhotoPromesse; }catch(e){}
-  }
-  // LA PHOTO N'EST PLUS OBLIGATOIRE — 10/09/2026.
-  //
-  // Elle l'a ete, et le raisonnement se tenait : un champ facultatif place en
-  // fin de formulaire n'est jamais rempli, et le tableau de bord du coach
-  // devient une grille d'initiales. Mais le refus supposait que TOUT LE MONDE
-  // PUISSE en poser une. Beaucoup n'y arrivaient pas : un iPhone rend un
-  // fichier HEIC, _resizeImage ne sait pas le decoder, et le formulaire se
-  // fermait sur « Ajoute une photo » sans dire comment. L'inscription entiere
-  // etait bloquee par un format d'image.
-  //
-  // Un compte qui n'existe pas ne montre aucune photo non plus. La photo reste
-  // demandee EN PREMIER, avec sa place et son cadre — c'est la ou elle se
-  // remplit — mais elle ne ferme plus la porte. Elle se pose ensuite depuis le
-  // profil, et le coach voit les initiales en attendant.
+  // LA PHOTO EST UN CHAMP COMME LES AUTRES. Elle est refusee avec le meme
+  // message et au meme moment que les autres : la laisser passer ici, c'est la
+  // demander « plus tard », c'est-a-dire jamais.
+  if(!_inscriptionPhotoB64)
+    return showErr('r-err','Ajoute une photo de profil : c\'est ce que ton coach verra sur son tableau de bord.','r-photo');
   // LA FORME DE L'ADRESSE, avant le moindre appel réseau. Sans ce contrôle,
   // une adresse sans arobase partait jusqu'à Firebase, qui répondait
   // INVALID_EMAIL — traduit en « Inscription impossible. Réessaie. », alors
@@ -15357,10 +15193,10 @@ async function doRegister(){
       // L'ADRESSE EST PRISE CÔTÉ SERVEUR — le compte peut très bien ne pas être
       // sur CET appareil : c'est le cas du coach qui s'inscrit en athlète depuis
       // un autre téléphone.
-      if(CLOUD._signInErr==='wrong_password'){ _proposerSecondCompte(em); _boutonReprise(em); }
+      if(CLOUD._signInErr==='wrong_password') _proposerSecondCompte(em);
       return showErr('r-err',
         CLOUD._signInErr==='wrong_password'
-          ? 'Un compte existe déjà avec cet email. Utilise « Se connecter », ou le bouton ci-dessous si le mot de passe ne te revient pas.'
+          ? 'Un compte existe déjà avec cet email. Utilise « Se connecter » ou « Mot de passe oublié ? ».'
           : CLOUD._signInErr==='network'
             ? 'Pas de connexion : impossible de créer le compte maintenant.'
             : CLOUD._signInErr==='invalid_email'
@@ -15553,19 +15389,6 @@ async function doLogin(){
         if(CLOUD._signInErr==='weak_password')
           return showErr('l-err','Mot de passe trop court : 6 caractères minimum.','l-pwd');
         return showErr('l-err','Impossible de se connecter. Essayez "Mot de passe oublié ?" ou vérifiez votre connexion.');
-      }
-      // ══ UN COMPTE CREE A L'INSTANT N'EST PAS UN COMPTE RETROUVE ══════
-      // Personne ne se connecte a une adresse jamais utilisee : c'est une
-      // faute de frappe. Le compte vide, lui, resterait pour toujours et
-      // repondrait EMAIL_EXISTS a la vraie inscription. On le defait.
-      // Et surtout PAS rescueLogin : il ne vaut que pour un compte qui existe
-      // cote Auth avec un dossier RTDB vide — ce n'est pas ce cas-ci.
-      if(CLOUD._compteCree){
-        try{ await CLOUD.supprimerCompteCourant(); }catch(e){}
-        try{ CLOUD.signOut(); }catch(e){}
-        showErr('l-err','Aucun compte à cette adresse. Vérifie l\'orthographe, ou crée ton compte.','l-email');
-        _lienVersInscription(em);
-        return;
       }
       toast('Récupération du compte…');
       await CLOUD.syncUser(em);
@@ -19528,87 +19351,6 @@ function canalDomaine(lien){
   const m=/^https?:\/\/([^/?#]+)/i.exec(s);
   return m?m[1].replace(/^www\./i,''):'';
 }
-// ── LES PASTILLES D'ONGLET, CHIFFREES ───────────────────────────────────
-// Le point rouge disait « il y a du neuf » sans dire combien : un message et
-// six messages avaient exactement la meme tete. Et pour le canal, la meme
-// information etait POUSSEE UNE SECONDE FOIS en banniere sur l'accueil, au
-// milieu des seances, du poids et du rappel de bilan. Deux endroits pour une
-// seule chose, dont un qui noyait le reste.
-//
-// Desormais : le compte vit sur l'icone, en bas, et nulle part ailleurs.
-function _pastilleOnglet(onglet,n,libelle){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="'+onglet+'"]');
-  if(!btn) return null;
-  const dot=btn.querySelector('.tab-dot');
-  const c=Math.max(0,Math.floor(Number(n)||0));
-  if(dot){
-    dot.classList.toggle('on',c>0);
-    // La classe ET le texte : sans le texte la pastille reste un point, sans
-    // la classe le chiffre deborde d'un cercle de neuf pixels.
-    dot.classList.toggle('chiffre',c>0);
-    dot.textContent=c>0?(c>9?'9+':String(c)):'';
-  }
-  // Le libelle accessible suit le chiffre : une pastille seule ne se percoit
-  // qu'a l'oeil, et le lecteur d'ecran annoncerait un onglet sans rien.
-  if(c>0&&typeof libelle==='function') btn.setAttribute('aria-label',libelle(c));
-  else btn.removeAttribute('aria-label');
-  return btn;
-}
-// ── COMBIEN DE MESSAGES NON LUS ─────────────────────────────────────────
-// canalNonLu ne rend qu'un booleen, et il ne peut pas faire mieux : la seule
-// chose que l'athlete connaisse sans ouvrir le canal est canalDernier, UN
-// horodatage pose dans coach_public. Les messages, eux, vivent dans /canaux.
-//
-// On memorise donc les horodatages des messages A CHAQUE OUVERTURE du canal.
-// Le compte devient exact des la deuxieme visite, et vaut « au moins un »
-// avant : mieux vaut annoncer 1 quand il y en a 3 que de ne rien annoncer.
-const CANAL_AT_CLE='rc_canal_ats';
-function _canalMemoriser(cle,liste){
-  if(!cle||!Array.isArray(liste)) return;
-  const ats=liste.map(m=>Number(m&&m.at)||0).filter(a=>a>0)
-    .sort((a,b)=>b-a).slice(0,60);
-  try{
-    const t=JSON.parse(localStorage.getItem(CANAL_AT_CLE)||'{}');
-    t[String(cle)]=ats;
-    localStorage.setItem(CANAL_AT_CLE,JSON.stringify(t));
-  }catch(e){}
-}
-function _canalAtsMemorises(cle){
-  try{
-    const t=JSON.parse(localStorage.getItem(CANAL_AT_CLE)||'{}');
-    const a=t&&t[String(cle)];
-    return Array.isArray(a)?a:[];
-  }catch(e){ return []; }
-}
-// PURE quant a sa decision : elle ne lit le stockage que pour affiner le
-// compte, jamais pour decider s'il y a du neuf. Cette decision-la reste
-// exactement celle de canalNonLu, et les deux ne peuvent pas diverger.
-function canalNonLusCompte(user,profil,vus){
-  if(!canalNonLu(user,profil,vus)) return 0;
-  const vu=Number((vus||{})[String(user&&user.email||'')])||0;
-  const n=_canalAtsMemorises(canalCle(user)).filter(a=>a>vu).length;
-  return n>0?n:1;
-}
-// ── LE BILAN DU JOUR ────────────────────────────────────────────────────
-// Meme regle que la carte de rappel de l'accueil — _bilTexteRetard rend un
-// texte quand un bilan est du, rien sinon. On ne recalcule pas l'echeance
-// ici : deux calculs de la meme date finiraient par ne plus dire pareil.
-function _bilanAFaireAujourdhui(){
-  try{ return !!_bilTexteRetard(_bilRetardJours(getNextBilanSaturday())); }
-  catch(e){ return false; }
-}
-// L'ONGLET OUVERT VAUT LU, POUR LA JOURNEE SEULEMENT. Le bilan reste a faire
-// tant qu'il n'est pas rempli, et il se rappellera demain : la pastille
-// signale, elle ne harcele pas. Le jour est stocke en clair — une date lisible
-// vaut mieux qu'un horodatage a comparer.
-const BILAN_ONGLET_CLE='rc_bilan_onglet_vu';
-function _bilanOngletVuAujourdhui(){
-  try{ return localStorage.getItem(BILAN_ONGLET_CLE)===localISODate(new Date()); }
-  catch(e){ return false; }
-}
-function bilanMarquerOngletVu(){
-  try{ localStorage.setItem(BILAN_ONGLET_CLE,localISODate(new Date())); }catch(e){}
-}
 // ── L'onglet : verrou et pastille ───────────────────────────────────────────
 function _majOngletCanal(){
   const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="canal"]');
@@ -19620,12 +19362,12 @@ function _majOngletCanal(){
   // peut même pas atteindre n'expliquerait jamais comment le déverrouiller.
   if(ouvert) btn.removeAttribute('aria-disabled');
   else btn.setAttribute('aria-disabled','true');
-  // LE COMPTE, ET PLUS LE SEUL FAIT. _pastilleOnglet efface le libelle quand
-  // le compte est nul : le verrou repose donc le sien APRES, sinon il serait
-  // retire aussitot pose.
-  const n=ouvert?canalNonLusCompte(currentUser,profilCoachLocal(canalCle(currentUser)),_canalVus()):0;
-  _pastilleOnglet('canal',n,c=>'Canal : '+c+' nouveau'+(c>1?'x':'')+' message'+(c>1?'s':'')+' de ton coach');
+  const dot=btn.querySelector('.tab-dot');
+  const neuf=ouvert&&canalNonLu(currentUser,profilCoachLocal(canalCle(currentUser)),_canalVus());
+  if(dot) dot.classList.toggle('on',!!neuf);
   if(!ouvert) btn.setAttribute('aria-label','Canal : réservé aux athlètes suivis');
+  else if(neuf) btn.setAttribute('aria-label','Canal : nouveau message du coach');
+  else btn.removeAttribute('aria-label');
 }
 
 // ── L'écran athlète ─────────────────────────────────────────────────────────
@@ -19731,8 +19473,6 @@ async function _canalCharger(){
   // Sans elle, le compteur touché ne changeait jamais à l'écran.
   const liste=canalTrier(msgs);
   window._canalListe=liste;
-  // Les horodatages, pour que la pastille sache COMBIEN la prochaine fois.
-  try{ _canalMemoriser(cle,liste); }catch(e){}
   await _canalPlancher(fil);
   // Un rappel sur un fil deja peint — bouton « Reessayer », retour dans
   // l'onglet — ne doit pas vider l'ecran pour y remettre des silhouettes.
@@ -19871,44 +19611,24 @@ function _canalRepeindre(){
 // dossier de l'athlète mais coach_public.canalEpingle — donc UN exemplaire pour
 // tout le monde, mis à jour d'une écriture, et qui atteint aussi les athlètes
 // connus par leur seul code, que l'ancien système ne touchait jamais.
-// ── L'ACCUEIL NE REPREND PLUS LE CANAL ─────────────────────────────────
-// Cette banniere reprenait le message epingle EN GRAND sur l'accueil, entre
-// les seances, le poids et le rappel de bilan. La meme annonce vivait deja
-// dans l'onglet Canal, avec les autres : l'accueil n'en etait que la copie,
-// et cette copie poussait vers le bas ce que l'athlete vient chercher — sa
-// seance du jour. Demande de Kevin, 10/09/2026 : « ca parasite les infos ».
-//
-// LA FONCTION RESTE, ET VIDE LA ZONE. Six appelants la nomment ; les faire
-// disparaitre un par un, c'est six occasions d'en oublier un et de laisser
-// une banniere orpheline. Elle garantit desormais l'inverse de ce qu'elle
-// faisait : que #clh-annonce soit vide.
-//
-// L'annonce n'est pas perdue : canalTrier place l'epingle EN TETE du fil, et
-// l'onglet Canal porte maintenant une pastille chiffree qui dit qu'il y a du
-// neuf. Un endroit, un signal.
-// LA ZONE SERT DESORMAIS A LA RELANCE PHOTO. Elle est en tete de l'accueil,
-// elle etait libre depuis que le canal ne s'y recopie plus, et la relance a
-// besoin d'exactement ca : un endroit visible, qui revient a chaque ouverture
-// tant que la photo manque, sans bloquer quoi que ce soit.
-//
-// C'est la contrepartie de la photo rendue facultative a l'inscription : la
-// grille de visages du coach se remplit en deux jours au lieu d'un, mais plus
-// personne ne bute sur un selecteur de fichiers avant meme d'avoir un compte.
-// Le bandeau disparait de lui-meme des que la photo est posee.
 function renderEpingleAccueil(){
   const el=document.getElementById('clh-annonce');
   if(!el) return;
-  const u=currentUser;
-  const manque=!!(u&&u.role==='athlete'&&!u.athletePhoto);
-  if(!manque){ el.innerHTML=''; el.style.display='none'; return; }
+  const e=canalAccessible(currentUser)
+    ? canalEpingleAAfficher(profilCoachLocal(canalCle(currentUser))) : null;
+  if(!e){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
-  el.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:13px 14px;margin-bottom:16px">'
-    +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5;margin-bottom:9px">'
-    +'Ajoute ta photo de profil : c\'est ce qui permet à ton coach de te reconnaître '
-    +'d\'un coup d\'œil sur son tableau de bord.</div>'
-    +'<button class="btn btn-outline btn-sm" style="width:100%" '
-    +'onclick="go(\'s-athlete-profile\')">Ajouter ma photo</button></div>';
+  const lien=String(e.lien||'').trim();
+  el.innerHTML=`<div style="background:linear-gradient(135deg,#12000a,#1a0000);border:1px solid rgba(224,32,32,.45);border-radius:var(--r-3);padding:14px 16px;margin-bottom:18px;box-shadow:var(--e2)">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+      <span style="font-size:var(--fs-lg);line-height:1" aria-hidden="true">📣</span>
+      <span style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase">Mot de ton coach</span>
+    </div>
+    ${e.titre?`<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px;line-height:1.4">${escapeHtml(e.titre)}</div>`:''}
+    ${e.texte?`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.65;white-space:pre-wrap">${escapeHtml(e.texte)}</div>`:''}
+    ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:var(--fs-sm);color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'Ouvrir le lien')} ↗</a>`:''}
+    <button onclick="clientTab('canal')" style="width:100%;margin-top:12px;padding:10px 0;background:none;border:1px solid rgba(224,32,32,.5);color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;border-radius:var(--r-2);cursor:pointer">VOIR LE CANAL</button>
+  </div>`;
 }
 
 // ══ CANAL — CÔTÉ COACH ══════════════════════════════════════════════════════
@@ -24711,8 +24431,6 @@ function openClientDetail(cid,_refresh,_force){
       :'';
   }catch(e){}
   try{ renderHabitudesCoach(c); }catch(e){}
-  try{ renderLifestyleGraphesCoach(c); }catch(e){}
-  try{ _ccdBilCalReset(); renderCalendrierBilansCoach(c); }catch(e){}
   try{ renderRedsCoach(c); }catch(e){}
   try{ renderPostPartumCoach(c); }catch(e){}
   try{ renderDossierSanteCoach(c); }catch(e){}
@@ -33818,11 +33536,7 @@ function clientTab(tab){
   // ce déplacement corrige, et allumerait l'onglet AVANT de savoir si la
   // navigation aboutit — go() peut rediriger (filet de sécurité de rôle).
   if(tab==='home') loadClientHome();
-  else if(tab==='bilan'){
-    bilanMarquerOngletVu();
-    openBilanChoice();
-    try{ _majPastilleBilan(); }catch(e){}
-  }
+  else if(tab==='bilan') openBilanChoice();
   else if(tab==='nutrition') loadNutrition();
   else if(tab==='videos') loadVideos();
   else if(tab==='lifestyle') loadLifestyle();
@@ -48453,149 +48167,6 @@ function _texteSport(e){
   const det=[i?i.lib:'',h>0?h+' h/sem':''].filter(Boolean).join(', ');
   return String(e.sport).trim()+(det?' ('+det+')':'');
 }
-// ── LE CALENDRIER DES BILANS ────────────────────────────────────────────
-// La section « Bilans » liste les derniers bilans, du plus recent au plus
-// ancien. Elle repond a « qu'a-t-il dit la derniere fois », jamais a « quand
-// a-t-il repondu, et quand a-t-il saute son tour » — or c'est cette
-// REGULARITE que le coach lit avant un rendez-vous, et une liste ne la montre
-// pas : trois bilans d'affilee et trois bilans etales sur trois mois ont la
-// meme tete.
-//
-// Un mois par ecran, les jours porteurs d'un bilan en rouge, et les reponses
-// du jour choisi dessous. Rien de neuf n'est stocke : tout vient de c.bilans
-// et de BILAN_QUESTIONS, les memes que la liste.
-const _ccdBilCal={mois:null,sel:null};
-// PURE. La cle « AAAA-MM » d'une date, et le jour ISO d'un bilan. Les bilans
-// portent des dates de formes variees selon leur age — chaine ISO, horodatage
-// — donc une seule fonction les normalise, et elle rend '' sur ce qu'elle ne
-// sait pas lire plutot qu'une date fausse.
-function _ccdBilJour(b){
-  if(!b||!b.date) return '';
-  const d=new Date(b.date);
-  return isFinite(d.getTime())?localISODate(d):'';
-}
-function _ccdBilMoisCle(iso){ return String(iso||'').slice(0,7); }
-// Les bilans ranges par jour. Deux bilans le meme jour restent tous les deux :
-// on les compte, et le clic ouvre le plus complet — pas question d'en cacher
-// un parce qu'il partage sa date.
-function _ccdBilParJour(c){
-  const par={};
-  ((c&&c.bilans)||[]).forEach(b=>{
-    const j=_ccdBilJour(b);
-    if(!j) return;
-    (par[j]=par[j]||[]).push(b);
-  });
-  return par;
-}
-// Les reponses d'un bilan, dans l'ordre du questionnaire, vides ecartees.
-function _ccdBilReponses(b){
-  if(!b) return [];
-  const qs=(b.type==='depart'?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi)||[];
-  return qs.map(q=>({lbl:q.lbl,emoji:q.emoji||'',txt:_texteReponse(b[q.k])}))
-           .filter(x=>x.txt);
-}
-function _ccdBilMoisLib(cle){
-  const [a,m]=String(cle||'').split('-');
-  const d=new Date(Number(a),Number(m)-1,1);
-  const s=d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
-  return s.charAt(0).toUpperCase()+s.slice(1);
-}
-function _ccdBilMoisDecale(cle,pas){
-  const [a,m]=String(cle).split('-').map(Number);
-  const d=new Date(a,m-1+pas,1);
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-}
-function _htmlCalendrierBilansCoach(c){
-  const par=_ccdBilParJour(c);
-  const jours=Object.keys(par).sort();
-  if(!jours.length){
-    return '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">'
-      +'Aucun bilan enregistré pour l\'instant.</div>';
-  }
-  // Au premier affichage on ouvre le mois du DERNIER bilan, pas le mois
-  // courant : un coach qui ouvre la fiche veut voir ce qui a ete repondu, et
-  // un mois vide ne lui apprend rien.
-  const dernier=jours[jours.length-1];
-  if(!_ccdBilCal.mois) _ccdBilCal.mois=_ccdBilMoisCle(dernier);
-  if(!_ccdBilCal.sel||!par[_ccdBilCal.sel]) _ccdBilCal.sel=dernier;
-  const cle=_ccdBilCal.mois;
-  const [an,mo]=cle.split('-').map(Number);
-  const premier=new Date(an,mo-1,1);
-  const nbJours=new Date(an,mo,0).getDate();
-  // Lundi en tete : getDay() rend 0 pour dimanche, d'ou le decalage.
-  const vide=(premier.getDay()+6)%7;
-  const auj=localISODate(new Date());
-  let cases='';
-  for(let i=0;i<vide;i++) cases+='<div></div>';
-  for(let j=1;j<=nbJours;j++){
-    const iso=cle+'-'+String(j).padStart(2,'0');
-    const n=(par[iso]||[]).length;
-    const sel=iso===_ccdBilCal.sel;
-    const fond=sel?'var(--red)':n?'rgba(224,32,32,.18)':'transparent';
-    const bord=n&&!sel?'1px solid rgba(224,32,32,.55)':(iso===auj?'1px dashed var(--sub)':'1px solid transparent');
-    const coul=sel?'#fff':n?'var(--red-text)':'var(--text-dim)';
-    cases+='<button type="button"'+(n?'':' disabled')
-      +' onclick="ccdBilCalJour(\''+iso+'\')"'
-      +' aria-label="'+j+' '+_ccdBilMoisLib(cle)+(n?' — '+n+' bilan'+(n>1?'s':''):'')+'"'
-      +' style="aspect-ratio:1;min-height:26px;display:flex;align-items:center;justify-content:center;'
-      +'background:'+fond+';border:'+bord+';border-radius:var(--r-2);color:'+coul+';'
-      +'font-size:var(--fs-2xs);font-weight:'+(n?'800':'500')+';'
-      +(n?'cursor:pointer':'cursor:default;opacity:.45')+'">'+j+'</button>';
-  }
-  const noms=['L','M','M','J','V','S','D']
-    .map(x=>'<div style="text-align:center;font-size:var(--fs-2xs);color:var(--text-faint);font-weight:700">'+x+'</div>').join('');
-  // Les fleches ne sortent pas de l'intervalle des bilans : proposer un mois
-  // ou il ne s'est jamais rien passe, c'est proposer du vide.
-  const minCle=_ccdBilMoisCle(jours[0]),maxCle=_ccdBilMoisCle(dernier);
-  const prec=cle>minCle,suiv=cle<maxCle;
-  const fleche=(actif,pas,txt)=>'<button type="button"'+(actif?'':' disabled')
-    +' onclick="ccdBilCalMois('+pas+')" aria-label="'+(pas<0?'Mois précédent':'Mois suivant')+'"'
-    +' style="min-width:32px;min-height:32px;background:none;border:1px solid var(--border);border-radius:var(--r-2);'
-    +'color:'+(actif?'var(--text)':'var(--text-faint)')+';cursor:'+(actif?'pointer':'default')+'">'+txt+'</button>';
-  const b=(par[_ccdBilCal.sel]||[])
-    .slice().sort((x,y)=>_ccdBilReponses(y).length-_ccdBilReponses(x).length)[0];
-  const rep=_ccdBilReponses(b);
-  const dLib=new Date(_ccdBilCal.sel).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  return '<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">'
-      +fleche(prec,-1,'‹')
-      +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text-strong)">'+escapeHtml(_ccdBilMoisLib(cle))+'</span>'
-      +fleche(suiv,1,'›')
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px">'+noms+'</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">'+cases+'</div>'
-    +'<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:10px">'
-      +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;margin-bottom:8px">'
-        +escapeHtml(dLib)+(b&&b.type==='depart'?' · bilan de départ':'')+'</div>'
-      +(rep.length
-        ? rep.map(r=>'<div style="margin-bottom:9px">'
-            +'<div style="font-size:var(--fs-2xs);color:var(--sub)">'+escapeHtml(r.emoji+' '+r.lbl)+'</div>'
-            +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55;white-space:pre-wrap">'+escapeHtml(r.txt)+'</div>'
-          +'</div>').join('')
-        : '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Ce bilan ne porte que des mesures : aucune question n\'a reçu de réponse écrite.</div>')
-    +'</div></div>';
-}
-function renderCalendrierBilansCoach(c){
-  const z=document.getElementById('ccd-bil-cal');
-  if(!z) return;
-  let h=''; try{ h=_htmlCalendrierBilansCoach(c); }catch(e){ h=''; }
-  z.innerHTML=h;
-}
-// Les deux commandes. Elles relisent le dossier plutot que de garder celui du
-// premier rendu : un bilan arrive entre-temps apparait sans rouvrir la fiche.
-function ccdBilCalMois(pas){
-  if(!_ccdBilCal.mois) return;
-  _ccdBilCal.mois=_ccdBilMoisDecale(_ccdBilCal.mois,pas);
-  renderCalendrierBilansCoach(getOwnedClient(currentClientId));
-}
-function ccdBilCalJour(iso){
-  _ccdBilCal.sel=String(iso||'');
-  renderCalendrierBilansCoach(getOwnedClient(currentClientId));
-}
-// LE MOIS SE REINITIALISE A CHAQUE FICHE. Sans cela, ouvrir la fiche de
-// quelqu'un d'autre gardait le mois du precedent, et le calendrier s'ouvrait
-// sur un mois vide sans qu'on comprenne pourquoi.
-function _ccdBilCalReset(){ _ccdBilCal.mois=null; _ccdBilCal.sel=null; }
 function _texteReponse(val){
   if(val==null||val==='') return '';
   // Un objet non reconnu rend '' et disparaît : mieux vaut une rubrique
@@ -50020,14 +49591,11 @@ function _dateBilanCourte(b){
 function _majPastilleBilan(){
   const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
   if(!btn) return;
-  // DEUX SOURCES, UN SEUL CHIFFRE : les reponses du coach qu'on n'a pas lues,
-  // et le bilan a remplir aujourd'hui. Ce dernier ne compte qu'une fois par
-  // jour, et plus du tout des que l'onglet a ete ouvert.
-  const _rep=bilansAvecReponseNonVue(currentUser).length;
-  const _du=(_bilanAFaireAujourdhui()&&!_bilanOngletVuAujourdhui())?1:0;
-  _pastilleOnglet('bilan',_rep+_du,c=>_du&&!_rep
-    ? 'Bilan : à remplir aujourd\'hui'
-    : 'Bilan : '+c+' élément'+(c>1?'s':'')+' à consulter');
+  const dot=btn.querySelector('.tab-dot');
+  const n=bilansAvecReponseNonVue(currentUser).length;
+  if(dot) dot.classList.toggle('on',n>0);
+  if(n>0) btn.setAttribute('aria-label','Bilan : '+n+' réponse'+(n>1?'s':'')+' de ton coach à lire');
+  else btn.removeAttribute('aria-label');
 }
 // Notification système, calquée sur checkFeedbackNotif — garde de premier
 // passage compris. Sans lui, la première synchro après déploiement enverrait
@@ -51207,139 +50775,6 @@ function renderHabitudesCoach(c){
   if(!z) return;
   let h=''; try{ h=c?htmlHabitudesCoach(c):''; }catch(e){ h=''; }
   z.innerHTML=h;
-}
-// ── LIFESTYLE COACH : LA FORME, PAS SEULEMENT LA MOYENNE ────────────────
-// Les deux sections « Sommeil » et « Pas » de cet onglet rendent une phrase :
-// « moyenne 14 jours ». C'est vrai et c'est insuffisant. Trois nuits a cinq
-// heures suivies de quatre a huit donnent la meme moyenne qu'une semaine
-// reguliere, et ce n'est pas la meme personne en face. Le coach a besoin de
-// voir la SUITE des jours avant de toucher a une charge.
-//
-// On reprend donc les barres de l'ecran Lifestyle de l'athlete, cote a cote
-// sous les habitudes, avec le choix de la periode. AUCUNE SAISIE ici : le
-// coach lit. Corriger la nuit de quelqu'un d'autre n'a pas de sens, et la
-// saisie est ce qui rend loadSteps/loadSleep inutilisables telles quelles —
-// elles lisent currentUser, qui est le coach sur cet ecran, pas l'athlete.
-const _CCD_LIFE_PERIODES=[7,14,30,90];
-const _ccdLifePer={pas:7,sommeil:7};
-// LES TROUS RESTENT DES TROUS. On parcourt les N derniers jours de calendrier
-// plutot que les seules entrees du journal : une semaine a trois relevés doit
-// se voir comme une semaine a trois relevés, pas comme une semaine pleine.
-function _ccdLifeSerie(log,jours,lire){
-  const par={};
-  (Array.isArray(log)?log:[]).forEach(e=>{ if(e&&e.date) par[e.date]=e; });
-  const auj=new Date(),out=[];
-  for(let i=jours-1;i>=0;i--){
-    const d=new Date(auj.getFullYear(),auj.getMonth(),auj.getDate()-i);
-    const iso=localISODate(d),e=par[iso];
-    let v=null;
-    if(e){ try{ v=lire(e); }catch(_){ v=null; } }
-    out.push({date:iso,jour:d,val:(typeof v==='number'&&isFinite(v))?v:null});
-  }
-  return out;
-}
-function _ccdLifeJJMM(d){
-  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
-}
-// La carte : titre, periode, chiffre de tete, barres. Une seule fonction pour
-// les deux colonnes — ce qui les distingue tient dans la couleur d'une barre
-// et dans l'unite, pas dans la structure.
-function _htmlCcdLifeCarte(o){
-  const s=o.serie,avec=s.filter(x=>x.val!=null);
-  const max=Math.max(...s.map(x=>x.val||0),o.plancher||1);
-  // Au-dela de 30 jours les barres tombent sous deux pixels : l'ecart entre
-  // elles mange le graphe au lieu de le lire.
-  const ecart=s.length>30?1:2;
-  const barres=s.map(x=>{
-    const pct=x.val?Math.max(4,Math.round(x.val/max*100)):3;
-    const col=x.val?o.couleur(x.val,x):'var(--border)';
-    return '<div title="'+_ccdLifeJJMM(x.jour)+(x.val!=null?' — '+o.format(x.val):' — non renseigné')+'"'
-      +' style="flex:1;min-width:2px;display:flex;align-items:flex-end;height:100%">'
-      +'<div style="width:100%;height:'+pct+'%;background:'+col+';border-radius:2px 2px 0 0"></div></div>';
-  }).join('');
-  const opts=_CCD_LIFE_PERIODES.map(n=>'<option value="'+n+'"'+(n===o.periode?' selected':'')+'>'+n+' jours</option>').join('');
-  return '<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">'
-      +'<span style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase">'+escapeHtml(o.titre)+'</span>'
-      +'<select aria-label="Période affichée" onchange="ccdLifePeriode(\''+o.cle+'\',this.value)"'
-        +' style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-2xs);padding:4px 6px">'
-        +opts+'</select>'
-    +'</div>'
-    +(avec.length
-      ? '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px">'
-          +'<span style="font-size:var(--fs-lg);font-weight:900;color:var(--text-strong)">'+escapeHtml(o.tete)+'</span>'
-          +'<span style="font-size:var(--fs-2xs);color:var(--text-dim)">'+escapeHtml(o.sousTete)+'</span>'
-        +'</div>'
-        +'<div style="display:flex;align-items:flex-end;gap:'+ecart+'px;height:74px">'+barres+'</div>'
-        +'<div style="display:flex;justify-content:space-between;font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">'
-          +'<span>'+_ccdLifeJJMM(s[0].jour)+'</span><span>'+_ccdLifeJJMM(s[s.length-1].jour)+'</span></div>'
-        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">'+avec.length+' jour'+(avec.length>1?'s':'')+' renseigné'+(avec.length>1?'s':'')+' sur '+s.length+'</div>'
-      : '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;padding:6px 0">Rien de saisi sur cette période.</div>')
-    +'</div>';
-}
-function _htmlLifestyleGraphesCoach(c){
-  if(!c) return '';
-  const nb=n=>Number(n).toLocaleString('fr-FR');
-  // ── PAS, a gauche ────────────────────────────────────────────────────
-  const jp=_ccdLifePer.pas;
-  const sp=_ccdLifeSerie(c.stepsLog,jp,e=>Number(e.count));
-  const avecP=sp.filter(x=>x.val!=null);
-  const totalP=avecP.reduce((s,x)=>s+x.val,0);
-  const moyP=avecP.length?Math.round(totalP/avecP.length):0;
-  const buts=(c&&c.stepsGoals)||STEPS_GOALS_DEFAUT;
-  const types=(c&&c.stepsDayType)||{};
-  const carteP=_htmlCcdLifeCarte({
-    cle:'pas',titre:'Pas',periode:jp,serie:sp,plancher:1000,
-    tete:avecP.length?nb(totalP)+' pas':'—',
-    sousTete:avecP.length?('soit '+nb(moyP)+' / jour'):'',
-    format:v=>nb(v)+' pas',
-    couleur:(v,x)=>{
-      // Le vert n'est pas une opinion : c'est l'objectif du jour, ON ou OFF,
-      // tel que l'athlete l'a regle. Sans objectif lisible, on reste neutre
-      // plutot que d'inventer un seuil.
-      const but=_stepsObjectifJour(buts,types[x.date]??null,x.date);
-      if(!(but>0)) return 'var(--sub)';
-      if(v>=but) return '#22c55e';
-      if(v>=but*0.6) return '#f97316';
-      return '#E02020';
-    }
-  });
-  // ── SOMMEIL, a droite ────────────────────────────────────────────────
-  const js=_ccdLifePer.sommeil;
-  const ss=_ccdLifeSerie(c.sleepLog,js,e=>Number(e.duration));
-  const avecS=ss.filter(x=>x.val!=null);
-  const moyS=avecS.length?Math.round(avecS.reduce((s,x)=>s+x.val,0)/avecS.length*10)/10:0;
-  const hhmm=v=>{
-    const h=Math.floor(v),m=Math.round((v-h)*60);
-    return h+' h'+(m?' '+String(m).padStart(2,'0'):'');
-  };
-  const carteS=_htmlCcdLifeCarte({
-    cle:'sommeil',titre:'Sommeil',periode:js,serie:ss,plancher:8,
-    tete:avecS.length?hhmm(moyS):'—',
-    sousTete:avecS.length?'de moyenne par nuit':'',
-    format:v=>hhmm(v),
-    couleur:v=>sleepColor(v)
-  });
-  // auto-fit : deux colonnes sur une fiche ouverte au large, une seule sur un
-  // telephone. Le coach consulte les deux, et souvent debout.
-  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:20px">'
-    +carteP+carteS+'</div>';
-}
-function renderLifestyleGraphesCoach(c){
-  const z=document.getElementById('ccd-life-graphes');
-  if(!z) return;
-  let h=''; try{ h=_htmlLifestyleGraphesCoach(c); }catch(e){ h=''; }
-  z.innerHTML=h;
-}
-// Le selecteur de periode. Il relit le dossier au lieu de garder celui du
-// premier rendu : une saisie de l'athlete arrivee entre-temps apparait alors
-// sans qu'on ait a rouvrir la fiche.
-function ccdLifePeriode(cle,v){
-  const n=parseInt(v,10);
-  if(_CCD_LIFE_PERIODES.indexOf(n)<0) return;
-  if(cle!=='pas'&&cle!=='sommeil') return;
-  _ccdLifePer[cle]=n;
-  renderLifestyleGraphesCoach(getOwnedClient(currentClientId));
 }
 // N3.2 — LE DOSSIER ENREGISTRE EST CELUI DE L'ATHLETE. getOwnedClient sans
 // second argument rend un objet DETACHE : DB.get reparse le JSON a chaque
@@ -78221,58 +77656,22 @@ function saveCoachPhone(){
   _renderCoachPhonePreview(raw);
   _renderContactCoach();
 }
-// UNE PROMESSE QUI PEND EST PIRE QU'UNE ERREUR : elle n'affiche rien.
-//
-// Seul img.onerror etait traite. Si FileReader echouait — fichier retire de la
-// galerie entre la selection et la lecture, permission refusee, quota disque —
-// ou si l'utilisateur annulait, r.onload n'etait jamais appele et la promesse
-// ne se resolvait JAMAIS. Le .then() des appelants n'arrivait pas, aucun toast
-// ne sortait, le rond restait vide : la personne concluait que l'app etait
-// cassee, et elle n'avait pas tort.
-//
-// Trois sorties de plus, toutes vers resolve(null) — la valeur que TOUS les
-// appelants savent deja traiter :
-//   • r.onerror  : la lecture a echoue ;
-//   • r.onabort  : elle a ete interrompue ;
-//   • un delai de 15 s : le cas qu'aucun evenement ne couvre — un decodage
-//     qui part sur une image enorme et ne rend jamais la main. 15 s parce
-//     qu'une photo de 12 Mpx se redimensionne en 2 a 3 s sur un telephone
-//     ancien : au-dela, plus rien n'arrivera.
-//
-// CE QUE CA NE COUVRE PAS : une image que le navigateur decode mal sans le
-// dire — un HEIC rendu tout noir, par exemple. On rend alors un JPEG valide,
-// et seul l'oeil peut le voir.
 function _resizeImage(file,maxW,maxH,quality){
   return new Promise(resolve=>{
-    let fini=false;
-    // Une seule sortie possible : sans ce garde, le delai de garde pourrait
-    // resoudre apres un succes et rien ne le signalerait.
-    const sortir=v=>{ if(fini) return; fini=true; clearTimeout(minuteur); resolve(v); };
-    const minuteur=setTimeout(()=>sortir(null),15000);
     const r=new FileReader();
     r.onload=e=>{
       const img=new Image();
       img.onload=()=>{
-        try{
-          const sc=Math.min(maxW/img.width,maxH/img.height,1);
-          const cv=document.createElement('canvas');
-          cv.width=Math.round(img.width*sc);cv.height=Math.round(img.height*sc);
-          cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-          sortir(cv.toDataURL('image/jpeg',quality||0.75));
-        }catch(err){
-          // toDataURL leve sur un canvas « souille » ou une image de taille
-          // aberrante. Sans ce catch, l'exception partait dans le vide du
-          // gestionnaire d'evenement et la promesse pendait, elle aussi.
-          sortir(null);
-        }
+        const sc=Math.min(maxW/img.width,maxH/img.height,1);
+        const cv=document.createElement('canvas');
+        cv.width=Math.round(img.width*sc);cv.height=Math.round(img.height*sc);
+        cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+        resolve(cv.toDataURL('image/jpeg',quality||0.75));
       };
-      img.onerror=()=>sortir(null);
+      img.onerror=()=>resolve(null);
       img.src=e.target.result;
     };
-    r.onerror=()=>sortir(null);
-    r.onabort=()=>sortir(null);
-    try{ r.readAsDataURL(file); }
-    catch(err){ sortir(null); }
+    r.readAsDataURL(file);
   });
 }
 function uploadCoachPhoto(input){
