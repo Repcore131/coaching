@@ -20892,6 +20892,21 @@ function _rendreVignettesAthletes(vus){
   z.innerHTML='<div class="vig-grille">'+vus.map(htmlVignetteAthlete).join('')+'</div>';
   return true;
 }
+// LES DEUX SECTIONS. Elles ne paraissent QUE s'il y a des deux cotes : tant
+// que le coach n'a bascule personne, tout le monde est « avec suivi » et un
+// titre unique au-dessus d'une liste complete n'apprendrait rien.
+// Une recherche ou un filtre qui ne laisse qu'un camp retombe donc sur la
+// liste simple, sans en-tete orpheline.
+function _htmlSectionsSuivi(vus){
+  const avec=vus.filter(estSuivi),sans=vus.filter(c=>!estSuivi(c));
+  if(!avec.length||!sans.length) return vus.map(renderClientRow).join('');
+  const titre=(t,n)=>'<div style="grid-column:1/-1;display:flex;align-items:baseline;gap:8px;'
+    +'margin:18px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub)">'
+    +escapeHtml(t)+'</span><span style="font-size:var(--fs-2xs);color:var(--text-faint)">'+n+'</span></div>';
+  return titre('Mes athlètes (avec suivi)',avec.length)+avec.map(renderClientRow).join('')
+        +titre('Mes athlètes (sans suivi)',sans.length)+sans.map(renderClientRow).join('');
+}
 function renderClientList(clients){
   const el=document.getElementById('ch-clients-list');
   if(!el) return;
@@ -20899,13 +20914,18 @@ function renderClientList(clients){
   const q=norm((document.getElementById('ch-search')||{}).value||'');
   let vus=tous;
   if(q) vus=vus.filter(c=>norm((c.fname||'')+' '+(c.lname||'')).includes(q));
+  // QUI ENTRE DANS QUEL FILTRE. Demande de Kevin, 11/09/2026 : une alerte de
+  // seance ou de charge ne concerne que quelqu'un qu'on suit ; une echeance
+  // d'acces concerne tout le monde, puisqu'elle porte sur le paiement.
+  //   seances, alertes, charges groupees -> avec suivi seulement
+  //   acces, jamais demarre, en attente, actifs, tous -> les deux
   if(_filtreClients==='traiter') vus=vus.filter(c=>needsAlert(c)||hasNewBilan(c));
   else if(_filtreClients==='attente') vus=vus.filter(c=>c._fromCode||!c.email);
   // Les trois compteurs de la barre. MEMES predicats que agregerPortefeuille :
   // un compteur qui n'ouvre pas exactement sa propre liste serait pire que pas
   // de compteur du tout.
-  else if(_filtreClients==='pf-traiter') vus=vus.filter(c=>urgencyScore(c)>=PIL_SEUIL_TRAITER);
-  else if(_filtreClients==='pf-decrochage') vus=vus.filter(c=>_pilEligibleSignaux(c)&&signauxEntrainement(c).decrochage);
+  else if(_filtreClients==='pf-traiter') vus=vus.filter(c=>estSuivi(c)&&urgencyScore(c)>=PIL_SEUIL_TRAITER);
+  else if(_filtreClients==='pf-decrochage') vus=vus.filter(c=>estSuivi(c)&&_pilEligibleSignaux(c)&&signauxEntrainement(c).decrochage);
   else if(_filtreClients==='pf-acces') vus=vus.filter(c=>_pilEligibleSignaux(c)&&_pilAccesExpire(c,Date.now()));
   // N1.11 — les deux etats que les metric-box decrivaient sans les ouvrir.
   // MEMES predicats que agregerPortefeuille, aux memes fonctions.
@@ -20963,7 +20983,7 @@ function renderClientList(clients){
       +'<span class="cr-diete">Diète</span>'
       +'<span>Charge</span><span>Progrès</span><span>Bilans</span>'
       +'<span></span><span>État</span></div>'
-      +vus.map(renderClientRow).join('');
+      +_htmlSectionsSuivi(vus);
     // LA CASCADE NE JOUE QU'AU PREMIER REMPLISSAGE de la visite. Les rendus
     // suivants — frappe, filtre, tri, synchro — posent le contenu sans un
     // mouvement : une entree qui se rejoue n'est plus une entree, c'est un
@@ -22539,6 +22559,45 @@ function selVersProgramme(){
     +' en attente : choisis le programme à leur assigner.','var(--info)');
   return true;
 }
+// ══ AVEC SUIVI / SANS SUIVI ════════════════════════════════════════════
+// Un portefeuille melange deux populations qui ne se pilotent pas pareil :
+// ceux que le coach suit vraiment, et ceux qui ont un acces sans
+// accompagnement. Les memes alertes pour les deux noient les premieres.
+//
+// LE DEFAUT EST « AVEC SUIVI », et c'est deliberé : un dossier existant n'a
+// pas ce champ, et rien ne doit changer pour lui tant que le coach n'a rien
+// dit. C'est LUI qui bascule, athlete par athlete — aucune deduction
+// automatique, aucune surprise.
+function estSuivi(c){ return !!c && c.suivi!==false; }
+function coachBasculerSuivi(id,ev){
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(id,users);
+  if(!c) return;
+  c.suivi=!estSuivi(c);
+  if(c.email) users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  // On repeint la liste ENTIERE : l'athlete change de section, et sa ligne
+  // seule ne saurait pas se deplacer.
+  try{ renderClientList(); }catch(e){}
+  try{ if(currentClientId===id) openClientDetail(id,true,true); }catch(e){}
+  toastSync(ok,envoi,estSuivi(c)?'Passé en suivi':'Passé sans suivi',"le changement est");
+}
+// Le curseur, tel qu'il apparait sur la ligne et sur la fiche.
+function _htmlCurseurSuivi(c,taille){
+  const on=estSuivi(c);
+  const p=taille==='grand'?'9px 14px':'6px 10px';
+  return '<button type="button" class="btn btn-sm" onclick="coachBasculerSuivi(\''+c.id+'\',event)"'
+    +' aria-pressed="'+(on?'true':'false')+'"'
+    +' title="Bascule entre suivi et sans suivi"'
+    +' style="margin:0;flex-shrink:0;white-space:nowrap;padding:'+p+';min-height:36px;'
+    +'font-size:var(--fs-2xs);letter-spacing:1px;border-radius:var(--r-full);'
+    +'border:1px solid '+(on?'var(--red)':'var(--border)')+';'
+    +'background:'+(on?'rgba(224,32,32,.16)':'transparent')+';'
+    +'color:'+(on?'var(--red-text)':'var(--text-dim)')+'">'
+    +(on?'● SUIVI':'○ SANS SUIVI')+'</button>';
+}
 function renderClientRow(c){
   const badge=_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire</span>'
     :_accesExpire(c)?'<span class="badge badge-gray">Lecture seule</span>'
@@ -22607,6 +22666,7 @@ function renderClientRow(c){
          geste vague, et il merite un apercu. -->
     <button class="btn btn-red btn-sm cr-fiche" onclick="event.stopPropagation();openClientDetail('${c.id}',false,true)"
       style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap">OUVRIR LA FICHE</button>
+    ${_htmlCurseurSuivi(c)}
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;
 }
