@@ -7514,6 +7514,56 @@ function testExercices(){
           return /throw new Error/.test(src)
             ?true:_echec('la durée est rabotée sans le dire');})());
 
+        // ── L'invitation copiée : le message entier, pas le code nu ──────
+        // Demande de Kevin, 14/09/2026. Le bouton copiait le token seul, et le
+        // reste — ou cliquer, dans quel navigateur, et que le code n'est pas
+        // optionnel — vivait dans sa memoire, a reecrire une fois par athlete.
+        ok('L\'invitation porte le prenom, le code NU et le lien court',(()=>{
+          const t=_texteInvitationAthlete({studentName:'Arthur Dupont',token:'RC-ZGW7-5WBE'});
+          if(t.indexOf('Arthur')<0) return _echec('le prenom manque');
+          if(t.indexOf('Dupont')>=0) return _echec('le nom de famille est passe avec le prenom');
+          if(t.indexOf('RC-ZGW7-5WBE')<0) return _echec('le code manque');
+          // ⚠ LE POINT QUI COMPTE. Le code est colle tel quel par l'athlete, et
+          // la saisie ne retire que les ESPACES : des parentheses autour du
+          // code le feraient chercher AVEC elles, et rendre « introuvable » —
+          // la panne exacte que ce message existe pour eviter.
+          if(/[(\[]\s*RC-ZGW7-5WBE|RC-ZGW7-5WBE\s*[)\]]/.test(t))
+            return _echec('le code est entoure de parentheses : il sera colle avec');
+          // Le code est SEUL SUR SA LIGNE : une ligne de prose autour, et le
+          // double-clic de l'athlete emporte le mot d'a cote.
+          if(t.split('\n').indexOf('RC-ZGW7-5WBE')<0)
+            return _echec('le code n\'est pas seul sur sa ligne');
+          // LE LIEN EST DEDUIT, JAMAIS ECRIT EN DUR — meme regle que le QR.
+          // Un lien fige renverrait vers repcore-sync depuis n'importe quel
+          // hebergement, y compris un apercu local.
+          if(/repcore-sync\.web\.app/.test(String(_texteInvitationAthlete)))
+            return _echec('le lien est code en dur dans la fonction');
+          const n=t.split(RC_LIEN_COURT).length-1;
+          if(n!==2) return _echec('le lien court apparait '+n+' fois au lieu de 2');
+          // Les trois etapes, dans l'ordre : c'est ce qui en fait un mode
+          // d'emploi plutot qu'un code accompagne de texte.
+          const i1=t.indexOf('1️⃣'), i2=t.indexOf('2️⃣'), i3=t.indexOf('3️⃣');
+          if(i1<0||i2<0||i3<0) return _echec('une des trois etapes manque');
+          if(!(i1<i2&&i2<i3)) return _echec('les etapes ne sont pas dans l\'ordre');
+          // L'AVERTISSEMENT SUR LE NAVIGATEUR RESTE : c'est lui qui evite
+          // l'installation depuis la vue embarquee d'Instagram, ou elle
+          // echoue sans rien dire.
+          return /Instagram/.test(t)?true:_echec('l\'avertissement navigateur a disparu');})());
+        ok('Sans nom saisi, la phrase se referme au lieu de trainer une virgule',(()=>{
+          const t=_texteInvitationAthlete({studentName:'',token:'RC-0000-0000'});
+          if(/prêt,\s*\./.test(t)||/prêt,\s*$/m.test(t))
+            return _echec('une virgule vide subsiste : '+t.split('\n')[0]);
+          if(t.indexOf('RC-0000-0000')<0) return _echec('le code manque');
+          return t.split('\n')[0]==='Ton accès RepCore est enfin prêt.'
+            ?true:_echec('premiere ligne : « '+t.split('\n')[0]+' »');})());
+        ok('Le message part en TEXTE BRUT, jamais echappe en HTML',(()=>{
+          // Il va dans un presse-papier, pas dans une page : escapeHtml y
+          // transformerait « M'Bala » en « M&#39;Bala » dans le message que
+          // l'athlete recoit.
+          const t=_texteInvitationAthlete({studentName:"M'Bala",token:'RC-1111-2222'});
+          if(/&#|&amp;|&quot;/.test(t)) return _echec('du HTML echappe est parti : '+t.slice(0,80));
+          return t.indexOf("M'Bala")>=0?true:_echec('l\'apostrophe a ete perdue');})());
+
         // ── Aucune régression rétroactive ────────────────────────────────
         ok('Un code ANCIEN, sans grantedBy, est lu comme « creator »',(()=>{
           // Migration implicite : aucun code en circulation ne change de

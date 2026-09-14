@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1194';
+window.RC_BUILD='1195';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -83936,8 +83936,14 @@ function loadStudentCodes(){
       +'<div style="display:flex;gap:8px;margin-top:10px">'
       +'<button onclick="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:7px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">'+(c.active?'Désactiver':'Activer')+'</button>'
       +'<button onclick="extendStudentCode('+i+')" style="flex:1;background:none;border:1px solid #1a3a1a;color:var(--green);border-radius:var(--r-2);padding:7px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">+3 mois</button>'
-      +'<button onclick="copyExistingCode('+i+')" style="flex:1;background:none;border:1px solid #1a1a3a;color:#7ab;border-radius:var(--r-2);padding:7px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Copier</button>'
       +'</div>'
+      // ══ LE GESTE PRINCIPAL DE LA LIGNE, ET IL PREND SA PROPRE LARGEUR ══
+      // « Copier » etait un troisieme bouton de la rangee, du meme rang que
+      // « Desactiver ». C'est pourtant CE geste-la qu'on fait apres avoir
+      // genere un code : on l'envoie. Et « Copier l'invitation » ne tient pas
+      // dans un tiers de carte sur un telephone — il s'y couperait en trois
+      // lignes. Il passe donc sur sa propre ligne, au-dessus du rouge.
+      +'<button onclick="_copierInvitationAthlete('+i+')" style="width:100%;margin-top:8px;background:none;border:1px solid #1a1a3a;color:#7ab;border-radius:var(--r-2);padding:7px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Copier l\'invitation</button>'
       // ══ LE QUATRIEME GESTE : FERMER ET EFFACER ══════════════════════════
       // Demande de Kevin, 08/09/2026 : « ca m'eviterait de devoir rechercher
       // des codes ou des athletes avec qui je ne peux plus travailler ».
@@ -84103,11 +84109,61 @@ async function extendStudentCode(i){
     toast('Code prolongé jusqu\'au '+_jusquau+'. Son dossier n\'est pas encore synchronisé ici : renvoie-lui le MÊME code (bouton Copier) pour qu\'il applique la prolongation.','var(--orange)');
   }
 }
-function copyExistingCode(i){
-  if(!currentUser.studentCodes||!currentUser.studentCodes[i]) return;
-  const token=currentUser.studentCodes[i].token;
-  if(navigator.clipboard){navigator.clipboard.writeText(token).then(()=>toast('Code copié'));}
-  else{const t=document.createElement('textarea');t.value=token;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();toast('Code copié');}
+// ══ L'INVITATION ENTIERE, PLUS LE CODE NU ════════════════════════════════
+//
+// ⚠ copyExistingCode A ETE REMPLACEE le 14/09/2026. Elle copiait le token
+// seul : le coach devait ensuite reecrire de memoire, a chaque athlete, ou
+// cliquer, dans quel navigateur, et que le code n'est pas optionnel. Ce sont
+// exactement les trois points sur lesquels une installation echoue, et ils
+// etaient confies a sa memoire une fois par athlete.
+//
+// TEXTE BRUT, JAMAIS escapeHtml : ceci part dans un presse-papier, pas dans
+// une page. Un prenom avec une apostrophe y deviendrait « M&#39;Bala ».
+function _texteInvitationAthlete(c){
+  // Le prenom se prend comme partout ailleurs dans cet ecran : le premier mot
+  // du nom saisi par le coach. Sans nom, la phrase se referme proprement
+  // plutot que de trainer une virgule vide.
+  const prenom=String((c&&c.studentName)||'').trim().split(' ')[0];
+  // DEDUIT, JAMAIS CODE EN DUR — meme regle que le QR. Servie hors de
+  // l'hebergement Firebase, la reecriture /i n'existe pas et RC_LIEN_COURT
+  // rend l'adresse longue : un lien mort dans une invitation ne se rattrape
+  // pas, l'athlete est deja parti.
+  const lien=RC_LIEN_COURT;
+  return [
+    'Ton accès RepCore est enfin prêt'+(prenom?', '+prenom:'')+'.',
+    '',
+    '1️⃣ Ouvre ce lien 👇',
+    lien,
+    '',
+    '',
+    '⚠️ Dans Safari (iPhone) ou Chrome (Android), PAS dans Instagram.',
+    'Si un écran te dit "ouvre dans ton navigateur", clique dessus,',
+    'c\'est normal.',
+    '',
+    '2️⃣ Installe l\'app, le bouton te le propose direct.',
+    '',
+    '3️⃣ Une fois l\'app installée. Il va te demander un code, colle celui-là :',
+    // ⚠ LE CODE EST NU, SANS PARENTHESES. Il est colle tel quel dans le champ
+    // de l'athlete, et _lierCoach ne retire que les ESPACES : « (RC-XXXX) »
+    // serait cherche avec ses parentheses et rendrait « code introuvable » —
+    // la panne exacte que ce message existe pour eviter.
+    String((c&&c.token)||''),
+    '',
+    'Le code est obligatoire, sans lui tu n\'as pas d\'accès et je ne te vois pas apparaître de mon côté.',
+    '',
+    'Si t\'es bloqué, le lien : '+lien
+  ].join('\n');
+}
+function _copierInvitationAthlete(i){
+  const c=currentUser.studentCodes&&currentUser.studentCodes[i];
+  if(!c) return;
+  _rcCopier(_texteInvitationAthlete(c)).then(ok=>{
+    // ON NE DIT « COPIE » QUE SI CA L'EST. Un accuse de reception faux fait
+    // coller dans le vide — ici, envoyer un message vide a un athlete qui
+    // attend son acces, et ne s'en apercevoir que par son silence.
+    if(ok) toast('Invitation copiée — colle-la dans WhatsApp','var(--green)');
+    else toast('Copie refusée par le navigateur. Réessaie, ou copie le code à la main.','var(--orange)');
+  });
 }
 
 // ═══════════════════════════════════════════════════
