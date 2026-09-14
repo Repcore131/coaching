@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1178';
+window.RC_BUILD='1179';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -7774,7 +7774,9 @@ const COACH_PHOTO='icons/coach.jpg';
            la reponse vaut quelque chose. La zone reste dans le document :
            rcRendreRetourSeance l'ecrit toujours, et la masquer ici plutot que
            de retirer son code evite de casser le reste de la boucle. -->
-      <div id="clh-retour-zone" style="display:none!important;margin-bottom:16px"></div>
+      <!-- Vide depuis le 14/09/2026 : voir rcRendreRetourAccueil. La zone
+           demeure pour que ses appelants continuent de la trouver. -->
+      <div id="clh-retour-zone" style="display:none;margin-bottom:16px"></div>
       <!-- 1er BILAN EN ATTENTE -->
       <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div class="eyebrow" style="color:var(--info);margin-bottom:5px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
@@ -47663,11 +47665,30 @@ function rcRendreRetourSeance(sess){
   z.style.display='block';
   return true;
 }
-// L'ENCART DE L'ACCUEIL : les courbatures, en differe.
+// ⚠ L'ENCART DE COURBATURES A QUITTE L'ACCUEIL le 14/09/2026. Kevin : « ça
+// pollue ». Il ouvrait l'accueil sur « Depuis ta dernière séance » et une
+// question par muscle, avant la séance du jour, le poids et la nutrition —
+// trois choses qu'on vient chercher, contre une qu'on n'a pas demandee.
+//
+// LA FONCTION RESTE ET NE REND PLUS RIEN. Trois appelants la nomment ; les
+// retirer un par un, c'est trois occasions d'en oublier un et de laisser une
+// zone orpheline. Elle garantit desormais l'inverse de ce qu'elle faisait :
+// que #clh-retour-zone soit vide.
+//
+// Masquer la zone en CSS ne suffisait PAS, et c'est l'erreur du lot precedent :
+// z.style.display='block' reecrit la declaration en ligne, priorite comprise,
+// et le !important posait donc avec elle. Couper a la source est le seul
+// endroit qui tienne.
+//
+// CE QUE CA NE SUPPRIME PAS : le retour demande en FIN DE SEANCE, au seul
+// moment ou la reponse vaut quelque chose. retoursEnAttenteCourbatures reste
+// appelee par lui.
 function rcRendreRetourAccueil(){
   const z=document.getElementById('clh-retour-zone');
   if(!z) return false;
   z.style.display='none'; z.innerHTML='';
+  return false;
+  // eslint-disable-next-line no-unreachable
   let l=[];
   try{ l=retoursEnAttenteCourbatures(currentUser); }catch(e){ l=[]; }
   if(!l.length) return false;
