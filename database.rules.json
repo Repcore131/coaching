@@ -184,6 +184,24 @@
         "vision": { ".validate": "newData.isString() && newData.val().length < 4000" },
         "photoVitrine": { ".validate": "newData.isString() && newData.val().length < 3000000" },
         "signature": { ".validate": "newData.isString() && newData.val().length < 1500000" },
+
+        // ── Le logo detoure du coach ───────────────────────────────────────
+        //
+        // MEME PANNE QUE 'dispo' CI-DESSOUS, MEME CAUSE, ET ELLE ETAIT ENCORE
+        // OUVERTE. 'logo' figure dans CHAMPS_PROFIL_COACH — il DOIT y figurer,
+        // car il est lu chez l ATHLETE par l image de seance qu il telecharge —
+        // mais il n avait pas de regle ici. pushProfilCoach fait un PUT du
+        // profil ENTIER reconstruit depuis cette liste : le "$autre" ferme plus
+        // bas rejetait donc la BRANCHE COMPLETE. Des qu un coach deposait son
+        // logo, son profil public cessait DEFINITIVEMENT de se publier — photo,
+        // phrase, vitrine et signature comprises — et chaque tentative suivante
+        // repartait avec le meme 'logo'.
+        //
+        // LE BUDGET EST CELUI DE LA SIGNATURE, et pour les memes raisons : meme
+        // nature (un PNG detoure, transparence conservee, donc pas de
+        // re-encodage JPEG), et meme plafond dans IMG_BUDGET_KO — 200 ko.
+        "logo": { ".validate": "newData.isString() && newData.val().length < 1500000" },
+
         "cartePro": { ".validate": "newData.isString() && newData.val().length < 3000000" },
         "diplomes": {
           ".validate": "newData.hasChildren() || newData.val() == null",

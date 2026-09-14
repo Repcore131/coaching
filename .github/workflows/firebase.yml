@@ -80,6 +80,16 @@ jobs:
       - name: Verifier les illustrations
         run: node scripts/verif/illustrations.mjs
 
+      # LES REGLES DE LA BASE. coach_public se ferme sur une liste blanche, et
+      # pushProfilCoach envoie le profil ENTIER : un champ ecrit par le code et
+      # absent des regles fait rejeter TOUTE la branche, definitivement et sans
+      # un mot. C'est arrive avec 'dispo', puis avec 'logo'.
+      # Le script lit les deux fichiers SUR LE DISQUE — la sonde equivalente de
+      # tests.js, elle, lit les regles par fetch, et database.rules.json n'est
+      # pas deploye : elle rendait vert faute de pouvoir conclure.
+      - name: Verifier les regles de la base
+        run: node scripts/verif/regles.mjs
+
       - name: Deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
