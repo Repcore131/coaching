@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1196';
+window.RC_BUILD='1197';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2069,11 +2069,18 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .san-carte{background:linear-gradient(180deg,#161619,#0d0d0f);border:1px solid #2a2a2e;
   border-radius:var(--r-3);padding:15px 14px 13px;margin-bottom:16px}
 .san-tete{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+/* UNE COULEUR, UN SENS. L'icone suivait le rouge quel que soit le domaine :
+   la carte « Sommeil » portait donc une lune ROUGE, juste sous un titre de
+   section bleu. La classe de domaine la corrige sans toucher au reste. */
 .san-ico{width:20px;height:20px;color:var(--red-text);flex-shrink:0}
+.san-carte.san-nuit .san-ico{color:#60a5fa}
 .san-ico svg{width:100%;height:100%;display:block}
 .san-t{margin:0;font-size:var(--fs-sm);font-weight:900;letter-spacing:2.5px;text-transform:uppercase;color:#fff}
 .san-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
-.san-nav-b{min-width:38px;min-height:34px;border-radius:var(--r-2);cursor:pointer;font-size:var(--fs-md);
+/* ⚠ 44x44 MINIMUM, et elles etaient a 38x34. Ce sont les deux seules
+   commandes de navigation de l'ecran : les rater au doigt, c'est ne pas
+   pouvoir consulter la semaine precedente du tout. */
+.san-nav-b{min-width:44px;min-height:44px;border-radius:var(--r-2);cursor:pointer;font-size:var(--fs-md);
   border:1px solid #2e2e33;background:transparent;color:var(--text);font-family:inherit}
 .san-nav-b[disabled]{opacity:.35;cursor:default}
 .san-per{flex:1;text-align:center;font-size:var(--fs-2xs);letter-spacing:1.5px;
@@ -2094,6 +2101,20 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .san-obj-l{position:absolute;left:0;right:0;border-top:1px dashed rgba(255,255,255,.35);pointer-events:none}
 .san-obj-l span{position:absolute;right:0;top:-8px;font-size:9px;letter-spacing:.5px;
   background:#0d0d0f;padding:0 4px;color:var(--text-faint)}
+/* ── MA SEMAINE : deux pistes, un seul axe de jours ─────────────────────
+   Les pistes n'ont PAS de libelles de jour : ils sont rendus une fois, sous
+   les deux, et c'est ce qui en fait un axe partage plutot que deux axes qui
+   se ressemblent. Les gaps et le flex:1 des barres sont les memes des deux
+   cotes — sans quoi les colonnes ne tomberaient pas en face. */
+.sansem-piste{margin-bottom:10px}
+.sansem-lbl{display:flex;align-items:center;gap:6px;font-size:var(--fs-2xs);
+  letter-spacing:1.5px;text-transform:uppercase;font-weight:800;margin-bottom:6px}
+.sansem-pt{width:7px;height:7px;border-radius:var(--r-full);flex-shrink:0}
+.sansem-graph{position:relative;display:flex;align-items:flex-end;gap:5px;height:74px}
+.sansem-bar{gap:0}
+.sansem-jours{display:flex;gap:5px;margin-top:2px}
+.sansem-j{flex:1;min-width:0;text-align:center;font-size:var(--fs-2xs);
+  color:var(--text-faint);font-weight:700}
 .san-chiffres{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
 .san-lbl{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800}
 .san-val{font-family:var(--pile-titre);font-size:clamp(26px,7.5vw,34px);color:#fff;letter-spacing:1px;line-height:1.1}
@@ -9754,6 +9775,14 @@ const COACH_PHOTO='icons/coach.jpg';
            premier, et qu'il ne fera pas defiler jusqu'en bas pour le
            decouvrir. Remplie une fois par sanRendre(). -->
       <div id="lifestyle-import"></div>
+      <!-- MA SEMAINE, AU-DESSUS DES DEUX DOMAINES. Elle porte les deux pistes
+           sur un seul axe de jours et la navigation de periode ; les cartes
+           « Mes pas » et « Mon sommeil » ci-dessous n'ont plus ni graphe ni
+           fleches. C'est la comparaison, pas la repetition, qui a de la
+           valeur : la nuit ou l'on a mal dormi est celle ou l'on a peu
+           marche, et il fallait quatre cents pixels de defilement pour
+           l'apercevoir. -->
+      <div id="lifestyle-semaine"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:var(--red);border-radius:var(--r-1);box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
         <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
@@ -77989,19 +78018,35 @@ function sanLirePas(txt){
 // Sept barres, une ligne d'objectif, et une echelle qui ne ment pas : le bas
 // n'est jamais arbitraire, il descend au minimum observe arrondi vers le bas,
 // et jamais au-dessus de ce qui rendrait un ecart de vingt minutes spectaculaire.
-function _sanGraph(quoi,serie,objectif,fmt){
-  const vals=serie.map(x=>x.v).filter(v=>v!=null);
+// PURE, ET PARTAGEE PAR LES DEUX PISTES DE « MA SEMAINE ». Elle vivait dans
+// _sanGraph ; deux graphes la voulaient, et la recopier aurait fait diverger
+// l'echelle d'une piste de celle de la carte qui la redit.
+// Le plancher : zero pour les pas — un jour a 2 000 pas DOIT paraitre bas —
+// et six heures pour le sommeil, sinon sept nuits entre 6 h et 8 h donnent
+// sept barres identiques.
+function _sanEchelle(quoi,vals,objectif){
   const max=Math.max(objectif,...(vals.length?vals:[objectif]));
-  // Le plancher : zero pour les pas — un jour a 2 000 pas DOIT paraitre bas —
-  // et six heures pour le sommeil, sinon sept nuits entre 6 h et 8 h donnent
-  // sept barres identiques.
   const bas=quoi==='sommeil'?Math.min(360,Math.max(0,(vals.length?Math.min(...vals):360)-30)):0;
   const haut=max*1.08;
-  const pc=v=>Math.max(3,Math.round((v-bas)/(haut-bas)*100));
-  const pcObj=Math.max(0,Math.min(100,Math.round((objectif-bas)/(haut-bas)*100)));
+  return {
+    bas,haut,
+    // 3 % de plancher : une barre a zero n'est pas cliquable, et c'est
+    // justement le jour qu'on veut pouvoir ouvrir pour le remplir.
+    pc:v=>Math.max(3,Math.round((v-bas)/(haut-bas)*100)),
+    pcObj:Math.max(0,Math.min(100,Math.round((objectif-bas)/(haut-bas)*100)))
+  };
+}
+// UNE COULEUR, UN SENS, SUR TOUTE LA PAGE. Le rouge est le domaine de
+// l'activite, le bleu celui du sommeil. Une nuit reussie affichee en rouge
+// disait « pas » a l'oeil qui venait de lire la piste du dessus.
+function _sanTeinte(quoi){ return quoi==='sommeil'?'#60a5fa':'#e02020'; }
+function _sanGraph(quoi,serie,objectif,fmt){
+  const vals=serie.map(x=>x.v).filter(v=>v!=null);
+  const e=_sanEchelle(quoi,vals,objectif);
+  const pc=e.pc, pcObj=e.pcObj;
   const barres=serie.map((x,i)=>{
     const ok=x.v!=null&&x.v>=objectif;
-    const col=x.v==null?'#242428':(ok?'#e02020':'#5a5a62');
+    const col=x.v==null?'#242428':(ok?_sanTeinte(quoi):'#5a5a62');
     const h=x.v==null?3:pc(x.v);
     const lib=x.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
     return '<button type="button" class="san-bar" style="--h:'+h+'%"'
@@ -78014,6 +78059,75 @@ function _sanGraph(quoi,serie,objectif,fmt){
   return '<div class="san-graph">'
     +'<div class="san-obj-l" style="bottom:calc('+pcObj+'% + 18px)"><span>'+escapeHtml(fmt(objectif))+'</span></div>'
     +barres+'</div>';
+}
+// ══ MA SEMAINE : LES PAS ET LES NUITS SUR LE MEME AXE ════════════════════
+//
+// LE POINT DE CE LOT. Les deux semaines etaient deux graphes separes par
+// quatre cents pixels de defilement — alors que la comparaison est exactement
+// ce qui a de la valeur : « la nuit ou j'ai mal dormi, j'ai peu marche ». Mise
+// en regard, elle se lit d'un coup d'oeil, en descendant une colonne.
+//
+// DEUX PISTES EMPILEES, UNE SEULE LIGNE DE JOURS. Et non quatorze barres fines
+// alternees : a 320 px, quatorze barres font 14 px de large, ni lisibles ni
+// touchables. Empilees, chaque barre garde toute la largeur de sa colonne, et
+// l'oeil descend la colonne au lieu de compter des paires.
+//
+// CHAQUE PISTE GARDE SON ECHELLE. Les pas se comptent en milliers, le sommeil
+// en minutes : un axe commun ecraserait l'un des deux contre le plancher.
+// Ce qui est commun, c'est l'AXE DES JOURS — les memes sept colonnes, les
+// memes libelles, la meme periode.
+function _htmlPisteSante(u,quoi,jours){
+  const v=j=>quoi==='sommeil'?sanSommeilMin(u,j.iso):sanPas(u,j.iso);
+  const fmt=quoi==='sommeil'?sanHM:sanNb;
+  const objectif=quoi==='sommeil'?sanObjSommeil(u):sanObjPas(u);
+  const serie=jours.map(j=>({iso:j.iso,d:j.d,v:v(j)}));
+  const e=_sanEchelle(quoi,serie.map(x=>x.v).filter(x=>x!=null),objectif);
+  const teinte=_sanTeinte(quoi);
+  const barres=serie.map(x=>{
+    const ok=x.v!=null&&x.v>=objectif;
+    const col=x.v==null?'#242428':(ok?teinte:'#5a5a62');
+    const h=x.v==null?3:e.pc(x.v);
+    const lib=x.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+    return '<button type="button" class="san-bar sansem-bar" style="--h:'+h+'%"'
+      +' onclick="sanOuvrirJour(\''+quoi+'\',\''+x.iso+'\')"'
+      +' aria-label="'+escapeHtml((quoi==='sommeil'?'Sommeil, ':'Pas, ')+lib+' : '
+        +(x.v==null?'aucune donnée':fmt(x.v)))+'">'
+      +'<span class="san-bar-f" style="background:'+col+'"></span>'
+      +'</button>';
+  }).join('');
+  return '<div class="sansem-piste">'
+    +'<div class="sansem-lbl" style="color:'+teinte+'">'
+      +'<span class="sansem-pt" style="background:'+teinte+'"></span>'
+      +(quoi==='sommeil'?'Sommeil':'Pas')+'</div>'
+    +'<div class="sansem-graph">'
+      +'<div class="san-obj-l" style="bottom:'+e.pcObj+'%"><span>'+escapeHtml(fmt(objectif))+'</span></div>'
+      +barres+'</div>'
+    +'</div>';
+}
+function _htmlSemaineSante(u){
+  const jours=sanJours(_sanOffset);
+  const p0=jours[0].d,p6=jours[6].d;
+  const libPer=_sanOffset===0?'7 derniers jours'
+    :(p0.getDate()+' '+p0.toLocaleDateString('fr-FR',{month:'short'})+' au '
+      +p6.getDate()+' '+p6.toLocaleDateString('fr-FR',{month:'short'}));
+  // LA LIGNE DE JOURS EST RENDUE UNE FOIS, SOUS LES DEUX PISTES. C'est elle
+  // qui fait l'axe commun : la redire par piste, c'est deux axes qui se
+  // ressemblent, pas un axe partage.
+  const jsHtml=jours.map(j=>'<span class="sansem-j">'
+    +escapeHtml(['L','M','M','J','V','S','D'][(j.d.getDay()+6)%7])+'</span>').join('');
+  return '<section class="san-carte">'
+    +'<div class="san-tete"><h2 class="san-t">Ma semaine</h2></div>'
+    +'<div class="san-nav">'
+      +'<button type="button" class="san-nav-b" onclick="sanPeriode(-1)" aria-label="Période précédente">‹</button>'
+      +'<span class="san-per">'+escapeHtml(libPer)+'</span>'
+      +'<button type="button" class="san-nav-b" onclick="sanPeriode(1)" aria-label="Période suivante"'
+        +(_sanOffset>=0?' disabled':'')+'>›</button>'
+    +'</div>'
+    +(_sanOffset!==0?'<button type="button" class="san-auj" onclick="sanPeriode(0,true)">Aujourd\'hui</button>':'')
+    +_htmlPisteSante(u,'pas',jours)
+    +_htmlPisteSante(u,'sommeil',jours)
+    +'<div class="sansem-jours">'+jsHtml+'</div>'
+    +'</section>';
 }
 function _htmlCarteSante(u,quoi){
   const r=sanResume(u,_sanOffset);
@@ -78031,18 +78145,17 @@ function _htmlCarteSante(u,quoi){
     :'<div class="san-ecart '+(bloc.ecart>=0?'pos':'neg')+'">'
       +(quoi==='sommeil'?sanHMSigne(bloc.ecart)+' / nuit'
         :(bloc.ecart>0?'+':'−')+sanNb(Math.abs(bloc.ecart))+' / jour')+'</div>';
-  return '<section class="san-carte">'
+  return '<section class="san-carte'+(quoi==='sommeil'?' san-nuit':'')+'">'
     +'<div class="san-tete">'
       +'<span class="san-ico">'+(quoi==='sommeil'?_sanIcoLune():_sanIcoPas())+'</span>'
       +'<h2 class="san-t">'+titre+'</h2></div>'
-    +'<div class="san-nav">'
-      +'<button type="button" class="san-nav-b" onclick="sanPeriode(-1)" aria-label="Période précédente">‹</button>'
-      +'<span class="san-per">'+escapeHtml(libPer)+'</span>'
-      +'<button type="button" class="san-nav-b" onclick="sanPeriode(1)" aria-label="Période suivante"'
-        +(_sanOffset>=0?' disabled':'')+'>›</button>'
-    +'</div>'
-    +(_sanOffset!==0?'<button type="button" class="san-auj" onclick="sanPeriode(0,true)">Aujourd\'hui</button>':'')
-    +_sanGraph(quoi,serie,bloc.objectif,fmt)
+    // ⚠ NI GRAPHE NI NAVIGATION ICI DEPUIS LE 14/09/2026. Les deux vivent
+    // dans « Ma semaine », au-dessus, ou les pas et les nuits partagent UN
+    // SEUL axe de jours — c'est la comparaison qui a de la valeur, et elle
+    // etait separee par quatre cents pixels de defilement. Trois navigations
+    // pour une seule periode, c'etait aussi trois facons de se contredire.
+    // Cette carte garde ce qu'elle seule sait dire : les chiffres du domaine,
+    // ses actions, sa source.
     +'<div class="san-chiffres">'
       +'<div><div class="san-lbl">Moyenne</div><div class="san-val">'
         +(bloc.moy==null?'—':escapeHtml(fmt(bloc.moy)))+'</div></div>'
@@ -78082,6 +78195,12 @@ function sanRendre(){
   // ouvrirait un chemin ou l'ecran n'offre aucune capture du tout.
   try{ const zi=document.getElementById('lifestyle-import');
        if(zi) zi.innerHTML=_htmlCadreImportCapture(); }catch(e){}
+  // LA SEMAINE EN PREMIER, DANS SON PROPRE try. Elle porte desormais la
+  // navigation de periode : si elle echouait en silence, les deux cartes du
+  // dessous resteraient sur une periode qu'on ne pourrait plus changer.
+  try{ const zw=document.getElementById('lifestyle-semaine');
+       if(zw) zw.innerHTML=_htmlSemaineSante(u); }catch(e){
+       const zw=document.getElementById('lifestyle-semaine'); if(zw) zw.innerHTML=''; }
   try{ if(zs) zs.innerHTML=_htmlCarteSante(u,'sommeil'); }catch(e){ if(zs) zs.innerHTML=''; }
   try{ if(zp) zp.innerHTML=_htmlCarteSante(u,'pas'); }catch(e){ if(zp) zp.innerHTML=''; }
 }

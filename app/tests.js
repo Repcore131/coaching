@@ -38111,6 +38111,114 @@ vendredi 78 6h 44m
          const n=currentUser.sleepLog.find(e=>e.date==='2026-08-04');
          return n&&n.duration===8.3&&!n.bed&&!n.wake; })());
 
+    // ── Ma semaine : les deux domaines sur UN SEUL axe — 8 cas ──
+    // Le point du lot : les pas et les nuits etaient deux graphes separes par
+    // quatre cents pixels de defilement, alors que la comparaison est ce qui a
+    // de la valeur. Ce qui est partage, c'est l'AXE DES JOURS — pas l'echelle,
+    // qui ecraserait les minutes de sommeil sous les milliers de pas.
+    (()=>{
+      const _sU=currentUser;
+      const j=Date.now(), iso=d=>localISODate(new Date(d));
+      const pas=[],nuits=[];
+      for(let i=1;i<=7;i++){
+        pas.push({date:iso(j-i*864e5),count:i===1?12000:3000});
+        nuits.push({date:iso(j-i*864e5),duration:i===1?9:6});
+      }
+      const u={id:'S1',email:'s1@t.fr',role:'athlete',stepsLog:pas,sleepLog:nuits,
+        stepsGoals:{on:10000,off:7000},sleepGoal:480};
+      const boite=h=>{const d=document.createElement('div');d.innerHTML=h;return d;};
+      try{
+        currentUser=u;
+        const d=boite(_htmlSemaineSante(u));
+
+        ok('Ma semaine rend DEUX pistes et une seule ligne de jours',(()=>{
+          const pistes=d.querySelectorAll('.sansem-piste').length;
+          const axes=d.querySelectorAll('.sansem-jours').length;
+          if(pistes!==2) return _echec(pistes+' piste(s)');
+          // C'EST TOUT LE SUJET. Deux lignes de jours, ce sont deux axes qui
+          // se ressemblent ; une seule, c'est un axe partage.
+          return axes===1?true:_echec(axes+' ligne(s) de jours');})());
+        ok('Sept colonnes par piste, sept libelles, et ils tombent en face',(()=>{
+          const b=d.querySelectorAll('.sansem-bar').length;
+          const l=d.querySelectorAll('.sansem-j').length;
+          if(b!==14) return _echec(b+' barres au lieu de 14');
+          if(l!==7) return _echec(l+' libelles au lieu de 7');
+          // L'alignement tient au flex:1 et au MEME gap des deux cotes : un
+          // ecart entre les deux regles, et les colonnes ne tombent plus en
+          // face — c'est-a-dire que la comparaison ment.
+          const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+          const g1=(css.match(/\.sansem-graph\{[^}]*gap:(\d+)px/)||[])[1];
+          const g2=(css.match(/\.sansem-jours\{[^}]*gap:(\d+)px/)||[])[1];
+          return (g1&&g1===g2)?true:_echec('gaps differents : graph '+g1+' / jours '+g2);})());
+        ok('Les deux pistes lisent la MEME periode, dans le meme ordre',(()=>{
+          // Les libelles de jour sont rendus une fois ; ce qui doit coincider,
+          // ce sont les dates portees par les barres.
+          const isos=[...d.querySelectorAll('.sansem-bar')]
+            .map(b=>(b.getAttribute('onclick')||'').match(/'(\d{4}-\d{2}-\d{2})'/))
+            .map(m=>m&&m[1]);
+          const a=isos.slice(0,7), b=isos.slice(7);
+          if(a.some(x=>!x)||b.some(x=>!x)) return _echec('une barre sans date');
+          if(JSON.stringify(a)!==JSON.stringify(b))
+            return _echec('les deux pistes ne couvrent pas les memes jours');
+          return JSON.stringify(a)===JSON.stringify(sanJours(0).map(x=>x.iso))
+            ?true:_echec('la periode n\'est pas celle de sanJours');})());
+        ok('Une couleur, un sens : la nuit reussie est BLEUE, le jour reussi ROUGE',(()=>{
+          // Le rouge est le domaine de l'activite. Une nuit atteinte peinte en
+          // rouge disait « pas » a l'oeil qui venait de lire la piste du dessus.
+          if(_sanTeinte('sommeil')!=='#60a5fa') return _echec('sommeil : '+_sanTeinte('sommeil'));
+          if(_sanTeinte('pas')!=='#e02020') return _echec('pas : '+_sanTeinte('pas'));
+          const b=[...d.querySelectorAll('.sansem-piste')].map(pi=>
+            [...pi.querySelectorAll('.san-bar-f')].map(f=>f.getAttribute('style')||''));
+          // La veille porte 12 000 pas et 9 h : les deux objectifs sont tenus,
+          // et chaque piste doit le dire dans SA couleur.
+          if(!b[0].some(x=>x.indexOf('#e02020')>=0)) return _echec('aucune barre de pas atteinte en rouge');
+          if(!b[1].some(x=>x.indexOf('#60a5fa')>=0)) return _echec('aucune nuit atteinte en bleu');
+          // ET PAS L'INVERSE : la piste des pas n'emprunte jamais le bleu.
+          return !b[0].some(x=>x.indexOf('#60a5fa')>=0)
+            ?true:_echec('la piste des pas emprunte la couleur du sommeil');})());
+        ok('Chaque piste garde SON echelle : les minutes ne s\'ecrasent pas sous les pas',(()=>{
+          // Un axe commun mettrait 540 minutes et 12 000 pas sur la meme regle :
+          // les nuits deviendraient sept traits au ras du sol.
+          const eP=_sanEchelle('pas',[3000,12000],10000);
+          const eS=_sanEchelle('sommeil',[360,540],480);
+          if(eP.bas!==0) return _echec('le plancher des pas n\'est pas zero : '+eP.bas);
+          // Le sommeil part SOUS sa plus petite nuit, sinon sept nuits entre
+          // 6 h et 8 h donnent sept barres identiques.
+          if(!(eS.bas>0&&eS.bas<360)) return _echec('plancher sommeil : '+eS.bas);
+          return eS.haut<eP.haut?true:_echec('les deux echelles se confondent');})());
+        ok('La navigation de periode est rendue UNE fois, sur la semaine',(()=>{
+          if(d.querySelectorAll('.san-nav').length!==1)
+            return _echec('la semaine porte '+d.querySelectorAll('.san-nav').length+' navigation(s)');
+          // ET LES CARTES DE DOMAINE N'EN ONT PLUS. Trois navigations pour une
+          // seule periode, c'etaient trois facons de se contredire.
+          const c=boite(_htmlCarteSante(u,'pas'));
+          if(c.querySelector('.san-nav')) return _echec('la carte « Pas » a garde ses fleches');
+          if(c.querySelector('.san-graph')) return _echec('la carte « Pas » a garde son graphe');
+          const n=boite(_htmlCarteSante(u,'sommeil'));
+          return !n.querySelector('.san-nav')&&!n.querySelector('.san-graph')
+            ?true:_echec('la carte « Sommeil » a garde graphe ou fleches');})());
+        ok('Les fleches de periode tiennent la cible de 44 px',(()=>{
+          // Ce sont les DEUX SEULES commandes de navigation de l'ecran : les
+          // rater au doigt, c'est ne pas pouvoir consulter la semaine passee.
+          const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+          const m=css.match(/\.san-nav-b\{([^}]*)\}/);
+          if(!m) return _echec('regle .san-nav-b introuvable');
+          const w=(m[1].match(/min-width:(\d+)px/)||[])[1];
+          const h=(m[1].match(/min-height:(\d+)px/)||[])[1];
+          return (Number(w)>=44&&Number(h)>=44)?true:_echec('cible '+w+'×'+h+' px');})());
+        ok('Chaque barre reste ouvrable et se nomme pour un lecteur d\'ecran',(()=>{
+          const bs=[...d.querySelectorAll('.sansem-bar')];
+          const muettes=bs.filter(b=>!(b.getAttribute('aria-label')||'').trim());
+          if(muettes.length) return _echec(muettes.length+' barre(s) sans libelle');
+          // Le libelle NOMME SON DOMAINE : deux pistes l'une sous l'autre, un
+          // « mardi 12 : 3 000 » ne dirait pas de quoi il parle.
+          const sansDomaine=bs.filter(b=>!/^(Pas|Sommeil), /.test(b.getAttribute('aria-label')||''));
+          if(sansDomaine.length) return _echec(sansDomaine.length+' libelle(s) sans domaine');
+          return bs.every(b=>/sanOuvrirJour/.test(b.getAttribute('onclick')||''))
+            ?true:_echec('une barre n\'ouvre pas son jour');})());
+      } finally { currentUser=_sU; }
+    })();
+
     // ── Le cadre d'import est LA, et une seule fois — 6 cas ──
     // Il avait disparu de Lifestyle sans que rien ne le dise : le seul chemin
     // de remplissage rapide n'etait plus atteignable, et aucune assertion ne
