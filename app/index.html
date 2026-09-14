@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1183';
+window.RC_BUILD='1184';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -29638,6 +29638,32 @@ function _slugIllustre(sl){
     const b=exSlug(v.base);
     if(b&&b!==sl&&_exoIndex.has(b)) return b;
   }
+  // ── ET « X + PRECISION » PREND L'IMAGE DE X ───────────────────
+  //
+  // ⚠ CINQUANTE EXERCICES DU GUIDE ONT UNE VIDEO ET DES CONSIGNES, ET
+  // AUCUNE IMAGE — mesure du 14/09/2026. Ce sont presque tous des
+  // declinaisons : « CURL BARRE PRISE LARGE » quand le guide illustre
+  // « CURL BARRE », « PRESSE A CUISSE INCLINE PIEDS EN HAUT » quand il
+  // illustre « PRESSE A CUISSE INCLINE ». La fiche montrait donc une video
+  // et un texte, et un cadre vide a la place du dessin.
+  //
+  // EX_VARIANTES faisait deja exactement cela, mais a la main, pour vingt-neuf
+  // noms ecrits un par un. Ici on le derive du nom : on retire le dernier mot
+  // tant qu'il en reste au moins deux, et le PLUS LONG prefixe illustre gagne
+  // — le plus long, parce que « TIRAGE HORIZONTAL MACHINE UNILATERAL NEUTRE »
+  // doit prendre l'unilateral s'il existe, et la machine sinon.
+  //
+  // DEUX MOTS AU MINIMUM, jamais un seul : « CURL » ou « SQUAT » tout court
+  // rattacherait des mouvements qui n'ont rien a voir. Le prefixe retenu est
+  // le meme mouvement avec une precision d'execution en moins ; c'est la seule
+  // chose que cette regle affirme, et elle ne va pas plus loin.
+  // 37 des 50 retrouvent ainsi leur dessin ; les 13 autres n'ont pas de base
+  // illustree dans le guide, et gardent leur cadre — on n'invente rien.
+  const mots=String(sl).split('-').filter(Boolean);
+  for(let c=mots.length-1;c>=2;c--){
+    const pref=mots.slice(0,c).join('-');
+    if(_exoIndex.has(pref)) return pref;
+  }
   return null;
 }
 // PURE. L'illustration PLEINE RESOLUTION d'un slug deja calcule — 900 px, la
@@ -32662,16 +32688,20 @@ function _majEtatEnregistrement(){
 // que le coach vient verifier, et l'ouvrir pour le lire serait un clic de
 // trop.
 function _htmlBoutonProgEx(ex,i){
-  const c=(()=>{ try{ return consigneProgEx(ex); }catch(e){ return null; } })();
+  // Le dossier de l'athlete edite : sans lui le coach lirait une consigne
+  // differente de celle que l'athlete recoit dans sa seance.
+  const _cl=(()=>{ try{ return getOwnedClient(currentClientId); }catch(e){ return null; } })();
+  const c=(()=>{ try{ return consigneProgEx(ex,null,_cl); }catch(e){ return null; } })();
   const p=(()=>{ try{ return progExDe(ex); }catch(e){ return null; } })();
   const fin=(()=>{ try{ return finProgExProche(ex); }catch(e){ return null; } })();
   let resume='';
   if(c){
     resume=`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:5px">
       Semaine ${c.semaine+1} / ${c.total} · ${c.series}×${c.reps} @${c.rpe}
-      ${c.kg!=null?`· <b style="color:var(--sub)">${c.kg} kg</b> (${String(c.pct).replace('.',',')} % de ${c.max} kg)`
+      ${c.kg!=null?`· <b style="color:var(--sub)">${c.kg} kg</b> (${String(c.pct).replace('.',',')} % de ${c.maxRetenu} kg)`
                   :`· <span style="color:var(--orange)">charge non calculable au-delà de ${RPE_REPS_MAX} répétitions</span>`}
       ${fin!=null&&fin<=PROG_EX_FIN_PREVENIR+1?`<span style="color:var(--orange)"> · ${fin===1?'dernière semaine':fin+' semaines restantes'}</span>`:''}
+      ${c.maxDepasse?`<div style="color:var(--orange);margin-top:3px">1RM au dossier : ${c.max} kg · observé en séance : ${c.maxObserve} kg. La charge est calculée sur l’observé — corrige le 1RM pour figer la progression.</div>`:''}
     </div>`;
   } else if(p){
     // UNE PROGRAMMATION QUI NE S'APPLIQUE PAS SE DIT. Terminee, pas encore
@@ -37611,7 +37641,8 @@ function _blocExo(idx,estSS){
   // LA CHARGE, ELLE, RESTE MODIFIABLE. C'est une SUGGESTION : la barre du
   // jour, la fatigue, une blessure naissante — l'athlete est le seul a
   // savoir. On pre-remplit, on ne verrouille pas.
-  const _cons=(()=>{ try{ return consigneProgEx(ex); }catch(e){ return null; } })();
+  const _cons=(()=>{ try{ return consigneProgEx(ex,null,currentUser); }
+                     catch(e){ return null; } })();
   if(_cons){
     // LES SERIES SUIVENT LA CONSIGNE. On AJOUTE ce qui manque et on ne retire
     // jamais une serie deja faite : une seance commencee ne se raccourcit pas
@@ -37704,6 +37735,11 @@ function _blocExo(idx,estSS){
       </div>
 
       ${cycleLabel&&!estSS?`<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
+
+      <!-- La consigne a ete recalculee sur ce qui a ete souleve. On le DIT :
+           une charge qui change toute seule sans un mot se lit comme un bug,
+           et c'est exactement ainsi que l'inverse avait ete rapporte. -->
+      ${(_cons&&_cons.maxDepasse)?`<div style="background:var(--surface-2);border-left:3px solid var(--orange);border-radius:var(--r-1);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Tu as déjà fait mieux que le 1RM noté par ton coach sur cet exercice (${_cons.max} kg au dossier, ${_cons.maxObserve} kg estimés d’après tes séries). La charge du jour est calculée sur ce que tu soulèves vraiment.</div>`:''}
 
       ${isCardio(ex)?
         `<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:var(--r-3);padding:14px;margin-bottom:12px;text-align:center">
@@ -44741,7 +44777,63 @@ function semaineProgEx(prog,date){
 // PURE. La consigne de la semaine en cours : series, repetitions, RPE, charge.
 // Rend null hors programmation, ou quand la semaine est incomplete — une
 // ligne a moitie remplie ne prescrit rien.
-function consigneProgEx(ex,date){
+// ═════ LE 1RM DU DOSSIER, CONFRONTE A CE QUI EST REELLEMENT SOULEVE ═════
+//
+// ⚠ IL NE BOUGEAIT JAMAIS, ET C'EST LE BUG RAPPORTE LE 14/09/2026 : « j'ai
+// beau mettre 60 kg en RIR 0, la semaine d'apres il me propose toujours
+// 20 kg ». La charge prescrite vaut `max × pourcentage`, et `max` est le 1RM
+// saisi UNE FOIS par le coach. Un athlete qui progresse, ou un 1RM entre trop
+// bas au depart, recevait la meme consigne indefiniment — une consigne que la
+// seance d'avant avait deja demontree fausse.
+//
+// CE N'EST PAS UN NOUVEAU MODELE. On garde la methode du coach — sa table de
+// pourcentages, ses semaines, son RPE — et on corrige la SEULE entree qui
+// avait vieilli. L'e1RM existe deja dans ce fichier et sert deja aux records
+// et a la detection de plateau ; c'est lui qu'on relit.
+//
+// ET RIEN NE SE FAIT EN SILENCE : la consigne rend `maxObserve` et
+// `maxDepasse`, l'ecran de seance et le bouton du coach le disent tous les
+// deux, et le coach garde la main sur le chiffre du dossier.
+const PROG_EX_OBS_JOURS=120;   // au-dela, ce n'est plus la forme du moment
+const PROG_EX_OBS_ECART=1.10;  // 10 % : sous cet ecart, on ne touche a rien
+// PURE. Le meilleur e1RM observe sur cet exercice, ou null.
+function maxE1rmObserve(user,nomEx,maintenant){
+  const u=_dossier(user);
+  const l=(u&&Array.isArray(u.sessions))?u.sessions:[];
+  if(!l.length||!nomEx) return null;
+  const t=(maintenant instanceof Date)?maintenant.getTime()
+    :Number(maintenant==null?Date.now():maintenant);
+  const limite=(isFinite(t)?t:Date.now())-PROG_EX_OBS_JOURS*86400000;
+  let haut=0;
+  for(const sess of l){
+    if(!sess) continue;
+    // Une decharge n'est pas une mesure de force : elle est concue pour etre
+    // facile, et la compter reviendrait a faire baisser une reference.
+    if(sess.deload===true) continue;
+    const d=Number(sess.date);
+    if(isFinite(d)&&d>0&&d<limite) continue;
+    const dd=_dataDeSeance(sess,nomEx);
+    if(!dd||!Array.isArray(dd.sets)) continue;
+    for(const se of dd.sets){
+      if(!se||se.done!==true) continue;
+      const w=parseFloat(se.weight); if(!(w>0)) continue;
+      const r=_perfReps(se);
+      // Au-dela de douze repetitions l'e1RM n'est plus fiable : la meme borne
+      // que partout ailleurs dans ce fichier, et pour la meme raison.
+      if(!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+      const v=e1rm(w,r,_perfRir(se,user));
+      if(v>haut) haut=v;
+    }
+  }
+  if(!(haut>0)) return null;
+  const v=Math.round(haut*10)/10;
+  // Memes bornes que le champ du coach : une valeur hors echelle vient d'une
+  // saisie aberrante, et on ne prescrit pas sur une saisie aberrante.
+  return (v>=PROG_EX_MAX_MIN&&v<=PROG_EX_MAX_MAX)?v:null;
+}
+// `user` EST FACULTATIF, ET SON ABSENCE VAUT « AUCUNE CORRECTION » : tout
+// appelant a deux arguments garde exactement le comportement d'avant.
+function consigneProgEx(ex,date,user){
   const p=progExDe(ex);
   if(!p) return null;
   const i=semaineProgEx(p,date);
@@ -44749,9 +44841,16 @@ function consigneProgEx(ex,date){
   const s=p.semaines[i];
   if(!s||!s.series||!s.reps||!s.rpe) return null;
   const pct=pctDe1RM(s.rpe,s.reps);
-  const kg=(pct==null)?null:_arrondirCharge(p.max*pct/100);
+  const obs=user?(()=>{ try{ return maxE1rmObserve(user,ex&&ex.name,date); }
+                        catch(e){ return null; } })():null;
+  const depasse=(obs!=null&&obs>p.max*PROG_EX_OBS_ECART);
+  const ref=depasse?obs:p.max;
+  const kg=(pct==null)?null:_arrondirCharge(ref*pct/100);
   return {semaine:i,total:p.semaines.length,series:s.series,reps:s.reps,
           rpe:s.rpe,pct,kg,max:p.max,
+          // Ce qu'on a observe, ce qu'on a retenu, et s'ils different : de
+          // quoi ecrire la phrase sans refaire le calcul.
+          maxObserve:obs, maxRetenu:ref, maxDepasse:depasse,
           // RIR EQUIVALENT, pour l'athlete qui lit en RIR depuis toujours.
           // 10 - RPE, la conversion usuelle ; affichee, jamais enregistree
           // comme une mesure — voir la carte des series.
@@ -83793,7 +83892,7 @@ function chargeReferenceEchauffement(idx){
   // rendus seraient l'inverse de ce qu'il faut charger.
   try{ if(isCounterweightEx(ex.name)) return null; }catch(e){}
   try{
-    const c=consigneProgEx(ex);
+    const c=consigneProgEx(ex,null,currentUser);
     if(c&&c.kg>0) return c.kg;
   }catch(e){}
   try{
