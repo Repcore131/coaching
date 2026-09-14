@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1185';
+window.RC_BUILD='1186';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1579,7 +1579,12 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .rcf-rec::before{content:'';position:absolute;left:0;right:0;bottom:26px;height:1px;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.07) 22%,
     rgba(255,255,255,.07) 78%,transparent);pointer-events:none}
-.rcf-rec-g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-items:end}
+/* ⚠ align-items:START, ET C'EST TOUT LE POINT. Avec `end`, les trois cases
+   s'alignaient par le BAS : un libelle sur une ligne poussait son medaillon
+   quarante pixels plus bas que celui d'a cote, et la composition demandee —
+   deux badges a la meme hauteur, celui du milieu un peu plus haut — devenait
+   un escalier desordonne. Vu a l'ecran le 14/09/2026. */
+.rcf-rec-g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-items:start}
 .rcf-rec-g.n1{grid-template-columns:1fr;max-width:190px;margin:0 auto}
 .rcf-rec-g.n2{grid-template-columns:repeat(2,1fr);max-width:300px;margin:0 auto}
 .rcf-case{position:relative;display:flex;flex-direction:column;align-items:center;
@@ -1589,9 +1594,18 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .rcf-case-halo{position:absolute;left:50%;top:-6px;width:112px;height:112px;
   transform:translateX(-50%);pointer-events:none;opacity:0;
   background:radial-gradient(circle,rgba(224,32,32,.34),transparent 66%)}
+/* Les medaillons sont le point haut de l'ecran : ils y sont plus grands
+   qu'en liste. Leur taille est posee en style INLINE par _htmlBadge — une
+   fonction partagee par les listes d'exercices et le coach — donc elle ne
+   peut se surcharger qu'ici, et seulement pour cet ecran. Le rapport 88x96
+   est celui des fichiers eux-memes (184x200) : a toute autre proportion,
+   object-fit:contain laisserait une bande noire d'un cote. */
+.rcf-case .rc-badge-hex{width:88px!important;height:96px!important}
 .rcf-nom{font-size:var(--fs-2xs);font-weight:900;letter-spacing:1.3px;
-  text-transform:uppercase;color:#fff;line-height:1.25}
-.rcf-exp{font-size:9px;color:var(--text-faint);line-height:1.4;letter-spacing:.2px}
+  text-transform:uppercase;color:#fff;line-height:1.25;min-height:2.5em;
+  display:flex;align-items:flex-start;justify-content:center}
+.rcf-exp{font-size:9px;color:var(--text-faint);line-height:1.4;letter-spacing:.2px;
+  min-height:2.8em}
 /* Apparition ELECTRIQUE : flash, halo, badge, micro scale, stabilisation. */
 @keyframes rcfFlash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
 @keyframes rcfSurgit{
@@ -1747,7 +1761,17 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   .rcf-flamme{width:108px;height:124px}
   .rcf-titre{letter-spacing:3px}
   .rcf-rec-g{gap:4px}
-  .rcf-exp{display:none}
+  .rcf-case .rc-badge-hex{width:72px!important;height:79px!important}
+  /* ⚠ L'EXPLICATION RESTE. Elle etait masquee ici, et c'etait une faute : sur
+     « 100 % valide » elle porte le SEUL chiffre dynamique de la ligne —
+     « 24 / 24 series realisees ». La cacher sur les petits ecrans retirait
+     l'information a ceux qui ont le moins de place pour aller la chercher. */
+  .rcf-nom{letter-spacing:.8px;min-height:2.6em}
+  .rcf-exp{font-size:8.5px;min-height:0}
+  /* « Ressenti post-séance » et « Plus de détails » tenaient chacun sur deux
+     lignes, cote a cote : l'interligne suffit a les remettre sur une. */
+  .rcf-fb-t{font-size:9px;letter-spacing:1.4px}
+  .rcf-fb-plus{font-size:9px}
   .rcf-st{padding:12px 3px}
   .rcf-marches{height:78px}
   .rcf-p{height:26px}
@@ -40805,22 +40829,33 @@ function _htmlFlammeFin(){
   +'</defs>'
   // 1. Le halo. Peint le premier, donc derriere tout le reste.
   +'<ellipse cx="60" cy="86" rx="52" ry="50" fill="url(#rcffHalo)"/>'
-  // 2. Les deux langues laterales : elles donnent la largeur a la base et
-  //    l'impression que l'energie deborde.
-  +'<path d="M26 122c-9-11-11-24-5-36 1 9 5 14 10 17-3-12 0-22 7-30 0 14 6 20 11 26z" '
-    +'fill="url(#rcffSombre)" opacity=".85"/>'
-  +'<path d="M94 122c9-11 11-24 5-36-1 9-5 14-10 17 3-12 0-22-7-30 0 14-6 20-11 26z" '
-    +'fill="url(#rcffSombre)" opacity=".85"/>'
-  // 3. Le corps sombre : la masse. C'est lui qui porte la silhouette.
-  +'<path d="M60 6c4 17-6 25-14 35-7 9-13 18-13 30a27 27 0 0 0 54 0c0-15-9-24-15-35'
-    +'-4-7-6-12-6-18-7 6-11 13-11 21 0-13 3-22 5-33z" fill="url(#rcffSombre)"/>'
-  // 4. Le corps vif, en retrait de quelques pixels : le lisere rouge qui
-  //    apparait entre les deux est ce qui fait le relief.
-  +'<path d="M60 26c3 13-5 19-11 27-5 7-9 13-9 22a20 20 0 0 0 40 0c0-11-7-18-11-26'
-    +'-3-5-4-9-4-13-5 4-8 10-8 16 0-10 2-17 3-26z" fill="url(#rcffVif)"/>'
-  // 5. Le coeur incandescent : la seule zone claire de tout l'ecran.
-  +'<path d="M60 62c2 7-3 10-6 15-2 4-3 7-3 11a9 9 0 0 0 18 0c0-6-4-10-6-15'
-    +'-2-4-3-7-3-11z" fill="url(#rcffCoeur)"/>'
+  // ⚠ ELLE A ETE REDESSINEE APRES L'AVOIR VUE A L'ECRAN. La premiere version
+  //    se lisait comme une GOUTTE : sommet trop rond, corps trop large, langues
+  //    laterales trop basses. Une flamme, c'est une pointe fine qui part haut,
+  //    un corps qui s'evase vite, et des langues qui LECHENT vers le haut.
+  // 2. Les deux langues laterales : angulaires et montantes, elles donnent
+  //    l'energie qui s'echappe. Basses et rondes, elles faisaient des joues.
+  +'<path d="M31 118c-11-13-13-29-6-44 0 12 4 19 10 23-5-16-2-30 8-41'
+    +'-1 18 5 27 12 35z" fill="url(#rcffSombre)" opacity=".8"/>'
+  +'<path d="M89 118c11-13 13-29 6-44 0 12-4 19-10 23 5-16 2-30-8-41'
+    +'1 18-5 27-12 35z" fill="url(#rcffSombre)" opacity=".8"/>'
+  // 3. Le corps sombre : la masse, et la SILHOUETTE. La pointe part de y=4 et
+  //    penche legerement — une flamme parfaitement symetrique est un logo, pas
+  //    un feu.
+  +'<path d="M58 4c9 21 3 31-2 40 5-4 9-10 11-17 6 13 17 21 25 33 8 11 10 22 10 31'
+    +'a42 42 0 0 1-84 0c0-13 6-24 15-34 8-9 14-17 14-27 3 6 6 11 7 17'
+    +'C56 32 55 18 58 4z" fill="url(#rcffSombre)"/>'
+  // 4. Le corps vif, en retrait : le lisere sombre qui apparait entre les deux
+  //    est ce qui fait le relief. Sa pointe est DECALEE de la grande, sinon les
+  //    deux formes se lisent comme une seule.
+  +'<path d="M61 34c6 15 1 22-2 28 4-3 7-7 8-12 4 9 12 15 17 23 5 8 7 15 7 21'
+    +'a30 30 0 0 1-60 0c0-9 4-17 11-24 6-6 10-12 10-19 2 4 4 8 5 12'
+    +'C59 52 59 43 61 34z" fill="url(#rcffVif)"/>'
+  // 5. Le coeur incandescent : la seule zone claire de tout l'ecran, et elle
+  //    tient dans quinze pixels. Plus large, elle deviendrait une lampe.
+  +'<path d="M61 74c3 8-1 12-2 16 2-2 4-4 5-7 2 5 6 9 8 13 3 5 4 9 4 12'
+    +'a14 14 0 0 1-28 0c0-5 2-9 6-13 3-4 5-7 5-11 1 2 2 4 3 6'
+    +'C60 84 60 79 61 74z" fill="url(#rcffCoeur)"/>'
   +'</svg>'
   // 6. Les etincelles. Trois passages, puis elles s'arretent : une braise qui
   //    monterait en boucle pour l'eternite ferait du bruit visuel.
