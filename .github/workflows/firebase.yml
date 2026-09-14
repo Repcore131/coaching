@@ -72,6 +72,14 @@ jobs:
           echo "Version du service worker :"
           head -1 _site/app/sw.js
 
+      # LES ILLUSTRATIONS. Un deploiement remplace TOUT le site : une image
+      # annoncee par l'index mais absente du depot disparait de la production
+      # sans que rien ne le dise. Le script refuse une fiche manquante, un
+      # fichier illisible ou une dimension fausse dans l'index ; il se contente
+      # de SIGNALER les vignettes absentes, pour lesquelles l'app a un repli.
+      - name: Verifier les illustrations
+        run: node scripts/verif/illustrations.mjs
+
       - name: Deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1182';
+window.RC_BUILD='1183';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4155,6 +4155,14 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .bslider::-moz-range-thumb{width:26px;height:26px;border-radius:var(--r-full);background:#0a0a0a;border:2.5px solid var(--bsl,#555);box-shadow:0 0 12px var(--bsl-glow,transparent);cursor:pointer}
 .bsl-scale{display:flex;justify-content:space-between;font-size:var(--fs-xs);font-weight:700;color:var(--text-dim);margin-top:8px;padding:0 4px}
 .choice-opt.sel{border-color:var(--red);border-left-width:3px;color:var(--text);background:var(--red-bg)}
+/* Le niveau d'activite hors sport : un libelle ET sa definition. La seule
+   raison d'une classe a part est cette seconde ligne — sans elle, « Peu
+   actif » et « Moyennement actif » ne se distinguent pas, et l'athlete
+   choisit au hasard le facteur qui pilote toute sa depense. */
+.naf-opt{display:block;text-transform:none;letter-spacing:0;padding:11px 14px}
+.naf-opt .naf-lib{display:block;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase}
+.naf-opt .naf-aide{display:block;margin-top:3px;font-size:var(--fs-2xs);font-weight:500;letter-spacing:0;text-transform:none;color:var(--text-faint);line-height:1.5}
+.naf-opt.sel .naf-aide{color:var(--text-dim)}
 .choice-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 
 /* ── L'APPUI, SUR TOUT CE QUI SE PRESSE ────────────────────────────────────
@@ -4324,6 +4332,45 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    3000) et sous #toast (9999), qui doit rester lisible par-dessus tout.
    contain isole ses recalculs : ce qui s'y peint ne provoque aucun relayout
    ailleurs dans la page. */
+/* ── LA BARRE D'ENVOI ────────────────────────────────────────────────
+   Un envoi de video dure des dizaines de secondes sur un reseau mobile.
+   Sans rien a l'ecran, la personne ne sait pas si ca marche : elle relance,
+   elle quitte l'ecran, elle envoie deux fois le meme fichier. Le panneau est
+   FLOTTANT parce qu'on envoie depuis deux ecrans differents — la page Videos
+   et le milieu d'une seance — et qu'un bloc pose dans l'un des deux serait
+   invisible depuis l'autre.
+   Sous #toast : la confirmation doit rester lisible par-dessus. */
+.rc-envoi{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
+  z-index:var(--z-layer);width:min(92vw,420px);
+  background:linear-gradient(180deg,var(--surface-1),var(--dark));
+  border:1px solid var(--surface-2);border-radius:var(--r-4);padding:14px 16px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 30px rgba(0,0,0,.55);
+  text-align:left}
+.rc-envoi-t{font-size:var(--fs-sm);font-weight:800;letter-spacing:1.1px;
+  text-transform:uppercase;color:var(--text-strong);margin-bottom:9px}
+.rc-envoi-piste{height:7px;border-radius:99px;background:#141414;
+  border:1px solid #1e1e1e;overflow:hidden}
+/* La largeur est la SEULE chose animee : un box-shadow qui varie se repeint a
+   chaque frame, et la regle de performance l'interdit sur Android. */
+.rc-envoi-jauge{height:100%;width:0;border-radius:99px;
+  background:linear-gradient(90deg,#8d0000,#e21414);
+  transition:width var(--t-2) var(--c-out)}
+/* L'etat indetermine : les octets sont partis, Cloudinary travaille encore.
+   Une jauge figee a 100 % laisserait croire a un blocage. */
+.rc-envoi.attente .rc-envoi-jauge{width:100%;
+  background:linear-gradient(90deg,#8d0000,#e21414,#8d0000);
+  background-size:200% 100%;animation:rc-envoi-bal 1.1s linear infinite}
+@keyframes rc-envoi-bal{from{background-position:0 0}to{background-position:-200% 0}}
+.rc-envoi.ok .rc-envoi-jauge{width:100%;background:linear-gradient(90deg,#15803d,#22c55e)}
+.rc-envoi.ko .rc-envoi-jauge{width:100%;background:#7f1d1d}
+.rc-envoi-d{display:flex;justify-content:space-between;gap:10px;margin-top:8px;
+  font-size:var(--fs-2xs);font-weight:700;color:var(--text-dim);line-height:1.5}
+.rc-envoi.ok .rc-envoi-d{color:var(--green)}
+.rc-envoi.ko .rc-envoi-d{color:var(--red-text)}
+@media (prefers-reduced-motion:reduce){
+  .rc-envoi-jauge{transition:none}
+  .rc-envoi.attente .rc-envoi-jauge{animation:none}
+}
 #arc-calque{position:fixed;inset:0;pointer-events:none;z-index:var(--z-layer);
   contain:layout style paint;overflow:hidden}
 #arc-calque>*{position:absolute;pointer-events:none;opacity:0}
@@ -29794,9 +29841,28 @@ function bqFavori(slug,ev){
 //
 // onerror EST RETIRE AVANT DE REMPLACER : sans ca, un repli qui echouerait a
 // son tour rappellerait la fonction indefiniment.
+// ⚠ ELLE TENTE LA PLEINE RESOLUTION AVANT D'ABANDONNER — 14/09/2026.
+// Elle remplacait la vignette manquante par un cadre gris, directement. Or
+// l'image de 900 px, elle, EXISTE : le dossier vignettes/ etait absent du
+// depot alors que l'index le declarait, et les 436 exercices s'affichaient
+// donc en gris dans toutes les listes pendant que leur fiche montrait bien
+// une photo. Un cadre vide ne dit rien a personne et ne se signale nulle part.
+//
+// Le repli coute une requete de plus SUR LE SEUL CAS D'ECHEC, et il rend le
+// produit insensible a une vignette manquante — celle d'aujourd'hui comme
+// celle d'un exercice ajoute demain sans sa miniature.
 function _illusAbsente(el){
   if(!el||!el.parentNode) return false;
   try{ el.onerror=null; }catch(e){}
+  const plein=el.getAttribute&&el.getAttribute('data-plein');
+  if(plein&&!el.dataset.repliTente){
+    el.dataset.repliTente='1';
+    // Le srcset doit partir : il redesignerait la vignette absente.
+    try{ el.removeAttribute('srcset'); el.removeAttribute('sizes'); }catch(e){}
+    el.onerror=function(){ _illusAbsente(el); };
+    el.src=plein;
+    return true;
+  }
   const fiche=el.style&&el.style.width==='100%';
   const d=document.createElement('div');
   if(fiche){
@@ -29835,6 +29901,16 @@ function _bqLigne(f){
   const sl=_slugIllustre(exSlug(f.nom));
   const img=sl?EXO_VIGNETTE_DOSSIER+sl+'.webp':null;
   const img2x=sl?EXO_IMG_DOSSIER+sl+'.webp':null;
+  // ⚠ « 900w » ETAIT UN CHIFFRE INVENTE, et il coutait cher. Le descripteur
+  // annoncait au navigateur une image de 900 px ; aucune des 436 n'atteint
+  // cette largeur — la mediane est de 248 px. Sur un ecran a DPR 3, le
+  // navigateur choisissait donc la « grande » en croyant gagner en finesse,
+  // et affichait un dessin de 248 px la ou il en fallait 192. Depuis que
+  // l'index porte les dimensions REELLES, on lui dit la verite ; sans elles,
+  // on ne dit rien du tout, ce qui vaut mieux qu'un mensonge.
+  const _dl=_dimsParSlug(exSlug(f.nom));
+  const _srcset=(img&&img2x&&_dl)
+    ?` srcset="${escapeHtml(img)} 256w, ${escapeHtml(img2x)} ${_dl[0]}w" sizes="64px"`:'';
   const fav=estFavoriExo(f.slug);
   const sous=[(f.muscles||[]).slice(0,2).map(m=>(MUSCLES[m]||{}).lib||m).join(', '),
     f.materiel||''].filter(Boolean).join(' · ');
@@ -29844,8 +29920,9 @@ function _bqLigne(f){
     style="display:flex;align-items:center;gap:11px;background:var(--surface-1);
     border:1px solid var(--border);border-radius:var(--r-3);padding:9px 11px;margin-bottom:8px;
     cursor:pointer;min-height:66px">
-    ${img?`<img src="${escapeHtml(img)}" srcset="${escapeHtml(img)} 256w, ${escapeHtml(img2x)} 900w"
-      sizes="64px" alt="" loading="lazy" decoding="async" width="64" height="48"
+    ${img?`<img src="${escapeHtml(img)}"${_srcset}
+      alt="" loading="lazy" decoding="async" width="64" height="48"
+      data-plein="${escapeHtml(img2x||'')}"
       onerror="_illusAbsente(this)"
       style="width:64px;height:48px;object-fit:cover;border-radius:8px;background:#f4f4f4;
       box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);flex-shrink:0">`
@@ -30009,6 +30086,13 @@ function ouvrirFicheBanque(slug,ev){
   const _sl=_slugIllustre(exSlug(f.nom));
   const img=_sl?EXO_IMG_DOSSIER+_sl+'.webp':null;
   const _d=_dimsParSlug(exSlug(f.nom));
+  // ⚠ ET ELLE NE S'AGRANDIT PLUS. `width:100%` dans une modale de 480 px
+  // etirait un dessin de 248 px a DEUX FOIS sa taille : c'est exactement le
+  // « images de mauvaise qualite » rapporte. Aucune des 436 illustrations
+  // n'atteint 900 px, contrairement a ce que le commentaire du dossier
+  // affirmait. `max-width` a la largeur reelle la montre NETTE, centree, et
+  // laisse `width:100%` faire son travail sur les ecrans plus etroits qu'elle.
+  // Sans dimension connue, on ne borne rien : le comportement d'avant.
   const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">`
     +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text);text-align:right">${escapeHtml(v)}</span></div>`:'';
   const liste=(titre,arr)=>(arr&&arr.length)?`<div style="margin-top:12px">`
@@ -30022,7 +30106,7 @@ function ouvrirFicheBanque(slug,ev){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:10px;font-size:var(--fs-lg)">${escapeHtml(f.nom)}</h2>
-    ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" decoding="async"${_d?` width="${_d[0]}" height="${_d[1]}"`:''} onerror="_illusAbsente(this)" style="width:100%;height:auto;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3);margin-bottom:12px">`
+    ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" decoding="async"${_d?` width="${_d[0]}" height="${_d[1]}"`:''} onerror="_illusAbsente(this)" style="display:block;margin:0 auto 12px;width:100%;${_d?`max-width:${_d[0]}px;`:''}height:auto;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3)">`
       :`<div class="sub" style="font-size:var(--fs-xs);text-align:center;padding:16px;background:var(--surface-1);border-radius:var(--r-3);margin-bottom:12px">Aucune illustration pour cet exercice.</div>`}
     ${l('Muscles',(f.muscles||[]).map(m=>(MUSCLES[m]||{}).lib||m).join(', '))}
     ${l('Schéma',SCHEMA_LIB[f.schema]||f.schema||'')}
@@ -48826,6 +48910,25 @@ function _bMetierSaisie(id,val){
       :(val?'Métier non reconnu : le calcul utilisera le nombre de séances.':'');
   }
 }
+// ── Niveau d'activite hors sport : DECLARE PAR LA PERSONNE ─────────
+//
+// ⚠ IL PASSE DEVANT LA PROFESSION, et c'etait tout l'objet du changement.
+// Deduire le NEAT d'un intitule de metier se trompe souvent : deux personnes
+// qui ecrivent « infirmier » ne bougent pas pareil selon le service, et un
+// « comptable » qui marche une heure par jour etait classe sedentaire sans
+// recours. La personne sait, elle : on le lui demande.
+//
+// La question reste FACULTATIVE. Sans reponse, la deduction par le metier
+// continue de servir exactement comme avant — on ajoute un niveau de
+// priorite, on n'en retire aucun.
+function bNaf(id){
+  const cur=nafDepuisReponse(bilData[id]);
+  return NAF_ECHELLE.map(x=>
+    `<div class="choice-opt naf-opt${cur&&cur.cle===x.cle?' sel':''}" data-grp="${id}" data-val="${escapeHtml(x.lib)}" onclick="pickBilChoice('${id}',this.dataset.val,false)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">`+
+    `<span class="naf-lib">${escapeHtml(x.lib)}</span>`+
+    `<span class="naf-aide">${escapeHtml(x.aide)}</span>`+
+    `</div>`).join('');
+}
 function _bMetierChoisi(id,nom){
   bilData[id]=nom;
   const el=document.getElementById(id);
@@ -49165,6 +49268,7 @@ const BILAN_QUESTIONS={
     {k:'deb-tca',lbl:'Troubles du comportement alimentaire',emoji:'🚨',alerte:true},
     {k:'deb-goals',lbl:'Objectifs principaux',emoji:'🎯'},
     {k:'deb-job',lbl:'Profession',emoji:'💼'},
+    {k:'deb-naf',lbl:"Niveau d'activité hors sport",emoji:'🚶'},
     {k:'deb-work-rhythm',lbl:'Rythme de travail',emoji:'🕒'},
     {k:'deb-location',lbl:"Lieu d'entraînement",emoji:'📍'},
     {k:'deb-gym',lbl:'Salle fréquentée',emoji:'🏢'},
@@ -51129,6 +51233,11 @@ const DEB_STEPS=[
     bLbl('Quels sont tes objectifs principaux ? ')+
     `<div>${bC('deb-goals',['Perte de poids','Prise de muscle','Rééquilibrage corporel','Amélioration des performances','Bien-être général'],true)}</div>`+
     bLbl('Quelle est ta profession ? ')+bMetier('deb-job')+
+    // Sous la profession, et pas ailleurs : c'est la meme question posee
+    // autrement, et l'une eclaire l'autre.
+    bLbl("Hors sport, comment situes-tu ton niveau d'activite au quotidien ?")+
+    `<div>${bNaf('deb-naf')}</div>`+
+    `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:2px 0 4px">C'est ce niveau qui servira au calcul de ta depense. Le sport est compte a part.</div>`+
     bLbl('Et ton rythme de travail ?')+
     `<div>${bC('deb-work-rhythm',['Plein temps','Partiel','En arrêt'])}</div>`+
     bLbl('As-tu des problèmes de santé ou des blessures ?  (Si oui, précise)')+bT('deb-health','Ex: Hernie discale, entorse...')+
@@ -63873,6 +63982,12 @@ function facteurNEAT(user){
   const metier=_dernierChamp(user,'deb-job');
   const prof=facteurProfession(metier);
   const pas=moyennePas14j(user);
+  // MEME PRIORITE QUE nafRetenu, et pour la meme raison : deux fonctions qui
+  // classent le meme athlete doivent le classer pareil, sinon l'estimation
+  // affichee ici contredit la cible affichee la.
+  const dec=nafDepuisReponse(_dernierChamp(user,'deb-naf'));
+  if(dec) return {f:dec.f,source:'declare',pas,
+    niveau:dec.cle,lib:dec.lib,metier:metier||null};
   if(prof) return {f:prof.f,source:'profession',pas,
     niveau:prof.niveau,lib:prof.lib,metier};
   // Sans profession reconnue, les PAS SEULS ajustent la base. Aucun relevé :
@@ -64301,6 +64416,20 @@ const NAF_DEPUIS_METIER=Object.freeze({
 function nafNiveau(cle){
   return NAF_ECHELLE.filter(x=>x.cle===cle)[0]||null;
 }
+// PURE. Ce que la personne a coche dans son bilan, ramene a l'echelle.
+//
+// ⚠ ON ACCEPTE LA CLE ET LE LIBELLE. Le formulaire stocke le libelle — un
+// bilan doit se lire tel quel, « Sédentaire » et pas « sedentaire » — mais
+// un reglage venu d'ailleurs porte la cle. Les deux entrent ici, et la
+// comparaison ignore accents et casse : « tres actif » vaut « Très actif ».
+function nafDepuisReponse(txt){
+  const nrm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+                 .toLowerCase().trim();
+  const t=nrm(txt);
+  if(!t) return null;
+  return NAF_ECHELLE.filter(x=>
+    x.cle===t||nrm(x.lib)===t)[0]||null;
+}
 // PURE. Le niveau retenu et d'ou il vient : le reglage explicite du coach
 // d'abord, la profession ensuite, et le sedentaire en dernier recours.
 function nafRetenu(user,opts){
@@ -64310,6 +64439,12 @@ function nafRetenu(user,opts){
   const regle=((u&&u.nutrition&&u.nutrition.tableur)||{}).naf;
   if(regle&&nafNiveau(regle)) return {n:nafNiveau(regle),source:'reglage'};
   const metier=_dernierChamp(u,'deb-job');
+  // ⚠ LE NIVEAU DECLARE PASSE DEVANT LA PROFESSION. La personne a repondu
+  // elle-meme dans son bilan : sa reponse vaut mieux qu'une deduction faite
+  // sur un intitule de metier. Seul le reglage du coach, lu plus haut, la
+  // depasse encore.
+  const dec=nafDepuisReponse(_dernierChamp(u,'deb-naf'));
+  if(dec) return {n:dec,source:'declare',metier:metier||null};
   const niv=niveauMetier(metier);
   if(niv&&NAF_DEPUIS_METIER[niv])
     return {n:nafNiveau(NAF_DEPUIS_METIER[niv]),source:'metier',metier:metier};
@@ -65786,7 +65921,8 @@ function _htmlTableauxTableur(c){
     +li('Niveau d’activité hors sport',
         sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+' — ×'+String(x.f).replace('.',',')})),
           t.naf.cle),
-        t.nafSource==='metier'?('déduit de « '+t.metier+' »')
+        t.nafSource==='declare'?'déclaré par l’athlète dans son bilan'
+        :t.nafSource==='metier'?('déduit de « '+t.metier+' »')
           :(t.nafSource==='reglage'?'choisi par toi'
             :(t.metier?('« '+t.metier+' » non reconnue — choisis le niveau')
               :'aucune profession renseignée — choisis le niveau')))
@@ -70451,7 +70587,14 @@ function loadMoreVideos(){
   const shown=document.getElementById('vid-card-list')?.children.length||0;
   _renderVideoBatch(shown,20);
 }
-async function _buildVideoCard(v){
+// ⚠ ELLE N'EST PLUS `async`, ET C'ETAIT TOUT LE BUG. Elle ne contient aucun
+// `await` — le mot-cle etait decoratif — mais il suffisait a lui faire rendre
+// une PROMESSE au lieu d'une chaine. _renderVideoBatch fait
+// `lot.map(_buildVideoCard).join('')` : une liste de promesses concatenee
+// donne « [object Promise] », repete autant de fois qu'il y a de videos.
+// C'est ce que l'eleve lisait en bas de son ecran, et c'est aussi pourquoi
+// aucune correction n'etait accessible : les cartes n'existaient pas.
+function _buildVideoCard(v){
   const hasFb=v.feedback||v.feedbackTimestamps?.length;
   const tsInner=_renderTsAnnotations(v.feedbackTimestamps||[],{readonly:true,videoId:'vc-video-'+v.id});
   const tsBlock=tsInner?`<div style="margin-top:8px">${tsInner}</div>`:'';
@@ -70543,12 +70686,110 @@ function _cloudinaryUserMsg(e,kind){
 // `options` EST FACULTATIF ET ARRIVE EN SECOND : les appels existants —
 // l'entree de fichier de l'ecran Videos — ne changent pas d'un iota. Avec lui,
 // l'entree ecrite porte son rattachement a la serie.
+// ══════════════ L'ENVOI QUI SE VOIT ═════════════════════════
+//
+// ⚠ FETCH NE SAIT PAS DIRE OÙ EN EST UN ENVOI, et c'était tout le problème.
+// L'ancienne version postait le fichier avec `fetch` et écrivait « Upload en
+// cours... » une fois pour toutes : sur un réseau mobile, cinquante mégaoctets
+// tiennent la ligne une minute entière sans que rien ne bouge à l'écran. La
+// personne croit à un blocage, relance, et envoie deux fois le même fichier.
+//
+// XMLHttpRequest, lui, émet `upload.onprogress`. C'est la SEULE raison de ne
+// pas utiliser fetch ici — le reste de l'app n'a pas à changer.
+function _envoiPanneau(titre){
+  let z=document.getElementById('rc-envoi-panneau');
+  if(!z){
+    z=document.createElement('div');
+    z.id='rc-envoi-panneau';
+    document.body.appendChild(z);
+  }
+  z.className='rc-envoi';
+  z.setAttribute('role','status');
+  z.setAttribute('aria-live','polite');
+  z.innerHTML='<div class="rc-envoi-t"></div>'
+    +'<div class="rc-envoi-piste"><div class="rc-envoi-jauge"></div></div>'
+    +'<div class="rc-envoi-d"><span class="rc-envoi-g"></span><span class="rc-envoi-dr"></span></div>';
+  const t=z.querySelector('.rc-envoi-t'), j=z.querySelector('.rc-envoi-jauge'),
+        g=z.querySelector('.rc-envoi-g'), d=z.querySelector('.rc-envoi-dr');
+  t.textContent=titre||'Envoi en cours';
+  g.textContent='0 %'; d.textContent='';
+  let mort=null;
+  const fermer=()=>{ if(mort) clearTimeout(mort); if(z&&z.parentNode) z.parentNode.removeChild(z); };
+  const differer=ms=>{ if(mort) clearTimeout(mort); mort=setTimeout(fermer,ms); };
+  return {
+    // Pendant le transfert : le pourcentage ET les mégaoctets. Le pourcentage
+    // seul ne dit pas si l'attente sera de dix secondes ou de deux minutes.
+    maj(charge,total){
+      z.className='rc-envoi';
+      const pct=total>0?Math.min(100,Math.round(charge/total*100)):0;
+      j.style.width=pct+'%';
+      g.textContent=pct+' %';
+      d.textContent=total>0?(_mo(charge)+' / '+_mo(total)):'';
+    },
+    // Les octets sont partis, le serveur travaille encore. Une jauge figée à
+    // 100 % se lirait comme un blocage : elle se met à balayer.
+    attente(msg){
+      z.className='rc-envoi attente';
+      g.textContent=msg||'Traitement…';
+      d.textContent='';
+    },
+    fini(msg){
+      z.className='rc-envoi ok';
+      t.textContent='Envoi terminé';
+      g.textContent=msg||'Vidéo envoyée';
+      d.textContent='';
+      differer(4000);
+    },
+    rate(msg){
+      z.className='rc-envoi ko';
+      t.textContent='Envoi interrompu';
+      g.textContent=msg||'Échec';
+      d.textContent='';
+      differer(7000);
+    },
+    fermer:fermer
+  };
+}
+// Des mégaoctets à une décimale, virgule française. « 12.3 Mo » se lit mal ici.
+function _mo(o){
+  return String(Math.round(Number(o||0)/1048576*10)/10).replace('.',',')+' Mo';
+}
+// POST multipart avec progression. Résout avec le corps de la réponse tel quel ;
+// c'est l'appelant qui sait s'il attend du JSON.
+//
+// ⚠ LES QUATRE FINS SONT TRAITÉES. Un envoi peut aboutir, échouer côté
+// serveur, tomber avec le réseau, ou être abandonné — et une promesse qui ne
+// se règle jamais laisserait le panneau à l'écran pour toujours.
+function _envoiXhr(url,corps,surProgres){
+  return new Promise((resolve,reject)=>{
+    const x=new XMLHttpRequest();
+    x.open('POST',url);
+    if(x.upload&&typeof surProgres==='function'){
+      x.upload.onprogress=e=>{
+        // `lengthComputable` est faux quand la taille n'est pas connue : on
+        // n'invente pas un pourcentage, on laisse l'appelant afficher l'attente.
+        if(e.lengthComputable) surProgres(e.loaded,e.total);
+      };
+    }
+    x.onload=()=>{
+      if(x.status>=200&&x.status<300) resolve(x.responseText);
+      else reject(new Error('Erreur serveur '+x.status));
+    };
+    x.onerror=()=>reject(new Error('Réseau indisponible'));
+    x.onabort=()=>reject(new Error('Envoi annulé'));
+    x.ontimeout=()=>reject(new Error('Délai dépassé'));
+    x.send(corps);
+  });
+}
 async function uploadVideoFile(input,options){
   const _opt=options||{};
   const file=input.files[0];if(!file) return;
   const errEl=document.getElementById('vid-upload-error');
   const progEl=document.getElementById('vid-upload-progress');
   if(errEl) errEl.style.display='none';
+  // La confirmation du PRECEDENT envoi part tout de suite : la laisser sous un
+  // fichier refuse reviendrait a annoncer une reussite qui n'a pas eu lieu.
+  if(progEl){ progEl.style.display='none'; progEl.textContent=''; }
   if(!file.type.startsWith('video/')){
     if(errEl){errEl.style.display='block';errEl.textContent='Fichier invalide : sélectionne une vidéo (MP4, MOV, WebM…)';}
     input.value='';return;
@@ -70566,16 +70807,33 @@ async function uploadVideoFile(input,options){
   const uploadPreset=coach?.cloudinaryPreset||currentUser.cloudinaryPreset||'repcore_videos';
   const folder='repcore/'+(currentUser.id||currentUser.email);
 
-  if(progEl){progEl.style.display='block';progEl.textContent='Upload en cours...';}
+  // Le panneau flottant est le SEUL affichage commun aux deux ecrans d'envoi :
+  // `vid-upload-progress` n'existe pas au milieu d'une seance.
+  const pan=_envoiPanneau('Envoi de la vidéo');
+  pan.maj(0,file.size);
+  if(progEl){progEl.style.display='block';progEl.textContent='Envoi en cours…';}
   try{
     const fd=new FormData();
     fd.append('file',file);
     fd.append('upload_preset',uploadPreset);
     fd.append('folder',folder);
-    const res=await fetch('https://api.cloudinary.com/v1_1/'+cloudName+'/video/upload',{method:'POST',body:fd});
-    if(!res.ok) throw new Error('Erreur serveur '+res.status);
-    const data=await res.json();
+    const brut=await _envoiXhr('https://api.cloudinary.com/v1_1/'+cloudName+'/video/upload',fd,
+      (charge,total)=>{
+        pan.maj(charge,total);
+        if(progEl) progEl.textContent='Envoi… '+(total>0?Math.round(charge/total*100):0)+' %';
+        // Les octets sont partis : ce qui reste est le travail de Cloudinary.
+        if(total>0&&charge>=total){
+          pan.attente('Traitement de la vidéo…');
+          if(progEl) progEl.textContent='Traitement de la vidéo…';
+        }
+      });
+    let data;
+    // Une reponse qui n'est pas du JSON est une panne cote serveur, pas un
+    // envoi reussi : la laisser passer poserait une entree sans URL.
+    try{ data=JSON.parse(brut); }
+    catch(_){ throw new Error('Réponse illisible du serveur vidéo'); }
     if(data.error) throw new Error(data.error.message);
+    if(!data.secure_url) throw new Error('Le serveur n\u2019a pas renvoyé de lien');
     const url=data.secure_url;
     const _saisi=_opt.nom||((document.getElementById('vid-name-input')||{}).value||'').trim();
     const name=_saisi||file.name.replace(/\.(mp4|mov|webm|mkv|avi)$/i,'');
@@ -70592,7 +70850,7 @@ async function uploadVideoFile(input,options){
       // Session changée pendant l'upload — écrire directement dans le compte cible
       const allUsers=DB.get('users')||{};
       const target=allUsers[targetEmail];
-      if(!target){toast('Session expirée : vidéo non sauvegardée.','var(--orange)');if(progEl)progEl.style.display='none';input.value='';return;}
+      if(!target){toast('Session expirée : vidéo non sauvegardée.','var(--orange)');pan.rate('Session expirée');if(progEl)progEl.style.display='none';input.value='';return;}
       if(!target.videos) target.videos=[];
       target.videos.push(entry);
       target.updatedAt=Date.now();
@@ -70605,7 +70863,16 @@ async function uploadVideoFile(input,options){
       consommerDemandeVideo(name,currentUser);
       _localOk=saveUser();
     }
-    if(progEl) progEl.style.display='none';
+    // ⚠ LA CONFIRMATION RESTE, elle ne se contente plus d'un toast. Le toast
+    // dure trois secondes et part : quelqu'un qui a repose son telephone
+    // pendant l'envoi ne le voit jamais, et ne sait pas si sa video est
+    // partie. Le panneau se ferme seul ; la ligne sous le bouton, elle, tient
+    // jusqu'au prochain envoi.
+    pan.fini('Vidéo envoyée au coach');
+    if(progEl){
+      progEl.style.display='block';
+      progEl.textContent='✓ Vidéo envoyée au coach · '+name;
+    }
     const _nomEl=document.getElementById('vid-name-input'); if(_nomEl) _nomEl.value='';
     input.value='';
     // La vidéo est bien sur Cloudinary, mais l'entrée qui la référence peut
@@ -70614,6 +70881,7 @@ async function uploadVideoFile(input,options){
     loadVideos();
   }catch(e){
     console.error('[uploadVideoFile]',e);
+    pan.rate(_cloudinaryUserMsg(e,'video'));
     if(progEl) progEl.style.display='none';
     if(errEl){errEl.style.display='block';errEl.textContent=_cloudinaryUserMsg(e,'video');}
     input.value='';

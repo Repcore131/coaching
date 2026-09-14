@@ -4235,7 +4235,8 @@ function testExercices(){
           const u=_ath({id:'r5',sopk:true});
           let h=_htmlSopkAthlete(u)+SOPK_NOTE_LIPIDES+SOPK_RENVOI_ATHLETE;
           (risquesMicro(u)||[]).forEach(x=>{ h+=' '+x.lib+' '+x.motif+' '+x.question; });
-          try{ currentUser=u; h+=_htmlDepartCoach(u); }catch(e){}
+          // Le panneau de depart du coach, retire le 08/09/2026, sortait
+          // d'ici. Le reste du lot, lui, couvre toujours le contenu SOPK.
           const d=document.createElement('div'); d.innerHTML=h;
           const n=(d.textContent||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
           // Dépistage : aucune question de symptôme.
@@ -4333,17 +4334,6 @@ function testExercices(){
                                off:{kcal:1800,p:144,l:Math.round(1.2*poids),g:100}}};
           if(!planSousAncienneRegleSopk(u)) return _echec('plan non reconnu');
           return migrationSopkADire(u)?true:_echec('bandeau muet');})());
-        ok('Critère : le bandeau ne s\'affiche qu\'une fois',(()=>{
-          const u=_ath({id:'c9',sopk:true});
-          const poids=_planPoids(u);
-          u.nutrition={macros:{on:{kcal:1800,p:144,l:Math.round(1.2*poids),g:100},off:{}}};
-          if(!migrationSopkADire(u)) return _echec('fixture muette');
-          if(_htmlDepartCoach(u).indexOf(escapeHtml(SOPK_MIGRATION_TITRE))<0)
-            return _echec('le bandeau ne sort pas de la fiche');
-          u.migrations={sopkLipidRuleRemoved:true};
-          if(migrationSopkADire(u)) return _echec('reproposé après lecture');
-          return _htmlDepartCoach(u).indexOf(escapeHtml(SOPK_MIGRATION_TITRE))<0
-            ?true:_echec('le bandeau sort encore');})());
         ok('Le bandeau se tait quand le plan est au standard, ou sans SOPK',(()=>{
           const u=_ath({id:'c10',sopk:true});
           const poids=_planPoids(u);
@@ -4371,16 +4361,6 @@ function testExercices(){
           assertNoDiagnosisBoundNumericTarget();
           return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
         // ── Le sélecteur coach ──────────────────────────────────────────
-        ok('Le sélecteur de lipides propose toute l\'échelle',(()=>{
-          const sauve=currentUser, sauveId=currentClientId;
-          try{
-            currentUser=_ath({id:'c1'});
-            const h=_htmlDepartCoach(_ath({id:'c1'}));
-            const manque=LIP_ECHELLE.filter(v=>h.indexOf('value="'+v+'"')<0);
-            if(manque.length) return _echec('absents : '+manque.join(', '));
-            return /_propSetLip\(this\.value\)/.test(h)
-              ?true:_echec('le sélecteur n\'est pas branché');
-          } finally { currentUser=sauve; currentClientId=sauveId; }})());
         // Cette assertion verrouillait 1,2 g/kg sous SOPK. Elle a ete
         // REMPLACEE, pas retiree : elle verifie maintenant l'absence de la
         // regle. La note, elle, doit toujours sortir — c'est elle qui porte
@@ -4396,12 +4376,6 @@ function testExercices(){
           if(!a||a.source===null||!b||b.source===null) return _echec('fixture muette');
           if(a.on.l!==b.on.l) return _echec('lipides '+a.on.l+' contre '+b.on.l);
           return a.on.g===b.on.g?true:_echec('glucides '+a.on.g+' contre '+b.on.g);})());
-        ok('Critère : la note sourcée accompagne toujours le SOPK, et elle seule',(()=>{
-          const sopk=_ath({id:'c2b',sopk:true}), sans=_ath({id:'c3b'});
-          const h=_htmlDepartCoach(sopk);
-          if(h.indexOf(escapeHtml(SOPK_NOTE_LIPIDES))<0) return _echec('note absente');
-          return _htmlDepartCoach(sans).indexOf(escapeHtml(SOPK_NOTE_LIPIDES))<0
-            ?true:_echec('la note sort sans SOPK');})());
         ok('Le réglage vit en MÉMOIRE, rien n\'est écrit dans le dossier',(()=>{
           const sauve=_propLip;
           try{
@@ -4743,32 +4717,6 @@ function testExercices(){
             return /ni dose, ni molécule/.test(c.textContent||'')
               ?true:_echec('la mention de ce qui n\'est pas demandé a disparu');
           } finally { currentUser=sauve; }})());
-        ok('Le sélecteur de correction est branché côté coach',(()=>{
-          const sauve=currentUser;
-          try{
-            const c=_bilan(_ath({id:'d4',etats:['thyroide'],
-              thyroide:{etat:'hypo',traitement:false}}));
-            currentUser=c;
-            const h=_htmlDepartCoach(c);
-            const manque=CORRECTION_MB_ECHELLE.filter(v=>h.indexOf('value="'+v+'"')<0);
-            if(manque.length) return _echec('absents : '+manque.join(', '));
-            if(!/_propSetCorr\(this\.value\)/.test(h)) return _echec('non branché');
-            return /· suggéré/.test(h)?true:_echec('la suggestion n\'est pas marquée');
-          } finally { currentUser=sauve; }})());
-        ok('Le réglage du coach vit en mémoire, pas dans le dossier',(()=>{
-          const sauve=_propCorr;
-          try{
-            const u=_bilan(_ath({id:'d5'}));
-            const avant=JSON.stringify(u);
-            _propSetCorr(0.85);
-            const r=_propReglages();
-            if(r.correctionMB!==0.85) return _echec('réglage non lu');
-            const b=besoinsProposes(u,r);
-            if(!b.hypotheses.some(h=>/métabolisme corrigé de -15 %/.test(h)))
-              return _echec('le réglage ne parvient pas au calcul');
-            return JSON.stringify(u)===avant
-              ?true:_echec('le dossier a été modifié');
-          } finally { _propCorr=sauve; }})());
       } finally { currentUser=_tyU; }
     })();
 
@@ -5559,34 +5507,6 @@ function testExercices(){
           return (c.min===SOPK_CIBLE_SECHE.min&&c.max===SOPK_CIBLE_SECHE.max
                   &&c.alerte===SOPK_CIBLE_SECHE.alerte)
             ?true:_echec('le SOPK seul a bougé : '+JSON.stringify(c));})());
-        ok('Le sélecteur du coach part bien de l\'échelle décalée',(()=>{
-          // La fonction peut être juste et l'écran l'ignorer : c'est le RENDU
-          // que le coach voit.
-          const u=_ath({id:'e2',statut:'menopause'});
-          const h=_htmlDepartCoach(u);
-          if(!h||!/<option/.test(h)) return _echec('fixture muette : aucun sélecteur');
-          // Le même écran porte l'échelle des LIPIDES, dont la borne haute 1,5
-          // tombait dans un filtre par valeur. On distingue par le libellé.
-          const _prot=t=>(t.match(/<option value="([\d.]+)"[^>]*>[\d,]+ g\/kg(?! lip\.)/g)||[])
-            .map(x=>parseFloat((x.match(/value="([\d.]+)"/)||[])[1]));
-          const prot=_prot(h);
-          if(prot.length!==protEchelle(u).length)
-            return _echec(prot.length+' options au lieu de '+protEchelle(u).length);
-          if(Math.min.apply(null,prot)<PROT_MIN_MENOPAUSE)
-            return _echec('le coach voit encore '+Math.min.apply(null,prot));
-          // Et surtout : QUELLE option porte la mention. Les bonnes valeurs
-          // offertes avec la mauvaise suggestion, c'est le contraire du lot.
-          const _sug=t=>{
-            const m=t.match(/<option value="([\d.]+)"[^>]*>[\d,]+ g\/kg · suggéré/);
-            return m?parseFloat(m[1]):null;
-          };
-          if(_sug(h)!==protSuggeree(u,typePhase(u)))
-            return _echec('mention sur '+_sug(h)+' au lieu de '+protSuggeree(u,typePhase(u)));
-          if(_sug(h)===PROT_DEFAUT[typePhase(u)])
-            return _echec('la mention est restée sur la valeur d\'avant');
-          const tv=_prot(_htmlDepartCoach(_ath({id:'e3'})));
-          return Math.min.apply(null,tv)===Math.min.apply(null,PROT_ECHELLE.slice())
-            ?true:_echec('le témoin a bougé aussi : '+Math.min.apply(null,tv));})());
         ok('Les trois statuts, et rien de plus',
            STATUTS_HORMONAUX.length===3
            &&STATUTS_HORMONAUX.map(x=>x.cle).join('|')==='cycles_reguliers|perimenopause|menopause');
@@ -5766,14 +5686,6 @@ function testExercices(){
           const e=protEchelle(safe);
           return Math.max.apply(null,e.slice())===Math.max.apply(null,PROT_ECHELLE.slice())
             ?true:_echec('le coach voit '+Math.max.apply(null,e.slice()));})());
-        ok('Partagée, l\'échelle du coach monte bien à 3,0',(()=>{
-          const u=_ath({id:'d4',pes:true,partage:true});
-          const h=_htmlDepartCoach(u);
-          if(!h||!/<option/.test(h)) return _echec('fixture muette : aucun sélecteur');
-          const vals=(h.match(/<option value="([\d.]+)"[^>]*>[\d,]+ g\/kg(?! lip\.)/g)||[])
-            .map(x=>parseFloat((x.match(/value="([\d.]+)"/)||[])[1]));
-          return Math.max.apply(null,vals)===3.0
-            ?true:_echec('le coach voit '+Math.max.apply(null,vals));})());
 
         // ── Ce que le lot NE fait PAS ────────────────────────────────────
         ok('Aucun champ ne demande un produit, une dose ou une durée',(()=>{
@@ -18280,7 +18192,10 @@ function testExercices(){
       // noms est déclaré UNE SEULE FOIS dans le fichier.
       ok('Aucune de mes fonctions ne double un nom existant',(()=>{
         const src=document.documentElement.outerHTML;
-        const miens=['_htmlDepartCoach','_htmlDepartHypotheses','_htmlDepartAthlete',
+        // Deux noms de moins : les deux fonctions du panneau de depart ont
+        // ete retirees le 08/09/2026, et un nom absent n'est declare ni une
+        // fois ni deux.
+        const miens=['_htmlDepartAthlete',
           'besoinsProposes','mbMifflin','mbKatch','masseMaigreDuBilan',
           'facteurProfession','depenseSportsParJour','niveauMetier','chercherMetiers',
           'bMetier','bSports','proposerPointDepart','utiliserBesoinsProposes'];
@@ -21637,12 +21552,6 @@ function testExercices(){
           return true;})());
 
         // CRITÈRE 6 : changement de phase ⇒ null.
-        ok('Critère 6 : changement de phase ⇒ _propVitesse repasse à null',(()=>{
-          _propVitesse=-0.95; _propVitessePhase='seche';
-          if(_propVitesseCourante(seche())!==-0.95) return _echec('perdue à tort');
-          const masse=_ath({phase:{type:'masse',debut:Date.now()-30*864e5}});
-          if(_propVitesseCourante(masse)!==null) return _echec('conservée à tort');
-          return _propVitesse===null?true:_echec('la variable subsiste');})());
 
         // Règles de périmètre.
         ok('Règle 7 : _propVitesse n\'est jamais écrit dans le dossier',(()=>{
@@ -23948,24 +23857,24 @@ function testExercices(){
         return /CLOUD\.pushOne\(ce,mc\)/.test(s)
           ?_echec('la poussee vers le dossier du coach subsiste'):true;})());
 
-      ok('N2.5 — LES SIX APPELS A besoinsProposes SONT PROTEGES',(()=>{
-        // Deux d'entre eux sont interpoles dans le innerHTML du panneau
+      ok('N2.5 — LES APPELS A besoinsProposes SONT PROTEGES',(()=>{
+        // Deux d'entre eux etaient interpoles dans le innerHTML du panneau
         // nutrition : une exception y laissait TOUT le panneau vide, sans un mot.
+        // ⚠ ILS ETAIENT SIX. Les deux fonctions du panneau de depart ont ete
+        // retirees du produit le 08/09/2026 ; les nommer ici faisait LEVER la
+        // suite entiere, qui s'arretait alors a 626 verifications sur pres de
+        // quatre mille. Le garde-fou vaut pour les appelants qui restent.
         if(typeof _besoinsSurs!=='function') return _echec('aucun garde-fou');
-        for(const f of [_htmlDepartCoach,_htmlDepartHypotheses,saveClientNutriManuel,
+        for(const f of [saveClientNutriManuel,
                         _resumeReinit,reinitialiserCalculs,proposerPointDepart]){
           const s=String(f).replace(/\/\/.*/g,'');
           if(/besoinsProposes\(/.test(s)&&!/try\{/.test(s))
             return _echec(f.name+' appelle encore besoinsProposes a nu');
         }
-        // ET L'ERREUR EST DITE. Un panneau vide n'apprend rien au coach.
-        const svB=window.besoinsProposes;
-        try{
-          window.besoinsProposes=()=>{ throw new Error('objet a trous'); };
-          const h=_htmlDepartCoach({email:'z@t.fr'});
-          if(h.indexOf('n’a pas pu être calculé')<0)
-            return _echec('l\'echec de calcul est avale en silence');
-        } finally { window.besoinsProposes=svB; }
+        // Le second volet — « et l'erreur est dite » — lisait le panneau du
+        // coach, qui n'existe plus. Ce sont les tableaux qui portent
+        // desormais « Calcul impossible : il manque … », et ils ont leurs
+        // propres assertions.
         return true;})());
 
       ok('N2.1 — LES CURSEURS DE CALCUL NE SURVIVENT PLUS AU CHANGEMENT D\'ATHLETE',(()=>{
