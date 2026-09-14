@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1193';
+window.RC_BUILD='1194';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -9746,6 +9746,14 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <!-- UNE SEULE CARTE D'IMPORT POUR LES DEUX SECTIONS, et elle passe
+           devant. Lifestyle montre les pas ET le sommeil : la capture vaut
+           pour les deux, la dupliquer sous chaque titre ferait deux boutons
+           qui font la meme chose. Elle est en tete parce que l'athlete qui
+           arrive ici avec une semaine vide est celui qu'on veut servir en
+           premier, et qu'il ne fera pas defiler jusqu'en bas pour le
+           decouvrir. Remplie une fois par sanRendre(). -->
+      <div id="lifestyle-import"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:var(--red);border-radius:var(--r-1);box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
         <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
@@ -73523,7 +73531,7 @@ function _rerenderLifestyle(){
   const actif=id=>document.getElementById(id)?.classList.contains('active');
   if(actif('s-lifestyle')){ try{ sanRendre(); }catch(e){
     // Repli sur les anciens rendus : l'ecran ne doit jamais rester vide.
-    loadSteps('lifestyle-steps-content'); loadSleep('lifestyle-sleep-content'); } return; }
+    loadSteps('lifestyle-steps-content',{avecImport:false}); loadSleep('lifestyle-sleep-content',null,{avecImport:false}); } return; }
   if(actif('s-steps')){ loadSteps('steps-content'); return; }
   if(actif('s-sleep')){ loadSleep('sleep-content'); return; }
   loadLifestyle();
@@ -73614,7 +73622,15 @@ function _stepsObjectifJour(goals,type,date){
 function _htmlBarreSemaine(pct,col,isToday,accentBas){
   return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div class="rc-barre-v" data-bar-h="${pct}" style="width:82%;height:4px;background:linear-gradient(180deg,${col},${col}55);border-radius:var(--r-1) var(--r-1) 0 0;min-height:4px;box-shadow:0 0 ${isToday?'14':'8'}px ${col}${isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:height 420ms var(--c-out) var(--rcb-d,0ms);${isToday?'border-top:2px solid #fff;':''}${accentBas?'border-bottom:2px solid '+accentBas+';':''}"></div></div>`;
 }
-function loadSteps(containerId='steps-content'){
+// ⚠ `opts.avecImport` EST EXPLICITE, ET NON DEDUIT DU NOM DU CONTENEUR.
+// Deduire « je suis sur la page autonome » de `containerId==='steps-content'`
+// marchait tant qu'il n'y avait que deux appelants ; le jour ou un
+// troisieme ecran rend cette page, il herite d'un comportement que
+// personne n'a choisi pour lui. L'appelant dit ce qu'il veut.
+// Par defaut : true, parce que les deux ecrans autonomes le veulent et
+// que c'est le seul endroit ou l'oubli serait invisible.
+function loadSteps(containerId='steps-content',opts){
+  const _avecImport=!opts||opts.avecImport!==false;
   if(containerId==='steps-content') go('s-steps');
   const log=currentUser.stepsLog||[];
   const goals=currentUser.stepsGoals||STEPS_GOALS_DEFAUT;
@@ -73776,6 +73792,11 @@ function loadSteps(containerId='steps-content'){
       </div>
     </div>
 
+    <!-- LA CAPTURE SE PLACE SOUS LA SAISIE, PAS EN BAS DE PAGE. Elle etait
+         derriere l'historique : personne ne descend jusque-la, et l'athlete
+         qui n'a pas note ses journees est precisement celui qui ne fait pas
+         defiler. Elle suit donc immediatement le champ qu'elle remplace. -->
+    ${_avecImport?_htmlCadreImportCapture('pas'):''}
     <div class="card-nut" style="margin-bottom:14px;${_animEntree('steps-sem')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
@@ -73790,7 +73811,6 @@ function loadSteps(containerId='steps-content'){
     </div>
 
     ${histHtml}
-    ${_htmlCadreImportCapture()}
   `;
   // Les barres et le pourcentage du jour ne bougent que si quelqu'un leur donne
   // leur cible AU TOUR SUIVANT : c'est tout l'objet de _animerJauges.
@@ -77158,6 +77178,34 @@ function _chargerScript(src){
     document.head.appendChild(s);
   });
 }
+// ── DIRE OU ON EN EST PENDANT LA LECTURE ───────────────────────────────────
+// Tesseract n'annonce son avancement qu'au `logger` passe a la CREATION du
+// worker — et ce worker est memoise pour toute la session. Un logger fige sur
+// le bouton du premier appelant ne dirait donc rien de la deuxieme lecture, et
+// ecrirait dans un bouton disparu du DOM. Le logger est pose une fois pour
+// toutes et relaie vers ce crochet, que chaque appelant installe puis retire
+// dans son finally. Un seul emplacement suffit : deux lectures simultanees
+// n'existent pas dans l'interface (le bouton se desactive pendant l'operation),
+// et si cela changeait, la derniere posee gagnerait — un libelle en retard,
+// jamais une erreur.
+let _lecteurSurPhase=null;
+// Les etats que Tesseract emet, traduits. Ce qui n'est pas dans la table ne
+// s'affiche pas : mieux vaut garder le libelle precedent qu'ecrire
+// « loading language traineddata » a un athlete.
+const _LECT_PHASES={
+  'loading tesseract core':'Téléchargement du moteur…',
+  'loading language traineddata':'Téléchargement du français…',
+  'initializing tesseract':'Préparation…',
+  'initializing api':'Préparation…',
+  'initialized api':'Préparation…',
+  'recognizing text':'Lecture de l\'image…'
+};
+function _lecteurPhase(m){
+  if(!_lecteurSurPhase||!m) return;
+  const lib=_LECT_PHASES[String(m.status||'').toLowerCase()];
+  if(!lib) return;
+  try{ _lecteurSurPhase(lib, typeof m.progress==='number'?m.progress:null); }catch(e){}
+}
 async function _chargerLecteurTexte(){
   if(_lecteurTexte) return _lecteurTexte;
   if(_lecteurTextePromesse) return _lecteurTextePromesse;
@@ -77165,6 +77213,7 @@ async function _chargerLecteurTexte(){
     if(!window.Tesseract) await _chargerScript(_TESS+'tesseract.min.js');
     _lecteurTexte=await window.Tesseract.createWorker('fra',1,{
       workerPath:_TESS+'worker.min.js',
+      logger:_lecteurPhase,
       // Le cœur est DÉSIGNÉ, pas laissé au choix de la bibliothèque. Livrée un
       // dossier, elle réclame d'elle-même la variante correspondant au jeu
       // d'instructions du navigateur — relaxedsimd, simd ou aucune — et un 404
@@ -77341,20 +77390,57 @@ function _appliquerCaptureStats(analyse){
 // rendu le premier — le bouton « Lecture en cours… » se serait affiché sur
 // l'autre page. On navigue donc de proche en proche : le bouton déclenche le
 // champ qui le précède, le gestionnaire retrouve le bouton qui le suit.
-function _htmlCadreImportCapture(){
+// ⚠ LA DEMOTION DE CE BLOC EST REVOQUEE, ET C'EST UNE DECISION DE KEVIN.
+// Il portait ceci : « Ce n'est pas une fonction du produit, c'est un
+// depannage : quelques mots et un bouton. » Les faits ont tranche autrement.
+// La saisie manuelle jour apres jour est ce qui PRODUIT les trous dont le
+// coach se plaint — « l'athlete oublie, le coach pilote sur des trous ». Une
+// capture vaut sept journees : ce n'est pas un depannage, c'est le chemin
+// principal de remplissage. Il reprend donc le gabarit de la page.
+//
+// ⚠ TOUJOURS AUCUN `id`. Sur l'ecran Lifestyle, loadSteps et loadSleep
+// rendent chacun dans leur conteneur : tout identifiant en dur y existerait
+// en double, et document.getElementById en trouverait un au hasard. Le
+// bouton atteint son champ par previousElementSibling, comme avant.
+function _htmlCadreImportCapture(quoi){
+  // `quoi` colore la carte selon la section qui l'accueille — rouge pour les
+  // pas, bleu pour le sommeil, neutre sur Lifestyle ou elle vaut pour les
+  // deux. La lecture, elle, ne depend pas de la page : _analyserCaptureStats
+  // deduit la nature du contenu, pas de l'endroit d'ou on l'appelle.
+  const teinte = quoi==='sommeil' ? {c:'#60a5fa',h:'rgba(96,165,250,.55)',
+                   g:'linear-gradient(160deg,#2563eb,#0b2f6b)',b:'rgba(120,180,255,.42)'}
+               : quoi==='pas'     ? {c:'var(--red-text)',h:'rgba(224,32,32,.55)',
+                   g:'linear-gradient(160deg,#e21414,#8d0000)',b:'rgba(255,90,90,.42)'}
+               :                    {c:'var(--red-text)',h:'rgba(224,32,32,.5)',
+                   g:'linear-gradient(160deg,#e21414,#8d0000)',b:'rgba(255,90,90,.42)'};
+  const ce = quoi==='sommeil' ? 'tes nuits'
+           : quoi==='pas'     ? 'tes journees'
+           :                    'tes pas ou tes nuits';
   return `
-    <!-- NI CADRE, NI TITRE. Ce n est pas une fonction du produit, c est un
-         depannage : quelques mots et un bouton. Le cadre et le titre en
-         capitales lui donnaient le poids d une section a part entiere.
-         La phrase sur la confidentialite RESTE : c est un engagement, pas
-         une decoration, et c est elle qui autorise a demander une image. -->
-    <div style="margin-top:22px;margin-bottom:14px;animation:fadeInUp var(--t-4) var(--c-out)">
-      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:8px">
-        Pas noté tes stats ? Envoie la capture d'écran de ton application de montre, pas ou sommeil, vue 7 jours de préférence : les chiffres sont lus et remplis tout seuls.
-        <b style="color:var(--text-dim);font-weight:700">La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.</b>
+    <div class="card-nut" style="margin:14px 0;animation:fadeInUp var(--t-4) var(--c-out)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
+        <span style="display:inline-flex;color:${teinte.c};filter:drop-shadow(0 0 6px ${teinte.h})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+        <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:${teinte.c};text-transform:uppercase">Remplir depuis une capture</span>
       </div>
-      <input type="file" accept="image/*" style="display:none" onchange="importerCaptureStats(this)">
-      <button onclick="this.previousElementSibling.click()" style="width:100%;padding:10px;background:linear-gradient(180deg,#131313,#0c0c0c);border:1px solid var(--border);color:#a8a8a8;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;cursor:pointer">Envoyer une capture</button>
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:12px">
+        Pas noté ${escapeHtml(ce)} ? Envoie la capture d'écran de ton application de montre, vue 7 jours de préférence : les chiffres sont lus et remplis tout seuls.
+      </div>
+      <!-- ⚠ HEIC, HEIF, HIF EXPLICITEMENT. Le motif image/* seul suffit sur
+           Safari,
+           qui l'elargit au format natif de l'iPhone ; ni Chrome Android ni
+           les navigateurs de bureau ne le font, et la photo la plus courante
+           du telephone le plus courant se trouvait refusee par le selecteur
+           lui-meme, avant meme d'etre lue. -->
+      <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
+      <button class="btn" onclick="this.previousElementSibling.click()"
+        style="width:100%;min-height:46px;margin:0;background:${teinte.g};border:1px solid ${teinte.b};color:#fff;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:900;letter-spacing:1.8px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px ${teinte.h},inset 0 1px 0 rgba(255,255,255,.18)">Envoyer une capture</button>
+      <!-- LA PHRASE DE CONFIDENTIALITE EST UN ENGAGEMENT, PAS UNE MENTION
+           LEGALE A ENTERRER : elle passe de --fs-2xs / --text-faint, ou elle
+           etait illisible, a --fs-xs sur --text-dim. C'est elle qui autorise
+           a demander une image ; si elle ne se lit pas, elle n'autorise rien. -->
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:10px;text-align:center">
+        La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.
+      </div>
     </div>`;
 }
 async function importerCaptureStats(input){
@@ -77363,10 +77449,22 @@ async function importerCaptureStats(input){
   if(!f) return;
   const btn=input.nextElementSibling;
   const libelle=btn?btn.textContent:'';
-  // La première lecture télécharge le moteur, et la reconnaissance elle-même
-  // prend quelques secondes sur un téléphone. Sans ce retour visuel, l'athlète
-  // croit que rien ne se passe et renvoie sa capture une deuxième fois.
-  if(btn) arcAttendre(btn,'Lecture en cours…');
+  // La première lecture télécharge le moteur (4,1 Mo), et la reconnaissance
+  // elle-même prend quelques secondes sur un téléphone. arcAttendre pose déjà
+  // les deux garde-fous : le bouton passe à disabled — c'est ce qui empêche le
+  // double envoi — et la barre indéterminée .arc-attente-bar défile sous lui.
+  // Ce qui manquait, c'est de DIRE laquelle des deux attentes on subit : un
+  // libellé figé à « Lecture en cours… » pendant onze secondes de
+  // téléchargement se lit comme un blocage. Le crochet ci-dessous nomme
+  // l'étape et chiffre son avancement.
+  if(btn) arcAttendre(btn,'Préparation…');
+  _lecteurSurPhase=(lib,p)=>{
+    if(!btn) return;
+    // Le pourcentage n'apparaît qu'entre les bornes : 0 % et 100 % affichés
+    // font croire, l'un que rien n'a commencé, l'autre que c'est fini alors
+    // que l'étape suivante n'a pas démarré.
+    btn.textContent=(p!=null&&p>0&&p<1)?lib+' '+Math.round(p*100)+' %':lib;
+  };
   try{
     const dataUrl=await new Promise((res,rej)=>{
       const r=new FileReader();
@@ -77393,6 +77491,9 @@ async function importerCaptureStats(input){
   }catch(err){
     toast(err&&err.message?err.message:'Lecture impossible','var(--orange)');
   }finally{
+    // AVANT arcRendre : le crochet écrit dans le bouton, et un message de phase
+    // arrivé en retard réécrirait par-dessus le libellé restauré.
+    _lecteurSurPhase=null;
     if(btn) arcRendre(btn,libelle);
   }
 }
@@ -77975,6 +78076,12 @@ function sanRendre(){
   const u=currentUser;
   const zs=document.getElementById('lifestyle-sleep-content');
   const zp=document.getElementById('lifestyle-steps-content');
+  // EN PREMIER ET DANS SON PROPRE try : si _htmlCarteSante echoue, le repli
+  // rend loadSteps/loadSleep SANS import (avecImport:false) en comptant sur
+  // cette carte-ci pour etre deja posee. La remplir apres les deux autres
+  // ouvrirait un chemin ou l'ecran n'offre aucune capture du tout.
+  try{ const zi=document.getElementById('lifestyle-import');
+       if(zi) zi.innerHTML=_htmlCadreImportCapture(); }catch(e){}
   try{ if(zs) zs.innerHTML=_htmlCarteSante(u,'sommeil'); }catch(e){ if(zs) zs.innerHTML=''; }
   try{ if(zp) zp.innerHTML=_htmlCarteSante(u,'pas'); }catch(e){ if(zp) zp.innerHTML=''; }
 }
@@ -78175,7 +78282,11 @@ function updateSleepPreview(){
 }
 // `user` EST OPTIONNEL et retombe sur currentUser : les trois appels existants
 // ne changent pas.
-function loadSleep(containerId='sleep-content',user){
+// Meme contrat que loadSteps. `user` reste en deuxieme position : la fiche
+// coach l'appelle ainsi depuis toujours, et deplacer ce parametre casserait
+// un appelant pour une question de gout.
+function loadSleep(containerId='sleep-content',user,opts){
+  const _avecImport=!opts||opts.avecImport!==false;
   if(containerId==='sleep-content') go('s-sleep');
   const _u=user||currentUser;
   const log=(_u&&_u.sleepLog)||[];
@@ -78262,6 +78373,8 @@ function loadSleep(containerId='sleep-content',user){
       </div>
     </div>
 
+    <!-- Jumelle de la carte des pas : juste sous la saisie de la nuit. -->
+    ${_avecImport?_htmlCadreImportCapture('sommeil'):''}
     <div class="card-nut" style="margin-bottom:14px;${_animEntree('sleep-sem')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
@@ -78279,7 +78392,6 @@ function loadSleep(containerId='sleep-content',user){
          qu’on vient de fermer sur nutIsOnDay et _getEffectiveMacros. -->
     ${_htmlCafeineNuits(_u,weekDates)}
     ${histHtml}
-    ${_htmlCadreImportCapture()}
   `;
   // Meme gabarit de barres que les pas : elles naissent a 4 px et montent.
   try{
@@ -78352,7 +78464,7 @@ function loadLifestyle(){
   // seulement sur celui-ci : les ecrans s-steps et s-sleep gardent loadSteps
   // et loadSleep tels quels, avec leur saisie. Rien n'est supprime.
   try{ sanRendre(); }
-  catch(e){ loadSteps('lifestyle-steps-content'); loadSleep('lifestyle-sleep-content'); }
+  catch(e){ loadSteps('lifestyle-steps-content',{avecImport:false}); loadSleep('lifestyle-sleep-content',null,{avecImport:false}); }
 }
 
 // ======= CHARTS =======
