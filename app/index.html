@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1188';
+window.RC_BUILD='1189';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1844,9 +1844,19 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    la lueur enfle et le medaillon s'eclaire, trois fois, puis se pose.
    Trois — a deux on croit a un rate, au-dela on s'en lasse. */
 .rcf-case .rc-badge-img{animation:rcfSouffle 1.6s ease-in-out 3 both}
+/* ⚠ UNE OMBRE PORTEE AU REPOS. Un detourage sans ombre a toujours l'air
+   COLLE : rien ne dit a l'oeil que l'objet est pose devant le faisceau
+   plutot que decoupe dedans. Trois pixels vers le bas suffisent — c'est la
+   difference entre un sticker et un medaillon. */
 @keyframes rcfSouffle{
-  0%,100%{filter:drop-shadow(0 0 5px rgba(224,32,32,.35)) brightness(1)}
-  50%{filter:drop-shadow(0 0 16px rgba(224,32,32,.8)) brightness(1.16)}}
+  0%,100%{filter:drop-shadow(0 3px 7px rgba(0,0,0,.8))
+          drop-shadow(0 0 5px rgba(224,32,32,.35)) brightness(1)}
+  50%{filter:drop-shadow(0 3px 7px rgba(0,0,0,.8))
+      drop-shadow(0 0 16px rgba(224,32,32,.8)) brightness(1.16)}}
+/* Sous « animations reduites » l'ombre doit rester : elle n'est pas une
+   animation, c'est de la profondeur. */
+.rcf-case .rc-badge-img{filter:drop-shadow(0 3px 7px rgba(0,0,0,.8))
+  drop-shadow(0 0 5px rgba(224,32,32,.35))}
 .rcf-case .rc-badge:active{transform:scale(.96)}
 .rcf-case:nth-child(1) .rcf-case-halo{animation-delay:.42s}
 .rcf-case:nth-child(2) .rcf-case-halo{animation-delay:.60s}
