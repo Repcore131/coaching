@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1192';
+window.RC_BUILD='1193';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1837,7 +1837,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    sa marche — « 100 » passait derriere lui. Il se tient au BORD DROIT,
    celui qui fait face au palier suivant : c'est la qu'on se met quand on
    vient de se retablir et qu'on regarde la marche d'apres. */
-.rcf-grimpeur{position:absolute;left:76%;width:17px;height:23px;color:#fff;
+.rcf-grimpeur{position:absolute;left:76%;width:18px;height:23.5px;color:#fff;
   pointer-events:none;z-index:2;
   filter:drop-shadow(0 0 5px rgba(224,32,32,.9)) drop-shadow(0 1px 2px rgba(0,0,0,.8));
   transform:translateX(-50%);
@@ -1964,7 +1964,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   .rcf-fb-plus{font-size:9px}
   .rcf-st{padding:12px 3px}
   .rcf-marches{height:88px}
-  .rcf-grimpeur{width:14px;height:19px}
+  .rcf-grimpeur{width:15px;height:19.6px}
   .rcf-fanion{width:11px;height:15px}
   .rcf-p{height:26px}
 }
@@ -41244,14 +41244,33 @@ function _htmlStatsFin(mins,sets,setsPlanned,vol,delta){
 // Le blanc porte la lisibilite, le rouge la halo : la meme repartition que
 // partout ailleurs sur cet ecran.
 function _htmlGrimpeur(){
-  return '<svg viewBox="0 0 22 30" fill="none" stroke="currentColor" stroke-width="2.4" '
+  return '<svg viewBox="0 0 26 34" fill="currentColor" stroke="currentColor" '
     +'stroke-linecap="round" stroke-linejoin="round">'
-    +'<circle cx="10.6" cy="4.4" r="2.9" fill="currentColor" stroke="none"/>'
-    +'<path d="M10.6 7.6v8.2"/>'
-    +'<path d="M10.6 9.4 16.6 3.8"/>'
-    +'<path d="M10.6 11.6 5.6 15"/>'
-    +'<path d="M10.6 15.8 14.6 21.6 14 27.4"/>'
-    +'<path d="M10.6 15.8 6.6 20.8 8.2 26.6"/>'
+    // La tete, petite : c'est elle qui donne l'echelle du reste. Une tete
+    // large et tout le corps parait court.
+    +'<circle cx="12.6" cy="4.9" r="2.6" stroke="none"/>'
+    // LE TORSE EN V, et c'est lui qui fait tout le travail. Epaules a 10,4
+    // unites, taille a 3,4 : trois pour un. En dessous de ce rapport la
+    // silhouette redevient un bonhomme batons epaissi.
+    +'<path stroke="none" d="M7.4 10.4C8.4 8.9 10.4 8.3 12.6 8.3s4.2.6 5.2 2.1'
+    +'c-.6 2-1.6 3.2-2.4 4.4-.7 1.1-1 2.4-1.1 3.8h-3.4c-.1-1.4-.4-2.7-1.1-3.8'
+    +'-.8-1.2-1.8-2.4-2.4-4.4z"/>'
+    // Les deltoides : deux ellipses posees aux pointes d'epaule. Sans elles le
+    // bras part du torse comme une branche, et la carrure disparait.
+    +'<ellipse stroke="none" cx="17.5" cy="10.3" rx="2" ry="1.7" transform="rotate(-18 17.5 10.3)"/>'
+    +'<ellipse stroke="none" cx="7.7" cy="10.6" rx="1.9" ry="1.65" transform="rotate(18 7.7 10.6)"/>'
+    // Les bras restent des traits — c'est le RENFLEMENT du biceps qui donne le
+    // muscle, pas l'epaisseur du trait. Un trait epais fait un tuyau.
+    +'<path fill="none" stroke-width="2.4" d="M18.1 10.6 20.7 8.2 22.1 3.9"/>'
+    +'<path fill="none" stroke-width="2.3" d="M7.3 11.4 5 13.8 3.4 16.9"/>'
+    +'<ellipse stroke="none" cx="19.4" cy="9.3" rx="1.85" ry="1.4" transform="rotate(-38 19.4 9.3)"/>'
+    +'<ellipse stroke="none" cx="6.2" cy="12.6" rx="1.6" ry="1.25" transform="rotate(44 6.2 12.6)"/>'
+    // Les jambes partent de la taille, PAS des hanches larges : ecartees, elles
+    // rempliraient le V et l\'annuleraient.
+    +'<path fill="none" stroke-width="2.9" d="M13.8 18.8 16.2 24.4 15.7 30.3"/>'
+    +'<path fill="none" stroke-width="2.8" d="M11.4 18.8 8.4 23.6 9.5 30.1"/>'
+    +'<ellipse stroke="none" cx="15.2" cy="21.4" rx="1.95" ry="1.5" transform="rotate(-24 15.2 21.4)"/>'
+    +'<ellipse stroke="none" cx="9.8" cy="21.1" rx="1.85" ry="1.45" transform="rotate(28 9.8 21.1)"/>'
     +'</svg>';
 }
 function _htmlProchainObjectif(ctx){
