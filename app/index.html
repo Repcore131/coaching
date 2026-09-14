@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1170';
+window.RC_BUILD='1171';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -20209,7 +20209,7 @@ function ouvrirCrmCoach(){
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">CARNET D'ADRESSES</h2>
     <div class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">${l.length} athlète${l.length>1?'s':''}. Un tap ouvre ton mail, ton téléphone ou WhatsApp — RepCore n'envoie rien à ta place.</div>
     ${adresses?`<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" onclick="_crmCopierAdresses()">Copier toutes les adresses</button>`:''}
-    ${l.length?l.map(_crmLigne).join(''):'<div class="sub" style="text-align:center;padding:24px 0">Aucun athlète pour l\'instant.</div>'}
+    ${l.length?_htmlSectionsSuivi(l,_crmLigne):'<div class="sub" style="text-align:center;padding:24px 0">Aucun athlète pour l\'instant.</div>'}
     <button class="btn btn-outline" style="margin-top:16px" onclick="closeModal()">Fermer</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
@@ -20889,7 +20889,9 @@ function _rendreVignettesAthletes(vus){
   const z=document.getElementById('ch-vignettes');
   if(!z) return false;
   if(!vus||!vus.length){ z.innerHTML=''; return false; }
-  z.innerHTML='<div class="vig-grille">'+vus.map(htmlVignetteAthlete).join('')+'</div>';
+  // Les titres de section sont poses EN GRILLE (grid-column:1/-1) : la grille
+  // les traite comme une ligne pleine largeur, sans casser les colonnes.
+  z.innerHTML='<div class="vig-grille">'+_htmlSectionsSuivi(vus,htmlVignetteAthlete)+'</div>';
   return true;
 }
 // LES DEUX SECTIONS. Elles ne paraissent QUE s'il y a des deux cotes : tant
@@ -20897,15 +20899,23 @@ function _rendreVignettesAthletes(vus){
 // titre unique au-dessus d'une liste complete n'apprendrait rien.
 // Une recherche ou un filtre qui ne laisse qu'un camp retombe donc sur la
 // liste simple, sans en-tete orpheline.
-function _htmlSectionsSuivi(vus){
-  const avec=vus.filter(estSuivi),sans=vus.filter(c=>!estSuivi(c));
-  if(!avec.length||!sans.length) return vus.map(renderClientRow).join('');
+// UN SEUL DECOUPAGE, TROIS EMPLOIS : la liste, la grille de vignettes et le
+// CRM. Trois copies auraient fini par diverger — un ecran segmente et l'autre
+// pas, sur la meme donnee, c'est pire que pas de segmentation du tout.
+// `rendu` est la fonction qui sait peindre UNE fiche ; ce decoupage ne sait
+// rien d'autre que trier et titrer.
+function _htmlSectionsSuivi(vus,rendu){
+  const peindre=rendu||renderClientRow;
+  const avec=(vus||[]).filter(estSuivi),sans=(vus||[]).filter(c=>!estSuivi(c));
+  // Tant que le coach n'a bascule personne, tout le monde est « avec suivi » :
+  // une en-tete seule au-dessus d'une liste complete n'apprendrait rien.
+  if(!avec.length||!sans.length) return (vus||[]).map(peindre).join('');
   const titre=(t,n)=>'<div style="grid-column:1/-1;display:flex;align-items:baseline;gap:8px;'
     +'margin:18px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub)">'
     +escapeHtml(t)+'</span><span style="font-size:var(--fs-2xs);color:var(--text-faint)">'+n+'</span></div>';
-  return titre('Mes athlètes (avec suivi)',avec.length)+avec.map(renderClientRow).join('')
-        +titre('Mes athlètes (sans suivi)',sans.length)+sans.map(renderClientRow).join('');
+  return titre('Mes athlètes (avec suivi)',avec.length)+avec.map(peindre).join('')
+        +titre('Mes athlètes (sans suivi)',sans.length)+sans.map(peindre).join('');
 }
 function renderClientList(clients){
   const el=document.getElementById('ch-clients-list');
