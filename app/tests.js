@@ -38111,6 +38111,234 @@ vendredi 78 6h 44m
          const n=currentUser.sleepLog.find(e=>e.date==='2026-08-04');
          return n&&n.duration===8.3&&!n.bed&&!n.wake; })());
 
+    // ══ REGULARITE DU COUCHER, DETTE DE SOMMEIL, SERIE DE PAS ══════════
+    // ECRITS AVANT LE CODE, et pas par principe : la regularite se calcule sur
+    // un CERCLE. Un coucher a 23h50 et un autre a 00h10 sont a 20 min d'ecart,
+    // pas a 23h40 — et la moyenne arithmetique de 1430 et 10 vaut 720, soit
+    // midi. Une implementation lineaire passe tous les cas de la vie courante
+    // et se trompe exactement sur ceux qui comptent : les couchers tardifs.
+    (()=>{
+      const iso=d=>localISODate(new Date(d));
+      const j=Date.now();
+      // `n` nuits en remontant depuis hier, chacune avec son heure de coucher.
+      const dossier=beds=>({sleepLog:beds.map((b,i)=>({
+        date:iso(j-(i+1)*864e5),
+        bed:typeof b==='string'?b:undefined,
+        duration:7
+      }))});
+
+      // ── 3.2 Regularite ──────────────────────────────────────────────────
+      ok('Regularite : des couchers identiques donnent un ecart NUL',(()=>{
+        const r=regulariteCoucher(dossier(['23:00','23:00','23:00','23:00']));
+        return (r&&r.ecart===0)?true:_echec(JSON.stringify(r));})());
+      ok('Regularite : LE PIEGE — 23h50 et 00h10 sont a 20 min, pas a 23h40',(()=>{
+        const r=regulariteCoucher(dossier(['23:50','00:10']));
+        if(!r) return _echec('aucun resultat');
+        // Ecart-type de deux points distants de 20 min autour de leur milieu :
+        // 10 min. Ce qui est refuse, c'est la lecture lineaire — 710 min.
+        if(r.ecart>12) return _echec('ecart '+r.ecart+' min : lecture lineaire');
+        // Et la moyenne tombe a minuit, pas a midi.
+        return (r.moyenne>=1435||r.moyenne<=5)
+          ?true:_echec('coucher moyen a '+_minEnHhmm(r.moyenne));})());
+      ok('Regularite : une seule nuit ne rend PAS zero, elle rend null',(()=>{
+        // Zero se lirait « parfaitement regulier » sur une nuit unique, ce qui
+        // est le contraire de ce qu'on sait.
+        const r=regulariteCoucher(dossier(['23:00']));
+        return r===null?true:_echec(JSON.stringify(r));})());
+      ok('Regularite : les nuits SANS coucher sont exclues, sans planter',(()=>{
+        // Les nuits importees par capture n'ont ni coucher ni lever : seule la
+        // duree est lue. Elles ne doivent ni compter ni faire lever.
+        const r=regulariteCoucher(dossier(['23:00',undefined,'23:20',undefined]));
+        if(!r) return _echec('aucun resultat sur deux couchers valides');
+        if(r.n!==2) return _echec(r.n+' nuit(s) comptee(s) au lieu de 2');
+        const vide=regulariteCoucher(dossier([undefined,undefined]));
+        if(vide!==null) return _echec('deux nuits muettes rendent '+JSON.stringify(vide));
+        return regulariteCoucher(null)===null&&regulariteCoucher({})===null
+          ?true:_echec('un dossier vide leve ou rend une valeur');})());
+      ok('Regularite : le code couleur suit les seuils annonces',(()=>{
+        // vert < 30 min, orange 30-60, rouge > 60. Le vert ne dit jamais autre
+        // chose que « tenu ».
+        const f=m=>_teinteRegularite(m);
+        if(f(0)!==f(29)) return _echec('0 et 29 min ne sont pas du meme cote');
+        if(f(29)===f(31)) return _echec('la bascule a 30 min ne se fait pas');
+        if(f(45)===f(61)) return _echec('la bascule a 60 min ne se fait pas');
+        return f(0)==='#22c55e'?true:_echec('sous 30 min : '+f(0));})());
+
+      // ── 3.3 Dette de sommeil ────────────────────────────────────────────
+      const nuits=ds=>({sleepGoal:480,sleepLog:ds.map((h,i)=>
+        h==null?null:{date:iso(j-(i+1)*864e5),duration:h}).filter(Boolean)});
+      ok('Dette : la somme des manques, et LES NUITS ABSENTES NE COMPTENT PAS',(()=>{
+        // Une nuit non renseignee comptee comme zero ferait huit heures de
+        // dette par oubli : le chiffre dirait l'oubli, pas le sommeil.
+        const d=detteSommeil(nuits([7,7,null,null,null,null,null]));
+        if(!d) return _echec('aucun resultat');
+        if(d.nuits!==2) return _echec(d.nuits+' nuit(s) renseignee(s) au lieu de 2');
+        return d.dette===120?true:_echec('dette '+d.dette+' min au lieu de 120');})());
+      ok('Dette : un excedent ne se transforme pas en dette negative',(()=>{
+        // On affiche une dette, pas un solde : « −2h de dette » ne veut rien
+        // dire pour un athlete.
+        const d=detteSommeil(nuits([9,9,9]));
+        return (d&&d.dette===0)?true:_echec('dette '+(d&&d.dette));})());
+      ok('Dette : le surplus d\'une nuit efface le manque d\'une autre',(()=>{
+        // 9 h puis 7 h contre un objectif de 8 h : +60 puis −60, dette nulle.
+        const d=detteSommeil(nuits([9,7]));
+        return (d&&d.dette===0&&d.nuits===2)?true:_echec(JSON.stringify(d));})());
+      ok('Dette : le rouge est reserve a une NUIT PLEINE perdue',(()=>{
+        // Les seuils de la regularite ont d'abord ete empruntes ici : toute
+        // dette au-dela d'une heure passait au rouge. Une heure cumulee sur
+        // sept nuits n'est rien, et un rouge qui se declenche pour rien cesse
+        // d'etre lu.
+        if(_teinteDette(0,480)!=='#22c55e') return _echec('zero n\'est pas vert');
+        if(_teinteDette(65,480)!=='#f59e0b') return _echec('une heure de retard est '+_teinteDette(65,480));
+        if(_teinteDette(288,480)!=='#f59e0b') return _echec('4h48 est '+_teinteDette(288,480));
+        // UNE NUIT PLEINE PERDUE, c'est-a-dire l'objectif lui-meme : la, on le dit.
+        if(_teinteDette(480,480)!=='#e02020') return _echec('une nuit entiere est '+_teinteDette(480,480));
+        // ET LE SEUIL SUIT L'OBJECTIF : a 7 h d'objectif, 7 h de dette est
+        // aussi une nuit pleine.
+        return _teinteDette(420,420)==='#e02020'
+          ?true:_echec('le seuil ne suit pas l\'objectif');})());
+      ok('Dette : aucune nuit renseignee rend null, jamais zero',(()=>{
+        // Zero se lirait « aucune dette », c'est-a-dire « tout va bien ».
+        return detteSommeil(nuits([]))===null&&detteSommeil(null)===null
+          ?true:_echec('un journal vide rend une dette');})());
+
+      // ── 3.4 Serie de pas ────────────────────────────────────────────────
+      const pasLog=cs=>({stepsGoals:{on:10000,off:10000},
+        stepsLog:cs.map((c,i)=>c==null?null:{date:iso(j-(i+1)*864e5),count:c}).filter(Boolean)});
+      ok('Serie : des jours consecutifs au-dessus de l\'objectif s\'additionnent',(()=>{
+        const r=serieePas(pasLog([12000,11000,10000,4000]));
+        return (r&&r.n===3)?true:_echec(JSON.stringify(r));})());
+      ok('Serie : un jour SOUS l\'objectif la casse, et le dit',(()=>{
+        const r=serieePas(pasLog([12000,4000,12000]));
+        if(!r||r.n!==1) return _echec('serie '+(r&&r.n));
+        // POURQUOI elle s'arrete, sinon l'athlete ne comprend pas : un jour
+        // oublie et un jour manque ne se corrigent pas de la meme facon.
+        return r.raison==='sous'?true:_echec('raison « '+(r&&r.raison)+' »');})());
+      ok('Serie : un jour NON RENSEIGNE la casse aussi, pour une autre raison',(()=>{
+        const r=serieePas(pasLog([12000,null,12000]));
+        if(!r||r.n!==1) return _echec('serie '+(r&&r.n));
+        return r.raison==='vide'?true:_echec('raison « '+(r&&r.raison)+' »');})());
+      ok('Serie : l\'objectif du jour vient de _stepsObjectifJour',(()=>{
+        // Elle doit suivre le ON/OFF du programme, pas un chiffre unique : un
+        // jour de repos a 7 000 pas n'est pas un echec a 10 000.
+        const u=pasLog([8000,8000]);
+        u.stepsGoals={on:10000,off:7000};
+        // ⚠ LE TYPE DU JOUR VIT DANS stepsDayType, PAS SUR LA LIGNE DU LOG :
+        // c'est la carte {iso: 'on'|'off'} que loadSteps et stepsToggleType
+        // lisent et ecrivent. Le poser sur l'entree ne dirait rien a personne.
+        u.stepsDayType={};
+        u.stepsLog.forEach(e=>{ u.stepsDayType[e.date]='off'; });
+        const r=serieePas(u);
+        return (r&&r.n===2)?true:_echec('serie '+(r&&r.n)+' : le jour OFF est juge a 10 000');})());
+      ok('Serie : aucun jour renseigne rend zero, sans lever',(()=>{
+        const r=serieePas(pasLog([]));
+        return (r&&r.n===0)?true:_echec(JSON.stringify(r));})());
+    })();
+
+    // ── Les trous se voient, les habitudes arrivent, les fleches servent ──
+    (()=>{
+      const _sU=currentUser;
+      const iso=d=>localISODate(new Date(d));
+      const j=Date.now();
+      try{
+        // ── 3.5 Les trous ───────────────────────────────────────────────
+        ok('Un jour SANS pas ET SANS sommeil compte comme un trou',(()=>{
+          const u={stepsLog:[{date:iso(j-1*864e5),count:8000}],
+                   sleepLog:[{date:iso(j-2*864e5),duration:7}]};
+          const v=joursSansDonnees(u,7);
+          // j-1 porte des pas, j-2 une nuit : ni l'un ni l'autre n'est un trou.
+          if(v.indexOf(iso(j-1*864e5))>=0) return _echec('un jour avec pas compte comme vide');
+          if(v.indexOf(iso(j-2*864e5))>=0) return _echec('un jour avec nuit compte comme vide');
+          return v.length===5?true:_echec(v.length+' trou(s) au lieu de 5');})());
+        ok('LE JOUR EN COURS N\'EST JAMAIS UN TROU : il n\'est pas fini',(()=>{
+          // Le compter ferait une pastille allumee tous les matins.
+          const v=joursSansDonnees({stepsLog:[],sleepLog:[]},7);
+          return v.indexOf(localISODate(new Date()))<0
+            ?true:_echec('aujourd\'hui est compte comme un oubli');})());
+        ok('Une saisie partielle n\'est pas un oubli',(()=>{
+          // Pas notes, nuit oubliee : l'athlete joue le jeu. Le compter ferait
+          // sonner la pastille en permanence chez quelqu'un qui note.
+          const u={stepsLog:[{date:iso(j-1*864e5),count:9000}],sleepLog:[]};
+          return joursSansDonnees(u,1).length===0
+            ?true:_echec('une journee a moitie remplie compte comme vide');})());
+        ok('L\'onglet Lifestyle porte un support de pastille',(()=>{
+          const b=document.querySelector('#client-tabbar .tab-btn[data-tab="lifestyle"]');
+          if(!b) return _echec('onglet introuvable');
+          // Sans ce <span>, _pastilleOnglet ne trouve rien et se tait : la
+          // pastille serait posee sur un onglet qui ne peut pas l'afficher.
+          return b.querySelector('.tab-dot')?true:_echec('pas de .tab-dot sur l\'onglet');})());
+        ok('La pastille ne s\'allume QUE si la veille est vide',(()=>{
+          // Elle dit « tu as decroche », pas « ton historique est imparfait » :
+          // quelqu'un qui vient de s'y remettre n'a pas a voir un point rouge.
+          const src=String(_majPastilleLifestyle);
+          if(src.indexOf('veilleVide')<0) return _echec('aucune condition sur la veille');
+          // ET LE CHIFFRE COMPTE LA SEMAINE : c'est ce qui reste a rattraper.
+          return /joursSansDonnees\(currentUser,7\)/.test(src)
+            ?true:_echec('le chiffre ne compte pas la semaine');})());
+
+        // ── 3.1 Les habitudes ───────────────────────────────────────────
+        ok('Les habitudes sont DUPLIQUEES sur Lifestyle, pas deplacees',(()=>{
+          // L'appui quotidien est un rite d'accueil : le retirer de la ou
+          // l'athlete le fait deja aurait echange une bonne place contre une
+          // autre. Les deux porteurs doivent exister.
+          if(!document.getElementById('clh-habitudes')) return _echec('le bloc d\'accueil a disparu');
+          return document.getElementById('lifestyle-habitudes')
+            ?true:_echec('aucun porteur sur Lifestyle');})());
+        ok('Le taux 28 jours ne sort que sur demande',(()=>{
+          const u={habitudes:[{cle:'sommeil',libelle:'Dormir assez'}],habitudesLog:{}};
+          u.habitudesLog[iso(j-1*864e5)]=['sommeil'];
+          const sans=htmlHabitudes(u), avec=htmlHabitudes(u,{taux:true});
+          if(!sans) return _echec('le bloc ne se rend pas du tout');
+          if(/Moyenne sur/.test(sans)) return _echec('l\'accueil affiche le taux');
+          if(!/Moyenne sur/.test(avec)) return _echec('Lifestyle n\'affiche pas le taux');
+          // LA MEME PHRASE QUE LA FICHE COACH, pour le meme chiffre : deux
+          // formulations du meme taux finiraient par se contredire.
+          return /Fenêtre glissante, le jour en cours n\'est pas compté/.test(avec)
+            ?true:_echec('la phrase de fenetre glissante manque');})());
+        ok('Sans habitude assignee, aucun cadre vide n\'est rendu',(()=>{
+          return htmlHabitudes({habitudes:[]},{taux:true})===''
+            ?true:_echec('un cadre vide est rendu');})());
+
+        // ── 3.6 Les fleches ─────────────────────────────────────────────
+        ok('Les pas et le sommeil passent enfin avecFleches',(()=>{
+          const a=String(loadSteps), b=String(loadSleep);
+          if(!/steps-date-input[\s\S]{0,200}avecFleches:true/.test(a))
+            return _echec('les pas n\'ont toujours pas de fleches');
+          return /sleep-date-input[\s\S]{0,200}avecFleches:true/.test(b)
+            ?true:_echec('le sommeil n\'a toujours pas de fleches');})());
+        ok('Le jour voisin se borne a hier et a la retention',(()=>{
+          const auj=localISODate(new Date());
+          // L'AVENIR EST FERME : on ne saisit pas une nuit qui n'a pas eu lieu.
+          if(_jourVoisin(auj,1,180)!==null) return _echec('demain est atteignable');
+          if(_jourVoisin(auj,-1,180)!==iso(j-864e5))
+            return _echec('hier : '+_jourVoisin(auj,-1,180));
+          // ET LE FOND DE LA RETENTION AUSSI : au-dela, il n'y a plus rien a
+          // afficher, et la fleche menerait a un ecran vide.
+          const vieux=iso(j-200*864e5);
+          if(_jourVoisin(vieux,-1,180)!==null) return _echec('on remonte avant la retention');
+          return _jourVoisin('pas-une-date',-1,180)===null
+            ?true:_echec('une date illisible rend une valeur');})());
+
+        // ── Les faits de domaine, rendus ────────────────────────────────
+        ok('Chaque fait dit SUR COMBIEN DE NUITS il porte',(()=>{
+          // Une dette calculee sur deux nuits presentee comme hebdomadaire
+          // serait un chiffre faux affiche avec aplomb.
+          const u={sleepGoal:480,sleepLog:[
+            {date:iso(j-864e5),duration:6,bed:'23:00'},
+            {date:iso(j-2*864e5),duration:6,bed:'23:40'}]};
+          const h=_htmlFaitsSante(u,'sommeil');
+          if(!/Régularité des couchers/.test(h)) return _echec('la regularite manque');
+          if(!/Dette de la semaine/.test(h)) return _echec('la dette manque');
+          return /sur 2 nuits renseignées/.test(h)
+            ?true:_echec('le nombre de nuits n\'est pas dit : '+h.replace(/<[^>]*>/g,' ').slice(0,160));})());
+        ok('Sous deux couchers, la regularite se TAIT plutot que d\'afficher zero',(()=>{
+          const u={sleepGoal:480,sleepLog:[{date:iso(j-864e5),duration:7,bed:'23:00'}]};
+          const h=_htmlFaitsSante(u,'sommeil');
+          return !/Régularité/.test(h)
+            ?true:_echec('« ± 0 min » est affiche sur une nuit unique');})());
+      } finally { currentUser=_sU; }
+    })();
+
     // ── Ma semaine : les deux domaines sur UN SEUL axe — 8 cas ──
     // Le point du lot : les pas et les nuits etaient deux graphes separes par
     // quatre cents pixels de defilement, alors que la comparaison est ce qui a

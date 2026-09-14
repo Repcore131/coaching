@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1197';
+window.RC_BUILD='1198';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2122,6 +2122,16 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .san-ecart.pos{color:#e02020}
 .san-ecart.neg{color:var(--text-dim)}
 .san-resume{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:12px}
+/* Les faits du domaine. Une ligne par fait : libelle a gauche, chiffre a
+   droite dans la couleur du domaine, et la note EN DESSOUS sur toute la
+   largeur — « sur 5 nuits renseignées » ne tient pas a cote du chiffre a
+   320 px, et c'est justement la phrase qui empeche de lire de travers. */
+.san-faits{border-top:1px solid var(--surface-2);padding-top:10px;margin-bottom:12px}
+.san-fait{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:9px}
+.san-fait:last-child{margin-bottom:0}
+.san-fait-l{flex:1;min-width:0;font-size:var(--fs-xs);color:var(--sub)}
+.san-fait-v{font-size:var(--fs-sm);font-weight:900;letter-spacing:.5px;white-space:nowrap}
+.san-fait-n{flex-basis:100%;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5}
 .san-actions{display:flex;flex-direction:column;gap:8px}
 .san-actions .btn{width:100%;margin:0;min-height:44px}
 .san-src{width:100%;margin-top:10px;padding:8px 10px;border-radius:var(--r-2);cursor:pointer;
@@ -9796,6 +9806,12 @@ const COACH_PHOTO='icons/coach.jpg';
         <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--text);text-transform:uppercase;text-shadow:var(--halo-2)">MON SOMMEIL</span>
       </div>
       <div id="lifestyle-sleep-content"></div>
+      <!-- LES HABITUDES DU COACH, SUR L'ECRAN DE LEUR SUJET. Elles restent
+           aussi sur l'accueil : l'appui quotidien y est un rite, et le
+           deplacer aurait echange une bonne place contre une autre. Ici elles
+           portent en plus la lecture a 28 jours. Le bloc ne se rend pas du
+           tout si le coach n'en a assigne aucune — pas de cadre vide. -->
+      <div id="lifestyle-habitudes"></div>
     </div>
   </div>
 </div>
@@ -9826,7 +9842,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <button class="tab-btn" data-tab="bilan" data-icon="chart-bar" onclick="clientTab('bilan')"><span class="tab-dot" aria-hidden="true"></span>Bilan</button>
   <button class="tab-btn" data-tab="nutrition" data-icon="utensils" onclick="clientTab('nutrition')">Nutrition</button>
   <button class="tab-btn" data-tab="videos" data-icon="video" onclick="clientTab('videos')"><span class="tab-dot" aria-hidden="true"></span>Vidéos</button>
-  <button class="tab-btn" data-tab="lifestyle" data-icon="user" onclick="clientTab('lifestyle')">Lifestyle</button>
+  <button class="tab-btn" data-tab="lifestyle" data-icon="user" onclick="clientTab('lifestyle')"><span class="tab-dot" aria-hidden="true"></span>Lifestyle</button>
   <button class="tab-btn" data-tab="evolution" data-icon="trending-up" onclick="clientTab('evolution')">Évolution</button>
   <!-- Sans coach rattaché, ce bouton reste VISIBLE et grisé plutôt que masqué :
        l'athlète autonome doit voir ce dont il ne dispose pas. aria-disabled et
@@ -14200,6 +14216,7 @@ function _majTabbar(id){
   _majPastilleVideos();
   _majOngletCanal();
   _majPastilleBilan();
+  _majPastilleLifestyle();
 }
 function go(id){
   // ON NE VIDE QUE SI L ON QUITTE LE MODULE. Naviguer de la nutrition vers la
@@ -51955,6 +51972,47 @@ function _idBilan(b){ return b&&(b.id||('bil_'+b.date)); }
 function _dateBilanCourte(b){
   return b&&b.date?new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
 }
+// ══ LES TROUS SE VOIENT SANS OUVRIR L'ECRAN ═════════════════════════════
+//
+// Le probleme metier, ecrit noir sur blanc : « l'athlete oublie, le coach
+// pilote sur des trous ». Un athlete qui ne note rien pendant dix jours ne
+// voyait RIEN le lui dire — il fallait ouvrir Lifestyle pour constater le vide,
+// c'est-a-dire faire precisement le geste qu'il ne fait plus.
+//
+// PURE. Un jour est « sans donnees » quand il n'a NI pas NI sommeil : un jour
+// ou l'athlete a note ses pas mais pas sa nuit n'est pas un oubli, c'est une
+// saisie partielle, et la compter comme un trou ferait sonner la pastille en
+// permanence chez quelqu'un qui joue le jeu.
+//
+// LE JOUR EN COURS N'EST JAMAIS COMPTE : il n'est pas fini, et le compter
+// ferait une pastille allumee tous les matins.
+function joursSansDonnees(u,jours){
+  const n=(jours>0?jours:7);
+  const d=new Date(); d.setHours(12,0,0,0);
+  const out=[];
+  for(let i=1;i<=n;i++){
+    const j=new Date(d); j.setDate(d.getDate()-i);
+    const iso=localISODate(j);
+    if(sanPas(u,iso)==null&&sanSommeilMin(u,iso)==null) out.push(iso);
+  }
+  return out;
+}
+// La pastille, calquee sur _majPastilleVideos.
+//
+// ⚠ ELLE NE S'ALLUME QUE SI LA VEILLE EST VIDE, meme si la semaine porte
+// d'autres trous. Quelqu'un qui vient de se remettre a noter n'a pas a voir un
+// point rouge pour un oubli d'il y a cinq jours : la pastille dit « tu as
+// decroche », pas « ton historique est imparfait ». Le CHIFFRE, lui, compte la
+// semaine entiere — c'est ce qui reste a rattraper.
+function _majPastilleLifestyle(){
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="lifestyle"]');
+  if(!btn) return;
+  const vides=joursSansDonnees(currentUser,7);
+  const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()-1);
+  const veilleVide=vides.indexOf(localISODate(d))>=0;
+  _pastilleOnglet('lifestyle',veilleVide?vides.length:0,
+    c=>'Lifestyle : '+c+' jour'+(c>1?'s':'')+' sans données cette semaine');
+}
 // Pastille de l'onglet Bilan, calquée sur _majPastilleVideos.
 function _majPastilleBilan(){
   const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
@@ -53059,9 +53117,18 @@ async function coachLeverDrapeau(quoi){
 // AUCUN ÉCRAN NOUVEAU, aucun formulaire : une ligne sur l'accueil, un appui
 // par habitude. RÈGLE 2 : sans assignation, la ligne n'est pas rendue du tout
 // — pas de cadre vide, pas d'invitation à en créer.
-function htmlHabitudes(u){
+// ⚠ DUPLIQUE SUR LIFESTYLE, PAS DEPLACE. « Dormir assez », « Bouger tous les
+// jours » sont exactement le sujet de Lifestyle — mais l'appui quotidien est un
+// RITE D'ACCUEIL, et le retirer de la ou l'athlete le fait deja aurait echange
+// une bonne place contre une autre. Le meme rendu sert les deux ecrans ; la
+// logique, elle, n'existe qu'une fois.
+// `opts.taux` ajoute la lecture a 28 jours, qui a sa place sur Lifestyle — ou
+// l'on vient regarder une tendance — et pas sur l'accueil, ou l'on vient
+// appuyer sur un bouton.
+function htmlHabitudes(u,opts){
   const l=habitudesDe(u);
   if(!l.length) return '';
+  const _taux=!!(opts&&opts.taux);
   const auj=localISODate(new Date());
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:10px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
@@ -53082,7 +53149,20 @@ function htmlHabitudes(u){
         </button>`;}).join('')}
     </div>
     ${l.map(h=>_htmlHabSemaine(u,h)).join('')}
+    ${_taux?_htmlHabTaux(u):''}
   </div>`;
+}
+// LA FENETRE GLISSANTE, DITE. Le coach lit ce taux depuis toujours ; l'athlete,
+// lui, ne voyait que ses sept pastilles — donc jamais la tendance qui, elle,
+// resiste a une mauvaise semaine. La phrase reprend mot pour mot celle de la
+// fiche coach : les deux doivent dire la meme chose du meme chiffre.
+function _htmlHabTaux(u){
+  const g=habTauxGlobal(u);
+  if(g==null) return '';
+  return `<div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--border);
+      font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
+    Moyenne sur ${HAB_FENETRE_JOURS} jours : <strong style="color:${g>=70?'var(--green)':g>=40?'var(--amber)':'var(--text)'}">${g}&nbsp;%</strong>.
+    Fenêtre glissante, le jour en cours n'est pas compté.</div>`;
 }
 // La vue hebdomadaire L→D. Elle emprunte le rendu de renderNutriDots — même
 // pastille, même ordre, même vocabulaire visuel — via le fragment partagé
@@ -73551,6 +73631,20 @@ function salutation(d){
   return (h>=SALUT_DEBUT_JOUR&&h<SALUT_DEBUT_SOIR)?'Bonjour,':'Bonsoir,';
 }
 function _jourSleep(){ return _sleepDate||localISODate(new Date()); }
+// PURE. Le jour voisin, ou null quand il sort des bornes. Les fleches de
+// _bandeauJour se desactivent sur ce null : elles existent depuis toujours,
+// mais ni les pas ni le sommeil ne les passaient — pour rattraper trois jours
+// il fallait ouvrir trois fois le selecteur de date natif du telephone.
+function _jourVoisin(iso,pas,retention){
+  const d=new Date(String(iso)+'T12:00:00');
+  if(isNaN(d.getTime())) return null;
+  d.setDate(d.getDate()+pas);
+  const v=localISODate(d);
+  const auj=localISODate(new Date());
+  if(v>auj) return null;                                   // on ne saisit pas l'avenir
+  const min=localISODate(new Date(Date.now()-(retention||STEPS_RETENTION_JOURS)*24*3600*1000));
+  return v<min?null:v;
+}
 function changeStepsDate(v){ _stepsDate=(v&&v!==localISODate(new Date()))?v:null; _rerenderLifestyle(); }
 function changeSleepDate(v){ _sleepDate=(v&&v!==localISODate(new Date()))?v:null; _rerenderLifestyle(); }
 // Re-rend la ou les cartes réellement affichées. Un loadLifestyle() aveugle
@@ -73807,7 +73901,10 @@ function loadSteps(containerId='steps-content',opts){
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,${todayType==='off'?'rgba(96,165,250,.13)':'rgba(224,32,32,.14)'},transparent 68%);pointer-events:none"></div>
       <div style="position:relative">
-        ${_bandeauJour('steps-date-input',selStr,'changeStepsDate')}
+        ${_bandeauJour('steps-date-input',selStr,'changeStepsDate',{avecFleches:true,
+          prev:_jourVoisin(selStr,-1,STEPS_RETENTION_JOURS),
+          next:_jourVoisin(selStr,1,STEPS_RETENTION_JOURS),
+          retention:STEPS_RETENTION_JOURS})}
         <div style="display:flex;gap:8px;margin-bottom:11px">
           <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">JOUR ON</button>
           <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">JOUR OFF</button>
@@ -77978,6 +78075,140 @@ function sanResume(u,offset){
       ecart:pas.length?moy(pas)-oP:null}
   };
 }
+// ══ REGULARITE DU COUCHER ═══════════════════════════════════════════════
+//
+// La donnee dort dans le dossier depuis toujours : sleepLog[].bed. Elle n'etait
+// pas exploitee, alors que la regularite du coucher est aussi predictive que la
+// duree — deux athletes qui dorment 7 h se portent differemment selon qu'ils se
+// couchent a 23 h tous les soirs ou entre 21 h et 2 h.
+//
+// ⚠ LE CALCUL EST CIRCULAIRE, ET C'EST TOUT LE PIEGE. Les heures de coucher
+// vivent sur un CADRAN, pas sur une droite. Un coucher a 23h50 et un autre a
+// 00h10 sont a 20 minutes l'un de l'autre ; lus lineairement — 1430 et 10 — ils
+// sont a 23h40, et leur moyenne tombe a MIDI. Une implementation lineaire passe
+// tous les cas de la vie courante et se trompe exactement sur ceux qui comptent :
+// les couchers tardifs, ceux qu'on cherche justement a voir.
+//
+// La methode est celle des statistiques directionnelles : chaque heure devient
+// un vecteur unitaire sur le cercle, on moyenne les vecteurs, et la LONGUEUR de
+// la resultante dit la concentration. R proche de 1 = tous les couchers au meme
+// endroit du cadran ; R proche de 0 = disperses.
+const REG_COUCHER_NUITS=14;         // la fenetre, en nuits renseignees
+function regulariteCoucher(u,nuits){
+  const log=(u&&u.sleepLog)||[];
+  if(!log.length) return null;
+  const fen=(nuits>0?nuits:REG_COUCHER_NUITS);
+  // Les plus recentes d'abord, et SEULEMENT celles qui portent un coucher :
+  // les nuits importees par capture n'ont que leur duree, et les compter pour
+  // zero mettrait quatorze minuits fictifs dans le calcul.
+  const mins=log.slice()
+    .sort((a,b)=>String((b&&b.date)||'').localeCompare(String((a&&a.date)||'')))
+    .map(e=>_hhmmEnMin(e&&e.bed))
+    .filter(v=>v!=null)
+    .slice(0,fen);
+  // UNE SEULE NUIT NE REND PAS ZERO. Zero se lirait « parfaitement regulier »,
+  // ce qui est le contraire de ce qu'on sait d'une nuit unique.
+  if(mins.length<2) return null;
+  const TAU=Math.PI*2, PARMIN=TAU/1440;
+  let C=0,S=0;
+  for(const m of mins){ C+=Math.cos(m*PARMIN); S+=Math.sin(m*PARMIN); }
+  C/=mins.length; S/=mins.length;
+  const R=Math.sqrt(C*C+S*S);
+  // L'ecart-type circulaire. R vaut 1 quand tout coincide : le logarithme
+  // s'annule, et l'ecart avec lui. On borne a 1 pour que l'arrondi flottant ne
+  // fasse pas un logarithme de 1,0000000002 — donc une racine de nombre negatif.
+  const ecartRad=Math.sqrt(Math.max(0,-2*Math.log(Math.min(1,R))));
+  const moyRad=Math.atan2(S,C);
+  return {
+    n:mins.length,
+    moyenne:Math.round(((moyRad/PARMIN)%1440+1440)%1440),
+    ecart:Math.round(ecartRad/PARMIN)
+  };
+}
+// Les seuils sont ceux annonces a l'athlete : vert sous 30 min, orange
+// jusqu'a une heure, rouge au-dela. LE VERT NE DIT JAMAIS AUTRE CHOSE QUE
+// « tenu » — c'est la regle de couleur de tout l'ecran.
+function _teinteRegularite(min){
+  const m=Number(min)||0;
+  return m<30?'#22c55e':(m<=60?'#f59e0b':'#e02020');
+}
+// ⚠ LA DETTE A SES PROPRES SEUILS, et elle a d'abord emprunte ceux de la
+// regularite : toute dette au-dela d'une heure passait au rouge. Une heure de
+// manque cumulee sur une semaine entiere n'est rien, et un rouge qui se declenche
+// pour rien cesse d'etre lu — c'est l'inverse de ce qu'on cherche.
+// L'echelle est celle du sommeil lui-meme : zero, c'est tenu ; en dessous d'UNE
+// NUIT d'objectif, c'est un retard ordinaire ; au-dela, on a perdu une nuit
+// pleine sur la semaine, et ca se dit.
+function _teinteDette(min,objectif){
+  const m=Number(min)||0;
+  const o=Number(objectif)||SAN_OBJ_SOMMEIL;
+  return m<=0?'#22c55e':(m<o?'#f59e0b':'#e02020');
+}
+// ══ DETTE DE SOMMEIL DE LA SEMAINE ══════════════════════════════════════
+//
+// La somme des manques sur les sept derniers jours, contre l'objectif.
+//
+// ⚠ LES NUITS ABSENTES NE COMPTENT PAS POUR ZERO. Une nuit oubliee valant zero
+// ferait huit heures de dette par oubli : le chiffre dirait la saisie, pas le
+// sommeil — exactement l'erreur que sanResume evite deja sur ses moyennes.
+// Le nombre de nuits REELLEMENT lues repart avec le resultat, pour que l'ecran
+// puisse le dire : une dette sur deux nuits n'est pas une dette hebdomadaire.
+//
+// ET LA DETTE NE DEVIENT PAS NEGATIVE. On affiche une dette, pas un solde :
+// « −2h de dette » ne veut rien dire. Le surplus d'une nuit efface bien le
+// manque d'une autre — c'est une somme, pas un cumul de manques — mais le
+// total affiche s'arrete a zero.
+function detteSommeil(u,jours){
+  const n=(jours>0?jours:7);
+  const obj=sanObjSommeil(u);
+  const d=new Date(); d.setHours(12,0,0,0);
+  let somme=0,lues=0;
+  for(let i=0;i<n;i++){
+    const j=new Date(d); j.setDate(d.getDate()-i);
+    const m=sanSommeilMin(u,localISODate(j));
+    if(m==null) continue;
+    lues++; somme+=(obj-m);
+  }
+  if(!lues) return null;
+  return {dette:Math.max(0,Math.round(somme)),nuits:lues,objectif:obj,fenetre:n};
+}
+// ══ SERIE EN COURS SUR LES PAS ══════════════════════════════════════════
+//
+// Le nombre de jours consecutifs ou l'objectif DU JOUR a ete atteint. L'objectif
+// du jour, et non un chiffre unique : _stepsObjectifJour sait deja deduire le
+// ON/OFF du type declare puis du programme, et un jour de repos a 7 000 pas
+// n'est pas un echec a 10 000.
+//
+// ⚠ ON DIT POURQUOI LA SERIE S'ARRETE. Un jour oublie et un jour manque ne se
+// corrigent pas de la meme facon : l'un se rattrape en saisissant, l'autre en
+// marchant. Une serie qui s'arrete sans raison affichee laisse l'athlete
+// conclure qu'il n'a pas marche alors qu'il a juste oublie de noter.
+//
+// LE JOUR EN COURS NE CASSE PAS LA SERIE tant qu'il n'a pas atteint son
+// objectif : il n'est pas fini. Il la PROLONGE des qu'il l'atteint.
+const SERIE_PAS_MAX=400;            // garde-fou de boucle, ~13 mois
+function serieePas(u){
+  const buts=(u&&u.stepsGoals)||STEPS_GOALS_DEFAUT;
+  const types=(u&&u.stepsDayType)||{};
+  const d=new Date(); d.setHours(12,0,0,0);
+  const atteint=iso=>{
+    const v=sanPas(u,iso);
+    if(v==null) return 'vide';
+    const but=_stepsObjectifJour(buts,types[iso]??null,iso);
+    if(!(but>0)) return 'vide';     // sans objectif lisible, on n'invente pas de seuil
+    return v>=but?'ok':'sous';
+  };
+  const isoDe=k=>{ const j=new Date(d); j.setDate(d.getDate()-k); return localISODate(j); };
+  // Le jour en cours n'entre qu'en prolongation, jamais en rupture.
+  let k=(atteint(isoDe(0))==='ok')?0:1;
+  let n=0,raison=null;
+  for(;k<SERIE_PAS_MAX;k++){
+    const e=atteint(isoDe(k));
+    if(e==='ok'){ n++; continue; }
+    raison=e; break;
+  }
+  return {n,raison,objectifJour:_stepsObjectifJour(buts,types[isoDe(0)]??null,isoDe(0))};
+}
 // PURE. « 7h34 » a partir de minutes. Jamais « 7.57 h » : personne ne dort en
 // centiemes d'heure.
 function sanHM(min){
@@ -78129,6 +78360,53 @@ function _htmlSemaineSante(u){
     +'<div class="sansem-jours">'+jsHtml+'</div>'
     +'</section>';
 }
+// ══ CE QUE LA MOYENNE NE DIT PAS ════════════════════════════════════════
+//
+// Une ligne, un chiffre, la couleur du domaine — pas de badge, pas de
+// gamification. Chaque carte porte ce que SON domaine sait dire et que la
+// moyenne tait : pour le sommeil, la regularite des couchers et la dette de
+// la semaine ; pour les pas, la serie en cours.
+//
+// LE NOMBRE DE NUITS EST TOUJOURS DIT. Une dette calculee sur deux nuits
+// affichee comme une dette hebdomadaire serait un chiffre faux presente avec
+// aplomb — la meme erreur que la moyenne sur sept jours dont trois sont vides,
+// que sanResume evite deja.
+function _sanFait(lbl,val,coul,note){
+  return '<div class="san-fait">'
+    +'<span class="san-fait-l">'+escapeHtml(lbl)+'</span>'
+    +'<span class="san-fait-v"'+(coul?' style="color:'+coul+'"':'')+'>'+escapeHtml(val)+'</span>'
+    +(note?'<span class="san-fait-n">'+escapeHtml(note)+'</span>':'')
+    +'</div>';
+}
+function _htmlFaitsSante(u,quoi){
+  let h='';
+  if(quoi==='sommeil'){
+    const r=regulariteCoucher(u);
+    // ⚠ MUET PLUTOT QU'APPROXIMATIF. Sous deux couchers, regulariteCoucher
+    // rend null : afficher « ± 0 min » sur une nuit unique dirait
+    // « parfaitement regulier », le contraire de ce qu'on sait.
+    if(r) h+=_sanFait('Régularité des couchers','± '+r.ecart+' min',_teinteRegularite(r.ecart),
+      'coucher moyen '+_libHeure(r.moyenne)+' · sur '+r.n+' nuit'+(r.n>1?'s':''));
+    const d=detteSommeil(u);
+    if(d) h+=_sanFait('Dette de la semaine',d.dette?sanHM(d.dette):'aucune',
+      _teinteDette(d.dette,d.objectif),
+      'sur '+d.nuits+' nuit'+(d.nuits>1?'s':'')+' renseignée'+(d.nuits>1?'s':'')
+        +' · objectif '+sanHM(d.objectif));
+  } else {
+    const s=serieePas(u);
+    if(s){
+      // POURQUOI ELLE S'ARRETE, sinon l'athlete conclut qu'il n'a pas marche
+      // alors qu'il a seulement oublie de noter — et les deux ne se
+      // rattrapent pas de la meme facon.
+      const pourquoi=s.n===0?null
+        :s.raison==='vide'?'arrêtée par un jour non renseigné'
+        :s.raison==='sous'?'arrêtée par un jour sous l\'objectif':null;
+      h+=_sanFait('Série en cours',s.n?(s.n+' jour'+(s.n>1?'s':'')):'aucune',
+        s.n?'#e02020':'var(--text-dim)',pourquoi);
+    }
+  }
+  return h?'<div class="san-faits">'+h+'</div>':'';
+}
 function _htmlCarteSante(u,quoi){
   const r=sanResume(u,_sanOffset);
   const bloc=quoi==='sommeil'?r.sommeil:r.pas;
@@ -78164,6 +78442,7 @@ function _htmlCarteSante(u,quoi){
     +ecart
     +'<div class="san-resume">'+bloc.renseignes+'/7 jour'+(bloc.renseignes>1?'s':'')+' renseigné'
       +(bloc.renseignes>1?'s':'')+' · '+bloc.atteints+'/7 dans l\'objectif</div>'
+    +_htmlFaitsSante(u,quoi)
     +'<div class="san-actions">'
       +'<button type="button" class="btn btn-red btn-sm san-a1" onclick="sanSaisir(\''+quoi+'\')">'
         +'Ajouter / modifier mes données</button>'
@@ -78203,6 +78482,9 @@ function sanRendre(){
        const zw=document.getElementById('lifestyle-semaine'); if(zw) zw.innerHTML=''; }
   try{ if(zs) zs.innerHTML=_htmlCarteSante(u,'sommeil'); }catch(e){ if(zs) zs.innerHTML=''; }
   try{ if(zp) zp.innerHTML=_htmlCarteSante(u,'pas'); }catch(e){ if(zp) zp.innerHTML=''; }
+  try{ const zh=document.getElementById('lifestyle-habitudes');
+       if(zh) zh.innerHTML=htmlHabitudes(u,{taux:true}); }catch(e){
+       const zh=document.getElementById('lifestyle-habitudes'); if(zh) zh.innerHTML=''; }
 }
 // ── LA FEUILLE DU JOUR ─────────────────────────────────────────────────
 // Un clic sur une barre ouvre le detail, en bas d'ecran : sur un telephone,
@@ -78476,7 +78758,10 @@ function loadSleep(containerId='sleep-content',user,opts){
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,rgba(96,165,250,.13),transparent 68%);pointer-events:none"></div>
       <div style="position:relative">
-        ${_bandeauJour('sleep-date-input',selStr,'changeSleepDate')}
+        ${_bandeauJour('sleep-date-input',selStr,'changeSleepDate',{avecFleches:true,
+          prev:_jourVoisin(selStr,-1,STEPS_RETENTION_JOURS),
+          next:_jourVoisin(selStr,1,STEPS_RETENTION_JOURS),
+          retention:STEPS_RETENTION_JOURS})}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
           <div>
             <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
