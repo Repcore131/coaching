@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1177';
+window.RC_BUILD='1178';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1527,6 +1527,80 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 @media(max-width:380px){
   .rc-badges{grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:12px 8px}
   .rc-badge-d{display:none}
+}
+/* ══ LA CARTE « MON OBJECTIF » ════════════════════════════════════════════
+   C'est la carte qu'on vient regler : elle doit avoir de la matiere, pas
+   l'aplat gris de toutes les autres. Trois couches, et aucune n'est
+   decorative :
+     · un degrade sombre qui creuse le fond ;
+     · un grain tres fin en repeating-linear-gradient — aucune image, donc
+       aucun octet de plus a charger ;
+     · une lueur rouge tenue en haut, la ou vit le titre.
+   Le rouge ne sert qu'a ce qui est ACTIF. Le reste est charcoal et blanc. */
+.rc-obj-carte{position:relative;overflow:hidden;margin-bottom:18px;padding:16px 15px 14px;
+  border-radius:var(--r-3);border:1px solid #2c2c30;
+  background:
+    radial-gradient(120% 70% at 50% -10%,rgba(224,32,32,.16),transparent 62%),
+    linear-gradient(180deg,#1a1a1d 0%,#121214 46%,#0c0c0e 100%);
+  box-shadow:0 10px 26px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.06) inset}
+/* Le grain. 3 px de periode : visible de pres, invisible a distance de
+   lecture, et il empeche le degrade de « bander » sur les ecrans OLED. */
+.rc-obj-carte::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(45deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px)}
+/* Le filet rouge en tete : il dit que cette carte commande les autres. */
+.rc-obj-carte::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,#e02020 28%,#ff6a6a 50%,#e02020 72%,transparent);
+  opacity:.85}
+.rc-obj-carte>*{position:relative}
+.rc-obj-titre{font-size:var(--fs-xs);color:var(--sub);letter-spacing:2.5px;font-weight:800;
+  text-transform:uppercase;margin-bottom:11px}
+/* Les trois objectifs. Le choix actif est le seul element rouge de la rangee. */
+.rc-obj-choix{display:flex;gap:6px;margin-bottom:13px}
+.rc-obj-b{flex:1;min-height:40px;padding:8px 4px;border-radius:var(--r-2);cursor:pointer;
+  font-family:inherit;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.6px;
+  border:1px solid #2e2e33;color:var(--text-dim);
+  background:linear-gradient(180deg,#1c1c1f,#141416);
+  transition:transform .12s ease,border-color .12s ease,color .12s ease}
+.rc-obj-b:hover{color:var(--text);border-color:#3d3d44}
+.rc-obj-b:active{transform:scale(.97)}
+.rc-obj-b.actif{color:#fff;border-color:rgba(224,32,32,.75);
+  background:linear-gradient(180deg,rgba(224,32,32,.30),rgba(122,0,0,.22));
+  box-shadow:0 0 16px rgba(224,32,32,.28),0 0 0 1px rgba(224,32,32,.25) inset}
+/* Le total, en creux : c'est le chiffre qu'on regarde. */
+.rc-obj-kcal{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:11px 12px;border-radius:var(--r-2);border:1px solid #26262b;
+  background:linear-gradient(180deg,#0b0b0d,#131316);
+  box-shadow:0 2px 10px rgba(0,0,0,.5) inset}
+.rc-obj-pas{min-width:56px;min-height:40px;border-radius:var(--r-2);cursor:pointer;
+  font-family:inherit;font-size:var(--fs-sm);font-weight:900;color:var(--text);
+  border:1px solid #33333a;background:linear-gradient(180deg,#202024,#16161a);
+  transition:transform .12s ease,border-color .12s ease}
+.rc-obj-pas:hover{border-color:rgba(224,32,32,.6)}
+.rc-obj-pas:active{transform:scale(.94)}
+.rc-obj-centre{text-align:center;line-height:1.15;min-width:0}
+.rc-obj-nb{font-family:var(--pile-titre);font-size:clamp(30px,9vw,40px);color:#fff;letter-spacing:1px;
+  text-shadow:0 0 18px rgba(224,32,32,.45)}
+.rc-obj-u{font-size:var(--fs-2xs);color:var(--text-faint);margin-top:2px}
+/* Les trois macros. Une barre rouge a gauche de la ligne active le regard
+   sans repeindre la carte. */
+.rc-obj-macros{margin-top:12px}
+.rc-obj-l2{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 0 9px 10px;border-top:1px solid rgba(255,255,255,.06);position:relative}
+.rc-obj-l2::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:3px;height:18px;border-radius:2px;background:linear-gradient(180deg,#e02020,#5a0000);opacity:.75}
+.rc-obj-n2{font-size:var(--fs-sm);color:var(--sub)}
+.rc-obj-v2{display:flex;align-items:center;gap:8px}
+.rc-obj-g{font-size:var(--fs-sm);font-weight:900;min-width:58px;text-align:right;color:#fff}
+.rc-obj-reste{font-size:var(--fs-2xs);color:var(--text-faint)}
+.rc-obj-note{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:11px;
+  padding-top:9px;border-top:1px solid rgba(255,255,255,.05)}
+/* 360 px : les trois objectifs restent sur une ligne, le total ne deborde pas. */
+@media(max-width:380px){
+  .rc-obj-b{font-size:9px;letter-spacing:0;padding:8px 2px}
+  .rc-obj-pas{min-width:48px}
+}
+@media(prefers-reduced-motion:reduce){
+  .rc-obj-b,.rc-obj-pas{transition:none}
 }
 .tab-dot.on{display:block}
 /* ══ LES TABLEAUX DU CALCUL, RESSERRES ═══════════════════════════════════
@@ -55974,44 +56048,35 @@ function _htmlCiblesAthlete(u){
       +escapeHtml(c.manque.join(', '))+'. Complète ton bilan.</div>';
   }
   const per=_athPerso(u);
-  const bouton=(o)=>'<button type="button" class="btn btn-sm" onclick="athObjectif(\''+o.k+'\')" style="flex:1;margin:0;'
-    +'border:1px solid '+(c.objectif===o.k?'var(--red)':'var(--border)')+';'
-    +'background:'+(c.objectif===o.k?'rgba(224,32,32,.16)':'transparent')+';'
-    +'color:'+(c.objectif===o.k?'var(--red-text)':'var(--text-dim)')+';font-size:var(--fs-2xs)">'+o.lib+'</button>';
+  const bouton=(o)=>'<button type="button" class="rc-obj-b'+(c.objectif===o.k?' actif':'')
+    +'" aria-pressed="'+(c.objectif===o.k?'true':'false')
+    +'" onclick="athObjectif(\''+o.k+'\')">'+o.lib+'</button>';
   const ech=(v,haut)=>{ const o=[];for(let x=v;x<=haut;x+=0.1) o.push(Math.round(x*10)/10); return o; };
   const sel=(quoi,val,bas,haut)=>'<select onchange="athGkg(\''+quoi+'\',this.value)" onclick="event.stopPropagation()" '
     +'style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
     +'font-size:var(--fs-2xs);padding:4px 6px">'
     +ech(bas,haut).map(x=>'<option value="'+x+'"'+(Math.abs(x-val)<0.05?' selected':'')+'>'+String(x).replace('.',',')+' g/kg</option>').join('')
     +'</select>';
-  const ligne=(t,v,u2,extra)=>'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
-    +'padding:7px 0;border-top:1px solid rgba(255,255,255,.06)">'
-    +'<span style="font-size:var(--fs-sm);color:var(--sub)">'+t+'</span>'
-    +'<span style="display:flex;align-items:center;gap:8px">'+(extra||'')
-    +'<span style="font-size:var(--fs-sm);font-weight:800;min-width:58px;text-align:right">'+v+u2+'</span></span></div>';
-  return '<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);'
-    +'padding:14px;margin-bottom:18px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;'
-    +'text-transform:uppercase;margin-bottom:9px">Mon objectif</div>'
-    +'<div style="display:flex;gap:6px;margin-bottom:12px">'+ATH_OBJECTIFS.map(bouton).join('')+'</div>'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
-    +'background:var(--surface-1);border-radius:var(--r-2);padding:9px 11px">'
-      +'<button type="button" class="btn btn-sm" onclick="athDelta(-1)" style="margin:0;min-width:52px;'
-      +'border:1px solid var(--border);background:transparent;color:var(--text)">−20</button>'
-      +'<div style="text-align:center;line-height:1.2">'
-        +'<div style="font-size:var(--fs-lg);font-weight:900">'+c.kcal+'</div>'
-        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint)">kcal par jour'
+  const ligne=(t,v,u2,extra)=>'<div class="rc-obj-l2"><span class="rc-obj-n2">'+t+'</span>'
+    +'<span class="rc-obj-v2">'+(extra||'')
+    +'<span class="rc-obj-g">'+v+u2+'</span></span></div>';
+  return '<div class="rc-obj-carte">'
+    +'<div class="rc-obj-titre">Mon objectif</div>'
+    +'<div class="rc-obj-choix">'+ATH_OBJECTIFS.map(bouton).join('')+'</div>'
+    +'<div class="rc-obj-kcal">'
+      +'<button type="button" class="rc-obj-pas" onclick="athDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
+      +'<div class="rc-obj-centre">'
+        +'<div class="rc-obj-nb">'+Number(c.kcal).toLocaleString('fr-FR')+'</div>'
+        +'<div class="rc-obj-u">kcal par jour'
         +(per.delta?' · '+(per.delta>0?'+':'')+per.delta:'')+'</div></div>'
-      +'<button type="button" class="btn btn-sm" onclick="athDelta(1)" style="margin:0;min-width:52px;'
-      +'border:1px solid var(--border);background:transparent;color:var(--text)">+20</button>'
+      +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
     +'</div>'
-    +'<div style="margin-top:10px">'
+    +'<div class="rc-obj-macros">'
       +ligne('Protéines',c.p,' g',sel('prot',Number(c.protGkg)||1.8,1.2,2.6))
       +ligne('Lipides',c.l,' g',sel('lip',Number(c.lipGkg)||0.9,0.6,1.4))
-      +ligne('Glucides',c.g,' g','<span style="font-size:var(--fs-2xs);color:var(--text-faint)">le reste</span>')
+      +ligne('Glucides',c.g,' g','<span class="rc-obj-reste">le reste</span>')
     +'</div>'
-    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:9px">'
-    +'Ton coach voit ces cibles : elles remplacent celles de sa grille.</div>'
+    +'<div class="rc-obj-note">Ton coach voit ces cibles : elles remplacent celles de sa grille.</div>'
     +'</div>';
 }
 function _getEffectiveMacros(nut,isOn,dateStr,porteur){
@@ -57201,9 +57266,10 @@ function _renderNutriContent(type,dateAff){
     ?`<img src="${escapeHtml(_flxPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
     :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
   if(type==='flexible'){
-    // LA CARTE DES CIBLES EN TETE : c'est ce qu'on vient regler, et tout ce
-    // qui suit en decoule.
-    contentEl.innerHTML=`${(()=>{ try{ return _htmlCiblesAthlete(currentUser); }catch(e){ return ''; } })()}`+`
+    // L'ENCART QUI EXPLIQUE LA DIETE VIENT EN PREMIER, LA CARTE DES CIBLES
+    // JUSTE APRES. On dit d'abord ou l'on est, on regle ensuite : l'ordre
+    // inverse faisait regler des chiffres avant d'avoir nomme la methode.
+    contentEl.innerHTML=`
       <div class="banner-hero" style="margin-bottom:18px;${_animEntree('nut-hero')}">
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           ${_flxCircle}
@@ -57214,6 +57280,7 @@ function _renderNutriContent(type,dateAff){
           </div>
         </div>
       </div>
+      ${(()=>{ try{ return _htmlCiblesAthlete(currentUser); }catch(e){ return ''; } })()}
       ${_htmlSopkAthlete(currentUser)}
       ${_htmlDepartAthlete(nut)}
       ${_htmlPlancherAthlete(currentUser)}
