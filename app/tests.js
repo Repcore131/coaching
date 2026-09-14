@@ -38313,25 +38313,52 @@ vendredi 78 6h 44m
         // Zero se lirait « pas de changement », ce qui est une affirmation.
         const b=bilanDomaineCoach(ath([{date:iso(j-864e5),count:9000}]),'pas',28);
         return b.delta===null?true:_echec('delta '+b.delta);})());
-      ok('La sparkline NE RELIE PAS les jours vides',(()=>{
-        // Une ligne continue par-dessus un trou dessine une donnee qui
-        // n'existe pas — et c'est le trou que le coach doit voir.
-        const serie=[{iso:'a',v:1},{iso:'b',v:2},{iso:'c',v:null},{iso:'d',v:3},{iso:'e',v:4}];
-        const h=_sparklineCoach(serie,'#e02020');
-        if(!h) return _echec('aucune sparkline');
-        const d=(h.match(/ d="([^"]*)"/)||[])[1]||'';
-        // Deux segments, donc DEUX « M » : le trace se reprend apres le trou.
-        const m=(d.match(/M/g)||[]).length;
-        return m===2?true:_echec(m+' segment(s) : « '+d+' »');})());
-      ok('Sous deux points, aucune sparkline : un trait unique ne dit rien',(()=>{
-        return _sparklineCoach([{iso:'a',v:1},{iso:'b',v:null}],'#e02020')===''
-          ?true:_echec('une sparkline est rendue sur un point');})());
-      ok('AUCUNE BIBLIOTHEQUE, AUCUN APPEL RESEAU pour ce graphique',(()=>{
-        // La contrainte du projet : tout est inline. Un graphique ne vaut pas
-        // de l'enfreindre.
-        const src=String(_sparklineCoach);
-        return !/https?:|import\(|fetch\(|createElement\('script'/.test(src)
-          ?true:_echec('une ressource externe est chargee');})());
+      // ⚠ TROIS ASSERTIONS DE SPARKLINE ONT ETE RETIREES ICI, le jour meme ou
+      // elles sont nees. La sparkline dessinait 28 jours de forme sans echelle ;
+      // la carte de _htmlCcdLifeUn, qui vit maintenant dans la MEME section,
+      // offre 7/14/30/90 jours, des barres colorees par l'objectif DU JOUR et le
+      // total de la periode. Garder les deux, c'etait remplacer une duplication
+      // par une autre — et celle que je venais d'ecrire etait la plus pauvre.
+      // Ce qui reste a tenir, c'est qu'UN SUJET N'AIT QU'UNE SECTION.
+      ok('Un sujet, une section : la courbe vit avec sa moyenne',(()=>{
+        // DEUX SEMAINES DE DONNEES, sinon le delta vaut null et la ligne ne se
+        // rend pas : c'est le contrat de bilanDomaineCoach, pas un defaut.
+        const p14=[],n14=[];
+        for(let i=1;i<=14;i++){ p14.push({date:iso(j-i*864e5),count:9000});
+          n14.push({date:iso(j-i*864e5),duration:7,bed:'23:00'}); }
+        const u=ath(p14,n14);
+        const h=_htmlPasCoach(u);
+        // La courbe de periode est DANS la section « Pas », plus dans un
+        // conteneur a part pose sous les habitudes.
+        if(h.indexOf('ccdLifePeriode')<0) return _echec('la courbe n\'a pas rejoint la section');
+        if(h.indexOf('7 j vs 7 j')<0) return _echec('la comparaison hebdo a disparu');
+        // ET LE CONTENEUR SEPARE N'EXISTE PLUS : un identifiant qui ne designe
+        // plus rien survit indefiniment, et le prochain lecteur le croit vivant.
+        if(document.getElementById('ccd-life-graphes'))
+          return _echec('#ccd-life-graphes survit dans le balisage');
+        // La sparkline, elle, est bien partie.
+        return typeof _sparklineCoach==='undefined'
+          ?true:_echec('deux graphiques cohabitent encore');})());
+      ok('Le resume « Sommeil et pas » est EN TETE de l\'onglet',(()=>{
+        // Son propre commentaire l'annoncait depuis le debut ; le balisage ne
+        // suivait pas, et il tombait apres les habitudes.
+        const v=document.querySelector('.ccd-vue[data-vue="lifestyle"]');
+        if(!v) return _echec('onglet introuvable');
+        const ids=[...v.querySelectorAll('.cc-sect-c')].map(x=>x.id);
+        const i=ids.indexOf('ccd-sante');
+        if(i<0) return _echec('le resume a disparu');
+        return i===0?true:_echec('il arrive en position '+(i+1)+' : '+ids.join(', '));})());
+      ok('Les sections de domaine ne sont plus masquees par defaut',(()=>{
+        // Elles l'etaient, et c'etait le defaut : un athlete muet produisait un
+        // onglet vide, indiscernable d'un athlete qui va bien.
+        const v=document.querySelector('.ccd-vue[data-vue="lifestyle"]');
+        const caches=['ccd-sommeil','ccd-pas'].filter(id=>{
+          const z=document.getElementById(id);
+          const sect=z&&z.closest('.cc-sect');
+          return sect&&/display:\s*none/.test(sect.getAttribute('style')||'');
+        });
+        void v;
+        return caches.length?_echec('encore masquee(s) : '+caches.join(', ')):true;})());
 
       // ── 4.2 Le silence ──────────────────────────────────────────────
       ok('Un athlete muet depuis dix jours est DIT, pas masque',(()=>{

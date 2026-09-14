@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1200';
+window.RC_BUILD='1201';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -7763,14 +7763,29 @@ const COACH_PHOTO='icons/coach.jpg';
       </section>
       </div>
       <div class="ccd-vue" data-vue="lifestyle">
-      <!-- Sommeil et pas : les CHIFFRES BRUTS, sans seuil ni jugement. Le
-           verdict, lui, reste au bloc Récupération. Masqués tant que rien
-           n’a été saisi. -->
-      <section class="cc-sect" style="--cc-accent:var(--border);display:none">
+      <!-- ══ UN SUJET, UNE SECTION ═══════════════════════════════════════
+           L'onglet portait TROIS lectures voisines du sommeil et trois des
+           pas, a trois endroits : le resume hebdomadaire, une section de
+           moyennes, et une courbe — cette derniere posee tout en bas, sous
+           les habitudes, loin de la moyenne qu'elle sert a nuancer. Chaque
+           courbe a rejoint la section de son domaine, et #ccd-life-graphes
+           a disparu.
+           ET « Sommeil et pas » EST ENFIN EN TETE, comme son propre
+           commentaire l'annonçait depuis le debut sans que le balisage le
+           suive : c'est le resume qu'on lit avant d'ouvrir le detail. -->
+      <section class="cc-sect" style="--cc-accent:var(--border)">
+        <div class="cc-sect-t"><span>Sommeil et pas</span></div>
+        <div class="cc-sect-c" id="ccd-sante"></div>
+      </section>
+      <!-- ⚠ CES DEUX SECTIONS NE SONT PLUS MASQUEES PAR DEFAUT. Elles
+           l'etaient, et c'etait le defaut : un athlete muet depuis dix jours
+           produisait un onglet vide, donc indiscernable d'un athlete qui va
+           bien. Le silence est desormais l'une des choses qu'elles disent. -->
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Sommeil</span></div>
         <div class="cc-sect-c" id="ccd-sommeil"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--border);display:none">
+      <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Pas</span></div>
         <div class="cc-sect-c" id="ccd-pas"></div>
       </section>
@@ -7778,19 +7793,6 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Habitudes</span></div>
         <div class="cc-sect-c" id="ccd-habitudes"></div>
       </section>
-      <!-- SOMMEIL ET PAS, EN TETE DE L'ONGLET : deux moyennes, deux comptes
-           d'objectif, et l'etat des donnees. C'est ce qu'on lit avant
-           d'ouvrir les courbes. -->
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Sommeil et pas</span></div>
-        <div class="cc-sect-c" id="ccd-sante"></div>
-      </section>
-      <!-- LES COURBES, SOUS LES HABITUDES. Les deux sections « Sommeil » et
-           « Pas » ci-dessus disent une moyenne ; une moyenne ne montre pas
-           trois nuits courtes d'affilee, qui est precisement ce qu'on
-           regarde avant d'ajuster une charge. Rempli par
-           renderLifestyleGraphesCoach, vide si l'athlete n'a rien saisi. -->
-      <div id="ccd-life-graphes"></div>
       </div>
       <div class="ccd-vue" data-vue="donnees">
       <!-- Journal du coach. Il etait en TETE de fiche ; depuis la mise en
@@ -53366,10 +53368,15 @@ function _htmlCcdLifeCarte(o){
       : '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;padding:6px 0">Rien de saisi sur cette période.</div>')
     +'</div>';
 }
-function _htmlLifestyleGraphesCoach(c){
+// ⚠ SCINDEE PAR DOMAINE LE 14/09/2026. Les deux cartes vivaient cote a cote
+// dans #ccd-life-graphes, SOUS les sections « Sommeil » et « Pas » qui disaient
+// deja une moyenne du meme domaine : l'onglet portait donc trois lectures
+// voisines du sommeil et trois des pas, a trois endroits. Chaque courbe rejoint
+// la section de son domaine ; #ccd-life-graphes disparait.
+function _htmlCcdLifeUn(c,quoi){
   if(!c) return '';
   const nb=n=>Number(n).toLocaleString('fr-FR');
-  // ── PAS, a gauche ────────────────────────────────────────────────────
+  if(quoi==='pas'){
   const jp=_ccdLifePer.pas;
   const sp=_ccdLifeSerie(c.stepsLog,jp,e=>Number(e.count));
   const avecP=sp.filter(x=>x.val!=null);
@@ -53393,7 +53400,8 @@ function _htmlLifestyleGraphesCoach(c){
       return '#E02020';
     }
   });
-  // ── SOMMEIL, a droite ────────────────────────────────────────────────
+  return carteP;
+  }
   const js=_ccdLifePer.sommeil;
   const ss=_ccdLifeSerie(c.sleepLog,js,e=>Number(e.duration));
   const avecS=ss.filter(x=>x.val!=null);
@@ -53409,16 +53417,14 @@ function _htmlLifestyleGraphesCoach(c){
     format:v=>hhmm(v),
     couleur:v=>sleepColor(v)
   });
-  // auto-fit : deux colonnes sur une fiche ouverte au large, une seule sur un
-  // telephone. Le coach consulte les deux, et souvent debout.
-  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:20px">'
-    +carteP+carteS+'</div>';
+  return carteS;
 }
+// Le changement de periode redessine les DEUX SECTIONS DE DOMAINE, puisque
+// c'est la qu'habitent desormais les courbes. Le nom ne bouge pas :
+// ccdLifePeriode l'appelle, et le renommer n'aurait rien clarifie.
 function renderLifestyleGraphesCoach(c){
-  const z=document.getElementById('ccd-life-graphes');
-  if(!z) return;
-  let h=''; try{ h=_htmlLifestyleGraphesCoach(c); }catch(e){ h=''; }
-  z.innerHTML=h;
+  try{ renderPasCoach(c); }catch(e){}
+  try{ renderSommeilCoach(c); }catch(e){}
 }
 // Le selecteur de periode. Il relit le dossier au lieu de garder celui du
 // premier rendu : une saisie de l'athlete arrivee entre-temps apparait alors
@@ -75729,31 +75735,12 @@ function bilanDomaineCoach(u,quoi,jours){
     delta:(m0!=null&&m1!=null)?(m0-m1):null,
     dernier:der,depuis};
 }
-// La sparkline. SVG INLINE, meme facture que les barres existantes : aucune
-// bibliotheque, aucun appel reseau — c'est la contrainte du projet, et un
-// graphique ne vaut pas de l'enfreindre.
-// LES JOURS VIDES NE SONT PAS RELIES. Une ligne continue par-dessus un trou
-// dessine une donnee qui n'existe pas ; le trait s'interrompt, et c'est
-// precisement ce que le coach doit voir.
-function _sparklineCoach(serie,teinte){
-  const vals=serie.map(x=>x.v).filter(v=>v!=null);
-  if(vals.length<2) return '';
-  const L=240,H=38,bas=Math.min(...vals),haut=Math.max(...vals);
-  const etendue=(haut-bas)||1;
-  const x=i=>Math.round(i/(serie.length-1)*L*10)/10;
-  const y=v=>Math.round((H-2-((v-bas)/etendue)*(H-6))*10)/10;
-  let d='',ouvert=false;
-  serie.forEach((p,i)=>{
-    if(p.v==null){ ouvert=false; return; }
-    d+=(ouvert?'L':'M')+x(i)+' '+y(p.v)+' '; ouvert=true;
-  });
-  const pts=serie.map((p,i)=>p.v==null?''
-    :'<circle cx="'+x(i)+'" cy="'+y(p.v)+'" r="1.6" fill="'+teinte+'" opacity=".55"/>').join('');
-  return '<svg viewBox="0 0 '+L+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" '
-    +'role="img" aria-hidden="true" style="display:block;margin:6px 0 2px">'
-    +'<path d="'+d.trim()+'" fill="none" stroke="'+teinte+'" stroke-width="1.8" '
-    +'stroke-linejoin="round" stroke-linecap="round"/>'+pts+'</svg>';
-}
+// ⚠ _sparklineCoach A ETE RETIREE LE MEME JOUR QU'ELLE EST NEE. Elle dessinait
+// 28 jours de forme, sans echelle ; la carte de _htmlCcdLifeUn, qui vit
+// maintenant dans la meme section, offre 7/14/30/90 jours, des barres colorees
+// par l'objectif DU JOUR et le total de la periode. Garder les deux, c'etait
+// remplacer une duplication par une autre — et celle que je venais d'ecrire
+// etait la plus pauvre des deux.
 function _ligneCoach(lib,val,note){
   return '<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);'
     +'color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">'+escapeHtml(lib)+'</span>'
@@ -75872,7 +75859,7 @@ function _htmlSommeilCoach(c){
     ${silence}
     ${ligne('Moyenne 7 jours',a)}
     ${ligne('Moyenne 28 jours',b)}
-    ${_sparklineCoach(bil.serie,'#60a5fa')}
+    ${_htmlCcdLifeUn(c,'sommeil')}
     ${_htmlFormeCoach(bil,'sommeil',c)}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:8px">Durées saisies par l’athlète. Les nuits non renseignées ne sont pas comptées.</div>
   </div>`;
@@ -75904,7 +75891,7 @@ function _htmlPasCoach(c){
     ${silence}
     ${m!=null?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">Moyenne 14 jours</span><span style="font-weight:800">${nb(m)} pas</span></div>`:''}
     ${obj?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">Objectif</span><span style="font-weight:800">${escapeHtml(obj)}</span></div>`:''}
-    ${_sparklineCoach(bil.serie,'#e02020')}
+    ${_htmlCcdLifeUn(c,'pas')}
     ${_htmlFormeCoach(bil,'pas',c)}
     ${_htmlObjectifsCoach(c)}
   </div>`;
@@ -75913,10 +75900,9 @@ function renderSommeilCoach(c){
   const z=document.getElementById('ccd-sommeil');
   if(!z) return;
   let h=''; try{ h=_htmlSommeilCoach(c); }catch(e){ h=''; }
-  // ⚠ LE BLOC PEUT DESORMAIS NE CONTENIR QUE LE SILENCE, et c'est voulu : il
-  // ne se masque plus des qu'il n'y a pas de donnee, puisque l'absence EST
-  // l'information. Le display:none ne survit que pour le cas ou le rendu a
-  // reellement leve.
+  // ⚠ LE BLOC PEUT DESORMAIS NE CONTENIR QUE LE SILENCE, et c'est voulu :
+  // l'absence EST l'information. Le display:none ne survit que pour le cas ou
+  // le rendu a REELLEMENT leve — la, il n'y a rien a montrer.
   z.innerHTML=h; z.style.display=h?'':'none';
 }
 function renderPasCoach(c){
