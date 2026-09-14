@@ -20586,21 +20586,19 @@ function testExercices(){
           return /data-num="[^"]*"\s*fill="[^"]*">20</.test(sans)
             ?true:_echec('le consommé disparaît quand la cible manque');})());
 
-        // Règle 7 : ON et OFF séparées côté coach.
-        ok('Règle 7 : ON et OFF ont deux répartitions distinctes, jamais moyennées',(()=>{
-          const c=_ath();
-          const h=htmlMacrosCoachLecture(c,{p:180,g:250,l:70},{p:180,g:180,l:70});
-          const on=partsPourcent(180,70,250), off=partsPourcent(180,70,180);
-          if(on.c===off.c) return _echec('la fixture ne distingue pas les journées');
-          if(h.indexOf('G '+on.c+' %')<0) return _echec('la part ON manque');
-          if(h.indexOf('G '+off.c+' %')<0) return _echec('la part OFF manque');
-          return !/moyenne/i.test(h)?true:_echec('une moyenne est mentionnée');})());
-        ok('Règle 4 : les champs de saisie du coach restent en grammes',(()=>{
-          // La ligne ajoutée est en LECTURE SEULE, sous les champs.
-          const src=String(htmlMacrosCoachLecture);
-          if(/ccd-on-|ccd-off-|<input/.test(src)) return _echec('la ligne touche aux champs');
-          return /Lecture seule/.test(src)
-            ?true:_echec('la ligne ne se déclare pas en lecture seule');})());
+        // ⚠ LES DEUX ASSERTIONS QUI APPELAIENT htmlMacrosCoachLecture ONT ETE
+        // RETIREES. La fonction a disparu le 08/09/2026 avec la section
+        // « Cibles en cours » — voir la note dans index.html. Elles ne
+        // testaient donc plus rien : elles LEVAIENT. Et comme la suite est un
+        // SEUL try, tout ce qui les suivait mourait avec elles — 2 236
+        // assertions jouees la ou le fichier en ecrit pres du double, dont la
+        // non-regression entiere de l'import par capture. Une assertion
+        // obsolete ne coute pas une assertion, elle coute la suite.
+        // Ce qui survit a la suppression, c'est le contrat qui l'a motivee.
+        ok('La lecture en pourcentages du coach reste supprimee, pas revenue',
+           typeof htmlMacrosCoachLecture==='undefined',
+           'la fonction est de retour : le meme chiffre serait affiche deux fois, '
+           +'dont une fois derive');
         ok('Règle 1 : le moteur n\'est pas touché',(()=>{
           const src=String(formatMacro)+String(partsPourcent)+String(setMacroUnite)
             +String(poidsReference);
@@ -21532,7 +21530,13 @@ function testExercices(){
           const b=besoinsProposes(u,{vitesse:-0.9});
           if(b.delta!==0) return _echec('delta = '+b.delta);
           if(bornesVitesseChoisie(u)!==null) return _echec('une fourchette existe');
-          return _htmlVitesseCoach(u)===''?true:_echec('le curseur est rendu');})());
+          // ⚠ « et le curseur est masque » : _htmlVitesseCoach a ete RETIREE le
+          // 08/09/2026 avec le curseur lui-meme (voir la note dans index.html).
+          // Masque par absence, donc. Ce qui reste a tenir est qu'il ne
+          // revienne pas : il pilotait un SECOND moteur de calcul, concurrent
+          // du coefficient d'objectif des tableaux.
+          return typeof _htmlVitesseCoach==='undefined'
+            ?true:_echec('le curseur de vitesse coach est de retour');})());
         ok('Règle 8 : en recomp, le curseur peut valoir 0',(()=>{
           const u=_ath({phase:{type:'recomp',debut:Date.now()-30*864e5}});
           if(cibleVitesseChoisie('recomp',0,u)!==0) return _echec('0 refusé');
@@ -24021,64 +24025,23 @@ function testExercices(){
         return /cle!=='tous'/.test(String(_pilCompteur))
           ?true:_echec('re-cliquer « Tous » le desactive');})());
 
-      ok('N2.3 et N2.7 — LE COACH VOIT CE QUE SON ATHLETE VOIT, au chiffre pres',(()=>{
-        if(typeof _htmlAthleteVoit!=='function') return _echec('aucun bloc de lecture');
-        const j=Date.now();
-        const iso=d=>new Date(d).toISOString().slice(0,10);
-        // Femme, diete flexible, cycle actif, sensibilite PMS, jour OFF :
-        // luteale tardive ajoute 4 % de kcal chez l'athlete. Le panneau coach
-        // lisait nutrition.macros brut et ne le montrait nulle part.
-        const A={id:'AV',email:'av@t.fr',role:'athlete',fname:'C',lname:'B',
-          gender:'Femme',_evol_gender:'F',_evol_height:'168','init-age':29,
-          createdAt:j-200*864e5,
-          sessions_config:[{active:false},{active:false},{active:false},{active:false},
-            {active:false},{active:false},{active:false}],
-          cycle:{enabled:true,lastPeriodDate:iso(j-25*864e5),cycleLength:28,sensibilitePms:true},
-          bilans:[{type:'suivi',date:j-3*864e5,'bil-weight':'59'}],
-          sessions:[],videos:[],
-          nutrition:{dietType:'flexible',cycle:false,manuel:true,
-            macros:{on:{kcal:2000,p:130,g:200,l:60},off:{kcal:2000,p:130,g:200,l:60}}}};
-        const today=localISODate(new Date());
-        if(phaseCycle(A,today)!=='luteal_late') return true;  // fixture hors phase : rien a prouver
-        const isOn=nutIsOnDay(today,A);
-        const vrai=_getEffectiveMacros(A.nutrition,isOn,today,A)||{};
-        // LE MEME CHEMIN, LE MEME NOMBRE. C'est tout le grief : la grille
-        // n'appelait jamais _getEffectiveMacros.
-        const g={kcal:2000,p:130,g:200,l:60};
-        const h=_htmlAthleteVoit(A,g,g,false);
-        if(!h) return _echec('aucun rendu');
-        const t=h.replace(/<[^>]*>/g,' ');
-        if(t.indexOf(String(Math.round(vrai.kcal)))<0)
-          return _echec('le bloc n’annonce pas les '+Math.round(vrai.kcal)+' kcal de ses anneaux : '+t.slice(0,180));
-        if(Math.round(vrai.kcal)===2000)
-          return _echec('l’adaptation de cycle n’a pas joue — la sonde ne prouve rien');
-        // L'ECART DE CYCLE EST DIT, et dit comme VOULU : ce n'est pas une erreur.
-        if(t.indexOf('Adaptation de cycle')<0)
-          return _echec('l’adaptation de cycle n’est pas signalee');
-        // ET L'ECART DE CALCUL EST DIT SEPAREMENT : le champ affiche le calcul
-        // du moment, l'athlete garde ce qui est enregistre tant qu'on n'a pas
-        // appuye sur le bouton.
-        const h2=_htmlAthleteVoit(A,{kcal:1603,p:120,g:150,l:55},{kcal:1603,p:120,g:150,l:55},false);
-        if(h2.replace(/<[^>]*>/g,' ').indexOf('calcul du moment')<0)
-          return _echec('un champ qui diverge du dossier n’est pas signale');
-        // AUCUNE ECRITURE : ce bloc LIT, et c'est toujours le bouton
-        // d'enregistrement qui envoie.
-        const s=String(_htmlAthleteVoit);
-        return (!/DB\.set|saveUser|CLOUD\.push/.test(s))
-          ?true:_echec('le bloc de lecture ecrit dans le dossier');})());
+      // ⚠ TROIS ASSERTIONS ONT ETE RETIREES ICI (N2.3, N2.7 et N2.21). Elles
+      // eprouvaient _htmlAthleteVoit — le bloc « ce que voit ton athlete » de
+      // la fiche coach — RETIRE le 08/09/2026 avec ecartAthleteVu : voir la
+      // pierre tombale dans index.html, juste avant les tableaux du calcul.
+      // Elles ne testaient donc plus rien, elles LEVAIENT ; et la suite etant
+      // un seul try, tout ce qui les suivait ne s'executait plus.
+      // CE QUI PORTAIT LEUR RAISON D'ETRE NE DISPARAIT PAS AVEC ELLES : le
+      // decalage entre la copie enregistree et le calcul vivant est dit par
+      // _cplHtmlDesync et par le bouton « Appliquer ces cibles », tous deux
+      // couverts ailleurs. Ce qui reste a tenir ici, c'est que le bloc ne
+      // revienne pas : il redisait au coach, par un second chemin, les
+      // chiffres que l'ecran de l'athlete calcule deja.
+      ok('Le bloc « ce que voit ton athlete » reste retire, pas revenu',
+         typeof _htmlAthleteVoit==='undefined'&&typeof ecartAthleteVu==='undefined',
+         'un second chemin d\'affichage des memes chiffres est de retour');
 
-      ok('N2.3 — LE PANNEAU PORTE LA SECTION, et nutIsOnDay reste le seul juge',(()=>{
-        const s=String(renderCoachNutriSection);
-        if(s.indexOf('ccd-nut-athlete')<0) return _echec('la section n’est pas assemblee');
-        if(s.indexOf('_htmlAthleteVoit')<0) return _echec('le bloc n’est pas appele');
-        // La section est rendue AVANT les reglages : le coach lit ce que son
-        // athlete a sous les yeux avant de toucher aux champs.
-        if(s.indexOf('ccd-nut-athlete')>s.indexOf('ccd-nut-reglages'))
-          return _echec('la section est rendue apres les reglages');
-        // Le jour ON/OFF vient de nutIsOnDay, jamais d'une deduction locale :
-        // _applyNutCycleModifier teste `!isOn` pour le bonus de luteale.
-        return /nutIsOnDay\(today,c\)/.test(String(_htmlAthleteVoit))
-          ?true:_echec('le jour n’est pas lu par nutIsOnDay');})());
+
 
       ok('N2.6 — UN SEUL POIDS DE REFERENCE, et les trois lectures s\'y ramenent',(()=>{
         if(typeof poidsNutritionnel!=='function') return _echec('aucune source unique');
@@ -24171,40 +24134,27 @@ function testExercices(){
         return mk.indexOf(direRegplePlancher(pAvec))>=0
           ?true:_echec('le message ne porte pas la regle : '+mk);})());
 
-      ok('N2.10 — « Proteines par prise » lit la MEME source que le champ PROT',(()=>{
-        if(typeof _calcAffiche!=='function') return _echec('aucune lecture commune');
-        // Le grief : sur un dossier en calcul automatique jamais enregistre, le
-        // champ affichait 190 g et le bloc en dessous « 4 x 44 g = 176 g ».
-        const s=String(_htmlRepartitionPrisesCoach);
-        if(/nutrition&&c\.nutrition\.macros\)\|\|\{\}\)\.on\)/.test(s))
-          return _echec('le bloc lit encore la valeur enregistree directement');
-        if(s.indexOf('_calcAffiche')<0) return _echec('le bloc ne passe pas par la lecture commune');
-        if(String(renderCoachNutriSection).indexOf('_calcAffiche')<0)
-          return _echec('la grille ne passe pas par la lecture commune');
-        // EN MANUEL, c'est le dossier qui fait foi — des deux cotes.
-        const man={email:'m@t.fr',nutrition:{manuel:true,macros:{on:{kcal:2000,p:190,g:200,l:60}}}};
-        if(_calcAffiche(man)!==null) return _echec('le mode manuel recalcule');
-        // AUCUN RECALCUL AJOUTE : repartitionPrises n'est pas touchee.
-        return /repartitionPrises\(c,_on\)/.test(s)
-          ?true:_echec('la repartition ne recoit pas la cible affichee');})());
+      // ⚠ N2.10 ET N2.11 ONT ETE RETIREES ICI. Elles eprouvaient
+      // _htmlRepartitionPrisesCoach et la section #ccd-prises, RETIREES le
+      // 08/09/2026 — Kevin : « c'est ininteressant, degage-le, il n'a rien a
+      // faire la ». Le bloc redisait le total de proteines de la grille juste
+      // au-dessus, divise par un nombre de repas que l'athlete regle lui-meme.
+      // Elles ne testaient plus rien : elles LEVAIENT, et la suite etant un
+      // seul try, tout ce qui suivait mourait avec elles.
+      // repartitionPrises et _htmlRepartitionPrises, eux, RESTENT : c'est
+      // l'ecran de l'athlete, ou le decoupage a un sens, et il garde ses
+      // assertions plus bas.
+      ok('La section « Proteines par prise » du coach reste retiree',(()=>{
+        if(typeof _htmlRepartitionPrisesCoach!=='undefined')
+          return _echec('le bloc coach est de retour');
+        if(document.getElementById('ccd-prises'))
+          return _echec('la section est de retour dans la fiche');
+        // ET LA CLEF DE REPLI EST PARTIE AVEC ELLE : une clef qui ne designe
+        // plus rien ne casse rien, et c'est precisement ce qui la fait
+        // survivre indefiniment.
+        return CCD_REPLI_DEFAUT.indexOf('ccd-prises')<0
+          ?true:_echec('ccd-prises survit dans CCD_REPLI_DEFAUT');})());
 
-      ok('N2.11 — LA REPARTITION PROTEIQUE EST DANS L\'ONGLET NUTRITION',(()=>{
-        const z=document.getElementById('ccd-prises');
-        if(!z) return _echec('la section a disparu');
-        const v=z.closest('.ccd-vue');
-        if(!v||v.dataset.vue!=='nutrition')
-          return _echec('elle est dans « '+(v?v.dataset.vue:'hors onglet')+' »');
-        // SOUS LE BLOC DONT ELLE DERIVE.
-        const n=document.getElementById('ccd-nutrition');
-        if(!n||!(n.compareDocumentPosition(z)&Node.DOCUMENT_POSITION_FOLLOWING))
-          return _echec('elle ne suit pas le bloc Nutrition');
-        // ET SON LIBELLE DIT CE QU'ELLE CONTIENT. « Prises » ne le disait pas.
-        const t=z.closest('.cc-sect').querySelector('.cc-sect-t');
-        if(!t||!/Protéines/.test(t.textContent))
-          return _echec('libelle : « '+(t?t.textContent.trim():'aucun')+' »');
-        // RENDUE UNE SEULE FOIS : un deplacement qui duplique serait pire.
-        return document.querySelectorAll('#ccd-prises').length===1
-          ?true:_echec('la section est rendue deux fois');})());
 
       ok('N2.13 — LE COACH LIT LES MEMES BLOCAGES QUE SON ATHLETE',(()=>{
         const s=String(_htmlAjustement);
@@ -24404,34 +24354,6 @@ function testExercices(){
         if(h2.indexOf('hors échelle')>=0) return _echec('une valeur de l’échelle est dite hors échelle');
         return h2.indexOf('suggéré')>=0?true:_echec('le suggéré n’est plus marqué');})());
 
-      ok('N2.21 — LA CIBLE DE SEL EST DITE AU COACH, et c\'est la même',(()=>{
-        const s=String(_htmlAthleteVoit);
-        if(s.indexOf('_selPourGrille')<0) return _echec('le moteur sodique n’est pas lu');
-        const j=Date.now();
-        const u={id:'SD',email:'sd@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
-          _evol_height:'178','init-age':32,createdAt:j-200*864e5,
-          weightLog:[{date:new Date(j-2*864e5).toISOString().slice(0,10),kg:80}],
-          sessions_config:Array.from({length:7},()=>({active:false})),
-          bilans:[{type:'debut',date:j-100*864e5,'deb-weight':'80','deb-height':'178',
-                   'deb-age':'32','deb-gender':'Homme'}],
-          sessions:[],videos:[],
-          nutrition:{dietType:'flexible',manuel:true,
-            macros:{on:{kcal:2400,p:180,g:250,l:70},off:{kcal:2400,p:180,g:250,l:70}}}};
-        const today=localISODate(new Date());
-        const vu=_getEffectiveMacros(u.nutrition,nutIsOnDay(today,u),today,u);
-        const attendu=_selPourGrille(u,today,vu);
-        const t=_htmlAthleteVoit(u,vu,vu,false).replace(/<[^>]*>/g,' ');
-        if(attendu&&attendu.cible&&attendu.cible.targetSaltG>0){
-          const nb=String(Math.round(attendu.cible.targetSaltG*10)/10).replace('.',',');
-          if(t.indexOf(nb+' g')<0)
-            return _echec('le coach ne lit pas les '+nb+' g de sa grille à lui : '+t.slice(0,220));
-        }
-        // NULL RESTE NULL : sans poids connu, le moteur se tait et on se tait
-        // avec lui plutot que d'afficher un zero.
-        const v=JSON.parse(JSON.stringify(u));
-        v.weightLog=[]; v.bilans=[]; v['init-weight']='';
-        const t2=_htmlAthleteVoit(v,{kcal:2400,p:180,g:250,l:70},{kcal:2400,p:180,g:250,l:70},false);
-        return t2.indexOf('0 g</b>')<0?true:_echec('un zéro est affiché faute de poids');})());
 
       ok('N2.22 — L\'ORIGINE DES CIBLES EST MONTREE, avec sa date',(()=>{
         if(typeof _htmlOrigineCibles!=='function') return _echec('l’origine n’est jamais lue');
@@ -25368,15 +25290,47 @@ function testExercices(){
           ?true:_echec('la phase ne recalcule plus les cibles');})());
 
       ok('N4.7 — L\'INTERRUPTEUR EST AU-DESSUS DE LA GRILLE QU\'IL DEVERROUILLE',(()=>{
-        const s=String(renderCoachNutriSection);
-        const i=s.indexOf('_htmlManuelCoach(c)');
-        const g=s.indexOf('${macroRows}');
-        if(i<0||g<0) return _echec('l’assemblage a changé de forme');
-        if(i>g) return _echec('l’interrupteur est encore rendu après la grille');
-        // LE MECANISME readonly NE CHANGE PAS : il est délibéré, et `disabled`
-        // ne rendrait pas sa valeur à l’enregistrement.
-        if(s.indexOf("_man?'':' readonly'")<0)
-          return _echec('le mécanisme readonly a été touché');
+        // ⚠ L'ASSERTION A CHANGE DE CIBLE, PAS D'INTENTION. _htmlManuelCoach a
+        // ete retiree le 08/09/2026 : son commutateur vit desormais dans la
+        // PREMIERE LIGNE du tableau « Macronutriments », la ou sont les
+        // valeurs qu'il ouvre a la frappe. Il etait pose au-dessus d'une
+        // SECONDE grille, elle-meme retiree. Ce qu'on tient reste le meme :
+        // l'interrupteur precede les champs qu'il deverrouille.
+        if(typeof _htmlManuelCoach!=='undefined')
+          return _echec('la seconde grille du coach est de retour');
+        const s=String(_htmlTableauxTableur);
+        if(s.indexOf('saveClientNutriManuel(this.checked)')<0)
+          return _echec('le commutateur a disparu du tableau');
+        if(s.indexOf('Macronutriments')<0) return _echec('le tableau a change de titre');
+        // ⚠ L'ORDRE SE LIT SUR LE RENDU, PAS SUR LA SOURCE. `_in` — donc la
+        // chaine 'tbk-in' — est DECLAREE avant `_swi` dans la fonction, et
+        // comparer deux positions de texte disait l'inverse de ce qui sort.
+        // On rend donc le tableau pour de bon, en SAISIE MANUELLE — seul mode
+        // ou les champs existent — et on compare deux lignes. Le rendu se fait
+        // dans un noeud DETACHE : la fonction est pure, elle prend le dossier
+        // en argument, et rien ici ne doit toucher l'ecran du coach.
+        const cM={id:'T7',email:'t7@t.fr',role:'athlete',gender:'H',
+          _evol_height:'178','init-age':30,
+          sessions_config:Array.from({length:7},()=>({active:false})),
+          bilans:[{date:Date.now()-3*864e5,'bil-weight':'80','deb-height':'178','deb-age':30}],
+          nutrition:{manuel:true,macros:{on:{kcal:3000,p:285,g:243,l:98,f:45},
+                                         off:{kcal:2600,p:247,g:211,l:82,f:39}}}};
+        const boite=document.createElement('div');
+        boite.innerHTML=_htmlTableauxTableur(cM);
+        const tb=[...boite.querySelectorAll('table.tbk')]
+          .find(x=>/Macronutriments/.test((x.querySelector('caption')||{}).textContent||''));
+        if(!tb) return _echec('le tableau « Macronutriments » n\'est plus rendu');
+        const rs=[...tb.querySelectorAll('tbody tr')];
+        const iSwi=rs.findIndex(r=>r.querySelector('input[type=checkbox]'));
+        const iIn=rs.findIndex(r=>r.querySelector('input[type=number]'));
+        if(iSwi<0) return _echec('l\'interrupteur n\'est pas rendu dans le tableau');
+        if(iIn<0) return _echec('aucun champ de saisie en mode manuel');
+        if(iSwi>iIn) return _echec('l\'interrupteur est rendu apres les champs');
+        // ⚠ LE MECANISME readonly A DISPARU AVEC LES CHAMPS EUX-MEMES : en
+        // automatique le tableau ecrit du texte, il n'y a plus d'input a
+        // verrouiller. Ce qu'il garantissait — « en automatique, rien ne se
+        // tape » — est tenu par l'assertion du meme nom, plus bas.
+        if(/readonly/.test(s)) return _echec('un champ verrouille est revenu');
         return String(saveClientNutriManuel).indexOf('_besoinsSurs')>=0
           ?true:_echec('le passage auto → manuel → auto ne recalcule plus');})());
 
@@ -27539,6 +27493,20 @@ function testExercices(){
         phase:{type:'seche',debut:Date.now()-10*864e5},
         bilans:[{date:Date.now()-3*864e5,'bil-weight':'80','deb-height':'178','deb-age':30}],
         nutrition:nut||{}});
+      // ── LIRE LE TABLEAU « MACRONUTRIMENTS » ───────────────────────────
+      // Il y a CINQ tables .tbk dans la fiche ; querySelector('.tbk') prenait
+      // « Facteurs ». On designe celle qu'on veut par sa legende.
+      const _tbkMacro=()=>[...document.querySelectorAll('table.tbk')]
+        .find(x=>/Macronutriments/.test((x.querySelector('caption')||{}).textContent||''));
+      const _tbkLigne=(t,lbl)=>{
+        const tr=t&&[...t.querySelectorAll('tbody tr')]
+          .find(r=>r.textContent.indexOf(lbl)>=0);
+        return tr?tr.textContent.replace(/\s+/g,' ').trim():'ABSENTE';};
+      // Le grammage est EN FIN DE LIGNE, apres le menu de g/kg : une recherche
+      // naive y attrape le « 2,4 g » du libelle et lit 4.
+      const _tbkG=(t,lbl)=>{
+        const m=_tbkLigne(t,lbl).match(/(\d[\d\s\u202f\u00a0]*)\s*g$/);
+        return m?Number(m[1].replace(/\D/g,'')):null;};
       const poser=nut=>{ DB.set('users',{'c9@t.fr':COACH,'a9@t.fr':mk(nut)});
         currentUser=COACH; currentClientId='A9';
         _propProt=null; _propLip=null; _propCycle=null;
@@ -27565,37 +27533,55 @@ function testExercices(){
           return saisieManuelle(mk({manuel:true}))===true
             ?true:_echec('le choix explicite « manuel » est ignore');})());
 
-        ok('EN AUTOMATIQUE, LES CHAMPS PORTENT LE CALCUL ET NE SE TAPENT PAS',(()=>{
+        ok('EN AUTOMATIQUE, LE CALCUL EST ECRIT ET NE SE TAPE PAS',(()=>{
+          // ⚠ L'ASSERTION A CHANGE DE CIBLE, PAS D'INTENTION. Elle cherchait un
+          // champ `readonly` ; depuis le 08/09/2026 il n'y a plus de champ DU
+          // TOUT en automatique — le tableau ecrit le calcul en texte, et les
+          // champs n'apparaissent qu'en saisie manuelle. `readonly` a disparu
+          // du fichier avec eux. Ce qui est tenu est le meme contrat, en plus
+          // fort : en automatique, rien ne se tape.
           poser({});
-          const e=document.getElementById('ccd-on-kcal');
-          if(!e) return _echec('aucun champ rendu');
-          if(!(Number(e.value)>0)) return _echec('le champ est vide : « '+e.value+' »');
-          // `readonly` ET NON `disabled` : un champ desactive ne rend pas sa
-          // valeur, et le reste de l'ecran les lit par leur identifiant.
-          if(!e.hasAttribute('readonly')) return _echec('le champ se laisse taper');
-          return !e.disabled?true:_echec('le champ est desactive, sa valeur ne sortira pas');})());
+          const t=_tbkMacro();
+          if(!t) return _echec('le tableau « Macronutriments » n\'est plus rendu');
+          if(t.querySelectorAll('input[type=number]').length)
+            return _echec('un champ de saisie est rendu en automatique');
+          if(document.getElementById('ccd-on-kcal'))
+            return _echec('le champ de total survit en automatique');
+          // ET LE CALCUL EST BIEN ECRIT : un tableau vide passerait ce qui
+          // precede sans rien prouver.
+          const g=_tbkG(t,'Protéines');
+          return (g>0)?true
+            :_echec('aucun grammage calcule : « '+_tbkLigne(t,'Protéines')+' »');})());
 
         ok('LES CIBLES SUIVENT LES OBJECTIFS NUTRITIONNELS',(()=>{
           // C'est la demande meme : changer les proteines par kilo doit changer
           // les cibles, sans rien taper.
+          // ⚠ LE GESTE A CHANGE DE NOM, PAS DE SENS. Il ne reste qu'UN menu de
+          // g/kg — celui des tableaux — et c'est majTableauTableur qui le
+          // porte : elle pose _tbOpts, que les tableaux LISENT, et _propProt,
+          // que besoinsProposes lit. _propSetProt seule ne nourrit plus que la
+          // seconde moitie, si bien que l'ancienne assertion interrogeait un
+          // tableau qui ne pouvait pas bouger.
           poser({});
-          const avant=Number(document.getElementById('ccd-on-p').value);
-          _propSetProt('2.8');
-          const apres=Number(document.getElementById('ccd-on-p').value);
-          if(!(avant>0&&apres>0)) return _echec('cibles illisibles : '+avant+' puis '+apres);
+          const avant=_tbkG(_tbkMacro(),'Protéines');
+          majTableauTableur('protGkg','1.8');
+          const apres=_tbkG(_tbkMacro(),'Protéines');
+          if(!(avant>0&&apres>0)) return _echec('grammages illisibles : '+avant+' puis '+apres);
           if(avant===apres) return _echec('les proteines n\'ont pas bouge : '+avant);
+          // LE CHIFFRE EST VERIFIE, pas seulement « different » : 1,8 g/kg sur
+          // les 80 kg de poids de reference de la fixture font 144 g.
+          if(apres!==144) return _echec('1,8 g/kg sur 80 kg donne '+apres+' g au lieu de 144');
           // Et les lipides aussi.
-          const lAvant=Number(document.getElementById('ccd-on-l').value);
-          _propSetLip('1.2');
-          const lApres=Number(document.getElementById('ccd-on-l').value);
+          const lAvant=_tbkG(_tbkMacro(),'Lipides');
+          majTableauTableur('lipGkg','1.2');
+          const lApres=_tbkG(_tbkMacro(),'Lipides');
           if(lAvant===lApres) return _echec('les lipides n\'ont pas bouge : '+lAvant);
-          // ET LE BLOC « AUTREMENT DIT » SUIT LA MEME SOURCE. Il lisait les
-          // grammes ENREGISTRES : il restait vide sur un dossier neuf, et
-          // affichait les anciennes valeurs des qu'un reglage bougeait.
-          const z=document.getElementById('ccd-nutrition');
-          const gk=(z.textContent.match(/P ([0-9,]+) g\/kg/)||[])[1];
-          return gk==='2,8'?true
-            :_echec('le bloc de lecture annonce « '+gk+' » au lieu de 2,8 g/kg');})());
+          if(lApres!==96) return _echec('1,2 g/kg sur 80 kg donne '+lApres+' g au lieu de 96');
+          // ET LA LIGNE ANNONCE LE REGLAGE RETENU : des grammes qui bougent
+          // sous un libelle reste a l'ancienne valeur seraient pires que rien.
+          return /1,8 g par kilo/.test(_tbkLigne(_tbkMacro(),'Protéines'))
+            ?true:_echec('la ligne n\'annonce pas 1,8 g par kilo : « '
+              +_tbkLigne(_tbkMacro(),'Protéines')+' »');})());
 
         ok('EN MANUEL, LES CIBLES NE BOUGENT PLUS',(()=>{
           // C'est tout l'objet de l'interrupteur : les chiffres du coach priment.
@@ -33622,8 +33608,11 @@ function testExercices(){
           return protSuggeree(meno,'maintien')===attendu
             ?true:_echec('bonus déplacé : '+protSuggeree(meno,'maintien')+' au lieu de '+attendu);})());
         ok('RÈGLE 2 : aucun horaire, aucune fenêtre, aucun plan de repas',(()=>{
+          // ⚠ _htmlRepartitionPrisesCoach A QUITTE CETTE CONCATENATION avec la
+          // section coach, retiree le 08/09/2026. La regle vaut toujours pour
+          // ce qui reste : l'ecran de l'athlete et les trois phrases.
           const src=String(repartitionPrises)+String(_htmlRepartitionPrises)
-            +String(_htmlRepartitionPrisesCoach)+PRISE_PHRASE_PLANCHER
+            +PRISE_PHRASE_PLANCHER
             +PRISE_PHRASE_RELEVE+PRISE_PHRASE_TENSION;
           const interdits=['fenetre anabolique','fenêtre anabolique','avant la séance',
             'après la séance','dans les 30','minutes','heure suivante','au coucher',
@@ -33755,18 +33744,24 @@ function testExercices(){
             return !/par repas/.test(h)
               ?true:_echec('les repères apparaissent encore dans la carte');
           } finally { currentUser=sauve; }})());
-        ok('LE MODULE RESTE RENDU CÔTÉ COACH : la fiche client est son dernier emplacement',(()=>{
-          // Ce qui a été retiré, c'est la vue ATHLÈTE. La répartition des
-          // prises reste sous les yeux du coach, dans la fiche client : sans
-          // cette assertion, plus rien ne rendrait le module et personne ne le
-          // saurait avant de lire le code.
+        // ⚠ ASSERTION RETIREE. Elle tenait que la repartition des prises
+        // restait sous les yeux du COACH apres son retrait de la vue athlete.
+        // Le 08/09/2026 elle a quitte la fiche coach a son tour, sur la meme
+        // demande de Kevin. Ce qui reste rendu, c'est _htmlRepartitionPrises,
+        // sur l'ecran de l'athlete — couvert par les regles ci-dessus.
+        ok('La repartition des prises reste rendue a l\'athlete, et nulle part ailleurs',(()=>{
+          if(typeof _htmlRepartitionPrisesCoach!=='undefined')
+            return _echec('le bloc coach est de retour');
           const c=_u({'deb-meals-day':'4'},[]);
-          c.nutrition={macros:{on:{kcal:2600,p:180,g:260,l:80}}};
-          let h=''; try{ h=_htmlRepartitionPrisesCoach(c); }catch(e){
-            return _echec('exception : '+e.message); }
-          if(!h) return _echec('la fiche coach ne rend rien');
-          return /Protéines par prise/.test(h)
-            ?true:_echec('le bloc coach a changé de titre : '+h.slice(0,120));})());
+          c.nutrition={macros:{on:{kcal:2600,g:260,p:180,l:80}}};
+          let h=''; try{ h=_htmlRepartitionPrises(c,{kcal:2600,p:180,g:260,l:80}); }
+          catch(e){ return _echec('exception : '+e.message); }
+          // ⚠ CE BLOC N'A PAS DE TITRE : il ecrit un CALCUL, qui se verifie a
+          // l'oeil — « 62 g + 62 g + 62 g + 61 g = 247 g au total ». Chercher
+          // « Protéines par prise » y cherchait le titre de la section COACH,
+          // celle qui vient d'etre retiree.
+          return /= *\d+ g au total/.test(h)
+            ?true:_echec('le bloc athlete n\'ecrit plus son total : '+h.slice(0,160));})());
 
         // ── Le marqueur péri-séance ───────────────────────────────────────
         ok('Critère : le marqueur ne change AUCUN total',(()=>{
@@ -37118,24 +37113,30 @@ function testExercices(){
           return s.introuvable===true?true:_echec(JSON.stringify(s));})());
 
         // ── Périodisation ──
-        ok('Les multiplicateurs de sèche sont ceux des tableurs',(()=>{
-          const m=PLAN_PHASES_DEFAUT.seche.map(x=>x.mult).join('/');
-          return m==='0.85/0.8/0.75/0.65'?true:_echec(m);})());
-        ok('Ceux de prise de masse aussi, dernier palier compris',(()=>{
-          const m=PLAN_PHASES_DEFAUT.masse.map(x=>x.mult).join('/');
-          return m==='1.1/1.15/1.2/1.15'?true:_echec(m);})());
-        ok('Le palier suit la semaine de phase : 1, 3, 8 puis 30',(()=>{
-          const faux=[];
-          for(const [sem,att] of [[1,0],[2,0],[3,1],[7,1],[8,2],[13,2],[14,3],[30,3]]){
-            const u=_pa({phase:_phase('seche',sem)});
-            const p=planPalierCourant(null,u);
-            if(!p||p.idx!==att) faux.push('semaine '+sem+' → palier '+(p?p.idx:'aucun')+' au lieu de '+att);
-          }
-          return faux.length?_echec(faux.join(', ')):true;})());
-        ok('Le dernier palier court jusqu\'à la fin, sans borne haute',(()=>{
-          const u=_pa({phase:_phase('seche',400)});
-          const p=planPalierCourant(null,u);
-          return (p&&p.idx===3&&p.dernier===true)?true:_echec(JSON.stringify(p));})());
+        // ⚠ LES DEUX ASSERTIONS DE MULTIPLICATEURS ONT ETE RETIREES ICI, avec
+        // la table PLAN_PHASES_DEFAUT qu'elles lisaient. Elles LEVAIENT, et
+        // emportaient tout ce que ce fichier ecrit ensuite. Le contrat qui
+        // survit — aucun multiplicateur, nulle part — est tenu par l'assertion
+        // juste en dessous.
+        // ⚠ DEUX ASSERTIONS DE PALIER ONT ETE RETIREES ICI. planPaliers et
+        // planPalierCourant ont disparu le 08/09/2026 avec la periodisation :
+        // elle frappait une SECONDE fois des chiffres deja multiplies par le
+        // coefficient d'objectif des tableaux — 0,85 de 0,85. Voir la pierre
+        // tombale de PLAN_PHASES_DEFAUT dans index.html.
+        // Elles ne testaient plus rien : elles LEVAIENT, et emportaient avec
+        // elles tout ce que ce fichier ecrit apres.
+        ok('La periodisation reste retiree : aucun multiplicateur de palier',(()=>{
+          if(typeof planPalierCourant!=='undefined'||typeof planPaliers!=='undefined')
+            return _echec('le second moteur de periodisation est de retour');
+          if(typeof PLAN_PHASES_DEFAUT!=='undefined')
+            return _echec('la table des multiplicateurs est de retour');
+          // TEMOIN : les cibles du jour sortent du calcul de la fiche, non
+          // multipliees. C'est ce que le retrait devait obtenir.
+          const u=_pa({phase:_phase('seche',3),
+            nutrition:_macros({kcal:2600,p:200,g:300,l:70,f:36})});
+          const c=planCiblesJour(u,true,null);
+          return c.kcal===2600
+            ?true:_echec('les cibles sont encore multipliees : '+c.kcal+' au lieu de 2600');})());
         ok('Sans phase déclarée, aucun palier et aucun multiplicateur',(()=>{
           const u=_pa({nutrition:_macros({kcal:2600,p:200,g:300,l:70,f:36})});
           const c=planCiblesJour(u,true,null);
@@ -37327,7 +37328,7 @@ function testExercices(){
           planCouverture(plan,_ch); planCiblesJour(u,true,null);
           planSources(plan,{p:100,c:100,l:10},_ch);
           planListeCourses(plan,u,_ch); planAlertes(plan,u,_ch);
-          planPalierCourant(plan,u); planNbSources(plan,'p');
+          planNbSources(plan,'p');
           return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
 
         // ── Les alertes du coach ──
@@ -38059,6 +38060,52 @@ vendredi 78 6h 44m
            new Date('2026-08-06T12:00:00')));
          const n=currentUser.sleepLog.find(e=>e.date==='2026-08-04');
          return n&&n.duration===8.3&&!n.bed&&!n.wake; })());
+
+    // ── Le cadre d'import est LA, et une seule fois — 6 cas ──
+    // Il avait disparu de Lifestyle sans que rien ne le dise : le seul chemin
+    // de remplissage rapide n'etait plus atteignable, et aucune assertion ne
+    // s'en plaignait. On verifie donc les deux faces du contrat : present par
+    // defaut sur les ecrans autonomes, present UNE SEULE FOIS sur Lifestyle.
+    // Le compte se fait sur le champ de fichier et son gestionnaire, pas sur
+    // le libelle du bouton : un libelle se reecrit sans rien casser, ce champ
+    // est ce qui rend la fonction atteignable.
+    (()=>{
+      const SEL='input[onchange="importerCaptureStats(this)"]';
+      const cadres=el=>el?el.querySelectorAll(SEL).length:-1;
+      const bac=document.createElement('div');
+      bac.style.display='none';
+      bac.innerHTML='<div id="rc-t5-pas"></div><div id="rc-t5-nuit"></div>';
+      document.body.appendChild(bac);
+      const zp=document.getElementById('rc-t5-pas');
+      const zn=document.getElementById('rc-t5-nuit');
+      const life=document.getElementById('s-lifestyle');
+      const sauve=life?life.innerHTML:null;
+      try{
+        loadSteps('rc-t5-pas');
+        ok('loadSteps rend le cadre d\'import, et une seule fois',
+           cadres(zp)===1,'compte '+cadres(zp));
+        loadSleep('rc-t5-nuit');
+        ok('loadSleep rend le cadre d\'import, et une seule fois',
+           cadres(zn)===1,'compte '+cadres(zn));
+        // L'option existe pour Lifestyle, qui porte son propre cadre : si elle
+        // ne coupait rien, l'ecran en afficherait trois.
+        loadSteps('rc-t5-pas',{avecImport:false});
+        ok('loadSteps sait s\'en passer quand on le lui demande',
+           cadres(zp)===0,'compte '+cadres(zp));
+        loadSleep('rc-t5-nuit',null,{avecImport:false});
+        ok('loadSleep sait s\'en passer quand on le lui demande',
+           cadres(zn)===0,'compte '+cadres(zn));
+        if(!life){ ok('#s-lifestyle existe',false); return; }
+        sanRendre();
+        ok('Lifestyle porte le cadre d\'import',cadres(life)>=1,
+           'aucun cadre sur l\'ecran');
+        ok('Lifestyle ne le porte qu\'une fois',cadres(life)===1,
+           'compte '+cadres(life));
+      } finally {
+        bac.remove();
+        if(life&&sauve!=null) life.innerHTML=sauve;
+      }
+    })();
 
     // ══ Disposition coach en ecran large — bloc @media(min-width:1025px) ══
     // On lit le TEXTE de la feuille inline, pas le CSSOM : on veut assertir
