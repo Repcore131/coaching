@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1180';
+window.RC_BUILD='1182';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1683,6 +1683,47 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   .san-bar-f{transition:none}
   .san-f{animation:none}
 }
+/* ── Le chercheur de tracker ───────────────────────────────────────────── */
+.trk-duo{display:flex;gap:8px;margin-bottom:14px}
+.trk-gros{flex:1;min-height:52px;border-radius:var(--r-2);cursor:pointer;font-family:inherit;
+  font-size:var(--fs-sm);font-weight:900;letter-spacing:1.5px;text-transform:uppercase;
+  border:1px solid #2e2e33;background:linear-gradient(180deg,#1b1b1f,#131316);color:var(--text-dim)}
+.trk-gros.actif{color:#fff;border-color:rgba(224,32,32,.75);
+  background:linear-gradient(180deg,rgba(224,32,32,.28),rgba(122,0,0,.2))}
+.trk-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:10px}
+.trk-tuile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:11px 6px;
+  border-radius:var(--r-2);cursor:pointer;font-family:inherit;
+  border:1px solid #26262b;background:#111113;color:var(--text)}
+.trk-tuile:active{transform:scale(.97)}
+/* L'initiale remplace le logo : le projet n'a pas les droits des marques, et
+   une initiale nette vaut mieux qu'un logo approximatif. */
+.trk-ini{display:flex;align-items:center;justify-content:center;width:34px;height:34px;
+  border-radius:var(--r-full);background:linear-gradient(160deg,#2a2a2e,#121214);
+  border:1px solid #33333a;font-family:var(--pile-titre);font-size:17px;color:var(--red-text)}
+.trk-nom{font-size:var(--fs-2xs);line-height:1.25;text-align:center;color:var(--text-dim)}
+.trk-app{display:flex;justify-content:space-between;gap:10px;padding:9px 0;
+  border-bottom:1px solid rgba(255,255,255,.07);font-size:var(--fs-sm);color:var(--sub)}
+.trk-app strong{color:#fff}
+.trk-chemin{margin:6px 0 0;padding:0;list-style:none;counter-reset:c}
+.trk-chemin li{counter-increment:c;position:relative;padding:8px 0 8px 30px;
+  font-size:var(--fs-sm);color:#fff;border-top:1px solid rgba(255,255,255,.06)}
+.trk-chemin li::before{content:counter(c);position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:20px;height:20px;border-radius:var(--r-full);display:flex;align-items:center;
+  justify-content:center;font-size:10px;font-weight:800;color:var(--red-text);
+  background:rgba(224,32,32,.16);border:1px solid rgba(224,32,32,.45)}
+.trk-gen{font-size:var(--fs-sm);color:#fff;line-height:1.6;padding:10px 0}
+.trk-indispo{font-size:var(--fs-sm);color:var(--orange);line-height:1.6;padding:10px 0}
+.trk-lien{background:none;border:0;padding:0;color:var(--red-text);cursor:pointer;
+  font-family:inherit;font-size:inherit;text-decoration:underline}
+/* La vue coach : deux blocs, et l'etat des donnees dit sans detour. */
+.san-c{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
+.san-c-b{background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:11px 12px}
+.san-c-t{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800}
+.san-c-v{font-family:var(--pile-titre);font-size:26px;color:#fff;letter-spacing:.5px;line-height:1.2;margin:2px 0}
+.san-c-s{font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.4}
+.san-c-m{font-size:var(--fs-2xs);color:var(--orange);line-height:1.4;margin-top:5px}
+.san-c-src{font-size:var(--fs-2xs);color:var(--text-faint)}
+.san-c-vide{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6}
 .tab-dot.on{display:block}
 /* ══ LES TABLEAUX DU CALCUL, RESSERRES ═══════════════════════════════════
    Ils tenaient sur toute la longueur de l'ecran : comparer « besoin selon
@@ -7188,6 +7229,13 @@ const COACH_PHOTO='icons/coach.jpg';
       <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Habitudes</span></div>
         <div class="cc-sect-c" id="ccd-habitudes"></div>
+      </section>
+      <!-- SOMMEIL ET PAS, EN TETE DE L'ONGLET : deux moyennes, deux comptes
+           d'objectif, et l'etat des donnees. C'est ce qu'on lit avant
+           d'ouvrir les courbes. -->
+      <section class="cc-sect" style="--cc-accent:var(--border)">
+        <div class="cc-sect-t"><span>Sommeil et pas</span></div>
+        <div class="cc-sect-c" id="ccd-sante"></div>
       </section>
       <!-- LES COURBES, SOUS LES HABITUDES. Les deux sections « Sommeil » et
            « Pas » ci-dessus disent une moyenne ; une moyenne ne montre pas
@@ -25152,6 +25200,7 @@ function openClientDetail(cid,_refresh,_force){
       :'';
   }catch(e){}
   try{ renderHabitudesCoach(c); }catch(e){}
+  try{ renderSanteCoach(c); }catch(e){}
   try{ renderLifestyleGraphesCoach(c); }catch(e){}
   try{ _ccdBilCalReset(); renderCalendrierBilansCoach(c); }catch(e){}
   try{ renderRedsCoach(c); }catch(e){}
@@ -76090,6 +76139,329 @@ function stepsToggleType(type){
 }
 
 // ======= SLEEP =======
+// ── CE QUE LE COACH VOIT ───────────────────────────────────────────────
+// Deux lignes par athlete, et l'etat des donnees. Un coach qui lit « sommeil
+// 7h18 » sans savoir que trois nuits manquent prend une decision sur une
+// moyenne de quatre jours en croyant en lire sept.
+//
+// AUCUN DIAGNOSTIC. RepCore est une application de coaching sportif : on dit
+// « en dessous de l'objectif », jamais « mauvais sommeil » ni « insomnie ».
+function _htmlSanteCoach(c){
+  if(!c) return '';
+  let r=null;
+  try{ r=sanResume(c,0); }catch(e){ return ''; }
+  const rien=r.sommeil.renseignes===0&&r.pas.renseignes===0;
+  if(rien){
+    return '<div class="san-c-vide">Aucune donnée de sommeil ni de pas cette semaine.</div>';
+  }
+  const bloc=(titre,b,fmt,unite)=>{
+    const manque=b.renseignes<4;
+    return '<div class="san-c-b">'
+      +'<div class="san-c-t">'+titre+'</div>'
+      +'<div class="san-c-v">'+(b.moy==null?'—':escapeHtml(fmt(b.moy)))+'</div>'
+      +'<div class="san-c-s">'+b.atteints+'/7 '+unite+' dans l\'objectif</div>'
+      +(manque?'<div class="san-c-m">'+(b.renseignes===0?'Aucune donnée'
+        :'Données incomplètes ('+b.renseignes+'/7)')+'</div>':'')
+      +'</div>';
+  };
+  const src=sanSource(c,'sommeil').lib;
+  const srcP=sanSource(c,'pas').lib;
+  return '<div class="san-c">'
+    +bloc('Sommeil',r.sommeil,sanHM,'nuits')
+    +bloc('Pas',r.pas,sanNb,'jours')
+    +'</div>'
+    +'<div class="san-c-src">Source : '+escapeHtml(src===srcP?src:(src+' · '+srcP))+'</div>';
+}
+function renderSanteCoach(c){
+  const z=document.getElementById('ccd-sante');
+  if(!z) return;
+  let h=''; try{ h=_htmlSanteCoach(c); }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+// ══ LA BASE DES TRACKERS ═══════════════════════════════════════════════
+// Une entree par ecosysteme. Ajouter une marque ne demande QUE d'ajouter un
+// objet ici : ni le graphique, ni la recherche, ni les ecrans ne bougent.
+//
+// ⚠ LES CHEMINS NE SONT PAS INVENTES, ET C'EST UNE REGLE ABSOLUE. Seuls
+// figurent ici les chemins qui ont ete DICTES ou verifies. Partout ailleurs,
+// `chemin` vaut null et l'ecran affiche la recherche generique — « tape
+// sommeil dans ton application » — qui, elle, est vraie partout.
+// `verifie` porte le mois de la derniere verification, ou null. Ce champ ne
+// s'affiche pas : il sert a savoir quelles notices reprendre quand les
+// applications changent.
+const TRACK_VERSION=1;
+const TRACKERS=Object.freeze([
+  {id:'apple',marque:'Apple',app:'Apple Santé',
+   modeles:['Apple Watch','Watch Ultra','Watch SE','iPhone'],
+   sommeil:{chemin:['Santé','Parcourir','Sommeil'],
+     note:'Choisis la vue Semaine pour voir tes 7 derniers jours.'},
+   pas:{chemin:['Santé','Parcourir','Activité','Pas'],
+     note:'Choisis la vue Semaine pour consulter tes 7 derniers jours.'},
+   verifie:'2026-09'},
+  {id:'garmin',marque:'Garmin',app:'Garmin Connect',
+   modeles:['Fenix','Forerunner','Venu','Epix','Instinct','vívoactive','Enduro','Lily'],
+   sommeil:{chemin:['Garmin Connect','Plus','Statistiques de santé','Sommeil'],
+     alternatif:['Statistiques de santé','Sommeil']},
+   pas:{chemin:null},
+   verifie:'2026-09'},
+  {id:'samsung',marque:'Samsung',app:'Samsung Health',
+   modeles:['Galaxy Watch','Galaxy Fit','Galaxy Ring'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'google',marque:'Google / Pixel',app:'Google Health Connect',
+   modeles:['Pixel Watch','Pixel','Fitbit via Google'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'huawei',marque:'Huawei',app:'Huawei Santé',
+   modeles:['Watch GT','Watch Fit','Band','Watch Ultimate'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'fitbit',marque:'Fitbit',app:'Fitbit',
+   modeles:['Charge','Sense','Versa','Inspire','Luxe'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'xiaomi',marque:'Xiaomi / Redmi',app:'Mi Fitness',
+   modeles:['Mi Band','Smart Band','Watch S','Redmi Watch'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'amazfit',marque:'Amazfit',app:'Zepp',
+   modeles:['GTR','GTS','T-Rex','Balance','Bip','Cheetah'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'polar',marque:'Polar',app:'Polar Flow',
+   modeles:['Vantage','Grit','Pacer','Ignite','Unite'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'coros',marque:'COROS',app:'COROS',
+   modeles:['Pace','Apex','Vertix','Nomad'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'suunto',marque:'Suunto',app:'Suunto',
+   modeles:['Race','Vertical','9 Peak','Ocean'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'whoop',marque:'WHOOP',app:'WHOOP',modeles:['WHOOP 4.0','WHOOP MG'],
+   sommeil:{chemin:null},pas:{chemin:null,indisponible:true}},
+  {id:'oura',marque:'Oura',app:'Oura',modeles:['Oura Ring','Ring 4'],
+   sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'withings',marque:'Withings',app:'Withings Health Mate',
+   modeles:['ScanWatch','Steel HR','Sleep Analyzer'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'oneplus',marque:'OnePlus',app:'OHealth',modeles:['OnePlus Watch'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'oppo',marque:'OPPO',app:'OHealth',modeles:['OPPO Watch'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'mobvoi',marque:'Mobvoi / TicWatch',app:'Mobvoi Health',modeles:['TicWatch'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'honor',marque:'HONOR',app:'HONOR Health',modeles:['HONOR Watch','HONOR Band'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'realme',marque:'realme',app:'realme Link',modeles:['realme Watch','realme Band'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'nothing',marque:'CMF / Nothing',app:'Nothing X',modeles:['CMF Watch'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'fossil',marque:'Fossil',app:'Fossil Smartwatches',modeles:['Gen 6'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'tagheuer',marque:'TAG Heuer',app:'TAG Heuer Connected',modeles:['Connected Calibre'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'montblanc',marque:'Montblanc',app:'Montblanc Summit',modeles:['Summit'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'ringconn',marque:'RingConn',app:'RingConn',modeles:['RingConn Gen 2'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'ultrahuman',marque:'Ultrahuman',app:'Ultrahuman',modeles:['Ring AIR'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'circular',marque:'Circular',app:'Circular',modeles:['Circular Ring'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'casio',marque:'Casio',app:'Casio Watches',modeles:['G-Shock Move'],sommeil:{chemin:null},pas:{chemin:null}},
+  {id:'autre',marque:'Autre',app:null,modeles:[],sommeil:{chemin:null},pas:{chemin:null}}
+]);
+// L'ordre d'affichage : les ecosystemes les plus repandus d'abord, le reste
+// par ordre alphabetique. La recherche, elle, les atteint tous.
+const TRACK_TETE=Object.freeze(['apple','garmin','samsung','google','huawei','fitbit',
+  'xiaomi','amazfit','polar','coros','suunto','whoop','oura','withings']);
+// PURE. Recherche tolerante : accents, casse et espaces ignores, et une
+// correspondance partielle suffit. « fenix 8 » trouve Garmin, « gt 5 » Huawei.
+function trackNorm(t){
+  return String(t==null?'':t).toLowerCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+}
+function trackChercher(q){
+  const n=trackNorm(q);
+  if(!n) return [];
+  const out=[];
+  for(const t of TRACKERS){
+    if(t.id==='autre') continue;
+    const champs=[t.marque,t.app||''].concat(t.modeles||[]);
+    let score=0;
+    for(const c of champs){
+      const cn=trackNorm(c);
+      if(!cn) continue;
+      if(cn===n){ score=Math.max(score,100); }
+      else if(cn.startsWith(n)||n.startsWith(cn)){ score=Math.max(score,80); }
+      // La sous-chaine ne joue qu'a partir de DEUX caracteres : « s » se
+      // trouve dans Samsung, Suunto, Casio, Fossil et dix autres — la moitie
+      // de la base pour une lettre, ce n'est plus une recherche.
+      else if(n.length>=2&&(cn.includes(n)||n.includes(cn))){ score=Math.max(score,60); }
+      // ET MOT A MOT. Les familles portent un prefixe que personne ne tape :
+      // on dit « GT 5 », jamais « Watch GT 5 ». Comparer les libellés entiers
+      // ne trouvait donc pas Huawei, alors que « Fenix 8 » trouvait Garmin par
+      // accident — le prefixe manquait de ce cote-la.
+      // Deux caracteres au minimum : « S » attraperait la moitie de la base.
+      else {
+        for(const mot of String(c).split(/[\s/]+/)){
+          const mn=trackNorm(mot);
+          if(mn.length<2) continue;
+          if(n===mn||n.startsWith(mn)||n.endsWith(mn)){ score=Math.max(score,50); break; }
+        }
+      }
+    }
+    if(score) out.push({t,score});
+  }
+  return out.sort((a,b)=>b.score-a.score||a.t.marque.localeCompare(b.t.marque)).map(x=>x.t);
+}
+function trackParId(id){ return TRACKERS.find(t=>t.id===id)||null; }
+// ══ TROUVER MES DONNEES ════════════════════════════════════════════════
+// Trois etapes, jamais plus : QUOI, puis AVEC QUELLE MONTRE, puis le chemin.
+// Afficher d'emblee vingt-huit marques et deux notices par marque, c'est un
+// mur ; poser deux questions courtes reduit la notice a six lignes.
+let _trkQuoi='sommeil',_trkQ='';
+function sanAide(quoi){
+  _trkQuoi=(quoi==='pas')?'pas':'sommeil';
+  _trkQ='';
+  try{ rcm(_trkQuoi==='pas'?'steps_help_opened':'sleep_help_opened'); }catch(e){}
+  try{ rcm('tracker_help_opened'); }catch(e){}
+  _trkEtape1();
+}
+function _trkEtape1(){
+  _sanFeuille('Trouver mes données',
+    '<div class="san-aide" style="margin-bottom:12px">Que cherches-tu ?</div>'
+    +'<div class="trk-duo">'
+      +'<button type="button" class="trk-gros'+(_trkQuoi==='sommeil'?' actif':'')+'" '
+        +'onclick="_trkQuoiSet(\'sommeil\')">Sommeil</button>'
+      +'<button type="button" class="trk-gros'+(_trkQuoi==='pas'?' actif':'')+'" '
+        +'onclick="_trkQuoiSet(\'pas\')">Pas</button>'
+    +'</div>'
+    +'<div class="san-lab">Avec quel appareil ?</div>'
+    +'<input id="trk-q" inputmode="search" placeholder="Rechercher ma montre…" '
+      +'value="'+escapeHtml(_trkQ)+'" oninput="_trkRecherche(this.value)">'
+    +'<div id="trk-res">'+_trkGrille()+'</div>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:14px 0 0" '
+      +'onclick="_trkPerdu()">Je ne trouve pas ma montre</button>');
+  const i=document.getElementById('trk-q'); if(i&&_trkQ) i.focus();
+}
+function _trkQuoiSet(q){ _trkQuoi=q; _trkEtape1(); }
+function _trkGrille(){
+  const tete=TRACK_TETE.map(trackParId).filter(Boolean);
+  const reste=TRACKERS.filter(t=>TRACK_TETE.indexOf(t.id)<0&&t.id!=='autre')
+    .sort((a,b)=>a.marque.localeCompare(b.marque));
+  return '<div class="trk-grille">'
+    +tete.concat(reste).map(_trkTuile).join('')+'</div>';
+}
+function _trkTuile(t){
+  // AUCUN LOGO DE MARQUE : le projet n'en detient pas les droits et un logo
+  // approximatif vaut moins qu'une initiale nette. Fallback generique partout.
+  const ini=String(t.marque||'?').trim().charAt(0).toUpperCase();
+  return '<button type="button" class="trk-tuile" onclick="_trkFiche(\''+t.id+'\')">'
+    +'<span class="trk-ini" aria-hidden="true">'+escapeHtml(ini)+'</span>'
+    +'<span class="trk-nom">'+escapeHtml(t.marque)+'</span></button>';
+}
+function _trkRecherche(q){
+  _trkQ=q;
+  const z=document.getElementById('trk-res');
+  if(!z) return;
+  const n=String(q||'').trim();
+  if(!n){ z.innerHTML=_trkGrille(); return; }
+  const r=trackChercher(n);
+  if(!r.length){
+    z.innerHTML='<div class="san-vide">Aucun appareil trouvé pour « '+escapeHtml(n)+' ».</div>';
+    return;
+  }
+  z.innerHTML=(r.length>1
+      ?'<div class="san-aide" style="margin:10px 0 6px">Nous avons trouvé plusieurs appareils.</div>':'')
+    +'<div class="trk-grille">'+r.map(_trkTuile).join('')+'</div>';
+}
+// ── LA FICHE ───────────────────────────────────────────────────────────
+function _trkFiche(id){
+  const t=trackParId(id);
+  if(!t) return;
+  try{ rcm('tracker_selected'); }catch(e){}
+  const bloc=_trkQuoi==='pas'?t.pas:t.sommeil;
+  const quoiLib=_trkQuoi==='pas'?'tes pas':'ton sommeil';
+  let corps='';
+  if(bloc&&bloc.indisponible){
+    // NE JAMAIS FAIRE CROIRE QU'UNE DONNEE EXISTE. Quand l'appareil ne la
+    // mesure pas, on le dit, et on propose la seule chose qui marche.
+    corps='<div class="trk-indispo">Cette donnée n\'est pas disponible avec cet appareil.</div>';
+  } else if(bloc&&bloc.chemin&&bloc.chemin.length){
+    corps='<div class="trk-app">Application<strong>'+escapeHtml(t.app||'—')+'</strong></div>'
+      +'<div class="san-lab">Chemin</div>'
+      +'<ol class="trk-chemin">'+bloc.chemin.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ol>'
+      +(bloc.alternatif?'<div class="san-aide">Si ce menu n\'existe pas : '
+        +escapeHtml(bloc.alternatif.join(' → '))+'</div>':'')
+      +(bloc.note?'<div class="san-aide">'+escapeHtml(bloc.note)+'</div>':'');
+  } else {
+    // LE REPLI GENERIQUE, ET IL EST VRAI PARTOUT. Mieux vaut une consigne
+    // exacte et large qu'un chemin precis et faux.
+    corps='<div class="trk-app">Application<strong>'+escapeHtml(t.app||'celle de ta montre')+'</strong></div>'
+      +'<div class="trk-gen">Ouvre '+escapeHtml(t.app||'l\'application de ta montre')
+      +' et cherche « '+(_trkQuoi==='pas'?'pas':'sommeil')+' ».</div>'
+      +'<div class="san-aide">Le chemin exact de cette application n\'est pas encore référencé '
+      +'dans RepCore. La recherche de l\'application, elle, y mène toujours.</div>';
+  }
+  _sanFeuille(t.marque,
+    corps
+    +'<div class="san-aide" style="margin-top:12px">Le nom ou l\'emplacement des menus peut varier '
+    +'selon la version de ton application. Si tu ne trouves pas cette rubrique, utilise la recherche '
+    +'de l\'application et tape « '+(_trkQuoi==='pas'?'pas':'sommeil')+' ».</div>'
+    +'<div class="san-f-actions">'
+      +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" '
+        +'onclick="sanFermer();sanSaisir(\''+_trkQuoi+'\')">J\'ai trouvé</button>'
+      +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" '
+        +'onclick="_trkEtape1()">Retour</button>'
+    +'</div>');
+}
+// ── JE NE TROUVE PAS MA MONTRE ─────────────────────────────────────────
+function _trkPerdu(){
+  try{ rcm('tracker_not_found'); }catch(e){}
+  _sanFeuille('On va la retrouver',
+    '<div class="san-aide" style="margin-bottom:12px">Qu\'est-ce que tu connais ?</div>'
+    +'<div class="san-src-l">'
+      +'<button type="button" class="san-src-o" onclick="_trkParTexte(\'marque\')">Ma marque</button>'
+      +'<button type="button" class="san-src-o" onclick="_trkParTexte(\'app\')">Le nom de l\'application</button>'
+      +'<button type="button" class="san-src-o" onclick="_trkParTexte(\'modele\')">Le modèle</button>'
+      +'<button type="button" class="san-src-o" onclick="_trkRien()">Rien de tout ça</button>'
+    +'</div>');
+}
+function _trkParTexte(quoi){
+  const lib=quoi==='app'?'Nom de l\'application':(quoi==='modele'?'Nom du modèle':'Nom de la marque');
+  _sanFeuille(lib,
+    '<input id="trk-libre" inputmode="search" placeholder="'+escapeHtml(lib)+'" '
+    +'oninput="_trkLibreRes(this.value)">'
+    +'<div id="trk-libre-res"></div>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:14px 0 0" '
+    +'onclick="_trkPerdu()">Retour</button>');
+  const i=document.getElementById('trk-libre'); if(i) i.focus();
+}
+function _trkLibreRes(q){
+  const z=document.getElementById('trk-libre-res');
+  if(!z) return;
+  const r=trackChercher(q);
+  z.innerHTML=r.length
+    ?'<div class="trk-grille" style="margin-top:10px">'+r.map(_trkTuile).join('')+'</div>'
+    :(String(q||'').trim()
+      ?'<div class="san-vide">Rien trouvé. '
+        +'<button type="button" class="trk-lien" onclick="_trkSignaler()">Signaler ma montre</button></div>':'');
+}
+function _trkRien(){
+  _sanFeuille('On va la retrouver',
+    '<div class="trk-gen">Regarde l\'application utilisée pour synchroniser ta montre : '
+    +'son nom est le meilleur indice.</div>'
+    +'<div class="san-aide" style="margin-bottom:10px">Tu peux aussi simplement nous donner '
+    +'le nom écrit sur ta montre.</div>'
+    +'<label class="san-lab">Nom de ma montre</label>'
+    +'<input id="trk-libre" inputmode="search" oninput="_trkLibreRes(this.value)">'
+    +'<div id="trk-libre-res"></div>'
+    +'<div class="san-f-actions">'
+      +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" '
+        +'onclick="sanFermer();sanSaisir(\''+_trkQuoi+'\')">Saisir mes données</button>'
+      +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" '
+        +'onclick="_trkSignaler()">Signaler ma montre</button>'
+    +'</div>');
+}
+function _trkSignaler(){
+  _sanFeuille('Signaler ma montre',
+    '<div class="trk-gen">Ta montre n\'est pas encore référencée. Ce n\'est pas bloquant : '
+    +'tu peux saisir tes données à la main dès maintenant.</div>'
+    +'<label class="san-lab">Marque</label><input id="sig-marque">'
+    +'<label class="san-lab">Modèle</label><input id="sig-modele">'
+    +'<label class="san-lab">Application</label><input id="sig-app">'
+    +'<button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0" '
+    +'onclick="_trkEnvoyerSignal()">Envoyer</button>');
+}
+function _trkEnvoyerSignal(){
+  const v=id=>String((document.getElementById(id)||{}).value||'').trim().slice(0,60);
+  const m=v('sig-marque'),mo=v('sig-modele'),ap=v('sig-app');
+  if(!m&&!mo&&!ap) return toast('Renseigne au moins une information','var(--orange)');
+  const u=currentUser;
+  if(!u.santeSignal) u.santeSignal=[];
+  // CONSERVE DANS LE DOSSIER, pas envoye ailleurs : aucune collecte de plus
+  // que ce que l'application stocke deja.
+  u.santeSignal.push({marque:m,modele:mo,app:ap,at:Date.now()});
+  u.santeSignal=u.santeSignal.slice(-10);
+  saveUser();
+  try{ CLOUD.pushOne(u.email,u); }catch(e){}
+  try{ rcm('tracker_feedback_submitted'); }catch(e){}
+  sanFermer();
+  toast('Merci. Nous pourrons ajouter cette montre à RepCore.','var(--green)');
+}
 // ══ SUIVI SANTE : SOMMEIL ET PAS ═══════════════════════════════════════
 // Deux cartes, sept jours glissants, et rien d'autre a comprendre. L'ecran
 // existant montrait la semaine CALENDAIRE : un dimanche, il affichait six
