@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1199';
+window.RC_BUILD='1200';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -42845,8 +42845,37 @@ const RAP_BLOCS=Object.freeze([
   {cle:'diete',      lib:'Diète'},
   {cle:'mensurations',lib:'Mensurations'},
   {cle:'photos',     lib:'Photos'},
+  // Le coach imprimait un bilan de periode ou ni le sommeil ni les pas
+  // n'apparaissaient. Coche comme les autres, et place avant le mot du coach :
+  // celui-la ferme le document, il reste dernier.
+  {cle:'lifestyle',  lib:'Sommeil et pas'},
   {cle:'mot',        lib:'Mot du coach'}
 ]);
+// PURE. Sommeil et pas SUR LA PERIODE DU RAPPORT, et non sur une fenetre
+// glissante : c'est un document date, il doit dire ce qui s'est passe entre ses
+// deux bornes. Les moyennes ne comptent que les jours RENSEIGNES, et le rapport
+// dit combien il y en avait — sans quoi une moyenne sur quatre jours se lirait
+// comme une moyenne sur trente.
+function rapLifestyle(u,debut,fin){
+  const d0=new Date(debut); d0.setHours(12,0,0,0);
+  const d1=new Date(fin);   d1.setHours(12,0,0,0);
+  const jours=[];
+  for(let d=new Date(d0); d.getTime()<=d1.getTime(); d.setDate(d.getDate()+1))
+    jours.push(localISODate(new Date(d)));
+  const pas=jours.map(x=>sanPas(u,x)).filter(v=>v!=null);
+  const som=jours.map(x=>sanSommeilMin(u,x)).filter(v=>v!=null);
+  const moy=a=>a.length?Math.round(a.reduce((t,v)=>t+v,0)/a.length):null;
+  // La regularite se lit sur les nuits de la PERIODE, pas sur les quatorze
+  // dernieres : le rapport ne doit rien contenir qui deborde de ses bornes.
+  const nuits=((u&&u.sleepLog)||[]).filter(e=>e&&e.date>=jours[0]&&e.date<=jours[jours.length-1]);
+  const reg=regulariteCoucher({sleepLog:nuits},nuits.length||1);
+  return {
+    jours:jours.length,
+    pas:{moyenne:moy(pas),renseignes:pas.length,objectif:sanObjPas(u)},
+    sommeil:{moyenne:moy(som),renseignes:som.length,objectif:sanObjSommeil(u)},
+    regularite:reg
+  };
+}
 // PURE. Le mois calendaire PRÉCÉDENT, borne à borne.
 function rapMoisPrecedent(now){
   const t=(typeof now==='number')?now:Date.now();
@@ -43151,6 +43180,7 @@ function rapportPeriode(u,debut,fin,opts){
       progres:phraseExercicesEnProgres(u)
     },
     sante:rapSanteAutorisee(u),
+    lifestyle:rapLifestyle(u,debut,fin),
     // N6.7 — les trois blocs manquants.
     diete:rapDiete(u),
     mensurations:rapMensurations(u,debut,fin),
@@ -43206,7 +43236,7 @@ function _rapBarreVolume(m){
 }
 // ── Le document ───────────────────────────────────────────────────────────
 let _rapBlocs={entete:true,assiduite:true,volume:true,progression:true,tendances:true,poids:true,signaux:true,
-  diete:true,mensurations:true,photos:true,mot:true};
+  diete:true,mensurations:true,photos:true,lifestyle:true,mot:true};
 let _rapDebut=null,_rapFin=null,_rapCible=null;
 // Les trois fenêtres qu’on demande réellement. Remplir deux champs date à la
 // main, sur téléphone, pour chaque athlète, était le prix de la moindre
@@ -43423,6 +43453,28 @@ function htmlRapport(r){
     h+=`</section>`;
   }
   // (7) Mot du coach — VIDE, et il le reste.
+  // (12) Sommeil et pas. AUCUN DEGRADE, AUCUN HALO : ce bloc est fait pour
+  // sortir d'une imprimante noir et blanc. Il n'emploie que du texte et les
+  // classes rap-* existantes, qui sont deja eprouvees a l'impression.
+  if(B.lifestyle){
+    const L=r.lifestyle;
+    h+=`<section class="rap-bloc"><h2>Sommeil et pas</h2>`;
+    if(!L||(!L.pas.renseignes&&!L.sommeil.renseignes)){
+      // LE VIDE EST DIT. Un bloc coche qui ne rend rien laisserait croire a une
+      // panne d'impression plutot qu'a une absence de saisie.
+      h+=`<p class="rap-note">Aucune donnée de sommeil ni de pas sur la période.</p>`;
+    } else {
+      h+=`<div class="rap-grille">
+        <div><div class="rap-lbl">Pas / jour</div>${L.pas.moyenne!=null?nb(sanNb(L.pas.moyenne),'en moyenne'):nb('—','')}</div>
+        <div><div class="rap-lbl">Jours renseignés</div>${nb(L.pas.renseignes,'/ '+L.jours)}</div>
+        <div><div class="rap-lbl">Sommeil / nuit</div>${L.sommeil.moyenne!=null?nb(sanHM(L.sommeil.moyenne),'en moyenne'):nb('—','')}</div>
+        <div><div class="rap-lbl">Nuits renseignées</div>${nb(L.sommeil.renseignes,'/ '+L.jours)}</div>
+      </div>`;
+      if(L.regularite) h+=`<p class="rap-note">Couchers : ± ${L.regularite.ecart} min autour de ${_libHeure(L.regularite.moyenne)}, sur ${L.regularite.n} nuit${L.regularite.n>1?'s':''} horodatée${L.regularite.n>1?'s':''}.</p>`;
+      h+=`<p class="rap-note">Objectifs en vigueur : ${sanNb(L.pas.objectif)} pas, ${sanHM(L.sommeil.objectif)} de sommeil. Les jours non renseignés ne sont pas comptés dans les moyennes.</p>`;
+    }
+    h+=`</section>`;
+  }
   if(B.mot) h+=`<section class="rap-bloc"><h2>Mot du coach</h2>
     <div class="rap-mot" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mot du coach"></div>
     <p class="rap-note rap-noprint">Écris ici avant d'imprimer. Rien n'est enregistré : ce texte vit le temps de l'impression.</p></section>`;
@@ -75631,17 +75683,197 @@ function _sommeilMoyenne(u,jours){
 // PURE. '' quand il n'y a aucune nuit à montrer : pas de cadre vide, pas de
 // « 0 nuit » — ce serait un constat sur l’athlète, alors que c’est une absence
 // de saisie.
+// ══ CE QUE LE COACH NE VOYAIT PAS ═══════════════════════════════════════
+//
+// L'onglet Lifestyle de la fiche athlete portait trois sections, dont DEUX
+// MASQUEES par defaut — rallumees seulement si des donnees existent. Un athlete
+// qui n'a rien saisi depuis dix jours produisait donc un onglet vide, c'est-a-
+// dire indiscernable d'un athlete qui va bien. Et le peu qui s'affichait etait
+// une moyenne, point : une moyenne sur 14 jours ne distingue pas « 7 000 pas
+// tous les jours » de « 14 000 le week-end et 2 000 en semaine ».
+//
+// PURE. Tout ce que les deux blocs ont besoin de savoir, en une passe.
+const COACH_FENETRE_JOURS=28;
+function bilanDomaineCoach(u,quoi,jours){
+  const n=(jours>0?jours:COACH_FENETRE_JOURS);
+  const val=iso=>quoi==='sommeil'?sanSommeilMin(u,iso):sanPas(u,iso);
+  const d=new Date(); d.setHours(12,0,0,0);
+  const serie=[];
+  for(let i=n-1;i>=0;i--){
+    const j=new Date(d); j.setDate(d.getDate()-i);
+    const iso=localISODate(j);
+    serie.push({iso,v:val(iso)});
+  }
+  const lus=serie.filter(x=>x.v!=null);
+  const moy=a=>a.length?Math.round(a.reduce((t,x)=>t+x.v,0)/a.length):null;
+  // LES DEUX SEMAINES SE COMPARENT SUR LEURS JOURS RENSEIGNES, chacune de son
+  // cote. Comparer une semaine pleine a une semaine a moitie vide en divisant
+  // les deux par sept ferait chuter la seconde pour une raison de saisie.
+  // ⚠ LE JOUR EN COURS EST HORS DES DEUX FENETRES. Il est incomplet — l'athlete
+  // n'a pas fini sa journee — et l'inclure tirait la semaine courante vers le
+  // bas tous les matins, donc affichait une baisse qui n'existe pas. Les deux
+  // fenetres sont donc les sept jours qui finissent HIER, et les sept d'avant.
+  const s0=serie.slice(-8,-1).filter(x=>x.v!=null);
+  const s1=serie.slice(-15,-8).filter(x=>x.v!=null);
+  const m0=moy(s0), m1=moy(s1);
+  // LE DERNIER JOUR RENSEIGNE, pour pouvoir dire le silence. Sans lui, la
+  // section se contentait de disparaitre.
+  const der=lus.length?lus[lus.length-1].iso:null;
+  let depuis=null;
+  if(der){
+    const dd=new Date(der+'T12:00:00');
+    depuis=Math.max(0,Math.round((d.getTime()-dd.getTime())/864e5));
+  }
+  return {serie,fenetre:n,renseignes:lus.length,moyenne:moy(lus),
+    semaine:m0,semaineAvant:m1,
+    delta:(m0!=null&&m1!=null)?(m0-m1):null,
+    dernier:der,depuis};
+}
+// La sparkline. SVG INLINE, meme facture que les barres existantes : aucune
+// bibliotheque, aucun appel reseau — c'est la contrainte du projet, et un
+// graphique ne vaut pas de l'enfreindre.
+// LES JOURS VIDES NE SONT PAS RELIES. Une ligne continue par-dessus un trou
+// dessine une donnee qui n'existe pas ; le trait s'interrompt, et c'est
+// precisement ce que le coach doit voir.
+function _sparklineCoach(serie,teinte){
+  const vals=serie.map(x=>x.v).filter(v=>v!=null);
+  if(vals.length<2) return '';
+  const L=240,H=38,bas=Math.min(...vals),haut=Math.max(...vals);
+  const etendue=(haut-bas)||1;
+  const x=i=>Math.round(i/(serie.length-1)*L*10)/10;
+  const y=v=>Math.round((H-2-((v-bas)/etendue)*(H-6))*10)/10;
+  let d='',ouvert=false;
+  serie.forEach((p,i)=>{
+    if(p.v==null){ ouvert=false; return; }
+    d+=(ouvert?'L':'M')+x(i)+' '+y(p.v)+' '; ouvert=true;
+  });
+  const pts=serie.map((p,i)=>p.v==null?''
+    :'<circle cx="'+x(i)+'" cy="'+y(p.v)+'" r="1.6" fill="'+teinte+'" opacity=".55"/>').join('');
+  return '<svg viewBox="0 0 '+L+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" '
+    +'role="img" aria-hidden="true" style="display:block;margin:6px 0 2px">'
+    +'<path d="'+d.trim()+'" fill="none" stroke="'+teinte+'" stroke-width="1.8" '
+    +'stroke-linejoin="round" stroke-linecap="round"/>'+pts+'</svg>';
+}
+function _ligneCoach(lib,val,note){
+  return '<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);'
+    +'color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">'+escapeHtml(lib)+'</span>'
+    +'<span style="font-weight:800">'+val
+    +(note?'<span style="color:var(--text-dim);font-weight:600"> · '+escapeHtml(note)+'</span>':'')
+    +'</span></div>';
+}
+// LE SILENCE EST DIT, ET IL EST VISIBLE. C'est le point : un athlete muet
+// depuis dix jours ne doit pas ressembler a un athlete qui va bien.
+const COACH_SILENCE_JOURS=7;
+function _htmlSilenceCoach(b,quoi){
+  const q=quoi==='sommeil'?'nuit':'journée';
+  if(b.dernier==null)
+    return '<div style="font-size:var(--fs-sm);color:var(--warning);line-height:1.6;font-weight:700">'
+      +'Aucune '+q+' saisie sur '+b.fenetre+' jours.</div>';
+  if(b.depuis<COACH_SILENCE_JOURS) return '';
+  const lbl=new Date(b.dernier+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+  return '<div style="font-size:var(--fs-sm);color:var(--warning);line-height:1.6;font-weight:700;margin-bottom:6px">'
+    +'Aucune donnée depuis le '+escapeHtml(lbl)+' ('+b.depuis+' jours).</div>';
+}
+// LA FORME, PAS SEULEMENT LA MOYENNE.
+//
+// LE TAUX DE RENSEIGNEMENT EST LA CHOSE LA PLUS IMPORTANTE DU BLOC : sans lui,
+// une moyenne calculee sur quatre jours se lit comme une moyenne sur vingt-huit.
+// Il vient donc en premier, avant les chiffres qu'il qualifie.
+function _htmlFormeCoach(bil,quoi,c){
+  const fmt=quoi==='sommeil'?sanHM:sanNb;
+  let h=_ligneCoach('Renseigné',bil.renseignes+'/'+bil.fenetre+' jours');
+  if(bil.delta!=null){
+    // SIGNE ET COULEUR : « +820 pas » ne veut rien dire sans dire par rapport
+    // a quoi, et les deux semaines se comparent chacune sur SES jours lus.
+    const signe=bil.delta>0?'+':bil.delta<0?'−':'';
+    const coul=bil.delta===0?'var(--text-dim)':(bil.delta>0?'#22c55e':'var(--warning)');
+    h+=_ligneCoach('7 j vs 7 j précédents',
+      '<span style="color:'+coul+'">'+signe+fmt(Math.abs(bil.delta))+'</span>',
+      'sur ce qui est renseigné');
+  }
+  if(quoi==='sommeil'){
+    // LA MEME FONCTION QUE L'ATHLETE, sur le meme dossier. Deux calculs de
+    // regularite donneraient deux chiffres, et le coach commenterait celui que
+    // son athlete ne voit pas.
+    const r=regulariteCoucher(c);
+    if(r) h+=_ligneCoach('Régularité des couchers',
+      '<span style="color:'+_teinteRegularite(r.ecart)+'">± '+r.ecart+' min</span>',
+      'coucher moyen '+_libHeure(r.moyenne)+' · '+r.n+' nuit'+(r.n>1?'s':''));
+  }
+  return h;
+}
+// LES OBJECTIFS DE PAS, POSABLES PAR LE COACH (4.3).
+//
+// stepsGoals n'etait modifiable que par l'athlete, alors que c'est un parametre
+// d'entrainement. Le patron est celui de habCoachAjouter — et son piege est
+// nomme dans le commentaire N3.2 : getOwnedClient SANS SECOND ARGUMENT rend un
+// objet detache, saveUser() ne range que le coach, et la modification
+// reapparait effacee a la reouverture de la fiche. On passe donc la carte
+// `users`, comme le fait coachSetPhase.
+//
+// L'ATHLETE GARDE LA MAIN : s'il change l'objectif depuis son ecran, c'est le
+// sien qui gagne — il n'y a qu'un seul champ, et le dernier qui ecrit gagne.
+// L'ecran dit d'ou vient la valeur, comme le fait deja « (objectifs par
+// defaut) » juste au-dessus.
+function _htmlObjectifsCoach(c){
+  const g=(c&&c.stepsGoals)||STEPS_GOALS_DEFAUT;
+  const v=n=>Number(n)>0?Number(n):'';
+  return `<div style="border-top:1px solid var(--border);margin-top:11px;padding-top:11px">
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">Poser l'objectif</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <label style="flex:1;min-width:110px;font-size:var(--fs-2xs);color:var(--text-dim)">Jours ON
+        <input type="number" id="ccd-pas-on" min="0" max="99999" inputmode="numeric" value="${v(g.on)}"
+          style="width:100%;box-sizing:border-box;margin-top:3px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
+      <label style="flex:1;min-width:110px;font-size:var(--fs-2xs);color:var(--text-dim)">Jours OFF
+        <input type="number" id="ccd-pas-off" min="0" max="99999" inputmode="numeric" value="${v(g.off)}"
+          style="width:100%;box-sizing:border-box;margin-top:3px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="coachPoserObjectifsPas()" style="width:100%;margin:9px 0 0;min-height:44px">Enregistrer les objectifs</button>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">L'athlète peut les changer depuis son écran : c'est alors sa valeur qui s'applique.</div>
+  </div>`;
+}
+function coachPoserObjectifsPas(){
+  // ⚠ LA CARTE `users` EST PASSEE A getOwnedClient. Sans elle, l'objet rendu
+  // est DETACHE : DB.set rangerait un dossier qui n'a jamais recu la
+  // modification, et le coach la verrait disparaitre a la reouverture. C'est
+  // le piege ecrit noir sur blanc dans habCoachAjouter.
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  const lire=id=>{ const e=document.getElementById(id); const n=parseInt(e&&e.value,10);
+    return (isFinite(n)&&n>=0&&n<=99999)?n:null; };
+  const on=lire('ccd-pas-on'), off=lire('ccd-pas-off');
+  if(on==null&&off==null) return toast('Saisis au moins un objectif valide','var(--orange)');
+  c.stepsGoals=Object.assign({},c.stepsGoals||{},
+    on!=null?{on}:{}, off!=null?{off}:{});
+  c.updatedAt=Date.now();
+  if(c.email) users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  try{ renderPasCoach(c); }catch(e){}
+  toastSync(ok,envoi,'Objectifs posés','l\'objectif est');
+  return true;
+}
 function _htmlSommeilCoach(c){
   const a=_sommeilMoyenne(c,7), b=_sommeilMoyenne(c,28);
-  if(!a&&!b) return '';
+  const bil=bilanDomaineCoach(c,'sommeil',COACH_FENETRE_JOURS);
+  // ⚠ LE BLOC NE DISPARAIT PLUS QUAND IL N'Y A RIEN. C'etait le defaut : un
+  // athlete muet depuis dix jours produisait une section MASQUEE, donc
+  // indiscernable d'un athlete qui va bien. Le silence est desormais l'une des
+  // choses que ce bloc sait dire.
+  const silence=_htmlSilenceCoach(bil,'sommeil');
+  if(!a&&!b&&!silence) return '';
   const dec=v=>String(v).replace('.',',');
   const ligne=(lib,x)=>x
     ?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">${escapeHtml(lib)}</span><span style="font-weight:800">${dec(x.h)} h <span style="color:var(--text-dim);font-weight:600">· ${x.nuits} nuit${x.nuits>1?'s':''}</span></span></div>`
     :'';
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Sommeil</div>
+    ${silence}
     ${ligne('Moyenne 7 jours',a)}
     ${ligne('Moyenne 28 jours',b)}
+    ${_sparklineCoach(bil.serie,'#60a5fa')}
+    ${_htmlFormeCoach(bil,'sommeil',c)}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:8px">Durées saisies par l’athlète. Les nuits non renseignées ne sont pas comptées.</div>
   </div>`;
 }
@@ -75649,7 +75881,10 @@ function _htmlSommeilCoach(c){
 // TELLE QUELLE : elle porte déjà sa fenêtre et son contrat de null.
 function _htmlPasCoach(c){
   let m=null; try{ m=moyennePas14j(c); }catch(e){ m=null; }
-  if(m==null) return '';
+  const bil=bilanDomaineCoach(c,'pas',COACH_FENETRE_JOURS);
+  // Meme regle que le sommeil : le silence se dit, il ne se cache pas.
+  const silence=_htmlSilenceCoach(bil,'pas');
+  if(m==null&&!silence) return '';
   // LE MÊME DÉFAUT QUE L’ATHLÈTE, et il est DIT. Masquer la ligne laissait
   // croire qu’aucun objectif n’était fixé ; afficher le chiffre sans préciser
   // d’où il vient remplacerait un silence trompeur par une affirmation
@@ -75666,16 +75901,22 @@ function _htmlPasCoach(c){
   const obj=_liste?(_liste+(_propres?'':' (objectifs par défaut)')):'';
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Pas</div>
-    <div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9">
-      <span style="color:var(--sub)">Moyenne 14 jours</span>
-      <span style="font-weight:800">${nb(m)} pas</span></div>
+    ${silence}
+    ${m!=null?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">Moyenne 14 jours</span><span style="font-weight:800">${nb(m)} pas</span></div>`:''}
     ${obj?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">Objectif</span><span style="font-weight:800">${escapeHtml(obj)}</span></div>`:''}
+    ${_sparklineCoach(bil.serie,'#e02020')}
+    ${_htmlFormeCoach(bil,'pas',c)}
+    ${_htmlObjectifsCoach(c)}
   </div>`;
 }
 function renderSommeilCoach(c){
   const z=document.getElementById('ccd-sommeil');
   if(!z) return;
   let h=''; try{ h=_htmlSommeilCoach(c); }catch(e){ h=''; }
+  // ⚠ LE BLOC PEUT DESORMAIS NE CONTENIR QUE LE SILENCE, et c'est voulu : il
+  // ne se masque plus des qu'il n'y a pas de donnee, puisque l'absence EST
+  // l'information. Le display:none ne survit que pour le cas ou le rendu a
+  // reellement leve.
   z.innerHTML=h; z.style.display=h?'':'none';
 }
 function renderPasCoach(c){
@@ -76221,6 +76462,8 @@ function absencesConsecutives(user,depuisISO){
 }
 // PURE. Un point par critère rempli, chacun isolé dans son try : un calcul
 // qui casse compte ZÉRO et n'emporte pas les cinq autres avec lui.
+// Convention, pas mesure : voir le commentaire du critere « pas » ci-dessous.
+const DEF_PAS_ELEVES=12000;
 function risqueDeficitEnergetique(user,jourISO){
   const j=jourISO||localISODate(new Date());
   const criteres=[];
@@ -76254,6 +76497,25 @@ function risqueDeficitEnergetique(user,jourISO){
     if(!v||v.pctSem==null) return null;
     return v.pctSem<seuil
       ?(String(Math.round(v.pctSem*100)/100).replace('.',',')+' % par semaine'):null;
+  });
+  // ⚠ LES PAS ENTRENT DANS LE FAISCEAU EXISTANT, PAS A COTE. Consigne
+  // explicite : ne pas creer une seconde detection. Le critere rejoint donc les
+  // autres ici, passe par REDS_CODES comme eux, et tombe sous la meme regle des
+  // DEUX signaux minimum — il ne declenche jamais rien seul.
+  //
+  // ET ON NE CONCLUT RIEN SUR LA SANTE DE QUI QUE CE SOIT A PARTIR D'UN
+  // PODOMETRE. Ce critere ne dit pas « depense excessive » ni quoi que ce soit
+  // d'osseux : il dit un nombre de pas, constate. Ce qui le rend utile, c'est
+  // sa coincidence avec un apport bas et un sommeil court — jamais lui seul.
+  //
+  // LE SEUIL EST UNE CONVENTION, PAS UNE MESURE. 12 000 pas par jour en moyenne
+  // sur quatorze jours situe une depense hors entrainement dans le haut de
+  // NAF_ECHELLE ; ce n'est pas un diagnostic, et ce commentaire est la pour que
+  // personne ne le lise comme tel.
+  essai('pas','Dépense hors entraînement élevée',()=>{
+    let m=null; try{ m=moyennePas14j(user); }catch(e){ return null; }
+    if(m==null||!(m>=DEF_PAS_ELEVES)) return null;
+    return sanNb(m)+' pas par jour sur 14 jours';
   });
   essai('volume','Volume au-dessus du repère haut',()=>{
     // La dernière semaine RÉVOLUE, comme partout ailleurs : la semaine en
@@ -76362,7 +76624,10 @@ const REDS_CODES=Object.freeze({
   absences_espacees:'regles_espacees',
   sommeil:'sommeil_court',
   douleur:'douleurs_repetees',
-  volume:'volume_haut'
+  volume:'volume_haut',
+  // Les pas rejoignent la table comme les autres : nommes, jamais recalcules
+  // ici, et soumis au minimum de deux signaux.
+  pas:'depense_neat_haute'
 });
 // PURE. L'état du nœud. Absent = défauts, et la LECTURE n'écrit rien.
 function redsEtat(user){

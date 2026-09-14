@@ -38283,6 +38283,173 @@ vendredi 78 6h 44m
         return t.length?_echec('conseil trouvé : '+t.join(', ')):true;})());
     })();
 
+    // ══ COTE COACH : la forme, le silence, les objectifs, le rapport ═══
+    (()=>{
+      const iso=d=>localISODate(new Date(d));
+      const j=Date.now();
+      const ath=(pas,nuits)=>({id:'K1',email:'k1@t.fr',role:'athlete',fname:'K',
+        stepsLog:(pas||[]),sleepLog:(nuits||[]),stepsGoals:{on:10000,off:7000}});
+
+      // ── 4.1 La forme, pas seulement la moyenne ──────────────────────
+      ok('Le taux de renseignement est calcule sur la FENETRE, pas sur les lignes',(()=>{
+        // Sans lui, une moyenne sur quatre jours se lit comme une moyenne sur
+        // vingt-huit. C'est la chose la plus importante du bloc.
+        const u=ath([{date:iso(j-864e5),count:9000},{date:iso(j-2*864e5),count:8000}]);
+        const b=bilanDomaineCoach(u,'pas',28);
+        if(b.fenetre!==28) return _echec('fenetre '+b.fenetre);
+        if(b.renseignes!==2) return _echec(b.renseignes+' jour(s) lus');
+        return b.serie.length===28?true:_echec(b.serie.length+' points de serie');})());
+      ok('Les deux semaines se comparent chacune sur SES jours renseignes',(()=>{
+        // Comparer une semaine pleine a une semaine a moitie vide en divisant
+        // les deux par sept ferait chuter la seconde pour une raison de saisie.
+        const p=[];
+        for(let i=1;i<=7;i++)  p.push({date:iso(j-i*864e5),count:10000});
+        p.push({date:iso(j-9*864e5),count:6000});           // une seule journee la semaine d'avant
+        const b=bilanDomaineCoach(ath(p),'pas',28);
+        if(b.semaine!==10000) return _echec('semaine '+b.semaine);
+        if(b.semaineAvant!==6000) return _echec('semaine precedente '+b.semaineAvant);
+        return b.delta===4000?true:_echec('delta '+b.delta);})());
+      ok('Sans semaine precedente, le delta est null et non zero',(()=>{
+        // Zero se lirait « pas de changement », ce qui est une affirmation.
+        const b=bilanDomaineCoach(ath([{date:iso(j-864e5),count:9000}]),'pas',28);
+        return b.delta===null?true:_echec('delta '+b.delta);})());
+      ok('La sparkline NE RELIE PAS les jours vides',(()=>{
+        // Une ligne continue par-dessus un trou dessine une donnee qui
+        // n'existe pas — et c'est le trou que le coach doit voir.
+        const serie=[{iso:'a',v:1},{iso:'b',v:2},{iso:'c',v:null},{iso:'d',v:3},{iso:'e',v:4}];
+        const h=_sparklineCoach(serie,'#e02020');
+        if(!h) return _echec('aucune sparkline');
+        const d=(h.match(/ d="([^"]*)"/)||[])[1]||'';
+        // Deux segments, donc DEUX « M » : le trace se reprend apres le trou.
+        const m=(d.match(/M/g)||[]).length;
+        return m===2?true:_echec(m+' segment(s) : « '+d+' »');})());
+      ok('Sous deux points, aucune sparkline : un trait unique ne dit rien',(()=>{
+        return _sparklineCoach([{iso:'a',v:1},{iso:'b',v:null}],'#e02020')===''
+          ?true:_echec('une sparkline est rendue sur un point');})());
+      ok('AUCUNE BIBLIOTHEQUE, AUCUN APPEL RESEAU pour ce graphique',(()=>{
+        // La contrainte du projet : tout est inline. Un graphique ne vaut pas
+        // de l'enfreindre.
+        const src=String(_sparklineCoach);
+        return !/https?:|import\(|fetch\(|createElement\('script'/.test(src)
+          ?true:_echec('une ressource externe est chargee');})());
+
+      // ── 4.2 Le silence ──────────────────────────────────────────────
+      ok('Un athlete muet depuis dix jours est DIT, pas masque',(()=>{
+        // C'etait le defaut : la section se masquait, donc un athlete muet
+        // ressemblait exactement a un athlete qui va bien.
+        const u=ath([{date:iso(j-10*864e5),count:9000}]);
+        const b=bilanDomaineCoach(u,'pas',28);
+        if(b.depuis!==10) return _echec('silence de '+b.depuis+' jours');
+        const h=_htmlSilenceCoach(b,'pas');
+        return /Aucune donnée depuis le/.test(h)
+          ?true:_echec('le silence n\'est pas dit : '+h);})());
+      ok('Un athlete a jour ne declenche aucune alerte de silence',(()=>{
+        const u=ath([{date:iso(j-864e5),count:9000}]);
+        const b=bilanDomaineCoach(u,'pas',28);
+        return _htmlSilenceCoach(b,'pas')===''
+          ?true:_echec('une alerte sort sur un dossier a jour');})());
+      ok('Un dossier VIDE le dit aussi, au lieu de disparaitre',(()=>{
+        const b=bilanDomaineCoach(ath([]),'pas',28);
+        if(b.dernier!==null) return _echec('un dernier jour sort de nulle part');
+        return /Aucune journée saisie/.test(_htmlSilenceCoach(b,'pas'))
+          ?true:_echec('le vide ne se dit pas');})());
+      ok('Le bloc Pas du coach ne se tait plus quand il n\'y a rien',(()=>{
+        const h=_htmlPasCoach(ath([]));
+        return /Aucune journée saisie/.test(h)
+          ?true:_echec('le bloc est vide : '+h.slice(0,80));})());
+
+      // ── 4.3 Les objectifs, posables par le coach ────────────────────
+      ok('coachPoserObjectifsPas passe la carte users a getOwnedClient',(()=>{
+        // ⚠ LE PIEGE NOMME DANS habCoachAjouter : sans second argument,
+        // getOwnedClient rend un objet DETACHE, DB.set range un dossier qui n'a
+        // jamais recu la modification, et le coach la voit disparaitre a la
+        // reouverture de la fiche.
+        const src=String(coachPoserObjectifsPas);
+        if(!/getOwnedClient\(currentClientId,\s*users\)/.test(src))
+          return _echec('le client est lu detache');
+        if(!/DB\.set\('users',users\)/.test(src)) return _echec('la carte n\'est pas rangee');
+        // ET L'ECRITURE NE TOMBE PAS EN SILENCE.
+        return /toastSync\(/.test(src)?true:_echec('l\'echec d\'ecriture serait muet');})());
+      ok('Le formulaire d\'objectifs tient la cible de 44 px',(()=>{
+        const h=_htmlObjectifsCoach(ath([]));
+        const n=(h.match(/min-height:44px/g)||[]).length;
+        return n>=3?true:_echec(n+' element(s) a 44 px');})());
+      ok('L\'ecran dit que l\'athlete garde la main',(()=>{
+        return /peut les changer depuis son écran/.test(_htmlObjectifsCoach(ath([])))
+          ?true:_echec('la regle de priorite n\'est pas dite');})());
+
+      // ── 4.4 Le rapport ──────────────────────────────────────────────
+      ok('Le rapport porte un bloc Sommeil et pas, coche par defaut',(()=>{
+        if(!RAP_BLOCS.some(b=>b.cle==='lifestyle')) return _echec('le bloc n\'existe pas');
+        // Place AVANT le mot du coach : celui-la ferme le document.
+        const i=RAP_BLOCS.findIndex(b=>b.cle==='lifestyle');
+        const m=RAP_BLOCS.findIndex(b=>b.cle==='mot');
+        if(i>m) return _echec('le bloc passe apres le mot du coach');
+        return _rapBlocs.lifestyle===true?true:_echec('il n\'est pas coche par defaut');})());
+      ok('Le rapport compte SUR SA PERIODE, pas sur une fenetre glissante',(()=>{
+        // C'est un document date : il ne doit rien contenir qui deborde de ses
+        // deux bornes.
+        const deb=j-9*864e5, fin=j-3*864e5;
+        const u=ath([{date:iso(j-5*864e5),count:9000},{date:iso(j-864e5),count:20000}]);
+        const L=rapLifestyle(u,deb,fin);
+        if(L.pas.renseignes!==1) return _echec(L.pas.renseignes+' jour(s) comptes');
+        return L.pas.moyenne===9000
+          ?true:_echec('moyenne '+L.pas.moyenne+' : un jour hors periode est entre');})());
+      ok('Un rapport SANS donnee le dit au lieu de rendre un bloc muet',(()=>{
+        // Un bloc coche qui ne rend rien se lit comme une panne d'impression.
+        const r={lifestyle:rapLifestyle(ath([]),j-30*864e5,j),athlete:{},periode:{},
+          genereLe:j,assiduite:{},nSeances:0};
+        const sv=JSON.parse(JSON.stringify(_rapBlocs));
+        try{
+          for(const k of Object.keys(_rapBlocs)) _rapBlocs[k]=false;
+          _rapBlocs.lifestyle=true;
+          const h=htmlRapport(r);
+          return /Aucune donnée de sommeil ni de pas sur la période/.test(h)
+            ?true:_echec('le bloc est muet : '+h.replace(/<[^>]*>/g,' ').slice(0,120));
+        } finally { for(const k of Object.keys(sv)) _rapBlocs[k]=sv[k]; }})());
+      ok('Le bloc du rapport est IMPRIMABLE EN NOIR ET BLANC',(()=>{
+        // Ni degrade ni halo : le document sort d'une imprimante.
+        const sv=JSON.parse(JSON.stringify(_rapBlocs));
+        try{
+          for(const k of Object.keys(_rapBlocs)) _rapBlocs[k]=false;
+          _rapBlocs.lifestyle=true;
+          const u=ath([{date:iso(j-2*864e5),count:9000}],[{date:iso(j-2*864e5),duration:7,bed:'23:00'}]);
+          const h=htmlRapport({lifestyle:rapLifestyle(u,j-7*864e5,j),athlete:{},periode:{},
+            genereLe:j,assiduite:{},nSeances:0});
+          const t=[];
+          if(/linear-gradient|radial-gradient/.test(h)) t.push('degrade');
+          if(/text-shadow|box-shadow|filter:\s*drop-shadow/.test(h)) t.push('halo');
+          return t.length?_echec(t.join(', ')+' dans un bloc imprimable'):true;
+        } finally { for(const k of Object.keys(sv)) _rapBlocs[k]=sv[k]; }})());
+
+      // ── 4.5 RED-S ───────────────────────────────────────────────────
+      ok('Les pas entrent dans le faisceau EXISTANT, pas a cote',(()=>{
+        // Consigne explicite : ne pas creer une seconde detection.
+        if(!REDS_CODES.pas) return _echec('le critere n\'est pas dans la table');
+        const src=String(risqueDeficitEnergetique);
+        if(src.indexOf('moyennePas14j')<0) return _echec('les pas ne passent pas par le calcul existant');
+        // ET LA REGLE DES DEUX SIGNAUX TIENT TOUJOURS : il ne declenche rien seul.
+        return REDS_MIN_SIGNAUX>=2?true:_echec('le minimum de signaux est tombe a '+REDS_MIN_SIGNAUX);})());
+      ok('Le critere de pas ne conclut RIEN sur la sante',(()=>{
+        // « On ne conclut rien sur la densite osseuse ni sur la sante de qui que
+        // ce soit a partir d'un podometre. »
+        const u=ath(Array.from({length:14},(_,i)=>({date:iso(j-(i+1)*864e5),count:15000})));
+        const r=risqueDeficitEnergetique(u,localISODate(new Date()));
+        const c=(r&&r.criteres||[]).find(x=>x.cle==='pas');
+        if(!c) return _echec('le critere ne se declenche pas a 15 000 pas');
+        const interdits=['osseu','densité','santé','excessi','risque de'];
+        const t=interdits.filter(x=>(c.lib+' '+c.valeur).toLowerCase().indexOf(x)>=0);
+        if(t.length) return _echec('vocabulaire interdit : '+t.join(', '));
+        // Il dit un NOMBRE CONSTATE, et rien d'autre.
+        return /15 ?000 pas par jour sur 14 jours/.test(c.valeur.replace(/ | /g,' '))
+          ?true:_echec('valeur « '+c.valeur+' »');})());
+      ok('Sous le seuil, le critere de pas ne se declenche pas',(()=>{
+        const u=ath(Array.from({length:14},(_,i)=>({date:iso(j-(i+1)*864e5),count:6000})));
+        const r=risqueDeficitEnergetique(u,localISODate(new Date()));
+        return !(r&&r.criteres||[]).some(x=>x.cle==='pas')
+          ?true:_echec('6 000 pas declenchent le critere');})());
+    })();
+
     // ── Cafeine : l'heure limite AVANT, pas le constat APRES — 7 cas ──
     (()=>{
       const iso=d=>localISODate(new Date(d));
