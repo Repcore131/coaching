@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1184';
+window.RC_BUILD='1185';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1486,6 +1486,12 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   box-shadow:0 0 22px rgba(224,32,32,.45) inset;opacity:.9;pointer-events:none}
 .rc-badge-ico{position:relative;width:46%;color:#ff4a4a;filter:drop-shadow(0 0 6px rgba(224,32,32,.85))}
 .rc-badge-ico svg{width:100%;height:100%;display:block}
+/* Le medaillon dessine recouvre le cadre : il porte deja son hexagone, ses
+   lauriers et sa lueur. On retire donc le decor de repli sous lui, sinon
+   deux hexagones se superposeraient a un pixel pres. */
+.rc-badge-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+.rc-badge-vrai{clip-path:none;background:none;box-shadow:none}
+.rc-badge-vrai::after{display:none}
 .rc-badge-xl .rc-badge-ico{color:#ff5a5a}
 .rc-badge-t{font-size:var(--fs-2xs);font-weight:900;letter-spacing:1.4px;text-transform:uppercase;color:#fff}
 .rc-badge-xl .rc-badge-t{font-size:var(--fs-sm);letter-spacing:2.5px;color:var(--red-text)}
@@ -1522,6 +1528,237 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .rc-badge:active{transform:scale(.97)}
 @media(prefers-reduced-motion:reduce){
   .rc-hero .rc-badge,.rc-hero-val,.rc-hero-prog,.rc-hero-gain,.rc-badges .rc-badge{animation:none}
+}
+/* ══ FIN DE SEANCE v2 — LA RECOMPENSE ═════════════════════════════════════
+   Le noir domine, le blanc porte la lisibilite, le rouge ne sert QU'A
+   l'energie : la flamme, le halo d'un badge, l'appel a l'action. Jamais en
+   aplat de remplissage.
+   Trois profondeurs de noir, et c'est ce qui fait le relief : #08090b au
+   fond, #0e0e10 pour les blocs, #141416 pour ce qui doit remonter.
+   ⚠ TOUT CE QUI S'ANIME LE FAIT EN opacity/transform UNIQUEMENT, et part de
+   sa place finale (`both`) : aucune de ces entrees ne decale la mise en page.
+   Les medaillons .rc-badge-* ne sont PAS redefinis ici : ce sont exactement
+   ceux de l'application, on ne change que leur mise en scene. */
+.rcf{--rcf-rouge:#e02020;--rcf-braise:#ff5a3c;--rcf-sombre:#5a0000}
+
+/* ── LE HERO ─────────────────────────────────────────────────────────── */
+.rcf-hero{position:relative;text-align:center;padding:26px 0 22px;overflow:hidden}
+/* Le halo de fond : une seule radiale, peinte une fois, jamais reanimee. */
+.rcf-hero::before{content:'';position:absolute;left:50%;top:4px;width:300px;height:300px;
+  transform:translateX(-50%);pointer-events:none;
+  background:radial-gradient(circle,rgba(224,32,32,.22),rgba(224,32,32,.06) 42%,transparent 68%)}
+.rcf-flamme{position:relative;width:132px;height:150px;margin:0 auto;display:block}
+.rcf-flamme svg{width:100%;height:100%;display:block;
+  filter:drop-shadow(0 0 18px rgba(224,32,32,.55)) drop-shadow(0 0 44px rgba(224,32,32,.28))}
+/* Les etincelles : trois passages, puis plus rien. Une animation permanente
+   sur un ecran qu'on regarde trente secondes fatigue pour rien. */
+.rcf-etin{position:absolute;inset:0;pointer-events:none}
+.rcf-etin i{position:absolute;bottom:22%;width:3px;height:3px;border-radius:50%;
+  background:var(--rcf-braise);box-shadow:0 0 6px rgba(255,90,60,.9);opacity:0;
+  animation:rcfEtin 1.5s ease-out 3 both}
+.rcf-etin i:nth-child(1){left:32%;animation-delay:.30s}
+.rcf-etin i:nth-child(2){left:52%;animation-delay:.52s}
+.rcf-etin i:nth-child(3){left:66%;animation-delay:.74s}
+.rcf-etin i:nth-child(4){left:44%;animation-delay:.96s}
+.rcf-etin i:nth-child(5){left:60%;animation-delay:1.18s}
+@keyframes rcfEtin{
+  0%{opacity:0;transform:translate3d(0,0,0) scale(.6)}
+  18%{opacity:1}
+  100%{opacity:0;transform:translate3d(6px,-78px,0) scale(.2)}}
+.rcf-titre{position:relative;font-family:var(--pile-titre);
+  font-size:clamp(28px,8.6vw,42px);line-height:1.02;letter-spacing:5px;
+  text-transform:uppercase;color:#fff;margin:14px 0 0;
+  text-shadow:0 0 30px rgba(224,32,32,.45)}
+/* Le trait sous le titre : il ferme le hero sans poser de bordure pleine. */
+.rcf-trait{position:relative;width:96px;height:1px;margin:13px auto 0;
+  background:linear-gradient(90deg,transparent,rgba(224,32,32,.85),transparent)}
+
+/* ── LES RECOMPENSES ─────────────────────────────────────────────────── */
+.rcf-rec{position:relative;margin:26px 0 24px}
+/* Les traits verticaux : la sensation de montee, sans dessiner un podium. */
+.rcf-rec::before{content:'';position:absolute;left:0;right:0;bottom:26px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.07) 22%,
+    rgba(255,255,255,.07) 78%,transparent);pointer-events:none}
+.rcf-rec-g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-items:end}
+.rcf-rec-g.n1{grid-template-columns:1fr;max-width:190px;margin:0 auto}
+.rcf-rec-g.n2{grid-template-columns:repeat(2,1fr);max-width:300px;margin:0 auto}
+.rcf-case{position:relative;display:flex;flex-direction:column;align-items:center;
+  text-align:center;gap:8px;min-width:0;padding-bottom:4px}
+/* Le badge du milieu monte : une progression, pas une marche de podium. */
+.rcf-rec-g.n3 .rcf-case:nth-child(2){transform:translateY(-18px)}
+.rcf-case-halo{position:absolute;left:50%;top:-6px;width:112px;height:112px;
+  transform:translateX(-50%);pointer-events:none;opacity:0;
+  background:radial-gradient(circle,rgba(224,32,32,.34),transparent 66%)}
+.rcf-nom{font-size:var(--fs-2xs);font-weight:900;letter-spacing:1.3px;
+  text-transform:uppercase;color:#fff;line-height:1.25}
+.rcf-exp{font-size:9px;color:var(--text-faint);line-height:1.4;letter-spacing:.2px}
+/* Apparition ELECTRIQUE : flash, halo, badge, micro scale, stabilisation. */
+@keyframes rcfFlash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+@keyframes rcfSurgit{
+  0%{opacity:0;transform:scale(.72)}
+  55%{opacity:1;transform:scale(1.09)}
+  78%{transform:scale(.98)}
+  100%{opacity:1;transform:scale(1)}}
+@keyframes rcfHalo{0%{opacity:0}22%{opacity:1}100%{opacity:.18}}
+@keyframes rcfMonte{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes rcfMonteHaut{from{opacity:0;transform:translateY(12px)}
+  to{opacity:1;transform:translateY(-18px)}}
+
+/* ── MES RECORDS : present, mais volontairement tamise ───────────────── */
+.rcf-rk{position:relative;background:linear-gradient(180deg,#141416,#0b0b0c);
+  border:1px solid #1c1c1f;border-radius:var(--r-3);padding:14px 15px;overflow:hidden;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 0 22px rgba(224,32,32,.05)}
+/* La texture : des diagonales a 1,2 % d'opacite. On la devine, on ne la voit pas. */
+.rcf-rk::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(-52deg,transparent,transparent 13px,
+    rgba(255,255,255,.012) 13px,rgba(255,255,255,.012) 14px)}
+.rcf-rk-t{position:relative;font-size:10px;letter-spacing:2.6px;text-transform:uppercase;
+  font-weight:800;color:var(--sub);margin-bottom:11px}
+.rcf-rk-l{position:relative;display:flex;align-items:baseline;justify-content:space-between;
+  gap:10px;padding:7px 0;border-top:1px solid rgba(255,255,255,.045)}
+.rcf-rk-l:first-of-type{border-top:none;padding-top:0}
+.rcf-rk-ex{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.8px;color:var(--text-dim);
+  text-transform:uppercase;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rcf-rk-v{flex-shrink:0;font-size:var(--fs-sm);font-weight:900;color:#fff;letter-spacing:.5px}
+.rcf-rk-a{color:var(--text-faint);font-weight:700;font-size:var(--fs-2xs)}
+.rcf-rk-g{color:var(--red-text);font-weight:900;font-size:var(--fs-2xs);margin-left:6px}
+
+/* ── LA BANDE STATISTIQUE : un seul bloc, trois zones ────────────────── */
+.rcf-stats{display:grid;grid-template-columns:repeat(3,1fr);
+  background:linear-gradient(180deg,#141416,#0b0b0c);border:1px solid #1c1c1f;
+  border-radius:var(--r-3);overflow:hidden;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+.rcf-st{padding:14px 6px;text-align:center;border-left:1px solid rgba(255,255,255,.05)}
+.rcf-st:first-child{border-left:none}
+.rcf-st-v{font-family:var(--pile-titre);font-size:clamp(19px,5.6vw,25px);line-height:1.05;
+  color:#fff;letter-spacing:.5px;white-space:nowrap}
+.rcf-st-u{font-size:11px;color:var(--text-dim);font-weight:800;margin-left:2px}
+.rcf-st-l{font-size:9px;letter-spacing:1.8px;text-transform:uppercase;color:var(--sub);
+  font-weight:800;margin-top:6px}
+/* Le delta : le chiffre domine, la mention s'efface. */
+.rcf-delta{display:flex;align-items:baseline;justify-content:center;gap:7px;
+  margin-top:10px;padding:8px 12px;border-radius:var(--r-2);
+  background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.22)}
+.rcf-delta-v{font-size:var(--fs-lg);font-weight:900;color:var(--red-text);letter-spacing:.5px}
+.rcf-delta-l{font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-faint);
+  font-weight:700}
+
+/* ── LES ACTIONS : une dominante, une secondaire ─────────────────────── */
+.rcf-dl{position:relative;width:100%;display:flex;align-items:center;justify-content:center;
+  gap:9px;min-height:56px;padding:16px 18px;border:none;border-radius:var(--r-3);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:900;letter-spacing:2px;
+  text-transform:uppercase;color:#fff;cursor:pointer;overflow:hidden;
+  background:linear-gradient(160deg,#e21414,#8d0000);
+  border:1px solid rgba(255,90,90,.42);
+  box-shadow:0 0 26px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.2);
+  transition:transform var(--t-1) var(--c-out),box-shadow var(--t-2) var(--c-out)}
+.rcf-dl:active{transform:scale(.977);box-shadow:0 0 34px rgba(224,32,32,.55),
+  inset 0 1px 0 rgba(255,255,255,.2)}
+.rcf-dl[disabled]{opacity:.75;cursor:default}
+.rcf-dl.fait{background:linear-gradient(160deg,#1a1a1c,#0d0d0e);
+  border-color:rgba(224,32,32,.45);box-shadow:0 0 18px rgba(224,32,32,.18) inset}
+.rcf-dl svg{width:18px;height:18px;flex-shrink:0}
+.rcf-share{width:100%;min-height:46px;margin-top:9px;background:none;
+  border:1px solid rgba(255,255,255,.13);border-radius:var(--r-2);color:var(--text-dim);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;
+  text-transform:uppercase;cursor:pointer;
+  transition:border-color var(--t-1),color var(--t-1),transform var(--t-1)}
+.rcf-share:active{transform:scale(.985);border-color:rgba(224,32,32,.5);color:#fff}
+.rcf-note{font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:10px;text-align:center}
+
+/* ── L'ASCENSION ─────────────────────────────────────────────────────── */
+.rcf-asc{background:linear-gradient(180deg,#141416,#0b0b0c);border:1px solid #1c1c1f;
+  border-radius:var(--r-3);padding:15px 14px 13px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+.rcf-asc-ex{font-size:var(--fs-2xs);font-weight:900;letter-spacing:1.8px;color:#fff;
+  text-transform:uppercase;margin-bottom:14px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.rcf-marches{display:flex;align-items:flex-end;gap:5px;height:92px}
+.rcf-m{position:relative;flex:1;display:flex;flex-direction:column;justify-content:flex-end;
+  min-width:0}
+.rcf-m-bloc{position:relative;border-radius:3px 3px 0 0;overflow:hidden;
+  background:#161618;border:1px solid #202024;border-bottom:none;
+  transform-origin:bottom;animation:rcfMarche .5s cubic-bezier(.2,.85,.3,1) both}
+/* Franchie : matiere pleine, discrete. En cours : c'est la seule qui brille. */
+.rcf-m.pris .rcf-m-bloc{background:linear-gradient(180deg,#3a0b0b,#1c0606);
+  border-color:#43100f}
+.rcf-m.ici .rcf-m-bloc{background:linear-gradient(180deg,#e02020,#7a0000);
+  border-color:rgba(255,120,120,.55);box-shadow:0 0 16px rgba(224,32,32,.6)}
+/* Le palier vise : en pointilles, il attend. */
+.rcf-m.but .rcf-m-bloc{background:transparent;border:1px dashed rgba(224,32,32,.5);
+  border-bottom:none}
+.rcf-m-kg{font-size:9px;font-weight:800;color:var(--text-faint);text-align:center;
+  margin-bottom:5px;letter-spacing:.3px;white-space:nowrap}
+.rcf-m.ici .rcf-m-kg{color:#fff}
+.rcf-m.but .rcf-m-kg{color:var(--red-text)}
+.rcf-asc-n{font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:11px}
+@keyframes rcfMarche{from{transform:scaleY(.12);opacity:.25}to{transform:scaleY(1);opacity:1}}
+
+/* ── LE RESSENTI : quatre questions, et rien d'autre ─────────────────── */
+.rcf-fb{background:linear-gradient(180deg,#101012,#0a0a0b);border:1px solid #1a1a1d;
+  border-radius:var(--r-3);padding:14px 14px 12px}
+.rcf-fb-t{font-size:10px;letter-spacing:2.6px;text-transform:uppercase;font-weight:800;
+  color:var(--sub)}
+.rcf-fb-plus{background:none;border:none;padding:0;color:var(--text-faint);
+  font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;letter-spacing:.8px;
+  cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.rcf-q{margin-top:14px}
+.rcf-q-l{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  margin-bottom:7px}
+.rcf-q-n{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--text-dim)}
+.rcf-q-v{font-size:var(--fs-md);font-weight:900;color:var(--red-text);line-height:1}
+/* Dix pastilles plutot qu'un curseur : on vise, on ne fait pas glisser. */
+.rcf-ech{display:flex;gap:3px}
+.rcf-p{flex:1;height:30px;min-width:0;padding:0;border-radius:4px;cursor:pointer;
+  background:#141416;border:1px solid #1e1e21;color:#5a5a60;
+  font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;line-height:1;
+  transition:background var(--t-1),border-color var(--t-1),color var(--t-1),
+    transform var(--t-1)}
+.rcf-p:active{transform:scaleY(.9)}
+.rcf-p.on{background:linear-gradient(180deg,#e02020,#8a0000);border-color:rgba(255,110,110,.5);
+  color:#fff;box-shadow:0 0 10px rgba(224,32,32,.45)}
+@media(hover:hover){.rcf-p:hover{border-color:rgba(224,32,32,.55)}}
+
+/* ── LA CHOREGRAPHIE ─────────────────────────────────────────────────── */
+.rcf-e{animation:rcfMonte .42s cubic-bezier(.2,.8,.3,1) both}
+.rcf-d1{animation-delay:.10s}.rcf-d2{animation-delay:.25s}.rcf-d3{animation-delay:.95s}
+.rcf-d4{animation-delay:1.10s}.rcf-d5{animation-delay:1.25s}.rcf-d6{animation-delay:1.40s}
+.rcf-flamme{animation:rcfSurgit .52s cubic-bezier(.2,.8,.3,1) .10s both}
+.rcf-titre,.rcf-trait{animation:rcfMonte .40s ease-out .25s both}
+.rcf-rec-g .rcf-case{animation:rcfMonte .40s cubic-bezier(.2,.8,.3,1) both}
+.rcf-rec-g.n3 .rcf-case:nth-child(2){animation-name:rcfMonteHaut}
+.rcf-case .rc-badge{animation:rcfSurgit .44s cubic-bezier(.2,.85,.3,1) both}
+.rcf-case:nth-child(1),.rcf-case:nth-child(1) .rc-badge{animation-delay:.45s}
+.rcf-case:nth-child(2),.rcf-case:nth-child(2) .rc-badge{animation-delay:.63s}
+.rcf-case:nth-child(3),.rcf-case:nth-child(3) .rc-badge{animation-delay:.81s}
+.rcf-case-halo{animation:rcfHalo .9s ease-out both}
+.rcf-case:nth-child(1) .rcf-case-halo{animation-delay:.42s}
+.rcf-case:nth-child(2) .rcf-case-halo{animation-delay:.60s}
+.rcf-case:nth-child(3) .rcf-case-halo{animation-delay:.78s}
+.rcf-m:nth-child(1) .rcf-m-bloc{animation-delay:1.42s}
+.rcf-m:nth-child(2) .rcf-m-bloc{animation-delay:1.50s}
+.rcf-m:nth-child(3) .rcf-m-bloc{animation-delay:1.58s}
+.rcf-m:nth-child(4) .rcf-m-bloc{animation-delay:1.66s}
+.rcf-m:nth-child(5) .rcf-m-bloc{animation-delay:1.74s}
+
+/* 320 px : rien ne se coupe, rien ne deborde. */
+@media(max-width:359px){
+  .rcf-flamme{width:108px;height:124px}
+  .rcf-titre{letter-spacing:3px}
+  .rcf-rec-g{gap:4px}
+  .rcf-exp{display:none}
+  .rcf-st{padding:12px 3px}
+  .rcf-marches{height:78px}
+  .rcf-p{height:26px}
+}
+/* Le contrat d'accessibilite : tout se pose, rien ne bouge. */
+@media(prefers-reduced-motion:reduce){
+  .rcf-e,.rcf-flamme,.rcf-titre,.rcf-trait,.rcf-rec-g .rcf-case,
+  .rcf-case .rc-badge,.rcf-m-bloc{animation:none!important}
+  .rcf-case-halo{animation:none!important;opacity:.18}
+  .rcf-etin i{animation:none!important;opacity:0}
+  .rcf-rec-g.n3 .rcf-case:nth-child(2){transform:translateY(-18px)}
 }
 /* 360 px : trois medaillons par ligne restent lisibles, le hero ne deborde pas. */
 @media(max-width:380px){
@@ -8488,129 +8725,73 @@ const COACH_PHOTO='icons/coach.jpg';
     <span></span><span></span>
   </div>
   <div class="scroll-area" style="flex:1">
-    <div class="done-anim anim-in pad">
-      <div style="text-align:center;padding:24px 0 20px;border-bottom:1px solid #181818;margin-bottom:20px">
-        <div style="margin-bottom:12px;color:var(--red-text);filter:drop-shadow(0 0 20px rgba(198,15,8,.4))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:56px;height:56px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></div>
-        <h1 style="text-align:center;font-size:var(--fs-3xl);margin-bottom:6px;color:var(--text)">SÉANCE TERMINÉE</h1>
-        <!-- Le message porte désormais des chiffres et un nom d'exercice. En
-             majuscules espacées, comme le voulait la formule générique qu'il
-             remplace, une phrase de ce genre devient pénible à lire. -->
-        <p style="text-align:center;font-size:var(--fs-sm);color:#ccc;line-height:1.6;padding:0 14px" id="wd-msg"></p>
-      </div>
-      <!-- ⚠ L'ORDRE DE CET ECRAN A ETE INVERSE le 14/09/2026, et c'est tout
-           l'objet du lot. Il commencait par la comparaison de volume — donc
-           souvent par « -3 557 kg » — puis par DEUX questions, avant le
-           moindre chiffre. Quelqu'un qui vient de finir sa seance veut savoir
-           ce qu'il a REUSSI ; on ne lui demande rien tant qu'on ne le lui a
-           pas montre.
-           Nouvel ordre : hero, chiffres, visuel, accomplissements, prochain
-           objectif, ressenti, analyse. Aucune zone n'est supprimee : elles
-           sont deplacees, et leurs identifiants ne changent pas — rcRendreSrpe,
-           renderEtatsSeance et les autres les retrouvent telles quelles. -->
-      <div style="display:flex;gap:8px;margin-bottom:20px">
-        <div class="stat-tile"><div class="st-val" id="wd-time">—</div><div class="st-lbl">Durée</div></div>
-        <div class="stat-tile"><div class="st-val" id="wd-sets">—</div><div class="st-lbl">Séries</div></div>
-        <div class="stat-tile"><div class="st-val" id="wd-vol">—</div><div class="st-lbl">Volume</div></div>
-      </div>
-      <!-- L'IMAGE PARTAGEABLE. Sous les trois chiffres qu'elle reprend : on
-           voit ce qu'on va publier avant de toucher le bouton. -->
-      <div id="wd-partage"></div>
-      <!-- TES ACCOMPLISSEMENTS, puis TON PROCHAIN OBJECTIF : ce qu'on vient de
-           gagner, puis ce qu'on peut gagner. C'est cet enchainement qui donne
-           envie de revenir. -->
+    <div class="done-anim anim-in pad rcf">
+      <!-- ⚠ L'ECRAN EST REFONDU LE 14/09/2026, ET C'EST UNE COMPOSITION, pas
+           une pile de cartes. L'oeil doit descendre dans cet ordre et dans
+           aucun autre : FLAMME, RECOMPENSES, PERFORMANCE, ACTION, PROGRESSION,
+           RESSENTI. Chaque zone garde l'identifiant qu'elle avait — rcRendreSrpe,
+           renderEtatsSeance, renderCarteAFilmer, renderFormeSeance et
+           savePostSession retrouvent les leurs sans changer d'une ligne.
+           Les blocs sont remplis par finishWorkout ; ils sont VIDES ici, et un
+           conteneur vide n'occupe aucune hauteur : rien ne se decale quand ils
+           se remplissent. -->
+
+      <!-- 1. LE HERO : flamme, titre. Le record n'y est plus, il est dans les
+              recompenses et dans « Mes records » — trois fois la meme nouvelle
+              la banalisait. -->
+      <div id="wd-msg"></div>
+
+      <!-- 2. LES RECOMPENSES : trois au maximum, celle du milieu plus haute. -->
       <div id="wd-badges"></div>
-      <div id="wd-objectif"></div>
-      <!-- TON RESSENTI. Facultatif, et jamais bloquant : on peut quitter
-           l'ecran sans y toucher. -->
+
+      <!-- 3. MES RECORDS : present mais tamise. Rien quand il n'y a rien. -->
+      <div id="wd-records" class="rcf-e rcf-d3" style="margin-bottom:14px"></div>
+
+      <!-- 4. LA PERFORMANCE : une bande, trois zones, et le delta dessous. -->
+      <div id="wd-stats" class="rcf-e rcf-d3" style="margin-bottom:18px"></div>
+
+      <!-- 5. L'ACTION. Le telechargement domine, le partage suit.
+              L'image partageable elle-meme est rendue par renderPartageBilan. -->
+      <div id="wd-partage" class="rcf-e rcf-d4" style="margin-bottom:20px"></div>
+
+      <!-- 6. TON PROCHAIN OBJECTIF : une ascension, pas une barre. -->
+      <div id="wd-objectif" class="rcf-e rcf-d6" style="margin-bottom:18px"></div>
+
+      <!-- 7. TON RESSENTI : quatre questions, jamais bloquantes. -->
+      <div id="wd-ressenti" class="rcf-e rcf-d6" style="margin-bottom:14px"></div>
+
+      <!-- CE QUI EXISTAIT DEJA ET QUI RESTE. Aucune de ces zones n'est
+           supprimee : elles descendent sous la recompense, parce qu'elles
+           informent au lieu de celebrer, mais elles rendent exactement ce
+           qu'elles rendaient. -->
+      <div id="wd-forme" style="margin-bottom:14px"></div>
       <div id="wd-srpe-zone" style="display:none;margin-bottom:14px"></div>
       <div id="wd-retour-zone" style="display:none;margin-bottom:18px"></div>
       <div id="wd-etats"></div>
-      <!-- ANALYSE : tout en bas, parce que c'est la seule place ou elle ne
-           gache rien. -->
-      <div id="wd-comparison"></div>
       <div id="wd-cooldown"></div>
       <div id="wd-afilmer"></div>
-      <!-- RESSENTI POST-SÉANCE -->
-      <div style="margin-bottom:16px">
-        <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">Ressenti post-séance</div>
-        <button id="ps-detail-btn" onclick="togglePsDetail()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0 0 10px">+ de détail</button>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <!-- Fatigue -->
-          <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:12px 10px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Fatigue</div>
-              <div style="font-size:var(--fs-xl);font-weight:900;color:var(--red-text)" id="ps-fatigue-val">5</div>
-            </div>
-            <input type="range" id="ps-fatigue" min="0" max="10" value="5" oninput="document.getElementById('ps-fatigue-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
-          </div>
-          <!-- F-61 : le curseur d'INTENSITÉ a été RETIRÉ. Il était écrit après
-               chaque séance et lu par rien, et il recoupait le RIR déjà saisi
-               série par série. On cesse de le demander ; les valeurs déjà
-               enregistrées restent dans les dossiers, rien n'est effacé. -->
-          <!-- Satisfaction -->
-          <div class="ps-detail-item" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:12px 10px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Satisfaction</div>
-              <div style="font-size:var(--fs-xl);font-weight:900;color:var(--red-text)" id="ps-satisfaction-val">5</div>
-            </div>
-            <input type="range" id="ps-satisfaction" min="0" max="10" value="5" oninput="document.getElementById('ps-satisfaction-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
-          </div>
-          <!-- Sensation musculaire -->
-          <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:12px 10px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Sensation</div>
-              <div style="font-size:var(--fs-xl);font-weight:900;color:var(--red-text)" id="ps-sensation-val">5</div>
-            </div>
-            <input type="range" id="ps-sensation" min="0" max="10" value="5" oninput="document.getElementById('ps-sensation-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
-          </div>
-          <!-- Énergie en dehors des séances -->
-          <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:12px 10px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Énergie en dehors des séances</div>
-              <div style="font-size:var(--fs-xl);font-weight:900;color:var(--red-text)" id="ps-energie-val">5</div>
-            </div>
-            <input type="range" id="ps-energie" min="0" max="10" value="5" oninput="document.getElementById('ps-energie-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
-          </div>
-          <!-- Hydratation -->
-          <div class="ps-detail-item" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:12px 10px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Hydratation</div>
-              <div style="font-size:var(--fs-xl);font-weight:900;color:var(--red-text)" id="ps-hydratation-val">5</div>
-            </div>
-            <input type="range" id="ps-hydratation" min="0" max="10" value="5" oninput="document.getElementById('ps-hydratation-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
-          </div>
-          <!-- Motivation -->
-          <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:12px 10px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Motivation</div>
-              <div style="font-size:var(--fs-xl);font-weight:900;color:var(--red-text)" id="ps-motivation-val">5</div>
-            </div>
-            <input type="range" id="ps-motivation" min="0" max="10" value="5" oninput="document.getElementById('ps-motivation-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
-          </div>
-        </div>
-        <!-- Pas -->
-        <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:12px 14px">
-          <label style="margin-top:0;margin-bottom:6px">Pas aujourd'hui</label>
-          <input type="number" id="ps-steps" placeholder="Ex: 8500" style="margin-top:0">
-          <div class="sub" style="font-size:var(--fs-xs);margin-top:6px">Ajouté à ton suivi Lifestyle</div>
-        </div>
-      </div>
-      <!-- RELANCE BILAN DE DÉPART — visible seulement s'il manque encore.
-           Placée ici, après la séance et avant les boutons : c'est le moment où
-           l'athlète vient de recevoir de la valeur, donc celui où la demande se
-           justifie. À l'inscription elle n'aurait été qu'un péage.
+
+      <!-- RELANCE BILAN DE DEPART — visible seulement s'il manque encore.
            Le clic passe par savePostSession(true) et JAMAIS par openBilan
-           directement : le ressenti saisi au-dessus n'est écrit qu'à la
+           directement : le ressenti saisi au-dessus n'est ecrit qu'a la
            validation, l'ouvrir en direct le jetterait silencieusement. -->
       <div id="wd-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="savePostSession(true)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Et maintenant ?</div>
         <div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px;color:var(--text)">Remplis ton questionnaire de départ</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5">Ton coach pourra suivre ta progression et adapter tes charges. On enregistre ta séance et on y va →</div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-      <div id="wd-forme"></div>
-        <button class="btn btn-red" onclick="savePostSession()">Valider et terminer </button>
-        <button class="btn btn-outline" onclick="go('s-client-home');loadClientHome()">Passer</button>
+
+      <!-- 8. LA SORTIE. UNE action principale, une seule. « Passer » reste
+              accessible mais cesse d'etre un bouton de meme poids : trois
+              boutons pleine largeur se concurrencaient, et celui qui enregistre
+              le ressenti n'etait pas plus evident que celui qui le jette. -->
+      <div style="margin-top:4px">
+        <button class="btn btn-red" style="width:100%;margin:0" onclick="savePostSession()">Valider et terminer</button>
+        <button type="button" onclick="go('s-client-home');loadClientHome()"
+          style="display:block;width:100%;margin-top:12px;background:none;border:none;padding:10px;
+          color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);
+          font-weight:700;letter-spacing:1.4px;text-transform:uppercase;cursor:pointer;
+          text-decoration:underline;text-underline-offset:3px">Passer</button>
       </div>
       <div style="height:30px"></div>
     </div>
@@ -36922,18 +37103,32 @@ function _bilanSeanceCourante(){
 // touche deux fois, et le second appel retombait sur le verrou _storyEnCours
 // sans rien dire. Trois etats, et le libelle revient toujours — meme en cas
 // d'echec, sinon le bouton reste bloque sur « Génération… ».
+// Les trois etats du bouton : pret, en cours, fait. Sans le troisieme,
+// l'athlete clique, rien ne bouge a l'ecran — le fichier est parti dans le
+// dossier de telechargements, qu'il ne regarde pas — et il reclique.
+//
+// ⚠ ON N'ECRIT QUE DANS LE <span>, jamais dans le bouton. `btn.textContent=…`
+// remplacait TOUT le contenu, icone comprise : elle disparaissait au premier
+// clic et ne revenait jamais.
 function _telechargerAvecEtat(btn){
-  const lib='Télécharger le visuel de ma séance';
-  const pose=t=>{ if(btn) btn.textContent=t; };
-  if(btn){ btn.disabled=true; pose('Génération…'); }
+  const lib='Télécharger ma séance';
+  const z=btn?(btn.querySelector('span')||btn):null;
+  const pose=t=>{ if(z) z.textContent=t; };
+  if(btn){ btn.disabled=true; btn.classList.remove('fait'); pose('Génération…'); }
   // Rendu differe d'une frame : sans cela le libelle ne s'affiche jamais, le
   // dessin bloquant le fil avant que le navigateur ait repeint.
   requestAnimationFrame(()=>{ setTimeout(()=>{
     let ok=false;
     try{ ok=telechargerBilanSeance(); }catch(e){ ok=false; }
-    pose(ok?'Visuel prêt':lib);
-    if(btn) btn.disabled=false;
-    if(ok) setTimeout(()=>pose(lib),2200);
+    pose(ok?'Visuel téléchargé':lib);
+    if(btn){
+      btn.disabled=false;
+      if(ok) btn.classList.add('fait');
+    }
+    if(ok){
+      try{ if(typeof arcHaptique==='function') arcHaptique('succes'); }catch(e){}
+      setTimeout(()=>{ pose(lib); if(btn) btn.classList.remove('fait'); },2400);
+    }
   },0); });
   return true;
 }
@@ -36984,17 +37179,23 @@ function renderPartageBilan(){
   try{ _prechaufferMarqueCoach(); }catch(e){}
   // Le partage reste SECOND, et il ne remplace jamais le telechargement :
   // l'athlete doit pouvoir recuperer l'image et la poster ou il veut.
+  // ⚠ LE TELECHARGEMENT DOMINE, ET CE N'EST PAS UN DETAIL DE STYLE. C'est le
+  // geste que l'athlete veut : recuperer l'image et la poser sur SA photo. Le
+  // partage natif reste — c'est le chemin le plus court sur telephone — mais
+  // il devient franchement secondaire : contour fin, pas de rouge, plus petit.
+  // Deux boutons de meme poids laissaient le choix a l'utilisateur alors que
+  // l'un des deux est la bonne reponse neuf fois sur dix.
   const part=(typeof navigator!=='undefined'&&navigator.share)
-    ?'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0" '
-      +'onclick="partagerBilanSeance()">Partager ma séance</button>':'';
-  z.innerHTML='<div style="margin-bottom:16px">'
-    +'<button type="button" class="btn btn-red" id="wd-dl" style="width:100%;margin:0" '
+    ?'<button type="button" class="rcf-share" onclick="partagerBilanSeance()">'
+      +'Partager ma séance</button>':'';
+  z.innerHTML='<button type="button" class="rcf-dl" id="wd-dl" '
     +'onclick="_telechargerAvecEtat(this)">'+icon('download',18)
-    +'Télécharger le visuel de ma séance</button>'+part
-    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;'
-    +'margin-top:8px;text-align:center">PNG sans fond, à poser sur ta photo en story. '
-    +'Dans la galerie, il s’affiche sur du blanc — c’est normal.</div>'
-    +'</div>';
+    +'<span>Télécharger ma séance</span></button>'+part
+    // Les deux phrases, et les deux-points. « en blanc : c'est normal » se lit
+    // comme une explication ; un tiret ou un separateur graphique en aurait
+    // fait deux affirmations sans lien.
+    +'<div class="rcf-note">PNG sans fond, à apposer sur ta photo en story.<br>'
+    +'Dans la galerie, le visuel s’affichera en blanc : c’est normal.</div>';
   return true;
 }
 // Le partage natif, en plus et jamais a la place. Tout est SYNCHRONE : le
@@ -38866,18 +39067,10 @@ function finishWorkout(incomplete=false){
   // geste du repli est isole a son tour — celui qui n'a plus de DOM ne doit pas
   // empecher les autres.
   try{
-  // Les trois chiffres montent de zero en 600 ms. Le textContent reste pose
-  // d'abord : si _compterVers echoue, la valeur est deja juste.
-  document.getElementById('wd-time').textContent=mins+'min';
-  // « 5/12 » plutôt que « 5 » : l'écart devient lisible au lieu d'être noyé.
-  // Même formatage que la fiche coach, via fmtSeries — les deux écrans parlent
-  // du même dossier et ne doivent pas pouvoir se contredire.
-  document.getElementById('wd-sets').textContent=fmtSeries(sets,setsPlanned);
-  document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
-  try{
-    _compterVers(document.getElementById('wd-time'),mins,'min');
-    _compterVers(document.getElementById('wd-vol'),Math.round(vol),'kg');
-  }catch(e){}
+  // ⚠ LES TROIS CHIFFRES SONT RENDUS PLUS BAS, avec le delta, par
+  // _htmlStatsFin : ils forment une bande et non trois tuiles, et la duree s'y
+  // lit en heures. Ils ont besoin de _cmp — calcule juste apres — donc leur
+  // ecriture attend. Ce qui ne change pas : ils sortent du MEME calcul qu'avant.
   // La comparaison est calculee AVANT le message : celui-ci lit _cmp, et un
   // const utilise avant sa declaration leve une ReferenceError — la fin de
   // seance s'interrompait donc juste apres l'enregistrement, sans jamais
@@ -38919,33 +39112,55 @@ function finishWorkout(incomplete=false){
     };
     _badges=achievementEngine(_ctxFin);
   }catch(e){ _badges=[]; _ctxFin=null; }
-  // LE HERO. Un record s'affiche en plusieurs lignes courtes ; a defaut, la
-  // phrase de fin de seance reste ce qu'elle etait.
-  const _msgEl=document.getElementById('wd-msg');
-  const _hero=(()=>{ try{ return _htmlHeroFin(_badges,_ctxFin); }catch(e){ return ''; } })();
-  if(_msgEl){
-    if(_hero) _msgEl.innerHTML=_hero;
-    else _msgEl.textContent=_messageFinSeance(sets,setsPlanned,mins,_cmp.records,_cmp.delta,_cmp.jour,incomplete);
-  }
-  try{ document.getElementById('wd-badges').innerHTML=_htmlAccomplissements(_badges); }catch(e){}
-  try{ document.getElementById('wd-objectif').innerHTML=_htmlProchainObjectif(_ctxFin); }catch(e){}
-  // ⚠ LA COMPARAISON DE VOLUME NE SORT PLUS QUAND ELLE EST NEGATIVE. Elle
-  // reste entiere dans le suivi ; ici, juste apres un record, elle ne
-  // faisait qu'abimer la nouvelle. Kevin, 14/09/2026 : « je ne veux pas
-  // afficher immediatement une information negative apres un accomplissement ».
-  document.getElementById('wd-comparison').innerHTML=(_cmp&&_cmp.delta<0)?'':_cmp.html;
+  // ── LE RENDU, ZONE PAR ZONE ─────────────────────────────────────
+  //
+  // Chacune est isolee : celle qui echoue ne doit pas emporter les suivantes.
+  // C'est la lecon du 09/09/2026, ou une seule exception laissait l'ecran a
+  // moitie peint.
+  const _pose=(id,html)=>{ try{
+    const z=document.getElementById(id); if(z) z.innerHTML=html;
+  }catch(e){} };
+
+  // 1. LE HERO : flamme et titre. Il ne depend d'aucun calcul, il ne peut
+  //    donc pas manquer — et c'est lui qui dit que la seance est finie.
+  _pose('wd-msg',(()=>{ try{ return _htmlHeroFin(_badges,_ctxFin); }catch(e){
+    return '<div class="rcf-hero"><h1 class="rcf-titre">Séance terminée</h1></div>'; } })());
+  // 2. LES RECOMPENSES : trois au maximum. Aucune obtenue, aucun bloc — on
+  //    n'invente pas trois faux badges pour meubler.
+  _pose('wd-badges',(()=>{ try{ return _htmlRecompenses(_badges,_ctxFin); }catch(e){ return ''; } })());
+  // 3. MES RECORDS.
+  _pose('wd-records',(()=>{ try{ return _htmlRecordsFin(_ctxFin); }catch(e){ return ''; } })());
+  // 4. LA PERFORMANCE, delta compris.
+  _pose('wd-stats',(()=>{ try{
+    return _htmlStatsFin(mins,sets,setsPlanned,vol,(_cmp&&_cmp.delta)||0); }catch(e){ return ''; } })());
+  // 6. L'ASCENSION.
+  _pose('wd-objectif',(()=>{ try{ return _htmlProchainObjectif(_ctxFin); }catch(e){ return ''; } })());
+  // 7. LE RESSENTI. Il est deja dans le document depuis le chargement — voir
+  //    rcfPoserRessenti — et on ne le REDESSINE PAS : reecrire son innerHTML
+  //    refermerait « Plus de détails » sans remettre _psDetailOuvert a faux,
+  //    et le bouton dirait « Moins de détails » sur un bloc replie. On se
+  //    contente de remettre les notes a 5, ce qui est le seul etat a effacer
+  //    d'une seance a l'autre.
+  try{ rcfPoserRessenti(); }catch(e){}
+  try{ rcfReinitRessenti(); }catch(e){}
+  // ⚠ #wd-comparison A DISPARU DU GABARIT, et avec lui le gros medaillon
+  // « nouveau record » qu'il dessinait. Ce n'est pas une perte : le record est
+  // dit deux fois au-dessus, par la recompense et par « Mes records ». Le
+  // delta de volume, lui, est passe dans la bande statistique, ou il tient en
+  // une ligne au lieu d'un bloc. buildSessionComparison reste appelee telle
+  // quelle — c'est elle qui CALCULE les records, et son html n'est simplement
+  // plus lu.
   // Seuls les exercices dont l'état vient de CHANGER, et jamais pour annoncer
   // une progression : l'écran de fin de séance n'est pas un bulletin.
   renderEtatsSeance(currentUser,sess);
   renderCarteAFilmer(sess);
   // Le retour au calme n'a de sens qu'ici, une fois la dernière série faite.
   document.getElementById('wd-cooldown').innerHTML=_carteProtocole(woState&&woState.cooldown,'Fin de séance','var(--accent-blue)','wd-cooldown-body');
-  // Reset sliders post-séance
-  // `energie` EST DANS LA LISTE. Elle en était absente alors que
-  // savePostSession écrit toujours energie:_lu('energie') : deux séances de
-  // suite sans rechargement, et la seconde héritait de la note de la première
-  // — une valeur jamais saisie, enregistrée comme si elle l'avait été.
-  ['fatigue','satisfaction','sensation','hydratation','motivation','energie'].forEach(m=>{
+  // Les deux curseurs de detail — satisfaction, hydratation — sont remis a 5
+  // comme avant. Les quatre principaux le sont par rcfReinitRessenti, qui
+  // repositionne AUSSI les pastilles : poser .value sans elles laisserait la
+  // note de la seance precedente allumee sous une valeur remise a zero.
+  ['satisfaction','hydratation'].forEach(m=>{
     const el=document.getElementById('ps-'+m);const vl=document.getElementById('ps-'+m+'-val');
     if(el){el.value=5;}if(vl)vl.textContent='5';
   });
@@ -38954,7 +39169,13 @@ function finishWorkout(incomplete=false){
   // #wd-forme affichait la forme de la séance PRÉCÉDENTE jusqu’au premier
   // déplacement de curseur. Après la remise à zéro, jamais avant.
   try{ renderFormeSeance(); }catch(e){}
-  document.getElementById('ps-steps').value='';
+  // ⚠ LE CHAMP « PAS AUJOURD'HUI » EST RETIRE DE CET ECRAN. Il est demande
+  // par l'ecran Sante, qui le suit sur sept jours et le rapproche du
+  // sommeil ; le redemander trente secondes apres la derniere serie faisait
+  // un formulaire de plus au pire moment. savePostSession lit `ps-steps`
+  // avec un accesseur qui rend `undefined` quand le champ n'existe pas, et
+  // son garde `!isNaN && >0` ecarte deja ce cas : rien n'est a changer la-bas,
+  // et les pas deja enregistres restent ou ils sont.
   // La séance est déjà dans l'historique à ce stade : la toute première y est
   // donc seule. Même raisonnement que first_workout_started — c'est la donnée
   // qui décide, pas un drapeau d'appareil.
@@ -39041,29 +39262,37 @@ function _feterFinSeance(o){
     a.addEventListener('finish',_oter);
     a.addEventListener('cancel',_oter);
     setTimeout(_oter,(rec?520:320)+200);   // le filet
-    document.querySelectorAll('#s-workout-done .stat-tile').forEach((el,i)=>{
-      el.style.animation='wFadeUp var(--t-4) var(--c-out) '+(0.25+i*0.09)+'s both';
-    });
-    // LES TROIS CHIFFRES MONTENT, chacun sur le delai de sa propre tuile. Le
-    // plus gros nombre a la plus longue montee. tabular-nums n'est PAS
-    // optionnel : sans lui, le passage de 3 a 4 chiffres change la largeur du
-    // texte a chaque frame et fait sauter les deux tuiles voisines.
-    ['wd-time','wd-sets','wd-vol'].forEach(id=>{
+    // LES DEUX QUANTITES MONTENT. tabular-nums n'est PAS optionnel : sans lui,
+    // le passage de 3 a 4 chiffres change la largeur du texte a chaque frame
+    // et fait sauter les zones voisines de la bande.
+    //
+    // ⚠ ELLES DEMARRENT A 950 ms, quand la bande statistique entre en scene
+    // (.rcf-d3). Les faire monter pendant que le bloc est encore invisible
+    // aurait donne un chiffre deja fige a son apparition.
+    ['rcf-st-series','rcf-st-vol'].forEach(id=>{
       const el=document.getElementById(id);
       if(el) el.style.fontVariantNumeric='tabular-nums';
     });
-    if(o.mins!=null) setTimeout(()=>arcChiffre('wd-time',0,o.mins,{duree:600,format:v=>Math.round(v)+'min'}),250);
-    if(o.sets!=null) setTimeout(()=>arcChiffre('wd-sets',0,o.sets,{duree:700,format:v=>fmtSeries(Math.round(v),o.setsPlanned)}),340);
-    if(o.vol!=null)  setTimeout(()=>arcChiffre('wd-vol',0,o.vol,{duree:900,format:v=>Math.round(v)+'kg'}),430);
+    // ⚠ PAS DE COMPTEUR SUR UNE SEANCE PARTIELLE. La case affiche alors
+    // « 5 / 12 », et arcChiffre ecrit en textContent : il remplacerait l'ecart
+    // par un « 5 » nu, c'est-a-dire exactement l'information qu'on tient a
+    // garder. On laisse la valeur posee.
+    const _complet=(o.setsPlanned==null)||(Number(o.sets)>=Number(o.setsPlanned));
+    if(o.sets!=null&&_complet) setTimeout(()=>arcChiffre('rcf-st-series',0,o.sets,
+      {duree:600,format:v=>Number(Math.round(v)).toLocaleString('fr-FR')}),980);
+    if(o.vol!=null)  setTimeout(()=>arcChiffre('rcf-st-vol',0,o.vol,
+      {duree:800,format:v=>Number(Math.round(v)).toLocaleString('fr-FR')}),1060);
+    // LE HALO DU MEDAILLON CENTRAL, dans l'obscurite qui suit le flash. Celui
+    // du milieu et pas un autre : c'est le point haut de la composition.
     if(rec){
-      // LE MEDAILLON ARRIVE DANS L'OBSCURITE QUI SUIT LE FLASH, pas pendant.
       setTimeout(()=>{
         try{
-          const m=document.querySelector('#s-workout-done .wd-badge-medal');
-          if(m) arcGlow(m,{couleur:'rgba(255,46,147,.55)',duree:ARC.afterglow,pic:.9});
+          const m=document.querySelector('#s-workout-done .rcf-rec-g .rcf-case:nth-child(2) .rc-badge-hex')
+                ||document.querySelector('#s-workout-done .rcf-case .rc-badge-hex');
+          if(m) arcGlow(m,{couleur:'rgba(224,32,32,.6)',duree:ARC.afterglow,pic:.9});
           if(typeof arcHaptique==='function') arcHaptique('succes');
         }catch(e){}
-      },260);
+      },660);
     }else if(typeof arcHaptique==='function') arcHaptique('succes');
   }catch(e){}
 }
@@ -40360,6 +40589,37 @@ const BADGE_GLYPHES=Object.freeze({
   phenix:'<path d="M12 4c2 3 5 4 8 4-2 2-4 2-5 2 2 1 3 3 3 5-2-1-4-2-6-2s-4 1-6 2c0-2 1-4 3-5-1 0-3 0-5-2 3 0 6-1 8-4z"/>',
   cerveau:'<path d="M9 4a3 3 0 00-3 3 3 3 0 00-1 5 3 3 0 002 5 3 3 0 005 1V4.5A2.5 2.5 0 009 4z"/><path d="M15 4a3 3 0 013 3 3 3 0 011 5 3 3 0 01-2 5 3 3 0 01-5 1"/>'
 });
+// ══ LES VRAIS MEDAILLONS, QUAND ILS SONT LA ═══════════════════════════
+//
+// ⚠ LES GLYPHES CI-DESSUS SONT UN REPLI, PAS LA CIBLE. Kevin a dessine les
+// quinze medaillons — hexagone metal, lauriers, embleme rouge, lueur — et ce
+// sont EUX qu'il faut afficher : le trait a 1,7 px ne les remplace pas, il
+// tient la place tant que les fichiers ne sont pas deposes.
+//
+// MEME CONVENTION QUE app/img/arn.png : le fichier est cherche par un chemin
+// local, rien n'est telecharge, et son absence est geree par un `onerror` qui
+// rend la main au glyphe. Une image cassee serait pire que pas d'image.
+//
+// UN FICHIER PAR BADGE, nomme d'apres sa clef en minuscules :
+//   app/img/badges/new_record.webp, multiple_records.webp, new_load.webp,
+//   personal_best.webp, new_perf.webp, progression.webp, monster.webp,
+//   high_volume.webp, no_mercy.webp, full_session.webp, no_fail.webp,
+//   perfect.webp, streak.webp, return.webp, discipline.webp
+// Voir app/img/badges/LISEZ-MOI.txt.
+const BADGE_IMG_DOSSIER='img/badges/';
+function _badgeFichier(k){
+  return k?BADGE_IMG_DOSSIER+String(k).toLowerCase()+'.webp':null;
+}
+// Le medaillon dessine n'existe pas : on revele le glyphe reste dessous et on
+// remet le cadre hexagonal, que l'image portait elle-meme.
+function _badgeSansImage(el){
+  if(!el||!el.parentNode) return false;
+  try{ el.onerror=null; }catch(e){}
+  const h=el.parentNode;
+  h.classList.remove('rc-badge-vrai');
+  try{ el.remove(); }catch(e){ try{ h.removeChild(el); }catch(_e){} }
+  return true;
+}
 function _htmlGlyphe(nom){
   const d=BADGE_GLYPHES[nom]||BADGE_GLYPHES.cible;
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
@@ -40418,38 +40678,79 @@ function achievementEngine(ctx){
   }
   return garde;
 }
-// ── LE RENDU ───────────────────────────────────────────────────────────
-function _htmlBadge(b,grand){
-  const t=grand?96:64;
-  return '<div class="rc-badge'+(grand?' rc-badge-xl':'')+'" role="img" aria-label="'+escapeHtml(b.titre+'. '+b.desc)+'">'
-    +'<div class="rc-badge-hex" style="width:'+t+'px;height:'+t+'px">'
-      +'<div class="rc-badge-ico">'+_htmlGlyphe(b.icone)+'</div></div>'
-    +'<div class="rc-badge-t">'+escapeHtml(b.titre)+'</div>'
-    +(grand?'':'<div class="rc-badge-d">'+escapeHtml(b.desc)+'</div>')+'</div>';
+// ══════ FIN DE SEANCE v2 : LA LOGIQUE, PUIS LE RENDU ══════════════════
+//
+// Tout ce qui suit est separe en deux : d'abord des fonctions PURES qui
+// decident (quelles recompenses, quels paliers, quelle duree lisible), puis
+// des fonctions qui dessinent. Aucune des premieres ne touche au DOM, aucune
+// des secondes ne calcule quoi que ce soit. C'est ce qui rend l'ecran
+// testable sans navigateur — et c'est ainsi qu'il l'est.
+
+// ── PURE. La duree en heures, jamais en minutes au-dela de 59 ──────────
+//
+// ⚠ « 205 minutes » ne se lit pas. Personne ne sait ce que ca represente sans
+// poser une division ; « 3 h 25 » se lit d'un coup. Sous l'heure on garde les
+// minutes, parce que « 0 h 45 » serait pire que « 45 min ».
+function fmtDureeSeance(mins){
+  const m=Math.max(0,Math.round(Number(mins)||0));
+  if(m<60) return m+' min';
+  const h=Math.floor(m/60), r=m%60;
+  // « 1 h » et non « 1 h 00 » : le zero n'apporte rien et allonge la ligne.
+  return r===0 ? (h+' h') : (h+' h '+(r<10?'0'+r:r));
 }
-function _htmlHeroFin(badges,ctx){
-  const r=badges.find(b=>b.k==='NEW_RECORD');
-  if(!r) return '';
-  const nb=v=>Number(v).toLocaleString('fr-FR');
-  return '<div class="rc-hero">'
-    +_htmlBadge(r,true)
-    +'<div class="rc-hero-val">'+nb(r.valeur)+' KG</div>'
-    +'<div class="rc-hero-ex">'+escapeHtml(String(r.exercice||'').toUpperCase())+'</div>'
-    +'<div class="rc-hero-prog"><span>'+nb(r.ancien)+' KG</span>'
-      +'<span class="rc-hero-fleche" aria-hidden="true">›</span>'
-      +'<span class="rc-hero-neuf">'+nb(r.valeur)+' KG</span></div>'
-    +'<div class="rc-hero-gain">+'+nb(r.gain)+' KG</div>'
-    +'</div>';
+
+// ── PURE. Les trois recompenses qui comptent ───────────────────────────
+//
+// Le moteur en rend jusqu'a une dizaine. En afficher dix les devalue toutes :
+// on en garde TROIS, et on assume l'ordre.
+//
+// L'ordre demande est explicite — le palier d'abord, le volume ensuite, la
+// seance complete en troisieme — et il prime sur la priorite interne du
+// moteur. Ce qui reste est departage par cette priorite. Zero recompense rend
+// un tableau vide, et l'ecran le sait : il n'affiche PAS trois faux badges.
+const RECOMPENSES_ORDRE=Object.freeze(['NEW_LOAD','MONSTER','HIGH_VOLUME','FULL_SESSION']);
+function recompensesPrincipales(badges){
+  const l=Array.isArray(badges)?badges.filter(Boolean):[];
+  if(!l.length) return [];
+  const rang=b=>{
+    const i=RECOMPENSES_ORDRE.indexOf(b.k);
+    // Les non-listees passent apres, dans l'ordre du moteur.
+    return i>=0?i:(RECOMPENSES_ORDRE.length+(1000-(Number(b.priorite)||0))/1000);
+  };
+  return l.slice().sort((a,b)=>rang(a)-rang(b)).slice(0,3);
 }
-function _htmlAccomplissements(badges){
-  const autres=badges.filter(b=>b.k!=='NEW_RECORD');
-  if(!autres.length) return '';
-  return '<section class="rc-sect"><h2 class="rc-sect-t">Tes accomplissements</h2>'
-    +'<div class="rc-badges">'+autres.map(b=>_htmlBadge(b)).join('')+'</div></section>';
+
+// ── PURE. L'explication sous un badge ──────────────────────────────────
+//
+// Courte, et DYNAMIQUE quand elle porte un chiffre : « 24 / 24 series
+// realisees » doit dire 18/18 pour une seance de dix-huit. Le nombre en dur
+// etait la faute a ne pas commettre.
+function descRecompense(b,ctx){
+  const c=ctx||{};
+  if(!b) return '';
+  if(b.k==='FULL_SESSION'){
+    const f=Number(b.valeur)||Number(c.sets)||0;
+    const t=Number(b.prevus)||Number(c.setsPlanned)||f;
+    return f+' / '+t+' séries réalisées';
+  }
+  if(b.k==='NEW_LOAD')  return 'Tu viens de franchir un nouveau niveau.';
+  if(b.k==='MONSTER')   return 'Une séance avec un volume exceptionnel.';
+  if(b.k==='HIGH_VOLUME') return 'Une séance avec un volume exceptionnel.';
+  return String(b.desc||'');
 }
-// ── LE PROCHAIN OBJECTIF ───────────────────────────────────────────────
+
+// ── PURE. L'ascension : des marches, pas une barre ─────────────────────
+//
+// Cinq paliers de 5 kg qui montent vers le prochain. Ceux qui sont derriere
+// sont « pris », celui ou l'on se tient est « ici », le dernier est le « but ».
+// Les paliers negatifs ou nuls sont retires : on ne montre pas une marche a
+// -5 kg parce que l'athlete debute.
 // PURE. Le prochain palier de 5 kg au-dessus du record du jour ; a defaut de
 // record, le meilleur exercice de la seance et son propre palier.
+//
+// Elle survit a la refonte SANS UNE LIGNE DE CHANGEE : c'est la decision
+// metier — quel exercice, quel palier vise — et elle etait juste. Seule sa
+// representation change, de la barre de progression aux marches.
 function prochainObjectif(ctx){
   const c=ctx||{};
   const rec=(Array.isArray(c.records)?c.records:[]).slice().sort((a,b)=>(b.curMax||0)-(a.curMax||0))[0];
@@ -40458,22 +40759,306 @@ function prochainObjectif(ctx){
   const cible=Math.ceil((base.kg+0.01)/5)*5;
   return {exercice:base.nm,actuel:base.kg,cible,reste:Math.round((cible-base.kg)*10)/10};
 }
-function _htmlProchainObjectif(ctx){
-  const o=prochainObjectif(ctx);
-  if(!o) return '';
-  const nb=v=>Number(v).toLocaleString('fr-FR');
-  // La barre part du palier precedent : sans origine, « 115 sur 120 » donnerait
-  // une barre presque pleine des la premiere seance.
-  const bas=Math.floor(o.actuel/5)*5;
-  const pc=Math.max(4,Math.min(96,Math.round((o.actuel-bas)/(o.cible-bas)*100)));
-  return '<section class="rc-sect"><h2 class="rc-sect-t">Ton prochain objectif</h2>'
-    +'<div class="rc-obj">'
-      +'<div class="rc-obj-ex">'+escapeHtml(String(o.exercice||'').toUpperCase())+'</div>'
-      +'<div class="rc-obj-l"><span>'+nb(o.actuel)+' KG</span><span>'+nb(o.cible)+' KG</span></div>'
-      +'<div class="rc-obj-bar"><div class="rc-obj-fill" style="width:'+pc+'%"></div>'
-        +'<div class="rc-obj-dot" style="left:'+pc+'%"></div></div>'
-      +'<div class="rc-obj-n">Encore '+String(o.reste).replace('.',',')+' kg avant ton prochain record.</div>'
+const ASC_PAS=5, ASC_MARCHES=5;
+function ascensionPaliers(ctx){
+  const o=(()=>{ try{ return prochainObjectif(ctx); }catch(e){ return null; } })();
+  if(!o) return null;
+  const ici=Math.floor(o.actuel/ASC_PAS)*ASC_PAS;
+  const marches=[];
+  for(let i=ASC_MARCHES-1;i>=0;i--){
+    const kg=o.cible-i*ASC_PAS;
+    if(kg<=0) continue;
+    marches.push({kg,pris:kg<ici,ici:kg===ici,but:kg===o.cible});
+  }
+  // Un seul palier ne raconte pas de montee : on ne dessine alors rien.
+  if(marches.length<2) return null;
+  return {exercice:o.exercice,actuel:o.actuel,cible:o.cible,reste:o.reste,marches};
+}
+// ── LA FLAMME ──────────────────────────────────────────────────────────
+//
+// ⚠ NI EMOJI, NI PICTOGRAMME. Une flamme d'emoji est jaune et ronde, un
+// pictogramme au trait est plat : ni l'un ni l'autre ne dit « energie
+// accumulee ». Celle-ci est faite de QUATRE COUCHES qui se recouvrent — halo,
+// corps sombre, corps vif, coeur incandescent — et c'est leur superposition
+// qui donne la profondeur, pas un filtre.
+//
+// Tout est en SVG inline : aucun fichier a charger, aucune bibliotheque, et
+// les degrades se repeignent avec la page au lieu d'etre une image figee.
+// Les identifiants de degrade sont prefixes `rcff` : l'ecran de fin cohabite
+// avec le dessin du bilan partageable, qui a les siens.
+function _htmlFlammeFin(){
+  return '<div class="rcf-flamme">'
+  +'<svg viewBox="0 0 120 140" fill="none" aria-hidden="true">'
+  +'<defs>'
+    +'<linearGradient id="rcffSombre" x1="0" y1="1" x2="0" y2="0">'
+      +'<stop offset="0" stop-color="#2b0000"/><stop offset=".45" stop-color="#6b0505"/>'
+      +'<stop offset="1" stop-color="#a00d0d"/></linearGradient>'
+    +'<linearGradient id="rcffVif" x1="0" y1="1" x2="0" y2="0">'
+      +'<stop offset="0" stop-color="#7a0000"/><stop offset=".5" stop-color="#e02020"/>'
+      +'<stop offset="1" stop-color="#ff4a2a"/></linearGradient>'
+    +'<linearGradient id="rcffCoeur" x1="0" y1="1" x2="0" y2="0">'
+      +'<stop offset="0" stop-color="#e02020"/><stop offset=".55" stop-color="#ff6a3c"/>'
+      +'<stop offset="1" stop-color="#ffb08a"/></linearGradient>'
+    +'<radialGradient id="rcffHalo" cx=".5" cy=".62" r=".55">'
+      +'<stop offset="0" stop-color="#e02020" stop-opacity=".42"/>'
+      +'<stop offset="1" stop-color="#e02020" stop-opacity="0"/></radialGradient>'
+  +'</defs>'
+  // 1. Le halo. Peint le premier, donc derriere tout le reste.
+  +'<ellipse cx="60" cy="86" rx="52" ry="50" fill="url(#rcffHalo)"/>'
+  // 2. Les deux langues laterales : elles donnent la largeur a la base et
+  //    l'impression que l'energie deborde.
+  +'<path d="M26 122c-9-11-11-24-5-36 1 9 5 14 10 17-3-12 0-22 7-30 0 14 6 20 11 26z" '
+    +'fill="url(#rcffSombre)" opacity=".85"/>'
+  +'<path d="M94 122c9-11 11-24 5-36-1 9-5 14-10 17 3-12 0-22-7-30 0 14-6 20-11 26z" '
+    +'fill="url(#rcffSombre)" opacity=".85"/>'
+  // 3. Le corps sombre : la masse. C'est lui qui porte la silhouette.
+  +'<path d="M60 6c4 17-6 25-14 35-7 9-13 18-13 30a27 27 0 0 0 54 0c0-15-9-24-15-35'
+    +'-4-7-6-12-6-18-7 6-11 13-11 21 0-13 3-22 5-33z" fill="url(#rcffSombre)"/>'
+  // 4. Le corps vif, en retrait de quelques pixels : le lisere rouge qui
+  //    apparait entre les deux est ce qui fait le relief.
+  +'<path d="M60 26c3 13-5 19-11 27-5 7-9 13-9 22a20 20 0 0 0 40 0c0-11-7-18-11-26'
+    +'-3-5-4-9-4-13-5 4-8 10-8 16 0-10 2-17 3-26z" fill="url(#rcffVif)"/>'
+  // 5. Le coeur incandescent : la seule zone claire de tout l'ecran.
+  +'<path d="M60 62c2 7-3 10-6 15-2 4-3 7-3 11a9 9 0 0 0 18 0c0-6-4-10-6-15'
+    +'-2-4-3-7-3-11z" fill="url(#rcffCoeur)"/>'
+  +'</svg>'
+  // 6. Les etincelles. Trois passages, puis elles s'arretent : une braise qui
+  //    monterait en boucle pour l'eternite ferait du bruit visuel.
+  +'<div class="rcf-etin" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>'
+  +'</div>';
+}
+// ── LE RENDU ───────────────────────────────────────────────────────────
+// ⚠ `sansTexte` : sur l'ecran de fin, le nom et l'explication sont rendus
+// DESSOUS par _htmlRecompenses, avec leur propre typographie. Les repeter ici
+// ferait deux titres l'un sur l'autre.
+function _htmlBadge(b,grand,sansTexte){
+  const t=grand?96:64;
+  const f=_badgeFichier(b&&b.k);
+  // L'image par-dessus le glyphe, dans le meme cadre : si elle charge, elle le
+  // recouvre entierement ; si elle manque, `onerror` la retire et le glyphe est
+  // deja la, sans clignotement et sans requete supplementaire.
+  const img=f?('<img class="rc-badge-img" src="'+escapeHtml(f)+'" alt="" '
+    +'loading="lazy" decoding="async" onerror="_badgeSansImage(this)">'):'';
+  return '<div class="rc-badge'+(grand?' rc-badge-xl':'')+'" role="img" aria-label="'+escapeHtml(b.titre+'. '+b.desc)+'">'
+    +'<div class="rc-badge-hex'+(f?' rc-badge-vrai':'')+'" style="width:'+t+'px;height:'+t+'px">'
+      +'<div class="rc-badge-ico">'+_htmlGlyphe(b.icone)+'</div>'+img+'</div>'
+    +(sansTexte?'':'<div class="rc-badge-t">'+escapeHtml(b.titre)+'</div>'
+      +(grand?'':'<div class="rc-badge-d">'+escapeHtml(b.desc)+'</div>'))+'</div>';
+}
+// ── LE HERO ────────────────────────────────────────────────────────────
+// Il ne porte plus le record : celui-ci a sa place dans les recompenses et
+// dans « Mes records », et l'afficher trois fois le banalisait.
+function _htmlHeroFin(badges,ctx){
+  return '<div class="rcf-hero">'+_htmlFlammeFin()
+    +'<h1 class="rcf-titre">Séance terminée</h1>'
+    +'<div class="rcf-trait" aria-hidden="true"></div></div>';
+}
+
+// ── LES RECOMPENSES ────────────────────────────────────────────────────
+//
+// ⚠ LES MEDAILLONS SONT EXACTEMENT CEUX DE L'APPLICATION. _htmlBadge et
+// BADGE_GLYPHES ne sont pas touches : on ne change que ce qu'il y a AUTOUR —
+// la disposition, le halo, l'ordre d'apparition. Un badge redessine pour
+// l'occasion aurait fait deux jeux d'icones dans la meme app.
+//
+// Le badge du milieu monte de 18 px. Pas un podium : une progression. Les
+// deux autres restent a la meme hauteur, c'est ce qui distingue les deux.
+function _htmlRecompenses(badges,ctx){
+  const l=recompensesPrincipales(badges);
+  if(!l.length) return '';
+  // A une ou deux recompenses, la grille se resserre et se centre : trois
+  // colonnes dont une vide laisserait un trou que l'oeil cherche.
+  const cls='rcf-rec-g n'+l.length;
+  return '<section class="rcf-rec"><div class="'+cls+'">'
+    +l.map(b=>'<div class="rcf-case">'
+        +'<div class="rcf-case-halo" aria-hidden="true"></div>'
+        +_htmlBadge({k:b.k,titre:b.titre,desc:b.desc,icone:b.icone},false,true)
+        +'<div class="rcf-nom">'+escapeHtml(b.titre)+'</div>'
+        +'<div class="rcf-exp">'+escapeHtml(descRecompense(b,ctx))+'</div>'
+      +'</div>').join('')
     +'</div></section>';
+}
+
+// ── MES RECORDS ────────────────────────────────────────────────────────
+// Present, mais volontairement en retrait : les recompenses au-dessus ont
+// deja dit la nouvelle. Aucun record pertinent, aucun bloc — jamais de cadre
+// vide.
+function _htmlRecordsFin(ctx){
+  const rec=((ctx&&ctx.records)||[]).filter(r=>r&&r.nm&&r.curMax>0)
+    .slice().sort((a,b)=>(b.gain||0)-(a.gain||0)).slice(0,4);
+  if(!rec.length) return '';
+  const nb=v=>Number(v).toLocaleString('fr-FR');
+  return '<div class="rcf-rk"><div class="rcf-rk-t">Mes records</div>'
+    +rec.map(r=>'<div class="rcf-rk-l">'
+      +'<span class="rcf-rk-ex">'+escapeHtml(String(r.nm))+'</span>'
+      +'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.histMax)+' → </span>'
+        +nb(r.curMax)+' kg<span class="rcf-rk-g">+'+nb(r.gain)+'</span></span>'
+      +'</div>').join('')
+    +'</div>';
+}
+
+// ── LA BANDE STATISTIQUE ───────────────────────────────────────────────
+// Un seul bloc, trois zones. Trois cartes separees auraient fait trois objets
+// concurrents la ou il n'y a qu'une seule information : la seance.
+//
+// Le delta de volume s'y rattache au lieu de vivre dans un bloc a lui. Il ne
+// sort QUE s'il est positif : juste apres un accomplissement, un « -3 557 kg »
+// ne renseigne personne, il abime la nouvelle. Il reste entier dans le suivi.
+function _htmlStatsFin(mins,sets,setsPlanned,vol,delta){
+  const nb=v=>Number(Math.round(v)).toLocaleString('fr-FR');
+  const d=Number(delta)||0;
+  const partielle=Number(setsPlanned)>0&&Number(sets)<Number(setsPlanned);
+  // ⚠ L'IDENTIFIANT PORTE LE NOMBRE SEUL, jamais l'unite. arcChiffre ecrit en
+  // `textContent` : une unite placee dans le meme noeud serait effacee des la
+  // premiere frame, et y glisser du balisage l'aurait affiche tel quel.
+  const zone=(v,u,l,id)=>'<div class="rcf-st"><div class="rcf-st-v">'
+    +'<span'+(id?' id="'+id+'"':'')+'>'+v+'</span>'
+    +(u?'<span class="rcf-st-u">'+u+'</span>':'')+'</div>'
+    +'<div class="rcf-st-l">'+l+'</div></div>';
+  // La duree ne se compte PAS : « 3 h 25 » n'a pas de trajectoire depuis zero,
+  // et la faire defiler en « 0 h 01, 0 h 02 » serait absurde. Les deux autres,
+  // si — ce sont des quantites, et les voir monter est la recompense.
+  return '<div class="rcf-stats">'
+    +zone(escapeHtml(fmtDureeSeance(mins)),'','Durée')
+    // ⚠ « 5 / 12 » QUAND LA SEANCE EST PARTIELLE. Afficher « 5 » seul ferait
+    // passer une seance ecourtee pour une seance complete — c'est precisement
+    // ce que fmtSeries corrigeait, et on ne le perd pas. Complete, le total
+    // n'apprend rien : on rend le nombre nu, qui se compte joliment.
+    +zone(partielle?(nb(sets)+' / '+nb(setsPlanned)):nb(sets),'','Séries','rcf-st-series')
+    +zone(nb(vol),' kg','Volume','rcf-st-vol')
+    +'</div>'
+    +(d>0?'<div class="rcf-delta"><span class="rcf-delta-v">+'+nb(d)+' kg</span>'
+      +'<span class="rcf-delta-l">vs dernière séance</span></div>':'');
+}
+
+// ── TON PROCHAIN OBJECTIF : UNE ASCENSION ──────────────────────────────
+// Une barre de progression dit « 72 % ». Des marches disent « tu es la, et il
+// reste une marche ». C'est la meme donnee, et ce n'est pas le meme message.
+function _htmlProchainObjectif(ctx){
+  const a=ascensionPaliers(ctx);
+  if(!a) return '';
+  const nb=v=>Number(v).toLocaleString('fr-FR');
+  // Les hauteurs montent regulierement : la derniere marche est la plus haute,
+  // et c'est elle qu'on vise.
+  const n=a.marches.length;
+  return '<section class="rcf-sect"><div class="rcf-asc">'
+    +'<div class="rcf-asc-ex">'+escapeHtml(String(a.exercice||'').toUpperCase())+'</div>'
+    +'<div class="rcf-marches">'
+    +a.marches.map((m,i)=>{
+        const h=Math.round(34+(i/(n-1))*58);
+        const c='rcf-m'+(m.but?' but':(m.ici?' ici':(m.pris?' pris':'')));
+        return '<div class="'+c+'">'
+          +'<div class="rcf-m-kg">'+nb(m.kg)+'</div>'
+          +'<div class="rcf-m-bloc" style="height:'+h+'px"></div></div>';
+      }).join('')
+    +'</div>'
+    +'<div class="rcf-asc-n">Tu es à '+nb(a.actuel)+' kg. Encore '
+      +escapeHtml(String(a.reste).replace('.',','))+' kg pour la prochaine marche.</div>'
+    +'</div></section>';
+}
+
+// ── LE RESSENTI ────────────────────────────────────────────────────────
+//
+// QUATRE QUESTIONS, et rien d'autre. Les pas et le sommeil sont deja suivis
+// par l'ecran Sante : les redemander ici, apres une seance, c'etait un
+// formulaire de plus au moment ou l'on a le moins envie d'en remplir un.
+//
+// ⚠ LES IDENTIFIANTS NE CHANGENT PAS. ps-fatigue, ps-sensation, ps-energie et
+// ps-motivation sont ceux que savePostSession lit et que renderFormeSeance
+// ecoute. Seule l'apparence change — dix pastilles au lieu d'un curseur, parce
+// qu'on vise une valeur du pouce au lieu de faire glisser. La valeur reste
+// dans un <input type=range> CACHE : c'est lui qui porte la donnee, et rien
+// en aval n'a a savoir comment on l'a saisie.
+//
+// ⚠ ET « ENERGIE » CHANGE DE SENS : le libelle passe de « en dehors des
+// seances » a « durant la seance ». C'est demande, et c'est note ici parce
+// que energieZ compare chaque seance a la moyenne des precedentes : le temps
+// que la fenetre se renouvelle, la base melange les deux questions. Le modele
+// se recentre tout seul ensuite — aucune donnee n'est perdue ni reecrite.
+const RCF_QUESTIONS=Object.freeze([
+  {id:'fatigue',   lib:'Fatigue post-séance',    forme:true},
+  {id:'sensation', lib:'Ressenti',               forme:true},
+  {id:'energie',   lib:'Énergie durant la séance',forme:false},
+  {id:'motivation',lib:'Motivation',             forme:true},
+  // ⚠ LES DEUX SUIVANTES SONT REPLIEES, PAS SUPPRIMEES. « Plus de détails »
+  // doit ouvrir quelque chose : sans elles le bouton ne faisait plus rien, et
+  // savePostSession lisait deux champs absents des que le detail etait ouvert.
+  // Elles ne sont ecrites QUE si l'athlete a deplie — un 5 pose par defaut
+  // ressemblerait a une reponse alors que personne n'a rien repondu.
+  {id:'satisfaction',lib:'Satisfaction',         forme:false,detail:true},
+  {id:'hydratation', lib:'Hydratation',          forme:false,detail:true}
+]);
+function _htmlRessentiFin(){
+  const q=o=>{
+    const suite=o.forme?'renderFormeSeance();':'';
+    // .ps-detail-item est la classe que togglePsDetail pilote depuis toujours :
+    // on la reutilise telle quelle plutot que d'inventer un second mecanisme.
+    return '<div class="rcf-q'+(o.detail?' ps-detail-item':'')+'"'
+      +(o.detail?' style="display:none"':'')+'>'
+      +'<div class="rcf-q-l"><span class="rcf-q-n">'+escapeHtml(o.lib)+'</span>'
+        +'<span class="rcf-q-v" id="ps-'+o.id+'-val">5</span></div>'
+      +'<div class="rcf-ech" role="group" aria-label="'+escapeHtml(o.lib)+' sur 10">'
+      +Array.from({length:10},(_,i)=>{
+          const v=i+1;
+          // ⚠ LE CHIFFRE EST DANS LE BOUTON, PAS SEULEMENT DANS SON aria-label.
+          // Une commande sans un caractere est une zone cliquable invisible —
+          // c'est une regle de cette application, et une assertion la tient.
+          // Ici le chiffre sert deux fois : il rend le bouton visible, et il dit
+          // ou l'on vise sur l'echelle au lieu de le faire deviner.
+          return '<button type="button" class="rcf-p'+(v===5?' on':'')+'" data-v="'+v+'"'
+            +' aria-label="'+v+' sur 10" onclick="rcfNoter(\''+o.id+'\','+v+')">'+v+'</button>';
+        }).join('')
+      +'</div>'
+      // Le porteur de la donnee. Cache, mais c'est bien lui que tout le reste
+      // de l'application lit et ecrit.
+      +'<input type="range" id="ps-'+o.id+'" min="0" max="10" value="5" hidden'
+      +' oninput="'+suite+'">'
+      +'</div>';
+  };
+  return '<div class="rcf-fb">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
+      +'<span class="rcf-fb-t">Ressenti post-séance</span>'
+      +'<button type="button" class="rcf-fb-plus" id="ps-detail-btn" '
+        +'onclick="togglePsDetail()">Plus de détails</button></div>'
+    +RCF_QUESTIONS.map(q).join('')
+    +'</div>';
+}
+// Poser une note : la pastille, le chiffre, et l'input qui porte la valeur.
+// L'evenement `input` est declenche a la main — une ecriture par script n'en
+// emet pas, et renderFormeSeance ne serait jamais rappelee.
+function rcfNoter(id,v){
+  const inp=document.getElementById('ps-'+id);
+  if(inp){
+    inp.value=String(v);
+    try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){}
+  }
+  const val=document.getElementById('ps-'+id+'-val');
+  if(val) val.textContent=String(v);
+  const zone=inp&&inp.parentNode?inp.parentNode.querySelector('.rcf-ech'):null;
+  if(zone) zone.querySelectorAll('.rcf-p').forEach(b=>{
+    b.classList.toggle('on',Number(b.dataset.v)===Number(v));
+  });
+  try{ arcHaptique&&arcHaptique('legere'); }catch(e){}
+}
+// Remise a 5 entre deux seances. Meme raison qu'avant : une valeur heritee de
+// la seance precedente passerait pour une reponse.
+function rcfReinitRessenti(){
+  RCF_QUESTIONS.forEach(o=>{ try{ rcfNoter(o.id,5); }catch(e){} });
+}
+// LE RESSENTI EST POSE AU DEMARRAGE, pas seulement en fin de seance.
+//
+// ⚠ IL ETAIT RENDU UNIQUEMENT PAR finishWorkout, et c'etait une faute : tant
+// qu'aucune seance n'etait terminee, #wd-ressenti restait vide, savePostSession
+// ne trouvait aucun champ, et le banc d'essai — qui lit le document tel qu'il
+// se charge — ne voyait pas un seul curseur. Le rendre ici le rend vrai a tout
+// instant ; finishWorkout ne fait plus que remettre les notes a 5.
+function rcfPoserRessenti(){
+  try{
+    const z=document.getElementById('wd-ressenti');
+    if(!z||z.firstChild) return false;
+    z.innerHTML=_htmlRessentiFin();
+    return true;
+  }catch(e){ return false; }
 }
 // ── LES COMPTEURS ──────────────────────────────────────────────────────
 // Rapides : 600 ms. Un compteur qui fait attendre n'est plus une recompense.
@@ -41568,7 +42153,9 @@ function togglePsDetail(){
   document.querySelectorAll('.ps-detail-item').forEach(e=>{
     e.style.display=_psDetailOuvert?'block':'none';});
   const b=document.getElementById('ps-detail-btn');
-  if(b) b.textContent=_psDetailOuvert?'− moins de détail':'+ de détail';
+  // « Plus de détails » est le libelle demande. Replie, il dit l'inverse : un
+  // bouton qui garde le meme texte dans les deux sens ne dit pas ce qu'il fait.
+  if(b) b.textContent=_psDetailOuvert?'Moins de détails':'Plus de détails';
 }
 
 // ── Courbe de forme déclarée ────────────────────────────────────────────────
@@ -80018,6 +80605,14 @@ function initLogos(){
   const ph=document.getElementById('welcome-photo');if(ph)ph.src=COACH_PHOTO;
 }
 document.addEventListener('DOMContentLoaded',initLogos);
+// LE RESSENTI DE FIN DE SEANCE EXISTE DES LE CHARGEMENT.
+// Il est rendu par du code plutot qu'ecrit a la main dans le gabarit — une
+// seule source, RCF_QUESTIONS — mais il doit etre dans le document AVANT
+// qu'une seance se termine : savePostSession lit ses champs, et un ecran
+// atteint autrement que par finishWorkout les trouvait vides.
+document.addEventListener('DOMContentLoaded',function(){
+  try{ rcfPoserRessenti(); }catch(e){}
+});
 // ═══════════════════════════════════════════════════
 // MONETISATION — Coach tabs
 // ═══════════════════════════════════════════════════

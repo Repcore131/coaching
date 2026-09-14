@@ -1,0 +1,54 @@
+LES QUINZE MEDAILLONS
+=====================
+
+Ce dossier porte les badges de recompense affiches en fin de seance. Rien ne
+va les chercher sur le reseau : le service worker sert l'application hors
+ligne, et privacy.html declare un par un les domaines contactes. Une image
+doit donc etre DEPOSEE ICI pour exister.
+
+FICHIERS ATTENDUS
+-----------------
+Un fichier par badge, nomme d'apres sa clef en minuscules, extension .webp :
+
+  new_record.webp        NOUVEAU RECORD        couronne
+  new_perf.webp          NOUVELLE PERFORMANCE  eclair
+  monster.webp           SEANCE MONSTRE        flamme
+  no_mercy.webp          NO MERCY              crane
+  full_session.webp      100% VALIDE           cible
+  progression.webp       EN PROGRESSION        courbe
+  high_volume.webp       GROS VOLUME           haltere
+  streak.webp            SERIE EN COURS        chaine
+  multiple_records.webp  DOMINATION            lion
+  new_load.webp          NOUVEAU PALIER        fusee
+  personal_best.webp     PERSONAL BEST         trophee
+  return.webp            RETOUR AU COMBAT      phenix
+  no_fail.webp           SANS ECHEC            100
+  discipline.webp        DISCIPLINE            cerveau
+  perfect.webp           SEANCE PARFAITE       sommet
+
+L'ordre ci-dessus est celui de la planche « TES BADGES », lue de gauche a
+droite et de haut en bas.
+
+FORMAT
+------
+  — Carre, 256 x 256 px suffit : ils sont affiches a 64 px, 128 sur un ecran
+    a densite 2. Plus grand ne se verra pas et pesera pour rien.
+  — FOND TRANSPARENT. Le medaillon porte deja son hexagone, ses lauriers et
+    sa lueur ; un fond opaque poserait un carre noir sur la composition.
+  — .webp de preference, comme les 436 illustrations d'exercices. Le .png
+    marche aussi : changer l'extension attendue se fait a un seul endroit,
+    BADGE_IMG_DOSSIER / _badgeFichier dans app/index.html.
+
+TANT QU'ILS MANQUENT
+--------------------
+Le gabarit retire l'image de lui-meme — voir le `onerror` sur .rc-badge-img
+dans app/index.html — et le glyphe au trait de BADGE_GLYPHES reprend sa
+place, dans son cadre hexagonal. L'ecran de fin de seance reste donc complet
+et lisible ; il est simplement moins beau. Une image cassee serait pire que
+pas d'image.
+
+SI TU AS LA PLANCHE COMPLETE ET PAS LES QUINZE FICHIERS
+-------------------------------------------------------
+Depose-la telle quelle a la racine du depot sous le nom `planche-badges.png`
+et demande le decoupage : il se fait ici, une fois, et les quinze .webp
+atterrissent dans ce dossier.

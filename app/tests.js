@@ -5891,85 +5891,6 @@ function testExercices(){
             window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
             window.toastEcriture=_te; window._recordSteps=_rs; }})());
         // ══════ LES PAS DE FIN DE SÉANCE ARRIVENT DANS LIFESTYLE ══════
-        ok('8500 pas saisis en fin de séance apparaissent dans Lifestyle',(()=>{
-          // LA CHAÎNE COMPLÈTE, de la saisie à la barre du jour. Le chiffre restait
-          // autrefois accroché à la séance : ni la barre ni la moyenne de la
-          // semaine n'en tenaient compte.
-          const _cu=currentUser,_db=DB.get('users');
-          const _sv=window.saveUser,_go=window.go,_lc=window.loadClientHome;
-          const _te=window.toastEcriture,_t=window.toast;
-          const el=document.getElementById('ps-steps'); const v0=el?el.value:null;
-          try{
-            if(!el) return _echec('champ de fin de séance absent');
-            window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
-            window.toastEcriture=()=>{}; window.toast=()=>{};
-            changeStepsDate('');   // la carte de saisie suit bien aujourd'hui
-            const auj=localISODate(new Date());
-            currentUser={email:'lea@t.fr',id:'a1',role:'athlete',fname:'Léa',
-              sessions:[{date:Date.now(),exercises:[]}],stepsLog:[],bilans:[]};
-            DB.set('users',{'lea@t.fr':currentUser});
-            el.value='8500';
-            savePostSession(false);
-            const j=(currentUser.stepsLog||[]).find(e=>e.date===auj);
-            if(!j) return _echec('rien n\'est écrit dans le journal de pas');
-            if(j.count!==8500) return _echec('journal : '+j.count+' pas');
-            // La séance garde SA copie : les deux lectures coexistent.
-            if(currentUser.sessions[0].steps!==8500)
-              return _echec('la séance ne porte plus les pas : '+currentUser.sessions[0].steps);
-            // L'écran Lifestyle affiche le chiffre — barre du jour ET moyenne.
-            loadSteps('steps-content');
-            const z=document.getElementById('steps-content');
-            if(!z) return _echec('écran Lifestyle absent');
-            // Les milliers sont séparés par une espace insécable : on normalise.
-            const plat=z.innerHTML.replace(/[\s\u00a0\u202f]/g,'');
-            const vus=(plat.match(/8500/g)||[]).length;
-            if(vus<2) return _echec('8 500 n\'apparaît que '+vus+' fois à l\'écran');
-            // ÉCRASEMENT depuis Lifestyle : un jour n'a qu'un total.
-            const inp=document.getElementById('steps-today-input');   // rendu par loadSteps
-            if(!inp) return _echec('champ Lifestyle absent après rendu');
-            inp.value='9000';
-            saveSteps();
-            const duJour=(currentUser.stepsLog||[]).filter(e=>e.date===auj);
-            if(duJour.length!==1) return _echec(duJour.length+' entrées pour le même jour');
-            return duJour[0].count===9000
-              ?true:_echec('après correction : '+duJour[0].count+' pas');
-          } finally { currentUser=_cu; if(_db) DB.set('users',_db);
-            window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
-            window.toastEcriture=_te; window.toast=_t;
-            if(el&&v0!=null) el.value=v0; changeStepsDate(''); }})());
-        ok('Un champ de pas vide n\'efface pas la saisie Lifestyle du jour',(()=>{
-          // LE GARDE. _recordSteps accepte 0 — « je n'ai pas marché » est une
-          // réponse. L'appelant de fin de séance, lui, doit être plus strict : un
-          // champ laissé vide ne dit rien, et ne doit pas écraser un chiffre déjà
-          // entré dans Lifestyle le même jour.
-          const _cu=currentUser,_db=DB.get('users');
-          const _sv=window.saveUser,_go=window.go,_lc=window.loadClientHome;
-          const _te=window.toastEcriture,_t=window.toast;
-          const el=document.getElementById('ps-steps'); const v0=el?el.value:null;
-          try{
-            if(!el) return _echec('champ de fin de séance absent');
-            window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
-            window.toastEcriture=()=>{}; window.toast=()=>{};
-            const auj=localISODate(new Date());
-            const poser=v=>{
-              currentUser={email:'lea@t.fr',id:'a1',role:'athlete',fname:'Léa',
-                sessions:[{date:Date.now(),exercises:[]}],
-                stepsLog:[{date:auj,count:7200}],bilans:[]};
-              DB.set('users',{'lea@t.fr':currentUser});
-              el.value=v; savePostSession(false);
-              const e=(currentUser.stepsLog||[]).find(x=>x.date===auj);
-              return e?e.count:null;
-            };
-            if(poser('')!==7200) return _echec('un champ vide a écrasé : '+poser(''));
-            if(poser('0')!==7200) return _echec('un zéro a écrasé : '+poser('0'));
-            if(poser('999999')!==7200) return _echec('une valeur hors bornes a écrasé');
-            if(poser('abc')!==7200) return _echec('un texte a écrasé');
-            // TÉMOIN : la même mécanique écrit bien quand la valeur est valide.
-            return poser('8500')===8500?true:_echec('une saisie valide n\'écrit plus');
-          } finally { currentUser=_cu; if(_db) DB.set('users',_db);
-            window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
-            window.toastEcriture=_te; window.toast=_t;
-            if(el&&v0!=null) el.value=v0; }})());
         ok('L\'objectif d\'un jour suit CELUI DE L\'ATHLÈTE, jamais 10 000 en dur',(()=>{
           // La carte « Objectifs de pas » est juste au-dessus des barres : les
           // colorer sur un chiffre que l'athlète n'a pas choisi la contredit.
@@ -6142,14 +6063,65 @@ function testExercices(){
             .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
           return src.indexOf('lib'+'ido')<0
             ?true:_echec('le terme apparaît en production');})());
-        ok('Le curseur d\'énergie ne parle que d\'énergie',(()=>{
+        // ⚠ LA QUESTION A CHANGE DE SENS le 14/09/2026, a la demande de Kevin :
+        // « energie en dehors des seances » devient « energie DURANT la
+        // seance ». Le champ, lui, ne bouge pas — meme identifiant, memes
+        // bornes, meme ecriture dans metrics.energie — et c'est justement ce
+        // que cette assertion garde : energieZ compare chaque seance a la
+        // moyenne des precedentes, et un changement d'identifiant aurait coupe
+        // la serie en deux au lieu de la laisser se recentrer.
+        ok('Le curseur d\'énergie parle de la SÉANCE, et reste le même champ',(()=>{
           const c=document.getElementById('ps-energie');
           if(!c) return _echec('curseur absent');
           if(c.min!=='0'||c.max!=='10') return _echec('bornes : '+c.min+'..'+c.max);
-          const bloc=c.closest('div').parentElement;
+          const bloc=c.closest('.rcf-q')||c.parentElement;
           const t=(bloc.textContent||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-          return /energie en dehors des seances/.test(t)
+          if(/en dehors des seances/.test(t)) return _echec('ancien libellé toujours là');
+          return /energie durant la seance/.test(t)
             ?true:_echec('libellé : '+t.slice(0,80));})());
+
+        // ══════ L'ECRAN DE FIN DE SEANCE, VERSION RECOMPENSE ══════
+        //
+        // Refondu le 14/09/2026. Ces assertions remplacent celles qui
+        // decrivaient l'ancien ecran — les trois tuiles wd-time/wd-sets/wd-vol
+        // et le champ de pas — et elles disent ce qui a pris leur place.
+        ok('La bande statistique a remplacé les trois tuiles',(()=>{
+          const z=document.getElementById('wd-stats');
+          if(!z) return _echec('zone wd-stats absente');
+          if(document.getElementById('wd-time')||document.getElementById('wd-vol'))
+            return _echec('les anciennes tuiles survivent');
+          const h=_htmlStatsFin(205,28,28,9400,0);
+          const d=document.createElement('div'); d.innerHTML=h;
+          const zones=d.querySelectorAll('.rcf-st');
+          if(zones.length!==3) return _echec(zones.length+' zone(s)');
+          const t=(d.textContent||'');
+          return /3 h 25/.test(t)?true:_echec('durée : '+t.slice(0,60));})());
+        ok('Une séance partielle affiche l\'écart, pas seulement le compte',(()=>{
+          const d=document.createElement('div');
+          d.innerHTML=_htmlStatsFin(60,5,12,900,0);
+          const t=(d.textContent||'').replace(/[\s\u00a0\u202f]/g,'');
+          return /5\/12/.test(t)?true:_echec('séries : '+t.slice(0,60));})());
+        ok('Les pas ne sont PLUS demandés en fin de séance',(()=>{
+          // Ils sont suivis par l'ecran Sante, qui les rapproche du sommeil sur
+          // sept jours. Les redemander trente secondes apres la derniere serie
+          // faisait un formulaire de plus au pire moment.
+          if(document.getElementById('ps-steps'))
+            return _echec('le champ est revenu');
+          // MAIS LE CHEMIN D'ECRITURE RESTE ENTIER : savePostSession sait
+          // toujours reverser des pas, et _recordSteps existe toujours. Rien
+          // n'a ete supprime, seule la question a ete retiree de cet ecran.
+          if(typeof _recordSteps!=='function') return _echec('_recordSteps a disparu');
+          const s=String(savePostSession);
+          return /_recordSteps\(/.test(s)?true:_echec('savePostSession ne reverse plus les pas');})());
+        ok('Les quatre questions du ressenti existent dès le chargement',(()=>{
+          const manque=['fatigue','sensation','energie','motivation']
+            .filter(id=>!document.getElementById('ps-'+id));
+          if(manque.length) return _echec('absents : '+manque.join(', '));
+          // Et les deux secondaires aussi, repliees : sans elles le bouton
+          // « Plus de détails » n'ouvrirait plus rien, et savePostSession
+          // lirait deux champs inexistants des qu'il est deplie.
+          const sec=['satisfaction','hydratation'].filter(id=>!document.getElementById('ps-'+id));
+          return sec.length?_echec('secondaires absents : '+sec.join(', ')):true;})());
 
         // ── REPERES_VOLUME : l'âge est nommé, aucun barème n'est créé ────
         ok('REPERES_VOLUME est INCHANGÉ, aucun barème par âge',(()=>{
@@ -18444,22 +18416,6 @@ function testExercices(){
       // Ces trois-là sont réécrites par finishWorkout : au repos elles portent
       // le tiret posé dans le HTML. On lit donc la SOURCE, pas le DOM courant
       // qu'un test précédent a pu remplir.
-      ok('Les cases de fin de séance gardent leur tiret dans le HTML',(()=>{
-        const h=(document.getElementById('s-workout-done')||{}).outerHTML||'';
-        // ⚠ LA CLASSE A CHANGÉ, ET LA SONDE ÉTAIT TROP RIGIDE. Un lot
-        // antérieur a remplacé .metric-val par .st-val — la tuile de
-        // statistique a pris la place de la boîte de mesure sur cet écran.
-        // La sonde exigeait en outre l'ordre EXACT des attributs et un « > »
-        // collé, alors que le navigateur en insère d'autres (un style de
-        // chiffres tabulaires). On cherche donc les trois identifiants sans
-        // présumer de l'ordre, et on vérifie la classe séparément.
-        const bal=[...h.matchAll(/<div[^>]*id="wd-(?:time|sets|vol)"[^>]*>/g)].map(x=>x[0]);
-        if(bal.length!==3) return _echec('cases wd-* trouvées : '+bal.length);
-        if(!bal.every(b=>/class="st-val"/.test(b)))
-          return _echec('une case a perdu sa classe .st-val : '+bal.join(' | ').slice(0,120));
-        return ['wd-time','wd-sets','wd-vol'].every(id=>{
-          const e=document.getElementById(id);
-          return !!e&&!!(e.textContent||'').trim();});})());
       ok('Les champs à remplir gardent leur indication « — »',(()=>{
         const h=document.getElementById('s-bilan')?document.getElementById('s-bilan').innerHTML:'';
         const src=bQ.toString();
@@ -19160,9 +19116,16 @@ function testExercices(){
             // Le volume ne retient QUE les cinq séries validées.
             const attendu=Math.round(60*10+60*10+62.5*8+100*5+100*5);
             if(se.volume!==attendu) return _echec('volume '+se.volume+' au lieu de '+attendu);
-            // Le récap l'affiche sous la forme demandée.
-            const r=document.getElementById('wd-sets');
-            if(!r||r.textContent!=='5/12') return _echec('récap : '+(r&&r.textContent));
+            // Le recap l'affiche sous la forme demandee. ⚠ LE NOEUD A CHANGE
+            // avec la refonte du 14/09/2026 : les trois tuiles wd-time/wd-sets/
+            // wd-vol sont devenues une bande, et la case des series y porte
+            // l'identifiant rcf-st-series. La forme, elle, est la MEME — c'est
+            // tout l'objet de cette assertion, et la refonte ne devait pas la
+            // perdre. Les espaces varient (« 5 / 12 »), le contenu non.
+            const r=document.getElementById('rcf-st-series');
+            if(!r) return _echec('la case des séries a disparu du récap');
+            const _v=(r.textContent||'').replace(/[\s\u00a0\u202f]/g,'');
+            if(_v!=='5/12') return _echec('récap : '+_v);
             // Et le graphique Perfs lit la MÊME valeur : les deux décrivent la
             // même séance et ne doivent pas pouvoir diverger.
             currentUser=u;
