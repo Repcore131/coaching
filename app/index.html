@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1171';
+window.RC_BUILD='1177';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1458,7 +1458,95 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .tab-dot{position:absolute;top:3px;left:calc(50% + 5px);width:9px;height:9px;
   border-radius:var(--r-full);background:var(--red);border:1.5px solid #0c0c0c;
   box-shadow:0 0 6px rgba(224,32,32,.9);display:none;pointer-events:none}
+/* ══ ECRAN DE FIN DE SEANCE : LA RECOMPENSE ═══════════════════════════════
+   Noir, charcoal, blanc, rouge RepCore. Aucun vert, aucun jaune. Le rouge ne
+   sert qu'a ce qui compte : le record, le halo, l'appel a l'action.
+   Toutes les animations sortent sous prefers-reduced-motion — la valeur
+   finale est alors posee d'emblee, jamais un ecran fige a mi-chemin. */
+.rc-hero{text-align:center;padding:6px 0 22px}
+.rc-hero-val{font-family:var(--pile-titre);font-size:clamp(44px,14vw,68px);line-height:1;
+  color:#fff;letter-spacing:2px;margin-top:14px;text-shadow:0 0 26px rgba(224,32,32,.55)}
+.rc-hero-ex{font-size:var(--fs-sm);letter-spacing:3px;color:var(--sub);margin-top:6px;
+  text-transform:uppercase;font-weight:800}
+.rc-hero-prog{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px;
+  font-size:var(--fs-sm);font-weight:800;color:var(--text-dim);flex-wrap:wrap}
+.rc-hero-fleche{color:var(--red-text);font-size:var(--fs-lg);line-height:1}
+.rc-hero-neuf{color:#fff}
+.rc-hero-gain{display:inline-block;margin-top:12px;padding:6px 14px;border-radius:var(--r-full);
+  background:rgba(224,32,32,.16);border:1px solid rgba(224,32,32,.5);color:var(--red-text);
+  font-weight:900;letter-spacing:1.5px;font-size:var(--fs-sm)}
+/* Le medaillon : hexagone, metal sombre, contour argente, halo rouge. */
+.rc-badge{display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px;min-width:0}
+.rc-badge-hex{position:relative;display:flex;align-items:center;justify-content:center;
+  clip-path:polygon(50% 0,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);
+  background:linear-gradient(160deg,#2a2a2e,#0d0d0f 55%,#18181b);
+  box-shadow:0 0 0 1px rgba(190,190,200,.28) inset,0 6px 18px rgba(0,0,0,.6)}
+.rc-badge-hex::after{content:'';position:absolute;inset:0;
+  clip-path:polygon(50% 0,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);
+  box-shadow:0 0 22px rgba(224,32,32,.45) inset;opacity:.9;pointer-events:none}
+.rc-badge-ico{position:relative;width:46%;color:#ff4a4a;filter:drop-shadow(0 0 6px rgba(224,32,32,.85))}
+.rc-badge-ico svg{width:100%;height:100%;display:block}
+.rc-badge-xl .rc-badge-ico{color:#ff5a5a}
+.rc-badge-t{font-size:var(--fs-2xs);font-weight:900;letter-spacing:1.4px;text-transform:uppercase;color:#fff}
+.rc-badge-xl .rc-badge-t{font-size:var(--fs-sm);letter-spacing:2.5px;color:var(--red-text)}
+.rc-badge-d{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45}
+.rc-badges{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:14px 10px}
+.rc-sect{margin-bottom:22px}
+.rc-sect-t{font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--sub);
+  font-weight:800;margin:0 0 12px}
+/* Le prochain objectif : ce qu'on peut gagner, juste apres ce qu'on a gagne. */
+.rc-obj{background:linear-gradient(180deg,#151517,#0d0d0e);border:1px solid var(--border);
+  border-radius:var(--r-3);padding:15px 14px}
+.rc-obj-ex{font-size:var(--fs-xs);font-weight:900;letter-spacing:2px;color:#fff;margin-bottom:12px}
+.rc-obj-l{display:flex;justify-content:space-between;font-size:var(--fs-xs);font-weight:800;
+  color:var(--text-dim);margin-bottom:7px}
+.rc-obj-bar{position:relative;height:6px;border-radius:var(--r-full);background:#232326}
+.rc-obj-fill{height:100%;border-radius:var(--r-full);
+  background:linear-gradient(90deg,#7a0000,#e02020);box-shadow:0 0 12px rgba(224,32,32,.55)}
+.rc-obj-dot{position:absolute;top:50%;width:11px;height:11px;border-radius:var(--r-full);
+  background:#fff;transform:translate(-50%,-50%);box-shadow:0 0 10px rgba(224,32,32,.9)}
+.rc-obj-n{font-size:var(--fs-2xs);color:var(--text-faint);margin-top:9px;line-height:1.5}
+/* Entrees : courtes, et decalees pour que l'oeil suive l'ordre de lecture. */
+@keyframes rcBadgeIn{0%{opacity:0;transform:scale(.85) rotate(-4deg)}
+  60%{opacity:1;transform:scale(1.05) rotate(0)}100%{opacity:1;transform:scale(1)}}
+@keyframes rcMonte{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.rc-hero .rc-badge{animation:rcBadgeIn .42s cubic-bezier(.2,.8,.3,1) both}
+.rc-hero-val,.rc-hero-prog,.rc-hero-gain{animation:rcMonte .34s ease-out both}
+.rc-hero-val{animation-delay:.16s}.rc-hero-prog{animation-delay:.26s}.rc-hero-gain{animation-delay:.36s}
+.rc-badges .rc-badge{animation:rcBadgeIn .38s cubic-bezier(.2,.8,.3,1) both}
+.rc-badges .rc-badge:nth-child(2){animation-delay:.06s}
+.rc-badges .rc-badge:nth-child(3){animation-delay:.12s}
+.rc-badges .rc-badge:nth-child(4){animation-delay:.18s}
+.rc-badges .rc-badge:nth-child(n+5){animation-delay:.24s}
+/* Pression : la seule interaction permanente, et elle ne bouge qu'au doigt. */
+.rc-badge:active{transform:scale(.97)}
+@media(prefers-reduced-motion:reduce){
+  .rc-hero .rc-badge,.rc-hero-val,.rc-hero-prog,.rc-hero-gain,.rc-badges .rc-badge{animation:none}
+}
+/* 360 px : trois medaillons par ligne restent lisibles, le hero ne deborde pas. */
+@media(max-width:380px){
+  .rc-badges{grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:12px 8px}
+  .rc-badge-d{display:none}
+}
 .tab-dot.on{display:block}
+/* ══ LES TABLEAUX DU CALCUL, RESSERRES ═══════════════════════════════════
+   Ils tenaient sur toute la longueur de l'ecran : comparer « besoin selon
+   l'objectif » et la ligne des proteines demandait de defiler entre les deux.
+   Deux colonnes des 900 px, et des hauteurs de ligne reduites d'un tiers :
+   les quatre tableaux tiennent alors dans un ecran, ce qui est la seule
+   facon de les LIRE ensemble plutot que l'un apres l'autre.
+   On ne touche a aucune valeur ni a aucun identifiant de champ. */
+.tbk-serre{margin-bottom:18px}
+.tbk-serre .tbk{margin-bottom:10px}
+.tbk-serre .tbk th,.tbk-serre .tbk td{padding-top:6px;padding-bottom:6px;line-height:1.3}
+.tbk-serre .tbk caption{padding-top:7px;padding-bottom:7px}
+.tbk-serre .tbk select{min-height:34px;padding:4px 8px}
+@media(min-width:900px){
+  .tbk-serre{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+  /* Le poids de reference et le tableau des macros parlent des deux colonnes :
+     ils gardent la largeur entiere. */
+  .tbk-serre>*:first-child,.tbk-serre>.tbk:last-child{grid-column:1/-1}
+}
 /* LA PASTILLE CHIFFREE. Neuf pixels ronds ne portent qu'une information : « il
    y a du neuf ». Un message et six messages avaient donc la meme tete, et le
    canal doublait l'annonce d'une banniere sur l'accueil. Le chiffre tient dans
@@ -7604,7 +7692,15 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- LES COURBATURES, EN DIFFERE. Posees au RETOUR dans l'app et non a
            chaud : « as-tu des courbatures ? » dix minutes apres la seance n'a
            pas de sens physiologique, et la reponse serait toujours « aucune ». -->
-      <div id="clh-retour-zone" style="display:none;margin-bottom:16px"></div>
+      <!-- ⚠ LA QUESTION DE RESSENTI A QUITTE L'ACCUEIL le 14/09/2026. Elle
+           portait sur une seance DEJA TERMINEE, parfois plusieurs jours plus
+           tard : personne ne se souvient de sa congestion du mardi, et la
+           carte occupait le haut de l'accueil sans rien apprendre a personne.
+           Le meme retour est demande a la fin de la seance, au seul moment ou
+           la reponse vaut quelque chose. La zone reste dans le document :
+           rcRendreRetourSeance l'ecrit toujours, et la masquer ici plutot que
+           de retirer son code evite de casser le reste de la boucle. -->
+      <div id="clh-retour-zone" style="display:none!important;margin-bottom:16px"></div>
       <!-- 1er BILAN EN ATTENTE -->
       <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div class="eyebrow" style="color:var(--info);margin-bottom:5px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
@@ -8149,14 +8245,16 @@ const COACH_PHOTO='icons/coach.jpg';
              remplace, une phrase de ce genre devient pénible à lire. -->
         <p style="text-align:center;font-size:var(--fs-sm);color:#ccc;line-height:1.6;padding:0 14px" id="wd-msg"></p>
       </div>
-      <div id="wd-comparison"></div>
-      <!-- LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps : une fois
-           par semaine et par muscle, sur la derniere seance qui le touche. -->
-      <!-- UNE SEULE QUESTION, FACULTATIVE, IGNORABLE EN UN GESTE. Elle passe
-           AVANT le retour par muscle : c'est la plus courte des deux, et
-           l'ordre inverse ferait abandonner les deux. -->
-      <div id="wd-srpe-zone" style="display:none;margin-bottom:14px"></div>
-      <div id="wd-retour-zone" style="display:none;margin-bottom:18px"></div>
+      <!-- ⚠ L'ORDRE DE CET ECRAN A ETE INVERSE le 14/09/2026, et c'est tout
+           l'objet du lot. Il commencait par la comparaison de volume — donc
+           souvent par « -3 557 kg » — puis par DEUX questions, avant le
+           moindre chiffre. Quelqu'un qui vient de finir sa seance veut savoir
+           ce qu'il a REUSSI ; on ne lui demande rien tant qu'on ne le lui a
+           pas montre.
+           Nouvel ordre : hero, chiffres, visuel, accomplissements, prochain
+           objectif, ressenti, analyse. Aucune zone n'est supprimee : elles
+           sont deplacees, et leurs identifiants ne changent pas — rcRendreSrpe,
+           renderEtatsSeance et les autres les retrouvent telles quelles. -->
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <div class="stat-tile"><div class="st-val" id="wd-time">—</div><div class="st-lbl">Durée</div></div>
         <div class="stat-tile"><div class="st-val" id="wd-sets">—</div><div class="st-lbl">Séries</div></div>
@@ -8165,7 +8263,19 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- L'IMAGE PARTAGEABLE. Sous les trois chiffres qu'elle reprend : on
            voit ce qu'on va publier avant de toucher le bouton. -->
       <div id="wd-partage"></div>
+      <!-- TES ACCOMPLISSEMENTS, puis TON PROCHAIN OBJECTIF : ce qu'on vient de
+           gagner, puis ce qu'on peut gagner. C'est cet enchainement qui donne
+           envie de revenir. -->
+      <div id="wd-badges"></div>
+      <div id="wd-objectif"></div>
+      <!-- TON RESSENTI. Facultatif, et jamais bloquant : on peut quitter
+           l'ecran sans y toucher. -->
+      <div id="wd-srpe-zone" style="display:none;margin-bottom:14px"></div>
+      <div id="wd-retour-zone" style="display:none;margin-bottom:18px"></div>
       <div id="wd-etats"></div>
+      <!-- ANALYSE : tout en bas, parce que c'est la seule place ou elle ne
+           gache rien. -->
+      <div id="wd-comparison"></div>
       <div id="wd-cooldown"></div>
       <div id="wd-afilmer"></div>
       <!-- RESSENTI POST-SÉANCE -->
@@ -8994,6 +9104,16 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="lifestyle-sleep-content"></div>
     </div>
   </div>
+</div>
+
+<!-- MEAL PREP ET RECETTE. s-food- : le prefixe suffit a NUT_ECRANS, qui
+     reconnait les ecrans de nutrition par leur nom. -->
+<div id="s-food-prep" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="loadNutrition()">←</button>
+    <span class="topbar-title" id="prep-titre">Meal prep</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1"><div class="pad"><div id="prep-corps"></div></div></div>
 </div>
 
 <!-- TOAST -->
@@ -18849,6 +18969,9 @@ function _pilCompteur(cle,lib,n,couleur){
 // decrit l etat ensuite, « Tous » en dernier parce qu il n est pas une
 // information mais un retour en arriere.
 function renderPortefeuille(clients){
+  // LA MEME REPARTITION QU'AUX ARRIVEES, et volontairement la meme fonction :
+  // deux facons de compter les memes gens finiraient par ne plus dire pareil.
+  // Posee apres le rendu, pour ne pas avoir a connaitre le balisage interne.
   const el=document.getElementById('ch-portefeuille');
   if(!el) return;
   const l=clients||(typeof getClients==='function'?getClients():[]);
@@ -18865,7 +18988,10 @@ function renderPortefeuille(clients){
     ['attente',       'En attente',           p.enAttente,       '#8a8a8a'],
     ['pf-actifs',     'Actifs 14 j',          p.actifs,          '#22c55e'],
     ['tous',          'Tous',                 p.total,           '#c4c4c4']];
-  el.innerHTML=cases.map(c=>_pilCompteur(c[0],c[1],c[2],c[3])).join('');
+  el.innerHTML=cases.map(c=>_pilCompteur(c[0],c[1],c[2],c[3])).join('')
+    // La repartition suivi / sans suivi ferme la carte : les compteurs
+    // au-dessus disent ce qu'il y a a faire, celle-ci dit sur qui.
+    +(l.length?'<div style="grid-column:1/-1;margin-top:4px">'+_htmlRepartitionSuivi(l)+'</div>':'');
 }
 function _pilBande(cle,titre,corps,resume){
   return `<details class="plan-src pil-bande" style="margin:0 0 7px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
@@ -20907,15 +21033,25 @@ function _rendreVignettesAthletes(vus){
 function _htmlSectionsSuivi(vus,rendu){
   const peindre=rendu||renderClientRow;
   const avec=(vus||[]).filter(estSuivi),sans=(vus||[]).filter(c=>!estSuivi(c));
-  // Tant que le coach n'a bascule personne, tout le monde est « avec suivi » :
-  // une en-tete seule au-dessus d'une liste complete n'apprendrait rien.
-  if(!avec.length||!sans.length) return (vus||[]).map(peindre).join('');
+  // LES DEUX SECTIONS PARAISSENT TOUJOURS, meme vides — et c'est un
+  // changement du 14/09/2026. La regle d'avant les masquait tant qu'un seul
+  // camp existait : comme tout le monde est « avec suivi » par defaut,
+  // PERSONNE ne voyait jamais de titre, donc personne ne pouvait deviner que
+  // le curseur existait. Une fonctionnalite qu'on ne voit pas n'existe pas.
+  // La section vide dit quoi faire ; c'est elle qui apprend le geste.
+  if(!(vus||[]).length) return '';
   const titre=(t,n)=>'<div style="grid-column:1/-1;display:flex;align-items:baseline;gap:8px;'
     +'margin:18px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub)">'
     +escapeHtml(t)+'</span><span style="font-size:var(--fs-2xs);color:var(--text-faint)">'+n+'</span></div>';
-  return titre('Mes athlètes (avec suivi)',avec.length)+avec.map(peindre).join('')
-        +titre('Mes athlètes (sans suivi)',sans.length)+sans.map(peindre).join('');
+  const vide=t=>'<div style="grid-column:1/-1;font-size:var(--fs-xs);color:var(--text-dim);'
+    +'line-height:1.6;padding:10px 2px 14px">'+t+'</div>';
+  return titre('Mes athlètes (avec suivi)',avec.length)
+    +(avec.length?avec.map(peindre).join('')
+       :vide('Personne ici pour l\'instant.'))
+    +titre('Mes athlètes (sans suivi)',sans.length)
+    +(sans.length?sans.map(peindre).join('')
+       :vide('Personne ici pour l\'instant. Touche le curseur SUIVI sur une fiche pour l\'y basculer.'));
 }
 function renderClientList(clients){
   const el=document.getElementById('ch-clients-list');
@@ -21210,7 +21346,7 @@ function renderFileReprise(){
       </select>
     </div>`;
   if(!f.lignes.length){
-    el.innerHTML=tete+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);
+    el.innerHTML=tete+_htmlCalendrierAcces()+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);
       padding:22px 16px;text-align:center;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">
       Personne à relancer. Les athlètes en pause déclarée et ceux qui portent un signal de santé n'entrent jamais ici — ils gardent leur ligne dans « À traiter ».</div>`;
     return;
@@ -21220,7 +21356,7 @@ function renderFileReprise(){
       font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.3px;
       background:${fort?'rgba(224,32,32,.14)':'#111'};border:1px solid ${fort?'var(--red)':'var(--border)'};
       color:${fort?'var(--text)':'var(--sub)'}">${escapeHtml(lib)}</button>`;
-  el.innerHTML=tete+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,#151515,#0e0e0e);
+  el.innerHTML=tete+_htmlCalendrierAcces()+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,#151515,#0e0e0e);
       border:1px solid var(--border);border-left:3px solid var(--red);border-radius:var(--r-3);
       padding:11px 12px;margin-bottom:9px;box-shadow:var(--e2)">
       <div style="display:flex;align-items:baseline;gap:8px">
@@ -23037,6 +23173,73 @@ function _dessinerCroissance(id,pts){
 }
 // La carte. Elle n'apparaît pas sans athlète : un graphique vide n'apprend
 // rien et occupe la place de ce qui compte quand on démarre.
+// QUI EST SUR L'APPLI, EN UNE LIGNE. La toile trace un total : elle ne dit pas
+// si ces arrivees sont accompagnees ou non, et c'est pourtant la question que
+// pose le coach en la regardant. Les barres, elles, restent d'une seule
+// couleur — elles sont tracees sur un canvas par _dessinerCroissance, qui ne
+// connait qu'une serie ; les repeindre en deux teintes demanderait de lui en
+// passer deux, ce qui est un autre chantier. La repartition est donc donnee
+// ici, avec les memes couleurs que celles demandees : rouge pour les suivis,
+// jaune pour les autres.
+// ══ LES ACCES QUI ARRIVENT A TERME, PAR MOIS ═══════════════════════════
+// « A relancer » dit qui est en train de decrocher. Il ne dit pas ce qui
+// tombe le mois prochain — or c'est la meme decision : qui rappeler, et quand.
+// Demande de Kevin, 11/09/2026 : « je peux me projeter, tiens, a cette date-la
+// j'ai ca qui arrive ».
+//
+// Groupe par mois plutot qu'en grille de jours : une echeance d'acces se lit
+// en « courant novembre », pas en « le 14 ». Les dates passees sont ecartees —
+// un acces deja expire releve du filtre « acces qui expire », pas d'une
+// projection. Suivis et non suivis sont tous deux presents, avec leur pastille
+// de couleur : une echeance porte sur le paiement, pas sur l'accompagnement.
+function _htmlCalendrierAcces(){
+  let l=[];
+  try{ l=getClients()||[]; }catch(e){ return ''; }
+  const auj=Date.now();
+  const ech=l.map(c=>({c,t:Date.parse(c&&c.accessExpiry)}))
+             .filter(x=>isFinite(x.t)&&x.t>=auj)
+             .sort((a,b)=>a.t-b.t);
+  if(!ech.length) return '';
+  const mois={};
+  for(const x of ech){
+    const d=new Date(x.t),k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    (mois[k]=mois[k]||[]).push(x);
+  }
+  const libMois=k=>{
+    const [a,m]=k.split('-');
+    const t=new Date(Number(a),Number(m)-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+    return t.charAt(0).toUpperCase()+t.slice(1);
+  };
+  const jour=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  const blocs=Object.keys(mois).sort().map(k=>
+    '<div style="margin-bottom:10px">'
+    +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;'
+    +'color:var(--sub);margin-bottom:5px">'+escapeHtml(libMois(k))+' · '+mois[k].length+'</div>'
+    +mois[k].map(x=>'<div style="display:flex;align-items:center;gap:8px;padding:5px 0;'
+      +'border-top:1px solid rgba(255,255,255,.05);font-size:var(--fs-xs)">'
+      +'<span style="width:8px;height:8px;border-radius:var(--r-full);flex-shrink:0;background:'
+      +(estSuivi(x.c)?'#E02020':'#f5a524')+'"></span>'
+      +'<span style="flex:1;min-width:0;color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;'
+      +'white-space:nowrap">'+escapeHtml(((x.c.fname||'')+' '+(x.c.lname||'')).trim()||'—')+'</span>'
+      +'<span style="color:var(--sub);flex-shrink:0">'+jour(x.t)+'</span></div>').join('')
+    +'</div>').join('');
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-3);padding:13px 14px;margin-bottom:16px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;'
+    +'color:var(--sub);margin-bottom:9px">Accès arrivant à terme</div>'+blocs
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">'
+    +'Rouge : avec suivi. Jaune : sans suivi.</div></div>';
+}
+function _htmlRepartitionSuivi(l){
+  const avec=(l||[]).filter(estSuivi).length,sans=(l||[]).length-avec;
+  if(!avec||!sans) return '';
+  const pastille=(c,n,t)=>'<span style="display:inline-flex;align-items:center;gap:5px;'
+    +'font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--sub)">'
+    +'<span style="width:9px;height:9px;border-radius:var(--r-full);background:'+c+'"></span>'
+    +n+' '+t+'</span>';
+  return '<div style="display:flex;align-items:center;gap:14px;margin-bottom:9px;flex-wrap:wrap">'
+    +pastille('#E02020',avec,'avec suivi')+pastille('#f5a524',sans,'sans suivi')+'</div>';
+}
 function _htmlCroissanceCoach(athletes){
   const l=Array.isArray(athletes)?athletes.filter(Boolean):[];
   if(!l.length) return '';
@@ -23054,6 +23257,7 @@ function _htmlCroissanceCoach(athletes){
     </div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.4px;margin-bottom:9px">
       D'après la date de création de chaque dossier.</div>
+    ${_htmlRepartitionSuivi(l)}
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
       <span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)">
         <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px rgba(224,32,32,.8)"></span>Arrivées</span>
@@ -36393,6 +36597,26 @@ function _bilanSeanceCourante(){
   d.records=Math.max(0,Math.round(Number(_bilanRecords)||0));
   return d;
 }
+// LE BOUTON DIT CE QU'IL FAIT. Le dessin du visuel prend de quelques dizaines
+// de millisecondes a une demi-seconde selon le telephone : sans retour, on
+// touche deux fois, et le second appel retombait sur le verrou _storyEnCours
+// sans rien dire. Trois etats, et le libelle revient toujours — meme en cas
+// d'echec, sinon le bouton reste bloque sur « Génération… ».
+function _telechargerAvecEtat(btn){
+  const lib='Télécharger le visuel de ma séance';
+  const pose=t=>{ if(btn) btn.textContent=t; };
+  if(btn){ btn.disabled=true; pose('Génération…'); }
+  // Rendu differe d'une frame : sans cela le libelle ne s'affiche jamais, le
+  // dessin bloquant le fil avant que le navigateur ait repeint.
+  requestAnimationFrame(()=>{ setTimeout(()=>{
+    let ok=false;
+    try{ ok=telechargerBilanSeance(); }catch(e){ ok=false; }
+    pose(ok?'Visuel prêt':lib);
+    if(btn) btn.disabled=false;
+    if(ok) setTimeout(()=>pose(lib),2200);
+  },0); });
+  return true;
+}
 function telechargerBilanSeance(){
   if(_storyEnCours) return false;
   const d=_bilanSeanceCourante();
@@ -36438,13 +36662,15 @@ function renderPartageBilan(){
   // LE LOGO DU COACH SE CHARGE MAINTENANT, pas au clic : le dessin est
   // synchrone, une image pas encore decodee ne s'y dessinerait pas.
   try{ _prechaufferMarqueCoach(); }catch(e){}
+  // Le partage reste SECOND, et il ne remplace jamais le telechargement :
+  // l'athlete doit pouvoir recuperer l'image et la poster ou il veut.
   const part=(typeof navigator!=='undefined'&&navigator.share)
     ?'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0" '
-      +'onclick="partagerBilanSeance()">Partager directement</button>':'';
+      +'onclick="partagerBilanSeance()">Partager ma séance</button>':'';
   z.innerHTML='<div style="margin-bottom:16px">'
-    +'<button type="button" class="btn btn-red" style="width:100%;margin:0" '
-    +'onclick="telechargerBilanSeance()">'+icon('download',18)
-    +'Télécharger ma séance</button>'+part
+    +'<button type="button" class="btn btn-red" id="wd-dl" style="width:100%;margin:0" '
+    +'onclick="_telechargerAvecEtat(this)">'+icon('download',18)
+    +'Télécharger le visuel de ma séance</button>'+part
     +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;'
     +'margin-top:8px;text-align:center">PNG sans fond, à poser sur ta photo en story. '
     +'Dans la galerie, il s’affiche sur du blanc — c’est normal.</div>'
@@ -38314,12 +38540,18 @@ function finishWorkout(incomplete=false){
   // geste du repli est isole a son tour — celui qui n'a plus de DOM ne doit pas
   // empecher les autres.
   try{
+  // Les trois chiffres montent de zero en 600 ms. Le textContent reste pose
+  // d'abord : si _compterVers echoue, la valeur est deja juste.
   document.getElementById('wd-time').textContent=mins+'min';
   // « 5/12 » plutôt que « 5 » : l'écart devient lisible au lieu d'être noyé.
   // Même formatage que la fiche coach, via fmtSeries — les deux écrans parlent
   // du même dossier et ne doivent pas pouvoir se contredire.
   document.getElementById('wd-sets').textContent=fmtSeries(sets,setsPlanned);
   document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
+  try{
+    _compterVers(document.getElementById('wd-time'),mins,'min');
+    _compterVers(document.getElementById('wd-vol'),Math.round(vol),'kg');
+  }catch(e){}
   // La comparaison est calculee AVANT le message : celui-ci lit _cmp, et un
   // const utilise avant sa declaration leve une ReferenceError — la fin de
   // seance s'interrompait donc juste apres l'enregistrement, sans jamais
@@ -38333,8 +38565,49 @@ function finishWorkout(incomplete=false){
   // record, sans erreur et sans que rien ne le montre.
   _bilanRecords=(_cmp&&_cmp.records&&_cmp.records.length)|0;
   try{ renderPartageBilan(); }catch(e){}
-  document.getElementById('wd-msg').textContent=_messageFinSeance(sets,setsPlanned,mins,_cmp.records,_cmp.delta,_cmp.jour,incomplete);
-  document.getElementById('wd-comparison').innerHTML=_cmp.html;
+  // ── LES BADGES, LE HERO, LE PROCHAIN OBJECTIF ────────────────────
+  // Le contexte est assemble ICI parce que c'est le seul endroit qui a tout :
+  // la comparaison, la seance et le dossier. Le moteur, lui, ne connait que
+  // ce qu'on lui passe.
+  let _badges=[],_ctxFin=null;
+  try{
+    const _sess=(currentUser.sessions||[]);
+    const _prec=_sess.slice(0,-1).slice(-8);
+    const _derniere=_prec.length?_prec[_prec.length-1]:null;
+    const _jours=_derniere&&_derniere.date
+      ? Math.max(0,(Date.now()-new Date(_derniere.date).getTime())/864e5) : 0;
+    _ctxFin={
+      records:(_cmp&&_cmp.records)||[],
+      sets,setsPlanned,volume:vol,
+      volumesPrecedents:_prec.map(x=>Number(x&&x.volume)||0),
+      streak:Number(currentUser.streak)||0,
+      joursDepuisDerniere:_jours,
+      exosAmeliores:Number(_cmp&&_cmp.ameliores)||0,
+      seriesEchouees:Math.max(0,(Number(setsPlanned)||0)-(Number(sets)||0)),
+      rpe:Number(sess&&sess.rpe)||0,
+      meilleurExo:(()=>{ try{
+        const l=((sess&&sess.exercises)||[]).map(x=>({nm:x&&(x.name||x.nm),
+          kg:Math.max(0,...(((x&&x.sets)||[]).map(t=>Number(t&&t.weight)||0)))}))
+          .filter(x=>x.nm&&x.kg>0).sort((a,b)=>b.kg-a.kg);
+        return l[0]||null; }catch(e){ return null; } })()
+    };
+    _badges=achievementEngine(_ctxFin);
+  }catch(e){ _badges=[]; _ctxFin=null; }
+  // LE HERO. Un record s'affiche en plusieurs lignes courtes ; a defaut, la
+  // phrase de fin de seance reste ce qu'elle etait.
+  const _msgEl=document.getElementById('wd-msg');
+  const _hero=(()=>{ try{ return _htmlHeroFin(_badges,_ctxFin); }catch(e){ return ''; } })();
+  if(_msgEl){
+    if(_hero) _msgEl.innerHTML=_hero;
+    else _msgEl.textContent=_messageFinSeance(sets,setsPlanned,mins,_cmp.records,_cmp.delta,_cmp.jour,incomplete);
+  }
+  try{ document.getElementById('wd-badges').innerHTML=_htmlAccomplissements(_badges); }catch(e){}
+  try{ document.getElementById('wd-objectif').innerHTML=_htmlProchainObjectif(_ctxFin); }catch(e){}
+  // ⚠ LA COMPARAISON DE VOLUME NE SORT PLUS QUAND ELLE EST NEGATIVE. Elle
+  // reste entiere dans le suivi ; ici, juste apres un record, elle ne
+  // faisait qu'abimer la nouvelle. Kevin, 14/09/2026 : « je ne veux pas
+  // afficher immediatement une information negative apres un accomplissement ».
+  document.getElementById('wd-comparison').innerHTML=(_cmp&&_cmp.delta<0)?'':_cmp.html;
   // Seuls les exercices dont l'état vient de CHANGER, et jamais pour annoncer
   // une progression : l'écran de fin de séance n'est pas un bulletin.
   renderEtatsSeance(currentUser,sess);
@@ -39716,6 +39989,183 @@ function _peindreVolumeCreneau(u){
     l.map(s=>s.volume||0));
 }
 
+// ══ LA FIN DE SEANCE EST UNE RECOMPENSE, PAS UN RELEVE ═════════════════
+// L'ecran posait une question sur la congestion AVANT d'avoir montre le
+// moindre chiffre, et annoncait « -3 557 kg vs derniere seance » juste apres
+// un record. Quelqu'un qui vient de finir veut savoir ce qu'il a REUSSI ;
+// l'analyse peut attendre trois ecrans de defilement. Refonte demandee par
+// Kevin, 14/09/2026.
+//
+// LE MOTEUR EST UNE LISTE DE REGLES, jamais une suite de if dans le rendu :
+// une regle s'ajoute en une ligne, et chacune dit ce qu'elle constate.
+const BADGES=Object.freeze({
+  NEW_RECORD:      {t:'Nouveau record',    d:'Tu as battu ton précédent record sur cet exercice.', i:'couronne', p:100,f:'record'},
+  MULTIPLE_RECORDS:{t:'Domination',        d:'Plusieurs records dans la même séance.',             i:'lion',     p:95, f:'record'},
+  NEW_LOAD:        {t:'Nouveau palier',    d:'Tu as franchi un nouveau seuil de charge.',          i:'fusee',    p:90, f:'record'},
+  PERSONAL_BEST:   {t:'Personal best',     d:'Ta meilleure performance historique.',               i:'trophee',  p:88, f:'record'},
+  NEW_PERF:        {t:'Nouvelle performance',d:'Tu as réalisé ta meilleure performance sur cet exercice.',i:'eclair',p:80,f:'progression'},
+  PROGRESSION:     {t:'En progression',    d:'Plusieurs exercices en amélioration.',               i:'courbe',   p:78, f:'progression'},
+  MONSTER:         {t:'Séance monstre',    d:'Volume exceptionnel. Tu as tout donné.',             i:'flamme',   p:75, f:'volume'},
+  HIGH_VOLUME:     {t:'Gros volume',       d:'Tu as atteint un volume musculaire exceptionnel.',   i:'haltere',  p:70, f:'volume'},
+  NO_MERCY:        {t:'No mercy',          d:'Une intensité rare. Tu n’as rien lâché.',            i:'crane',    p:68, f:'intensite'},
+  FULL_SESSION:    {t:'100% validé',       d:'Toutes les séries prévues ont été réalisées.',       i:'cible',    p:65, f:'completion'},
+  NO_FAIL:         {t:'Sans échec',        d:'Toutes les séries ont été validées.',                i:'cent',     p:62, f:'completion'},
+  PERFECT:         {t:'Séance parfaite',   d:'Objectifs de séance remplis.',                       i:'sommet',   p:60, f:'completion'},
+  STREAK:          {t:'Série en cours',    d:'Tu construis ta régularité. Continue.',              i:'chaine',   p:55, f:'regularite'},
+  RETURN:          {t:'Retour au combat',  d:'Tu reviens plus fort après une pause.',              i:'phenix',   p:52, f:'regularite'},
+  DISCIPLINE:      {t:'Discipline',        d:'Tu as tenu le cap, même dans la difficulté.',        i:'cerveau',  p:45, f:'mental'}
+});
+// Un glyphe par badge, meme trait, meme grille 24x24 : melanger deux styles
+// d'icones se voit immediatement sur une grille de quinze.
+const BADGE_GLYPHES=Object.freeze({
+  couronne:'<path d="M4 17h16M4 17l-1.5-8L8 12l4-7 4 7 5.5-3L20 17"/>',
+  lion:'<path d="M12 3l2.5 2H18l-1 3 2 2-2 2 1 3h-3.5L12 20l-2.5-3H6l1-3-2-2 2-2-1-3h3.5z"/><circle cx="9.5" cy="12" r="1"/><circle cx="14.5" cy="12" r="1"/>',
+  fusee:'<path d="M12 3c3 2 5 5.5 5 9l-2.5 3h-5L7 12c0-3.5 2-7 5-9z"/><path d="M9.5 18l-2 3 3-1M14.5 18l2 3-3-1"/><circle cx="12" cy="10" r="1.6"/>',
+  trophee:'<path d="M8 4h8v5a4 4 0 01-8 0z"/><path d="M8 6H5a3 3 0 003 3M16 6h3a3 3 0 01-3 3"/><path d="M10 20h4M12 13v7"/>',
+  eclair:'<path d="M13 3L5 13h6l-2 8 9-11h-6z"/>',
+  courbe:'<path d="M4 20V9M10 20V5M16 20v-7M20 20V3"/>',
+  flamme:'<path d="M12 3c1 3-1 4-2.5 6C8 11 7 12.5 7 14.5A5 5 0 0017 15c0-3-2-4.5-3-7-1.5 1-2 2-2 3 0-3 0-5 0-8z"/>',
+  haltere:'<path d="M3 9v6M6 7v10M18 7v10M21 9v6M6 12h12"/>',
+  crane:'<path d="M12 3a7 7 0 00-7 7c0 2.5 1.5 4 2.5 5V19h9v-4c1-1 2.5-2.5 2.5-5a7 7 0 00-7-7z"/><circle cx="9.5" cy="11" r="1.5"/><circle cx="14.5" cy="11" r="1.5"/>',
+  cible:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
+  cent:'<path d="M4 8v8M8 8v8M4 12h4"/><circle cx="13.5" cy="12" r="3.2"/><circle cx="20" cy="12" r="3.2"/>',
+  sommet:'<path d="M3 20l6-11 3 5 2-3 7 9z"/><path d="M14 4v6l4-2-4-2"/>',
+  chaine:'<path d="M9 12a3 3 0 013-3h2a3 3 0 010 6h-2"/><path d="M15 12a3 3 0 01-3 3h-2a3 3 0 010-6h2"/>',
+  phenix:'<path d="M12 4c2 3 5 4 8 4-2 2-4 2-5 2 2 1 3 3 3 5-2-1-4-2-6-2s-4 1-6 2c0-2 1-4 3-5-1 0-3 0-5-2 3 0 6-1 8-4z"/>',
+  cerveau:'<path d="M9 4a3 3 0 00-3 3 3 3 0 00-1 5 3 3 0 002 5 3 3 0 005 1V4.5A2.5 2.5 0 009 4z"/><path d="M15 4a3 3 0 013 3 3 3 0 011 5 3 3 0 01-2 5 3 3 0 01-5 1"/>'
+});
+function _htmlGlyphe(nom){
+  const d=BADGE_GLYPHES[nom]||BADGE_GLYPHES.cible;
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+    +'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
+}
+// ── LE MOTEUR ──────────────────────────────────────────────────────────
+// PURE : aucun DOM, aucun currentUser. Tout ce qu'il sait lui est donne,
+// donc tout ce qu'il decide est verifiable.
+//   ctx = {records:[{nm,curMax,histMax,gain}], sets, setsPlanned, volume,
+//          volumesPrecedents:[], streak, joursDepuisDerniere, exosAmeliores,
+//          seriesEchouees, rpe}
+function achievementEngine(ctx){
+  const c=ctx||{};
+  const rec=Array.isArray(c.records)?c.records:[];
+  const sets=Number(c.sets)||0, prevus=Number(c.setsPlanned)||0;
+  const vol=Number(c.volume)||0;
+  const hist=(Array.isArray(c.volumesPrecedents)?c.volumesPrecedents:[]).filter(v=>v>0);
+  const median=hist.length?hist.slice().sort((a,b)=>a-b)[Math.floor(hist.length/2)]:0;
+  const out=[];
+  const pose=(k,extra)=>{ const b=BADGES[k]; if(b) out.push(Object.assign({k,titre:b.t,desc:b.d,icone:b.i,priorite:b.p,famille:b.f},extra||{})); };
+
+  if(rec.length){
+    const meilleur=rec.slice().sort((a,b)=>(b.gain||0)-(a.gain||0))[0];
+    pose('NEW_RECORD',{exercice:meilleur.nm,valeur:meilleur.curMax,ancien:meilleur.histMax,gain:meilleur.gain});
+    if(rec.length>=2) pose('MULTIPLE_RECORDS',{valeur:rec.length});
+    // Un palier est un multiple de 10 kg franchi pour la premiere fois : 97 ->
+    // 102 en est un, 101 -> 104 n'en est pas.
+    const palier=rec.find(r=>Math.floor(r.curMax/10)>Math.floor((r.histMax||0)/10));
+    if(palier) pose('NEW_LOAD',{exercice:palier.nm,valeur:Math.floor(palier.curMax/10)*10});
+  } else if(Number(c.exosAmeliores)>0){
+    // Pas de record, mais ca monte : c'est une autre nouvelle, pas la meme.
+    if(Number(c.exosAmeliores)>=2) pose('PROGRESSION',{valeur:Number(c.exosAmeliores)});
+    else pose('NEW_PERF',{valeur:Number(c.exosAmeliores)});
+  }
+  if(prevus>0&&sets>=prevus){
+    pose('FULL_SESSION',{valeur:sets,prevus});
+    if(!Number(c.seriesEchouees)) pose('PERFECT',{valeur:sets});
+  }
+  if(!Number(c.seriesEchouees)&&sets>0) pose('NO_FAIL',{valeur:sets});
+  if(vol>0){
+    if(median>0&&vol>=median*1.25) pose('MONSTER',{valeur:vol});
+    else if(vol>=12000) pose('HIGH_VOLUME',{valeur:vol});
+  }
+  if(Number(c.rpe)>=8.5) pose('NO_MERCY',{valeur:Number(c.rpe)});
+  if(Number(c.joursDepuisDerniere)>=10) pose('RETURN',{valeur:Math.round(Number(c.joursDepuisDerniere))});
+  else if(Number(c.streak)>=3) pose('STREAK',{valeur:Number(c.streak)});
+  if(Number(c.rpe)>=7&&prevus>0&&sets>=prevus) pose('DISCIPLINE',{});
+
+  // PAS DE DOUBLONS : une famille ne parle qu'une fois, sauf « record » ou le
+  // cumul est justement l'information (un record ET plusieurs records ET un
+  // palier disent trois choses differentes).
+  const vues=new Set(),garde=[];
+  for(const b of out.sort((a,b)=>b.priorite-a.priorite)){
+    if(b.famille!=='record'&&vues.has(b.famille)) continue;
+    vues.add(b.famille); garde.push(b);
+  }
+  return garde;
+}
+// ── LE RENDU ───────────────────────────────────────────────────────────
+function _htmlBadge(b,grand){
+  const t=grand?96:64;
+  return '<div class="rc-badge'+(grand?' rc-badge-xl':'')+'" role="img" aria-label="'+escapeHtml(b.titre+'. '+b.desc)+'">'
+    +'<div class="rc-badge-hex" style="width:'+t+'px;height:'+t+'px">'
+      +'<div class="rc-badge-ico">'+_htmlGlyphe(b.icone)+'</div></div>'
+    +'<div class="rc-badge-t">'+escapeHtml(b.titre)+'</div>'
+    +(grand?'':'<div class="rc-badge-d">'+escapeHtml(b.desc)+'</div>')+'</div>';
+}
+function _htmlHeroFin(badges,ctx){
+  const r=badges.find(b=>b.k==='NEW_RECORD');
+  if(!r) return '';
+  const nb=v=>Number(v).toLocaleString('fr-FR');
+  return '<div class="rc-hero">'
+    +_htmlBadge(r,true)
+    +'<div class="rc-hero-val">'+nb(r.valeur)+' KG</div>'
+    +'<div class="rc-hero-ex">'+escapeHtml(String(r.exercice||'').toUpperCase())+'</div>'
+    +'<div class="rc-hero-prog"><span>'+nb(r.ancien)+' KG</span>'
+      +'<span class="rc-hero-fleche" aria-hidden="true">›</span>'
+      +'<span class="rc-hero-neuf">'+nb(r.valeur)+' KG</span></div>'
+    +'<div class="rc-hero-gain">+'+nb(r.gain)+' KG</div>'
+    +'</div>';
+}
+function _htmlAccomplissements(badges){
+  const autres=badges.filter(b=>b.k!=='NEW_RECORD');
+  if(!autres.length) return '';
+  return '<section class="rc-sect"><h2 class="rc-sect-t">Tes accomplissements</h2>'
+    +'<div class="rc-badges">'+autres.map(b=>_htmlBadge(b)).join('')+'</div></section>';
+}
+// ── LE PROCHAIN OBJECTIF ───────────────────────────────────────────────
+// PURE. Le prochain palier de 5 kg au-dessus du record du jour ; a defaut de
+// record, le meilleur exercice de la seance et son propre palier.
+function prochainObjectif(ctx){
+  const c=ctx||{};
+  const rec=(Array.isArray(c.records)?c.records:[]).slice().sort((a,b)=>(b.curMax||0)-(a.curMax||0))[0];
+  const base=rec?{nm:rec.nm,kg:rec.curMax}:(c.meilleurExo||null);
+  if(!base||!(base.kg>0)) return null;
+  const cible=Math.ceil((base.kg+0.01)/5)*5;
+  return {exercice:base.nm,actuel:base.kg,cible,reste:Math.round((cible-base.kg)*10)/10};
+}
+function _htmlProchainObjectif(ctx){
+  const o=prochainObjectif(ctx);
+  if(!o) return '';
+  const nb=v=>Number(v).toLocaleString('fr-FR');
+  // La barre part du palier precedent : sans origine, « 115 sur 120 » donnerait
+  // une barre presque pleine des la premiere seance.
+  const bas=Math.floor(o.actuel/5)*5;
+  const pc=Math.max(4,Math.min(96,Math.round((o.actuel-bas)/(o.cible-bas)*100)));
+  return '<section class="rc-sect"><h2 class="rc-sect-t">Ton prochain objectif</h2>'
+    +'<div class="rc-obj">'
+      +'<div class="rc-obj-ex">'+escapeHtml(String(o.exercice||'').toUpperCase())+'</div>'
+      +'<div class="rc-obj-l"><span>'+nb(o.actuel)+' KG</span><span>'+nb(o.cible)+' KG</span></div>'
+      +'<div class="rc-obj-bar"><div class="rc-obj-fill" style="width:'+pc+'%"></div>'
+        +'<div class="rc-obj-dot" style="left:'+pc+'%"></div></div>'
+      +'<div class="rc-obj-n">Encore '+String(o.reste).replace('.',',')+' kg avant ton prochain record.</div>'
+    +'</div></section>';
+}
+// ── LES COMPTEURS ──────────────────────────────────────────────────────
+// Rapides : 600 ms. Un compteur qui fait attendre n'est plus une recompense.
+// Sous « animations reduites », la valeur est posee d'emblee.
+function _compterVers(el,fin,suffixe,duree){
+  if(!el) return;
+  const reduit=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
+  const fmt=v=>Number(Math.round(v)).toLocaleString('fr-FR')+(suffixe||'');
+  if(reduit||!(fin>0)){ el.textContent=fmt(fin); return; }
+  const t0=Date.now(),d=duree||600;
+  const pas=()=>{
+    const k=Math.min(1,(Date.now()-t0)/d);
+    // Sortie douce : la valeur finale se pose au lieu de s'arreter net.
+    el.textContent=fmt(fin*(1-Math.pow(1-k,3)));
+    if(k<1) requestAnimationFrame(pas);
+  };
+  requestAnimationFrame(pas);
+}
 function buildSessionComparison(vol,data){
   const prev=currentUser.sessions.slice(0,-1);
   // Appariement sur le CRÉNEAU, pas sur le libellé. Le nom est saisi librement
@@ -53085,7 +53535,17 @@ function loadDechargeAthletes(){
     el.innerHTML='<div style="text-align:center;padding:24px;color:var(--sub);font-size:var(--fs-sm)">Aucun athlète lié à ton compte.</div>';
     _cdgMajBouton(); return;
   }
-  el.innerHTML=athletes.map(a=>{
+  // LES SUIVIS SEULEMENT. Une decharge groupee est un geste d'accompagnement :
+  // la proposer sur quelqu'un qu'on ne suit pas allonge la liste sans jamais
+  // servir. Demande de Kevin, 11/09/2026. Le repli garde TOUT LE MONDE quand
+  // personne n'est suivi — une liste vide serait un ecran mort, pas un filtre.
+  const _suivis=athletes.filter(estSuivi);
+  const _liste=_suivis.length?_suivis:athletes;
+  const _caches=athletes.length-_liste.length;
+  el.innerHTML=(_caches?'<div style="padding:9px 10px;font-size:var(--fs-2xs);color:var(--text-faint);'
+      +'border-bottom:1px solid #242424;line-height:1.5">'+_caches+' athlète'+(_caches>1?'s':'')
+      +' sans suivi ne sont pas listés ici.</div>':'')
+    +_liste.map(a=>{
     const n=((a.sessions_config)||[]).filter(s=>s&&s.active).length;
     // Un athlète qui ne peut pas être traité reste VISIBLE et cochable : c'est
     // le récapitulatif qui dira pourquoi. Le masquer ferait croire au coach
@@ -55389,6 +55849,171 @@ function _htmlDieteTransition(nut,porteur){
     <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6">${escapeHtml(DIETE_TRANSITION)}</div>
   </div>`;
 }
+// ══ L'ATHLETE REGLE SES PROPRES CIBLES ═════════════════════════════════
+// En diete flexible, les cibles ne bougeaient pas : elles venaient de
+// nutrition.macros, ecrit par le coach, et l'athlete n'avait aucune prise
+// dessus. Demande de Kevin, 14/09/2026 — objectif, plus ou moins 20 kcal, et
+// les g/kg de proteines et de lipides reglables par l'athlete lui-meme.
+//
+// TOUT PASSE PAR cibleTableur, LE MOTEUR DU TABLEAU DU COACH. Pas un second
+// calcul : le meme. C'est ce qui fait que les deux ecrans ne peuvent pas
+// diverger, et que le coach voit immediatement ce que l'athlete a change —
+// le resultat est ecrit dans nutrition.macros, la ou le coach lit deja.
+//
+// CE QUE CA NE COUVRE PAS : la diete stricte, ou les grammages viennent du
+// plan du coach et n'ont pas a etre negocies depuis l'assiette.
+const ATH_OBJECTIFS=Object.freeze([
+  {k:'seche',   lib:'Sèche'},
+  {k:'maintien',lib:'Maintien'},
+  {k:'masse',   lib:'Prise de masse'}
+]);
+const ATH_DELTA_PAS=20;
+function _athPerso(u){
+  const n=(u&&u.nutrition)||{};
+  const p=n.perso||{};
+  return {objectif:ATH_OBJECTIFS.some(o=>o.k===p.objectif)?p.objectif:null,
+          delta:Number(p.delta)||0};
+}
+// PURE. Les cibles de l'athlete, moteur du coach compris, delta applique.
+// Le delta tombe sur les GLUCIDES et eux seuls : proteines et lipides sont
+// des planchers de sante, on ne les rabote pas pour vingt calories.
+function ciblesAthlete(u){
+  const per=_athPerso(u);
+  const reg=(typeof reglagesCalcul==='function')?reglagesCalcul(u):{};
+  const opts={};
+  if(per.objectif) opts.coef=objCoefDefaut(per.objectif);
+  if(typeof reg.prot==='number') opts.protGparKg=reg.prot;
+  if(typeof reg.lip==='number')  opts.lipGparKg=reg.lip;
+  let t=null;
+  try{ t=cibleTableur(u,opts); }catch(e){ return null; }
+  if(!t||(t.manque&&t.manque.length)) return t?{manque:t.manque||[]}:null;
+  const kcal=Math.max(0,Math.round(t.kcal+per.delta));
+  const p=Math.round(t.p),l=Math.round(t.l);
+  // Les glucides absorbent l'ecart. Jamais negatifs : un total impossible se
+  // lit a zero glucide, pas en chiffre rouge invente.
+  const g=Math.max(0,Math.round((kcal-p*4-l*9)/4));
+  return {kcal,p,l,g,protGkg:t.protGkg,lipGkg:t.lipGkg,
+          coef:per.objectif?objCoefDefaut(per.objectif):t.coef,
+          objectif:per.objectif||t.phase,delta:per.delta,manque:[]};
+}
+// Ecrit les cibles LA OU TOUT LE MONDE LES LIT : nutrition.macros.on/off.
+// Les deux journees recoivent la meme valeur — le cyclage ON/OFF est une
+// decision du coach, pas de l'athlete, et _getEffectiveMacros continue
+// d'appliquer par-dessus l'adaptation de cycle.
+function _athEcrireCibles(){
+  const c=ciblesAthlete(currentUser);
+  if(!c||(c.manque&&c.manque.length)) return false;
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  const bloc={kcal:c.kcal,p:c.p,g:c.g,l:c.l};
+  const m=currentUser.nutrition.macros||{};
+  currentUser.nutrition.macros=Object.assign({},m,{on:Object.assign({},m.on,bloc),
+    off:Object.assign({},m.off,bloc),origine:'athlete'});
+  saveUser();
+  try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
+  return true;
+}
+function athObjectif(k){
+  if(!ATH_OBJECTIFS.some(o=>o.k===k)) return;
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  const p=currentUser.nutrition.perso||{};
+  p.objectif=k; currentUser.nutrition.perso=p;
+  // ET DANS nutrition.tableur, LA OU LE COACH LIT. cibleTableur prend son
+  // coefficient dans u.nutrition.tableur.coef : sans cette ligne, l'athlete
+  // aurait choisi « seche » et le tableau du coach serait reste sur le
+  // maintien — deux ecrans, deux verites, sur la meme personne.
+  const tb=currentUser.nutrition.tableur||{};
+  tb.coef=objCoefDefaut(k); tb.objectifAthlete=k;
+  currentUser.nutrition.tableur=tb;
+  _athEcrireCibles(); loadNutrition();
+}
+function athDelta(sens){
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  const p=currentUser.nutrition.perso||{};
+  // Borne a plus ou moins 500 kcal : au-dela ce n'est plus un ajustement,
+  // c'est un autre objectif — et il y a un bouton pour ca juste au-dessus.
+  p.delta=Math.max(-500,Math.min(500,(Number(p.delta)||0)+(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS)));
+  currentUser.nutrition.perso=p;
+  const tb=currentUser.nutrition.tableur||{};
+  tb.deltaAthlete=p.delta; currentUser.nutrition.tableur=tb;
+  _athEcrireCibles(); loadNutrition();
+}
+function athGkg(quoi,val){
+  const v=Number(val);
+  if(!isFinite(v)||v<=0) return;
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  const r=currentUser.nutrition.reglages||{};
+  if(quoi==='prot') r.prot=v; else if(quoi==='lip') r.lip=v; else return;
+  currentUser.nutrition.reglages=r;
+  _athEcrireCibles(); loadNutrition();
+}
+// Cote coach : une ligne, et seulement quand l'athlete a effectivement
+// touche a quelque chose. Un bandeau permanent qui repete « rien n'a change »
+// n'avertit de rien.
+function _htmlReglageAthleteCoach(c){
+  const tb=(c&&c.nutrition&&c.nutrition.tableur)||{};
+  const per=(c&&c.nutrition&&c.nutrition.perso)||{};
+  const obj=tb.objectifAthlete||per.objectif||null;
+  const d=Number(tb.deltaAthlete!=null?tb.deltaAthlete:per.delta)||0;
+  if(!obj&&!d) return '';
+  const lib=(ATH_OBJECTIFS.find(o=>o.k===obj)||{}).lib||obj;
+  const bouts=[];
+  if(obj) bouts.push('objectif « '+lib+' »');
+  if(d)   bouts.push((d>0?'+':'')+d+' kcal');
+  return '<div style="grid-column:1/-1;background:rgba(224,32,32,.10);border:1px solid rgba(224,32,32,.45);'
+    +'border-radius:var(--r-3);padding:10px 12px;margin-bottom:10px;font-size:var(--fs-xs);'
+    +'color:var(--text-strong);line-height:1.55">Réglé par l\'athlète depuis son écran : '
+    +escapeHtml(bouts.join(' · '))+'. Le calcul ci-dessous en tient compte.</div>';
+}
+function _htmlCiblesAthlete(u){
+  const c=ciblesAthlete(u);
+  if(!c) return '';
+  if(c.manque&&c.manque.length){
+    return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
+      +'padding:13px 14px;margin-bottom:18px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">'
+      +'Tes cibles ne peuvent pas être calculées : il manque '
+      +escapeHtml(c.manque.join(', '))+'. Complète ton bilan.</div>';
+  }
+  const per=_athPerso(u);
+  const bouton=(o)=>'<button type="button" class="btn btn-sm" onclick="athObjectif(\''+o.k+'\')" style="flex:1;margin:0;'
+    +'border:1px solid '+(c.objectif===o.k?'var(--red)':'var(--border)')+';'
+    +'background:'+(c.objectif===o.k?'rgba(224,32,32,.16)':'transparent')+';'
+    +'color:'+(c.objectif===o.k?'var(--red-text)':'var(--text-dim)')+';font-size:var(--fs-2xs)">'+o.lib+'</button>';
+  const ech=(v,haut)=>{ const o=[];for(let x=v;x<=haut;x+=0.1) o.push(Math.round(x*10)/10); return o; };
+  const sel=(quoi,val,bas,haut)=>'<select onchange="athGkg(\''+quoi+'\',this.value)" onclick="event.stopPropagation()" '
+    +'style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
+    +'font-size:var(--fs-2xs);padding:4px 6px">'
+    +ech(bas,haut).map(x=>'<option value="'+x+'"'+(Math.abs(x-val)<0.05?' selected':'')+'>'+String(x).replace('.',',')+' g/kg</option>').join('')
+    +'</select>';
+  const ligne=(t,v,u2,extra)=>'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
+    +'padding:7px 0;border-top:1px solid rgba(255,255,255,.06)">'
+    +'<span style="font-size:var(--fs-sm);color:var(--sub)">'+t+'</span>'
+    +'<span style="display:flex;align-items:center;gap:8px">'+(extra||'')
+    +'<span style="font-size:var(--fs-sm);font-weight:800;min-width:58px;text-align:right">'+v+u2+'</span></span></div>';
+  return '<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);'
+    +'padding:14px;margin-bottom:18px">'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;'
+    +'text-transform:uppercase;margin-bottom:9px">Mon objectif</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:12px">'+ATH_OBJECTIFS.map(bouton).join('')+'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
+    +'background:var(--surface-1);border-radius:var(--r-2);padding:9px 11px">'
+      +'<button type="button" class="btn btn-sm" onclick="athDelta(-1)" style="margin:0;min-width:52px;'
+      +'border:1px solid var(--border);background:transparent;color:var(--text)">−20</button>'
+      +'<div style="text-align:center;line-height:1.2">'
+        +'<div style="font-size:var(--fs-lg);font-weight:900">'+c.kcal+'</div>'
+        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint)">kcal par jour'
+        +(per.delta?' · '+(per.delta>0?'+':'')+per.delta:'')+'</div></div>'
+      +'<button type="button" class="btn btn-sm" onclick="athDelta(1)" style="margin:0;min-width:52px;'
+      +'border:1px solid var(--border);background:transparent;color:var(--text)">+20</button>'
+    +'</div>'
+    +'<div style="margin-top:10px">'
+      +ligne('Protéines',c.p,' g',sel('prot',Number(c.protGkg)||1.8,1.2,2.6))
+      +ligne('Lipides',c.l,' g',sel('lip',Number(c.lipGkg)||0.9,0.6,1.4))
+      +ligne('Glucides',c.g,' g','<span style="font-size:var(--fs-2xs);color:var(--text-faint)">le reste</span>')
+    +'</div>'
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:9px">'
+    +'Ton coach voit ces cibles : elles remplacent celles de sa grille.</div>'
+    +'</div>';
+}
 function _getEffectiveMacros(nut,isOn,dateStr,porteur){
   // Ne s'applique qu'en Diète Flexible — toutes les autres diètes retournent la base intacte
   const base=(isOn?nut.macros?.on:nut.macros?.off)||{};
@@ -56576,7 +57201,9 @@ function _renderNutriContent(type,dateAff){
     ?`<img src="${escapeHtml(_flxPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
     :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
   if(type==='flexible'){
-    contentEl.innerHTML=`
+    // LA CARTE DES CIBLES EN TETE : c'est ce qu'on vient regler, et tout ce
+    // qui suit en decoule.
+    contentEl.innerHTML=`${(()=>{ try{ return _htmlCiblesAthlete(currentUser); }catch(e){ return ''; } })()}`+`
       <div class="banner-hero" style="margin-bottom:18px;${_animEntree('nut-hero')}">
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           ${_flxCircle}
@@ -59946,6 +60573,166 @@ function _fjCopier(entrees,dateCible,repas){
   const ids=_fjIdsNeufs(dateCible,entrees.length);
   return entrees.map((e,i)=>Object.assign({},e,{id:ids[i]},repas?{repas}:{}));
 }
+// ══ MEAL PREP ET RECETTE ═══════════════════════════════════════════════
+// Le journal sait compter un aliment a la fois. Il ne sait pas repondre a la
+// seule question que pose quelqu'un qui cuisine a l'avance : « j'ai fait deux
+// kilos de riz et un kilo de poulet pour six repas — qu'est-ce que j'ai dans
+// cette assiette ? ». Demande de Kevin, 14/09/2026.
+//
+// DEUX DIVISEURS, PARCE QUE CE SONT DEUX GESTES DIFFERENTS :
+//   • meal prep : on divise par un NOMBRE DE PORTIONS, toutes egales ;
+//   • recette   : on prend une PART d'un tout — en grammes peses, ou « a vue
+//     de nez » en pourcentage, parce que personne ne pese un gateau.
+//
+// Les ingredients sont saisis en valeurs POUR 100 g, comme sur un emballage :
+// c'est ce qui est ecrit sur le paquet, et c'est donc ce qu'on a sous les yeux.
+const PREP_MODES={prep:'Meal prep',recette:'Recette'};
+let _prepEtat={mode:'prep',ing:[],portions:2,total_g:'',part_g:'',part_pc:100,base:'g'};
+// PURE, et c'est voulu : tout le calcul tient ici, sans DOM, et la suite de
+// tests l'eprouve directement.
+function prepCalculer(etat){
+  // NORMALISE EN TETE. Les deux premieres branches se gardaient une par une
+  // (etat&&etat.mode), la troisieme non : prepCalculer(null) levait sur
+  // etat.total_g. Une garde par branche finit toujours par en oublier une.
+  const e=etat||{};
+  const ing=e.ing||[];
+  const tot={kcal:0,p:0,c:0,l:0,g:0};
+  for(const i of ing){
+    const g=Number(i&&i.g)||0;
+    if(g<=0) continue;
+    tot.g+=g;
+    tot.kcal+=(Number(i.k)||0)*g/100;
+    tot.p   +=(Number(i.p)||0)*g/100;
+    tot.c   +=(Number(i.c)||0)*g/100;
+    tot.l   +=(Number(i.l)||0)*g/100;
+  }
+  // LE FACTEUR, SELON LE MODE. Il vaut 0 quand la saisie ne permet pas encore
+  // de conclure : mieux vaut n'afficher aucun chiffre qu'un chiffre faux.
+  let f=0;
+  if(e.mode==='prep'){
+    const n=Math.floor(Number(e.portions)||0);
+    if(n>0) f=1/n;
+  } else if(e.base==='pc'){
+    const pc=Number(e.part_pc);
+    if(isFinite(pc)&&pc>0) f=Math.min(pc,100)/100;
+  } else {
+    // Le poids total peut etre laisse vide : on prend alors la somme des
+    // ingredients. Un plat cuit perd de l'eau, d'ou la possibilite de corriger.
+    const tt=Number(e.total_g)||tot.g;
+    const part=Number(e.part_g)||0;
+    if(tt>0&&part>0) f=part/tt;
+  }
+  const r=v=>Math.round(v*10)/10;
+  return {
+    total:{kcal:Math.round(tot.kcal),p:r(tot.p),c:r(tot.c),l:r(tot.l),g:Math.round(tot.g)},
+    facteur:f,
+    portion:{kcal:Math.round(tot.kcal*f),p:r(tot.p*f),c:r(tot.c*f),l:r(tot.l*f),
+             g:Math.round(tot.g*f)}
+  };
+}
+function prepNom(etat){
+  const noms=((etat&&etat.ing)||[]).map(i=>String(i&&i.n||'').trim()).filter(Boolean);
+  const t=(etat&&etat.mode)==='prep'?'Meal prep':'Recette';
+  if(!noms.length) return t;
+  return t+' — '+noms.slice(0,3).join(', ')+(noms.length>3?'…':'');
+}
+function ouvrirPrep(mode){
+  _prepEtat={mode:(mode==='recette'?'recette':'prep'),
+    ing:[{n:'',g:'',k:'',p:'',c:'',l:''},{n:'',g:'',k:'',p:'',c:'',l:''}],
+    portions:2,total_g:'',part_g:'',part_pc:100,base:'g'};
+  go('s-food-prep');
+  _prepRendre();
+}
+function prepMode(m){ _prepEtat.mode=(m==='recette'?'recette':'prep'); _prepRendre(); }
+function prepBase(b){ _prepEtat.base=(b==='pc'?'pc':'g'); _prepRendre(); }
+function prepAjouterLigne(){ _prepEtat.ing.push({n:'',g:'',k:'',p:'',c:'',l:''}); _prepRendre(); }
+function prepRetirerLigne(i){ _prepEtat.ing.splice(i,1); if(!_prepEtat.ing.length) prepAjouterLigne(); else _prepRendre(); }
+// La saisie ne redessine PAS la liste : reecrire le balisage a chaque frappe
+// ferait perdre le curseur et le clavier. Seul le resultat est repeint.
+function prepChamp(i,cle,val){
+  const l=_prepEtat.ing[i]; if(!l) return;
+  l[cle]=val;
+  _prepResultat();
+}
+function prepDiviseur(cle,val){ _prepEtat[cle]=val; _prepResultat(); }
+function _prepResultat(){
+  const z=document.getElementById('prep-resultat');
+  if(!z) return;
+  const r=prepCalculer(_prepEtat);
+  const b=document.getElementById('prep-ajouter');
+  if(b) b.disabled=!(r.portion.kcal>0);
+  const ligne=(t,v,u)=>'<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);line-height:1.9">'
+    +'<span style="color:var(--sub)">'+t+'</span><span style="font-weight:800">'+v+(u||'')+'</span></div>';
+  z.innerHTML='<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Dans ton assiette</div>'
+    +(r.portion.kcal>0
+      ? ligne('Calories',r.portion.kcal,' kcal')+ligne('Protéines',r.portion.p,' g')
+        +ligne('Glucides',r.portion.c,' g')+ligne('Lipides',r.portion.l,' g')
+        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px;'
+        +'padding-top:8px;border-top:1px solid var(--border)">Préparation entière : '
+        +r.total.kcal+' kcal · '+r.total.g+' g</div>'
+      : '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Renseigne au moins un ingrédient avec sa quantité et ses valeurs pour 100 g.</div>')
+    +'</div>';
+}
+function _prepRendre(){
+  const z=document.getElementById('prep-corps');
+  if(!z) return;
+  const e=_prepEtat;
+  const t=document.getElementById('prep-titre');
+  if(t) t.textContent=PREP_MODES[e.mode];
+  const ch=(v)=>escapeHtml(v==null?'':String(v));
+  const onglet=(m,lib)=>'<button type="button" class="btn btn-sm" onclick="prepMode(\''+m+'\')" style="flex:1;margin:0;'
+    +'border:1px solid '+(e.mode===m?'var(--red)':'var(--border)')+';background:'+(e.mode===m?'rgba(224,32,32,.16)':'transparent')
+    +';color:'+(e.mode===m?'var(--red-text)':'var(--text-dim)')+'">'+lib+'</button>';
+  const lignes=e.ing.map((l,i)=>
+    '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px;margin-bottom:8px">'
+    +'<div style="display:flex;gap:8px;margin-bottom:6px">'
+      +'<input placeholder="Ingrédient" value="'+ch(l.n)+'" oninput="prepChamp('+i+',\'n\',this.value)" style="flex:1;min-width:0">'
+      +'<button type="button" onclick="prepRetirerLigne('+i+')" aria-label="Retirer" style="min-width:44px;min-height:44px;'
+      +'background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer">×</button>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:6px">'
+      +'<input type="number" inputmode="decimal" placeholder="grammes" value="'+ch(l.g)+'" oninput="prepChamp('+i+',\'g\',this.value)">'
+      +'<input type="number" inputmode="decimal" placeholder="kcal/100g" value="'+ch(l.k)+'" oninput="prepChamp('+i+',\'k\',this.value)">'
+      +'<input type="number" inputmode="decimal" placeholder="P/100g" value="'+ch(l.p)+'" oninput="prepChamp('+i+',\'p\',this.value)">'
+      +'<input type="number" inputmode="decimal" placeholder="G/100g" value="'+ch(l.c)+'" oninput="prepChamp('+i+',\'c\',this.value)">'
+      +'<input type="number" inputmode="decimal" placeholder="L/100g" value="'+ch(l.l)+'" oninput="prepChamp('+i+',\'l\',this.value)">'
+    +'</div></div>').join('');
+  const diviseur=e.mode==='prep'
+    ? '<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">En combien de repas ?</div>'
+      +'<input type="number" inputmode="numeric" min="1" value="'+ch(e.portions)+'" oninput="prepDiviseur(\'portions\',this.value)" style="width:100%">'
+    : '<div style="display:flex;gap:8px;margin-bottom:8px">'
+        +'<button type="button" class="btn btn-sm" onclick="prepBase(\'g\')" style="flex:1;margin:0;border:1px solid '
+          +(e.base==='g'?'var(--red)':'var(--border)')+';background:transparent;color:'+(e.base==='g'?'var(--red-text)':'var(--text-dim)')+'">En grammes</button>'
+        +'<button type="button" class="btn btn-sm" onclick="prepBase(\'pc\')" style="flex:1;margin:0;border:1px solid '
+          +(e.base==='pc'?'var(--red)':'var(--border)')+';background:transparent;color:'+(e.base==='pc'?'var(--red-text)':'var(--text-dim)')+'">En parts</button>'
+      +'</div>'
+      +(e.base==='g'
+        ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+          +'<input type="number" inputmode="decimal" placeholder="poids total (g)" value="'+ch(e.total_g)+'" oninput="prepDiviseur(\'total_g\',this.value)">'
+          +'<input type="number" inputmode="decimal" placeholder="ma part (g)" value="'+ch(e.part_g)+'" oninput="prepDiviseur(\'part_g\',this.value)">'
+          +'</div><div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">'
+          +'Poids total vide : on prend la somme des ingrédients. À remplir si le plat a perdu de l\'eau à la cuisson.</div>'
+        : '<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">Quelle part en as-tu mangée ?</div>'
+          +'<input type="number" inputmode="decimal" min="1" max="100" placeholder="%" value="'+ch(e.part_pc)+'" oninput="prepDiviseur(\'part_pc\',this.value)" style="width:100%">');
+  z.innerHTML='<div style="display:flex;gap:8px;margin-bottom:16px">'+onglet('prep','Meal prep')+onglet('recette','Recette')+'</div>'
+    +lignes
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-bottom:18px" onclick="prepAjouterLigne()">+ Ingrédient</button>'
+    +'<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:16px">'+diviseur+'</div>'
+    +'<div id="prep-resultat" style="margin-bottom:16px"></div>'
+    +'<button type="button" class="btn btn-red" id="prep-ajouter" onclick="prepJournaliser()" style="width:100%" disabled>Ajouter à mon journal</button>';
+  _prepResultat();
+}
+function prepJournaliser(){
+  const r=prepCalculer(_prepEtat);
+  if(!(r.portion.kcal>0)) return;
+  // UNE SEULE ENTREE, avec des valeurs ABSOLUES : c'est exactement ce que le
+  // journal additionne deja. Rien de neuf dans le modele de donnees.
+  const date=(typeof _fjJour==='function')?_fjJour():localISODate(new Date());
+  const e={n:prepNom(_prepEtat),kcal:r.portion.kcal,p:r.portion.p,c:r.portion.c,l:r.portion.l};
+  const ok=_fjAjouter(_fjCopier([e],date,null),date,prepNom(_prepEtat));
+  if(ok){ toast('Ajouté à ton journal','var(--green)'); loadNutrition(); }
+}
 function _fjAjouter(copies,dateCible,quoi){
   if(!copies.length) return false;
   if(!currentUser.nutrition) currentUser.nutrition={};
@@ -60365,7 +61152,14 @@ function _renderFjActions(){
   // fonctionne entierement hors ligne : rien de ce qu elle fait ne sort.
   const scan=(typeof navigator!=='undefined'&&navigator.onLine===false)?''
     :'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirScan()">Scanner</button>';
-  el.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirAlimentPerso()">+ Nouvel aliment</button>'+scan;
+  // DEUX ENTREES DE PLUS, sur une seconde ligne : quatre boutons cote a cote
+  // ne tiendraient pas a 320 px, et ces deux-la repondent a une autre question
+  // que « quel aliment » — « combien dans mon assiette ».
+  el.innerHTML='<div style="display:flex;gap:8px;margin-bottom:8px">'
+    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirAlimentPerso()">+ Nouvel aliment</button>'+scan+'</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirPrep(\'prep\')">Meal prep</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirPrep(\'recette\')">Recette</button></div>';
 }
 function _renderFjRecent(){
   const el=document.getElementById('fj-recent-section');
@@ -65157,11 +65951,13 @@ function renderCoachNutriSection(c){
            en dessous en depend — les grammages, les g/kg, le plancher — et il
            etait invisible, alors que trois lectures concurrentes pouvaient en
            donner trois valeurs differentes sur le meme dossier. -->
-      ${(()=>{ try{ return htmlPoidsReference(c); }catch(e){ return ''; } })()}
-      <!-- LES TABLEAUX DU CALCUL, EN TETE. Ils disent d'ou vient chaque
-           chiffre ; ce qui suit ne fait que le regler. L'ordre inverse
-           obligeait a regler avant de savoir ce qu'on reglait. -->
-      ${(()=>{ try{ return _htmlTableauxTableur(c); }catch(e){ return ''; } })()}
+      <!-- ⚠ LE POIDS DE REFERENCE ET LES TABLEAUX DU CALCUL ONT QUITTE CETTE
+           SECTION le 14/09/2026, sur demande de Kevin : « rends-les plus
+           visibles, pas d'onglet deroulant pour ces tableaux, place-les
+           directement sur la page nutrition sous le rectangle des phases ».
+           Ils sont desormais rendus AVANT la section, sans repli : c'est le
+           calcul, on le lit, on ne va pas le chercher. Voir _tableauxCalcul
+           plus bas. Rien de leur contenu n'a change. -->
       <!-- ⚠ LES DEUX MENUS DEROULANTS QUI ETAIENT ICI ONT DEMENAGE le
            08/09/2026, sur demande de Kevin — « diete flexible ou stricte, je
            veux que tu remontes beaucoup plus haut et de maniere plus
@@ -65256,6 +66052,19 @@ function renderCoachNutriSection(c){
     // encore ce qu'il voit. Un bandeau permanent qui repete « tout va bien »
     // n'avertit plus de rien : celui-la ne parle que lorsqu'il a une nouvelle.
     // ── CE QUE LE COACH REGLE ──────────────────────────────────────────────
+    // ── LE CALCUL, A DECOUVERT ─────────────────────────────────────
+    // Sans cc-sect : pas de chevron, pas de repli, pas de memoire d'etat. La
+    // classe tbk-serre resserre les hauteurs de ligne et fait passer les
+    // quatre tableaux sur deux colonnes des que la fenetre le permet — ils
+    // s'etiraient sur toute la longueur de l'ecran, et il fallait defiler
+    // pour comparer deux chiffres qui se repondent.
+    + '<div class="tbk-serre">'
+      // CE QUE L'ATHLETE A REGLE, DIT AU COACH. Sans cette ligne, le coach
+      // verrait des chiffres bouger sans savoir qui les a bouges.
+      + (()=>{ try{ return _htmlReglageAthleteCoach(c); }catch(e){ return ''; } })()
+      + (()=>{ try{ return htmlPoidsReference(c); }catch(e){ return ''; } })()
+      + (()=>{ try{ return _htmlTableauxTableur(c); }catch(e){ return ''; } })()
+      + '</div>'
     + _sect('ccd-nut-reglages','Régler les objectifs','var(--border)',_reglages)
     + _sect('ccd-nut-strict','Diète stricte','var(--border)',_strict);
 }
