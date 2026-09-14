@@ -38235,6 +38235,116 @@ vendredi 78 6h 44m
         return (r&&r.n===0)?true:_echec(JSON.stringify(r));})());
     })();
 
+    // ── Rattraper, et la lecture croisee qui montre ses appuis — 6 cas ──
+    (()=>{
+      const iso=d=>localISODate(new Date(d));
+      const j=Date.now();
+      ok('Rattraper vise LE PLUS ANCIEN trou, celui qu\'on va perdre',(()=>{
+        // Le plus ancien sort de la fenetre en premier : commencer par le plus
+        // recent, c'est perdre l'autre pour de bon.
+        const u={stepsLog:[{date:iso(j-1*864e5),count:9000}],sleepLog:[]};
+        return premierJourVide(u,'pas',7)===iso(j-7*864e5)
+          ?true:_echec(premierJourVide(u,'pas',7));})());
+      ok('Le trou est compté PAR DOMAINE, pas globalement',(()=>{
+        // Une journee ou les pas sont notes mais pas la nuit est un trou pour
+        // le sommeil, et pas pour les pas.
+        const u={stepsLog:Array.from({length:7},(_,i)=>({date:iso(j-(i+1)*864e5),count:9000})),
+                 sleepLog:[]};
+        if(premierJourVide(u,'pas',7)!==null) return _echec('un jour de pas complet compte comme vide');
+        return premierJourVide(u,'sommeil',7)===iso(j-7*864e5)
+          ?true:_echec('sommeil : '+premierJourVide(u,'sommeil',7));})());
+      ok('Sans trou, aucun bouton Rattraper n\'est rendu',(()=>{
+        const u={stepsLog:Array.from({length:7},(_,i)=>({date:iso(j-(i+1)*864e5),count:9000})),
+                 sleepLog:[]};
+        return _htmlRattraper(u,'pas')===''?true:_echec('un bouton est rendu sans trou');})());
+      ok('Le bouton dit COMBIEN et PAR OU on commence',(()=>{
+        const u={stepsLog:[{date:iso(j-1*864e5),count:9000}],sleepLog:[]};
+        const h=_htmlRattraper(u,'pas');
+        if(!/6 jours sans données/.test(h)) return _echec('le compte manque : '+h.replace(/<[^>]*>/g,' ').slice(0,120));
+        return /on commence par/.test(h)
+          ?true:_echec('le premier jour n\'est pas nommé');})());
+      ok('La lecture croisee MONTRE ses appuis, et ne montre pas de score',(()=>{
+        // C'est tout le grief : l'athlete lisait la phrase sans jamais savoir
+        // ce qui l'avait produite, alors que le coach voit les criteres.
+        const src=String(_htmlRecuperationLifestyle);
+        if(src.indexOf('criteres')<0) return _echec('les criteres ne sont pas lus');
+        if(/points *\+|>\$\{r\.points\}|r\.points *\+/.test(src))
+          return _echec('le score est affiche');
+        // ET LE SEUIL NE BOUGE PAS : montrer les criteres des le premier ferait
+        // un encart permanent chez quiconque dort mal une semaine.
+        return src.indexOf('RECUP_SEUIL_MESSAGE')>=0
+          ?true:_echec('le seuil de parole a ete contourne');})());
+      ok('ON DECRIT, ON NE PRESCRIT PAS : aucun verbe d\'ordre ajouté',(()=>{
+        // La regle est ecrite noir sur blanc dans le fichier. Ce bloc ne doit
+        // ajouter aucun conseil : il reprend les libelles deja produits.
+        const src=String(_htmlRecuperationLifestyle)+String(_htmlCafeLimite);
+        const ordres=['Couche-toi','Dors ','Repose-toi','Arrête','Réduis','Évite ','Il faut '];
+        const t=ordres.filter(x=>src.indexOf(x)>=0);
+        return t.length?_echec('conseil trouvé : '+t.join(', ')):true;})());
+    })();
+
+    // ── Cafeine : l'heure limite AVANT, pas le constat APRES — 7 cas ──
+    (()=>{
+      const iso=d=>localISODate(new Date(d));
+      const j=Date.now();
+      const dossier=(prises,bed)=>{
+        const days={};
+        for(let i=1;i<=10;i++) days[iso(j-i*864e5)]=prises;
+        return {
+          sleepLog:Array.from({length:10},(_,i)=>({date:iso(j-(i+1)*864e5),duration:7,bed})),
+          nutrition:{caffeine:{days}}
+        };
+      };
+      ok('L\'heure limite recule quand la dose monte',(()=>{
+        // Deux demi-vies pour passer de 200 a 50 mg : dix heures avant le
+        // coucher. Une seule pour passer de 100 a 50 : cinq heures.
+        const a=heureDernierCafe(dossier([{mg:200,time:'09:00'}],'23:00'));
+        const b=heureDernierCafe(dossier([{mg:100,time:'09:00'}],'23:00'));
+        if(a==null||b==null) return _echec('a='+a+' b='+b);
+        // 23h00 − 10h = 13h00 ; 23h00 − 5h = 18h00.
+        if(a.limite!==13*60) return _echec('200 mg : '+_libHeure(a.limite));
+        return b.limite===18*60?true:_echec('100 mg : '+_libHeure(b.limite));})());
+      ok('Elle part du coucher HABITUEL, pas d\'une heure inventee',(()=>{
+        const a=heureDernierCafe(dossier([{mg:100,time:'09:00'}],'23:00'));
+        const b=heureDernierCafe(dossier([{mg:100,time:'09:00'}],'01:00'));
+        if(a==null||b==null) return _echec('resultat manquant');
+        // Un coucher a 1 h du matin recule la limite de deux heures.
+        if(b.limite!==20*60) return _echec('coucher 1h : '+_libHeure(b.limite));
+        return a.coucher===23*60?true:_echec('coucher retenu : '+_libHeure(a.coucher));})());
+      ok('LE PASSAGE DE MINUIT NE FAIT PAS REMONTER L\'HEURE',(()=>{
+        // Un coucher a 00h30 moins cinq heures tombe a 19h30 LA VEILLE : sans
+        // modulo, la soustraction rendrait un nombre negatif et _libHeure
+        // afficherait n'importe quoi.
+        const r=heureDernierCafe(dossier([{mg:100,time:'09:00'}],'00:30'));
+        if(!r) return _echec('aucun resultat');
+        return (r.limite>=0&&r.limite<1440&&r.limite===19*60+30)
+          ?true:_echec('limite '+r.limite+' ('+_libHeure(r.limite)+')');})());
+      ok('SANS HISTORIQUE DE CAFEINE, ON NE DIT RIEN',(()=>{
+        // Annoncer une heure limite de cafe a quelqu'un qui n'en boit pas est
+        // du bruit, et du bruit qui se presente comme un conseil.
+        const u=dossier([],'23:00');
+        return heureDernierCafe(u)===null
+          ?true:_echec('une heure est annoncee sans la moindre prise');})());
+      ok('Sans coucher connu, on se tait aussi',(()=>{
+        const u=dossier([{mg:100,time:'09:00'}],'23:00');
+        u.sleepLog=[];
+        return heureDernierCafe(u)===null
+          ?true:_echec('une heure est annoncee sans coucher connu');})());
+      ok('Une dose deja sous la cible ne fait pas reculer l\'heure',(()=>{
+        // 30 mg ne depassent jamais les 50 mg vises : la limite est le coucher
+        // lui-meme, pas une heure anterieure calculee sur un logarithme negatif.
+        const r=heureDernierCafe(dossier([{mg:30,time:'09:00'}],'23:00'));
+        if(!r) return _echec('aucun resultat');
+        return r.limite===23*60?true:_echec('limite '+_libHeure(r.limite));})());
+      ok('Le modele de demi-vie n\'est ecrit qu\'UNE fois',(()=>{
+        // Deux modeles de demi-vie finiraient par diverger, et c'est la
+        // consigne explicite : reutiliser, ne pas reecrire.
+        const src=String(heureDernierCafe);
+        if(src.indexOf('DEMI_VIE_CAFEINE_H')<0) return _echec('la demi-vie n\'est pas celle du module');
+        return src.indexOf('CAFEINE_RESIDU_CIBLE')>=0
+          ?true:_echec('la cible n\'est pas celle du module');})());
+    })();
+
     // ── Les trous se voient, les habitudes arrivent, les fleches servent ──
     (()=>{
       const _sU=currentUser;

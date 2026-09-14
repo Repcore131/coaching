@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1198';
+window.RC_BUILD='1199';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2132,6 +2132,15 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .san-fait-l{flex:1;min-width:0;font-size:var(--fs-xs);color:var(--sub)}
 .san-fait-v{font-size:var(--fs-sm);font-weight:900;letter-spacing:.5px;white-space:nowrap}
 .san-fait-n{flex-basis:100%;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5}
+/* Le raccourci de rattrapage. Il precede les actions et se distingue d'elles :
+   ce n'est pas « saisir », c'est « saisir CE JOUR-LA ». */
+.san-rattrap{display:block;width:100%;text-align:left;margin-bottom:10px;padding:10px 12px;
+  min-height:44px;border-radius:var(--r-2);cursor:pointer;font-family:inherit;
+  border:1px dashed color-mix(in srgb,var(--amber) 45%,transparent);
+  background:color-mix(in srgb,var(--amber) 7%,transparent)}
+.san-rattrap-t{display:block;font-size:var(--fs-xs);font-weight:900;letter-spacing:1.5px;
+  text-transform:uppercase;color:var(--warning);margin-bottom:2px}
+.san-rattrap-n{display:block;font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.5}
 .san-actions{display:flex;flex-direction:column;gap:8px}
 .san-actions .btn{width:100%;margin:0;min-height:44px}
 .san-src{width:100%;margin-top:10px;padding:8px 10px;border-radius:var(--r-2);cursor:pointer;
@@ -9812,6 +9821,10 @@ const COACH_PHOTO='icons/coach.jpg';
            portent en plus la lecture a 28 jours. Le bloc ne se rend pas du
            tout si le coach n'en a assigne aucune — pas de cadre vide. -->
       <div id="lifestyle-habitudes"></div>
+      <!-- LA LECTURE CROISEE, ET L'HEURE LIMITE DE CAFEINE. Toutes deux
+           DESCRIPTIVES : des chiffres deja calcules ailleurs, remis sous les
+           yeux de celui qui les vit. Aucun conseil n'est genere. -->
+      <div id="lifestyle-croise"></div>
     </div>
   </div>
 </div>
@@ -70900,6 +70913,59 @@ function coucherHabituel(user){
 
 const CAFEINE_NOTE_DEMIVIE="Estimation sur une demi-vie moyenne de 5 h : la vitesse d'élimination varie beaucoup d'une personne à l'autre.";
 
+// ══ L'HEURE LIMITE, AVANT — ET NON LE CONSTAT, APRES ════════════════════
+//
+// _htmlCafeineCoucher et _htmlCafeineNuits ne parlent que RETROSPECTIVEMENT :
+// il faut avoir deja bu pour qu'ils disent quoi que ce soit, et le second
+// attend meme que le residu depasse le seuil d'alerte. Par construction, ils
+// arrivent trop tard — au moment ou l'on peut encore decider, ils se taisent.
+//
+// Celle-ci repond a la question qu'on se pose LE MATIN : jusqu'a quelle heure
+// puis-je boire mon cafe habituel ?
+//
+// LE MODELE N'EST PAS REECRIT. DEMI_VIE_CAFEINE_H et CAFEINE_RESIDU_CIBLE sont
+// ceux de cafeineResiduelle : deux modeles de demi-vie finiraient par diverger,
+// et c'est celui qui derive qui se met a mentir en premier. La forme est
+// fermee plutot qu'un balayage — on cherche t tel que dose·2^(−(coucher−t)/T)
+// vaut la cible, donc coucher − t = T·log2(dose/cible).
+//
+// LA DOSE EST CELLE DE L'ATHLETE, la mediane de ses prises reelles : annoncer
+// une heure calculee sur un expresso standard a quelqu'un qui boit des mugs de
+// filtre serait une heure fausse presentee comme un conseil.
+const CAFE_LIMITE_JOURS=14;
+function heureDernierCafe(u){
+  // SANS HISTORIQUE, ON NE DIT RIEN. Une heure limite de cafe annoncee a
+  // quelqu'un qui n'en boit pas est du bruit — et du bruit qui se presente
+  // comme un conseil.
+  const jours=(u&&u.nutrition&&u.nutrition.caffeine&&u.nutrition.caffeine.days)||{};
+  const doses=[];
+  const d0=new Date(); d0.setHours(12,0,0,0);
+  for(let i=1;i<=CAFE_LIMITE_JOURS;i++){
+    const j=new Date(d0); j.setDate(d0.getDate()-i);
+    (jours[localISODate(j)]||[]).forEach(e=>{
+      const mg=Number(e&&e.mg);
+      if(isFinite(mg)&&mg>0) doses.push(mg);
+    });
+  }
+  if(!doses.length) return null;
+  doses.sort((a,b)=>a-b);
+  const dose=doses[Math.floor(doses.length/2)];
+  // Le coucher habituel vient de coucherHabituel, qui sert deja l'ecran
+  // Cafeine : une seconde definition du « coucher habituel » sur le meme
+  // dossier donnerait deux heures differentes sur deux ecrans.
+  const c=coucherHabituel(u);
+  if(!c||c.min==null) return null;
+  // Une dose deja sous la cible ne recule rien : le logarithme serait negatif
+  // et l'heure repartirait APRES le coucher.
+  const recul=dose<=CAFEINE_RESIDU_CIBLE?0
+    :Math.round(DEMI_VIE_CAFEINE_H*60*(Math.log(dose/CAFEINE_RESIDU_CIBLE)/Math.LN2));
+  // ⚠ MODULO 1440, ET C'EST LE PIEGE. Un coucher a 00h30 moins cinq heures
+  // tombe a 19h30 LA VEILLE : sans le modulo, la soustraction rend un nombre
+  // negatif, et _libHeure en fait n'importe quoi.
+  return {limite:((c.min-recul)%1440+1440)%1440,coucher:c.min,dose,
+    nuits:c.nuits,source:c.source};
+}
+
 // Écran Caféine, sous la jauge. Rien si l'heure de coucher est inconnue, rien
 // s'il ne reste plus rien à annoncer.
 function _htmlCafeineCoucher(entrees,user){
@@ -70920,6 +70986,21 @@ function _htmlCafeineCoucher(entrees,user){
   </div>`;
 }
 
+// L'heure limite, rendue. Muette sans historique de cafeine ou sans coucher
+// connu : heureDernierCafe rend null dans les deux cas, et une carte vide vaut
+// moins que pas de carte.
+function _htmlCafeLimite(u){
+  const r=heureDernierCafe(u);
+  if(!r) return '';
+  return `<section class="san-carte">
+    <div class="san-tete"><h2 class="san-t">Dernier café</h2></div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">
+      Pour qu'il t'en reste moins de ${CAFEINE_RESIDU_CIBLE}&nbsp;mg à ton coucher habituel
+      (${_libHeure(r.coucher)}), ta dernière prise de ${r.dose}&nbsp;mg devrait être avant
+      <strong style="color:var(--warning)">${_libHeure(r.limite)}</strong>.</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">${escapeHtml(CAFEINE_NOTE_DEMIVIE)}</div>
+  </section>`;
+}
 // Écran Sommeil, la même chose dans l'autre sens : les nuits de la semaine
 // affichée où il restait de la caféine au coucher. L'heure retenue est celle
 // RELEVÉE cette nuit-là — ce n'est pas une hypothèse, c'est une donnée.
@@ -75625,6 +75706,38 @@ function _htmlRecuperationAthlete(user){
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(RECUP_PHRASE_ATHLETE)}</div>
   </div>`;
 }
+// ── Sur Lifestyle : LA MEME PHRASE, MAIS ON MONTRE SUR QUOI ELLE S'APPUIE ─
+//
+// L'athlete lisait « ton sommeil, ton ressenti et ton volume vont dans le meme
+// sens » sans jamais savoir CE QUI avait produit la phrase. Le coach, lui, voit
+// les criteres remplis depuis toujours (_htmlRecuperationCoach). Le meme
+// dossier, deux niveaux d'explication : celui qui vit la fatigue en savait
+// moins que celui qui la commente.
+//
+// ON DECRIT, ON NE PRESCRIT PAS. La regle est ecrite noir sur blanc dans ce
+// fichier : aucun conseil de sommeil, d'alimentation ni de moral n'est genere.
+// Ce bloc n'ajoute donc AUCUN texte : il reprend les libelles et les chiffres
+// que scoreRecuperation a deja produits — « sommeil court (6h10 sur 5 nuits) »
+// — et la phrase existante, inchangee. Pas de verbe a l'imperatif, pas de
+// seuil affiche comme un verdict, pas de score.
+//
+// LE SEUIL NE BOUGE PAS NON PLUS. RECUP_SEUIL_MESSAGE reste ce qui decide de
+// parler : montrer les criteres des le premier ferait un encart permanent chez
+// quiconque dort mal une semaine.
+function _htmlRecuperationLifestyle(user){
+  let r;
+  try{ r=scoreRecuperation(user); }catch(e){ return ''; }
+  if(!r||r.points<RECUP_SEUIL_MESSAGE) return '';
+  const lignes=(r.criteres||[]).map(x=>
+    `<div class="san-fait"><span class="san-fait-l">${escapeHtml(x.lib)}</span>`
+    +`<span class="san-fait-v" style="color:var(--text)">${escapeHtml(String(x.valeur))}</span></div>`).join('');
+  return `<section class="san-carte">
+    <div class="san-tete"><h2 class="san-t">Ce qui va dans le même sens</h2></div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7;margin-bottom:12px">${escapeHtml(RECUP_PHRASE_ATHLETE)}</div>
+    <div class="san-faits" style="border-top:1px solid var(--surface-2);padding-top:10px;margin-bottom:0">${lignes}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">D'après ce que tu as saisi. Aucun seuil n'est franchi : c'est une conversation à avoir avec ton coach.</div>
+  </section>`;
+}
 // N2.8 — LE MESSAGE NOMME LA REGLE QUI A REELLEMENT PRODUIT LE NOMBRE.
 // Il citait TOUJOURS KCAL_PLANCHER_PAR_KG — « 22 kcal/kg » — alors que
 // plancherEffectif rend un champ `regle` qui peut valoir masse_maigre (30 kcal
@@ -78371,12 +78484,59 @@ function _htmlSemaineSante(u){
 // affichee comme une dette hebdomadaire serait un chiffre faux presente avec
 // aplomb — la meme erreur que la moyenne sur sept jours dont trois sont vides,
 // que sanResume evite deja.
+// Le raccourci, rendu seulement s'il y a quelque chose a rattraper.
+function _htmlRattraper(u,quoi){
+  const n=[];
+  const d=new Date(); d.setHours(12,0,0,0);
+  for(let i=1;i<=7;i++){
+    const j=new Date(d); j.setDate(d.getDate()-i);
+    const iso=localISODate(j);
+    if((quoi==='sommeil'?sanSommeilMin(u,iso):sanPas(u,iso))==null) n.push(iso);
+  }
+  if(!n.length) return '';
+  const q=quoi==='sommeil'?'nuit':'jour';
+  const prem=premierJourVide(u,quoi,7);
+  const lbl=prem?new Date(prem+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric'}):'';
+  return '<button type="button" class="san-rattrap" onclick="sanRattraper(\''+quoi+'\')">'
+    +'<span class="san-rattrap-t">Rattraper</span>'
+    +'<span class="san-rattrap-n">'+n.length+' '+q+(n.length>1?'s':'')+' sans données cette semaine'
+    +(lbl?' · on commence par '+escapeHtml(lbl):'')+'</span></button>';
+}
 function _sanFait(lbl,val,coul,note){
   return '<div class="san-fait">'
     +'<span class="san-fait-l">'+escapeHtml(lbl)+'</span>'
     +'<span class="san-fait-v"'+(coul?' style="color:'+coul+'"':'')+'>'+escapeHtml(val)+'</span>'
     +(note?'<span class="san-fait-n">'+escapeHtml(note)+'</span>':'')
     +'</div>';
+}
+// ══ RATTRAPER ══════════════════════════════════════════════════════════
+//
+// La seconde moitie du probleme des trous. Les voir ne suffit pas : pour
+// rattraper trois jours, il fallait ouvrir la feuille de saisie, changer la
+// date, saisir, refermer, recommencer. Ce bouton ouvre directement le PREMIER
+// JOUR VIDE du domaine — le plus ancien, celui qui va sortir de la fenetre en
+// premier et qu'on perdrait pour de bon.
+//
+// PURE. Le plus ancien jour de la semaine sans donnee POUR CE DOMAINE : un
+// jour ou les pas sont notes mais pas la nuit est un trou pour le sommeil, et
+// pas pour les pas.
+function premierJourVide(u,quoi,jours){
+  const n=(jours>0?jours:7);
+  const d=new Date(); d.setHours(12,0,0,0);
+  for(let i=n;i>=1;i--){
+    const j=new Date(d); j.setDate(d.getDate()-i);
+    const iso=localISODate(j);
+    const v=quoi==='sommeil'?sanSommeilMin(u,iso):sanPas(u,iso);
+    if(v==null) return iso;
+  }
+  return null;
+}
+function sanRattraper(quoi){
+  const iso=premierJourVide(currentUser,quoi,7);
+  // Plus de trou : le bouton ne devrait pas etre la, mais s'il l'est (rendu
+  // avant une saisie, clique apres), on ouvre le jour courant plutot que de
+  // ne rien faire — un bouton muet se lit comme une panne.
+  sanSaisir(quoi,iso||localISODate(new Date()));
 }
 function _htmlFaitsSante(u,quoi){
   let h='';
@@ -78443,6 +78603,7 @@ function _htmlCarteSante(u,quoi){
     +'<div class="san-resume">'+bloc.renseignes+'/7 jour'+(bloc.renseignes>1?'s':'')+' renseigné'
       +(bloc.renseignes>1?'s':'')+' · '+bloc.atteints+'/7 dans l\'objectif</div>'
     +_htmlFaitsSante(u,quoi)
+    +_htmlRattraper(u,quoi)
     +'<div class="san-actions">'
       +'<button type="button" class="btn btn-red btn-sm san-a1" onclick="sanSaisir(\''+quoi+'\')">'
         +'Ajouter / modifier mes données</button>'
@@ -78485,6 +78646,9 @@ function sanRendre(){
   try{ const zh=document.getElementById('lifestyle-habitudes');
        if(zh) zh.innerHTML=htmlHabitudes(u,{taux:true}); }catch(e){
        const zh=document.getElementById('lifestyle-habitudes'); if(zh) zh.innerHTML=''; }
+  try{ const zc=document.getElementById('lifestyle-croise');
+       if(zc) zc.innerHTML=_htmlCafeLimite(u)+_htmlRecuperationLifestyle(u); }catch(e){
+       const zc=document.getElementById('lifestyle-croise'); if(zc) zc.innerHTML=''; }
 }
 // ── LA FEUILLE DU JOUR ─────────────────────────────────────────────────
 // Un clic sur une barre ouvre le detail, en bas d'ecran : sur un telephone,
