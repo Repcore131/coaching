@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1186';
+window.RC_BUILD='1187';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1574,11 +1574,60 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   background:linear-gradient(90deg,transparent,rgba(224,32,32,.85),transparent)}
 
 /* ── LES RECOMPENSES ─────────────────────────────────────────────────── */
-.rcf-rec{position:relative;margin:26px 0 24px}
-/* Les traits verticaux : la sensation de montee, sans dessiner un podium. */
-.rcf-rec::before{content:'';position:absolute;left:0;right:0;bottom:26px;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.07) 22%,
-    rgba(255,255,255,.07) 78%,transparent);pointer-events:none}
+.rcf-rec{position:relative;margin:26px 0 24px;padding-bottom:14px}
+/* ══ LES RAIES ROUGES ═══════════════════════════════════════════════════
+   Des faisceaux verticaux de largeurs inegales, derriere les medaillons.
+   PAS un fond : une source d'energie. Ils montent une fois, se stabilisent
+   a mi-opacite, et ne bougent plus — un rideau qui ondulerait en permanence
+   derriere trois badges rendrait la page illisible au bout de dix secondes.
+
+   ⚠ LE MASQUE EST CE QUI LES REND ACCEPTABLES. Sans lui les raies vont bord
+   a bord et le bloc ressemble a un code-barres ; avec, elles naissent au
+   centre et s'eteignent avant les bords, donc elles designent les badges au
+   lieu de meubler la largeur.
+   Les largeurs ne sont pas regulieres — 2, 1, 3, 1 px espaces de 9, 12, 13,
+   16 — parce qu'un pas constant se lit comme une texture, pas comme de la
+   lumiere. */
+/* ⚠ ELLES ETAIENT CACHEES DERRIERE LES MEDAILLONS. Le masque les concentrait
+   au centre — exactement la ou trois images opaques les recouvrent. Elles
+   montent maintenant plus haut que les badges et redescendent sous l'arc, et
+   le masque s'ouvre en largeur : on les voit dans les intervalles, au-dessus
+   et sur les cotes, ce qui est precisement la ou de la lumiere se voit. */
+.rcf-rec::before{content:'';position:absolute;left:-6%;right:-6%;top:-54px;bottom:12px;
+  pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(90deg,
+    transparent 0 9px, rgba(224,32,32,.34) 9px 11px,
+    transparent 11px 23px, rgba(255,90,60,.20) 23px 24px,
+    transparent 24px 37px, rgba(224,32,32,.44) 37px 40px,
+    transparent 40px 56px, rgba(255,120,90,.16) 56px 57px,
+    transparent 57px 71px);
+  -webkit-mask-image:radial-gradient(ellipse 78% 96% at 50% 62%,#000 30%,transparent 88%);
+  mask-image:radial-gradient(ellipse 78% 96% at 50% 62%,#000 30%,transparent 88%);
+  opacity:0;animation:rcfRaies 1.5s cubic-bezier(.2,.8,.3,1) .30s both}
+@keyframes rcfRaies{
+  0%{opacity:0;transform:translateY(14px) scaleY(.86)}
+  35%{opacity:1}
+  100%{opacity:.75;transform:none}}
+
+/* L'ARC. Un seul trait, qui s'ouvre depuis le centre sous les medaillons et
+   reste. Il ferme la composition la ou le trait blanc d'avant la soulignait
+   sans rien dire. */
+/* bottom:0 et non 26px : a 26 il traversait l'explication du badge le plus
+   bavard. Il ferme le bloc, il ne le barre pas. */
+/* ⚠ scaleX ET NON width. Animer la largeur est une propriete de mise en
+   page : meme sur un pseudo-element absolu, elle fait recalculer a chaque
+   frame ce que transform obtient gratuitement sur le compositeur. La regle
+   de performance de cette application l'interdit, et une assertion la tient. */
+.rcf-rec::after{content:'';position:absolute;left:4%;right:4%;bottom:0;height:1px;
+  transform-origin:50% 50%;pointer-events:none;z-index:0;
+  background:linear-gradient(90deg,transparent,rgba(224,32,32,.9) 35%,
+    rgba(255,120,90,1) 50%,rgba(224,32,32,.9) 65%,transparent);
+  box-shadow:0 0 10px rgba(224,32,32,.55);
+  animation:rcfArc .75s cubic-bezier(.2,.85,.3,1) .42s both}
+@keyframes rcfArc{from{transform:scaleX(0);opacity:0}60%{opacity:1}
+  to{transform:scaleX(1);opacity:.85}}
+/* Les medaillons passent DEVANT les raies : sans cela le masque les voilerait. */
+.rcf-rec-g{position:relative;z-index:1}
 /* ⚠ align-items:START, ET C'EST TOUT LE POINT. Avec `end`, les trois cases
    s'alignaient par le BAS : un libelle sur une ligne poussait son medaillon
    quarante pixels plus bas que celui d'a cote, et la composition demandee —
@@ -1605,7 +1654,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   text-transform:uppercase;color:#fff;line-height:1.25;min-height:2.5em;
   display:flex;align-items:flex-start;justify-content:center}
 .rcf-exp{font-size:9px;color:var(--text-faint);line-height:1.4;letter-spacing:.2px;
-  min-height:2.8em}
+  min-height:2.8em;padding:0 2px;overflow-wrap:anywhere}
 /* Apparition ELECTRIQUE : flash, halo, badge, micro scale, stabilisation. */
 @keyframes rcfFlash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
 @keyframes rcfSurgit{
@@ -1747,9 +1796,31 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .rcf-case:nth-child(2),.rcf-case:nth-child(2) .rc-badge{animation-delay:.63s}
 .rcf-case:nth-child(3),.rcf-case:nth-child(3) .rc-badge{animation-delay:.81s}
 .rcf-case-halo{animation:rcfHalo .9s ease-out both}
+/* ══ LE MEDAILLON S'ANIME ═══════════════════════════════════════════════
+   Trois gestes, tous finis. Rien ne tourne en boucle.
+   1. LE LUSTRE : une bande claire traverse le medaillon en diagonale, une
+      fois, juste apres son apparition. C'est ce qui donne le metal — une
+      image fixe, aussi belle soit-elle, reste plate.
+   2. LA RESPIRATION : la lueur monte et redescend TROIS fois, puis se pose.
+      Trois, parce qu'a deux on croit a un raté et au-dela on s'en lasse.
+   3. LA PRESSION : le seul geste permanent, et il ne part qu'au doigt. */
+/* ⚠ PAS DE BANDE DE LUSTRE EN DIAGONALE. Elle a ete essayee et vue a
+   l'ecran : le medaillon est une image OPAQUE et rectangulaire, la bande
+   claire dessinait donc un rectangle gris par-dessus, pas un reflet sur du
+   metal. Ce qui suit agit sur l'image elle-meme, donc epouse le dessin :
+   la lueur enfle et le medaillon s'eclaire, trois fois, puis se pose.
+   Trois — a deux on croit a un rate, au-dela on s'en lasse. */
+.rcf-case .rc-badge-img{animation:rcfSouffle 1.6s ease-in-out 3 both}
+@keyframes rcfSouffle{
+  0%,100%{filter:drop-shadow(0 0 5px rgba(224,32,32,.35)) brightness(1)}
+  50%{filter:drop-shadow(0 0 16px rgba(224,32,32,.8)) brightness(1.16)}}
+.rcf-case .rc-badge:active{transform:scale(.96)}
 .rcf-case:nth-child(1) .rcf-case-halo{animation-delay:.42s}
 .rcf-case:nth-child(2) .rcf-case-halo{animation-delay:.60s}
 .rcf-case:nth-child(3) .rcf-case-halo{animation-delay:.78s}
+.rcf-case:nth-child(1) .rc-badge-img{animation-delay:.70s}
+.rcf-case:nth-child(2) .rc-badge-img{animation-delay:.88s}
+.rcf-case:nth-child(3) .rc-badge-img{animation-delay:1.06s}
 .rcf-m:nth-child(1) .rcf-m-bloc{animation-delay:1.42s}
 .rcf-m:nth-child(2) .rcf-m-bloc{animation-delay:1.50s}
 .rcf-m:nth-child(3) .rcf-m-bloc{animation-delay:1.58s}
@@ -1779,7 +1850,11 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 /* Le contrat d'accessibilite : tout se pose, rien ne bouge. */
 @media(prefers-reduced-motion:reduce){
   .rcf-e,.rcf-flamme,.rcf-titre,.rcf-trait,.rcf-rec-g .rcf-case,
-  .rcf-case .rc-badge,.rcf-m-bloc{animation:none!important}
+  .rcf-case .rc-badge,.rcf-m-bloc,.rcf-case .rc-badge-img{animation:none!important}
+  /* Les raies et l'arc se POSENT a leur etat final : les retirer priverait
+     l'ecran de sa profondeur, les animer irait contre la demande. */
+  .rcf-rec::before{animation:none!important;opacity:.75}
+  .rcf-rec::after{animation:none!important;transform:none;opacity:.85}
   .rcf-case-halo{animation:none!important;opacity:.18}
   .rcf-etin i{animation:none!important;opacity:0}
   .rcf-rec-g.n3 .rcf-case:nth-child(2){transform:translateY(-18px)}
@@ -40631,8 +40706,11 @@ const BADGE_GLYPHES=Object.freeze({
 //   perfect.webp, streak.webp, return.webp, discipline.webp
 // Voir app/img/badges/LISEZ-MOI.txt.
 const BADGE_IMG_DOSSIER='img/badges/';
+// .png et non .webp : c'est le format demande. Il pese quatre fois plus —
+// 1,2 Mo pour les quinze contre 324 Ko — et le service worker les met en
+// cache une fois pour toutes, donc le cout est paye au premier chargement.
 function _badgeFichier(k){
-  return k?BADGE_IMG_DOSSIER+String(k).toLowerCase()+'.webp':null;
+  return k?BADGE_IMG_DOSSIER+String(k).toLowerCase()+'.png':null;
 }
 // Le medaillon dessine n'existe pas : on revele le glyphe reste dessous et on
 // remet le cadre hexagonal, que l'image portait elle-meme.
@@ -40684,7 +40762,9 @@ function achievementEngine(ctx){
   }
   if(!Number(c.seriesEchouees)&&sets>0) pose('NO_FAIL',{valeur:sets});
   if(vol>0){
-    if(median>0&&vol>=median*1.25) pose('MONSTER',{valeur:vol});
+    // La MEDIANE VOYAGE AVEC LE BADGE : c'est elle qui permet d'ecrire
+    // « +25 % sur ta moyenne » au lieu de « volume exceptionnel ».
+    if(median>0&&vol>=median*1.25) pose('MONSTER',{valeur:vol,mediane:median});
     else if(vol>=12000) pose('HIGH_VOLUME',{valeur:vol});
   }
   if(Number(c.rpe)>=8.5) pose('NO_MERCY',{valeur:Number(c.rpe)});
@@ -40749,17 +40829,74 @@ function recompensesPrincipales(badges){
 // Courte, et DYNAMIQUE quand elle porte un chiffre : « 24 / 24 series
 // realisees » doit dire 18/18 pour une seance de dix-huit. Le nombre en dur
 // etait la faute a ne pas commettre.
+// ⚠ ELLE NOMME CE QUI S'EST PASSE DANS CETTE SEANCE, pas ce que le badge
+// signifie en general. « Tu viens de franchir un nouveau niveau » est vrai
+// pour tout le monde et n'apprend rien ; « Développé couché · palier des
+// 100 kg » dit QUEL exercice, QUEL palier, et se verifie.
+//
+// Chaque badge porte deja ses chiffres — le moteur les attache au moment ou
+// il le pose. Ici on ne fait que les mettre en mots. Quand ils manquent — un
+// dossier ancien, une seance sans consigne — on retombe sur la description
+// generique du badge plutot que d'ecrire une phrase a trous.
 function descRecompense(b,ctx){
   const c=ctx||{};
   if(!b) return '';
-  if(b.k==='FULL_SESSION'){
-    const f=Number(b.valeur)||Number(c.sets)||0;
+  const nb=v=>Number(v).toLocaleString('fr-FR');
+  const dec=v=>String(Math.round(Number(v)*10)/10).replace('.',',');
+  const ex=String(b.exercice||'').trim();
+  // ⚠ UN CHIFFRE ABSENT N'EST PAS UN ZERO. Un badge venu d'un dossier
+  // ancien, ou pose sans sa valeur, donnait « Palier des NaN kg » et
+  // « 0 kg souleves » — vu a l'ecran le 14/09/2026. `ok` decide, une fois,
+  // si on a de quoi ecrire une phrase juste ; sinon on rend la description
+  // generique du badge, qui reste vraie.
+  const v=Number(b.valeur);
+  const ok=n=>Number.isFinite(n)&&n>0;
+  const k=b.k;
+
+  if(k==='FULL_SESSION'||k==='PERFECT'){
+    const f=ok(v)?v:Number(c.sets);
     const t=Number(b.prevus)||Number(c.setsPlanned)||f;
-    return f+' / '+t+' séries réalisées';
+    return (ok(f)&&ok(t))?(f+' / '+t+' séries réalisées'):String(b.desc||'');
   }
-  if(b.k==='NEW_LOAD')  return 'Tu viens de franchir un nouveau niveau.';
-  if(b.k==='MONSTER')   return 'Une séance avec un volume exceptionnel.';
-  if(b.k==='HIGH_VOLUME') return 'Une séance avec un volume exceptionnel.';
+  if(k==='NO_FAIL'){
+    const f=ok(v)?v:Number(c.sets);
+    return ok(f)?(f+' séries validées, aucune manquée'):String(b.desc||'');
+  }
+  if(k==='NEW_LOAD')
+    return ok(v)?(ex?(ex+' · palier des '+nb(v)+' kg'):('Palier des '+nb(v)+' kg franchi'))
+               :String(b.desc||'');
+  if(k==='NEW_RECORD'){
+    if(!ok(v)) return String(b.desc||'');
+    const a=Number(b.ancien);
+    return (ex?ex+' · ':'')+(a>0?(nb(a)+' → '+nb(v)+' kg'):(nb(v)+' kg'));
+  }
+  if(k==='MULTIPLE_RECORDS')
+    return ok(v)?(v+' records dans cette séance'):String(b.desc||'');
+  if(k==='MONSTER'||k==='HIGH_VOLUME'){
+    const vol=ok(v)?v:Number(c.volume);
+    if(!ok(vol)) return String(b.desc||'');
+    const m=Number(b.mediane);
+    return (k==='MONSTER'&&ok(m))
+      ? (nb(Math.round(vol))+' kg, +'+Math.round((vol/m-1)*100)+' % sur ta moyenne')
+      : (nb(Math.round(vol))+' kg soulevés');
+  }
+  if(k==='NO_MERCY')
+    return ok(v)?('RPE moyen '+dec(v)+' sur 10'):String(b.desc||'');
+  if(k==='PROGRESSION'||k==='NEW_PERF'){
+    const n=v||Number(c.exosAmeliores)||0;
+    if(!n) return String(b.desc||'');
+    return n+' exercice'+(n>1?'s':'')+' en progression';
+  }
+  if(k==='STREAK')
+    return ok(v)?(v+' semaine'+(v>1?'s':'')+' d’affilée'):String(b.desc||'');
+  if(k==='RETURN')
+    return ok(v)?('De retour après '+v+' jours'):String(b.desc||'');
+  if(k==='DISCIPLINE'){
+    const f=Number(c.sets)||0, t=Number(c.setsPlanned)||f;
+    return (f&&t)?('Tout tenu : '+f+' / '+t+' séries'):String(b.desc||'');
+  }
+  if(k==='PERSONAL_BEST')
+    return ex?(ex+' · meilleure performance'):String(b.desc||'');
   return String(b.desc||'');
 }
 

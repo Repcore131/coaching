@@ -8,23 +8,23 @@ doit donc etre DEPOSEE ICI pour exister.
 
 FICHIERS ATTENDUS
 -----------------
-Un fichier par badge, nomme d'apres sa clef en minuscules, extension .webp :
+Un fichier par badge, nomme d'apres sa clef en minuscules, extension .png :
 
-  new_record.webp        NOUVEAU RECORD        couronne
-  new_perf.webp          NOUVELLE PERFORMANCE  eclair
-  monster.webp           SEANCE MONSTRE        flamme
-  no_mercy.webp          NO MERCY              crane
-  full_session.webp      100% VALIDE           cible
-  progression.webp       EN PROGRESSION        courbe
-  high_volume.webp       GROS VOLUME           haltere
-  streak.webp            SERIE EN COURS        chaine
-  multiple_records.webp  DOMINATION            lion
-  new_load.webp          NOUVEAU PALIER        fusee
-  personal_best.webp     PERSONAL BEST         trophee
-  return.webp            RETOUR AU COMBAT      phenix
-  no_fail.webp           SANS ECHEC            100
-  discipline.webp        DISCIPLINE            cerveau
-  perfect.webp           SEANCE PARFAITE       sommet
+  new_record.png        NOUVEAU RECORD        couronne
+  new_perf.png          NOUVELLE PERFORMANCE  eclair
+  monster.png           SEANCE MONSTRE        flamme
+  no_mercy.png          NO MERCY              crane
+  full_session.png      100% VALIDE           cible
+  progression.png       EN PROGRESSION        courbe
+  high_volume.png       GROS VOLUME           haltere
+  streak.png            SERIE EN COURS        chaine
+  multiple_records.png  DOMINATION            lion
+  new_load.png          NOUVEAU PALIER        fusee
+  personal_best.png     PERSONAL BEST         trophee
+  return.png            RETOUR AU COMBAT      phenix
+  no_fail.png           SANS ECHEC            100
+  discipline.png        DISCIPLINE            cerveau
+  perfect.png           SEANCE PARFAITE       sommet
 
 L'ordre ci-dessus est celui de la planche « TES BADGES », lue de gauche a
 droite et de haut en bas.
@@ -33,9 +33,13 @@ FORMAT
 ------
   — Carre, 256 x 256 px suffit : ils sont affiches a 64 px, 128 sur un ecran
     a densite 2. Plus grand ne se verra pas et pesera pour rien.
-  — FOND TRANSPARENT. Le medaillon porte deja son hexagone, ses lauriers et
-    sa lueur ; un fond opaque poserait un carre noir sur la composition.
-  — .webp de preference, comme les 436 illustrations d'exercices. Le .png
+  — FOND TRANSPARENT, ET CE N'EST PAS UN DETAIL. Les quinze actuels ont ete
+    decoupes de la planche avec un remplissage depuis les bords : tout ce qui
+    est sombre et joignable depuis l'exterieur devient transparent, la lueur
+    arrete le remplissage, l'interieur de l'hexagone n'est jamais atteint.
+    Sans cela le medaillon occulte les raies rouges du fond EN RECTANGLE, et
+    c'est ce rectangle que l'oeil accroche au lieu du badge.
+  — .png de preference, comme les 436 illustrations d'exercices. Le .png
     marche aussi : changer l'extension attendue se fait a un seul endroit,
     BADGE_IMG_DOSSIER / _badgeFichier dans app/index.html.
 
@@ -50,5 +54,5 @@ pas d'image.
 SI TU AS LA PLANCHE COMPLETE ET PAS LES QUINZE FICHIERS
 -------------------------------------------------------
 Depose-la telle quelle a la racine du depot sous le nom `planche-badges.png`
-et demande le decoupage : il se fait ici, une fois, et les quinze .webp
+et demande le decoupage : il se fait ici, une fois, et les quinze .png
 atterrissent dans ce dossier.
