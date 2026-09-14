@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1179';
+window.RC_BUILD='1180';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1601,6 +1601,87 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 }
 @media(prefers-reduced-motion:reduce){
   .rc-obj-b,.rc-obj-pas{transition:none}
+}
+/* ══ SUIVI SANTE : LES DEUX CARTES ═══════════════════════════════════════
+   Lisible en moins de deux secondes : un titre, sept barres, deux chiffres.
+   Tout le reste est en dessous. */
+.san-carte{background:linear-gradient(180deg,#161619,#0d0d0f);border:1px solid #2a2a2e;
+  border-radius:var(--r-3);padding:15px 14px 13px;margin-bottom:16px}
+.san-tete{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.san-ico{width:20px;height:20px;color:var(--red-text);flex-shrink:0}
+.san-ico svg{width:100%;height:100%;display:block}
+.san-t{margin:0;font-size:var(--fs-sm);font-weight:900;letter-spacing:2.5px;text-transform:uppercase;color:#fff}
+.san-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.san-nav-b{min-width:38px;min-height:34px;border-radius:var(--r-2);cursor:pointer;font-size:var(--fs-md);
+  border:1px solid #2e2e33;background:transparent;color:var(--text);font-family:inherit}
+.san-nav-b[disabled]{opacity:.35;cursor:default}
+.san-per{flex:1;text-align:center;font-size:var(--fs-2xs);letter-spacing:1.5px;
+  text-transform:uppercase;font-weight:800;color:var(--sub)}
+.san-auj{display:block;margin:0 auto 12px;padding:5px 12px;border-radius:var(--r-full);cursor:pointer;
+  border:1px solid rgba(224,32,32,.5);background:rgba(224,32,32,.12);color:var(--red-text);
+  font-family:inherit;font-size:var(--fs-2xs);font-weight:800}
+/* Le graphique. Les barres sont des boutons : chacune s'ouvre au doigt et
+   porte son libelle pour les lecteurs d'ecran. */
+.san-graph{position:relative;display:flex;align-items:flex-end;gap:5px;height:132px;margin-bottom:14px}
+.san-bar{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;
+  align-items:center;gap:5px;background:none;border:0;padding:0;cursor:pointer;font-family:inherit}
+.san-bar-f{display:block;width:100%;height:var(--h);border-radius:3px 3px 0 0;transition:height .25s ease}
+.san-bar-j{font-size:var(--fs-2xs);color:var(--text-faint);font-weight:700}
+.san-bar:active .san-bar-f{filter:brightness(1.25)}
+/* La ligne d'objectif : en pointilles, avec sa valeur a droite. Elle ne doit
+   pas se confondre avec une barre. */
+.san-obj-l{position:absolute;left:0;right:0;border-top:1px dashed rgba(255,255,255,.35);pointer-events:none}
+.san-obj-l span{position:absolute;right:0;top:-8px;font-size:9px;letter-spacing:.5px;
+  background:#0d0d0f;padding:0 4px;color:var(--text-faint)}
+.san-chiffres{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
+.san-lbl{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800}
+.san-val{font-family:var(--pile-titre);font-size:clamp(26px,7.5vw,34px);color:#fff;letter-spacing:1px;line-height:1.1}
+.san-ecart{font-size:var(--fs-xs);font-weight:800;margin-bottom:8px}
+.san-ecart.pos{color:#e02020}
+.san-ecart.neg{color:var(--text-dim)}
+.san-resume{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:12px}
+.san-actions{display:flex;flex-direction:column;gap:8px}
+.san-actions .btn{width:100%;margin:0;min-height:44px}
+.san-src{width:100%;margin-top:10px;padding:8px 10px;border-radius:var(--r-2);cursor:pointer;
+  border:1px dashed #2e2e33;background:transparent;color:var(--text-dim);
+  font-family:inherit;font-size:var(--fs-2xs)}
+.san-src strong{color:var(--text)}
+/* La feuille du bas. Sur un telephone, c'est la seule forme lisible. */
+#san-feuille{display:none;position:fixed;inset:0;z-index:1200}
+.san-f-fond{position:absolute;inset:0;background:rgba(0,0,0,.6)}
+.san-f{position:absolute;left:0;right:0;bottom:0;max-height:86vh;overflow-y:auto;
+  background:linear-gradient(180deg,#17171a,#0c0c0e);border-top:1px solid #2c2c30;
+  border-radius:var(--r-3) var(--r-3) 0 0;padding:10px 16px 22px;
+  animation:sanMonte .22s ease-out both}
+@keyframes sanMonte{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+.san-f-poignee{width:38px;height:4px;border-radius:2px;background:#333;margin:0 auto 12px}
+.san-f-t{font-size:var(--fs-xs);letter-spacing:2px;text-transform:uppercase;color:var(--sub);
+  font-weight:800;margin-bottom:12px}
+.san-gros{font-family:var(--pile-titre);font-size:44px;color:#fff;letter-spacing:1px;margin-bottom:10px}
+.san-l{display:flex;justify-content:space-between;gap:10px;padding:8px 0;
+  border-top:1px solid rgba(255,255,255,.06);font-size:var(--fs-sm)}
+.san-l span{color:var(--sub)}
+.san-l strong{color:#fff}
+.san-sous{font-size:var(--fs-2xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);
+  font-weight:800;margin-top:14px}
+.san-vide{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;padding:6px 0 10px}
+.san-f-actions{display:flex;gap:8px;margin-top:14px}
+.san-lab{display:block;font-size:var(--fs-2xs);letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--sub);font-weight:800;margin:12px 0 5px}
+#san-feuille input{width:100%;min-height:44px}
+.san-aide{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:5px}
+.san-src-l{display:flex;flex-direction:column;gap:6px}
+.san-src-o{width:100%;min-height:44px;text-align:left;padding:10px 12px;border-radius:var(--r-2);
+  cursor:pointer;border:1px solid #2a2a2e;background:#121214;color:var(--text);
+  font-family:inherit;font-size:var(--fs-sm)}
+.san-src-o.actif{border-color:rgba(224,32,32,.7);background:rgba(224,32,32,.14);color:#fff}
+/* Desktop : les deux cartes cote a cote. Mobile : l'une sous l'autre. */
+@media(min-width:820px){
+  .san-duo{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+}
+@media(prefers-reduced-motion:reduce){
+  .san-bar-f{transition:none}
+  .san-f{animation:none}
 }
 .tab-dot.on{display:block}
 /* ══ LES TABLEAUX DU CALCUL, RESSERRES ═══════════════════════════════════
@@ -72080,7 +72161,9 @@ function changeSleepDate(v){ _sleepDate=(v&&v!==localISODate(new Date()))?v:null
 // date, ce qui interromprait la saisie qu'on cherche justement à permettre.
 function _rerenderLifestyle(){
   const actif=id=>document.getElementById(id)?.classList.contains('active');
-  if(actif('s-lifestyle')){ loadSteps('lifestyle-steps-content'); loadSleep('lifestyle-sleep-content'); return; }
+  if(actif('s-lifestyle')){ try{ sanRendre(); }catch(e){
+    // Repli sur les anciens rendus : l'ecran ne doit jamais rester vide.
+    loadSteps('lifestyle-steps-content'); loadSleep('lifestyle-sleep-content'); } return; }
   if(actif('s-steps')){ loadSteps('steps-content'); return; }
   if(actif('s-sleep')){ loadSleep('sleep-content'); return; }
   loadLifestyle();
@@ -76007,6 +76090,378 @@ function stepsToggleType(type){
 }
 
 // ======= SLEEP =======
+// ══ SUIVI SANTE : SOMMEIL ET PAS ═══════════════════════════════════════
+// Deux cartes, sept jours glissants, et rien d'autre a comprendre. L'ecran
+// existant montrait la semaine CALENDAIRE : un dimanche, il affichait six
+// jours passes et masquait la semaine en cours. Demande de Kevin, 14/09/2026 :
+// toujours les sept jours les plus recents.
+//
+// CE QUI N'EST PAS FAIT, ET NE DOIT PAS ETRE SIMULE : aucune synchronisation
+// automatique. Rien dans ce module ne parle a Garmin, Apple ou Samsung, et
+// aucun libelle ne le laisse croire. La saisie est manuelle ; l'architecture,
+// elle, porte deja source et sourceDevice pour le jour ou une API existera.
+const SAN_OBJ_SOMMEIL=480;              // 8 h, en minutes
+const SAN_SOURCES=Object.freeze({
+  manuel:'Saisie manuelle', apple:'Apple Santé', garmin:'Garmin Connect',
+  samsung:'Samsung Health', google:'Google Health Connect', huawei:'Huawei Santé',
+  fitbit:'Fitbit', xiaomi:'Mi Fitness', amazfit:'Zepp', polar:'Polar Flow',
+  coros:'COROS', suunto:'Suunto', whoop:'WHOOP', oura:'Oura', withings:'Withings',
+  autre:'Autre application'
+});
+let _sanOffset=0;   // 0 = les sept derniers jours ; -1 = les sept precedents
+// PURE. Les sept jours de la periode, du plus ancien au plus recent.
+function sanJours(offset){
+  const d=new Date(); d.setHours(12,0,0,0);
+  d.setDate(d.getDate()+(Number(offset)||0)*7);
+  const out=[];
+  for(let i=6;i>=0;i--){
+    const j=new Date(d); j.setDate(d.getDate()-i);
+    out.push({iso:localISODate(j),d:j});
+  }
+  return out;
+}
+function sanObjSommeil(u){ const n=Number(u&&u.sleepGoal); return isFinite(n)&&n>0?n:SAN_OBJ_SOMMEIL; }
+function sanObjPas(u){
+  const g=(u&&u.stepsGoals)||STEPS_GOALS_DEFAUT;
+  const n=Number(g&&g.on); return isFinite(n)&&n>0?n:10000;
+}
+// Le coach peut verrouiller : l'athlete lit alors ses objectifs sans les changer.
+function sanVerrouille(u){ return !!(u&&u.objectifsVerrouilles); }
+function sanSource(u,quoi){
+  const s=(u&&u.santeSource)||{};
+  const k=s[quoi];
+  return SAN_SOURCES[k]?{cle:k,lib:SAN_SOURCES[k]}:{cle:'manuel',lib:SAN_SOURCES.manuel};
+}
+// PURE. Minutes de sommeil d'un jour, ou null. duration est en HEURES dans le
+// dossier depuis toujours : on convertit ici plutot que de migrer un historique.
+function sanSommeilMin(u,iso){
+  const e=((u&&u.sleepLog)||[]).find(x=>x&&x.date===iso);
+  if(!e) return null;
+  const h=Number(e.duration);
+  return isFinite(h)&&h>0?Math.round(h*60):null;
+}
+function sanSommeilEntree(u,iso){ return ((u&&u.sleepLog)||[]).find(x=>x&&x.date===iso)||null; }
+function sanPas(u,iso){
+  const e=((u&&u.stepsLog)||[]).find(x=>x&&x.date===iso);
+  const n=e?Number(e.count):NaN;
+  return isFinite(n)&&n>=0?Math.round(n):null;
+}
+// PURE. Le resume de la periode : moyennes sur les jours RENSEIGNES, et le
+// compte de ceux qui atteignent l'objectif. Une moyenne calculee sur sept
+// jours dont trois sont vides dirait n'importe quoi.
+function sanResume(u,offset){
+  const js=sanJours(offset);
+  const som=js.map(j=>sanSommeilMin(u,j.iso)).filter(v=>v!=null);
+  const pas=js.map(j=>sanPas(u,j.iso)).filter(v=>v!=null);
+  const oS=sanObjSommeil(u),oP=sanObjPas(u);
+  const moy=a=>a.length?Math.round(a.reduce((s,v)=>s+v,0)/a.length):null;
+  return {
+    jours:js,
+    sommeil:{moy:moy(som),renseignes:som.length,objectif:oS,
+      atteints:som.filter(v=>v>=oS).length,
+      ecart:som.length?moy(som)-oS:null},
+    pas:{moy:moy(pas),renseignes:pas.length,objectif:oP,
+      atteints:pas.filter(v=>v>=oP).length,
+      ecart:pas.length?moy(pas)-oP:null}
+  };
+}
+// PURE. « 7h34 » a partir de minutes. Jamais « 7.57 h » : personne ne dort en
+// centiemes d'heure.
+function sanHM(min){
+  const m=Math.max(0,Math.round(Number(min)||0));
+  return Math.floor(m/60)+'h'+String(m%60).padStart(2,'0');
+}
+function sanHMSigne(min){
+  const m=Math.round(Number(min)||0);
+  return (m>0?'+':m<0?'−':'')+sanHM(Math.abs(m));
+}
+function sanNb(n){ return Number(Math.round(Number(n)||0)).toLocaleString('fr-FR'); }
+// PURE. « 7h42 », « 7:42 », « 7.7 », « 462 » -> minutes. null si illisible.
+// Accepter les quatre formes coute dix lignes ; les refuser coute une saisie
+// abandonnee a chaque fois qu'on tape comme on parle.
+function sanLireDuree(txt){
+  const t=String(txt==null?'':txt).trim().toLowerCase().replace(',','.');
+  if(!t) return null;
+  let m=/^(\d{1,2})\s*[h:]\s*(\d{1,2})?$/.exec(t);
+  if(m) return Number(m[1])*60+(m[2]?Number(m[2]):0);
+  m=/^(\d{1,2})\s*h$/.exec(t);
+  if(m) return Number(m[1])*60;
+  const n=Number(t);
+  if(!isFinite(n)||n<=0) return null;
+  // Au-dela de 24, c'est forcement des minutes ; en dessous, des heures.
+  return n>24?Math.round(n):Math.round(n*60);
+}
+// PURE. « 10 542 », « 10.5k », « 10542 » -> entier. null si illisible.
+function sanLirePas(txt){
+  const t=String(txt==null?'':txt).trim().toLowerCase()
+    .replace(/[\s  ]/g,'').replace(',','.');
+  if(!t) return null;
+  const m=/^(\d+(?:\.\d+)?)k$/.exec(t);
+  if(m) return Math.round(Number(m[1])*1000);
+  const n=Number(t);
+  return isFinite(n)&&n>=0?Math.round(n):null;
+}
+// ── LE GRAPHIQUE ───────────────────────────────────────────────────────
+// Sept barres, une ligne d'objectif, et une echelle qui ne ment pas : le bas
+// n'est jamais arbitraire, il descend au minimum observe arrondi vers le bas,
+// et jamais au-dessus de ce qui rendrait un ecart de vingt minutes spectaculaire.
+function _sanGraph(quoi,serie,objectif,fmt){
+  const vals=serie.map(x=>x.v).filter(v=>v!=null);
+  const max=Math.max(objectif,...(vals.length?vals:[objectif]));
+  // Le plancher : zero pour les pas — un jour a 2 000 pas DOIT paraitre bas —
+  // et six heures pour le sommeil, sinon sept nuits entre 6 h et 8 h donnent
+  // sept barres identiques.
+  const bas=quoi==='sommeil'?Math.min(360,Math.max(0,(vals.length?Math.min(...vals):360)-30)):0;
+  const haut=max*1.08;
+  const pc=v=>Math.max(3,Math.round((v-bas)/(haut-bas)*100));
+  const pcObj=Math.max(0,Math.min(100,Math.round((objectif-bas)/(haut-bas)*100)));
+  const barres=serie.map((x,i)=>{
+    const ok=x.v!=null&&x.v>=objectif;
+    const col=x.v==null?'#242428':(ok?'#e02020':'#5a5a62');
+    const h=x.v==null?3:pc(x.v);
+    const lib=x.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+    return '<button type="button" class="san-bar" style="--h:'+h+'%"'
+      +' onclick="sanOuvrirJour(\''+quoi+'\',\''+x.iso+'\')"'
+      +' aria-label="'+escapeHtml(lib+' : '+(x.v==null?'aucune donnée':fmt(x.v)))+'">'
+      +'<span class="san-bar-f" style="background:'+col+'"></span>'
+      +'<span class="san-bar-j">'+escapeHtml(['L','M','M','J','V','S','D'][(x.d.getDay()+6)%7])+'</span>'
+      +'</button>';
+  }).join('');
+  return '<div class="san-graph">'
+    +'<div class="san-obj-l" style="bottom:calc('+pcObj+'% + 18px)"><span>'+escapeHtml(fmt(objectif))+'</span></div>'
+    +barres+'</div>';
+}
+function _htmlCarteSante(u,quoi){
+  const r=sanResume(u,_sanOffset);
+  const bloc=quoi==='sommeil'?r.sommeil:r.pas;
+  const fmt=quoi==='sommeil'?sanHM:sanNb;
+  const serie=r.jours.map(j=>({iso:j.iso,d:j.d,
+    v:quoi==='sommeil'?sanSommeilMin(u,j.iso):sanPas(u,j.iso)}));
+  const titre=quoi==='sommeil'?'Sommeil':'Pas';
+  const src=sanSource(u,quoi);
+  const p0=r.jours[0].d,p6=r.jours[6].d;
+  const libPer=_sanOffset===0?'7 derniers jours'
+    :(p0.getDate()+' '+p0.toLocaleDateString('fr-FR',{month:'short'})+' au '
+      +p6.getDate()+' '+p6.toLocaleDateString('fr-FR',{month:'short'}));
+  const ecart=bloc.ecart==null?''
+    :'<div class="san-ecart '+(bloc.ecart>=0?'pos':'neg')+'">'
+      +(quoi==='sommeil'?sanHMSigne(bloc.ecart)+' / nuit'
+        :(bloc.ecart>0?'+':'−')+sanNb(Math.abs(bloc.ecart))+' / jour')+'</div>';
+  return '<section class="san-carte">'
+    +'<div class="san-tete">'
+      +'<span class="san-ico">'+(quoi==='sommeil'?_sanIcoLune():_sanIcoPas())+'</span>'
+      +'<h2 class="san-t">'+titre+'</h2></div>'
+    +'<div class="san-nav">'
+      +'<button type="button" class="san-nav-b" onclick="sanPeriode(-1)" aria-label="Période précédente">‹</button>'
+      +'<span class="san-per">'+escapeHtml(libPer)+'</span>'
+      +'<button type="button" class="san-nav-b" onclick="sanPeriode(1)" aria-label="Période suivante"'
+        +(_sanOffset>=0?' disabled':'')+'>›</button>'
+    +'</div>'
+    +(_sanOffset!==0?'<button type="button" class="san-auj" onclick="sanPeriode(0,true)">Aujourd\'hui</button>':'')
+    +_sanGraph(quoi,serie,bloc.objectif,fmt)
+    +'<div class="san-chiffres">'
+      +'<div><div class="san-lbl">Moyenne</div><div class="san-val">'
+        +(bloc.moy==null?'—':escapeHtml(fmt(bloc.moy)))+'</div></div>'
+      +'<div><div class="san-lbl">Objectif</div><div class="san-val">'+escapeHtml(fmt(bloc.objectif))+'</div></div>'
+    +'</div>'
+    +ecart
+    +'<div class="san-resume">'+bloc.renseignes+'/7 jour'+(bloc.renseignes>1?'s':'')+' renseigné'
+      +(bloc.renseignes>1?'s':'')+' · '+bloc.atteints+'/7 dans l\'objectif</div>'
+    +'<div class="san-actions">'
+      +'<button type="button" class="btn btn-red btn-sm san-a1" onclick="sanSaisir(\''+quoi+'\')">'
+        +'Ajouter / modifier mes données</button>'
+      +'<button type="button" class="btn btn-outline btn-sm san-a2" onclick="sanAide(\''+quoi+'\')">'
+        +'Où trouver '+(quoi==='sommeil'?'mon sommeil':'mes pas')+' ?</button>'
+    +'</div>'
+    +'<button type="button" class="san-src" onclick="sanChangerSource(\''+quoi+'\')">'
+      +'Source : <strong>'+escapeHtml(src.lib)+'</strong></button>'
+    +'</section>';
+}
+function _sanIcoLune(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z"/></svg>'; }
+function _sanIcoPas(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18c-1.5 0-2.5-1-2.5-2.5S6 12 6 10c0-2.5 1-4 2.5-4S11 7.5 11 10c0 2 1 3 1 5.5S9 18 7 18z"/><path d="M17 21c-1.2 0-2-.8-2-2s1-2.5 1-4c0-2 .8-3 2-3s2 1.2 2 3c0 1.5-.8 2.5-.8 4S18.2 21 17 21z"/></svg>'; }
+function sanPeriode(sens,auj){
+  if(auj) _sanOffset=0;
+  else{
+    const n=_sanOffset+(sens<0?-1:1);
+    if(n>0) return;            // on ne consulte pas l'avenir
+    _sanOffset=n;
+  }
+  sanRendre();
+}
+function sanRendre(){
+  const u=currentUser;
+  const zs=document.getElementById('lifestyle-sleep-content');
+  const zp=document.getElementById('lifestyle-steps-content');
+  try{ if(zs) zs.innerHTML=_htmlCarteSante(u,'sommeil'); }catch(e){ if(zs) zs.innerHTML=''; }
+  try{ if(zp) zp.innerHTML=_htmlCarteSante(u,'pas'); }catch(e){ if(zp) zp.innerHTML=''; }
+}
+// ── LA FEUILLE DU JOUR ─────────────────────────────────────────────────
+// Un clic sur une barre ouvre le detail, en bas d'ecran : sur un telephone,
+// une infobulle de douze pixels ne se lit pas et ne se touche pas.
+function sanOuvrirJour(quoi,iso){
+  const u=currentUser;
+  const d=new Date(iso+'T12:00:00');
+  const lib=d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  const titre=lib.charAt(0).toUpperCase()+lib.slice(1);
+  let corps='';
+  if(quoi==='sommeil'){
+    const e=sanSommeilEntree(u,iso),min=sanSommeilMin(u,iso),obj=sanObjSommeil(u);
+    corps=min==null
+      ? '<div class="san-vide">Aucune donnée pour cette nuit.</div>'
+      : '<div class="san-gros">'+sanHM(min)+'</div>'
+        +_sanL('Coucher',(e&&e.bed)||'—')+_sanL('Réveil',(e&&e.wake)||'—')
+        +_sanL('Objectif',sanHM(obj))+_sanL('Écart',sanHMSigne(min-obj))
+        // Les stades ne s'affichent QUE s'ils existent. Aucune estimation :
+        // inventer un « sommeil profond » serait inventer une mesure.
+        +((e&&(e.deep||e.light||e.rem||e.awake))
+          ? '<div class="san-sous">Détail du sommeil</div>'
+            +(e.deep?_sanL('Profond',sanHM(e.deep)):'')
+            +(e.light?_sanL('Léger',sanHM(e.light)):'')
+            +(e.rem?_sanL('REM',sanHM(e.rem)):'')
+            +(e.awake?_sanL('Éveillé',sanHM(e.awake)):'')
+          :'')
+        +((e&&e.sleepScore)?_sanL('Score sommeil',String(e.sleepScore)):'');
+  } else {
+    const n=sanPas(u,iso),obj=sanObjPas(u);
+    const e=((u&&u.stepsLog)||[]).find(x=>x&&x.date===iso);
+    corps=n==null
+      ? '<div class="san-vide">Aucune donnée pour ce jour.</div>'
+      : '<div class="san-gros">'+sanNb(n)+'</div>'
+        +_sanL('Objectif',sanNb(obj))
+        +_sanL('Écart',(n-obj>=0?'+':'−')+sanNb(Math.abs(n-obj)))
+        +((e&&e.km)?_sanL('Distance',String(e.km).replace('.',',')+' km'):'');
+  }
+  _sanFeuille(titre,corps
+    +'<div class="san-f-actions">'
+      +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" '
+        +'onclick="sanFermer();sanSaisir(\''+quoi+'\',\''+iso+'\')">Modifier</button>'
+      +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" '
+        +'onclick="sanSupprimer(\''+quoi+'\',\''+iso+'\')">Supprimer</button>'
+    +'</div>');
+}
+function _sanL(t,v){ return '<div class="san-l"><span>'+escapeHtml(t)+'</span><strong>'+escapeHtml(String(v))+'</strong></div>'; }
+function _sanFeuille(titre,html){
+  let z=document.getElementById('san-feuille');
+  if(!z){ z=document.createElement('div'); z.id='san-feuille'; document.body.appendChild(z); }
+  z.innerHTML='<div class="san-f-fond" onclick="sanFermer()"></div>'
+    +'<div class="san-f" role="dialog" aria-modal="true" aria-label="'+escapeHtml(titre)+'">'
+      +'<div class="san-f-poignee"></div>'
+      +'<div class="san-f-t">'+escapeHtml(titre)+'</div>'+html
+      +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:12px 0 0" '
+        +'onclick="sanFermer()">Fermer</button></div>';
+  z.style.display='block';
+}
+function sanFermer(){ const z=document.getElementById('san-feuille'); if(z){ z.style.display='none'; z.innerHTML=''; } }
+// ── LA SAISIE ──────────────────────────────────────────────────────────
+// Trois champs au maximum, et la date par defaut est celle qu'on regarde.
+function sanSaisir(quoi,iso){
+  const u=currentUser;
+  const jour=iso||localISODate(new Date());
+  const e=quoi==='sommeil'?sanSommeilEntree(u,jour):((u.stepsLog||[]).find(x=>x&&x.date===jour));
+  const min=quoi==='sommeil'?sanSommeilMin(u,jour):null;
+  const corps=quoi==='sommeil'
+    ? '<label class="san-lab">Date</label><input type="date" id="san-date" value="'+jour+'">'
+      +'<label class="san-lab">Durée</label>'
+      +'<input id="san-duree" inputmode="text" placeholder="7h30" value="'+(min!=null?sanHM(min):'')+'">'
+      +'<div class="san-aide">« 7h30 », « 7:30 » ou « 450 » minutes.</div>'
+      +'<label class="san-lab">Coucher</label><input type="time" id="san-bed" value="'+((e&&e.bed)||'')+'">'
+      +'<label class="san-lab">Réveil</label><input type="time" id="san-wake" value="'+((e&&e.wake)||'')+'">'
+    : '<label class="san-lab">Date</label><input type="date" id="san-date" value="'+jour+'">'
+      +'<label class="san-lab">Pas</label>'
+      +'<input id="san-pas" inputmode="text" placeholder="10 542" value="'+(e&&e.count!=null?e.count:'')+'">'
+      +'<div class="san-aide">« 10542 » ou « 10.5k ».</div>'
+      +'<label class="san-lab">Distance (facultatif)</label>'
+      +'<input id="san-km" inputmode="decimal" placeholder="8,4" value="'+((e&&e.km)||'')+'">';
+  _sanFeuille(quoi==='sommeil'?'Mon sommeil':'Mes pas',
+    corps+'<button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0" '
+      +'onclick="sanEnregistrer(\''+quoi+'\')">Enregistrer</button>');
+}
+function sanEnregistrer(quoi){
+  const u=currentUser;
+  const jour=(document.getElementById('san-date')||{}).value||localISODate(new Date());
+  if(quoi==='sommeil'){
+    const min=sanLireDuree((document.getElementById('san-duree')||{}).value);
+    if(min==null) return toast('Durée illisible. Exemple : 7h30','var(--orange)');
+    // ON DEMANDE, ON NE REFUSE PAS. Une nuit de 90 minutes existe ; une faute
+    // de frappe aussi. Confirmer les distingue sans bloquer personne.
+    if((min<120||min>16*60)&&!confirm(sanHM(min)+' de sommeil, c\'est bien ça ?')) return;
+    const bed=(document.getElementById('san-bed')||{}).value||'';
+    const wake=(document.getElementById('san-wake')||{}).value||'';
+    if(!u.sleepLog) u.sleepLog=[];
+    const i=u.sleepLog.findIndex(x=>x&&x.date===jour);
+    const now=Date.now();
+    if(i>=0){
+      const e=u.sleepLog[i];
+      e.duration=Math.round(min/60*100)/100;
+      if(bed) e.bed=bed;
+      if(wake) e.wake=wake;
+      e.source=sanSource(u,'sommeil').cle; e.updatedAt=now; e.dataStatus='manual';
+    } else {
+      const e={date:jour,duration:Math.round(min/60*100)/100,
+        source:sanSource(u,'sommeil').cle,dataStatus:'manual',createdAt:now,updatedAt:now};
+      if(bed) e.bed=bed; if(wake) e.wake=wake;
+      u.sleepLog.push(e);
+    }
+    try{ rcm('manual_sleep_added'); }catch(e){}
+  } else {
+    const n=sanLirePas((document.getElementById('san-pas')||{}).value);
+    if(n==null) return toast('Nombre de pas illisible','var(--orange)');
+    if(n>60000&&!confirm(sanNb(n)+' pas, c\'est bien ça ?')) return;
+    const kmTxt=String((document.getElementById('san-km')||{}).value||'').replace(',','.').trim();
+    const km=kmTxt?Number(kmTxt):null;
+    if(!u.stepsLog) u.stepsLog=[];
+    const i=u.stepsLog.findIndex(x=>x&&x.date===jour);
+    const now=Date.now();
+    if(i>=0){
+      const e=u.stepsLog[i]; e.count=n;
+      if(km!=null&&isFinite(km)&&km>0) e.km=km;
+      e.source=sanSource(u,'pas').cle; e.updatedAt=now; e.dataStatus='manual';
+    } else {
+      const e={date:jour,count:n,source:sanSource(u,'pas').cle,dataStatus:'manual',
+        createdAt:now,updatedAt:now};
+      if(km!=null&&isFinite(km)&&km>0) e.km=km;
+      u.stepsLog.push(e);
+    }
+    try{ rcm('manual_steps_added'); }catch(e){}
+  }
+  saveUser();
+  try{ CLOUD.pushOne(u.email,u); }catch(e){}
+  sanFermer(); sanRendre();
+  toast('Enregistré','var(--green)');
+}
+function sanSupprimer(quoi,iso){
+  if(!confirm('Supprimer les données de ce jour ?')) return;
+  const u=currentUser;
+  const cle=quoi==='sommeil'?'sleepLog':'stepsLog';
+  u[cle]=(u[cle]||[]).filter(x=>!(x&&x.date===iso));
+  saveUser();
+  try{ CLOUD.pushOne(u.email,u); }catch(e){}
+  sanFermer(); sanRendre();
+  toast('Supprimé','var(--green)');
+}
+function sanChangerSource(quoi){
+  const u=currentUser;
+  const act=sanSource(u,quoi).cle;
+  const opts=Object.keys(SAN_SOURCES).map(k=>
+    '<button type="button" class="san-src-o'+(k===act?' actif':'')+'" '
+    +'onclick="sanPoserSource(\''+quoi+'\',\''+k+'\')">'+escapeHtml(SAN_SOURCES[k])+'</button>').join('');
+  // CE QUE CE CHOIX NE FAIT PAS : il ne synchronise rien. Il dit d'ou vient la
+  // donnee, et l'historique deja enregistre garde SA source d'origine.
+  _sanFeuille('Modifier ma source',
+    '<div class="san-aide" style="margin-bottom:10px">D\'où viennent tes données. '
+    +'Ça n\'active aucune synchronisation : la saisie reste manuelle.</div>'
+    +'<div class="san-src-l">'+opts+'</div>');
+}
+function sanPoserSource(quoi,cle){
+  if(!SAN_SOURCES[cle]) return;
+  const u=currentUser;
+  if(!u.santeSource) u.santeSource={};
+  u.santeSource[quoi]=cle;
+  saveUser();
+  try{ CLOUD.pushOne(u.email,u); }catch(e){}
+  try{ rcm('tracker_selected'); }catch(e){}
+  sanFermer(); sanRendre();
+}
 function getSleepWeek(){
   const today=new Date(),dow=today.getDay();
   const mon=new Date(today);
@@ -76210,8 +76665,11 @@ function saveSleep(){
 
 function loadLifestyle(){
   go('s-lifestyle');
-  loadSteps('lifestyle-steps-content');
-  loadSleep('lifestyle-sleep-content');
+  // ⚠ LES DEUX CARTES REMPLACENT LES DEUX ANCIENS RENDUS SUR CET ECRAN, et
+  // seulement sur celui-ci : les ecrans s-steps et s-sleep gardent loadSteps
+  // et loadSleep tels quels, avec leur saisie. Rien n'est supprime.
+  try{ sanRendre(); }
+  catch(e){ loadSteps('lifestyle-steps-content'); loadSleep('lifestyle-sleep-content'); }
 }
 
 // ======= CHARTS =======
