@@ -28985,6 +28985,153 @@ function testExercices(){
     // s'arretait au premier bilan : il disait combien de gens entrent, rien
     // sur combien restent.
 
+    // ══ 15/09/2026 — TROISIEME LISTE : « JAMAIS DEMARRE » ══════════════════
+    // Un athlete sans UNE SEULE seance n'a pas d'assiduite : il n'a rien dont
+    // on puisse mesurer le relachement. Il n'apparaissait ni dans « A
+    // relancer » (qui traite l'assiduite) ni dans « A traiter » — dont la
+    // ligne « Inscrit, n'a jamais commence » compte les BILANS, pas les
+    // seances. Le coach ne le voyait nulle part.
+
+    ok('jamaisDemarre : le critere, et rien d’autre',(()=>{
+      const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
+      const A=o=>Object.assign({id:'x',role:'athlete',fname:'Léa',
+        createdAt:t-5*J,sessions:[]},o);
+      const cas=[
+        ['rattache 5 j, 0 seance',   A({}),                                    true],
+        ['rattache 5 j, 1 seance',   A({sessions:[{date:t}]}),                 false],
+        // 48 h EXACTEMENT : le delai est STRICT, « plus de 48 h ».
+        ['rattache 47 h',            A({createdAt:t-47*3600e3}),               false],
+        ['rattache 49 h',            A({createdAt:t-49*3600e3}),               true],
+        // Une pastille fabriquee depuis un code porte sessions:[] EN DUR : son
+        // tableau vide n'est pas un fait, c'est un remplissage.
+        ['pastille d’un code',  A({_fromCode:true}),                      false],
+        ['un coach',                 A({role:'coach'}),                        false],
+        // Sans date, on ne suppose rien.
+        ['sans createdAt',           A({createdAt:undefined}),                 false],
+        ['coachSince prime',         A({createdAt:t-40*J,coachSince:t-3600e3}),false]
+      ];
+      for(const [lib,c,att] of cas){
+        const r=jamaisDemarre(c,t);
+        if(r!==att) return _echec(lib+' rend '+r+' au lieu de '+att);
+      }
+      return true;})());
+
+    // ⚠ CONTRAINTE ABSOLUE : une douleur ou un drapeau rouge n'arrive JAMAIS
+    // dans cette liste. Ils gardent leur ligne dans « A traiter », le seul
+    // endroit d'ou le coach ne peut pas les reporter d'un clic.
+    // Un drapeau se declare AU QUESTIONNAIRE, donc sans avoir jamais pose une
+    // seance : l'exclusion mord pour de vrai, elle n'est pas decorative.
+    ok('Un drapeau rouge ne tombe jamais dans « Jamais demarre »',(()=>{
+      const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
+      const A=o=>Object.assign({id:'x',role:'athlete',fname:'Léa',
+        createdAt:t-5*J,sessions:[]},o);
+      // LES DEUX FAMILLES, avec leur forme REELLE : drapeauRouge porte une
+      // zone, drapeauGeneral n'en porte pas.
+      const artic=A({drapeauRouge:{zone:'epaule',cases:['douleur_nocturne'],date:t-J}});
+      const gen  =A({drapeauGeneral:{cases:['thoracique'],date:t-J}});
+      if(!drapeauQuelconqueActif(artic)) return _echec('le gabarit articulaire ne leve pas de drapeau');
+      if(!drapeauQuelconqueActif(gen))   return _echec('le gabarit general ne leve pas de drapeau');
+      if(jamaisDemarre(artic,t)) return _echec('un drapeau articulaire est tombe dans la liste');
+      if(jamaisDemarre(gen,t))   return _echec('un drapeau general est tombe dans la liste');
+      // ET « A traiter » LES GARDE : renderTodoBlock lit le meme predicat.
+      return /drapeauQuelconqueActif\(c\)/.test(String(renderTodoBlock))
+        ?true:_echec('« A traiter » ne remonte plus les drapeaux');})());
+
+    ok('La liste va du rattachement le plus ancien au plus recent',(()=>{
+      const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
+      const A=(f,j,o)=>Object.assign({id:f,role:'athlete',fname:f,
+        createdAt:t-j*J,sessions:[]},o||{});
+      const l=listeJamaisDemarre([A('Zoé',3),A('Alice',12),A('Marc',6),
+        A('Paul',1),A('Ida',9,{sessions:[{date:t}]})],t);
+      const noms=l.map(c=>c.fname).join(',');
+      if(noms!=='Alice,Marc,Zoé') return _echec('ordre : '+noms);
+      // Le nombre de jours REVOLUS, pas arrondi.
+      return joursDepuisRattachement(l[0],t)===12
+        ?true:_echec('Alice attend depuis '+joursDepuisRattachement(l[0],t)+' jours');})());
+
+    ok('La carte ne s’affiche pas quand la liste est vide',(()=>{
+      // Une liste de relance qui s'affiche a zero devient du decor, et on
+      // cesse de la lire le jour ou elle dit quelque chose.
+      if(_htmlJamaisDemarre([],Date.now())!=='') return _echec('un cadre vide est rendu');
+      const t=Date.now();
+      const h=_htmlJamaisDemarre([{id:'a',fname:'Alice',createdAt:t-12*864e5,sessions:[]}],t);
+      if(!h) return _echec('la carte ne sort rien pour un athlete');
+      const d=document.createElement('div'); d.innerHTML=h;
+      // LE NOMBRE D'ATHLETES CONCERNES, demande explicitement.
+      if(d.innerText.indexOf('1')<0) return _echec('le nombre n’est pas affiche');
+      if(d.innerText.indexOf('Alice')<0) return _echec('le prenom n’est pas affiche');
+      if(!/12 jours|12 jours/.test(d.innerText)) return _echec('les jours ne sont pas affiches : '+d.innerText);
+      // UN SEUL BOUTON PAR LIGNE.
+      const b=d.querySelectorAll('button');
+      if(b.length!==1) return _echec(b.length+' bouton(s) sur la ligne');
+      return /relancerJamaisDemarre\(/.test(b[0].getAttribute('onclick'))
+        ?true:_echec('le bouton ne mene pas a la relance');})());
+
+    // XSS STOCKE : le prenom est saisi par l'athlete et atterrit dans le
+    // tableau de bord de son coach. Le defaut avait deja ete trouve dans
+    // renderTodoBlock ; on ne le reintroduit pas par une troisieme liste.
+    ok('Un prenom hostile ne s’execute pas dans la carte',(()=>{
+      const h=_htmlJamaisDemarre([{id:'h',fname:'<img src=x onerror=alert(1)>',
+        createdAt:Date.now()-5*864e5,sessions:[]}],Date.now());
+      return /<img/.test(h)?_echec('la balise est passee telle quelle'):true;})());
+
+    ok('Le brouillon est un texte, modifiable, jamais un envoi',(()=>{
+      const b=brouillonJamaisDemarre({fname:'Léa'});
+      if(b.indexOf('Léa')<0) return _echec('le prenom n’est pas dans le brouillon');
+      if(b.indexOf('première séance')<0) return _echec('le brouillon a change de sujet');
+      // Sans prenom, la phrase reste lisible plutot que de laisser un trou.
+      if(brouillonJamaisDemarre({}).indexOf('Salut toi')<0)
+        return _echec('sans prenom, le brouillon laisse un trou');
+      const r=String(relancerJamaisDemarre);
+      // ⚠ AUCUN ENVOI : le geste OUVRE la fenetre de redaction, il ne publie
+      // rien. Si ecrireMessageCanal apparaissait ici, ce serait un automate.
+      if(/ecrireMessageCanal|enregistrerMessageCanal/.test(r))
+        return _echec('la relance publie toute seule');
+      if(r.indexOf('openMessageCanal')<0) return _echec('la relance n’ouvre pas le canal');
+      // ⚠ LE COACH N'ECRIT PAS DANS LE DOSSIER DE L'ATHLETE : ce chemin ne
+      // passe ni par saveUser, ni par DB.set('users'), ni par CLOUD.push.
+      return /saveUser\(|DB\.set\('users'|CLOUD\.push\(/.test(r)
+        ?_echec('la relance ecrit dans le dossier de l’athlete'):true;})());
+
+    // LE CANAL EST UNE DIFFUSION, et les regles RTDB le disent : /canaux/
+    // {coach}/messages est lisible par TOUT athlete rattache. Un brouillon qui
+    // nomme quelqu'un l'expose au groupe entier — le coach doit le savoir au
+    // moment ou il ecrit, pas apres.
+    ok('La fenetre avertit quand le brouillon nomme un athlete',(()=>{
+      const s=String(openMessageCanal);
+      if(s.indexOf('brouillon')<0) return _echec('la fenetre n’accepte pas de brouillon');
+      if(s.indexOf('lu par tous tes athl')<0)
+        return _echec('aucun avertissement de diffusion');
+      // L'AVERTISSEMENT NE PARAIT QUE LA OU IL SERT : un message general n'a
+      // pas a porter une mise en garde sur un prenom qu'il ne contient pas.
+      if(!/_br&&_br\.nomme/.test(s)) return _echec('l’avertissement n’est pas conditionne');
+      // ET LE NOM EST ECHAPPE DANS L'AVERTISSEMENT LUI-MEME.
+      if(!/escapeHtml\(_br\.nomme\)/.test(s)) return _echec('le prenom n’est pas echappe dans l’avis');
+      // LE BROUILLON N'ECRASE JAMAIS UN TEXTE DEJA ECRIT.
+      return /if\(_br&&!msgId&&_br\.texte\)/.test(s)
+        ?true:_echec('un brouillon pourrait ecraser un message en cours de modification');})());
+
+    // ⚠ TROIS LISTES, TROIS NATURES, AUCUNE FUSION. L'ecran d'assiduite et le
+    // predicat de bilans restent mot pour mot ce qu'ils etaient.
+    ok('« A relancer » et la logique d’assiduite sont intacts',(()=>{
+      const e=document.getElementById('s-coach-file');
+      if(!e) return _echec('l’ecran d’assiduite a disparu');
+      const h=e.querySelector('h1');
+      if(!h||h.textContent.trim()!=='À relancer')
+        return _echec('le titre de l’ecran a change : '+(h&&h.textContent));
+      // Sa phrase pose sa nature ; la troisieme liste ne la reprend pas.
+      if(e.innerText.indexOf('Assiduité seulement')<0)
+        return _echec('l’ecran ne se declare plus « assiduite seulement »');
+      // neverStarted compte les BILANS et continue de le faire : c'est un
+      // predicat DIFFERENT de jamaisDemarre, et ils restent separes.
+      const n=String(neverStarted).replace(/\s+/g,'');
+      if(n.indexOf('c.bilans||[]).length')<0)
+        return _echec('neverStarted ne compte plus les bilans');
+      if(n.indexOf('sessions')>=0)
+        return _echec('neverStarted s’est mis a compter les seances : les deux listes fusionnent');
+      // Et la ligne « A traiter » qui s'en sert est toujours la.
+      return /neverStarted\(c\)/.test(String(renderTodoBlock))
+        ?true:_echec('« A traiter » a perdu sa ligne « n’a jamais commence »');})());
     ok('Les quatre compteurs de retention sont declares',(()=>{
       const n=['notif_granted','pwa_installed','retour_j1','jamais_demarre_7j'];
       const abs=n.filter(x=>RCM_EVENEMENTS.indexOf(x)<0);

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1209';
+window.RC_BUILD='1210';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -7040,6 +7040,14 @@ const COACH_PHOTO='icons/coach.jpg';
              defiler pour voir ce qui l attend. Les cinq autres gardent leur
              ordre relatif entre eux. -->
         <div id="ch-todo"></div>
+        <!-- TROISIEME LISTE, distincte des deux autres. « A traiter » porte ce
+             qui demande une decision, « A relancer » (s-coach-file) porte
+             l'assiduite ; celle-ci porte les athletes qui n'ont JAMAIS pose une
+             seance et n'ont donc aucune assiduite a relacher. Aucune fusion :
+             trois listes, trois natures.
+             Rempli par loadCoachHome, et VIDE tant que personne n'est concerne
+             — une liste de relance qui s'affiche a zero devient du decor. -->
+        <div id="ch-jamais-demarre"></div>
         <!-- Invitations emises qui n ont pas abouti. Rempli par
              _rendreInvitations, appele par loadCoachHome. -->
         <div id="ch-invitations"></div>
@@ -21138,14 +21146,42 @@ async function resyncCompteursCanal(msgId){
   }catch(e){ toast('Resynchronisation impossible : '+e.message,'var(--orange)'); }
 }
 
-function openMessageCanal(msgId){
+// `brouillon` est OPTIONNEL et n'existe que pour la liste « Jamais demarre » :
+// {texte, nomme}. Les deux appelants historiques ne passent qu'un identifiant et
+// ne changent pas d'un caractere.
+//
+// ⚠ CE CANAL EST UNE DIFFUSION, PAS UN MESSAGE PRIVE. Les regles RTDB ouvrent
+// /canaux/{coach}/messages en lecture a TOUT athlete dont coachEmailKey designe
+// ce coach : il n'existe aucun adressage par athlete dans ce produit, et le
+// commentaire de ces memes regles pose le principe — « RepCore n'a jamais
+// laisse un athlete apprendre l'existence d'un autre ».
+// Un brouillon qui commence par « Salut Marie » nomme donc Marie a tout le
+// groupe, ET apprend au groupe qu'elle n'a pas commence. Le coach doit le
+// savoir AU MOMENT OU IL ECRIT, pas apres : d'ou l'avertissement ci-dessous,
+// pose seulement quand le brouillon porte un prenom.
+function openMessageCanal(msgId,brouillon){
   document.getElementById('modal-overlay')?.remove();
   const m=(msgId&&(window._canalMsgsCoach||{})[msgId])||{};
+  const _br=(brouillon&&typeof brouillon==='object')?brouillon:null;
+  // Le brouillon ne remplit QUE le corps, et seulement sur un nouveau message :
+  // il n'ecrase jamais un texte deja ecrit.
+  if(_br&&!msgId&&_br.texte) m.texte=_br.texte;
+  const _avis=(_br&&_br.nomme)
+    ?'<div style="background:var(--surface-1);border:1px solid var(--orange);'
+      +'border-left:3px solid var(--orange);border-radius:var(--r-2);padding:10px 12px;'
+      +'margin-bottom:12px;font-size:var(--fs-xs);line-height:1.55;color:var(--text-strong)">'
+      +'<strong>Ce canal est lu par tous tes athlètes suivis.</strong> Le brouillon '
+      +'nomme '+escapeHtml(_br.nomme)+' : en l’envoyant tel quel, tu apprends à '
+      +'tout le groupe qu’'+escapeHtml(_br.nomme)+' n’a pas encore commencé. '
+      +'Retire le prénom pour en faire un message général, ou écris-lui '
+      +'directement depuis sa fiche.</div>'
+    :'';
   window._canalEdite=msgId||'';
   document.body.insertAdjacentHTML('beforeend',
   `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">${msgId?'Modifier le message':'Nouveau message'}</h2>
+    ${_avis}
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Il apparaît dans le canal de tous tes athlètes suivis, à leur prochaine ouverture de l'app. Ce n'est pas une notification : leur téléphone ne sonnera pas.</p>
     <label for="cm-titre">Titre (optionnel) · ${CANAL_TITRE_MAX} caractères</label>
     <input id="cm-titre" type="text" maxlength="${CANAL_TITRE_MAX}" value="${escapeHtml(m.titre||'')}" placeholder="Nouvelle vidéo technique">
@@ -24591,10 +24627,12 @@ function loadCoachHome(){
   const elList=document.getElementById('ch-clients-list');
   if(!clients.length){
     renderTodoBlock([]);
+    _rendreJamaisDemarre([]);
     elList.innerHTML=emptyState('users','Aucun athlète encore.'+(u.code?'<br>Partage ton code : <strong style="color:var(--red-text)">'+u.code+'</strong>':''));return;
   }
   clients.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
   renderTodoBlock(clients);
+  _rendreJamaisDemarre(clients);
   // La toile est tracée APRÈS son insertion : _setupCanvas mesure la largeur
   // du conteneur, et un élément pas encore dans le document en mesure zéro.
   try{
@@ -24633,6 +24671,10 @@ function loadCoachHome(){
     const freshClients=getClients();
     freshClients.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
     renderTodoBlock(freshClients);
+    // ET APRES LA SYNCHRO AUSSI. Un athlete rapatrie par syncRelevantUsers
+    // n'existait pas au premier rendu : sans ce second appel, il n'apparaitrait
+    // qu'au prochain retour sur le tableau de bord.
+    _rendreJamaisDemarre(freshClients);
     const el2=document.getElementById('ch-clients-list');
     if(!el2||!freshClients.length) return;
     // LA PULSATION NE PART QUE SI LA LISTE A REELLEMENT CHANGE. Posee a chaque
@@ -24794,6 +24836,155 @@ function hasNewBilan(c){
 // createdAt absent (comptes antérieurs au champ) → traité comme ancien, donc signalé.
 function neverStarted(c){
   return !c._fromCode&&!(c.bilans||[]).length&&(Date.now()-(c.createdAt||0))>3*864e5;
+}
+
+// ══════════ TROISIEME LISTE : « JAMAIS DEMARRE » ═══════════════════════
+//
+// ⚠ TROIS LISTES, TROIS NATURES, AUCUNE FUSION.
+//   « A traiter »   — ce qui demande une decision : sante, bilans, acces.
+//   « A relancer »  — l'assiduite, et elle seule (ecran s-coach-file).
+//   « Jamais demarre » — celle-ci. Un athlete sans UNE SEULE seance n'a pas
+//                    d'assiduite : il n'a rien dont on puisse mesurer le
+//                    relachement. Il n'apparaissait donc nulle part.
+//
+// ET SURTOUT PAS DANS neverStarted, JUSTE AU-DESSUS. Celui-la compte les
+// BILANS, pas les seances : un athlete qui a rempli son bilan de depart et
+// n'a jamais ouvert une seance en sort — c'est exactement le trou. Les deux
+// predicats se ressemblent et ne disent pas la meme chose ; ils restent
+// separes, et aucune ligne de l'un n'est reecrite pour servir l'autre.
+//
+// CE QUE CETTE LISTE NE REGARDE PAS : la douleur, les drapeaux, l'assiduite,
+// les programmes, le statut d'acces. Un seul fait — aucune seance — et un
+// seul delai.
+const JAMAIS_DEMARRE_DELAI=48*3600e3;
+
+// PURE. La date d'entree de cet athlete dans le portefeuille du coach.
+//
+// ⚠ IL N'EXISTE AUCUNE DATE DE RATTACHEMENT DANS LE SCHEMA. Verifie le
+// 15/09/2026 : ni linkToCoach, ni la consommation de code, ni le lien RCLINK
+// n'ecrivent quand le lien s'est fait. `createdAt` est donc le seul repere
+// disponible — et pour la grande majorite c'est le meme instant, un athlete
+// se rattachant au moment ou il cree son compte.
+// `coachSince` est lu D'ABORD pour que le jour ou ce champ existera, cette
+// fonction devienne exacte sans qu'on y retouche. L'ecrire releverait du
+// parcours ATHLETE, jamais du coach : le coach n'ecrit pas dans ce dossier.
+function dateRattachement(c){
+  if(!c) return 0;
+  const s=Number(c.coachSince)||0;
+  return s||Number(c.createdAt)||0;
+}
+// PURE. Le nombre de jours REVOLUS depuis le rattachement.
+function joursDepuisRattachement(c,maintenant){
+  const d=dateRattachement(c);
+  const t=Number(maintenant)||0;
+  if(!d||!t||t<d) return 0;
+  return Math.floor((t-d)/864e5);
+}
+// PURE. Le critere, et rien d'autre : rattache depuis plus de 48 h, aucune
+// seance.
+//
+// ⚠ UNE DOULEUR OU UN DRAPEAU ROUGE N'ARRIVE JAMAIS ICI. Les deux gardent
+// leur ligne dans « A traiter », qui est le seul endroit d'ou le coach ne
+// peut pas les reporter d'un clic. Un drapeau se declare au questionnaire,
+// donc SANS avoir jamais pose une seance : l'exclusion mord pour de vrai, et
+// elle n'est pas decorative. Une douleur, elle, se declare en seance et ne
+// peut pas coexister avec « aucune seance » — on l'ecarte quand meme, pour
+// que la regle soit vraie par construction et non par chance.
+//
+// `_fromCode` EST EXCLU, et c'est important : ces dossiers-la sont des
+// pastilles fabriquees par getClients depuis un code, avec `sessions:[]` pose
+// en dur. Leur tableau vide n'est pas un fait, c'est un remplissage — les
+// compter dirait « n'a jamais demarre » d'athletes qui s'entrainent peut-etre
+// depuis un mois sur leur propre telephone. neverStarted les ecarte pour la
+// meme raison.
+function jamaisDemarre(c,maintenant){
+  if(!c||c._fromCode||c.role==='coach') return false;
+  if((c.sessions||[]).length) return false;
+  try{ if(drapeauQuelconqueActif(c)) return false; }catch(e){}
+  try{ const sg=signauxEntrainement(c); if(sg&&(sg.douleur||sg.douleurDiffuse)) return false; }catch(e){}
+  const d=dateRattachement(c);
+  const t=Number(maintenant)||0;
+  if(!d||!t) return false;
+  return (t-d)>JAMAIS_DEMARRE_DELAI;
+}
+// PURE. La liste, du plus ancien rattachement au plus recent : celui qui
+// attend depuis douze jours passe avant celui qui attend depuis trois.
+function listeJamaisDemarre(clients,maintenant){
+  return (clients||[]).filter(c=>jamaisDemarre(c,maintenant))
+    .sort((a,b)=>dateRattachement(a)-dateRattachement(b));
+}
+// PURE. Le brouillon propose au coach. Un BROUILLON : il s'ouvre dans la
+// fenetre de redaction, il ne part pas tout seul, et le coach le reecrit s'il
+// veut. Le prenom est insere tel quel — c'est la fenetre de redaction qui
+// echappe, pas cette fonction, qui rend du texte et non du HTML.
+function brouillonJamaisDemarre(c){
+  const p=String((c&&c.fname)||'').trim();
+  return 'Salut '+(p||'toi')+', j’ai vu que tu n’as pas encore lancé ta '
+    +'première séance. Dis-moi ce qui bloque, on règle ça en deux minutes.';
+}
+// PURE. La carte, ou la chaine VIDE quand personne n'est concerne — jamais un
+// cadre vide annoncant zero. Une liste de relance qui s'affiche a zero devient
+// du decor, et on cesse de la lire le jour ou elle dit quelque chose.
+//
+// LE GRIS ET NON LE ROUGE. Ce n'est pas une alerte : personne n'a mal, rien
+// n'est en retard. C'est une relance commerciale, et la peindre comme « A
+// traiter » lui volerait l'attention que la sante doit garder.
+function _htmlJamaisDemarre(liste,maintenant){
+  const l=liste||[];
+  if(!l.length) return '';
+  const n=l.length;
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
+    +'overflow:hidden;box-shadow:var(--el-1)">'
+    +'<div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;'
+    +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
+    +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
+    +'letter-spacing:2.4px">Jamais démarré</span>'
+    +'<span style="background:var(--surface-1);border:1px solid var(--border);color:var(--text);'
+    +'font-size:14px;font-weight:400;padding:1px 9px;border-radius:var(--r-3);'
+    +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
+    +'</div>'
+    +'<div style="padding:0 14px">'
+    +renderDataList(l,c=>{
+      const j=joursDepuisRattachement(c,maintenant);
+      // XSS STOCKE : le prenom est saisi par l'athlete et atterrit dans le
+      // tableau de bord de son coach. Meme precaution que renderTodoBlock, et
+      // pour la meme raison — le defaut y avait ete trouve en testant des
+      // prenoms hostiles.
+      const nom=escapeHtml(String(c.fname||'').trim()||'Athlète');
+      return '<div style="flex:1;min-width:0">'
+        +'<div style="font-size:var(--fs-sm);font-weight:800;line-height:1.3">'+nom+'</div>'
+        +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">'
+        +'rattaché depuis '+j+' jour'+(j>1?'s':'')+'</div>'
+        +'</div>'
+        // UN SEUL BOUTON. L'ecran n'a qu'une action a proposer, et deux
+        // boutons cote a cote obligeraient a choisir avant de savoir quoi.
+        +'<button type="button" onclick="relancerJamaisDemarre(\''+escapeHtml(String(c.id||''))+'\')" '
+        +'class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;margin:0;padding:0 14px;'
+        +'min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs);white-space:nowrap">'
+        +'Écrire</button>';
+    },{pad:'11px 0'})
+    +'</div></div>';
+}
+// Le geste : ouvrir la fenetre de redaction du canal avec le brouillon dedans.
+//
+// ⚠ AUCUN ENVOI. Le message s'affiche dans le champ, modifiable, et rien ne
+// part tant que le coach n'a pas appuye sur « Publier » lui-meme. C'est la
+// demande exacte : un brouillon, pas un automate.
+//
+// ⚠ ET LE COACH N'ECRIT PAS DANS LE DOSSIER DE L'ATHLETE. Ce chemin aboutit a
+// /canaux/{coach}/messages, le seul noeud que les regles RTDB lui ouvrent en
+// ecriture. Rien ici ne touche /users/{athlete}.
+function _rendreJamaisDemarre(clients){
+  const z=document.getElementById('ch-jamais-demarre');
+  if(!z) return;
+  try{ z.innerHTML=_htmlJamaisDemarre(listeJamaisDemarre(clients,Date.now()),Date.now()); }
+  catch(e){ z.innerHTML=''; }
+}
+function relancerJamaisDemarre(id){
+  const c=getClients().find(x=>String(x.id)===String(id));
+  if(!c){ toast('Athlète introuvable','var(--orange)'); return; }
+  openMessageCanal('',{texte:brouillonJamaisDemarre(c),nomme:String(c.fname||'').trim()});
 }
 // Un athlète « a un programme » dès qu'UN de ces mécanismes est renseigné.
 // Source unique de vérité : tout code qui juge la présence d'un programme doit
