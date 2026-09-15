@@ -31174,6 +31174,164 @@ function testExercices(){
         return _echec('.metric-box ne partage plus la largeur');
       return true;})());
 
+    // ══ 15/09/2026 — L'HISTORIQUE DES SEANCES ════════════════════════════
+    ok('La carte d’entraînement porte ses trois actions',(()=>{
+      const h=document.getElementById('clh-hero');
+      if(!h) return _echec('la carte d’entraînement a disparu');
+      const rouge=h.querySelector('.btn-red');
+      if(!rouge) return _echec('le bouton principal a disparu');
+      if(rouge.textContent.trim()!=='DÉMARRER MA SÉANCE DU JOUR')
+        return _echec('libellé : '+rouge.textContent.trim());
+      const duo=h.querySelectorAll('.hero-duo .btn');
+      if(duo.length!==2) return _echec(duo.length+' boutons secondaires au lieu de deux');
+      const t=[...duo].map(b=>b.textContent.trim());
+      if(t[0]!=='GÉRER MES SÉANCES'||t[1]!=='HISTORIQUE')
+        return _echec('libellés : '+t.join(' | '));
+      // ⚠ SUR UNE LIGNE, et c'est la demande. La regle suffit quand l'ecran
+      // n'est pas monte ; quand il l'est, on mesure.
+      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const m=css.match(/\.hero-duo\{([^}]*)\}/);
+      if(!m||!/display:flex/.test(m[1])) return _echec('.hero-duo n’est pas une rangée');
+      // flex:1 1 0 AVEC min-width:0 : sans le min-width, un libellé qui ne se
+      // coupe pas impose sa largeur et déborde la carte.
+      const mb=css.match(/\.hero-duo \.btn\{([^}]*)\}/);
+      if(!mb||!/min-width:0/.test(mb[1]))
+        return _echec('les boutons peuvent déborder : min-width:0 manque');
+      const r=[...duo].map(b=>b.getBoundingClientRect());
+      if(r[0].width&&r[1].width&&window.innerWidth>=390
+         &&Math.abs(r[0].top-r[1].top)>2)
+        return _echec('les deux boutons ne partagent pas la ligne');
+      return true;})());
+
+    // LA LISTE. Une ligne par séance, triée de la plus récente à la plus
+    // ancienne, et RIEN n'y est recalculé : une séance porte déjà son nom, sa
+    // date, sa durée et son volume. Un historique qui recalculerait finirait
+    // par afficher d'autres chiffres que ceux montrés à la fin de la séance.
+    ok('L’historique liste les séances, de la plus récente à la plus ancienne',(()=>{
+      const u={sessions:[
+        {id:'a',date:3000,name:'A',duration:40,volume:1000},
+        {id:'b',date:1000,name:'B',duration:50,volume:2000},
+        {id:'c',date:2000,name:'C',duration:60,volume:3000},
+        {date:0},                       // sans date : écartée
+        null]};
+      const l=listeHistoriqueSeances(u);
+      if(l.map(x=>x.id).join(',')!=='a,c,b')
+        return _echec('ordre : '+l.map(x=>x.id).join(','));
+      if(listeHistoriqueSeances({}).length) return _echec('un dossier vide rend des séances');
+      // La ligne porte le nom, la date, et les deux chiffres qu'on cherche.
+      const h=_htmlLigneHistorique({id:'a',date:Date.parse('2026-09-14T18:00:00'),
+        name:'PUSH HAUT',duration:61,volume:4800,complete:true},Date.parse('2026-09-15T09:00:00'));
+      // ⚠ LES ESPACES DES NOMBRES NE SONT PAS DES ESPACES. toLocaleString('fr-FR')
+      // groupe les milliers avec une espace fine insécable (U+202F) — ou
+      // insécable (U+00A0) selon la version d'ICU. Comparer à une espace
+      // ordinaire faisait tomber ce test sur un affichage parfaitement correct.
+      const _norm=x=>String(x).replace(/[\u202f\u00a0\s]+/g,' ');
+      for(const bout of ['PUSH HAUT','Lundi 14 septembre','61 min','4 800 kg'])
+        if(_norm(h).indexOf(bout)<0) return _echec('la ligne ne porte pas « '+bout+' »');
+      if(h.indexOf('data-seance="a"')<0) return _echec('la ligne ne porte pas son identifiant');
+      // ⚠ L'IDENTIFIANT PASSE PAR data-, JAMAIS PAR UN onclick CONSTRUIT. Un
+      // nom de séance porte des apostrophes, et les concaténer dans du
+      // JavaScript en ligne est la porte d'entrée qu'on ne veut pas.
+      const x=_htmlLigneHistorique({id:"a'b",date:Date.now(),
+        name:'<img src=x onerror=alert(1)>',duration:1,volume:1},Date.now());
+      // ⚠ ON CHERCHE LA BALISE, PAS SON CONTENU. escapeHtml neutralise les
+      // chevrons : « onerror=alert(1) » survit comme TEXTE, parfaitement
+      // inoffensif, et un motif qui le cherche accuse un échappement correct.
+      // Ce qui compte est qu'aucune balise ne s'ouvre.
+      if(/<img/i.test(x)) return _echec('le nom n’est pas échappé : une balise s’ouvre');
+      if(x.indexOf('&lt;img')<0) return _echec('le nom n’est pas passé par escapeHtml');
+      if(/onclick="ouvrirSeanceHistorique\('/.test(x))
+        return _echec('l’identifiant est concaténé dans un onclick');
+      // UNE SÉANCE PARTIELLE SE SIGNALE, sans être punie : elle a eu lieu.
+      if(_htmlLigneHistorique({id:'p',date:Date.now(),name:'P',complete:false},Date.now())
+         .indexOf('partielle')<0) return _echec('une séance partielle ne se signale pas');
+      // L'ANNÉE N'APPARAÎT QUE SI CE N'EST PAS L'ANNÉE EN COURS.
+      const auj=Date.parse('2026-09-15T09:00:00');
+      if(/2026/.test(_dateHistorique(Date.parse('2026-03-02T10:00:00'),auj)))
+        return _echec('l’année en cours est affichée pour rien');
+      if(!/2025/.test(_dateHistorique(Date.parse('2025-03-02T10:00:00'),auj)))
+        return _echec('une séance d’une autre année ne porte pas son année');
+      return true;})());
+
+    // LES RECORDS D'UNE SÉANCE RELUE, calculés contre tout ce qui la précède.
+    ok('Une séance relue retrouve ses records',(()=>{
+      const st=(kg,n)=>({sets:Array.from({length:n},()=>({done:true,weight:kg,reps:8}))});
+      const ant=[{date:1,data:{'DC':st(80,3)}},{date:2,data:{'DC':st(85,3)}}];
+      const sc={date:3,data:{'DC':st(90,3),'DIPS':st(0,3)}};
+      const r=recordsDeSeance(sc,ant);
+      if(r.length!==1) return _echec(r.length+' records au lieu d’un');
+      if(r[0].nm!=='DC'||r[0].histMax!==85||r[0].curMax!==90||r[0].gain!==5)
+        return _echec(JSON.stringify(r[0]));
+      // ⚠ UN EXERCICE JAMAIS FAIT AVANT N'EST PAS UN RECORD. C'est une
+      // première, et l'annoncer comme un record les dévaluerait tous.
+      if(recordsDeSeance({date:3,data:{'NOUVEAU':st(60,3)}},ant).length)
+        return _echec('un premier passage compte comme un record');
+      // Une charge égale n'en est pas un non plus.
+      if(recordsDeSeance({date:3,data:{'DC':st(85,3)}},ant).length)
+        return _echec('une charge égale compte comme un record');
+      // Les séries non validées ne comptent pas.
+      if(recordsDeSeance({date:3,data:{'DC':{sets:[{done:false,weight:200}]}}},ant).length)
+        return _echec('une série non validée compte');
+      return true;})());
+
+    // ⚠ L'ÉCRAN DE RELECTURE NE DEMANDE RIEN. C'est le point délicat du lot :
+    // rouvrir s-workout-done aurait rouvert ses curseurs de ressenti, son
+    // sRPE, sa relance de bilan et son invitation aux notifications — donc
+    // redemandé un ressenti déjà donné, et risqué de l'écrire sur la DERNIÈRE
+    // séance.
+    ok('La séance relue se lit, elle ne se ressaisit pas',(()=>{
+      const d=document.getElementById('s-seance-detail');
+      if(!d) return _echec('l’écran de relecture n’existe pas');
+      if(d===document.getElementById('s-workout-done'))
+        return _echec('la relecture réutilise l’écran de fin de séance');
+      // AUCUN CHAMP DE SAISIE dans le gabarit de relecture.
+      const champs=d.querySelectorAll('input,textarea,select');
+      if(champs.length) return _echec(champs.length+' champ(s) de saisie sur un écran de relecture');
+      // Et rien n'y écrit : ni saveUser, ni rcm, ni les fonctions de ressenti.
+      for(const [n,f] of [['ouvrirSeanceHistorique',ouvrirSeanceHistorique],
+                          ['_htmlRessentiRelu',_htmlRessentiRelu],
+                          ['_htmlExercicesRelus',_htmlExercicesRelus],
+                          ['loadHistoriqueSeances',loadHistoriqueSeances]])
+        if(/saveUser\(|savePostSession|rcfReinitRessenti|rcfPoserRessenti/.test(String(f)))
+          return _echec(n+' écrit ou réarme une saisie');
+      // LE RESSENTI EST RELU, PAS REDEMANDÉ : des valeurs, et les libellés de
+      // RCF_QUESTIONS — la même table que l'écran de fin.
+      const h=_htmlRessentiRelu({metrics:{fatigue:7,sensation:8}});
+      if(h.indexOf('/ 10')<0) return _echec('le ressenti relu n’est pas une valeur');
+      if(/<input/.test(h)) return _echec('le ressenti relu pose un champ');
+      const lib=(RCF_QUESTIONS.find(q=>q.id==='fatigue')||{}).lib;
+      if(lib&&h.indexOf(escapeHtml(lib))<0)
+        return _echec('les libellés ne viennent plus de RCF_QUESTIONS');
+      // Une séance sans ressenti n'affiche pas un bloc vide.
+      if(_htmlRessentiRelu({})!=='') return _echec('une séance sans ressenti rend un bloc');
+      return true;})());
+
+    // ⚠ LE VISUEL TÉLÉCHARGÉ EST CELUI DE LA SÉANCE OUVERTE, pas de la
+    // dernière. Sans cela, relire une séance d'il y a trois semaines et
+    // toucher « Télécharger » aurait rendu le visuel d'hier.
+    ok('Le visuel téléchargé est celui de la séance relue',(()=>{
+      const src=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
+      // La cible est un PARAMÈTRE, et le cas par défaut reste la dernière
+      // séance : l'écran de fin ne change pas de comportement.
+      if(!/function telechargerBilanSeance\(sc\)/.test(src))
+        return _echec('telechargerBilanSeance ne prend pas la séance en paramètre');
+      if(!/function partagerBilanSeance\(sc\)/.test(src))
+        return _echec('partagerBilanSeance ne prend pas la séance en paramètre');
+      if(String(_bilanDonneesDe).indexOf('_bilanSeanceCourante')<0)
+        return _echec('sans argument, le comportement d’origine est perdu');
+      // ET LES RECORDS SONT RECOMPTÉS pour cette séance-là : _bilanRecords est
+      // le compte de la DERNIÈRE séance, et l'appliquer à une séance ancienne
+      // lui prêterait des records qu'elle n'a pas faits.
+      if(String(_bilanDonneesDe).indexOf('recordsDeSeance')<0)
+        return _echec('les records du visuel ne sont pas recomptés pour la séance relue');
+      if(String(telechargerSeanceRelue).indexOf('_seanceRelue')<0)
+        return _echec('le téléchargement ne vise pas la séance ouverte');
+      // Et le MÊME dessin que l'écran de fin : une seconde mise en page
+      // aurait divergé au premier ajustement.
+      if(String(_rendrePartageSeanceRelue).indexOf('_bilanDonneesDe')<0)
+        return _echec('l’aperçu de relecture ne passe pas par la même source');
+      return true;})());
+
     // « — Continue ! » — meme tiret, meme lecture, dans la notification
     // d'assiduite. Et l'encouragement doit garder le bord droit du cadre :
     // c'est le tiret qui portait le margin-left:auto.

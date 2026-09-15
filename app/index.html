@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1221';
+window.RC_BUILD='1222';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5523,6 +5523,51 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    fermer, et c'est la seule forme acceptable pour une récompense : elle se
    remarque ou elle ne se remarque pas, elle n'interrompt pas.
    Au-dessus de la barre d'onglets, pas devant : bottom 88px. */
+/* LES DEUX BOUTONS SECONDAIRES DE LA CARTE D'ENTRAINEMENT.
+   flex:1 1 0 avec min-width:0 : sans le min-width, un bouton dont le libelle
+   ne peut pas se couper impose sa largeur naturelle et deborde la carte —
+   c'est le defaut classique de flex, dont la base est `auto` et non 0. */
+.hero-duo{display:flex;gap:8px}
+.hero-duo .btn{flex:1 1 0;min-width:0;font-size:var(--fs-xs);padding:11px 6px;
+  letter-spacing:1.2px;white-space:nowrap}
+@media(max-width:360px){
+  .hero-duo{flex-wrap:wrap}
+  .hero-duo .btn{flex:1 1 100%}
+}
+
+/* ══ L'HISTORIQUE DES SEANCES ═════════════════════════════════════════════
+   Une ligne par seance, et rien d'autre : nom, date, et les deux chiffres
+   qu'on cherche en relisant — la duree et le volume. Tout le reste est
+   derriere le clic. Une liste qui montre tout ne se parcourt pas. */
+.hs-ligne{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+  padding:12px 13px;margin-bottom:8px;border-radius:var(--r-2);cursor:pointer;
+  background:var(--surface-1);border:1px solid var(--border);
+  font-family:Montserrat,sans-serif;color:var(--text);
+  transition:border-color var(--t-1),background var(--t-1)}
+.hs-ligne:hover,.hs-ligne:focus-visible{border-color:var(--red);background:#140505}
+.hs-corps{flex:1 1 auto;min-width:0}
+.hs-nom{font-size:var(--fs-md);font-weight:800;line-height:1.3;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hs-date{font-size:var(--fs-xs);color:var(--sub);line-height:1.4;margin-top:2px}
+.hs-chiffres{flex:0 0 auto;text-align:right;font-size:var(--fs-xs);
+  color:var(--sub);line-height:1.4;font-variant-numeric:tabular-nums}
+.hs-fleche{flex:0 0 auto;color:var(--sub);font-size:var(--fs-lg)}
+/* Une seance INCOMPLETE se signale, sans etre punie : elle a eu lieu. */
+.hs-ligne[data-partielle] .hs-nom{color:var(--text-strong)}
+.hs-part{display:inline-block;margin-left:7px;padding:1px 6px;border-radius:var(--r-1);
+  background:var(--surface-3);color:var(--sub);font-size:var(--fs-xs);
+  font-weight:700;letter-spacing:.3px;vertical-align:middle}
+.hs-vide{padding:28px 16px;text-align:center;color:var(--sub);
+  font-size:var(--fs-sm);line-height:1.6}
+/* Le ressenti relu : des valeurs, pas des curseurs. L'ecran de detail ne
+   REDEMANDE rien — il montre ce qui a ete repondu ce jour-la. */
+.hs-res{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.hs-res-c{flex:1 1 calc(50% - 4px);min-width:120px;padding:10px 12px;
+  border-radius:var(--r-2);background:var(--surface-1);border:1px solid var(--border)}
+.hs-res-l{font-size:var(--fs-xs);color:var(--sub);letter-spacing:.3px}
+.hs-res-v{font-size:var(--fs-lg);font-weight:800;color:var(--text-strong);
+  font-variant-numeric:tabular-nums}
+
 /* LES TROIS CASES DE L'ACCUEIL, cote a cote. Cette regle a longtemps vecu
    dans l'attribut style du bloc, et c'est ce qui la rendait fragile : tout
    code qui masque puis rend l'element — _rendreReprise le fait — l'effacait
@@ -8818,8 +8863,17 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:24px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div class="eyebrow eyebrow-act" style="margin-bottom:14px">Entraînement</div>
-        <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">DÉMARRER MA SÉANCE</button>
-        <button class="btn btn-blanc" onclick="loadSessionManager()" style="font-size:var(--fs-xs);padding:11px;letter-spacing:1.5px">GÉRER MES SÉANCES</button>
+        <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">DÉMARRER MA SÉANCE DU JOUR</button>
+        <!-- LES DEUX SECONDAIRES SUR UNE LIGNE. Gerer et relire sont deux
+             gestes de meme rang — l'un prepare, l'autre revient — et les
+             empiler aurait donne trois boutons pleine largeur sous un quatrieme.
+             La rangee s'enveloppe sous 360 px : deux libelles de cette longueur
+             cote a cote n'y tiennent pas, et une cible qu'on ne peut pas viser
+             ne vaut pas une ligne gagnee. -->
+        <div class="hero-duo">
+          <button class="btn btn-blanc" onclick="loadSessionManager()">GÉRER MES SÉANCES</button>
+          <button class="btn btn-blanc" onclick="loadHistoriqueSeances()">HISTORIQUE</button>
+        </div>
       </div>
 
       <!-- « Tension et analyses » a quitté l'accueil pour « Mon profil » : c'est
@@ -9446,6 +9500,49 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- WORKOUT COMPLETE -->
+<!-- ══ HISTORIQUE DES SEANCES ══════════════════════════════════════════════
+     Une ligne par seance, de la plus recente a la plus ancienne. Remplie par
+     loadHistoriqueSeances. -->
+<div id="s-historique-seances" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="go('s-client-home')">←</button>
+    <span class="topbar-title">Mes séances</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1"><div class="pad">
+    <div id="hs-compte" style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:12px"></div>
+    <div id="hs-liste"></div>
+  </div></div>
+</div>
+<!-- ══ UNE SEANCE RELUE ═════════════════════════════════════════════════════
+     ⚠ ECRAN SEPARE DE s-workout-done, ET C'EST LE POINT DELICAT DE CE LOT.
+
+     La tentation etait de rouvrir l'ecran de fin de seance. Il ne s'y prete
+     pas : il porte les curseurs de ressenti, le sRPE, la carte de forme, la
+     relance de bilan et l'invitation aux notifications — c'est-a-dire une
+     demi-douzaine de champs qui ECRIVENT. Les rouvrir sur une seance d'il y a
+     trois semaines, c'est redemander un ressenti deja donne et risquer de
+     l'ecrire sur la derniere seance.
+
+     Cet ecran-ci ne demande RIEN. Il montre, et il laisse telecharger. Il
+     reutilise les MEMES fabricants d'HTML que l'ecran de fin — _htmlHeroFin,
+     _htmlRecompenses, _htmlRecordsFin, _htmlStatsFin — pour que ce qu'on relit
+     soit exactement ce qu'on a vu ce jour-la, et non une seconde mise en page
+     qui divergerait. -->
+<div id="s-seance-detail" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="loadHistoriqueSeances()">←</button>
+    <span class="topbar-title">Séance</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1"><div class="pad">
+    <div id="sd-entete" style="margin-bottom:16px"></div>
+    <div id="sd-badges"></div>
+    <div id="sd-records" style="margin-bottom:14px"></div>
+    <div id="sd-stats" style="margin-bottom:18px"></div>
+    <div id="sd-partage" style="margin-bottom:20px"></div>
+    <div id="sd-ressenti"></div>
+    <div id="sd-exercices"></div>
+  </div></div>
+</div>
 <div id="s-workout-done" class="screen">
   <!-- UNE SORTIE EXPLICITE. Sans .back-btn, _histPopstate tombait en cas 5 et
        remontait à _ecranOrigine — c’est-à-dire s-workout, la séance qu’on
@@ -39468,24 +39565,43 @@ function _telechargerAvecEtat(btn){
   },0); });
   return true;
 }
-function telechargerBilanSeance(){
+// ⚠ LA SEANCE VISEE DEVIENT UN PARAMETRE, et c'est tout ce qui change ici.
+// L'historique doit pouvoir telecharger le visuel d'une seance d'il y a trois
+// semaines ; sans ce parametre il aurait fallu une seconde fonction, qui
+// aurait divergé du dessin de l'ecran de fin au premier ajustement.
+// Sans argument, le comportement est EXACTEMENT celui d'avant : la derniere
+// seance, par _bilanSeanceCourante.
+function _bilanDonneesDe(sc){
+  if(!sc) return _bilanSeanceCourante();
+  const d=bilanSeanceDonnees(sc,currentUser);
+  if(!d) return null;
+  // LES RECORDS SONT RECOMPTES POUR CETTE SEANCE-LA. _bilanRecords est le
+  // compte de la DERNIERE seance, pose par l'ecran de fin : l'appliquer a une
+  // seance ancienne lui preterait des records qu'elle n'a pas faits.
+  try{
+    const ant=listeHistoriqueSeances(currentUser).filter(x=>x.date<sc.date);
+    d.records=recordsDeSeance(sc,ant).length;
+  }catch(e){ d.records=0; }
+  return d;
+}
+function telechargerBilanSeance(sc){
   if(_storyEnCours) return false;
-  const d=_bilanSeanceCourante();
+  const d=_bilanDonneesDe(sc);
   if(!d){ toast('Aucune séance à partager.','var(--orange)'); return false; }
   _storyEnCours=true;
   try{ return _storySortirTelechargement(_dessinerBilanSeance(d),'repcore-bilan.png'); }
   catch(e){ toast('Téléchargement impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); return false; }
   finally{ _storyEnCours=false; }
 }
-function partagerBilanSeance(){
+function partagerBilanSeance(sc){
   if(_storyEnCours) return false;
-  const d=_bilanSeanceCourante();
+  const d=_bilanDonneesDe(sc);
   if(!d){ toast('Aucune séance à partager.','var(--orange)'); return false; }
   _storyEnCours=true;
   try{
     if(_storySortirPartage(_dessinerBilanSeance(d),'repcore-bilan.png')) return true;
     _storyEnCours=false;
-    return telechargerBilanSeance();
+    return telechargerBilanSeance(sc);
   }catch(e){
     toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)');
     return false;
@@ -43294,6 +43410,256 @@ function _htmlBadge(b,grand,sansTexte){
 // ── LE HERO ────────────────────────────────────────────────────────────
 // Il ne porte plus le record : celui-ci a sa place dans les recompenses et
 // dans « Mes records », et l'afficher trois fois le banalisait.
+// ══════════════════ L'HISTORIQUE DES SEANCES ══════════════════════════════
+//
+// Toutes les seances faites, de la plus recente a la plus ancienne, une ligne
+// chacune. Un clic ouvre la seance relue.
+//
+// ⚠ RIEN N'EST RECALCULE ICI. Une seance enregistree porte deja son nom, sa
+// date, sa duree, son volume et ses series — finishWorkout les a ecrits. La
+// liste les LIT. Un historique qui recalculerait finirait par afficher des
+// chiffres differents de ceux montres a la fin de la seance, et c'est
+// exactement ce qu'on ne peut pas se permettre : ce sont les memes.
+//
+// PURE. Les seances, triees, avec ce qu'il faut pour une ligne et rien de plus.
+function listeHistoriqueSeances(u){
+  return ((u&&u.sessions)||[])
+    .filter(x=>x&&x.date)
+    .slice()
+    .sort((a,b)=>b.date-a.date);
+}
+// PURE. La date, telle qu'on la lit dans une liste : « Mardi 15 septembre ».
+// L'annee n'apparait QUE si ce n'est pas l'annee en cours — sur douze mois
+// elle est du bruit, au-dela elle est la seule chose qu'on cherche.
+function _dateHistorique(ts,maintenant){
+  const d=new Date(ts);
+  const t=new Date((typeof maintenant==='number')?maintenant:Date.now());
+  const o={weekday:'long',day:'numeric',month:'long'};
+  if(d.getFullYear()!==t.getFullYear()) o.year='numeric';
+  const x=d.toLocaleDateString('fr-FR',o);
+  return x.charAt(0).toUpperCase()+x.slice(1);
+}
+// PURE. Une ligne. L'identifiant passe par data-id et non par un onclick
+// construit a la main : un nom de seance porte des apostrophes, et les
+// concatener dans du JavaScript inline est la porte d'entree qu'on ne veut pas.
+function _htmlLigneHistorique(sc,maintenant){
+  const nb=v=>Number(Math.round(v)||0).toLocaleString('fr-FR');
+  const dur=Number(sc.duration)||0;
+  const vol=Number(sc.volume)||0;
+  const chiffres=[];
+  if(dur>0) chiffres.push(dur+' min');
+  if(vol>0) chiffres.push(nb(vol)+' kg');
+  return '<button type="button" class="hs-ligne" data-seance="'+escapeHtml(String(sc.id||sc.date))+'"'
+    +(sc.complete===false?' data-partielle':'')+'>'
+    +'<div class="hs-corps">'
+      +'<div class="hs-nom">'+escapeHtml(String(sc.name||'Séance'))
+      +(sc.complete===false?'<span class="hs-part">partielle</span>':'')+'</div>'
+      +'<div class="hs-date">'+escapeHtml(_dateHistorique(sc.date,maintenant))+'</div>'
+    +'</div>'
+    +'<div class="hs-chiffres">'+chiffres.map(escapeHtml).join('<br>')+'</div>'
+    +'<div class="hs-fleche" aria-hidden="true">›</div>'
+    +'</button>';
+}
+function loadHistoriqueSeances(){
+  const l=listeHistoriqueSeances(currentUser);
+  const z=document.getElementById('hs-liste');
+  const c=document.getElementById('hs-compte');
+  if(c) c.textContent=l.length
+    ? l.length+' séance'+(l.length>1?'s':'')+' enregistrée'+(l.length>1?'s':'')
+    : '';
+  if(z){
+    z.innerHTML=l.length
+      ? l.map(x=>_htmlLigneHistorique(x,Date.now())).join('')
+      : '<div class="hs-vide">Aucune séance enregistrée pour l\'instant.<br>'
+        +'Elles apparaîtront ici dès la première terminée.</div>';
+    // UN SEUL ECOUTEUR, sur le conteneur : deux cents lignes font deux cents
+    // ecouteurs autrement, et ils survivraient a chaque rendu.
+    z.onclick=e=>{
+      const b=e.target&&e.target.closest?e.target.closest('.hs-ligne'):null;
+      if(b&&b.dataset.seance) ouvrirSeanceHistorique(b.dataset.seance);
+    };
+  }
+  go('s-historique-seances');
+}
+// PURE. Les records de CETTE seance : ce qu'elle a battu par rapport a tout ce
+// qui la precede. Meme regle que buildSessionComparison — la charge maximale
+// par exercice, comparee au meilleur anterieur — mais sans woState, que
+// l'historique n'a pas. Un exercice jamais fait avant n'est pas un record :
+// c'est une premiere, et l'annoncer comme un record les devaluerait tous.
+function recordsDeSeance(sc,anterieures){
+  const out=[];
+  const data=(sc&&sc.data&&typeof sc.data==='object')?sc.data:{};
+  for(const nm of Object.keys(data)){
+    const sets=((data[nm]||{}).sets)||[];
+    let cur=0;
+    for(const st of sets){
+      if(!st||st.done!==true) continue;
+      const w=parseFloat(st.weight)||0;
+      if(w>cur) cur=w;
+    }
+    if(!cur) continue;
+    let hist=0;
+    for(const p of (anterieures||[])){
+      let d=null;
+      try{ d=_dataDeSeance(p,nm); }catch(e){ d=null; }
+      for(const st of ((d&&d.sets)||[])){
+        if(!st||st.done!==true) continue;
+        const w=parseFloat(st.weight)||0;
+        if(w>hist) hist=w;
+      }
+    }
+    if(hist>0&&cur>hist) out.push({nm,curMax:cur,histMax:hist,gain:cur-hist});
+  }
+  out.sort((a,b)=>b.gain-a.gain);
+  return out;
+}
+// PURE. Le contexte que les fabricants d'HTML de fin de seance attendent,
+// reconstruit depuis une seance ENREGISTREE. C'est ce qui permet de reutiliser
+// _htmlRecompenses, _htmlRecordsFin et achievementEngine tels quels, au lieu
+// d'ecrire une seconde mise en page qui divergerait de la premiere.
+function contexteSeanceRelue(sc,u){
+  if(!sc||!sc.date) return null;
+  const toutes=listeHistoriqueSeances(u);
+  const ant=toutes.filter(x=>x.date<sc.date).sort((a,b)=>a.date-b.date);
+  const prec=ant.slice(-8);
+  const der=prec.length?prec[prec.length-1]:null;
+  const rec=recordsDeSeance(sc,ant);
+  let meilleur=null;
+  try{
+    const data=(sc.data&&typeof sc.data==='object')?sc.data:{};
+    const l=Object.keys(data).map(nm=>({nm,
+      kg:Math.max(0,...(((data[nm]||{}).sets||[]).map(t=>Number(t&&t.weight)||0)))}))
+      .filter(x=>x.kg>0).sort((a,b)=>b.kg-a.kg);
+    meilleur=l[0]||null;
+  }catch(e){ meilleur=null; }
+  const sets=Number(sc.sets)||0, prevus=Number(sc.setsPlanned)||0;
+  return {
+    records:rec,
+    sets,setsPlanned:prevus,volume:Number(sc.volume)||0,
+    volumesPrecedents:prec.map(x=>Number(x&&x.volume)||0),
+    // LA SERIE N'EST PAS RECONSTITUEE. On ne sait pas ce qu'elle valait ce
+    // jour-la — `streak` est une valeur du dossier, pas de la seance — et
+    // inventer un nombre ferait dire a un badge quelque chose de faux. Zero
+    // vaut ici « on ne sait pas », et achievementEngine ne pose alors aucun
+    // badge de regularite : c'est le comportement juste.
+    streak:0,
+    joursDepuisDerniere:der&&der.date
+      ? Math.max(0,(sc.date-der.date)/864e5) : 0,
+    exosAmeliores:rec.length,
+    seriesEchouees:Math.max(0,prevus-sets),
+    rpe:Number(sc.rpe)||0,
+    meilleurExo:meilleur
+  };
+}
+let _seanceRelue=null;
+// Le bloc de telechargement de la seance relue. Meme gabarit et memes phrases
+// que renderPartageBilan sur l'ecran de fin : le PNG sans fond, l'avertissement
+// sur la galerie en mode clair. Deux formulations auraient fini par promettre
+// deux choses differentes du meme fichier.
+function _rendrePartageSeanceRelue(sc){
+  const z=document.getElementById('sd-partage');
+  if(!z) return false;
+  let d=null;
+  try{ d=_bilanDonneesDe(sc); }catch(e){ d=null; }
+  // Une seance sans aucune serie validee ne produit pas de visuel : on
+  // n'affiche pas un bouton qui repondrait « aucune seance a partager ».
+  if(!d){ z.innerHTML=''; return true; }
+  try{ _prechaufferMarqueCoach(); }catch(e){}
+  const part=(typeof navigator!=='undefined'&&navigator.share)
+    ?'<button type="button" class="rcf-share" onclick="partagerSeanceRelue()">'
+      +'Partager cette séance</button>':'';
+  z.innerHTML='<button type="button" class="rcf-dl" onclick="telechargerSeanceRelue(this)">'
+    +icon('download',18)+'<span>Télécharger cette séance</span></button>'+part
+    +'<div class="rcf-note">PNG sans fond, à apposer sur ta photo en story.<br>'
+    +'Dans la galerie, le visuel s\u2019affichera en blanc : c\u2019est normal.</div>';
+  return true;
+}
+// Les deux gestes. Ils passent par la seance RETENUE a l'ouverture de l'ecran,
+// jamais par la derniere : c'est tout l'objet de l'historique.
+function telechargerSeanceRelue(btn){
+  const lib='Télécharger cette séance';
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp) sp.textContent='Génération…';
+  let ok=false;
+  try{ ok=telechargerBilanSeance(_seanceRelue); }catch(e){ ok=false; }
+  if(sp) setTimeout(()=>{ sp.textContent=ok?'Téléchargé ✓':lib;
+    if(ok) setTimeout(()=>{ sp.textContent=lib; },2000); },260);
+  return ok;
+}
+function partagerSeanceRelue(){ return partagerBilanSeance(_seanceRelue); }
+// Le clic d'une ligne. L'identifiant est celui de la seance — `id` quand elle
+// en porte un, sa date sinon : les seances anterieures au champ `id` n'en ont
+// pas, et elles doivent rester ouvrables.
+function ouvrirSeanceHistorique(cle){
+  const sc=listeHistoriqueSeances(currentUser)
+    .find(x=>String(x.id||x.date)===String(cle));
+  if(!sc){ toast('Séance introuvable','var(--orange)'); return; }
+  _seanceRelue=sc;
+  let ctx=null;
+  try{ ctx=contexteSeanceRelue(sc,currentUser); }catch(e){ ctx=null; }
+  let badges=[];
+  try{ badges=achievementEngine(ctx||{}); }catch(e){ badges=[]; }
+  const pose=(id,html)=>{ try{
+    const z=document.getElementById(id); if(z) z.innerHTML=html;
+  }catch(e){} };
+  // L'ENTETE remplace le hero de fin de seance : « Séance terminée » au passe
+  // n'a pas de sens trois semaines apres. Le nom et la date, qui sont ce
+  // qu'on cherche en relisant.
+  pose('sd-entete','<div class="rcf-hero"><h1 class="rcf-titre">'
+    +escapeHtml(String(sc.name||'Séance'))+'</h1>'
+    +'<div class="hs-date" style="text-align:center">'
+    +escapeHtml(_dateHistorique(sc.date,Date.now()))
+    +(sc.complete===false?' · partielle':'')+'</div>'
+    +'<div class="rcf-trait" aria-hidden="true"></div></div>');
+  pose('sd-badges',(()=>{ try{ return _htmlRecompenses(badges,ctx); }catch(e){ return ''; } })());
+  pose('sd-records',(()=>{ try{ return _htmlRecordsFin(ctx); }catch(e){ return ''; } })());
+  pose('sd-stats',(()=>{ try{
+    return _htmlStatsFin(Number(sc.duration)||0,Number(sc.sets)||0,
+      Number(sc.setsPlanned)||0,Number(sc.volume)||0,0); }catch(e){ return ''; } })());
+  pose('sd-ressenti',_htmlRessentiRelu(sc));
+  pose('sd-exercices',_htmlExercicesRelus(sc));
+  _rendrePartageSeanceRelue(sc);
+  go('s-seance-detail');
+}
+// PURE. Le ressenti TEL QU'IL A ETE DONNE. Des valeurs, pas des curseurs :
+// cet ecran ne redemande rien. Les libelles viennent de RCF_QUESTIONS, la
+// meme table que l'ecran de fin — deux listes auraient fini par nommer
+// differemment la meme question.
+function _htmlRessentiRelu(sc){
+  const m=(sc&&sc.metrics&&typeof sc.metrics==='object')?sc.metrics:null;
+  if(!m) return '';
+  const l=RCF_QUESTIONS.filter(q=>{
+    const v=Number(m[q.id]);
+    return Number.isFinite(v)&&v>0;
+  });
+  if(!l.length) return '';
+  return '<div class="rcf-rk-t" style="margin-bottom:8px">Ton ressenti ce jour-là</div>'
+    +'<div class="hs-res">'
+    +l.map(q=>'<div class="hs-res-c"><div class="hs-res-l">'+escapeHtml(q.lib)+'</div>'
+      +'<div class="hs-res-v">'+escapeHtml(String(Math.round(Number(m[q.id]))))
+      +'<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:600"> / 10</span>'
+      +'</div></div>').join('')
+    +'</div>';
+}
+// PURE. Le detail des exercices, lu par bilanSeanceDonnees — la MEME fonction
+// qui alimente le visuel telechargeable. Ce qu'on lit a l'ecran est donc
+// exactement ce que le fichier contiendra.
+function _htmlExercicesRelus(sc){
+  let d=null;
+  try{ d=bilanSeanceDonnees(sc,currentUser); }catch(e){ d=null; }
+  const ex=(d&&d.ex)||[];
+  if(!ex.length) return '';
+  const nb=v=>Number(v).toLocaleString('fr-FR');
+  return '<div class="rcf-rk"><div class="rcf-rk-t">Ce que tu as fait</div>'
+    +ex.map(x=>'<div class="rcf-rk-l">'
+      +'<span class="rcf-rk-ex">'+escapeHtml(String(x.nom))+'</span>'
+      +'<span class="rcf-rk-v">'+escapeHtml(String(x.series))+' série'
+      +(x.series>1?'s':'')
+      +(x.kg>0?' · '+nb(x.kg)+' kg':'')
+      +(x.reps>0?' × '+nb(x.reps):'')
+      +'</span></div>').join('')
+    +'</div>';
+}
 function _htmlHeroFin(badges,ctx){
   return '<div class="rcf-hero">'+_htmlFlammeFin()
     +'<h1 class="rcf-titre">Séance terminée</h1>'
