@@ -30476,6 +30476,239 @@ function testExercices(){
         if(bm.indexOf(f)<0) return _echec('badgesMerites n’utilise plus '+f);
       return true;})());
 
+    // ══ 15/09/2026 — TON POINT DU JOUR ════════════════════════════════════
+    // « UNE question par jour. Jamais deux. Trois questions, c'est un
+    // formulaire, et un formulaire quotidien est abandonne en une semaine. »
+    // Rien dans le code ne tient cette regle tout seul — une table peut
+    // recevoir un tableau de deux entrees sans que rien ne casse — donc elle
+    // est tenue ici.
+    ok('Une question par jour, jamais deux',(()=>{
+      const jours=Object.keys(PDJ_SEMAINE);
+      if(jours.length!==5) return _echec(jours.length+' jours portent une question au lieu de cinq');
+      for(const j of jours){
+        const v=PDJ_SEMAINE[j];
+        if(typeof v!=='string') return _echec('le jour '+j+' porte '+JSON.stringify(v)+' et non UN identifiant');
+        if(!PDJ_QUESTIONS[v]) return _echec('le jour '+j+' designe « '+v+' », qui n’est pas une question');
+      }
+      // LE WEEK-END NE PORTE RIEN, et c'est voulu : deux jours sans rien
+      // demander font partie du rythme.
+      if(PDJ_SEMAINE[0]||PDJ_SEMAINE[6]) return _echec('le week-end porte une question');
+      // Chaque question dit son titre et son accuse. Un accuse manquant
+      // laisserait la carte se refermer sans rien confirmer.
+      for(const k in PDJ_QUESTIONS){
+        const q=PDJ_QUESTIONS[k];
+        if(!q.titre||!q.accuse) return _echec(k+' n’a pas de titre ou pas d’accuse');
+        // Un titre qui poserait deux questions se reconnait a son second « ? ».
+        if((String(q.titre).match(/\?/g)||[]).length!==1)
+          return _echec(k+' ne pose pas exactement une question : '+q.titre);
+      }
+      return true;})());
+
+    // LE CALENDRIER COMPLET, les sept jours, et la DATE A LAQUELLE la reponse
+    // appartient. Date#getDay rend 0 pour dimanche ; _woReminderDays, lui,
+    // compte lundi=0. Les deux conventions coexistent dans ce fichier, et les
+    // confondre decalerait la semaine entiere d'un jour — ce test l'attraperait.
+    ok('Le tour de la semaine, jour par jour',(()=>{
+      // 2026-09-13 est un dimanche. Sept jours a partir de la.
+      const attendu=[
+        ['2026-09-13',null,        null],          // dimanche
+        ['2026-09-14','poids',     '2026-09-14'],  // lundi
+        ['2026-09-15','sommeil',   '2026-09-15'],  // mardi
+        ['2026-09-16','energie',   '2026-09-16'],  // mercredi
+        // ⚠ JEUDI : LES PAS DE LA VEILLE. Personne ne connait son total du
+        // jour a huit heures ; la reponse appartient donc au MERCREDI, et
+        // l'ecrire au jeudi fausserait les deux journees.
+        ['2026-09-17','pas',       '2026-09-16'],  // jeudi
+        ['2026-09-18','sommeil',   '2026-09-18'],  // vendredi
+        ['2026-09-19',null,        null]           // samedi
+      ];
+      for(const [iso,q,cible] of attendu){
+        const t=Date.parse(iso+'T09:00:00');
+        const r=pdjQuestionDuJour(t);
+        if(r!==q) return _echec(iso+' → '+r+' au lieu de '+q);
+        if(q&&pdjDateCible(q,t)!==cible)
+          return _echec(iso+' → la reponse irait au '+pdjDateCible(q,t)+' au lieu du '+cible);
+      }
+      return true;})());
+
+    // « Si la donnee du jour est deja saisie, la carte n'apparait pas. » — et
+    // c'est vrai QUELLE QUE SOIT LA PORTE par laquelle la donnee est entree :
+    // l'ecran Lifestyle, l'import par capture, la fin de seance. On interroge
+    // la donnee, jamais un temoin de passage.
+    ok('Une donnée déjà saisie referme la carte',(()=>{
+      const base={role:'athlete',createdAt:Date.parse('2026-01-01'),
+        sessions:[{date:Date.parse('2026-09-10'),exercises:[]}],
+        weightLog:[],sleepLog:[],stepsLog:[],energieLog:[]};
+      const cas=[
+        ['2026-09-14','poids',  {weightLog:[{date:'2026-09-14',kg:78}]}],
+        ['2026-09-15','sommeil',{sleepLog:[{date:'2026-09-15',duration:7}]}],
+        ['2026-09-16','energie',{energieLog:[{date:'2026-09-16',niveau:3}]}],
+        ['2026-09-17','pas',    {stepsLog:[{date:'2026-09-16',count:8000}]}]
+      ];
+      for(const [iso,q,rempli] of cas){
+        const t=Date.parse(iso+'T09:00:00');
+        const vide=pdjEtat(Object.assign({},base),t);
+        if(!vide||vide.question!==q) return _echec(iso+' : la carte ne pose pas '+q);
+        if(pdjEtat(Object.assign({},base,rempli),t))
+          return _echec(iso+' : la carte reste alors que '+q+' est deja saisi');
+      }
+      // ⚠ ET LE JEUDI LIT BIEN LA VEILLE : des pas saisis pour AUJOURD'HUI ne
+      // referment pas la carte, qui demande ceux d'hier.
+      const jeudi=Date.parse('2026-09-17T09:00:00');
+      if(!pdjEtat(Object.assign({},base,{stepsLog:[{date:'2026-09-17',count:8000}]}),jeudi))
+        return _echec('le jeudi se referme sur les pas d’aujourd’hui au lieu de ceux d’hier');
+      // Un poids saisi dans un BILAN du jour compte : c'est la meme donnee.
+      if(pdjEtat(Object.assign({},base,{bilans:[{date:'2026-09-14',weight:78}]}),
+                 Date.parse('2026-09-14T09:00:00')))
+        return _echec('un poids saisi au bilan ne referme pas la carte');
+      return true;})());
+
+    // LES GARDES. Aucune n'est nouvelle : celles du poids sont EXACTEMENT
+    // celles de la carte de pesee, et le bloc de reprise garde sa promesse
+    // d'etre le seul bloc du haut de l'ecran.
+    ok('La carte se tait quand elle n’a pas à parler',(()=>{
+      const lundi=Date.parse('2026-09-14T09:00:00');
+      const base=()=>({role:'athlete',createdAt:Date.parse('2026-01-01'),
+        sessions:[{date:Date.parse('2026-09-10'),exercises:[]}],
+        weightLog:[],sleepLog:[],stepsLog:[],energieLog:[]});
+      if(!pdjEtat(base(),lundi)) return _echec('le temoin ne pose aucune question');
+      const cas=[
+        ['un coach',              u=>{u.role='coach';}],
+        ['poids masque',          u=>{u.masquerPoids=true;}],
+        // AUCUNE SEANCE et un compte de plus de 48 h : le bloc de reprise
+        // occupe le haut de l'ecran, et une question d'intendance n'a rien a
+        // faire a cote de « commencer maintenant ».
+        ['bloc de reprise actif', u=>{u.sessions=[];}]
+      ];
+      for(const [nom,poser] of cas){
+        const u=base(); poser(u);
+        if(pdjEtat(u,lundi)) return _echec('la carte parle malgre : '+nom);
+      }
+      // ⚠ LES GARDES DU POIDS SONT CELLES DE LA CARTE DE PESEE, mot pour mot.
+      // Si l'une des deux apprend une garde que l'autre ignore, un lundi
+      // demanderait son poids a quelqu'un a qui l'accueil refuse de le montrer.
+      const gardesPesee=String(renderCartePesee).match(/aTCA\(currentUser\)\|\|currentUser\.masquerPoids/);
+      if(!gardesPesee) return _echec('les gardes de la carte de pesee ont change de forme');
+      const gp=String(pdjEtat);
+      for(const g of ['aTCA','masquerPoids','paliersDeficit'])
+        if(gp.indexOf(g)<0) return _echec('pdjEtat ignore la garde '+g);
+      return true;})());
+
+    // « Ecris dans les structures existantes : ne cree pas un stockage
+    // parallele. » Les trois reponses qui ont deja un tableau passent par la
+    // FONCTION D'ECRITURE de ce tableau, celle-la meme qu'emploient les ecrans
+    // dedies — pas par une ecriture directe qui divergerait de ses regles
+    // (ecrasement par jour, fenetre de retention, fusion des champs).
+    ok('Les réponses vont dans les tableaux existants',(()=>{
+      const attendu={poids:'_recordWeight',sommeil:'_recordSleep',pas:'_recordSteps'};
+      const fns={poids:pdjValiderPoids,sommeil:pdjValiderSommeil,pas:pdjValiderPas};
+      for(const k in attendu){
+        const src=String(fns[k]);
+        // Le poids passe par _enregistrerPesee, qui porte _recordWeight ET la
+        // garde d'ecart : c'est la meme porte que savePesee.
+        const complet=(k==='poids')?src+String(_enregistrerPesee):src;
+        if(complet.indexOf(attendu[k])<0)
+          return _echec('la reponse « '+k+' » n’ecrit pas par '+attendu[k]);
+        // Et JAMAIS d'ecriture directe dans le tableau.
+        if(/currentUser\.(weightLog|sleepLog|stepsLog)\s*(=|\.push|\[)/.test(src))
+          return _echec('la reponse « '+k+' » ecrit dans le tableau sans passer par sa fonction');
+      }
+      // ⚠ LA PESEE S'ENREGISTRE EN UN SEUL ENDROIT. savePesee et le point du
+      // jour appellent la meme fonction : sans cela, la GARDE D'ECART —
+      // « 784 kg pour 78,4 » — aurait pu ne vivre que dans l'une des deux.
+      if(String(savePesee).indexOf('_enregistrerPesee')<0)
+        return _echec('savePesee a repris une copie de l’enregistrement');
+      if(String(_enregistrerPesee).indexOf('PESEE_ECART_CONFIRM')<0)
+        return _echec('la garde d’ecart a quitte l’enregistrement commun');
+      // L'energie est la SEULE qui n'avait pas de tableau. Le sien suit le
+      // meme patron : une entree par jour, ecrasement et non ajout.
+      const sv=currentUser;
+      try{
+        currentUser={role:'athlete',energieLog:[]};
+        if(!_recordEnergie('2026-09-16',4)) return _echec('une energie valide est refusee');
+        if(!_recordEnergie('2026-09-16',2)) return _echec('la correction est refusee');
+        if(currentUser.energieLog.length!==1)
+          return _echec('le meme jour occupe '+currentUser.energieLog.length+' entrees');
+        if(currentUser.energieLog[0].niveau!==2) return _echec('la correction n’a pas pris');
+        for(const mauvais of [0,6,-1,'x',null,undefined])
+          if(_recordEnergie('2026-09-16',mauvais)) return _echec(JSON.stringify(mauvais)+' est accepte comme niveau');
+        return true;
+      } finally { currentUser=sv; }})());
+
+    // ⚠ LA CONTRAINTE DE PLACE EST UNE CONTRAINTE DE SECURITE, pas de gout.
+    // Une question d'intendance ne passe JAMAIS devant une fin d'acces, une
+    // contre-indication ou une douleur declaree. Le test lit le DOCUMENT, qui
+    // est ce qui decide reellement de l'ordre a l'ecran.
+    ok('La carte ne passe jamais devant la douleur ni l’échéance',(()=>{
+      const c=document.getElementById('clh-point-jour');
+      if(!c) return _echec('le noeud de la carte n’existe pas');
+      const P=Node.DOCUMENT_POSITION_PRECEDING, S=Node.DOCUMENT_POSITION_FOLLOWING;
+      for(const id of ['clh-echeance','clh-contraintes','clh-douleur']){
+        const e=document.getElementById(id);
+        if(!e) return _echec(id+' a disparu de l’accueil');
+        if(!(e.compareDocumentPosition(c)&S))
+          return _echec('la carte passe devant '+id);
+      }
+      // Et elle reste EN HAUT de tout le reste : une question qu'il faut aller
+      // chercher n'est pas posee.
+      for(const id of ['clh-stats','clh-hero','clh-pesee','clh-prog-exercises']){
+        const e=document.getElementById(id);
+        if(e&&!(e.compareDocumentPosition(c)&P))
+          return _echec('la carte est passee sous '+id);
+      }
+      return true;})());
+
+    // LE LUNDI, UN SEUL CHAMP DE PESEE SUR L'ECRAN. Sans la garde de
+    // renderCartePesee, l'accueil en affichait DEUX a quinze centimetres l'un
+    // de l'autre — la carte « Pesee du jour » et la question du jour.
+    ok('Le lundi, l’accueil ne demande le poids qu’une fois',(()=>{
+      const sv=currentUser, svQ=pdjQuestionDuJour;
+      try{
+        pdjQuestionDuJour=()=>'poids';
+        currentUser={id:'q',email:'q@t.fr',role:'athlete',fname:'K',
+          createdAt:Date.parse('2026-01-01'),
+          sessions:[{date:Date.now()-3*864e5,exercises:[]}],
+          bilans:[],sessions_config:[{active:true}],
+          weightLog:[],sleepLog:[],stepsLog:[],energieLog:[]};
+        _rendrePointDuJour();
+        renderCartePesee();
+        const zone=document.getElementById('s-client-home');
+        const champs=zone.querySelectorAll('#pdj-poids,#pesee-input').length;
+        if(champs!==1) return _echec(champs+' champs de pesee sur l’ecran');
+        if(!document.getElementById('pdj-poids')) return _echec('c’est l’ancienne carte qui a gagne');
+        // ET LA CARTE DE PESEE REVIENT des que la question est repondue :
+        // c'est ce qui rend la moyenne sur sept jours a l'athlete.
+        currentUser.weightLog=[{date:pdjDateCible('poids',Date.now()),kg:78}];
+        _rendrePointDuJour();
+        renderCartePesee();
+        if(document.getElementById('pdj-poids')) return _echec('la question survit a sa reponse');
+        return document.getElementById('pesee-input')
+          ?true:_echec('la carte de pesee ne revient pas apres la reponse');
+      } finally {
+        currentUser=sv; pdjQuestionDuJour=svQ;
+        try{ document.getElementById('clh-point-jour').innerHTML=''; }catch(e){}
+        try{ document.getElementById('clh-pesee').innerHTML=''; }catch(e){}
+      }})());
+
+    // UN SEUL CONTROLE PAR CARTE. Le gabarit peut poser un champ OU des
+    // pastilles, jamais les deux : deux controles, c'est deja un formulaire.
+    ok('Le gabarit ne pose qu’un seul contrôle',(()=>{
+      for(const q in PDJ_QUESTIONS){
+        const h=_htmlPointDuJour({question:q,date:'2026-09-15',titre:PDJ_QUESTIONS[q].titre});
+        const d=document.createElement('div'); d.innerHTML=h;
+        const champs=d.querySelectorAll('input').length;
+        const groupes=d.querySelectorAll('.pdj-choix').length;
+        if(champs+groupes!==1)
+          return _echec(q+' pose '+champs+' champ(s) et '+groupes+' groupe(s) de pastilles');
+        if(d.querySelectorAll('.pdj-q').length!==1) return _echec(q+' pose plusieurs questions');
+        // Chaque pastille est une cible tactile : une rangee qui deborde
+        // vaut une rangee qu'on ne peut pas viser.
+        if(groupes&&!d.querySelectorAll('.pdj-past').length)
+          return _echec(q+' annonce des pastilles et n’en pose aucune');
+      }
+      // La carte vide ne rend RIEN — pas un cadre vide.
+      return _htmlPointDuJour(null)===''?true:_echec('l’etat vide rend quelque chose');})());
+
     // « — Continue ! » — meme tiret, meme lecture, dans la notification
     // d'assiduite. Et l'encouragement doit garder le bord droit du cadre :
     // c'est le tiret qui portait le margin-left:auto.
