@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1224';
+window.RC_BUILD='1225';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1673,10 +1673,36 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    rouge — ni vert, ni jaune, ni bleu — mais aucune n'est la voisine.
    Les largeurs et les ecarts sont IRREGULIERS pour la meme raison : un pas
    constant se lit comme une texture, un pas irregulier comme de la lumiere. */
-.rcf-faisceau{position:absolute;left:-8%;right:-8%;top:-58px;bottom:8px;
+/* ⚠ PAS DE overflow:hidden. C'EST LUI QUI DESSINAIT LE RECTANGLE.
+   Les deux couches debordent volontairement (inset negatif) pour que le flou
+   ait de la place ; les couper au cadre remettait exactement le bord franc
+   qu'on cherche a supprimer — quatre aretes nettes autour d'une lumiere.
+   La boite s'elargit aussi : la lumiere doit MOURIR avant le bord, pas etre
+   arretee par lui. */
+/* ⚠ ET IL NE DEBORDE PAS LATERALEMENT. Elargi a -26 % sans le cadre qui le
+   coupait, il ajoutait 20 px de defilement horizontal a la page et jusqu'a
+   105 px a la zone — mesure au navigateur. La largeur n'etait pas le bon
+   levier : c'est au MASQUE de s'eteindre avant le bord, pas a la boite de
+   s'eloigner. Il reste donc dans ses bornes horizontales et ne deborde qu'en
+   hauteur, ou rien ne defile de travers. */
+/* ⚠ contain:paint ET NON overflow:hidden. Les deux bornent la peinture au
+   cadre ; seul le premier le fait sans creer de bord visible ICI, parce que
+   le masque a deja tout eteint bien avant ce cadre — a 46 % du centre pour
+   un cadre a 50 %. C'est ce qui permet de reprendre une limite sans
+   reprendre un contour.
+   Il fallait une limite : le flou de 34 px peint hors de la boite, et cette
+   encre debordante ajoutait 20 px de defilement horizontal a la page —
+   mesure au navigateur, verifiee en eteignant le faisceau. */
+.rcf-faisceau{position:absolute;left:0;right:0;top:-88px;bottom:-30px;
+  /* overflow:hidden, et non contain:paint — mesure faite : la containment
+     ne suffisait pas a retirer les 20 px de defilement dus a l'encre du
+     flou, la coupe si. Elle est SANS DANGER ICI, et c'est tout le lot : ce
+     cadre existait deja et c'est lui qu'on accusait, alors que le bord
+     visible venait du MASQUE qui degenerait. Le masque eteint desormais la
+     lumiere a 46 % du centre ; couper a 50 % ne coupe plus rien. */
   pointer-events:none;z-index:0;overflow:hidden}
 /* La couche du fond : large, tres floue, elle ne donne que l'atmosphere. */
-.rcf-faisceau::before,.rcf-faisceau::after{content:'';position:absolute;inset:-10% -4%}
+.rcf-faisceau::before,.rcf-faisceau::after{content:'';position:absolute;inset:-10% 0}
 .rcf-faisceau::before{
   background:linear-gradient(90deg,
     transparent 0 4%, rgba(74,0,22,.55) 6% 10%, transparent 13%,
@@ -1685,7 +1711,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
     rgba(150,4,66,.54) 52% 57%, transparent 61%,
     rgba(176,10,20,.34) 68% 72%, transparent 77%,
     rgba(90,0,16,.50) 84% 89%, transparent 95%);
-  filter:blur(13px);opacity:.85}
+  filter:blur(34px);opacity:.72}
 /* La couche de devant : fine, nette de bord mais legerement floue, c'est
    elle qui donne les colonnes. */
 .rcf-faisceau::after{
@@ -1708,14 +1734,31 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
     rgba(255,80,40,.58) 81.8% 82.6%, transparent 82.5% 87.0%,
     rgba(64,0,20,.84) 87.0% 88.8%, transparent 88.8% 92.4%,
     rgba(206,18,64,.60) 92.4% 93.3%, transparent 93.2% 100%);
-  filter:blur(2.2px)}
+  /* 2,2 px laissait des colonnes a bords lisibles : on voyait des barres
+     posees sur le fond. A 9 px elles restent distinctes quand on cherche,
+     sans qu'aucune n'ait de contour. */
+  filter:blur(9px);opacity:.78}
 /* Les colonnes naissent et meurent : nettes au milieu, eteintes aux bords.
    Sans ce masque elles butent sur le cadre et le bloc devient un rideau. */
-.rcf-faisceau{-webkit-mask-image:linear-gradient(180deg,transparent,#000 22%,#000 74%,transparent),
-    radial-gradient(ellipse 74% 100% at 50% 55%,#000 34%,transparent 92%);
-  mask-image:linear-gradient(180deg,transparent,#000 22%,#000 74%,transparent),
-    radial-gradient(ellipse 74% 100% at 50% 55%,#000 34%,transparent 92%);
-  -webkit-mask-composite:source-in;mask-composite:intersect;
+/* ⚠ UN SEUL MASQUE, RADIAL, ET AUCUNE COMPOSITION.
+   Il y en avait DEUX — un lineaire et un radial — assembles par
+   mask-composite:intersect, avec -webkit-mask-composite:source-in en repli.
+   Ces deux syntaxes ne sont pas equivalentes, et la ou la composition ne
+   s'applique pas, le masque degenere : la couche reparait ENTIERE, bords
+   compris. C'est l'autre moitie du rectangle que Kevin voyait.
+   Une ellipse unique n'a rien a composer, donc rien a rater — et ses arrets
+   s'etalent sur 55 % du rayon, si bien qu'aucun point du contour n'est un
+   bord : la lumiere s'eteint partout en meme temps. */
+.rcf-faisceau{
+  /* Rayon 52 % de la LARGEUR, eteint a 88 % de ce rayon : la lumiere est
+     donc nulle a 46 % du centre, soit bien avant le bord a 50 %. Aucun point
+     du contour ne porte quoi que ce soit — il n'y a plus de contour. */
+  -webkit-mask-image:radial-gradient(ellipse 52% 56% at 50% 46%,
+    #000 0 16%,rgba(0,0,0,.86) 32%,rgba(0,0,0,.46) 54%,
+    rgba(0,0,0,.16) 72%,transparent 88%);
+  mask-image:radial-gradient(ellipse 52% 56% at 50% 46%,
+    #000 0 16%,rgba(0,0,0,.86) 32%,rgba(0,0,0,.46) 54%,
+    rgba(0,0,0,.16) 72%,transparent 88%);
   opacity:0;animation:rcfRaies 1.6s cubic-bezier(.2,.8,.3,1) .28s both}
 @keyframes rcfRaies{
   0%{opacity:0;transform:translateY(18px) scaleY(.88)}
@@ -1726,22 +1769,38 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    badge cesse de flotter au milieu des colonnes et passe devant elles. Elle
    remplace l'ancien halo purement rouge, qui eclaircissait la ou il aurait
    fallu assombrir. */
-.rcf-case-halo{position:absolute;left:50%;top:-14px;width:132px;height:132px;
+/* ⚠ ELLE S'ETEIGNAIT A 76 % DU RAYON, donc elle avait un CONTOUR — un disque
+   sombre visible des que le fond s'eclaircit derriere. Elle va desormais
+   jusqu'au bout, avec des arrets rapproches en fin de course : le dernier
+   quart ne porte presque plus rien, et l'oeil ne trouve nulle part ou la
+   flaque s'arrete. Plus large aussi — une flaque plus grande que ce qu'elle
+   doit assombrir n'a pas besoin d'etre dense. */
+/* 176 px sortaient de la zone de 12 px sur un ecran de 390 — la case fait
+   117 px a trois colonnes. 148 px tiennent, et la flaque n'a pas besoin
+   d'etre plus large que ce qu'elle assombrit. */
+.rcf-case-halo{position:absolute;left:50%;top:-18px;width:148px;height:148px;
   transform:translateX(-50%);pointer-events:none;opacity:0;
   background:radial-gradient(circle,
-    rgba(0,0,0,.92) 0 30%, rgba(12,0,2,.78) 40%,
-    rgba(96,0,14,.42) 52%, rgba(224,32,32,.22) 63%, transparent 76%)}
+    rgba(0,0,0,.88) 0 18%, rgba(10,0,2,.70) 30%,
+    rgba(78,0,12,.38) 44%, rgba(190,28,28,.20) 56%,
+    rgba(150,20,22,.10) 68%, rgba(90,12,14,.04) 82%, transparent 100%)}
 
 /* L'ARC. Un trait qui s'ouvre depuis le centre sous les medaillons et reste.
    ⚠ scaleX ET NON width. Animer la largeur est une propriete de mise en
    page : meme sur un pseudo-element absolu, elle fait recalculer a chaque
    frame ce que transform obtient gratuitement sur le compositeur. */
-.rcf-rec::after{content:'';position:absolute;left:4%;right:4%;bottom:0;height:1px;
+/* ⚠ UN TRAIT DE 1 px EST UNE DEMARCATION HORIZONTALE NETTE — exactement ce
+   qu'on ne veut plus. Il devient une LUEUR : dix pixels de haut, floue,
+   sans arete, et masquee aux deux bouts. On voit toujours que quelque chose
+   souligne les medaillons ; on ne voit plus ou ca commence. */
+.rcf-rec::after{content:'';position:absolute;left:2%;right:2%;bottom:-4px;height:10px;
   transform-origin:50% 50%;pointer-events:none;z-index:0;
-  background:linear-gradient(90deg,transparent,rgba(122,0,48,.8) 22%,
-    rgba(224,32,32,.95) 44%,rgba(255,106,60,1) 52%,rgba(200,16,40,.9) 62%,
-    rgba(92,0,16,.7) 82%,transparent);
-  box-shadow:0 0 12px rgba(224,32,32,.5);
+  background:linear-gradient(90deg,transparent,rgba(122,0,48,.42) 24%,
+    rgba(224,32,32,.58) 46%,rgba(255,106,60,.66) 52%,rgba(200,16,40,.52) 62%,
+    rgba(92,0,16,.34) 80%,transparent);
+  filter:blur(5px);
+  -webkit-mask-image:radial-gradient(ellipse 58% 100% at 50% 50%,#000 0 30%,transparent 88%);
+  mask-image:radial-gradient(ellipse 58% 100% at 50% 50%,#000 0 30%,transparent 88%);
   animation:rcfArc .75s cubic-bezier(.2,.85,.3,1) .42s both}
 @keyframes rcfArc{from{transform:scaleX(0);opacity:0}60%{opacity:1}
   to{transform:scaleX(1);opacity:.85}}
@@ -1754,9 +1813,13 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   text-align:center;gap:8px;min-width:0;padding-bottom:4px}
 /* Le badge du milieu monte : une progression, pas une marche de podium. */
 .rcf-rec-g.n3 .rcf-case:nth-child(2){transform:translateY(-18px)}
-.rcf-case-halo{position:absolute;left:50%;top:-6px;width:112px;height:112px;
-  transform:translateX(-50%);pointer-events:none;opacity:0;
-  background:radial-gradient(circle,rgba(224,32,32,.34),transparent 66%)}
+/* ⚠ IL Y AVAIT ICI UNE SECONDE REGLE .rcf-case-halo, et c'est ELLE qui
+   gagnait : un halo rouge de 112 px s'arretant net a 66 % du rayon, soit
+   exactement le disque a bord visible qu'on cherchait a supprimer. La
+   premiere regle — la flaque sombre, plus large et fondue jusqu'au bout — ne
+   servait a rien depuis qu'elle avait ete ecrite.
+   Deux regles pour un meme selecteur, a quatre-vingts lignes d'ecart : la
+   seconde a ete retiree, la premiere fait foi. */
 /* Les medaillons sont le point haut de l'ecran : ils y sont plus grands
    qu'en liste. Leur taille est posee en style INLINE par _htmlBadge — une
    fonction partagee par les listes d'exercices et le coach — donc elle ne
@@ -5545,16 +5608,20 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   .hero-duo .btn{flex:1 1 100%}
 }
 
-/* LA RELECTURE EST SOBRE. Le faisceau de colonnes et les flaques sous les
-   medaillons sont la fete de l'instant : sur un ecran de relecture ils ne
-   celebrent plus rien, et leurs bords finissent par etre la seule chose qu'on
-   voit. Le trait qui ferme le bloc part avec eux — il n'avait de sens que
-   comme fin de la mise en scene. */
-.sd-sobre .rcf-faisceau,.sd-sobre .rcf-case-halo,.sd-sobre .rcf-rec::after{display:none}
-.sd-sobre .rcf-rec{margin:10px 0 18px;padding-bottom:0}
-/* Et la marche du milieu redescend : sans le faisceau pour la porter, un
-   badge decale de 18 px ressemble a un defaut d'alignement. */
-.sd-sobre .rcf-rec-g.n3 .rcf-case:nth-child(2){transform:none}
+/* ⚠ LE FAISCEAU REVIENT SUR LA RELECTURE, et l'eteindre etait la mauvaise
+   reponse. Kevin : « le probleme n'est PAS leur presence, c'est leur rendu
+   trop decoupe ». La richesse graphique reste ; ce sont les BORDS qui ont
+   disparu — voir .rcf-faisceau et .rcf-case-halo plus haut.
+   Il ne reste ici qu'un reglage d'espacement : sans le grand titre et la
+   flamme de l'ecran de fin au-dessus, le bloc n'a pas besoin d'autant d'air. */
+.sd-sobre .rcf-rec{margin:14px 0 20px}
+
+/* La flaque sous un medaillon est plus large que sa colonne — c'est ce qui
+   lui permet de ne pas avoir de bord. Sur un ecran de 320 px la colonne ne
+   fait que 90 px et la flaque sortait de 9 px, ce qui suffisait a rendre la
+   zone defilante de travers. On coupe au niveau de la zone : la flaque n'y
+   porte plus que 4 % d'opacite, la coupe ne se voit pas. */
+#s-seance-detail .scroll-area,#s-workout-done .scroll-area{overflow-x:hidden}
 
 /* ══ L'HISTORIQUE DES SEANCES ═════════════════════════════════════════════
    Une ligne par seance, et rien d'autre : nom, date, et les deux chiffres
