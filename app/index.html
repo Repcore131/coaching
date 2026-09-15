@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1201';
+window.RC_BUILD='1202';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -721,7 +721,41 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
        mesurees pour treize colonnes, et les recalculer ici en donnerait deux
        jeux a tenir. A 1360 px les colonnes souples se resserrent d'autant —
        c'est ce que `minmax` est fait pour faire, et leurs minimums tiennent. */
-    --cr-cols:18px 44px minmax(112px,1.3fr) minmax(96px,1.1fr) minmax(74px,1.2fr) minmax(64px,.8fr) 58px 74px 52px 66px 66px 142px 96px;
+    /* ⚠ QUATORZE PISTES DEPUIS LE 14/09/2026, ET NON TREIZE. L'interrupteur
+       de suivi avait ete ajoute a la ligne sans sa colonne : la grille comptait
+       quatorze enfants pour treize pistes, et le badge d'etat REPASSAIT A LA
+       LIGNE — d'ou le « Nouveau bilan » coupe sous l'avatar, signale par Kevin.
+       PROPORTIONS REVUES DANS LA FOULEE. Le nom se coupait a « Claire Boum… »
+       pendant que les colonnes de chiffres gardaient du vide : il passe de 112
+       a 132 px de minimum et de 1,3 a 1,6 fr, les mesures se resserrent a 52 px
+       — elles portent « 100 % », « 0 % », « 2 », jamais davantage — et l'avatar
+       descend de 44 a 38, ce qui suffit a deux initiales.
+       Total mesure a 1366 px : 928 px de pistes + 13 ecarts de 8 = 1 032, pour
+       1 054 disponibles. L'ancienne definition en demandait 1 058 : elle
+       debordait deja de quatre pixels avant meme l'interrupteur. */
+    /* ⚠ LES LARGEURS SUIVENT LE CONTENU REEL, mesure cellule par cellule :
+       assidu et diete rendent « 100 % », poids « −0,4 kg », charge
+       « +65 % · pic » — la seule composee, donc la seule large —, progres
+       « 0/1 » et bilans « 2 ». Elles etaient toutes a 52 px : le chiffre le
+       plus court occupait autant que la chaine la plus longue, et les
+       cinquante pixels de trop se prenaient sur le NOM, qui se coupait a
+       « Jean-Baptiste ... » pendant que trois colonnes de deux caracteres
+       respiraient.
+       L'ETAT PASSE DE 86 A 100 px : « NOUVEAU BILAN » demandait 95 px et
+       retombait sur deux lignes, ce qui montait TOUTE la ligne a 78 px de
+       haut. Une colonne trop etroite de cinq pixels coutait vingt pixels de
+       hauteur sur chaque ligne de la liste.
+       Total a 1366 px : 648 px de pistes fixes + 13 ecarts de 8 = 752, pour
+       1 054 disponibles — 302 px reviennent au nom, a l'objectif et a la
+       phase, contre 264 avant. */
+    /* ⚠ LE COMPTE SE FAIT SUR LA BOITE DE CONTENU, PAS SUR clientWidth. Ce
+       dernier INCLUT les 2 x 14 px de marge interne : je les avais comptes
+       comme disponibles, et les pistes debordaient de vingt-quatre pixels par
+       la droite — le badge d'etat sortait de la ligne.
+       A 1 366 px : 1 048 px de boite de padding, moins 28 px de marge = 1 020
+       px utiles. Treize ecarts de 8 en prennent 104 : il reste 916 px pour les
+       quatorze pistes, et elles en font exactement 916. */
+    --cr-cols:16px 34px minmax(168px,2.4fr) minmax(70px,1fr) minmax(112px,.9fr) 50px 42px 40px 76px 38px 28px 76px 46px 120px;
     /* L'ECART, ET C'EST LUI QUI MANQUAIT. Les treize pistes font 918 px a
        1366 — mesure — pour 1 054 px de ligne : elles tiennent largement. Ce
        sont les DOUZE ECARTS a douze pixels, 144 px, qui faisaient deborder de
@@ -764,6 +798,47 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
   body:has(#s-coach-home.active) #ch-clients-list .cr-progres,
   body:has(#s-coach-home.active) #ch-clients-list .cr-bilans{display:block}
   body:has(#s-coach-home.active) #ch-clients-list .client-row:hover{transform:none}
+  /* ⚠ LE BADGE TIENT SUR UNE LIGNE, ET C'EST UNE QUESTION DE HAUTEUR, PAS DE
+     GOUT. « Nouveau bilan » demandait cinq pixels de plus que sa colonne :
+     il repassait a la ligne, montait a 39 px, et faisait monter TOUTE la
+     ligne a 78 px. Cinq pixels de colonne coutaient vingt pixels de hauteur
+     sur chacune des lignes de la liste.
+     « Abonnement a souscrire » ne tiendra jamais, lui : il se coupe, et le
+     title porte le texte entier — un badge tronque qu'on peut survoler vaut
+     mieux qu'une liste dont chaque ligne respire au hasard de son etat. */
+  body:has(#s-coach-home.active) #ch-clients-list .client-row .badge{
+    max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    /* L'INTERLETTRAGE ET LA MARGE SE RESSERRENT ICI, et la seulement : sur la
+       carte du telephone le badge est seul sur sa ligne et peut respirer ; en
+       colonne de cent pixels, un pixel d'interlettrage par caractere sur
+       treize caracteres, c'est « NOUVEAU BIL… » au lieu de « NOUVEAU BILAN ». */
+    letter-spacing:.2px;padding-left:7px;padding-right:7px}
+  /* LA DENSITE. La ligne portait 19 px de marge haute et basse pour un
+     contenu d'une seule ligne : quatre athletes remplissaient l'ecran. */
+  body:has(#s-coach-home.active) #ch-clients-list .client-row{padding-top:4px;padding-bottom:4px}
+  /* ⚠ LE BOUTON PERD SES DEUX DERNIERS MOTS, EN MODE TABLEAU SEULEMENT.
+     « OUVRIR LA FICHE » demande 142 px ; quatorze colonnes dans les 1 048 px
+     que laisse la barre laterale a 1 366, il n'y en a pas 142 a lui donner
+     sans reprendre au NOM, qui est justement ce qu'on repare. Le verbe reste
+     — c'est lui qui compte, Kevin l'a signale : un bouton qui porte un verbe
+     fait ce que le verbe dit — et le libelle entier passe dans le title et
+     dans aria-label, donc au survol comme au lecteur d'ecran.
+     SOUS 1 360 PX LA CARTE EMPILEE GARDE « OUVRIR LA FICHE » : elle a la
+     place, et c'est la qu'on lit au telephone. */
+  body:has(#s-coach-home.active) #ch-clients-list .cr-fiche{padding:8px 6px}
+  /* DEUX LIBELLES DANS LE BALISAGE, un seul rendu a la fois. Le premier
+     essai eteignait le texte par font-size:0 — battu par le style EN LIGNE du
+     bouton, si bien que les deux libelles se superposaient. Une regle de
+     feuille ne peut pas reprendre un attribut style sans !important ; deux
+     elements, eux, se montrent et se cachent sans lutter. */
+  body:has(#s-coach-home.active) #ch-clients-list .cr-fiche .cr-fiche-l{display:none}
+  body:has(#s-coach-home.active) #ch-clients-list .cr-fiche .cr-fiche-c{display:inline}
+  /* LA PHASE TIENT SUR UNE LIGNE. « Maintien · 7e semaine » se cassait en
+     trois, ce qui remontait la ligne a 60 px pour une cellule secondaire.
+     Coupee et survolable, comme le badge d'etat. */
+  body:has(#s-coach-home.active) #ch-clients-list .cr-phase,
+  body:has(#s-coach-home.active) #ch-clients-list .cr-obj{
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* L en-tete de colonnes n existe QUE dans ce mode : sous le point de
      rupture, la ligne est une carte empilee et neuf intitules n auraient
      rien a surmonter. Il herite de la grille de la ligne. */
@@ -843,7 +918,8 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      prix de la place, et il est assume : les trois valeurs qui disparaissent
      sont dans le tiroir, pour l'athlete qu'on regarde. */
   body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list{
-    --cr-cols:18px 44px minmax(140px,1.3fr) minmax(120px,1.1fr) minmax(90px,1.2fr) minmax(78px,.8fr) 66px 66px 142px 108px;
+    /* ONZE PISTES : les dix d'avant plus l'interrupteur de suivi. */
+    --cr-cols:16px 34px minmax(168px,2.4fr) minmax(86px,1fr) minmax(118px,.9fr) 76px 38px 28px 76px 46px 120px;
     --cr-gap:12px}
   body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list .cr-assidu,
   body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list .cr-poids,
@@ -3065,6 +3141,28 @@ body.with-tabbar #rc-ban-install{padding-bottom:9px}
 .celebrate::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   box-shadow:0 0 0 10px rgba(34,197,94,.55);opacity:0;
   animation:celebrateOnde var(--t-3) var(--c-out) both}
+/* L'interrupteur de suivi. Meme gabarit que .tbk-swi — meme course, meme
+   pastille — avec l'accent ROUGE : c'est le domaine de cette liste, la ou les
+   macros du coach sont en orange. La cible touchable fait 44 px de haut grace
+   au padding, alors que la piste n'en fait que 24 : on ne rate pas une bascule
+   au doigt sur une ligne de tableau. */
+.cr-swi{position:relative;display:inline-flex;align-items:center;gap:8px;
+  padding:10px 0;cursor:pointer;flex-shrink:0;justify-self:center}
+.cr-swi input{position:absolute;opacity:0;width:0;height:0}
+.cr-swi-p{position:relative;display:block;width:42px;height:24px;flex:none;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);
+  transition:background var(--t-2),border-color var(--t-2)}
+.cr-swi-p::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;
+  background:#6a6a6a;border-radius:var(--r-full);transition:transform var(--t-2),background var(--t-2)}
+.cr-swi input:checked+.cr-swi-p{background:rgba(224,32,32,.22);border-color:var(--red)}
+.cr-swi input:checked+.cr-swi-p::after{transform:translateX(18px);background:var(--red-light)}
+.cr-swi input:focus-visible+.cr-swi-p{outline:2px solid var(--red);outline-offset:2px}
+.cr-swi-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;
+  text-transform:uppercase;color:var(--text-dim);white-space:nowrap}
+.cr-swi input:checked~.cr-swi-t{color:var(--red-text)}
+@media(prefers-reduced-motion:reduce){.cr-swi-p,.cr-swi-p::after{transition:none}}
+/* Le libelle court du bouton d'ouverture n'existe QU'EN MODE TABLEAU. */
+.cr-fiche-c{display:none}
 .cr-head{display:none}
 /* LA LIGNE DE BANQUE REPOND AU DOIGT. Elle est cliquable depuis toujours et
    ne le montrait par rien : ni survol, ni enfoncement. */
@@ -21853,8 +21951,14 @@ function renderClientList(clients){
       +'<span>Objectif</span><span>Phase</span>'
       +'<span class="cr-assidu">Assidu.</span><span class="cr-poids">Poids</span>'
       +'<span class="cr-diete">Diète</span>'
-      +'<span>Charge</span><span>Progrès</span><span>Bilans</span>'
-      +'<span></span><span>État</span></div>'
+      // ⚠ « Progrès » ET « Bilans » SONT ABREGES, et c'est la colonne qui
+      // commande : elles portent « 0/1 » et « 2 », vingt-quatre et douze
+      // pixels. Les mots entiers en demandaient cinquante-six, pris sur la
+      // PHASE, qui se coupait a « Maintien ·… ». Le mot entier vit dans le
+      // title, comme pour chaque mesure de la ligne.
+      +'<span>Charge</span><span title="Exercices en progrès">Prog.</span>'
+      +'<span title="Bilans sans réponse">Bil.</span>'
+      +'<span></span><span>Suivi</span><span>État</span></div>'
       +_htmlSectionsSuivi(vus);
     // LA CASCADE NE JOUE QU'AU PREMIER REMPLISSAGE de la visite. Les rendus
     // suivants — frappe, filtre, tri, synchro — posent le contenu sans un
@@ -23457,23 +23561,43 @@ function coachBasculerSuivi(id,ev){
   toastSync(ok,envoi,estSuivi(c)?'Passé en suivi':'Passé sans suivi',"le changement est");
 }
 // Le curseur, tel qu'il apparait sur la ligne et sur la fiche.
+// ══ LE SUIVI EST UN INTERRUPTEUR, PLUS UNE PILULE ═══════════════════════
+//
+// Demande de Kevin, 14/09/2026 : « j'aurais aimé un curseur type on/off pour
+// activer le suivi ». Il avait raison au-dela de l'esthetique : « ● SUIVI » et
+// « ○ SANS SUIVI » sont deux libelles de LONGUEURS DIFFERENTES dans une colonne
+// de tableau — la ligne changeait de largeur selon l'etat de l'athlete, et
+// l'oeil qui descend la liste voyait la colonne respirer. Un interrupteur a une
+// seule largeur, et sa position dit l'etat sans qu'on lise un mot.
+//
+// LE VOCABULAIRE EST CELUI DE .tbk-swi, l'interrupteur des macros du coach :
+// meme gabarit, meme course, meme pastille. Seul l'accent change — rouge, le
+// domaine de cette liste, la ou les macros sont en orange.
+//
+// `taille` GARDE SON SENS pour les appelants hors tableau : ils demandent
+// « grand », ils obtiennent un interrupteur accompagne de son mot.
 function _htmlCurseurSuivi(c,taille){
   const on=estSuivi(c);
-  const p=taille==='grand'?'9px 14px':'6px 10px';
-  return '<button type="button" class="btn btn-sm" onclick="coachBasculerSuivi(\''+c.id+'\',event)"'
-    +' aria-pressed="'+(on?'true':'false')+'"'
-    +' title="Bascule entre suivi et sans suivi"'
-    +' style="margin:0;flex-shrink:0;white-space:nowrap;padding:'+p+';min-height:36px;'
-    +'font-size:var(--fs-2xs);letter-spacing:1px;border-radius:var(--r-full);'
-    +'border:1px solid '+(on?'var(--red)':'var(--border)')+';'
-    +'background:'+(on?'rgba(224,32,32,.16)':'transparent')+';'
-    +'color:'+(on?'var(--red-text)':'var(--text-dim)')+'">'
-    +(on?'● SUIVI':'○ SANS SUIVI')+'</button>';
+  const nom=((c&&c.fname)||'')+' '+((c&&c.lname)||'');
+  const lbl='Suivi de '+(nom.trim()||'cet athlète');
+  // stopPropagation : la ligne entiere est cliquable, et sans lui basculer le
+  // suivi ouvrirait aussi la fiche.
+  return '<label class="cr-swi'+(taille==='grand'?' cr-swi-g':'')+'"'
+    +' title="Suivi actif ou non" onclick="event.stopPropagation()">'
+    +'<input type="checkbox"'+(on?' checked':'')
+    +' onchange="coachBasculerSuivi(\''+c.id+'\',event)"'
+    +' aria-label="'+escapeHtml(lbl)+'">'
+    +'<span class="cr-swi-p"></span>'
+    +(taille==='grand'?'<span class="cr-swi-t">'+(on?'Suivi':'Sans suivi')+'</span>':'')
+    +'</label>';
 }
 function renderClientRow(c){
-  const badge=_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire</span>'
-    :_accesExpire(c)?'<span class="badge badge-gray">Lecture seule</span>'
-    :hasNewBilan(c)?'<span class="badge badge-orange">Nouveau bilan</span>':needsAlert(c)?'<span class="badge badge-red">Alerte</span>':isActive(c)?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-gray">Inactif</span>';
+  // Le `title` porte le texte ENTIER : en mode tableau le badge se coupe a la
+  // largeur de sa colonne, et « Abonnement a souscrire » n'y tiendra jamais.
+  const _bdg=(cls,txt)=>'<span class="badge '+cls+'" title="'+escapeHtml(txt)+'">'+escapeHtml(txt)+'</span>';
+  const badge=_enAttenteAbonnement(c)?_bdg('badge-orange','⏳ Abonnement à souscrire')
+    :_accesExpire(c)?_bdg('badge-gray','Lecture seule')
+    :hasNewBilan(c)?_bdg('badge-orange','Nouveau bilan'):needsAlert(c)?_bdg('badge-red','Alerte'):isActive(c)?_bdg('badge-green','Actif'):_bdg('badge-gray','Inactif');
   const lastSession=c.sessions?.length?c.sessions[c.sessions.length-1].date:0;
   const lastBilan=c.bilans?.length?c.bilans[c.bilans.length-1].date:0;
   const lastActivity=Math.max(lastSession,lastBilan);
@@ -23490,7 +23614,8 @@ function renderClientRow(c){
   const objLine=`<div class="cr-obj" style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_objDisplay?escapeHtml(_objDisplay):''}</div>`;
   // Phase : rien du tout quand elle est absente, ce qui est le cas par defaut.
   const _ph=phaseCourante(c);
-  const phLine=`<div class="cr-phase" style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px">${_ph?PHASES[_ph.type].lib+' · '+ordinalSemaine(semainesPhase(c)):''}</div>`;
+  const _phTxt=_ph?(PHASES[_ph.type].lib+' · '+ordinalSemaine(semainesPhase(c))):'';
+  const phLine=`<div class="cr-phase" title="${escapeHtml(_phTxt)}" style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px">${escapeHtml(_phTxt)}</div>`;
   // Les trois mesures, EMISES MEME VIDES, pour la même raison que l’objectif
   // et la phase : sur grand écran la ligne devient une ligne de tableau, et
   // une cellule absente décalerait toutes les colonnes suivantes.
@@ -23521,7 +23646,7 @@ function renderClientRow(c){
       onclick="selAthleteBascule('${c.id}',event)"
       aria-label="Sélectionner ${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète')}">
     <div class="avatar" style="width:44px;height:44px;font-size:var(--fs-lg);overflow:hidden;flex-shrink:0">${avatarHtml}</div>
-    <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div>${objLine}${phLine}${asLine}${poLine}${diLine}${chLine}${prLine}${biLine}</div>
+    <div style="flex:1;min-width:0"><div class="cr-nom" title="${_nm}">${_nm}</div>${objLine}${phLine}${asLine}${poLine}${diLine}${chLine}${prLine}${biLine}</div>
     <!-- ══ LE BOUTON EST DANS LA LIGNE, A COTE DU NOM ═══════════════════
          Demande de Kevin, 08/09/2026 : « je vois Claire Boumar, je peux
          cliquer directement sur ouvrir la fiche a cote de son prenom ».
@@ -23537,7 +23662,8 @@ function renderClientRow(c){
          Le clic sur le RESTE de la ligne, lui, garde l'apercu : c'est le
          geste vague, et il merite un apercu. -->
     <button class="btn btn-red btn-sm cr-fiche" onclick="event.stopPropagation();openClientDetail('${c.id}',false,true)"
-      style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap">OUVRIR LA FICHE</button>
+      title="Ouvrir la fiche de ${_nm}" aria-label="Ouvrir la fiche de ${_nm}"
+      style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap"><span class="cr-fiche-l">OUVRIR LA FICHE</span><span class="cr-fiche-c">OUVRIR</span></button>
     ${_htmlCurseurSuivi(c)}
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;

@@ -25725,6 +25725,15 @@ function testExercices(){
         return css.indexOf('.ch-chip.actif{background:var(--red-bg)')>=0
           ?true:_echec('l’état actif de référence a changé');})());
 
+      // Compte les intitules ECRITS dans renderClientList, sans dependre d'un
+      // rendu : c'est la seule source disponible a tout moment de la suite.
+      const _crNbIntitules=()=>{
+        const src=String(renderClientList);
+        const i=src.indexOf('cr-head');
+        if(i<0) return 0;
+        const j=src.indexOf('</div>',i);
+        return (src.slice(i,j<0?undefined:j).match(/<span/g)||[]).length;
+      };
       ok('N5.1 et N5.16 — L\'EN-TETE DU TABLEAU S\'AFFICHE, et ses libelles tiennent',(()=>{
         const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
         // N5.1 — `.cr-head{display:none}` est declare PLUS BAS a specificite
@@ -25744,10 +25753,113 @@ function testExercices(){
         const m=css.match(/--cr-cols:([^;}]+)/);
         if(!m) return _echec('la définition des colonnes a disparu');
         const cols=m[1].split(/\s+(?![^(]*\))/).filter(Boolean);
-        if(cols.length!==13) return _echec(cols.length+' colonnes au lieu de 13');
+        // ⚠ LE COMPTE N'EST PLUS ECRIT EN DUR, IL EST DEDUIT DE L'EN-TETE.
+        // Il valait 13 ; le curseur de suivi a ete ajoute a la ligne sans sa
+        // colonne, la grille a compte quatorze enfants pour treize pistes, et
+        // le badge d'etat est REPASSE A LA LIGNE — visible a l'ecran, muet
+        // dans la suite, parce que le nombre attendu etait une constante et
+        // non une mesure. Desormais l'en-tete fait foi : ajouter une cellule
+        // sans son intitule fait tomber l'assertion.
+        // ⚠ L'EN-TETE SE COMPTE DANS LA SOURCE, PAS DANS LE DOM : la suite
+        // tourne sans liste coach rendue, et interroger un conteneur vide
+        // ferait conclure au vert faute de trouver quoi que ce soit.
+        const nHead=_crNbIntitules();
+        if(!nHead) return _echec('en-tete introuvable dans renderClientList');
+        if(cols.length!==nHead)
+          return _echec(cols.length+' pistes pour '+nHead+' intitules');
         if(css.indexOf('.client-row>div:nth-child(3){display:contents}')<0)
           return _echec('le bloc central n’est plus dissous au bon rang');
         return true;})());
+
+      // ── La ligne d'athlete en tableau : proportions et curseur — 5 cas ──
+      // ── La ligne d'athlete en tableau : proportions et curseur — 5 cas ──
+      // ELLES MONTENT LEUR PROPRE DECOR. La suite ne rend pas la liste coach :
+      // interroger #ch-clients-list tel quel, c'est interroger un conteneur
+      // vide et conclure au vert faute de trouver quoi que ce soit.
+      (()=>{
+        const _sU=currentUser,_sD=DB.get('users'),_sC=currentClientId;
+        const j=Date.now();
+        const coach={id:'CX',email:'cx@t.fr',role:'coach',fname:'K',lname:'G'};
+        const ath={id:'AX',email:'ax@t.fr',role:'athlete',fname:'Claire',lname:'Boumard',
+          coachId:'CX',suivi:true,objective:'Prise de muscle',
+          sessions_config:Array.from({length:7},(_,i)=>({active:i<3})),
+          sessions:[{id:'s1',date:j-2*864e5,data:{}}],
+          bilans:[{type:'suivi',date:j-3*864e5}],videos:[]};
+        let rendu=false;
+        try{
+          DB.set('users',{'cx@t.fr':coach,'ax@t.fr':ath});
+          currentUser=coach; currentClientId=null;
+          renderClientList(); rendu=true;
+        }catch(e){}
+        const r=document.querySelector('#ch-clients-list .client-row');
+        const nH=document.querySelectorAll('#ch-clients-list .cr-head>span').length;
+        try{
+          ok('CHAQUE ENFANT DE LA LIGNE A SA PISTE, et l\'en-tete son intitule',(()=>{
+            // ⚠ C'EST L'ASSERTION QUI MANQUAIT. Le curseur de suivi avait ete
+            // ajoute a la ligne sans sa colonne : quatorze enfants pour treize
+            // pistes, et la grille repassait le badge d'etat A LA LIGNE —
+            // « Nouveau bilan » coupe sous l'avatar, signale sur capture.
+            if(!rendu||!r) return _echec('la liste ne s\'est pas rendue');
+            let n=0;
+            for(const e of r.children)
+              n+=(e.tagName==='DIV'&&e.querySelector&&e.querySelector('.cr-nom'))?e.children.length:1;
+            if(!nH) return _echec('en-tete introuvable');
+            return n===nH?true:_echec(n+' cellules dans la ligne pour '+nH+' intitules');})());
+          ok('LE SUIVI EST UN INTERRUPTEUR, et son etat se lit sans mot',(()=>{
+            // « ● SUIVI » et « ○ SANS SUIVI » sont deux libelles de LONGUEURS
+            // DIFFERENTES dans une colonne de tableau : la ligne changeait de
+            // largeur selon l'etat de l'athlete.
+            const sw=r&&r.querySelector('.cr-swi input[type=checkbox]');
+            if(!sw) return _echec('aucun interrupteur dans la ligne');
+            if(!/coachBasculerSuivi/.test(sw.getAttribute('onchange')||''))
+              return _echec('l\'interrupteur ne bascule rien');
+            if(sw.checked!==true) return _echec('l\'etat du dossier n\'est pas reporte');
+            // ET IL SE NOMME POUR UN LECTEUR D'ECRAN : un interrupteur nu ne se
+            // percoit qu'a l'oeil.
+            return /^Suivi de /.test(sw.getAttribute('aria-label')||'')
+              ?true:_echec('libelle : « '+sw.getAttribute('aria-label')+' »');})());
+          ok('Basculer le suivi n\'ouvre PAS la fiche au passage',(()=>{
+            // La ligne entiere est cliquable : sans stopPropagation, toucher le
+            // curseur basculerait le suivi ET ouvrirait l'athlete.
+            const lab=r&&r.querySelector('.cr-swi');
+            if(!lab) return _echec('aucun interrupteur');
+            if(!/stopPropagation/.test(lab.getAttribute('onclick')||''))
+              return _echec('le clic remonte a la ligne');
+            return /stopPropagation/.test(String(coachBasculerSuivi))
+              ?true:_echec('le gestionnaire ne coupe pas la propagation');})());
+          ok('RIEN NE DEBORDE : les pistes tiennent dans la boite de contenu',(()=>{
+            // ⚠ LE COMPTE SE FAIT SUR LA BOITE DE CONTENU. clientWidth INCLUT
+            // les deux marges internes de 14 px : les compter comme
+            // disponibles faisait deborder la ligne de vingt-quatre pixels par
+            // la droite, et le badge d'etat sortait de la carte.
+            if(!r) return _echec('aucune ligne');
+            const cs=getComputedStyle(r);
+            // Sous le point de rupture la ligne est une carte empilee : il n'y
+            // a pas de piste a mesurer, et c'est un vert legitime.
+            if(cs.display!=='grid') return true;
+            const utile=r.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);
+            const p=cs.gridTemplateColumns.split(' ');
+            const besoin=p.reduce((t,x)=>t+parseFloat(x),0)+(p.length-1)*parseFloat(cs.columnGap);
+            return besoin<=utile+1?true
+              :_echec('les pistes demandent '+Math.round(besoin)+' px pour '+Math.round(utile)+' disponibles');})());
+          ok('Ce qui se coupe porte son texte entier en infobulle',(()=>{
+            // Nom, phase et badge se coupent en colonne etroite. Une troncature
+            // sans recours est une information perdue.
+            if(!r) return _echec('aucune ligne');
+            // UNE CELLULE VIDE N'A RIEN A EXPLIQUER : la phase est absente par
+            // defaut, et exiger une infobulle sur du vide ferait echouer
+            // l'assertion sur un dossier parfaitement normal.
+            const manque=[['.cr-nom','le nom'],['.cr-phase','la phase'],['.badge','l\'etat']]
+              .filter(([sel])=>{ const e=r.querySelector(sel);
+                return e&&(e.textContent||'').trim()&&!(e.getAttribute('title')||'').trim(); })
+              .map(([,lib])=>lib);
+            return manque.length?_echec('sans infobulle : '+manque.join(', ')):true;})());
+        } finally {
+          currentUser=_sU; currentClientId=_sC; DB.set('users',_sD||{});
+          try{ renderClientList(); }catch(e){}
+        }
+      })();
+
 
       ok('N5.17 — LE TITRE DE SECTION PASSE PAR LE JETON D\'IDENTITE',(()=>{
         const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
@@ -25957,9 +26069,12 @@ function testExercices(){
         // debordement, aucun libelle d'en-tete coupe.
         const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
         const m=css.match(/--cr-cols:([^;}]+)/);
-        if(!m) return _echec('aucune grille de treize colonnes');
+        if(!m) return _echec('aucune grille de colonnes');
         const cols=m[1].split(/\s+(?![^(]*\))/).filter(Boolean);
-        if(cols.length!==13) return _echec(cols.length+' colonnes au lieu de 13');
+        // Meme regle qu'au-dessus : l'en-tete fait foi, pas une constante.
+        const nH=_crNbIntitules();
+        if(!nH) return _echec('en-tete introuvable dans renderClientList');
+        if(cols.length!==nH) return _echec(cols.length+' pistes pour '+nH+' intitules');
         // L'ECART EST UNE VARIABLE, lue par la ligne ET par l'en-tete : deux
         // valeurs ecrites separement se decaleraient d'un pixel chacune et les
         // valeurs ne tomberaient plus sous leur titre.
