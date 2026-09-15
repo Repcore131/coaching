@@ -31135,6 +31135,45 @@ function testExercices(){
           return _echec('le lot d’essai touche au flux de paiement');
       return true;})());
 
+    // ══ 15/09/2026 — LES TROIS CASES RESTENT SUR UNE LIGNE ═══════════════
+    //
+    // ⚠ `style.display=''` NE REMET PAS PAR DEFAUT : elle SUPPRIME la
+    // declaration en ligne. #clh-stats porte `display:flex` dans son attribut
+    // style — c'est lui qui met les trois cases cote a cote. _rendreReprise la
+    // vidait pour « rendre » le bloc, et les faisait retomber en `block`, donc
+    // EN COLONNE, pour tout le monde et a chaque rendu de l'accueil.
+    //
+    // C'est le MEME piege que showErr avec la couleur de #r-err, documente
+    // dans ce fichier depuis des mois. Il a ete refait.
+    ok('Les trois cases de l’accueil restent sur une ligne',(()=>{
+      const z=document.getElementById('clh-stats');
+      if(!z) return _echec('le bloc des trois cases n’existe plus');
+      // ⚠ LA MISE EN PAGE EST DANS LA FEUILLE, PAS EN LIGNE. C'est TOUT le
+      // correctif : un `display` en ligne sur un element qu'on masque est
+      // efface par le premier `style.display=''` venu.
+      if(/display\s*:/.test(z.getAttribute('style')||''))
+        return _echec('#clh-stats a de nouveau un display en ligne : il sera effacé au premier masquage');
+      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      if(!/#clh-stats\{[^}]*display:flex/.test(css))
+        return _echec('la regle #clh-stats{display:flex} n’existe pas dans la feuille');
+      // ⚠ ET ON REJOUE LE MASQUAGE : masquer puis rendre doit retrouver flex.
+      // Sans le correctif, ce retour donnait 'block'.
+      const sv=z.style.display;
+      try{
+        z.style.display='none';
+        if(getComputedStyle(z).display!=='none') return _echec('le masquage ne masque pas');
+        z.style.display='';
+        if(getComputedStyle(z).display!=='flex')
+          return _echec('rendu apres masquage : '+getComputedStyle(z).display+' au lieu de flex');
+      } finally { z.style.display=sv; }
+      // Les trois cases sont TROIS, et chacune prend sa part.
+      const b=z.querySelectorAll('.metric-box');
+      if(b.length!==3) return _echec(b.length+' cases au lieu de trois');
+      const m=css.match(/\.metric-box\{([\s\S]*?)\}/);
+      if(!m||!/flex:1/.test(m[1]))
+        return _echec('.metric-box ne partage plus la largeur');
+      return true;})());
+
     // « — Continue ! » — meme tiret, meme lecture, dans la notification
     // d'assiduite. Et l'encouragement doit garder le bord droit du cadre :
     // c'est le tiret qui portait le margin-left:auto.

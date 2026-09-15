@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1220';
+window.RC_BUILD='1221';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5523,6 +5523,12 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    fermer, et c'est la seule forme acceptable pour une récompense : elle se
    remarque ou elle ne se remarque pas, elle n'interrompt pas.
    Au-dessus de la barre d'onglets, pas devant : bottom 88px. */
+/* LES TROIS CASES DE L'ACCUEIL, cote a cote. Cette regle a longtemps vecu
+   dans l'attribut style du bloc, et c'est ce qui la rendait fragile : tout
+   code qui masque puis rend l'element — _rendreReprise le fait — l'effacait
+   sans le vouloir. Dans la feuille, `style.display=''` retrouve `flex`. */
+#clh-stats{display:flex;gap:8px;margin-bottom:16px}
+
 /* ══ CE QU'IL RESTE D'ESSAI ═══════════════════════════════════════════════
    DISCRETE, et le mot est de Kevin : pas de cadre rouge, pas de compte a
    rebours, pas de pastille. Une ligne de texte et un lien. Elle informe, elle
@@ -8791,7 +8797,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-reprise"></div>
 
       <!-- STATS -->
-      <div id="clh-stats" class="clh-in clh-in-2" style="display:flex;gap:8px;margin-bottom:16px">
+      <!-- ⚠ PAS DE display EN LIGNE ICI. Il y en avait un — `display:flex` —
+           et _rendreReprise, qui masque ce bloc puis le rend, le vidait avec
+           `style.display=''`. Cette ecriture ne remet pas par defaut : elle
+           SUPPRIME la declaration. Les trois cases retombaient donc en `block`,
+           c'est-a-dire EN COLONNE, pour tout le monde et a chaque rendu de
+           l'accueil. La mise en page vit dans la feuille (#clh-stats), ou un
+           masquage ne peut pas l'effacer. -->
+      <div id="clh-stats" class="clh-in clh-in-2">
         <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Cette semaine</div>
           <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m1-sub"></div></div>
         <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances au total</div>
@@ -37055,6 +37068,16 @@ function _rendreReprise(){
     try{ prog=_configReelle(currentUser&&currentUser.sessions_config); }catch(e){}
     z.innerHTML=_htmlReprise(prog);
   } else z.innerHTML='';
+  // ⚠ `style.display=''` NE REMET PAS PAR DEFAUT : elle SUPPRIME la
+  // declaration en ligne. Ces deux blocs n'en portent donc AUCUNE — leur mise
+  // en page vit dans la feuille — et vider la propriete les rend exactement
+  // comme le CSS le prevoit.
+  //
+  // #clh-stats a porte `display:flex` en ligne, et ce masquage l'effacait :
+  // les trois cases tombaient en colonne pour tout le monde. Signale par
+  // Kevin le 15/09/2026. Le remede n'est pas de retenir la valeur ici — elle
+  // dependrait de l'etat au premier appel — mais de ne pas mettre de mise en
+  // page en ligne sur un element qu'on masque.
   for(const id of ['clh-stats','clh-hero']){
     const e=document.getElementById(id);
     if(e) e.style.display=actif?'none':'';
