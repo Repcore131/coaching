@@ -31366,6 +31366,202 @@ function testExercices(){
         return _echec('l’aperçu de relecture ne passe pas par la même source');
       return true;})());
 
+    // ══ 15/09/2026 — LE GRIMPEUR ESCALADE, IL NE SAUTE PLUS ══════════════
+    //
+    // « il faut qu'on le voie progresser de marche en marche comme s'il
+    // escaladait, l'animation doit être plus complexe qu'un simple saut, il
+    // doit adopter des comportements selon les marches, même avoir l'air de
+    // galérer à la fin et symboliser l'obsession. » — Kevin, 15/09/2026.
+    //
+    // Cinq exigences, et chacune a son assertion : il part du bas, il PASSE
+    // par chaque marche, l'effort CHANGE avec la hauteur, la derniere le fait
+    // GLISSER, et il ne se repose jamais ensuite.
+
+    // ⚠ SA PLACE DE REPOS VIENT DU GABARIT, PAS DU JAVASCRIPT. Sans cela,
+    // « animations reduites », un echec de mesure ou un ecran jamais affiche
+    // le laissaient en bas a gauche de la volee.
+    ok('Le grimpeur est pose sur sa marche sans JavaScript',(()=>{
+      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const m=css.match(/\.rcf-grimpeur\{([^}]*)\}/);
+      if(!m) return _echec('la regle .rcf-grimpeur n’existe plus');
+      // Un `left` fixe dans la feuille contredirait le `left` en ligne du
+      // gabarit, qui est calcule marche par marche.
+      if(/(^|;)\s*left\s*:/.test(m[1]))
+        return _echec('la feuille repose un left fixe : il ecraserait celui du gabarit');
+      // Et plus aucune animation CSS : le chemin depend de hauteurs mesurees,
+      // il ne peut pas etre ecrit dans une feuille.
+      if(/animation\s*:/.test(m[1]))
+        return _echec('une animation CSS est revenue sur le grimpeur');
+      if(/@keyframes\s+rcfGrimpe\b/.test(css))
+        return _echec('@keyframes rcfGrimpe est du code mort');
+      // Le gabarit, lui, DOIT poser les deux coordonnees et le rang.
+      const src=String(_htmlProchainObjectif);
+      for(const t of ['data-ici=','left:','bottom:'])
+        if(src.indexOf(t)<0) return _echec('le gabarit ne pose plus '+t);
+      return true;})());
+
+    // LE CHEMIN EST PUR : des ecarts en pixels, aucune mesure dedans. C'est ce
+    // qui permet de le verifier ici sans monter l'ecran.
+    const _ecMarches=n=>{ const e=[]; for(let i=0;i<n;i++) e.push({x:(i-(n-1))*34,y:((n-1)-i)*14.5}); return e; };
+    const _xy=k=>{ const m=String(k.transform).match(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/);
+      return m?{x:parseFloat(m[1]),y:parseFloat(m[2])}:null; };
+    const _rot=k=>{ const m=String(k.transform).match(/rotate\((-?[\d.]+)deg\)/);
+      return m?parseFloat(m[1]):null; };
+
+    ok('Le grimpeur passe par CHAQUE marche, il ne saute pas a la derniere',(()=>{
+      const ec=_ecMarches(5), c=_grimpeurChemin(ec,4);
+      if(!c||!c.images||c.images.length<12)
+        return _echec('le chemin tient en '+((c&&c.images)?c.images.length:0)+' images : c’est un saut');
+      // ⚠ PUR : deux appels, deux resultats identiques.
+      if(JSON.stringify(_grimpeurChemin(_ecMarches(5),4))!==JSON.stringify(c))
+        return _echec('le chemin n’est pas pur');
+      // Il part du BAS : la premiere image est a hauteur de la marche 0.
+      const p0=_xy(c.images[0]);
+      if(!p0||Math.abs(p0.y-ec[0].y)>14)
+        return _echec('il n’entre pas par le bas de la volee : y='+(p0&&p0.y));
+      if(c.images[0].opacity!==0) return _echec('il apparait au lieu d’arriver');
+      // ET IL SE TIENT DEBOUT SUR CHACUNE : une image par marche, exactement a
+      // sa place, sans rotation ni deformation. C'est la difference entre
+      // « il monte » et « il passe devant ».
+      const arr=[];
+      for(let i=0;i<ec.length;i++){
+        const j=c.images.findIndex(k=>{ const q=_xy(k);
+          return q&&Math.abs(q.x-ec[i].x)<0.02&&Math.abs(q.y-ec[i].y)<0.02
+            &&_rot(k)===0&&/scale\(1\.000,1\.000\)/.test(k.transform); });
+        if(j<0) return _echec('il ne se pose jamais sur la marche '+i);
+        if(arr.length&&j<=arr[arr.length-1]) return _echec('les marches ne sont pas prises dans l’ordre');
+        arr.push(j);
+      }
+      // ⚠ LA DERNIERE IMAGE EST L'IDENTITE, sinon l’animation devrait etre
+      // defaite a la fin — et une animation qui doit etre defaite finit par ne
+      // pas l’etre.
+      const f=c.images[c.images.length-1];
+      if(f.offset!==1||f.opacity!==1) return _echec('la derniere image n’est pas posee');
+      if(f.transform!=='translateX(-50%) translate(0.00px,0.00px) rotate(0.00deg) scale(1.000,1.000)')
+        return _echec('la derniere image n’est pas la place de repos : '+f.transform);
+      if(f.transform.indexOf('translateX(-50%)')!==0)
+        return _echec('le centrage de la feuille est perdu en cours de route');
+      // Les images-cles sont ordonnees, et bornees.
+      let prec=-1;
+      for(const k of c.images){
+        if(!(k.offset>=prec)) return _echec('les images-cles reculent');
+        prec=k.offset;
+        if(k.offset<0||k.offset>1) return _echec('une image-cle sort de l’intervalle');
+        if(k.transform.indexOf('translateX(-50%)')!==0)
+          return _echec('une image-cle perd le centrage');
+      }
+      // IL NE SORT PAS DE LA VOLEE : sans cette borne, un ecart de calcul le
+      // ferait deborder du bloc et ouvrirait un defilement lateral.
+      const bx=Math.max.apply(null,ec.map(e=>Math.abs(e.x)));
+      for(const k of c.images){ const q=_xy(k);
+        if(!q||Math.abs(q.x)>bx+22) return _echec('il sort de la volee : x='+(q&&q.x)); }
+      return true;})());
+
+    // ⚠ « DES COMPORTEMENTS SELON LES MARCHES » EST UNE EXIGENCE MESURABLE :
+    // le temps passe a monter doit CROITRE avec la hauteur. Une cadence
+    // constante redonnerait le saut repete cinq fois.
+    ok('L\'effort du grimpeur croit avec la hauteur',(()=>{
+      const ec=_ecMarches(5), c=_grimpeurChemin(ec,4);
+      const t=[];
+      for(let i=0;i<ec.length;i++){
+        const k=c.images.find(k=>{ const q=_xy(k);
+          return q&&Math.abs(q.x-ec[i].x)<0.02&&Math.abs(q.y-ec[i].y)<0.02
+            &&_rot(k)===0&&/scale\(1\.000,1\.000\)/.test(k.transform); });
+        if(!k) return _echec('marche '+i+' jamais atteinte');
+        t.push(k.offset*c.duree);
+      }
+      const cout=[]; for(let i=1;i<t.length;i++) cout.push(t[i]-t[i-1]);
+      for(let i=1;i<cout.length;i++)
+        if(!(cout[i]>cout[i-1]))
+          return _echec('la marche '+(i+1)+' ne coute pas plus que la precedente : '+cout.join(' / '));
+      // ET LA DERNIERE COUTE LE PLUS, de loin : c'est elle qu'il reste a
+      // prendre, et c'est tout le propos du bloc.
+      const d=cout[cout.length-1];
+      if(!(d>=2*cout[0]))
+        return _echec('la derniere marche ne coute pas le double de la premiere : '+cout.join(' / '));
+      return true;})());
+
+    // « MEME AVOIR L'AIR DE GALERER A LA FIN » : il ne suffit pas que ce soit
+    // plus lent. Il doit RATER — approcher le rebord, puis redescendre.
+    ok('Le grimpeur galere sur la derniere marche : il glisse et recommence',(()=>{
+      const ec=_ecMarches(5), c=_grimpeurChemin(ec,4);
+      // Le dernier segment : tout ce qui suit la pose sur l'avant-derniere.
+      const j=c.images.map(_xy).findIndex((q,i)=>q&&Math.abs(q.x-ec[3].x)<0.02
+        &&Math.abs(q.y-ec[3].y)<0.02&&_rot(c.images[i])===0);
+      if(j<0) return _echec('l’avant-derniere marche n’est pas atteinte');
+      const seg=c.images.slice(j+1).map(_xy);
+      if(seg.length<8) return _echec('la fin tient en '+seg.length+' temps : c’est un saut de plus');
+      // Il approche du rebord (y proche de 0, la place de repos)…
+      let a=-1; for(let i=0;i<seg.length;i++) if(seg[i].y<=8){ a=i; break; }
+      if(a<0) return _echec('il n’approche jamais du rebord');
+      // …puis il REDESCEND franchement : la glissade.
+      const bas=seg.slice(a+1).reduce((m,q)=>Math.max(m,q.y),-1e9);
+      if(!(bas>=seg[a].y+5))
+        return _echec('il ne glisse pas : il touche a '+seg[a].y+' et ne redescend qu’a '+bas);
+      // …et il finit par passer, une fois, pour de bon.
+      const fin=seg[seg.length-1];
+      if(Math.abs(fin.x)>0.02||Math.abs(fin.y)>0.02) return _echec('il ne se retablit pas');
+      // Le depassement du retablissement : il monte au-dessus de sa marche
+      // avant de s’y poser. Sans lui, le geste est mecanique.
+      if(!seg.some(q=>q.y<-1)) return _echec('aucun depassement : le retablissement est mou');
+      return true;})());
+
+    // « SYMBOLISER L'OBSESSION » : il est arrive, et il ne se repose pas. La
+    // boucle est INFINIE — la seule du bloc — et minuscule : au-dela, on
+    // regarde un jouet au lieu de lire une tension.
+    ok('L\'obsession est une boucle infinie, et elle ne saute pas',(()=>{
+      const src=String(_grimpeurObsession);
+      if(src.indexOf('iterations:Infinity')<0) return _echec('la boucle s’arrete');
+      // ⚠ ELLE PASSE PAR _animer, le seul chemin sanctionne : lui seul
+      // respecte « animations reduites ».
+      if(src.indexOf('_animer(')<0) return _echec('la boucle court-circuite _animer');
+      if(/\.animate\(/.test(src)) return _echec('la boucle appelle animate directement');
+      // Premiere et derniere image identiques : autrement, chaque tour
+      // commence par un a-coup.
+      const m=src.match(/\{offset:0,\s*transform:([^,]+),/);
+      if(!m) return _echec('la premiere image de la boucle est introuvable');
+      if(!/\{offset:1,\s*transform:i\(0,0,0,1,1\)\}/.test(src.replace(/\s+/g,' ')))
+        return _echec('la boucle ne revient pas a son point de depart');
+      // Et l'amplitude reste une tension : cinq pixels, pas trente.
+      const ec=(src.match(/i\((-?[\d.]+),(-?[\d.]+),/g)||[]).map(x=>x.match(/i\((-?[\d.]+),(-?[\d.]+),/));
+      if(!ec.length) return _echec('la boucle ne bouge pas');
+      for(const e of ec)
+        if(Math.abs(parseFloat(e[1]))>6||Math.abs(parseFloat(e[2]))>6)
+          return _echec('la boucle gigote : '+e[0]);
+      return true;})());
+
+    // LE BRANCHEMENT. Une animation parfaite que personne ne lance ne vaut
+    // rien : les DEUX ecrans qui dessinent l'ascension doivent l'appeler.
+    ok('L\'ascension est lancee par les deux ecrans qui la dessinent',(()=>{
+      const src=_prodSrc();
+      for(const id of ['wd-objectif','sd-objectif'])
+        if(src.indexOf('_animerGrimpeur(document.getElementById(\''+id+'\'))')<0)
+          return _echec(id+' dessine l’ascension sans la lancer');
+      const f=String(_animerGrimpeur);
+      // ⚠ LE SEUL CHEMIN SANCTIONNE, ici aussi.
+      if(f.indexOf('_animer(')<0||/el\.animate\(|g\.animate\(/.test(f))
+        return _echec('l’ascension court-circuite _animer');
+      // ⚠ SOUS « ANIMATIONS REDUITES », _animer rend null : on n’arme alors
+      // RIEN, surtout pas une boucle infinie.
+      if(!/if\(!a\)\s*return;/.test(f))
+        return _echec('rien ne garde le cas ou _animer ne joue pas');
+      if(f.indexOf('_grimpeurObsession')<0)
+        return _echec('l’obsession n’est jamais armee');
+      if(f.indexOf('onfinish')>=f.indexOf('_grimpeurObsession'))
+        return _echec('l’obsession ne suit pas l’ascension');
+      // ⚠ UN SEUL GRIMPEUR VIVANT : l'ecran de fin et l'historique dessinent
+      // le meme bloc, et l'obsession est infinie. Sans annulation, relire une
+      // seance laissait tourner l'animation du bloc precedent.
+      if(f.indexOf('cancel()')<0)
+        return _echec('rien n’annule l’animation precedente');
+      // ⚠ ET ON MESURE APRES AFFICHAGE : au moment de l'appel, l'ecran qui
+      // porte le bloc n'est pas encore monte — tout vaudrait zero.
+      if(f.indexOf('requestAnimationFrame')<0)
+        return _echec('la mesure est prise avant que l’ecran soit affiche');
+      if(!/width>0/.test(f))
+        return _echec('rien ne verifie que la volee a une largeur mesurable');
+      return true;})());
+
     // « — Continue ! » — meme tiret, meme lecture, dans la notification
     // d'assiduite. Et l'encouragement doit garder le bord droit du cadre :
     // c'est le tiret qui portait le margin-left:auto.

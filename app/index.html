@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1225';
+window.RC_BUILD='1226';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1974,28 +1974,25 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 @keyframes rcfMarche{from{transform:scaleY(.12);opacity:.25}to{transform:scaleY(1);opacity:1}}
 
 /* ── LE GRIMPEUR ─────────────────────────────────────────────────────────
-   Il escalade la marche atteinte et s'y tient. Il ARRIVE une fois — il monte
-   depuis la marche d'avant, s'accroche, se retablit — puis il reste.
-   Une boucle infinie ferait un jouet ; une arrivee fait un recit. */
-/* ⚠ IL N'EST PAS CENTRE NON PLUS. Au centre il se plante sur le nombre de
-   sa marche — « 100 » passait derriere lui. Il se tient au BORD DROIT,
-   celui qui fait face au palier suivant : c'est la qu'on se met quand on
-   vient de se retablir et qu'on regarde la marche d'apres. */
-.rcf-grimpeur{position:absolute;left:76%;width:18px;height:23.5px;color:#fff;
-  pointer-events:none;z-index:2;
+   IL ESCALADE TOUTE LA VOLEE, marche apres marche, depuis le sol. Un saut
+   unique disait « il est arrive » ; une ascension dit « il est monte », et
+   ce n'est pas le meme recit.
+   ⚠ SON MOUVEMENT N'EST PLUS DANS CETTE FEUILLE, et il ne peut pas y etre :
+   le chemin depend de la hauteur reelle de chaque marche, mesuree au
+   navigateur — voir _animerGrimpeur. Ce qui reste ici est sa PLACE DE REPOS
+   (le gabarit pose left/bottom en dur) et son allure. L'animation n'exprime
+   que des ecarts par rapport a ce point, et sa derniere image est
+   l'identite : sans JavaScript, sous « animations reduites » ou si la mesure
+   echoue, il est deja debout sur sa marche.
+   ⚠ IL N'EST PAS CENTRE SUR SA MARCHE. Au centre il se plante sur le nombre
+   — « 100 » passait derriere lui. Il se tient au BORD DROIT, celui qui fait
+   face au palier suivant : c'est la qu'on se met quand on vient de se
+   retablir et qu'on regarde la marche d'apres. */
+.rcf-grimpeur{position:absolute;width:18px;height:23.5px;color:#fff;
+  pointer-events:none;z-index:2;will-change:transform;
   filter:drop-shadow(0 0 5px rgba(224,32,32,.9)) drop-shadow(0 1px 2px rgba(0,0,0,.8));
-  transform:translateX(-50%);
-  animation:rcfGrimpe 1.15s cubic-bezier(.25,.9,.35,1) 1.55s both}
+  transform:translateX(-50%)}
 .rcf-grimpeur svg{width:100%;height:100%;display:block}
-@keyframes rcfGrimpe{
-  /* En contrebas, a gauche : il vient de la marche precedente. */
-  0%{opacity:0;transform:translate(-115%,24px) rotate(-14deg) scale(.92)}
-  22%{opacity:1}
-  /* Il s'accroche au rebord : le corps passe au-dessus de l'arete. */
-  58%{transform:translate(-72%,4px) rotate(-7deg) scale(.97)}
-  /* Retablissement, avec le leger depassement qui rend le geste vivant. */
-  80%{transform:translate(-50%,-4px) rotate(2deg) scale(1.03)}
-  100%{opacity:1;transform:translateX(-50%) rotate(0) scale(1)}}
 /* Le fanion du palier vise. Il respire deux fois, puis se tient tranquille. */
 /* ⚠ LE FANION N'EST PAS CENTRE, et c'est voulu : au centre il se plante
    pile sur le nombre affiche au-dessus de la marche — « 105 » disparaissait
@@ -2117,7 +2114,8 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   .rcf-e,.rcf-flamme,.rcf-titre,.rcf-trait,.rcf-rec-g .rcf-case,
   .rcf-case .rc-badge,.rcf-m-bloc,.rcf-case .rc-badge-img{animation:none!important}
   /* Le grimpeur se POSE sur sa marche : le retirer priverait le bloc de son
-     propos, l'animer irait contre la demande. */
+     propos, l'animer irait contre la demande. Son ascension passe par
+     _animer, qui ne joue rien ici ; la regle reste par securite. */
   .rcf-grimpeur{animation:none!important;opacity:1;transform:translateX(-50%)}
   .rcf-fanion{animation:none!important;transform:translateX(-50%)}
   /* Les raies et l'arc se POSENT a leur etat final : les retirer priverait
@@ -41695,6 +41693,10 @@ function finishWorkout(incomplete=false){
     return _htmlStatsFin(mins,sets,setsPlanned,vol,(_cmp&&_cmp.delta)||0); }catch(e){ return ''; } })());
   // 6. L'ASCENSION.
   _pose('wd-objectif',(()=>{ try{ return _htmlProchainObjectif(_ctxFin); }catch(e){ return ''; } })());
+  // L'ascension du grimpeur se mesure : elle ne peut pas partir avant que le
+  // bloc soit ecrit, ni avant que l'ecran soit affiche — _animerGrimpeur
+  // attend les deux.
+  try{ _animerGrimpeur(document.getElementById('wd-objectif')); }catch(e){}
   // 7. LE RESSENTI. Il est deja dans le document depuis le chargement — voir
   //    rcfPoserRessenti — et on ne le REDESSINE PAS : reecrire son innerHTML
   //    refermerait « Plus de détails » sans remettre _psDetailOuvert a faux,
@@ -43725,6 +43727,7 @@ function ouvrirSeanceHistorique(cle){
     return _htmlStatsFin(Number(sc.duration)||0,Number(sc.sets)||0,
       Number(sc.setsPlanned)||0,Number(sc.volume)||0,0); }catch(e){ return ''; } })());
   pose('sd-objectif',(()=>{ try{ return _htmlProchainObjectif(ctx); }catch(e){ return ''; } })());
+  try{ _animerGrimpeur(document.getElementById('sd-objectif')); }catch(e){}
   pose('sd-ressenti',_htmlRessentiRelu(sc));
   pose('sd-exercices',_htmlExercicesRelus(sc));
   _rendrePartageSeanceRelue(sc);
@@ -43897,7 +43900,7 @@ function _htmlGrimpeur(){
     +'<ellipse stroke="none" cx="9.8" cy="21.1" rx="1.85" ry="1.45" transform="rotate(28 9.8 21.1)"/>'
     +'</svg>';
 }
-function _htmlProchainObjectif(ctx){
+function _htmlProchainObjectif(ctx){
   const a=ascensionPaliers(ctx);
   if(!a) return '';
   const nb=v=>Number(v).toLocaleString('fr-FR');
@@ -43913,13 +43916,12 @@ function _htmlProchainObjectif(ctx){
     +a.marches.map((m,i)=>{
         const h=Math.round(34+(i/(n-1))*58);
         const c='rcf-m'+(m.but?' but':(m.ici?' ici':(m.pris?' pris':'')));
-        // LE GRIMPEUR SE TIENT SUR LA MARCHE ATTEINTE, et il est pose DANS
-        // elle : place dans un calque a part, il aurait fallu recalculer sa
-        // position a chaque largeur d'ecran. Ici la marche le porte.
-        const grimpeur=m.ici
-          ? ('<div class="rcf-grimpeur" style="bottom:'+(h+1)+'px" aria-hidden="true">'
-             +_htmlGrimpeur()+'</div>')
-          : '';
+        // ⚠ LE GRIMPEUR N'EST PLUS DANS LA MARCHE. Il y etait pose, et il ne
+        // pouvait donc que s'y poser : une marche ne peut pas contenir un
+        // deplacement qui la traverse. Il vit desormais dans la volee entiere
+        // — voir plus bas — et c'est ce qui lui permet de MONTER au lieu
+        // d'arriver.
+        const grimpeur='';
         // Le fanion plante sur le palier vise : on voit ou l'on va.
         const fanion=m.but
           ? ('<div class="rcf-fanion" style="bottom:'+(h+1)+'px" aria-hidden="true">'
@@ -43927,15 +43929,194 @@ function _htmlProchainObjectif(ctx){
              +'stroke-linecap="round" stroke-linejoin="round">'
              +'<path d="M4 21V2"/><path d="M4 3.2h9.2l-2.6 3.4 2.6 3.4H4"/></svg></div>')
           : '';
-        return '<div class="'+c+'">'
+        return '<div class="'+c+'" data-h="'+h+'">'
           +'<div class="rcf-m-kg">'+nb(m.kg)+'</div>'
           +grimpeur+fanion
           +'<div class="rcf-m-bloc" style="height:'+h+'px"></div></div>';
       }).join('')
+    // ⚠ SA PLACE DE REPOS EST POSEE ICI, EN DUR, et c'est elle qui fait foi.
+    // L'animation ne fait que l'amener jusqu'a elle : ses images-cles sont des
+    // ECARTS par rapport a ce point, et la derniere est l'identite. Trois
+    // consequences, toutes voulues : sans JavaScript il est deja au bon
+    // endroit, sous « animations reduites » il y est pose sans rien jouer, et
+    // un echec du calcul ne le laisse jamais en bas a gauche.
+    +(()=>{
+        const iIci=a.marches.findIndex(m=>m.ici);
+        if(iIci<0) return '';
+        const hIci=Math.round(34+(iIci/(n-1))*58);
+        // 76 % de sa marche : le bord qui fait face au palier suivant. Les
+        // ecarts de 5 px entre marches sont ignores — un demi-pixel sur un
+        // bonhomme de 18, et le calcul exact se fait de toute facon au
+        // navigateur quand l'animation part.
+        return '<div class="rcf-grimpeur" aria-hidden="true" data-ici="'+iIci+'" '
+          +'style="left:'+(((iIci+0.76)/n)*100).toFixed(3)+'%;bottom:'+(hIci+1)+'px">'
+          +_htmlGrimpeur()+'</div>';
+      })()
     +'</div>'
     +'<div class="rcf-asc-n">Tu es à <b>'+nb(a.actuel)+' kg</b>. Encore '
       +escapeHtml(String(a.reste).replace('.',','))+' kg pour la prochaine marche.</div>'
     +'</div></div></section>';
+}
+
+// ── L'ASCENSION DU GRIMPEUR ────────────────────────────────────────────
+//
+// IL MONTE, IL NE SAUTE PAS. La difference tient a une chose : chaque marche
+// lui coute quelque chose de different, et ca se voit. En bas il enchaine,
+// leger et rapide. A mi-hauteur il se plie plus bas, il met plus de temps, et
+// il souffle une fois arrive. Sur la DERNIERE — celle du jour, celle qui
+// reste a prendre — il n'y arrive pas du premier coup : saut trop court,
+// prise du bout des doigts, glissade, suspension, second elan, traction lente
+// qui tremble. Sept temps la ou une montee ordinaire en fait cinq.
+//
+// Puis il ne se repose pas : il regarde deja la marche d'apres. C'est
+// l'obsession, et elle est une BOUCLE — la seule du bloc, et elle est
+// minuscule (six pixels au plus) parce qu'une agitation ferait un jouet.
+//
+// ⚠ TOUT EST EXPRIME EN ECARTS par rapport a la place de repos posee par le
+// gabarit, et la derniere image est l'identite. Consequence : rien a defaire
+// si le calcul echoue, et « animations reduites » le laisse simplement pose.
+
+// PURE. ec[i] = l'ecart en pixels de la marche i par rapport a la place de
+// repos ; ec[iIci] vaut {0,0}. Rend les images-cles et leur duree totale.
+function _grimpeurChemin(ec,iIci){
+  const A=[]; let t=0;
+  const poser=(ms,p)=>{ t+=ms;
+    A.push({t:t,x:p.x||0,y:p.y||0,r:p.r||0,sx:p.sx||1,sy:p.sy||1,
+      o:(p.o==null?1:p.o),e:p.e||'ease-in-out'}); };
+  const a0=ec[0]||{x:0,y:0};
+  // L'entree : il vient du sol, un peu en arriere. Il n'apparait pas — il
+  // arrive, et c'est ce qui fait qu'on le suit des le depart.
+  A.push({t:0,x:a0.x-15,y:a0.y+11,r:-13,sx:1.02,sy:.93,o:0,
+    e:'cubic-bezier(.2,.8,.3,1)'});
+  poser(300,{x:a0.x-3,y:a0.y+1.5,r:-3,e:'cubic-bezier(.3,.9,.4,1)'});
+  poser(170,{x:a0.x,y:a0.y,r:0});
+  for(let i=1;i<=iIci;i++){
+    const a=ec[i-1],b=ec[i],dx=b.x-a.x,dernier=(i===iIci);
+    // LA FATIGUE EST UN PARAMETRE, pas une decoration : p va de 0 en bas a 1
+    // en haut et pilote la cadence, la profondeur de la flexion et le repos.
+    const p=(iIci>1)?((i-1)/(iIci-1)):1;
+    if(!dernier){
+      const lent=1+p*0.95;              // il ralentit a mesure qu'il monte
+      const flex=3+p*3.4;               // et il se plie de plus en plus bas
+      // Flexion — detente au-dessus du rebord — prise sous l'arete —
+      // retablissement avec le leger depassement qui rend le geste vivant.
+      poser(Math.round(105*lent),{x:a.x,y:a.y+flex,r:(dx>0?2:-2),
+        sx:1.05+p*.05,sy:.88-p*.07,e:'cubic-bezier(.4,0,.6,1)'});
+      poser(Math.round(140*lent),{x:a.x+dx*0.58,y:b.y-(8-p*3),r:-13+p*4,
+        sx:.95,sy:1.07,e:'cubic-bezier(.3,.1,.6,1)'});
+      poser(Math.round(105*lent),{x:b.x-1.6,y:b.y+(4.5+p*2.5),r:-9+p*2,
+        sx:.99,sy:1.03,e:'cubic-bezier(.2,.7,.4,1)'});
+      poser(Math.round(150*lent),{x:b.x,y:b.y-2.6,r:2.5,sx:1.02,sy:1.03,
+        e:'cubic-bezier(.25,.9,.35,1)'});
+      poser(Math.round(95*lent),{x:b.x,y:b.y,r:0});
+      // A mi-hauteur il souffle. C'est le SEUL endroit ou il s'arrete, et
+      // c'est ce qui rend la galere de la fin credible : sans ce repos, la
+      // derniere marche n'est qu'une animation plus longue.
+      if(p>0.30&&p<0.80){
+        poser(230,{x:b.x,y:b.y+1.4,sx:1.02,sy:.97});
+        poser(250,{x:b.x,y:b.y});
+      }
+    }else{
+      // ── LA DERNIERE MARCHE : CELLE QUI COUTE ──────────────────────────
+      poser(240,{x:a.x,y:a.y+7,r:-1,sx:1.11,sy:.79,e:'cubic-bezier(.4,0,.6,1)'});
+      // Le saut est TROP COURT : il finit sous le rebord, pas dessus.
+      poser(200,{x:a.x+dx*0.72,y:b.y+9,r:-17,sx:.94,sy:1.08,
+        e:'cubic-bezier(.3,.1,.7,1)'});
+      poser(120,{x:b.x-2.2,y:b.y+6.5,r:-12,sx:.99,sy:1.04,
+        e:'cubic-bezier(.3,.6,.5,1)'});
+      // Il glisse. Une acceleration vers le bas, pas un retour amorti.
+      poser(190,{x:b.x-2.8,y:b.y+13,r:-17,sx:.97,sy:.97,
+        e:'cubic-bezier(.5,0,.8,.6)'});
+      poser(270,{x:b.x-4.2,y:b.y+12.2,r:-20,sx:.98,sy:1.02});   // suspendu, il balance
+      poser(210,{x:b.x-1.2,y:b.y+13.8,r:-9,sx:1.03,sy:.93,
+        e:'cubic-bezier(.4,0,.6,1)'});                          // il ramasse son elan
+      poser(430,{x:b.x,y:b.y+2.4,r:-5,sx:.98,sy:1.06,
+        e:'cubic-bezier(.34,.04,.5,1)'});                       // traction, lente
+      poser(115,{x:b.x+.5,y:b.y+3.6,r:-8,sy:1.01});             // et elle tremble
+      poser(115,{x:b.x-.4,y:b.y+1.3,r:-2,sy:1.04});
+      poser(300,{x:b.x,y:b.y-3.2,r:3.5,sx:1.02,sy:1.05,
+        e:'cubic-bezier(.25,.9,.35,1)'});                       // il passe
+      poser(210,{x:b.x,y:b.y,r:0});
+    }
+  }
+  const D=Math.max(t,1);
+  // translateX(-50%) EN PREMIER : c'est le centrage de la feuille de style,
+  // et la derniere image doit lui etre identique au pixel pres.
+  return {duree:D,images:A.map(k=>({
+    offset:Math.max(0,Math.min(1,k.t/D)),
+    opacity:k.o,
+    transform:'translateX(-50%) translate('+k.x.toFixed(2)+'px,'+k.y.toFixed(2)+'px)'
+      +' rotate('+k.r.toFixed(2)+'deg) scale('+k.sx.toFixed(3)+','+k.sy.toFixed(3)+')',
+    easing:k.e
+  }))};
+}
+
+// L'OBSESSION. Il est arrive, et il ne redescend pas d'un cran : il se penche
+// vers le fanion, tend le bras, se reprend, recommence. Jamais plus de cinq
+// pixels — c'est une tension, pas un gigotement.
+function _grimpeurObsession(g){
+  const B='translateX(-50%) ';
+  const i=(x,y,r,sx,sy)=>B+'translate('+x+'px,'+y+'px) rotate('+r+'deg) scale('+sx+','+sy+')';
+  return _animer(g,[
+    {offset:0,   transform:i(0,0,0,1,1),               easing:'ease-in-out'},
+    {offset:.16, transform:i(2.6,-1.2,5,1,1.02),       easing:'ease-in-out'},
+    {offset:.30, transform:i(4.6,-2.4,8,.99,1.035),    easing:'cubic-bezier(.4,0,.6,1)'},
+    {offset:.42, transform:i(2,.6,3,1.02,.98),         easing:'ease-in-out'},
+    {offset:.54, transform:i(-1.4,1.2,-3,1.02,.97),    easing:'cubic-bezier(.3,.1,.6,1)'},
+    {offset:.66, transform:i(1.2,-3.4,6,.98,1.05),     easing:'cubic-bezier(.3,.7,.4,1)'},
+    {offset:.78, transform:i(3.4,-.8,4,1,1.01),        easing:'ease-in-out'},
+    {offset:.90, transform:i(.6,.9,-1.5,1.01,.985),    easing:'ease-in-out'},
+    {offset:1,   transform:i(0,0,0,1,1)}
+  ],{duration:3600,iterations:Infinity,easing:'linear'});
+}
+
+// UN SEUL GRIMPEUR VIVANT A LA FOIS : l'ecran de fin et l'ecran d'historique
+// dessinent le meme bloc, et l'obsession est infinie — sans ce garde, une
+// relecture d'historique laisserait tourner l'animation du bloc precedent.
+let _grimpeurAnims=[];
+function _animerGrimpeur(hote){
+  try{ _grimpeurAnims.forEach(a=>{ try{ a.cancel(); }catch(e){} }); }catch(e){}
+  _grimpeurAnims=[];
+  const racine=hote||document;
+  if(!racine||!racine.querySelector) return;
+  const g=racine.querySelector('.rcf-grimpeur');
+  if(!g) return;
+  const lancer=()=>{
+    try{
+      const zone=g.parentNode; if(!zone||!zone.querySelectorAll) return;
+      const iIci=parseInt(g.getAttribute('data-ici'),10);
+      const blocs=[].slice.call(zone.querySelectorAll('.rcf-m .rcf-m-bloc'));
+      if(!blocs.length||!(iIci>=0)||iIci>=blocs.length) return;
+      const r=blocs.map(x=>x.getBoundingClientRect());
+      // L'ECRAN N'EST PEUT-ETRE PAS ENCORE AFFICHE. Sans largeur il n'y a pas
+      // de chemin a calculer, et le grimpeur reste pose sur sa marche : c'est
+      // un repli correct, pas une panne.
+      if(!(r[iIci].width>0)) return;
+      const ax=r[iIci].left+r[iIci].width*0.76, ay=r[iIci].top;
+      // 76 % du bloc : le bord qui fait face au palier suivant, le meme que
+      // celui du gabarit. On RAMENE tout a zero sur la marche d'arrivee pour
+      // que la derniere image soit exactement la place de repos — les
+      // quelques pixels d'ecart entre le pourcentage du gabarit et la mesure
+      // reelle se reportent uniformement sur le chemin, ou ils ne se voient
+      // pas.
+      const ec=r.map(x=>({x:(x.left+x.width*0.76)-ax, y:x.top-ay}));
+      const c=_grimpeurChemin(ec,iIci);
+      // Le retard laisse les marches finir de se dresser : il ne peut pas
+      // escalader ce qui n'est pas encore sorti du sol.
+      const a=_animer(g,c.images,{duration:c.duree,delay:1500,fill:'both',
+        easing:'linear'});
+      if(!a) return;                // animations reduites : il est deja en place
+      _grimpeurAnims=[a];
+      // L'ascension reste dans la liste : elle REMPLIT jusqu'a la fin (sa
+      // derniere image est la place de repos), et une relecture doit pouvoir
+      // annuler les deux d'un coup.
+      a.onfinish=()=>{ const o=_grimpeurObsession(g); if(o) _grimpeurAnims=[a,o]; };
+    }catch(e){}
+  };
+  // DEUX TRAMES. Le bloc vient d'etre ecrit et l'ecran qui le porte n'est pas
+  // encore affiche quand on nous appelle : mesurer tout de suite donnerait
+  // zero partout.
+  try{ requestAnimationFrame(()=>requestAnimationFrame(lancer)); }catch(e){ lancer(); }
 }
 
 // ── LE RESSENTI ────────────────────────────────────────────────────────
@@ -70801,7 +70982,7 @@ function _htmlTableauxTableur(c){
   // LA GRILLE RETOMBE SUR UNE COLONNE SOUS 700 px — voir .tbk-duo. Deux
   // tableaux de cinq lignes cote a cote sur un telephone rogneraient les
   // libelles jusqu'a l'illisible.
-  // ── TABLEAU 4 — LES JOURNEES, ET LE CYCLAGE QUI LES COMMANDE ────────
+  // ── TABLEAU 4 — LES JOURNEES, ET LE CYCLAGE QUI LES COMMANDE ────────
   // (rendu a DROITE du sport : voir l'assemblage juste en dessous)
   // ⚠ IL A ETE SORTI DU TABLEAU DES MACROS le 08/09/2026. Kevin : « le total,
   // jour ON, jour OFF, tu me sautes une ligne, tu me mets ca dans un second
