@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1204';
+window.RC_BUILD='1205';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2300,12 +2300,18 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .tbk-serre .tbk th,.tbk-serre .tbk td{padding-top:6px;padding-bottom:6px;line-height:1.3}
 .tbk-serre .tbk caption{padding-top:7px;padding-bottom:7px}
 .tbk-serre .tbk select{min-height:34px;padding:4px 8px}
-@media(min-width:900px){
-  .tbk-serre{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
-  /* Le poids de reference et le tableau des macros parlent des deux colonnes :
-     ils gardent la largeur entiere. */
-  .tbk-serre>*:first-child,.tbk-serre>.tbk:last-child{grid-column:1/-1}
-}
+/* ⚠ .tbk-serre N'EST PLUS UNE GRILLE. Elle passait en deux colonnes des 900 px
+   pour « faire passer les quatre tableaux sur deux colonnes » — la meme
+   intention que les paires .tbk-duo, mais imposee a TOUS ses enfants : les
+   deux paires se retrouvaient cote a cote, donc quatre tableaux sur une seule
+   rangee, et les boutons flottaient a droite des macros au lieu d'etre sous
+   elles.
+   L'APPARIEMENT EST DESORMAIS EXPLICITE, paire par paire, dans le balisage :
+   [Facteurs | Besoins], [Sport | Journees], puis les macros pleine largeur et
+   les boutons. Une grille qui apparie DEUX A DEUX tout ce qu'elle contient ne
+   peut pas dire cela ; deux conteneurs nommes, si.
+   Le reste de .tbk-serre — hauteurs de ligne resserrees, marges — ne dependait
+   pas du nombre de colonnes et ne bouge pas. */
 /* LA PASTILLE CHIFFREE. Neuf pixels ronds ne portent qu'une information : « il
    y a du neuf ». Un message et six messages avaient donc la meme tete, et le
    canal doublait l'annonce d'une banniere sur l'accueil. Le chiffre tient dans
@@ -3930,6 +3936,21 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
 @media(min-width:700px){
   .tbk-duo{grid-template-columns:1fr 1fr;gap:0 14px;align-items:start}
 }
+/* ⚠ LA PAIRE DU SPORT DEMANDE PLUS DE PLACE QUE L'AUTRE, et pour une raison
+   qui se mesure : « Depense selon l'activite sportive » porte QUATRE colonnes
+   — discipline, heures, intensite, depense — la ou les autres tableaux en ont
+   deux. A 820 px de fenetre, une demi-largeur lui laissait 44 px par colonne
+   et les intitules se cassaient caractere par caractere : « DISC IPLI NE ».
+   Elle s'apparie donc a 1 025 px et non a 700 ; en dessous, les deux tableaux
+   reprennent la largeur entiere. Deux classes pour departager : la regle a
+   700 px ne peut pas la reprendre.
+   ⚠ 1 025 ET NON 1 024 : une tablette en paysage fait EXACTEMENT 1 024, et la
+   regle du depot est que rien n'y bouge — une assertion balaie la feuille pour
+   l'interdire, et elle a attrape ce seuil-ci des le premier essai. */
+.tbk-duo.tbk-duo-l{grid-template-columns:1fr}
+@media(min-width:1025px){
+  .tbk-duo.tbk-duo-l{grid-template-columns:1fr 1fr;gap:0 14px;align-items:start}
+}
 /* ══ CHAQUE MACRO PORTE SA COULEUR ══════════════════════════════════
    Demande de Kevin, 08/09/2026. Ce ne sont pas quatre teintes decoratives : le
    coach lit ce tableau en diagonale et vise UNE ligne, celle qu'il vient
@@ -3970,6 +3991,12 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
   .tbk-swi-p,.tbk-swi-p::after{transition:none}
 }
 .tbk-save{width:100%;margin:0 0 14px;min-height:46px}
+/* CENTRE, SUR SA PROPRE LIGNE, ET D'UN SEUL TENANT. Pleine largeur il se
+   confondait avec le tableau qu'il enregistre ; centre et dimensionne sur son
+   libelle, il se lit comme une action. nowrap : « Enregistrer ces chiffres »
+   coupe en deux sur un telephone etroit se lirait comme deux boutons. */
+.tbk-save-c{display:block;width:auto;min-width:min(100%,240px);max-width:100%;
+  margin:0 auto 10px;padding:0 22px;min-height:46px;white-space:nowrap}
 /* ══ LE PANNEAU DE SUIVI DU PLAN ALIMENTAIRE ════════════════════════
    Kevin, 08/09/2026 : « un menu qui ne bouge pas a droite ». Le tableau
    d'apercu dit deja cible / squelette / restant, mais il est en haut : des
@@ -67415,9 +67442,58 @@ function _htmlTableauxTableur(c){
   // LA GRILLE RETOMBE SUR UNE COLONNE SOUS 700 px — voir .tbk-duo. Deux
   // tableaux de cinq lignes cote a cote sur un telephone rogneraient les
   // libelles jusqu'a l'illisible.
-  h='<div class="tbk-duo">'+h+hBesoins+'</div>'+hSport;
+  // ── TABLEAU 4 — LES JOURNEES, ET LE CYCLAGE QUI LES COMMANDE ────────
+  // (rendu a DROITE du sport : voir l'assemblage juste en dessous)
+  // ⚠ IL A ETE SORTI DU TABLEAU DES MACROS le 08/09/2026. Kevin : « le total,
+  // jour ON, jour OFF, tu me sautes une ligne, tu me mets ca dans un second
+  // tableau avec la possibilite de mettre oui ou non ». Deux lignes de plus
+  // sous les macros se lisaient comme deux macros de plus, alors qu'elles
+  // disent autre chose : ce que le cyclage FAIT du total juste au-dessus.
+  //
+  // ET LE COMMUTATEUR EST DANS CE TABLEAU. Il vivait dans un menu deroulant
+  // gris, quatre ecrans plus bas, loin des deux colonnes qu'il fait apparaitre
+  // et disparaitre. Ici, on voit ce qu'on regle.
+  //
+  // SANS QUOI L'ECRAN MENTIRAIT PAR OMISSION : le bouton d'application cycle
+  // les glucides de ±15 %, le tableau annoncait 3 139 et le dossier recevait
+  // 3 360. Deux chiffres pour la meme decision, et le second n'apparaissait
+  // nulle part.
+  const _optCyc='<select id="tbk-cycle" onchange="saveClientNutriCycle(this.value)">'
+    +'<option value="1"'+(_cycT?' selected':'')+'>Oui — jour ON / jour OFF</option>'
+    +'<option value="0"'+(_cycT?'':' selected')+'>Non — mêmes valeurs tous les jours</option>'
+    +'</select>';
+  let hJournees='<table class="tbk"><caption>Journées</caption><tbody>'
+    +li('Cycler les glucides',_optCyc,
+        'décale les glucides de ±'+Math.round(CYCLE_GLUC*100)
+        +' % entre jours d’entraînement et jours de repos')
+    +(function(){
+      if(!_cycT) return li('Tous les jours',_tbNb(t.kcal)+' kcal',
+        _tbNb(t.g)+' g de glucides, mêmes valeurs sept jours sur sept',true);
+      let j=null; try{ j=_tbJournees(c,t,true); }catch(e){ j=null; }
+      if(!j) return '';
+      return li('Jour ON',_tbNb(j.on.kcal)+' kcal',
+          _tbNb(j.on.g)+' g de glucides, soit +'+Math.round(CYCLE_GLUC*100)+' %',true)
+        +li('Jour OFF',_tbNb(j.off.kcal)+' kcal',
+          _tbNb(j.off.g)+' g de glucides, soit −'+Math.round(CYCLE_GLUC*100)+' %',true);
+    })()
+    +'</tbody></table>';
+  // ── L'ASSEMBLAGE ────────────────────────────────────────────────────
+  // Demande de Kevin, 15/09/2026 : deux paires cote a cote, puis les macros.
+  //   [ Facteurs | Besoins caloriques ]
+  //   [ Depense selon l'activite sportive | Journees ]
+  //   [ Macronutriments ]
+  // Les deux paires disent la meme chose a deux niveaux : la premiere, ce
+  // qu'on met dans le calcul et ce qui en sort ; la seconde, ce que le sport
+  // ajoute et ce que le cyclage en fait. Empilees, il fallait defiler pour
+  // relier les deux moities d'une meme phrase.
+  // « Journees » ETAIT CONSTRUIT PLUS BAS, apres les macros. Il ne dependait
+  // pourtant que de `t` et de `_cycT`, tous deux connus ici : le deplacer ne
+  // change aucun calcul, seulement l'ordre du balisage.
+  // LES DEUX GRILLES RETOMBENT SUR UNE COLONNE SOUS 700 px — voir .tbk-duo.
+  h='<div class="tbk-duo">'+h+hBesoins+'</div>'
+    +'<div class="tbk-duo tbk-duo-l">'+hSport+hJournees+'</div>';
 
-  // ── TABLEAU 4 — LES MACROS ──────────────────────────────────────────
+  // ── TABLEAU 5 — LES MACROS, PLEINE LARGEUR ──────────────────────────
   let selG=null;
   try{ selG=cibleSodiumJour(c,localISODate(new Date()),
     {kcal:t.kcal,p:t.p,c:t.g,l:t.l}); }catch(e){ selG=null; }
@@ -67546,46 +67622,18 @@ function _htmlTableauxTableur(c){
   // que le coach corrige ensuite. Sa place est donc contre ces champs, pas
   // trois ecrans plus bas, et il ne s'offre qu'en manuel : en automatique il
   // remplirait des cases avec ce qu'elles portent deja.
-  if(_man) h+='<button type="button" class="btn btn-outline tbk-save" '
-    +'style="margin-bottom:7px" '
-    +'onclick="proposerPointDepart()">Proposer un point de départ</button>'
-    +'<button type="button" class="btn btn-red tbk-save" '
-    +'onclick="saveClientNutriMacros()">Enregistrer ces chiffres</button>';
+  // ⚠ L'ENREGISTREMENT PASSE DEVANT, ET IL EST CENTRE SUR SA PROPRE LIGNE.
+  // Demande de Kevin, 15/09/2026. C'est le geste qu'on fait APRES avoir rempli
+  // le tableau juste au-dessus — donc celui qu'on cherche en premier en
+  // sortant des champs. « Proposer un point de depart », lui, se fait AVANT de
+  // remplir : il pre-remplit les cases. Il passe donc en second, en retrait,
+  // pleine largeur : on n'y revient pas a chaque reglage.
+  if(_man) h+='<button type="button" class="btn btn-red tbk-save-c" '
+    +'onclick="saveClientNutriMacros()">Enregistrer ces chiffres</button>'
+    +'<button type="button" class="btn btn-outline tbk-save" '
+    +'onclick="proposerPointDepart()">Proposer un point de départ</button>';
 
-  // ── TABLEAU 5 — LES JOURNEES, ET LE CYCLAGE QUI LES COMMANDE ────────
-  // ⚠ IL A ETE SORTI DU TABLEAU DES MACROS le 08/09/2026. Kevin : « le total,
-  // jour ON, jour OFF, tu me sautes une ligne, tu me mets ca dans un second
-  // tableau avec la possibilite de mettre oui ou non ». Deux lignes de plus
-  // sous les macros se lisaient comme deux macros de plus, alors qu'elles
-  // disent autre chose : ce que le cyclage FAIT du total juste au-dessus.
-  //
-  // ET LE COMMUTATEUR EST DANS CE TABLEAU. Il vivait dans un menu deroulant
-  // gris, quatre ecrans plus bas, loin des deux colonnes qu'il fait apparaitre
-  // et disparaitre. Ici, on voit ce qu'on regle.
-  //
-  // SANS QUOI L'ECRAN MENTIRAIT PAR OMISSION : le bouton d'application cycle
-  // les glucides de ±15 %, le tableau annoncait 3 139 et le dossier recevait
-  // 3 360. Deux chiffres pour la meme decision, et le second n'apparaissait
-  // nulle part.
-  const _optCyc='<select id="tbk-cycle" onchange="saveClientNutriCycle(this.value)">'
-    +'<option value="1"'+(_cycT?' selected':'')+'>Oui — jour ON / jour OFF</option>'
-    +'<option value="0"'+(_cycT?'':' selected')+'>Non — mêmes valeurs tous les jours</option>'
-    +'</select>';
-  h+='<table class="tbk"><caption>Journées</caption><tbody>'
-    +li('Cycler les glucides',_optCyc,
-        'décale les glucides de ±'+Math.round(CYCLE_GLUC*100)
-        +' % entre jours d’entraînement et jours de repos')
-    +(function(){
-      if(!_cycT) return li('Tous les jours',_tbNb(t.kcal)+' kcal',
-        _tbNb(t.g)+' g de glucides, mêmes valeurs sept jours sur sept',true);
-      let j=null; try{ j=_tbJournees(c,t,true); }catch(e){ j=null; }
-      if(!j) return '';
-      return li('Jour ON',_tbNb(j.on.kcal)+' kcal',
-          _tbNb(j.on.g)+' g de glucides, soit +'+Math.round(CYCLE_GLUC*100)+' %',true)
-        +li('Jour OFF',_tbNb(j.off.kcal)+' kcal',
-          _tbNb(j.off.g)+' g de glucides, soit −'+Math.round(CYCLE_GLUC*100)+' %',true);
-    })()
-    +'</tbody></table>';
+
 
   // ⚠ LA VITESSE VISEE A ETE RETIREE DE L'ECRAN le 08/09/2026, et c'est le
   // correctif de fond de ce lot. Kevin : « le seul calcul a prendre en compte

@@ -25426,6 +25426,84 @@ function testExercices(){
         return String(coachSetPhase).indexOf('renderCoachNutriSection')>=0
           ?true:_echec('la phase ne recalcule plus les cibles');})());
 
+      // ── L'ORDRE DES TABLEAUX DE NUTRITION — 4 cas ──────────────────
+      // Demande de Kevin, 15/09/2026, dans cet ordre exact :
+      //   [Facteurs | Besoins caloriques]
+      //   [Depense selon l'activite sportive | Journees]
+      //   [Macronutriments]
+      //   [Enregistrer ces chiffres]  centre, seul sur sa ligne
+      //   [Proposer un point de depart]
+      //   [Enregistrer les reglages | Appliquer a l'athlete]
+      ok('Les tableaux de nutrition sortent dans l\'ordre demande',(()=>{
+        const c={id:'T9',email:'t9@t.fr',role:'athlete',gender:'F',_evol_gender:'Femme',
+          _evol_height:'168','init-age':29,
+          sessions_config:Array.from({length:7},(_,i)=>({active:i<3})),
+          bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'62',
+                   'deb-height':'168','deb-age':'29','deb-gender':'Femme'}],
+          weightLog:[{date:localISODate(new Date()),kg:62}],
+          nutrition:{manuel:true,cycle:true,
+            macros:{on:{kcal:2200,p:130,g:230,l:70,f:30},off:{kcal:2000,p:130,g:180,l:70,f:28}}}};
+        const d=document.createElement('div');
+        d.innerHTML=_htmlTableauxTableur(c);
+        const lu=[...d.children].map(e=>{
+          if(e.tagName==='TABLE') return 'T:'+((e.querySelector('caption')||{}).textContent||'');
+          if(e.classList.contains('tbk-duo'))
+            return 'DUO:'+[...e.querySelectorAll('caption')].map(x=>x.textContent).join('|');
+          if(e.classList.contains('tbk-deux'))
+            return 'DEUX:'+[...e.querySelectorAll('button')].map(x=>x.textContent).join('|');
+          if(e.tagName==='BUTTON') return 'B:'+e.textContent;
+          return e.tagName;
+        });
+        const attendu=['DUO:Facteurs|Besoins caloriques',
+          'DUO:Dépense selon l’activité sportive|Journées',
+          'T:Macronutriments',
+          'B:Enregistrer ces chiffres',
+          'B:Proposer un point de départ',
+          'DEUX:Enregistrer les réglages|Appliquer à l’athlète'];
+        return JSON.stringify(lu)===JSON.stringify(attendu)
+          ?true:_echec('lu : '+JSON.stringify(lu));})());
+      ok('« Enregistrer ces chiffres » est CENTRE et seul sur sa ligne',(()=>{
+        // Pleine largeur il se confondait avec le tableau qu'il enregistre.
+        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const m=css.match(/\.tbk-save-c\{([^}]*)\}/);
+        if(!m) return _echec('la regle .tbk-save-c a disparu');
+        if(!/margin:0 auto/.test(m[1])) return _echec('il n\'est pas centre');
+        // ⚠ `max-width:100%` N'EST PAS `width:100%` : le premier borne, le
+        // second impose. Le motif nu attrapait les deux.
+        if(/(?:^|;)width:100%/.test(m[1])) return _echec('il reprend toute la largeur');
+        // ET SON LIBELLE NE SE COUPE PAS : « Enregistrer ces chiffres » casse
+        // en deux se lirait comme deux boutons.
+        return /white-space:nowrap/.test(m[1])
+          ?true:_echec('le libelle peut se couper');})());
+      ok('.tbk-serre N\'IMPOSE PLUS de grille a deux colonnes',(()=>{
+        // ⚠ C'EST ELLE QUI ECRASAIT TOUT. Elle appariait DEUX A DEUX tous ses
+        // enfants des 900 px : les deux paires se retrouvaient cote a cote —
+        // quatre tableaux sur une rangee — et les boutons flottaient a droite
+        // des macros. L'appariement est desormais explicite, paire par paire.
+        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const i=css.indexOf('.tbk-serre{display:grid');
+        if(i>=0) return _echec('.tbk-serre est encore une grille');
+        return !/\.tbk-serre\{[^}]*grid-template-columns/.test(css)
+          ?true:_echec('.tbk-serre porte encore des colonnes');})());
+      ok('La paire du sport s\'apparie PLUS TARD que l\'autre',(()=>{
+        // « Depense selon l'activite sportive » porte QUATRE colonnes : a
+        // 820 px, une demi-largeur lui laissait 44 px par colonne et les
+        // intitules se cassaient caractere par caractere.
+        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        if(css.indexOf('.tbk-duo.tbk-duo-l{grid-template-columns:1fr}')<0)
+          return _echec('la paire du sport n\'est pas retenue sous son seuil');
+        // 1 025 et non 1 024 : une tablette en paysage fait exactement 1 024.
+        if(!/@media\(min-width:1025px\)\{[\s\S]{0,160}\.tbk-duo\.tbk-duo-l\{grid-template-columns:1fr 1fr/.test(css))
+          return _echec('elle ne s\'apparie jamais');
+        // Et le balisage la porte.
+        const c={id:'T8',email:'t8@t.fr',role:'athlete',gender:'H',_evol_height:'178','init-age':30,
+          sessions_config:Array.from({length:7},()=>({active:false})),
+          bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'80','deb-height':'178','deb-age':'30','deb-gender':'Homme'}],
+          nutrition:{}};
+        const d=document.createElement('div'); d.innerHTML=_htmlTableauxTableur(c);
+        return d.querySelector('.tbk-duo-l')
+          ?true:_echec('aucune paire marquee dans le balisage');})());
+
       ok('N4.7 — L\'INTERRUPTEUR EST AU-DESSUS DE LA GRILLE QU\'IL DEVERROUILLE',(()=>{
         // ⚠ L'ASSERTION A CHANGE DE CIBLE, PAS D'INTENTION. _htmlManuelCoach a
         // ete retiree le 08/09/2026 : son commutateur vit desormais dans la
