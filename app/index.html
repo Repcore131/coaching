@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1215';
+window.RC_BUILD='1216';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5143,6 +5143,38 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   align-items:baseline;column-gap:6px;row-gap:1px;min-width:0}
 #clh-streak-val{grid-column:1;grid-row:1}
 .sk-lbl{grid-column:2;grid-row:1}
+/* ── LE CAS NUL : « SEMAINE 1 », ET CE QU'IL RESTE A FAIRE ───────────────
+   Un compteur de serie a zero ne motive pas : il n'y a rien a perdre, donc
+   aucune tension. On montre donc la semaine EN COURS — celle qui se joue — et
+   le nombre de seances qui la validerait.
+
+   ⚠ AUCUNE REGLE DE CALCUL NE CHANGE. streakSemaines, _streakPerime et
+   ecartNormalJours sont intactes : c'est le RENDU du cas nul qui change, et
+   lui seul. Le compteur n'affiche jamais un nombre de semaines acquis qu'il
+   n'a pas : dans cet etat, le grand chiffre est RETIRE de la mise en page —
+   pas remplace par un « 1 » qui se lirait comme une semaine gagnee — et c'est
+   le libelle, en petit, qui porte « SEMAINE 1 ».
+
+   LE LIBELLE S'ETEND ALORS SUR LES DEUX COLONNES, puisqu'il n'a plus de
+   chiffre a cote de lui. */
+.sk-chiffres[data-nul] #clh-streak-val{display:none}
+.sk-chiffres[data-nul] .sk-lbl{grid-column:1/-1;letter-spacing:1.4px}
+/* La ligne du dessous.
+   ⚠ 11 px, ET PAS UN DE MOINS. Elle a d'abord ete ecrite a 9,5 px, pour tenir
+   sous un libelle de neuf caracteres sans elargir le cadre — et l'assertion
+   « aucun texte de l'accueil athlete ne descend sous le plancher » l'a refusee,
+   comme elle avait refuse la ligne de la pesee quinze jours plus tot. Elle a
+   raison : c'est l'ecran qu'on lit le plus souvent et le plus vite.
+   C'est donc la PHRASE qui a ete raccourcie. « 3 seances pour la valider »
+   demande trois lignes a 11 px et porte le cadre a 146x66 ; « Encore 3
+   seances » en demande deux et le laisse a 136x52. Mesure au navigateur a 320
+   et 375 px, avec l'avatar et le prenom sur la meme ligne.
+   ELLE S'ENVELOPPE, largeur maximale en CARACTERES : une phrase qui refuse de
+   se couper pousserait l'avatar ou le prenom hors de l'ecran. */
+.sk-reste{grid-column:1/-1;grid-row:2;font-size:11px;font-weight:700;
+  letter-spacing:.2px;color:var(--sub);line-height:1.2;max-width:10ch;
+  text-transform:none}
+.sk-chiffres:not([data-nul]) .sk-reste{display:none}
 #clh-streak-val{font-family:var(--pile-titre);font-size:var(--sk-f);line-height:.86;color:var(--text);
   font-variant-numeric:tabular-nums;letter-spacing:.5px;
   text-shadow:0 0 10px rgba(255,255,255,.3)}
@@ -8477,6 +8509,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="sk-chiffres">
           <span id="clh-streak-val">0</span>
           <span class="sk-lbl">SEM.</span>
+          <!-- LA SEMAINE EN COURS, et ce qu'il reste pour l'acquerir. Vide des
+               qu'une semaine est acquise : voir _rendreStreak. -->
+          <span class="sk-reste" id="clh-streak-reste"></span>
         </div>
       </div>
     </div>
@@ -34927,14 +34962,7 @@ function loadClientHome(){
   const s=streakSemaines(u);
   // Le compteur de l'en-tete subsiste, reduit. La case « Semaines » a quitte
   // les metriques : elle reste consultable dans l'onglet Perfs.
-  const _sv=document.getElementById('clh-streak-val');
-  if(_sv){
-    // MEME MECANISME QUE LE SCORE, et donc le meme piege — dormant seulement
-    // parce que ce compteur-ci affiche un nombre NU. Le jour ou il porterait
-    // une unite — « 12 sem. » — il casserait a l'identique. On ne laisse pas
-    // deux compteurs voisins tenus par deux regles differentes.
-    arcCompteur(_sv,s,{duree:ARC.release});
-  }
+  _rendreStreak(u,s);
   document.getElementById('clh-greeting').textContent=salutation()+' '+u.fname+'.';
   const _dStr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
   document.getElementById('clh-date').textContent=_dStr.charAt(0).toUpperCase()+_dStr.slice(1);
@@ -43977,6 +44005,62 @@ function _streakPerime(u,now){
 // Valeur à AFFICHER. Le compteur stocké ne bouge qu'à la fin d'une séance ;
 // sans ce calcul, un athlète à l'arrêt depuis un mois verrait encore son
 // ancien score en ouvrant l'app.
+// PURE. CE QUE LE CADRE AFFICHE, et rien de plus.
+//
+// ⚠ ELLE NE CALCULE AUCUNE SERIE. streakSemaines, _streakPerime et
+// ecartNormalJours decident, comme avant et sans une ligne de changement ;
+// celle-ci recoit leur verdict et choisit des mots. Un compteur de serie a zero
+// ne motive pas — il n'y a rien a perdre, donc aucune tension — et c'est le
+// RENDU de ce cas-la, et lui seul, qui change.
+//
+// LE COMPTEUR N'ANNONCE JAMAIS UNE SEMAINE QU'IL N'A PAS ACQUISE : dans l'etat
+// nul, `valeur` est null et le grand chiffre disparait de la mise en page.
+// « SEMAINE 1 » nomme la semaine EN COURS, celle qui se joue, et la ligne du
+// dessous dit ce qu'il faut pour l'acquerir — les deux se lisent ensemble et
+// aucune des deux ne se lit comme un acquis.
+//
+// `reste` vaut au moins 1 tant que la semaine n'est pas validee : quelqu'un qui
+// a deja fait ses trois seances mais dont la semaine n'est pas close ne lit pas
+// « 0 seance pour la valider », qui serait faux et incomprehensible.
+function affichageStreak(streak,prevues,faites){
+  const s=Math.max(0,Math.round(Number(streak)||0));
+  if(s>0) return {valeur:s,libelle:'SEM.',reste:'',nul:false};
+  const p=Math.max(1,Math.round(Number(prevues)||1));
+  const f=Math.max(0,Math.round(Number(faites)||0));
+  const r=Math.max(1,p-f);
+  // « Encore 3 seances » ET NON « 3 seances pour la valider » : la seconde
+  // demande trois lignes au plancher de 11 px et porte le cadre a 146x66, la
+  // premiere en demande deux et le laisse a 136x52. Le sens est le meme — ce
+  // qu'il RESTE a faire — et « SEMAINE 1 » juste au-dessus dit deja ce qui se
+  // joue. Voir la regle .sk-reste pour la mesure.
+  return {valeur:null,libelle:'SEMAINE 1',
+    reste:'Encore '+r+' séance'+(r>1?'s':''),nul:true};
+}
+// Le tour impur : poser les trois textes et basculer l'etat du cadre.
+//
+// ⚠ L'ANIMATION DU CHIFFRE RESTE CE QU'ELLE ETAIT quand il y a un chiffre —
+// meme mecanisme que le score, meme piege evite : le jour ou ce compteur
+// porterait une unite dans le meme noeud, il casserait a l'identique.
+// DANS L'ETAT NUL, data-valeur est EFFACE. Sans cela, la semaine suivante
+// animerait « 1 » depuis une valeur perimee — un compteur qui compte a rebours
+// depuis un nombre que personne n'a jamais vu.
+function _rendreStreak(u,s){
+  const el=document.getElementById('clh-streak-val');
+  const lbl=document.querySelector('#clh-streak .sk-lbl');
+  const res=document.getElementById('clh-streak-reste');
+  const zone=document.querySelector('#clh-streak .sk-chiffres');
+  let a;
+  try{ a=affichageStreak(s,seancesPrevuesParSemaine(u),_seancesCetteSemaine(u)); }
+  catch(e){ a={valeur:null,libelle:'SEMAINE 1',reste:'',nul:true}; }
+  if(lbl) lbl.textContent=a.libelle;
+  if(res) res.textContent=a.reste;
+  if(zone) zone.toggleAttribute('data-nul',a.nul);
+  if(!el) return;
+  if(a.valeur===null){
+    el.textContent='';
+    try{ delete el.dataset.valeur; }catch(e){}
+  } else arcCompteur(el,a.valeur,{duree:ARC.release});
+}
 function streakSemaines(u){
   // SOUS SUSPENSION, LA VALEUR EST GELÉE — c'est le cœur de la règle 2. Elle
   // ne monte pas (updateStreak s'en charge) et elle ne tombe pas. Au-delà de

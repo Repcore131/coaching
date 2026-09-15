@@ -30088,6 +30088,113 @@ function testExercices(){
         if(_slugIllustre('escaliers')!==null) return _echec('un slug sort sans index');
         return true;
       } finally { _exoIndex=sv; }})());
+    // ══ 15/09/2026 — LE CAS NUL DU COMPTEUR DE SERIE ═══════════════════════
+    // Un compteur de serie a zero ne motive pas : il n'y a rien a perdre, donc
+    // aucune tension. On montre la semaine EN COURS et ce qui la validerait.
+
+    // ⚠ AUCUNE REGLE DE CALCUL NE CHANGE, et ce test l'exige plutot que de
+    // l'esperer : streakSemaines, _streakPerime et ecartNormalJours decident
+    // comme avant, affichageStreak recoit leur verdict et choisit des mots.
+    ok('L’affichage du cas nul ne calcule aucune série',(()=>{
+      const a=String(affichageStreak);
+      for(const f of ['streakSemaines','_streakPerime','ecartNormalJours',
+                      'lastSession','suspensionEtat','Date.now'])
+        if(a.indexOf(f)>=0) return _echec('affichageStreak touche a '+f);
+      // Et les trois fonctions de calcul ignorent tout de l'affichage.
+      for(const [n,f] of [['streakSemaines',streakSemaines],['_streakPerime',_streakPerime],
+                          ['ecartNormalJours',ecartNormalJours]]){
+        const s=String(f);
+        for(const m of ['affichageStreak','SEMAINE 1','sk-reste','_rendreStreak'])
+          if(s.indexOf(m)>=0) return _echec(n+' connait desormais '+m);
+      }
+      // ecartNormalJours reste EXACTEMENT sa formule : 7 / seances + 1.
+      return /Math\.ceil\(7\/seancesPrevuesParSemaine\(u\)\)\+1/.test(String(ecartNormalJours))
+        ?true:_echec('ecartNormalJours a change de formule');})());
+
+    ok('Le cas nul montre la semaine en cours, jamais une semaine acquise',(()=>{
+      const cas=[
+        // streak, prevues, faites  →  valeur, libelle, reste
+        [0,3,0,null,'SEMAINE 1','Encore 3 séances'],
+        [0,3,1,null,'SEMAINE 1','Encore 2 séances'],
+        [0,3,2,null,'SEMAINE 1','Encore 1 séance'],
+        // ⚠ DEJA TROIS SEANCES MAIS LA SEMAINE N'EST PAS CLOSE : on ne dit pas
+        // « 0 seance », qui serait faux et incomprehensible.
+        [0,3,3,null,'SEMAINE 1','Encore 1 séance'],
+        [0,3,9,null,'SEMAINE 1','Encore 1 séance'],
+        [0,1,0,null,'SEMAINE 1','Encore 1 séance'],
+        [0,5,0,null,'SEMAINE 1','Encore 5 séances'],
+        // DES LA PREMIERE SEMAINE ACQUISE, l'affichage redevient ce qu'il etait.
+        [1,3,0,1,'SEM.',''],
+        [7,3,2,7,'SEM.',''],
+        [52,3,0,52,'SEM.','']
+      ];
+      for(const [s,p,f,v,l,r] of cas){
+        const a=affichageStreak(s,p,f);
+        if(a.valeur!==v||a.libelle!==l||a.reste!==r)
+          return _echec('streak='+s+' → '+JSON.stringify(a));
+      }
+      // ⚠ LE COMPTEUR N'ANNONCE JAMAIS UNE SEMAINE QU'IL N'A PAS ACQUISE.
+      // `valeur` est null dans le cas nul : le grand chiffre QUITTE la mise en
+      // page, il n'est pas remplace par un « 1 » qui se lirait comme un acquis.
+      if(affichageStreak(0,3,0).valeur!==null)
+        return _echec('le cas nul pose un nombre de semaines');
+      return true;})());
+
+    ok('Le cadre bascule d’un état à l’autre, et efface sa mémoire',(()=>{
+      const sv=currentUser;
+      try{
+        const cfg=[{active:true},{active:true},{active:true},
+                   {active:false},{active:false},{active:false},{active:false}];
+        const el=document.getElementById('clh-streak-val');
+        const zone=document.querySelector('#clh-streak .sk-chiffres');
+        const lbl=document.querySelector('#clh-streak .sk-lbl');
+        const res=document.getElementById('clh-streak-reste');
+        if(!el||!zone||!lbl||!res) return _echec('le cadre a change de structure');
+        currentUser={id:'x',email:'x@t.fr',role:'athlete',streak:0,sessions:[],sessions_config:cfg};
+        _rendreStreak(currentUser,0);
+        if(!zone.hasAttribute('data-nul')) return _echec('l’etat nul n’est pas marque');
+        if(lbl.textContent!=='SEMAINE 1') return _echec('libelle : '+lbl.textContent);
+        if(res.textContent!=='Encore 3 séances') return _echec('reste : '+res.textContent);
+        // ⚠ LA MEMOIRE DU COMPTEUR EST EFFACEE. Sans cela, la semaine suivante
+        // animerait « 1 » depuis une valeur perimee — un compteur qui compte a
+        // rebours depuis un nombre que personne n'a jamais vu.
+        if(el.dataset.valeur!==undefined)
+          return _echec('data-valeur survit a l’etat nul : '+el.dataset.valeur);
+        if(el.textContent!=='') return _echec('le grand chiffre garde un texte : '+el.textContent);
+        currentUser.streak=1; currentUser.lastSession=Date.now();
+        _rendreStreak(currentUser,1);
+        if(zone.hasAttribute('data-nul')) return _echec('l’etat nul survit a la premiere semaine');
+        if(lbl.textContent!=='SEM.') return _echec('le libelle ne revient pas : '+lbl.textContent);
+        if(res.textContent!=='') return _echec('la ligne du dessous survit : '+res.textContent);
+        return el.dataset.valeur==='1'?true:_echec('le compteur ne repart pas de 1');
+      } finally {
+        currentUser=sv;
+        try{
+          const el=document.getElementById('clh-streak-val');
+          el.textContent='0'; delete el.dataset.valeur;
+          document.querySelector('#clh-streak .sk-chiffres').removeAttribute('data-nul');
+          document.querySelector('#clh-streak .sk-lbl').textContent='SEM.';
+          document.getElementById('clh-streak-reste').textContent='';
+        }catch(e){}
+      }})());
+
+    // ⚠ LA LIGNE DU DESSOUS RESPECTE LE PLANCHER DE 11 px. Elle a d'abord ete
+    // ecrite a 9,5 px, et « aucun texte de l'accueil athlete ne descend sous le
+    // plancher » l'a refusee — comme elle avait refuse la ligne de la pesee.
+    // C'est la PHRASE qui a ete raccourcie, pas le corps.
+    ok('La ligne du cas nul tient le plancher de l’accueil',(()=>{
+      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const m=css.match(/\.sk-reste\{([^}]*)\}/);
+      if(!m) return _echec('la regle .sk-reste n’existe pas');
+      const px=(m[1].match(/font-size:(\d+(?:\.\d+)?)px/)||[])[1];
+      if(!px) return _echec('le corps n’est pas ecrit en pixels : '+m[1].slice(0,60));
+      if(parseFloat(px)<11) return _echec('la ligne descend a '+px+' px');
+      // ELLE S'ENVELOPPE : une phrase qui refuse de se couper pousserait
+      // l'avatar ou le prenom hors de l'ecran sur un telephone etroit.
+      if(!/max-width:/.test(m[1])) return _echec('rien ne borne sa largeur');
+      // ET ELLE NE PARAIT QUE DANS L'ETAT NUL.
+      return /\.sk-chiffres:not\(\[data-nul\]\) \.sk-reste\{display:none\}/.test(css)
+        ?true:_echec('la ligne du dessous survivrait a l’etat normal');})());
     ok('Le compteur de semaines ne porte plus de tiret',(()=>{
       const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
       if(document.querySelector('.sk-tiret')) return _echec('le tiret est encore dans le document');
