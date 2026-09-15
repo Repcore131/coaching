@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1207';
+window.RC_BUILD='1208';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -9118,7 +9118,7 @@ const COACH_PHOTO='icons/coach.jpg';
        repli, il n'y a pas de camera a ouvrir. -->
   <input id="wo-video-input" type="file" accept="video/*" capture="environment"
     style="display:none" onchange="_videoSerieEnvoyer(this)">
-  <div class="topbar" style="flex-shrink:0"><button class="back-btn" onclick="pauseWorkout()" aria-label="Mettre la séance en pause">←</button><span class="topbar-title" id="wo-title">Séance</span><span style="font-size:var(--fs-md);font-weight:700;color:var(--sub)" id="wo-timer">00:00</span></div>
+  <div class="topbar" style="flex-shrink:0"><button class="back-btn" onclick="pauseWorkout()" aria-label="Mettre la séance en pause">←</button><span class="topbar-title" id="wo-title">Séance</span><span style="font-size:var(--fs-md);font-weight:700;color:var(--sub)" id="wo-timer">00:00:00</span></div>
   <!-- LE BANDEAU DE PROGRESSION A QUITTÉ CET EMPLACEMENT. Barre et compteurs
        vivent désormais DANS la carte de l'exercice, sous son nom : c'est là
        qu'on les lit, à côté de ce qu'ils comptent. Voir .wo-prog. -->
@@ -30214,15 +30214,24 @@ function _appliquerDeprecationImport(){
 // conséquence, qu'il faut connaître : corriger une description dans la banque
 // ne met pas à jour les séances déjà écrites. Sans serveur, c'est le prix.
 const EXO_IMG_DOSSIER='exercices/';
-// DEUX TAILLES, ET IL EN FAUT DEUX. Les sources du guide de septembre 2026
-// font 936 px de large en médiane : le seeding en tire une FICHE de 900 px,
-// affichée en width:100% dans une modale de 480 px, et une VIGNETTE de 256 px
-// pour la ligne de liste, affichée en 64x48. Une seule taille obligeait à
-// choisir entre une liste qui télécharge 10 Mo pour des images de 64 px et
-// une fiche floue — c'est ce qu'on avait, et les fiches sortaient à 248 px.
-// Le MÊME slug dans les deux dossiers, et le MÊME index.json : une image
-// existe pour les deux tailles ou pour aucune.
-const EXO_VIGNETTE_DOSSIER=EXO_IMG_DOSSIER+'vignettes/';
+// ⚠ UNE SEULE TAILLE, PARCE QU'IL N'EN A JAMAIS EXISTE DEUX. Ce bloc décrivait
+// un schéma à deux dossiers posé le 07/09/2026 — une FICHE de 900 px et une
+// VIGNETTE de 256 px sous le même slug — et annonçait que « une image existe
+// pour les deux tailles ou pour aucune ». C'était faux : `exercices/vignettes/`
+// n'a jamais été créé, et le seeding qui devait le remplir n'a jamais tourné.
+// Chaque ligne de liste demandait donc un fichier absent et prenait un 404
+// avant de se rabattre sur la fiche. Vérifié le 15/09/2026, dossier absent du
+// dépôt comme du disque.
+//
+// ET LE CALCUL QUI LE JUSTIFIAIT ÉTAIT FAUX AUSSI. Les 436 fiches pèsent
+// 3,3 Mo au total — médiane 7 Ko, largeur médiane 248 px — et non les 900 px
+// et 10 Mo invoqués ici. Une vignette économiserait deux ou trois kilo-octets
+// sur sept, contre 1,5 Mo ajoutés au dépôt. C'est exactement ce que dit
+// _htmlVignetteExo depuis le premier lot, mesures à l'appui.
+//
+// La constante et ses deux fonctions — EXO_VIGNETTE_DOSSIER, _vignetteParSlug,
+// vignetteDe — ont été retirées plutôt que laissées en place : une fonction
+// qui rend l'URL d'un fichier inexistant n'attend qu'un appelant.
 const EXO_INDEX_URL=EXO_IMG_DOSSIER+'index.json';
 const BANQUE_CLE='rc_banque_exos';
 // Une semaine : la banque ne bouge qu'à un nouveau seeding, et 256 Ko relus
@@ -30281,6 +30290,18 @@ function _lireIndexIllustrations(brut){
   }
   return m;
 }
+// ⚠ UN ECHEC NE SE MEMORISE PAS. La version d'avant posait `_exoIndex` a une
+// Map VIDE des que le reseau echouait — et comme la premiere ligne rend
+// `_exoIndex` des qu'il est truthy, une Map vide en est une, cet echec devenait
+// DEFINITIF pour toute la duree de la page. Un seul creux de reseau au
+// demarrage — un metro, un ascenseur, un service worker qui n'a pas encore la
+// reponse — et l'athlete n'avait plus AUCUNE illustration nulle part, jusqu'a
+// ce qu'il recharge : ni dans sa seance, ni dans le guide, ni dans la banque.
+// Rien ne le lui disait, et rien ne retentait.
+//
+// On rend donc une Map vide POUR CET APPEL-LA — l'appelant continue sans
+// image, comme avant — mais `_exoIndex` reste null et le prochain rendu
+// retente. L'affichage se repare tout seul des que le reseau revient.
 async function chargerIndexIllustrations(){
   if(_exoIndex) return _exoIndex;
   if(_exoIndexEnCours) return _exoIndexEnCours;
@@ -30289,7 +30310,10 @@ async function chargerIndexIllustrations(){
       const r=await fetch(EXO_INDEX_URL);
       if(!r.ok) throw new Error(r.status);
       _exoIndex=_lireIndexIllustrations(await r.json());
-    }catch(e){ _exoIndex=new Map(); }   // pas d'index : aucune image, pas d'erreur
+    }catch(e){
+      _exoIndexEnCours=null;
+      return new Map();                  // pas d'index CETTE FOIS : on retentera
+    }
     _exoIndexEnCours=null;
     return _exoIndex;
   })();
@@ -30401,14 +30425,6 @@ function _illustrationParSlug(sl){
   const s=_slugIllustre(sl);
   return s?EXO_IMG_DOSSIER+s+'.webp':null;
 }
-// PURE. La VIGNETTE — 256 px, la taille de la ligne de liste. Meme index, meme
-// slug, meme resolution de renommage : une image existe pour les deux tailles
-// ou pour aucune.
-function _vignetteParSlug(sl){
-  const s=_slugIllustre(sl);
-  return s?EXO_VIGNETTE_DOSSIER+s+'.webp':null;
-}
-function vignetteDe(nom){ return _vignetteParSlug(exSlug(nom)); }
 // PURE. [largeur, hauteur] de la FICHE, ou null quand l'index ne les porte
 // pas — ancien format, ou exercice renommé dont le fichier survit sans que le
 // seeding le reproduise. Sert à réserver la place de l'image dans la modale.
@@ -30653,9 +30669,26 @@ function _bqLigne(f){
   // deux fois plus, elle gagne. La fiche ne sortirait que si le cadre grandis-
   // sait vraiment. Et `sizes` cesse d'etre decoratif : avec des descripteurs
   // `x` la specification l'IGNORE, avec des `w` il est ce qui decide.
+  // ⚠ LE DOSSIER DES VIGNETTES N'A JAMAIS EXISTE. Tout ce qui precede decrit
+  // un schema a deux tailles pose le 07/09/2026 ; les 427 vignettes de 256 px
+  // qu'il annonce n'ont jamais ete produites, et `app/exercices/vignettes/`
+  // n'est pas dans le depot. Chaque ligne de liste demandait donc un fichier
+  // ABSENT, prenait un 404, puis se rabattait sur la fiche par `onerror` :
+  // soixante allers-retours perdus par liste, et un cadre vide le temps du
+  // repli. Constate le 15/09/2026, dossier verifie.
+  //
+  // ET L'ECONOMIE N'EN ETAIT PAS UNE. Les 436 fiches pesent 3,3 Mo au total,
+  // mediane 7 Ko, largeur mediane 248 px — pas les « 900 px » et les 12,7 Mo
+  // que decrivaient ces commentaires. Une vignette de 256 px economiserait
+  // deux ou trois kilo-octets sur sept, contre 1,5 Mo ajoutes au depot : le
+  // calcul ne tient pas, et c'est ce que dit deja _htmlVignetteExo.
+  //
+  // On sert donc la seule image qui existe. Le jour ou les vignettes seront
+  // vraiment produites, ce sont ces trois lignes qui changent, et elles
+  // seules — srcset et `data-plein` sont restes en place juste en dessous.
   const sl=_slugIllustre(exSlug(f.nom));
-  const img=sl?EXO_VIGNETTE_DOSSIER+sl+'.webp':null;
-  const img2x=sl?EXO_IMG_DOSSIER+sl+'.webp':null;
+  const img=sl?EXO_IMG_DOSSIER+sl+'.webp':null;
+  const img2x=img;
   // ⚠ « 900w » ETAIT UN CHIFFRE INVENTE, et il coutait cher. Le descripteur
   // annoncait au navigateur une image de 900 px ; aucune des 436 n'atteint
   // cette largeur — la mediane est de 248 px. Sur un ecran a DPR 3, le
@@ -30663,9 +30696,9 @@ function _bqLigne(f){
   // et affichait un dessin de 248 px la ou il en fallait 192. Depuis que
   // l'index porte les dimensions REELLES, on lui dit la verite ; sans elles,
   // on ne dit rien du tout, ce qui vaut mieux qu'un mensonge.
-  const _dl=_dimsParSlug(exSlug(f.nom));
-  const _srcset=(img&&img2x&&_dl)
-    ?` srcset="${escapeHtml(img)} 256w, ${escapeHtml(img2x)} ${_dl[0]}w" sizes="64px"`:'';
+  // PLUS DE srcset : il departageait DEUX fichiers, il n'y en a plus qu'un.
+  // L'annoncer deux fois sous deux largeurs serait un mensonge de plus.
+  const _srcset='';
   const fav=estFavoriExo(f.slug);
   const sous=[(f.muscles||[]).slice(0,2).map(m=>(MUSCLES[m]||{}).lib||m).join(', '),
     f.materiel||''].filter(Boolean).join(' · ');
@@ -37969,17 +38002,26 @@ function _normaliserSS(exercices){
 }
 function pad(n){return n.toString().padStart(2,'0');}
 // PURE. La durée écoulée d'une séance, en secondes, mise en forme.
-// AU-DELÀ DE L'HEURE ON PASSE EN HEURES : « 97:10 » se lit d'abord comme une
-// valeur aberrante avant de se comprendre. En dessous, rien ne change —
-// « 04:32 » reste « 04:32 » ; afficher « 0:04:32 » ferait payer à toutes les
-// séances la longueur de la plus longue.
+//
+// ⚠ TOUJOURS hh:mm:ss, HEURE COMPRISE MEME A ZERO. Demande de Kevin,
+// 15/09/2026 : « 00:00:00 heure minute seconde ». La version d'avant masquait
+// l'heure sous les soixante minutes — « 04:32 » — pour ne pas faire payer aux
+// séances courtes la longueur de la plus longue. Le prix de ce choix est
+// qu'on ne sait pas, en voyant « 04:32 », si on lit 4 minutes ou 4 heures :
+// deux champs qui changent de sens en cours de séance. Trois champs fixes
+// coûtent trois caractères et ne mentent jamais.
+//
+// LARGEUR STABLE : chaque champ est sur deux chiffres, donc le chronomètre ne
+// change plus de largeur en cours de séance — il ne fait plus sauter le titre
+// à sa gauche à la première heure franchie.
+//
 // Elle existe parce que trois fonctions calculaient cet affichage à
 // l'identique : corriger trois fois, c'est accepter qu'une quatrième copie
 // naisse un jour et diverge.
 function fmtDureeSeance(s){
   s=Math.max(0,Math.floor(Number(s)||0));
   const h=Math.floor(s/3600), m=Math.floor(s%3600/60), sec=s%60;
-  return h ? h+':'+pad(m)+':'+pad(sec) : pad(m)+':'+pad(sec);
+  return pad(h)+':'+pad(m)+':'+pad(sec);
 }
 // Un écran de séance affiche un GROUPE : un exercice seul, ou les deux (ou
 // plus) d'un superset. Le corps propre à un exercice a été sorti dans
@@ -41254,7 +41296,15 @@ function achievementEngine(ctx){
 // ⚠ « 205 minutes » ne se lit pas. Personne ne sait ce que ca represente sans
 // poser une division ; « 3 h 25 » se lit d'un coup. Sous l'heure on garde les
 // minutes, parce que « 0 h 45 » serait pire que « 45 min ».
-function fmtDureeSeance(mins){
+//
+// ⚠ ELLE S'APPELAIT fmtDureeSeance, COMME CELLE DU CHRONOMETRE — qui vit
+// 3 300 lignes plus haut et prend des SECONDES. Deux declarations de fonction
+// du meme nom dans le meme script : la seconde ecrase la premiere, en silence,
+// et c'est celle-ci qui gagnait. Le chronometre de seance passait donc ses
+// secondes a une fonction qui lisait des minutes — au bout d'une minute de
+// seance il affichait « 1 h 02 », au bout d'une demi-heure « 30 h 32 ».
+// Signale par Kevin le 15/09/2026. Le nom dit desormais ce qu'elle rend.
+function fmtDureeHeures(mins){
   const m=Math.max(0,Math.round(Number(mins)||0));
   if(m<60) return m+' min';
   const h=Math.floor(m/60), r=m%60;
@@ -41555,7 +41605,7 @@ function _htmlStatsFin(mins,sets,setsPlanned,vol,delta){
   // et la faire defiler en « 0 h 01, 0 h 02 » serait absurde. Les deux autres,
   // si — ce sont des quantites, et les voir monter est la recompense.
   return '<div class="rcf-stats">'
-    +zone(escapeHtml(fmtDureeSeance(mins)),'','Durée')
+    +zone(escapeHtml(fmtDureeHeures(mins)),'','Durée')
     // ⚠ « 5 / 12 » QUAND LA SEANCE EST PARTIELLE. Afficher « 5 » seul ferait
     // passer une seance ecourtee pour une seance complete — c'est precisement
     // ce que fmtSeries corrigeait, et on ne le perd pas. Complete, le total

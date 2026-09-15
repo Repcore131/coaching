@@ -28968,6 +28968,110 @@ function testExercices(){
 
     // « 0-SEM. » — le tiret entre le compte et son unite se lisait comme un
     // trait d'union, donc comme une seule chaine. Il part ; l'espace reste.
+    // ══ 15/09/2026 — LE CHRONOMETRE ET LES ILLUSTRATIONS ═══════════════════
+    // Trois defauts signales par Kevin, trois causes distinctes, toutes
+    // reproduites au navigateur avant correction.
+
+    // ⚠ DEUX FONCTIONS PORTAIENT LE NOM fmtDureeSeance. L'une prend des
+    // SECONDES et sert le chronometre de seance ; l'autre, ecrite 3 300 lignes
+    // plus bas, prend des MINUTES et sert le recapitulatif. Deux declarations
+    // du meme nom dans un meme script : la SECONDE ecrase la premiere, en
+    // silence. Le chronometre passait donc ses secondes a la lecture en
+    // minutes — « 1 h 02 » au bout d'une minute, « 30 h 32 » au bout d'une
+    // demi-heure. Ce test tient le nom unique, et non seulement le resultat :
+    // c'est la collision qui est le defaut.
+    ok('Un seul fmtDureeSeance dans toute la source',(()=>{
+      const n=(_prodSrc().match(/function fmtDureeSeance\(/g)||[]).length;
+      return n===1?true:_echec(n+' declarations du meme nom');})());
+
+    // hh:mm:ss TOUJOURS, heure comprise a zero. Demande de Kevin : trois
+    // champs fixes, qui ne changent pas de sens en cours de seance.
+    ok('Le chronometre de seance affiche hh:mm:ss',(()=>{
+      const cas=[[0,'00:00:00'],[9,'00:00:09'],[62,'00:01:02'],
+                 [1832,'00:30:32'],[3725,'01:02:05'],[86399,'23:59:59']];
+      for(const [s,att] of cas){
+        const v=fmtDureeSeance(s);
+        if(v!==att) return _echec(s+' s rend '+JSON.stringify(v)+' au lieu de '+att);
+      }
+      // LARGEUR STABLE : huit caracteres, quelle que soit la duree. C'est ce
+      // qui empeche le titre voisin de sauter a la premiere heure franchie.
+      if(new Set(cas.map(c=>fmtDureeSeance(c[0]).length)).size!==1)
+        return _echec('la largeur du chronometre varie');
+      // ET LE GABARIT PART DE LA MEME FORME, sinon la premiere seconde
+      // ecourterait la ligne.
+      const el=document.getElementById('wo-timer');
+      if(!el) return _echec('le chronometre a disparu de l’ecran de seance');
+      return el.textContent.trim()==='00:00:00'
+        ?true:_echec('le gabarit part a '+JSON.stringify(el.textContent));})());
+
+    // ET LA LECTURE EN HEURES SURVIT SOUS SON PROPRE NOM : c'est elle que le
+    // recapitulatif de fin de seance appelle, et « 205 min » ne se lit pas.
+    ok('fmtDureeHeures garde la lecture du recapitulatif',(()=>{
+      if(typeof fmtDureeHeures!=='function') return _echec('la fonction n’existe plus');
+      const cas=[[45,'45 min'],[120,'2 h'],[205,'3 h 25'],[0,'0 min']];
+      for(const [m,att] of cas){
+        const v=fmtDureeHeures(m);
+        if(v!==att) return _echec(m+' min rend '+JSON.stringify(v)+' au lieu de '+att);
+      }
+      return /zone\(escapeHtml\(fmtDureeHeures\(mins\)\)/.test(_prodSrc())
+        ?true:_echec('le recapitulatif n’appelle plus la lecture en heures');})());
+
+    // ⚠ LE DOSSIER exercices/vignettes/ N'A JAMAIS EXISTE. Le code le visait
+    // depuis le 07/09/2026 : chaque ligne de liste demandait un fichier
+    // absent, prenait un 404, puis se rabattait sur la fiche par `onerror`.
+    // Rien ne doit plus emettre cette URL tant que le dossier n'est pas la.
+    ok('Aucune URL ne vise le dossier de vignettes absent',(()=>{
+      const prod=_prodSrc();
+      // Le commentaire qui RACONTE le retrait a le droit de nommer le dossier ;
+      // une URL construite, non. On vise donc la concatenation, pas le mot.
+      if(/['"`]vignettes\//.test(prod)) return _echec('une URL de vignette est encore construite');
+      if(/EXO_VIGNETTE_DOSSIER\s*\+/.test(prod)) return _echec('la constante sert encore a batir une URL');
+      // ET LA LIGNE DE LISTE SERT L'IMAGE QUI EXISTE.
+      const h=_bqLigne({slug:'x',nom:'DEVELOPPE COUCHE BARRE',muscles:[],materiel:''});
+      const src=(h.match(/src="([^"]+)"/)||[])[1]||'';
+      if(!/^exercices\/[a-z0-9-]+\.webp$/.test(src))
+        return _echec('la ligne de liste sert : '+JSON.stringify(src));
+      // PLUS DE srcset : il departageait deux fichiers, il n'y en a qu'un.
+      return /srcset=/.test(h)?_echec('le srcset annonce encore deux tailles'):true;})());
+
+    // ⚠ UN SEUL ECHEC RESEAU ETEIGNAIT TOUTES LES ILLUSTRATIONS, DEFINITIVEMENT.
+    // `catch` posait _exoIndex a une Map VIDE, et la premiere ligne de la
+    // fonction rend _exoIndex des qu'il est truthy — une Map vide en est une.
+    // Un creux de reseau au demarrage et l'athlete n'avait plus aucune image
+    // nulle part jusqu'au rechargement, sans que rien ne retente.
+    // ⚠ CE TEST LIT LA SOURCE, ET C'EST DELIBERE. La verification honnete —
+    // couper window.fetch, appeler, verifier, rebrancher — demande deux await,
+    // et `ok` ne fait que !!c : une promesse est truthy, un tel test PASSERAIT
+    // toujours, y compris sur le code fautif. Mieux vaut une assertion de forme
+    // qui mord qu'une assertion de comportement qui ment. Le comportement, lui,
+    // a ete verifie au navigateur le 15/09/2026 : coupure, Map vide, _exoIndex
+    // toujours null, puis 436 entrees au retour du reseau.
+    ok('Un echec de l’index des illustrations ne se memorise pas',(()=>{
+      const s=String(chargerIndexIllustrations);
+      const i=s.indexOf('catch');
+      if(i<0) return _echec('la fonction ne rattrape plus rien');
+      const bloc=s.slice(i);
+      // LE DEFAUT EXACT : `catch(e){ _exoIndex=new Map(); }`. La premiere ligne
+      // rend _exoIndex des qu'il est truthy, et une Map vide en est une :
+      // l'echec devenait DEFINITIF pour toute la duree de la page.
+      if(/_exoIndex\s*=\s*new Map\(\)/.test(bloc))
+        return _echec('le catch memorise encore l’echec dans _exoIndex');
+      if(!/return new Map\(\)/.test(bloc))
+        return _echec('le catch ne rend plus de Map vide a l’appelant');
+      // ET LA GARDE D'ENTREE RESTE CELLE QUI REND LE RETRY POSSIBLE.
+      return /if\(_exoIndex\) return _exoIndex/.test(s)
+        ?true:_echec('la garde d’entree a change : le retry n’est plus garanti');})());
+
+    // ET TANT QUE L'INDEX MANQUE, ON NE REND PAS D'URL CASSEE : null, jamais
+    // une adresse qui produirait un cadre vide.
+    ok('Sans index, aucune illustration n’est inventee',(()=>{
+      const sv=_exoIndex;
+      try{
+        _exoIndex=null;
+        if(illustrationDe('ESCALIERS')!==null) return _echec('une URL sort sans index');
+        if(_slugIllustre('escaliers')!==null) return _echec('un slug sort sans index');
+        return true;
+      } finally { _exoIndex=sv; }})());
     ok('Le compteur de semaines ne porte plus de tiret',(()=>{
       const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
       if(document.querySelector('.sk-tiret')) return _echec('le tiret est encore dans le document');

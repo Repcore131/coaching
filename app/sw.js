@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1207';
+const CACHE = 'repcore-v1208';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -33,13 +33,18 @@ const CACHE = 'repcore-v1207';
 // arrivent dans app/exercices/vignettes/. Meme raison, meme remede : la
 // constante vaut CACHE une fois de plus.
 //
-// LES VIGNETTES SONT COUVERTES SANS RIEN CHANGER. _prioritaire teste
-// /\/vendor\/|\/exercices\// et la branche de purge /\/exercices\// :
-// « app/exercices/vignettes/squat.webp » contient « /exercices/ », il est donc
-// deja reporte en priorite ET deja purge avec le reste. Verifie, et une
-// assertion de testExercices() le tient desormais — le jour ou quelqu'un
-// resserrerait ce motif en /\/exercices\/[^/]+$/, les vignettes tomberaient du
-// report sans un mot.
+// ⚠ CES VIGNETTES N'EXISTENT PAS. Le paragraphe ci-dessus les annonce depuis
+// le 07/09/2026 et decrit meme comment elles sont reportees et purgees ; le
+// dossier app/exercices/vignettes/ n'a jamais ete cree, ni dans le depot ni
+// sur le disque. Le seeding qui devait les produire n'a pas tourne, et
+// index.html a bascule sur le schema a deux tailles sans elles : chaque ligne
+// de liste demandait un fichier absent, prenait un 404, puis se rabattait sur
+// la fiche. Constate le 15/09/2026.
+//
+// index.html est revenu a UNE seule taille — celle qui existe — et n'emet plus
+// aucune requete vers vignettes/. Le motif /\/exercices\// reste juste tel
+// qu'il est : il couvre le dossier reel, et il couvrirait les vignettes le
+// jour ou elles seraient vraiment produites.
 //
 // ET LA v1141 L'A REMISE A UNE VALEUR ANCIENNE, comme annonce. Les lots qui
 // ont suivi ne touchent AUCUNE image — EX_VIDEOS, les methodes
