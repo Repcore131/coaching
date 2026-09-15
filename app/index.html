@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1223';
+window.RC_BUILD='1224';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5545,6 +5545,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   .hero-duo .btn{flex:1 1 100%}
 }
 
+/* LA RELECTURE EST SOBRE. Le faisceau de colonnes et les flaques sous les
+   medaillons sont la fete de l'instant : sur un ecran de relecture ils ne
+   celebrent plus rien, et leurs bords finissent par etre la seule chose qu'on
+   voit. Le trait qui ferme le bloc part avec eux — il n'avait de sens que
+   comme fin de la mise en scene. */
+.sd-sobre .rcf-faisceau,.sd-sobre .rcf-case-halo,.sd-sobre .rcf-rec::after{display:none}
+.sd-sobre .rcf-rec{margin:10px 0 18px;padding-bottom:0}
+/* Et la marche du milieu redescend : sans le faisceau pour la porter, un
+   badge decale de 18 px ressemble a un defaut d'alignement. */
+.sd-sobre .rcf-rec-g.n3 .rcf-case:nth-child(2){transform:none}
+
 /* ══ L'HISTORIQUE DES SEANCES ═════════════════════════════════════════════
    Une ligne par seance, et rien d'autre : nom, date, et les deux chiffres
    qu'on cherche en relisant — la duree et le volume. Tout le reste est
@@ -9554,6 +9565,11 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="sd-badges"></div>
     <div id="sd-records" style="margin-bottom:14px"></div>
     <div id="sd-stats" style="margin-bottom:18px"></div>
+    <!-- L'ASCENSION. Elle etait rendue par l'ecran de fin et par lui seul ;
+         c'est le bloc que Kevin cherchait en relisant une seance. Meme
+         fabricant — _htmlProchainObjectif — donc mêmes marches, meme
+         grimpeur, meme animation. -->
+    <div id="sd-objectif" style="margin-bottom:18px"></div>
     <div id="sd-partage" style="margin-bottom:20px"></div>
     <div id="sd-ressenti"></div>
     <div id="sd-exercices"></div>
@@ -43627,11 +43643,21 @@ function ouvrirSeanceHistorique(cle){
     +escapeHtml(_dateHistorique(sc.date,Date.now()))
     +(sc.complete===false?' · partielle':'')+'</div>'
     +'<div class="rcf-trait" aria-hidden="true"></div></div>');
-  pose('sd-badges',(()=>{ try{ return _htmlRecompenses(badges,ctx); }catch(e){ return ''; } })());
+  // ⚠ LES MEMES MEDAILLONS, MAIS SANS LA MISE EN SCENE. Le faisceau de
+  // colonnes et les flaques sous les badges sont des effets de CELEBRATION :
+  // ils appartiennent a l'instant ou la seance vient de finir. Trois semaines
+  // apres, ils ne celebrent plus rien — et sur cet ecran, ou rien ne les
+  // precede, on ne voyait plus que leurs bords : un grand rectangle sous le
+  // trait, et un carre d'opacite autour de chaque icone. Signale par Kevin.
+  // La classe .sd-sobre les eteint ICI SEULEMENT : l'ecran de fin garde sa
+  // fete entiere.
+  pose('sd-badges',(()=>{ try{
+    return '<div class="sd-sobre">'+_htmlRecompenses(badges,ctx)+'</div>'; }catch(e){ return ''; } })());
   pose('sd-records',(()=>{ try{ return _htmlRecordsFin(ctx); }catch(e){ return ''; } })());
   pose('sd-stats',(()=>{ try{
     return _htmlStatsFin(Number(sc.duration)||0,Number(sc.sets)||0,
       Number(sc.setsPlanned)||0,Number(sc.volume)||0,0); }catch(e){ return ''; } })());
+  pose('sd-objectif',(()=>{ try{ return _htmlProchainObjectif(ctx); }catch(e){ return ''; } })());
   pose('sd-ressenti',_htmlRessentiRelu(sc));
   pose('sd-exercices',_htmlExercicesRelus(sc));
   _rendrePartageSeanceRelue(sc);
