@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1213';
+window.RC_BUILD='1214';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -8526,8 +8526,19 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <!-- OBJECTIF -->
 
+      <!-- LA PREMIERE SEANCE N'A PAS ENCORE EU LIEU.
+           Rempli par _rendreReprise, et VIDE des qu'une seance est
+           enregistree. Quand il parle, les deux blocs qui suivent — les trois
+           chiffres et la carte d'entrainement — se taisent : voir #clh-stats
+           et #clh-hero.
+           ⚠ IL EST SOUS l'echeance d'acces, les signes a faire examiner et la
+           douleur, et c'est deliberement leur ordre du gabarit qui l'y met.
+           Ces trois-la ont une date limite ou touchent a la sante ; une
+           proposition de seance ne passe jamais devant. -->
+      <div id="clh-reprise"></div>
+
       <!-- STATS -->
-      <div class="clh-in clh-in-2" style="display:flex;gap:8px;margin-bottom:16px">
+      <div id="clh-stats" class="clh-in clh-in-2" style="display:flex;gap:8px;margin-bottom:16px">
         <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Cette semaine</div>
           <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m1-sub"></div></div>
         <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances au total</div>
@@ -8538,7 +8549,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 
       <!-- DÉMARRER SÉANCE — hero card -->
-      <div class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:24px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
+      <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:24px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div class="eyebrow eyebrow-act" style="margin-bottom:14px">Entraînement</div>
         <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">DÉMARRER MA SÉANCE</button>
@@ -34934,6 +34945,14 @@ function loadClientHome(){
   // des présences, le second est déjà porté par la carte « Pesée du jour »
   // juste en dessous. Total et Semaines restent dans l'onglet Perfs.
   _majMetriquesAccueil(u);
+  // ⚠ APRES les trois chiffres, jamais avant : c'est _rendreReprise qui decide
+  // de les MASQUER, et les masquer avant que _majMetriquesAccueil les remplisse
+  // les laisserait remplis puis caches — le meme travail, fait pour rien, et un
+  // ordre qui se lit a l'envers.
+  // ET AVANT les blocs de sante, qui sont rendus juste apres et qu'il ne touche
+  // pas : l'echeance d'acces, les signes a faire examiner et la douleur gardent
+  // leur place et leur priorite.
+  try{ _rendreReprise(); }catch(e){}
   renderCartePesee();
   renderContraintesAthlete();
   renderDouleurAthlete();
@@ -36080,6 +36099,100 @@ function _aiguillerNouvelInscrit(){
     }
   }catch(e){}
   return false;
+}
+// ══════════ LE SEUL MOMENT OU L'ON PEUT ENCORE PARLER ══════════════════
+//
+// RepCore tourne sur le plan Spark : aucune fonction serveur, donc aucune
+// relance automatique. Le seul instant ou l'application peut encore s'adresser
+// a un inscrit qui n'a jamais commence est celui ou il la ROUVRE — et cet
+// instant tombait sur un tableau de bord vide : trois chiffres a zero et deux
+// boutons dont un qui ouvre un gestionnaire.
+//
+// ⚠ LE TON EST LA MOITIE DU LOT, ET IL N'EST PAS NEGOCIABLE.
+//   • AUCUN DECOMPTE DE JOURS. « Ca fait 6 jours que… » n'informe de rien —
+//     il le sait — et transforme l'ouverture de l'app en convocation. Le
+//     delai de 48 h sert a DECIDER d'afficher le bloc ; il n'est jamais dit.
+//   • AUCUN REPROCHE, AUCUN POINT D'EXCLAMATION. Ni « Allez ! », ni « Il est
+//     temps de s'y mettre » : ce qui se lit comme un rappel a l'ordre se
+//     repond par une desinstallation.
+//   • UNE PROPOSITION, AU PRESENT. Le bloc ne parle pas de ce qui n'a pas eu
+//     lieu ; il parle de la seule chose qui puisse avoir lieu maintenant.
+//
+// ⚠ ET IL NE PASSE JAMAIS DEVANT LA SANTE. L'echeance d'acces, les signes a
+// faire examiner et la douleur declaree vivent AU-DESSUS de lui dans le
+// gabarit, et il ne touche ni a leur affichage ni a leur ordre. Il ne remplace
+// que ce qui est vide de sens pour quelqu'un qui n'a jamais commence : les
+// trois chiffres a zero et la carte d'entrainement a deux boutons.
+const REPRISE_DELAI=48*3600e3;
+// PURE. Faut-il poser le bloc ?
+//   • un athlete ;
+//   • un compte de plus de 48 h — en dessous, l'inscription est du jour meme
+//     et l'accueil ordinaire suffit ;
+//   • AUCUNE SEANCE. C'est la seule condition de sortie : le bloc disparait de
+//     lui-meme a la premiere seance enregistree, sans temoin ni drapeau.
+function _doitProposerReprise(u,maintenant){
+  if(!u||u.role==='coach') return false;
+  if((u.sessions||[]).length) return false;
+  const c=Number(u&&u.createdAt)||0;
+  const t=Number(maintenant)||0;
+  if(!c||!t) return false;
+  return (t-c)>REPRISE_DELAI;
+}
+// PURE. Le bloc. Une phrase, une duree, un bouton — rien d'autre.
+//
+// `avecProgramme` decide le libelle de ce qui suit, pas le texte d'accueil :
+// que le coach ait publie ou non, la proposition est la meme, et l'athlete n'a
+// pas a apprendre ici l'etat du travail de son coach.
+function _htmlReprise(avecProgramme){
+  return '<div class="clh-in clh-in-2" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);'
+    +'border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;'
+    +'padding:24px 20px;margin-bottom:16px;box-shadow:0 14px 34px rgba(0,0,0,.6),'
+    +'0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">'
+    +'<div class="eyebrow eyebrow-act" style="margin-bottom:12px">Ta première séance</div>'
+    +'<div style="font-size:var(--fs-lg);font-family:var(--pile-titre);letter-spacing:.5px;'
+    +'line-height:1.25;margin-bottom:8px">On commence maintenant.</div>'
+    +'<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:18px">'
+    +'Quinze minutes suffisent pour commencer'+' '+'— tu t’arrêtes quand tu veux.</div>'
+    +'<button class="btn btn-red" onclick="reprendreMaintenant()" style="margin:0;min-height:52px;'
+    +'letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">'
+    +'COMMENCER MAINTENANT</button>'
+    +(avecProgramme
+      ? '<div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-top:12px;text-align:center">'
+        +'Ton programme t’attend.</div>'
+      : '')
+    +'</div>';
+}
+// UN SEUL BOUTON, DEUX DESTINATIONS. Le coach a publie : on ouvre le selecteur
+// de seances, comme partout ailleurs. Il n'a rien publie : on ouvre le parcours
+// de premiere seance, qui pose trois questions et rend une seance a lancer.
+// Dans les deux cas, on emprunte un chemin qui existe deja.
+function reprendreMaintenant(){
+  try{
+    if(_configReelle(currentUser&&currentUser.sessions_config)){ openSessionPicker(); return; }
+  }catch(e){}
+  try{ ouvrirPremiereSeance(); }
+  catch(e){ try{ openSessionPicker(); }catch(_e){} }
+}
+// Le tour impur : poser le bloc, et faire taire ce qu'il remplace.
+//
+// ⚠ IL REND L'AFFICHAGE DES DEUX BLOCS A CHAQUE PASSAGE, dans les deux sens.
+// Les eteindre sans jamais les rallumer laisserait un accueil ampute apres la
+// premiere seance — loadClientHome est rappelee a chaque retour, et c'est elle
+// qui doit rendre l'ecran a son etat normal.
+function _rendreReprise(){
+  const z=document.getElementById('clh-reprise');
+  if(!z) return;
+  let actif=false;
+  try{ actif=_doitProposerReprise(currentUser,Date.now()); }catch(e){}
+  if(actif){
+    let prog=false;
+    try{ prog=_configReelle(currentUser&&currentUser.sessions_config); }catch(e){}
+    z.innerHTML=_htmlReprise(prog);
+  } else z.innerHTML='';
+  for(const id of ['clh-stats','clh-hero']){
+    const e=document.getElementById(id);
+    if(e) e.style.display=actif?'none':'';
+  }
 }
 // PURE. Faut-il proposer la premiere marche a ce dossier ?
 //

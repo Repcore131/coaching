@@ -29028,6 +29028,133 @@ function testExercices(){
     // _bandeauEssai, _personnaliserSeance, _configReelle. Ce qui manquait
     // etait de DEMANDER a l'athlete ce qu'il veut faire.
 
+    // ══ 15/09/2026 — LE SEUL MOMENT OU L'ON PEUT ENCORE PARLER ═════════════
+    // Plan Spark : aucune fonction serveur, donc aucune relance automatique.
+    // Le seul instant ou l'application peut s'adresser a un inscrit qui n'a
+    // jamais commence est celui ou il la ROUVRE — et cet instant tombait sur
+    // un tableau de bord vide.
+
+    ok('Le bloc de reprise ne parait qu’a qui n’a jamais commencé',(()=>{
+      const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
+      const A=o=>Object.assign({email:'a@t.fr',role:'athlete',createdAt:t-5*J,sessions:[]},o);
+      const cas=[
+        ['compte de 5 jours',   A({}),                          true],
+        // 48 h STRICTEMENT : en dessous, l'inscription est du jour meme et
+        // l'accueil ordinaire suffit.
+        ['compte de 47 h',      A({createdAt:t-47*3600e3}),     false],
+        ['compte de 49 h',      A({createdAt:t-49*3600e3}),     true],
+        // LA SEULE CONDITION DE SORTIE : le bloc disparait de lui-meme a la
+        // premiere seance, sans temoin ni drapeau a maintenir.
+        ['une seance faite',    A({sessions:[{date:t}]}),       false],
+        ['un coach',            A({role:'coach'}),              false],
+        ['sans createdAt',      A({createdAt:undefined}),       false],
+        ['sans dossier',        null,                           false]
+      ];
+      for(const [lib,u,att] of cas){
+        const r=_doitProposerReprise(u,t);
+        if(r!==att) return _echec(lib+' rend '+r+' au lieu de '+att);
+      }
+      return true;})());
+
+    // ⚠ LE TON EST LA MOITIE DU LOT, ET IL N'EST PAS NEGOCIABLE. Ce test est
+    // le seul garde-fou d'une regle qu'aucun compilateur ne verifie.
+    ok('Le bloc de reprise ne reproche rien et ne compte pas les jours',(()=>{
+      const d=document.createElement('div');
+      for(const avec of [false,true]){
+        d.innerHTML=_htmlReprise(avec);
+        const txt=d.textContent;
+        // AUCUN DECOMPTE. « Ca fait 6 jours que… » n'informe de rien — il le
+        // sait — et transforme l'ouverture de l'app en convocation.
+        if(/\d+\s*(jour|semaine|mois)/i.test(txt))
+          return _echec('un decompte apparait : '+txt.slice(0,80));
+        // AUCUN POINT D'EXCLAMATION : ce qui se lit comme un rappel a l'ordre
+        // se repond par une desinstallation.
+        if(txt.indexOf('!')>=0) return _echec('un point d’exclamation : '+txt.slice(0,80));
+        // AUCUN REPROCHE, AUCUNE EVOCATION DE CE QUI N'A PAS EU LIEU.
+        const mots=/ça fait|depuis|absent|oubli|manqu|raté|revien|retour|toujours pas|enfin/i;
+        if(mots.test(txt)) return _echec('un reproche : '+txt.slice(0,80));
+        // LA DUREE EST ANNONCEE, et c'est elle qui rend la proposition tenable.
+        if(!/quinze minutes/i.test(txt)) return _echec('la duree n’est pas annoncee');
+        // UN SEUL BOUTON : le bloc propose UNE chose.
+        const b=d.querySelectorAll('button');
+        if(b.length!==1) return _echec(b.length+' bouton(s) au lieu d’un');
+        if(!/commencer/i.test(b[0].textContent)) return _echec('le bouton dit : '+b[0].textContent);
+        // ET AUCUN ADJECTIF GENRE : RepCore a des athletes des deux sexes, et
+        // « Prete ? » en exclut la moitie.
+        if(/\bpr[ê e]t[e]?\b/i.test(txt)) return _echec('un adjectif genre : '+txt.slice(0,80));
+      }
+      return true;})());
+
+    // ⚠ IL NE PASSE JAMAIS DEVANT LA SANTE. L'echeance d'acces, les signes a
+    // faire examiner et la douleur declaree ont une date limite ou touchent au
+    // corps ; une proposition de seance ne les masque pas et ne passe pas
+    // devant elles.
+    ok('Le bloc de reprise ne masque ni l’accès ni la santé',(()=>{
+      const r=String(_rendreReprise);
+      for(const id of ['clh-echeance','clh-contraintes','clh-douleur','clh-echeance-prepa'])
+        if(r.indexOf(id)>=0) return _echec('_rendreReprise touche a #'+id);
+      // IL NE CACHE QUE CE QUI EST VIDE DE SENS pour qui n'a jamais commence :
+      // trois chiffres a zero, et une carte a deux boutons.
+      if(r.indexOf('clh-stats')<0||r.indexOf('clh-hero')<0)
+        return _echec('il ne remplace plus les blocs vides');
+      // ET IL EST SOUS EUX DANS LE GABARIT : c'est l'ordre du document qui
+      // garantit la priorite, pas une regle de style.
+      const g=document.getElementById('s-client-home').innerHTML;
+      const iR=g.indexOf('id="clh-reprise"');
+      if(iR<0) return _echec('le conteneur a disparu du gabarit');
+      for(const id of ['clh-echeance','clh-contraintes','clh-douleur']){
+        const i=g.indexOf('id="'+id+'"');
+        if(i<0) return _echec('#'+id+' a disparu du gabarit');
+        if(i>iR) return _echec('#'+id+' est passe SOUS le bloc de reprise');
+      }
+      return true;})());
+
+    // ⚠ IL REND L'AFFICHAGE DANS LES DEUX SENS. Eteindre sans jamais rallumer
+    // laisserait un accueil ampute apres la premiere seance — loadClientHome
+    // est rappelee a chaque retour, et c'est elle qui doit rendre l'ecran a son
+    // etat normal.
+    ok('Les blocs masques reviennent dès la première séance',(()=>{
+      const sv=currentUser;
+      try{
+        const t=Date.now();
+        currentUser={id:'r',email:'r@t.fr',role:'athlete',createdAt:t-5*864e5,sessions:[]};
+        _rendreReprise();
+        const vis=id=>{const e=document.getElementById(id);
+          return e?e.style.display!=='none':null;};
+        if(!document.getElementById('clh-reprise').innerHTML) return _echec('le bloc ne parait pas');
+        if(vis('clh-stats')||vis('clh-hero')) return _echec('les blocs vides restent affiches');
+        currentUser.sessions=[{date:t}];
+        _rendreReprise();
+        if(document.getElementById('clh-reprise').innerHTML) return _echec('le bloc survit a la premiere seance');
+        return (vis('clh-stats')&&vis('clh-hero'))
+          ?true:_echec('l’accueil reste ampute apres la premiere seance');
+      } finally {
+        currentUser=sv;
+        try{ document.getElementById('clh-reprise').innerHTML=''; }catch(e){}
+        for(const id of ['clh-stats','clh-hero']){
+          const e=document.getElementById(id); if(e) e.style.display='';
+        }
+      }})());
+
+    ok('Le bouton mène au programme du coach, ou au parcours de départ',(()=>{
+      const s=String(reprendreMaintenant);
+      // LE COACH A PUBLIE : on ouvre le selecteur, comme partout ailleurs.
+      // _configReelle est le predicat deja en place, celui qui distingue un
+      // programme publie d'un repli generique.
+      if(s.indexOf('_configReelle')<0) return _echec('il ne regarde pas si un programme existe');
+      if(s.indexOf('openSessionPicker')<0) return _echec('il n’ouvre pas le selecteur de seances');
+      // IL N'A RIEN PUBLIE : on ouvre le parcours de premiere seance.
+      if(s.indexOf('ouvrirPremiereSeance')<0) return _echec('il n’ouvre pas le parcours de depart');
+      const iC=s.indexOf('_configReelle'), iP=s.indexOf('ouvrirPremiereSeance');
+      if(!(iP>iC)) return _echec('le parcours passe avant le programme du coach');
+      // ET IL EST BRANCHE : loadClientHome rend le bloc, apres les chiffres
+      // qu'il masque et avant les blocs de sante qu'il ne touche pas.
+      const l=String(loadClientHome);
+      const iM=l.indexOf('_majMetriquesAccueil'), iR=l.indexOf('_rendreReprise');
+      if(iR<0) return _echec('loadClientHome ne rend jamais le bloc');
+      if(!(iM>=0&&iR>iM)) return _echec('le bloc est rendu avant les chiffres qu’il masque');
+      const iD=l.indexOf('renderDouleurAthlete');
+      return (iD>iR)?true:_echec('le bloc est rendu apres les blocs de sante');})());
     ok('Le parcours ne s’ouvre que pour un compte sans programme ni historique',(()=>{
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',sessions:[]},o);
       const vrai=[{active:true,exercises:[{name:'DC'}]},{active:false},{active:false},
