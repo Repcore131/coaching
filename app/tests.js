@@ -29034,6 +29034,110 @@ function testExercices(){
     // jamais commence est celui ou il la ROUVRE — et cet instant tombait sur
     // un tableau de bord vide.
 
+    // ══ 15/09/2026 — L'INSTALLATION DEVIENT UNE ETAPE ══════════════════════
+    // Tout existait : beforeinstallprompt capte dans le <head>, #install-btn
+    // affiche, showIosInstallGuide pour iOS. Mais c'etait un bouton SANS RAISON
+    // DONNEE, et presque personne ne le pressait.
+
+    ok('L’installation ne se propose qu’une fois, et jamais pour rien',(()=>{
+      const A=o=>Object.assign({email:'a@t.fr',role:'athlete',sessions:[{date:1}]},o);
+      // (dossier, notifications supportees, deja installee, iOS, invitation)
+      const cas=[
+        ['Chrome avec invitation',  A({}), true,false,false,true, 'inviter'],
+        // iOS NE DECLENCHE JAMAIS beforeinstallprompt : le guide manuel est la
+        // seule voie, et il existe deja.
+        ['iPhone',                  A({}), true,false,true, false,'ios'],
+        // ⚠ DEJA INSTALLEE : la question ne se pose plus. Proposer d'installer
+        // a quelqu'un qui lit depuis son ecran d'accueil ferait douter du reste.
+        ['iPhone deja installe',    A({}), true,true, true, false,'rien'],
+        ['standalone',              A({}), true,true, false,true, 'rien'],
+        // NI iOS NI INVITATION : un bouton qui ne declencherait rien est pire
+        // qu'aucun bouton.
+        ['ni iOS ni invitation',    A({}), true,false,false,false,'rien'],
+        ['2e seance',               A({sessions:[{},{}]}),true,false,false,true,'rien'],
+        ['aucune seance',           A({sessions:[]}),     true,false,false,true,'rien'],
+        // UNE SEULE FOIS DANS LA VIE DU COMPTE, REFUS COMPRIS.
+        ['deja demande',            A({_installDemandeeLe:1}),true,false,false,true,'rien'],
+        ['un coach',                A({role:'coach'}),    true,false,false,true,'rien'],
+        ['sans dossier',            null,                 true,false,false,true,'rien']
+      ];
+      for(const [lib,u,sup,auto,ios,inv,att] of cas){
+        const r=etatInvitationInstall(u,sup,auto,ios,inv);
+        if(r!==att) return _echec(lib+' rend «'+r+'» au lieu de «'+att+'»');
+      }
+      return true;})());
+
+    // ⚠ L'ARGUMENT EST CONCRET, ET C'EST TOUT L'OBJET DU LOT. On ne dit pas
+    // « installe l'application » — une action abstraite —, on dit ce qu'elle
+    // rend dans la salle.
+    ok('La carte d’installation donne la raison, pas l’action',(()=>{
+      const d=document.createElement('div');
+      for(const e of ['inviter','ios']){
+        d.innerHTML=_htmlInvitationInstall(e,false);
+        const txt=d.textContent;
+        if(!/sans réseau/i.test(txt)) return _echec(e+' : « sans réseau » n’est pas dit');
+        if(!/écran d’accueil/i.test(txt)) return _echec(e+' : l’écran d’accueil n’est pas dit');
+        // DEUX BOUTONS, jamais trois, et « Plus tard » lisible.
+        const b=d.querySelectorAll('button');
+        if(b.length!==2) return _echec(e+' : '+b.length+' bouton(s)');
+        if(!/plus tard/i.test(b[1].textContent)) return _echec('la sortie dit : '+b[1].textContent);
+        // LE GESTE EST CELUI QUI CONVIENT AU CAS.
+        const g=b[0].getAttribute('onclick')||'';
+        if(e==='ios'&&g.indexOf('invInstallIos')<0) return _echec('iOS n’ouvre pas le guide');
+        if(e==='inviter'&&g.indexOf('invInstallInviter')<0) return _echec('l’invitation n’est pas declenchee');
+      }
+      // LA RAISON SUPPLEMENTAIRE quand les notifications manquent — c'est la
+      // carte des notifications qui lui passe la main.
+      d.innerHTML=_htmlInvitationInstall('inviter',true);
+      if(!/rappels possibles/.test(d.textContent))
+        return _echec('la raison des rappels manque quand Notification n’existe pas');
+      d.innerHTML=_htmlInvitationInstall('inviter',false);
+      if(/rappels possibles/.test(d.textContent))
+        return _echec('la raison des rappels s’affiche alors qu’ils marchent');
+      return _htmlInvitationInstall('rien',false)===''
+        ?true:_echec('l’etat « rien » rend quelque chose');})());
+
+    // ⚠ AUCUNE DETECTION N'EST DUPLIQUEE : les cinq fonctions existantes sont
+    // APPELEES, aucune n'est reecrite.
+    ok('L’etape d’installation ne duplique aucune detection',(()=>{
+      // Le CODE, pas les commentaires : String(fn) rend le corps entier.
+      const nu=s=>String(s).replace(/\/\/[^\n]*/g,'');
+      if(/matchMedia|userAgent|navigator\./.test(nu(etatInvitationInstall)))
+        return _echec('la decision refait la detection au lieu de la recevoir');
+      const r=nu(_rendreInvitationInstall);
+      for(const f of ['rcInstallAutonome','rcInstalliOS','rcInstallInvite'])
+        if(r.indexOf(f+'(')<0) return _echec('elle n’appelle pas '+f);
+      // ET LES DEUX GESTES SONT CEUX QUI EXISTENT.
+      if(nu(invInstallInviter).indexOf('installApp()')<0)
+        return _echec('le bouton ne passe pas par installApp');
+      if(nu(invInstallIos).indexOf('showIosInstallGuide()')<0)
+        return _echec('iOS ne passe pas par le guide existant');
+      // Aucun des deux ne refait la garde Samsung ni la capture de l'invitation.
+      for(const [n,f] of [['invInstallInviter',invInstallInviter],['invInstallIos',invInstallIos]])
+        if(/__rcInstallEvt|prompt\(\)|userChoice/.test(nu(f)))
+          return _echec(n+' touche a l’invitation du navigateur en direct');
+      return true;})());
+
+    ok('Le témoin d’installation est posé à l’affichage',(()=>{
+      const r=String(_rendreInvitationInstall);
+      if(r.indexOf('_installDemandeeLe')<0) return _echec('rien ne retient que la question a ete posee');
+      // « REFUS COMPRIS » inclut l'absence de reponse : quelqu'un qui quitte
+      // l'ecran sans toucher aux boutons a bien vu la question.
+      for(const [n,f] of [['invInstallInviter',invInstallInviter],['invInstallIos',invInstallIos],
+                          ['invInstallNon',invInstallNon]])
+        if(String(f).indexOf('_installDemandeeLe')>=0)
+          return _echec(n+' : le temoin depend de la reponse');
+      // DANS LE DOSSIER, pas en local : « la vie du compte » traverse les
+      // appareils.
+      if(/localStorage|sessionStorage/.test(r)) return _echec('le temoin est local a l’appareil');
+      if(r.indexOf('saveUser()')<0) return _echec('le temoin n’est pas enregistre');
+      // ET ELLE EST BRANCHEE JUSTE APRES LA CARTE DES NOTIFICATIONS.
+      const s=String(finishWorkout);
+      const iN=s.indexOf('_rendreInvitationNotif'), iI=s.indexOf('_rendreInvitationInstall');
+      if(iI<0) return _echec('finishWorkout ne rend jamais l’etape d’installation');
+      if(!(iN>=0&&iI>iN)) return _echec('elle est rendue avant la carte des notifications');
+      return document.getElementById('wd-install-invite')
+        ?true:_echec('le conteneur a disparu de l’ecran de fin');})());
     ok('Le bloc de reprise ne parait qu’a qui n’a jamais commencé',(()=>{
       const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',createdAt:t-5*J,sessions:[]},o);
@@ -29355,8 +29459,12 @@ function testExercices(){
         // systeme — et reinsister est nuisible.
         ['permission accordee',     A({}),                     true, 'granted','rien'],
         ['permission refusee',      A({}),                     true, 'denied', 'rien'],
-        // PAS DE NOTIFICATIONS DU TOUT : on propose l'installation a la place.
-        ['non supportees',          A({}),                     false, null,    'installer'],
+        // ⚠ CE CAS RENDAIT 'installer' ET NE LE REND PLUS. Cette carte portait
+        // elle-meme la proposition d'installation quand Notification n'existe
+        // pas ; A6 en a fait une etape a part entiere, juste en dessous, avec
+        // son propre argument. Deux cartes pour la meme chose valent moins
+        // qu'une — et celle-ci se tait.
+        ['non supportees',          A({}),                     false, null,    'rien'],
         ['non supportees, deja posee',A({_notifDemandeeLe:1}), false, null,    'rien'],
         ['un coach',                A({role:'coach'}),         true, 'default','rien'],
         ['sans dossier',            null,                      true, 'default','rien']
@@ -29408,11 +29516,17 @@ function testExercices(){
       d.innerHTML=_htmlInvitationNotif('demander','');
       if(/prochaine séance est\s*\./.test(d.innerText)) return _echec('une promesse vide est affichee');
       if(d.querySelectorAll('button').length!==2) return _echec('les deux boutons ne survivent pas');
-      // ⚠ L'ETAT « INSTALLER » REPREND _NOTIF_INDISPO MOT POUR MOT : il dit
-      // deja pourquoi ca ne marche pas ET quoi faire.
-      d.innerHTML=_htmlInvitationNotif('installer','');
-      return d.innerText.indexOf(_NOTIF_INDISPO)>=0
-        ?true:_echec('le message d’indisponibilite a ete reecrit');})());
+      // ⚠ L'ETAT « INSTALLER » A DISPARU DE CETTE CARTE. Elle portait
+      // elle-meme la proposition d'installation quand Notification n'existe
+      // pas, et son commentaire renvoyait deja « voir A6 ». A6 est arrive :
+      // l'installation est une etape a part entiere, juste en dessous, avec son
+      // propre argument. Deux cartes pour la meme chose valent moins qu'une.
+      // Ce qui reste verrouille ici : le cas « pas de notifications » ne rend
+      // plus RIEN sur cette carte-la, et la raison passe bien a l'autre.
+      if(etatInvitationNotif({email:'a',role:'athlete',sessions:[{}]},false,null)!=='rien')
+        return _echec('la carte des notifications propose encore l’installation');
+      return /rappels possibles/.test(_htmlInvitationInstall('inviter',true))
+        ?true:_echec('la carte d’installation ne reprend pas la raison des rappels');})());
 
     ok('Le temoin est pose a l’affichage, pas a la reponse',(()=>{
       const r=String(_rendreInvitationNotif);
@@ -30356,9 +30470,26 @@ function testExercices(){
         }
         if(fin<0) continue;
         // Et sans les commentaires : un commentaire n'exécute rien.
+        //
+        // ⚠ CE DEPOUILLAGE N'EN DEPOUILLAIT AUCUN, ET PERSONNE NE LE SAVAIT.
+        // index.html est en CRLF : `.split('\n')` laisse un \r EN FIN de chaque
+        // ligne. Or `.` ne traverse pas \r en JavaScript, et `$` sans le drapeau
+        // `m` vise la fin de la CHAINE — qui est apres ce \r. Le motif
+        // `//.*$` ne pouvait donc jamais aboutir, et pas une ligne de
+        // commentaire n'a jamais ete retiree depuis que cette sonde existe.
+        // Consequence : elle accusait toute fonction dont un COMMENTAIRE nomme
+        // Notification. Son historique en porte deja la trace — « deux
+        // fonctions étaient accusées à tort » — et le correctif d'alors a
+        // resserré l'appariement d'accolades, qui n'était pas la cause.
+        // Constate le 15/09/2026, en ecrivant un commentaire qui nommait
+        // Notification dans une fonction parfaitement gardee.
+        //
+        // `[^\r\n]*` PLUTOT QUE `.*$` : il dit ce qu'on veut — jusqu'au bout de
+        // la ligne, quelle que soit la convention de fin de ligne — et ne
+        // depend ni d'un drapeau ni d'un caractere invisible.
         const corps=prod.slice(re.lastIndex,fin)
           .replace(/\/\*[\s\S]*?\*\//g,'')
-          .split('\n').map(x=>x.replace(/\/\/.*$/,'')).join('\n');
+          .replace(/\/\/[^\r\n]*/g,'');
         if(!/(?<![.\w'"])Notification\b/.test(corps)) continue;
         vues++;
         if(m[1]==='_notifSupported') continue;

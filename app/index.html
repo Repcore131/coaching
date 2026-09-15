@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1214';
+window.RC_BUILD='1215';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -9239,6 +9239,14 @@ const COACH_PHOTO='icons/coach.jpg';
            permission n'a rien a y faire. Ce qui relance vit en bas, avant la
            sortie. -->
       <div id="wd-notif-invite"></div>
+
+      <!-- L'INSTALLATION, JUSTE APRES. Vide sauf apres la toute premiere
+           seance, et une seule fois dans la vie du compte. Remplie par
+           _rendreInvitationInstall, appelee depuis finishWorkout.
+           Elle se tait toute seule quand l'application est deja sur l'ecran
+           d'accueil, quand le navigateur n'a rien a declencher, et quand la
+           question a deja ete posee. -->
+      <div id="wd-install-invite"></div>
 
       <!-- RELANCE BILAN DE DEPART — visible seulement s'il manque encore.
            Le clic passe par savePostSession(true) et JAMAIS par openBilan
@@ -40631,6 +40639,10 @@ function finishWorkout(incomplete=false){
   // c'etait la premiere. Elle se garde elle-meme — seconde seance, question
   // deja posee, permission deja tranchee : elle ne rend rien.
   try{ _rendreInvitationNotif(); }catch(e){}
+  // JUSTE APRES : l'installation est l'etape suivante du parcours, et elle
+  // prend la place de la carte des notifications quand celles-ci n'existent pas
+  // — etatInvitationNotif rend alors 'rien', et celle-ci se retrouve seule.
+  try{ _rendreInvitationInstall(); }catch(e){}
   // LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps — une fois par
   // semaine et par muscle, sur la derniere seance qui le touche.
   try{ rcRendreSrpe(); }catch(e){}
@@ -54839,7 +54851,15 @@ function etatInvitationNotif(u,supporte,permission){
   if(!u||u.role==='coach') return 'rien';
   if((u.sessions||[]).length!==1) return 'rien';
   if(u._notifDemandeeLe) return 'rien';
-  if(!supporte) return 'installer';
+  // ⚠ CE CAS RENDAIT 'installer' ET NE LE REND PLUS. La carte des
+  // notifications portait elle-meme la proposition d'installation quand
+  // Notification n'existe pas — c'etait le lot precedent, et son commentaire
+  // renvoyait deja « voir A6 ». A6 est arrive : l'installation est devenue une
+  // etape a part entiere, juste en dessous, avec son propre argument. Deux
+  // cartes qui proposent la meme chose au meme instant valent moins qu'une.
+  // Le message n'est pas perdu : la carte d'installation ajoute la raison
+  // « c'est aussi ce qui rend les rappels possibles » quand ils manquent.
+  if(!supporte) return 'rien';
   if(permission==='granted'||permission==='denied') return 'rien';
   return 'demander';
 }
@@ -54852,15 +54872,6 @@ function _htmlInvitationNotif(etat,phrase){
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:5px">'+titre+'</div>'+corps+actions+'</div>';
-  if(etat==='installer'){
-    // LE MESSAGE EXISTANT, MOT POUR MOT. Il dit deja pourquoi ca ne marche pas
-    // ET quoi faire — c'est exactement ce qu'il faut ici.
-    return cadre('Pour \u00eatre prévenu',
-      '<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55;margin-bottom:12px">'
-        +escapeHtml(_NOTIF_INDISPO)+'</div>',
-      '<button type="button" class="btn btn-red btn-sm" style="width:100%;margin:0;min-height:44px" '
-      +'onclick="invNotifInstaller()">Installer RepCore</button>');
-  }
   // LA PROMESSE EST NOMMEE, ET ELLE VIENT DE SES PROPRES CRENEAUX. Sans
   // planning enregistre, on ne promet pas un jour qu'on ne connait pas : la
   // phrase reste vraie, simplement moins precise.
@@ -54922,21 +54933,113 @@ async function invNotifOui(){
   }catch(e){}
   if(z) z.innerHTML='';
 }
+// ══════════ L'INSTALLATION DEVIENT UNE ETAPE, PAS UN BOUTON ════════════
+//
+// LE DEFAUT QU'ELLE CORRIGE : tout existait deja — beforeinstallprompt capte
+// dans le <head>, #install-btn affiche, showIosInstallGuide pour iOS — mais
+// c'etait un bouton SANS RAISON DONNEE, pose sur un ecran d'accueil. « ⬇
+// Installer l'app » ne dit pas ce qu'on y gagne, et presque personne ne le
+// pressait.
+//
+// ⚠ ELLE NE DUPLIQUE AUCUNE DETECTION. rcInstallAutonome dit si l'application
+// est deja sur l'ecran d'accueil, rcInstalliOS reconnait iOS et ses navigateurs
+// qui ne declenchent jamais l'invitation, rcInstallInvite rend l'invitation du
+// navigateur quand elle existe, installApp et showIosInstallGuide portent les
+// deux gestes. Les cinq sont appelees, aucune n'est reecrite.
+//
+// L'ARGUMENT EST CONCRET, ET C'EST TOUT L'OBJET DU LOT. On ne dit pas
+// « installe l'application » — une action abstraite —, on dit ce qu'elle rend
+// dans la salle : elle marche sans reseau, et elle est sous la main.
+//
+// PURE. Rend 'rien', 'inviter' (le navigateur a une invitation a declencher)
+// ou 'ios' (le guide manuel, seule voie sur iPhone).
+function etatInvitationInstall(u,supporteNotif,autonome,ios,invite){
+  if(!u||u.role==='coach') return 'rien';
+  // LA PREMIERE SEANCE, ET ELLE SEULE — la meme donnee que la carte des
+  // notifications juste au-dessus, et que first_workout_completed.
+  if((u.sessions||[]).length!==1) return 'rien';
+  // UNE SEULE FOIS DANS LA VIE DU COMPTE, REFUS COMPRIS. Le temoin est dans le
+  // DOSSIER, pas en local : « la vie du compte » traverse les appareils.
+  if(u._installDemandeeLe) return 'rien';
+  // DEJA INSTALLEE : la question ne se pose plus. C'est la premiere garde, et
+  // celle qui compte le plus — proposer d'installer a quelqu'un qui lit depuis
+  // son ecran d'accueil ferait douter du reste.
+  if(autonome) return 'rien';
+  if(ios) return 'ios';
+  // NI iOS NI INVITATION — Firefox Android, navigateurs exotiques, ou
+  // beforeinstallprompt pas encore arrive. Un bouton qui ne declencherait rien
+  // est pire qu'aucun bouton : on se tait.
+  return invite?'inviter':'rien';
+}
+// PURE. La carte. L'argument d'abord, le geste ensuite.
+//
+// `aussiNotif` ajoute la raison supplementaire quand le navigateur ne connait
+// pas les notifications : c'est le message _NOTIF_INDISPO, deja ecrit et deja
+// relu, et c'est la carte des notifications qui lui passe la main ici.
+function _htmlInvitationInstall(etat,aussiNotif){
+  if(etat==='rien') return '';
+  const geste=etat==='ios'?'invInstallIos()':'invInstallInviter()';
+  const lib=etat==='ios'?'Comment faire':'Installer RepCore';
+  return '<div style="background:var(--info-bg);border:1px solid var(--info-border);'
+    +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
+    +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;'
+    +'text-transform:uppercase;margin-bottom:5px">Dans la salle</div>'
+    +'<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.5;margin-bottom:4px">'
+    +'RepCore fonctionne <strong style="color:var(--text)">sans réseau</strong> : '
+    +'au sous-sol ou dans un coin sans barre, ta séance s’enregistre quand même.</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-bottom:12px">'
+    +'Sur ton écran d’accueil, elle s’ouvre d’un doigt, sans passer par le navigateur.'
+    +(aussiNotif?' C’est aussi ce qui rend les rappels possibles.':'')+'</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px;'
+    +'letter-spacing:.5px" onclick="'+geste+'">'+lib+'</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;'
+    +'padding:0 16px;margin:0;min-height:44px;letter-spacing:.5px" onclick="invInstallNon()">'
+    +'Plus tard</button></div></div>';
+}
+// Le tour impur : decider, rendre, et MARQUER.
+//
+// ⚠ LE TEMOIN EST POSE A L'AFFICHAGE, comme pour les notifications et pour la
+// meme raison : « une seule fois, refus compris » inclut l'absence de reponse.
+// Quelqu'un qui quitte l'ecran sans toucher aux boutons a bien vu la question.
+function _rendreInvitationInstall(){
+  const z=document.getElementById('wd-install-invite');
+  if(!z) return;
+  let etat='rien', sup=false;
+  try{ sup=_notifSupported(); }catch(e){}
+  try{
+    etat=etatInvitationInstall(currentUser,sup,rcInstallAutonome(),rcInstalliOS(),!!rcInstallInvite());
+  }catch(e){ etat='rien'; }
+  if(etat==='rien'){ z.innerHTML=''; return; }
+  z.innerHTML=_htmlInvitationInstall(etat,!sup);
+  try{ currentUser._installDemandeeLe=Date.now(); saveUser(); }catch(e){}
+}
+// LES DEUX GESTES EXISTENT DEJA : on les appelle, on ne les refait pas.
+// installApp porte la garde Samsung et l'invitation du navigateur ;
+// showIosInstallGuide explique les deux touches de Safari et compte sa vue.
+function invInstallInviter(){
+  const z=document.getElementById('wd-install-invite');
+  if(z) z.innerHTML='';
+  try{ installApp(); }catch(e){}
+}
+function invInstallIos(){
+  const z=document.getElementById('wd-install-invite');
+  if(z) z.innerHTML='';
+  try{ showIosInstallGuide(); }catch(e){}
+}
+// AUCUNE INSISTANCE. Le temoin pose a l'affichage garantit deja que la
+// question ne reviendra pas ; il n'y a rien a ajouter, et surtout pas un
+// « tu peux toujours l'installer depuis les reglages ».
+function invInstallNon(){
+  const z=document.getElementById('wd-install-invite');
+  if(z) z.innerHTML='';
+}
 function invNotifNon(){
   const z=document.getElementById('wd-notif-invite');
   if(z) z.innerHTML='';
   // RIEN D'AUTRE. Pas de toast, pas de « tu peux changer d'avis dans les
   // reglages » : la question a ete posee une fois, la reponse est non, et le
   // temoin pose a l'affichage garantit qu'elle ne reviendra pas.
-}
-// Le navigateur ne connait pas les notifications : la seule voie est
-// l'installation. On reutilise le geste de la banniere d'installation, qui
-// sait deja distinguer iOS, l'invitation du navigateur, et le cas ou il n'y a
-// rien a declencher.
-function invNotifInstaller(){
-  const z=document.getElementById('wd-notif-invite');
-  if(z) z.innerHTML='';
-  try{ rcBanniereInstallAgir(); }catch(e){ try{ toast(_NOTIF_INDISPO,'var(--orange)'); }catch(_e){} }
 }
 // ══════════ LE PLANNING DE RAPPEL, ECRIT EN UN SEUL ENDROIT ════════════
 //
