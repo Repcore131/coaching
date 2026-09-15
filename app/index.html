@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1222';
+window.RC_BUILD='1223';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5528,8 +5528,18 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    ne peut pas se couper impose sa largeur naturelle et deborde la carte —
    c'est le defaut classique de flex, dont la base est `auto` et non 0. */
 .hero-duo{display:flex;gap:8px}
-.hero-duo .btn{flex:1 1 0;min-width:0;font-size:var(--fs-xs);padding:11px 6px;
-  letter-spacing:1.2px;white-space:nowrap}
+/* ⚠ PLUS DE white-space:nowrap : les libelles portent leur propre coupure,
+   et un nowrap l'aurait ignoree en poussant les deux lignes sur une seule.
+   ⚠ ET LE CORPS RESTE A 11 px. C'est le PLANCHER de l'accueil athlete, tenu
+   par une assertion : en dessous, un libelle en capitales espacees n'est plus
+   lisible sur un telephone tenu a bout de bras. « Plus petit » se gagne donc
+   sur l'INTERLETTRAGE — 1,2 px a 0,4 px resserre franchement le mot — et sur
+   les deux lignes, qui rendent chaque ligne plus courte. */
+.hero-duo .btn{flex:1 1 0;min-width:0;font-size:var(--fs-xs);padding:10px 6px;
+  letter-spacing:.4px}
+/* Les deux lignes ne doivent pas gonfler le bouton : l'interligne se resserre,
+   et la coupure ecrite garantit qu'il n'y en aura jamais trois. */
+.btn-2l{line-height:1.25}
 @media(max-width:360px){
   .hero-duo{flex-wrap:wrap}
   .hero-duo .btn{flex:1 1 100%}
@@ -8863,7 +8873,13 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:24px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div class="eyebrow eyebrow-act" style="margin-bottom:14px">Entraînement</div>
-        <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">DÉMARRER MA SÉANCE DU JOUR</button>
+        <!-- ⚠ LA COUPURE EST ECRITE, elle n'est pas subie. Le libelle faisait
+             286 px pour 272 disponibles : il se coupait tout seul, mais la ou
+             la place manquait — « DÉMARRER MA SÉANCE DU / JOUR » sur un
+             telephone, autrement ailleurs. Un <br> pose la meme coupure a
+             toutes les largeurs, et l'interlettrage peut alors rester a 1,5 px
+             puisque chaque ligne a de la place. -->
+        <button class="btn btn-red btn-2l" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">DÉMARRER MA SÉANCE<br>DU JOUR</button>
         <!-- LES DEUX SECONDAIRES SUR UNE LIGNE. Gerer et relire sont deux
              gestes de meme rang — l'un prepare, l'autre revient — et les
              empiler aurait donne trois boutons pleine largeur sous un quatrieme.
@@ -8871,8 +8887,8 @@ const COACH_PHOTO='icons/coach.jpg';
              cote a cote n'y tiennent pas, et une cible qu'on ne peut pas viser
              ne vaut pas une ligne gagnee. -->
         <div class="hero-duo">
-          <button class="btn btn-blanc" onclick="loadSessionManager()">GÉRER MES SÉANCES</button>
-          <button class="btn btn-blanc" onclick="loadHistoriqueSeances()">HISTORIQUE</button>
+          <button class="btn btn-blanc btn-2l" onclick="loadSessionManager()">GÉRER MES<br>SÉANCES</button>
+          <button class="btn btn-blanc btn-2l" onclick="loadHistoriqueSeances()">HISTORIQUE DES<br>SÉANCES</button>
         </div>
       </div>
 

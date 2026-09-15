@@ -31180,13 +31180,45 @@ function testExercices(){
       if(!h) return _echec('la carte d’entraînement a disparu');
       const rouge=h.querySelector('.btn-red');
       if(!rouge) return _echec('le bouton principal a disparu');
-      if(rouge.textContent.trim()!=='DÉMARRER MA SÉANCE DU JOUR')
-        return _echec('libellé : '+rouge.textContent.trim());
+      // ⚠ ON COMPARE LE TEXTE, PAS SA MISE EN LIGNES. Les trois libelles
+      // portent une coupure ECRITE — un <br> — pour que les deux lignes
+      // tombent au meme endroit a toutes les largeurs : textContent rend donc
+      // « DÉMARRER MA SÉANCEDU JOUR », sans espace. On normalise plutot que
+      // d'ecrire le <br> dans l'assertion, qui deviendrait un test de balisage.
+      const _lib=e=>e.textContent.replace(/\s+/g,' ').trim();
+      // LA COUPURE EST VOULUE, et sur les trois boutons.
+      for(const b of [rouge,...h.querySelectorAll('.hero-duo .btn')]){
+        if(b.innerHTML.indexOf('<br>')<0)
+          return _echec('« '+_lib(b)+' » n’a plus sa coupure écrite');
+        if(!b.classList.contains('btn-2l'))
+          return _echec('« '+_lib(b)+' » n’a pas l’interligne des deux lignes');
+      }
       const duo=h.querySelectorAll('.hero-duo .btn');
       if(duo.length!==2) return _echec(duo.length+' boutons secondaires au lieu de deux');
-      const t=[...duo].map(b=>b.textContent.trim());
-      if(t[0]!=='GÉRER MES SÉANCES'||t[1]!=='HISTORIQUE')
-        return _echec('libellés : '+t.join(' | '));
+      // ⚠ ON LIT LES DEUX LIGNES, SEPAREMENT. Coller textContent donne
+      // « GÉRER MESSÉANCES » — le <br> ne produit aucun caractere — et une
+      // normalisation qui ecrase les espaces effaçait aussi celui de
+      // « GÉRER MES ». Decouper sur le <br> dit ce qu'on veut vraiment :
+      // deux lignes, et lesquelles.
+      const _lignes=b=>b.innerHTML.split(/<br\s*\/?>/i)
+        .map(x=>x.replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim());
+      const t=[...duo].map(_lignes);
+      if(t[0].join('|')!=='GÉRER MES|SÉANCES')
+        return _echec('premier bouton : '+t[0].join(' | '));
+      if(t[1].join('|')!=='HISTORIQUE DES|SÉANCES')
+        return _echec('second bouton : '+t[1].join(' | '));
+      if(_lignes(rouge).join('|')!=='DÉMARRER MA SÉANCE|DU JOUR')
+        return _echec('bouton principal : '+_lignes(rouge).join(' | '));
+      // ⚠ 11 px EST LE PLANCHER DE L'ACCUEIL, tenu par l'assertion « Aucun
+      // texte de l'accueil athlete ne descend sous le plancher ». « Plus
+      // petit » se gagne sur l'interlettrage, pas sur le corps.
+      for(const b of duo){
+        const cs=getComputedStyle(b);
+        if(parseFloat(cs.fontSize)<11)
+          return _echec('un bouton passe sous le plancher : '+cs.fontSize);
+        if(/nowrap/.test(cs.whiteSpace))
+          return _echec('white-space:nowrap écraserait la coupure écrite');
+      }
       // ⚠ SUR UNE LIGNE, et c'est la demande. La regle suffit quand l'ecran
       // n'est pas monte ; quand il l'est, on mesure.
       const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
@@ -31197,6 +31229,8 @@ function testExercices(){
       const mb=css.match(/\.hero-duo \.btn\{([^}]*)\}/);
       if(!mb||!/min-width:0/.test(mb[1]))
         return _echec('les boutons peuvent déborder : min-width:0 manque');
+      if(/white-space:nowrap/.test(mb[1]))
+        return _echec('nowrap est revenu : il pousserait les deux lignes sur une seule');
       const r=[...duo].map(b=>b.getBoundingClientRect());
       if(r[0].width&&r[1].width&&window.innerWidth>=390
          &&Math.abs(r[0].top-r[1].top)>2)
