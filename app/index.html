@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1205';
+window.RC_BUILD='1206';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -755,7 +755,12 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
        A 1 366 px : 1 048 px de boite de padding, moins 28 px de marge = 1 020
        px utiles. Treize ecarts de 8 en prennent 104 : il reste 916 px pour les
        quatorze pistes, et elles en font exactement 916. */
-    --cr-cols:16px 34px minmax(168px,2.4fr) minmax(70px,1fr) minmax(112px,.9fr) 50px 42px 40px 76px 38px 28px 76px 46px 120px;
+    /* ⚠ « VOIR PROFIL » DEMANDE 18 px DE PLUS QUE « OUVRIR », et ils sont pris
+       sur la PHASE, pas sur le nom : la phase porte deja son texte entier en
+       infobulle et se coupe proprement, le nom est justement ce qu'on a
+       elargi. Le total ne bouge pas : 916 px de pistes pour 1 020 utiles a
+       1 366, ecarts compris. */
+    --cr-cols:16px 34px minmax(168px,2.4fr) minmax(70px,1fr) minmax(94px,.9fr) 50px 42px 40px 76px 38px 28px 94px 46px 120px;
     /* L'ECART, ET C'EST LUI QUI MANQUAIT. Les treize pistes font 918 px a
        1366 — mesure — pour 1 054 px de ligne : elles tiennent largement. Ce
        sont les DOUZE ECARTS a douze pixels, 144 px, qui faisaient deborder de
@@ -919,7 +924,7 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      sont dans le tiroir, pour l'athlete qu'on regarde. */
   body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list{
     /* ONZE PISTES : les dix d'avant plus l'interrupteur de suivi. */
-    --cr-cols:16px 34px minmax(168px,2.4fr) minmax(86px,1fr) minmax(118px,.9fr) 76px 38px 28px 76px 46px 120px;
+    --cr-cols:16px 34px minmax(168px,2.4fr) minmax(86px,1fr) minmax(100px,.9fr) 76px 38px 28px 94px 46px 120px;
     --cr-gap:12px}
   body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list .cr-assidu,
   body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list .cr-poids,
@@ -23668,7 +23673,7 @@ function renderClientRow(c){
          geste vague, et il merite un apercu. -->
     <button class="btn btn-red btn-sm cr-fiche" onclick="event.stopPropagation();openClientDetail('${c.id}',false,true)"
       title="Ouvrir la fiche de ${_nm}" aria-label="Ouvrir la fiche de ${_nm}"
-      style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap"><span class="cr-fiche-l">OUVRIR LA FICHE</span><span class="cr-fiche-c">OUVRIR</span></button>
+      style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap"><span class="cr-fiche-l">OUVRIR LA FICHE</span><span class="cr-fiche-c">VOIR PROFIL</span></button>
     ${_htmlCurseurSuivi(c)}
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;
@@ -27190,7 +27195,13 @@ const EX_RENOMMAGES=Object.freeze({
   'PRESSE A CUISSE INCLINEE':'PRESSE A CUISSE INCLINE',
   'PRESSE A CUISSE INCLINEE PIEDS EN HAUT':'PRESSE A CUISSE INCLINE',
   // « NEUTRE » seul dans le guide, « PRISE NEUTRE » sur le fichier.
-  'TIRAGE POITRINE NEUTRE':'TIRAGE POITRINE PRISE NEUTRE'
+  'TIRAGE POITRINE NEUTRE':'TIRAGE POITRINE PRISE NEUTRE',
+  // ⚠ UNE LETTRE. Le fichier s'appelle « squat-bulgar-haltere », sans le « e »
+  // de « bulgare » — une faute de frappe au nommage, et les deux
+  // « squat bulgar… » du dossier la portent. L'image est la bonne : pied
+  // arriere sur le banc, haltere en main, verifie a l'oeil. C'est le nom qui
+  // se corrige, pas la photo qu'on remplace.
+  'SQUAT BULGARE HALTERE':'SQUAT BULGAR HALTERE'
 });
 // PURE. La clef telle que le GUIDE la nomme aujourd'hui, sans rien savoir de
 // l'utilisateur : seule EX_RENOMMAGES est traversée, bornée aux mêmes 3 sauts

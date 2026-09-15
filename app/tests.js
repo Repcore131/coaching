@@ -1015,6 +1015,14 @@ function testExercices(){
     // dernier mot jusqu'a trouver une image — et « poulie » retire, il restait
     // une barre libre. Ni le meme trajet de charge, ni la meme tension : le
     // dessin contredisait la consigne.
+    ok('« SQUAT BULGARE HALTÈRE » retrouve son fichier malgre la faute de frappe',(()=>{
+      // Le dossier ecrit « squat-bulgar-haltere », le guide « SQUAT BULGARE
+      // HALTÈRE » : une lettre d'ecart, et la fiche restait sans dessin.
+      // L'image a ete verifiee a l'oeil : pied arriere sur le banc, haltere en
+      // main. C'est le nom qui se corrige, pas la photo qu'on remplace.
+      if(!_exoIndex||!_exoIndex.size) return _echec('index non chargé');
+      const r=_slugIllustre(exSlug('SQUAT BULGARE HALTÈRE'));
+      return r==='squat-bulgar-haltere'?true:_echec('resolu sur « '+r+' »');})());
     ok('EX_RENOMMAGES : chaque cible EXISTE dans l\'index',(()=>{
       // Une clef qui pointe sur un slug absent ne rattrape rien et ne le dit
       // pas : la fiche garde son cadre vide, et la table donne l'illusion que
@@ -1046,7 +1054,12 @@ function testExercices(){
       // DEUX EXCEPTIONS ASSUMEES : aucune photo n'existe dans le depot pour
       // ces deux-la, et leur coller celle d'un autre agres serait exactement
       // l'erreur qu'on vient de fermer.
-      const SANS_PHOTO=['SQUAT BULGARE HALTÈRE','SQUAT GOBLET'];
+      // ⚠ « SQUAT BULGARE HALTÈRE » N'EST PLUS UNE EXCEPTION : son fichier
+      // existait, sous « squat-bulgar-haltere » — sans le « e » de bulgare, une
+      // faute de frappe au nommage. Il reste « SQUAT GOBLET », pour lequel
+      // AUCUN fichier ne correspond : la plus proche graphie du dossier est a
+      // cinq caracteres de distance, et son image montre autre chose.
+      const SANS_PHOTO=['SQUAT GOBLET'];
       const src=(typeof window!=='undefined'&&window._RC_SRC_PROD)||'';
       if(!src) return true;               // source non servie : rien a balayer
       const noms=new Set();
@@ -25970,7 +25983,20 @@ function testExercices(){
               n+=(e.tagName==='DIV'&&e.querySelector&&e.querySelector('.cr-nom'))?e.children.length:1;
             if(!nH) return _echec('en-tete introuvable');
             return n===nH?true:_echec(n+' cellules dans la ligne pour '+nH+' intitules');})());
-          ok('LE SUIVI EST UN INTERRUPTEUR, et son etat se lit sans mot',(()=>{
+          ok('Le bouton du tableau dit « VOIR PROFIL », et le long reste au telephone',(()=>{
+        // En tableau, « Ouvrir la fiche » demandait 142 px qu'on ne peut
+        // prendre qu'au nom. Le libelle court le remplace SANS remplacer le
+        // long : la carte empilee du telephone, elle, a la place.
+        const b=r&&r.querySelector('.cr-fiche');
+        if(!b) return _echec('aucun bouton de fiche');
+        const court=b.querySelector('.cr-fiche-c'), long=b.querySelector('.cr-fiche-l');
+        if(!court||!long) return _echec('les deux libelles ne coexistent pas');
+        if(court.textContent!=='VOIR PROFIL') return _echec('court : « '+court.textContent+' »');
+        if(long.textContent!=='OUVRIR LA FICHE') return _echec('long : « '+long.textContent+' »');
+        // ET LE LIBELLE ENTIER RESTE ATTEIGNABLE : title et aria-label.
+        return /Ouvrir la fiche de /.test(b.getAttribute('aria-label')||'')
+          ?true:_echec('aucun libelle accessible complet');})());
+      ok('LE SUIVI EST UN INTERRUPTEUR, et son etat se lit sans mot',(()=>{
             // « ● SUIVI » et « ○ SANS SUIVI » sont deux libelles de LONGUEURS
             // DIFFERENTES dans une colonne de tableau : la ligne changeait de
             // largeur selon l'etat de l'athlete.
