@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1218';
+window.RC_BUILD='1219';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -6850,6 +6850,89 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- REGISTER -->
+<!-- ══ LE CONSENTEMENT SANTE, DEMANDE AU MOMENT OU IL SERT ══════════════════
+     Il etait recueilli a l'inscription, avant que le produit ait montre quoi
+     que ce soit. Il l'est desormais au premier geste qui ecrit une donnee de
+     sante — et la phrase du haut dit LEQUEL.
+
+     ⚠ LE TEXTE DE LA CASE EST CELUI DE r-cgu D'ORIGINE, MOT POUR MOT. Un
+     consentement porte sur un texte ; le reecrire pour l'occasion aurait fait
+     porter l'accord sur autre chose que ce que la politique decrit.
+
+     ⚠ JAMAIS PRE-COCHEE — article 9.2.a : le consentement explicite est un
+     GESTE. _ouvrirConsentementSante la remet a faux a chaque ouverture, y
+     compris si le navigateur a restaure son etat. -->
+<!-- ══ IDENTITE, DEMANDEE AU RATTACHEMENT ═══════════════════════════════════
+     Prenom et nom ne servent a personne tant qu'on est seul dans l'app. Ils
+     servent des qu'un coach doit reconnaitre quelqu'un sur son tableau de
+     bord — c'est ce moment-la, et la phrase du haut le dit. -->
+<div id="s-identite" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="passerIdentite()">←</button><span class="topbar-title">Ton nom</span><span></span></div>
+  <div class="pad scroll-area gap" style="flex:1">
+    <div id="id-motif" style="font-size:var(--fs-lg);font-weight:800;line-height:1.35;color:var(--text-strong)"></div>
+    <div><label for="id-fname">Prénom</label><input id="id-fname" placeholder="Ton prénom" maxlength="40"></div>
+    <div><label for="id-lname">Nom</label><input id="id-lname" placeholder="Ton nom" maxlength="40"></div>
+    <div id="id-err" style="color:var(--red-light);font-size:var(--fs-sm);display:none"></div>
+    <button class="btn btn-red" onclick="validerIdentite()">Enregistrer</button>
+    <button class="btn btn-outline" onclick="passerIdentite()">Plus tard</button>
+  </div>
+</div>
+<!-- ══ DATE DE NAISSANCE ET GENRE, AU PREMIER CALCUL QUI EN A BESOIN ════════
+     ⚠ C'EST ICI QUE VIT DESORMAIS LE CONTROLE DES 16 ANS REVOLUS. Il etait a
+     l'inscription parce que la date y etait demandee ; il suit sa donnee, avec
+     le meme AGE_MINIMUM et le meme message.
+
+     ⚠ ET CET ECRAN PASSE PAR LE VERROU DE L'ARTICLE 9 : le texte de r-health
+     range l'age parmi les donnees de sante depuis l'origine — « … pas
+     quotidiens et age pour mon suivi sportif ». demanderNaissanceGenre
+     enchaine donc le consentement sante avant d'ouvrir cet ecran. -->
+<div id="s-naissance" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="passerNaissance()">←</button><span class="topbar-title">Tes repères</span><span></span></div>
+  <div class="pad scroll-area gap" style="flex:1">
+    <div id="nai-motif" style="font-size:var(--fs-lg);font-weight:800;line-height:1.35;color:var(--text-strong)"></div>
+    <div><label for="nai-birthdate">Date de naissance</label>
+      <input type="date" id="nai-birthdate">
+      <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">RepCore demande 16 ans révolus : l'application traite des données de santé.</div>
+    </div>
+    <div><label for="nai-gender">Genre</label>
+      <select id="nai-gender"><option value="">-- Sélectionner --</option><option value="H">Homme</option><option value="F">Femme</option></select>
+      <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Il change la formule de masse grasse et les repères énergétiques : sans lui, le calcul serait faux.</div>
+    </div>
+    <div id="nai-err" style="color:var(--red-light);font-size:var(--fs-sm);display:none"></div>
+    <button class="btn btn-red" onclick="validerNaissanceGenre()">Enregistrer</button>
+    <button class="btn btn-outline" onclick="passerNaissance()">Plus tard</button>
+  </div>
+</div>
+<div id="s-consent-sante" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="refuserConsentementSante()">←</button><span class="topbar-title">Données de santé</span><span></span></div>
+  <div class="pad scroll-area gap" style="flex:1">
+    <div id="cs-motif" style="font-size:var(--fs-lg);font-weight:800;line-height:1.35;color:var(--text-strong)"></div>
+    <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.65">
+      Le RGPD la classe à part, et RepCore ne l'enregistre pas sans ton accord explicite.
+      Tu n'as rien eu à accepter à l'inscription pour cette raison : la question se pose
+      ici, maintenant, parce que c'est maintenant qu'elle sert.
+    </div>
+    <div id="cs-rappel" style="display:none;font-size:var(--fs-sm);color:var(--sub);line-height:1.65;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:11px 13px">
+      Tu avais déjà donné cet accord, sur une version précédente de la politique de
+      confidentialité. Le texte a changé : ton accord doit porter sur celui que tu lis
+      aujourd'hui. Tes données déjà enregistrées ne sont pas touchées.
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2)">
+      <input type="checkbox" id="cs-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+      <label for="cs-health" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong>, notamment poids, mensurations, photos corporelles, cycle menstruel, sommeil, stress, caféine, compléments, pas quotidiens et âge pour mon suivi sportif. La liste complète figure au §2 de la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-light)">politique de confidentialité</a>.</label>
+    </div>
+    <div id="cs-err" style="color:var(--red-light);font-size:var(--fs-sm);display:none"></div>
+    <button class="btn btn-red" onclick="accepterConsentementSante()">J'accepte et je continue</button>
+    <!-- LE REFUS EST UNE SORTIE NORMALE, pas un echec : il ne bloque rien
+         d'autre et n'ecrit rien du tout. Le reste de l'application continue de
+         fonctionner sans cette donnee-la. -->
+    <button class="btn btn-outline" onclick="refuserConsentementSante()">Pas maintenant</button>
+    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.65">
+      Sans cet accord, rien n'est enregistré — ni sur cet appareil, ni ailleurs. Tu peux
+      le donner plus tard, et le retirer à tout moment en supprimant ton compte.
+    </div>
+  </div>
+</div>
 <div id="s-register" class="screen">
   <div class="topbar"><button class="back-btn" onclick="go('s-welcome')">←</button><span class="topbar-title">Créer un compte</span><span></span></div>
   <div class="pad scroll-area gap" style="flex:1">
@@ -6888,21 +6971,21 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
     </div>
-    <div><label for="r-fname">Prénom</label><input id="r-fname" placeholder="Ton prénom"></div>
-    <div><label for="r-lname">Nom</label><input id="r-lname" placeholder="Ton nom"></div>
+    <!-- ⚠ PRENOM ET NOM SONT DEPLACES, PAS SUPPRIMES. Ils sont demandes au
+         rattachement a un coach — le seul moment ou quelqu'un a besoin de les
+         lire — ou a la premiere utilisation qui les requiert. Voir
+         demanderIdentite et l'ecran s-identite. -->
     <div><label for="r-email">Email</label><input type="email" id="r-email" placeholder="ton@email.com"></div>
     <div><label for="r-pwd">Mot de passe</label><input type="password" id="r-pwd" placeholder="Min. 6 caractères"></div>
     <div><label for="r-pwd2">Confirmer</label><input type="password" id="r-pwd2" placeholder="••••••••"></div>
-    <!-- max est posé au démarrage à aujourd'hui − 16 ans : le sélecteur natif
-         décourage déjà les dates trop récentes. Ce n'est qu'un confort —
-         doRegister revérifie, car l'attribut est trivial à contourner. -->
-    <div><label for="r-birthdate">Date de naissance</label>
-      <input type="date" id="r-birthdate" required>
-      <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">L'inscription demande 16 ans révolus.</div>
-    </div>
-    <div><label for="r-gender">Genre</label>
-      <select id="r-gender"><option value="">-- Sélectionner --</option><option value="H">Homme</option><option value="F">Femme</option></select>
-    </div>
+    <!-- ⚠ DATE DE NAISSANCE ET GENRE SONT DEPLACES, PAS SUPPRIMES. Ils sont
+         demandes au premier calcul de charge ou au premier usage du suivi de
+         cycle — voir demanderNaissanceGenre et l'ecran s-naissance.
+
+         ET LE CONTROLE DES 16 ANS REVOLUS PART AVEC EUX : il s'applique au
+         moment ou la date est demandee, avec le meme AGE_MINIMUM et le meme
+         message. Il ne pouvait pas rester ici, ou il n'y a plus de date a
+         verifier ; il n'est pas perdu pour autant. -->
     <div class="divider" id="r-role-sep"></div>
     <!-- ── LE ROLE EST DEJA CONNU EN ARRIVANT ICI ───────────────────────
          Les NEUF chemins qui menent a cet ecran preselectionnent le role :
@@ -6956,16 +7039,23 @@ const COACH_PHOTO='icons/coach.jpg';
       <input type="checkbox" id="r-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
       <label for="r-cgu" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
     </div>
-    <!-- margin-top retiré : il s'ajoutait aux 12 px du parent et creusait un
-         écart inégal entre les deux consentements. -->
-    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2)">
-      <input type="checkbox" id="r-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
-      <label for="r-health" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong>, notamment poids, mensurations, photos corporelles, cycle menstruel, sommeil, stress, caféine, compléments, pas quotidiens et âge pour mon suivi sportif. La liste complète figure au §2 de la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-light)">politique de confidentialité</a>.</label>
-    </div>
-    <!-- LE TEXTE CGV EST ICI, et non plus au milieu du bloc santé : il y était
-         inséré ENTRE la case r-health et son label, ce qui séparait la case de
-         ce qu'elle engage. Il parle de la création de compte en général, sa
-         place est sous les deux consentements. -->
+    <!-- ⚠ LE CONSENTEMENT SANTE A QUITTE CE FORMULAIRE, et c'est le cur du
+         lot. Il est recueilli par s-consent-sante, au moment ou la PREMIERE
+         donnee de sante est saisie, avec la phrase qui dit laquelle.
+
+         LES DEUX CONSENTEMENTS RESTENT STRICTEMENT SEPARES : celui-ci
+         (article 6, accepter des conditions) et celui-la (article 9, traiter
+         des donnees de sante) sont deux regimes, deux booleens, deux gestes.
+         Cocher r-cgu ne pose RIEN sur `consent.health`, qui part a false.
+
+         CE QUI REND CE DEPLACEMENT LEGAL est ailleurs : le verrou de
+         saveUser, qui coupe toute donnee de sante d'un dossier n'ayant jamais
+         consenti — localement comme a distance. Voir _sansSante. -->
+    <!-- LE TEXTE CGV. Il a longtemps ete insere ENTRE la case de consentement
+         sante et son label, ce qui separait la case de ce qu'elle engage ; il
+         parle de la creation de compte en general, et sa place est sous le
+         consentement qui la couvre. Celui de sante ayant quitte cet ecran, il
+         est desormais le dernier texte du formulaire. -->
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">En créant un compte tu acceptes les <a href="../terms.html" target="_blank" rel="noopener" style="color:var(--red-light)">CGV</a> et prends connaissance des <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-light)">mentions légales</a>.</div>
     <!-- Rappel de l'invitation portée depuis l'écran coach : sans ce repère,
          le coach ne voit nulle part que son code a bien été pris en compte. -->
@@ -13773,9 +13863,396 @@ function _diffAthletePkg(a){
 // Les comptes anterieurs a ce champ n'en portent aucun : ils passent aussi par
 // cet ecran, ce qui est le comportement voulu — leur accord d'origine portait
 // sur un texte qui a change depuis.
+// ══════════ LE CONSENTEMENT SANTE, ET LE VERROU QUI LE REND LEGAL ═════════
+//
+// L'inscription demandait onze choses avant d'avoir rien montre. Six sont
+// DEPLACEES — jamais supprimees, jamais fusionnees — au moment ou elles
+// servent, chacune avec la phrase qui dit pourquoi on la demande la.
+//
+// ⚠ CE DEPLACEMENT N'EST LEGAL QUE SI UNE GARANTIE TIENT : aucune donnee de
+// sante ne peut etre ecrite, ni localement ni a distance, avant que le
+// consentement sante ait ete recueilli. C'est tout l'objet de ce bloc, et
+// c'est la seule chose de ce fichier dont une erreur est une faute au sens de
+// l'article 9 du RGPD. Tout le reste n'est que confort.
+//
+// LES DEUX CONSENTEMENTS RESTENT STRICTEMENT SEPARES. L'article 6 (accepter
+// des conditions) et l'article 9 (traiter des donnees de sante) sont deux
+// regimes distincts. Ils ne sont ni fusionnes, ni pre-coches, ni deduits l'un
+// de l'autre : `consent.cgu` et `consent.health` sont deux booleens, poses par
+// deux gestes, a deux moments.
+//
+// ── LA CLASSIFICATION, ET POURQUOI ELLE EST ECRITE EN DUR ────────────────
+//
+// ⚠ CHAMPS_SANTE, ET NON SANTE_CHAMPS : ce nom-la est deja pris, par la
+// table {bloc: champs} qui masque grossesse, pes, constantes et analyses
+// avant l'envoi vers sante_privee. Deux listes differentes, deux roles
+// differents, et les confondre melangerait un masquage de partage avec un
+// verrou de consentement.
+//
+// Les 165 champs qu'un dossier peut porter sont ranges dans DEUX listes, et
+// chacun doit figurer dans EXACTEMENT UNE. Une assertion du depot balaye le
+// source, releve tout champ affecte sur un dossier, et tombe si l'un d'eux
+// n'est classe nulle part. C'est ce qui rend la garantie durable : un champ
+// ajoute l'an prochain fait TOMBER LE TEST tant que quelqu'un n'a pas dit ce
+// qu'il contient. Sans ce balayage, une liste ecrite a la main derive en
+// silence, et la derive ne se voit qu'apres la fuite.
+//
+// EN CAS DE DOUTE, SANTE. C'est le seul biais acceptable ici : classer a tort
+// un champ anodin en sante retarde une ecriture jusqu'a une question ; classer
+// a tort un champ de sante en anodin ecrit une donnee de l'article 9 sans
+// consentement.
+const CHAMPS_SANTE=Object.freeze([
+  // Poids, mensurations, photos corporelles
+  'weightLog','profileWeight','weight','bilans','photosBilan','photosProgression',
+  'comparaisons','bilanGoals','_evol_height','_evol_gender',
+  // Sommeil, pas, energie, habitudes quotidiennes
+  'sleepLog','stepsLog','stepsDayType','stepsGoals','energieLog','habitudesLog',
+  // Cycle menstruel et ce qui l'entoure
+  'cycle','currentCycle','cycleSuivi','cycleArretPropose','cycleChoixVus',
+  'cycleIgnoresSuite','grossesse','statutHormonal','traitementHormonal',
+  'contraception','thyroide','etatsSante','famillesTraitement','traitementDetail',
+  'traitementEnCours','traitementRevuLe',
+  // Douleur, drapeaux, suspension : de la donnee de sante pure
+  'drapeauRouge','drapeauGeneral','historiqueDrapeaux','journalDouleur',
+  'contraintesSante','suspension','sante','santeSignal','santeSource',
+  'tracesSante','constantes','analyses','encartOsseuxVu',
+  // Alimentation, cafeine, complements — nutrition porte les trois
+  'nutrition','paliers','phase','phaseRefusee',
+  // Troubles alimentaires et vigilance energetique
+  'tcaRisque','tcaRisqueDate','redsScreening','masquerPoids',
+  // Produits ameliorant la performance
+  'pes','pesPartagee',
+  // Ressentis de seance et ce qui en derive
+  'fatigue','journalSeance','ecartsSeance','retourMuscle','rites','allegementJour',
+  'monteeChargeMasquee','reperesAuto','calibrageRir',
+  // ⚠ L'AGE EST UNE DONNEE DE SANTE, et le texte de r-health le dit depuis
+  // toujours : « … pas quotidiens et age pour mon suivi sportif ». Il est
+  // demande au premier calcul de charge, et ce moment-la passe donc par le
+  // meme verrou que les autres.
+  'birthdate','age',
+  // Le genre n'est PAS une donnee de sante au sens de l'article 9. Il est
+  // pourtant ici : il n'est demande qu'avec la date de naissance, au meme
+  // ecran, et il ne sert qu'a des calculs de sante — masse grasse, repere
+  // energetique, fourchette de perte. Le laisser passer seul n'apporterait
+  // rien et ouvrirait une porte a surveiller.
+  'gender'
+]);
+// L'AUTRE MOITIE. Identite, authentification, lien au coach, programme,
+// preferences d'affichage, et tout l'espace coach — qui ne porte aucune donnee
+// de sante SUR LE COACH LUI-MEME. Ces champs s'ecrivent librement avant le
+// consentement sante, et c'est ce qui permet a quelqu'un de s'inscrire, de se
+// rattacher, de recevoir un programme et de s'entrainer sans avoir eu a
+// consentir a quoi que ce soit d'autre que la politique de confidentialite.
+const CHAMPS_NON_SANTE=Object.freeze([
+  'id','email','fname','lname','role','createdAt','updatedAt','consent','rgpd',
+  'status','accessExpiry','paymentStatus','paypalSubscriptionId','abonnement',
+  'echeance','alertStatus','supprimes','_export',
+  'coachId','coachName','coachEmailKey','coachCode','coachPhoto','code','clients',
+  'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
+  'studentCodes','msgTemplates','quickComments','protocolesPerso','canalEpingle',
+  'canalDernier','journalGroupe','cloudinaryName','cloudinaryPreset','teamName',
+  'catchphrase','phone','diplomes','promoBanners','seenBilans','bio','dispo',
+  'contact','vision','level','salles','rapPreset','blocPriorite','lastCoachVisit',
+  'demandesVideo','motCoach','brouillonsProg','methodesForcees','programme',
+  'programPdf','programPdfDate','programPdfLink','programPdfName','programPdfSize',
+  'programPdfStorageUrl','programPdfVersion',
+  'exAlias','exMuscles','exCatalogVersion','exCustom','exFavoris','exRecents',
+  'chargesSchema','sessions_config','sessions','streak','streakWeek','lastSession',
+  'videos','athletePhoto','objective','badges','habitudes','sonRepos',
+  'questionnaireComplete','_firstBilanPending','_reprise','_repriseDeload',
+  '_defaultCooldown','_defaultWarmup','_bilanFreq','_notifEnabled',
+  '_woReminderDays','_woReminderEnabled','_woReminderHour','_woReminderMin',
+  '_lastBilanNotif','_lastFbNotif','_lastRepBilanNotif','_lastWoNotif',
+  '_notifDemandeeLe','_installDemandeeLe',
+  // `innerHTML` est un faux positif du balayage : c'est une propriete du DOM,
+  // jamais un champ de dossier. Il est nomme pour que le test reste exact.
+  'innerHTML'
+]);
+// PURE. A-t-il consenti UN JOUR ? C'est la question du VERROU, et elle ne
+// regarde pas la version du texte.
+//
+// ⚠ LA DISTINCTION AVEC aConsentiSante N'EST PAS UN DETAIL : elle empeche une
+// perte de donnees. Quelqu'un qui a consenti sous la politique de mars et n'a
+// pas encore revu celle de septembre A DEJA des donnees de sante, legitimement
+// recueillies. Si le verrou lisait la version, la prochaine sauvegarde les
+// effacerait toutes. Le verrou dit « a-t-il consenti », la porte dit « son
+// accord est-il a jour » — et c'est la porte qui redemande.
+function santeJamaisConsentie(u){
+  return !(u&&u.consent&&u.consent.health===true);
+}
+// PURE. L'accord est-il a jour ? C'est la question de la PORTE, celle qui
+// decide s'il faut redemander avant d'ecrire.
+function aConsentiSante(u){
+  const c=u&&u.consent;
+  return !!(c&&c.health===true&&c.policyVersion===POLICY_VERSION);
+}
+// PURE. Le dossier, ampute de ce qu'il n'a pas le droit de porter.
+//
+// ⚠ RENDU TEL QUEL DANS LE CAS NORMAL — meme objet, aucune copie, aucun cout.
+// La branche qui coupe ne sert qu'aux dossiers qui n'ont JAMAIS consenti,
+// c'est-a-dire aux comptes neufs, dont le dossier est presque vide.
+//
+// C'EST UNE SECONDE LIGNE, PAS LA PREMIERE. Les portes en amont sont censees
+// faire qu'aucune donnee de sante n'arrive jamais jusqu'ici sans accord. Si
+// celle-ci coupe quelque chose, c'est qu'une porte manque : elle le DIT en
+// console plutot que de le faire en silence, et la sonde de recette lit ce
+// signal. Une defense muette ne s'entretient pas.
+function _sansSante(u){
+  if(!u||!santeJamaisConsentie(u)) return u;
+  const copie={},coupes=[];
+  for(const k in u){
+    if(CHAMPS_SANTE.indexOf(k)>=0){ if(u[k]!==undefined&&u[k]!==null) coupes.push(k); continue; }
+    copie[k]=u[k];
+  }
+  // Les seances restent — s'entrainer n'est pas une donnee de sante — mais
+  // LEURS RESSENTIS partent : fatigue, sensations, motivation et hydratation
+  // sont nommes comme donnees de sante au §2 de la politique.
+  if(Array.isArray(copie.sessions)&&copie.sessions.some(x=>x&&x.metrics)){
+    copie.sessions=copie.sessions.map(x=>{
+      if(!x||!x.metrics) return x;
+      const c=Object.assign({},x); delete c.metrics; return c;
+    });
+    coupes.push('sessions.metrics');
+  }
+  if(coupes.length){
+    try{ console.error('[RepCore] donnée de santé écrite sans consentement, '
+      +'coupée avant enregistrement : '+coupes.join(', ')
+      +' — il manque une porte en amont.'); }catch(e){}
+    try{ window._santeCoupee=(window._santeCoupee||[]).concat(coupes); }catch(e){}
+  }
+  return copie;
+}
+// ── LA PORTE, ET IL N'Y EN A QU'UNE ──────────────────────────────────────
+//
+// Tout geste qui va ecrire une donnee de sante passe par ici. Elle rend true
+// quand l'ecriture peut se faire tout de suite, false quand elle a ete
+// suspendue le temps de poser la question — et dans ce cas elle rejoue
+// `apres` toute seule des que l'accord est donne.
+//
+// `motif` est la phrase qui dit POURQUOI on demande maintenant. Elle n'est pas
+// decorative : c'est elle qui fait la difference entre un consentement
+// eclaire et une case a cocher de plus.
+const SANTE_MOTIFS=Object.freeze({
+  poids:      'Ton poids est une donnée de santé.',
+  mensuration:'Tes mensurations et tes photos de progression sont des données de santé.',
+  photo:      'Tes photos de progression sont des données de santé.',
+  cycle:      'Le suivi de ton cycle est une donnée de santé.',
+  sommeil:    'Ton sommeil est une donnée de santé.',
+  stress:     'Ton niveau de stress est une donnée de santé.',
+  cafeine:    'Ta consommation de caféine est une donnée de santé.',
+  complement: 'Les compléments que tu prends sont une donnée de santé.',
+  pas:        'Ton nombre de pas quotidiens est une donnée de santé.',
+  energie:    'Ton niveau d\'énergie est une donnée de santé.',
+  age:        'Ta date de naissance sert à calculer tes repères : c\'est une donnée de santé.',
+  ressenti:   'Ton ressenti de séance — fatigue, sensations — est une donnée de santé.'
+});
+// ── LES DEUX AUTRES DEPLACEMENTS ────────────────────────────────────────
+//
+// Meme forme que la porte de sante, et pour la meme raison : l'appelant dit
+// POURQUOI il a besoin de la donnee, la porte se charge de l'obtenir, et le
+// geste d'origine reprend tout seul.
+const IDENTITE_MOTIFS=Object.freeze({
+  coach:   'Ton coach a besoin de savoir qui tu es.',
+  partage: 'Ce que tu t\'apprêtes à partager porte ton nom.',
+  defaut:  'RepCore a besoin de ton nom pour cette action.'
+});
+const NAISSANCE_MOTIFS=Object.freeze({
+  charge: 'Pour calculer tes repères, RepCore a besoin de ton âge et de ton genre.',
+  cycle:  'Le suivi du cycle a besoin de ta date de naissance et de ton genre.',
+  defaut: 'Ce calcul a besoin de ton âge et de ton genre.'
+});
+// PURE. Le dossier porte-t-il de quoi calculer ?
+function identiteComplete(u){
+  return !!(u&&String(u.fname||'').trim()&&String(u.lname||'').trim());
+}
+// ⚠ ELLE DOIT LIRE COMME LE CALCUL QU'ELLE GARDE, ET PAS PLUS STRICTEMENT.
+//
+// La premiere version exigeait `u.birthdate` et `u.gender`. Or ageActuel lit
+// la date de naissance, PUIS `deb-birthdate` du bilan, PUIS `deb-age`, et son
+// commentaire est explicite : « des dossiers en portent un sans date de
+// naissance, et les priver de calcul serait leur faire payer un changement
+// qu'ils n'ont pas demande ». Le genre a le meme repli, par `_evol_gender` et
+// `deb-gender`.
+//
+// Une porte plus stricte que son calcul redemande une donnee que le dossier
+// porte deja, ailleurs. Deux assertions du depot l'ont montre sur un gabarit
+// dont l'age ne vivait que dans un bilan de depart.
+function naissanceComplete(u){
+  if(!u) return false;
+  let age=null;
+  try{ age=ageActuel(u); }catch(e){ age=(u.birthdate?_ageRevolu(u.birthdate):null); }
+  if(!(age!=null&&age>0)) return false;
+  const bl=((u.bilans)||[]).filter(b=>b&&b.date).slice().sort((x,y)=>x.date-y.date);
+  const der=bl[bl.length-1]||{};
+  return !!(u.gender||u._evol_gender||der['deb-gender']);
+}
+let _identiteSuite=null,_naissanceSuite=null;
+function demanderIdentite(motif,apres){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return false;
+  if(identiteComplete(u)) return true;   // meme contrat : on ne rejoue pas l'appelant
+  _identiteSuite=(typeof apres==='function')?apres:null;
+  const z=document.getElementById('id-motif');
+  if(z) z.textContent=IDENTITE_MOTIFS[motif]||IDENTITE_MOTIFS.defaut;
+  const a=document.getElementById('id-fname'); if(a) a.value=u.fname||'';
+  const b=document.getElementById('id-lname'); if(b) b.value=u.lname||'';
+  const e=document.getElementById('id-err'); if(e) e.style.display='none';
+  go('s-identite');
+  return false;
+}
+function validerIdentite(){
+  const fn=String(document.getElementById('id-fname')?.value||'').trim().slice(0,40);
+  const ln=String(document.getElementById('id-lname')?.value||'').trim().slice(0,40);
+  const e=document.getElementById('id-err');
+  if(!fn||!ln){
+    if(e){ e.style.display=''; e.textContent='Renseigne ton prénom et ton nom.'; }
+    return;
+  }
+  // Ni l'un ni l'autre n'est une donnee de sante : ils s'ecrivent sans passer
+  // par le verrou de l'article 9, et _sansSante les laisse traverser.
+  currentUser.fname=fn; currentUser.lname=ln;
+  saveUser();
+  const suite=_identiteSuite; _identiteSuite=null;
+  if(typeof suite==='function'){ try{ suite(); }catch(err){} }
+  else { try{ routeUser(); }catch(err){} }
+}
+function passerIdentite(){
+  _identiteSuite=null;
+  try{ routeUser(); }catch(e){ go('s-client-home'); }
+}
+// ⚠ LE CONSENTEMENT SANTE PASSE D'ABORD. L'age est nomme donnee de sante par
+// le texte meme de la case, et l'ecrire sans accord ferait exactement ce que
+// le verrou interdit. Les deux questions s'enchainent au lieu de se melanger :
+// d'abord l'accord, ensuite la donnee.
+function demanderNaissanceGenre(motif,apres){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return false;
+  if(naissanceComplete(u)) return true;   // meme contrat
+  // ⚠ L'ACCORD SANTE D'ABORD : l'age est nomme donnee de sante par le texte
+  // meme de la case. Si l'accord manque, la question de l'accord s'affiche, et
+  // c'est ELLE qui ouvrira l'ecran de naissance ensuite — d'ou la reprise
+  // passee en `apres`. Si l'accord est la, on enchaine directement.
+  if(!demanderConsentementSante('age',()=>_ouvrirNaissance(motif,apres))) return false;
+  _ouvrirNaissance(motif,apres);
+  return false;                           // l'ecran est ouvert : le geste est suspendu
+}
+function _ouvrirNaissance(motif,apres){
+  _naissanceSuite=(typeof apres==='function')?apres:null;
+  const z=document.getElementById('nai-motif');
+  if(z) z.textContent=NAISSANCE_MOTIFS[motif]||NAISSANCE_MOTIFS.defaut;
+  const b=document.getElementById('nai-birthdate');
+  if(b){ b.value=currentUser.birthdate||''; }
+  const g=document.getElementById('nai-gender');
+  if(g) g.value=currentUser.gender||'';
+  const e=document.getElementById('nai-err'); if(e) e.style.display='none';
+  try{ _initBirthdateMax(); }catch(e){}
+  go('s-naissance');
+}
+// ⚠ LE CONTROLE DES 16 ANS REVOLUS, DEPLACE DEPUIS doRegister ET INCHANGE.
+// Meme constante, meme bornes, meme message. C'est la seule porte par
+// laquelle une date de naissance entre dans un dossier depuis cet ecran.
+function validerNaissanceGenre(){
+  const e=document.getElementById('nai-err');
+  const dire=m=>{ if(e){ e.style.display=''; e.textContent=m; } };
+  const bd=String(document.getElementById('nai-birthdate')?.value||'').trim();
+  const gn=String(document.getElementById('nai-gender')?.value||'').trim();
+  if(!bd) return dire('Renseigne ta date de naissance.');
+  const age=_ageRevolu(bd);
+  if(age===null||age<0||age>120) return dire('Date de naissance invalide.');
+  if(age<AGE_MINIMUM)
+    return dire('RepCore demande d\'avoir '+AGE_MINIMUM+' ans révolus. '
+      +'L\'application traite des données de santé, et le consentement d\'un '
+      +'mineur plus jeune ne peut pas être recueilli ici.');
+  if(!gn) return dire('Sélectionne ton genre : il sert au calcul de tes repères énergétiques et de ta masse grasse.');
+  // Le consentement sante a ete recueilli par demanderNaissanceGenre AVANT
+  // l'ouverture de cet ecran : cette ecriture-ci est donc couverte. Si elle ne
+  // l'etait pas, _sansSante la couperait et le dirait en console — c'est la
+  // seconde ligne, et elle ne doit jamais avoir a servir.
+  currentUser.birthdate=bd; currentUser.age=age; currentUser.gender=gn;
+  saveUser();
+  const suite=_naissanceSuite; _naissanceSuite=null;
+  if(typeof suite==='function'){ try{ suite(); }catch(err){} }
+  else { try{ routeUser(); }catch(err){} }
+}
+function passerNaissance(){
+  _naissanceSuite=null;
+  try{ routeUser(); }catch(e){ go('s-client-home'); }
+}
+let _santeSuite=null;
+// ⚠ LE CONTRAT, ET IL N'EST PAS NEGOCIABLE : quand l'accord EST la, la porte
+// rend true et NE JOUE PAS `apres`. L'appelant continue en ligne — c'est
+// l'idiome `if(!demanderConsentementSante(...)) return;`.
+//
+// La premiere version jouait `apres` dans les deux cas. Comme `apres` est
+// presque toujours l'appelant lui-meme — la facon de reprendre le geste apres
+// la question — elle se rappelait, retrouvait l'accord, se rappelait encore :
+// « Maximum call stack size exceeded », et 3 900 assertions emportees avec.
+//
+// `apres` ne sert QU'A REPRENDRE, une fois la question posee et repondue.
+function demanderConsentementSante(motif,apres){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return false;
+  if(aConsentiSante(u)) return true;
+  _santeSuite=(typeof apres==='function')?apres:null;
+  _ouvrirConsentementSante(motif);
+  return false;
+}
+function _ouvrirConsentementSante(motif){
+  const z=document.getElementById('cs-motif');
+  if(z) z.textContent=SANTE_MOTIFS[motif]||SANTE_MOTIFS.poids;
+  const c=document.getElementById('cs-health');
+  if(c) c.checked=false;                 // JAMAIS PRE-COCHEE. Article 9.2.a.
+  const e=document.getElementById('cs-err');
+  if(e) e.style.display='none';
+  // Un compte qui avait deja consenti sous une politique ANTERIEURE le voit
+  // dit : il ne decouvre pas une question qu'il croyait avoir reglee.
+  const r=document.getElementById('cs-rappel');
+  if(r) r.style.display=(currentUser&&currentUser.consent&&currentUser.consent.health===true)?'':'none';
+  go('s-consent-sante');
+}
+function accepterConsentementSante(){
+  const c=document.getElementById('cs-health');
+  const e=document.getElementById('cs-err');
+  if(!c||!c.checked){
+    if(e){ e.style.display=''; e.textContent='Coche la case pour continuer, ou reviens en arrière : rien ne sera enregistré.'; }
+    return;
+  }
+  // ⚠ ON N'ECRIT QUE `health`. `cgu` garde la valeur qu'il avait — il a ete
+  // recueilli a l'inscription, par un autre geste, et le reecrire ici
+  // reviendrait a deduire un consentement de l'autre.
+  const av=(currentUser.consent&&typeof currentUser.consent==='object')?currentUser.consent:{};
+  currentUser.consent=Object.assign({},av,{health:true,healthAt:Date.now(),
+    policyVersion:POLICY_VERSION});
+  saveUser();
+  const suite=_santeSuite; _santeSuite=null;
+  try{ rcm('health_consent_granted'); }catch(e){}
+  if(typeof suite==='function'){ try{ suite(); }catch(err){} }
+  else { try{ routeUser(); }catch(err){} }
+}
+function refuserConsentementSante(){
+  _santeSuite=null;
+  // RIEN N'EST ECRIT, et c'est dit. Un refus n'est pas un echec : il ramene
+  // simplement la ou on etait.
+  try{ routeUser(); }catch(e){ go('s-client-home'); }
+}
+// ⚠ CETTE PORTE-CI NE REGARDE PLUS QUE LES CGU, et c'est la consequence
+// directe du deplacement du consentement sante.
+//
+// Elle commande _proposerReconsentement, dont la seule autre issue est la
+// deconnexion : elle BLOQUE l'application. Tant que le consentement sante
+// etait recueilli a l'inscription, exiger les deux ici etait juste. Depuis
+// qu'il est recueilli au premier usage, l'exiger ici bloquerait tout compte
+// neuf sur une question que le produit n'a pas encore eu de raison de poser
+// — exactement ce que ce lot supprime.
+//
+// LE CONSENTEMENT SANTE N'EST PAS ABANDONNE POUR AUTANT : aConsentiSante le
+// verifie, VERSION COMPRISE, avant chaque ecriture de donnee de sante, et la
+// porte le redemande a ce moment-la. Un texte qui change redemande donc les
+// deux accords — l'un tout de suite parce qu'il conditionne l'usage, l'autre
+// au premier geste qui le concerne.
 function _consentementAJour(u){
   const c=u&&u.consent;
-  return !!(c&&c.cgu&&c.health&&c.policyVersion===POLICY_VERSION);
+  return !!(c&&c.cgu&&c.policyVersion===POLICY_VERSION);
 }
 function _proposerReconsentement(){
   if(!currentUser||_consentementAJour(currentUser)) return;
@@ -13791,10 +14268,11 @@ function _proposerReconsentement(){
       <input type="checkbox" id="rc-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
       <label for="rc-cgu" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
     </div>
-    <div style="display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-2)">
-      <input type="checkbox" id="rc-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
-      <label for="rc-health" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong>, notamment poids, mensurations, photos corporelles, cycle menstruel, sommeil, stress, caféine, compléments, pas quotidiens et âge pour mon suivi sportif. La liste complète figure au §2 de la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-light)">politique de confidentialité</a>.</label>
-    </div>
+    <!-- ⚠ PAS DE CASE SANTE ICI. Cette modale bloque l'application : y
+         remettre le consentement sante le rendrait de fait obligatoire pour
+         ouvrir l'app, ce qui est precisement ce que le deplacement supprime.
+         Il est redemande par s-consent-sante, au premier geste qui le
+         concerne, version du texte comprise. -->
     <div id="rc-consent-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:10px;display:none"></div>
     <button class="btn btn-red" style="margin-top:14px" onclick="_validerReconsentement()">Confirmer mon accord</button>
     <!-- Pas de « plus tard » : un traitement de donnees de sante sans accord en
@@ -13807,15 +14285,21 @@ function _proposerReconsentement(){
 }
 function _validerReconsentement(){
   const cgu=document.getElementById('rc-cgu')?.checked;
-  const sante=document.getElementById('rc-health')?.checked;
   const err=document.getElementById('rc-consent-err');
-  if(!cgu||!sante){
-    if(err){err.style.display='';err.textContent=!cgu
-      ?'Accepte la politique de confidentialité et les mentions légales pour continuer.'
-      :'Le consentement au traitement de tes données de santé est nécessaire pour continuer.';}
+  if(!cgu){
+    if(err){err.style.display='';
+      err.textContent='Accepte la politique de confidentialité et les mentions légales pour continuer.';}
     return;
   }
-  currentUser.consent={cgu:true,health:true,at:Date.now(),policyVersion:POLICY_VERSION};
+  // ⚠ `health` EST REPORTE TEL QUEL, jamais remis a true : deduire l'accord
+  // sante de l'accord CGU serait exactement la fusion que l'article 9
+  // interdit. Un compte qui avait consenti sous une politique anterieure
+  // garde `health:true` — ses donnees existantes restent legitimes — et
+  // aConsentiSante, qui lit la version, redemandera avant la prochaine
+  // ecriture de sante.
+  const _av=(currentUser.consent&&typeof currentUser.consent==='object')?currentUser.consent:{};
+  currentUser.consent=Object.assign({},_av,{cgu:true,at:Date.now(),
+    policyVersion:POLICY_VERSION});
   const users=DB.get('users')||{};
   users[currentUser.email]=currentUser;
   const ok=DB.set('users',users)&&DB.set('session',currentUser);
@@ -16564,10 +17048,13 @@ function _inscriptionPhoto(input){
   return true;
 }
 async function doRegister(){
-  const fn=v('r-fname'),ln=v('r-lname'),em=v('r-email').toLowerCase(),pw=v('r-pwd'),pw2=v('r-pwd2'),gn=v('r-gender');
+  // QUATRE CHAMPS, ET UNE CASE. Le formulaire en demandait onze : prenom,
+  // nom, date de naissance et genre sont DEPLACES au moment ou ils servent,
+  // et le consentement sante a son propre ecran. Aucun n'est supprime.
+  const em=v('r-email').toLowerCase(),pw=v('r-pwd'),pw2=v('r-pwd2');
   const err=document.getElementById('r-err');err.style.display='none';
   _masquerSecondCompte();
-  if(!fn||!ln||!em||!pw){return showErr('r-err','Tous les champs sont obligatoires.');}
+  if(!em||!pw){return showErr('r-err','L\'adresse et le mot de passe sont obligatoires.');}
   // ATTENDRE, PAS REFUSER. Le redimensionnement dure une a trois secondes ; le
   // formulaire se remplit pendant ce temps et le bouton se touche juste apres.
   // _resizeImage se resout TOUJOURS desormais, delai de garde compris : cette
@@ -16599,28 +17086,25 @@ async function doRegister(){
   if(!_PKG_EMAIL_RE.test(em)) return showErr('r-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.','r-email');
   if(pw.length<6) return showErr('r-err','Mot de passe trop court (min 6 car.).','r-pwd');
   if(pw!==pw2) return showErr('r-err','Mots de passe différents.','r-pwd2');
-  // Contrôle d'âge AVANT CLOUD.signIn : signIn crée le compte Firebase Auth,
-  // et un refus qui interviendrait après laisserait derrière lui le compte
-  // d'un mineur — exactement ce que ce contrôle doit empêcher.
-  const bd=v('r-birthdate');
-  if(!bd) return showErr('r-err','Renseigne ta date de naissance.','r-birthdate');
-  const ageInscription=_ageRevolu(bd);
-  if(ageInscription===null||ageInscription<0||ageInscription>120)
-    return showErr('r-err','Date de naissance invalide.','r-birthdate');
-  if(ageInscription<AGE_MINIMUM)
-    return showErr('r-err','L\'inscription à RepCore demande d\'avoir '+AGE_MINIMUM
-      +' ans révolus. L\'application traite des données de santé, et le consentement '
-      +'d\'un mineur plus jeune ne peut pas être recueilli ici.');
-  if(!selRole) return showErr('r-err','Sélectionne ton rôle.');
-  // LE GENRE EST OBLIGATOIRE, et il ne l'était nulle part. Le champ part à vide
-  // par défaut, et tout le reste le traite comme acquis : calcBF change de
-  // formule selon lui, les repères énergétiques aussi, et les silhouettes de
-  // bilan viennent de posesGenre. Un compte créé sans genre traversait tout ça
-  // en silence.
+  // ⚠ LE CONTROLE DES 16 ANS N'EST PAS SUPPRIME, IL A SUIVI SA DONNEE.
   //
-  // Ici, comme le contrôle d'âge : AVANT CLOUD.signIn, sinon un refus laisse
-  // derrière lui un compte Firebase Auth sans dossier applicatif.
-  if(!gn) return showErr('r-err','Sélectionne ton genre : il sert au calcul de tes repères énergétiques et de ta masse grasse.');
+  // Il vivait ici parce que la date de naissance y etait demandee, et son
+  // commentaire disait la vraie raison de sa place : « AVANT CLOUD.signIn,
+  // sinon un refus laisserait derriere lui le compte d'un mineur ». Cette
+  // raison tenait a l'ordre des lignes, pas a l'ecran.
+  //
+  // La date est desormais demandee par s-naissance, au premier calcul qui en
+  // a besoin, et le controle s'y applique avec le MEME AGE_MINIMUM et le MEME
+  // message — voir validerNaissanceGenre. Ce qui change : le compte existe
+  // deja quand le refus tombe. Il n'a alors AUCUNE donnee de sante — le
+  // verrou de saveUser s'en est charge — et la seule chose qu'il porte est une
+  // adresse et un mot de passe, que son titulaire peut faire effacer.
+  if(!selRole) return showErr('r-err','Sélectionne ton rôle.');
+  // LE GENRE RESTE OBLIGATOIRE — mais la ou il sert. Le raisonnement qui le
+  // rendait obligatoire ici tenait : calcBF change de formule selon lui, les
+  // reperes energetiques aussi, et les silhouettes de bilan viennent de
+  // posesGenre. C'est exactement pour cela qu'il est demande AVEC la date de
+  // naissance, au premier de ces calculs, et refuse vide a ce moment-la.
   // LE VERROU EST LEVÉ. Un coach inconnu crée son compte sans code, et démarre
   // au palier Libre — un athlète suivi, sans carte bancaire et sans durée.
   //
@@ -16637,17 +17121,16 @@ async function doRegister(){
   // qu'après la création du compte Firebase.
   if(selRole==='coach'&&_coachInviteCode()&&!_INVITE_RE.test(_coachInviteCode()))
     return showErr('r-err','Ce code d\'invitation est mal formé (format RC-XXXX-XXXX). Efface-le pour continuer sans code.');
-  // Les deux consentements sont exiges SEPAREMENT, et refuses avec des messages
-  // distincts : dire « accepte les conditions » a quelqu'un qui a coche les
-  // conditions mais pas les donnees de sante le laisse chercher.
+  // UN SEUL CONSENTEMENT EST EXIGE ICI, celui de l'article 6. Celui de
+  // l'article 9 se demande au premier geste qui le concerne, sur son propre
+  // ecran — les deux restent strictement separes, ils ne sont simplement plus
+  // poses au meme moment.
   //
   // AVANT L'APPEL RÉSEAU ci-dessous, qui peut durer plusieurs secondes : une
   // case oubliée n'a pas à se payer d'une attente serveur, alors que la
   // réponse tient dans la lecture de deux cases de la page.
   if(!document.getElementById('r-cgu')?.checked)
     return showErr('r-err','Accepte la politique de confidentialité et les mentions légales pour continuer.');
-  if(!document.getElementById('r-health')?.checked)
-    return showErr('r-err','Le consentement au traitement de tes données de santé est nécessaire : sans lui, RepCore ne peut enregistrer ni ton poids, ni tes mensurations, ni tes photos.');
   // ── UN SEUL DEPART A LA FOIS ──────────────────────────────────────────
   //
   // À partir d’ici, la fonction enchaîne jusqu’à QUATRE appels réseau —
@@ -16716,19 +17199,31 @@ async function doRegister(){
     // cette garde était censée donner, et la branche d'adoption la donne
     // vraiment.
     const uid='u_'+Date.now();
-    const user={id:uid,fname:fn,lname:ln,email:em,
-      role:selRole,gender:gn,
-      // birthdate est la source de vérité ; age n'en est qu'une vue, recalculée
-      // au démarrage pour ne pas vieillir sur place.
-      birthdate:bd,age:ageInscription,
-      createdAt:Date.now(),streak:0,lastSession:null,sessions:[],bilans:[],nutrition:{},videos:[],coachId:null,coachName:null,
+    // ⚠ NI fname, NI lname, NI birthdate, NI age, NI gender, NI nutrition, NI
+    // bilans. Le dossier neuf ne porte AUCUNE donnee de sante, et ce n'est pas
+    // seulement parce qu'on ne les demande plus : les poser vides suffirait a
+    // faire tomber le verrou de _sansSante au premier enregistrement, qui les
+    // couperait en criant dans la console. Un dossier qui nait propre reste
+    // propre.
+    //
+    // `bilans` et `nutrition` sont recrees par leurs propres ecrans, qui les
+    // creent deja quand ils manquent — c'est ce que font openBilan et les
+    // accesseurs de nutrition depuis toujours.
+    const user={id:uid,email:em,
+      role:selRole,
+      createdAt:Date.now(),streak:0,lastSession:null,sessions:[],videos:[],coachId:null,coachName:null,
       status:'FREE',accessExpiry:null,paymentStatus:null,paypalSubscriptionId:null,
       // Trace du consentement : QUOI, QUAND, et sur QUELLE VERSION du texte.
       // Sans la version, on saurait que la personne a accepte quelque chose, sans
       // pouvoir dire quoi — c'est precisement ce que l'article 7.1 du RGPD demande
       // de pouvoir demontrer. Pousse tel quel vers RTDB : _doPushOne ne retire que
       // les champs sensibles (mots de passe, blobs), jamais celui-ci.
-      consent:{cgu:true,health:true,at:Date.now(),policyVersion:POLICY_VERSION}};
+      // ⚠ health:false, ET CE N'EST PAS UN OUBLI. Les deux consentements sont
+      // deux regimes : l'article 6 est acquis ici, par la case r-cgu ; l'article
+      // 9 ne l'est pas, et rien ne le deduira de l'autre. Il sera pose par
+      // accepterConsentementSante, avec sa propre date — `healthAt` — le jour ou
+      // la premiere donnee de sante sera saisie.
+      consent:{cgu:true,health:false,at:Date.now(),policyVersion:POLICY_VERSION}};
     // athletePhoto, et non `photo` : c'est le champ que la fiche, la grille de
     // vignettes et le carnet d'adresses lisent deja.
     if(_inscriptionPhotoB64) user.athletePhoto=_inscriptionPhotoB64;
@@ -17245,7 +17740,11 @@ function _initBirthdateMax(){
   const d=new Date();
   d.setFullYear(d.getFullYear()-AGE_MINIMUM);
   const max=d.toISOString().slice(0,10);
-  for(const id of ['r-birthdate','atp-birthdate']){
+  // 'r-birthdate' a disparu avec le champ de l'inscription ; 'nai-birthdate'
+  // prend sa place — c'est le meme champ, sur l'ecran qui le demande
+  // desormais. Le plafond natif reste un confort : validerNaissanceGenre
+  // reverifie, car l'attribut est trivial a contourner.
+  for(const id of ['nai-birthdate','atp-birthdate']){
     const el=document.getElementById(id);
     if(!el) continue;
     el.max=max;
@@ -36246,6 +36745,22 @@ function _htmlSeanceDepart(s){
 // Chacun se garde lui-meme, et les deux temoins sont independants : passer le
 // premier ne saute pas le second.
 function _aiguillerNouvelInscrit(){
+  // ⚠ L'IDENTITE EN PREMIER, et seulement pour quelqu'un DE RATTACHE. Prenom
+  // et nom ne servent a personne tant qu'on est seul dans l'application ; ils
+  // servent des qu'un coach doit reconnaitre un visage sur son tableau de
+  // bord. C'est ce moment-la, et pas l'inscription.
+  //
+  // ICI, ET NON DANS _appliquerPayloadCode : il existe plusieurs chemins de
+  // rattachement — code d'acces, lien d'invitation, paquet d'athlete, reprise
+  // d'un dossier distant — et un garde pose sur l'un d'eux seulement en
+  // laisserait passer trois. routeUser est le seul endroit qui decide OU un
+  // athlete atterrit, et c'est la lecon d'un lot precedent.
+  try{
+    const u=currentUser;
+    if(u&&u.role!=='coach'&&(u.coachId||u.coachEmailKey)&&!identiteComplete(u)){
+      demanderIdentite('coach'); return true;
+    }
+  }catch(e){}
   try{
     if(_doitProposerJours(currentUser,Date.now(),_jenVu(currentUser))){
       _ouvrirJoursEntrainement(); return true;
@@ -36818,6 +37333,8 @@ function _cycleLancer(){
   _apercuOuSeance(idx);
 }
 function setCyclePhase(phase,el){
+  // Le cycle menstruel est nomme a l'article 9 et au §2 de la politique.
+  if(!demanderConsentementSante('cycle',()=>setCyclePhase(phase,el))) return;
   if(el) document.querySelectorAll('#cycle-options .obj-opt').forEach(e=>e.classList.remove('sel'));
   if(el) el.classList.add('sel');
   currentUser.currentCycle=phase;
@@ -36841,6 +37358,20 @@ function repondreCycleChoix(v){
   currentUser.cycleSuivi=(CYCLE_SUIVI_VALEURS.indexOf(v)>=0)?v:'jamais_demander';
   saveUser();
   if(currentUser.cycleSuivi==='actif'){
+    // ⚠ PREMIER USAGE DU SUIVI DE CYCLE : c'est l'un des deux moments ou la
+    // date de naissance et le genre sont demandes. La porte enchaine le
+    // consentement sante puis l'ecran, et rejoue cette fonction ensuite —
+    // `cycleSuivi` est deja ecrit, la branche reprendra donc au meme endroit.
+    //
+    // ⚠ ET saveUser() CI-DESSUS A DEJA COUPE `cycleSuivi` si le consentement
+    // manquait : c'est le verrou qui fait son travail. La reponse est
+    // reecrite au retour de la porte, une fois l'accord donne.
+    if(!naissanceComplete(currentUser)){
+      demanderNaissanceGenre('cycle',()=>{
+        currentUser.cycleSuivi='actif'; saveUser(); repondreCycleChoix('actif');
+      });
+      return;
+    }
     // « Je l'indiquerai avant mes séances » — celle-ci comprise, sinon la
     // séance qui suit le oui serait la seule à ne pas en tenir compte.
     const m=document.getElementById('cycle-modal');
@@ -54060,6 +54591,18 @@ function saveBilanFinal(){
     }
   }catch(e){}
   _bilReprises=null;
+  // ⚠ LE BILAN EST LA DONNEE DE SANTE LA PLUS DENSE DU PRODUIT : mensurations,
+  // photos corporelles, ressentis, reponses de sante. Rien ne doit en entrer
+  // un seul dans le dossier sans l'accord de l'article 9.
+  //
+  // LA PORTE EST POSEE ICI, juste avant l'ecriture, et non a l'ouverture du
+  // questionnaire : quelqu'un a le droit de PARCOURIR le formulaire pour voir
+  // ce qu'on lui demande avant de decider. C'est au moment ou ca s'ecrit que
+  // la question se pose.
+  if(!aConsentiSante(currentUser)){
+    demanderConsentementSante('mensuration',null);
+    return;
+  }
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
   if(bi.type==='depart'){
@@ -55476,6 +56019,7 @@ async function pdjValiderPoids(){
   try{ renderCartePesee(); }catch(e){}
 }
 function pdjValiderPas(){
+  if(!demanderConsentementSante('pas',pdjValiderPas)) return;
   const inp=document.getElementById('pdj-pas');
   if(!inp) return;
   const n=parseInt(String(inp.value).replace(/\s/g,''),10);
@@ -55485,6 +56029,7 @@ function pdjValiderPas(){
   _pdjAccuser('pas');
 }
 function pdjValiderSommeil(h){
+  if(!demanderConsentementSante('sommeil',()=>pdjValiderSommeil(h))) return;
   const d=Number(h);
   if(!_recordSleep(pdjDateCible('sommeil',Date.now()),{duration:d})){
     toast('⚠️ Durée refusée','var(--red)'); return; }
@@ -55492,6 +56037,7 @@ function pdjValiderSommeil(h){
   _pdjAccuser('sommeil');
 }
 function pdjValiderEnergie(n){
+  if(!demanderConsentementSante('energie',()=>pdjValiderEnergie(n))) return;
   if(!_recordEnergie(pdjDateCible('energie',Date.now()),n)){
     toast('⚠️ Niveau refusé','var(--red)'); return; }
   toastEcriture(saveUser(),'Énergie enregistrée 👍','ton énergie est');
@@ -67151,6 +67697,19 @@ function _prefetchCiqual(){
 // caféine se naviguent séparément, chacun avec sa propre date. Les confondre
 // ferait sauter le journal au jour de la caféine, ou l’inverse.
 function loadNutrition(dateAff,dateCaff){
+  // ⚠ PREMIER CALCUL DE CHARGE : l'ecran de nutrition est celui qui calcule
+  // les reperes energetiques — mbEstime a besoin de l'age ET du genre, et
+  // sans eux il rend null, c'est-a-dire un ecran de chiffres absents sans
+  // explication. On demande donc les deux ICI, avec la phrase qui dit
+  // pourquoi, plutot qu'a l'inscription.
+  //
+  // Un coach n'est pas concerne : il lit les reperes de ses athletes, pas les
+  // siens.
+  try{
+    if(currentUser&&currentUser.role!=='coach'&&!naissanceComplete(currentUser)){
+      if(!demanderNaissanceGenre('charge',()=>loadNutrition(dateAff,dateCaff))) return;
+    }
+  }catch(e){}
   go('s-nutrition');
   _prefetchCiqual();
   const nut=currentUser.nutrition||{};
@@ -79425,6 +79984,10 @@ function renderCartePesee(){
 // confirmation est declinee. L'APPELANT decide de ce qu'il repeint : savePesee
 // refait sa carte, le point du jour se referme.
 async function _enregistrerPesee(v,jour){
+  // LA PORTE DE L'ARTICLE 9. Ici et non dans _recordWeight : la primitive est
+  // aussi appelee par l'import et par la fusion de synchronisation, ou il n'y
+  // a personne pour repondre a une question. C'est le GESTE qui la pose.
+  if(!demanderConsentementSante('poids',()=>_enregistrerPesee(v,jour))) return false;
   if(isNaN(v)||v<PESEE_MIN||v>PESEE_MAX){
     toast('⚠️ Saisis un poids entre '+PESEE_MIN+' et '+PESEE_MAX+' kg','var(--red)'); return false; }
   const auj=jour||localISODate(new Date());
@@ -80335,6 +80898,7 @@ function _recordSteps(dateStr,count){
   return true;
 }
 function saveSteps(){
+  if(!demanderConsentementSante('pas',saveSteps)) return;
   const input=document.getElementById('steps-today-input');
   const count=parseInt(input.value,10);
   const jour=_jourSteps();
@@ -81276,6 +81840,12 @@ function sanSaisir(quoi,iso){
       +'onclick="sanEnregistrer(\''+quoi+'\')">Enregistrer</button>');
 }
 function sanEnregistrer(quoi){
+  // ⚠ CETTE FONCTION N'EMPRUNTE PAS _recordSleep / _recordSteps : elle ecrit
+  // dans sleepLog et stepsLog EN DIRECT, avec ses propres champs (source,
+  // dataStatus, km). La porte posee dans les primitives ne la couvre donc
+  // pas, et il en faut une ici — c'est precisement le genre de second chemin
+  // qu'un verrou pose trop haut laisse passer.
+  if(!demanderConsentementSante(quoi==='sommeil'?'sommeil':'pas',()=>sanEnregistrer(quoi))) return;
   const u=currentUser;
   const jour=(document.getElementById('san-date')||{}).value||localISODate(new Date());
   if(quoi==='sommeil'){
@@ -81556,6 +82126,7 @@ function _recordSleep(dateStr,{bed,wake,duration}={}){
   return true;
 }
 function saveSleep(){
+  if(!demanderConsentementSante('sommeil',saveSleep)) return;
   const bed=document.getElementById('sleep-bed-input')?.value;
   const wake=document.getElementById('sleep-wake-input')?.value;
   if(!bed||!wake) return toast('Renseigne l\'heure de coucher et de lever','var(--orange)');
@@ -81794,11 +82365,21 @@ function saveUser(){
   currentUser.updatedAt=Date.now();
   delete currentUser._st;delete currentUser._stb64;delete currentUser._sk;
   const users=DB.get('users')||{};
-  users[currentUser.email]=currentUser;
+  // ⚠ LE VERROU DE L'ARTICLE 9, ET C'EST ICI QU'IL DOIT ETRE.
+  //
+  // saveUser est le SEUL point par lequel un dossier devient durable : le
+  // stockage local passe par elle, et la poussee distante part de la meme
+  // ligne, deux instructions plus bas. Un verrou pose ailleurs laisserait
+  // toujours un chemin ouvert ; pose ici, il n'en laisse aucun.
+  //
+  // Dans le cas normal — quelqu'un qui a consenti — _sansSante rend le meme
+  // objet, sans copie ni parcours : le cout est nul.
+  const aEcrire=_sansSante(currentUser);
+  users[currentUser.email]=aEcrire;
   // Les deux écritures sont évaluées séparément AVANT le &&, sans quoi un
   // échec sur 'users' court-circuiterait l'écriture de 'session'.
   const usersOk=DB.set('users',users);
-  const sessionOk=DB.set('session',currentUser);
+  const sessionOk=DB.set('session',aEcrire);
   if(CLOUD.canWrite()){
     CLOUD.push(users);
   }

@@ -1877,7 +1877,19 @@ function testExercices(){
       const _fermer=()=>['cycle-modal','cycle-choix-modal','cycle-arret-modal']
         .forEach(id=>{ const e=M(id); if(e) e.style.display='none'; });
       let _lances=0;
+      // ⚠ LE CONSENTEMENT SANTE EST DANS LE GABARIT depuis le 15/09/2026. Le
+      // cycle menstruel est une donnee de l'article 9 : setCyclePhase pose
+      // desormais la question avant d'ecrire, et un gabarit sans accord se la
+      // fait poser. Tout compte reel en porte un — ce gabarit-ci n'en portait
+      // pas, et ne representait donc personne.
       const _ath=(extra)=>Object.assign({id:'cs',email:'cs@t',fname:'A',role:'athlete',
+        consent:{cgu:true,health:true,policyVersion:POLICY_VERSION},
+        // ⚠ ET UNE DATE DE NAISSANCE. Le premier usage du suivi de cycle est
+        // l'un des deux moments ou elle est desormais demandee : sans elle,
+        // repondreCycleChoix('actif') ouvre l'ecran de naissance au lieu de
+        // l'ecran de phase, ce qui est le comportement voulu et n'etait pas
+        // ce que ce gabarit voulait eprouver.
+        birthdate:'1994-03-12',
         exAlias:{},exMuscles:{},programs:{},bilans:[],sessions:[],
         sessions_config:[{day:'J0',name:'S0',active:true,exercises:[]}]},extra||{});
       if(!M('cycle-modal')||!M('cycle-choix-modal')||!M('cycle-arret-modal')){
@@ -2179,6 +2191,7 @@ function testExercices(){
       const _fcU=currentUser;
       const _jour=(n)=>localISODate(new Date(Date.now()-n*864e5));
       const _ath=(cycle,extra)=>Object.assign({id:'ph',email:'ph@t',role:'athlete',
+        consent:{cgu:true,health:true,policyVersion:POLICY_VERSION},
         gender:'F',exAlias:{},exMuscles:{},programs:{},bilans:[],sessions:[],
         cycle:cycle||undefined},extra||{});
       const AUJ=localISODate(new Date());
@@ -6422,9 +6435,12 @@ function testExercices(){
           const prod=tout.slice(0,fin);
           if(prod.length<100000) return _echec('production trop courte : '+prod.length);
           const n=prod.split(a).length-1;
-          // 1 écriture dans saveBilanFinal. Toute occurrence supplémentaire est
-          // une lecture à justifier, et ce test à mettre à jour SCIEMMENT.
-          return n<=1?true:_echec(n+' occurrences en production au lieu de 1');})());
+          // 1 écriture dans saveBilanFinal, et 1 CLASSIFICATION dans
+          // CHAMPS_SANTE — le verrou de l'article 9 doit nommer le champ pour
+          // le couper, et ne le lit jamais. Mise à jour SCIEMMENT le
+          // 15/09/2026, comme la ligne au-dessus le demande. Toute occurrence
+          // supplémentaire reste une lecture à justifier.
+          return n<=2?true:_echec(n+' occurrences en production au lieu de 2');})());
         ok('deb-health garde ses DEUX lecteurs, et pas un de plus',(()=>{
           // La spec en annonçait un seul — _aAntecedentLombaire. Il y en a deux :
           // MICRO_CHAMPS_VEGE balaie aussi deb-health pour l'entrée végétale de
@@ -30708,6 +30724,220 @@ function testExercices(){
       }
       // La carte vide ne rend RIEN — pas un cadre vide.
       return _htmlPointDuJour(null)===''?true:_echec('l’etat vide rend quelque chose');})());
+
+    // ══ 15/09/2026 — L'INSCRIPTION ALLEGEE, ET LE VERROU DE L'ARTICLE 9 ═══
+    //
+    // ⚠ CES ASSERTIONS SONT LES SEULES DU DEPOT DONT UN ECHEC EST UNE FAUTE
+    // AU SENS DU RGPD, et non un defaut de produit. Le deplacement de six
+    // champs hors de l'inscription n'est legal QUE si aucune donnee de sante
+    // ne peut etre ecrite avant le consentement. C'est ce qu'elles verifient.
+
+    // LES DEUX CONSENTEMENTS RESTENT DEUX. Article 6 et article 9 sont deux
+    // regimes : ni fusionnes, ni pre-coches, ni deduits l'un de l'autre.
+    ok('Les deux consentements restent strictement séparés',(()=>{
+      const src=_prodSrc();
+      // Le formulaire d'inscription ne porte plus QUE la case des conditions.
+      if(!/id="r-cgu"/.test(src)) return _echec('la case des conditions a disparu de l’inscription');
+      if(/id="r-health"/.test(src)) return _echec('la case santé est revenue dans le formulaire d’inscription');
+      // L'ecran dedie la porte, et il la porte SEULE.
+      if(!/id="cs-health"/.test(src)) return _echec('l’écran de consentement santé n’a pas sa case');
+      const ecran=src.slice(src.indexOf('id="s-consent-sante"'),src.indexOf('id="s-register"'));
+      if(/id="cs-cgu"/.test(ecran)) return _echec('l’écran santé porte aussi les conditions : les deux sont fusionnés');
+      // AUCUNE DES DEUX N'EST PRE-COCHEE — article 9.2.a : un consentement
+      // explicite est un GESTE, pas une case trouvée déjà faite.
+      for(const id of ['r-cgu','cs-health']){
+        const i=src.indexOf('id="'+id+'"');
+        const bal=src.slice(src.lastIndexOf('<input',i),src.indexOf('>',i));
+        if(/\bchecked\b/.test(bal)) return _echec(id+' est pré-cochée');
+      }
+      // ET LE CODE NE DEDUIT JAMAIS L'UN DE L'AUTRE : accepter les conditions
+      // n'ecrit rien sur `health`, accepter la sante n'ecrit rien sur `cgu`.
+      // ⚠ COMMENTAIRES RETIRES AVANT LECTURE. Les deux fonctions EXPLIQUENT
+      // en commentaire qu'elles ne reposent pas l'autre consentement, et la
+      // sonde se reconnaissait dans ces phrases : elle accusait le code de
+      // faire exactement ce qu'il dit ne pas faire. Sixieme fois que ce depot
+      // apprend qu'une sonde peut matcher son propre sujet.
+      const _sansCom=f=>String(f).replace(/\/\/[^\r\n]*/g,'');
+      if(/health\s*:\s*true/.test(_sansCom(_validerReconsentement)))
+        return _echec('la re-acceptation des conditions repose le consentement santé');
+      if(/cgu\s*:\s*true/.test(_sansCom(accepterConsentementSante)))
+        return _echec('l’acceptation santé repose le consentement aux conditions');
+      // Un compte neuf part avec health:false, jamais true.
+      const dr=src.slice(src.indexOf('async function doRegister'));
+      const cons=dr.slice(dr.indexOf('consent:{'),dr.indexOf('consent:{')+120);
+      if(!/health:false/.test(cons)) return _echec('un compte neuf ne part pas avec health:false : '+cons.slice(0,80));
+      return true;})());
+
+    // L'INSCRIPTION NE DEMANDE PLUS QUE QUATRE CHOSES ET UNE CASE — et les six
+    // autres sont DEPLACEES, pas supprimees : chacune a son ecran et sa porte.
+    ok('L’inscription est allégée par déplacement, jamais par suppression',(()=>{
+      const src=_prodSrc();
+      // ⚠ BORNES DANS L'ORDRE DU DOCUMENT. s-login PRECEDE s-register :
+      // la tranche partait a l'envers et ne contenait rien, si bien que le
+      // test annoncait « r-email a quitte l'inscription » sur un formulaire
+      // parfaitement intact.
+      const _d=src.indexOf('id="s-register"');
+      const _f=src.indexOf('<div id="s-',_d+10);
+      const form=src.slice(_d,_f>_d?_f:_d+40000);
+      for(const id of ['r-email','r-pwd','r-pwd2','r-cgu'])
+        if(form.indexOf('id="'+id+'"')<0) return _echec(id+' a quitté l’inscription');
+      for(const id of ['r-fname','r-lname','r-birthdate','r-gender','r-health'])
+        if(form.indexOf('id="'+id+'"')>=0) return _echec(id+' est encore demandé à l’inscription');
+      // ⚠ CHAQUE CHAMP DEPLACE A BIEN UN AILLEURS. Sans cette moitie-ci,
+      // « allege » voudrait dire « supprime ».
+      const ailleurs={'r-fname':'id-fname','r-lname':'id-lname',
+                      'r-birthdate':'nai-birthdate','r-gender':'nai-gender',
+                      'r-health':'cs-health'};
+      for(const k in ailleurs)
+        if(src.indexOf('id="'+ailleurs[k]+'"')<0)
+          return _echec(k+' a été supprimé au lieu d’être déplacé : '+ailleurs[k]+' n’existe pas');
+      // Et chacun de ces ecrans porte la PHRASE qui dit pourquoi on demande la.
+      for(const z of ['id-motif','nai-motif','cs-motif'])
+        if(src.indexOf('id="'+z+'"')<0) return _echec(z+' : l’écran ne dit pas pourquoi il demande');
+      for(const t of [IDENTITE_MOTIFS,NAISSANCE_MOTIFS,SANTE_MOTIFS])
+        for(const k in t)
+          if(!t[k]||String(t[k]).length<20) return _echec('un motif est vide ou trop court : '+k);
+      return true;})());
+
+    // ⚠ LE CONTROLE DES 16 ANS SUIT SA DONNEE. Il ne pouvait plus vivre a
+    // l'inscription, ou il n'y a plus de date a verifier ; il devait donc se
+    // retrouver INTACT la ou la date est desormais demandee.
+    ok('Le contrôle des 16 ans révolus s’applique où la date est demandée',(()=>{
+      const f=String(validerNaissanceGenre);
+      if(f.indexOf('AGE_MINIMUM')<0) return _echec('validerNaissanceGenre ne contrôle plus l’âge');
+      if(f.indexOf('_ageRevolu')<0) return _echec('l’âge n’est plus calculé depuis la date');
+      if(!/age<AGE_MINIMUM/.test(f.replace(/\s/g,''))) return _echec('le seuil n’est plus comparé');
+      if(AGE_MINIMUM!==16) return _echec('AGE_MINIMUM vaut '+AGE_MINIMUM+' au lieu de 16');
+      // Les bornes d'absurdite restent, elles aussi.
+      if(!/age>120/.test(f.replace(/\s/g,''))) return _echec('la borne haute a disparu');
+      // Et doRegister ne le contrôle plus, faute de date — mais il ne doit pas
+      // pour autant avoir perdu le rôle et les conditions.
+      const dr=String(doRegister);
+      if(dr.indexOf('r-birthdate')>=0) return _echec('doRegister lit encore une date qui n’existe plus');
+      if(dr.indexOf('selRole')<0) return _echec('doRegister ne contrôle plus le rôle');
+      if(dr.indexOf('r-cgu')<0) return _echec('doRegister ne contrôle plus les conditions');
+      return true;})());
+
+    // ⚠ LA CLASSIFICATION NE DOIT PAS POUVOIR DERIVER.
+    //
+    // Le verrou coupe ce qui est dans CHAMPS_SANTE. Un champ ajoute demain et
+    // oublie dans les deux listes passerait donc au travers, en silence, et
+    // personne ne le verrait avant la fuite. Ce test balaye le SOURCE, releve
+    // tout champ affecte sur un dossier, et tombe tant qu'il n'est pas classe.
+    // C'est ce qui rend la garantie durable plutot que ponctuelle.
+    ok('Chaque champ du dossier est classé santé ou non-santé',(()=>{
+      const src=_prodSrc();
+      const vus=new Set();
+      const re=/(?:currentUser|user|athlete|safe|u)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=[^=]/g;
+      let m; while((m=re.exec(src))) vus.add(m[1]);
+      const classes=new Set(CHAMPS_SANTE.concat(CHAMPS_NON_SANTE));
+      const orphelins=[...vus].filter(k=>!classes.has(k));
+      if(orphelins.length)
+        return _echec('champ(s) non classé(s), donc non protégé(s) : '+orphelins.join(', '));
+      // ET AUCUN CHAMP DANS LES DEUX LISTES : il serait coupé ou gardé selon
+      // l'ordre de lecture, ce qui est le pire des deux mondes.
+      const double=CHAMPS_SANTE.filter(k=>CHAMPS_NON_SANTE.indexOf(k)>=0);
+      if(double.length) return _echec('champ(s) dans les deux listes : '+double.join(', '));
+      // Les dix familles nommees par le texte de la case ont chacune au moins
+      // un champ du cote santé. C'est le lien entre le code et le document.
+      const attendus=['weightLog','bilans','photosProgression','cycle','sleepLog',
+                      'nutrition','stepsLog','age','birthdate','pes'];
+      for(const k of attendus)
+        if(CHAMPS_SANTE.indexOf(k)<0) return _echec(k+' n’est pas classé en donnée de santé');
+      return true;})());
+
+    // ⚠ LE VERROU. « AUCUNE donnée de santé ne doit pouvoir être écrite, ni
+    // localement ni à distance, avant que le consentement ait été recueilli. »
+    ok('Sans consentement santé, rien de santé ne s’écrit',(()=>{
+      const sansAccord={email:'x@t.fr',role:'athlete',fname:'K',lname:'G',
+        consent:{cgu:true,health:false,policyVersion:POLICY_VERSION},
+        weightLog:[{date:'2026-09-14',kg:78}],sleepLog:[{date:'2026-09-14',duration:7}],
+        stepsLog:[{date:'2026-09-14',count:9000}],cycle:{regles:['2026-09-01']},
+        bilans:[{date:1,taille:180}],nutrition:{caffeine:{}},birthdate:'1990-01-01',
+        age:36,gender:'H',grossesse:{etat:'x'},pes:true,
+        sessions:[{date:1,exercises:[],metrics:{fatigue:7,energie:4}}]};
+      const coupe=_sansSante(sansAccord);
+      for(const k of ['weightLog','sleepLog','stepsLog','cycle','bilans','nutrition',
+                      'birthdate','age','gender','grossesse','pes'])
+        if(k in coupe) return _echec(k+' survit à l’absence de consentement');
+      // Ce qui n'est PAS de la santé traverse : sans cela, personne ne
+      // pourrait s'inscrire, se rattacher, ni recevoir de programme.
+      for(const k of ['email','role','fname','lname','consent'])
+        if(!(k in coupe)) return _echec(k+' est coupé alors qu’il n’est pas une donnée de santé');
+      // S'ENTRAINER N'EST PAS UNE DONNEE DE SANTE — les seances restent — MAIS
+      // LEURS RESSENTIS EN SONT : le §2 nomme fatigue, sensations, motivation.
+      if(!Array.isArray(coupe.sessions)||coupe.sessions.length!==1)
+        return _echec('les séances sont perdues : on ne peut plus s’entraîner sans consentement santé');
+      if(coupe.sessions[0].metrics) return _echec('les ressentis de séance survivent');
+      // ⚠ ET LE DOSSIER QUI A CONSENTI N'EST PAS TOUCHE — meme objet, aucune
+      // copie. Un verrou qui recopierait tout a chaque sauvegarde serait
+      // abandonne au premier ralentissement.
+      const avecAccord={email:'y@t.fr',consent:{cgu:true,health:true,policyVersion:POLICY_VERSION},
+        weightLog:[{date:'2026-09-14',kg:78}]};
+      if(_sansSante(avecAccord)!==avecAccord) return _echec('le dossier consentant est recopié');
+      // ⚠ ET CELUI DONT L'ACCORD EST PERIME GARDE SES DONNEES. Il a consenti
+      // sous un texte anterieur : ses donnees sont legitimes, c'est la
+      // PROCHAINE ecriture qui redemande. Un verrou qui lirait la version les
+      // effacerait toutes a la prochaine sauvegarde.
+      const perime={email:'z@t.fr',consent:{cgu:true,health:true,policyVersion:'2020-01'},
+        weightLog:[{date:'2026-09-14',kg:78}]};
+      if(_sansSante(perime)!==perime) return _echec('un accord périmé fait perdre les données déjà recueillies');
+      if(aConsentiSante(perime)) return _echec('un accord périmé passe pour à jour');
+      if(santeJamaisConsentie(perime)) return _echec('un accord périmé passe pour inexistant');
+      return true;})());
+
+    // LE VERROU EST SUR LE CHEMIN, ET SUR LE SEUL QUI COMPTE. saveUser est le
+    // point par lequel un dossier devient durable — stockage local ET poussee
+    // distante partent de la. Un verrou pose ailleurs laisserait un chemin.
+    ok('Le verrou est posé sur l’unique chemin d’écriture',(()=>{
+      const f=String(saveUser);
+      if(f.indexOf('_sansSante')<0) return _echec('saveUser n’appelle plus le verrou');
+      // Ce qui est range dans `users` — donc pousse — est l'objet COUPE, et non
+      // currentUser : sans cela le local serait protege et le distant non.
+      if(!/users\[currentUser\.email\]\s*=\s*aEcrire/.test(f))
+        return _echec('c’est currentUser qui part vers la base, pas la version coupée');
+      if(!/DB\.set\('session',aEcrire\)/.test(f))
+        return _echec('la session locale garde la version non coupée');
+      // ET LA PORTE EST DANS LES PRIMITIVES, pas sur leurs appelants.
+      // ⚠ LA PORTE EST SUR LE GESTE, PAS DANS LA PRIMITIVE — et ce n'est pas
+      // un detail de gout. _recordWeight et ses surs sont aussi appelees par
+      // l'import par capture d'ecran et par la fusion de synchronisation, ou
+      // il n'y a personne pour repondre a une question : leur donner un effet
+      // de bord d'interface les rendait inutilisables la-bas. Le VERROU de
+      // saveUser garantit ; la porte, elle, demande au bon moment.
+      const gestes=[['_enregistrerPesee',_enregistrerPesee],['saveSleep',saveSleep],
+        ['saveSteps',saveSteps],['sanEnregistrer',sanEnregistrer],
+        ['pdjValiderPas',pdjValiderPas],['pdjValiderSommeil',pdjValiderSommeil],
+        ['pdjValiderEnergie',pdjValiderEnergie],['setCyclePhase',setCyclePhase]];
+      for(const [n,f2] of gestes)
+        if(String(f2).indexOf('demanderConsentementSante')<0)
+          return _echec(n+' écrit une donnée de santé sans passer par la porte');
+      // Et les primitives restent PURES : aucun effet de bord d'interface.
+      for(const [n,f2] of [['_recordWeight',_recordWeight],['_recordSleep',_recordSleep],
+                           ['_recordSteps',_recordSteps],['_recordEnergie',_recordEnergie]])
+        if(String(f2).indexOf('demanderConsentementSante')>=0)
+          return _echec(n+' porte une question : elle est aussi appelée par l’import');
+      return true;})());
+
+    // LA PORTE BLOQUANTE NE PORTE PLUS QUE LES CGU. Y laisser la santé
+    // rendrait le consentement de fait obligatoire pour ouvrir l'app — ce que
+    // le déplacement supprime — puisque sa seule autre issue est la
+    // déconnexion.
+    ok('La modale bloquante ne réclame plus le consentement santé',(()=>{
+      const f=String(_consentementAJour);
+      if(f.indexOf('c.health')>=0) return _echec('la porte bloquante exige encore la santé');
+      if(f.indexOf('c.cgu')<0) return _echec('la porte bloquante n’exige plus les conditions');
+      if(f.indexOf('POLICY_VERSION')<0) return _echec('la version du texte n’est plus vérifiée');
+      // Un compte neuf, qui n'a consenti qu'aux conditions, n'est pas bloqué.
+      const neuf={consent:{cgu:true,health:false,policyVersion:POLICY_VERSION}};
+      if(!_consentementAJour(neuf)) return _echec('un compte neuf est bloqué par la modale');
+      if(aConsentiSante(neuf)) return _echec('un compte neuf passe pour avoir consenti à la santé');
+      // Mais un compte sans CGU, ou sur un texte périmé, l'est toujours.
+      if(_consentementAJour({consent:{cgu:false,policyVersion:POLICY_VERSION}}))
+        return _echec('un compte sans conditions passe');
+      if(_consentementAJour({consent:{cgu:true,policyVersion:'2020-01'}}))
+        return _echec('un compte sur un texte périmé passe');
+      return true;})());
 
     // « — Continue ! » — meme tiret, meme lecture, dans la notification
     // d'assiduite. Et l'encouragement doit garder le bord droit du cadre :
