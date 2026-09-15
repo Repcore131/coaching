@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1202';
+window.RC_BUILD='1203';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2177,20 +2177,6 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .san-obj-l{position:absolute;left:0;right:0;border-top:1px dashed rgba(255,255,255,.35);pointer-events:none}
 .san-obj-l span{position:absolute;right:0;top:-8px;font-size:9px;letter-spacing:.5px;
   background:#0d0d0f;padding:0 4px;color:var(--text-faint)}
-/* ── MA SEMAINE : deux pistes, un seul axe de jours ─────────────────────
-   Les pistes n'ont PAS de libelles de jour : ils sont rendus une fois, sous
-   les deux, et c'est ce qui en fait un axe partage plutot que deux axes qui
-   se ressemblent. Les gaps et le flex:1 des barres sont les memes des deux
-   cotes — sans quoi les colonnes ne tomberaient pas en face. */
-.sansem-piste{margin-bottom:10px}
-.sansem-lbl{display:flex;align-items:center;gap:6px;font-size:var(--fs-2xs);
-  letter-spacing:1.5px;text-transform:uppercase;font-weight:800;margin-bottom:6px}
-.sansem-pt{width:7px;height:7px;border-radius:var(--r-full);flex-shrink:0}
-.sansem-graph{position:relative;display:flex;align-items:flex-end;gap:5px;height:74px}
-.sansem-bar{gap:0}
-.sansem-jours{display:flex;gap:5px;margin-top:2px}
-.sansem-j{flex:1;min-width:0;text-align:center;font-size:var(--fs-2xs);
-  color:var(--text-faint);font-weight:700}
 .san-chiffres{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
 .san-lbl{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800}
 .san-val{font-family:var(--pile-titre);font-size:clamp(26px,7.5vw,34px);color:#fff;letter-spacing:1px;line-height:1.1}
@@ -9894,14 +9880,6 @@ const COACH_PHOTO='icons/coach.jpg';
            premier, et qu'il ne fera pas defiler jusqu'en bas pour le
            decouvrir. Remplie une fois par sanRendre(). -->
       <div id="lifestyle-import"></div>
-      <!-- MA SEMAINE, AU-DESSUS DES DEUX DOMAINES. Elle porte les deux pistes
-           sur un seul axe de jours et la navigation de periode ; les cartes
-           « Mes pas » et « Mon sommeil » ci-dessous n'ont plus ni graphe ni
-           fleches. C'est la comparaison, pas la repetition, qui a de la
-           valeur : la nuit ou l'on a mal dormi est celle ou l'on a peu
-           marche, et il fallait quatre cents pixels de defilement pour
-           l'apercevoir. -->
-      <div id="lifestyle-semaine"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:var(--red);border-radius:var(--r-1);box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
         <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
@@ -30210,6 +30188,22 @@ function illustrationDe(nom){
 // de liste montrerait la photo d'un autre exercice que sa fiche.
 // Null tant que l'index n'est pas charge : jamais une URL qui produirait une
 // image cassee.
+// LES MOTS QUI CHANGENT D'EXERCICE, PAS SEULEMENT D'EXECUTION.
+//
+// Ils nomment l'agres ou le trajet de la charge : retirer l'un d'eux d'un nom
+// ne laisse pas « le meme mouvement en moins precis », il laisse un AUTRE
+// mouvement. « Curl barre poulie » sans « poulie » est un curl barre libre ;
+// « developpe couche haltere » sans « haltere » est un developpe a la barre.
+//
+// NE PAS Y METTRE LES PRECISIONS D'EXECUTION — prise, large, serre, pieds,
+// haut, bas, incline, decline, neutre, unilateral, assis, debout : ce sont
+// elles que la regle de prefixe est faite pour retirer, et les interdire la
+// viderait de son objet.
+const EX_MOTS_AGRES=new Set(['poulie','poulies','machine','guidee','guide',
+  'haltere','halteres','barre','smith','kettlebell','elastique','elastiques',
+  'trx','sangle','sangles','disque','disques','sac','corde','pupitre','banc',
+  'gym80','presse','chaise','cadre','roulette','ballon','swiss','bulgare',
+  'landmine','hack','pendlay','sol','tapis','velo','rameur','ergo']);
 function _slugIllustre(sl){
   if(!sl||!_exoIndex) return null;
   if(_exoIndex.has(sl)) return sl;
@@ -30259,8 +30253,24 @@ function _slugIllustre(sl){
   // chose que cette regle affirme, et elle ne va pas plus loin.
   // 37 des 50 retrouvent ainsi leur dessin ; les 13 autres n'ont pas de base
   // illustree dans le guide, et gardent leur cadre — on n'invente rien.
+  //
+  // ⚠ LA REGLE S'ARRETE DES QU'ON RETIRE LE MATERIEL. Signale par Kevin le
+  // 15/09/2026 : « CURL BARRE POULIE » affichait l'image de « CURL BARRE »,
+  // c'est-a-dire une barre libre a la place d'une poulie. Ce n'est pas le meme
+  // exercice — ni le meme trajet de charge, ni la meme tension au long du
+  // mouvement — et l'athlete voyait un dessin qui contredisait sa consigne.
+  //
+  // CE QUE LA REGLE AFFIRMAIT ETAIT TROP LARGE. « Le prefixe est le meme
+  // mouvement avec une precision d'execution en moins » est vrai pour « PRISE
+  // LARGE » ou « PIEDS EN HAUT » ; c'est FAUX des que le mot retire nomme
+  // l'AGRES. Montrer une image approchante vaut mieux que pas d'image ; montrer
+  // l'image d'un AUTRE exercice ne vaut pas mieux que rien, ca vaut moins.
+  //
+  // On s'arrete donc net — et non « on essaie plus court » : tout prefixe plus
+  // court retire le meme mot, plus d'autres.
   const mots=String(sl).split('-').filter(Boolean);
   for(let c=mots.length-1;c>=2;c--){
+    if(mots.slice(c).some(m=>EX_MOTS_AGRES.has(m))) break;
     const pref=mots.slice(0,c).join('-');
     if(_exoIndex.has(pref)) return pref;
   }
@@ -78781,86 +78791,46 @@ function _sanGraph(quoi,serie,objectif,fmt){
     +'<div class="san-obj-l" style="bottom:calc('+pcObj+'% + 18px)"><span>'+escapeHtml(fmt(objectif))+'</span></div>'
     +barres+'</div>';
 }
-// ══ MA SEMAINE : LES PAS ET LES NUITS SUR LE MEME AXE ════════════════════
+// ⚠ _htmlSemaineSante ET _htmlPisteSante ONT ETE RETIREES LE 15/09/2026,
+// le lendemain de leur arrivee. Elles mettaient les pas et les nuits en regard
+// sur un axe de jours commun ; Kevin les voulait separes : « 1 graphique = un
+// suivi ». Le raisonnement qui les avait amenees — la nuit ou l'on dort mal
+// est celle ou l'on marche peu — reste vrai, mais il ne vaut pas de lire deux
+// suivis sur une figure qu'on n'a pas demandee. Chaque carte a repris son
+// graphe et sa navigation.
+// _sanEchelle et _sanTeinte, elles, RESTENT : la premiere est le calcul de
+// plancher que _sanGraph utilisait deja, sortie pour etre partageable ; la
+// seconde donne au sommeil sa couleur, et une nuit reussie n'a plus a
+// s'afficher en rouge.
+// ══ RATTRAPER ══════════════════════════════════════════════════════════
 //
-// LE POINT DE CE LOT. Les deux semaines etaient deux graphes separes par
-// quatre cents pixels de defilement — alors que la comparaison est exactement
-// ce qui a de la valeur : « la nuit ou j'ai mal dormi, j'ai peu marche ». Mise
-// en regard, elle se lit d'un coup d'oeil, en descendant une colonne.
+// La seconde moitie du probleme des trous. Les voir ne suffit pas : pour
+// rattraper trois jours, il fallait ouvrir la feuille de saisie, changer la
+// date, saisir, refermer, recommencer. Ce bouton ouvre directement le PREMIER
+// JOUR VIDE du domaine — le plus ancien, celui qui va sortir de la fenetre en
+// premier et qu'on perdrait pour de bon.
 //
-// DEUX PISTES EMPILEES, UNE SEULE LIGNE DE JOURS. Et non quatorze barres fines
-// alternees : a 320 px, quatorze barres font 14 px de large, ni lisibles ni
-// touchables. Empilees, chaque barre garde toute la largeur de sa colonne, et
-// l'oeil descend la colonne au lieu de compter des paires.
-//
-// CHAQUE PISTE GARDE SON ECHELLE. Les pas se comptent en milliers, le sommeil
-// en minutes : un axe commun ecraserait l'un des deux contre le plancher.
-// Ce qui est commun, c'est l'AXE DES JOURS — les memes sept colonnes, les
-// memes libelles, la meme periode.
-function _htmlPisteSante(u,quoi,jours){
-  const v=j=>quoi==='sommeil'?sanSommeilMin(u,j.iso):sanPas(u,j.iso);
-  const fmt=quoi==='sommeil'?sanHM:sanNb;
-  const objectif=quoi==='sommeil'?sanObjSommeil(u):sanObjPas(u);
-  const serie=jours.map(j=>({iso:j.iso,d:j.d,v:v(j)}));
-  const e=_sanEchelle(quoi,serie.map(x=>x.v).filter(x=>x!=null),objectif);
-  const teinte=_sanTeinte(quoi);
-  const barres=serie.map(x=>{
-    const ok=x.v!=null&&x.v>=objectif;
-    const col=x.v==null?'#242428':(ok?teinte:'#5a5a62');
-    const h=x.v==null?3:e.pc(x.v);
-    const lib=x.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-    return '<button type="button" class="san-bar sansem-bar" style="--h:'+h+'%"'
-      +' onclick="sanOuvrirJour(\''+quoi+'\',\''+x.iso+'\')"'
-      +' aria-label="'+escapeHtml((quoi==='sommeil'?'Sommeil, ':'Pas, ')+lib+' : '
-        +(x.v==null?'aucune donnée':fmt(x.v)))+'">'
-      +'<span class="san-bar-f" style="background:'+col+'"></span>'
-      +'</button>';
-  }).join('');
-  return '<div class="sansem-piste">'
-    +'<div class="sansem-lbl" style="color:'+teinte+'">'
-      +'<span class="sansem-pt" style="background:'+teinte+'"></span>'
-      +(quoi==='sommeil'?'Sommeil':'Pas')+'</div>'
-    +'<div class="sansem-graph">'
-      +'<div class="san-obj-l" style="bottom:'+e.pcObj+'%"><span>'+escapeHtml(fmt(objectif))+'</span></div>'
-      +barres+'</div>'
-    +'</div>';
+// PURE. Le plus ancien jour de la semaine sans donnee POUR CE DOMAINE : un
+// jour ou les pas sont notes mais pas la nuit est un trou pour le sommeil, et
+// pas pour les pas.
+function premierJourVide(u,quoi,jours){
+  const n=(jours>0?jours:7);
+  const d=new Date(); d.setHours(12,0,0,0);
+  for(let i=n;i>=1;i--){
+    const j=new Date(d); j.setDate(d.getDate()-i);
+    const iso=localISODate(j);
+    const v=quoi==='sommeil'?sanSommeilMin(u,iso):sanPas(u,iso);
+    if(v==null) return iso;
+  }
+  return null;
 }
-function _htmlSemaineSante(u){
-  const jours=sanJours(_sanOffset);
-  const p0=jours[0].d,p6=jours[6].d;
-  const libPer=_sanOffset===0?'7 derniers jours'
-    :(p0.getDate()+' '+p0.toLocaleDateString('fr-FR',{month:'short'})+' au '
-      +p6.getDate()+' '+p6.toLocaleDateString('fr-FR',{month:'short'}));
-  // LA LIGNE DE JOURS EST RENDUE UNE FOIS, SOUS LES DEUX PISTES. C'est elle
-  // qui fait l'axe commun : la redire par piste, c'est deux axes qui se
-  // ressemblent, pas un axe partage.
-  const jsHtml=jours.map(j=>'<span class="sansem-j">'
-    +escapeHtml(['L','M','M','J','V','S','D'][(j.d.getDay()+6)%7])+'</span>').join('');
-  return '<section class="san-carte">'
-    +'<div class="san-tete"><h2 class="san-t">Ma semaine</h2></div>'
-    +'<div class="san-nav">'
-      +'<button type="button" class="san-nav-b" onclick="sanPeriode(-1)" aria-label="Période précédente">‹</button>'
-      +'<span class="san-per">'+escapeHtml(libPer)+'</span>'
-      +'<button type="button" class="san-nav-b" onclick="sanPeriode(1)" aria-label="Période suivante"'
-        +(_sanOffset>=0?' disabled':'')+'>›</button>'
-    +'</div>'
-    +(_sanOffset!==0?'<button type="button" class="san-auj" onclick="sanPeriode(0,true)">Aujourd\'hui</button>':'')
-    +_htmlPisteSante(u,'pas',jours)
-    +_htmlPisteSante(u,'sommeil',jours)
-    +'<div class="sansem-jours">'+jsHtml+'</div>'
-    +'</section>';
+function sanRattraper(quoi){
+  const iso=premierJourVide(currentUser,quoi,7);
+  // Plus de trou : le bouton ne devrait pas etre la, mais s'il l'est (rendu
+  // avant une saisie, clique apres), on ouvre le jour courant plutot que de
+  // ne rien faire — un bouton muet se lit comme une panne.
+  sanSaisir(quoi,iso||localISODate(new Date()));
 }
-// ══ CE QUE LA MOYENNE NE DIT PAS ════════════════════════════════════════
-//
-// Une ligne, un chiffre, la couleur du domaine — pas de badge, pas de
-// gamification. Chaque carte porte ce que SON domaine sait dire et que la
-// moyenne tait : pour le sommeil, la regularite des couchers et la dette de
-// la semaine ; pour les pas, la serie en cours.
-//
-// LE NOMBRE DE NUITS EST TOUJOURS DIT. Une dette calculee sur deux nuits
-// affichee comme une dette hebdomadaire serait un chiffre faux presente avec
-// aplomb — la meme erreur que la moyenne sur sept jours dont trois sont vides,
-// que sanResume evite deja.
 // Le raccourci, rendu seulement s'il y a quelque chose a rattraper.
 function _htmlRattraper(u,quoi){
   const n=[];
@@ -78964,13 +78934,21 @@ function _htmlCarteSante(u,quoi){
     +'<div class="san-tete">'
       +'<span class="san-ico">'+(quoi==='sommeil'?_sanIcoLune():_sanIcoPas())+'</span>'
       +'<h2 class="san-t">'+titre+'</h2></div>'
-    // ⚠ NI GRAPHE NI NAVIGATION ICI DEPUIS LE 14/09/2026. Les deux vivent
-    // dans « Ma semaine », au-dessus, ou les pas et les nuits partagent UN
-    // SEUL axe de jours — c'est la comparaison qui a de la valeur, et elle
-    // etait separee par quatre cents pixels de defilement. Trois navigations
-    // pour une seule periode, c'etait aussi trois facons de se contredire.
-    // Cette carte garde ce qu'elle seule sait dire : les chiffres du domaine,
-    // ses actions, sa source.
+    // ⚠ UN GRAPHIQUE PAR SUIVI, ET CHACUN CHEZ LUI. Le 14/09/2026 les deux
+    // semaines avaient ete reunies sur un axe de jours commun, au-dessus des
+    // cartes. Kevin, le 15 : « je veux pour les pas et sommeil un graphique
+    // different, pas sur le meme. 1 graphique = un suivi ». On revient donc a
+    // la disposition d'avant, carte par carte, navigation comprise — ce qui a
+    // ete AJOUTE depuis reste : les faits du domaine, le rattrapage, l'aide et
+    // la source.
+    +'<div class="san-nav">'
+      +'<button type="button" class="san-nav-b" onclick="sanPeriode(-1)" aria-label="Période précédente">‹</button>'
+      +'<span class="san-per">'+escapeHtml(libPer)+'</span>'
+      +'<button type="button" class="san-nav-b" onclick="sanPeriode(1)" aria-label="Période suivante"'
+        +(_sanOffset>=0?' disabled':'')+'>›</button>'
+    +'</div>'
+    +(_sanOffset!==0?'<button type="button" class="san-auj" onclick="sanPeriode(0,true)">Aujourd\'hui</button>':'')
+    +_sanGraph(quoi,serie,bloc.objectif,fmt)
     +'<div class="san-chiffres">'
       +'<div><div class="san-lbl">Moyenne</div><div class="san-val">'
         +(bloc.moy==null?'—':escapeHtml(fmt(bloc.moy)))+'</div></div>'
@@ -79012,12 +78990,6 @@ function sanRendre(){
   // ouvrirait un chemin ou l'ecran n'offre aucune capture du tout.
   try{ const zi=document.getElementById('lifestyle-import');
        if(zi) zi.innerHTML=_htmlCadreImportCapture(); }catch(e){}
-  // LA SEMAINE EN PREMIER, DANS SON PROPRE try. Elle porte desormais la
-  // navigation de periode : si elle echouait en silence, les deux cartes du
-  // dessous resteraient sur une periode qu'on ne pourrait plus changer.
-  try{ const zw=document.getElementById('lifestyle-semaine');
-       if(zw) zw.innerHTML=_htmlSemaineSante(u); }catch(e){
-       const zw=document.getElementById('lifestyle-semaine'); if(zw) zw.innerHTML=''; }
   try{ if(zs) zs.innerHTML=_htmlCarteSante(u,'sommeil'); }catch(e){ if(zs) zs.innerHTML=''; }
   try{ if(zp) zp.innerHTML=_htmlCarteSante(u,'pas'); }catch(e){ if(zp) zp.innerHTML=''; }
   try{ const zh=document.getElementById('lifestyle-habitudes');
