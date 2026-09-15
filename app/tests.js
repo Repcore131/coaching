@@ -28980,6 +28980,137 @@ function testExercices(){
     // minutes — « 1 h 02 » au bout d'une minute, « 30 h 32 » au bout d'une
     // demi-heure. Ce test tient le nom unique, et non seulement le resultat :
     // c'est la collision qui est le defaut.
+    // ══ 15/09/2026 — LA RETENTION ENTRE DANS LE TUNNEL ═════════════════════
+    // Quatre compteurs demandes par Kevin. L'ecran mesurait l'acquisition et
+    // s'arretait au premier bilan : il disait combien de gens entrent, rien
+    // sur combien restent.
+
+    ok('Les quatre compteurs de retention sont declares',(()=>{
+      const n=['notif_granted','pwa_installed','retour_j1','jamais_demarre_7j'];
+      const abs=n.filter(x=>RCM_EVENEMENTS.indexOf(x)<0);
+      if(abs.length) return _echec('absent(s) de RCM_EVENEMENTS : '+abs.join(', '));
+      // ⚠ LA LISTE BLANCHE DU SERVEUR EST L'AUTRE MOITIE, et elle n'est pas
+      // verifiable d'ici : database.rules.json n'est pas deploye, une sonde
+      // par fetch depuis la page rend `true` faute de pouvoir conclure — c'est
+      // exactement comme ca que 'logo' est reste casse en etant vert. Cette
+      // comparaison-la vit dans scripts/verif/regles.mjs, qui lit les DEUX
+      // fichiers sur le disque et bloque le deploiement. Le 15/09/2026 elle a
+      // trouve QUINZE compteurs refuses en silence depuis huit jours.
+      return true;})());
+
+    ok('Les quatre compteurs sont au tableau de bord, bien places',(()=>{
+      const q=c=>RCM_TUNNEL.find(e=>e.cles.indexOf(c)>=0);
+      const trois=['notif_granted','pwa_installed','retour_j1'];
+      for(const c of trois){
+        const e=q(c);
+        if(!e) return _echec(c+' n’est pas dans RCM_TUNNEL');
+        if(!e.lib||!/[a-zà-ÿ]/.test(e.lib)) return _echec(c+' n’a pas de libelle francais');
+        // HORS CHAINE : ces trois-la se produisent a n'importe quel moment de
+        // la vie d'un compte. Dans la chaine, elles feraient calculer un taux
+        // entre deux volumes qui ne se suivent pas.
+        if(!e.horsTunnel) return _echec(c+' casserait le taux de l’etape suivante');
+      }
+      const j=q('jamais_demarre_7j');
+      if(!j) return _echec('jamais_demarre_7j n’est pas dans RCM_TUNNEL');
+      if(!j.lib) return _echec('jamais_demarre_7j n’a pas de libelle');
+      // CELUI-CI EST DANS LA CHAINE, comme demande. Le test le verrouille pour
+      // que le choix reste un choix, et non un oubli.
+      return !j.horsTunnel?true:_echec('jamais_demarre_7j a ete sorti de la chaine');})());
+
+    // LA DECISION EST PURE, donc entierement eprouvable ici : ni horloge, ni
+    // stockage, ni reseau. Une erreur de retention ne se verrait pas a
+    // l'ecran — elle se verrait dans six mois, dans un chiffre faux dont
+    // personne ne saurait qu'il l'est.
+    ok('etapesRetention : la table de decision',(()=>{
+      const J=864e5, auj='2026-09-15', t=Date.parse('2026-09-15T10:00:00Z');
+      const f=(u,v)=>etapesRetention(u,v||{},auj,t).join(',');
+      const cas=[
+        ['compte de 2 h',            {email:'a',role:'athlete',createdAt:t-2*3600e3},{},''],
+        ['30 h, jamais compte',      {email:'a',role:'athlete',createdAt:t-30*3600e3},{},'retour_j1'],
+        ['30 h, deja compte ce jour',{email:'a',role:'athlete',createdAt:t-30*3600e3},{retour_j1:auj},''],
+        ['30 h, compte hier',        {email:'a',role:'athlete',createdAt:t-30*3600e3},{retour_j1:'2026-09-14'},'retour_j1'],
+        ['8 j, athlete, 0 seance',   {email:'a',role:'athlete',createdAt:t-8*J},{retour_j1:auj},'jamais_demarre_7j'],
+        ['8 j, athlete, 1 seance',   {email:'a',role:'athlete',createdAt:t-8*J,sessions:[{}]},{retour_j1:auj},''],
+        ['8 j, COACH, 0 seance',     {email:'c',role:'coach',  createdAt:t-8*J},{retour_j1:auj},''],
+        ['6 j, athlete, 0 seance',   {email:'a',role:'athlete',createdAt:t-6*J},{retour_j1:auj},''],
+        ['8 j, rien encore compte',  {email:'a',role:'athlete',createdAt:t-8*J},{},'retour_j1,jamais_demarre_7j'],
+        // SANS DATE DE CREATION, ON NE SUPPOSE RIEN : compter les comptes
+        // d'avant createdAt comme « plus de 24 h » ferait un pic de retour_j1
+        // le jour de la mise en ligne, et ce pic se lirait comme un succes.
+        ['sans createdAt',           {email:'a',role:'athlete'},{},''],
+        ['sans email',               {role:'athlete',createdAt:t-8*J},{},''],
+        ['dossier nul',              null,{},'']
+      ];
+      for(const [lib,u,v,att] of cas){
+        const r=f(u,v);
+        if(r!==att) return _echec(lib+' rend «'+r+'» au lieu de «'+att+'»');
+      }
+      return true;})());
+
+    // ⚠ LA CONTRAINTE ABSOLUE : DES ENTIERS, ET RIEN D'AUTRE.
+    // Le test lit la source de rcm() plutot que de l'appeler : la suite tourne
+    // sur 127.0.0.1, et rcm() s'y tait par conception — la garde de
+    // developpement. L'appeler ici ne prouverait donc rien du tout. L'envoi
+    // reel a ete inspecte au navigateur le 15/09/2026, sur un hote non local :
+    // PUT /metrics/AAAA-MM-JJ/<nom>.json, corps {".sv":{"increment":1}},
+    // en-tetes {Content-Type}, aucun jeton, aucun e-mail, aucun cookie.
+    ok('Les compteurs de retention n’emportent aucun identifiant',(()=>{
+      const s=String(rcm);
+      if(!/\{'\.sv':\{'increment':1\}\}|"\.sv"/.test(s.replace(/\s/g,'')))
+        return _echec('le corps n’est plus un simple increment');
+      if(/auth=|Authorization|idToken|getToken/i.test(s))
+        return _echec('rcm joint desormais un jeton : chaque increment serait rattachable');
+      // rcmRetention ne passe QUE des noms d'etape a rcm.
+      const r=String(rcmRetention);
+      if(/rcm\((?!e\)|'[a-z0-9_]+')/.test(r))
+        return _echec('rcmRetention passe autre chose qu’un nom d’etape');
+      // LA MEMOIRE DU JOUR RESTE SUR L'APPAREIL. Elle est lue et ecrite dans
+      // localStorage, et n'apparait nulle part dans ce qui part sur le reseau.
+      if(r.indexOf('localStorage')<0)
+        return _echec('la cle datee ne passe plus par le stockage local');
+      if(/fetch|XMLHttpRequest|sendBeacon/.test(r))
+        return _echec('rcmRetention contacte le reseau directement, hors de rcm');
+      // ET LE TEXTE DE BAS DE PAGE RESTE VRAI, mot pour mot.
+      const p=document.querySelector('#s-metrics p.sub');
+      if(!p) return _echec('le texte de bas de page a disparu de l’ecran');
+      const txt=p.textContent.replace(/\s+/g,' ');
+      for(const m of ['Aucun cookie','aucun identifiant','aucune donnée de santé',
+                      'ni de relier deux étapes à une même personne'])
+        if(txt.indexOf(m)<0) return _echec('le bas de page ne dit plus : '+m);
+      return true;})());
+
+    // LES QUATRE POINTS D'APPEL. N'en instrumenter qu'une partie donnerait un
+    // chiffre faux sans que rien ne le signale — la regle que ce fichier pose
+    // deja pour le guide iOS, qui s'ouvre par deux chemins.
+    ok('Les quatre compteurs sont branches la ou ils se produisent',(()=>{
+      const prod=_prodSrc();
+      // LES DEUX ACCORDS DE NOTIFICATION, pas un seul.
+      const n=(prod.match(/rcm\('notif_granted'\)/g)||[]).length;
+      if(n!==2) return _echec(n+' point(s) d’appel sur 2 pour notif_granted');
+      // Et chacun DANS la branche « accorde », jamais avant le verdict.
+      const dem=[...prod.matchAll(/Notification\.requestPermission\(\)/g)].map(m=>m.index);
+      if(dem.length!==2) return _echec(dem.length+' appel(s) a requestPermission');
+      for(const i of dem){
+        const suite=prod.slice(i,i+420);
+        if(suite.indexOf('notif_granted')<0)
+          return _echec('un requestPermission ne compte rien');
+        if(suite.indexOf('granted')>suite.indexOf('notif_granted'))
+          return _echec('un compteur est pose avant le verdict de permission');
+      }
+      // L'INSTALLATION : dans l'ecouteur de l'evenement du navigateur, a cote
+      // de son jumeau install_fait.
+      const iF=prod.indexOf("rcm('install_fait')"), iP=prod.indexOf("rcm('pwa_installed')");
+      if(iP<0) return _echec('pwa_installed n’est branche nulle part');
+      if(!(iF>=0&&Math.abs(iP-iF)<1200))
+        return _echec('pwa_installed n’est pas dans l’ecouteur d’installation');
+      // LA RETENTION : au demarrage, APRES la fusion session/carte — sans quoi
+      // un athlete dont les seances etaient du cote manquant serait compte
+      // « jamais demarre ».
+      const iR=prod.indexOf('rcmRetention(currentUser)');
+      if(iR<0) return _echec('rcmRetention n’est pas appelee au demarrage');
+      const iFus=prod.indexOf('currentUser=users[currentUser.email]');
+      if(!(iFus>=0&&iFus<iR)) return _echec('rcmRetention est appelee avant la fusion du dossier');
+      return true;})());
     ok('Un seul fmtDureeSeance dans toute la source',(()=>{
       const n=(_prodSrc().match(/function fmtDureeSeance\(/g)||[]).length;
       return n===1?true:_echec(n+' declarations du meme nom');})());

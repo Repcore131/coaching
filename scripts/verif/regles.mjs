@@ -87,4 +87,46 @@ if(manquants.length){
 const orphelines=[...niveau1].filter(k=>!k.startsWith('.')&&k!=='$autre'
   &&k!=='maj'&&!champs.includes(k));
 if(orphelines.length) console.log('regle(s) sans champ correspondant : '+orphelines.join(', '));
+
+// ══ LES COMPTEURS DE TUNNEL : MEME PANNE, MEME REMEDE ═══════════════════
+//
+// /metrics/$jour/$evenement se ferme sur une liste blanche ecrite dans une
+// expression reguliere. Le 15/09/2026, index.html declarait TRENTE noms
+// d'evenements et cette expression en acceptait QUINZE : tout le tunnel
+// d'installation, tout le trafic des navigateurs integres, lancement_autonome
+// et nav_samsung etaient ecrits par l'app et rejetes par le serveur.
+//
+// RIEN NE POUVAIT LE SIGNALER. rcm() envoie et n'attend aucune reponse — c'est
+// voulu, la mesure ne doit rien couter a l'ecran — donc un rejet ne produit ni
+// erreur, ni console, ni compteur a zero qu'on distinguerait d'un compteur
+// jamais atteint. L'ecran affichait « Pas encore mesurable » depuis huit
+// jours, et son commentaire l'expliquait par un deploiement en retard.
+//
+// Le commentaire de RCM_EVENEMENTS affirmait pourtant, noir sur blanc, que
+// « les noms sont figes ici ET dans database.rules.json ». Un commentaire ne
+// verifie rien ; ceci, si.
+const mEvts=source.match(/const RCM_EVENEMENTS=\[([\s\S]*?)\];/);
+if(!mEvts){ console.error('RCM_EVENEMENTS introuvable dans app/index.html'); process.exit(1); }
+const evts=[...mEvts[1].replace(/\/\/[^\n]*/g,'').matchAll(/'([^']+)'/g)].map(m=>m[1]);
+if(evts.length<15){ console.error('RCM_EVENEMENTS : '+evts.length+' nom(s) lu(s), lecture cassee'); process.exit(1); }
+
+const mRegex=regles.match(/\$evenement\.matches\(\/\^\(([^)]*)\)\$\/\)/);
+if(!mRegex){ console.error('la liste blanche de /metrics a disparu des regles'); process.exit(1); }
+const acceptes=new Set(mRegex[1].split('|').filter(Boolean));
+
+console.log('\ncompteurs ecrits par le code : '+evts.length
+  +'   noms acceptes par les regles : '+acceptes.size);
+const refuses=evts.filter(n=>!acceptes.has(n));
+if(refuses.length){
+  console.error('\nCOMPTE PAR L\'APP, REFUSE PAR LE SERVEUR : '+refuses.join(', '));
+  console.error('Ces incrementations partent et sont rejetees SANS AUCUN SIGNAL :');
+  console.error('l\'ecran « Tunnel : 7 jours » affichera zero sans dire pourquoi.');
+  console.error('Ajoute chaque nom a $evenement.matches dans database.rules.json.');
+  process.exit(1);
+}
+// Un nom accepte que plus personne n'ecrit n'est pas dangereux — mais il
+// laisse croire qu'une mesure existe.
+const inutiles=[...acceptes].filter(n=>!evts.includes(n));
+if(inutiles.length) console.log('nom(s) accepte(s) que le code n\'ecrit plus : '+inutiles.join(', '));
+
 console.log('\nRien de bloquant.');

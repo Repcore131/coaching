@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1208';
+window.RC_BUILD='1209';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -10382,7 +10382,26 @@ const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_
   'install_guide_ios','install_fait','lancement_autonome',
   // LE NAVIGATEUR QUI INSTALLE MAL. Distinct des iab_* : ceux-la ne peuvent
   // pas installer du tout, celui-ci installe quelque chose qu'Android refuse.
-  'nav_samsung'];
+  'nav_samsung',
+  // ── LA RETENTION : CE QUI SE PASSE APRES L'ACQUISITION ──────────────
+  //
+  // Le tunnel s'arretait au premier bilan. Il disait combien de gens entrent,
+  // rien sur combien restent — et les deux questions n'ont pas les memes
+  // reponses. Ces quatre-la repondent a la seconde.
+  //
+  // ⚠ CE QUI PART SUR LE RESEAU N'A PAS CHANGE D'UN OCTET : « +1 sur cette
+  // etape aujourd'hui », sans jeton, sans identifiant, sans date de naissance,
+  // sans rien qui relie deux incrementations a une meme personne. Les deux
+  // compteurs de retention ont besoin de savoir s'ils ont deja compte
+  // AUJOURD'HUI POUR CE COMPTE — cette memoire vit dans le localStorage de
+  // l'appareil, elle n'est jamais transmise, et c'est exactement le procede
+  // que rcmVue emploie deja avec sessionStorage.
+  //
+  // ⚠ « jamais_demarre_7j » SE DEDUIT D'UNE ABSENCE DE SEANCES, et ce n'est
+  // pas pour autant une donnee de sante qui sort : ce qui part est le nombre
+  // de comptes dans ce cas ce jour-la, pas lesquels. Le texte de bas de page
+  // de l'ecran reste vrai mot pour mot.
+  'notif_granted','pwa_installed','retour_j1','jamais_demarre_7j'];
 // ══════════ SONDE DE QUOTA : UNE PENTE, PAS UNE VÉRITÉ ══════════
 // Le plan Spark plafonne à 10 Go téléchargés par mois, et le dépassement est
 // SILENCIEUX : l'application cesse simplement de répondre. Cette sonde ne
@@ -10527,6 +10546,79 @@ function rcmVue(nom){
     sessionStorage.setItem(cle,'1');
   }catch(e){}
   rcm(nom);
+}
+
+// ══════════ RETENTION : DEUX ETAPES QUI SE DECIDENT AU DEMARRAGE ═══════
+//
+// Le tunnel mesurait l'acquisition et s'arretait au premier bilan. Ces deux
+// compteurs-ci disent ce qu'il advient ensuite : qui revient le lendemain, et
+// qui a un compte depuis une semaine sans avoir jamais lance une seance.
+//
+// ⚠ AUCUNE DONNEE NE CHANGE DE NATURE. Ce qui part sur le reseau reste
+// « +1 sur cette etape aujourd'hui », sans jeton et sans identifiant, comme
+// pour les trente autres. Ce qui est NOUVEAU, c'est qu'il faut savoir si on a
+// deja compte aujourd'hui pour ce compte, sans quoi quelqu'un qui recharge
+// six fois compterait six retours. Cette memoire reste SUR L'APPAREIL, dans
+// une cle localStorage datee, et n'est jamais transmise — meme procede que
+// rcmVue avec sessionStorage, meme garantie.
+//
+// PURE, ET C'EST LE POINT. Toute la decision — l'age du compte, le role, les
+// seances, le jour deja compte — tient dans cette fonction, qui ne lit ni
+// l'horloge ni le stockage ni le reseau : on les lui passe. Elle s'eprouve
+// donc entierement sans navigateur, ce qu'une regle de retention merite : une
+// erreur ici ne se verrait pas a l'ecran, elle se verrait dans six mois dans
+// un chiffre faux dont personne ne saurait qu'il l'est.
+//
+// Rend la LISTE des etapes a compter pour ce demarrage — vide la plupart du
+// temps, et c'est le cas normal.
+function etapesRetention(user,vus,auj,maintenant){
+  const out=[];
+  if(!user||!user.email) return out;
+  // SANS DATE DE CREATION, ON NE SUPPOSE RIEN. Les comptes d'avant
+  // l'existence de createdAt n'ont pas d'age connu ; les compter comme
+  // « plus de 24 h » gonflerait retour_j1 de tous les anciens dossiers le
+  // jour de la mise en ligne, et ce pic se lirait comme un succes.
+  const cree=Number(user.createdAt)||0;
+  if(!cree) return out;
+  const t=Number(maintenant)||0;
+  if(!t) return out;
+  const age=t-cree;
+  const v=(vus&&typeof vus==='object')?vus:{};
+  const J=864e5;
+  // ── LE RETOUR DU LENDEMAIN ──────────────────────────────────────────
+  // Plus de 24 h d'anciennete, et pas encore compte aujourd'hui. La cle
+  // datee porte la journee : le premier demarrage d'une journee nouvelle
+  // compte, les suivants non.
+  if(age>J&&v.retour_j1!==auj) out.push('retour_j1');
+  // ── SEPT JOURS, PAS UNE SEULE SEANCE ────────────────────────────────
+  // ROLE ATHLETE SEULEMENT : un coach n'a pas a s'entrainer dans l'app, et
+  // le compter ici ferait passer chaque coach pour un athlete perdu.
+  // `sessions` absent vaut vide — un compte neuf n'a pas le champ.
+  const seances=(user.sessions&&user.sessions.length)||0;
+  if(age>7*J&&user.role==='athlete'&&!seances&&v.jamais_demarre_7j!==auj)
+    out.push('jamais_demarre_7j');
+  return out;
+}
+const RCM_RETENTION_CLE='rcm_retention_';
+// Le tour impur : lire la cle, appeler la fonction pure, compter, reecrire.
+//
+// ⚠ LE JOUR EST MARQUE MEME SI rcm() NE PART PAS — developpement local, nom
+// hors liste, reseau coupe. C'est voulu : on ne peut pas savoir si
+// l'increment est arrive (la requete est deliberement sans reponse lue), et
+// entre risquer de perdre un comptage et risquer d'en compter six pour un
+// seul demarrage, c'est le second qui fausse le chiffre.
+function rcmRetention(user){
+  try{
+    if(!user||!user.email) return;
+    const cle=RCM_RETENTION_CLE+user.email;
+    let vus={};
+    try{ vus=JSON.parse(localStorage.getItem(cle)||'{}')||{}; }catch(e){ vus={}; }
+    const auj=localISODate(new Date());
+    const etapes=etapesRetention(user,vus,auj,Date.now());
+    if(!etapes.length) return;
+    for(const e of etapes){ rcm(e); vus[e]=auj; }
+    try{ localStorage.setItem(cle,JSON.stringify(vus)); }catch(e){}
+  }catch(e){}
 }
 
 // APP_BASE_URL : racine publique de l'app, déduite de l'adresse courante.
@@ -13718,6 +13810,17 @@ window.onload=()=>{
             DB.set('session',currentUser);
           }
         }
+        // ── LES DEUX ETAPES DE RETENTION ────────────────────────────
+        // ICI, et pas ailleurs : c'est le seul endroit ou un demarrage avec un
+        // compte deja ouvert passe a coup sur, et ou `currentUser` porte enfin
+        // la fusion session + carte. Avant la fusion, `sessions` pouvait
+        // manquer du cote lu, et un athlete qui s'entraine aurait ete compte
+        // comme « jamais demarre ». Apres l'aiguillage, routeUser() a change
+        // d'ecran — et ce qui suit un changement d'ecran finit un jour par ne
+        // plus s'executer.
+        // Elle se garde elle-meme : compte nouveau, compte sans date de
+        // creation, journee deja comptee, elle ne fait rien.
+        try{ rcmRetention(currentUser); }catch(e){}
         // Le statut ne gouverne QUE l'accès athlète : doRegister crée tout compte
         // en status:'FREE' et rien ne le change jamais pour un coach, qui serait
         // donc déconnecté à chaque rechargement. Aligné sur doLogin (l. ~3177).
@@ -53270,6 +53373,10 @@ function requestBilanNotifPermission(){
   }
   Notification.requestPermission().then(p=>{
     if(p==='granted'){
+      // PREMIER DES DEUX POINTS D'ACCORD. L'autre est dans le rappel de
+      // seance ; n'en instrumenter qu'un donnerait un chiffre faux sans que
+      // rien ne le signale — c'est la regle deja posee pour le guide iOS.
+      try{ rcm('notif_granted'); }catch(e){}
       currentUser._notifEnabled=true;saveUser();
       scheduleSwNotif();scheduleSuppNotif();
       toast(' Rappels activés ! Tu seras notifié chaque samedi de bilan à 7h.');
@@ -53932,7 +54039,11 @@ async function saveWoReminderConfig(){
   if(Notification.permission==='granted'){await doSave();return;}
   if(Notification.permission==='denied'){toast('Notifications bloquées : autorise-les dans les réglages du navigateur','var(--orange)');return;}
   const p=await Notification.requestPermission();
-  if(p==='granted') await doSave();
+  if(p==='granted'){
+    // SECOND POINT D'ACCORD — voir le premier, dans le rappel de bilan.
+    try{ rcm('notif_granted'); }catch(e){}
+    await doSave();
+  }
   else toast('Permission refusée : rappel non activé');
 }
 async function disableWoReminder(){
@@ -82137,6 +82248,19 @@ window.addEventListener('rc-install-fait',()=>{
   // Un accord a l'invite n'est pas une installation — l'un se clique, l'autre
   // se termine, et l'ecart entre les deux est exactement ce qu'on cherche.
   try{ rcm('install_fait'); }catch(e){}
+  // ⚠ CE COMPTEUR EST LE JUMEAU DU PRECEDENT, et il faut le savoir : les deux
+  // sont incrementes par le meme evenement `appinstalled`, au meme instant, et
+  // afficheront donc TOUJOURS le meme entier. `install_fait` ferme le tunnel
+  // d'acquisition, `pwa_installed` ouvre le groupe de retention — demande de
+  // Kevin, 15/09/2026. Si l'un des deux doit disparaitre un jour, c'est un
+  // choix de lecture, pas une correction de bug.
+  //
+  // ICI ET NON SUR window.addEventListener('appinstalled'), qui vit dans la
+  // tete du document : rcm() n'y est pas encore declaree. La tete pose le
+  // drapeau et previent par `rc-install-fait` ; ce bloc est l'ecouteur de cet
+  // evenement, donc l'ecouteur d'`appinstalled` a un relais pres. C'est la
+  // regle que ce fichier applique deja pour `install_fait` juste au-dessus.
+  try{ rcm('pwa_installed'); }catch(e){}
   const b=document.getElementById('install-btn');
   if(b) b.style.display='none';
   // LA BANNIERE N'A PLUS RIEN A PROPOSER. Sans ca elle resterait affichee
@@ -82259,6 +82383,27 @@ const RCM_TUNNEL=[
   {cles:['first_workout_started'],lib:'1re séance lancée'},
   {cles:['first_workout_completed'],lib:'1re séance terminée'},
   {cles:['first_bilan_completed'],lib:'1er bilan rempli'},
+  // ── LA RETENTION ────────────────────────────────────────────────────
+  // Tout ce qui precede mesure l'ACQUISITION et s'arrete au premier bilan.
+  // Ces quatre lignes disent ce qu'il advient apres, et elles se lisent en
+  // volumes du jour, jamais en parcours d'une personne.
+  //
+  // TROIS SONT HORS CHAINE, et `neutre` : ce ne sont ni des etapes ni des
+  // fuites. Elles se produisent a n'importe quel moment de la vie d'un compte
+  // — on accorde les notifications le troisieme jour, on revient le
+  // quinzieme — et les inserer dans la chaine ferait calculer un taux entre
+  // deux choses qui ne se suivent pas.
+  {cles:['notif_granted'],lib:'Notifications autorisées',horsTunnel:true,neutre:true},
+  // ⚠ CE CHIFFRE EST LE JUMEAU DE « Application installée » : meme evenement
+  // navigateur, meme instant, donc toujours le meme entier. Il est ici parce
+  // qu'une installation est le premier acte de retention, et la-haut parce
+  // qu'elle ferme le tunnel d'acquisition.
+  {cles:['pwa_installed'],lib:'Application posée sur l\'écran d\'accueil',horsTunnel:true,neutre:true},
+  {cles:['retour_j1'],lib:'Revenu un jour après son inscription',horsTunnel:true,neutre:true},
+  // ⚠ CELUI-CI RESTE DANS LA CHAINE, comme demande — et il faut savoir ce que
+  // ca produit : le taux affiche a sa droite le compare a « 1er bilan
+  // rempli », deux volumes qui ne se suivent pas. Le nombre, lui, est juste.
+  {cles:['jamais_demarre_7j'],lib:'Athlète : 7 jours sans une seule séance'},
   // HORS TUNNEL : ce n'est pas une etape, c'est une fuite. Ces visiteurs ne
   // peuvent PAS installer, et la plupart ne reviendront pas par un autre
   // chemin. Le detail nomme l'application pour que le chiffre soit
