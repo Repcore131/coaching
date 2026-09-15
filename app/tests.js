@@ -1015,6 +1015,47 @@ function testExercices(){
     // dernier mot jusqu'a trouver une image — et « poulie » retire, il restait
     // une barre libre. Ni le meme trajet de charge, ni la meme tension : le
     // dessin contredisait la consigne.
+    ok('EX_RENOMMAGES : chaque cible EXISTE dans l\'index',(()=>{
+      // Une clef qui pointe sur un slug absent ne rattrape rien et ne le dit
+      // pas : la fiche garde son cadre vide, et la table donne l'illusion que
+      // le cas est traite.
+      if(!_exoIndex||!_exoIndex.size) return _echec('index non chargé');
+      const morts=Object.entries(EX_RENOMMAGES)
+        .filter(([,v])=>!_exoIndex.has(exSlug(v)))
+        .map(([k,v])=>k+' → '+v);
+      return morts.length?_echec('cible(s) inexistante(s) : '+morts.join(' | ')):true;})());
+    ok('EX_RENOMMAGES : les clefs sont SANS ACCENT, comme les slugs',(()=>{
+      // ⚠ _slugIllustre traverse cette table avec le slug remis en mots, et un
+      // slug ne porte jamais d'accent : « PRESSE À CUISSE INCLINÉE » comme clef
+      // ne serait JAMAIS consultee, et la table paraitrait pourtant remplie.
+      const acc=Object.keys(EX_RENOMMAGES).filter(k=>/[À-ÿ]/.test(k));
+      if(acc.length) return _echec('clef(s) accentuee(s) : '+acc.join(' | '));
+      const min=Object.keys(EX_RENOMMAGES).filter(k=>k!==k.toUpperCase());
+      return min.length?_echec('clef(s) en minuscules : '+min.join(' | ')):true;})());
+    ok('« CURL À LA POULIE » montre une POULIE, pas une barre libre',(()=>{
+      // Le cas exact signale par Kevin. L'exercice existe dans un programme
+      // modele, avec sa video et sa consigne ; seul le dessin manquait a son
+      // nom, et la regle de prefixe le rattrapait sur « curl barre ».
+      const r=_slugIllustre(exSlug('CURL À LA POULIE'));
+      if(!r) return _echec('toujours sans illustration');
+      if(r==='curl-barre') return _echec('toujours la barre libre');
+      return /poulie/.test(r)?true:_echec('resolu sur « '+r+' »');})());
+    ok('Les exercices ECRITS DANS LES PROGRAMMES ont tous leur dessin',(()=>{
+      // Pas seulement le catalogue : les modeles de seance portent des noms
+      // que le guide orthographie autrement, et ce sont eux que l'athlete lit.
+      // DEUX EXCEPTIONS ASSUMEES : aucune photo n'existe dans le depot pour
+      // ces deux-la, et leur coller celle d'un autre agres serait exactement
+      // l'erreur qu'on vient de fermer.
+      const SANS_PHOTO=['SQUAT BULGARE HALTÈRE','SQUAT GOBLET'];
+      const src=(typeof window!=='undefined'&&window._RC_SRC_PROD)||'';
+      if(!src) return true;               // source non servie : rien a balayer
+      const noms=new Set();
+      const re=/name:'([^']+)'/g; let m;
+      while((m=re.exec(src))) noms.add(m[1]);
+      const sans=[...noms].filter(n=>/^[A-ZÀ-Ý][A-ZÀ-Ý0-9' -]{4,}$/.test(n)
+        &&!/^SÉANCE/.test(n)&&SANS_PHOTO.indexOf(n)<0
+        &&exSlug(n)&&!_slugIllustre(exSlug(n)));
+      return sans.length?_echec(sans.length+' sans dessin : '+sans.slice(0,6).join(' | ')):true;})());
     ok('Retirer l\'AGRES arrete la recherche : pas d\'image plutot qu\'une fausse',(()=>{
       if(!_exoIndex||!_exoIndex.size) return _echec('index non chargé');
       // Le cas exact signale. « curl-barre » EXISTE dans l'index : c'est bien

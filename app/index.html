@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1203';
+window.RC_BUILD='1204';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -27129,8 +27129,41 @@ const VOL_ZONES=Object.freeze([
 // et son échec serait muet. Une assertion de testExercices() le vérifie.
 //
 // Vide dans ce lot : on pose la tuyauterie avant de toucher aux données.
+// LA TABLE ETAIT VIDE, ET LE MECANISME ATTENDAIT DEPUIS LE DEBUT.
+//
+// Signale par Kevin le 15/09/2026 : « le curl barre a la poulie, on voit juste
+// du curl barre ». Dix exercices ECRITS DANS LES PROGRAMMES n'avaient aucune
+// illustration a leur nom — non parce que le dessin manque, mais parce que le
+// guide les nomme autrement que les fichiers : pluriel contre singulier, accent
+// contre sans accent, « OU A LA SMITH » en plus. La regle de prefixe rattrapait
+// les plus courts au hasard des mots retires, et c'est ainsi que « curl a la
+// poulie » finissait sur une barre libre.
+//
+// LES CLES SONT DE-ACCENTUEES ET EN MAJUSCULES : _slugIllustre traverse cette
+// table avec le slug remis en mots, et un slug ne porte jamais d'accent.
+//
+// DEUX EXERCICES N'Y SONT PAS, ET C'EST VOLONTAIRE : « SQUAT BULGARE HALTERE »
+// et « SQUAT GOBLET » n'ont AUCUNE photo dans le depot. Le plus proche pour le
+// premier serait « fente bulgare machine » — un autre agres, donc exactement
+// l'erreur qu'on vient de fermer. Ils gardent leur cadre vide jusqu'a ce qu'une
+// photo existe : c'est une donnee qui manque, pas une resolution a bricoler.
 const EX_RENOMMAGES=Object.freeze({
-  // 'ANCIENNE CLE':'NOUVELLE CLE',
+  // Pluriel du guide, singulier du fichier.
+  'ABDUCTEURS A LA MACHINE':'ABDUCTEUR A LA MACHINE',
+  // Le guide nomme les deux agres possibles ; le fichier n'en illustre qu'un.
+  'CURL LARRY SCOTT MACHINE GUIDEE OU PUPITRE':'CURL LARRY SCOTT MACHINE GUIDEE',
+  'DEVELOPPE MACHINE HAUT DE PECS OU A LA SMITH':'DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS',
+  'HIP THRUST MACHINE OU A LA BARRE':'HIP THRUST MACHINE',
+  // LE CAS SIGNALE. Debout, barre accrochee au cable : c'est ce que le fichier
+  // « curl barre poulie elastique » montre, et c'est ce que la consigne decrit.
+  'CURL A LA POULIE':'CURL BARRE POULIE ELASTIQUE',
+  // Feminin du guide, masculin du fichier. La variante « pieds en haut » n'a
+  // pas de photo propre : elle prend celle de la presse, ou seul le placement
+  // des pieds differe — une precision d'execution, pas un autre exercice.
+  'PRESSE A CUISSE INCLINEE':'PRESSE A CUISSE INCLINE',
+  'PRESSE A CUISSE INCLINEE PIEDS EN HAUT':'PRESSE A CUISSE INCLINE',
+  // « NEUTRE » seul dans le guide, « PRISE NEUTRE » sur le fichier.
+  'TIRAGE POITRINE NEUTRE':'TIRAGE POITRINE PRISE NEUTRE'
 });
 // PURE. La clef telle que le GUIDE la nomme aujourd'hui, sans rien savoir de
 // l'utilisateur : seule EX_RENOMMAGES est traversée, bornée aux mêmes 3 sauts
