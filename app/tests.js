@@ -7589,9 +7589,17 @@ function testExercices(){
           const u=_ath({status:'COACHING_SUIVI',accessExpiry:Date.now()+3*MOIS});
           if(!checkAccess(u)) return _echec('checkAccess refuse');
           const src=String(routeUser);
-          // La seule branche vers s-client-code reste celle du statut FREE.
-          const m=src.match(/if\(s==='FREE'\)\s*return go\('s-client-code'\)/);
-          return m?true:_echec('la garde FREE a changé de forme');})());
+          // ⚠ LA GARDE A CHANGE DE FORME LE 15/09/2026, et c'est voulu : elle
+          // lisait `s==='FREE'` en dur, ce qui aurait renvoye au paywall un
+          // athlete en essai. Elle passe par doitVoirLePaywall, qui pose la
+          // MEME question en tenant compte de l'essai. La propriete verifiee
+          // ici ne change pas : un seul chemin vers s-client-code, et un
+          // COACHING_SUIVI valide ne le prend pas.
+          const m=src.match(/if\(doitVoirLePaywall\(currentUser\)\) return go\('s-client-code'\)/);
+          if(!m) return _echec('la garde vers s-client-code a changé de forme');
+          if((src.match(/go\('s-client-code'\)/g)||[]).length!==1)
+            return _echec('routeUser a plusieurs chemins vers s-client-code');
+          return !doitVoirLePaywall(u)?true:_echec('un COACHING_SUIVI valide y passerait');})());
 
         // ── Le plafond, vérifié DEUX fois ────────────────────────────────
         ok('Plafond : 12 mois, et un affilié ne peut pas le dépasser',(()=>{
@@ -7779,10 +7787,27 @@ function testExercices(){
         ok('R-02 : les six gardes role!==coach sont TOUTES là',(()=>{
           // Elles étaient corrigées mais rien ne les protégeait : un seul oubli
           // renverrait un coach sur s-client-code, et rien ne le dirait.
-          const tout=_prodSrc();
-          const prod=tout;
-          const n=(prod.match(/role!=='coach'&&\(\w+\.status\|\|'FREE'\)==='FREE'/g)||[]).length;
-          return n>=6?true:_echec(n+' gardes au lieu de 6 au moins');})());
+          // ⚠ MISE A JOUR LE 15/09/2026, ET SCIEMMENT. Cette sonde comptait
+          // SIX COPIES de la meme question, ecrites a la main dans six
+          // fonctions. C'etait la bonne sonde pour ce code-la : un oubli sur
+          // l'une renvoyait un coach sur s-client-code.
+          //
+          // L'essai athlete a force a poser la question une septieme fois, et
+          // six copies a maintenir en valaient une de trop : elles sont
+          // devenues doitVoirLePaywall, qui porte le garde coach UNE fois.
+          // La sonde verifie donc la meme propriete par l'autre bout — plus
+          // aucune copie a la main, tous les chemins par le predicat, et le
+          // predicat qui refuse un coach.
+          const prod=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
+          const copies=(prod.match(/role!=='coach'&&\(\w+\.status\|\|'FREE'\)==='FREE'/g)||[]).length;
+          if(copies) return _echec(copies+' copie(s) de la question ecrites a la main subsistent');
+          const n=(prod.match(/doitVoirLePaywall\(/g)||[]).length;
+          if(n<7) return _echec(n+' mention(s) du predicat : 1 definition + 6 chemins attendus');
+          // ET LE GARDE COACH EST DEDANS. C'est tout ce que les six copies
+          // avaient a garantir.
+          if(doitVoirLePaywall({role:'coach',status:'FREE'}))
+            return _echec('un coach FREE serait renvoye sur s-client-code');
+          return true;})());
         ok('R-02 bis : un coach FREE arrive sur s-coach-home, session INTACTE',(()=>{
           // R-02 ci-dessus COMPTE les gardes. Six gardes bien placées mais
           // menant au mauvais écran passeraient ce comptage sans rien prouver.
@@ -30937,6 +30962,177 @@ function testExercices(){
         return _echec('un compte sans conditions passe');
       if(_consentementAJour({consent:{cgu:true,policyVersion:'2020-01'}}))
         return _echec('un compte sur un texte périmé passe');
+      return true;})());
+
+    // ══ 15/09/2026 — L'ESSAI ATHLETE ══════════════════════════════════════
+    //
+    // ⚠ CE QUE LA PHRASE PROMET, LE CODE DOIT L'APPLIQUER. Une durée annoncée
+    // que le produit n'applique pas serait une promesse contractuelle dont on
+    // ne revient pas — c'est la contrainte du lot, et ces assertions sont là
+    // pour qu'elle tienne quand ESSAI_SEANCES changera.
+    ok('La phrase dit exactement ce que l’essai fait',(()=>{
+      if(typeof PROMESSE_ATHLETE!=='string'||!PROMESSE_ATHLETE)
+        return _echec('la phrase n’existe pas');
+      // ⚠ LE NOMBRE VIENT DE LA CONSTANTE, il n'est pas écrit en toutes
+      // lettres : sans cela, passer ESSAI_SEANCES à 5 laisserait le produit
+      // promettre 3 séances et en accorder 5 — ou l'inverse.
+      if(PROMESSE_ATHLETE.indexOf(String(ESSAI_SEANCES))<0)
+        return _echec('la phrase ne porte pas le nombre de séances accordé');
+      if(!/ESSAI_SEANCES/.test(_prodSrc().slice(
+          _prodSrc().indexOf('const PROMESSE_ATHLETE'),
+          _prodSrc().indexOf('const PROMESSE_ATHLETE')+260)))
+        return _echec('la phrase écrit le nombre en dur au lieu de lire la constante');
+      // ELLE NE PROMET NI DURÉE, NI GRATUITÉ AU-DELÀ. Même règle que
+      // PROMESSE_COACH, dont le commentaire dit : « essai de N jours dirait
+      // exactement le contraire ».
+      for(const mot of ['jour','semaine','mois','illimit','toujours','à vie'])
+        if(new RegExp(mot,'i').test(PROMESSE_ATHLETE))
+          return _echec('la phrase promet une durée ou un au-delà : « '+mot+' »');
+      // ET ELLE DIT QUE ÇA S'ARRÊTE : une phrase qui ne nommerait que ce qui
+      // est libre serait la moitié de la vérité.
+      if(!/abonnement/i.test(PROMESSE_ATHLETE))
+        return _echec('la phrase ne dit pas ce qui vient après');
+      if(!/carte bancaire/i.test(PROMESSE_ATHLETE))
+        return _echec('la phrase ne dit pas qu’aucune carte n’est demandée');
+      return true;})());
+
+    // ÉCRITE UNE FOIS, POSÉE PARTOUT — même mécanique que prixAutonomie, et
+    // pour la même raison : trois textes en dur annonceraient trois essais
+    // différents le jour où la constante change.
+    ok('La phrase d’essai n’est écrite qu’une fois',(()=>{
+      const src=_prodSrc();
+      const n=(src.match(/data-promesse-athlete/g)||[]).length;
+      if(n<3) return _echec('moins de deux emplacements portent la phrase ('+n+' occurrences)');
+      // Le texte lui-même n'apparaît qu'à UN endroit : sa constante.
+      const bout='premières séances sont libres';
+      const m=(src.split(bout).length-1);
+      if(m!==1) return _echec(m+' copies du texte en production au lieu d’une');
+      // Et le poseur lit bien la constante.
+      if(String(_poserPromesseAthlete).indexOf('PROMESSE_ATHLETE')<0)
+        return _echec('le poseur n’utilise pas la constante');
+      return true;})());
+
+    // LE COMPTEUR, SÉANCE PAR SÉANCE. Il se lit dans `sessions`, la donnée
+    // déjà enregistrée : aucun second compteur ne peut diverger d'elle.
+    ok('L’essai se consomme séance par séance, et s’arrête net',(()=>{
+      const u={id:'e',email:'e@t',role:'athlete',status:'FREE',sessions:[]};
+      if(essaiRestant(u)!==null) return _echec('un dossier sans essai en annonce un');
+      if(texteEssaiRestant(u)!=='') return _echec('un dossier sans essai affiche une ligne');
+      if(checkAccess(u)) return _echec('un dossier sans essai a l’accès');
+      if(!essaiOuvrir(u)) return _echec('l’essai ne s’ouvre pas');
+      if(essaiOuvrir(u)) return _echec('l’essai se rouvre : il serait infini');
+      for(let n=0;n<=ESSAI_SEANCES+2;n++){
+        u.sessions=Array.from({length:n},(_,i)=>({date:i+1,exercises:[]}));
+        const reste=Math.max(0,ESSAI_SEANCES-n);
+        if(essaiRestant(u)!==reste)
+          return _echec(n+' séances → reste '+essaiRestant(u)+' au lieu de '+reste);
+        if(checkAccess(u)!==(reste>0))
+          return _echec(n+' séances → accès '+checkAccess(u));
+        // La ligne se tait dès l'épuisement : à ce moment-là c'est le paywall
+        // qui parle, et répéter serait insister.
+        if((texteEssaiRestant(u)!=='')!==(reste>0))
+          return _echec(n+' séances → ligne « '+texteEssaiRestant(u)+' »');
+      }
+      // ⚠ L'ANCRE EST UN NOMBRE DE SÉANCES AU DÉPART, pas un compteur à
+      // rebours : un dossier qui portait déjà des séances n'épuise pas son
+      // essai d'avance.
+      const v={id:'v',email:'v@t',role:'athlete',status:'FREE',
+        sessions:Array.from({length:10},(_,i)=>({date:i+1}))};
+      essaiOuvrir(v);
+      if(essaiRestant(v)!==ESSAI_SEANCES)
+        return _echec('un dossier déjà garni ouvre un essai entamé : '+essaiRestant(v));
+      return true;})());
+
+    // ⚠ UNE SEULE QUESTION « FAUT-IL MONTRER LE PAYWALL », et six appels.
+    // Six endroits la posaient à la main ; chacun aurait renvoyé un athlète en
+    // essai au paywall, une fois par rechargement, malgré un checkAccess qui
+    // disait oui.
+    ok('Le paywall se décide en un seul endroit',(()=>{
+      const src=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
+      // Plus aucune copie de la question à la main.
+      const maison=(src.match(/role!=='coach'&&\(\w+\.status\|\|'FREE'\)==='FREE'/g)||[]).length;
+      if(maison) return _echec(maison+' copie(s) de la question subsistent');
+      const n=(src.match(/doitVoirLePaywall\(/g)||[]).length;
+      // 1 définition + 6 appels.
+      if(n<7) return _echec('seulement '+n+' mention(s) du prédicat : des chemins n’y passent pas');
+      // Il dit non pendant l'essai, oui après, et jamais rien d'un coach.
+      const f=(st,ess)=>({role:'athlete',status:st,essai:ess,sessions:[]});
+      if(doitVoirLePaywall(f('FREE',{seancesAuDebut:0})))
+        return _echec('un athlète en essai est renvoyé au paywall');
+      const epuise={role:'athlete',status:'FREE',essai:{seancesAuDebut:0},
+        sessions:Array.from({length:ESSAI_SEANCES},(_,i)=>({date:i+1}))};
+      if(!doitVoirLePaywall(epuise)) return _echec('un essai épuisé échappe au paywall');
+      if(!doitVoirLePaywall(f('FREE',undefined)))
+        return _echec('un compte FREE sans essai échappe au paywall');
+      if(doitVoirLePaywall({role:'coach',status:'FREE'}))
+        return _echec('un coach est renvoyé au paywall');
+      if(doitVoirLePaywall({role:'athlete',status:'COACHING_SUIVI'}))
+        return _echec('un athlète à code est renvoyé au paywall');
+      return true;})());
+
+    // L'ESSAI S'OUVRE POUR UN ATHLÈTE SANS CODE, ET POUR LUI SEUL.
+    ok('L’essai s’ouvre à l’inscription sans code, jamais ailleurs',(()=>{
+      const src=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
+      const n=(src.match(/essaiOuvrir\(/g)||[]).length;
+      // 1 définition + 1 appel. Un second appel serait un second endroit où
+      // un essai peut naître, donc un endroit où il peut renaître.
+      if(n!==2) return _echec(n+' mentions de essaiOuvrir au lieu de deux');
+      // Et cet appel est bien dans la branche « pas de code retenu ».
+      if(!/_appliquerCodeApresInscription\(\)\)\s*return;[\s\S]{0,600}?essaiOuvrir\(currentUser\)/.test(src))
+        return _echec('l’essai ne s’ouvre pas dans la branche sans code');
+      // Un coach n'en reçoit pas : sa promesse à lui est PROMESSE_COACH.
+      const c={role:'coach',sessions:[]};
+      if(essaiOuvrir(c)) return _echec('un coach reçoit un essai athlète');
+      return true;})());
+
+    // LA MENTION EST DISCRÈTE ET HONNÊTE : elle dit ce qu'il reste, elle ne
+    // relance pas, et elle laisse un chemin volontaire vers l'abonnement.
+    ok('La mention d’essai informe sans relancer',(()=>{
+      const z=document.getElementById('clh-essai');
+      if(!z) return _echec('le nud de la mention n’existe pas');
+      // Après la douleur, les contre-indications et l'échéance, comme tout le
+      // reste de l'accueil.
+      const S=Node.DOCUMENT_POSITION_FOLLOWING;
+      for(const id of ['clh-echeance','clh-contraintes','clh-douleur']){
+        const e=document.getElementById(id);
+        if(e&&!(e.compareDocumentPosition(z)&S))
+          return _echec('la mention passe devant '+id);
+      }
+      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const m=css.match(/\.ess-ligne\{([^}]*)\}/);
+      if(!m) return _echec('la règle .ess-ligne n’existe pas');
+      // DISCRÈTE : ni rouge de relance, ni animation, ni pastille.
+      if(/var\(--red\)|background:var\(--red/.test(m[1]))
+        return _echec('la mention crie : '+m[1].slice(0,70));
+      if(/animation:/.test(m[1])) return _echec('la mention bouge');
+      // Le texte lui-même ne promet rien et ne presse personne.
+      const u={role:'athlete',status:'FREE',essai:{seancesAuDebut:0},sessions:[]};
+      const t=texteEssaiRestant(u);
+      for(const mot of ['vite','dépêche','plus que','profite','offre'])
+        if(new RegExp(mot,'i').test(t)) return _echec('la ligne relance : « '+mot+' »');
+      if(t.indexOf(String(ESSAI_SEANCES))<0)
+        return _echec('la ligne ne dit pas combien il en reste');
+      return true;})());
+
+    // ⚠ LE FLUX PAYPAL ET LA RENONCIATION NE SONT PAS TOUCHÉS. La case reste
+    // obligatoire et décochée par défaut au moment du paiement réel : c'est
+    // une contrainte explicite du lot, et elle se vérifie plutôt qu'elle ne
+    // se suppose.
+    ok('La renonciation au droit de rétractation est intacte',(()=>{
+      const src=_prodSrc();
+      const i=src.indexOf('id="sub-renonciation"');
+      if(i<0) return _echec('la case de renonciation a disparu');
+      const bal=src.slice(src.lastIndexOf('<input',i),src.indexOf('>',i));
+      // ⚠ L'ATTRIBUT, PAS LE MOT. La balise porte
+      // onchange="_majRenonciation(this.checked)" : un \bchecked\b y trouvait
+      // « this.checked » et accusait de pré-cochage une case parfaitement
+      // décochée. On cherche l'attribut autonome.
+      if(/(^|\s)checked(\s|=|$)/.test(bal.replace(/this\.checked/g,'')))
+        return _echec('la case de renonciation est pré-cochée');
+      // Et rien du lot d'essai ne s'est branché sur le flux de paiement.
+      for(const f of [_poserPromesseAthlete,_rendreEssai,ouvrirAbonnementDepuisEssai])
+        if(/sub-waiver|paypal|PAYPAL/i.test(String(f)))
+          return _echec('le lot d’essai touche au flux de paiement');
       return true;})());
 
     // « — Continue ! » — meme tiret, meme lecture, dans la notification

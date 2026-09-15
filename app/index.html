@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1219';
+window.RC_BUILD='1220';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5523,6 +5523,19 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    fermer, et c'est la seule forme acceptable pour une récompense : elle se
    remarque ou elle ne se remarque pas, elle n'interrompt pas.
    Au-dessus de la barre d'onglets, pas devant : bottom 88px. */
+/* ══ CE QU'IL RESTE D'ESSAI ═══════════════════════════════════════════════
+   DISCRETE, et le mot est de Kevin : pas de cadre rouge, pas de compte a
+   rebours, pas de pastille. Une ligne de texte et un lien. Elle informe, elle
+   ne relance pas — un athlete qui a encore deux seances devant lui n'a rien a
+   decider aujourd'hui. */
+.ess-ligne{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+  margin-bottom:16px;padding:9px 12px;border-radius:var(--r-2);
+  background:var(--surface-1);border:1px solid var(--border);
+  font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.ess-lien{margin-left:auto;padding:0;background:none;border:0;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;
+  color:var(--red-text);cursor:pointer;white-space:nowrap}
+
 /* ══ TON POINT DU JOUR ════════════════════════════════════════════════════
    UNE question, un controle, et c'est tout. La carte est volontairement plus
    basse que celles qui l'entourent : elle doit se lire en entier sans faire
@@ -6790,7 +6803,13 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="width:44px;height:44px;border-radius:var(--r-3);background:#0d0d0d;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:var(--fs-lg);letter-spacing:.5px">JE N'AI PAS DE CODE</div>
-          <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Accès en autonomie : <span data-prix-autonomie>9,95 €/mois</span>, sans engagement</div>
+          <!-- ⚠ L'ESSAI EST ANNONCE ICI, ET LE PRIX RESTE. Annoncer l'un sans
+               l'autre serait la moitie de la verite : on dit ce qui est libre,
+               et ce que ca coute ensuite. Le texte vient de PROMESSE_ATHLETE,
+               pose par _poserPromesseAthlete — ecrit une fois, comme
+               PROMESSE_COACH. -->
+          <div class="sub" style="font-size:var(--fs-xs);margin-top:3px;color:var(--green)" data-promesse-athlete></div>
+          <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Ensuite : <span data-prix-autonomie>9,95 €/mois</span>, sans engagement</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:var(--fs-xl)">›</div>
       </div>
@@ -6799,7 +6818,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Info box athlète -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:var(--r-3);padding:14px 16px;margin-top:4px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ℹ️ ESPACE ATHLÈTE</div>
-      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, l'accès en autonomie coûte <span data-prix-autonomie>9,95 €/mois</span>, sans engagement.</div>
+      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, <span data-promesse-athlete></span> L'accès en autonomie coûte ensuite <span data-prix-autonomie>9,95 €/mois</span>, sans engagement.</div>
     </div>
 
   </div>
@@ -8742,6 +8761,15 @@ const COACH_PHOTO='icons/coach.jpg';
            Elle ne s'affiche ni le samedi, ni le dimanche, ni quand la
            reponse du jour est deja la, ni par-dessus le bloc de reprise. -->
       <div id="clh-point-jour"></div>
+
+      <!-- ══ CE QU'IL RESTE D'ESSAI ═══════════════════════════════════════
+           Une ligne, discrete, et HONNETE : elle dit ce qu'il reste, pas ce
+           qu'on espere. Remplie par _rendreEssai, appelee depuis
+           loadClientHome. Vide des que l'essai est epuise — a ce moment-la
+           c'est le paywall qui parle, et repeter la ligne serait insister.
+           Vide aussi pour un athlete a code : il n'a pas d'essai, il a un
+           coach. -->
+      <div id="clh-essai"></div>
 
       <!-- MOT DU COACH -->
       <div id="clh-annonce" style="display:none"></div>
@@ -11294,6 +11322,129 @@ function coachQuotaDepasse(coach,users){
 // contractuelle dont on ne revient pas.
 const PROMESSE_COACH='Gratuit pour votre premier client, sans limite de durée, '
   +'sans carte bancaire.';
+// ══════════ L'ESSAI ATHLETE, SYMETRIQUE DE LA PROMESSE COACH ══════════════
+//
+// Le coach a PROMESSE_COACH : gratuit pour son premier client, sans carte.
+// L'athlete sans code, lui, arrivait sur 9,95 EUR/mois, PayPal et une case de
+// renonciation au droit de retractation — avant d'avoir vu une repetition.
+//
+// ── POURQUOI DES SEANCES ET NON DES JOURS ────────────────────────────────
+//
+// NOTE-DECISION-MODELE-ECONOMIQUE.md a ete lue avant d'ecrire cette ligne :
+// elle tranche « AUCUNE — statu quo » sur A contre B, et ne dit RIEN d'une
+// duree d'essai. Le choix n'y est donc pas fait, et il est fait ici, avec ses
+// raisons — pour qu'il se relise et se defasse.
+//
+//   1. LA MAISON A DEJA TRANCHE CONTRE LES DUREES. Le commentaire de
+//      PROMESSE_COACH, quinze lignes plus bas, dit mot pour mot : « Elle promet
+//      un CLIENT, jamais une duree […] et "essai de N jours" dirait exactement
+//      le contraire. » Un essai athlete en jours contredirait la phrase soeur
+//      sur le meme ecran d'accueil.
+//
+//   2. LA SYMETRIE EST UNE UNITE D'USAGE, PAS UNE HORLOGE. « Ton premier
+//      client » se traduit par « tes trois premieres seances », pas par « ta
+//      premiere semaine ».
+//
+//   3. UNE DUREE EXPIRE SANS AVOIR SERVI. Sept jours pour quelqu'un qui
+//      s'inscrit un vendredi et ouvre l'app le mardi suivant, c'est un essai
+//      consomme a 60 % par du sommeil. Un compteur de seances ne se vide que
+//      quand il a servi.
+//
+//   4. ET SURTOUT : UNE SEANCE SE COMPTE DANS LA DONNEE DEJA ENREGISTREE.
+//      `sessions` est ecrit par finishWorkout et par personne d'autre. Le
+//      texte promet donc exactement ce que le code applique. Une duree, elle,
+//      se compte sur l'horloge de l'appareil — que le plan Spark ne permet pas
+//      de contredire (voir l'avertissement ci-dessous). Promettre sept jours
+//      quand on ne sait pas quel jour il est serait la promesse contractuelle
+//      dont on ne revient pas.
+//
+// Trois est le nombre : assez pour qu'une progression commence a se voir,
+// assez peu pour que l'essai ne remplace pas l'abonnement. Il se change ici,
+// en un endroit, et la phrase suit — voir PROMESSE_ATHLETE.
+const ESSAI_SEANCES=3;
+// ⚠ AUCUN CONTROLE SERVEUR, ET ON NE FAIT PAS SEMBLANT.
+//
+// Meme arbitrage que status / paymentStatus, assume le 24/07/2026 et rappele
+// juste au-dessus de checkAccess : sous users/$emailKey, database.rules.json
+// accorde l'ecriture au titulaire SANS restriction de champ. N'importe qui
+// peut donc remettre `essai.seancesAuDebut` a la valeur de son choix depuis la
+// console de son navigateur et recommencer un essai, indefiniment.
+//
+// CE N'EST PAS UN OUBLI, C'EST LA LIMITE DU PLAN SPARK — aucune fonction
+// serveur, donc aucun endroit ou poser un compteur que l'utilisateur ne
+// controle pas. La seule barriere est l'interface, exactement comme pour
+// l'abonnement lui-meme.
+//
+// Ce qui change quand meme quelque chose : l'essai est adosse a `sessions`,
+// qui est aussi ce que le COACH lit. Un athlete qui trafique son compteur se
+// voit sur la fiche de son coach.
+//
+// Condition de reouverture : passage au plan Blaze.
+
+// LA phrase, ecrite une fois, sur le modele de PROMESSE_COACH. Elle dit CE QUE
+// L'ESSAI FAIT, et rien de plus : trois seances, pas de carte, puis
+// l'abonnement. Elle ne promet ni duree, ni gratuite au-dela, ni
+// renouvellement — une limitation annoncee comme un avantage devient une
+// promesse dont on ne revient pas.
+const PROMESSE_ATHLETE='Tes '+ESSAI_SEANCES+' premières séances sont libres, '
+  +'sans carte bancaire. L\'abonnement ne vient qu\'ensuite.';
+// ECRIT. Ouvre l'essai, UNE SEULE FOIS DANS LA VIE DU COMPTE.
+//
+// `seancesAuDebut` plutot qu'un simple compteur a rebours : l'essai se lit
+// alors dans `sessions`, la donnee deja enregistree, et aucun second compteur
+// ne peut diverger d'elle. Il vaut 0 sur un compte neuf — le seul cas ou cette
+// fonction est appelee — mais le poser explicitement rend la lecture juste si
+// l'essai devait un jour s'ouvrir sur un dossier deja garni.
+function essaiOuvrir(u){
+  if(!u||u.role==='coach') return false;
+  if(u.essai&&typeof u.essai==='object') return false;   // deja ouvert, ou deja epuise
+  u.essai={ouvertLe:Date.now(),seancesAuDebut:((u.sessions)||[]).length};
+  return true;
+}
+// PURE. Les seances faites DEPUIS l'ouverture de l'essai.
+function essaiSeancesFaites(u){
+  const e=u&&u.essai;
+  if(!e||typeof e!=='object') return 0;
+  const n=((u.sessions)||[]).length-(Number(e.seancesAuDebut)||0);
+  return Math.max(0,n);
+}
+// PURE. Ce qu'il reste, ou NULL quand il n'y a pas d'essai du tout — les deux
+// ne se confondent pas : zero veut dire « epuise », null veut dire « ce compte
+// n'en a jamais eu », et le second ne doit rien afficher.
+function essaiRestant(u){
+  if(!u||!u.essai||typeof u.essai!=='object') return null;
+  return Math.max(0,ESSAI_SEANCES-essaiSeancesFaites(u));
+}
+function essaiActif(u){
+  const r=essaiRestant(u);
+  return r!==null&&r>0;
+}
+// PURE. ⚠ LA QUESTION « FAUT-IL MONTRER LE PAYWALL », ECRITE UNE FOIS.
+//
+// SIX endroits du fichier detournaient un athlete FREE vers s-client-code :
+// le demarrage synchrone, la synchro de fond, les trois sorties de doLogin, et
+// la reprise d'un dossier distant. Chacun posait la meme question a la main —
+// `role!=='coach' && (status||'FREE')==='FREE'` — et chacun aurait donc
+// renvoye un athlete EN ESSAI au paywall, une fois par rechargement, malgre un
+// checkAccess qui disait oui.
+//
+// Une seule fonction, six appels. Le jour ou l'essai change de regle, il n'y a
+// qu'un endroit a ouvrir, et aucun des six ne peut etre oublie.
+function doitVoirLePaywall(u){
+  if(!u||u.role==='coach') return false;
+  if((u.status||'FREE')!=='FREE') return false;
+  return !essaiActif(u);
+}
+// PURE. La mention discrete, et HONNETE : elle dit ce qu'il reste, pas ce
+// qu'on espere. Rend '' quand il n'y a rien a dire — pas d'essai, ou essai
+// epuise, cas ou c'est le paywall qui parle et non cette ligne.
+function texteEssaiRestant(u){
+  const r=essaiRestant(u);
+  if(r===null||r<=0) return '';
+  return r===1
+    ? 'Dernière séance libre. Ensuite, l\'abonnement ou un code de ton coach.'
+    : 'Il te reste '+r+' séances libres sur '+ESSAI_SEANCES+'.';
+}
 const LIBRE_MAX=200;
 function _urlCoachsLibres(){
   return CLOUD._fbUrl.replace('/users.json','/coachs_libres.json');
@@ -13946,6 +14097,11 @@ const CHAMPS_SANTE=Object.freeze([
 const CHAMPS_NON_SANTE=Object.freeze([
   'id','email','fname','lname','role','createdAt','updatedAt','consent','rgpd',
   'status','accessExpiry','paymentStatus','paypalSubscriptionId','abonnement',
+  // `essai` compte des seances pour decider d'un paywall : c'est de la
+  // facturation, pas de la sante. Il ne porte ni mesure, ni ressenti, ni
+  // date de naissance — seulement un horodatage d'ouverture et un nombre de
+  // seances deja faites au depart.
+  'essai',
   'echeance','alertStatus','supprimes','_export',
   'coachId','coachName','coachEmailKey','coachCode','coachPhoto','code','clients',
   'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
@@ -14467,6 +14623,10 @@ window.addEventListener('online',async()=>{
 window.onload=()=>{
   // Les prix affichés en clair viennent de la table, pas du balisage.
   _majPrixAffiches();
+  // Et la promesse d'essai vient de PROMESSE_ATHLETE, pas du balisage non
+  // plus : meme mecanique, meme raison. Trois textes en dur auraient fini par
+  // annoncer trois essais differents le jour ou ESSAI_SEANCES change.
+  _poserPromesseAthlete();
   // L'app peut démarrer hors ligne : l'événement `offline` ne se déclenchera
   // pas, il n'y a pas de transition.
   document.querySelectorAll('#client-tabbar .tab-btn[data-icon]').forEach(b=>b.insertAdjacentHTML('afterbegin',icon(b.dataset.icon,19)));
@@ -14594,7 +14754,7 @@ window.onload=()=>{
           // Session corrompue : là, et seulement là, la purge est justifiée.
           silentLogout();
           go('s-welcome');
-        } else if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
+        } else if(doitVoirLePaywall(currentUser)){
           go('s-client-code');
         } else if(sessionStorage.getItem('rc_paypal_return')){
           // Retour depuis redirection PayPal → remettre sur la page paiement
@@ -14613,7 +14773,7 @@ window.onload=()=>{
             // Même exclusion coach qu'au démarrage synchrone : sans elle le coach
             // atteint bien s-coach-home puis en est éjecté ~1s plus tard, à la fin
             // de la sync cloud.
-            if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
+            if(doitVoirLePaywall(currentUser)){
               // La sync de fond arrive ~1s après le boot : l'utilisateur peut
               // déjà être parti voir les abonnements ou remplir son inscription.
               // On ne le ramène que s'il est resté sur un écran d'accès.
@@ -15073,7 +15233,11 @@ function routeUser(){
   // invalide : on conserve sa session et on l'amène à l'écran qui propose le
   // code ET les abonnements. Le déconnecter revenait à détruire son compte
   // parce qu'il n'avait pas encore choisi comment payer.
-  if(s==='FREE') return go('s-client-code');
+  // ⚠ ET L'ESSAI SE LIT ICI AUSSI. Sans cette condition, checkAccess aurait
+  // beau dire oui, la ligne d'au-dessus aurait detourne l'athlete vers
+  // l'ecran de code avant meme qu'on la consulte : s-subscribe et s-client-code
+  // ne sont presentes qu'a l'epuisement.
+  if(doitVoirLePaywall(currentUser)) return go('s-client-code');
   if(!checkAccess(currentUser)){go('s-access-gate');loadAccessGate();return;}
   // ── L'ACCUEIL DU NOUVEL INSCRIT ──────────────────────────────────────
   // ICI, et nulle part ailleurs. routeUser est le seul point qui DECIDE ou un
@@ -15110,7 +15274,15 @@ function routeUser(){
 function checkAccess(u){
   if(!u||u.role==='coach') return true;
   const s=u.status||'FREE';
-  if(s==='FREE') return false;
+  // ⚠ L'ESSAI PASSE PAR LA MEME PORTE QUE TOUT LE RESTE, et c'est voulu :
+  // checkAccess est le seul endroit du fichier qui dise oui ou non a un
+  // athlete. Un essai branche ailleurs — un garde dans go(), une exception
+  // dans routeUser — aurait fait deux verites sur le meme sujet.
+  //
+  // FREE + essai en cours = acces. FREE + essai epuise = le paywall, comme
+  // avant. FREE sans essai du tout = comme avant, inchange : les comptes
+  // anterieurs a ce lot ne se voient pas ouvrir un essai retroactif.
+  if(s==='FREE') return essaiActif(u);
   if(s==='COACHING_SUIVI'){
     if(!u.accessExpiry) return true;
     return Date.now()<u.accessExpiry;
@@ -17317,7 +17489,7 @@ async function doRegister(){
       try{ comptesEnregistrer(currentUser); }catch(e){}
       // routeUser() déconnecterait un athlète encore en statut FREE ; on le mène
       // à l'écran de code, comme le fait doLogin dans la même situation.
-      if(dossierExistant.role!=='coach'&&(dossierExistant.status||'FREE')==='FREE'){
+      if(doitVoirLePaywall(dossierExistant)){
         if(_retourApresInscription()) return;
         // Même règle que pour une inscription neuve : un code déjà vérifié
         // s'applique tout seul. Ce chemin est celui du réinstallateur, qui n'a
@@ -17386,8 +17558,22 @@ async function doRegister(){
       // sur son bilan de départ (code créateur) ou sur l'abonnement (code
       // affilié) sans jamais voir s-client-code.
       if(await _appliquerCodeApresInscription()) return;
-      // Pas de code retenu, ou application impossible : l'écran de saisie reste
-      // le filet — c'est désormais son seul rôle.
+      // ⚠ PAS DE CODE : C'EST ICI QUE L'ESSAI S'OUVRE, et nulle part ailleurs.
+      // Cette branche est exactement « un athlete sans code coach » — celui
+      // qui, jusqu'a ce lot, tombait sur 9,95 EUR/mois avant d'avoir vu une
+      // repetition. Un athlete qui ARRIVE avec un code n'en a pas besoin :
+      // son acces est ouvert par son coach, et lui en ouvrir un en plus
+      // laisserait un essai dormant a consommer le jour ou le code expire.
+      if(essaiOuvrir(currentUser)){
+        saveUser();
+        // L'accueil, pas l'ecran de code : l'essai est ouvert, il y a donc
+        // quelque chose a faire. La promesse est rappelee a l'arrivee.
+        routeUser();
+        toast(PROMESSE_ATHLETE,'var(--green)');
+        return;
+      }
+      // Essai deja ouvert et epuise, ou dossier de coach : l'écran de saisie
+      // reste le filet — c'est désormais son seul rôle.
       go('s-client-code');
       // Pre-fill pending code if athlete came via s-athlete-entry
       const pending=localStorage.getItem('pendingCode');
@@ -17463,7 +17649,7 @@ async function doLogin(){
       if(!u) return rescueLogin(em,pw);
       synced[em]=u;DB.set('users',synced);
       currentUser=u;DB.set('session',currentUser);
-      if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){go('s-client-code');return;}
+      if(doitVoirLePaywall(currentUser)){go('s-client-code');return;}
       return routeUser();
     }
 
@@ -17475,7 +17661,7 @@ async function doLogin(){
         :'Email ou mot de passe incorrect.');
     currentUser=users[em];DB.set('session',currentUser);
     if(CLOUD.canWrite()) saveUser();
-    if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
+    if(doitVoirLePaywall(currentUser)){
       go('s-client-code');
       return;
     }
@@ -17598,7 +17784,7 @@ async function doNewPwdRecovery(){
     if(u){
       users[em]=u;DB.set('users',users);
       currentUser=u;DB.set('session',currentUser);
-      if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){go('s-client-code');return;}
+      if(doitVoirLePaywall(currentUser)){go('s-client-code');return;}
       return routeUser();
     }
     return rescueLogin(em,pw);
@@ -24253,7 +24439,13 @@ function renderTodoBlock(clients){
 // ouverture. Le badge d'activité seul affichait « Inactif », ce qui se lisait
 // comme un manque d'assiduité alors que l'élève ne peut tout simplement pas
 // entrer. Le coach doit savoir ce qu'il reste à faire.
-function _enAttenteAbonnement(c){return !c._fromCode&&c.status==='FREE';}
+// ⚠ PAS PENDANT L'ESSAI. Le commentaire ci-dessus dit la raison d'etre de ce
+// signal : « l'eleve ne peut tout simplement pas entrer ». Pendant ses trois
+// seances libres, il entre — et afficher au coach qu'il est bloque serait lui
+// faire relancer quelqu'un qui est en train de s'entrainer.
+function _enAttenteAbonnement(c){
+  return !c._fromCode&&c.status==='FREE'&&!essaiActif(c);
+}
 // R-03 : accès expiré = LECTURE SEULE, jamais suppression. Le dossier, les
 // séances, les bilans et l'historique restent intacts et consultables par le
 // coach ; c'est l'athlète qui ne peut plus entrer tant qu'un nouveau code ne
@@ -35610,6 +35802,7 @@ function loadClientHome(){
   // ET APRES _rendreReprise, dont il depend : pdjEtat se tait quand le bloc de
   // reprise occupe le haut de l'ecran.
   _rendrePointDuJour();
+  _rendreEssai();
   renderCartePesee();
   renderContraintesAthlete();
   renderDouleurAthlete();
@@ -55977,6 +56170,35 @@ function _htmlPointDuJour(etat){
     +'<div class="pdj-tete">Ton point du jour</div>'
     +'<div class="pdj-q">'+escapeHtml(etat.titre)+'</div>'
     +controle+lien+'</div>';
+}
+// La mention d'essai. Elle emprunte son texte a texteEssaiRestant, qui est
+// PURE et qui est la seule a savoir compter — ce rendu-ci ne fait que peindre.
+function _rendreEssai(){
+  const z=document.getElementById('clh-essai');
+  if(!z) return;
+  let t='';
+  try{ t=texteEssaiRestant(currentUser); }catch(e){ t=''; }
+  z.innerHTML=t
+    ? '<div class="ess-ligne"><span>'+escapeHtml(t)+'</span>'
+      +'<button type="button" class="ess-lien" onclick="ouvrirAbonnementDepuisEssai()">'
+      +'Voir l\'abonnement</button></div>'
+    : '';
+}
+// Le seul chemin vers le paywall pendant l'essai, et il est VOLONTAIRE : on
+// ne le pousse pas, on le rend atteignable. C'est la difference entre une
+// mention et une relance.
+function ouvrirAbonnementDepuisEssai(){
+  try{ goAvecRetour('s-subscribe'); loadSubscribePage(); }
+  catch(e){ try{ go('s-subscribe'); }catch(_e){} }
+}
+// La phrase posee partout ou elle doit l'etre, sur le modele exact de ce que
+// fait selectRole pour PROMESSE_COACH : un seul texte, plusieurs emplacements,
+// aucune recopie.
+function _poserPromesseAthlete(){
+  try{
+    document.querySelectorAll('[data-promesse-athlete]')
+      .forEach(e=>{ e.textContent=PROMESSE_ATHLETE; });
+  }catch(e){}
 }
 function _rendrePointDuJour(){
   const z=document.getElementById('clh-point-jour');
