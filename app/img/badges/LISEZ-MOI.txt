@@ -29,6 +29,27 @@ Un fichier par badge, nomme d'apres sa clef en minuscules, extension .png :
 L'ordre ci-dessus est celui de la planche « TES BADGES », lue de gauche a
 droite et de haut en bas.
 
+ETAT AU 15/09/2026
+------------------
+Les quinze sont LA, et ils servent a DEUX endroits :
+
+  1. le recap de fin de seance — BADGES / achievementEngine, qui en choisit
+     jusqu'a trois d'apres ce que la seance a produit ; ils sont ephemeres ;
+  2. la carte « Mes badges » du profil athlete — BADGES_ACQUIS, cinq
+     recompenses permanentes inscrites au dossier avec leur date. Elle
+     EMPRUNTE cinq de ces quinze fichiers (voir BADGE_ACQUIS_IMG) plutot que
+     d'en deposer cinq de plus : deux decoupages du meme hexagone auraient
+     diverge au premier retouchage.
+
+Ils ont ete REINDEXES sur 96 couleurs avec transparence le 15/09/2026 :
+1 303 724 octets -> 221 119, soit -84 %, sans difference visible a taille
+reelle alors qu'ils s'affichent a 64 px. C'est ce qui a permis de les mettre
+dans ASSETS du service worker (MEDAILLONS, app/sw.js) : ils arrivent donc
+hors ligne, c'est-a-dire en salle, c'est-a-dire au moment ou ils servent.
+
+Un remplacement futur repasse par la meme reindexation, sans quoi le dossier
+reprendra 1,3 Mo sans que personne le remarque.
+
 FORMAT
 ------
   — Carre, 256 x 256 px suffit : ils sont affiches a 64 px, 128 sur un ecran

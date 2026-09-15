@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1216';
+const CACHE = 'repcore-v1217';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -88,9 +88,24 @@ for (let n = 1; n <= 7; n++) for (const g of ['h', 'f']) for (const v of ['', '-
 // l ouverture. Sans elle, un athlete hors ligne verrait la carte de citation
 // se rendre sans sa photo — le onerror la retirerait, silencieusement, et il
 // n aurait aucune raison de comprendre pourquoi.
+// LES QUINZE MEDAILLONS. Ils etaient laissés au handler fetch, et le
+// commentaire de LISEZ-MOI l'expliquait par leur poids : 1,2 Mo pour les
+// quinze. Ils en pesent 221 ko depuis leur reindexation sur 96 couleurs, soit
+// moins que les vingt-huit avatars qui sont dans la liste depuis toujours.
+//
+// Le raisonnement d'AVATARS s'applique alors mot pour mot : ils sont demandes
+// A LA FIN D'UNE SEANCE, c'est-a-dire souvent en salle, c'est-a-dire souvent
+// sans reseau. Sans eux l'ecran de fin retombait sur les glyphes au trait —
+// il restait complet, mais la recompense dessinee n'arrivait jamais au seul
+// moment ou elle compte. La carte « Mes badges » du profil les demande aussi.
+const MEDAILLONS = ['new_record', 'multiple_records', 'new_load', 'personal_best',
+  'new_perf', 'progression', 'monster', 'high_volume', 'no_mercy', 'full_session',
+  'no_fail', 'perfect', 'streak', 'return', 'discipline']
+  .map(n => './img/badges/' + n + '.png');
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './fonts/montserrat-var-latin.woff2',
-  './fonts/bebasneue-400-latin.woff2', './img/arn.png'].concat(AVATARS);
+  './fonts/bebasneue-400-latin.woff2', './img/arn.png']
+  .concat(AVATARS).concat(MEDAILLONS);
 
 // Une séance en cours interdit la bascule. Prendre le contrôle en pleine
 // séance, c'est purger le cache sous les pieds de quelqu'un qui est peut-être

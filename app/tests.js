@@ -30222,6 +30222,260 @@ function testExercices(){
       const ecart=rl.left-rv.right;
       return ecart>2&&ecart<14?true:_echec('espace entre les deux : '+Math.round(ecart)+' px');})());
 
+    // ══ 15/09/2026 — LES CINQ BADGES ══════════════════════════════════════
+    // « Cinq badges, pas un de plus. RepCore se vend sur le serieux : une
+    // collection sans fin transformerait un signal de reconnaissance en bruit. »
+    // Ce n'est pas une contrainte technique, donc rien dans le code ne la tient
+    // tout seul : il faut une assertion, et la voici. Le SERVEUR la tient aussi
+    // — le motif de cle de /users/$emailKey/badges n'accepte que ces cinq
+    // identifiants — et scripts/verif/regles.mjs compare les deux listes.
+    ok('Cinq badges, pas un de plus',(()=>{
+      if(!Array.isArray(BADGES_ACQUIS)) return _echec('BADGES_ACQUIS n’est pas une liste');
+      if(BADGES_ACQUIS.length!==5) return _echec(BADGES_ACQUIS.length+' badges au lieu de cinq');
+      const ids=BADGES_ACQUIS.map(b=>b.id);
+      if(new Set(ids).size!==5) return _echec('deux badges portent le meme identifiant');
+      // Chacun dit ce qu'il RECOMPENSE et ce qu'il FAUT FAIRE : la vitrine du
+      // profil montre les cinq, obtenus et a obtenir, et sans `attendu` la
+      // moitie de la carte serait vide.
+      for(const b of BADGES_ACQUIS){
+        for(const c of ['id','lib','phrase','attendu'])
+          if(!b[c]||typeof b[c]!=='string') return _echec(b.id+' n’a pas de '+c);
+        if(!badgeAcquisFichier(b.id)) return _echec(b.id+' n’a pas d’image');
+      }
+      return true;})());
+
+    // ⚠ AUCUNE IMAGE NOUVELLE. Les quinze medaillons sont decoupes dans
+    // app/img/badges/ depuis le 14/09 ; en redecouper cinq pour cette carte
+    // aurait mis deux versions du meme hexagone dans le depot. Les cinq
+    // permanents EMPRUNTENT donc cinq des quinze, par leur clef de fin de
+    // seance — et cette assertion verifie que ces clefs existent vraiment.
+    ok('Les badges permanents empruntent les medaillons existants',(()=>{
+      for(const b of BADGES_ACQUIS){
+        const k=BADGE_ACQUIS_IMG[b.id];
+        if(!k) return _echec(b.id+' ne designe aucun medaillon');
+        if(!BADGES[k]) return _echec(b.id+' designe '+k+', qui n’est pas un badge de seance');
+        const f=badgeAcquisFichier(b.id);
+        if(f!==_badgeFichier(k)) return _echec(b.id+' ne passe pas par _badgeFichier : '+f);
+        if(!/^img\/badges\//.test(f)) return _echec(b.id+' sort du dossier commun : '+f);
+      }
+      return true;})());
+
+    // LES CINQ CRITERES, UN PAR UN. « Les badges se calculent a partir des
+    // donnees deja enregistrees, sans nouvelle colle » : badgesMerites ne lit
+    // que sessions, bilans, sessions_config et streak, par des fonctions qui
+    // existaient avant ce lot.
+    ok('Les cinq critères se lisent dans le dossier, et nulle part ailleurs',(()=>{
+      const J=864e5, now=Date.now();
+      const lundi=_lundiDe(now).getTime();
+      const cfg3=[{active:true},{active:true},{active:true},{active:false}];
+      const seance=(d,nom,poids,reps)=>({date:d,exercises:[{name:nom,
+        sets:[{weight:poids,reps:reps,repsDone:reps,rir:0,done:true}]}]});
+      const cas=[
+        // Dossier vierge : rien.
+        [{sessions:[],bilans:[],sessions_config:cfg3},[]],
+        // UNE seance : la premiere, et elle seule. Pas de record — il n'y a
+        // rien a battre — et le quota de trois n'est pas atteint.
+        [{sessions:[seance(lundi+J,'DEV',100,5)],bilans:[],sessions_config:cfg3},
+         ['premiere-seance']],
+        // Trois seances dans LA MEME semaine calendaire : le quota est fait.
+        [{sessions:[seance(lundi,'DEV',100,5),seance(lundi+J,'DEV',90,5),
+                    seance(lundi+2*J,'DEV',90,5)],bilans:[],sessions_config:cfg3},
+         ['premiere-seance','semaine-validee']],
+        // Trois seances a cheval sur DEUX semaines : aucune n'est validee.
+        [{sessions:[seance(lundi-8*J,'DEV',100,5),seance(lundi-7*J,'DEV',90,5),
+                    seance(lundi+J,'DEV',90,5)],bilans:[],sessions_config:cfg3},
+         ['premiere-seance']],
+        // Une charge qui monte apres la premiere seance : c'est un record.
+        [{sessions:[seance(lundi-8*J,'DEV',100,5),seance(lundi+J,'DEV',110,5)],
+          bilans:[],sessions_config:cfg3},
+         ['premiere-seance','premier-record']],
+        // La meme charge qui DESCEND : ce n'en est pas un.
+        [{sessions:[seance(lundi-8*J,'DEV',100,5),seance(lundi+J,'DEV',90,5)],
+          bilans:[],sessions_config:cfg3},
+         ['premiere-seance']],
+        // Un bilan, quel que soit son type.
+        [{sessions:[],bilans:[{date:now,type:'depart'}],sessions_config:cfg3},
+         ['premier-bilan']],
+        // Quatre semaines de serie, lues par streakSemaines et par personne
+        // d'autre : aucune semaine n'est recomptee de ce cote.
+        [{sessions:[],bilans:[],sessions_config:cfg3,streak:4,lastSession:now},
+         ['quatre-semaines']],
+        [{sessions:[],bilans:[],sessions_config:cfg3,streak:3,lastSession:now},
+         []]
+      ];
+      for(let i=0;i<cas.length;i++){
+        const [u,attendu]=cas[i];
+        const r=badgesMerites(Object.assign({role:'athlete'},u),now);
+        if(r.join(',')!==attendu.join(','))
+          return _echec('cas '+i+' → ['+r.join(',')+'] au lieu de ['+attendu.join(',')+']');
+      }
+      // ET L'ORDRE EST CELUI DE BADGES_ACQUIS, toujours : majBadges ne fete que
+      // le premier de la liste, et un ordre qui flotterait ferait varier la
+      // banniere d'un appareil a l'autre pour le meme evenement.
+      const tous=badgesMerites({role:'athlete',sessions:[seance(lundi,'DEV',100,5),
+        seance(lundi+J,'DEV',110,5),seance(lundi+2*J,'DEV',120,5)],
+        bilans:[{date:now}],sessions_config:cfg3,streak:4,lastSession:now},now);
+      const rang=tous.map(id=>BADGES_ACQUIS.findIndex(b=>b.id===id));
+      for(let i=1;i<rang.length;i++)
+        if(rang[i]<=rang[i-1]) return _echec('l’ordre flotte : '+tous.join(','));
+      return tous.length===5?true:_echec('les cinq ne tombent pas ensemble : '+tous.join(','));})());
+
+    // ⚠ LE GARDE EST EN PREMIERE LIGNE, ET IL BLOQUE L'ECRITURE AUTANT QUE LA
+    // BANNIERE. « Aucun badge ne doit se declencher pendant une suspension ou
+    // un drapeau rouge » — un badge inscrit en silence pour etre fete plus tard
+    // serait la meme chose avec un delai. Le critere, lui, ne s'efface pas : il
+    // se lit dans les donnees et retombera a la levee.
+    ok('Sous drapeau ou suspension, aucun badge ne tombe',(()=>{
+      const sv=currentUser;
+      try{
+        const base=()=>({id:'b1',email:'b@t.fr',role:'athlete',
+          sessions:[{date:Date.now()-3600e3,exercises:[]}],bilans:[],
+          sessions_config:[{active:true}]});
+        // Temoin : sans drapeau, le badge tombe. Sans ce temoin, les deux cas
+        // suivants passeraient meme si majBadges ne faisait plus rien du tout.
+        currentUser=base();
+        if(!majBadges().length) return _echec('le temoin sans drapeau ne gagne rien');
+        if(!currentUser.badges||!currentUser.badges['premiere-seance'])
+          return _echec('le temoin ne l’inscrit pas au dossier');
+        if(!(currentUser.badges['premiere-seance'].at>0))
+          return _echec('le badge est inscrit sans date');
+        // DRAPEAU ROUGE ARTICULAIRE.
+        currentUser=base(); currentUser.drapeauRouge={zone:'epaule',cases:['nuit'],date:Date.now()};
+        if(majBadges().length) return _echec('un badge tombe sous drapeau rouge');
+        if(currentUser.badges) return _echec('un badge est inscrit en silence sous drapeau');
+        // DRAPEAU GENERAL.
+        currentUser=base(); currentUser.drapeauGeneral={cases:['thorax'],date:Date.now()};
+        if(majBadges().length) return _echec('un badge tombe sous drapeau general');
+        if(currentUser.badges) return _echec('un badge est inscrit en silence sous drapeau general');
+        // ET LE GARDE PASSE BIEN PAR suspensionEtat, comme la consigne l'exige.
+        const src=String(majBadges);
+        if(src.indexOf('suspensionEtat')<0) return _echec('majBadges ne consulte plus suspensionEtat');
+        if(src.indexOf('drapeauQuelconqueActif')<0) return _echec('majBadges ne consulte plus les drapeaux');
+        // A LA LEVEE, le badge retombe — avec la date du jour, qui est la
+        // verite de ce qui s'est passe.
+        delete currentUser.drapeauGeneral;
+        return majBadges().length?true:_echec('rien ne retombe apres la levee');
+      } finally { currentUser=sv; }})());
+
+    // Un badge deja inscrit ne retombe jamais : sans quoi la banniere
+    // reapparaitrait a chaque fin de seance, et « Premiere seance » serait
+    // fetee toutes les semaines.
+    ok('Un badge acquis ne se regagne pas',(()=>{
+      const sv=currentUser;
+      try{
+        // TROIS CRENEAUX, ET NON UN. Avec un seul creneau le quota vaut 1,
+        // et l'unique seance validait aussi la semaine : l'assertion sur un
+        // badge unique tombait sur un code parfaitement correct.
+        currentUser={id:'b2',email:'b2@t.fr',role:'athlete',
+          sessions:[{date:Date.now()-3600e3,exercises:[]}],bilans:[],
+          sessions_config:[{active:true},{active:true},{active:true}]};
+        const un=majBadges();
+        const quand=currentUser.badges['premiere-seance'].at;
+        const deux=majBadges();
+        if(deux.length) return _echec('le meme badge retombe : '+deux.join(','));
+        if(currentUser.badges['premiere-seance'].at!==quand)
+          return _echec('la date d’obtention a ete reecrite');
+        // UN DOSSIER DE COACH N'EN GAGNE AUCUN : ces cinq recompenses parlent
+        // d'un entrainement, et le coach n'en fait pas dans ce dossier.
+        currentUser={id:'c1',email:'c@t.fr',role:'coach',
+          sessions:[{date:Date.now(),exercises:[]}],bilans:[{date:Date.now()}],
+          sessions_config:[{active:true}]};
+        if(majBadges().length) return _echec('un dossier coach gagne des badges');
+        return un.length===1?true:_echec('le premier passage a rendu '+un.join(','));
+      } finally { currentUser=sv; }})());
+
+    // « A l'obtention, afficher une celebration breve et sobre : une animation
+    // courte, le badge, une phrase. PAS DE MODALE BLOQUANTE. » — la banniere
+    // ne prend pas le focus, ne couvre aucun bouton, et il n'y a rien a fermer.
+    ok('La célébration ne bloque rien',(()=>{
+      const z=document.getElementById('bdg-fete');
+      if(!z) return _echec('le noeud de celebration n’existe pas');
+      // Hors de tout .screen : elle doit survivre au changement d'ecran, comme
+      // le toast — majBadges est appelee AVANT go('s-workout-done').
+      if(z.closest('.screen')) return _echec('la banniere vit dans un ecran');
+      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const m=css.match(/\.bdg-fete\{([^}]*)\}/);
+      if(!m) return _echec('la regle .bdg-fete n’existe pas');
+      if(!/pointer-events:none/.test(m[1]))
+        return _echec('la banniere intercepte les clics : '+m[1].slice(0,80));
+      if(!/position:fixed/.test(m[1])) return _echec('la banniere n’est pas posee');
+      // AUCUN DES GESTES D'UNE MODALE : pas de voile, pas de prise de focus,
+      // pas de changement d'ecran, pas de blocage du defilement.
+      const src=String(_celebrerBadge);
+      for(const g of ['focus(','showModal','go(','overflow','confirm(','alert('])
+        if(src.indexOf(g)>=0) return _echec('_celebrerBadge appelle '+g);
+      // ELLE S'EN VA SEULE. Un setTimeout qui retire data-vu, et rien qui
+      // attende un geste.
+      if(!/setTimeout/.test(src)||!/removeAttribute\('data-vu'\)/.test(src))
+        return _echec('la banniere ne se retire pas d’elle-meme');
+      return true;})());
+
+    // UNE SEULE BANNIERE, meme quand plusieurs badges tombent ensemble — cas
+    // reel : la premiere seance d'un programme a une seance par semaine vaut
+    // aussi la semaine validee. Trois bannieres a la file seraient la
+    // collection sans fin qu'on refuse, en accelere.
+    ok('Plusieurs badges d’un coup ne font qu’une seule bannière',(()=>{
+      const sv=currentUser, svC=_celebrerBadge;
+      const vues=[];
+      try{
+        _celebrerBadge=(id)=>{ vues.push(id); };
+        currentUser={id:'b3',email:'b3@t.fr',role:'athlete',
+          sessions:[{date:Date.now()-3600e3,exercises:[]}],
+          bilans:[{date:Date.now()}],sessions_config:[{active:true}]};
+        const n=majBadges();
+        if(n.length<2) return _echec('le cas a plusieurs badges ne se produit pas : '+n.join(','));
+        if(vues.length!==1) return _echec(vues.length+' bannieres pour '+n.length+' badges');
+        if(vues[0]!==n[0]) return _echec('la banniere ne montre pas le premier : '+vues[0]);
+        // LES AUTRES SONT INSCRITS QUAND MEME, et attendent dans le profil.
+        for(const id of n) if(!currentUser.badges[id])
+          return _echec(id+' n’est pas inscrit au dossier');
+        return true;
+      } finally { currentUser=sv; _celebrerBadge=svC; }})());
+
+    // LA VITRINE DU PROFIL : les cinq, toujours les cinq. Montrer seulement les
+    // acquis repondrait a « qu'ai-je gagne » et jamais a « que reste-t-il »,
+    // qui est la question qu'on se pose en ouvrant cette carte.
+    ok('« Mes badges » montre les obtenus ET ceux qui restent',(()=>{
+      const h=htmlMesBadges({badges:{'premiere-seance':{at:Date.parse('2026-09-01T10:00:00')}}});
+      // ⚠ ON COMPTE LES BALISES, PAS LES ATTRIBUTS. `class="bdg-case"` est un
+      // PREFIXE de `class="bdg-case" data-attente` : les deux motifs se
+      // recouvraient et les quatre cases en attente etaient comptees deux fois.
+      const cases=(h.match(/<div class="bdg-case"/g)||[]).length;
+      if(cases!==5) return _echec(cases+' cases au lieu de cinq');
+      if((h.match(/data-attente/g)||[]).length!==4)
+        return _echec('les quatre badges restants ne sont pas marques en attente');
+      if(h.indexOf('01/09/26')<0) return _echec('la date d’obtention n’est pas montree');
+      if(h.indexOf('1/5')<0) return _echec('le decompte n’est pas montre');
+      // Ce qu'il faut faire pour ceux qui restent.
+      for(const b of BADGES_ACQUIS.slice(1))
+        if(h.indexOf(escapeHtml(b.attendu))<0) return _echec('« '+b.attendu+' » manque');
+      // Un dossier vierge ne casse pas la carte.
+      const v=htmlMesBadges({});
+      if((v.match(/data-attente/g)||[]).length!==5) return _echec('le dossier vierge n’affiche pas les cinq');
+      return v.indexOf('0/5')>=0?true:_echec('le dossier vierge ne dit pas 0/5');})());
+
+    // « Sans nouvelle colle » : deux points d'appel, pas un de plus, et tous
+    // deux au moment ou la donnee vient d'etre ecrite.
+    ok('Les badges n’ont que deux points d’appel',(()=>{
+      const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
+      const n=(s.match(/majBadges\(\)/g)||[]).length;
+      // Trois occurrences : la definition, l'appel de fin de seance, l'appel
+      // de fin de bilan. Une quatrieme signalerait un rendu qui attribue des
+      // badges — un accueil, un onglet — et donc une banniere qui surgit sans
+      // que rien ne vienne de se passer.
+      if(n!==3) return _echec(n+' occurrences de majBadges() au lieu de trois');
+      if(!/if\(\(currentUser\.bilans\|\|\[\]\)\.length===1\) rcm\('first_bilan_completed'\);[\s\S]{0,400}?majBadges\(\)/.test(s))
+        return _echec('l’appel apres le bilan a disparu');
+      if(!/_rendreInvitationInstall\(\);[\s\S]{0,400}?majBadges\(\)/.test(s))
+        return _echec('l’appel apres la seance a disparu');
+      // ET AUCUN COMPTEUR PARALLELE : badgesMerites ne tient rien, elle lit.
+      const bm=String(badgesMerites);
+      if(/saveUser|localStorage|currentUser/.test(bm))
+        return _echec('badgesMerites ecrit ou lit hors de son argument');
+      for(const f of ['seancesPrevuesParSemaine','_lundiDe','_riteRecords','streakSemaines'])
+        if(bm.indexOf(f)<0) return _echec('badgesMerites n’utilise plus '+f);
+      return true;})());
+
     // « — Continue ! » — meme tiret, meme lecture, dans la notification
     // d'assiduite. Et l'encouragement doit garder le bord droit du cadre :
     // c'est le tiret qui portait le margin-left:auto.

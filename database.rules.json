@@ -85,6 +85,26 @@
           }
         },
 
+        // ── Les cinq badges ────────────────────────────────────────────────
+        // LA LISTE EST FERMEE ICI AUSSI, et c est tout l interet de ce bloc.
+        // La regle produit de RepCore est « cinq badges, pas un de plus » :
+        // ecrite dans le seul index.html, elle tiendrait le temps qu un lot
+        // pense bien faire en ajoutant un sixieme. Le motif ci-dessous refuse
+        // toute autre cle cote SERVEUR, et scripts/verif/regles.mjs compare
+        // BADGES a ce motif pour que le refus se voie au moment du lot et non
+        // en production — meme mecanique que RCM_EVENEMENTS, ecrite apres que
+        // quinze compteurs eurent ete rejetes en silence pendant des mois.
+        //
+        // Un badge, c est une DATE et rien d autre : il n y a pas de valeur a
+        // porter, pas de niveau, pas de compteur. "$autre": false le dit.
+        "badges": {
+          "$badge": {
+            ".validate": "$badge.matches(/^(premiere-seance|semaine-validee|premier-record|premier-bilan|quatre-semaines)$/)",
+            "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "$autre": { ".validate": false }
+          }
+        },
+
         "coachEmailKey": {
           ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
         }

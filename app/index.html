@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1216';
+window.RC_BUILD='1217';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5515,6 +5515,52 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .jen-min{min-height:44px;padding:0 14px;border-radius:var(--r-1);
   font-size:var(--fs-xs);font-weight:800;font-variant-numeric:tabular-nums}
 
+/* ══ LES CINQ BADGES ══════════════════════════════════════════════════════
+   DEUX RENDUS, UNE SEULE SOURCE D'IMAGES. La célébration (.bdg-fete) est une
+   bannière POSÉE, jamais une modale : elle ne prend pas le focus, elle ne
+   couvre pas les boutons — pointer-events:none sur tout le bloc — et elle
+   s'en va seule. Quelqu'un qui enchaîne sur « Enregistrer » n'a rien à
+   fermer, et c'est la seule forme acceptable pour une récompense : elle se
+   remarque ou elle ne se remarque pas, elle n'interrompt pas.
+   Au-dessus de la barre d'onglets, pas devant : bottom 88px. */
+.bdg-fete{position:fixed;left:16px;right:16px;bottom:88px;margin:0 auto;
+  width:fit-content;max-width:min(92vw,360px);z-index:var(--z-toast);
+  transform:translateY(16px);opacity:0;pointer-events:none;
+  display:flex;align-items:center;gap:12px;
+  background:var(--surface-2);border:1px solid var(--border);
+  border-left:4px solid var(--red);border-radius:var(--r-3);
+  padding:11px 15px 11px 12px;box-shadow:0 10px 30px rgba(0,0,0,.45);
+  transition:opacity var(--t-3) var(--c-out),transform var(--t-3) var(--c-out)}
+/* ⚠ CENTRE PAR left/right/margin:auto, ET NON par left:50% + translateX.
+   Un bloc fixe cale a left:50% n'a plus que LA MOITIE de la fenetre comme
+   largeur disponible : sur un telephone de 390 px, la banniere se repliait a
+   195 px, le titre passait sur deux lignes et la phrase sur quatre. Le
+   max-width ne servait a rien, il n'etait jamais atteint. Mesure faite au
+   navigateur le 15/09/2026. La translation ne porte donc plus que le Y. */
+.bdg-fete[data-vu]{opacity:1;transform:translateY(0)}
+.bdg-fete img{width:54px;height:54px;flex-shrink:0;display:block}
+.bdg-fete b{display:block;font-size:var(--fs-xs);letter-spacing:1.2px;
+  font-weight:800;text-transform:uppercase;color:var(--red);margin-bottom:3px}
+.bdg-fete span{display:block;font-size:var(--fs-sm);color:var(--text-strong);
+  line-height:1.45}
+@media(prefers-reduced-motion:reduce){.bdg-fete{transition:none}}
+
+/* La vitrine du profil. LES CINQ SONT TOUJOURS LÀ, obtenus ou non : une
+   grille qui ne montrerait que les acquis ne dirait pas ce qui reste, et
+   c'est justement ce qu'on vient y chercher. Le non-obtenu est éteint, pas
+   caché. */
+.bdg-grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));
+  gap:14px 10px}
+.bdg-case{text-align:center;min-width:0}
+.bdg-case img{width:100%;max-width:64px;height:auto;aspect-ratio:1;
+  display:block;margin:0 auto 7px}
+.bdg-case[data-attente] img{filter:grayscale(1);opacity:.26}
+.bdg-nom{font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px;
+  color:var(--text-strong);line-height:1.3}
+.bdg-case[data-attente] .bdg-nom{color:var(--sub);font-weight:700}
+.bdg-date{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.3;
+  margin-top:3px;font-variant-numeric:tabular-nums}
+
 /* ══ LA CARTE « SÉANCE GELÉE » ════════════════════════════════════════════
    Deux colonnes : le texte à gauche, le bloc de glace à droite. Tout le décor
    — montagnes, voile, poudre — est un SVG posé EN DUR sous le contenu : il ne
@@ -8826,6 +8872,12 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
         </div>
       </div>
+      <!-- MES BADGES. Cinq cases, toujours les cinq. Remplie par
+           _rendreMesBadges, appelée depuis openAthleteProfile. Elle ne
+           s'affiche que s'il y a des badges à montrer, c'est-à-dire
+           toujours pour un athlète — et jamais pour un dossier coach, qui
+           n'ouvre pas cet écran. -->
+      <div class="card" id="atp-badges" style="margin-bottom:14px"></div>
       <!-- Venu de l'accueil. Sa place est ici : c'est une consignation, et elle
            ouvre la même série de cartes santé que celles qui suivent. -->
       <button class="btn btn-outline" onclick="go('s-sante');loadSante()" style="font-size:var(--fs-xs);padding:11px;letter-spacing:1.5px;margin-bottom:14px">TENSION ET ANALYSES</button>
@@ -10158,6 +10210,14 @@ const COACH_PHOTO='icons/coach.jpg';
      borne le toast s'etendait au-dela de l'ecran sur un telephone etroit —
      min-width etait la seule contrainte de largeur. Il enveloppe desormais. -->
 <div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(28px);background:#222;color:var(--text);padding:12px 20px;border-radius:var(--r-3);font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:opacity var(--t-2) var(--c-out),transform var(--t-2) var(--c-out);opacity:0;min-width:200px;max-width:min(92vw,420px);line-height:1.4;text-align:center;pointer-events:none"></div>
+
+<!-- LA CÉLÉBRATION DES BADGES. Sœur du toast, et posée au même endroit pour
+     la même raison : elle doit survivre aux changements d'écran, donc elle ne
+     vit dans aucun. Vide tant que rien n'est gagné. Remplie par
+     _celebrerBadge, qui la retire seule au bout de cinq secondes.
+     aria-live=polite : annoncée après ce que la personne est en train de
+     faire, jamais à sa place. -->
+<div id="bdg-fete" class="bdg-fete" role="status" aria-live="polite"></div>
 
 <!-- ══════ BARRE D'ONGLETS ATHLÈTE ══════
      Sœur des écrans, et non enfant de #s-client-home : c'est ce qui lui permet
@@ -40671,6 +40731,12 @@ function finishWorkout(incomplete=false){
   // prend la place de la carte des notifications quand celles-ci n'existent pas
   // — etatInvitationNotif rend alors 'rien', et celle-ci se retrouve seule.
   try{ _rendreInvitationInstall(); }catch(e){}
+  // LES BADGES. ICI, ET AVANT go() : la séance est dans l'historique depuis
+  // une centaine de lignes, la série est à jour, et tout ce que les cinq
+  // critères lisent est donc déjà écrit. La bannière, elle, s'affiche une
+  // seconde plus tard — _celebrerBadge attend que la fête de fin de séance
+  // ait joué la sienne.
+  try{ majBadges(); }catch(e){}
   // LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps — une fois par
   // semaine et par muscle, sur la derniere seance qui le touche.
   try{ rcRendreSrpe(); }catch(e){}
@@ -42093,9 +42159,13 @@ const BADGE_GLYPHES=Object.freeze({
 //   perfect.webp, streak.webp, return.webp, discipline.webp
 // Voir app/img/badges/LISEZ-MOI.txt.
 const BADGE_IMG_DOSSIER='img/badges/';
-// .png et non .webp : c'est le format demande. Il pese quatre fois plus —
-// 1,2 Mo pour les quinze contre 324 Ko — et le service worker les met en
-// cache une fois pour toutes, donc le cout est paye au premier chargement.
+// .png et non .webp : c'est le format demande. Il a longtemps pese quatre fois
+// plus — 1,2 Mo pour les quinze contre 324 Ko en webp — et ce commentaire s'en
+// excusait. Ce n'est plus vrai : les quinze sont reindexes sur 96 couleurs
+// avec transparence (15/09/2026) et pesent 221 ko a eux tous, moins que la
+// version webp. Comparatif fait a taille reelle avant remplacement : aucune
+// difference visible, et ils s'affichent a 64 px.
+// Depuis, ils sont dans ASSETS de sw.js — voir MEDAILLONS la-bas.
 function _badgeFichier(k){
   return k?BADGE_IMG_DOSSIER+String(k).toLowerCase()+'.png':null;
 }
@@ -53953,6 +54023,10 @@ function saveBilanFinal(){
   // Le bilan vient d'être poussé dans l'historique : longueur 1 = c'était le
   // premier. Seul le compteur part — ni le type, ni la moindre réponse.
   if((currentUser.bilans||[]).length===1) rcm('first_bilan_completed');
+  // LE SECOND ET DERNIER POINT D'APPEL DES BADGES. Le bilan est le seul
+  // critère des cinq qui ne passe pas par la fin d'une séance : sans cette
+  // ligne, « Premier bilan » ne tomberait qu'à la séance suivante.
+  try{ majBadges(); }catch(e){}
   if(currentUser._notifEnabled) scheduleSwNotif();
   // Un bilan représente une saisie longue : mensurations, photos et réponses
   // de santé. Annoncer « enregistré ! » alors que le quota a débordé pousse
@@ -55124,6 +55198,201 @@ function invNotifNon(){
   // RIEN D'AUTRE. Pas de toast, pas de « tu peux changer d'avis dans les
   // reglages » : la question a ete posee une fois, la reponse est non, et le
   // temoin pose a l'affichage garantit qu'elle ne reviendra pas.
+}
+// ══════════════════ LES CINQ BADGES ═══════════════════════════════════════
+//
+// CINQ, ET ON S'ARRÊTE. Ce n'est pas une contrainte technique, c'est la
+// valeur du signal : une collection qui s'allonge cesse d'être une
+// reconnaissance et devient du bruit de fond. Le jour où l'on voudra un
+// sixième badge, la question à trancher sera « lequel des cinq sort ».
+// La liste est gelée ici ET dans database.rules.json, dont le motif de clé
+// n'accepte que ces cinq identifiants : un badge ajouté dans ce fichier
+// seul serait refusé par le serveur, et scripts/verif/regles.mjs compare
+// les deux listes pour que le refus soit vu ici plutôt qu'en production.
+//
+// AUCUN CALCUL NOUVEAU. Les cinq critères se lisent dans ce qui est déjà
+// enregistré — `sessions`, `bilans`, `sessions_config`, `streak` — par des
+// fonctions qui existaient avant ce lot : seancesPrevuesParSemaine,
+// _lundiDe, _riteRecords, streakSemaines. Aucun compteur parallèle n'est
+// tenu, donc aucun ne peut diverger de la réalité du dossier.
+const BADGES_ACQUIS=Object.freeze([
+  {id:'premiere-seance',lib:'Première séance',
+   phrase:'La première est faite. C\'est celle qui coûte le plus.',
+   attendu:'Termine une première séance.'},
+  {id:'semaine-validee',lib:'Semaine validée',
+   phrase:'Toutes les séances prévues, sur une même semaine.',
+   attendu:'Fais toutes tes séances prévues sur une même semaine.'},
+  {id:'premier-record',lib:'Premier record',
+   phrase:'Tu viens de passer ta meilleure performance.',
+   attendu:'Dépasse ta meilleure performance sur un exercice.'},
+  {id:'premier-bilan',lib:'Premier bilan',
+   phrase:'Ton premier bilan est enregistré. La suite se mesure.',
+   attendu:'Remplis un premier bilan.'},
+  {id:'quatre-semaines',lib:'Quatre semaines',
+   phrase:'Quatre semaines de suite. Ce n\'est plus un essai.',
+   attendu:'Enchaîne quatre semaines consécutives.'}
+]);
+// ⚠ AUCUNE IMAGE NOUVELLE. Les quinze médaillons de la planche sont déjà
+// découpés dans app/img/badges/ depuis le 14/09, avec leur fond rendu
+// transparent, et _badgeFichier sait déjà les nommer. Découper une seconde
+// fois les mêmes hexagones pour cette carte aurait mis deux versions du même
+// dessin dans le dépôt, qui auraient divergé au premier retouchage.
+//
+// On emprunte donc cinq des quinze, par leur clef de fin de séance. Quatre
+// tombent juste — la couronne pour un record, la cible pour « validé », la
+// chaîne pour la série, la courbe pour un bilan ; la fusée de NOUVEAU PALIER
+// sert la première séance, qui est le premier palier de tous.
+const BADGE_ACQUIS_IMG=Object.freeze({
+  'premiere-seance':'NEW_LOAD',      // fusée
+  'semaine-validee':'FULL_SESSION',  // cible
+  'premier-record':'NEW_RECORD',     // couronne
+  'premier-bilan':'PROGRESSION',     // courbe
+  'quatre-semaines':'STREAK'         // chaîne
+});
+function badgeAcquisFichier(id){
+  const k=BADGE_ACQUIS_IMG[id];
+  return k?_badgeFichier(k):'';
+}
+function badgeAcquisDef(id){ return BADGES_ACQUIS.find(b=>b&&b.id===id)||null; }
+// PURE. Les badges que le dossier MÉRITE — pas ceux qu'il porte. C'est la
+// seule fonction qui connaisse les critères, et elle ne décide de rien :
+// majBadges compare son résultat à ce qui est déjà inscrit.
+//
+// Elle est relisible de bout en bout : cinq conditions, cinq lignes de
+// données. Si un badge apparaît à tort, il n'y a qu'un endroit à ouvrir.
+function badgesMerites(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date).slice()
+              .sort((a,b)=>a.date-b.date);
+  const out=[];
+  // 1. La première séance TERMINÉE. Une séance n'entre dans `sessions` qu'à
+  //    la fin de finishWorkout : la présence vaut achèvement, il n'y a pas
+  //    de drapeau à consulter.
+  if(ses.length>=1) out.push('premiere-seance');
+  // 2. Le quota d'une semaine CALENDAIRE atteint — lundi à dimanche, par
+  //    _lundiDe, la même découpe que « Cette semaine » de l'accueil. Le
+  //    quota est celui d'aujourd'hui : un athlète passé de 4 à 2 séances
+  //    garde le badge, et c'est juste — il l'a gagné sous l'ancien quota,
+  //    et rien ne reprend un badge dans ce produit.
+  let quota=1; try{ quota=seancesPrevuesParSemaine(u); }catch(e){ quota=1; }
+  const parSemaine={};
+  for(const x of ses){
+    let k=0; try{ k=_lundiDe(x.date).getTime(); }catch(e){ continue; }
+    parSemaine[k]=(parSemaine[k]||0)+1;
+  }
+  for(const k in parSemaine){ if(parSemaine[k]>=quota){ out.push('semaine-validee'); break; } }
+  // 3. Le premier record, lu par _riteRecords — la fonction du rite de
+  //    période, inchangée. La fenêtre s'ouvre à la DEUXIÈME séance : tout ce
+  //    qui la précède est la référence à battre. Avec une seule séance il
+  //    n'y a rien à comparer, et tout serait un record.
+  if(ses.length>=2){
+    let r=[]; try{ r=_riteRecords(u,ses[1].date,t)||[]; }catch(e){ r=[]; }
+    if(r.length) out.push('premier-record');
+  }
+  // 4. Le premier bilan, quel que soit son type.
+  if((((u&&u.bilans)||[]).length)>=1) out.push('premier-bilan');
+  // 5. Quatre semaines, lues par streakSemaines — qui porte déjà la
+  //    péremption et le gel de suspension. On ne recompte pas les semaines
+  //    de son côté : il n'existe qu'une définition de la série.
+  let st=0; try{ st=streakSemaines(u)||0; }catch(e){ st=0; }
+  if(st>=4) out.push('quatre-semaines');
+  return out;
+}
+// Les badges INSCRITS au dossier, dans l'ordre de BADGES et non dans celui
+// des clés d'un objet — l'ordre d'itération d'un objet reconstruit par le
+// sync n'est pas celui de l'écriture.
+function badgesObtenus(u){
+  const m=(u&&u.badges&&typeof u.badges==='object')?u.badges:{};
+  return BADGES_ACQUIS.filter(b=>m[b.id]&&m[b.id].at>0)
+               .map(b=>({id:b.id,at:Number(m[b.id].at)||0}));
+}
+// ⚠ LE GARDE EST EN PREMIÈRE LIGNE, AVANT TOUTE ÉCRITURE.
+//
+// Sous suspension ou drapeau, RIEN ne se déclenche : ni la célébration, ni
+// l'inscription au dossier. Fêter une série pendant qu'une douleur est
+// déclarée, c'est applaudir précisément ce qu'on demande d'arrêter, et un
+// badge inscrit en silence pour être fêté plus tard serait la même chose
+// avec un délai. Le critère, lui, ne s'efface pas : il se lit dans les
+// données, il restera vrai à la levée, et le badge tombera au prochain
+// passage — avec la date de ce jour-là, qui est la vérité de ce qui s'est
+// passé.
+function majBadges(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||u.role==='coach') return [];
+  try{ if(suspensionEtat(u).actif) return []; }catch(e){}
+  try{ if(drapeauQuelconqueActif(u)) return []; }catch(e){}
+  const deja=(u.badges&&typeof u.badges==='object')?u.badges:{};
+  let merites=[]; try{ merites=badgesMerites(u,Date.now()); }catch(e){ return []; }
+  const neufs=merites.filter(id=>badgeAcquisDef(id)&&!(deja[id]&&deja[id].at>0));
+  if(!neufs.length) return [];
+  const t=Date.now();
+  u.badges=deja;
+  for(const id of neufs) u.badges[id]={at:t};
+  try{ saveUser(); }catch(e){}
+  // UNE SEULE BANNIÈRE, même quand plusieurs badges tombent ensemble — cas
+  // réel : la première séance d'un programme à une séance par semaine vaut
+  // aussi la semaine validée. Trois bannières à la file seraient la
+  // collection sans fin qu'on refuse, en accéléré. Les autres sont inscrits
+  // et attendent dans le profil, qui est fait pour ça.
+  try{ _celebrerBadge(neufs[0]); }catch(e){}
+  return neufs;
+}
+let _bdgMinuteur=null;
+// LA CÉLÉBRATION. Une bannière posée, une image, une phrase, cinq secondes.
+// Elle ne prend pas le focus et ne bloque aucun geste : pointer-events est à
+// none sur le bloc entier (feuille de style), il n'y a donc rien à fermer.
+//
+// LE DÉLAI D'UNE SECONDE n'est pas cosmétique : majBadges est appelée avant
+// go('s-workout-done'), et _feterFinSeance joue sa propre séquence à
+// l'arrivée. Deux mouvements en même temps sur le même écran ne se lisent
+// ni l'un ni l'autre.
+function _celebrerBadge(id){
+  const b=badgeAcquisDef(id); if(!b) return;
+  const z=document.getElementById('bdg-fete'); if(!z) return;
+  if(_bdgMinuteur){ clearTimeout(_bdgMinuteur); _bdgMinuteur=null; }
+  const poser=()=>{
+    z.innerHTML='<img src="'+escapeHtml(badgeAcquisFichier(b.id))+'" alt="" width="54" height="54">'
+      +'<div><b>'+escapeHtml(b.lib)+'</b><span>'+escapeHtml(b.phrase)+'</span></div>';
+    z.setAttribute('data-vu','');
+    try{ arcHaptique('legere'); }catch(e){}
+    _bdgMinuteur=setTimeout(()=>{
+      z.removeAttribute('data-vu');
+      _bdgMinuteur=null;
+      // Le contenu part APRÈS la sortie, sans quoi la bannière se viderait
+      // en pleine transition et disparaîtrait d'un coup.
+      setTimeout(()=>{ if(!z.hasAttribute('data-vu')) z.innerHTML=''; },420);
+    },5000);
+  };
+  setTimeout(poser,arcReduit()?0:1000);
+}
+// LA VITRINE. Les cinq, toujours les cinq : obtenus en couleur avec leur
+// date, à obtenir en gris avec ce qu'il faut faire. Montrer seulement les
+// acquis répondrait à « qu'ai-je gagné » et jamais à « que reste-t-il », qui
+// est la question qu'on se pose en ouvrant cette carte.
+function htmlMesBadges(u){
+  const m=(u&&u.badges&&typeof u.badges==='object')?u.badges:{};
+  const n=BADGES_ACQUIS.filter(b=>m[b.id]&&m[b.id].at>0).length;
+  let h='<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;'
+    +'text-transform:uppercase;display:block;margin-bottom:10px">Mes badges'
+    +' <span style="color:var(--text-dim)">— '+n+'/'+BADGES_ACQUIS.length+'</span></label>'
+    +'<div class="bdg-grille">';
+  for(const b of BADGES_ACQUIS){
+    const g=m[b.id]&&m[b.id].at>0;
+    let d='';
+    if(g){ try{ d=new Date(m[b.id].at).toLocaleDateString('fr-FR',
+      {day:'2-digit',month:'2-digit',year:'2-digit'}); }catch(e){ d=''; } }
+    h+='<div class="bdg-case"'+(g?'':' data-attente')+' title="'
+      +escapeHtml(g?b.phrase:b.attendu)+'">'
+      +'<img src="'+escapeHtml(badgeAcquisFichier(b.id))+'" alt="" loading="lazy">'
+      +'<div class="bdg-nom">'+escapeHtml(b.lib)+'</div>'
+      +'<div class="bdg-date">'+escapeHtml(g?d:b.attendu)+'</div></div>';
+  }
+  h+='</div>';
+  return h;
+}
+function _rendreMesBadges(){
+  const z=document.getElementById('atp-badges'); if(!z) return;
+  try{ z.innerHTML=htmlMesBadges(currentUser); }catch(e){ z.innerHTML=''; }
 }
 // ══════════ LE PLANNING DE RAPPEL, ECRIT EN UN SEUL ENDROIT ════════════
 //
@@ -85106,6 +85375,7 @@ function openAthleteProfile(){
   _renderAtpEtats();
   const zc=document.getElementById('atp-comptes');
   if(zc) zc.innerHTML=htmlSelecteurComptes();
+  try{ _rendreMesBadges(); }catch(e){}
   go('s-athlete-profile');
 }
 function saveAthleteProfile(){

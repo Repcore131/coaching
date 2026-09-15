@@ -129,4 +129,48 @@ if(refuses.length){
 const inutiles=[...acceptes].filter(n=>!evts.includes(n));
 if(inutiles.length) console.log('nom(s) accepte(s) que le code n\'ecrit plus : '+inutiles.join(', '));
 
+// ══ LES CINQ BADGES : LA MEME LISTE, AUX DEUX BOUTS ════════════════════════
+//
+// « Cinq badges, pas un de plus » est une decision de produit, pas une limite
+// technique : une collection qui s'allonge cesse d'etre une reconnaissance.
+// Elle est donc ecrite DEUX FOIS — BADGES_ACQUIS dans app/index.html, et le motif de
+// cle de /users/$emailKey/badges dans database.rules.json — et ce bloc verifie
+// qu'elles disent la meme chose.
+//
+// Les deux sens comptent ici, contrairement aux compteurs de tunnel :
+//  — un badge que le code attribue et que le serveur refuse serait gagne sur
+//    l'appareil puis perdu a la premiere synchro, sans le moindre signal ;
+//  — un badge accepte par les regles et absent du code est la porte ouverte
+//    au sixieme, qu'un lot futur n'aurait plus qu'a pousser.
+const mBadges=source.match(/const BADGES_ACQUIS=Object\.freeze\(\[([\s\S]*?)\]\);/);
+if(!mBadges){ console.error('BADGES_ACQUIS introuvable dans app/index.html'); process.exit(1); }
+const badges=[...mBadges[1].matchAll(/\bid:'([^']+)'/g)].map(m=>m[1]);
+if(badges.length!==5){
+  console.error('\nBADGES_ACQUIS : '+badges.length+' identifiant(s) lu(s), il en faut CINQ.');
+  console.error('Cinq badges, pas un de plus, pas un de moins — c\'est la regle');
+  console.error('de produit. Si elle doit changer, elle change ICI aussi, a la main.');
+  process.exit(1);
+}
+const mBadgeRegex=regles.match(/\$badge\.matches\(\/\^\(([^)]*)\)\$\/\)/);
+if(!mBadgeRegex){ console.error('la liste blanche des badges a disparu des regles'); process.exit(1); }
+const badgesAcceptes=new Set(mBadgeRegex[1].split('|').filter(Boolean));
+
+console.log('\nbadges declares par le code : '+badges.length
+  +'   identifiants acceptes par les regles : '+badgesAcceptes.size);
+const badgesRefuses=badges.filter(n=>!badgesAcceptes.has(n));
+const badgesOrphelins=[...badgesAcceptes].filter(n=>!badges.includes(n));
+if(badgesRefuses.length||badgesOrphelins.length){
+  if(badgesRefuses.length){
+    console.error('\nATTRIBUE PAR L\'APP, REFUSE PAR LE SERVEUR : '+badgesRefuses.join(', '));
+    console.error('Le badge serait gagne sur l\'appareil puis efface a la synchro.');
+  }
+  if(badgesOrphelins.length){
+    console.error('\nACCEPTE PAR LES REGLES, INCONNU DU CODE : '+badgesOrphelins.join(', '));
+    console.error('Une place libre pour un sixieme badge. Retire-la.');
+  }
+  console.error('Les deux listes doivent etre identiques : BADGES_ACQUIS dans');
+  console.error('app/index.html, $badge.matches dans database.rules.json.');
+  process.exit(1);
+}
+
 console.log('\nRien de bloquant.');
