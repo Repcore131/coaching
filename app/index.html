@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1211';
+window.RC_BUILD='1212';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -9208,6 +9208,16 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="wd-etats"></div>
       <div id="wd-cooldown"></div>
       <div id="wd-afilmer"></div>
+
+      <!-- L'INVITATION AUX NOTIFICATIONS. Vide sauf apres la TOUTE PREMIERE
+           seance terminee, et une seule fois dans la vie du compte. Remplie par
+           _rendreInvitationNotif, appelee depuis finishWorkout.
+           ICI, AVEC LES AUTRES RELANCES, et non dans la composition du haut :
+           l'ordre FLAMME / RECOMPENSES / PERFORMANCE / ACTION / PROGRESSION /
+           RESSENTI est pose et commente juste au-dessus, et une demande de
+           permission n'a rien a y faire. Ce qui relance vit en bas, avant la
+           sortie. -->
+      <div id="wd-notif-invite"></div>
 
       <!-- RELANCE BILAN DE DEPART — visible seulement s'il manque encore.
            Le clic passe par savePostSession(true) et JAMAIS par openBilan
@@ -40154,6 +40164,12 @@ function finishWorkout(incomplete=false){
   // deux relances doivent apparaître et disparaître ensemble.
   const _wdBil=document.getElementById('wd-first-bilan-card');
   if(_wdBil) _wdBil.style.display=(currentUser.bilans||[]).some(b=>b.type==='depart')?'none':'block';
+  // L'INVITATION AUX NOTIFICATIONS, au meme endroit et pour la meme raison que
+  // la relance de bilan : la seance vient d'etre enregistree, elle est donc
+  // deja dans l'historique, et `sessions.length===1` dit sans ambiguite que
+  // c'etait la premiere. Elle se garde elle-meme — seconde seance, question
+  // deja posee, permission deja tranchee : elle ne rend rien.
+  try{ _rendreInvitationNotif(); }catch(e){}
   // LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps — une fois par
   // semaine et par muscle, sur la derniere seance qui le touche.
   try{ rcRendreSrpe(); }catch(e){}
@@ -54284,6 +54300,182 @@ function wrdSetMin(m){
     el.style.border='1px solid '+(on?'var(--red)':'var(--border)');
     el.style.color=on?'var(--text)':'var(--sub)';
   });
+}
+// ══════════ « JE TE PREVIENS ? » — APRES LA PREMIERE SEANCE ════════════
+//
+// LE DEFAUT QU'ELLE CORRIGE : Notification.requestPermission n'etait appelee
+// qu'a deux endroits — le rappel de bilan et la feuille de rappel de seance.
+// Deux ecrans de REGLAGE, qu'on n'atteint qu'une fois deja convaincu. La
+// permission n'etait donc jamais demandee a ceux qui en auraient le plus
+// besoin : ceux qui viennent de finir leur premiere seance et qu'il faut
+// ramener a la deuxieme.
+//
+// ⚠ ON NE DEMANDE PAS UNE PERMISSION, ON PROPOSE UN SERVICE. La difference
+// tient au texte : « Ta prochaine seance est mercredi a 18 h. Je te previens ? »
+// nomme ce qu'on rend, pas ce qu'on prend. Le jour et l'heure viennent des
+// creneaux que l'athlete a choisis lui-meme a l'inscription — c'est SA phrase
+// qu'on lui relit.
+//
+// PURE. Le prochain creneau d'entrainement, ou null.
+//
+// STRICTEMENT POSTERIEUR A `maintenant` : on vient de finir une seance, celui
+// d'aujourd'hui est derriere nous. Un creneau plus tard dans la MEME journee
+// reste valide — quelqu'un qui s'entraine le matin et a pose son rappel a 18 h
+// est un cas rare mais pas absurde, et lui annoncer mercredi prochain serait
+// faux.
+function prochainCreneau(u,maintenant){
+  const jours=(u&&u._woReminderDays)||[];
+  if(!jours.length) return null;
+  const t=Number(maintenant)||0;
+  if(!t) return null;
+  const h=(u._woReminderHour>=0&&u._woReminderHour<=23)?u._woReminderHour:18;
+  const m=(u._woReminderMin===30)?30:0;
+  const d=new Date(t);
+  // getDay() rend 0=dimanche ; _woReminderDays compte 0=lundi, comme DAYS.
+  const auj=(d.getDay()+6)%7;
+  const minutesMaintenant=d.getHours()*60+d.getMinutes();
+  const cible=h*60+m;
+  const tries=[...new Set(jours.map(Number).filter(x=>x>=0&&x<=6))].sort((a,b)=>a-b);
+  if(!tries.length) return null;
+  for(let dj=0;dj<=7;dj++){
+    const j=(auj+dj)%7;
+    if(!tries.includes(j)) continue;
+    if(dj===0&&cible<=minutesMaintenant) continue;   // deja passe aujourd'hui
+    return {jour:j,dansJours:dj,h,m};
+  }
+  return null;
+}
+// PURE. La phrase, telle qu'elle s'affiche. « aujourd'hui » et « demain »
+// plutot que le nom du jour quand c'est tout proche : personne ne dit « ta
+// prochaine seance est mercredi » un mardi soir.
+// « 18 h » et non « 18:00 » : c'est une phrase, pas un tableau.
+function texteProchainCreneau(c){
+  if(!c) return '';
+  const quand=c.dansJours===0?'aujourd’hui'
+    :c.dansJours===1?'demain'
+    :DAYS[c.jour].toLowerCase();
+  return quand+' à '+c.h+' h'+(c.m?' '+c.m:'');
+}
+// PURE. Que faut-il montrer a cet athlete, a cet instant ? Rend 'rien',
+// 'demander' ou 'installer'.
+//
+// LES REGLES, DANS L'ORDRE OU ELLES MORDENT :
+//   • LA PREMIERE SEANCE, ET ELLE SEULE. `sessions.length===1` — la meme
+//     donnee que first_workout_completed juste au-dessus dans finishWorkout,
+//     et non un drapeau d'appareil.
+//   • UNE SEULE FOIS DANS LA VIE DU COMPTE. Le temoin est dans le DOSSIER —
+//     pas dans localStorage : « la vie du compte » traverse les appareils, et
+//     reposer la question sur un second telephone serait exactement ce que
+//     cette regle interdit.
+//   • DEJA REPONDU AU NAVIGATEUR : on n'affiche RIEN. Un refus navigateur ne
+//     se rattrape pas depuis l'app — la seule voie est les reglages du
+//     systeme — et reinsister est nuisible. Un accord n'a rien a demander.
+//   • PAS DE NOTIFICATIONS DU TOUT : on propose l'installation a la place.
+//     C'est le cas de Safari dans un onglet, ou Notification n'existe pas ;
+//     installer RepCore sur l'ecran d'accueil la fait apparaitre. Le message
+//     est _NOTIF_INDISPO, deja ecrit et deja relu.
+function etatInvitationNotif(u,supporte,permission){
+  if(!u||u.role==='coach') return 'rien';
+  if((u.sessions||[]).length!==1) return 'rien';
+  if(u._notifDemandeeLe) return 'rien';
+  if(!supporte) return 'installer';
+  if(permission==='granted'||permission==='denied') return 'rien';
+  return 'demander';
+}
+// PURE. La carte. Deux boutons, jamais trois, et « Non merci » a le meme
+// poids visuel qu'un refus doit avoir : lisible, pas honteux, pas cache.
+function _htmlInvitationNotif(etat,phrase){
+  if(etat==='rien') return '';
+  const cadre=(titre,corps,actions)=>
+    '<div style="background:var(--info-bg);border:1px solid var(--info-border);'
+    +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
+    +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;'
+    +'text-transform:uppercase;margin-bottom:5px">'+titre+'</div>'+corps+actions+'</div>';
+  if(etat==='installer'){
+    // LE MESSAGE EXISTANT, MOT POUR MOT. Il dit deja pourquoi ca ne marche pas
+    // ET quoi faire — c'est exactement ce qu'il faut ici.
+    return cadre('Pour \u00eatre prévenu',
+      '<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55;margin-bottom:12px">'
+        +escapeHtml(_NOTIF_INDISPO)+'</div>',
+      '<button type="button" class="btn btn-red btn-sm" style="width:100%;margin:0;min-height:44px" '
+      +'onclick="invNotifInstaller()">Installer RepCore</button>');
+  }
+  // LA PROMESSE EST NOMMEE, ET ELLE VIENT DE SES PROPRES CRENEAUX. Sans
+  // planning enregistre, on ne promet pas un jour qu'on ne connait pas : la
+  // phrase reste vraie, simplement moins precise.
+  const promesse=phrase
+    ? 'Ta prochaine séance est <strong style="color:var(--text)">'+escapeHtml(phrase)+'</strong>. Je te préviens ?'
+    : 'Je peux te prévenir avant chacune de tes séances. On essaie ?';
+  return cadre('Et la prochaine ?',
+    '<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.5;margin-bottom:4px">'
+      +promesse+'</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-bottom:12px">'
+      +'Un rappel, ces jours-là, et rien d’autre.</div>',
+    '<div style="display:flex;gap:8px">'
+    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px;letter-spacing:.5px" '
+    +'onclick="invNotifOui()">Oui, préviens-moi</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0;'
+    +'min-height:44px;letter-spacing:.5px" onclick="invNotifNon()">Non merci</button>'
+    +'</div>');
+}
+// Le tour impur : decider, rendre, et MARQUER.
+//
+// ⚠ LE TEMOIN EST POSE A L'AFFICHAGE, pas a la reponse. La consigne dit « une
+// seule fois, quelle que soit la reponse » — et « quelle que soit la reponse »
+// inclut l'absence de reponse. Un athlete qui quitte l'ecran sans toucher aux
+// deux boutons a bien vu la question ; la reposer serait insister.
+function _rendreInvitationNotif(){
+  const z=document.getElementById('wd-notif-invite');
+  if(!z) return;
+  let etat='rien';
+  try{
+    etat=etatInvitationNotif(currentUser,_notifSupported(),
+      _notifSupported()?Notification.permission:null);
+  }catch(e){ etat='rien'; }
+  if(etat==='rien'){ z.innerHTML=''; return; }
+  let phrase='';
+  try{ phrase=texteProchainCreneau(prochainCreneau(currentUser,Date.now())); }catch(e){}
+  z.innerHTML=_htmlInvitationNotif(etat,phrase);
+  try{ currentUser._notifDemandeeLe=Date.now(); saveUser(); }catch(e){}
+}
+// ⚠ LA PERMISSION N'EST DEMANDEE QUE SUR ACCEPTATION. C'est tout l'interet de
+// cette carte : le navigateur n'ouvre sa boite qu'a quelqu'un qui vient de dire
+// oui, donc il ne la refuse presque jamais — et un refus navigateur est
+// definitif, il n'y a pas de seconde chance a gaspiller.
+async function invNotifOui(){
+  const z=document.getElementById('wd-notif-invite');
+  try{
+    if(!_notifSupported()){ toast(_NOTIF_INDISPO,'var(--orange)'); if(z) z.innerHTML=''; return; }
+    const p=await Notification.requestPermission();
+    if(p==='granted'){
+      // TROISIEME POINT D'ACCORD — voir les deux autres, dans les rappels de
+      // bilan et de seance. Les trois comptent le meme evenement.
+      try{ rcm('notif_granted'); }catch(e){}
+      await scheduleWoNotif();
+      toast('C’est note — je te préviens avant ta prochaine séance ✓');
+    } else {
+      // AUCUNE INSISTANCE. Le refus est accepte sans un mot de plus : le
+      // reprocher, c'est se faire desinstaller.
+      toast('Très bien, pas de rappel.');
+    }
+  }catch(e){}
+  if(z) z.innerHTML='';
+}
+function invNotifNon(){
+  const z=document.getElementById('wd-notif-invite');
+  if(z) z.innerHTML='';
+  // RIEN D'AUTRE. Pas de toast, pas de « tu peux changer d'avis dans les
+  // reglages » : la question a ete posee une fois, la reponse est non, et le
+  // temoin pose a l'affichage garantit qu'elle ne reviendra pas.
+}
+// Le navigateur ne connait pas les notifications : la seule voie est
+// l'installation. On reutilise le geste de la banniere d'installation, qui
+// sait deja distinguer iOS, l'invitation du navigateur, et le cas ou il n'y a
+// rien a declencher.
+function invNotifInstaller(){
+  const z=document.getElementById('wd-notif-invite');
+  if(z) z.innerHTML='';
+  try{ rcBanniereInstallAgir(); }catch(e){ try{ toast(_NOTIF_INDISPO,'var(--orange)'); }catch(_e){} }
 }
 // ══════════ LE PLANNING DE RAPPEL, ECRIT EN UN SEUL ENDROIT ════════════
 //

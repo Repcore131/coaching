@@ -28998,6 +28998,142 @@ function testExercices(){
     // inscrit ne recevait JAMAIS aucun rappel, et l'absence de notification ne
     // produit aucune trace qui l'aurait signale.
 
+    // ══ 15/09/2026 — « JE TE PREVIENS ? » APRES LA PREMIERE SEANCE ═════════
+    // requestPermission n'etait appelee qu'a deux endroits, tous deux des
+    // ecrans de REGLAGE qu'on n'atteint qu'une fois deja convaincu. La
+    // permission n'etait donc jamais demandee a ceux qui en auraient le plus
+    // besoin : ceux qui viennent de finir leur premiere seance.
+
+    ok('L’invitation ne se pose qu’une fois, au bon moment',(()=>{
+      const A=o=>Object.assign({email:'a@t.fr',role:'athlete',sessions:[{date:1}]},o);
+      const cas=[
+        ['1re seance',              A({}),                     true, 'default','demander'],
+        ['2e seance',               A({sessions:[{},{}]}),     true, 'default','rien'],
+        ['aucune seance',           A({sessions:[]}),          true, 'default','rien'],
+        // UNE SEULE FOIS DANS LA VIE DU COMPTE, quelle que soit la reponse.
+        ['question deja posee',     A({_notifDemandeeLe:123}), true, 'default','rien'],
+        // ⚠ DEJA TRANCHE PAR LE NAVIGATEUR : on n'affiche RIEN. Un refus ne se
+        // rattrape pas depuis l'app — la seule voie est les reglages du
+        // systeme — et reinsister est nuisible.
+        ['permission accordee',     A({}),                     true, 'granted','rien'],
+        ['permission refusee',      A({}),                     true, 'denied', 'rien'],
+        // PAS DE NOTIFICATIONS DU TOUT : on propose l'installation a la place.
+        ['non supportees',          A({}),                     false, null,    'installer'],
+        ['non supportees, deja posee',A({_notifDemandeeLe:1}), false, null,    'rien'],
+        ['un coach',                A({role:'coach'}),         true, 'default','rien'],
+        ['sans dossier',            null,                      true, 'default','rien']
+      ];
+      for(const [lib,u,sup,perm,att] of cas){
+        const r=etatInvitationNotif(u,sup,perm);
+        if(r!==att) return _echec(lib+' rend «'+r+'» au lieu de «'+att+'»');
+      }
+      return true;})());
+
+    // LA PROMESSE EST NOMMEE, et elle vient des creneaux que l'athlete a
+    // choisis lui-meme a l'inscription : c'est SA phrase qu'on lui relit.
+    ok('La phrase nomme le prochain creneau enregistre',(()=>{
+      // Un mardi soir, 19 h 30. _woReminderDays compte 0=lundi, comme DAYS ;
+      // Date#getDay compte 0=dimanche — l'inversion est le piege de cette
+      // fonction, et ce test la verrouille.
+      const mardiSoir=Date.parse('2026-09-15T19:30:00');
+      const f=(u,t)=>texteProchainCreneau(prochainCreneau(u,t||mardiSoir));
+      const cas=[
+        [{_woReminderDays:[0,2,4],_woReminderHour:18,_woReminderMin:0},'demain à 18 h'],
+        // Un creneau plus tard DANS LA MEME JOURNEE reste valide.
+        [{_woReminderDays:[1],_woReminderHour:21,_woReminderMin:0},'aujourd’hui à 21 h'],
+        // Celui d'aujourd'hui est passe : le prochain est dans sept jours, et
+        // on le nomme par son jour.
+        [{_woReminderDays:[1],_woReminderHour:18,_woReminderMin:0},'mardi à 18 h'],
+        [{_woReminderDays:[2],_woReminderHour:18,_woReminderMin:30},'demain à 18 h 30'],
+        // Sans creneau enregistre, on ne promet pas un jour qu'on ne connait pas.
+        [{},'']
+      ];
+      for(const [u,att] of cas){
+        const r=f(u);
+        if(r!==att) return _echec(JSON.stringify(u._woReminderDays||null)+' rend «'+r+'» au lieu de «'+att+'»');
+      }
+      return true;})());
+
+    ok('La carte porte deux boutons, et la phrase promise',(()=>{
+      if(_htmlInvitationNotif('rien','x')!=='') return _echec('l’etat « rien » rend quelque chose');
+      const d=document.createElement('div');
+      d.innerHTML=_htmlInvitationNotif('demander','mercredi à 18 h');
+      const b=d.querySelectorAll('button');
+      if(b.length!==2) return _echec(b.length+' bouton(s) au lieu de 2');
+      const libs=[...b].map(x=>x.textContent.trim());
+      if(libs[0].indexOf('prviens')<0&&!/préviens-moi/i.test(libs[0]))
+        return _echec('premier bouton : '+libs[0]);
+      if(!/non merci/i.test(libs[1])) return _echec('second bouton : '+libs[1]);
+      if(d.innerText.indexOf('mercredi à 18 h')<0)
+        return _echec('la phrase promise n’apparait pas');
+      // SANS CRENEAU CONNU, la phrase reste vraie, simplement moins precise.
+      d.innerHTML=_htmlInvitationNotif('demander','');
+      if(/prochaine séance est\s*\./.test(d.innerText)) return _echec('une promesse vide est affichee');
+      if(d.querySelectorAll('button').length!==2) return _echec('les deux boutons ne survivent pas');
+      // ⚠ L'ETAT « INSTALLER » REPREND _NOTIF_INDISPO MOT POUR MOT : il dit
+      // deja pourquoi ca ne marche pas ET quoi faire.
+      d.innerHTML=_htmlInvitationNotif('installer','');
+      return d.innerText.indexOf(_NOTIF_INDISPO)>=0
+        ?true:_echec('le message d’indisponibilite a ete reecrit');})());
+
+    ok('Le temoin est pose a l’affichage, pas a la reponse',(()=>{
+      const r=String(_rendreInvitationNotif);
+      if(r.indexOf('_notifDemandeeLe')<0) return _echec('rien ne retient que la question a ete posee');
+      // « Quelle que soit la reponse » inclut l'absence de reponse : un athlete
+      // qui quitte l'ecran sans toucher aux boutons a bien vu la question.
+      if(String(invNotifOui).indexOf('_notifDemandeeLe')>=0
+        ||String(invNotifNon).indexOf('_notifDemandeeLe')>=0)
+        return _echec('le temoin depend de la reponse');
+      // ⚠ DANS LE DOSSIER ET NON EN LOCAL : « la vie du compte » traverse les
+      // appareils, et reposer la question sur un second telephone serait
+      // exactement ce que la regle interdit.
+      if(/localStorage|sessionStorage/.test(r)) return _echec('le temoin est local a l’appareil');
+      return r.indexOf('saveUser()')>=0?true:_echec('le temoin n’est pas enregistre');})());
+
+    // ⚠ LA PERMISSION N'EST DEMANDEE QUE SUR ACCEPTATION. C'est tout l'interet :
+    // le navigateur n'ouvre sa boite qu'a quelqu'un qui vient de dire oui.
+    ok('La permission n’est demandee que sur acceptation',(()=>{
+      if(String(invNotifOui).indexOf('requestPermission')<0)
+        return _echec('« oui » ne demande pas la permission');
+      for(const [nom,f] of [['invNotifNon',invNotifNon],
+                            ['_rendreInvitationNotif',_rendreInvitationNotif],
+                            ['_htmlInvitationNotif',_htmlInvitationNotif],
+                            ['etatInvitationNotif',etatInvitationNotif]])
+        if(/requestPermission/.test(String(f)))
+          return _echec(nom+' demande la permission sans qu’on ait dit oui');
+      const s=String(invNotifOui);
+      // scheduleWoNotif SEULEMENT si la permission est accordee : armer un
+      // planning sur un refus serait ecrire pour rien.
+      const iG=s.indexOf("p==='granted'"), iS=s.indexOf('scheduleWoNotif');
+      if(iG<0) return _echec('la reponse du navigateur n’est pas testee');
+      if(!(iS>iG)) return _echec('le planning est arme avant de connaitre la reponse');
+      // AUCUNE INSISTANCE SUR UN REFUS : pas de seconde demande, pas de renvoi
+      // vers les reglages du systeme.
+      return /requestPermission/g.test(s)&&(s.match(/requestPermission/g)||[]).length===1
+        ?true:_echec('la permission est demandee plus d’une fois');})());
+
+    ok('L’invitation est branchee sur la fin de seance',(()=>{
+      const s=String(finishWorkout);
+      if(s.indexOf('_rendreInvitationNotif')<0)
+        return _echec('finishWorkout ne rend jamais l’invitation');
+      // AU MEME ENDROIT QUE LA RELANCE DE BILAN : la seance vient d'etre
+      // enregistree, elle est donc deja dans l'historique, et
+      // `sessions.length===1` dit sans ambiguite que c'etait la premiere.
+      const iB=s.indexOf('wd-first-bilan-card'), iN=s.indexOf('_rendreInvitationNotif');
+      if(!(iB>=0&&iN>iB)) return _echec('l’invitation n’est pas avec les autres relances');
+      // ET LE CONTENEUR EXISTE, avec les relances et non dans la composition
+      // du haut — dont l'ordre est pose et commente.
+      return document.getElementById('wd-notif-invite')
+        ?true:_echec('le conteneur a disparu de l’ecran de fin');})());
+
+    // LES DEUX POINTS D'APPEL HISTORIQUES RESTENT : cette carte s'ajoute, elle
+    // ne remplace rien. Les trois comptent le meme evenement notif_granted.
+    ok('Les trois points d’accord comptent le meme evenement',(()=>{
+      const prod=_prodSrc();
+      const n=(prod.match(/rcm\('notif_granted'\)/g)||[]).length;
+      if(n!==3) return _echec(n+' point(s) d’appel sur 3');
+      const d=(prod.match(/Notification\.requestPermission\(\)/g)||[]).length;
+      return d===3?true:_echec(d+' appel(s) a requestPermission au lieu de 3');})());
     ok('La question des jours ne se pose qu’au nouvel inscrit',(()=>{
       const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',createdAt:t-2*J},o);
@@ -29372,12 +29508,17 @@ function testExercices(){
     // deja pour le guide iOS, qui s'ouvre par deux chemins.
     ok('Les quatre compteurs sont branches la ou ils se produisent',(()=>{
       const prod=_prodSrc();
-      // LES DEUX ACCORDS DE NOTIFICATION, pas un seul.
-      const n=(prod.match(/rcm\('notif_granted'\)/g)||[]).length;
-      if(n!==2) return _echec(n+' point(s) d’appel sur 2 pour notif_granted');
-      // Et chacun DANS la branche « accorde », jamais avant le verdict.
+      // ⚠ LE NOMBRE EST DERIVE, JAMAIS ECRIT EN DUR. Ce test disait « 2 sur 2 »,
+      // et il est tombe le jour ou l'invitation de fin de premiere seance a
+      // ajoute un TROISIEME point d'appel — alors que ce troisieme point est
+      // exactement ce que la regle demande. La regle n'a jamais ete « il y en a
+      // deux » : elle est « CHAQUE demande de permission compte son accord ».
+      // On compte donc les demandes, et on exige autant de comptages.
       const dem=[...prod.matchAll(/Notification\.requestPermission\(\)/g)].map(m=>m.index);
-      if(dem.length!==2) return _echec(dem.length+' appel(s) a requestPermission');
+      if(dem.length<2) return _echec(dem.length+' appel(s) a requestPermission : lecture cassee');
+      const n=(prod.match(/rcm\('notif_granted'\)/g)||[]).length;
+      if(n!==dem.length)
+        return _echec(n+' comptage(s) pour '+dem.length+' demande(s) de permission');
       for(const i of dem){
         const suite=prod.slice(i,i+420);
         if(suite.indexOf('notif_granted')<0)
