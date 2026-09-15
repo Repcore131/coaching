@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1206';
+window.RC_BUILD='1207';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2890,8 +2890,35 @@ body.with-tabbar #rc-ban-install{padding-bottom:9px}
 .pr-carte[data-pose]{border-color:rgba(34,197,94,.42);
   background:linear-gradient(180deg,#0f1a0f,#0b120b);
   box-shadow:0 0 16px rgba(34,197,94,.14),inset 0 1px 0 rgba(255,255,255,.04)}
-.pr-haut{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.pr-nom{font-size:var(--fs-sm);font-weight:800;color:var(--text);letter-spacing:.2px}
+/* LE TITRE A GAUCHE, LE RESTE A DROITE, SUR LA MEME LIGNE. La duree et
+   l'objectif etaient trois enfants libres d'un flex qui enveloppe : sur un
+   telephone, « PERFORMANCE » et « 10 a 12 min » tombaient au rang suivant et la
+   carte prenait trois rangs pour deux. Demande de Kevin, 15/09/2026 : la duree
+   AVANT l'objectif, tous deux sur la ligne du titre, l'explication en dessous.
+   LE GROUPE NE S'ENVELOPPE PAS (nowrap au niveau haut) : c'est ce qui garantit
+   le rang unique. Le titre, lui, garde le droit de passer a la ligne DANS sa
+   propre colonne — un nom long doit rester lisible en entier, jamais coupe. */
+.pr-haut{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.pr-meta{flex:0 1 auto;min-width:0;margin-left:auto;display:flex;align-items:center;
+  justify-content:flex-end;gap:7px;flex-wrap:wrap}
+/* LA DUREE ET L OBJECTIF NE SE SEPARENT JAMAIS, dans cet ordre : c est la
+   demande. « En place », lui, n apparait que sur le protocole deja pose et
+   peut tomber au rang suivant quand les trois ne tiennent pas — c est le seul
+   des trois dont la place n a pas ete decidee. */
+.pr-paire{flex:0 0 auto;display:flex;align-items:center;gap:7px;flex-wrap:nowrap}
+/* `flex:1 1 0` ET NON `1 1 auto`. Avec une base automatique, le nom et le groupe
+   de droite se partagent le retrecissement au prorata de leur largeur naturelle,
+   et le groupe se repliait alors qu il avait la place — mesure a 320, 360, 375 et
+   430 px. Base zero : le nom prend ce qui reste, et c est lui, et lui seul, qui
+   passe a la ligne.
+   ET UN PLANCHER DE 6,5 em. Sans lui, une carte qui porte AUSSI « En place »
+   laissait 59 px au titre : « Jour lourd, force » y tombait sur trois rangs, et
+   la carte etait PLUS HAUTE qu avant. Le plancher force le groupe de droite a
+   ceder le premier, et c est la pastille « En place » qui passe au rang suivant
+   — celle des trois dont la place n a pas ete decidee. Mesure a 320 px, la
+   largeur ou la contrainte mord. */
+.pr-nom{flex:1 1 0;min-width:6.5em;font-size:var(--fs-sm);font-weight:800;
+  color:var(--text);letter-spacing:.2px}
 /* AU CONTOUR, PAS EN APLAT : sur un fond sombre, un aplat sature a la
    luminosite d un bouton et se lit comme une action a faire. */
 .pr-obj{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.1px;
@@ -5106,19 +5133,19 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   width:50%!important;height:50%!important}
 .sk-ico{color:#ff2f2f;filter:drop-shadow(0 0 4px rgba(255,50,50,.9))}
 /* ── Le compte ─────────────────────────────────────────────────────────── */
-/* Une grille de deux colonnes : le compte et son tiret sur le premier rang,
-   le libellé en travers du second. Le chiffre reste ainsi un enfant DIRECT de
-   ce bloc, et son libellé son voisin — ce que la suite de tests vérifie. */
+/* Le compte et son libellé SUR UNE SEULE LIGNE, séparés par un espace. Le tiret
+   qui les séparait se lisait « 0-sem » ; demande de Kevin, 15/09/2026. Le
+   chiffre reste un enfant DIRECT de ce bloc, et son libellé son voisin — ce que
+   la suite de tests vérifie. Alignement sur la LIGNE DE BASE et non sur le
+   milieu : deux corps très différents (20 px et 11 px) centrés l'un sur l'autre
+   donnent un libellé qui flotte trop haut. */
 .sk-chiffres{display:grid;grid-template-columns:auto auto;justify-content:start;
-  align-items:center;column-gap:5px;row-gap:1px;min-width:0}
+  align-items:baseline;column-gap:6px;row-gap:1px;min-width:0}
 #clh-streak-val{grid-column:1;grid-row:1}
-.sk-tiret{grid-column:2;grid-row:1}
-.sk-lbl{grid-column:1/-1;grid-row:2}
+.sk-lbl{grid-column:2;grid-row:1}
 #clh-streak-val{font-family:var(--pile-titre);font-size:var(--sk-f);line-height:.86;color:var(--text);
   font-variant-numeric:tabular-nums;letter-spacing:.5px;
   text-shadow:0 0 10px rgba(255,255,255,.3)}
-.sk-tiret{display:block;width:8px;height:1.5px;background:#ff2b2b;flex:0 0 auto;
-  box-shadow:0 0 5px rgba(224,32,32,.75)}
 .sk-lbl{font-size:11px;font-weight:800;letter-spacing:2.1px;text-transform:uppercase;
   color:var(--text);line-height:1}
 
@@ -5422,6 +5449,21 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .pes-champ{-moz-appearance:textfield;appearance:textfield}
 .pes-unite{flex:0 0 auto;font-family:var(--pile-titre);font-size:var(--fs-md);
   letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
+/* LA LIGNE DU DESSOUS TIENT SUR UN SEUL RANG. « Encore 4 pesées cette semaine
+   avant une moyenne fiable » passait à la ligne sur tout téléphone et faisait
+   grandir la carte d'un rang pour trois mots. Demande de Kevin, 15/09/2026.
+   ⚠ LE CORPS NE BOUGE PAS. Première tentative : descendre à 10 px. Une
+   assertion de ce dépôt — « aucun texte de l'accueil athlète ne descend sous le
+   plancher » — l'a refusée, et elle a raison : c'est l'écran qu'on lit le plus
+   souvent et le plus vite. C'est donc la PHRASE qui a été raccourcie, dans
+   renderCartePesee, et ce bloc ne fait que tenir le rang unique.
+   LE REPLI SOUS 340 px. À 11 px la phrase raccourcie demande 244 px ; un écran
+   de 320 n'en offre que 250, donc elle passe — mais de six pixels. Sous 340,
+   `nowrap` est levé : mieux vaut deux rangs qu'une phrase coupée. Mesuré dans
+   le navigateur à 320, 360, 375, 390 et 430 — pas estimé. */
+.pes-sous{font-size:var(--fs-xs);color:var(--sub);margin-top:7px;line-height:1.45;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:340px){.pes-sous{white-space:normal}}
 
 /* ══ LA CARTE « SÉANCE GELÉE » ════════════════════════════════════════════
    Deux colonnes : le texte à gauche, le bloc de glace à droite. Tout le décor
@@ -5568,10 +5610,8 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    soit tronqué : sur un écran étroit, c'est l'encouragement qui doit rester. */
 .nb-lbl{font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;
   color:var(--text);line-height:1.15;min-width:0}
-.nb-tiret{display:block;width:8px;height:1.5px;background:#ff2b2b;flex:0 0 auto;
-  box-shadow:0 0 5px rgba(224,32,32,.75);margin-left:auto}
 .nb-cta{font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;
-  color:var(--red-text);line-height:1;flex:0 0 auto;
+  color:var(--red-text);line-height:1;flex:0 0 auto;margin-left:auto;
   text-shadow:0 0 8px rgba(224,32,32,.55)}
 
 /* ══ LE CHRONOMÈTRE DE RÉCUPÉRATION ═══════════════════════════════════════
@@ -8409,7 +8449,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="sk-cadre">
         <div class="sk-dial"><svg viewBox="0 0 100 100" aria-hidden="true"><line x1="17.7" y1="71.8" x2="10.6" y2="76.6" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="12.5" y1="67.8" x2="7.5" y2="70.2" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="10.3" y1="62.0" x2="5.0" y2="63.6" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="8.9" y1="55.9" x2="3.5" y2="56.7" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="8.5" y1="49.7" x2="3.0" y2="49.7" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="11.5" y1="43.9" x2="3.1" y2="42.6" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="10.4" y1="37.5" x2="5.2" y2="35.8" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="12.8" y1="31.7" x2="7.8" y2="29.2" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="15.9" y1="26.3" x2="11.4" y2="23.2" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="19.8" y1="21.5" x2="15.9" y2="17.7" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="26.0" y1="19.3" x2="20.8" y2="12.6" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="29.6" y1="13.8" x2="26.9" y2="9.1" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="35.3" y1="11.2" x2="33.3" y2="6.1" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="41.2" y1="9.4" x2="40.1" y2="4.1" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="47.4" y1="8.6" x2="47.0" y2="3.1" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="53.4" y1="11.1" x2="54.1" y2="2.7" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="59.8" y1="9.7" x2="61.1" y2="4.3" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="65.7" y1="11.6" x2="67.8" y2="6.5" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="71.2" y1="14.4" x2="74.1" y2="9.6" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="76.3" y1="17.9" x2="79.8" y2="13.7" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="79.0" y1="23.9" x2="85.3" y2="18.2" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="84.6" y1="27.2" x2="89.2" y2="24.1" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="87.7" y1="32.6" x2="92.7" y2="30.3" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="89.9" y1="38.4" x2="95.1" y2="36.9" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="91.1" y1="44.5" x2="96.6" y2="43.8" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="89.0" y1="50.7" x2="97.5" y2="50.8" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="90.9" y1="56.9" x2="96.3" y2="57.8" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><path d="M 93.0 59.1 A 44 44 0 0 1 16.3 78.3" fill="none" stroke="#ff2a24" stroke-width="3.4" stroke-linecap="round"/></svg><svg class="sk-ico" viewBox="0 0 32 32" aria-hidden="true"><path d="M12.2 20.8A3.4 3.4 0 0 0 15.6 17.4c0-1.9-.7-2.7-1.4-4.1-1.5-2.9-.3-5.5 2.7-8.2.7 3.4 2.7 6.7 5.5 8.9 2.7 2.2 4.1 4.8 4.1 7.5a9.5 9.5 0 1 1-19 0c0-1.6.6-3.1 1.4-4.1a3.4 3.4 0 0 0 3.4 4.1z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="sk-chiffres">
-          <span id="clh-streak-val">0</span><i class="sk-tiret"></i>
+          <span id="clh-streak-val">0</span>
           <span class="sk-lbl">SEM.</span>
         </div>
       </div>
@@ -28379,6 +28419,14 @@ const defEx=[
   {name:'Tirage Unilatéral sur Banc',series:4,reps:'10 Par Bras',repos:'75 sec',description:'Assis de côté sur le banc. Étirement complet en bas, contraction maximale en haut.',note:'',image:null},
   {name:'Oblique Abdominal Crunch',series:5,reps:'15',repos:'60 sec',description:'En décubitus dorsal, mains derrière la nuque. Rotation et contraction maximale des obliques.',note:'',image:null}
 ];
+// LE REPOS PAR DEFAUT D UN EXERCICE NEUF. Une minute etait trop court pour du
+// travail en charge, et personne ne le laissait tel quel. Deux minutes, pour le
+// coach comme pour l athlete — demande de Kevin, 15/09/2026 — et chacun le
+// change a la main s il veut autre chose.
+// LE FORMAT EST CELUI DU CATALOGUE : « 2 min », comme les 200 exercices du
+// guide, et non « 02 min ». parseRepos lit les deux, mais deux ecritures pour
+// une meme duree finissent toujours par se contredire quelque part.
+const REPOS_DEFAUT='2 min';
 let progEx=[];
 let _progExDirty=false;
 // ======= COACH PROGRAMME TEMPLATES =======
@@ -32532,7 +32580,7 @@ async function setExerciseCount(n){
   const cur=progEx.length;
   if(n===cur) return;
   if(n>cur){
-    for(let i=cur;i<n;i++) progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null});
+    for(let i=cur;i<n;i++) progEx.push({name:'',series:3,reps:'10',repos:REPOS_DEFAUT,description:'',image:null});
   } else {
     const toRemove=progEx.slice(n);
     const hasContent=toRemove.some(ex=>ex.name||ex.description);
@@ -33158,16 +33206,27 @@ function renderProgEx(){
           <summary style="font-size:var(--fs-2xs);color:var(--text-faint);cursor:pointer;list-style:none">Quelle différence ?</summary>
           <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;padding:6px 0 0"><b style="color:var(--sub)">Remplacer</b> : un autre mouvement, l'historique repart de zéro. <b style="color:var(--sub)">Mettre à jour</b> : le même, qui gagne la photo et les vidéos du guide et garde ses suggestions de charge. Ou tape son nom au-dessus.</div>
         </details>`:''}
-        <div class="px-grp">PRESCRIPTION</div>
-        <!-- Séries / Reps / Repos -->
-        <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;margin-bottom:8px">
+        <!-- SÉRIES / RÉPÉTITIONS / REPOS, TROIS CASES DE MÊME LARGEUR.
+             LE TITRE « PRESCRIPTION » EST PARTI (Kevin, 15/09/2026) : il nommait
+             un groupe dont le contenu se nomme déjà lui-même, et il coûtait un
+             rang en haut de chaque carte.
+             TROIS COLONNES ÉGALES et non 1fr 2fr 1fr : la case du milieu portait
+             un libellé de soixante caractères — « Reps (ex: 10 PUIS 20 / 6-8 /
+             15 Par Jambe) » — qui passait à la ligne et décalait son champ d'un
+             rang par rapport à ses deux voisins. Le libellé se réduit au mot,
+             les trois champs retombent sur la même ligne.
+             L'EXEMPLE N'EST PAS PERDU : le cas courant reste en placeholder et
+             les trois formes reconnues passent en infobulle. Les écrire toutes
+             dans le placeholder les aurait fait tronquer : trente et un
+             caractères dans un champ de 106 px. -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
           <div><label style="margin-top:0">Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" class="f-c"></div>
           <div>
-            <label>Reps <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 10 PUIS 20 / 6-8 / 15 Par Jambe)</span></label>
-            <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" class="f-c">
+            <label style="margin-top:0">Répétition</label>
+            <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" title="Exemples : 10 PUIS 20 (dégressive) · 6-8 (fourchette) · 15 par jambe (unilatéral)" class="f-c">
             <div style="margin-top:4px">${badge}</div>
           </div>
-          <div><label>Repos</label><input class="px-court" value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" class="f-c f-sm"></div>
+          <div><label style="margin-top:0">Repos</label><input class="px-court" value="${escapeHtml(ex.repos||REPOS_DEFAUT)}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="${REPOS_DEFAUT}" class="f-c f-sm"></div>
         </div>
         <!-- CHARGE ET RIR CIBLES. Les deux étaient LUS depuis toujours —
              _apLigne les affiche dans l’aperçu de séance, PP_COLS en fait
@@ -33780,7 +33839,7 @@ function addExercise(){
   // ne porte aucune consigne d'intensite tant que le coach n'en a pas choisi
   // une. C'est le champ etabli, celui que l'apercu de seance et la fiche
   // imprimable lisent depuis toujours.
-  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:'',ss:false,methodeSeries:'',rir:''});
+  progEx.push({name:'',series:3,reps:'10',repos:REPOS_DEFAUT,description:'',image:null,videoUrl:'',ss:false,methodeSeries:'',rir:''});
   _progExDirty=true;
   renderProgEx();
   // Scroll vers le nouvel exercice
@@ -35092,7 +35151,6 @@ function _htmlNotifAssiduite(sem){
       <svg class="nb-ico" viewBox="0 0 32 32" aria-hidden="true"><path d="M12.2 20.8A3.4 3.4 0 0 0 15.6 17.4c0-1.9-.7-2.7-1.4-4.1-1.5-2.9-.3-5.5 2.7-8.2.7 3.4 2.7 6.7 5.5 8.9 2.7 2.2 4.1 4.8 4.1 7.5a9.5 9.5 0 1 1-19 0c0-1.6.6-3.1 1.4-4.1a3.4 3.4 0 0 0 3.4 4.1z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span class="nb-num">${n}</span>
       <span class="nb-lbl">semaines d'assiduité</span>
-      <i class="nb-tiret"></i>
       <span class="nb-cta">Continue&nbsp;!</span>
     </div>
   </div>`;
@@ -77304,8 +77362,14 @@ function renderCartePesee(){
   if(moy!=null) sous='Moyenne 7 jours : <b style="color:var(--text)">'+moy.toFixed(1)+' kg</b>';
   else{
     const fen=serie.filter(e=>e.date>=_jourPlus(auj,-(PESEE_FENETRE_MM-1))).length;
+    // « … cette semaine avant une moyenne fiable » faisait 53 caracteres et
+    // passait a la ligne sur tout telephone. Kevin voulait un seul rang
+    // (15/09/2026) ; le corps ne peut pas descendre — une assertion interdit
+    // tout texte sous 11 px sur cet ecran — donc c'est la PHRASE qui se
+    // raccourcit. « Cette semaine » ne se perd pas : le compte est deja
+    // celui de la fenetre de sept jours, il ne disait rien de plus.
     sous='Encore '+(PESEE_MM_MIN-fen)+' pesée'+((PESEE_MM_MIN-fen)>1?'s':'')
-      +' cette semaine avant une moyenne fiable';
+      +' avant une moyenne fiable';
   }
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:13px 14px;margin-bottom:16px;box-shadow:var(--el-1)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
@@ -77326,7 +77390,7 @@ function renderCartePesee(){
       </label>
       <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 18px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
     </div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:7px;line-height:1.45">${sous}</div>
+    <div class="pes-sous">${sous}</div>
   </div>`;
 }
 async function savePesee(){
@@ -77696,11 +77760,15 @@ function ouvrirChoixPhase(){
 }
 // Bandeau discret. Volontairement sans couleur de verdict : la phase n'est ni
 // un bon ni un mauvais état.
+// LE RANG DE SEMAINE N'Y EST PLUS. « Prise de masse · 1re semaine » se lisait
+// comme une seule chaîne — Kevin, 15/09/2026 — et le rang n'est pas ce qu'on
+// vient chercher ici. Il reste sur la fiche coach, où ordinalSemaine est
+// appelée deux fois, et dans la carte d'objectif.
 function _htmlBandeauPhase(user){
   const p=phaseCourante(user);
   if(!p) return '';
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:8px 12px;margin-bottom:14px">
-    <span style="font-size:var(--fs-xs);color:var(--sub)"><b style="color:var(--text-strong)">${PHASES[p.type].lib}</b> · ${ordinalSemaine(semainesPhase(user))}</span>
+    <span style="font-size:var(--fs-xs);color:var(--sub)">Objectif actuel : <b style="color:var(--text-strong)">${PHASES[p.type].lib}</b></span>
     <button onclick="ouvrirChoixPhase()" style="background:none;border:none;padding:0;cursor:pointer;font-size:var(--fs-2xs);letter-spacing:1px;text-transform:uppercase;color:var(--red-text);font-weight:700">Changer</button>
   </div>`;
 }
@@ -85753,9 +85821,13 @@ function _rendreSuggestionsProto(){
       return `<button type="button" class="pr-carte"${pose?' data-pose':''} style="--c:${o.c}" onclick="_appliquerProto('${p.slug}','${champ}')">
         <div class="pr-haut">
           <span class="pr-nom">${escapeHtml(p.nom)}</span>
-          <span class="pr-obj">${escapeHtml(o.lib.toUpperCase())}</span>
-          ${pose?'<span class="pr-pose">En place</span>':''}
-          <span class="pr-duree">${duree} min</span>
+          <span class="pr-meta">
+            <span class="pr-paire">
+              <span class="pr-duree">${duree} min</span>
+              <span class="pr-obj">${escapeHtml(o.lib.toUpperCase())}</span>
+            </span>
+            ${pose?'<span class="pr-pose">En place</span>':''}
+          </span>
         </div>
         <div class="pr-desc">${escapeHtml(p.desc)}</div>
         ${p.contreInd.length?`<div class="pr-ci">À éviter si : ${escapeHtml(p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', '))}</div>`:''}

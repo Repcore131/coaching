@@ -15804,8 +15804,18 @@ function testExercices(){
           phase:{type:'masse',debut:Date.now()-44*864e5,finPrevue:null,definiPar:'athlete',historique:[]}};
         _phChoix=null;
         renderCartePhase(); renderBandeauPhase(); renderRelancePhase();
-        ok('Phase active : le bandeau porte le libellé et la semaine',
-           /Prise de masse/.test(zB.innerHTML)&&/7e semaine/.test(zB.innerHTML),zB.innerHTML.slice(0,120));
+        // ⚠ CETTE ASSERTION EXIGEAIT « 7e semaine » DANS LE BANDEAU. Kevin l'a
+        // fait retirer le 15/09/2026 : « Prise de masse · 1re semaine » se lisait
+        // comme une seule chaine, et le rang n'est pas ce qu'on vient chercher
+        // sur l'accueil. Ce qui RESTE vrai est verrouille ici : le bandeau nomme
+        // l'objectif, et il le nomme sous cette forme-la.
+        ok('Phase active : le bandeau nomme l’objectif, sans rang de semaine',(()=>{
+           if(!/Objectif actuel/.test(zB.innerHTML))
+             return _echec('le bandeau n’annonce plus l’objectif : '+zB.innerHTML.slice(0,120));
+           if(!/Prise de masse/.test(zB.innerHTML))
+             return _echec('la phase n’est plus nommee : '+zB.innerHTML.slice(0,120));
+           return /semaine/i.test(zB.innerHTML)
+             ?_echec('le rang de semaine est revenu : '+zB.innerHTML.slice(0,120)):true;})());
         ok('Phase active : plus de carte de choix',zP.innerHTML==='');
         ok('Phase active récente : aucune relance',zR.innerHTML==='');
 
@@ -27315,6 +27325,78 @@ function testExercices(){
       // portaient .f-c ; Charge cible et RIR cible, ajoutes par un lot
       // ulterieur, ne portaient rien. Trois champs centres au-dessus, deux
       // alignes a gauche en dessous, dans le MEME groupe PRESCRIPTION.
+
+      // ══ 15/09/2026 — LA CARTE DE PROTOCOLE ET LE BLOC DE PRESCRIPTION ═════
+      // Deux demandes de Kevin sur l'ecran des seances, de la meme famille :
+      // des rangs depenses pour rien.
+
+      // LA DUREE MONTE SUR LA LIGNE DU TITRE, AVANT L'OBJECTIF. Elle tombait
+      // au rang suivant avec « PERFORMANCE », et la carte prenait trois rangs
+      // la ou deux suffisent.
+      ok('Carte de protocole : duree et objectif sur la ligne du titre',(()=>{
+        const s=String(_rendreSuggestionsProto);
+        const iN=s.indexOf('pr-nom'), iD=s.indexOf('pr-duree'),
+              iO=s.indexOf('pr-obj'), iC=s.indexOf('pr-desc');
+        if(iN<0||iD<0||iO<0||iC<0) return _echec('la carte a change de structure');
+        // L'ORDRE EST CELUI DEMANDE : titre, duree, objectif, puis l'explication.
+        if(!(iN<iD&&iD<iO&&iO<iC))
+          return _echec('ordre lu : '+[['nom',iN],['duree',iD],['obj',iO],['desc',iC]]
+            .sort((a,b)=>a[1]-b[1]).map(x=>x[0]).join(' > '));
+        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        // LE HAUT NE S'ENVELOPPE PLUS : c'est ce qui garantit le rang unique.
+        if(!/\.pr-haut\{[^}]*flex-wrap:nowrap/.test(css))
+          return _echec('le haut de carte enveloppe encore');
+        // LA PAIRE NE SE SEPARE PAS : duree et objectif restent cote a cote.
+        if(!/\.pr-paire\{[^}]*flex-wrap:nowrap/.test(css))
+          return _echec('la duree et l\'objectif peuvent se separer');
+        // ET LE TITRE GARDE UN PLANCHER : sans lui, une carte « En place »
+        // laissait 59 px au nom, qui tombait sur trois rangs — plus haut
+        // qu'avant la correction.
+        return /\.pr-nom\{[^}]*min-width:6\.5em/.test(css)
+          ?true:_echec('le titre n\'a plus de largeur plancher');})());
+
+      // LE TITRE « PRESCRIPTION » NOMMAIT UN GROUPE QUI SE NOMME DEJA, et
+      // coutait un rang en haut de chaque carte d'exercice.
+      ok('Creation de seance : plus de titre « PRESCRIPTION »',(()=>{
+        const s=String(renderProgEx);
+        if(/px-grp">\s*PRESCRIPTION/i.test(s)) return _echec('le titre est encore ecrit');
+        // LES GROUPES QUI RESTAIENT RESTENT : on en retire un, pas tous.
+        return /px-grp">EXÉCUTION/.test(s)
+          ?true:_echec('un autre groupe a disparu avec lui');})());
+
+      // TROIS CASES DE MEME LARGEUR, et un libelle qui tient sur un rang.
+      // Le libelle du milieu faisait soixante caracteres : il passait a la
+      // ligne et decalait son champ d'un rang par rapport a ses voisins.
+      ok('Series / Repetition / Repos : trois cases alignees',(()=>{
+        const s=String(renderProgEx);
+        if(s.indexOf('grid-template-columns:1fr 1fr 1fr')<0)
+          return _echec('les trois colonnes ne sont pas egales');
+        if(!/<label style="margin-top:0">Répétition<\/label>/.test(s))
+          return _echec('le libelle du milieu n\'est pas le seul mot « Répétition »');
+        // LES TROIS LIBELLES PARTENT DU MEME BORD HAUT : c'est `margin-top:0`
+        // sur les trois, et non sur le premier seul.
+        const mt=(s.match(/<label style="margin-top:0">/g)||[]).length;
+        if(mt<3) return _echec(mt+' libelle(s) sur 3 partent du meme bord');
+        // L'EXEMPLE N'EST PAS PERDU : il passe en infobulle.
+        return s.indexOf('title="Exemples : 10 PUIS 20')>=0
+          ?true:_echec('les exemples de reps ont disparu');})());
+
+      // DEUX MINUTES PAR DEFAUT, COACH COMME ATHLETE. Une minute etait trop
+      // court pour du travail en charge, et personne ne le laissait tel quel.
+      ok('Le repos d\'un exercice neuf vaut 2 min',(()=>{
+        if(typeof REPOS_DEFAUT==='undefined') return _echec('la constante n\'existe pas');
+        if(REPOS_DEFAUT!=='2 min') return _echec('valeur : '+JSON.stringify(REPOS_DEFAUT));
+        // LE FORMAT EST CELUI DU CATALOGUE, et il se relit bien.
+        if(parseRepos(REPOS_DEFAUT)!==120)
+          return _echec('parseRepos rend '+parseRepos(REPOS_DEFAUT)+' s');
+        // LES TROIS ENDROITS QUI CREAIENT UN EXERCICE LISENT LA MEME CONSTANTE
+        // — c'est ce qui empeche les trois de diverger a nouveau.
+        const prod=_prodSrc();
+        if(/repos:'01 min'/.test(prod)) return _echec('un « 01 min » subsiste dans le code');
+        const n=(prod.match(/repos:REPOS_DEFAUT/g)||[]).length;
+        if(n<2) return _echec(n+' creation(s) d\'exercice lisent la constante');
+        return /ex\.repos\|\|REPOS_DEFAUT/.test(prod)
+          ?true:_echec('le champ du formulaire ne lit pas la constante');})());
       ok('B2.9 — les cinq champs de prescription se presentent pareil',(()=>{
         const s=String(renderProgEx);
         if(!/class="px-court f-c" value="\$\{escapeHtml\(ex\.charge/.test(s))
@@ -28877,6 +28959,100 @@ function testExercices(){
       if(!(px<=20)) return _echec('le compteur mesure '+px+' px, au-dessus du cran xl (20 px)');
       return !halo?true:_echec('le halo est revenu : '+cs.textShadow);})());
     ok('Le compteur de streak reste affiché',!!document.getElementById('clh-streak-val'));
+
+    // ══ 15/09/2026 — LES QUATRE RETOUCHES DE L'ACCUEIL ATHLETE ═════════════
+    // Kevin lit ce que RepCore affiche, pas ce que le code voulait dire. Les
+    // quatre defauts qu'il signale sont de la meme famille : un separateur
+    // decoratif qui se lit comme un caractere, et une ligne qui passe au rang
+    // suivant pour trois mots.
+
+    // « 0-SEM. » — le tiret entre le compte et son unite se lisait comme un
+    // trait d'union, donc comme une seule chaine. Il part ; l'espace reste.
+    ok('Le compteur de semaines ne porte plus de tiret',(()=>{
+      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      if(document.querySelector('.sk-tiret')) return _echec('le tiret est encore dans le document');
+      if(/\.sk-tiret\s*\{/.test(css)) return _echec('la regle .sk-tiret est encore ecrite');
+      const v=document.getElementById('clh-streak-val');
+      if(!v) return _echec('le compteur a disparu');
+      const l=document.querySelector('.sk-lbl');
+      if(!l) return _echec('le libelle a disparu');
+      // SUR LA MEME LIGNE, ET SEPARES PAR UN ESPACE : c'est la demande exacte.
+      // ⚠ LA MESURE NE VAUT QUE SI L'ECRAN EST MONTE. Quand l'accueil athlete
+      // n'est pas l'ecran actif, les deux rectangles sont nuls et leur ecart
+      // vaut 0 — ce test tombait sur une page parfaitement correcte. On lit
+      // donc la REGLE, toujours vraie, et on ne mesure que si la mise en page
+      // a reellement eu lieu.
+      const m=css.match(/\.sk-chiffres\{([^}]*)\}/);
+      if(!m) return _echec('la regle .sk-chiffres n\'existe plus');
+      if(!/column-gap:[1-9]/.test(m[1]))
+        return _echec('aucun espace entre le compte et son libelle : '+m[1].slice(0,70));
+      if(!/\.sk-lbl\{grid-column:2;grid-row:1\}/.test(css))
+        return _echec('le libelle n\'est plus sur le rang du compte');
+      const rv=v.getBoundingClientRect(), rl=l.getBoundingClientRect();
+      if(!rv.width||!rl.width) return true;   // ecran non monte : la regle suffit
+      if(!(Math.abs(rv.bottom-rl.bottom)<3))
+        return _echec('le compte et son libelle ne partagent pas la ligne de base');
+      const ecart=rl.left-rv.right;
+      return ecart>2&&ecart<14?true:_echec('espace entre les deux : '+Math.round(ecart)+' px');})());
+
+    // « — Continue ! » — meme tiret, meme lecture, dans la notification
+    // d'assiduite. Et l'encouragement doit garder le bord droit du cadre :
+    // c'est le tiret qui portait le margin-left:auto.
+    ok('L\'encouragement d\'assiduite ne porte plus de tiret',(()=>{
+      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      if(/\.nb-tiret\s*\{/.test(css)) return _echec('la regle .nb-tiret est encore ecrite');
+      const s=String(_htmlNotifAssiduite);
+      if(s.indexOf('nb-tiret')>=0) return _echec('la balise du tiret est encore posee');
+      if(s.indexOf('Continue')<0) return _echec('l\'encouragement a disparu');
+      // LE BORD DROIT EST TENU PAR LA PASTILLE ELLE-MEME, desormais.
+      return /\.nb-cta\{[^}]*margin-left:auto/.test(css)
+        ?true:_echec('rien ne pousse l\'encouragement vers le bord droit');})());
+
+    // « Prise de masse · 1re semaine » se lisait comme une seule chaine, et le
+    // rang de semaine n'est pas ce qu'on vient chercher sur l'accueil.
+    ok('Le bandeau de phase nomme l\'objectif, sans rang de semaine',(()=>{
+      const u={phase:{type:'masse',debut:Date.now()-20*864e5}};
+      const h=_htmlBandeauPhase(u);
+      if(!h) return _echec('le bandeau ne sort rien');
+      const txt=h.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
+      if(txt.indexOf('Objectif actuel :')<0) return _echec('libelle : '+txt);
+      if(txt.indexOf('Prise de masse')<0) return _echec('la phase n\'est plus nommee : '+txt);
+      if(/semaine/i.test(txt)) return _echec('le rang de semaine est encore la : '+txt);
+      // IL RESTE AILLEURS : la fiche coach et la carte d'objectif le portent
+      // toujours, et ordinalSemaine n'est donc pas devenue du code mort.
+      const prod=_prodSrc();
+      return (prod.match(/ordinalSemaine\(/g)||[]).length>=3
+        ?true:_echec('ordinalSemaine n\'est plus appelee ailleurs');})());
+
+    // « Encore 4 pesees cette semaine avant une moyenne fiable » passait a la
+    // ligne et faisait grandir la carte d'un rang pour trois mots.
+    ok('La ligne sous la pesee du jour tient sur un seul rang',(()=>{
+      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const m=css.match(/\.pes-sous\{([^}]*)\}/);
+      if(!m) return _echec('la regle .pes-sous n\'existe pas');
+      if(m[1].indexOf('white-space:nowrap')<0) return _echec('rien n\'empeche le retour a la ligne');
+      // ⚠ LE CORPS RESTE A 11 px. Descendre a 10 faisait tomber « aucun texte
+      // de l'accueil athlete ne descend sous le plancher », et cette
+      // assertion-la a raison : c'est la PHRASE qui a ete raccourcie.
+      if(m[1].indexOf('font-size:var(--fs-xs)')<0)
+        return _echec('le corps n\'est plus au cran xs : '+m[1].slice(0,60));
+      if(String(renderCartePesee).indexOf('class="pes-sous"')<0)
+        return _echec('la carte n\'utilise pas la regle');
+      // LA PHRASE A ETE RACCOURCIE, et c'est ce qui la fait tenir : 244 px a
+      // 11 px, contre 326 pour l'ancienne. « Cette semaine » ne disait rien de
+      // plus — le compte est deja celui de la fenetre de sept jours.
+      const s=String(renderCartePesee);
+      // LE MOTIF VISE LE CODE, PAS LE COMMENTAIRE. `String(fn)` rend le corps
+      // entier, commentaires compris, et celui qui explique ce lot cite
+      // justement l'ancienne phrase : sans l'apostrophe fermante et le
+      // point-virgule, ce test tombait sur sa propre explication.
+      if(s.indexOf(" cette semaine avant une moyenne fiable';")>=0)
+        return _echec('la phrase longue est revenue');
+      if(s.indexOf(" avant une moyenne fiable'")<0)
+        return _echec('la phrase courte a disparu');
+      // ET UN REPLI SOUS 340 px : mieux vaut deux rangs qu'une phrase coupee.
+      return /@media \(max-width:340px\)\{\.pes-sous\{white-space:normal\}\}/.test(css)
+        ?true:_echec('aucun repli sous 340 px');})());
     // Test qui manquait : appeler loadClientHome EN ENTIER. Les tests ne
     // sollicitaient que _majMetriquesAccueil, si bien qu'une ecriture vers une
     // case supprimee interrompait toute la fonction sans qu'aucun test tombe.
