@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1210';
+window.RC_BUILD='1211';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5465,6 +5465,14 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:340px){.pes-sous{white-space:normal}}
 
+/* ── « Quels jours comptes-tu t'entraîner ? » ─────────────────────────────
+   Les deux pastilles de minutes. Elles portent leur TAILLE ici et leurs
+   COULEURS en ligne, posées par jenMin() : la couleur change à chaque
+   touche, la taille jamais. 44 px de haut — la cible tactile minimale, et
+   ces deux-là sont côte à côte. */
+.jen-min{min-height:44px;padding:0 14px;border-radius:var(--r-1);
+  font-size:var(--fs-xs);font-weight:800;font-variant-numeric:tabular-nums}
+
 /* ══ LA CARTE « SÉANCE GELÉE » ════════════════════════════════════════════
    Deux colonnes : le texte à gauche, le bloc de glace à droite. Tout le décor
    — montagnes, voile, poudre — est un SVG posé EN DUR sous le contenu : il ne
@@ -9930,6 +9938,57 @@ const COACH_PHOTO='icons/coach.jpg';
       <button class="btn btn-red" style="width:100%" onclick="ppImprimer()">Imprimer / Enregistrer en PDF</button>
     </div>
     <div id="pp-corps"></div>
+  </div>
+</div>
+
+<!-- ══════ QUELS JOURS COMPTES-TU T'ENTRAINER ? ══════════════════════════
+     Les rappels de seance existent depuis longtemps et ne s'armaient que par
+     un reglage opt-in enfoui : un nouvel inscrit n'en recevait jamais aucun.
+     Cet ecran s'interpose UNE FOIS, juste avant la premiere arrivee sur
+     l'accueil, et repart avec un planning.
+
+     ⚠ CE N'EST PAS UNE SECONDE INSCRIPTION, et tout ici sert a le dire :
+       • AUCUN CHAMP DE SAISIE. Rien a taper, rien a relire, aucun clavier.
+       • AUCUNE BARRE DE PROGRESSION, aucun « etape 2 sur 3 » : l'inscription
+         est finie, et suggerer qu'elle continue serait un mensonge.
+       • PAS DE TOPBAR, pas de fleche retour, pas de logo : un ecran de
+         formulaire en porte, une question n'en a pas besoin.
+       • LES JOURS SONT DEJA COCHES et l'heure deja posee : le chemin le plus
+         court est UNE touche — « C'est parti ». L'autre sortie, « je
+         choisirai plus tard », en demande une aussi.
+       • La phrase du bas dit que ca se change quand on veut. C'est vrai, et
+         c'est ce qui autorise a repondre vite.
+
+     ⚠ AUCUNE PERMISSION N'EST DEMANDEE ICI. On enregistre l'intention et on
+     prepare le planning ; la permission de notification se demande apres la
+     premiere seance. Demander deux choses d'un coup, c'est se faire refuser
+     les deux. -->
+<div id="s-jours-entrainement" class="screen">
+  <div class="scroll-area" style="flex:1">
+    <div class="pad" style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%">
+      <div style="flex:1">
+        <div style="width:24px;height:2px;background:var(--red);margin:14px 0 14px"></div>
+        <h1 style="font-size:var(--fs-2xl);line-height:1.2;font-weight:400;letter-spacing:.5px;margin-bottom:8px">Quels jours comptes-tu t'entraîner&nbsp;?</h1>
+        <p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:22px">On te posera un rappel ces jours-là. Rien d'autre.</p>
+        <div id="jen-jours" style="display:flex;gap:6px;margin-bottom:26px"></div>
+        <label for="jen-heure" style="margin-top:0">À quelle heure&nbsp;?</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <select id="jen-heure" class="f-c" style="flex:1;font-size:var(--fs-lg);font-family:var(--pile-titre);letter-spacing:1px"></select>
+          <div style="display:flex;gap:6px">
+            <button type="button" id="jen-min-0" onclick="jenMin(0)" class="jen-min">:00</button>
+            <button type="button" id="jen-min-30" onclick="jenMin(30)" class="jen-min">:30</button>
+          </div>
+        </div>
+      </div>
+      <div style="padding:26px 0 8px">
+        <button class="btn btn-red" onclick="jenValider()" style="margin-bottom:14px;letter-spacing:1.5px;min-height:50px">C'est parti</button>
+        <!-- TOUJOURS VISIBLE, et non cache derriere un repli : c'est la sortie,
+             et une sortie qu'on cherche n'en est pas une. Elle n'ecrit AUCUN
+             reglage — ni jours, ni heure, ni activation. -->
+        <button type="button" onclick="jenPlusTard()" style="display:block;width:100%;background:none;border:none;padding:10px 0;min-height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);text-decoration:underline;cursor:pointer">Je choisirai plus tard</button>
+        <p class="sub" style="font-size:var(--fs-2xs);line-height:1.5;text-align:center;margin-top:6px">Modifiable à tout moment depuis ton accueil.</p>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -34711,6 +34770,22 @@ function _repeindreSiJourChange(){
   return false;
 }
 function loadClientHome(){
+  // ── AVANT TOUT LE RESTE : LA QUESTION DES JOURS D'ENTRAINEMENT ───────
+  // Elle s'interpose UNE fois, sur la premiere arrivee d'un nouvel inscrit, et
+  // rend la main a cette meme fonction juste apres. L'accueil n'est pas peint
+  // derriere : on sort avant d'avoir rien rendu, ce qui est bien « avant
+  // l'arrivee sur s-client-home ».
+  // ICI ET PAS DANS doRegister : entre l'inscription et cet ecran, un athlete
+  // passe par le code, parfois par son bilan de depart, parfois par
+  // l'abonnement. Pose en amont, la question serait tombee au milieu d'une
+  // file d'attente administrative — et aurait ressemble a une seconde
+  // inscription, ce qu'on nous demande justement d'eviter.
+  try{
+    if(_doitProposerJours(currentUser,Date.now(),_jenVu(currentUser))){
+      _ouvrirJoursEntrainement();
+      return;
+    }
+  }catch(e){}
   // Posé À CHAQUE rendu : c’est lui qui vient d’écrire la date.
   _jourAffiche=localISODate(new Date());
   // RATTRAPAGE DE L'ANNUAIRE, une fois par session. Les athlètes déjà
@@ -54210,18 +54285,195 @@ function wrdSetMin(m){
     el.style.color=on?'var(--text)':'var(--sub)';
   });
 }
+// ══════════ LE PLANNING DE RAPPEL, ECRIT EN UN SEUL ENDROIT ════════════
+//
+// Extrait de saveWoReminderConfig le 15/09/2026, quand l'ecran d'accueil des
+// nouveaux inscrits a eu besoin d'ecrire le meme planning. Deux copies de ces
+// cinq lignes auraient diverge : l'une aurait appris a gerer les minutes, ou
+// a trier les jours, et l'autre non — et personne ne l'aurait su avant qu'un
+// athlete ne recoive un rappel au mauvais moment.
+//
+// ⚠ ELLE NE DEMANDE AUCUNE PERMISSION, et c'est le partage des roles :
+// l'APPELANT decide s'il faut demander, cette fonction ecrit. scheduleWoNotif
+// ne touche pas davantage a Notification — elle pose un plan dans le cache du
+// service worker et arme periodicSync. Un planning ecrit sans permission est
+// donc parfaitement valide : il dormira jusqu'a ce que la permission arrive,
+// et se declenchera tout seul ensuite, sans qu'on ait rien a rejouer.
+//
+// `jours` est TRIE et DEDOUBLONNE ici, une bonne fois : _nomsSeancesParJour
+// associe les creneaux dans l'ordre du tableau, et un tableau desordonne
+// donnait le nom d'une seance a un autre jour.
+// ══════════ « QUELS JOURS COMPTES-TU T'ENTRAINER ? » ═══════════════════
+//
+// LE DEFAUT QU'IL CORRIGE : scheduleWoNotif existe depuis longtemps, mais rien
+// ne l'arme sauf saveWoReminderConfig — une feuille qu'on n'atteint qu'en
+// sachant deja qu'elle existe. Un nouvel inscrit ne recevait donc JAMAIS aucun
+// rappel, et personne ne pouvait le remarquer : l'absence de notification ne
+// produit aucune trace.
+//
+// OU IL S'INTERPOSE, ET POURQUOI LA. La demande disait « juste apres une
+// inscription reussie, avant l'arrivee sur s-client-home ». Ces deux instants
+// n'en font pas un : apres doRegister, un athlete part sur s-client-code,
+// parfois sur son bilan de depart, parfois sur l'abonnement — il peut se
+// passer plusieurs ecrans, et parfois plusieurs jours, avant qu'il voie son
+// accueil. Poser l'ecran dans doRegister l'aurait donc mis AVANT l'acces, au
+// milieu d'une file d'attente administrative : exactement la « seconde
+// inscription » qu'on nous demande d'eviter.
+//
+// Il est donc pose sur la PREMIERE ARRIVEE A L'ACCUEIL, qui est litteralement
+// « avant s-client-home » et qui couvre les trois branches d'un coup. Le
+// compte vient d'etre cree — la garde des 30 jours le verifie — donc c'est
+// bien du nouvel inscrit qu'il s'agit.
+const JEN_FENETRE=30*864e5;
+// ⚠ LA MEMOIRE EST LOCALE, PAS DANS LE DOSSIER. « Je choisirai plus tard »
+// doit n'ECRIRE RIEN, et c'est la consigne exacte. Mais un ecran qui ne
+// retient pas qu'il a ete montre revient a chaque ouverture : ce ne serait
+// plus une proposition, ce serait un piege. Le temoin vit donc dans
+// localStorage, par compte, sur CET appareil — rien ne part au reseau, rien
+// n'entre dans le dossier, rien n'est synchronise.
+// CONSEQUENCE ASSUMEE : un nouvel appareil repose la question une fois. Pour
+// quelqu'un qui n'a jamais repondu, c'est le bon comportement.
+const JEN_CLE='rc_jours_vu_';
+function _jenVu(u){
+  try{ return !!localStorage.getItem(JEN_CLE+((u&&u.email)||'')); }catch(e){ return true; }
+}
+function _jenMarquer(u){
+  try{ localStorage.setItem(JEN_CLE+((u&&u.email)||''),String(Date.now())); }catch(e){}
+}
+// PURE. Faut-il poser la question a ce dossier, a cet instant ?
+//
+// LES QUATRE GARDES, et aucune de plus :
+//   • un athlete — un coach ne s'entraine pas dans l'app ;
+//   • un compte JEUNE — la question s'adresse au nouvel inscrit, pas a
+//     quelqu'un qui utilise RepCore depuis six mois et n'a jamais voulu de
+//     rappels ;
+//   • aucun planning deja pose — celui qui a regle ses rappels a repondu ;
+//   • jamais montre sur cet appareil.
+function _doitProposerJours(u,maintenant,dejaVu){
+  if(!u||!u.email||u.role==='coach') return false;
+  if(u._woReminderEnabled) return false;
+  if((u._woReminderDays||[]).length) return false;
+  if(dejaVu) return false;
+  const c=Number(u.createdAt)||0;
+  const t=Number(maintenant)||0;
+  if(!c||!t) return false;
+  return (t-c)<JEN_FENETRE;
+}
+// PURE. Les jours proposes d'avance. Le chemin le plus court doit etre UNE
+// touche : sans pre-selection, « C'est parti » serait desactive et l'ecran
+// exigerait au moins deux gestes avant de rendre la main.
+// LES CRENEAUX DU PROGRAMME D'ABORD — c'est la meilleure reponse possible,
+// elle vient du coach. A defaut, lundi / mercredi / vendredi : trois seances
+// espacees, le rythme le plus courant chez un debutant.
+// ⚠ LES SEANCES D'ESSAI NE COMPTENT PAS. loadClientHome pose une configuration
+// de repli — cinq jours actifs, marques `_essai` — a qui n'a pas encore de
+// programme. La lire ici proposerait cinq jours d'entrainement au nom d'un
+// coach qui n'a rien ecrit. hasProgram ecarte ces memes seances, pour la meme
+// raison et avec le meme predicat.
+function _jenJoursProposes(u){
+  const act=((u&&u.sessions_config)||[]).reduce((a,s,i)=>{
+    if(!s||!s.active) return a;
+    try{ if(seanceEstExemple(s)) return a; }catch(e){}
+    a.push(i); return a;
+  },[]);
+  // LUNDI / MERCREDI / VENDREDI a defaut : trois seances espacees, le rythme
+  // le plus courant chez quelqu'un qui commence. Un defaut vide obligerait a
+  // toucher l'ecran avant de pouvoir en sortir.
+  return act.length?act:[0,2,4];
+}
+// ── Le rendu et les trois gestes ────────────────────────────────────────
+let _jenJours=[], _jenMin=0;
+function _ouvrirJoursEntrainement(){
+  const u=currentUser;
+  _jenJours=_jenJoursProposes(u);
+  _jenMin=0;
+  const z=document.getElementById('jen-jours');
+  const DS=['L','Ma','Me','J','V','S','D'];
+  if(z) z.innerHTML=DS.map((d,i)=>
+    '<button type="button" id="jen-j-'+i+'" onclick="jenJour('+i+')" '
+    +'aria-pressed="'+(_jenJours.includes(i)?'true':'false')+'" '
+    +'style="flex:1;min-width:0;min-height:52px;border-radius:var(--r-2);cursor:pointer;'
+    +'font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800">'+d+'</button>').join('');
+  const h=document.getElementById('jen-heure');
+  // DE 5 h A 22 h : avant et apres, ce n'est plus un creneau d'entrainement,
+  // c'est une liste qu'on fait defiler pour rien.
+  if(h) h.innerHTML=Array.from({length:18},(_,i)=>i+5)
+    .map(x=>'<option value="'+x+'"'+(x===18?' selected':'')+'>'+String(x).padStart(2,'0')+'h</option>').join('');
+  for(let i=0;i<7;i++) _jenPeindre(i);
+  jenMin(0);
+  go('s-jours-entrainement');
+}
+function _jenPeindre(i){
+  const b=document.getElementById('jen-j-'+i);
+  if(!b) return;
+  const on=_jenJours.includes(i);
+  b.setAttribute('aria-pressed',on?'true':'false');
+  b.style.border='1px solid '+(on?'var(--red)':'var(--border)');
+  b.style.background=on?'#1a0000':'transparent';
+  b.style.color=on?'var(--red-text)':'var(--sub)';
+}
+function jenJour(i){
+  const k=_jenJours.indexOf(i);
+  if(k>=0) _jenJours.splice(k,1); else _jenJours.push(i);
+  _jenPeindre(i);
+}
+function jenMin(m){
+  _jenMin=(m===30)?30:0;
+  [0,30].forEach(x=>{
+    const el=document.getElementById('jen-min-'+x);
+    if(!el) return;
+    const on=x===_jenMin;
+    el.style.background=on?'var(--red)':'transparent';
+    el.style.border='1px solid '+(on?'var(--red)':'var(--border)');
+    el.style.color=on?'var(--text)':'var(--sub)';
+  });
+}
+// ⚠ AUCUNE PERMISSION DEMANDEE. On enregistre l'intention et on prepare le
+// planning ; la permission viendra apres la premiere seance. C'est la consigne,
+// et c'est aussi ce qui marche : deux demandes d'un coup se font refuser
+// ensemble.
+async function jenValider(){
+  if(!_jenJours.length){
+    toast('Choisis au moins un jour, ou « je choisirai plus tard »','var(--orange)');
+    return;
+  }
+  const h=+(document.getElementById('jen-heure')?.value||18);
+  // MARQUE D'ABORD. Si scheduleWoNotif echoue — pas de service worker, cache
+  // indisponible — le planning est quand meme ecrit dans le dossier et l'ecran
+  // ne doit pas revenir a la prochaine ouverture.
+  _jenMarquer(currentUser);
+  try{ await _appliquerRappelSeance(_jenJours,h,_jenMin); }catch(e){}
+  toast('C’est note — rappel a '+String(h).padStart(2,'0')+':'
+    +String(_jenMin).padStart(2,'0')+' ✓');
+  go('s-client-home');
+  loadClientHome();
+}
+// ⚠ N'ECRIT AUCUN REGLAGE : ni jours, ni heure, ni activation, et rien dans le
+// dossier. Seul le temoin local retient que l'ecran a ete montre — sans lui, la
+// question reviendrait a chaque ouverture, et une proposition qui revient
+// devient une corvee.
+function jenPlusTard(){
+  _jenMarquer(currentUser);
+  go('s-client-home');
+  loadClientHome();
+}
+async function _appliquerRappelSeance(jours,h,m){
+  const j=[...new Set((jours||[]).map(Number).filter(x=>x>=0&&x<=6))].sort((a,b)=>a-b);
+  currentUser._woReminderEnabled=true;
+  currentUser._woReminderHour=(h>=0&&h<=23)?h:18;
+  currentUser._woReminderMin=(m===30)?30:0;
+  currentUser._woReminderDays=j;
+  saveUser();
+  await scheduleWoNotif();
+  return j;
+}
 async function saveWoReminderConfig(){
   const h=+(document.getElementById('wrd-hour')?.value||18);
   const m=window._wrdMin??0;
   const days=window._wrdDays||[];
   if(!days.length){toast("Sélectionne au moins un jour d'entraînement",'var(--orange)');return;}
   const doSave=async()=>{
-    currentUser._woReminderEnabled=true;
-    currentUser._woReminderHour=h;
-    currentUser._woReminderMin=m;
-    currentUser._woReminderDays=[...days];
-    saveUser();
-    await scheduleWoNotif();
+    await _appliquerRappelSeance(days,h,m);
     toast('Rappel activé à '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+' ✓');
     document.getElementById('wo-reminder-config')?.remove();
     renderWoReminderCard();

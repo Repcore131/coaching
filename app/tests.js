@@ -28992,6 +28992,147 @@ function testExercices(){
     // ligne « Inscrit, n'a jamais commence » compte les BILANS, pas les
     // seances. Le coach ne le voyait nulle part.
 
+    // ══ 15/09/2026 — « QUELS JOURS COMPTES-TU T'ENTRAINER ? » ══════════════
+    // scheduleWoNotif existait, mais rien ne l'armait sauf une feuille de
+    // reglage qu'on n'atteint qu'en sachant deja qu'elle existe : un nouvel
+    // inscrit ne recevait JAMAIS aucun rappel, et l'absence de notification ne
+    // produit aucune trace qui l'aurait signale.
+
+    ok('La question des jours ne se pose qu’au nouvel inscrit',(()=>{
+      const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
+      const A=o=>Object.assign({email:'a@t.fr',role:'athlete',createdAt:t-2*J},o);
+      const cas=[
+        ['nouvel inscrit athlete',  A({}),                        false, true],
+        ['deja vu sur l’appareil', A({}),                    true,  false],
+        // Celui qui a regle ses rappels a repondu : on ne redemande pas.
+        ['a deja un planning',      A({_woReminderEnabled:true}), false, false],
+        ['a deja des jours poses',  A({_woReminderDays:[0,2]}),   false, false],
+        // La question s'adresse au nouvel inscrit, pas a quelqu'un qui utilise
+        // RepCore depuis six mois et n'a jamais voulu de rappels.
+        ['compte de 40 jours',      A({createdAt:t-40*J}),        false, false],
+        ['un coach',                A({role:'coach'}),            false, false],
+        ['sans createdAt',          A({createdAt:undefined}),     false, false],
+        ['sans dossier',            null,                         false, false]
+      ];
+      for(const [lib,u,vu,att] of cas){
+        const r=_doitProposerJours(u,t,vu);
+        if(r!==att) return _echec(lib+' rend '+r+' au lieu de '+att);
+      }
+      return true;})());
+
+    ok('Les jours proposes evitent les seances d’essai',(()=>{
+      // loadClientHome pose une configuration de repli — cinq jours actifs,
+      // marques `_essai` — a qui n'a pas encore de programme. La lire
+      // proposerait cinq entrainements au nom d'un coach qui n'a rien ecrit.
+      const essai=[0,1,2,3,4].map(()=>({day:'x',active:true,exercises:[{name:'X'}],_essai:true}))
+        .concat([{day:'S',active:false,exercises:[]},{day:'D',active:false,exercises:[]}]);
+      const r1=_jenJoursProposes({sessions_config:essai});
+      if(JSON.stringify(r1)!=='[0,2,4]')
+        return _echec('les seances d’essai sont comptees : '+JSON.stringify(r1));
+      // Un VRAI programme, lui, decide : c'est la meilleure reponse possible,
+      // elle vient du coach.
+      const vrai=[{active:true,exercises:[{name:'DC'}]},{active:false},
+                  {active:true,exercises:[{name:'SQ'}]},{active:false},{active:false},
+                  {active:true,exercises:[{name:'RO'}]},{active:false}];
+      const r2=_jenJoursProposes({sessions_config:vrai});
+      if(JSON.stringify(r2)!=='[0,2,5]') return _echec('le programme du coach est ignore : '+JSON.stringify(r2));
+      // ET UN DEFAUT NON VIDE, toujours : c'est ce qui permet de sortir en UNE
+      // touche. Un defaut vide obligerait a toucher l'ecran avant d'en partir.
+      return _jenJoursProposes({}).length?true:_echec('aucun jour propose par defaut');})());
+
+    // ⚠ CET ECRAN NE DOIT EN AUCUN CAS RESSEMBLER A UNE SECONDE INSCRIPTION.
+    ok('L’ecran des jours ne ressemble pas a une inscription',(()=>{
+      const e=document.getElementById('s-jours-entrainement');
+      if(!e) return _echec('l’ecran n’existe pas');
+      // AUCUN CHAMP DE SAISIE : rien a taper, rien a relire, aucun clavier.
+      const saisies=e.querySelectorAll('input,textarea');
+      if(saisies.length) return _echec(saisies.length+' champ(s) de saisie');
+      // PAS DE TOPBAR, PAS DE FLECHE RETOUR : un formulaire en porte, une
+      // question n'en a pas besoin.
+      if(e.querySelectorAll('.topbar,.back-btn').length)
+        return _echec('l’ecran porte une barre de titre');
+      // AUCUNE BARRE DE PROGRESSION, aucun « etape 2 sur 3 » : l'inscription
+      // est finie, suggerer qu'elle continue serait un mensonge.
+      if(/étape\s*\d|step\s*\d|\d\s*\/\s*\d/i.test(e.innerText||''))
+        return _echec('l’ecran annonce une etape');
+      // LA SORTIE EST TOUJOURS VISIBLE, et non repliee : une sortie qu'on
+      // cherche n'en est pas une.
+      const tard=[...e.querySelectorAll('button')].find(b=>/plus tard/i.test(b.textContent));
+      if(!tard) return _echec('« je choisirai plus tard » est absent');
+      if(getComputedStyle(tard).display==='none') return _echec('la sortie est masquee');
+      // UN SEUL ECRAN : il n'est pas dans la barre d'onglets, donc rien ne
+      // permet d'en sortir de biais, et rien ne le fait ressembler a un onglet.
+      return (typeof TABBAR_ECRANS==='object'&&!TABBAR_ECRANS['s-jours-entrainement'])
+        ?true:_echec('l’ecran est devenu un onglet');})());
+
+    ok('« Je choisirai plus tard » n’ecrit aucun reglage',(()=>{
+      const s=String(jenPlusTard);
+      for(const k of ['_woReminderEnabled','_woReminderDays','_woReminderHour','_woReminderMin'])
+        if(s.indexOf(k)>=0) return _echec('il ecrit '+k);
+      if(/_appliquerRappelSeance|scheduleWoNotif|saveUser\(/.test(s))
+        return _echec('il ecrit dans le dossier ou arme le planning');
+      // Il retient SEULEMENT que l'ecran a ete montre — sans quoi la question
+      // reviendrait a chaque ouverture, et une proposition qui revient devient
+      // une corvee. Ce temoin vit dans localStorage, pas dans le dossier.
+      if(s.indexOf('_jenMarquer')<0) return _echec('rien ne retient que l’ecran a ete montre');
+      const m=String(_jenMarquer);
+      if(m.indexOf('localStorage')<0) return _echec('le temoin n’est pas local');
+      return /saveUser\(|DB\.set/.test(m)?_echec('le temoin entre dans le dossier'):true;})());
+
+    // ⚠ AUCUNE PERMISSION SUR CET ECRAN : elle se demandera apres la premiere
+    // seance. Demander deux choses d'un coup, c'est se faire refuser les deux.
+    ok('L’ecran des jours ne demande aucune permission',(()=>{
+      for(const [nom,f] of [['jenValider',jenValider],['jenPlusTard',jenPlusTard],
+                            ['_appliquerRappelSeance',_appliquerRappelSeance],
+                            ['_ouvrirJoursEntrainement',_ouvrirJoursEntrainement]])
+        if(/requestPermission|Notification\.permission/.test(String(f)))
+          return _echec(nom+' touche a la permission de notification');
+      // scheduleWoNotif non plus : elle pose un plan dans le cache du service
+      // worker et arme periodicSync. Un planning ecrit sans permission est donc
+      // valide — il dormira jusqu'a ce que la permission arrive.
+      return /requestPermission/.test(String(scheduleWoNotif))
+        ?_echec('scheduleWoNotif demande la permission'):true;})());
+
+    ok('La validation ecrit les quatre champs et arme le planning',(()=>{
+      const s=String(jenValider);
+      if(s.indexOf('_appliquerRappelSeance')<0)
+        return _echec('la validation n’utilise pas la logique commune');
+      if(s.indexOf('_jenMarquer')<0) return _echec('l’ecran reviendrait a la prochaine ouverture');
+      // LES QUATRE CHAMPS SONT ECRITS PAR LA FONCTION COMMUNE, et elle appelle
+      // scheduleWoNotif elle-meme.
+      const a=String(_appliquerRappelSeance);
+      for(const k of ['_woReminderEnabled','_woReminderDays','_woReminderHour','_woReminderMin'])
+        if(a.indexOf(k)<0) return _echec(k+' n’est pas ecrit');
+      if(a.indexOf('scheduleWoNotif')<0) return _echec('le planning n’est pas arme');
+      return a.indexOf('saveUser()')>=0?true:_echec('le dossier n’est pas enregistre');})());
+
+    // ⚠ PAS DE DUPLICATION : la feuille de reglage et l'ecran d'accueil
+    // ecrivent le meme planning, par la meme fonction. Deux copies auraient
+    // diverge, et personne ne l'aurait su avant qu'un rappel ne tombe au
+    // mauvais moment.
+    ok('saveWoReminderConfig et l’ecran partagent la meme ecriture',(()=>{
+      const s=String(saveWoReminderConfig);
+      if(s.indexOf('_appliquerRappelSeance')<0)
+        return _echec('la feuille de reglage a garde sa propre copie');
+      // Les quatre affectations ne doivent plus y figurer en direct.
+      for(const k of ['_woReminderEnabled=','_woReminderDays=','_woReminderHour=','_woReminderMin='])
+        if(s.replace(/\s/g,'').indexOf(k)>=0) return _echec('elle ecrit encore '+k+' elle-meme');
+      // ET SA DEMANDE DE PERMISSION RESTE : c'est l'appelant qui decide s'il
+      // faut demander, pas la fonction d'ecriture.
+      return /requestPermission/.test(s)
+        ?true:_echec('la feuille de reglage ne demande plus la permission');})());
+
+    // L'INTERCEPTION EST AVANT LE RENDU, pas apres : l'accueil ne doit pas
+    // etre peint derriere la question.
+    ok('La question s’interpose avant que l’accueil soit rendu',(()=>{
+      const s=String(loadClientHome);
+      const i=s.indexOf('_doitProposerJours');
+      if(i<0) return _echec('loadClientHome ne pose jamais la question');
+      const j=s.indexOf('_jourAffiche=');
+      if(!(j>=0&&i<j)) return _echec('la question vient apres le debut du rendu');
+      // Et elle REND LA MAIN : sans `return`, l'accueil se peindrait quand meme.
+      return /_ouvrirJoursEntrainement\(\);[\s\S]{0,40}return;/.test(s)
+        ?true:_echec('l’accueil se rend quand meme derriere la question');})());
     ok('jamaisDemarre : le critere, et rien d’autre',(()=>{
       const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
       const A=o=>Object.assign({id:'x',role:'athlete',fname:'Léa',
