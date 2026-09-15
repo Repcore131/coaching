@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1212';
+window.RC_BUILD='1213';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5465,6 +5465,16 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:340px){.pes-sous{white-space:normal}}
 
+/* ── La première marche : une pastille de réponse, pleine largeur ──────
+   Un libellé, une explication, et la touche suivante fait avancer. Aucun
+   bouton « suivant » : il ajouterait une touche par question, soit trois de
+   plus sur un parcours qui en promet trois en tout. */
+.ps-choix{display:block;width:100%;text-align:left;margin-bottom:10px;padding:14px 16px;
+  min-height:60px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;
+  background:var(--surface-1);border:1px solid var(--border);
+  transition:border-color var(--t-2),background var(--t-2)}
+.ps-choix:hover,.ps-choix:focus-visible{border-color:var(--red);background:#140505}
+
 /* ── « Quels jours comptes-tu t'entraîner ? » ─────────────────────────────
    Les deux pastilles de minutes. Elles portent leur TAILLE ici et leurs
    COULEURS en ligne, posées par jenMin() : la couleur change à chaque
@@ -9951,6 +9961,29 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- ══════ LA PREMIERE MARCHE ════════════════════════════════════════════
+     Trois questions, un ecran, puis la seance posee devant l'athlete. Le
+     corps est rendu par _psRendre : un seul conteneur, pas quatre ecrans —
+     « un ecran chacune » se joue DANS celui-ci, sans traverser le routeur.
+
+     ⚠ SAUTABLE A TOUT MOMENT, et la sortie ne bouge jamais de place : meme
+     mot, meme coin, sur les quatre etapes. Une sortie qui se deplace est une
+     sortie qu'on cherche.
+
+     PAS DE TOPBAR, PAS DE FLECHE : la fleche de retour ramenerait a l'accueil
+     vide d'ou l'on vient, ce qui est exactement ce que fait « Passer ». -->
+<div id="s-premiere-seance" class="screen">
+  <div class="scroll-area" style="flex:1">
+    <div class="pad" style="max-width:520px;margin:0 auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 18px">
+        <div id="ps-pas" class="sub" style="font-size:var(--fs-2xs);letter-spacing:2px;text-transform:uppercase;font-weight:800"></div>
+        <button type="button" onclick="psPasser()" style="background:none;border:none;padding:8px 0;min-height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;text-decoration:underline;text-underline-offset:3px;white-space:nowrap">Passer</button>
+      </div>
+      <div id="ps-corps"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ══════ QUELS JOURS COMPTES-TU T'ENTRAINER ? ══════════════════════════
      Les rappels de seance existent depuis longtemps et ne s'armaient que par
      un reglage opt-in enfoui : un nouvel inscrit n'en recevait jamais aucun.
@@ -14390,6 +14423,14 @@ function routeUser(){
   // parce qu'il n'avait pas encore choisi comment payer.
   if(s==='FREE') return go('s-client-code');
   if(!checkAccess(currentUser)){go('s-access-gate');loadAccessGate();return;}
+  // ── L'ACCUEIL DU NOUVEL INSCRIT ──────────────────────────────────────
+  // ICI, et nulle part ailleurs. routeUser est le seul point qui DECIDE ou un
+  // athlete atterrit — c'est deja lui qui l'envoie sur l'ecran de code ou sur
+  // la barriere d'acces, deux lignes plus haut. Les deux accueils sont des
+  // aiguillages de meme nature, ils appartiennent donc a la meme fonction.
+  // Consequence assumee et voulue : un retour a l'accueil par la fleche ou par
+  // un onglet ne les redeclenche pas. Ce sont des RETOURS, pas des arrivees.
+  if(_aiguillerNouvelInscrit()) return;
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
   if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}
@@ -34780,22 +34821,15 @@ function _repeindreSiJourChange(){
   return false;
 }
 function loadClientHome(){
-  // ── AVANT TOUT LE RESTE : LA QUESTION DES JOURS D'ENTRAINEMENT ───────
-  // Elle s'interpose UNE fois, sur la premiere arrivee d'un nouvel inscrit, et
-  // rend la main a cette meme fonction juste apres. L'accueil n'est pas peint
-  // derriere : on sort avant d'avoir rien rendu, ce qui est bien « avant
-  // l'arrivee sur s-client-home ».
-  // ICI ET PAS DANS doRegister : entre l'inscription et cet ecran, un athlete
-  // passe par le code, parfois par son bilan de depart, parfois par
-  // l'abonnement. Pose en amont, la question serait tombee au milieu d'une
-  // file d'attente administrative — et aurait ressemble a une seconde
-  // inscription, ce qu'on nous demande justement d'eviter.
-  try{
-    if(_doitProposerJours(currentUser,Date.now(),_jenVu(currentUser))){
-      _ouvrirJoursEntrainement();
-      return;
-    }
-  }catch(e){}
+  // ⚠ LES DEUX ACCUEILS DE NOUVEL INSCRIT NE SONT PLUS ICI. Ils y ont vecu
+  // quelques heures le 15/09/2026, et c'etait la mauvaise couche :
+  // loadClientHome est un RENDU, appele par la boucle de synchronisation, par
+  // chaque retour d'onglet, par la fleche de retour et par une dizaine de
+  // tests. Un garde qui sort en `return` avant de peindre y transforme chaque
+  // appelant en aiguillage sans le lui dire — deux assertions de ce depot sont
+  // tombees en le montrant, et c'est exactement ce qu'elles devaient faire.
+  // Ils vivent desormais dans routeUser, le seul endroit qui decide OU un
+  // athlete atterrit. Voir _aiguillerNouvelInscrit.
   // Posé À CHAQUE rendu : c’est lui qui vient d’écrire la date.
   _jourAffiche=localISODate(new Date());
   // RATTRAPAGE DE L'ANNUAIRE, une fois par session. Les athlètes déjà
@@ -35855,6 +35889,320 @@ function removeSessionPhoto(i){
   saveUser();loadSessionManager();
 }
 
+// ══════════ LA PREMIERE MARCHE ════════════════════════════════════════
+//
+// LE DEFAUT QU'ELLE CORRIGE : un athlete qui vient de creer son compte et dont
+// le coach n'a pas encore publie de programme arrive sur l'accueil sans rien a
+// faire. Il etait motive ; il n'a pas de premiere marche.
+//
+// ⚠ CE LOT NE CREE AUCUNE NOTION NOUVELLE DE « SEANCE PROVISOIRE ». Elle
+// existe deja, complete, juste en dessous : initSessionsConfig fabrique un
+// repli, seanceEstExemple le reconnait, programmeEstEssai allume _bandeauEssai
+// — « Ton coach n'a pas encore publie ton programme… ne sont pas
+// personnalisees pour toi » —, _personnaliserSeance retire la marque des qu'on
+// y touche, et _configReelle garantit que la publication du coach ecrase le
+// repli. Ce qui manquait n'etait pas le mecanisme : c'etait de DEMANDER a
+// l'athlete ce qu'il veut faire, et de lui poser une seance devant lui.
+//
+// La seance produite ici porte donc `_essai` comme les autres, et tout ce qui
+// precede continue de s'appliquer sans une ligne de plus.
+
+// LES TROIS QUESTIONS. Trois, pas quatre : chacune doit se repondre sans
+// reflechir, et la quatrieme est toujours celle qui fait fermer l'app.
+const PS_OBJECTIFS=[
+  {cle:'force', lib:'Force',            sous:'Soulever plus lourd',      series:5,reps:'5',    repos:'3 min'},
+  {cle:'masse', lib:'Prise de masse',   sous:'Construire du muscle',     series:4,reps:'8-12', repos:'2 min'},
+  {cle:'forme', lib:'Remise en forme',  sous:'Reprendre en douceur',     series:3,reps:'12-15',repos:'1 min 30'}
+];
+const PS_FREQUENCES=[2,3,4];
+const PS_LIEUX=[
+  {cle:'salle',  lib:'En salle', sous:'Machines et charges libres'},
+  {cle:'maison', lib:'À la maison', sous:'Poids du corps, haltères, élastique'}
+];
+
+// LES SEANCES, ECRITES A LA MAIN ET VERIFIEES CONTRE LE CATALOGUE.
+//
+// ⚠ POURQUOI PAS UN FILTRE AUTOMATIQUE SUR LE NOM. Retirer d'EX_GUIDE_BRUT
+// tout ce qui contient « machine », « poulie », « presse »… donne des resultats
+// faux dans les deux sens : « LEG CURL ASSIS » est une machine sans porter le
+// mot, et « NORDIC CURL AVEC ELASTIQUE » n'en est pas une tout en portant
+// « curl ». Un debutant a qui on propose un exercice impossible chez lui ne
+// recommence pas. Le filtrage sur le materiel est donc fait UNE FOIS, a la
+// main, et deux assertions le tiennent : chaque nom existe dans le catalogue,
+// et aucun nom de la colonne « maison » ne porte de mot d'agres de salle.
+//
+// L'ORDRE EST CELUI DE LA SEANCE : les gros mouvements d'abord, le gainage en
+// dernier. Ce n'est pas une preference, c'est la seule facon de ne pas finir
+// ses squats avec des abdominaux deja fatigues.
+//
+// DEUX DECOUPES SEULEMENT. A deux ou trois seances par semaine, un debutant
+// progresse mieux en full body : chaque muscle est touche deux ou trois fois.
+// A quatre, la repartition haut / bas devient tenable, et cette premiere
+// seance est celle du HAUT. Au-dela, c'est le travail du coach, pas le notre.
+const PS_SEANCES={
+  salle:{
+    full:['SQUAT','DEVELOPPE COUCHE BARRE','TIRAGE POITRINE PRISE NEUTRE',
+          'SOULEVE DE TERRE ROUMAIN HALTERES','DEVELOPPE MILITAIRE HALTERES','GAINAGE PLANCHE'],
+    haut:['DEVELOPPE COUCHE BARRE','TIRAGE POITRINE PRISE NEUTRE','DEVELOPPE MILITAIRE HALTERES',
+          'TIRAGE HORIZONTAL SERRE','CURL BARRE']
+  },
+  maison:{
+    full:['SQUAT AVEC HALTERES','POMPES','ROWING HALTERE BUSTE PENCHE',
+          'SOULEVE DE TERRE ROUMAIN HALTERES','DEVELOPPE MILITAIRE HALTERES','GAINAGE PLANCHE'],
+    haut:['POMPES','ROWING HALTERE BUSTE PENCHE','DEVELOPPE EPAULES HALTERES',
+          'OISEAUX BUSTE PENCHE','CURL MARTEAU']
+  }
+};
+// Les mots qui nomment un agres qu'on n'a pas chez soi. Ils ne servent PAS a
+// filtrer — voir ci-dessus — mais a verifier que la liste ecrite a la main
+// n'en contient aucun. Un garde sur des donnees figees, pas une heuristique.
+const PS_MOTS_SALLE=['machine','poulie','smith','presse','hacksquat','guidee','pupitre',
+  'landmine','belt','rameur','velo','tapis','skierg','pendulum','convergente','tirage',
+  'butterfly','crossover','pulldown','graviton','station'];
+
+// Ce qui se tient au lieu de se compter. La duree est ecrite dans `reps`, comme
+// partout ailleurs dans ce produit — le champ est un TEXTE libre, et « 30 sec »
+// y est aussi valide que « 8-12 ».
+const PS_ISOMETRIQUES={
+  'GAINAGE PLANCHE':{series:3,reps:'30 sec',repos:'1 min'},
+  'GAINAGE LATERAL':{series:3,reps:'30 sec par côté',repos:'1 min'},
+  'GAINAGE HOLLOW HOLD':{series:3,reps:'30 sec',repos:'1 min'},
+  'GAINAGE CHAISE':{series:3,reps:'45 sec',repos:'1 min'}
+};
+// PURE. La seance de depart, au FORMAT EXISTANT de sessions_config.
+//
+// ⚠ AUCUN CHAMP INVENTE : day, name, active, photo, photo2, warmup, notes,
+// exercises[{name,series,reps,repos,description,note,image,videoUrl}], plus
+// `_essai`. C'est exactement ce que produit initSessionsConfig, et le moteur de
+// seance la traite comme n'importe quelle autre.
+function genererSeanceDepart(rep,jourIdx){
+  const o=PS_OBJECTIFS.find(x=>x.cle===rep.objectif)||PS_OBJECTIFS[1];
+  const lieu=(rep.lieu==='maison')?'maison':'salle';
+  const freq=PS_FREQUENCES.includes(Number(rep.freq))?Number(rep.freq):3;
+  const decoupe=(freq>=4)?'haut':'full';
+  const noms=PS_SEANCES[lieu][decoupe];
+  const j=(typeof jourIdx==='number'&&jourIdx>=0&&jourIdx<7)?jourIdx:0;
+  return {
+    day:DAYS[j],
+    name:decoupe==='haut'?'Première séance · haut du corps':'Première séance · full body',
+    active:true, photo:null, photo2:null,
+    warmup:lieu==='maison'
+      ? '5 min : montées de genoux, rotations d’épaules, 10 squats à vide.'
+      : '8 min : vélo ou rameur 5 min, rotations d’épaules, 10 squats à vide.',
+    // LA MENTION EST DANS LA SEANCE ELLE-MEME, et pas seulement sur l'ecran qui
+    // la presente : elle suit la seance dans le selecteur, dans l'apercu et
+    // dans le gestionnaire de seances, partout ou le coach ne l'a pas encore
+    // remplacee.
+    notes:'Séance de départ générée par RepCore, à partir de tes réponses. '
+      +'Elle est PROVISOIRE : ton coach la remplacera par ton programme.',
+    _essai:true,
+    exercises:noms.map(n=>{
+      const v=videosPour(n);
+      // ⚠ UN GAINAGE NE SE COMPTE PAS EN REPETITIONS. « GAINAGE PLANCHE,
+      // 5 series de 5, repos 3 min » est une consigne absurde : on tient une
+      // planche en SECONDES, et trois minutes de repos entre deux planches
+      // n'ont aucun sens. Les isometriques gardent donc leur propre
+      // prescription, quelle que soit la reponse a la question « objectif ».
+      const iso=PS_ISOMETRIQUES[n];
+      return {name:n,
+        series:iso?iso.series:o.series,
+        reps:iso?iso.reps:o.reps,
+        repos:iso?iso.repos:o.repos,
+        description:'',note:'',image:null,
+        videoUrl:v.length?v[0].url:'',videoUrl2:''};
+    })
+  };
+}
+// PURE. La seance posee devant l'athlete, et UN bouton.
+//
+// ⚠ LA MENTION EST EN TETE, PAS EN BAS DE PAGE. Elle doit etre lue avant la
+// liste, pas apres : quelqu'un qui a deja parcouru six exercices a deja cru
+// que c'etait son programme. Orange et encadree, comme le bandeau d'essai que
+// cet athlete reverra dans son selecteur de seances — meme couleur pour la
+// meme chose.
+function _htmlSeanceDepart(s){
+  if(!s||!s.exercises||!s.exercises.length)
+    return '<div class="sub" style="font-size:var(--fs-sm);line-height:1.6">La séance n’a pas pu être préparée.</div>';
+  const o=PS_OBJECTIFS.find(x=>x.cle===_psRep.objectif);
+  return '<div style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);'
+    +'border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+    +'<span style="font-size:var(--fs-lg)">⏳</span>'
+    +'<div style="font-weight:900;font-size:var(--fs-sm);color:var(--orange);text-transform:uppercase;'
+    +'letter-spacing:1px">Séance provisoire</div></div>'
+    +'<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">'
+    +'Elle est générée à partir de tes trois réponses, pas écrite pour toi. '
+    +'<strong style="color:var(--text-strong)">Ton coach la remplacera par ton programme.</strong> '
+    +'En attendant, elle te permet de commencer aujourd’hui.</div></div>'
+    +'<h1 style="font-size:var(--fs-xl);line-height:1.25;font-weight:400;letter-spacing:.5px;'
+    +'margin-bottom:4px">'+escapeHtml(s.name)+'</h1>'
+    +'<p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">'
+    +s.exercises.length+' exercices'+(o?' · '+escapeHtml(o.lib.toLowerCase()):'')
+    +' · '+(_psRep.lieu==='maison'?'à la maison':'en salle')+'</p>'
+    +renderDataList(s.exercises,e=>{
+      const img=illustrationExo(e);
+      return (img
+        ? '<img src="'+escapeHtml(img)+'" alt="" loading="lazy" width="52" height="40" '
+          +'onerror="_illusAbsente(this)" style="width:52px;height:40px;object-fit:cover;'
+          +'border-radius:6px;background:#f4f4f4;flex-shrink:0">'
+        : '<div style="width:52px;height:40px;border-radius:6px;background:var(--surface-2);'
+          +'border:1px solid var(--border);flex-shrink:0"></div>')
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:var(--fs-sm);font-weight:800;line-height:1.3">'+escapeHtml(e.name)+'</div>'
+      +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">'
+      +e.series+' × '+escapeHtml(String(e.reps))+' · repos '+escapeHtml(String(e.repos))+'</div>'
+      +'</div>';
+    },{pad:'9px 0',gap:11})
+    +'<div style="margin-top:22px">'
+    +'<button class="btn btn-red" onclick="psLancer()" style="margin:0;min-height:52px;letter-spacing:1.5px">'
+    +'LANCER MA PREMIÈRE SÉANCE</button></div>'
+    +'<div style="height:20px"></div>';
+}
+// Les deux accueils de nouvel inscrit, dans l'ordre ou ils se posent. Rend
+// true quand l'un des deux a pris la main — l'appelant s'arrete alors la.
+//
+// L'ORDRE N'EST PAS ARBITRAIRE : la question des jours se repond en UNE touche
+// et prepare les rappels ; la premiere marche en demande trois et se termine
+// par une seance. Les enchainer dans l'autre sens ferait commencer par le plus
+// long quelqu'un qui vient a peine d'ouvrir l'application.
+//
+// Chacun se garde lui-meme, et les deux temoins sont independants : passer le
+// premier ne saute pas le second.
+function _aiguillerNouvelInscrit(){
+  try{
+    if(_doitProposerJours(currentUser,Date.now(),_jenVu(currentUser))){
+      _ouvrirJoursEntrainement(); return true;
+    }
+  }catch(e){}
+  try{
+    if(_doitProposerPremiereSeance(currentUser,_psVu(currentUser))){
+      ouvrirPremiereSeance(); return true;
+    }
+  }catch(e){}
+  return false;
+}
+// PURE. Faut-il proposer la premiere marche a ce dossier ?
+//
+// LES TROIS GARDES, ET AUCUNE DE PLUS :
+//   • un athlete ;
+//   • AUCUN PROGRAMME REEL — _configReelle est le predicat deja en place, et
+//     c'est lui qui distingue un programme publie par le coach d'un repli
+//     generique. Le reecrire aurait fait diverger deux definitions du meme
+//     mot ;
+//   • AUCUN HISTORIQUE. Quelqu'un qui s'est deja entraine a trouve sa
+//     premiere marche tout seul : la lui proposer serait insultant.
+// Et le parcours ne se represente pas une fois traverse ou passe.
+function _doitProposerPremiereSeance(u,dejaVu){
+  if(!u||!u.email||u.role==='coach') return false;
+  if(dejaVu) return false;
+  if((u.sessions||[]).length) return false;
+  return !_configReelle(u.sessions_config);
+}
+// ⚠ LE TEMOIN EST LOCAL, comme celui de l'ecran des jours et pour la meme
+// raison : « Passer » ne doit rien ecrire dans le dossier, et un ecran qui ne
+// retient pas qu'il a ete montre revient a chaque ouverture.
+const PS_CLE='rc_premiere_seance_';
+function _psVu(u){
+  try{ return !!localStorage.getItem(PS_CLE+((u&&u.email)||'')); }catch(e){ return true; }
+}
+function _psMarquer(u){
+  try{ localStorage.setItem(PS_CLE+((u&&u.email)||''),String(Date.now())); }catch(e){}
+}
+// ── Le parcours ─────────────────────────────────────────────────────────
+// `_psRep` porte les trois reponses ; `_psEtape` va de 0 a 3 — les trois
+// questions, puis la seance.
+let _psRep={objectif:'',freq:0,lieu:''}, _psEtape=0, _psSeance=null, _psIdx=0;
+function ouvrirPremiereSeance(){
+  _psRep={objectif:'',freq:0,lieu:''}; _psEtape=0; _psSeance=null;
+  _psRendre();
+  go('s-premiere-seance');
+}
+// UN SEUL ECRAN, quatre contenus. Ne pas traverser go() entre les questions :
+// chaque passage relance une animation d'ecran, et trois animations pour trois
+// touches donnent l'impression d'un formulaire long.
+function _psRendre(){
+  const z=document.getElementById('ps-corps');
+  const p=document.getElementById('ps-pas');
+  if(!z) return;
+  if(p) p.textContent=_psEtape<3?('Question '+(_psEtape+1)+' sur 3'):'Ta séance';
+  const titre=x=>'<h1 style="font-size:var(--fs-2xl);line-height:1.2;font-weight:400;'
+    +'letter-spacing:.5px;margin-bottom:6px">'+x+'</h1>';
+  const sousT=x=>'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:20px">'+x+'</p>';
+  // Une pastille pleine largeur par reponse : un libelle, une explication, et
+  // la touche suivante fait avancer. Aucun bouton « suivant » : il ajouterait
+  // une touche par question, soit trois de plus sur un parcours qui en promet
+  // trois en tout.
+  const choix=(lib,sous,onclick)=>
+    '<button type="button" onclick="'+onclick+'" class="ps-choix">'
+    +'<span style="font-size:var(--fs-md);font-weight:800;color:var(--text);display:block">'+lib+'</span>'
+    +(sous?'<span class="sub" style="font-size:var(--fs-xs);display:block;margin-top:3px">'+sous+'</span>':'')
+    +'</button>';
+  if(_psEtape===0){
+    z.innerHTML=titre('Ton objectif ?')+sousT('Il decide des séries et des répétitions.')
+      +PS_OBJECTIFS.map(o=>choix(escapeHtml(o.lib),escapeHtml(o.sous),
+          'psRepondre(\'objectif\',\''+o.cle+'\')')).join('');
+    return;
+  }
+  if(_psEtape===1){
+    z.innerHTML=titre('Combien de séances par semaine ?')
+      +sousT('Deux ou trois : on travaille tout le corps à chaque fois. Quatre : on sépare le haut et le bas.')
+      +PS_FREQUENCES.map(f=>choix(f+' séances',
+          f>=4?'Haut / bas':'Full body','psRepondre(\'freq\','+f+')')).join('');
+    return;
+  }
+  if(_psEtape===2){
+    z.innerHTML=titre('Où t’entraînes-tu ?')
+      +sousT('On ne te proposera que du matériel que tu as.')
+      +PS_LIEUX.map(l=>choix(escapeHtml(l.lib),escapeHtml(l.sous),
+          'psRepondre(\'lieu\',\''+l.cle+'\')')).join('');
+    return;
+  }
+  z.innerHTML=_htmlSeanceDepart(_psSeance);
+}
+// Chaque reponse avance d'une etape. A la troisieme, la seance est generee et
+// ECRITE dans sessions_config : c'est ce qui permet au moteur de seance de la
+// lancer sans rien savoir de ce parcours.
+function psRepondre(champ,valeur){
+  _psRep[champ]=valeur;
+  _psEtape++;
+  if(_psEtape===3){
+    try{ _psPoserSeance(); }
+    catch(e){ toast('La séance n’a pas pu être préparée.','var(--orange)'); psPasser(); return; }
+  }
+  _psRendre();
+}
+// ⚠ ON N'INVENTE PAS DE STRUCTURE : on ecrit dans sessions_config, au format
+// existant, sur le creneau du jour. Le reste de l'app la traite ensuite comme
+// n'importe quelle autre seance — selecteur, apercu, moteur, historique.
+function _psPoserSeance(){
+  const cfg=currentUser.sessions_config||initSessionsConfig();
+  // LE CRENEAU D'AUJOURD'HUI : la seance se lance maintenant, elle porte donc
+  // le jour ou on la fait. DAYS commence au lundi, getDay au dimanche.
+  _psIdx=(new Date().getDay()+6)%7;
+  _psSeance=genererSeanceDepart(_psRep,_psIdx);
+  cfg[_psIdx]=_psSeance;
+  currentUser.sessions_config=cfg;
+  // ECRIT, et c'est necessaire : startWorkoutSession relit sessions_config
+  // depuis currentUser, et la reprise apres fermeture de l'app aussi.
+  // La seance porte `_essai` : _configReelle rend donc toujours false, et la
+  // publication du coach l'ecrasera sans ceremonie.
+  saveUser();
+  _psMarquer(currentUser);
+}
+// LE BOUTON UNIQUE. Il entre dans le flux existant par startWorkoutSession,
+// exactement comme le selecteur de seances : aucune branche nouvelle dans le
+// moteur, aucun format particulier a reconnaitre.
+function psLancer(){
+  try{ _psMarquer(currentUser); }catch(e){}
+  startWorkoutSession(_psIdx);
+}
+// ⚠ « PASSER » N'ECRIT RIEN DANS LE DOSSIER. Ni seance, ni reponse : seul le
+// temoin local retient que le parcours a ete montre.
+function psPasser(){
+  _psMarquer(currentUser);
+  go('s-client-home');
+  loadClientHome();
+}
 // Repli générique servi tant que le coach n'a rien publié.
 // Chaque séance produite ici porte _essai : sans ce marqueur, le repli était
 // indiscernable d'un programme réellement publié, et l'écran « Programme en

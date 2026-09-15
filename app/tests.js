@@ -18548,12 +18548,27 @@ function testExercices(){
       // séance n'a été faite, alors qu'on ne sait rien de la semaine ni de la
       // diète. La règle du coach — le tiret RESTE quand l'information manque
       // — est intacte pour les deux cases qui la concernent encore.
+      // ⚠ CE TEST LISAIT UNE IMAGE D'ANIMATION, ET NE PASSAIT QUE PAR HASARD.
+      // Les cases numeriques passent par arcCompteur, qui INTERPOLE sur
+      // ARC.release quand la valeur precedente differe de la nouvelle : lu
+      // synchroniquement juste apres, `textContent` rend une valeur
+      // intermediaire, pas la cible. Il ne tombait pas parce qu'un test voisin
+      // laissait par coincidence la MEME valeur dans data-valeur — auquel cas
+      // arcCompteur pose au lieu d'animer. Deplacer un aiguillage ailleurs
+      // dans l'application a suffi a rompre la coincidence, le 15/09/2026.
+      //
+      // ON LIT DONC LA VALEUR QUI FAIT FOI : arcCompteur ecrit data-valeur
+      // AVANT d'animer — son propre commentaire le dit — et c'est elle que le
+      // rendu suivant relit. Le tiret, lui, n'est pas un nombre : il est pose
+      // directement dans le texte, et c'est la qu'on le cherche.
       ok('Les cases de l\'accueil gardent leur tiret quand l\'info manque',(()=>{
         currentUser=JSON.parse(JSON.stringify(neuf));
         try{ _majMetriquesAccueil(currentUser); }catch(e){ return _echec('exception: '+e.message); }
-        const l=id=>(document.getElementById(id)||{}).textContent;
-        return (l('clh-m1')==='—'&&l('clh-m3')==='—'&&l('clh-m2')==='0')
-          ?true:_echec(l('clh-m1')+' | '+l('clh-m2')+' | '+l('clh-m3'));})());
+        const txt=id=>(document.getElementById(id)||{}).textContent;
+        const val=id=>{ const e=document.getElementById(id);
+          return e&&e.dataset&&e.dataset.valeur!==undefined?e.dataset.valeur:txt(id); };
+        return (txt('clh-m1')==='—'&&txt('clh-m3')==='—'&&val('clh-m2')==='0')
+          ?true:_echec(txt('clh-m1')+' | '+val('clh-m2')+' | '+txt('clh-m3'));})());
       ok('Les textes d\'attente des cases sont toujours là',(()=>{
         const l=id=>(document.getElementById(id)||{}).textContent;
         return (l('clh-m2-sub')==='Aucune séance enregistrée.'
@@ -29004,6 +29019,202 @@ function testExercices(){
     // permission n'etait donc jamais demandee a ceux qui en auraient le plus
     // besoin : ceux qui viennent de finir leur premiere seance.
 
+    // ══ 15/09/2026 — LA PREMIERE MARCHE ════════════════════════════════════
+    // Un athlete qui vient de creer son compte et dont le coach n'a pas encore
+    // publie de programme arrivait sur l'accueil sans rien a faire.
+    //
+    // ⚠ CE LOT NE CREE AUCUNE NOTION NOUVELLE DE SEANCE PROVISOIRE : elle
+    // existe deja — initSessionsConfig, seanceEstExemple, programmeEstEssai,
+    // _bandeauEssai, _personnaliserSeance, _configReelle. Ce qui manquait
+    // etait de DEMANDER a l'athlete ce qu'il veut faire.
+
+    ok('Le parcours ne s’ouvre que pour un compte sans programme ni historique',(()=>{
+      const A=o=>Object.assign({email:'a@t.fr',role:'athlete',sessions:[]},o);
+      const vrai=[{active:true,exercises:[{name:'DC'}]},{active:false},{active:false},
+                  {active:false},{active:false},{active:false},{active:false}];
+      const cas=[
+        ['compte neuf',              A({}),                      false, true],
+        ['deja vu',                  A({}),                      true,  false],
+        // Quelqu'un qui s'est deja entraine a trouve sa premiere marche tout
+        // seul : la lui proposer serait insultant.
+        ['a un historique',          A({sessions:[{date:1}]}),   false, false],
+        // ⚠ _configReelle EST LE PREDICAT DEJA EN PLACE : c'est lui qui
+        // distingue un programme publie d'un repli generique. Le reecrire
+        // aurait fait diverger deux definitions du meme mot.
+        ['a un vrai programme',      A({sessions_config:vrai}),  false, false],
+        ['a le repli generique',     A({sessions_config:[{active:true,exercises:[{name:'X'}],_essai:true}]}), false, true],
+        ['un coach',                 A({role:'coach'}),          false, false],
+        ['sans dossier',             null,                       false, false]
+      ];
+      for(const [lib,u,vu,att] of cas){
+        const r=_doitProposerPremiereSeance(u,vu);
+        if(r!==att) return _echec(lib+' rend '+r+' au lieu de '+att);
+      }
+      return true;})());
+
+    // ⚠ CHAQUE NOM ECRIT A LA MAIN EXISTE DANS LE CATALOGUE. Une faute de
+    // frappe donnerait un exercice sans image, sans video et sans historique de
+    // charge — et rien ne la signalerait a l'ecran.
+    ok('Les seances de depart ne citent que des exercices du guide',(()=>{
+      const tous=new Set();
+      Object.values(EX_GUIDE_BRUT).forEach(v=>String(v).split('~').forEach(n=>tous.add(n)));
+      if(tous.size<300) return _echec('catalogue lu : '+tous.size+' exercices, lecture cassee');
+      const abs=[];
+      for(const l of ['salle','maison'])
+        for(const d of ['full','haut'])
+          PS_SEANCES[l][d].forEach(n=>{ if(!tous.has(n)) abs.push(l+'/'+d+' : '+n); });
+      if(abs.length) return _echec('hors catalogue → '+abs.join(' · '));
+      // CINQ A SIX EXERCICES, comme demande.
+      for(const l of ['salle','maison'])
+        for(const d of ['full','haut']){
+          const n=PS_SEANCES[l][d].length;
+          if(n<5||n>6) return _echec(l+'/'+d+' : '+n+' exercices');
+        }
+      return true;})());
+
+    // ⚠ LE FILTRAGE SUR LE MATERIEL EST FAIT A LA MAIN, ET VERIFIE ICI.
+    // Un filtre automatique sur le nom se trompe dans les deux sens : « LEG
+    // CURL ASSIS » est une machine sans porter le mot, « NORDIC CURL AVEC
+    // ELASTIQUE » n'en est pas une tout en portant « curl ». Un debutant a qui
+    // on propose un exercice impossible chez lui ne recommence pas.
+    ok('Aucun agres de salle dans les seances « maison »',(()=>{
+      const fautifs=[];
+      for(const d of ['full','haut'])
+        PS_SEANCES.maison[d].forEach(n=>{
+          const mots=n.toLowerCase().split(' ');
+          PS_MOTS_SALLE.forEach(m=>{ if(mots.indexOf(m)>=0) fautifs.push(n+' → «'+m+'»'); });
+        });
+      if(fautifs.length) return _echec(fautifs.join(' · '));
+      // TEMOIN : le garde voit bien quelque chose. Sans lui, une liste de mots
+      // videe par accident rendrait « aucun fautif » pour n'importe quoi.
+      const t=['DEVELOPPE COUCHE MACHINE','TIRAGE POITRINE LARGE'].filter(n=>
+        PS_MOTS_SALLE.some(m=>n.toLowerCase().split(' ').indexOf(m)>=0));
+      return t.length===2?true:_echec('le garde ne reconnait plus les agres de salle');})());
+
+    ok('La seance generee suit les trois reponses',(()=>{
+      // L'OBJECTIF DECIDE LA PRESCRIPTION.
+      for(const o of PS_OBJECTIFS){
+        const s=genererSeanceDepart({objectif:o.cle,freq:3,lieu:'salle'},0);
+        const e=s.exercises.find(x=>!PS_ISOMETRIQUES[x.name]);
+        if(!e) return _echec('aucun exercice non isometrique');
+        if(e.series!==o.series||e.reps!==o.reps||e.repos!==o.repos)
+          return _echec(o.cle+' rend '+e.series+'×'+e.reps+'/'+e.repos);
+      }
+      // LA FREQUENCE DECIDE LA DECOUPE : full body a 2 et 3, haut/bas a 4.
+      for(const [f,att] of [[2,6],[3,6],[4,5]]){
+        const n=genererSeanceDepart({objectif:'masse',freq:f,lieu:'salle'},0).exercises.length;
+        if(n!==att) return _echec(f+' seances → '+n+' exercices au lieu de '+att);
+      }
+      // LE LIEU DECIDE LE MATERIEL.
+      const m=genererSeanceDepart({objectif:'masse',freq:3,lieu:'maison'},0);
+      if(JSON.stringify(m.exercises.map(e=>e.name))!==JSON.stringify(PS_SEANCES.maison.full))
+        return _echec('la seance maison ne vient pas de la liste maison');
+      // ⚠ UN GAINAGE NE SE COMPTE PAS EN REPETITIONS. « GAINAGE PLANCHE, 5
+      // series de 5, repos 3 min » est une consigne absurde.
+      const g=genererSeanceDepart({objectif:'force',freq:3,lieu:'salle'},0)
+        .exercises.find(x=>x.name==='GAINAGE PLANCHE');
+      if(!g) return _echec('le gainage a disparu de la seance');
+      return /sec/.test(g.reps)?true:_echec('le gainage se compte en repetitions : '+g.reps);})());
+
+    // ⚠ AUCUN CHAMP INVENTE : le moteur de seance ne doit rien avoir a
+    // reconnaitre de particulier.
+    ok('La seance de depart est au format existant de sessions_config',(()=>{
+      const s=genererSeanceDepart({objectif:'masse',freq:3,lieu:'salle'},2);
+      const ref=DAYS.map((day,i)=>({day,name:'',photo:null,photo2:null,
+        exercises:[],active:false,notes:'',warmup:''}))[0];
+      const inconnus=Object.keys(s).filter(k=>k!=='_essai'&&!(k in ref));
+      if(inconnus.length) return _echec('champ(s) inventé(s) : '+inconnus.join(', '));
+      const e=s.exercises[0];
+      for(const k of ['name','series','reps','repos','description'])
+        if(!(k in e)) return _echec('l’exercice n’a pas de '+k);
+      // ELLE PORTE `_essai` : toute la machinerie existante s'applique sans
+      // une ligne de plus — badge « exemple », bandeau d'essai, et surtout
+      // _configReelle qui garantit que la publication du coach l'ecrase.
+      if(!seanceEstExemple(s)) return _echec('la seance n’est pas marquee comme un essai');
+      if(_configReelle([s])) return _echec('elle passerait pour un programme publie du coach');
+      return s.day===DAYS[2]?true:_echec('le creneau demande n’est pas respecte');})());
+
+    // ⚠ JAMAIS PRESENTEE COMME UNE PRESCRIPTION PERSONNALISEE.
+    ok('La mention provisoire est visible et vient avant la liste',(()=>{
+      const sv=JSON.stringify(_psRep);
+      try{
+        _psRep={objectif:'masse',freq:3,lieu:'salle'};
+        const s=genererSeanceDepart(_psRep,0);
+        const d=document.createElement('div');
+        d.innerHTML=_htmlSeanceDepart(s);
+        const txt=d.textContent.toLowerCase();
+        const iM=txt.indexOf('provisoire'), iE=txt.indexOf(s.exercises[0].name.toLowerCase());
+        if(iM<0) return _echec('le mot « provisoire » n’apparait pas');
+        if(!(iE>iM)) return _echec('la mention arrive apres la liste');
+        if(txt.indexOf('remplacera par ton programme')<0)
+          return _echec('rien ne dit que le coach la remplacera');
+        // Le mot « personnalise » ne doit JAMAIS servir a la decrire.
+        if(/personnalis/.test(txt)) return _echec('elle se dit personnalisee');
+        // ET LA MENTION SUIT LA SEANCE : elle est aussi dans `notes`, donc
+        // visible partout ou le coach ne l'a pas encore remplacee.
+        if(!/PROVISOIRE/.test(s.notes)) return _echec('la seance elle-meme ne porte pas la mention');
+        // UN SEUL BOUTON, et c'est le sien.
+        const b=d.querySelectorAll('button');
+        if(b.length!==1) return _echec(b.length+' bouton(s) au lieu d’un');
+        return /LANCER MA PREMI/i.test(b[0].textContent)
+          ?true:_echec('le bouton dit : '+b[0].textContent);
+      } finally { _psRep=JSON.parse(sv); }})());
+
+    ok('Le parcours entre dans le flux de seance sans le modifier',(()=>{
+      const s=String(psLancer);
+      if(s.indexOf('startWorkoutSession')<0)
+        return _echec('le bouton n’emprunte pas le chemin existant');
+      // AUCUNE BRANCHE NEUVE DANS LE MOTEUR : pas de woState touche a la main,
+      // pas d'appel direct a launchWorkout.
+      if(/woState|launchWorkout|_woSaveSnap/.test(s))
+        return _echec('le bouton touche au moteur de seance');
+      // ET LA SEANCE EST ECRITE DANS sessions_config AVANT d'etre lancee :
+      // c'est ce qui permet a startWorkoutSession de la lire sans rien savoir
+      // de ce parcours.
+      const p=String(_psPoserSeance);
+      if(p.indexOf('sessions_config')<0) return _echec('la seance n’est pas posee dans la configuration');
+      return p.indexOf('saveUser()')>=0?true:_echec('la seance n’est pas enregistree');})());
+
+    // ⚠ LA LECON DU 15/09/2026, VERROUILLEE. Les deux accueils de nouvel
+    // inscrit ont vecu quelques heures dans loadClientHome, qui est un RENDU :
+    // appele par la boucle de synchronisation, par chaque retour d'onglet, par
+    // la fleche de retour et par une dizaine de tests. Un garde qui y sort en
+    // `return` avant de peindre transforme chaque appelant en aiguillage sans
+    // le lui dire — deux assertions de ce depot sont tombees en le montrant.
+    // Ils vivent dans routeUser, qui DECIDE, et c'est la qu'ils restent.
+    ok('Les accueils de nouvel inscrit vivent dans l’aiguillage, pas dans le rendu',(()=>{
+      const r=String(loadClientHome);
+      for(const f of ['_doitProposerPremiereSeance','_doitProposerJours',
+                      'ouvrirPremiereSeance','_ouvrirJoursEntrainement'])
+        if(r.indexOf(f+'(')>=0) return _echec('loadClientHome aiguille encore : '+f);
+      const u=String(routeUser);
+      if(u.indexOf('_aiguillerNouvelInscrit()')<0)
+        return _echec('routeUser n’aiguille pas les nouveaux inscrits');
+      // AVANT loadClientHome, sinon l'accueil serait peint derriere.
+      const iA=u.indexOf('_aiguillerNouvelInscrit()'), iL=u.indexOf('loadClientHome()');
+      if(!(iA>=0&&iL>iA)) return _echec('l’aiguillage arrive apres le rendu');
+      // ET IL REND LA MAIN : sans `return`, l'accueil se peindrait quand meme.
+      if(!/_aiguillerNouvelInscrit\(\)\)\s*return;/.test(u))
+        return _echec('l’aiguillage ne coupe pas le rendu');
+      // LES DEUX, DANS L'ORDRE : une touche avant trois.
+      const a=String(_aiguillerNouvelInscrit);
+      const iJ=a.indexOf('_doitProposerJours'), iP=a.indexOf('_doitProposerPremiereSeance');
+      return (iJ>=0&&iP>iJ)?true:_echec('la premiere marche passe avant la question des jours');})());
+
+    ok('Le parcours est sautable, et « Passer » n’ecrit rien',(()=>{
+      const e=document.getElementById('s-premiere-seance');
+      if(!e) return _echec('l’ecran n’existe pas');
+      const b=[...e.querySelectorAll('button')].find(x=>/passer/i.test(x.textContent));
+      if(!b) return _echec('aucune sortie sur l’ecran');
+      // ⚠ HORS DU CORPS QUI SE REECRIT : _psRendre remplace #ps-corps a chaque
+      // etape. Une sortie posee dedans disparaitrait a la premiere reponse —
+      // c'est exactement le defaut qu'on evite en la mettant au-dessus.
+      if(document.getElementById('ps-corps').contains(b))
+        return _echec('la sortie vit dans le corps : elle serait effacee a chaque etape');
+      const s=String(psPasser);
+      for(const k of ['sessions_config','genererSeanceDepart','_psRep'])
+        if(s.indexOf(k)>=0) return _echec('« Passer » touche a '+k);
+      return s.indexOf('_psMarquer')>=0?true:_echec('le parcours reviendrait a la prochaine ouverture');})());
     ok('L’invitation ne se pose qu’une fois, au bon moment',(()=>{
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',sessions:[{date:1}]},o);
       const cas=[
@@ -29258,17 +29469,21 @@ function testExercices(){
       return /requestPermission/.test(s)
         ?true:_echec('la feuille de reglage ne demande plus la permission');})());
 
-    // L'INTERCEPTION EST AVANT LE RENDU, pas apres : l'accueil ne doit pas
-    // etre peint derriere la question.
-    ok('La question s’interpose avant que l’accueil soit rendu',(()=>{
-      const s=String(loadClientHome);
-      const i=s.indexOf('_doitProposerJours');
-      if(i<0) return _echec('loadClientHome ne pose jamais la question');
-      const j=s.indexOf('_jourAffiche=');
-      if(!(j>=0&&i<j)) return _echec('la question vient apres le debut du rendu');
-      // Et elle REND LA MAIN : sans `return`, l'accueil se peindrait quand meme.
-      return /_ouvrirJoursEntrainement\(\);[\s\S]{0,40}return;/.test(s)
-        ?true:_echec('l’accueil se rend quand meme derriere la question');})());
+    // ⚠ CETTE ASSERTION VISAIT loadClientHome. La question des jours y a vecu
+    // quelques heures, et c'etait la mauvaise couche — voir « Les accueils de
+    // nouvel inscrit vivent dans l'aiguillage, pas dans le rendu », qui porte
+    // desormais cette regle pour les DEUX accueils. Ce qui reste vrai ici, et
+    // qui lui est propre : la question s'interpose, et elle rend la main.
+    ok('La question des jours s’interpose avant le rendu de l’accueil',(()=>{
+      const a=String(_aiguillerNouvelInscrit);
+      if(a.indexOf('_doitProposerJours')<0) return _echec('la question n’est plus posee');
+      // Elle REND LA MAIN : sans ce true, routeUser peindrait l'accueil derriere.
+      if(!/_ouvrirJoursEntrainement\(\);\s*return true;/.test(a))
+        return _echec('l’accueil se rendrait quand meme derriere la question');
+      // ET AVANT loadClientHome dans routeUser, jamais apres.
+      const u=String(routeUser);
+      const iA=u.indexOf('_aiguillerNouvelInscrit()'), iL=u.indexOf('loadClientHome()');
+      return (iA>=0&&iL>iA)?true:_echec('l’aiguillage arrive apres le rendu');})());
     ok('jamaisDemarre : le critere, et rien d’autre',(()=>{
       const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
       const A=o=>Object.assign({id:'x',role:'athlete',fname:'Léa',
