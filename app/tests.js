@@ -31395,6 +31395,183 @@ function testExercices(){
         return _echec('l’aperçu de relecture ne passe pas par la même source');
       return true;})());
 
+    // ══ 16/09/2026 — R07 : LA COLONNE D'INTENSITE PARLE AU DOIGT ═════════
+    //
+    // Deux éléments portaient leur sens dans un attribut title= : la mention
+    // « cible N » et la pastille « @N ». UN title N'EXISTE PAS AU DOIGT — sur
+    // téléphone, les deux étaient muets. C'est tout l'objet du lot.
+
+    // Un décor qui reproduit le gabarit étroit de _blocExo, aux mêmes classes :
+    // c'est la mise en page réelle qui contraint la place, pas une approximation.
+    const _r07Fix=f=>{
+      const d=document.createElement('div');
+      d.style.cssText='position:fixed;left:0;top:0;width:359px;background:#000;z-index:-1';
+      d.innerHTML='<div id="wo-sets-scroll-0" style="overflow-x:auto">'
+        +'<table class="series-table series-table-wo" style="width:100%;min-width:260px">'
+        +'<thead><tr style="background:var(--red)">'
+        +'<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th>'
+        +'<th id="r07-th" style="color:var(--text)">RIR'+rcInfo('rir')+'</th>'
+        +'<th style="font-size:var(--fs-xs);color:var(--text)">Douleur</th>'
+        +'<th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>'
+        +'</tr></thead><tbody id="sets-body-0"></tbody></table></div>';
+      document.body.appendChild(d);
+      try{ return f(d); } finally { d.remove(); }
+    };
+    const _r07Cell=(ex,sets)=>{ renderSets(ex,{sets:sets},0);
+      return document.querySelector('#sets-body-0 tr td:nth-child(3)'); };
+
+    ok('La consigne du coach se lit « visé », et son title reste',(()=>
+      _r07Fix(()=>{
+        const c=_r07Cell({name:'DEVELOPPE COUCHE',series:3,reps:'10',rirCible:'2'},
+          [{weight:60,reps:10,rir:'',pain:''}]);
+        if(!c) return _echec('la cellule d’intensité a disparu');
+        const sp=[...c.querySelectorAll('span')].find(x=>/visé/.test(x.textContent));
+        if(!sp) return _echec('la mention « visé » est absente : « '+c.textContent.trim()+' »');
+        if(/cible/.test(c.textContent)) return _echec('« cible » est encore là');
+        if(sp.textContent.replace(/\s+/g,' ').trim()!=='visé : 2')
+          return _echec('mention : « '+sp.textContent.trim()+' »');
+        // ⚠ LE title= RESTE. Il ne sert à rien au doigt, mais il sert au
+        // survol sur bureau, et le lot demande de le conserver.
+        if(sp.getAttribute('title')!=='Intensité demandée par ton coach')
+          return _echec('title : « '+sp.getAttribute('title')+' »');
+        return true;})));
+
+    // ⚠ LA LOGIQUE D'ECART NE BOUGE PAS : seuil à plus d'un cran, orange
+    // au-delà, gris en deçà, et RIEN tant que rien n'est saisi. Un rappel
+    // n'est pas un jugement — c'est écrit dans le code, et c'est mesuré ici.
+    ok('L\'écart de consigne garde son seuil, ses couleurs, et son silence',(()=>
+      _r07Fix(()=>{
+        const ex={name:'DEVELOPPE COUCHE',series:3,reps:'10',rirCible:'2'};
+        const coul=rir=>{
+          const c=_r07Cell(ex,[{weight:60,reps:10,rir:rir,pain:''}]);
+          const sp=[...c.querySelectorAll('span')].find(x=>/visé/.test(x.textContent));
+          return sp?getComputedStyle(sp).color:null;
+        };
+        const ORANGE='rgb(249, 115, 22)', GRIS='rgb(130, 130, 130)';
+        // Rien de saisi : rien à comparer, donc gris.
+        if(coul('')!==GRIS) return _echec('sans saisie : '+coul(''));
+        // Un cran d'écart : ce n'est pas « loin ».
+        if(coul('3')!==GRIS) return _echec('un cran d’écart : '+coul('3'));
+        if(coul('1')!==GRIS) return _echec('un cran d’écart sous la cible : '+coul('1'));
+        // Deux crans : orange.
+        if(coul('4')!==ORANGE) return _echec('deux crans : '+coul('4'));
+        // L'échec vaut zéro, donc deux crans sous une cible de 2.
+        if(coul('echec')!==ORANGE) return _echec('échec : '+coul('echec'));
+        return true;})));
+
+    ok('La pastille verrouillée dit ce qu\'elle est, et reste inmodifiable',(()=>
+      _r07Fix(()=>{
+        const c=_r07Cell({name:'DEVELOPPE COUCHE',series:3,reps:'10'},
+          [{weight:60,reps:10,rpeCible:8,pain:''}]);
+        if(!c) return _echec('la cellule a disparu');
+        const p=c.querySelector('[role="img"]');
+        if(!p) return _echec('la pastille a perdu son role');
+        // ⚠ CE N'EST TOUJOURS PAS UN <select>. Décision produit documentée
+        // dans le code : le coach a fixé le RPE, l'athlète ne le règle pas.
+        if(c.querySelector('select')) return _echec('la colonne est redevenue modifiable');
+        const txt=p.textContent.replace(/\s+/g,' ').trim();
+        if(txt!=='RPE 8') return _echec('texte : « '+txt+' »');
+        if(/@/.test(txt)) return _echec('« @N » est encore là');
+        // Le cadenas dit qu'on ne la règle pas, sans un mot de plus.
+        if(!p.querySelector('svg')) return _echec('le cadenas est absent');
+        // L'aria-label d'origine, mot pour mot.
+        if(p.getAttribute('aria-label')!=='RPE demandé par ton coach : 8 sur 10')
+          return _echec('aria-label : « '+p.getAttribute('aria-label')+' »');
+        if(!p.getAttribute('title')) return _echec('le title a été retiré');
+        // ⚠ ET LE ⓘ EST DEHORS, PAS DEDANS. L'élément porte role="img" : tout
+        // ce qu'il contient disparaît pour un lecteur d'écran, remplacé par
+        // son aria-label. Un bouton posé à l'intérieur aurait été visible pour
+        // l'œil et absent pour la voix.
+        if(p.querySelector('.rc-i')) return _echec('le ⓘ est enfermé dans le role="img" : il est inatteignable');
+        const b=c.querySelector('.rc-i');
+        if(!b) return _echec('la pastille du lexique est absente de la cellule');
+        if((b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'rpe\')')<0)
+          return _echec('le ⓘ n’ouvre pas « rpe » : '+b.getAttribute('onclick'));
+        // Et il est bien À DROITE de la pastille.
+        if(!(b.compareDocumentPosition(p)&Node.DOCUMENT_POSITION_PRECEDING))
+          return _echec('le ⓘ n’est pas à droite de la pastille');
+        return true;})));
+
+    ok('L\'en-tête de la colonne RIR porte son explication',(()=>
+      _r07Fix(()=>{
+        const src=_prodSrc();
+        if(src.indexOf('RIR${rcInfo(\'rir\')}')<0)
+          return _echec('l’en-tête de colonne ne pose pas le ⓘ');
+        const th=document.getElementById('r07-th');
+        const b=th&&th.querySelector('.rc-i');
+        if(!b) return _echec('le ⓘ n’est pas rendu dans l’en-tête');
+        if((b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'rir\')')<0)
+          return _echec('l’en-tête n’ouvre pas « rir »');
+        // SUR LA BANDE ROUGE le gris de base disparaîtrait : la pastille y
+        // vire au blanc voilé, sans changer de taille.
+        const co=getComputedStyle(b).color;
+        if(!/255,\s*255,\s*255/.test(co)) return _echec('couleur sur la bande rouge : '+co);
+        if(Math.round(b.getBoundingClientRect().width)!==32)
+          return _echec('le ⓘ de l’en-tête fait '+Math.round(b.getBoundingClientRect().width)+'px');
+        return true;})));
+
+    // ══ LA PLACE, MESUREE A 359 px ═══════════════════════════════════════
+    //
+    // ⚠ CE TEST A DECIDE DU LOT. Le ⓘ avait été posé aussi dans la CELLULE,
+    // à côté de « visé : 2 » : la cellule débordait alors de 2 px à 359 px, et
+    // deux pixels suffisent à ouvrir un défilement latéral dans un tableau à
+    // cinq colonnes. La règle du lot est explicite — on retire le ⓘ de la
+    // cellule, on le garde sur l'en-tête, et on NE REDUIT PAS la police pour
+    // le faire tenir. L'assertion garde la porte fermée.
+    ok('À 359 px, la colonne d\'intensité ne déborde pas',(()=>
+      _r07Fix(d=>{
+        const sc=document.getElementById('wo-sets-scroll-0');
+        const tb=sc.querySelector('table'), th=document.getElementById('r07-th');
+        const ex={name:'DEVELOPPE COUCHE',series:3,reps:'10'};
+        const cas=[
+          ['sans consigne',ex,[{weight:60,reps:10,rir:'',pain:''}]],
+          ['avec consigne',{name:'DEVELOPPE COUCHE',series:3,reps:'10',rirCible:'2'},
+            [{weight:60,reps:10,rir:'5',pain:''}]],
+          ['RPE verrouillé',ex,[{weight:60,reps:10,rpeCible:8,pain:''}]]
+        ];
+        const trop=[];
+        for(const [nom,e,sets] of cas){
+          const c=_r07Cell(e,sets);
+          if(tb.scrollWidth>sc.clientWidth+1)
+            trop.push(nom+' : le tableau déborde de '+(tb.scrollWidth-sc.clientWidth)+'px');
+          if(c&&c.scrollWidth>c.clientWidth+1)
+            trop.push(nom+' : la cellule déborde de '+(c.scrollWidth-c.clientWidth)+'px');
+          if(th.scrollWidth>th.clientWidth+1)
+            trop.push(nom+' : l’en-tête déborde de '+(th.scrollWidth-th.clientWidth)+'px');
+          // Le ⓘ de l'en-tête ne sort pas de sa case.
+          const b=th.querySelector('.rc-i');
+          if(b){ const rt=th.getBoundingClientRect(), rb=b.getBoundingClientRect();
+            if(rb.right>rt.right+1) trop.push(nom+' : le ⓘ sort de l’en-tête'); }
+        }
+        // ⚠ ET LA POLICE N'A PAS BAISSE POUR FAIRE TENIR : c'est l'autre
+        // moitié de la règle, et c'est la triche la plus facile.
+        const c2=_r07Cell(cas[1][1],cas[1][2]);
+        const sp=c2&&[...c2.querySelectorAll('span')].find(x=>/visé/.test(x.textContent));
+        if(sp&&parseFloat(getComputedStyle(sp).fontSize)<10)
+          return _echec('la mention est passée sous 10px : '+getComputedStyle(sp).fontSize);
+        return trop.length?_echec(trop.join(' | ')):true;})));
+
+    // ══ CE QUE R07 NE TOUCHE PAS ═════════════════════════════════════════
+    ok('R07 ne renverse aucune des décisions documentées de la colonne',(()=>
+      _r07Fix(()=>{
+        // ⚠ `rir` RESTE VIDE SUR UN EXERCICE PROGRAMME. « Recopier le RPE
+        // prescrit dans rir ferait passer une consigne pour une mesure, et le
+        // coach lirait sa propre prescription en croyant lire son athlète. »
+        const data={sets:[{weight:60,reps:10,rpeCible:8,pain:''},
+                          {weight:60,reps:10,rpeCible:8,pain:''}]};
+        renderSets({name:'DEVELOPPE COUCHE',series:3,reps:'10'},data,0);
+        for(const s of data.sets)
+          if(s.rir!==undefined&&s.rir!=='')
+            return _echec('le RPE prescrit a été recopié dans rir : '+s.rir);
+        // ET LA CHARGE NE DERIVE PAS non plus sur un exercice programmé.
+        if(data.sets[1].weight!==60) return _echec('la charge a dérivé : '+data.sets[1].weight);
+        // _rirPrescrit et consigneProgEx n'ont pas changé de réponse.
+        if(_rirPrescrit({name:'X',rirCible:'2'})!=='2')
+          return _echec('_rirPrescrit ne rend plus la consigne');
+        if(_rirPrescrit({name:'X'})!=='')
+          return _echec('_rirPrescrit invente une consigne quand il n’y en a pas');
+        return true;})));
+
     // ══ 16/09/2026 — R06 : LE LEXIQUE, UNE SOURCE ET UN COMPOSANT ════════
     //
     // L'application employait « RIR », « e1RM », « NEAT », « macros » sans les

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1229';
+window.RC_BUILD='1230';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4873,6 +4873,10 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
   font-family:inherit;font-size:13px;line-height:1;
   color:var(--text-faint);vertical-align:middle;flex-shrink:0}
 .rc-i:hover,.rc-i:focus-visible{color:var(--sub)}
+/* SUR LA BANDE ROUGE DE L'ENTETE DES SERIES, le gris de base disparait :
+   la pastille y vire au blanc voile. Elle ne change pas de taille. */
+.series-table-wo th .rc-i{color:rgba(255,255,255,.72)}
+.series-table-wo th .rc-i:hover,.series-table-wo th .rc-i:focus-visible{color:#fff}
 /* Le contenu de la feuille. */
 .rci-t{font-size:var(--fs-md);font-weight:800;letter-spacing:.4px;color:var(--text);
   line-height:1.3;margin-bottom:9px}
@@ -40835,7 +40839,7 @@ function _blocExo(idx,estSS){
         <thead><tr style="background:var(--red)">
           ${isWide
             ?`<th style="color:var(--text);text-align:left;padding-left:10px;font-size:var(--fs-xs);letter-spacing:.5px">Séries${pr.type==='degressive'?' · Dégressive':''}</th>`
-            :`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th><th style="color:var(--text)">RIR</th><th style="font-size:var(--fs-xs);color:var(--text)">Douleur</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`}
+            :`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th><th style="color:var(--text)">RIR${rcInfo('rir')}</th><th style="font-size:var(--fs-xs);color:var(--text)">Douleur</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`}
         </tr></thead>
         <tbody id="sets-body-${idx}"></tbody>
       </table>
@@ -41291,8 +41295,20 @@ function renderSets(ex,data,idx){
       // de repondre, il n'y a rien a comparer.
       const v=(s.rir===''||s.rir==null)?null:(s.rir==='echec'?0:parseInt(s.rir,10));
       const loin=(v!=null&&isFinite(v)&&Math.abs(v-Number(_cons))>1);
+      // « cible » devient « visé » : une cible se rate, un objectif se vise —
+      // et le rappel n'est pas un jugement, c'est la regle ecrite juste
+      // au-dessus. Le title= reste : il sert au survol, sur bureau.
+      //
+      // ⚠ PAS DE PASTILLE ICI, ET C'EST UNE MESURE. Elle y a ete posee, puis
+      // retiree : a 359 px — la largeur de reference — la cellule debordait de
+      // 2 px des que la consigne s'affichait. Deux pixels suffisent a ouvrir
+      // un defilement lateral dans un tableau a cinq colonnes, et la regle du
+      // lot est explicite : on retire le ⓘ de la CELLULE, on le garde sur
+      // l'en-tete de colonne, et on NE REDUIT PAS la police pour le faire
+      // tenir. L'explication du RPE reste donc a un doigt — en haut de la
+      // meme colonne.
       return `<span style="font-size:var(--fs-2xs);color:${loin?'var(--orange)':'var(--text-faint)'};`
-        +`white-space:nowrap;flex:none" title="Intensité demandée par ton coach">cible ${_cons}</span>`;
+        +`white-space:nowrap;flex:none" title="Intensité demandée par ton coach">visé : ${_cons}</span>`;
     })();
     // ══ LA COLONNE D'INTENSITE : RIR SAISI, OU RPE PRESCRIT ═══════════
     //
@@ -41307,12 +41323,20 @@ function renderSets(ex,data,idx){
     // l'alternative : recopier le RPE prescrit dans `rir` ferait passer une
     // consigne pour une mesure, et le coach lirait sa propre prescription en
     // croyant lire son athlete.
+    // « @8 » NE DIT PAS CE QUE C'EST, et son sens vivait dans un title= —
+    // donc nulle part, au doigt. Le cadenas dit qu'on ne la regle pas, « RPE »
+    // dit de quoi il s'agit, la pastille dit ou aller le lire.
+    // ⚠ LE ⓘ EST DEHORS, PAS DEDANS. L'element porte role="img" : tout ce
+    // qu'il contient disparait pour un lecteur d'ecran, remplace par son
+    // aria-label. Un bouton pose a l'interieur aurait ete inatteignable —
+    // visible pour l'oeil, absent pour la voix. Il est donc son VOISIN, ce
+    // qui est aussi ce que « a droite » veut dire.
     const rirSelect=s.rpeCible
       ?`<div class="set-input" role="img" aria-label="RPE demandé par ton coach : ${s.rpeCible} sur 10"
           title="Intensité demandée par ton coach — tu ne la règles pas"
-          style="padding:4px 2px;font-size:var(--fs-xs);min-width:44px;min-height:38px;display:flex;
-            align-items:center;justify-content:center;background:var(--surface-2);color:var(--text-strong);
-            border:1px solid var(--border);border-radius:var(--r-1);white-space:nowrap">@${s.rpeCible}</div>`
+          style="padding:4px 5px;font-size:var(--fs-xs);min-width:44px;min-height:38px;display:flex;
+            align-items:center;justify-content:center;gap:4px;background:var(--surface-2);color:var(--text-strong);
+            border:1px solid var(--border);border-radius:var(--r-1);white-space:nowrap">${icon('lock',10)}RPE ${s.rpeCible}</div>${rcInfo('rpe')}`
       :`<select class="set-input" onchange="${onChR}" ${dis} style="padding:4px 2px;font-size:var(--fs-xs);min-width:44px;min-height:38px">
       <option value="">RIR</option>
       ${RIR_OPTS.map(v=>`<option value="${v}" ${String(s.rir)===v?'selected':''}>${v==='echec'?'Échec':v==='0'?'0 ':v}</option>`).join('')}
