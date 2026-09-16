@@ -8781,16 +8781,63 @@ function testExercices(){
           } finally { currentUser=_cu; if(_db) DB.set('users',_db);
             if(_pf===null) localStorage.removeItem(CLE);
             else localStorage.setItem(CLE,_pf); }})());
-        ok('Le lien « Un souci ? » existe, et il ANNONCE la sortie',(()=>{
-          const a=document.getElementById('clh-contact-link');
-          if(!a) return _echec('le lien de contact a disparu de l\'accueil');
-          const t=(a.textContent||'').replace(/\s+/g,' ').trim();
-          if(!/Un souci/.test(t)) return _echec('libellé : '+t);
-          // On quitte RepCore : le dire AVANT, pas après.
-          if(!/quittes RepCore/i.test(CONTACT_SORTIE))
-            return _echec('la mention de sortie a changé : '+CONTACT_SORTIE);
-          return /rel="noopener"/.test(a.outerHTML)&&a.target==='_blank'
-            ?true:_echec('le lien s\'ouvre sans noopener, ou dans l\'app');})());
+        // ⚠ LE LIEN UNIQUE EST DEVENU TROIS CANAUX le 16/09/2026. Il retombait
+        // sur le mail dès que le WhatsApp n'était pas publié, sans jamais dire
+        // qu'un troisième chemin existait — le mot au coach, dans
+        // l'application, proposé plus bas dans une carte séparée. Les trois
+        // sont au même endroit, et cette carte a disparu avec.
+        ok('« Un souci ? » propose les trois canaux, et annonce la sortie',(()=>{
+          const _cu=currentUser,_db=DB.get('users');
+          try{
+            const coach={id:'c9',email:'c9@t.fr',role:'coach',fname:'K',lname:'G',
+              contact:{mode:'whatsapp',consentAt:'2026-08-05T10:00:00.000Z',phone:'+33600000000'},
+              phone:'+33600000000'};
+            currentUser={email:'a9@t.fr',id:'a9',role:'athlete',fname:'A',coachId:'c9'};
+            DB.set('users',{'a9@t.fr':currentUser,'c9@t.fr':coach});
+            const z=document.getElementById('clh-contact');
+            if(!z) return _echec('le bloc de contact a disparu de l’accueil');
+            _rendreContactCoach(currentUser,DB.get('users'));
+            const t=(z.textContent||'').replace(/\s+/g,' ').trim();
+            if(!/Un souci/.test(t)) return _echec('libellé : '+t);
+            const b=[...z.querySelectorAll('.cct-b')];
+            if(b.length!==3) return _echec(b.length+' canaux : '+b.map(x=>x.textContent).join(' | '));
+            // ⚠ « WhatsApp » CONTIENT « app », et un /app/i rendait le bouton
+            // WhatsApp au lieu du canal interne : le test accusait un code
+            // correct. On compare les libellés EN ENTIER.
+            const par=n=>b.find(x=>(x.textContent||'').trim()===n);
+            const wa=par('WhatsApp'), ml=par('E-mail'), ap=par('Dans l\'app');
+            if(!wa||!ml||!ap) return _echec('canaux : '+b.map(x=>x.textContent).join(' | '));
+            if((wa.getAttribute('href')||'').indexOf('https://wa.me/')!==0)
+              return _echec('WhatsApp : '+wa.getAttribute('href'));
+            if((ml.getAttribute('href')||'').indexOf('mailto:')!==0)
+              return _echec('mail : '+ml.getAttribute('href'));
+            // ⚠ LE TROISIEME N'EST PAS UN LIEN : il reste DANS l'application,
+            // et un href l'en ferait sortir.
+            if(ap.tagName!=='BUTTON') return _echec('le canal interne est un lien');
+            // On quitte RepCore : le dire AVANT, pas après.
+            if(!/quittes RepCore/i.test(CONTACT_SORTIE))
+              return _echec('la mention de sortie a changé : '+CONTACT_SORTIE);
+            for(const x of [wa,ml]){
+              if(x.target!=='_blank'||!/noopener/.test(x.getAttribute('rel')||''))
+                return _echec('un canal externe s’ouvre sans noopener, ou dans l’app');
+              if(!/quittes RepCore/i.test(x.getAttribute('title')||''))
+                return _echec('la sortie n’est pas annoncée sur « '+x.textContent+' »');
+            }
+            // ⚠ LE CONSENTEMENT COMMANDE TOUJOURS : sans lui, plus de WhatsApp,
+            // et il ne reste que deux canaux.
+            coach.contact={mode:'aucun'};
+            DB.set('users',{'a9@t.fr':currentUser,'c9@t.fr':coach});
+            _rendreContactCoach(currentUser,DB.get('users'));
+            const b2=[...z.querySelectorAll('.cct-b')];
+            if(b2.some(x=>/whatsapp/i.test(x.textContent||'')))
+              return _echec('le WhatsApp survit au retrait du consentement');
+            if(b2.length!==2) return _echec(b2.length+' canaux sans consentement');
+            // Sans coach rattaché : rien du tout.
+            currentUser.coachId='';
+            _rendreContactCoach(currentUser,DB.get('users'));
+            return z.innerHTML===''?true:_echec('un bloc s’affiche sans coach');
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db);
+            try{ const z=document.getElementById('clh-contact'); if(z) z.innerHTML=''; }catch(e){} }})());
 
         ok('contactCoach et contactNumero sont PURES',(()=>{
           const u=_pub({contact:{mode:'whatsapp',consentAt:'2026-08-05T10:00:00.000Z',horaires:'9h-18h'}});
@@ -28944,9 +28991,41 @@ function testExercices(){
       ok('TÉMOIN : « Charge totale » et « Exercices en progrès » ont quitté l\'accueil',(()=>{
         const h=document.getElementById('s-client-home').innerHTML;
         return !/Charge totale/.test(h)&&!/Exercices en progrès/.test(h);})());
+      // ⚠ LES TROIS LIBELLES ONT RACCOURCI le 16/09/2026, et c'est une mesure :
+      // à 11 px la tuile offre 70 px sur un écran de 320, et « Cette semaine »
+      // en demandait 93, « Séances totales » 109, « Diète respectée » 105. Les
+      // trois étaient tronqués. La précision n'est pas perdue — le sous-titre
+      // juste dessous la porte.
       ok('Les libellés sont ceux du cahier des charges',(()=>{
         const h=document.getElementById('s-client-home').innerHTML;
-        return /Cette semaine/.test(h)&&/Séances au total/.test(h)&&/Diète respectée/.test(h);})());
+        return /Semaine/.test(h)&&/Séances/.test(h)&&/Diète/.test(h);})());
+      // ET ILS TIENNENT VRAIMENT, sans ellipse. C'est cette assertion-là qui a
+      // trouvé que l'interlettrage ne suffisait pas.
+      ok('Aucun libellé de tuile n\'est tronqué',(()=>{
+        const s=document.createElement('span');
+        const m=document.querySelector('#clh-stats .metric-label');
+        if(!m) return _echec('les tuiles n’ont plus de libellé');
+        const cs=getComputedStyle(m);
+        s.style.cssText='position:fixed;left:-9999px;white-space:nowrap';
+        s.style.font=cs.font; s.style.fontSize=cs.fontSize;
+        s.style.fontFamily=cs.fontFamily; s.style.fontWeight=cs.fontWeight;
+        s.style.letterSpacing=cs.letterSpacing; s.style.textTransform=cs.textTransform;
+        document.body.appendChild(s);
+        try{
+          if(parseFloat(cs.fontSize)<11)
+            return _echec('le libellé est passé sous le plancher : '+cs.fontSize);
+          // 70 px : la largeur utile d'une tuile sur un écran de 320, le plus
+          // étroit que le produit vise. Mesurée au navigateur.
+          const trop=[];
+          document.querySelectorAll('#clh-stats .metric-label').forEach(e=>{
+            s.textContent=e.textContent;
+            const w=Math.ceil(s.getBoundingClientRect().width);
+            if(w>70) trop.push('« '+e.textContent+' » '+w+'px');
+          });
+          if(!(s.textContent&&s.getBoundingClientRect().width>10))
+            return _echec('la sonde ne mesure rien');
+          return trop.length?_echec('au-delà de 70px : '+trop.join(' | ')):true;
+        } finally { s.remove(); }})());
       // Aucun historique : deux tirets et un zéro, aucune erreur.
       currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},bilans:[],sessions:[],
         sessions_config:[{active:true}]};

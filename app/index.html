@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1233';
+window.RC_BUILD='1234';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2538,6 +2538,24 @@ body.with-tabbar #rc-ban-install{padding-bottom:9px}
 /* Le halo du chiffre lui-meme : sans lui, le blanc reste plat sur le noir. */
 .metric-val{text-shadow:var(--halo-2)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
+/* LES TROIS TUILES DE L'ACCUEIL SE RESSERRENT. Le chiffre ne bouge pas —
+   c'est lui qu'on vient lire — mais tout ce qui l'entoure gagnait de la
+   hauteur pour rien : un rembourrage de 16 px en haut comme en bas, et des
+   libelles a 2 px d'interlettrage qui passaient a la ligne.
+   ⚠ LE CORPS DU LIBELLE NE BOUGE PAS NON PLUS : 11 px est le plancher de cet
+   ecran, tenu par une assertion. C'est l'INTERLETTRAGE qui cede d'abord — il
+   ne porte aucun sens.
+   ⚠ MAIS L'INTERLETTRAGE NE SUFFISAIT PAS, et les libelles ont du raccourcir.
+   Mesure au navigateur, police de l'ecran, a 11 px : la tuile offre 70 px a
+   320 et 93 a 390. « Cette semaine » en demande 93, « Séances totales » 109,
+   « Diète respectée » 105. Les trois etaient donc tronques — « Séances tot… »
+   — ce qui est pire qu'un mot de moins. « Semaine » (54), « Séances » (55) et
+   « Diète » (35) tiennent partout, avec de la marge. Et la precision n'est pas
+   perdue : le sous-titre juste dessous la porte — « / 3 prévues », le mois du
+   depart, « +7 pts ». */
+#clh-stats .metric-box{padding:11px 8px}
+#clh-stats .metric-label{letter-spacing:0;margin-top:4px;line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* LE SOUS-TITRE D'UNE TUILE : le REFERENTIEL du chiffre au-dessus. « 2 »
    seances ne dit rien ; « 2 » sous « / 3 prevues » dit tout, et sans ajouter
    un mot de plus. Il tient sur UNE ligne — deux feraient grandir la tuile —
@@ -5394,11 +5412,53 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   letter-spacing:.2px;color:var(--sub);line-height:1.2;max-width:10ch;
   text-transform:none}
 .sk-chiffres:not([data-nul]) .sk-reste{display:none}
+/* LA DATE DU JOUR, sous le compte. Elle ne s'enroule pas : le mois est deja
+   abrege pour ca — « mercredi 16 sept. » et non « mercredi 16 septembre »,
+   qui demandait deux lignes et grandissait le cadre.
+   ⚠ ELLE S'EFFACE QUAND LE CAS NUL PARLE. « Encore 3 seances » et la date se
+   disputeraient la meme rangee : ce qu'il reste a faire passe avant la date
+   du jour, qui est sur le telephone de toute facon. */
+.sk-date{grid-column:1/-1;grid-row:3;font-size:11px;font-weight:600;
+  letter-spacing:.2px;color:var(--text-faint);line-height:1.2;
+  text-transform:none;white-space:nowrap}
+.sk-chiffres[data-nul] .sk-date{display:none}
 #clh-streak-val{font-family:var(--pile-titre);font-size:var(--sk-f);line-height:.86;color:var(--text);
   font-variant-numeric:tabular-nums;letter-spacing:.5px;
   text-shadow:0 0 10px rgba(255,255,255,.3)}
 .sk-lbl{font-size:11px;font-weight:800;letter-spacing:2.1px;text-transform:uppercase;
   color:var(--text);line-height:1}
+
+/* ══ « UN SOUCI ? » : TROIS CANAUX ═══════════════════════════════════════
+   Trois boutons de meme rang, sur une rangee qui s'enveloppe. Ils ne sont pas
+   rouges : ce n'est pas une alerte, c'est une porte — et trois portes rouges
+   cote a cote sous un ecran deja rouge ne se distinguent plus de rien. */
+.cct{margin-top:9px}
+.cct-t{font-size:var(--fs-xs);color:var(--red-text);font-weight:700;
+  letter-spacing:.5px;margin-bottom:7px}
+.cct-l{display:flex;flex-wrap:wrap;gap:7px}
+/* La cible fait 34 px de haut : sous 32, elle n'est plus viseable au pouce. */
+.cct-b{display:inline-flex;align-items:center;justify-content:center;
+  min-height:34px;padding:0 13px;border-radius:var(--r-full);
+  background:var(--surface-2);border:1px solid var(--border);
+  color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);
+  font-weight:800;letter-spacing:.6px;cursor:pointer;text-decoration:none;
+  white-space:nowrap;transition:border-color var(--t-1),color var(--t-1)}
+.cct-b:hover{border-color:rgba(224,32,32,.55);color:var(--red-text)}
+.cct-b:active{transform:scale(.96)}
+
+/* LE NOM DE LA TEAM, SUR UNE SEULE LIGNE. « GUELLEC COACHING PRO » a vingt
+   caracteres : a 4 px d'interlettrage il passait a la ligne et ajoutait une
+   rangee entiere a la carte du coach.
+   ⚠ LE CORPS NE BOUGE PAS — 11 px est le plancher de cet ecran, tenu par une
+   assertion. C'est l'INTERLETTRAGE qui cede, et lui seul : il n'a jamais
+   porte de sens. Mesure au navigateur : « GUELLEC COACHING PRO » demande
+   174 px a 1,2 px d'interlettrage, 162 a 0,6 et 150 a zero, pour 150
+   disponibles sur un ecran de 320. Il faut donc aller jusqu'a zero.
+   Et si un nom plus long arrivait un jour, l'ellipse le coupe plutot que de
+   faire grandir la carte. */
+.cc-team{font-size:var(--fs-xs);color:var(--red-text);letter-spacing:0;
+  font-weight:900;text-transform:uppercase;margin-bottom:4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ══ LE CHOIX DE LA SÉANCE ════════════════════════════════════════════════
    Tout passait par des styles en ligne, réécrits à chaque ouverture. Les états
@@ -9000,6 +9060,10 @@ const COACH_PHOTO='icons/coach.jpg';
           <!-- LA SEMAINE EN COURS, et ce qu'il reste pour l'acquerir. Vide des
                qu'une semaine est acquise : voir _rendreStreak. -->
           <span class="sk-reste" id="clh-streak-reste"></span>
+          <!-- LA DATE DU JOUR. Elle vivait sous « Bonjour Kevin », ou elle
+               occupait une ligne entiere pour trois mots. Ici elle se glisse
+               sous le compteur, dans une place qui existait deja. -->
+          <span class="sk-date" id="clh-streak-date"></span>
         </div>
       </div>
     </div>
@@ -9010,7 +9074,6 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="clh-in clh-in-1" style="margin-bottom:28px">
         <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
         <h1 id="clh-greeting" style="font-size:var(--fs-2xl);line-height:1.15;font-weight:400;letter-spacing:1px"></h1>
-        <p class="sub" id="clh-date" style="margin-top:4px;font-size:var(--fs-sm)"></p>
         <p id="clh-phrase" style="margin-top:7px;font-size:var(--fs-sm);line-height:1.55;color:var(--text-dim);font-style:italic"></p>
         <!-- LA LIGNE D AUTEUR A ETE RETIREE le 24/08/2026, avec le jeu de
              citations qu elle accompagnait. Les 365 phrases sont celles de
@@ -9019,7 +9082,13 @@ const COACH_PHOTO='icons/coach.jpg';
              dessous, porte déjà son nom, sa photo et sa phrase. Le cas « sans
              coach » y est traité aussi, par une invitation à saisir un code. -->
         <div id="clh-dispo"></div>
-        <a id="clh-contact-link" href="#" target="_blank" rel="noopener" style="display:none;font-size:var(--fs-xs);color:var(--red-text);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg> Un souci ? Contacte ton coach</a>
+        <!-- ⚠ « UN SOUCI ? » NE CHOISIT PLUS A LA PLACE DE L'ATHLETE. Le lien
+             unique retombait sur le mail des que le WhatsApp n'etait pas
+             publie, sans jamais dire qu'un troisieme canal existait — le mot
+             au coach, dans l'application, qui etait propose plus bas dans une
+             carte separee. Les trois sont desormais au meme endroit, et la
+             carte « Quelque chose a dire a ton coach ? » a disparu avec. -->
+        <div id="clh-contact"></div>
         <a href="#" onclick="ouvrirReglagesAthlete();return false" style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);color:var(--sub);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.4.55.71.66H21a2 2 0 1 1 0 4h-.09c-.31.11-.57.35-.71.66z"/></svg> Réglages</a>
       </div>
 
@@ -9094,19 +9163,19 @@ const COACH_PHOTO='icons/coach.jpg';
            l'accueil. La mise en page vit dans la feuille (#clh-stats), ou un
            masquage ne peut pas l'effacer. -->
       <div id="clh-stats" class="clh-in clh-in-2">
-        <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Cette semaine</div>
+        <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Semaine</div>
           <div class="clh-m-sub" id="clh-m1-sub"></div></div>
-        <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances au total</div>
+        <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances</div>
           <div class="clh-m-sub" id="clh-m2-sub"></div></div>
-        <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Diète respectée</div>
+        <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Diète</div>
           <div class="clh-m-sub" id="clh-m3-sub"></div></div>
       </div>
 
 
       <!-- DÉMARRER SÉANCE — hero card -->
-      <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:24px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
+      <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:14px 20px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
-        <div class="eyebrow eyebrow-act" style="margin-bottom:14px">Entraînement</div>
+        <div class="eyebrow eyebrow-act" style="margin-bottom:10px">Entraînement</div>
         <!-- ⚠ LA COUPURE EST ECRITE, elle n'est pas subie. Le libelle faisait
              286 px pour 272 disponibles : il se coupait tout seul, mais la ou
              la place manquait — « DÉMARRER MA SÉANCE DU / JOUR » sur un
@@ -22048,6 +22117,24 @@ function dispoSanteForce(user){
   }catch(e){}
   return null;
 }
+// PURE (au dossier pres). LES DEUX CANAUX EXTERNES DU COACH, separement.
+// ⚠ EXTRAITE DE _coachContactHref SANS CHANGER UNE VIRGULE DE LA REGLE. Deux
+// endroits resolvent desormais le meme coach — le lien unique de l'ecran
+// d'acces expire, et les trois boutons de l'accueil : recopier la resolution
+// aurait fabrique deux verites, et c'est exactement ce que le commentaire
+// ci-dessous interdit depuis le debut.
+function _canauxCoach(coachId,users){
+  const vide={whatsapp:'',mail:''};
+  if(!coachId) return vide;
+  const us=users||DB.get('users')||{};
+  const coach=Object.values(us).find(x=>x&&x.id===coachId);
+  const _cle=cleCoachDe(currentUser);
+  const _pub=profilCoachLocal(_cle);
+  const email=Object.keys(us).find(k=>us[k]&&us[k].id===coachId)
+    ||(_cle?_cle.replace(/,/g,'.'):null);
+  const _src=contactNumero(coach)?coach:_pub;
+  return {whatsapp:contactNumero(_src)||'', mail:email||'', src:_src};
+}
 function _coachContactHref(coachId,texte,users){
   if(!coachId) return '';
   const us=users||DB.get('users')||{};
@@ -26910,6 +26997,58 @@ function marquerMotCoachLu(coach,athlete){
 // permanence sur l'accueil est une question posee tous les jours, et une
 // question posee tous les jours finit par ne plus rien recevoir.
 let _motEdition=false;
+// ══ « UN SOUCI ? » : TROIS CANAUX, ET L'ATHLETE CHOISIT ══════════════════
+//
+// Le lien unique retombait sur le mail des que le WhatsApp n'etait pas publie,
+// sans jamais dire qu'un TROISIEME canal existait — le mot au coach, dans
+// l'application, propose plus bas dans une carte separee. Les trois sont
+// desormais au meme endroit, et cette carte a disparu avec.
+//
+// ⚠ LE CONSENTEMENT COMMANDE TOUJOURS. _canauxCoach porte la meme regle
+// qu'avant : sans consentement horodate, aucun numero ne devient un lien. Un
+// canal absent n'affiche AUCUN bouton — un bouton qui n'ouvre rien fait croire
+// qu'on a ecrit.
+function _rendreContactCoach(u,users){
+  const z=document.getElementById('clh-contact');
+  if(!z) return false;
+  const uu=u||currentUser;
+  if(!uu||!uu.coachId){ z.innerHTML=''; return false; }
+  const c=_canauxCoach(uu.coachId,users);
+  const bouts=[];
+  if(c.whatsapp) bouts.push(['a','https://wa.me/'+c.whatsapp,'WhatsApp','wa']);
+  if(c.mail) bouts.push(['a','mailto:'+c.mail,'E-mail','ml']);
+  // LE MOT DANS L'APPLICATION est toujours disponible : il ne depend d'aucun
+  // numero ni d'aucun consentement, et il reste chez soi.
+  bouts.push(['b','motOuvrirDepuisContact()','Dans l\'app','ap']);
+  if(!bouts.length){ z.innerHTML=''; return false; }
+  // La mention de sortie et les horaires restent portees par l'info-bulle,
+  // comme avant — voir la note de CONTACT_SORTIE.
+  let titre='';
+  try{ const _c=contactCoach(c.src);
+    titre=CONTACT_SORTIE+(_c&&_c.horaires?' Réponses : '+_c.horaires:''); }catch(e){}
+  z.innerHTML='<div class="cct"><div class="cct-t">Un souci ? Contacte ton coach</div>'
+    +'<div class="cct-l">'+bouts.map(b=>b[0]==='a'
+      ?'<a class="cct-b" href="'+escapeHtml(b[1])+'" target="_blank" rel="noopener noreferrer" '
+        +'onclick="_journaliserContactCoach()" title="'+escapeHtml(titre)+'">'
+        +escapeHtml(b[2])+'</a>'
+      :'<button type="button" class="cct-b" onclick="'+b[1]+'">'+escapeHtml(b[2])+'</button>'
+    ).join('')+'</div></div>';
+  return true;
+}
+// Le renvoi est journalise AU CLIC, pas a l'affichage : un bouton vu n'est pas
+// un bouton touche. Le journal vit dans le dossier de l'ATHLETE — c'est le seul
+// document qu'il peut ecrire.
+function _journaliserContactCoach(){
+  try{ journaliserRenvoi(currentUser,currentUser.id); saveUser(); }catch(e){}
+  return true;
+}
+// Ouvre l'editeur du mot au coach ET l'amene sous les yeux : il vit plus bas
+// dans la page, et l'ouvrir sans y aller donnerait un bouton qui ne fait rien.
+function motOuvrirDepuisContact(){
+  motOuvrir();
+  try{ _defiler(document.getElementById('clh-mot'),{block:'center'}); }catch(e){}
+  return true;
+}
 function renderMotCoach(){
   const z=document.getElementById('clh-mot');
   if(!z) return false;
@@ -26937,14 +27076,12 @@ function renderMotCoach(){
     const t=document.getElementById('mot-texte'); if(t) t.focus();
     return true;
   }
-  if(!m){
-    z.innerHTML='<div style="'+enc+';display:flex;align-items:center;gap:10px">'
-      +'<div style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--sub);line-height:1.55">'
-      +'Quelque chose à dire à ton coach ?</div>'
-      +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0" '
-      +'onclick="motOuvrir()">Écrire</button></div>';
-    return true;
-  }
+  // ⚠ PLUS DE CARTE D'INVITATION QUAND IL N'Y A RIEN A DIRE. « Quelque chose
+  // a dire a ton coach ? » occupait un cadre entier de l'accueil pour poser
+  // une question a laquelle on repond rarement — et le meme geste est
+  // desormais l'un des trois canaux de « Un souci ? », juste au-dessus.
+  // L'emplacement reste : des qu'un mot est ECRIT, il s'affiche ici.
+  if(!m){ z.innerHTML=''; return true; }
   z.innerHTML='<div style="'+enc+'">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
@@ -36480,8 +36617,6 @@ function loadClientHome(){
   // les metriques : elle reste consultable dans l'onglet Perfs.
   _rendreStreak(u,s);
   document.getElementById('clh-greeting').textContent=salutation()+' '+u.fname+'.';
-  const _dStr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-  document.getElementById('clh-date').textContent=_dStr.charAt(0).toUpperCase()+_dStr.slice(1);
   // textContent et non innerHTML : ces phrases n'ont aucune raison de
   // traverser l'analyseur HTML.
   // NI GUILLEMETS NI AUTEUR depuis le 24/08/2026 : les 365 phrases sont
@@ -36571,7 +36706,10 @@ function loadClientHome(){
   // L'échéance d'accès : rien à afficher la plupart du temps, un bandeau dans
   // les sept derniers jours.
   try{ _rendreEcheanceAcces(); }catch(e){}
-  const contactLink=document.getElementById('clh-contact-link');
+  // ⚠ LE LIEN UNIQUE EST DEVENU TROIS BOUTONS, et le rendu a donc quitte
+  // cette fonction pour _rendreContactCoach. Le garde reste le meme : sans
+  // coach rattache, rien n'est rendu.
+  const contactLink=document.getElementById('clh-contact');
   if(contactLink&&u.coachId){
     // Déclarée AVANT _applyCoachData : le rapatriement plus bas s'en sert
     // aussi, et il vit hors de cette fonction.
@@ -36589,30 +36727,10 @@ function loadClientHome(){
       // Calcul déporté dans _coachContactHref, partagé avec l'écran d'accès
       // expiré : deux écrans qui proposent de joindre le même coach ne doivent
       // pas pouvoir diverger sur le numéro retenu ni sur le repli email.
-      const href=_coachContactHref(u.coachId,'',usrs);
-      // Sans coach rattaché, ou sans consentement : aucun bouton, et AUCUN
-      // message d'erreur. Il n'y a rien à expliquer à qui n'a rien demandé.
-      if(href){
-        contactLink.href=href;
-        contactLink.style.display='inline-flex';
-        // Le renvoi est journalisé AU CLIC, pas à l'affichage : un bouton vu
-        // n'est pas un bouton touché. Le journal vit dans le dossier de
-        // l'ATHLÈTE — c'est le seul document qu'il peut écrire — et remonte
-        // au coach par la synchronisation. Une date, une empreinte, rien
-        // d'autre : ni le contenu, ni le numéro, ni d'identifiant en clair.
-        contactLink.onclick=function(){
-          try{ journaliserRenvoi(currentUser,currentUser.id); saveUser(); }catch(e){}
-          return true;   // on ne bloque JAMAIS l'ouverture du lien
-        };
-        // On quitte RepCore : le dire avant, pas après. Et les horaires du
-        // coach, s'il en a renseigné — c'est ce qui évite un message à 23 h
-        // resté sans réponse jusqu'au lendemain.
-        // Le paragraphe visible sous le lien a été retiré à la demande de
-        // Kevin. La mention reste portée par l'info-bulle du lien et par
-        // privacy.html — voir la note de la constante CONTACT_SORTIE.
-        const _c=contactCoach(_pub);
-        contactLink.title=CONTACT_SORTIE+(_c.horaires?' Réponses : '+_c.horaires:'');
-      }
+      // Les trois canaux, et l'athlete choisit. Le consentement, le
+      // journal de renvoi et la mention de sortie n'ont pas bouge : ils
+      // vivent desormais dans _rendreContactCoach.
+      try{ _rendreContactCoach(u,usrs); }catch(e){}
       _renderCoachBanner(coachUser, u.coachName);
       _renderPromoBanners(coachUser);
     };
@@ -36723,7 +36841,13 @@ function loadClientHome(){
            bandeau déborde de 20 px vers la gauche — la valeur exacte du
            padding de cette rangée — pour venir mourir sur le bord rouge de la
            carte, comme une étiquette cousue et non un bouton posé. -->
-      <div style="display:flex;align-items:stretch;padding:20px 18px 20px 20px;gap:16px;position:relative">
+      <!-- ⚠ LA HAUTEUR DE CETTE CARTE NE VIENT PAS DU TEXTE, et c'est ce que
+           la mesure a montre : remettre le nom de la team sur une ligne ne
+           l'a pas raccourcie d'un pixel. La colonne de GAUCHE commande — la
+           photo de 72 px et la pastille COACH sous elle — et la colonne de
+           droite est plus courte qu'elle. C'est donc le rembourrage vertical
+           qui cede : 20 px deviennent 13, en haut comme en bas. -->
+      <div style="display:flex;align-items:stretch;padding:13px 18px 13px 20px;gap:16px;position:relative">
         <div style="flex-shrink:0;display:flex;flex-direction:column;width:72px;gap:12px">
         ${photo
           ?`<div style="width:72px;height:72px;border-radius:var(--r-full);overflow:hidden;border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7)"><img src="${escapeHtml(photo)}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
@@ -36731,7 +36855,7 @@ function loadClientHome(){
           <div style="margin-top:auto;margin-left:-20px;width:92px;text-align:center;background:var(--red);color:var(--text);font-size:var(--fs-2xs);font-weight:900;letter-spacing:2.5px;padding:5px 0;border-radius:0 var(--r-2) var(--r-2) 0;box-shadow:var(--e2),var(--glow-red)">COACH</div>
         </div>
         <div style="flex:1;min-width:0">
-          ${team?`<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:4px;font-weight:900;text-transform:uppercase;margin-bottom:5px">${escapeHtml(team)}</div>`:''}
+          ${team?`<div class="cc-team">${escapeHtml(team)}</div>`:''}
           <div class="txt-stat" style="letter-spacing:2px;line-height:0.95;background:linear-gradient(135deg,var(--text) 30%,#888 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:${phrase?'8':'0'}px">${escapeHtml(name.trim())}</div>
           ${phrase?`<div style="font-size:var(--fs-xs);color:#888;font-style:italic;line-height:1.6">"${escapeHtml(phrase)}"</div>`:''}
         </div>
@@ -46505,12 +46629,25 @@ function _rendreStreak(u,s){
   catch(e){ a={valeur:null,libelle:'SEMAINE 1',reste:'',nul:true}; }
   if(lbl) lbl.textContent=a.libelle;
   if(res) res.textContent=a.reste;
+  // LA DATE DU JOUR, sous le compte — elle a quitte la ligne sous « Bonjour
+  // Kevin », ou elle occupait une rangee entiere pour trois mots.
+  // ⚠ LE MOIS EST ABREGE, et c'est ce qui la fait tenir : « mercredi 16
+  // septembre » demandait deux lignes et grandissait le cadre.
+  const dt=document.getElementById('clh-streak-date');
+  if(dt) dt.textContent=dateDuJourCourte();
   if(zone) zone.toggleAttribute('data-nul',a.nul);
   if(!el) return;
   if(a.valeur===null){
     el.textContent='';
     try{ delete el.dataset.valeur; }catch(e){}
   } else arcCompteur(el,a.valeur,{duree:ARC.release});
+}
+// PURE. « mercredi 16 sept. » — le jour, en une ligne.
+function dateDuJourCourte(maintenant){
+  const d=(maintenant instanceof Date)?maintenant:new Date(
+    (typeof maintenant==='number')?maintenant:Date.now());
+  try{ return d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'short'}); }
+  catch(e){ return ''; }
 }
 function streakSemaines(u){
   // SOUS SUSPENSION, LA VALEUR EST GELÉE — c'est le cœur de la règle 2. Elle
