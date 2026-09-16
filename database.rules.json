@@ -151,7 +151,11 @@
       // EN CENTIMES, ENTIER, ET PLAFONNE. Aucun flottant ne touche a de
       // l argent, et un prix a quatre chiffres d euros est une faute de
       // frappe, pas une intention : 500 000 centimes, soit 5 000 EUR.
-      "prixCts": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500000 && newData.val() === newData.val().toFixed(0) * 1" },
+      // ⚠ PAS DE toFixed ICI : le langage des regles n'est PAS du JavaScript.
+      // Il n'a ni toFixed, ni toString, ni Math, ni parseInt — et le
+      // deploiement le refuse avec « No such method/property ». Le modulo,
+      // lui, existe : c'est ce qui dit « entier » dans ce langage.
+      "prixCts": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500000 && newData.val() % 1 === 0" },
       // La devanture, en donnee-URL redimensionnee avant envoi. Bornee : une
       // image non redimensionnee remplirait le quota a elle seule, et elle est
       // relue par CHAQUE athlete qui ouvre la boutique.

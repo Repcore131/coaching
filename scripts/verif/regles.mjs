@@ -228,4 +228,45 @@ for(const [champ,att] of [['image',420000],['seances',240000]]){
 }
 console.log('boutique : un seul vendeur, lecture ouverte, bornes concordantes');
 
+// ══ LE LANGAGE DES REGLES N'EST PAS DU JAVASCRIPT ═════════════════════════
+//
+// Ecrire `newData.val().toFixed(0)` dans une regle passe la relecture humaine
+// et la validation JSON, puis fait echouer le DEPLOIEMENT COMPLET :
+// « Error: Syntax error in database rules: No such method/property 'toFixed' ».
+// Et il echoue AVANT d'envoyer l'hebergement : une faute d'un mot dans ce
+// fichier bloque la mise en ligne de toute l'application.
+//
+// Le langage n'a ni toFixed, ni toString, ni parseInt, ni Math, ni JSON, ni
+// indexOf. Il a `%` pour dire « entier », `.length` sur les chaines,
+// `.matches()` pour les expressions rationnelles, et `.replace()`.
+// C'est arrive le 16/09/2026, sur prixCts.
+// ⚠ DES MOTIFS, PAS DES SOUS-CHAINES. La premiere version cherchait
+// « Number( » et trouvait « isNumber( » — qui est, lui, le coeur meme du
+// langage : elle accusait quarante regles parfaitement valides. Une sonde qui
+// crie au loup partout ne se lit plus.
+const INTERDITS=[
+  [/\.toFixed\s*\(/,'toFixed'], [/\.toString\s*\(/,'toString'],
+  [/\bparseInt\s*\(/,'parseInt'], [/\bparseFloat\s*\(/,'parseFloat'],
+  [/\bMath\./,'Math.'], [/\bJSON\./,'JSON.'],
+  [/\.indexOf\s*\(/,'indexOf'], [/\.substring\s*\(/,'substring'],
+  [/\.slice\s*\(/,'slice'], [/\.toUpperCase\s*\(/,'toUpperCase'],
+  [/\.toLowerCase\s*\(/,'toLowerCase'], [/\bisNaN\s*\(/,'isNaN'],
+  [/(^|[^A-Za-z])Number\s*\(/,'Number()'], [/\.push\s*\(/,'push'],
+  [/\bfor\s*\(/,'for'], [/=>/,'=>']
+];
+const fautes=[];
+regles.split('\n').forEach((ligne,i)=>{
+  if(/^\s*\/\//.test(ligne)) return;            // un commentaire peut les nommer
+  for(const [re_,nom] of INTERDITS)
+    if(re_.test(ligne)) fautes.push('  ligne '+(i+1)+' : '+nom+'   '+ligne.trim().slice(0,90));
+});
+if(fautes.length){
+  console.error('\nDU JAVASCRIPT DANS LES REGLES — le deploiement le refusera,');
+  console.error('et il refusera AUSSI l\'hebergement : tout reste en ligne dans');
+  console.error('sa version precedente, sans que rien ne le dise.');
+  fautes.forEach(f=>console.error(f));
+  process.exit(1);
+}
+console.log('regles : aucun appel JavaScript inconnu du langage');
+
 console.log('\nRien de bloquant.');
