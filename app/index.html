@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1245';
+window.RC_BUILD='1246';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4499,6 +4499,40 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
 .plan-titre::after{content:'';position:absolute;inset:0;pointer-events:none;
   background:repeating-linear-gradient(-52deg,transparent,transparent 7px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.16) 8px)}
 .plan-titre>*{position:relative}
+/* ── La case d'un repas ────────────────────────────────────────────────
+   44 px de cible tactile, obtenus par le padding du <label> : la case elle
+   -meme reste a 18 px, parce qu'une case a 44 px se lit comme un bouton et
+   deseequilibre la ligne du titre. `align-self:center` : le titre est en
+   baseline, et sans cela la case flottait sur la ligne de base du texte. */
+.plan-coche{flex:0 0 auto;align-self:center;display:inline-flex;align-items:center;
+  justify-content:center;min-width:44px;min-height:44px;margin:-9px 0 -9px -13px;
+  cursor:pointer}
+.plan-coche input{width:18px;height:18px;accent-color:#2ee06a;cursor:pointer;margin:0}
+/* ── Ce que les cases disent deja ──────────────────────────────────────
+   Elle remplace la question binaire : elle se lit donc comme un CONSTAT,
+   pas comme une question. Grise tant qu'il manque un repas, verte quand la
+   journee est complete — et jamais rouge : un repas non coche n'est pas une
+   faute, c'est une case non cochee. */
+.plan-resume{font-size:var(--fs-sm);font-weight:800;letter-spacing:1.4px;
+  color:var(--sub);text-align:center;padding:9px 12px;margin-bottom:10px;
+  border:1px solid var(--border);border-radius:var(--r-3);
+  background:rgba(255,255,255,.028)}
+.plan-resume-ok{color:#2ee06a;border-color:rgba(46,224,106,.42);
+  background:rgba(46,224,106,.09);box-shadow:0 0 18px rgba(46,224,106,.14)}
+/* ── « Corriger ma journee » ───────────────────────────────────────────
+   Replie, pas supprime : les deux boutons gardent le dernier mot. Discret
+   parce que c'est le chemin de rattrapage, pas le chemin normal. */
+.plan-corriger{margin-bottom:12px}
+.plan-corriger>summary{list-style:none;cursor:pointer;min-height:44px;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;
+  text-transform:uppercase;color:var(--text-faint);
+  border:1px dashed var(--border);border-radius:var(--r-3);padding:0 14px}
+.plan-corriger>summary::-webkit-details-marker{display:none}
+.plan-corriger>summary::after{content:'▾';font-size:var(--fs-md);line-height:1}
+.plan-corriger[open]>summary::after{content:'▴'}
+.plan-corriger>summary:hover{color:var(--sub);border-color:var(--sub)}
+.plan-corriger-c{margin-top:10px}
 .plan-titre-t{font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.2px;text-transform:uppercase;color:var(--text);
   text-shadow:var(--halo-1),0 0 14px rgba(255,255,255,.5),0 0 26px rgba(255,120,120,.45)}
 /* Total du repas : petit, italique, poussé à droite. Il ne doit jamais
@@ -22648,6 +22682,12 @@ function _waTexteTodo(type,c){
   }
   if(type==='bilan') return 'Salut '+p+', j\'ai bien reçu ton bilan, je le regarde et je reviens vers toi rapidement 💪';
   if(type==='noprog') return 'Salut '+p+', je prépare ton programme, je te l\'envoie très vite 💪';
+  // LE MESSAGE DEMANDE, IL NE CONSTATE PAS. Le coach voit le nombre de jours
+  // sur sa ligne ; le rappeler a l'athlete ferait du brouillon un reproche
+  // chiffre. Et il ne porte NI CALORIE NI POIDS — meme regle que partout
+  // ailleurs dans ce module.
+  if(type==='diete') return 'Salut '+p+', on fait un point sur ton suivi alimentaire '
+    +'quand tu veux : dis-moi si quelque chose bloque de ton côté 💪';
   // Signaux d'entraînement. Ces messages POSENT UNE QUESTION et ne donnent
   // aucun conseil : ni « arrête cet exercice », ni « baisse la charge », ni
   // quoi que ce soit qui ressemble à un avis médical. C'est au coach d'écrire
@@ -24971,7 +25011,13 @@ let _ajCtx=null;
 // portent un groupe. Aucune action de masse n'est donc possible — la règle
 // « un athlète, un geste » se tient par la structure des lignes.
 function _ajBouton(r,idx){
-  if(!r||!r.texte||r.type==='drapeau') return '';
+  // ⚠ « diete » EST EXCLUE AU MEME TITRE QUE « drapeau ». Le critere etait la
+  // seule presence de `r.texte`, qui distinguait les lignes d'entrainement des
+  // lignes administratives : la septieme famille porte un texte SANS etre un
+  // signal d'entrainement, et le bouton ⚙ aurait ouvert l'ajustement de
+  // programme — series, charges, substitutions — depuis une ligne qui parle
+  // d'un journal alimentaire.
+  if(!r||!r.texte||r.type==='drapeau'||r.type==='diete') return '';
   return '<button class="hit44" onclick="event.stopPropagation();ouvrirAjustement('+idx+')"'
     +' title="Ajuster le programme" aria-label="Ajuster le programme"'
     +' style="background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer;'
@@ -25632,6 +25678,31 @@ function renderTodoBlock(clients){
   if(_rites.length) rows.push({type:'rite',icon:'📆',color:'var(--sub)',
     label:'Bilan de 4 semaines à lire',list:_rites});
   if(noProg.length) rows.push({type:'noprog',icon:'📋',color:'var(--sub)',label:'Sans programme',list:noProg});
+  // ══ SEPTIEME FAMILLE : « SUIVI ALIMENTAIRE EN PAUSE » ═══════════════════
+  //
+  // ⚠ DERNIER RANG, ET C'EST SA PLACE. Elle vient APRES les bilans et APRES
+  // les relances parce qu'elle INFORME, elle n'urge pas : un bilan en retard
+  // et un acces qui expire demandent un geste aujourd'hui, un journal
+  // alimentaire interrompu demande de savoir. Grise comme les notes et le rite,
+  // et hors d'urgencyScore comme eux — la ligne se voit, elle ne remonte
+  // personne dans la liste.
+  //
+  // ⚠ LA LIGNE DIT LE FAIT, ET RIEN D'AUTRE. Pas de taux, pas de calories, pas
+  // de qualificatif : « plus de saisie depuis 9 jours ». Ce que ca veut dire —
+  // un depart en vacances, une lassitude, un probleme qu'on n'ose pas dire —
+  // c'est au coach d'en decider, pas a l'application. C'est aussi la regle du
+  // module : aucun chiffre d'energie ni de masse la ou il n'est pas demande.
+  //
+  // UNE LIGNE PAR ATHLETE, comme les signaux d'entrainement : un groupe ne
+  // dirait pas depuis combien de jours, et c'est le seul fait qu'on ait.
+  for(const c of clients){
+    if(isAlertSnoozed('diete',c.id)) continue;
+    let p=null; try{ p=suiviAlimentaireEnPause(c,now); }catch(e){ p=null; }
+    if(!p) continue;
+    rows.push({type:'diete',icon:'🍽️',color:'var(--sub)',
+      label:'Suivi alimentaire en pause',list:[c],
+      texte:'plus de saisie depuis '+p.jours+' jours'});
+  }
   if(!rows.length){ window._todoRows=[]; el.innerHTML=''; return; }
   // Un tableau de bord qui affiche trente alertes n'oriente plus rien. Les
   // lignes sont deja triees par gravite : on coupe la queue et on l'annonce.
@@ -45501,19 +45572,87 @@ function _joursDepuisCle(cle,maintenant){
 //
 // Les clefs sont des dates locales au format YYYY-MM-DD : elles se comparent
 // dans l'ordre chronologique, sans conversion.
-function derniereTraceAlimentaire(u){
+// PURE. Le journal a consulter, et sa nature. Les clefs ne sont pas les memes
+// des deux cotes : le journal alimentaire en flexible, les reponses
+// quotidiennes en stricte.
+function _sourceTraces(u){
   const nut=(u&&u.nutrition)||{};
   const flexible=(typeof typeDiete==='function')?typeDiete(nut)==='flexible':true;
-  const src=(flexible?nut.log:nut.days)||{};
+  return {flexible:flexible, src:(flexible?nut.log:nut.days)||{}};
+}
+// PURE. Ce jour porte-t-il VRAIMENT une trace ? Nommee une fois, lue par les
+// deux fonctions ci-dessous : deux definitions du mot « trace » auraient fini
+// par faire dire a l'une qu'un athlete a decroche pendant que l'autre le
+// comptait assidu.
+function _jourPorteTrace(v,flexible){
+  const j=v||{};
+  return flexible?!!(j.entries&&j.entries.length)
+                 :(j.respected===true||j.respected===false);
+}
+function derniereTraceAlimentaire(u){
+  const {flexible,src}=_sourceTraces(u);
   let max='';
-  for(const k of Object.keys(src)){
-    const v=src[k]||{};
-    const porte=flexible
-      ?!!(v.entries&&v.entries.length)
-      :(v.respected===true||v.respected===false);
-    if(porte&&k>max) max=k;
-  }
+  for(const k of Object.keys(src))
+    if(_jourPorteTrace(src[k],flexible)&&k>max) max=k;
   return max;
+}
+// PURE. Le nombre de jours portant une trace dans un intervalle de CLEFS,
+// bornes comprises. Les clefs sont des dates locales YYYY-MM-DD : elles se
+// comparent dans l'ordre chronologique, sans conversion.
+function nbTracesAlimentaires(u,cleBasse,cleHaute){
+  const {flexible,src}=_sourceTraces(u);
+  let n=0;
+  for(const k of Object.keys(src)){
+    if(cleBasse&&k<cleBasse) continue;
+    if(cleHaute&&k>cleHaute) continue;
+    if(_jourPorteTrace(src[k],flexible)) n++;
+  }
+  return n;
+}
+// ══ « SUIVI ALIMENTAIRE EN PAUSE », COTE COACH ════════════════════════════
+//
+// ⚠ ON SIGNALE UN DECROCHAGE, JAMAIS UN ATHLETE QUI N'A JAMAIS COMMENCE. Ce
+// n'est pas une precaution de forme : sans la seconde condition, la ligne
+// serait sortie pour tout athlete rattache depuis huit jours et jamais entre
+// dans l'ecran nutrition — c'est-a-dire pour la majorite d'un portefeuille
+// neuf. Elle aurait rempli « A traiter » de gens qui n'ont rien lache, et
+// noye les trois lignes qui comptent.
+//
+// L'HABITUDE SE MESURE AVANT L'ARRET, ET NON AVANT AUJOURD'HUI. La fenetre de
+// trente jours se termine sur la DERNIERE TRACE. Comptee depuis aujourd'hui,
+// elle serait vide pour quelqu'un qui a decroche il y a deux mois — et
+// l'athlete le plus decroche de tous serait le seul a ne pas remonter.
+const PAUSE_DIETE_JOURS=7;
+const PAUSE_DIETE_HABITUDE=5;
+const PAUSE_DIETE_FENETRE=30;
+// PURE. La clef de jour situee `n` jours AVANT une autre clef.
+//
+// ⚠ TOUT EN UTC, DEPUIS UN ANCRAGE A MIDI. Repasser par une date locale pour
+// reculer de trente jours fait dependre le resultat du fuseau : a midi UTC,
+// un navigateur regle sur UTC+13 est deja au lendemain, et la fenetre glissait
+// d'un jour pour lui seul. Ancre a midi, decalee en UTC, reformatee en UTC :
+// aucun fuseau, aucun changement d'heure ne peut la faire bouger.
+function _cleReculee(cle,n){
+  const d=new Date(String(cle||'')+'T12:00:00Z');
+  if(!isFinite(d.getTime())) return '';
+  d.setUTCDate(d.getUTCDate()-(Number(n)||0));
+  const p=x=>String(x).padStart(2,'0');
+  return d.getUTCFullYear()+'-'+p(d.getUTCMonth()+1)+'-'+p(d.getUTCDate());
+}
+// PURE. {jours} quand cet athlete a decroche, null sinon.
+function suiviAlimentaireEnPause(c,maintenant){
+  if(!c||c._fromCode||c.role==='coach') return null;
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const cle=derniereTraceAlimentaire(c);
+  if(!cle) return null;                       // jamais rien saisi
+  const j=_joursDepuisCle(cle,t);
+  if(j===null||j<=PAUSE_DIETE_JOURS) return null;
+  // Les trente jours qui se terminent sur la derniere trace, celle-ci
+  // comprise : c'est l'habitude qu'il avait AVANT de s'arreter.
+  const debut=_cleReculee(cle,PAUSE_DIETE_FENETRE-1);
+  if(!debut) return null;
+  if(nbTracesAlimentaires(c,debut,cle)<PAUSE_DIETE_HABITUDE) return null;
+  return {jours:j};
 }
 // PURE. L'entree de relance alimentaire de l'accueil, ou null.
 //
@@ -65320,7 +65459,12 @@ function _renderStrictDiet(){
   // LE SUIVI DU JOUR EST PASSÉ AU PLAN, à la place qu'occupait la liste de
   // courses. Ses deux compteurs le suivent : ils NOTENT la réponse oui/non,
   // et les laisser derrière la liste les aurait rendus orphelins.
-  const suiviDuJour=`    <!-- Suivi du jour -->
+  // ⚠ LES DEUX MORCEAUX SONT SEPARES DEPUIS QUE LES REPAS SE COCHENT. Avec un
+  // plan, la QUESTION se replie sous « Corriger ma journee » — les cases l'ont
+  // deja posee — mais les COMPTEURS, eux, restent visibles : replier la serie
+  // de jours consecutifs derriere un depliant l'aurait rendue invisible pour
+  // tout le monde. Sans plan, les deux se suivent exactement comme avant.
+  const questionDuJour=`    <!-- Suivi du jour -->
     <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid var(--border);border-radius:var(--r-4);box-shadow:var(--e4);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp var(--t-3) var(--c-out)">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
       <div style="position:relative">
@@ -65331,8 +65475,8 @@ function _renderStrictDiet(){
           <button onclick="setNutriRespected('${_sjour}',false)" style="flex:1;padding:16px 0;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'var(--text)':'#e79b9b'};border:2px solid ${respNo?'var(--red)':'rgba(224,32,32,.35)'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">✗ NON</button>
         </div>
       </div>
-    </div>
-    <!-- Scores -->
+    </div>`;
+  const scoresDuJour=`    <!-- Scores -->
     <div style="display:flex;gap:10px;margin-bottom:8px">
       <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:var(--r-4);box-shadow:var(--e4);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp var(--t-3) var(--c-out)">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
@@ -65352,6 +65496,8 @@ function _renderStrictDiet(){
         </div>
       </div>
     </div>`;
+  // SANS PLAN, RIEN NE BOUGE : la question puis les compteurs, a la ligne pres.
+  const suiviDuJour=questionDuJour+scoresDuJour;
   el.innerHTML=`${_transiStrict}
     <!-- Définition diète stricte -->
     <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp var(--t-3) var(--c-out)">
@@ -65387,7 +65533,7 @@ function _renderStrictDiet(){
          sur cet écran. -->
     ${!planActif(currentUser)?suiviDuJour:''}
     <!-- Le plan composé par le coach : repas imposés et sources interchangeables -->
-    ${_htmlPlanAthlete(currentUser,suiviDuJour)}
+    ${_htmlPlanAthlete(currentUser,{question:questionDuJour,scores:scoresDuJour})}
 `;
 }
 
@@ -65396,6 +65542,12 @@ function setNutriRespected(key,val){
   if(!currentUser.nutrition.days) currentUser.nutrition.days={};
   if(!currentUser.nutrition.days[key]) currentUser.nutrition.days[key]={};
   currentUser.nutrition.days[key].respected=val;
+  // ⚠ LE DERNIER MOT REVIENT A L'ATHLETE. En retirant le marqueur, cette
+  // reponse cesse d'etre deduite : cocher ou decocher un repas ensuite ne la
+  // reecrira plus. Sans cette ligne, quelqu'un qui repond NON sur une journee
+  // dont tous les repas sont coches verrait son NON redevenir OUI au premier
+  // re-rendu.
+  delete currentUser.nutrition.days[key].respectedSource;
   saveUser();
   const dt=typeDiete(currentUser.nutrition);
   if(dt==='strict') _renderStrictDiet();
@@ -67795,6 +67947,66 @@ function _htmlAjusterOA(user){
   return `<a class="oa-ajuster" href="${escapeHtml(href)}" target="_blank" rel="noopener"
     title="${escapeHtml(CONTACT_SORTIE)}">Ajuster ${icon('sliders',15)}</a>`;
 }
+// PURE. Les clefs des repas du plan, dans l'ordre ou l'athlete les voit.
+//
+// ⚠ NOMMEE UNE FOIS. Le rendu s'en sert pour poser les cases, la deduction de
+// `respected` pour savoir quand elles sont TOUTES cochees. Deux listes
+// recopiees auraient fini par ne plus compter les memes repas — et « 4 repas
+// sur 5 » aurait contredit la journee declaree tenue juste en dessous.
+function planClesRepas(u){
+  try{
+    const plan=planDe(u);
+    if(!plan) return [];
+    const couv=planCouverture(plan);
+    const moment=planMoment(plan,u);
+    return Object.keys(couv.parRepas)
+      .sort((a,b)=>planOrdreRepas(a,moment)-planOrdreRepas(b,moment));
+  }catch(e){ return []; }
+}
+// ══ LES REPAS SE COCHENT ══════════════════════════════════════════════════
+//
+// UNE CASE COCHEE N'EST JAMAIS IRREVERSIBLE : le meme geste la decoche, et la
+// clef DISPARAIT plutot que de valoir false — un dossier ne porte pas de
+// « non » qu'on n'a pas dit.
+function basculerRepasPlan(cle){
+  const u=currentUser;
+  if(!u||!cle) return false;
+  const j=_strictJourValide(_strictJour);
+  if(!u.nutrition) u.nutrition={};
+  if(!u.nutrition.days) u.nutrition.days={};
+  if(!u.nutrition.days[j]) u.nutrition.days[j]={};
+  const d=u.nutrition.days[j];
+  if(!d.repas||typeof d.repas!=='object') d.repas={};
+  if(d.repas[cle]) delete d.repas[cle]; else d.repas[cle]=true;
+  _deduireRespected(u,j);
+  saveUser();
+  _renderStrictDiet();
+  return true;
+}
+// `respected` SE DEDUIT DES CASES, ET NE S'Y SUBSTITUE PAS.
+//
+// ⚠ LES DEUX BOUTONS GARDENT LE DERNIER MOT, et c'est la seule regle qui
+// compte ici : un athlete sait mieux que les cases ce qu'il a mange. Une
+// reponse donnee a la main — OUI ou NON — n'est donc JAMAIS ecrasee par une
+// case qu'on coche ou decoche ensuite. On distingue les deux par
+// `respectedSource` : « repas » veut dire « ce verdict vient des cases, il peut
+// encore changer » ; son absence veut dire « la personne a repondu ».
+//
+// ⚠ ET RIEN N'EST MIGRE. Un jour deja repondu avant ce lot n'a ni `repas` ni
+// `respectedSource` : il porte donc une reponse a la main, il s'affiche tel
+// quel, et aucune case n'est retro-cochee sous lui.
+function _deduireRespected(u,jour){
+  const d=(((u||{}).nutrition||{}).days||{})[jour];
+  if(!d) return false;
+  // Une reponse donnee a la main : on ne touche a rien.
+  if(d.respected!==undefined&&d.respectedSource!=='repas') return false;
+  const cles=planClesRepas(u);
+  const coches=d.repas||{};
+  const tout=cles.length>0&&cles.every(k=>!!coches[k]);
+  if(tout){ d.respected=true; d.respectedSource='repas'; }
+  else if(d.respectedSource==='repas'){ delete d.respected; delete d.respectedSource; }
+  return true;
+}
 function _htmlPlanAthlete(user,intercale){
   if(!planActif(user)) return '';
   const plan=planDe(user);
@@ -67870,7 +68082,15 @@ function _htmlPlanAthlete(user,intercale){
   // choisit — c'est la forme du tableur, et c'est ce qui rend le plan
   // utilisable sans faire d'aller-retour.
   const moment=planMoment(plan,user);
-  const cles=Object.keys(couv.parRepas).sort((a,b)=>planOrdreRepas(a,moment)-planOrdreRepas(b,moment));
+  // MEME LISTE QUE LA DEDUCTION DE `respected` : voir planClesRepas.
+  const cles=planClesRepas(user);
+  // LE JOUR SUR LEQUEL ON COCHE EST CELUI DES BOUTONS OUI/NON, et non
+  // « aujourd'hui » : le selecteur de jour existe precisement pour rattraper
+  // une journee oubliee la veille, et cocher un repas sur un autre jour que
+  // celui qu'on est en train de corriger serait indefendable.
+  const _jourCoche=_strictJourValide(typeof _strictJour!=='undefined'?_strictJour:null);
+  const _dj=(((user&&user.nutrition)||{}).days||{})[_jourCoche]||{};
+  const _coches=(_dj.repas&&typeof _dj.repas==='object')?_dj.repas:{};
   // Total du repas — même calcul et même libellé que la fiche coach.
   const totalRepas=(r)=>planTotalRepasHtml(planTotalRepas(r,rest,nSrc));
   const blocRepas=cles.map(cle=>{
@@ -67900,11 +68120,31 @@ function _htmlPlanAthlete(user,intercale){
         <div class="plan-q">${q==null?'—':(Math.round(q*100)/100).toString().replace('.',',')}<u> ${escapeHtml(planUnitePluriel(q,u))}</u></div>
       </div>`;
     }).join('');
+    // LA CASE EST A GAUCHE DU TITRE, dans un <label> : toute la zone du titre
+    // devient cliquable, et le clavier l'atteint sans qu'on ait rien a ecrire.
+    const _ok=!!_coches[cle];
+    const _lib=planLibRepas(cle);
     return `<div class="plan-card">
-      <div class="plan-titre"><span class="plan-titre-t">${escapeHtml(planLibRepas(cle))}</span>${totalRepas(r)}</div>
+      <div class="plan-titre">
+        <label class="plan-coche" title="${escapeHtml(_ok?'Décocher '+_lib:'Marquer '+_lib+' comme pris')}">
+          <input type="checkbox"${_ok?' checked':''} onchange="basculerRepasPlan('${escapeHtml(cle)}')"
+            aria-label="${escapeHtml(_lib+' pris')}">
+        </label>
+        <span class="plan-titre-t">${escapeHtml(_lib)}</span>${totalRepas(r)}</div>
       <div class="plan-corps">${lignes}</div>
     </div>`;
   }).join('');
+  // ══ CE QUE LES CASES DISENT DEJA ═══════════════════════════════════════
+  //
+  // ⚠ ELLE REMPLACE LA QUESTION BINAIRE, elle ne s'y ajoute pas. Demander
+  // « as-tu respecté ton plan ? » sous cinq cases dont quatre sont cochées,
+  // c'est demander a quelqu'un de redire ce qu'il vient de dire — et les deux
+  // reponses pouvaient diverger, sans qu'aucune des deux ne soit fausse.
+  const _nCoches=cles.filter(k=>!!_coches[k]).length;
+  const _tout=cles.length>0&&_nCoches===cles.length;
+  const resumeRepas=cles.length
+    ?`<div class="plan-resume${_tout?' plan-resume-ok':''}">${_nCoches} repas sur ${cles.length} ✓</div>`
+    :'';
 
   // Un catalogue posé sans marqueur dans aucun repas resterait invisible.
   const orphelins=['p','c'].filter(m=>{
@@ -67964,6 +68204,22 @@ function _htmlPlanAthlete(user,intercale){
     </div>
   </div>`;
 
+  // ⚠ `intercale` ACCEPTE LES DEUX FORMES. Une chaine se pose exactement ou
+  // elle se posait : c'est ce que font les appels de la suite de tests, et
+  // c'est ce que fait l'ecran sans plan. Un objet {question, scores} separe les
+  // deux morceaux — les compteurs restent visibles, la question se replie.
+  const _int=(intercale&&typeof intercale==='object')?intercale:null;
+  const _scoresBloc=_int?(_int.scores||''):(intercale||'');
+  const _questionBloc=_int?(_int.question||''):'';
+  // LES DEUX BOUTONS RESTENT, ET ILS RESTENT ATTEIGNABLES. Replies, pas
+  // supprimes : ils gardent le dernier mot, et quelqu'un qui a coche ses cinq
+  // repas mais sait qu'il a crague doit pouvoir le dire.
+  const blocCorriger=_questionBloc
+    ?`<details class="plan-corriger">
+      <summary>Corriger ma journée</summary>
+      <div class="plan-corriger-c">${_questionBloc}</div>
+    </details>`
+    :'';
   let lc=null;
   try{ lc=planListeCourses(plan,user); }catch(e){}
   // La liste de courses ne se lit PAS comme le plan : elle se tient à la main
@@ -68079,9 +68335,11 @@ const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style
     </div>
     ${negatif}
     ${blocRepas}
+    ${resumeRepas}
+    ${blocCorriger}
     ${blocOrphelins}
     ${blocFruits}
-    ${intercale||''}
+    ${_scoresBloc}
     ${blocCheat}
     ${_htmlHuileCuissonAthlete(couv)}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-bottom:14px">${escapeHtml(PLAN_NOTE_CUISSON)}</div>
@@ -89295,8 +89553,19 @@ function _htmlVitrineCoach(pub){
   // UNE VITRINE QUI N'A QUE DES PROGRAMMES N'EST PAS VIDE. Sans ce terme, un
   // coach qui met un programme en vente sans avoir rempli sa bio verrait son
   // athlete tomber sur « Ton coach n'a pas encore rempli sa présentation ».
+  //
+  // ⚠ ET UNE VITRINE QUI N'A QUE DES BANNIERES NON PLUS. Signale par Kevin le
+  // 17/09/2026 : « les pubs mises par le coach ne s'affichent plus ». Elles ont
+  // demenage de l'accueil vers le bas de la vitrine au build 1240 — c'etait la
+  // demande — mais le conteneur qui les recoit n'est emis que par le chemin
+  // PLEIN. Un coach qui a depose des bannieres sans remplir sa bio tombait donc
+  // sur la sortie anticipee : ses athletes lisaient « ton coach n'a pas encore
+  // rempli sa presentation » et ses bannieres n'existaient nulle part. Elles
+  // etaient bien publiees, bien rapatriees, bien lues — et jamais dessinees.
+  const _banns=(Array.isArray(p.promoBanners)?p.promoBanners:[])
+    .filter(b=>b&&b.imageUrl).length;
   const _rempli=(p.bio||'').trim()||(p.vision||'').trim()||p.photoVitrine
-    ||p.signature||p.cartePro||((p.diplomes||[]).length)||_progs.length;
+    ||p.signature||p.cartePro||((p.diplomes||[]).length)||_progs.length||_banns;
   if(!_rempli){
     return '<div class="pad" style="padding-bottom:44px">'
       +'<h1 style="margin-bottom:14px">'+escapeHtml(nom)+'</h1>'

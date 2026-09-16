@@ -23733,6 +23733,253 @@ function testExercices(){
             if(nu(f).indexOf(ecrit)>=0) return _echec('écriture détectée : '+ecrit);
         return true;})());
 
+      // ══════════════════════════════════════════════════════════════════
+      // « SUIVI ALIMENTAIRE EN PAUSE » — LA SEPTIÈME FAMILLE DU COACH
+      // ══════════════════════════════════════════════════════════════════
+      //
+      // ⚠ ON SIGNALE UN DÉCROCHAGE, JAMAIS UN ATHLÈTE QUI N'A JAMAIS COMMENCÉ.
+      // Sans la condition d'habitude, la ligne serait sortie pour tout athlète
+      // rattaché depuis huit jours et jamais entré dans l'écran nutrition —
+      // c'est-à-dire pour la majorité d'un portefeuille neuf.
+      const _pJ=864e5;
+      const _pT=Date.parse('2026-06-15T10:30:00');
+      const _pCle=n=>{ const d=new Date(_pT); d.setDate(d.getDate()-n); return localISODate(d); };
+      const _pRepas=[{kcal:600,p:40,c:60,l:20}];
+      const _pF=(jours,x)=>{ const log={}; jours.forEach(n=>{ log[_pCle(n)]={entries:_pRepas}; });
+        return Object.assign({id:'pa',role:'athlete',fname:'Jean',email:'j@t',
+          nutrition:{dietType:'flexible',log:log,days:{}}},x); };
+      const _pS=jours=>{ const days={}; jours.forEach(n=>{ days[_pCle(n)]={respected:true}; });
+        return {id:'pb',role:'athlete',fname:'Luc',email:'l@t',
+          nutrition:{dietType:'strict',days:days,log:{}}}; };
+      const _pJours=u=>{ const r=suiviAlimentaireEnPause(u,_pT); return r?r.jours:null; };
+
+      ok('La pause alimentaire demande un décrochage, pas une absence',(()=>{
+        // Sept jours PILE ne suffisent pas : il faut DÉPASSER.
+        if(_pJours(_pF([7,8,9,10,11,12]))!==null) return _echec('sept jours déclenchent déjà');
+        if(_pJours(_pF([8,9,10,11,12,13]))!==8) return _echec('huit jours ne déclenchent pas');
+        // L'HABITUDE : cinq jours au moins dans les trente qui précèdent l'arrêt.
+        if(_pJours(_pF([9,10,11]))!==null) return _echec('trois traces suffisent');
+        if(_pJours(_pF([9,10,11,12,13]))!==9) return _echec('cinq traces ne suffisent pas');
+        // JAMAIS RIEN SAISI : rien, quel que soit le temps écoulé.
+        if(_pJours(_pF([]))!==null) return _echec('un athlète sans historique est signalé');
+        // Une trace récente éteint tout.
+        if(_pJours(_pF([0,1,2,3,4,5,6,7,8,9,10]))!==null) return _echec('un athlète assidu est signalé');
+        // Et la diète stricte compte ses réponses, pas son journal.
+        return _pJours(_pS([9,10,11,12,13,14]))===9?true:_echec('stricte : '+_pJours(_pS([9,10,11,12,13,14])));})());
+
+      ok('L’habitude se mesure AVANT l’arrêt, pas avant aujourd’hui',(()=>{
+        // ⚠ LA PANNE QUE CECI EMPÊCHE. Comptée depuis aujourd'hui, la fenêtre
+        // de trente jours serait VIDE pour quelqu'un qui a décroché il y a deux
+        // mois — et l'athlète le plus décroché de tous serait le seul à ne
+        // jamais remonter.
+        const vieux=_pF([60,61,62,63,64,70]);
+        if(_pJours(vieux)!==60) return _echec('un décrochage ancien est ignoré : '+_pJours(vieux));
+        // Et la fenêtre reste bornée : des traces BIEN avant les trente jours
+        // qui précèdent l'arrêt ne fabriquent pas une habitude.
+        return _pJours(_pF([9,200,201,202,203,204]))===null
+          ?true:_echec('une habitude vieille de six mois compte encore');})());
+
+      ok('Ni pastille de code, ni coach, et aucun dossier ne fait lever',(()=>{
+        if(_pJours(_pF([9,10,11,12,13],{_fromCode:true}))!==null)
+          return _echec('une pastille de code est signalée');
+        if(_pJours(_pF([9,10,11,12,13],{role:'coach'}))!==null)
+          return _echec('un coach est signalé');
+        for(const d of [null,undefined,{},{nutrition:{}},{nutrition:{log:null}}]){
+          try{ if(suiviAlimentaireEnPause(d,_pT)!==null) return _echec('verdict sur '+JSON.stringify(d)); }
+          catch(e){ return _echec('lève sur '+JSON.stringify(d)+' : '+e.message); }
+        }
+        return true;})());
+
+      ok('La ligne dit le FAIT, et rien d’autre',(()=>{
+        const _sv=currentUser, _sDB=DB.get('users');
+        const z=document.getElementById('ch-todo');
+        if(!z) return _echec('l’emplacement « À traiter » n’existe pas');
+        const garde=z.innerHTML;
+        try{
+          const T=Date.now(), J=864e5;
+          const c=n=>localISODate(new Date(T-n*J));
+          const log={}; [9,10,11,12,14,20].forEach(n=>{ log[c(n)]={entries:_pRepas}; });
+          const ath={id:'zz',fname:'Jean',lname:'D',email:'zz@t',role:'athlete',coachId:'CZ',
+            status:'COACHING_SUIVI',createdAt:T-200*J,sessions:[{date:T-2*J}],phone:'+33612345678',
+            bilans:[{type:'suivi',date:T-3*J,reponseCoach:'ok',reponseVue:true}],
+            nutrition:{dietType:'flexible',log:log,days:{}}};
+          const co={id:'CZ',email:'cz@t.fr',role:'coach',fname:'K',alertStatus:{},studentCodes:[]};
+          currentUser=co; DB.set('users',{'cz@t.fr':co,'zz@t':ath});
+          renderTodoBlock([ath]);
+          const r=(window._todoRows||[]).find(x=>x.type==='diete');
+          if(!r) return _echec('aucune ligne : '+(window._todoRows||[]).map(x=>x.type).join(','));
+          if(r.label!=='Suivi alimentaire en pause') return _echec('libellé : '+r.label);
+          if(r.texte!=='plus de saisie depuis 9 jours') return _echec('texte : '+r.texte);
+          // ⚠ NI TAUX, NI CALORIES, NI JUGEMENT. Ce que ça veut dire — des
+          // vacances, une lassitude, un problème qu'on n'ose pas dire — c'est
+          // au coach d'en décider, pas à l'application.
+          const n=(r.texte+' '+r.label).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          for(const mot of ['%','kcal','calorie','poids','kg','mauvais','abandon','neglige','doit','faut'])
+            if(n.indexOf(mot)>=0) return _echec('mot interdit : '+mot);
+          // ELLE INFORME, ELLE N'URGE PAS : grise, et après les bilans.
+          if(r.color!=='var(--sub)') return _echec('couleur : '+r.color);
+          const types=(window._todoRows||[]).map(x=>x.type);
+          for(const avant of ['bilan','overdue','nostart','expiring','noprog','rite'])
+            if(types.indexOf(avant)>=0&&types.indexOf(avant)>types.indexOf('diete'))
+              return _echec('« '+avant+' » passe APRÈS la pause alimentaire');
+          // ⚠ LE ⚙ D'AJUSTEMENT N'A RIEN À FAIRE LÀ : il ouvre les séries et
+          // les charges depuis une ligne qui parle d'un journal alimentaire.
+          if(_ajBouton(r,0)!=='') return _echec('le bouton d’ajustement est rendu');
+          // ET ELLE SE MET DE CÔTÉ comme les autres.
+          reporterAlerte('diete',ath);
+          renderTodoBlock([ath]);
+          if((window._todoRows||[]).some(x=>x.type==='diete'))
+            return _echec('le report ne la fait pas disparaître');
+          return true;
+        } finally { z.innerHTML=garde; currentUser=_sv; if(_sDB) DB.set('users',_sDB); }})());
+
+      // ══════════════════════════════════════════════════════════════════
+      // LES REPAS SE COCHENT
+      // ══════════════════════════════════════════════════════════════════
+      const _plPlan={squelette:[{id:'m1',repas:'matin',ciqual:4,q:100,u:'g'},
+        {id:'m2',repas:'midi',ciqual:4,q:150,u:'g'},
+        {id:'m3',repas:'soir',ciqual:4,q:120,u:'g'}],sources:{proteines:[],glucides:[]}};
+      const _plU=days=>({id:'pl',email:'pl@t.fr',role:'athlete',fname:'A',coachId:'c1',
+        status:'COACHING_SUIVI',accessExpiry:Date.now()+90*864e5,createdAt:Date.now()-200*864e5,
+        sessions:[],bilans:[],
+        nutrition:{dietType:'strict',strictAcces:true,plan:_plPlan,days:days||{},
+          macros:{on:{kcal:2000,p:150,g:200,l:60},off:{kcal:2000,p:150,g:200,l:60}}}});
+
+      ok('Chaque repas porte une case, et elle se décoche du même geste',(()=>{
+        const _sv=currentUser;
+        const el=document.getElementById('nut-diet-content');
+        if(!el) return _echec('nut-diet-content absent');
+        const garde=el.innerHTML;
+        try{
+          const auj=localISODate(new Date());
+          currentUser=_plU({});
+          if(!(accesDieteStricte(currentUser)||{}).ok) return _echec('accès fermé, le test ne prouve rien');
+          _renderStrictDiet();
+          const cases=()=>[...el.querySelectorAll('.plan-coche input')];
+          if(cases().length!==3) return _echec(cases().length+' case(s) pour 3 repas');
+          if(cases().some(x=>x.checked)) return _echec('une case est cochée au départ');
+          // UNE CASE COCHÉE N'EST JAMAIS IRRÉVERSIBLE, et la clé DISPARAÎT
+          // plutôt que de valoir false : un dossier ne porte pas de « non »
+          // qu'on n'a pas dit.
+          basculerRepasPlan('matin');
+          const d=()=>currentUser.nutrition.days[auj]||{};
+          if(d().repas.matin!==true) return _echec('la case n’est pas enregistrée');
+          basculerRepasPlan('matin');
+          if(Object.prototype.hasOwnProperty.call(d().repas,'matin'))
+            return _echec('décocher laisse une clé : '+JSON.stringify(d().repas));
+          return true;
+        } finally { el.innerHTML=garde; currentUser=_sv; }})());
+
+      ok('« N repas sur M » remplace la question, et respected se DÉDUIT',(()=>{
+        const _sv=currentUser;
+        const el=document.getElementById('nut-diet-content');
+        if(!el) return _echec('nut-diet-content absent');
+        const garde=el.innerHTML;
+        try{
+          const auj=localISODate(new Date());
+          currentUser=_plU({});
+          _renderStrictDiet();
+          const resume=()=>((el.querySelector('.plan-resume')||{}).textContent||'').trim();
+          const d=()=>currentUser.nutrition.days[auj]||{};
+          if(resume()!=='0 repas sur 3 ✓') return _echec('au départ : « '+resume()+' »');
+          basculerRepasPlan('matin'); basculerRepasPlan('midi');
+          if(resume()!=='2 repas sur 3 ✓') return _echec('à deux : « '+resume()+' »');
+          if(d().respected!==undefined) return _echec('respected posé avant la fin : '+d().respected);
+          if(el.querySelector('.plan-resume-ok')) return _echec('le vert paraît avant la fin');
+          // TOUS LES REPAS : le verdict se déduit, et il est MARQUÉ comme déduit.
+          basculerRepasPlan('soir');
+          if(resume()!=='3 repas sur 3 ✓') return _echec('à trois : « '+resume()+' »');
+          if(d().respected!==true) return _echec('respected non déduit');
+          if(d().respectedSource!=='repas') return _echec('la déduction n’est pas marquée');
+          if(!el.querySelector('.plan-resume-ok')) return _echec('le vert ne paraît pas');
+          // ON DÉCOCHE : la déduction se RETIRE, elle ne devient pas « false ».
+          basculerRepasPlan('midi');
+          if(d().respected!==undefined) return _echec('respected survit : '+d().respected);
+          if(d().respectedSource!==undefined) return _echec('le marqueur survit');
+          return true;
+        } finally { el.innerHTML=garde; currentUser=_sv; }})());
+
+      ok('Les deux boutons gardent le DERNIER MOT sur les cases',(()=>{
+        // Un athlète sait mieux que les cases ce qu'il a mangé. Sans cette
+        // règle, quelqu'un qui répond NON sur une journée dont tous les repas
+        // sont cochés verrait son NON redevenir OUI au premier re-rendu.
+        const _sv=currentUser;
+        const el=document.getElementById('nut-diet-content');
+        if(!el) return _echec('nut-diet-content absent');
+        const garde=el.innerHTML;
+        try{
+          const auj=localISODate(new Date());
+          currentUser=_plU({});
+          _renderStrictDiet();
+          basculerRepasPlan('matin'); basculerRepasPlan('midi'); basculerRepasPlan('soir');
+          const d=()=>currentUser.nutrition.days[auj]||{};
+          if(d().respected!==true) return _echec('la déduction n’a pas eu lieu');
+          setNutriRespected(auj,false);
+          if(d().respected!==false) return _echec('le NON n’est pas enregistré');
+          if(d().respectedSource!==undefined) return _echec('le marqueur de déduction survit au NON');
+          // On retouche les cases : le NON tient.
+          basculerRepasPlan('soir'); basculerRepasPlan('soir');
+          if(d().respected!==false) return _echec('les cases ont écrasé le NON : '+d().respected);
+          // Et les deux boutons restent ATTEIGNABLES, repliés — pas supprimés.
+          const det=el.querySelector('.plan-corriger');
+          if(!det) return _echec('« Corriger ma journée » a disparu');
+          if(det.open) return _echec('le volet est ouvert par défaut');
+          if(det.innerHTML.indexOf('setNutriRespected(')<0)
+            return _echec('les boutons ne sont plus dedans');
+          if((det.textContent||'').indexOf('Corriger ma journée')<0)
+            return _echec('le libellé du volet a changé');
+          // LES COMPTEURS, EUX, RESTENT VISIBLES : les replier aurait rendu la
+          // série de jours consécutifs invisible pour tout le monde.
+          if((det.textContent||'').indexOf('Jours consécutifs')>=0)
+            return _echec('les compteurs sont repliés avec la question');
+          if((el.textContent||'').indexOf('Jours consécutifs')<0)
+            return _echec('les compteurs ont disparu');
+          return true;
+        } finally { el.innerHTML=garde; currentUser=_sv; }})());
+
+      ok('Rétro-compatible : un jour déjà répondu s’affiche tel quel',(()=>{
+        // Aucune migration n'est écrite : un jour répondu avant ce lot n'a ni
+        // `repas` ni `respectedSource`, et aucune case n'est rétro-cochée.
+        const _sv=currentUser;
+        const el=document.getElementById('nut-diet-content');
+        if(!el) return _echec('nut-diet-content absent');
+        const garde=el.innerHTML;
+        try{
+          const auj=localISODate(new Date());
+          currentUser=_plU({[auj]:{respected:true}});
+          const avant=JSON.stringify(currentUser.nutrition.days);
+          _renderStrictDiet();
+          const cochees=[...el.querySelectorAll('.plan-coche input')].filter(x=>x.checked).length;
+          if(cochees) return _echec(cochees+' case(s) rétro-cochée(s)');
+          if(JSON.stringify(currentUser.nutrition.days)!==avant)
+            return _echec('le rendu a migré le dossier : '+JSON.stringify(currentUser.nutrition.days));
+          // Et le rendu SANS plan ne change pas d'un caractère : la question y
+          // reste posée, dépliée, puisqu'il n'y a aucune case pour y répondre.
+          const nu=String(_renderStrictDiet).replace(/\/\/[^\n]*/g,'');
+          return nu.indexOf('questionDuJour+scoresDuJour')>=0
+            ?true:_echec('l’écran sans plan ne rassemble plus les deux blocs');
+        } finally { el.innerHTML=garde; currentUser=_sv; }})());
+
+      ok('Une vitrine qui n’a QUE des bannières n’est pas déclarée vide',(()=>{
+        // ⚠ SIGNALÉ PAR KEVIN LE 17/09/2026 : « les pubs mises par le coach ne
+        // s'affichent plus ». Elles ont déménagé vers le bas de la vitrine au
+        // build 1240 — c'était la demande — mais le conteneur qui les reçoit
+        // n'est émis que par le chemin PLEIN. Un coach qui a déposé des
+        // bannières sans remplir sa bio tombait sur la sortie anticipée : ses
+        // athlètes lisaient « ton coach n'a pas encore rempli sa présentation »
+        // et ses bannières n'existaient nulle part. Elles étaient publiées,
+        // rapatriées, lues — et jamais dessinées.
+        const B=[{imageUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACw=',linkUrl:'https://x.fr'}];
+        const h=_htmlVitrineCoach({fname:'K',promoBanners:B});
+        if(/pas encore rempli sa présentation|présentation est vide/.test(h))
+          return _echec('la vitrine se déclare vide alors qu’elle porte des bannières');
+        if(h.indexOf('vit-promo-banners')<0) return _echec('le conteneur n’est pas émis');
+        // Une bannière SANS image ne compte pas : elle ne dessine rien.
+        const vide=_htmlVitrineCoach({fname:'K',promoBanners:[{linkUrl:'https://x.fr'}]});
+        if(vide.indexOf('vit-promo-banners')>=0)
+          return _echec('une bannière sans image rend la vitrine « pleine »');
+        return true;})());
+
       ok('Le rendu des pastilles n’écrit RIEN dans le dossier',(()=>{
         // Le verdict flexible se CALCULE à la lecture. Le stocker figerait un
         // jugement que l'ajout d'un aliment doit pouvoir corriger — et
@@ -36139,8 +36386,20 @@ function testExercices(){
             l.length===1&&l[0].forme==='bisglycinate',JSON.stringify(l[0]));
           ok('Le moment de prise a bien été lu',
             JSON.stringify((l[0]||{}).timings)==='["soir"]');
-          remplir('Magnésium','',0);
+          // ⚠ CE TEST ÉCHOUAIT DEPUIS QUE L'ÉDITION SE FAIT PAR IDENTIFIANT.
+          // Le champ s'appelle toujours « supp-edit-idx », mais il ne porte
+          // plus un INDICE depuis longtemps : loadSuppForm y écrit `s.id`, et
+          // saveSuppEntry le résout par _suppIndexParId. En y posant « 0 », le
+          // test demandait la fiche d'identifiant zéro — qui n'existe pas :
+          // saveSuppEntry AJOUTAIT donc un second complément au lieu de
+          // modifier le premier, et l'assertion relisait l'entrée d'origine,
+          // forme intacte. Le produit était juste, le test parlait d'une
+          // version antérieure. On lui passe l'identifiant, comme l'écran.
+          remplir('Magnésium','',l[0].id);
           saveSuppEntry();
+          ok('Un seul complément après modification, pas deux',
+            currentUser.nutrition.supplements.length===1,
+            JSON.stringify(currentUser.nutrition.supplements));
           ok('Revenir à « Non précisée » EFFACE la forme',
             !('forme' in currentUser.nutrition.supplements[0]),
             JSON.stringify(currentUser.nutrition.supplements[0]));
@@ -43631,9 +43890,39 @@ function testExercices(){
           let h='';
           try{ currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]); h=_htmlPlanAthlete(u); }
           finally{ currentUser=_s; _ciqualDB=_sDB; }
-          if(/<button/i.test(h)) return _echec('un bouton est apparu');
-          if(/<input/i.test(h)) return _echec('un champ de saisie est apparu');
-          return /cpl[A-Z]|savePlanCoach/.test(h)?_echec('un geste de coach a fuité'):true;})());
+          // ⚠ CE QUE CETTE ASSERTION PROTEGE, ET CE QU'ELLE INTERDISAIT PAR
+          // RACCOURCI. Le contrat est « l'athlète ne MODIFIE PAS SON PLAN » :
+          // le plan est composé par le coach, et aucun geste de composition ne
+          // doit fuiter sur cet écran. « Aucun <input>, aucun <button> » en
+          // était un proxy commode — et il tenait, tant que l'écran ne portait
+          // que du texte. Il était déjà approximatif : la liste de courses
+          // porte quatre <select> depuis longtemps, et personne n'a jamais
+          // pensé qu'ils modifiaient le plan.
+          //
+          // Depuis le 17/09/2026 chaque repas porte une CASE : elle écrit dans
+          // nutrition.days[jour].repas, c'est-à-dire dans le journal de
+          // l'athlète — ce qu'il a mangé — et jamais dans le plan. L'assertion
+          // vise donc maintenant la vraie cible : le plan.
+          const d=document.createElement('div'); d.innerHTML=h;
+          // 1. AUCUN GESTE DE COACH, quelle que soit sa forme.
+          if(/cpl[A-Z]|savePlanCoach|planSupprimer|_cplPlan/.test(h))
+            return _echec('un geste de coach a fuité');
+          // 2. AUCUN BOUTON. Les cases sont des <input>, pas des boutons : la
+          //    règle d'origine tient entièrement de ce côté-là.
+          if(d.querySelector('button')) return _echec('un bouton est apparu');
+          // 3. LES SEULS CHAMPS SONT LES CASES DE REPAS, et elles n'appellent
+          //    qu'une chose.
+          for(const i of d.querySelectorAll('input')){
+            if(i.type!=='checkbox') return _echec('un champ « '+i.type+' » est apparu');
+            const on=i.getAttribute('onchange')||'';
+            if(on.indexOf('basculerRepasPlan(')<0)
+              return _echec('une case appelle autre chose : '+on.slice(0,60));
+          }
+          // 4. ET CE QU'ELLE ECRIT NE TOUCHE PAS AU PLAN.
+          const nu=String(basculerRepasPlan).replace(/\/\/[^\n]*/g,'');
+          for(const interdit of ['nutrition.plan','.plan=','squelette','planSupprimer'])
+            if(nu.indexOf(interdit)>=0) return _echec('la case touche au plan : '+interdit);
+          return true;})());
         ok('Le nom d\'un aliment est échappé avant d\'atteindre la page',(()=>{
           const _sDB=_ciqualDB, _s=currentUser;
           let h='';
