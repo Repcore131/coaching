@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1230';
+window.RC_BUILD='1231';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -30152,6 +30152,12 @@ function suggestProtocols(seance,profil,user){
   return res;
 }
 
+// ⚠ defEx N'EST PLUS APPLIQUE NULLE PART depuis le 16/09/2026. Cette liste
+// etait le programme de repli — « SEANCE 1 : DOS & ABDOS » — pose d'office a
+// qui n'avait pas encore de programme. Elle survit comme CONTRE-EXEMPLE
+// NOMME : deux assertions verifient qu'aucun de ces six exercices ne reparait
+// dans une grille neuve, et elles ont besoin de la liste pour le faire.
+// Ne pas la reintroduire dans un chemin de creation.
 const defEx=[
   {name:'Pull Over sur Banc Incliné',series:3,reps:'20',repos:'90 sec',description:'Amplitude maximale, expiration à la montée. Bras tendus, descendre jusqu\'à l\'étirement complet des dorsaux.',note:'',image:null},
   {name:'Tirage Poitrine Largeur Épaule',series:4,reps:'5+',repos:'2 min',description:'Prise légèrement plus large que les épaules. Coudes vers le bas, omoplates en rétraction en fin de mouvement.',note:'',image:null},
@@ -30168,6 +30174,43 @@ const defEx=[
 // guide, et non « 02 min ». parseRepos lit les deux, mais deux ecritures pour
 // une meme duree finissent toujours par se contredire quelque part.
 const REPOS_DEFAUT='2 min';
+// ══ UNE SEANCE NEUVE NAIT VIERGE ═════════════════════════════════════════
+//
+// ⚠ RIEN N'EST PRE-REMPLI DE CONTENU, ET C'EST LE LOT. L'application posait
+// d'office un programme que personne n'avait choisi : la Fondation selon le
+// genre, ou a defaut la liste generique defEx — « SEANCE 1 : DOS & ABDOS ».
+// Le coach comme l'athlete commencaient donc par DEFAIRE le travail de
+// quelqu'un d'autre avant de faire le leur. Demande de Kevin, 16/09/2026 :
+// « il faut que toutes les seances soient vierges, que ce soit pour l'athlete
+// ou pour le coach. Comme si je voulais installer une nouvelle seance. »
+//
+// CE QUI RESTE PRE-REMPLI EST DE LA FORME, PAS DU CONTENU : cinq
+// emplacements, trois series, deux minutes de repos. Aucun nom d'exercice,
+// aucune consigne. Ce sont des reglages qu'on ajuste, pas un programme qu'on
+// desapprouve — et chacun se change d'un clic.
+const SEANCE_EXOS_DEFAUT=5;
+// PURE. Un emplacement d'exercice, exactement la forme que pousse
+// addExercise : une seule definition, sinon l'editeur et la creation
+// divergeraient au premier champ ajoute.
+function _exoVierge(){
+  return {name:'',series:3,reps:'10',repos:REPOS_DEFAUT,description:'',image:null,
+    videoUrl:'',ss:false,methodeSeries:'',rir:''};
+}
+// PURE. Sept creneaux eteints et vides — la forme que tous les rendus
+// attendent. Un tableau vide ne suffit pas : ils lisent sept jours.
+function _seancesViergesSemaine(){
+  return DAYS.map(day=>({day,name:'',photo:null,photo2:null,exercises:[],
+    active:false,notes:'',warmup:''}));
+}
+// ⚠ ON NE GARNIT QUE CE QUI EST VIDE. Rouvrir un jour deja travaille lui
+// ajouterait cinq emplacements par-dessus le travail existant — et un
+// creneau qu'on eteint puis rallume par erreur ne doit rien coûter.
+function _garnirSeanceVierge(s){
+  if(!s||typeof s!=='object') return s;
+  if(Array.isArray(s.exercises)&&s.exercises.length) return s;
+  s.exercises=Array.from({length:SEANCE_EXOS_DEFAUT},_exoVierge);
+  return s;
+}
 let progEx=[];
 let _progExDirty=false;
 // ======= COACH PROGRAMME TEMPLATES =======
@@ -31006,6 +31049,7 @@ function cptToggleDay(i){
   const sessions=_cptSeances(p,_editProgTemplateGender);
   if(!sessions) return;
   sessions[i].active=!sessions[i].active;
+  if(sessions[i].active) _garnirSeanceVierge(sessions[i]);
   loadProgTemplateSlots(_editProgTemplateGender);
 }
 function cptRenameSession(i,val){
@@ -31358,15 +31402,13 @@ function _seancesCoachRendre(){
   const _gBrut=_coachEditClient._evol_gender||_coachEditClient.gender;
   const g=isFemale(_gBrut)?'F':(_gBrut?'H':null);
   // Init sessions_config si absent
+  // ⚠ SEPT CRENEAUX VIDES, QUEL QUE SOIT LE GENRE. La grille partait de la
+  // Fondation quand le genre etait connu : le coach ouvrait la fiche d'un
+  // nouvel athlete et trouvait trois seances de six exercices qu'il n'avait
+  // pas ecrites. Une grille vide dit la verite — il n'y a pas encore de
+  // programme — et c'est la meme regle que pour l'athlete.
   if(!_coachEditClient.sessions_config){
-    const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
-    _coachEditClient.sessions_config=base
-      ?base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}))
-      // Genre réellement inconnu : sept jours VIDES et INACTIFS. defEx était un
-      // programme arbitraire — « DOS & ABDOS », cinq jours actifs — que
-      // personne n'avait choisi et que le coach devait d'abord défaire. Une
-      // grille vide dit la vérité : il n'y a pas encore de programme.
-      :DAYS.map(day=>({day,name:'',photo:null,photo2:null,exercises:[],active:false,notes:'',warmup:''}));
+    _coachEditClient.sessions_config=_seancesViergesSemaine();
   }
   // MIGRATION VERS FONDATION — seulement sur une grille qui ne porte RIEN.
   //
@@ -31387,11 +31429,11 @@ function _seancesCoachRendre(){
   //
   // Les Fondations elles-mêmes portent des séances actives avec exercices :
   // une config déjà migrée ne peut donc pas l’être une seconde fois.
-  const _porteQqch=s2=>s2&&s2.active&&(((s2.exercises||[]).length>0)||!!String(s2.name||'').trim());
-  if((g==='H'||g==='F')&&sc&&!sc.some(_porteQqch)){
-    const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
-    if(base) _coachEditClient.sessions_config=base.map(s2=>({...s2,exercises:s2.exercises.map(e=>({...e}))}));
-  }
+  // ⚠ LA MIGRATION VERS LA FONDATION EST SUPPRIMEE. Le commentaire ci-dessus
+  // raconte comment elle a deja coute le travail d'un coach une premiere fois,
+  // et comment sa garde a ete resserree. Le lot du 16/09/2026 va plus loin :
+  // il n'y a plus de pose automatique du tout, donc plus de garde a tenir
+  // juste. Une grille vide reste vide jusqu'a ce que quelqu'un la remplisse.
   const title=document.getElementById('csm-title');
   if(title) title.textContent=(_coachEditClient.fname||'Athlète')+' : Séances';
   go('s-coach-sessions');
@@ -31595,7 +31637,9 @@ function coachToggleDeload(i,val){
 }
 function coachToggleDay(i){
   if(!_coachEditClient?.sessions_config) return;
-  _coachEditClient.sessions_config[i].active=!_coachEditClient.sessions_config[i].active;
+  const s=_coachEditClient.sessions_config[i];
+  s.active=!s.active;
+  if(s.active) _garnirSeanceVierge(s);
   loadCoachSessionSlots();
 }
 function coachRenameSession(i,val){
@@ -36549,7 +36593,12 @@ function getProgram(){
   const users=DB.get('users')||{};
   const u=users[currentUser.email];
   if(u?.program) return{name:u.programName||'Mon programme',exercises:u.program,notes:u.programNotes};
-  return{name:'SÉANCE 1 : DOS & ABDOS',exercises:defEx,notes:'',_isDefault:true};
+  // ⚠ LE REPLI NE FABRIQUE PLUS UN PROGRAMME. Il rendait « SÉANCE 1 : DOS &
+  // ABDOS » et six exercices tires de defEx : un athlete sans programme en
+  // voyait un, et pouvait le derouler en croyant que c'etait le sien.
+  // _isDefault reste, c'est lui que les appelants lisent pour savoir qu'il n'y
+  // a rien.
+  return{name:'',exercises:[],notes:'',_isDefault:true};
 }
 // Les trois anneaux sur l'accueil. Le DESSIN est celui de la diète flexible,
 // à la fonction près ; c'est ce qu'ils comptent qui change selon la diète.
@@ -37123,7 +37172,12 @@ function loadSessionManager(){
 
 function toggleDayActive(i){
   if(!currentUser.sessions_config) initSessionsConfig();
-  currentUser.sessions_config[i].active=!currentUser.sessions_config[i].active;
+  const s=currentUser.sessions_config[i];
+  s.active=!s.active;
+  // ALLUMER UN JOUR, C'EST CREER LA SEANCE : elle arrive avec cinq
+  // emplacements vides plutot qu'avec rien du tout. On n'en garnit QUE les
+  // creneaux vides — voir _garnirSeanceVierge.
+  if(s.active) _garnirSeanceVierge(s);
   _personnaliserSeance(i);
   saveUser();loadSessionManager();
 }
@@ -37684,17 +37738,14 @@ function initSessionsConfig(){
   // premier bilan : lu seul, il valait undefined pour une athlète qui n'en a
   // pas encore rempli, et elle recevait les exemples génériques plutôt que la
   // Fondation Femme. isFemale absorbe les conventions historiques du champ.
-  const _gBrut=currentUser._evol_gender||currentUser.gender;
-  const g=isFemale(_gBrut)?'F':(_gBrut?'H':null);
-  const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
-  let cfg;
-  if(base){
-    cfg=base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}));
-  } else {
-    cfg=DAYS.map((day,i)=>({
-      day,name:'',photo:null,photo2:null,exercises:i<5?defEx.map(e=>({...e})):[],active:i<5,notes:'',warmup:''
-    }));
-  }
+  // ⚠ PLUS DE FONDATION POSEE D'OFFICE, ET PLUS DE defEx NON PLUS. Le genre
+  // ne decide plus du contenu : il ne decidait de toute facon que d'un
+  // programme que l'athlete n'avait pas choisi. Sept creneaux eteints disent
+  // la verite — il n'y a pas encore de programme — et c'est a partir de la
+  // qu'on construit le sien.
+  // La Fondation n'est pas perdue : elle reste un programme a part entiere,
+  // et c'est la boutique qui la proposera.
+  const cfg=_seancesViergesSemaine();
   cfg.forEach(s=>{s._essai=true;});
   currentUser.sessions_config=cfg;
   return cfg;

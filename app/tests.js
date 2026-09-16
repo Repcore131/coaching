@@ -10885,11 +10885,15 @@ function testExercices(){
             if(apres[0].exercises[0].name!=='SOULEVÉ DE TERRE')
               return _echec('le programme publié a été remplacé : '+apres[0].exercises[0].name);
             if(apres.length!==2) return _echec('la grille a changé de taille : '+apres.length);
-            // TÉMOIN : une grille qui ne porte VRAIMENT rien migre toujours.
+            // ⚠ ET UNE GRILLE VRAIMENT VIDE RESTE VIDE. C'est l'inversion du
+            // 16/09/2026 : elle « recevait la Fondation », elle ne reçoit plus
+            // rien. Le défaut que cette assertion garde — un programme
+            // remplacé à la simple ouverture — ne peut plus se produire, parce
+            // qu'il n'y a plus rien à poser.
             magasin.users['a@t'].sessions_config=[{day:'Lundi',name:'',active:false,exercises:[]}];
             ouvrirSeancesSansBrouillon();
-            if(!(_coachEditClient.sessions_config||[]).some(x=>(x.exercises||[]).length))
-              return _echec('une grille vide ne reçoit plus la Fondation');
+            if((_coachEditClient.sessions_config||[]).some(x=>(x.exercises||[]).length))
+              return _echec('une grille vide reçoit encore un programme d’office');
             // Et un jour actif SEULEMENT nommé est protégé lui aussi.
             magasin.users['a@t'].sessions_config=[{day:'Lundi',name:'HAUT DU CORPS',active:true,exercises:[]},
               {day:'Mardi',name:'',active:false,exercises:[]}];
@@ -31395,6 +31399,138 @@ function testExercices(){
         return _echec('l’aperçu de relecture ne passe pas par la même source');
       return true;})());
 
+    // ══ 16/09/2026 — TOUT NAIT VIERGE ═══════════════════════════════════
+    //
+    // « Il faut que toutes les séances soient vierges, que ce soit pour
+    // l'athlète ou pour le coach. Comme si je voulais installer une nouvelle
+    // séance. Donc tu mets cinq exos à chaque fois [...] Tu laisses juste
+    // rempli deux minutes de repos [...] tu peux pré-remplir en mettant trois
+    // séries. » — Kevin, 16/09/2026.
+    //
+    // ⚠ LA DISTINCTION QUI PORTE TOUT LE LOT : on pré-remplit de la FORME, pas
+    // du CONTENU. Cinq emplacements, trois séries, deux minutes — des réglages
+    // qu'on ajuste. Aucun nom d'exercice, aucune consigne — un programme, ça,
+    // se désapprouve.
+
+    ok('Un emplacement d\'exercice naît vide, à trois séries et deux minutes',(()=>{
+      const e=_exoVierge();
+      if(e.name!=='') return _echec('l’emplacement porte un nom : « '+e.name+' »');
+      if(e.series!==3) return _echec('séries : '+e.series);
+      if(e.repos!==REPOS_DEFAUT) return _echec('repos : '+e.repos);
+      if(REPOS_DEFAUT!=='2 min') return _echec('le repos par défaut a changé : '+REPOS_DEFAUT);
+      // Rien d'autre n'est décidé à sa place.
+      for(const k of ['description','videoUrl','methodeSeries','rir'])
+        if(e[k]!=='') return _echec(k+' est pré-rempli : « '+e[k]+' »');
+      // ⚠ EXACTEMENT LA FORME QUE POUSSE addExercise. Deux définitions
+      // auraient divergé au premier champ ajouté à l'une des deux, et
+      // l'éditeur aurait lu un champ absent sur les exercices créés par
+      // l'autre chemin.
+      const f=String(addExercise);
+      for(const k of Object.keys(e))
+        if(f.indexOf(k+':')<0) return _echec('addExercise ne pose pas '+k);
+      // Et chaque appel rend un objet NEUF : un littéral partagé ferait que
+      // modifier la 3e série d'un exercice les modifierait tous les cinq.
+      const a=_exoVierge(), b=_exoVierge();
+      if(a===b) return _echec('le même objet est rendu deux fois');
+      a.series=4;
+      return b.series===3?true:_echec('les emplacements partagent leur état');})());
+
+    ok('Allumer un jour crée cinq emplacements, et jamais plus',(()=>{
+      const s0={day:'Lundi',name:'',exercises:[],active:false};
+      _garnirSeanceVierge(s0);
+      if(s0.exercises.length!==SEANCE_EXOS_DEFAUT)
+        return _echec(s0.exercises.length+' emplacements au lieu de '+SEANCE_EXOS_DEFAUT);
+      if(SEANCE_EXOS_DEFAUT!==5) return _echec('le défaut n’est plus cinq : '+SEANCE_EXOS_DEFAUT);
+      if(s0.exercises.some(e=>e.name!==''||e.series!==3||e.repos!==REPOS_DEFAUT))
+        return _echec('un emplacement n’est pas vierge');
+      // ⚠ ON NE GARNIT QUE CE QUI EST VIDE. Éteindre puis rallumer un jour par
+      // erreur ajouterait cinq emplacements par-dessus le travail existant —
+      // et ce serait la perte silencieuse que ce fichier documente partout.
+      _garnirSeanceVierge(s0);
+      if(s0.exercises.length!==5) return _echec('rallumer a ajouté : '+s0.exercises.length);
+      const travail={day:'Mardi',exercises:[{name:'SQUAT',series:4,reps:'8'}],active:false};
+      _garnirSeanceVierge(travail);
+      if(travail.exercises.length!==1||travail.exercises[0].name!=='SQUAT')
+        return _echec('le travail existant a été garni par-dessus');
+      // Et les cinq emplacements sont indépendants.
+      const s1={exercises:[]}; _garnirSeanceVierge(s1);
+      s1.exercises[0].series=5;
+      if(s1.exercises[1].series!==3) return _echec('les cinq emplacements sont le même objet');
+      // Les entrées absurdes ne lèvent pas.
+      for(const v of [null,undefined,'x',42]) _garnirSeanceVierge(v);
+      return true;})());
+
+    // LES TROIS INTERRUPTEURS DE JOUR passent par la MÊME fonction. Trois
+    // recopies auraient divergé, et c'est le genre de divergence qu'on ne voit
+    // qu'en production, sur un seul des trois écrans.
+    ok('Les trois écrans qui allument un jour le garnissent de la même façon',(()=>{
+      const src=_prodSrc();
+      // ⚠ ON DECOUPE A L'INDEX, ON NE CONSTRUIT PAS DE RegExp. Le motif
+      // traverse deux littéraux imbriqués, et chaque couche mange une moitié
+      // des contre-obliques : la recherche échouait sur une fonction
+      // parfaitement présente.
+      const corpsDe=(nom,n)=>{ const i=src.indexOf('function '+nom+'(');
+        return i<0?null:src.slice(i,i+n); };
+      for(const f of ['toggleDayActive','coachToggleDay','cptToggleDay']){
+        const c=corpsDe(f,700);
+        if(!c) return _echec(f+' est introuvable');
+        if(c.indexOf('_garnirSeanceVierge')<0)
+          return _echec(f+' n’appelle pas _garnirSeanceVierge');
+      }
+      return true;})());
+
+    // ⚠ PLUS AUCUN PROGRAMME POSE D'OFFICE, ET ON LE CONSTATE SUR LA SOURCE :
+    // les trois chemins qui le faisaient sont nommés, et aucun ne doit plus
+    // citer FONDATION ni defEx.
+    ok('Aucun chemin de création ne pose plus de programme d\'office',(()=>{
+      const src=_prodSrc();
+      // Même précaution, et on retire les commentaires : sinon la sonde
+      // trouve « FONDATION » dans la phrase qui explique qu'on n'en pose
+      // plus. Ce fichier a déjà payé ce piège sept fois.
+      const corps=nom=>{ const i=src.indexOf('function '+nom+'(');
+        return i<0?null:src.slice(i,i+4000).replace(/\/\/[^\r\n]*/g,' '); };
+      for(const f of ['initSessionsConfig','getProgram']){
+        const c=corps(f);
+        if(!c) return _echec(f+' est introuvable');
+        if(/FONDATION_[HF]/.test(c)) return _echec(f+' pose encore une Fondation');
+        if(/\bdefEx\b/.test(c)) return _echec(f+' pose encore defEx');
+      }
+      // getProgram rendait un programme entier à qui n'en avait aucun : il
+      // pouvait se dérouler comme si c'était le sien.
+      const _u=currentUser, _db=DB.get('users');
+      try{
+        currentUser={email:'vide@t.fr',id:'v1',role:'athlete'};
+        DB.set('users',{'vide@t.fr':{email:'vide@t.fr',id:'v1',role:'athlete'}});
+        const g=getProgram();
+        if((g.exercises||[]).length) return _echec('getProgram rend '+g.exercises.length+' exercices');
+        if(g.name) return _echec('getProgram nomme un programme : « '+g.name+' »');
+        // Le drapeau reste : c'est lui que les appelants lisent pour savoir
+        // qu'il n'y a rien.
+        if(g._isDefault!==true) return _echec('_isDefault a disparu : les appelants ne sauront plus');
+      } finally { currentUser=_u; if(_db) DB.set('users',_db); }
+      return true;})());
+
+    // LA FONDATION N'EST PAS SUPPRIMEE, elle change de statut : elle cesse
+    // d'être un défaut imposé pour devenir un programme qu'on choisit. Les
+    // deux jeux doivent donc rester intacts et complets — la boutique les
+    // vendra, et un programme amputé se vendrait tout aussi bien.
+    ok('Les deux Fondations restent entières, prêtes à être proposées',(()=>{
+      for(const [nom,F] of [['Homme',FONDATION_H],['Femme',FONDATION_F]]){
+        if(!Array.isArray(F)||!F.length) return _echec('Fondation '+nom+' vide');
+        const actives=F.filter(s2=>s2.active);
+        if(actives.length!==3) return _echec('Fondation '+nom+' : '+actives.length+' séances actives');
+        for(const s2 of actives){
+          if(!String(s2.name||'').trim()) return _echec('Fondation '+nom+' : une séance sans nom');
+          if(!(s2.exercises||[]).length) return _echec('Fondation '+nom+' : « '+s2.name+' » est vide');
+          for(const e of s2.exercises){
+            if(!e.name) return _echec('Fondation '+nom+' : un exercice sans nom');
+            if(!e.series||!e.reps||!e.repos)
+              return _echec('Fondation '+nom+' : « '+e.name+' » est incomplet');
+          }
+        }
+      }
+      return true;})());
+
     // ══ 16/09/2026 — R07 : LA COLONNE D'INTENSITE PARLE AU DOIGT ═════════
     //
     // Deux éléments portaient leur sens dans un attribut title= : la mention
@@ -36126,51 +36262,59 @@ function testExercices(){
         exercises:[],active:false,notes:'',warmup:''}));
       try{
         window.go=()=>{}; window.loadCoachSessionSlots=()=>{}; window.toast=()=>{};
-        ok('Athlète créée par le coach, gender F et aucun bilan : Fondation Femme',(()=>{
-          // _evol_gender n'existe qu'à partir du PREMIER BILAN. Lu seul, il valait
-          // undefined pour une athlète que le coach vient de créer : aucune
-          // Fondation ne correspondait, et le coach héritait de defEx — une liste
-          // « DOS & ABDOS » que personne n'avait choisie, pour une femme.
-          const r=ouvrir({gender:'F'});
-          if(r.actives!==3) return _echec(r.actives+' séances actives au lieu de 3');
-          if(!/JAMBES & CUISSES/.test(r.noms[0]||''))
-            return _echec('première séance : '+r.noms[0]);
-          if(r.fondation!==7) return _echec(r.fondation+' jours marqués Fondation sur 7');
-          // ET JAMAIS defEx : c'est le défaut que le lot nomme.
-          const intrus=defEx.map(e=>e.name).filter(n=>r.exos.indexOf(n)>=0);
-          if(intrus.length) return _echec('exercices de defEx rendus : '+intrus.join(', '));
-          // Les conventions historiques du champ sont absorbées par isFemale.
-          for(const g of ['f','Femme','femme','F']){
-            const x=ouvrir({gender:g});
-            if(!/JAMBES & CUISSES/.test(x.noms[0]||''))
-              return _echec('gender='+JSON.stringify(g)+' → '+x.noms[0]);
-          }
-          // Et le bilan l'emporte sur la fiche : _evol_gender d'abord.
-          const bilan=ouvrir({gender:'H',_evol_gender:'F'});
-          if(!/JAMBES & CUISSES/.test(bilan.noms[0]||''))
-            return _echec('_evol_gender ne prime pas : '+bilan.noms[0]);
-          // TÉMOIN : un homme reçoit bien l'autre Fondation.
-          const h=ouvrir({gender:'H'});
-          return /PECS/.test(h.noms[0]||'')
-            ?true:_echec('Fondation Homme : '+h.noms[0]);})());
-        ok('Genre inconnu : sept jours VIDES et inactifs, jamais defEx',(()=>{
-          // defEx posait cinq jours actifs remplis d'un programme arbitraire que
-          // le coach devait d'abord défaire. Une grille vide dit la vérité : il
-          // n'y a pas encore de programme.
-          for(const cas of [{},{gender:''},{gender:null}]){
+        // ⚠ LE CONTRAT S'EST INVERSE LE 16/09/2026, et c'est TOUT le lot.
+        // L'écran posait d'office la Fondation selon le genre — trois séances
+        // de six exercices que le coach n'avait pas écrites — et, faute de
+        // genre, la liste générique defEx. Le coach commençait donc par DÉFAIRE
+        // le travail de quelqu'un d'autre. Demande de Kevin : « il faut que
+        // toutes les séances soient vierges, que ce soit pour l'athlète ou
+        // pour le coach ». La Fondation n'est pas perdue : elle devient un
+        // programme de la boutique.
+        //
+        // Ces deux assertions mesuraient l'ancien contrat. Elles mesurent le
+        // nouveau, et gardent le MÊME rôle : dire ce que le coach trouve en
+        // ouvrant la fiche d'un athlète qui n'a encore rien.
+        ok('Le coach ouvre une fiche neuve sur SEPT JOURS VIDES, quel que soit le genre',(()=>{
+          // LE GENRE NE DECIDE PLUS DU CONTENU. Il ne décidait de toute façon
+          // que d'un programme que personne n'avait choisi.
+          for(const cas of [{gender:'F'},{gender:'H'},{gender:'f'},{gender:'Femme'},
+              {gender:'H',_evol_gender:'F'},{},{gender:''},{gender:null}]){
             const r=ouvrir(cas);
-            if(r.jours!==7) return _echec(r.jours+' jours au lieu de 7');
-            if(r.actives!==0) return _echec(r.actives+' séance(s) active(s) sans genre connu');
-            if(r.exos.length) return _echec(r.exos.length+' exercice(s) posés sans genre connu');
-            if(r.fondation!==0) return _echec('une Fondation est posée sans genre connu');
+            const q=JSON.stringify(cas);
+            if(r.jours!==7) return _echec(q+' : '+r.jours+' jours au lieu de 7');
+            if(r.actives!==0) return _echec(q+' : '+r.actives+' séance(s) active(s) sur une grille neuve');
+            if(r.exos.length) return _echec(q+' : '+r.exos.length+' exercice(s) posés d’office');
+            if(r.fondation!==0) return _echec(q+' : une Fondation est encore posée');
           }
-          // TÉMOIN : la fonction sait poser des exercices quand le genre est su.
-          return ouvrir({gender:'F'}).exos.length>0
-            ?true:_echec('aucun exercice même avec un genre connu');})());
-        ok('La migration n\'écrase JAMAIS un programme écrit par le coach',(()=>{
-          // Le risque réel de cette fonction. Une condition de migration trop
-          // large remplacerait par une Fondation le programme qu'un coach a
-          // construit à la main — sans le dire, et à l'ouverture de l'écran.
+          return true;})());
+        ok('Ni la Fondation ni defEx ne reviennent par une porte de côté',(()=>{
+          // ⚠ defEx SURVIT COMME CONTRE-EXEMPLE NOMME, et c'est pour cette
+          // assertion-ci : elle a besoin de la liste pour vérifier qu'aucun de
+          // ses six exercices ne reparaît. Ne pas la réintroduire dans un
+          // chemin de création.
+          const noms=[].concat(defEx.map(e=>e.name),
+            FONDATION_F.flatMap(x=>x.exercises.map(e=>e.name)),
+            FONDATION_H.flatMap(x=>x.exercises.map(e=>e.name)));
+          for(const cas of [{gender:'F'},{gender:'H'},{}]){
+            const r=ouvrir(cas);
+            const intrus=noms.filter(n=>r.exos.indexOf(n)>=0);
+            if(intrus.length)
+              return _echec(JSON.stringify(cas)+' : '+intrus.slice(0,3).join(', '));
+          }
+          // TÉMOIN : le décor fonctionne, et sait rendre des exercices quand la
+          // grille en porte. Sans lui, un ouvrir() cassé rendrait « aucun
+          // intrus » quel que soit le code.
+          const porte=vide();
+          porte[0]={...porte[0],active:true,name:'X',
+            exercises:[{name:'SOULEVÉ DE TERRE',series:3,reps:'5'}]};
+          return ouvrir({gender:'F'},porte).exos.indexOf('SOULEVÉ DE TERRE')>=0
+            ?true:_echec('le décor ne rend aucun exercice : l’assertion ne prouve rien');})());
+        ok('Ouvrir une fiche ne remplace RIEN, dans aucun état de la grille',(()=>{
+          // ⚠ IL N'Y A PLUS DE MIGRATION DU TOUT, donc plus de condition de
+          // migration à tenir juste. Cette fonction en a déjà coûté cher : une
+          // garde trop large remplaçait par une Fondation le programme qu'un
+          // coach avait construit à la main, sans le dire, à la simple
+          // OUVERTURE de l'écran. La porte est murée, pas resserrée.
           const perso=vide();
           perso[0]={...perso[0],name:'MON PROGRAMME',active:true,
             exercises:[{name:'DÉVELOPPÉ COUCHÉ',series:4,reps:'8'}]};
@@ -36179,22 +36323,21 @@ function testExercices(){
             return _echec('le programme du coach est devenu : '+g.noms[0]);
           if(g.fondation!==0) return _echec('une Fondation a été posée par-dessus');
           if(g.actives!==1) return _echec(g.actives+' séances actives au lieu de 1');
-          // En revanche, une grille VIDE se laisse remplir : rien à écraser.
+          // UNE GRILLE VIDE RESTE VIDE. C'est l'inversion du lot : avant, elle
+          // « se laissait remplir ».
           const m=ouvrir({gender:'F'},vide());
-          if(m.actives!==3) return _echec('une grille vide n\'est pas migrée : '+m.actives);
-          // Et une Fondation déjà posée reste stable, sans doublon.
+          if(m.actives!==0||m.exos.length)
+            return _echec('une grille vide a été remplie : '+m.actives+' actives, '+m.exos.length+' exos');
+          // Une Fondation DEJA EN PLACE, elle, ne bouge pas : ce lot ne retire
+          // à personne ce qu'il a déjà. C'est la seule façon d'en voir une.
           const deja=FONDATION_F.map(x=>({...x,exercises:x.exercises.map(e=>({...e}))}));
           const st=ouvrir({gender:'F'},deja);
-          if(st.actives!==3) return _echec('la Fondation en place devient : '+st.actives);
-          // Sans genre connu, aucune migration ne part.
-          const inc=ouvrir({gender:''},vide());
-          return inc.actives===0
-            ?true:_echec('migration sans genre connu : '+inc.actives);})());
-        ok('Côté athlète aussi, la Fondation suit .gender sans attendre un bilan',(()=>{
-          // LA JUMELLE. initSessionsConfig lisait _evol_gender seul, comme le faisait
-          // openCoachSessions avant ce lot : une athlète sans bilan recevait les
-          // exemples génériques au lieu de la Fondation Femme. Corriger les deux et
-          // n'en tenir qu'un, c'est ainsi que le défaut avait survécu la première fois.
+          return st.actives===3
+            ?true:_echec('la Fondation en place devient : '+st.actives);})());
+        ok('Côté athlète aussi, la grille neuve est vide, quel que soit le genre',(()=>{
+          // LA JUMELLE, et elle doit le rester : le défaut d'origine avait
+          // survécu une première fois parce qu'on avait corrigé un seul des
+          // deux chemins. Les deux posent désormais sept jours vides.
           const _u=currentUser;
           try{
             const init=champs=>{
@@ -36202,28 +36345,22 @@ function testExercices(){
                 fname:'X'},champs);
               currentUser.sessions_config=null;
               const cfg=initSessionsConfig()||[];
-              return {actives:cfg.filter(x=>x.active).length,
-                premiere:(cfg.filter(x=>x.active)[0]||{}).name||'',
+              return {jours:cfg.length, actives:cfg.filter(x=>x.active).length,
+                exos:cfg.flatMap(x=>(x.exercises||[]).map(e=>e.name)),
                 essai:cfg.every(x=>x._essai===true)};
             };
-            const f=init({gender:'F'});
-            if(!/JAMBES & CUISSES/.test(f.premiere))
-              return _echec('gender F sans bilan → '+JSON.stringify(f.premiere));
-            if(f.actives!==3) return _echec(f.actives+' séances actives au lieu de 3');
-            for(const g of ['f','Femme','femme']){
-              if(!/JAMBES & CUISSES/.test(init({gender:g}).premiere))
-                return _echec('gender='+JSON.stringify(g)+' n\'est pas reconnu');
+            for(const cas of [{gender:'F'},{gender:'H'},{gender:'f'},{gender:'Femme'},
+                {gender:'H',_evol_gender:'F'},{}]){
+              const r=init(cas), q=JSON.stringify(cas);
+              if(r.jours!==7) return _echec(q+' : '+r.jours+' jours au lieu de 7');
+              if(r.actives!==0) return _echec(q+' : '+r.actives+' séance(s) active(s)');
+              if(r.exos.length) return _echec(q+' : '+r.exos.length+' exercice(s) posés d’office');
             }
-            // Le bilan prime toujours sur la fiche.
-            if(!/JAMBES & CUISSES/.test(init({gender:'H',_evol_gender:'F'}).premiere))
-              return _echec('_evol_gender ne prime pas côté athlète');
-            // TÉMOIN : un homme reçoit l'autre Fondation.
-            if(!/PECS/.test(init({gender:'H'}).premiere))
-              return _echec('Fondation Homme absente côté athlète');
             // Et TOUT ce que fabrique cette fonction reste marqué EXEMPLE : c'est ce
             // marqueur qui fait afficher les badges, et qui distingue une séance
             // proposée d'une séance voulue.
-            return f.essai?true:_echec('les séances ne portent plus _essai');
+            return init({gender:'F'}).essai
+              ?true:_echec('les séances ne portent plus _essai');
           } finally { currentUser=_u; }})());
       } finally { currentUser=_cu; if(_db) DB.set('users',_db);
         currentClientId=_cid; _coachEditClient=_ce;
