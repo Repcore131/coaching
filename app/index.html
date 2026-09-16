@@ -234,17 +234,32 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
      Ce n'était pas une échelle, c'était un nuage. Elles sont désormais toutes
      rangées ici, et toute nouvelle taille passe par ces variables.
 
-     LE PLANCHER EST --fs-2xs, 10px, et il ne sert qu'à l'accessoire. Les 375
+     LE PLANCHER EST --fs-2xs, 11px, et il ne sert qu'à l'accessoire. Les 375
      tailles qui descendaient jusqu'à 8px y remontent : c'est le vrai gain.
-     Le texte qui PORTE LE SENS — « MON PROFIL », les libellés d'onglets et de
-     compteurs, en majuscules très espacées — reste à --fs-xs, 11px, parce
-     qu'en dessous il n'est plus lisible sur un téléphone tenu à bout de bras.
+
+     ⚠ CE PLANCHER VIENT D'ÊTRE RELEVÉ, et le paragraphe qui précède disait
+     l'inverse il y a un lot — il portait 10px. La raison du changement n'est
+     pas la lisibilité d'un texte isolé, que 10px assurait : c'est la
+     HIÉRARCHIE. Relevé : 1605 des 2437 tailles du fichier, soit 66 %, valaient
+     10 ou 11px. À cette densité un titre de section et une note de bas de
+     carte se lisent au même poids, et aucun écran ne peut désigner ce qu'il
+     faut lire d'abord. Les cinq premiers crans montent donc d'environ 1px ;
+     les trois derniers — 20, 26, 44 — ne bougent pas, ils étaient déjà
+     distincts. L'écart titre/note passe de 4 à 6,5px, et c'est lui qu'on
+     achète.
+
+     DEUX ZONES PAYENT CE RELÈVEMENT et sont épinglées à leur valeur d'avant,
+     chacune avec sa mesure, chacune commentée sur place : les libellés de
+     .tab-btn sous 420px, et les en-têtes de .series-table-wo. Toutes deux
+     sont contraintes par une LARGEUR au pixel près, pas par la lisibilité.
+     Les épingles tombent d'elles-mêmes le jour où la barre passe à cinq
+     onglets.
 
      Les interlignes suivent les tailles en sens inverse : un petit corps
      respire (--lh-sm 1.45), un titre se resserre (--lh-3xl .95). Les
      interlettrages vont du nul au très espacé des capitales, plus un cran
      négatif pour les grands nombres. */
-  --fs-2xs:10px;--fs-xs:11px;--fs-sm:12px;--fs-md:14px;--fs-lg:16px;--fs-xl:20px;--fs-2xl:26px;--fs-3xl:44px;
+  --fs-2xs:11px;--fs-xs:12.5px;--fs-sm:13.5px;--fs-md:15px;--fs-lg:17px;--fs-xl:20px;--fs-2xl:26px;--fs-3xl:44px;
   --lh-2xs:1.3;--lh-xs:1.35;--lh-sm:1.45;--lh-md:1.5;--lh-lg:1.4;--lh-xl:1.2;--lh-2xl:1.1;--lh-3xl:.95;
   --ls-0:0;--ls-1:.3px;--ls-2:1px;--ls-3:1.5px;--ls-4:2.5px;--ls-tight:-.5px}
 /* 100vh d'abord comme repli, 100dvh ensuite : sur mobile 100vh vaut la hauteur
@@ -965,7 +980,21 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    est un ecran installe depuis des mois : rapetisser une police se corrige, un
    onglet renomme desoriente. La contrepartie est reelle et assumee — 10px au
    lieu de 11 sous 420px de large. */
-@media(max-width:420px){.tab-btn{letter-spacing:0;padding:6px 2px;font-size:var(--fs-2xs);flex:1 1 auto}}
+/* 10px EN DUR, ET NON --fs-2xs. Le plancher typographique est passé de 10 à
+   11px (voir :root) ; les sept onglets ne le supportent pas sous 420px.
+   MESURE, même protocole que la table ci-dessus — somme des libellés, police
+   chargée, interlettrage déjà nul et marges déjà à 2px, donc plus rien à céder
+   de ce côté :
+     11px -> 374px de libellés. Tient à 375px à UN pixel près, mais à 360px —
+             Galaxy, Pixel, iPhone 12 mini — les SEPT libellés sont rognés de
+             2 à 3px chacun par l'overflow:hidden, sans défilement pour les
+             rattraper : la bande défilante ne s'ouvre qu'à 359px.
+     10px -> 343px. Aucun libellé rogné de 360 à 420px, comme aujourd'hui.
+   Au-dessus de 420px la règle de base s'applique et les onglets prennent bien
+   leurs 11px : mesuré à 430px, 398px de libellés pour 430 disponibles.
+   CETTE ÉPINGLE EST TEMPORAIRE : elle tombe quand la barre passe à cinq
+   onglets, où 11px tiendra partout. */
+@media(max-width:420px){.tab-btn{letter-spacing:0;padding:6px 2px;font-size:10px;flex:1 1 auto}}
 /* Sous 360px (iPhone SE = 320px) : meme a 10px, 359px ne rentrent plus. Plutot
    que de rapetisser encore ou de tronquer, la barre defile — les derniers
    onglets s'atteignent d'un glissement, et aucun libelle ne devient illisible.
@@ -979,7 +1008,10 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   .tab-bar{overflow-x:auto;
     -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%);
     mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%)}
-  .tab-btn{flex:0 0 auto;padding:6px 9px;font-size:var(--fs-2xs)}
+  /* 10px en dur, pour la même raison qu'à 420px — et ici s'ajoute la distance
+     à parcourir : à 11px la bande réclame 472px de glissement au lieu de 441.
+     Rien n'y devient illisible, mais deux onglets de plus passent hors champ. */
+  .tab-btn{flex:0 0 auto;padding:6px 9px;font-size:10px}
 }
 /* Onglet actif : trois signaux cumulés — la teinte de --red-text, un halo sur
    l'icône, et un liseré supérieur. Le liseré est un repère de FORME : l'onglet
@@ -2358,6 +2390,22 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
    ligne est aussi en alerte, sans ajouter d'!important concurrent. */
 .series-table tr.done.row-alert td{background:transparent}
 .series-table-wo td{padding:5px 4px}.series-table-wo th{padding:6px 6px}
+/* LES EN-TÊTES RESTENT À 11px, interlettrage rabattu à .5px. Le plancher est
+   passé à 11px et --fs-xs à 12.5px (voir :root) ; ici ce sont les EN-TÊTES,
+   et eux seuls, qui fixent la largeur des cinq colonnes.
+   MESURE, largeur intrinsèque de chaque th, avant -> après le relèvement :
+     Reps 46->51 · Charge 66->73 · Douleur 74->81 · Validé 58->63, soit +23px
+     sur une table qui tenait à 320px pile dans les 320px d'un iPhone 375.
+   Les champs, eux, ne bougent pas : input 56px et select 60px sont fixés.
+   Conséquence sans cette règle : le tableau se met à défiler à 375 ET 390px,
+   c'est-à-dire sur la majorité des téléphones, et la colonne « Validé » — la
+   seule qu'on touche à chaque série — passe derrière le badge « +1 ».
+   Avec elle, la table retrouve ses largeurs d'avant : mesuré 320px à 375px,
+   335px à 390px, 357px à 412px, identiques au lot précédent.
+   LE CORPS DU TABLEAU, LUI, PROFITE DU RELÈVEMENT : les td suivent --fs-md,
+   15px au lieu de 14 — et c'est la charge et le RIR qu'on lit debout, pas
+   l'intitulé de la colonne. C'est exactement le partage qu'on veut. */
+.series-table-wo th{font-size:11px;letter-spacing:.5px}
 /* LA CASE DESCEND À 38 PX. Le plancher de 44 était un choix d'accessibilité ;
    la demande est répétée, on l'abaisse. La case fait 56 px de large : la cible
    reste 56 × 38, au-dessus du minimum de la règle (24 × 24) et sous son palier
@@ -3608,7 +3656,12 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .gv-flocon svg{width:15px;height:15px;display:block;
   animation:gvTourne var(--t-boucle) linear infinite}
 @keyframes gvTourne{to{transform:rotate(360deg)}}
-.gv-past-txt{font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;
+/* 10.5px — un des « demi-crans » que l'échelle de :root avait justement pour
+   objet de faire disparaître, et le DERNIER texte de l'accueil athlète à
+   passer sous le plancher. Le banc « Aucun texte de l'accueil athlète ne
+   descend sous le plancher » le signalait déjà avant ce lot, parmi huit
+   violations ; c'est la huitième, et elle passe au cran. */
+.gv-past-txt{font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
   letter-spacing:2px;text-transform:uppercase;color:#8fc2f0;line-height:1}
 
 /* ── Le texte ────────────────────────────────────────────────────────── */
@@ -31632,7 +31685,13 @@ function _blocExo(idx,estSS){
         <thead><tr style="background:var(--red)">
           ${isWide
             ?`<th style="color:var(--text);text-align:left;padding-left:10px;font-size:var(--fs-xs);letter-spacing:.5px">Séries${pr.type==='degressive'?' · Dégressive':''}</th>`
-            :`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th><th style="color:var(--text)">RIR</th><th style="font-size:var(--fs-xs);color:var(--text)">Douleur</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`}
+            /* « font-size:var(--fs-xs) » a quitté Douleur et Validé. Il y était
+               STRICTEMENT REDONDANT — .series-table th pose déjà cette taille,
+               à l'identique — et ces deux en-têtes sur cinq échappaient donc à
+               l'épingle à 11px posée sur .series-table-wo th, un style en ligne
+               l'emportant sur la feuille. La rangée se serait lue sur deux
+               tailles. Rien d'autre ne change : la couleur reste en ligne. */
+            :`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th><th style="color:var(--text)">RIR</th><th style="color:var(--text)">Douleur</th><th style="color:var(--text)">Validé</th>`}
         </tr></thead>
         <tbody id="sets-body-${idx}"></tbody>
       </table>

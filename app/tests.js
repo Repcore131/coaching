@@ -8830,8 +8830,16 @@ function testExercices(){
           // c'est exactement le défaut qu'elle a d'abord porté.
           if(inspectees<100) return _echec('seulement '+inspectees+' règle(s) inspectée(s) : le parcours est aveugle');
           // Et l'échelle existe toujours, avec son plancher à 11.
-          const xs=getComputedStyle(document.documentElement).getPropertyValue('--fs-xs').trim();
-          return xs==='11px'?true:_echec('--fs-xs vaut '+xs);})());
+          // C'EST --fs-2xs QU'ON LIT, ET NON --fs-xs. Cette ligne épinglait
+          // --fs-xs à 11px parce que le PLANCHER de l'échelle valait alors
+          // 10px : --fs-xs était le premier cran au-dessus, et le seul que
+          // le texte porteur de sens avait le droit d'employer. Depuis le
+          // relèvement de l'échelle, le plancher lui-même vaut 11px — ce que
+          // cette assertion a toujours voulu vérifier — et --fs-xs est monté
+          // à 12.5px avec le reste. On lit donc le plancher réel, et non le
+          // cran qui en tenait lieu.
+          const plancher=getComputedStyle(document.documentElement).getPropertyValue('--fs-2xs').trim();
+          return plancher==='11px'?true:_echec('--fs-2xs vaut '+plancher);})());
 
         // ══════ AUCUNE COMMANDE INVISIBLE ══════
         ok('Aucun bouton rendu n\'est dépourvu de glyphe',(()=>{
