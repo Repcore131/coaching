@@ -35285,6 +35285,175 @@ function testExercices(){
       currentUser=sauve;
     })();
 
+    // ══════════════════════════════════════════════════════════════════════
+    // LA RELANCE ALIMENTAIRE DE L'ACCUEIL
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // UNE SEULE ENTRÉE, à une place précise, et trois silences. Ce qui est
+    // vérifié ici dans l'ordre d'importance : que le message ne porte NI
+    // calorie NI poids, qu'il ne parte jamais sur un antécédent déclaré, et
+    // qu'il ne se duplique pas.
+    (function(){
+      const _J=864e5, _T=Date.parse('2026-06-15T10:30:00');
+      const _cle=n=>{ const d=new Date(_T); d.setDate(d.getDate()-n); return localISODate(d); };
+      const _cib={kcal:2000,p:150,g:200,l:60};
+      const _repas=[{kcal:600,p:40,c:60,l:20}];
+      const _U=x=>Object.assign({id:'nn',email:'nn@t',role:'athlete',
+        sessions:[],bilans:[]},x);
+      const _flex=(log,extra)=>_U(Object.assign({nutrition:{dietType:'flexible',
+        macros:{on:_cib,off:_cib},log:log,days:{}}},extra));
+      const _strict=(days,extra)=>_U(Object.assign({nutrition:{dietType:'strict',
+        macros:{on:_cib,off:_cib},days:days,log:{}}},extra));
+
+      ok('La relance alimentaire ne part qu’au-delà de trois jours',(()=>{
+        // Un week-end sans rien noter est une vie normale, pas un décrochage :
+        // relancer au deuxième jour ferait de cette ligne un bruit de fond
+        // qu'on apprend à ne plus voir.
+        for(const n of [0,1,2,NUTRI_SILENCE_JOURS])
+          if(notifNutrition(_flex({[_cle(n)]:{entries:_repas}}),_T))
+            return _echec(n+' jour(s) déclenche déjà la relance');
+        const r=notifNutrition(_flex({[_cle(NUTRI_SILENCE_JOURS+1)]:{entries:_repas}}),_T);
+        if(!r) return _echec('quatre jours ne déclenchent rien');
+        if(r.msg.indexOf((NUTRI_SILENCE_JOURS+1)+' jours')!==0)
+          return _echec('le compte est faux : '+r.msg);
+        if(r.c!=='var(--orange)') return _echec('couleur : '+r.c);
+        if(r.act!=='loadNutrition()') return _echec('action : '+r.act);
+        // Et le compte suit vraiment la date, il n'est pas figé.
+        const loin=notifNutrition(_flex({[_cle(30)]:{entries:_repas}}),_T);
+        return /^30 jours/.test(loin.msg)?true:_echec('à trente jours : '+loin.msg);})());
+
+      ok('NI CALORIE NI POIDS dans la relance alimentaire',(()=>{
+        // ⚠ LE GARDE-FOU DU MODULE. Tout ce fichier refuse d'afficher un
+        // chiffre d'énergie ou de masse là où il n'est pas demandé : mode
+        // neutre, refus de déficit, signal micro coupé, vitesse masquée. Une
+        // notification d'accueil est lue par tout le monde, tous les jours,
+        // sans l'avoir demandée — c'est le pire endroit du produit pour un
+        // chiffre de calories.
+        const r=notifNutrition(_flex({[_cle(9)]:{entries:_repas}}),_T);
+        if(!r) return _echec('aucune relance à mesurer');
+        const n=r.msg.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        for(const mot of ['kcal','calorie','poids','kg','gramme','maigr','gras',
+                          'perdre','deficit','objectif','macro'])
+          if(n.indexOf(mot)>=0) return _echec('mot interdit : « '+mot+' » dans « '+r.msg+' »');
+        // UN SEUL NOMBRE, et c'est le compte de jours. Tout autre chiffre dans
+        // cette phrase serait forcément une quantité mangée.
+        const chiffres=r.msg.match(/\d+/g)||[];
+        if(chiffres.length!==1) return _echec(chiffres.length+' nombres : '+chiffres.join(', '));
+        return chiffres[0]==='9'?true:_echec('le nombre n’est pas le compte de jours : '+chiffres[0]);})());
+
+      ok('Antécédent déclaré : aucune relance alimentaire, jamais',(()=>{
+        // ⚠ CE GARDE N'ÉTAIT PAS DANS LA DEMANDE, et il est délibéré. aTCA
+        // coupe déjà onze chemins ailleurs, tous de la même famille : proposer
+        // de manger moins, pousser à se peser, conseiller sur l'assiette.
+        // Relancer quelqu'un pour qu'il RECOMMENCE À NOTER CE QU'IL MANGE
+        // appartient à cette famille — la tenue d'un journal alimentaire est
+        // précisément ce qu'on n'incite pas chez quelqu'un qui a déclaré un
+        // trouble du comportement alimentaire.
+        for(const n of [4,9,60,365])
+          if(notifNutrition(_flex({[_cle(n)]:{entries:_repas}},{tcaRisque:true}),_T))
+            return _echec('relance à '+n+' jours malgré l’antécédent');
+        // La contre-épreuve : le MÊME dossier sans l'antécédent la reçoit.
+        return notifNutrition(_flex({[_cle(9)]:{entries:_repas}}),_T)
+          ?true:_echec('le témoin ne reçoit rien — le test ne prouve rien');})());
+
+      ok('On ne relance pas sur du vide, ni sans cible',(()=>{
+        // « Reprends là où tu en étais » n'a aucun sens pour quelqu'un qui n'a
+        // jamais commencé — et l'accueil porte déjà, pour lui, l'invitation à
+        // lancer sa première séance.
+        if(notifNutrition(_flex({}),_T)) return _echec('relance sans aucune saisie');
+        if(notifNutrition(_strict({}),_T)) return _echec('relance sans aucune saisie (stricte)');
+        // Sans objectifs, « suivre » ne veut rien dire : il n'y a rien à quoi se
+        // comparer, et l'écran vers lequel on renvoie ne montrerait que trois
+        // anneaux vides.
+        const sansCible=_U({nutrition:{dietType:'flexible',macros:{on:{},off:{}},
+          days:{},log:{[_cle(9)]:{entries:_repas}}}});
+        if(notifNutrition(sansCible,_T)) return _echec('relance sans cible de macros');
+        // Un dossier sans nutrition du tout ne lève pas.
+        try{ if(notifNutrition(_U({}),_T)) return _echec('relance sans nutrition'); }
+        catch(e){ return _echec('un dossier nu fait lever : '+e.message); }
+        return notifNutrition(null,_T)===null?true:_echec('null fait lever ou rend une entrée');})());
+
+      ok('Une clé vide n’est pas une trace alimentaire',(()=>{
+        // ⚠ LA PANNE QUE CECI EMPÊCHE. nutrition.log et nutrition.days portent
+        // des entrées vides — un jour ouvert puis refermé sans rien inscrire,
+        // une note sans réponse. Compter la clé aurait fait dire « 0 jour sans
+        // suivi » à quelqu'un qui n'a rien noté depuis trois semaines, et la
+        // relance ne serait jamais partie.
+        const avecBruit=_flex({[_cle(9)]:{entries:_repas},[_cle(0)]:{entries:[]}});
+        const r=notifNutrition(avecBruit,_T);
+        if(!r) return _echec('le jour vide a éteint la relance');
+        if(!/^9 jours/.test(r.msg)) return _echec('le jour vide compte : '+r.msg);
+        // Même chose en stricte : une note sans `respected` n'est pas une
+        // réponse.
+        const s=notifNutrition(_strict({[_cle(9)]:{respected:true},[_cle(0)]:{note:'rien'}}),_T);
+        if(!s||!/^9 jours/.test(s.msg)) return _echec('stricte : '+(s&&s.msg));
+        // Et un « non » EST une réponse : on a suivi, on n'a pas tenu.
+        const non=notifNutrition(_strict({[_cle(2)]:{respected:false}}),_T);
+        if(non) return _echec('un « non » d’il y a deux jours déclenche la relance');
+        return derniereTraceAlimentaire(avecBruit)===_cle(9)
+          ?true:_echec('dernière trace : '+derniereTraceAlimentaire(avecBruit));})());
+
+      ok('Le compte de jours ne dérape pas au changement d’heure',(()=>{
+        // ⚠ MIDI UTC DES DEUX CÔTÉS. Deux dates locales converties en
+        // millisecondes sont séparées de 23 ou 25 heures quand un changement
+        // d'heure tombe entre elles : la division rendait un jour de trop, ou
+        // un de moins, deux fois par an. On se place à cheval sur le dernier
+        // dimanche de mars et sur celui d'octobre.
+        for(const iso of ['2026-04-02T09:00:00','2026-11-02T09:00:00',
+                          '2026-03-29T23:30:00','2026-10-25T00:30:00']){
+          const t=Date.parse(iso);
+          if(!isFinite(t)) return _echec('instant illisible : '+iso);
+          for(const n of [4,10,45]){
+            const d=new Date(t); d.setDate(d.getDate()-n);
+            const j=_joursDepuisCle(localISODate(d),t);
+            if(j!==n) return _echec(iso+' à J-'+n+' → '+j+' jour(s)');
+          }
+        }
+        return _joursDepuisCle('pas une date',_T)===null
+          ?true:_echec('une clé illisible rend un nombre');})());
+
+      ok('UNE SEULE entrée nutrition, après la séance et avant le badge',(()=>{
+        const _sv=currentUser;
+        const z=document.getElementById('clh-notifs');
+        if(!z) return _echec('l’emplacement des notifications n’existe pas');
+        const garde=z.innerHTML;
+        try{
+          // Séances chaque semaine depuis huit semaines, la dernière il y a
+          // longtemps : la relance de séance ET le badge d'assiduité sont là,
+          // donc les deux voisins que l'ordre doit respecter.
+          const T=Date.now(), s=[];
+          for(let w=0;w<8;w++) s.push({date:T-(w*7+1)*_J});
+          currentUser={id:'no',email:'no@t',role:'athlete',fname:'A',createdAt:T-200*_J,
+            sessions:s,bilans:[],streak:6,streakWeek:6,
+            nutrition:{dietType:'flexible',macros:{on:_cib,off:_cib},days:{},
+              log:{[localISODate(new Date(T-9*_J))]:{entries:_repas}}}};
+          renderNotifs();
+          const l=[...z.children].map(x=>(x.textContent||'').replace(/\s+/g,' ').trim());
+          const iN=l.findIndex(t=>/suivi alimentaire/.test(t));
+          if(iN<0) return _echec('aucune entrée nutrition : '+l.join(' | '));
+          if(l.filter(t=>/suivi alimentaire/.test(t)).length!==1)
+            return _echec('plusieurs entrées nutrition');
+          const iS=l.findIndex(t=>/sans séance/.test(t));
+          const iB=l.findIndex(t=>/assiduité/.test(t));
+          // UNE SÉANCE MANQUÉE EST UN RENDEZ-VOUS RATÉ, un journal non tenu est
+          // une trace manquante : le premier prime. Un compteur, lui, ne prime
+          // sur rien — il félicite.
+          if(iS<0) return _echec('le témoin « sans séance » manque, l’ordre n’est pas prouvé');
+          if(iB<0) return _echec('le témoin « assiduité » manque, l’ordre n’est pas prouvé');
+          if(!(iS<iN)) return _echec('la nutrition passe devant la séance');
+          if(!(iN<iB)) return _echec('la nutrition passe derrière le badge');
+          // Elle est un VRAI bouton : curseur, rôle et clavier compris.
+          const el=z.children[iN];
+          if((el.getAttribute('onclick')||'').indexOf('loadNutrition()')<0)
+            return _echec('l’entrée n’ouvre pas la nutrition');
+          if(el.getAttribute('role')!=='button') return _echec('l’entrée n’est pas un bouton');
+          // Trois rendus de suite n'en font toujours qu'une.
+          renderNotifs(); renderNotifs();
+          return [...z.children].filter(x=>/suivi alimentaire/.test(x.textContent||'')).length===1
+            ?true:_echec('l’entrée se duplique aux rendus suivants');
+        } finally { z.innerHTML=garde; currentUser=_sv; }})());
+    })();
+
     // ── Le rendu partagé ne montre le formulaire QUE côté coach ──
     ok('Côté athlète : la réponse est lisible, sans formulaire',(()=>{
       const b=_rbB(2,{reponseCoach:'Bonne semaine.',reponseDate:Date.now(),reponseVue:true,'bil-motivation':'8'});

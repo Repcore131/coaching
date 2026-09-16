@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1243';
+window.RC_BUILD='1244';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -38295,6 +38295,11 @@ function renderNotifs(){
     const ecartNormal=ecartNormalJours(currentUser);
     if(days>ecartNormal) notifs.push({icon:'',msg:`${days} jours sans séance. Reprends le rythme !`,c:'var(--orange)'});
   }
+  // UNE SEULE ENTREE NUTRITION, ET A CETTE PLACE-LA. Apres la relance de
+  // seance : une seance manquee est un rendez-vous rate, un journal non tenu
+  // est une trace manquante — le premier prime. Avant le badge d'assiduite :
+  // un compteur ne prime sur rien, il felicite.
+  try{ const _nn=notifNutrition(currentUser); if(_nn) notifs.push(_nn); }catch(e){}
   const _sem=streakSemaines(currentUser);
   // Cette entree-la ne se rend pas comme les autres : elle porte le cadre du
   // badge. On la marque au lieu de lui donner un `msg`, pour que la ligne de
@@ -45404,6 +45409,98 @@ function _tauxDieteRespectee(u,maintenant){
 function _dieteFenetre(u,debut,fin){
   const g=_dieteComptes(u,_cleJourDecalee(debut,0),_cleJourDecalee(fin,0));
   return g.juges?{pct:Math.round(g.tenus*100/g.juges),juges:g.juges}:null;
+}
+// ══ LA RELANCE ALIMENTAIRE DE L'ACCUEIL ═══════════════════════════════════
+//
+// TROIS JOURS, ET PAS UN DE MOINS. Un week-end sans rien noter est une vie
+// normale, pas un decrochage : relancer au deuxieme jour ferait de cette ligne
+// un bruit de fond qu'on apprend a ne plus voir, et le jour ou elle dirait
+// quelque chose personne ne la lirait. Au-dela de trois, le silence n'est plus
+// un week-end.
+const NUTRI_SILENCE_JOURS=3;
+// PURE. Le nombre de jours REVOLUS entre une clef de jour et aujourd'hui.
+//
+// ⚠ MIDI UTC DES DEUX COTES, ET NON MINUIT LOCAL. Deux dates locales converties
+// en millisecondes sont separees de 23 ou 25 heures quand un changement d'heure
+// tombe entre elles : la division rendait alors un jour de trop, ou un de moins,
+// deux fois par an. A midi, aucun decalage saisonnier ne peut faire changer de
+// jour — la marge est de douze heures des deux cotes.
+function _joursDepuisCle(cle,maintenant){
+  const a=Date.parse(String(cle||'')+'T12:00:00Z');
+  if(!isFinite(a)) return null;
+  const b=Date.parse(_cleJourDecalee(maintenant,0)+'T12:00:00Z');
+  if(!isFinite(b)) return null;
+  return Math.round((b-a)/864e5);
+}
+// PURE. La derniere trace alimentaire : la clef la plus recente qui porte
+// VRAIMENT quelque chose. Rend '' quand l'athlete n'a jamais rien saisi.
+//
+// ⚠ UNE CLEF N'EST PAS UNE TRACE. nutrition.log et nutrition.days portent des
+// entrees vides — un jour ouvert puis referme sans rien inscrire, une note sans
+// reponse. Compter la clef aurait fait dire « 0 jour sans suivi » a quelqu'un
+// qui n'a rien note depuis trois semaines, et la relance ne serait jamais
+// partie. On exige donc le CONTENU : un aliment en flexible, une reponse en
+// stricte.
+//
+// Les clefs sont des dates locales au format YYYY-MM-DD : elles se comparent
+// dans l'ordre chronologique, sans conversion.
+function derniereTraceAlimentaire(u){
+  const nut=(u&&u.nutrition)||{};
+  const flexible=(typeof typeDiete==='function')?typeDiete(nut)==='flexible':true;
+  const src=(flexible?nut.log:nut.days)||{};
+  let max='';
+  for(const k of Object.keys(src)){
+    const v=src[k]||{};
+    const porte=flexible
+      ?!!(v.entries&&v.entries.length)
+      :(v.respected===true||v.respected===false);
+    if(porte&&k>max) max=k;
+  }
+  return max;
+}
+// PURE. L'entree de relance alimentaire de l'accueil, ou null.
+//
+// ⚠ CE MESSAGE NE PORTE NI CALORIE NI POIDS, ET C'EST LE GARDE-FOU DU MODULE.
+// Tout ce fichier refuse d'afficher un chiffre d'energie ou de masse la ou il
+// n'est pas demande : mode neutre, refus de deficit, signal micro coupe,
+// vitesse masquee. Une notification d'accueil est lue par tout le monde, tous
+// les jours, sans l'avoir demandee — c'est le pire endroit du produit pour un
+// chiffre de calories. Elle dit un NOMBRE DE JOURS et une invitation, rien
+// d'autre.
+//
+// ⚠ ET ELLE NE PART PAS SUR UN ANTECEDENT DECLARE. aTCA coupe deja onze chemins
+// ailleurs, tous de la meme famille : proposer de manger moins, pousser a se
+// peser, conseiller sur l'assiette. Relancer quelqu'un pour qu'il RECOMMENCE A
+// NOTER CE QU'IL MANGE appartient a cette famille-la — la tenue d'un journal
+// alimentaire est precisement ce qu'on n'incite pas chez quelqu'un qui a
+// declare un trouble du comportement alimentaire. Ce n'etait pas dans la
+// demande ; c'est la doctrine du module, et elle ne souffre pas d'exception
+// selon l'ecran.
+function notifNutrition(u,maintenant){
+  const uu=u||{};
+  try{ if(aTCA(uu)) return null; }catch(e){}
+  const nut=uu.nutrition||{};
+  // AUCUNE CIBLE, AUCUNE RELANCE. Sans objectifs, « suivre » ne veut rien dire :
+  // il n'y a rien a quoi se comparer, et l'ecran vers lequel on renvoie ne
+  // montrerait que trois anneaux vides. Meme lecture que renderNutriAnneaux,
+  // qui s'efface pour la meme raison.
+  let m={};
+  try{
+    const auj=_cleJourDecalee(maintenant,0);
+    let isOn=true; try{ isOn=nutIsOnDay(auj,uu); }catch(e){}
+    m=_getEffectiveMacros(nut,isOn,auj,uu)||{};
+  }catch(e){ m={}; }
+  if(!m.p&&!m.g&&!m.l) return null;
+  // JAMAIS RIEN SAISI : ON NE RELANCE PAS SUR DU VIDE. « Reprends la ou tu en
+  // etais » n'a aucun sens pour quelqu'un qui n'a jamais commence — et
+  // l'accueil porte deja, pour lui, l'invitation a lancer sa premiere seance.
+  const cle=derniereTraceAlimentaire(uu);
+  if(!cle) return null;
+  const j=_joursDepuisCle(cle,maintenant);
+  if(j===null||j<=NUTRI_SILENCE_JOURS) return null;
+  return {icon:'',
+    msg:j+' jours sans suivi alimentaire. Reprends là où tu en étais.',
+    c:'var(--orange)',act:'loadNutrition()'};
 }
 // ⚠ CES TROIS FONCTIONS NE SONT PLUS AFFICHEES depuis le 16/09/2026. Les
 // sous-titres des tuiles portaient une valeur calculee — la tendance de diete,
