@@ -25800,6 +25800,42 @@ function testExercices(){
           remettre.forEach(e=>e.classList.add('active'));
         }})());
 
+      // « Jamais démarré » et « En attente » ouvraient l'écran du coach, sous
+      // « A traiter ». Demande de Kevin du 16/09/2026 : ils passent EN BAS.
+      // Ce ne sont pas des urgences — une relance commerciale et une invitation
+      // qui n'a pas abouti — et ils repoussaient les athlètes vers le bas.
+      // ON MESURE L'ORDRE DU DOCUMENT, pas la présence : les deux conteneurs
+      // existaient déjà avant ce lot, et un test qui les cherche seulement
+      // passerait aussi bien avec l'ancienne disposition.
+      ok('Les listes « jamais démarré » et « en attente » sont SOUS la liste d’athlètes',(()=>{
+        const l=document.getElementById('ch-clients-list');
+        const j=document.getElementById('ch-jamais-demarre');
+        const i=document.getElementById('ch-invitations');
+        if(!l) return _echec('aucune liste d’athlètes');
+        if(!j) return _echec('aucun conteneur « jamais démarré »');
+        if(!i) return _echec('aucun conteneur « en attente »');
+        const S=Node.DOCUMENT_POSITION_FOLLOWING;
+        if(!(l.compareDocumentPosition(j)&S))
+          return _echec('« jamais démarré » précède encore la liste d’athlètes');
+        if(!(l.compareDocumentPosition(i)&S))
+          return _echec('« en attente » précède encore la liste d’athlètes');
+        // ET RIEN NE LES SUIT : « en bas de la page », c'est la fin du panneau,
+        // pas un rang intermédiaire entre deux boutons de navigation.
+        const pere=j.parentElement;
+        if(!pere||i.parentElement!==pere)
+          return _echec('les deux conteneurs ne sont plus frères');
+        const enf=Array.from(pere.children);
+        if(enf[enf.length-1]!==i||enf[enf.length-2]!==j)
+          return _echec('quelque chose les suit : '
+            +enf.slice(-2).map(e=>e.id||e.tagName).join(', '));
+        // LES IDENTIFIANTS N'ONT PAS BOUGÉ : _rendreJamaisDemarre et
+        // _rendreInvitations écrivent dedans sans rien savoir de leur place.
+        if(String(_rendreJamaisDemarre).indexOf('ch-jamais-demarre')<0)
+          return _echec('_rendreJamaisDemarre ne vise plus son conteneur');
+        if(String(_rendreInvitations).indexOf('ch-invitations')<0)
+          return _echec('_rendreInvitations ne vise plus son conteneur');
+        return true;})());
+
       ok('N4.13 — LA SELECTION MULTIPLE VIT DANS LA LISTE, et lui survit',(()=>{
         if(typeof SEL_ATHLETES==='undefined') return _echec('aucune sélection');
         // LA CASE RELIT LE Set A CHAQUE RENDU : c'est ce qui la fait survivre à
