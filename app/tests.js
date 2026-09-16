@@ -31395,6 +31395,362 @@ function testExercices(){
         return _echec('l’aperçu de relecture ne passe pas par la même source');
       return true;})());
 
+    // ══ 16/09/2026 — R06 : LE LEXIQUE, UNE SOURCE ET UN COMPOSANT ════════
+    //
+    // L'application employait « RIR », « e1RM », « NEAT », « macros » sans les
+    // définir nulle part. Le risque, en corrigeant ça, n'est pas d'oublier un
+    // mot : c'est d'en définir un DEUX FOIS. Deux explications de la même
+    // notion divergent toujours, et c'est celle qu'on ne relit pas qui reste
+    // fausse. Ces assertions tiennent l'unicité autant que le contenu.
+
+    ok('Le catalogue du lexique est gelé, et chaque entrée est complète',(()=>{
+      if(typeof RC_LEXIQUE!=='object'||!RC_LEXIQUE) return _echec('RC_LEXIQUE n’existe pas');
+      if(!Object.isFrozen(RC_LEXIQUE)) return _echec('le catalogue n’est pas gelé');
+      const cles=Object.keys(RC_LEXIQUE);
+      if(cles.length<10) return _echec(cles.length+' entrées : '+cles.join(','));
+      for(const k of cles){
+        const e=RC_LEXIQUE[k];
+        if(!Object.isFrozen(e)) return _echec(k+' : l’entrée n’est pas gelée');
+        // LE MINIMUM DEMANDE : un titre et une définition, non vides.
+        if(!e.t||!String(e.t).trim()) return _echec(k+' : titre vide');
+        if(!e.d||!String(e.d).trim()) return _echec(k+' : définition vide');
+        // ⚠ VINGT MOTS AU PLUS. Au-delà on écrit un article, et un article ne
+        // se lit pas au milieu d'une série.
+        const m=String(e.d).trim().split(/\s+/).length;
+        if(m>20) return _echec(k+' : '+m+' mots dans la définition');
+        // AU TUTOIEMENT, comme tout le reste de l'application côté athlète.
+        if(/\b(vous|votre|vos)\b/i.test(e.d+' '+(e.p||'')))
+          return _echec(k+' : vouvoiement dans « '+e.d+' »');
+        if(e.p!==undefined&&!String(e.p).trim()) return _echec(k+' : ligne « en pratique » vide');
+        if(e.e!==undefined){
+          if(!Array.isArray(e.e)||e.e.length<2||e.e.length>4)
+            return _echec(k+' : une échelle fait 2 à 4 lignes, pas '+(e.e||[]).length);
+          for(const l of e.e)
+            if(!Array.isArray(l)||l.length!==2||!l[0]||!l[1])
+              return _echec(k+' : une ligne d’échelle n’est pas [libellé, explication]');
+        }
+      }
+      return true;})());
+
+    // ⚠ LES TEXTES SONT VALIDES, ILS NE SE RETOUCHENT PAS AU FIL DE L'EAU.
+    // Une définition qui dérive d'une version à l'autre est exactement ce que
+    // ce catalogue existe pour empêcher — on la fige donc ici aussi.
+    ok('Les définitions du lexique sont celles qui ont été validées',(()=>{
+      const att={
+        rir:['RIR — Répétitions en réserve',
+          'Le nombre de répétitions que tu aurais encore pu faire après ta dernière.',
+          'Vise RIR 2 sur tes premières séries, RIR 0–1 sur la dernière.'],
+        rpe:['RPE — Intensité demandée par ton coach',
+          'Une note sur 10 fixée par ton coach pour cette série.',
+          'Tu ne la règles pas : note ta charge, c\'est tout.'],
+        e1rm:['Force max estimée (e1RM)',
+          'La charge que tu pourrais sans doute soulever une seule fois, calculée depuis tes séries.',
+          'Fiable jusqu\'à 12 répétitions, approximative au-delà. Jamais testée en vrai.'],
+        douleur:['Échelle de gêne',
+          'Note ce que tu as ressenti pendant la série, pas après.',undefined],
+        neat:['Activité hors sport (NEAT)',
+          'Ce que tu dépenses en dehors de tes séances : marche, travail, gestes du quotidien.',undefined],
+        macros:['Macros',
+          'Protéines, glucides et lipides : les trois familles qui composent tes calories.',undefined],
+        volume:['Volume',
+          'La quantité de travail accumulée sur une période, muscle par muscle.',undefined],
+        surcharge:['Surcharge progressive',
+          'Augmenter un peu la charge dès que tu gardes des répétitions en réserve.',
+          'RepCore le fait pour toi : la charge proposée monte toute seule.'],
+        masse_grasse:['Masse grasse estimée',
+          'Estimée depuis ton tour de taille, ton cou et ta taille — jamais mesurée.',
+          'Marge de 3 à 4 points. Regarde la tendance, pas le chiffre exact.'],
+        '1rm':['1RM','La charge maximale que tu pourrais soulever une seule fois.',undefined]
+      };
+      for(const [k,[t,d,pr]] of Object.entries(att)){
+        const e=RC_LEXIQUE[k];
+        if(!e) return _echec(k+' a disparu du catalogue');
+        if(e.t!==t) return _echec(k+' titre : « '+e.t+' »');
+        if(e.d!==d) return _echec(k+' définition : « '+e.d+' »');
+        if((e.p||undefined)!==pr) return _echec(k+' pratique : « '+e.p+' »');
+      }
+      // Les deux échelles, en entier : ce sont les repères qu'on lit en
+      // choisissant un chiffre, et un repère faux vaut mieux absent.
+      if(RC_LEXIQUE.rir.e.map(l=>l.join('=')).join('|')
+         !=='RIR 0=Échec : pas une de plus|RIR 1=Une encore en réserve|'
+           +'RIR 2=Deux encore : intense mais contrôlé|RIR 3+=Encore loin de l\'échec')
+        return _echec('échelle RIR : '+JSON.stringify(RC_LEXIQUE.rir.e));
+      if(RC_LEXIQUE.douleur.e.map(l=>l.join('=')).join('|')
+         !=='1–2=À peine perceptible|3=Gênant mais supportable|'
+           +'4–5=Ça fait mal, ta technique se dégrade|6=Je dois arrêter')
+        return _echec('échelle gêne : '+JSON.stringify(RC_LEXIQUE.douleur.e));
+      return true;})());
+
+    // ⚠ UNE SOURCE DE VERITE, ET UNE SEULE. Si une définition se retrouvait
+    // recopiée ailleurs dans le fichier — dans un title=, un placeholder, une
+    // aide en ligne — le catalogue cesserait d'être la source : il n'en serait
+    // plus qu'une copie parmi d'autres, et la divergence ne serait qu'une
+    // question de temps.
+    ok('Aucune définition du lexique n\'est recopiée ailleurs',(()=>{
+      const src=_prodSrc();
+      const doubles=[];
+      for(const [k,e] of Object.entries(RC_LEXIQUE)){
+        // On cherche le texte tel qu'il est ECRIT dans la source : l'apostrophe
+        // y est échappée par le backslash du littéral JavaScript.
+        const lit=e.d.replace(/'/g,'\\\'');
+        const n=src.split(lit).length-1;
+        if(n>1) doubles.push(k+' ×'+n);
+      }
+      return doubles.length?_echec('définitions recopiées : '+doubles.join(', ')):true;})());
+
+    // ⚠ rcInfo EST PURE, ET SURTOUT INCASSABLE. Elle sera appelée depuis des
+    // dizaines de gabarits en R07 à R10 : `${rcInfo(cle)}` ne doit jamais
+    // pouvoir casser la ligne qui l'accueille, même si la clé se trompe ou
+    // disparaît du catalogue.
+    ok('rcInfo rend une pastille, ou rien du tout',(()=>{
+      if(rcInfo('inconnu')!=='') return _echec('une clé inconnue rend « '+rcInfo('inconnu')+' »');
+      if(rcInfo()!=='') return _echec('sans clé, rcInfo rend du balisage');
+      if(rcInfo(null)!==''||rcInfo('')!=='') return _echec('null ou vide rend du balisage');
+      // ⚠ ET PAS D'HERITAGE D'Object.prototype : rcInfo('toString') lirait une
+      // fonction et rendrait un bouton mort si la lecture n'était pas gardée.
+      if(rcInfo('toString')!=='') return _echec('une clé héritée rend un bouton mort');
+      const h=rcInfo('rir');
+      if(h.indexOf('rir')<0) return _echec('la pastille ne porte pas sa clé : '+h);
+      const d=document.createElement('div');
+      d.style.cssText='position:fixed;left:-9999px;top:0'; d.innerHTML=h;
+      document.body.appendChild(d);
+      try{
+        const b=d.querySelector('button');
+        if(!b) return _echec('la pastille ne rend aucun bouton');
+        // Le type est explicite : dans un <form>, un bouton sans type SOUMET.
+        if(b.getAttribute('type')!=='button')
+          return _echec('pas de type="button" : la pastille soumettrait un formulaire');
+        if(!b.classList.contains('rc-i')||!b.classList.contains('hit44'))
+          return _echec('classes : '+b.className);
+        if((b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'rir\')')<0)
+          return _echec('onclick : '+b.getAttribute('onclick'));
+        const al=b.getAttribute('aria-label')||'';
+        if(al!=='Qu\'est-ce que '+RC_LEXIQUE.rir.t+' ?') return _echec('aria-label : « '+al+' »');
+        if(b.textContent.trim()!=='ⓘ') return _echec('glyphe : « '+b.textContent.trim()+' »');
+        return true;
+      } finally { d.remove(); }})());
+
+    // LA MISE EN FORME DEMANDEE, mesurée sur le rendu et non relue dans la
+    // feuille : 32 px de zone, 13 px de glyphe, aucun fond, aucune bordure.
+    ok('La pastille tient la mise en forme demandée, et ne bouge pas',(()=>{
+      const d=document.createElement('div');
+      d.style.cssText='position:fixed;left:-9999px;top:0'; d.innerHTML=rcInfo('rir');
+      document.body.appendChild(d);
+      try{
+        const b=d.querySelector('.rc-i'), cs=getComputedStyle(b);
+        const r=b.getBoundingClientRect();
+        if(Math.round(r.width)!==32||Math.round(r.height)!==32)
+          return _echec('zone dessinée '+Math.round(r.width)+'×'+Math.round(r.height)+' au lieu de 32×32');
+        if(parseFloat(cs.fontSize)!==13) return _echec('glyphe à '+cs.fontSize);
+        if(cs.borderTopWidth!=='0px') return _echec('bordure : '+cs.borderTopWidth);
+        if(cs.backgroundImage!=='none'||!/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor))
+          return _echec('fond : '+cs.backgroundColor+' / '+cs.backgroundImage);
+        if(cs.verticalAlign!=='middle') return _echec('vertical-align : '+cs.verticalAlign);
+        if(parseFloat(cs.marginLeft)!==4) return _echec('margin-left : '+cs.marginLeft);
+        if(cs.flexShrink!=='0') return _echec('flex-shrink : '+cs.flexShrink);
+        // ⚠ PAS D'ANIMATION. Un élément d'aide qui bouge attire l'œil qu'il
+        // devrait laisser au contenu — et c'est demandé sans.
+        if(cs.animationName!=='none') return _echec('animation : '+cs.animationName);
+        if(!/^(none|all 0s|.*\b0s\b)/.test(cs.transition||'none')&&cs.transitionDuration!=='0s')
+          return _echec('transition : '+cs.transition);
+        // .hit44 porte la zone tactile SANS agrandir le dessin.
+        const av=getComputedStyle(b,'::before');
+        if(parseFloat(av.width)<44||parseFloat(av.height)<44)
+          return _echec('zone tactile '+av.width+'×'+av.height);
+        return true;
+      } finally { d.remove(); }})());
+
+    // ⚠ LA PASTILLE NE DOIT JAMAIS CASSER L'ALIGNEMENT DE LA LIGNE QUI LA
+    // PORTE, et c'est demandé dans trois contextes précis. Chacun casse d'une
+    // façon différente : un <th> par la ligne de base, un titre de carte en
+    // flex par l'écrasement (sans flex-shrink:0 elle tombe à zéro quand le
+    // texte est long), un libellé par la hauteur de ligne.
+    ok('La pastille s\'aligne dans un <th>, un titre de carte et un libellé',(()=>{
+      const d=document.createElement('div');
+      d.style.cssText='position:fixed;left:0;top:0;width:359px;background:#000;z-index:-1';
+      d.innerHTML=
+        '<table class="series-table" style="width:100%"><thead><tr>'
+        +'<th id="rci-c1">RIR'+rcInfo('rir')+'</th><th>Charge</th></tr></thead>'
+        +'<tbody><tr><td>10</td><td>60</td></tr></tbody></table>'
+        +'<div class="card"><div class="card-title" id="rci-c2" style="display:flex;align-items:center">'
+        +'Masse grasse estimée sur un titre vraiment très long'+rcInfo('masse_grasse')+'</div></div>'
+        +'<div style="padding:8px"><label id="rci-c3" style="font-size:var(--fs-sm)">'
+        +'Activité hors sport'+rcInfo('neat')+'</label></div>';
+      document.body.appendChild(d);
+      try{
+        for(const [id,quoi] of [['rci-c1','<th> de tableau'],
+            ['rci-c2','titre de carte'],['rci-c3','libellé de champ']]){
+          const p=document.getElementById(id), b=p&&p.querySelector('.rc-i');
+          if(!b) return _echec(quoi+' : la pastille a disparu');
+          const rp=p.getBoundingClientRect(), rb=b.getBoundingClientRect();
+          // ÉCRASÉE : c'est ce qui arrive dans un conteneur flex sans
+          // flex-shrink:0, et le bouton devient intouchable.
+          if(Math.round(rb.width)<30)
+            return _echec(quoi+' : pastille écrasée à '+Math.round(rb.width)+'px');
+          // SORTIE DE SA LIGNE : le symptôme d'un vertical-align perdu.
+          if(rb.top<rp.top-2||rb.bottom>rp.bottom+2)
+            return _echec(quoi+' : la pastille déborde sa ligne');
+          // Et le texte reste centré sur elle.
+          const ec=Math.abs((rb.top+rb.bottom)/2-(rp.top+rp.bottom)/2);
+          if(ec>3) return _echec(quoi+' : centres décalés de '+ec.toFixed(1)+'px');
+        }
+        return true;
+      } finally { d.remove(); }})());
+
+    ok('La feuille rend le titre, la définition, et rien de plus',(()=>{
+      const z=document.getElementById('rc-lexique');
+      const c=document.getElementById('rc-lexique-corps');
+      if(!z||!c) return _echec('la feuille du lexique n’existe pas');
+      try{
+        // Une entrée COMPLETE : les quatre parties.
+        if(rcInfoOuvrir('rir')===null) return _echec('rcInfoOuvrir n’ouvre pas');
+        if(z.style.display!=='flex') return _echec('la feuille reste fermée');
+        if((c.querySelector('.rci-t')||{}).textContent!==RC_LEXIQUE.rir.t)
+          return _echec('titre rendu : « '+(c.querySelector('.rci-t')||{}).textContent+' »');
+        if((c.querySelector('.rci-d')||{}).textContent!==RC_LEXIQUE.rir.d)
+          return _echec('définition non rendue');
+        const pr=(c.querySelector('.rci-p')||{}).textContent||'';
+        if(pr.indexOf('En pratique')!==0||pr.indexOf(RC_LEXIQUE.rir.p)<0)
+          return _echec('« En pratique » : « '+pr+' »');
+        // DEUX COLONNES, SANS EN-TETE.
+        const tb=c.querySelector('table.rci-e');
+        if(!tb) return _echec('l’échelle n’est pas un tableau');
+        if(tb.querySelector('thead')) return _echec('le tableau porte un en-tête');
+        const lignes=tb.querySelectorAll('tr');
+        if(lignes.length!==4) return _echec(lignes.length+' lignes au lieu de 4');
+        for(const tr of lignes)
+          if(tr.children.length!==2) return _echec('une ligne a '+tr.children.length+' colonnes');
+        // ⚠ ET UNE ENTREE NUE N'INVENTE RIEN. Un bloc « en pratique » vide ou
+        // un tableau à zéro ligne meubleraient — la règle du produit est de
+        // ne pas meubler.
+        rcInfoOuvrir('neat');
+        if(c.querySelector('.rci-p')) return _echec('neat rend un bloc « en pratique » vide');
+        if(c.querySelector('.rci-e')) return _echec('neat rend un tableau vide');
+        if((c.querySelector('.rci-d')||{}).textContent!==RC_LEXIQUE.neat.d)
+          return _echec('neat ne rend pas sa définition');
+        // UNE CLE INCONNUE N'OUVRE RIEN, et surtout n'efface pas ce qui est là.
+        const av=c.innerHTML;
+        if(rcInfoOuvrir('inconnu')!==null) return _echec('une clé inconnue ouvre la feuille');
+        // ⚠ ET PAS PLUS PAR LE PROTOTYPE. rcInfoOuvrir('toString') aurait
+        // ouvert une feuille sur « undefined » tant que la lecture n'était
+        // pas gardée par hasOwnProperty.
+        if(rcInfoOuvrir('toString')!==null) return _echec('une clé héritée ouvre la feuille');
+        if(c.innerHTML!==av) return _echec('une clé inconnue a vidé le corps');
+        // ⚠ TOUT PASSE PAR escapeHtml. Les textes viennent d'une constante
+        // gelée aujourd'hui ; R10 en ajoutera, et le composant n'aura pas à
+        // être relu pour rester sûr.
+        const f=String(rcInfoOuvrir);
+        for(const ch of ['e.t','e.d','e.p'])
+          if(f.indexOf('escapeHtml('+ch+')')<0) return _echec(ch+' n’est pas échappé');
+        if(!/escapeHtml\(l\[0\]\)/.test(f)||!/escapeHtml\(l\[1\]\)/.test(f))
+          return _echec('les lignes d’échelle ne sont pas échappées');
+        return true;
+      } finally { try{ rcInfoFermer(true); }catch(e){} }})());
+
+    // ══ LES REGLES UX, MESUREES ET NON RELUES ════════════════════════════
+    //
+    // ⚠ LA FEUILLE NE DEFILE PAS. C'est une règle, pas un réglage : une
+    // explication qui demande de faire défiler n'est plus une explication,
+    // c'est un article — et on est venu chercher un mot au milieu d'une série.
+    // Si une entrée n'y tient pas, c'est L'ENTREE qu'il faut raccourcir ;
+    // cette assertion est là pour que ce soit constaté au lieu d'être découvert
+    // sur le téléphone de quelqu'un.
+    ok('Aucune entrée du lexique ne fait défiler la feuille',(()=>{
+      const z=document.getElementById('rc-lexique');
+      const boite=z&&[...z.children].find(c=>c.tagName==='DIV');
+      if(!boite) return _echec('la feuille n’a pas de panneau');
+      try{
+        const cs=getComputedStyle(boite);
+        if(/auto|scroll/.test(cs.overflowY)) return _echec('overflow-y:'+cs.overflowY);
+        if(cs.maxHeight!=='none') return _echec('max-height:'+cs.maxHeight+' : la feuille pourra défiler');
+        const trop=[];
+        for(const k of Object.keys(RC_LEXIQUE)){
+          rcInfoOuvrir(k);
+          if(boite.scrollHeight>boite.clientHeight+1)
+            trop.push(k+' ('+boite.scrollHeight+'>'+boite.clientHeight+')');
+        }
+        return trop.length?_echec('entrées à raccourcir : '+trop.join(', ')):true;
+      } finally { try{ rcInfoFermer(true); }catch(e){} }})());
+
+    // ⚠ AUCUNE NAVIGATION, ET UNE SEULE SORTIE. On est venu chercher un mot ;
+    // on doit pouvoir revenir à sa série sans avoir rien décidé. Un lien ou un
+    // « en savoir plus » transformerait une réponse de trois lignes en
+    // embranchement.
+    ok('On ne va nulle part depuis la feuille, et on en sort par un seul bouton',(()=>{
+      try{
+        rcInfoOuvrir('rir');
+        const z=document.getElementById('rc-lexique');
+        if(z.querySelector('a')) return _echec('la feuille porte un lien');
+        const btns=[...z.querySelectorAll('button')];
+        if(btns.length!==1) return _echec(btns.length+' boutons : '+btns.map(b=>b.textContent.trim()).join(' | '));
+        if(btns[0].textContent.trim()!=='J\'ai compris')
+          return _echec('le bouton dit « '+btns[0].textContent.trim()+' »');
+        if((btns[0].getAttribute('onclick')||'').indexOf('rcInfoFermer')<0)
+          return _echec('le bouton ne ferme pas');
+        // LE FOCUS ARRIVE DESSUS : au clavier, le seul geste possible est
+        // d'en sortir.
+        if(document.activeElement!==btns[0])
+          return _echec('le focus est sur '+(document.activeElement&&document.activeElement.id||'?'));
+        // Il ferme vraiment.
+        btns[0].onclick(); rcInfoFermer(true);
+        return z.style.display==='none'?true:_echec('display='+z.style.display);
+      } finally { try{ rcInfoFermer(true); }catch(e){} }})());
+
+    // TROIS SORTIES : le bouton ci-dessus, le voile, et Échap.
+    ok('Le voile et la touche Échap ferment aussi la feuille',(()=>{
+      const z=document.getElementById('rc-lexique');
+      const src=_prodSrc();
+      // LE VOILE : le clic sur le fond, et LUI SEUL — event.target===this.
+      const oc=z.getAttribute('onclick')||'';
+      if(oc.indexOf('event.target===this')<0||oc.indexOf('rcInfoFermer')<0)
+        return _echec('le voile ne ferme pas : '+oc);
+      // ÉCHAP : le gestionnaire global doit connaître la feuille, et la
+      // traiter AVANT la modale — le lexique peut s'ouvrir par-dessus, et
+      // Échap défait le dernier geste, pas l'avant-dernier.
+      const m=src.match(/if\(e\.key!=='Escape'\) return;[\s\S]{0,1200}/);
+      if(!m) return _echec('le gestionnaire d’Échap est introuvable');
+      const iL=m[0].indexOf('rc-lexique'), iO=m[0].indexOf('modal-overlay');
+      if(iL<0) return _echec('Échap ignore le lexique');
+      if(iO>=0&&iL>iO) return _echec('Échap ferme la modale avant le lexique');
+      // Et on le joue pour de vrai.
+      rcInfoOuvrir('rir');
+      if(z.style.display!=='flex') return _echec('la feuille ne s’ouvre pas');
+      document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+      const ferme=z.style.display==='none'||z.dataset.sortie==='1';
+      try{ rcInfoFermer(true); }catch(e){}
+      return ferme?true:_echec('Échap n’a pas fermé la feuille');})());
+
+    // ⚠ UNE DEFINITION NE SURVIT PAS A L'ECRAN QUI L'A OUVERTE. Elle s'ouvre
+    // depuis n'importe où : sans ça, elle restait posée par-dessus l'écran
+    // suivant, et elle n'expliquait plus rien. Même discipline que la modale
+    // de pause et que la saisie, documentée dans go().
+    ok('Le lexique meurt avec l\'écran qui l\'a ouvert',(()=>{
+      const src=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
+      // go() la ferme, et INSTANTANEMENT : une feuille qui sortirait en fondu
+      // par-dessus le nouvel écran serait pire que le clignotement d'avant.
+      if(!/rcInfoFermer\(true\)/.test(src))
+        return _echec('go() ne ferme pas le lexique, ou pas instantanément');
+      // ET LE RETOUR MATERIEL LA DEFAIT EN PREMIER, pour la même raison
+      // qu'Échap.
+      const f=String(_histFermerCalque);
+      const iL=f.indexOf('rc-lexique'), iP=f.indexOf('wo-pause-modal');
+      if(iL<0) return _echec('le retour matériel ignore le lexique');
+      if(iP>=0&&iL>iP) return _echec('le retour ferme la pause avant le lexique');
+      return true;})());
+
+    // ══ CE QUE CE LOT NE FAIT PAS ════════════════════════════════════════
+    // Il crée le composant, il ne le déploie pas : R07 à R10 poseront les ⓘ.
+    // Deux choses devaient rester intactes, et on le constate.
+    ok('R06 ne touche ni à toggleRirExplain ni aux title= existants',(()=>{
+      if(typeof toggleRirExplain!=='function')
+        return _echec('toggleRirExplain a disparu : R22 n’aura plus rien à reprendre');
+      const src=_prodSrc();
+      // Le title= de la consigne RPE en séance : celui que le lexique
+      // remplacera un jour, et qui n'est pas retiré aujourd'hui.
+      if(src.indexOf('title="Intensité demandée par ton coach')<0)
+        return _echec('un title= existant a été retiré');
+      return true;})());
+
     // ══ 16/09/2026 — LES TROIS TUILES RECOIVENT UN REFERENTIEL ═══════════
     //
     // « 2 » séances cette semaine : conforme ou en retard ? « 71 % » de diète

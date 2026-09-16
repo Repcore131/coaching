@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1228';
+window.RC_BUILD='1229';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4852,6 +4852,45 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
    NE FONCTIONNE PAS sur input ni select : ces elements remplaces ne rendent
    pas de pseudo-element. Leur zone tactile passe par min-height (voir
    .set-input plus bas). */
+/* ══ LE LEXIQUE ══════════════════════════════════════════════════════════
+   LA PASTILLE NE DOIT PAS SE FAIRE REMARQUER. Elle se pose a cote de libelles
+   qui, eux, portent l'information : au meme poids visuel elle deviendrait un
+   deuxieme point d'appel, et l'oeil hesiterait a chaque ligne.
+   ⚠ ELLE NE DOIT JAMAIS CASSER L'ALIGNEMENT DE LA LIGNE QUI LA PORTE, et
+   trois proprietes s'en chargent, chacune contre un contexte : vertical-align
+   pour un libelle en ligne ou un <th>, flex-shrink:0 pour un titre de carte
+   dans un conteneur flex — sans lui elle se fait ecraser a zero quand le
+   texte est long —, et line-height:1 pour qu'un glyphe de 13 px dans une
+   boite de 32 ne fasse pas grandir la rangee.
+   ⚠ AUCUNE ANIMATION. Elle est demandee sans, et c'est juste : un element
+   d'aide qui bouge attire l'oeil qu'il devrait laisser au contenu.
+   ⚠ SA ZONE TACTILE FAIT 32 px DESSINES, portee a 44 par .hit44 — un
+   pseudo-element centre qui ne pousse rien. Agrandir le bouton lui-meme
+   aurait deplace tous les libelles a cote desquels elle se pose. */
+.rc-i{display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;padding:0;margin-left:4px;
+  background:none;border:none;border-radius:50%;cursor:pointer;
+  font-family:inherit;font-size:13px;line-height:1;
+  color:var(--text-faint);vertical-align:middle;flex-shrink:0}
+.rc-i:hover,.rc-i:focus-visible{color:var(--sub)}
+/* Le contenu de la feuille. */
+.rci-t{font-size:var(--fs-md);font-weight:800;letter-spacing:.4px;color:var(--text);
+  line-height:1.3;margin-bottom:9px}
+.rci-d{font-size:var(--fs-sm);line-height:1.6;color:var(--text)}
+.rci-p{font-size:var(--fs-sm);line-height:1.55;color:var(--sub);margin-top:12px;
+  padding-left:11px;border-left:2px solid var(--red)}
+.rci-p b{color:var(--red-text);font-weight:800;letter-spacing:.3px}
+.rci-e{width:100%;border-collapse:collapse;margin-top:15px}
+.rci-e tr{border-top:1px solid var(--border)}
+/* La clef ne s'enroule pas et ne se comprime pas : c'est le repere qu'on
+   cherche du regard, et une colonne qui bouge d'une ligne a l'autre ne se
+   parcourt plus. */
+.rci-e th{width:60px;text-align:left;vertical-align:baseline;padding:7px 10px 7px 0;
+  font-size:var(--fs-xs);font-weight:800;letter-spacing:.6px;color:var(--red-text);
+  white-space:nowrap}
+.rci-e td{vertical-align:baseline;padding:7px 0;font-size:var(--fs-sm);line-height:1.45;
+  color:var(--text)}
+@media(max-width:360px){ .rci-e th{width:52px;padding-right:8px} }
 .hit44,.back-btn,.exo-chip{position:relative}
 .hit44::before,.back-btn::before,.exo-chip::before{
   content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -9620,6 +9659,30 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- ══════ LE LEXIQUE ════════════════════════════════════════════════
+     UNE SEULE FEUILLE POUR TOUTE L'APPLICATION, remplie a l'ouverture par
+     rcInfoOuvrir. Un calque par notion aurait multiplie le balisage pour
+     afficher, a chaque fois, trois lignes de texte.
+     Meme patron que #wo-pause-modal et #prog-ex-modal : le fond ferme au
+     clic, le contenu arrete la propagation.
+     ⚠ ELLE NE DEFILE PAS, et c'est une regle, pas un reglage : ni
+     overflow-y, ni max-height. Une explication qui demande de faire defiler
+     n'est plus une explication, c'est un article. Si une entree n'y tient
+     pas, c'est l'entree qu'il faut raccourcir — une assertion mesure les dix
+     a 359 px de large et tombe si l'une deborde.
+     ⚠ ET ON NE VA NULLE PART DEPUIS ICI : aucun lien, aucun « en savoir
+     plus », UNE seule sortie. On est venu chercher un mot au milieu d'une
+     serie ; on doit pouvoir revenir a sa serie sans avoir rien decide. -->
+<div id="rc-lexique" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
+  onclick="if(event.target===this)rcInfoFermer()" role="dialog" aria-modal="true"
+  aria-labelledby="rc-lexique-titre">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:22px 20px 18px;width:100%;max-width:560px">
+    <div id="rc-lexique-corps"></div>
+    <button id="rc-lexique-ok" class="btn btn-outline btn-sm" style="width:100%;margin-top:18px"
+      onclick="rcInfoFermer()">J'ai compris</button>
+  </div>
+</div>
+
 <!-- ══════ ECHEANCE ══════════════════════════════════════════════════
      UN SEUL ECRAN, atteint depuis la fiche client cote coach et depuis
      l'accueil athlete quand une echeance est active. Rien d'autre ne change
@@ -12222,6 +12285,130 @@ const RESIL_MOYENS='Ta demande est enregistrée. RepCore ne peut pas annuler '
 // Palier retenu. L'annuel est pré-sélectionné quand il existe ; sinon le
 // premier disponible, pour qu'aucun état ne laisse la sélection vide.
 let _subPalier=null;
+// ══ LE LEXIQUE ═══════════════════════════════════════════════════════════
+//
+// UNE SOURCE DE VERITE, UN COMPOSANT, ET RIEN D'AUTRE. L'application employait
+// « RIR », « e1RM », « NEAT », « macros » sans les definir nulle part, ou en
+// les redefinissant a l'endroit ou ils tombaient — ce qui revient au meme
+// defaut avec plus de travail : deux explications du meme mot finissent
+// toujours par diverger, et c'est celle qu'on ne relit pas qui reste fausse.
+//
+// LA STRUCTURE D'UNE ENTREE, et elle est faite pour en accueillir d'autres :
+//   t : le titre affiche.
+//   d : la definition. VINGT MOTS AU PLUS, au tutoiement — regle tenue par une
+//       assertion, pas par la bonne volonte. Au-dela on ecrit un article, et
+//       un article ne se lit pas au milieu d'une serie.
+//   p : la ligne « en pratique », facultative. Elle dit quoi FAIRE la ou d dit
+//       ce que c'est. Les deux ne se remplacent pas.
+//   e : l'echelle, facultative, deux a quatre lignes. Elle n'existe que pour
+//       ce qu'on NOTE : un chiffre qu'on doit choisir a besoin de ses reperes,
+//       une notion qu'on lit n'en a pas besoin.
+//
+// ⚠ AJOUTER UNE ENTREE NE DEMANDE RIEN D'AUTRE QUE D'ECRIRE ICI. Le composant
+// ne connait aucune cle : il lit t, d, p et e, et se tait sur ce qui manque.
+// Une entree sans p ne rend pas de bloc vide, une entree sans e ne rend pas de
+// tableau vide.
+//
+// ⚠ GELE, jusqu'aux lignes d'echelle. Les textes sont valides ; une definition
+// qui derive d'une version a l'autre est exactement ce que ce catalogue existe
+// pour empecher.
+const RC_LEXIQUE=Object.freeze({
+  rir:Object.freeze({
+    t:'RIR — Répétitions en réserve',
+    d:'Le nombre de répétitions que tu aurais encore pu faire après ta dernière.',
+    p:'Vise RIR 2 sur tes premières séries, RIR 0–1 sur la dernière.',
+    e:Object.freeze([Object.freeze(['RIR 0','Échec : pas une de plus']),
+      Object.freeze(['RIR 1','Une encore en réserve']),
+      Object.freeze(['RIR 2','Deux encore : intense mais contrôlé']),
+      Object.freeze(['RIR 3+','Encore loin de l\'échec'])])}),
+  rpe:Object.freeze({
+    t:'RPE — Intensité demandée par ton coach',
+    d:'Une note sur 10 fixée par ton coach pour cette série.',
+    p:'Tu ne la règles pas : note ta charge, c\'est tout.'}),
+  e1rm:Object.freeze({
+    t:'Force max estimée (e1RM)',
+    d:'La charge que tu pourrais sans doute soulever une seule fois, calculée depuis tes séries.',
+    p:'Fiable jusqu\'à 12 répétitions, approximative au-delà. Jamais testée en vrai.'}),
+  douleur:Object.freeze({
+    t:'Échelle de gêne',
+    d:'Note ce que tu as ressenti pendant la série, pas après.',
+    e:Object.freeze([Object.freeze(['1–2','À peine perceptible']),
+      Object.freeze(['3','Gênant mais supportable']),
+      Object.freeze(['4–5','Ça fait mal, ta technique se dégrade']),
+      Object.freeze(['6','Je dois arrêter'])])}),
+  neat:Object.freeze({
+    t:'Activité hors sport (NEAT)',
+    d:'Ce que tu dépenses en dehors de tes séances : marche, travail, gestes du quotidien.'}),
+  macros:Object.freeze({
+    t:'Macros',
+    d:'Protéines, glucides et lipides : les trois familles qui composent tes calories.'}),
+  volume:Object.freeze({
+    t:'Volume',
+    d:'La quantité de travail accumulée sur une période, muscle par muscle.'}),
+  surcharge:Object.freeze({
+    t:'Surcharge progressive',
+    d:'Augmenter un peu la charge dès que tu gardes des répétitions en réserve.',
+    p:'RepCore le fait pour toi : la charge proposée monte toute seule.'}),
+  masse_grasse:Object.freeze({
+    t:'Masse grasse estimée',
+    d:'Estimée depuis ton tour de taille, ton cou et ta taille — jamais mesurée.',
+    p:'Marge de 3 à 4 points. Regarde la tendance, pas le chiffre exact.'}),
+  '1rm':Object.freeze({
+    t:'1RM',
+    d:'La charge maximale que tu pourrais soulever une seule fois.'})
+});
+// ⚠ ON LIT PAR hasOwnProperty, JAMAIS PAR L'ACCESSEUR. RC_LEXIQUE est un
+// objet litteral : il herite d'Object.prototype, et rcInfo('toString') y
+// trouvait une fonction — donc une entree « vraie », donc un bouton mort dont
+// le titre disait « undefined ». Une cle viendra un jour d'une donnee et non
+// d'un litteral ; elle n'a pas a pouvoir atteindre le prototype.
+// Trouve par l'assertion « rcInfo rend une pastille, ou rien du tout ».
+function _lexEntree(cle){
+  return (typeof cle==='string'&&Object.prototype.hasOwnProperty.call(RC_LEXIQUE,cle))
+    ?RC_LEXIQUE[cle]:null;
+}
+// PURE. La pastille : un ⓘ de 13 px, et une zone tactile autour de lui.
+// ⚠ UNE CLE INCONNUE REND LA CHAINE VIDE, jamais une erreur et jamais un
+// bouton mort. C'est ce qui permet de l'appeler sans precaution depuis
+// n'importe quel gabarit : `${rcInfo(cle)}` ne peut pas casser la ligne qui
+// l'accueille, meme si la cle se trompe ou disparait.
+function rcInfo(cle){
+  const e=_lexEntree(cle);
+  if(!e) return '';
+  return '<button type="button" class="rc-i hit44" '
+    +'onclick="rcInfoOuvrir(\''+cle+'\')" '
+    +'aria-label="Qu\'est-ce que '+escapeHtml(e.t)+' ?">ⓘ</button>';
+}
+// L'OUVERTURE. Une cle inconnue n'ouvre RIEN : une feuille vide serait pire
+// qu'une pastille absente, parce qu'elle promet une reponse.
+function rcInfoOuvrir(cle){
+  const e=_lexEntree(cle);
+  if(!e) return null;
+  const z=document.getElementById('rc-lexique-corps');
+  if(!z) return null;
+  // ⚠ TOUT PASSE PAR escapeHtml. Les textes viennent d'une constante gelee
+  // aujourd'hui ; le jour ou une entree viendra d'ailleurs — R10 en ajoutera —
+  // le composant n'aura pas a etre relu pour rester sur.
+  let h='<div class="rci-t" id="rc-lexique-titre">'+escapeHtml(e.t)+'</div>'
+    +'<div class="rci-d">'+escapeHtml(e.d)+'</div>';
+  // « En pratique » n'est pas la suite de la definition, c'est un autre
+  // registre : l'une dit ce que c'est, l'autre dit quoi faire.
+  if(e.p) h+='<div class="rci-p"><b>En pratique</b> — '+escapeHtml(e.p)+'</div>';
+  // DEUX COLONNES, SANS EN-TETE. Un en-tete sur quatre lignes de reperes
+  // ajouterait une ligne a lire pour n'annoncer que « libelle » et « sens ».
+  if(e.e&&e.e.length){
+    h+='<table class="rci-e"><tbody>'+e.e.map(l=>'<tr>'
+      +'<th scope="row">'+escapeHtml(l[0])+'</th>'
+      +'<td>'+escapeHtml(l[1])+'</td></tr>').join('')+'</tbody></table>';
+  }
+  z.innerHTML=h;
+  const f=_feuilleOuvrir('rc-lexique');
+  // Le focus part sur la SORTIE : au clavier comme au lecteur d'ecran, on
+  // arrive dans la feuille, et le seul geste possible est d'en sortir.
+  try{ const b=document.getElementById('rc-lexique-ok'); if(b) b.focus({preventScroll:true}); }catch(x){}
+  return f;
+}
+function rcInfoFermer(tout_de_suite){ _feuilleFermer('rc-lexique',tout_de_suite); }
 // ── Système d'icônes SVG inline (style Lucide / Feather) ─────────────────────
 const ICONS={
   home:'<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
@@ -15723,6 +15910,10 @@ function go(id){
   // INSTANTANEE : une feuille qui sortirait en fondu par-dessus le nouvel
   // ecran serait pire que le clignotement d'avant.
   try{ _feuilleFermer('wo-pause-modal',true); }catch(e){}
+  // ET LE LEXIQUE. Meme raison que les deux precedentes : il s'ouvre depuis
+  // n'importe quel ecran, il doit donc mourir avec celui qui l'a ouvert. Une
+  // definition posee par-dessus l'ecran suivant n'explique plus rien.
+  try{ rcInfoFermer(true); }catch(e){}
   // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
   // non au seul accueil coach : un coach qui ouvre l app ailleurs ne passait
   // jamais par loadCoachHome, et sa vitrine restait non publiee sans que rien
@@ -16104,6 +16295,11 @@ function _histFermerCalque(){
   // LA MODALE DE PAUSE D’ABORD, ET À LA MAIN. Contrairement aux deux
   // suivantes elle ne rend aucune promesse et personne ne l’attend : la
   // masquer suffit, c’est ce que fait déjà son bouton « Continuer la séance ».
+  // LE LEXIQUE D'ABORD, parce qu'il peut s'ouvrir PAR-DESSUS les autres : on
+  // demande « c'est quoi RIR ? » depuis un ecran qui a lui-meme un calque
+  // ouvert. Le retour doit defaire le dernier geste, pas l'avant-dernier.
+  const _lx=document.getElementById('rc-lexique');
+  if(_lx&&_lx.style.display==='flex'&&!_lx.dataset.sortie){ rcInfoFermer(); return; }
   const _wp=document.getElementById('wo-pause-modal');
   if(_wp&&_wp.style.display==='flex'&&!_wp.dataset.sortie){ _feuilleFermer('wo-pause-modal'); return; }
   // PAR LEUR BOUTON « non » : c’est lui qui résout la promesse. Les fermer à
@@ -84702,6 +84898,13 @@ function openAddAthlete(){
 // donc aucune politique nouvelle, on rend la meme accessible au clavier.
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape') return;
+  // LE LEXIQUE D'ABORD : il peut s'ouvrir PAR-DESSUS une modale, et Echap
+  // defait le dernier geste, pas l'avant-dernier. C'est la troisieme sortie
+  // demandee, avec le voile et « J'ai compris ».
+  const lx=document.getElementById('rc-lexique');
+  if(lx&&lx.style.display==='flex'&&!lx.dataset.sortie){
+    e.preventDefault(); try{ rcInfoFermer(); }catch(x){} return;
+  }
   const ov=document.getElementById('modal-overlay');
   if(!ov) return;
   const oc=ov.getAttribute('onclick')||'';
