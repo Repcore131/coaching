@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1235';
+window.RC_BUILD='1236';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5387,8 +5387,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    la suite de tests vérifie. Alignement sur la LIGNE DE BASE et non sur le
    milieu : deux corps très différents (20 px et 11 px) centrés l'un sur l'autre
    donnent un libellé qui flotte trop haut. */
+/* ⚠ L'ECART MESURE ETAIT DEJA DE 4 px, et il paraissait pourtant trop grand :
+   le chiffre est en Bebas, dont la chasse laisse du blanc a droite du glyphe,
+   et l'interlettrage de 0,5 px en ajoute encore apres le dernier chiffre. Le
+   blanc VU n'est donc pas le blanc MESURE.
+   ⚠ MAIS LA GOUTTIERE NE DESCEND PAS A ZERO. Une assertion tient un espace
+   REEL entre le compte et son libelle, et elle a raison : le blanc qu'on
+   voit vient de la chasse de Bebas, et Bebas est une police CHARGEE. Le jour
+   ou elle n'arrive pas, la police de repli colle « 12SEMAINES ». Deux
+   pixels : moitie moins qu'avant, et jamais zero. */
 .sk-chiffres{display:grid;grid-template-columns:auto auto;justify-content:start;
-  align-items:baseline;column-gap:4px;row-gap:1px;min-width:0}
+  align-items:baseline;column-gap:2px;row-gap:1px;min-width:0}
 #clh-streak-val{grid-column:1;grid-row:1}
 .sk-lbl{grid-column:2;grid-row:1}
 /* ── LE CAS NUL : « SEMAINE 1 », ET CE QU'IL RESTE A FAIRE ───────────────
@@ -9097,7 +9106,11 @@ const COACH_PHOTO='icons/coach.jpg';
            trait rouge flottait au milieu de rien. Il est annule ICI SEULEMENT,
            par une marge negative : la regle .pad sert vingt autres ecrans, et
            la changer les aurait tous deplaces. -->
-      <div class="clh-in clh-in-1" style="margin-top:-12px;margin-bottom:22px">
+      <!-- 22 px sous « Réglages » plus l'interligne faisaient 25 px de blanc
+           avant la carte du coach, pour rien : les deux emplacements qui les
+           separent — l'echeance d'acces et le mot au coach — sont vides la
+           plupart du temps. -->
+      <div class="clh-in clh-in-1" style="margin-top:-12px;margin-bottom:10px">
         <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
         <h1 id="clh-greeting" style="font-size:var(--fs-2xl);line-height:1.15;font-weight:400;letter-spacing:1px"></h1>
         <p id="clh-phrase" style="margin-top:7px;font-size:var(--fs-sm);line-height:1.55;color:var(--text-dim);font-style:italic"></p>
