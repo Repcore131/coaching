@@ -23581,6 +23581,158 @@ function testExercices(){
         return st.indexOf(Math.round(DIETE_TOLERANCE*100)+' %')>=0
           ?true:_echec('le sous-titre annonce autre chose : '+st);})());
 
+      // ══════════════════════════════════════════════════════════════════
+      // LA FENÊTRE GLISSANTE DE TRENTE JOURS
+      // ══════════════════════════════════════════════════════════════════
+      //
+      // ⚠ POURQUOI UNE FENÊTRE. Le taux se calculait sur TOUTE l'histoire du
+      // dossier. À trois cents jours notés, une semaine parfaite le fait gagner
+      // un demi-point et une semaine ratée lui en coûte autant : le chiffre se
+      // fige, et d'autant plus que l'athlète est assidu depuis longtemps —
+      // c'est-à-dire chez ceux qu'on voudrait garder. Un indicateur qu'aucun
+      // effort ne déplace cesse d'être lu.
+      //
+      // `maintenant` est passé À CHAQUE APPEL : une fenêtre glissante ne se
+      // vérifie pas sans pouvoir dire quand on se place, et un test qui
+      // dépendrait de l'heure d'exécution tomberait une nuit sur deux.
+      const _dJ=864e5;
+      const _dCle=(T,n)=>localISODate(new Date(T-n*_dJ));
+      // Jours `de`..`a` (en jours révolus), dont `bons` respectés.
+      const _dJrs=(T,de,a,bons)=>{ const o={}; let i=0;
+        for(let n=de;n<=a;n++){ o[_dCle(T,n)]={respected:i<bons}; i++; }
+        return o; };
+      const _dU=days=>({id:'df',email:'df@t',role:'athlete',
+        nutrition:{dietType:'strict',days:days}});
+
+      ok('Le taux de diète ne regarde que les trente derniers jours',(()=>{
+        const T=Date.parse('2026-06-15T10:30:00');   // instant fixe, pas Date.now()
+        if(!isFinite(T)) return _echec('instant de référence illisible');
+        // Dix jours parfaits récents, vingt jours ratés il y a deux mois.
+        const u=_dU(Object.assign(_dJrs(T,0,9,10),_dJrs(T,60,79,0)));
+        const r=_tauxDieteRespectee(u,T);
+        if(!r) return _echec('aucun taux');
+        if(r.juges!==10) return _echec(r.juges+' jours jugés au lieu de 10');
+        if(r.pct!==100) return _echec(r.pct+' % — le passé lointain pèse encore');
+        // ⚠ LA RÉGRESSION QUE CECI EMPÊCHE : un cumul à vie ne bouge plus.
+        // On ajoute trois cents jours parfaits très anciens ; le taux ne doit
+        // pas bouger d'un point, et surtout le dénominateur pas d'une unité.
+        const lourd=Object.assign({},u.nutrition.days);
+        for(let n=100;n<400;n++) lourd[_dCle(T,n)]={respected:true};
+        const r2=_tauxDieteRespectee(_dU(lourd),T);
+        if(r2.juges!==10) return _echec('300 jours anciens ont été comptés : '+r2.juges);
+        return true;})());
+
+      ok('La borne de la fenêtre est J-29, pas « il y a 29×24 h »',(()=>{
+        // ⚠ LE DÉFAUT QUE CECI EMPÊCHE, et il était déjà là dans _dieteFenetre.
+        // Les clés sont des dates LOCALES, donc minuit ; borner par
+        // `maintenant − 29×864e5` place la limite à L'HEURE QU'IL EST il y a
+        // vingt-neuf jours. À dix heures du matin, la clé J-29 tombait dix
+        // heures AVANT la borne et disparaissait — un jour sur trente, tous les
+        // jours, sans que rien ne le dise.
+        //
+        // On se place volontairement en fin de journée : c'est là que l'écart
+        // est le plus large.
+        const T=Date.parse('2026-06-15T23:45:00');
+        if(!isFinite(T)) return _echec('instant de référence illisible');
+        const dedans=_tauxDieteRespectee(_dU(_dJrs(T,29,29,1)),T);
+        if(!dedans||dedans.juges!==1) return _echec('J-29 est hors de la fenêtre');
+        const dehors=_tauxDieteRespectee(_dU(_dJrs(T,30,30,1)),T);
+        if(dehors!==null) return _echec('J-30 est dans la fenêtre : '+JSON.stringify(dehors));
+        // Et le même contrôle au petit matin, l'autre extrémité de la journée.
+        const M=Date.parse('2026-06-15T00:05:00');
+        const d2=_tauxDieteRespectee(_dU(_dJrs(M,29,29,1)),M);
+        return (d2&&d2.juges===1)?true:_echec('J-29 manque au petit matin');})());
+
+      ok('La tendance compare quinze jours à quinze, dans la même fenêtre',(()=>{
+        const T=Date.parse('2026-06-15T10:30:00');
+        // Récents 0..14 : 12/15 = 80 %. Précédents 15..29 : 6/15 = 40 %. → +40
+        const h=_tauxDieteRespectee(_dU(Object.assign(_dJrs(T,0,14,12),_dJrs(T,15,29,6))),T);
+        if(!h) return _echec('aucun taux');
+        if(h.tendance!==40) return _echec('hausse : '+h.tendance+' au lieu de +40');
+        if(h.juges!==30) return _echec('les deux moitiés ne pavent pas la fenêtre : '+h.juges);
+        // L'inverse, et jamais confondu avec une progression.
+        const b=_tauxDieteRespectee(_dU(Object.assign(_dJrs(T,0,14,6),_dJrs(T,15,29,12))),T);
+        if(b.tendance!==-40) return _echec('baisse : '+b.tendance);
+        // ⚠ LES DEUX MOITIÉS NE SE RECOUVRENT PAS ET NE LAISSENT PAS DE TROU.
+        // [J-14 … J] et [J-29 … J-15] : trente jours, chacun d'un seul côté.
+        // Un recouvrement d'un jour aurait fait compter ce jour deux fois et
+        // amorti toutes les tendances, sans jamais rien casser de visible.
+        const seulRecent=_tauxDieteRespectee(_dU(_dJrs(T,0,14,15)),T);
+        const seulAncien=_tauxDieteRespectee(_dU(_dJrs(T,15,29,0)),T);
+        if(seulRecent.tendance!==null) return _echec('une tendance sans moitié ancienne');
+        if(seulAncien.tendance!==null) return _echec('une tendance sans moitié récente');
+        if(seulRecent.juges!==15||seulAncien.juges!==15)
+          return _echec('moitiés de '+seulRecent.juges+' et '+seulAncien.juges+' jours');
+        return true;})());
+
+      ok('Une tendance sur deux jours n’est pas une tendance',(()=>{
+        // Quatre jours jugeables de chaque côté, au minimum. En dessous, un
+        // seul repas fait passer de « en hausse » à « en baisse ».
+        const T=Date.parse('2026-06-15T10:30:00');
+        const trois=_tauxDieteRespectee(_dU(Object.assign(_dJrs(T,0,14,10),_dJrs(T,15,17,1))),T);
+        if(trois.tendance!==null) return _echec('trois jours suffisent : '+trois.tendance);
+        // Quatre pile : elle existe.
+        const quatre=_tauxDieteRespectee(_dU(Object.assign(_dJrs(T,0,3,4),_dJrs(T,15,18,0))),T);
+        if(quatre.tendance!==100) return _echec('quatre jours de chaque côté : '+quatre.tendance);
+        // ⚠ ET C'EST `null`, PAS ZÉRO. Zéro se lirait comme « stable »,
+        // c'est-à-dire comme une mesure — alors qu'on n'a rien mesuré.
+        if(trois.tendance===0) return _echec('l’absence de mesure est rendue comme un zéro');
+        // Un dossier sans aucun jour ne rend rien du tout.
+        return _tauxDieteRespectee(_dU({}),T)===null
+          ?true:_echec('un dossier vide rend un taux');})());
+
+      ok('Le sous-titre dit la fenêtre, et ne parle du sens qu’au-delà de ±5',(()=>{
+        const base={tenus:12,juges:18,flexible:true,jours:DIETE_FENETRE_JOURS};
+        const st=t=>_sousTitreDiete(Object.assign({},base,{tendance:t}));
+        // LA FENÊTRE SE DIT. Sans elle, « 12/18 » se lit comme un total de vie.
+        if(st(null).indexOf('sur '+DIETE_FENETRE_JOURS+' jours')<0)
+          return _echec('la fenêtre n’est pas annoncée : '+st(null));
+        // Le seuil est DÉRIVÉ de la constante — un nombre écrit à la main ici
+        // finirait par annoncer autre chose que ce que le code applique.
+        const S=DIETE_TENDANCE_SEUIL;
+        for(const t of [0,1,S-1,S,-1,-(S-1),-S]){
+          const s=st(t);
+          if(/en hausse|en baisse/.test(s)) return _echec(t+' pts → « '+s+' »');
+        }
+        if(st(S+1).indexOf('en hausse')<0) return _echec('+'+(S+1)+' → « '+st(S+1)+' »');
+        if(st(-(S+1)).indexOf('en baisse')<0) return _echec('−'+(S+1)+' → « '+st(-(S+1))+' »');
+        // Et jamais « stable » sous le seuil : affirmer la stabilité serait
+        // affirmer une chose qu'on n'a pas mesurée.
+        if(/stable/.test(st(1))) return _echec('« stable » sous le seuil : '+st(1));
+        // La règle jugée reste annoncée dans les deux régimes.
+        if(st(null).indexOf(Math.round(DIETE_TOLERANCE*100)+' %')<0)
+          return _echec('la tolérance a disparu du flexible : '+st(null));
+        const strict=_sousTitreDiete(Object.assign({},base,{flexible:false,tendance:null}));
+        if(strict.indexOf('jours déclarés')<0) return _echec('strict : '+strict);
+        if(strict.indexOf('sur '+DIETE_FENETRE_JOURS+' jours')<0)
+          return _echec('la fenêtre manque en stricte : '+strict);
+        // ⚠ LE NOMBRE VIENT DE `di.jours`, PAS DE LA CONSTANTE : ce que le
+        // sous-titre annonce doit être ce sur quoi le taux a RÉELLEMENT porté.
+        const vieux=_sousTitreDiete(Object.assign({},base,{jours:7,tendance:null}));
+        return vieux.indexOf('sur 7 jours')>=0
+          ?true:_echec('le sous-titre ignore di.jours : '+vieux);})());
+
+      ok('Une seule boucle compte les jours de diète',(()=>{
+        // Le taux, la tendance et la fenêtre glissante passent tous par
+        // _dieteComptes. Trois boucles recopiées auraient fini par compter
+        // trois choses légèrement différentes, et le sous-titre aurait
+        // contredit le pourcentage juste au-dessus de lui.
+        const nu=s=>String(s).replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+        for(const [f,nom] of [[_tauxDieteRespectee,'_tauxDieteRespectee'],
+                              [_dieteFenetre,'_dieteFenetre']]){
+          const src=nu(f);
+          if(src.indexOf('_dieteComptes')<0) return _echec(nom+' ne délègue pas le comptage');
+          if(/for\s*\(/.test(src)) return _echec(nom+' porte encore sa propre boucle');
+          if(src.indexOf('jourDieteTenu')>=0) return _echec(nom+' rejuge les jours lui-même');
+        }
+        if(nu(_dieteComptes).indexOf('jourDieteTenu')<0)
+          return _echec('_dieteComptes ne passe pas par le prédicat partagé');
+        // Et rien n'écrit : le verdict se calcule à la lecture.
+        for(const f of [_tauxDieteRespectee,_dieteComptes,_dieteFenetre,_cleJourDecalee])
+          for(const ecrit of ['saveUser','DB.set','nutrition.days['])
+            if(nu(f).indexOf(ecrit)>=0) return _echec('écriture détectée : '+ecrit);
+        return true;})());
+
       ok('Le rendu des pastilles n’écrit RIEN dans le dossier',(()=>{
         // Le verdict flexible se CALCULE à la lecture. Le stocker figerait un
         // jugement que l'ajout d'un aliment doit pouvoir corriger — et

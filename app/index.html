@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1242';
+window.RC_BUILD='1243';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -45220,6 +45220,40 @@ function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomple
 // rien de nutritionnel, et laisserait passer un jour à protéines et glucides
 // justes avec quarante pour cent de lipides en trop.
 const DIETE_TOLERANCE=0.10;
+// ══ LA FENETRE DE LA DIETE ════════════════════════════════════════════════
+//
+// TRENTE JOURS, ET UNE FENETRE PLUTOT QU'UN CUMUL A VIE.
+//
+// ⚠ POURQUOI UNE FENETRE : UN CUMUL A VIE NE BOUGE PLUS, DONC NE MOTIVE PLUS.
+// Le taux se calculait sur TOUTE l'histoire du dossier. A trois cents jours
+// notes, une semaine parfaite le fait gagner un demi-point, et une semaine
+// ratee lui en coute autant : le chiffre se fige, et il se fige d'autant plus
+// que l'athlete est assidu depuis longtemps — c'est-a-dire exactement chez
+// ceux qu'on voudrait garder. Pire, il ne pardonne jamais : un mois difficile
+// en janvier pese encore en decembre, et personne ne peut plus le rattraper.
+// Un indicateur qu'aucun effort ne deplace cesse d'etre lu.
+//
+// Une fenetre glissante rend au chiffre sa seule qualite utile : REPONDRE.
+// Une bonne semaine se voit, un relachement se voit, et ce qui est corrige
+// finit par sortir du cadre.
+//
+// TRENTE ET NON SEPT. Sept jours font basculer le taux de quinze points pour
+// un repas de famille, et un indicateur qui saute a chaque ecart se lit comme
+// du bruit. Trente laisse la place a un week-end sans effacer une derive.
+const DIETE_FENETRE_JOURS=30;
+// La moitie, pour la tendance : quinze contre quinze DANS la meme fenetre.
+// Le sous-titre ne doit pas parler d'un mois que le chiffre au-dessus de lui
+// ignore — ce serait deux mesures dans la meme phrase.
+const DIETE_DEMI_JOURS=15;
+// ⚠ QUATRE JOURS JUGEABLES AU MINIMUM DE CHAQUE COTE. Une tendance calculee
+// sur deux jours n'est pas une tendance : un seul repas la fait passer de
+// « en hausse » a « en baisse ». En dessous, on ne dit rien — meme honnetete
+// que « RIR non note » et « Premiere seance ».
+const DIETE_TENDANCE_MIN=4;
+// CINQ POINTS. En dessous, l'ecart tient dans le bruit de deux jours notes
+// differemment, et annoncer « en hausse » pour trois points ferait osciller le
+// libelle d'un jour a l'autre sans que rien n'ait change chez l'athlete.
+const DIETE_TENDANCE_SEUIL=5;
 // PURE. L'énergie d'un jeu de macros. `kcal` quand il est là — c'est ce que
 // les cibles portent — et sinon la reconstitution 4/4/9, pour qu'un dossier
 // ancien reste jugeable au lieu d'être écarté en silence.
@@ -45240,9 +45274,22 @@ function _dieteKcal(o){
 function _sousTitreDiete(di){
   if(!di) return 'Aucun jour renseigné.';
   const n=di.tenus+'/'+di.juges;
-  return di.flexible
-    ? n+' · kcal et protéines à ±'+Math.round(DIETE_TOLERANCE*100)+' %'
-    : n+' · jours déclarés';
+  // LA FENETRE SE DIT. Sans elle, « 12/18 » se lisait comme un total de vie,
+  // et le chiffre paraissait s'effondrer le jour ou la fenetre a ete posee.
+  // `di.jours` plutot que la constante : ce que le sous-titre annonce est ce
+  // sur quoi le taux a REELLEMENT porte, pas ce que la constante vaut au
+  // moment du rendu.
+  const fen=' sur '+(di.jours||DIETE_FENETRE_JOURS)+' jours';
+  const regle=di.flexible
+    ? ' · kcal et protéines à ±'+Math.round(DIETE_TOLERANCE*100)+' %'
+    : ' · jours déclarés';
+  // LE SENS NE S'AJOUTE QU'AU-DELA DU SEUIL, et jamais « stable » en dessous :
+  // dire « stable » pour trois points d'ecart affirme une chose qu'on n'a pas
+  // mesuree. On se tait, ce qui est la seule maniere honnete de ne rien dire.
+  const t=di.tendance;
+  const sens=(typeof t==='number'&&Math.abs(t)>DIETE_TENDANCE_SEUIL)
+    ? (t>0?' · en hausse':' · en baisse') : '';
+  return n+fen+regle+sens;
 }
 // PURE. UN SEUL JOUR : tenu, pas tenu, ou pas jugeable.
 //
@@ -45283,42 +45330,80 @@ function jourDieteTenu(u,dateISO){
   const dans=(v,c)=>Math.abs(v-c)<=c*DIETE_TOLERANCE;
   return dans(mangeKcal,cibleKcal)&&dans(t.p,cibleProt);
 }
-function _tauxDieteRespectee(u){
+// PURE. La clef de jour a `decalage` jours d'un instant donne — negatif vers
+// le passe.
+//
+// ⚠ ON BORNE EN CLEFS, PAS EN MILLISECONDES, et ce n'est pas un detail de
+// style. Les clefs sont des dates LOCALES posees par localISODate ; borner par
+// `maintenant - 29*864e5` place la limite a l'HEURE QU'IL EST il y a vingt-neuf
+// jours, alors que la clef de ce jour-la vaut minuit. A dix heures du matin,
+// « J-29 » tombait donc dix heures avant la borne, et le jour le plus ancien de
+// la fenetre disparaissait — un jour sur trente, tous les jours, sans que rien
+// ne le dise. Le passage a l'heure d'ete en ajoutait un second. La comparaison
+// de chaines est exacte, et YYYY-MM-DD se compare dans l'ordre chronologique.
+function _cleJourDecalee(t,decalage){
+  const d=new Date((typeof t==='number')?t:Date.now());
+  d.setDate(d.getDate()+(Number(decalage)||0));
+  return localISODate(d);
+}
+// PURE. {tenus, juges} sur un intervalle de CLEFS, BORNES COMPRISES.
+//
+// ⚠ LA SEULE BOUCLE DE COMPTAGE DU FICHIER. Le taux, la tendance et la fenetre
+// glissante l'appellent tous les trois : trois boucles recopiees auraient fini
+// par compter trois choses legerement differentes, et le sous-titre aurait
+// contredit le pourcentage juste au-dessus de lui.
+//
+// ELLE PASSE PAR jourDieteTenu. Lire `respected` directement n'aurait marche
+// qu'en diete stricte : en flexible, le verdict se lit dans le journal
+// alimentaire contre les cibles du jour.
+function _dieteComptes(u,cleBasse,cleHaute){
   const nut=(u&&u.nutrition)||{};
   const flexible=(typeof typeDiete==='function')?typeDiete(nut)==='flexible':true;
   // Les clefs a examiner ne sont pas les memes des deux cotes : les reponses
   // quotidiennes en stricte, le journal alimentaire en flexible.
   const cles=Object.keys((flexible?nut.log:nut.days)||{});
-  let tenus=0, juges=0;
-  for(const k of cles){
-    const v=jourDieteTenu(u,k);
-    if(v===null) continue;
-    juges++;
-    if(v) tenus++;
-  }
-  if(!juges) return null;
-  return {pct:Math.round(tenus*100/juges), tenus:tenus, juges:juges, flexible:flexible};
-}
-// PURE. Le taux de diete sur une FENETRE de dates, jours repondus seulement.
-// ⚠ ELLE PASSE PAR jourDieteTenu, comme _tauxDieteRespectee. Lire
-// `respected` directement n'aurait marche qu'en diete stricte : en flexible,
-// le verdict se lit dans le journal alimentaire contre les cibles du jour.
-// Deux jugements recopies auraient fini par diverger, et le sous-titre aurait
-// contredit le pourcentage juste au-dessus de lui.
-function _dieteFenetre(u,debut,fin){
-  const nut=(u&&u.nutrition)||{};
-  const flexible=(typeof typeDiete==='function')?typeDiete(nut)==='flexible':true;
-  const cles=Object.keys((flexible?nut.log:nut.days)||{});
   let tenus=0,juges=0;
   for(const k of cles){
-    // Les clefs sont des dates LOCALES (localISODate) : on les relit en local.
-    const t=Date.parse(String(k)+'T00:00:00');
-    if(!isFinite(t)||t<debut||t>fin) continue;
+    if(cleBasse&&k<cleBasse) continue;
+    if(cleHaute&&k>cleHaute) continue;
     const v=jourDieteTenu(u,k);
     if(v===null) continue;            // jour non repondu : il ne compte pas
     juges++; if(v) tenus++;
   }
-  return juges?{pct:Math.round(tenus*100/juges),juges:juges}:null;
+  return {tenus:tenus,juges:juges,flexible:flexible};
+}
+// PURE. Le taux de diete sur les DIETE_FENETRE_JOURS derniers jours, jours
+// jugeables seulement, plus la tendance a l'interieur de cette meme fenetre.
+//
+// `maintenant` est FACULTATIF et sert aux tests : une fenetre glissante ne se
+// verifie pas sans pouvoir dire quand on se place.
+function _tauxDieteRespectee(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const haut=_cleJourDecalee(t,0);
+  const bas=_cleJourDecalee(t,-(DIETE_FENETRE_JOURS-1));
+  const g=_dieteComptes(u,bas,haut);
+  if(!g.juges) return null;
+  // LA TENDANCE : quinze jours contre quinze, DANS la fenetre de trente.
+  // Les deux moities se touchent sans se recouvrir — [J-14 … J] et
+  // [J-29 … J-15] — et leur reunion est exactement la fenetre du taux.
+  const recent=_dieteComptes(u,_cleJourDecalee(t,-(DIETE_DEMI_JOURS-1)),haut);
+  const avant=_dieteComptes(u,bas,_cleJourDecalee(t,-DIETE_DEMI_JOURS));
+  // ⚠ UNE MOITIE TROP MAIGRE NE REND PAS ZERO, ELLE REND null. Zero se lirait
+  // comme « stable », c'est-a-dire comme une mesure — alors qu'on n'a pas
+  // mesure. Et `tendance` est lue par un `typeof … === 'number'` : un null y
+  // est un silence, pas une valeur basse.
+  const tendance=(recent.juges>=DIETE_TENDANCE_MIN&&avant.juges>=DIETE_TENDANCE_MIN)
+    ?Math.round(recent.tenus*100/recent.juges)-Math.round(avant.tenus*100/avant.juges)
+    :null;
+  return {pct:Math.round(g.tenus*100/g.juges), tenus:g.tenus, juges:g.juges,
+    flexible:g.flexible, jours:DIETE_FENETRE_JOURS, tendance:tendance};
+}
+// PURE. Le taux sur une fenetre de dates donnee en HORODATAGES, pour les
+// appelants qui raisonnent en instants. Elle delegue le comptage : le jour du
+// bord est pris ENTIER, ce qui corrige au passage le decalage decrit plus haut.
+function _dieteFenetre(u,debut,fin){
+  const g=_dieteComptes(u,_cleJourDecalee(debut,0),_cleJourDecalee(fin,0));
+  return g.juges?{pct:Math.round(g.tenus*100/g.juges),juges:g.juges}:null;
 }
 // ⚠ CES TROIS FONCTIONS NE SONT PLUS AFFICHEES depuis le 16/09/2026. Les
 // sous-titres des tuiles portaient une valeur calculee — la tendance de diete,
