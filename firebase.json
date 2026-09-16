@@ -16,15 +16,7 @@
   ],
   "hosting": {
     "public": "_site",
-    "//": "/i est le lien court : dictable a l'oral, imprimable sur un flyer, et surtout COURT — un QR qui encode moins de caracteres a des modules plus gros, donc se lit de plus loin. Il REDIRIGE vers /app/#install (voir //redirects ci-dessous) au lieu de servir la page sous son propre chemin : servie sous /i, l'application cherchait ses ressources relatives a la racine et ne trouvait ni son logo, ni son manifeste, ni son service worker. Firebase applique redirections et reecritures APRES avoir cherche un fichier reel : aucune ressource existante n'est masquee. ATTENTION : les regles headers portent sur le chemin DEMANDE et non sur le fichier servi — la regle no-cache sur /i reste donc utile, elle empeche la redirection elle-meme d'etre mise en cache une heure.",
-    "//redirects": "⚠ UNE REDIRECTION, ET SURTOUT PAS UNE REECRITURE. La reecriture servait /app/index.html SOUS l'adresse /i : la page arrivait, mais le navigateur la croyait posee a la racine, et toutes ses adresses relatives — ./icons/logo.png, ./manifest.json, ./sw.js — se resolvaient une case trop haut, donc en 404. Mesure du 02/09/2026 sur https://repcore-sync.web.app/i : logo en image cassee, aucun service worker, AUCUN MANIFESTE — donc pas de beforeinstallprompt, donc un ecran d'installation qui n'installe rien. Le lien court est celui du QR et du flyer : les seuls a qui on demande d'installer etaient les seuls a ne pas le pouvoir. La 302 renvoie le navigateur sur /app/, ou tout se resout, et le fragment #install force l'ecran meme apres deux refus.",
-    "redirects": [
-      {
-        "source": "/i",
-        "destination": "/app/#install",
-        "type": 302
-      }
-    ],
+    "//": "/i est le lien court. Il sert i/index.html, une page AUTONOME (10/09/2026) qui renvoie sur /app/ en gardant les parametres, et qui explique quoi faire dans le navigateur integre d'Instagram au lieu d'y rediriger. PAS DE REDIRECTION /i -> /app/#install (version du 02/09) : chez Firebase une redirection passe AVANT le contenu statique, elle masquerait cette page. Le defaut du 02/09 — /app/index.html REECRIT sous /i, ressources relatives en 404 — ne se pose plus : ce n'est plus l'app qui est servie sous /i. Fusion du 16/09/2026.",
     "//ignore": "⚠ .well-known EST EXEMPTE, ET C'EST L'ETAPE QUE TOUT LE MONDE RATE. La regle **/.* exclut du deploiement tout fichier ou dossier commencant par un point — .well-known/assetlinks.json en fait partie. Sans exemption il n'est jamais publie, Android ne peut pas verifier que le domaine autorise l'application, et la TWA s'ouvre AVEC LA BARRE D'ADRESSE : elle se comporte comme un onglet de navigateur deguise. Le defaut ne dit rien, il se constate a l'ecran.",
     "ignore": [
       "**/.*",

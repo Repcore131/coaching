@@ -11074,13 +11074,12 @@ async function testExercices(){
             const _rejoue=p=>(p==='/i'||p==='/i/');
             return _rejoue('/app/')?_echec('la condition se rejouerait sur /app/'):true;})());
 
-          okA('L\'hébergement REDIRIGE le lien court, il ne le réécrit pas',(async()=>{
-            // LA DIFFERENCE EST TOUT LE DEFAUT. Une reecriture sert la page
-            // SOUS /i ; une redirection renvoie le navigateur sur /app/, ou
-            // les adresses relatives se resolvent. Le fragment #install force
-            // l'ecran meme apres deux refus — on vient de scanner un QR qui
-            // dit « installe », ce n'est pas le moment de faire valoir un
-            // refus d'hier.
+          okA('L\'hébergement ne sert jamais l\'app sous le lien court',(async()=>{
+            // LE DEFAUT DU 02/09 ETAIT DE SERVIR /app/index.html SOUS /i. Depuis
+            // le 10/09, /i est une page autonome (i/index.html) qui renvoie sur
+            // /app/ : elle peut etre servie sous /i, l'app non. Et AUCUNE
+            // redirection sur /i — chez Firebase elle passerait avant la page
+            // et la masquerait (fusion du 16/09/2026).
             let t=null;
             try{ const r=await fetch('../firebase.json',{cache:'no-store'});
                  if(r.ok) t=await r.text(); }catch(e){}
@@ -11093,12 +11092,11 @@ async function testExercices(){
             catch(e){ return _echec('firebase.json est illisible : '+((e&&e.message)||e)); }
             const h=(j&&j.hosting)||{};
             const rw=(h.rewrites||[]).find(x=>String(x&&x.source)==='/i');
-            if(rw) return _echec('/i est encore RÉÉCRIT vers '+rw.destination
-              +' : la page arriverait sous /i et chercherait ses ressources à la racine');
+            if(rw&&/^\/?app\//.test(String(rw.destination||'')))
+              return _echec('/i est RÉÉCRIT vers l’app ('+rw.destination
+              +') : elle arriverait sous /i et chercherait ses ressources à la racine');
             const rd=(h.redirects||[]).find(x=>String(x&&x.source)==='/i');
-            if(!rd) return _echec('/i ne mène plus nulle part');
-            if(String(rd.destination||'').indexOf('/app/')!==0)
-              return _echec('/i ne renvoie pas dans /app/ : '+rd.destination);
+            if(rd) return _echec('une redirection sur /i masquerait la page du lien court');
             return true;}));
         })();
 
