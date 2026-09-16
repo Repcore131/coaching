@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1231';
+window.RC_BUILD='1232';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4852,6 +4852,50 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
    NE FONCTIONNE PAS sur input ni select : ces elements remplaces ne rendent
    pas de pseudo-element. Leur zone tactile passe par min-height (voir
    .set-input plus bas). */
+/* ══ LA BOUTIQUE ═════════════════════════════════════════════════════════
+   UNE CARTE PAR PROGRAMME, et la devanture porte le nom en grand : c'est
+   elle qu'on regarde avant de lire quoi que ce soit. */
+.bq-carte{background:var(--surface-1);border:1px solid var(--border);
+  border-radius:var(--r-4);overflow:hidden;margin-bottom:18px;
+  box-shadow:var(--elev-2)}
+/* LA DEVANTURE. Rapport 3/4, celui d'une couverture de programme.
+   ⚠ LE DESSIN CSS EST DESSOUS, L'IMAGE PAR-DESSUS. Quand le fichier manque,
+   l'<img> se retire elle-meme et le dessin apparait : il n'y a pas a choisir
+   a l'avance, ni a tester l'existence du fichier avant de peindre. */
+.bq-dev{position:relative;width:100%;aspect-ratio:3/4;max-height:360px;
+  background:#07080a;overflow:hidden}
+.bq-dev-fond{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:9px;text-align:center;padding:24px;
+  background:
+    radial-gradient(120% 70% at 50% 0%,rgba(224,32,32,.20),transparent 62%),
+    repeating-linear-gradient(-56deg,transparent,transparent 13px,
+      rgba(255,255,255,.028) 13px,rgba(255,255,255,.028) 14px),
+    linear-gradient(170deg,#15161a,#0a0a0c 62%,#050506)}
+.bq-dev-nom{font-family:var(--pile-titre);font-size:clamp(30px,10vw,54px);
+  line-height:1;letter-spacing:4px;text-transform:uppercase;color:#fff;
+  text-shadow:0 0 34px rgba(224,32,32,.55)}
+.bq-dev-phase{font-size:var(--fs-2xs);letter-spacing:3.4px;text-transform:uppercase;
+  font-weight:800;color:var(--red-text)}
+.bq-dev-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.bq-corps{padding:17px 16px 16px}
+.bq-tete{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.bq-nom{font-size:var(--fs-lg);font-weight:900;letter-spacing:.6px;color:var(--text)}
+/* LE PRIX NE S'ENROULE PAS et ne se comprime pas : c'est la seule information
+   de la carte qu'on cherche du regard. */
+.bq-prix{font-size:var(--fs-lg);font-weight:900;color:var(--red-text);
+  white-space:nowrap;flex-shrink:0}
+.bq-accroche{font-size:var(--fs-sm);color:var(--sub);line-height:1.55;margin-top:6px}
+.bq-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.bq-tags span{font-size:var(--fs-2xs);letter-spacing:.6px;text-transform:uppercase;
+  font-weight:800;color:var(--sub);background:var(--surface-2);
+  border:1px solid var(--border);border-radius:var(--r-full);padding:5px 10px}
+.bq-desc{font-size:var(--fs-sm);color:var(--text);line-height:1.65;margin-top:13px}
+/* La note d'honnetete sous le bouton. Elle est DISCRETE mais lisible : ni une
+   alerte — il ne se passe rien de grave —, ni un murmure qu'on peut manquer. */
+.bq-note{font-size:var(--fs-2xs);color:var(--sub);line-height:1.5;
+  text-align:center;margin-top:9px}
+@media(max-width:360px){ .bq-dev{max-height:300px} }
+
 /* ══ LE LEXIQUE ══════════════════════════════════════════════════════════
    LA PASTILLE NE DOIT PAS SE FAIRE REMARQUER. Elle se pose a cote de libelles
    qui, eux, portent l'information : au meme poids visuel elle deviendrait un
@@ -9431,10 +9475,30 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- SESSION MANAGER -->
+<!-- ══════ LA BOUTIQUE ══════════════════════════════════════════════
+     Une liste de programmes, et rien d'autre. Pas de panier, pas de
+     compte client, pas de recommandations : on vient chercher un
+     programme, on l'applique, on retourne s'entrainer. -->
+<div id="s-boutique" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="go('s-session-manager')">←</button><span class="topbar-title">Programmes</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div id="bq-liste"></div>
+      <div id="bq-contact"></div>
+    </div>
+  </div>
+</div>
+
 <div id="s-session-manager" class="screen">
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Mes séances</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <!-- LA PORTE DE LA BOUTIQUE. Elle est ICI et pas sur l'accueil : c'est
+           en arrivant devant sept jours vides qu'on se demande par ou
+           commencer, et c'est la seule question a laquelle un programme tout
+           fait repond. -->
+      <button class="btn btn-red" style="width:100%;margin-bottom:16px"
+        onclick="ouvrirBoutique()">PARTIR D'UN PROGRAMME</button>
       <!-- LA CITATION D'OUVERTURE. Demande de Kevin, 24/08/2026. Elle remplace
            le paragraphe qui expliquait où déposer la photo de sa fiche.
            LA PHOTO N'EST PAS DANS LE DÉPÔT. Elle a été envoyée dans la
@@ -11079,6 +11143,78 @@ const POLICY_VERSION='2026-08';
 // nombre d'athlètes garanti : une limitation technique annoncée comme un
 // avantage devient une promesse contractuelle dont on ne revient pas.
 const CREATOR_EMAIL='guellec.coachingpro@gmail.com';
+// Le WhatsApp du coach, au format international SANS le « + » — c'est celui
+// que wa.me attend. Vide, le bouton de contact ne s'affiche pas du tout :
+// mieux vaut pas de bouton qu'un bouton qui ouvre une conversation avec
+// personne.
+const RC_WHATSAPP='33778439205';
+// ══ LA BOUTIQUE ══════════════════════════════════════════════════════════
+//
+// UN CATALOGUE DE PROGRAMMES, ET UN SEUL VENDEUR. Kevin vend ses propres
+// programmes ; un autre coach peut en acheter, jamais en vendre. Ce n'est pas
+// une limitation d'interface, c'est LE montage qui evite le §2 de la note de
+// decision economique : encaisser l'argent d'un client pour le reverser a un
+// professionnel ferait de RepCore un intermediaire de paiement au sens de la
+// DSP2 — activite reglementee, agrement ou Stripe Connect obligatoire, et
+// explicitement ecartee. Ici l'argent encaisse appartient deja a celui qui
+// encaisse. Arbitre par Kevin le 16/09/2026.
+//
+// ⚠ LES PRIX SONT EN CENTIMES. Aucun flottant ne touche a de l'argent : 14,90
+// s'ecrit 1490, et 0,1+0,2 ne vaut pas 0,3 en binaire.
+//
+// ⚠ L'IMAGE N'EST PAS DANS LE DEPOT, et c'est le meme cas qu'arnold.png sur
+// l'ecran des seances : elle a ete envoyee dans la conversation, et rien ne
+// permet d'ecrire un fichier depuis une image collee. Tant qu'elle manque, la
+// devanture dessinee en CSS prend sa place — elle n'est pas un pis-aller, elle
+// est le repli permanent pour tout programme sans visuel.
+// ⚠ LE PAIEMENT N'EST PAS ENCORE BRANCHE, ET ON LE DIT. Le prix s'affiche
+// parce qu'il est arbitre ; le bouton, lui, applique le programme sans rien
+// facturer. Afficher « 14,90 € » au-dessus d'un bouton qui donne le programme
+// serait mensonger, et ce n'est pas une question d'interface : c'est une
+// annonce de prix a un consommateur. Ce drapeau pose la phrase qui le dit, et
+// il se retire d'une ligne le jour ou PayPal est branche.
+const RC_BOUTIQUE_GRATUITE=true;
+const RC_PROGRAMMES=Object.freeze([
+  Object.freeze({
+    id:'fondations',
+    nom:'Fondations',
+    phase:'Phase 1',
+    accroche:'Construire des bases solides pour progresser durablement',
+    description:'Trois séances par semaine, huit à douze semaines, un jour de '
+      +'repos au minimum entre deux séances. Les mouvements de base, appris '
+      +'proprement, avec la charge qui monte toute seule à mesure que tu '
+      +'gardes des répétitions en réserve.',
+    tags:Object.freeze(['Tous niveaux','Hommes & femmes','3 séances/semaine',
+      '8 à 12 semaines']),
+    prixCts:1490,
+    image:'./img/programmes/fondations.jpg',
+    // LES SEANCES SONT LUES A L'APPLICATION, PAS COPIEES ICI. Deux jeux de
+    // sept jours recopies dans le catalogue auraient diverge de FONDATION_H/F
+    // au premier ajustement, et c'est la version non relue qui serait restee
+    // fausse. La fonction differe la lecture : les deux constantes sont
+    // declarees plus bas dans le fichier.
+    seances:genre=>(genre==='F')?FONDATION_F:FONDATION_H
+  })
+]);
+// PURE. Le programme du catalogue, ou null. Meme garde que le lexique : une
+// cle qui viendrait d'une donnee ne doit pas pouvoir atteindre le prototype.
+function programmeDuCatalogue(id){
+  if(typeof id!=='string'||!id) return null;
+  return RC_PROGRAMMES.find(p=>p.id===id)||null;
+}
+// PURE. « 14,90 € ». L'espace avant l'euro est INSECABLE (U+00A0), comme
+// partout ailleurs dans le fichier : « 14,90 » et « € » ne se separent pas.
+function prixProgramme(p){
+  const c=p&&Number(p.prixCts);
+  if(!isFinite(c)||c<0) return '';
+  return (c/100).toFixed(2).replace('.',',')+'\u00a0€';
+}
+// Le lien de contact. Vide s'il n'y a pas de numero : voir RC_WHATSAPP.
+function lienWhatsApp(texte){
+  if(!RC_WHATSAPP) return '';
+  return 'https://wa.me/'+RC_WHATSAPP
+    +'?text='+encodeURIComponent(texte||'Bonjour Kevin, je te contacte depuis RepCore.');
+}
 
 // ── Mesure de tunnel ────────────────────────────────────────────────────────
 // Des COMPTEURS agrégés, dans la base déjà utilisée par l'app : aucun outil
@@ -14571,6 +14707,14 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // date de naissance — seulement un horodatage d'ouverture et un nombre de
   // seances deja faites au depart.
   'essai',
+  // La trace du programme choisi dans la boutique : un identifiant, un nom, la
+  // version H/F et une date. Ce n'est pas une donnee de sante — c'est un achat
+  // et un choix de programme — mais elle DOIT etre classee, sinon elle n'est
+  // protegee par rien. Signale par l'assertion « Chaque champ du dossier est
+  // classe sante ou non-sante » a la premiere execution.
+  // ⚠ LE GENRE Y FIGURE, et il est deja classe ailleurs : c'est le meme que
+  // `gender`, recopie ici pour savoir quelle version a ete posee.
+  'programmeApplique',
   'echeance','alertStatus','supprimes','_export',
   'coachId','coachName','coachEmailKey','coachCode','coachPhoto','code','clients',
   'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
@@ -37076,6 +37220,112 @@ function htmlCarteSeanceSlot(i,s){
       ${part}
     </div>
   </div>`;
+}
+// ══ LA BOUTIQUE : RENDU ET APPLICATION ═══════════════════════════════════
+function ouvrirBoutique(){
+  _rendreBoutique();
+  go('s-boutique');
+}
+// PURE. Le genre a utiliser pour un programme qui en porte deux jeux.
+// Meme lecture que partout ailleurs : le bilan d'abord, la fiche ensuite.
+function _genreProgramme(u){
+  const b=(u&&(u._evol_gender||u.gender))||'';
+  return isFemale(b)?'F':(b?'H':null);
+}
+function _rendreBoutique(){
+  const z=document.getElementById('bq-liste');
+  if(z) z.innerHTML=RC_PROGRAMMES.map(_htmlCarteProgramme).join('')
+    ||'<div class="sub" style="text-align:center;padding:28px 0">Aucun programme pour le moment.</div>';
+  const c=document.getElementById('bq-contact');
+  if(!c) return;
+  const lien=lienWhatsApp('Bonjour Kevin, je te contacte depuis RepCore '
+    +'pour une demande de coaching.');
+  // PAS DE NUMERO, PAS DE BOUTON. Un bouton de contact qui n'ouvre rien est
+  // pire que pas de bouton : il fait croire qu'on a ecrit.
+  c.innerHTML=lien
+    ?'<div style="background:var(--surface-1);border:1px solid var(--border);'
+      +'border-radius:var(--r-4);padding:18px;margin-top:6px;text-align:center">'
+      +'<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-bottom:13px">'
+      +'Tu cherches un suivi sur mesure plutôt qu\'un programme tout fait ?</div>'
+      +'<a class="btn btn-outline btn-sm" style="width:100%;margin:0;text-decoration:none" '
+      +'href="'+escapeHtml(lien)+'" target="_blank" rel="noopener noreferrer">'
+      +'TOUTE DEMANDE DE COACHING</a></div>'
+    :'';
+}
+// PURE. La carte d'un programme. La devanture est une IMAGE quand le fichier
+// existe, et un dessin CSS sinon — voir le commentaire de RC_PROGRAMMES.
+function _htmlCarteProgramme(p){
+  if(!p) return '';
+  const nom=escapeHtml(p.nom||''), prix=prixProgramme(p);
+  // ⚠ L'IMAGE SE RETIRE ELLE-MEME SI ELLE MANQUE. Une devanture cassee — le
+  // rectangle gris a l'icone brisee — abime plus la page que son absence.
+  // Le dessin CSS est DESSOUS, pas a la place : il apparait quand l'image
+  // s'efface, sans qu'il y ait a choisir a l'avance.
+  const dev='<div class="bq-dev">'
+    +'<div class="bq-dev-fond"><span class="bq-dev-nom">'+nom+'</span>'
+    +(p.phase?'<span class="bq-dev-phase">'+escapeHtml(p.phase)+'</span>':'')+'</div>'
+    +(p.image?'<img class="bq-dev-img" src="'+escapeHtml(p.image)+'" alt="" '
+      +'loading="lazy" onerror="this.remove()">':'')
+    +'</div>';
+  return '<div class="bq-carte">'+dev
+    +'<div class="bq-corps">'
+    +'<div class="bq-tete"><span class="bq-nom">'+nom+'</span>'
+    +(prix?'<span class="bq-prix">'+prix+'</span>':'')+'</div>'
+    +(p.accroche?'<div class="bq-accroche">'+escapeHtml(p.accroche)+'</div>':'')
+    +((p.tags&&p.tags.length)
+      ?'<div class="bq-tags">'+p.tags.map(t=>'<span>'+escapeHtml(t)+'</span>').join('')+'</div>':'')
+    +(p.description?'<div class="bq-desc">'+escapeHtml(p.description)+'</div>':'')
+    +'<button class="btn btn-red btn-sm" style="width:100%;margin-top:15px" '
+    +'onclick="appliquerProgramme(\''+escapeHtml(p.id)+'\')">APPLIQUER CE PROGRAMME</button>'
+    +(RC_BOUTIQUE_GRATUITE
+      ?'<div class="bq-note">Le paiement arrive. D\'ici la, ce programme est '
+        +'libre d\'acces : rien ne t\'est facture.</div>'
+      :'')
+    +'</div></div>';
+}
+// L'APPLICATION D'UN PROGRAMME.
+//
+// ⚠ ON DEMANDE AVANT D'ECRASER, ET SEULEMENT SI IL Y A QUELQUE CHOSE A
+// ECRASER. Arbitre par Kevin le 16/09/2026 : une grille vide se remplit sans
+// question — il n'y a rien a perdre —, une grille qui porte du travail ne se
+// remplace pas en silence. C'est la meme regle que la migration Fondation qui
+// a deja coute le travail d'un coach, et qui a ete supprimee pour ca.
+async function appliquerProgramme(id){
+  const p=programmeDuCatalogue(id);
+  if(!p){ toast('Programme introuvable.','var(--orange)'); return false; }
+  if(!currentUser){ toast('Connecte-toi pour appliquer un programme.','var(--orange)'); return false; }
+  let g=_genreProgramme(currentUser);
+  if(!g){
+    // Genre inconnu : on DEMANDE plutot que de trancher. Poser la version
+    // Homme par defaut serait un choix arbitraire sur le corps de quelqu'un.
+    g=(await rcConfirm('Quelle version de « '+(p.nom||'ce programme')+' » ?',
+      null,'Homme','Femme'))?'H':'F';
+  }
+  const seances=(typeof p.seances==='function')?p.seances(g):null;
+  if(!Array.isArray(seances)||!seances.length){
+    toast('Ce programme n\'a aucune séance.','var(--orange)'); return false;
+  }
+  const sc=currentUser.sessions_config;
+  const porte=Array.isArray(sc)&&sc.some(x=>x&&x.active&&((x.exercises||[]).length||String(x.name||'').trim()));
+  if(porte){
+    const nl=String.fromCharCode(10);
+    if(!await rcConfirm('Remplacer tes séances par « '+(p.nom||'ce programme')+' » ?',
+      'Tes séances actuelles seront écrasées.'+nl+'Cette action ne peut pas être annulée.',
+      'Remplacer')) return false;
+  }
+  // COPIE PROFONDE. Le fichier a deja eu ce bug deux fois — voir
+  // saveCoachSessionsAsTemplate et cptReporterGenre : sans clone, le programme
+  // applique reste attache a la constante, et le premier exercice modifie par
+  // l'athlete modifie le catalogue pour tout le monde jusqu'au rechargement.
+  currentUser.sessions_config=seances.map(x=>({...x,
+    exercises:(x.exercises||[]).map(e=>({...e}))}));
+  // CE N'EST PLUS UN EXEMPLE : quelqu'un l'a choisi. Les deux marqueurs
+  // tombent, comme dans _personnaliserSeance.
+  currentUser.sessions_config.forEach(x=>{ delete x._essai; delete x._foundation; });
+  currentUser.programmeApplique={id:p.id,nom:p.nom||'',genre:g,le:Date.now()};
+  toastEcriture(saveUser(),'« '+(p.nom||'Programme')+' » appliqué','le programme est');
+  loadSessionManager();
+  return true;
 }
 function loadSessionManager(){
   go('s-session-manager');

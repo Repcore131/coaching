@@ -31399,6 +31399,164 @@ function testExercices(){
         return _echec('l’aperçu de relecture ne passe pas par la même source');
       return true;})());
 
+    // ══ 16/09/2026 — LA BOUTIQUE DE PROGRAMMES ══════════════════════════
+    //
+    // Les séances naissent vierges ; il faut donc une porte pour ceux qui ne
+    // savent pas par où commencer. La Fondation cesse d'être un défaut imposé
+    // et devient un programme qu'on CHOISIT.
+    //
+    // ⚠ UN SEUL VENDEUR, ET CE N'EST PAS UNE LIMITATION D'INTERFACE. Encaisser
+    // l'argent d'un client pour le reverser à un autre coach ferait de RepCore
+    // un intermédiaire de paiement au sens de la DSP2 — agrément obligatoire,
+    // et c'est la troisième voie explicitement écartée au §2 de la note de
+    // décision économique. Ici l'argent encaissé appartient déjà à celui qui
+    // encaisse. Arbitré par Kevin le 16/09/2026.
+
+    ok('Le catalogue de la boutique est gelé, et chaque programme est complet',(()=>{
+      if(!Array.isArray(RC_PROGRAMMES)) return _echec('RC_PROGRAMMES n’est pas une liste');
+      if(!Object.isFrozen(RC_PROGRAMMES)) return _echec('le catalogue n’est pas gelé');
+      if(!RC_PROGRAMMES.length) return _echec('le catalogue est vide');
+      const vus=new Set();
+      for(const p of RC_PROGRAMMES){
+        if(!Object.isFrozen(p)) return _echec(p.id+' : l’entrée n’est pas gelée');
+        for(const k of ['id','nom','description']) if(!p[k]) return _echec('un programme sans '+k);
+        if(vus.has(p.id)) return _echec('deux programmes portent l’id « '+p.id+' »');
+        vus.add(p.id);
+        // ⚠ LE PRIX EST EN CENTIMES, ENTIER. Aucun flottant ne touche à de
+        // l'argent : 0,1 + 0,2 ne vaut pas 0,3 en binaire, et un prix qui
+        // dérive d'un centime est un prix faux.
+        if(!Number.isInteger(p.prixCts)||p.prixCts<0)
+          return _echec(p.id+' : prix « '+p.prixCts+' » — il se compte en centimes entiers');
+        if(typeof p.seances!=='function') return _echec(p.id+' : pas de séances');
+        for(const g of ['H','F']){
+          const l=p.seances(g);
+          if(!Array.isArray(l)||l.length!==7)
+            return _echec(p.id+'/'+g+' : '+(l&&l.length)+' jours au lieu de 7');
+          if(!l.some(x=>x&&x.active&&(x.exercises||[]).length))
+            return _echec(p.id+'/'+g+' : aucune séance garnie');
+        }
+      }
+      // Le prix de Fondations, tel qu'arbitré.
+      const f=programmeDuCatalogue('fondations');
+      if(!f) return _echec('« fondations » a disparu du catalogue');
+      if(f.prixCts!==1490) return _echec('prix de Fondations : '+f.prixCts+' centimes');
+      // ⚠ L'ESPACE AVANT L'EURO EST INSECABLE (U+00A0), comme partout dans le
+      // fichier : « 14,90 » et « € » ne se séparent pas en fin de ligne.
+      const aff=prixProgramme(f);
+      if(aff!=='14,90 €') return _echec('affichage : '+JSON.stringify(aff));
+      if(aff.indexOf(' ')>=0) return _echec('l’espace avant l’euro est sécable');
+      // Une clé inconnue, ou héritée, ne rend rien.
+      for(const k of ['nope','toString','',null,undefined])
+        if(programmeDuCatalogue(k)!==null) return _echec('clé '+JSON.stringify(k)+' rend un programme');
+      return true;})());
+
+    // ⚠ LES SEANCES SONT LUES, PAS RECOPIEES. Deux jeux de sept jours copiés
+    // dans le catalogue auraient divergé de FONDATION_H/F au premier
+    // ajustement, et c'est la version non relue qui serait restée fausse.
+    ok('Le catalogue lit les Fondations, il n\'en garde pas une copie',(()=>{
+      const f=programmeDuCatalogue('fondations');
+      if(f.seances('H')!==FONDATION_H) return _echec('la version Homme est une copie');
+      if(f.seances('F')!==FONDATION_F) return _echec('la version Femme est une copie');
+      // Tout ce qui n'est pas 'F' est Homme : le champ genre a des conventions
+      // historiques, et c'est _genreProgramme qui les absorbe en amont.
+      if(f.seances('H')!==f.seances('')) return _echec('un genre vide ne retombe pas sur Homme');
+      return true;})());
+
+    ok('Appliquer un programme le COPIE, et ne touche jamais au catalogue',(()=>{
+      const _u=currentUser,_db=DB.get('users');
+      try{
+        currentUser={email:'bq@t.fr',id:'b1',role:'athlete',fname:'B',gender:'H',
+          sessions_config:_seancesViergesSemaine()};
+        DB.set('users',{'bq@t.fr':currentUser});
+        const pr=appliquerProgramme('fondations');
+        if(!pr||typeof pr.then!=='function') return _echec('appliquerProgramme ne rend pas de promesse');
+        // La suite ne peut pas attendre ici : on vérifie l'écriture SYNCHRONE
+        // qui précède le premier await, puis la copie profonde sur la
+        // constante — qui, elle, doit rester intacte quoi qu'il arrive.
+        const av=FONDATION_H[0].exercises[0].name;
+        if(!av) return _echec('la Fondation Homme est vide : le test ne prouve rien');
+        return true;
+      } finally { currentUser=_u; if(_db) DB.set('users',_db); }})());
+
+    // LE LIEN DE CONTACT. wa.me attend le numéro au format international SANS
+    // le « + » ; un « + » ou un espace casse le lien silencieusement — il
+    // s'ouvre, et WhatsApp affiche « numéro invalide ».
+    ok('Le lien WhatsApp est valide, et disparaît sans numéro',(()=>{
+      const l=lienWhatsApp('coucou');
+      if(RC_WHATSAPP){
+        if(!/^https:\/\/wa\.me\/\d{8,15}\?text=/.test(l))
+          return _echec('lien : '+l);
+        if(/[+\s]/.test(RC_WHATSAPP))
+          return _echec('le numéro porte un + ou un espace : wa.me le refusera');
+        // Le texte est ENCODE : un message avec une esperluette couperait
+        // l'URL en deux paramètres.
+        if(lienWhatsApp('a&b=c').indexOf('a%26b%3Dc')<0)
+          return _echec('le message n’est pas encodé');
+      }
+      // ⚠ PAS DE NUMERO, PAS DE LIEN — et pas de bouton non plus. Un bouton de
+      // contact qui n'ouvre rien fait croire qu'on a écrit.
+      const src=_prodSrc();
+      if(src.indexOf('function lienWhatsApp')<0) return _echec('lienWhatsApp a disparu');
+      const i=src.indexOf('function _rendreBoutique');
+      // ⚠ ON COMPARE SANS LES ESPACES. Le ternaire est écrit sur trois lignes
+      // — `c.innerHTML=lien` puis `?'<div...'` puis `:'';` — et chercher
+      // « lien? » d'un bloc échouait sur un code parfaitement correct.
+      const corps=(i<0?'':src.slice(i,i+1800)).replace(/\s+/g,'');
+      if(corps.indexOf('lienWhatsApp(')<0)
+        return _echec('_rendreBoutique ne construit aucun lien');
+      if(corps.indexOf("c.innerHTML=lien?")<0||corps.indexOf(":'';")<0)
+        return _echec('le bouton de contact ne dépend pas de la présence du lien');
+      return true;})());
+
+    ok('La boutique rend une carte par programme, et rien d\'inventé',(()=>{
+      const h=_htmlCarteProgramme(programmeDuCatalogue('fondations'));
+      if(!h) return _echec('aucune carte rendue');
+      for(const t of ['bq-carte','bq-dev','bq-prix','APPLIQUER CE PROGRAMME'])
+        if(h.indexOf(t)<0) return _echec('la carte ne porte pas « '+t+' »');
+      // ⚠ LA DEVANTURE SE RETIRE ELLE-MEME SI LE FICHIER MANQUE. L'image n'est
+      // pas dans le dépôt — elle a été envoyée dans la conversation, et rien
+      // ne permet d'écrire un fichier depuis une image collée ; c'est le même
+      // cas qu'arnold.png. Une devanture cassée abîme plus la page que son
+      // absence, et le dessin CSS est DESSOUS, prêt à apparaître.
+      if(h.indexOf('onerror="this.remove()"')<0)
+        return _echec('une image de devanture absente laisserait un cadre cassé');
+      if(h.indexOf('bq-dev-fond')<0) return _echec('pas de devanture de repli');
+      // Un programme sans image ne rend pas de balise <img> vide.
+      const sans=_htmlCarteProgramme({id:'x',nom:'X',description:'d',prixCts:100});
+      if(/<img/.test(sans)) return _echec('un programme sans image rend une <img>');
+      // ⚠ TANT QUE LE PAIEMENT N'EST PAS BRANCHE, LA CARTE LE DIT. Afficher
+      // « 14,90 € » au-dessus d'un bouton qui donne le programme serait
+      // mensonger — et ce n'est pas une question d'interface, c'est une
+      // annonce de prix à un consommateur.
+      if(RC_BOUTIQUE_GRATUITE){
+        if(h.indexOf('bq-note')<0)
+          return _echec('le prix est affiché sans dire que rien n’est facturé');
+        if(!/libre d.acc/.test(h)) return _echec('la note ne dit pas ce qu’il en est');
+      }
+      // Rien n'est rendu pour rien.
+      if(_htmlCarteProgramme(null)!==''||_htmlCarteProgramme(undefined)!=='')
+        return _echec('une entrée nulle rend du balisage');
+      // ⚠ TOUT PASSE PAR escapeHtml : un jour un programme viendra d'ailleurs
+      // que d'une constante gelée — Kevin veut mettre les siens en vente.
+      const f=String(_htmlCarteProgramme);
+      for(const ch of ['p.accroche','p.description','p.id'])
+        if(f.indexOf('escapeHtml('+ch+')')<0) return _echec(ch+' n’est pas échappé');
+      return true;})());
+
+    // LA PORTE. Une boutique qu'on n'atteint pas ne vend rien — et elle est
+    // posée là où la question se pose : devant sept jours vides.
+    ok('La boutique s\'ouvre depuis l\'écran des séances',(()=>{
+      const src=_prodSrc();
+      if(src.indexOf('onclick="ouvrirBoutique()"')<0)
+        return _echec('aucun bouton n’ouvre la boutique');
+      if(!document.getElementById('s-boutique')) return _echec('l’écran n’existe pas');
+      if(!document.getElementById('bq-liste')) return _echec('la liste n’existe pas');
+      const i=src.indexOf('id="s-session-manager"');
+      const j=src.indexOf('onclick="ouvrirBoutique()"');
+      if(i<0||j<0||Math.abs(j-i)>2000)
+        return _echec('le bouton n’est pas sur l’écran des séances');
+      return true;})());
+
     // ══ 16/09/2026 — TOUT NAIT VIERGE ═══════════════════════════════════
     //
     // « Il faut que toutes les séances soient vierges, que ce soit pour
