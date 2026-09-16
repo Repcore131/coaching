@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1244';
+window.RC_BUILD='1245';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -45382,6 +45382,63 @@ function _dieteComptes(u,cleBasse,cleHaute){
 //
 // `maintenant` est FACULTATIF et sert aux tests : une fenetre glissante ne se
 // verifie pas sans pouvoir dire quand on se place.
+// ══ LA SERIE DE JOURS CONSECUTIFS ═════════════════════════════════════════
+//
+// ⚠ ELLE ETAIT LA SEULE EXCEPTION DU FICHIER A LA REGLE DE jourDieteTenu, et
+// c'est ce lot qui l'y aligne. Cette regle est ecrite juste au-dessus, en
+// toutes lettres :
+//
+//   « `null` N'EST PAS `false`. Un jour sans saisie, ou un jour sans cible a
+//     quoi se comparer, n'est pas un jour rate — c'est un jour dont on ne sait
+//     rien, et le compter ferait tomber le pourcentage de quelqu'un qui n'a
+//     rien fait de mal. »
+//
+// Le taux la suit, le camembert la suit, les sept pastilles de l'accueil la
+// suivent depuis le 16/09/2026, le calendrier du journal la suit. La serie,
+// elle, cassait sur un jour non renseigne : sa boucle lisait
+// `else if(i>0) break`, c'est-a-dire « tout trou autre qu'aujourd'hui arrete
+// tout ». Quarante jours de diete tenue disparaissaient parce qu'on avait
+// oublie de repondre un samedi — et l'athlete n'avait AUCUN moyen de le
+// rattraper, puisque le compteur ne dit pas pourquoi il est retombe a zero.
+//
+// TROIS ETATS, TROIS TRAITEMENTS :
+//   true  → la serie continue et s'incremente.
+//   false → la serie s'arrete. C'est un ECART DECLARE : l'athlete a repondu,
+//           il a dit non, et lui laisser sa serie effacerait sa reponse.
+//   rien  → NEUTRE. La serie traverse, sans s'incrementer : on ne recompense
+//           pas un jour dont on ne sait rien, et on ne le punit pas non plus.
+//
+// ⚠ LA TRAVERSEE EST PLAFONNEE A DEUX JOURS CONSECUTIFS. Au-dela, ce n'est
+// plus un oubli, c'est un arret : quelqu'un qui n'a pas ouvert l'application
+// depuis une semaine n'a pas « tenu sa diete » pendant cette semaine, et lui
+// afficher une serie intacte serait un compliment invente. La serie repart
+// alors de zero.
+const SERIE_TROU_MAX=2;
+// Le pas de recul maximal. UN PLAFOND, PAS UNE REGLE : il etait deja de
+// soixante avant ce lot, et une serie plus longue est ecretee. On le nomme
+// pour que ce soit visible, faute de pouvoir l'enlever sans parcourir le
+// dossier entier a chaque rendu.
+const SERIE_DIETE_MAX_JOURS=60;
+// PURE. {jours, traverses} — la longueur de la serie, et le nombre de jours
+// non renseignes qu'elle a effectivement ENJAMBES.
+//
+// ⚠ UN TROU N'EST « TRAVERSE » QUE S'IL Y A QUELQUE CHOSE DE L'AUTRE COTE.
+// Les jours neutres sont mis en attente et ne sont comptes qu'a la rencontre
+// du `true` suivant. Sans cela, une serie qui se termine sur deux jours vides
+// aurait annonce « 2 jours non renseignes, ta serie tient » alors qu'elle
+// n'enjambe rien du tout — le message aurait felicite un vide.
+function serieDieteJours(u,maintenant){
+  const jrs=((u&&u.nutrition)||{}).days||{};
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  let jours=0, traverses=0, attente=0;
+  for(let i=0;i<SERIE_DIETE_MAX_JOURS;i++){
+    const r=(jrs[_cleJourDecalee(t,-i)]||{}).respected;
+    if(r===true){ jours++; traverses+=attente; attente=0; }
+    else if(r===false) break;                 // ecart declare : la serie s'arrete
+    else { attente++; if(attente>SERIE_TROU_MAX) break; }
+  }
+  return {jours:jours,traverses:traverses};
+}
 function _tauxDieteRespectee(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   const haut=_cleJourDecalee(t,0);
@@ -65242,14 +65299,19 @@ function _renderStrictDiet(){
   const weekKeys=Array.from({length:7},(_,i)=>{const d=new Date(wk);d.setDate(wk.getDate()+i);return localISODate(d);});
   const weekScore=weekKeys.filter(k=>days_data[k]?.respected===true).length;
   const answered=weekKeys.filter(k=>days_data[k]?.respected===true||days_data[k]?.respected===false).length;
-  let streak=0;
-  for(let i=0;i<60;i++){
-    const d=new Date(today);d.setDate(today.getDate()-i);
-    const k=localISODate(d);
-    if(days_data[k]?.respected===true) streak++;
-    else if(days_data[k]?.respected===false) break;
-    else if(i>0) break;
-  }
+  // La boucle vit desormais dans serieDieteJours, pure et testable : voir la
+  // regle et le plafond de traversee la-bas.
+  const _serie=serieDieteJours(currentUser);
+  const streak=_serie.jours;
+  // ON NE LE DIT QUE QUAND IL S'EST PASSE QUELQUE CHOSE. Une ligne permanente
+  // sous le compteur serait lue une fois puis jamais plus ; celle-ci ne parait
+  // que le jour ou la serie a enjambe un trou, c'est-a-dire exactement quand
+  // l'athlete se demande pourquoi elle n'est pas retombee a zero.
+  const _trous=(streak>0&&_serie.traverses>0)
+    ?('<div style="font-size:11px;color:var(--text-faint);line-height:1.45;margin-top:6px">'
+      +_serie.traverses+' jour'+(_serie.traverses>1?'s':'')+' non renseigné'
+      +(_serie.traverses>1?'s':'')+', ta série tient.</div>')
+    :'';
   // Meme lecture que l en-tete de la diete flexible, et pour la meme raison.
   const coachPhoto=photoCoachDe(currentUser);
   const coachCircle=coachPhoto
@@ -65278,6 +65340,7 @@ function _renderStrictDiet(){
         <div style="position:relative">
           <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1;color:${streak>0?'#22c55e':'#ff3b30'};--halo-c:${streak>0?'rgba(34,197,94,.85)':'rgba(224,32,32,.8)'};text-shadow:var(--halo-2),0 0 26px ${streak>0?'rgba(34,197,94,.4)':'rgba(224,32,32,.35)'}">${streak}</div>
           <div style="font-size:var(--fs-xs);color:${streak>0?'rgba(34,197,94,.75)':'rgba(255,90,90,.7)'};letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Jours consécutifs</div>
+          ${_trous}
         </div>
       </div>
       <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:var(--r-4);box-shadow:var(--e4);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp var(--t-3) var(--c-out)">

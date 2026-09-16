@@ -44144,6 +44144,156 @@ function testExercices(){
           // UNE SEULE FOIS : les deux conditions sont exclusives.
           return (h.split('setNutriRespected(').length-1)===2
             ?true:_echec('la question est rendue en double');})());
+        // ══════════════════════════════════════════════════════════════
+        // LA SÉRIE DE JOURS CONSÉCUTIFS
+        // ══════════════════════════════════════════════════════════════
+        //
+        // ⚠ ELLE ÉTAIT LA SEULE EXCEPTION DU FICHIER à la règle de
+        // jourDieteTenu — « `null` n'est pas `false` » — que le taux, le
+        // camembert, les sept pastilles et le calendrier suivent tous. Sa
+        // boucle lisait « tout trou autre qu'aujourd'hui arrête tout » :
+        // quarante jours de diète tenue disparaissaient parce qu'on avait
+        // oublié de répondre un samedi, et rien ne disait pourquoi.
+        //
+        // `motif` se lit de GAUCHE À DROITE EN REMONTANT LE TEMPS : le premier
+        // caractère est aujourd'hui. O = oui, N = non, point = pas de réponse.
+        const _srU=motif=>{
+          const T=Date.now(), days={};
+          motif.split('').forEach((c,i)=>{
+            const d=new Date(T); d.setDate(d.getDate()-i);
+            if(c==='O') days[localISODate(d)]={respected:true};
+            else if(c==='N') days[localISODate(d)]={respected:false};
+          });
+          return {id:'sr',email:'sr@t',role:'athlete',
+            nutrition:{dietType:'strict',days:days}};
+        };
+        const _sr=m=>serieDieteJours(_srU(m),Date.now());
+
+        ok('La série : oui continue, non arrête, un trou se traverse',(()=>{
+          // LES TROIS CAS, ET RIEN D'AUTRE NE LES DÉPARTAGE.
+          // 1. OUI : la série continue et s'incrémente.
+          if(_sr('OOOOO').jours!==5) return _echec('cinq oui → '+_sr('OOOOO').jours);
+          // 2. NON : elle s'arrête. C'est un ÉCART DÉCLARÉ — l'athlète a
+          //    répondu, il a dit non, et lui laisser sa série effacerait sa
+          //    réponse.
+          if(_sr('NOOOO').jours!==0) return _echec('un non aujourd’hui → '+_sr('NOOOO').jours);
+          if(_sr('ONOOO').jours!==1) return _echec('un non hier → '+_sr('ONOOO').jours);
+          // 3. TROU : neutre. Elle traverse SANS s'incrémenter — on ne
+          //    récompense pas un jour dont on ne sait rien, et on ne le punit
+          //    pas non plus.
+          const un=_sr('.OOOO');
+          if(un.jours!==4) return _echec('un trou aujourd’hui → '+un.jours+' au lieu de 4');
+          if(un.traverses!==1) return _echec('le trou n’est pas compté : '+un.traverses);
+          // ⚠ LA RÉGRESSION QUE CECI EMPÊCHE : un trou AU MILIEU cassait tout.
+          const milieu=_sr('OO.OOOO');
+          if(milieu.jours!==6) return _echec('un trou au milieu → '+milieu.jours+' au lieu de 6');
+          return true;})());
+
+        ok('La traversée s’arrête à deux jours : au-delà, c’est un arrêt',(()=>{
+          // Quelqu'un qui n'a pas ouvert l'application depuis une semaine n'a
+          // pas « tenu sa diète » pendant cette semaine : lui afficher une
+          // série intacte serait un compliment inventé.
+          if(SERIE_TROU_MAX!==2) return _echec('le plafond a changé : '+SERIE_TROU_MAX);
+          const deux=_sr('..OOO');
+          if(deux.jours!==3||deux.traverses!==2)
+            return _echec('deux trous → '+deux.jours+'/'+deux.traverses);
+          const trois=_sr('...OO');
+          if(trois.jours!==0) return _echec('trois trous → '+trois.jours+', la série devait repartir de zéro');
+          // Et au milieu, elle s'arrête AVANT le trou, sans perdre ce qui
+          // précède.
+          const mur=_sr('O...OOOO');
+          if(mur.jours!==1) return _echec('trois trous au milieu → '+mur.jours+' au lieu de 1');
+          // Des trous ISOLÉS ne s'additionnent pas : le plafond est consécutif.
+          const isoles=_sr('O.O.O.O');
+          if(isoles.jours!==4) return _echec('trous isolés → '+isoles.jours+' au lieu de 4');
+          return isoles.traverses===3?true:_echec('traversés : '+isoles.traverses);})());
+
+        ok('Un trou n’est « traversé » que s’il y a quelque chose derrière',(()=>{
+          // ⚠ SANS CETTE RÈGLE, le message aurait félicité un vide : une série
+          // qui se termine sur deux jours non renseignés aurait annoncé
+          // « 2 jours non renseignés, ta série tient » alors qu'elle n'enjambe
+          // rien du tout.
+          if(_sr('O..').traverses!==0) return _echec('des trous sans suite sont comptés');
+          if(_sr('O..').jours!==1) return _echec('la série est fausse : '+_sr('O..').jours);
+          if(_sr('O').traverses!==0) return _echec('un jour seul compte un trou');
+          // Le cas inverse : le trou d'aujourd'hui EST traversé, puisqu'il y a
+          // une série derrière. C'est précisément quand l'athlète se demande
+          // pourquoi son compteur n'est pas retombé à zéro.
+          return _sr('.OOO').traverses===1
+            ?true:_echec('le trou du jour n’est pas compté');})());
+
+        ok('serieDieteJours est pure et ne lève sur aucun dossier',(()=>{
+          const nu=String(serieDieteJours).replace(/\/\/[^\n]*/g,'');
+          // ⚠ « =true » EN SOUS-CHAÎNE ACCUSE « ===true », et cette assertion
+          // vient de le faire. La fonction compare `r===true` et `r===false` :
+          // la sonde y lisait une écriture. C'est le piège que ce dépôt paie
+          // régulièrement — on cherche des marqueurs d'écriture PRÉCIS, et la
+          // preuve réelle est plus bas, sur le dossier lui-même.
+          for(const ecrit of ['saveUser','DB.set','nutrition.days['])
+            if(nu.indexOf(ecrit)>=0) return _echec('écriture détectée : '+ecrit);
+          // Une affectation dans le journal des jours, et non une comparaison :
+          // le signe « = » doit être seul, sans « = » ni « ! » « < » « > » devant.
+          if(/jrs\s*\[[^\]]*\]\s*[^=!<>]?=[^=]/.test(nu))
+            return _echec('la fonction écrit dans le journal des jours');
+          for(const d of [null,undefined,{},{nutrition:null},{nutrition:{}},
+                          {nutrition:{days:null}}]){
+            let r; try{ r=serieDieteJours(d,Date.now()); }
+            catch(e){ return _echec('lève sur '+JSON.stringify(d)+' : '+e.message); }
+            if(!r||r.jours!==0||r.traverses!==0)
+              return _echec('dossier vide → '+JSON.stringify(r));
+          }
+          // Le dossier n'a pas bougé après l'appel.
+          const u=_srU('O.OO');
+          const avant=JSON.stringify(u.nutrition.days);
+          serieDieteJours(u,Date.now());
+          return JSON.stringify(u.nutrition.days)===avant
+            ?true:_echec('le dossier a été modifié');})());
+
+        ok('La phrase des trous ne paraît QUE quand un jour a été traversé',(()=>{
+          const _s=currentUser;
+          const el=document.getElementById('nut-diet-content');
+          if(!el) return _echec('nut-diet-content absent');
+          const garde=el.innerHTML;
+          try{
+            const T=Date.now();
+            const mk=m=>Object.assign(_srU(m),{fname:'A',coachId:'c1',
+              status:'COACHING_SUIVI',accessExpiry:T+90*864e5,createdAt:T-200*864e5,
+              sessions:[],bilans:[]});
+            const rendre=m=>{ currentUser=mk(m);
+              if(!(accesDieteStricte(currentUser)||{}).ok)
+                return '(accès fermé — le test ne prouve rien)';
+              _renderStrictDiet();
+              return (el.textContent||'').replace(/\s+/g,' '); };
+            // Sans trou : rien sous le compteur.
+            const plein=rendre('OOOOO');
+            if(plein.indexOf('(accès fermé')===0) return _echec(plein);
+            if(/non renseigné/.test(plein)) return _echec('une phrase sans trou : '+plein.slice(0,120));
+            // UN trou : la phrase EXACTE de la demande, au singulier.
+            const un=rendre('.OOOO');
+            if(un.indexOf('1 jour non renseigné, ta série tient.')<0)
+              return _echec('phrase absente ou fausse : '+un.slice(0,160));
+            // DEUX trous : le pluriel suit, il ne dit pas « 1 ».
+            const deux=rendre('..OOO');
+            if(deux.indexOf('2 jours non renseignés, ta série tient.')<0)
+              return _echec('pluriel : '+deux.slice(0,160));
+            // Série morte : aucune phrase — « ta série tient » sur un zéro
+            // serait un mensonge.
+            for(const m of ['...OO','NOOOO'])
+              if(/ta série tient/.test(rendre(m)))
+                return _echec('la phrase paraît sur une série morte : '+m);
+            return true;
+          } finally { el.innerHTML=garde; currentUser=_s; }})());
+
+        ok('Le rendu délègue sa boucle, il ne la refait pas',(()=>{
+          const nu=String(_renderStrictDiet).replace(/\/\/[^\n]*/g,'');
+          if(nu.indexOf('serieDieteJours')<0)
+            return _echec('_renderStrictDiet ne passe pas par la fonction pure');
+          // L'ancienne boucle ne doit pas survivre à côté : deux comptes du
+          // même chiffre finiraient par ne plus dire la même chose.
+          if(/respected===true\) streak\+\+/.test(nu))
+            return _echec('la boucle d’origine est encore là');
+          return true;})());
+
         ok('Le verrou dit LEQUEL des deux cas s\'applique',(()=>{
           const sans=_htmlStrictVerrou('sans_coach'), non=_htmlStrictVerrou('non_valide');
           if(!/Réservé au suivi coaché/.test(sans)) return _echec('cas sans coach muet');
