@@ -2,11 +2,17 @@
   "name": "RepCore",
   "short_name": "RepCore",
   "description": "Musculation avec suivi : charges adaptées à ta phase de cycle, 3 484 aliments ANSES-Ciqual et séances complètes hors ligne.",
+  "id": "/app/index.html",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#080808",
   "theme_color": "#080808",
   "orientation": "portrait",
+  "lang": "fr",
+  "dir": "ltr",
+  "categories": ["health", "fitness", "sports"],
   "icons": [
     { "src": "icons/icon-72x72.png",           "sizes": "72x72",   "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-96x96.png",           "sizes": "96x96",   "type": "image/png", "purpose": "any" },
@@ -18,5 +24,21 @@
     { "src": "icons/icon-384x384.png",         "sizes": "384x384", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512x512.png",         "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512x512-maskable.png","sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "icons/screenshots/accueil.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow",
+      "label": "L'accueil : ton coach, tes séances de la semaine et ta diète du jour" },
+    { "src": "icons/screenshots/seance.png",  "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow",
+      "label": "Une séance en cours : charges, répétitions et RIR série par série" },
+    { "src": "icons/screenshots/diete.png",   "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow",
+      "label": "La diète : objectifs du jour et journal alimentaire hors ligne" }
+  ],
+  "shortcuts": [
+    { "name": "Nouvelle séance", "short_name": "Séance", "url": "./index.html?wo=1",
+      "description": "Ouvre le choix de séance",
+      "icons": [ { "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" } ] },
+    { "name": "Ma diète", "short_name": "Diète", "url": "./index.html?diete=1",
+      "description": "Ouvre le journal alimentaire",
+      "icons": [ { "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" } ] }
   ]
 }

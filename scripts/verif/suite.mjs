@@ -15,6 +15,13 @@ await new Promise(r => ws.onopen = r);
 // vider les caches du service worker ne l'atteint pas.
 await cmd('Network.enable');
 await cmd('Network.setCacheDisabled', { cacheDisabled: true });
+// LE HEADLESS TOURNE EN UTC, ET AUCUN UTILISATEUR DE REPCORE N'Y VIT.
+// Mesure faite : entre le 28 et le 29 mars 2026, deux minuits locaux du harnais
+// sont separes de 24 heures pile — il n'y a pas de changement d'heure en UTC.
+// Toute assertion ecrite pour verifier qu'un calcul de jours resiste au passage
+// a l'heure d'ete passait donc au vert sans rien avoir traverse, y compris avec
+// une division brute de millisecondes. Le fuseau est celui des utilisateurs.
+await cmd('Emulation.setTimezoneOverride', { timezoneId: 'Europe/Paris' });
 await new Promise(r => setTimeout(r, 6000));
 const ev = async x => {
   const r = await cmd('Runtime.evaluate',
@@ -71,7 +78,7 @@ console.log('regles :', await ev(`(async()=>{ try{
 }catch(e){ return 'NON SERVIES : '+String(e&&e.message||e); } })()`));
 const rap = await ev(`(async()=>{ try{ const r=await chargerTests();
   return {total:r.total,echecs:r.echecs,
-    liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:''))}; }
+    liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:'')+(x.ou?'  ['+x.ou+']':''))}; }
   catch(e){ return {erreur:String(e&&e.message||e)}; } })()`);
 console.log(JSON.stringify(rap, null, 1).slice(0, 12000));
 await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`);

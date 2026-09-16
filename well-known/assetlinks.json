@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.repcore.app",
+      "sha256_cert_fingerprints": [
+        "9E:55:AE:95:8A:99:DC:55:22:8B:8F:CD:8A:9C:FD:81:2E:90:25:02:51:ED:B3:57:55:A6:AF:2A:0C:6A:98:FA"
+      ]
+    }
+  }
+]

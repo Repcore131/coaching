@@ -22,6 +22,25 @@ chrome.exe --headless=old --disable-gpu --no-first-run \
   --user-data-dir=/tmp/chr --remote-debugging-port=9223 about:blank &
 ```
 
+## Rejouabilité
+
+`suite.mjs` ouvre un onglet neuf et vide le stockage : il ne peut donc rien dire
+de la rejouabilité. `idempotence.mjs` joue la suite TROIS fois dans la MÊME page
+et compare les rapports — c'est le seul moyen de voir si elle rend ce qu'elle
+emprunte à `DB`, à `currentUser` et aux caches. Une suite qui ne restaure pas
+rend des échecs fantômes à la deuxième passe, et tout diagnostic bâti sur elle
+devient douteux.
+
+```bash
+node scripts/verif/idempotence.mjs "http://127.0.0.1:8799/app/index.html"
+```
+
+Les trois totaux doivent être identiques, et `fantomes2`, `fantomes3` et
+`gueris` vides. Un total qui DÉRIVE dit que la suite s'ajoute à elle-même ; un
+fantôme dit qu'elle ne restaure pas.
+
+Mesure du 02/09/2026 : 4 142 / 18 aux trois passes, aucun fantôme.
+
 ## Captures
 
 `capture.mjs` prend une page qui contient des blocs `.banc`, chacun de

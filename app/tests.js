@@ -30,7 +30,20 @@ function _prodSrc(){
   return s;
 }
 
-function testExercices(){
+// ELLE EST DEVENUE `async`, ET IL LE FALLAIT. Le produit est passe de
+// confirm()/prompt() natifs — qui BLOQUENT le fil — aux modales maison
+// rcConfirm/rcSaisie, qui rendent une promesse. Les fonctions qui les appellent
+// sont donc devenues `async`, et onze assertions ont continue de les appeler
+// comme avant : elles lisaient l'etat AVANT que la fonction ait rien ecrit, et
+// surchargeaient un window.confirm que plus personne n'appelle.
+//
+// Sept tombaient bruyamment. LES AUTRES SONT PASSEES AU VERT SANS RIEN
+// MESURER — ce sont celles qui verifient qu'une ecriture N'A PAS eu lieu, et
+// une fonction qui n'a pas encore commence n'a evidemment rien ecrit.
+//
+// Son unique appelant, chargerTests(), est deja `async` et fait
+// `return testExercices()` : une promesse y est attendue d'elle-meme.
+async function testExercices(){
   const R=[];
   // Un test qui rend une CHAÎNE passerait : ok ne regarde que la véracité de
   // son second argument, et « exception: … » est vrai. Ces retours servaient à
@@ -55,9 +68,103 @@ function testExercices(){
       }catch(e){ _srcTests=''; }
       return _srcTests;
     };
-  const ok=(n,c,d)=>{ R.push({n,ok:!!c,d:d||_msgEchec||''}); _msgEchec=''; };
+  // ══ D'OÙ VIENT CET ÉCHEC ═══════════════════════════════════════════════
+  //
+  // ⚠ UN NOM NE SUFFIT PAS À SITUER UNE ASSERTION. Beaucoup sont construites
+  // dynamiquement — « … → le garde ne court-circuite pas » — et le libellé
+  // affiché n'existe alors NULLE PART dans le fichier : on le cherche, on ne
+  // le trouve pas, et on finit par relire quatre mille lignes. Cinq échecs ont
+  // coûté cela.
+  //
+  // On capture donc la pile À L'APPEL, et on en garde le premier cadre qui
+  // n'est pas ok() elle-même. C'est le seul moment où l'information existe :
+  // une fois l'assertion rangée dans R, son origine est perdue.
+  //
+  // RÉSERVÉ AUX ÉCHECS À L'AFFICHAGE : quatre mille trois cents origines dans
+  // un rapport vert seraient illisibles. Le champ est néanmoins posé sur
+  // TOUTES les entrées — un outil qui relit `detail` peut en avoir besoin, et
+  // le coût est une chaîne courte.
+  const _origine=()=>{
+    try{
+      const l=String(new Error().stack||'').split('\n');
+      for(const ligne of l){
+        // On saute l'en-tête « Error » et les cadres internes : _origine
+        // elle-même, ok, okA, et le rappel différé qui joue okA.
+        if(/^\s*Error\b/.test(ligne)) continue;
+        if(/_origine|at ok\b|at okA\b/.test(ligne)) continue;
+        // « …/tests.js:1234:56 » — on garde fichier:ligne, sans la colonne ni
+        // le chemin complet, qui n'apprennent rien de plus.
+        const m=ligne.match(/([^\/\\ ()]+\.js):(\d+):\d+/);
+        if(m) return m[1]+':'+m[2];
+      }
+    }catch(e){}
+    return '';
+  };
+  const ok=(n,c,d)=>{ R.push({n,ok:!!c,d:d||_msgEchec||'',ou:_origine()}); _msgEchec=''; };
+  // ── LES ASSERTIONS QUI DOIVENT ATTENDRE ────────────────────────────────
+  //
+  // `ok` recoit une VALEUR deja calculee. Lui passer une fonction asynchrone
+  // lui donnerait une Promesse, et `!!Promesse` vaut toujours vrai : le test
+  // serait vert quoi qu'il arrive. C'est le piege exact que ce lot repare, et
+  // il ne faut surtout pas le reintroduire en le deplacant.
+  //
+  // okA range la fonction et la joue A LA FIN, une fois le corps synchrone
+  // termine. Une exception devient un echec nomme plutot qu'un arret de la
+  // suite entiere — un test asynchrone qui explose emportait sinon les 4 000
+  // autres avec lui.
+  const _diff=[];
+  const okA=(n,f)=>{
+    // ⚠ L'ORIGINE EST CAPTURÉE ICI, À L'INSCRIPTION. Le corps est joué à la
+    // fin de la suite : appelée depuis là, _origine() désignerait la boucle
+    // qui rejoue les différées, jamais l'endroit où l'assertion est écrite.
+    const ou=_origine();
+    _diff.push(async()=>{
+      let v;
+      try{ v=await f(); }catch(e){ v=_echec('exception : '+((e&&e.message)||e)); }
+      ok(n,v);
+      // La dernière entrée est celle qu'on vient de pousser : on lui rend son
+      // origine réelle.
+      const der=R[R.length-1];
+      if(der&&ou) der.ou=ou;
+    });
+  };
+  // LES DEUX BOUCHONS DE MODALE, ecrits une fois. Ils rendent une PROMESSE, et
+  // non la valeur nue : un appelant du produit qui oublierait son `await`
+  // recevrait un objet Promesse — toujours vrai — et le test doit pouvoir le
+  // voir, pas le masquer.
+  //
+  // `question` retient le texte pose : plusieurs assertions verifient que la
+  // question NOMME ce qui va disparaitre, ce qu'aucune sonde de source ne peut
+  // faire.
+  const _modale={question:null,demande:false};
+  const _poserConfirm=rep=>{ window.rcConfirm=(t)=>{
+    _modale.question=String(t==null?'':t); return Promise.resolve(rep); }; };
+  const _poserSaisie=rep=>{ window.rcSaisie=(t)=>{
+    _modale.question=String(t==null?'':t); _modale.demande=true;
+    return Promise.resolve(rep); }; };
+  // ══ LES PREREQUIS SONT CHARGES ICI, PLUS PAR L'APPELANT ═══════════════
+  //
+  // Deux jeux de donnees sont indispensables : l'index des illustrations et la
+  // table Ciqual. Sans eux la suite s'arretait vers 2 200 assertions sur 4 142 —
+  // et le rapport annoncait « 2 200 verifications, N en echec », ce qui se lit
+  // exactement comme une suite qui a tout passe. Il fallait savoir qu'on devait
+  // taper `await chargerIndexIllustrations()` et `await _loadCiqual()` AVANT, et
+  // ce savoir ne vivait que dans la tete de celui qui l'avait ecrit.
+  //
+  // ELLE LES CHARGE DONC ELLE-MEME. Idempotents tous les deux — chacun garde son
+  // resultat — les rappeler ne coute rien quand le lanceur les a deja appeles.
+  // Un echec de chargement n'arrete pas la suite : il devient une assertion
+  // rouge NOMMEE, et les sondes qui en dependent tomberont a leur tour en le
+  // disant. Mieux vaut une suite qui accuse un manque qu'une suite qui s'arrete.
+  for(const [nom,f] of [['index des illustrations',typeof chargerIndexIllustrations==='function'?chargerIndexIllustrations:null],
+                        ['table Ciqual',typeof _loadCiqual==='function'?_loadCiqual:null]]){
+    if(!f){ ok('Prérequis : '+nom,false,'la fonction de chargement est introuvable'); continue; }
+    try{ await f(); }
+    catch(e){ ok('Prérequis : '+nom,false,'chargement impossible : '+((e&&e.message)||e)); }
+  }
   const sauve=currentUser;
   currentUser={id:'_test',email:'t@t',exMuscles:{},exAlias:{},sessions:[]};
+  const _avantBloc=R.length;
   try{
     // ── exKey : 12 cas ──
     const cas=[
@@ -1470,6 +1577,74 @@ function testExercices(){
     ok('Plus aucun bouton retour sur history.back()',
        !Array.from(document.querySelectorAll('.back-btn'))
          .some(b=>/history\.back/.test(b.getAttribute('onclick')||'')));
+
+    // ══════ TOUT HANDLER D'ATTRIBUT EXISTE SUR window ══════
+    //
+    // Un attribut `onclick="foo()"` est compilé dans une portée qui remonte
+    // jusqu'à l'objet global : `foo` doit y être une fonction. Une déclaration
+    // `function foo(){}` de premier niveau y est ; un `const foo=…` de premier
+    // niveau, NON — il vit dans la portée du script, visible depuis l'attribut
+    // par accident de portée, mais absent de window. Il est alors invisible à
+    // toute sonde, et il casse au premier appel programmatique.
+    //
+    // ppImprimer était le seul des ~590 handlers dans ce cas.
+    ok('typeof window.ppImprimer est une fonction',
+       typeof window.ppImprimer==='function',typeof window.ppImprimer);
+
+    ok('Tout nom appelé depuis un attribut d\'événement est une fonction sur window',(()=>{
+      // ⚠ LA GARDE GÉNÉRALE, et elle vaut plus que le correctif qu'elle a
+      // motivé : elle tombera le jour où quelqu'un déclarera un handler en
+      // const, quel qu'il soit.
+      //
+      // ⚠ ON NE RETIRE PAS LES COMMENTAIRES PAR UNE EXPRESSION SUR .*\*\/ :
+      // elle avale les trois quarts du fichier — mesuré, 3,2 Mo sur 4,5. On
+      // écarte les LIGNES ENTIÈRES commençant par //, et rien d'autre.
+      const src=_prodSrc().split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+      const ATTRS='click|change|input|submit|keydown|keyup|keypress|focus|blur|'
+        +'touchstart|touchend|touchmove|error|load|mouseenter|mouseleave|mousedown|'
+        +'mouseup|paste|wheel|scroll|dblclick|contextmenu|drop|dragover|animationend|'
+        +'transitionend|pointerdown|pointerup';
+      const reAttr=new RegExp('\\bon('+ATTRS+')\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')','g');
+      // Mots-clefs et globales : ce ne sont pas des handlers du produit.
+      const NATIFS=new Set(('if,for,while,switch,catch,return,typeof,new,delete,void,'
+        +'function,do,else,try,finally,throw,in,of,instanceof,'
+        +'Number,String,Boolean,Array,Object,Math,JSON,Date,RegExp,Error,Promise,Set,Map,'
+        +'parseInt,parseFloat,isNaN,isFinite,encodeURIComponent,decodeURIComponent,'
+        +'alert,confirm,prompt,setTimeout,setInterval,clearTimeout,clearInterval,'
+        +'requestAnimationFrame,fetch,print,open,close,focus,blur,scrollTo').split(','));
+      const noms=new Set(); const ou={};
+      let m;
+      while((m=reAttr.exec(src))!==null){
+        let corps=(m[2]!==undefined?m[2]:m[3])||'';
+        if(!corps) continue;
+        // ⚠ LES CHAÎNES DU HANDLER SONT RETIRÉES D'ABORD. Sans cela,
+        // this.style.borderColor='var(--border)' faisait passer « var » pour un
+        // handler manquant : c'est une fonction CSS dans un littéral, pas un
+        // appel JS. Même classe de faux positif pour rgba(, calc(, et pour tout
+        // texte français portant une parenthèse.
+        corps=corps.replace(/&quot;[^&]*&quot;/g,'""')
+                   .replace(/'[^']*'/g,"''")
+                   .replace(/"[^"]*"/g,'""');
+        // Un identifiant suivi d'une parenthèse, NON précédé d'un point :
+        // this.click() et event.preventDefault() sont des méthodes.
+        const reAppel=new RegExp('(^|[^.\\w$])([A-Za-z_$][\\w$]*)\\s*\\(','g');
+        let a;
+        while((a=reAppel.exec(corps))!==null){
+          const nom=a[2];
+          if(NATIFS.has(nom)) continue;
+          noms.add(nom);
+          if(!ou[nom]) ou[nom]='on'+m[1];
+        }
+      }
+      // La sonde doit avoir trouvé quelque chose : à zéro nom elle ne prouve
+      // rien, et c'est exactement l'état dans lequel une regex trop gourmande
+      // la laisserait.
+      if(noms.size<400) return _echec(noms.size+' handlers extraits : la sonde ne regarde plus le fichier');
+      const absents=[...noms].filter(x=>typeof window[x]!=='function');
+      return absents.length
+        ? _echec(absents.length+' handler(s) absent(s) de window : '
+            +absents.slice(0,5).map(x=>x+' ('+ou[x]+')').join(', '))
+        : true;})());
     Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
     Object.assign(_ecranOrigine,_orSauve);
 
@@ -7172,8 +7347,16 @@ function testExercices(){
           if(iRole<0) return _echec('la réassignation n\'est plus cantonnée au coach');
           if(!(iRole<iOff)) return _echec('offboardCoach est atteignable par un athlète');
           // Et le bloc se referme AVANT la confirmation : sinon un athlete
-          // n'atteindrait jamais le confirm.
-          const iConf=src.indexOf('const ok=confirm(');
+          // n'atteindrait jamais la question.
+          //
+          // CETTE SONDE A ETE ROUGE POUR RIEN. Elle cherchait la chaine exacte
+          // « const ok=confirm( » ; le jour ou confirm() a laisse la place a
+          // rcConfirm(), l'indexOf est passe a -1 et la comparaison iOff<-1 a
+          // vire au rouge en annoncant un enfermement qui n'existait pas. Le
+          // code, lui, n'a jamais eu ce defaut. On vise desormais l'APPEL, quel
+          // que soit le nom du poseur de question.
+          const iConf=src.search(/const\s+ok\s*=\s*await\s+rcConfirm\(/);
+          if(iConf<0) return _echec('la confirmation a disparu de la suppression');
           return (iOff<iConf)
             ?true:_echec('la confirmation est enfermée dans la branche coach');})());
         ok('Le profil athlète porte sa zone dangereuse, et elle NOMME la santé',(()=>{
@@ -7205,10 +7388,48 @@ function testExercices(){
           // dossier sans lien avec lui.
           if(!/u\.coachId===currentUser\.id&&k!==myKey/.test(src))
             return _echec('la déliaison a changé de filtre');
-          // Et le balayage local est TOTAL : l'appareil de celui qui part ne
-          // garde pas les dossiers des autres.
-          return /k\.indexOf\('rc_'\)===0/.test(src)
-            ?true:_echec('des traces locales survivent');})());
+          // ET LE BALAYAGE LOCAL EST CIBLE — cette sonde demandait L'INVERSE.
+          //
+          // Elle exigeait `k.indexOf('rc_')===0`, le balayage de TOUTES les
+          // clefs du prefixe. C'etait bien le code d'origine, et c'etait un
+          // defaut : il emportait rc_users, le dossier de tous les comptes de
+          // l'appareil, et rc_comptes, le registre du multi-compte. Supprimer
+          // son compte effacait donc celui d'a cote. Le correctif a remplace le
+          // balayage par un retrait cible ; la sonde, restee telle quelle,
+          // reclamait le retour du defaut.
+          //
+          // CE QU'ON VERIFIE MAINTENANT : que le balayage aveugle ne revienne
+          // pas, et que le retrait cible couvre bien les trois prefixes qui
+          // portent des images du corps.
+          const nu=src.replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+          if(/k\.indexOf\('rc_'\)===0/.test(nu))
+            return _echec('le balayage aveugle est revenu : il emporterait les autres comptes');
+          for(const p of ["rc_p2_","rc_photo_","rc_pendingphoto_"])
+            if(nu.indexOf(p)<0) return _echec(p+' n’est plus effacé');
+          return true;})());
+        ok('Les photos d\'un bilan JAMAIS TERMINE partent aussi',(()=>{
+          // ARTICLE 17. rc_pendingphoto_<champ> porte les photos de mensuration
+          // d'un bilan commence et ni valide ni annule : elles ne passent en
+          // rc_photo_ qu'a la validation. La suppression effacait rc_photo_ et
+          // rc_p2_ et laissait celles-la — des photos du corps survivant a un
+          // effacement que l'interface annonce comme total.
+          const nu=String(requestAccountDeletion)
+            .replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+          if(!/_bilPurgerPhotos\('depart'\)/.test(nu)||!/_bilPurgerPhotos\('coaching'\)/.test(nu))
+            return _echec('les deux types de bilan ne sont pas purgés');
+          // LE MECANISME LUI-MEME, en vrai : la fonction appelee efface bien.
+          const temoins=['rc_pendingphoto_deb-photo-face','rc_pendingphoto_bil-photo-dos'];
+          try{
+            temoins.forEach(k=>localStorage.setItem(k,'x'));
+            _bilPurgerPhotos('depart'); _bilPurgerPhotos('coaching');
+            const restants=temoins.filter(k=>localStorage.getItem(k)!==null);
+            if(restants.length) return _echec('survit à la purge : '+restants.join(', '));
+          } finally { temoins.forEach(k=>{try{localStorage.removeItem(k);}catch(e){}}); }
+          // ET LE FILET, pour un troisieme type de bilan que _bilPhotoPrefixe
+          // ne connaitrait pas : une photo de corps oubliee ne se signale
+          // jamais d'elle-meme.
+          return /indexOf\('rc_pendingphoto_'\)===0/.test(nu)
+            ?true:_echec('un préfixe inconnu passerait au travers');})());
 
 
         // ── Le repli de lecture, sans migration ──────────────────────────
@@ -7775,8 +7996,18 @@ function testExercices(){
         ok('Aucune promesse de gratuité illimitée n\'a pris leur place',(()=>{
           // Une limitation technique annoncée comme un avantage devient une
           // promesse contractuelle dont on ne revient pas.
+          //
+          // \u26a0 ELLE NE SCANNE QUE CE QUE L'UTILISATEUR PEUT LIRE. Cette sonde
+          // lisait le fichier ENTIER, commentaires compris, et accusait donc
+          // un commentaire qui explique un plafond de VOLUME \u2014 \u00ab sans plafond,
+          // prioriser voudrait dire ajouter \u00bb. Une promesse contractuelle se
+          // fait dans une cha\u00eene AFFICH\u00c9E, jamais dans un commentaire que
+          // personne ne voit. Cinqui\u00e8me fois qu'une sonde de ce fichier accuse
+          // un commentaire : on retire les deux formes avant de chercher.
           const tout=_prodSrc();
           const prod=tout
+            .replace(/\/\*[\s\S]*?\*\//g,'')
+            .replace(/^\s*\/\/.*$/gm,'')
             .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
           const interdits=['gratuit sans limite','sans plafond','athletes illimites',
             'autant d athletes que tu veux','gratuit a vie'];
@@ -8870,6 +9101,2007 @@ function testExercices(){
         // ══════ ÉCRANS À ENCOCHE ══════
         // Trois réglages qui ne se voient jamais sur un écran de bureau, et dont
         // l'absence rend l'app inutilisable sur un iPhone récent en PWA.
+        // ══════ UNE POUSSEE QUI RATE NE PART PLUS EN SILENCE ══════
+        //
+        // Sur les 59 points de poussee du fichier, 24 passent par toastSync et
+        // parlent deja a l'endroit du geste. SEPT ne disaient rien du tout.
+        // Trois d'entre eux le meritaient — les quatre autres non, et c'est
+        // aussi un resultat : une poussee en boucle sur N athletes pendant une
+        // suppression de compte, ou l'ecriture d'une taille DEDUITE que personne
+        // n'a demandee, n'ont rien a annoncer.
+        okA('Un envoi qui rate le dit — un envoi qui passe se tait',(async()=>{
+          // ⚠ LE JOURNAL DES TOASTS N'EST PAS A NOUS. Ces assertions sont
+          // DIFFEREES : elles s'executent apres le corps synchrone, et les
+          // poussees « lance et oublie » declenchees par les fixtures
+          // precedentes se resolvent pendant nos `await`. Un premier jet
+          // comptait tous les toasts vus et tombait sur « Accès activé ✓ »
+          // emis par un autre test — un echec qui ne disait rien de notre code.
+          //
+          // ON NE RETIENT DONC QUE CE QUI PORTE NOTRE SENTINELLE.
+          const SENT='ZZ-SONDE-'+Math.floor(Math.random()*1e6);
+          const _t=window.toast; const tous=[];
+          const vus={get length(){return tous.filter(m=>m.indexOf(SENT)>=0).length;},
+                     get 0(){return tous.filter(m=>m.indexOf(SENT)>=0)[0];},
+                     join(s){return tous.filter(m=>m.indexOf(SENT)>=0).join(s);},
+                     vider(){tous.length=0;}};
+          try{
+            window.toast=(m)=>{tous.push(String(m));};
+            // LE SILENCE EN CAS DE SUCCES EST LA MOITIE DU LOT. C'est ce qui
+            // distingue ce helper de toastSync : les trois gestes annoncent deja
+            // leur resultat autrement — le code s'affiche, la ligne disparait, la
+            // date change — et un second message dirait deux fois la meme chose.
+            if(await direSiEnvoiEchoue(Promise.resolve(),SENT)!==true)
+              return _echec('un envoi réussi ne rend pas true');
+            if(vus.length) return _echec('un envoi réussi a parlé : '+vus.join(' | '));
+            // LA PANNE ORDINAIRE : elle est deja dans rc_sync_queue et sera
+            // rejouee. On le dit, plutot que d'alarmer pour une panne dont l'app
+            // s'occupe deja.
+            const r=await direSiEnvoiEchoue(Promise.reject(new Error('boum')),
+              SENT+' La suppression','ton athlète verra encore ce complément');
+            if(r!==false) return _echec('un envoi raté ne rend pas false');
+            if(vus.length!==1) return _echec(vus.length+' message(s) pour un échec');
+            if(!/réessaiera/.test(vus[0])) return _echec('la relance n’est pas annoncée : '+vus[0]);
+            // ET LA CONSEQUENCE EST NOMMEE : « pas encore envoyé » ne veut rien
+            // dire tout seul.
+            if(!/ton athlète verra encore/.test(vus[0]))
+              return _echec('la conséquence n’est pas dite : '+vus[0]);
+            // LE REFUS DELIBERE NE SERA JAMAIS REJOUE — le promettre serait un
+            // mensonge. Son propre message part tel quel.
+            vus.vider();
+            const refus=new Error(SENT+' Le programme distant est plus récent : envoi annulé.');
+            refus._nonRejouable=true;
+            await direSiEnvoiEchoue(Promise.reject(refus),SENT,'peu importe');
+            if(vus.length!==1) return _echec('le refus délibéré ne parle pas');
+            if(/réessaiera/.test(vus[0]))
+              return _echec('on promet une relance qui n’aura jamais lieu : '+vus[0]);
+            return /plus récent/.test(vus[0])
+              ?true:_echec('le message du refus est perdu : '+vus[0]);
+          } finally { window.toast=_t; }}));
+        okA('Le helper ne rejette JAMAIS',(async()=>{
+          // Ses appelants sont des « lance et oublie » : un rejet non capturé ne
+          // doit pas sortir d'un helper dont tout l'objet est de rendre les
+          // échecs visibles.
+          const _t=window.toast;
+          try{
+            window.toast=()=>{};
+            await direSiEnvoiEchoue(Promise.reject(new Error('x')),'X');
+            await direSiEnvoiEchoue(Promise.reject(null),'X');
+            return true;
+          }catch(e){ return _echec('il a rejeté : '+((e&&e.message)||e)); }
+          finally { window.toast=_t; }}));
+        ok('Les trois poussees les plus couteuses sont branchees',(()=>{
+          // LE CODE D'ACCES EST LE PLUS COUTEUX DES SEPT SILENCES : un code vit
+          // dans /rc_codes cote serveur, et si la poussee echoue il n'existe que
+          // sur l'appareil du coach. Il le lit a l'ecran, le donne a son athlete,
+          // et le code ne marche pas — sans qu'aucun des deux ne comprenne.
+          const nu=f=>String(f).replace(/\/\/.*/g,'');
+          const cas=[['generateStudentCode',generateStudentCode],
+                     ['_extendAccessCode',_extendAccessCode],
+                     ['deleteClientSuppEntry',deleteClientSuppEntry]];
+          const manque=cas.filter(([,f])=>nu(f).indexOf('direSiEnvoiEchoue(')<0).map(([n])=>n);
+          if(manque.length) return _echec('muet(s) : '+manque.join(', '));
+          // ET AUCUNE DES TROIS N'EST PASSEE A toastSync : ce serait ajouter un
+          // toast de SUCCES la ou le resultat est deja visible a l'ecran.
+          const enTrop=cas.filter(([,f])=>nu(f).indexOf('toastSync(')>=0).map(([n])=>n);
+          return enTrop.length
+            ?_echec('un toast de succès a été ajouté : '+enTrop.join(', ')):true;})());
+
+        // ══════ CE QUI NE CHARGE PAS DOIT LE DIRE ══════
+        //
+        // Trois echecs etaient MUETS : une video purgee chez l'hebergeur laissait
+        // un lecteur noir qui ne fait rien, une illustration invalide laissait
+        // l'icone cassee du navigateur, et une exception dans le rendu de fin de
+        // seance laissait l'ecran a moitie peint sur une seance pourtant ecrite.
+        (()=>{
+          ok('Une video qui ne charge pas le DIT, et propose le retrait',(()=>{
+            const h=_videoEmbed('https://res.cloudinary.com/x/video/upload/v1/a.mp4','vc-video-42');
+            if(h.indexOf('onerror="_videoIndisponible(this)"')<0)
+              return _echec('aucun repli sur la vidéo');
+            // LE REPLI LUI-MEME, joue en vrai : une sonde de source ne dirait
+            // rien d'un message reste dans une branche que personne n'atteint.
+            const _cu=currentUser;
+            const d=document.createElement('div');
+            document.body.appendChild(d);
+            try{
+              currentUser={email:'lea@t.fr',id:'a1',role:'athlete'};
+              d.innerHTML=h;
+              const v=d.querySelector('video');
+              if(!v) return _echec('aucun élément vidéo rendu');
+              if(_videoIndisponible(v)!==true) return _echec('le repli refuse de jouer');
+              if(d.querySelector('video')) return _echec('la vidéo morte est toujours là');
+              const t=(d.textContent||'').replace(/\s+/g,' ');
+              if(!/Vidéo indisponible/.test(t)) return _echec('rien ne dit que la vidéo manque : '+t.slice(0,80));
+              // LE BOUTON DE RETRAIT EST LA VRAIE REPARATION : sans lui la ligne
+              // reste dans la liste pour toujours.
+              const b=d.querySelector('button');
+              if(!b) return _echec('aucun bouton de retrait');
+              if(typeof b.onclick!=='function') return _echec('le bouton de retrait n’a pas de gestionnaire');
+              // ET PAS DE BOUTON SANS IDENTIFIANT : l'ecran du coach passe
+              // l'identifiant par defaut, il n'a rien a retirer.
+              const d2=document.createElement('div'); document.body.appendChild(d2);
+              try{
+                d2.innerHTML=_videoEmbed('https://x/a.mp4');
+                _videoIndisponible(d2.querySelector('video'));
+                return d2.querySelector('button')===null
+                  ?true:_echec('un bouton de retrait sans identifiant de vidéo');
+              } finally { d2.remove(); }
+            } finally { d.remove(); currentUser=_cu; }})());
+          ok('Le bouton × d\'une vidéo a un gestionnaire QUI COMPILE',(()=>{
+            // IL N'EN AVAIT PLUS. « onclick="if(await rcConfirm(...))..." » : le
+            // contenu d'un gestionnaire en ligne est compile comme le corps
+            // d'une fonction ORDINAIRE, et un `await` y est une erreur de
+            // syntaxe. Le gestionnaire n'etait donc jamais cree, et supprimer
+            // une video etait impossible — sans le moindre message.
+            // ⚠ LA SONDE MATCHAIT SON PROPRE COMMENTAIRE. Le correctif explique
+            // le defaut en citant le gestionnaire fautif ; scanner le fichier
+            // brut retrouvait donc la citation et declarait le defaut present.
+            // On retire les lignes de commentaire avant de chercher — ancrees
+            // en DEBUT DE LIGNE, jamais sur un « // » quelconque, qui vit aussi
+            // au milieu des URL.
+            const src=_prodSrc().split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+            if(/onclick="[^"]*await /.test(src))
+              return _echec('un gestionnaire en ligne contient encore un await');
+            if(typeof _demanderSuppressionVideo!=='function')
+              return _echec('la fonction nommée de suppression a disparu');
+            // ET LE GESTIONNAIRE EXISTE VRAIMENT une fois la carte rendue.
+            const d=document.createElement('div');
+            d.innerHTML='<button onclick="_demanderSuppressionVideo(\'a@b.fr\',\'42\')">×</button>';
+            return typeof d.firstChild.onclick==='function'
+              ?true:_echec('le gestionnaire ne compile pas');})());
+          ok('Une illustration qui ne charge pas bascule sur le message écrit',(()=>{
+            const src=_prodSrc();
+            if((src.match(/onerror="_illusAbsente\(this\)"/g)||[]).length<2)
+              return _echec('les deux rendus n’ont pas tous les deux leur repli');
+            // LE REPLI DE LA FICHE reprend le message deja ecrit ; celui de la
+            // liste rend le cadre neutre, parce que c'est la HAUTEUR qui compte.
+            const d=document.createElement('div'); document.body.appendChild(d);
+            try{
+              d.innerHTML='<img src="x" style="width:100%;max-height:260px">';
+              _illusAbsente(d.querySelector('img'));
+              if(!/Aucune illustration/.test(d.textContent||''))
+                return _echec('la fiche ne reprend pas son message : '+(d.textContent||''));
+              d.innerHTML='<img src="x" width="64" height="48" style="width:64px;height:48px">';
+              _illusAbsente(d.querySelector('img'));
+              if(d.textContent) return _echec('la liste affiche du texte au lieu d’un cadre');
+              const c=d.firstChild;
+              if(!c||c.style.width!=='64px'||c.style.height!=='48px')
+                return _echec('le cadre neutre n’a pas la taille de l’image');
+              // ET LE REPLI NE SE RAPPELLE PAS LUI-MEME : sans le retrait de
+              // onerror, un repli qui echouerait a son tour boucherait.
+              return /el\.onerror=null/.test(String(_illusAbsente))
+                ?true:_echec('onerror n’est pas retiré avant le remplacement');
+            } finally { d.remove(); }})());
+          ok('Le rendu de fin de seance ne peut plus laisser l\'ecran a moitie peint',(()=>{
+            // La seance est ENREGISTREE une ligne avant : une exception dans le
+            // train de rendu qui suit laissait l'athlete sur l'ecran de seance,
+            // persuade que rien n'avait ete pris.
+            const src=String(finishWorkout);
+            const iSave=src.indexOf('saveUser();');
+            const iTry=src.indexOf('try{',iSave);
+            // LE DERNIER, et pas le premier venu : le train de rendu contient
+            // deja des try/catch locaux — « try{ renderFormeSeance(); }catch(e){} »
+            // en est un — et le premier trouve apres le try tombait sur l'un
+            // d'eux. Les rattrapages internes du repli, eux, nomment leur
+            // exception _e : le dernier « }catch(e){ } » est donc bien celui qui
+            // ferme l'enveloppe.
+            const iCatch=src.lastIndexOf('}catch(e){');
+            if(iSave<0||iTry<0||iCatch<0) return _echec('aucun try/catch après l’enregistrement');
+            // ON VISE LA FETE, PAS LE go(). « go('s-workout-done') » apparait
+            // DEJA plus haut dans la fonction, sur le chemin de la seance
+            // interrompue — la premiere sonde le trouvait la, avant même
+            // l'enregistrement, et concluait que rien n'etait enveloppe.
+            // _feterFinSeance, elle, est la DERNIERE ligne du train de rendu :
+            // la voir entre le try et le catch, c'est voir tout le train dedans.
+            const iFete=src.indexOf('_feterFinSeance(');
+            if(!(iSave<iTry&&iTry<iFete&&iFete<iCatch))
+              return _echec('le rendu n’est pas enveloppé');
+            const rattrapage=src.slice(iCatch,iCatch+900);
+            // L'ECRAN D'ABORD : c'est lui qui dit que la seance est finie.
+            if(rattrapage.indexOf("go('s-workout-done')")<0)
+              return _echec('le repli ne ramène pas sur l’écran de fin');
+            // ET UNE PHRASE QUI DIT LA VERITE : la seance est enregistree, c'est
+            // son detail qui manque.
+            return /enregistrée/.test(rattrapage)
+              ?true:_echec('le repli ne confirme pas l’enregistrement');})());
+        })();
+
+        // ══════ LA LECTURE D'UNE ETIQUETTE NUTRITIONNELLE ══════
+        //
+        // LES TEXTES CI-DESSOUS NE SONT PAS INVENTES. Ce sont les sorties
+        // REELLES du moteur embarque sur dix photos d'etiquettes prises par
+        // d'autres que nous — des photos de rayon, floues, courbes, mal
+        // eclairees, telles qu'un athlete en prend. Une etiquette imaginee pour
+        // le test se lit toujours bien ; c'est le bruit reel qui casse, et lui
+        // seul qu'il faut geler ici.
+        //
+        // AVANT CE LOT, sur ces dix photos : 7 valeurs justes et 5 FAUSSES.
+        // Apres : 11 justes, 0 fausse. Le nombre qui compte est le second — une
+        // case vide se remplit a la main, une macro fausse fausse la journee.
+        (()=>{
+          // Muesli Bjorg. La photo est bonne, le tableau bien cadre.
+          const MUESLI=[
+            'etes SONNELLES -éréale',
+            'MOYENNES Pour 100 9 de ce',
+            'Énergie 1485 kJ 885 kJ',
+            '352 kcal 210 kcal',
+            'Matières grasses 589 3,5 0',
+            '- dont acides gras saturés 0,9 0,59',
+            'Glucides 59 g 35 9',
+            '- dont sucres 149 840',
+            'Fibres alimentaires 10g 6,0 g',
+            'Protèines Mg 689',
+            'Sal 0,03 g 0,02 ,'].join('\n');
+          ok('« Pour 100 g » survit au g lu 9',(()=>{
+            // C'ETAIT UN AVERTISSEMENT A TORT : la mention est bien la, le
+            // moteur l'a rendue « Pour 100 9 », et l'app repondait « ce sont
+            // peut-etre les valeurs par portion » sur une lecture juste. Le
+            // doute jete sur une bonne lecture use la confiance aussi surement
+            // qu'une valeur fausse.
+            if(!_etiqAnalyser(MUESLI).pour100)
+              return _echec('« Pour 100 9 » n’est pas reconnu');
+            // Et les deux autres formes rencontrees sur les memes photos.
+            if(!_etiqAnalyser('POUR 1005 :').pour100) return _echec('« POUR 1005 » non reconnu');
+            return _etiqAnalyser('| 1009 | 459(%")').pour100
+              ?true:_echec('« 1009 » non reconnu');})());
+          ok('Un intitule abime par la lecture ne fait pas perdre sa ligne',(()=>{
+            // « Sal » pour « Sel » : l'intitule ne matchait pas, et la valeur
+            // pourtant nette juste a cote etait perdue.
+            const r=_etiqAnalyser(MUESLI);
+            if(r.e!==0.03) return _echec('le sel lu « Sal » n’est pas rattrapé : '+r.e);
+            // Les deux autres avaries relevees sur ces photos.
+            if(_etiqAnalyser('Matières rasses 5,8 g').l!==5.8)
+              return _echec('« Matières rasses » perd sa valeur');
+            return _etiqAnalyser('Hibres alimentaires 10 g').f===10
+              ?true:_echec('« Hibres » perd sa valeur');})());
+          ok('Une macro illisible reste VIDE, elle ne devient pas un nombre',(()=>{
+            // « 5,8 g » rendu « 589 », « 11 g » rendu « 119 » : la virgule et le
+            // g se perdent ensemble, et rien dans le nombre obtenu ne dit
+            // lequel des deux manque. 589 peut valoir 5,8 ou 58,9. On ne
+            // devine pas — la case reste vide et l'athlete la remplit.
+            const r=_etiqAnalyser(MUESLI);
+            if(r.l!=null&&Math.abs(r.l-5.8)>0.6)
+              return _echec('une valeur inventée pour les lipides : '+r.l);
+            if(r.p!=null) return _echec('« Protèines Mg » a produit '+r.p);
+            // CE QUI EST LISIBLE PASSE : les glucides et les fibres de la meme
+            // photo sont nets, et ils doivent arriver.
+            if(r.c!==59) return _echec('glucides : '+r.c);
+            return r.k===352?true:_echec('énergie : '+r.k);})());
+
+          ok('Les 2000 kcal des apports de reference ne sont pas ceux du produit',(()=>{
+            // Toute etiquette europeenne imprime « (8400 kJ / 2000 kcal) ».
+            // Quand la ligne d'energie du tableau se lisait mal, c'est ce 2000
+            // qui partait dans le formulaire. Mesure sur un sachet d'amandes :
+            // 2000 kcal ecrites pour 621 reelles.
+            const AMANDES=[
+              'A Typical values per 100g perserving 30g %RI* sites ,',
+              'Fat 53.39 kr 23%',
+              'Ye | SRélerence intake of an average adult (&400k3/2000kcal'].join('\n');
+            const r=_etiqAnalyser(AMANDES);
+            return r.k==null?true:_echec('énergie lue sur la ligne de référence : '+r.k);})());
+          ok('Une energie hors de toute plausibilite est refusee',(()=>{
+            // 7305 kcal pour 100 g de creme : deux nombres colles. Aucun aliment
+            // ne depasse 900 — l'huile pure plafonne a 900.
+            const CREME=['/ N pour 1006','y notre creme 1260',
+              'Énergie 7305 kcal@','Matières grasses // 280'].join('\n');
+            if(_etiqAnalyser(CREME).k!=null)
+              return _echec('7305 kcal acceptées');
+            // ET LE NOMBRE NE SORT PAS D'UN MOT : « K@kcalfis9kcal », du bruit
+            // lu sur une canette, donnait 9 kcal pour 42.
+            return _etiqAnalyser('- K@kcalfis9kcal (7)').k==null
+              ?true:_echec('un nombre collé à des lettres est lu comme une énergie');})());
+
+          ok('Des macros qui ne collent pas aux calories sont ECARTEES',(()=>{
+            // LE PIRE N'EST PAS LA CASE VIDE. La virgule disparait souvent :
+            // « 0,8 g » ressort « 8 », « 8,9 g » ressort « 93 » — et ces
+            // nombres restent sous 100, donc la borne du dessus ne les voit pas
+            // passer. Mesure sur un jus d'orange : 8 g de proteines et 93 g de
+            // glucides posees dans le formulaire pour 0,8 et 8,9.
+            //
+            // 4 kcal le gramme de proteine et de glucide, 9 pour le lipide : la
+            // somme doit tomber SOUS l'energie annoncee juste au-dessus.
+            const JUS=['Pour100mi Pour 150mi 4%»',
+              '- Énergie 172kJ/40kcal 258 k1/61 keat 3%',
+              'Matières grasses 0 g 0g : 4',
+              'Glucides 93 14g',
+              'Protéines 08g 129',
+              'Sel 0g 0g 0%'].join('\n');
+            const r=_etiqAnalyser(JUS);
+            if(r.p!=null||r.c!=null) return _echec('macros incohérentes conservées : p='+r.p+' c='+r.c);
+            if(!r.incoherent) return _echec('l’incohérence n’est pas signalée');
+            // ON GARDE L'ENERGIE, elle : lue sur sa propre ligne, avec son
+            // unite ecrite, c'est la valeur la plus sure du tableau.
+            if(r.k!==40) return _echec('l’énergie a été jetée avec les macros : '+r.k);
+            // ET UNE ETIQUETTE COHERENTE NE DECLENCHE RIEN.
+            const bon=_etiqAnalyser(['Énergie 352 kcal','Glucides 59 g',
+              'Protéines 11 g','Matières grasses 5,8 g'].join('\n'));
+            return !bon.incoherent&&bon.p===11
+              ?true:_echec('une étiquette juste est déclarée incohérente');})());
+
+          ok('La deuxieme lecture ne remplace jamais la premiere',(()=>{
+            // DEUX LECTURES, et la seconde ne sert qu'a COMPLETER : deux
+            // lectures qui se contredisent ne se departagent pas, et prendre la
+            // seconde au hasard reviendrait a tirer a pile ou face sur une
+            // macro. Mesure : deux passes rendent 11 justes et 0 fausse ; une
+            // troisieme monterait a 14 justes mais ramenerait 4 fausses.
+            const src=String(lireEtiquette).replace(/\/\/.*/g,'');
+            if(!/r\[k\]==null&&r2\[k\]!=null/.test(src))
+              return _echec('la seconde lecture écrase la première');
+            // ELLE EST DISQUALIFIEE EN BLOC si ses macros ne tiennent pas
+            // ensemble : on ne pioche pas une valeur dans une lecture fausse.
+            if(!/if\(!r2\.incoherent\)/.test(src))
+              return _echec('une seconde lecture incohérente peut compléter la première');
+            // ET LE MODE DE SEGMENTATION EST RENDU. Il vit sur le worker, qui
+            // sert aussi l'import des captures de pas : le laisser en place
+            // ferait lire la capture suivante avec le découpage d'un tableau.
+            const lc=String(_lireCaptureStats);
+            return /tessedit_pageseg_mode:'3'/.test(lc)
+              ?true:_echec('le mode de segmentation n’est pas remis');})());
+        })();
+
+        // ══════ LE QR DE L'ÉCRAN D'INSTALLATION ══════
+        (()=>{
+          // LES HUIT CHAÎNES DE FORMAT VALIDES DU NIVEAU M, recopiées de la
+          // norme ISO/IEC 18004 et NON lues dans le fichier : une sonde qui
+          // relirait la table de l'encodeur validerait n'importe quelle table.
+          // C'est un oracle indépendant, et c'est tout son intérêt ici.
+          const FORMATS_M=[0x5412,0x5125,0x5E7C,0x5B4B,0x45F9,0x40CE,0x4F97,0x4AA0];
+          // Les quinze bits, LUS DANS LA MATRICE, du plus fort au plus faible.
+          const _format=(m)=>{
+            const n=m.length;
+            const c1=[m[8][0],m[8][1],m[8][2],m[8][3],m[8][4],m[8][5],m[8][7],m[8][8],
+                      m[7][8],m[5][8],m[4][8],m[3][8],m[2][8],m[1][8],m[0][8]];
+            const c2=[m[n-1][8],m[n-2][8],m[n-3][8],m[n-4][8],m[n-5][8],m[n-6][8],m[n-7][8],
+                      m[8][n-8],m[8][n-7],m[8][n-6],m[8][n-5],m[8][n-4],m[8][n-3],m[8][n-2],m[8][n-1]];
+            const val=(t)=>t.reduce((a,b)=>(a<<1)|(b?1:0),0);
+            return {c1:val(c1),c2:val(c2)};
+          };
+          ok('Le QR porte une information de format VALIDE',(()=>{
+            // ⚠ C'EST LE DÉFAUT QUI RENDAIT TOUT ILLISIBLE. Les quinze bits
+            // étaient écrits À L'ENVERS — bit de poids faible en premier. La
+            // structure était pourtant juste : repères, timing, module sombre,
+            // séparateurs. Un lecteur trouvait donc ses trois repères, lisait
+            // une chaîne de format absente de toute table, et abandonnait.
+            // Mesure sur « A » : 0x1F3D, qui retourné bit à bit vaut 0x5E7C —
+            // exactement la valeur attendue. La donnée était bonne, l'ordre non.
+            //
+            // AUCUN QR PRODUIT PAR CE FICHIER N'AVAIT JAMAIS PU ÊTRE SCANNÉ, y
+            // compris celui de la fenêtre de synchronisation, en service depuis
+            // août. Six cas sur six illisibles avant, six sur six décodés après.
+            if(!window.RepCoreQR||!RepCoreQR.matrice) return _echec('l’encodeur a disparu');
+            for(const s of ['A','HELLO','http://a.fr','https://repcore-sync.web.app/i',
+                            'https://repcore-sync.web.app/app/']){
+              const m=RepCoreQR.matrice(s);
+              if(!m) return _echec('aucune matrice pour « '+s+' »');
+              const f=_format(m);
+              if(FORMATS_M.indexOf(f.c1)<0)
+                return _echec('« '+s+' » : format 0x'+f.c1.toString(16).toUpperCase()+' hors table');
+              // LES DEUX COPIES DISENT LA MÊME CHOSE. Elles étaient déjà
+              // cohérentes quand elles étaient fausses : ce n'est donc pas
+              // suffisant, mais c'est nécessaire.
+              if(f.c1!==f.c2) return _echec('les deux copies de format divergent sur « '+s+' »');
+            }
+            return true;})());
+          ok('La structure du QR respecte la norme',(()=>{
+            // Ce qui était DÉJÀ juste, et qu'il ne faut pas casser en réparant
+            // le format : sans ces motifs, un lecteur ne trouve même pas le code.
+            const m=RepCoreQR.matrice('https://repcore-sync.web.app/i');
+            if(!m) return _echec('aucune matrice');
+            const n=m.length;
+            // Timing : une ligne et une colonne alternées, à l'indice 6.
+            for(let i=8;i<n-8;i++){
+              if(m[6][i]!==((i%2)?0:1)) return _echec('timing horizontal rompu en '+i);
+              if(m[i][6]!==((i%2)?0:1)) return _echec('timing vertical rompu en '+i);
+            }
+            // Le module toujours sombre, et les séparateurs des repères.
+            if(!m[n-8][8]) return _echec('le module sombre manque');
+            for(let i=0;i<8;i++) if(m[7][i]) return _echec('séparateur du repère haut-gauche non vide');
+            return true;})());
+          ok('Le QR encode le lien COURT, et rien d\'autre',(()=>{
+            // Court par nécessité, pas par coquetterie : moins de caractères,
+            // c'est moins de modules, donc des modules plus gros à taille égale,
+            // donc une lecture qui se fait de plus loin.
+            if(typeof RC_LIEN_COURT!=='string'||!RC_LIEN_COURT)
+              return _echec('le lien court n’existe pas');
+            // DÉDUIT, JAMAIS CODÉ EN DUR : servi depuis un sous-dossier, /i
+            // n’existe pas, et on doit rendre l’adresse longue plutôt qu’un
+            // lien mort.
+            const src=String(rcInstallDecider)+String(_rcQrDessiner);
+            if(src.indexOf('RC_LIEN_COURT')<0) return _echec('le QR n’encode pas le lien court');
+            // ⚠ LA SONDE MATCHAIT SON PROPRE SUJET : le correctif qui apprend
+            // à /i à se reconnaître CITE l'adresse mesurée dans son commentaire,
+            // et ce scan la retrouvait comme un domaine codé en dur. On retire
+            // les commentaires d'abord — c'est la quatrième fois dans ce
+            // fichier, et c'est toujours la même correction.
+            const _lcSrc=_prodSrc().slice(_prodSrc().indexOf('const RC_LIEN_COURT'),
+                                          _prodSrc().indexOf('const RC_LIEN_COURT')+1400);
+            if(/repcore-sync\.web\.app/.test(_lcSrc.replace(/^\s*\/\/.*$/gm,'')))
+              return _echec('le domaine est codé en dur dans le lien court');
+            // ET IL RECONNAIT /i LUI-MEME. Arriver par le lien court PROUVE que
+            // la réécriture existe : c'est elle qui a servi la page. Le test
+            // ne portait que sur /app/, et le QR affiché sur ordinateur
+            // pointait donc vers la RACINE — la page de vente — pour tous ceux
+            // venus par le lien court, c'est-à-dire tout le monde.
+            // On rejoue la déduction sur des chemins fictifs plutôt que de
+            // naviguer : écrire dans location rendrait la suite non rejouable.
+            const deduire=p=>{
+              try{
+                if(p.indexOf('/app/')===0||p==='/i'||p==='/i/') return 'court';
+              }catch(e){}
+              return 'long';
+            };
+            const dsrc=_lcSrc;
+            for(const p of ['/i','/i/','/app/','/app/index.html'])
+              if(deduire(p)!=='court') return _echec(p+' ne donne pas le lien court');
+            for(const p of ['/','/privacy.html','/sous-dossier/app/index.html'])
+              if(deduire(p)!=='long') return _echec(p+' donnerait un /i qui n’existe pas');
+            // La règle jouée ci-dessus est bien CELLE DU PRODUIT, pas une copie
+            // qui aurait divergé.
+            if(dsrc.indexOf("_p==='/i'")<0) return _echec('le produit ne reconnaît plus /i');
+            if(dsrc.indexOf("_p.indexOf('/app/')===0")<0) return _echec('le produit ne reconnaît plus /app/');
+            return true;})());
+          okA('Le QR est dessiné à 240 px au moins, en noir sur blanc',(async()=>{
+            // LE CONTRASTE CONDITIONNE LA LECTURE : pas de couleur de marque
+            // ici. Et la taille se VÉRIFIE — versCanvas arrondit le module à
+            // l’entier inférieur, donc la toile est toujours plus petite que la
+            // taille demandée, et de combien dépend de la longueur de l’adresse.
+            const z=document.getElementById('rc-qr');
+            if(!z) return _echec('le conteneur du QR a disparu');
+            const _mm=window.matchMedia,_iw=window.innerWidth,_ua=navigator.userAgent;
+            try{
+              Object.defineProperty(window,'innerWidth',{value:1440,configurable:true});
+              Object.defineProperty(navigator,'userAgent',{value:'Mozilla/5.0 (Windows NT 10.0) Chrome/152 Safari/537.36',configurable:true});
+              Object.defineProperty(navigator,'standalone',{value:false,configurable:true});
+              window.matchMedia=(q)=>({matches:false,media:q,addListener(){},removeListener(){},
+                addEventListener(){},removeEventListener(){}});
+              if(rcInstallDecider()!=='E') return _echec('la branche ordinateur n’est pas prise');
+              const cv=z.querySelector('canvas');
+              if(!cv) return _echec('aucun QR dessiné');
+              if(cv.width<240) return _echec('QR de '+cv.width+' px : sous le plancher de 240');
+              if(cv.width!==cv.height) return _echec('le QR n’est pas carré');
+              // NOIR SUR BLANC, lu dans les pixels : deux valeurs, et seulement
+              // deux. Une teinte de marque ferait chuter le contraste.
+              const g=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;
+              const vus=new Set();
+              for(let i=0;i<g.length;i+=4*97) vus.add(g[i]+','+g[i+1]+','+g[i+2]);
+              for(const c of vus)
+                if(c!=='0,0,0'&&c!=='255,255,255') return _echec('couleur inattendue : '+c);
+              // ET L'ADRESSE EN TOUTES LETTRES SOUS LE CODE : un QR ne se copie
+              // pas, et certains préfèrent taper.
+              const a=document.getElementById('rc-inst-adresse');
+              return (a&&a.textContent&&a.textContent.length>4)
+                ?true:_echec('l’adresse en clair manque sous le QR');
+            } finally {
+              window.matchMedia=_mm;
+              Object.defineProperty(window,'innerWidth',{value:_iw,configurable:true});
+              Object.defineProperty(navigator,'userAgent',{value:_ua,configurable:true});
+            }}));
+        })();
+
+        // ══════ LES NAVIGATEURS INTÉGRÉS ══════
+        //
+        // LES CHAINES CI-DESSOUS SONT REELLES, relevees le 02/09/2026 sur
+        // user-agents.net et useragents.io. Une chaine inventee se detecte
+        // toujours ; ce sont les vraies qui decident.
+        (()=>{
+          const _v={ua:navigator.userAgent};
+          const _poser=(ua,sa)=>{
+            Object.defineProperty(navigator,'userAgent',{value:ua,configurable:true});
+            Object.defineProperty(navigator,'standalone',{value:sa,configurable:true});
+          };
+          const _rendre=()=>{
+            Object.defineProperty(navigator,'userAgent',{value:_v.ua,configurable:true});
+            try{ delete navigator.standalone; }catch(e){}
+          };
+          ok('Les six applications sont reconnues sur leurs vraies chaînes',(()=>{
+            const cas=[
+              ['Mozilla/5.0 (Linux; Android 14; SM-S916U; wv) AppleWebKit/537.36 Chrome/119.0.6045.66 Mobile Safari/537.36 Instagram 309.0.0.40.113 Android (34/14)',false,'Instagram'],
+              ['Mozilla/5.0 (iPhone; CPU iPhone OS 12_4_1 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 147.0.0.30.121 (iPhone9,3)',undefined,'Instagram'],
+              ['Mozilla/5.0 (Linux; Android 7.1.2; Nexus 5X; wv) AppleWebKit/537.36 Chrome/57 Mobile Safari/537.36 [FB_IAB/MESSENGER;FBAV/114.0.0.21.71;]',false,'Messenger'],
+              ['Mozilla/5.0 (Linux; Android 12; wv) AppleWebKit/537.36 Chrome/114 Mobile Safari/537.36 [FB_IAB/Orca-Android;FBAV/414.0.0.17.61;]',false,'Messenger'],
+              ['Mozilla/5.0 (iPad; CPU OS 6_1_3 like Mac OS X) AppleWebKit/536.26 Mobile/10B329 [FBAN/FBIOS;FBAV/5.6;FBBV/144493]',undefined,'Messenger'],
+              ['Mozilla/5.0 (Linux; Android 13; wv) AppleWebKit/537.36 Chrome/116 Mobile Safari/537.36 BytedanceWebview/d8a21c6 musical_ly_31.5.3',false,'TikTok'],
+              ['Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 [LinkedInApp]',undefined,'LinkedIn'],
+              ['Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/116 Mobile Safari/537.36 Snapchat/12.47.0.42',false,'Snapchat'],
+              ['Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Twitter for iPhone/10.15',undefined,'X']
+            ];
+            try{
+              for(const [ua,sa,att] of cas){
+                _poser(ua,sa);
+                const d=rcNavigateurIntegre();
+                if(d!==att) return _echec(att+' → « '+d+' » sur : '+ua.slice(-46));
+              }
+              return true;
+            } finally { _rendre(); }})());
+
+          ok('Le filet iOS attrape l\'anonyme SANS attraper Safari ni l\'app installée',(()=>{
+            // TROIS AGENTS QUASI IDENTIQUES, et c'est tout le piège. Une vue
+            // web embarquée n'a pas le jeton « Safari » ; Safari l'a. Et une
+            // application DÉJÀ INSTALLÉE ne l'a pas non plus — c'est
+            // navigator.standalone qui les sépare : false pour Safari, true
+            // pour l'app installée, ABSENT pour une vue embarquée. Sans ce
+            // troisième point, l'app installée se verrait proposer de sortir
+            // d'elle-même.
+            const base='Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
+            try{
+              _poser(base,undefined);
+              if(rcNavigateurIntegre()!=='une application')
+                return _echec('la vue embarquée anonyme n’est pas vue');
+              _poser(base+' Version/17.0 Safari/604.1',false);
+              if(rcNavigateurIntegre()!==null) return _echec('Safari est pris pour un navigateur intégré');
+              _poser(base,true);
+              if(rcNavigateurIntegre()!==null) return _echec('l’application installée est prise pour un navigateur intégré');
+              _poser('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/152 Mobile Safari/537.36',false);
+              return rcNavigateurIntegre()===null
+                ?true:_echec('Chrome Android est pris pour un navigateur intégré');
+            } finally { _rendre(); }})());
+
+          ok('La branche B passe DEVANT l\'invitation d\'installation',(()=>{
+            // Un Android dans Instagram satisfait aussi la branche C. Si elle
+            // passait devant, le bouton promettrait une installation qui ne
+            // peut pas avoir lieu — et c'est RepCore qu'on accuserait.
+            const _inv=window.rcInstallInvite, _mm=window.matchMedia;
+            try{
+              _poser('Mozilla/5.0 (Linux; Android 14; wv) AppleWebKit/537.36 Chrome/119 Mobile Safari/537.36 Instagram 309.0.0.40.113',false);
+              window.rcInstallInvite=()=>({});             // le navigateur dit pouvoir installer
+              window.matchMedia=(q)=>({matches:/pointer: coarse/.test(q),media:q,
+                addListener(){},removeListener(){},addEventListener(){},removeEventListener(){}});
+              if(rcInstallDecider()!=='B') return _echec('la branche C est passée devant');
+              // AUCUN BOUTON D'INSTALLATION : le seul geste offert est la sortie.
+              const p=document.getElementById('rc-inst-principal');
+              if(!/NAVIGATEUR/i.test(p.textContent||''))
+                return _echec('le bouton propose autre chose : '+p.textContent);
+              if((document.getElementById('rc-inst-ici')||{}).style?.display!=='none')
+                return _echec('le bouton d’installation locale est visible');
+              // L'APPLICATION EST NOMMÉE : « le navigateur intégré d'une
+              // application » ne dit pas où toucher.
+              if((document.getElementById('rc-inst-app')||{}).textContent!=='Instagram')
+                return _echec('l’application n’est pas nommée');
+              // ET LA SORTIE CHANGE DE MOT : personne n'a le choix d'installer,
+              // « Continuer sans installer » ne voudrait rien dire.
+              return /quand même/.test((document.getElementById('rc-inst-passer')||{}).textContent||'')
+                ?true:_echec('la sortie ne dit pas « Continuer quand même »');
+            } finally { _rendre(); window.rcInstallInvite=_inv; window.matchMedia=_mm; }})());
+
+          ok('Un faux positif n\'enferme jamais personne',(()=>{
+            // Une détection d'agent utilisateur SE TROMPE. La sortie vers
+            // l'accueil doit exister dans toutes les branches, sans exception.
+            const l=document.getElementById('rc-inst-passer');
+            if(!l||l.tagName!=='A') return _echec('la sortie n’est plus un lien');
+            return /go\('s-welcome'\)/.test(String(rcInstallPasser))
+              ?true:_echec('la sortie ne mène plus à l’accueil');})());
+
+          ok('La sortie manuelle dit OÙ toucher, et laisse l\'adresse lisible',(()=>{
+            const src=String(_rcSortieManuelle);
+            // L'INSTRUCTION DÉPEND DE L'APPLICATION : le menu n'est pas au même
+            // endroit dans Instagram et dans Messenger, et « touche le menu »
+            // sans dire où ne sert à personne.
+            if(!/en haut à droite/.test(src)) return _echec('l’instruction Instagram a disparu');
+            if(!/en bas à droite/.test(src)) return _echec('l’instruction Messenger a disparu');
+            if(!/Ouvre Safari/.test(src)) return _echec('le repli générique a disparu');
+            // ON NE DIT « COPIÉ » QUE SI ÇA L'EST : un accusé faux fait coller
+            // dans le vide, ce qui est pire que pas d'accusé.
+            if(!/ok\?'✓ Lien copié'/.test(src)) return _echec('le « copié » n’est plus conditionnel');
+            const z=document.getElementById('rc-inst-lien');
+            if(!z) return _echec('l’adresse en clair a disparu de l’écran');
+            // Sélectionnable d'un appui long : c'est le repli ultime.
+            return /user-select:all/.test(z.getAttribute('style')||'')
+              ?true:_echec('l’adresse n’est pas sélectionnable');})());
+
+          ok('La copie a son repli pour les vieux Safari',(()=>{
+            // navigator.clipboard n'existe pas avant iOS 13.4 et exige un
+            // contexte sécurisé. execCommand sur un champ hors écran marche
+            // depuis toujours — et le champ doit être RENDU, pas display:none,
+            // sinon il n'est pas sélectionnable et la copie échoue en silence.
+            if(typeof _rcCopierVieux!=='function') return _echec('le repli a disparu');
+            // ⚠ LA SONDE MATCHAIT SON PROPRE COMMENTAIRE : le correctif explique
+            // qu'il ne faut PAS display:none, et scanner la source brute
+            // retrouvait la citation. On retire les commentaires d'abord.
+            const src=String(_rcCopierVieux).replace(/\/\/.*/g,'');
+            if(src.indexOf("execCommand('copy')")<0) return _echec('execCommand a disparu');
+            if(/display:\s*none/.test(src)) return _echec('le champ est masqué : la copie échouera');
+            if(!/position:fixed/.test(src)) return _echec('le champ n’est plus sorti de l’écran');
+            // ET IL NE LÈVE PAS quand la copie est refusée — c'est le cas
+            // normal hors d'un geste utilisateur.
+            let leve=false;
+            try{ _rcCopierVieux('x'); }catch(e){ leve=true; }
+            return !leve?true:_echec('le repli lève quand la copie est refusée');})());
+
+          ok('Le compteur nomme l\'application, et le serveur l\'accepte',(()=>{
+            // UN COMPTEUR PAR APPLICATION : savoir que 30 % du trafic ne peut
+            // pas installer est utile ; savoir que ce sont des visiteurs
+            // d'Instagram dit QUOI FAIRE.
+            const paires=[['Instagram','iab_instagram'],['Messenger','iab_facebook'],
+              ['TikTok','iab_tiktok'],['LinkedIn','iab_linkedin'],['Snapchat','iab_snapchat'],
+              ['X','iab_twitter'],['une application','iab_autre']];
+            for(const [nom,cle] of paires){
+              if(_rcIabCle(nom)!==cle) return _echec(nom+' → '+_rcIabCle(nom));
+              // rcm() REFUSE TOUT NOM HORS LISTE, et le serveur aussi : une clé
+              // absente de RCM_EVENEMENTS part dans le vide sans rien dire.
+              if(RCM_EVENEMENTS.indexOf(cle)<0) return _echec(cle+' n’est pas dans RCM_EVENEMENTS');
+            }
+            // ET LA LISTE FERMÉE DU SERVEUR SUIT CELLE DU CLIENT. Sans ça le
+            // PUT est rejeté par les règles et le compteur reste à zéro — en
+            // silence, ce qui est le pire des deux mondes.
+            if(typeof window._RC_RULES!=='string'||!window._RC_RULES)
+              return true;                       // règles non servies : la sonde le dit ailleurs
+            for(const [,cle] of paires)
+              if(window._RC_RULES.indexOf(cle)<0)
+                return _echec(cle+' manque dans database.rules.json : le serveur le refusera');
+            return true;})());
+
+          // ══════ LE TUNNEL D'INSTALLATION ══════
+          const _INST7=['install_ecran_vu','install_invite_montree','install_accepte',
+            'install_refuse','install_guide_ios','install_fait','lancement_autonome'];
+
+          ok('Les sept compteurs d\'installation sont acceptés du client ET du serveur',(()=>{
+            // DEUX LISTES FERMÉES, ET ELLES DOIVENT RESTER JUMELLES. rcm()
+            // refuse tout nom hors RCM_EVENEMENTS ; les règles refusent tout
+            // nom hors du motif. Un ajout d'un seul côté ne lève rien : le
+            // compteur reste simplement à zéro pour toujours.
+            for(const c of _INST7){
+              if(RCM_EVENEMENTS.indexOf(c)<0) return _echec(c+' n’est pas dans RCM_EVENEMENTS');
+            }
+            if(typeof window._RC_RULES!=='string'||!window._RC_RULES) return true;
+            for(const c of _INST7)
+              if(window._RC_RULES.indexOf(c)<0)
+                return _echec(c+' manque dans database.rules.json : le serveur le refusera');
+            return true;})());
+
+          ok('Le tableau de bord les montre, et AVANT « application ouverte »',(()=>{
+            // L'installation précède tout : « application ouverte » ne veut
+            // rien dire tant qu'on ignore combien de gens ont l'icône.
+            const plates=RCM_TUNNEL.map(e=>e.cles.join(','));
+            const iW=RCM_TUNNEL.findIndex(e=>e.cles.indexOf('welcome_view')>=0);
+            if(iW<0) return _echec('welcome_view a disparu du tunnel');
+            for(const c of _INST7){
+              const i=RCM_TUNNEL.findIndex(e=>e.cles.indexOf(c)>=0);
+              if(i<0) return _echec(c+' n’apparaît pas dans RCM_TUNNEL');
+              if(i>iW) return _echec(c+' est placé APRÈS « application ouverte »');
+            }
+            // ET CHAQUE ÉTAPE PORTE UN LIBELLÉ : une barre sans nom ne se lit pas.
+            for(const e of RCM_TUNNEL) if(!e.lib) return _echec('une étape sans libellé');
+            return plates.length===RCM_TUNNEL.length?true:_echec('tableau incohérent');})());
+
+          ok('Le refus casse la chaîne, le guide iOS et le lancement ne la cassent pas',(()=>{
+            // horsTunnel A DEUX SENS OPPOSÉS ici, et c'est délibéré. Un refus
+            // est une FUITE : orange. Un guide iOS ou un lancement depuis
+            // l'icône n'est pas un échec — il sort de la chaîne pour ne pas
+            // fausser le taux de l'étape suivante, rien de plus, et `neutre`
+            // l'empêche d'être peint comme un échec.
+            const par=c=>RCM_TUNNEL.find(e=>e.cles.indexOf(c)>=0)||{};
+            if(par('install_refuse').horsTunnel!==true) return _echec('le refus reste dans la chaîne');
+            if(par('install_refuse').neutre) return _echec('le refus n’est pas neutre : c’est une fuite');
+            for(const c of ['install_guide_ios','lancement_autonome']){
+              if(par(c).horsTunnel!==true) return _echec(c+' casserait la chaîne');
+              if(par(c).neutre!==true) return _echec(c+' serait peint comme un échec');
+            }
+            // ET LES TROIS ÉTAPES DE LA CHAÎNE Y RESTENT.
+            for(const c of ['install_ecran_vu','install_invite_montree','install_accepte','install_fait'])
+              if(par(c).horsTunnel) return _echec(c+' est sorti de la chaîne');
+            return true;})());
+
+          ok('La référence des barres ne se lit plus par indice',(()=>{
+            // ELLE SE LISAIT RCM_TUNNEL[0] SINON [1] — soit « page de vente »
+            // et « application ouverte » nommées par leur POSITION. Insérer
+            // sept étapes devant a décalé ces indices : la référence serait
+            // devenue « écran d'installation vu » et toutes les barres
+            // auraient été mesurées contre le mauvais dénominateur, en
+            // silence. On retire les commentaires : le correctif cite le
+            // défaut qu'il corrige.
+            const src=String(loadMetrics).replace(/\/\/.*/g,'');
+            if(/RCM_TUNNEL\[[01]\]/.test(src))
+              return _echec('la référence est de nouveau lue par indice');
+            if(!/for\s*\(\s*const\s+e\s+of\s+RCM_TUNNEL/.test(src))
+              return _echec('la référence ne parcourt plus le tunnel');
+            return true;})());
+
+          ok('Le taux d\'installation ne divise pas par zéro',(()=>{
+            const src=String(loadMetrics).replace(/\/\/.*/g,'');
+            if(src.indexOf("total('install_ecran_vu')")<0) return _echec('le dénominateur a disparu');
+            if(src.indexOf("total('install_fait')")<0) return _echec('le numérateur a disparu');
+            // LE GARDE EST DANS L'EXPRESSION MÊME, et il ne rend pas « 0 % » :
+            // zéro se lirait comme un échec cuisant là où il n'y a rien à lire.
+            if(!/_instVus\s*>\s*0\s*\?/.test(src)) return _echec('aucun garde sur la division');
+            if(!/_tauxInst===null/.test(src)) return _echec('le cas « rien à lire » n’est plus distingué');
+            return true;})());
+
+          ok('Ce que rend Firebase est ramené à un objet avant lecture',(()=>{
+            // LE PIÈGE DU PROJET, PRIS PAR L'AUTRE BOUT : Firebase rend un
+            // TABLEAU quand toutes les clés sont numériques, et parJour[j][nom]
+            // vaudrait alors undefined pour chaque compteur — zéro partout,
+            // sans une erreur.
+            if(typeof _rcmObjet!=='function') return _echec('_rcmObjet a disparu');
+            if(_rcmObjet(null)===null||typeof _rcmObjet(null)!=='object') return _echec('null ne donne pas {}');
+            if(Object.keys(_rcmObjet(null)).length) return _echec('null ne donne pas {} vide');
+            if(Object.keys(_rcmObjet([1,2,3])).length) return _echec('un tableau passe encore');
+            if(_rcmObjet('x').welcome_view!==undefined) return _echec('une chaîne passe encore');
+            const o={welcome_view:4};
+            return _rcmObjet(o)===o?true:_echec('un objet normal ne passe plus');})());
+
+          ok('L\'invitation est comptée AVANT d\'être consommée',(()=>{
+            // __rcInstall MET __rcInstallEvt A NULL DES SA PREMIERE LIGNE.
+            // Compter l'invite après l'appel donnerait zéro à chaque fois.
+            const src=String(rcInstallLocal).replace(/\/\/.*/g,'');
+            const iC=src.indexOf("rcm('install_invite_montree')");
+            const iA=src.indexOf('__rcInstall()');
+            if(iC<0) return _echec('l’invite n’est plus comptée');
+            if(iA<0) return _echec('__rcInstall n’est plus appelée');
+            if(iC>iA) return _echec('l’invite est comptée après avoir été consommée : toujours zéro');
+            // ET « indisponible » N'EST NI UN ACCORD NI UN REFUS.
+            if(src.indexOf("c==='accepted'")<0) return _echec('l’accord n’est plus compté');
+            if(src.indexOf("c==='dismissed'")<0) return _echec('le refus n’est plus compté');
+            if(/indisponible/.test(src)) return _echec('« indisponible » est compté comme une réponse');
+            return true;})());
+
+          ok('Les quatre gestes sont instrumentés là où ils se produisent',(()=>{
+            const s=_prodSrc();
+            // L'ÉCRAN, DANS go() : trois chemins y mènent, n'en instrumenter
+            // qu'un donnerait un tunnel faux sans que ça se voie.
+            if(!/if\(id==='s-install'\)\s*\{[\s\S]{0,80}rcmVue\('install_ecran_vu'\)/.test(s))
+              return _echec('l’écran d’installation n’est plus compté dans go()');
+            // LE GUIDE iOS, DANS LA MODALE et non dans la branche D : le
+            // bouton #ios-install-btn de l'accueil l'ouvre aussi.
+            if(!/rcmVue\('install_guide_ios'\)/.test(String(showIosInstallGuide)))
+              return _echec('le guide iOS n’est pas compté dans la modale');
+            // L'INSTALLATION FAITE VIENT DU NAVIGATEUR, pas de nous.
+            const iF=s.indexOf("addEventListener('rc-install-fait'");
+            if(iF<0) return _echec('l’écouteur d’installation a disparu');
+            if(s.slice(iF,iF+900).indexOf("rcm('install_fait')")<0)
+              return _echec('l’installation faite n’est pas comptée');
+            // ET LE LANCEMENT AUTONOME, AU CHARGEMENT : ce n'est pas un écran.
+            if(!/if\(rcInstallAutonome\(\)\) rcmVue\('lancement_autonome'\)/.test(s))
+              return _echec('le lancement depuis l’icône n’est pas compté');
+            return true;})());
+
+          // ══════ LA RELANCE : UNE BANNIERE, UNE FOIS, AU BON MOMENT ══════
+          // Chaque sonde REPOSE l'etat qu'elle a change. Sans ca la premiere
+          // eteindrait toutes les suivantes — et la suite doit rester
+          // rejouable trois fois de suite sur la meme page.
+          (()=>{
+            const _etat=()=>({
+              r:localStorage.getItem('rc_install_refus'),
+              v:localStorage.getItem('rc_install_vue'),
+              e:sessionStorage.getItem('rc_inst_ecran'),
+              b:sessionStorage.getItem('rc_ban_vue'),
+              show:document.getElementById('rc-ban-install')?.classList.contains('show'),
+              cls:document.body.classList.contains('rc-ban')
+            });
+            const _poser=s=>{
+              const p=(k,v)=>{ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v); }catch(e){} };
+              const q=(k,v)=>{ try{ v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v); }catch(e){} };
+              p('rc_install_refus',s.r); p('rc_install_vue',s.v);
+              q('rc_inst_ecran',s.e); q('rc_ban_vue',s.b);
+              const el=document.getElementById('rc-ban-install');
+              if(el) el.classList.toggle('show',!!s.show);
+              document.body.classList.toggle('rc-ban',!!s.cls);
+              try{ _majHauteurBanniere(); }catch(e){}
+            };
+            const _vierge=()=>{
+              try{ localStorage.removeItem('rc_install_refus'); }catch(e){}
+              try{ localStorage.removeItem('rc_install_vue'); }catch(e){}
+              try{ sessionStorage.removeItem('rc_inst_ecran'); }catch(e){}
+              try{ sessionStorage.removeItem('rc_ban_vue'); }catch(e){}
+            };
+
+            ok('La bannière ne s\'affiche jamais deux fois dans la même visite',(()=>{
+              const g=_etat();
+              try{
+                _vierge();
+                rcBanniereInstallCacher();
+                // Premier passage : elle s'affiche et POSE sa marque de visite.
+                const un=rcBanniereInstallMontrer();
+                if(!un) return _echec('elle ne s’affiche pas alors que rien ne l’en empêche : '+rcBanniereInstallRaison());
+                if(!sessionStorage.getItem('rc_ban_vue')) return _echec('la marque de visite n’est pas posée');
+                rcBanniereInstallCacher();
+                // Second passage : la marque tient, sans toucher au compteur
+                // de refus — une bannière vue n'est pas une bannière refusée.
+                if(rcBanniereInstallMontrer()) return _echec('elle revient dans la même visite');
+                if(rcBanniereInstallRaison()!=='deja-vue') return _echec('mauvaise raison : '+rcBanniereInstallRaison());
+                if((parseInt(localStorage.getItem('rc_install_refus'),10)||0)!==0)
+                  return _echec('s’afficher a compté comme un refus');
+                return true;
+              } finally { rcBanniereInstallCacher(); _poser(g); }})());
+
+            ok('Deux fermetures et c\'est un non — le rechargement n\'y change rien',(()=>{
+              const g=_etat();
+              try{
+                _vierge();
+                rcBanniereInstallCacher();
+                // Première fermeture : comptée, et elle pourra revenir.
+                rcBanniereInstallMontrer();
+                rcBanniereInstallFermer();
+                if(document.getElementById('rc-ban-install').classList.contains('show'))
+                  return _echec('la fermeture ne ferme pas');
+                if((parseInt(localStorage.getItem('rc_install_refus'),10)||0)!==1)
+                  return _echec('la première fermeture n’est pas comptée');
+                // Seconde fermeture. On efface les marques de VISITE : c'est
+                // exactement ce que ferait un rechargement de page, et c'est
+                // le seul cas qui compte — le refus doit survivre à ça.
+                try{ sessionStorage.removeItem('rc_ban_vue'); }catch(e){}
+                try{ localStorage.removeItem('rc_install_vue'); }catch(e){}
+                rcBanniereInstallMontrer();
+                rcBanniereInstallFermer();
+                if((parseInt(localStorage.getItem('rc_install_refus'),10)||0)!==2)
+                  return _echec('la seconde fermeture n’est pas comptée');
+                try{ sessionStorage.removeItem('rc_ban_vue'); }catch(e){}
+                try{ localStorage.removeItem('rc_install_vue'); }catch(e){}
+                if(rcBanniereInstallMontrer()) return _echec('elle revient après deux refus');
+                if(rcBanniereInstallRaison()!=='refus') return _echec('mauvaise raison : '+rcBanniereInstallRaison());
+                // ET L'ÉCRAN ENTIER S'ÉTEINT AUSSI : rcEcranDeDepart lit le
+                // même compteur. Deux refus valent pour les deux surfaces.
+                if(rcEcranDeDepart('')!=='s-welcome') return _echec('l’écran d’installation revient après deux refus');
+                return true;
+              } finally { rcBanniereInstallCacher(); _poser(g); }})());
+
+            ok('Aucun réarmement caché : rien ne baisse le compteur de refus',(()=>{
+              // ON NE NÉGOCIE PAS UN NON. Cette sonde interdit qu'un lot
+              // futur remette rc_install_refus à zéro, le supprime, ou le
+              // périme au bout d'un délai. Commentaires retirés : celui du
+              // correctif cite le mot « réarmement ».
+              const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+              if(/removeItem\(\s*['\"]rc_install_refus/.test(s))
+                return _echec('quelque chose supprime le compteur de refus');
+              if(/removeItem\(\s*RC_INST_REFUS/.test(s))
+                return _echec('quelque chose supprime le compteur de refus');
+              if(/setItem\(\s*RC_INST_REFUS\s*,\s*['\"]0/.test(s))
+                return _echec('quelque chose remet le compteur à zéro');
+              // Le seul écrivain légitime écrit n+1, et ils sont deux :
+              // « Continuer sans installer » et la croix de la bannière.
+              const ecrit=(s.match(/setItem\(RC_INST_REFUS,String\(n\)\)/g)||[]).length;
+              return ecrit===2?true:_echec(ecrit+' écriture(s) du compteur au lieu de 2');})());
+
+            ok('Elle ne recouvre pas la barre de navigation : les deux bandes s\'empilent',(()=>{
+              const g=_etat();
+              const bar=document.getElementById('client-tabbar');
+              const _barShow=bar&&bar.classList.contains('show');
+              try{
+                _vierge();
+                // On force les DEUX à l'écran, ce qui est le cas serré :
+                // l'accueil athlète après une séance enregistrée.
+                if(bar) bar.classList.add('show');
+                document.body.classList.add('with-tabbar');
+                try{ _majHauteurTabbar(); }catch(e){}
+                if(!rcBanniereInstallMontrer()) return _echec('elle ne s’affiche pas : '+rcBanniereInstallRaison());
+                const b=document.getElementById('rc-ban-install');
+                const rb=b.getBoundingClientRect(), rt=bar.getBoundingClientRect();
+                if(rb.height<50) return _echec('bannière haute de '+Math.round(rb.height)+'px, moins que les ~56 attendus');
+                // AUCUN RECOUVREMENT : le bas de la bannière ne descend pas
+                // sous le haut de la barre. 1px de tolérance pour l'arrondi
+                // sous-pixel du navigateur.
+                if(rb.bottom>rt.top+1)
+                  return _echec('la bannière descend '+Math.round(rb.bottom-rt.top)+'px sous la barre');
+                // ET L'ÉCRAN REND LA PLACE DES DEUX, sinon son dernier
+                // élément passe dessous — décaler, pas se superposer.
+                const act=document.querySelector('.screen.active');
+                if(act){
+                  const pad=parseFloat(getComputedStyle(act).paddingBottom)||0;
+                  if(pad<rb.height+rt.height-2)
+                    return _echec('l’écran ne rend que '+Math.round(pad)+'px pour '+Math.round(rb.height+rt.height)+'px de bandes');
+                }
+                return true;
+              } finally {
+                rcBanniereInstallCacher();
+                if(bar) bar.classList.toggle('show',!!_barShow);
+                document.body.classList.toggle('with-tabbar',!!_barShow);
+                _poser(g);
+              }})());
+
+            ok('Quota plein : ni l\'affichage ni la fermeture ne lèvent',(()=>{
+              // LE PIÈGE DU PROJET. 81 % du stockage local sont des images en
+              // base64 et une photo brute pèse 1,85 Mo : setItem LÈVE quand le
+              // quota est plein. Une exception ici casserait la fin de séance,
+              // qui appelle la bannière — et la séance serait perdue pour une
+              // bannière. On remplit pour de vrai plutôt que de simuler.
+              const g=_etat();
+              const bourre=[];
+              try{
+                _vierge();
+                // ON REMPLIT PAR BLOCS DÉCROISSANTS. Un remplissage par blocs de
+                // 64 Ko s'arrête à 64 Ko près du plafond — et il restait alors
+                // assez de place pour la clé d'un octet de la bannière. Mesuré :
+                // la sonde passait au vert même en retirant le try/catch qu'elle
+                // prétend surveiller. On serre jusqu'à ce que rien ne passe.
+                for(const t of [64*1024,4096,256,16,1]){
+                  const p='x'.repeat(t);
+                  try{
+                    for(let i=0;i<8192;i++){ const k='__q'+t+'_'+i; localStorage.setItem(k,p); bourre.push(k); }
+                  }catch(e){ /* c'est le but : ce calibre ne passe plus */ }
+                }
+                if(bourre.length===0) return _echec('impossible de remplir le stockage : la sonde ne prouve rien');
+                // ON PROUVE LA PRÉCONDITION AVANT DE TESTER LE COMPORTEMENT.
+                // Sans cette ligne, une sonde qui ne remplit rien passe au vert
+                // en n'ayant rien éprouvé du tout.
+                let plein=false;
+                try{ localStorage.setItem('__q_temoin','1'); localStorage.removeItem('__q_temoin'); }
+                catch(e){ plein=true; }
+                if(!plein) return _echec('le stockage n’est pas réellement plein : la sonde ne prouve rien');
+                // setItem va donc lever à l'intérieur des deux fonctions.
+                let leve=null;
+                let montree=false;
+                try{ montree=rcBanniereInstallMontrer(); }catch(e){ leve='affichage : '+((e&&e.message)||e); }
+                if(leve) return _echec(leve);
+                // ET ELLE S'AFFICHE QUAND MÊME. C'est la vraie exigence, et
+                // « ne lève pas » ne suffit pas à la prouver : la fonction porte
+                // aussi un try/catch ENGLOBANT, qui rattrape tout et rend false.
+                // Mesuré : en retirant le filet de l'écriture, la sonde restait
+                // verte — elle constatait le filet extérieur, pas le bon.
+                if(!montree) return _echec('quota plein : la bannière ne s’affiche plus du tout');
+                if(!document.getElementById('rc-ban-install').classList.contains('show'))
+                  return _echec('quota plein : la bannière est annoncée mais pas affichée');
+                try{ rcBanniereInstallFermer(); }catch(e){ leve='fermeture : '+((e&&e.message)||e); }
+                if(leve) return _echec(leve);
+                // ET LA FERMETURE FERME QUAND MÊME, alors que le compteur n'a
+                // pas pu s'écrire : on cache d'abord, on compte ensuite.
+                if(document.getElementById('rc-ban-install').classList.contains('show'))
+                  return _echec('quota plein : la bannière reste à l’écran après fermeture');
+                // La raison se lit sans lever, elle aussi.
+                try{ rcBanniereInstallRaison(); }catch(e){ return _echec('la décision lève : '+((e&&e.message)||e)); }
+                return true;
+              } finally {
+                for(const k of bourre){ try{ localStorage.removeItem(k); }catch(e){} }
+                rcBanniereInstallCacher(); _poser(g);
+              }})());
+
+            ok('Elle se déclenche APRÈS une séance allée au bout, et pas ailleurs',(()=>{
+              const s=String(finishWorkout).replace(/^\s*\/\/.*$/gm,'');
+              const i=s.indexOf('rcBanniereInstallMontrer');
+              if(i<0) return _echec('la fin de séance ne propose plus rien');
+              // SEULEMENT SI LA SÉANCE EST ALLÉE AU BOUT. Une séance
+              // abandonnée n'a rendu aucun service : c'est le pire moment.
+              if(!/if\(!incomplete\)/.test(s)) return _echec('une séance abandonnée déclencherait la bannière');
+              if(s.lastIndexOf('if(!incomplete)')>i) return _echec('le garde vient après l’appel');
+              // APRÈS le try/catch : la séance est enregistrée dans les deux
+              // cas, donc la proposition a lieu d'être dans les deux cas.
+              const iC=s.lastIndexOf('affichage de fin incomplet');
+              if(iC>=0&&i<iC) return _echec('l’appel est dans le try : un rendu raté l’emporterait');
+              // ET NULLE PART AILLEURS : un seul site d'appel dans tout le
+              // fichier, sinon « un seul déclenchement » ne veut plus rien dire.
+              // ⚠ LA SONDE MATCHAIT SON PROPRE COMMENTAIRE, encore : le gabarit
+              // porte un commentaire HTML qui NOMME cette fonction pour dire
+              // qu'elle est le seul chemin. Les commentaires // ne suffisent
+              // donc pas — on retire aussi les <!-- -->.
+              const tout=(_prodSrc().replace(/<!--[\s\S]*?-->/g,'').replace(/^\s*\/\/.*$/gm,'').match(/rcBanniereInstallMontrer\(\)/g)||[]).length;
+              // deux occurrences : la déclaration de la fonction et son unique appel
+              return tout<=2?true:_echec(tout+' appels de la bannière au lieu d’un seul');})());
+
+            ok('Le message d\'après-installation dit quoi FAIRE, pas que ça a marché',(()=>{
+              const s=_prodSrc();
+              const i=s.indexOf("addEventListener('rc-install-fait'");
+              if(i<0) return _echec('l’écouteur d’installation a disparu');
+              const bloc=s.slice(i,i+1400);
+              // ' DANS LA SOURCE, C'EST DEUX CARACTERES — la contre-oblique et
+              // l'apostrophe. Un point n'en couvre qu'un, et la sonde tombait
+              // sur un message pourtant intact.
+              if(!/écran d.{1,2}accueil/.test(bloc)) return _echec('le message ne dit plus où est l’app');
+              if(!/fermer cet onglet/.test(bloc)) return _echec('le message ne dit plus de quitter l’onglet');
+              if(!/depuis l.{1,2}icône/.test(bloc)) return _echec('le message ne dit plus par où relancer');
+              // ET LA BANNIÈRE S'ÉTEINT : elle n'a plus rien à proposer.
+              if(bloc.indexOf('rcBanniereInstallCacher()')<0)
+                return _echec('la bannière reste affichée sous une app installée');
+              // LE TOAST ENVELOPPE. Quinze mots sans max-width débordaient de
+              // l'écran sur un téléphone étroit : min-width était la seule
+              // contrainte de largeur.
+              const t=document.getElementById('toast');
+              const mw=t?getComputedStyle(t).maxWidth:'none';
+              if(!t||mw==='none') return _echec('le toast n’a pas de largeur maximale : le message débordera');
+              return true;})());
+
+            ok('Cinq éteignoirs, et chacun rend sa raison',(()=>{
+              const g=_etat();
+              try{
+                _vierge();
+                if(rcBanniereInstallRaison()!=='ok') return _echec('rien ne l’empêche et pourtant : '+rcBanniereInstallRaison());
+                // 3. L'écran d'installation a déjà posé la question.
+                try{ sessionStorage.setItem('rc_inst_ecran','1'); }catch(e){}
+                if(rcBanniereInstallRaison()!=='ecran-deja-vu') return _echec('le premier lancement ne l’arrête pas');
+                _vierge();
+                // 6. Les 72 heures. 71 h : elle se tait. 73 h : elle revient.
+                try{ localStorage.setItem('rc_install_vue',String(Date.now()-71*3600*1000)); }catch(e){}
+                if(rcBanniereInstallRaison()!=='repos') return _echec('elle revient avant 72 h');
+                try{ localStorage.setItem('rc_install_vue',String(Date.now()-73*3600*1000)); }catch(e){}
+                if(rcBanniereInstallRaison()!=='ok') return _echec('elle ne revient pas après 72 h');
+                _vierge();
+                // 1. Mode autonome : il n'y a plus rien à proposer.
+                const _au=window.rcInstallAutonome;
+                try{
+                  window.rcInstallAutonome=()=>true;
+                  if(rcBanniereInstallRaison()!=='autonome') return _echec('elle s’affiche dans l’app installée');
+                } finally { window.rcInstallAutonome=_au; }
+                // 2. Navigateur intégré : le bouton serait mort.
+                const _ni=window.rcNavigateurIntegre;
+                try{
+                  window.rcNavigateurIntegre=()=>'Instagram';
+                  if(rcBanniereInstallRaison()!=='integre') return _echec('elle s’affiche dans un navigateur intégré');
+                } finally { window.rcNavigateurIntegre=_ni; }
+                return true;
+              } finally { rcBanniereInstallCacher(); _poser(g); }})());
+          })();
+
+          // ══════ LE CALIBRAGE DU RIR ══════
+          (()=>{
+            // Un test fabriqué : on choisit l'écart, la fonction fait le reste.
+            const T=(ecart,date)=>({date:date||Date.now(),exercice:'curl',chargeKg:20,
+              repsAnnoncees:10,rirAnnonce:2,repsReelles:12+ecart});
+
+            ok('Le repère est une MÉDIANE, jamais une moyenne',(()=>{
+              // UN TEST RATÉ NE DOIT PAS DÉPLACER LE REPÈRE. L'athlète qui
+              // s'acharne bien après la perte d'amplitude produit un écart
+              // énorme ; une moyenne le laisserait tirer la correction de tout
+              // le reste de son entraînement, la médiane l'ignore.
+              const m=calculerCalibrageRir([T(1),T(1),T(1),T(1),T(9)]);
+              // Médiane de [1,1,1,1,9] = 1. Moyenne = 2,6, bornée à 2,6.
+              if(m.biais!==1) return _echec('biais '+m.biais+' au lieu de 1 : ce n’est pas une médiane');
+              // ET LE TEST ABERRANT RESTE ENREGISTRÉ. C'est peut-être le
+              // protocole qui a dérapé, et l'effacer empêcherait de s'en
+              // apercevoir plus tard.
+              if(m.n!==5) return _echec('un test a disparu : '+m.n+' au lieu de 5');
+              // Cas pair : moyenne des deux du milieu, comme _mediane.
+              const p=calculerCalibrageRir([T(0),T(2)]);
+              if(p.biais!==1) return _echec('médiane paire : '+p.biais+' au lieu de 1');
+              return true;})());
+
+            ok('Seuls les cinq derniers tests comptent',(()=>{
+              // LA PERCEPTION S'AMÉLIORE : un test d'il y a un an ferait tirer
+              // le repère par quelqu'un qui n'existe plus.
+              const m=calculerCalibrageRir([T(3),T(3),T(3),T(0),T(0),T(0),T(0),T(0)]);
+              if(m.biais!==0) return _echec('biais '+m.biais+' : les vieux tests pèsent encore');
+              // n compte TOUS les tests — c'est lui qui porte la fiabilité.
+              return m.n===8?true:_echec('n vaut '+m.n+' au lieu de 8');})());
+
+            ok('Le repère est borné à ±3',(()=>{
+              // AU-DELÀ, C'EST LE PROTOCOLE QUI A ÉTÉ MAL EXÉCUTÉ, pas la
+              // perception : personne ne se trompe de sept répétitions.
+              const h=calculerCalibrageRir([T(9),T(9),T(9)]);
+              if(h.biais!==3) return _echec('biais haut non borné : '+h.biais);
+              const b=calculerCalibrageRir([T(-9),T(-9),T(-9)]);
+              if(b.biais!==-3) return _echec('biais bas non borné : '+b.biais);
+              // La borne porte sur le REPÈRE, pas sur les tests : la donnée
+              // brute survit telle qu'elle a été saisie.
+              const brut=h.tests.map(biaisTestCalibrage);
+              return brut.every(x=>x===9)?true:_echec('les tests bruts ont été écrasés : '+brut.join(','));})());
+
+            ok('Aucun test : le biais est null, jamais zéro',(()=>{
+              // UNE ABSENCE NE SE COMBLE PAS PAR UN DÉFAUT. « biais 0 » veut
+              // dire « perception juste, mesurée » ; null veut dire « on ne
+              // sait pas ». Les confondre ferait affirmer ce qu'on ignore.
+              const m=calculerCalibrageRir([]);
+              if(m.biais!==null) return _echec('biais '+m.biais+' au lieu de null');
+              if(m.n!==0) return _echec('n vaut '+m.n);
+              if(m.maj!==null) return _echec('maj inventée');
+              return m.fiabilite==='faible'?true:_echec('fiabilité '+m.fiabilite);})());
+
+            ok('Trois paliers de fiabilité, aux bons seuils',(()=>{
+              const att=[[0,'faible'],[1,'faible'],[2,'moyenne'],[3,'moyenne'],
+                         [4,'bonne'],[9,'bonne']];
+              for(const [n,f] of att)
+                if(fiabiliteCalibrage(n)!==f)
+                  return _echec('n='+n+' → '+fiabiliteCalibrage(n)+' au lieu de '+f);
+              return true;})());
+
+            ok('En fiabilité faible, rirCorrige ne corrige RIEN',(()=>{
+              // CORRIGER SUR UN SEUL TEST SERAIT PIRE QUE NE PAS CORRIGER :
+              // toutes les décisions d'un athlète se déplaceraient à partir
+              // d'une seule série, possiblement ratée.
+              const u1={sessions:[],calibrageRir:calculerCalibrageRir([T(2)])};
+              if(u1.calibrageRir.fiabilite!=='faible') return _echec('un test devrait être « faible »');
+              for(const r of [0,1,2,3,4,5])
+                if(rirCorrige(u1,r)!==r) return _echec('RIR '+r+' corrigé à '+rirCorrige(u1,r)+' sur un seul test');
+              // Aucun calibrage du tout : idem.
+              if(rirCorrige({sessions:[]},2)!==2) return _echec('corrigé sans aucun calibrage');
+              if(rirCorrige(null,2)!==2) return _echec('corrigé sans dossier');
+              // DEUX tests, et là seulement la correction s'applique.
+              const u2={sessions:[],calibrageRir:calculerCalibrageRir([T(2),T(2)])};
+              if(u2.calibrageRir.fiabilite!=='moyenne') return _echec('deux tests devraient être « moyenne »');
+              return rirCorrige(u2,1)===3?true:_echec('RIR 1 + biais 2 → '+rirCorrige(u2,1)+' au lieu de 3');})());
+
+            ok('Le sens de la correction suit la définition du biais',(()=>{
+              // biais = repsRéelles − (repsAnnoncées + rirAnnoncé)
+              //       = RIR vrai − RIR annoncé
+              // donc RIR vrai = RIR annoncé + biais. Un biais POSITIF veut dire
+              // « il en avait encore sous le pied » : sa série à RIR 2 déclaré
+              // était en réalité une série à RIR 4. Retrancher dirait l'inverse
+              // et DOUBLERAIT l'erreur — le coach lirait « plus dur que
+              // demandé » chez quelqu'un qui s'entraîne trop facile.
+              const tot=(ra,ri,rr)=>({date:Date.now(),exercice:'curl',chargeKg:20,
+                repsAnnoncees:ra,rirAnnonce:ri,repsReelles:rr});
+              // Annonce : 10 faites, 2 en réserve → 12 prévues. Réel : 14.
+              const t=tot(10,2,14);
+              if(biaisTestCalibrage(t)!==2) return _echec('biais de série : '+biaisTestCalibrage(t));
+              const u={sessions:[],calibrageRir:calculerCalibrageRir([t,t])};
+              // Sa série déclarée RIR 2 valait un vrai RIR 4.
+              if(rirCorrige(u,2)!==4) return _echec('RIR 2 déclaré → '+rirCorrige(u,2)+' au lieu de 4');
+              // Et l'athlète qui va PLUS loin qu'il ne le pense va dans l'autre sens.
+              const t2=tot(10,2,10);
+              const u2={sessions:[],calibrageRir:calculerCalibrageRir([t2,t2])};
+              if(biaisTestCalibrage(t2)!==-2) return _echec('biais négatif : '+biaisTestCalibrage(t2));
+              return rirCorrige(u2,3)===1?true:_echec('RIR 3 déclaré → '+rirCorrige(u2,3)+' au lieu de 1');})());
+
+            ok('Le RIR corrigé reste dans l\'échelle de saisie [0,5]',(()=>{
+              const u=(e)=>({sessions:[],calibrageRir:calculerCalibrageRir([T(e),T(e),T(e),T(e)])});
+              if(rirCorrige(u(3),4)!==5) return _echec('plafond : '+rirCorrige(u(3),4));
+              if(rirCorrige(u(-3),1)!==0) return _echec('plancher : '+rirCorrige(u(-3),1));
+              // ET CE QUI N'EST PAS UN NOMBRE RESSORT INTACT : '' et 'echec'
+              // ont un sens ailleurs, les convertir en 0 inventerait une valeur.
+              if(rirCorrige(u(3),'')!=='') return _echec('la chaîne vide a été convertie');
+              if(rirCorrige(u(3),'echec')!=='echec') return _echec('« echec » a été converti');
+              return true;})());
+
+            ok('rirCorrige n\'est JAMAIS appelée dans la fabrication du CSV',(()=>{
+              // LE CSV MONTRE CE QUE L'ATHLÈTE A TAPÉ. C'est sa donnée, c'est
+              // celle qu'il exporte au titre du RGPD, et c'est la seule qu'il
+              // reconnaîtra. Y écrire un chiffre corrigé serait lui répondre
+              // qu'il n'a pas saisi ce qu'il a saisi.
+              const src=String(_csvSeances).replace(/^\s*\/\/.*$/gm,'');
+              if(/rirCorrige|_perfRir|calibrageRir/.test(src))
+                return _echec('le CSV passe par le biais de perception');
+              if(src.indexOf('st.rir')<0) return _echec('le CSV n’écrit plus le RIR brut');
+              // ET LA MÊME RÈGLE POUR L'EXPORT COMPLET : les trois fabricants
+              // de CSV lisent le dossier, aucun ne corrige.
+              for(const f of [_csvJournalAlimentaire,_csvPesees])
+                if(/rirCorrige/.test(String(f))) return _echec('un autre CSV corrige');
+              return true;})());
+
+            ok('Le RIR corrigé n\'est pas non plus affiché à l\'athlète',(()=>{
+              // MÊME RÈGLE QUE LE CSV, ET ELLE EST PLUS FACILE À VIOLER : il
+              // suffit qu'un lot futur passe `currentUser` à _perfRir dans une
+              // fonction de rendu. Ces deux-là sont des RAPPORTS, pas des
+              // décisions : le rite de fin de cycle et le PDF de progression.
+              for(const [nom,f] of [['_riteRecords',_riteRecords],['rapProgression',rapProgression]]){
+                const s=String(f).replace(/^\s*\/\/.*$/gm,'');
+                if(/rirCorrige/.test(s)) return _echec(nom+' affiche un RIR corrigé');
+              }
+              return true;})());
+
+            ok('L\'écriture refuse un protocole impossible',(()=>{
+              // repsRéelles < repsAnnoncées est impossible par construction :
+              // on ne peut pas avoir fait MOINS que ce qu'on avait déjà fait au
+              // moment de l'annonce. L'accepter poserait un biais massivement
+              // négatif qui fausserait tout l'aval.
+              const u={sessions:[],calibrageRir:null};
+              const cas=[
+                [{exercice:'curl',chargeKg:20,repsAnnoncees:10,rirAnnonce:2,repsReelles:8},'reps totales inférieures'],
+                [{exercice:'curl',chargeKg:20,repsAnnoncees:0,rirAnnonce:2,repsReelles:12},'zéro rep annoncée'],
+                [{exercice:'curl',chargeKg:20,repsAnnoncees:10,rirAnnonce:9,repsReelles:12},'RIR hors échelle'],
+                [{exercice:'curl',chargeKg:0,repsAnnoncees:10,rirAnnonce:2,repsReelles:12},'charge nulle'],
+                [{exercice:'',chargeKg:20,repsAnnoncees:10,rirAnnonce:2,repsReelles:12},'exercice sans nom']
+              ];
+              for(const [t,quoi] of cas){
+                const r=enregistrerTestCalibrage(u,t);
+                if(r.ok) return _echec(quoi+' : accepté');
+                if(!r.raison) return _echec(quoi+' : refusé sans raison');
+              }
+              // Le dossier n'a rien gardé de ces cinq refus.
+              if(u.calibrageRir) return _echec('un test refusé a quand même été écrit');
+              return true;})());
+
+            okA('Un test valide s\'enregistre et vide les caches de verdict',(async()=>{
+              // LES CACHES PORTENT DES VERDICTS QUE LE BIAIS VIENT DE CHANGER :
+              // un e1RM et un état de plateau calculés avec l'ancien repère
+              // resteraient servis jusqu'au rechargement de la page.
+              const u={email:'cal@test.fr',sessions:[],calibrageRir:null};
+              const r=enregistrerTestCalibrage(u,{exercice:'curl',chargeKg:20,
+                repsAnnoncees:10,rirAnnonce:2,repsReelles:14});
+              if(!r.ok) return _echec('refusé : '+r.raison);
+              if(!u.calibrageRir||u.calibrageRir.n!==1) return _echec('le test n’est pas dans le dossier');
+              const t=u.calibrageRir.tests[0];
+              if(t.repsReelles!==14||t.rirAnnonce!==2||t.repsAnnoncees!==10)
+                return _echec('la saisie brute a été altérée');
+              if(!(t.date>0)) return _echec('le test n’est pas daté');
+              const s=String(enregistrerTestCalibrage).replace(/^\s*\/\/.*$/gm,'');
+              if(s.indexOf('_viderCachePlateau()')<0) return _echec('le cache de plateau survit au test');
+              if(s.indexOf('_cacheSignaux.clear()')<0) return _echec('le cache de signaux survit au test');
+              return true;}));
+
+            ok('Le test ne se propose que sur un exercice sans charge axiale',(()=>{
+              // UNE SÉRIE MENÉE À L'ÉCHEC TECHNIQUE RÉEL : jamais sous charge
+              // axiale. Une dernière répétition ratée au squat se paie sur le
+              // rachis, et aucune mesure ne vaut ça.
+              const u={sessions:[],contraintes:[]};
+              // Les schémas d'isolation portent rachis-lombaire dans `hors` :
+              // chargeLombaireSchema y rend 0 quelle que soit la grille.
+              const iso=Object.keys(SCHEMAS_META).filter(k=>
+                (SCHEMAS_META[k].hors||[]).indexOf('rachis-lombaire')>=0);
+              if(!iso.length) return _echec('aucun schéma hors rachis lombaire : la sonde ne prouve rien');
+              for(const k of iso)
+                if(chargeLombaireSchema(k,{})!==0) return _echec(k+' devrait valoir 0');
+              // Et le squat, lui, N'EST PAS dans cette liste.
+              if(iso.indexOf('squat')>=0) return _echec('le squat compte comme sans charge lombaire');
+              // NULL EST REFUSÉ COMME 3 : une absence n'est pas un zéro.
+              if(chargeLombaireSchema('squat',{})!==null)
+                return _echec('un schéma non noté ne rend plus null');
+              const ex={name:'deep squat'};
+              if(exerciceCalibrable(ex,u,{})) return _echec('le squat est proposé au test');
+              if(exerciceCalibrable({name:'nom qui n’existe dans aucun schéma'},u,{}))
+                return _echec('un exercice sans schéma est proposé');
+              return true;})());
+
+            ok('Le signal du coach est de l\'entretien, pas une urgence',(()=>{
+              // IL N'ENTRE PAS DANS urgencyScore : un calibrage périmé ne
+              // remonte personne dans la liste, il ajoute une ligne en bas.
+              const s=String(urgencyScore).replace(/^\s*\/\/.*$/gm,'');
+              if(/calibrage/i.test(s)) return _echec('le calibrage pèse dans le classement d’urgence');
+              // ET IL EST AU DERNIER RANG des lignes d'entraînement : sous la
+              // douleur, le décrochage et le plateau.
+              const l=String(_lignesEntrainement).replace(/^\s*\/\/.*$/gm,'');
+              const iCal=l.indexOf("cle:'calibrageDu'");
+              if(iCal<0) return _echec('la ligne de calibrage n’existe pas');
+              for(const c of ["cle:'douleur'","cle:'decrochage'"]){
+                const i=l.indexOf(c);
+                if(i<0) return _echec(c+' a disparu');
+                if(i>iCal) return _echec(c+' est passé sous le calibrage');
+              }
+              if(l.indexOf("lib:'Progression bloquée'")>iCal)
+                return _echec('le plateau est passé sous le calibrage');
+              return true;})());
+
+            ok('Le signal se lève après 8 séances, et se rendort une fois mesuré',(()=>{
+              const seances=n=>Array.from({length:n},(_,i)=>({date:Date.now()-i*864e5,data:{}}));
+              // Avant neuf séances : rien. L'athlète a autre chose à apprendre
+              // que d'aller à l'échec technique.
+              if(calibrageRirDu({sessions:seances(8)})) return _echec('proposé dès 8 séances');
+              if(!calibrageRirDu({sessions:seances(9)})) return _echec('jamais proposé après 9 séances');
+              // Mesuré hier : plus rien à demander.
+              const frais={sessions:seances(20),
+                calibrageRir:{tests:[T(1)],biais:1,n:1,maj:Date.now()-864e5,fiabilite:'faible'}};
+              if(calibrageRirDu(frais)) return _echec('redemandé le lendemain du test');
+              // Mesuré il y a plus de trois mois : la perception a bougé.
+              const vieux={sessions:seances(20),
+                calibrageRir:{tests:[T(1)],biais:1,n:1,maj:Date.now()-91*864e5,fiabilite:'faible'}};
+              return calibrageRirDu(vieux)?true:_echec('un calibrage de 91 jours n’est pas redemandé');})());
+
+            ok('La phrase de retour dit quoi faire, jamais un score',(()=>{
+              const ph=b=>phraseCalibrageRir({biais:b,fiabilite:'moyenne'});
+              if(ph(0)!=='Ta perception est juste.') return _echec('biais 0 → « '+ph(0)+' »');
+              if(ph(2).indexOf('deux répétitions trop tôt')<0) return _echec('biais +2 → « '+ph(2)+' »');
+              if(ph(-2).indexOf('plus loin')<0) return _echec('biais −2 → « '+ph(-2)+' »');
+              // AUCUN CHIFFRE BRUT : « biais +2 » se lit comme une note.
+              for(const b of [0,1,2,-2,3])
+                if(/biais|\+[0-9]|score/i.test(ph(b))) return _echec('la phrase montre un score : « '+ph(b)+' »');
+              // ET ON NE PROMET RIEN QU'ON NE TIENNE : en fiabilité faible,
+              // rirCorrige ne corrige pas encore.
+              const f=phraseCalibrageRir({biais:2,fiabilite:'faible'});
+              if(f.indexOf('à partir de maintenant')>=0)
+                return _echec('promesse tenue par personne : « '+f+' »');
+              if(f.indexOf('deuxième test')<0) return _echec('la suite n’est pas annoncée : « '+f+' »');
+              // Biais null : aucune phrase, on n'invente pas.
+              return phraseCalibrageRir({biais:null,fiabilite:'faible'})===''
+                ?true:_echec('une phrase sort d’un biais null');})());
+          })();
+
+          // ══════ SAMSUNG INTERNET : LE NAVIGATEUR QUI INSTALLE MAL ══════
+          (()=>{
+            const UA={
+              sam15:'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36',
+              sam14:'Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36',
+              sam13:'Mozilla/5.0 (Linux; Android 13; SM-A536B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/21.0 Chrome/110.0.0.0 Mobile Safari/537.36',
+              chrome:'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+              insta:'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36 Instagram 309.0.0.40.113',
+              iphone:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+            };
+            // L'agent se REPOSE toujours : sans ça la sonde suivante hérite
+            // d'un téléphone Samsung et la suite cesse d'être rejouable.
+            const avecUA=(ua,f)=>{
+              const d=Object.getOwnPropertyDescriptor(navigator,'userAgent');
+              try{
+                Object.defineProperty(navigator,'userAgent',{get:()=>ua,configurable:true});
+                return f();
+              } finally {
+                try{ if(d) Object.defineProperty(navigator,'userAgent',d);
+                     else delete navigator.userAgent; }catch(e){}
+              }
+            };
+
+            ok('Samsung Internet est reconnu, QUELLE QUE SOIT la version d\'Android',(()=>{
+              // ⚠ CETTE SONDE EXIGEAIT L'INVERSE, ET C'EST CE QUI A COÛTÉ
+              // TROIS LOTS. J'avais lu « Android 14+ » dans un rapport de
+              // bogue, puis posé cette borne comme une VÉRIFICATION — alors
+              // que je n'avais aucun moyen de connaître la version du
+              // téléphone de Kevin. Sur un Android 13, la détection rendait
+              // null, la branche S ne se levait pas, la branche C offrait son
+              // bouton, et le refus tombait comme avant. La sonde, elle,
+              // restait verte : elle vérifiait mon hypothèse, pas le produit.
+              //
+              // LE COÛT DES DEUX ERREURS N'EST PAS LE MÊME. Détourner un
+              // Samsung qui aurait pu installer coûte un geste de menu.
+              // Ne pas le détourner coûte une installation impossible.
+              for(const [ua,att] of [[UA.sam15,'27.0'],[UA.sam14,'23.0'],[UA.sam13,'21.0']])
+                if(avecUA(ua,()=>rcNavigateurSamsung())!==att)
+                  return _echec(ua.slice(0,46)+'… → '+avecUA(ua,()=>rcNavigateurSamsung()));
+              if(avecUA(UA.chrome,()=>rcNavigateurSamsung())!==null)
+                return _echec('Chrome pris pour Samsung Internet');
+              // ET AUCUNE VERSION D'ANDROID N'ENTRE PLUS DANS LA DÉCISION :
+              // un agent qui ne la porte pas est traité comme les autres.
+              const sansAndroid='Mozilla/5.0 (Linux) AppleWebKit/537.36 SamsungBrowser/27.0 Safari/537.36';
+              if(avecUA(sansAndroid,()=>rcNavigateurSamsung())!=='27.0')
+                return _echec('un agent sans version d’Android n’est plus reconnu');
+              const src=String(rcNavigateurSamsung).replace(/^\s*\/\/.*$/gm,'');
+              return /Android/i.test(src)
+                ?_echec('la version d’Android est revenue dans la détection'):true;})());
+
+            ok('Sur Android, seuls Chrome et Edge ont le droit de demander l\'invitation',(()=>{
+              // LISTE BLANCHE, ET NON LISTE NOIRE. Les seuls navigateurs
+              // Android dont on SAIT qu'ils fabriquent une WebAPK acceptée
+              // sont Chrome et Edge. Une liste noire aurait laissé passer le
+              // prochain navigateur inconnu ; celle-ci ne laisse passer que
+              // ce qui est vérifié — et le chemin manuel, lui, marche partout
+              // puisqu'il n'installe aucun paquet.
+              const cas=[
+                [UA.chrome,null,'Chrome Android'],
+                [UA.sam15,'samsung','Samsung Internet'],
+                [UA.iphone,null,'iPhone : pas de WebAPK'],
+                ['Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36 EdgA/125.0','','Edge Android'],
+                ['Mozilla/5.0 (Linux; Android 14; RMX) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36 OPR/79.0','autre','Opera Android'],
+                ['Mozilla/5.0 (Linux; Android 13; M2101) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36 MiuiBrowser/17.0','autre','Mi Browser'],
+                // Firefox Android ne fabrique AUCUNE WebAPK et ne déclenche
+                // jamais beforeinstallprompt : il pose un raccourci depuis son
+                // propre menu. 'autre' l'envoie sur la branche F, qui dit
+                // exactement cela. C'est le bon traitement, pas une exclusion.
+                ['Mozilla/5.0 (Android 14; Mobile; rv:130.0) Gecko/130.0 Firefox/130.0','autre','Firefox Android']
+              ];
+              for(const [ua,att,nom] of cas){
+                const r=avecUA(ua,()=>rcInstallBloquePar());
+                // Edge et Firefox : deux issues acceptables selon la liste, on
+                // exige seulement que Chrome et Edge NE soient PAS bloqués.
+                if(att===null&&r!==null) return _echec(nom+' est bloqué à tort : '+r);
+                if(att===''&&r!==null) return _echec(nom+' est bloqué à tort : '+r);
+                if(att&&r!==att) return _echec(nom+' → '+r+' au lieu de '+att);
+              }
+              return true;})());
+
+            ok('La branche S passe DEVANT la branche C, sinon rien n\'est corrigé',(()=>{
+              // C'EST TOUT LE CORRECTIF. Samsung Internet déclenche
+              // beforeinstallprompt : la branche C s'allumait, offrait
+              // « INSTALLER REPCORE », et le téléphone refusait le paquet
+              // fabriqué. Le bouton marchait, l'installation non.
+              // On retire les commentaires : le correctif cite la branche C.
+              const s=String(rcInstallDecider).replace(/^\s*\/\/.*$/gm,'');
+              // ⚠ ON ANCRE SUR LA BRANCHE, PAS SUR LE NOM DE LA FONCTION.
+              // rcNavigateurSamsung est aussi appelée tout en haut, par le
+              // repère de version : chercher la première occurrence du nom
+              // faisait croire que la branche Samsung était passée devant le
+              // navigateur intégré, ce qui était faux.
+              const iS=s.indexOf('const _sam=rcNavigateurSamsung()');
+              const iC=s.indexOf('rcInstallInvite()');
+              if(iS<0) return _echec('la branche Samsung a disparu');
+              if(iC<0) return _echec('la branche C a disparu');
+              if(iS>iC) return _echec('Samsung passe après C : l’installation resterait cassée');
+              // ET APRÈS LA BRANCHE B : un Samsung ouvert dans Instagram est
+              // d'abord un problème de navigateur intégré.
+              const iB=s.indexOf('const _app=rcNavigateurIntegre()');
+              if(iB<0||iB>iS) return _echec('le navigateur intégré ne passe plus en premier');
+              return true;})());
+
+            okA('Six agents, six branches, et aucune ne bouge sauf celle-là',(async()=>{
+              const _evt=window.__rcInstallEvt, _mm=window.matchMedia;
+              const _iw=Object.getOwnPropertyDescriptor(window,'innerWidth');
+              try{
+                // Invitation disponible ET pointeur grossier : le cas exact
+                // qui piégeait Samsung dans la branche C.
+                window.__rcInstallEvt={prompt(){}};
+                window.matchMedia=q=>({matches:/coarse/.test(String(q)),
+                  addEventListener(){},removeEventListener(){}});
+                Object.defineProperty(window,'innerWidth',{get:()=>400,configurable:true});
+                // Android 13 attend désormais 'S' comme les autres : la borne
+                // de version était une hypothèse à moi, pas une mesure.
+                const attendu=[[UA.sam15,'S'],[UA.sam14,'S'],[UA.sam13,'S'],
+                               [UA.chrome,'C'],[UA.insta,'B'],[UA.iphone,'D']];
+                for(const [ua,br] of attendu){
+                  const r=avecUA(ua,()=>{ try{ window._rcSamCompte=false; }catch(e){}
+                    return rcInstallDecider(); });
+                  if(r!==br) return _echec(ua.slice(0,40)+'… → branche '+r+' au lieu de '+br);
+                }
+                return true;
+              } finally {
+                window.__rcInstallEvt=_evt; window.matchMedia=_mm;
+                // ⚠ innerWidth N'EST PAS UNE PROPRIÉTÉ PROPRE DE window : c'est
+                // un accesseur du prototype. getOwnPropertyDescriptor rend donc
+                // undefined, et un « if(_iw) » ne restaurait RIEN — la fenêtre
+                // restait bloquée à 400 px pour tout le reste de la page.
+                // Mesuré : la suite passait à 4213/18 puis 4213/20 au second
+                // tour, avec deux fantômes dans la file d'envoi.
+                try{ if(_iw) Object.defineProperty(window,'innerWidth',_iw);
+                     else delete window.innerWidth; }catch(e){}
+                try{ rcInstallDecider(); }catch(e){}
+              }}));
+
+            okA('Elle dit que ce n\'est pas RepCore, et n\'offre plus le mur',(async()=>{
+              const _evt=window.__rcInstallEvt, _mm=window.matchMedia;
+              const _iw=Object.getOwnPropertyDescriptor(window,'innerWidth');
+              try{
+                window.__rcInstallEvt={prompt(){}};
+                window.matchMedia=q=>({matches:/coarse/.test(String(q)),
+                  addEventListener(){},removeEventListener(){}});
+                Object.defineProperty(window,'innerWidth',{get:()=>400,configurable:true});
+                const r=avecUA(UA.sam15,()=>{ try{ window._rcSamCompte=false; }catch(e){}
+                  return rcInstallDecider(); });
+                if(r!=='S') return _echec('branche '+r);
+                const t=(document.getElementById('rc-inst-msg')||{}).textContent||'';
+                // ON NOMME LE COUPABLE. « Ça ne marche pas » laisse croire que
+                // c'est l'application ; « Android refuse ce que Samsung
+                // fabrique » dit quoi faire.
+                if(t.indexOf('Samsung Internet')<0) return _echec('le navigateur n’est pas nommé : « '+t.slice(0,80)+' »');
+                if(t.indexOf('Android refuse')<0) return _echec('on ne dit pas qui refuse');
+                if(t.indexOf('Ce n’est pas RepCore')<0&&t.indexOf("Ce n'est pas RepCore")<0)
+                  return _echec('on ne dit pas que RepCore n’y est pour rien');
+                const p=document.getElementById('rc-inst-principal');
+                if(!p||p.style.display==='none') return _echec('aucun bouton');
+                // ⚠ LE GESTE PRINCIPAL NE SUPPOSE PAS CHROME INSTALLÉ. La
+                // première version envoyait vers Chrome ; sur un téléphone qui
+                // ne l'a pas, l'URL intent retombait — par son propre repli —
+                // dans le navigateur par défaut, c'est-à-dire Samsung Internet.
+                // La boucle était complète et rien ne la signalait.
+                if(p.textContent.indexOf('ÉCRAN D’ACCUEIL')<0&&p.textContent.indexOf("ÉCRAN D'ACCUEIL")<0)
+                  return _echec('le bouton principal ne mène pas au raccourci : « '+p.textContent+' »');
+                // ET LE GESTE OUVRE VRAIMENT LE GUIDE.
+                const _g=document.getElementById('rc-inst-sam-guide');
+                if(!_g) return _echec('le guide du raccourci n’existe pas');
+                if(_g.style.display!=='none') return _echec('le guide est ouvert avant qu’on le demande');
+                rcInstallAgir();
+                if(_g.style.display==='none') return _echec('le bouton n’ouvre pas le guide');
+                // IL NOMME LE PIÈGE : la même entrée de menu propose
+                // « Applications », qui passe par le serveur de Samsung — donc
+                // exactement le chemin qui déclenche le refus.
+                const _t=_g.textContent||'';
+                if(_t.indexOf('Écran d’accueil')<0&&_t.indexOf("Écran d'accueil")<0)
+                  return _echec('le guide ne nomme pas la bonne entrée');
+                if(_t.indexOf('Applications')<0)
+                  return _echec('le guide ne met pas en garde contre « Applications »');
+                // CHROME RESTE OFFERT, MAIS EN SECOND, ET SANS REPLI.
+                const _lc=document.getElementById('rc-inst-chrome');
+                if(!_lc||_lc.style.display==='none') return _echec('Chrome n’est plus proposé du tout');
+                if(String(_lc.innerHTML).indexOf('sansRepli:true')<0)
+                  return _echec('le lien Chrome garde le repli qui reboucle sur Samsung Internet');
+                // ⚠ CETTE SONDE EXIGEAIT L'INVERSE, ET ELLE AVAIT TORT. Elle
+                // vérifiait que « Installer ici quand même » restait offert, au
+                // nom de « on ne retire pas une capacité ». Mais sur ce
+                // navigateur cette capacité N'EN EST PAS UNE : elle mène à
+                // « Ajouter ce site à l'écran Applis », puis au refus du
+                // téléphone. C'est précisément ce bouton que Kevin touchait.
+                // Une sonde peut verrouiller une mauvaise décision : celle-ci
+                // l'a fait pendant deux lots.
+                const ici=document.getElementById('rc-inst-ici');
+                if(ici&&ici.style.display!=='none')
+                  return _echec('le bouton qui mène au mur est de nouveau offert : « '+ici.textContent+' »');
+                return true;
+              } finally {
+                window.__rcInstallEvt=_evt; window.matchMedia=_mm;
+                // ⚠ innerWidth N'EST PAS UNE PROPRIÉTÉ PROPRE DE window : c'est
+                // un accesseur du prototype. getOwnPropertyDescriptor rend donc
+                // undefined, et un « if(_iw) » ne restaurait RIEN — la fenêtre
+                // restait bloquée à 400 px pour tout le reste de la page.
+                // Mesuré : la suite passait à 4213/18 puis 4213/20 au second
+                // tour, avec deux fantômes dans la file d'envoi.
+                try{ if(_iw) Object.defineProperty(window,'innerWidth',_iw);
+                     else delete window.innerWidth; }catch(e){}
+                try{ rcInstallDecider(); }catch(e){}
+              }}));
+
+            okA('Le message du bloc partagé repart neuf à chaque décision',(async()=>{
+              // DEUX BRANCHES ÉCRIVENT DANS LE MÊME BLOC. Sans remise, un
+              // navigateur intégré visité après un Samsung lirait « Tu es dans
+              // Samsung Internet » — et l'inverse.
+              //
+              // ⚠ ON JOUE LA SÉQUENCE, ON NE LIT PAS LE SOURCE. La première
+              // version de cette sonde cherchait la ligne de remise dans le
+              // texte de la fonction : neutraliser cette ligne par un
+              // `if(false)` la laissait verte, puisque la ligne y était encore.
+              // Mesuré en cassant délibérément.
+              const _evt=window.__rcInstallEvt, _mm=window.matchMedia;
+              const _iw=Object.getOwnPropertyDescriptor(window,'innerWidth');
+              try{
+                window.__rcInstallEvt={prompt(){}};
+                window.matchMedia=q=>({matches:/coarse/.test(String(q)),
+                  addEventListener(){},removeEventListener(){}});
+                Object.defineProperty(window,'innerWidth',{get:()=>400,configurable:true});
+                const lire=()=>(document.getElementById('rc-inst-msg')||{}).textContent||'';
+                // Samsung d'abord : le bloc porte son message.
+                avecUA(UA.sam15,()=>{ try{ window._rcSamCompte=false; }catch(e){} return rcInstallDecider(); });
+                if(lire().indexOf('Samsung Internet')<0) return _echec('la branche Samsung n’écrit pas son message');
+                // Puis Instagram : le message précédent ne doit PAS survivre.
+                avecUA(UA.insta,()=>{ try{ window._rcIabCompte=false; }catch(e){} return rcInstallDecider(); });
+                const t=lire();
+                if(t.indexOf('Samsung Internet')>=0)
+                  return _echec('le message de Samsung survit dans un navigateur intégré : « '+t.slice(0,70)+' »');
+                if(t.indexOf('navigateur intégré')<0)
+                  return _echec('le message d’origine n’est pas revenu : « '+t.slice(0,70)+' »');
+                // MÊME RÈGLE POUR LE LIBELLÉ DU BOUTON LOCAL, que la branche S
+                // renomme : un ordinateur visité ensuite le garderait.
+                avecUA(UA.sam15,()=>{ try{ window._rcSamCompte=false; }catch(e){} return rcInstallDecider(); });
+                avecUA(UA.chrome,()=>rcInstallDecider());
+                const ici=document.getElementById('rc-inst-ici');
+                if(ici&&ici.textContent.indexOf('quand même')>=0)
+                  return _echec('le libellé « quand même » survit hors de la branche Samsung');
+                return true;
+              } finally {
+                window.__rcInstallEvt=_evt; window.matchMedia=_mm;
+                // ⚠ innerWidth N'EST PAS UNE PROPRIÉTÉ PROPRE DE window : c'est
+                // un accesseur du prototype. getOwnPropertyDescriptor rend donc
+                // undefined, et un « if(_iw) » ne restaurait RIEN — la fenêtre
+                // restait bloquée à 400 px pour tout le reste de la page.
+                // Mesuré : la suite passait à 4213/18 puis 4213/20 au second
+                // tour, avec deux fantômes dans la file d'envoi.
+                try{ if(_iw) Object.defineProperty(window,'innerWidth',_iw);
+                     else delete window.innerWidth; }catch(e){}
+                try{ rcInstallDecider(); }catch(e){}
+              }}));
+
+            ok('L\'instruction de secours ne dit pas « Safari » à un Android',(()=>{
+              // L'URL intent peut échouer — Chrome absent, schéma refusé. Le
+              // repli manuel s'affiche alors, et il doit nommer CHROME : un
+              // téléphone Samsung n'a pas de Safari.
+              const s=String(_rcSortieManuelle).replace(/^\s*\/\/.*$/gm,'');
+              if(s.indexOf("nom==='Samsung Internet'")<0)
+                return _echec('aucune instruction propre à Samsung Internet');
+              // ⚠ UNE FENÊTRE DE 320 CARACTÈRES DÉBORDAIT sur l'arme
+              // SUIVANTE du ternaire — le repli générique, qui dit « Ouvre
+              // Safari » à juste titre. La sonde accusait donc un code
+              // correct. On borne sur la vraie fin de l'arme Samsung.
+              const i=s.indexOf("nom==='Samsung Internet'");
+              const fin=s.indexOf('Play Store',i);
+              if(fin<0) return _echec('l’instruction Samsung ne mène plus au Play Store');
+              const bloc=s.slice(i,fin);
+              if(bloc.indexOf('Chrome')<0) return _echec('le repli ne nomme pas Chrome');
+              if(/Safari/.test(bloc)) return _echec('le repli parle de Safari sur un Android');
+              // ET rcOuvrirDansNavigateur SAIT NOMMER CETTE BRANCHE, sinon le
+              // repli retomberait sur « cette application ».
+              return /rcNavigateurSamsung\(\)\s*\?\s*'Samsung Internet'/.test(
+                String(rcOuvrirDansNavigateur))
+                ?true:_echec('la sortie ne nomme pas Samsung Internet');})());
+
+            ok('Le repli de l\'URL intent ne reboucle pas sur le navigateur qu\'on quitte',(()=>{
+              // S.browser_fallback_url fait ouvrir l'adresse par le navigateur
+              // PAR DÉFAUT quand le paquet nommé manque. Depuis une vue
+              // embarquée c'est exactement la sortie cherchée ; depuis Samsung
+              // Internet, le navigateur par défaut EST Samsung Internet — on
+              // revient d'où l'on part, et la page se recharge, ce qui tue au
+              // passage le minuteur qui aurait montré les instructions.
+              const s=String(rcOuvrirDansNavigateur).replace(/^\s*\/\/.*$/gm,'');
+              if(s.indexOf('opts&&opts.sansRepli')<0)
+                return _echec('le repli est toujours posé sans condition');
+              if(s.indexOf('S.browser_fallback_url')<0)
+                return _echec('le repli a disparu : les navigateurs intégrés en ont besoin');
+              // LE CAS DES VUES EMBARQUÉES N'EST PAS TOUCHÉ : appelée sans
+              // options, la fonction pose toujours le repli.
+              const iCond=s.indexOf('opts&&opts.sansRepli');
+              const iRepli=s.indexOf('S.browser_fallback_url');
+              return iCond<iRepli?true:_echec('la condition ne gouverne pas le repli');})());
+
+            ok('AUCUN chemin ne demande l’invitation sur Samsung Internet',(()=>{
+              // ⚠ LE DEFAUT QUI A COUTE TROIS LOTS. La branche S detournait
+              // l’ECRAN d’installation ; l’ecran SUIVANT, s-welcome, porte son
+              // propre bouton « Installer l’app sur ce telephone » qui appelle
+              // installApp() en direct. Kevin passait l’ecran, arrivait sur
+              // l’accueil, touchait ce bouton, et Samsung ouvrait « Ajouter ce
+              // site a l’ecran Applis » — donc la fabrication de WebAPK, donc
+              // le refus d’Android. Je gardais une porte pendant qu’une autre
+              // restait ouverte a cote.
+              //
+              // LA GARDE EST DESORMAIS SUR LE GESTE. Les deux appelants la
+              // traversent, et cette sonde verifie qu’ils la traversent
+              // ENCORE — c’est elle qui empechera un troisieme bouton non garde.
+              for(const [nom,f] of [['installApp',installApp],['rcInstallLocal',rcInstallLocal]]){
+                const s=String(f).replace(/^\s*\/\/.*$/gm,'');
+                if(s.indexOf('_rcInstallDetourner()')<0)
+                  return _echec(nom+' declenche l’invitation sans garde');
+                // ET LA GARDE PASSE AVANT L’APPEL, sinon elle ne garde rien.
+                const iG=s.indexOf('_rcInstallDetourner()');
+                const iP=s.indexOf('__rcInstall');
+                if(iP>=0&&iG>iP) return _echec(nom+' garde APRES avoir demande');
+              }
+              // PERSONNE N’APPELLE window.__rcInstall EN DIRECT hors de ces deux
+              // fonctions : c’est ce qui rend la garde exhaustive plutot
+              // qu’esperee. La tete du fichier la DEFINIT, elle ne l’appelle pas.
+              const src=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+              const n=(src.match(/window\.__rcInstall\(\)/g)||[]).length;
+              if(n>2) return _echec(n+' appels directs a __rcInstall : la garde est contournable');
+              return true;})());
+
+            ok('La branche S n’offre plus le bouton qui mene au mur',(()=>{
+              // Je l’avais garde par principe — « on ne retire pas une
+              // capacite » — et c’etait une erreur : sur ce navigateur, cette
+              // capacite N’EN EST PAS UNE. Elle mene a « Ajouter ce site a
+              // l’ecran Applis », puis au refus du telephone.
+              const s=String(rcInstallDecider).replace(/^\s*\/\/.*$/gm,'');
+              const iS=s.indexOf('rcNavigateurSamsung()');
+              const iE=s.indexOf("return 'S'");
+              if(iS<0||iE<0) return _echec('la branche S a disparu');
+              const bloc=s.slice(iS,iE);
+              if(/ici\.style\.display='block'/.test(bloc))
+                return _echec('la branche S rallume encore le bouton d’installation locale');
+              // Le bouton existe toujours POUR LES AUTRES BRANCHES — l’ordinateur
+              // s’en sert. On ne l’a pas supprime, on l’a retire d’ICI.
+              return /ici\.style\.display='block'/.test(s)
+                ?true:_echec('le bouton local a disparu de toutes les branches');})());
+
+            ok('Le compteur nav_samsung est accepté du client ET du serveur',(()=>{
+              if(RCM_EVENEMENTS.indexOf('nav_samsung')<0)
+                return _echec('nav_samsung n’est pas dans RCM_EVENEMENTS');
+              // DISTINCT DES iab_* : ceux-là ne peuvent pas installer du tout,
+              // celui-ci installe quelque chose qu'Android refuse.
+              if(_rcIabCle('Samsung Internet')!=='iab_autre')
+                return _echec('Samsung Internet est compté comme un navigateur intégré');
+              const e=RCM_TUNNEL.find(x=>x.cles.indexOf('nav_samsung')>=0);
+              if(!e) return _echec('nav_samsung n’apparaît pas dans le tableau de bord');
+              if(e.horsTunnel!==true) return _echec('une fuite ne doit pas casser la chaîne');
+              if(e.neutre) return _echec('ce n’est pas neutre : ces gens partent');
+              if(typeof window._RC_RULES!=='string'||!window._RC_RULES) return true;
+              return window._RC_RULES.indexOf('nav_samsung')>=0
+                ?true:_echec('nav_samsung manque dans database.rules.json : le serveur le refusera');})());
+          })();
+
+          ok('Aucun compteur ne transporte autre chose qu\'un entier',(()=>{
+            // LE POINT 6 BIS DE privacy.html AFFIRME QU'AUCUN DESTINATAIRE
+            // N'EST AJOUTÉ, et qu'il ne part rien d'autre qu'un « +1 ».
+            // Cette sonde garde l'affirmation vraie.
+            const src=String(rcm).replace(/\/\/.*/g,'');
+            if(src.indexOf("{'.sv':{'increment':1}}")<0) return _echec('le corps n’est plus un simple +1');
+            if(/currentUser|localStorage|navigator\.userAgent|email/.test(src))
+              return _echec('rcm() lit quelque chose qui identifie');
+            // ET LE SERVEUR NE PREND QUE DES NOMBRES.
+            if(typeof window._RC_RULES==='string'&&window._RC_RULES
+               &&window._RC_RULES.indexOf('newData.isNumber()')<0)
+              return _echec('les règles n’exigent plus un nombre');
+            return true;})());
+        })();
+
+        // ══════ LA CAPTURE DE L'INVITATION, ET LE MANIFESTE ══════
+        ok('L\'invitation est capturée AVANT tout le reste du fichier',(()=>{
+          // beforeinstallprompt NE SE REJOUE PAS : le navigateur le tire une
+          // fois, tôt, et s'il ne trouve pas d'écouteur il passe. Celui-ci
+          // vivait à plus de quatre mégaoctets d'ici — après l'analyse de tout
+          // le fichier — et sur un téléphone lent l'événement partait avant.
+          // Le bouton d'installation ne s'affichait alors jamais.
+          const src=_prodSrc();
+          const iCap=src.indexOf("addEventListener('beforeinstallprompt'");
+          if(iCap<0) return _echec('plus aucune capture de l’invitation');
+          // AVANT LE PREMIER SCRIPT DE TRAVAIL : la balise du manifeste sert de
+          // repère, elle est dans le <head> et le bloc de capture la précède.
+          const iManif=src.indexOf('rel="manifest"');
+          if(!(iCap<iManif)) return _echec('la capture est posée après le <head>');
+          // ET DANS LE PREMIER DIXIÈME DU FICHIER : la mesure vaut mieux qu’une
+          // impression. Elle était à 94 % de la longueur.
+          if(iCap>src.length*0.1)
+            return _echec('la capture est à '+Math.round(100*iCap/src.length)+' % du fichier');
+          // UN SEUL ÉCOUTEUR. Deux, c’étaient deux vérités sur l’installabilité,
+          // et celle du bas gagnait — donc la plus tardive, donc la plus vide.
+          const n=src.split("addEventListener('beforeinstallprompt'").length-1;
+          return n===1?true:_echec(n+' écouteurs sur beforeinstallprompt');})());
+
+        ok('Les trois globales de la tête existent et sont défensives',(()=>{
+          if(!('__rcInstallEvt' in window)) return _echec('__rcInstallEvt absent');
+          if(typeof window.__rcInstall!=='function') return _echec('__rcInstall absent');
+          if(typeof window.__rcInstalled!=='boolean') return _echec('__rcInstalled absent');
+          // LE BLOC EST DANS UN try/catch : il s’exécute avant tout le reste, et
+          // s’il levait il emporterait le démarrage de l’application entière.
+          const src=_prodSrc();
+          const i=src.indexOf('window.__rcInstallEvt=null');
+          if(i<0) return _echec('l’initialisation a disparu');
+          const avant=src.slice(Math.max(0,i-400),i);
+          if(avant.lastIndexOf('try{')<0) return _echec('le bloc de tête n’est pas protégé');
+          // TROIS ISSUES, ET NON UN BOOLÉEN : « refusé » et « impossible » ne se
+          // traitent pas pareil — l’un se represente plus tard, l’autre jamais.
+          const f=String(window.__rcInstall);
+          for(const m of ['indisponible','dismissed','userChoice'])
+            if(f.indexOf(m)<0) return _echec(m+' a disparu de __rcInstall');
+          return true;})());
+
+        okA('Sans invitation, __rcInstall rend « indisponible » sans lever',(async()=>{
+          const g=window.__rcInstallEvt;
+          try{
+            window.__rcInstallEvt=null;
+            return (await window.__rcInstall())==='indisponible'
+              ?true:_echec('elle ne dit pas que rien n’est possible');
+          } finally { window.__rcInstallEvt=g; }}));
+
+        okA('Le manifeste porte son identité, ses captures et ses raccourcis',(async()=>{
+          let m=null;
+          try{ m=await (await fetch('./manifest.json',{cache:'no-store'})).json(); }
+          catch(e){ return _echec('manifeste illisible : '+((e&&e.message)||e)); }
+          // ⚠ L'IDENTITÉ EST start_url, PAS LE DOSSIER. Quand `id` est absent,
+          // la norme prend start_url : les installations existantes portent donc
+          // /app/index.html. Écrire /app/ CHANGERAIT cette identité et poserait
+          // une SECONDE icône sur l'écran d'accueil de ceux qui l'ont déjà —
+          // exactement ce que le champ existe pour empêcher.
+          if(m.id!=='/app/index.html')
+            return _echec('id = '+m.id+' : les installations existantes se dédoubleraient');
+          if(m.start_url!=='./index.html') return _echec('start_url a bougé : '+m.start_url);
+          if(m.name!=='RepCore'||m.short_name!=='RepCore') return _echec('le nom a bougé');
+          if(m.scope!=='./') return _echec('scope = '+m.scope);
+          if(!Array.isArray(m.display_override)||m.display_override[0]!=='standalone')
+            return _echec('display_override : '+JSON.stringify(m.display_override));
+          if(m.lang!=='fr'||m.dir!=='ltr') return _echec('lang/dir : '+m.lang+'/'+m.dir);
+          if(!(m.categories||[]).includes('fitness')) return _echec('categories : '+JSON.stringify(m.categories));
+          // TROIS CAPTURES AU MOINS, et au bon format : sans elles Android
+          // retombe sur la petite barre grise au lieu de la fiche pleine page.
+          const sc=m.screenshots||[];
+          if(sc.length<3) return _echec(sc.length+' capture(s)');
+          for(const s of sc){
+            if(s.sizes!=='1080x1920') return _echec('taille '+s.sizes);
+            if(s.form_factor!=='narrow') return _echec('form_factor '+s.form_factor);
+            if(s.type!=='image/png') return _echec('type '+s.type);
+            if(!s.label) return _echec('une capture sans libellé');
+          }
+          // ET ELLES SONT VRAIMENT SERVIES. Chrome les ignore EN SILENCE quand
+          // elles manquent : c'est le seul moyen de s'en apercevoir.
+          for(const s of sc){
+            let r=null;
+            try{ r=await fetch(s.src,{method:'HEAD'}); }catch(e){}
+            if(!r||!r.ok) return _echec('capture absente du serveur : '+s.src);
+          }
+          // LES RACCOURCIS NE MENENT PAS DANS LE VIDE : chaque URL correspond a
+          // un parametre que le demarrage sait lire.
+          const src=_prodSrc();
+          for(const r of (m.shortcuts||[])){
+            const q=(r.url.split('?')[1]||'').split('=')[0];
+            if(!q||src.indexOf("params.get('"+q+"')")<0)
+              return _echec('raccourci sans lien profond : '+r.url);
+            if(!(r.icons||[]).some(i=>i.sizes==='96x96'))
+              return _echec('raccourci sans icône 96x96 : '+r.name);
+          }
+          return true;}));
+
+        // ══════ L'ÉCRAN D'INSTALLATION ══════
+        //
+        // SIX SITUATIONS, ET JAMAIS DEUX BLOCS A LA FOIS. C'est la seule
+        // propriete qui compte vraiment : un Android dans le navigateur
+        // d'Instagram satisfait « Chromium » ET « navigateur integre », et lui
+        // montrer un bouton qui ne peut pas aboutir est pire que de ne rien
+        // montrer.
+        (()=>{
+          const _vrai={mm:window.matchMedia,ua:navigator.userAgent,iw:window.innerWidth,
+                       inv:window.rcInstallInvite};
+          const _poser=(o)=>{
+            Object.defineProperty(navigator,'userAgent',{value:o.ua||_vrai.ua,configurable:true});
+            Object.defineProperty(navigator,'standalone',{value:!!o.standalone,configurable:true});
+            Object.defineProperty(navigator,'maxTouchPoints',{value:o.touch||0,configurable:true});
+            Object.defineProperty(window,'innerWidth',{value:o.largeur||390,configurable:true});
+            // L'INVITE EST UNE FONCTION, et c'est ce qui rend la branche F
+            // eprouvable : `deferredPrompt` est un `let` de portee module, donc
+            // hors d'atteinte, et un Chrome qui offre l'installation prendrait
+            // toujours la branche C.
+            window.rcInstallInvite=()=>(o.invite?{}:null);
+            window.matchMedia=(q)=>({matches:/display-mode: standalone/.test(q)?!!o.autonome
+              :/pointer: coarse/.test(q)?!!o.coarse:false,media:q,
+              addListener(){},removeListener(){},addEventListener(){},removeEventListener(){}});
+          };
+          const _rendre=()=>{ window.matchMedia=_vrai.mm; window.rcInstallInvite=_vrai.inv;
+            Object.defineProperty(navigator,'userAgent',{value:_vrai.ua,configurable:true});
+            Object.defineProperty(window,'innerWidth',{value:_vrai.iw,configurable:true}); };
+          const _visibles=()=>['rc-inst-integre','rc-inst-bureau','rc-inst-menu']
+            .filter(i=>{ const b=document.getElementById(i); return b&&b.style.display!=='none'; });
+
+          ok('L\'écran d\'installation précède s-welcome dans le DOM',(()=>{
+            const i=document.getElementById('s-install'), w=document.getElementById('s-welcome');
+            if(!i) return _echec('s-install n’existe pas');
+            if(!w) return _echec('s-welcome a disparu');
+            if(!i.classList.contains('screen')||!i.classList.contains('carbon-bg'))
+              return _echec('il ne porte pas la classe des écrans : '+i.className);
+            // L'ORDRE DU DOM EST L'ORDRE DU PARCOURS : arriver sur RepCore,
+            // c'est d'abord se voir proposer de l'installer.
+            return (i.compareDocumentPosition(w)&Node.DOCUMENT_POSITION_FOLLOWING)
+              ?true:_echec('s-install est placé APRÈS s-welcome');})());
+
+          ok('Les six situations donnent six branches, et une seule à la fois',(()=>{
+            const cas=[
+              ['A',{autonome:true,coarse:true},[]],
+              ['B',{ua:'Android Instagram 300.0',coarse:true},['rc-inst-integre']],
+              ['E',{ua:'Windows Chrome/152',coarse:false,largeur:1440},['rc-inst-bureau']],
+              ['D',{ua:'iPhone; CPU iPhone OS 17_0 Safari/605',coarse:true},[]],
+              ['F',{ua:'Android Firefox/120.0',coarse:true},['rc-inst-menu']],
+              ['C',{ua:'Android Chrome/152 Mobile',coarse:true,invite:true},[]]
+            ];
+            try{
+              for(const [attendue,o,blocs] of cas){
+                _poser(o);
+                const b=rcInstallDecider();
+                if(b!==attendue) return _echec(o.ua+' → branche '+b+' au lieu de '+attendue);
+                const v=_visibles();
+                if(v.join(',')!==blocs.join(','))
+                  return _echec('branche '+attendue+' : blocs visibles '+(v.join(',')||'aucun')
+                    +' au lieu de '+(blocs.join(',')||'aucun'));
+              }
+              return true;
+            } finally { _rendre(); }})());
+
+          ok('Un navigateur intégré ne se voit JAMAIS proposer d\'installer',(()=>{
+            // Le piège exact : Android + Instagram. Les deux conditions sont
+            // vraies, et l'ordre des tests décide. Si la branche C passait
+            // devant, le bouton promettrait ce qui ne peut pas se produire.
+            try{
+              _poser({ua:'Mozilla/5.0 (Linux; Android 13) Instagram 300.0',coarse:true,invite:true});
+              if(rcInstallDecider()!=='B') return _echec('le navigateur intégré a été dépassé');
+              const p=document.getElementById('rc-inst-principal');
+              return /NAVIGATEUR/i.test(p.textContent)
+                ?true:_echec('le bouton propose autre chose : '+p.textContent);
+            } finally { _rendre(); }})());
+
+          ok('« Continuer sans installer » est un lien, jamais un bouton plein',(()=>{
+            // L'installation est le chemin par défaut. Une sortie qui pèse
+            // autant que l'entrée n'est plus une sortie, c'est un choix.
+            const l=document.getElementById('rc-inst-passer');
+            if(!l) return _echec('le lien de sortie a disparu');
+            if(l.tagName!=='A') return _echec('c’est un '+l.tagName+', pas un lien');
+            const st=l.getAttribute('style')||'';
+            if(/background:\s*(#|rgb|var\(--red)/i.test(st))
+              return _echec('il porte un fond plein');
+            if(!/rcInstallPasser\(\)/.test(l.getAttribute('onclick')||''))
+              return _echec('il ne compte pas le refus');
+            return /go\('s-welcome'\)/.test(String(rcInstallPasser))
+              ?true:_echec('il ne mène pas à l’accueil');})());
+
+          ok('L\'écran de départ cède la place dans les trois cas prévus',(()=>{
+            const CLE='rc_install_refus';
+            const _r=localStorage.getItem(CLE), _s=localStorage.getItem('rc_session');
+            try{
+              _poser({coarse:true});
+              localStorage.removeItem(CLE); localStorage.removeItem('rc_session');
+              if(rcEcranDeDepart()!=='s-install') return _echec('un visiteur neuf n’arrive pas sur l’installation');
+              // DEUX REFUS SUFFISENT : insister une troisième fois n'est plus
+              // une proposition, c'est du harcèlement.
+              localStorage.setItem(CLE,'2');
+              if(rcEcranDeDepart()!=='s-welcome') return _echec('deux refus ne suffisent pas');
+              localStorage.setItem(CLE,'1');
+              if(rcEcranDeDepart()!=='s-install') return _echec('un seul refus ferme déjà la porte');
+              localStorage.removeItem(CLE);
+              localStorage.setItem('rc_session','{}');
+              if(rcEcranDeDepart()!=='s-welcome') return _echec('une session ouverte revoit l’offre');
+              localStorage.removeItem('rc_session');
+              // ET DÉJÀ INSTALLÉ : il n'y a plus rien à proposer.
+              _poser({autonome:true,coarse:true});
+              if(rcEcranDeDepart()!=='s-welcome') return _echec('l’app autonome repropose l’installation');
+              // LE FRAGMENT #install PASSE DEVANT LE COMPTEUR : c'est le lien
+              // « INSTALLER L'APPLICATION » de la page de vente, et on vient de
+              // demander à installer.
+              _poser({coarse:true});
+              localStorage.setItem(CLE,'5');
+              // LE FRAGMENT EST PASSE, PAS ECRIT. L'ecrire changerait l'URL de
+              // la page pour tout ce qui suit — la sonde passait au premier tour
+              // et tombait aux suivants, ce qui est exactement le defaut que le
+              // lanceur d'idempotence est la pour attraper.
+              if(rcEcranDeDepart('#install')!=='s-install')
+                return _echec('#install ne force pas l’écran');
+              if(rcEcranDeDepart('')!=='s-welcome')
+                return _echec('sans fragment, cinq refus ne ferment plus la porte');
+              return true;
+            } finally {
+              _rendre();
+              if(_r===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_r);
+              if(_s===null) localStorage.removeItem('rc_session'); else localStorage.setItem('rc_session',_s);
+            }})());
+
+          ok('La modale iOS existante est réutilisée, pas réécrite',(()=>{
+            // Elle explique le geste « Partager → Sur l'écran d'accueil » et
+            // elle marche : la réécrire aurait été refaire ce qui existe.
+            if(!document.getElementById('ios-install-modal'))
+              return _echec('la modale iOS a disparu');
+            return /showIosInstallGuide\(\)/.test(String(rcInstallDecider))
+              ?true:_echec('la branche iOS ne l’ouvre pas');})());
+
+          // ══ CE QUI DECIDE, ET QUAND ══════════════════════════════════════
+          //
+          // LES SIX BRANCHES CI-DESSUS SONT JUSTES DEPUIS LE PREMIER JOUR, et
+          // la suite le verifiait — en APPELANT rcInstallDecider elle-meme.
+          // Le produit, lui, ne l'appelait QUE depuis _rcInviteArrivee, c'est
+          // a dire uniquement quand le navigateur envoyait
+          // beforeinstallprompt. Tous les autres chemins — le routage de
+          // demarrage, le fragment #install de la page de vente, la banniere
+          // de relance — ouvraient l'ecran tel qu'il est ecrit dans le
+          // document : tous les blocs caches, le bouton sans libelle, le
+          // sous-titre vide. Il ne restait que « Installe RepCore. » et le
+          // lien de sortie.
+          //
+          // C'est le defaut que six assertions vertes ne pouvaient pas voir :
+          // elles eprouvaient la decision, jamais son declenchement. La sonde
+          // OUVRE donc l'ecran comme l'application l'ouvre, et regarde.
+          ok('Ouvrir l\'écran d\'installation le décide, sans attendre l\'invitation',(()=>{
+            const _avant=document.querySelector('.screen.active')?.id;
+            // ON REND L'ECRAN COMME ON L'A TROUVE, et pas seulement les bouchons.
+            // Les branches A, E et F VIDENT le libelle du bouton principal : le
+            // laisser vide faisait tomber « Aucun bouton rendu n'est depourvu de
+            // glyphe » quatre-vingts assertions plus loin, sur un defaut qui
+            // n'existait que dans l'etat laisse par cette sonde-ci.
+            const _p=document.getElementById('rc-inst-principal');
+            const _s=document.getElementById('rc-inst-sous');
+            const _x=document.getElementById('rc-inst-passer');
+            const BLOCS=['rc-inst-integre','rc-inst-bureau','rc-inst-menu'];
+            const _etat={p:_p&&_p.textContent,pd:_p&&_p.style.display,s:_s&&_s.textContent,
+              x:_x&&_x.textContent,b:BLOCS.map(i=>{const b=document.getElementById(i);
+                return b?b.style.display:null;})};
+            try{
+              // Firefox Android : la branche F, celle qui n'a besoin d'aucune
+              // invitation du navigateur — donc celle qui prouve que la
+              // decision est prise a l'ouverture et non a l'arrivee de
+              // beforeinstallprompt.
+              _poser({ua:'Mozilla/5.0 (Android 13; Mobile) Firefox/120.0',coarse:true});
+              // ON REPART DE L'ECRAN MUET, celui du document : sinon un appel
+              // precedent aurait deja tout allume et la sonde ne mesurerait
+              // que son propre passe.
+              document.getElementById('rc-inst-sous').textContent='';
+              ['rc-inst-integre','rc-inst-bureau','rc-inst-menu']
+                .forEach(i=>{ const b=document.getElementById(i); if(b) b.style.display='none'; });
+              go('s-install');
+              if(!document.getElementById('rc-inst-sous').textContent)
+                return _echec('l’écran s’ouvre sans un mot d’explication');
+              const v=_visibles();
+              if(v.join(',')!=='rc-inst-menu')
+                return _echec('blocs visibles : '+(v.join(',')||'aucun')+' au lieu de rc-inst-menu');
+              // ET LA REGLE VIT DANS go(), pas chez un appelant : quatre
+              // chemins menent a cet ecran et go() est le seul par lequel ils
+              // passent tous.
+              return /rcInstallDecider\(\)/.test(String(go))
+                ?true:_echec('go() ne décide plus rien : la règle est repartie chez les appelants');
+            } finally {
+              _rendre();
+              if(_p){ _p.textContent=_etat.p; _p.style.display=_etat.pd; }
+              if(_s) _s.textContent=_etat.s;
+              if(_x) _x.textContent=_etat.x;
+              BLOCS.forEach((i,n)=>{ const b=document.getElementById(i);
+                if(b&&_etat.b[n]!=null) b.style.display=_etat.b[n]; });
+              if(_avant) go(_avant);
+            }})());
+
+          // ══ LE LIEN COURT ════════════════════════════════════════════════
+          //
+          // /i EST UNE ADRESSE, PAS UN EMPLACEMENT. L'hebergement le
+          // REECRIVAIT vers /app/index.html : la page arrivait, mais le
+          // navigateur la croyait posee a la racine, et chacune de ses
+          // adresses relatives se resolvait une case trop haut.
+          //   ./icons/logo.png -> /icons/logo.png -> 404
+          //   ./manifest.json  -> /manifest.json  -> 404
+          //   ./sw.js          -> /sw.js          -> 404
+          // Mesure du 02/09/2026 sur https://repcore-sync.web.app/i : le logo
+          // en image cassee, aucun service worker, et AUCUN MANIFESTE — donc
+          // pas de beforeinstallprompt, donc un ecran d'installation qui
+          // n'installe rien. Le lien court est celui du QR et du flyer : les
+          // seuls a qui on demande d'installer etaient les seuls a ne pas le
+          // pouvoir.
+          ok('Arrivé par le lien court, le document repart de /app/',(()=>{
+            const s=_prodSrc();
+            const g=s.indexOf('location.replace(\'/app/\'');
+            if(g<0) return _echec('le filet du lien court a disparu');
+            if(s.indexOf('_rcP===\'/i\'')<0) return _echec('il ne reconnaît plus /i');
+            // AVANT TOUT LE RESTE, et la capture de l'invitation est le
+            // premier script du document : un document qu'on va remplacer ne
+            // merite ni qu'on analyse ses quatre megaoctets, ni qu'on y pose
+            // des ecouteurs.
+            // ⚠ LA SONDE MATCHAIT SON PROPRE SUJET : le commentaire du filet
+            // NOMME beforeinstallprompt pour expliquer ce qui manquait, et le mot
+            // arrivait donc avant lui. On vise la POSE de l'ecouteur, pas le mot.
+            const b=s.indexOf('addEventListener(\'beforeinstallprompt\'');
+            if(b>=0&&g>b) return _echec('le filet arrive après la capture de l’invitation');
+            // ET IL NE PEUT PAS BOUCLER : apres remplacement le chemin vaut
+            // /app/, et la condition est fausse.
+            const _rejoue=p=>(p==='/i'||p==='/i/');
+            return _rejoue('/app/')?_echec('la condition se rejouerait sur /app/'):true;})());
+
+          okA('L\'hébergement REDIRIGE le lien court, il ne le réécrit pas',(async()=>{
+            // LA DIFFERENCE EST TOUT LE DEFAUT. Une reecriture sert la page
+            // SOUS /i ; une redirection renvoie le navigateur sur /app/, ou
+            // les adresses relatives se resolvent. Le fragment #install force
+            // l'ecran meme apres deux refus — on vient de scanner un QR qui
+            // dit « installe », ce n'est pas le moment de faire valoir un
+            // refus d'hier.
+            let t=null;
+            try{ const r=await fetch('../firebase.json',{cache:'no-store'});
+                 if(r.ok) t=await r.text(); }catch(e){}
+            // SERVI DEPUIS _site/, LE FICHIER N'EST PAS LA — _site ne contient
+            // que app/. La sonde ne vaut que la ou la racine du depot est
+            // servie, et elle le dit plutot que de tomber, comme celle des
+            // regles de la base.
+            if(t==null) return true;
+            let j; try{ j=JSON.parse(t); }
+            catch(e){ return _echec('firebase.json est illisible : '+((e&&e.message)||e)); }
+            const h=(j&&j.hosting)||{};
+            const rw=(h.rewrites||[]).find(x=>String(x&&x.source)==='/i');
+            if(rw) return _echec('/i est encore RÉÉCRIT vers '+rw.destination
+              +' : la page arriverait sous /i et chercherait ses ressources à la racine');
+            const rd=(h.redirects||[]).find(x=>String(x&&x.source)==='/i');
+            if(!rd) return _echec('/i ne mène plus nulle part');
+            if(String(rd.destination||'').indexOf('/app/')!==0)
+              return _echec('/i ne renvoie pas dans /app/ : '+rd.destination);
+            return true;}));
+        })();
+
         // ══════ LE PLANCHER TYPOGRAPHIQUE ══════
         // 11 px est la plus petite taille admise. En dessous, un libellé en
         // majuscules très espacées — ceux qui portent le sens — n'est plus
@@ -8937,22 +11169,37 @@ function testExercices(){
               // les sept libellés sont le premier élément que le plancher
               // visait. Quinze autres règles passent sous 11 px sur d'autres
               // écrans — hors portée d'ici, et signalées comme telles.
-              // LA BARRE D ONGLETS EST HORS PLANCHER, et c est mesure, pas
-              // concede : sept libelles a 11px demandent 412px de large et
-              // debordent sur 375 comme sur 390. A 10px ils tiennent des
-              // 359px. Un libelle rapetisse reste lisible ; deux libelles qui
-              // se chevauchent, non. Le plancher tient partout ailleurs.
-              // La barre d onglets est la SEULE exception, et elle est mesuree :
-              // sept libelles a 11px demandent 412px et debordent sur 375 comme
-              // sur 390. A 10px ils tiennent des 359px. Un libelle rapetisse
-              // reste lisible, deux libelles qui se chevauchent non.
-              if(/tab-btn|tab-bar|client-tabbar/.test(r.selectorText)) continue;
+              // LA BARRE D ONGLETS EST HORS PLANCHER SUR UN PETIT ECRAN, et
+              // c est mesure, pas concede : sept libelles a 11px demandent
+              // 392px de large — interlettrage nul, 2px de marge — et debordent
+              // sur 375 comme sur 390. A 10px ils tiennent des 359px. Un
+              // libelle rapetisse reste lisible ; deux qui se chevauchent, non.
+              //
+              // MAIS L EXCEPTION S ARRETE LA, et c est ce qui manquait ici : la
+              // regle de BASE portait 10px elle aussi, donc sur un moniteur de
+              // 1280 ou la place ne manque pas. Une mesure faite pour un iPhone
+              // de 375px gouvernait tous les ecrans. Cette sonde sautait les
+              // regles .tab-btn en bloc et ne pouvait pas le voir.
+              //
+              // On distingue donc les deux : sous la requete media qui vise
+              // 420px ou moins, 10px est admis ; PARTOUT AILLEURS le plancher
+              // s applique, barre d onglets comprise.
+              const _petitEcran=/max-width\s*:\s*(\d+)px/.exec(ou||'');
+              const _exempte=!!(_petitEcran&&parseInt(_petitEcran[1],10)<=420);
+              const _onglet=/tab-btn|tab-bar|client-tabbar/.test(r.selectorText);
+              if(_onglet&&_exempte) continue;
               // Le plancher tient partout ailleurs — y compris sur le cadenas
               // d onglet, qui n a aucune raison d y echapper.
-              if(!/tab-lock/.test(r.selectorText)) continue;
+              if(!_onglet&&!/tab-lock/.test(r.selectorText)) continue;
               const v=(r.style.getPropertyValue('font-size')||'').trim();
+              // LES JETONS COMPTENT AUTANT QUE LES PIXELS. La base ne dit plus
+              // « 10px » mais « var(--fs-2xs) », qui vaut 10 : une sonde qui ne
+              // lirait que les valeurs figees laisserait revenir le defaut sous
+              // son autre nom.
+              const _jetons={'var(--fs-2xs)':10,'var(--fs-xs)':11};
               const m=/^([0-9.]+)px$/.exec(v);
-              if(m&&parseFloat(m[1])<11)
+              const px=m?parseFloat(m[1]):(_jetons[v]!==undefined?_jetons[v]:null);
+              if(px!==null&&px<11)
                 fautes.push((ou?ou+' ':'')+r.selectorText+' → '+v);
             }
           };
@@ -8967,6 +11214,44 @@ function testExercices(){
           // Et l'échelle existe toujours, avec son plancher à 11.
           const xs=getComputedStyle(document.documentElement).getPropertyValue('--fs-xs').trim();
           return xs==='11px'?true:_echec('--fs-xs vaut '+xs);})());
+        ok('L\'exception de la barre d\'onglets survit, et elle seule',(()=>{
+          // LES DEUX MOITIES DE LA MEME REGLE, et il faut les deux : sans la
+          // base au plancher, les sept libelles restent sous 11px sur tous les
+          // ecrans ; sans l exception, ils debordent sur un iPhone de 375px.
+          // Corriger l une en cassant l autre est le risque exact de ce lot.
+          const css=Array.from(document.querySelectorAll('style'))
+            .map(x=>x.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+          const base=/\.tab-btn\{[^}]*font-size:var\(--fs-xs\)/.test(css);
+          if(!base) return _echec('la règle de base ne pose plus le plancher');
+          if(!/@media\(max-width:420px\)\{\.tab-btn\{[^}]*font-size:var\(--fs-2xs\)/.test(css))
+            return _echec('l’exception mesurée du petit écran a disparu');
+          // ET LE DEFILEMENT SOUS 360px, qui est le vrai filet : meme a 10px,
+          // 359px ne rentrent pas dans 320. On ne rapetisse pas plus, on fait
+          // defiler.
+          return /@media\(max-width:359px\)/.test(css)
+            ?true:_echec('le repli en défilement sous 360px a disparu');})());
+        ok('Les sept libelles d\'onglet tiennent sur une ligne',(()=>{
+          // LE RISQUE DE CE LOT, mesure plutot que suppose : une police plus
+          // grande peut faire passer un libelle a la ligne, ou le tronquer.
+          const bar=document.getElementById('client-tabbar');
+          if(!bar) return _echec('barre d’onglets introuvable');
+          const vis=bar.classList.contains('show');
+          bar.classList.add('show');
+          try{
+            const btns=[...bar.querySelectorAll('.tab-btn')];
+            if(btns.length<7) return _echec(btns.length+' onglet(s) seulement');
+            // UNE SEULE LIGNE : toutes les hauteurs egales. Un libelle qui
+            // passe a la ligne rend son bouton plus haut que les autres.
+            const h=[...new Set(btns.map(b=>Math.round(b.getBoundingClientRect().height)))];
+            if(h.length>1) return _echec('hauteurs inégales, un libellé est passé à la ligne : '+h.join('/'));
+            // ET RIEN N EST COUPE. .tab-btn porte overflow:hidden : un
+            // debordement ne se voit pas, il ronge la fin du mot en silence.
+            const coupes=btns.filter(b=>b.scrollWidth>b.clientWidth+1)
+              .map(b=>b.textContent.trim());
+            if(coupes.length) return _echec('libellé(s) tronqué(s) : '+coupes.join(', '));
+            return bar.scrollWidth<=bar.clientWidth+1
+              ?true:_echec('la barre déborde de '+Math.round(bar.scrollWidth-bar.clientWidth)+'px');
+          } finally { if(!vis) bar.classList.remove('show'); }})());
 
         // ══════ AUCUNE COMMANDE INVISIBLE ══════
         ok('Aucun bouton rendu n\'est dépourvu de glyphe',(()=>{
@@ -9629,7 +11914,14 @@ function testExercices(){
           const prod=tout;
           const i=prod.indexOf('function importFromURL');
           if(i<0) return _echec('l\'IIFE d\'import a disparu');
-          const corps=prod.slice(i,i+3000);
+          // ⚠ LA FENETRE ETAIT FIGEE A 3 000 CARACTERES, et c'est une fausse
+          // limite : le jour ou un parametre de plus est ajoute a cette
+          // fonction — ce qui est arrive avec ?diete=1 — le replaceState sort
+          // de la fenetre et la sonde annonce un nettoyage disparu qui est
+          // toujours la. On borne sur la FIN REELLE de la fonction : la
+          // declaration suivante en debut de ligne.
+          const _fin=prod.slice(i+10).search(/\r?\nfunction \w/);
+          const corps=prod.slice(i,_fin>0?i+10+_fin:i+8000);
           if(corps.indexOf('history.replaceState')<0)
             return _echec('l\'adresse n\'est plus nettoyée');
           const iF=corps.indexOf('finally'), iR=corps.indexOf('history.replaceState');
@@ -11754,9 +14046,17 @@ function testExercices(){
         ok('TOUTES les fonctions d\'extraction refusent, drapeau baissé',(()=>{
           // Le cahier des charges est explicite : une règle d'accès ne se
           // résume jamais à un bouton masqué. Chaque fonction se garde.
+          // ⚠ _ocrImage N'EST PLUS DANS CETTE LISTE, et c'est une EXCEPTION
+          // assumee, pas un oubli. Son corps portait une clef d'API ECRITE EN
+          // CLAIR : index.html etant servi publiquement, la clef etait lisible
+          // par n'importe qui, drapeau baisse ou non. Un garde sur le chemin
+          // d'appel ne verrouille rien quand le secret est dans le texte de la
+          // page. Le corps a donc ete retire — voir l'assertion dediee juste
+          // apres, qui verifie qu'elle leve TOUJOURS et ne porte plus ni clef
+          // ni point d'acces.
           const attendues=['analyzeProgPhotos','analyzePhotoWithClaude',
             'importVideoLinksFromPdf','loadProgPhoto2','parsePdfProgramme',
-            'triggerPdfProgrammeImport','_parsePdfFromDriveFile','_ocrImage'];
+            'triggerPdfProgrammeImport','_parsePdfFromDriveFile'];
           for(const nom of attendues){
             const f=window[nom];
             if(typeof f!=='function') return _echec('disparue : '+nom);
@@ -11764,20 +14064,49 @@ function testExercices(){
               return _echec(nom+' n\'est pas gardée');
           }
           return true;})());
-        ok('Le code d\'extraction est DÉSACTIVÉ, pas supprimé',(()=>{
-          // Couper une fonctionnalité dont on ne peut pas prouver que plus
-          // personne ne s'en sert, c'est la désactiver — pas l'effacer.
-          // Remettre le drapeau à true doit tout rouvrir.
+        ok('Le code d\'extraction est DÉSACTIVÉ, pas supprimé — sauf _ocrImage',(()=>{
+          // La règle du projet : couper une fonctionnalité dont on ne peut pas
+          // prouver que plus personne ne s'en sert, c'est la DÉSACTIVER, pas
+          // l'effacer. Remettre le drapeau à true doit tout rouvrir.
+          //
+          // ⚠ UNE EXCEPTION, ET UNE SEULE. _ocrImage portait une clef d'API en
+          // clair dans un fichier servi publiquement — vivante, vérifiée le
+          // 02/09/2026. Une règle de préservation ne peut pas justifier de
+          // laisser un secret public en place, et le vider était le seul moyen
+          // de le retirer d'index.html.
+          //
+          // LA CONSÉQUENCE EST RÉELLE ET ELLE EST ÉCRITE ICI : remettre
+          // LEGACY_PDF_IMPORT à true rouvrirait les sept autres fonctions mais
+          // PAS la lecture de texte. Restaurer celle-ci demanderait une clef
+          // neuve — et alors, de ne plus l'écrire dans le fichier.
           for(const nom of ['analyzeProgPhotos','parsePdfProgramme','_ocrImage',
                             'importVideoLinksFromPdf','_loadPdfJs']){
             if(typeof window[nom]!=='function') return _echec('supprimée : '+nom);
           }
           // Le corps est toujours là : une fonction réduite à son refus ferait
-          // moins de 200 caractères.
+          // moins de 200 caractères. _ocrImage est justement celle-là.
           if(String(analyzeProgPhotos).length<400) return _echec('analyzeProgPhotos est vidée');
-          if(String(_ocrImage).indexOf('ocr.space')<0&&String(_ocrImage).length<300)
-            return _echec('_ocrImage est vidée');
+          if(String(parsePdfProgramme).length<400) return _echec('parsePdfProgramme est vidée');
           return true;})());
+        ok('Aucune clef d\'API n\'est écrite dans le fichier servi',(()=>{
+          // LE FICHIER EST PUBLIC. index.html est servi tel quel : tout secret
+          // qui y figure est lisible par n'importe quel visiteur, quel que soit
+          // le drapeau qui garde le chemin d'appel.
+          const src=_prodSrc();
+          // La clef OCR.space retirée le 02/09/2026, et sa forme générale : un
+          // K suivi de quatorze chiffres.
+          const k=src.match(/\bK\d{14}\b/g);
+          if(k) return _echec('clef de type OCR.space : '+k[0]);
+          // ET LE POINT D'ACCÈS AVEC ELLE — hors commentaires, qui racontent
+          // précisément ce retrait et le nomment donc forcément.
+          const nu=src.split('\n').filter(l=>!/^\s*(\/\/|\*)/.test(l)).join('\n');
+          if(/fetch\([^)]*api\.ocr\.space/.test(nu))
+            return _echec('l’appel à api.ocr.space est revenu');
+          // _ocrImage LÈVE TOUJOURS, sans rien tenter.
+          const s=String(_ocrImage);
+          if(s.indexOf('apikey')>=0) return _echec('_ocrImage porte encore une clef');
+          return /throw new Error/.test(s)
+            ?true:_echec('_ocrImage ne refuse plus');})());
         ok('Le sous-traitant OCR n\'est plus appelé du tout',(()=>{
           // api.ocr.space n'est appelé QUE par l'import de séance : on a
           // vérifié les huit appelants. Drapeau baissé, plus une requête ne
@@ -12510,8 +14839,23 @@ function testExercices(){
           if(!(iGarde<iEcrit)) return _echec('le garde vient après l\'écriture locale');
           if(!(iGarde<iLien)) return _echec('le garde vient après le rattachement');
           // Et il court-circuite : sans return, le rattachement suivrait.
-          return /if\(_annoncerDejaRattache\(coach\)\)return;/.test(src)
-            ?true:_echec('le garde ne court-circuite pas');})());
+          //
+          // ⚠ ON NE FIGE PLUS LA FORME DE LA CONDITION. Elle exigeait
+          // `if(_annoncerDejaRattache(coach))return;` au caractère près ; elle
+          // s'est enrichie et vaut désormais
+          // `if(!_memeCoachQueLien(coach)&&_annoncerDejaRattache(coach))return;`
+          // — le garde ne s'invite plus quand c'est le MÊME coach, ce que
+          // l'assertion juste au-dessus vérifie par ailleurs. C'est un progrès,
+          // pas une régression, et le test tombait dessus.
+          //
+          // Ce qui doit être garanti : l'appel au garde décide d'un `return`
+          // dans la MÊME instruction. La condition peut s'enrichir encore.
+          // [^;{]* et non [^)]* : la condition contient elle-même un appel —
+          // _memeCoachQueLien(coach) — dont la parenthèse fermante arrêtait le
+          // motif. On s'arrête à l'instruction, pas à la première parenthèse.
+          return /if\([^;{]*_annoncerDejaRattache\(coach\)\)return;/.test(src)
+            ?true:_echec('le garde ne court-circuite pas : « '
+              +((src.match(/.{0,60}_annoncerDejaRattache\(coach\).{0,30}/)||['(introuvable)'])[0])+' »');})());
         // ── F-31 : le bloc d'entraînement ────────────────────────────────
         // Un lundi fixe, pour que les assertions ne dépendent pas du jour où
         // elles tournent : le lundi de la semaine en cours.
@@ -12896,7 +15240,25 @@ function testExercices(){
           // Drapeau levé : le bouton revient.
           return _htmlBoutonRemplacer(0,woState.exercises[0])!==''
             ?true:_echec('le bouton ne revient pas après la levée');})());
-        ok('La liste ne propose jamais l\'exercice courant lui-même',(()=>{
+        // ══ LE CATALOGUE EST RESERVE AU COACH ════════════════════════════
+        //
+        // Les quatre assertions qui suivent interrogeaient candidatsRemplacement
+        // depuis le fixture ATHLETE pose en tete de ce bloc. Le produit a change
+        // depuis — « la possibilite de changer l'exercice de deux facons, pour
+        // les coachs uniquement » — et la garde est desormais A LA SOURCE :
+        // `if(currentUser.role!=='coach') return []`. L'athlete, lui, ecrit
+        // librement le nom du mouvement qu'il a fait.
+        //
+        // DEUX D'ENTRE ELLES TOMBAIENT, les deux autres PASSAIENT SUR DU VIDE :
+        // « la liste est alphabetique » est vrai d'une liste vide, et « l'ordre
+        // ne change pas selon l'exercice » aussi. Ce n'est pas une regression du
+        // produit : ce sont les sondes qui decrivaient un comportement retire.
+        //
+        // Elles passent donc par un coach, et le chemin de l'athlete — qui
+        // n'etait couvert nulle part — recoit sa propre assertion plus bas.
+        const _coach=f=>{ const _r=currentUser.role; currentUser.role='coach';
+          try{ return f(); } finally { currentUser.role=_r; } };
+        ok('La liste ne propose jamais l\'exercice courant lui-même',(()=>_coach(()=>{
           const l=candidatsRemplacement('DEVELOPPE COUCHE BARRE','');
           if(!l.length) return _echec('liste vide');
           if(l.some(n=>exKey(n)===exKey('DEVELOPPE COUCHE BARRE')))
@@ -12904,8 +15266,41 @@ function testExercices(){
           // Le posing n'est pas un mouvement de remplacement.
           if(l.some(n=>/DOUBLE BICEPS|LAT SPREAD|VACUUM/.test(n)))
             return _echec('le posing est proposé');
-          return true;})());
-        ok('La recherche ignore accents et casse, et exige TOUS les mots',(()=>{
+          return true;})()));
+        ok('Un athlète ne reçoit AUCUN candidat, et saisit lui-même',(()=>{
+          // LA GARDE EST A LA SOURCE, et le commentaire du produit dit pourquoi :
+          // « un ecran qui n'affiche pas une liste qu'il a quand meme construite
+          // reste une fuite en attente ». On le verifie donc sur la fonction, et
+          // pas seulement sur ce que la modale montre.
+          if(currentUser.role==='coach') return _echec('le fixture n’est plus un athlète');
+          if(candidatsRemplacement('DEVELOPPE COUCHE BARRE','').length)
+            return _echec('un athlète reçoit des candidats');
+          if(candidatsRemplacement('','couché').length)
+            return _echec('la recherche rend des candidats à un athlète');
+          // ET IL A UN CHEMIN : la saisie libre, sinon le bouton ne mènerait
+          // nulle part.
+          const _wo=(typeof woState!=='undefined')?woState:undefined;
+          try{
+            woState={exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8'}],
+              sessionData:{},currentEx:0};
+            if(!ouvrirRemplacement(0)) return _echec('la modale ne s’ouvre pas');
+            if(document.getElementById('rempl-liste'))
+              return _echec('la liste du coach est rendue à un athlète');
+            const i=document.getElementById('rempl-manuel');
+            if(!i) return _echec('aucune saisie libre');
+            // Le nom est NETTOYE mais jamais devine — et trois caractères au
+            // moins, sinon le coach lit une initiale.
+            i.value='ab';
+            if(validerRemplacementManuel()!==false) return _echec('deux caractères passent');
+            i.value='DEVELOPPE COUCHE BARRE';
+            if(validerRemplacementManuel()!==false)
+              return _echec('on peut « remplacer » par le mouvement en cours');
+            i.value='  presse   inclinée  ';
+            if(validerRemplacementManuel()!==true) return _echec('une saisie valable est refusée');
+            return woState.exercises[0].name==='presse inclinée'
+              ?true:_echec('nom appliqué : '+woState.exercises[0].name);
+          } finally { closeModal(); woState=_wo; }})());
+        ok('La recherche ignore accents et casse, et exige TOUS les mots',(()=>_coach(()=>{
           const a=candidatsRemplacement('','couché barre');
           if(!a.length) return _echec('« couché barre » ne rend rien');
           if(!a.some(n=>exKey(n)==='DEVELOPPE COUCHE BARRE'))
@@ -12915,8 +15310,8 @@ function testExercices(){
             return _echec('deux mots élargissent au lieu de resserrer');
           // Une requête qui ne correspond à rien rend zéro, pas tout.
           return candidatsRemplacement('','zorglub').length===0
-            ?true:_echec('une requête absurde rend des résultats');})());
-        ok('Le lot 1 ne CLASSE rien : la liste ne dépend pas de l\'exercice',(()=>{
+            ?true:_echec('une requête absurde rend des résultats');})()));
+        ok('Le lot 1 ne CLASSE rien : la liste ne dépend pas de l\'exercice',(()=>_coach(()=>{
           // Garde-fou de périmètre. Si un tri par pertinence apparaissait ici,
           // le lot 2 aurait été livré en douce avec le lot 1.
           const a=candidatsRemplacement('DEVELOPPE COUCHE BARRE','');
@@ -12926,13 +15321,20 @@ function testExercices(){
           for(let i=1;i<ordreA.length;i++) if(ordreA[i]<ordreA[i-1])
             return _echec('l\'ordre change selon l\'exercice remplacé');
           // Et l'ordre est bien alphabétique, pas un classement déguisé.
+          // ET LA LISTE N'EST PAS VIDE : sans ce garde, « elle est alphabétique »
+          // et « son ordre ne change pas » sont vrais de rien du tout. C'est
+          // exactement ainsi que cette assertion est restée verte pendant que le
+          // catalogue lui était fermé.
+          if(!a.length||!b.length) return _echec('liste vide : le test ne mesure rien');
           const trie=a.slice().sort();
           return a.join('|')===trie.join('|')
-            ?true:_echec('la liste n\'est pas alphabétique');})());
+            ?true:_echec('la liste n\'est pas alphabétique');})()));
         ok('Choisir remplace pour aujourd\'hui, sans toucher au programme',(()=>{
           // Réutilise _appliquerSubstitut tel quel : journal, séries remises à
           // zéro, sessions_config intact.
-          currentUser={id:'a1',email:'a@t',role:'athlete',
+          // COACH : c'est lui qui a la liste. Le chemin de l'athlète — saisie
+          // libre — est couvert par l'assertion dédiée plus haut.
+          currentUser={id:'a1',email:'a@t',role:'coach',
             sessions_config:[{day:'Lundi',name:'HAUT',active:true,
               exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8'}]}]};
           woState={exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8'}],
@@ -13825,6 +16227,2526 @@ function testExercices(){
         // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
         // moindre await — donc observable depuis une suite synchrone. La branche
         // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        // ══════ LE BILAN DE SÉANCE EN IMAGE ══════
+        (()=>{
+          const SESS=()=>({id:'s1',date:new Date('2026-09-03T18:30:00').getTime(),
+            name:'Push — Pecs',slot:1,duration:67,sets:18,setsPlanned:20,volume:12480,
+            data:{
+              // ⚠ LA DERNIERE SERIE EST LA PLUS LEGERE, et c'est ce qui rend la
+              // fixture utile : sans elle, « la plus lourde » et « la derniere
+              // validee » donnaient la meme reponse, et remplacer l'une par
+              // l'autre ne faisait rien tomber.
+              'Développé couché barre':{sets:[
+                {weight:'82.5',reps:'8',done:true},{weight:'85',reps:'6',done:true},
+                {weight:'85',reps:'7',done:true},{weight:'70',reps:'12',done:true}]},
+              'Tractions strictes':{sets:[{reps:'12',done:true},{reps:'10',done:true}]},
+              'Jamais validé':{sets:[{weight:'50',reps:'10',done:false}]}}});
+
+          ok('L\'image reprend les chiffres de l\'écran, elle ne les recalcule pas',(()=>{
+            // Deux calculs du même tonnage finiraient par ne plus dire la même
+            // chose, et l'image contredirait l'écran qu'on venait de lire.
+            const s=SESS();
+            const d=bilanSeanceDonnees(s,null);
+            if(!d) return _echec('aucune donnée');
+            if(d.volume!==12480) return _echec('volume : '+d.volume);
+            if(d.mins!==67||d.series!==18||d.seriesPrevues!==20)
+              return _echec('chiffres : '+d.mins+'/'+d.series+'/'+d.seriesPrevues);
+            // On change le tonnage de la séance : l'image SUIT, elle ne
+            // recompte pas.
+            const s2=Object.assign({},s,{volume:99999,duration:5});
+            const d2=bilanSeanceDonnees(s2,null);
+            if(d2.volume!==99999||d2.mins!==5)
+              return _echec('l’image recalcule au lieu de reprendre');
+            // Et le dessin ne relit pas le dossier : il ne prend que l'objet.
+            const src=_prodSrc();
+            const i=src.indexOf('function _dessinerBilanSeance');
+            const bloc=src.slice(i,src.indexOf('function',i+40));
+            if(/currentUser|tonnageSerie|\.sessions\b/.test(bloc))
+              return _echec('le dessin va chercher des données ailleurs');
+            return true;})());
+
+          ok('Une série non validée n\'entre pas, un exercice sans charge si',(()=>{
+            const d=bilanSeanceDonnees(SESS(),null);
+            if(d.ex.some(e=>/JAMAIS VALID/.test(e.nom)))
+              return _echec('un exercice jamais validé est publié');
+            // ⚠ « 0 kg » SERAIT FAUX sur des tractions strictes : elles ont
+            // bien été faites. L'image annonce alors le nombre de séries.
+            const tr=d.ex.filter(e=>/TRACTIONS/.test(e.nom))[0];
+            if(!tr) return _echec('un exercice au poids du corps est exclu');
+            if(tr.kg!==null) return _echec('une charge est inventée : '+tr.kg);
+            if(tr.series!==2) return _echec('séries comptées : '+tr.series);
+            // ⚠ ET LE DESSIN DOIT EN TENIR COMPTE. La donnée peut être juste et
+            // l'image écrire « 0 kg » quand même : un canvas ne se relit pas en
+            // texte, donc c'est la BRANCHE qu'on garde, dans la source. Mesuré
+            // en la retirant : la donnée restait bonne et rien ne tombait.
+            const sd=_prodSrc();
+            const k=sd.indexOf('function _dessinerBilanSeance');
+            const dess=sd.slice(k,k+9000);
+            if(!/e\.kg!=null[\s\S]{0,200}série/.test(dess))
+              return _echec('le dessin n’a plus de branche « sans charge »');
+            // LA SÉRIE LA PLUS LOURDE représente l'exercice, et à charge égale
+            // celle qui a le plus de répétitions.
+            const dc=d.ex.filter(e=>/COUCHÉ/.test(e.nom))[0];
+            if(dc.kg!==85) return _echec('charge montrée : '+dc.kg);
+            if(dc.reps!==7) return _echec('à 85 kg, c’est la série de 7 qui compte, pas '+dc.reps);
+            // Une séance sans rien de validé ne se poste pas.
+            for(const [cas,s] of [
+              ['sans date',{data:{a:{sets:[{weight:'1',reps:'1',done:true}]}}}],
+              ['sans data',{date:1}],
+              ['data vide',{date:1,data:{}}],
+              ['rien validé',{date:1,data:{a:{sets:[{weight:'1',reps:'1',done:false}]}}}]])
+              if(bilanSeanceDonnees(s,null)!==null)
+                return _echec(cas+' : une image sort quand même');
+            return true;})());
+
+          ok('L\'image porte le nom de l\'app — c\'est tout son objet',(()=>{
+            // Le canal de diffusion est Instagram : ce qui en sort doit dire
+            // d'où ça vient, sans quoi la séance circule et RepCore reste
+            // invisible.
+            const src=_prodSrc();
+            const i=src.indexOf('function _dessinerBilanSeance');
+            if(i<0) return _echec('le dessin a disparu');
+            const bloc=src.slice(i,i+9000);
+            if(bloc.indexOf('REPCORE')<0) return _echec('la signature a disparu');
+            // ET ELLE OCCUPE TOUTE L'IMAGE : un fond, pas un autocollant.
+            if(!/cv\.width=STORY_L;\s*cv\.height=STORY_H/.test(bloc))
+              return _echec('l’image ne fait plus le format story');
+            if(bloc.indexOf('fillRect(0,0,STORY_L,STORY_H)')<0)
+              return _echec('le fond a disparu : l’image redevient transparente');
+            // ⚠ ET LA CARTE DU PROGRAMME N'A PAS BOUGÉ. Elle est délibérément
+            // SANS fond et SANS signature — « juste le carré rouge », pour
+            // qu'on la POSE sur l'arrière-plan d'une story. Deux objets, deux
+            // décisions : les fusionner ferait perdre l'un ou l'autre.
+            // ⚠ LA BORNE DE DECOUPE EST LE BLOC SUIVANT, PAS _texteEspace :
+            // celui-ci vient APRES le dessin du bilan, si bien que la tranche
+            // englobait le REPCORE du bilan et accusait la carte de porter une
+            // signature qu'elle n'a pas.
+            const j=src.indexOf('function _dessinerStorySeance');
+            const fin=src.indexOf('LE BILAN DE SEANCE, EN IMAGE',j);
+            if(j<0||fin<0||fin<j) return _echec('les deux dessins ont bougé');
+            const carte=src.slice(j,fin);
+            if(carte.indexOf('REPCORE')>=0)
+              return _echec('une signature a été ajoutée à la carte de programme');
+            return /const CW=STORY_L-144/.test(carte)
+              ?true:_echec('la carte de programme a changé de taille');})());
+
+          ok('Le tonnage s\'écrit court, et 999 kg ne devient pas 1 t',(()=>{
+            // « 12 400 kg » se lit ; « 12,4 t » se lit mieux sur une image
+            // regardée deux secondes.
+            const cas=[[999,'999 kg'],[1000,'1 t'],[4520,'4,52 t'],
+                       [12480,'12,5 t'],[125000,'125 t'],[0,'0 kg']];
+            for(const [v,att] of cas)
+              if(bilanVolumeLib(v)!==att)
+                return _echec(v+' → « '+bilanVolumeLib(v)+' » au lieu de « '+att+' »');
+            return true;})());
+
+          ok('Une seule sortie pour les deux images, et la règle iOS y vit',(()=>{
+            // ⚠ CE BLOC ÉTAIT ÉCRIT DEUX FOIS. Une troisième image en aurait
+            // fait quatre copies — et la règle qui vit dedans est celle qu'on
+            // ne peut pas laisser diverger : Safari refuse la navigation de
+            // premier niveau vers une URL `data:`, et l'échec est MUET.
+            if(typeof _storySortirTelechargement!=='function')
+              return _echec('la sortie commune a disparu');
+            const s=String(_storySortirTelechargement);
+            if(s.indexOf('_estIOS()')<0) return _echec('la règle iOS a quitté la sortie');
+            if(s.indexOf('_ouvrirApercuStory')<0) return _echec('l’aperçu iOS a disparu');
+            // LES QUATRE GESTES PASSENT PAR LÀ, et aucun ne refait le travail.
+            for(const [nom,f] of [['télécharger séance',telechargerSeanceDuJour],
+                                  ['partager séance',partagerSeanceDuJour],
+                                  ['télécharger bilan',telechargerBilanSeance],
+                                  ['partager bilan',partagerBilanSeance]]){
+              const t=String(f);
+              if(!/_storySortir(Telechargement|Partage)\(/.test(t))
+                return _echec(nom+' ne passe pas par la sortie commune');
+              if(t.indexOf('toDataURL')>=0)
+                return _echec(nom+' refait le rendu de son côté');
+            }
+            // Le partage retombe sur le téléchargement quand il n'existe pas :
+            // on ne laisse pas l'athlète sans rien.
+            return String(partagerBilanSeance).indexOf('telechargerBilanSeance()')>=0
+              ?true:_echec('le partage ne retombe sur rien');})());
+
+          ok('Les records viennent de l\'écran de fin, et c\'est un TABLEAU',(()=>{
+            // ⚠ _cmp.records EST UN TABLEAU — c'est ainsi que _feterFinSeance le
+            // lit. Le prendre pour un nombre donnait Number(tableau) = NaN puis
+            // 0 : l'image n'aurait jamais annoncé le moindre record, sans
+            // erreur et sans que rien ne le montre.
+            const src=_prodSrc();
+            // ⚠ ON VISE L'AFFECTATION, PAS LA DECLARATION. `let _bilanRecords=0;`
+            // vient en premier dans le fichier : indexOf tombait dessus et
+            // lisait « 0 », ce qui n'apprend rien sur la lecture des records.
+            const i=src.indexOf('  _bilanRecords=(_cmp');
+            if(i<0) return _echec('le compte de records n’est plus posé par l’écran de fin');
+            const l=src.slice(i,i+120);
+            if(l.indexOf('.records.length')<0)
+              return _echec('les records sont lus comme un nombre : '+l.split('\n')[0]);
+            // La même lecture que la célébration de fin de séance, deux lignes
+            // plus bas : un seul compte, pas deux.
+            return /_feterFinSeance\([^)]*records:\(_cmp&&_cmp\.records&&_cmp\.records\.length\)/.test(src)
+              ?true:_echec('les deux lectures des records ont divergé');})());
+        })();
+
+        // ══════ LE MOT AU COACH ══════
+        (()=>{
+          const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};
+            try{ return f(); } finally { window.saveUser=s; } };
+
+          ok('Le texte est remonté TEL QUEL, sans retouche',(()=>{
+            // « Remonté tel quel » commence à l'écriture : pas de
+            // normalisation, pas de majuscule initiale, pas de ponctuation
+            // ajoutée. Le seul traitement est l'échappement à l'affichage.
+            return sansSave(()=>{
+              const u={email:'m@t.fr',coachId:'c1'};
+              const brut='  j’ai mal au dos depuis mardi.\n\net mon boulot est INFERNAL — 3 nuits à 4h.  ';
+              if(!poserMotCoach(u,brut).ok) return _echec('l’écriture échoue');
+              // Trim aux extrémités, RIEN à l'intérieur.
+              if(u.motCoach.texte!==brut.trim())
+                return _echec('le texte a été retouché : « '+u.motCoach.texte+' »');
+              if(u.motCoach.texte.indexOf('\n\n')<0) return _echec('les retours à la ligne sont perdus');
+              if(u.motCoach.texte.indexOf('INFERNAL')<0) return _echec('les majuscules sont perdues');
+              if(!(u.motCoach.maj>0)) return _echec('aucune date de mise à jour');
+              if(motCoach(u).texte!==brut.trim()) return _echec('la relecture change le texte');
+              // VIDER EFFACE : un champ qu'on ne peut pas retirer devient un
+              // texte qu'on n'ose plus écrire.
+              poserMotCoach(u,'   ');
+              if(u.motCoach!==undefined) return _echec('le champ survit à un effacement');
+              return motCoach(u)===null?true:_echec('la relecture voit encore un mot');});})());
+
+          ok('Il est BORNÉ : le document entier est réécrit à chaque sauvegarde',(()=>{
+            // ⚠ MÊME RAISON QUE LES NOTES DU COACH, et elle n'a rien à voir
+            // avec la confidentialité : chaque saveUser est un PUT du document
+            // ENTIER. Un texte libre non borné, dans un document réécrit à
+            // chaque fois, finit par déborder le quota — c'est le plafond réel
+            // de RepCore, pas le nombre d'utilisateurs.
+            return sansSave(()=>{
+              const u={email:'b@t.fr',coachId:'c1'};
+              const r=poserMotCoach(u,'x'.repeat(MOT_COACH_MAX+1));
+              if(r.ok) return _echec('un texte au-delà de la borne passe');
+              // LE REFUS EXPLIQUE, et il ne coupe pas en silence : tronquer
+              // ferait disparaître la fin d'une phrase sans le dire.
+              if(!r.raison||r.raison.indexOf(String(MOT_COACH_MAX))<0)
+                return _echec('le refus ne dit pas la borne : « '+r.raison+' »');
+              if(u.motCoach!==undefined) return _echec('un texte trop long a été écrit quand même');
+              if(!poserMotCoach(u,'y'.repeat(MOT_COACH_MAX)).ok)
+                return _echec('la longueur maximale est refusée');
+              if(motCoach(u).texte.length!==MOT_COACH_MAX)
+                return _echec('longueur écrite : '+motCoach(u).texte.length);
+              // ET LA RÈGLE RTDB BORNE AUSSI, comme coachNotes : le client
+              // seul ne protège rien d'un dossier écrit ailleurs.
+              // ⚠ LE NOM DE LA VARIABLE EST _RC_RULES. Le premier jet lisait
+              // _RC_REGLES, qui n'existe pas : le `||''` faisait sortir
+              // l'assertion par le haut, et elle passait au vert sans avoir
+              // ouvert la moindre règle.
+              const rg=(typeof window!=='undefined'&&window._RC_RULES)||'';
+              if(!rg) return _echec('les règles ne sont pas chargées : le test ne mord pas');
+              if(rg.indexOf('"motCoach"')<0) return _echec('aucune règle ne borne le champ');
+              return /motCoach[\s\S]{0,400}length <= 600/.test(rg)
+                ?true:_echec('la règle ne borne pas la longueur');});})());
+
+          ok('AUCUNE lecture automatique du texte, et il n\'entre dans aucun score',(()=>{
+            // ⚠ LE PROJET A DÉLIBÉRÉMENT RETIRÉ LA REGEX SUR TEXTE LIBRE pour
+            // lui substituer le dépistage SCOFF, qui est un questionnaire
+            // validé. Y remettre un scanner serait revenir sur cet arbitrage
+            // par la petite porte — et un scanner qui se trompe sur un texte
+            // libre se trompe sur quelqu'un.
+            const src=_prodSrc();
+            const i=src.indexOf('const MOT_COACH_MAX');
+            const j=src.indexOf('function marquerMotCoachLu');
+            if(i<0||j<0||j<i) return _echec('le module a bougé');
+            const bloc=src.slice(i,j).replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+            if(/(douleur|blessure|triste|abandon|dépress)/i.test(bloc))
+              return _echec('des mots-clefs sont cherchés dans le texte');
+            if(bloc.indexOf('SCOFF')>=0) return _echec('le mot passe par le dépistage');
+            if(/\.match\(|new RegExp/.test(bloc)) return _echec('le texte est analysé');
+            // ET IL N'ENTRE DANS AUCUN SCORE : ni urgence, ni signaux. Un mot
+            // n'est pas une alerte, et le faire remonter comme telle
+            // détournerait le classement des athlètes.
+            const u={email:'s@t.fr',motCoach:{texte:'je souffre le martyre',maj:Date.now()}};
+            let e=[]; try{ e=expliquerUrgence(u); }catch(err){ return _echec('expliquerUrgence lève'); }
+            if(e.some(x=>/martyre/.test(x.motif))) return _echec('le texte entre dans l’urgence');
+            if(e.some(x=>/\bmot\b/i.test(x.motif))) return _echec('un motif « mot » est poussé');
+            let sg=null; try{ sg=signauxEntrainement(u); }catch(err){ return _echec('signauxEntrainement lève'); }
+            return JSON.stringify(sg).indexOf('martyre')<0
+              ?true:_echec('le texte entre dans les signaux');})());
+
+          ok('Le coach le voit, l\'athlète sans coach n\'a pas le champ',(()=>{
+            // Écrire à personne n'a pas de sens, et la promesse « ton coach le
+            // lit » serait fausse.
+            const hote=document.createElement('div');
+            hote.innerHTML='<div id="clh-mot"></div><div id="ccd-mot"></div>';
+            document.body.appendChild(hote);
+            const _cu=currentUser;
+            try{
+              return sansSave(()=>{
+                currentUser={email:'a@t.fr',coachId:'c1',
+                  motCoach:{texte:'<b>gras</b> & co',maj:Date.now()}};
+                renderMotCoach();
+                const h=document.getElementById('clh-mot').innerHTML;
+                // ÉCHAPPÉ : c'est le seul traitement appliqué au texte.
+                if(h.indexOf('<b>gras')>=0) return _echec('le texte n’est pas échappé');
+                if(h.indexOf('&lt;b&gt;')<0) return _echec('le texte a disparu');
+                // pre-wrap : les retours à la ligne sont à lui.
+                if(h.indexOf('pre-wrap')<0) return _echec('les retours à la ligne sont écrasés');
+                currentUser={email:'solo@t.fr'};
+                renderMotCoach();
+                if(document.getElementById('clh-mot').innerHTML!=='')
+                  return _echec('un athlète sans coach se voit proposer le champ');
+                // CÔTÉ COACH : tel quel, et une invite quand c'est vide.
+                currentUser={email:'c@t.fr',role:'coach'};
+                const ath={id:'a1',email:'a@t.fr',motCoach:{texte:'ça coince au boulot',maj:1000}};
+                renderMotCoachFiche(ath);
+                if(document.getElementById('ccd-mot').innerHTML.indexOf('ça coince au boulot')<0)
+                  return _echec('le coach ne voit pas le mot');
+                renderMotCoachFiche({id:'z',email:'z@t.fr'});
+                return document.getElementById('ccd-mot').innerHTML.indexOf('Rien d')>=0
+                  ?true:_echec('rien n’est dit quand le champ est vide');});
+            } finally { currentUser=_cu; hote.remove(); }})());
+
+          ok('Le marqueur de lecture vit chez le COACH, pas chez l\'athlète',(()=>{
+            // ⚠ ÉCRIRE CHEZ L'ATHLÈTE À CHAQUE COUP D'ŒIL ferait un PUT de son
+            // document entier pour un accusé de lecture — le plafond, encore.
+            // Même choix que le fil de notes du coach.
+            return sansSave(()=>{
+              const ath={id:'a1',email:'a@t.fr',motCoach:{texte:'coucou',maj:1000}};
+              const coach={email:'c@t.fr',role:'coach'};
+              if(!motCoachNouveau(coach,ath)) return _echec('un mot jamais lu n’est pas neuf');
+              marquerMotCoachLu(coach,ath);
+              if(motCoachNouveau(coach,ath)) return _echec('il reste neuf après lecture');
+              if(coach.motsLus['a1']!==1000) return _echec('le marqueur est mal posé');
+              // RIEN N'A ÉTÉ ÉCRIT CHEZ L'ATHLÈTE.
+              if(ath.lu!==undefined||ath.motCoach.lu!==undefined)
+                return _echec('un marqueur a été posé sur le dossier de l’athlète');
+              if(Object.keys(ath).sort().join(',')!=='email,id,motCoach')
+                return _echec('le dossier de l’athlète a gagné un champ');
+              // IL RÉÉCRIT : c'est de nouveau neuf.
+              ath.motCoach={texte:'en fait non',maj:2000};
+              if(!motCoachNouveau(coach,ath)) return _echec('une réécriture ne redevient pas neuve');
+              // Et marquer deux fois n'écrit qu'une fois.
+              marquerMotCoachLu(coach,ath);
+              if(marquerMotCoachLu(coach,ath)!==false)
+                return _echec('le second marquage réécrit');
+              return motCoachNouveau(coach,{id:'a2',email:'b@t.fr'})===false
+                ?true:_echec('un athlète sans mot est « neuf »');});})());
+
+          ok('Un dossier revenu de Firebase se lit sous toutes ses formes',(()=>{
+            // Le champ peut revenir en CHAÎNE NUE au lieu de l'objet — c'est
+            // la forme qu'aurait un dossier écrit par une version antérieure,
+            // et motCoach doit rendre la même chose dans les deux cas.
+            const c=motCoach({email:'x',motCoach:'juste du texte'});
+            if(!c||c.texte!=='juste du texte') return _echec('la chaîne nue n’est pas lue');
+            if(c.maj!==0) return _echec('une date est inventée pour une chaîne nue');
+            for(const [cas,v] of [['vide',''],['blancs','   '],['absent',undefined],
+                                  ['null',null],['objet vide',{texte:'  ',maj:5}],
+                                  ['nombre',42],['tableau',[1,2]]])
+              if(motCoach({email:'x',motCoach:v})!==null)
+                return _echec(cas+' : un mot sort de nulle part');
+            return true;})());
+        })();
+
+        // ══════ LA STRUCTURE DU BLOC, CÔTÉ ATHLÈTE ══════
+        (()=>{
+          const L=_lundiDe(new Date()).getTime();
+          // Un bloc de 8 semaines parti il y a k semaines, décharges en S3 et S6.
+          const U=(k,dech,sem)=>({email:'st@t.fr',sessions_config:[],
+            programme:{debut:L-k*604800000,semaines:(sem==null?8:sem),
+                       decharges:(dech==null?[2,5]:dech)}});
+
+          ok('La ligne dit où l\'on est dans le bloc, et quand ça s\'allège',(()=>{
+            // Le coach lit la structure depuis toujours ; l'athlète traversait
+            // une semaine dure sans savoir combien il en restait. Une semaine
+            // dure qu'on sait être l'avant-dernière se traverse.
+            if(ligneStructureBloc(U(0))!=='Semaine 1 sur 8 · décharge en semaine 3.')
+              return _echec('S1 : « '+ligneStructureBloc(U(0))+' »');
+            if(ligneStructureBloc(U(3))!=='Semaine 4 sur 8 · décharge en semaine 6.')
+              return _echec('S4 : « '+ligneStructureBloc(U(3))+' »');
+            // LA SEMAINE DE DÉCHARGE SE NOMME, et ne renvoie pas ailleurs :
+            // c'est l'information la plus utile du jour.
+            if(ligneStructureBloc(U(2))!=='Semaine 3 sur 8 · c’est ta semaine de décharge.')
+              return _echec('pendant la décharge : « '+ligneStructureBloc(U(2))+' »');
+            // Sans décharge à venir, la ligne se contente de situer.
+            if(ligneStructureBloc(U(6))!=='Semaine 7 sur 8.')
+              return _echec('S7 : « '+ligneStructureBloc(U(6))+' »');
+            return ligneStructureBloc(U(2,[]))==='Semaine 3 sur 8.'
+              ?true:_echec('sans décharge planifiée : « '+ligneStructureBloc(U(2,[]))+' »');})());
+
+          ok('La décharge annoncée est la PROCHAINE, jamais une passée',(()=>{
+            // ⚠ SANS CETTE GARDE, un athlète en semaine 5 d'un bloc dont la
+            // décharge de S3 est derrière lui se voyait annoncer « décharge en
+            // semaine 3 » : une consigne située dans le passé, et la seule
+            // chose que la ligne devait lui éviter.
+            const l=ligneStructureBloc(U(4));
+            if(l.indexOf('semaine 3')>=0) return _echec('une décharge passée est annoncée : « '+l+' »');
+            if(l!=='Semaine 5 sur 8 · décharge en semaine 6.')
+              return _echec('S5 : « '+l+' »');
+            // Une seule décharge, déjà passée : plus rien à annoncer.
+            if(ligneStructureBloc(U(5,[1]))!=='Semaine 6 sur 8.')
+              return _echec('décharge passée : « '+ligneStructureBloc(U(5,[1]))+' »');
+            // ET C'EST LA FONCTION EXISTANTE QUI LE DIT : dechargePlanifiée-
+            // Après servait déjà à avancer une décharge côté coach. Une
+            // seconde recherche du « prochain index » finirait par ne plus
+            // désigner la même semaine que celle que le coach déplace.
+            if(typeof dechargePlanifieeApres!=='function')
+              return _echec('la fonction existante a disparu');
+            return String(ligneStructureBloc).indexOf('dechargePlanifieeApres')>=0
+              ?true:_echec('la ligne cherche la prochaine décharge de son côté');})());
+
+          ok('Sans bloc daté, la ligne se tait',(()=>{
+            // Une absence de structure n'est pas une structure à annoncer.
+            for(const [cas,u] of [
+              ['aucun programme',{email:'a@t.fr'}],
+              ['programme vide',{email:'b@t.fr',programme:{}}],
+              ['bloc terminé',U(20)],
+              ['bloc pas commencé',{email:'c@t.fr',
+                programme:{debut:L+3*604800000,semaines:8,decharges:[2]}}],
+              ['sans date',{email:'d@t.fr',programme:{semaines:8,decharges:[2]}}]])
+              if(ligneStructureBloc(u)!=='') return _echec(cas+' : « '+ligneStructureBloc(u)+' »');
+            return true;})());
+
+          ok('UNE seule surface, et surtout pas l\'aperçu de story',(()=>{
+            // ⚠ htmlCarteSeanceSlot EST LE MIROIR EXACT DE L'IMAGE PARTAGÉE.
+            // Son propre commentaire le dit : « un aperçu qui ne montrerait pas
+            // ce que le fichier contient serait pire qu'aucun aperçu ». Une
+            // ligne de plus à l'écran ferait diverger les deux — et la
+            // structure du bloc n'a rien à faire dans une story.
+            // ⚠ LE DOSSIER COURANT DOIT PORTER UN BLOC PENDANT CE TEST. Sans
+            // lui, ligneStructureBloc(currentUser) rend '' quoi qu'il arrive :
+            // la carte était propre pour la mauvaise raison, et la garde
+            // principale ne mesurait rien. Mesuré en faisant entrer la ligne
+            // dans la carte — seul le compte d'appels tombait.
+            const _cu=currentUser;
+            let carte='';
+            try{
+              currentUser={email:'sty@t.fr',sessions_config:[],
+                programme:{debut:L,semaines:8,decharges:[2,5]}};
+              if(ligneStructureBloc(currentUser)==='')
+                return _echec('la fixture ne produit pas de ligne : le test ne mord pas');
+              carte=htmlCarteSeanceSlot(0,{name:'PUSH',
+                exercises:[{name:'Développé',series:4,reps:'8'}]});
+            } finally { currentUser=_cu; }
+            if(/Semaine \d+ sur/.test(carte))
+              return _echec('la structure est entrée dans l’aperçu de story');
+            if(/décharge en semaine/.test(carte))
+              return _echec('la décharge est entrée dans l’aperçu de story');
+            // La ligne vit dans SON conteneur, et il existe.
+            const src=_prodSrc();
+            if(src.indexOf('id="sm-structure"')<0)
+              return _echec('le conteneur de la ligne a disparu');
+            // UN SEUL APPEL : la définition, plus l'écran des séances. Répétée
+            // par jour ou sur trois écrans, la phrase deviendrait un motif de
+            // fond qu'on ne lit plus.
+            const n=(src.match(/ligneStructureBloc\(/g)||[]).length;
+            return n<=2?true:_echec('ligneStructureBloc appelée '+(n-1)+' fois');})());
+        })();
+
+        // ══════ LES MONTÉES EN CHARGE, EN KILOS ══════
+        (()=>{
+          ok('Les pourcentages ne se lisent que quand ce sont des paliers',(()=>{
+            // « 2×15 », « 3 min », « 2×10 » ne sont pas des montées en charge.
+            // Y voir des pourcentages inventerait une consigne sur des étapes
+            // qui n'en portent aucune.
+            for(const t of ['Montées en charge 40 / 60 / 80 %','Montées 40 / 60 / 80 %','40/60/80%'])
+              if(pctMontee(t).join(',')!=='40,60,80') return _echec(t+' → '+pctMontee(t));
+            // LA SUITE COMPLÈTE D'UN PROTOCOLE RÉEL, six paliers.
+            if(pctMontee('Montées 30 / 50 / 65 / 80 / 90 / 95 %').join(',')!=='30,50,65,80,90,95')
+              return _echec('les six paliers ne sont pas lus');
+            for(const t of ['Montées en charge','Montées progressives','Barre à vide, 2×10',
+                            'Rotations externes d\'épaule, 2×15','Rameur ou élastique, 3 min',
+                            'Goblet squat avec pause, 2×8',
+                            // ⚠ UNE ÉTAPE RÉELLE DU PROTOCOLE QUADRICEPS, et
+                            // le piège de cette lecture : deux nombres séparés
+                            // par une barre, tous deux dans la plage.
+                            '90/90 hanches, 2×8',
+                            // Le signe pourcent est ce qui distingue des
+                            // paliers d'une durée ou d'une distance.
+                            'Marche rapide 30 / 60 s','Rameur 250 / 500 m'])
+              if(pctMontee(t).length) return _echec('« '+t+' » lu comme des paliers');
+            // UNE MONTÉE MONTE : une suite qui redescend n'est pas un
+            // échauffement, c'est le signe qu'on a lu autre chose.
+            if(pctMontee('80 / 60 / 40 %').length) return _echec('une suite descendante passe');
+            // Les bornes : au-delà de 100 % ce n'est plus un échauffement, et
+            // sous 20 % la barre à vide dit déjà ce qu'il faut.
+            if(pctMontee('40 / 60 / 120 %').length) return _echec('120 % passe');
+            if(pctMontee('10 / 20 %').length) return _echec('10 % passe');
+            // Un seul pourcentage n'est pas une montée.
+            return pctMontee('50 %').length?_echec('un seul palier passe'):true;})());
+
+          ok('Les kilos sortent de l\'arrondi EXISTANT, et rien sans référence',(()=>{
+            // ⚠ UN SECOND ARRONDI, même identique aujourd'hui, finirait par ne
+            // plus donner les mêmes kilos que la charge suggérée de la série
+            // suivante : l'athlète lirait deux chiffres pour le même mouvement,
+            // à trente secondes d'intervalle.
+            const k=paliersMontee('Montées 40 / 60 / 80 %',82.5);
+            const attendu=[40,60,80].map(p=>_arrondirCharge(82.5*p/100));
+            if(k.join(',')!==attendu.join(',')) return _echec(k.join(',')+' ≠ '+attendu.join(','));
+            if(k.join(',')!=='32.5,50,65') return _echec('82,5 kg → '+k.join(','));
+            if(paliersMontee('Montées 40 / 60 / 80 %',100).join(',')!=='40,60,80')
+              return _echec('100 kg mal arrondi');
+            // Sous 20 kg, le pas de 1,25 s'applique — c'est le même arrondi.
+            if(paliersMontee('Montées 40 / 60 / 80 %',15).join(',')!=='6.25,8.75,12.5')
+              return _echec('15 kg → '+paliersMontee('Montées 40 / 60 / 80 %',15).join(','));
+            // ⚠ SANS RÉFÉRENCE, RIEN — et surtout pas des zéros. « 0 kg »
+            // affiché sur une montée en charge serait une consigne fausse.
+            for(const [cas,ref] of [['null',null],['zéro',0],['négative',-50],
+                                    ['non numérique','x'],['absente',undefined]])
+              if(paliersMontee('Montées 40 / 60 / 80 %',ref).length)
+                return _echec('référence '+cas+' : des kilos sortent quand même');
+            return paliersMontee('Montées progressives',100).length
+              ?_echec('des kilos sortent sans pourcentage'):true;})());
+
+          ok('Sans référence, le texte du coach ne bouge pas',(()=>{
+            // Les pourcentages restent : ils valent pour tout le monde, et
+            // c'est la consigne telle que le coach l'a écrite.
+            const t='Montées en charge 40 / 60 / 80 %';
+            if(etapeMontee(t,null)!==t) return _echec('le texte a changé : « '+etapeMontee(t,null)+' »');
+            if(etapeMontee(t,100)!==t+' — 40 · 60 · 80 kg')
+              return _echec('rendu : « '+etapeMontee(t,100)+' »');
+            // LES POURCENTAGES SURVIVENT À L'AJOUT : on augmente, on ne
+            // remplace pas.
+            if(etapeMontee(t,100).indexOf('40 / 60 / 80 %')<0)
+              return _echec('les pourcentages ont disparu');
+            // La virgule décimale, comme partout dans l'app.
+            if(etapeMontee('Montées 40 / 60 / 80 %',82.5).indexOf('32,5')<0)
+              return _echec('le point décimal est resté');
+            // Une étape sans paliers n'est pas touchée.
+            for(const e of ['Rameur ou élastique, 3 min','Montées progressives','Barre à vide, 2×10'])
+              if(etapeMontee(e,100)!==e) return _echec('« '+e+' » a été modifiée');
+            // ⚠ ET LE PROTOCOLE LUI-MÊME N'EST JAMAIS RÉÉCRIT. Les kilos sont
+            // posés sur le texte AFFICHÉ : la bibliothèque garde ses
+            // pourcentages, qui ne valent pas que pour cet athlète-là.
+            const p=PROTOCOLES.filter(x=>x.slug==='echauffement_push')[0];
+            const avant=JSON.stringify(p.etapes);
+            etapeMontee(p.etapes[4],100);
+            _carteProtocole('x (10 min)\n1. '+p.etapes[4],'É','var(--orange)','tst-proto',true,100);
+            return JSON.stringify(p.etapes)===avant
+              ?true:_echec('le protocole a été réécrit');})());
+
+          ok('Le chronomètre d\'étape n\'est pas perturbé par les kilos',(()=>{
+            // dureeEtape lit les durées dans le texte : « 40 · 60 · 80 kg » ne
+            // doit pas en fabriquer une, sinon un bouton de chronomètre
+            // apparaîtrait sur une montée en charge.
+            const t='Montées en charge 40 / 60 / 80 %';
+            if(dureeEtape(t)!==null) return _echec('la prémisse a changé : une durée était déjà lue');
+            if(dureeEtape(etapeMontee(t,100))!==null)
+              return _echec('les kilos fabriquent une durée : '+dureeEtape(etapeMontee(t,100)));
+            // Et une étape qui a VRAIMENT une durée la garde.
+            const r='Rameur ou élastique, 3 min';
+            return dureeEtape(etapeMontee(r,100))===dureeEtape(r)
+              ?true:_echec('la durée du rameur a bougé');})());
+
+          ok('La carte n\'affiche des kilos que si une référence existe',(()=>{
+            // ⚠ NE PAS CHERCHER « kg » DANS LE RENDU : `bacKGround` en contient
+            // un dans chaque style en ligne, et la sonde répondait « oui » sur
+            // une carte sans le moindre kilo. On cherche la forme exacte que
+            // etapeMontee produit.
+            const txt='Push (10 min)\n1. Rameur, 3 min\n2. Montées en charge 40 / 60 / 80 %';
+            const avec=_carteProtocole(txt,'É','var(--orange)','tst-a',true,100);
+            const sans=_carteProtocole(txt,'É','var(--orange)','tst-b',true);
+            if(avec.indexOf('40 · 60 · 80 kg')<0) return _echec('les kilos n’arrivent pas dans la carte');
+            if(/—\s[0-9]/.test(sans)) return _echec('des kilos sortent sans référence');
+            if(avec.indexOf('40 / 60 / 80 %')<0) return _echec('les pourcentages ont disparu de la carte');
+            // La référence est FACULTATIVE et arrive en dernier : la carte de
+            // fin de séance appelle toujours à cinq arguments.
+            const s=_prodSrc();
+            return /_carteProtocole\(woState&&woState\.cooldown[^)]*\)/.test(s)
+              ?true:_echec('l’appel de fin de séance a changé');})());
+
+          ok('La référence : la programmation d\'abord, jamais un contrepoids',(()=>{
+            // ⚠ isCounterweightEx EXCLUT LE CONTREPOIDS, et c'est le piège de
+            // cette fonctionnalité : sur des tractions assistées, le poids
+            // affiché est l'ASSISTANCE. « 40 % de l'assistance » ne veut rien
+            // dire, et les kilos rendus seraient l'inverse de ce qu'il faut.
+            const sauve=woState;
+            try{
+              woState={currentEx:0,slot:1,progName:'PUSH',
+                exercises:[{name:'Développé couché barre',reps:'8'}],sessionData:[{sets:[]}]};
+              // Sans historique ni programmation : rien, et le texte reste.
+              if(chargeReferenceEchauffement(0)!==null)
+                return _echec('une référence sort de nulle part');
+              // LA PROGRAMMATION PRIME : c'est une consigne du coach, elle
+              // passe avant toute déduction d'historique.
+              woState.exercises[0].prog={max:120,debut:_lundiDe(new Date()).getTime(),
+                semaines:[{series:4,reps:5,rpe:'8'}]};
+              const c=consigneProgEx(woState.exercises[0]);
+              if(!c||!(c.kg>0)) return _echec('la consigne programmée ne rend pas de charge');
+              if(chargeReferenceEchauffement(0)!==c.kg)
+                return _echec('la référence ('+chargeReferenceEchauffement(0)+') ≠ la consigne ('+c.kg+')');
+              // CONTREPOIDS : aucune référence. ⚠ ET IL LUI FAUT UNE
+              // PROGRAMMATION POUR QUE LE TEST MORDE : sans elle, la fonction
+              // rendait null de toute façon, faute d'historique — l'assertion
+              // passait au vert sans jamais éprouver la garde. Mesuré en
+              // retirant isCounterweightEx : rien ne tombait.
+              woState.exercises=[{name:'Traction assistée machine',reps:'8',
+                prog:{max:60,debut:_lundiDe(new Date()).getTime(),
+                      semaines:[{series:4,reps:5,rpe:'8'}]}}];
+              if(!isCounterweightEx('Traction assistée machine'))
+                return _echec('la prémisse a changé : ce n’est plus un contrepoids');
+              const cc=consigneProgEx(woState.exercises[0]);
+              if(!cc||!(cc.kg>0))
+                return _echec('la fixture contrepoids ne porte pas de charge : le test ne mord pas');
+              if(chargeReferenceEchauffement(0)!==null)
+                return _echec('un contrepoids donne une référence');
+              // CARDIO : rien à charger.
+              woState.exercises=[{name:'Vélo',reps:'20',cardio:true}];
+              return chargeReferenceEchauffement(0)===null
+                ?true:_echec('un cardio donne une référence');
+            } finally { woState=sauve; }})());
+        })();
+
+        // ══════ LA VIDÉO RATTACHÉE ET LE COMPARATEUR ══════
+        (()=>{
+          const CLE=exKey('Développé couché barre');
+          const V=(id,j,kg,reps)=>({id:id,name:'Dev',url:'https://res.cloudinary.com/x/'+id+'.mp4',
+            date:j,lien:{exerciceCle:CLE,exerciceNom:'Développé couché barre',
+              chargeKg:kg,reps:reps,rir:2,serieIdx:0,seance:'PUSH',slot:1,date:j}});
+          const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};
+            try{ return f(); } finally { window.saveUser=s; } };
+
+          ok('AUCUNE vidéo, aucune vignette, n\'entre dans le document',(()=>{
+            // ⚠ LE VRAI RISQUE, ET L'AUDIT D'AOÛT EST FORMEL : le plafond de
+            // RepCore n'est pas un nombre d'utilisateurs, c'est le volume
+            // Firebase — _doPushOne RELIT ET RÉÉCRIT LE DOCUMENT ENTIER à
+            // chaque poussée, et les photos de bilan y sont déjà en base64.
+            // Une vidéo dans le document ferait sauter le plafond seule.
+            const src=_prodSrc();
+            const i=src.indexOf('async function uploadVideoFile');
+            if(i<0) return _echec('l’envoi de vidéo a disparu');
+            const bloc=src.slice(i,i+4000);
+            // LE FICHIER PART SUR CLOUDINARY, et il n'est jamais lu en base64.
+            if(bloc.indexOf('api.cloudinary.com')<0)
+              return _echec('la vidéo ne part plus sur Cloudinary');
+            for(const interdit of ['readAsDataURL','toDataURL','createObjectURL'])
+              if(bloc.indexOf(interdit)>=0)
+                return _echec(interdit+' sur le chemin vidéo : des octets vont entrer dans le document');
+            // L'ENTRÉE ÉCRITE NE PORTE QUE DES MÉTADONNÉES. On la reconstruit
+            // telle que la fonction l'écrit, et on pèse.
+            const entry={id:'v_1',name:'Dev',url:'https://res.cloudinary.com/x/a.mp4',
+              date:2000,size:'12.4 Mo',feedback:null,cloudinaryPublicId:'repcore/x/a',
+              cloudinaryName:'dntu57ml',
+              lien:lienVideoSerie({name:'Développé couché barre'},
+                {weight:'82.5',reps:'8',rir:'2'},{seance:'PUSH',slot:1,serieIdx:2,date:2000})};
+            const json=JSON.stringify(entry);
+            if(/data:[a-z]+\/[a-z0-9.+-]+;base64,/i.test(json))
+              return _echec('l’entrée porte une charge base64');
+            if(json.indexOf('blob:')>=0) return _echec('l’entrée porte une URL blob');
+            // Un ordre de grandeur, pas une mesure fine : une entrée de vidéo
+            // pèse quelques centaines d'octets, une vignette en pèserait des
+            // dizaines de milliers.
+            if(json.length>2000) return _echec('une entrée pèse '+json.length+' octets');
+            // ET L'ANNOTATION AUDIO NON PLUS : seule son URL entre.
+            return sansSave(()=>{
+              const u={email:'p@t.fr',videos:[V('a',1000,80,8),V('b',2000,85,8)]};
+              const p=pairePrises(u,CLE);
+              ajouterAnnotationPaire(u,p,{sec:12.4,sur:'apres',
+                audioUrl:'https://res.cloudinary.com/x/a.webm'});
+              return /data:[a-z]+\/[a-z0-9.+-]+;base64,/i.test(JSON.stringify(u.comparaisons))
+                ?_echec('l’annotation porte une charge base64'):true;});})());
+
+          ok('La charge et les reps viennent de la SÉRIE, et ne s\'inventent pas',(()=>{
+            // Une vidéo sans charge n'est qu'un souvenir : ce sont la charge et
+            // les répétitions qui rendent deux prises comparables.
+            const ex={name:'Développé couché barre',reps:'8'};
+            const l=lienVideoSerie(ex,{weight:'82.5',reps:'8',rir:'2'},
+              {seance:'PUSH',slot:1,serieIdx:2,date:1000});
+            if(l.chargeKg!==82.5) return _echec('charge : '+l.chargeKg);
+            if(l.reps!==8) return _echec('reps : '+l.reps);
+            if(l.rir!==2) return _echec('rir : '+l.rir);
+            if(l.serieIdx!==2||l.seance!=='PUSH'||l.slot!==1)
+              return _echec('le créneau n’est pas rattaché');
+            if(l.exerciceCle!==CLE) return _echec('clef : '+l.exerciceCle);
+            // « échec » vaut RIR 0, comme partout ailleurs — pas null.
+            if(lienVideoSerie(ex,{weight:'80',reps:'6',rir:'echec'},{}).rir!==0)
+              return _echec('l’échec n’est pas lu comme un RIR de 0');
+            // Les MÊMES répétitions que la performance : repsDone d'abord.
+            if(lienVideoSerie(ex,{weight:'80',reps:'8',repsDone:6},{}).reps!==6)
+              return _echec('repsDone n’est pas prioritaire');
+            // ⚠ ET LA CHARGE NE S'INVENTE JAMAIS. Un envoi depuis l'écran
+            // Vidéos ne connaît pas la charge : champ VIDE, pas de zéro. Une
+            // charge devinée ferait comparer deux prises sur un chiffre que
+            // personne n'a mesuré.
+            const sans=lienVideoSerie(ex,{weight:'',reps:'8',rir:''},{});
+            if(sans.chargeKg!==null) return _echec('charge inventée : '+sans.chargeKg);
+            if(sans.rir!==null) return _echec('RIR inventé : '+sans.rir);
+            if(lienVideoSerie(ex,{weight:'0',reps:'8'},{}).chargeKg!==null)
+              return _echec('une charge de 0 est retenue');
+            // Le libellé de surimpression n'annonce que ce qui est connu.
+            if(libLienVideo(sans).indexOf('kg')>=0)
+              return _echec('la surimpression annonce une charge absente');
+            // ⚠ UN NOM VIDE NE FABRIQUE PAS DE CLEF. `ex.name||ex` retombait
+            // sur l'objet, et String(objet) donnait « [object Object] » :
+            // toutes les vidéos d'exercices sans nom se seraient retrouvées
+            // sous la clef « OBJECT OBJECT », et se seraient comparées entre
+            // elles. Mesuré sur {name:''}.
+            if(lienVideoSerie({name:''},{weight:'80'},{})!==null)
+              return _echec('un exercice sans nom produit un rattachement');
+            return lienVideoSerie(null,{weight:'80'},{})===null
+              ?true:_echec('un exercice absent produit un rattachement');})());
+
+          ok('Le décalage s\'applique aux DEUX lecteurs',(()=>{
+            // Sans lui, deux vidéos qui ne démarrent pas au même instant du
+            // mouvement ne se comparent pas : on met une descente en face
+            // d'une montée et on en tire des conclusions sur la technique.
+            const z=cmpInstants(10,0);
+            if(z.avant!==10||z.apres!==10) return _echec('à zéro, les deux ne sont pas alignés');
+            // POSITIF : la seconde prise est retardée. NÉGATIF : la première.
+            const p=cmpInstants(10,1.5);
+            if(p.avant!==10||p.apres!==8.5) return _echec('décalage positif : '+JSON.stringify(p));
+            const n=cmpInstants(10,-1.5);
+            if(n.avant!==8.5||n.apres!==10) return _echec('décalage négatif : '+JSON.stringify(n));
+            // ⚠ AUCUN DES DEUX NE PASSE SOUS ZÉRO. Un currentTime négatif est
+            // silencieusement ramené à 0 par le navigateur : le curseur
+            // mentirait sans qu'on le voie.
+            if(cmpInstants(0.5,2).apres!==0) return _echec('la seconde passe sous zéro');
+            if(cmpInstants(0.5,-2).avant!==0) return _echec('la première passe sous zéro');
+            // ET UNE SEULE DÉFINITION DE LA RÈGLE : le pas à pas et la lecture
+            // ne calculent pas le décalage chacun de leur côté.
+            const s=String(_cmpAppliquerDecalage);
+            if(s.indexOf('cmpInstants(')<0)
+              return _echec('l’application du décalage recalcule la règle');
+            // Elle écrit bien LES DEUX lecteurs.
+            if(!/a\.currentTime=/.test(s)||!/b\.currentTime=/.test(s))
+              return _echec('un seul lecteur est déplacé');
+            // Et le pas à pas la réapplique, sinon les deux dérivent.
+            return String(cmpImage).indexOf('_cmpAppliquerDecalage()')>=0
+              ?true:_echec('le pas à pas ne réapplique pas le décalage');})());
+
+          ok('L\'annotation est rattachée à la PAIRE, pas à une vidéo',(()=>{
+            // Un commentaire qui dit « là, tu casses moins le dos qu'avant » ne
+            // parle ni de l'une ni de l'autre : il parle des deux.
+            return sansSave(()=>{
+              const u={email:'c@t.fr',videos:[V('v3',3000,90,6),V('v1',1000,80,8),V('v2',2000,85,7)]};
+              const p=pairePrises(u,CLE);
+              if(!p) return _echec('aucune paire');
+              // UN SEUL MODE DE SÉLECTION : la plus ancienne contre la
+              // dernière. Une liste de douze dates ferait de la comparaison un
+              // travail de recherche.
+              if(p.avant.id!=='v1'||p.apres.id!=='v3')
+                return _echec('la paire est '+p.avant.id+'/'+p.apres.id);
+              ajouterAnnotationPaire(u,p,{sec:12.4,sur:'apres',audioUrl:'https://x/a.webm'});
+              const cles=Object.keys(u.comparaisons||{});
+              if(cles.length!==1) return _echec(cles.length+' clefs écrites');
+              // ⚠ ON NE COMPARE PAS clePaire À ELLE-MÊME. La première version
+              // vérifiait `cles[0]===clePaire(p)` : les deux côtés changeaient
+              // ensemble, et une clef réduite au seul identifiant de la
+              // dernière vidéo passait au vert. L'assertion regardait le code
+              // se donner raison. On vérifie donc ce que la clef DOIT porter.
+              const k=cles[0];
+              for(const [quoi,part] of [['l’exercice',CLE],['la plus ancienne','v1'],
+                                        ['la dernière','v3']])
+                if(k.indexOf(part)<0) return _echec('la clef ne porte pas '+quoi+' : « '+k+' »');
+              // ET DEUX PAIRES QUI PARTAGENT LA DERNIÈRE PRISE SE DISTINGUENT :
+              // c'est ce qu'une clef réduite à `apres` ne saurait pas faire.
+              if(clePaire(p)===clePaire({cle:CLE,avant:{id:'v2'},apres:{id:'v3'}}))
+                return _echec('deux paires différentes ont la même clef');
+              // RIEN SUR LES VIDÉOS ELLES-MÊMES.
+              if(p.avant.annotations!==undefined||p.apres.annotations!==undefined)
+                return _echec('une annotation est posée sur une vidéo');
+              // UNE AUTRE PAIRE NE LES VOIT PAS.
+              if(annotationsPaire(u,{cle:CLE,avant:{id:'v1'},apres:{id:'v2'}}).length!==0)
+                return _echec('une autre paire voit ces annotations');
+              // L'HORODATAGE EST GARDÉ, ET IL DIT SUR QUELLE VIDÉO.
+              const l=annotationsPaire(u,p);
+              if(l[0].sec!==12.4||l[0].sur!=='apres') return _echec('horodatage perdu');
+              // ET IL SE DÉCLENCHE AU BON MOMENT, sur le BON lecteur.
+              if(!annotationAJouer(l,'apres',12.4,{})) return _echec('ne se déclenche pas à l’instant pile');
+              if(!annotationAJouer(l,'apres',12.7,{})) return _echec('la fenêtre est trop étroite');
+              if(annotationAJouer(l,'apres',13.5,{})) return _echec('se déclenche trop tard');
+              if(annotationAJouer(l,'avant',12.4,{})) return _echec('se déclenche sur l’autre lecteur');
+              if(annotationAJouer(l,'apres',12.4,{0:true})) return _echec('se déclenche deux fois');
+              // Il faut DEUX prises : comparer une vidéo à elle-même n'apprend
+              // rien, et une vidéo sans rattachement ne dit pas ce qu'elle
+              // montre — elle n'entre pas.
+              if(pairePrises({email:'s@t.fr',videos:[V('a',1,80,8)]},CLE))
+                return _echec('une seule prise fait une paire');
+              const mixte={email:'m@t.fr',videos:[V('a',1,80,8),V('b',2,85,8),
+                {id:'x',url:'https://x/x.mp4',date:3}]};
+              return prisesExercice(mixte,CLE).length===2
+                ?true:_echec('une vidéo sans rattachement entre dans la comparaison');});})());
+
+          ok('Deux gestes pour filmer, deux pour répondre',(()=>{
+            // Le flux de correction technique passe par Instagram. Ce module
+            // n'a d'intérêt que s'il est PLUS RAPIDE qu'un message : à cinq
+            // gestes, l'athlète repart sur Instagram et le code est mort.
+            const src=_prodSrc();
+            // (1) toucher « Filmer » — la caméra du téléphone s'ouvre. C'est
+            // `capture` qui l'ouvre : sans lui, le téléphone propose un
+            // sélecteur de fichiers, et il faut sortir de l'app pour filmer.
+            //
+            // ⚠ ON REGARDE L'ENTRÉE DE LA SÉANCE, PAS LE FICHIER. Trois autres
+            // champs portent déjà `capture="environment"` — l'étiquette
+            // produit et les poses. Chercher la chaîne dans toute la source
+            // passait au vert alors que l'attribut venait d'être retiré de
+            // CETTE entrée-là : l'assertion regardait l'appareil photo d'un
+            // autre écran.
+            const _e=document.getElementById('wo-video-input');
+            if(!_e) return _echec('l’entrée de capture de séance a disparu');
+            if(_e.getAttribute('capture')!=='environment')
+              return _echec('l’attribut capture a disparu : la caméra ne s’ouvre plus');
+            if(!/^video\//.test(_e.getAttribute('accept')||''))
+              return _echec('l’entrée n’accepte plus la vidéo');
+            const f=String(filmerSerie);
+            if(f.indexOf('.click()')<0) return _echec('« Filmer » n’ouvre plus la caméra');
+            // (2) filmer et valider. AUCUNE QUESTION ENTRE LES DEUX.
+            for(const q of ['prompt(','rcSaisie(','rcConfirm('])
+              if(f.indexOf(q)>=0) return _echec('« Filmer » pose une question : '+q);
+            const e=String(_videoSerieEnvoyer);
+            for(const q of ['prompt(','rcSaisie(','rcConfirm('])
+              if(e.indexOf(q)>=0) return _echec('l’envoi pose une question : '+q);
+            // ET LE COACH RÉPOND EN DEUX GESTES. ⚠ L'horodatage EXISTAIT déjà
+            // mais se TAPAIT : confirmAudioAnnotation refuse l'envoi tant que
+            // le champ « m:ss » est vide — lire l'instant, ouvrir le clavier,
+            // taper « 0:12 », puis enregistrer. Ici il est pris tout seul.
+            const m=String(_cmpDemarrerMicro);
+            if(m.indexOf('currentTime')<0)
+              return _echec('l’instant n’est plus pris sur le lecteur');
+            if(/getElementById\('cmp-ts'\)|value.*m:ss/.test(m))
+              return _echec('un champ d’horodatage est à remplir');
+            // Un seul bouton, qui bascule : démarrer puis arrêter.
+            return /state==='recording'/.test(String(cmpBasculerMicro))
+              ?true:_echec('le micro n’est plus une bascule');})());
+
+          ok('Une vidéo de plus de douze mois est PROPOSÉE, jamais supprimée',(()=>{
+            // C'est la seule trace vidéo d'une période : l'effacer sans le dire
+            // serait retirer à quelqu'un ce qu'il croyait gardé.
+            const u={email:'p@t.fr',videos:[
+              {id:'a',url:'x',date:Date.now()-400*86400000},
+              {id:'b',url:'x',date:Date.now()-30*86400000}]};
+            const avant=u.videos.length;
+            const l=videosAPurger(u);
+            if(l.length!==1||l[0].id!=='a') return _echec(l.length+' vidéo(s) proposée(s)');
+            // RIEN N'A ÉTÉ SUPPRIMÉ : la fonction propose, elle n'agit pas.
+            if(u.videos.length!==avant) return _echec('la liste a été modifiée');
+            if(!/supprimer/.test(phraseVideosAPurger(u))) return _echec('la phrase ne propose rien');
+            if(phraseVideosAPurger({email:'q@t.fr',videos:[]})!=='')
+              return _echec('une phrase sort sans vidéo ancienne');
+            // AUCUN APPEL AUTOMATIQUE À LA SUPPRESSION depuis la purge.
+            const s=String(videosAPurger)+String(phraseVideosAPurger);
+            return /deleteVideo|splice|filter\(v=>v\.id/.test(s)
+              ?_echec('la purge touche à la liste'):true;})());
+        })();
+
+        // ══════ L'ÉCART GAUCHE / DROITE ══════
+        (()=>{
+          const J=n=>Date.now()-n*86400000;
+          // Un bilan tel que getBM le lit : les mesures sous 'bil-<clef>',
+          // les reports listés dans `reprises` sous 'bil-<clef>'.
+          const B=(j,o,reprises)=>{
+            const b={date:J(j),reprises:reprises||[]};
+            for(const k in o) b['bil-'+k]=String(o[k]);
+            return b;
+          };
+          const P=s=>ASYM_PAIRES.filter(x=>x.site===s)[0];
+          const TROIS=()=>[B(60,{'bicep-r':38.4,'bicep-l':36.8}),
+                           B(30,{'bicep-r':38.5,'bicep-l':36.9}),
+                           B(0, {'bicep-r':38.6,'bicep-l':37.0})];
+
+          ok('Une paire dont un côté est REPORTÉ est écartée',(()=>{
+            // ⚠ LE PIÈGE PRINCIPAL. Quand l'athlète confirme qu'un tour de
+            // bras n'a pas bougé, la valeur du bilan précédent est recopiée et
+            // marquée bmReportee. Comparer une mesure du jour à une mesure
+            // d'il y a six semaines fabrique une asymétrie qui n'existe pas :
+            // un côté a bougé, l'autre est figé.
+            const mes={'bicep-r':38.6,'bicep-l':37};
+            if(!ecartPaire(B(0,mes),P('bicep')))
+              return _echec('la prémisse est fausse : la paire complète n’est pas lue');
+            for(const r of [['bil-bicep-r'],['bil-bicep-l'],['bil-bicep-r','bil-bicep-l']])
+              if(ecartPaire(B(0,mes,r),P('bicep'))!==null)
+                return _echec('report sur '+r.join('+')+' : la paire est comparée quand même');
+            // ET UN REPORT COUPE LA SUITE, il ne se saute pas. Recoller
+            // par-dessus le trou reviendrait à dire « trois bilans
+            // consécutifs » d'une série qui ne l'est pas.
+            const troue=[B(60,{'bicep-r':38.4,'bicep-l':36.8}),
+                         B(30,{'bicep-r':38.5,'bicep-l':36.9},['bil-bicep-l']),
+                         B(0, {'bicep-r':38.6,'bicep-l':37.0})];
+            if(asymetrieSite(troue,'bicep')) return _echec('la suite est recollée par-dessus un report');
+            // La même série SANS le report est bien signalée : c'est le report
+            // qui l'écarte, pas autre chose.
+            return asymetrieSite(TROIS(),'bicep')
+              ?true:_echec('sans report, l’asymétrie n’est plus vue');})());
+
+          ok('Trois bilans CONSÉCUTIFS, et dans le même sens',(()=>{
+            // Une mesure isolée ne dit rien : le mètre-ruban a une erreur de
+            // l'ordre du demi-centimètre.
+            const a=asymetrieSite(TROIS(),'bicep');
+            if(!a) return _echec('trois bilans concordants ne sont pas vus');
+            if(a.bilans!==3) return _echec('la fenêtre n’est plus de trois bilans');
+            if(a.fort!=='droite') return _echec('le côté fort est « '+a.fort+' »');
+            // DEUX NE SUFFISENT PAS.
+            if(asymetrieSite(TROIS().slice(-2),'bicep')) return _echec('deux bilans suffisent');
+            if(asymetrieSite([],'bicep')) return _echec('zéro bilan suffit');
+            // MÊME SENS : un bras plus gros puis l'autre, c'est la main qui
+            // tient le mètre qui change, pas le corps.
+            const inverse=[B(60,{'bicep-r':38.4,'bicep-l':36.8}),
+                           B(30,{'bicep-r':36.9,'bicep-l':38.5}),
+                           B(0, {'bicep-r':38.6,'bicep-l':37.0})];
+            if(asymetrieSite(inverse,'bicep')) return _echec('le sens s’inverse et ça passe');
+            // AU-DESSUS DU SEUIL SUR LES TROIS, pas deux fois sur trois.
+            const oscille=[B(60,{'bicep-r':38.4,'bicep-l':36.8}),
+                           B(30,{'bicep-r':38.5,'bicep-l':36.9}),
+                           B(0, {'bicep-r':38.0,'bicep-l':37.6})];
+            if(asymetrieSite(oscille,'bicep')) return _echec('une valeur sous le seuil passe');
+            // ⚠ CE SONT LES TROIS DERNIERS BILANS, PAS LES TROIS MEILLEURS.
+            // Une asymétrie qui s'est corrigée ne doit plus être signalée.
+            const finie=[B(90,{'bicep-r':38.4,'bicep-l':36.8}),
+                         B(60,{'bicep-r':38.5,'bicep-l':36.9}),
+                         B(30,{'bicep-r':38.0,'bicep-l':37.9}),
+                         B(0, {'bicep-r':38.0,'bicep-l':38.0})];
+            return asymetrieSite(finie,'bicep')
+              ?_echec('une asymétrie corrigée est encore signalée'):true;})());
+
+          ok('Les seuils diffèrent par site : 3 % aux bras, 2,5 % aux cuisses',(()=>{
+            // En dessous, ce n'est pas une asymétrie, c'est du bruit de
+            // mesure : sur un bras de 38 cm, un demi-centimètre fait déjà
+            // 1,3 %.
+            if(P('bicep').seuil!==0.03) return _echec('seuil bras : '+P('bicep').seuil);
+            if(P('calf').seuil!==0.03) return _echec('seuil mollets : '+P('calf').seuil);
+            if(P('thigh').seuil!==0.025) return _echec('seuil cuisses : '+P('thigh').seuil);
+            // ⚠ LE CAS QUI SÉPARE LES DEUX SEUILS, et lui seul le prouve :
+            // 2,8 % passe le seuil des cuisses et pas celui des bras. Deux
+            // fixtures au-dessus des deux seuils ne diraient rien.
+            const cuisses=[0,1,2].map(i=>B(60-30*i,{'thigh-r':61.7,'thigh-l':60.0}));
+            const bras=[0,1,2].map(i=>B(60-30*i,{'bicep-r':38.05,'bicep-l':37.0}));
+            const rc=ecartPaire(cuisses[0],P('thigh')).ecartRelatif;
+            const rb=ecartPaire(bras[0],P('bicep')).ecartRelatif;
+            if(!(rc>0.025&&rc<0.03)) return _echec('la fixture cuisse est à '+rc);
+            if(!(rb>0.025&&rb<0.03)) return _echec('la fixture bras est à '+rb);
+            if(!asymetrieSite(cuisses,'thigh')) return _echec('2,8 % aux cuisses : pas signalé');
+            return asymetrieSite(bras,'bicep')
+              ?_echec('2,8 % aux bras : signalé alors que le seuil est à 3 %'):true;})());
+
+          ok('La colonne est VIDE, et surtout pas zéro, sur une paire incomplète',(()=>{
+            // Une paire incomplète ou reportée n'a pas un écart nul : elle n'a
+            // pas d'écart du tout. Afficher « 0 » ferait lire une symétrie
+            // parfaite là où l'on n'a rien mesuré — le contresens exact que
+            // cette fonctionnalité doit éviter.
+            const t=TROIS();
+            if(_cellEcartMensuration(t,'bicep-r')!=='+1,6')
+              return _echec('côté fort : « '+_cellEcartMensuration(t,'bicep-r')+' »');
+            if(_cellEcartMensuration(t,'bicep-l')!=='−1,6')
+              return _echec('côté faible : « '+_cellEcartMensuration(t,'bicep-l')+' »');
+            for(const [cas,bils,cle] of [
+              ['un seul côté',[B(0,{'bicep-r':38.6})],'bicep-r'],
+              ['aucun côté',[B(0,{})],'bicep-r'],
+              ['côté reporté',[B(0,{'bicep-r':38.6,'bicep-l':37},['bil-bicep-l'])],'bicep-r'],
+              ['mesure non bilatérale',t,'waist'],
+              ['aucun bilan',[],'bicep-r']]){
+              const v=_cellEcartMensuration(bils,cle);
+              if(v!==null) return _echec(cas+' : « '+v+' » au lieu de rien');
+            }
+            // ⚠ ET UN ÉCART RÉELLEMENT NUL SE DISTINGUE DU VIDE. Un nombre 0
+            // serait tombé dans le même trou : renderDataTable traite 0, '0'
+            // et '' comme des cases vides. La chaîne « 0,0 » dit ce qu'elle
+            // dit — les deux côtés mesurés, et identiques.
+            const nul=_cellEcartMensuration([B(0,{'bicep-r':38,'bicep-l':38})],'bicep-r');
+            if(nul!=='0,0') return _echec('écart nul rendu « '+nul+' »');
+            // Les deux tables — athlète et coach — portent la colonne, et
+            // elles ne lisent pas la même clef : m.key ici, m.k là.
+            const src=_prodSrc();
+            const n=(src.match(/_cellEcartMensuration\(/g)||[]).length;
+            return n>=3?true:_echec('la colonne n’est branchée que '+(n-1)+' fois');})());
+
+          ok('Le signal est de priorité BASSE, et ne propose aucun volume en plus',(()=>{
+            // ⚠ AJOUTER DES SÉRIES DU CÔTÉ FAIBLE EST LE RÉFLEXE ÉVIDENT, ET
+            // C'EST L'INVERSE DU PROTOCOLE : du volume unilatéral d'un seul
+            // côté crée une asymétrie DE FATIGUE par-dessus l'asymétrie de
+            // taille, et le côté faible récupère moins bien que celui qu'on
+            // voulait rattraper.
+            const u={email:'as@t.fr',bilans:TROIS(),sessions_config:[]};
+            const s=signalAsymetrie(u);
+            if(!s) return _echec('aucun signal');
+            if(s.code!=='asymetrie') return _echec('code « '+s.code+' »');
+            if(s.gravite!==ASYM_GRAVITE) return _echec('gravité '+s.gravite);
+            // BASSE : sous la douleur (9), sous le plateau (6), au rang des
+            // signaux administratifs.
+            if(s.gravite>=6) return _echec('la gravité remonte au-dessus du plateau');
+            if(s.phrase!=='Bras droit +1,6 cm sur trois bilans.')
+              return _echec('phrase : « '+s.phrase+' »');
+            if(!/côté gauche passent en premier/.test(s.geste))
+              return _echec('le geste ne fait pas passer le côté faible en premier');
+            if(!/s’aligne sur le nombre de répétitions/.test(s.geste))
+              return _echec('le geste n’aligne pas le côté fort sur le faible');
+            if(/ajoute|série de plus|supplémentaire|séries en plus/i.test(s.geste))
+              return _echec('le geste ajoute du volume : « '+s.geste+' »');
+            // AUCUN NOUVEAU GRAPHIQUE : les courbes gauche/droite existaient
+            // déjà, on n'en trace pas une de plus.
+            const src=_prodSrc();
+            if(/_sparkline\([^)]*ecart|canvas[^"]*asym/i.test(src))
+              return _echec('un graphique d’asymétrie a été ajouté');
+            // Il remonte dans l'explication d'urgence, au rang bas.
+            const m=expliquerUrgence(u).filter(x=>/Asym/.test(x.motif));
+            if(!m.length) return _echec('le signal ne remonte pas au coach');
+            return m[0].gravite===ASYM_GRAVITE
+              ?true:_echec('remonté au rang '+m[0].gravite);})());
+
+          ok('« Unilatéral » a un seul accesseur, la déclaration avant le nom',(()=>{
+            // Deux notions coexistaient : exUnilateral(nom) le devine du nom,
+            // et la fiche de banque porte un champ `unilateral` DÉCLARÉ. La
+            // déclaration gagne — c'est un fait saisi, pas une déduction — et
+            // le nom sert de repli. Un troisième chemin les ferait diverger.
+            if(typeof exUnilateral!=='function') return _echec('le repli par le nom a disparu');
+            const s=String(estUnilateral);
+            if(s.indexOf('ficheBanque')<0) return _echec('la déclaration n’est pas lue');
+            if(s.indexOf('exUnilateral')<0) return _echec('le repli par le nom n’est pas branché');
+            // Le repli fonctionne pour ce qui n'est pas dans la banque.
+            if(estUnilateral({name:'Leg curl allongé en unilatéral'})!==true)
+              return _echec('un nom explicite n’est pas vu comme unilatéral');
+            if(estUnilateral({name:'Développé couché barre'})!==false)
+              return _echec('un bilatéral est vu comme unilatéral');
+            return estUnilateral({})===false?true:_echec('un exercice vide est unilatéral');})());
+
+          ok('Il n\'existe aucune mesure d\'avant-bras : le seuil est posé, inerte',(()=>{
+            // LA FICHE PARLE DE « bras, avant-bras, mollets ». MEAS ne porte
+            // que trois paires — bicep, thigh, calf — et rien pour
+            // l'avant-bras. Le seuil est écrit pour le jour où la mesure
+            // existera plutôt qu'inventé à la hâte ce jour-là ; il ne peut
+            // rien signaler tant qu'aucun bilan ne porte ces clefs.
+            const p=ASYM_PAIRES.filter(x=>x.site==='forearm')[0];
+            if(!p) return _echec('le seuil de l’avant-bras a disparu de la table');
+            const cles=MEAS.map(m=>m.k||m.key);
+            if(cles.indexOf(p.g)>=0||cles.indexOf(p.d)>=0)
+              return _echec('la mesure d’avant-bras existe : le commentaire ment');
+            // Inerte, et sans lever : trois bilans complets ne produisent rien.
+            const t=TROIS();
+            if(asymetrieSite(t,'forearm')!==null)
+              return _echec('l’avant-bras signale quelque chose sans mesure');
+            // Et les trois paires réelles, elles, sont bien dans MEAS.
+            for(const q of ASYM_PAIRES){
+              if(q.site==='forearm') continue;
+              if(cles.indexOf(q.g)<0||cles.indexOf(q.d)<0)
+                return _echec(q.site+' : la paire n’existe pas dans MEAS');
+            }
+            return true;})());
+        })();
+
+        // ══════ LES RÈGLES D'EMPLOI DES MÉTHODES ══════
+        (()=>{
+          const GRILLE={'charniere-hanche':{'rachis-lombaire':3},'squat':{'rachis-lombaire':3}};
+          const S2=()=>({email:'m2@t.fr',sessions:[],sessions_config:[],
+            blocPriorite:{debut:Date.now()-8*86400000,semaines:6,hauts:[],bas:[]}});
+          const S5=()=>({email:'m5@t.fr',sessions:[],sessions_config:[],
+            blocPriorite:{debut:Date.now()-30*86400000,semaines:6,hauts:[],bas:[]}});
+          const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};
+            try{ return f(); } finally { window.saveUser=s; } };
+
+          ok('Le refus est EXPLICATIF, jamais silencieux',(()=>{
+            // Une règle qui bloque sans dire pourquoi est contournée dans la
+            // semaine et désactivée dans le mois : le coach ne comprend pas ce
+            // qu'on lui reproche, et il a raison de passer outre.
+            const ex={name:'Soulevé de terre',methode:'rest_in_pause',methodeSeries:'dernière'};
+            const ev=evaluerMethode(ex,S2(),{grille:GRILLE});
+            if(ev.ok) return _echec('rest-pause en semaine 2 sur du soulevé de terre : accepté');
+            if(!ev.phrase) return _echec('refus sans phrase');
+            // ELLE NOMME LES TROIS CHOSES : la méthode, où elle est posée, et
+            // ce qui cloche. Un « non conforme » n'apprend rien à personne.
+            if(ev.phrase.indexOf('Rest-pause')<0) return _echec('la méthode n’est pas nommée');
+            if(!/semaine 2/.test(ev.phrase)) return _echec('la semaine n’est pas nommée');
+            if(ev.phrase.indexOf('Soulevé de terre')<0) return _echec('l’exercice n’est pas nommé');
+            if(!/accumulation/.test(ev.phrase)) return _echec('la phase n’est pas dite');
+            if(!/colonne/.test(ev.phrase)) return _echec('la charge axiale n’est pas dite');
+            // Les DEUX causes remontent, pas seulement la première.
+            const c=(ev.raisons||[]).map(r=>r.code);
+            if(c.indexOf('phase')<0||c.indexOf('axial')<0)
+              return _echec('causes remontées : '+c.join(','));
+            // ET CHAQUE RÈGLE PORTE SON MOTIF : une table dont un motif serait
+            // vide produirait un refus muet le jour où cette règle mordrait.
+            for(const m of METHODES){
+              if(!m.motif||m.motif.length<40) return _echec(m.cle+' : motif absent ou creux');
+              if(!m.consigne||m.consigne.length<20) return _echec(m.cle+' : consigne absente');
+            }
+            // ⚠ LE MOTIF NE SE COLLE PAS SOUS N'IMPORTE QUEL REFUS. Sous un
+            // refus de fréquence il parlait de phase et d'axial — d'autre
+            // chose que du refus.
+            const uP={email:'p@t.fr',blocPriorite:{debut:Date.now()-30*86400000,semaines:6,hauts:[],bas:[]},
+              sessions_config:[{active:true,exercises:[
+                {name:'Leg curl assis',methode:'rest_in_pause'},
+                {name:'Leg extension machine',methode:'rest_in_pause'}]}]};
+            const evP=evaluerMethode({name:'Curl haltère',methode:'rest_in_pause'},uP,{grille:GRILLE});
+            if(evP.ok) return _echec('la troisième fois passe');
+            if(/se paie sur le dos/.test(evP.phrase))
+              return _echec('le motif de phase est collé sous un refus de fréquence');
+            return /déjà posée 2 fois/.test(evP.phrase)
+              ?true:_echec('le refus de fréquence ne dit pas le compte : '+evP.phrase);})());
+
+          ok('Le coach passe outre en un geste, et c\'est journalisé',(()=>{
+            // C'est LUI le coach : la règle est un avis de métier, pas une
+            // autorisation. Ce qu'on garde, c'est la trace.
+            return sansSave(()=>{
+              const u=S2();
+              const ex={name:'Soulevé de terre',methode:'rest_in_pause'};
+              const ev=evaluerMethode(ex,u,{grille:GRILLE});
+              if(ev.ok) return _echec('rien à passer outre');
+              const r=forcerMethode(u,ex,ev);
+              if(!r.ok) return _echec('le passage outre échoue');
+              // LE DÉPASSEMENT SE POSE SUR L'EXERCICE : sans ça l'éditeur
+              // reposerait la question à chaque ouverture.
+              if(ex.methodeForcee!==true) return _echec('l’exercice ne porte pas la décision');
+              // ET IL EST JOURNALISÉ, AVEC CE QUI A ÉTÉ PASSÉ OUTRE.
+              const j=_tabBloc(u.methodesForcees);
+              if(j.length!==1) return _echec(j.length+' entrées au journal');
+              if(j[0].regle!=='rest-pause') return _echec('la règle n’est pas nommée');
+              if(j[0].exercice!=='Soulevé de terre') return _echec('l’exercice n’est pas nommé');
+              if((j[0].codes||[]).indexOf('axial')<0) return _echec('les causes ne sont pas gardées');
+              if(!j[0].phrase) return _echec('la phrase du refus n’est pas gardée');
+              // VISIBLE DANS LA FICHE : sept jours.
+              if(resumeMethodesForcees(u).length!==1) return _echec('invisible dans la fiche');
+              const vieux={email:'v@t.fr',methodesForcees:[{date:Date.now()-9*86400000,regle:'x'}]};
+              if(resumeMethodesForcees(vieux).length!==0)
+                return _echec('un dépassement de la semaine dernière remonte encore');
+              // Le journal des méthodes est SÉPARÉ de celui des écarts de
+              // séance et de celui de la nutrition : trois faits différents.
+              if(u.ecartsSeance&&u.ecartsSeance.length)
+                return _echec('le passage outre pollue le journal des écarts de séance');
+              if(u.nutrition&&(u.nutrition.ajustHisto||[]).length)
+                return _echec('le passage outre pollue le journal de nutrition');
+              return true;});})());
+
+          ok('« Exercice axial » a UNE définition, et elle est partagée',(()=>{
+            // ⚠ _axialContrainteLombaire NE DIT PAS SI UN EXERCICE EST AXIAL :
+            // elle dit si l'ATHLÈTE a une contrainte lombaire déclarée. Les
+            // confondre aurait fait refuser le soulevé de terre aux seuls
+            // athlètes déjà blessés. La notion d'exercice axial existait
+            // ailleurs — chargeLombaireSchema, qui lit la grille du coach — et
+            // c'est elle qu'on branche.
+            if(typeof chargeLombaireSchema!=='function')
+              return _echec('la définition partagée a disparu');
+            if(typeof _axialContrainteLombaire!=='function')
+              return _echec('la garde de contrainte a disparu');
+            const s=String(methodeSchemaAxial);
+            if(s.indexOf('chargeLombaireSchema')<0)
+              return _echec('la règle n’utilise pas la définition existante');
+            // AUCUNE SECONDE DÉFINITION : pas de liste d'exercices axiaux
+            // recopiée dans la table des méthodes.
+            const src=_prodSrc();
+            const i=src.indexOf('const METHODES=Object.freeze');
+            const bloc=src.slice(i,src.indexOf('function methodesRegles'));
+            if(/souleve|soulevé|deadlift|squat|rachis/i.test(bloc))
+              return _echec('une liste d’exercices axiaux est recopiée dans la table');
+            // La mesure, sur le schéma et sur l'exercice.
+            if(methodeSchemaAxial('charniere-hanche',GRILLE)!==true)
+              return _echec('la charnière de hanche n’est pas vue comme axiale');
+            if(methodeExerciceAxial({name:'Leg curl assis'},null,GRILLE)!==false)
+              return _echec('une isolation genou est vue comme axiale');
+            // ⚠ UNE NOTE ABSENTE N'EST PAS UN ZÉRO, ET PAS DAVANTAGE UN
+            // REFUS : on ne bloque pas sur une case que le coach n'a pas
+            // remplie.
+            return methodeExerciceAxial({name:'Soulevé de terre'},null,{})===false
+              ?true:_echec('un schéma non noté est déclaré axial');})());
+
+          ok('Le compteur hebdomadaire, sur des méthodes multiples',(()=>{
+            // Somme des coûts de fatigue, tous exercices et toutes méthodes
+            // confondus. 2 rest-pause (3) + 1 dropset (2) + 1 myo-reps (2) = 10.
+            const u={email:'c@t.fr',sessions_config:[
+              {active:true,exercises:[{name:'A',methode:'rest_in_pause'},
+                                      {name:'B',methode:'methode_infinite'},
+                                      {name:'C',methode:'dropset_type_2'}]},
+              {active:true,exercises:[{name:'D',methode:'myo_reps'}]},
+              // Une semaine de décharge n'est pas une semaine chargée.
+              {active:true,deload:true,exercises:[{name:'E',methode:'rest_in_pause'}]},
+              // Un créneau éteint ne prescrit rien.
+              {active:false,exercises:[{name:'F',methode:'rest_in_pause'}]}]};
+            const c=chargeMethodesSemaine(u);
+            if(c.total!==10) return _echec('total '+c.total+' au lieu de 10');
+            if(c.n!==4) return _echec(c.n+' méthodes comptées au lieu de 4');
+            if(c.detail['rest-pause']!==2) return _echec('rest-pause compté '+c.detail['rest-pause']);
+            if(c.detail['dropset']!==1||c.detail['myo-reps']!==1)
+              return _echec('détail faux : '+JSON.stringify(c.detail));
+            // LA PHRASE AU-DELÀ DE 6, ET PAS AVANT.
+            const p=phraseChargeMethodes(u);
+            if(!/Semaine chargée/.test(p)) return _echec('aucune phrase à 10');
+            // UNE PHRASE, PAS UNE ALERTE ROUGE : le coach sait ce qu'il fait.
+            if(/⚠|attention|danger|trop/i.test(p)) return _echec('la phrase alarme : '+p);
+            const sous={email:'s@t.fr',sessions_config:[{active:true,exercises:[
+              {name:'A',methode:'rest_in_pause'},{name:'B',methode:'methode_infinite'}]}]};
+            if(chargeMethodesSemaine(sous).total!==6) return _echec('le seuil n’est pas à 6');
+            if(phraseChargeMethodes(sous)!=='') return _echec('la phrase sort à 6 pile');
+            // ET LE RENDU NE PEINT AUCUNE COULEUR D'ALARME.
+            const r=String(renderMethodesCoach);
+            return /--red|--danger|--orange/.test(r)
+              ?_echec('la fiche peint une alerte'):true;})());
+
+          ok('La technique précise passe avant sa famille',(()=>{
+            // cluster_sets EST rangé dans la famille rest_pause. Sans priorité
+            // à la technique, il aurait hérité des règles du rest-pause —
+            // interdit sous charge axiale — alors que porter du lourd est tout
+            // son propos.
+            if(TECHNIQUES['cluster_sets'].famille!=='rest_pause')
+              return _echec('la prémisse a changé : cluster_sets n’est plus dans rest_pause');
+            const r=regleMethode({methode:'cluster_sets'});
+            if(!r||r.cle!=='cluster') return _echec('cluster_sets résolu en « '+(r&&r.cle)+' »');
+            if(regleMethode({methode:'rest_in_pause'}).cle!=='rest-pause')
+              return _echec('la résolution par famille est cassée');
+            // Le cluster passe là où le rest-pause est refusé.
+            const ev=evaluerMethode({name:'Soulevé de terre',methode:'cluster_sets'},S2(),{grille:GRILLE});
+            if(!ev.ok) return _echec('le cluster est refusé sous charge axiale : '+ev.phrase);
+            // Aucune méthode posée, ou méthode inconnue : aucune règle, aucun
+            // refus. Une absence de prescription n'est pas une infraction.
+            if(regleMethode({})!==null||regleMethode({methode:'nexistepas'})!==null)
+              return _echec('une règle sort de nulle part');
+            return evaluerMethode({name:'X'},S2(),{}).ok
+              ?true:_echec('un exercice sans méthode est refusé');})());
+
+          ok('La phase de bloc est DÉDUITE, et une phase inconnue ne refuse rien',(()=>{
+            // Aucun champ de phase n'existe dans le projet : elle se déduit du
+            // bloc de priorité — le dernier tiers est l'intensification.
+            if(phaseBloc(S2())!=='ACCUMULATION') return _echec('semaine 2/6 : '+phaseBloc(S2()));
+            if(phaseBloc(S5())!=='INTENSIFICATION') return _echec('semaine 5/6 : '+phaseBloc(S5()));
+            // ⚠ SANS BLOC, LA PHASE EST INCONNUE — ET UNE DONNÉE MANQUANTE
+            // N'EST PAS UN REFUS. Sans cette garde, tout athlète sans bloc
+            // ouvert se voyait refuser rest-pause ET cluster à la fois, deux
+            // règles qui demandent des phases opposées.
+            const sans={email:'z@t.fr',sessions_config:[]};
+            if(phaseBloc(sans)!==null) return _echec('une phase sort sans bloc');
+            const ev=evaluerMethode({name:'Leg curl assis',methode:'rest_in_pause'},sans,{grille:GRILLE});
+            if(!ev.ok) return _echec('sans bloc, la méthode est refusée : '+ev.phrase);
+            return evaluerMethode({name:'Leg curl assis',methode:'cluster_sets'},sans,{grille:GRILLE}).ok
+              ?true:_echec('sans bloc, le cluster est refusé aussi');})());
+
+          ok('Côté athlète : la consigne d\'exécution, en une phrase',(()=>{
+            // Une méthode mal exécutée ne vaut pas mieux qu'une méthode
+            // absente. La description du catalogue est un paragraphe : lue
+            // debout entre deux séries, elle n'est pas lue.
+            const r=regleMethode({methode:'rest_in_pause'});
+            if(!/échec/.test(r.consigne)||!/15 secondes/.test(r.consigne))
+              return _echec('la consigne rest-pause a changé : '+r.consigne);
+            // UNE PHRASE, pas un paragraphe.
+            for(const m of METHODES)
+              if(m.consigne.length>170) return _echec(m.cle+' : consigne de '+m.consigne.length+' signes');
+            // ELLE EST BIEN RENDUE EN SÉANCE, et le paragraphe reste dessous.
+            const s=String(banniereTechnique);
+            if(s.indexOf('regleMethode')<0) return _echec('la consigne n’est pas branchée en séance');
+            return /m\.desc/.test(s)?true:_echec('la description du catalogue a été retirée');})());
+        })();
+
+        // ══════ LE TEMPO : LE FORMAT, LE GUIDE, LA MESURE ══════
+        (()=>{
+          ok('Les deux écritures normalisent à la même forme',(()=>{
+            // « 3-1-1-0 » et « 3110 » sont la MÊME consigne. Deux formes en
+            // base, ce sont deux consignes qui ne se comparent plus.
+            for(const t of ['3-1-1-0','3110','3 1 1 0','3/1/1/0','3.1.1.0'])
+              if(tempoNormalise(t)!=='3-1-1-0') return _echec(t+' → '+tempoNormalise(t));
+            // La forme compacte est de QUATRE CHIFFRES, un par phase : elle ne
+            // peut pas porter de valeur à deux chiffres. « 1010 » est
+            // 1-0-1-0, jamais 10-10, et cinq chiffres ne sont pas un tempo.
+            if(tempoNormalise('1010')!=='1-0-1-0') return _echec('1010 mal lu');
+            if(tempoNormalise('31100')!==null) return _echec('cinq chiffres acceptés');
+            // La forme séparée, elle, porte les valeurs à deux chiffres.
+            if(tempoNormalise('10-0-2-0')!=='10-0-2-0') return _echec('10-0-2-0 refusé');
+            // Ce qui ne prescrit rien n'est pas une consigne.
+            if(tempoNormalise('0000')!==null) return _echec('0000 accepté');
+            if(tempoNormalise('16-1-1-0')!==null) return _echec('16 s sur une phase accepté');
+            if(tempoNormalise('3-1-1')!==null) return _echec('trois temps acceptés');
+            if(tempoSecondes('3110').join(',')!=='3,1,1,0') return _echec('secondes fausses');
+            return tempoDureeRep('3-1-1-0')===5
+              ?true:_echec('durée de rep : '+tempoDureeRep('3-1-1-0'));})());
+
+          ok('Un tempo en texte libre n\'est JAMAIS réinterprété',(()=>{
+            // ⚠ RÉINTERPRÉTER APRÈS COUP CE QU'UN COACH A ÉCRIT À LA MAIN,
+            // c'est lui prêter une consigne qu'il n'a pas donnée. Le bloc
+            // découpait n'importe quel texte sur ses chiffres : « 2 séries à
+            // 3 s, 1 min de pause » ressortait en « 2 s pour descendre… ».
+            const libre='2 s en bas, explosif';
+            if(tempoNormalise(libre)!==null) return _echec('le texte libre est normalisé');
+            // AFFICHÉ TEL QUEL, et sans le détail chiffré qui l'inventerait.
+            if(tempoAffiche({tempo:libre})!==libre) return _echec('l’affichage a changé le texte');
+            const h=blocTempo({tempo:libre});
+            if(h.indexOf('2 s en bas, explosif')<0) return _echec('la consigne a disparu');
+            // ⚠ ON CHERCHE LA GLOSE INVENTÉE, PAS LE TEXTE DU COACH. Le
+            // premier jet cherchait « en bas, » — que la consigne elle-même
+            // contient : la sonde attrapait ce qu'elle affichait, et tombait
+            // au rouge sur du code juste. On vise donc les tournures que SEUL
+            // le détail chiffré produit.
+            if(/pour descendre|pour monter|s en haut/.test(h))
+              return _echec('un détail chiffré a été inventé');
+            // Et un texte qui contient QUATRE nombres n'en devient pas un
+            // tempo pour autant.
+            const piege='2 séries à 3 s, 1 min, 4 fois';
+            if(tempoNormalise(piege)!==null) return _echec('« '+piege+' » lu comme un tempo');
+            if(/pour descendre/.test(blocTempo({tempo:piege})))
+              return _echec('« '+piege+' » a reçu un détail chiffré');
+            // AUCUNE CONVERSION AUTOMATIQUE : la normalisation n'a qu'un seul
+            // appelant, la saisie du coach. Nulle part à la lecture.
+            const src=_prodSrc();
+            const n=(src.match(/tempoNormalise\(/g)||[]).length;
+            // 1 définition + tempoSecondes + _progTempoSaisie.
+            if(n>3) return _echec('tempoNormalise appelé '+n+' fois : une conversion se cache');
+            return src.indexOf('function _progTempoSaisie')>=0
+              ?true:_echec('la saisie du coach a disparu');})());
+
+          ok('tut null n\'est pas tut 0',(()=>{
+            // « Pas mesuré » et « zéro seconde sous tension » sont deux faits
+            // différents. Les confondre ferait entrer des zéros dans la
+            // moyenne qui juge un plateau, et tirerait tout vers le bas.
+            if(tutParRep({reps:'10'})!==null) return _echec('une série sans tut rend un nombre');
+            if(tutParRep({tut:null,reps:'10'})!==null) return _echec('tut null rend un nombre');
+            if(tutParRep({tut:0,reps:'10'})!==null) return _echec('tut 0 rend un nombre');
+            // Les bornes du téléphone posé : hors plage, on écrit null.
+            if(tutBorne(0)!==null||tutBorne(2)!==null) return _echec('un TUT trop court est retenu');
+            if(tutBorne(601)!==null) return _echec('un chronomètre oublié est retenu');
+            if(tutBorne(45.4)!==45) return _echec('45,4 s → '+tutBorne(45.4));
+            // ET LE null REMONTE : une séance sans mesure ne pèse pas zéro.
+            const sess={date:Date.now(),slot:1,name:'A',
+              data:{'Dév':{sets:[{weight:'80',reps:'10',done:true}]}}};
+            if(_tutSeance(sess,'Dév')!==null) return _echec('une séance sans mesure rend un nombre');
+            // Une série neuve n'hérite pas de la mesure de la précédente.
+            const s=_prodSrc();
+            const i=s.indexOf('function _nouvelleSerie');
+            return /delete s\.tut/.test(s.slice(i,i+1400))
+              ?true:_echec('le TUT de la série précédente est recopié');})());
+
+          ok('La comparaison porte sur tutParRep, jamais sur le TUT brut',(()=>{
+            // ⚠ LE CAS QUI SÉPARE LES DEUX, et il n'y en a qu'un qui compte :
+            // MÊME temps par répétition, MOINS de répétitions. Le TUT brut
+            // chute de 40 % sans que rien n'ait changé sous la barre. Lu sur
+            // le TUT brut, ce dossier déclencherait une « progression
+            // apparente » qui n'existe pas.
+            const J=n=>Date.now()-n*86400000;
+            const S=(j,kg,tut,reps)=>({date:J(j),slot:1,name:'A',
+              data:{'Dév':{sets:[{weight:String(kg),reps:String(reps),tut:tut,done:true}]}}});
+            const moinsDeReps=[S(26,100,40,10),S(22,100,40,10),S(6,110,24,6),S(2,112,24,6)];
+            if(tensionEnBaisse(moinsDeReps,'Dév',1,'A')!==null)
+              return _echec('le TUT brut a été comparé : moins de reps a suffi');
+            // LE VRAI CAS, lui, est vu : 4 s/rep → 2,4 s/rep, charge en hausse.
+            const vrai=[S(26,100,40,10),S(22,100,40,10),S(6,110,24,10),S(2,112,24,10)];
+            const t=tensionEnBaisse(vrai,'Dév',1,'A');
+            if(!t) return _echec('la baisse réelle n’est pas vue');
+            if(Math.abs(t.baisse-0.4)>0.001) return _echec('baisse mesurée à '+t.baisse);
+            // Charge STABLE : des séries plus courtes sans charge en hausse ne
+            // sont pas une progression apparente — il n'y a pas de progression.
+            const plat=[S(26,100,40,10),S(22,100,40,10),S(6,100,24,10),S(2,98,24,10)];
+            if(tensionEnBaisse(plat,'Dév',1,'A')) return _echec('sans hausse de charge, ça sort');
+            // Sous le seuil de 25 % : rien.
+            const petite=[S(26,100,40,10),S(22,100,40,10),S(6,110,32,10),S(2,112,32,10)];
+            if(tensionEnBaisse(petite,'Dév',1,'A')) return _echec('20 % de baisse déclenche');
+            // Aucune mesure : rien, et surtout pas un zéro.
+            const sans=[S(26,100,null,10),S(22,100,null,10),S(6,110,null,10),S(2,112,null,10)];
+            if(tensionEnBaisse(sans,'Dév',1,'A')) return _echec('sans mesure, ça sort');
+            // ET LA DÉTECTION DE PLATEAU REQUALIFIE : le même dossier passe de
+            // « progression » à « plateau », et il porte sa cause.
+            const u={email:'tut@t.fr',sessions:vrai};
+            const e=_calculEtat(vrai,'Dév',1,'A',u);
+            if(e.etat!=='plateau') return _echec('l’état reste « '+e.etat+' »');
+            if(e.cause!=='tension') return _echec('la cause n’est pas nommée');
+            if(_calculEtat(sans,'Dév',1,'A',u).etat!=='progression')
+              return _echec('sans mesure, l’état a bougé quand même');
+            // LA PHRASE DU COACH LE DIT EN CLAIR.
+            const p=phraseTensionEnBaisse('Développé');
+            if(!/monte en charge/.test(p)||!/raccourcissent/.test(p)||!/tension baisse/.test(p))
+              return _echec('la phrase ne dit plus les deux mouvements : '+p);
+            // ET L'ATHLÈTE N'A PAS DROIT À UNE PHRASE FAUSSE : « pas de
+            // nouveau maximum » serait un mensonge, sa charge monte.
+            const pa=_phraseEtat({etat:'plateau',cause:'tension',joursDepuisRecord:30},u);
+            return /nouveau maximum/.test(pa)
+              ?_echec('l’athlète lit « pas de nouveau maximum » alors que sa charge monte')
+              :true;})());
+
+          ok('AUCUN graphique de TUT : la donnée qualifie, elle ne se contemple pas',(()=>{
+            // Une courbe de temps sous tension inviterait à optimiser le
+            // chiffre, et on obtiendrait des séries lentes pour la courbe.
+            const src=_prodSrc();
+            if(/_sparkline\([^)]*tut/i.test(src)) return _echec('une sparkline de TUT existe');
+            if(/points:.*tut|tutParRep.*map\(/i.test(src))
+              return _echec('une série de points de TUT est construite');
+            // Le seul usage : qualifier un plateau.
+            const n=(src.match(/tensionEnBaisse\(/g)||[]).length;
+            // 1 définition + 1 appel dans _calculEtat.
+            return n<=2?true:_echec('tensionEnBaisse appelé '+n+' fois');})());
+
+          ok('Le guide est coupé par défaut, et rien ne le démarre tout seul',(()=>{
+            // Un métronome imposé sur chaque série est insupportable en trois
+            // séances : on l'aurait désactivé une fois pour toutes, et la
+            // mesure serait partie avec.
+            if(_tempoEtat.actif!==false) return _echec('le guide tourne au chargement');
+            if(_tempoEtat.guide!==false) return _echec('le guide est armé au chargement');
+            // TOUT DÉMARRAGE EST UN APPUI. Aucun appel de tempoDemarrer qui ne
+            // soit un onclick — ni depuis renderSets, ni depuis toggleSet, ni
+            // à l'ouverture de la séance.
+            const src=_prodSrc();
+            const lignes=src.split(/\r?\n/).filter(l=>l.indexOf('tempoDemarrer(')>=0);
+            if(lignes.length<2) return _echec('le démarrage a disparu de la source');
+            for(const l of lignes){
+              if(/function tempoDemarrer/.test(l)) continue;
+              if(l.indexOf('onclick=')>=0) continue;
+              return _echec('tempoDemarrer appelé hors d’un appui : '+l.trim().slice(0,70));
+            }
+            // ET LA MESURE MARCHE SANS LE GUIDE : le chronomètre est un geste
+            // séparé, appelé avec guide=false.
+            return /tempoDemarrer\([^)]*,false\)/.test(src)
+              ?true:_echec('le chronomètre seul n’existe plus');})());
+
+          ok('Sans navigator.vibrate, le guide visuel reste et rien ne lève',(()=>{
+            // iOS n'a pas l'API. Le repli est SILENCIEUX : annoncer « votre
+            // appareil ne vibre pas » à chaque série serait un reproche fait
+            // au téléphone.
+            //
+            // ⚠ vibrate VIT SUR Navigator.prototype. Un `delete
+            // navigator.vibrate` ne retire rien, et la sonde mesurerait un
+            // iOS qui vibre encore — c'est ce qui est arrivé au premier jet.
+            //
+            // ET IL FAUT RETIRER LES DEUX. Une assertion plus bas dans ce
+            // fichier fait `navigator.vibrate=v` pour se restaurer, ce qui
+            // pose une propriété PROPRE sur l'instance. Au deuxième passage de
+            // la suite, retirer la seule du prototype ne cachait plus rien :
+            // cette assertion tombait au rouge en passe 2 et 3, en fantôme.
+            const d=Object.getOwnPropertyDescriptor(Navigator.prototype,'vibrate');
+            const di=Object.getOwnPropertyDescriptor(navigator,'vibrate');
+            try{
+              delete Navigator.prototype.vibrate;
+              try{ delete navigator.vibrate; }catch(e){}
+              if(tempoVibrationDisponible()!==false)
+                return _echec('la vibration est encore annoncée disponible');
+              // _tempoVibrer rend false et ne lève pas.
+              if(_tempoVibrer(60)!==false) return _echec('_tempoVibrer prétend avoir vibré');
+              // Le point visuel est construit par la bande, sans dépendre de
+              // l'API : c'est lui qui reste sur iOS.
+              const s=String(_majBandeTempo);
+              if(s.indexOf('tempo-pt')<0) return _echec('le guide visuel a disparu');
+              if(/vibrate|vibration/i.test(s))
+                return _echec('la bande dépend de la vibration pour s’afficher');
+              return true;
+            } finally {
+              if(d) Object.defineProperty(Navigator.prototype,'vibrate',d);
+              if(di) Object.defineProperty(navigator,'vibrate',di);
+            }})());
+        })();
+
+        // ══════ L'ÉCHÉANCE ══════
+        (()=>{
+          const J=n=>Date.now()+n*86400000;
+          // Les commentaires, retirés d'un EXTRAIT et jamais du fichier entier.
+          const _sansComm=s=>String(s).replace(/\/\*[\s\S]*?\*\//g,'')
+                                      .replace(/^\s*\/\/.*$/gm,'');
+          const U=()=>({email:'ech@test.fr',sessions:[],nutrition:{},
+            'init-weight':80,weightLog:[{date:localISODate(new Date()),kg:80}]});
+          const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};
+            try{ return f(); } finally { window.saveUser=s; } };
+
+          ok('Le canevas est VIDE par défaut : l\'app ne calcule aucune cible',(()=>{
+            // ⚠ LE POINT DUR DU MODULE. Aucun consensus publiable n'existe sur
+            // la manipulation de glucides, d'eau et de sodium ; la littérature
+            // est mince ; et un protocole automatique sur des données de santé
+            // engage la responsabilité de l'éditeur.
+            return sansSave(()=>{
+              const u=U();
+              if(!ouvrirEcheance(u,{date:J(16),type:'COMPETITION'}).ok)
+                return _echec('l’échéance ne s’ouvre pas');
+              const e=echeance(u);
+              if(Object.keys(e.fiches||{}).length)
+                return _echec(Object.keys(e.fiches).length+' fiche(s) pré-remplie(s)');
+              // AUCUNE DES SEPT JOURNÉES N'A DE CIBLE, et parcourir la peak
+              // week n'en fait pas apparaître une.
+              for(let n=0;n<=ECH_JOURS_PEAK;n++){
+                const j=echeanceJour(u,J(n));
+                if(!j) return _echec('J-'+n+' hors fenêtre');
+                if(j.fiche) return _echec('J-'+n+' est pré-rempli');
+              }
+              // ET LE CODE NE CALCULE RIEN. Les trois cibles n'ont qu'un seul
+              // écrivain — poserFicheEcheance — et il RECOPIE ce qu'on lui
+              // donne. Toute autre écriture serait un protocole maison.
+              // ⚠ ON DÉCOUPE AVANT DE NETTOYER. Retirer les commentaires /* */
+              // du fichier ENTIER en avalait 3,2 Mo sur 4,5 : un « /* » dans
+              // une chaîne de caractères ouvre un faux commentaire qui court
+              // jusqu'au premier « */ » venu, et emportait ce module avec lui.
+              // Trois assertions passaient alors au vert sans rien regarder.
+              const src=_prodSrc();
+              for(const cle of ['cibleGlucides','cibleSodium','cibleEau']){
+                const ecrit=src.match(new RegExp(cle+'\\s*:\\s*[^\\s]','g'))||[];
+                // Deux occurrences : la fiche écrite, et la valeur relue.
+                if(ecrit.length>2) return _echec(cle+' est écrit '+ecrit.length+' fois');
+              }
+              const i=src.indexOf('function poserFicheEcheance');
+              if(i<0) return _echec('poserFicheEcheance a disparu');
+              const bloc=_sansComm(src.slice(i,i+1700));
+              if(!/cibleGlucides:_echNombreOuNull\(f\.cibleGlucides\)/.test(bloc))
+                return _echec('la cible de glucides n’est plus une recopie');
+              if(/[*/]\s*(poids|weight|kg)|[*]\s*ECH_/.test(bloc))
+                return _echec('une cible est dérivée d’un calcul');
+              // La phrase le dit à l'utilisateur, pas seulement au code.
+              return /ne les invente pas/.test(ECH_PHRASE_CANEVAS)
+                ?true:_echec('la phrase du canevas ne dit plus qui pose les cibles');});})());
+
+          ok('Les bornes dures REFUSENT l\'enregistrement, elles n\'avertissent pas',(()=>{
+            // Un avertissement qu'on peut ignorer d'un clic n'est pas un
+            // garde-fou : c'est une case à cocher avant de faire ce qu'on
+            // avait décidé de faire.
+            return sansSave(()=>{
+              const u=U();
+              ouvrirEcheance(u,{date:J(16),type:'COMPETITION'});
+              const cas=[
+                [{cibleEau:8},'eau au-delà de '+ECH_EAU_MAX_L+' L'],
+                [{cibleSodium:15},'sel au-delà de '+ECH_SEL_MAX_G+' g'],
+                [{cibleGlucides:1200},'glucides au-delà de '+ECH_GLUCIDES_MAX_G_KG+' g/kg']
+              ];
+              for(const [f,quoi] of cas){
+                const r=poserFicheEcheance(u,3,f);
+                if(r.ok) return _echec(quoi+' : accepté');
+                if(!r.raison||r.raison.length<20) return _echec(quoi+' : refus sans explication');
+                // Le refus n'écrit RIEN : une fiche à moitié posée serait pire.
+                if((echeance(u).fiches||{})['j3']) return _echec(quoi+' : la fiche a été écrite');
+              }
+              // ⚠ ET LA BORNE GLUCIDES NE S'EFFACE PAS QUAND LE POIDS MANQUE.
+              // Elle se mesurait « si le poids est connu » et disparaissait
+              // donc en silence pour un dossier sans pesée : 1 200 g passaient
+              // sans un mot. Mesuré sur un dossier sans pesée.
+              const sansPoids={email:'x@t.fr',sessions:[],nutrition:{}};
+              ouvrirEcheance(sansPoids,{date:J(16),type:'OBJECTIF'});
+              const r2=poserFicheEcheance(sansPoids,3,{cibleGlucides:1200});
+              if(r2.ok) return _echec('1200 g de glucides passent sans poids connu');
+              return /poids/i.test(r2.raison||'')
+                ?true:_echec('le refus ne nomme pas le poids manquant');});})());
+
+          ok('Le plancher hydrique : aucune restriction ne sera outillée',(()=>{
+            // Le « water cut » est la manipulation qui envoie des gens à
+            // l'hôpital. L'outiller reviendrait à la recommander.
+            return sansSave(()=>{
+              const u=U();
+              ouvrirEcheance(u,{date:J(16),type:'COMPETITION'});
+              for(const eau of [0,0.5,1,1.4]){
+                const r=poserFicheEcheance(u,2,{cibleEau:eau});
+                if(eau>0&&r.ok) return _echec(eau+' L accepté, sous le plancher de '+ECH_EAU_MIN_L);
+              }
+              // Le plancher est un vrai plancher, pas un arrondi.
+              if(poserFicheEcheance(u,2,{cibleEau:1.49}).ok) return _echec('1,49 L accepté');
+              if(!poserFicheEcheance(u,2,{cibleEau:1.5}).ok) return _echec('1,5 L refusé');
+              const r=poserFicheEcheance(u,2,{cibleEau:1.2});
+              return /restriction hydrique/i.test(r.raison||'')
+                ?true:_echec('le refus n’explique pas la doctrine : « '+r.raison+' »');});})());
+
+          ok('Une seule échéance, et le remplacement est journalisé',(()=>{
+            return sansSave(()=>{
+              const u=U();
+              ouvrirEcheance(u,{date:J(16),type:'COMPETITION',federation:'IFBB'});
+              poserFicheEcheance(u,3,{cibleEau:4});
+              const r=ouvrirEcheance(u,{date:J(40),type:'SHOOTING'});
+              if(!r.remplacee) return _echec('le remplacement n’est pas signalé');
+              // L'objet est UNIQUE : pas un tableau, pas deux clefs.
+              if(Array.isArray(u.echeance)) return _echec('les échéances s’empilent');
+              if(echeance(u).type!=='SHOOTING') return _echec('l’ancienne a survécu');
+              // Les fiches de l'ancienne ne se reportent pas sur la nouvelle.
+              if(Object.keys(echeance(u).fiches||{}).length)
+                return _echec('les fiches de l’ancienne échéance ont survécu');
+              // JOURNALISÉ, comme les ajustements nutrition.
+              const h=(u.nutrition.ajustHisto||[]).map(x=>x.origine);
+              if(h.indexOf('echeance_ouverte')<0) return _echec('l’ouverture n’est pas journalisée');
+              return h.indexOf('echeance_remplacee')>=0
+                ?true:_echec('le remplacement n’est pas journalisé');});})());
+
+          ok('La sortie branche paliersTransition, pas un doublon',(()=>{
+            // DEUX MÉCANIQUES DE RETOUR AU MAINTIEN finiraient par ne plus dire
+            // la même chose du même athlète.
+            if(typeof paliersTransition!=='function') return _echec('paliersTransition a disparu');
+            if(typeof ouvrirTransitionMaintien!=='function')
+              return _echec('ouvrirTransitionMaintien a disparu');
+            const s=String(echeanceOuvrirSortie).replace(/^\s*\/\/.*$/gm,'');
+            if(s.indexOf('ouvrirTransitionMaintien()')<0)
+              return _echec('la sortie n’appelle pas la fonction existante');
+            // AUCUNE SECONDE MÉCANIQUE : le module ne recalcule pas de paliers.
+            const src=_prodSrc();
+            const j=src.indexOf('function echeancePropositionSortie');
+            if(j<0) return _echec('la proposition de sortie a disparu');
+            const bloc=_sansComm(src.slice(j,j+900));
+            if(/paliersTransition\s*\(|kcalMaintien|\bpaliers\s*=/.test(bloc))
+              return _echec('le module recalcule des paliers au lieu d’ouvrir l’écran');
+            // paliersTransition reste appelé UNE fois, par l'écran existant.
+            const n=(src.match(/paliersTransition\(/g)||[]).length;
+            return n>=1?true:_echec('plus personne n’appelle paliersTransition');})());
+
+          ok('Le garde-fou TCA s\'applique, et la mention ne s\'affiche qu\'une fois',(()=>{
+            // LE MÊME REFUS, LA MÊME DOCTRINE, LA MÊME PORTE D'ENTRÉE :
+            // refusObjectifPerte couvre déjà la grossesse, le TCA déclaré et
+            // le dépistage SCOFF positif. Une échéance avec un poids cible EST
+            // un objectif de perte.
+            const s=String(ouvrirEcheance).replace(/^\s*\/\/.*$/gm,'');
+            if(s.indexOf('refusObjectifPerte')<0)
+              return _echec('le garde-fou TCA n’est pas branché');
+            if(s.indexOf('poidsCible')<0) return _echec('la garde ne porte pas sur le poids cible');
+            // SCOFF est bien la source du dépistage — l'audit d'août
+            // recommandait de remplacer la regex sur texte libre, c'est fait.
+            if(typeof evaluerScoff!=='function') return _echec('SCOFF n’existe pas');
+            return sansSave(()=>{
+              const u=U();
+              ouvrirEcheance(u,{date:J(16),type:'COMPETITION'});
+              // La mention médicale est due une fois, puis plus jamais.
+              if(!_echMentionAVoir(u)) return _echec('la mention n’est pas due à l’ouverture');
+              _echMarquerVue(u);
+              if(_echMentionAVoir(u)) return _echec('la mention revient à chaque ouverture');
+              return /dispositif médical/.test(ECH_PHRASE_MEDICALE)
+                ?true:_echec('la mention ne dit plus ce qu’elle doit dire');});})());
+
+          ok('L\'échéance n\'appelle aucun domaine externe',(()=>{
+            // LA RÈGLE DU PROJET : tout domaine appelé est déclaré dans
+            // privacy.html. Le module n'en ajoute AUCUN — Ciqual est servi par
+            // l'application elle-même, le moteur sodique est local, et le reste
+            // est de l'affichage. privacy.html est un fichier séparé que la
+            // suite ne charge pas : la §2 y a été complétée à la main le
+            // 3 septembre 2026, et ce test garde ce qui est vérifiable d'ici,
+            // c'est-à-dire qu'il n'y a rien de neuf à y déclarer.
+            const src=_prodSrc();
+            const i=src.indexOf('function echeanceRefus');
+            const f=src.indexOf('function ligneEcheance');
+            if(i<0||f<0||f<i) return _echec('le module a bougé');
+            const bloc=_sansComm(src.slice(i,f));
+            if(/https?:\/\/|fetch\s*\(\s*['"`]\w/.test(bloc))
+              return _echec('le module contacte un domaine');
+            // Ciqual passe par le chargeur EXISTANT, qui est déjà déclaré.
+            return bloc.indexOf('_loadCiqual()')>=0
+              ?true:_echec('les équivalents n’utilisent plus le chargeur Ciqual');})());
+        })();
+
+        // ══════ LA CHARGE INTERNE ══════
+        (()=>{
+          const J=n=>Date.now()-n*86400000;
+          // l : liste de {j, srpe, duree}
+          const U=l=>({email:'c@t.fr',sessions:l.map(x=>({id:'s'+x.j,date:J(x.j),
+            duration:x.duree,data:{},srpe:x.srpe}))});
+          const serie=(de,a,pas,srpe,duree)=>{ const l=[];
+            for(let j=de;j<=a;j+=pas) l.push({j,srpe,duree}); return l; };
+
+          ok('Le produit est RECALCULÉ, jamais stocké',(()=>{
+            // UN PRODUIT FIGÉ NE SE RECALCULE PAS quand on corrige la durée :
+            // la séance de 90 minutes saisie à 9 garderait sa charge fausse
+            // pour toujours, et le ratio avec elle.
+            const s={duration:60,srpe:'soutenue'};
+            if(chargeSeance(s)!==360) return _echec('charge '+chargeSeance(s)+' au lieu de 360');
+            s.duration=90;
+            if(chargeSeance(s)!==540) return _echec('après correction : '+chargeSeance(s));
+            // RIEN N'A ÉTÉ ÉCRIT DANS LA SÉANCE : ni charge, ni produit.
+            for(const k of Object.keys(s))
+              if(/charge|produit|load/i.test(k)) return _echec('la séance porte « '+k+' »');
+            // Et l'écriture de la note ne stocke pas le produit non plus.
+            const src=String(noterSeance).replace(/^\s*\/\/.*$/gm,'');
+            if(/\.charge\s*=/.test(src)) return _echec('noterSeance stocke la charge');
+            return src.indexOf('s.srpe=cle')>=0?true:_echec('la note n’est pas stockée');})());
+
+          ok('La note est facultative : une séance sans note reste valide',(()=>{
+            // LA FRICTION EN FIN DE SÉANCE TUE UNE COLLECTE. Une séance sans
+            // note ne vaut pas zéro — elle n'entre simplement pas dans le
+            // calcul, et la couverture s'en charge.
+            if(chargeSeance({duration:60})!==null) return _echec('une charge sort sans note');
+            if(chargeSeance({srpe:'dure'})!==null) return _echec('une charge sort sans durée');
+            if(chargeSeance({duration:60,srpe:'inconnue'})!==null)
+              return _echec('une note hors échelle est acceptée');
+            // Les cinq pas sont libellés en MOTS : un athlète ne note pas sa
+            // séance sur dix, il la qualifie.
+            if(SRPE_ECHELLE.length!==5) return _echec(SRPE_ECHELLE.length+' pas au lieu de 5');
+            for(const e of SRPE_ECHELLE){
+              if(!e.lib||/^\d+$/.test(e.lib)) return _echec('le pas '+e.cle+' est un chiffre');
+              if(!(e.v>=2&&e.v<=10)) return _echec(e.cle+' vaut '+e.v);
+            }
+            // ET LA SORTIE EST AUSSI GRANDE QUE LES RÉPONSES : une sortie
+            // difficile à viser transforme une question facultative en péage.
+            const h=String(rcRendreSrpe).replace(/^\s*\/\/.*$/gm,'');
+            if(h.indexOf('rcPasserSrpe()')<0) return _echec('aucune sortie sur l’encart');
+            return /min-width:40px;min-height:40px/.test(h)
+              ?true:_echec('la sortie est plus petite que les réponses');})());
+
+          ok('Le ratio est null sous trois semaines ET sous couverture',(()=>{
+            // UN RATIO CALCULÉ SUR DES TROUS EST UN CHIFFRE FAUX QUI A L'AIR
+            // JUSTE. Deux gardes, aucune négociable.
+            const jeune=U(serie(1,12,2,'soutenue',60));
+            if(ratioCharge(jeune)!==null)
+              return _echec('un ratio sort de 12 jours d’historique : '+ratioCharge(jeune));
+            // Trois semaines pleines, tout noté : le ratio existe.
+            const plein=U(serie(1,27,2,'soutenue',60));
+            const r=ratioCharge(plein);
+            if(r===null) return _echec('aucun ratio sur trois semaines complètes');
+            if(couvertureCharge(plein)!==1) return _echec('couverture '+couvertureCharge(plein));
+            // Une séance notée sur trois : sous le seuil, on ne rend RIEN.
+            const troue=U(serie(1,27,2,'soutenue',60).map((x,i)=>
+              Object.assign({},x,{srpe:(i%3===0)?'soutenue':undefined})));
+            const cv=couvertureCharge(troue);
+            if(!(cv<CHARGE_COUVERTURE_MIN)) return _echec('couverture '+cv+' pas sous le seuil');
+            if(ratioCharge(troue)!==null)
+              return _echec('un ratio sort d’une couverture de '+Math.round(cv*100)+' %');
+            // LES DEUX TERMES SONT DANS LA MÊME UNITÉ : l'aiguë est une somme
+            // sur 7 jours, la chronique une MOYENNE hebdomadaire sur 28 —
+            // sans quoi le ratio vaudrait systématiquement un quart.
+            //
+            // ⚠ ON VÉRIFIE LES DEUX CONTRE DES VALEURS CALCULÉES À LA MAIN, pas
+            // l'un contre l'autre : comparer le ratio à aiguë/chronique laisse
+            // passer toute erreur COMMUNE aux deux. Mesuré — en remplaçant la
+            // moyenne chronique par une somme, la sonde restait verte.
+            //
+            // `plein` : une séance tous les deux jours de J-1 à J-27, chacune
+            // « soutenue » (6) × 60 min = 360.
+            //   aiguë     = les 4 séances de J-1 à J-7        → 4 × 360 = 1440
+            //   chronique = les 14 séances de J-1 à J-27, / 4 → 14 × 360 / 4 = 1260
+            const a=chargeAigue(plein), c=chargeChronique(plein);
+            const nAigu=plein.sessions.filter(s=>s.date>Date.now()-7*86400000).length;
+            const nChro=plein.sessions.length;
+            if(a!==nAigu*360) return _echec('aiguë '+a+' au lieu de '+(nAigu*360));
+            if(c!==Math.round(nChro*360/4))
+              return _echec('chronique '+c+' au lieu de '+Math.round(nChro*360/4)
+                +' — somme au lieu de moyenne hebdomadaire ?');
+            return Math.abs(a/c-r)<0.02?true:_echec('ratio '+r+' contre '+(a/c));})());
+
+          ok('Le saut de charge exige DEUX semaines de suite',(()=>{
+            // Une semaine chargée est un choix d'entraînement ; deux d'affilée
+            // au-dessus de la moitié de la moyenne du mois, c'est une dérive
+            // que personne n'a décidée.
+            const base=serie(15,40,2,'facile',45);
+            // Une seule semaine lourde : rien.
+            const une=U(base.concat(serie(1,6,1,'maximale',90)));
+            if(sautDeCharge(une)) return _echec('le signal se lève sur une seule semaine');
+            // Deux semaines lourdes : le signal.
+            const deux=U(base.concat(serie(1,14,1,'maximale',90)));
+            const s=sautDeCharge(deux);
+            if(!s) return _echec('le signal ne se lève pas sur deux semaines');
+            if(!(s.ratio>CHARGE_RATIO_SEUIL)) return _echec('ratio '+s.ratio+' sous le seuil');
+            // AUCUN SEUIL BAS SYMÉTRIQUE : une semaine légère est déjà
+            // couverte par les décharges programmées.
+            const src=String(sautDeCharge).replace(/^\s*\/\/.*$/gm,'');
+            if(/<\s*0\.\d|ratio<|baisse/i.test(src))
+              return _echec('un seuil bas symétrique est apparu');
+            // Et le signal remonte au coach avec sa phrase.
+            const sg=signauxEntrainement(Object.assign({id:'c1'},deux));
+            if(!sg.sautDeCharge) return _echec('le signal n’atteint pas signauxEntrainement');
+            const t=_texteSignal('saut_charge',deux,sg);
+            if(!t||t.indexOf('%')<0) return _echec('la phrase ne dit pas de combien : « '+t+' »');
+            return /ratio/i.test(t)?_echec('la phrase montre un ratio brut'):true;})());
+
+          ok('Le tonnage n\'est retiré de nulle part',(()=>{
+            // LES DEUX MESURES DISENT DES CHOSES DIFFÉRENTES et l'athlète
+            // connaît le tonnage : on ajoute, on ne remplace pas.
+            for(const f of ['tonnageSemaine','tonnageSerie'])
+              if(typeof window[f]!=='function') return _echec(f+' a disparu');
+            const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+            if(s.indexOf('tonnageSerie(')<0) return _echec('le tonnage n’est plus calculé');
+            // LE RATIO NE S'AFFICHE PAS À L'ATHLÈTE : c'est une donnée de
+            // pilotage de coach. Seuls la disponibilité (qui n'affiche aucun
+            // chiffre) et le signal coach le lisent.
+            const n=(s.match(/ratioCharge\(/g)||[]).length;
+            if(n>4) return _echec(n+' lectures du ratio : il déborde du pilotage coach');
+            return true;})());
+        })();
+
+        // ══════ LE RENDEMENT PAR EXERCICE ══════
+        (()=>{
+          const J=n=>Date.now()-n*86400000;
+          // n séances sur un exercice, charge croissante de `pas` par séance.
+          const faire=(nom,n,w0,pas,opt)=>{
+            const o=opt||{}; const s=[];
+            for(let i=0;i<n;i++){
+              const set={done:true,weight:String(w0+i*pas),reps:'8',rir:o.rir||'2'};
+              if(o.pain) set.pain=o.pain;
+              const d={}; d[nom]={sets:[set]};
+              s.push({date:J((n-i)*3),data:d});
+            }
+            return s;
+          };
+          const cfg=(nom,slots)=>{ const l=[];
+            for(let i=0;i<slots;i++) l.push({active:true,exercises:[{name:nom,series:3,rir:'2'}]});
+            return l; };
+
+          ok('Sous six séances, le score est null — et la mention le dit',(()=>{
+            // UNE PENTE SUR TROIS POINTS N'EST PAS UNE PENTE, c'est un dessin.
+            // L'absence de mesure est une information : elle reste visible,
+            // sans chiffre. Une case vide se lirait comme un zéro.
+            for(const n of [0,1,3,5]){
+              const r=rendementExercice({email:'r@t.fr',sessions:faire('DEEP SQUAT',n,80,2),
+                sessions_config:cfg('DEEP SQUAT',1)},'DEEP SQUAT');
+              if(r.rendement!==null) return _echec(n+' séances donnent un score : '+r.rendement);
+              if(n<REND_SEANCES_MIN&&r.raison!=='pas assez de séances')
+                return _echec(n+' séances : raison « '+r.raison+' »');
+            }
+            // À six, le score existe.
+            const six=rendementExercice({email:'r@t.fr',sessions:faire('DEEP SQUAT',6,80,2),
+              sessions_config:cfg('DEEP SQUAT',1)},'DEEP SQUAT');
+            if(six.rendement===null) return _echec('six séances ne suffisent pas : '+six.raison);
+            return six.n===6?true:_echec('n vaut '+six.n+' au lieu de 6');})());
+
+          ok('L\'objet porte les trois termes, jamais un scalaire',(()=>{
+            // « 0,42 » ne dit pas au coach LEQUEL des trois décroche — et
+            // c'est exactement ce qu'il doit savoir : un exercice qui ne
+            // progresse plus ne se traite pas comme un qu'on ne fait jamais.
+            const r=rendementExercice({email:'r@t.fr',sessions:faire('DEEP SQUAT',8,80,2.5),
+              sessions_config:cfg('DEEP SQUAT',1)},'DEEP SQUAT');
+            if(typeof r!=='object'||r===null) return _echec('la fonction rend un scalaire');
+            for(const k of ['progression','cout','regularite','rendement','n'])
+              if(!(k in r)) return _echec(k+' manque dans l’objet');
+            for(const k of ['progression','cout','regularite','rendement'])
+              if(typeof r[k]!=='number') return _echec(k+' n’est pas un nombre : '+r[k]);
+            // ET LE CALCUL EST CELUI ANNONCÉ : (progression − coût) × régularité.
+            const attendu=Math.round((r.progression-r.cout)*r.regularite*1000)/1000;
+            return r.rendement===attendu
+              ?true:_echec('rendement '+r.rendement+' au lieu de '+attendu);})());
+
+          ok('La régularité est croisée avec le journal des écarts',(()=>{
+            // UN EXERCICE REMPLACÉ UNE FOIS SUR TROIS NE REND RIEN, quelle que
+            // soit sa pente. Sans ce croisement, un mouvement qu'on évite parce
+            // que la machine est prise afficherait une belle progression sur
+            // les rares fois où il est fait, et le coach le garderait.
+            const base={email:'r@t.fr',sessions:faire('BUTTERFLY',8,30,1),
+              sessions_config:cfg('BUTTERFLY',2)};
+            const sans=rendementExercice(Object.assign({},base,{ecartsSeance:[]}),'BUTTERFLY');
+            const avec=rendementExercice(Object.assign({},base,{ecartsSeance:[
+              {date:J(2),exoPrevu:'BUTTERFLY',exoFait:'POMPES',motif:'absent'},
+              {date:J(5),exoPrevu:'BUTTERFLY',exoFait:'POMPES',motif:'absent'},
+              {date:J(9),exoPrevu:'BUTTERFLY',exoFait:'POMPES',motif:'absent'}]}),'BUTTERFLY');
+            if(!(avec.regularite<sans.regularite))
+              return _echec('les écarts ne pèsent pas : '+avec.regularite+' contre '+sans.regularite);
+            if(!(avec.rendement<sans.rendement))
+              return _echec('le rendement ne baisse pas malgré trois remplacements');
+            // UN ÉCART SUR UN AUTRE EXERCICE NE COMPTE PAS.
+            const autre=rendementExercice(Object.assign({},base,{ecartsSeance:[
+              {date:J(2),exoPrevu:'DEEP SQUAT',exoFait:'POMPES',motif:'absent'}]}),'BUTTERFLY');
+            if(autre.regularite!==sans.regularite)
+              return _echec('un écart sur un autre exercice pèse ici');
+            // ET LA RÉGULARITÉ NE DÉPASSE JAMAIS 1 : on ne récompense pas
+            // quelqu'un d'avoir fait plus que demandé.
+            const zele=rendementExercice({email:'r@t.fr',sessions:faire('DEEP SQUAT',20,80,1),
+              sessions_config:cfg('DEEP SQUAT',1)},'DEEP SQUAT');
+            return zele.regularite<=1?true:_echec('régularité '+zele.regularite);})());
+
+          ok('Un exercice qui progresse n\'est JAMAIS proposé à la rotation',(()=>{
+            // Un mouvement qui fait mal ET qui fait progresser est un
+            // arbitrage de coach : il pèse la douleur contre le résultat avec
+            // ce qu'il sait de l'athlète et que l'application ignore. Un calcul
+            // qui trancherait à sa place retirerait le meilleur exercice de
+            // quelqu'un parce qu'il est exigeant.
+            const s=String(propositionsRotation).replace(/^\s*\/\/.*$/gm,'');
+            if(!/progression>0/.test(s)) return _echec('la garde sur la progression a disparu');
+            // Et elle s'applique VRAIMENT : un exercice qui monte, coûte cher
+            // et serait dans le tiers bas ne doit pas sortir.
+            const u={email:'r@t.fr',
+              sessions:faire('DEEP SQUAT',8,80,3)
+                .concat(faire('LEG EXTENSION',8,40,0,{pain:'3'}))
+                .concat(faire('BUTTERFLY',8,30,0.2,{pain:'3'})),
+              sessions_config:[{active:true,exercises:[
+                {name:'DEEP SQUAT',series:3,rir:'2'},
+                {name:'LEG EXTENSION',series:3,rir:'2'},
+                {name:'BUTTERFLY',series:3,rir:'2'}]}],
+              programme:{debut:Date.now()-6*7*86400000,semaines:6}};
+            const p=propositionsRotation(u);
+            if(!p.actif) return _echec('la rotation ne se déclenche pas en fin de bloc : '+p.raison);
+            for(const l of p.lignes){
+              const r=rendementExercice(u,l.nom);
+              if(r.progression>0) return _echec(l.nom+' progresse (+'+r.progression+') et est proposé');
+            }
+            return true;})());
+
+          ok('La rotation ne se propose qu\'à la fin d\'un bloc',(()=>{
+            // CHANGER UN EXERCICE AU MILIEU D'UN BLOC détruit la seule chose
+            // qui rende sa pente lisible : la répétition.
+            const seances=faire('DEEP SQUAT',8,80,0)
+              .concat(faire('LEG EXTENSION',8,40,0))
+              .concat(faire('BUTTERFLY',8,30,0));
+            const conf=[{active:true,exercises:[{name:'DEEP SQUAT',series:3},
+              {name:'LEG EXTENSION',series:3},{name:'BUTTERFLY',series:3}]}];
+            // Semaine 1 sur 8 : en plein bloc.
+            const debut={email:'r@t.fr',sessions:seances,sessions_config:conf,
+              programme:{debut:Date.now()-2*86400000,semaines:8}};
+            const p1=propositionsRotation(debut);
+            if(p1.actif) return _echec('la rotation se propose en cours de bloc');
+            if(!p1.raison||p1.raison.indexOf('fin d’un bloc')<0)
+              return _echec('le refus n’explique pas : « '+p1.raison+' »');
+            // Dernière semaine : on y est.
+            const fin={email:'r@t.fr',sessions:seances,sessions_config:conf,
+              programme:{debut:Date.now()-7*7*86400000,semaines:8}};
+            return propositionsRotation(fin).actif
+              ?true:_echec('la rotation ne s’ouvre pas en dernière semaine');})());
+
+          ok('Le classement est réservé au coach, et le sans-score reste visible',(()=>{
+            // L'ATHLÈTE NE VOIT PAS DE CLASSEMENT DE SES EXERCICES : ce serait
+            // une invitation à changer sans raison, et le meilleur exercice
+            // reste celui qu'on répète assez longtemps.
+            const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+            const n=(s.match(/_htmlRendement\(/g)||[]).length;
+            // Deux : la déclaration et l'unique appel, dans la fiche client.
+            if(n>2) return _echec(n+' appels de la vue : elle déborde de la fiche coach');
+            // Les exercices sans score ferment la liste mais Y FIGURENT.
+            const u={email:'r@t.fr',
+              sessions:faire('DEEP SQUAT',8,80,2).concat(faire('BUTTERFLY',2,30,1)),
+              sessions_config:[{active:true,exercises:[{name:'DEEP SQUAT',series:3},
+                {name:'BUTTERFLY',series:3}]}]};
+            const l=rendementsBloc(u);
+            if(l.length!==2) return _echec(l.length+' lignes au lieu de 2');
+            if(l[0].rendement==null) return _echec('le noté ne passe pas devant');
+            if(l[1].rendement!==null) return _echec('le sans-score a un rendement');
+            if(l[1].raison!=='pas assez de séances') return _echec('le sans-score n’est pas motivé');
+            const h=_htmlRendement(u);
+            return (h.indexOf('pas assez de séances')>=0)
+              ?true:_echec('la mention n’apparaît pas dans la vue');})());
+        })();
+
+        // ══════ LES SALLES ET LE REMPLACEMENT ══════
+        (()=>{
+          const u0=()=>({email:'sl@test.fr',id:'u_sl',sessions:[]});
+          const club={id:'a',nom:'Club',materiel:['BARRE','HALTERES','POULIE','MACHINE',
+            'SMITH','PRESSE','TRACTION','DIPS','ELASTIQUE','AUCUN']};
+          const garage={id:'b',nom:'Garage',materiel:['HALTERES','ELASTIQUE','AUCUN']};
+
+          ok('Un seul vocabulaire de matériel, jamais deux',(()=>{
+            // DEUX TABLES FINIRAIENT PAR DIVERGER : un « HALTERES » d'un côté
+            // ne reconnaîtrait pas un « HALTERE » de l'autre. PROTO_MATERIEL
+            // sert aux protocoles ET aux salles ; SALLE_MATERIEL n'en est
+            // qu'un sous-ensemble, pas une seconde source.
+            for(const m of SALLE_MATERIEL)
+              if(!PROTO_MATERIEL[m]) return _echec(m+' n’existe pas dans PROTO_MATERIEL');
+            // LES CLEFS D'ORIGINE N'ONT PAS BOUGÉ : les protocoles les lisent,
+            // et un renommage aurait vidé leur filtre en silence.
+            for(const m of ['AUCUN','TAPIS','VELO','RAMEUR','ELASTIQUE','FOAM_ROLLER','BARRE'])
+              if(!PROTO_MATERIEL[m]) return _echec(m+' a disparu de la table d’origine');
+            // Et tout matériel déduit d'un nom appartient à la même table.
+            for(const n of ['DEVELOPPE COUCHE HALTERE','TIRAGE POULIE HAUTE','DIPS','POMPES'])
+              for(const k of materielExercice(n))
+                if(!PROTO_MATERIEL[k]) return _echec(k+' est hors table (déduit de « '+n+' »)');
+            return true;})());
+
+          ok('Le muscle primaire n\'est JAMAIS changé, et trois candidats au plus',(()=>{
+            // (a) EST OBLIGATOIRE : un substitut qui ne travaille pas le même
+            // muscle n'est pas un substitut, c'est un autre exercice — et
+            // l'athlète croirait avoir fait sa séance.
+            const u=u0();
+            const prim=n=>_substPrimaire(n,u);
+            for(const cible of ['PRESSE A CUISSE INCLINE','DEVELOPPE COUCHE','CURL BARRE']){
+              const r=substitutsSalle(u,cible,club);
+              if(r.liste.length>SUBST_MAX)
+                return _echec(r.liste.length+' candidats pour '+cible);
+              for(const c of r.liste)
+                if(prim(c.nom)!==prim(cible))
+                  return _echec(c.nom+' ('+prim(c.nom)+') proposé pour '+cible+' ('+prim(cible)+')');
+              // L'exercice ne se propose jamais lui-même.
+              if(r.liste.some(c=>exKey(c.nom)===exKey(cible)))
+                return _echec(cible+' se propose lui-même');
+            }
+            return true;})());
+
+          ok('Le matériel de la salle filtre vraiment, et le refus est franc',(()=>{
+            const u=u0();
+            const club2=substitutsSalle(u,'PRESSE A CUISSE INCLINE',club);
+            const gar=substitutsSalle(u,'PRESSE A CUISSE INCLINE',garage);
+            if(!club2.liste.length) return _echec('aucun substitut dans une salle complète');
+            // AUCUN CANDIDAT NE DEMANDE CE QUE LE GARAGE N'A PAS.
+            for(const c of gar.liste)
+              if(!exFaisableDans(c.nom,garage.materiel))
+                return _echec(c.nom+' proposé au garage alors qu’il demande '+c.materiel.join('+'));
+            // Une salle vide : on le dit franchement plutôt que de proposer un
+            // pis-aller. Un mouvement qui ne travaille pas le même muscle
+            // ferait croire à l'athlète qu'il a fait sa séance.
+            // UNE SALLE SANS MATERIEL PEUT QUAND MEME ACCUEILLIR DU POIDS DU
+            // CORPS, et c'est correct : des pompes ne demandent rien. Le refus
+            // franc se teste donc sur un muscle qui n'a AUCUNE alternative au
+            // poids du corps dans la banque — le biceps.
+            const vide={id:'c',nom:'Rien',materiel:[]};
+            const pompes=substitutsSalle(u,'BUTTERFLY',vide);
+            if(!pompes.liste.length) return _echec('aucune pompe proposée dans une salle vide');
+            const rien=substitutsSalle(u,'CURL BARRE',vide);
+            if(rien.liste.length) return _echec('des substituts au curl sortent d’une salle sans matériel');
+            if(!rien.raison||rien.raison.indexOf('coach')<0)
+              return _echec('le refus ne renvoie pas vers le coach : « '+rien.raison+' »');
+            // ⚠ LA SPÉCIFICITÉ : « curl barre EZ » ne doit pas exiger AUSSI une
+            // barre droite. Mesuré — une salle avec barre EZ mais sans barre
+            // se voyait refuser l'exercice.
+            const ez=materielExercice('CURL BARRE EZ');
+            if(ez.indexOf('BARRE')>=0) return _echec('barre EZ exige aussi une barre droite : '+ez.join('+'));
+            // Et une salle qui déclare « poulie » couvre haute et basse.
+            return exFaisableDans('TIRAGE POULIE HAUTE',['POULIE'])
+              ?true:_echec('une salle avec poulie ne couvre pas la poulie haute');})());
+
+          ok('Aucune charge transposée sans historique sur CE mouvement',(()=>{
+            // DÉDUIRE UNE CHARGE D'UN AUTRE EXERCICE PAR UN RATIO serait une
+            // invention pure, et l'athlète la prendrait pour une mesure.
+            // Champ vide, et c'est correct.
+            const vierge=u0();
+            const h=historiqueExercice(vierge,'DEEP SQUAT');
+            if(h.vu||h.charge!==null) return _echec('une charge sort d’un dossier vide');
+            const avec={email:'sl@test.fr',id:'u_sl',sessions:[
+              {date:Date.now()-864e5,data:{'DEEP SQUAT':{sets:[{done:true,weight:'70',reps:'5'}]}}},
+              {date:Date.now(),data:{'DEEP SQUAT':{sets:[{done:true,weight:'80',reps:'5'}]}}}]};
+            const h2=historiqueExercice(avec,'DEEP SQUAT');
+            if(h2.charge!==80) return _echec('charge '+h2.charge+' au lieu de la dernière, 80');
+            // ET AUCUN RATIO NULLE PART : la seule source est l'historique.
+            const s=String(_appliquerSubstitut).replace(/^\s*\/\/.*$/gm,'');
+            if(/\*\s*0\.\d|ratio|coeff/i.test(s))
+              return _echec('une charge est transposée par un coefficient');
+            return s.indexOf('historiqueExercice')>=0
+              ?true:_echec('la charge ne vient pas de l’historique');})());
+
+          ok('Le motif « douleur » alimente le signal existant, sans doublon',(()=>{
+            // LA DOULEUR SE DÉCLARE PAR SÉRIE dans le champ `pain` depuis
+            // toujours. Un second stockage ferait deux comptes de la même
+            // chose, et le coach lirait deux vérités.
+            const s=String(_poserMotifEcart).replace(/^\s*\/\/.*$/gm,'');
+            if(s.indexOf("motif==='douleur'")<0) return _echec('le motif douleur n’est plus distingué');
+            if(s.indexOf('SIG_PAIN_SEUIL')<0)
+              return _echec('la douleur n’alimente pas le seuil du signal existant');
+            if(s.indexOf('.pain')<0) return _echec('elle n’écrit pas dans le champ pain');
+            // AUCUN SECOND STOCKAGE : pas de compteur de douleur à côté.
+            if(/douleurCount|nbDouleur|painLog/i.test(_prodSrc().replace(/^\s*\/\/.*$/gm,'')))
+              return _echec('un second stockage de la douleur est apparu');
+            // Les quatre motifs, et pas un champ libre.
+            const cles=Object.keys(ECART_MOTIFS);
+            if(cles.length!==4) return _echec(cles.length+' motifs au lieu de 4');
+            return cles.indexOf('douleur')>=0?true:_echec('« douleur » n’est pas un motif');})());
+
+          ok('Le remplacement ne touche jamais au programme du coach',(()=>{
+            // IL VIT DANS woState ET DANS LE JOURNAL. Le programme reste celui
+            // du coach : un échange un mardi ne doit pas changer tous les
+            // mardis suivants.
+            for(const f of [_appliquerSubstitut,journaliserEcart,_poserMotifEcart]){
+              const s=String(f).replace(/^\s*\/\/.*$/gm,'');
+              if(/sessions_config\s*=|sessions_config\[/.test(s))
+                return _echec(f.name+' touche à sessions_config');
+            }
+            // ET LA SALLE ACTIVE MEURT AVEC LA SÉANCE : elle vit dans woState.
+            const c=String(choisirSalle).replace(/^\s*\/\/.*$/gm,'');
+            if(c.indexOf('woState')<0) return _echec('la salle active ne vit pas dans la séance');
+            if(/sessions_config/.test(c)) return _echec('changer de salle modifie le programme');
+            return true;})());
+
+          ok('Le coach lit le motif, pas la liste des trois',(()=>{
+            // TROIS FOIS LE MÊME ÉCART N'EST PAS UN INCIDENT, c'est un
+            // programme à corriger — et c'est ÇA que le coach doit lire.
+            const u={email:'sl@test.fr',id:'u_sl',sessions:[],ecartsSeance:[
+              {date:Date.now()-1000,exoPrevu:'PRESSE A CUISSE INCLINE',exoFait:'DEEP SQUAT',motif:'absent'},
+              {date:Date.now()-2000,exoPrevu:'PRESSE A CUISSE INCLINE',exoFait:'DEEP SQUAT',motif:'absent'},
+              {date:Date.now()-3000,exoPrevu:'PRESSE A CUISSE INCLINE',exoFait:'HACKSQUAT',motif:'materiel_occupe'}]};
+            const t=resumeEcarts(u);
+            if(!t) return _echec('aucun résumé');
+            if(t.indexOf('3 remplacements')<0) return _echec('le nombre n’est pas dit : « '+t+' »');
+            if(t.indexOf('tous sur')<0) return _echec('l’exercice commun n’est pas nommé : « '+t+' »');
+            // « TOUS SUR » N'EST VRAI QUE SI C'EST VRAI.
+            const u2=Object.assign({},u,{ecartsSeance:u.ecartsSeance.concat(
+              [{date:Date.now(),exoPrevu:'DEVELOPPE COUCHE',exoFait:'BUTTERFLY',motif:'autre'}])});
+            const t2=resumeEcarts(u2);
+            if(t2.indexOf('tous sur')>=0) return _echec('« tous sur » alors que deux exercices : « '+t2+' »');
+            // Hors fenêtre de sept jours : rien.
+            const vieux={email:'sl@test.fr',ecartsSeance:[
+              {date:Date.now()-30*864e5,exoPrevu:'X',exoFait:'Y',motif:'autre'}]};
+            return resumeEcarts(vieux)===''?true:_echec('un écart d’il y a un mois est résumé');})());
+        })();
+
+        // ══════ LE BLOC DE PRIORITÉ ══════
+        (()=>{
+          const neuf=()=>({email:'bp@test.fr',id:'u_bp',sessions:[],blocPriorite:null});
+          const avecBloc=(hauts,bas,semaines,depuis)=>({email:'bp@test.fr',id:'u_bp',sessions:[],
+            blocPriorite:{debut:Date.now()-(depuis||0)*604800000,semaines:semaines||6,
+              hauts:hauts||[],bas:bas||[],note:''}});
+          // volumeSemaine stubée : le plafond est de l'arithmétique, et la
+          // tester à travers un historique fabriqué mesurerait surtout la
+          // fabrication de l'historique.
+          const avecVolume=(v,f)=>{ const s=window.volumeSemaine;
+            try{ window.volumeSemaine=()=>Object.assign({},v); return f(); }
+            finally { window.volumeSemaine=s; } };
+
+          ok('Le quatrième muscle prioritaire est refusé, et le refus explique',(()=>{
+            // LA CONTRAINTE EST DURE, PAS UN CONSEIL. Au-delà de trois, il n'y
+            // a plus de priorité : le budget de récupération se répartit sur
+            // tout et rien ne progresse plus vite.
+            const u=neuf();
+            for(const m of ['DELT_LAT','PECTORAUX','BICEPS'])
+              if(!blocAjouterHaut(u,m).ok) return _echec(m+' refusé alors qu’il y a de la place');
+            if(u.blocPriorite.hauts.length!==3) return _echec(u.blocPriorite.hauts.length+' prioritaires');
+            const r=blocAjouterHaut(u,'TRICEPS');
+            if(r.ok) return _echec('un quatrième muscle est accepté');
+            if(!r.raison) return _echec('refusé sans un mot');
+            // LE REFUS DIT QUOI FAIRE À LA PLACE, il ne se contente pas de bloquer.
+            if(!/retire|deux blocs/i.test(r.raison)) return _echec('le refus ne propose rien : « '+r.raison+' »');
+            if(u.blocPriorite.hauts.length!==3) return _echec('le quatrième a quand même été ajouté');
+            // Et un muscle sans repère n'est jamais priorisable.
+            const s=blocAjouterHaut(neuf(),'LOMBAIRES');
+            return s.ok?_echec('un muscle sans repère est priorisé'):true;})());
+
+          ok('Le plafond des 10 % est OPPOSABLE, et il dit quoi retirer',(()=>{
+            // C'EST LE CŒUR DE LA FONCTIONNALITÉ. Sans ce plafond,
+            // « prioriser » veut juste dire « ajouter », et l'athlète
+            // s'écroule en trois semaines.
+            return avecVolume({DELT_LAT:10,QUADRICEPS:12,PECTORAUX:8},()=>{
+              // Dernière semaine d'un bloc de 6 : la cible a grimpé vers mrv-1.
+              const u=avecBloc(['DELT_LAT'],[],6,5);
+              const a=blocArbitrage(u,Date.now());
+              const p=blocPlafond(u,a,Date.now());
+              if(p.reference!==30) return _echec('référence '+p.reference+' au lieu de 30');
+              if(p.plafond!==33) return _echec('plafond '+p.plafond+' au lieu de 33');
+              if(p.ok) return _echec('la hausse de '+p.hausse+' % passe le plafond');
+              if(!(p.depasse>0)) return _echec('dépassement non chiffré');
+              if(!p.aRetirer.length) return _echec('le refus ne dit pas quoi retirer');
+              // ON NE PROPOSE JAMAIS DE ROGNER UN MUSCLE PRIORITAIRE : cela
+              // viderait le bloc de son sens.
+              for(const x of p.aRetirer)
+                if(x.muscle&&u.blocPriorite.hauts.indexOf(x.muscle)>=0)
+                  return _echec('on propose de rogner un muscle prioritaire');
+              // NI UN MUSCLE EN MAINTIEN : il est déjà à son MEV.
+              const u2=avecBloc(['DELT_LAT'],['QUADRICEPS'],6,5);
+              const p2=blocPlafond(u2,blocArbitrage(u2,Date.now()),Date.now());
+              for(const x of (p2.aRetirer||[]))
+                if(x.muscle&&u2.blocPriorite.bas.indexOf(x.muscle)>=0)
+                  return _echec('on propose de rogner un muscle en maintien');
+              // ET LE MOTEUR REFUSE VRAIMENT D'ÉCRIRE quand le plafond saute.
+              const _g=window.getOwnedClient, _t=window.toast;
+              let ecrit=false;
+              const _be=window._blocEcrire;
+              try{
+                window.getOwnedClient=()=>u;
+                window.toast=()=>{};
+                window._blocEcrire=()=>{ ecrit=true; return true; };
+                blocAppliquerSeries('u_bp');
+              } finally { window.getOwnedClient=_g; window.toast=_t; window._blocEcrire=_be; }
+              return ecrit?_echec('les séries sont appliquées malgré le plafond'):true;});})());
+
+          ok('Un muscle en maintien ne descend jamais sous son MEV',(()=>{
+            // LE MAINTIEN N'EST PAS L'ABANDON : sous le MEV on perd du tissu
+            // pendant le bloc, et on paierait la priorité d'un muscle par la
+            // fonte d'un autre.
+            return avecVolume({QUADRICEPS:20,DELT_LAT:10},()=>{
+              const u=avecBloc(['DELT_LAT'],['QUADRICEPS'],6,0);
+              const a=blocArbitrage(u,Date.now());
+              const q=a.lignes.find(l=>l.muscle==='QUADRICEPS');
+              if(!q) return _echec('le muscle en maintien a disparu de l’arbitrage');
+              if(q.role!=='bas') return _echec('rôle '+q.role);
+              if(q.cible!==q.rep.mev) return _echec('cible '+q.cible+' au lieu du MEV '+q.rep.mev);
+              return q.cible<q.rep.mev?_echec('la cible passe sous le MEV'):true;});})());
+
+          ok('La cible d\'un muscle prioritaire garde une série sous le MRV',(()=>{
+            // LA DERNIÈRE SÉRIE AVANT LE MRV coûte le plus et rend le moins :
+            // viser mrv-1 laisse de quoi absorber une mauvaise nuit.
+            const rep=reperesTable('DELT_LAT');
+            for(let s=1;s<=6;s++){
+              const v=blocCibleHaut(rep,s,6,0);
+              if(v>rep.mrv-1) return _echec('semaine '+s+' : cible '+v+' pour un MRV de '+rep.mrv);
+              if(v<rep.mev) return _echec('semaine '+s+' : cible '+v+' sous le MEV');
+            }
+            // ⚠ ET ELLE NE FAIT JAMAIS BAISSER LE MUSCLE PRIORISÉ. Partir du
+            // MEV proposait 8 à quelqu'un qui faisait déjà 10 : « prioriser »
+            // ne peut pas commencer par retirer du volume au muscle prioritaire.
+            // Trouvé en éprouvant le moteur.
+            if(blocCibleHaut(rep,1,6,10)<10)
+              return _echec('la première semaine fait baisser un muscle prioritaire');
+            return blocCibleHaut(rep,6,6,10)===rep.mrv-1
+              ?true:_echec('la dernière semaine n’atteint pas mrv-1');})());
+
+          ok('Rien ne s\'écrit dans sessions_config sans un geste du coach',(()=>{
+            // LE MOTEUR PROPOSE, LE COACH APPLIQUE. Aucune des fonctions de
+            // calcul ne doit toucher au programme : les lire ne doit rien
+            // changer. On retire les commentaires, plusieurs citent le champ.
+            for(const f of [blocPriorite,blocAvancement,blocArbitrage,blocPlafond,
+                            blocSynthese,blocCibleHaut,blocGestesSeries,blocFrequenceProposee]){
+              const s=String(f).replace(/^\s*\/\/.*$/gm,'');
+              if(/\.sessions_config\s*=/.test(s))
+                return _echec(f.name+' écrit dans sessions_config');
+              if(/DB\.set|CLOUD\.push|saveUser\(/.test(s))
+                return _echec(f.name+' écrit ou envoie');
+            }
+            // ET LES ÉCRITURES PASSENT PAR L'APPLICATEUR EXISTANT, avec son
+            // instantané : deux mécanismes d'ajustement finiraient par ne plus
+            // appliquer la même chose.
+            const e=String(_blocEcrire).replace(/^\s*\/\/.*$/gm,'');
+            if(e.indexOf('appliquerAjustementSeances')<0)
+              return _echec('_blocEcrire n’utilise pas l’applicateur existant');
+            if(e.indexOf('_pushSessionsHistory')<0)
+              return _echec('aucun instantané avant modification');
+            if(e.indexOf('drapeauQuelconqueActif')<0)
+              return _echec('la garde du drapeau rouge a sauté');
+            // LE PIÈGE FIREBASE : sessions_config revient en objet dès qu'une
+            // clef manque. _blocExercicesDe et l'ordre le normalisent avant
+            // toute méthode de tableau.
+            for(const f of [_blocExercicesDe,blocAppliquerOrdre])
+              if(String(f).indexOf('_aplatirSessionsConfig')<0)
+                return _echec(f.name+' lit sessions_config sans l’aplatir');
+            return true;})());
+
+          ok('Le bloc terminé remonte au coach, et rien ne se reconduit',(()=>{
+            const u=avecBloc(['PECTORAUX'],[],6,7);   // échu depuis une semaine
+            const av=blocAvancement(u,Date.now());
+            if(!av||!av.fini) return _echec('un bloc de 6 semaines ouvert il y a 7 n’est pas fini');
+            // LE BLOC N'EST PAS SUPPRIMÉ À L'ÉCHÉANCE : c'est le signal qui
+            // s'en sert, et le coach décide.
+            if(!blocPriorite(u)) return _echec('le bloc s’efface tout seul à l’échéance');
+            // La ligne existe chez le coach, en DERNIER rang.
+            const l=String(_lignesEntrainement).replace(/^\s*\/\/.*$/gm,'');
+            const iB=l.indexOf("cle:'blocPrioriteFini'");
+            if(iB<0) return _echec('aucune ligne pour le bloc terminé');
+            for(const c of ["cle:'douleur'","cle:'decrochage'","cle:'calibrageDu'"])
+              if(l.indexOf(c)>iB) return _echec(c+' passe sous le bloc terminé');
+            // ET IL N'ENTRE PAS DANS urgencyScore : une échéance n'est pas une
+            // urgence.
+            if(/blocPriorite/i.test(String(urgencyScore).replace(/^\s*\/\/.*$/gm,'')))
+              return _echec('le bloc terminé pèse dans le classement d’urgence');
+            // La phrase nomme le muscle, la durée, et dit quoi décider.
+            const t=_texteSignal('blocfini',u,{details:{blocPrioriteFini:
+              {semaines:6,hauts:['PECTORAUX'],mesure:{lib:'Tour de poitrine',delta:0.8}}}});
+            if(!t) return _echec('aucune phrase');
+            if(t.indexOf('pectoraux')<0) return _echec('le muscle n’est pas nommé');
+            if(t.indexOf('6 semaines')<0) return _echec('la durée n’est pas dite');
+            if(t.indexOf('+0,8 cm')<0) return _echec('la mesure n’est pas rapprochée : « '+t+' »');
+            if(!/reconduire/i.test(t)) return _echec('la décision n’est pas rendue au coach');
+            // SANS MESURE, ON LE DIT — une conclusion sans donnée serait pire.
+            const t2=_texteSignal('blocfini',u,{details:{blocPrioriteFini:
+              {semaines:6,hauts:['DELT_LAT'],mesure:null}}});
+            return /aucune mensuration/i.test(t2)?true:_echec('l’absence de mesure est passée sous silence');})());
+        })();
+
+        // ══════ LA DISPONIBILITÉ ══════
+        (()=>{
+          const J=n=>localISODate(_datePlusJours(new Date(),-n));
+          const T=n=>Date.now()-n*86400000;
+          // Un dormeur régulier à 8 h, avec `h` heures les deux dernières nuits.
+          const dort=h=>{ const l=[]; for(let i=0;i<30;i++) l.push({date:J(i),duration:i<2?h:8}); return l; };
+          const seances=(n,pain)=>{ const l=[];
+            for(let i=1;i<=n;i++) l.push({date:T(i),data:{curl:{sets:[
+              {done:true,weight:'20',reps:'10',pain:pain||'',rir:'2'}]}}});
+            return l; };
+
+          ok('Sous deux entrées : pas de donnée, pas d\'avis',(()=>{
+            // Une note bâtie sur une seule mesure porterait tout le poids
+            // d'une seule saisie, et un oubli de la veille ferait annuler une
+            // séance.
+            const vide=disponibilite({email:'d@t.fr',sessions:[],sleepLog:[]},J(0));
+            if(vide.note!==null) return _echec('une note sort de rien : '+vide.note);
+            if(vide.drapeau!=='vert') return _echec('drapeau '+vide.drapeau+' sans donnée');
+            if(vide.donneesManquantes.length!==4) return _echec('les quatre absences ne sont pas listées');
+            // UNE seule entrée : toujours null.
+            const une=disponibilite({email:'d@t.fr',sessions:[],sleepLog:dort(4)},J(0));
+            if(une.note!==null) return _echec('une seule entrée produit une note : '+une.note);
+            return une.drapeau==='vert'?true:_echec('drapeau '+une.drapeau+' sur une entrée');})());
+
+          ok('Une entrée absente est retirée, son poids redistribué',(()=>{
+            // ON NE REMPLACE JAMAIS UNE ABSENCE PAR UNE MOYENNE : inventer
+            // « 50 » pour un sommeil non renseigné, c'est fabriquer une mesure
+            // et la faire peser 40 %.
+            const u={email:'d@t.fr',sessions:seances(6,''),sleepLog:dort(8)};
+            const d=disponibilite(u,J(0));
+            if(d.note===null) return _echec('aucune note avec deux entrées');
+            const dispo=Object.keys(d.sousScores||{});
+            if(dispo.length<2) return _echec(dispo.length+' entrée(s) disponible(s)');
+            // La note vaut EXACTEMENT la moyenne pondérée des entrées présentes,
+            // les poids étant ramenés à leur somme — pas à 100.
+            let poids=0,somme=0;
+            for(const k of dispo){ poids+=DISPO_POIDS[k]; somme+=d.sousScores[k]*DISPO_POIDS[k]; }
+            const attendu=Math.round(somme/poids);
+            if(d.note!==attendu) return _echec('note '+d.note+' au lieu de '+attendu+' (poids non redistribués)');
+            // Et les absentes sont NOMMÉES, pas silencieuses.
+            for(const k of Object.keys(DISPO_POIDS))
+              if(!dispo.includes(k)&&!d.donneesManquantes.includes(k))
+                return _echec(k+' est absente et non signalée');
+            return true;})());
+
+          ok('En vert, rien ne s\'affiche',(()=>{
+            // LE SILENCE EST L'ÉTAT NORMAL. Pas un encart gris, pas un
+            // « tout va bien » : au-dessus du seuil, la note ne dit rien.
+            const u={email:'d@t.fr',sessions:seances(6,''),sleepLog:dort(8)};
+            const d=disponibilite(u,J(0));
+            if(d.drapeau!=='vert') return _echec('un athlète reposé et sans douleur n’est pas vert : '+d.note);
+            if(d.motif!==null) return _echec('un motif sort en vert : « '+d.motif+' »');
+            const _sv=currentUser;
+            try{
+              currentUser=u;
+              if(_htmlDispo(0)!=='') return _echec('l’encart s’affiche en vert');
+              // Et sans donnée non plus.
+              currentUser={email:'d@t.fr',sessions:[],sleepLog:[]};
+              if(_htmlDispo(0)!=='') return _echec('l’encart s’affiche sans donnée');
+            } finally { currentUser=_sv; }
+            return true;})());
+
+          ok('Le motif nomme UNE cause, jamais deux',(()=>{
+            // Une phrase qui liste trois facteurs n'est plus une consigne,
+            // c'est un tableau de bord — exactement ce que ce lot évite.
+            const u={email:'d@t.fr',sessions:seances(6,'3'),sleepLog:dort(4)};
+            const d=disponibilite(u,J(0));
+            if(d.drapeau==='vert') return _echec('deux entrées dégradées restent vertes');
+            if(!d.motif) return _echec('aucun motif hors du vert');
+            if(!d.cause) return _echec('aucune cause nommée');
+            // La cause retenue est bien la PIRE, et une seule.
+            let pire=null;
+            for(const k of Object.keys(d.sousScores))
+              if(pire===null||d.sousScores[k]<d.sousScores[pire]) pire=k;
+            if(d.cause!==pire) return _echec('cause '+d.cause+' au lieu de '+pire);
+            // ⚠ ON PARCOURT LES HUIT MOTIFS, pas seulement celui que
+            // l'échantillon déclenche. La première version testait la phrase
+            // produite par SON cas — celle de la douleur — et laissait passer
+            // deux causes citées dans la phrase du sommeil. Mesuré en
+            // cassant : la sonde restait verte.
+            const familles=[/nuit/i,/douleur/i,/échec|echec/i,/charge/i];
+            for(const cause of ['sommeil','douleur','rir','charge'])
+              for(const dr of ['orange','rouge']){
+                const p=_dispoMotif(cause,dr,u,J(0));
+                if(!p) return _echec('aucun motif pour '+cause+'/'+dr);
+                // ⚠ ON NE COMPTE LES CAUSES QUE DANS LA PREMIÈRE PHRASE. Le
+                // motif est « <cause>. <action> », et l'action de chaque
+                // niveau orange dit « Garde la charge » : chercher les
+                // familles dans tout le texte accusait un motif correct de
+                // citer deux facteurs. Mesuré sur le code sain.
+                const cle=String(p).split('.')[0];
+                const n=familles.filter(re=>re.test(cle)).length;
+                if(n>1) return _echec(n+' facteurs cités ('+cause+'/'+dr+') : « '+cle+' »');
+                // ET IL DIT QUOI FAIRE : « ta note est de 58 » n'aide
+                // personne, « enlève la dernière série » si.
+                if(!/série|repos|légère|coach/i.test(p))
+                  return _echec('le motif ne dit pas quoi faire ('+cause+'/'+dr+') : « '+p+' »');
+                // AUCUN CHIFFRE DE NOTE : il inviterait à optimiser la note.
+                if(/\b\d{2,3}\s*\/\s*100\b/.test(p)) return _echec('le motif affiche un score');
+              }
+            return true;})());
+
+          ok('L\'allègement appliqué est journalisé et visible du coach',(()=>{
+            const _sv=currentUser, _ss=window.saveUser, _sc=window.CLOUD, _st=window.toastSync;
+            try{
+              window.saveUser=()=>{}; window.toastSync=()=>{};
+              window.CLOUD=Object.assign({},_sc,{pushOne:()=>Promise.resolve()});
+              currentUser={email:'d@t.fr',sessions:[],sleepLog:[],
+                sessions_config:[{active:true,exercises:[
+                  {name:'developpe couche',series:4},{name:'curl',series:3}]}]};
+              if(!dispoAllegerSeance(0,{cause:'sommeil'})) return _echec('l’allègement n’a pas été posé');
+              const a=currentUser.allegementJour;
+              if(!a) return _echec('aucune intention enregistrée');
+              // LE DERNIER EXERCICE, pas le premier : retirer une série au
+              // travail principal amputerait la séance.
+              if(a.exercice!=='curl') return _echec('l’allègement porte sur '+a.exercice);
+              if(a.avant!==3||a.apres!==2) return _echec('séries '+a.avant+' → '+a.apres);
+              // LE PROGRAMME DU COACH N'EST PAS TOUCHÉ : une séance allégée un
+              // mardi ne doit pas alléger tous les mardis suivants.
+              if(currentUser.sessions_config[0].exercises[1].series!==3)
+                return _echec('le programme a été modifié');
+              // JOURNALISÉ, et lisible côté coach.
+              const j=currentUser.journalSeance||[];
+              if(!j.length) return _echec('rien dans le journal');
+              if(j[j.length-1].origine!=='dispo_allegement') return _echec('mauvaise origine');
+              if(j[j.length-1].cause!=='sommeil') return _echec('la cause n’est pas journalisée');
+              const h=_htmlJournalSeance(currentUser);
+              if(!h||h.indexOf('curl')<0) return _echec('le coach ne voit pas l’allègement');
+              if(h.indexOf('sommeil court')<0) return _echec('le coach ne voit pas la cause');
+              // ET IL SE CONSOMME UNE FOIS, sur la copie de travail.
+              const copie=[{name:'developpe couche',series:4},{name:'curl',series:3}];
+              if(!_dispoConsommerAllegement(copie,0)) return _echec('l’allègement ne se consomme pas');
+              if(copie[1].series!==2) return _echec('la copie n’est pas allégée : '+copie[1].series);
+              if(currentUser.allegementJour) return _echec('l’intention survit à sa consommation');
+              const copie2=[{name:'curl',series:3}];
+              return _dispoConsommerAllegement(copie2,0)?_echec('consommé deux fois'):true;
+            } finally { currentUser=_sv; window.saveUser=_ss; window.CLOUD=_sc; window.toastSync=_st; }})());
+
+          ok('Aucune surface d\'affichage hors de l\'aperçu, aucune notification',(()=>{
+            // AUCUN AFFICHAGE sur l'accueil, dans l'onglet évolution ou dans
+            // le rapport. AUCUNE notification poussée sur ce score — jamais.
+            const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+            const n=(s.match(/_htmlDispo\(/g)||[]).length;
+            // Deux : la déclaration et l'unique appel, dans _renderApercu.
+            if(n>2) return _echec(n+' appels de l’encart : il déborde de l’aperçu');
+            const i=s.indexOf('_htmlDispo(_apIdx)');
+            if(i<0) return _echec('l’encart n’est plus posé sur l’aperçu');
+            // ET LE CYCLE MENSTRUEL N'ENTRE PAS DANS LE CALCUL : l'arbitrage
+            // d'août 2026 l'a écarté sur des effets de 0,01 à 0,14.
+            for(const f of [disponibilite,_dispoSommeil,_dispoDouleur,_dispoEcartRir,_dispoCharge]){
+              const src=String(f).replace(/^\s*\/\/.*$/gm,'');
+              if(/phaseCycle|confCycle|luteal|folliculaire/i.test(src))
+                return _echec(f.name+' module par la phase du cycle');
+              // AUCUN VOCABULAIRE MÉDICAL : l'app ne mesure ni HRV ni stress
+              // physiologique, et leur emprunter le nom serait leur emprunter
+              // une autorité qu'elle n'a pas.
+              if(/HRV|variabilit|physiologique/i.test(src))
+                return _echec(f.name+' emprunte un vocabulaire médical');
+            }
+            return true;})());
+        })();
+
+        // ══════ LA BOUCLE DE RETOUR PAR MUSCLE ══════
+        (()=>{
+          const S=n=>{ let c=semaineISO(new Date()); for(let i=0;i<n;i++) c=_semainePrecedente(c); return c; };
+          const faux=r=>({email:'rm@test.fr',sessions:[],retourMuscle:{PECTORAUX:r},reperesAuto:{}});
+          const sansSave=f=>{ const s=window.saveUser; window.saveUser=()=>{};
+            try{ return f(); } finally { window.saveUser=s; } };
+
+          ok('Le repère bougé reste dans ses bornes dures',(()=>{
+            // LES BORNES SE MESURENT CONTRE LA TABLE, jamais contre le repère
+            // déjà déplacé : sinon douze semaines de « +1 » plafonnées sur le
+            // résultat de la précédente feraient dériver le repère sans fin.
+            const T=reperesTable('PECTORAUX');
+            if(!T) return _echec('les pectoraux n’ont plus de repère de table');
+            return sansSave(()=>{
+              // MONTER : plafonné à mavMin de la table.
+              let u=faux([{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}]);
+              let r=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(r.bouge!=='mev'||r.vers!==T.mev+1) return _echec('MEV : '+r.de+' → '+r.vers);
+              u=faux([{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'hausse'}]);
+              u.reperesAuto.PECTORAUX={mev:T.mavMin};
+              r=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(r.bouge) return _echec('le MEV dépasse mavMin : '+r.vers);
+              // DESCENDRE : plancher à mavMin de la table.
+              u=faux([{semaineISO:S(1),congestion:'correcte',courbatures:'encore',perfDelta:'stable'}]);
+              r=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(r.bouge!=='mrv'||r.vers!==T.mrv-1) return _echec('MRV : '+r.de+' → '+r.vers);
+              u=faux([{semaineISO:S(1),congestion:'correcte',courbatures:'encore',perfDelta:'stable'}]);
+              u.reperesAuto.PECTORAUX={mrv:T.mavMin};
+              r=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(r.bouge) return _echec('le MRV passe sous mavMin : '+r.vers);
+              return true;});})());
+
+          ok('Jamais deux bornes dans la même semaine, ni deux fois la même semaine',(()=>{
+            // Refermer la fenêtre par les deux bouts sur une seule semaine
+            // d'observation n'est pas une mesure, c'est une panique.
+            return sansSave(()=>{
+              const u=faux([{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}]);
+              const a=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(!a.bouge) return _echec('rien n’a bougé');
+              const e=u.reperesAuto.PECTORAUX;
+              if(typeof e.mev==='number'&&typeof e.mrv==='number')
+                return _echec('les deux bornes ont bougé la même semaine');
+              // REJOUER LA MEME SEMAINE NE DOIT RIEN FAIRE : deux passages
+              // déplaceraient la borne de deux séries pour une observation.
+              const b=appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              return b.bouge?_echec('la semaine a été rejouée'):true;});})());
+
+          ok('Une seule baisse ne suffit pas, deux de suite oui',(()=>{
+            // Une baisse isolée est un mauvais jour, une nuit courte, un repas
+            // sauté. La traiter comme un dépassement de récupération ferait
+            // retirer du volume à chaque accident.
+            return sansSave(()=>{
+              let u=faux([{semaineISO:S(1),congestion:'correcte',courbatures:'legeres',perfDelta:'baisse'}]);
+              if(appliquerRetourMuscle(u,'PECTORAUX',S(1)).bouge)
+                return _echec('une baisse isolée déplace le repère');
+              u=faux([{semaineISO:S(2),congestion:'correcte',courbatures:'legeres',perfDelta:'baisse'},
+                      {semaineISO:S(1),congestion:'correcte',courbatures:'legeres',perfDelta:'baisse'}]);
+              return appliquerRetourMuscle(u,'PECTORAUX',S(1)).bouge==='mrv'
+                ?true:_echec('deux baisses de suite ne descendent pas le MRV');});})());
+
+          ok('Un muscle sans repère est ignoré, à l\'écriture comme au déplacement',(()=>{
+            // LOMBAIRES, ABDUCTEURS, ADDUCTEURS : la table les exclut
+            // volontairement. Ils n'ont ni MEV ni MRV à déplacer, et récolter
+            // un retour qu'on ne pourra pas appliquer, c'est poser une
+            // question pour rien.
+            return sansSave(()=>{
+              for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS']){
+                if(reperesTable(m)) return _echec(m+' a un repère de table');
+                const u={email:'x@t.fr',sessions:[],reperesAuto:{},retourMuscle:{}};
+                u.retourMuscle[m]=[{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}];
+                if(appliquerRetourMuscle(u,m,S(1)).bouge) return _echec(m+' a bougé');
+                const e=enregistrerRetourMuscle(u,m,{congestion:'forte'});
+                if(e.ok) return _echec('un retour est accepté sur '+m);
+              }
+              return true;});})());
+
+          ok('Deux semaines muettes gèlent le repère, sans revenir à la table',(()=>{
+            // Revenir en silence changerait les seuils de quelqu'un qui n'a
+            // rien demandé, et il le découvrirait par une jauge qui change de
+            // couleur sans raison.
+            return sansSave(()=>{
+              const u=faux([{semaineISO:S(4),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}]);
+              u.reperesAuto.PECTORAUX={mev:9,derniereSemaine:S(4)};
+              if(!calibrageMuscleGele(u,'PECTORAUX',S(1))) return _echec('pas gelé après 4 semaines muettes');
+              appliquerRetourMuscle(u,'PECTORAUX',S(1));
+              if(u.reperesAuto.PECTORAUX.mev!==9)
+                return _echec('le repère gelé a bougé : '+u.reperesAuto.PECTORAUX.mev);
+              // ET IL EST TOUJOURS LU : geler n'est pas oublier.
+              if(reperesEffectifs(u,'PECTORAUX').mev!==9) return _echec('le repère gelé n’est plus lu');
+              const frais=faux([{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}]);
+              return calibrageMuscleGele(frais,'PECTORAUX',S(1))
+                ?_echec('gelé alors que la semaine révolue porte un retour'):true;});})());
+
+          ok('Le coach garde le dernier mot, et la source le dit',(()=>{
+            // Une mesure automatique qui écraserait la décision de quelqu'un
+            // qui connaît l'athlète serait un système qui s'arroge le dernier
+            // mot. Et sans `source`, le coach ne sait pas lequel il a le droit
+            // de contredire.
+            const u=faux([]);
+            if(reperesEffectifs(u,'PECTORAUX').source!=='table')
+              return _echec('sans rien, la source n’est pas « table »');
+            u.reperesAuto={PECTORAUX:{mev:9}};
+            if(reperesEffectifs(u,'PECTORAUX').source!=='perso') return _echec('l’ajustement n’est pas annoncé');
+            u.reperesVolume={PECTORAUX:{mev:15}};
+            const r=reperesEffectifs(u,'PECTORAUX');
+            if(r.source!=='coach') return _echec('la surcharge coach n’est pas annoncée');
+            return r.mev===15?true:_echec('le coach ne gagne pas : mev '+r.mev);})());
+
+          ok('Aucune lecture directe de la table hors de la couche de repères',(()=>{
+            // TOUTES LES LECTURES PASSENT PAR reperesEffectifs, sinon un écran
+            // continue d'afficher le repère de référence pendant que les
+            // autres montrent celui de l'athlète — et personne ne comprend
+            // pourquoi deux écrans ne disent pas la même chose.
+            // On retire les commentaires : plusieurs citent la table.
+            const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+            const n=(s.match(/REPERES_VOLUME\[/g)||[]).length;
+            // Deux, et deux seulement : reperesEffectifs et reperesTable.
+            if(n>2) return _echec(n+' lectures directes de la table au lieu de 2');
+            for(const f of [reperesEffectifs,reperesTable])
+              if(String(f).indexOf('REPERES_VOLUME[')<0) return _echec('la couche ne lit plus la table');
+            return true;})());
+
+          ok('La question ne se pose qu\'une fois par semaine et par muscle',(()=>{
+            // Poser les questions à chaque séance est la façon la plus sûre de
+            // détruire la donnée : dès la troisième semaine on répond au
+            // hasard pour faire disparaître l'encart.
+            return sansSave(()=>{
+              const u=faux([]);
+              u.sessions=[{date:Date.now(),data:{'developpe couche':{sets:[{done:true,weight:'60',reps:'10'}]}}}];
+              const sess=u.sessions[0];
+              const avant=musclesAInterroger(u,sess);
+              // La réponse déjà donnée cette semaine ferme la question.
+              if(avant.length){
+                u.retourMuscle[avant[0]]=[{semaineISO:semaineISO(new Date()),congestion:'forte'}];
+                if(musclesAInterroger(u,sess).indexOf(avant[0])>=0)
+                  return _echec('la question revient alors qu’elle a déjà une réponse');
+              }
+              // TROIS AU PLUS : une séance de dos touche sept muscles, et sept
+              // encarts à la suite sont le péage qu'on voulait éviter.
+              const s=String(musclesAInterroger).replace(/^\s*\/\/.*$/gm,'');
+              return /slice\(0,3\)/.test(s)?true:_echec('le nombre de questions n’est plus borné');});})());
+
+          ok('Le retour de l\'athlète survit à la remise à zéro du coach',(()=>{
+            // C'est une observation de l'athlète, pas une décision de
+            // l'application : l'effacer empêcherait de comprendre pourquoi le
+            // repère avait bougé.
+            return sansSave(()=>{
+              const u=faux([{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}]);
+              u.reperesAuto={PECTORAUX:{mev:9},DORSAUX:{mrv:24}};
+              const r=reinitialiserReperesMuscle(u,'PECTORAUX');
+              if(r.n!==1) return _echec(r.n+' repère(s) annulé(s) au lieu de 1');
+              if(u.reperesAuto.PECTORAUX) return _echec('le repère n’est pas parti');
+              if(!u.reperesAuto.DORSAUX) return _echec('un autre muscle a été emporté');
+              if(!retoursMuscle(u,'PECTORAUX').length) return _echec('le retour brut a été effacé');
+              // ET C'EST JOURNALISÉ, comme les ajustements nutrition.
+              const src=String(reinitialiserReperesMuscle).replace(/^\s*\/\/.*$/gm,'');
+              if(src.indexOf('_pauseJournaliser')<0) return _echec('la remise à zéro n’est pas journalisée');
+              // Tous les muscles d'un coup.
+              const t=reinitialiserReperesMuscle(u);
+              return t.n===1?true:_echec('la remise à zéro globale a annulé '+t.n+' repère(s)');});})());
+        })();
+
+        ok('Le rôle n\'est demandé qu\'une seule fois',(()=>{
+          // ⚠ IL L'ÉTAIT DEUX FOIS. « ESPACE ATHLÈTE » sur l'accueil, puis
+          // « Je suis : COACH / ATHLÈTE » sur le formulaire — à quelqu'un qui
+          // venait de répondre. Signalé par Kevin : « ça ne devrait être
+          // demandé qu'une seule fois ». Les NEUF routes vers l'inscription
+          // connaissaient déjà le rôle ; aucune ne le disait au formulaire.
+          const bloc=document.getElementById('r-role-bloc');
+          const sep=document.getElementById('r-role-sep');
+          if(!bloc||!sep) return _echec('le bloc de rôle ou son séparateur a disparu');
+          const _av=selRole;
+          try{
+            // Venu par un chemin qui SAIT : la première réponse fait foi, et
+            // le formulaire n'en reparle pas du tout.
+            selectRole('athlete',true);
+            if(bloc.style.display!=='none') return _echec('la question est reposée alors que le rôle est connu');
+            if(sep.style.display!=='none')
+              return _echec('le trait de séparation reste : il annonce une section qui n’existe plus');
+            // RIEN NE REPARLE DU RÔLE. Un premier correctif laissait une ligne
+            // « Tu crées un compte athlète — ce n'est pas ça ? » ; c'était
+            // encore du bruit sur une question déjà répondue.
+            if(document.getElementById('r-role-rappel'))
+              return _echec('la ligne de rappel est revenue');
+            // MAIS LE BLOC EST MASQUÉ, PAS SUPPRIMÉ : si une route future
+            // arrivait sans rôle, la question doit pouvoir être posée plutôt
+            // que de laisser un formulaire qui refuse de partir.
+            rcRoleRouvrir();
+            if(bloc.style.display==='none') return _echec('le choix a été supprimé, pas masqué');
+            if(selRole!=='athlete') return _echec('rouvrir a effacé le rôle retenu');
+            // Un clic RÉEL laisse le bloc ouvert : c'est la personne qui
+            // choisit, elle doit voir ce qu'elle a coché.
+            selectRole('coach');
+            if(bloc.style.display==='none') return _echec('un clic réel referme le choix');
+            return true;
+          } finally { try{ selectRole(_av||'athlete',true); }catch(e){} }})());
+
+        ok('Toutes les routes vers l\'inscription posent le rôle',(()=>{
+          // C'EST CE QUI PERMET DE NE PLUS POSER LA QUESTION. Si une route
+          // arrivait sans rôle, le formulaire devrait la reposer — et cette
+          // sonde tombe avant que quelqu'un ne se retrouve devant un
+          // formulaire qui refuse de partir sans qu'on sache pourquoi.
+          const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
+          const routes=(s.match(/go\('s-register'\)/g)||[]).length;
+          const poses=(s.match(/selectRole\('(?:coach|athlete)',true\)/g)||[]).length;
+          if(!routes) return _echec('plus aucune route vers l’inscription');
+          if(poses<routes)
+            return _echec(poses+' présélection(s) pour '+routes+' routes : une au moins ne pose pas le rôle');
+          return true;})());
+
         ok('Critère : coller le lien complet mène à l\'inscription, coach lié',(()=>{
           const _sv=currentUser, _su=localStorage.getItem('rc_users');
           const _pc=localStorage.getItem('pendingCode'), _ss=window.saveUser;
@@ -13848,8 +18770,12 @@ function testExercices(){
               return _echec('pendingCode : '+localStorage.getItem('pendingCode'));
             // Le role est pose dans un setTimeout : on epingle l'appel plutot
             // que d'attendre, une suite synchrone ne peut pas l'observer.
-            return /selectRole\('athlete'\)/.test(String(doAthleteCode))
-              ?true:_echec('le rôle athlète n\'est plus présélectionné');
+            // ET LA PRÉSÉLECTION EST IMPLICITE : le second argument dit que le
+            // rôle vient du CHEMIN et non d'un clic. C'est lui qui évite de
+            // reposer au formulaire une question à laquelle l'athlète vient
+            // de répondre en saisissant son code.
+            return /selectRole\('athlete',true\)/.test(String(doAthleteCode))
+              ?true:_echec('le rôle athlète n\'est plus présélectionné implicitement');
           } finally { currentUser=_sv; window.saveUser=_ss;
             if(_su!==null) localStorage.setItem('rc_users',_su);
             if(_pc!==null) localStorage.setItem('pendingCode',_pc);
@@ -14095,6 +19021,264 @@ function testExercices(){
           const si=String(CLOUD.signIn);
           return /_signInErr='wrong_password'/.test(si)&&/_signInErr='network'/.test(si)
             ?true:_echec('signIn ne pose plus ces motifs');})());
+        // ══ LA PROTECTION CONTRE L'ÉNUMÉRATION A RENDU LE CODE MENTEUR ═══════
+        //
+        // Le projet Firebase a « email enumeration protection » activée. Sous ce
+        // réglage, accounts:signInWithPassword répond INVALID_LOGIN_CREDENTIALS
+        // pour une adresse PARFAITEMENT INCONNUE, exactement comme pour un mot de
+        // passe faux — c'est tout l'objet de la protection : ne plus laisser
+        // deviner qui a un compte. Mesuré le 02/09/2026 sur repcore-sync, avec
+        // une adresse jamais vue : INVALID_LOGIN_CREDENTIALS, et non
+        // EMAIL_NOT_FOUND.
+        //
+        // signIn concluait « mauvais mot de passe » et sortait AVANT son repli
+        // signUp. Résultat : doRegister affichait « Un compte existe déjà avec cet
+        // email » sur des adresses que personne n'avait jamais utilisées, et PLUS
+        // AUCUNE INSCRIPTION ne pouvait aboutir.
+        //
+        // CETTE SONDE JOUE LA LOGIQUE, elle ne lit pas la source. Une sonde de
+        // texte n'aurait rien vu : le code fautif était parfaitement lisible et
+        // parfaitement raisonnable — c'est le SERVEUR qui a changé de réponse.
+        okA('Une adresse inconnue n\'est plus annoncée « déjà prise »',(async()=>{
+          const _fetch=window.fetch;
+          const _tok=CLOUD._idToken,_ref=CLOUD._refreshToken,_exp=CLOUD._tokenExpiry;
+          const _save=CLOUD._saveAuth,_push=CLOUD._doPush,_vider=CLOUD.viderFile;
+          const appels=[];
+          const bouchon=r=>{ window.fetch=async(url)=>{
+            const ep=String(url).indexOf('accounts:signUp')>=0?'signUp':'signIn';
+            appels.push(ep);
+            return {ok:true,json:async()=>r[ep]};
+          }; };
+          // Les effets de bord de signIn sont neutralisés : un succès simulé ne
+          // doit ni écraser le jeton réel, ni pousser quoi que ce soit.
+          CLOUD._saveAuth=()=>{}; CLOUD._doPush=()=>{}; CLOUD.viderFile=async()=>{};
+          try{
+            // 1. ADRESSE LIBRE — le cas qui était cassé.
+            appels.length=0;
+            bouchon({signIn:{error:{message:'INVALID_LOGIN_CREDENTIALS'}},
+                     signUp:{idToken:'T',refreshToken:'R',expiresIn:'3600'}});
+            if(await CLOUD.signIn('libre@exemple.fr','MotDePasse1')!==true)
+              return _echec('une adresse libre est refusée');
+            if(appels.indexOf('signUp')<0)
+              return _echec('le repli signUp n\'est jamais atteint : c\'est le bug d\'origine');
+            if(CLOUD._signInErr)
+              return _echec('un motif de refus est posé sur un succès : '+CLOUD._signInErr);
+            // 2. ADRESSE PRISE, MOT DE PASSE FAUX — signUp le dit sans ambiguïté.
+            bouchon({signIn:{error:{message:'INVALID_LOGIN_CREDENTIALS'}},
+                     signUp:{error:{message:'EMAIL_EXISTS'}}});
+            if(await CLOUD.signIn('pris@exemple.fr','MauvaisMdp')!==false)
+              return _echec('un mot de passe faux ouvre la session');
+            if(CLOUD._signInErr!=='wrong_password')
+              return _echec('motif « '+CLOUD._signInErr+' » au lieu de wrong_password');
+            // 3. MOT DE PASSE TROP COURT SUR UNE ADRESSE LIBRE : nommé, pas noyé
+            //    dans le « Réessaie » générique.
+            bouchon({signIn:{error:{message:'INVALID_LOGIN_CREDENTIALS'}},
+                     signUp:{error:{message:'WEAK_PASSWORD : Password should be at least 6 characters'}}});
+            if(await CLOUD.signIn('libre2@exemple.fr','abc')!==false)
+              return _echec('un mot de passe trop court passe');
+            if(CLOUD._signInErr!=='weak_password')
+              return _echec('motif « '+CLOUD._signInErr+' » au lieu de weak_password');
+            // 4. ADRESSE MAL FORMÉE : aucun aller-retour de plus.
+            appels.length=0;
+            bouchon({signIn:{error:{message:'INVALID_EMAIL'}},
+                     signUp:{error:{message:'INVALID_EMAIL'}}});
+            if(await CLOUD.signIn('pas-une-adresse','MotDePasse1')!==false)
+              return _echec('une adresse invalide passe');
+            if(CLOUD._signInErr!=='invalid_email')
+              return _echec('motif « '+CLOUD._signInErr+' » au lieu de invalid_email');
+            if(appels.indexOf('signUp')>=0)
+              return _echec('signUp est appelé pour rien sur une adresse mal formée');
+            return true;
+          } finally {
+            window.fetch=_fetch;
+            CLOUD._idToken=_tok;CLOUD._refreshToken=_ref;CLOUD._tokenExpiry=_exp;
+            CLOUD._signInErr=null;
+            // Les deux rappels différés de signIn — push à 300 ms, file à 1 200 ms —
+            // tirent APRÈS cette sonde. On ne rend les vraies fonctions qu'une fois
+            // qu'ils ont tiré à vide, sinon ils partiraient sur un jeton fictif.
+            //
+            // ⚠ ON ATTEND, ON NE PROGRAMME PLUS. Un setTimeout rendait la main
+            // tout de suite : le bouchon `viderFile` — un async()=>{} vide —
+            // restait donc en place APRÈS la fin de la suite. Rejouée sur la
+            // même page, la passe suivante lisait ce bouchon, et les deux
+            // sondes qui inspectent String(CLOUD.viderFile) tombaient :
+            // « Un renvoi impossible ne VIDE pas la file » et « N3.5 ». Deux
+            // fantômes, aucun rapport avec le produit. Ce await coûte deux
+            // secondes une fois par suite, et rend la page rejouable.
+            await new Promise(r=>setTimeout(r,2000));
+            CLOUD._saveAuth=_save;CLOUD._doPush=_push;CLOUD.viderFile=_vider;
+          }}));
+        ok('« Mot de passe oublié » ne promet plus un envoi qu\'il ne constate pas',(()=>{
+          // sendOobCode répond « succès » même sur une adresse inconnue quand la
+          // protection contre l'énumération est active (mesuré le 02/09/2026) :
+          // annoncer « Email envoyé » sans réserve, c'est envoyer quelqu'un
+          // fouiller ses spams pour un courrier qui ne partira jamais.
+          const fp=String(forgotPassword);
+          if(/✅ Email envoyé à/.test(fp))
+            return _echec('l\'envoi est encore annoncé comme certain');
+          if(!/Si un compte existe/.test(fp))
+            return _echec('la réserve n\'est pas dite');
+          // ET ON DIT QUOI FAIRE si rien n'arrive : sans ça, la réserve laisse
+          // l'utilisateur sans geste suivant.
+          return /Créer un compte/.test(fp)
+            ?true:_echec('rien n\'est proposé à qui ne reçoit rien');})());
+        // ══ LE SECOND COMPTE SUR LA MÊME BOÎTE MAIL ═════════════════════════
+        //
+        // Une adresse ne porte qu'un compte, et ce n'est pas une règle de
+        // l'application : Firebase Auth refuse net une seconde inscription sur la
+        // même adresse. Le sous-adressage est la seule sortie qui ne demande ni
+        // seconde boîte mail ni réécriture de l'identité des dossiers.
+        ok('L\'adresse de second compte se déduit, sans jamais empiler deux étiquettes',(()=>{
+          const cas=[
+            // Le cas nominal, et celui pour lequel tout ceci existe : un coach
+            // qui veut SON compte athlète.
+            [['kevin@gmail.com','athlete',{}],'kevin+athlete@gmail.com'],
+            [['kevin@gmail.com','coach',{}],'kevin+coach@gmail.com'],
+            // DÉJÀ SOUS-ADRESSÉE : on repart de la base, sinon on obtiendrait
+            // kevin+athlete+athlete@gmail.com, que plus personne ne relit.
+            [['kevin+perso@gmail.com','athlete',{}],'kevin+athlete@gmail.com'],
+            // L'ÉTIQUETTE EST DÉJÀ PRISE sur cet appareil : proposer la même
+            // ferait retomber sur le refus au clic suivant.
+            [['kevin@gmail.com','athlete',{'kevin+athlete@gmail.com':1}],'kevin+athlete2@gmail.com'],
+            // LA CASSE NE COMPTE PAS : l'adresse est normalisée partout ailleurs.
+            [['KEVIN@GMAIL.COM','athlete',{}],'kevin+athlete@gmail.com'],
+            // ⚠ ORANGE, FREE, SFR, LAPOSTE NE FONT PAS DE SOUS-ADRESSAGE. Proposer
+            // l'alias là, c'est fabriquer un compte dont le courrier n'arrivera
+            // JAMAIS — donc dont le mot de passe ne pourra jamais être
+            // réinitialisé. On ne propose rien plutôt que de promettre ça.
+            [['kevin@orange.fr','athlete',{}],null],
+            [['kevin@free.fr','athlete',{}],null],
+            [['pas-une-adresse','athlete',{}],null],
+            [['@gmail.com','athlete',{}],null]
+          ];
+          for(const [args,attendu] of cas){
+            const r=_aliasSecondCompte(args[0],args[1],args[2]);
+            if(r!==attendu)
+              return _echec(args[0]+' ('+args[1]+') donne '+r+' au lieu de '+attendu);
+          }
+          return true;})());
+
+        ok('La proposition ne sort QUE sur une adresse prise, et ne valide rien',(()=>{
+          const z=document.getElementById('r-2e-compte');
+          const b=document.getElementById('r-2e-btn');
+          const t=document.getElementById('r-2e-txt');
+          if(!z||!b||!t) return _echec('le bloc du second compte a disparu de l\'écran');
+          const _role=selRole,_champ=document.getElementById('r-email');
+          const _val=_champ?_champ.value:'';
+          const _aff=z.style.display,_alias=b.dataset.alias,_bt=b.style.display;
+          try{
+            // MASQUÉ AU REPOS : le montrer d'emblée inviterait à se faire un
+            // doublon là où « Se connecter » était la bonne réponse.
+            _masquerSecondCompte();
+            if(z.style.display!=='none') return _echec('le bloc reste visible au repos');
+            selRole='athlete';
+            const a=_proposerSecondCompte('kevin@gmail.com');
+            if(a!=='kevin+athlete@gmail.com') return _echec('adresse proposée : '+a);
+            if(z.style.display==='none') return _echec('le bloc ne s\'affiche pas');
+            if(b.style.display==='none') return _echec('le bouton reste caché');
+            if(t.textContent.indexOf('second compte')<0) return _echec('le texte ne dit pas de quoi il s\'agit');
+            // LE CLIC REMPLIT, IL NE SOUMET PAS : l'adresse de connexion future
+            // ne doit pas être posée sans avoir été lue.
+            if(_champ) _champ.value='kevin@gmail.com';
+            if(_appliquerSecondCompte()!==true) return _echec('le bouton ne fait rien');
+            if(_champ&&_champ.value!=='kevin+athlete@gmail.com')
+              return _echec('le champ porte « '+(_champ&&_champ.value)+' »');
+            if(z.style.display!=='none') return _echec('le bloc survit à son propre bouton');
+            // HORS LISTE : un constat, et AUCUN bouton — voir la sonde ci-dessus.
+            const b2=_proposerSecondCompte('kevin@orange.fr');
+            if(b2!==null) return _echec('une adresse est proposée chez un fournisseur sans sous-adressage');
+            if(b.style.display!=='none') return _echec('le bouton est offert sans adresse à proposer');
+            // ET L'ADRESSE PRÉCÉDENTE NE RESTE PAS ACCROCHÉE : invisible tant que
+            // le bouton est caché, mais prête à remplir le champ avec l'adresse de
+            // quelqu'un d'autre le jour où une branche le rallumerait.
+            if(b.dataset.alias) return _echec('l’adresse précédente reste accrochée : '+b.dataset.alias);
+            if(t.textContent.indexOf('autre adresse')<0) return _echec('le constat ne dit pas quoi faire');
+            return true;
+          } finally {
+            selRole=_role;
+            if(_champ) _champ.value=_val;
+            // ET LE FOCUS EST RENDU. _appliquerSecondCompte pose le curseur dans le
+            // champ — c'est son travail — mais un champ resté actif fait taire les
+            // raccourcis clavier du reste de l'app, et c'est une sonde de l'écran
+            // coach, quatre-vingts assertions plus loin, qui l'a dit.
+            try{ if(_champ) _champ.blur(); }catch(e){}
+            z.style.display=_aff; b.style.display=_bt;
+            if(_alias===undefined) delete b.dataset.alias; else b.dataset.alias=_alias;
+          }})());
+
+        ok('L\'inscription ne refuse plus sur le CACHE de l\'appareil',(()=>{
+          // C'ÉTAIT LA VRAIE SOURCE DES « adresses jamais utilisées ». `users`
+          // n'est pas le registre des comptes : c'est le cache local, et il porte
+          // le coach, TOUS ses athlètes, ceux qu'il a créés, ceux arrivés par
+          // import, et tout compte ayant un jour vécu sur l'appareil — la
+          // déconnexion n'en retire rien. Refuser là-dessus, c'était refuser une
+          // adresse parce qu'un TÉLÉPHONE en avait entendu parler.
+          const dr=String(doRegister);
+          if(/Email déjà utilisé/.test(dr))
+            return _echec('le refus sur le cache local est revenu');
+          // L'AUTORITÉ EST FIREBASE, et elle est consultée AVANT toute écriture.
+          const iAuth=dr.indexOf('await CLOUD.signIn(');
+          const iEcrit=dr.indexOf('users[em]=user;DB.set');
+          if(iAuth<0||iEcrit<0) return _echec('structure de doRegister inattendue');
+          if(!(iAuth<iEcrit)) return _echec('on écrit avant d\'avoir demandé à Firebase');
+          // ET UN DOSSIER DÉJÀ LÀ EST ADOPTÉ, jamais écrasé : distant d'abord,
+          // local à défaut. C'est la garantie que l'ancienne garde prétendait
+          // donner, sans jamais laisser entrer personne.
+          const iAdopt=dr.indexOf('const dossierExistant=cloudUser||users[em]');
+          if(iAdopt<0) return _echec('l\'adoption ne couvre plus le dossier local');
+          return iAdopt<iEcrit?true:_echec('l\'adoption vient APRÈS l\'écriture');})());
+
+        ok('La sortie « second compte » n\'est offerte que sur une adresse prise',(()=>{
+          // STRUCTURELLE, comme ses voisines : doRegister cède la main sur
+          // « await CLOUD.signIn » et un appel depuis une sonde synchrone se
+          // terminerait avant la branche. Le comportement, lui, a été vérifié en
+          // navigateur.
+          const dr=String(doRegister);
+          if(dr.indexOf('_masquerSecondCompte()')<0)
+            return _echec('la proposition n\'est pas remise à zéro à chaque tentative');
+          const n=dr.split('_proposerSecondCompte(em)').length-1;
+          if(n!==1) return _echec(n+' branche(s) offrent la sortie au lieu d\'une seule');
+          // UN HORS LIGNE OU UNE ADRESSE MAL FORMÉE n'ont pas de second compte à
+          // proposer : seul « mot de passe faux sur adresse prise » l'offre.
+          const i=dr.indexOf('CLOUD._signInErr===\'wrong_password\') _proposerSecondCompte(em)');
+          if(i<0) return _echec('la branche Firebase l\'offre sur n\'importe quel refus');
+          // ET LE COACH QUI S'AJOUTE COMME ATHLÈTE l'a aussi, depuis son propre
+          // formulaire : c'est là qu'il se heurte à sa propre adresse.
+          const ca=String(createAthlete);
+          if(ca.indexOf('_aliasSecondCompte(em,\'athlete\',users)')<0)
+            return _echec('l\'ajout d\'athlète n\'offre aucune sortie');
+          // ET IL NOMME CE QU'IL A TROUVÉ : trois situations sortaient sous la
+          // même phrase, et aucune ne disait quoi faire.
+          if(ca.indexOf('ton adresse de coach')<0)
+            return _echec('sa propre adresse n\'est plus reconnue comme telle');
+          return /est déjà dans tes athlètes/.test(ca)
+            ?true:_echec('un athlète déjà présent n\'est plus nommé');})());
+        ok('Un compte créé entre au registre de l\'appareil, même sans code coach',(()=>{
+          // LE SÉLECTEUR EST CE QUI REND LE SECOND COMPTE UTILISABLE : sans lui, on
+          // vient de créer kevin+athlete@gmail.com et rien ne permet d'y revenir
+          // sauf à se souvenir de l'alias. La proposition de l'écran d'inscription
+          // le promet — il doit tenir.
+          const dr=String(doRegister);
+          const n=dr.split('comptesEnregistrer(currentUser)').length-1;
+          if(n!==2) return _echec(n+' branche(s) inscrivent le compte au registre au lieu de 2');
+          // AVANT LA SORTIE VERS L'ÉCRAN DE CODE. routeUser() écrit déjà le
+          // registre, mais un athlète au statut FREE part sur s-client-code et n'y
+          // passe JAMAIS : c'est lui qui restait hors du sélecteur.
+          const iReg=dr.indexOf('comptesEnregistrer(currentUser)');
+          const iCode=dr.indexOf('go(\'s-client-code\')');
+          if(iCode>=0&&!(iReg<iCode))
+            return _echec('le registre est écrit APRÈS la sortie vers l\'écran de code');
+          // ET REJOUER N'AJOUTE RIEN : routeUser la rappelle juste après, et deux
+          // lignes pour un même compte dédoubleraient le sélecteur.
+          const _av=comptesConnectes();
+          try{
+            _comptesEcrire([]);
+            const faux={email:'sonde-registre@exemple.fr',fname:'S',lname:'R',role:'athlete'};
+            comptesEnregistrer(faux); comptesEnregistrer(faux);
+            const l=comptesConnectes().filter(c=>c&&c.email==='sonde-registre@exemple.fr');
+            if(l.length!==1) return _echec(l.length+' entrée(s) pour un seul compte');
+            return true;
+          } finally { try{ _comptesEcrire(_av); }catch(e){} }})());
         ok('Un e-mail déjà inscrit N\'ÉCRASE JAMAIS le dossier existant',(()=>{
           const dr=String(doRegister);
           const iCloud=dr.indexOf('const cloudUser=await CLOUD.pullUser(em)');
@@ -14292,12 +19476,94 @@ function testExercices(){
             // n'est contacté. cloudfunctions.net n'apparaît que dans _callFn,
             // vestige sans aucun appelant — le déclarer sous-traitant serait
             // aussi faux que d'omettre un sous-traitant réel. w3.org est
-            // l'espace de noms XML des SVG (jamais téléchargé) ; anses.fr et
-            // repcore131 sont des liens que l'utilisateur clique.
+            // l'espace de noms XML des SVG (jamais téléchargé) ; repcore131 est
+            // un lien que l'utilisateur clique.
+            //
+            // ⚠ anses.fr A QUITTÉ CETTE LISTE, et c'est le sens de ce lot : il
+            // n'existe que dans un COMMENTAIRE — la source des références
+            // nutritionnelles, citée en clair. Depuis que le scanner retire les
+            // commentaires, il n'y a plus rien à excuser. Une exception qui ne
+            // couvre plus rien est une invitation à en ajouter une de trop.
             'cloudfunctions.net',
-            'w3.org','anses.fr','repcore131.github.io'];
-          const tout=_prodSrc();
-          const prod=tout;
+            'w3.org','repcore131.github.io'];
+          // ══ LE SCANNER LISAIT LES COMMENTAIRES ═══════════════════════
+          //
+          // Il cherchait dans le source BRUT. Une adresse citée en commentaire —
+          // la source d'une donnée, un exemple de format — ressortait donc comme
+          // un appel réseau, et il fallait l'excuser dans la liste ci-dessus.
+          // C'est ainsi que « id.gs1.org », cité une fois comme exemple de lien
+          // GS1, faisait tomber cette assertion sans qu'aucun appel n'existe.
+          //
+          // DEUX PIÈGES, et le second est le vrai :
+          //   • « https://… » contient « // » : un découpage naïf coupe l'URL en
+          //     deux et fait disparaître l'appel qu'on cherche ;
+          //   • une expression régulière comme /[^'"]/ contient un guillemet.
+          //     Un découpage qui ne connaît que les chaînes y entre en mode
+          //     chaîne, avale le code jusqu'au guillemet suivant et se
+          //     DÉSYNCHRONISE — après quoi il ne reconnaît plus un seul
+          //     commentaire. Mesuré : une chaîne fantôme de 4 026 caractères
+          //     ouverte sur « return /[";\\n\\r]/ », ligne 14660 du produit.
+          //     Un mot-clé avant le « / » n'en fait donc PAS une division.
+          const _sansComm=(js)=>{
+            const MOTS=['return','typeof','case','in','of','delete','void','new',
+                        'do','else','yield','await','instanceof','throw'];
+            const FIN=/[)\]}\w$]/;
+            let out='',dernier='',i=0;
+            const n=js.length;
+            while(i<n){
+              const c=js[i];
+              if(c==='\''||c==='"'||c==='`'){
+                const q=c; out+=c; i++;
+                while(i<n){
+                  if(js[i]==='\\'){ out+=js.substr(i,2); i+=2; continue; }
+                  out+=js[i];
+                  if(js[i]===q){ i++; break; }
+                  i++;
+                }
+                dernier=q; continue;
+              }
+              if(c==='/'&&i+1<n){
+                if(js[i+1]==='/'){ while(i<n&&js[i]!=='\n') i++; continue; }
+                if(js[i+1]==='*'){ const j=js.indexOf('*/',i+2); i=j<0?n:j+2; continue; }
+                const q=out.slice(-24).replace(/\s+$/,'');
+                const motCle=MOTS.some(k=>q.endsWith(k)&&(q.length===k.length
+                  ||!/[\w$]/.test(q[q.length-k.length-1])));
+                if(!FIN.test(dernier)||motCle){
+                  let j=i+1,classe=false;
+                  while(j<n){
+                    const d=js[j];
+                    if(d==='\\'){ j+=2; continue; }
+                    if(d==='\n') break;
+                    if(d==='[') classe=true;
+                    else if(d===']') classe=false;
+                    else if(d==='/'&&!classe){ j++; break; }
+                    j++;
+                  }
+                  out+=' '; dernier=')'; i=j; continue;
+                }
+              }
+              out+=c;
+              if(!/\s/.test(c)) dernier=c;
+              i++;
+            }
+            return out;
+          };
+          const _net=(html)=>{
+            let s=html.replace(/<!--[\s\S]*?-->/g,' ');
+            return s.replace(/<(script|style)\b[^>]*>([\s\S]*?)<\/\1>/gi,
+              (t,bal,corps)=>bal.toLowerCase()==='style'
+                ?corps.replace(/\/\*[\s\S]*?\*\//g,' ')
+                :_sansComm(corps));
+          };
+          const prod=_net(_prodSrc());
+          // TÉMOINS DU DÉCOUPAGE. Sans eux, un découpage cassé rendrait « aucun
+          // domaine non déclaré » sur un fichier entièrement fautif — et cette
+          // assertion, qui garde une obligation légale, passerait au vert en
+          // n'ayant rien lu.
+          if(prod.indexOf('id.gs1.org')>=0||prod.indexOf('anses.fr')>=0)
+            return _echec('le découpage ne retire pas les commentaires');
+          for(const t of ['identitytoolkit.googleapis.com','world.openfoodfacts.org','wa.me'])
+            if(prod.indexOf(t)<0) return _echec('le découpage a mangé un appel réel : '+t);
           const trouves=new Set();
           const re=/https?:\/\/([a-zA-Z0-9.-]+)/g;
           let m;
@@ -16561,8 +21827,20 @@ function testExercices(){
          Object.assign(_cTCA('seche'),{weightLog:_ps(20,i=>60-i*1.5/7)}))));
 
     // ── Ligne de phase dans la liste des athlètes ──
-    ok('Sans phase, la ligne d\'athlète n\'affiche rien de plus',
-       !/semaine/.test(renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[]})));
+    // ⚠ ELLE CHERCHAIT « semaine » DANS TOUT LE HTML, et l'attrapait dans un
+    // attribut sans rapport : la colonne de charge porte
+    // title="Charge de la semaine, sur la moyenne des 4 précédentes". Le test
+    // ne mesurait donc plus la ligne de phase mais une infobulle voisine.
+    // On vise la FORME de la ligne de phase — celle que l'assertion suivante
+    // exige quand la phase existe : « … · 7e semaine ».
+    ok('Sans phase, la ligne d\'athlète n\'affiche rien de plus',(()=>{
+      const h=renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[]});
+      if(/·\s*\d+e semaine/.test(h))
+        return _echec('une ligne de phase sort sans phase : « '
+          +((h.match(/.{0,40}·\s*\d+e semaine/)||[''])[0])+' »');
+      // Et aucun libellé de phase non plus.
+      return !/Prise de masse|Sèche|Maintien/.test(h)
+        ?true:_echec('un libellé de phase apparaît sans phase');})());
     ok('Avec phase, la ligne porte le libellé et la semaine',
        /Prise de masse · 7e semaine/.test(renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[],
          phase:{type:'masse',debut:Date.now()-44*864e5,definiPar:'coach',historique:[]}})));
@@ -17944,8 +23222,13 @@ function testExercices(){
             ?true:_echec('un brouillon corrompu est accepté');
         } finally { if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
           else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
-      ok('Accepter la reprise restaure l\'étape, les réponses ET la photo',(()=>{
-        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _cf=window.confirm;
+      // ⚠ openBilan EST `async` ET PASSE PAR rcConfirm. Ce test surchargeait
+      // encore window.confirm — que plus personne n'appelle — et lisait l'état
+      // AVANT que la reprise ait eu lieu : la question n'était jamais vue, et
+      // « aucune proposition de reprise » disait vrai sans rien prouver.
+      // Même reliquat que les cinq déjà corrigées.
+      okA('Accepter la reprise restaure l\'étape, les réponses ET la photo',(async()=>{
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _rc=window.rcConfirm;
         const _bt=bilType, _bs=bilStep, _bd=bilData, _go=window.go, _r=window.renderBilStep;
         const CLE='rc_pendingphoto_bil-photo-face';
         const _ph=localStorage.getItem(CLE);
@@ -17954,9 +23237,9 @@ function testExercices(){
           localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({bilType:'coaching',bilStep:2,
             bilData:{poids:'72.4',douleurs:['genou','epaule']},ts:Date.now()}));
           localStorage.setItem(CLE,'data:image/jpeg;base64,PHOTOFACE');
-          let question=null;
-          window.confirm=(m)=>{question=m;return true;};
-          openBilan('coaching');
+          _modale.question=null; _poserConfirm(true);
+          await openBilan('coaching');
+          const question=_modale.question;
           if(!question) return _echec('aucune proposition de reprise');
           // La question DIT où l'athlète en était : « reprendre ? » tout court
           // ne lui permet pas de décider.
@@ -17969,18 +23252,34 @@ function testExercices(){
           if(bilData['bil-photo-face']!=='data:image/jpeg;base64,PHOTOFACE')
             return _echec('la photo n\'est pas restaurée');
           return true;
-        } finally { window.confirm=_cf; window.go=_go; window.renderBilStep=_r;
+        } finally { window.rcConfirm=_rc; window.go=_go; window.renderBilStep=_r;
           bilType=_bt; bilStep=_bs; bilData=_bd;
           if(_ph===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_ph);
           if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
-          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }}));
       ok('Le brouillon et la validation comptent avec le MÊME code',(()=>{
         // Deux copies de la même règle finissent par diverger : _bilDraftRempli
         // doit déléguer, pas recopier.
         if(!/_bilCompterReponses\(/.test(String(_bilDraftRempli)))
           return _echec('_bilDraftRempli a sa propre copie de la règle');
-        if(!/_bilCompterReponses\(bilData\)/.test(String(bilNext)))
+        // ⚠ ELLE EXIGEAIT L'ARGUMENT LITTERAL `bilData`, et c'est ce qui l'a
+        // rendue fausse. bilNext compte desormais sur
+        // `_bilSansReprises(bilData,_bilReprises)` — les mensurations
+        // pre-remplies ne sont pas des reponses, et les compter faisait passer
+        // le garde-fou a un bilan coaching ou rien n'avait ete touche. La regle
+        // « une seule facon de compter » n'a pas bouge ; c'est ce sur QUOI on
+        // compte qui a change, et la sonde lisait l'argument au lieu de la
+        // regle.
+        const _bn=String(bilNext);
+        if(!/_bilCompterReponses\s*\(/.test(_bn))
           return _echec('bilNext ne compte pas avec la même');
+        // ET IL COMPTE BIEN SUR LA SAISIE, pas sur autre chose : ce qu'il passe
+        // derive de bilData. Sans ce second point, compter sur un objet vide
+        // satisferait la sonde.
+        if(!/_bilCompterReponses\s*\(\s*(bilData|_saisi)\s*\)/.test(_bn))
+          return _echec('bilNext compte sur autre chose que la saisie');
+        if(/_saisi/.test(_bn)&&!/_saisi\s*=\s*_bilSansReprises\(bilData/.test(_bn))
+          return _echec('_saisi ne vient plus de bilData');
         const o={a:'',b:null,c:[],d:[1],e:'x',f:0};
         return _bilCompterReponses(o)===3
           ?true:_echec('comptage : '+_bilCompterReponses(o)+' au lieu de 3');})());
@@ -18003,10 +23302,12 @@ function testExercices(){
           return enregistre===1?true:_echec('un bilan rempli n\'a pas été enregistré');
         } finally { bilData=_bd; bilStep=_bs; bilType=_bt;
           window.toast=_t; window.saveBilanFinal=_sv; window.confirm=_cf; }})());
-      ok('Un brouillon d\'un AUTRE type ne meurt pas en silence',(()=>{
+      // Même reliquat que ci-dessus : openBilan est `async` et passe par
+      // rcConfirm ; window.confirm n'était plus appelé par personne.
+      okA('Un brouillon d\'un AUTRE type ne meurt pas en silence',(async()=>{
         // Toucher « Bilan coaching » détruisait un questionnaire de départ à
         // moitié rempli, sans un mot.
-        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _cf=window.confirm;
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _rc=window.rcConfirm;
         const _bt=bilType, _bs=bilStep, _bd=bilData, _go=window.go, _r=window.renderBilStep;
         const CLE='rc_pendingphoto_deb-photo-face';
         const _ph=localStorage.getItem(CLE);
@@ -18020,9 +23321,9 @@ function testExercices(){
             bilData:{poids:'70',objectif:'masse'},ts:Date.now(),
             email:(currentUser&&currentUser.email)||''}));
           localStorage.setItem(CLE,'data:image/jpeg;base64,DEPART');
-          let question=null;
-          window.confirm=(m)=>{question=m;return false;};
-          const r=openBilan('coaching');
+          _modale.question=null; _poserConfirm(false);
+          const r=await openBilan('coaching');
+          const question=_modale.question;
           if(!question) return _echec('aucune question posée');
           if(!/bilan de départ/.test(question)) return _echec('le bilan en cours n\'est pas nommé : '+question);
           if(!/2 réponses/.test(question)) return _echec('le nombre de réponses manque : '+question);
@@ -18033,16 +23334,16 @@ function testExercices(){
           if(bilType!==_bt) return _echec('bilType a été écrasé avant la question');
           // ACCEPTER : le brouillon part, et ses photos AUSSI — sans quoi elles
           // reviendraient s'inviter au prochain questionnaire de départ.
-          window.confirm=()=>true;
-          openBilan('coaching');
+          _poserConfirm(true);
+          await openBilan('coaching');
           if(localStorage.getItem(BIL_DRAFT_KEY)) return _echec('le brouillon survit à l\'acceptation');
           return localStorage.getItem(CLE)===null
             ?true:_echec('la photo deb-photo-* reste orpheline dans le stockage');
-        } finally { window.confirm=_cf; window.go=_go; window.renderBilStep=_r;
+        } finally { window.rcConfirm=_rc; window.go=_go; window.renderBilStep=_r;
           bilType=_bt; bilStep=_bs; bilData=_bd;
           if(_ph===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_ph);
           if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
-          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }}));
       ok('Refuser la reprise efface TOUT, photos en attente comprises',(()=>{
         // Sinon les photos refusées reviendraient s'inviter au bilan suivant.
         const _sv=localStorage.getItem(BIL_DRAFT_KEY), _cf=window.confirm;
@@ -18224,25 +23525,42 @@ function testExercices(){
         return /le compte en veille n'en reçoit pas/.test(htmlSelecteurComptes());})());
 
       // ── Se déconnecter bascule sur le compte restant ──
-      ok('La déconnexion retire le compte et active le suivant',(()=>{
-        _poser();
-        const u=DB.get('users');
-        currentUser=u[CO];
-        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jCO',r:'r',e:Date.now()+3600000}));
-        comptesEnregistrer(currentUser);
-        currentUser=u[AT];
-        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jAT',r:'r',e:Date.now()+3600000}));
-        comptesEnregistrer(currentUser);
-        const vraiConfirm=window.confirm; window.confirm=()=>true;
-        try{ logout(); }catch(e){ window.confirm=vraiConfirm; return _echec('exception: '+e.message); }
-        window.confirm=vraiConfirm;
-        const l=comptesConnectes();
-        return compteActif()===CO&&l.length===1&&l[0].email===CO;})());
-      ok('Dernier compte : la déconnexion renvoie sur l\'écran d\'accueil',(()=>{
-        const vraiConfirm=window.confirm; window.confirm=()=>true;
-        try{ logout(); }catch(e){ window.confirm=vraiConfirm; return _echec('exception: '+e.message); }
-        window.confirm=vraiConfirm;
-        return currentUser===null&&comptesConnectes().length===0;})());
+      // ⚠ logout EST `async` ET PASSE PAR rcConfirm. Ces deux assertions
+      // surchargeaient encore window.confirm — que plus personne n'appelle —
+      // et lisaient le registre AVANT que la déconnexion ait eu lieu. Même
+      // reliquat que les trois de la décharge.
+      //
+      // ⚠ ET LES DEUX SONT FUSIONNÉES EN UNE SEULE. okA diffère l'exécution à
+      // la fin de la suite : « dernier compte » lisait l'état laissé par
+      // « retire le compte et active le suivant », et deux corps différés
+      // n'ont plus rien qui garantisse cet enchaînement. La séquence est donc
+      // écrite d'un bloc — c'est d'ailleurs une seule histoire : on se
+      // déconnecte deux fois de suite, et on regarde ce qui reste.
+      okA('La déconnexion retire le compte, active le suivant, puis rend l\'accueil',(async()=>{
+        const sR=window.rcConfirm;
+        try{
+          _poser();
+          const u=DB.get('users');
+          currentUser=u[CO];
+          localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jCO',r:'r',e:Date.now()+3600000}));
+          comptesEnregistrer(currentUser);
+          currentUser=u[AT];
+          localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jAT',r:'r',e:Date.now()+3600000}));
+          comptesEnregistrer(currentUser);
+          if(comptesConnectes().length!==2)
+            return _echec('la prémisse est fausse : '+comptesConnectes().length+' compte(s) au registre');
+          _poserConfirm(true);
+          await logout();
+          const l=comptesConnectes();
+          if(l.length!==1) return _echec(l.length+' comptes restants au lieu d’un');
+          if(l[0].email!==CO) return _echec('le compte restant est '+l[0].email);
+          if(compteActif()!==CO) return _echec('le compte actif est '+compteActif());
+          // LE DERNIER COMPTE : on se déconnecte à nouveau, et il ne reste rien.
+          await logout();
+          if(currentUser!==null) return _echec('un utilisateur est encore en session');
+          return comptesConnectes().length===0
+            ?true:_echec('le registre n’est pas vide');
+        } finally { window.rcConfirm=sR; }}));
 
       // ── routeUser est le seul point d'accroche ──
       ok('routeUser inscrit le compte au registre, à lui seul',(()=>{
@@ -20650,25 +25968,55 @@ function testExercices(){
                          {active:true,name:'Pull',exercises:[],deload:false}]});
       const poser=c=>{ const u={}; u[c.email]=c; DB.set('users',u); currentClientId=c.id; };
 
-      window.confirm=()=>false;
-      ok('Décharge : refuser la confirmation ne change rien',(()=>{
-        poser(faireClient());
-        try{ programmerDecharge(); }catch(e){ return _echec('exception: '+e.message); }
-        const c=(DB.get('users')||{})['dch1@t.fr'];
-        return c.sessions_config.every(s=>!s.deload);})());
+      // ⚠ programmerDecharge EST `async` ET PASSE PAR rcConfirm. Ces
+      // assertions surchargeaient encore window.confirm — que plus personne
+      // n'appelle — et lisaient DB AVANT que l'écriture ait eu lieu. Trois
+      // tombaient ; « refuser ne change rien » passait au VERT SANS RIEN
+      // MESURER, puisqu'une fonction qui n'a pas commencé n'a évidemment rien
+      // écrit. C'est le reliquat du lot documenté en tête de fichier.
+      //
+      // ⚠ ET CHACUNE POSE SA PROPRE FIXTURE. okA diffère l'exécution à la fin
+      // de la suite, donc APRÈS le `finally` de ce bloc qui restaure DB,
+      // currentUser et currentClientId : une assertion qui compterait sur
+      // l'état laissé par la précédente lirait un dossier déjà rendu.
+      const _dchPreparer=()=>{ const c=faireClient(); poser(c); return c; };
+      const _dchLire=()=>((DB.get('users')||{})['dch1@t.fr']||{sessions_config:[]});
+      const _dchCoach=()=>({id:'coachD',email:'cod@t.fr',role:'coach',
+        seenBilans:{},alertStatus:{}});
 
-      window.confirm=()=>true;
-      ok('Critère 6 : tous les créneaux ACTIFS passent en décharge',(()=>{
-        poser(faireClient());
-        try{ programmerDecharge(); }catch(e){ return _echec('exception: '+e.message); }
-        const c=(DB.get('users')||{})['dch1@t.fr'];
-        return c.sessions_config[0].deload===true&&c.sessions_config[2].deload===true;})());
-      ok('Critère 6 : un créneau inactif n\'est pas touché',(()=>{
-        const c=(DB.get('users')||{})['dch1@t.fr'];
-        return !c.sessions_config[1].deload;})());
-      ok('Aucun champ nouveau en base : seul deload bouge',(()=>{
-        const c=(DB.get('users')||{})['dch1@t.fr'];
-        return Object.keys(c.sessions_config[0]).sort().join(',')==='active,deload,exercises,name';})());
+      okA('Décharge : refuser la confirmation ne change rien',(async()=>{
+        const sU=currentUser, sC=currentClientId, sR=window.rcConfirm;
+        try{
+          currentUser=_dchCoach(); _dchPreparer(); _poserConfirm(false);
+          await programmerDecharge();
+          return _dchLire().sessions_config.every(s=>!s.deload)
+            ?true:_echec('une décharge a été posée malgré le refus');
+        } finally { currentUser=sU; currentClientId=sC; window.rcConfirm=sR; }}));
+
+      okA('Critère 6 : tous les créneaux ACTIFS passent en décharge',(async()=>{
+        const sU=currentUser, sC=currentClientId, sR=window.rcConfirm;
+        try{
+          currentUser=_dchCoach(); _dchPreparer(); _poserConfirm(true);
+          await programmerDecharge();
+          const c=_dchLire();
+          if(c.sessions_config[0].deload!==true) return _echec('le premier créneau actif n’est pas en décharge');
+          if(c.sessions_config[2].deload!==true) return _echec('le second créneau actif n’est pas en décharge');
+          // LE CRÉNEAU INACTIF N'EST PAS TOUCHÉ, et c'est la même écriture qui
+          // le prouve : le vérifier depuis une assertion voisine la rendrait
+          // dépendante de l'ordre.
+          if(c.sessions_config[1].deload) return _echec('un créneau inactif a été mis en décharge');
+          // AUCUN CHAMP NOUVEAU EN BASE : seul deload bouge.
+          const cles=Object.keys(c.sessions_config[0]).sort().join(',');
+          return cles==='active,deload,exercises,name'
+            ?true:_echec('champs du créneau : '+cles);
+        } finally { currentUser=sU; currentClientId=sC; window.rcConfirm=sR; }}));
+
+      ok('Critère 6 : un créneau inactif n\'est pas touché',
+         String(programmerDecharge).indexOf('active')>=0,
+         'programmerDecharge ne filtre plus sur `active`');
+      ok('Aucun champ nouveau en base : seul deload bouge',
+         !/\.(deloadDate|deloadPar|deloadAt)\s*=/.test(String(programmerDecharge)),
+         'un champ de décharge autre que `deload` est écrit');
       ok('Le bouton n\'apparaît pas sans créneau actif',(()=>{
         const c=faireClient(); c.sessions_config.forEach(s=>{s.active=false;});
         return _htmlBoutonDecharge(c)==='';})());
@@ -20692,6 +26040,14 @@ function testExercices(){
           ?true:_echec('le nombre de créneaux a disparu');})());
       ok('LE RETRAIT N\'ÉCRIT QUE SUR LES CRÉNEAUX EN DÉCHARGE',(()=>{
         // Ni sur les créneaux inactifs, ni sur ceux qui n'en portent pas.
+        //
+        // ⚠ ELLE POSE SA PROPRE FIXTURE. Elle lisait celle qu'une assertion
+        // voisine avait écrite en appelant programmerDecharge ; ces appels
+        // sont passés en okA — donc différés à la fin de la suite — et le
+        // dossier n'existait plus ici. Mesuré : « fixture absente ». Une
+        // assertion qui dépend de l'ordre d'exécution de ses voisines tombe
+        // le jour où l'une d'elles change de nature.
+        _dchPreparer();
         const users=DB.get('users')||{};
         const c=users['dch1@t.fr'];
         if(!c) return _echec('fixture absente');
@@ -20707,10 +26063,21 @@ function testExercices(){
         const q=_preparerDechargeGroupee([c.id],DB.get('users')||{},false);
         return (!q.cibles.length&&/décharge à retirer/.test((q.echecs[0]||{}).raison||''))
           ?true:_echec('le refus n\'est pas nommé : '+JSON.stringify(q.echecs));})());
-      ok('Aucun décochage automatique : rejouer ne remet rien à false',(()=>{
-        try{ programmerDecharge(); }catch(e){ return _echec('exception: '+e.message); }
-        const c=(DB.get('users')||{})['dch1@t.fr'];
-        return c.sessions_config[0].deload===true&&c.sessions_config[2].deload===true;})());
+      okA('Aucun décochage automatique : rejouer ne remet rien à false',(async()=>{
+        const sU=currentUser, sC=currentClientId, sR=window.rcConfirm;
+        try{
+          currentUser=_dchCoach(); _dchPreparer(); _poserConfirm(true);
+          // DEUX FOIS DE SUITE : c'est le propos de l'assertion. Rejouer la
+          // pose ne doit rien remettre à false — un « bascule » au lieu d'un
+          // « pose » retirerait la décharge au second clic.
+          await programmerDecharge();
+          await programmerDecharge();
+          const c=_dchLire();
+          if(c.sessions_config[0].deload!==true||c.sessions_config[2].deload!==true)
+            return _echec('rejouer a décoché un créneau');
+          return !c.sessions_config[1].deload
+            ?true:_echec('rejouer a touché le créneau inactif');
+        } finally { currentUser=sU; currentClientId=sC; window.rcConfirm=sR; }}));
 
       // Le second maillon : une séance RÉALISÉE en décharge sort du calcul de
       // plateau. Le premier maillon (sessions_config → woState → sess.deload)
@@ -21202,11 +26569,26 @@ function testExercices(){
           _eqCtx=null;
           return appliquerEquivalence('1',100)===false
             ?true:_echec('une substitution a eu lieu hors contexte');})());
-        ok('La mention d\'absence de filtre allergène est affichée',(()=>{
+        // ⚠ CETTE ASSERTION EPINGLAIT UNE PHRASE, ET LA PHRASE EST DEVENUE
+        // FAUSSE. Elle exigeait « PAS filtrée par allergène » ; depuis le lot
+        // des évictions, la liste EST filtrée par ce que l'athlète déclare.
+        // Remplacer une formulation figée par une autre n'aurait repoussé le
+        // problème que d'un lot : on épingle donc l'INVARIANT, qui lui ne
+        // bougera pas — une réserve est toujours affichée, et elle ne promet
+        // jamais une absence.
+        ok('Équivalences : une réserve est toujours affichée sous la liste',(()=>{
           currentUser={id:'a',bilans:[],nutrition:{log:{}}};
           const h=_htmlEquivalents({id:1,alim_id:poulet.id,nom:poulet.n,qty:100});
-          return /PAS filtrée par allergène/.test(h)
-            ?true:_echec('la mention manque');})());
+          return h.indexOf(escapeHtml(EQ_RESERVE_ALLERGENE))>=0
+            ?true:_echec('la réserve manque');})());
+        ok('Équivalences : la réserve ne promet aucune absence',(()=>{
+          const t=EQ_RESERVE_ALLERGENE;
+          if(t.length<60) return _echec('réserve trop courte pour dire quoi que ce soit');
+          // Elle doit nommer la limite RÉELLE — la table ne porte pas
+          // d'allergènes — et renvoyer la décision au lecteur.
+          if(!/Ciqual/.test(t)) return _echec('la réserve ne nomme pas la source de la limite');
+          if(!/[Vv]érifie/.test(t)) return _echec('la réserve ne renvoie pas la décision au lecteur');
+          return true;})());
         ok('_eqConstruireEntree est le MIROIR de saveFoodEntry',(()=>{
           // Le seul garde-fou contre une divergence des deux chemins.
           const u={id:'m',nutrition:{log:{},recentFoods:[]}};
@@ -22709,9 +28091,27 @@ function testExercices(){
         if(!/_scanFlux=null/.test(src)) return _echec('le flux n\'est pas relâché');
         if(!/srcObject=null/.test(src)) return _echec('la vidéo reste attachée');
         // Porte 1 : la fermeture de l'écran.
-        if(!/scanArreter/.test(String(scanFermer))) return _echec('la fermeture ne coupe pas');
+        //
+        // ⚠ ELLE NE COUPE PAS ELLE-MEME, ET C'EST MIEUX AINSI. scanFermer appelle
+        // scanLibererTout, qui appelle scanArreter ET purge le module ZXing —
+        // plusieurs mégaoctets de WebAssembly que l'ancien chemin laissait en
+        // mémoire. La sonde exigeait le nom « scanArreter » dans le corps de
+        // scanFermer et ne voyait donc plus rien : elle annonçait une caméra
+        // restée allumée alors que la chaîne la coupe et libère davantage.
+        //
+        // ON SUIT LA CHAINE plutôt qu'un nom : le libérateur compte comme une
+        // porte s'il mène bien à l'arrêt. Un intermédiaire qui cesserait de
+        // couper ferait tomber cette assertion, ce qu'un simple « accepte les
+        // deux noms » ne garantirait pas.
+        const _coupe=f=>{
+          const s=String(f);
+          if(/scanArreter\s*\(/.test(s)) return true;
+          return /scanLibererTout\s*\(/.test(s)
+            && /scanArreter\s*\(/.test(String(scanLibererTout));
+        };
+        if(!_coupe(scanFermer)) return _echec('la fermeture ne coupe pas');
         // Porte 2 : TOUT changement d'écran, pas seulement le bouton retour.
-        if(!/scanArreter/.test(String(go))) return _echec('le changement d\'écran ne coupe pas');
+        if(!_coupe(go)) return _echec('le changement d\'écran ne coupe pas');
         // Porte 3 : le passage en arrière-plan.
         return /visibilitychange/.test(String(loadClientHome))
           ?true:_echec('aucun écouteur de visibilité');})());
@@ -22846,19 +28246,54 @@ function testExercices(){
           ?true:_echec('l\'aberrant n\'est pas rejeté');})());
 
       // Critère 5 : offValide sur les cinq cas de rejet.
+      //
+      // ⚠ ON N'EXIGE PLUS UNE FORMULATION, ON EXIGE LA GRANDEUR EN CAUSE.
+      // Le cas des macros attendait le mot « macros » ; le message dit
+      // désormais « Protéines + glucides + lipides font 150 g pour 100 g de
+      // produit. » — c'est la MÊME information, mieux dite. Remplacer un mot
+      // figé par un autre mot figé n'aurait fait que déplacer la prochaine
+      // rupture : « macros » était d'ailleurs du jargon interne, pas une
+      // grandeur.
+      //
+      // Ce qui doit être garanti, et qui ne dépend d'aucune tournure : le
+      // produit est REJETÉ, la raison est NON VIDE, et elle nomme ce qui
+      // cloche. Les quatre autres cas nomment bien une grandeur — protéines,
+      // kcal, portion, nom — et non une tournure : ils restent tels quels.
       ok('Critère 5 : les cinq motifs de rejet',(()=>{
         const cas=[
-          [_off({nutriments:{'energy-kcal_100g':100,'carbohydrates_100g':10,'fat_100g':2}}),/protéines/],
-          [_off({nutriments:_nut({'energy-kcal_100g':901,'fat_100g':100,'proteins_100g':0,'carbohydrates_100g':0})}),/900/],
-          [_off({nutriments:_nut({'proteins_100g':50,'carbohydrates_100g':50,'fat_100g':50})}),/macros/],
-          [_off({serving_size:'1 pot',nutrition_data_per:'serving',
-            nutriments:{'energy-kcal_serving':120,'proteins_serving':8,
-              'carbohydrates_serving':12,'fat_serving':3}}),/portion/],
-          [_off({product_name_fr:'',product_name:'',nutriments:_nut()}),/nom/]];
-        for(let i=0;i<cas.length;i++){
-          const v=offValide(offNormalise(cas[i][0]));
-          if(v.ok) return _echec('cas '+(i+1)+' accepté à tort');
-          if(!cas[i][1].test(v.raison)) return _echec('cas '+(i+1)+' : raison « '+v.raison+' »');
+          ['protéines non renseignées',
+           _off({nutriments:{'energy-kcal_100g':100,'carbohydrates_100g':10,'fat_100g':2}}),
+           r=>/protéines/i.test(r)],
+          ['énergie au-delà du possible',
+           _off({nutriments:_nut({'energy-kcal_100g':901,'fat_100g':100,'proteins_100g':0,'carbohydrates_100g':0})}),
+           r=>/kcal/i.test(r)],
+          // LA SOMME DES MACROS DÉPASSE 100 g : la raison doit nommer au moins
+          // l'une des trois, quelle que soit la phrase qui les porte.
+          // ⚠ LES CALORIES SONT COHÉRENTES AVEC LES MACROS, et c'est ce qui
+          // rend ce cas utile : 50 + 50 + 50 g font 850 kcal par Atwater
+          // (4/4/9). Avec les 100 kcal de la fixture d'origine, le produit
+          // était de toute façon rejeté par le contrôle « les macros ne collent
+          // pas aux calories » — mesuré : retirer le contrôle de somme ne
+          // faisait alors rien tomber. Le cas ne prouvait pas ce qu'il
+          // annonçait.
+          ['somme des macros au-dessus de 100 g',
+           _off({nutriments:_nut({'energy-kcal_100g':850,
+             'proteins_100g':50,'carbohydrates_100g':50,'fat_100g':50})}),
+           r=>/protéines|glucides|lipides|macro/i.test(r)],
+          ['valeurs données par portion',
+           _off({serving_size:'1 pot',nutrition_data_per:'serving',
+             nutriments:{'energy-kcal_serving':120,'proteins_serving':8,
+               'carbohydrates_serving':12,'fat_serving':3}}),
+           r=>/portion/i.test(r)],
+          ['produit sans nom',
+           _off({product_name_fr:'',product_name:'',nutriments:_nut()}),
+           r=>/nom/i.test(r)]];
+        for(const [quoi,o,nomme] of cas){
+          const v=offValide(offNormalise(o));
+          if(v.ok) return _echec(quoi+' : accepté à tort');
+          const r=String(v.raison||'').trim();
+          if(!r) return _echec(quoi+' : rejeté sans raison');
+          if(!nomme(r)) return _echec(quoi+' : la raison ne nomme pas la grandeur — « '+r+' »');
         }
         // Et un produit correct passe.
         return offValide(offNormalise(_off({nutriments:_nut()}))).ok
@@ -25637,6 +31072,81 @@ function testExercices(){
         return _cptContenu(vide)<_cptContenu(plein)
           ?true:_echec('vider un créneau ne se voit pas');})());
 
+      // ══════ LA CHARGE PROGRAMMEE ATTEINT L'ATHLETE ═════════════════
+      //
+      // La programmation calcule une charge — 1RM, pourcentage de la table, RPE
+      // de la semaine — et l'expose par consigneProgEx(ex).kg. Mais l'apercu de
+      // seance et la fiche imprimee ne lisaient que ex.charge, le champ texte
+      // libre : le coach voyait sa charge calculee dans l'editeur, et l'athlete
+      // recevait une case vide. La consigne existait et n'arrivait pas.
+      (()=>{
+        const _lun=n=>{ const d=new Date(); d.setHours(0,0,0,0);
+          d.setDate(d.getDate()-((d.getDay()+6)%7)+7*n); return d.getTime(); };
+        const _prog=(sem,max)=>({name:'DEVELOPPE COUCHE',series:3,reps:'5',
+          prog:{max:max||145,debut:_lun(0),semaines:sem}});
+
+        ok('La charge prescrite suit la meme regle que le RIR prescrit',(()=>{
+          if(typeof _chargePrescrite!=='function')
+            return _echec('aucune fonction de charge prescrite');
+          // LA PROGRAMMATION D'ABORD. 145 kg, 4 reps a RPE 8 → 83,7 % → 122,5.
+          const ex=_prog([{series:5,reps:4,rpe:'8'}]);
+          ex.charge='80 kg';   // une vieille note, qui ne doit pas gagner
+          const v=_chargePrescrite(ex);
+          if(!/122,5/.test(v)) return _echec('la charge calculée ne passe pas devant : « '+v+' »');
+          // LE REPLI SUR LE TEXTE LIBRE quand il n'y a pas de programmation —
+          // exactement ce que fait _rirPrescrit avec `rir`.
+          if(_chargePrescrite({charge:'80 kg'})!=='80 kg')
+            return _echec('le texte libre n’est plus lu sans programmation');
+          if(_chargePrescrite({poids:'75 kg'})!=='75 kg')
+            return _echec('l’ancien champ poids n’est plus lu');
+          // ET VIDE VEUT DIRE VIDE : une absence n'est jamais comblee.
+          if(_chargePrescrite({})!==''||_chargePrescrite(null)!=='')
+            return _echec('une absence de consigne produit une valeur');
+          // HORS TABLE — au-dela de douze repetitions — la programmation ne
+          // donne pas de charge : on retombe sur le texte libre plutot que de
+          // n'afficher rien.
+          const hors=_prog([{series:3,reps:15,rpe:'8'}]);
+          hors.charge='60 kg';
+          return _chargePrescrite(hors)==='60 kg'
+            ?true:_echec('hors table, le repli ne joue pas : « '+_chargePrescrite(hors)+' »');})());
+
+        ok('L\'apercu et la fiche imprimee lisent la consigne, plus le texte brut',(()=>{
+          const ap=String(_apLigne), pp=JSON.stringify(PP_COLS.map(c=>String(c.v)));
+          if(ap.indexOf('_chargePrescrite(ex)')<0)
+            return _echec('l’aperçu lit encore le champ brut');
+          if(pp.indexOf('_chargePrescrite(ex)')<0)
+            return _echec('la fiche imprimée lit encore le champ brut');
+          // ET L'APERCU LISAIT AUSSI `ex.rir` EN DIRECT, dans la ligne d'a
+          // cote : meme defaut, meme fonction, meme convention. Une consigne
+          // posee dans rirCible n'y arrivait pas non plus.
+          if(ap.indexOf('_rirPrescrit(ex)')<0)
+            return _echec('l’aperçu lit encore le RIR brut');
+          return /ex\.charge\|\|ex\.poids/.test(ap+pp)
+            ?_echec('un repli brut subsiste hors de _chargePrescrite'):true;})());
+
+        ok('Une programmation ne suit pas un changement de mouvement',(()=>{
+          // Le commentaire de _oublierAncienMouvement le dit deja pour la
+          // charge : « quatre-vingts kilos sur un squat ne sont pas
+          // quatre-vingts kilos sur une presse ». Un MAXIMUM l'est encore plus :
+          // garder la programmation ferait suggerer, semaine apres semaine, des
+          // charges calculees depuis un maximum jamais souleve sur ce
+          // mouvement-la.
+          const ex=_prog([{series:5,reps:4,rpe:'8'}]);
+          ex.charge='120 kg';
+          const _t=window.toast; let dit=null;
+          try{
+            window.toast=(m)=>{dit=String(m);};
+            ex.name='PRESSE A CUISSE';
+            _oublierAncienMouvement(ex);
+            if(ex.prog) return _echec('la programmation a suivi le nouveau mouvement');
+            if(ex.charge) return _echec('la charge a suivi');
+            // ET ON LE DIT : un 1RM et N semaines de series, ce n'est pas une
+            // note, c'est du travail. Rien ne disparait en silence.
+            return (dit&&/programmation/i.test(dit))
+              ?true:_echec('la programmation disparaît sans un mot');
+          } finally { window.toast=_t; }})());
+      })();
+
       // ══════ UN BROUILLON SANS ADRESSE N'EST PAS CELUI D'UN AUTRE ════
       //
       // _bilEcrireDraft ecrit `email:(currentUser&&currentUser.email)||''`. Un
@@ -28404,10 +33914,16 @@ function testExercices(){
           return _echec('moins de trois champs courts marques');
         // ET AUCUNE CLEF DE progEx N'A BOUGE : le correctif est une mise en
         // page, il ne touche ni aux handlers ni a ce qui est ecrit.
-        for(const k of ['].tempo=this.value','].materiel=this.value',
+        for(const k of ['].materiel=this.value',
                         '].repos=this.value','].charge=this.value'])
           if(s.indexOf(k)<0) return _echec('handler perdu : '+k);
-        return true;})());
+        // LE TEMPO A CHANGÉ DE HANDLER, ET C'EST VOULU : il est le seul champ
+        // qui se normalise à l'enregistrement (« 3110 » et « 3-1-1-0 » sont
+        // la même consigne), ce qu'un `progEx[i].tempo=this.value` en attribut
+        // ne peut pas faire. La clef écrite, elle, n'a pas bougé.
+        if(s.indexOf('_progTempoSaisie(')<0) return _echec('la saisie de tempo a disparu');
+        return /progEx\[i\]\.tempo=val/.test(String(_progTempoSaisie))
+          ?true:_echec('_progTempoSaisie n’écrit plus dans progEx[i].tempo');})());
 
       // B2.F1 — LE TIROIR DE DETAIL. Ouvrir un athlete remplacait
       // s-coach-home par s-coach-client : la liste disparaissait, et revenir
@@ -29593,14 +35109,36 @@ function testExercices(){
       const vu=z&&z.style.display!=='none'&&/Récup terminée/.test(z.innerHTML)&&z.innerHTML.indexOf('+00:12')>=0;
       annulerRepos(); woState=sauveWo;
       return !!vu;})(),(document.getElementById('wo-repos')||{}).innerHTML?'':'zone absente');
-    ok('Au-delà de la fenêtre, le bandeau est masqué',(()=>{
+    // ⚠ LE RETRAIT DU BANDEAU EST ANIMÉ : _reposRetirer fait glisser la carte
+    // sur ARC.strike avant de poser display:none, et le nettoyage vient de
+    // l'événement `finish` ou du filet setTimeout(une, ARC.strike+80). Lire le
+    // display dans la foulée rend « block » — le comportement de production
+    // est correct, c'est la lecture qui était trop tôt.
+    //
+    // LA DURÉE EST LUE DEPUIS ARC, pas écrite en dur : si la charge change, le
+    // test suit. Et _reposRetirer court-circuite l'animation sous
+    // arcReduit() — l'attente est alors inutile mais inoffensive, ce qui fait
+    // tenir l'assertion dans les DEUX états de préférence de mouvement.
+    const _attendreFilet=()=>new Promise(r=>setTimeout(r,
+      ((typeof ARC==='object'&&ARC&&Number(ARC.strike))||120)+120));
+    okA('Au-delà de la fenêtre, le bandeau est masqué',(async()=>{
       const sauveWo=woState, z=document.getElementById('wo-repos');
-      woState={exercises:[],sessionData:{},startTime:Date.now(),
-        reposFin:Date.now()-(REPOS_DEPASSEMENT+5)*1000,reposTotal:120,reposVibre:true};
-      _peindreRepos();
-      const cache=!z||z.style.display==='none';
-      woState=sauveWo;
-      return cache;})());
+      try{
+        // VISIBLE D'ABORD : sans cela _reposVisible est faux et _peindreRepos
+        // masque en synchrone — l'assertion passerait sans jamais éprouver le
+        // chemin animé, qui est le seul qui compte ici.
+        woState={exercises:[],sessionData:{},startTime:Date.now(),
+          reposFin:Date.now()+45000,reposTotal:120,reposVibre:true,reposLib:''};
+        _peindreRepos();
+        if(!z) return _echec('la zone du bandeau est absente');
+        if(z.style.display==='none') return _echec('le bandeau ne s’affiche pas : rien à retirer');
+        woState={exercises:[],sessionData:{},startTime:Date.now(),
+          reposFin:Date.now()-(REPOS_DEPASSEMENT+5)*1000,reposTotal:120,reposVibre:true};
+        _peindreRepos();
+        await _attendreFilet();
+        return z.style.display==='none'
+          ?true:_echec('le bandeau est encore affiché après le filet : « '+z.style.display+' »');
+      } finally { try{ annulerRepos(); }catch(e){} woState=sauveWo; }}));
     // Même format rembourré : voir la raison au-dessus de _fmtRepos.
     ok('Format : une minute pile',_fmtRepos(60)==='01:00');
     ok('Format : moins d\'une minute',_fmtRepos(7)==='00:07');
@@ -29638,7 +35176,10 @@ function testExercices(){
     ok('Rattrapage de saisie : c\'est la validation la PLUS RÉCENTE qui compte',
        _reposReelDepuis(_rpSets(1000000,1100000,null),2,1160000)===60);
 
-    // ── Tempo : consigne, jamais saisie ──
+    // ── Tempo : une consigne affichée, et depuis le lot « tempo » un guide
+    //    facultatif à côté. blocTempo, lui, n'a pas bougé de rôle : il
+    //    AFFICHE. Le chronomètre et le métronome vivent dans _majBandeTempo,
+    //    hors de ce bloc — c'est ce que garde l'assertion « jamais décompté ».
     ok('Critère 8 : le tempo est expliqué',(()=>{
       const h=blocTempo({tempo:'3-1-1-0'});
       return /Tempo 3-1-1-0/.test(h)&&/3 s pour descendre/.test(h)&&/1 s en bas/.test(h)
@@ -29646,9 +35187,19 @@ function testExercices(){
     ok('Critère 8 : aucun champ de saisie de tempo en séance',
        !/<input|<select|onchange/.test(blocTempo({tempo:'3-1-1-0'})));
     ok('Sans tempo, aucun bloc',blocTempo({})===''&&blocTempo({tempo:'   '})==='');
-    ok('Un tempo libre est affiché tel quel avec une explication générique',(()=>{
+    ok('Un tempo libre est affiché tel quel, SANS glose de format',(()=>{
+      // ELLE ATTENDAIT « excentrique · pause basse · concentrique · pause
+      // haute, en secondes » sous un texte libre. Or c'est précisément la
+      // glose qui prête au coach un format qu'il n'a pas employé : sous
+      // « lent », elle annonçait quatre temps qui n'existent pas. Elle est
+      // remplacée par une ligne qui ne décrit rien — « Consigne de ton
+      // coach » — et le détail chiffré reste réservé aux tempos normalisés.
       const h=blocTempo({tempo:'lent'});
-      return /lent/.test(h)&&/excentrique/.test(h);})());
+      if(!/lent/.test(h)) return _echec('la consigne du coach a disparu');
+      if(/excentrique|pause basse|en secondes/.test(h))
+        return _echec('un format est encore annoncé sous un texte libre');
+      return /Consigne de ton coach/.test(h)
+        ?true:_echec('plus rien n’accompagne la consigne');})());
     ok('Le tempo n\'est jamais décompté ni mesuré',
        !/setInterval|Date\.now|reposFin/.test(String(blocTempo)));
 
@@ -29668,15 +35219,24 @@ function testExercices(){
     ok('Aucun son par défaut',!currentUser.sonRepos);
 
     // ── Persistance ──
-    ok('Critère 9 : un minuteur expiré n\'est pas réaffiché',(()=>{
-      const sauveWo=woState;
-      const z=document.getElementById('wo-repos');
-      woState={exercises:[],sessionData:{},startTime:Date.now(),
-        reposFin:Date.now()-20*60000,reposTotal:120};
-      _reprendreRepos();
-      const cache=!z||z.style.display==='none';
-      woState=sauveWo;
-      return cache;})());
+    // Même raison que « Au-delà de la fenêtre » : le retrait passe par
+    // _reposRetirer, qui pose display:none à la fin de l'animation ou par son
+    // filet. On attend ARC.strike, lu depuis la source.
+    okA('Critère 9 : un minuteur expiré n\'est pas réaffiché',(async()=>{
+      const sauveWo=woState, z=document.getElementById('wo-repos');
+      try{
+        // Le bandeau est visible AVANT : c'est le chemin animé qu'on éprouve.
+        woState={exercises:[],sessionData:{},startTime:Date.now(),
+          reposFin:Date.now()+45000,reposTotal:120,reposVibre:true,reposLib:''};
+        _peindreRepos();
+        if(!z) return _echec('la zone du bandeau est absente');
+        woState={exercises:[],sessionData:{},startTime:Date.now(),
+          reposFin:Date.now()-20*60000,reposTotal:120};
+        _reprendreRepos();
+        await _attendreFilet();
+        return z.style.display==='none'
+          ?true:_echec('un minuteur expiré est réaffiché : « '+z.style.display+' »');
+      } finally { try{ annulerRepos(); }catch(e){} woState=sauveWo; }}));
     ok('Un minuteur encore valide est réaffiché',(()=>{
       const sauveWo=woState;
       const z=document.getElementById('wo-repos');
@@ -30313,16 +35873,27 @@ function testExercices(){
          lire('clh-m2')!=='+50 %'&&!/vs 4 dernières semaines/.test(lire('clh-m2-sub')||''),
          lire('clh-m2')+' | '+lire('clh-m2-sub'));
       // ET ELLE CONTINUE DE COMPTER : six séances posées, six affichées.
+      // dataset.valeur et non textContent : voir lireVal — le compteur passe
+      // de 2 à 6, et l'image intermédiaire ne vaut ni l'un ni l'autre.
       ok('Séances au total : le cumul suit l\'historique',
-         lire('clh-m2')===String(ss.length),
-         lire('clh-m2')+' pour '+ss.length+' séances');
+         lireVal('clh-m2')===String(ss.length),
+         lireVal('clh-m2')+' pour '+ss.length+' séances');
       for(const id in g){ const e=document.getElementById(id); if(e&&g[id]!=null) e.textContent=g[id]; }
       currentUser=sauveU;
     })();
-    ok('Le compteur de streak ne dépasse pas 18 px et n\'a plus de halo',(()=>{
+    // ⚠ ELLE NE PARLE PLUS DU HALO, ET CE N'EST PAS UN ASSOUPLISSEMENT.
+    // Le halo a été RÉINTRODUIT volontairement — la feuille pose
+    // text-shadow:0 0 10px rgba(255,255,255,.3) sur #clh-streak-val. C'est une
+    // décision de design, pas une régression : une assertion qui l'interdit
+    // fait échouer la suite sur un choix assumé, et l'élargir « jusqu'à ce
+    // qu'elle passe » serait la faire mentir. Elle garde donc ce qui reste
+    // vrai — la TAILLE — et son nom le dit.
+    //
+    // Si le halo redevient un sujet, c'est une assertion à lui, avec sa propre
+    // justification. Pas une clause greffée sur celle-ci.
+    ok('Le compteur de streak ne dépasse pas le cran --fs-xl',(()=>{
       const e=document.getElementById('clh-streak-val');
       if(!e) return false;
-      const st=(e.getAttribute('style')||'');
       // COLLISION SIGNALEE A KEVIN. Le plafond etait ecrit en px : 18 au plus.
       // L'echelle a huit crans n'a pas de 18 — le cran voisin est --fs-xl, qui
       // vaut 20px. Le compteur a donc GRANDI de deux points, alors que ce test
@@ -30336,14 +35907,21 @@ function testExercices(){
       // échouait sans jamais mesurer le compteur. On lit le style CALCULÉ,
       // qui dit ce que l'athlète voit réellement, quel que soit l'endroit
       // d'où la valeur vient.
+      // ⚠ ON LIT LA PROPRIÉTÉ SUR L'ÉLÉMENT, jamais l'innerHTML ni l'attribut
+      // style : la taille ne vient plus d'un style en ligne mais d'une règle
+      // de feuille, et la sérialisation d'un style en ligne insère de toute
+      // façon une espace (« color: var(--text); ») qui fait rater tout motif
+      // écrit sans elle.
       const cs=getComputedStyle(e);
       const px=parseFloat(cs.fontSize);
-      const halo=cs.textShadow&&cs.textShadow!=='none';
-      // Le plafond reste le cran --fs-xl, 20 px : c'est le dernier cran sous
-      // lequel ce compteur doit rester pour ne pas peser plus que le chiffre
-      // des cases voisines.
-      if(!(px<=20)) return _echec('le compteur mesure '+px+' px, au-dessus du cran xl (20 px)');
-      return !halo?true:_echec('le halo est revenu : '+cs.textShadow);})());
+      // LE PLAFOND EST LE CRAN, pas un nombre écrit une seconde fois : on le
+      // lit sur la racine plutôt que de recopier « 20 ». Le jour où l'échelle
+      // bouge, le test suit au lieu de mentir.
+      const cran=parseFloat(getComputedStyle(document.documentElement)
+        .getPropertyValue('--fs-xl'))||20;
+      if(!isFinite(px)) return _echec('taille illisible : « '+cs.fontSize+' »');
+      return px<=cran
+        ?true:_echec('le compteur mesure '+px+' px, au-dessus du cran xl ('+cran+' px)');})());
     ok('Le compteur de streak reste affiché',!!document.getElementById('clh-streak-val'));
 
     // ══ 15/09/2026 — LES QUATRE RETOUCHES DE L'ACCUEIL ATHLETE ═════════════
@@ -34586,6 +40164,39 @@ function testExercices(){
       // ET UN REPLI SOUS 340 px : mieux vaut deux rangs qu'une phrase coupee.
       return /@media \(max-width:340px\)\{\.pes-sous\{white-space:normal\}\}/.test(css)
         ?true:_echec('aucun repli sous 340 px');})());
+    ok('Le corps du compteur est PLAFONNE par l\'echelle, pas par le cadran',(()=>{
+      // 29 × 0,76 fait 22,04 px — deux points au-dessus du dernier cran. Le
+      // compteur n'avait pas GRANDI par decision : il l'avait pris en heritant
+      // du diametre du cadran, que rien ne relie a l'echelle typographique.
+      //
+      // ON PLAFONNE PLUTOT QUE DE RETRECIR --sk-d : le ramener a 26 ferait bien
+      // tomber le chiffre a 19,76, mais emporterait aussi le cadran, la flambee
+      // et le cadre neon — trois pieces dessinees a 29 qu'aucun constat ne
+      // remet en cause.
+      const css=Array.from(document.querySelectorAll('style'))
+        .map(x=>x.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+      if(!/--sk-f:min\(/.test(css))
+        return _echec('le corps du chiffre n’est plus plafonné');
+      if(!/--sk-d:29px/.test(css))
+        return _echec('le cadran a été rétréci au lieu de plafonner le chiffre');
+      // ET LE PLAFOND EST LE CRAN, pas un nombre ecrit une seconde fois.
+      return /min\(calc\(var\(--sk-d\)\*\.76\),var\(--fs-xl\)\)/.test(css)
+        ?true:_echec('le plafond n’est plus le cran --fs-xl');})());
+    ok('Un graphique sans donnee ne consomme pas de traversee',(()=>{
+      // Le drapeau arcPret et la programmation de la traversee etaient poses en
+      // TETE de drawLineChart, donc aussi quand il n'y a rien a tracer : un
+      // athlete sans pesee faisait jouer une animation sur un canevas vide.
+      // Le drapeau promet « celui-ci sera peint » ; le poser sur un canevas qui
+      // sort une ligne plus bas en fait une promesse fausse.
+      const src=String(drawLineChart);
+      const iGarde=src.indexOf('if(!allVals.length)return;');
+      const iPret=src.indexOf("dataset.arcPret='1'");
+      const iTrace=src.indexOf('arcTracerCourbes(canvas)');
+      if(iGarde<0) return _echec('le garde de liste vide a disparu');
+      if(iPret<0||iTrace<0) return _echec('le tracé a disparu du graphique');
+      if(!(iPret>iGarde)) return _echec('le drapeau est encore posé avant le test');
+      return iTrace>iGarde
+        ?true:_echec('la traversée est encore programmée avant le test');})());
     // Test qui manquait : appeler loadClientHome EN ENTIER. Les tests ne
     // sollicitaient que _majMetriquesAccueil, si bien qu'une ecriture vers une
     // case supprimee interrompait toute la fonction sans qu'aucun test tombe.
@@ -34602,6 +40213,78 @@ function testExercices(){
       return !err&&g.length>0;})(),'');
     ok('Aucune ecriture vers une case supprimee ne subsiste',
        !/clh-sessions|clh-streak-nb|clh-weight/.test(String(loadClientHome)));
+
+    // ══════ DEUX BANDEAUX D'ÉCHÉANCE, DEUX NŒUDS ══════
+    //
+    // ⚠ ILS ONT PORTÉ LE MÊME IDENTIFIANT, et getElementById ne rend que le
+    // PREMIER. Le bloc de préparation s'exécutait AVANT _rendreEcheanceAcces
+    // et posait display:none sur le nœud d'accès dès que ligneEcheance rendait
+    // '' — le cas de presque tous les athlètes. L'avertissement de fin d'accès
+    // était donc écrit dans un nœud invisible, et le second nœud ne recevait
+    // jamais rien. Aucune erreur, aucune trace : le bandeau ne s'affichait
+    // simplement plus.
+    (()=>{
+      const J=n=>Date.now()+n*864e5;
+      // Un dossier minimal que loadClientHome sait traverser en entier.
+      const U=(sup)=>Object.assign({id:'a',email:'ech@t.fr',fname:'M',role:'athlete',
+        exAlias:{},exMuscles:{},bilans:[],sessions:[],sessions_config:[{active:true}],
+        programs:{}},sup||{});
+      const ACCES=()=>({status:'COACHING_SUIVI',accessExpiry:J(3)});
+      const PREPA=()=>({echeance:{date:J(5),type:'COMPETITION',fiches:{},journal:[],vueLe:0}});
+      const jouer=(sup)=>{
+        const sauve=currentUser, sv=window.saveUser;
+        window.saveUser=()=>{};
+        try{
+          currentUser=U(sup);
+          try{ loadClientHome(); }catch(e){}
+          const acc=document.getElementById('clh-echeance');
+          const pre=document.getElementById('clh-echeance-prepa');
+          const lire=el=>el?{rempli:(el.innerHTML||'').trim().length>0,
+                             display:getComputedStyle(el).display}:null;
+          return {acc:lire(acc),pre:lire(pre)};
+        } finally { currentUser=sauve; window.saveUser=sv; }
+      };
+
+      ok('L\'avertissement de fin d\'accès est VISIBLE après un loadClientHome complet',(()=>{
+        // C'est l'assertion qui aurait attrapé le défaut. Elle ne regarde pas
+        // le contenu écrit — il l'était déjà — mais ce que l'utilisateur VOIT.
+        if(accesJoursRestants(U(ACCES()))!==3)
+          return _echec('la prémisse est fausse : '+accesJoursRestants(U(ACCES()))+' jours au lieu de 3');
+        const r=jouer(ACCES());
+        if(!r.acc) return _echec('le nœud d’accès a disparu');
+        if(!r.acc.rempli) return _echec('le bandeau n’est pas écrit');
+        return r.acc.display!=='none'
+          ?true:_echec('le bandeau est écrit dans un nœud masqué : display « '+r.acc.display+' »');})());
+
+      ok('Sans préparation, le nœud de préparation est masqué et celui d\'accès intact',(()=>{
+        const r=jouer(ACCES());
+        if(!r.pre) return _echec('le nœud de préparation n’existe pas');
+        if(r.pre.rempli) return _echec('une ligne de préparation sort de nulle part');
+        if(r.pre.display!=='none') return _echec('le nœud vide reste affiché');
+        // ET CELUI D'ACCÈS N'A PAS ÉTÉ TOUCHÉ par le voisin.
+        return (r.acc&&r.acc.rempli&&r.acc.display!=='none')
+          ?true:_echec('le nœud d’accès a été affecté par la préparation');})());
+
+      ok('Les deux bandeaux actifs : chacun visible, chacun à sa place',(()=>{
+        const r=jouer(Object.assign(ACCES(),PREPA()));
+        if(!r.acc||!r.acc.rempli||r.acc.display==='none')
+          return _echec('le bandeau d’accès n’est pas visible');
+        if(!r.pre||!r.pre.rempli||r.pre.display==='none')
+          return _echec('la ligne de préparation n’est pas visible');
+        // CHACUN SON CONTENU : aucun des deux n'écrit dans l'autre.
+        const a=document.getElementById('clh-echeance').innerHTML;
+        const p=document.getElementById('clh-echeance-prepa').innerHTML;
+        if(a.indexOf('ouvrirEcheanceEcran')>=0)
+          return _echec('la préparation a écrit dans le nœud d’accès');
+        return p.indexOf('accès se termine')<0
+          ?true:_echec('l’accès a écrit dans le nœud de préparation');})());
+
+      ok('Un seul nœud porte l\'identifiant clh-echeance',(()=>{
+        const n=document.querySelectorAll('#clh-echeance').length;
+        if(n!==1) return _echec(n+' nœuds portent #clh-echeance');
+        return document.querySelectorAll('#clh-echeance-prepa').length===1
+          ?true:_echec('le nœud de préparation n’est pas unique');})());
+    })();
 
     // ── Message de fin de séance : la chaîne générique a disparu ──
     ok('« Excellent travail » n\'existe plus dans le produit',
@@ -35177,13 +40860,37 @@ function testExercices(){
     (function(){
       const sauveU=currentUser;
       const sauveUsers=DB.get('users');
-      const ta=document.createElement('textarea'); ta.id='rb-texte'; document.body.appendChild(ta);
       const b=_rbB(2);
-      const client={id:'cl1',email:'cl1@t.fr',fname:'Léa',role:'athlete',bilans:[b]};
+      // ⚠ LA VRAIE CAUSE DES DEUX ÉCHECS, ET CE N'EST PAS L'IDENTIFIANT DE
+      // ZONE. saveReponseBilan a reçu un contrôle d'appartenance — N3.13, le
+      // même que les soixante-neuf autres écritures : l'adresse vient d'un
+      // attribut onclick, et le cache local peut porter des dossiers
+      // étrangers. La fixture n'a jamais été rattachée au coach, si bien que
+      // _estMonAthlete refusait et que la fonction rendait false. Mesuré :
+      // « Élève introuvable ou non autorisé ».
+      //
+      // Le refus était donc DEUX FOIS légitime — zone introuvable, puis
+      // athlète non rattaché. Corriger la zone seule ne suffisait pas.
+      const client={id:'cl1',email:'cl1@t.fr',fname:'Léa',role:'athlete',
+        coachId:'co',bilans:[b]};
       const users=Object.assign({},sauveUsers||{}); users['cl1@t.fr']=client;
       DB.set('users',users);
       currentUser={id:'co',email:'co@t.fr',role:'coach',exAlias:{},exMuscles:{},sessions:[],bilans:[]};
       const id=_idBilan(b);
+      // ⚠ LA ZONE QUE LA FONCTION IRA RÉELLEMENT CHERCHER, et non un
+      // identifiant fixe. saveReponseBilan résout sa zone par
+      // `taId || _taIdBilan(bilanId)` ; le test l'appelait à DEUX arguments et
+      // fabriquait un 'rb-texte' nu. getElementById rendait null, le texte
+      // était vu comme vide, et la fonction refusait — ce qui est LE BON
+      // COMPORTEMENT. Deux assertions tombaient donc sur un refus légitime.
+      //
+      // Et deux autres passaient au vert SANS RIEN MESURER : « texte vide » et
+      // « espaces uniquement » vérifient un refus, or la fonction refusait de
+      // toute façon, faute de trouver sa zone. Elles éprouvent maintenant ce
+      // qu'elles annoncent.
+      const idTa=_taIdBilan(id);
+      const ta=document.createElement('textarea'); ta.id=idTa;
+      document.body.appendChild(ta);
       ta.value='';
       ok('Texte vide : envoi refusé',saveReponseBilan('cl1@t.fr',id)===false);
       ta.value='   \n  ';
@@ -35204,6 +40911,42 @@ function testExercices(){
         return x.reponseVue===false&&x.reponseCoach==='Finalement, on ajuste.';})());
       ok('Athlète introuvable : refus sans exception',saveReponseBilan('personne@t.fr',id)===false);
       ok('Bilan introuvable : refus sans exception',saveReponseBilan('cl1@t.fr','bil_0')===false);
+
+      // ⚠ LE LIEN QUI MANQUAIT, et c'est lui qui a laissé passer le décalage.
+      // Le test fabriquait SON PROPRE identifiant : il ne pouvait donc pas voir
+      // que la carte en produisait un autre. Une assertion qui invente les deux
+      // côtés d'une convention ne vérifie que sa propre invention.
+      //
+      // On lie donc les deux bouts : l'identifiant que _taIdBilan produit doit
+      // être exactement celui que la carte écrit dans le HTML, et exactement
+      // celui que le bouton d'envoi passe à saveReponseBilan.
+      ok('L\'identifiant de zone du test est CELUI que la carte rend',(()=>{
+        // ⚠ SA PROPRE FIXTURE, ET AVEC UNE RÉPONSE DEDANS. `_rbB(2)` nu ne
+        // porte aucun champ rempli : la carte n'a alors rien à quoi répondre
+        // et ne rend pas de formulaire — mesuré, aucun id="rb-texte…" dans la
+        // sortie. Elle est aussi découplée des mutations que les assertions
+        // précédentes ont faites sur le dossier.
+        const bb=_rbB(2,{'bil-motivation':'8'});
+        const idB=_idBilan(bb), idTa=_taIdBilan(idB);
+        const cli={id:'cl1',email:'cl1@t.fr',fname:'Léa',role:'athlete',bilans:[bb]};
+        const h=renderReponsesBilans([bb],cli);
+        if(!h) return _echec('la carte ne rend rien');
+        // Écrit sur la zone de saisie…
+        if(h.indexOf('id="'+idTa+'"')<0)
+          return _echec('la carte n’écrit pas id="'+idTa+'" : « '
+            +((h.match(/id="rb-texte[^"]*"/)||['(aucun)'])[0])+' »');
+        // …ET passé au bouton d'envoi, en troisième argument.
+        if(h.indexOf("saveReponseBilan('"+cli.email+"','"+idB+"','"+idTa+"')")<0)
+          return _echec('le bouton ne passe pas cet identifiant : « '
+            +((h.match(/saveReponseBilan\([^)]*\)/)||['(aucun)'])[0])+' »');
+        // ET LA CONVENTION EST BIEN CELLE DE _taIdBilan, pas un préfixe nu :
+        // c'est le suffixe qui distingue deux bilans affichés côte à côte.
+        if(idTa===_taIdBilan('')) return _echec('l’identifiant ne dépend plus du bilan');
+        return _taIdBilan('X')!==_taIdBilan('Y')
+          ?true:_echec('deux bilans partagent la même zone de saisie');})());
+
+      // La zone est retirée : laissée dans le document, elle fausserait les
+      // assertions suivantes qui comptent les champs de la page.
       ta.remove();
       if(sauveUsers) DB.set('users',sauveUsers);
       currentUser=sauveU;
@@ -35663,12 +41406,25 @@ function testExercices(){
         _suppEcartMoment({name:'Truc maison',timings:['coucher']})===''
         &&_suppEcartMoment({name:'Citrulline malate',timings:[]})==='');
       ok('L\'écart n\'empêche rien : la ligne reste cliquable et modifiable',(()=>{
-        const h=_renderSuppTable([{name:'Citrulline malate',dosage_quantity:6,
-          dosage_unit:'g',timings:['coucher'],active:true}],false,'openSuppEdit');
-        // Aucun blocage : le onclick d'édition est toujours là, et rien
-        // n'annonce un refus.
-        return h.indexOf('openSuppEdit(0)')>=0&&h.indexOf('disabled')<0
-          &&h.indexOf('Le plus souvent')>=0;})());
+        // ⚠ ELLE ATTENDAIT openSuppEdit(0), c'est-à-dire un INDEX. Le rendu
+        // passe désormais l'IDENTIFIANT du complément — _suppAssurerIds en pose
+        // un sur chaque entrée, et `editFn(${s.id})` l'utilise. Le test visait
+        // une signature révolue ; la ligne, elle, est restée cliquable.
+        //
+        // On lit l'id depuis la liste au lieu d'en figer un : il est généré, et
+        // le recopier ferait retomber le test au premier changement de forme.
+        const l=[{name:'Citrulline malate',dosage_quantity:6,
+          dosage_unit:'g',timings:['coucher'],active:true}];
+        const h=_renderSuppTable(l,false,'openSuppEdit');
+        const id=l[0].id;
+        if(id===undefined) return _echec('aucun identifiant posé sur le complément');
+        if(h.indexOf('openSuppEdit('+id+')')<0)
+          return _echec('la ligne n’ouvre plus l’édition : « '
+            +((h.match(/openSuppEdit\([^)]*\)/)||['(aucun appel)'])[0])+' »');
+        // Aucun blocage, et l'écart est bien dit.
+        if(h.indexOf('disabled')>=0) return _echec('la ligne est désactivée');
+        return h.indexOf('Le plus souvent')>=0
+          ?true:_echec('l’écart de moment n’est plus signalé');})());
 
       // ── Interactions ──────────────────────────────────────────────────────
       const _s=(nom,t)=>({name:nom,dosage_quantity:1,dosage_unit:'g',timings:t,active:true});
@@ -36119,6 +41875,15 @@ function testExercices(){
         const _u=currentUser,_save=window.saveUser,_toast=window.toastEcriture,
               _ls=window.loadSupplements,_ln=window.loadNutrition,
               _sn=window.scheduleSuppNotif;
+        // `supp-edit-idx` PORTE UN IDENTIFIANT, pas un rang, malgre son nom :
+        // openSuppEdit y ecrit `s.id` et saveSuppEntry le resout par
+        // _suppIndexParId. La sonde y posait encore un INDEX — 0 pour la
+        // premiere entree — et _suppIndexParId ne trouvait evidemment aucun
+        // complement d'identifiant 0 : au lieu de modifier la ligne existante,
+        // l'enregistrement en AJOUTAIT une seconde, et « la forme a-t-elle ete
+        // effacee ? » se lisait sur une ligne qui n'avait jamais eu de forme.
+        // Le nom du champ est trompeur ; c'est la sonde qui s'y est laissee
+        // prendre, pas le produit.
         const remplir=(nom,forme,idx)=>{
           el['supp-name'].value=nom; el['supp-qty'].value='400';
           el['supp-unit'].value='mg'; el['supp-notes'].value='';
@@ -36139,11 +41904,13 @@ function testExercices(){
             l.length===1&&l[0].forme==='bisglycinate',JSON.stringify(l[0]));
           ok('Le moment de prise a bien été lu',
             JSON.stringify((l[0]||{}).timings)==='["soir"]');
-          remplir('Magnésium','',0);
+          remplir('Magnésium','',l[0].id);
           saveSuppEntry();
+          const l2=currentUser.nutrition.supplements;
+          ok('Modifier un complément ne le DUPLIQUE pas',l2.length===1,
+            l2.length+' entrées : '+JSON.stringify(l2.map(x=>x.name)));
           ok('Revenir à « Non précisée » EFFACE la forme',
-            !('forme' in currentUser.nutrition.supplements[0]),
-            JSON.stringify(currentUser.nutrition.supplements[0]));
+            !('forme' in l2[0]),JSON.stringify(l2[0]));
           currentUser={id:'t',email:'t@t',nutrition:{supplements:[]}};
           remplir('Glutamine','',-1);
           saveSuppEntry();
@@ -36884,6 +42651,71 @@ function testExercices(){
       ok('L\'athlète lit le canal de SON coach',(()=>{
         const u=U('lea@t.fr'); u.coachEmailKey='kev@t,fr';
         return canalCle(u)==='kev@t,fr'?true:_echec(String(canalCle(u)));})());
+
+      // ── QUAND LE CANAL NE S'OUVRE PAS, DIRE LAQUELLE DES DEUX CAUSES ───
+      ok('Une clef de coach absente n\'est pas une panne de reseau',(()=>{
+        // « Reviens quand tu auras du réseau » était dit AUSSI quand le réseau
+        // allait très bien. Un athlète rattaché par l'ancienne méthode —
+        // coachId posé, coachEmailKey jamais posé — n'a aucune clef : il
+        // pouvait attendre le réseau indéfiniment, le canal ne se serait
+        // jamais ouvert. Le conseil était faux de bout en bout.
+        const src=String(_canalCharger).replace(/\/\/.*/g,'');
+        const iRes=src.indexOf('!CLOUD.ok()');
+        const iCle=src.indexOf('if(!cle)');
+        if(iRes<0||iCle<0) return _echec('les deux causes ne sont plus distinguées');
+        // LE RESEAU D'ABORD : sans lui on ne peut même pas essayer.
+        if(!(iRes<iCle)) return _echec('la clef est jugée avant le réseau');
+        // ET LE MESSAGE DE LA CLEF NE PARLE PAS DE RESEAU. C'est tout l'objet
+        // de ce lot : le conseil doit être celui qui débloque.
+        const bloc=src.slice(iCle,iCle+700);
+        if(/hors connexion|réseau/.test(bloc))
+          return _echec('le message de la clef parle encore de réseau');
+        return /nouveau code/.test(bloc)
+          ?true:_echec('le message ne dit pas quoi faire : '+bloc.slice(0,120));})());
+      okA('L\'écran le dit vraiment, pas seulement le source',(async()=>{
+        // Rendu RÉEL : une sonde de source ne dirait rien d'un message resté
+        // dans une branche que personne n'atteint.
+        const _cu=currentUser,_ok=CLOUD.ok;
+        const fil=document.getElementById('canal-fil');
+        if(!fil) return _echec('le fil du canal n’existe pas dans l’écran');
+        const _av=fil.innerHTML;
+        try{
+          CLOUD.ok=()=>true;                       // le réseau va bien
+          currentUser={email:'lea@t.fr',id:'a1',role:'athlete',coachId:'co'};
+          await _canalCharger();
+          const t=(fil.textContent||'').replace(/\s+/g,' ');
+          if(/hors connexion|réseau/.test(t))
+            return _echec('l’écran parle de réseau alors qu’il va bien : '+t.slice(0,90));
+          return /code/.test(t)
+            ?true:_echec('l’écran ne dit pas quoi faire : '+t.slice(0,90));
+        } finally { currentUser=_cu; CLOUD.ok=_ok; fil.innerHTML=_av; }}));
+      ok('cleCoachDe retente par le cache avant d\'abandonner',(()=>{
+        // SUR LE TELEPHONE DE L'ATHLETE, `users` NE CONTIENT QUE SON PROPRE
+        // DOSSIER — les règles RTDB refusent celui du coach. La recherche par
+        // coachId n'y rend donc jamais rien, et c'était le seul repli.
+        const CLE='rc_coach_profil';
+        const _av=localStorage.getItem(CLE);
+        const _db=DB.get('users');
+        try{
+          DB.set('users',{'lea@t.fr':{id:'a1',email:'lea@t.fr',coachId:'co'}});
+          const u={id:'a1',email:'lea@t.fr',role:'athlete',coachId:'co'};
+          localStorage.removeItem(CLE);
+          if(cleCoachDe(u)!==null) return _echec('une clef sort de nulle part');
+          localStorage.setItem(CLE,JSON.stringify({key:'kev@t,fr',d:{fname:'Kev'}}));
+          if(cleCoachDe(u)!=='kev@t,fr')
+            return _echec('le cache n’est pas relu : '+cleCoachDe(u));
+          // LE CHAMP DU DOSSIER RESTE PRIORITAIRE : le cache est un dernier
+          // recours, pas une source concurrente.
+          const v={...u,coachEmailKey:'autre@t,fr'};
+          if(cleCoachDe(v)!=='autre@t,fr') return _echec('le cache passe devant le dossier');
+          // ET UN COACH N'Y TOUCHE PAS. Il n'a pas de coachId et sort avant :
+          // sans cet ordre il ramasserait la clef d'un cache qui n'est pas le
+          // sien.
+          return cleCoachDe({email:'kev@t.fr',role:'coach'})===null
+            ?true:_echec('un coach récupère la clef du cache');
+        } finally {
+          if(_av===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_av);
+          if(_db) DB.set('users',_db); }})());
 
       // ── La pastille : une sonde, pas un fil ─────────────────────────────
       ok('Un message plus récent que la dernière visite allume la pastille',
@@ -41932,28 +47764,28 @@ function testExercices(){
         // if(false && !confirm(...)) laisse le mot « confirm » dans le code, et
         // un test de source passerait au vert. On répond NON à la boîte et on
         // vérifie que rien n'a été écrit.
-        ok('Un déficit refusé n\'écrit AUCUNE macro',(()=>{
-          const sauveU=currentUser, sauveC=window.confirm;
+        okA('Un déficit refusé n\'écrit AUCUNE macro',(async()=>{
+          const sauveU=currentUser, sauveC=window.rcConfirm;
           try{
             currentUser=_ath(62,'seche');
             currentUser.nutrition={dietType:'flexible'};
-            let vue=false;
-            window.confirm=(m)=>{ vue=/déficit/.test(String(m)); return false; };
-            utiliserBesoinsProposes();
-            if(!vue) return _echec('aucune confirmation chiffrée n\'a été posée');
+            _modale.question=null; _poserConfirm(false);
+            await utiliserBesoinsProposes();
+            if(!/déficit/.test(_modale.question||''))
+              return _echec('aucune confirmation chiffrée n\'a été posée : « '+_modale.question+' »');
             const m=(currentUser.nutrition||{}).macros;
             return !m?true:_echec('des macros ont été écrites malgré le refus');
-          } finally { currentUser=sauveU; window.confirm=sauveC; }})());
-        ok('Un déficit accepté écrit bien les macros',(()=>{
-          const sauveU=currentUser, sauveC=window.confirm;
+          } finally { currentUser=sauveU; window.rcConfirm=sauveC; }}));
+        okA('Un déficit accepté écrit bien les macros',(async()=>{
+          const sauveU=currentUser, sauveC=window.rcConfirm;
           try{
             currentUser=_ath(62,'seche');
             currentUser.nutrition={dietType:'flexible'};
-            window.confirm=()=>true;
-            utiliserBesoinsProposes();
+            _poserConfirm(true);
+            await utiliserBesoinsProposes();
             const m=(currentUser.nutrition||{}).macros;
             return (m&&m.origine==='auto')?true:_echec('rien écrit après acceptation');
-          } finally { currentUser=sauveU; window.confirm=sauveC; }})());
+          } finally { currentUser=sauveU; window.rcConfirm=sauveC; }}));
         ok('Des protéines très hautes ne fabriquent pas de glucides négatifs',(()=>{
           // Le curseur protéines du coach peut demander plus que la cible ne
           // permet : sans la garde, le reste devient négatif et les glucides
@@ -42412,8 +48244,8 @@ function testExercices(){
               ?true:_echec('rien n\'explique le refus : '+vus.join(' | '));
           } finally { closeModal(); currentUser=_cu; window.toast=_t;
                       window.getOwnedClient=_gc; }})());
-        ok('Remplacer un programme existant demande confirmation, et la respecte',(()=>{
-          const _cu=currentUser,_cc=window.currentClientId,_t=window.toast,_c=window.confirm,
+        okA('Remplacer un programme existant demande confirmation, et la respecte',(async()=>{
+          const _cu=currentUser,_cc=window.currentClientId,_t=window.toast,_c=window.rcConfirm,
                 _oc=window.openClientDetail,_p=CLOUD.pushOne,_si=Storage.prototype.setItem;
           try{
             window.toast=()=>{}; window.openClientDetail=()=>{};
@@ -42427,17 +48259,17 @@ function testExercices(){
               DB.set('users',u); return u; };
             _atGenre={0:'H'};
             // 1. Le coach refuse : RIEN ne doit bouger.
-            poser(); window.confirm=()=>false;
-            applyTemplateToClient(0);
+            poser(); _poserConfirm(false);
+            await applyTemplateToClient(0);
             let a=(DB.get('users')||{})['lea@t.fr'];
             if(a.sessions_config[0].name!=='ANCIEN')
               return _echec('le refus n\'a pas été respecté');
             if(a.assignedProgramName) return _echec('une trace est écrite malgré le refus');
             // 2. Il accepte : le programme est remplacé et tracé.
-            let question=null;
-            window.confirm=(m)=>{question=m;return true;};
+            _modale.question=null; _poserConfirm(true);
             _atGenre={0:'H'};
-            applyTemplateToClient(0);
+            await applyTemplateToClient(0);
+            const question=_modale.question;
             a=(DB.get('users')||{})['lea@t.fr'];
             if(a.sessions_config[0].name!=='NEUF') return _echec('le modèle n\'a pas été appliqué');
             if(a.assignedProgramName!=='Fondation') return _echec('la trace manque');
@@ -42447,8 +48279,8 @@ function testExercices(){
             return /rollback/.test(question||'')
               ?true:_echec('la question ne mentionne pas le retour en arrière');
           } finally { currentUser=_cu; window.currentClientId=_cc; window.toast=_t;
-            window.confirm=_c; window.openClientDetail=_oc; CLOUD.pushOne=_p;
-            Storage.prototype.setItem=_si; }})());
+            window.rcConfirm=_c; window.openClientDetail=_oc; CLOUD.pushOne=_p;
+            Storage.prototype.setItem=_si; }}));
         ok('La fiche affiche le modèle appliqué ET sa date',(()=>{
           // « Programme : Fondation — assigné le 25/07 ». Sans la date, le
           // coach ne sait pas si le programme date d'hier ou de six mois.
@@ -42494,11 +48326,11 @@ function testExercices(){
             return currentUser.coachPrograms.length===avant
               ?true:_echec('un index inconnu crée un programme');
           } finally { currentUser=_cu; window.toast=_t; }})());
-        ok('Copier une séance sur un autre jour : tout est repris, rien n\'est lié',(()=>{
+        okA('Copier une séance sur un autre jour : tout est repris, rien n\'est lié',(async()=>{
           const _cu=currentUser,_i=window._editProgTemplateIdx,_g=window._editProgTemplateGender,
-                _t=window.toast,_c=window.confirm,_l=window.loadProgTemplateSlots;
+                _t=window.toast,_c=window.rcConfirm,_l=window.loadProgTemplateSlots;
           try{
-            window.toast=()=>{}; window.confirm=()=>true; window.loadProgTemplateSlots=()=>{};
+            window.toast=()=>{}; _poserConfirm(true); window.loadProgTemplateSlots=()=>{};
             const jours=['Lundi','Mardi','Mercredi','Jeudi'];
             currentUser={email:'c@t.fr',id:'c1',role:'coach',coachPrograms:[{id:'p1',name:'P',
               sessions_H:jours.map((d,k)=>k===0
@@ -42506,7 +48338,7 @@ function testExercices(){
                   exercises:[{name:'DC',series:4,sets:[{kg:60}]}]}
                 :{day:d,name:'',active:false,exercises:[]}),sessions_F:[]}]};
             _editProgTemplateIdx=0; _editProgTemplateGender='H';
-            cptCopyDay(0,3);                       // lundi → jeudi
+            await cptCopyDay(0,3);                 // lundi → jeudi
             const S=currentUser.coachPrograms[0].sessions_H;
             // Les cinq champs demandés, et le jour cible ACTIVÉ — sans quoi la
             // séance recopiée resterait invisible pour l'athlète.
@@ -42527,32 +48359,32 @@ function testExercices(){
             return src.indexOf('saveUser()')<0
               ?true:_echec('cptCopyDay écrit alors que l\'écran ne le fait qu\'au bouton');
           } finally { currentUser=_cu; window._editProgTemplateIdx=_i;
-            window._editProgTemplateGender=_g; window.toast=_t; window.confirm=_c;
-            window.loadProgTemplateSlots=_l; }})());
-        ok('Écraser une séance déjà écrite demande confirmation',(()=>{
+            window._editProgTemplateGender=_g; window.toast=_t; window.rcConfirm=_c;
+            window.loadProgTemplateSlots=_l; }}));
+        okA('Écraser une séance déjà écrite demande confirmation',(async()=>{
           // C'est le seul endroit de ce lot où l'on peut détruire du travail.
           const plein={day:'Jeudi',active:true,exercises:[{name:'X'},{name:'Y'}]};
           const vide={day:'Jeudi',active:false,exercises:[]};
           const inactifMaisRempli={day:'Jeudi',active:false,exercises:[{name:'X'}]};
-          const _c=window.confirm;
+          const _c=window.rcConfirm;
           try{
-            let question=null;
-            window.confirm=(m)=>{question=m;return false;};
-            if(_confirmerEcrasement({day:'Lundi'},vide)!==true)
+            _modale.question=null; _poserConfirm(false);
+            if(await _confirmerEcrasement({day:'Lundi'},vide)!==true)
               return _echec('un créneau vide demande confirmation pour rien');
-            if(question) return _echec('une question est posée sur un créneau vide');
-            if(_confirmerEcrasement({day:'Lundi'},inactifMaisRempli)!==true)
+            if(_modale.question) return _echec('une question est posée sur un créneau vide');
+            if(await _confirmerEcrasement({day:'Lundi'},inactifMaisRempli)!==true)
               return _echec('un créneau inactif demande confirmation pour rien');
-            const r=_confirmerEcrasement({day:'Lundi'},plein);
+            const r=await _confirmerEcrasement({day:'Lundi'},plein);
             if(r!==false) return _echec('le refus n\'est pas respecté');
+            const question=_modale.question;
             if(!question) return _echec('aucune confirmation sur un créneau rempli');
             // La question DIT ce qui va disparaître : « 2 exercices », et d'où
             // vient le remplacement. Sans cela le coach ne peut pas décider.
             return /2 exercices/.test(question)&&/Lundi/.test(question)&&/Jeudi/.test(question)
               ?true:_echec('la question ne situe pas : '+question);
-          } finally { window.confirm=_c; }})());
-        ok('Le programme d\'un athlète devient un modèle assignable',(()=>{
-          const _cu=currentUser,_ce=window._coachEditClient,_p=window.prompt,_t=window.toast;
+          } finally { window.rcConfirm=_c; }}));
+        okA('Le programme d\'un athlète devient un modèle assignable',(async()=>{
+          const _cu=currentUser,_ce=window._coachEditClient,_p=window.rcSaisie,_t=window.toast;
           try{
             window.toast=()=>{};
             currentUser={email:'c@t.fr',id:'c1',role:'coach'};
@@ -42561,8 +48393,8 @@ function testExercices(){
                photo:'data:image/jpeg;base64,LOURD',photo2:'x',
                exercises:[{name:'DC',series:4,sets:[{kg:60}]}]},
               {day:'Mardi',name:'',active:false,exercises:[]}]};
-            window.prompt=()=>'Prise de masse Léa';
-            saveCoachSessionsAsTemplate();
+            _poserSaisie('Prise de masse Léa');
+            await saveCoachSessionsAsTemplate();
             const L=currentUser.coachPrograms||[];
             if(L.length!==1) return _echec(L.length+' modèle(s) créé(s)');
             const m=L[0];
@@ -42585,35 +48417,40 @@ function testExercices(){
               return _echec('le modèle partage ses séries avec l\'athlète');
             return true;
           } finally { currentUser=_cu; window._coachEditClient=_ce;
-                      window.prompt=_p; window.toast=_t; }})());
-        ok('Un programme vide ne devient pas un modèle, et le dit',(()=>{
+                      window.rcSaisie=_p; window.toast=_t; }}));
+        // ⚠ CELLE-CI PASSAIT AU VERT SANS RIEN MESURER, et c'est le cas le plus
+        // dangereux des onze : elle verifie qu'un modele n'a PAS ete cree.
+        // saveCoachSessionsAsTemplate etant devenue asynchrone, elle rendait la
+        // main avant d'avoir rien fait — et « rien n'a ete cree » etait vrai
+        // pour la mauvaise raison. Un test qui ne peut plus tomber est pire
+        // qu'un test absent : il occupe la place et rassure.
+        okA('Un programme vide ne devient pas un modèle, et le dit',(async()=>{
           // Un modèle sans exercice est un piège : il s'assigne, et l'athlète
           // se retrouve sans séance.
-          const _cu=currentUser,_ce=window._coachEditClient,_p=window.prompt,_t=window.toast;
+          const _cu=currentUser,_ce=window._coachEditClient,_p=window.rcSaisie,_t=window.toast;
           try{
             const vus=[];
             window.toast=(m)=>{vus.push(String(m));};
-            let demande=false;
-            window.prompt=()=>{demande=true;return 'X';};
+            _modale.demande=false; _poserSaisie('X');
             currentUser={email:'c@t.fr',id:'c1',role:'coach'};
             _coachEditClient={fname:'Léa',sessions_config:[
               {day:'Lundi',name:'',active:true,exercises:[]},
               {day:'Mardi',name:'PUSH',active:false,exercises:[{name:'DC'}]}]};
-            saveCoachSessionsAsTemplate();
+            await saveCoachSessionsAsTemplate();
             if((currentUser.coachPrograms||[]).length)
               return _echec('un modèle vide a été créé');
-            if(demande) return _echec('le nom est demandé avant de vérifier le contenu');
+            if(_modale.demande) return _echec('le nom est demandé avant de vérifier le contenu');
             if(!vus.length||!/Aucune séance/.test(vus[0]))
               return _echec('rien n\'explique le refus : '+vus.join(' | '));
             // Nom vide ou annulation : on n'écrit rien non plus.
             _coachEditClient.sessions_config[0]={day:'Lundi',name:'P',active:true,
               exercises:[{name:'DC'}]};
-            window.prompt=()=>null;
-            saveCoachSessionsAsTemplate();
+            _poserSaisie(null);
+            await saveCoachSessionsAsTemplate();
             return !(currentUser.coachPrograms||[]).length
               ?true:_echec('annuler la question crée quand même un modèle');
           } finally { currentUser=_cu; window._coachEditClient=_ce;
-                      window.prompt=_p; window.toast=_t; }})());
+                      window.rcSaisie=_p; window.toast=_t; }}));
 
         ok('Critère : la duplication copie tous les exercices',(()=>{
           const cfg=[_jour('Lundi','PUSH',[_ex('SQUAT'),_ex('DIPS')]),
@@ -45240,6 +51077,47 @@ vendredi 78 6h 44m
           return a.some((v,i)=>Math.abs(v-b[i])>0.001);
         }).map(([n,j])=>n+' : css «'+(_v(n)||'ABSENTE')+'» ≠ js «'+j+'»');
         return faux.length?_echec(faux.join(' | ')):true;})());
+      ok('La décharge reste UN alias, et snap n\'est pas --c-snap',(()=>{
+        // TROIS FACONS DE FAIRE DIVERGER A NOUVEAU CES DEUX SOURCES, et
+        // l'assertion ci-dessus n'en voit aucune : elle compare des valeurs
+        // resolues, or les trois pieges portent sur la FORME de la declaration.
+
+        // 1. RELITTERALISER L'ALIAS. --arc-c-discharge:var(--c-out) et
+        //    --arc-c-charge:var(--c-in) doivent rester des renvois. Recopier la
+        //    valeur en dur les rendrait egaux au JS le jour de la copie, donc
+        //    verts ici — et muets le jour ou --c-out bougerait, qui gouverne 95
+        //    appels directs dans le reste de la feuille.
+        if(!/--arc-c-discharge\s*:\s*var\(--c-out\)/.test(_cssArc))
+          return _echec('--arc-c-discharge n’est plus un alias de --c-out');
+        if(!/--arc-c-charge\s*:\s*var\(--c-in\)/.test(_cssArc))
+          return _echec('--arc-c-charge n’est plus un alias de --c-in');
+
+        // 2. LAISSER --arc-c-snap VIDE. Elle a manque pendant des semaines,
+        //    parce qu'aucune regle CSS ne l'appelait — mais ARC.snap existait,
+        //    et une regle qui aurait ecrit var(--arc-c-snap) n'aurait rien recu
+        //    et serait retombee sur `ease` sans le dire.
+        if(!_v('--arc-c-snap')) return _echec('--arc-c-snap est de nouveau vide');
+
+        // 3. CONFONDRE LES DEUX SNAP. --c-snap DEPASSE puis revient — c'est la
+        //    courbe des deux « pop » de badge. --arc-c-snap ne depasse pas ; le
+        //    depassement du cycle ARC vient des paliers de scale. Les aliaser
+        //    l'une sur l'autre priverait les deux pops de leur rebond.
+        if(_v('--arc-c-snap')===_v('--c-snap'))
+          return _echec('les deux courbes « snap » ont été confondues');
+
+        // ET LA PREUVE PAR LE RENDU : une animation reellement construite avec
+        // ARC.discharge doit rapporter la courbe que le CSS resout. C'est le
+        // seul point ou les deux mondes se touchent vraiment.
+        const el=document.createElement('div');
+        const an=el.animate?el.animate([{opacity:0},{opacity:1}],
+          {duration:ARC.strike,easing:ARC.discharge}):null;
+        if(!an) return true;                   // pas de WAAPI : rien a prouver
+        const applique=an.effect.getTiming().easing;
+        try{ an.cancel(); }catch(e){}
+        const nbs=s=>{const m=String(s).match(/-?\d*\.?\d+/g);return m?m.map(Number):[];};
+        const x=nbs(applique), y=nbs(_v('--arc-c-discharge'));
+        return (x.length===4&&y.length===4&&x.every((v,i)=>Math.abs(v-y[i])<0.001))
+          ?true:_echec('l’animation joue «'+applique+'» quand le CSS pose «'+_v('--arc-c-discharge')+'»');})());
       ok('Les amplitudes ARC sont les mêmes en CSS et en JS',(()=>{
         const paires=[['--arc-scale-charge',ARC.scaleCharge],
           ['--arc-scale-impact',ARC.scaleImpact],['--arc-scale-settle',ARC.scaleSettle],
@@ -45659,16 +51537,60 @@ vendredi 78 6h 44m
           // ne bougeait. Le trait bouge — mesuré sur la version servie, il
           // passe de 279,60 à 32,62 entre 60 s et 7 s restantes.
           //
-          // MAIS IL BOUGE DANS L'AUTRE SENS. Un décalage qui DIMINUE, c'est un
-          // anneau qui se REMPLIT à mesure que le repos s'achève, pas un
-          // anneau qui se vide. Ce test demande l'inverse, et il le demande
-          // dans son titre. La divergence est donc réelle et reste rouge :
-          // c'est un choix d'affichage, pas une sonde à recaler, et personne
-          // d'autre que Kevin ne peut trancher lequel des deux il veut.
+          // IL BOUGEAIT DANS L'AUTRE SENS, et ce test est resté rouge le temps
+          // que Kevin tranche : un décalage qui DIMINUE, c'est un anneau qui se
+          // REMPLIT à mesure que le repos s'achève. Ce test demandait l'inverse,
+          // et il le demandait dans son titre — on ne recale pas une sonde pour
+          // faire taire un choix d'affichage que son auteur seul peut faire.
+          //
+          // TRANCHÉ LE 01/09/2026 : l'anneau se VIDE. Le décalage vaut désormais
+          // C*pc/100 — zéro au départ, donc trait entier et cercle complet, puis
+          // il croît jusqu'à la circonférence à l'échéance. Mesure sur la
+          // version servie : 0 → 186 → 550 pour un repos de 60 s lu à 60, 40 et
+          // 1 seconde restantes.
           ok('L\'anneau se VIDE : le trait recule quand le temps passe',(()=>{
             const a=e1.offset, b=e2.offset;
             if(a==null||b==null||isNaN(a)||isNaN(b)) return _echec('offset illisible');
             return b>a?true:_echec(a+' → '+b+' : le trait AVANCE, l\'anneau se remplit au lieu de se vider');})());
+          ok('L\'anneau part PLEIN, balisage compris',(()=>{
+            // L'ETAT INITIAL DU BALISAGE DOIT SUIVRE LE SENS. Pose a la
+            // circonference, il affichait un cercle VIDE le temps du premier
+            // rendu — un clignotement a chaque depart de repos, dans le sens
+            // exactement contraire a celui qu'on vient de choisir.
+            const m=/id="rep-arc"[\s\S]{0,240}?stroke-dashoffset="([^"]*)"/.exec(_prodSrc());
+            if(!m) return _echec('l’arc a perdu son décalage initial');
+            const v=parseFloat(m[1]);
+            if(!(Math.abs(v)<0.01))
+              return _echec('le balisage part à '+m[1]+' : l’anneau s’affiche vide avant le premier rendu');
+            // ET LE CALCUL VA BIEN DANS CE SENS : C*pc/100, pas C*(100-pc)/100.
+            const s=String(_peindreRepos).replace(/\/\/.*/g,'');
+            if(/REPOS_C\s*\*\s*\(\s*100\s*-\s*pc\s*\)/.test(s))
+              return _echec('le calcul remplit encore l’anneau');
+            return /REPOS_C\s*\*\s*pc\s*\/\s*100/.test(s)
+              ?true:_echec('le décalage ne suit plus le temps écoulé');})());
+          ok('Aucun saut au redepart du minuteur',(()=>{
+            // LE TRAIT GLISSE d'une seconde a l'autre — sans transition, le
+            // bandeau etant reconstruit a chaque tick, l'anneau avancait par
+            // crans visibles.
+            const css=Array.from(document.querySelectorAll('style'))
+              .map(x=>x.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+            if(!/#rep-arc\{transition:stroke-dashoffset/.test(css))
+              return _echec('le trait avance encore par crans');
+            // MAIS PAS AU REDEPART : le decalage retombe alors de C a 0, et la
+            // transition ferait balayer un tour COMPLET a l'envers avant que le
+            // decompte ne commence. Le sens du mouvement distingue les deux —
+            // en marche normale le decalage ne fait que croitre.
+            const s=String(_peindreRepos);
+            if(s.indexOf("transition='none'")<0)
+              return _echec('le redémarrage balaierait un tour à l’envers');
+            // UNE LECTURE FORCE L'APPLICATION avant de rendre la transition :
+            // sans elle, les deux ecritures sont regroupees et le glissement
+            // rejoue le retour en arriere qu'on veut eviter.
+            if(s.indexOf('getBoundingClientRect()')<0)
+              return _echec('rien ne force l’application avant de rendre la transition');
+            // ET LE MOUVEMENT REDUIT LA RETIRE ENTIEREMENT.
+            return /#rep-arc\{transition:none!important/.test(css)
+              ?true:_echec('la transition survit au mouvement réduit');})());
         } finally { try{ annulerRepos(); }catch(e){} woState=sauveWo; }
       })();
       ok('L\'avertissement de fin de repos est le motif déjà connu',(()=>{
@@ -45787,6 +51709,24 @@ vendredi 78 6h 44m
         finally{ if(z&&p) p.insertBefore(z,s); }
         return true;})());
 
+      // ── CE QUI PASSE PAR UN OBSERVATEUR NE SE LIT PAS DANS LA FOULEE ────
+      //
+      // _auChamp est un IntersectionObserver : ce qu'il declenche n'existe pas a
+      // la ligne suivante. Plusieurs sondes lisaient le resultat en synchrone et
+      // annoncaient « aucune animation » sur un produit qui en pose une — elles
+      // mesuraient la synchronie, pas le trace.
+      //
+      // On attend par IMAGES et non par delai : une attente en millisecondes est
+      // soit trop courte sur une machine chargee, soit du temps perdu a chaque
+      // execution. On sort des que la condition tient.
+      const _attendreImages=async(cond,max)=>{
+        for(let i=0;i<(max||30);i++){
+          try{ if(cond()) return true; }catch(e){}
+          await new Promise(r=>requestAnimationFrame(r));
+        }
+        try{ return !!cond(); }catch(e){ return false; }
+      };
+
       // ── La traversée ────────────────────────────────────────────────────
       ok('La traversée ne bouge QU\'UNE translation',(()=>{
         // Le parent porte le gabarit et la découpe, l'enfant seul se déplace :
@@ -45880,10 +51820,28 @@ vendredi 78 6h 44m
       ok('La sortie n\'est JAMAIS plus lente que l\'entrée',(()=>{
         // Une fermeture qui traîne donne le sentiment d'une application qui
         // résiste. L'entrée dure 180 ms, la sortie 140.
-        const ent=/#modal-overlay\{[^}]*animation:arcVoile (\d+)ms/.exec(_cssArc);
+        // ⚠ ELLE CHERCHAIT UN LITTERAL EN MS, et la regle n'en porte plus :
+        // « animation:arcVoile var(--t-2) … ». La sonde ne trouvait donc plus
+        // rien et annoncait « duree d'entree introuvable » — pas un ralenti a
+        // la fermeture, juste une echelle passee par des jetons.
+        //
+        // ON LIT LE JETON ET ON LE RESOUT. Extraire la valeur du fichier ne
+        // suffirait pas : c'est getComputedStyle qui dit ce que le navigateur
+        // applique vraiment, et c'est la seule mesure qui vaille.
+        const ent=/#modal-overlay\{[^}]*animation:arcVoile\s+([^\s;}]+)/.exec(_cssArc);
         if(!ent) return _echec('durée d\'entrée introuvable');
-        return ARC.strike<=parseInt(ent[1],10)
-          ?true:_echec('sortie '+ARC.strike+'ms > entrée '+ent[1]+'ms');})());
+        const _ms=v=>{
+          v=String(v).trim();
+          const j=/^var\(\s*(--[\w-]+)\s*\)$/.exec(v);
+          if(j) v=getComputedStyle(document.documentElement).getPropertyValue(j[1]).trim();
+          const n=parseFloat(v);
+          if(!isFinite(n)) return NaN;
+          return /ms\s*$/.test(v)?n:(/s\s*$/.test(v)?n*1000:NaN);
+        };
+        const dEnt=_ms(ent[1]);
+        if(!isFinite(dEnt)) return _echec('durée d\'entrée illisible : « '+ent[1]+' »');
+        return ARC.strike<=dEnt
+          ?true:_echec('sortie '+ARC.strike+'ms > entrée '+dEnt+'ms');})());
       ok('closeModal retire l\'IDENTIFIANT tout de suite, le nœud après',(()=>{
         // Sans ça, fermer puis rouvrir dans la foulée ferait pointer tout le
         // code sur la feuille en train de mourir : invisible en lecture,
@@ -45936,7 +51894,7 @@ vendredi 78 6h 44m
         if(arcReduit()) return (un===0&&deux===0)?true:_echec('tracé malgré la préférence');
         if(un!==1) return _echec('premier passage : '+un);
         return deux===0?true:_echec('rejoué au second passage : '+deux);})());
-      ok('Le tracé SVG est un vrai stroke-dashoffset, sur 620 ms',(()=>{
+      okA('Le tracé SVG est un vrai stroke-dashoffset, sur 620 ms',(async()=>{
         // La seule entorse revendiquée à « transform et opacity seuls » : le
         // cahier des charges nomme explicitement cette propriété, et aucun
         // transform ne trace une courbe.
@@ -45948,6 +51906,12 @@ vendredi 78 6h 44m
         document.body.appendChild(h);
         arcTracerCourbes(h);
         const p=h.querySelector('path');
+        // ⚠ L'ANIMATION N'EST PAS POSEE TOUT DE SUITE. Le trace attend l'entree
+        // dans le champ — _auChamp, un IntersectionObserver — pour que les
+        // courbes sous la ligne de flottaison ne jouent pas leurs 620 ms hors
+        // de l'ecran. La sonde lisait getAnimations() dans la foulee de l'appel
+        // et ne trouvait rien : elle mesurait la synchronie, pas le trace.
+        await _attendreImages(()=>p.getAnimations().length>0);
         const an=p.getAnimations()[0];
         if(!an){ h.remove(); return _echec('aucune animation'); }
         const k=an.effect.getKeyframes();
@@ -45957,38 +51921,57 @@ vendredi 78 6h 44m
         if(d!==ARC.afterglow) return _echec(d+' ms au lieu de '+ARC.afterglow);
         const dernier=parseFloat(k[k.length-1].strokeDashoffset);
         return (parseFloat(k[0].strokeDashoffset)>0&&dernier===0)
-          ?true:_echec(JSON.stringify(k.map(x=>x.strokeDashoffset)));})());
-      ok('Un canvas reçoit la traversée, faute de trait à tracer',(()=>{
+          ?true:_echec(JSON.stringify(k.map(x=>x.strokeDashoffset)));}));
+      okA('Un canvas reçoit la traversée, faute de trait à tracer',(async()=>{
         // Un canvas n'a ni chemin ni trait, juste des pixels : stroke-dashoffset
         // n'y existe pas. Les tracer vraiment supposerait de réécrire les quatre
         // fonctions de dessin en SVG — un chantier, pas une animation.
+        //
+        // ⚠ DEUX RETARDS DANS CETTE SONDE, et le produit n'y est pour rien.
+        //   • LE DRAPEAU. arcTracerCourbes ignore une toile qui ne porte pas
+        //     dataset.arcPret : les dimensions sont posees avant le dessin, les
+        //     lire ne dit rien, et seul le peintre sait quand il a fini. La
+        //     sonde ne le posait pas et repartait donc avec zero.
+        //   • L'ATTENTE. Le noeud de traversee est pose dans _auChamp, un
+        //     IntersectionObserver : il n'existe pas encore a la ligne suivante.
         if(arcReduit()) return true;
         const c=document.createElement('canvas');
         c.width=200;c.height=60;
         c.style.cssText='position:fixed;left:0;top:0;width:200px;height:60px';
+        c.dataset.arcPret='1';
         document.body.appendChild(c);
         const avant=_arcCalque().childElementCount;
         const un=arcTracerCourbes(c);
+        await _attendreImages(()=>_arcCalque().childElementCount>avant);
         const pose=_arcCalque().childElementCount-avant;
         const deux=arcTracerCourbes(c);
         _arcCalque().querySelectorAll('.arc-trace').forEach(n=>n.remove());
         c.remove();
         if(un!==1||pose!==1) return _echec('premier passage : '+un+' / '+pose+' nœud');
-        return deux===0?true:_echec('rejoué : '+deux);})());
-      ok('Un graphique encore masqué garde son droit au tracé',(()=>{
-        // Le marquer alors qu'il mesure zéro l'aurait privé de son tracé POUR
-        // DE BON : il n'aurait jamais rien joué, et rien ne l'aurait signalé.
+        return deux===0?true:_echec('rejoué : '+deux);}));
+      ok('Un graphique pas encore peint garde son droit au tracé',(()=>{
+        // Le marquer alors qu'il n'a rien à montrer l'aurait privé de son tracé
+        // POUR DE BON : le WeakSet ne relâche jamais, il n'aurait jamais rien
+        // joué, et rien ne l'aurait signalé.
+        //
+        // ⚠ « PAS ENCORE PRET » A CHANGE DE FORME, et c'est ce que la sonde
+        // n'avait pas suivi. Elle le disait par display:none — une toile qui
+        // « mesure zéro ». Le produit ne mesure plus rien du tout : les
+        // dimensions sont posées AVANT le dessin, donc les lire ne dit rien, et
+        // c'est le peintre qui pose dataset.arcPret quand il a fini. La sonde
+        // exprime donc l'attente de la même façon que le produit.
         if(arcReduit()) return true;
         const c=document.createElement('canvas');
-        c.width=200;c.height=60;c.style.display='none';
-        document.body.appendChild(c);
-        const masque=arcTracerCourbes(c);
+        c.width=200;c.height=60;
         c.style.cssText='position:fixed;left:0;top:0;width:200px;height:60px';
-        const visible=arcTracerCourbes(c);
+        document.body.appendChild(c);
+        const pasPret=arcTracerCourbes(c);          // aucun drapeau : ignorée
+        c.dataset.arcPret='1';                      // le peintre a fini
+        const pret=arcTracerCourbes(c);
         _arcCalque().querySelectorAll('.arc-trace').forEach(n=>n.remove());
         c.remove();
-        if(masque!==0) return _echec('tracé alors qu\'il ne mesurait rien');
-        return visible===1?true:_echec('perdu son tracé une fois visible');})());
+        if(pasPret!==0) return _echec('tracé alors qu’elle n’avait rien à montrer');
+        return pret===1?true:_echec('perdu son tracé une fois peinte');})());
       ok('Le tracé se déclenche au DESSIN, pas au défilement',(()=>{
         // Les deux rappels sont posés là où la toile est réellement peinte.
         const a=_setupCanvas.toString().indexOf('arcTracerCourbes')>=0;
@@ -46186,13 +52169,1026 @@ vendredi 78 6h 44m
         // la-bas, il est manque, et le bouton d'installation ne parait jamais.
         return ligne<=200?true:_echec('déclaré ligne '+ligne+', trop tard');})());
     })();
-  }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
+
+    // ══ LES TRAITEMENTS ══════════════════════════════════════════════════
+    //
+    // Un objet distinct des complements : un complement se conseille, un
+    // medicament ne se conseille pas. Ce qui suit garde la frontiere.
+    (()=>{
+      const T=(o)=>Object.assign({id:'t1',nom:'Test',moments:['matin'],actif:true,
+        debut:new Date('2026-01-01T08:00:00').getTime(),fin:null,
+        rythme:{type:'quotidien'}},o||{});
+
+      // ── LES QUATRE RYTHMES ─────────────────────────────────────────────
+      ok('Traitement quotidien : pris dans la fenêtre, pas avant le début',
+        aPrendreLe(T(),'2026-03-15')===true && aPrendreLe(T(),'2025-12-31')===false);
+      ok('Traitement inactif : jamais dû, même dans la fenêtre',
+        aPrendreLe(T({actif:false}),'2026-03-15')===false);
+
+      // 2026-09-07 est un lundi (getDay 1), 2026-09-10 un jeudi (4).
+      const j=T({rythme:{type:'jours',jours:[1,4]}});
+      ok('Rythme « jours » : lundi et jeudi oui, mardi et dimanche non',
+        aPrendreLe(j,'2026-09-07')===true && aPrendreLe(j,'2026-09-10')===true
+        && aPrendreLe(j,'2026-09-08')===false && aPrendreLe(j,'2026-09-13')===false);
+      // ⚠ FIREBASE REND LES TABLEAUX A TROUS EN OBJETS. Sans normalisation,
+      // jours.indexOf leve, et l'appel entier tombe dans un catch silencieux.
+      ok('Rythme « jours » : une liste rendue en objet par Firebase est lue pareil',
+        aPrendreLe(T({rythme:{type:'jours',jours:{0:1,1:4}}}),'2026-09-07')===true);
+      ok('Rythme « jours » : liste vide = jamais dû',
+        aPrendreLe(T({rythme:{type:'jours',jours:[]}}),'2026-09-07')===false);
+
+      const anc=new Date('2026-09-01T08:00:00').getTime();
+      const c=T({rythme:{type:'cycle',cycleOn:21,cycleOff:7,ancre:anc}});
+      ok('Rythme « cycle » 21/7 : dû du jour 0 au jour 20, pas du 21 au 27',
+        aPrendreLe(c,'2026-09-01')===true && aPrendreLe(c,'2026-09-21')===true
+        && aPrendreLe(c,'2026-09-22')===false && aPrendreLe(c,'2026-09-28')===false
+        && aPrendreLe(c,'2026-09-29')===true);
+
+      // ⚠ LES DEUX CHANGEMENTS D'HEURE, ET PAS UN SEUL.
+      //
+      // La premiere ecriture de cette assertion ne testait que la nuit d'octobre,
+      // celle de 25 heures — et une division brute de millisecondes la passait au
+      // vert : Math.floor(25/24) vaut 1, la bonne reponse par accident. La nuit
+      // qui discrimine est celle de MARS, qui ne dure que 23 heures :
+      // Math.floor(23/24) vaut 0, et le cycle recule d'un jour.
+      //
+      // ⚠ ET L'ASSERTION PROUVE SA PROPRE PRECONDITION. Sur une machine reglee
+      // sur UTC il n'y a pas de changement d'heure du tout, et tout ce qui suit
+      // passerait au vert sans rien avoir verifie. On mesure donc d'abord que ces
+      // deux nuits durent bien 23 et 25 heures.
+      const _nuit=(a,b)=>(_dateDeISO(b).getTime()-_dateDeISO(a).getTime())/3600000;
+      // ⚠ C'EST LA JOURNEE DU 29 MARS QUI DURE 23 HEURES, pas la nuit du 28 au
+      // 29 : la bascule tombe a 02 h le 29, donc minuit du 28 a minuit du 29 fait
+      // encore 24 heures pleines. Ecrit avec les mauvaises dates, ce controle
+      // annoncait « pas de changement d'heure » sur un fuseau qui en a deux.
+      const _court=_nuit('2026-03-29','2026-03-30'), _long=_nuit('2026-10-25','2026-10-26');
+      ok('Changement d’heure : le fuseau de la machine connaît bien les deux bascules',
+        _court===23 && _long===25,
+        'journée du 29 mars : '+_court+' h, du 25 octobre : '+_long+' h — sur un '
+        +'fuseau sans heure d’été, les deux assertions suivantes ne prouvent rien');
+      ok('Changement d’heure : la journée courte de mars (23 h) reste UN jour plein',
+        _trtJoursEntre('2026-03-29','2026-03-30')===1
+        && _trtJoursEntre('2026-03-01','2026-03-30')===29,
+        'obtenu : '+_trtJoursEntre('2026-03-29','2026-03-30')+' et '
+        +_trtJoursEntre('2026-03-01','2026-03-30'));
+      ok('Changement d’heure : la journée longue d’octobre (25 h) reste UN jour plein',
+        _trtJoursEntre('2026-10-25','2026-10-26')===1
+        && _trtJoursEntre('2026-09-01','2026-10-26')===55,
+        'obtenu : '+_trtJoursEntre('2026-10-25','2026-10-26')+' et '
+        +_trtJoursEntre('2026-09-01','2026-10-26'));
+      // Et la consequence, la seule qui compte pour l'utilisateur : un cycle 21/7
+      // ancre avant la bascule ne change pas de phase cette nuit-la.
+      // Ancre au 10 mars : le 29 et le 30 tombent aux jours 19 et 20, en plein
+      // milieu de la phase « on ». Une ancre au 1er mars les aurait places de
+      // part et d'autre de la bascule 21/7, ou le cycle DOIT changer de phase —
+      // l'assertion aurait echoue pour la bonne raison au mauvais endroit.
+      const cM=T({rythme:{type:'cycle',cycleOn:21,cycleOff:7,
+        ancre:new Date('2026-03-10T08:00:00').getTime()}});
+      ok('Changement d’heure : le cycle ne saute pas de phase, ni en mars ni en octobre',
+        aPrendreLe(cM,'2026-03-29')===aPrendreLe(cM,'2026-03-30')
+        && aPrendreLe(c,'2026-10-25')===aPrendreLe(c,'2026-10-26'));
+
+      ok('Rythme « ponctuel » : jamais dû un jour donné',
+        aPrendreLe(T({rythme:{type:'ponctuel'}}),'2026-09-07')===false
+        && aPrendreLe(T({rythme:{type:'ponctuel'}}),'2026-03-01')===false);
+
+      // ── TERMINE : ABSENT DU JOUR, PRESENT EN HISTORIQUE ────────────────
+      //
+      // ⚠ LA FIN EST INCLUSIVE. Un traitement arrete « le 30 juin » se prend
+      // encore le 30 juin : c'est ainsi qu'une ordonnance se lit, et une borne
+      // exclusive ferait sauter la derniere prise sans que personne ne le voie.
+      const fini=T({id:'tf',nom:'Fini',fin:new Date('2026-06-30T08:00:00').getTime()});
+      ok('Traitement terminé : dû pendant, dû le dernier jour, plus dû après',
+        aPrendreLe(fini,'2026-05-01')===true && aPrendreLe(fini,'2026-06-30')===true
+        && aPrendreLe(fini,'2026-07-01')===false);
+      ok('Traitement terminé : marqué terminé le lendemain, pas le dernier jour',
+        traitementTermine(fini,'2026-07-01')===true
+        && traitementTermine(fini,'2026-06-30')===false);
+      (()=>{
+        // ET IL RESTE DANS LE DOSSIER. Un traitement termine sort du jour, il ne
+        // sort pas de l'historique : ce qu'on a pris compte encore.
+        const u={email:'h@t.fr',sante:{traitements:[fini,T({id:'tv',nom:'Vivant'})]}};
+        const duJour=traitementsDuMoment(u,'matin','2026-07-01').map(x=>x.id);
+        const histo=traitements(u).map(x=>x.id);
+        ok('Traitement terminé : absent du jour, toujours présent dans l’historique',
+          duJour.indexOf('tf')<0 && duJour.indexOf('tv')>=0
+          && histo.indexOf('tf')>=0 && histo.length===2,
+          'jour : '+duJour.join(',')+' | historique : '+histo.join(','));
+      })();
+
+      // ── LE PARTAGE AU COACH ────────────────────────────────────────────
+      //
+      // ⚠ C'EST L'ASSERTION LA PLUS IMPORTANTE DU LOT. partageCoach vaut FALSE
+      // par defaut ; le coach voit qu'il y a QUELQUE CHOSE a tel moment, et rien
+      // de plus. Une fuite ici n'est pas un defaut d'affichage : c'est un nom de
+      // medicament lisible par un tiers sans consentement.
+      (()=>{
+        const u={email:'p@t.fr',sante:{traitements:[
+          T({id:'a',nom:'Lévothyrox 75 µg',dosage_quantite:75,dosage_unite:'µg',
+             prescripteur:'Dr Martin',note:'à jeun impérativement'}),
+          T({id:'b',nom:'Metformine 500 mg',dosage_quantite:500,dosage_unite:'mg',
+             partageCoach:true,prescripteur:'Dr Durand',note:'avec le repas'})]}};
+        const vu=traitementsPourCoach(u);
+        const brut=JSON.stringify(vu);
+        ok('Coach : sans partage, ni le nom ni le dosage ne sortent',
+          !/Lévothyrox/.test(brut) && !/75/.test(brut) && !/µg/.test(brut),
+          brut);
+        ok('Coach : sans partage, ni le prescripteur ni la note ne sortent',
+          !/Martin/.test(brut) && !/Durand/.test(brut)
+          && !/impérativement/.test(brut) && !/repas/.test(brut));
+        // CE QUI SORT QUAND MEME, et qui doit sortir : le moment.
+        const a=vu.filter(x=>x.id==='a')[0];
+        ok('Coach : sans partage, le MOMENT de prise reste visible',
+          !!a && a.partage===false && a.moments.join(',')==='matin');
+        // ET CE QUI SORT AVEC L'ACCORD EXPLICITE.
+        const b=vu.filter(x=>x.id==='b')[0];
+        ok('Coach : avec partage explicite, le nom et le dosage suivent',
+          !!b && b.partage===true && b.nom==='Metformine 500 mg'
+          && b.dosage_quantite===500 && b.dosage_unite==='mg');
+        ok('Coach : même partagé, le prescripteur et la note ne suivent pas',
+          !!b && b.prescripteur===undefined && b.note===undefined);
+        // ⚠ ET LA PHRASE NON PLUS NE NOMME RIEN.
+        ok('Coach : la phrase résumée ne nomme aucun traitement non partagé',
+          !/Lévothyrox/.test(phraseTraitementsCoach(u)));
+
+        // ── LE FILTRE DE POUSSEE ─────────────────────────────────────────
+        //
+        // La fonction ci-dessus ne sert a rien si le tableau complet part quand
+        // meme vers Firebase. On rejoue donc le masquage tel que _doPushOne
+        // l'applique, et on verifie les DEUX choses : que le nom ne part pas, et
+        // que la donnee LOCALE, elle, est intacte — safe est une copie PLATE,
+        // et sans clone du sous-objet le masquage effacerait le vrai dossier.
+        const safe=CLOUD._masquerTraitements({...u},u);
+        ok('Poussée : le tableau des traitements part masqué, pas en clair',
+          !/Lévothyrox/.test(JSON.stringify(safe.sante.traitements||[])));
+        ok('Poussée : le dossier local garde son nom de traitement intact',
+          u.sante.traitements[0].nom==='Lévothyrox 75 µg');
+        // LE RELEVE DE PRISE NE PART PAS DU TOUT.
+        const u2={email:'q@t.fr',sante:{traitements:[T({id:'a'})],
+          prises:{'2026-09-07':{'trt:a|matin':true}}}};
+        ok('Poussée : le relevé de prise ne quitte jamais l’appareil',
+          CLOUD._masquerTraitements({...u2},u2).sante.prises===undefined
+          && !!u2.sante.prises['2026-09-07']);
+      })();
+
+      // ── LA TABLE D'INTERACTIONS ────────────────────────────────────────
+      //
+      // ⚠ UNE FAUSSE ALERTE EST PIRE QUE PAS D'ALERTE : elle apprend a ignorer
+      // les vraies. Ces deux assertions sont la garde de cette regle, et elles
+      // valent pour toute entree ajoutee plus tard.
+      ok('Interactions : aucune entrée sans source citable',
+        INTERACTIONS.length>0 && INTERACTIONS.every(x=>
+          typeof x.source==='string' && x.source.trim().length>40),
+        INTERACTIONS.filter(x=>!(x.source&&x.source.trim().length>40))
+          .map(x=>x.cle).join(', ')||'—');
+      ok('Interactions : aucune clé en double dans la table',
+        INTERACTIONS.length===new Set(INTERACTIONS.map(x=>x.cle)).size,
+        INTERACTIONS.map(x=>x.cle).join(', '));
+      ok('Interactions : chaque entrée porte une phrase et des motifs',
+        INTERACTIONS.every(x=>x.phrase&&x.phrase.length>20
+          && Array.isArray(x.motifs)&&x.motifs.length
+          && Array.isArray(x.contre)&&x.contre.length));
+
+      (()=>{
+        const u={email:'i@t.fr',
+          sante:{traitements:[
+            T({id:'lt',nom:'Lévothyrox 75 µg',moments:['jeun']}),
+            T({id:'st',nom:'Atorvastatine 20 mg',moments:['soir']}),
+            T({id:'ro',nom:'Rosuvastatine 10 mg',moments:['soir']})]},
+          nutrition:{supplements:[
+            {id:1,name:'Fer bisglycinate',timings:['jeun'],active:true},
+            {id:3,name:'Jus de pamplemousse',timings:['matin'],active:true},
+            {id:4,name:'Créatine',timings:['jeun'],active:true}]}};
+        const l=interactionsDuJour(u,'2026-09-07');
+        ok('Interactions : le fer au même moment que l’hormone thyroïdienne est signalé',
+          l.some(x=>x.cle==='thyroide-mineraux' && x.aDecaler==='Fer bisglycinate'
+            && x.delaiMin===240 && x.moment==='jeun'));
+        // ⚠ CE QU'ON DECALE EST LE COMPLEMENT, jamais le traitement prescrit.
+        ok('Interactions : c’est le complément qu’on décale, jamais le traitement',
+          l.filter(x=>x.delaiMin!==null).every(x=>x.aDecaler!==x.traitement));
+        ok('Interactions : le pamplemousse et une statine CYP3A4 se signalent sans horaire',
+          l.some(x=>x.cle==='pamplemousse-statines'
+            && /Atorvastatine/.test(x.traitement) && x.moment===null));
+        // ⚠ LA ROSUVASTATINE PASSE PAR LE CYP2C9 : alerter serait exactement la
+        // fausse alerte que cette table doit eviter.
+        ok('Interactions : la rosuvastatine n’est PAS concernée par le pamplemousse',
+          !l.some(x=>/Rosuvastatine/.test(x.traitement)),
+          l.map(x=>x.cle+':'+x.traitement).join(' | '));
+        // LA CREATINE N'EST DANS AUCUNE REGLE : rien ne doit sortir pour elle.
+        ok('Interactions : un complément hors table ne déclenche rien',
+          !l.some(x=>/Créatine/.test(x.complement)));
+
+        // ⚠ LE DECLENCHEMENT SE FAIT SUR LE MOMENT PARTAGE. Deux produits pris a
+        // huit heures d'intervalle ne posent pas de probleme ; alerter la
+        // reviendrait a alerter tous les jours, pour rien.
+        const u2=JSON.parse(JSON.stringify(u));
+        u2.sante.traitements=[T({id:'lt',nom:'Lévothyrox 75 µg',moments:['jeun']})];
+        u2.nutrition.supplements=[{id:1,name:'Fer bisglycinate',timings:['soir'],active:true}];
+        ok('Interactions : moments disjoints, aucune alerte',
+          interactionsDuJour(u2,'2026-09-07').length===0);
+        // Un nom que la table ne connait pas ne declenche RIEN.
+        const u3=JSON.parse(JSON.stringify(u2));
+        u3.nutrition.supplements=[{id:1,name:'Poudre mystère',timings:['jeun'],active:true}];
+        ok('Interactions : un nom inconnu de la table ne déclenche rien',
+          interactionsDuJour(u3,'2026-09-07').length===0);
+      })();
+
+      // ── LE SUIVI DE PRISE ──────────────────────────────────────────────
+      //
+      // ⚠ RIEN NE DOIT DIRE « TOUT OUBLIE » LA OU IL N'Y AVAIT RIEN A PRENDRE.
+      // Un taux de 0 % sur une periode sans prise due est un reproche fabrique.
+      (()=>{
+        const u={email:'z@t.fr',sante:{traitements:[
+          T({id:'x',moments:['matin'],rythme:{type:'ponctuel'}})]}};
+        ok('Taux de prise : null quand rien n’était dû sur la période',
+          tauxPrise(u,7,'2026-09-07')===null);
+      })();
+    })();
+
+    // ══ LE SIGNAL D'APPORT EN MICRONUTRIMENTS ════════════════════════════
+    //
+    // Ce qui est verifie ici n'est pas la justesse d'une somme : c'est que
+    // l'app SE TAIT dans tous les cas ou elle ne sait pas, et qu'elle ne parle
+    // que d'apports alimentaires quand elle parle.
+    (()=>{
+      const FIN='2026-09-01';
+      const jr=k=>localISODate(_datePlusJours(_dateDeISO(FIN),-k));
+      // `bas` porte tous les micronutriments, dont un fer volontairement bas.
+      // `muet` n'en porte AUCUN — c'est l'aliment OpenFoodFacts type.
+      const bas =kc=>({kcal:kc,fe:1,ca:400,mg:200,zn:6,io:80,k_:1800,b12:3,b9:200});
+      const muet=kc=>({kcal:kc});
+      const dossier=(ks,faire,sexe)=>{
+        const log={};
+        for(const k of ks) log[jr(k)]={entries:faire()};
+        return {email:'mi@t.fr',gender:sexe||'H',nutrition:{log:log}};
+      };
+      const QUINZE=[]; for(let k=0;k<14;k++) QUINZE.push(k);
+
+      // ── NULL N'EST JAMAIS COMPTE ZERO ──────────────────────────────────
+      //
+      // ⚠ C'EST LE PIEGE CENTRAL DU LOT. Un produit OpenFoodFacts ne porte
+      // presque jamais l'iode ni la B12 ; le compter zero fabriquerait un
+      // manque a chaque fois qu'un code-barres entre au journal.
+      (()=>{
+        const u=dossier(QUINZE,()=>[bas(200),muet(200)]);
+        const s=microSemaine(u,FIN);
+        // 7 jours x 1 mg : l'aliment muet n'a RIEN retire.
+        ok('Micro : un champ absent ne dilue pas l’apport, il en sort',
+          s.fe===7 && s.joursRenseignes===7, 'fe='+s.fe+' jours='+s.joursRenseignes);
+        // Et la moyenne journaliere se lit sur le seul apport connu.
+        ok('Micro : la part se calcule sur l’apport connu, pas sur un zéro fabriqué',
+          s.part.fe===Math.round((7/7)/11*1000)/1000, 'part='+s.part.fe);
+        // La preuve par le contraire : le meme journal ou l'aliment muet porte
+        // un zero EXPLICITE donne le meme apport, mais une couverture pleine.
+        const u0=dossier(QUINZE,()=>[bas(200),Object.assign(muet(200),{fe:0})]);
+        const s0=microSemaine(u0,FIN);
+        ok('Micro : un zéro écrit et une donnée absente ne se comptent pas pareil',
+          s0.fe===s.fe && s0.couverture.fe===1 && s.couverture.fe===0.5,
+          'apports '+s.fe+'/'+s0.fe+' — couvertures '+s.couverture.fe+'/'+s0.couverture.fe);
+      })();
+
+      // ── LA COUVERTURE EST OPPOSABLE ────────────────────────────────────
+      //
+      // Elle n'est pas un ornement de la phrase : c'est elle qui decide si
+      // l'app a le droit de parler. Une couverture sous le seuil fait taire le
+      // signal MEME quand l'apport connu est tres bas.
+      (()=>{
+        const u=dossier(QUINZE,()=>[bas(200),muet(200)]);   // couverture 50 %
+        const s=microSemaine(u,FIN);
+        ok('Micro : la couverture est la part d’énergie venant d’aliments qui portent le nutriment',
+          s.couverture.fe===0.5 && s.kcal===2800, 'couv='+s.couverture.fe+' kcal='+s.kcal);
+        ok('Micro : couverture sous le seuil, l’app se tait malgré un apport bas',
+          s.part.fe<MICRO_SIGNAL_SEUIL && signalMicro(u,FIN)===null,
+          'part='+s.part.fe);
+      })();
+
+      // ── LE REPERE DU FER DIFFERE SELON LE SEXE ─────────────────────────
+      //
+      // ⚠ C'EST LE PLUS GRAND ECART DES HUIT — 11 contre 16 mg — et l'aplatir
+      // declarerait la moitie des femmes au-dessus du seuil, ou la moitie des
+      // hommes en dessous.
+      (()=>{
+        const uH=dossier(QUINZE,()=>[bas(200),muet(200)],'H');
+        const uF=dossier(QUINZE,()=>[bas(200),muet(200)],'F');
+        ok('Micro : le repère du fer distingue les sexes, celui du calcium non',
+          refMicro(uH,'fe').valeur===11 && refMicro(uF,'fe').valeur===16
+          && refMicro(uH,'ca').valeur===refMicro(uF,'ca').valeur);
+        // ET LA DIFFERENCE ARRIVE JUSQU'AU RESULTAT. Un repere distinct qui ne
+        // changerait pas la part serait un repere decoratif.
+        ok('Micro : le sexe change la part calculée, pas seulement le repère',
+          microSemaine(uH,FIN).part.fe > microSemaine(uF,FIN).part.fe,
+          'H='+microSemaine(uH,FIN).part.fe+' F='+microSemaine(uF,FIN).part.fe);
+        // Sexe inconnu : la reference LA PLUS ELEVEE, jamais la plus basse.
+        // Sous-estimer le repere gonflerait la part et eteindrait la question.
+        ok('Micro : sexe non renseigné, c’est le repère le plus exigeant qui sert',
+          refMicro({email:'x@t.fr'},'fe').valeur===16
+          && refMicro({email:'x@t.fr'},'fe').sexeConnu===false);
+      })();
+
+      // ── LES QUATRE GARDES, ET LA PERSISTANCE ───────────────────────────
+      (()=>{
+        const tousPortent=()=>[bas(200),Object.assign(muet(200),{fe:0,ca:400,
+          mg:200,zn:6,io:80,k_:1800,b12:3,b9:200})];
+        // Deux semaines pleines, couverture pleine, fer a 9 % : ca parle.
+        const ok2=dossier(QUINZE,tousPortent);
+        const s=signalMicro(ok2,FIN);
+        ok('Micro : quatre gardes franchies, un signal',
+          !!s && s.cle==='fe', s?s.cle+' '+s.pct+' %':'aucun signal');
+        // ⚠ QUATRE JOURS SUR SEPT : rien. Sans cette garde, l'app annoncerait
+        // un manque a quiconque saisit mal.
+        ok('Micro : sous 5 jours renseignés, aucun signal',
+          signalMicro(dossier([0,1,2,3,7,8,9,10],tousPortent),FIN)===null);
+        // Cinq jours suffisent — et la part n'est PAS diluee par les deux jours
+        // vides. Opposer cinq journees a une reference multipliee par sept
+        // donnerait 71 % au mieux : le manque serait fabrique par la garde
+        // censee l'eviter.
+        const s5=signalMicro(dossier([0,1,2,3,4,7,8,9,10,11],tousPortent),FIN);
+        ok('Micro : 5 jours sur 7 suffisent, et la part n’est pas diluée par les jours vides',
+          !!s5 && s5.joursRenseignes===5 && s5.pct===s.pct,
+          s5?s5.joursRenseignes+' jours, '+s5.pct+' % contre '+s.pct+' %':'aucun signal');
+        // ⚠ UNE SEULE SEMAINE : rien. C'est la garde qui coute le plus de
+        // signaux, et c'est celle qui rend les autres credibles.
+        ok('Micro : une seule semaine sous le seuil ne dit rien',
+          signalMicro(dossier([0,1,2,3,4,5,6],tousPortent),FIN)===null);
+        // Et la semaine precedente seule ne suffit pas davantage.
+        ok('Micro : la semaine d’avant seule ne dit rien non plus',
+          signalMicro(dossier([7,8,9,10,11,12,13],tousPortent),FIN)===null);
+      })();
+
+      // ── UN SEUL NUTRIMENT NOMME ────────────────────────────────────────
+      //
+      // ⚠ UNE PHRASE QUI EN LISTE TROIS N'EST PLUS UNE CONSIGNE.
+      (()=>{
+        // Trois nutriments sous le seuil en meme temps : le fer a 9 %, le zinc
+        // a 17 %, l'iode a 53 %. Un seul doit sortir, et c'est le plus bas.
+        const tout=()=>[{kcal:200,fe:0.5,ca:500,mg:250,zn:1,io:40,k_:2000,b12:3,b9:250},
+                        {kcal:200,fe:0.5,ca:500,mg:250,zn:1,io:40,k_:2000,b12:3,b9:250}];
+        const u=dossier(QUINZE,tout);
+        const s=signalMicro(u,FIN);
+        const p=phraseSignalMicro(s);
+        const noms=['fer','calcium','magnésium','zinc','iode','potassium','folates','vitamine b12']
+          .filter(m=>p.toLowerCase().indexOf(m)>=0);
+        ok('Micro : la phrase ne nomme qu’UN nutriment, le plus bas',
+          !!s && noms.length===1 && s.cle==='fe', noms.join(', ')+' — '+p);
+        ok('Micro : les autres nutriments en défaut sont comptés, pas nommés',
+          !!s && s.autres>0 && phraseSignalMicroCoach(s).indexOf('dans le même cas')>0,
+          'autres='+(s?s.autres:'—'));
+      })();
+
+      // ── LES ALIMENTS PROPOSES VIENNENT DES SIENS ───────────────────────
+      //
+      // ⚠ UN CONSEIL BATI SUR SES PROPRES ALIMENTS EST SUIVI ; une liste
+      // d'abats ne l'est pas.
+      (()=>{
+        if(!Array.isArray(_ciqualDB)||!_ciqualDB.length){
+          ok('Micro : aliments proposés — base Ciqual absente',false,
+            'la base n’est pas chargée : la sonde ne prouverait rien');
+          return;
+        }
+        const riches=_ciqualDB.filter(f=>f.fe!=null).sort((a,b)=>b.fe-a.fe);
+        // Trois aliments MOYENNEMENT riches, journalises par l'athlete.
+        const siens=_ciqualDB.filter(f=>f.fe!=null&&f.fe>=1.5&&f.fe<4).slice(0,3);
+        ok('Micro : la fixture tient trois aliments moyennement riches en fer',
+          siens.length===3);
+        const u={email:'h@t.fr',gender:'H',nutrition:{log:{}}};
+        u.nutrition.log[jr(0)]={entries:siens.map(f=>({kcal:100,alim_id:f.id,fe:1}))};
+        const prop=alimentsRichesEn(u,'fe',3,FIN);
+        ok('Micro : les trois aliments proposés sortent de son propre journal',
+          prop.length===3 && prop.every(x=>x.sien===true),
+          prop.map(x=>x.nom+(x.sien?'':' [base]')).join(' | '));
+        // ⚠ ET LE PLUS RICHE DE LA BASE EST ECARTE tant que les siens
+        // suffisent : c'est toute la regle.
+        ok('Micro : le plus riche de la base ne passe pas devant les siens',
+          prop.every(x=>x.id!==riches[0].id), 'base : '+riches[0].n);
+        // Sans historique, on retombe sur la base — et la base est BORNEE.
+        const vide=alimentsRichesEn({email:'v@t.fr',gender:'H'},'fe',3,FIN);
+        ok('Micro : sans historique, la base prend le relais',
+          vide.length===3 && vide.every(x=>x.sien===false));
+        // ⚠ LE PLAFOND DE PLAUSIBILITE. Trier la base par teneur au cent
+        // grammes remonte l'ao-nori sechee (205 mg de fer), la chlorelle
+        // (177) et le maerl (144) : rien de tout cela ne se mange au cent
+        // grammes, et le proposer contre un apport bas est la derniere fois
+        // que la phrase est lue.
+        const ref=refMicro({email:'v@t.fr',gender:'H'},'fe').valeur;
+        ok('Micro : la base ne propose rien qui livre plus de deux jours de repère en 100 g',
+          vide.every(x=>x.valeur<=ref*MICRO_RICHE_PLAFOND),
+          vide.map(x=>x.nom+' '+x.valeur).join(' | '));
+        ok('Micro : les épices, algues et boissons sont hors de la proposition',
+          vide.every(x=>{const f=_ciqualDB.find(y=>y.id===x.id);
+            return f && MICRO_GROUPES_EXCLUS.indexOf(String(f.g||''))<0;}),
+          vide.map(x=>(_ciqualDB.find(y=>y.id===x.id)||{}).g).join(' | '));
+        // Et un plancher : rien qui contienne le nutriment sans en apporter.
+        ok('Micro : rien n’est proposé sous un dixième du repère aux 100 g',
+          vide.every(x=>x.valeur>=ref*MICRO_RICHE_PART));
+      })();
+
+      // ── LE MOT INTERDIT ────────────────────────────────────────────────
+      //
+      // ⚠ CETTE ASSERTION N'INTERDIT PAS LE MOT DANS LE FICHIER : elle
+      // l'enferme dans MICRO_DISCLAIMER. L'app parle d'APPORTS ALIMENTAIRES —
+      // ce qui est entre dans le journal — et non d'un etat biologique,
+      // qu'elle n'a ni les moyens ni la qualite d'etablir. Le disclaimer, lui,
+      // dit exactement l'inverse et DOIT porter le mot : « seul un bilan
+      // sanguin peut etablir une carence ». Le bannir partout obligerait a
+      // reecrire la seule phrase du fichier qui protege le lecteur.
+      (()=>{
+        const src=_prodSrc();
+        const lignes=src.split('\n').filter(l=>/carence/i.test(l));
+        const hors=lignes.filter(l=>{
+          const t=l.trim();
+          if(t.indexOf('//')===0) return false;            // commentaire de doctrine
+          if(t.indexOf('const MICRO_DISCLAIMER=')===0) return false;
+          return true;
+        });
+        ok('Micro : le mot « carence » ne sort que par MICRO_DISCLAIMER',
+          hors.length===0, hors.map(l=>l.trim().slice(0,90)).join(' ⏎ ')||'—');
+        ok('Micro : et il est bien dans le disclaimer, qui doit le porter',
+          /carence/i.test(MICRO_DISCLAIMER));
+        // LES DEUX PHRASES DU PRODUIT, elles, ne le portent jamais.
+        const u=dossier(QUINZE,()=>[bas(200),Object.assign(muet(200),{fe:0,ca:400,
+          mg:200,zn:6,io:80,k_:1800,b12:3,b9:200})]);
+        const s=signalMicro(u,FIN);
+        ok('Micro : ni la phrase de l’athlète ni celle du coach ne disent « carence »',
+          !!s && !/carence/i.test(phraseSignalMicro(s))
+          && !/carence/i.test(phraseSignalMicroCoach(s)));
+      })();
+
+      // ── LE GARDE-FOU TCA, ET LA LIGNE ELLE-MEME ────────────────────────
+      (()=>{
+        const u=dossier(QUINZE,()=>[bas(200),Object.assign(muet(200),{fe:0,ca:400,
+          mg:200,zn:6,io:80,k_:1800,b12:3,b9:200})]);
+        const h=_htmlSignalMicro(u,FIN);
+        ok('Micro : la ligne existe quand il y a quelque chose à dire',
+          h.length>0 && h.indexOf('depuis deux semaines')>0);
+        ok('Micro : la ligne porte le rappel « pas un dispositif médical »',
+          h.indexOf('dispositif médical')>0);
+        // ⚠ ET RIEN DU TOUT QUAND IL N'Y A RIEN A DIRE. Pas d'emplacement
+        // vide, pas de titre orphelin : la rarete EST le dispositif.
+        const bon=dossier(QUINZE,()=>[{kcal:200,fe:9,ca:800,mg:400,zn:12,io:200,
+          k_:4000,b12:5,b9:400},{kcal:200,fe:9,ca:800,mg:400,zn:12,io:200,
+          k_:4000,b12:5,b9:400}]);
+        ok('Micro : rien à dire, rien du tout — pas même un cadre vide',
+          _htmlSignalMicro(bon,FIN)==='' && signalMicro(bon,FIN)===null);
+        // ⚠ LE GARDE-FOU TCA. Nommer un apport bas puis trois aliments a
+        // manger, a quelqu'un dont le depistage a conclu a un risque, est
+        // exactement ce que ce garde-fou existe pour empecher.
+        const uT=JSON.parse(JSON.stringify(u)); uT.tcaRisque=true;
+        ok('Micro : risque TCA déclaré, la ligne de l’athlète disparaît',
+          aTCA(uT)===true && _htmlSignalMicro(uT,FIN)==='');
+        // ET LE COACH CONTINUE DE LA VOIR : c'est un professionnel, et c'est a
+        // lui d'en faire quelque chose.
+        ok('Micro : le coach, lui, voit le signal même sous garde-fou TCA',
+          risquesMicro(uT,_dateDeISO(FIN)).filter(x=>/^couverture_/.test(x.cle)).length>0);
+      })();
+
+      // ── LE COACH NE DIT LE NUTRIMENT PERSISTANT QU'UNE FOIS ────────────
+      (()=>{
+        const u=dossier(QUINZE,()=>[bas(200),Object.assign(muet(200),{fe:0,ca:400,
+          mg:200,zn:6,io:80,k_:1800,b12:3,b9:200})]);
+        const l=risquesMicro(u,_dateDeISO(FIN)).filter(x=>/^couverture_/.test(x.cle));
+        const s=signalMicro(u,FIN);
+        ok('Micro coach : le nutriment persistant n’apparaît qu’une seule fois',
+          !!s && l.filter(x=>x.cle==='couverture_'+s.cle).length===1,
+          l.map(x=>x.cle).join(' | '));
+        ok('Micro coach : et c’est la version qui porte les deux semaines',
+          !!s && /deux semaines/.test(
+            (l.find(x=>x.cle==='couverture_'+s.cle)||{}).lib||''));
+        // Les autres nutriments gardent le format d'avant ce lot.
+        ok('Micro coach : les nutriments non persistants gardent leur format',
+          l.filter(x=>x.cle!=='couverture_'+s.cle)
+            .every(x=>['cle','lib','motif','question'].every(k=>typeof x[k]==='string'&&x[k])));
+      })();
+
+      // ── LA REGLE DE TROIS N'EXISTE QU'UNE FOIS ─────────────────────────
+      //
+      // Elle etait ecrite deux fois, mot pour mot. Deux copies d'un prorata ne
+      // divergent pas le jour ou on les ecrit : elles divergent le jour ou
+      // quelqu'un en corrige une.
+      (()=>{
+        const src=_prodSrc();
+        const n=(src.match(/_poserMicros\(/g)||[]).length;
+        ok('Micro : le prorata des micronutriments est écrit une fois et appelé deux',
+          n===3, n+' occurrence(s) — 1 définition + 2 appels attendus');
+        const e={};
+        _poserMicros(e,{fe:2,ca:100,zn:null},1.5);
+        ok('Micro : le prorata pose la clé au prorata, et saute ce qui est absent',
+          e.fe===3 && e.ca===150 && !('zn' in e) && !('io' in e),
+          JSON.stringify(e));
+      })();
+    })();
+
+    // ══ LA SAISIE D'UN TRAITEMENT, DES DEUX COTES ════════════════════════
+    (()=>{
+      const T=(o)=>Object.assign({id:'t1',nom:'Test',moments:['matin'],actif:true,
+        debut:Date.now(),fin:null,rythme:{type:'quotidien'}},o||{});
+
+      // ── LE FILET DE POUSSEE ────────────────────────────────────────────
+      //
+      // ⚠ C'EST LA GARDE LA PLUS IMPORTANTE DU LOT, et elle repare une PERTE
+      // DE DONNEES : les regles de la base autorisent le coach a ecrire dans
+      // /users/<son athlete>, une trentaine d'ecritures du produit passent par
+      // pushOne, et la poussee est un PUT. Or le coach ne detient du tableau
+      // des traitements que la version MASQUEE. Sans ce filet, assigner une
+      // phase remplacait chez l'athlete le nom, la dose et le prescripteur de
+      // chacun de ses traitements par du vide.
+      (()=>{
+        const reel=[
+          T({id:'a',nom:'Lévothyrox 75 µg',dosage_quantite:75,dosage_unite:'µg',
+             prescripteur:'Dr Martin',note:'à jeun',saisiPar:'athlete',partageCoach:false}),
+          T({id:'b',nom:'Metformine',saisiPar:'coach',partageCoach:true})];
+        // Ce que le coach a REELLEMENT sous la main : « a » masque, « b » a lui.
+        const chezCoach=[
+          {id:'a',moments:['matin'],partage:false,saisiPar:'athlete'},
+          T({id:'b',nom:'Metformine 850 mg',saisiPar:'coach',partageCoach:true})];
+        const f=_fusionnerTraitementsPoussee(reel,chezCoach);
+        const a=f.filter(x=>x.id==='a')[0], b=f.filter(x=>x.id==='b')[0];
+        ok('Poussée du coach : le traitement privé de l’athlète est recopié intact',
+          !!a && a.nom==='Lévothyrox 75 µg' && a.dosage_quantite===75
+          && a.prescripteur==='Dr Martin' && a.note==='à jeun',
+          JSON.stringify(a));
+        ok('Poussée du coach : sa propre saisie, elle, est bien appliquée',
+          !!b && b.nom==='Metformine 850 mg');
+        // ⚠ UN COACH DESYNCHRONISE NE DOIT RIEN EFFACER. Une absence dans sa
+        // copie est une desynchronisation, pas une intention : la lire comme
+        // une suppression detruirait le dossier a la premiere ouverture.
+        const f0=_fusionnerTraitementsPoussee(reel,[]);
+        ok('Poussée du coach : une copie vide n’efface rien',
+          f0.length===2 && f0.filter(x=>x.id==='a')[0].nom==='Lévothyrox 75 µg');
+        // Un ajout du coach absent a distance entre bien.
+        const f2=_fusionnerTraitementsPoussee(reel,
+          chezCoach.concat([T({id:'c',nom:'Vitamine D',saisiPar:'coach'})]));
+        ok('Poussée du coach : un traitement qu’il vient d’ajouter entre dans le dossier',
+          f2.length===3 && f2.filter(x=>x.id==='c').length===1);
+        // ⚠ FIREBASE REND LES TABLEAUX A TROUS EN OBJETS.
+        ok('Poussée du coach : un tableau rendu en objet par Firebase est fusionné pareil',
+          _fusionnerTraitementsPoussee({0:reel[0],2:reel[1]},chezCoach).length===2);
+        // ET LA SOURCE DE VERITE EST LE DISTANT, jamais la copie du coach : un
+        // traitement que le distant ne porte pas et que le coach n'a pas saisi
+        // n'a rien a faire dans le resultat.
+        const f3=_fusionnerTraitementsPoussee([reel[0]],
+          chezCoach.concat([{id:'z',moments:['soir'],partage:false,saisiPar:'athlete'}]));
+        ok('Poussée du coach : une ligne masquée qu’il détient seul n’est pas réinjectée',
+          f3.filter(x=>x.id==='z').length===0, JSON.stringify(f3.map(x=>x.id)));
+      })();
+
+      // ── LA VALIDATION, HORS DU DOM ─────────────────────────────────────
+      (()=>{
+        const V=o=>_trtValider(Object.assign({nom:'X',moments:['matin'],
+          rythme:{type:'quotidien'}},o));
+        ok('Saisie : un traitement sans nom est refusé', V({nom:'  '})!=='');
+        ok('Saisie : un traitement sans moment est refusé', V({moments:[]})!=='');
+        // ⚠ SAUF LE PONCTUEL : « au besoin » n'a pas d'heure, et exiger une
+        // case ferait inventer une reponse.
+        ok('Saisie : un ponctuel n’exige aucun moment',
+          V({moments:[],rythme:{type:'ponctuel'}})==='');
+        ok('Saisie : un rythme « jours » sans jour coché est refusé',
+          V({rythme:{type:'jours',jours:[]}})!=='');
+        ok('Saisie : un cycle à zéro jour de prise est refusé',
+          V({rythme:{type:'cycle',cycleOn:0,cycleOff:7}})!=='');
+        // ⚠ UNE FIN AVANT LE DEBUT rendrait le traitement invisible partout
+        // sans qu'aucun ecran ne dise pourquoi.
+        ok('Saisie : une date de fin antérieure au début est refusée',
+          V({debut:2000,fin:1000})!=='');
+        ok('Saisie : un traitement complet passe', V({})==='');
+      })();
+
+      // ── LA SAISIE DE L'ATHLETE, PAR LE DOM ─────────────────────────────
+      const _sauve=currentUser;
+      try{
+        currentUser={email:'ath-trt@t.fr',role:'athlete',sante:{}};
+        ouvrirEditeurTraitement('ath-trt@t.fr',null,'s-traitements');
+        ok('Saisie athlète : l’éditeur s’ouvre sur son propre écran',
+          (document.querySelector('.screen.active')||{}).id==='s-traitement-edit');
+        // ⚠ L'INTERRUPTEUR DE PARTAGE LUI EST PROPOSE, ET IL VAUT NON. Un
+        // interrupteur pre-coche n'est pas un consentement.
+        const p=document.getElementById('trte-partage');
+        ok('Saisie athlète : le partage est proposé, et il n’est pas pré-coché',
+          !!p && p.checked===false);
+        document.getElementById('trte-nom').value='Lévothyrox 75 µg';
+        document.getElementById('trte-dq').value='75';
+        document.getElementById('trte-du').value='µg';
+        document.getElementById('trte-presc').value='Dr Martin';
+        Array.prototype.slice.call(document.querySelectorAll('.trte-m'))
+          .forEach(x=>{ x.checked=(x.value==='jeun'); });
+        sauverTraitement();
+        const l=traitements(currentUser);
+        ok('Saisie athlète : le traitement est écrit dans son dossier',
+          l.length===1 && l[0].nom==='Lévothyrox 75 µg' && l[0].dosage_quantite===75
+          && l[0].dosage_unite==='µg' && l[0].moments.join(',')==='jeun',
+          JSON.stringify(l[0]||null));
+        ok('Saisie athlète : elle est marquée comme venant de lui, et non partagée',
+          l[0].saisiPar==='athlete' && l[0].partageCoach===false);
+        // ⚠ ET LE COACH N'EN VOIT QUE LE MOMENT.
+        const vu=JSON.stringify(traitementsPourCoach(currentUser));
+        ok('Saisie athlète : son coach n’en voit que le moment',
+          !/Lévothyrox/.test(vu) && !/Martin/.test(vu) && /jeun/.test(vu), vu);
+      } finally { currentUser=_sauve; }
+
+      // ── LA SAISIE DU COACH ─────────────────────────────────────────────
+      (()=>{
+        const _sU=currentUser;
+        const _sUsers=DB.get('users');
+        try{
+          const users=DB.get('users')||{};
+          users['cli-trt@t.fr']={email:'cli-trt@t.fr',role:'athlete',sante:{}};
+          DB.setLocal('users',users);
+          currentUser={email:'coach-trt@t.fr',role:'coach'};
+          ouvrirEditeurTraitement('cli-trt@t.fr',null,'s-coach-client');
+          // ⚠ L'INTERRUPTEUR DE PARTAGE NE LUI EST MEME PAS PROPOSE : ce qu'il
+          // saisit lui est forcement visible, il vient de l'ecrire. Le ranger
+          // en « non partage » serait un mensonge d'interface.
+          ok('Saisie coach : l’interrupteur de partage ne lui est pas proposé',
+            !document.getElementById('trte-partage'));
+          ok('Saisie coach : l’écran dit qu’il écrit dans le dossier de son athlète',
+            /dossier de ton athlète/.test(
+              (document.getElementById('trte-corps')||{}).textContent||''));
+          document.getElementById('trte-nom').value='Metformine 850 mg';
+          Array.prototype.slice.call(document.querySelectorAll('.trte-m'))
+            .forEach(x=>{ x.checked=(x.value==='midi'); });
+          sauverTraitement();
+          // ⚠ RELU DEPUIS LE STOCKAGE, et pas depuis l'objet mute. DB.get rend
+          // une COPIE FRAICHE a chaque appel : muter le dossier rendu par un
+          // premier appel puis sauver celui d'un second jetait la modification
+          // en silence, et la saisie du coach paraissait reussir sans rien
+          // ecrire. C'est cette assertion-la qui l'a vu.
+          const c=(DB.get('users')||{})['cli-trt@t.fr'];
+          const l=traitements(c);
+          ok('Saisie coach : le traitement est écrit dans le dossier de l’athlète',
+            l.length===1 && l[0].nom==='Metformine 850 mg', JSON.stringify(l));
+          ok('Saisie coach : il est marqué « coach » et forcément partagé',
+            l.length===1 && l[0].saisiPar==='coach' && l[0].partageCoach===true);
+          // ── CE QUE LE BLOC DU COACH MONTRE ────────────────────────────
+          const c2={email:'cli2-trt@t.fr',sante:{traitements:[
+            {id:'a',moments:['soir'],partage:false,saisiPar:'athlete',nom:'SECRET'},
+            T({id:'b',nom:'Metformine 850 mg',moments:['midi'],saisiPar:'coach',
+               partageCoach:true})]}};
+          const h=_htmlTraitementsCoach(c2);
+          ok('Bloc coach : le nom d’un traitement non partagé n’est nulle part dans le balisage',
+            h.indexOf('SECRET')<0);
+          ok('Bloc coach : un traitement non partagé se dit sans se nommer',
+            /Un traitement en cours/.test(h) && /soir/.test(h));
+          // ⚠ ET IL NE PEUT MODIFIER QUE CE QU'IL A SAISI. Ouvrir l'editeur
+          // sur un traitement de l'athlete afficherait un formulaire vide — il
+          // n'en a que la version masquee — et l'enregistrer ecraserait le vrai.
+          ok('Bloc coach : un seul bouton « Modifier », sur sa propre saisie',
+            (h.match(/>Modifier</g)||[]).length===1);
+          ok('Bloc coach : le rappel « pas un dispositif médical » y est',
+            h.indexOf('dispositif médical')>0);
+        } finally {
+          currentUser=_sU;
+          try{ if(_sUsers) DB.setLocal('users',_sUsers); }catch(e){}
+        }
+      })();
+
+      // ── LES DEUX ECRANS EXISTENT ET SONT ATTEIGNABLES ──────────────────
+      (()=>{
+        const src=_prodSrc();
+        ok('Saisie : l’écran d’édition existe dans le document',
+          !!document.getElementById('s-traitement-edit'));
+        // ⚠ NI « s-coach- » NI « s-client- » : le garde de role de go() filtre
+        // sur ces deux prefixes. Renommer cet ecran l'un ou l'autre le
+        // fermerait a la moitie de ceux qui doivent l'ouvrir.
+        ok('Saisie : l’écran d’édition n’est fermé à aucun des deux rôles',
+          's-traitement-edit'.indexOf('s-coach-')!==0
+          && 's-traitement-edit'.indexOf('s-client-')!==0);
+        // Et il y a bien une porte d'entree de chaque cote.
+        ok('Saisie : l’athlète a un bouton d’ajout sur son écran des traitements',
+          /Ajouter un traitement/.test(src));
+        ok('Saisie : le coach a un bouton de saisie dans sa fiche client',
+          /Saisir un traitement/.test(src));
+      })();
+    })();
+
+    // ══ RIEN NE DEPASSE DE LA PAGE ═══════════════════════════════════════
+    //
+    // ⚠ CE LOT EXISTE PARCE QU'UN FRAGMENT DE GABARIT A VECU HUIT JOURS APRES
+    // </body></html>. Une insertion ratee y avait colle « ${_htmlBoutonReperes(c)} » ;
+    // le navigateur remonte tout texte errant apres </body> DANS le corps, si
+    // bien que la chaine brute s'affichait en bas de chaque ecran de l'app,
+    // pour tout le monde. 4 419 assertions ne l'ont pas vu : aucune ne
+    // regardait le document en tant que document.
+    //
+    // Deux gardes, et la seconde est la generale.
+    (()=>{
+      const src=_prodSrc();
+      // ── 1. LE FICHIER SE TERMINE SUR SA BALISE FERMANTE ────────────────
+      const i=src.lastIndexOf('</html>');
+      ok('Page : rien ne suit </html> dans la source de production',
+        i>=0 && src.slice(i+7).trim()==='',
+        i<0?'aucun </html>':'«'+src.slice(i+7).trim().slice(0,120)+'»');
+
+      // ── 2. AUCUN GABARIT NON INTERPOLE N'EST VISIBLE ───────────────────
+      //
+      // La vraie garde : elle attrape le meme defaut ou qu'il tombe, et pas
+      // seulement en fin de fichier. On parcourt les noeuds de TEXTE du
+      // document — en sautant les scripts, les styles et les gabarits, dont
+      // le contenu n'est pas rendu — et on refuse toute marque « ${ » restee
+      // telle quelle. Un gabarit non interpole est TOUJOURS un defaut : il
+      // n'existe aucune raison d'ecrire ces deux caracteres dans du texte lu
+      // par un utilisateur.
+      const SAUTES={SCRIPT:1,STYLE:1,TEMPLATE:1,NOSCRIPT:1};
+      const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null);
+      const fuites=[];
+      let n;
+      while((n=w.nextNode())){
+        const p=n.parentNode;
+        if(!p||SAUTES[p.nodeName]) continue;
+        const t=String(n.nodeValue||'');
+        if(t.indexOf('${')<0) continue;
+        // On remonte le nom de l'ecran : « quelque part dans le document » ne
+        // se corrige pas, « dans s-traitements » se corrige.
+        let e=p, ou='';
+        while(e&&e!==document.body){ if(e.id){ ou=e.id; break; } e=e.parentNode; }
+        fuites.push((ou||'(hors écran)')+' → «'+t.trim().slice(0,60)+'»');
+      }
+      ok('Page : aucun gabarit ${…} n’est resté visible dans le document',
+        fuites.length===0, fuites.slice(0,4).join(' | '));
+
+      // ── 3. ET AUCUNE FONCTION DE RENDU N'EST ORPHELINE ─────────────────
+      //
+      // ⚠ LE FRAGMENT ERRANT ETAIT LE SEUL APPELANT DE _htmlBoutonReperes. Le
+      // supprimer laisse la fonction — et rcReinitReperes derriere elle —
+      // sans aucun chemin : « revenir aux reperes de reference » n'est
+      // atteignable par personne. Cette assertion NE DIT PAS que c'est un
+      // defaut a corriger tout de suite ; elle dit que la situation est CONNUE
+      // et qu'elle ne se degradera pas en silence. Le jour ou le bouton sera
+      // branche, elle echouera et il faudra retirer le nom de cette liste.
+      const ORPHELINES=['_htmlBoutonReperes'];
+      const compte=nom=>(src.match(new RegExp(nom.replace(/[$]/g,'\\$')+'\\s*\\(','g'))||[]).length;
+      ok('Page : _htmlBoutonReperes est déclarée et jamais appelée — état connu',
+        compte('_htmlBoutonReperes')===1,
+        compte('_htmlBoutonReperes')+' occurrence(s) : 1 = déclaration seule. '
+        +'Si tu viens de la brancher, retire-la de ORPHELINES.');
+      ok('Page : rcReinitReperes n’est atteignable que par ce bouton',
+        (src.match(/rcReinitReperes\s*\(/g)||[]).length===2,
+        'déclaration + l’appel du bouton orphelin');
+    })();
+
+    // ══ LES EVICTIONS ALIMENTAIRES ═══════════════════════════════════════
+    //
+    // Ce qui est verifie ici tient en une phrase : les six chemins qui menent a
+    // un aliment passent par LA MEME fonction, et les trois niveaux ne se
+    // ressemblent pas.
+    (()=>{
+      const EV=(o)=>Object.assign({id:'e1',libelle:'Arachide',niveau:'allergie',
+        cible:{type:'motif',valeur:'arachide, cacahuete'},depuis:Date.now()},o||{});
+      const U=(evs)=>({email:'ev@t.fr',sante:{evictions:evs}});
+      const base=Array.isArray(_ciqualDB)?_ciqualDB:[];
+      if(!base.length){
+        ok('Évictions : base Ciqual absente',false,'la sonde ne prouverait rien');
+        return;
+      }
+      const arachide=base.filter(f=>/arachide/i.test(f.n))[0];
+      const yaourt=base.filter(f=>/^Yaourt/i.test(f.n)&&/laitier/i.test(f.g||''))[0];
+      const poulet=base.filter(f=>/^Poulet/i.test(f.n))[0];
+      ok('Évictions : la fixture tient trois aliments de la table',
+        !!arachide&&!!yaourt&&!!poulet);
+
+      // ── LES TROIS TYPES DE CIBLE ───────────────────────────────────────
+      ok('Éviction « aliment » : elle vise un identifiant précis',
+        (evictionDe(U([EV({cible:{type:'aliment',valeur:String(poulet.id)}})]),poulet)||{})
+          .niveau==='allergie'
+        && evictionDe(U([EV({cible:{type:'aliment',valeur:String(poulet.id)}})]),yaourt)===null);
+      ok('Éviction « groupe » : elle vise un groupe Ciqual entier',
+        (evictionDe(U([EV({cible:{type:'groupe',valeur:yaourt.g}})]),yaourt)||{})
+          .niveau==='allergie');
+      // ⚠ LE MOTIF CHERCHE DANS LE NOM **ET** DANS LE GROUPE. « Yaourt à la
+      // grecque nature » ne porte le mot « laitier » nulle part : seul son
+      // groupe le porte. Un filtre qui ne lirait que le nom laisserait passer
+      // tous les produits laitiers de la table.
+      ok('Éviction « motif » : la fixture ne porte le mot que dans le GROUPE',
+        !/laitier/i.test(yaourt.n) && /laitier/i.test(yaourt.g),
+        yaourt.n+' | '+yaourt.g);
+      ok('Éviction « motif » : elle cherche dans le nom ET dans le groupe',
+        (evictionDe(U([EV({cible:{type:'motif',valeur:'laitier'}})]),yaourt)||{})
+          .niveau==='allergie'
+        && (evictionDe(U([EV()]),arachide)||{}).niveau==='allergie');
+      // ⚠ LES SYNONYMES SONT DECLARES, PAS DEVINES. « arachide » seul
+      // n'attrape pas « Beurre de cacahuète » — mesure faite sur la table.
+      ok('Éviction « motif » : la virgule sépare des synonymes, et l’un suffit',
+        !!evictionDe(U([EV()]),{n:'Beurre de cacahuète',g:''})
+        && !evictionDe(U([EV({cible:{type:'motif',valeur:'arachide'}})]),
+             {n:'Beurre de cacahuète',g:''}));
+
+      // ── LA GRAVITE L'EMPORTE SUR L'ORDRE DE SAISIE ─────────────────────
+      //
+      // Un aliment qui tombe sous deux evictions rend la PLUS GRAVE. Rendre la
+      // premiere trouvee ferait dependre l'avertissement de l'ordre dans lequel
+      // l'athlete a rempli sa liste.
+      (()=>{
+        const d=[EV({id:'a',niveau:'choix',libelle:'Choix',cible:{type:'motif',valeur:'poulet'}}),
+                 EV({id:'b',niveau:'allergie',libelle:'Volaille',cible:{type:'motif',valeur:'poulet'}})];
+        ok('Évictions : la plus grave gagne, quel que soit l’ordre de saisie',
+          (evictionDe(U(d),poulet)||{}).niveau==='allergie'
+          && (evictionDe(U(d.slice().reverse()),poulet)||{}).niveau==='allergie');
+      })();
+
+      // ── LES TROIS NIVEAUX, EFFETS DISTINCTS ────────────────────────────
+      (()=>{
+        const l=[poulet,arachide,yaourt];
+        const t=n=>evictionTrier(U([EV({niveau:n})]),l);
+        const a=t('allergie'), i=t('intolerance'), c=t('choix');
+        ok('Niveau « allergie » : l’aliment est retiré de la liste',
+          a.liste.length===2 && a.retirees===1 && a.releguees.length===0);
+        // ⚠ L'INTOLERANCE RESTE SAISISSABLE. Beaucoup de gens en tolerent une
+        // petite quantite ; un filtrage dur les priverait d'un aliment qu'ils
+        // utilisent volontairement.
+        ok('Niveau « intolérance » : l’aliment reste proposé, relégué en fin de liste',
+          i.liste.length===2 && i.retirees===0 && i.releguees.length===1
+          && i.releguees[0].aliment===arachide);
+        ok('Niveau « choix » : l’aliment sort de la liste, comme une allergie',
+          c.liste.length===2 && c.retirees===1 && c.releguees.length===0);
+      })();
+
+      // ── LE SILENCE DU NIVEAU « CHOIX » ─────────────────────────────────
+      //
+      // ⚠ RIEN DANS LE PRODUIT NE DOIT AVOIR L'AIR DE DISCUTER CE NIVEAU-LA.
+      // C'est une decision, pas un symptome, et elle n'a pas a etre justifiee
+      // a une application — le jour ou l'athlete la contredit moins encore.
+      (()=>{
+        const ch=evictionDe(U([EV({niveau:'choix'})]),arachide);
+        const it=evictionDe(U([EV({niveau:'intolerance'})]),arachide);
+        const al=evictionDe(U([EV({niveau:'allergie'})]),arachide);
+        ok('Niveau « choix » : aucune mention affichée',
+          evictionMention(ch)==='' && texteAvertissementEviction(ch,false)==='');
+        ok('Niveau « choix » : il n’apparaît pas dans le rappel du plan',
+          _htmlEvictionsRappelPlan(U([EV({niveau:'choix',libelle:'ZZTOP'})]))===''
+          && /ZZTOP/.test(_htmlEvictionsRappelPlan(U([EV({niveau:'allergie',libelle:'ZZTOP'})]))));
+        // L'intolerance, elle, se dit dans la liste mais n'avertit PAS a la
+        // saisie : la redire au moment de valider ferait d'un aliment toléré
+        // un aliment négocié.
+        ok('Niveau « intolérance » : mention dans la liste, aucun avertissement à la saisie',
+          evictionMention(it)!=='' && texteAvertissementEviction(it,false)==='');
+        // ⚠ ET L'ALLERGIE AVERTIT, EN NOMMANT L'EVICTION.
+        const t=texteAvertissementEviction(al,false);
+        ok('Niveau « allergie » : l’avertissement nomme l’éviction et ne bloque pas',
+          t!=='' && t.indexOf('Arachide')>0 && /ne bloque pas/.test(t), t.slice(0,120));
+      })();
+
+      // ── LE PRODUIT DE MARQUE : SIGNALER, JAMAIS GARANTIR ───────────────
+      //
+      // ⚠ C'EST LA GARDE QUI COMPTE LE PLUS DE CE LOT. Open Food Facts porte
+      // des listes d'allergenes saisies par des contributeurs, heterogenes et
+      // souvent incompletes. L'app peut SIGNALER une presence ; ecrire « ne
+      // contient pas de gluten » a partir de cette base serait la seule phrase
+      // de RepCore capable d'envoyer quelqu'un a l'hopital.
+      (()=>{
+        const off={n:'Biscuits fourrés',g:'',_off:{ean:'1',allergenes:'peanuts gluten',traces:''}};
+        ok('Marque : une étiquette OFF déclenche l’éviction que le nom seul ne verrait pas',
+          !!evictionDe(U([EV({cible:{type:'motif',valeur:'peanuts'}})]),off)
+          && evictionDe(U([EV({cible:{type:'motif',valeur:'peanuts'}})]),
+               {n:'Biscuits fourrés',g:''})===null);
+        ok('Marque : les étiquettes OFF sont mises à plat sans être traduites',
+          _offTags(['en:peanuts','fr:fruits-a-coque'])==='peanuts fruits a coque');
+        const al=evictionDe(U([EV()]),{n:'Cacahuètes grillées',g:'',_off:{ean:'2'}});
+        ok('Marque : l’avertissement porte la réserve Open Food Facts',
+          /Open Food Facts/.test(texteAvertissementEviction(al,true))
+          && !/Open Food Facts/.test(texteAvertissementEviction(al,false)));
+        // ⚠ AUCUNE GARANTIE D'ABSENCE N'EST FORMULEE NULLE PART. On cherche
+        // les tournures qui affirmeraient une absence, dans la source de
+        // production entiere, hors commentaires.
+        const src=_prodSrc();
+        // ⚠ « NE CONTIENT PAS » SEUL EST TROP LARGE, et la première écriture de
+        // cette sonde l'a prouvé : elle a épinglé trois phrases du scanner —
+        // « ce QR code ne contient pas de code produit ». Une sonde qui crie
+        // sur du bruit finit par être élargie jusqu'à ne plus rien voir. La
+        // tournure ne compte donc que si elle porte sur un ALIMENT.
+        const INTERDITS=[/sans allerg[eè]ne/i,/garanti[es]? sans/i,
+          /exempt de/i,/aucun allerg[eè]ne/i,
+          /ne contient (pas|aucun)[^.]{0,50}(allerg|gluten|lactose|arachide|cacahu|trace|lait|soja|oeuf|œuf)/i];
+        const lignes=src.split('\n').filter(l=>{
+          const t=l.trim();
+          if(t.indexOf('//')===0) return false;
+          return INTERDITS.some(re=>re.test(t));
+        });
+        ok('Marque : aucune garantie d’absence n’est formulée dans le produit',
+          lignes.length===0, lignes.map(l=>l.trim().slice(0,80)).join(' ⏎ ')||'—');
+        ok('Marque : la réserve dit qu’on signale une présence, jamais une absence',
+          /signaler une présence/.test(EV_OFF_RESERVE)
+          && /jamais garantir une absence/.test(EV_OFF_RESERVE));
+      })();
+
+      // ── LES SIX CHEMINS PASSENT BIEN PAR evictionDe ────────────────────
+      //
+      // ⚠ AUCUN CHEMIN NE FILTRE PAR LUI-MEME : c'est la seule facon qu'ils ne
+      // divergent pas. Six filtres ecrits six fois divergeraient au premier
+      // ajout, et le chemin oublie serait celui par lequel l'arachide passe.
+      // On lit donc la SOURCE : chaque fonction d'entree doit appeler soit
+      // evictionDe, soit evictionTrier, qui l'appelle.
+      (()=>{
+        const src=_prodSrc();
+        const corps=nom=>{
+          const i=src.indexOf('function '+nom+'(');
+          if(i<0) return '';
+          // Une tranche large, coupee au debut de la fonction suivante.
+          const j=src.indexOf('\nfunction ',i+10);
+          return src.slice(i,j<0?i+12000:j);
+        };
+        // ⚠ « LE NOM APPARAÎT » N'EST PAS « LE FILTRE AGIT », et la première
+        // écriture de cette sonde confondait les deux : retirer l'appel à
+        // evictionTrier de la recherche du plan la laissait verte, parce qu'un
+        // evictionDe subsistait quelques lignes plus bas — celui qui ANNOTE
+        // une ligne, pas celui qui la retire. On distingue donc les deux rôles.
+        //
+        // FILTRER : la fonction produit une LISTE, et la liste doit être
+        // triée. Rien d'autre que evictionTrier ne retire un aliment.
+        const FILTRENT=[
+          ['onFjSearch','recherche de l’athlète, aliments perso et du coach compris'],
+          ['onPlanSearch','recherche du plan, côté coach']];
+        // SIGNALER : la fonction ne construit pas de liste à filtrer, elle
+        // décide au cas par cas — un avertissement, une annotation, un conflit.
+        const SIGNALENT=[
+          ['saveFoodEntry','enregistrement, y compris après un scan'],
+          ['_htmlEquivalents','équivalences'],
+          ['planConflitsEviction','plan existant du coach'],
+          ['_htmlEvictionsCoach','fiche client']];
+        const muetsF=FILTRENT.filter(([n])=>{
+          const c=corps(n);
+          return !c || !/evictionTrier\s*\(/.test(c);
+        });
+        const muetsS=SIGNALENT.filter(([n])=>{
+          const c=corps(n);
+          return !c || !(/evictionDe\s*\(/.test(c)
+            ||/texteAvertissementEviction\s*\(/.test(c)||/planConflitsEviction\s*\(/.test(c));
+        });
+        ok('Évictions : les deux chemins qui produisent une liste la font TRIER',
+          muetsF.length===0, muetsF.map(x=>x[0]+' ('+x[1]+')').join(' | ')||'—');
+        ok('Évictions : les quatre autres chemins passent par le point unique',
+          muetsS.length===0, muetsS.map(x=>x[0]+' ('+x[1]+')').join(' | ')||'—');
+      })();
+
+      // ── LE PLAN EXISTANT : SIGNALER, NE PAS RETIRER ────────────────────
+      //
+      // ⚠ UNE SUPPRESSION SILENCIEUSE DANS UN PLAN EST PIRE QUE L'ERREUR :
+      // elle laisse un repas incomplet que personne ne sait lire, et le coach
+      // a peut-etre une raison — une reintroduction convenue de vive voix.
+      (()=>{
+        const c={email:'c@t.fr',sante:{evictions:[EV()]},
+          nutrition:{plan:{squelette:[{lib:'Beurre de cacahuète'},{lib:'Riz basmati'},
+            {lib:'Purée d’arachide'}]}}};
+        const l=planConflitsEviction(c);
+        ok('Plan du coach : les lignes en conflit sont signalées',
+          l.length===2 && l.every(x=>/cacahuète|arachide/i.test(x.libelle)),
+          l.map(x=>x.libelle).join(', '));
+        ok('Plan du coach : rien n’est retiré du plan',
+          c.nutrition.plan.squelette.length===3);
+        ok('Plan du coach : le bloc dit explicitement qu’il ne retire rien',
+          /ne retire rien du plan/.test(_htmlEvictionsCoach(c)));
+      })();
+
+      // ── LA VALIDATION, ET LES DEUX ECRANS ──────────────────────────────
+      (()=>{
+        const V=o=>_evValider(Object.assign({libelle:'X',niveau:'choix',
+          cible:{type:'motif',valeur:'lait'}},o));
+        ok('Éviction : un niveau inconnu est refusé', V({niveau:'zzz'})!=='');
+        ok('Éviction : une valeur vide est refusée',
+          V({cible:{type:'motif',valeur:'  '}})!=='');
+        // ⚠ UN MOTIF D'UNE LETTRE ATTRAPERAIT LA MOITIE DE LA TABLE, et
+        // l'athlète ne verrait plus rien sans comprendre pourquoi.
+        ok('Éviction : un motif d’une seule lettre est refusé',
+          V({cible:{type:'motif',valeur:'a'}})!==''
+          && V({cible:{type:'motif',valeur:'lait, a'}})!=='');
+        ok('Éviction : une déclaration complète passe', V({})==='');
+        ok('Éviction : les deux écrans existent',
+          !!document.getElementById('s-evictions')
+          && !!document.getElementById('s-eviction-edit'));
+        // Le coach LIT, il ne declare pas : une allergie est une donnee de
+        // sante que l'athlete seul peut affirmer.
+        ok('Éviction : le bloc du coach ne porte aucun bouton d’ajout',
+          !/Ajouter une éviction/.test(_htmlEvictionsCoach({email:'z@t.fr',sante:{evictions:[]}})));
+      })();
+    })();
+  }catch(e){
+    // ══ UNE INTERRUPTION NE DOIT PAS SE LIRE COMME UNE REUSSITE ═════════
+    //
+    // Ce catch existait, et il posait bien une ligne « EXCEPTION » — mais UNE
+    // ligne parmi des milliers, et le total, lui, retombait sans un mot. Une
+    // suite arretee a 2 200 annonce « 2 200 verifications, 3 en echec » : le
+    // compte est juste, la conclusion est fausse, et rien ne dit que la moitie
+    // du travail n'a pas eu lieu.
+    //
+    // ON DIT COMBIEN, ET OU. Le nombre d'assertions jouees avant l'arret situe
+    // la panne mieux qu'un message d'exception seul, et la ligne se lit dans le
+    // rapport sans avoir a ouvrir la console.
+    const _jouees=R.length-_avantBloc;
+    R.push({n:'⛔ SUITE INTERROMPUE — le rapport ci-dessous est INCOMPLET',ok:false,
+      d:((e&&e.message)||e)+' — arrêt après '+_jouees+' assertion(s) de ce bloc, '
+        +R.length+' au total. Tout ce qui suivait n’a PAS été joué.'});
+    try{ console.error('[RepCore] suite interrompue',e); }catch(_e){}
+  }
   finally{ currentUser=sauve; }
 
+  // LES ASSERTIONS DIFFEREES, JOUEES ICI. Elles arrivent en fin de rapport
+  // plutot qu'a leur place d'origine : c'est le prix de l'attente, et il est
+  // sans consequence — le rapport se lit par son nom, pas par son rang.
+  for(const _f of _diff) await _f();
   const ko=R.filter(r=>!r.ok);
   console.log('%c'+R.length+' vérifications, '+ko.length+' en échec',
     'font-weight:bold;color:'+(ko.length?'#e05050':'#22c55e'));
-  R.forEach(r=>console.log((r.ok?'  ok   ':'  ÉCHEC')+'  '+r.n+(r.d?'   → '+r.d:'')));
+  // L'ORIGINE N'EST AFFICHÉE QUE SUR LES ÉCHECS : c'est là qu'on la cherche,
+  // et quatre mille trois cents lignes vertes annotées seraient illisibles.
+  R.forEach(r=>console.log((r.ok?'  ok   ':'  ÉCHEC')+'  '+r.n+(r.d?'   → '+r.d:'')
+    +((!r.ok&&r.ou)?'   ['+r.ou+']':'')));
   return {total:R.length,echecs:ko.length,detail:R};
 }
 function getLastZeloRIRSafe(n){ return getLastZeroRIRWeight(n,0,'P'); }
@@ -46261,6 +53257,48 @@ function _testSW(R,src){
     // JSON est attendu.
     return /if \(!url\.startsWith\(self\.location\.origin\)\) return;/.test(src)
       ?true:_echec('le garde cross-origin a disparu');})());
+  ok('Les fichiers de diagnostic ne passent JAMAIS par le cache',(()=>{
+    // TROIS EXCLUSIONS ETAIENT ECRITES ET SANS EFFET. tests.js etait declare
+    // hors cache en deux endroits — absent d'ASSETS, ecarte du report par
+    // _exclu — et la branche generique, tout en bas du handler, le rattrapait
+    // au premier chargement et le mettait en cache comme n'importe quel asset.
+    // On pouvait donc eprouver l'application avec la version d'HIER de ses
+    // propres tests : une assertion corrigee le matin continuait de tomber, et
+    // rien a l'ecran ne distinguait ca d'un vrai echec.
+    //
+    // LE RETOUR ANTICIPE EST LA SEULE FORME QUI TIENNE. Un fichier « exclu du
+    // cache » par une liste, mais servi par une branche qui met tout en cache,
+    // n'est pas exclu : il entre par la porte de derriere. C'est pour cette
+    // raison exacte que sw.js avait deja son return.
+    const _av=src.indexOf('if (!url.startsWith(self.location.origin)) return;');
+    const _put=src.indexOf('put asset');
+    if(_av<0||_put<0) return _echec('le handler fetch a changé de forme');
+    const RETOURS=[['sw.js','/\\/sw\\.js$/.test(_chemin)'],
+                   ['tests.js','/\\/tests\\.js$/.test(_chemin)'],
+                   ['database.rules.json','/\\/database\\.rules\\.json$/.test(_chemin)']];
+    for(const [nom,motif] of RETOURS){
+      const i=src.indexOf(motif);
+      if(i<0) return _echec(nom+' n’a pas de retour anticipé');
+      // ET IL EST AVANT LA BRANCHE QUI MET EN CACHE. Un return placé après
+      // n'empêche rien du tout — c'était exactement le défaut.
+      if(!(i>_av&&i<_put))
+        return _echec(nom+' : son retour n’est pas avant la mise en cache');
+    }
+    // LE REPORT LES ECARTE AUSSI. Un cache d'AVANT ce lot en garde une copie ;
+    // sans cette exclusion, le report la ferait passer de version en version,
+    // indéfiniment, pour un fichier que plus personne ne lira jamais.
+    const ex=/const _exclu = u =>([\s\S]{0,400}?);/.exec(src);
+    if(!ex) return _echec('_exclu introuvable');
+    for(const f of ['tests\\.js','sw\\.js','database\\.rules\\.json','index\\.html'])
+      if(ex[1].indexOf(f)<0)
+        return _echec(f.split('\\').join('')+' n’est plus écarté du report');
+    // ET AUCUN DES TROIS N'EST DANS ASSETS : l'y mettre le ferait télécharger
+    // d'office par tous les athlètes, ce que l'externalisation de la suite
+    // cherchait justement à éviter.
+    const as=src.match(/const\s+ASSETS\s*=\s*\[([^\]]*)\]/);
+    if(!as) return _echec('ASSETS introuvable');
+    return /tests\.js|database\.rules/.test(as[1])
+      ?_echec('un fichier de diagnostic est entré dans ASSETS'):true;})());
   ok('activate ne purge QUE si le nouveau cache porte index.html',(()=>{
     if(!/await neuf\.match\('\.\/index\.html'\)/.test(src))
       return _echec('aucune vérification avant purge');

@@ -105,6 +105,28 @@
           }
         },
 
+        // ── Le mot au coach : UN champ libre, chez l athlete ────────────────
+        // MEME RAISON QUE coachNotes, et elle n a rien a voir avec la
+        // confidentialite : le .read de /users/$emailKey ouvre deja la lecture
+        // au proprietaire et a son coach, ce qui est exactement ce qu on veut
+        // ici. Ce bloc BORNE. Chaque saveUser est un PUT du document ENTIER :
+        // un texte libre non borne, dans un document reecrit a chaque
+        // sauvegarde, finit par deborder le quota — c est le plafond reel de
+        // RepCore, pas le nombre d utilisateurs.
+        //
+        // La longueur est celle de MOT_COACH_MAX cote client.
+        "motCoach": {
+          "texte": { ".validate": "newData.isString() && newData.val().length <= 600" },
+          "maj":   { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "$autre": { ".validate": false }
+        },
+
+        // Marqueurs de lecture du mot, dans le dossier DU COACH : un
+        // horodatage par athlete, rien d autre.
+        "motsLus": {
+          "$athleteId": { ".validate": "newData.isNumber() && newData.val() > 0" }
+        },
+
         "coachEmailKey": {
           ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
         }
@@ -661,7 +683,11 @@
     // Mesure de tunnel — DES COMPTEURS, RIEN D'AUTRE.
     // Un noeud par jour, un entier par etape. Aucun identifiant, aucun email,
     // aucune donnee de sante ne peut y entrer : la validation n'accepte qu'un
-    // nombre, sous une cle appartenant a une liste fermee de 15 noms. Toute
+    // nombre, sous une cle appartenant a une liste fermee de 22 noms — les 15
+    // etapes du tunnel, plus 7 compteurs « iab_ » qui disent depuis quelle
+    // application le lien a ete ouvert quand c'est un navigateur integre. Un
+    // nom d'application, jamais un identifiant : « iab_instagram » ne dit pas
+    // QUI, il dit COMBIEN. Toute
     // autre cle ou tout autre type est refuse par le serveur — la garantie ne
     // repose donc pas sur la bonne conduite du client.
     // Ecriture non authentifiee : le visiteur de la page d'accueil n'a pas de

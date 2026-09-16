@@ -221,16 +221,45 @@ function penalite(m){
   p+=Math.floor(Math.abs(pct-50)/5)*10;
   return p;
 }
+// ⚠ LES QUINZE BITS DE FORMAT S'ECRIVENT DU PLUS FORT AU PLUS FAIBLE.
+// C'est LE defaut de cet encodeur, et il le rendait totalement illisible : la
+// boucle prenait le bit i en partant du POIDS FAIBLE et le posait a la position
+// i en partant du DEBUT de la sequence — soit la chaine de format ecrite a
+// l'envers. Les deux copies etaient coherentes entre elles, la structure etait
+// juste (reperes, timing, module sombre, separateurs), et le carre avait donc
+// toutes les apparences d'un QR : un lecteur y trouvait ses trois reperes, puis
+// lisait une chaine de format qui ne figure dans aucune table et abandonnait.
+//
+// MESURE : sur « A », les deux copies rendaient 0x1F3D, absent des huit valeurs
+// valides du niveau M. Retourne bit a bit, 0x1F3D vaut 0x5E7C — soit
+// exactement FORMAT_M[2]. La donnee etait bonne, l'ordre ne l'etait pas.
+//
+// AUCUN QR PRODUIT PAR CE FICHIER N'A JAMAIS PU ETRE SCANNE, y compris celui de
+// la fenetre de synchronisation, en service depuis aout. Eprouve dans les deux
+// sens : avant, six cas sur six illisibles (de « A » a une URL complete) ;
+// apres, six sur six decodes.
 function poserFormat(m,masque){
   var n=m.length, f=FORMAT_M[masque];
   for(var i=0;i<15;i++){
-    var b=(f>>i)&1;
+    var b=(f>>(14-i))&1;
     if(i<6) m[8][i]=b;
     else if(i===6) m[8][7]=b;
     else if(i===7) m[8][8]=b;
     else if(i===8) m[7][8]=b;
     else m[14-i][8]=b;
-    if(i<8) m[n-1-i][8]=b;
+    // ⚠ SEPT MODULES EN BAS, PAS HUIT. La partie basse de la seconde copie
+    // occupe (n-1,8) a (n-7,8) — SEPT positions. La huitieme, (n-8,8), est le
+    // MODULE TOUJOURS SOMBRE, pose deux lignes plus bas. Avec i<8, le bit 7
+    // etait ecrit dessus puis ecrase par le 1 : la seconde copie perdait un bit
+    // et decalait tous les suivants.
+    //
+    // LE DEFAUT NE SE VOYAIT PAS, et c'est ce qui le rend interessant : un
+    // lecteur lit la PREMIERE copie et ne consulte la seconde que si la
+    // premiere est abimee. Le QR se decodait donc — jusqu'au jour ou un reflet
+    // ou un pli aurait abime le coin haut-gauche, ou la redondance prevue par
+    // la norme n'aurait servi a rien. Trouve par l'assertion qui compare les
+    // deux copies, pas par un scan.
+    if(i<7) m[n-1-i][8]=b;
     else m[8][n-15+i]=b;
   }
   m[n-8][8]=1;

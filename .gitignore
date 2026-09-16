@@ -25,3 +25,5 @@ __pycache__/
 
 # Sauvegardes .orig : un doublon de 5 Mo du fichier principal, jamais servi.
 *.orig
+# Bac a sable de test OCR etiquettes : images tierces, jamais commitees.
+.tmp-etiq/
