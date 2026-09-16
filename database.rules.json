@@ -276,6 +276,46 @@
         "logo": { ".validate": "newData.isString() && newData.val().length < 1500000" },
 
         "cartePro": { ".validate": "newData.isString() && newData.val().length < 3000000" },
+
+        // ── Les programmes qu un coach met en vente sur sa vitrine ─────────
+        //
+        // MEME GABARIT QUE 'diplomes' JUSTE EN DESSOUS : une liste, un objet
+        // par rang, chaque champ borne, et un "$x" ferme pour refuser tout ce
+        // qui n est pas nomme ici. Le ".validate" du noeud accepte la liste ou
+        // sa disparition — retirer son dernier programme de la vente envoie un
+        // tableau vide, que Firebase stocke comme une absence.
+        //
+        // ⚠ CE NOEUD NE PORTE AUCUNE SEANCE ET AUCUN EXERCICE, et la regle le
+        // garantit : seules ces six clefs passent. coach_public est lisible par
+        // TOUS les athletes rattaches au coach — y laisser entrer le contenu
+        // d un programme le donnerait a ceux qui ne l ont pas achete. On publie
+        // une promesse ici, on livre ailleurs.
+        //
+        // ⚠ ET C EST UNE BRANCHE D UN PUT ENTIER. Un seul champ refuse fait
+        // rejeter TOUT coach_public — photo, phrase, diplomes, signature — et
+        // definitivement, puisque chaque tentative suivante repart avec la meme
+        // valeur. C est la panne qu ont deja produite 'logo' et 'dispo' ici
+        // meme. Les bornes ci-dessous sont donc les MEMES que celles que le
+        // code applique dans VPR_BORNES, un cran au-dessus pour ne jamais
+        // mordre sur une valeur que le code juge acceptable.
+        "vitrineProgrammes": {
+          ".validate": "newData.hasChildren() || newData.val() == null",
+          "$i": {
+            "id":        { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+            "name":      { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120" },
+            "pitch":     { ".validate": "newData.isString() && newData.val().length <= 280" },
+            "prix":      { ".validate": "newData.isString() && newData.val().length <= 40" },
+            // https IMPOSE, et pas seulement une longueur : ce lien emmene
+            // quelqu un saisir un moyen de paiement. _lienAchatValide applique
+            // la meme regle cote code, avant meme d enregistrer.
+            "lienAchat": { ".validate": "newData.isString() && newData.val().length <= 500 && newData.val().beginsWith('https://')" },
+            // 450 000 caracteres : le code vise 320 ko de base64 (327 680) et
+            // REFUSE l image plutot que d en garder une plus lourde. La marge
+            // absorbe l entete du data URL et les variations d encodage.
+            "visuel":    { ".validate": "newData.isString() && newData.val().length < 450000" },
+            "$x": { ".validate": false }
+          }
+        },
         "diplomes": {
           ".validate": "newData.hasChildren() || newData.val() == null",
           "$i": {
@@ -658,7 +698,7 @@
         ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
         "$evenement": {
           ".write": true,
-          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j)$/)"
+          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee)$/)"
         }
       }
     },

@@ -14511,7 +14511,15 @@ function testExercices(){
     // La vitrine est entree ici : bio, vision, photo de presentation,
     // signature, carte pro et diplomes. Ce sont des elements que le coach
     // PUBLIE volontairement, et l athlete ne peut pas les lire autrement.
-    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','bio','vision','photoVitrine','signature','cartePro','diplomes','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'];
+    // ⚠ CETTE LISTE ETAIT PERIMEE DE DEUX ENTREES, ET ELLE LE DISAIT DEPUIS
+    // DES SEMAINES. C'est tout son interet : elle est FIGEE pour qu'un ajout
+    // a CHAMPS_PROFIL_COACH ne puisse pas passer inapercu — publier un champ
+    // de plus chez tous les athletes d'un coach est une decision, pas un
+    // detail. 'logo' y etait entre sans que personne ne vienne ici ; ce lot y
+    // ajoute 'vitrineProgrammes', les programmes que le coach met en vente,
+    // reduits au nom, au pitch, au prix, au lien et a l'image — jamais les
+    // seances, jamais les exercices, jamais les charges.
+    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','vitrineProgrammes','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'];
     ok('Liste des champs publiés figée',
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH)===JSON.stringify(_cpAttendus),
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH));
@@ -14520,6 +14528,586 @@ function testExercices(){
     ok('L\'URL vise bien le nœud public',
        /\/coach_public\/kevin@coach,fr\.json$/.test(CLOUD._urlProfilCoach('kevin@coach,fr')),
        CLOUD._urlProfilCoach('kevin@coach,fr'));
+
+    // ══════════════════════════════════════════════════════════════════════
+    // VENDRE UN PROGRAMME : LE MODELE, LA FICHE PUBLIEE, LA VITRINE
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // Cinq champs facultatifs sur un modele du coach, une fiche reduite
+    // publiee dans coach_public, une carte sur la vitrine. Ce qui est verifie
+    // ici, dans l'ordre d'importance : qu'AUCUNE seance ne fuit par le noeud
+    // public, que les longueurs restent sous les bornes des regles, et qu'un
+    // coach qui ne vend rien voit exactement l'ecran d'avant.
+
+    ok('Un programme neuf ne porte AUCUN des cinq champs de vente',(()=>{
+      // La regle du lot : facultatifs, absents par defaut, aucune migration.
+      // On lit la SOURCE de createCoachProgTemplate plutot que d'appeler la
+      // fonction : elle ouvre un rcConfirm, donc elle attend une reponse.
+      const s=String(createCoachProgTemplate);
+      const litt=s.slice(s.indexOf('const p={'),s.indexOf('currentUser.coachPrograms.push'));
+      if(litt.length<20) return _echec('littéral du programme introuvable');
+      const poses=CPT_CHAMPS_VENTE.filter(k=>new RegExp('(^|[^A-Za-z_])'+k+'\\s*:').test(litt));
+      return poses.length?_echec('champs posés à la création : '+poses.join(', ')):true;})());
+
+    ok('_venteProgAppliquer ne crée JAMAIS de clé à vide',(()=>{
+      const p={id:'z',name:'N'};
+      _venteProgAppliquer(p,{enVente:false,pitch:'',prix:'   ',lienAchat:'',visuel:''});
+      const restes=CPT_CHAMPS_VENTE.filter(k=>Object.prototype.hasOwnProperty.call(p,k));
+      if(restes.length) return _echec('clés créées à vide : '+restes.join(', '));
+      // Et l'effacement d'un champ deja rempli EFFACE la cle, il ne la met
+      // pas a ''. Sans cela, `delete` n'aurait jamais ete teste.
+      _venteProgAppliquer(p,{enVente:true,pitch:'p',prix:'9 €',lienAchat:'https://a.fr'});
+      if(!progEnVente(p)) return _echec('le programme n’est pas passé en vente');
+      _venteProgAppliquer(p,{enVente:false,pitch:'',prix:'',lienAchat:''});
+      const apres=CPT_CHAMPS_VENTE.filter(k=>Object.prototype.hasOwnProperty.call(p,k));
+      return apres.length?_echec('clés survivantes : '+apres.join(', ')):true;})());
+
+    ok('progEnVente ne se laisse pas tromper par une valeur approchante',
+       [null,undefined,{},{enVente:false},{enVente:'false'},{enVente:1},{enVente:'oui'}]
+         .every(x=>progEnVente(x)===false)&&progEnVente({enVente:true})===true,
+       'une valeur non booléenne met un programme en vente');
+
+    ok('Le lien d’achat exige https, et pas seulement « une URL »',(()=>{
+      // safeUrlRaw accepte http:// — pas ici : c'est une page de PAIEMENT.
+      const cas=[['https://pay.me/a','https://pay.me/a'],['http://pay.me/a',''],
+        ['javascript:alert(1)',''],['//pay.me',''],['pay.me',''],['',''],[null,'']];
+      for(const [e,a] of cas)
+        if(_lienAchatValide(e)!==a) return _echec(JSON.stringify(e)+' → '+JSON.stringify(_lienAchatValide(e)));
+      // Et safeUrlRaw, lui, laisse bien passer http : c'est la preuve que la
+      // regle d'ici est PLUS stricte, et non une redite.
+      return (safeUrlRaw('http://pay.me/a')!=='#')
+        ?true:_echec('safeUrlRaw a change : la comparaison ne prouve plus rien');})());
+
+    ok('AUCUNE séance ne part dans le nœud public',(()=>{
+      // LA PLUS IMPORTANTE DE CE LOT. coach_public est lisible par TOUS les
+      // athletes rattaches au coach : y laisser entrer le contenu d'un
+      // programme le donnerait a ceux qui ne l'ont pas achete.
+      const u={coachPrograms:[{id:'a',name:'A',enVente:true,pitch:'p',prix:'9 €',
+        lienAchat:'https://a.fr',visuel:'data:image/jpeg;base64,AAA',
+        sessions_H:[{day:'Lundi',active:true,exercises:[{name:'SECRET-H',series:4}]}],
+        sessions_F:[{day:'Lundi',active:true,exercises:[{name:'SECRET-F',series:4}]}],
+        createdAt:1,notes:'mes notes privées'}]};
+      const t=JSON.stringify(vitrineProgrammesDe(u));
+      for(const interdit of ['SECRET-H','SECRET-F','sessions_H','sessions_F','exercises','notes','createdAt'])
+        if(t.indexOf(interdit)>=0) return _echec(interdit+' a fuité : '+t.slice(0,160));
+      const o=vitrineProgrammesDe(u)[0];
+      const attendues=['id','name','pitch','prix','lienAchat','visuel'];
+      const trop=Object.keys(o).filter(k=>attendues.indexOf(k)<0);
+      return trop.length?_echec('clés en trop : '+trop.join(', ')):true;})());
+
+    ok('Seuls les programmes EN VENTE sont publiés',(()=>{
+      const u={coachPrograms:[{id:'a',name:'A',enVente:true},{id:'b',name:'B'},
+        {id:'c',name:'C',enVente:false},{id:'',name:'D',enVente:true},
+        {id:'e',name:'   ',enVente:true}]};
+      const ids=vitrineProgrammesDe(u).map(x=>x.id).join(',');
+      // « d » n'a pas d'identifiant et « e » pas de nom : ni l'un ni l'autre
+      // ne peut faire une carte, et une carte sans titre n'annonce rien.
+      return ids==='a'?true:_echec('publiés : '+ids);})());
+
+    ok('Aucune longueur publiée ne peut franchir les bornes des règles',(()=>{
+      // ⚠ LA PANNE QUE CECI EMPECHE : coach_public se publie par un PUT du
+      // profil ENTIER, et un seul champ refuse fait rejeter LA BRANCHE — photo,
+      // phrase, diplomes et signature compris, definitivement. 'logo' et
+      // 'dispo' l'ont deja produite dans ce fichier.
+      const u={coachPrograms:[{id:'i'.repeat(200),name:'N'.repeat(400),enVente:true,
+        pitch:'P'.repeat(900),prix:'X'.repeat(300),
+        lienAchat:'https://a.fr/'+'q'.repeat(900)}]};
+      const o=vitrineProgrammesDe(u)[0];
+      if(!o) return _echec('rien publié');
+      if(o.id.length>60) return _echec('id : '+o.id.length);
+      if(o.name.length>120) return _echec('name : '+o.name.length);
+      if(o.pitch.length>CPT_PITCH_MAX) return _echec('pitch : '+o.pitch.length);
+      if(o.prix.length>40) return _echec('prix : '+o.prix.length);
+      // UN LIEN TRONQUE N'EST PLUS UN LIEN : on n'en publie aucun plutot
+      // qu'une adresse a moitie qui ouvrirait une page morte.
+      if(o.lienAchat!==undefined) return _echec('lien tronqué publié : '+o.lienAchat.length);
+      return true;})());
+
+    ok('La carte d’un programme échappe tout ce que le coach saisit',(()=>{
+      // ⚠ ON ANALYSE LE DOM, PAS LA CHAINE. Chercher « onmouseover= » dans le
+      // HTML rendu accuse une carte PARFAITEMENT SUR : escapeHtml transforme
+      // les guillemets en &quot;, et la suite reste du TEXTE a l'interieur de
+      // href — visible dans la source, inerte dans le document. C'est le piege
+      // que ce depot a deja paye plusieurs fois avec les sondes par sous-chaine.
+      // Ce qui compte n'est pas ce qu'on lit, c'est ce que le navigateur monte.
+      const h=_htmlCarteProgVitrine({name:'<img src=x onerror=alert(1)>',
+        pitch:'"><script>alert(2)<\/script>',prix:'<b>9</b>',
+        lienAchat:'https://ok.fr/" onmouseover="alert(3)',visuel:'"><i>'});
+      const d=document.createElement('div');
+      d.innerHTML=h;
+      // Aucun element injecte : la seule image legitime est la devanture.
+      const imgs=[...d.querySelectorAll('img')];
+      if(imgs.some(x=>!x.classList.contains('vpr-img')))
+        return _echec('une image étrangère a été montée');
+      for(const t of ['script','b','i','iframe','svg','object'])
+        if(d.querySelector(t)) return _echec('<'+t+'> a été monté');
+      // Aucun gestionnaire d'evenement en dehors de ceux qu'on ecrit
+      // nous-memes : onerror sur la devanture, onclick sur le bouton d'achat.
+      const permis={'IMG':['onerror'],'A':['onclick']};
+      for(const x of d.querySelectorAll('*'))
+        for(const a of x.attributes)
+          if(/^on/i.test(a.name)&&(permis[x.tagName]||[]).indexOf(a.name)<0)
+            return _echec(x.tagName+' porte '+a.name+'="'+a.value.slice(0,40)+'"');
+      // Le nom saisi reste du TEXTE, entier, et n'est pas devenu une balise.
+      const n=d.querySelector('.vpr-n');
+      if(!n||n.textContent!=='<img src=x onerror=alert(1)>')
+        return _echec('le nom n’est pas rendu tel quel : '+(n&&n.textContent));
+      // Et le href n'a pas pu s'echapper de son attribut : ce qui suit le
+      // guillemet echappe fait partie de l'adresse, pas du balisage.
+      const a=d.querySelector('a.vpr-btn');
+      if(a&&a.getAttribute('onmouseover')!==null)
+        return _echec('le lien a fait sortir un attribut');
+      return true;})());
+
+    ok('Pas de lien d’achat, pas de bouton — et pas de nom, pas de carte',(()=>{
+      if(_htmlCarteProgVitrine({pitch:'x',prix:'9 €'})!=='')
+        return _echec('une carte sans nom a été rendue');
+      const sans=_htmlCarteProgVitrine({name:'N',prix:'9 €'});
+      if(/vpr-btn/.test(sans)) return _echec('un bouton sans lien : '+sans);
+      const avec=_htmlCarteProgVitrine({name:'N',lienAchat:'https://a.fr'});
+      if(!/vpr-btn/.test(avec)) return _echec('pas de bouton avec un lien valide');
+      // Le lien http est refuse a l'affichage aussi, pas seulement a la saisie.
+      if(/vpr-btn/.test(_htmlCarteProgVitrine({name:'N',lienAchat:'http://a.fr'})))
+        return _echec('un lien http a produit un bouton');
+      return true;})());
+
+    ok('« Mes programmes » se place entre « Qui je suis » et « Ma vision »',(()=>{
+      // C'est la position qui suit la confiance et precede le detail. Elle est
+      // verifiee par l'ORDRE dans le rendu, pas par la presence : un bloc
+      // present mais mal place passerait une assertion de presence.
+      const p={fname:'K',bio:'ma bio',vision:'ma vision',
+        vitrineProgrammes:[{id:'a',name:'Prise de masse',prix:'49 €',lienAchat:'https://a.fr'}]};
+      const h=_htmlVitrineCoach(p);
+      const a=h.indexOf('Qui je suis'), b=h.indexOf('Mes programmes'), c=h.indexOf('Ma vision');
+      if(a<0||b<0||c<0) return _echec('blocs manquants : '+JSON.stringify({a,b,c}));
+      return (a<b&&b<c)?true:_echec('ordre : '+JSON.stringify({a,b,c}));})());
+
+    ok('Sans programme en vente, la vitrine est EXACTEMENT celle d’avant',(()=>{
+      // La regle du fichier : une vitrine vide vaut moins qu'une carte qui ne
+      // s'ouvre pas. Aucun titre, aucun cadre, aucun « 0 programme ».
+      const base={fname:'K',lname:'G',bio:'ma bio',vision:'ma vision'};
+      const sans=_htmlVitrineCoach(base);
+      if(/Mes programmes|vpr-c/.test(sans)) return _echec('un bloc est rendu à vide');
+      // Une liste vide, une liste de rien de publiable, ou un objet rendu par
+      // Firebase a la place d'un tableau : aucun des trois ne doit rien rendre.
+      for(const v of [[],[{}],[{name:''}],{},null,undefined]){
+        const h=_htmlVitrineCoach(Object.assign({},base,{vitrineProgrammes:v}));
+        if(h!==sans) return _echec('la vitrine change avec '+JSON.stringify(v));
+      }
+      return true;})());
+
+    ok('Une vitrine qui n’a QUE des programmes n’est pas déclarée vide',(()=>{
+      // Sans ce terme dans `_rempli`, un coach qui met un programme en vente
+      // avant d'ecrire sa bio voyait son athlete lire « ton coach n'a pas
+      // encore rempli sa présentation » — juste au-dessus de rien.
+      const h=_htmlVitrineCoach({fname:'K',
+        vitrineProgrammes:[{id:'a',name:'Prise de masse',lienAchat:'https://a.fr'}]});
+      if(/pas encore rempli sa présentation|présentation est vide/.test(h))
+        return _echec('la vitrine se déclare vide alors qu’elle vend');
+      return /Mes programmes/.test(h)?true:_echec('le bloc n’est pas rendu');})());
+
+    ok('Les bannières promo ont QUITTÉ l’accueil pour la vitrine',(()=>{
+      // UN SEUL CONTENEUR DANS TOUTE L'APPLICATION. Deux auraient affiche les
+      // memes bannieres a deux endroits, et le premier trouve aurait decide.
+      if(document.getElementById('clh-promo-banners'))
+        return _echec('le conteneur d’accueil existe toujours');
+      const s=String(_renderPromoBanners);
+      if(s.indexOf('vit-promo-banners')<0) return _echec('_renderPromoBanners ne vise pas la vitrine');
+      if(s.indexOf('clh-promo-banners')>=0) return _echec('_renderPromoBanners vise encore l’accueil');
+      const h=_htmlVitrineCoach({fname:'K',bio:'ma bio'});
+      if(h.indexOf('vit-promo-banners')<0) return _echec('la vitrine n’émet pas le conteneur');
+      // EN BAS, et pas au milieu : c'est la demande, et c'est ce qui evite
+      // qu'une promotion coupe la lecture de la presentation.
+      return (h.indexOf('vit-promo-banners')>h.indexOf('Qui je suis'))
+        ?true:_echec('le conteneur est au-dessus de la présentation');})());
+
+    ok('La vitrine transporte bien les deux champs qu’elle dessine',(()=>{
+      // promoBanners et vitrineProgrammes doivent figurer dans les DEUX listes
+      // de champs d'ouvrirVitrineCoach — celle de l'ouverture et celle du
+      // rafraichissement. Absents de l'une, la vitrine s'affiche sans eux au
+      // premier rendu ; absents de l'autre, ils disparaissent quand le cloud
+      // repond. Les deux pannes sont muettes.
+      const s=String(ouvrirVitrineCoach);
+      const listes=s.split('\'diplomes\'').length-1;
+      if(listes<2) return _echec('moins de deux listes de champs : '+listes);
+      const n=(t)=>s.split(t).length-1;
+      if(n('\'vitrineProgrammes\'')<2) return _echec('vitrineProgrammes : '+n('\'vitrineProgrammes\'')+' occurrence(s)');
+      if(n('\'promoBanners\'')<2) return _echec('promoBanners : '+n('\'promoBanners\'')+' occurrence(s)');
+      return /_renderPromoBanners/.test(s)?true:_echec('les bannières ne sont jamais rendues');})());
+
+    ok('La liste publiée se recalcule à la publication, jamais avant',(()=>{
+      // Champ DERIVE : le poser a la main sur chacun des chemins qui publient
+      // aurait garanti qu'un de ces chemins finisse par envoyer une liste
+      // perimee. pushProfilCoach le recalcule au dernier instant.
+      const s=String(CLOUD.pushProfilCoach);
+      if(s.indexOf('vitrineProgrammesDe')<0) return _echec('aucun recalcul dans pushProfilCoach');
+      // Et il est bien DANS la liste blanche, sinon le recalcul ne servirait
+      // a rien : le champ ne partirait jamais.
+      if(CLOUD.CHAMPS_PROFIL_COACH.indexOf('vitrineProgrammes')<0)
+        return _echec('absent de CHAMPS_PROFIL_COACH');
+      // Et classe, sinon le verrou de l'article 9 le refuserait a l'ecriture.
+      if(CHAMPS_NON_SANTE.indexOf('vitrineProgrammes')<0
+         &&CHAMPS_SANTE.indexOf('vitrineProgrammes')<0)
+        return _echec('champ non classé santé / non-santé');
+      return true;})());
+
+    ok('La liste publiée est aplatie à la lecture, comme les deux autres',(()=>{
+      // Firebase rend une liste en OBJET des qu'un rang manque. Les lecteurs
+      // font .map et .length : sans aplatissement, la vitrine se croit vide et
+      // ne s'affiche pas, sans erreur ni trace. Meme piege que `diplomes`.
+      const s=String(CLOUD.pullProfilCoach);
+      return /_aplatirChamp\(d,'vitrineProgrammes'\)/.test(s)
+        ?true:_echec('vitrineProgrammes n’est pas aplati');})());
+
+    ok('Un objet Firebase à la place d’un tableau ne fait pas tomber la vitrine',(()=>{
+      // La ceinture de la bretelle ci-dessus : meme si l'aplatissement manquait
+      // un jour, le rendu ne doit pas lever — un ecran qui tombe est pire
+      // qu'un bloc absent.
+      try{
+        const h=_htmlVitrineCoach({fname:'K',bio:'b',vitrineProgrammes:{0:{id:'a',name:'A'}}});
+        return /Mes programmes/.test(h)?_echec('un objet a été rendu comme une liste'):true;
+      }catch(e){ return _echec('la vitrine a levé : '+e.message); }})());
+
+    // ── LA FEUILLE DE VENTE ──────────────────────────────────────────────
+    ok('La feuille de vente s’ouvre, se remplit et se referme',(()=>{
+      const _sU=currentUser;
+      try{
+        currentUser={email:'v@t.fr',role:'coach',coachPrograms:[
+          {id:'a',name:'Prise de masse',enVente:true,pitch:'p',prix:'49 €',
+           lienAchat:'https://pay.me/a'}]};
+        if(!ouvrirVenteProgramme(0)) return _echec('la feuille ne s’ouvre pas');
+        const f=document.getElementById('rc-progvente');
+        if(!f||f.style.display!=='flex') return _echec('la feuille reste masquée');
+        if(!f.querySelector('.sp-feuille')) return _echec('ce n’est pas une .sp-feuille');
+        const v=id=>(document.getElementById(id)||{}).value;
+        if(!document.getElementById('cpv-envente').checked) return _echec('l’interrupteur n’est pas repris');
+        if(v('cpv-prix')!=='49 €') return _echec('prix : '+v('cpv-prix'));
+        if(v('cpv-pitch')!=='p') return _echec('pitch : '+v('cpv-pitch'));
+        if(v('cpv-lien')!=='https://pay.me/a') return _echec('lien : '+v('cpv-lien'));
+        // L'APERCU EST LE MEME RENDU QUE LA VITRINE, pas une imitation.
+        const ap=(document.getElementById('cpv-apercu')||{}).innerHTML||'';
+        if(ap.indexOf('vpr-c')<0) return _echec('l’aperçu n’utilise pas la carte de la vitrine');
+        if(ap.indexOf('Prise de masse')<0) return _echec('l’aperçu ne montre pas le nom');
+        // Un index inconnu ne doit rien ouvrir plutot que d'ouvrir du vide.
+        if(ouvrirVenteProgramme(9)!==false) return _echec('un index absent a ouvert la feuille');
+        return true;
+      } finally {
+        // REGLE DU DEPOT : un test qui ouvre un calque le referme, sinon c'est
+        // l'assertion VOISINE qui echoue, et on cherche au mauvais endroit.
+        try{ fermerVenteProgramme(true); }catch(e){}
+        currentUser=_sU;
+      }})());
+
+    ok('Un lien non https est refusé AVANT toute écriture',(()=>{
+      const _sU=currentUser;
+      try{
+        const p={id:'a',name:'N',enVente:true,lienAchat:'https://bon.fr'};
+        currentUser={email:'v@t.fr',role:'coach',coachPrograms:[p]};
+        ouvrirVenteProgramme(0);
+        document.getElementById('cpv-lien').value='http://pas-sur.fr';
+        // enregistrerVenteProgramme est `async` : elle rend une PROMESSE, et une
+        // promesse est TOUJOURS vraie. On ne teste donc pas sa valeur de
+        // retour — on teste ce qu'elle a fait au dossier, de facon synchrone.
+        // Le chemin de refus sort avant tout `await`, donc tout est deja joue.
+        enregistrerVenteProgramme();
+        if(p.lienAchat!=='https://bon.fr') return _echec('le dossier a été écrit : '+p.lienAchat);
+        const err=document.getElementById('cpv-err');
+        if(!err||err.style.display==='none') return _echec('aucun message n’est affiché');
+        if(err.textContent.indexOf('https')<0) return _echec('le message ne dit pas pourquoi : '+err.textContent);
+        return true;
+      } finally {
+        try{ fermerVenteProgramme(true); }catch(e){}
+        currentUser=_sU;
+      }})());
+
+    ok('Le choix du visuel a un bouton VISIBLE',(()=>{
+      // ⚠ `input[type=file]{display:none}` EST POSE GLOBALEMENT dans ce fichier,
+      // et c'est le LABEL qui fait le bouton. Un champ fichier nu ne s'affiche
+      // pas « mal » ni « petit » : il ne s'affiche PAS — mesure au navigateur,
+      // 0 × 0 px. Les deux fiches de vente en portaient un, et l'entree
+      // « Devanture » de la boutique n'avait donc jamais montre de bouton
+      // depuis qu'elle existe.
+      const cas=[['cpv-img','la fiche de vente d’un programme du coach'],
+                 ['vn-img','la fiche de la boutique']];
+      const _sU=currentUser;
+      try{
+        currentUser={email:'v@t.fr',role:'coach',coachPrograms:[{id:'a',name:'A'}]};
+        ouvrirVenteProgramme(0);
+        currentUser.email=CREATOR_EMAIL;
+        ouvrirFicheVente('fondations');
+        for(const [id,ou] of cas){
+          const f=document.getElementById(id);
+          if(!f) return _echec('champ absent : '+id+' ('+ou+')');
+          if(getComputedStyle(f).display!=='none')
+            return _echec(id+' est affiché nu — la règle globale a changé, ce test n’a plus de sens');
+          const lab=f.closest('label');
+          if(!lab) return _echec(id+' n’a aucun label pour l’ouvrir ('+ou+')');
+          const r=lab.getBoundingClientRect();
+          if(!(r.width>40&&r.height>20))
+            return _echec(id+' : bouton de '+Math.round(r.width)+'×'+Math.round(r.height)+' px');
+          if(!/image/i.test(lab.textContent)) return _echec(id+' : le bouton ne dit pas quoi choisir');
+        }
+        return true;
+      } finally {
+        try{ fermerFicheVente(true); }catch(e){}
+        try{ fermerVenteProgramme(true); }catch(e){}
+        currentUser=_sU;
+      }})());
+
+    ok('Le visuel ne peut pas dépasser le budget que les règles acceptent',(()=>{
+      // Le code DESCEND par paliers puis REFUSE : il ne garde jamais une image
+      // qu'il sait trop lourde. Un envoi trop gros ferait rejeter tout
+      // coach_public, pas seulement l'image.
+      const s=String(_cpvVisuelSousBudget);
+      if(s.indexOf('IMG_BUDGET_KO.photoVitrine')<0) return _echec('le budget n’est pas celui de la photo de vitrine');
+      if(!/apres\(null\)/.test(s)) return _echec('aucun chemin ne refuse l’image');
+      if(!CPV_VISUEL_ETAPES.length) return _echec('aucun palier');
+      // Les paliers descendent, en qualite comme en taille : un palier qui
+      // remonterait ferait boucler la reduction sans jamais converger.
+      for(let i=1;i<CPV_VISUEL_ETAPES.length;i++){
+        const a=CPV_VISUEL_ETAPES[i-1], b=CPV_VISUEL_ETAPES[i];
+        if(b[0]>a[0]||b[1]>=a[1]) return _echec('palier '+i+' ne descend pas : '+JSON.stringify(b));
+      }
+      return true;})());
+
+    // ── LA CARTE DE SEANCE SIGNEE ────────────────────────────────────────
+    ok('Le QR est dessiné SANS dépendance et SANS attente',(()=>{
+      // LA CONTRAINTE QUI COMMANDE TOUT : le dessin part d'un clic, et iOS
+      // refuse navigator.share des que le geste a ete rendu a la boucle
+      // d'evenements. Un `await`, un `fetch`, un `img.onload` dans ce chemin,
+      // et le partage echoue sur l'appareil ou il sert le plus.
+      const s=String(_dessinerStorySeance)+String(_qrMatrice);
+      for(const interdit of ['await ','fetch(','new Image','XMLHttpRequest','import(']) 
+        if(s.indexOf(interdit)>=0) return _echec(interdit+' dans le chemin du dessin');
+      if(/^async/.test(String(_dessinerStorySeance))) return _echec('le dessin est asynchrone');
+      const m=_qrMatrice(RC_URL_VITRINE);
+      if(!m) return _echec('aucune matrice');
+      if(m.length!==m[0].length) return _echec('matrice non carrée : '+m.length+'×'+m[0].length);
+      if((m.length-17)%4!==0) return _echec('taille hors norme : '+m.length);
+      return true;})());
+
+    ok('Une génération de QR impossible ne fait jamais lever le clic',(()=>{
+      // « Si la generation leve, le pied s'affiche sans QR — jamais d'image
+      // cassee, jamais d'exception qui remonte au clic. »
+      if(_qrMatrice('')!==null) return _echec('un texte vide rend une matrice');
+      if(_qrMatrice(null)!==null) return _echec('null rend une matrice');
+      if(_qrMatrice('x'.repeat(4000))!==null) return _echec('un texte trop long ne rend pas null');
+      const vrai=window.RepCoreQR;
+      try{
+        // L'encodeur absent — un service worker qui n'a pas encore rapatrie
+        // vendor/qr.js — et le pied doit quand meme se dessiner.
+        window.RepCoreQR=null;
+        if(_qrMatrice('https://a.fr')!==null) return _echec('sans encodeur, la matrice n’est pas null');
+        const cv=_dessinerStorySeance({sel:0,todayIdx:0,sc:[{active:true}],coach:'K',
+          titre:'L',repos:'',ex:[{n:'A',d:'1×1'}],coupes:0});
+        if(!cv||!cv.width) return _echec('le dessin a échoué sans QR');
+        return true;
+      }catch(e){ return _echec('le dessin a levé : '+e.message); }
+      finally{ window.RepCoreQR=vrai; }})());
+
+    ok('Le QR de la carte est celui qui sert déjà en production',(()=>{
+      // ON N'A PAS ECRIT UN SECOND ENCODEUR : vendor/qr.js est celui de
+      // CLOUD.showQR. On compare donc le dessin du pied, pixel par pixel, au
+      // rendu de reference — s'ils divergent, c'est le dessin qui a tort.
+      const cv=_dessinerStorySeance({sel:0,todayIdx:0,sc:[{active:true}],coach:'K',
+        titre:'L',repos:'',ex:[{n:'A',d:'1×1'}],coupes:0});
+      const m=_qrMatrice(RC_URL_VITRINE);
+      if(!m) return _echec('aucune matrice');
+      const total=m.length+8, pas=Math.max(2,Math.round(96/total)), cote=total*pas;
+      const ref=RepCoreQR.versCanvas(RC_URL_VITRINE,cote);
+      if(!ref||ref.width!==cote) return _echec('référence de taille '+(ref&&ref.width)+' pour '+cote);
+      const A=cv.getContext('2d').getImageData(cv.width-52-cote,
+        Math.round(cv.height-132+(132-cote)/2),cote,cote).data;
+      const B=ref.getContext('2d').getImageData(0,0,cote,cote).data;
+      let ecarts=0;
+      for(let i=0;i<A.length;i+=4) if((A[i]<128)!==(B[i]<128)) ecarts++;
+      return ecarts===0?true:_echec(ecarts+' pixels divergent du rendu de production');})());
+
+    ok('Le pied coûte exactement 132 px, avec ou sans nom de coach',(()=>{
+      const base={sel:0,todayIdx:0,sc:[{active:true}],titre:'LUNDI',repos:'',
+        ex:[{n:'A',d:'1×1'},{n:'B',d:'2×2'}],coupes:0};
+      const avec=_dessinerStorySeance(Object.assign({},base,{coach:'GUELLEC COACHING PRO'}));
+      const sans=_dessinerStorySeance(Object.assign({},base,{coach:''}));
+      // MEME HAUTEUR : le pied est fixe, c'est le QR qui commande. Un pied qui
+      // grandirait avec la liste rendrait le QR minuscule sur une seance
+      // courte.
+      if(avec.height!==sans.height) return _echec('hauteurs différentes : '+avec.height+' / '+sans.height);
+      const attendu=250+base.ex.length*76+56+132;
+      return avec.height===attendu?true:_echec('hauteur '+avec.height+' pour '+attendu+' attendu');})());
+
+    ok('Le nom du coach vient du dossier, pas d’une seconde lecture',(()=>{
+      // _storyDonnees rassemble TOUT ce que le dessin utilise. Deux lectures du
+      // meme nom — une pour l'apercu, une pour le fichier — finiraient par
+      // diverger, et l'image ne dirait pas ce que l'ecran annonce.
+      if(String(_dessinerStorySeance).indexOf('_nomCoachStory')>=0)
+        return _echec('le dessin relit le dossier lui-même');
+      if(String(_storyDonnees).indexOf('_nomCoachStory')<0)
+        return _echec('_storyDonnees ne pose pas le nom');
+      const _sU=currentUser;
+      try{
+        currentUser={email:'a@t.fr',role:'athlete',coachName:'Kévin G.'};
+        if(_nomCoachStory()!=='Kévin G.') return _echec('coachName ignoré : '+_nomCoachStory());
+        currentUser={email:'c@t.fr',role:'coach',teamName:'GUELLEC COACHING PRO'};
+        if(_nomCoachStory()!=='GUELLEC COACHING PRO') return _echec('le coach ne se reconnaît pas : '+_nomCoachStory());
+        currentUser={email:'x@t.fr',role:'athlete'};
+        if(_nomCoachStory()!=='') return _echec('un nom sorti de nulle part : '+_nomCoachStory());
+        return true;
+      } finally { currentUser=_sU; }})());
+
+    ok('Le partage enrichi retombe sur le fichier seul si le navigateur dit non',(()=>{
+      // ⚠ LE PIEGE iOS : `text` ou `url` joints a `files` font parfois TOMBER
+      // le fichier. L'image est le principal, le texte un bonus — et un bonus
+      // ne coûte pas le principal.
+      const s=String(_storySortirPartage);
+      if(s.indexOf('canShare(riche)')<0) return _echec('la charge enrichie n’est pas soumise à canShare');
+      if(s.indexOf('{files:[f]}')<0) return _echec('aucun repli sur le fichier seul');
+      const _cs=navigator.canShare, _sh=navigator.share;
+      try{
+        let recu=null;
+        // Un faux canevas : on teste l'aiguillage du partage, pas le dessin.
+        const faux=()=>({width:1,height:1,getContext:()=>({}),
+          toDataURL:()=>'data:image/png;base64,AAAA'});
+        Object.defineProperty(navigator,'share',{value:p=>{recu=p;return Promise.resolve();},configurable:true});
+        // Le navigateur qui REFUSE la charge enrichie : on doit recevoir les
+        // fichiers seuls, et surtout les recevoir.
+        Object.defineProperty(navigator,'canShare',{value:p=>!(p&&(p.text||p.url)),configurable:true});
+        _storySortirPartage(faux(),'a.png',{title:'T',text:'X',url:'https://a.fr'});
+        if(!recu||!recu.files) return _echec('aucun fichier partagé sur le repli');
+        if(recu.text||recu.url) return _echec('le texte est passé malgré le refus');
+        // Et celui qui l'ACCEPTE : le titre et l'adresse doivent arriver.
+        recu=null;
+        Object.defineProperty(navigator,'canShare',{value:()=>true,configurable:true});
+        _storySortirPartage(faux(),'a.png',{title:'T',text:'X',url:'https://a.fr'});
+        if(!recu||!recu.files) return _echec('aucun fichier partagé');
+        if(recu.url!=='https://a.fr'||recu.title!=='T') return _echec('charge enrichie perdue : '+JSON.stringify(Object.keys(recu)));
+        return true;
+      } finally {
+        try{ Object.defineProperty(navigator,'canShare',{value:_cs,configurable:true}); }catch(e){}
+        try{ Object.defineProperty(navigator,'share',{value:_sh,configurable:true}); }catch(e){}
+      }})());
+
+    ok('L’athlète sait ce qui sort AVANT de toucher « Partager »',(()=>{
+      const h=htmlCarteSeanceSlot(0,{exercises:[{name:'DEV',series:4,reps:'8'}]});
+      if(h.indexOf('Ta carte porte le nom de ton coach et un QR vers sa vitrine.')<0)
+        return _echec('la mention est absente');
+      // 11 px, LE PLANCHER DU PRODUIT. Plus petit, la mention ne se lit pas ;
+      // absente de la feuille de style, elle prendrait la taille du parent.
+      const d=document.createElement('div');
+      d.className='cs-mention'; d.textContent='x';
+      document.body.appendChild(d);
+      try{
+        const t=parseFloat(getComputedStyle(d).fontSize);
+        if(!(t>=11)) return _echec('mention à '+t+'px, sous le plancher');
+      } finally { d.remove(); }
+      // Et le bouton est nomme, pas « Partager » tout court : ce qui part est
+      // SA seance, et le libelle doit le dire.
+      const vrai=navigator.share;
+      try{
+        Object.defineProperty(navigator,'share',{value:()=>{},configurable:true});
+        const h2=htmlCarteSeanceSlot(0,{exercises:[{name:'DEV',series:4,reps:'8'}]});
+        if(h2.indexOf('Partager ma séance')<0) return _echec('le bouton n’est pas renommé');
+        return true;
+      } finally { try{ Object.defineProperty(navigator,'share',{value:vrai,configurable:true}); }catch(e){} }})());
+
+    // ── LA MESURE ────────────────────────────────────────────────────────
+    ok('Les quatre compteurs de vente sont déclarés, et nommés pareil partout',(()=>{
+      const attendus=['vitrine_vue','programme_vu','programme_clic_achat','story_partagee'];
+      const manquants=attendus.filter(x=>RCM_EVENEMENTS.indexOf(x)<0);
+      if(manquants.length) return _echec('absents de RCM_EVENEMENTS : '+manquants.join(', '));
+      // ⚠ LE SERVEUR REFUSE TOUTE CLE HORS LISTE : un nom present ici mais
+      // absent des regles n'est pas une mesure manquante, c'est une ecriture
+      // rejetee en silence. La concordance des deux fichiers est verifiee par
+      // scripts/verif/regles.mjs, qui les lit SUR DISQUE — database.rules.json
+      // n'est pas deploye, un fetch depuis la page conclurait « tout va bien ».
+      const dansLeTunnel=attendus.filter(x=>RCM_TUNNEL.some(e=>e.cles.indexOf(x)>=0));
+      if(dansLeTunnel.length!==4)
+        return _echec('absents de RCM_TUNNEL : '+attendus.filter(x=>dansLeTunnel.indexOf(x)<0).join(', '));
+      return true;})());
+
+    ok('La vente est une SECONDE chaîne, pas la suite du tunnel d’acquisition',(()=>{
+      // On ouvre la vitrine de son coach le trentieme jour, pas juste apres son
+      // premier bilan : enchainer les deux ferait calculer un taux entre deux
+      // volumes sans rapport — et ce taux serait lu.
+      const i=RCM_TUNNEL.findIndex(e=>e.cles.indexOf('vitrine_vue')>=0);
+      if(i<0) return _echec('vitrine_vue absent du tunnel');
+      if(RCM_TUNNEL[i].section!=='Vente') return _echec('la section n’est pas marquée : '+RCM_TUNNEL[i].section);
+      // `section` est porte par une VRAIE entree : les trois boucles qui
+      // parcourent RCM_TUNNEL lisent toutes `cles` et `lib`, et une entree
+      // sans elles les casserait toutes les trois.
+      const boiteuses=RCM_TUNNEL.filter(e=>!Array.isArray(e.cles)||!e.cles.length||!e.lib);
+      if(boiteuses.length) return _echec(boiteuses.length+' entrée(s) sans clés ni libellé');
+      // Le partage a lieu chez l'athlete, AVANT que quiconque ouvre une
+      // vitrine : il alimente la chaine, il n'en est pas une etape.
+      const sp=RCM_TUNNEL.find(e=>e.cles.indexOf('story_partagee')>=0);
+      if(!sp.horsTunnel||!sp.neutre) return _echec('le partage est compté comme une étape ou comme une fuite');
+      return true;})());
+
+    ok('Chaque section du tunnel a son PROPRE dénominateur',(()=>{
+      // Sans cela, les etapes de vente auraient ete mesurees contre « page de
+      // vente vue » — un denominateur cent fois plus grand, donc des barres a
+      // 2 px qu'on aurait lues comme un echec.
+      const s=String(loadMetrics);
+      if(s.indexOf('_refDepuis')<0) return _echec('aucun dénominateur par section');
+      if(!/e\.section/.test(s)) return _echec('le rendu ignore le marqueur de section');
+      if(!/precedent=null/.test(s)) return _echec('la chaîne des taux ne se remet pas à zéro');
+      return true;})());
+
+    ok('Les quatre compteurs sont réellement émis, et au bon endroit',(()=>{
+      if(String(ouvrirVitrineCoach).indexOf("rcmVue('vitrine_vue')")<0)
+        return _echec('vitrine_vue n’est pas émis à l’ouverture de la vitrine');
+      if(String(ouvrirVitrineCoach).indexOf("rcmVue('programme_vu')")<0)
+        return _echec('programme_vu n’est pas émis');
+      // ⚠ LE COACH NE SE COMPTE PAS LUI-MEME : il relit sa vitrine souvent, et
+      // chaque relecture aurait pese autant qu'une visite d'athlete.
+      if(String(ouvrirVitrineCoach).indexOf("role!=='coach'")<0)
+        return _echec('le coach compte ses propres visites');
+      if(String(apercuVitrineCoach).indexOf('rcm')>=0)
+        return _echec('l’aperçu du coach est compté comme une visite');
+      if(String(rcmAchatProgramme).indexOf("'programme_clic_achat'")<0)
+        return _echec('programme_clic_achat n’est pas émis');
+      if(_htmlCarteProgVitrine({name:'N',lienAchat:'https://a.fr'}).indexOf('rcmAchatProgramme()')<0)
+        return _echec('le bouton d’achat ne compte rien');
+      if(String(partagerSeanceDuJour).indexOf("rcm('story_partagee')")<0)
+        return _echec('story_partagee n’est pas émis');
+      return true;})());
+
+    ok('RC_URL_VITRINE est le lien court, et il mène quelque part',(()=>{
+      if(typeof RC_URL_VITRINE!=='string'||!RC_URL_VITRINE)
+        return _echec('constante absente ou vide');
+      if(RC_URL_VITRINE!==RC_LIEN_COURT)
+        return _echec('ce n’est pas le lien du flyer : '+RC_URL_VITRINE);
+      // Un QR qui ne mene nulle part est pire que pas de QR : la constante doit
+      // toujours produire une adresse encodable.
+      return _qrMatrice(RC_URL_VITRINE)?true:_echec('le lien n’est pas encodable : '+RC_URL_VITRINE);})());
+
+    ok('La pastille de vente DIT l’état, elle ne le change pas',(()=>{
+      const _sU=currentUser;
+      try{
+        currentUser={email:'v@t.fr',role:'coach',coachPrograms:[
+          {id:'a',name:'A',enVente:true,sessions_H:[],sessions_F:[],createdAt:1},
+          {id:'b',name:'B',sessions_H:[],sessions_F:[],createdAt:1}]};
+        const z=document.getElementById('cpl-list');
+        if(!z) return _echec('la liste des programmes n’existe pas');
+        loadCoachProgramsList();
+        const p=[...z.querySelectorAll('.cpl-pill')];
+        if(p.length!==2) return _echec(p.length+' pastille(s) pour 2 programmes');
+        if(p[0].textContent.trim()!=='En vente') return _echec('1re pastille : '+p[0].textContent);
+        if(p[1].textContent.trim()!=='Privé') return _echec('2e pastille : '+p[1].textContent);
+        // Ce n'est PAS un bouton : rien ne doit pouvoir se cliquer dessus.
+        if(p.some(x=>x.tagName==='BUTTON'||x.getAttribute('onclick')))
+          return _echec('la pastille est cliquable');
+        // JAMAIS DE ROUGE : garder un programme pour soi n'est pas une faute.
+        for(const x of p){
+          const c=getComputedStyle(x).color;
+          const m=c.match(/\d+/g);
+          if(m&&+m[0]>150&&+m[1]<90&&+m[2]<90) return _echec('pastille rouge : '+c);
+        }
+        // Et le sixieme bouton est bien la, nomme selon l'etat.
+        const b=[...z.children[0].querySelectorAll('button')]
+          .map(x=>(x.textContent||'').trim());
+        if(!b.some(x=>/vente/i.test(x))) return _echec('pas de bouton « Vendre » : '+b.join(' | '));
+        return true;
+      } finally { currentUser=_sU; }})());
 
     // Un athlète ne publie pas de profil coach, même s'il appelle la fonction.
     // pushProfilCoach LEVE desormais : la promesse doit etre REJETEE, et le

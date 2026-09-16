@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1239';
+window.RC_BUILD='1240';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2970,6 +2970,12 @@ body.with-tabbar #rc-ban-install{padding-bottom:9px}
   letter-spacing:.4px;color:var(--text);
   background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.22)}
 .cs-btn-plein{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.34)}
+/* 11 px, LE PLANCHER DU PRODUIT — pas un pixel en dessous. Cette ligne dit ce
+   qui sort de l'application quand on touche « Partager ma séance » : elle doit
+   se lire, pas se deviner. Elle est discrete parce que c'est une mention, pas
+   une alerte : rien de ce qu'elle annonce n'est un probleme. */
+.cs-mention{font-size:11px;line-height:1.5;color:rgba(255,255,255,.52);
+  margin-top:9px;letter-spacing:.2px}
 @media (max-width:400px){
   .cs-carte{padding:13px 13px 12px}
   .cs-actions{gap:7px}
@@ -4948,6 +4954,45 @@ textarea.vn-in{resize:vertical;line-height:1.5}
 .vn-cb{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:var(--fs-sm);
   color:var(--sub);cursor:pointer}
 .vn-cb input{width:18px;height:18px;accent-color:var(--red);cursor:pointer}
+
+/* ══ VENDRE SON PROPRE PROGRAMME ═════════════════════════════════════════
+   L'ETAT DE VENTE, DANS LA LISTE DES MODELES DU COACH. La pastille ne se
+   touche pas : elle DIT, le bouton « Vendre » fait. Vert pour ce qui est en
+   vente, gris pour le reste — et jamais de rouge, garder un programme pour soi
+   n'est pas une faute. */
+.cpl-pill{display:inline-block;vertical-align:middle;margin-left:8px;
+  font-size:10px;font-weight:900;letter-spacing:1.3px;text-transform:uppercase;
+  padding:2px 7px;border-radius:var(--r-1);white-space:nowrap}
+.cpl-pill-on{color:#8ff0a4;background:rgba(34,197,94,.13);
+  border:1px solid rgba(34,197,94,.42)}
+.cpl-pill-off{color:var(--text-faint);background:var(--surface-2);
+  border:1px solid var(--border)}
+/* 11 px, LE PLANCHER. Ces deux lignes disent ou va l'argent et combien de
+   caracteres il reste : elles doivent se lire. */
+.cpv-mention{font-size:11px;line-height:1.55;color:var(--text-faint);margin-top:6px}
+.cpv-compte{font-size:11px;color:var(--text-faint);text-align:right;margin-top:4px}
+.cpv-compte[data-plein="1"]{color:var(--orange)}
+/* ══ LA CARTE D'UN PROGRAMME EN VENTE, SUR LA VITRINE ════════════════════
+   Le meme grain sombre que les cartes de presentation autour d'elle : c'est
+   la meme page, et une carte qui viendrait visiblement d'ailleurs se lirait
+   comme une publicite. */
+.vpr-c{background:linear-gradient(168deg,#1b1b1b,#111 52%,#0b0b0b);
+  border:1px solid #242424;border-radius:12px;overflow:hidden;
+  margin-bottom:12px;box-shadow:var(--elev-1)}
+.vpr-img{width:100%;display:block;aspect-ratio:16/9;object-fit:cover;
+  background:var(--surface-2)}
+.vpr-b{padding:14px 16px 16px}
+.vpr-n{font-size:var(--fs-md);font-weight:800;color:var(--text-strong);
+  line-height:1.3}
+.vpr-p{font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-top:6px}
+.vpr-x{font-size:var(--fs-lg);font-weight:900;color:var(--red-text);
+  margin-top:10px;letter-spacing:.4px}
+.vpr-btn{display:block;margin-top:13px;padding:12px 14px;min-height:44px;
+  border-radius:var(--r-2);background:var(--red);color:#fff;text-align:center;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;
+  letter-spacing:1.2px;text-transform:uppercase;text-decoration:none;
+  box-sizing:border-box}
+.vpr-btn:hover{background:#c01818}
 
 /* ══ LE LEXIQUE ══════════════════════════════════════════════════════════
    LA PASTILLE NE DOIT PAS SE FAIRE REMARQUER. Elle se pose a cote de libelles
@@ -9430,8 +9475,11 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
 
-      <!-- BANNIÈRES PUB COACH -->
-      <div id="clh-promo-banners" style="display:none;margin-top:24px;margin-bottom:16px"></div>
+      <!-- LES BANNIERES DU COACH NE SONT PLUS ICI. Elles sont au bas de la
+           VITRINE, ou l'athlete est venu voir ce que son coach propose —
+           plutot qu'au bas de l'ecran ou il lit ses calories. Voir
+           _htmlVitrineCoach et #vit-promo-banners : un seul conteneur dans
+           toute l'application, jamais deux. -->
     </div>
   </div>
   <!-- La barre d'onglets etait ici. Elle est desormais soeur des ecrans, plus
@@ -9668,6 +9716,61 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="vn-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:10px;display:none"></div>
     <button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" onclick="enregistrerFicheVente()">Publier</button>
     <button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" onclick="fermerFicheVente()">Annuler</button>
+  </div>
+</div>
+
+<!-- ══════ VENDRE SON PROPRE PROGRAMME (n'importe quel coach) ══════════
+     A NE PAS CONFONDRE AVEC #rc-vente, juste au-dessus. Celle-la est la
+     boutique RepCore : un catalogue central, reserve au createur, dont les
+     prix vivent dans le noeud /boutique. Celle-ci appartient a CHAQUE coach :
+     elle met un de SES modeles sur SA vitrine, avec SON lien de paiement.
+     Deux mecanismes, deux noeuds, aucune passerelle — et c'est voulu, parce
+     que RepCore n'encaisse rien dans le second cas.
+
+     .sp-feuille : la meme feuille que le choix de seance. Elle defile, et il
+     le faut : six champs et un apercu ne tiennent pas sur un ecran de 568 px
+     de haut. La regle de non-defilement est celle du LEXIQUE, qui porte une
+     definition de quatre lignes — pas celle d'un formulaire. -->
+<div id="rc-progvente" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
+  onclick="if(event.target===this)fermerVenteProgramme()" role="dialog" aria-modal="true" aria-labelledby="cpv-titre">
+  <div class="sp-feuille" onclick="event.stopPropagation()" style="max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain">
+    <i class="sp-poignee" aria-hidden="true"></i>
+    <div class="sp-tete">
+      <h2 id="cpv-titre">Vendre ce programme</h2>
+      <button class="sp-fermer" onclick="fermerVenteProgramme()" aria-label="Fermer">✕</button>
+    </div>
+    <label class="vn-cb" style="margin-top:0" for="cpv-envente">
+      <input type="checkbox" id="cpv-envente" onchange="_cpvApercu()">
+      <span>Afficher ce programme sur ma vitrine</span></label>
+    <label class="vn-lab" for="cpv-prix">Prix affiché</label>
+    <input id="cpv-prix" class="vn-in" maxlength="40" placeholder="49 € · 3 × 20 € · sur devis" oninput="_cpvApercu()">
+    <label class="vn-lab" for="cpv-pitch">Pitch</label>
+    <textarea id="cpv-pitch" class="vn-in" rows="3" maxlength="280" placeholder="Ce que ce programme apporte, en deux phrases" oninput="_cpvApercu()"></textarea>
+    <div class="cpv-compte" id="cpv-reste"></div>
+    <label class="vn-lab" for="cpv-lien">Lien d'achat</label>
+    <input id="cpv-lien" class="vn-in" type="url" inputmode="url" autocomplete="off" placeholder="https://..." oninput="_cpvApercu()">
+    <!-- CE QUI SORT DE L'APPLICATION SE DIT SOUS LE CHAMP, pas dans une page
+         d'aide. Le coach doit savoir, au moment ou il colle son lien, que
+         l'argent ne passe pas par nous. -->
+    <div class="cpv-mention">RepCore n'encaisse rien : ce lien mène à ta propre page de paiement.</div>
+    <div class="vn-lab">Visuel</div>
+    <!-- ⚠ LE CHAMP FICHIER EST INVISIBLE DANS CETTE APPLICATION :
+         `input[type=file]{display:none}` est pose globalement, et c'est le
+         LABEL qui fait le bouton. Un <input type=file> nu ne s'affiche pas du
+         tout — pas « mal », pas « petit » : rien. Mesure au navigateur :
+         0 × 0 px, display:none. Meme forme que les quatre images de la
+         vitrine, quelques centaines de lignes plus haut. -->
+    <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Choisir une image
+      <input type="file" id="cpv-img" accept="image/*" style="display:none" onchange="_cpvChoisirVisuel(this)">
+    </label>
+    <div class="vn-lab">Aperçu</div>
+    <!-- LE MEME RENDU QUE LA VITRINE, pas une imitation : _htmlCarteProgVitrine
+         dessine les deux. Un apercu qui divergerait de ce que voit l'athlete
+         serait pire que pas d'apercu du tout. -->
+    <div id="cpv-apercu"></div>
+    <div id="cpv-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:12px;display:none"></div>
+    <button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" onclick="enregistrerVenteProgramme()">Enregistrer</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" onclick="fermerVenteProgramme()">Annuler</button>
   </div>
 </div>
 
@@ -11594,7 +11697,25 @@ const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_
   // pas pour autant une donnee de sante qui sort : ce qui part est le nombre
   // de comptes dans ce cas ce jour-la, pas lesquels. Le texte de bas de page
   // de l'ecran reste vrai mot pour mot.
-  'notif_granted','pwa_installed','retour_j1','jamais_demarre_7j'];
+  'notif_granted','pwa_installed','retour_j1','jamais_demarre_7j',
+  // ── LA VENTE : UN SECOND PARCOURS, QUI N'EST PAS LE TUNNEL D'ACQUISITION ──
+  //
+  // Les quatre precedents disent ce qu'il advient d'un COMPTE. Ces quatre-ci
+  // disent ce qu'il advient d'une OFFRE : combien de gens ouvrent la vitrine
+  // d'un coach, combien voient un programme, combien touchent le bouton
+  // d'achat, et combien de cartes de seance sont partagees — la carte etant
+  // aujourd'hui le seul chemin qui ramene quelqu'un du dehors.
+  //
+  // ⚠ CE QUI PART SUR LE RESEAU N'A PAS CHANGE D'UN OCTET : « +1 sur cette
+  // etape aujourd'hui », sans jeton, sans identifiant. On ne saura JAMAIS quel
+  // coach a ete vu ni quel programme a ete clique — seulement combien de fois.
+  // Un compteur par coach identifierait les coachs entre eux, et ce n'est pas
+  // ce que cette mesure doit permettre.
+  //
+  // « programme_clic_achat » COMPTE UN DEPART, PAS UNE VENTE. Le paiement se
+  // fait sur la page du coach, hors de RepCore : nous ne savons pas — et nous
+  // n'avons pas a savoir — si la personne a paye.
+  'vitrine_vue','programme_vu','programme_clic_achat','story_partagee'];
 // ══════════ SONDE DE QUOTA : UNE PENTE, PAS UNE VÉRITÉ ══════════
 // Le plan Spark plafonne à 10 Go téléchargés par mois, et le dépassement est
 // SILENCIEUX : l'application cesse simplement de répondre. Cette sonde ne
@@ -11876,6 +11997,26 @@ const RC_LIEN_COURT=(()=>{
   // plutot qu'un lien mort.
   return APP_BASE_URL;
 })();
+
+// ══════════ L'ADRESSE QUE PORTE LE QR DE LA CARTE DE SEANCE ════════════
+//
+// C'EST LE LIEN DU FLYER, ET RIEN D'AUTRE POUR L'INSTANT. repcore-sync.web.app/i
+// mene a l'ecran d'installation : quelqu'un qui scanne la carte partagee par un
+// athlete tombe donc sur « installe l'application », pas sur une adresse morte.
+// C'est la meilleure destination qui EXISTE aujourd'hui, pas la bonne
+// destination dans l'absolu.
+//
+// ELLE BASCULERA VERS LA VITRINE PUBLIQUE DU COACH quand celle-ci existera —
+// une page servie sans compte, ou l'on verrait qui est le coach et ce qu'il
+// vend. Ce jour-la, une seule ligne change ici. C'est pour cela que la valeur
+// est nommee une fois, au lieu d'etre recopiee dans le dessin.
+//
+// ⚠ DECLAREE ICI ET NON A COTE DE RCM_BASE, bien que ce soit la meme famille de
+// constantes de reglage : elle vaut RC_LIEN_COURT, et un `const` n'est pas
+// hisse. Posee plus haut, elle lirait RC_LIEN_COURT avant son initialisation —
+// une ReferenceError a l'evaluation du fichier, donc une application qui ne
+// demarre pas du tout.
+const RC_URL_VITRINE=RC_LIEN_COURT;
 
 // PAYPAL_CLIENT_ID / PAYPAL_PLAN_ID : liés au compte PayPal du créateur
 //   (App créée sur developer.paypal.com avec guellec.coachingpro@gmail.com).
@@ -14061,7 +14202,12 @@ const CLOUD={
     // coach_public, seul noeud du coach que l'athlete a le droit de lire.
     // Oublier ce mot ici ne casserait rien de visible : le logo resterait en
     // local, et l'image sortirait sans lui, sans un mot.
-    'bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'],
+    // vitrineProgrammes : les programmes que le coach met en vente, reduits a
+    // ce qu'il faut pour dessiner une carte. Ce champ est DERIVE de
+    // coachPrograms et recalcule par pushProfilCoach juste avant l'envoi —
+    // l'oublier ici ne casserait rien de visible : la vitrine resterait vide
+    // chez l'athlete, sans un mot, exactement comme le logo avant lui.
+    'bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','vitrineProgrammes','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'],
   // ── Santé privée : ce que le coach ne voit pas, et qui survit quand même ──
   // La règle de /users donne au coach un accès LECTURE ET ÉCRITURE sur le
   // dossier entier de ses athlètes, sans granularité. Les blocs non partagés
@@ -14178,6 +14324,17 @@ const CLOUD={
   async pushProfilCoach(user){
     const u=user||currentUser;
     if(!u||u.role!=='coach'||!u.email) throw new Error('Profil public : aucun coach à publier.');
+    // ⚠ LA VITRINE DES PROGRAMMES SE RECALCULE ICI, ET NULLE PART AILLEURS.
+    // C'est un champ DERIVE de coachPrograms : le poser a la main sur chacun
+    // des chemins qui publient — enregistrer une fiche, renommer un modele,
+    // supprimer un programme, la file de reprise — aurait garanti qu'un de ces
+    // chemins finirait par envoyer une liste perimee. Calcule au dernier
+    // instant, il ne peut pas etre en retard.
+    //
+    // UN TABLEAU VIDE EST UNE VALEUR, PAS UNE ABSENCE : il EFFACE la vitrine
+    // quand le coach retire son dernier programme. C'est pour cela qu'on
+    // l'ecrit toujours, meme vide, plutot que de sauter le champ.
+    try{ u.vitrineProgrammes=vitrineProgrammesDe(u); }catch(e){}
     const token=await this._getToken();
     if(!token){
       this._enfilerProfil(u.email);
@@ -14302,13 +14459,15 @@ const CLOUD={
       if(!r.ok) return null;
       const d=await r.json();
       if(!d) return null;
-      // MEME PIEGE, AUTRE NOEUD. `diplomes` et `promoBanners` sont des listes
-      // dans coach_public, et Firebase les rend en objet des qu'un rang manque
-      // — un diplome retire du milieu suffit. Leurs lecteurs font `.filter` et
-      // `.forEach` : la vitrine tombait. Et trois autres lisent `.length`, qui
-      // vaut `undefined` sur un objet : la vitrine se croyait vide et ne
-      // s'affichait pas, sans erreur ni trace.
-      try{ _aplatirChamp(d,'diplomes'); _aplatirChamp(d,'promoBanners'); }catch(e){}
+      // MEME PIEGE, AUTRE NOEUD. `diplomes`, `promoBanners` et
+      // `vitrineProgrammes` sont des listes dans coach_public, et Firebase les
+      // rend en objet des qu'un rang manque — un diplome retire du milieu
+      // suffit. Leurs lecteurs font `.filter` et `.forEach` : la vitrine
+      // tombait. Et trois autres lisent `.length`, qui vaut `undefined` sur un
+      // objet : la vitrine se croyait vide et ne s'affichait pas, sans erreur
+      // ni trace.
+      try{ _aplatirChamp(d,'diplomes'); _aplatirChamp(d,'promoBanners');
+           _aplatirChamp(d,'vitrineProgrammes'); }catch(e){}
       // Rangé HORS de currentUser : la photo du coach est en base64 et les
       // bannières peuvent être lourdes. Dans le dossier de l'athlète, elles
       // repartiraient vers Firebase à chaque synchronisation, dupliquées
@@ -15087,6 +15246,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
   'studentCodes','msgTemplates','quickComments','protocolesPerso','canalEpingle',
   'canalDernier','journalGroupe','cloudinaryName','cloudinaryPreset','teamName',
+  // Les programmes qu'un coach met en vente : un nom, un pitch, un prix, un
+  // lien et une image. Du commerce, pas de la sante — mais il DOIT etre classe,
+  // sinon il n'est protege par rien.
+  'vitrineProgrammes',
   'catchphrase','phone','diplomes','promoBanners','seenBilans','bio','dispo',
   'contact','vision','level','salles','rapPreset','blocPriorite','lastCoachVisit',
   'demandesVideo','motCoach','brouillonsProg','methodesForcees','programme',
@@ -16817,6 +16980,8 @@ function _histFermerCalque(){
   // ouvert. Le retour doit defaire le dernier geste, pas l'avant-dernier.
   const _ah=document.getElementById('rc-achat');
   if(_ah&&_ah.style.display==='flex'&&!_ah.dataset.sortie){ fermerAchatProgramme(); return; }
+  const _pv=document.getElementById('rc-progvente');
+  if(_pv&&_pv.style.display==='flex'&&!_pv.dataset.sortie){ fermerVenteProgramme(); return; }
   const _ct=document.getElementById('rc-contact');
   if(_ct&&_ct.style.display==='flex'&&!_ct.dataset.sortie){ fermerContactCoach(); return; }
   const _lx=document.getElementById('rc-lexique');
@@ -30824,7 +30989,125 @@ let _progExDirty=false;
 // ======= COACH PROGRAMME TEMPLATES =======
 let _editProgTemplateIdx=null, _editProgTemplateGender='H', _assigningProgIdx=null;
 
-function openCoachPrograms(){go('s-coach-programs');loadCoachProgramsList();}
+// ══ METTRE UN PROGRAMME EN VENTE ═══════════════════════════════════════════
+//
+// CINQ CHAMPS, TOUS FACULTATIFS, TOUS ABSENTS PAR DEFAUT, ET AUCUNE MIGRATION.
+// Un programme cree avant ce lot — ou cree apres, et jamais mis en vente — ne
+// porte AUCUNE de ces cles, et se lit « pas en vente ». C'est la raison pour
+// laquelle createCoachProgTemplate ne les pose pas : une cle a vide sur les
+// milliers de programmes existants n'apporterait rien, gonflerait chaque
+// sauvegarde, et obligerait a distinguer « faux » de « jamais renseigne ».
+//
+//   enVente    booleen — true, ou absent. Jamais false ecrit.
+//   pitch      chaine, 280 caracteres au plus
+//   prix       chaine LIBRE, et c'est voulu : « 49 € », « 3 × 20 € », « sur
+//              devis ». Un nombre aurait force une monnaie et un format.
+//   lienAchat  chaine https, passee par safeUrl a l'affichage
+//   visuel     image en base64, sous le meme budget que la photo de vitrine
+//
+// LE VISUEL EST LE CINQUIEME, et il n'etait pas dans la liste des quatre :
+// il l'est ici parce que la fiche publiee le nomme, et un champ publie qui
+// n'existe nulle part dans le modele serait un champ fantome.
+const CPT_PITCH_MAX=280;
+const CPT_CHAMPS_VENTE=Object.freeze(['enVente','pitch','prix','lienAchat','visuel']);
+// PURE. Un programme est en vente, ou il ne l'est pas. `=== true` et non une
+// coercition : une chaine « false » venue d'une vieille sauvegarde ne doit pas
+// mettre un programme en vente dans le dos de son auteur.
+function progEnVente(p){ return !!(p&&p.enVente===true); }
+// PURE. Le lien de paiement s'il est utilisable, '' sinon.
+//
+// ⚠ https SEUL, ET NON safeUrlRaw, QUI ACCEPTE AUSSI http. C'est un lien de
+// PAIEMENT : envoyer quelqu'un saisir sa carte sur une page en clair n'est pas
+// une preference de style. La regle est donc plus stricte ici qu'ailleurs dans
+// le fichier, et volontairement.
+function _lienAchatValide(v){
+  const s=String(v==null?'':v).trim();
+  return /^https:\/\//i.test(s)?s:'';
+}
+// PURE. Ce qui part dans coach_public : le STRICT necessaire pour dessiner une
+// carte, et rien de ce qui fait le programme.
+//
+// ⚠ AUCUNE SEANCE, AUCUN EXERCICE, AUCUNE CHARGE. Ce noeud est lisible par tous
+// les athletes rattaches au coach : y publier le contenu des programmes le
+// donnerait a ceux qui ne l'ont pas achete. On vend une promesse ici, on livre
+// ailleurs.
+// ⚠ CHAQUE LONGUEUR EST BORNEE ICI, PAS SEULEMENT DANS LES REGLES, et c'est la
+// lecon la plus chere de ce noeud : coach_public est publie par un PUT du profil
+// ENTIER, et un seul champ refuse fait rejeter LA BRANCHE COMPLETE. Un pitch
+// trop long n'aurait donc pas coupe un pitch — il aurait fait disparaitre la
+// photo, la phrase, les diplomes et la signature du coach, definitivement et
+// sans un mot, exactement comme 'logo' et 'dispo' l'ont deja fait ici. Les
+// bornes du code sont LES MEMES que celles des regles, un cran en dessous.
+const VPR_BORNES=Object.freeze({name:120,pitch:CPT_PITCH_MAX,prix:40,lienAchat:500});
+function vitrineProgrammesDe(u){
+  return (((u||{}).coachPrograms)||[])
+    .filter(progEnVente)
+    .map(p=>{
+      const o={id:String(p.id||'').slice(0,60),
+               name:String(p.name||'').trim().slice(0,VPR_BORNES.name)};
+      // MEME DISCIPLINE QU'EN LOCAL : une cle vide ne s'ecrit pas. Les regles
+      // de la base valident chaque champ present ; un '' passerait, mais il
+      // ferait dessiner un prix vide et une image cassee.
+      ['pitch','prix','lienAchat','visuel'].forEach(k=>{
+        let s=String(p[k]==null?'':p[k]).trim();
+        if(VPR_BORNES[k]) s=s.slice(0,VPR_BORNES[k]);
+        if(s) o[k]=s;
+      });
+      // ⚠ UN LIEN TRONQUE N'EST PLUS UN LIEN. Si la coupe a mordu, on
+      // n'envoie RIEN plutot qu'une adresse a moitie : la carte s'affichera
+      // sans bouton, ce qui est visible, au lieu d'ouvrir une page morte.
+      if(o.lienAchat&&!_lienAchatValide(o.lienAchat)) delete o.lienAchat;
+      if(o.lienAchat&&String(p.lienAchat||'').trim().length>VPR_BORNES.lienAchat)
+        delete o.lienAchat;
+      return o;
+    })
+    .filter(o=>o.id&&o.name);
+}
+// Pose les cinq champs sur un programme, et EFFACE ceux qui sont vides. C'est
+// la seule ecriture : elle garantit qu'on ne cree jamais de cle a vide, y
+// compris quand le coach efface un champ qu'il avait rempli.
+function _venteProgAppliquer(p,v){
+  if(!p||!v) return false;
+  if(v.enVente) p.enVente=true; else delete p.enVente;
+  ['pitch','prix','lienAchat','visuel'].forEach(k=>{
+    const s=String(v[k]==null?'':v[k]).trim();
+    if(s) p[k]=s; else delete p[k];
+  });
+  if(p.pitch) p.pitch=p.pitch.slice(0,CPT_PITCH_MAX);
+  return true;
+}
+// PURE. La carte d'un programme, telle que l'athlete la voit sur la vitrine —
+// et telle que l'apercu de la feuille la montre au coach. UNE SEULE fonction
+// pour les deux : un apercu qui ne montrerait pas ce que l'athlete verra ne
+// vaudrait pas la place qu'il prend.
+//
+// Rend '' quand il n'y a pas de nom : une carte sans titre n'annonce rien.
+function _htmlCarteProgVitrine(p){
+  const o=p||{};
+  const nom=String(o.name||'').trim();
+  if(!nom) return '';
+  const pitch=String(o.pitch||'').trim();
+  const prix=String(o.prix||'').trim();
+  const lien=_lienAchatValide(o.lienAchat);
+  const vis=String(o.visuel||'').trim();
+  return '<div class="vpr-c">'
+    +(vis?('<img class="vpr-img" src="'+escapeHtml(vis)+'" alt="" loading="lazy" '
+           +'onerror="this.style.display=\'none\'">'):'')
+    +'<div class="vpr-b">'
+    +'<div class="vpr-n">'+escapeHtml(nom)+'</div>'
+    +(pitch?('<div class="vpr-p">'+escapeHtml(pitch)+'</div>'):'')
+    +(prix?('<div class="vpr-x">'+escapeHtml(prix)+'</div>'):'')
+    // LE BOUTON N'APPARAIT QUE S'IL MENE QUELQUE PART. Un « Voir le programme »
+    // qui n'ouvre rien est pire que pas de bouton : il fait croire a une panne.
+    +(lien?('<a class="vpr-btn" href="'+safeUrl(lien)+'" target="_blank" '
+            +'rel="noopener noreferrer" onclick="rcmAchatProgramme()">Voir le programme</a>'):'')
+    +'</div></div>';
+}
+// L'EVENEMENT DU DEPART. Il ne bloque rien et ne rend rien : le lien s'ouvre
+// que la mesure parte ou non — un compteur ne doit jamais retenir un clic.
+function rcmAchatProgramme(){ try{ rcm('programme_clic_achat'); }catch(e){} return true; }
+
+function openCoachPrograms(){go('s-coach-programs');loadCoachProgramsList();}function openCoachPrograms(){go('s-coach-programs');loadCoachProgramsList();}
 
 function loadCoachProgramsList(){
   const progs=currentUser.coachPrograms||[];
@@ -30834,12 +31117,19 @@ function loadCoachProgramsList(){
   }
   container.innerHTML=progs.map((p,i)=>`
     <div style="background:var(--surface-1);border-radius:var(--r-4);padding:16px;margin-bottom:12px;border:1px solid var(--border)">
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">${escapeHtml(p.name||'Sans nom')}</div>
+      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">${escapeHtml(p.name||'Sans nom')}<!--
+        LA PASTILLE DIT L'ETAT, ELLE NE LE CHANGE PAS : ce n'est pas un bouton,
+        et elle n'en a pas l'air. Le geste est « Vendre », plus bas.
+        VERT POUR « EN VENTE », GRIS POUR « PRIVE », et jamais de rouge : un
+        programme garde pour soi n'est pas une faute. -->
+        <span class="cpl-pill ${progEnVente(p)?'cpl-pill-on':'cpl-pill-off'}">${progEnVente(p)?'En vente':'Privé'}</span></div>
       <div class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">
         ${_cptCount(p.sessions_H)} séances H · ${_cptCount(p.sessions_F)} séances F
         · créé le ${new Date(p.createdAt||Date.now()).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}
       </div>
-      <div style="display:flex;gap:8px">
+      <!-- flex-wrap : SIX COMMANDES NE TIENNENT PAS SUR UNE LIGNE DE 320 PX.
+           Sans lui, la sixieme sortait de la carte et devenait inatteignable. -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <!-- N4.18 — L'ORDRE DES MODELES SE REGLE. La liste etait celle du
              tableau, et duplicateCoachProgTemplate ajoute toujours en fin :
              elle devenait vite illisible. Les MEMES fleches que l'editeur
@@ -30853,6 +31143,7 @@ function loadCoachProgramsList(){
         <button class="btn btn-red btn-sm" style="flex:1" onclick="openAssignProgram(${i})">▶ Assigner</button>
         <button onclick="duplicateCoachProgTemplate(${i})" title="Dupliquer ce programme" aria-label="Dupliquer ce programme" style="background:none;border:1px solid var(--border);color:#888;border-radius:var(--r-2);padding:7px 10px;font-size:var(--fs-md);cursor:pointer;line-height:1">⧉</button>
         <button onclick="deleteCoachProgTemplate(${i})" title="Supprimer ce programme" aria-label="Supprimer ce programme" style="background:none;border:1px solid var(--border);color:var(--text-faint);border-radius:var(--r-2);padding:7px 10px;font-size:var(--fs-md);cursor:pointer;line-height:1">🗑</button>
+        <button class="btn btn-outline btn-sm" style="flex:1 1 100%;margin:0" onclick="ouvrirVenteProgramme(${i})">${progEnVente(p)?'Modifier la vente':'Vendre ce programme'}</button>
       </div>
     </div>
   `).join('');
@@ -30901,6 +31192,14 @@ async function createCoachProgTemplate(){
     +'un point de depart si tu debutes.'+nl
     +'Sinon, tu obtiens sept jours vides a remplir toi-meme.',
     null,'Fondation','Modèle vide');
+  // ⚠ AUCUN DES CINQ CHAMPS DE VENTE N'EST POSE ICI, ET C'EST LE CONTRAT.
+  // enVente, pitch, prix, lienAchat et visuel (voir CPT_CHAMPS_VENTE) sont
+  // FACULTATIFS et ABSENTS par defaut : un programme qui n'en porte aucun se
+  // lit « pas en vente », exactement comme les programmes crees avant ce lot.
+  // Les poser a vide obligerait a distinguer « faux » de « jamais renseigne »,
+  // alourdirait chaque sauvegarde, et demanderait une migration — trois couts
+  // pour zero gain. C'est ouvrirVenteProgramme qui les cree, un par un, quand
+  // le coach les remplit.
   const p={id:Date.now().toString(36),name:'Nouveau programme',createdAt:Date.now(),
     sessions_H:avecFondation
       ?FONDATION_H.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}))
@@ -30951,8 +31250,150 @@ function duplicateCoachProgTemplate(idx){
 
 async function deleteCoachProgTemplate(idx){
   if(!await rcConfirm('Supprimer ce programme ?',null,'Supprimer')) return;
+  // ⚠ UN PROGRAMME EN VENTE QU'ON SUPPRIME DOIT QUITTER LA VITRINE. Sans cette
+  // ligne, la carte restait publiee dans coach_public : les athletes voyaient
+  // toujours un bouton d'achat pour un programme qui n'existe plus, et rien du
+  // cote du coach ne le disait. On relit l'etat AVANT de decider de republier.
+  const _vendait=progEnVente(currentUser.coachPrograms[idx]);
   currentUser.coachPrograms.splice(idx,1);
-  saveUser();toast('Programme supprimé.');loadCoachProgramsList();
+  saveUser();
+  if(_vendait) CLOUD.pushProfilCoach(currentUser).catch(()=>{});
+  toast('Programme supprimé.');loadCoachProgramsList();
+}
+
+// ══ LA FICHE DE VENTE D'UN MODELE DU COACH ════════════════════════════════
+//
+// `_cpvIdx` est l'index DANS LE TABLEAU coachPrograms, comme les cinq autres
+// commandes de la liste. `_cpvVisuel` porte l'image choisie tant qu'elle n'est
+// pas enregistree : `null` veut dire « inchangee », '' veut dire « effacee »,
+// et une chaine veut dire « celle-ci ». Trois etats, parce que deux ne
+// suffisent pas — sans le troisieme, ouvrir la fiche sans toucher au fichier
+// aurait efface l'image a chaque enregistrement.
+let _cpvIdx=null, _cpvVisuel=null;
+function ouvrirVenteProgramme(idx){
+  const p=((currentUser&&currentUser.coachPrograms)||[])[idx];
+  if(!p){ toast('Programme introuvable.','var(--orange)'); return false; }
+  _cpvIdx=idx; _cpvVisuel=null;
+  const t=document.getElementById('cpv-titre');
+  if(t) t.textContent=String(p.name||'Ce programme').slice(0,60);
+  const g=(id,v)=>{ const z=document.getElementById(id); if(z) z.value=v==null?'':String(v); };
+  const c=document.getElementById('cpv-envente');
+  if(c) c.checked=progEnVente(p);
+  g('cpv-prix',p.prix); g('cpv-pitch',p.pitch); g('cpv-lien',p.lienAchat);
+  // Le champ fichier se vide : garder le nom d'un fichier choisi la fois
+  // precedente ferait croire qu'il est deja joint.
+  const f=document.getElementById('cpv-img'); if(f) f.value='';
+  const err=document.getElementById('cpv-err');
+  if(err){ err.style.display='none'; err.textContent=''; }
+  _cpvApercu();
+  _feuilleOuvrir('rc-progvente');
+  return true;
+}
+function fermerVenteProgramme(tout_de_suite){
+  _feuilleFermer('rc-progvente',tout_de_suite);
+  _cpvIdx=null; _cpvVisuel=null;
+}
+// PURE au sens du dossier : elle lit les champs, elle n'ecrit nulle part.
+function _cpvLire(){
+  const v=id=>{ const z=document.getElementById(id); return z?String(z.value||''):''; };
+  const c=document.getElementById('cpv-envente');
+  const p=((currentUser&&currentUser.coachPrograms)||[])[_cpvIdx]||{};
+  return {enVente:!!(c&&c.checked), prix:v('cpv-prix').trim(),
+    pitch:v('cpv-pitch').slice(0,CPT_PITCH_MAX).trim(),
+    lienAchat:v('cpv-lien').trim(),
+    // `null` = pas touche, donc on garde l'image deja enregistree.
+    visuel:(_cpvVisuel===null)?String(p.visuel||''):_cpvVisuel};
+}
+function _cpvApercu(){
+  const z=document.getElementById('cpv-apercu');
+  if(!z) return false;
+  const v=_cpvLire();
+  const p=((currentUser&&currentUser.coachPrograms)||[])[_cpvIdx]||{};
+  z.innerHTML=_htmlCarteProgVitrine(Object.assign({},v,{name:p.name}))
+    ||'<div class="sub" style="font-size:var(--fs-sm);padding:4px 0">Ce programme n’a pas de nom : renomme-le dans « Modifier » pour pouvoir l’afficher.</div>';
+  // Le compteur de caracteres passe a l'orange au dernier dixieme : on previent
+  // avant la butee, pas au moment ou la frappe cesse de repondre.
+  const r=document.getElementById('cpv-reste');
+  if(r){
+    const reste=CPT_PITCH_MAX-String(v.pitch||'').length;
+    r.textContent=reste+' caractère'+(reste>1?'s':'')+' restant'+(reste>1?'s':'');
+    r.dataset.plein=(reste<=28)?'1':'0';
+  }
+  return true;
+}
+// ⚠ 320 Ko, LE MEME BUDGET QUE LA PHOTO DE VITRINE, et pour la meme raison :
+// l'image part dans coach_public, que CHAQUE athlete du coach retelecharge en
+// entier a chaque ouverture de son accueil. Une photo de telephone non reduite
+// y couterait plusieurs megaoctets par athlete et par jour, sur un plan qui
+// compte les octets descendus.
+//
+// LA QUALITE BAISSE PAR PALIERS jusqu'a passer sous le budget. On ne coupe pas
+// la dimension : une devanture de 900 px trop compressee reste lisible, une
+// devanture de 300 px ne l'est plus.
+// ⚠ LE BUDGET EST UNE LIMITE DURE, PAS UN OBJECTIF. Les regles de la base
+// bornent ce champ, et coach_public se publie par un PUT du profil ENTIER :
+// une image trop lourde ne serait pas rognee, elle ferait rejeter la branche
+// et effacerait la vitrine du coach. On descend donc jusqu'a passer, et si
+// meme la derniere etape ne suffit pas, ON REFUSE L'IMAGE en le disant —
+// jamais on n'en garde une qu'on sait trop grosse.
+const CPV_VISUEL_ETAPES=Object.freeze([[900,.82],[900,.68],[760,.60],[620,.52],[480,.44]]);
+function _cpvVisuelSousBudget(f,i,apres){
+  const et=CPV_VISUEL_ETAPES[i||0];
+  if(!et){
+    toast('Cette image reste trop lourde même très réduite. Essaie une autre photo.','var(--orange)');
+    return apres(null);
+  }
+  compressImage(f,et[0],et[1],b64=>{
+    const max=(IMG_BUDGET_KO.photoVitrine||320)*1024;
+    if(b64&&b64.length>max) return _cpvVisuelSousBudget(f,(i||0)+1,apres);
+    apres(b64||null);
+  },()=>{ toast('Image illisible : réessaie avec une autre','var(--orange)'); apres(null); });
+}
+function _cpvChoisirVisuel(input){
+  const f=input&&input.files&&input.files[0];
+  if(!f) return false;
+  if(f.size>20*1024*1024){ toast('Image trop lourde (max 20 Mo)','var(--orange)'); return false; }
+  _cpvVisuelSousBudget(f,0,b64=>{
+    if(!b64) return;
+    _cpvVisuel=b64;
+    _cpvApercu();
+  });
+  return true;
+}
+function _cpvErreur(m){
+  const z=document.getElementById('cpv-err');
+  if(z){ z.textContent=m; z.style.display=''; }
+  return false;
+}
+async function enregistrerVenteProgramme(){
+  const p=((currentUser&&currentUser.coachPrograms)||[])[_cpvIdx];
+  if(!p) return _cpvErreur('Programme introuvable — rouvre la fiche.');
+  const v=_cpvLire();
+  // LE LIEN EST REFUSE AVANT TOUTE ECRITURE, et le message dit pourquoi : un
+  // champ qui refuse sans expliquer se remplit deux fois de la meme facon.
+  if(v.lienAchat&&!_lienAchatValide(v.lienAchat))
+    return _cpvErreur('Le lien d’achat doit commencer par https:// — c’est une page de paiement, elle ne peut pas être en clair.');
+  // EN VENTE SANS LIEN : ON PREVIENT, ON NE BLOQUE PAS. Un coach peut vouloir
+  // annoncer avant d'avoir sa page de paiement ; ce qu'il ne doit pas pouvoir
+  // faire, c'est l'ignorer.
+  if(v.enVente&&!v.lienAchat){
+    const suite=await rcConfirm('Publier sans lien de paiement ?',
+      'La carte s’affichera sur ta vitrine avec son nom, son pitch et son prix, '
+      +'mais SANS bouton : personne ne pourra acheter. Tu pourras ajouter le lien plus tard.',
+      'Publier quand même','Revenir au lien');
+    if(!suite) return false;
+  }
+  _venteProgAppliquer(p,v);
+  const local=saveUser();
+  // pushProfilCoach recalcule `vitrineProgrammes` lui-meme : rien a preparer
+  // ici, et aucun chemin ne peut publier une liste perimee.
+  const envoi=CLOUD.pushProfilCoach(currentUser);
+  toastSync(local,envoi,
+    progEnVente(p)?'Programme publié sur ta vitrine ✓':'Programme retiré de ta vitrine ✓',
+    'ta vitrine est');
+  fermerVenteProgramme();
+  loadCoachProgramsList();
+  return true;
 }
 
 // LES EXERCICES D'UNE SÉANCE, RENDUS RENDABLES.
@@ -37014,7 +37455,8 @@ function loadClientHome(){
       // vivent desormais dans _rendreContactCoach.
       try{ _rendreContactCoach(u,usrs); }catch(e){}
       _renderCoachBanner(coachUser, u.coachName);
-      _renderPromoBanners(coachUser);
+      // _renderPromoBanners N'EST PLUS APPELE ICI : son conteneur vit dans la
+      // vitrine, et ouvrirVitrineCoach s'en charge apres l'injection.
     };
     _applyCoachData(users);
     if(CLOUD.ok()&&_cle){
@@ -37657,7 +38099,7 @@ function htmlCarteSeanceSlot(i,s){
     <span class="cs-det">${escapeHtml(String(e.series||'')+'×'+String(e.reps||''))}</span>
   </li>`).join('');
   const part=(typeof navigator!=='undefined'&&navigator.share)
-    ?`<button type="button" class="cs-btn cs-btn-plein" onclick="partagerSeanceSlot(${i})">${icon('share',14)}Partager</button>`:'';
+    ?`<button type="button" class="cs-btn cs-btn-plein" onclick="partagerSeanceSlot(${i})">${icon('share',14)}Partager ma séance</button>`:'';
   return `<div class="cs-carte">
     <div class="cs-tete">
       <span class="cs-sur">Séance du jour</span>
@@ -37670,6 +38112,10 @@ function htmlCarteSeanceSlot(i,s){
       <button type="button" class="cs-btn" onclick="telechargerSeanceSlot(${i})">${icon('download',14)}Télécharger</button>
       ${part}
     </div>
+    <!-- CE QUI SORT DE L'APPLICATION SE DIT AVANT LE GESTE, pas apres. La carte
+         porte le nom du coach et une adresse : quelqu'un a le droit de le
+         savoir avant de la poster, pas de le decouvrir sur sa story. -->
+    <div class="cs-mention">Ta carte porte le nom de ton coach et un QR vers sa vitrine.</div>
   </div>`;
 }
 // ══ LA BOUTIQUE : RENDU ET APPLICATION ═══════════════════════════════════
@@ -37824,8 +38270,13 @@ function ouvrirFicheVente(id,idxModele){
     // ⚠ LE PRIX SE SAISIT EN EUROS ET SE STOCKE EN CENTIMES. Un champ en
     // centimes serait une invitation a la faute de frappe a deux zeros pres.
     +ch('Prix en euros','vn-prix',p?((p.prixCts||0)/100).toFixed(2).replace('.',','):'','14,90')
-    +'<label class="vn-lab" for="vn-img">Devanture</label>'
-    +'<input type="file" id="vn-img" accept="image/*" class="vn-in" onchange="_venteChoisirImage(this)">'
+    // MEME DEFAUT, MEME CAUSE : `input[type=file]{display:none}` est global, et
+    // ce champ-ci ne s'affichait donc pas non plus — l'entree « Devanture »
+    // n'avait jamais montre de bouton. C'est le LABEL qui ouvre le selecteur.
+    +'<div class="vn-lab">Devanture</div>'
+    +'<label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Choisir une image'
+    +'<input type="file" id="vn-img" accept="image/*" style="display:none" onchange="_venteChoisirImage(this)">'
+    +'</label>'
     +'<div id="vn-apercu" class="vn-ap">'
       +((p&&p.image)?'<img src="'+escapeHtml(p.image)+'" alt="">':'')+'</div>'
     +(id?('<label class="vn-cb"><input type="checkbox" id="vn-off"'
@@ -40399,6 +40850,49 @@ function _renderExCard(ex,idx){
 }
 // ══════════════ SEANCE DU JOUR : L IMAGE A PARTAGER ══════════════════════
 const STORY_L=1080, STORY_H=1920;   // 9:16, le format des stories
+// ══ LE QR DU PIED DE CARTE ═══════════════════════════════════════════════
+//
+// SYNCHRONE, SANS RESEAU, SANS `await`. C'est la contrainte qui commande tout
+// le reste : le dessin part d'un clic, et iOS refuse navigator.share des que
+// le geste a ete rendu a la boucle d'evenements. Une seule attente — un
+// `await`, un `fetch`, un `img.onload` — et le partage echoue sur l'appareil
+// ou il sert le plus.
+//
+// ⚠ ON N'ECRIT PAS UN SECOND ENCODEUR. vendor/qr.js en porte deja un, ecrit
+// pour ce depot : mode octet, niveau de correction M, les huit masques
+// evalues. Il est LOCAL — servi avec l'application, precache par le service
+// worker, aucun tiers, aucun CDN — et RepCoreQR.matrice rend exactement la
+// matrice de 0/1 demandee ici. En redessiner un deuxieme donnerait deux
+// encodeurs a maintenir pour un seul format de QR, et le jour ou l'un des deux
+// se tromperait, c'est l'image partagee qui mentirait.
+//
+// RIEN NE REMONTE. Un QR absent vaut mieux qu'un clic qui leve : l'appelant
+// recoit null et dessine le pied sans lui.
+function _qrMatrice(texte){
+  try{
+    const t=String(texte==null?'':texte).trim();
+    if(!t) return null;
+    if(typeof window==='undefined'||!window.RepCoreQR||!RepCoreQR.matrice) return null;
+    const m=RepCoreQR.matrice(t);
+    // Une matrice carree non vide, ou rien. Le texte trop long rend null.
+    return (m&&m.length&&m.length===m[0].length)?m:null;
+  }catch(e){ return null; }
+}
+// PURE au sens du dessin : elle lit le dossier, elle n'ecrit rien.
+// Le nom affiche au pied de la carte. TROIS SOURCES, DANS L'ORDRE OU ELLES
+// sont fiables : le nom que l'athlete voit deja partout dans l'application,
+// puis le nom d'equipe publie par le coach, puis — sur l'appareil du coach
+// lui-meme, ou il n'y a pas de « coachName » — son propre nom d'equipe.
+// Vide quand l'athlete n'a pas de coach : le pied se contente alors de dire
+// d'ou vient la carte.
+function _nomCoachStory(u){
+  const uu=u||currentUser||{};
+  let pub=null;
+  try{ pub=profilCoachLocal(cleCoachDe(uu)); }catch(e){}
+  const c=[uu.coachName,pub&&pub.teamName,(uu.role==='coach')?uu.teamName:'']
+    .map(v=>String(v==null?'':v).trim()).find(Boolean);
+  return c||'';
+}
 // Les valeurs de la carte, calculees EXACTEMENT comme _renderWeeklyInto : si
 // les deux divergeaient, l athlete partagerait une seance qu il ne voit pas.
 function _storyDonnees(){
@@ -40414,6 +40908,10 @@ function _storyDonnees(){
   const nbEx=(selS.active&&selS.exercises&&selS.exercises.length)?selS.exercises.length:0;
   if(!nbEx) return null;                 // un jour de repos ne se poste pas
   return {sel,todayIdx,sc,
+    // LE PIED DE CARTE SE CALCULE ICI, avec le reste. _dessinerStorySeance ne
+    // lit aucun dossier : elle prend `d` et dessine. Deux lectures du meme
+    // nom — une pour l'apercu, une pour le fichier — finiraient par diverger.
+    coach:_nomCoachStory(currentUser),
     titre:(DAYS[sel]||'').toUpperCase()+(selS.name?' : '+selS.name.toUpperCase():''),
     repos:(selS.exercises.map(e=>e.repos).filter(Boolean)[0]||''),
     ex:selS.exercises.slice(0,14).map(e=>({n:String(e.name||'').toUpperCase(),
@@ -40446,7 +40944,12 @@ function _dessinerStorySeance(d){
   const nL=d.ex.length;
   const LH=76;                                  // hauteur d une ligne d exercice
   const CW=STORY_L-144;                         // la largeur qu elle avait deja
-  const CH=250+nL*LH+(d.coupes?64:0)+56;
+  // LE PIED SIGNE LA CARTE, ET IL COUTE 132 PX DE HAUT. Hauteur FIXE, et non
+  // proportionnelle : le QR fait la meme taille quelle que soit la longueur de
+  // la seance, et c'est lui qui commande. Un pied qui grandirait avec la liste
+  // rendrait le QR minuscule sur une seance de trois exercices.
+  const PIED=132;
+  const CH=250+nL*LH+(d.coupes?64:0)+56+PIED;
   const CX=0, CY=0;                             // elle occupe tout le canevas
   const cv=document.createElement('canvas');
   cv.width=CW; cv.height=CH;
@@ -40519,9 +41022,60 @@ function _dessinerStorySeance(d){
     g.fillStyle='rgba(255,255,255,.5)'; g.font='700 24px '+MONT;
     g.fillText('+ '+d.coupes+' autre'+(d.coupes>1?'s':'')+' exercice'+(d.coupes>1?'s':''),CX+108,y);
   }
-  // PAS DE SIGNATURE. « Juste le carre rouge » : ce qui est en dehors de la
-  // carte n a plus de place ou vivre. La marque reviendra dans la carte si on
-  // le decide, pas sous elle.
+  // ── LE PIED DE CARTE ────────────────────────────────────────────────
+  //
+  // LA CARTE EST SIGNEE. Elle ne l'etait pas : « juste le carre rouge », et la
+  // marque devait revenir DANS la carte si on le decidait un jour, pas sous
+  // elle. On le decide ici, et la raison a change entre-temps — ce n'est plus
+  // une question de decor, c'est le seul chemin de retour qui existe. Une carte
+  // partagee sur une story est vue par des gens qui ne connaissent ni le coach
+  // ni l'application ; sans un nom et une adresse, elle ne ramene personne.
+  //
+  // ET C'EST BIEN DANS LA CARTE, pas dessous : le canevas grandit de 132 px, le
+  // degrade, la trame et les coins arrondis s'etendent avec lui. Rien n'est
+  // pose sur un fond qui n'existe pas — la regle « sans fond » tient toujours.
+  const py=CY+CH-PIED;
+  // Le meme filet que celui qui ouvre la liste : la carte se ferme comme elle
+  // s'est ouverte.
+  g.strokeStyle='rgba(255,255,255,.17)'; g.lineWidth=2;
+  g.beginPath(); g.moveTo(CX+52,py); g.lineTo(CX+CW-52,py); g.stroke();
+  // LE QR EST PLACE EN PREMIER parce que c'est lui qui decide de la largeur
+  // qui reste au nom. Dans l'autre ordre, un nom d'equipe long passait dessous.
+  let droite=CX+CW-52;
+  const mat=_qrMatrice(RC_URL_VITRINE);
+  if(mat){
+    const nq=mat.length, marge=4, total=nq+marge*2;
+    // 96 PX VISES, PAS ENTIER IMPOSE. Un pas fractionnaire etale chaque module
+    // sur deux pixels : le lecteur voit du gris la ou la norme attend du noir,
+    // et le QR devient capricieux a lire. On prend donc le multiple entier le
+    // plus proche de 96, et c'est le panneau qui s'ajuste au QR — jamais
+    // l'inverse.
+    const pas=Math.max(2,Math.round(96/total));
+    const cote=total*pas;
+    const qx=CX+CW-52-cote, qy=Math.round(py+(PIED-cote)/2);
+    // LE FOND BLANC N'EST PAS UN ORNEMENT. Le canevas est transparent : posee
+    // sur une photo sombre, une grille de modules noirs sur rien n'est pas
+    // lisible du tout. La « quiet zone » de 4 modules qu'exige la norme est
+    // comprise dans le panneau — sans elle, beaucoup de lecteurs abandonnent.
+    g.fillStyle='#fff'; rr(qx,qy,cote,cote,8); g.fill();
+    g.fillStyle='#000';
+    for(let r=0;r<nq;r++) for(let c=0;c<nq;c++)
+      if(mat[r][c]) g.fillRect(qx+(c+marge)*pas,qy+(r+marge)*pas,pas,pas);
+    droite=qx-24;
+  }
+  const larg=droite-(CX+52);
+  const nomCoach=String(d.coach||'').trim().toUpperCase();
+  g.textAlign='left'; g.textBaseline='alphabetic';
+  // SANS COACH, PAS DE LIGNE VIDE : l'athlete libre garde le sous-titre seul,
+  // centre dans la hauteur du pied. Un nom absent ne doit pas laisser un trou.
+  let ty=py+(nomCoach?62:80);
+  if(nomCoach){
+    g.fillStyle=_tok('--text','#efefef'); g.font='800 34px '+MONT;
+    _texteCoupe(g,nomCoach,CX+52,ty,larg);
+    ty+=32;
+  }
+  g.fillStyle='rgba(255,255,255,.62)'; g.font='800 20px '+MONT;
+  _texteEspace(g,'ENTRAÎNEMENT SUIVI SUR REPCORE',CX+52,ty,3);
   return cv;
 }
 // ══════════════ LE BILAN DE SEANCE, EN IMAGE ═══════════════════════════
@@ -40972,14 +41526,28 @@ function _storySortirTelechargement(cv,nomFichier){
 }
 // Rend false quand le partage natif n'existe pas : l'appelant retombe alors
 // sur le telechargement, qui est ce que l'athlete attendait de toute facon.
-function _storySortirPartage(cv,nomFichier){
+// `meta` est FACULTATIF et porte {title,text,url}. Le bilan de seance appelle
+// sans lui et son comportement ne bouge pas d'un octet.
+//
+// ⚠ TEXTE + FICHIER, LE PIEGE iOS. Sur plusieurs versions de Safari, joindre
+// `text` ou `url` a un `files` fait TOMBER LE FICHIER : la feuille s'ouvre avec
+// un lien nu, l'image a disparu, et rien ne le dit. On ne suppose donc rien —
+// on DEMANDE au navigateur, avec la charge exacte qu'on s'apprete a envoyer, et
+// on retombe sur le fichier seul des qu'il repond non. L'image est ce qu'on
+// partage ; le texte n'est qu'un bonus, et un bonus ne coute pas le principal.
+function _storySortirPartage(cv,nomFichier,meta){
   const dataUrl=cv.toDataURL('image/png');
   cv.width=0; cv.height=0;
   const blob=_b64versBlob(dataUrl);
   let f=null;
   try{ f=new File([blob],nomFichier,{type:'image/png'}); }catch(e){}
   if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
-    navigator.share({files:[f]}).catch(()=>{});
+    let charge={files:[f]};
+    if(meta){
+      const riche=Object.assign({files:[f]},meta);
+      try{ if(navigator.canShare(riche)) charge=riche; }catch(e){}
+    }
+    navigator.share(charge).catch(()=>{});
     return true;
   }
   return false;
@@ -41154,7 +41722,22 @@ function partagerSeanceDuJour(){
   if(!d){ toast('Aucune séance à partager aujourd’hui.','var(--orange)'); return false; }
   _storyEnCours=true;
   try{
-    if(_storySortirPartage(_dessinerStorySeance(d),'repcore-seance.png')) return true;
+    // LE TEXTE NOMME LE COACH, ET L'ADRESSE EST CELLE DU QR. Les deux disent la
+    // meme chose que le pied de la carte : qui a programme la seance, et ou
+    // aller pour la meme chose. Une image qu'on republie perd souvent sa
+    // legende — d'ou le pied, qui lui ne se perd pas.
+    const _n=d.ex.length;
+    const _meta={title:'Ma séance du jour',
+      text:(d.coach?(d.coach+' — '):'')+d.titre+' · '+_n+' exercice'+(_n>1?'s':''),
+      url:RC_URL_VITRINE};
+    if(_storySortirPartage(_dessinerStorySeance(d),'repcore-seance.png',_meta)){
+      // ⚠ ON COMPTE UNE FEUILLE DE PARTAGE OUVERTE, PAS UNE PUBLICATION. Ce qui
+      // se passe ensuite — publier, annuler, choisir une application — se passe
+      // hors du navigateur, et nous n'en savons rien. Le chiffre mesure une
+      // INTENTION de partager, et ce lot ne pretend rien de plus.
+      try{ rcm('story_partagee'); }catch(x){}
+      return true;
+    }
     // Pas de partage natif ici : on ne laisse pas l athlete sans rien, on
     // telecharge. C est ce qu il attendait de toute facon.
     _storyEnCours=false;
@@ -86102,6 +86685,12 @@ document.addEventListener('keydown',e=>{
   if(ah&&ah.style.display==='flex'&&!ah.dataset.sortie){
     e.preventDefault(); try{ fermerAchatProgramme(); }catch(x){} return;
   }
+  // La fiche de vente d'un programme du coach : meme rang que les autres
+  // feuilles statiques, et Echap doit la fermer comme le voile et la croix.
+  const pv=document.getElementById('rc-progvente');
+  if(pv&&pv.style.display==='flex'&&!pv.dataset.sortie){
+    e.preventDefault(); try{ fermerVenteProgramme(); }catch(x){} return;
+  }
   const ct=document.getElementById('rc-contact');
   if(ct&&ct.style.display==='flex'&&!ct.dataset.sortie){
     e.preventDefault(); try{ fermerContactCoach(); }catch(x){} return;
@@ -87341,7 +87930,30 @@ const RCM_TUNNEL=[
   {cles:['iab_instagram','iab_facebook','iab_tiktok','iab_linkedin','iab_snapchat','iab_twitter','iab_autre'],
    lib:'Arrive par un navigateur integre',horsTunnel:true,
    detail:['iab_instagram','Instagram','iab_facebook','Messenger','iab_tiktok','TikTok',
-           'iab_linkedin','LinkedIn','iab_snapchat','Snapchat','iab_twitter','X','iab_autre','autre']}
+           'iab_linkedin','LinkedIn','iab_snapchat','Snapchat','iab_twitter','X','iab_autre','autre']},
+  // ══ VENTE ════════════════════════════════════════════════════════════
+  //
+  // UNE SECONDE CHAINE, ET NON LA SUITE DE LA PREMIERE. Tout ce qui precede
+  // mesure l'acquisition d'un COMPTE ; ces quatre lignes mesurent la vie d'une
+  // OFFRE, et les deux ne se suivent pas — on ouvre la vitrine de son coach le
+  // trentieme jour, pas juste apres son premier bilan. Les enchainer ferait
+  // calculer un taux entre deux volumes sans rapport, et ce taux serait lu.
+  //
+  // `section` est porte par la PREMIERE entree du groupe, et non par un objet
+  // separe : les trois boucles qui parcourent RCM_TUNNEL lisent toutes `cles`
+  // et `lib`, et une entree sans elles les casserait toutes les trois. Le
+  // rendu remet son denominateur a zero en voyant ce marqueur, et repart de
+  // « Vitrine ouverte ».
+  {cles:['vitrine_vue'],lib:'Vitrine d\'un coach ouverte',section:'Vente'},
+  {cles:['programme_vu'],lib:'Programme en vente affiché'},
+  // ⚠ UN DEPART, PAS UNE VENTE. Le paiement se fait sur la page du coach, hors
+  // de RepCore : ce chiffre dit combien de gens sont partis payer, jamais
+  // combien ont paye. Le nommer « ventes » serait un mensonge confortable.
+  {cles:['programme_clic_achat'],lib:'Parti vers la page de paiement du coach'},
+  // HORS CHAINE ET NEUTRE : le partage a lieu chez l'athlete, AVANT que
+  // quiconque ouvre une vitrine. C'est ce qui alimente la chaine, pas une de
+  // ses etapes — et ce n'est certainement pas une fuite.
+  {cles:['story_partagee'],lib:'Carte de séance partagée',horsTunnel:true,neutre:true}
 ];
 async function loadMetrics(){
   // Même garde que la génération de codes gratuits : ce sont les chiffres du
@@ -87375,12 +87987,20 @@ async function loadMetrics(){
   // indices : la reference serait devenue « ecran d'installation vu », et
   // toutes les barres auraient ete mesurees contre le mauvais denominateur,
   // sans qu'aucune erreur ne le signale. Par parcours, l'ordre peut bouger.
-  let reference=0;
-  for(const e of RCM_TUNNEL){
-    if(e.horsTunnel) continue;
-    const n=totalEtape(e);
-    if(n>0){ reference=n; break; }
-  }
+  // LA REFERENCE SE RECALCULE A CHAQUE SECTION. Sans cela, les trois etapes de
+  // vente auraient ete mesurees contre « page de vente vue » — un denominateur
+  // cent fois plus grand, donc trois barres a 2 px qu'on aurait lues comme un
+  // echec alors qu'elles racontent leur propre histoire.
+  const _refDepuis=(depart)=>{
+    for(let i=depart;i<RCM_TUNNEL.length;i++){
+      if(i>depart&&RCM_TUNNEL[i].section) break;   // la section suivante a la sienne
+      if(RCM_TUNNEL[i].horsTunnel) continue;
+      const n=totalEtape(RCM_TUNNEL[i]);
+      if(n>0) return n;
+    }
+    return 0;
+  };
+  let reference=_refDepuis(0);
   // DEUX TEINTES POUR CE QUI SORT DE LA CHAINE, parce que sortir de la chaine
   // recouvre deux choses opposees : un refus est une fuite et se lit en
   // orange ; un guide iOS ou un lancement depuis l'icone n'est pas un echec —
@@ -87412,7 +88032,18 @@ async function loadMetrics(){
         +'<span style="font-size:var(--fs-sm);color:var(--sub)">'+_instFaits+' installation'+(_instFaits>1?'s':'')+' pour '+_instVus+' écran'+(_instVus>1?'s':'')+' vu'+(_instVus>1?'s':'')+'</span>'
         +'</div>')
     +'</div>';
-  for(const e of RCM_TUNNEL){
+  for(let _i=0;_i<RCM_TUNNEL.length;_i++){
+    const e=RCM_TUNNEL[_i];
+    // UNE NOUVELLE SECTION REMET LES DEUX COMPTEURS A ZERO : son propre
+    // denominateur, et la chaine des taux. Le titre le dit a l'ecran, sans
+    // quoi deux series de barres se liraient comme une seule.
+    if(e.section){
+      reference=_refDepuis(_i);
+      precedent=null;
+      html+='<div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:.14em;'
+        +'text-transform:uppercase;font-weight:800;margin:26px 0 12px;padding-top:14px;'
+        +'border-top:1px solid var(--border)">'+escapeHtml(e.section)+'</div>';
+    }
     const n=totalEtape(e);
     const largeur=reference>0?Math.max(2,Math.round(n/reference*100)):0;
     // Le taux compare à l'étape précédente du tunnel ; les étapes marquées
@@ -88097,8 +88728,27 @@ function _htmlVitrineCoach(pub){
       +'<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.8">'+escapeHtml(t).replace(/\n/g,'<br>')+'</div>'
       +'</div></div>';
   };
+  // ── MES PROGRAMMES ──────────────────────────────────────────────────
+  // ENTRE « Qui je suis » ET « Ma vision », et pas ailleurs. C'est la position
+  // qui suit la confiance et precede le detail : on ne propose rien avant
+  // d'avoir dit qui on est, et on ne fait pas defiler trois cartes de methode
+  // avant d'arriver a ce qui se vend.
+  //
+  // RIEN N'EST RENDU QUAND RIEN N'EST EN VENTE. La regle du fichier, celle que
+  // _htmlDiplomesCoach et _htmlJamaisDemarre appliquent deja : un cadre vide qui
+  // annonce zero devient du decor, et on cesse de le lire le jour ou il dit
+  // quelque chose.
+  const _progs=(Array.isArray(p.vitrineProgrammes)?p.vitrineProgrammes:[])
+    .map(_htmlCarteProgVitrine).filter(Boolean);
+  const blocProgrammes=_progs.length
+    ?('<div style="margin-bottom:16px">'
+      +'<div style="'+TITRE+'">Mes programmes</div>'+_progs.join('')+'</div>')
+    :'';
+  // UNE VITRINE QUI N'A QUE DES PROGRAMMES N'EST PAS VIDE. Sans ce terme, un
+  // coach qui met un programme en vente sans avoir rempli sa bio verrait son
+  // athlete tomber sur « Ton coach n'a pas encore rempli sa présentation ».
   const _rempli=(p.bio||'').trim()||(p.vision||'').trim()||p.photoVitrine
-    ||p.signature||p.cartePro||((p.diplomes||[]).length);
+    ||p.signature||p.cartePro||((p.diplomes||[]).length)||_progs.length;
   if(!_rempli){
     return '<div class="pad" style="padding-bottom:44px">'
       +'<h1 style="margin-bottom:14px">'+escapeHtml(nom)+'</h1>'
@@ -88128,12 +88778,23 @@ function _htmlVitrineCoach(pub){
   return '<div class="pad" style="padding-bottom:48px">'
     +tete
     +carte('Qui je suis',p.bio)
+    +blocProgrammes
     +carte('Ma vision',p.vision)
     +_htmlDiplomesCoach(p)
     +(p.signature?('<div style="text-align:center;margin-top:18px;padding-top:30px;position:relative">'
         +'<div style="position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)"></div>'
         +img(p.signature,'max-width:210px;width:58%;display:inline-block;background:none')
         +'</div>'):'')
+    // ── LES BANNIERES DU COACH, EN BAS DE LA VITRINE ───────────────────
+    // ELLES VIVAIENT SUR L'ACCUEIL ATHLETE, sous le suivi nutritionnel. Un
+    // athlete qui ouvre son application vient s'entrainer : lui presenter une
+    // promotion au bas de l'ecran ou il lit ses calories, c'est occuper la
+    // place de quelque chose d'utile par quelque chose qu'il n'a pas demande.
+    // Ici, il est venu voir ce que propose son coach — la banniere repond a sa
+    // question au lieu de l'interrompre.
+    // Le conteneur est VIDE : _renderPromoBanners le remplit apres l'injection,
+    // et le laisse a display:none tant qu'aucune banniere n'a d'image.
+    +'<div id="vit-promo-banners" style="display:none;margin-top:24px"></div>'
     +'</div>';
 }
 // Diplomes et carte pro, et le texte qui dit pourquoi ca compte. Rien n'est
@@ -88202,8 +88863,12 @@ function ouvrirVitrineCoach(){
   // compte qu une valeur soit renseignee.
   const _plein=v=>Array.isArray(v)?v.length>0:!!(v&&String(v).trim());
   const pub={};
+  // promoBanners ET vitrineProgrammes ONT REJOINT CETTE LISTE. Les deux se
+  // dessinent desormais sur cet ecran : absents d'ici, ils n'auraient jamais
+  // atteint _htmlVitrineCoach, et la vitrine se serait affichee sans eux — sans
+  // erreur, sans trace, exactement comme la photo du coach avant eux.
   ['fname','lname','teamName','catchphrase','bio','vision','photoVitrine',
-   'signature','cartePro','diplomes'].forEach(k=>{
+   'signature','cartePro','diplomes','promoBanners','vitrineProgrammes'].forEach(k=>{
     const v=[_pub[k],_loc[k],_moi[k]].find(_plein);
     if(v!==undefined) pub[k]=v;
   });
@@ -88211,7 +88876,26 @@ function ouvrirVitrineCoach(){
   const z=document.getElementById('vitrine-coach-corps');
   if(!z) return false;
   z.innerHTML=_htmlVitrineCoach(pub);
+  _renderPromoBanners(pub);
   goAvecRetour('s-vitrine');
+  // ── LA MESURE ───────────────────────────────────────────────────────
+  // rcmVue ET NON rcm : une fois par visite, comme les autres vues d'ecran.
+  // Un aller-retour entre l'accueil et la vitrine — le comportement normal de
+  // quelqu'un qui hesite — gonflerait le compteur et ferait apparaitre un taux
+  // de clic plus bas que la realite.
+  //
+  // ⚠ LE COACH NE SE COMPTE PAS LUI-MEME. Il ouvre sa propre vitrine pour la
+  // relire, souvent, et chaque relecture aurait pese autant qu'une visite
+  // d'athlete. « programme_vu » suit la meme regle et n'est emis que s'il y a
+  // effectivement une carte a voir : sans cela, il aurait compte des vitrines
+  // sans le moindre programme.
+  try{
+    if(!currentUser||currentUser.role!=='coach'){
+      rcmVue('vitrine_vue');
+      if((Array.isArray(pub.vitrineProgrammes)?pub.vitrineProgrammes.length:0)>0)
+        rcmVue('programme_vu');
+    }
+  }catch(e){}
   // RAFRAICHISSEMENT A L OUVERTURE. Le cache rc_coach_profil n etait relu
   // qu au demarrage : un coach qui vient de publier sa presentation ne la
   // voyait pas arriver chez son athlete avant le prochain lancement, et rien
@@ -88223,12 +88907,14 @@ function ouvrirVitrineCoach(){
         if(!frais) return;
         const maj={};
         ['fname','lname','teamName','catchphrase','bio','vision','photoVitrine',
-         'signature','cartePro','diplomes'].forEach(k=>{
+         'signature','cartePro','diplomes','promoBanners','vitrineProgrammes'].forEach(k=>{
           const v=[frais[k],pub[k]].find(x=>Array.isArray(x)?x.length:(x&&String(x).trim()));
           if(v!==undefined) maj[k]=v;
         });
         const zz=document.getElementById('vitrine-coach-corps');
-        if(zz) zz.innerHTML=_htmlVitrineCoach(maj);
+        // AUCUNE MESURE ICI : c'est le meme ecran, deja compte a l'ouverture.
+        // Le rafraichissement redessine, il ne revisite pas.
+        if(zz){ zz.innerHTML=_htmlVitrineCoach(maj); _renderPromoBanners(maj); }
       }).catch(()=>{});
     }
   }catch(e){}
@@ -88258,7 +88944,14 @@ function apercuVitrineCoach(){
   // qui avait produit le défaut. Une image ajoutée à _IMG_VITRINE demain sera
   // couverte sans qu'on y revienne.
   Object.values(_IMG_VITRINE).forEach(cfg=>{ brouillon[cfg[0]]=currentUser[cfg[0]]||''; });
+  // LES PROGRAMMES EN VENTE SE DERIVENT ICI AUSSI. Le champ n'existe dans le
+  // dossier qu'apres une publication : sans cette ligne, le coach qui met un
+  // programme en vente puis previsualise sa vitrine ne l'y verrait pas, et
+  // croirait que rien n'a pris.
+  try{ brouillon.vitrineProgrammes=vitrineProgrammesDe(currentUser); }catch(e){}
   z.innerHTML=_htmlVitrineCoach(brouillon);
+  // AUCUNE MESURE : un coach qui relit sa propre vitrine n'est pas une visite.
+  _renderPromoBanners(brouillon);
   goAvecRetour('s-vitrine');
 }
 function saveCoachIdentity(){
@@ -88467,8 +89160,12 @@ function saveCoachBanners(){
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
   toastSync(ok,_envoi,'Bannières enregistrées ✓','le profil public est');
 }
+// LE CONTENEUR A CHANGE D'ECRAN : il est desormais au bas de la VITRINE, emis
+// par _htmlVitrineCoach. Un seul identifiant dans toute l'application — un
+// second, reste sur l'accueil, aurait fait afficher les memes bannieres a deux
+// endroits, et le premier trouve aurait decide lequel.
 function _renderPromoBanners(coach){
-  const el=document.getElementById('clh-promo-banners');
+  const el=document.getElementById('vit-promo-banners');
   if(!el) return;
   const banners=(coach?.promoBanners||[]).filter(b=>b.imageUrl);
   if(!banners.length){el.style.display='none';return;}
