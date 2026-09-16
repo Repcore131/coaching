@@ -31366,6 +31366,187 @@ function testExercices(){
         return _echec('l’aperçu de relecture ne passe pas par la même source');
       return true;})());
 
+    // ══ 15/09/2026 — LE BIFRÖST : DES COLONNES, ET PLUS AUCUNE COUPE ═════
+    //
+    // « remets les lignes type Bifröst de Thor derrière comme ça, mais joue
+    // sur l'opacité en haut pour qu'elles se fondent sans avoir de
+    // démarcation nette. » — Kevin, 15/09/2026.
+    //
+    // ⚠ LE BORD N'ETAIT PAS DANS CE QUI PORTAIT LA LUMIERE, IL ETAIT DANS CE
+    // QUI LA COUPAIT. On a cherche trois tours dans le faisceau — masques,
+    // degrades, opacites — alors que le trait horizontal sous la date etait
+    // le halo du hero, tranche net par son propre overflow:hidden 25 px
+    // au-dessus du centre de son disque, la ou il est le plus dense.
+    //
+    // D'ou la regle que ces assertions tiennent, et qui vaut pour tout ce
+    // bloc : UNE COUCHE QUI EST COUPEE DOIT ETRE DEJA ETEINTE A L'ENDROIT DE
+    // LA COUPE. Soit on retire la coupe, soit on eteint avant elle. Il n'y a
+    // pas de troisieme reponse, et « c'est a peine visible » n'en est pas
+    // une : 15 % de rouge plein sur 388 px de large se voit.
+    ok('Aucune couche n\'est coupée là où elle porte encore de la lumière',(()=>{
+      // Un decor hors champ : les styles calculES demandent un element rendu.
+      const b=document.createElement('div');
+      b.style.cssText='position:fixed;left:-9999px;top:0;width:390px;height:300px';
+      b.innerHTML='<div class="rcf-hero"><div class="rcf-trait"></div></div>'
+        +'<section class="rcf-rec"><div class="rcf-faisceau"></div>'
+        +'<div class="rcf-rec-g n3"></div></section>';
+      document.body.appendChild(b);
+      try{
+        // ⚠ LE HALO DU HERO N'EST PLUS COUPE. C'est LE correctif de ce lot :
+        // son disque de 300 px vivait dans une boite de 129, et la coupe
+        // tombait sur sa partie la plus dense.
+        const hero=b.querySelector('.rcf-hero');
+        const co=getComputedStyle(hero);
+        if(co.overflowY==='hidden'||co.overflowX==='hidden')
+          return _echec('.rcf-hero coupe de nouveau son halo : '+co.overflow);
+        const f=b.querySelector('.rcf-faisceau');
+        const cf=getComputedStyle(f);
+        // Le faisceau, LUI, garde sa coupe : l'encre de son flou de 40 px
+        // peint hors de la boite et ouvrait 20 px de defilement lateral.
+        // Elle est sans danger parce que le masque eteint avant elle — c'est
+        // tout l'objet des deux verifications qui suivent.
+        if(cf.overflowX!=='hidden')
+          return _echec('le faisceau ne borne plus l’encre de son flou');
+        // ⚠ UN AXE PAR ELEMENT. Deux masques sur le MEME element ont deja
+        // coute un rectangle : mask-composite:intersect et
+        // -webkit-mask-composite:source-in ne sont pas equivalents, et la ou
+        // la composition ne s’applique pas le masque degenere — la couche
+        // reparait entiere, bords compris. Cette porte reste fermee.
+        // ⚠ ON RETIRE LES COMMENTAIRES AVANT DE CHERCHER. C'est la septieme
+        // fois que le depot l'apprend : la sonde trouvait le mot dans le
+        // commentaire qui explique pourquoi il ne faut PAS l'ecrire. Une
+        // regle porte sur les declarations, jamais sur la prose.
+        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent)
+          .join('\n').replace(/\/\*[\s\S]*?\*\//g,' ');
+        if(/mask-composite/.test(css))
+          return _echec('mask-composite est revenu : le masque peut degenerer');
+        const M=(el,ps)=>{ const c=getComputedStyle(el,ps||null);
+          const v=c.maskImage&&c.maskImage!=='none'?c.maskImage:c.webkitMaskImage;
+          return (v&&v!=='none')?v:''; };
+        const hz=M(f), vt=M(f,'::before'), vt2=M(f,'::after');
+        if(!/linear-gradient\(\s*90deg/.test(hz))
+          return _echec('le cadre ne porte plus l’extinction horizontale : '+hz.slice(0,60));
+        // ⚠ LE STYLE CALCULE EFFACE « 180deg ». C'est la direction par
+        // defaut d'un degrade lineaire, et le navigateur la rend en
+        // l'omettant : chercher le mot faisait tomber l'assertion sur un
+        // masque parfaitement correct. On verifie donc ce qui compte — que
+        // la couche descend, et surtout qu'elle ne porte PAS l'axe du cadre.
+        const versLeBas=v=>/^linear-gradient\(\s*(?:(?:180deg|to\s+bottom)\s*,)?\s*rgba?\(/.test(v)
+          &&!/\b(?:90deg|270deg|to\s+(?:left|right))\b/.test(v);
+        for(const v of [vt,vt2])
+          if(!versLeBas(v))
+            return _echec('une couche ne porte plus l’extinction verticale : '+v.slice(0,70));
+        // Les arrets, lus dans le style CALCULE : c’est le masque REEL, pas
+        // celui qu’on croit avoir ecrit.
+        // ⚠ ET LE CALCUL REND « 0px » LA OU ON A ECRIT « 0 ». Un lecteur qui
+        // n'accepte que les pourcentages perd le premier arret, donc la
+        // valeur au bord — exactement celle qu'on vient verifier. On accepte
+        // les deux unites et on ramene tout en pourcentage.
+        const arrets=(g,L)=>{ const o=[]; const re=/rgba?\(([^)]*)\)\s+(-?[\d.]+)(%|px)/g; let m;
+          while((m=re.exec(g))){ const p=m[1].split(',').map(x=>parseFloat(x));
+            const v=parseFloat(m[2]);
+            o.push([m[3]==='%'?v:(L>0?v/L*100:0), p.length>3?p[3]:1]); }
+          return o; };
+        // Alpha du masque a une position donnee, interpolation lineaire :
+        // exactement ce que le navigateur peint.
+        const a=(st,x)=>{ if(!st.length) return 1;
+          if(x<=st[0][0]) return st[0][1];
+          for(let i=1;i<st.length;i++){ if(x<=st[i][0]){
+            const [p0,a0]=st[i-1],[p1,a1]=st[i];
+            return p1===p0?a1:a0+(a1-a0)*(x-p0)/(p1-p0); } }
+          return st[st.length-1][1]; };
+        // ⚠ L'AXE VERTICAL SE LIT DANS LES POURCENTAGES DE LA COUCHE, PAS DU
+        // CADRE, et les deux ne coincident pas : inset:-10% 0 donne a la
+        // couche 120 % de la hauteur du cadre. On calcule donc ou tombe la
+        // coupe AU LIEU de recopier 8,33 % — si l'inset change un jour,
+        // l'assertion suit.
+        // ⚠ PAS getBoundingClientRect ICI. Le faisceau porte une animation
+        // d'entree qui passe par scaleY(.88) : le rectangle rendu vaut 88 %
+        // de la hauteur de MISE EN PAGE tant qu'elle joue, et le rapport
+        // couche/cadre sortait a 1,36 au lieu de 1,20 — l'assertion accusait
+        // un masque parfaitement correct. Les pourcentages d'un inset se
+        // resolvent sur la boite de mise en page, jamais sur la transformee.
+        const cf2=getComputedStyle(f);
+        const hc=parseFloat(cf2.height)||0, lc=parseFloat(cf2.width)||0;
+        const hp=parseFloat(getComputedStyle(f,'::before').height)||0;
+        if(!(hc>0&&hp>hc))
+          return _echec('la couche ne deborde plus du cadre : '+hc+' / '+hp);
+        const deb=(hp-hc)/2;
+        const coupeHaut=deb/hp*100, coupeBas=(deb+hc)/hp*100;
+        // L'AXE HORIZONTAL : nul aux deux bords, la ou overflow:hidden coupe.
+        const sh=arrets(hz,lc);
+        if(!sh.length) return _echec('le masque horizontal n’a aucun arret');
+        for(const x of [0,100])
+          if(a(sh,x)>0.001)
+            return _echec('le masque horizontal porte '+a(sh,x).toFixed(3)+' a '+x+' % : la coupe se verra');
+        for(const v of [vt,vt2]){
+          const sv=arrets(v,hp);
+          if(!sv.length) return _echec('un masque vertical n’a aucun arret');
+          for(const y of [0,coupeHaut,coupeBas,100])
+            if(a(sv,y)>0.001)
+              return _echec('le masque vertical porte '+a(sv,y).toFixed(3)
+                +' a '+y.toFixed(2)+' % : c’est la demarcation que Kevin voit');
+          // ET IL EST BIEN ALLUME AU MILIEU : un masque nul partout ne
+          // laisserait plus rien a voir, et passerait la verification du haut.
+          if(a(sv,52)<0.98)
+            return _echec('le masque vertical eteint aussi le milieu : '+a(sv,52).toFixed(2));
+        }
+        // ⚠ ET LA MONTEE EST LONGUE. C’est elle qui remplace le trait : un
+        // masque qui passe de 0 a 1 en cinq pour cent redonne un bord, meme
+        // sans coupe. On exige que la lumiere mette au moins un quart de la
+        // hauteur a naitre.
+        const sv=arrets(vt,hp);
+        let d=coupeHaut, ff=100;
+        for(let y=coupeHaut;y<=100;y+=0.5){ if(a(sv,y)>0.02){ d=y; break; } }
+        for(let y=d;y<=100;y+=0.5){ if(a(sv,y)>=0.99){ ff=y; break; } }
+        if(ff-d<25)
+          return _echec('la lumiere naît en '+(ff-d).toFixed(1)+' % de la hauteur : trop vite, ça refait un bord');
+        return true;
+      } finally { b.remove(); }
+    })());
+
+    // LES COLONNES. « Remets les lignes type Bifröst » : elles avaient
+    // disparu — pas retirees, NOYEES. Le lavis de fond etait a .72 sur 34 px
+    // de flou, les colonnes a .78 sur 9 px : capture faite, le bloc rendait
+    // une nappe rouge uniforme ou pas une seule raie ne se lisait.
+    //
+    // ⚠ CE N'EST PAS UN REGLAGE, C'EST UN ORDRE. Le lavis doit rester plus
+    // FAIBLE et plus FLOU que les colonnes, sinon il repasse devant elles.
+    // Les deux couches peuvent etre retouchees tant que cet ordre tient.
+    ok('Les colonnes du Bifröst passent devant le lavis, et non l\'inverse',(()=>{
+      const b=document.createElement('div');
+      b.style.cssText='position:fixed;left:-9999px;top:0;width:390px;height:300px';
+      b.innerHTML='<section class="rcf-rec"><div class="rcf-faisceau"></div>'
+        +'<div class="rcf-rec-g n3"></div></section>';
+      document.body.appendChild(b);
+      try{
+        const f=b.querySelector('.rcf-faisceau');
+        const av=getComputedStyle(f,'::before'), ap=getComputedStyle(f,'::after');
+        const flou=c=>{ const m=String(c.filter).match(/blur\(([\d.]+)px\)/); return m?parseFloat(m[1]):-1; };
+        const oAv=parseFloat(av.opacity), oAp=parseFloat(ap.opacity);
+        const fAv=flou(av), fAp=flou(ap);
+        if(!(fAv>0&&fAp>0)) return _echec('une couche n’est plus floue : '+fAv+' / '+fAp);
+        if(!(oAp>oAv))
+          return _echec('le lavis ('+oAv+') est aussi dense que les colonnes ('+oAp+') : il les noie');
+        if(!(fAp<fAv))
+          return _echec('les colonnes ('+fAp+'px) sont aussi floues que le lavis ('+fAv+'px) : ce ne sont plus des colonnes');
+        // Assez net pour se lire comme des colonnes, assez flou pour n’avoir
+        // aucun contour. Entre les deux, il n’y a pas de bord a voir.
+        if(fAp<3||fAp>7.5)
+          return _echec('le flou des colonnes est hors plage : '+fAp+'px');
+        // ET LE DEGRADE EST TOUJOURS IRREGULIER : un pas constant se lit
+        // comme une texture, un pas irregulier comme de la lumiere.
+        const g=String(ap.backgroundImage);
+        const pos=(g.match(/([\d.]+)%/g)||[]).map(parseFloat);
+        if(pos.length<20) return _echec('les colonnes ont disparu du degrade : '+pos.length+' arrets');
+        const ec=[]; for(let i=1;i<pos.length;i++) if(pos[i]>pos[i-1]) ec.push(pos[i]-pos[i-1]);
+        const moy=ec.reduce((a,c)=>a+c,0)/ec.length;
+        const va=Math.sqrt(ec.reduce((a,c)=>a+(c-moy)*(c-moy),0)/ec.length);
+        if(va<0.25) return _echec('les ecarts sont devenus reguliers : c’est un code-barres, pas de la lumiere');
+        return true;
+      } finally { b.remove(); }
+    })());
+
     // ══ 15/09/2026 — LE GRIMPEUR ESCALADE, IL NE SAUTE PLUS ══════════════
     //
     // « il faut qu'on le voie progresser de marche en marche comme s'il
