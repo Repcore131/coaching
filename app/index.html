@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1227';
+window.RC_BUILD='1228';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2538,6 +2538,20 @@ body.with-tabbar #rc-ban-install{padding-bottom:9px}
 /* Le halo du chiffre lui-meme : sans lui, le blanc reste plat sur le noir. */
 .metric-val{text-shadow:var(--halo-2)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
+/* LE SOUS-TITRE D'UNE TUILE : le REFERENTIEL du chiffre au-dessus. « 2 »
+   seances ne dit rien ; « 2 » sous « / 3 prevues » dit tout, et sans ajouter
+   un mot de plus. Il tient sur UNE ligne — deux feraient grandir la tuile —
+   et il est gris par defaut.
+   ⚠ LA COULEUR DE BASE EST ICI, PAS EN LIGNE. _majMetriquesAccueil pose le
+   vert en ligne pour une amelioration et l'efface autrement, et
+   style.color='' SUPPRIME la declaration au lieu de la restaurer : une base
+   posee en ligne aurait disparu au premier passage non-vert. C'est
+   exactement le piege de #clh-stats, documente deux ecrans plus haut, et il
+   se referme de la meme facon — la mise en forme vit dans la feuille.
+   ⚠ ET JAMAIS DE ROUGE. Le vert salue une progression ; il n'a pas de
+   contraire ici. Une diete en baisse se dit en gris, comme le reste. */
+.clh-m-sub{font-size:var(--fs-xs);color:var(--sub);margin-top:2px;line-height:1.25;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* UNE CASE SANS DONNEE S'EFFACE. Un « — » en pleine lumière a le même poids
    visuel qu'un chiffre, alors qu'il ne dit rien. Elle perd son relief et
    descend à 55 % — elle reste lisible, elle cesse d'appeler. */
@@ -8994,11 +9008,11 @@ const COACH_PHOTO='icons/coach.jpg';
            masquage ne peut pas l'effacer. -->
       <div id="clh-stats" class="clh-in clh-in-2">
         <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Cette semaine</div>
-          <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m1-sub"></div></div>
+          <div class="clh-m-sub" id="clh-m1-sub"></div></div>
         <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances au total</div>
-          <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m2-sub"></div></div>
+          <div class="clh-m-sub" id="clh-m2-sub"></div></div>
         <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Diète respectée</div>
-          <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m3-sub"></div></div>
+          <div class="clh-m-sub" id="clh-m3-sub"></div></div>
       </div>
 
 
@@ -43051,6 +43065,74 @@ function _tauxDieteRespectee(u){
   if(!juges) return null;
   return {pct:Math.round(tenus*100/juges), tenus:tenus, juges:juges, flexible:flexible};
 }
+// PURE. Le taux de diete sur une FENETRE de dates, jours repondus seulement.
+// ⚠ ELLE PASSE PAR jourDieteTenu, comme _tauxDieteRespectee. Lire
+// `respected` directement n'aurait marche qu'en diete stricte : en flexible,
+// le verdict se lit dans le journal alimentaire contre les cibles du jour.
+// Deux jugements recopies auraient fini par diverger, et le sous-titre aurait
+// contredit le pourcentage juste au-dessus de lui.
+function _dieteFenetre(u,debut,fin){
+  const nut=(u&&u.nutrition)||{};
+  const flexible=(typeof typeDiete==='function')?typeDiete(nut)==='flexible':true;
+  const cles=Object.keys((flexible?nut.log:nut.days)||{});
+  let tenus=0,juges=0;
+  for(const k of cles){
+    // Les clefs sont des dates LOCALES (localISODate) : on les relit en local.
+    const t=Date.parse(String(k)+'T00:00:00');
+    if(!isFinite(t)||t<debut||t>fin) continue;
+    const v=jourDieteTenu(u,k);
+    if(v===null) continue;            // jour non repondu : il ne compte pas
+    juges++; if(v) tenus++;
+  }
+  return juges?{pct:Math.round(tenus*100/juges),juges:juges}:null;
+}
+// LE SOUS-TITRE DE LA DIETE. Trente jours contre les trente precedents, sur
+// les jours REPONDUS des deux cotes — compter les jours sans saisie comme des
+// echecs mesurerait l'assiduite de saisie, pas la diete. Meme regle que le
+// pourcentage au-dessus, et c'est voulu : les deux doivent se tenir.
+//
+// ⚠ RIEN N'EST INVENTE QUAND IL MANQUE UNE MOITIE. Moins de sept jours notes
+// en tout, ou aucun jour repondu dans l'une des deux fenetres, et il n'y a
+// pas de tendance : on dit alors ce qu'on sait — combien de jours — plutot
+// que d'appeler « stable » un ecart qu'on n'a pas pu mesurer. C'est la meme
+// honnetete que « RIR non note » et « Premiere seance ».
+// ⚠ LES LIBELLES SONT COURTS PARCE QUE LA TUILE FAIT 78 px. Mesure au
+// navigateur, a 320 px de large, police de l'ecran : « sur 12 jours notés »
+// demande 94 px et « +25 pts vs mois dernier » 126 px. Les deux etaient
+// tronques a TOUTES les largeurs de telephone — 85 px a 390, 91 a 360 — donc
+// pour tout le monde et tout le temps. Un referentiel tronque n'est plus un
+// referentiel ; on dit moins, mais en entier.
+// « / 12 prévues » 64 px · « sept. 2026 » 56 px · « −100 pts » 45 px ·
+// « 365 j notés » 59 px : tout tient, y compris les pires cas.
+function _sousTitreTendanceDiete(u,di,maintenant){
+  if(!di||!di.juges) return null;
+  const n=di.juges, pl=n>1?'s':'';
+  // « 365 jours notés » demande 83 px et deborderait ; la forme breve n'en
+  // demande que 59. Elle n'apparait donc QUE la ou la longue ne tient pas.
+  const compte={t:n<100?(n+' jour'+pl+' noté'+pl):(n+' j notés')};
+  if(n<7) return compte;
+  const t=(typeof maintenant==='number')?maintenant:Date.now(), J=864e5;
+  const a=_dieteFenetre(u,t-29*J,t);
+  const b=_dieteFenetre(u,t-59*J,t-30*J);
+  if(!a||!b) return compte;
+  const d=a.pct-b.pct;
+  if(d===0) return {t:'stable'};
+  // ⚠ LE SIGNE MOINS (U+2212), PAS LE TRAIT D'UNION : « −4 » se lit comme un
+  // nombre negatif, « -4 » comme une puce de liste a cette taille.
+  // Et le vert UNIQUEMENT vers le haut : une baisse se dit en gris.
+  return {t:(d>0?'+':'−')+Math.abs(d)+' pts', vert:d>0};
+}
+// PURE. « sept. 2026 » — le mois ou tout a commence.
+// ⚠ LE MOIS ABREGE, ET « DEPUIS » EN MOINS. « depuis septembre 2026 » demande
+// 130 px dans une tuile qui en offre 78 : il s'affichait « depuis sept… » sur
+// tous les telephones. Le libelle au-dessus dit deja « Séances au total » —
+// une date en dessous d'un total ne peut se lire que comme un depart.
+function _moisAnnee(ts){
+  try{ const d=new Date(ts);
+    if(!isFinite(d.getTime())) return '';
+    return d.toLocaleDateString('fr-FR',{month:'short',year:'numeric'});
+  }catch(e){ return ''; }
+}
 function _majMetriquesAccueil(u){
   // LA MONTEE EST CONDITIONNELLE, et la condition est le coeur du correctif :
   // l'accueil est quotidien, la regle de frequence interdit d'y rejouer une
@@ -43059,7 +43141,7 @@ function _majMetriquesAccueil(u){
   // la valeur a change. Un premier affichage (texte initial « — », donc av non
   // fini) pose la valeur directement plutot que de compter depuis zero a
   // chaque lancement de l'application.
-  const met=(id,val,sub)=>{
+  const met=(id,val,sub,vert)=>{
     const a=document.getElementById(id), b=document.getElementById(id+'-sub');
     if(a){
       // LE QUATRIEME COMPTEUR, et il relisait lui aussi son propre texte. Il
@@ -43085,30 +43167,48 @@ function _majMetriquesAccueil(u){
       // conteneur, qui porte le style.
       a.closest('.metric-box')?.toggleAttribute('data-vide', val==='—'||val==='0');
     }
-    if(b) b.textContent=sub||'';
+    if(b){
+      b.textContent=sub||'';
+      // ⚠ '' EFFACE LA DECLARATION EN LIGNE, elle ne restaure rien : c'est
+      // pour cela que le gris de base vit dans .clh-m-sub. Sans quoi le
+      // sous-titre serait reste sans couleur des le premier rendu non-vert.
+      b.style.color=vert?'var(--green)':'';
+    }
   };
+  // ── LES TROIS REFERENTIELS ──────────────────────────────────────────
+  // Les trois chiffres etaient donnes SANS repere. « 2 » seances : conforme
+  // ou en retard ? « 71 % » de diete : mieux ou moins bien qu'avant ? Chaque
+  // sous-titre repond a cette question-la, et a rien d'autre.
+  // ⚠ ET IL RESTE VIDE QUAND LA DONNEE MANQUE. Une tuile sans sous-titre
+  // s'affiche exactement comme avant ce lot : c'est la regle d'honnetete
+  // tenue partout ailleurs — on ne meuble pas.
   const ss=((u&&u.sessions)||[]).filter(s=>s&&s.date);
+  // a) Cette semaine, contre les creneaux actifs du programme. Aucun creneau,
+  //    aucun sous-titre : « / 0 prevues » n'est pas un referentiel, c'est un
+  //    zero affiche.
+  const prevues=_creneauxPrevus(u);
+  const subM1=prevues>0?('/ '+prevues+' prévue'+(prevues>1?'s':'')):'';
+  // c) La diete, et sa tendance sur trente jours. Calculee ici pour les deux
+  //    branches : le taux existe meme sans une seule seance.
+  const di=_tauxDieteRespectee(u);
+  const tM3=_sousTitreTendanceDiete(u,di);
+  const valM3=di?(di.pct+' %'):'—';
   if(!ss.length){
-    met('clh-m1','—',''); met('clh-m2','0','Aucune séance enregistrée.');
-    const _d0=_tauxDieteRespectee(u);
-    met('clh-m3',_d0?(_d0.pct+' %'):'—',_sousTitreDiete(_d0));
+    // Aucune seance : le compteur du total n'a pas de premier mois a nommer.
+    met('clh-m1','—',subM1);
+    met('clh-m2','0','');
+    met('clh-m3',valM3,tM3&&tM3.t,tM3&&tM3.vert);
     return;
   }
-  // a) Cette semaine — depuis lundi, comme partout ailleurs dans l'app. Le
-  // quota est l'ENGAGEMENT de l'objectif s'il existe, sinon les créneaux.
-  const faites=_seancesCetteSemaine(u), quota=_quotaSemaine(u);
-  met('clh-m1',String(faites),faites+' sur '+quota);
-  // b) Séances au total, depuis le premier jour. Un compteur qui ne
-  //    redescend jamais : c'est le seul chiffre de cet écran qui récompense
-  //    la durée plutôt que la semaine en cours.
+  const faites=_seancesCetteSemaine(u);
+  met('clh-m1',String(faites),subM1);
+  // b) Seances au total, et depuis quand. Un compteur qui ne redescend
+  //    jamais : c'est le seul chiffre de cet ecran qui recompense la duree
+  //    plutot que la semaine en cours. Le MOIS plutot qu'un nombre de jours
+  //    — « juil. 2026 » se retient, « depuis 412 jours » se calcule.
   const _prem=ss.reduce((m,x)=>Math.min(m,x.date),ss[0].date);
-  const _jours=Math.max(1,Math.round((Date.now()-_prem)/864e5));
-  met('clh-m2',String(ss.length),
-    ss.length>1?('depuis '+_jours+' jour'+(_jours>1?'s':'')):'première séance');
-  // c) Diète respectée. Les jours non enregistrés sont ÉCARTÉS : les compter
-  //    comme des échecs mesurerait l'assiduité de saisie, pas la diète.
-  const di=_tauxDieteRespectee(u);
-  met('clh-m3',di?(di.pct+' %'):'—',_sousTitreDiete(di));
+  met('clh-m2',String(ss.length),_moisAnnee(_prem));
+  met('clh-m3',valM3,tM3&&tM3.t,tM3&&tM3.vert);
 }
 // ── Volume par créneau, dans l'onglet Perfs ─────────────────────────────────
 // Le graphique mélangeait tous les créneaux : une séance jambes et une séance
@@ -45559,8 +45659,17 @@ function _lundiDe(d){
   return x;
 }
 // Nombre de séances actives au programme — le quota hebdomadaire à atteindre.
+// PURE. Le nombre de creneaux actifs du programme, TEL QUEL — zero compris.
+// ⚠ ZERO EST UNE INFORMATION ICI, et c'est pourquoi cette fonction existe a
+// cote de seancesPrevuesParSemaine plutot que dedans : celle-ci porte un
+// Math.max(1,…) parce que ecartNormalJours DIVISE par elle, si bien qu'elle
+// ne peut jamais rendre 0. Un sous-titre qui lirait ce plancher afficherait
+// « / 1 prevue » a quelqu'un qui n'a aucun creneau — un chiffre invente.
+function _creneauxPrevus(u){
+  return ((u&&u.sessions_config)||[]).filter(s=>s&&s.active).length;
+}
 function seancesPrevuesParSemaine(u){
-  return Math.max(1,((u&&u.sessions_config)||[]).filter(s=>s&&s.active).length);
+  return Math.max(1,_creneauxPrevus(u));
 }
 // Écart normal entre deux séances, en jours, plus un jour de marge. Avec 3
 // séances par semaine l'intervalle vaut 3 jours, donc 4 avec la marge. Même

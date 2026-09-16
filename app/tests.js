@@ -18610,11 +18610,17 @@ function testExercices(){
           return e&&e.dataset&&e.dataset.valeur!==undefined?e.dataset.valeur:txt(id); };
         return (txt('clh-m1')==='—'&&txt('clh-m3')==='—'&&val('clh-m2')==='0')
           ?true:_echec(txt('clh-m1')+' | '+val('clh-m2')+' | '+txt('clh-m3'));})());
-      ok('Les textes d\'attente des cases sont toujours là',(()=>{
+      // ⚠ LE CONTRAT S'EST INVERSE LE 16/09/2026, et c'est voulu. Les cases
+      // disaient « Aucune séance enregistrée. » et « Aucun jour renseigné. » :
+      // deux phrases pour dire qu'il n'y a rien, sous un chiffre qui le disait
+      // deja. Depuis que les sous-titres portent un REFERENTIEL — « / 3
+      // prevues », « sept. 2026 », « +7 pts » — un texte d'attente ne serait
+      // plus une attente mais un remplissage, et la regle du produit est de ne
+      // pas meubler. Une case sans donnee n'a pas de sous-titre.
+      ok('Sans donnée, une case n\'a pas de sous-titre du tout',(()=>{
         const l=id=>(document.getElementById(id)||{}).textContent;
-        return (l('clh-m2-sub')==='Aucune séance enregistrée.'
-          &&l('clh-m3-sub')==='Aucun jour renseigné.')
-          ?true:_echec(l('clh-m2-sub')+' | '+l('clh-m3-sub'));})());
+        return (l('clh-m2-sub')===''&&l('clh-m3-sub')==='')
+          ?true:_echec('« '+l('clh-m2-sub')+' » | « '+l('clh-m3-sub')+' »');})());
       // LE cas de l'athlète qui a des bilans mais pas ses tours de mesure :
       // c'est exactement l'écran où le coach a vu ses trois tirets, et il a
       // demandé qu'ils y restent.
@@ -28906,6 +28912,16 @@ function testExercices(){
       ['clh-m1','clh-m2','clh-m3','clh-m1-sub','clh-m2-sub','clh-m3-sub']
         .forEach(id=>{const e=document.getElementById(id); g[id]=e?e.textContent:null;});
       const lire=id=>{const e=document.getElementById(id); return e?e.textContent:null;};
+      // ⚠ LE CHIFFRE D'UNE CASE NE SE LIT PAS DANS SON TEXTE. arcCompteur
+      // l'ANIME : une lecture synchrone juste apres le rendu rend une valeur
+      // intermediaire — « 0 » en route vers « 2 ». L'assertion du cumul
+      // tombait pour cette raison, et pour cette raison seule ; sa voisine
+      // passait par la coincidence decrite plus haut dans ce fichier (meme
+      // valeur deja posee, donc pas d'animation). On lit data-valeur, ecrite
+      // AVANT l'animation, avec repli sur le texte pour le tiret — qui n'est
+      // pas un nombre et se pose directement.
+      const lireVal=id=>{const e=document.getElementById(id);
+        return (e&&e.dataset&&e.dataset.valeur!==undefined)?e.dataset.valeur:lire(id);};
       ok('Les trois cases existent',
          !!document.getElementById('clh-m1')&&!!document.getElementById('clh-m2')
          &&!!document.getElementById('clh-m3'));
@@ -28938,10 +28954,14 @@ function testExercices(){
       ok('Aucune séance : deux tirets et un zéro',
          lire('clh-m1')==='—'&&lire('clh-m2')==='0'&&lire('clh-m3')==='—',
          lire('clh-m1')+' | '+lire('clh-m2')+' | '+lire('clh-m3'));
-      ok('Aucune séance : les textes d\'attente sont exacts',
-         lire('clh-m2-sub')==='Aucune séance enregistrée.'
-         &&lire('clh-m3-sub')==='Aucun jour renseigné.',
-         lire('clh-m2-sub')+' | '+lire('clh-m3-sub'));
+      // Aucune seance et aucun jour de diete : les deux sous-titres se
+      // taisent. Le premier, LUI, parle — il y a un creneau actif, donc un
+      // referentiel : « 0 fait sur 1 prevue » est une information complete.
+      ok('Aucune séance : les deux cases muettes se taisent vraiment',
+         lire('clh-m2-sub')===''&&lire('clh-m3-sub')==='',
+         '« '+lire('clh-m2-sub')+' » | « '+lire('clh-m3-sub')+' »');
+      ok('Aucune séance : le quota de la semaine reste annoncé',
+         lire('clh-m1-sub')==='/ 1 prévue',lire('clh-m1-sub'));
       // Historique court : Cette semaine se remplit, les deux autres attendent.
       const J=n=>Date.now()-n*864e5;
       const lundi=_lundiDe(new Date()).getTime();
@@ -28949,14 +28969,23 @@ function testExercices(){
                             {id:'s2',date:lundi+9e6,volume:4200,data:{}}];
       currentUser.sessions_config=[{active:true},{active:true},{active:true}];
       _majMetriquesAccueil(currentUser);
-      ok('Cette semaine : le compte et le quota',
-         lire('clh-m1')==='2'&&lire('clh-m1-sub')==='2 sur 3');
+      // ⚠ « 2 sur 3 » EST DEVENU « / 3 prévues » le 16/09/2026. Le compte
+      // etait dit deux fois — le gros chiffre au-dessus le portait deja — et
+      // le sous-titre ne servait donc qu'a repeter. Il porte desormais le
+      // seul terme que le chiffre ne dit pas : la reference.
+      ok('Cette semaine : le compte, et le quota en référence',
+         lireVal('clh-m1')==='2'&&lire('clh-m1-sub')==='/ 3 prévues',
+         lireVal('clh-m1')+' | '+lire('clh-m1-sub'));
       // LA CASE DU MILIEU CUMULE MAINTENANT LES SÉANCES, et sa seconde ligne
       // dit depuis QUAND. Mesuré sur la version servie avec les deux séances
       // posées ci-dessus : « 2 » et « depuis 5 jours ».
-      ok('Séances au total : le cumul et son ancienneté',
-         lire('clh-m2')==='2'&&/^depuis /.test(lire('clh-m2-sub')||''),
-         lire('clh-m2')+' | '+lire('clh-m2-sub'));
+      // ⚠ « depuis 5 jours » EST DEVENU « sept. 2026 ». Un nombre de jours se
+      // recalcule a chaque lecture ; un mois se retient. Et « depuis » est
+      // tombe avec : mesure au navigateur, « depuis septembre 2026 » demande
+      // 130 px dans une tuile qui en offre 78.
+      ok('Séances au total : le cumul, et le mois du départ',
+         lireVal('clh-m2')==='2'&&/^[^\s]+ \d{4}$/.test(lire('clh-m2-sub')||''),
+         lireVal('clh-m2')+' | '+lire('clh-m2-sub'));
       // ⚠ LES DEUX ASSERTIONS SUIVANTES SONT CADUQUES et deviennent des
       // témoins. Elles mesuraient « Cinq exercices en progrès sur douze » et
       // « Charge totale : +50 % vs 4 dernières semaines » — deux cases qui
@@ -31364,6 +31393,249 @@ function testExercices(){
       // aurait divergé au premier ajustement.
       if(String(_rendrePartageSeanceRelue).indexOf('_bilanDonneesDe')<0)
         return _echec('l’aperçu de relecture ne passe pas par la même source');
+      return true;})());
+
+    // ══ 16/09/2026 — LES TROIS TUILES RECOIVENT UN REFERENTIEL ═══════════
+    //
+    // « 2 » séances cette semaine : conforme ou en retard ? « 71 % » de diète
+    // respectée : mieux ou moins bien ? Les trois chiffres de l'accueil
+    // étaient donnés sans repère. Chaque sous-titre répond à cette
+    // question-là, et à rien d'autre.
+    //
+    // ⚠ ET IL RESTE VIDE QUAND LA DONNEE MANQUE. C'est la règle d'honnêteté
+    // tenue partout ailleurs — « RIR non noté », « Première séance ». Un
+    // athlète sans données voit exactement ce qu'il voyait avant ce lot.
+
+    // Un décor commun : on peuple, on rend, on lit les trois sous-titres.
+    const _subFix=(u,f)=>{
+      const _cu=currentUser,_db=DB.get('users');
+      const z=document.getElementById('s-client-home');
+      const etait=z&&z.classList.contains('active');
+      try{
+        if(z) z.classList.add('active');
+        currentUser=u; DB.set('users',{'sub@t.fr':u});
+        _majMetriquesAccueil(u);
+        const lis=k=>{ const v=document.getElementById('clh-m'+k),
+          b=document.getElementById('clh-m'+k+'-sub');
+          return {val:v?v.textContent:null, sub:b?b.textContent:null,
+            vert:b?/34,\s*197,\s*94/.test(getComputedStyle(b).color):false,
+            n:b}; };
+        return f({m1:lis(1),m2:lis(2),m3:lis(3)});
+      } finally { currentUser=_cu; if(_db) DB.set('users',_db);
+        if(z&&!etait) z.classList.remove('active'); }
+    };
+    const _subU=o=>Object.assign({email:'sub@t.fr',id:'s1',role:'athlete',
+      fname:'Sub',sessions:[],sessions_config:[],bilans:[]},o||{});
+    // n jours de diète stricte à partir de `depuis` jours en arrière, dont
+    // `bons` respectés. Les autres sont répondus ET ratés — jamais absents :
+    // un jour absent ne doit PAS compter, et c'est un autre test.
+    const _subJrs=(n,depuis,bons)=>{ const o={};
+      for(let i=0;i<n;i++){
+        const d=new Date(Date.now()-(depuis+i)*864e5);
+        o[localISODate(d)]={respected:i<bons};
+      } return o; };
+
+    // ⚠ LA VERIFICATION DEMANDEE, mot pour mot : un nouvel utilisateur doit
+    // voir exactement ce qu'il voyait, sans sous-texte parasite.
+    ok('Un athlète sans données ne reçoit aucun sous-titre',(()=>
+      _subFix(_subU({}),r=>{
+        for(const k of ['m1','m2','m3'])
+          if(r[k].sub!=='') return _echec(k+' invente un sous-titre : « '+r[k].sub+' »');
+        // Et les valeurs principales n'ont pas bougé : le lot ne touche qu'au
+        // sous-titre.
+        if(r.m1.val!=='—'||r.m3.val!=='—')
+          return _echec('les valeurs ont changé : '+r.m1.val+' / '+r.m3.val);
+        // La tuile vide reste effacée, comme avant.
+        const box=r.m1.n.closest('.metric-box');
+        if(box&&!box.hasAttribute('data-vide'))
+          return _echec('la tuile vide a perdu son effacement');
+        return true;})));
+
+    // ⚠ « / 0 PREVUES » N'EST PAS UN REFERENTIEL, C'EST UN ZERO AFFICHE.
+    // Et le compte NE PASSE PAS par seancesPrevuesParSemaine : elle porte un
+    // Math.max(1,…) parce que ecartNormalJours divise par elle, si bien
+    // qu'elle aurait annoncé « / 1 prévue » à quelqu'un qui n'a aucun créneau.
+    ok('Le quota affiché est le vrai nombre de créneaux actifs, ou rien',(()=>{
+      if(_creneauxPrevus({sessions_config:[]})!==0)
+        return _echec('le compte des créneaux porte un plancher');
+      if(seancesPrevuesParSemaine({sessions_config:[]})!==1)
+        return _echec('le plancher de seancesPrevuesParSemaine a disparu : ecartNormalJours diviserait par zéro');
+      // Aucun créneau : rien du tout.
+      const a=_subFix(_subU({sessions_config:[{active:false},{active:false}]}),r=>r.m1.sub);
+      if(a!=='') return _echec('sans créneau actif, le sous-titre dit « '+a+' »');
+      // Un seul : au singulier.
+      const b=_subFix(_subU({sessions_config:[{active:true},{active:false}]}),r=>r.m1.sub);
+      if(b!=='/ 1 prévue') return _echec('un créneau : « '+b+' »');
+      // Plusieurs : le compte des ACTIFS, pas la longueur du tableau.
+      const c=_subFix(_subU({sessions_config:[{active:true},{active:true},
+        {active:false},{active:true}]}),r=>r.m1.sub);
+      if(c!=='/ 3 prévues') return _echec('trois créneaux actifs sur quatre : « '+c+' »');
+      return true;})());
+
+    // LE MOIS DE LA PREMIERE SEANCE, pas celui de la dernière ni celui du
+    // jour : c'est le seul chiffre de l'écran qui récompense la durée.
+    ok('Le total des séances est daté du mois de la PREMIERE',(()=>{
+      const T=Date.now(), J=864e5;
+      const attendu=new Date(T-400*J).toLocaleDateString('fr-FR',{month:'short',year:'numeric'});
+      const r=_subFix(_subU({sessions:[{date:T-2*J},{date:T-400*J},{date:T-90*J}]}),x=>x.m2);
+      if(r.sub!==attendu) return _echec('« '+r.sub+' » au lieu de « '+attendu+' »');
+      // ⚠ PAS textContent POUR LE CHIFFRE : arcCompteur l'ANIME, et une
+      // lecture synchrone juste apres rend une valeur intermediaire. La
+      // valeur qui fait foi est data-valeur, ecrite AVANT l'animation — le
+      // piege est documente trente ecrans plus haut dans ce fichier.
+      const vv=r.n&&document.getElementById('clh-m2');
+      const val=(vv&&vv.dataset&&vv.dataset.valeur!==undefined)?vv.dataset.valeur:r.val;
+      if(val!=='3') return _echec('le total a changé : '+val);
+      // Aucune séance : aucun mois à nommer, donc rien.
+      if(_subFix(_subU({}),x=>x.m2.sub)!=='')
+        return _echec('sans séance, un mois est inventé');
+      return true;})());
+
+    // LA TENDANCE. Trente jours contre les trente précédents, sur les jours
+    // RÉPONDUS des deux côtés.
+    ok('La tendance de diète compare bien deux fenêtres de trente jours',(()=>{
+      const mk=d=>_subU({sessions:[{date:Date.now()-2*864e5}],
+        nutrition:{mode:'strict',days:d}});
+      // 20 jours à 85 % récents, 20 jours à 60 % le mois d'avant : +25.
+      const h=_subFix(mk(Object.assign(_subJrs(20,0,17),_subJrs(20,30,12))),r=>r.m3);
+      if(h.sub!=='+25 pts') return _echec('hausse : « '+h.sub+' »');
+      if(!h.vert) return _echec('une amélioration n’est pas verte');
+      // L'inverse : −40, et SURTOUT pas de rouge ni de vert.
+      const b=_subFix(mk(Object.assign(_subJrs(20,0,10),_subJrs(20,30,18))),r=>r.m3);
+      if(b.sub!=='−40 pts') return _echec('baisse : « '+b.sub+' »');
+      if(b.vert) return _echec('une baisse est peinte comme une progression');
+      // ⚠ LE SIGNE MOINS (U+2212), pas le trait d'union.
+      if(b.sub.charCodeAt(0)!==0x2212)
+        return _echec('le signe moins est un trait d’union : U+'+b.sub.charCodeAt(0).toString(16));
+      // ⚠ ET JAMAIS DE ROUGE. On ne reproche rien à l'athlète.
+      const co=getComputedStyle(b.n).color;
+      if(/rgb\(2[0-9][0-9],\s*[0-5][0-9]?,/.test(co)||/^rgb\(2[0-4][0-9]/.test(co))
+        return _echec('la baisse est peinte en rouge : '+co);
+      // Égalité : « stable », et rien de plus.
+      const e=_subFix(mk(Object.assign(_subJrs(20,0,15),_subJrs(20,30,15))),r=>r.m3);
+      if(e.sub!=='stable') return _echec('égalité : « '+e.sub+' »');
+      if(e.vert) return _echec('« stable » n’est pas une progression');
+      return true;})());
+
+    // ⚠ ON N'INVENTE PAS UNE TENDANCE QU'ON N'A PAS MESUREE. Moins de sept
+    // jours notés, ou aucun jour répondu le mois d'avant : on dit combien de
+    // jours on a, ce qui est vrai, au lieu d'appeler « stable » un écart
+    // qu'on n'a pas pu calculer.
+    ok('Sans matière à comparer, la diète compte les jours au lieu de conclure',(()=>{
+      const mk=d=>_subU({sessions:[{date:Date.now()-2*864e5}],
+        nutrition:{mode:'strict',days:d}});
+      const a=_subFix(mk(_subJrs(3,0,2)),r=>r.m3.sub);
+      if(a!=='3 jours notés') return _echec('trois jours : « '+a+' »');
+      const un=_subFix(mk(_subJrs(1,0,1)),r=>r.m3.sub);
+      if(un!=='1 jour noté') return _echec('un seul jour, au singulier : « '+un+' »');
+      // Douze jours, mais rien le mois d'avant : pas de comparaison possible.
+      const b=_subFix(mk(_subJrs(12,0,9)),r=>r.m3.sub);
+      if(b!=='12 jours notés') return _echec('sans mois précédent : « '+b+' »');
+      // Aucun jour répondu du tout : aucun sous-titre, et « — » au-dessus.
+      const v=_subFix(mk({}),r=>r.m3);
+      if(v.sub!==''||v.val!=='—') return _echec('sans diète : « '+v.sub+' » / '+v.val);
+      return true;})());
+
+    // ⚠ UN JOUR NON REPONDU N'EST PAS UN JOUR RATE. Le compter ferait tomber
+    // le taux de quelqu'un qui n'a rien fait de mal — c'est la règle de
+    // jourDieteTenu, et le sous-titre doit la suivre, pas la contredire.
+    ok('Les jours non répondus ne pèsent sur aucune des deux fenêtres',(()=>{
+      const J=864e5, T=Date.now();
+      const d=Object.assign(_subJrs(20,0,17),_subJrs(20,30,12));
+      const temoin=_subFix(_subU({sessions:[{date:T-2*J}],
+        nutrition:{mode:'strict',days:d}}),r=>r.m3.sub);
+      // On ajoute dix jours SANS réponse dans chaque fenêtre.
+      // ⚠ SUR DES JOURS LIBRES, ET C'EST TOUT LE SOIN DU TEST. La premiere
+      // version posait le bruit sur 20→34, qui MORD sur les jours 30→34 de
+      // la fenetre precedente : elle effaçait cinq jours repondus au lieu
+      // d'en ajouter d'ignores, et le test tombait sur son propre decor. Les
+      // reponses occupent 0→19 et 30→49 ; le bruit va donc en 20→29 (dans la
+      // fenetre recente) et 50→59 (dans la precedente), sans rien recouvrir.
+      const bruit=Object.assign({},d);
+      for(const dep of [20,50]) for(let i=0;i<10;i++)
+        bruit[localISODate(new Date(T-(dep+i)*J))]={note:'rien'};
+      const avec=_subFix(_subU({sessions:[{date:T-2*J}],
+        nutrition:{mode:'strict',days:bruit}}),r=>r.m3.sub);
+      return temoin===avec?true
+        :_echec('le bruit a changé la tendance : « '+temoin+' » → « '+avec+' »');})());
+
+    // ══ LE SOUS-TITRE TIENT DANS LA TUILE ════════════════════════════════
+    //
+    // ⚠ CE TEST A TROUVE LE DEFAUT, et il reste pour ça. Les libellés
+    // d'origine — « depuis septembre 2026 », « +25 pts vs mois dernier »,
+    // « sur 12 jours notés » — demandaient 130, 126 et 94 px dans une tuile
+    // qui en offre 78 à 320 px et 85 à 390. Ils étaient tronqués à TOUTES les
+    // largeurs de téléphone, donc pour tout le monde et tout le temps.
+    // Un référentiel tronqué n'est plus un référentiel.
+    //
+    // La mesure se fait sur une SONDE à la police du sous-titre, contre le
+    // budget de la tuile la plus étroite : elle ne dépend donc pas de la
+    // largeur de la fenêtre où tourne la suite.
+    ok('Aucun sous-titre de tuile ne dépasse la largeur d\'une tuile',(()=>{
+      const b=document.getElementById('clh-m1-sub');
+      if(!b) return _echec('le sous-titre n’existe plus');
+      const cs=getComputedStyle(b);
+      // La mise en forme demandée : une ligne, et ce qui dépasse est coupé.
+      if(cs.whiteSpace!=='nowrap') return _echec('le sous-titre peut passer à la ligne : '+cs.whiteSpace);
+      if(cs.overflow!=='hidden') return _echec('rien ne borne le débordement : '+cs.overflow);
+      const sonde=document.createElement('span');
+      sonde.style.cssText='position:fixed;left:-9999px;top:0;white-space:nowrap';
+      sonde.style.font=cs.font||(cs.fontWeight+' '+cs.fontSize+' '+cs.fontFamily);
+      sonde.style.fontSize=cs.fontSize; sonde.style.fontFamily=cs.fontFamily;
+      sonde.style.fontWeight=cs.fontWeight; sonde.style.letterSpacing=cs.letterSpacing;
+      document.body.appendChild(sonde);
+      try{
+        // 78 px : la largeur utile de la tuile sur un écran de 320 px, le plus
+        // étroit que le produit vise. Mesurée au navigateur.
+        const BUDGET=78;
+        const large=t=>{ sonde.textContent=t; return sonde.getBoundingClientRect().width; };
+        // LES PIRES CAS DE CHAQUE LIBELLE, pas des exemples commodes.
+        const pires=['/ 12 prévues','/ 1 prévue','sept. 2026','−100 pts','+100 pts',
+          'stable','365 j notés','99 jours notés','1 jour noté'];
+        // Et les douze mois : « sept. » n'est pas le plus large partout.
+        for(let m=0;m<12;m++)
+          pires.push(new Date(2026,m,15).toLocaleDateString('fr-FR',{month:'short',year:'numeric'}));
+        const trop=pires.filter(t=>large(t)>BUDGET)
+          .map(t=>'« '+t+' » '+Math.ceil(large(t))+'px');
+        if(trop.length) return _echec(trop.length+' au-delà de '+BUDGET+'px : '+trop.join(' | '));
+        // TEMOIN : la sonde mesure bien quelque chose. Sans lui, une police
+        // qui ne charge pas rendrait zéro partout et le test passerait à vide.
+        if(!(large('/ 12 prévues')>20))
+          return _echec('la sonde ne mesure rien : police absente ?');
+        return true;
+      } finally { sonde.remove(); }
+    })());
+
+    // ⚠ LE VERT S'EFFACE. _majMetriquesAccueil pose la couleur EN LIGNE et la
+    // retire avec style.color='' — qui SUPPRIME la déclaration au lieu de la
+    // restaurer. C'est pour cela que le gris de base vit dans .clh-m-sub :
+    // une base posée en ligne aurait disparu au premier rendu non-vert, et le
+    // sous-titre serait resté sans couleur. Même piège que #clh-stats.
+    ok('Le vert d\'une progression ne survit pas au rendu suivant',(()=>{
+      const b=document.getElementById('clh-m3-sub');
+      if(!b) return _echec('le sous-titre de la diète n’existe plus');
+      // La mise en forme n'est PAS en ligne dans le gabarit.
+      const src=_prodSrc();
+      if(/id="clh-m[123]-sub"[^>]*style=/.test(src)||/style=[^>]*id="clh-m[123]-sub"/.test(src))
+        return _echec('un sous-titre porte encore une mise en forme en ligne');
+      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent)
+        .join('\n').replace(/\/\*[\s\S]*?\*\//g,' ');
+      if(!/\.clh-m-sub\{[^}]*color:/.test(css))
+        return _echec('la couleur de base n’est pas dans la feuille : elle sera effacée');
+      const mk=d=>_subU({sessions:[{date:Date.now()-2*864e5}],
+        nutrition:{mode:'strict',days:d}});
+      // On peint en vert…
+      _subFix(mk(Object.assign(_subJrs(20,0,17),_subJrs(20,30,12))),r=>r.m3);
+      if(!/34,\s*197,\s*94/.test(getComputedStyle(b).color))
+        return _echec('la progression n’a pas été peinte : le test ne prouve rien');
+      // …puis on rend une baisse SUR LE MEME NOEUD.
+      const ap=_subFix(mk(Object.assign(_subJrs(20,0,10),_subJrs(20,30,18))),
+        r=>getComputedStyle(r.m3.n).color);
+      if(/34,\s*197,\s*94/.test(ap))
+        return _echec('le vert a survécu à une baisse : '+ap);
+      // Et le gris de la feuille a bien repris la main — pas « aucune couleur ».
+      if(!/rgb\(138,\s*138,\s*138\)/.test(ap))
+        return _echec('le sous-titre n’a plus la couleur de la feuille : '+ap);
       return true;})());
 
     // ══ 15/09/2026 — LE BIFRÖST : DES COLONNES, ET PLUS AUCUNE COUPE ═════
