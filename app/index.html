@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1234';
+window.RC_BUILD='1235';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2554,8 +2554,19 @@ body.with-tabbar #rc-ban-install{padding-bottom:9px}
    perdue : le sous-titre juste dessous la porte — « / 3 prévues », le mois du
    depart, « +7 pts ». */
 #clh-stats .metric-box{padding:11px 8px}
-#clh-stats .metric-label{letter-spacing:0;margin-top:4px;line-height:1.2;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ⚠ TROIS CORPS, ET AUCUN SOUS 11 px. Le chiffre garde le sien ; le libelle
+   passe a 12 px et le qualificatif reste a 11 : c'est ce qui donne les trois
+   etages demandes sans franchir le plancher de cet ecran, tenu par une
+   assertion. Descendre le qualificatif a 10 px aurait ete plus simple et
+   aurait creuse la regle. */
+#clh-stats .metric-label{font-size:var(--fs-sm);letter-spacing:0;margin-top:3px;
+  line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* LE QUALIFICATIF S'ENVELOPPE, lui, et c'est voulu : « depuis le début »
+   demande 100 px pour 70 disponibles a 320. Deux lignes de 11 px valent mieux
+   qu'une ligne coupee — et il n'y a ici aucune raison de tenir sur une seule,
+   contrairement au libelle qui doit rester lisible d'un coup d'oeil. */
+#clh-stats .clh-m-sub{white-space:normal;color:var(--text-faint);line-height:1.25;
+  margin-top:2px}
 /* LE SOUS-TITRE D'UNE TUILE : le REFERENTIEL du chiffre au-dessus. « 2 »
    seances ne dit rien ; « 2 » sous « / 3 prevues » dit tout, et sans ajouter
    un mot de plus. Il tient sur UNE ligne — deux feraient grandir la tuile —
@@ -5377,7 +5388,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    milieu : deux corps très différents (20 px et 11 px) centrés l'un sur l'autre
    donnent un libellé qui flotte trop haut. */
 .sk-chiffres{display:grid;grid-template-columns:auto auto;justify-content:start;
-  align-items:baseline;column-gap:6px;row-gap:1px;min-width:0}
+  align-items:baseline;column-gap:4px;row-gap:1px;min-width:0}
 #clh-streak-val{grid-column:1;grid-row:1}
 .sk-lbl{grid-column:2;grid-row:1}
 /* ── LE CAS NUL : « SEMAINE 1 », ET CE QU'IL RESTE A FAIRE ───────────────
@@ -5425,17 +5436,27 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 #clh-streak-val{font-family:var(--pile-titre);font-size:var(--sk-f);line-height:.86;color:var(--text);
   font-variant-numeric:tabular-nums;letter-spacing:.5px;
   text-shadow:0 0 10px rgba(255,255,255,.3)}
-.sk-lbl{font-size:11px;font-weight:800;letter-spacing:2.1px;text-transform:uppercase;
-  color:var(--text);line-height:1}
+/* ⚠ L'INTERLETTRAGE TOMBE AVEC L'ABREVIATION. « SEM. » tenait a 2,1 px ;
+   « SEMAINES » a huit caracteres, et le meme interlettrage poussait le cadre
+   hors de l'en-tete. Le corps ne bouge pas — 11 px est le plancher. */
+.sk-lbl{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--text);line-height:1;white-space:nowrap}
 
 /* ══ « UN SOUCI ? » : TROIS CANAUX ═══════════════════════════════════════
    Trois boutons de meme rang, sur une rangee qui s'enveloppe. Ils ne sont pas
    rouges : ce n'est pas une alerte, c'est une porte — et trois portes rouges
    cote a cote sous un ecran deja rouge ne se distinguent plus de rien. */
-.cct{margin-top:9px}
-.cct-t{font-size:var(--fs-xs);color:var(--red-text);font-weight:700;
-  letter-spacing:.5px;margin-bottom:7px}
-.cct-l{display:flex;flex-wrap:wrap;gap:7px}
+/* LE LIEN, TEL QU'IL ETAIT : leger, rouge, sans cadre. C'est une phrase qu'on
+   touche, pas un bouton qui pese. */
+.cct-lien{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:0;
+  background:none;border:none;cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color:var(--red-text);
+  font-weight:700;letter-spacing:.5px;text-align:left}
+.cct-lien svg{width:13px;height:13px;flex-shrink:0}
+.cct-lien:active{opacity:.7}
+/* Dans la feuille, les canaux s'empilent : on les lit, on en choisit un. */
+.cct-col{display:flex;flex-direction:column;gap:8px}
+.cct-col .cct-b{width:100%}
 /* La cible fait 34 px de haut : sous 32, elle n'est plus viseable au pouce. */
 .cct-b{display:inline-flex;align-items:center;justify-content:center;
   min-height:34px;padding:0 13px;border-radius:var(--r-full);
@@ -9071,7 +9092,12 @@ const COACH_PHOTO='icons/coach.jpg';
   
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <div class="clh-in clh-in-1" style="margin-bottom:28px">
+      <!-- ⚠ LE PREMIER BLOC REMONTE CONTRE LE BANDEAU. Le rembourrage de la
+           zone — 24 px — s'ajoutait a la hauteur du bandeau au-dessus, et le
+           trait rouge flottait au milieu de rien. Il est annule ICI SEULEMENT,
+           par une marge negative : la regle .pad sert vingt autres ecrans, et
+           la changer les aurait tous deplaces. -->
+      <div class="clh-in clh-in-1" style="margin-top:-12px;margin-bottom:22px">
         <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
         <h1 id="clh-greeting" style="font-size:var(--fs-2xl);line-height:1.15;font-weight:400;letter-spacing:1px"></h1>
         <p id="clh-phrase" style="margin-top:7px;font-size:var(--fs-sm);line-height:1.55;color:var(--text-dim);font-style:italic"></p>
@@ -9163,19 +9189,24 @@ const COACH_PHOTO='icons/coach.jpg';
            l'accueil. La mise en page vit dans la feuille (#clh-stats), ou un
            masquage ne peut pas l'effacer. -->
       <div id="clh-stats" class="clh-in clh-in-2">
-        <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Semaine</div>
-          <div class="clh-m-sub" id="clh-m1-sub"></div></div>
+        <!-- TROIS ETAGES : le chiffre, ce qu'il compte, et sur quoi. Le
+             qualificatif est FIXE — « cette semaine », « depuis le début »,
+             « de la diète » — la ou il portait une valeur calculee. Le quota
+             de la semaine a demenage DANS le chiffre : « 5/6 » dit d'un coup
+             ce que « 5 » et « / 6 prévues » disaient en deux endroits. -->
+        <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Séances</div>
+          <div class="clh-m-sub" id="clh-m1-sub">cette semaine</div></div>
         <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances</div>
-          <div class="clh-m-sub" id="clh-m2-sub"></div></div>
-        <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Diète</div>
-          <div class="clh-m-sub" id="clh-m3-sub"></div></div>
+          <div class="clh-m-sub" id="clh-m2-sub">depuis le début</div></div>
+        <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Respect</div>
+          <div class="clh-m-sub" id="clh-m3-sub">de la diète</div></div>
       </div>
 
 
       <!-- DÉMARRER SÉANCE — hero card -->
-      <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:14px 20px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
+      <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:9px 20px 18px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
-        <div class="eyebrow eyebrow-act" style="margin-bottom:10px">Entraînement</div>
+        <div class="eyebrow eyebrow-act" style="margin-bottom:8px">Entraînement</div>
         <!-- ⚠ LA COUPURE EST ECRITE, elle n'est pas subie. Le libelle faisait
              286 px pour 272 disponibles : il se coupait tout seul, mais la ou
              la place manquait — « DÉMARRER MA SÉANCE DU / JOUR » sur un
@@ -9544,6 +9575,20 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- SESSION MANAGER -->
+<!-- ══════ JOINDRE SON COACH ════════════════════════════════════════
+     Trois portes, et l'athlete choisit. Elles ne vivent pas sur l'accueil :
+     posees a demeure, elles y occupaient une rangee entiere pour une
+     question qu'on se pose rarement. -->
+<div id="rc-contact" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
+  onclick="if(event.target===this)fermerContactCoach()" role="dialog" aria-modal="true">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:22px 20px 18px;width:100%;max-width:560px">
+    <div class="rci-t">Joindre ton coach</div>
+    <div class="rci-d" style="margin-bottom:16px">Choisis le canal qui te va.</div>
+    <div id="cct-corps" class="cct-col"></div>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:14px" onclick="fermerContactCoach()">Annuler</button>
+  </div>
+</div>
+
 <!-- ══════ L'ACHAT D'UN PROGRAMME ══════════════════════════════════
      Meme patron que les autres feuilles basses. La case de renonciation
      est OBLIGATOIRE et DECOCHEE a chaque ouverture : elle porte sur CE
@@ -16174,6 +16219,7 @@ function go(id){
   // definition posee par-dessus l'ecran suivant n'explique plus rien.
   try{ rcInfoFermer(true); }catch(e){}
   try{ fermerAchatProgramme(true); }catch(e){}
+  try{ fermerContactCoach(true); }catch(e){}
   // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
   // non au seul accueil coach : un coach qui ouvre l app ailleurs ne passait
   // jamais par loadCoachHome, et sa vitrine restait non publiee sans que rien
@@ -16560,6 +16606,8 @@ function _histFermerCalque(){
   // ouvert. Le retour doit defaire le dernier geste, pas l'avant-dernier.
   const _ah=document.getElementById('rc-achat');
   if(_ah&&_ah.style.display==='flex'&&!_ah.dataset.sortie){ fermerAchatProgramme(); return; }
+  const _ct=document.getElementById('rc-contact');
+  if(_ct&&_ct.style.display==='flex'&&!_ct.dataset.sortie){ fermerContactCoach(); return; }
   const _lx=document.getElementById('rc-lexique');
   if(_lx&&_lx.style.display==='flex'&&!_lx.dataset.sortie){ rcInfoFermer(); return; }
   const _wp=document.getElementById('wo-pause-modal');
@@ -27026,15 +27074,38 @@ function _rendreContactCoach(u,users){
   let titre='';
   try{ const _c=contactCoach(c.src);
     titre=CONTACT_SORTIE+(_c&&_c.horaires?' Réponses : '+_c.horaires:''); }catch(e){}
-  z.innerHTML='<div class="cct"><div class="cct-t">Un souci ? Contacte ton coach</div>'
-    +'<div class="cct-l">'+bouts.map(b=>b[0]==='a'
-      ?'<a class="cct-b" href="'+escapeHtml(b[1])+'" target="_blank" rel="noopener noreferrer" '
-        +'onclick="_journaliserContactCoach()" title="'+escapeHtml(titre)+'">'
-        +escapeHtml(b[2])+'</a>'
-      :'<button type="button" class="cct-b" onclick="'+b[1]+'">'+escapeHtml(b[2])+'</button>'
-    ).join('')+'</div></div>';
+  // ⚠ LES TROIS CANAUX NE S'AFFICHENT PLUS SOUS LE LIEN. Poses a demeure, ils
+  // occupaient une rangee de l'accueil pour une question qu'on se pose
+  // rarement — « ca mange de la place pour rien ». Le lien redevient donc ce
+  // qu'il etait, LEGER, et les trois portes s'ouvrent au clic.
+  z.innerHTML='<button type="button" class="cct-lien" onclick="ouvrirContactCoach()" '
+    +'title="'+escapeHtml(titre)+'">'
+    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    +'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    +'<path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>'
+    +'Un souci ? Contacte ton coach</button>';
+  // Les canaux sont gardes pour l'ouverture de la feuille : les recalculer au
+  // clic relirait le magasin pour rien, et surtout hors du contexte ou la
+  // fonction a ete appelee.
+  _contactBouts=bouts; _contactTitre=titre;
   return true;
 }
+// La feuille des canaux. Elle n'existe qu'au moment ou on la demande.
+let _contactBouts=[], _contactTitre='';
+function ouvrirContactCoach(){
+  const z=document.getElementById('cct-corps');
+  if(!z||!_contactBouts.length) return null;
+  z.innerHTML=_contactBouts.map(b=>b[0]==='a'
+    ?'<a class="cct-b" href="'+escapeHtml(b[1])+'" target="_blank" rel="noopener noreferrer" '
+      +'onclick="_journaliserContactCoach();fermerContactCoach(true)" '
+      +'title="'+escapeHtml(_contactTitre)+'">'+escapeHtml(b[2])+'</a>'
+    :'<button type="button" class="cct-b" onclick="fermerContactCoach(true);'+b[1]+'">'
+      +escapeHtml(b[2])+'</button>').join('');
+  const f=_feuilleOuvrir('rc-contact');
+  try{ const p=document.querySelector('#cct-corps .cct-b'); if(p) p.focus({preventScroll:true}); }catch(e){}
+  return f;
+}
+function fermerContactCoach(tout_de_suite){ _feuilleFermer('rc-contact',tout_de_suite); }
 // Le renvoi est journalise AU CLIC, pas a l'affichage : un bouton vu n'est pas
 // un bouton touche. Le journal vit dans le dossier de l'ATHLETE — c'est le seul
 // document qu'il peut ecrire.
@@ -43960,6 +44031,17 @@ function _dieteFenetre(u,debut,fin){
   }
   return juges?{pct:Math.round(tenus*100/juges),juges:juges}:null;
 }
+// ⚠ CES TROIS FONCTIONS NE SONT PLUS AFFICHEES depuis le 16/09/2026. Les
+// sous-titres des tuiles portaient une valeur calculee — la tendance de diete,
+// le mois de la premiere seance — et portent desormais un qualificatif FIXE :
+// « de la diète », « depuis le début ». Demande de Kevin.
+// ELLES RESTENT, ET C'EST DELIBERE : ce sont des regles de calcul justes,
+// eprouvees par leurs assertions, et la tendance est exactement le genre de
+// chose qu'on veut remettre ailleurs — sur l'ecran Nutrition, par exemple.
+// Les supprimer aurait coute le travail ET les verifications. Ne pas les
+// rebrancher sans le dire : un sous-titre qui redevient calcule change ce que
+// la tuile promet.
+//
 // LE SOUS-TITRE DE LA DIETE. Trente jours contre les trente precedents, sur
 // les jours REPONDUS des deux cotes — compter les jours sans saisie comme des
 // echecs mesurerait l'assiduite de saisie, pas la diete. Meme regle que le
@@ -44032,16 +44114,27 @@ function _majMetriquesAccueil(u){
       // LA VALEUR D'ARRIVEE, ELLE, se lit toujours dans `val` : c'est la
       // SOURCE, pas un affichage, et la nettoyer est legitime. « — » n'a pas de
       // valeur numerique et se pose tel quel, comme avant.
-      const ap=parseFloat(String(val).replace(/[^\d.-]/g,''));
+      // ⚠⚠ UNE VALEUR COMPOSEE NE S'ANIME PAS, ET CE PIEGE A DEJA COUTE.
+      // Le nettoyage `[^\d.-]` rend « 56 » pour « 5/6 » : le compteur
+      // s'emballait jusqu'a 7777777/7, et le commentaire ci-dessus raconte
+      // comment. Depuis que la premiere tuile affiche « 5/6 » — le fait sur le
+      // prevu — la porte est grande ouverte. On la ferme : ce qui porte un
+      // separateur se POSE, il ne se compte pas.
+      const _compose=/\//.test(String(val));
+      const ap=_compose?NaN:parseFloat(String(val).replace(/[^\d.-]/g,''));
       const suf=/%/.test(String(val))?' %':'';
       if(isFinite(ap)) arcCompteur(a,ap,{duree:ARC.release,format:v=>Math.round(v)+suf});
       else { a.textContent=val; try{ delete a.dataset.valeur; }catch(e){} }
       // Le drapeau suit la VALEUR AFFICHEE, pas le calcul : « — » et « 0 » sont
       // les deux facons dont cette app dit « rien ». closest() remonte au
       // conteneur, qui porte le style.
-      a.closest('.metric-box')?.toggleAttribute('data-vide', val==='—'||val==='0');
+      // « 0/3 » EST AUSSI UNE CASE VIDE : c'est la meme chose que « 0 », dite
+      // avec son referentiel. Sans ce cas, la premiere tuile restait en pleine
+      // lumiere pour annoncer qu'il ne s'etait rien passe.
+      a.closest('.metric-box')?.toggleAttribute('data-vide',
+        val==='—'||val==='0'||/^0\//.test(String(val)));
     }
-    if(b){
+    if(b&&sub!==undefined){
       b.textContent=sub||'';
       // ⚠ '' EFFACE LA DECLARATION EN LIGNE, elle ne restaure rien : c'est
       // pour cela que le gris de base vit dans .clh-m-sub. Sans quoi le
@@ -44060,29 +44153,34 @@ function _majMetriquesAccueil(u){
   // a) Cette semaine, contre les creneaux actifs du programme. Aucun creneau,
   //    aucun sous-titre : « / 0 prevues » n'est pas un referentiel, c'est un
   //    zero affiche.
+  // ⚠ LE QUOTA A DEMENAGE DANS LE CHIFFRE. « 5 » surmonte de « / 6 prévues »
+  // disait la meme chose en deux endroits ; « 5/6 » la dit d'un coup, et rend
+  // la troisieme ligne au qualificatif. Sans creneau actif, il n'y a pas de
+  // denominateur a annoncer — le compte seul, comme avant.
   const prevues=_creneauxPrevus(u);
-  const subM1=prevues>0?('/ '+prevues+' prévue'+(prevues>1?'s':'')):'';
   // c) La diete, et sa tendance sur trente jours. Calculee ici pour les deux
   //    branches : le taux existe meme sans une seule seance.
   const di=_tauxDieteRespectee(u);
-  const tM3=_sousTitreTendanceDiete(u,di);
   const valM3=di?(di.pct+' %'):'—';
+  // ⚠ LES QUALIFICATIFS SONT ECRITS DANS LE GABARIT, PAS ICI. Ils sont fixes
+  // — « cette semaine », « depuis le début », « de la diète » — et les
+  // reecrire a chaque rendu n'aurait servi qu'a les faire diverger du jour ou
+  // l'un d'eux changerait dans le HTML. On passe donc `undefined` : met()
+  // laisse alors le sous-titre tel qu'il est.
   if(!ss.length){
-    // Aucune seance : le compteur du total n'a pas de premier mois a nommer.
-    met('clh-m1','—',subM1);
-    met('clh-m2','0','');
-    met('clh-m3',valM3,tM3&&tM3.t,tM3&&tM3.vert);
+    met('clh-m1',prevues>0?('0/'+prevues):'—');
+    met('clh-m2','0');
+    met('clh-m3',valM3);
     return;
   }
   const faites=_seancesCetteSemaine(u);
-  met('clh-m1',String(faites),subM1);
+  met('clh-m1',prevues>0?(faites+'/'+prevues):String(faites));
   // b) Seances au total, et depuis quand. Un compteur qui ne redescend
   //    jamais : c'est le seul chiffre de cet ecran qui recompense la duree
   //    plutot que la semaine en cours. Le MOIS plutot qu'un nombre de jours
   //    — « juil. 2026 » se retient, « depuis 412 jours » se calcule.
-  const _prem=ss.reduce((m,x)=>Math.min(m,x.date),ss[0].date);
-  met('clh-m2',String(ss.length),_moisAnnee(_prem));
-  met('clh-m3',valM3,tM3&&tM3.t,tM3&&tM3.vert);
+  met('clh-m2',String(ss.length));
+  met('clh-m3',valM3);
 }
 // ── Volume par créneau, dans l'onglet Perfs ─────────────────────────────────
 // Le graphique mélangeait tous les créneaux : une séance jambes et une séance
@@ -46599,7 +46697,9 @@ function _streakPerime(u,now){
 // « 0 seance pour la valider », qui serait faux et incomprehensible.
 function affichageStreak(streak,prevues,faites){
   const s=Math.max(0,Math.round(Number(streak)||0));
-  if(s>0) return {valeur:s,libelle:'SEM.',reste:'',nul:false};
+  // « SEMAINES » EN ENTIER. « SEM. » economisait six caracteres et coutait
+  // une abreviation a lire ; le cadre a la place de les ecrire.
+  if(s>0) return {valeur:s,libelle:'SEMAINES',reste:'',nul:false};
   const p=Math.max(1,Math.round(Number(prevues)||1));
   const f=Math.max(0,Math.round(Number(faites)||0));
   const r=Math.max(1,p-f);
@@ -85598,6 +85698,10 @@ document.addEventListener('keydown',e=>{
   const ah=document.getElementById('rc-achat');
   if(ah&&ah.style.display==='flex'&&!ah.dataset.sortie){
     e.preventDefault(); try{ fermerAchatProgramme(); }catch(x){} return;
+  }
+  const ct=document.getElementById('rc-contact');
+  if(ct&&ct.style.display==='flex'&&!ct.dataset.sortie){
+    e.preventDefault(); try{ fermerContactCoach(); }catch(x){} return;
   }
   const lx=document.getElementById('rc-lexique');
   if(lx&&lx.style.display==='flex'&&!lx.dataset.sortie){
