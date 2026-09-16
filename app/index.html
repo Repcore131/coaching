@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1241';
+window.RC_BUILD='1242';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -38076,19 +38076,63 @@ function renderNutriDots(){
   // (l'ancien calcul -getDay()+1 renvoyait le lundi SUIVANT le dimanche)
   wk.setDate(today.getDate()-((today.getDay()+6)%7));
   const days=['L','M','M','J','V','S','D'],nut=currentUser.nutrition||{};
-  // Semaine courante (lundi → dimanche) — même source que _renderStrictDiet : nutrition.days[key].respected
   const weekKeys=days.map((_,i)=>{const dt=new Date(wk);dt.setDate(wk.getDate()+i);return localISODate(dt);});
+  // ══ LE VERDICT SE CALCULE, IL NE SE LIT PAS ══════════════════════════
+  //
+  // ⚠ CETTE LIGNE LISAIT nutrition.days[k].respected, ET C'ETAIT FAUX EN DIETE
+  // FLEXIBLE. `respected` est la reponse a une question quotidienne — « as-tu
+  // tenu ta diete ? » — et personne ne pose cette question a un athlete en
+  // flexible : il enregistre ce qu'il mange, et c'est le journal qui repond.
+  // Les sept pastilles restaient donc grises toute la semaine, et le score
+  // affichait 0/7 a quelqu'un qui tenait ses macros tous les jours.
+  //
+  // jourDieteTenu SAIT LES DEUX REGIMES, et c'est le meme predicat qui sert
+  // deja au camembert de diete, au calendrier du journal et a la fenetre
+  // glissante. Une seule definition : recopier la regle ici aurait fabrique un
+  // cinquieme jugement, et le jour ou la tolerance bougerait, la pastille
+  // aurait contredit le pourcentage qui la resume.
+  //
+  // ⚠ ET ON N'ECRIT RIEN DANS nutrition.days. Le verdict flexible se CALCULE a
+  // la lecture. Le figer reviendrait a graver un jugement que l'ajout d'un
+  // aliment doit pouvoir corriger : l'athlete qui complete son journal le soir
+  // verrait sa journee rester rouge, sans comprendre pourquoi.
+  //
+  // En diete STRICTE, jourDieteTenu relit exactement `respected` et rend le
+  // meme triplet qu'avant — true, false, null. Le rendu ne bouge pas d'un
+  // pixel de ce cote-la ; c'est le meme code pour les deux, et non deux
+  // chemins dont un seul serait teste.
+  const verdicts=weekKeys.map(k=>{
+    try{ return jourDieteTenu(currentUser,k); }catch(e){ return null; }
+  });
   // Le balisage de la ligne est passe dans _htmlLigneDots, partage avec la
   // vue hebdomadaire des habitudes. Meme pastille, meme ordre, meme code —
   // deux rendus de la meme chose auraient diverge des la premiere retouche.
+  // null -> etoile NEUTRE, jamais rouge : un jour sans saisie, ou sans cible a
+  // quoi se comparer, n'est pas un jour rate.
   document.getElementById('clh-nutri-dots').innerHTML=
-    _htmlLigneDots(weekKeys.map(k=>nut.days?.[k]?.respected),26,days);
-  const score=weekKeys.filter(k=>nut.days?.[k]?.respected===true).length;
+    _htmlLigneDots(verdicts,26,days);
+  const tenus=verdicts.filter(v=>v===true).length;
+  const juges=verdicts.filter(v=>v===true||v===false).length;
+  const flexible=typeDiete(nut)==='flexible';
   const scoreEl=document.getElementById('clh-nutri-score');
+  // LE DENOMINATEUR NE COMPTE QUE LES JOURS JUGEABLES, en flexible. Sur sept,
+  // un athlete qui tient ses trois premiers jours de la semaine lirait 3/7 des
+  // le mercredi — quatre jours comptes comme rates avant d'avoir eu lieu. Il
+  // lit 3/3.
+  //
+  // LE DIVISEUR RESTE SEPT EN STRICTE, et c'est delibere : la question
+  // quotidienne est posee chaque jour, une absence de reponse y est une
+  // information, et changer ce cadran-la n'a pas ete demande.
+  const denom=flexible?juges:7;
   // LA VALEUR PRECEDENTE VIENT DE data-valeur, JAMAIS DU TEXTE AFFICHE. Le
   // texte porte une fraction : le nettoyer retirait le « / » et collait le
   // numerateur au denominateur — voir arcCompteur.
-  arcCompteur(scoreEl,score,{duree:ARC.release,format:v=>Math.round(v)+'/7'});
+  //
+  // ZERO JOUR JUGEABLE : on rend le tiret de l'etat vide, pas « 0/0 ». Une
+  // fraction nulle sur nulle se lit comme un echec, alors qu'il n'y a rien a
+  // lire — c'est la meme regle que le taux d'installation de l'ecran mesures.
+  arcCompteur(scoreEl,tenus,{duree:ARC.release,
+    format:denom>0?(v=>Math.round(v)+'/'+denom):(()=>'—')});
   // LE VERT, PAS LE JAUNE DES GLUCIDES. Un score de 5/7 peint dans la couleur
   // exacte de l anneau glucides se lit comme une macro, pas comme un compte de
   // jours tenus. Le vert est la couleur de ce qui est fait, partout ailleurs.

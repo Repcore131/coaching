@@ -23441,8 +23441,158 @@ function testExercices(){
         const src=String(renderNutriDots);
         if(!/_htmlLigneDots/.test(src)) return _echec('la délégation n\'est pas là');
         if(!/clh-nutri-dots/.test(src)) return _echec('l\'élément a changé');
-        if(!/respected/.test(src)) return _echec('la source de données a changé');
+        // ⚠ CETTE LIGNE CHERCHAIT « respected » DANS LE TEXTE DE LA FONCTION,
+        // et le 16/09/2026 elle serait restée verte pour la pire des raisons :
+        // le mot ne survit plus que dans les COMMENTAIRES qui expliquent
+        // pourquoi on ne le lit plus. Le dépôt a déjà payé ce piège plusieurs
+        // fois — une sonde par sous-chaîne finit par trouver son propre
+        // commentaire. On nomme donc le prédicat, et on retire les commentaires
+        // avant de chercher.
+        const nu=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+        if(!/jourDieteTenu/.test(nu)) return _echec('le verdict ne passe plus par le prédicat partagé');
+        if(/respected/.test(nu)) return _echec('le rendu relit « respected » en direct');
         return /clh-nutri-score/.test(src)?true:_echec('le score a disparu');})());
+
+      // ══════════════════════════════════════════════════════════════════
+      // LES SEPT PASTILLES EN DIÈTE FLEXIBLE
+      // ══════════════════════════════════════════════════════════════════
+      //
+      // ⚠ CE QUI ÉTAIT CASSÉ. Les pastilles lisaient nutrition.days[k].respected,
+      // qui est la réponse à une question quotidienne — « as-tu tenu ta
+      // diète ? ». Personne ne pose cette question à un athlète en flexible :
+      // il enregistre ce qu'il mange, et c'est le journal qui répond. Les sept
+      // pastilles restaient donc grises toute la semaine, et le score affichait
+      // 0/7 à quelqu'un qui tenait ses macros tous les jours.
+      ok('En diète flexible, les pastilles suivent le JOURNAL, pas « respected »',(()=>{
+        const _mq=_arcMq; _arcMq={matches:true};   // le compteur pose sa valeur, sans montée
+        const _sv=currentUser, _ss=window.saveUser;
+        try{
+          window.saveUser=()=>true;
+          const auj=new Date(), lundi=new Date(auj);
+          lundi.setDate(auj.getDate()-((auj.getDay()+6)%7));
+          const cle=n=>{const d=new Date(lundi);d.setDate(lundi.getDate()+n);return localISODate(d);};
+          // ⚠ LES CIBLES VIVENT DANS macros.on / macros.off, pas dans macros.
+          // Un `macros:{kcal:…}` posé à plat rend _getEffectiveMacros vide, et
+          // TOUS les jours deviennent « non jugeables » : l'assertion aurait
+          // été verte sur sept pastilles grises.
+          const cib={kcal:2000,p:150,g:200,l:60};
+          const repas=(k,p,c,l)=>({kcal:k,p:p,c:c,l:l});
+          currentUser={id:'nf',email:'nf@t',role:'athlete',exAlias:{},exMuscles:{},
+            programs:{},sessions:[],bilans:[],
+            nutrition:{dietType:'flexible',macros:{on:cib,off:cib},days:{},log:{}}};
+          const lire=()=>{
+            renderNutriDots();
+            const d=[...document.querySelectorAll('#clh-nutri-dots > div > div:first-child')]
+              .map(x=>x.dataset.etat||'?').join('');
+            return {dots:d,score:document.getElementById('clh-nutri-score').textContent};
+          };
+          // 1. RIEN DE SAISI : sept étoiles neutres, et un TIRET — pas « 0/0 »,
+          //    qui se lirait comme un échec alors qu'il n'y a rien à lire.
+          let e=lire();
+          if(e.dots!=='ggggggg') return _echec('au départ : '+e.dots);
+          if(e.score!=='—') return _echec('au départ : '+e.score);
+          // 2. Un jour PILE sur ses cibles : vert, et le dénominateur ne compte
+          //    que lui. 1/1, et non 1/7 — six jours comptés comme ratés avant
+          //    d'avoir eu lieu.
+          currentUser.nutrition.log[cle(0)]={entries:[repas(2000,150,200,60)]};
+          e=lire();
+          if(e.dots[0]!=='v') return _echec('jour tenu : '+e.dots);
+          if(e.score!=='1/1') return _echec('jour tenu : '+e.score);
+          // 3. Un jour dans la tolérance : vert aussi. Le seuil est DÉRIVÉ de
+          //    la constante — un pourcentage écrit à la main ici finirait par
+          //    juger autrement que le code.
+          const bas=Math.round(2000*(1-DIETE_TOLERANCE*0.8));
+          currentUser.nutrition.log[cle(1)]={entries:[repas(bas,Math.round(150*(1-DIETE_TOLERANCE*0.8)),190,58)]};
+          e=lire();
+          if(e.dots.slice(0,2)!=='vv') return _echec('dans la tolérance : '+e.dots);
+          if(e.score!=='2/2') return _echec('dans la tolérance : '+e.score);
+          // 4. Protéines trop basses : ROUGE. L'énergie seule ne suffit pas.
+          currentUser.nutrition.log[cle(2)]={entries:[repas(2000,90,260,60)]};
+          e=lire();
+          if(e.dots.slice(0,3)!=='vvr') return _echec('protéines basses : '+e.dots);
+          if(e.score!=='2/3') return _echec('protéines basses : '+e.score);
+          // 5. LES JOURS SANS SAISIE RESTENT NEUTRES, JAMAIS ROUGES.
+          if((e.dots.match(/g/g)||[]).length!==4)
+            return _echec('les jours vides ne sont pas neutres : '+e.dots);
+          // 6. ⚠ LA RAISON POUR LAQUELLE LE VERDICT NE SE STOCKE PAS. Ajouter
+          //    un aliment le soir doit CORRIGER la journée : un verdict figé
+          //    aurait laissé la pastille rouge, sans que rien ne l'explique.
+          currentUser.nutrition.log[cle(2)].entries.push(repas(0,60,0,0));
+          e=lire();
+          if(e.dots.slice(0,3)!=='vvv') return _echec('après ajout : '+e.dots);
+          if(e.score!=='3/3') return _echec('après ajout : '+e.score);
+          // 7. ET RIEN N'A ÉTÉ ÉCRIT. Le verdict se calcule à la lecture.
+          if(Object.keys(currentUser.nutrition.days).length)
+            return _echec('nutrition.days a été écrit : '
+              +JSON.stringify(currentUser.nutrition.days).slice(0,120));
+          return true;
+        } finally { currentUser=_sv; window.saveUser=_ss; _arcMq=_mq; }})());
+
+      ok('Sans cible, un jour ne se juge pas — et ne devient pas rouge',(()=>{
+        // `null` n'est pas `false`. Un jour sans cible à quoi se comparer n'est
+        // pas un jour raté : c'est un jour dont on ne sait rien, et le compter
+        // ferait tomber le score de quelqu'un qui n'a rien fait de mal.
+        const _mq=_arcMq; _arcMq={matches:true};
+        const _sv=currentUser, _ss=window.saveUser;
+        try{
+          window.saveUser=()=>true;
+          const auj=new Date(), lundi=new Date(auj);
+          lundi.setDate(auj.getDate()-((auj.getDay()+6)%7));
+          const k=localISODate(lundi);
+          currentUser={id:'ns',email:'ns@t',role:'athlete',exAlias:{},exMuscles:{},
+            programs:{},sessions:[],bilans:[],
+            nutrition:{dietType:'flexible',macros:{on:{},off:{}},days:{},
+              log:{[k]:{entries:[{kcal:2000,p:150,c:200,l:60}]}}}};
+          if(jourDieteTenu(currentUser,k)!==null)
+            return _echec('un jour sans cible est jugé : '+jourDieteTenu(currentUser,k));
+          renderNutriDots();
+          const d=[...document.querySelectorAll('#clh-nutri-dots > div > div:first-child')]
+            .map(x=>x.dataset.etat||'?').join('');
+          if(/r/.test(d)) return _echec('du rouge sans cible : '+d);
+          if(d!=='ggggggg') return _echec('pastilles : '+d);
+          return document.getElementById('clh-nutri-score').textContent==='—'
+            ?true:_echec('score : '+document.getElementById('clh-nutri-score').textContent);
+        } finally { currentUser=_sv; window.saveUser=_ss; _arcMq=_mq; }})());
+
+      ok('Les pastilles et le camembert de diète disent la MÊME chose',(()=>{
+        // UNE SEULE DÉFINITION. Le camembert, le calendrier du journal, la
+        // fenêtre glissante et maintenant les sept pastilles passent tous par
+        // jourDieteTenu. Recopier la règle aurait fabriqué un jugement de plus,
+        // et le jour où la tolérance bougerait, la pastille aurait contredit le
+        // pourcentage qui la résume.
+        const auj=new Date(), lundi=new Date(auj);
+        lundi.setDate(auj.getDate()-((auj.getDay()+6)%7));
+        const cle=n=>{const d=new Date(lundi);d.setDate(lundi.getDate()+n);return localISODate(d);};
+        const cib={kcal:2000,p:150,g:200,l:60};
+        const u={id:'nc',email:'nc@t',role:'athlete',
+          nutrition:{dietType:'flexible',macros:{on:cib,off:cib},days:{},log:{
+            [cle(0)]:{entries:[{kcal:2000,p:150,c:200,l:60}]},
+            [cle(1)]:{entries:[{kcal:2000,p:90,c:260,l:60}]},
+            [cle(2)]:{entries:[{kcal:1950,p:148,c:195,l:59}]}}}};
+        const verdicts=[0,1,2,3,4,5,6].map(n=>jourDieteTenu(u,cle(n)));
+        const tenus=verdicts.filter(v=>v===true).length;
+        const juges=verdicts.filter(v=>v===true||v===false).length;
+        const r=_tauxDieteRespectee(u);
+        if(!r) return _echec('le camembert ne rend rien');
+        if(r.tenus!==tenus||r.juges!==juges)
+          return _echec('camembert '+r.tenus+'/'+r.juges+' contre pastilles '+tenus+'/'+juges);
+        // Et le sous-titre annonce la MÊME tolérance que celle qui a jugé.
+        const st=_sousTitreDiete(r);
+        return st.indexOf(Math.round(DIETE_TOLERANCE*100)+' %')>=0
+          ?true:_echec('le sous-titre annonce autre chose : '+st);})());
+
+      ok('Le rendu des pastilles n’écrit RIEN dans le dossier',(()=>{
+        // Le verdict flexible se CALCULE à la lecture. Le stocker figerait un
+        // jugement que l'ajout d'un aliment doit pouvoir corriger — et
+        // renderNutriDots n'a aucune raison de toucher au dossier de qui que
+        // ce soit.
+        const nu=String(renderNutriDots).replace(/\/\/[^\n]*/g,'');
+        for(const ecrit of ['saveUser','nutrition.days[','days[k]=','respected=','DB.set'])
+          if(nu.indexOf(ecrit)>=0) return _echec('le rendu écrit : '+ecrit);
+        const njdt=String(jourDieteTenu).replace(/\/\/[^\n]*/g,'');
+        for(const ecrit of ['saveUser','DB.set','=true;','push('])
+          if(njdt.indexOf(ecrit)>=0) return _echec('le prédicat écrit : '+ecrit);
+        return true;})());
       ok('La ligne de pastilles rend bien sept jours',(()=>{
         const h=_htmlLigneDots([true,false,null,true,true,false,null],28);
         return (h.match(/<svg/g)||[]).length===7
