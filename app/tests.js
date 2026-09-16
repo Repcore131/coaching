@@ -31399,6 +31399,181 @@ function testExercices(){
         return _echec('l’aperçu de relecture ne passe pas par la même source');
       return true;})());
 
+    // ══ 16/09/2026 — L'ACHAT, ET LE NETTOYAGE DES FONDATIONS POSEES ═════
+    //
+    // ⚠ CE QUE LE PLAN SPARK NE PERMET PAS, et qu'il faut savoir avant que de
+    // l'argent circule : sans fonction serveur, RIEN NE VERIFIE UN ACHAT COTE
+    // SERVEUR. `programmesAchetes` est un champ du dossier, et les règles RTDB
+    // accordent au titulaire l'écriture sans restriction de champ. C'est le
+    // MÊME arbitrage, déjà assumé, que pour `status` côté abonnement — voir le
+    // « point dur » du §4 de la note de décision économique. Ces assertions
+    // vérifient donc ce qui EST vérifiable : que les verrous d'interface
+    // tiennent, et qu'aucun chemin ne les contourne.
+
+    const _achFix=(u,f)=>{
+      const _cu=currentUser,_db=DB.get('users');
+      try{ currentUser=u; DB.set('users',{[u.email]:u}); return f(); }
+      finally{ currentUser=_cu; if(_db) DB.set('users',_db);
+        try{ fermerAchatProgramme(true); }catch(e){} }
+    };
+    const _achU=o=>Object.assign({email:'ach@t.fr',id:'h1',role:'athlete',
+      fname:'H',gender:'H',bilans:[]},o||{});
+
+    ok('Un programme payant n\'est acquis qu\'une fois payé',(()=>_achFix(_achU(),()=>{
+      const u=currentUser;
+      if(RC_BOUTIQUE_GRATUITE) return _echec('la boutique est encore en accès libre');
+      if(programmeAcquis(u,'fondations')) return _echec('acquis sans achat');
+      // ⚠ PAS D'HERITAGE D'Object.prototype : la clé vient d'une donnée.
+      u.programmesAchetes={};
+      if(programmeAcquis(u,'toString')) return _echec('une clé héritée vaut achat');
+      // Un programme à zéro euro est libre, et c'est voulu : Kevin pourra en
+      // publier un gratuit sans inventer un second mécanisme.
+      if(!programmeAcquis(u,'__zero')&&programmeDuCatalogue('__zero'))
+        return _echec('un programme gratuit devrait être libre');
+      u.programmesAchetes={fondations:{le:Date.now(),prixCts:1490,ordre:'X'}};
+      if(!programmeAcquis(u,'fondations')) return _echec('l’achat n’est pas reconnu');
+      // Un achat « faux » (valeur tombée à false) ne vaut pas acquis.
+      u.programmesAchetes={fondations:false};
+      return !programmeAcquis(u,'fondations')?true:_echec('un achat vide vaut acquis');})));
+
+    // ⚠ LE DERNIER VERROU EST DANS appliquerProgramme, PAS DANS LE BOUTON. La
+    // carte n'affiche « Appliquer » que sur un programme acquis, mais un appel
+    // direct contournerait l'affichage — même discipline que la case de
+    // renonciation, verrouillée deux fois elle aussi.
+    ok('Appliquer un programme non payé n\'écrit rien et propose de l\'acheter',(()=>
+      _achFix(_achU({sessions_config:_seancesViergesSemaine()}),()=>{
+        appliquerProgramme('fondations');
+        const sc=currentUser.sessions_config||[];
+        if(sc.some(x=>x.active)) return _echec('des séances ont été écrites sans achat');
+        const z=document.getElementById('rc-achat');
+        if(!z||z.style.display!=='flex') return _echec('la feuille d’achat ne s’ouvre pas');
+        // Et le verrou est bien dans la fonction, pas seulement dans la carte.
+        if(String(appliquerProgramme).indexOf('programmeAcquis')<0)
+          return _echec('appliquerProgramme ne vérifie pas l’acquisition');
+        return true;})));
+
+    // LA RENONCIATION AU DROIT DE RETRACTATION. Elle porte sur CE contenu-là :
+    // une case cochée lors d'un achat précédent ne vaut pas pour celui-ci.
+    ok('La case de renonciation est décochée à chaque ouverture, et verrouille deux fois',(()=>
+      _achFix(_achU(),()=>{
+        const c=document.getElementById('ach-cgv'), b=document.getElementById('ach-paypal');
+        if(!c||!b) return _echec('la feuille d’achat n’existe pas');
+        c.checked=true;                       // reste d'un achat précédent
+        ouvrirAchatProgramme('fondations');
+        if(c.checked) return _echec('la case survit d’un achat à l’autre');
+        if(b.style.display!=='none') return _echec('PayPal s’affiche sans la case');
+        c.checked=true; _majBoutonAchat();
+        if(b.style.display==='none') return _echec('PayPal reste caché une fois coché');
+        // ⚠ DEUXIEME VERROU : masquer ne suffit pas, un clic programmatique
+        // contournerait l'affichage. createOrder refuse aussi.
+        const f=String(_rendreBoutonAchat);
+        if(f.indexOf('ach-cgv')<0||f.indexOf('c.checked')<0)
+          return _echec('createOrder ne vérifie pas la case');
+        // Et le texte dit ce qu'il doit dire.
+        const t=document.querySelector('label[for="ach-cgv"]').textContent;
+        for(const mot of ['rétractation','14 jours','conditions générales'])
+          if(t.indexOf(mot)<0) return _echec('la mention ne dit pas « '+mot+' »');
+        return true;})));
+
+    // ⚠ LES DEUX SDK PAYPAL NE PEUVENT PAS PARTAGER LE MEME NOM. L'abonnement
+    // charge `vault=true&intent=subscription`, l'achat `intent=capture` :
+    // charger le second par-dessus écraserait l'un des deux selon l'ordre
+    // d'arrivée, et le défaut ne se verrait que sur l'écran non testé.
+    ok('L\'achat charge son propre SDK PayPal, sous son propre nom',(()=>{
+      const f=String(_chargerPaypalAchat);
+      if(f.indexOf('paypal-sdk-achat')<0) return _echec('le script n’a pas son propre identifiant');
+      if(f.indexOf('data-namespace')<0||f.indexOf('paypalAchat')<0)
+        return _echec('le SDK d’achat écraserait celui de l’abonnement');
+      if(f.indexOf('intent=capture')<0) return _echec('l’achat n’est pas un paiement unique');
+      if(/vault=true|intent=subscription/.test(f)) return _echec('l’achat charge un SDK d’abonnement');
+      // Le SDK de l'abonnement, lui, n'a pas bougé.
+      const a=String(initPaypalSubscription);
+      if(a.indexOf('intent=subscription')<0) return _echec('le flux d’abonnement a été touché');
+      // ⚠ LE MONTANT SE CONSTRUIT DEPUIS LES CENTIMES. Passer un flottant est
+      // le chemin le plus court vers un ordre à 14.899999999999999.
+      const r=String(_rendreBoutonAchat);
+      if(r.indexOf('prixCts/100).toFixed(2)')<0)
+        return _echec('le montant n’est pas construit depuis les centimes');
+      return true;})());
+
+    ok('Le coach seul peut appliquer un programme sans payer',(()=>{
+      const h=_achFix(_achU(),()=>_htmlActionProgramme(programmeDuCatalogue('fondations')));
+      if(/offrirProgramme/.test(h)) return _echec('un athlète voit le bouton du coach');
+      if(h.indexOf('ouvrirAchatProgramme')<0) return _echec('un athlète ne peut pas acheter');
+      const hk=_achFix(_achU({email:CREATOR_EMAIL,role:'coach'}),
+        ()=>_htmlActionProgramme(programmeDuCatalogue('fondations')));
+      if(!/offrirProgramme/.test(hk)) return _echec('le coach ne peut pas offrir son programme');
+      // ⚠ ET LE GARDE EST DANS LA FONCTION, pas seulement dans l'affichage.
+      const f=String(offrirProgramme);
+      if(f.indexOf('CREATOR_EMAIL')<0) return _echec('offrirProgramme ne vérifie pas qui appelle');
+      return true;})());
+
+    // ══ LE NETTOYAGE DES FONDATIONS POSEES D'OFFICE ═════════════════════
+    //
+    // « Tous les gens connectés actuellement avec le programme débutant, clean
+    // le programme et laisse le modèle vide. » — Kevin, 16/09/2026.
+    //
+    // ⚠ ON NE NETTOIE QUE CE QUE PERSONNE N'A TOUCHE. Effacer par erreur des
+    // semaines de travail est le défaut que ce fichier documente à cinq
+    // endroits. Les quatre cas de protection sont éprouvés un par un.
+    ok('Le nettoyage efface une Fondation intacte, et RIEN d\'autre',(()=>{
+      const _cu=currentUser,_db=DB.get('users');
+      try{
+        const poser=F=>F.map(x=>({...x,exercises:x.exercises.map(e=>({...e})),_essai:true}));
+        const mettre=sc=>{ currentUser={email:'n@t.fr',id:'n1',role:'athlete',
+          gender:'H',sessions_config:sc}; DB.set('users',{'n@t.fr':currentUser}); };
+        // 1. LE CAS VISE : une Fondation posée d'office, jamais touchée.
+        mettre(poser(FONDATION_H));
+        if(!_nettoyerFondationPosee()) return _echec('une Fondation intacte n’est pas nettoyée');
+        if(currentUser.sessions_config.some(x=>x.active))
+          return _echec('des séances actives survivent au nettoyage');
+        if(currentUser.sessions_config.length!==7)
+          return _echec('la grille ne fait plus sept jours');
+        // IDEMPOTENTE : la grille vidée, il n'y a plus rien à faire.
+        if(_nettoyerFondationPosee()) return _echec('le nettoyage se rejoue sur une grille vide');
+        // La version Femme aussi.
+        mettre(poser(FONDATION_F));
+        if(!_nettoyerFondationPosee()) return _echec('la Fondation Femme n’est pas nettoyée');
+        // 2. MODIFIEE : un seul exercice renommé suffit à la protéger.
+        const mod=poser(FONDATION_H); mod[0].exercises[0].name='MON EXERCICE À MOI';
+        mettre(mod);
+        if(_nettoyerFondationPosee()) return _echec('une Fondation modifiée a été effacée');
+        // 3. UN PROGRAMME PERSO marqué _essai par accident reste intouché : le
+        //    marqueur ne suffit pas, le CONTENU doit être celui d'une Fondation.
+        const perso=_seancesViergesSemaine();
+        perso[0]={...perso[0],active:true,name:'MON PROGRAMME',_essai:true,
+          exercises:[{name:'SOULEVÉ DE TERRE',series:5,reps:'5'}]};
+        mettre(perso);
+        if(_nettoyerFondationPosee()) return _echec('un programme personnel a été effacé');
+        // 4. SANS MARQUEUR : une Fondation publiée par un coach est protégée,
+        //    parce que _marquerCommePublie retire _foundation à la publication.
+        const pub=FONDATION_F.map(x=>({...x,exercises:x.exercises.map(e=>({...e}))}));
+        pub.forEach(x=>{ delete x._foundation; delete x._essai; });
+        mettre(pub);
+        if(_nettoyerFondationPosee()) return _echec('une Fondation publiée a été effacée');
+        // 5. Les entrées absurdes ne lèvent pas.
+        for(const v of [null,undefined,[],'x',42])
+          if(_estFondationPosee(v)) return _echec('une grille absurde est prise pour une Fondation');
+        return true;
+      } finally { currentUser=_cu; if(_db) DB.set('users',_db); }})());
+
+    // ⚠ ET LE GESTE EST REVERSIBLE. Un nettoyage qu'on ne peut pas défaire
+    // serait exactement la perte silencieuse que ce fichier combat.
+    ok('Le nettoyage laisse la grille d\'avant dans l\'historique',(()=>{
+      const f=String(_nettoyerFondationPosee);
+      if(f.indexOf('_pushSessionsHistory')<0)
+        return _echec('rien ne permet de revenir en arrière');
+      // Et la fonction de pose automatique a bien DISPARU : c'était le
+      // troisième chemin, et il avait survécu au lot qui a fermé les deux
+      // autres parce qu'il ne cite pas FONDATION — il appelait
+      // initSessionsConfig.
+      const src=_prodSrc();
+      if(src.indexOf('_migrateFoundationIfNeeded(')>=0)
+        return _echec('l’ancienne pose automatique est encore appelée');
+      if(f.indexOf('initSessionsConfig')>=0)
+        return _echec('le nettoyage repasse par la fabrique de grilles');
+      return true;})());
+
     // ══ 16/09/2026 — LA BOUTIQUE DE PROGRAMMES ══════════════════════════
     //
     // Les séances naissent vierges ; il faut donc une porte pour ceux qui ne
@@ -31462,21 +31637,41 @@ function testExercices(){
       if(f.seances('H')!==f.seances('')) return _echec('un genre vide ne retombe pas sur Homme');
       return true;})());
 
+    // ⚠ CETTE ASSERTION LAISSAIT LA FEUILLE D'ACHAT OUVERTE, et c'est une
+    // assertion VOISINE qui est tombée : celle d'Échap sur le lexique. Depuis
+    // que appliquerProgramme propose l'achat au lieu d'appliquer, l'appel
+    // ouvrait « rc-achat » et personne ne le refermait — Échap fermait donc la
+    // feuille d'achat restée là, et le lexique ne bougeait pas.
+    // UN TEST QUI OUVRE UN CALQUE LE REFERME. Toujours, et dans un finally.
     ok('Appliquer un programme le COPIE, et ne touche jamais au catalogue',(()=>{
       const _u=currentUser,_db=DB.get('users');
       try{
         currentUser={email:'bq@t.fr',id:'b1',role:'athlete',fname:'B',gender:'H',
-          sessions_config:_seancesViergesSemaine()};
+          sessions_config:_seancesViergesSemaine(),
+          // Acquis : sinon on mesure le verrou d'achat, pas la copie.
+          programmesAchetes:{fondations:{le:Date.now(),prixCts:1490,ordre:'T'}}};
         DB.set('users',{'bq@t.fr':currentUser});
         const pr=appliquerProgramme('fondations');
         if(!pr||typeof pr.then!=='function') return _echec('appliquerProgramme ne rend pas de promesse');
-        // La suite ne peut pas attendre ici : on vérifie l'écriture SYNCHRONE
-        // qui précède le premier await, puis la copie profonde sur la
-        // constante — qui, elle, doit rester intacte quoi qu'il arrive.
+        // L'écriture est SYNCHRONE quand la grille est vide : aucune question
+        // n'est posée, donc rien n'attend.
+        const sc=currentUser.sessions_config||[];
+        if(!sc.some(x=>x.active&&(x.exercises||[]).length))
+          return _echec('le programme n’a pas été appliqué');
+        // ⚠ COPIE PROFONDE. Le fichier a déjà eu ce bug deux fois : sans
+        // clone, le premier exercice modifié par l'athlète modifie le
+        // catalogue pour tout le monde jusqu'au rechargement.
         const av=FONDATION_H[0].exercises[0].name;
         if(!av) return _echec('la Fondation Homme est vide : le test ne prouve rien');
+        sc.filter(x=>x.active)[0].exercises[0].name='ÉCRASÉ PAR LE TEST';
+        if(FONDATION_H[0].exercises[0].name!==av)
+          return _echec('la constante a été modifiée : la copie est de surface');
+        // Les marqueurs d'exemple tombent : quelqu'un l'a choisi.
+        if(sc.some(x=>x._essai||x._foundation))
+          return _echec('le programme appliqué est encore marqué « exemple »');
         return true;
-      } finally { currentUser=_u; if(_db) DB.set('users',_db); }})());
+      } finally { currentUser=_u; if(_db) DB.set('users',_db);
+        try{ fermerAchatProgramme(true); }catch(e){} }})());
 
     // LE LIEN DE CONTACT. wa.me attend le numéro au format international SANS
     // le « + » ; un « + » ou un espace casse le lien silencieusement — il
@@ -31511,8 +31706,16 @@ function testExercices(){
     ok('La boutique rend une carte par programme, et rien d\'inventé',(()=>{
       const h=_htmlCarteProgramme(programmeDuCatalogue('fondations'));
       if(!h) return _echec('aucune carte rendue');
-      for(const t of ['bq-carte','bq-dev','bq-prix','APPLIQUER CE PROGRAMME'])
+      for(const t of ['bq-carte','bq-dev','bq-prix'])
         if(h.indexOf(t)<0) return _echec('la carte ne porte pas « '+t+' »');
+      // ⚠ LE BOUTON DEPEND DESORMAIS DE L'ACQUISITION : « Acheter » tant que
+      // le programme n'est pas paye, « Appliquer » ensuite. L'assertion
+      // mesurait le contrat d'avant le paiement ; elle exige maintenant qu'il
+      // y ait UNE action, et une seule.
+      const act=(h.indexOf('ouvrirAchatProgramme')>=0?1:0)
+        +(h.indexOf('appliquerProgramme')>=0?1:0);
+      if(act!==1) return _echec(act+' action(s) sur la carte : '
+        +(h.match(/onclick="[^"]*"/g)||[]).join(' | '));
       // ⚠ LA DEVANTURE SE RETIRE ELLE-MEME SI LE FICHIER MANQUE. L'image n'est
       // pas dans le dépôt — elle a été envoyée dans la conversation, et rien
       // ne permet d'écrire un fichier depuis une image collée ; c'est le même
@@ -31538,9 +31741,18 @@ function testExercices(){
         return _echec('une entrée nulle rend du balisage');
       // ⚠ TOUT PASSE PAR escapeHtml : un jour un programme viendra d'ailleurs
       // que d'une constante gelée — Kevin veut mettre les siens en vente.
+      // ⚠ L'ECHAPPEMENT DE L'IDENTIFIANT A DEMENAGE avec le bouton : il vit
+      // dans _htmlActionProgramme, qui construit l'action. On vérifie donc
+      // chaque champ LA OU IL EST ECRIT — une assertion qui suit la structure
+      // plutôt qu'une fonction nommée survit au prochain découpage.
       const f=String(_htmlCarteProgramme);
-      for(const ch of ['p.accroche','p.description','p.id'])
-        if(f.indexOf('escapeHtml('+ch+')')<0) return _echec(ch+' n’est pas échappé');
+      for(const ch of ['p.accroche','p.description','p.nom'])
+        if(f.indexOf('escapeHtml('+ch+')')<0&&f.indexOf('escapeHtml(p.nom||\'\')')<0)
+          return _echec(ch+' n’est pas échappé dans la carte');
+      const g=String(_htmlActionProgramme);
+      if(g.indexOf('escapeHtml(p.id)')<0) return _echec('p.id n’est pas échappé dans l’action');
+      // Et l'identifiant est bien celui qui part dans le onclick.
+      if(h.indexOf("('fondations')")<0) return _echec('l’action ne porte pas l’identifiant');
       return true;})());
 
     // LA PORTE. Une boutique qu'on n'atteint pas ne vend rien — et elle est
