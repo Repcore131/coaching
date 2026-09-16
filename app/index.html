@@ -10662,6 +10662,32 @@ const CLOUD={
   //
   // Chaque échec ENFILE : le profil repartira au retour du réseau, sans que
   // le coach ait à rouvrir l’écran où il a saisi.
+  // La vitrine telle qu'elle est EN LIGNE. Rend null si elle est injoignable —
+  // et pushProfilCoach repart alors de la memoire seule, comme avant : mieux
+  // vaut republier ce qu'on sait que ne rien republier du tout.
+  //
+  // ⚠ ELLE NE S'APPELLE PAS pullProfilCoach, ET C'EST DELIBERE. Ce nom EXISTE
+  // DEJA sur cet objet, 130 lignes plus bas : il prend une CLEF (adresse a
+  // virgules) la ou celle-ci prend une adresse, et il MET EN CACHE le resultat
+  // dans rc_coach_profil — un cache destine a l'appareil de l'ATHLETE, qui
+  // reecrirait ici toute la vitrine du coach dans un stockage local deja
+  // sature. Deux clefs du meme nom dans un objet litteral : la derniere gagne,
+  // sans erreur, sans avertissement. La premiere version de ce correctif a
+  // vecu ainsi, sans jamais s'appliquer.
+  async _lireVitrineDistante(email){
+    if(!email) return null;
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      if(!token) return null;
+      const r=await fetch(this._urlProfilCoach(email.replace(/\./g,','))+'?auth='+token,
+        {signal:ctrl.signal});
+      if(!r.ok) return null;
+      const t=await r.text();
+      try{ _quotaCompter('in',t.length); }catch(e){}
+      return t?JSON.parse(t):null;
+    }catch(e){ return null; }
+  },
   async pushProfilCoach(user){
     const u=user||currentUser;
     if(!u||u.role!=='coach'||!u.email) throw new Error('Profil public : aucun coach à publier.');
@@ -10670,8 +10696,29 @@ const CLOUD={
       this._enfilerProfil(u.email);
       throw new Error('Non connecté : le profil public n\'a pas été publié.');
     }
+    // ⚠ CE PUT RECONSTRUISAIT LE PROFIL ENTIER DEPUIS LA SEULE MEMOIRE, et
+    // c'est la seconde cause de disparition — la plus silencieuse des deux.
+    //
+    // `coach_public` est remplace en bloc a CHAQUE sauvegarde : identite,
+    // disponibilite, telephone, contact, banniere. Tout champ absent de
+    // `currentUser` a cet instant precis disparaissait donc de la vitrine, sans
+    // erreur ni trace. Une seule sauvegarde de la disponibilite, faite depuis
+    // un appareil dont le dossier en memoire ne portait pas encore la photo,
+    // effacait la photo, la signature, la carte pro et les diplomes pour TOUS
+    // les athletes.
+    //
+    // ON REPART DONC DU PROFIL DISTANT, et on n'y superpose que ce que cet
+    // appareil CONNAIT. La distinction est celle de la fusion des dossiers, et
+    // elle est exactement la bonne ici :
+    //   · undefined  → cet appareil ne sait pas. On garde ce qui est en ligne.
+    //   · ''         → un effacement VOLONTAIRE (le bouton ✕ de la vitrine).
+    //                  Il doit passer, sinon plus rien ne s'efface jamais.
+    const distant=await this._lireVitrineDistante(u.email);
     const profil={};
-    for(const c of this.CHAMPS_PROFIL_COACH) if(u[c]!=null) profil[c]=u[c];
+    if(distant&&typeof distant==='object')
+      for(const c of this.CHAMPS_PROFIL_COACH)
+        if(distant[c]!==undefined&&distant[c]!==null) profil[c]=distant[c];
+    for(const c of this.CHAMPS_PROFIL_COACH) if(u[c]!==undefined&&u[c]!==null) profil[c]=u[c];
     profil.maj=Date.now();
     let r;
     try{
@@ -74366,13 +74413,22 @@ function apercuVitrineCoach(){
   goAvecRetour('s-vitrine');
 }
 function saveCoachIdentity(){
-  const name=(document.getElementById('coach-team-name')?.value||'').trim();
-  const phrase=(document.getElementById('coach-catchphrase')?.value||'').trim();
-  currentUser.teamName=name;
-  currentUser.catchphrase=phrase;
-  // Vitrine. On lit ce qui est present : l'editeur peut ne pas etre rendu
-  // quand saveCoachIdentity part d'un autre chemin.
+  // ⚠ CES DEUX CHAMPS-LA ETAIENT ECRITS SANS CONDITION, et c'est la premiere
+  // cause de disparition. `?.value||''` rend la chaine VIDE quand l'editeur
+  // n'est pas dans le document — et la ligne suivante l'ecrivait par-dessus le
+  // nom de la team. La garde existait deja trois lignes plus bas, posee pour
+  // la bio et la vision : elle n'avait simplement jamais ete appliquee aux
+  // deux premiers.
+  //
+  // Et l'effacement ne s'arrete pas la : une chaine vide poussee vers /users
+  // EFFACE la valeur locale des autres appareils au reveil suivant, parce que
+  // la fusion applique — a juste titre — la regle « absent n'est pas vide ».
+  // Un champ vide cote distant est un effacement volontaire ; encore faut-il
+  // qu'il en soit vraiment un.
   const _v=id=>{const e=document.getElementById(id);return e?(e.value||'').trim():null;};
+  const _nom=_v('coach-team-name'), _phrase=_v('coach-catchphrase');
+  if(_nom!==null) currentUser.teamName=_nom;
+  if(_phrase!==null) currentUser.catchphrase=_phrase;
   const _bio=_v('coach-bio'), _vis=_v('coach-vision');
   // Les images sont deja posees sur currentUser par _majImageVitrine.
   if(_bio!==null) currentUser.bio=_bio;
