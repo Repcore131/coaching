@@ -31688,6 +31688,158 @@ function testExercices(){
         return _echec('le nettoyage repasse par la fabrique de grilles');
       return true;})());
 
+    // ══ 16/09/2026 — METTRE SES PROGRAMMES EN VENTE, ET FIXER LES PRIX ══
+    //
+    // ⚠ LE PRIX NE PEUT PAS VIVRE DANS LE CODE. L'athlète doit voir celui que
+    // le coach a posé, et un prix dans le code demanderait un déploiement pour
+    // changer. D'où un nœud PUBLIC : tout compte connecté le lit, le créateur
+    // seul l'écrit — et c'est la règle RTDB qui le tient, pas l'interface.
+
+    ok('Le prix se saisit en euros et se range en centimes, ou se refuse',(()=>{
+      const cas=[['14,90',1490],['14.90',1490],['9',900],['0',0],['  12,5 ',1250],
+        ['4999,99',499999],
+        // ⚠ LE SIGNE SE REFUSE AVANT LE NETTOYAGE, PAS APRES. « tout ce qui
+        // n'est pas un chiffre » transformait « -3 » en « 3 » : un prix négatif
+        // devenait positif, en silence. Trouvé par cette assertion.
+        ['-3',null],['- 12',null],
+        ['',null],['abc',null],['9999',null],[null,null],[undefined,null],
+        ['12,3,4',null]];
+      for(const [t,att] of cas){
+        const v=prixEnCentimes(t);
+        if(v!==att) return _echec(JSON.stringify(t)+' → '+v+' au lieu de '+att);
+      }
+      // ⚠ TOUJOURS UN ENTIER : la regle RTDB refuse un flottant, et 12,345 €
+      // n'existe pas.
+      for(const t of ['12,345','0,019','1,005']){
+        const v=prixEnCentimes(t);
+        if(v!==null&&!Number.isInteger(v)) return _echec(t+' → '+v+' n’est pas un entier');
+      }
+      return true;})());
+
+    ok('L\'identifiant d\'un programme est stable et sans accent',(()=>{
+      // Une clef de base ne se renomme pas : elle doit survivre aux accents,
+      // aux espaces et a la ponctuation du nom qui l'a produite.
+      const cas=[['Prise de Masse — Élite #2','prise-de-masse-elite-2'],
+        ['Fondations','fondations'],['   ---  ',''],['Été 2026','ete-2026']];
+      for(const [n,att] of cas){
+        const v=_slugProgramme(n);
+        if(v!==att) return _echec(JSON.stringify(n)+' → « '+v+' » au lieu de « '+att+' »');
+      }
+      if(_slugProgramme('a'.repeat(200)).length>50) return _echec('l’identifiant n’est pas borné');
+      return true;})());
+
+    // ⚠ LE PUBLIE RECOUVRE LE CODE CHAMP PAR CHAMP, ET JAMAIS EN BLOC. Un
+    // Object.assign écraserait `seances` — une FONCTION dans le catalogue, une
+    // chaîne JSON dans la base — et le programme livré avec l'application
+    // cesserait d'avoir des séances au premier changement de prix.
+    ok('Changer un prix ne fait pas perdre le reste du programme',(()=>{
+      const _av=_boutiqueLocale();
+      try{
+        _poserBoutiqueLocale({});
+        const base=programmeDuCatalogue('fondations');
+        if(!base) return _echec('le programme livré a disparu');
+        const nH=(base.seances('H')||[]).length;
+        if(nH!==7) return _echec('le programme livré n’a pas ses séances : '+nH);
+        // On ne publie QU'UN PRIX.
+        _poserBoutiqueLocale({fondations:{prixCts:2490,maj:Date.now()}});
+        const maj=programmeDuCatalogue('fondations');
+        if(maj.prixCts!==2490) return _echec('le prix publié n’est pas repris : '+maj.prixCts);
+        if(prixProgramme(maj)!=='24,90 €') return _echec('affichage : '+prixProgramme(maj));
+        if(maj.nom!==base.nom) return _echec('le nom a été perdu : « '+maj.nom+' »');
+        if(maj.description!==base.description) return _echec('la description a été perdue');
+        if((maj.seances('H')||[]).length!==7)
+          return _echec('LES SÉANCES ONT ÉTÉ PERDUES : '+(maj.seances('H')||[]).length);
+        if((maj.seances('F')||[]).length!==7) return _echec('la version Femme a été perdue');
+        return true;
+      } finally { _poserBoutiqueLocale(_av); }})());
+
+    ok('Un programme publié s\'ajoute à la boutique, et se retire sans disparaître',(()=>{
+      const _av=_boutiqueLocale();
+      try{
+        _poserBoutiqueLocale({'mon-prog':{nom:'Mon prog',prixCts:1990,description:'D',
+          seances:JSON.stringify({H:[{day:'Lundi',name:'A',active:true,
+            exercises:[{name:'SQUAT',series:3,reps:'10'}]}],F:[]}),maj:1}});
+        const p=programmeDuCatalogue('mon-prog');
+        if(!p) return _echec('le programme publié est introuvable');
+        if(p.prixCts!==1990) return _echec('prix : '+p.prixCts);
+        const H=p.seances('H')||[];
+        if(H.length!==1||(H[0].exercises||[])[0].name!=='SQUAT')
+          return _echec('les séances publiées ne sont pas relues');
+        // Sans jeu Femme publié, on retombe sur celui qui existe : mieux vaut
+        // le programme de l'autre genre que pas de programme du tout.
+        if(!(p.seances('F')||[]).length) return _echec('aucune séance pour la version Femme');
+        if(!programmesBoutique().some(x=>x.id==='mon-prog'))
+          return _echec('le programme publié n’apparaît pas dans la liste');
+        // ⚠ RETIRE DE LA VENTE N'EST PAS SUPPRIME. Un programme deja achete
+        // doit rester lisible par ceux qui l'ont paye.
+        _poserBoutiqueLocale({'mon-prog':{nom:'Mon prog',prixCts:1990,masque:true,maj:1}});
+        if(programmesBoutique().some(x=>x.id==='mon-prog'))
+          return _echec('un programme retiré reste en vitrine');
+        if(!programmeDuCatalogue('mon-prog'))
+          return _echec('un programme retiré devient illisible pour qui l’a acheté');
+        // Un programme publié sans nom n'entre pas en vitrine : une carte sans
+        // titre ne se vend pas, elle inquiète.
+        _poserBoutiqueLocale({'x':{prixCts:100,maj:1}});
+        if(programmesBoutique().some(x=>x.id==='x'))
+          return _echec('un programme sans nom entre en vitrine');
+        // Et le prototype ne devient pas un programme.
+        _poserBoutiqueLocale({});
+        if(programmeDuCatalogue('toString')) return _echec('une clé héritée rend un programme');
+        return true;
+      } finally { _poserBoutiqueLocale(_av); }})());
+
+    // ⚠⚠ L'ADRESSE DU VENDEUR EST ECRITE DEUX FOIS — dans app/index.html et
+    // dans database.rules.json — ET LA VERIFICATION N'EST PAS ICI.
+    //
+    // Elle y a ete ecrite, en `async`, et c'est le piege que ce fichier
+    // documente depuis des mois : `ok` ne regarde que la veracite de son
+    // second argument, et UNE PROMESSE EST TOUJOURS VRAIE. L'assertion serait
+    // passee au vert quoi qu'il arrive.
+    //
+    // Et meme synchrone elle ne vaudrait rien : database.rules.json n'est PAS
+    // deploye — voir l'assemblage de _site — donc un fetch depuis la page ne
+    // trouve rien et conclut « tout va bien ». C'est exactement ainsi qu'un
+    // champ 'logo' est reste casse pendant que la suite etait verte.
+    //
+    // Le controle vit donc dans scripts/verif/regles.mjs, qui lit LES DEUX
+    // FICHIERS SUR LE DISQUE. Il n'y a rien a servir, et rien qui puisse etre
+    // muet.
+    ok('Seul le créateur voit — et tient — la mise en vente',(()=>{
+      const _cu=currentUser;
+      try{
+        currentUser={email:'x@t.fr',id:'x1',role:'coach',fname:'X'};
+        if(estVendeur()) return _echec('un autre coach est vendeur');
+        _rendreEntreeVente();
+        if(/ouvrirMesProgrammes/.test(document.getElementById('bq-vendeur').innerHTML))
+          return _echec('un autre coach voit l’entrée de mise en vente');
+        // ⚠ ET LE GARDE EST DANS LES FONCTIONS, pas seulement dans l'affichage.
+        for(const f of [ouvrirMesProgrammes,ouvrirFicheVente])
+          if(String(f).indexOf('estVendeur')<0)
+            return _echec('une porte de mise en vente ne vérifie pas qui appelle');
+        if(String(enregistrerFicheVente).indexOf('estVendeur')<0)
+          return _echec('la publication ne vérifie pas qui appelle');
+        if(ouvrirMesProgrammes()!==false) return _echec('un autre coach ouvre l’écran');
+        currentUser={email:CREATOR_EMAIL,id:'k1',role:'coach',fname:'K'};
+        if(!estVendeur()) return _echec('le créateur n’est pas vendeur');
+        _rendreEntreeVente();
+        return /ouvrirMesProgrammes/.test(document.getElementById('bq-vendeur').innerHTML)
+          ?true:_echec('le créateur ne voit pas l’entrée');
+      } finally { currentUser=_cu;
+        try{ _rendreEntreeVente(); }catch(e){} }})());
+
+    // L'IMAGE PART DANS UN NŒUD PUBLIC que chaque athlète relit à chaque
+    // ouverture de la boutique. Non réduite, elle y coûterait des mégaoctets
+    // par lecture — et le plan Spark compte les octets descendus.
+    ok('La devanture est réduite avant d\'être publiée, et bornée',(()=>{
+      const f=String(_venteChoisirImage);
+      if(f.indexOf('_resizeImage')<0) return _echec('l’image n’est pas redimensionnée');
+      const g=String(enregistrerFicheVente);
+      if(g.indexOf('420000')<0) return _echec('aucune borne sur le poids de l’image');
+      if(g.indexOf('240000')<0) return _echec('aucune borne sur le poids du programme');
+      // Les mêmes bornes que la règle de la base : une borne côté client qui
+      // laisserait passer ce que le serveur refuse donnerait un échec muet.
+      return true;})());
+
     // ══ 16/09/2026 — LA BOUTIQUE DE PROGRAMMES ══════════════════════════
     //
     // Les séances naissent vierges ; il faut donc une porte pour ceux qui ne

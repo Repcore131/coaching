@@ -120,7 +120,56 @@
     // athlete l acces aux seances, bilans, nutrition et liste de clients du
     // coach. Ce nud ne porte QUE ce qui est destine a etre vu, et n est
     // lisible que par les athletes rattaches a ce coach precis.
-    "coach_public": {
+    // ══ LA BOUTIQUE ═════════════════════════════════════════════════════════
+  //
+  // UN SEUL VENDEUR, ET LA REGLE LE DIT. Kevin vend ses propres programmes ;
+  // tout le monde les lit, lui seul les ecrit. Ce n est pas une limitation
+  // d interface : encaisser l argent d un client pour le reverser a un autre
+  // coach ferait de RepCore un intermediaire de paiement au sens de la DSP2,
+  // activite reglementee, et c est la troisieme voie explicitement ecartee au
+  // §2 de la note de decision economique. Ici l argent encaisse appartient
+  // deja a celui qui encaisse.
+  //
+  // ⚠ L ADRESSE DU CREATEUR EST ECRITE ICI, EN DUR, et elle doit rester
+  // identique a CREATOR_EMAIL dans app/index.html. Une assertion compare les
+  // deux : sans elle, changer l une sans l autre donnerait soit un vendeur qui
+  // ne peut plus publier, soit — bien pire — une boutique que personne ne
+  // garde.
+  //
+  // .read OUVERT A TOUT COMPTE CONNECTE, et c est le but : le prix qu un
+  // athlete voit doit etre celui que le coach a pose. Sans noeud public, le
+  // prix ne pourrait vivre que dans le code, et le modifier demanderait un
+  // deploiement.
+  "boutique": {
+    ".read": "auth != null",
+    ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+    "$progId": {
+      ".validate": "$progId.length < 60",
+      "nom": { ".validate": "newData.isString() && newData.val().length < 80" },
+      "accroche": { ".validate": "newData.isString() && newData.val().length < 220" },
+      "description": { ".validate": "newData.isString() && newData.val().length < 1400" },
+      // EN CENTIMES, ENTIER, ET PLAFONNE. Aucun flottant ne touche a de
+      // l argent, et un prix a quatre chiffres d euros est une faute de
+      // frappe, pas une intention : 500 000 centimes, soit 5 000 EUR.
+      "prixCts": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500000 && newData.val() === newData.val().toFixed(0) * 1" },
+      // La devanture, en donnee-URL redimensionnee avant envoi. Bornee : une
+      // image non redimensionnee remplirait le quota a elle seule, et elle est
+      // relue par CHAQUE athlete qui ouvre la boutique.
+      "image": { ".validate": "newData.isString() && newData.val().length < 420000" },
+      // ⚠ LES SEANCES SONT UNE CHAINE JSON, ET C EST DELIBERE. Valider sept
+      // jours d exercices champ par champ demanderait ici une transcription de
+      // tout le modele de donnees, qui divergerait du code au premier ajout.
+      // Une chaine bornee protege ce qui compte a cet etage : la taille.
+      "seances": { ".validate": "newData.isString() && newData.val().length < 240000" },
+      "maj": { ".validate": "newData.isNumber()" },
+      // Retire de la vente sans etre supprime : un programme deja achete doit
+      // rester lisible par ceux qui l ont paye.
+      "masque": { ".validate": "newData.isBoolean()" },
+      "$autre": { ".validate": false }
+    }
+  },
+
+  "coach_public": {
       "$emailKey": {
         ".read": "auth != null && (auth.token.email.replace('.', ',') === $emailKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $emailKey)",
         ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey",

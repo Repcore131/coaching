@@ -173,4 +173,59 @@ if(badgesRefuses.length||badgesOrphelins.length){
   process.exit(1);
 }
 
+// ══ LA BOUTIQUE : UN SEUL VENDEUR, ECRIT DANS DEUX FICHIERS ═══════════════
+//
+// L'adresse du createur vit dans app/index.html (CREATOR_EMAIL) ET dans la
+// regle d'ecriture de /boutique. Changer l'une sans l'autre donnerait soit un
+// vendeur qui ne peut plus rien publier, soit — bien pire — une boutique que
+// PERSONNE ne garde : n'importe quel compte connecte pourrait y poser un
+// programme, un prix, une image.
+//
+// ⚠ ET CE CONTROLE NE PEUT PAS VIVRE DANS tests.js. Il y a ete ecrit une fois,
+// en `async` : `ok` ne regarde que la veracite de son second argument, et une
+// promesse est toujours vraie — l'assertion passait au vert quoi qu'il arrive.
+// Meme synchrone elle ne vaudrait rien, puisque database.rules.json n'est pas
+// deploye et qu'un fetch depuis la page conclurait « tout va bien » sur un
+// fichier absent. C'est exactement ainsi que 'logo' est reste casse.
+const mCreateur=source.match(/const CREATOR_EMAIL='([^']+)'/);
+if(!mCreateur){ console.error('CREATOR_EMAIL introuvable dans app/index.html'); process.exit(1); }
+const mBoutique=regles.match(/"boutique"\s*:\s*\{([\s\S]*?)\n  \}/);
+if(!mBoutique){ console.error('le noeud boutique est absent de database.rules.json'); process.exit(1); }
+const mEcrit=mBoutique[1].match(/"\.write"\s*:\s*"([^"]+)"/);
+const mLit=mBoutique[1].match(/"\.read"\s*:\s*"([^"]+)"/);
+if(!mEcrit||!mLit){ console.error('le noeud boutique n\'a pas ses deux regles'); process.exit(1); }
+console.log('\nvendeur declare par le code : '+mCreateur[1]);
+if(mEcrit[1].indexOf(mCreateur[1])<0){
+  console.error('\nLA REGLE NOMME UN AUTRE VENDEUR QUE LE CODE.');
+  console.error('  code   : '+mCreateur[1]);
+  console.error('  regles : '+mEcrit[1]);
+  console.error('Soit le createur ne peut plus publier, soit n\'importe qui le peut.');
+  process.exit(1);
+}
+if(mEcrit[1].indexOf('auth != null')<0){
+  console.error('\nLA BOUTIQUE S\'ECRIT SANS COMPTE : '+mEcrit[1]);
+  process.exit(1);
+}
+if(mLit[1].indexOf('auth != null')<0){
+  console.error('\nLA BOUTIQUE NE SE LIT PLUS : '+mLit[1]);
+  console.error('C\'est pourtant sa raison d\'etre : l\'athlete doit voir le prix pose.');
+  process.exit(1);
+}
+// Les bornes de taille, des deux cotes. Une borne cote client plus large que
+// celle du serveur donnerait un echec de publication muet.
+for(const [champ,att] of [['image',420000],['seances',240000]]){
+  const m=mBoutique[1].match(new RegExp('"'+champ+'"\\s*:\\s*\\{[^}]*length\\s*<\\s*(\\d+)'));
+  if(!m){ console.error('\nle champ '+champ+' n\'est pas borne dans les regles'); process.exit(1); }
+  if(Number(m[1])!==att){
+    console.error('\nBORNE INCOHERENTE sur '+champ+' : regles '+m[1]+', code '+att);
+    console.error('Le client laisserait passer ce que le serveur refuse, sans un mot.');
+    process.exit(1);
+  }
+  if(source.indexOf(String(att))<0){
+    console.error('\nla borne de '+champ+' ('+att+') n\'est plus verifiee cote client');
+    process.exit(1);
+  }
+}
+console.log('boutique : un seul vendeur, lecture ouverte, bornes concordantes');
+
 console.log('\nRien de bloquant.');

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1236';
+window.RC_BUILD='1237';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4925,6 +4925,30 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
   text-align:center;margin-top:9px}
 @media(max-width:360px){ .bq-dev{max-height:300px} }
 
+/* ══ MES PROGRAMMES EN VENTE ═════════════════════════════════════════════ */
+.vn-t{font-size:var(--fs-2xs);letter-spacing:2.4px;text-transform:uppercase;
+  font-weight:800;color:var(--sub);margin-bottom:10px}
+.vn-l{display:flex;align-items:center;gap:10px;background:var(--surface-1);
+  border:1px solid var(--border);border-radius:var(--r-3);padding:11px 12px;
+  margin-bottom:8px}
+.vn-l-n{flex:1;min-width:0;font-size:var(--fs-sm);font-weight:800;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vn-l-p{font-size:var(--fs-sm);font-weight:900;color:var(--red-text);white-space:nowrap;flex-shrink:0}
+.vn-l-b{flex:0 0 auto;margin:0;padding:7px 11px;font-size:var(--fs-2xs)}
+.vn-off{font-size:var(--fs-2xs);font-weight:700;letter-spacing:.6px;color:var(--text-faint);
+  text-transform:uppercase}
+.vn-lab{display:block;font-size:var(--fs-2xs);letter-spacing:1.6px;text-transform:uppercase;
+  font-weight:800;color:var(--sub);margin:14px 0 5px}
+.vn-in{width:100%;background:var(--surface-1);border:1px solid var(--border);
+  border-radius:var(--r-2);padding:10px 12px;color:var(--text);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-sm)}
+textarea.vn-in{resize:vertical;line-height:1.5}
+.vn-ap{margin-top:9px}
+.vn-ap img{width:100%;max-height:220px;object-fit:cover;border-radius:var(--r-2);display:block}
+.vn-cb{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:var(--fs-sm);
+  color:var(--sub);cursor:pointer}
+.vn-cb input{width:18px;height:18px;accent-color:var(--red);cursor:pointer}
+
 /* ══ LE LEXIQUE ══════════════════════════════════════════════════════════
    LA PASTILLE NE DOIT PAS SE FAIRE REMARQUER. Elle se pose a cote de libelles
    qui, eux, portent l'information : au meme poids visuel elle deviendrait un
@@ -9622,6 +9646,31 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- ══════ MES PROGRAMMES EN VENTE ══════════════════════════════════
+     Reserve au createur : la regle RTDB le tient, pas cet ecran. Un autre
+     coach qui l'atteindrait ne pourrait rien ecrire. -->
+<div id="s-vente" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="go('s-boutique')">←</button><span class="topbar-title">Mes programmes</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div id="vn-liste"></div>
+      <div id="vn-source"></div>
+    </div>
+  </div>
+</div>
+
+<!-- La fiche d'un programme en vente. -->
+<div id="rc-vente" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
+  onclick="if(event.target===this)fermerFicheVente()" role="dialog" aria-modal="true">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:22px 20px 18px;width:100%;max-width:560px;max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain">
+    <div class="rci-t" id="vn-titre">Mettre en vente</div>
+    <div id="vn-corps"></div>
+    <div id="vn-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:10px;display:none"></div>
+    <button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" onclick="enregistrerFicheVente()">Publier</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" onclick="fermerFicheVente()">Annuler</button>
+  </div>
+</div>
+
 <!-- ══════ LA BOUTIQUE ══════════════════════════════════════════════
      Une liste de programmes, et rien d'autre. Pas de panier, pas de
      compte client, pas de recommandations : on vient chercher un
@@ -9630,6 +9679,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="go('s-session-manager')">←</button><span class="topbar-title">Programmes</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <div id="bq-vendeur"></div>
       <div id="bq-liste"></div>
       <div id="bq-contact"></div>
     </div>
@@ -11350,11 +11400,112 @@ const RC_PROGRAMMES=Object.freeze([
     seances:genre=>(genre==='F')?FONDATION_F:FONDATION_H
   })
 ]);
-// PURE. Le programme du catalogue, ou null. Meme garde que le lexique : une
-// cle qui viendrait d'une donnee ne doit pas pouvoir atteindre le prototype.
+// ══ LE CATALOGUE EFFECTIF : LE CODE, PUIS CE QUE LE COACH A PUBLIE ═══════
+//
+// DEUX SOURCES, ET UNE SEULE VERITE A L'ARRIVEE. Le catalogue en dur porte les
+// programmes livres avec l'application ; le noeud public porte ceux que le
+// coach met en vente depuis son telephone, ET les retouches qu'il fait aux
+// premiers — un prix, surtout. Le publie GAGNE, champ par champ : c'est le
+// plus recent, et c'est celui que le coach a voulu.
+//
+// ⚠ LE CACHE EST LOCAL ET DATE. La boutique doit s'ouvrir hors ligne, et un
+// prix d'hier vaut mieux qu'une page blanche — mais il ne doit pas survivre a
+// une desinstallation du programme : un programme masque disparait de la
+// liste des qu'on relit le noeud.
+const RC_BOUTIQUE_CLE='rc_boutique';
+let _boutiquePubliee=null;
+function _boutiqueLocale(){
+  if(_boutiquePubliee) return _boutiquePubliee;
+  try{ const t=localStorage.getItem(RC_BOUTIQUE_CLE);
+    const d=t?JSON.parse(t):null;
+    _boutiquePubliee=(d&&typeof d==='object')?d:{};
+  }catch(e){ _boutiquePubliee={}; }
+  return _boutiquePubliee;
+}
+function _poserBoutiqueLocale(d){
+  _boutiquePubliee=(d&&typeof d==='object')?d:{};
+  try{ localStorage.setItem(RC_BOUTIQUE_CLE,JSON.stringify(_boutiquePubliee)); }catch(e){}
+  return _boutiquePubliee;
+}
+// Rapatrie le noeud public. Silencieuse : hors ligne, on garde le cache.
+async function rafraichirBoutique(){
+  try{
+    if(!CLOUD.ok()) return null;
+    const d=await CLOUD.lireBoutique();
+    if(d===null) return null;          // echec reseau : on ne vide pas le cache
+    _poserBoutiqueLocale(d);
+    try{ _rendreBoutique(); }catch(e){}
+    return d;
+  }catch(e){ return null; }
+}
+// PURE (au cache pres). Un programme publie, normalise — les seances arrivent
+// en CHAINE JSON depuis la base, parce que les valider champ par champ dans
+// les regles aurait demande d'y transcrire tout le modele de donnees.
+function _programmePublie(id){
+  const b=_boutiqueLocale()||{};
+  if(typeof id!=='string'||!Object.prototype.hasOwnProperty.call(b,id)) return null;
+  const p=b[id];
+  return (p&&typeof p==='object')?p:null;
+}
+function _seancesPubliees(p,genre){
+  try{
+    const d=JSON.parse(p.seances||'null');
+    if(!d) return null;
+    if(Array.isArray(d)) return d.length?d:null;
+    // ⚠ UN JEU VIDE N'EST PAS UN JEU, ET ON RETOMBE SUR L'AUTRE GENRE. Le
+    // coach publie souvent la version Homme d'abord ; `|| d.H` ne suffisait
+    // pas, parce qu'un tableau VIDE est un objet, donc vrai. Une athlete
+    // recevait alors un programme sans une seule seance.
+    // Mieux vaut le programme de l'autre genre que pas de programme du tout :
+    // c'est le meme mouvement, et la charge s'ajuste d'elle-meme.
+    const plein=l=>Array.isArray(l)&&l.length?l:null;
+    const voulu=(genre==='F')?plein(d.F):plein(d.H);
+    return voulu||plein(d.H)||plein(d.F)||null;
+  }catch(e){ return null; }
+}
+// PURE. Le programme tel qu'il doit etre AFFICHE ET VENDU : le catalogue en
+// dur, recouvert par ce que le coach a publie.
 function programmeDuCatalogue(id){
   if(typeof id!=='string'||!id) return null;
-  return RC_PROGRAMMES.find(p=>p.id===id)||null;
+  const base=RC_PROGRAMMES.find(p=>p.id===id)||null;
+  const pub=_programmePublie(id);
+  if(!base&&!pub) return null;
+  if(!pub) return base;
+  // ⚠ CHAMP PAR CHAMP, ET JAMAIS EN BLOC. Un Object.assign ecraserait
+  // `seances` — une FONCTION dans le catalogue, une chaine dans la base — et
+  // le programme livre avec l'application cesserait d'avoir des seances.
+  const f=(k,def)=>(pub[k]!==undefined&&pub[k]!==null&&pub[k]!=='')?pub[k]:def;
+  const seances=genre=>{
+    const sp=_seancesPubliees(pub,genre);
+    if(sp) return sp;
+    return (base&&typeof base.seances==='function')?base.seances(genre):null;
+  };
+  return Object.freeze({
+    id:id,
+    nom:f('nom',base&&base.nom),
+    phase:base&&base.phase,
+    accroche:f('accroche',base&&base.accroche),
+    description:f('description',base&&base.description),
+    tags:(base&&base.tags)||null,
+    prixCts:(typeof pub.prixCts==='number')?pub.prixCts:(base?base.prixCts:0),
+    image:f('image',base&&base.image),
+    masque:pub.masque===true,
+    seances:seances
+  });
+}
+// La liste AFFICHEE : le catalogue en dur, plus ce que le coach a publie en
+// propre, moins ce qu'il a retire de la vente.
+function programmesBoutique(){
+  const vus=new Set(), out=[];
+  for(const p of RC_PROGRAMMES){ vus.add(p.id);
+    const e=programmeDuCatalogue(p.id); if(e&&!e.masque) out.push(e); }
+  const b=_boutiqueLocale()||{};
+  for(const id of Object.keys(b)){
+    if(vus.has(id)) continue;
+    const e=programmeDuCatalogue(id);
+    if(e&&!e.masque&&e.nom) out.push(e);
+  }
+  return out;
 }
 // PURE. « 14,90 € ». L'espace avant l'euro est INSECABLE (U+00A0), comme
 // partout ailleurs dans le fichier : « 14,90 » et « € » ne se separent pas.
@@ -13927,6 +14078,53 @@ const CLOUD={
   // de lecture, pas une migration.
   _urlSantePrivee(key){ return this._fbUrl.replace('users.json','sante_privee/'+key+'.json'); },
   _urlProfilCoach(key){ return this._fbUrl.replace('users.json','coach_public/'+key+'.json'); },
+  _urlBoutique(id){ return this._fbUrl.replace('users.json',
+    'boutique'+(id?('/'+encodeURIComponent(id)):'')+'.json'); },
+  // ── LA BOUTIQUE PUBLIQUE ──────────────────────────────────────────────
+  //
+  // TOUT LE MONDE LIT, LE CREATEUR SEUL ECRIT — la regle RTDB le tient, pas
+  // l'interface. Ce noeud existe pour UNE raison : le prix qu'un athlete voit
+  // doit etre celui que le coach a pose. Sans lui, le prix ne pourrait vivre
+  // que dans le code, et le changer demanderait un deploiement.
+  async lireBoutique(){
+    const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),8000);
+    try{
+      const token=await this._getToken();
+      if(!token) return null;
+      const r=await fetch(this._urlBoutique()+'?auth='+token,{signal:ctrl.signal});
+      if(!r.ok) return null;
+      const t=await r.text();
+      try{ _quotaCompter('in',t.length); }catch(e){}
+      const d=JSON.parse(t||'null');
+      return (d&&typeof d==='object')?d:null;
+    }catch(e){ return null; }
+  },
+  // UN PROGRAMME A LA FOIS, par PUT : ecrire tout le noeud d'un coup
+  // effacerait ce qu'un autre appareil vient d'y poser.
+  async ecrireProgrammeBoutique(id,obj){
+    if(!id||!obj) return false;
+    const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),12000);
+    try{
+      const token=await this._getToken();
+      if(!token) return false;
+      const corps=JSON.stringify(obj);
+      try{ _quotaCompter('out',corps.length); }catch(e){}
+      const r=await fetch(this._urlBoutique(id)+'?auth='+token,
+        {method:'PUT',body:corps,signal:ctrl.signal});
+      return r.ok;
+    }catch(e){ return false; }
+  },
+  async supprimerProgrammeBoutique(id){
+    if(!id) return false;
+    const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),8000);
+    try{
+      const token=await this._getToken();
+      if(!token) return false;
+      const r=await fetch(this._urlBoutique(id)+'?auth='+token,
+        {method:'DELETE',signal:ctrl.signal});
+      return r.ok;
+    }catch(e){ return false; }
+  },
 
   // ── La file du PROFIL PUBLIC ──────────────────────────────────────────
   // DISTINCTE de rc_sync_queue, et ce n’est pas un détail : une clé posée
@@ -37478,6 +37676,10 @@ function htmlCarteSeanceSlot(i,s){
 function ouvrirBoutique(){
   _rendreBoutique();
   go('s-boutique');
+  // Le rafraichissement arrive APRES l'affichage : la boutique s'ouvre sur le
+  // cache — donc tout de suite, et hors ligne — puis se corrige si le reseau
+  // repond. Un prix d'hier vaut mieux qu'une page blanche.
+  rafraichirBoutique();
 }
 // PURE. Le genre a utiliser pour un programme qui en porte deux jeux.
 // Meme lecture que partout ailleurs : le bilan d'abord, la fiche ensuite.
@@ -37487,8 +37689,9 @@ function _genreProgramme(u){
 }
 function _rendreBoutique(){
   const z=document.getElementById('bq-liste');
-  if(z) z.innerHTML=RC_PROGRAMMES.map(_htmlCarteProgramme).join('')
+  if(z) z.innerHTML=programmesBoutique().map(_htmlCarteProgramme).join('')
     ||'<div class="sub" style="text-align:center;padding:28px 0">Aucun programme pour le moment.</div>';
+  try{ _rendreEntreeVente(); }catch(e){}
   const c=document.getElementById('bq-contact');
   if(!c) return;
   const lien=lienWhatsApp('Bonjour Kevin, je te contacte depuis RepCore '
@@ -37530,6 +37733,193 @@ function _htmlCarteProgramme(p){
     +(p.description?'<div class="bq-desc">'+escapeHtml(p.description)+'</div>':'')
     +_htmlActionProgramme(p)
     +'</div></div>';
+}
+// ══ METTRE SES PROGRAMMES EN VENTE ═══════════════════════════════════════
+//
+// ⚠ RESERVE AU CREATEUR, ET C'EST LA REGLE RTDB QUI LE TIENT — pas cet ecran.
+// Un autre coach qui l'atteindrait ne pourrait rien ecrire : le noeud
+// /boutique n'accepte que l'adresse du createur. L'interface se contente de
+// ne pas proposer ce qu'elle sait refuse.
+function estVendeur(u){
+  const uu=u||currentUser;
+  return !!(uu&&uu.email===CREATOR_EMAIL);
+}
+function _rendreEntreeVente(){
+  const z=document.getElementById('bq-vendeur');
+  if(!z) return false;
+  z.innerHTML=estVendeur()
+    ?'<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 18px" '
+      +'onclick="ouvrirMesProgrammes()">GÉRER MES PROGRAMMES EN VENTE</button>'
+    :'';
+  return true;
+}
+function ouvrirMesProgrammes(){
+  if(!estVendeur()){ toast('Réservé au coach.','var(--orange)'); return false; }
+  _rendreMesProgrammes();
+  go('s-vente');
+  rafraichirBoutique().then(()=>{ try{ _rendreMesProgrammes(); }catch(e){} });
+  return true;
+}
+function _rendreMesProgrammes(){
+  const z=document.getElementById('vn-liste');
+  if(z){
+    const b=_boutiqueLocale()||{};
+    const ids=Object.keys(b);
+    z.innerHTML='<div class="vn-t">En vente</div>'
+      +(ids.length
+        ?ids.map(id=>{ const p=programmeDuCatalogue(id); if(!p) return '';
+            return '<div class="vn-l">'
+              +'<div class="vn-l-n">'+escapeHtml(p.nom||id)
+              +(p.masque?' <span class="vn-off">retiré</span>':'')+'</div>'
+              +'<div class="vn-l-p">'+prixProgramme(p)+'</div>'
+              +'<button class="btn btn-outline btn-sm vn-l-b" '
+              +'onclick="ouvrirFicheVente(\''+escapeHtml(id)+'\')">Modifier</button></div>'; }).join('')
+        :'<div class="sub" style="font-size:var(--fs-sm);padding:6px 0 2px">Rien en vente pour le moment.</div>');
+  }
+  // LES PROGRAMMES LIVRES AVEC L'APPLICATION : ils n'ont pas de fiche publiee
+  // tant qu'on n'y a pas touche, et c'est par ici qu'on leur en donne une —
+  // pour changer leur prix, par exemple.
+  const y=document.getElementById('vn-source');
+  if(y){
+    const dejà=_boutiqueLocale()||{};
+    const l=RC_PROGRAMMES.filter(p=>!Object.prototype.hasOwnProperty.call(dejà,p.id));
+    const mods=((currentUser&&currentUser.coachPrograms)||[]);
+    y.innerHTML='<div class="vn-t" style="margin-top:24px">À mettre en vente</div>'
+      +l.map(p=>'<div class="vn-l"><div class="vn-l-n">'+escapeHtml(p.nom)
+        +' <span class="vn-off">livré</span></div>'
+        +'<div class="vn-l-p">'+prixProgramme(p)+'</div>'
+        +'<button class="btn btn-outline btn-sm vn-l-b" '
+        +'onclick="ouvrirFicheVente(\''+escapeHtml(p.id)+'\')">Publier</button></div>').join('')
+      +mods.map((m,i)=>'<div class="vn-l"><div class="vn-l-n">'+escapeHtml(m.name||('Programme '+(i+1)))
+        +' <span class="vn-off">à moi</span></div><div class="vn-l-p">—</div>'
+        +'<button class="btn btn-outline btn-sm vn-l-b" '
+        +'onclick="ouvrirFicheVente(null,'+i+')">Mettre en vente</button></div>').join('')
+      +((!l.length&&!mods.length)
+        ?'<div class="sub" style="font-size:var(--fs-sm);padding:6px 0 2px">Crée un programme dans l\'onglet Programmes, il apparaîtra ici.</div>':'');
+  }
+  return true;
+}
+// La fiche. `id` pour retoucher une entree existante, `idxModele` pour
+// publier un de ses propres programmes.
+let _venteId=null, _venteModele=null, _venteImage=null;
+function ouvrirFicheVente(id,idxModele){
+  if(!estVendeur()){ toast('Réservé au coach.','var(--orange)'); return false; }
+  _venteId=id||null; _venteImage=null;
+  _venteModele=(typeof idxModele==='number')
+    ?((currentUser&&currentUser.coachPrograms)||[])[idxModele]||null:null;
+  const p=id?programmeDuCatalogue(id):null;
+  const nom=p?(p.nom||''):(_venteModele?(_venteModele.name||''):'');
+  const t=document.getElementById('vn-titre');
+  if(t) t.textContent=id?'Modifier la fiche':'Mettre en vente';
+  const z=document.getElementById('vn-corps');
+  if(!z) return false;
+  const ch=(lab,idc,val,ph,ta)=>'<label class="vn-lab" for="'+idc+'">'+lab+'</label>'
+    +(ta?('<textarea id="'+idc+'" class="vn-in" rows="4" placeholder="'+escapeHtml(ph||'')+'">'
+         +escapeHtml(val||'')+'</textarea>')
+       :('<input id="'+idc+'" class="vn-in" value="'+escapeHtml(val||'')+'" '
+         +'placeholder="'+escapeHtml(ph||'')+'">'));
+  z.innerHTML=ch('Nom','vn-nom',nom,'Fondations')
+    +ch('Accroche','vn-acc',p?p.accroche:'','Une ligne, pas deux')
+    +ch('Description','vn-desc',p?p.description:'','Ce que la personne achète',true)
+    // ⚠ LE PRIX SE SAISIT EN EUROS ET SE STOCKE EN CENTIMES. Un champ en
+    // centimes serait une invitation a la faute de frappe a deux zeros pres.
+    +ch('Prix en euros','vn-prix',p?((p.prixCts||0)/100).toFixed(2).replace('.',','):'','14,90')
+    +'<label class="vn-lab" for="vn-img">Devanture</label>'
+    +'<input type="file" id="vn-img" accept="image/*" class="vn-in" onchange="_venteChoisirImage(this)">'
+    +'<div id="vn-apercu" class="vn-ap">'
+      +((p&&p.image)?'<img src="'+escapeHtml(p.image)+'" alt="">':'')+'</div>'
+    +(id?('<label class="vn-cb"><input type="checkbox" id="vn-off"'
+        +((p&&p.masque)?' checked':'')+'> Retirer de la vente</label>'):'');
+  const e=document.getElementById('vn-err'); if(e){ e.style.display='none'; e.textContent=''; }
+  _feuilleOuvrir('rc-vente');
+  return true;
+}
+function fermerFicheVente(tout_de_suite){
+  _feuilleFermer('rc-vente',tout_de_suite);
+  _venteId=null; _venteModele=null; _venteImage=null;
+}
+// ⚠ L'IMAGE EST REDIMENSIONNEE AVANT D'ETRE GARDEE. Elle part dans un noeud
+// PUBLIC que chaque athlete relit a chaque ouverture de la boutique : une
+// photo de telephone non reduite y couterait plusieurs megaoctets par lecture,
+// et le plan Spark compte les octets descendus.
+async function _venteChoisirImage(input){
+  const f=input&&input.files&&input.files[0];
+  if(!f) return false;
+  try{
+    _venteImage=await _resizeImage(f,900,1200,.82);
+    const a=document.getElementById('vn-apercu');
+    if(a&&_venteImage) a.innerHTML='<img src="'+escapeHtml(_venteImage)+'" alt="">';
+  }catch(e){ _venteImage=null; }
+  return true;
+}
+function _venteErreur(m){
+  const e=document.getElementById('vn-err');
+  if(e){ e.textContent=m; e.style.display=''; }
+  return false;
+}
+// PURE. « 14,90 » ou « 14.90 » → 1490. Rend null sur une saisie qui n'est pas
+// un prix : mieux vaut refuser que publier un programme a zero euro.
+function prixEnCentimes(txt){
+  const brut=String(txt==null?'':txt).trim();
+  // ⚠ LE SIGNE SE REFUSE AVANT LE NETTOYAGE, PAS APRES. Retirer « tout ce qui
+  // n'est pas un chiffre » transformait « -3 » en « 3 » : un prix negatif
+  // devenait un prix positif, en silence. Trouve par son assertion.
+  if(/-/.test(brut)) return null;
+  // ⚠ TOUTES LES VIRGULES, PAS LA PREMIERE. `replace(',','.')` n'en remplace
+  // qu'une : « 12,3,4 » devenait « 12.3,4 », le nettoyage retirait la seconde
+  // virgule et rendait « 12.34 » — une saisie manifestement fautive devenait
+  // un prix, en silence. Trouve par son assertion.
+  const t=brut.replace(/,/g,'.').replace(/[^\d.]/g,'');
+  if(!t||!/^\d+(\.\d+)?$/.test(t)) return null;
+  const v=Number(t);
+  if(!isFinite(v)||v<0||v>5000) return null;
+  return Math.round(v*100);
+}
+async function enregistrerFicheVente(){
+  if(!estVendeur()) return _venteErreur('Réservé au coach.');
+  const val=id=>{ const e=document.getElementById(id); return e?String(e.value||'').trim():''; };
+  const nom=val('vn-nom');
+  if(!nom) return _venteErreur('Il faut un nom.');
+  const cts=prixEnCentimes(val('vn-prix'));
+  if(cts===null) return _venteErreur('Prix invalide. Exemple : 14,90');
+  const id=_venteId||_slugProgramme(nom);
+  if(!id) return _venteErreur('Nom inutilisable.');
+  const obj={nom:nom.slice(0,79),prixCts:cts,maj:Date.now()};
+  const acc=val('vn-acc'), des=val('vn-desc');
+  if(acc) obj.accroche=acc.slice(0,219);
+  if(des) obj.description=des.slice(0,1399);
+  const off=document.getElementById('vn-off');
+  if(off) obj.masque=!!off.checked;
+  // L'image : la nouvelle si on en a choisi une, sinon celle deja publiee.
+  const dejà=_programmePublie(id);
+  const img=_venteImage||(dejà&&dejà.image)||'';
+  if(img) obj.image=img;
+  // LES SEANCES. Celles du modele qu'on publie, ou celles deja en ligne. Un
+  // programme du catalogue livre avec l'application n'en a pas besoin : sa
+  // fiche ne sert qu'a retoucher prix et textes, et programmeDuCatalogue
+  // retombe alors sur les seances du code.
+  if(_venteModele){
+    const H=_cptSeances(_venteModele,'H')||[], F=_cptSeances(_venteModele,'F')||[];
+    obj.seances=JSON.stringify({H:H,F:F});
+  } else if(dejà&&dejà.seances) obj.seances=dejà.seances;
+  if(obj.image&&obj.image.length>=420000) return _venteErreur('Image trop lourde, même réduite.');
+  if(obj.seances&&obj.seances.length>=240000) return _venteErreur('Programme trop volumineux à publier.');
+  if(!CLOUD.ok()) return _venteErreur('Hors ligne : la publication a besoin du réseau.');
+  const ok=await CLOUD.ecrireProgrammeBoutique(id,obj);
+  if(!ok) return _venteErreur('La publication a échoué. Réessaie.');
+  // On relit le noeud plutot que de recopier ce qu'on croit avoir ecrit : la
+  // base a pu normaliser, et c'est elle qui fait foi.
+  await rafraichirBoutique();
+  fermerFicheVente(true);
+  _rendreMesProgrammes();
+  toast('« '+nom+' » est en ligne.','var(--green)');
+  return true;
+}
+// PURE. Un identifiant stable a partir d'un nom. Sans accents ni espaces :
+// il devient une clef de base, et une clef ne se renomme pas.
+function _slugProgramme(nom){
+  return String(nom||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50);
 }
 // L'ACTION DE LA CARTE. Trois etats, et un seul bouton a la fois : on achete,
 // on applique, ou — pour le coach — on offre. Deux boutons cote a cote
