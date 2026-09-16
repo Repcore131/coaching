@@ -14295,7 +14295,24 @@ function testExercices(){
             // l'espace de noms XML des SVG (jamais téléchargé) ; anses.fr et
             // repcore131 sont des liens que l'utilisateur clique.
             'cloudfunctions.net',
-            'w3.org','anses.fr','repcore131.github.io'];
+            'w3.org','anses.fr','repcore131.github.io',
+            // ⚠ AJOUTES LE 17/09/2026, ET NI L'UN NI L'AUTRE N'EST CONTACTE.
+            //
+            // repcore-sync.web.app est NOTRE PROPRE HEBERGEMENT : quatre
+            // occurrences, toutes dans des commentaires qui expliquent d'ou
+            // vient le lien court /i. Se declarer sous-traitant de soi-meme
+            // n'aurait aucun sens, et Firebase Hosting est deja couvert par la
+            // ligne googleapis.
+            //
+            // id.gs1.org apparait UNE fois, dans le commentaire qui explique le
+            // format d'un code-barres GS1 — « le segment /01/ ». Le scanner lit
+            // ce format, il n'appelle jamais cette adresse.
+            //
+            // La sonde ne retire pas les commentaires, et c'est deliberе :
+            // elle doit voir une adresse posee en dur meme dans une chaine
+            // qu'aucun appel ne touche encore. Le prix est celui-ci — une
+            // adresse citee en exemple doit etre nommee ici, avec sa raison.
+            'repcore-sync.web.app','id.gs1.org'];
           const tout=_prodSrc();
           const prod=tout;
           const trouves=new Set();
@@ -23960,6 +23977,37 @@ function testExercices(){
             ?true:_echec('l’écran sans plan ne rassemble plus les deux blocs');
         } finally { el.innerHTML=garde; currentUser=_sv; }})());
 
+      ok('Un écran introuvable ne vide pas la page',(()=>{
+        // ⚠ LA PANNE QUE CECI EMPÊCHE, et c'est exactement « l'application
+        // s'est fermée ». go() éteint TOUS les écrans puis rallume la cible,
+        // dans cet ordre : quand la cible n'existe pas, le premier geste a lieu
+        // et le second non. Zéro écran actif, écran noir, aucune erreur, aucun
+        // message. Mesuré au navigateur le 17/09/2026.
+        const avant=[...document.querySelectorAll('.screen.active')].map(x=>x.id);
+        const vraiErr=console.error; let dit='';
+        try{
+          console.error=(...a)=>{ dit=a.join(' '); };
+          const r=go('s-cet-ecran-n-existe-pas');
+          if(r!==false) return _echec('go rend « '+r+' » au lieu de false');
+        } finally { console.error=vraiErr; }
+        const apres=[...document.querySelectorAll('.screen.active')].map(x=>x.id);
+        if(apres.join(',')!==avant.join(','))
+          return _echec('l’écran actif a changé : ['+avant+'] → ['+apres+']');
+        // ET ON LE DIT : un écran manquant est un défaut de code, le silence
+        // reproduirait la panne sous une autre forme.
+        if(dit.indexOf('introuvable')<0) return _echec('rien n’est signalé : « '+dit+' »');
+        // TÉMOIN : un écran qui EXISTE se monte toujours. Sans lui, un garde
+        // trop large rendrait ce test vert en cassant toute la navigation.
+        go('s-client-home');
+        const ok1=(document.getElementById('s-client-home')||{}).classList;
+        if(!ok1||!ok1.contains('active')) return _echec('un écran réel ne s’ouvre plus');
+        // Et le garde ne fait pas le ménage au passage : les calques d'un
+        // écran qu'on ne quitte pas doivent rester ouverts.
+        const nu=String(go).replace(/\/\/[^\n]*/g,'');
+        const i=nu.indexOf('return false');
+        const j=nu.indexOf('rcInfoFermer');
+        return (i>=0&&(j<0||i<j))?true:_echec('le garde passe après le ménage');})());
+
       ok('Une vitrine qui n’a QUE des bannières n’est pas déclarée vide',(()=>{
         // ⚠ SIGNALÉ PAR KEVIN LE 17/09/2026 : « les pubs mises par le coach ne
         // s'affichent plus ». Elles ont déménagé vers le bas de la vitrine au
@@ -31838,7 +31886,20 @@ function testExercices(){
       if(!(Math.abs(rv.bottom-rl.bottom)<3))
         return _echec('le compte et son libelle ne partagent pas la ligne de base');
       const ecart=rl.left-rv.right;
-      return ecart>2&&ecart<14?true:_echec('espace entre les deux : '+Math.round(ecart)+' px');})());
+      // ⚠ LA BORNE BASSE A SUIVI UNE DEMANDE, ET CE TEST NE LA VOYAIT PAS.
+      // Kevin, 16/09/2026 : « rapproche le SEMAINES du chiffre qui est devant
+      // ce mot, l'espace entre les 2 est trop gros ». column-gap est donc passe
+      // a 2 px, et l'ecart mesure vaut desormais 2 — sous l'ancien seuil.
+      //
+      // ⚠ ET IL ETAIT VERT PAR ACCIDENT. La ligne de sortie juste au-dessus —
+      // « ecran non monte : la regle suffit » — le sauvait : un test anterieur
+      // appelait go() sur un identifiant introuvable, ce qui ETEIGNAIT TOUS LES
+      // ECRANS (voir « Un ecran introuvable ne vide pas la page »). Les deux
+      // rectangles etaient nuls, la mesure ne se faisait jamais. Depuis que
+      // go() refuse de vider la page, ce test mesure pour de vrai — et il
+      // mesurait juste. Ce qu'il protege reste entier : un ESPACE, ni un tiret,
+      // ni deux mots colles.
+      return ecart>1&&ecart<14?true:_echec('espace entre les deux : '+Math.round(ecart)+' px');})());
 
     // ══ 15/09/2026 — LES CINQ BADGES ══════════════════════════════════════
     // « Cinq badges, pas un de plus. RepCore se vend sur le serieux : une
@@ -46455,11 +46516,30 @@ vendredi 78 6h 44m
         return src.indexOf(motif)===-1?true
           :_echec('le refus sec sur le cache local est revenu dans doRegister');})());
       ok('_resizeImage ne peut plus rester sans réponse',(()=>{
-        const src=_sansCom(_resizeImage);
-        if(src.indexOf('on'+'error')===-1) return _echec('onerror manque');
-        if(src.indexOf('on'+'abort')===-1) return _echec('onabort manque');
-        return src.indexOf('setTimeout')!==-1?true
-          :_echec('le délai de garde manque');})());
+        // ⚠ CETTE SONDE CHERCHAIT LES GARDES DANS LA MAUVAISE FONCTION. Le
+        // décodage a été extrait dans _decoderImage — trois chemins, du plus
+        // rapide au plus compatible — et c'est LUI qui porte désormais onerror,
+        // onabort et son propre minuteur. _resizeImage garde sa ceinture à
+        // part : trente secondes, volontairement APRÈS le délai du décodeur,
+        // pour que celui-ci rende la main proprement en premier.
+        //
+        // Le produit n'a jamais cessé d'être protégé ; la sonde lisait une
+        // version antérieure et criait au loup à chaque exécution. On suit la
+        // chaîne réelle : chaque maillon doit porter ce qui l'empêche de
+        // pendre.
+        const chaine=_sansCom(_resizeImage);
+        if(chaine.indexOf('_decoderImage')===-1)
+          return _echec('_resizeImage ne passe plus par le décodeur');
+        if(chaine.indexOf('setTimeout')===-1) return _echec('la ceinture de _resizeImage manque');
+        const dec=_sansCom(_decoderImage);
+        if(dec.indexOf('on'+'error')===-1) return _echec('onerror manque au décodeur');
+        if(dec.indexOf('on'+'abort')===-1) return _echec('onabort manque au décodeur');
+        if(dec.indexOf('setTimeout')===-1) return _echec('le délai de garde manque au décodeur');
+        // ET LES DEUX SORTIES SONT UNIQUES : un chemin qui résout deux fois
+        // rendrait le garde inutile.
+        if(dec.indexOf('if(fini) return')===-1)
+          return _echec('le décodeur peut répondre deux fois');
+        return true;})());
       ok('L\'écouteur d\'installation est déclaré en tête de document',(()=>{
         let src='';
         try{

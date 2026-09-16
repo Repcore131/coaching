@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1246';
+window.RC_BUILD='1247';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2440,8 +2440,17 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    canal doublait l'annonce d'une banniere sur l'accueil. Le chiffre tient dans
    la meme place, au meme endroit, et rend la banniere inutile.
    width:auto ANNULE les 9px de .tab-dot : sans cela le chiffre deborde. */
+ /* ⚠ 11 px, ET NON 10 : c'est le plancher de l'accueil athlete, et la sonde
+   « Aucun texte de l'accueil athlete ne descend sous le plancher » le
+   signalait depuis qu'elle scrute la barre d'onglets. Un chiffre seul se lit
+   mieux qu'un libelle a la meme taille, mais la regle ne fait pas d'exception
+   et elle a raison de n'en pas faire : deux planchers selon la nature du texte
+   deviennent zero plancher. Mesure au navigateur : « 9+ » tient toujours dans
+   la pastille, min-width absorbe la difference.
+   line-height EGAL A LA HAUTEUR : a 13px dans une boite de 16, le chiffre
+   etait deja pose deux pixels trop haut. */
 .tab-dot.chiffre{width:auto;min-width:16px;height:16px;padding:0 4px;top:0;
-  left:calc(50% + 2px);font-size:10px;line-height:13px;text-align:center;
+  left:calc(50% + 2px);font-size:11px;line-height:16px;text-align:center;
   font-weight:800;color:#fff;font-family:var(--pile-sans)}
 /* Onglet verrouille (canal sans coach rattache). Le cadenas occupe la place de
    la pastille, jamais les deux a la fois : un onglet inaccessible n'a rien de
@@ -5556,9 +5565,14 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   letter-spacing:.2px;color:var(--text-faint);line-height:1.2;
   text-transform:none;white-space:nowrap}
 .sk-chiffres[data-nul] .sk-date{display:none}
+/* ⚠ AUCUN HALO SUR CE COMPTEUR, et c'est un arbitrage de Kevin, pas un gout.
+   Il est revenu en meme temps que la refonte de .sk-chiffres, et l'assertion
+   « le compteur de streak ne depasse pas 18 px et n'a plus de halo » le disait
+   a chaque execution. La raison tient en une phrase : ce compteur voisine les
+   trois cases chiffrees de l'accueil, et un halo le fait peser plus qu'elles
+   alors qu'il ne dit pas davantage. */
 #clh-streak-val{font-family:var(--pile-titre);font-size:var(--sk-f);line-height:.86;color:var(--text);
-  font-variant-numeric:tabular-nums;letter-spacing:.5px;
-  text-shadow:0 0 10px rgba(255,255,255,.3)}
+  font-variant-numeric:tabular-nums;letter-spacing:.5px}
 /* ⚠ L'INTERLETTRAGE TOMBE AVEC L'ABREVIATION. « SEM. » tenait a 2,1 px ;
    « SEMAINES » a huit caracteres, et le meme interlettrage poussait le cadre
    hors de l'en-tete. Le corps ne bouge pas — 11 px est le plancher. */
@@ -16623,6 +16637,28 @@ function _majTabbar(id){
   _majPastilleLifestyle();
 }
 function go(id){
+  // ══ UN ECRAN INTROUVABLE NE VIDE PLUS LA PAGE ═════════════════════════
+  //
+  // ⚠ CE QUE CA DONNAIT. Plus bas, go() eteint TOUS les ecrans puis rallume
+  // la cible — dans cet ordre. Quand la cible n'existe pas (un identifiant mal
+  // orthographie, un ecran retire, un etat qu'on croyait atteignable), le
+  // premier geste a lieu et le second non : l'application se retrouve SANS
+  // AUCUN ECRAN ACTIF. Ecran noir, aucune erreur, aucun message, et pour
+  // l'utilisateur « l'application s'est fermee ». Mesure au navigateur le
+  // 17/09/2026 : `go('s-inexistant')` laissait zero `.screen.active`.
+  //
+  // ON NE NAVIGUE PAS, DONC ON NE FAIT RIEN. Sortir ici saute aussi tout le
+  // menage qui suit — fermeture des calques, camera, datation de visite — et
+  // c'est juste : ce menage accompagne un CHANGEMENT d'ecran, et il n'y en a
+  // pas. L'ecran courant reste affiche, l'utilisateur garde la main.
+  //
+  // ET ON LE DIT. Un ecran manquant est un defaut de code : le silence
+  // reproduirait la panne d'origine sous une autre forme — plus rien ne se
+  // passe, et personne ne sait pourquoi.
+  if(!document.getElementById(id)){
+    try{ console.error('[RepCore] go(«'+id+'») : écran introuvable, navigation annulée'); }catch(e){}
+    return false;
+  }
   // ON NE VIDE QUE SI L ON QUITTE LE MODULE. Naviguer de la nutrition vers la
   // cafeine ne rejoue rien ; revenir depuis l accueil rejoue l entree une fois.
   try{ if(!NUT_ECRANS.test(String(id||''))) _dejaAnime.clear(); }catch(e){}
