@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1240';
+window.RC_BUILD='1241';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4967,6 +4967,17 @@ textarea.vn-in{resize:vertical;line-height:1.5}
   border:1px solid rgba(34,197,94,.42)}
 .cpl-pill-off{color:var(--text-faint);background:var(--surface-2);
   border:1px solid var(--border)}
+/* ── Les deux relances du cadre « Inactifs » ────────────────────────────
+   DEUX BOUTONS, ET ILS DOIVENT TENIR A COTE DU NOM sur un ecran de 320 px.
+   Ils se serrent plutot que de pousser le nom hors de la carte, et passent
+   l'un sous l'autre si meme serres ils ne tiennent pas. `flex:0 0 auto` sur
+   le conteneur : c'est le NOM qui absorbe la place restante, jamais eux. */
+.inact-a{flex:0 0 auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.inact-b{flex:0 0 auto;margin:0;padding:0 11px;min-height:38px;width:auto;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:var(--fs-2xs);letter-spacing:.8px;white-space:nowrap;
+  text-decoration:none}
+@media(max-width:360px){ .inact-b{padding:0 8px;letter-spacing:.2px} }
 /* 11 px, LE PLANCHER. Ces deux lignes disent ou va l'argent et combien de
    caracteres il reste : elles doivent se lire. */
 .cpv-mention{font-size:11px;line-height:1.55;color:var(--text-faint);margin-top:6px}
@@ -7861,6 +7872,14 @@ const COACH_PHOTO='icons/coach.jpg';
           <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">DÉCHARGE GROUPÉE</span>
           <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
         </button>
+        <!-- QUATRIEME LISTE, ET LA PREMIERE DES TROIS DU BAS.
+             Demande de Kevin, 16/09/2026 : ce qui dort quitte la grille de
+             vignettes et la liste d'athletes pour descendre ici. L'ordre du bas
+             va du plus proche au plus lointain — un athlete endormi s'est deja
+             entraine, celui d'en dessous n'a jamais commence, et le dernier n'a
+             meme pas de compte.
+             Rempli par loadCoachHome, et VIDE tant que personne n'est concerne. -->
+        <div id="ch-inactifs"></div>
         <!-- « JAMAIS DÉMARRÉ » ET « EN ATTENTE » SONT EN BAS DE PAGE.
              Demande de Kevin, 16/09/2026. Les deux blocs ouvraient l'écran,
              juste sous « A traiter », et repoussaient les athlètes vers le bas
@@ -22049,8 +22068,13 @@ function _pilEligibleSignaux(c){
 function _pilCompteur(cle,lib,n,couleur){
   const vide=!(n>0);
   const actif=(_filtreClients===cle);
-  // « Tous » EST le retour en arriere : se re-cliquer ne peut pas le retirer.
-  const cible=(actif&&cle!=='tous')?'tous':cle;
+  // LE RETOUR EN ARRIERE VISE LA VUE DE TRAVAIL, ET NON PLUS « Tous ».
+  // Tant que 'tous' etait l'etat par defaut, re-toucher une puce allumee ne
+  // pouvait que ramener a lui, et « Tous » lui-meme ne se retirait pas — s'y
+  // re-cliquer l'aurait repose sur place. Depuis que la vue par defaut est
+  // 'travail', « Tous » est une puce comme les autres : elle s'allume, et se
+  // re-toucher la rend.
+  const cible=actif?'travail':cle;
   return `<button onclick="setFiltreClients('${cible}')"
     aria-pressed="${actif?'true':'false'}"
     class="pil-compteur" data-vide="${vide?1:0}"
@@ -23595,7 +23619,19 @@ function norm(s){
   // et « joel » doit trouver « Joel » comme « Joël ».
   return (s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
 }
-let _filtreClients='tous';
+// ⚠ 'travail' N'EST PAS 'tous', ET LA DISTINCTION EST TOUTE LA DIFFICULTE DE
+// CE LOT. La vue par defaut masque desormais ce qui dort — invitations jamais
+// honorees, comptes jamais demarres, athletes endormis — parce que ces trois
+// familles ont leur propre cadre en bas de page. Mais la puce « Tous » affiche
+// le nombre p.total : si elle ouvrait cette vue-la, elle annoncerait dix et en
+// montrerait trois. Le fichier pose la regle deux fois en toutes lettres — un
+// compteur qui n'ouvre pas exactement sa propre liste est pire que pas de
+// compteur. Il fallait donc deux etats, et non un seul relu differemment.
+//
+// 'travail' n'a PAS de puce, et c'est normal : ce n'est pas un filtre qu'on
+// choisit, c'est l'ecran tel qu'il s'ouvre. Re-toucher une puce allumee y
+// ramene.
+let _filtreClients='travail';
 function setFiltreClients(f){
   _filtreClients=f;
   // N1.11 — plus de puces a marquer : renderClientList repeint la barre
@@ -24231,6 +24267,27 @@ function renderClientList(clients){
   // MEMES predicats que agregerPortefeuille, aux memes fonctions.
   else if(_filtreClients==='pf-jamais') vus=vus.filter(c=>neverStarted(c));
   else if(_filtreClients==='pf-actifs') vus=vus.filter(c=>isActive(c));
+  // ── CE QUI DORT NE REMONTE PAS EN HAUT DE PAGE ──────────────────────
+  //
+  // Demande de Kevin, 16/09/2026. La grille de vignettes montrait dix ronds
+  // dont sept vides — des invitations jamais honorees et des comptes qu'on
+  // n'a pas vus depuis des mois — et il fallait les lire tous pour trouver
+  // les trois athletes qui s'entrainent vraiment. Ces trois familles ont
+  // chacune leur cadre EN BAS de page, avec ce qu'il faut pour agir dessus :
+  // les laisser aussi en haut, c'est les afficher deux fois et diluer la
+  // seule question que cet ecran doit trancher — qui dois-je regarder
+  // aujourd'hui.
+  //
+  // ⚠ SEULEMENT EN VUE PAR DEFAUT. Une recherche, ou n'importe quelle puce de
+  // filtre, RAMENE tout le monde : « Jamais demarres », « En attente » et
+  // « Tous » sont precisement les puces qui servent a les retrouver, et un
+  // filtre qui ouvrirait une liste vide serait pire que pas de filtre. Taper
+  // un nom retrouve donc aussi bien un athlete endormi qu'un athlete actif —
+  // masquer quelqu'un a qui on pense nommement serait absurde.
+  //
+  // L'EXCLUSION EST LA DERNIERE : posee avant les puces, elle les aurait
+  // videes ; posee ici, elle ne mord que sur le jeu complet.
+  else if(_filtreClients==='travail'&&!q) vus=vus.filter(c=>!_estDormant(c,Date.now()));
   if(_triClients==='taux') vus.sort((a,b)=>_triTaux(b)-_triTaux(a));
   else if(_triClients==='charge') vus.sort((a,b)=>_triCharge(b)-_triCharge(a));
   else if(_triClients==='progression') vus.sort((a,b)=>_triProgres(b)-_triProgres(a));
@@ -24260,9 +24317,19 @@ function renderClientList(clients){
   const pan=document.getElementById('ct-dashboard');
   const scr=pan?pan.scrollTop:0;
   if(!vus.length){
-    el.innerHTML=(q||_filtreClients!=='tous')
+    // TROIS SITUATIONS, TROIS PHRASES. « Aucun athlète ne correspond » etait
+    // juste pour une recherche et faux pour la vue par defaut : un coach dont
+    // tout le portefeuille dort aurait lu que ses athletes n'existent pas,
+    // alors qu'ils sont tous dans les cadres du bas.
+    el.innerHTML=q
       ? '<div class="sub" style="text-align:center;padding:28px 12px;font-size:var(--fs-sm)">Aucun athlète ne correspond.</div>'
-      : el.innerHTML;
+      : (_filtreClients==='travail'
+        ? (tous.length
+          ? '<div class="sub" style="text-align:center;padding:28px 12px;font-size:var(--fs-sm);line-height:1.6">'
+            +'Personne en activité cette quinzaine.<br>Tes '+tous.length+' athlète'+(tous.length>1?'s sont':' est')
+            +' dans les listes en bas de page.</div>'
+          : el.innerHTML)
+        : '<div class="sub" style="text-align:center;padding:28px 12px;font-size:var(--fs-sm)">Aucun athlète ne correspond.</div>');
   } else {
     // L en-tete de colonnes est emis TOUJOURS : c est le CSS qui decide de
     // l afficher, et seulement au-dela de 1360 px. Le sortir du rendu
@@ -26775,11 +26842,13 @@ function loadCoachHome(){
   if(!clients.length){
     renderTodoBlock([]);
     _rendreJamaisDemarre([]);
+    _rendreInactifs([]);
     elList.innerHTML=emptyState('users','Aucun athlète encore.'+(u.code?'<br>Partage ton code : <strong style="color:var(--red-text)">'+u.code+'</strong>':''));return;
   }
   clients.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
   renderTodoBlock(clients);
   _rendreJamaisDemarre(clients);
+  _rendreInactifs(clients);
   // La toile est tracée APRÈS son insertion : _setupCanvas mesure la largeur
   // du conteneur, et un élément pas encore dans le document en mesure zéro.
   try{
@@ -26822,6 +26891,7 @@ function loadCoachHome(){
     // n'existait pas au premier rendu : sans ce second appel, il n'apparaitrait
     // qu'au prochain retour sur le tableau de bord.
     _rendreJamaisDemarre(freshClients);
+    _rendreInactifs(freshClients);
     const el2=document.getElementById('ch-clients-list');
     if(!el2||!freshClients.length) return;
     // LA PULSATION NE PART QUE SI LA LISTE A REELLEMENT CHANGE. Posee a chaque
@@ -27054,6 +27124,85 @@ function jamaisDemarre(c,maintenant){
   if(!d||!t) return false;
   return (t-d)>JAMAIS_DEMARRE_DELAI;
 }
+// ══════════════ QUATRIEME LISTE : « INACTIFS » ═════════════════════════
+//
+// Demande de Kevin, 16/09/2026 : « les personnes inactives, ne les fais pas
+// apparaitre dans les ronds ni dans la liste de mes athletes, mais seulement
+// dans une liste en bas de page ».
+//
+// ⚠ QUATRE LISTES, QUATRE NATURES, TOUJOURS AUCUNE FUSION. Celle-ci s'insere
+// entre « A traiter » et « Jamais demarre », et elle ne recouvre NI l'une NI
+// l'autre :
+//   « En attente »      — le compte n'existe pas encore (_fromCode).
+//   « Jamais demarre »  — le compte existe, aucune seance n'a jamais ete posee.
+//   « Inactifs »        — celle-ci. Le compte existe, l'athlete a DEJA pose au
+//                         moins une seance, et plus rien depuis quatorze jours.
+//
+// LA SEANCE EST LA CONDITION D'ENTREE, et c'est elle qui rend les trois listes
+// disjointes. Sans elle, tout athlete endormi aurait figure a la fois ici et
+// dans « Jamais demarre » — deux lignes pour une personne, dans deux cadres qui
+// disent deux choses differentes.
+//
+// ⚠ ET C'EST POURQUOI UN DRAPEAU ROUGE SANS SEANCE NE DISPARAIT PAS DE L'ECRAN.
+// jamaisDemarre ecarte deja les drapeaux et les douleurs — ils restent dans
+// « A traiter », le seul endroit d'ou le coach ne peut pas les reporter d'un
+// clic. Si « inactif » avait accepte les dossiers sans seance, un athlete a
+// drapeau rouge serait sorti de la grille sans entrer dans aucune des listes du
+// bas : il aurait simplement cesse d'exister a l'ecran. La condition « au moins
+// une seance » l'empeche par construction.
+//
+// QUATORZE JOURS, LE MEME DELAI QUE isActive, et ce n'est pas une coincidence :
+// la puce « Actifs 14 j » de la barre de portefeuille compte exactement le
+// complement. Deux delais differents pour la meme idee auraient fini par
+// afficher « 8 actifs » au-dessus d'une liste de neuf.
+const INACTIF_DELAI=14*864e5;
+// PURE. Le dernier signe de vie : une seance, ou un bilan. PAS createdAt —
+// isActive le compte, et il le doit, pour qu'un compte tout neuf ne soit pas
+// declare mort avant d'avoir servi. Ici c'est l'inverse qu'on cherche : un
+// compte neuf n'a pas de seance, il ne peut donc pas entrer dans cette liste,
+// et compter sa date de creation n'aurait servi qu'a rajeunir indefiniment un
+// dossier qui dort.
+function dernierSigneDeVie(c){
+  if(!c) return 0;
+  const s=(c.sessions||[]).reduce((m,x)=>Math.max(m,(x&&Number(x.date))||0),0);
+  const b=(c.bilans||[]).reduce((m,x)=>Math.max(m,(x&&Number(x.date))||0),0);
+  return Math.max(s,b);
+}
+// PURE. Le critere, et rien d'autre : un compte, au moins une seance, et plus
+// rien depuis quatorze jours.
+function inactif(c,maintenant){
+  if(!c||c._fromCode||c.role==='coach') return false;
+  if(!(c.sessions||[]).length) return false;   // « jamais demarre » : autre liste
+  const d=dernierSigneDeVie(c);
+  const t=Number(maintenant)||0;
+  if(!d||!t||t<d) return false;
+  return (t-d)>INACTIF_DELAI;
+}
+// PURE. Du plus endormi au moins endormi : celui qu'on n'a pas vu depuis deux
+// mois passe avant celui qui manque depuis quinze jours.
+function listeInactifs(clients,maintenant){
+  return (clients||[]).filter(c=>inactif(c,maintenant))
+    .sort((a,b)=>dernierSigneDeVie(a)-dernierSigneDeVie(b));
+}
+// PURE. Le nombre de jours REVOLUS depuis le dernier signe de vie.
+function joursDepuisSigne(c,maintenant){
+  const d=dernierSigneDeVie(c);
+  const t=Number(maintenant)||0;
+  if(!d||!t||t<d) return 0;
+  return Math.floor((t-d)/864e5);
+}
+// PURE. « Dort », au sens de la grille de vignettes et de la liste d'athletes :
+// quelqu'un qui a sa propre ligne dans un des trois cadres du BAS de page, et
+// qui n'a donc rien a faire en haut. Une seule fonction pour les trois cas —
+// recopier la reunion a deux endroits aurait fini par en oublier un, et cet
+// athlete-la serait apparu deux fois ou pas du tout.
+function _estDormant(c,maintenant){
+  if(!c) return false;
+  if(c._fromCode) return true;                 // « En attente d'inscription »
+  try{ if(jamaisDemarre(c,maintenant)) return true; }catch(e){}
+  try{ if(inactif(c,maintenant)) return true; }catch(e){}
+  return false;
+}
 // PURE. La liste, du plus ancien rattachement au plus recent : celui qui
 // attend depuis douze jours passe avant celui qui attend depuis trois.
 function listeJamaisDemarre(clients,maintenant){
@@ -27122,6 +27271,116 @@ function _htmlJamaisDemarre(liste,maintenant){
 // ⚠ ET LE COACH N'ECRIT PAS DANS LE DOSSIER DE L'ATHLETE. Ce chemin aboutit a
 // /canaux/{coach}/messages, le seul noeud que les regles RTDB lui ouvrent en
 // ecriture. Rien ici ne touche /users/{athlete}.
+// ══ LE CADRE « INACTIFS » ═════════════════════════════════════════════════
+//
+// PURE. Le brouillon propose au coach. Un BROUILLON : il ouvre WhatsApp ou le
+// client mail avec le texte dedans, modifiable, et rien ne part tant que le
+// coach n'a pas appuye sur « envoyer » lui-meme.
+//
+// ⚠ AUCUN REPROCHE, ET C'EST UNE REGLE DU PRODUIT, pas une preference de ton.
+// Le message ne dit pas « tu n'as rien fait depuis un mois » : il demande ce
+// qui bloque et propose d'ajuster. Un athlete qui s'arrete a une raison, et
+// elle est rarement la paresse.
+//
+// ⚠ ET IL NE PORTE AUCUNE DONNEE DE SANTE. Il parle de SEANCES et de temps, ni
+// de poids, ni de douleur, ni de bilan — meme discipline que messageRelance et
+// que le message d'acces qui expire.
+function brouillonInactif(c,maintenant){
+  const p=String((c&&c.fname)||'').trim();
+  const j=joursDepuisSigne(c,maintenant||Date.now());
+  // Le nombre de jours n'est dit QUE s'il est connu. « depuis 0 jour » serait
+  // du bruit, et inventer une duree serait pire.
+  const depuis=j>0?(' depuis '+j+' jour'+(j>1?'s':'')):'';
+  return 'Salut '+(p||'toi')+', je n’ai pas vu de séance de ton côté'+depuis+'. '
+    +'Aucun reproche — je veux juste savoir ce qui bloque : le temps, le '
+    +'programme, la motivation ? Dis-moi, on ajuste ensemble.';
+}
+// L'objet du mail. Court, et sans point d'interrogation anxieux dans la boite
+// de reception.
+const INACTIF_OBJET='On fait le point ?';
+// PURE. Les deux adresses ouvrables pour cet athlete, ou '' pour chacune.
+// _numWa et non un replace brut : un numero saisi en « 06… » produit un lien
+// que WhatsApp refuse, et mieux vaut ne pas poser le bouton qu'en poser un
+// mort — c'est la regle deja ecrite pour le contact du coach.
+function canauxRelanceInactif(c,maintenant){
+  const texte=brouillonInactif(c,maintenant);
+  const tel=_telAthlete(c);
+  const mail=String((c&&c.email)||'').trim();
+  return {
+    texte:texte,
+    wa:tel?waLink(tel,texte):'',
+    // ⚠ L'ADRESSE N'EST PAS PERCENT-ENCODEE, le sujet et le corps le sont.
+    // `mailto:x%40t.fr` fait tomber une partie des clients mail — l'arobase
+    // encodee n'est pas reconnue comme separateur. Seuls les PARAMETRES de la
+    // requete se codent. L'adresse est nettoyee des caracteres qui pourraient
+    // en faire sortir : sans cela, un champ email contenant « ?body= » aurait
+    // reecrit le message que le coach croit envoyer.
+    mail:(mail.indexOf('@')>0&&!/[\s?&#<>"']/.test(mail))
+      ?('mailto:'+mail+'?subject='+encodeURIComponent(INACTIF_OBJET)
+        +'&body='+encodeURIComponent(texte))
+      :''
+  };
+}
+// PURE. Le cadre, ou la chaine VIDE quand personne n'est concerne — jamais un
+// cadre vide annoncant zero. Meme regle que « Jamais demarre » juste en
+// dessous, et pour la meme raison : une liste de relance qui s'affiche a zero
+// devient du decor, et on cesse de la lire le jour ou elle dit quelque chose.
+//
+// LE GRIS ET NON LE ROUGE, encore. Ce n'est pas une alerte : personne n'a mal,
+// rien n'est en retard. La peindre comme « A traiter » lui volerait l'attention
+// que la sante doit garder.
+function _htmlInactifs(liste,maintenant){
+  const l=liste||[];
+  if(!l.length) return '';
+  const t=Number(maintenant)||Date.now();
+  const n=l.length;
+  const bouton=(href,lib)=>'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" '
+    +'class="btn btn-outline btn-sm inact-b">'+lib+'</a>';
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
+    +'overflow:hidden;box-shadow:var(--el-1)">'
+    +'<div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;'
+    +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
+    +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
+    +'letter-spacing:2.4px">Inactifs</span>'
+    +'<span style="background:var(--surface-1);border:1px solid var(--border);color:var(--text);'
+    +'font-size:14px;font-weight:400;padding:1px 9px;border-radius:var(--r-3);'
+    +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
+    +'</div>'
+    +'<div style="padding:0 14px">'
+    +renderDataList(l,c=>{
+      const j=joursDepuisSigne(c,t);
+      // XSS STOCKE : le prenom est saisi par l'athlete et atterrit dans le
+      // tableau de bord de son coach. Meme precaution que renderTodoBlock.
+      const nom=escapeHtml(String(c.fname||'').trim()||'Athlète');
+      const k=canauxRelanceInactif(c,t);
+      // NI NUMERO NI ADRESSE : on le DIT. Deux boutons qui n'ouvrent rien
+      // feraient croire a une panne, et le coach cliquerait deux fois avant de
+      // comprendre que le manque est dans la fiche de l'athlete.
+      const actions=(k.wa||k.mail)
+        ?('<div class="inact-a">'
+          +(k.wa?bouton(k.wa,'WhatsApp'):'')
+          +(k.mail?bouton(k.mail,'Mail'):'')+'</div>')
+        :'<span class="sub" style="font-size:var(--fs-2xs);flex:0 0 auto;text-align:right;'
+          +'line-height:1.4;max-width:104px">Ni numéro<br>ni adresse</span>';
+      return '<div style="flex:1;min-width:0">'
+        +'<div style="font-size:var(--fs-sm);font-weight:800;line-height:1.3">'+nom+'</div>'
+        +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">'
+        +(j>0?('plus de séance depuis '+j+' jour'+(j>1?'s':'')):'plus de séance récente')
+        +'</div></div>'+actions;
+    },{pad:'11px 0'})
+    +'</div>'
+    +'<div class="sub" style="font-size:var(--fs-2xs);line-height:1.55;padding:2px 14px 12px">'
+    +'Le message s’ouvre pré-rédigé et modifiable. RepCore n’envoie rien à ta place.'
+    +'</div></div>';
+}
+function _rendreInactifs(clients){
+  const z=document.getElementById('ch-inactifs');
+  if(!z) return false;
+  try{ z.innerHTML=_htmlInactifs(listeInactifs(clients,Date.now()),Date.now()); }
+  catch(e){ z.innerHTML=''; }
+  return true;
+}
 function _rendreJamaisDemarre(clients){
   const z=document.getElementById('ch-jamais-demarre');
   if(!z) return;

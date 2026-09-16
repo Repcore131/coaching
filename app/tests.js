@@ -24906,9 +24906,22 @@ function testExercices(){
           return _echec('les compteurs sont restes dans le volet');
         if(!/_pilCompteur\(/.test(String(renderPortefeuille)))
           return _echec('la barre n\'utilise pas les compteurs existants');
-        // « Tous » NE SE RETIRE PAS LUI-MEME : c'est deja le retour en arriere.
-        return /cle!=='tous'/.test(String(_pilCompteur))
-          ?true:_echec('re-cliquer « Tous » le desactive');})());
+        // ⚠ CETTE REGLE A CHANGE LE 16/09/2026, et l'assertion avec elle.
+        // Tant que 'tous' etait l'etat PAR DEFAUT, il etait aussi le retour en
+        // arriere, et il ne pouvait donc pas se retirer : s'y re-cliquer
+        // l'aurait repose sur place. Depuis que ce qui dort descend en bas de
+        // page, la vue par defaut est 'travail' — un etat qui n'a pas de puce,
+        // parce que ce n'est pas un filtre qu'on choisit mais l'ecran tel qu'il
+        // s'ouvre. « Tous » est redevenu une puce ordinaire : elle s'allume, et
+        // se re-toucher la rend.
+        //
+        // CE QUE CETTE LIGNE PROTEGE N'A PAS CHANGE : re-toucher une puce
+        // allumee doit RAMENER quelque part, jamais laisser le coach coince
+        // dans un filtre qu'il ne sait plus retirer.
+        if(!/'travail'/.test(String(_pilCompteur)))
+          return _echec('le retour en arriere ne vise pas la vue de travail');
+        return /cible=actif\?'travail':cle/.test(String(_pilCompteur))
+          ?true:_echec('une puce allumee ne se retire pas : '+String(_pilCompteur).slice(0,0));})());
 
       // ⚠ TROIS ASSERTIONS ONT ETE RETIREES ICI (N2.3, N2.7 et N2.21). Elles
       // eprouvaient _htmlAthleteVoit — le bloc « ce que voit ton athlete » de
@@ -26395,6 +26408,250 @@ function testExercices(){
       // ON MESURE L'ORDRE DU DOCUMENT, pas la présence : les deux conteneurs
       // existaient déjà avant ce lot, et un test qui les cherche seulement
       // passerait aussi bien avec l'ancienne disposition.
+      // ══════════════════════════════════════════════════════════════════
+      // CE QUI DORT DESCEND EN BAS DE PAGE
+      // ══════════════════════════════════════════════════════════════════
+      //
+      // Demande de Kevin, 16/09/2026. Quatre listes, quatre natures, toujours
+      // aucune fusion — et c'est cette DISJONCTION que la plupart des
+      // assertions ci-dessous protègent : deux lignes pour une personne, dans
+      // deux cadres qui disent deux choses différentes, serait pire que la
+      // grille encombrée d'avant.
+      const _J=864e5;
+      const _ath=(x,t)=>Object.assign({role:'athlete',id:'z',fname:'Z',email:'z@t.fr',
+        phone:'+33612345678',sessions:[],bilans:[],createdAt:t-100*_J},x);
+
+      ok('« Inactif » exige une séance déjà posée, et quatorze jours de silence',(()=>{
+        const t=Date.now();
+        const cas=[
+          [{fname:'Actif',   sessions:[{date:t-2*_J}]},                       false,'vu il y a 2 jours'],
+          [{fname:'Limite',  sessions:[{date:t-13*_J}]},                      false,'vu il y a 13 jours'],
+          [{fname:'Dort',    sessions:[{date:t-40*_J}]},                      true ,'vu il y a 40 jours'],
+          // UN BILAN EST UN SIGNE DE VIE. Quelqu'un qui remplit son bilan sans
+          // s'entraîner n'a pas disparu : il parle encore.
+          [{fname:'Bilan',   sessions:[{date:t-40*_J}],bilans:[{date:t-3*_J}]},false,'bilan récent'],
+          // Aucune séance : c'est « Jamais démarré », le cadre d'en dessous.
+          [{fname:'Jamais',  sessions:[]},                                    false,'aucune séance'],
+          // Une pastille fabriquée depuis un code n'est pas un dossier : son
+          // tableau vide est un remplissage, pas un fait.
+          [{fname:'Code',    _fromCode:true,sessions:[{date:t-40*_J}]},        false,'_fromCode'],
+          [{fname:'Coach',   role:'coach',sessions:[{date:t-40*_J}]},          false,'un coach']];
+        for(const [x,attendu,quoi] of cas)
+          if(inactif(_ath(x,t),t)!==attendu)
+            return _echec(quoi+' → '+inactif(_ath(x,t),t)+' au lieu de '+attendu);
+        // Sans instant, aucune réponse : mieux vaut ne rien dire que de
+        // déclarer tout le monde endormi parce que l'horloge manque.
+        if(inactif(_ath({sessions:[{date:t-40*_J}]},t),0)!==false)
+          return _echec('un « maintenant » absent rend un verdict');
+        return true;})());
+
+      ok('Les quatre listes du coach sont DISJOINTES',(()=>{
+        // Personne ne peut figurer dans deux cadres du bas à la fois. C'est la
+        // règle que le fichier pose depuis « Jamais démarré », et le seul vrai
+        // risque de ce lot.
+        const t=Date.now();
+        const gens=[
+          _ath({fname:'Actif', sessions:[{date:t-2*_J}]},t),
+          _ath({fname:'Dort',  sessions:[{date:t-40*_J}]},t),
+          _ath({fname:'Jamais',sessions:[]},t),
+          _ath({fname:'Code',  _fromCode:true},t),
+          _ath({fname:'Neuf',  createdAt:t-3600e3},t)];
+        for(const c of gens){
+          const dans=[inactif(c,t)&&'inactif',jamaisDemarre(c,t)&&'jamais démarré',
+                      !!c._fromCode&&'en attente'].filter(Boolean);
+          if(dans.length>1) return _echec(c.fname+' est dans : '+dans.join(' + '));
+        }
+        return true;})());
+
+      ok('Un drapeau rouge sans séance ne disparaît PAS de l’écran',(()=>{
+        // ⚠ LA PANNE QUE CECI EMPÊCHE. jamaisDemarre écarte délibérément les
+        // drapeaux et les douleurs : ils restent dans « À traiter », le seul
+        // endroit d'où le coach ne peut pas les reporter d'un clic. Si
+        // « inactif » avait accepté les dossiers SANS séance, un athlète à
+        // drapeau rouge serait sorti de la grille sans entrer dans aucun cadre
+        // du bas — il aurait simplement cessé d'exister à l'écran.
+        const t=Date.now();
+        const c=_ath({fname:'Drapeau',sessions:[],
+          drapeauRouge:{zone:'epaule',cases:['douleur la nuit'],date:t-10*_J}},t);
+        if(!drapeauQuelconqueActif(c))
+          return _echec('le drapeau de ce test n’est pas lu — la forme a changé, l’assertion ne prouve rien');
+        if(jamaisDemarre(c,t)) return _echec('« jamais démarré » l’a pris malgré le drapeau');
+        if(inactif(c,t)) return _echec('« inactif » l’a pris alors qu’il n’a aucune séance');
+        if(_estDormant(c,t)) return _echec('il a été masqué de la grille sans entrer nulle part');
+        return true;})());
+
+      ok('Les inactifs sont triés du plus endormi au moins endormi',(()=>{
+        const t=Date.now();
+        const l=listeInactifs([
+          _ath({fname:'R',sessions:[{date:t-20*_J}]},t),
+          _ath({fname:'V',sessions:[{date:t-90*_J}]},t),
+          _ath({fname:'A',sessions:[{date:t-2*_J}]},t),
+          _ath({fname:'M',sessions:[{date:t-45*_J}]},t)],t).map(c=>c.fname).join('');
+        return l==='VMR'?true:_echec('ordre : '+l);})());
+
+      ok('La vue par défaut n’est PAS la puce « Tous »',(()=>{
+        // ⚠ LE PIÈGE DE CE LOT, et la raison d'un second état. La puce « Tous »
+        // affiche p.total : si elle ouvrait la vue de travail, elle annoncerait
+        // dix et en montrerait trois. Le fichier pose la règle deux fois — un
+        // compteur qui n'ouvre pas exactement sa propre liste est pire que pas
+        // de compteur.
+        const s=String(renderClientList);
+        if(s.indexOf("_filtreClients==='travail'")<0)
+          return _echec('la vue de travail n’a pas d’état à elle');
+        // L'exclusion doit être la DERNIÈRE branche : posée avant les puces,
+        // elle les aurait vidées.
+        const iTravail=s.indexOf("_filtreClients==='travail'&&!q");
+        for(const puce of ["'pf-jamais'","'attente'","'pf-actifs'"])
+          if(s.indexOf(puce)>iTravail)
+            return _echec('la puce '+puce+' est évaluée APRÈS l’exclusion');
+        // Et re-toucher une puce allumée ramène à la vue de travail, pas à
+        // « Tous » — sinon « Tous » ne se retirerait jamais.
+        if(String(_pilCompteur).indexOf("'travail'")<0)
+          return _echec('le retour en arrière ne vise pas la vue de travail');
+        return true;})());
+
+      ok('La grille et la liste montrent la MÊME chose, et masquent ce qui dort',(()=>{
+        const _sU=currentUser, _sF=_filtreClients;
+        const _sDB=DB.get('users');
+        try{
+          const t=Date.now();
+          const co={id:'C9',email:'c9@t.fr',role:'coach',fname:'K',studentCodes:[
+            {codeId:'k9',token:'T9',active:true,studentName:'Invité',createdAt:t-30*_J,ouvertLe:t-20*_J}]};
+          const l=[_ath({id:'a',fname:'Actif', sessions:[{date:t-1*_J}]},t),
+                   _ath({id:'b',fname:'Dort',  sessions:[{date:t-40*_J}]},t),
+                   _ath({id:'c',fname:'Jamais',sessions:[]},t)];
+          const users={'c9@t.fr':co};
+          l.forEach(a=>{ a.coachId='C9'; users[a.fname+'@t9.fr']=a; });
+          currentUser=co; DB.set('users',users);
+          _filtreClients='travail';
+          const rech=document.getElementById('ch-search'); if(rech) rech.value='';
+          renderClientList();
+          const cnt=(document.getElementById('ch-count')||{}).textContent||'';
+          // 3 athlètes + 1 invitation = 4 au total, 1 seul en activité.
+          if(cnt.indexOf('1/4')<0) return _echec('compteur : '+cnt);
+          const grille=(document.getElementById('ch-vignettes')||{}).textContent||'';
+          if(grille.indexOf('Actif')<0) return _echec('l’athlète actif manque dans la grille');
+          for(const absent of ['Dort','Jamais','Invité'])
+            if(grille.indexOf(absent)>=0) return _echec(absent+' est encore dans les ronds');
+          // « Tous » les ramène TOUS : c'est ce que son nombre promet.
+          _filtreClients='tous'; renderClientList();
+          const cnt2=(document.getElementById('ch-count')||{}).textContent||'';
+          if(cnt2.indexOf('4/4')<0) return _echec('« Tous » n’ouvre pas sa propre liste : '+cnt2);
+          // Et une recherche retrouve un endormi : masquer quelqu'un à qui on
+          // pense nommément serait absurde.
+          _filtreClients='travail';
+          if(rech){ rech.value='dort'; renderClientList();
+            const g2=(document.getElementById('ch-vignettes')||{}).textContent||'';
+            if(g2.indexOf('Dort')<0) return _echec('la recherche ne retrouve pas un endormi'); }
+          return true;
+        } finally {
+          const r=document.getElementById('ch-search'); if(r) r.value='';
+          _filtreClients=_sF; currentUser=_sU;
+          if(_sDB) DB.set('users',_sDB);
+          try{ renderClientList(); }catch(e){}
+        }})());
+
+      ok('Le cadre « Inactifs » ne s’affiche pas à zéro',(()=>{
+        // Une liste de relance qui s'affiche à zéro devient du décor, et on
+        // cesse de la lire le jour où elle dit quelque chose.
+        return _htmlInactifs([],Date.now())===''&&_htmlInactifs(null,Date.now())===''
+          ?true:_echec('un cadre vide est rendu');})());
+
+      ok('Le cadre « Inactifs » est gris, jamais rouge',(()=>{
+        // Ce n'est pas une alerte : personne n'a mal, rien n'est en retard. La
+        // peindre comme « À traiter » lui volerait l'attention que la santé
+        // doit garder.
+        const t=Date.now();
+        const h=_htmlInactifs([_ath({fname:'Dort',sessions:[{date:t-40*_J}]},t)],t);
+        if(/var\(--red\)|var\(--red-text\)|#E02020|#e02020/.test(h))
+          return _echec('du rouge dans le cadre');
+        return /border-left:3px solid var\(--sub\)/.test(h)
+          ?true:_echec('le liseré gris a disparu');})());
+
+      ok('Les deux relances ouvrent un brouillon, et rien ne part tout seul',(()=>{
+        const t=Date.now();
+        const c=_ath({fname:'Léa',sessions:[{date:t-40*_J}]},t);
+        const k=canauxRelanceInactif(c,t);
+        if(!/^https:\/\/wa\.me\/33612345678\?text=/.test(k.wa)) return _echec('WhatsApp : '+k.wa);
+        // ⚠ L'ADRESSE N'EST PAS PERCENT-ENCODÉE : « mailto:x%40t.fr » fait
+        // tomber une partie des clients mail. Seuls sujet et corps se codent.
+        if(!/^mailto:z@t\.fr\?subject=/.test(k.mail)) return _echec('mail : '+k.mail.slice(0,40));
+        if(k.mail.indexOf('%40')>=0) return _echec('l’arobase a été encodée');
+        if(k.mail.indexOf('body=')<0) return _echec('le corps manque');
+        // LE TEXTE NE REPROCHE RIEN, et ne porte aucune donnée de santé.
+        const txt=k.texte;
+        if(txt.indexOf('Léa')<0) return _echec('le prénom manque');
+        if(txt.indexOf('40 jours')<0) return _echec('la durée manque');
+        if(txt.indexOf('Aucun reproche')<0) return _echec('le ton a changé : '+txt);
+        for(const interdit of ['poids','douleur','bilan','kilo','blessure'])
+          if(txt.toLowerCase().indexOf(interdit)>=0) return _echec('donnée de santé : '+interdit);
+        // ET LE CADRE LE DIT À L'ÉCRAN : rien n'est envoyé à la place du coach.
+        const h=_htmlInactifs([c],t);
+        return /RepCore n’envoie rien à ta place/.test(h)
+          ?true:_echec('la mention manque');})());
+
+      ok('Pas de numéro, pas de bouton — et on dit pourquoi',(()=>{
+        // Un bouton de contact qui n'ouvre rien est pire que pas de bouton : il
+        // fait croire à une panne. Règle déjà écrite pour le contact du coach.
+        const t=Date.now();
+        const sansTel=_ath({fname:'A',sessions:[{date:t-40*_J}],phone:''},t);
+        const sansRien=_ath({fname:'B',sessions:[{date:t-40*_J}],phone:'06',email:''},t);
+        const k1=canauxRelanceInactif(sansTel,t);
+        if(k1.wa!=='') return _echec('un lien WhatsApp sans numéro');
+        if(!k1.mail) return _echec('le mail a disparu avec le numéro');
+        // « 06… » : un numéro sans indicatif produit un lien que WhatsApp
+        // refuse. _numWa le rejette, et on n'écrit pas le bouton.
+        const k2=canauxRelanceInactif(sansRien,t);
+        if(k2.wa||k2.mail) return _echec('un lien construit sans rien : '+JSON.stringify(k2));
+        const h=_htmlInactifs([sansRien],t);
+        if(/wa\.me|mailto:/.test(h)) return _echec('un lien mort dans le cadre');
+        return /Ni numéro/.test(h)?true:_echec('le cadre ne dit pas ce qui manque');})());
+
+      ok('Une adresse mail piégée ne réécrit pas le message',(()=>{
+        // Un champ email contenant « ?body= » aurait remplacé le texte que le
+        // coach croit envoyer. On refuse l'adresse plutôt que de la recoller.
+        const t=Date.now();
+        for(const sale of ['a b@t.fr','x?body=pirate@t.fr','y&subject=z@t.fr','<a@t.fr']){
+          const k=canauxRelanceInactif(_ath({fname:'S',sessions:[{date:t-40*_J}],email:sale},t),t);
+          if(k.mail!=='') return _echec(sale+' → '+k.mail);
+        }
+        return true;})());
+
+      ok('Le prénom d’un athlète est échappé dans le cadre « Inactifs »',(()=>{
+        // XSS STOCKÉ : le prénom est saisi par l'athlète et atterrit dans le
+        // tableau de bord de son coach. Même précaution que renderTodoBlock.
+        const t=Date.now();
+        const h=_htmlInactifs([_ath({fname:'<img src=q onerror=alert(1)>',
+          sessions:[{date:t-40*_J}]},t)],t);
+        const d=document.createElement('div'); d.innerHTML=h;
+        if(d.querySelector('img')) return _echec('une image a été montée');
+        for(const x of d.querySelectorAll('*'))
+          for(const a of x.attributes)
+            if(/^on/i.test(a.name)) return _echec(x.tagName+' porte '+a.name);
+        return true;})());
+
+      ok('« Inactifs » se place entre la liste d’athlètes et « jamais démarré »',(()=>{
+        // L'ordre du bas va du plus proche au plus lointain : un athlète
+        // endormi s'est déjà entraîné, celui d'en dessous n'a jamais commencé,
+        // et le dernier n'a même pas de compte.
+        const i=document.getElementById('ch-inactifs');
+        const j=document.getElementById('ch-jamais-demarre');
+        const v=document.getElementById('ch-invitations');
+        const l=document.getElementById('ch-clients-list');
+        if(!i) return _echec('aucun conteneur « inactifs »');
+        if(!j||!v||!l) return _echec('un conteneur voisin manque');
+        const S=Node.DOCUMENT_POSITION_FOLLOWING;
+        if(!(l.compareDocumentPosition(i)&S)) return _echec('« inactifs » précède la liste d’athlètes');
+        if(!(i.compareDocumentPosition(j)&S)) return _echec('« inactifs » ne précède pas « jamais démarré »');
+        if(!(j.compareDocumentPosition(v)&S)) return _echec('« jamais démarré » ne précède pas « en attente »');
+        // Et il est rempli partout où « jamais démarré » l'est : un cadre qui
+        // ne se rafraîchit qu'à l'ouverture afficherait un athlète relancé la
+        // veille.
+        const s=String(loadCoachHome);
+        const nj=s.split('_rendreJamaisDemarre').length-1;
+        const ni=s.split('_rendreInactifs').length-1;
+        return ni===nj?true:_echec(ni+' appel(s) contre '+nj+' pour « jamais démarré »');})());
+
       ok('Les listes « jamais démarré » et « en attente » sont SOUS la liste d’athlètes',(()=>{
         const l=document.getElementById('ch-clients-list');
         const j=document.getElementById('ch-jamais-demarre');
