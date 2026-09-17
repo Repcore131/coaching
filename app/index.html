@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1265';
+window.RC_BUILD='1266';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5418,6 +5418,12 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .hist-repli>summary::-webkit-details-marker{display:none}
 .hist-repli>summary::marker{content:''}
 .hist-repli[open]>summary .hist-chevron{transform:rotate(180deg)}
+/* R28 — les deux sections repliables de Lifestyle. L'en-tete garde sa forme
+   (barre, icone, titre), il devient seulement le bouton du repli. */
+.ls-sec-tete{display:flex;align-items:center;gap:10px;list-style:none;cursor:pointer;
+  min-height:44px;-webkit-tap-highlight-color:transparent}
+.ls-sec[open]>.ls-sec-tete{margin-bottom:12px}
+.ls-sep{margin:20px 0}
 
 /* ══════════════════ ARC — SYSTÈME D'ANIMATION ══════════════════
    L'application est un circuit sous tension, l'athlète en est la source. Chaque
@@ -11416,19 +11422,30 @@ const COACH_PHOTO='icons/coach.jpg';
            17/09/2026) : la saisie manuelle est le chemin principal, et
            l'import par capture devient son alternative, SOUS le bouton de
            saisie de chaque carte, Pas puis Sommeil. Voir _htmlCarteSante. -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <!-- R28 — LES DEUX SECTIONS SE REPLIENT. L ecran est long : a l arrivee,
+           loadLifestyle n ouvre que celle du moment de la journee
+           (lifestyleSectionDuMoment) — la nuit le matin, les pas ensuite. Les
+           rendus suivants ne touchent qu a leur contenu : un repli choisi par
+           l athlete tient jusqu a la prochaine ouverture de l ecran. -->
+      <details id="ls-pas" class="hist-repli ls-sec" open>
+      <summary class="ls-sec-tete">
         <div style="width:3px;height:22px;background:var(--red);border-radius:var(--r-1);box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
         <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
         <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--red-text);text-transform:uppercase;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)">MES PAS</span>
-      </div>
+        <span style="flex:1"></span><span class="hist-chevron" aria-hidden="true" style="font-size:var(--fs-md);color:var(--sub);transition:transform var(--t-1)">▾</span>
+      </summary>
       <div id="lifestyle-steps-content"></div>
-      <div class="divider" style="margin:28px 0"></div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      </details>
+      <div class="divider ls-sep"></div>
+      <details id="ls-sommeil" class="hist-repli ls-sec" open>
+      <summary class="ls-sec-tete">
         <div style="width:3px;height:22px;background:#60a5fa;border-radius:var(--r-1);box-shadow:0 0 10px rgba(96,165,250,.9)"></div>
         <span style="display:inline-flex;color:#60a5fa;filter:drop-shadow(0 0 6px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
         <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--text);text-transform:uppercase;text-shadow:var(--halo-2)">MON SOMMEIL</span>
-      </div>
+        <span style="flex:1"></span><span class="hist-chevron" aria-hidden="true" style="font-size:var(--fs-md);color:var(--sub);transition:transform var(--t-1)">▾</span>
+      </summary>
       <div id="lifestyle-sleep-content"></div>
+      </details>
       <!-- LES HABITUDES DU COACH, SUR L'ECRAN DE LEUR SUJET. Elles restent
            aussi sur l'accueil : l'appui quotidien y est un rite, et le
            deplacer aurait echange une bonne place contre une autre. Ici elles
@@ -82021,33 +82038,54 @@ function loadSteps(containerId='steps-content',opts){
   // seulement quand le type a été posé à la main. La teinte rouge reste
   // réservée au jour ON DÉCLARÉ : un jour déduit n’a pas la même certitude, et
   // le dire en rouge lui donnerait un poids qu’il n’a pas.
-  const todayGoalHintHtml=todayGoal?`<div style="text-align:center;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px">Objectif : <strong style="color:${todayType==='on'?'var(--red)':'var(--sub)'}">${todayGoal.toLocaleString('fr-FR')} pas</strong></div>`:'';
+  const todayGoalHintHtml=todayGoal?`<div style="text-align:center;font-size:var(--fs-xs);color:var(--sub)">Objectif : <strong style="color:${todayType==='on'?'var(--red)':'var(--sub)'}">${todayGoal.toLocaleString('fr-FR')} pas</strong></div>`:'';
 
   document.getElementById(containerId).innerHTML=`
-    <div class="card-nut" style="margin-bottom:14px;${_animEntree('steps-obj')}">
+    <!-- R28 — L ORDRE DE L USAGE : la saisie du jour, ce qu elle change,
+         la semaine, l historique, puis les reglages. -->
+    <div class="card-nut" style="margin-bottom:14px;${_animEntree('steps-saisie')}">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,${todayType==='off'?'rgba(96,165,250,.13)':'rgba(224,32,32,.14)'},transparent 68%);pointer-events:none"></div>
+      <div style="position:relative">
+        ${_bandeauJour('steps-date-input',selStr,'changeStepsDate',{avecFleches:true,
+          prev:_jourVoisin(selStr,-1,STEPS_RETENTION_JOURS),
+          next:_jourVoisin(selStr,1,STEPS_RETENTION_JOURS),
+          retention:STEPS_RETENTION_JOURS})}
+        <!-- R12 — ICI ON MARQUE LE TYPE DU JOUR, on ne regle rien. « Aujourd'hui »
+             seulement si le jour choisi EST aujourd'hui : le bandeau au-dessus
+             permet de revenir sur un autre jour, et le libelle mentirait. -->
+        <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">${selStr===todayStr?'Aujourd\'hui':'Ce jour-là'} :</div>
+        <div style="display:flex;gap:8px;margin-bottom:11px">
+          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Entraînement</button>
+          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Repos</button>
+        </div>
+        <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
+          value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
+          style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:var(--r-3);color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:11px;box-shadow:var(--e-inset);text-shadow:var(--halo-2)">
+        <!-- R28 — « Enregistrer », comme partout ailleurs dans l app. -->
+        <button class="btn btn-red" onclick="saveSteps()">Enregistrer</button>
+        <!-- LA CAPTURE SE PLACE SOUS LA SAISIE, PAS EN BAS DE PAGE : l athlete
+             qui n a pas note ses journees est precisement celui qui ne fait
+             pas defiler. R28 — dans la carte, sous le bouton, en alternative
+             (« ou importe une capture… ») : meme forme que sur Lifestyle. -->
+        ${_avecImport?_htmlCadreImportCapture('pas',{alternative:true}):''}
+      </div>
+    </div>
+
+    <!-- R28 — L OBJECTIF DU JOUR ET SON AVANCEMENT, juste sous la saisie :
+         c est ce que le chiffre qu on vient d ecrire change. -->
+    ${todayGoalHintHtml||todayProgressHtml?`<div class="card-nut" style="margin-bottom:14px;${_animEntree('steps-jour')}"><div style="position:relative">${todayGoalHintHtml}${todayProgressHtml}</div></div>`:''}
+
+    <div class="card-nut" style="margin-bottom:14px;${_animEntree('steps-sem')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Objectifs de pas</div>
-        <!-- ALIGNES PAR LE BAS. « JOUR ON ENTRAÎNEMENT » se replie sur deux
-             lignes la ou « JOUR OFF REPOS » tient sur une : les deux champs
-             se retrouvaient decales. Les colonnes s etirent a la meme hauteur
-             et poussent leur champ en bas, ce qui tient quel que soit le
-             libelle — figer une hauteur casserait a la premiere retouche de
-             texte, ou sur un telephone plus etroit. -->
-        <div style="display:flex;gap:10px;margin-bottom:12px;align-items:stretch">
-          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
-            <!-- R12 — PLUS DE « JOUR ON ». Ici on REGLE UN OBJECTIF : le
-                 libelle le dit, et il ne se confond plus avec le marquage du
-                 jour, plus bas, qui employait les memes mots. -->
-            <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours d'entraînement</div>
-            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:var(--r-2);color:var(--red-text);font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
-          </div>
-          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
-            <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours de repos</div>
-            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
-          </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
+          <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
+          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> Entraînement &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> Repos</span>
         </div>
-        <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
+        <div style="display:flex;gap:4px">${labels}</div>
+        <div style="display:flex;gap:4px">${counts}</div>
       </div>
     </div>
 
@@ -82068,50 +82106,35 @@ function loadSteps(containerId='steps-content',opts){
       </div>
     </div>
 
-    <div class="card-nut" style="margin-bottom:14px;${_animEntree('steps-saisie')}">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
-      <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,${todayType==='off'?'rgba(96,165,250,.13)':'rgba(224,32,32,.14)'},transparent 68%);pointer-events:none"></div>
-      <div style="position:relative">
-        ${_bandeauJour('steps-date-input',selStr,'changeStepsDate',{avecFleches:true,
-          prev:_jourVoisin(selStr,-1,STEPS_RETENTION_JOURS),
-          next:_jourVoisin(selStr,1,STEPS_RETENTION_JOURS),
-          retention:STEPS_RETENTION_JOURS})}
-        <!-- R12 — ICI ON MARQUE LE TYPE DU JOUR, on ne regle rien. « Aujourd'hui »
-             seulement si le jour choisi EST aujourd'hui : le bandeau au-dessus
-             permet de revenir sur un autre jour, et le libelle mentirait. -->
-        <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">${selStr===todayStr?'Aujourd\'hui':'Ce jour-là'} :</div>
-        <div style="display:flex;gap:8px;margin-bottom:11px">
-          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Entraînement</button>
-          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Repos</button>
-        </div>
-        ${todayGoalHintHtml}
-        <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
-          value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
-          style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:var(--r-3);color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:11px;box-shadow:var(--e-inset);text-shadow:var(--halo-2)">
-        <button class="btn btn-red" onclick="saveSteps()">Sauver</button>
-        ${todayProgressHtml}
-      </div>
-    </div>
-
-    <!-- LA CAPTURE SE PLACE SOUS LA SAISIE, PAS EN BAS DE PAGE. Elle etait
-         derriere l'historique : personne ne descend jusque-la, et l'athlete
-         qui n'a pas note ses journees est precisement celui qui ne fait pas
-         defiler. Elle suit donc immediatement le champ qu'elle remplace. -->
-    ${_avecImport?_htmlCadreImportCapture('pas'):''}
-    <div class="card-nut" style="margin-bottom:14px;${_animEntree('steps-sem')}">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
-      <div style="position:relative">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
-          <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
-          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> Entraînement &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> Repos</span>
-        </div>
-        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
-        <div style="display:flex;gap:4px">${labels}</div>
-        <div style="display:flex;gap:4px">${counts}</div>
-      </div>
-    </div>
-
     ${histHtml}
+    <!-- R28 — LES REGLAGES EN DERNIER, REPLIES. On regle ses objectifs une
+         fois ; on saisit ses pas tous les jours. -->
+    <div class="card-nut" style="margin:14px 0">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      <details class="hist-repli" style="position:relative">
+        <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Régler mes objectifs</div><span style="flex:1"></span><span class="hist-chevron" style="font-size:var(--fs-md);color:var(--sub);transition:transform var(--t-1)">▾</span></summary>
+        <!-- ALIGNES PAR LE BAS. « JOUR ON ENTRAÎNEMENT » se replie sur deux
+             lignes la ou « JOUR OFF REPOS » tient sur une : les deux champs
+             se retrouvaient decales. Les colonnes s etirent a la meme hauteur
+             et poussent leur champ en bas, ce qui tient quel que soit le
+             libelle — figer une hauteur casserait a la premiere retouche de
+             texte, ou sur un telephone plus etroit. -->
+        <div style="display:flex;gap:10px;margin:13px 0 12px;align-items:stretch">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
+            <!-- R12 — PLUS DE « JOUR ON ». Ici on REGLE UN OBJECTIF : le
+                 libelle le dit, et il ne se confond plus avec le marquage du
+                 jour, plus haut, qui employait les memes mots. -->
+            <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours d'entraînement</div>
+            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:var(--r-2);color:var(--red-text);font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
+            <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours de repos</div>
+            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
+          </div>
+        </div>
+        <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
+      </details>
+    </div>
   `;
   // Les barres et le pourcentage du jour ne bougent que si quelqu'un leur donne
   // leur cible AU TOUR SUIVANT : c'est tout l'objet de _animerJauges.
@@ -87228,22 +87251,8 @@ function loadSleep(containerId='sleep-content',user,opts){
   }
 
   document.getElementById(containerId).innerHTML=`
-    <div style="background:linear-gradient(145deg,#0d2a4d 0%,#08172c 55%,#040c17 100%);border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);${_animEntree('sleep-moy')}">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.16) 16px,rgba(0,0,0,.16) 17px);pointer-events:none"></div>
-      <div style="position:absolute;right:-20px;top:-20px;width:96px;height:96px;border-radius:var(--r-full);background:rgba(255,255,255,.05);pointer-events:none"></div>
-      <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
-      <div style="position:relative">
-        <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
-        <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;--halo-c:${weekAvg?avgColor:'rgba(255,255,255,.4)'};text-shadow:var(--halo-3),0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
-        <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
-        <div style="margin-top:14px;display:flex;justify-content:center;gap:16px">
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--green);margin-top:2px">7 – 9 h</div></div>
-          <div style="width:1px;background:rgba(255,255,255,.15)"></div>
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
-        </div>
-      </div>
-    </div>
-
+    <!-- R28 — MEME ORDRE QUE LES PAS : la nuit a saisir d abord, puis la
+         semaine et sa moyenne, la cafeine, l historique replie. -->
     <div class="card-nut" style="margin-bottom:14px;${_animEntree('sleep-saisie')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,rgba(96,165,250,.13),transparent 68%);pointer-events:none"></div>
@@ -87264,11 +87273,12 @@ function loadSleep(containerId='sleep-content',user,opts){
         </div>
         <div id="sleep-preview" style="text-align:center;font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:${sleepColor(todayEntry.duration)};--halo-c:${sleepColor(todayEntry.duration)};text-shadow:var(--halo-2)aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
         <button class="btn btn-red" onclick="saveSleep()">Enregistrer</button>
+        <!-- Jumelle de la carte des pas : sous le bouton de la nuit, en
+             alternative. R28 — dans la carte, comme sur Lifestyle. -->
+        ${_avecImport?_htmlCadreImportCapture('sommeil',{alternative:true}):''}
       </div>
     </div>
 
-    <!-- Jumelle de la carte des pas : juste sous la saisie de la nuit. -->
-    ${_avecImport?_htmlCadreImportCapture('sommeil'):''}
     <div class="card-nut" style="margin-bottom:14px;${_animEntree('sleep-sem')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
@@ -87281,6 +87291,22 @@ function loadSleep(containerId='sleep-content',user,opts){
         <div style="display:flex;gap:4px">${counts}</div>
       </div>
     </div>
+    <div style="background:linear-gradient(145deg,#0d2a4d 0%,#08172c 55%,#040c17 100%);border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);${_animEntree('sleep-moy')}">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.16) 16px,rgba(0,0,0,.16) 17px);pointer-events:none"></div>
+      <div style="position:absolute;right:-20px;top:-20px;width:96px;height:96px;border-radius:var(--r-full);background:rgba(255,255,255,.05);pointer-events:none"></div>
+      <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
+      <div style="position:relative">
+        <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
+        <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;--halo-c:${weekAvg?avgColor:'rgba(255,255,255,.4)'};text-shadow:var(--halo-3),0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
+        <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
+        <div style="margin-top:14px;display:flex;justify-content:center;gap:16px">
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--green);margin-top:2px">7 – 9 h</div></div>
+          <div style="width:1px;background:rgba(255,255,255,.15)"></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Le MÊME porteur que le journal ci-dessus. Lire les nuits d’un dossier
          et la caféine d’un autre mélangerait deux personnes — c’est le défaut
          qu’on vient de fermer sur nutIsOnDay et _getEffectiveMacros. -->
@@ -87353,8 +87379,24 @@ function saveSleep(){
   _rerenderLifestyle();
 }
 
+// R28 — PURE. La section ouverte en arrivant sur Lifestyle : le matin, la nuit
+// qu'on vient de finir ; a partir de midi, les pas de la journee. L'autre est
+// repliee — l'ecran portait les deux cartes depliees l'une sous l'autre.
+const LIFESTYLE_SOMMEIL_AVANT=12;
+function lifestyleSectionDuMoment(d){
+  const h=((d instanceof Date)?d:new Date()).getHours();
+  return h<LIFESTYLE_SOMMEIL_AVANT?'sommeil':'pas';
+}
 function loadLifestyle(){
   go('s-lifestyle');
+  // A L'ARRIVEE SEULEMENT : _rerenderLifestyle ne repasse pas par ici, et un
+  // repli choisi a la main tient donc pendant la saisie.
+  try{
+    const q=lifestyleSectionDuMoment(new Date());
+    const p=document.getElementById('ls-pas'), s=document.getElementById('ls-sommeil');
+    if(p) p.open=q==='pas';
+    if(s) s.open=q==='sommeil';
+  }catch(e){}
   // ⚠ LES DEUX CARTES REMPLACENT LES DEUX ANCIENS RENDUS SUR CET ECRAN, et
   // seulement sur celui-ci : les ecrans s-steps et s-sleep gardent loadSteps
   // et loadSleep tels quels, avec leur saisie. Rien n'est supprime.

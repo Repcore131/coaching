@@ -40432,6 +40432,112 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R28 : PAS ET SOMMEIL, LA SAISIE DU JOUR D'ABORD ════════
+
+    // L'ordre des repères dans un rendu : chacun doit SUIVRE le précédent dans
+    // le document. [nom, sélecteur] ou [nom, null, texte].
+    const _r28Ordre=(root,reperes)=>{
+      const trouver=([n,sel,txt])=>{
+        if(sel) return root.querySelector(sel);
+        const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT); let t;
+        while((t=w.nextNode())) if(t.nodeValue.indexOf(txt)>=0) return t.parentElement;
+        return null; };
+      const l=reperes.map(r=>[r[0],trouver(r)]);
+      const manque=l.filter(x=>!x[1]).map(x=>x[0]);
+      if(manque.length) return 'absent : '+manque.join(', ');
+      for(let i=1;i<l.length;i++)
+        if(!(l[i-1][1].compareDocumentPosition(l[i][1])&Node.DOCUMENT_POSITION_FOLLOWING)) return l[i-1][0]+' après '+l[i][0];
+      return '';
+    };
+    const _r28Compte=()=>{
+      const iso=k=>localISODate(new Date(Date.now()-k*864e5));
+      return {id:'r28',email:'r28@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+        programs:{},contraintesSante:[],consent:{health:true,policyVersion:POLICY_VERSION},birthdate:'1990-05-01',gender:'homme',
+        sessions_config:[],stepsGoals:{on:10000,off:7000},stepsDayType:{[iso(0)]:'on'},
+        stepsLog:[0,1,2,3].map(k=>({date:iso(k),count:6000+k*500})),
+        sleepLog:[0,1,2].map(k=>({date:iso(k),duration:7+k*.5,bed:'23:00',wake:'07:00'}))};
+    };
+
+    okA('R28 — Pas : saisie, objectif du jour, semaine, historique, réglages repliés, sur l’écran dédié comme dans Lifestyle',async()=>{
+      const sU=currentUser, svD=_stepsDate;
+      const PAS=[['bandeau du jour','#steps-date-input'],['marquage du jour','button[onclick="stepsToggleType(\'on\')"]'],
+        ['champ','#steps-today-input'],['Enregistrer','button[onclick="saveSteps()"]'],
+        ['« ou importe »',null,'ou importe une capture d\'écran de ton application de santé'],['import','input[onchange="importerCaptureStats(this)"]'],
+        ['objectif du jour',null,'Objectif :'],['avancement','#steps-pct-jour'],['semaine',null,'Cette semaine'],
+        ['moyenne',null,'Moyenne hebdomadaire'],['historique',null,'Historique'],['réglages',null,'Régler mes objectifs'],['objectif entraînement','#steps-goal-on']];
+      try{
+        currentUser=_r28Compte(); _stepsDate=null;
+        for(const [ou,conteneur] of [['écran dédié','steps-content'],['Lifestyle','lifestyle-steps-content']]){
+          if(conteneur!=='steps-content') go('s-lifestyle');
+          loadSteps(conteneur);
+          const z=document.getElementById(conteneur);
+          const o=_r28Ordre(z,PAS); if(o) return _echec(ou+' : '+o);
+          if(conteneur==='steps-content'&&(document.querySelector('.screen.active')||{}).id!=='s-steps') return _echec('l’écran dédié ne s’ouvre plus');
+          const b=z.querySelector('button[onclick="saveSteps()"]');
+          if(b.textContent.trim()!=='Enregistrer'||/\bSauver\b/.test(z.textContent)) return _echec(ou+' : bouton « '+b.textContent.trim()+' »');
+          // L'import DANS la carte de saisie, sous son bouton.
+          if(z.querySelector('input[onchange="importerCaptureStats(this)"]').closest('.card-nut')!==b.closest('.card-nut')) return _echec(ou+' : l’import n’est pas dans la carte de saisie');
+          // Les deux replis, fermés ; les objectifs dans le second.
+          const det=[...z.querySelectorAll('details')];
+          const lib=det.map(d=>d.querySelector('summary').textContent.replace(/[▾\d]|jours?/g,'').trim());
+          if(lib.join('|')!=='Historique|Régler mes objectifs') return _echec(ou+' : replis '+lib.join('|'));
+          if(det.some(d=>d.open)) return _echec(ou+' : un repli s’ouvre tout seul');
+          if(!det[1].querySelector('#steps-goal-on')||!det[1].querySelector('#steps-goal-off')||!det[1].querySelector('button[onclick="saveStepsGoals()"]')) return _echec(ou+' : les objectifs ne sont pas dans leur repli');
+        }
+        // Sans import, la phrase part avec lui.
+        loadSteps('lifestyle-steps-content',{avecImport:false});
+        if(/ou importe une capture/.test(g('lifestyle-steps-content').textContent)) return _echec('« ou importe » sans import');
+        return true;
+      } finally { currentUser=sU; _stepsDate=svD; }
+      function g(id){ return document.getElementById(id); }
+    });
+
+    okA('R28 — Sommeil : la nuit à saisir d’abord, puis la semaine et l’historique replié, sur les deux rendus',async()=>{
+      const sU=currentUser, svD=_sleepDate;
+      const SOM=[['bandeau du jour','#sleep-date-input'],['coucher','#sleep-bed-input'],['lever','#sleep-wake-input'],
+        ['Enregistrer','button[onclick="saveSleep()"]'],['« ou importe »',null,'ou importe une capture d\'écran de ton application de santé'],
+        ['semaine',null,'Cette semaine'],['moyenne',null,'Moyenne hebdomadaire'],['historique','details.hist-repli']];
+      try{
+        currentUser=_r28Compte(); _sleepDate=null;
+        for(const [ou,conteneur] of [['écran dédié','sleep-content'],['Lifestyle','lifestyle-sleep-content']]){
+          if(conteneur!=='sleep-content') go('s-lifestyle');
+          loadSleep(conteneur);
+          const z=document.getElementById(conteneur);
+          const o=_r28Ordre(z,SOM); if(o) return _echec(ou+' : '+o);
+          const b=z.querySelector('button[onclick="saveSleep()"]');
+          if(z.querySelector('input[onchange="importerCaptureStats(this)"]').closest('.card-nut')!==b.closest('.card-nut')) return _echec(ou+' : l’import n’est pas dans la carte de la nuit');
+          if(z.querySelector('details.hist-repli').open) return _echec(ou+' : l’historique s’ouvre tout seul');
+        }
+        return true;
+      } finally { currentUser=sU; _sleepDate=svD; }
+    });
+
+    okA('R28 — Lifestyle : MES PAS et MON SOMMEIL se replient, seule la section du moment est ouverte à l’arrivée',async()=>{
+      const sU=currentUser;
+      const p=document.getElementById('ls-pas'), s=document.getElementById('ls-sommeil');
+      try{
+        if(!p||!s||p.tagName!=='DETAILS'||s.tagName!=='DETAILS') return _echec('les sections ne sont pas repliables');
+        if(!/MES PAS/.test(p.querySelector('summary').textContent)||!/MON SOMMEIL/.test(s.querySelector('summary').textContent)) return _echec('les en-têtes ont changé');
+        if(!p.contains(document.getElementById('lifestyle-steps-content'))||!s.contains(document.getElementById('lifestyle-sleep-content'))) return _echec('le contenu n’est plus dans sa section');
+        // Le barème : la nuit le matin, les pas à partir de midi.
+        const cas=[[0,'sommeil'],[7,'sommeil'],[11,'sommeil'],[12,'pas'],[18,'pas'],[23,'pas']];
+        for(const [h,att] of cas){ const v=lifestyleSectionDuMoment(new Date(2026,0,15,h,59)); if(v!==att) return _echec(h+'h → '+v); }
+        currentUser=_r28Compte();
+        p.open=true; s.open=true;
+        loadLifestyle();
+        const att=lifestyleSectionDuMoment(new Date());
+        if(p.open!==(att==='pas')||s.open!==(att==='sommeil')) return _echec('à l’arrivée : pas '+p.open+', sommeil '+s.open+' (attendu '+att+')');
+        // Les cartes santé sont toujours là : seule leur enveloppe se replie.
+        if(document.querySelectorAll('#s-lifestyle .san-carte').length!==2) return _echec('les cartes santé ont disparu');
+        // UN REPLI CHOISI TIENT AUX RENDUS SUIVANTS.
+        p.open=!p.open; s.open=!s.open;
+        const avant=[p.open,s.open].join();
+        _rerenderLifestyle();
+        if([p.open,s.open].join()!==avant) return _echec('un rendu défait le repli choisi');
+        return true;
+      } finally { currentUser=sU; }
+    });
+
     // ══ 17/09/2026 — R27 : LES ALIMENTS À LA SUITE, SANS REPASSER PAR LA NUTRITION ══
 
     okA('R27 — ajouter, enchaîner, annuler, terminer : la saisie reste sur la recherche, hors ligne compris',async()=>{
