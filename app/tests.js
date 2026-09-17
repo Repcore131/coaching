@@ -39777,14 +39777,21 @@ async function testExercices(){
     };
     const _r08Ex={name:'DEVELOPPE COUCHE',series:3,reps:'10'};
     const _r08S=o=>Object.assign({weight:'60',weight2:'',reps:'10',rir:'',pain:'',done:false},o||{});
-    // R14 — le menu RIR d'une ligne, et ce que sa case affiche.
-    const _r14Sel=tr=>tr?tr.querySelector('.rir-choix select'):null;
+    // R14 — la case RIR d'une ligne, et ce qu'elle affiche.
+    // R15 — c'est un <button> qui ouvre une liste dessinee (#rir-menu).
+    const _r14Sel=tr=>tr?tr.querySelector('button.rir-choix'):null;
     const _r14Vu=tr=>{ const l=tr&&tr.querySelector('.rir-choix');
       return l?[...l.querySelectorAll('[aria-hidden="true"]')].map(x=>x.textContent).join('').replace('▾','').trim():null; };
+    // PAR LES VRAIS GESTES : un tap sur la case, un tap sur l'option.
     const _r14Choisir=(d,v,ligne)=>{
-      const sel=_r14Sel(d.querySelectorAll('#sets-body-0 tr')[ligne||0]);
-      if(!sel) throw new Error('pas de menu RIR sur la série '+((ligne||0)+1));
-      sel.value=v; sel.dispatchEvent(new Event('change'));
+      const b=_r14Sel(d.querySelectorAll('#sets-body-0 tr')[ligne||0]);
+      if(!b) throw new Error('pas de case RIR sur la série '+((ligne||0)+1));
+      b.click();
+      const m=document.getElementById('rir-menu');
+      if(!m) throw new Error('la liste RIR ne s’ouvre pas');
+      const o=[...m.querySelectorAll('.rir-opt')].find(x=>x.getAttribute('data-v')===v);
+      if(!o){ rirMenuFermer(false); throw new Error('pas d’option « '+v+' »'); }
+      o.click();
     };
 
     // ── PARTIE 1 : L'ÉCHELLE DE GÊNE ──
@@ -39913,16 +39920,80 @@ async function testExercices(){
         if(JSON.stringify(ths)!==JSON.stringify(['Reps','Charge','RIR','Gêne','Validé']))
           return _echec('en-tête : '+JSON.stringify(ths));
         const sel=_r14Sel(tr);
-        if(!sel) return _echec('pas de menu RIR');
-        if(!sel.closest('.wo-intensite')) return _echec('le menu RIR n’est pas dans la colonne d’intensité');
-        const V=['','echec','0','1','2','3','4','5'];
-        const T=['RIR','Échec (tu n\'as pas réussi à finaliser ton nombre de reps)','0 (aucune rep de plus possible)',
-          '1 (encore 1 rep en réserve)','2 (encore 2 reps en réserve)','3 (encore 3 reps en réserve)',
-          '4 (encore 4 reps en réserve)','5 (5 reps ou plus en réserve)'];
-        const v=[...sel.options].map(o=>o.value), txt=[...sel.options].map(o=>o.textContent.trim());
-        if(JSON.stringify(v)!==JSON.stringify(V)) return _echec('valeurs : '+JSON.stringify(v));
-        if(JSON.stringify(txt)!==JSON.stringify(T)) return _echec('libellés : '+JSON.stringify(txt));
+        if(!sel) return _echec('pas de case RIR');
+        if(!sel.closest('.wo-intensite')) return _echec('la case RIR n’est pas dans la colonne d’intensité');
         if(!/RIR/.test(sel.getAttribute('aria-label')||'')) return _echec('aria-label : « '+sel.getAttribute('aria-label')+' »');
+        sel.click();
+        const m=document.getElementById('rir-menu');
+        try{
+          if(!m) return _echec('la liste ne s’ouvre pas');
+          if(m.getAttribute('role')!=='listbox') return _echec('la liste n’est pas un listbox');
+          if(sel.getAttribute('aria-expanded')!=='true') return _echec('aria-expanded ne suit pas');
+          const V=['echec','0','1','2','3','4','5'];
+          const T=['Échec (tu n\'as pas réussi à finaliser ton nombre de reps)','0 (aucune rep de plus possible)',
+            '1 (encore 1 rep en réserve)','2 (encore 2 reps en réserve)','3 (encore 3 reps en réserve)',
+            '4 (encore 4 reps en réserve)','5 (5 reps ou plus en réserve)'];
+          const opts=[...m.querySelectorAll('.rir-opt')];
+          const v=opts.map(o=>o.getAttribute('data-v'));
+          const txt=opts.map(o=>o.querySelector('.rir-opt-v').textContent.trim()+' '+o.querySelector('.rir-opt-d').textContent.trim());
+          // Rien a effacer sur une serie vierge : pas de « — ».
+          if(JSON.stringify(v)!==JSON.stringify(V)) return _echec('valeurs : '+JSON.stringify(v));
+          if(JSON.stringify(txt)!==JSON.stringify(T)) return _echec('libellés : '+JSON.stringify(txt));
+        } finally { rirMenuFermer(false); }
+        if(document.getElementById('rir-menu')||document.querySelector('.rir-menu-voile')) return _echec('la liste reste après fermeture');
+        return true;})));
+
+    // R15 — « je réduirais de moitié la taille des indications entre
+    // parenthèses par rapport au chiffre ou échec » (Kevin, 17/09/2026).
+    ok('R15 — dans la liste RIR, la définition est deux fois plus petite que la valeur, sans passer sous 11 px',(()=>
+      _r08Fix(359,d=>{
+        const tb=_r08Rendre(d,_r08Ex,[_r08S({rir:'2'})]);
+        _r14Sel(tb.querySelector('tr')).click();
+        const m=document.getElementById('rir-menu');
+        try{
+          if(!m) return _echec('la liste ne s’ouvre pas');
+          const opts=[...m.querySelectorAll('.rir-opt')];
+          // Une valeur est notée : « — » permet de l'effacer.
+          if(opts[opts.length-1].getAttribute('data-v')!=='') return _echec('pas d’option pour effacer');
+          for(const o of opts){
+            const fv=parseFloat(getComputedStyle(o.querySelector('.rir-opt-v')).fontSize);
+            const fd=parseFloat(getComputedStyle(o.querySelector('.rir-opt-d')).fontSize);
+            if(Math.abs(fd*2-fv)>1) return _echec('« '+o.textContent.trim()+' » : valeur '+fv+' px, définition '+fd+' px');
+            if(fd<11) return _echec('définition sous le plancher : '+fd+' px');
+            if(o.getBoundingClientRect().height<43.5) return _echec('option de '+o.getBoundingClientRect().height.toFixed(1)+' px de haut');
+          }
+          // L'option choisie est marquée, et c'est elle qui a le focus.
+          const on=opts.filter(o=>o.getAttribute('aria-selected')==='true');
+          if(on.length!==1||on[0].getAttribute('data-v')!=='2') return _echec('option marquée : '+on.map(o=>o.getAttribute('data-v')).join(','));
+          if(document.activeElement!==on[0]) return _echec('le focus n’est pas sur l’option choisie');
+          // Dans l'écran.
+          const r=m.getBoundingClientRect();
+          if(r.left<0||r.right>window.innerWidth||r.top<0||r.bottom>window.innerHeight) return _echec('la liste sort de l’écran');
+        } finally { rirMenuFermer(false); }
+        return true;})));
+
+    ok('R15 — la liste RIR se ferme au clavier et au toucher dehors, et une série validée ne l’ouvre pas',(()=>
+      _r08Fix(359,d=>{
+        const tb=_r08Rendre(d,_r08Ex,[_r08S({done:true,rir:'1'}),_r08S()]);
+        const [l1,l2]=tb.querySelectorAll('tr');
+        const b=_r14Sel(l2);
+        b.click();
+        document.getElementById('rir-menu').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+        if(document.getElementById('rir-menu')) return _echec('Échap ne ferme pas');
+        if(document.activeElement!==b) return _echec('Échap ne rend pas le focus à la case');
+        if(b.getAttribute('aria-expanded')!=='false') return _echec('aria-expanded reste ouvert');
+        b.click();
+        const v=document.querySelector('.rir-menu-voile');
+        if(!v) return _echec('pas de voile');
+        v.click();
+        if(document.getElementById('rir-menu')) return _echec('le toucher dehors ne ferme pas');
+        if(woState.sessionData[0].sets[1].rir!=='') return _echec('fermer a écrit un RIR');
+        // La série validée : la case est fermée, et un appel direct n'ouvre rien.
+        if(!_r14Sel(l1).disabled) return _echec('la case d’une série validée est ouverte');
+        if(rirMenuOuvrir(0,0,_r14Sel(l1))||document.getElementById('rir-menu')){ rirMenuFermer(false); return _echec('une série validée ouvre sa liste'); }
+        if(_woRirChoisir(0,0,'3')||woState.sessionData[0].sets[0].rir!=='1') return _echec('une série validée a changé de RIR');
+        // Une valeur hors liste est refusée.
+        if(_woRirChoisir(0,1,'9')||woState.sessionData[0].sets[1].rir!=='') return _echec('« 9 » a été écrit');
         return true;})));
 
     ok('R14 — la case n’affiche que la valeur : « Échec », jamais sa définition',(()=>
@@ -39936,7 +40007,9 @@ async function testExercices(){
             const vu=_r14Vu(tr);
             if(vu!==attendu) return _echec(nom+' : la case affiche « '+vu+' »');
             const sel=_r14Sel(tr);
-            if(sel.value!==String(v)) return _echec(nom+' : le menu montre « '+sel.value+' »');
+            // Le lecteur d'écran entend la valeur, sans la définition.
+            if((sel.getAttribute('aria-label')||'').indexOf(v===''?'non noté':attendu)<0) return _echec(nom+' : aria-label « '+sel.getAttribute('aria-label')+' »');
+            if(/réserve|réussi/.test(sel.textContent)) return _echec(nom+' : la définition est dans la case');
             if(sel.disabled!==done) return _echec(nom+' : disabled='+sel.disabled);
             // LE RENDU NE RÉÉCRIT RIEN : 5 reste 5, et reste du même type.
             if(woState.sessionData[0].sets[0].rir!==v) return _echec(nom+' : réécrit en '+JSON.stringify(woState.sessionData[0].sets[0].rir));
@@ -39949,8 +40022,11 @@ async function testExercices(){
 
     ok('R14 — choisir dans le menu écrit la même valeur qu’avant, et la charge suivante en découle',(()=>
       _r08Fix(359,d=>{
-        if(!/\.rir=this\.value;renderSets\(/.test(String(renderSets)))
-          return _echec('l’onchange du RIR n’écrit plus rir avant de repeindre');
+        const src=String(_woRirChoisir);
+        if(!/s\.rir=v;\s*renderSets\(woState\.exercises\[idx\],woState\.sessionData\[idx\],idx\)/.test(src))
+          return _echec('le choix du RIR n’écrit plus rir avant de repeindre');
+        // L'onchange d'origine ne persistait pas : le choix non plus.
+        if(/woPersist/.test(src)) return _echec('le choix persiste, ce que le menu ne faisait pas');
         const s0=_r08S({weight:'100'});
         const cles=Object.keys(s0).sort().join(',');
         _r08Rendre(d,_r08Ex,[s0,_r08S({weight:''})]);
@@ -40051,8 +40127,21 @@ async function testExercices(){
               if(i.getBoundingClientRect().right>r.getBoundingClientRect().left+0.5)
                 trop.push(ici+' : le ⓘ de « proposé » mord sur le menu RIR');
             }
+            // R15 — LES LIGNES NE SONT PLUS HAUTES QUE LEUR CONTENU. La case de
+            // gêne est un <label> : elle héritait des 16 + 6 px de marge des
+            // libellés de formulaire, et chaque ligne faisait 85 px.
+            if(nom!=='dégressive'){
+              for(const tr of d.querySelectorAll('#sets-body-0 tr')){
+                const h=tr.getBoundingClientRect().height;
+                // 62 : la ligne la plus chargée — pastille RPE et son ⓘ dessous,
+                // ou case, « visé » et « proposé » — mesure 57 à 61 px.
+                if(h>62) trop.push(ici+' : une ligne fait '+h.toFixed(1)+' px de haut');
+              }
+            }
             for(const g of d.querySelectorAll('#sets-body-0 .rir-choix,#sets-body-0 .gene-choix')){
               const r=g.getBoundingClientRect();
+              const cs=getComputedStyle(g);
+              if(parseFloat(cs.marginTop)||parseFloat(cs.marginBottom)) trop.push(ici+' : la case '+g.className+' a une marge '+cs.marginTop+' / '+cs.marginBottom);
               if(r.width<37.5||r.height<37.5) trop.push(ici+' : la case '+g.className+' fait '+r.width.toFixed(1)+' × '+r.height.toFixed(1));
               // ⚠ ET LA POLICE N'A PAS BAISSÉ POUR FAIRE TENIR.
               if(parseFloat(getComputedStyle(g).fontSize)<11) trop.push(ici+' : police de '+g.className+' à '+getComputedStyle(g).fontSize);
@@ -40061,6 +40150,72 @@ async function testExercices(){
         }
       }
       return trop.length?_echec(trop.join(' | ')):true;})());
+
+    // ══ 17/09/2026 — R15 : LE NORDIC CURL, ET LA CONSIGNE QUI DISPARAISSAIT ══
+
+    ok('R15 — le nordic curl est un exercice d’ischios, et un ancien classement automatique en biceps est corrigé',(()=>{
+      const sU=currentUser;
+      try{
+        currentUser={email:'r15@t.fr',exAlias:{},exMuscles:{
+          'NORDIC CURL':{p:['BICEPS'],s:['AVANT_BRAS'],src:'auto'},
+          'NORDIC HAMSTRING CURL':{p:['BICEPS'],s:[],src:'manuel'}}};
+        for(const n of ['NORDIC CURL','Nordic curl inversé','NORDIC CURL AVEC ELASTIQUE']){
+          const r=resoudreMuscles(n,{reps:'6'});
+          if(!r||r.p[0]!=='ISCHIOS') return _echec(n+' : '+JSON.stringify(r));
+        }
+        // CE QUI ÉTAIT FAUX EST RÉÉCRIT, pour de bon.
+        if(currentUser.exMuscles['NORDIC CURL'].p[0]!=='ISCHIOS') return _echec('le classement enregistré n’a pas été corrigé');
+        // UN CHOIX FAIT À LA MAIN N'EST JAMAIS REPRIS, même faux.
+        if(resoudreMuscles('NORDIC HAMSTRING CURL',{reps:'6'}).p[0]!=='BICEPS') return _echec('un choix manuel a été écrasé');
+        // Le curl reste un curl.
+        if(resoudreMuscles('CURL BARRE',{reps:'10'}).p[0]!=='BICEPS') return _echec('CURL BARRE n’est plus biceps');
+        if(resoudreMuscles('CURL MARTEAU DE MON COACH',{reps:'10'}).p[0]!=='BICEPS') return _echec('un curl hors guide n’est plus biceps');
+        // LA LECTURE D'UN AUTRE DOSSIER corrige ce qu'elle rend, SANS écrire.
+        const autre={exAlias:{},exMuscles:{'NORDIC CURL':{p:['BICEPS'],s:[],src:'auto'}}};
+        const l=resoudreMusclesLecture('NORDIC CURL',null,autre);
+        if(!l||l.p[0]!=='ISCHIOS') return _echec('lecture : '+JSON.stringify(l));
+        if(autre.exMuscles['NORDIC CURL'].p[0]!=='BICEPS') return _echec('la lecture a écrit dans le dossier');
+        return true;
+      } finally { currentUser=sU; }})());
+
+    // ⚠ DANS UNE VRAIE SÉANCE, ET SANS INDEX. C'est l'état d'une séance
+    // reprise après une mise à jour : l'apercu, qui chargeait l'index, n'a pas
+    // été ouvert.
+    okA('R15 — une séance ouverte sans l’index des illustrations retrouve son image, et la vidéo du guide s’affiche',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), sIdx=_exoIndex;
+      try{
+        currentUser={id:'r15',email:'r15@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},
+          sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],
+          sessions_config:[{active:true,name:'Jambes',exercises:[{name:'LEG CURL ASSIS',series:3,reps:'12',repos:'2 min',description:'',videoUrl:''}]}]};
+        _exoIndex=null;
+        launchWorkout(currentUser.sessions_config[0],0);
+        const z=document.getElementById('wo-consigne-0');
+        if(!z) return _echec('pas de zone de consigne dans la séance');
+        if(z.querySelector('img')) return _echec('le décor ne prouve rien : l’image est déjà là');
+        await chargerIndexIllustrations();
+        await new Promise(r=>setTimeout(r,0));
+        const img=document.getElementById('wo-consigne-0').querySelector('img');
+        if(!img||!/leg-curl-assis\.webp$/.test(img.getAttribute('src')||'')) return _echec('l’image ne revient pas');
+        if(!/CONSIGNE/.test(document.getElementById('wo-consigne-0').textContent)) return _echec('le bloc CONSIGNE ne revient pas');
+        // LA VIDÉO DU GUIDE, quand le programme n'en porte pas.
+        const att=videosPour('LEG CURL ASSIS')[0];
+        if(!att) return _echec('le guide n’a plus de vidéo pour LEG CURL ASSIS');
+        const a=[...document.getElementById('wo-content').querySelectorAll('a')].find(x=>/VIDÉO TECHNIQUE/.test(x.textContent));
+        if(!a||a.getAttribute('href')!==safeUrl(normaliserUrlVideo(att.url))) return _echec('vidéo : '+(a?a.getAttribute('href'):'aucune'));
+        // ET CELLE DU COACH PASSE DEVANT.
+        woState.exercises[0].videoUrl='https://youtu.be/dQw4w9WgXcQ';
+        renderWoEx();
+        const a2=[...document.getElementById('wo-content').querySelectorAll('a')].find(x=>/VIDÉO TECHNIQUE/.test(x.textContent));
+        if(!a2||a2.getAttribute('href')!==safeUrl(normaliserUrlVideo('https://youtu.be/dQw4w9WgXcQ'))) return _echec('la vidéo du coach ne passe pas devant');
+        return true;
+      } finally {
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        localStorage.removeItem('rc_wo_state');
+        if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
+        if(!_exoIndex&&sIdx) _exoIndex=sIdx;
+        currentUser=sU; woState=sW;
+      }
+    });
 
     // ══ 16/09/2026 — R07 : LA COLONNE D'INTENSITE PARLE AU DOIGT ═════════
     //

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1253';
+window.RC_BUILD='1254';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -3984,7 +3984,10 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
    !important ou non — mesuré. On rend donc les cellules transparentes quand la
    ligne est aussi en alerte, sans ajouter d'!important concurrent. */
 .series-table tr.done.row-alert td{background:transparent}
-.series-table-wo td{padding:5px 4px}.series-table-wo th{padding:6px 6px}
+.series-table-wo td{padding:3px 4px}.series-table-wo th{padding:6px 6px}
+/* R15 — 3 px et non 5 en haut et en bas : « trop d'espace entre le haut et
+   le bas des lignes et ce qui est ecrit » (Kevin). Les cases gardent leurs
+   38 px ; c'est l'air autour qui se reduit. */
 /* LA CASE DESCEND À 38 PX. Le plancher de 44 était un choix d'accessibilité ;
    la demande est répétée, on l'abaisse. La case fait 56 px de large : la cible
    reste 56 × 38, au-dessus du minimum de la règle (24 × 24) et sous son palier
@@ -4015,8 +4018,12 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
 /* ── R14 — LES SEGMENTS RIR ONT ETE RETIRES (Kevin, 17/09/2026) ──────────
    Ils passaient le tableau en cartes, et le rendu a l'ecran a ete juge
    illisible. Le RIR redevient un menu deroulant dans le tableau a cinq
-   colonnes, sur le meme principe que la gene juste dessous : la case ne
-   montre que la valeur, la liste native montre ce qu'elle veut dire. */
+   colonnes : la case ne montre que la valeur, la liste dit ce qu'elle veut
+   dire.
+   R15 — LA LISTE DU RIR N'EST PLUS NATIVE. Kevin : les definitions entre
+   parentheses, deux fois plus petites que « Échec » ou le chiffre. Une liste
+   native ne met qu'une taille par option : la liste est donc dessinee
+   (.rir-menu), et la case est un <button>. La gene garde sa liste native. */
 /* ── R08 — LE MENU DE GENE GARDE SA LARGEUR ───────────────────────────────
    LES LIBELLES SONT DANS LA LISTE, PAS DANS LA CASE. Un <select> se dimensionne
    sur sa plus longue option : « 6 · je dois arrêter » le portait a 125 px, et
@@ -4031,18 +4038,45 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
   gap:3px;min-width:44px;min-height:38px;padding:0 6px;box-sizing:border-box;flex:none;
   background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);
   color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
-  white-space:nowrap;text-transform:none;letter-spacing:.5px}
+  white-space:nowrap;text-transform:none;letter-spacing:.5px;
+  margin:0;line-height:1;vertical-align:middle;cursor:pointer}
+/* R15 — margin:0, ET C'EST CE QUI FAISAIT LES LIGNES HAUTES. La case de gene
+   est un <label> : elle heritait de la regle globale des libelles de
+   formulaire, 16 px au-dessus et 6 px en dessous. Chaque ligne du tableau
+   faisait 85 px pour 38 px de case — mesure. vertical-align:middle retire en
+   plus la descente de la ligne de base sous la case. */
+.rir-choix:focus-visible{outline:none;border-color:var(--red);box-shadow:0 0 0 2px rgba(198,15,8,.15)}
+.rir-choix:disabled{cursor:default}
 /* R14 — « Échec » EN CASSE NORMALE, et pas en capitales espacees heritees du
    tableau : 63 px au lieu de 74. Mesure a 359 px, ces 11 px sont ce qui
    laisse « Gêne ⓘ » sur une ligne dans l'en-tete. */
 .gene-choix .gene-fl,.rir-choix .gene-fl{color:var(--sub);font-size:9px}
-.gene-choix select,.rir-choix select{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;
+.gene-choix select{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;
   opacity:0;cursor:pointer;font-size:var(--fs-xs);border:none}
-.gene-choix:focus-within,.rir-choix:focus-within{border-color:var(--red);box-shadow:0 0 0 2px rgba(198,15,8,.15)}
+.gene-choix:focus-within{border-color:var(--red);box-shadow:0 0 0 2px rgba(198,15,8,.15)}
 /* R14 — le RIR se ferme a la validation, comme avant les segments : il decrit
    un effort accompli. La gene, elle, reste ouverte. */
 .rir-choix.fermee{opacity:.55}
-.rir-choix select:disabled{cursor:default}
+/* R15 — LA LISTE DU RIR. Posee sur <body>, en position fixe sous la case (ou
+   au-dessus quand la place manque), avec un voile transparent qui la ferme au
+   premier toucher dehors.
+   LA VALEUR A 22 px, SA DEFINITION A 11 : la moitie, comme demande, et 11 px
+   est le plancher de lecture de l'app : on ne descend pas en dessous. */
+.rir-menu-voile{position:fixed;inset:0;z-index:var(--z-modal-2);background:transparent}
+.rir-menu{position:fixed;z-index:var(--z-modal-2);box-sizing:border-box;width:max-content;
+  min-width:220px;max-width:min(300px,calc(100vw - 16px));max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);overflow-y:auto;
+  margin:0;padding:4px;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--r-3);box-shadow:0 10px 30px rgba(0,0,0,.55)}
+.rir-opt{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;box-sizing:border-box;
+  margin:0;padding:5px 10px;background:none;border:none;border-radius:var(--r-2);
+  color:var(--text);font-family:Montserrat,sans-serif;text-align:left;cursor:pointer;
+  text-transform:none;letter-spacing:normal}
+.rir-opt+.rir-opt{border-top:1px solid rgba(255,255,255,.05)}
+.rir-opt-v{flex:none;min-width:68px;font-size:22px;font-weight:800;line-height:1.1}
+.rir-opt-d{flex:1;min-width:0;font-size:11px;font-weight:500;line-height:1.35;color:var(--sub)}
+.rir-opt[aria-selected="true"]{background:rgba(224,32,32,.14)}
+.rir-opt[aria-selected="true"] .rir-opt-v{color:var(--red-text)}
+.rir-opt:focus-visible{outline:2px solid var(--red-text);outline-offset:-2px}
 /* ── R09 — LE ⓘ DE « proposé » NE DECALE PAS LA CASE ─────────────────────
    Pose en ligne, il elargissait le bloc de charge de 36 px : la case de la
    serie qui le porte glissait de 10 px vers la droite, et les chiffres des
@@ -4056,6 +4090,11 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
    16 px d'emprise — « proposé » et son ⓘ tiennent ensemble dans la cellule —
    et le haut et le bas a la hauteur du texte. La cible garde ses 32 px. */
 .wo-propose .rc-i{margin:-10px -9px -10px -7px}
+/* R15 — LE ⓘ DU RPE, SOUS LA PASTILLE VERROUILLEE. La cellule ne loge pas les
+   deux cote a cote : le ⓘ passe dessous, et sa boite de 32 px ajoutait 32 px
+   a la ligne (76 px, mesure). Des marges verticales negatives ramenent son
+   emprise a la hauteur du glyphe ; la cible garde ses 32 px. */
+.wo-intensite > .rc-i{margin-top:-10px;margin-bottom:-10px}
 /* ── R12 — LA MICRO-DESCRIPTION ───────────────────────────────────────────
    Pour le jargon dont la definition tient en quelques mots, un ⓘ serait un
    geste de trop : une ligne permanente suffit.
@@ -30904,7 +30943,11 @@ const EX_VIDEOS={
 const EX_REGLES=[
   // — spécifiques —
   {motif:/\bLEG EXTENSION\b/,                                        p:['QUADRICEPS'], s:[]},
-  {motif:/\bLEG CURL|SOULEVE DE TERRE ROUMAIN|ROMANIAN|GOOD MORNING/,p:['ISCHIOS'],    s:['FESSIERS']},
+  // R15 — LE NORDIC CURL EST UN EXERCICE D'ISCHIOS (Kevin, 17/09/2026). Seul
+  // « NORDIC CURL AVEC ELASTIQUE » etait dans le guide : « NORDIC CURL » ou
+  // « NORDIC HAMSTRING CURL » tombaient sur la regle du curl, plus bas, et
+  // sortaient BICEPS. Place ICI, avant elle, il ne peut plus y arriver.
+  {motif:/\bLEG CURL|\bNORDIC\b|SOULEVE DE TERRE ROUMAIN|ROMANIAN|GOOD MORNING/,p:['ISCHIOS'],    s:['FESSIERS']},
   {motif:/\bFACE PULL|OISEAU|REAR DELT|ELEVATION POSTERIEURE/,       p:['DELT_POST'],  s:['TRAP_MED']},
   {motif:/\bELEVATION LATERALE|LATERAL RAISE/,                       p:['DELT_LAT'],   s:[]},
   {motif:/\bELEVATION FRONTALE|FRONT RAISE/,                        p:['DELT_ANT'],   s:[]},
@@ -34763,13 +34806,27 @@ function _normaliserMuscles(r){
   if(!Array.isArray(r.s)) r.s=[];
   return r;
 }
+// ══ R15 — LES CLASSEMENTS AUTOMATIQUES D'AVANT UNE CORRECTION DE REGLE ══
+// resoudreMuscles ECRIT ce qu'il deduit dans exMuscles, et le relit ensuite
+// comme un choix enregistre. Corriger la regle ne corrigeait donc personne :
+// un « NORDIC CURL » deja classe BICEPS le restait pour toujours.
+// On ne revient QUE sur ce que l'app a deduit (src 'auto'), jamais sur un
+// choix fait a la main (src 'manuel'), et seulement pour les motifs listes
+// ici, chacun avec le muscle faux qu'il a pu produire.
+const EX_AUTO_REVUS=Object.freeze([
+  {motif:/\bNORDIC\b/, faux:'BICEPS'}
+]);
+function _autoARevoir(k,r){
+  if(!r||r.src!=='auto'||!Array.isArray(r.p)) return false;
+  return EX_AUTO_REVUS.some(x=>x.motif.test(k)&&r.p.indexOf(x.faux)>=0);
+}
 function resoudreMuscles(nom,ex){
   if(!currentUser) return null;
   let k=exKey(nom);
   if(!k) return null;
   k=resoudreAlias(k);
   const dejaVu=currentUser.exMuscles&&currentUser.exMuscles[k];
-  if(dejaVu) return _normaliserMuscles(dejaVu);
+  if(dejaVu&&!_autoARevoir(k,dejaVu)) return _normaliserMuscles(dejaVu);
   // Cardio : aucun rattachement, et surtout pas de mise en file.
   if((ex&&isCardio(ex))||_exGuideEstCardio(k)||_exGuideEstPosing(k)) return null;
   // 1. Le guide du coach fait foi.
@@ -42909,8 +42966,50 @@ function renderWoEx(){
        woMajAvatar(gi,grs.length,(woState.exercises||[])[groupe[0]]); }catch(e){}
   woPersist();
   setTimeout(()=>blocs.forEach(b=>setupScrollFade(document.getElementById('wo-sets-scroll-'+b.idx))),0);
+  // R15 — L'INDEX DES ILLUSTRATIONS, S'IL N'EST PAS ENCORE LA. Seule la zone
+  // de consigne est repeinte a son arrivee : le tableau des series, avec ce
+  // qu'on est peut-etre en train d'y taper, n'est pas touche. Un echec reseau
+  // ne memorise rien, le prochain rendu retentera (chargerIndexIllustrations).
+  if(!_exoIndex){
+    const _g=groupe.slice();
+    chargerIndexIllustrations().then(m=>{
+      if(!m||!m.size) return;
+      for(const i of _g){
+        const z=document.getElementById('wo-consigne-'+i);
+        const ex=woState&&woState.exercises&&woState.exercises[i];
+        if(z&&ex) z.innerHTML=_htmlConsigneExo(ex);
+      }
+    }).catch(()=>{});
+  }
 }
 
+// ══ R15 — LA CONSIGNE D'UN EXERCICE, EN UN SEUL ENDROIT ════════════════
+// Rendue par _blocExo, et REPEINTE par renderWoEx quand l'index des
+// illustrations arrive apres le premier rendu.
+//
+// ⚠ POURQUOI ELLE DISPARAISSAIT. L'index n'etait charge que par l'apercu de
+// seance et la banque du coach. Une seance ouverte autrement, et surtout une
+// seance REPRISE — ce qui arrive a chaque mise a jour de l'app, qui recharge
+// la page — rendait sans index : pas d'image, et pour un exercice sans texte,
+// plus de bloc CONSIGNE du tout. Rien ne repeignait ensuite.
+function _htmlConsigneExo(ex){
+  if(!ex) return '';
+  const img=(()=>{ try{ return illustrationExo(ex); }catch(e){ return null; } })();
+  if(!(ex.description||ex.materiel||ex.tempo||img)) return '';
+  return `<div style="background:var(--surface-2);border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px">
+        <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red-text);margin-bottom:5px">CONSIGNE</div>
+        ${blocTempo(ex)}
+        <!-- LE MATÉRIEL EN PREMIER : c'est ce qu'on va chercher avant de
+             commencer, pas ce qu'on lit pendant. Il fait aussi partie de la
+             condition d'affichage du bloc — sans ça, un exercice qui ne
+             porterait QUE son matériel n'aurait rien affiché du tout. -->
+        ${ex.materiel?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px">Matériel :</span> ${escapeHtml(ex.materiel)}</div>`:''}
+        <div style="display:flex;gap:11px;align-items:flex-start">
+          ${_htmlVignetteExo(ex)}
+          <div style="flex:1;min-width:0;font-size:var(--fs-sm);color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}</div>
+        </div>
+      </div>`;
+}
 // Corps d'un seul exercice. Rend le HTML et renvoie de quoi câbler la suite :
 // l'index est explicite partout, car deux exercices peuvent être à l'écran en
 // même temps et woState.currentEx ne désigne alors que la tête du groupe.
@@ -43057,28 +43156,27 @@ function _blocExo(idx,estSS){
 
       ${_htmlMonteeCharge(sug,ex,idx)}
       ${_blocContrainteSeance(ex,idx)}
-      ${(ex.description||ex.materiel||ex.tempo||illustrationExo(ex))?`<div style="background:var(--surface-2);border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px">
-        <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red-text);margin-bottom:5px">CONSIGNE</div>
-        ${blocTempo(ex)}
-        <!-- LE MATÉRIEL EN PREMIER : c'est ce qu'on va chercher avant de
-             commencer, pas ce qu'on lit pendant. Il fait aussi partie de la
-             condition d'affichage du bloc — sans ça, un exercice qui ne
-             porterait QUE son matériel n'aurait rien affiché du tout. -->
-        ${ex.materiel?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px">Matériel :</span> ${escapeHtml(ex.materiel)}</div>`:''}
-        <div style="display:flex;gap:11px;align-items:flex-start">
-          ${_htmlVignetteExo(ex)}
-          <div style="flex:1;min-width:0;font-size:var(--fs-sm);color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}</div>
-        </div>
-      </div>`:''}
+      <!-- R15 — LA CONSIGNE VIT DANS SA PROPRE ZONE : renderWoEx la repeint
+           seule quand l'index des illustrations arrive apres le rendu. -->
+      <div id="wo-consigne-${idx}">${_htmlConsigneExo(ex)}</div>
 
-      ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
+      ${(()=>{
+        // R15 — LA VIDEO DU GUIDE QUAND LE PROGRAMME N'EN PORTE PAS. videosExo
+        // rend la video posee par le coach d'abord, puis celle du guide (par
+        // slug, puis par nom) : c'est deja ce que montrent l'apercu et la vue
+        // programme. La seance, elle, ne lisait que ex.videoUrl, et un
+        // exercice du guide sans lien recopie n'y avait plus de video.
+        let u='';
+        try{ const v=videosExo(ex).find(x=>x&&!x.methode); u=v?normaliserUrlVideo(v.url):''; }catch(e){ u=''; }
+        return u?`<a href="${safeUrl(u)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
         <div style="width:32px;height:32px;background:#1a1a3a;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;font-size:var(--fs-md);flex-shrink:0">▶</div>
         <div style="flex:1">
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;color:#99aaff">VIDÉO TECHNIQUE</div>
           <div style="font-size:var(--fs-xs);color:var(--link);margin-top:2px">Regarder la technique d'exécution</div>
         </div>
         <span style="font-size:var(--fs-md);color:var(--link)">→</span>
-      </a>`:''}
+      </a>`:'';
+      })()}
 
       ${!isCardio(ex)?banniereTechnique(ex,idx):''}
       ${!isCardio(ex)&&pr.type==='degressive'?`<div style="background:#7c2d1222;border:1px solid #9a3412;border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-sm);color:#fca5a5">
@@ -43463,6 +43561,131 @@ function _seriesEnCartes(data){
   const sets=(data&&Array.isArray(data.sets))?data.sets:[];
   return !!(sets[0]&&sets[0].degressive);
 }
+// ══ R15 — LA LISTE DU RIR ══════════════════════════════════════════════
+//
+// LES VALEURS ENREGISTREES SONT CELLES D'AVANT R08 : 'echec', '0' a '5'.
+// chargeSuivante, l'e1RM et rirMoyenSeance les lisent telles quelles.
+// [valeur, ce que la case affiche, la definition]. La definition n'est que
+// dans la liste, en petit : la case du tableau n'affiche que la valeur.
+const RIR_CHOIX=Object.freeze([
+  ['echec','Échec','tu n\'as pas réussi à finaliser ton nombre de reps'],
+  ['0','0','aucune rep de plus possible'],
+  ['1','1','encore 1 rep en réserve'],
+  ['2','2','encore 2 reps en réserve'],
+  ['3','3','encore 3 reps en réserve'],
+  ['4','4','encore 4 reps en réserve'],
+  ['5','5','5 reps ou plus en réserve']
+]);
+// La liste ouverte, une seule a la fois : {idx, i, btn, voile, menu}.
+let _rirMenu=null;
+function rirMenuFermer(rendreFocus){
+  const m=_rirMenu;
+  if(!m) return false;
+  _rirMenu=null;
+  try{ m.voile.remove(); m.menu.remove(); }catch(e){}
+  window.removeEventListener('scroll',_rirMenuSurDefilement,true);
+  window.removeEventListener('resize',_rirMenuSurDefilement);
+  if(m.btn){
+    m.btn.setAttribute('aria-expanded','false');
+    if(rendreFocus&&m.btn.isConnected) try{ m.btn.focus({preventScroll:true}); }catch(e){}
+  }
+  return true;
+}
+// SOUS LA CASE, ou AU-DESSUS quand la place manque en bas ; toujours dans
+// l'ecran, a 8 px du bord.
+function _rirMenuPlacer(){
+  const m=_rirMenu;
+  if(!m) return false;
+  const r=m.btn.getBoundingClientRect();
+  const vh=window.innerHeight, vw=window.innerWidth;
+  // La case est sortie de l'ecran : la liste n'a plus rien a designer.
+  if(!m.btn.isConnected||r.bottom<0||r.top>vh){ rirMenuFermer(false); return false; }
+  const mh=m.menu.offsetHeight, mw=m.menu.offsetWidth;
+  let top=r.bottom+4;
+  if(top+mh>vh-8) top=r.top-4-mh;
+  top=Math.max(8,Math.min(top,vh-8-mh));
+  m.menu.style.top=top+'px';
+  m.menu.style.left=Math.max(8,Math.min(r.left,vw-8-mw))+'px';
+  return true;
+}
+// LA PAGE DEFILE : la liste SUIT sa case, elle ne se ferme pas. La fermer au
+// premier evenement de defilement la faisait disparaitre sous le doigt des
+// qu'un defilement doux ou une inertie finissait sa course — constate.
+// Le defilement DANS la liste ne la deplace pas.
+function _rirMenuSurDefilement(e){
+  if(_rirMenu&&e&&e.target&&e.target.nodeType===1&&_rirMenu.menu.contains(e.target)) return;
+  _rirMenuPlacer();
+}
+function rirMenuOuvrir(idx,i,btn){
+  rirMenuFermer(false);
+  const d=woState&&woState.sessionData&&woState.sessionData[idx];
+  const s=d&&Array.isArray(d.sets)?d.sets[i]:null;
+  // UNE SERIE VALIDEE NE S'OUVRE PAS : le bouton est disabled, et on le
+  // redit ici pour un appel direct.
+  if(!s||s.done||!btn) return false;
+  const cur=s.rir==null?'':String(s.rir);
+  // « — » n'apparait que s'il y a quelque chose a effacer.
+  const opts=RIR_CHOIX.concat(cur!==''?[['','—','effacer le RIR noté']]:[]);
+  const voile=document.createElement('div');
+  voile.className='rir-menu-voile';
+  // AU CLIC ET NON AU pointerdown : fermee des l'appui, la liste laisserait le
+  // relachement tomber sur ce qu'il y a dessous, la case d'une autre serie.
+  voile.addEventListener('click',e=>{ e.preventDefault(); rirMenuFermer(true); });
+  // `liste` et non `menu` : la suite de tests releve les affectations sur tout
+  // nom finissant par « u » pour verifier la classification des champs du
+  // dossier, et la classe de la liste s'y lisait comme un champ inconnu.
+  const liste=document.createElement('div');
+  liste.className='rir-menu';
+  liste.id='rir-menu';
+  liste.setAttribute('role','listbox');
+  liste.setAttribute('aria-label','RIR de la série '+(i+1));
+  liste.innerHTML=opts.map(([v,l,def])=>`<button type="button" role="option" class="rir-opt" data-v="${v}" aria-selected="${cur===v}">`
+    +`<span class="rir-opt-v">${l}</span><span class="rir-opt-d">(${escapeHtml(def)})</span></button>`).join('');
+  liste.addEventListener('click',e=>{
+    const o=e.target.closest('.rir-opt');
+    if(o) _woRirChoisir(idx,i,o.getAttribute('data-v'));
+  });
+  liste.addEventListener('keydown',e=>{
+    const l=[...liste.querySelectorAll('.rir-opt')];
+    const k=l.indexOf(document.activeElement);
+    let n=null;
+    if(e.key==='ArrowDown') n=l[Math.min(l.length-1,k+1)];
+    else if(e.key==='ArrowUp') n=l[Math.max(0,k-1)];
+    else if(e.key==='Home') n=l[0];
+    else if(e.key==='End') n=l[l.length-1];
+    else if(e.key==='Escape'){ e.preventDefault(); rirMenuFermer(true); return; }
+    else if(e.key==='Tab'){ rirMenuFermer(true); return; }
+    if(n){ e.preventDefault(); n.focus(); }
+  });
+  document.body.appendChild(voile);
+  document.body.appendChild(liste);
+  btn.setAttribute('aria-expanded','true');
+  _rirMenu={idx,i,btn,voile,menu:liste};
+  if(!_rirMenuPlacer()) return false;
+  window.addEventListener('scroll',_rirMenuSurDefilement,true);
+  window.addEventListener('resize',_rirMenuSurDefilement);
+  const f=liste.querySelector('[aria-selected="true"]')||liste.querySelector('.rir-opt');
+  if(f) try{ f.focus({preventScroll:true}); }catch(e){}
+  return true;
+}
+// LE CHOIX. Ecrit ce qu'ecrivait le menu natif, au meme endroit, puis
+// repeint : la charge de la serie suivante se recalcule sur ce RIR. Pas de
+// woPersist, que l'onchange d'origine n'appelait pas non plus.
+function _woRirChoisir(idx,i,v){
+  rirMenuFermer(false);
+  const d=woState&&woState.sessionData&&woState.sessionData[idx];
+  const s=d&&Array.isArray(d.sets)?d.sets[i]:null;
+  if(!s||s.done) return false;
+  v=String(v==null?'':v);
+  if(v!==''&&!RIR_CHOIX.some(c=>c[0]===v)) return false;
+  s.rir=v;
+  renderSets(woState.exercises[idx],woState.sessionData[idx],idx);
+  // Le focus revient sur la case repeinte, pas en haut de la page.
+  const tr=document.querySelectorAll('#sets-body-'+idx+' tr')[i];
+  const b=tr&&tr.querySelector('.rir-choix');
+  if(b) try{ b.focus({preventScroll:true}); }catch(e){}
+  return true;
+}
 // L'EN-TETE, UNE SEULE FOIS. Rendu par _blocExo, lu par la suite de tests :
 // c'est la vraie bande rouge qu'on mesure, pas une copie.
 //
@@ -43549,22 +43772,10 @@ function renderSets(ex,data,idx){
     }
   }
 
-  // R14 — LE RIR REDEVIENT UN MENU, avec les memes VALEURS qu'avant R08 :
-  // 'echec' et '0' a '5'. chargeSuivante, e1RM et rirMoyenSeance les lisent
-  // telles quelles.
-  // LA LISTE DIT CE QUE CHAQUE VALEUR VEUT DIRE ; LA CASE, ELLE, N'AFFICHE QUE
-  // LA VALEUR (« Échec », « 2 »). Meme principe que la gene : un <select> se
-  // dimensionne sur sa plus longue option, qui ferait deborder le tableau.
-  const RIR_OPTS=['echec','0','1','2','3','4','5'];
-  const RIR_LIB={
-    'echec':"Échec (tu n'as pas réussi à finaliser ton nombre de reps)",
-    '0':'0 (aucune rep de plus possible)',
-    '1':'1 (encore 1 rep en réserve)',
-    '2':'2 (encore 2 reps en réserve)',
-    '3':'3 (encore 3 reps en réserve)',
-    '4':'4 (encore 4 reps en réserve)',
-    '5':'5 (5 reps ou plus en réserve)'
-  };
+  // R14 — LE RIR REDEVIENT UN MENU, avec les memes VALEURS qu'avant R08. Les
+  // valeurs et leurs definitions vivent dans RIR_CHOIX (R15), que la liste
+  // dessinee lit aussi.
+  const RIR_OPTS=RIR_CHOIX.map(c=>c[0]);
   const PAIN_OPTS=['1','2','3','4','5','6'];
   // R08 — L'ECHELLE DE GENE, DITE DANS LA LISTE. Les VALEURS ne changent pas :
   // '1'..'6', comme avant, donc aucune migration et aucun seuil a revoir —
@@ -43598,9 +43809,6 @@ function renderSets(ex,data,idx){
     // appelle _majCarteDouleur en fin de course, ce qui fait apparaître la
     // carte « ça t'a fait mal deux fois » au moment même de la saisie.
     const onChP=`woState.sessionData[${idx}].sets[${i}].pain=this.value;woPersist();renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
-    // R14 — l'onchange d'avant R08, tel quel : ecrire, puis repeindre (la
-    // charge de la serie suivante se recalcule sur ce RIR).
-    const onChR=`woState.sessionData[${idx}].sets[${i}].rir=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
 
     // Weight cell (with « proposé » label)
     //
@@ -43613,7 +43821,7 @@ function renderSets(ex,data,idx){
     // ⚠ PAS DE « proposé » SUR UN EXERCICE PROGRAMME. La charge y vient du
     // coach et ne derive pas : _chargeProposee l'exclut.
     const autoLabel=_chargeProposee(s)
-      ?`<div class="wo-propose" style="font-size:var(--fs-2xs);color:var(--sub);text-align:center;margin-top:2px">proposé${i===_iPremierePropose?rcInfo('surcharge'):''}</div>`:'';
+      ?`<div class="wo-propose" style="font-size:var(--fs-2xs);color:var(--sub);text-align:center;margin-top:1px;line-height:1.15">proposé${i===_iPremierePropose?rcInfo('surcharge'):''}</div>`:'';
     const weightBorder=s.isAuto&&!s.done?'border-color:var(--green)':'';
 
     // Wide-mode: content without <td> wrappers (for 2-sub-row card layout)
@@ -43667,7 +43875,7 @@ function renderSets(ex,data,idx){
       // cote de « 2 » mais passait dessous a cote de « Échec », plus large :
       // deux places differentes dans la meme colonne. Dessous, la colonne RIR
       // est aussi plus etroite, et « Gêne ⓘ » tient sur une ligne.
-      return `<span style="display:block;margin-top:2px;font-size:var(--fs-2xs);color:${loin?'var(--orange)':'var(--text-faint)'};`
+      return `<span style="display:block;margin-top:1px;line-height:1.15;font-size:var(--fs-2xs);color:${loin?'var(--orange)':'var(--text-faint)'};`
         +`white-space:nowrap;flex:none" title="Intensité demandée par ton coach">visé : ${_cons}</span>`;
     })();
     // ══ LA COLONNE D'INTENSITE : RIR SAISI, OU RPE PRESCRIT ═══════════
@@ -43700,19 +43908,17 @@ function renderSets(ex,data,idx){
       :(()=>{
         // ══ R14 — LE RIR EN MENU DEROULANT ════════════════════════════════
         // La case montre la valeur courte (« Échec », « 2 », ou « RIR » tant
-        // que rien n'est choisi) ; le <select> transparent pose dessus ouvre
-        // la liste native, ou chaque valeur porte sa definition.
+        // que rien n'est choisi) ; la liste, elle, dit ce que chaque valeur
+        // veut dire (R15 : dessinee, voir rirMenuOuvrir).
         //
         // LE `${dis}` RESTE : le RIR se ferme a la validation, il decrit un
         // effort accompli.
         const cur=s.rir==null?'':String(s.rir);
         const _rirVal=RIR_OPTS.indexOf(cur)>=0?cur:'';
         const court=_rirVal==='echec'?'Échec':(_rirVal||'RIR');
-        return `<label class="rir-choix${s.done?' fermee':''}"><span aria-hidden="true">${court}</span><span class="gene-fl" aria-hidden="true">▾</span>`
-          +`<select onchange="${onChR}" ${dis} aria-label="RIR de la série ${i+1}">`
-          +`<option value="">RIR</option>`
-          +RIR_OPTS.map(v=>`<option value="${v}" ${_rirVal===v?'selected':''}>${RIR_LIB[v]}</option>`).join('')
-          +`</select></label>${_consRappel}`;
+        return `<button type="button" class="rir-choix${s.done?' fermee':''}" aria-haspopup="listbox" aria-expanded="false"`
+          +` aria-label="RIR de la série ${i+1} : ${_rirVal?court:'non noté'}" onclick="rirMenuOuvrir(${idx},${i},this)" ${dis}>`
+          +`<span aria-hidden="true">${court}</span><span class="gene-fl" aria-hidden="true">▾</span></button>${_consRappel}`;
       })();
 
     // Pain dropdown
@@ -51249,7 +51455,9 @@ function resoudreMusclesLecture(nom,ex,user){
   const k=_aliasPour(k0,user);
   // Même ordre que resoudreMuscles : un choix déjà enregistré fait foi.
   const dejaVu=user&&user.exMuscles&&user.exMuscles[k];
-  if(dejaVu) return _normaliserMuscles(dejaVu);
+  // R15 — meme revue que resoudreMuscles, mais SANS ECRIRE : cette lecture
+  // sert aussi a la fiche coach, sur le dossier d'un autre.
+  if(dejaVu&&!_autoARevoir(k,dejaVu)) return _normaliserMuscles(dejaVu);
   if((ex&&isCardio(ex))||_exGuideEstCardio(k)||_exGuideEstPosing(k)) return VOL_CARDIO;
   const g=_exGuide().get(k);
   if(g) return {p:g.p.slice(),s:g.s.slice(),src:'auto'};
