@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1250';
+window.RC_BUILD='1251';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2080,6 +2080,11 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .rcf-q-v{font-size:var(--fs-md);font-weight:900;color:var(--red-text);line-height:1}
 /* Dix pastilles plutot qu'un curseur : on vise, on ne fait pas glisser. */
 .rcf-ech{display:flex;gap:3px}
+/* R12 — L'ANCRAGE DES DEUX BOUTS. 13 px de ligne plus 1 px d'ecart : la
+   question grandit de 14 px, pas un de plus. nowrap : chaque bout tient sur
+   une ligne, et « pleine énergie » ne passe pas sous « à plat ». */
+.rcf-ancre{display:flex;justify-content:space-between;gap:10px;margin-top:1px;
+  font-size:var(--fs-2xs);line-height:13px;color:var(--sub);white-space:nowrap}
 .rcf-p{flex:1;height:30px;min-width:0;padding:0;border-radius:4px;cursor:pointer;
   background:#141416;border:1px solid #1e1e21;color:#5a5a60;
   font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;line-height:1;
@@ -2156,7 +2161,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
      l'information a ceux qui ont le moins de place pour aller la chercher. */
   .rcf-nom{letter-spacing:.8px;min-height:2.6em}
   .rcf-exp{font-size:8.5px;min-height:0}
-  /* « Ressenti post-séance » et « Plus de détails » tenaient chacun sur deux
+  /* « Ressenti post-séance » (« Comment tu te sens ? » depuis R12) et « Plus de détails » tenaient chacun sur deux
      lignes, cote a cote : l'interligne suffit a les remettre sur une. */
   .rcf-fb-t{font-size:9px;letter-spacing:1.4px}
   .rcf-fb-plus{font-size:9px}
@@ -4049,6 +4054,19 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
    case comme sur les autres lignes, et le ⓘ deborde a droite, dans l'espace
    libre de la carte. Il garde ses 32 px : on ne rapetisse pas une cible. */
 .wo-propose .rc-i{margin-right:-36px}
+/* ── R12 — LA MICRO-DESCRIPTION ───────────────────────────────────────────
+   Pour le jargon dont la definition tient en quelques mots, un ⓘ serait un
+   geste de trop : une ligne permanente suffit.
+   ⚠ UNE LIGNE, JAMAIS DEUX — A 359 px, la largeur de reference. Une assertion
+   mesure chaque phrase a cette largeur et tombe si l'une passe a la ligne. Si
+   une phrase ne tient pas, c'est un ⓘ qu'il faut, pas une seconde ligne.
+   ⚠ PAS DE nowrap NI DE POINTS DE SUSPENSION, et c'est voulu : la phrase des
+   sports fait 316 px pour 317 a 359. Sur un ecran plus etroit, une ligne
+   coupee en « … » perdrait son sens ; une seconde ligne le garde.
+   ⚠ 13 PX DE HAUT. Chaque emploi regle ses marges pour que le bloc qui la
+   recoit ne grandisse pas de plus de 14 px — mesure aussi. */
+.rc-micro{display:block;font-size:var(--fs-2xs);line-height:13px;color:var(--sub);
+  font-weight:400;letter-spacing:0;text-transform:none}
 /* ── R10 — LE ⓘ D'UNE TUILE CHIFFREE, DANS SON COIN ───────────────────────
    Accueil (« Respect de la diète ») et masse grasse (« MG actuel »).
    La tuile offre 84 px utiles, en overflow:hidden et en nowrap : « RESPECT »
@@ -47157,6 +47175,19 @@ const RCF_QUESTIONS=Object.freeze([
   {id:'satisfaction',lib:'Satisfaction',         forme:false,detail:true},
   {id:'hydratation', lib:'Hydratation',          forme:false,detail:true}
 ]);
+// R12 — LES DEUX BOUTS DE CHAQUE ECHELLE. Verifie dans le code avant d'etre
+// ecrit : les boutons vont de 1 a 10, de gauche a droite, et l'orientation des
+// valeurs ne change pas. La FATIGUE est la seule echelle a l'envers — _contribForme
+// l'inverse par FORME_MAX − f — donc 1 = « en forme », 10 = « épuisé ». Pour les
+// cinq autres, 10 est le meilleur.
+const RCF_ANCRES=Object.freeze({
+  fatigue:['en forme','épuisé'],
+  sensation:['rien senti','excellente'],
+  energie:['à plat','pleine énergie'],
+  motivation:['aucune','à fond'],
+  satisfaction:['déçu','très satisfait'],
+  hydratation:['peu bu','bien hydraté']
+});
 function _htmlRessentiFin(){
   const q=o=>{
     const suite=o.forme?'renderFormeSeance();':'';
@@ -47178,6 +47209,9 @@ function _htmlRessentiFin(){
             +' aria-label="'+v+' sur 10" onclick="rcfNoter(\''+o.id+'\','+v+')">'+v+'</button>';
         }).join('')
       +'</div>'
+      // R12 — l'ancrage, sous l'echelle : ce que veut dire 1, ce que veut dire 10.
+      +(RCF_ANCRES[o.id]?'<div class="rcf-ancre" aria-hidden="true"><span>'+escapeHtml(RCF_ANCRES[o.id][0])
+        +'</span><span>'+escapeHtml(RCF_ANCRES[o.id][1])+'</span></div>':'')
       // Le porteur de la donnee. Cache, mais c'est bien lui que tout le reste
       // de l'application lit et ecrit.
       +'<input type="range" id="ps-'+o.id+'" min="0" max="10" value="5" hidden'
@@ -47186,7 +47220,7 @@ function _htmlRessentiFin(){
   };
   return '<div class="rcf-fb">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
-      +'<span class="rcf-fb-t">Ressenti post-séance</span>'
+      +'<span class="rcf-fb-t">Comment tu te sens ?</span>'
       +'<button type="button" class="rcf-fb-plus" id="ps-detail-btn" '
         +'onclick="togglePsDetail()">Plus de détails</button></div>'
     +RCF_QUESTIONS.map(q).join('')
@@ -58263,7 +58297,11 @@ const DEB_STEPS=[
     bLbl('Quelle est ta taille ?  (en cm)')+bQ('deb-height')+
     bLbl('Quels sont tes objectifs principaux ? ')+
     `<div>${bC('deb-goals',['Perte de poids','Prise de muscle','Rééquilibrage corporel','Amélioration des performances','Bien-être général'],true)}</div>`+
-    bLbl('Quelle est ta profession ? ')+bMetier('deb-job')+
+    // R12 — marge haute negative : la ligne se loge dans les 8 px du libelle,
+    // et la question ne grandit que de 14 px.
+    bLbl('Quelle est ta profession ? ')+
+    `<div class="rc-micro" style="margin:-6px 0 7px">Sert à estimer ce que tu dépenses en dehors de tes séances.</div>`+
+    bMetier('deb-job')+
     // Sous la profession, et pas ailleurs : c'est la meme question posee
     // autrement, et l'une eclaire l'autre.
     bLbl("Hors sport, comment situes-tu ton niveau d'activite au quotidien ?")+
@@ -58300,7 +58338,11 @@ const DEB_STEPS=[
     bLbl('Quels jours souhaites-tu t\'entraîner ? ')+
     `<div>${bC('deb-training-days',['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'],true)}</div>`+
     bLbl('Quelle est la durée de séance que tu préfères ? ⏱')+bT('deb-session-duration','Ex: 45min, 1h30...')+
-    bLbl("Quels sports pratiques-tu, et combien d'heures par semaine ?")+bSports('deb-sports')+
+    // R12 — c'est exact : besoinsProposes compte les creneaux RepCore une fois,
+    // et ne les additionne jamais a une musculation declaree ici.
+    bLbl("Quels sports pratiques-tu, et combien d'heures par semaine ?")+
+    `<div class="rc-micro" style="margin:-6px 0 7px">Tes séances RepCore sont déjà comptées : n'ajoute que le reste.</div>`+
+    bSports('deb-sports')+
     bLbl("A quel niveau estime tu l'intensité de ta pratique sportive 1")+
     `<div>${bEmojiScale('deb-intensity-1',[
       {v:'Faible intensité',l:'Faible',svg:BICON.flame1,c:'#22c55e'},
@@ -80778,7 +80820,7 @@ function loadSteps(containerId='steps-content',opts){
       const goal=_stepsObjectifJour(goals,type,e.date)||null;
       const col=stepColor(e.count,type,e.date);
       const pctBar=goal?Math.min(100,Math.round(e.count/goal*100)):null;
-      const typeBadge=type?`<span style="font-size:var(--fs-xs);font-weight:900;padding:2px 6px;border-radius:var(--r-1);background:${type==='on'?'#2a0000':'#001a2a'};color:${type==='on'?'var(--red)':'var(--sub)'};letter-spacing:.5px">${type.toUpperCase()}</span>`:'';
+      const typeBadge=type?`<span style="font-size:var(--fs-xs);font-weight:900;padding:2px 6px;border-radius:var(--r-1);background:${type==='on'?'#2a0000':'#001a2a'};color:${type==='on'?'var(--red)':'var(--sub)'};letter-spacing:.5px">${type==='on'?'Entraînement':'Repos'}</span>`:'';
       const goalLine=goal?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${e.count.toLocaleString('fr-FR')} / ${goal.toLocaleString('fr-FR')} pas${e.count>=goal?' <span style="color:var(--green)">✓</span>':''}</div><div style="height:3px;background:var(--surface-2);border-radius:var(--r-1);margin-top:5px;overflow:hidden"><div style="height:100%;width:${pctBar}%;background:${col};border-radius:var(--r-1)"></div></div>`:'';
       return `<div style="padding:10px 0;border-bottom:1px solid #111">
         <div style="display:flex;align-items:center;justify-content:space-between">
@@ -80828,11 +80870,14 @@ function loadSteps(containerId='steps-content',opts){
              texte, ou sur un telephone plus etroit. -->
         <div style="display:flex;gap:10px;margin-bottom:12px;align-items:stretch">
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
-            <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">entraînement</span></div>
+            <!-- R12 — PLUS DE « JOUR ON ». Ici on REGLE UN OBJECTIF : le
+                 libelle le dit, et il ne se confond plus avec le marquage du
+                 jour, plus bas, qui employait les memes mots. -->
+            <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours d'entraînement</div>
             <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:var(--r-2);color:var(--red-text);font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
-            <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR OFF <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">repos</span></div>
+            <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours de repos</div>
             <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
         </div>
@@ -80848,9 +80893,9 @@ function loadSteps(containerId='steps-content',opts){
         <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:var(--text);letter-spacing:1px;text-shadow:var(--halo-3),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.62);margin-top:6px">pas / jour &nbsp;·&nbsp; ${withData.length} / 7 jours renseignés</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:14px">
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF ON</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text);margin-top:2px">${goals.on.toLocaleString('fr-FR')}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF ENTRAÎNEMENT</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text);margin-top:2px">${goals.on.toLocaleString('fr-FR')}</div></div>
           <div style="width:1px;background:rgba(255,255,255,.18)"></div>
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF OFF</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:rgba(255,255,255,.8);margin-top:2px">${goals.off.toLocaleString('fr-FR')}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF REPOS</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:rgba(255,255,255,.8);margin-top:2px">${goals.off.toLocaleString('fr-FR')}</div></div>
           <div style="width:1px;background:rgba(255,255,255,.18)"></div>
           <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text);margin-top:2px">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
         </div>
@@ -80865,9 +80910,13 @@ function loadSteps(containerId='steps-content',opts){
           prev:_jourVoisin(selStr,-1,STEPS_RETENTION_JOURS),
           next:_jourVoisin(selStr,1,STEPS_RETENTION_JOURS),
           retention:STEPS_RETENTION_JOURS})}
+        <!-- R12 — ICI ON MARQUE LE TYPE DU JOUR, on ne regle rien. « Aujourd'hui »
+             seulement si le jour choisi EST aujourd'hui : le bandeau au-dessus
+             permet de revenir sur un autre jour, et le libelle mentirait. -->
+        <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">${selStr===todayStr?'Aujourd\'hui':'Ce jour-là'} :</div>
         <div style="display:flex;gap:8px;margin-bottom:11px">
-          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">JOUR ON</button>
-          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">JOUR OFF</button>
+          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Entraînement</button>
+          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Repos</button>
         </div>
         ${todayGoalHintHtml}
         <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
@@ -80888,7 +80937,7 @@ function loadSteps(containerId='steps-content',opts){
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
           <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
-          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> ON &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> OFF</span>
+          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> Entraînement &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> Repos</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
         <div style="display:flex;gap:4px">${labels}</div>
@@ -82346,18 +82395,30 @@ function _htmlPlancherAthlete(user){
   if(!nut.macros) return '';
   const viol=controlerMacros(nut.macros,user);
   if(!viol.length) return '';
+  // R12 — LA LIGNE SOUS LE TITRE DIT CE QUE LE CODE CONSTATE. Le bloc ne
+  // s'affiche que si controlerMacros trouve des objectifs SOUS le plancher —
+  // un minimum calcule pour l'athlete (poids ou masse maigre, entrainement).
+  // « En dessous, on ne descend pas » aurait ete faux : le coach peut
+  // enregistrer une prescription sous le plancher, et c'est precisement ce
+  // cas que ce bloc annonce.
   return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:8px">À savoir</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:1px">À savoir</div>
+    <div class="rc-micro" style="margin-bottom:8px">Tes objectifs sont sous le minimum calculé pour toi.</div>
     ${TEXTE_PLANCHER_ATHLETE.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:7px">${escapeHtml(t)}</div>`).join('')}
   </div>`;
 }
 // Invitation au palier, jamais une injonction. Elle ne remplace pas la carte
 // ci-dessus, elle s'y ajoute quand la sèche dure.
+// R12 — LA LIGNE SOUS LE TITRE. Une supposition aurait dit « l'ajustement
+// suivant des calories » : c'est faux. Le palier que propose ce bloc est une
+// PAUSE dans la seche — remonter vers la depense deux ou trois semaines —, et
+// le texte juste dessous le dit.
 function _htmlPalierAthlete(user){
   if(!restrictionProlongee(user)) return '';
   const sem=semainesEcoulees(user);
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Faire un palier</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:1px">Faire un palier</div>
+    <div class="rc-micro" style="margin-bottom:8px">Remonter vers ta dépense, deux à trois semaines.</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Tu es en sèche depuis ${sem} semaines, avec des apports proches de ton plancher. Remonter aux alentours de ta dépense pendant deux ou trois semaines n'annule rien de ce que tu as fait : ça remet du carburant dans les séances et ça facilite la suite. C'est une proposition, tu en parles avec ton coach.</div>
     ${blocDisclaimerSante()}
   </div>`;

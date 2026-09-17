@@ -38932,6 +38932,150 @@ async function testExercices(){
       }
       return true;})());
 
+    // ══ 17/09/2026 — R12 : LE JARGON QUI TIENT EN UNE LIGNE ════════════════
+    //
+    // Là où un ⓘ serait un geste de trop, une ligne permanente. Deux règles
+    // mesurées : UNE ligne à 359 px, et jamais plus de 14 px de plus au bloc.
+
+    // Les micro-descriptions d'un gabarit, chacune mesurée à sa largeur
+    // NATURELLE, face à la largeur que l'écran réel lui laisse à 359 px —
+    // mesurée sur l'app : 290 px dans une carte de nutrition, 317 dans le
+    // bilan. Mesurer le gabarit entier dans un cadre aurait compté des
+    // rembourrages que l'écran réel n'a pas au même endroit.
+    const _r12Ligne=(html,largeur)=>{
+      const d=document.createElement('div');
+      d.style.cssText='position:fixed;left:0;top:0;width:2000px;z-index:-1;font-family:Montserrat,sans-serif';
+      const src=document.createElement('div'); src.innerHTML=html;
+      const lignes=[...src.querySelectorAll('.rc-micro')].map(m=>m.textContent);
+      d.innerHTML=lignes.map(t=>'<div class="rc-micro" style="width:max-content">'+escapeHtml(t)+'</div>').join('');
+      document.body.insertBefore(d,document.body.firstChild);
+      try{ return [...d.children].map((m,i)=>({t:lignes[i],w:Math.ceil(m.getBoundingClientRect().width),
+        h:Math.round(m.getBoundingClientRect().height),tient:m.getBoundingClientRect().width<=largeur})); }
+      finally{ d.remove(); }
+    };
+
+    ok('R12 — Nutrition : plancher et palier disent ce que le code fait, en une ligne',(()=>{
+      const sv={r:window.restrictionProlongee,s:window.semainesEcoulees,c:window.controlerMacros};
+      try{
+        window.restrictionProlongee=()=>true; window.semainesEcoulees=()=>9;
+        window.controlerMacros=()=>[{champ:'kcal',valeur:900,plancher:1400,message:'x'}];
+        const u={nutrition:{macros:{on:{kcal:900}}}};
+        const pl=_htmlPlancherAthlete(u), pa=_htmlPalierAthlete(u);
+        const att=[['Tes objectifs sont sous le minimum calculé pour toi.',pl],
+                   ['Remonter vers ta dépense, deux à trois semaines.',pa]];
+        for(const [t,h] of att){
+          const l=_r12Ligne(h,290);
+          if(l.length!==1||l[0].t!==t) return _echec('ligne : '+JSON.stringify(l));
+          if(!l[0].tient||l[0].h>13) return _echec('« '+t+' » fait '+l[0].w+' px pour 290 : plus d’une ligne');
+        }
+        // ⚠ CE QUE LE CODE FAIT, PAS CE QU'ON SUPPOSAIT. Le bloc plancher ne
+        // s'affiche QUE quand controlerMacros trouve des objectifs sous le
+        // plancher : « on ne descend pas » aurait été faux.
+        window.controlerMacros=()=>[];
+        if(_htmlPlancherAthlete(u)!=='') return _echec('le bloc plancher s’affiche sans objectif sous le plancher');
+        // Sur le TEXTE affiché, pas sur le balisage : un commentaire du gabarit
+        // n'est pas lu par l'athlète.
+        const lu=document.createElement('div'); lu.innerHTML=pl+pa;
+        if(/on ne descend pas|prochain ajustement/i.test(lu.textContent)) return _echec('une supposition a été écrite');
+        return true;
+      } finally { window.restrictionProlongee=sv.r; window.semainesEcoulees=sv.s; window.controlerMacros=sv.c; }})());
+
+    ok('R12 — Pas : plus de ON / OFF, l’objectif et le marquage du jour ne se confondent plus',(()=>{
+      const sU=currentUser;
+      const d=document.createElement('div'); d.id='r12-pas';
+      d.style.cssText='position:fixed;left:0;top:0;width:319px;z-index:-1';
+      document.body.insertBefore(d,document.body.firstChild);
+      try{
+        const now=new Date(), log=[], types={};
+        for(let i=0;i<4;i++){ const x=new Date(now); x.setDate(x.getDate()-i); const k=localISODate(x);
+          log.push({date:k,count:6000+i*500}); types[k]=i%2?'off':'on'; }
+        currentUser={id:'r12p',email:'r12p@t.fr',exAlias:{},exMuscles:{},sessions:[],bilans:[],sessions_config:[],
+          stepsLog:log,stepsDayType:types,stepsGoals:{on:10000,off:7000}};
+        loadSteps('r12-pas',{avecImport:false});
+        const txt=d.textContent;
+        const reste=txt.match(/JOUR ON|JOUR OFF|OBJECTIF ON|OBJECTIF OFF|\bON\b|\bOFF\b/g);
+        if(reste) return _echec('il reste : '+reste.join(', '));
+        // OBJECTIFS : on règle une cible.
+        for(const t of ['Objectif les jours d\'entraînement','Objectif les jours de repos'])
+          if(txt.indexOf(t)<0) return _echec('libellé d’objectif absent : « '+t+' »');
+        // MARQUAGE : on dit ce qu'était le jour.
+        const b=[...d.querySelectorAll('button')].filter(x=>/stepsToggleType/.test(x.getAttribute('onclick')||''));
+        if(b.map(x=>x.textContent.trim()).join('|')!=='Entraînement|Repos') return _echec('boutons : '+b.map(x=>x.textContent).join('|'));
+        // « Aujourd'hui » seulement si le jour choisi EST aujourd'hui.
+        const auj=_jourSteps()===localISODate(new Date());
+        if(!(auj?/Aujourd'hui :/:/Ce jour-là :/).test(txt))
+          return _echec('le marquage ne nomme pas le jour choisi ('+(auj?'aujourd’hui':'un autre jour')+')');
+        // LES CLÉS NE CHANGENT PAS : 'on' et 'off' restent écrits.
+        if((b[0].getAttribute('onclick')||'').indexOf('stepsToggleType(\'on\')')<0
+           ||(b[1].getAttribute('onclick')||'').indexOf('stepsToggleType(\'off\')')<0)
+          return _echec('les valeurs enregistrées ont changé');
+        // L'HISTORIQUE porte les mêmes mots.
+        const h=d.querySelector('details.hist-repli'); if(h) h.open=true;
+        const badges=[...d.querySelectorAll('details.hist-repli span')].map(s=>s.textContent).filter(x=>/^(Entraînement|Repos)$/.test(x));
+        if(badges.length!==4) return _echec(badges.length+' badges d’historique sur 4');
+        // Et les objectifs enregistrés sont intacts.
+        return currentUser.stepsGoals.on===10000&&currentUser.stepsGoals.off===7000?true:_echec('objectifs modifiés');
+      } finally { currentUser=sU; d.remove(); }})());
+
+    ok('R12 — Fin de séance : « Comment tu te sens ? », et chaque échelle dit ce que veulent 1 et 10',(()=>{
+      const d=document.createElement('div');
+      d.style.cssText='position:fixed;left:0;top:0;width:319px;z-index:-1';
+      d.innerHTML=_htmlRessentiFin(); document.body.insertBefore(d,document.body.firstChild);
+      try{
+        if((d.querySelector('.rcf-fb-t')||{}).textContent!=='Comment tu te sens ?') return _echec('titre : « '+(d.querySelector('.rcf-fb-t')||{}).textContent+' »');
+        if(/Ressenti post-séance/.test(d.textContent)) return _echec('l’ancien titre est encore là');
+        d.querySelectorAll('.ps-detail-item').forEach(x=>x.style.display='');
+        const ATT={fatigue:['en forme','épuisé'],satisfaction:['déçu','très satisfait'],sensation:['rien senti','excellente'],
+          energie:['à plat','pleine énergie'],hydratation:['peu bu','bien hydraté'],motivation:['aucune','à fond']};
+        for(const [id,[g,dr]] of Object.entries(ATT)){
+          const inp=d.querySelector('#ps-'+id);
+          if(!inp||inp.type!=='range') return _echec(id+' : l’input a disparu ou changé');
+          const q=inp.closest('.rcf-q'), a=q&&q.querySelector('.rcf-ancre');
+          if(!a) return _echec(id+' : pas d’ancrage');
+          const s=[...a.children].map(x=>x.textContent);
+          if(s[0]!==g||s[1]!==dr) return _echec(id+' : « '+s.join(' ←→ ')+' »');
+          // L'ancrage suit l'échelle, les valeurs restent 1 → 10 de gauche à droite.
+          const v=[...q.querySelectorAll('.rcf-p')].map(x=>Number(x.dataset.v));
+          if(v.join(',')!=='1,2,3,4,5,6,7,8,9,10') return _echec(id+' : l’orientation a changé : '+v.join(','));
+          if(!(a.compareDocumentPosition(q.querySelector('.rcf-ech'))&Node.DOCUMENT_POSITION_PRECEDING))
+            return _echec(id+' : l’ancrage n’est pas sous l’échelle');
+          // 14 px au plus.
+          const h1=q.getBoundingClientRect().height; a.style.display='none';
+          const h0=q.getBoundingClientRect().height; a.style.display='';
+          if(h1-h0>14.5) return _echec(id+' : la question grandit de '+Math.round(h1-h0)+' px');
+          if(a.scrollWidth>a.clientWidth+1) return _echec(id+' : l’ancrage déborde');
+        }
+        // ⚠ LE SENS VÉRIFIÉ : la fatigue est la seule échelle inversée par le calcul,
+        // donc 1 = en forme. Si ce sens changeait dans FORME_ITEMS, l'ancrage mentirait.
+        const f=FORME_ITEMS.find(x=>x.cle==='fatigue');
+        if(!f||f.inverse!==true) return _echec('la fatigue n’est plus inversée : l’ancrage « en forme ←→ épuisé » est à revoir');
+        return true;
+      } finally { d.remove(); }})());
+
+    ok('R12 — Bilan : profession et sports portent leur ligne, et la phrase des sports est vraie',(()=>{
+      const e1=DEB_STEPS[0](), e3=DEB_STEPS[2]();
+      const iP=e1.indexOf('Quelle est ta profession'), iM=e1.indexOf('Sert à estimer ce que tu dépenses en dehors de tes séances.'), iC=e1.indexOf('deb-job');
+      if(iM<0) return _echec('la ligne de la profession est absente');
+      if(!(iP<iM&&iM<iC)) return _echec('la ligne n’est pas entre la question et le champ de la profession');
+      const iS=e3.indexOf('Quels sports pratiques-tu'), iN=e3.indexOf('Tes séances RepCore sont déjà comptées : n\'ajoute que le reste.'), iF=e3.indexOf('deb-sports');
+      if(iN<0) return _echec('la ligne des sports est absente');
+      if(!(iS<iN&&iN<iF)) return _echec('la ligne n’est pas entre la question et le champ des sports');
+      // UNE LIGNE à la largeur que le bilan leur donne à 359 px.
+      const lb=_r12Ligne(e1+e3,317);
+      if(lb.length<2) return _echec(lb.length+' ligne(s) trouvée(s) dans les deux étapes');
+      for(const l of lb)
+        if(!l.tient||l.h>13) return _echec('« '+l.t+' » fait '+l.w+' px pour 317 : deux lignes à 359 px');
+      // ⚠ « DÉJÀ COMPTÉES » EST VRAI : la musculation déclarée ne s'additionne
+      // pas aux créneaux, un autre sport si.
+      const mk=(sp)=>({email:'r12b@t.fr',exAlias:{},exMuscles:{},sessions:[],
+        sessions_config:Array.from({length:6},()=>({active:true})),
+        bilans:[{type:'depart',date:Date.now()-864e5,'deb-sports':sp}]});
+      const seul=kcalSportParJour(mk([])).semaine;
+      const muscu=kcalSportParJour(mk([{sport:'Musculation',intensite:'moderee',heures:4}])).semaine;
+      const boxe=kcalSportParJour(mk([{sport:'Boxe',intensite:'haute',heures:2}])).semaine;
+      if(muscu!==seul) return _echec('la musculation déclarée s’ajoute aux créneaux : '+seul+' → '+muscu);
+      return boxe>seul?true:_echec('un autre sport ne s’ajoute plus : '+seul+' → '+boxe);})());
+
     // ══ 17/09/2026 — R11 : LES FICHES SANS TIRET, LE RIR À UN SEUL ENDROIT ══
     //
     // Retour de Kevin sur R10 : la précision de l'e1RM rejoint sa fiche, la
