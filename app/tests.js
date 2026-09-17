@@ -40468,6 +40468,244 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R27 : « MES PROGRAMMES », SANS RIEN MÉLANGER ═════════
+    //
+    // Kevin : la carte disait « 3 séances H · 3 séances F » sur une ligne, six
+    // commandes passaient à la ligne où elles pouvaient, et la vente demandait
+    // un lien d'achat alors que la boutique encaisse et installe le programme
+    // elle-même. On vérifie ce qu'il a demandé, dans ses mots : la version
+    // Homme puis la version Femme, les programmes tirés d'un athlète juste en
+    // dessous, et une fiche de vente à quatre champs — titre, prix, pitch,
+    // visuel.
+
+    // Un modèle de test. `h` et `f` : les noms des séances de chaque version,
+    // jour par jour ; un nom vide est un jour de repos.
+    const _r27Modele=(id,nom,h,f,o)=>{
+      const jeu=noms=>DAYS.map((day,i)=>noms[i]
+        ?{day,name:noms[i],active:true,notes:'',warmup:'',photo:'data:image/jpeg;base64,LOURD',photo2:null,
+          exercises:[{name:'SQUAT',series:3,reps:'10',repos:'2 min'}]}
+        :{day,name:'',active:false,exercises:[]});
+      return Object.assign({id,name:nom,createdAt:Date.UTC(2026,8,17),sessions_H:jeu(h),sessions_F:jeu(f)},o||{});
+    };
+
+    ok('R27 — les rayons, et dans chaque carte la version Homme PUIS la version Femme',(()=>{
+      const sU=currentUser, z=document.getElementById('cpl-list'), sv=z&&z.innerHTML;
+      try{
+        currentUser={id:'c27',email:'c27@t.fr',role:'coach',coachPrograms:[
+          _r27Modele('a','Débutant',['Push','','Legs'],['Fessiers']),
+          _r27Modele('m','Marc',['Pecs'],['Pecs'],{origine:'athlete',depuis:'Marc'}),
+          _r27Modele('g','Spécial fessiers',[],['Fessiers A','Fessiers B'])]};
+        loadCoachProgramsList();
+        const secs=[...z.querySelectorAll('.cpl-sec')];
+        const rayons=secs.map(s=>s.querySelector('.cpl-sec-t').textContent.replace(/\s+\d+$/,'').trim());
+        if(rayons.join(' | ')!=='Créés par moi | Enregistrés depuis un athlète') return _echec('rayons : '+rayons.join(' | '));
+        const noms=s=>[...s.querySelectorAll('.cpl-nom')].map(x=>x.textContent);
+        if(noms(secs[0]).join()!=='Débutant,Spécial fessiers') return _echec('créés par moi : '+noms(secs[0]));
+        if(noms(secs[1]).join()!=='Marc') return _echec('depuis un athlète : '+noms(secs[1]));
+        // LES DEUX VERSIONS, DANS CET ORDRE, avec leurs séances nommées.
+        // Chaque partie de la rangée est lue à part : textContent les colle.
+        const v=[...secs[0].querySelector('.cpl-c').querySelectorAll('.cpl-v')]
+          .map(b=>['.cpl-v-g','.cpl-v-n','.cpl-v-s'].map(k=>b.querySelector(k).textContent.trim()).join(' | '));
+        if(v.length!==2) return _echec(v.length+' version(s)');
+        if(v[0]!=='Homme | 2 séances | Push · Legs') return _echec('Homme : '+v[0]);
+        if(v[1]!=='Femme | 1 séance | Fessiers') return _echec('Femme : '+v[1]);
+        // Une version vide LE DIT, au lieu d'afficher « 0 séances ».
+        const fg=secs[0].querySelectorAll('.cpl-c')[1];
+        const vg=fg.querySelector('.cpl-v');
+        if(!vg.classList.contains('cpl-v-vide')||!/Aucune séance/.test(vg.textContent)) return _echec('version vide : '+vg.textContent);
+        // L'INDEX EST CELUI DU TABLEAU, pas du rayon : « Spécial fessiers » est
+        // le troisième modèle, et le deuxième de son rayon.
+        const oc=fg.querySelectorAll('.cpl-v')[1].getAttribute('onclick');
+        if(oc!=="editCoachProgTemplate(2,'F')") return _echec('la version Femme ouvre : '+oc);
+        if(!/openAssignProgram\(2\)/.test(fg.innerHTML)) return _echec('Assigner ne vise pas le bon modèle');
+        if(!/Depuis le programme de Marc/.test(secs[1].querySelector('.cpl-meta').textContent)) return _echec('l’origine n’est pas sur la carte');
+        // DEUX GESTES PLEINS, et rien d'autre à côté d'eux.
+        const act=[...fg.querySelectorAll('.cpl-actions .btn')].map(b=>b.textContent.trim());
+        if(act.join(' | ')!=='▶ Assigner | Mettre en vente') return _echec('actions : '+act.join(' | '));
+        // Le rayon de la boutique n'existe que pour le créateur.
+        if(/Dans la boutique/.test(z.textContent)) return _echec('un autre coach voit « Dans la boutique »');
+        return true;
+      } finally { currentUser=sU; if(z) z.innerHTML=sv; }})());
+
+    ok('R27 — on réordonne dans son rayon, jamais par-dessus l’autre',(()=>{
+      const sU=currentUser, svSave=window.saveUser;
+      try{
+        window.saveUser=()=>true;
+        currentUser={id:'c27',email:'c27@t.fr',role:'coach',coachPrograms:[
+          _r27Modele('a','A',['X'],[]),_r27Modele('m','M',['X'],[],{origine:'athlete'}),_r27Modele('b','B',['X'],[])]};
+        const ordre=()=>currentUser.coachPrograms.map(p=>p.id).join(',');
+        // A descend sous B, par-dessus M qui est d'un autre rayon.
+        if(cplDeplacer(0,1)!==true||ordre()!=='b,m,a') return _echec('A ne passe pas sous B : '+ordre());
+        // M est seul dans son rayon : il ne bouge ni vers le haut ni vers le bas.
+        if(cplDeplacer(1,-1)!==false||cplDeplacer(1,1)!==false) return _echec('le seul de son rayon bouge : '+ordre());
+        return true;
+      } finally { window.saveUser=svSave; currentUser=sU; try{ loadCoachProgramsList(); }catch(e){} }})());
+
+    okA('R27 — toucher une version ouvre l’éditeur sur elle',async()=>{
+      const sU=currentUser, sv=[...document.querySelectorAll('.screen.active')], svO=Object.assign({},_ecranOrigine);
+      const svRat=window._ratProfilFait, svIdx=_editProgTemplateIdx;
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      let msg=null;
+      try{
+        window._ratProfilFait=true;
+        currentUser={id:'c27',email:'c27@t.fr',role:'coach',coachPrograms:[_r27Modele('a','Débutant',['Push'],['Fessiers'])]};
+        const noms=()=>[...document.querySelectorAll('#cpt-session-slots input')].map(i=>i.value);
+        editCoachProgTemplate(0,'F');
+        if(_editProgTemplateGender!=='F'||noms().indexOf('Fessiers')<0) msg='la version Femme ouvre : '+_editProgTemplateGender+' '+noms().join();
+        else{
+          editCoachProgTemplate(0);
+          if(_editProgTemplateGender!=='H'||noms().indexOf('Push')<0) msg='sans genre, l’éditeur n’ouvre plus la version Homme';
+        }
+      } finally {
+        window._ratProfilFait=svRat; currentUser=sU; _editProgTemplateIdx=svIdx;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      // Même raison que l'itinéraire R21 : les go() ont posé des tracés.
+      await new Promise(r=>setTimeout(r,900));
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return msg?_echec(msg):true;
+    });
+
+    okA('R27 — vendre : quatre champs sans lien d’achat, publiés dans la boutique et liés au programme',async()=>{
+      const sU=currentUser, svOk=CLOUD.ok, svE=CLOUD.ecrireProgrammeBoutique, svP=CLOUD.majSeancesProgrammeBoutique;
+      const svRaf=window.rafraichirBoutique, svSave=window.saveUser, svToast=window.toast;
+      const svCache=JSON.stringify(_boutiqueLocale()), svIdx=_editProgTemplateIdx;
+      const inp=document.getElementById('cpt-name'), svIn=inp&&inp.value;
+      const ecrits=[], patchs=[];
+      // Le message est rendu à la fin, après la restauration : _echec le pose
+      // au moment de l'appel.
+      const verifier=async()=>{
+        window.saveUser=()=>true; window.toast=()=>{}; window.rafraichirBoutique=async()=>null;
+        CLOUD.ok=()=>true;
+        CLOUD.ecrireProgrammeBoutique=async(id,obj)=>{ ecrits.push([id,obj]);
+          const b=Object.assign({},_boutiqueLocale()); b[id]=JSON.parse(JSON.stringify(obj)); _poserBoutiqueLocale(b); return true; };
+        CLOUD.majSeancesProgrammeBoutique=async(id,s)=>{ patchs.push([id,s]); return true; };
+        _poserBoutiqueLocale({});
+        // UN AUTRE COACH vend par sa vitrine, avec son propre lien : RepCore
+        // n'encaisse pas pour lui, et rien ne change de ce côté.
+        currentUser={id:'c27',email:'c27@t.fr',role:'coach',coachPrograms:[_r27Modele('g','Spécial fessiers',[],['Fessiers A'])]};
+        loadCoachProgramsList();
+        const bAutre=document.querySelectorAll('#cpl-list .cpl-actions .btn')[1];
+        if(bAutre.getAttribute('onclick')!=='ouvrirVenteProgramme(0)') return 'autre coach : '+bAutre.getAttribute('onclick');
+        // LE CRÉATEUR vend par la boutique.
+        currentUser={id:'k27',email:CREATOR_EMAIL,role:'coach',coachPrograms:[
+          _r27Modele('g','Spécial fessiers',[],['Fessiers A','Fessiers B']),_r27Modele('v','Vide',[],[])]};
+        loadCoachProgramsList();
+        const b=document.querySelectorAll('#cpl-list .cpl-actions .btn')[1];
+        if(b.getAttribute('onclick')!=='ouvrirFicheVente(null,0)') return 'créateur : '+b.getAttribute('onclick');
+        if(!ouvrirFicheVente(null,0)) return 'la fiche ne s’ouvre pas';
+        const f=document.getElementById('rc-vente');
+        if(f.style.display!=='flex'||!f.querySelector('.sp-feuille')) return 'la fiche n’est pas une feuille ouverte';
+        const labs=[...f.querySelectorAll('.vn-lab')].map(l=>l.textContent.trim());
+        if(labs.slice(0,4).join(' | ')!=='Titre | Prix | Pitch | Visuel') return 'champs : '+labs.join(' | ');
+        if(/lien/i.test(f.textContent)||f.querySelector('input[type=url]')) return 'la fiche parle encore d’un lien d’achat';
+        if(document.getElementById('vn-nom').value!=='Spécial fessiers') return 'le titre ne part pas du nom du programme';
+        if(!/un acheteur recevra la version Femme/.test(f.textContent)) return 'la version manquante n’est pas signalée';
+        // L'APERÇU EST LA CARTE DE LA BOUTIQUE, et il suit la saisie.
+        const set=(id,v)=>{ const e=document.getElementById(id); e.value=v; e.dispatchEvent(new Event('input',{bubbles:true})); };
+        set('vn-prix','19,90'); set('vn-acc','Deux séances pour les fessiers.');
+        const ap=document.getElementById('vn-apercu');
+        if(!ap.querySelector('.bq-carte')||!/19,90/.test(ap.textContent)||!/Deux séances/.test(ap.textContent)) return 'l’aperçu ne suit pas la saisie';
+        if(/offrirProgramme/.test(ap.innerHTML)) return 'l’aperçu montre le bouton du coach';
+        // PUBLIER.
+        if(await enregistrerFicheVente()!==true) return 'publication refusée : '+document.getElementById('vn-err').textContent;
+        const [id,obj]=ecrits[0];
+        const m=currentUser.coachPrograms[0];
+        if(id!=='special-fessiers'||m.boutiqueId!==id) return 'lien : '+id+' / '+m.boutiqueId;
+        if(obj.prixCts!==1990||obj.accroche!=='Deux séances pour les fessiers.'||('lienAchat' in obj)) return 'fiche : '+JSON.stringify(Object.assign({},obj,{seances:'…'}));
+        const s=JSON.parse(obj.seances);
+        // UNE VERSION VIDE PART VIDE : sept jours de repos pour un acheteur, sinon.
+        if(s.H.length!==0||s.F.filter(x=>x&&x.active).length!==2) return 'séances : H '+s.H.length+', F actives '+s.F.filter(x=>x&&x.active).length;
+        if(s.F.some(x=>x&&x.photo)) return 'une photo de séance est partie dans la boutique';
+        const pc=programmeDuCatalogue(id);
+        if(!pc||(pc.seances('H')||[]).filter(x=>x&&x.active).length!==2) return 'un acheteur ne recevrait aucune séance';
+        // LA CARTE LE DIT.
+        loadCoachProgramsList();
+        const c=document.querySelector('#cpl-list .cpl-c');
+        if(c.querySelector('.cpl-pill').textContent!=='En vente') return 'pastille : '+c.querySelector('.cpl-pill').textContent;
+        if(c.textContent.indexOf('19,90 € dans la boutique')<0) return 'le prix n’est pas sur la carte';
+        // ROUVRIR ET RENOMMER : la même fiche, pas une seconde.
+        ouvrirFicheVente(null,0);
+        if(document.getElementById('vn-titre').textContent!=='Modifier la vente') return 'titre de la fiche : '+document.getElementById('vn-titre').textContent;
+        if(!document.getElementById('vn-off')) return 'pas de « Retirer de la vente » sur une fiche publiée';
+        document.getElementById('vn-nom').value='Fessiers en 6 semaines';
+        await enregistrerFicheVente();
+        if(!ecrits[1]||ecrits[1][0]!=='special-fessiers') return 'renommer a publié la fiche '+(ecrits[1]&&ecrits[1][0]);
+        // SAUVEGARDER LE PROGRAMME met à jour ce que la boutique livre.
+        currentUser.coachPrograms[0].sessions_F[2]={day:DAYS[2],name:'Fessiers C',active:true,exercises:[{name:'FENTES'}]};
+        _editProgTemplateIdx=0; if(inp) inp.value='Spécial fessiers';
+        await saveCoachProgTemplate();
+        if(patchs.length!==1||patchs[0][0]!=='special-fessiers'||patchs[0][1].indexOf('Fessiers C')<0) return 'la boutique ne suit pas le programme : '+patchs.length+' envoi(s)';
+        // UN PROGRAMME SANS SÉANCE NE SE VEND PAS, et le refus le dit.
+        ouvrirFicheVente(null,1);
+        document.getElementById('vn-nom').value='Fondations'; document.getElementById('vn-prix').value='9,90';
+        if(await enregistrerFicheVente()!==false) return 'un programme vide a été publié';
+        if(!/aucune séance/.test(document.getElementById('vn-err').textContent)) return 'refus muet : '+document.getElementById('vn-err').textContent;
+        // UN TITRE DÉJÀ PRIS ne remplace pas la fiche d'un autre programme.
+        currentUser.coachPrograms[1]=_r27Modele('v','Vide',['Push'],[]);
+        ouvrirFicheVente(null,1);
+        document.getElementById('vn-nom').value='Fondations'; document.getElementById('vn-prix').value='9,90';
+        await enregistrerFicheVente();
+        if(!ecrits[2]||ecrits[2][0]==='fondations') return 'la Fondation a été remplacée';
+        // « DANS LA BOUTIQUE » : ce qu'aucun modèle ne porte, et seulement ça.
+        loadCoachProgramsList();
+        const bq=[...document.querySelectorAll('#cpl-list .cpl-bq-n')].map(x=>x.textContent);
+        if(bq.join()!=='Fondations') return 'dans la boutique : '+bq.join();
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      finally {
+        try{ fermerFicheVente(true); }catch(e){}
+        CLOUD.ok=svOk; CLOUD.ecrireProgrammeBoutique=svE; CLOUD.majSeancesProgrammeBoutique=svP;
+        window.rafraichirBoutique=svRaf; window.saveUser=svSave; window.toast=svToast;
+        _poserBoutiqueLocale(JSON.parse(svCache)); currentUser=sU; _editProgTemplateIdx=svIdx;
+        if(inp) inp.value=svIn;
+        try{ loadCoachProgramsList(); }catch(e){}
+      }
+      return msg?_echec(msg):true;
+    });
+
+    okA('R27 — la fiche de la boutique se ferme comme les autres, et la boutique mène à « Mes programmes »',async()=>{
+      const sU=currentUser, sv=[...document.querySelectorAll('.screen.active')], svO=Object.assign({},_ecranOrigine);
+      const svRat=window._ratProfilFait, svRaf=window.rafraichirBoutique;
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const z=document.getElementById('rc-vente'), pv=document.getElementById('rc-progvente');
+      const attendre=()=>new Promise(r=>setTimeout(r,ARC.strike+60));
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.rafraichirBoutique=async()=>null;
+        // UN SEUL ENDROIT : l'écran « Mes programmes » de la boutique est retiré.
+        if(document.getElementById('s-vente')) return 'l’écran s-vente existe encore';
+        currentUser={id:'k27',email:CREATOR_EMAIL,role:'coach',coachPrograms:[]};
+        ouvrirFicheVente('fondations');
+        document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+        await attendre();
+        if(z.style.display!=='none') return 'Échap ne ferme pas la fiche';
+        // go() ferme les DEUX fiches de vente, instantanément.
+        ouvrirFicheVente('fondations'); _feuilleOuvrir('rc-progvente');
+        if(ouvrirMesProgrammes()!==true) return 'le créateur n’atteint pas « Mes programmes »';
+        const a=(document.querySelector('.screen.active')||{}).id;
+        if(a!=='s-coach-programs') return 'la boutique mène à '+a;
+        if(z.style.display!=='none'||pv.style.display!=='none') return 'une fiche de vente survit au changement d’écran';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      finally {
+        try{ fermerFicheVente(true); }catch(e){}
+        try{ fermerVenteProgramme(true); }catch(e){}
+        window._ratProfilFait=svRat; window.rafraichirBoutique=svRaf; currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      await new Promise(r=>setTimeout(r,900));
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return msg?_echec(msg):true;
+    });
+
     // ══ 17/09/2026 — R26 : « MON APPROCHE », EN BAS DE LA NUTRITION ═══════
 
     ok('R26 — la ligne du bas remplace le sélecteur, et la feuille dit ce que chaque diète change',(()=>{
@@ -41003,7 +41241,8 @@ async function testExercices(){
         ['aliment enregistré',athlete,['s-client-home','s-nutrition','s-food-search','s-food-add','s-nutrition'],['s-client-home']],
         ['profil › santé',athlete,['s-client-home','s-athlete-profile','s-sante'],['s-athlete-profile','s-client-home']],
         ['historique › détail',athlete,['s-client-home','s-historique-seances','s-seance-detail'],['s-historique-seances','s-client-home']],
-        ['séances › boutique › vente',athlete,['s-client-home','s-session-manager','s-boutique','s-vente'],['s-boutique','s-session-manager','s-client-home']],
+        // L'écran s-vente est retiré (R27) : la vente se gère dans « Mes programmes ».
+        ['séances › boutique',athlete,['s-client-home','s-session-manager','s-boutique'],['s-session-manager','s-client-home']],
         ['caféine saisie puis liste',athlete,['s-client-home','s-nutrition','s-caffeine-add','s-caffeine'],['s-nutrition','s-client-home']],
         // null : on oublie toutes les origines — l'état d'une application
         // rechargée sur cet écran. Le retour suit alors les écrans par défaut.
@@ -41083,7 +41322,7 @@ async function testExercices(){
     // _histCalqueOuvert ne les voyait pas : le retour tombait dans la
     // navigation, go() fermait la feuille au passage, et l'écran changeait
     // avec. Mesuré : rcInfoOuvrir('rir') puis _histPopstate() quittait l'écran.
-    okA('R21 — le retour ferme l’achat, la vente, le contact et le lexique, et reste sur l’écran',async()=>{
+    okA('R21 — le retour ferme l’achat, les deux fiches de vente, le contact et le lexique, et reste sur l’écran',async()=>{
       const sU=currentUser, svO=Object.assign({},_ecranOrigine), svSave=window.saveUser;
       const svRat=window._ratProfilFait, svToast=window.toast;
       const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
@@ -41096,6 +41335,8 @@ async function testExercices(){
       // passe par son vrai chemin, celui du bogue mesuré.
       const FEUILLES=[['rc-achat',()=>_feuilleOuvrir('rc-achat')],
                       ['rc-progvente',()=>_feuilleOuvrir('rc-progvente')],
+                      // R27 — la fiche de la boutique s'ouvre depuis « Mes programmes ».
+                      ['rc-vente',()=>_feuilleOuvrir('rc-vente')],
                       ['rc-contact',()=>_feuilleOuvrir('rc-contact')],
                       ['rc-lexique',()=>rcInfoOuvrir('rir')]];
       const ecran='s-athlete-profile';
@@ -50805,6 +51046,10 @@ async function testExercices(){
             if(L.length!==1) return _echec(L.length+' modèle(s) créé(s)');
             const m=L[0];
             if(m.name!=='Prise de masse Léa') return _echec('nom : '+m.name);
+            // R27 — SON RAYON : « Enregistrés depuis un athlète », avec le
+            // prénom seul pour dire d'où il vient.
+            if(m.origine!=='athlete'||m.depuis!=='Léa')
+              return _echec('origine : '+JSON.stringify({origine:m.origine,depuis:m.depuis}));
             // LES DEUX GENRES sont pré-remplis, à charge pour le coach
             // d'adapter l'onglet F.
             if(!m.sessions_H?.length||!m.sessions_F?.length)

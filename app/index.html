@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1266';
+window.RC_BUILD='1267';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5084,26 +5084,23 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
   text-align:center;margin-top:9px}
 @media(max-width:360px){ .bq-dev{max-height:300px} }
 
-/* ══ MES PROGRAMMES EN VENTE ═════════════════════════════════════════════ */
-.vn-t{font-size:var(--fs-2xs);letter-spacing:2.4px;text-transform:uppercase;
-  font-weight:800;color:var(--sub);margin-bottom:10px}
-.vn-l{display:flex;align-items:center;gap:10px;background:var(--surface-1);
-  border:1px solid var(--border);border-radius:var(--r-3);padding:11px 12px;
-  margin-bottom:8px}
-.vn-l-n{flex:1;min-width:0;font-size:var(--fs-sm);font-weight:800;color:var(--text);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.vn-l-p{font-size:var(--fs-sm);font-weight:900;color:var(--red-text);white-space:nowrap;flex-shrink:0}
-.vn-l-b{flex:0 0 auto;margin:0;padding:7px 11px;font-size:var(--fs-2xs)}
-.vn-off{font-size:var(--fs-2xs);font-weight:700;letter-spacing:.6px;color:var(--text-faint);
-  text-transform:uppercase}
+/* ══ LA FICHE DE VENTE DE LA BOUTIQUE ════════════════════════════════════ */
 .vn-lab{display:block;font-size:var(--fs-2xs);letter-spacing:1.6px;text-transform:uppercase;
   font-weight:800;color:var(--sub);margin:14px 0 5px}
 .vn-in{width:100%;background:var(--surface-1);border:1px solid var(--border);
   border-radius:var(--r-2);padding:10px 12px;color:var(--text);
   font-family:Montserrat,sans-serif;font-size:var(--fs-sm)}
 textarea.vn-in{resize:vertical;line-height:1.5}
-.vn-ap{margin-top:9px}
-.vn-ap img{width:100%;max-height:220px;object-fit:cover;border-radius:var(--r-2);display:block}
+/* LE PRIX PORTE SON EURO DANS LE CHAMP : on saisit « 14,90 », on lit
+   « 14,90 € ». Le signe ne se tape pas et ne se capte pas. */
+.vn-prix{position:relative}
+.vn-prix .vn-in{padding-right:34px}
+.vn-prix span{position:absolute;right:13px;top:50%;transform:translateY(-50%);
+  font-size:var(--fs-sm);font-weight:800;color:var(--sub);pointer-events:none}
+/* L'APERCU EST LA VRAIE CARTE DE LA BOUTIQUE, en plus etroit : il montre ce
+   que verra l'acheteur, et rien ne s'y touche — `inert` sur le conteneur. */
+.vn-apercu{max-width:290px;margin:0 auto;pointer-events:none}
+.vn-apercu .bq-carte{margin-bottom:0}
 .vn-cb{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:var(--fs-sm);
   color:var(--sub);cursor:pointer}
 .vn-cb input{width:18px;height:18px;accent-color:var(--red);cursor:pointer}
@@ -5120,6 +5117,76 @@ textarea.vn-in{resize:vertical;line-height:1.5}
   border:1px solid rgba(34,197,94,.42)}
 .cpl-pill-off{color:var(--text-faint);background:var(--surface-2);
   border:1px solid var(--border)}
+/* ══ MES PROGRAMMES : DES RAYONS, ET DANS CHAQUE CARTE H PUIS F ═══════════
+   Demande de Kevin, 17/09/2026 : « que ce ne soit pas tout mélangé ». La
+   carte disait « 3 séances H · 3 séances F » sur une ligne, et six commandes
+   passaient a la ligne ou elles pouvaient — la corbeille finissait seule.
+   Desormais : la version Homme, PUIS la version Femme, chacune sur sa rangee
+   avec ses seances nommees ; deux gestes pleins ; le reste en pied de carte. */
+.cpl-intro{font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin:0 0 20px}
+.cpl-sec{margin-bottom:26px}
+.cpl-sec-t{display:flex;align-items:baseline;gap:8px;margin:0 0 10px;
+  font-size:var(--fs-2xs);font-weight:800;letter-spacing:2.4px;
+  text-transform:uppercase;color:var(--sub)}
+.cpl-sec-n{color:var(--text-faint);letter-spacing:1px}
+.cpl-sec-d{font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin:-4px 0 12px}
+.cpl-c{background:var(--surface-1);border:1px solid var(--border);
+  border-radius:var(--r-4);padding:15px 15px 8px;margin-bottom:12px}
+.cpl-tete{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.cpl-tete>div{min-width:0}
+.cpl-nom{font-size:var(--fs-md);font-weight:800;color:var(--text);line-height:1.35;
+  overflow-wrap:anywhere}
+.cpl-meta{font-size:var(--fs-xs);color:var(--text-faint);margin-top:3px;line-height:1.45}
+.cpl-tete .cpl-pill{margin:2px 0 0;flex:0 0 auto}
+/* LES DEUX VERSIONS, l'une sous l'autre, dans un meme cadre : elles forment
+   un programme. Chaque rangee est un BOUTON qui ouvre l'editeur sur sa
+   version — on touche ce qu'on veut modifier. */
+.cpl-versions{margin-top:13px;border:1px solid var(--border);border-radius:var(--r-3);
+  overflow:hidden}
+.cpl-v{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;
+  padding:10px 12px;margin:0;border:none;border-radius:0;background:var(--surface-2);
+  color:var(--text);text-align:left;cursor:pointer;font-family:Montserrat,sans-serif;
+  transition:background var(--t-1) var(--c-out)}
+.cpl-v+.cpl-v{border-top:1px solid var(--border)}
+.cpl-v:hover{background:#1f1f1f}
+.cpl-v:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
+.cpl-v-g{flex:0 0 58px;font-size:var(--fs-2xs);font-weight:900;letter-spacing:1.6px;
+  text-transform:uppercase;color:var(--red-text)}
+.cpl-v-c{flex:1;min-width:0;display:flex;flex-direction:column}
+.cpl-v-n{font-size:var(--fs-sm);font-weight:800;color:var(--text)}
+.cpl-v-s{font-size:var(--fs-xs);color:var(--sub);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cpl-v-vide .cpl-v-g,.cpl-v-vide .cpl-v-n{color:var(--text-faint)}
+.cpl-v-ch{flex:0 0 auto;font-size:20px;line-height:1;color:var(--text-faint)}
+.cpl-actions{display:flex;gap:8px;margin-top:12px}
+/* « MODIFIER LA VENTE » TIENT SUR UNE LIGNE a 320 px : l'espacement des
+   lettres des .btn l'envoyait sur deux, et la rangee doublait de hauteur. */
+.cpl-actions .btn{flex:1 1 0;min-width:0;min-height:44px;margin:0;padding-left:8px;
+  padding-right:8px;letter-spacing:.6px;white-space:nowrap}
+/* LE PIED : ce qu'on fait rarement. Petit, gris, et la suppression a
+   l'autre bout — loin du doigt qui reordonne. */
+.cpl-pied{display:flex;align-items:center;gap:4px;margin-top:10px;padding-top:6px;
+  border-top:1px solid var(--border)}
+.cpl-mini{background:none;border:1px solid transparent;border-radius:var(--r-2);
+  color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);
+  font-weight:700;min-height:38px;min-width:38px;padding:0 9px;cursor:pointer;
+  transition:color var(--t-1) var(--c-out),border-color var(--t-1) var(--c-out)}
+.cpl-mini:hover{color:var(--text);border-color:var(--border)}
+.cpl-mini:disabled{opacity:.3;cursor:default;border-color:transparent;color:var(--text-faint)}
+.cpl-sup{margin-left:auto}
+/* « DANS LA BOUTIQUE » : ce qui est vendu sans venir d'un modele — la
+   Fondation livree avec l'application. Une rangee, pas une carte : il n'y a
+   ni version a ouvrir ni athlete a qui l'assigner ici. */
+.cpl-bq{display:flex;align-items:center;gap:12px;background:var(--surface-1);
+  border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px;margin-bottom:8px}
+.cpl-bq-img{flex:0 0 44px;height:58px;border-radius:var(--r-2);overflow:hidden;
+  background:linear-gradient(170deg,#15161a,#0a0a0c)}
+.cpl-bq-img img{width:100%;height:100%;object-fit:cover;display:block}
+.cpl-bq-c{flex:1;min-width:0}
+.cpl-bq-n{font-size:var(--fs-sm);font-weight:800;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cpl-bq-p{font-size:var(--fs-xs);color:var(--sub);margin-top:3px}
+.cpl-bq .btn{flex:0 0 auto;width:auto;margin:0;padding-left:12px;padding-right:12px}
 /* ── Les deux relances du cadre « Inactifs » ────────────────────────────
    DEUX BOUTONS, ET ILS DOIVENT TENIR A COTE DU NOM sur un ecran de 320 px.
    Ils se serrent plutot que de pousser le nom hors de la carte, et passent
@@ -9037,7 +9104,7 @@ const COACH_PHOTO='icons/coach.jpg';
            fabrique un modele, est juste a cote. -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
         <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="openApplyTemplate()">Partir d'un modèle</button>
-        <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="saveCoachSessionsAsTemplate()">⭑ Enregistrer comme modèle</button>
+        <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="saveCoachSessionsAsTemplate()">⭑ Enregistrer dans mes programmes</button>
       </div>
       <div id="csm-volume"></div>
       <div id="coach-session-slots"></div>
@@ -9054,7 +9121,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.6">Crée des templates avec une version Homme et une version Femme. Assigne-les à tes athlètes en un clic.</p>
+      <p class="cpl-intro">Chaque programme a sa version Homme et sa version Femme. Assigne-le à tes athlètes, ou mets-le en vente.</p>
       <div id="cpl-list"></div>
     </div>
   </div>
@@ -9998,27 +10065,32 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<!-- ══════ MES PROGRAMMES EN VENTE ══════════════════════════════════
-     Reserve au createur : la regle RTDB le tient, pas cet ecran. Un autre
-     coach qui l'atteindrait ne pourrait rien ecrire. -->
-<div id="s-vente" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="retourDe('s-vente','s-boutique')">←</button><span class="topbar-title">Mes programmes</span><span></span></div>
-  <div class="scroll-area" style="flex:1">
-    <div class="pad">
-      <div id="vn-liste"></div>
-      <div id="vn-source"></div>
-    </div>
-  </div>
-</div>
+<!-- ══════ LA FICHE DE VENTE DE LA BOUTIQUE (createur) ══════════════════
+     Reserve au createur : la regle RTDB le tient, pas cette feuille.
 
-<!-- La fiche d'un programme en vente. -->
+     QUATRE CHAMPS, ET C'EST LA DEMANDE — Kevin, 17/09/2026 : un titre, un
+     prix, un pitch, un visuel. PAS DE LIEN D'ACHAT : le paiement passe par
+     PayPal dans l'application, et le programme s'installe chez l'acheteur des
+     l'achat, dans sa version Homme ou Femme.
+
+     L'ECRAN « MES PROGRAMMES » DE LA BOUTIQUE EST RETIRE. Il listait les memes
+     modeles que l'ecran des programmes du coach, sous d'autres boutons : deux
+     endroits pour la meme chose. La vente se gere desormais la ou le
+     programme se fabrique.
+
+     .sp-feuille, comme la fiche de la vitrine juste en dessous : deux fiches
+     de vente, un seul dessin. -->
 <div id="rc-vente" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
-  onclick="if(event.target===this)fermerFicheVente()" role="dialog" aria-modal="true">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:22px 20px 18px;width:100%;max-width:560px;max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain">
-    <div class="rci-t" id="vn-titre">Mettre en vente</div>
+  onclick="if(event.target===this)fermerFicheVente()" role="dialog" aria-modal="true" aria-labelledby="vn-titre">
+  <div class="sp-feuille" onclick="event.stopPropagation()" style="max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain">
+    <i class="sp-poignee" aria-hidden="true"></i>
+    <div class="sp-tete">
+      <h2 id="vn-titre">Mettre en vente</h2>
+      <button class="sp-fermer" onclick="fermerFicheVente()" aria-label="Fermer">✕</button>
+    </div>
     <div id="vn-corps"></div>
-    <div id="vn-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:10px;display:none"></div>
-    <button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" onclick="enregistrerFicheVente()">Publier</button>
+    <div id="vn-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:12px;display:none"></div>
+    <button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" onclick="enregistrerFicheVente()">Publier dans la boutique</button>
     <button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" onclick="fermerFicheVente()">Annuler</button>
   </div>
 </div>
@@ -14712,6 +14784,23 @@ const CLOUD={
       return r.ok;
     }catch(e){ return false; }
   },
+  // LES SEANCES SEULES, par PATCH. Un modele retouche met a jour ce qu'il
+  // livre sans toucher au titre, au prix ni au visuel : un PUT reecrirait la
+  // fiche entiere depuis le cache de CET appareil, qui peut dater d'avant un
+  // changement de prix fait ailleurs.
+  async majSeancesProgrammeBoutique(id,seances){
+    if(!id||typeof seances!=='string') return false;
+    const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),12000);
+    try{
+      const token=await this._getToken();
+      if(!token) return false;
+      const corps=JSON.stringify({seances:seances,maj:Date.now()});
+      try{ _quotaCompter('out',corps.length); }catch(e){}
+      const r=await fetch(this._urlBoutique(id)+'?auth='+token,
+        {method:'PATCH',body:corps,signal:ctrl.signal});
+      return r.ok;
+    }catch(e){ return false; }
+  },
   async supprimerProgrammeBoutique(id){
     if(!id) return false;
     const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),8000);
@@ -17053,6 +17142,11 @@ function go(id){
   // definition posee par-dessus l'ecran suivant n'explique plus rien.
   try{ rcInfoFermer(true); }catch(e){}
   try{ fermerAchatProgramme(true); }catch(e){}
+  // LES DEUX FICHES DE VENTE aussi : elles s'ouvrent depuis « Mes programmes »,
+  // et une fiche laissee ouverte par-dessus l'ecran suivant y publierait un
+  // programme qu'on ne voit plus.
+  try{ fermerVenteProgramme(true); }catch(e){}
+  try{ fermerFicheVente(true); }catch(e){}
   try{ fermerContactCoach(true); }catch(e){}
   try{ fermerChoixDiete(true); }catch(e){}
   // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
@@ -17506,7 +17600,7 @@ function _histCalqueOuvert(){
   // _histFermerCalque sait les fermer : le retour tombait plus bas, go()
   // les fermait au passage, et l'ecran changeait avec. Meme ordre que
   // _histFermerCalque, pour qu'on lise les deux listes cote a cote.
-  for(const id of ['rc-achat','rc-progvente','rc-contact','rc-lexique','rc-diete','rc-confirm','rc-saisie']){
+  for(const id of ['rc-achat','rc-progvente','rc-vente','rc-contact','rc-lexique','rc-diete','rc-confirm','rc-saisie']){
     const z=document.getElementById(id);
     if(z&&z.style.display==='flex'&&!z.dataset.sortie) return true;
   }
@@ -17523,6 +17617,8 @@ function _histFermerCalque(){
   if(_ah&&_ah.style.display==='flex'&&!_ah.dataset.sortie){ fermerAchatProgramme(); return; }
   const _pv=document.getElementById('rc-progvente');
   if(_pv&&_pv.style.display==='flex'&&!_pv.dataset.sortie){ fermerVenteProgramme(); return; }
+  const _vb=document.getElementById('rc-vente');
+  if(_vb&&_vb.style.display==='flex'&&!_vb.dataset.sortie){ fermerFicheVente(); return; }
   const _ct=document.getElementById('rc-contact');
   if(_ct&&_ct.style.display==='flex'&&!_ct.dataset.sortie){ fermerContactCoach(); return; }
   const _lx=document.getElementById('rc-lexique');
@@ -31899,61 +31995,169 @@ function _htmlCarteProgVitrine(p){
 // que la mesure parte ou non — un compteur ne doit jamais retenir un clic.
 function rcmAchatProgramme(){ try{ rcm('programme_clic_achat'); }catch(e){} return true; }
 
-function openCoachPrograms(){go('s-coach-programs');loadCoachProgramsList();}function openCoachPrograms(){go('s-coach-programs');loadCoachProgramsList();}
+function openCoachPrograms(){
+  go('s-coach-programs');loadCoachProgramsList();
+  // LE CREATEUR VOIT L'ETAT REEL DE LA BOUTIQUE. La liste s'affiche sur le
+  // cache — donc tout de suite, et hors ligne — puis se corrige quand le
+  // noeud public repond, comme la boutique elle-meme.
+  if(estVendeur()) rafraichirBoutique().then(()=>{ try{ loadCoachProgramsList(); }catch(e){} });
+}
 
+// ══ MES PROGRAMMES : DES RAYONS, ET RIEN DE MELANGE ═══════════════════════
+//
+// Demande de Kevin, 17/09/2026 : « il faut que ce ne soit pas tout mélangé ».
+//   • LES PROGRAMMES CREES ICI, puis, juste en dessous, CEUX ENREGISTRES
+//     DEPUIS LE PROGRAMME D'UN ATHLETE — chacun sous son titre ;
+//   • dans chaque carte, LA VERSION HOMME PUIS LA VERSION FEMME, l'une sous
+//     l'autre, avec leurs seances nommees ; c'est en touchant une version
+//     qu'on l'ouvre ;
+//   • pour le createur, « DANS LA BOUTIQUE » : ce qui est vendu sans venir
+//     d'un modele, comme la Fondation livree avec l'application.
+//
+// ⚠ LES INDEX RESTENT CEUX DU TABLEAU. Les rayons filtrent l'affichage, pas
+// coachPrograms : chaque bouton passe l'index reel, comme avant.
+const CPL_RAYONS=Object.freeze([
+  // « Créés par moi » et non « Mes programmes » : c'est deja le titre de
+  // l'ecran, et le repeter au-dessus du premier rayon ne dit rien.
+  Object.freeze({cle:'moi',titre:'Créés par moi',aide:''}),
+  Object.freeze({cle:'athlete',titre:'Enregistrés depuis un athlète',
+    aide:'Adapte l’autre version avant de les vendre.'})
+]);
+// PURE. Le rayon d'un modele. Un modele cree avant ce lot ne porte pas
+// `origine` : il reste dans « Mes programmes », ou il a toujours ete.
+function _cplRayon(p){ return (p&&p.origine==='athlete')?'athlete':'moi'; }
+// PURE, ET SANS REPARATION. _cptSeances aplatit un objet Firebase et peut
+// alerter : c'est le travail de l'editeur, pas d'une liste qu'on parcourt.
+// On lit donc un tableau, ou les valeurs d'un objet, sans rien ecrire.
+// Une seance compte si elle est active ET porte un exercice — la regle de
+// _cptCount, que l'ancienne carte affichait.
+function _cplSeancesPleines(p,genre){
+  const brut=p&&p[genre==='F'?'sessions_F':'sessions_H'];
+  const l=Array.isArray(brut)?brut:((brut&&typeof brut==='object')?Object.values(brut):[]);
+  return l.filter(s=>s&&s.active&&Array.isArray(s.exercises)&&s.exercises.length);
+}
+// PURE (au cache de la boutique pres). Le createur vend par la BOUTIQUE : c'est
+// la fiche liee qui dit si le modele est en vente. Les autres coachs vendent
+// par leur VITRINE, avec leur propre lien de paiement : c'est progEnVente.
+function _cplEnVente(p){
+  if(!estVendeur()) return progEnVente(p);
+  if(!p||!p.boutiqueId||!_programmePublie(p.boutiqueId)) return false;
+  const e=programmeDuCatalogue(p.boutiqueId);
+  return !!(e&&!e.masque);
+}
+// Une version : son genre, le nombre de seances, leurs noms. Vide, elle le dit.
+function _htmlCplVersion(i,genre,p){
+  const l=_cplSeancesPleines(p,genre);
+  const n=l.length;
+  const noms=l.map(s=>String(s.name||'').trim()||String(s.day||'Séance')).join(' · ');
+  return '<button type="button" class="cpl-v'+(n?'':' cpl-v-vide')+'" '
+    +'onclick="editCoachProgTemplate('+i+',\''+genre+'\')">'
+    +'<span class="cpl-v-g">'+(genre==='F'?'Femme':'Homme')+'</span>'
+    +'<span class="cpl-v-c"><span class="cpl-v-n">'
+      +(n?(n+' séance'+(n>1?'s':'')):'Aucune séance')+'</span>'
+    +'<span class="cpl-v-s">'+(n?escapeHtml(noms):'À remplir')+'</span></span>'
+    +'<span class="cpl-v-ch" aria-hidden="true">›</span></button>';
+}
+function _htmlCplCarte(p,i,premier,dernier){
+  const on=_cplEnVente(p);
+  const meta=[];
+  if(p.origine==='athlete'&&String(p.depuis||'').trim())
+    meta.push('Depuis le programme de '+escapeHtml(String(p.depuis).trim()));
+  meta.push('Créé le '+new Date(p.createdAt||Date.now())
+    .toLocaleDateString('fr-FR',{day:'numeric',month:'short'}));
+  if(on&&estVendeur()){
+    const e=programmeDuCatalogue(p.boutiqueId), px=e?prixProgramme(e):'';
+    if(px) meta.push(px+' dans la boutique');
+  }
+  // LE CREATEUR VEND PAR LA BOUTIQUE, les autres par leur vitrine : un seul
+  // bouton, et la fiche qui correspond a qui le touche.
+  const vendre=estVendeur()?'ouvrirFicheVente(null,'+i+')':'ouvrirVenteProgramme('+i+')';
+  return '<div class="cpl-c">'
+    +'<div class="cpl-tete"><div>'
+      +'<div class="cpl-nom">'+escapeHtml(p.name||'Sans nom')+'</div>'
+      +'<div class="cpl-meta">'+meta.join(' · ')+'</div></div>'
+    // LA PASTILLE DIT L'ETAT, ELLE NE LE CHANGE PAS : ce n'est pas un bouton,
+    // et elle n'en a pas l'air. VERT POUR « EN VENTE », GRIS POUR « PRIVE »,
+    // et jamais de rouge : un programme garde pour soi n'est pas une faute.
+    +'<span class="cpl-pill '+(on?'cpl-pill-on':'cpl-pill-off')+'">'+(on?'En vente':'Privé')+'</span></div>'
+    +'<div class="cpl-versions">'+_htmlCplVersion(i,'H',p)+_htmlCplVersion(i,'F',p)+'</div>'
+    +'<div class="cpl-actions">'
+      +'<button class="btn btn-red btn-sm" onclick="openAssignProgram('+i+')">▶ Assigner</button>'
+      +'<button class="btn btn-outline btn-sm" onclick="'+vendre+'">'+(on?'Modifier la vente':'Mettre en vente')+'</button>'
+    +'</div>'
+    // N4.18 — L'ORDRE SE REGLE, dans le rayon : les MEMES fleches que
+    // l'editeur d'exercices, pour une liste qu'on reordonne trois fois par an.
+    +'<div class="cpl-pied">'
+      +'<button type="button" class="cpl-mini" onclick="cplDeplacer('+i+',-1)"'+(premier?' disabled':'')+' aria-label="Monter ce programme">▲</button>'
+      +'<button type="button" class="cpl-mini" onclick="cplDeplacer('+i+',1)"'+(dernier?' disabled':'')+' aria-label="Descendre ce programme">▼</button>'
+      +'<button type="button" class="cpl-mini" onclick="duplicateCoachProgTemplate('+i+')">⧉ Dupliquer</button>'
+      +'<button type="button" class="cpl-mini cpl-sup" onclick="deleteCoachProgTemplate('+i+')">Supprimer</button>'
+    +'</div></div>';
+}
+// « DANS LA BOUTIQUE », pour le createur seul : les programmes vendus qu'aucun
+// modele ne porte. Rend '' quand il n'y en a pas — un rayon vide n'annonce rien.
+function _htmlCplBoutique(){
+  if(!estVendeur()) return '';
+  const lies=new Set(((currentUser&&currentUser.coachPrograms)||[])
+    .map(p=>p&&p.boutiqueId).filter(Boolean));
+  const ids=RC_PROGRAMMES.map(p=>p.id);
+  Object.keys(_boutiqueLocale()||{}).forEach(id=>{ if(ids.indexOf(id)<0) ids.push(id); });
+  const rangs=ids.filter(id=>!lies.has(id)).map(id=>{
+    const e=programmeDuCatalogue(id);
+    if(!e||!e.nom) return '';
+    return '<div class="cpl-bq">'
+      +'<div class="cpl-bq-img" aria-hidden="true">'
+        +(e.image?'<img src="'+escapeHtml(e.image)+'" alt="" loading="lazy" onerror="this.remove()">':'')+'</div>'
+      +'<div class="cpl-bq-c"><div class="cpl-bq-n">'+escapeHtml(e.nom)+'</div>'
+        +'<div class="cpl-bq-p">'+prixProgramme(e)+' · '+(e.masque?'Retiré de la vente':'En vente')+'</div></div>'
+      +'<button class="btn btn-outline btn-sm" onclick="ouvrirFicheVente(\''+escapeHtml(id)+'\')">Modifier</button>'
+      +'</div>';
+  }).join('');
+  if(!rangs) return '';
+  return '<section class="cpl-sec">'
+    +'<div class="cpl-sec-t" role="heading" aria-level="2">Dans la boutique</div>'
+    +'<p class="cpl-sec-d">Vendus sans venir d’un de tes programmes, comme la Fondation livrée avec l’application.</p>'
+    +rangs+'</section>';
+}
 function loadCoachProgramsList(){
-  const progs=currentUser.coachPrograms||[];
+  const progs=(currentUser&&currentUser.coachPrograms)||[];
   const container=document.getElementById('cpl-list');if(!container)return;
+  let bq=''; try{ bq=_htmlCplBoutique(); }catch(e){ bq=''; }
   if(!progs.length){
     // R13 — le geste est offert ici, plus renvoye au « + CRÉER » de la barre.
-    container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme pour l\'instant</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Un modèle Homme/Femme, créé une fois, sert à tous tes athlètes.</span>','Créer un programme','createCoachProgTemplate()');return;
+    container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme pour l\'instant</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Un modèle Homme/Femme, créé une fois, sert à tous tes athlètes.</span>','Créer un programme','createCoachProgTemplate()')+bq;return;
   }
-  container.innerHTML=progs.map((p,i)=>`
-    <div style="background:var(--surface-1);border-radius:var(--r-4);padding:16px;margin-bottom:12px;border:1px solid var(--border)">
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">${escapeHtml(p.name||'Sans nom')}<!--
-        LA PASTILLE DIT L'ETAT, ELLE NE LE CHANGE PAS : ce n'est pas un bouton,
-        et elle n'en a pas l'air. Le geste est « Vendre », plus bas.
-        VERT POUR « EN VENTE », GRIS POUR « PRIVE », et jamais de rouge : un
-        programme garde pour soi n'est pas une faute. -->
-        <span class="cpl-pill ${progEnVente(p)?'cpl-pill-on':'cpl-pill-off'}">${progEnVente(p)?'En vente':'Privé'}</span></div>
-      <div class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">
-        ${_cptCount(p.sessions_H)} séances H · ${_cptCount(p.sessions_F)} séances F
-        · créé le ${new Date(p.createdAt||Date.now()).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}
-      </div>
-      <!-- flex-wrap : SIX COMMANDES NE TIENNENT PAS SUR UNE LIGNE DE 320 PX.
-           Sans lui, la sixieme sortait de la carte et devenait inatteignable. -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <!-- N4.18 — L'ORDRE DES MODELES SE REGLE. La liste etait celle du
-             tableau, et duplicateCoachProgTemplate ajoute toujours en fin :
-             elle devenait vite illisible. Les MEMES fleches que l'editeur
-             d'exercices, plutot qu'une seconde mecanique de glisser-deposer
-             pour une liste qu'on reordonne trois fois par an. -->
-        <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
-          <button type="button" class="px-mini" onclick="cplDeplacer(${i},-1)" ${i===0?'disabled':''} aria-label="Monter ce programme">▲</button>
-          <button type="button" class="px-mini" onclick="cplDeplacer(${i},1)" ${i===progs.length-1?'disabled':''} aria-label="Descendre ce programme">▼</button>
-        </div>
-        <button class="btn btn-outline btn-sm" style="flex:1" onclick="editCoachProgTemplate(${i})">✏️ Modifier</button>
-        <button class="btn btn-red btn-sm" style="flex:1" onclick="openAssignProgram(${i})">▶ Assigner</button>
-        <button onclick="duplicateCoachProgTemplate(${i})" title="Dupliquer ce programme" aria-label="Dupliquer ce programme" style="background:none;border:1px solid var(--border);color:#888;border-radius:var(--r-2);padding:7px 10px;font-size:var(--fs-md);cursor:pointer;line-height:1">⧉</button>
-        <button onclick="deleteCoachProgTemplate(${i})" title="Supprimer ce programme" aria-label="Supprimer ce programme" style="background:none;border:1px solid var(--border);color:var(--text-faint);border-radius:var(--r-2);padding:7px 10px;font-size:var(--fs-md);cursor:pointer;line-height:1">🗑</button>
-        <button class="btn btn-outline btn-sm" style="flex:1 1 100%;margin:0" onclick="ouvrirVenteProgramme(${i})">${progEnVente(p)?'Modifier la vente':'Vendre ce programme'}</button>
-      </div>
-    </div>
-  `).join('');
+  container.innerHTML=CPL_RAYONS.map(r=>{
+    const idx=[];
+    progs.forEach((p,i)=>{ if(p&&_cplRayon(p)===r.cle) idx.push(i); });
+    if(!idx.length) return '';
+    return '<section class="cpl-sec">'
+      +'<div class="cpl-sec-t" role="heading" aria-level="2">'+r.titre
+        +' <span class="cpl-sec-n">'+idx.length+'</span></div>'
+      +(r.aide?'<p class="cpl-sec-d">'+r.aide+'</p>':'')
+      +idx.map((i,k)=>_htmlCplCarte(progs[i],i,k===0,k===idx.length-1)).join('')
+      +'</section>';
+  }).join('')+bq;
 }
 
 function _cptCount(sessions){return sessions?sessions.filter(s=>s.active&&s.exercises?.length).length:0;}
 
 // N4.18 — DEPLACER UN MODELE DANS LA LISTE.
-// ATTENTION AUX INDEX : Modifier, Assigner, Dupliquer et Supprimer passent
+// ATTENTION AUX INDEX : Assigner, Vendre, Dupliquer et Supprimer passent
 // tous l'index du TABLEAU. Reordonner le tableau lui-meme, puis re-rendre,
-// garde donc les quatre boutons justes — c'est la seule facon de le faire
-// sans avoir a les toucher.
+// garde donc les boutons justes — c'est la seule facon de le faire sans avoir
+// a les toucher.
+// DANS SON RAYON : le voisin est le plus proche modele DU MEME RAYON. Echanger
+// avec l'element d'a cote du tableau ferait passer un programme d'un rayon a
+// l'autre a l'affichage — ou ne rien montrer bouger du tout.
 // L'ORDRE EST PERSISTE : saveUser, comme tout ce qui vit dans coachPrograms.
 function cplDeplacer(i,sens){
   const l=(currentUser&&currentUser.coachPrograms)||[];
-  const j=i+sens;
-  if(!l[i]||j<0||j>=l.length) return false;
+  if(!l[i]||(sens!==1&&sens!==-1)) return false;
+  const r=_cplRayon(l[i]);
+  let j=i+sens;
+  while(j>=0&&j<l.length&&_cplRayon(l[j])!==r) j+=sens;
+  if(j<0||j>=l.length) return false;
   const t=l[i]; l[i]=l[j]; l[j]=t;
   try{ saveUser(); }catch(e){}
   loadCoachProgramsList();
@@ -32005,14 +32209,17 @@ async function createCoachProgTemplate(){
   editCoachProgTemplate(currentUser.coachPrograms.length-1);
 }
 
-function editCoachProgTemplate(idx){
+// `genre` : la version qu'on a touchee dans la liste. Sans lui, la version
+// Homme, comme avant.
+function editCoachProgTemplate(idx,genre){
+  const g=(genre==='F')?'F':'H';
   _editProgTemplateIdx=idx;
-  _editProgTemplateGender='H';
+  _editProgTemplateGender=g;
   const p=currentUser.coachPrograms[idx];
   const inp=document.getElementById('cpt-name');
   if(inp) inp.value=p.name||'';
   go('s-coach-prog-template');
-  loadProgTemplateSlots('H');
+  loadProgTemplateSlots(g);
 }
 
 function saveCoachProgTemplateName(){
@@ -32023,7 +32230,38 @@ function saveCoachProgTemplateName(){
 
 function saveCoachProgTemplate(){
   saveCoachProgTemplateName();
-  toastEcriture(saveUser(),' Programme sauvegardé !','ton programme est');
+  const p=(currentUser.coachPrograms||[])[_editProgTemplateIdx];
+  const local=saveUser();
+  // LA BOUTIQUE SUIT LE MODELE. Un programme en vente se livrait tel qu'il
+  // etait le jour de sa publication : le coach corrigeait une seance, et
+  // l'acheteur suivant recevait l'ancienne. On pousse les SEANCES, et elles
+  // seules — titre, prix et visuel restent ceux de la fiche de vente.
+  if(p&&p.boutiqueId&&estVendeur()&&_programmePublie(p.boutiqueId))
+    return toastSync(local,_majSeancesBoutique(p),
+      ' Programme sauvegardé, et à jour dans la boutique','ton programme est');
+  toastEcriture(local,' Programme sauvegardé !','ton programme est');
+}
+// Rejette avec un message ACTIONNABLE : toastSync l'affiche tel quel, et le
+// coach sait que la boutique livre encore l'ancienne version.
+async function _majSeancesBoutique(p){
+  const s=_venteSeancesJson(p);
+  let ok=false;
+  if(s&&s.length<240000&&CLOUD.ok()){
+    try{ ok=await CLOUD.majSeancesProgrammeBoutique(p.boutiqueId,s); }catch(e){ ok=false; }
+  }
+  if(ok){
+    // Le cache suit, sans attendre la prochaine relecture du noeud.
+    const b=_boutiqueLocale()||{};
+    if(b[p.boutiqueId]&&typeof b[p.boutiqueId]==='object'){
+      b[p.boutiqueId].seances=s; _poserBoutiqueLocale(b);
+    }
+    return true;
+  }
+  const e=new Error(!s
+    ?'Programme sauvegardé. La boutique garde l’ancienne version : ce programme n’a plus aucune séance.'
+    :'Programme sauvegardé, mais la boutique livre encore l’ancienne version : sauvegarde de nouveau une fois en ligne.');
+  e._actionnable=true;
+  throw e;
 }
 
 // Repartir d'un programme existant plutôt que de tout ressaisir. JSON plutôt
@@ -32034,6 +32272,10 @@ function duplicateCoachProgTemplate(idx){
   if(!src) return;
   const p=JSON.parse(JSON.stringify(src));
   p.id=Date.now().toString(36);
+  // LA COPIE N'EST PAS EN VENTE. Garder le lien vers la fiche de la boutique
+  // ferait de deux modeles les auteurs d'une meme fiche : le dernier
+  // sauvegarde ecraserait les seances vendues de l'autre.
+  delete p.boutiqueId;
   p.name=(src.name||'Sans nom')+' (copie)';
   p.createdAt=Date.now();
   currentUser.coachPrograms.push(p);
@@ -32042,7 +32284,13 @@ function duplicateCoachProgTemplate(idx){
 }
 
 async function deleteCoachProgTemplate(idx){
-  if(!await rcConfirm('Supprimer ce programme ?',null,'Supprimer')) return;
+  // EN VENTE DANS LA BOUTIQUE, IL Y RESTE : la fiche ne depend pas du modele,
+  // et ceux qui l'ont achete doivent le garder. On le dit avant, et la fiche
+  // reapparait sous « Dans la boutique », ou elle se retire de la vente.
+  const _enBoutique=_cplEnVente(currentUser.coachPrograms[idx])&&estVendeur();
+  if(!await rcConfirm('Supprimer ce programme ?',
+    _enBoutique?'Il reste en vente dans la boutique : retire-le de la vente si tu ne veux plus le vendre.':null,
+    'Supprimer')) return;
   // ⚠ UN PROGRAMME EN VENTE QU'ON SUPPRIME DOIT QUITTER LA VITRINE. Sans cette
   // ligne, la carte restait publiee dans coach_public : les athletes voyaient
   // toujours un bouton d'achat pour un programme qui n'existe plus, et rien du
@@ -33423,10 +33671,16 @@ async function saveCoachSessionsAsTemplate(){
   if(!currentUser.coachPrograms) currentUser.coachPrograms=[];
   currentUser.coachPrograms.push({
     id:Date.now().toString(36),name:nom,createdAt:Date.now(),
-    // Les deux genres partent de la même copie : le coach adapte l'onglet F.
+    // SON RAYON, dans « Mes programmes » : sous « Enregistrés depuis un
+    // athlète », juste en dessous de ceux crees de zero. Le prenom seul — il
+    // dit d'ou vient le programme, le dossier de l'athlete n'a rien a y faire.
+    origine:'athlete',depuis:String(c.fname||'').trim().slice(0,40),
+    // Les deux genres partent de la même copie : le coach adapte l'autre.
     sessions_H:copie(),sessions_F:copie()
   });
-  toastEcriture(saveUser(),'Modèle « '+nom+' » créé : pense à adapter l\'onglet F','le modèle est');
+  // L'AUTRE VERSION, nommee : « l'onglet F » etait faux pour une athlete.
+  const _autre=isFemale(c._evol_gender||c.gender||'')?'Homme':'Femme';
+  toastEcriture(saveUser(),'« '+nom+' » ajouté à Mes programmes : adapte la version '+_autre,'le programme est');
 }
 
 // Une decharge est PLANIFIEE par le coach, pas constatee apres coup : elle ne
@@ -39064,95 +39318,118 @@ function _rendreEntreeVente(){
     :'';
   return true;
 }
+// LA GESTION DES VENTES VIT DANS « MES PROGRAMMES ». Un second ecran du meme
+// nom, derriere la boutique, listait les memes modeles sous d'autres boutons :
+// deux endroits pour la meme chose. Le bouton de la boutique y mene donc.
 function ouvrirMesProgrammes(){
   if(!estVendeur()){ toast('Réservé au coach.','var(--orange)'); return false; }
-  _rendreMesProgrammes();
-  go('s-vente');
-  rafraichirBoutique().then(()=>{ try{ _rendreMesProgrammes(); }catch(e){} });
-  return true;
-}
-function _rendreMesProgrammes(){
-  const z=document.getElementById('vn-liste');
-  if(z){
-    const b=_boutiqueLocale()||{};
-    const ids=Object.keys(b);
-    z.innerHTML='<div class="vn-t">En vente</div>'
-      +(ids.length
-        ?ids.map(id=>{ const p=programmeDuCatalogue(id); if(!p) return '';
-            return '<div class="vn-l">'
-              +'<div class="vn-l-n">'+escapeHtml(p.nom||id)
-              +(p.masque?' <span class="vn-off">retiré</span>':'')+'</div>'
-              +'<div class="vn-l-p">'+prixProgramme(p)+'</div>'
-              +'<button class="btn btn-outline btn-sm vn-l-b" '
-              +'onclick="ouvrirFicheVente(\''+escapeHtml(id)+'\')">Modifier</button></div>'; }).join('')
-        :'<div class="sub" style="font-size:var(--fs-sm);padding:6px 0 2px">Rien en vente pour le moment.</div>');
-  }
-  // LES PROGRAMMES LIVRES AVEC L'APPLICATION : ils n'ont pas de fiche publiee
-  // tant qu'on n'y a pas touche, et c'est par ici qu'on leur en donne une —
-  // pour changer leur prix, par exemple.
-  const y=document.getElementById('vn-source');
-  if(y){
-    const dejà=_boutiqueLocale()||{};
-    const l=RC_PROGRAMMES.filter(p=>!Object.prototype.hasOwnProperty.call(dejà,p.id));
-    const mods=((currentUser&&currentUser.coachPrograms)||[]);
-    y.innerHTML='<div class="vn-t" style="margin-top:24px">À mettre en vente</div>'
-      +l.map(p=>'<div class="vn-l"><div class="vn-l-n">'+escapeHtml(p.nom)
-        +' <span class="vn-off">livré</span></div>'
-        +'<div class="vn-l-p">'+prixProgramme(p)+'</div>'
-        +'<button class="btn btn-outline btn-sm vn-l-b" '
-        +'onclick="ouvrirFicheVente(\''+escapeHtml(p.id)+'\')">Publier</button></div>').join('')
-      +mods.map((m,i)=>'<div class="vn-l"><div class="vn-l-n">'+escapeHtml(m.name||('Programme '+(i+1)))
-        +' <span class="vn-off">à moi</span></div><div class="vn-l-p">—</div>'
-        +'<button class="btn btn-outline btn-sm vn-l-b" '
-        +'onclick="ouvrirFicheVente(null,'+i+')">Mettre en vente</button></div>').join('')
-      +((!l.length&&!mods.length)
-        ?'<div class="sub" style="font-size:var(--fs-sm);padding:6px 0 2px">Crée un programme dans l\'onglet Programmes, il apparaîtra ici.</div>':'');
-  }
+  openCoachPrograms();
   return true;
 }
 // La fiche. `id` pour retoucher une entree existante, `idxModele` pour
 // publier un de ses propres programmes.
-let _venteId=null, _venteModele=null, _venteImage=null;
+//
+// ⚠ UN MODELE DEJA PUBLIE SE RETOUCHE, IL NE SE REPUBLIE PAS SOUS UN AUTRE
+// NOM. L'identifiant venait du titre : changer le titre creait une seconde
+// fiche, et la premiere restait en vente avec les anciennes seances. Le
+// modele garde donc `boutiqueId`, pose a la premiere publication.
+//
+// `_venteImageDeja` : le visuel qu'on garde si on n'en choisit pas d'autre.
+let _venteId=null, _venteModele=null, _venteImage=null, _venteImageDeja='';
+const VENTE_PITCH_MAX=219;
 function ouvrirFicheVente(id,idxModele){
   if(!estVendeur()){ toast('Réservé au coach.','var(--orange)'); return false; }
-  _venteId=id||null; _venteImage=null;
   _venteModele=(typeof idxModele==='number')
     ?((currentUser&&currentUser.coachPrograms)||[])[idxModele]||null:null;
-  const p=id?programmeDuCatalogue(id):null;
-  const nom=p?(p.nom||''):(_venteModele?(_venteModele.name||''):'');
+  _venteId=id||(_venteModele&&_venteModele.boutiqueId)||null;
+  _venteImage=null;
+  const p=_venteId?programmeDuCatalogue(_venteId):null;
+  const m=_venteModele||{};
+  // PREMIERE MISE EN VENTE D'UN MODELE : on part de ce qu'il porte deja — son
+  // nom, et ce qu'une ancienne fiche de vitrine y a laisse.
+  const nom=p?(p.nom||''):(m.name||'');
+  const pitch=p?(p.accroche||''):String(m.pitch||'');
+  const cts=p?p.prixCts:prixEnCentimes(m.prix);
+  _venteImageDeja=p?String(p.image||''):String(m.visuel||'');
   const t=document.getElementById('vn-titre');
-  if(t) t.textContent=id?'Modifier la fiche':'Mettre en vente';
+  if(t) t.textContent=(p&&!p.masque)?'Modifier la vente':'Mettre en vente';
   const z=document.getElementById('vn-corps');
   if(!z) return false;
-  const ch=(lab,idc,val,ph,ta)=>'<label class="vn-lab" for="'+idc+'">'+lab+'</label>'
-    +(ta?('<textarea id="'+idc+'" class="vn-in" rows="4" placeholder="'+escapeHtml(ph||'')+'">'
-         +escapeHtml(val||'')+'</textarea>')
-       :('<input id="'+idc+'" class="vn-in" value="'+escapeHtml(val||'')+'" '
-         +'placeholder="'+escapeHtml(ph||'')+'">'));
-  z.innerHTML=ch('Nom','vn-nom',nom,'Fondations')
-    +ch('Accroche','vn-acc',p?p.accroche:'','Une ligne, pas deux')
-    +ch('Description','vn-desc',p?p.description:'','Ce que la personne achète',true)
+  // CE QUI SE PASSE A L'ACHAT, DIT AU MOMENT DE PUBLIER. Et si une version est
+  // vide, qui recevra quoi : _seancesPubliees retombe sur l'autre.
+  let mention='Paiement par PayPal dans l’application. Dès l’achat, le programme '
+    +'s’installe chez la personne, dans sa version Homme ou Femme.';
+  if(_venteModele){
+    const h=_cplSeancesPleines(m,'H').length, f=_cplSeancesPleines(m,'F').length;
+    if(h&&!f) mention+=' Pas encore de version Femme : une acheteuse recevra la version Homme.';
+    if(f&&!h) mention+=' Pas encore de version Homme : un acheteur recevra la version Femme.';
+  }
+  const ea=s=>escapeHtml(String(s==null?'':s));
+  z.innerHTML='<label class="vn-lab" for="vn-nom" style="margin-top:0">Titre</label>'
+    +'<input id="vn-nom" class="vn-in" maxlength="79" autocomplete="off" value="'+ea(nom)+'" '
+      +'placeholder="Ex. : Programme débutant" oninput="_venteApercu()">'
     // ⚠ LE PRIX SE SAISIT EN EUROS ET SE STOCKE EN CENTIMES. Un champ en
     // centimes serait une invitation a la faute de frappe a deux zeros pres.
-    +ch('Prix en euros','vn-prix',p?((p.prixCts||0)/100).toFixed(2).replace('.',','):'','14,90')
+    +'<label class="vn-lab" for="vn-prix">Prix</label>'
+    +'<div class="vn-prix"><input id="vn-prix" class="vn-in" inputmode="decimal" autocomplete="off" '
+      +'value="'+((typeof cts==='number'&&cts>0)?(cts/100).toFixed(2).replace('.',','):'')+'" '
+      +'placeholder="14,90" oninput="_venteApercu()"><span aria-hidden="true">€</span></div>'
+    +'<label class="vn-lab" for="vn-acc">Pitch</label>'
+    +'<textarea id="vn-acc" class="vn-in" rows="3" maxlength="'+VENTE_PITCH_MAX+'" '
+      +'placeholder="Ce que ce programme apporte, en deux phrases" oninput="_venteApercu()">'
+      +ea(pitch.slice(0,VENTE_PITCH_MAX))+'</textarea>'
+    +'<div class="cpv-compte" id="vn-reste"></div>'
     // MEME DEFAUT, MEME CAUSE : `input[type=file]{display:none}` est global, et
-    // ce champ-ci ne s'affichait donc pas non plus — l'entree « Devanture »
-    // n'avait jamais montre de bouton. C'est le LABEL qui ouvre le selecteur.
-    +'<div class="vn-lab">Devanture</div>'
+    // un champ fichier nu ne s'affiche pas. C'est le LABEL qui ouvre le selecteur.
+    +'<div class="vn-lab">Visuel</div>'
     +'<label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Choisir une image'
     +'<input type="file" id="vn-img" accept="image/*" style="display:none" onchange="_venteChoisirImage(this)">'
     +'</label>'
-    +'<div id="vn-apercu" class="vn-ap">'
-      +((p&&p.image)?'<img src="'+escapeHtml(p.image)+'" alt="">':'')+'</div>'
-    +(id?('<label class="vn-cb"><input type="checkbox" id="vn-off"'
-        +((p&&p.masque)?' checked':'')+'> Retirer de la vente</label>'):'');
+    // RETIRER N'EST PAS SUPPRIMER : la fiche reste lisible par ceux qui l'ont
+    // payee. La case n'existe que pour ce qui est deja dans la boutique.
+    +(p?('<label class="vn-cb"><input type="checkbox" id="vn-off"'+(p.masque?' checked':'')
+        +'> Retirer de la vente — ceux qui l’ont acheté le gardent</label>'):'')
+    +'<div class="cpv-mention">'+mention+'</div>'
+    +'<div class="vn-lab">Ce que verra l’acheteur</div>'
+    +'<div id="vn-apercu" class="vn-apercu" inert></div>';
   const e=document.getElementById('vn-err'); if(e){ e.style.display='none'; e.textContent=''; }
+  _venteApercu();
   _feuilleOuvrir('rc-vente');
   return true;
 }
 function fermerFicheVente(tout_de_suite){
   _feuilleFermer('rc-vente',tout_de_suite);
-  _venteId=null; _venteModele=null; _venteImage=null;
+  _venteId=null; _venteModele=null; _venteImage=null; _venteImageDeja='';
+}
+// L'APERCU EST LA CARTE DE LA BOUTIQUE ELLE-MEME, pas une imitation :
+// _htmlCarteProgramme dessine les deux. Seul le bouton du coach en est retire
+// — l'acheteur ne le verra jamais.
+function _venteApercu(){
+  const z=document.getElementById('vn-apercu');
+  if(!z) return false;
+  const val=id=>{ const e=document.getElementById(id); return e?String(e.value||''):''; };
+  const base=_venteId?programmeDuCatalogue(_venteId):null;
+  const cts=prixEnCentimes(val('vn-prix'));
+  z.innerHTML=_htmlCarteProgramme({id:'apercu-vente',
+    nom:val('vn-nom').trim()||'Titre du programme',
+    prixCts:(cts===null)?NaN:cts,
+    accroche:val('vn-acc').trim(),
+    description:(base&&base.description)||'',
+    tags:(base&&base.tags)||null, phase:base&&base.phase,
+    image:_venteImage||_venteImageDeja||''});
+  z.querySelectorAll('button').forEach(b=>{
+    if(/offrirProgramme/.test(b.getAttribute('onclick')||'')) b.remove();
+    else b.removeAttribute('onclick');
+  });
+  // Le compteur passe a l'orange au dernier dixieme : on previent avant la
+  // butee, pas au moment ou la frappe cesse de repondre.
+  const r=document.getElementById('vn-reste');
+  if(r){
+    const reste=VENTE_PITCH_MAX-val('vn-acc').length;
+    r.textContent=reste+' caractère'+(reste>1?'s':'')+' restant'+(reste>1?'s':'');
+    r.dataset.plein=(reste<=22)?'1':'0';
+  }
+  return true;
 }
 // ⚠ L'IMAGE EST REDIMENSIONNEE AVANT D'ETRE GARDEE. Elle part dans un noeud
 // PUBLIC que chaque athlete relit a chaque ouverture de la boutique : une
@@ -39163,8 +39440,7 @@ async function _venteChoisirImage(input){
   if(!f) return false;
   try{
     _venteImage=await _resizeImage(f,900,1200,.82);
-    const a=document.getElementById('vn-apercu');
-    if(a&&_venteImage) a.innerHTML='<img src="'+escapeHtml(_venteImage)+'" alt="">';
+    _venteApercu();
   }catch(e){ _venteImage=null; }
   return true;
 }
@@ -39195,47 +39471,83 @@ async function enregistrerFicheVente(){
   if(!estVendeur()) return _venteErreur('Réservé au coach.');
   const val=id=>{ const e=document.getElementById(id); return e?String(e.value||'').trim():''; };
   const nom=val('vn-nom');
-  if(!nom) return _venteErreur('Il faut un nom.');
+  if(!nom) return _venteErreur('Donne un titre au programme.');
   const cts=prixEnCentimes(val('vn-prix'));
   if(cts===null) return _venteErreur('Prix invalide. Exemple : 14,90');
-  const id=_venteId||_slugProgramme(nom);
-  if(!id) return _venteErreur('Nom inutilisable.');
+  const m=_venteModele;
+  const id=_venteId||_idBoutiqueLibre(nom);
+  if(!id) return _venteErreur('Titre inutilisable : il faut au moins une lettre ou un chiffre.');
+  const dejà=_programmePublie(id);
   const obj={nom:nom.slice(0,79),prixCts:cts,maj:Date.now()};
-  const acc=val('vn-acc'), des=val('vn-desc');
-  if(acc) obj.accroche=acc.slice(0,219);
-  if(des) obj.description=des.slice(0,1399);
+  const acc=val('vn-acc');
+  if(acc) obj.accroche=acc.slice(0,VENTE_PITCH_MAX);
+  // LA DESCRIPTION NE SE SAISIT PLUS ICI, MAIS ELLE NE S'EFFACE PAS : le PUT
+  // remplace la fiche entiere, et une description deja publiee tomberait.
+  if(dejà&&dejà.description) obj.description=String(dejà.description).slice(0,1399);
   const off=document.getElementById('vn-off');
   if(off) obj.masque=!!off.checked;
-  // L'image : la nouvelle si on en a choisi une, sinon celle deja publiee.
-  const dejà=_programmePublie(id);
-  const img=_venteImage||(dejà&&dejà.image)||'';
-  if(img) obj.image=img;
+  // L'image : la nouvelle si on en a choisi une, sinon celle deja publiee, ou
+  // pour une premiere mise en vente celle qu'une fiche de vitrine avait posee.
+  const img=_venteImage||(dejà&&dejà.image)||(!dejà&&m&&m.visuel)||'';
+  if(img) obj.image=String(img);
   // LES SEANCES. Celles du modele qu'on publie, ou celles deja en ligne. Un
   // programme du catalogue livre avec l'application n'en a pas besoin : sa
   // fiche ne sert qu'a retoucher prix et textes, et programmeDuCatalogue
   // retombe alors sur les seances du code.
-  if(_venteModele){
-    const H=_cptSeances(_venteModele,'H')||[], F=_cptSeances(_venteModele,'F')||[];
-    obj.seances=JSON.stringify({H:H,F:F});
+  if(m){
+    obj.seances=_venteSeancesJson(m);
+    if(!obj.seances) return _venteErreur('Ce programme n’a aucune séance : remplis au moins une version avant de le vendre.');
   } else if(dejà&&dejà.seances) obj.seances=dejà.seances;
   if(obj.image&&obj.image.length>=420000) return _venteErreur('Image trop lourde, même réduite.');
   if(obj.seances&&obj.seances.length>=240000) return _venteErreur('Programme trop volumineux à publier.');
   if(!CLOUD.ok()) return _venteErreur('Hors ligne : la publication a besoin du réseau.');
   const ok=await CLOUD.ecrireProgrammeBoutique(id,obj);
   if(!ok) return _venteErreur('La publication a échoué. Réessaie.');
+  // LE LIEN MODELE → FICHE, pose une fois. C'est lui qui fait retoucher la
+  // meme fiche la prochaine fois, et suivre les seances a chaque sauvegarde.
+  if(m&&m.boutiqueId!==id){ m.boutiqueId=id; try{ saveUser(); }catch(e){} }
   // On relit le noeud plutot que de recopier ce qu'on croit avoir ecrit : la
   // base a pu normaliser, et c'est elle qui fait foi.
   await rafraichirBoutique();
   fermerFicheVente(true);
-  _rendreMesProgrammes();
-  toast('« '+nom+' » est en ligne.','var(--green)');
+  try{ loadCoachProgramsList(); }catch(e){}
+  toast(obj.masque?'« '+nom+' » est retiré de la vente.':'« '+nom+' » est en vente dans la boutique.','var(--green)');
   return true;
+}
+// PURE. Les seances d'un modele telles qu'elles partent dans la boutique, en
+// chaine JSON — null s'il n'y en a aucune.
+//
+// ⚠ UNE VERSION SANS SEANCE PART VIDE. Sept creneaux eteints forment un
+// tableau NON vide : _seancesPubliees l'aurait pris, et une acheteuse aurait
+// recu sept jours de repos au lieu de la version Homme.
+// ⚠ LES PHOTOS DE SEANCE RESTENT CHEZ LE COACH : du base64 dans un noeud que
+// chaque athlete relit, et qui ferait refuser la publication pour sa taille.
+function _venteSeancesJson(m){
+  const jeu=g=>{
+    const l=_cptSeances(m,g)||[];
+    if(!l.some(s=>s&&s.active&&Array.isArray(s.exercises)&&s.exercises.length)) return [];
+    return l.map(s=>(s&&typeof s==='object')
+      ?Object.assign(JSON.parse(JSON.stringify(s)),{photo:null,photo2:null}):null);
+  };
+  const H=jeu('H'), F=jeu('F');
+  return (H.length||F.length)?JSON.stringify({H:H,F:F}):null;
 }
 // PURE. Un identifiant stable a partir d'un nom. Sans accents ni espaces :
 // il devient une clef de base, et une clef ne se renomme pas.
 function _slugProgramme(nom){
   return String(nom||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
     .toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50);
+}
+// PURE (au cache pres). Un identifiant NEUF. Le titre seul ne suffit pas : un
+// programme intitule « Fondations » aurait pris la cle de la Fondation, et sa
+// publication aurait remplace celle qui est deja en vente.
+function _idBoutiqueLibre(nom){
+  const base=_slugProgramme(nom);
+  if(!base) return null;
+  const pris=id=>RC_PROGRAMMES.some(p=>p.id===id)||!!_programmePublie(id);
+  if(!pris(base)) return base;
+  for(let n=2;n<10;n++) if(!pris(base+'-'+n)) return base+'-'+n;
+  return base+'-'+Date.now().toString(36);
 }
 // L'ACTION DE LA CARTE. Trois etats, et un seul bouton a la fois : on achete,
 // on applique, ou — pour le coach — on offre. Deux boutons cote a cote
@@ -88720,6 +89032,12 @@ document.addEventListener('keydown',e=>{
   const lx=document.getElementById('rc-lexique');
   if(lx&&lx.style.display==='flex'&&!lx.dataset.sortie){
     e.preventDefault(); try{ rcInfoFermer(); }catch(x){} return;
+  }
+  // R27 — la fiche de la boutique, APRES le lexique : il peut s'ouvrir
+  // par-dessus elle, et Echap defait le dernier geste.
+  const vb=document.getElementById('rc-vente');
+  if(vb&&vb.style.display==='flex'&&!vb.dataset.sortie){
+    e.preventDefault(); try{ fermerFicheVente(); }catch(x){} return;
   }
   // R26 — « Mon approche ». Aucun lexique ne s'ouvre depuis elle : l'ordre
   // avec lui est indifferent.
