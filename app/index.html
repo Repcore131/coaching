@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1272';
+window.RC_BUILD='1273';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -56884,8 +56884,31 @@ function _dateMaxNaissance(){
   return (d.getFullYear()-10)+'-12-31';
 }
 function bTA(id,ph){return`<textarea id="${id}" rows="3" placeholder="${ph||''}" oninput="bilData['${id}']=this.value" style="resize:none">${escapeHtml(bilData[id]||'')}</textarea>`;}
+// R35 — LE LIBELLE D'UN CHOIX PEUT DIFFERER DE SA VALEUR. bC enregistre la
+// chaine du choix telle quelle, et d'autres calculs la comparent (le type de
+// diete relu par saveBilanFinal, par exemple) : corriger un libelle en
+// reecrivant la chaine aurait change la valeur stockee et laisse les anciens
+// bilans sans correspondance. La valeur ne bouge donc pas ; seul l'affichage
+// passe par cette table, dans le questionnaire comme dans la lecture des
+// reponses (_texteReponseLue). Anciens et nouveaux bilans se lisent pareil.
+const BIL_CHOIX_LIBELLES=Object.freeze({
+  'deb-location':Object.freeze({'Park de Street Workout':'Parc de street workout'}),
+  'deb-nutrition-type':Object.freeze({
+    'Diet strict : Plan alimentaire détaillé avec quantités précises':'Diète stricte : ton coach compose ton plan, repas par repas',
+    'Diet flexible : Conseils personnalisés + calcul via application':'Diète flexible : tu fixes tes macros et tu manges ce que tu veux dans ces limites'})
+});
+function _libelleChoix(gid,val){
+  const t=Object.prototype.hasOwnProperty.call(BIL_CHOIX_LIBELLES,gid)?BIL_CHOIX_LIBELLES[gid]:null;
+  return (t&&typeof val==='string'&&Object.prototype.hasOwnProperty.call(t,val))?t[val]:val;
+}
+// Le texte d'une reponse tel qu'on le LIT, pour la question `k` : les choix
+// renommes y prennent leur libelle actuel. Les calculs, eux, continuent de
+// lire la valeur brute par _texteReponse.
+function _texteReponseLue(k,val){
+  return _texteReponse(Array.isArray(val)?val.map(v=>_libelleChoix(k,v)):_libelleChoix(k,val));
+}
 function bC(gid,choices,multi){
-  return choices.map(c=>`<div class="choice-opt${bilData[gid]&&(multi?bilData[gid].includes(c):bilData[gid]===c)?' sel':''}" data-grp="${gid}" data-val="${c}" onclick="pickBilChoice('${gid}',this.dataset.val,${!!multi})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${c}</div>`).join('');
+  return choices.map(c=>`<div class="choice-opt${bilData[gid]&&(multi?bilData[gid].includes(c):bilData[gid]===c)?' sel':''}" data-grp="${gid}" data-val="${c}" onclick="pickBilChoice('${gid}',this.dataset.val,${!!multi})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${_libelleChoix(gid,c)}</div>`).join('');
 }
 // Échelle d'émojis néon — visages SVG au trait (rendu identique sur tous les appareils)
 // Mêmes valeurs stockées que bC (compat stats coach)
@@ -57000,7 +57023,7 @@ function bMetier(id){
   const v=bilData[id]||'';
   const n=facteurProfession(v);
   return `<div style="position:relative">
-    <input type="text" id="${id}" autocomplete="off" placeholder="Commence à taper : maçon, infirmier, comptable…"
+    <input type="text" id="${id}" autocomplete="off" placeholder="Commence à taper : maçon, infirmier, comptable…"
       value="${escapeHtml(v)}" oninput="_bMetierSaisie('${id}',this.value)" onfocus="_bMetierSaisie('${id}',this.value)">
     <div id="${id}-sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:var(--z-raised);background:var(--dark);border:1px solid var(--border);border-radius:0 0 var(--r-3) var(--r-3);max-height:210px;overflow:auto"></div>
     <div id="${id}-niv" style="font-size:var(--fs-2xs);line-height:1.6;margin-top:5px;color:${n?'var(--success)':'var(--text-faint)'}">${
@@ -57092,12 +57115,23 @@ function bSports(id){
     <button type="button" onclick="_bSportAjouter('${id}')" class="btn btn-outline btn-sm"
       style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)">+ Ajouter un sport</button>
     <div data-sports-total style="font-size:var(--fs-xs);color:var(--success);line-height:1.6;margin-top:8px">${total.semaine>0?total.semaine+' kcal par semaine, soit '+total.jour+' kcal par jour ajoutés à ta dépense.':''}</div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:6px">Compte ici ce que tu fais EN DEHORS de RepCore. Tes créneaux du programme sont déjà comptés à part : si tu ajoutes quand même une ligne « Musculation », elle ne s'additionne pas à eux.</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:6px">Compte ici ce que tu fais EN DEHORS de RepCore. Tes créneaux du programme sont déjà comptés à part : si tu ajoutes quand même une ligne « Musculation », elle ne s'additionne pas à eux.</div>
   </div>`;
+}
+// R35 — PURE. Les sports reellement declares : une ligne sans sport, ou
+// « Aucun », ne compte pas.
+function _bSportsDeclares(id){
+  return _bSportsListe(id).filter(e=>e&&e.sport&&e.sport!=='Aucun').length;
 }
 function _bRepeindreSports(id){
   const z=document.getElementById(id+'-zone');
   if(z) z.outerHTML=bSports(id);
+  // R35 — la question d'intensite du second sport suit la liste : elle ne se
+  // montre qu'a partir de deux sports declares.
+  if(id==='deb-sports'){
+    const b2=document.getElementById('deb-intensity-2-bloc');
+    if(b2) b2.style.display=_bSportsDeclares(id)<2?'none':'';
+  }
 }
 function _bSportAjouter(id){
   const l=_bSportsListe(id).slice();
@@ -57286,7 +57320,7 @@ function bLongueurs(){
     </div>
   </div>`;
   return `<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
-    <div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Longueurs — facultatif</div>
+    <div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Longueurs (facultatif)</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Deux mesures qui ne bougent plus une fois adulte. Elles servent à ton coach pour te proposer des variantes d'un mouvement, jamais pour en écarter un.</div>
     ${champ('deb-entrejambe','Entrejambe','Du sol au pubis, pieds nus, dos au mur.')}
     ${champ('deb-bras','Longueur de bras','Bras tendu le long du corps, de la pointe de l\'épaule au poignet.')}
@@ -57400,8 +57434,9 @@ const BILAN_QUESTIONS={
     // bilans d'avant la migration, où elle est la seule trace du sujet.
     {k:'deb-sports',lbl:'Sports pratiqués',emoji:'⚽'},
     {k:'deb-other-sports',lbl:'Autres sports pratiqués',emoji:'⚽'},
-    {k:'deb-intensity-1',lbl:'Intensité perçue (1)',emoji:'🔥'},
-    {k:'deb-intensity-2',lbl:'Intensité perçue (2)',emoji:'🔥'},
+    // R35 — memes cles, libelles alignes sur les questions reformulees.
+    {k:'deb-intensity-1',lbl:'Intensité du sport principal',emoji:'🔥'},
+    {k:'deb-intensity-2',lbl:'Intensité du second sport',emoji:'🔥'},
     {k:'deb-history',lbl:'Antécédents sportifs',emoji:'📜'},
     {k:'deb-nutrition-type',lbl:'Type de suivi nutritionnel',emoji:'🥗'},
     {k:'deb-meals-day',lbl:'Repas par jour',emoji:'🍽️'},
@@ -57469,7 +57504,7 @@ function _ccdBilParJour(c){
 function _ccdBilReponses(b){
   if(!b) return [];
   const qs=(b.type==='depart'?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi)||[];
-  return qs.map(q=>({lbl:q.lbl,emoji:q.emoji||'',txt:_texteReponse(b[q.k])}))
+  return qs.map(q=>({lbl:q.lbl,emoji:q.emoji||'',txt:_texteReponseLue(q.k,b[q.k])}))
            .filter(x=>x.txt);
 }
 function _ccdBilMoisLib(cle){
@@ -59296,7 +59331,7 @@ function renderReponsesBilans(bilans,client){
     const d=new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
     const w=getBW(b);
     const answers=(depart?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi).map(q=>{
-      const txt=_texteReponse(b[q.k]);
+      const txt=_texteReponseLue(q.k,b[q.k]);
       if(!txt) return '';
       return `<div style="padding:8px 0;border-bottom:1px solid #141414">
         <div style="font-size:var(--fs-xs);color:${q.alerte?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${q.emoji} ${q.lbl}</div>
@@ -59335,10 +59370,13 @@ const BIL_STEPS=[
   ),
   // Step 2 : Difficultés & Alimentation
   ()=>bSec('Difficultés & Alimentation',
-    bLbl("As tu éprouvé des difficultés récentes en séance ou avec l'alimentation ?")+
+    // R35 — espace insecable avant « ? », « : » et « ! » ; cles et valeurs inchangees.
+    bLbl("As-tu éprouvé des difficultés récentes en séance ou avec l'alimentation ?")+
     `<div>${bC('bil-diff-type',["Oui, avec les séances","Oui, avec l'alimentation","Oui, avec les deux","Non, aucune difficulté particulière"])}</div>`+
-    bLbl('Si oui, détaille les difficultés rencontrées :')+bTA('bil-diff-detail','Décris tes difficultés...')+
-    bLbl('Combien as tu fais de Cheat Meals ou de repas hors programme cette semaine ? ')+
+    bLbl('Si oui, détaille les difficultés rencontrées :')+bTA('bil-diff-detail','Décris tes difficultés...')+
+    // « cheat meals » reste entre parentheses : c'est le mot que les athletes
+    // emploient, et le coach le lit dans les reponses.
+    bLbl('Combien de repas hors programme (cheat meals) as-tu pris cette semaine ?')+
     `<div>${bEmojiScale('bil-cheat-meals',[
       {v:'Aucun',f:'happy2',c:'#22c55e'},
       {v:'1',f:'happy',c:'#a3e635'},
@@ -59346,21 +59384,21 @@ const BIL_STEPS=[
       {v:'3',f:'sad',c:'#f97316'},
       {v:'4 ou plus',f:'angry',c:'#E02020'},
     ])}</div>`+
-    bLbl('Expliques moi les raisons (repas de famille, sorties professionnelles...) :')+bTA('bil-cheat-reasons','Repas de famille, sorties professionnelles...')
+    bLbl('Explique-moi les raisons (repas de famille, sorties professionnelles...) :')+bTA('bil-cheat-reasons','Repas de famille, sorties professionnelles...')
   ),
   // Step 3 : Ressenti & Modifications
   ()=>bSec('Ressenti & Modifications',
-    bLbl('Quel est ton niveau de motivation en ce moment (sur une échelle de 1 à 10) :')+
+    bLbl('Quel est ton niveau de motivation en ce moment, sur une échelle de 1 à 10 ?')+
     `<div>${bSlider('bil-motivation')}</div>`+
-    bLbl('Souhaiterais tu des modifications dans ton programme ?')+bTA('bil-prog-modifs','Décris librement tes souhaits de modifications...')
+    bLbl('Souhaiterais-tu des modifications dans ton programme ?')+bTA('bil-prog-modifs','Décris librement tes souhaits de modifications...')
   ),
   // Step 4 : Sommeil & Stress
   ()=>bSec('Sommeil & Stress',
-    bLbl('Qualité du sommeil : Comment dors-tu en ce moment ?')+
+    bLbl('Qualité du sommeil : comment dors-tu en ce moment ?')+
     `<div>${bC('bil-sleep-quality',['Très bien, je me sens reposé(e)','Correct, quelques nuits agitées','Mal, j\'ai du mal à me reposer'])}</div>`+
-    bLbl('Es tu stressé en ce moment?')+
+    bLbl('Es-tu stressé(e) en ce moment ?')+
     `<div>${bC('bil-stress',['Pas du tout','Un peu','Beaucoup','Énormément'])}</div>`+
-    bLbl('Si tu es stressé, peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...')
+    bLbl('Si tu es stressé(e), peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...')
   ),
   // Step 5 bis : le traitement, SEMESTRIELLEMENT et pas plus souvent.
   // Rend une chaîne VIDE le reste du temps : bSec n'est même pas appelé, il
@@ -59368,7 +59406,7 @@ const BIL_STEPS=[
   // rien ici ne conditionne la validation du bilan, et c'est délibéré : une
   // question de santé qui bloque un bilan se répond au hasard.
   ()=>traitementARevoir(currentUser)?bSec('Traitement',
-    bLbl('Ton traitement a-t-il changé depuis la dernière fois ?')+
+    bLbl('Ton traitement a-t-il changé depuis la dernière fois ?')+
     `<div>${bC('bil-traitement-change',['Non, rien n\'a changé','Oui, il a changé','Je ne prends plus de traitement'])}</div>`+
     `<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:8px">${escapeHtml(TRAITEMENT_MENTION)}</div>`
   ):'',
@@ -59376,13 +59414,13 @@ const BIL_STEPS=[
   // retiré du produit ; ce texte reste lu par _objectifTexte pour suggérer
   // une phase.
   ()=>bSec('Tes objectifs',
-    bLbl('Où en es-tu de tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')
+    bLbl('Où en es-tu de tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')
   ),
   // Step 6 : Photos de progression
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-2);padding:16px;margin-bottom:14px;text-align:center">`+
-    `<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:6px;color:var(--text)">Photos de progression${grossesseSuspend(currentUser)?' <span style="font-weight:600;color:var(--sub)">— facultatif</span>':''}</div>`+
-    `<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous : même endroit, même lumière qu'au début :<br><strong style="color:var(--red-text)">Face · Dos · Profil</strong></div></div>`+
+    `<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:6px;color:var(--text)">Photos de progression${grossesseSuspend(currentUser)?' <span style="font-weight:600;color:var(--sub)">(facultatif)</span>':''}</div>`+
+    `<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, même endroit et même lumière qu'au début :<br><strong style="color:var(--red-text)">Face · Dos · Profil</strong></div></div>`+
     bPhotoCards('bil')+
     `</div>`
 ];
@@ -59391,26 +59429,28 @@ const BIL_STEPS=[
 const DEB_STEPS=[
   // Step 1 : Informations personnelles
   ()=>bSec('Informations personnelles',
-    bLbl('Tu es ?')+
+    // R35 — espace insecable avant « ? », « : » et « ! » dans tous les
+    // libelles des deux questionnaires ; les cles et les valeurs ne bougent pas.
+    bLbl('Tu es ?')+
     `<div>${bGenderCards('deb-gender')}</div>`+
-    bLbl('Quelle est ta date de naissance ? ')+bDate('deb-birthdate')+
-    bLbl('Quel est ton poids actuel ? (en kg)')+bQ('deb-weight')+
-    bLbl('Quelle est ta taille ?  (en cm)')+bQ('deb-height')+
-    bLbl('Quels sont tes objectifs principaux ? ')+
+    bLbl('Quelle est ta date de naissance ?')+bDate('deb-birthdate')+
+    bLbl('Quel est ton poids actuel ? (en kg)')+bQ('deb-weight')+
+    bLbl('Quelle est ta taille ? (en cm)')+bQ('deb-height')+
+    bLbl('Quels sont tes objectifs principaux ?')+
     `<div>${bC('deb-goals',['Perte de poids','Prise de muscle','Rééquilibrage corporel','Amélioration des performances','Bien-être général'],true)}</div>`+
     // R12 — marge haute negative : la ligne se loge dans les 8 px du libelle,
     // et la question ne grandit que de 14 px.
-    bLbl('Quelle est ta profession ? ')+
+    bLbl('Quelle est ta profession ?')+
     `<div class="rc-micro" style="margin:-6px 0 7px">Sert à estimer ce que tu dépenses en dehors de tes séances.</div>`+
     bMetier('deb-job')+
     // Sous la profession, et pas ailleurs : c'est la meme question posee
     // autrement, et l'une eclaire l'autre.
-    bLbl("Hors sport, comment situes-tu ton niveau d'activite au quotidien ?")+
+    bLbl("Hors sport, comment situes-tu ton niveau d'activité au quotidien ?")+
     `<div>${bNaf('deb-naf')}</div>`+
-    `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:2px 0 4px">C'est ce niveau qui servira au calcul de ta depense. Le sport est compte a part.</div>`+
-    bLbl('Et ton rythme de travail ?')+
+    `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:2px 0 4px">C'est ce niveau qui servira au calcul de ta dépense. Le sport est compté à part.</div>`+
+    bLbl('Et ton rythme de travail ?')+
     `<div>${bC('deb-work-rhythm',['Plein temps','Partiel','En arrêt'])}</div>`+
-    bLbl('As-tu des problèmes de santé ou des blessures ?  (Si oui, précise)')+bT('deb-health','Ex: Hernie discale, entorse...')+
+    bLbl('As-tu des problèmes de santé ou des blessures ? (si oui, précise)')+bT('deb-health','Ex : hernie discale, entorse...')+
     // La CASE d'abord : c'est elle qui agit. Le texte est facultatif, et la
     // mention qui l'accompagne est AFFICHÉE, pas seulement commentée.
     `<label style="display:flex;align-items:flex-start;gap:9px;margin-top:10px;cursor:pointer">
@@ -59428,73 +59468,83 @@ const DEB_STEPS=[
   ),
   // Step 2 : Mensurations initiales — schéma corporel interactif
   ()=>bSec('Mensurations initiales ',
-    `<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:8px;line-height:1.5">Indique tes mesures directement sur le schéma pour suivre ton évolution !</div>`+
+    `<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:8px;line-height:1.5">Indique tes mesures directement sur le schéma pour suivre ton évolution !</div>`+
     bBodySchema('deb')
   ),
   // Step 3 : Entraînement
   ()=>bSec('Entraînement',
-    bLbl("Où t'entraînes tu habituellement ? ")+
+    bLbl("Où t'entraînes-tu ?")+
     `<div>${bC('deb-location',["En salle","Chez toi","Park de Street Workout"],true)}</div>`+
-    bLbl("Si tu t'entraines en salle, dans laquelle vas-tu?")+bT('deb-gym','Nom de la salle...')+
-    bLbl('Quels jours souhaites-tu t\'entraîner ? ')+
+    bLbl("Si tu t'entraînes en salle, laquelle ?")+bT('deb-gym','Nom de la salle...')+
+    bLbl('Quels jours souhaites-tu t\'entraîner ?')+
     `<div>${bC('deb-training-days',['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'],true)}</div>`+
-    bLbl('Quelle est la durée de séance que tu préfères ? ⏱')+bT('deb-session-duration','Ex: 45min, 1h30...')+
+    bLbl('Quelle est la durée de séance que tu préfères ? ⏱')+bT('deb-session-duration','Ex : 45 min, 1 h 30...')+
     // R12 — c'est exact : besoinsProposes compte les creneaux RepCore une fois,
     // et ne les additionne jamais a une musculation declaree ici.
-    bLbl("Quels sports pratiques-tu, et combien d'heures par semaine ?")+
-    `<div class="rc-micro" style="margin:-6px 0 7px">Tes séances RepCore sont déjà comptées : n'ajoute que le reste.</div>`+
+    bLbl("Quels sports pratiques-tu, et combien d'heures par semaine ?")+
+    `<div class="rc-micro" style="margin:-6px 0 7px">Tes séances RepCore sont déjà comptées : n'ajoute que le reste.</div>`+
     bSports('deb-sports')+
-    bLbl("A quel niveau estime tu l'intensité de ta pratique sportive 1")+
+    // R35 — LES DEUX QUESTIONS D'INTENSITE RESTENT, REFORMULEES. Elles ne
+    // servent pas au calcul de depense (depenseSportsParJour lit l'intensite de
+    // chaque ligne de deb-sports), mais deb-intensity-1 est encore lue :
+    // saveBilanFinal en tire currentUser.level, le « niveau » affiche en tete
+    // de la fiche athlete du coach. deb-intensity-2 n'est lue que dans les
+    // reponses du bilan. Les cles et les valeurs sont inchangees ; la seconde
+    // ne se montre qu'a partir de deux sports declares (_bRepeindreSports).
+    bLbl("Quelle est l'intensité de ton sport principal ?")+
     `<div>${bEmojiScale('deb-intensity-1',[
       {v:'Faible intensité',l:'Faible',svg:BICON.flame1,c:'#22c55e'},
       {v:'Intensité Modérée',l:'Modérée',svg:BICON.flame2,c:'#f97316'},
       {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:'#E02020'},
     ])}</div>`+
-    bLbl("A quel niveau estime tu l'intensité de ta pratique sportive 2")+
+    `<div id="deb-intensity-2-bloc"${_bSportsDeclares('deb-sports')<2?' style="display:none"':''}>`+
+    bLbl('Et celle de ton second sport ?')+
     `<div>${bEmojiScale('deb-intensity-2',[
       {v:'Faible intensité',l:'Faible',svg:BICON.flame1,c:'#22c55e'},
       {v:'Intensité Modérée',l:'Modérée',svg:BICON.flame2,c:'#f97316'},
       {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:'#E02020'},
-    ])}</div>`+
-    bLbl('As-tu des antécédents sportifs ? ')+bT('deb-history','Ex: Football 5 ans, boxe 2 ans...')+
-    bLbl('Quand souhaites tu t\'entraîner ? ⏰')+
+    ])}</div></div>`+
+    bLbl('As-tu des antécédents sportifs ?')+bT('deb-history','Ex : football 5 ans, boxe 2 ans...')+
+    bLbl('Quand préfères-tu t\'entraîner ? ⏰')+
     `<div>${bC('deb-training-time',['Matin','Après-midi','Soir'],true)}</div>`
   ),
   // Step 4 : Nutrition
   ()=>bSec('Nutrition ',
-    bLbl('As-tu des allergies ou régimes alimentaires spécifiques ? ')+bT('deb-allergies','Ex: Intolérance lactose, végétarien...')+
-    bLbl('Y a-t-il quelque chose que ton coach doit savoir sur ton rapport à l\'alimentation ?')+bT('deb-tca','Facultatif — ce que tu veux en dire')+
+    bLbl('As-tu des allergies ou régimes alimentaires spécifiques ?')+bT('deb-allergies','Ex : intolérance au lactose, végétarien...')+
+    bLbl('Y a-t-il quelque chose que ton coach doit savoir sur ton rapport à l\'alimentation ?')+bT('deb-tca','Facultatif : ce que tu veux en dire')+
     // QUESTIONS DE SECURITE. Le titre ne nomme aucun trouble, aucun score
     // n est affiche, et les reponses ne sont PAS conservees : seul le
     // booleen qu elles produisent l est.
     bLbl('Quelques questions de sécurité')+
     `<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:10px;text-transform:none;letter-spacing:normal;font-weight:400">Elles servent à savoir si un objectif de poids est prudent pour toi en ce moment. Tes réponses ne sont pas enregistrées.</div>`+
     SCOFF_QUESTIONS.map(q=>bLbl(q.q)+`<div>${bC('deb-scoff-'+q.cle,['Oui','Non'])}</div>`).join('')+
-    bLbl('Quel type de suivi nutritionnel préfères tu ? ')+
+    bLbl('Quel type de suivi nutritionnel préfères-tu ?')+
+    // R35 — valeurs inchangees : les libelles viennent de BIL_CHOIX_LIBELLES.
     `<div>${bC('deb-nutrition-type',['Diet strict : Plan alimentaire détaillé avec quantités précises','Diet flexible : Conseils personnalisés + calcul via application'])}</div>`+
-    bLbl('Nombre de repas par jour que tu préfères ? ')+
+    bLbl('Combien de repas par jour préfères-tu ?')+
     `<div>${bC('deb-meals-day',['3','4','5','6'])}</div>`+
-    bLbl('Aliments que tu adores ? ')+bT('deb-food-love','Ex: Riz, poulet, banane...')+
-    bLbl('Aliments que tu détestes? ')+bT('deb-food-hate','Ex: Brocolis, poivrons...')+
-    bLbl('Quantité d\'eau bue quotidiennement ?  (en litres)')+
+    bLbl('Aliments que tu adores ?')+bT('deb-food-love','Ex : riz, poulet, banane...')+
+    bLbl('Aliments que tu détestes ?')+bT('deb-food-hate','Ex : brocolis, poivrons...')+
+    // L'echelle affiche deja les litres : la precision est retiree du libelle.
+    bLbl('Combien d\'eau bois-tu par jour ?')+
     `<div>${bEmojiScale('deb-water',[
       {v:'Moins de 1L',l:'- de 1L',svg:BICON.glass(34),c:'#7dd3fc'},
       {v:'Entre 1 à 2L',l:'1 à 2L',svg:BICON.glass(27),c:'#38bdf8'},
       {v:'Entre 3 à 4L',l:'3 à 4L',svg:BICON.glass(19),c:'#0ea5e9'},
       {v:'5L et plus',l:'5L et +',svg:BICON.glass(11),c:'#2563eb'},
     ])}</div>`+
-    bLbl('Est-ce que tu suis tes calories et macronutriments au quotidien ? ')+
+    bLbl('Suis-tu tes calories et tes macros au quotidien ?')+
     `<div>${bC('deb-track-macros',['Oui','Non'])}</div>`+
-    bLbl('Si oui, combien de calories consommes-tu chaque jour, et dans quel but ? (ex. sèche, prise de masse, maintien)')+bT('deb-calories','Ex: 2200 kcal sèche...')+
-    bLbl('Souhaites tu consommer des compléments alimentaires ?')+
+    bLbl('Si oui, combien de calories consommes-tu chaque jour, et dans quel but ? (ex. sèche, prise de masse, maintien)')+bT('deb-calories','Ex : 2200 kcal en sèche...')+
+    bLbl('Souhaites-tu prendre des compléments alimentaires ?')+
     `<div>${bC('deb-supplements',['Oui','Non'])}</div>`+
-    bLbl('Si tu en consommes déjà, lesquels prends tu et pourquoi?')+bT('deb-supps-detail','Ex: Whey, créatine...')
+    bLbl('Si tu en prends déjà, lesquels et pourquoi ?')+bT('deb-supps-detail','Ex : whey, créatine...')
   ),
   // Step 5 : Photos de départ
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de départ </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-2);padding:16px;margin-bottom:14px;text-align:center">`+
     `<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:6px;color:var(--text)">Photos de départ</div>`+
-    `<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, tenue légère, lumière naturelle : <strong style="color:var(--red-text)">touche AJOUTER sous chaque pose</strong>.</div></div>`+
+    `<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, tenue légère, lumière naturelle : <strong style="color:var(--red-text)">touche AJOUTER sous chaque pose</strong>.</div></div>`+
     bPhotoCards('deb')+
     `</div>`
 ];

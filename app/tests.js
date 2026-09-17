@@ -39253,7 +39253,8 @@ async function testExercices(){
       const iP=e1.indexOf('Quelle est ta profession'), iM=e1.indexOf('Sert à estimer ce que tu dépenses en dehors de tes séances.'), iC=e1.indexOf('deb-job');
       if(iM<0) return _echec('la ligne de la profession est absente');
       if(!(iP<iM&&iM<iC)) return _echec('la ligne n’est pas entre la question et le champ de la profession');
-      const iS=e3.indexOf('Quels sports pratiques-tu'), iN=e3.indexOf('Tes séances RepCore sont déjà comptées : n\'ajoute que le reste.'), iF=e3.indexOf('deb-sports');
+      // R35 — espace insécable avant les deux-points.
+      const iS=e3.indexOf('Quels sports pratiques-tu'), iN=e3.indexOf('Tes séances RepCore sont déjà comptées'+String.fromCharCode(160)+': n\'ajoute que le reste.'), iF=e3.indexOf('deb-sports');
       if(iN<0) return _echec('la ligne des sports est absente');
       if(!(iS<iN&&iN<iF)) return _echec('la ligne n’est pas entre la question et le champ des sports');
       // UNE LIGNE à la largeur que le bilan leur donne à 359 px.
@@ -40338,6 +40339,121 @@ async function testExercices(){
         const m=(el.getAttribute('onclick')||'').match(/go\('([^']+)'\)/);
         if(m&&!document.getElementById(m[1])) return _echec('lien mort vers '+m[1]);
       }
+      return true;})());
+
+    // ══ 17/09/2026 — R35 : LES LIBELLÉS DES DEUX QUESTIONNAIRES ════════════
+    //
+    // Les libellés changent, jamais les clés ni les valeurs. Les étapes sont
+    // rendues pour de vrai, sous un compte de test, et lues dans le DOM.
+    const _R35_NBSP=String.fromCharCode(160);
+    const _r35Rendre=(steps,data,f)=>{
+      const sU=currentUser, sD=bilData;
+      try{
+        currentUser={id:'r35',email:'r35@t.fr',fname:'A',lname:'B',role:'athlete',gender:'homme',birthdate:'1990-01-01',
+          bilans:[{type:'depart',date:Date.now()-9e8}],sessions:[],exAlias:{},exMuscles:{},videos:[],programs:{},contraintesSante:[]};
+        bilData=Object.assign({},data||{});
+        const d=document.createElement('div');
+        d.innerHTML=_etapesUtiles(steps).map(s=>s()).join('');
+        return f(d);
+      } finally { currentUser=sU; bilData=sD; }
+    };
+    const _r35Valeurs=(d,g)=>[...d.querySelectorAll('[data-grp="'+g+'"]')].map(e=>e.dataset.val);
+
+    ok('R35 — les deux questions d’intensité : reformulées, mêmes clés, mêmes valeurs, et le niveau toujours tiré de la première',(()=>
+      _r35Rendre(DEB_STEPS,{'deb-sports':[{sport:'Natation',intensite:'moderee',heures:'2'},{sport:'Boxe',intensite:'haute',heures:'1'}]},d=>{
+        const t=d.textContent;
+        if(/A quel niveau estime tu/.test(t)) return _echec('l’ancienne formulation est encore là');
+        if(t.indexOf('Quelle est l\'intensité de ton sport principal'+_R35_NBSP+'?')<0) return _echec('question 1 absente');
+        if(t.indexOf('Et celle de ton second sport'+_R35_NBSP+'?')<0) return _echec('question 2 absente');
+        const att='Faible intensité|Intensité Modérée|Haute intensité';
+        for(const g of ['deb-intensity-1','deb-intensity-2'])
+          if(_r35Valeurs(d,g).join('|')!==att) return _echec(g+' : valeurs '+_r35Valeurs(d,g).join('|'));
+        // ⚠ ELLES SONT ENCORE LUES : la première donne le niveau affiché au coach.
+        const s=String(saveBilanFinal);
+        if(s.indexOf('bilData[\'deb-intensity-1\']')<0||s.indexOf('\'Intensité Modérée\':\'Intermédiaire (1-3 ans)\'')<0) return _echec('saveBilanFinal ne tire plus le niveau de deb-intensity-1');
+        // Le calcul de dépense, lui, lit l'intensité de chaque sport.
+        if(/deb-intensity/.test(String(depenseSportsParJour))) return _echec('depenseSportsParJour lit une question d’intensité');
+        const q=BILAN_QUESTIONS.depart.filter(x=>/^deb-intensity-/.test(x.k)).map(x=>x.k+'='+x.lbl).join('|');
+        if(q!=='deb-intensity-1=Intensité du sport principal|deb-intensity-2=Intensité du second sport') return _echec('libellés côté coach : '+q);
+        return true;})));
+
+    ok('R35 — l’intensité du second sport ne se montre qu’à partir de deux sports déclarés',(()=>{
+      // Un questionnaire resté dans #bil-content porterait les mêmes identifiants :
+      // ils sont mis de côté le temps du test.
+      const deCote=['deb-sports-zone','deb-intensity-2-bloc'].map(id=>document.getElementById(id)).filter(Boolean);
+      deCote.forEach(e=>{ e.id+='-r35'; });
+      const sD=bilData, hote=document.createElement('div');
+      const vu=()=>{ const b=document.getElementById('deb-intensity-2-bloc'); return !!b&&b.style.display!=='none'; };
+      try{
+        // Au rendu : masquée sans sport, avec un sport, et avec « Aucun ».
+        for(const [nom,l,att] of [['aucune ligne',[],false],['un sport',[{sport:'Natation',intensite:'faible',heures:'1'}],false],
+            ['un sport et « Aucun »',[{sport:'Natation'},{sport:'Aucun'}],false],['deux sports',[{sport:'Natation'},{sport:'Boxe'}],true]]){
+          const html=_r35Rendre(DEB_STEPS,{'deb-sports':l},d=>d.querySelector('#deb-intensity-2-bloc').outerHTML);
+          if(/display:none/.test(html)===att) return _echec(nom+' : '+(att?'masquée':'affichée'));
+        }
+        // En direct : la liste qu'on modifie la montre et la cache.
+        bilData={'deb-sports':[]};
+        hote.innerHTML=bSports('deb-sports')+'<div id="deb-intensity-2-bloc" style="display:none"></div>';
+        document.body.appendChild(hote);
+        _bSportAjouter('deb-sports'); if(vu()) return _echec('affichée avec un sport');
+        _bSportAjouter('deb-sports'); if(!vu()) return _echec('masquée avec deux sports');
+        _bSportSet('deb-sports',1,'sport','Aucun'); if(vu()) return _echec('« Aucun » compte comme un sport');
+        _bSportSet('deb-sports',1,'sport','Boxe'); if(!vu()) return _echec('masquée après le choix d’un second sport');
+        _bSportRetirer('deb-sports',0); if(vu()) return _echec('affichée après le retrait d’un sport');
+        return true;
+      } finally { hote.remove(); bilData=sD; deCote.forEach(e=>{ e.id=e.id.replace(/-r35$/,''); }); }})());
+
+    ok('R35 — libellés corrigés, valeurs de choix inchangées, anciennes réponses lues avec le nouveau libellé',(()=>{
+      const VALEURS={
+        'deb-work-rhythm':'Plein temps|Partiel|En arrêt',
+        'deb-location':'En salle|Chez toi|Park de Street Workout',
+        'deb-training-time':'Matin|Après-midi|Soir',
+        'deb-nutrition-type':'Diet strict : Plan alimentaire détaillé avec quantités précises|Diet flexible : Conseils personnalisés + calcul via application',
+        'deb-meals-day':'3|4|5|6',
+        'deb-water':'Moins de 1L|Entre 1 à 2L|Entre 3 à 4L|5L et plus',
+        'deb-track-macros':'Oui|Non','deb-supplements':'Oui|Non',
+        'bil-diff-type':'Oui, avec les séances|Oui, avec l\'alimentation|Oui, avec les deux|Non, aucune difficulté particulière',
+        'bil-cheat-meals':'Aucun|1|2|3|4 ou plus',
+        'bil-sleep-quality':'Très bien, je me sens reposé(e)|Correct, quelques nuits agitées|Mal, j\'ai du mal à me reposer',
+        'bil-stress':'Pas du tout|Un peu|Beaucoup|Énormément'};
+      const N=_R35_NBSP;
+      const NOUVEAUX={DEB:['Où t\'entraînes-tu'+N+'?','Parc de street workout','Si tu t\'entraînes en salle, laquelle'+N+'?',
+          'Quand préfères-tu t\'entraîner'+N+'?','Aliments que tu détestes'+N+'?','Suis-tu tes calories et tes macros au quotidien'+N+'?',
+          'Souhaites-tu prendre des compléments alimentaires'+N+'?','Si tu en prends déjà, lesquels et pourquoi'+N+'?',
+          'Diète stricte'+N+': ton coach compose ton plan, repas par repas',
+          'Diète flexible'+N+': tu fixes tes macros et tu manges ce que tu veux dans ces limites','Combien d\'eau bois-tu par jour'+N+'?',
+          'Quels sports pratiques-tu, et combien d\'heures par semaine'+N+'?'],
+        BIL:['As-tu éprouvé des difficultés','Combien de repas hors programme (cheat meals) as-tu pris cette semaine'+N+'?']};
+      const ANCIENS=/t'entraînes tu|Park de Street Workout|t'entraines|souhaites tu|détestes\?|Est-ce que tu suis|Souhaites tu consommer|prends tu|Diet strict|Diet flexible|Quantité d'eau bue|As tu éprouvé|Combien as tu fais|Expliques moi|Es tu stress|Souhaiterais tu|préfères tu/;
+      const scoff=SCOFF_QUESTIONS.map(q=>q.q);
+      for(const [nom,steps] of [['DEB',DEB_STEPS],['BIL',BIL_STEPS]]){
+        const r=_r35Rendre(steps,{'deb-sports':[{sport:'Natation'},{sport:'Boxe'}]},d=>{
+          for(const [g,att] of Object.entries(VALEURS)){
+            const v=_r35Valeurs(d,g);
+            if(v.length&&v.join('|')!==att) return g+' : valeurs '+v.join('|');
+          }
+          const t=d.textContent;
+          if(ANCIENS.test(t)) return 'ancienne formulation : « '+t.match(ANCIENS)[0]+' »';
+          for(const x of NOUVEAUX[nom]) if(t.indexOf(x)<0) return 'absent : « '+x+' »';
+          // L'ESPACE INSÉCABLE avant « ? », « : » et « ! », sauf dans les
+          // questions de sécurité, dont le texte n'est pas touché, et les heures.
+          const w=document.createTreeWalker(d,NodeFilter.SHOW_TEXT); let n;
+          while((n=w.nextNode())){
+            if(scoff.indexOf(n.nodeValue.trim())>=0) continue;
+            const txt=n.nodeValue.replace(/[ \t\r\n]+/g,' ').replace(/\d:\d\d/g,'');
+            if(new RegExp('[^'+N+'][?:!]').test(txt)) return 'espace insécable manquant : « '+txt.trim().slice(0,70)+' »';
+          }
+          return '';
+        });
+        if(r) return _echec(nom+' : '+r);
+      }
+      // Les valeurs relues par les calculs restent les anciennes chaînes.
+      if(_texteReponse('Park de Street Workout')!=='Park de Street Workout') return _echec('_texteReponse traduit une valeur');
+      // LA LECTURE : anciens et nouveaux bilans affichent le libellé actuel.
+      if(_texteReponseLue('deb-location',['En salle','Park de Street Workout'])!=='En salle, Parc de street workout') return _echec('lecture du lieu : '+_texteReponseLue('deb-location',['En salle','Park de Street Workout']));
+      const rep=_ccdBilReponses({type:'depart','deb-nutrition-type':VALEURS['deb-nutrition-type'].split('|')[0]});
+      const nut=(rep.find(x=>x.lbl==='Type de suivi nutritionnel')||{}).txt;
+      if(nut!=='Diète stricte'+N+': ton coach compose ton plan, repas par repas') return _echec('réponse lue par le coach : « '+nut+' »');
       return true;})());
 
     // ══ 17/09/2026 — R19 : « REMPLIR MON BILAN » EST UN AIGUILLAGE ═════════
