@@ -1,0 +1,16 @@
+{
+  "//": "LE TYPAGE DE motion-lab.js, ET DE LUI SEUL. Le module porte // @ts-check et des types JSDoc depuis sa naissance ; ce fichier permet de les VERIFIER, en local comme en integration continue, au lieu de les croire. index.html n'entre pas ici : trois mille fonctions jamais annotees rendraient le rapport illisible et le controle inutile. Voir app/globaux.d.ts pour le contrat avec l'application.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM"],
+    "moduleDetection": "force",
+    "module": "ES2020",
+    "skipLibCheck": true,
+    "strict": false,
+    "noImplicitAny": false
+  },
+  "include": ["app/motion-lab.js", "app/globaux.d.ts"]
+}

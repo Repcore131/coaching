@@ -2264,7 +2264,10 @@ async function mlAnalyser(relance){
   // L'écran a été quitté pendant l'analyse : plus rien à mettre à jour.
   if(!_ml) return false;
   const seg=_ml.segments.find(s=>s.id===a.id);
-  if(!res.ok){
+  // ⚠ `res.ok===false` ET NON `!res.ok` : sur une union déclarée en JSDoc,
+  // la négation ne restreint pas le type et tout ce qui lit res.code passe
+  // pour faux. Vérifié sur un cas minimal, TypeScript 5.9.
+  if(res.ok===false){
     _ml.mode='lecture';
     const msg={cors:'L’hébergeur de cette vidéo n’autorise pas la lecture de ses images : l’analyse est impossible sur ce fichier.',
       chargement:'La vidéo n’a pas pu être chargée pour l’analyse. Vérifie la connexion, puis réessaie.',
@@ -2655,7 +2658,8 @@ async function mlAnalyserArticulations(){
   },arreter);
   if(arreter()) return false;
   _ml.mode='lecture';
-  if(!r.ok){
+  // ⚠ `r.ok===false` : voir plus haut, la négation ne restreint pas.
+  if(r.ok===false){
     const msg={chargement:'La vidéo ne s’ouvre pas.',
       cors:'Cette vidéo ne se laisse pas lire image par image.',
       recherche:'La vidéo ne se déplace pas image par image ici.',
@@ -2880,7 +2884,7 @@ function _mlDessinerPose(g,R,S,tNow,cles){
 /**
  * Un geste du journal — union discriminée par son deuxième élément.
  * @typedef {[number,'lecture']|[number,'pause']|[number,'effacer']|[number,'aller',number]
- *   |[number,'vitesse',number]|[number,'trait',number,string]|[number,'calque','trajectoire',string,number]} Geste
+ *   |[number,'vitesse',number]|[number,'trait',number,string]|[number,'calque',string,string,number]} Geste
  */
 /** @typedef {{id:string, aMs:number, dureeMs:number, texte:string}} Carte */
 /**

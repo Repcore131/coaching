@@ -40998,6 +40998,36 @@ async function testExercices(){
       return true;
     });
 
+    // ══ 17/09/2026 — R33 : LE CONTRAT DE TYPAGE ════════════════════════════
+    //
+    // app/globaux.d.ts décrit ce que motion-lab.js attend de l'application.
+    // TypeScript le croit sur parole : il ne lit pas index.html. Ce test le
+    // confronte au vrai navigateur — sans lui, une déclaration fausse ferait
+    // passer le typage au vert tout en décrivant une fonction qui n'existe
+    // pas. Le jour où il a été écrit, deux déclarations mentaient déjà.
+
+    okA('R33 — chaque nom déclaré pour le typage existe vraiment dans l’application',async()=>{
+      let d=null;
+      try{ d=await (await fetch('./globaux.d.ts',{cache:'no-store'})).text(); }catch(e){}
+      if(!d) return _echec('app/globaux.d.ts est illisible');
+      const noms=[...d.matchAll(/^declare (?:const|let|function) ([A-Za-z_$][\w$]*)/gm)].map(m=>m[1]);
+      if(noms.length<30) return _echec(noms.length+' nom(s) trouvé(s) : le fichier n’a pas été lu comme prévu');
+      // ⚠ UN let OU UN const GLOBAL N'EST PAS SUR window — seul un corps de
+      // fonction évalué dans la portée globale voit les deux sortes.
+      const absents=noms.filter(n=>{
+        try{ return new Function('return typeof '+n)()==='undefined'; }catch(e){ return true; }
+      });
+      if(absents.length) return _echec('déclaré mais absent de l’application : '+absents.join(', '));
+      // LES QUATRE-VINGT-DIX POUR CENT DU FICHIER sont des fonctions : si le
+      // compte tombe, c'est que la déclaration a changé de forme et que le
+      // filtre ci-dessus ne voit plus rien.
+      const fonctions=noms.filter(n=>{
+        try{ return new Function('return typeof '+n)()==='function'; }catch(e){ return false; }
+      });
+      if(fonctions.length<20) return _echec(fonctions.length+' fonction(s) reconnue(s)');
+      return true;
+    });
+
     // ══ 17/09/2026 — R29 : MOTION LAB, LOTS 2 ET 3 — LA TRAJECTOIRE ════════
     //
     // Tout se calcule sur l'appareil du coach (option A). Les images de ces

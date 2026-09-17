@@ -1,0 +1,45 @@
+# Le typage de app/motion-lab.js, verifie a chaque poussee.
+#
+# POURQUOI CE FICHIER EXISTE. Le module porte // @ts-check et des types JSDoc
+# depuis sa naissance, mais rien ne les verifiait : une annotation fausse ne
+# coutait rien et se propageait. Ce controle a trouve, le jour ou il a ete
+# branche, deux appels avec le mauvais nombre d'arguments et un type de geste
+# devenu faux — dans du code qui tournait pourtant.
+#
+# CE QU'IL NE FAIT PAS : verifier index.html. Trois mille fonctions jamais
+# annotees rendraient le rapport illisible, donc inutile, donc ignore.
+#
+# IL NE BLOQUE AUCUN DEPLOIEMENT, et c est delibere : le deploiement sert une
+# application dont le typage n'est qu'un filet. On veut savoir, pas empecher
+# de livrer un dimanche soir.
+name: Verifier le typage
+
+on:
+  push:
+    paths:
+      - 'app/motion-lab.js'
+      - 'app/globaux.d.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/types.yml'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: typage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # LA VERSION EST FIGEE. Une version majeure de TypeScript change ce qu'il
+      # sait prouver : un controle qui vire au rouge tout seul un matin est un
+      # controle qu'on finit par ignorer.
+      - name: tsc --checkJs
+        run: npx -y -p typescript@5.9 tsc -p tsconfig.json
