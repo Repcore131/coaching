@@ -38793,7 +38793,8 @@ async function testExercices(){
       if(src.indexOf('onclick="ouvrirBoutique()"')<0)
         return _echec('aucun bouton n’ouvre la boutique');
       if(!document.getElementById('s-boutique')) return _echec('l’écran n’existe pas');
-      if(!document.getElementById('bq-liste')) return _echec('la liste n’existe pas');
+      // R13 — btq-liste : bq-liste appartient à la banque d'exercices du coach.
+      if(!document.getElementById('btq-liste')) return _echec('la liste n’existe pas');
       const i=src.indexOf('id="s-session-manager"');
       const j=src.indexOf('onclick="ouvrirBoutique()"');
       if(i<0||j<0||Math.abs(j-i)>2000)
@@ -38931,6 +38932,177 @@ async function testExercices(){
         }
       }
       return true;})());
+
+    // ══ 17/09/2026 — R13 : AUCUN ÉCRAN MORT ══════════════════════════════
+    //
+    // Un état vide dit ce qui manque et propose le geste qui le remplit —
+    // sauf quand l'utilisateur ne peut rien y faire (attente de quelqu'un
+    // d'autre, état de succès) ou quand le geste est déjà un bouton du même
+    // bloc. Chaque bouton est vérifié jusqu'au bout : un bouton qui aboutit à
+    // un toast « rien à faire » serait un cul-de-sac de plus.
+
+    const _r13Neuf=()=>({id:'r13',email:'r13@t.fr',fname:'Nina',lname:'Neuve',role:'athlete',exAlias:{},exMuscles:{},
+      sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],nutrition:{},
+      consent:{health:true,policyVersion:POLICY_VERSION}});
+    const _r13Lire=z=>{
+      const e=z&&z.querySelector('.empty-state'); if(!e) return null;
+      const b=e.querySelector('button');
+      return {msg:e.textContent.replace(b?b.textContent:'','').replace(/\s+/g,' ').trim(),
+        cta:b?b.textContent.trim():null, fn:b?b.getAttribute('onclick'):null, b};
+    };
+
+    ok('R13 — le bouton d’état vide est secondaire, et n’existe qu’avec son libellé ET son geste',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=emptyState('clipboard','X','Faire','faire()');
+      const b=d.querySelector('button');
+      if(!b) return _echec('pas de bouton avec libellé et geste');
+      for(const cl of ['btn','btn-outline','btn-sm'])
+        if(!b.classList.contains(cl)) return _echec('classe « '+cl+' » absente : '+b.className);
+      if(b.classList.contains('btn-red')) return _echec('le bouton est rouge plein');
+      if(b.getAttribute('onclick')!=='faire()') return _echec('onclick : '+b.getAttribute('onclick'));
+      d.innerHTML=emptyState('clipboard','X','Faire',null)+emptyState('clipboard','X',null,'faire()');
+      return d.querySelector('button')?_echec('un bouton sans libellé ou sans geste est rendu'):true;})());
+
+    ok('R13 — Évolution, compte neuf : chaque onglet vide mène quelque part',(()=>{
+      const pc=document.getElementById('progress-content');
+      if(!pc) return _echec('#progress-content absent');
+      const sU=currentUser, sv=pc.innerHTML;
+      const att={
+        poids:['Noter mon poids','ouvrirPeseeAccueil()'],
+        mensus:['Remplir mon bilan','openBilanChoice()'],
+        masseGrasse:['Remplir mon premier bilan','openBilanChoice()'],
+        notes:['Remplir mon premier bilan','openBilanChoice()'],
+        // Compte neuf : aucun créneau actif, donc pas « Démarrer » — le
+        // sélecteur ne ferait qu'un toast.
+        perf:['Préparer mes séances','loadSessionManager()']};
+      try{
+        for(const [tab,[lib,fn]] of Object.entries(att)){
+          currentUser=_r13Neuf(); showProgressTab(tab,null);
+          const r=_r13Lire(pc);
+          if(!r) return _echec(tab+' : pas d’état vide');
+          if(r.cta!==lib||r.fn!==fn) return _echec(tab+' : « '+r.cta+' » / '+r.fn);
+          if(/^Aucun/.test(r.msg)) return _echec(tab+' : le message ne dit que l’absence — « '+r.msg+' »');
+        }
+        // Avec un créneau actif, le geste redevient « Démarrer ».
+        currentUser=Object.assign(_r13Neuf(),{sessions_config:[{active:true,name:'P',exercises:[]}]});
+        showProgressTab('perf',null);
+        const p=_r13Lire(pc);
+        if(!p||p.cta!=='Démarrer ma première séance'||p.fn!=='openSessionPicker()')
+          return _echec('avec un créneau actif : '+JSON.stringify(p&&{cta:p.cta,fn:p.fn}));
+        // PESÉE RETIRÉE À DESSEIN : on ne parle pas de poids.
+        currentUser=Object.assign(_r13Neuf(),{masquerPoids:true});
+        showProgressTab('poids',null);
+        const m=_r13Lire(pc);
+        if(!m||/poids|pesée/i.test(m.msg+' '+m.cta)) return _echec('poids masqué : « '+(m&&m.msg)+' »');
+        return true;
+      } finally { currentUser=sU; pc.innerHTML=sv; }})());
+
+    okA('R13 — les gestes athlète aboutissent : bilan, séances, pesée, vidéo',async()=>{
+      const sU=currentUser;
+      const actif=()=>(document.querySelector('.screen.active')||{}).id;
+      const sv=[...document.querySelectorAll('.screen.active')];
+      try{
+        currentUser=_r13Neuf();
+        openBilanChoice();
+        if(actif()!=='s-bilan-choice') return _echec('openBilanChoice mène à '+actif());
+        loadSessionManager();
+        if(actif()!=='s-session-manager') return _echec('loadSessionManager mène à '+actif());
+        ouvrirPeseeAccueil();
+        await new Promise(r=>setTimeout(r,250));
+        if(actif()!=='s-client-home') return _echec('la pesée mène à '+actif());
+        const f=document.activeElement&&document.activeElement.id;
+        if(f!=='pesee-input'&&f!=='pdj-poids') return _echec('le doigt n’est pas sur le champ de poids : '+f);
+        loadVideos();
+        _focusLienVideo();
+        if((document.activeElement||{}).id!=='vid-url-input') return _echec('le champ du lien n’a pas le focus');
+        // ⚠ AUCUN GESTE ATHLÈTE NE VISE UN ÉCRAN COACH : go() le refuserait.
+        for(const g of [ouvrirPeseeAccueil,openBilanChoice,loadSessionManager,_focusLienVideo,_etatVideSeances])
+          if(/s-coach-/.test(String(g))) return _echec(g.name+' vise un écran coach');
+        return true;
+      } finally {
+        currentUser=sU;
+        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+        sv.forEach(s=>s.classList.add('active'));
+      }
+    });
+
+    ok('R13 — qui ne peut rien y faire n’a pas de bouton, et lit qui agit et quand',(()=>{
+      const d=document.createElement('div');
+      // Réponses écrites : l'athlète peut remplir, le coach attend.
+      d.innerHTML=renderReponsesBilans([{type:'depart',date:Date.now()}]);
+      const a=_r13Lire(d);
+      if(!a||a.fn!=='openBilanChoice()') return _echec('athlète : '+JSON.stringify(a&&{cta:a.cta,fn:a.fn}));
+      d.innerHTML=renderReponsesBilans([{type:'depart',date:Date.now()}],{fname:'Nina'});
+      const c=_r13Lire(d);
+      if(!c||c.cta) return _echec('coach : un bouton est proposé');
+      if(!/Nina/.test(c.msg)||!/prochain bilan/.test(c.msg)) return _echec('coach : « '+c.msg+' »');
+      // ⚠ CE N'EST PAS UN RETOUR DU COACH : la liste montre les réponses de
+      // l'athlète. « Ton coach n'a pas encore écrit » aurait menti.
+      if(/coach n.a pas encore écrit/i.test(a.msg+c.msg)) return _echec('le message confond réponses et retour du coach');
+      // Succès : inchangé, sans bouton.
+      if(String(loadExClassify).indexOf('Tous tes exercices sont classés.\',null,null')<0)
+        return _echec('l’état de succès a changé');
+      return true;})());
+
+    ok('R13 — pas de second bouton quand le geste est déjà dans le même bloc',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=_renderSuppTable([],false,'openSuppEdit');
+      let r=_r13Lire(d);
+      if(!r||r.cta) return _echec('compléments athlète : un bouton double « + AJOUTER »');
+      if(!/Ajouter/.test(r.msg)) return _echec('compléments athlète : le message ne dit pas où est le geste');
+      if(_htmlBlocSupplements([]).indexOf('onclick="openSuppEdit(-1)"')<0) return _echec('le « + AJOUTER » du bloc a disparu');
+      d.innerHTML=_renderSuppTable([],true,'openCoachSuppEdit');
+      r=_r13Lire(d);
+      if(!r||r.cta) return _echec('compléments coach : un bouton double le formulaire');
+      // Caféine : le bouton principal est juste au-dessus de la liste.
+      const cf=String(_renderCaffeineBlock);
+      if(cf.indexOf('Aucune prise notée ce jour')<0) return _echec('caféine : message non reformulé');
+      if(cf.indexOf('onclick="openCaffeineAdd()"')<0) return _echec('caféine : le bouton principal a disparu');
+      if(/Aucune prise notée ce jour[^)]*,\s*'openCaffeineAdd\(\)'/.test(cf)) return _echec('caféine : un second bouton est posé');
+      return true;})());
+
+    ok('R13 — coach : programmes, codes, athlètes, grille — le geste est proposé',(()=>{
+      const sU=currentUser;
+      try{
+        currentUser={id:'co13',email:'co13@t.fr',role:'coach',code:'KEV1',clients:[],coachPrograms:[],studentCodes:[],exAlias:{},exMuscles:{},sessions:[],bilans:[]};
+        const cpl=document.getElementById('cpl-list'), svc=cpl&&cpl.innerHTML;
+        loadCoachProgramsList();
+        const p=_r13Lire(cpl); if(cpl) cpl.innerHTML=svc;
+        if(!p||p.fn!=='createCoachProgTemplate()') return _echec('programmes : '+JSON.stringify(p&&{cta:p.cta,fn:p.fn}));
+        if(/Clique sur/.test(p.msg)) return _echec('programmes : le message renvoie encore à un autre bouton');
+        const src=_prodSrc();
+        for(const [m,quoi] of [["'Générer un code','generateStudentCode()'",'codes'],
+            ["'Inviter un athlète','openAddAthlete()'",'athlètes'],
+            ["'Modifier le programme','openCoachSessions()'",'grille de charge'],
+            ["'Réessayer','chargerBanque(true).then(()=>_bqRendre())'",'banque indisponible'],
+            ["'Effacer la recherche','_bqToutEffacer()'",'banque sans résultat']])
+          if(src.indexOf(m)<0) return _echec(quoi+' : le geste n’est pas proposé');
+        for(const f of ['generateStudentCode','openAddAthlete','openCoachSessions','createCoachProgTemplate','chargerBanque','_bqRendre','_bqToutEffacer'])
+          if(typeof window[f]!=='function') return _echec(f+' n’existe pas');
+        return true;
+      } finally { currentUser=sU; }})());
+
+    ok('R13 — aucun geste d’état vide ne casse son onclick',(()=>{
+      // ctaFn est posé entre guillemets doubles : on rend chaque geste du lot et
+      // on relit l'attribut. Il doit revenir intact, sans une lettre de moins.
+      const G=['ouvrirPeseeAccueil()','openBilanChoice()','openSessionPicker()','loadSessionManager()',
+        '_focusLienVideo()','openAddAthlete()','createCoachProgTemplate()','generateStudentCode()',
+        'openCoachSessions()','chargerBanque(true).then(()=>_bqRendre())','_bqToutEffacer()',"go('s-client-code')"];
+      const d=document.createElement('div'), casse=[];
+      for(const g of G){
+        d.innerHTML=emptyState('x','m','Faire',g);
+        const b=d.querySelector('button');
+        if(!b||b.getAttribute('onclick')!==g) casse.push(g+' → '+(b&&b.getAttribute('onclick')));
+      }
+      return casse.length?_echec(casse.join(' | ')):true;})());
+
+    ok('R13 — la banque du coach écrit dans SON écran, plus dans la boutique',(()=>{
+      const l=[...document.querySelectorAll('[id="bq-liste"]')];
+      if(l.length!==1) return _echec(l.length+' éléments portent l’id bq-liste');
+      if((l[0].closest('.screen')||{}).id!=='s-coach-banque') return _echec('bq-liste est dans '+(l[0].closest('.screen')||{}).id);
+      const b=document.getElementById('btq-liste');
+      if(!b||(b.closest('.screen')||{}).id!=='s-boutique') return _echec('la liste de la boutique n’a pas son propre id');
+      return String(_rendreBoutique).indexOf("getElementById('btq-liste')")>=0?true:_echec('la boutique écrit encore dans bq-liste');})());
 
     // ══ 17/09/2026 — R12 : LE JARGON QUI TIENT EN UNE LIGNE ════════════════
     //

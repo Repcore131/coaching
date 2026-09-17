@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1251';
+window.RC_BUILD='1252';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4735,6 +4735,8 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
 .content-card:active{transform:scale(var(--arc-scale-charge));box-shadow:none;filter:brightness(1);transition:transform var(--arc-attack) var(--arc-c-charge)}
 
 .empty-state{text-align:center;padding:48px 20px;color:var(--sub)}
+/* R13 — le geste d'un etat vide : secondaire, centre, jamais pleine largeur. */
+.empty-state .empty-cta{margin-top:16px;width:auto}
 .empty-state:hover .empty-illus{opacity:.68!important;filter:drop-shadow(0 0 10px rgba(224,32,32,.3))}
 .obj-opt{padding:14px;border-radius:var(--r-3);background:var(--surface-1);border:2px solid var(--border);cursor:pointer;font-size:var(--fs-md);font-weight:600;transition:border-color var(--t-2),background var(--t-2),color var(--t-2),transform var(--arc-strike) var(--arc-c-discharge);text-align:center;margin-bottom:10px}
 .obj-opt:hover,.obj-opt.sel{border-color:var(--red);color:var(--red-text)}
@@ -9924,7 +9926,12 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div id="bq-vendeur"></div>
-      <div id="bq-liste"></div>
+      <!-- btq-liste ET NON bq-liste (R13). Le meme identifiant existait deja
+           dans la banque d'exercices du coach, plus bas dans le document :
+           getElementById rendait le PREMIER, celui-ci, et la banque du coach
+           ecrivait sa liste dans cette boutique cachee. Son ecran restait vide
+           depuis le build 1232. -->
+      <div id="btq-liste"></div>
       <div id="bq-contact"></div>
     </div>
   </div>
@@ -13280,7 +13287,58 @@ const ILLUS={
   folder:`<path d="M14,40 L14,76 Q14,80 18,80 L78,80 Q82,80 82,76 L82,40 Q82,36 78,36 L50,36 Q46,36 44,32 L40,27 Q38,24 34,24 L18,24 Q14,24 14,28 Z" stroke-dasharray="5 3"/><line x1="48" y1="52" x2="48" y2="64"/><line x1="42" y1="58" x2="54" y2="58"/>`,
 };
 function illusIcon(name,size=96){const s=ILLUS[name];if(!s)return icon(name,Math.round(size*.58));return '<svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:'+size+'px;height:'+size+'px;display:block;margin:0 auto">'+s+'</svg>';}
-function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button onclick="${ctaFn}" style="margin-top:16px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:9px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div><div>${message}</div>${cta}</div>`;}
+function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div><div>${message}</div>${cta}</div>`;}
+// ══ R13 — AUCUN ECRAN MORT ═══════════════════════════════════════════════
+// Le bouton d'un etat vide est SECONDAIRE (.btn-outline .btn-sm) : il ne doit
+// pas concurrencer l'action principale de l'ecran. ctaFn est une CHAINE posee
+// dans un onclick entre guillemets doubles : elle n'en contient jamais.
+//
+// Les gestes ci-dessous verifient qu'ils menent quelque part AVANT d'y aller.
+// Un bouton qui aboutit a un toast « rien a faire » est un cul-de-sac de plus.
+
+// Le geste qui remplit un ecran de seances. Sur un compte neuf, aucun creneau
+// n'est actif : openSessionPicker ne ferait qu'afficher un toast. On ouvre
+// alors la gestion des seances, d'ou l'on choisit un programme.
+function _etatVideSeances(u){
+  let pret=false;
+  try{ pret=((u&&u.sessions_config)||initSessionsConfig()).some(s=>s&&s.active); }catch(e){}
+  return pret?['Démarrer ma première séance','openSessionPicker()']
+             :['Préparer mes séances','loadSessionManager()'];
+}
+// La pesee est un geste de l'accueil, et il y est MASQUE a dessein dans trois
+// cas : antecedent alimentaire, poids masque, deficit au palier de blocage.
+// Meme garde que renderCartePesee : on ne propose pas ailleurs ce que
+// l'accueil retire volontairement.
+function _peseePossible(u){
+  try{
+    if(!u||aTCA(u)||u.masquerPoids) return false;
+    if(paliersDeficit(u)==='blocage') return false;
+  }catch(e){ return false; }
+  return true;
+}
+// Ouvre l'accueil et pose le doigt sur le champ de poids : la carte de pesee,
+// ou le point du jour quand c'est lui qui pose la question.
+function ouvrirPeseeAccueil(){
+  go('s-client-home');
+  try{ loadClientHome(); }catch(e){}
+  setTimeout(()=>{
+    const i=document.getElementById('pesee-input')||document.getElementById('pdj-poids');
+    if(!i) return;
+    try{ i.scrollIntoView({block:'center'}); i.focus({preventScroll:true}); }catch(e){}
+  },120);
+}
+// Le champ du lien video est deja sur l'ecran, en haut : on y amene le doigt.
+function _focusLienVideo(){
+  const i=document.getElementById('vid-url-input');
+  if(!i) return;
+  try{ i.scrollIntoView({block:'center'}); i.focus({preventScroll:true}); }catch(e){}
+}
+// Banque d'exercices du coach : tout ce qui filtre, remis a zero.
+function _bqToutEffacer(){
+  _bqFiltres={};
+  const q=document.getElementById('bq-q'); if(q) q.value='';
+  _bqRendre();
+}
 function setupScrollFade(el){if(!el||el._sfBound)return;el._sfBound=true;const par=el.parentElement;const badge=document.createElement('div');badge.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.85);border:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;letter-spacing:.5px;padding:2px 7px;border-radius:var(--r-3);pointer-events:none;transition:opacity var(--t-2);opacity:0;z-index:10;white-space:nowrap;line-height:1.5';par.appendChild(badge);const grad='linear-gradient(to right,#000 82%,transparent 100%)';const upd=()=>{const hidden=el.scrollWidth-el.scrollLeft-el.clientWidth;const hasMore=hidden>4;el.style.webkitMaskImage=hasMore?grad:'';el.style.maskImage=hasMore?grad:'';if(hasMore){let n=0;const tbl=el.querySelector('table');if(tbl){const row=tbl.querySelector('tr');if(row){const right=el.getBoundingClientRect().right;n=[...row.querySelectorAll('th,td')].filter(c=>c.getBoundingClientRect().left>=right-4).length;}}else{const right=el.getBoundingClientRect().right;n=[...el.children].filter(c=>c.getBoundingClientRect().left>=right-4).length;}badge.textContent=n>0?'+'+n:'';badge.style.opacity=n>0?'1':'0';}else{badge.style.opacity='0';}};el.addEventListener('scroll',upd,{passive:true});upd();}
 
 // ─── List / Table generics ───────────────────────────────────────────────────
@@ -27004,7 +27062,7 @@ function loadCoachHome(){
     renderTodoBlock([]);
     _rendreJamaisDemarre([]);
     _rendreInactifs([]);
-    elList.innerHTML=emptyState('users','Aucun athlète encore.'+(u.code?'<br>Partage ton code : <strong style="color:var(--red-text)">'+u.code+'</strong>':''));return;
+    elList.innerHTML=emptyState('users','Aucun athlète pour l\'instant. Ils apparaîtront ici dès qu\'ils te rejoignent.'+(u.code?'<br>Partage ton code : <strong style="color:var(--red-text)">'+u.code+'</strong>':''),'Inviter un athlète','openAddAthlete()');return;
   }
   clients.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
   renderTodoBlock(clients);
@@ -28974,7 +29032,9 @@ function openClientDetail(cid,_refresh,_force){
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6">Envoie-lui le code d'accès pour qu'elle s'inscrive.<br>Ses données apparaîtront ici automatiquement dès qu'elle aura complété son premier bilan.</div>
     </div>`;
   } else if(!c.bilans?.length){
-    be.innerHTML=emptyState('clipboard','Aucun bilan.',null,null,'padding:20px');
+    // R13 — le coach ne remplit pas le bilan de son athlete : on dit qui agit
+    // et quand, sans bouton.
+    be.innerHTML=emptyState('clipboard','Pas encore de bilan de '+escapeHtml(c.fname||'ton athlète')+'. Il s\'affichera ici dès son envoi.',null,null,'padding:20px');
   } else {
     be.innerHTML=c.bilans.slice(-3).reverse().map(b=>{
       // Deux jeux de valeurs, et c'est voulu : calcBF veut des NOMBRES, donc le
@@ -31536,7 +31596,8 @@ function loadCoachProgramsList(){
   const progs=currentUser.coachPrograms||[];
   const container=document.getElementById('cpl-list');if(!container)return;
   if(!progs.length){
-    container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme créé</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Clique sur + CRÉER pour commencer ton premier template Homme/Femme.</span>');return;
+    // R13 — le geste est offert ici, plus renvoye au « + CRÉER » de la barre.
+    container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme pour l\'instant</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Un modèle Homme/Femme, créé une fois, sert à tous tes athlètes.</span>','Créer un programme','createCoachProgTemplate()');return;
   }
   container.innerHTML=progs.map((p,i)=>`
     <div style="background:var(--surface-1);border-radius:var(--r-4);padding:16px;margin-bottom:12px;border:1px solid var(--border)">
@@ -34021,16 +34082,24 @@ function _bqRendre(){
   if(cpt) cpt.textContent=res.length?String(res.length):'';
 
   if(!banqueEstChargee()&&_bqOnglet==='banque'&&!exercicesPerso().length){
+    // R13 — « rouvre cet écran » devient un bouton : c'est le meme geste.
     z.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Banque indisponible</strong>'
       +'<br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Elle n\'a pas encore '
-      +'été téléchargée sur cet appareil. Reconnecte-toi au réseau et rouvre cet écran.</span>');
+      +'été téléchargée sur cet appareil. Reconnecte-toi au réseau, puis réessaie.</span>',
+      'Réessayer','chargerBanque(true).then(()=>_bqRendre())');
     return;
   }
   if(!res.length){
-    z.innerHTML=emptyState('search',_bqOnglet==='perso'
-      ?'<strong style="font-size:var(--fs-md)">Aucun exercice personnel</strong><br>'
-        +'<span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Crée le tien avec le bouton ci-dessous.</span>'
-      :'Aucun exercice ne correspond.')
+    // R13 — onglet perso : le bouton de creation est deja pose juste dessous,
+    // pas de second. Banque : si une recherche ou un filtre vide la liste, on
+    // offre de tout effacer ; sans rien de pose, il n'y a rien a effacer.
+    const _filtre=!!(q.trim()||Object.keys(_bqFiltres).some(k=>_bqFiltres[k]));
+    z.innerHTML=(_bqOnglet==='perso'
+      ?emptyState('search','<strong style="font-size:var(--fs-md)">Aucun exercice personnel</strong><br>'
+        +'<span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Crée le tien avec le bouton ci-dessous.</span>')
+      :(_filtre
+        ?emptyState('search','Aucun exercice ne correspond à ta recherche.','Effacer la recherche','_bqToutEffacer()')
+        :emptyState('search','Aucun exercice dans la banque pour l\'instant.')))
       +(_bqOnglet==='perso'?_bqBoutonCreer():'');
     return;
   }
@@ -38606,7 +38675,8 @@ function _genreProgramme(u){
   return isFemale(b)?'F':(b?'H':null);
 }
 function _rendreBoutique(){
-  const z=document.getElementById('bq-liste');
+  // btq-liste : voir le balisage de #s-boutique — bq-liste est celle du coach.
+  const z=document.getElementById('btq-liste');
   if(z) z.innerHTML=programmesBoutique().map(_htmlCarteProgramme).join('')
     ||'<div class="sub" style="text-align:center;padding:28px 0">Aucun programme pour le moment.</div>';
   try{ _rendreEntreeVente(); }catch(e){}
@@ -42341,7 +42411,11 @@ function _renderProgExercisesInto(el){
   if(essai.some(s=>s.active&&s.exercises?.length)){_rendreSemaineAvecBandeau(el,essai);return;}
   // Filet de sécurité : ni programme, ni repli exploitable.
   el.innerHTML='<div style="border:1px dashed var(--border);border-radius:var(--r-md);background:var(--surface-0);margin-bottom:14px">'
-    +emptyState('dumbbell','<b style=\"color:var(--text);font-size:var(--fs-lg);display:block;margin-bottom:6px\">Programme en cours de création</b>Ton coach n\'a pas encore publié ton programme personnalisé.','ENTRER UN CODE COACH','go(\'s-client-code\')')
+    // R13 — QUI DOIT AGIR. Avec un coach, c'est lui : aucun bouton, on dit
+    // qu'on attend sa publication. Sans coach, l'athlete peut agir : le code.
+    +(currentUser.coachId
+      ?emptyState('dumbbell','<b style=\"color:var(--text);font-size:var(--fs-lg);display:block;margin-bottom:6px\">Programme en cours de création</b>Ton coach n\'a pas encore publié ton programme. Il apparaîtra ici dès qu\'il le publie.')
+      :emptyState('dumbbell','<b style=\"color:var(--text);font-size:var(--fs-lg);display:block;margin-bottom:6px\">Pas encore de programme</b>Il arrive avec le code de ton coach.','Entrer un code coach','go(\'s-client-code\')'))
     +'</div>';
 }
 // ======= WORKOUT =======
@@ -51267,7 +51341,10 @@ function _rendreGrilleCharge(){
     // disparait, elle ne s affiche pas a moitie.
     z.innerHTML=emptyState('calendar','<strong style="font-size:var(--fs-md)">Aucun bloc à afficher</strong>'
       +'<br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Cet athlète n\'a pas '
-      +'de bloc d\'entraînement daté, ou aucun de ses muscles n\'a de repère de volume.</span>');
+      +'de bloc d\'entraînement daté, ou aucun de ses muscles n\'a de repère de volume.</span>',
+      // R13 — un bloc date se pose dans son programme : ecran coach, depuis
+      // un ecran coach. currentClientId est l'athlete dont on vient.
+      'Modifier le programme','openCoachSessions()');
     return false;
   }
   const semaines=[...new Set(cases.map(c=>c.index))].sort((a,b)=>a-b);
@@ -58222,7 +58299,13 @@ function renderReponsesBilans(bilans,client){
       ${client?blocReponseBilan(b,client):''}
     </div>`;
   }).filter(Boolean).join('');
-  return cartes||emptyState('message-circle','Aucune réponse écrite pour le moment.');
+  // R13 — CE QUE CETTE LISTE MONTRE : les REPONSES ECRITES de l'athlete dans
+  // ses bilans, pas un retour du coach. Cote athlete, il peut donc la remplir
+  // lui-meme ; cote coach (`client`), il ne peut qu'attendre le prochain bilan.
+  if(cartes) return cartes;
+  return client
+    ?emptyState('message-circle','Pas encore de réponse écrite dans les bilans de '+escapeHtml(client.fname||'ton athlète')+'. Elles s\'afficheront ici dès son prochain bilan.')
+    :emptyState('message-circle','Tes réponses écrites aux bilans s\'afficheront ici. Il n\'y en a pas encore.','Remplir mon bilan','openBilanChoice()');
 }
 const BIL_STEPS=[
   // Step 1 : Mensurations — schéma corporel interactif
@@ -62436,7 +62519,14 @@ function showProgressTab(tab,btn){
     // mensurations, et le mélanger à des pesées quotidiennes le rendrait
     // illisible.
     if(!bl.length&&!(currentUser.weightLog||[]).length){
-      c.innerHTML=emptyState('clipboard','Aucune pesée ni bilan enregistré.');return;}
+      // R13 — le geste qui remplit l'onglet, s'il est permis : l'accueil
+      // retire la pesee a dessein dans trois cas, voir _peseePossible.
+      c.innerHTML=_peseePossible(currentUser)
+        ?emptyState('clipboard','Ta courbe de poids part de ta première pesée. Il n\'y en a pas encore.','Noter mon poids','ouvrirPeseeAccueil()')
+        // Pesee retiree a dessein : on ne parle pas de poids. Le bilan, lui,
+        // reste le geste qui remplit cet ecran.
+        :emptyState('clipboard','Ton suivi s\'affichera ici après ton premier bilan.','Remplir mon bilan','openBilanChoice()');
+      return;}
     const vals=bl.map(b=>getBW(b));
     c.innerHTML=blocPoids(currentUser)
       +((bl.length&&!currentUser.masquerPoids)?renderDataTable(
@@ -62451,7 +62541,7 @@ function showProgressTab(tab,btn){
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
 
   } else if(tab==='mensus'){
-    if(!bl.length){c.innerHTML=emptyState('trending-up','Aucune mensuration enregistrée.');return;}
+    if(!bl.length){c.innerHTML=emptyState('trending-up','Tes mensurations se remplissent pendant le bilan.','Remplir mon bilan','openBilanChoice()');return;}
     const GROUPS=[
       {label:'Biceps (D / G)',items:[{k:'bicep-r',l:'Droit',color:'#E02020'},{k:'bicep-l',l:'Gauche',color:'#f97316'}]},
       {label:'Cuisses (D / G)',items:[{k:'thigh-r',l:'Droit',color:'#06b6d4'},{k:'thigh-l',l:'Gauche',color:'#14b8a6'}]},
@@ -62535,7 +62625,7 @@ function showProgressTab(tab,btn){
     },60);
 
   } else if(tab==='masseGrasse'){
-    if(!bl.length){c.innerHTML=emptyState('clipboard','Aucun bilan enregistré.');return;}
+    if(!bl.length){c.innerHTML=emptyState('clipboard','Ta masse grasse se calcule sur les mesures d\'un bilan. Il n\'y en a pas encore.','Remplir mon premier bilan','openBilanChoice()');return;}
     const deb=(currentUser.bilans||[]).find(b=>b.type==='depart');
     const storedH=parseFloat(currentUser._evol_height||deb?.['deb-height']||currentUser['init-height']||0);
     const storedG=currentUser._evol_gender||currentUser.gender||'H';
@@ -62649,7 +62739,10 @@ function showProgressTab(tab,btn){
     // sont deux grandeurs differentes, le tonnage et les series dures.
     renderVolume();
   } else if(tab==='perf'){
-    if(!ss.length){c.innerHTML=emptyState('dumbbell','Aucune séance enregistrée.');return;}
+    // R13 — sur un compte neuf, aucun creneau n'est actif : le geste devient
+    // « Préparer mes séances ». Voir _etatVideSeances.
+    if(!ss.length){const _g=_etatVideSeances(currentUser);
+      c.innerHTML=emptyState('dumbbell','Tes perfs se lisent sur tes séances. Il n\'y en a pas encore.',_g[0],_g[1]);return;}
     const sl=ss.slice(-8);
     let _blocFormePerf='';
     try{ _blocFormePerf=blocForme(currentUser,false); }catch(e){}
@@ -62689,7 +62782,7 @@ function showProgressTab(tab,btn){
     const hasSome=bl.some(b=>getP(b,'face')||getP(b,'back')||getP(b,'side'));
     if(!hasSome){
       c.innerHTML='<div id="prog-photos-progression"></div>'+_php
-        +(_php?'':emptyState('image','Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.'));
+        +(_php?'':emptyState('image','Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.','Remplir mon bilan','openBilanChoice()'));
       setTimeout(()=>{ try{ renderPhotosProgression(); }catch(e){} },0);
       return;
     }
@@ -62799,7 +62892,7 @@ function showProgressTab(tab,btn){
     },0);
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
   } else if(tab==='notes'){
-    if(!bl.length){c.innerHTML=emptyState('clipboard','Aucun bilan enregistré.');return;}
+    if(!bl.length){c.innerHTML=emptyState('clipboard','Tes réponses aux bilans s\'afficheront ici. Il n\'y en a pas encore.','Remplir mon premier bilan','openBilanChoice()');return;}
     // Liste et mise en forme partagées avec l'écran coach : voir
     // BILAN_QUESTIONS et renderReponsesBilans. Elles vivaient ici, en local,
     // et l'athlète était donc le seul à pouvoir lire ses propres réponses.
@@ -76611,7 +76704,14 @@ function _renderSuppTable(list, isCoach, editFn){
   // L encart de sourcing survivait ici a la liste vide — l athlete qui n a
   // rien enregistre etant precisement celui qui n a rien achete. L encart a
   // ete retire ; la liste vide ne rend donc plus que son etat vide.
-  if(!list.length) return emptyState('pill','Aucun complément renseigné.',null,null,'padding:28px 0');
+  // R13 — PAS DE BOUTON ICI, ET C'EST UNE REGLE : le geste existe deja, dans
+  // le meme bloc. Cote athlete, « + AJOUTER » est l'en-tete de cette carte ;
+  // cote coach, le formulaire d'ajout est juste dessous. Un second bouton
+  // ferait deux boutons pour le meme geste. Le message dit ou il est.
+  if(!list.length) return emptyState('pill',isCoach
+      ?'Aucun complément noté pour l\'instant. Tu peux en ajouter un juste en dessous.'
+      :'Aucun complément noté pour l\'instant. Ajoute le premier avec « + Ajouter », juste au-dessus.',
+    null,null,'padding:28px 0');
   const TRAME='repeating-linear-gradient(-55deg,transparent,transparent 14px,rgba(255,255,255,.012) 14px,rgba(255,255,255,.012) 15px)';
   // Virgule francaise, et pas de decimale inutile : « 2 » et non « 2,0 ».
   const nb=v=>(Math.round(v*100)/100).toString().replace('.',',');
@@ -77433,7 +77533,8 @@ function renderCoachCaffeineSection(c){
         </div>
       </div>
       ${!withData.length
-        ?emptyState('coffee','Aucune prise enregistrée sur 28 jours.',null,null,'padding:16px 0')
+        // R13 — cote coach, rien a faire : c'est l'athlete qui note ses prises.
+        ?emptyState('coffee',escapeHtml(c.fname||'Ton athlète')+' n\'a noté aucune prise sur 28 jours. Elles s\'afficheront ici dès la première.',null,null,'padding:16px 0')
         :`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Historique 28 jours</div>
           <canvas id="ccd-caff-history" height="100" style="width:100%;display:block;border-radius:var(--r-2)"></canvas>
           <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px">Seuils (pour ${wKg}kg${_wConnu?'':' — poids non renseigné, seuils estimés'}) : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>
@@ -78019,7 +78120,10 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
     ?`<div class="caff-alert-banner" style="background:var(--info-bg);border-color:var(--info);color:var(--info)">⚡ Consommation modérée : ta limite du jour est à ${thr.orange}mg.</div>`
     :'';
   const listHtml=!entries.length
-    ?emptyState('coffee','Aucune prise enregistrée ce jour.',null,null,'padding:16px 0')
+    // R13 — PAS DE BOUTON : « + Enregistrer une prise » est juste au-dessus
+    // de cette liste. Un second bouton pour le meme geste, a deux pas du
+    // premier, serait du bruit.
+    ?emptyState('coffee','Aucune prise notée ce jour. Le bouton « + Enregistrer une prise », au-dessus, l\'ajoute.',null,null,'padding:16px 0')
     :renderDataList(entries,(e,i)=>({cls:(e.ts!=null&&e.ts===_caffTsNeuf)?'caff-neuf':'',html:`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(e.name)}</div><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red-text);font-size:var(--fs-lg);min-width:48px;text-align:right">${e.mg}mg</span><button class="hit44" onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`}));
   const _circ=2*Math.PI*48;
   const _off=_circ*(1-pct);
@@ -78703,7 +78807,7 @@ function loadVideos(nomPrerempli){
   _vidsSorted=(currentUser.videos||[]).slice().sort((a,b)=>b.date-a.date);
   const el=document.getElementById('vid-list');
   if(!_vidsSorted.length){
-    el.innerHTML=emptyState('video','Aucune vidéo partagée.<br>Colle un lien YouTube ou Google Drive pour recevoir les corrections de ton coach.');
+    el.innerHTML=emptyState('video','Aucune vidéo partagée.<br>Colle un lien YouTube ou Google Drive pour recevoir les corrections de ton coach.','Envoyer ma première vidéo','_focusLienVideo()');
     return;
   }
   // LA PURGE EST PROPOSEE, JAMAIS FAITE. La phrase apparait, et c'est tout :
@@ -90728,7 +90832,11 @@ function loadMonetisationTab(){
   document.getElementById('pp-cancelled').textContent=cancelled.length;
   const el=document.getElementById('pp-subs-list');
   if(!subs.length){
-    const msg=isCreator?'Aucun abonné pour l\'instant.':'Aucun de tes élèves n\'a encore souscrit.';
+    // R13 — rien a faire d'ici : on dit qui agit (l'athlete, en souscrivant)
+    // et quand la liste se remplit.
+    const msg=isCreator
+      ?'Aucun abonné pour l\'instant. Ils apparaîtront ici dès leur premier paiement.'
+      :'Aucun de tes élèves n\'a encore souscrit. Ils apparaîtront ici dès leur premier paiement.';
     el.innerHTML=emptyState('user',msg);return;
   }
   el.innerHTML=subs.map(s=>{
@@ -91803,7 +91911,7 @@ function loadStudentCodes(){
   if(inviteCard) inviteCard.style.display=isCreator?'':'none';
   const codes=currentUser.studentCodes||[];
   const el=document.getElementById('sc-list');
-  if(!codes.length){el.innerHTML=emptyState('key','Aucun code généré encore.');return;}
+  if(!codes.length){el.innerHTML=emptyState('key','Aucun code pour l\'instant. Chaque code ouvre l\'accès à un athlète.','Générer un code','generateStudentCode()');return;}
   const now=Date.now();
   el.innerHTML=[...codes].reverse().map((c,ri)=>{
     const i=codes.length-1-ri;
