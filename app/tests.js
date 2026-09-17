@@ -40824,7 +40824,22 @@ async function testExercices(){
       if(!isNaN(d[0])||!isNaN(d[29])) return _echec('une dérivée est inventée au bord');
       par[12]=NaN;
       if(!isFinite(mlDeriver(par,dt,4)[15])) return _echec('un trou voisin efface une dérivée calculable');
-      if(mlDemiFenetre(1000/60)!==4||mlDemiFenetre(1000/30)!==3||mlDemiFenetre(1000/240)!==8) return _echec('demi-fenêtre');
+      if(mlDemiFenetre(1000/60)!==3||mlDemiFenetre(1000/30)!==2||mlDemiFenetre(1000/240)!==8) return _echec('demi-fenêtre');
+      // LA FENÊTRE EN TEMPS, et non en images : une seconde de vidéo doit se
+      // dériver pareil qu'on l'ait filmée à 60 ou à 120 images.
+      for(const f of [30,60,120,240]){
+        const ms=mlDemiFenetre(1000/f)*2*1000/f;
+        if(ms>200||ms<60) return _echec('fenêtre de '+Math.round(ms)+' ms à '+f+' i/s');
+      }
+      // LE SOMMET AJUSTÉ : la pointe d'une parabole tombe entre deux images et
+      // on la retrouve ; un pic d'une seule image reste du bruit.
+      const parab=Array.from({length:21},(_,i)=>5-0.5*(i-10.4)*(i-10.4));
+      if(Math.abs(mlSommetParabole(parab,10,2)-5)>1e-6) return _echec('sommet à '+mlSommetParabole(parab,10,2));
+      if(mlSommetParabole(parab,1,2)!==parab[1]) return _echec('un sommet est ajusté au bord');
+      if(mlSommetParabole([0,0,0,1,0,0,0],3,2)>0.6) return _echec('un pic d’une seule image passe pour une vitesse');
+      if(mlSommetParabole([2,2,2,2,2,2,2],3,2)!==2) return _echec('un sommet est inventé sur une série plate');
+      if(mlSommetParabole([0,1,NaN,3,2,1,0],3,2)!==3) return _echec('un trou voisin n’arrête pas l’ajustement');
+      if(mlSommetParabole([0,1,2,9,2,1,0],3,2)>9*1.1+1e-9) return _echec('un sommet dépasse de plus de 10 %');
       // LES TROUS : au-delà de trois pas, on ne relie pas.
       const pts=_r29Points(60,1000/60,{A:450,T:3});
       pts.splice(20,6,...pts.slice(20,26).map(p=>({...p,etat:'perdu',conf:0})));

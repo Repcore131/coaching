@@ -465,21 +465,54 @@ function mlDeriver(v,dt,m){
   });
 }
 /**
- * PURE. La demi-fenêtre de dérivée pour un pas donné : environ 150 ms, entre 3
- * et 8 points de chaque côté. Mesuré sur une trajectoire de synthèse à 60 i/s :
- * 7 points (119 ms) surestimaient la vitesse maximale de 2,9 %, le bruit d'un
- * pixel passant dans le pic ; 9 points (153 ms) réduisent l'erreur au 95e
- * centile de 0,069 à 0,054 m/s. Plus large, le pic bref d'un arraché serait
- * écrasé.
+ * PURE. La demi-fenêtre de dérivée pour un pas donné : environ 110 ms, entre 2
+ * et 8 points de chaque côté. Mesuré sur des trajectoires de synthèse bruitées
+ * à deux pixels : à 150 ms, un pic bref (mi-hauteur 0,3 s) était sous-estimé de
+ * 9 % à 60 i/s et de 19 % à 30 i/s — là, le plancher de trois points portait la
+ * fenêtre à 200 ms. À 110 ms ces erreurs tombent à 5 % et 12 %, contre un point
+ * de surestimation de plus sur un mouvement lent. Un pic écrasé trompe plus
+ * qu'un pic un peu trop haut : le coach y lit une barre plus lente qu'elle ne
+ * l'était.
  * @param {number} pasMs
  * @returns {number}
  */
 function mlDemiFenetre(pasMs){
   const p=Number(pasMs);
   if(!(p>0)) return 3;
-  // 70 et non 75 : à 60 i/s, 75 / 16,67 tombe pile sur 4,5, et l'arrondi
-  // basculerait sur 5 ou 4 selon le dernier chiffre flottant.
-  return Math.max(3,Math.min(8,Math.round(70/p)));
+  // 55 et non 50 ou 60 : aucune cadence courante, de 24 à 240 i/s, ne tombe
+  // ainsi sur un demi-point, où l'arrondi basculerait selon le dernier chiffre
+  // flottant.
+  return Math.max(2,Math.min(8,Math.round(55/p)));
+}
+/**
+ * PURE. Le sommet d'un pic échantillonné : une parabole de degré 2 ajustée sur
+ * 2m+1 points autour du maximum, dont on renvoie la pointe. L'échantillonnage
+ * tombe rarement pile dessus, et le maximum brut d'une série bruitée est tiré
+ * vers le haut par le bruit ; l'ajustement corrige les deux. Jamais plus de
+ * 10 % au-dessus du maximum mesuré : au-delà, c'est la parabole qui déraille,
+ * pas la barre qui va vite.
+ * @param {number[]} v
+ * @param {number} i  l'indice du maximum
+ * @param {number} [m]  demi-fenêtre, 2 par défaut
+ * @returns {number}
+ */
+function mlSommetParabole(v,i,m){
+  const q=Math.max(1,Math.round(Number(m)||2)), pic=v[i];
+  if(!isFinite(pic)||pic<=0||i<q||i>v.length-1-q) return pic;
+  let n=0, sx2=0, sx4=0, sy=0, sxy=0, sx2y=0;
+  for(let k=-q;k<=q;k++){
+    const y=v[i+k];
+    if(!isFinite(y)) return pic;
+    n++; sx2+=k*k; sx4+=k*k*k*k; sy+=y; sxy+=k*y; sx2y+=k*k*y;
+  }
+  // LA FENÊTRE EST SYMÉTRIQUE : les sommes impaires sont nulles, les équations
+  // se séparent et la pente sort seule.
+  const den=n*sx4-sx2*sx2;
+  if(!den) return pic;
+  const a=(n*sx2y-sx2*sy)/den;
+  if(!(a<0)) return pic;
+  const b=sxy/sx2, c=(sx4*sy-sx2*sx2y)/den, s=c-b*b/(4*a);
+  return isFinite(s)?Math.max(0,Math.min(s,pic*1.1)):pic;
 }
 /**
  * PURE. Les points retenus, ré-échantillonnés à pas constant. Un trou de plus
@@ -568,10 +601,14 @@ function mlMetriquesBarre(points,mpp){
       ph.push(['point_bas',Math.round(r.t[iBas]),confAutour(iBas)]);
     }
   }
+  // LE SOMMET DE VITESSE est ajusté entre deux images : la pointe tombe
+  // rarement sur l'une d'elles. Les phases, elles, gardent l'instant d'une
+  // vraie image — c'est là que la vidéo ira se placer.
+  const vPic=iV>=0?mlSommetParabole(vy,iV,2):0;
   const arrondi=(/** @type {number} */ v)=>Math.round(v*1000)/1000;
   return {
     serie:{t:r.t,px:r.x,py:r.y,X:Xl,Y,vy,conf:r.conf},
-    m:{vMax:iV>=0?arrondi(vMax):0,tVMax:iV>=0?Math.round(r.t[iV]):0,hMax:iH>=0?arrondi(hMax):0,
+    m:{vMax:iV>=0?arrondi(vPic):0,tVMax:iV>=0?Math.round(r.t[iV]):0,hMax:iH>=0?arrondi(hMax):0,
       depVert:arrondi(depVert),devPlus:arrondi(devPlus),devMoins:arrondi(devMoins)},
     ph,pas:r.pas};
 }
@@ -1678,7 +1715,10 @@ function _mlDessinerCourbe(){
   g.setTransform(dpr,0,0,dpr,0,0);
   g.clearRect(0,0,W,H);
   const vs=d.vy.filter(isFinite);
-  const hi=Math.max(0.5,...vs), lo=Math.min(-0.5,...vs);
+  const b=/** @type {any} */(a).barre;
+  // LE HAUT DE LA COURBE tient compte du sommet ajusté, qui dépasse d'un rien
+  // le plus haut point échantillonné : sinon son repère sortirait du cadre.
+  const hi=Math.max(0.5,...vs,(b&&b.m&&Number(b.m.vMax))||0), lo=Math.min(-0.5,...vs);
   const X=(/** @type {number} */ t)=>((t-a.debutMs)/Math.max(1,a.finMs-a.debutMs))*W;
   const Y=(/** @type {number} */ val)=>6+(hi-val)/(hi-lo)*(H-18);
   const faint=_tok('--text-faint','#828282');
@@ -1696,7 +1736,6 @@ function _mlDessinerCourbe(){
     if(ouvert) g.lineTo(x,y); else { g.moveTo(x,y); ouvert=true; }
   }
   g.stroke();
-  const b=/** @type {any} */(a).barre;
   if(b&&b.m&&isFinite(b.m.tVMax)&&b.m.vMax>0){
     g.fillStyle=_tok('--arc-current','#4DE8FF');
     g.beginPath(); g.arc(X(b.m.tVMax),Y(b.m.vMax),3.5,0,2*Math.PI); g.fill();
@@ -1773,8 +1812,10 @@ function _mlMajTrajectoire(){
       :(()=>{ const d=_mlBarreLue(a); return d?d.t.map((t,i)=>({t,conf:d.conf[i]})):[]; })());
     h+='<button type="button" class="ml-mini ml-refaire" onclick="mlRefaire()" aria-label="Refaire la trajectoire">↺</button></div>'
       // DEUX DÉCIMALES, PAS TROIS : le millième est sous le bruit de l'analyse
-      // (≈ 4 % sur la vitesse maximale, mesuré sur une trajectoire de synthèse),
-      // et l'afficher promettrait une précision qu'elle n'a pas.
+      // (quelques pour cent sur la vitesse maximale, mesurés sur des
+      // trajectoires de synthèse), et l'afficher promettrait une précision
+      // qu'elle n'a pas. Deux décimales suffisent pour comparer deux
+      // répétitions filmées pareil : le biais y penche du même côté.
       +'<div class="ml-metr">'
         +'<div><b>'+mlNombre(m.vMax,2)+'\u00a0m/s</b><span>Vitesse verticale max'+(m.tVMax?' · '+mlTempsTexte(m.tVMax):'')+'</span></div>'
         +'<div><b>'+mlNombre(m.hMax,2)+'\u00a0m</b><span>Hauteur maximale</span></div>'
