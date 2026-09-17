@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1263';
+window.RC_BUILD='1264';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5725,6 +5725,33 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   font-weight:700;letter-spacing:.5px;text-align:left}
 .cct-lien svg{width:13px;height:13px;flex-shrink:0}
 .cct-lien:active{opacity:.7}
+/* R26 — MON APPROCHE. Une ligne en bas de la nutrition, et la feuille qui
+   presente les deux dietes : chaque option est un bouton entier, son nom puis
+   ce qu'elle change, en une lecture. */
+.nut-approche{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-top:22px;padding:11px 12px 11px 14px;background:var(--surface-1);
+  border:1px solid var(--border);border-radius:var(--r-3)}
+.nut-approche-l{min-width:0;font-size:var(--fs-sm);color:var(--sub);line-height:1.4}
+.nut-approche-l strong{color:var(--text);font-weight:700}
+.nut-approche-b{margin:0;flex-shrink:0}
+.dch-col{display:flex;flex-direction:column;gap:10px}
+.dch-opt{display:block;width:100%;text-align:left;padding:14px 15px;
+  background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);
+  color:var(--text);font-family:Montserrat,sans-serif;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:border-color var(--t-1)}
+.dch-opt:not(:disabled):hover{border-color:rgba(224,32,32,.55)}
+.dch-opt:not(:disabled):active{transform:scale(.985)}
+.dch-opt.actif{border-color:var(--red);box-shadow:inset 3px 0 0 var(--red)}
+.dch-opt:disabled{cursor:default;background:transparent;border-style:dashed}
+.dch-tete{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:5px}
+.dch-nom{font-size:var(--fs-sm);font-weight:900;letter-spacing:1.5px}
+.dch-opt:disabled .dch-nom{color:var(--text-dim)}
+.dch-etat{flex-shrink:0;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;
+  text-transform:uppercase;color:var(--red-text)}
+.dch-desc{display:block;font-size:var(--fs-sm);line-height:1.55;color:var(--sub)}
+.dch-verrou{display:block;margin-top:9px;padding-top:9px;border-top:1px solid var(--border);
+  font-size:var(--fs-xs);line-height:1.55;color:var(--text-dim)}
+.dch-verrou strong{display:block;color:var(--text);font-weight:700;margin-bottom:2px}
 /* Dans la feuille, les canaux s'empilent : on les lit, on en choisit un. */
 .cct-col{display:flex;flex-direction:column;gap:8px}
 .cct-col .cct-b{width:100%}
@@ -10326,6 +10353,23 @@ const COACH_PHOTO='icons/coach.jpg';
       onclick="rcInfoFermer()">J'ai compris</button>
   </div>
 </div>
+<!-- R26 — LE CHOIX DE L APPROCHE NUTRITIONNELLE. Meme patron que les autres
+     feuilles basses : voile qui ferme, retour et Echap qui ferment, go() qui la
+     retire. Les deux options disent ce qu elles changent au quotidien ; la
+     diete stricte verrouillee reste VISIBLE, avec son cadenas et la raison du
+     verrou (STRICT_VERROU), jamais masquee. Le corps est rendu a l ouverture
+     par _htmlChoixDiete. -->
+<div id="rc-diete" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
+  onclick="if(event.target===this)fermerChoixDiete()" role="dialog" aria-modal="true"
+  aria-labelledby="rc-diete-titre">
+  <div class="rci-feuille" onclick="event.stopPropagation()" style="max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain">
+    <div class="rci-grip" aria-hidden="true"></div>
+    <div id="rc-diete-titre" class="rci-t">Mon approche</div>
+    <div id="rc-diete-corps" class="dch-col"></div>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:14px"
+      onclick="fermerChoixDiete()">Annuler</button>
+  </div>
+</div>
 
 <!-- ══════ ECHEANCE ══════════════════════════════════════════════════
      UN SEUL ECRAN, atteint depuis la fiche client cote coach et depuis
@@ -10636,15 +10680,9 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="retourDe('s-nutrition')">←</button><span class="topbar-title">Nutrition</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <!-- Sélecteur type de diet -->
-      <div style="position:relative;margin-bottom:22px">
-        <select id="nut-diet-select" onchange="setNutriDietType(this.value)"
-          style="width:100%;padding:13px 40px 13px 16px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
-          <option value="strict">Diète Stricte</option>
-          <option value="flexible">Diète Flexible</option>
-        </select>
-        <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:var(--fs-sm)">▼</span>
-      </div>
+      <!-- R26 — LE TYPE DE DIETE N EST PLUS EN TETE. On le choisit une fois,
+           on s en sert tous les jours : la premiere place revient a ce qui sert
+           tous les jours. Il est descendu en bas de l ecran (#nut-approche). -->
       <!-- Contenu dynamique -->
       <div id="nut-diet-content"></div>
       <!-- Journal Yazio (flexible) -->
@@ -10654,6 +10692,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="supp-embedded" style="margin-bottom:8px"></div>
       <!-- Caféine -->
       <div id="caff-embedded" style="margin-top:8px"></div>
+      <!-- R26 — MON APPROCHE, EN BAS. Le libelle est ecrit par
+           _majApprocheNut, appelee par _renderNutriContent : tout ce qui change
+           le type de diete — cette ligne, mais aussi le bouton du verrou —
+           repasse par la, et la ligne ne peut pas mentir. -->
+      <div id="nut-approche" class="nut-approche">
+        <span class="nut-approche-l">Mon approche : <strong id="nut-approche-val"></strong></span>
+        <button type="button" class="btn btn-outline btn-sm nut-approche-b" onclick="ouvrirChoixDiete()">Changer</button>
+      </div>
     </div>
   </div>
 </div>
@@ -16999,6 +17045,7 @@ function go(id){
   try{ rcInfoFermer(true); }catch(e){}
   try{ fermerAchatProgramme(true); }catch(e){}
   try{ fermerContactCoach(true); }catch(e){}
+  try{ fermerChoixDiete(true); }catch(e){}
   // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
   // non au seul accueil coach : un coach qui ouvre l app ailleurs ne passait
   // jamais par loadCoachHome, et sa vitrine restait non publiee sans que rien
@@ -17444,7 +17491,9 @@ function _histCalqueOuvert(){
   // flex, et un appui sur retour serait alors mange une seconde fois.
   const _wp=document.getElementById('wo-pause-modal');
   if(_wp&&_wp.style.display==='flex'&&!_wp.dataset.sortie) return true;
-  for(const id of ['rc-confirm','rc-saisie']){
+  // R26 — la feuille « Mon approche » : le retour la ferme et reste sur la
+  // nutrition, comme le voile et « Annuler ».
+  for(const id of ['rc-diete','rc-confirm','rc-saisie']){
     const z=document.getElementById(id);
     if(z&&z.style.display==='flex'&&!z.dataset.sortie) return true;
   }
@@ -17465,6 +17514,8 @@ function _histFermerCalque(){
   if(_ct&&_ct.style.display==='flex'&&!_ct.dataset.sortie){ fermerContactCoach(); return; }
   const _lx=document.getElementById('rc-lexique');
   if(_lx&&_lx.style.display==='flex'&&!_lx.dataset.sortie){ rcInfoFermer(); return; }
+  const _dc=document.getElementById('rc-diete');
+  if(_dc&&_dc.style.display==='flex'&&!_dc.dataset.sortie){ fermerChoixDiete(); return; }
   const _wp=document.getElementById('wo-pause-modal');
   if(_wp&&_wp.style.display==='flex'&&!_wp.dataset.sortie){ _feuilleFermer('wo-pause-modal'); return; }
   // PAR LEUR BOUTON « non » : c’est lui qui résout la promesse. Les fermer à
@@ -66408,6 +66459,9 @@ function _htmlNutEclairs(c){
   return '<svg class="nut-eclairs" viewBox="0 0 480 360" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="nutEg'+c+'" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff3a3a"/><stop offset=".26" stop-color="#e00808"/><stop offset="1" stop-color="#4a0000"/></linearGradient><filter id="nutEf'+c+'" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"/></filter></defs><g class="nut-ec nut-ec1 fx-loop"><path d="M470.0,-10.0 L456.5,13.5 L431.1,24.4 L417.1,47.4 L391.0,57.4 L371.3,74.4 L369.3,110.1 L349.8,127.2 L312.0,124.9 L300.0,150.0 M385.4,69.7 L373.6,84.7 L362.1,100.0 L355.6,118.7 L342.2,132.7 M361.6,92.0 L344.4,89.1 L345.7,110.2 L342.4,125.4 L324.1,121.1 M455.0,40.0 L428.1,52.8 L423.4,88.9 L378.7,83.0 L389.8,135.7 L340.9,125.3 L320.1,144.5 L318.9,184.3 L288.4,193.2 L260.8,205.3 L250.0,235.0 M337.9,151.4 L346.4,170.8 L368.9,171.1 L373.1,196.4 L396.8,195.1 M322.7,165.9 L313.0,181.7 L284.5,160.0 L281.4,189.0 L266.3,194.0" stroke="url(#nutEg'+c+')" stroke-width="8" fill="none" stroke-linecap="round" filter="url(#nutEf'+c+')" opacity=".9"/><path d="M470.0,-10.0 L456.5,13.5 L431.1,24.4 L417.1,47.4 L391.0,57.4 L371.3,74.4 L369.3,110.1 L349.8,127.2 L312.0,124.9 L300.0,150.0 M385.4,69.7 L373.6,84.7 L362.1,100.0 L355.6,118.7 L342.2,132.7 M361.6,92.0 L344.4,89.1 L345.7,110.2 L342.4,125.4 L324.1,121.1 M455.0,40.0 L428.1,52.8 L423.4,88.9 L378.7,83.0 L389.8,135.7 L340.9,125.3 L320.1,144.5 L318.9,184.3 L288.4,193.2 L260.8,205.3 L250.0,235.0 M337.9,151.4 L346.4,170.8 L368.9,171.1 L373.1,196.4 L396.8,195.1 M322.7,165.9 L313.0,181.7 L284.5,160.0 L281.4,189.0 L266.3,194.0" stroke="#ff7070" stroke-width="1" opacity=".55" fill="none" stroke-linecap="round"/></g><g class="nut-ec nut-ec2 fx-loop"><path d="M430.0,-12.0 L405.7,11.7 L375.0,29.0 L345.5,47.6 L341.2,91.1 L302.0,100.1 L281.0,127.0 L259.0,153.0 L246.5,188.4 L215.0,205.0 M352.2,66.6 L356.0,84.8 L365.9,97.3 L382.5,103.2 L396.3,111.7 M486.0,120.0 L462.7,142.1 L441.4,165.6 L438.3,203.5 L406.2,218.6 L399.3,253.4 L361.7,264.3 L355.7,299.8 L330.0,320.0 M423.8,199.8 L419.0,222.6 L399.8,233.3 L384.1,246.9 L371.1,262.7" stroke="url(#nutEg'+c+')" stroke-width="8" fill="none" stroke-linecap="round" filter="url(#nutEf'+c+')" opacity=".9"/><path d="M430.0,-12.0 L405.7,11.7 L375.0,29.0 L345.5,47.6 L341.2,91.1 L302.0,100.1 L281.0,127.0 L259.0,153.0 L246.5,188.4 L215.0,205.0 M352.2,66.6 L356.0,84.8 L365.9,97.3 L382.5,103.2 L396.3,111.7 M486.0,120.0 L462.7,142.1 L441.4,165.6 L438.3,203.5 L406.2,218.6 L399.3,253.4 L361.7,264.3 L355.7,299.8 L330.0,320.0 M423.8,199.8 L419.0,222.6 L399.8,233.3 L384.1,246.9 L371.1,262.7" stroke="#ff7070" stroke-width="1" opacity=".55" fill="none" stroke-linecap="round"/></g><g class="nut-ec nut-ec3 fx-loop"><path d="M300.0,-14.0 L276.3,12.9 L254.3,41.6 L231.4,69.4 L186.5,74.5 L169.8,108.6 L142.5,131.8 L120.0,160.0 M223.9,59.5 L226.4,76.5 L235.7,89.5 L241.5,104.5 L256.4,114.1 M219.4,63.9 L204.7,66.7 L200.7,87.5 L181.3,82.6 L171.1,92.9 M470.0,200.0 L443.9,220.9 L429.7,254.5 L390.7,261.7 L383.5,302.7 L341.7,306.9 L319.2,331.7 L300.0,360.0 M421.9,245.2 L416.0,256.9 L425.0,274.7 L415.0,284.8 L402.4,293.7 M60.0,-10.0 L57.1,18.7 L29.3,37.9 L38.6,71.3 L24.7,95.8 L10.0,120.0 M33.6,58.8 L30.9,69.7 L33.2,78.1 L48.2,80.3 L48.7,89.7" stroke="url(#nutEg'+c+')" stroke-width="8" fill="none" stroke-linecap="round" filter="url(#nutEf'+c+')" opacity=".9"/><path d="M300.0,-14.0 L276.3,12.9 L254.3,41.6 L231.4,69.4 L186.5,74.5 L169.8,108.6 L142.5,131.8 L120.0,160.0 M223.9,59.5 L226.4,76.5 L235.7,89.5 L241.5,104.5 L256.4,114.1 M219.4,63.9 L204.7,66.7 L200.7,87.5 L181.3,82.6 L171.1,92.9 M470.0,200.0 L443.9,220.9 L429.7,254.5 L390.7,261.7 L383.5,302.7 L341.7,306.9 L319.2,331.7 L300.0,360.0 M421.9,245.2 L416.0,256.9 L425.0,274.7 L415.0,284.8 L402.4,293.7 M60.0,-10.0 L57.1,18.7 L29.3,37.9 L38.6,71.3 L24.7,95.8 L10.0,120.0 M33.6,58.8 L30.9,69.7 L33.2,78.1 L48.2,80.3 L48.7,89.7" stroke="#ff7070" stroke-width="1" opacity=".55" fill="none" stroke-linecap="round"/></g></svg>';
 }
 function _renderNutriContent(type,dateAff){
+  // R26 — la ligne « Mon approche » suit chaque rendu, quel que soit le
+  // chemin qui a change la diete.
+  _majApprocheNut(type);
   const contentEl=document.getElementById('nut-diet-content');
   // Encart de transition : il se pose AVANT tout le reste, parce qu'il explique
   // pourquoi les chiffres affiches en dessous ne portent aucune adaptation.
@@ -66502,6 +66556,105 @@ function _htmlStrictVerrou(raison){
       ${raison==='sans_coach'?`<button class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0;letter-spacing:1px;font-size:var(--fs-xs)" onclick="go('s-client-code')">J'ai un code coach</button>`:''}
     </div>
   </div>`;
+}
+
+// ══ R26 — MON APPROCHE : LA LIGNE, LA FEUILLE, LA CONFIRMATION ═══════════
+//
+// Le <select> de tete est parti. Ce qui changeait le type de diete d'un geste
+// passe desormais par trois temps : la ligne du bas, la feuille qui dit ce que
+// chaque diete change au quotidien, puis une confirmation. Le geste d'ecriture,
+// lui, ne change pas : c'est toujours setNutriDietType, avec sa garde.
+//
+// `ligne` est ce qu'affiche « Mon approche : … ».
+const DIETE_CHOIX=Object.freeze([
+  Object.freeze({type:'flexible',nom:'DIÈTE FLEXIBLE',ligne:'diète flexible',
+    desc:'Tu fixes tes macros et tu manges ce que tu veux dans ces limites. '
+      +'Tu notes chaque aliment dans le journal.'}),
+  Object.freeze({type:'strict',nom:'DIÈTE STRICTE',ligne:'diète stricte',
+    desc:'Ton coach compose ton plan repas par repas. Tu réponds simplement '
+      +'chaque jour si tu l\'as respecté.'})
+]);
+// CE QUE DIT LA CONFIRMATION, VERIFIE SUR LE CODE. setNutriDietType n'ecrit
+// QUE nutrition.dietType : le journal (nutrition.log), les cibles reglees
+// (nutrition.perso, nutrition.macros), les reponses du jour (nutrition.days)
+// et le plan du coach restent dans le dossier. _renderNutriContent n'affiche
+// que la diete choisie — journal masque en stricte, plan et suivi du jour
+// absents en flexible — et les relit tels quels au retour.
+const DIETE_CONFIRMER=Object.freeze({
+  strict:Object.freeze({titre:'Passer en diète stricte ?',
+    texte:'Ton journal alimentaire ne sera plus affiché. Tes données sont '
+      +'conservées et tu les retrouveras si tu reviens en flexible.',
+    ok:'Passer en diète stricte'}),
+  flexible:Object.freeze({titre:'Passer en diète flexible ?',
+    texte:'Ton plan repas et ton suivi quotidien ne seront plus affichés. Tes '
+      +'données sont conservées et tu les retrouveras si tu reviens en stricte.',
+    ok:'Passer en diète flexible'})
+});
+// PURE. Les deux options, dans l'ordre de DIETE_CHOIX.
+// L'option verrouillee reste VISIBLE, avec son cadenas. La retirer ferait
+// croire que la diete stricte n'existe pas, alors qu'elle est seulement
+// fermee — et un athlete qui ne sait pas qu'elle existe ne la demandera
+// jamais a son coach. Elle dit POURQUOI, avec le texte de l'ecran verrouille :
+// une seule redaction de la raison, pas deux.
+function _htmlChoixDiete(user){
+  const actuel=typeDiete((user&&user.nutrition)||{});
+  const acces=accesDieteStricte(user);
+  return DIETE_CHOIX.map(o=>{
+    const verrou=o.type==='strict'&&!acces.ok;
+    const v=verrou?(STRICT_VERROU[acces.raison]||STRICT_VERROU.non_valide):null;
+    const ici=o.type===actuel;
+    return '<button type="button" class="dch-opt'+(ici?' actif':'')+'" data-diete="'+o.type+'"'
+      +(ici?' aria-current="true"':'')
+      +(verrou?' disabled':' onclick="choisirDiete(\''+o.type+'\')"')+'>'
+      +'<span class="dch-tete"><span class="dch-nom">'+o.nom+(verrou?' 🔒':'')+'</span>'
+      +(ici?'<span class="dch-etat">Actuelle</span>':'')+'</span>'
+      +'<span class="dch-desc">'+escapeHtml(o.desc)+'</span>'
+      +(v?'<span class="dch-verrou"><strong>'+escapeHtml(v.titre)+'</strong>'+escapeHtml(v.texte)+'</span>':'')
+      +'</button>';
+  }).join('');
+}
+function ouvrirChoixDiete(){
+  const c=document.getElementById('rc-diete-corps');
+  if(!c||!currentUser) return null;
+  c.innerHTML=_htmlChoixDiete(currentUser);
+  const f=_feuilleOuvrir('rc-diete');
+  try{
+    const b=c.querySelector('.dch-opt.actif:not(:disabled)')||c.querySelector('.dch-opt:not(:disabled)');
+    if(b) b.focus({preventScroll:true});
+  }catch(e){}
+  return f;
+}
+function fermerChoixDiete(tout_de_suite){ _feuilleFermer('rc-diete',tout_de_suite); }
+// Rend true si la diete a change.
+async function choisirDiete(type){
+  if(DIETES_CONNUES.indexOf(type)<0||!currentUser) return false;
+  const actuel=typeDiete(currentUser.nutrition||{});
+  // La feuille part AVANT la question : deux calques empiles, et le retour
+  // fermerait la feuille du dessous en laissant la question ouverte.
+  fermerChoixDiete();
+  if(type===actuel) return false;
+  const acces=accesDieteStricte(currentUser);
+  // Verrouillee : pas de question pour un refus. setNutriDietType refuse et
+  // dit pourquoi, avec ses propres mots.
+  if(type==='strict'&&!acces.ok){ setNutriDietType(type); return false; }
+  // QUITTER UNE STRICTE VERROUILLEE NE FAIT RIEN PERDRE DE VISIBLE : l'ecran
+  // ne montrait que le verrou, ni plan ni suivi du jour. « Ton plan repas ne
+  // sera plus affiche » y serait faux, et le bouton du verrou fait deja ce
+  // passage sans question.
+  if(!(type==='flexible'&&actuel==='strict'&&!acces.ok)){
+    const q=DIETE_CONFIRMER[type];
+    if(!await rcConfirm(q.titre,q.texte,q.ok)) return false;
+  }
+  setNutriDietType(type);
+  return typeDiete(currentUser.nutrition||{})===type;
+}
+// La ligne suit LE RENDU, pas le dossier : _renderNutriContent affiche la
+// flexible pour 'flexible' et la stricte pour tout le reste, et la ligne dit
+// la meme chose que l'ecran au-dessus d'elle.
+function _majApprocheNut(type){
+  const v=document.getElementById('nut-approche-val');
+  if(!v) return;
+  v.textContent=DIETE_CHOIX.find(o=>o.type===(type==='flexible'?'flexible':'strict')).ligne;
 }
 
 // Le jour visé par les deux boutons OUI/NON. `null` = aujourd'hui.
@@ -72565,20 +72718,10 @@ function loadNutrition(dateAff,dateCaff){
   _prefetchCiqual();
   const nut=currentUser.nutrition||{};
   const dt=typeDiete(nut);
-  const sel=document.getElementById('nut-diet-select');
-  if(sel){
-    // L'option verrouillée reste VISIBLE, avec son cadenas. La retirer ferait
-    // croire que la diète stricte n'existe pas, alors qu'elle est seulement
-    // fermée — et un athlète qui ne sait pas qu'elle existe ne la demandera
-    // jamais à son coach.
-    const _a=accesDieteStricte(currentUser);
-    const _opt=sel.querySelector('option[value="strict"]');
-    if(_opt){
-      _opt.disabled=!_a.ok;
-      _opt.textContent=_a.ok?'Diète Stricte':'Diète Stricte 🔒';
-    }
-    sel.value=dt;
-  }
+  // R26 — le <select> de tete est parti. L'option verrouillee, son cadenas et
+  // la raison du verrou vivent dans la feuille « Mon approche »
+  // (_htmlChoixDiete), rendue a chaque ouverture ; la ligne du bas est ecrite
+  // par _renderNutriContent.
   _renderNutriContent(dt,dateAff);
   loadSuppEmbedded();
   loadCaffeineEmbedded(dateCaff);
@@ -88564,6 +88707,12 @@ document.addEventListener('keydown',e=>{
   const lx=document.getElementById('rc-lexique');
   if(lx&&lx.style.display==='flex'&&!lx.dataset.sortie){
     e.preventDefault(); try{ rcInfoFermer(); }catch(x){} return;
+  }
+  // R26 — « Mon approche ». Aucun lexique ne s'ouvre depuis elle : l'ordre
+  // avec lui est indifferent.
+  const dc=document.getElementById('rc-diete');
+  if(dc&&dc.style.display==='flex'&&!dc.dataset.sortie){
+    e.preventDefault(); try{ fermerChoixDiete(); }catch(x){} return;
   }
   const ov=document.getElementById('modal-overlay');
   if(!ov) return;

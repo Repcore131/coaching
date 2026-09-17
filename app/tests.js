@@ -40428,6 +40428,120 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R26 : « MON APPROCHE », EN BAS DE LA NUTRITION ═══════
+
+    ok('R26 — la ligne du bas remplace le sélecteur, et la feuille dit ce que chaque diète change',(()=>{
+      const g=id=>document.getElementById(id);
+      if(g('nut-diet-select')) return _echec('le <select> de tête est encore là');
+      const pad=document.querySelector('#s-nutrition .pad');
+      const l=g('nut-approche');
+      if(!l||pad.lastElementChild!==l) return _echec('« Mon approche » n’est pas en bas de l’écran');
+      if(!/^Mon approche : /.test(l.querySelector('.nut-approche-l').textContent)) return _echec('libellé : « '+l.textContent.trim()+' »');
+      const b=l.querySelector('button');
+      if(!b||b.textContent.trim()!=='Changer'||b.getAttribute('onclick')!=='ouvrirChoixDiete()') return _echec('le bouton « Changer » n’ouvre pas la feuille');
+      const _pa=o=>Object.assign({id:'r26',role:'athlete',nutrition:{}},o);
+      const lire=u=>{ const d=document.createElement('div'); d.innerHTML=_htmlChoixDiete(u);
+        return [...d.querySelectorAll('.dch-opt')].map(x=>({type:x.dataset.diete,off:x.disabled,actif:x.classList.contains('actif'),
+          nom:x.querySelector('.dch-nom').textContent,desc:x.querySelector('.dch-desc').textContent,
+          verrou:x.querySelector('.dch-verrou'),clic:x.getAttribute('onclick')})); };
+      // OUVERTE : deux options, flexible d'abord, les phrases demandées.
+      const o=lire(_pa({coachId:'c',nutrition:{dietType:'flexible',strictAcces:true}}));
+      if(o.map(x=>x.type).join()!=='flexible,strict') return _echec('ordre : '+o.map(x=>x.type));
+      if(o[0].nom!=='DIÈTE FLEXIBLE'||o[1].nom!=='DIÈTE STRICTE') return _echec('noms : '+o.map(x=>x.nom));
+      if(o[0].desc!=='Tu fixes tes macros et tu manges ce que tu veux dans ces limites. Tu notes chaque aliment dans le journal.') return _echec('flexible : « '+o[0].desc+' »');
+      if(o[1].desc!=='Ton coach compose ton plan repas par repas. Tu réponds simplement chaque jour si tu l\'as respecté.') return _echec('stricte : « '+o[1].desc+' »');
+      if(!o[0].actif||o[1].actif) return _echec('la diète actuelle n’est pas marquée');
+      if(o.some(x=>x.off||x.verrou)||o[1].clic!=='choisirDiete(\'strict\')') return _echec('une option ouverte est verrouillée');
+      // VERROUILLÉE : visible, cadenas, et la raison au mot près.
+      for(const [u,raison] of [[_pa({coachId:null,nutrition:{dietType:'flexible'}}),'sans_coach'],
+                               [_pa({coachId:'c',nutrition:{dietType:'flexible',strictAcces:false}}),'non_valide']]){
+        const s=lire(u).find(x=>x.type==='strict');
+        if(!s) return _echec(raison+' : l’option stricte est masquée');
+        if(!s.off||s.clic) return _echec(raison+' : l’option verrouillée se choisit');
+        if(s.nom!=='DIÈTE STRICTE 🔒') return _echec(raison+' : pas de cadenas (« '+s.nom+' »)');
+        const v=STRICT_VERROU[raison];
+        if(!s.verrou||s.verrou.querySelector('strong').textContent!==v.titre||s.verrou.textContent!==v.titre+v.texte)
+          return _echec(raison+' : la raison du verrou n’est pas celle de STRICT_VERROU');
+      }
+      // LA QUESTION, et la transition qui n'est pas redite dans la feuille.
+      const q=DIETE_CONFIRMER.strict;
+      if(q.titre!=='Passer en diète stricte ?'||q.texte!=='Ton journal alimentaire ne sera plus affiché. Tes données sont conservées et tu les retrouveras si tu reviens en flexible.')
+        return _echec('question stricte : '+JSON.stringify(q));
+      if(/_htmlDieteTransition|DIETE_TRANSITION/.test(String(_htmlChoixDiete)+String(choisirDiete))) return _echec('la transition est doublonnée dans la feuille');
+      return true;})());
+
+    okA('R26 — changer d’approche : une question, rien d’effacé, la ligne suit, la feuille se ferme comme les autres',async()=>{
+      const sU=currentUser, svSave=window.saveUser, svToast=window.toast, svConf=window.rcConfirm;
+      const questions=[]; let reponse=true;
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        window.rcConfirm=(t,x)=>{ questions.push(t+' | '+x); return Promise.resolve(reponse); };
+        const auj=localISODate(new Date());
+        const base=o=>Object.assign({id:'r26',email:'r26@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},
+          sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',
+          consent:{health:true,policyVersion:POLICY_VERSION},sessions_config:[]},o);
+        currentUser=base({coachId:'c1',nutrition:{dietType:'flexible',strictAcces:true,
+          log:{[auj]:{entries:[{id:1,kcal:500,p:30,c:50,l:10}]}},perso:{objectif:'seche',delta:20},
+          days:{[auj]:{respected:true}}}});
+        const sansType=()=>{ const n=Object.assign({},currentUser.nutrition); delete n.dietType; return JSON.stringify(n); };
+        // APRÈS le premier chargement : loadNutrition pose lui-même des
+        // compléments et une caféine vides à la première ouverture, ce qui n'a
+        // rien à voir avec le changement de diète.
+        loadNutrition();
+        const avant=sansType();
+        const val=()=>document.getElementById('nut-approche-val').textContent;
+        if(val()!=='diète flexible') return _echec('ligne : « '+val()+' »');
+        // LA FEUILLE.
+        ouvrirChoixDiete();
+        if(document.getElementById('rc-diete').style.display!=='flex') return _echec('la feuille ne s’ouvre pas');
+        // REFUS : rien ne bouge.
+        reponse=false;
+        if(await choisirDiete('strict')!==false||currentUser.nutrition.dietType!=='flexible') return _echec('un refus change la diète');
+        if(questions.length!==1||questions[0].indexOf('Passer en diète stricte ?')!==0) return _echec('question : '+JSON.stringify(questions));
+        // ACCORD : stricte, journal masqué, données intactes.
+        reponse=true;
+        if(await choisirDiete('strict')!==true) return _echec('le passage en stricte échoue');
+        if(val()!=='diète stricte') return _echec('la ligne ne suit pas : « '+val()+' »');
+        if(document.getElementById('fj-today-section').style.display!=='none') return _echec('le journal reste affiché en stricte');
+        if(sansType()!==avant) return _echec('le passage en stricte a touché aux données');
+        // RETOUR EN FLEXIBLE : sa propre question, et tout est retrouvé.
+        if(await choisirDiete('flexible')!==true) return _echec('le retour en flexible échoue');
+        if(questions[2].indexOf('Passer en diète flexible ?')!==0) return _echec('question flexible : '+questions[2]);
+        if(sansType()!==avant) return _echec('le retour en flexible a touché aux données');
+        if(document.getElementById('fj-today-section').style.display!=='block') return _echec('le journal ne revient pas');
+        // LA MÊME DIÈTE : ni question, ni écriture.
+        if(await choisirDiete('flexible')!==false||questions.length!==3) return _echec('choisir la diète actuelle pose une question');
+        // VERROUILLÉE : refus sans question.
+        currentUser=base({coachId:null,nutrition:{dietType:'flexible'}}); loadNutrition();
+        if(await choisirDiete('strict')!==false||currentUser.nutrition.dietType!=='flexible'||questions.length!==3) return _echec('la stricte verrouillée pose une question ou passe');
+        // QUITTER UNE STRICTE VERROUILLÉE : l'écran ne montrait que le verrou.
+        currentUser=base({coachId:'c1',nutrition:{}}); loadNutrition();
+        if(val()!=='diète stricte') return _echec('défaut : « '+val()+' »');
+        if(await choisirDiete('flexible')!==true||questions.length!==3) return _echec('quitter le verrou pose une question');
+        if(val()!=='diète flexible') return _echec('la ligne ne suit pas la sortie du verrou');
+        // LE BOUTON DU VERROU, qui ne passe pas par la feuille : la ligne suit aussi.
+        currentUser=base({coachId:null,nutrition:{dietType:'strict'}}); loadNutrition();
+        const bv=[...document.querySelectorAll('#nut-diet-content button')].find(x=>/Passer en diète flexible/.test(x.textContent));
+        if(!bv) return _echec('pas de bouton sur le verrou');
+        bv.click();
+        if(val()!=='diète flexible') return _echec('le bouton du verrou laisse la ligne en « '+val()+' »');
+        // FERMETURES : Échap, retour, changement d'écran.
+        const z=document.getElementById('rc-diete');
+        const attendre=()=>new Promise(r=>setTimeout(r,ARC.strike+60));
+        ouvrirChoixDiete(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+        await attendre(); if(z.style.display!=='none') return _echec('Échap ne ferme pas la feuille');
+        ouvrirChoixDiete(); _histPopstate(); await attendre();
+        if(z.style.display!=='none') return _echec('le retour ne ferme pas la feuille');
+        if(document.querySelector('.screen.active').id!=='s-nutrition') return _echec('le retour quitte la nutrition au lieu de fermer la feuille');
+        ouvrirChoixDiete(); go('s-client-home');
+        if(z.style.display!=='none') return _echec('la feuille survit au changement d’écran');
+        return true;
+      } finally {
+        try{ fermerChoixDiete(true); }catch(e){}
+        window.saveUser=svSave; window.toast=svToast; window.rcConfirm=svConf; currentUser=sU;
+      }
+    });
+
     // ══ 17/09/2026 — R25 : LES CHARGES À LA SUITE, SANS FERMER LE CLAVIER ══
 
     // Une séance montée pour ces tests : `exs` dans une séance « Push », et la
