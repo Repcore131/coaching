@@ -2006,7 +2006,12 @@ async function testExercices(){
     const _cyF0=_cyMonter('femme','j6_14');          // facteur 1,00
     const _cyF5=_cyMonter('femme','j1_supportable'); // facteur 0,95
     const _cyF20=_cyMonter('femme','j1_difficile');  // facteur 0,80
-    ok('Cinq colonnes chez l\'homme',_cyH.col.length===5,JSON.stringify(_cyH.col));
+    // R08 — LES SEGMENTS RIR PASSENT LE TABLEAU EN CARTES, pour tout exercice
+    // libre et pour tout le monde : la bande porte « Séries », « RIR » et
+    // « Gêne » dans une seule cellule. Ce que ces contrôles gardent ne change
+    // pas — la MÊME mise en page chez l'homme et chez la femme, et pas de CYC.
+    ok('La bande des séries chez l\'homme : Séries, RIR, Gêne',
+       _cyH.col.length===1&&/^Séries\s*RIR\s*ⓘ\s*Gêne\s*ⓘ$/.test(_cyH.col[0]||''),JSON.stringify(_cyH.col));
     ok('Mêmes colonnes pour une femme en phase neutre',
        JSON.stringify(_cyF0.col)===JSON.stringify(_cyH.col),JSON.stringify(_cyF0.col));
     ok('Mêmes colonnes pour une femme en phase difficile',
@@ -38926,6 +38931,326 @@ async function testExercices(){
       }
       return true;})());
 
+    // ══ 17/09/2026 — R08 : L'ÉCHELLE DE GÊNE, ET LE RIR EN SEGMENTS ══════
+    //
+    // Deux saisies de la séance passaient par un menu déroulant nu : la
+    // douleur, notée de 1 à 6 sans que rien nulle part ne dise ce que 4 veut
+    // dire, et le RIR, qui demandait deux gestes pour un seul choix. Le lot
+    // étiquette la première et passe le second en segments — SANS CHANGER UNE
+    // SEULE VALEUR ENREGISTRÉE.
+
+    // UN DÉCOR EN TÊTE DE PAGE. getElementById rend le PREMIER nœud du
+    // document : ajouté en fin, le décor laisserait renderSets — et le tap
+    // d'un segment, qui repasse par lui — écrire dans le tableau d'une séance
+    // déjà rendue par un test précédent.
+    // 319 px, c'est la largeur que le tableau reçoit VRAIMENT sur un écran de
+    // 359 px : mesurée sur l'écran de séance, en-tête et marges compris.
+    const _r08Fix=(largeur,f)=>{
+      const d=document.createElement('div');
+      d.style.cssText='position:fixed;left:0;top:0;width:'+largeur+'px;background:#000;z-index:-1';
+      d.innerHTML='<div class="r08-sc" style="overflow-x:auto">'
+        +'<table class="series-table series-table-wo" style="width:100%;min-width:260px">'
+        +'<thead><tr style="background:var(--red)"></tr></thead>'
+        +'<tbody id="sets-body-0"></tbody></table></div>';
+      document.body.insertBefore(d,document.body.firstChild);
+      const sv=woState;
+      try{ return f(d); } finally { woState=sv; d.remove(); }
+    };
+    // Rend comme la séance : la bande par _enteteSeries, les lignes par
+    // renderSets, sur un woState qui porte les séries — c'est lui que le tap
+    // d'un segment relit. Pas de startTime : woPersist sort aussitôt.
+    const _r08Rendre=(d,ex,sets)=>{
+      woState={exercises:[ex],sessionData:{0:{sets:sets}},currentEx:0};
+      d.querySelector('thead tr').innerHTML=
+        _enteteSeries(_seriesEnCartes({sets:sets}),!!(sets[0]&&sets[0].degressive));
+      renderSets(ex,woState.sessionData[0],0);
+      return d.querySelector('#sets-body-0');
+    };
+    const _r08Ex={name:'DEVELOPPE COUCHE',series:3,reps:'10'};
+    const _r08S=o=>Object.assign({weight:'60',weight2:'',reps:'10',rir:'',pain:'',done:false},o||{});
+    const _r08Segs=tr=>tr?[...tr.querySelectorAll('.rir-seg')]:[];
+    const _r08Libs=tr=>_r08Segs(tr).map(x=>x.textContent.trim()).join(' ');
+    const _r08Tap=(d,l,ligne)=>{
+      const tr=d.querySelectorAll('#sets-body-0 tr')[ligne||0];
+      const b=_r08Segs(tr).find(x=>x.textContent.trim()===l);
+      if(!b) throw new Error('pas de segment « '+l+' » : '+_r08Libs(tr));
+      b.click();
+    };
+
+    // ── PARTIE 1 : L'ÉCHELLE DE GÊNE ──
+
+    ok('R08 — la colonne « Douleur » devient « Gêne », et porte son ⓘ',(()=>{
+      const t=document.createElement('tr');
+      for(const [nom,large,deg] of [['cinq colonnes',false,false],['cartes',true,false],['dégressive',true,true]]){
+        t.innerHTML=_enteteSeries(large,deg);
+        if(/douleur/i.test(t.textContent)) return _echec(nom+' : « Douleur » est encore dans l’en-tête');
+        // Le porteur du libellé : la cellule, ou le span de la bande en cartes.
+        const porteur=[...t.querySelectorAll('th,span')].find(x=>x.firstChild
+          &&x.firstChild.nodeType===3&&x.firstChild.textContent.trim()==='Gêne');
+        if(!porteur) return _echec(nom+' : pas de libellé « Gêne » — « '+t.textContent.trim()+' »');
+        const b=porteur.querySelector('.rc-i');
+        if(!b||(b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'douleur\')')<0)
+          return _echec(nom+' : le ⓘ « douleur » manque à côté de « Gêne »');
+        // À DROITE du libellé : le dernier élément du porteur.
+        if(porteur.lastElementChild!==b) return _echec(nom+' : le ⓘ n’est pas à droite du libellé');
+        // ⚠ EN CARTES, LES COLONNES DISPARAISSENT — et le ⓘ du RIR posé par R07
+        // ne doit pas disparaître avec elles.
+        if(t.innerHTML.indexOf('rcInfoOuvrir(\'rir\')')<0) return _echec(nom+' : le ⓘ « rir » a disparu');
+      }
+      // Sans l'entrée R06, rcInfo rendrait une chaîne vide et le test d'au-dessus
+      // tomberait sans dire pourquoi.
+      if(!_lexEntree('douleur')) return _echec('l’entrée « douleur » du lexique manque');
+      // C'est bien la bande de _blocExo, pas une copie.
+      if(String(_blocExo).indexOf('_enteteSeries(isWide,')<0) return _echec('_blocExo ne peint pas la bande par _enteteSeries');
+      return true;})());
+
+    ok('R08 — les repères de gêne sont dans la liste, et les valeurs n’ont pas bougé',(()=>
+      _r08Fix(359,d=>{
+        const tb=_r08Rendre(d,_r08Ex,[_r08S()]);
+        const sel=tb.querySelector('.gene-choix select');
+        if(!sel) return _echec('le menu de gêne a disparu');
+        const V=['','1','2','3','4','5','6'];
+        const T=['—','1 · à peine','2','3 · gênant','4 · ça fait mal','5','6 · je dois arrêter'];
+        const v=[...sel.options].map(o=>o.value), txt=[...sel.options].map(o=>o.textContent.trim());
+        if(JSON.stringify(v)!==JSON.stringify(V)) return _echec('valeurs : '+JSON.stringify(v));
+        if(JSON.stringify(txt)!==JSON.stringify(T)) return _echec('libellés : '+JSON.stringify(txt));
+        // AUCUN SEUIL NE BOUGE : la carte, l'allègement et leur échelle.
+        if(DLR_SEANCE_SEUIL!==4||DLR_SEANCE_MIN!==2||DLR_ALLEGE!==0.80)
+          return _echec('les constantes de la carte ont changé : '+[DLR_SEANCE_SEUIL,DLR_SEANCE_MIN,DLR_ALLEGE].join('/'));
+        // « 4 · ça fait mal » écrit '4', la même chaîne qu'avant.
+        sel.value='4'; sel.dispatchEvent(new Event('change'));
+        const p=woState.sessionData[0].sets[0].pain;
+        if(p!=='4') return _echec('le menu a écrit '+JSON.stringify(p));
+        // LA CASE N'AFFICHE QUE LE CHIFFRE — c'est ce qui la garde étroite —,
+        // et le <select> reste l'élément nommé pour le lecteur d'écran.
+        const g=d.querySelector('#sets-body-0 .gene-choix');
+        const vu=[...g.querySelectorAll('[aria-hidden="true"]')].map(x=>x.textContent).join('');
+        if(vu.indexOf('4')!==0) return _echec('la case affiche « '+vu+' »');
+        const s2=g.querySelector('select');
+        if(s2.value!=='4') return _echec('après repeint, le menu montre « '+s2.value+' »');
+        if(!/Gêne/.test(s2.getAttribute('aria-label')||'')) return _echec('aria-label : « '+s2.getAttribute('aria-label')+' »');
+        return true;})));
+
+    ok('R08 — une série validée garde sa gêne ouverte, et ferme ses segments',(()=>
+      _r08Fix(359,d=>{
+        const tb=_r08Rendre(d,_r08Ex,[_r08S({done:true,rir:'1'}),_r08S()]);
+        const [l1,l2]=tb.querySelectorAll('tr');
+        const sel=l1&&l1.querySelector('.gene-choix select');
+        if(!sel) return _echec('pas de menu de gêne sur la série validée');
+        // « Une douleur se déclare souvent une fois la barre reposée. »
+        if(sel.disabled) return _echec('la gêne est verrouillée après validation');
+        const s1=_r08Segs(l1);
+        if(s1.length!==5) return _echec(s1.length+' segments sur la série validée');
+        if(s1.some(b=>!b.disabled)) return _echec('un segment reste touchable sur une série validée');
+        if(_r08Segs(l2).some(b=>b.disabled)) return _echec('la série non validée a des segments fermés');
+        return true;})));
+
+    // ⚠ PAR LE VRAI MENU, DANS UNE VRAIE SÉANCE. Le lot change le balisage du
+    // menu : c'est ce balisage-là qu'il faut traverser pour savoir si la carte
+    // se lève encore, pas une affectation directe de `pain`.
+    ok('R08 — une gêne à 4 choisie dans le menu lève toujours la carte après deux séries validées',(()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state');
+      try{
+        currentUser={id:'r08',email:'r08@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},
+          exMuscles:{},sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'SQUAT',series:3,reps:'5',repos:'3 min'}]}]};
+        launchWorkout(currentUser.sessions_config[0],0);
+        woState.sessionData={0:{sets:[
+          {weight:'100',reps:'5',rir:'1',pain:'',done:true},
+          {weight:'100',reps:'5',rir:'1',pain:'',done:true},
+          {weight:'100',reps:'5',rir:'',pain:'',done:false,userEdited:true}]}};
+        renderSets(woState.exercises[0],woState.sessionData[0],0);
+        const choisir=(i,v)=>{
+          const tr=document.getElementById('sets-body-0').querySelectorAll('tr')[i];
+          const sel=tr&&tr.querySelector('.gene-choix select');
+          if(!sel) throw new Error('pas de menu de gêne sur la série '+(i+1));
+          sel.value=v; sel.dispatchEvent(new Event('change'));
+        };
+        const carte=()=>/Qu'est-ce que tu veux faire/.test((document.getElementById('wo-douleur-0')||{}).innerHTML||'');
+        if(carte()) return _echec('la carte est là avant toute gêne');
+        choisir(0,'4');
+        if(woState.sessionData[0].sets[0].pain!=='4') return _echec('le menu a écrit '+JSON.stringify(woState.sessionData[0].sets[0].pain));
+        if(carte()) return _echec('la carte se lève sur UNE seule série');
+        choisir(1,'4');
+        if(!carte()) return _echec('deux séries validées à 4 : la carte ne se lève plus');
+        if(seriesDouloureusesSeance(0)!==2) return _echec('seriesDouloureusesSeance rend '+seriesDouloureusesSeance(0));
+        return true;
+      } finally {
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        localStorage.removeItem('rc_wo_state');
+        if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
+        currentUser=sU; woState=sW;
+      }})());
+
+    // ── PARTIE 2 : LE RIR EN SEGMENTS ──
+
+    ok('R08 — le segment « 3+ » écrit « 3 » dans sessionData',(()=>
+      _r08Fix(359,d=>{
+        const tb=_r08Rendre(d,_r08Ex,[_r08S(),_r08S()]);
+        if(_r08Libs(tb.querySelector('tr'))!=='Échec 0 1 2 3+')
+          return _echec('segments : « '+_r08Libs(tb.querySelector('tr'))+' »');
+        // LE MENU RIR A DISPARU : un tap, plus deux.
+        if(d.querySelector('#sets-body-0 .wo-intensite select')) return _echec('le menu RIR est encore là');
+        _r08Tap(d,'3+');
+        const v=woState.sessionData[0].sets[0].rir;
+        if(v!=='3') return _echec('« 3+ » a écrit '+JSON.stringify(v));
+        if(woState.sessionData[0].sets[1].rir!=='') return _echec('la série 2 a reçu '+JSON.stringify(woState.sessionData[0].sets[1].rir));
+        // Le repeint suit : « 3+ » allumé, et lui seul.
+        const on=_r08Segs(d.querySelector('#sets-body-0 tr')).filter(x=>x.classList.contains('on'));
+        if(on.length!==1||on[0].textContent.trim()!=='3+') return _echec('allumés : '+on.map(x=>x.textContent).join(','));
+        if(on[0].getAttribute('aria-pressed')!=='true') return _echec('aria-pressed : '+on[0].getAttribute('aria-pressed'));
+        // L'ACCENT, c'est var(--red) — lu sur une sonde, pas écrit en dur.
+        const sonde=document.createElement('i'); sonde.style.background='var(--red)'; d.appendChild(sonde);
+        const rouge=getComputedStyle(sonde).backgroundColor; sonde.remove();
+        if(getComputedStyle(on[0]).backgroundColor!==rouge)
+          return _echec('le segment actif est '+getComputedStyle(on[0]).backgroundColor+', l’accent '+rouge);
+        return true;})));
+
+    ok('R08 — 4 et 5 restent atteignables : un second tap sur « 3+ » les ouvre',(()=>
+      _r08Fix(359,d=>{
+        const s0=_r08S();
+        _r08Rendre(d,_r08Ex,[s0]);
+        const cles=Object.keys(s0).sort().join(',');
+        const libs=()=>_r08Libs(d.querySelector('#sets-body-0 tr'));
+        const rir=()=>woState.sessionData[0].sets[0].rir;
+        _r08Tap(d,'3+');
+        if(libs()!=='Échec 0 1 2 3+') return _echec('un seul tap ouvre déjà : '+libs());
+        _r08Tap(d,'3+');
+        if(libs()!=='Échec 0 1 2 3 4 5') return _echec('le second tap n’ouvre pas 4 et 5 : '+libs());
+        if(rir()!=='3') return _echec('le second tap a changé la valeur : '+JSON.stringify(rir()));
+        _r08Tap(d,'4'); if(rir()!=='4') return _echec('« 4 » a écrit '+JSON.stringify(rir()));
+        _r08Tap(d,'5'); if(rir()!=='5') return _echec('« 5 » a écrit '+JSON.stringify(rir()));
+        _r08Tap(d,'3'); if(rir()!=='3') return _echec('« 3 » a écrit '+JSON.stringify(rir()));
+        // UN ÉTAT D'AFFICHAGE, PAS UNE DONNÉE : la série n'a gagné aucun champ,
+        // rien ne part dans l'instantané ni dans l'historique.
+        if(Object.keys(woState.sessionData[0].sets[0]).sort().join(',')!==cles)
+          return _echec('la série porte d’autres champs : '+Object.keys(woState.sessionData[0].sets[0]).join(','));
+        // Et une AUTRE série n'est pas ouverte pour autant.
+        const tb=_r08Rendre(d,_r08Ex,[_r08S({rir:'3'})]);
+        if(_r08Libs(tb.querySelector('tr'))!=='Échec 0 1 2 3+') return _echec('l’ouverture fuit sur une autre série');
+        return true;})));
+
+    ok('R08 — une série qui porte déjà 5 affiche toujours 5 après rendu',(()=>
+      _r08Fix(359,d=>{
+        const cas=[['5','5','Échec 0 1 2 3+ 5'],[5,'5','Échec 0 1 2 3+ 5'],['4','4','Échec 0 1 2 3+ 4'],
+          ['echec','Échec','Échec 0 1 2 3+'],['0','0','Échec 0 1 2 3+'],['3','3+','Échec 0 1 2 3+']];
+        for(const done of [false,true]){
+          for(const [v,allume,attendu] of cas){
+            const tb=_r08Rendre(d,_r08Ex,[_r08S({rir:v,done:done})]);
+            const tr=tb.querySelector('tr');
+            const nom='rir '+JSON.stringify(v)+(done?' (validée)':'');
+            if(_r08Libs(tr)!==attendu) return _echec(nom+' : segments « '+_r08Libs(tr)+' »');
+            const on=_r08Segs(tr).filter(x=>x.classList.contains('on'));
+            if(on.length!==1) return _echec(nom+' : '+on.length+' segments allumés');
+            if(on[0].textContent.trim()!==allume) return _echec(nom+' : « '+on[0].textContent.trim()+' » est allumé');
+            if(on[0].getAttribute('aria-pressed')!=='true') return _echec(nom+' : aria-pressed absent');
+            // LE RENDU NE RÉÉCRIT RIEN : 5 reste 5, et reste du même type.
+            if(woState.sessionData[0].sets[0].rir!==v) return _echec(nom+' : réécrit en '+JSON.stringify(woState.sessionData[0].sets[0].rir));
+          }
+        }
+        return true;})));
+
+    ok('R08 — le tap suit le flux du menu : même écriture, même repeint, et la charge suivante en découle',(()=>
+      _r08Fix(359,d=>{
+        const src=String(_woRirSegment);
+        if(!/\.rir=v\b/.test(src)) return _echec('le tap n’écrit pas rir');
+        if(!/renderSets\(woState\.exercises\[idx\],woState\.sessionData\[idx\],idx\)/.test(src))
+          return _echec('le tap ne repeint pas par renderSets');
+        // L'ancien onchange ne persistait pas : le tap non plus.
+        if(/woPersist/.test(src)) return _echec('le tap persiste, ce que le menu ne faisait pas');
+        if(/\bonChR\b/.test(String(renderSets))) return _echec('onChR est encore dans renderSets');
+        // chargeSuivante lit TOUJOURS le RIR : taper « 2 » sur la série 1 remplit
+        // la série 2, exactement comme le menu.
+        _r08Rendre(d,_r08Ex,[_r08S({weight:'100'}),_r08S({weight:''})]);
+        _r08Tap(d,'2');
+        const att=chargeSuivante(100,'2',isCounterweightEx(_r08Ex.name));
+        const s2=woState.sessionData[0].sets[1];
+        if(Number(s2.weight)!==Number(att)) return _echec('série 2 à '+s2.weight+' au lieu de '+att);
+        if(s2.isAuto!==true) return _echec('la charge remplie n’est pas marquée AUTO');
+        return true;})));
+
+    ok('R08 — un exercice programmé garde sa pastille verrouillée et ses cinq colonnes',(()=>
+      _r08Fix(359,d=>{
+        const sets=[_r08S({rpeCible:8}),_r08S({rpeCible:8})];
+        if(_seriesEnCartes({sets:sets})) return _echec('un exercice programmé passe en cartes');
+        const tb=_r08Rendre(d,_r08Ex,sets);
+        const tr=tb.querySelector('tr');
+        if(tr.children.length!==5) return _echec(tr.children.length+' cellules au lieu de 5');
+        if(tb.querySelector('.rir-seg')) return _echec('des segments sur un exercice programmé');
+        if(!tr.querySelector('.wo-intensite [role="img"]')) return _echec('la pastille verrouillée a disparu');
+        if(!/Gêne/.test(d.querySelector('thead').textContent)) return _echec('la colonne ne s’appelle pas « Gêne »');
+        // `rir` RESTE VIDE : la consigne ne passe pas pour une mesure.
+        if(sets.some(s=>s.rir!=='')) return _echec('le RPE a été recopié dans rir');
+        // Mêlée à une série libre, une série programmée reste verrouillée.
+        const tb2=_r08Rendre(d,_r08Ex,[_r08S({rpeCible:8}),_r08S()]);
+        const [a,b]=tb2.querySelectorAll('tr');
+        if(_r08Segs(a).length||!a.querySelector('[role="img"]')) return _echec('la série programmée a perdu son verrou');
+        if(_r08Segs(b).length!==5) return _echec('la série libre n’a pas ses segments');
+        return true;})));
+
+    ok('R08 — le cardio n’a ni RIR ni gêne',(()=>
+      _r08Fix(359,d=>{
+        const ex={name:'VELO',series:1,reps:'20 min'};
+        if(!isCardio(ex)) return _echec('le décor n’est pas un cardio');
+        woState={exercises:[ex],sessionData:{0:{sets:[_r08S({reps:'20 min'})]}},currentEx:0};
+        renderSets(ex,woState.sessionData[0],0);
+        const tb=d.querySelector('#sets-body-0');
+        if(!tb.querySelector('tr')) return _echec('la ligne de cardio n’est pas rendue');
+        if(tb.querySelector('.rir-seg,.gene-choix,select')) return _echec('un champ RIR ou gêne est rendu sur un cardio');
+        return true;})));
+
+    // ══ LA PLACE ═════════════════════════════════════════════════════════
+    //
+    // ⚠ CE TEST A DÉCIDÉ DU LOT. En cinq colonnes, les segments font 187 px
+    // pour une colonne de 79 : le tableau débordait de 143 px. Et le menu de
+    // gêne étiqueté, laissé à sa largeur naturelle, s'élargissait à 125 px —
+    // 18 px de trop à lui seul. D'où les cartes, et la case qui n'affiche que
+    // le chiffre. L'assertion garde les deux portes fermées, sans police réduite.
+    ok('R08 — chaque segment fait au moins 32 × 38, et rien ne déborde sur un écran de 359 px',(()=>{
+      const trop=[];
+      const EXC={name:'DEVELOPPE COUCHE',series:3,reps:'10',rirCible:'2'};
+      const cas=[
+        ['libre',_r08Ex,()=>[_r08S(),_r08S({rir:'2',pain:'6'})],false],
+        ['consigne, série à 5, gêne 6',EXC,()=>[_r08S({rir:'5',pain:'6'})],false],
+        ['4 et 5 ouverts, consigne',EXC,()=>[_r08S()],true],
+        ['dégressive',{name:'SQUAT',series:3,reps:'8+8'},()=>[_r08S({degressive:true,weight2:'40',rir:'1',pain:'4'})],false],
+        ['RPE verrouillé',_r08Ex,()=>[_r08S({rpeCible:8,pain:'6'})],false]];
+      for(const w of [319,359]){
+        for(const [nom,ex,sets,ouvrir] of cas){
+          _r08Fix(w,d=>{
+            _r08Rendre(d,ex,sets());
+            if(ouvrir){ _woRirSegment(0,0,'3'); _woRirSegment(0,0,'3'); }
+            const ici=w+' px · '+nom;
+            const sc=d.querySelector('.r08-sc'), tb=sc.querySelector('table');
+            if(tb.scrollWidth>sc.clientWidth+1) trop.push(ici+' : le tableau déborde de '+(tb.scrollWidth-sc.clientWidth)+' px');
+            for(const th of d.querySelectorAll('thead th'))
+              if(th.scrollWidth>th.clientWidth+1) trop.push(ici+' : l’en-tête déborde');
+            for(const z of d.querySelectorAll('#sets-body-0 .wo-intensite'))
+              if(z.scrollWidth>z.clientWidth+1) trop.push(ici+' : la zone d’intensité déborde de '+(z.scrollWidth-z.clientWidth)+' px');
+            // EN CARTES, tout ce qu'on touche reste dans sa carte.
+            for(const carte of d.querySelectorAll('#sets-body-0 tr > td > div')){
+              const rc=carte.getBoundingClientRect();
+              for(const el of carte.querySelectorAll('.rir-seg,.gene-choix,.set-input,button[data-arc]')){
+                const r=el.getBoundingClientRect();
+                if(r.right>rc.right+0.5||r.left<rc.left-0.5) trop.push(ici+' : un élément sort de la carte ('+(el.className||el.tagName)+')');
+              }
+            }
+            for(const b of d.querySelectorAll('#sets-body-0 .rir-seg')){
+              const r=b.getBoundingClientRect();
+              if(r.width<31.5||r.height<37.5)
+                trop.push(ici+' : segment « '+b.textContent.trim()+' » de '+r.width.toFixed(1)+' × '+r.height.toFixed(1));
+              // ⚠ ET LA POLICE N'A PAS BAISSÉ POUR FAIRE TENIR.
+              if(parseFloat(getComputedStyle(b).fontSize)<11) trop.push(ici+' : police des segments à '+getComputedStyle(b).fontSize);
+            }
+            for(const g of d.querySelectorAll('#sets-body-0 .gene-choix')){
+              const r=g.getBoundingClientRect();
+              if(r.width<37.5||r.height<37.5) trop.push(ici+' : la case de gêne fait '+r.width.toFixed(1)+' × '+r.height.toFixed(1));
+            }
+          });
+        }
+      }
+      return trop.length?_echec(trop.join(' | ')):true;})());
+
     // ══ 16/09/2026 — R07 : LA COLONNE D'INTENSITE PARLE AU DOIGT ═════════
     //
     // Deux éléments portaient leur sens dans un attribut title= : la mention
@@ -38934,22 +39259,30 @@ async function testExercices(){
 
     // Un décor qui reproduit le gabarit étroit de _blocExo, aux mêmes classes :
     // c'est la mise en page réelle qui contraint la place, pas une approximation.
+    // R08 — LA BANDE EST CELLE DE LA PRODUCTION, et le décor passe EN TÊTE de
+    // page : getElementById rend le PREMIER nœud du document, et un décor
+    // ajouté en fin laissait renderSets écrire dans le tableau d'une séance
+    // rendue par un test précédent.
     const _r07Fix=f=>{
       const d=document.createElement('div');
       d.style.cssText='position:fixed;left:0;top:0;width:359px;background:#000;z-index:-1';
       d.innerHTML='<div id="wo-sets-scroll-0" style="overflow-x:auto">'
         +'<table class="series-table series-table-wo" style="width:100%;min-width:260px">'
-        +'<thead><tr style="background:var(--red)">'
-        +'<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th>'
-        +'<th id="r07-th" style="color:var(--text)">RIR'+rcInfo('rir')+'</th>'
-        +'<th style="font-size:var(--fs-xs);color:var(--text)">Douleur</th>'
-        +'<th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>'
+        +'<thead><tr id="r07-tr" style="background:var(--red)">'+_enteteSeries(false,false)
         +'</tr></thead><tbody id="sets-body-0"></tbody></table></div>';
-      document.body.appendChild(d);
+      document.body.insertBefore(d,document.body.firstChild);
       try{ return f(d); } finally { d.remove(); }
     };
-    const _r07Cell=(ex,sets)=>{ renderSets(ex,{sets:sets},0);
-      return document.querySelector('#sets-body-0 tr td:nth-child(3)'); };
+    // R08 — L'EN-TÊTE SUIT LES SÉRIES. Des segments RIR passent le tableau en
+    // cartes : la bande est repeinte comme _blocExo la peint, et la zone
+    // d'intensité se lit par sa classe — en cartes, il n'y a plus de troisième
+    // cellule.
+    const _r07Cell=(ex,sets)=>{
+      const tr=document.getElementById('r07-tr');
+      if(tr) tr.innerHTML=_enteteSeries(_seriesEnCartes({sets:sets}),false);
+      renderSets(ex,{sets:sets},0);
+      return document.querySelector('#sets-body-0 tr .wo-intensite'); };
+    const _r07Th=()=>[...document.querySelectorAll('#r07-tr th')].find(t=>/RIR/.test(t.textContent));
 
     ok('La consigne du coach se lit « visé », et son title reste',(()=>
       _r07Fix(()=>{
@@ -39028,7 +39361,7 @@ async function testExercices(){
         const src=_prodSrc();
         if(src.indexOf('RIR${rcInfo(\'rir\')}')<0)
           return _echec('l’en-tête de colonne ne pose pas le ⓘ');
-        const th=document.getElementById('r07-th');
+        const th=_r07Th();
         const b=th&&th.querySelector('.rc-i');
         if(!b) return _echec('le ⓘ n’est pas rendu dans l’en-tête');
         if((b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'rir\')')<0)
@@ -39052,7 +39385,7 @@ async function testExercices(){
     ok('À 359 px, la colonne d\'intensité ne déborde pas',(()=>
       _r07Fix(d=>{
         const sc=document.getElementById('wo-sets-scroll-0');
-        const tb=sc.querySelector('table'), th=document.getElementById('r07-th');
+        const tb=sc.querySelector('table');
         const ex={name:'DEVELOPPE COUCHE',series:3,reps:'10'};
         const cas=[
           ['sans consigne',ex,[{weight:60,reps:10,rir:'',pain:''}]],
@@ -39063,6 +39396,9 @@ async function testExercices(){
         const trop=[];
         for(const [nom,e,sets] of cas){
           const c=_r07Cell(e,sets);
+          // L'en-tête est repeint à chaque cas : on le relit après.
+          const th=_r07Th();
+          if(!th){ trop.push(nom+' : l’en-tête ne nomme plus le RIR'); continue; }
           if(tb.scrollWidth>sc.clientWidth+1)
             trop.push(nom+' : le tableau déborde de '+(tb.scrollWidth-sc.clientWidth)+'px');
           if(c&&c.scrollWidth>c.clientWidth+1)
