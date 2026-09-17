@@ -40435,6 +40435,134 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R32 : LA SYNTHÈSE D'ÉVOLUTION, ET L'ÉCRAN APRÈS LE BILAN ══
+
+    const _r32J=864e5;
+    const _r32Base=o=>Object.assign({id:'r32',email:'r32@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},videos:[],
+      programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',sessions:[],bilans:[]},o);
+    const _r32Bilan=(j,o)=>Object.assign({type:'coaching',date:Date.now()-j*_r32J},o);
+    const _r32Texte=h=>{ const d=document.createElement('div'); d.innerHTML=h; return d.textContent.replace(/\s+/g,' ').trim(); };
+
+    ok('R32 — un seul bilan : aucune phrase de synthèse',(()=>{
+      const u=_r32Base({bilans:[_r32Bilan(3,{type:'depart','deb-weight':'80','deb-waist':'84'})]});
+      if(syntheseProgression(u)!==null) return _echec('une synthèse sur un seul bilan');
+      if(_htmlSyntheseProgression(u)!=='') return _echec('du texte sur un seul bilan : « '+_htmlSyntheseProgression(u)+' »');
+      if(syntheseProgression(_r32Base({bilans:[]}))!==null) return _echec('une synthèse sans bilan');
+      return true;})());
+
+    ok('R32 — la synthèse : fenêtre de 8 semaines, trois éléments au plus, rien d’inventé, « stable » sous le bruit',(()=>{
+      const s=(j,kg,reps)=>({id:'s'+j,date:Date.now()-j*_r32J,name:'Push',slot:0,data:{'DEVELOPPE COUCHE':{sets:[{weight:String(kg),reps:String(reps),rir:'2',done:true}]}}});
+      const u=_r32Base({bilans:[
+          _r32Bilan(70,{type:'depart','deb-weight':'78','deb-waist':'84','deb-bicep-r':'36'}),
+          _r32Bilan(55,{'bil-weight':'79.0','bil-waist':'84.2','bil-bicep-r':'36.5'}),
+          _r32Bilan(1,{'bil-weight':'81.1','bil-waist':'84.4','bil-bicep-r':'37.4'})],
+        sessions:[s(50,80,8),s(20,85,8),s(2,87.5,8)]});
+      const r=syntheseProgression(u);
+      if(!r) return _echec('aucune synthèse');
+      // Le bilan de départ est hors fenêtre : la comparaison part du bilan de J-55.
+      if(r.periode!=='8 semaines') return _echec('période : '+r.periode);
+      const t=r.elements.map(e=>e.type+':'+e.libelle+' '+e.delta).join(' | ');
+      if(t!=='poids:poids +2,1 kg | mesure:tour de biceps droit +0,9 cm | exercice:developpe couche +9 kg d\'e1RM') return _echec('éléments : '+t);
+      if(!/Sur 8 semaines/.test(_htmlSyntheseProgression(u))||_htmlSyntheseProgression(u).indexOf("rcInfoOuvrir('e1rm')")<0) return _echec('la phrase ou son ⓘ manque');
+      // Une mesure absente de l'un des deux bilans n'entre pas ; sous le bruit, « stable ».
+      const v=_r32Base({bilans:[_r32Bilan(30,{'bil-weight':'70.0','bil-waist':'80','bil-neck':'38'}),_r32Bilan(2,{'bil-weight':'70.2','bil-waist':'80.4','bil-thigh-r':'55'})]});
+      const rv=syntheseProgression(v);
+      const tv=rv.elements.map(e=>e.libelle+' '+e.delta).join(' | ');
+      if(tv!=='poids stable | tour de taille stable') return _echec('stable : '+tv);
+      // Au-dessus du bruit, un écart ; en dessous, jamais.
+      if(_synEcart(0.29,'kg',SYN_BRUIT_POIDS).delta!=='stable'||_synEcart(0.3,'kg',SYN_BRUIT_POIDS).delta!=='+0,3 kg') return _echec('seuil du poids');
+      if(_synEcart(-0.49,'cm',SYN_BRUIT_MESURE).delta!=='stable'||_synEcart(-0.5,'cm',SYN_BRUIT_MESURE).delta!=='−0,5 cm') return _echec('seuil des mensurations');
+      return true;})());
+
+    ok('R32 — le vert seulement dans le sens d’une phase déclarée, jamais de rouge',(()=>{
+      const bl=[_r32Bilan(30,{'bil-weight':'80'}),_r32Bilan(1,{'bil-weight':'81.5','bil-waist':'90'})];
+      const vert=u=>syntheseProgression(u).elements[0].accord;
+      const ph=t=>({type:t,debut:Date.now()-90*_r32J});
+      if(vert(_r32Base({bilans:bl,phase:ph('masse')}))!==true) return _echec('masse + hausse : pas vert');
+      if(vert(_r32Base({bilans:bl,phase:ph('seche')}))!==false) return _echec('sèche + hausse : vert');
+      if(vert(_r32Base({bilans:bl,phase:ph('maintien')}))!==false) return _echec('maintien : vert');
+      if(vert(_r32Base({bilans:bl}))!==false) return _echec('sans phase : vert');
+      if(vert(_r32Base({bilans:bl,phase:ph('masse'),tcaRisque:true}))!==false) return _echec('mode neutre : vert');
+      const h=_htmlSyntheseProgression(_r32Base({bilans:bl,phase:ph('seche')}))
+        +_htmlRestitutionBilan(_r32Base({bilans:bl,phase:ph('seche')}));
+      if(/--red|#e02020|#ff3b30|orange/i.test(h)) return _echec('une couleur d’alerte dans la synthèse ou la restitution');
+      if(/bonne|mauvaise|bravo|attention|progression de/i.test(_r32Texte(h).replace(/Voir ma progression/,'')))
+        return _echec('un jugement : '+_r32Texte(h));
+      return true;})());
+
+    ok('R32 — masquerPoids : aucune mention de poids, ni dans la synthèse ni après le bilan',(()=>{
+      const u=_r32Base({masquerPoids:true,bilans:[
+        _r32Bilan(14,{'bil-weight':'80','bil-waist':'84','bil-hips':'100'}),
+        _r32Bilan(0,{'bil-weight':'79','bil-waist':'83.1','bil-hips':'100.2'})]});
+      const synth=_r32Texte(_htmlSyntheseProgression(u)), apres=_r32Texte(_htmlRestitutionBilan(u));
+      if(/poids|\b79\b|\b80\b/i.test(synth)) return _echec('synthèse : '+synth);
+      if(/poids|\b79\b|\b80\b/i.test(apres)) return _echec('restitution : '+apres);
+      // Premier bilan, lui aussi.
+      const d=_r32Base({masquerPoids:true,bilans:[_r32Bilan(0,{type:'depart','deb-weight':'72.4','deb-waist':'81'})]});
+      const td=_r32Texte(_htmlRestitutionBilan(d));
+      if(/poids|72/i.test(td)) return _echec('point de départ : '+td);
+      return true;})());
+
+    ok('R32 — premier bilan : le point de départ, ce qui a été enregistré, aucun écart ni donnée sensible',(()=>{
+      const u=_r32Base({coachId:null,bilans:[_r32Bilan(0,{type:'depart','deb-weight':'72.4','deb-waist':'81','deb-photo-face':'data:x',
+        'deb-scoff-1':'Oui','deb-drapeaux':['Douleur thoracique'],'deb-traitement':true,'deb-traitement-detail':'Levothyrox'})]});
+      const r=restitutionBilan(u,Date.now());
+      if(!r||r.depart!==true) return _echec('pas reconnu comme point de départ');
+      const t=_r32Texte(_htmlRestitutionBilan(u));
+      if(t.indexOf('Ton point de départ est enregistré. C\'est à partir de là que se mesurera ta progression.')<0) return _echec('message : '+t);
+      if(/[+−]\d|stable|Depuis ton bilan précédent/.test(t)) return _echec('un écart est affiché : '+t);
+      if(r.lignes.map(l=>l.libelle+' '+l.valeur).join(' | ')!=='Poids 72,4 kg | Tour de taille 81 cm | Photos 1') return _echec('enregistré : '+r.lignes.map(l=>l.libelle+' '+l.valeur).join(' | '));
+      if(/Douleur|Levothyrox|thoracique|scoff|traitement/i.test(t)) return _echec('une donnée sensible : '+t);
+      if(t.indexOf('Ton bilan est enregistré. Tu le retrouveras dans Évolution.')<0) return _echec('sans coach : '+t);
+      return true;})());
+
+    ok('R32 — la phrase du coach : un délai seulement s’il est déclaré',(()=>{
+      const sv=window.profilCoachLocal;
+      try{
+        const u=_r32Base({coachId:'c1',coachName:'Kévin G'});
+        window.profilCoachLocal=()=>null;
+        if(_phraseCoachBilan(u)!=='Ton coach est prévenu.') return _echec('sans délai : « '+_phraseCoachBilan(u)+' »');
+        window.profilCoachLocal=()=>({dispo:{delaiH:48}});
+        if(_phraseCoachBilan(u)!=='Ton coach est prévenu. Kévin G répond habituellement sous 2 jours.') return _echec('délai : « '+_phraseCoachBilan(u)+' »');
+        window.profilCoachLocal=()=>({dispo:{delaiH:0}});
+        if(_phraseCoachBilan(u)!=='Ton coach est prévenu.') return _echec('délai hors bornes affiché');
+        if(/\bIl\b|prévenue/.test(_phraseCoachBilan(u))) return _echec('le coach est genré');
+        return true;
+      } finally { window.profilCoachLocal=sv; }})());
+
+    okA('R32 — valider le dernier écran du bilan ouvre « Bilan enregistré », saveBilanFinal inchangée',async()=>{
+      const sU=currentUser, svSave=window.saveUser, svToast=window.toast, svProf=window.profilCoachLocal;
+      const svType=bilType, svData=bilData, svStep=bilStep;
+      try{
+        window.saveUser=()=>true; window.toast=()=>{}; window.profilCoachLocal=()=>null;
+        if(/ouvrirRestitutionBilan/.test(String(saveBilanFinal))) return _echec('saveBilanFinal a été modifiée');
+        currentUser=_r32Base({coachId:'c1',coachName:'Kévin G',consent:{health:true,policyVersion:POLICY_VERSION},
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'X',series:3,reps:'8',repos:'2 min'}]}],
+          bilans:[_r32Bilan(14,{'bil-weight':'80.0','bil-waist':'84','bil-hips':'100'})]});
+        bilType='coaching'; bilData={'bil-weight':'80.4','bil-waist':'83.2','bil-hips':'100.1'}; _bilReprises=null;
+        bilStep=_etapesUtiles(BIL_STEPS).length-1;
+        go('s-bilan');
+        await bilNext();
+        await new Promise(r=>setTimeout(r,150));
+        if((document.querySelector('.screen.active')||{}).id!=='s-bilan-fait') return _echec('écran : '+(document.querySelector('.screen.active')||{}).id);
+        const t=_r32Texte(document.getElementById('bf-contenu').innerHTML);
+        if(!/^Bilan enregistré/.test(t)) return _echec('titre : '+t);
+        // Libellé et valeur sont deux cellules côte à côte : leur texte se lit collé.
+        if(t.indexOf('Poids+0,4 kg')<0||t.indexOf('Tour de taille−0,8 cm')<0||t.indexOf('Tour de hanchestable')<0) return _echec('écarts : '+t);
+        if(t.indexOf('Ton coach est prévenu.')<0) return _echec('coach : '+t);
+        const b=[...document.querySelectorAll('#bf-contenu button')].map(x=>x.textContent.trim()+'>'+x.getAttribute('onclick'));
+        if(b.join(' | ')!=='Voir ma progression>loadProgress() | Retour à l\'accueil>go(\'s-client-home\');loadClientHome()') return _echec('boutons : '+b.join(' | '));
+        // LE RETOUR NE BOUCLE PAS : depuis Évolution, on rentre à l'accueil.
+        document.querySelector('#bf-contenu .btn-red').click();
+        await new Promise(r=>setTimeout(r,150));
+        if(_origineAEcrire('s-bilan-fait','s-progress')==='s-bilan-fait') return _echec('Évolution reviendrait sur l’écran du bilan');
+        return true;
+      } finally {
+        window.saveUser=svSave; window.toast=svToast; window.profilCoachLocal=svProf;
+        bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU;
+      }
+    });
+
     // ══ 17/09/2026 — R31 : UN VERBE PAR ACTE, LA CASSE, LE TUTOIEMENT ══════
 
     // L'inventaire des libellés de boutons écrits dans le source, comme celui

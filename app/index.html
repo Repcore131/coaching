@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1269';
+window.RC_BUILD='1270';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5442,6 +5442,28 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   min-height:44px;-webkit-tap-highlight-color:transparent}
 .ls-sec[open]>.ls-sec-tete{margin-bottom:12px}
 .ls-sep{margin:20px 0}
+/* R32 — LA SYNTHESE D'EVOLUTION. Une phrase grise, sans cadre : elle resume,
+   elle ne crie pas. Le vert n'y apparait que sur un ecart qui va dans le sens
+   d'un objectif declare ; jamais de rouge. */
+.prog-synthese{font-size:var(--fs-sm);line-height:1.6;color:var(--sub);margin:0 0 14px}
+.prog-synthese .syn-el{white-space:nowrap}
+.prog-synthese .syn-d{color:var(--text);font-weight:700}
+.syn-vert{color:var(--green)!important}
+.prog-synthese .rc-i{vertical-align:-2px}
+/* R32 — L'ECRAN QUI SUIT LE BILAN. */
+.rb-titre{font-family:var(--pile-titre);font-size:var(--fs-2xl);letter-spacing:1px;font-weight:400;
+  color:var(--text);margin:8px 0 14px}
+.rb-texte{font-size:var(--fs-md);line-height:1.6;color:var(--text-strong);margin:0 0 14px}
+.rb-carte{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);
+  padding:12px 14px;margin:0 0 16px}
+.rb-titre-carte{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--sub);margin-bottom:6px}
+.rb-ligne{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid rgba(255,255,255,.05);
+  font-size:var(--fs-sm)}
+.rb-ligne:first-of-type{border-top:none}
+.rb-l{color:var(--sub)}
+.rb-v{color:var(--text);font-weight:700;white-space:nowrap}
+.rb-coach{font-size:var(--fs-sm);line-height:1.6;color:var(--sub);margin:0 0 20px}
 
 /* ══════════════════ ARC — SYSTÈME D'ANIMATION ══════════════════
    L'application est un circuit sous tension, l'athlète en est la source. Chaque
@@ -10689,6 +10711,9 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="retourDe('s-progress')">←</button><span class="topbar-title">Évolution</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <!-- R32 — LA SYNTHESE, EN UNE PHRASE, au-dessus de tout. Peinte par
+           loadProgress (_renderSyntheseProgression) ; vide sous deux bilans. -->
+      <div id="prog-synthese"></div>
       <!-- R19 — LE PROCHAIN BILAN, EN UNE LIGNE. Il vivait en grand sur l'ecran
            de choix, que l'aiguillage ne montre presque plus. Peint par
            loadProgress (_updateBilanCountdown) ; vide avant le premier bilan. -->
@@ -10726,6 +10751,15 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- NUTRITION -->
 <!-- SANTÉ : constantes et analyses, consignation seule -->
+<!-- R32 — APRES LE BILAN. Rempli par ouvrirRestitutionBilan : ce qui a bouge
+     depuis le bilan precedent (trois lignes au plus), ou le point de depart ;
+     qui est prevenu ; et deux sorties. Aucune donnee de sante sensible. -->
+<div id="s-bilan-fait" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-bilan-fait','s-client-home')">←</button><span class="topbar-title">Bilan</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad" id="bf-contenu"></div>
+  </div>
+</div>
 <div id="s-sante" class="screen">
   <div class="topbar"><button class="back-btn" onclick="retourDe('s-sante')">←</button><span class="topbar-title">Santé</span><span></span></div>
   <div class="scroll-area" style="flex:1">
@@ -17429,7 +17463,9 @@ const _ecranOrigine={};
 // Seulement des saisies qu'on quitte en avancant. Les editeurs a garde
 // (s-coach-program, s-proto-edit) n'y sont pas : goAvecRetour y pose une
 // origine explicite, qu'une inference ici ecraserait.
-const ECRANS_DE_SAISIE=new Set(['s-food-add','s-food-perso','s-supplement-edit',
+// R32 — s-bilan-fait y figure aussi : c'est la sortie d'une saisie. Depuis
+// « Voir ma progression », le retour doit rendre l'accueil, pas cet ecran.
+const ECRANS_DE_SAISIE=new Set(['s-bilan-fait','s-food-add','s-food-perso','s-supplement-edit',
   's-caffeine-add','s-eviction-edit','s-traitement-edit','s-bilan','s-workout',
   's-scan','s-login','s-register','s-identite','s-naissance','s-consent-sante',
   's-client-code','s-coach-code','s-welcome','s-coach-entry','s-athlete-entry','s-install']);
@@ -56776,7 +56812,13 @@ async function bilNext(){
     // doit donc bien tomber.
     if(!_bilPoidsSaisi(_saisi)
        &&!await rcConfirm('Valider sans ton poids ?\n\nTa courbe n’aura pas de point pour ce bilan.',null,'Valider')) return;
+    // R32 — L'ECRAN DE RESTITUTION, seulement si le bilan S'EST ECRIT : la porte
+    // du consentement de sante peut rendre la main sans rien enregistrer.
+    const _nBilansAvant=((currentUser&&currentUser.bilans)||[]).length;
     saveBilanFinal();
+    if(((currentUser&&currentUser.bilans)||[]).length>_nBilansAvant){
+      try{ ouvrirRestitutionBilan(); }catch(e){}
+    }
   }
 }
 function renderBilStep(){
@@ -61546,6 +61588,8 @@ function _renderEncartOsseux(){
 }
 function loadProgress(){
   go('s-progress');_renderEncartOsseux();renderBandeauPhase();
+  // R32 — la phrase de synthese, en tete.
+  try{ _renderSyntheseProgression(); }catch(e){}
   // R20 — L'ONGLET OU L'ATHLETE S'ETAIT ARRETE, et non plus toujours « Poids ».
   // Un nom inconnu (ancien onglet, valeur abimee) retombe sur « Poids ».
   // LE REPLI SUR DONNEES ABSENTES N'EST PAS ECRIT : « Perfs » choisi sur un
@@ -61567,6 +61611,248 @@ function loadProgress(){
 /* --- helpers --- */
 function getBW(b){const v=parseFloat(b['bil-weight']||b['deb-weight']||b.weight);return isNaN(v)?null:v;}
 function getBM(b,k){const v=parseFloat(b['bil-'+k]||b['deb-'+k]||b[k]);return isNaN(v)?null:v;}
+// ══ R32 — LA SYNTHESE D'EVOLUTION, ET CE QUE LE BILAN VIENT DE CHANGER ══════
+//
+// Deux lectures des MEMES bilans (bilansOrdonnes, getBW, getBM, MEAS) : la
+// phrase en tete d'Evolution, et l'ecran qui suit l'envoi d'un bilan. Rien n'est
+// ecrit, rien n'est recalcule a cote : ce sont des lectures.
+//
+// ⚠ LA PRUDENCE, ICI, N'EST PAS UNE OPTION.
+// - AUCUN CHIFFRE INVENTE : une valeur absente de l'un des deux bilans sort de
+//   la comparaison, elle n'est ni estimee ni reportee.
+// - AUCUN JUGEMENT : « +2,1 kg », jamais « bonne progression ». Pas de rouge.
+// - LE VERT SEULEMENT QUAND ON SAIT : pour le poids, et seulement si une phase
+//   declaree donne un sens (masse : monter, seche : descendre). Maintien,
+//   recomposition, peak week, aucune phase, ou mode neutre (TCA) : gris. Les
+//   mensurations et l'e1RM restent gris — aucun objectif declare ne dit dans
+//   quel sens un tour de cuisse « doit » aller.
+// - « STABLE » SOUS LE BRUIT DE MESURE : 0,3 kg pour le poids, 0,5 cm pour une
+//   mensuration. En dessous, un ecart n'est pas un signal.
+// - masquerPoids : le poids n'apparait NULLE PART.
+const SYN_SEMAINES=8;
+const SYN_BRUIT_POIDS=0.3;
+const SYN_BRUIT_MESURE=0.5;
+const SYN_ECART_E1RM_MIN=0.5;
+// « 2,1 », « 7,5 » : une decimale, virgule francaise.
+function _synNombre(v){ return String(Math.round(Math.abs(Number(v))*10)/10).replace('.',','); }
+// PURE. Un ecart dit : « +2,1 kg », « −0,6 cm », ou « stable » sous le bruit.
+function _synEcart(v,unite,bruit){
+  const d=Number(v);
+  if(!isFinite(d)||Math.abs(d)<bruit) return {delta:'stable',sens:'stable'};
+  return {delta:(d>0?'+':'−')+_synNombre(d)+' '+unite,sens:d>0?'hausse':'baisse'};
+}
+// « Tour de Biceps D » → « tour de biceps droit ».
+function _libMesure(l,majuscule){
+  let s=String(l||'').replace(/ D$/,' droit').replace(/ G$/,' gauche').toLowerCase();
+  return majuscule?s.charAt(0).toUpperCase()+s.slice(1):s;
+}
+// PURE. Le poids va-t-il dans le sens de l'objectif DECLARE ? Faux dès qu'on
+// ne peut pas le dire avec certitude.
+function _synPoidsDansLeSens(user,d){
+  if(!user||aTCA(user)) return false;
+  const p=phaseCourante(user);
+  const sens=(p&&PHASES[p.type])?PHASES[p.type].sens:0;
+  if(!sens||!isFinite(d)||Math.abs(d)<SYN_BRUIT_POIDS) return false;
+  return (d>0)===(sens>0);
+}
+// « 8 semaines », « 5 jours ».
+function _synPeriode(debut,fin){
+  const j=Math.max(0,Math.round((fin-debut)/864e5));
+  if(j>=7){ const s=Math.round(j/7); return s+' semaine'+(s>1?'s':''); }
+  return j+' jour'+(j>1?'s':'');
+}
+// La fenetre : le DERNIER bilan, et le premier bilan des huit semaines qui le
+// precedent — ou le plus ancien disponible quand l'historique est plus court.
+// Si aucun bilan ne tombe dans la fenetre, le plus recent d'avant elle.
+function _synBilansFenetre(user){
+  const bl=bilansOrdonnes(user);
+  if(bl.length<2) return null;
+  const der=bl[bl.length-1];
+  const avant=bl.slice(0,-1);
+  const debut=der.date-SYN_SEMAINES*7*864e5;
+  const prem=avant.find(b=>b.date>=debut)||avant[avant.length-1];
+  return (prem&&prem.date<der.date)?{prem,der}:null;
+}
+// PURE. L'exercice dont l'e1RM a le plus progresse entre deux dates : premiere
+// et derniere seance de la periode, e1RM seulement (au-dela de 12 repetitions
+// le modele ne vaut plus), jamais une seance mixte ni une decharge. Null si
+// rien n'a progresse d'au moins un demi-kilo.
+function _synMeilleurE1rm(user,debut,fin){
+  const par=new Map();
+  for(const s of ((user&&user.sessions)||[])){
+    if(!s||!s.date||!s.data||s.deload) continue;
+    if(s.date<debut||s.date>fin) continue;
+    for(const nom of Object.keys(s.data)){
+      let p=null;
+      try{ p=perfExercice(s,nom,user); }catch(e){ p=null; }
+      if(!p||p.metrique!=='e1RM'||p.mixte||!(p.score>0)) continue;
+      let k=nom; try{ k=exKey(nom)||nom; }catch(e){}
+      const e=par.get(k)||{nom,points:[]};
+      e.points.push({date:s.date,score:p.score});
+      par.set(k,e);
+    }
+  }
+  let best=null;
+  for(const e of par.values()){
+    if(e.points.length<2) continue;
+    e.points.sort((a,b)=>a.date-b.date);
+    const d=e.points[e.points.length-1].score-e.points[0].score;
+    if(d>=SYN_ECART_E1RM_MIN&&(!best||d>best.d)) best={nom:e.nom,d};
+  }
+  return best;
+}
+// PURE. La synthese, ou null. { periode, elements:[{type, libelle, delta, sens,
+// accord}] } — trois elements au plus : le poids, la mensuration qui a le plus
+// bouge, l'exercice qui a le plus progresse. `accord` porte le vert.
+function syntheseProgression(user){
+  if(!user) return null;
+  const f=_synBilansFenetre(user);
+  if(!f) return null;
+  const {prem,der}=f;
+  const elements=[];
+  if(!user.masquerPoids){
+    const a=getBW(prem), b=getBW(der);
+    if(a!=null&&b!=null){
+      const e=_synEcart(b-a,'kg',SYN_BRUIT_POIDS);
+      elements.push({type:'poids',libelle:'poids',delta:e.delta,sens:e.sens,accord:_synPoidsDansLeSens(user,b-a)});
+    }
+  }
+  // LA MENSURATION QUI A LE PLUS BOUGE, en valeur absolue. A egalite, le tour de
+  // taille : c'est la mesure que l'athlete regarde d'abord.
+  let best=null;
+  for(const m of MEAS){
+    const a=getBM(prem,m.k), b=getBM(der,m.k);
+    if(a==null||b==null) continue;
+    const d=b-a, ad=Math.abs(d), bd=best?Math.abs(best.d):-1;
+    if(ad>bd+1e-9||(best&&Math.abs(ad-bd)<1e-9&&m.k==='waist')) best={m,d};
+  }
+  if(best){
+    const e=_synEcart(best.d,'cm',SYN_BRUIT_MESURE);
+    elements.push({type:'mesure',cle:best.m.k,libelle:_libMesure(best.m.l),delta:e.delta,sens:e.sens,accord:false});
+  }
+  const ex=_synMeilleurE1rm(user,prem.date,der.date);
+  if(ex){
+    const v=Math.round(ex.d*2)/2;
+    elements.push({type:'exercice',libelle:String(ex.nom).toLowerCase(),
+      delta:'+'+String(v).replace('.',',')+' kg d\'e1RM',sens:'hausse',accord:false});
+  }
+  if(!elements.length) return null;
+  return {periode:_synPeriode(prem.date,der.date),elements:elements.slice(0,3)};
+}
+function _htmlSyntheseProgression(user){
+  let s=null;
+  try{ s=syntheseProgression(user); }catch(e){ s=null; }
+  // MOINS DE DEUX BILANS : RIEN, pas « données insuffisantes ». L'etat vide de
+  // chaque onglet le dit deja, et deux fois serait une de trop.
+  if(!s) return '';
+  return '<div class="prog-synthese">Sur '+escapeHtml(s.periode)+' : '
+    +s.elements.map(e=>'<span class="syn-el">'+escapeHtml(e.libelle)+' <span class="syn-d'+(e.accord?' syn-vert':'')+'">'
+      +escapeHtml(e.delta)+'</span>'+(e.type==='exercice'?rcInfo('e1rm'):'')+'</span>').join('<span class="syn-sep"> · </span>')
+    +'</div>';
+}
+function _renderSyntheseProgression(){
+  const z=document.getElementById('prog-synthese');
+  if(z) z.innerHTML=_htmlSyntheseProgression(currentUser);
+}
+// ── L'ECRAN QUI SUIT LE BILAN ─────────────────────────────────────────────
+// PURE. Ce que dit l'ecran de restitution. Il ne lit QUE le poids, les
+// mensurations (MEAS) et le nombre de photos : aucune reponse de sante, aucun
+// drapeau, aucune reponse au depistage (elles ne sont de toute facon pas
+// conservees). Trois lignes d'ecart au plus.
+const RESTIT_LIGNES_MAX=3;
+function restitutionBilan(user,now){
+  const bl=bilansOrdonnes(user);
+  if(!bl.length) return null;
+  const der=bl[bl.length-1];
+  const depart=bl.length===1||der.type==='depart';
+  const out={depart,lignes:[],coach:_phraseCoachBilan(user,now)};
+  if(depart){
+    // CE QUI A ETE ENREGISTRE, tel quel.
+    if(!user.masquerPoids){
+      const w=getBW(der);
+      if(w!=null) out.lignes.push({libelle:'Poids',valeur:_synNombre(w)+' kg'});
+    }
+    for(const m of MEAS){
+      const v=getBM(der,m.k);
+      if(v!=null) out.lignes.push({libelle:_libMesure(m.l,true),valeur:_synNombre(v)+' cm'});
+    }
+    const photos=Object.keys(der).filter(k=>/photo/i.test(k)&&der[k]).length;
+    if(photos) out.lignes.push({libelle:'Photos',valeur:String(photos)});
+    return out;
+  }
+  const prev=bl[bl.length-2];
+  if(!user.masquerPoids){
+    const a=getBW(prev), b=getBW(der);
+    if(a!=null&&b!=null){
+      const e=_synEcart(b-a,'kg',SYN_BRUIT_POIDS);
+      out.lignes.push({libelle:'Poids',valeur:e.delta,sens:e.sens,accord:_synPoidsDansLeSens(user,b-a)});
+    }
+  }
+  const mes=[];
+  MEAS.forEach((m,i)=>{
+    const a=getBM(prev,m.k), b=getBM(der,m.k);
+    if(a==null||b==null) return;
+    mes.push({m,i,d:b-a});
+  });
+  mes.sort((x,y)=>(Math.abs(y.d)-Math.abs(x.d))||(x.i-y.i));
+  for(const x of mes){
+    if(out.lignes.length>=RESTIT_LIGNES_MAX) break;
+    const e=_synEcart(x.d,'cm',SYN_BRUIT_MESURE);
+    out.lignes.push({libelle:_libMesure(x.m.l,true),valeur:e.delta,sens:e.sens,accord:false});
+  }
+  return out;
+}
+// LA PHRASE DU COACH. « Il te répond sous 48 h » ne s'ecrit que si on peut le
+// tenir : la seule donnee de delai que l'athlete a le droit de lire est celle
+// que le coach DECLARE (dispo.delaiH), deja affichee ailleurs sous la forme
+// « Répond habituellement sous… ». Le delai median reel est reserve au coach.
+// Sans delai declare : « Ton coach est prévenu. », rien de plus. Et pas de
+// « Il » : le produit ne connait pas le genre du coach.
+function _phraseCoachBilan(user,now){
+  if(!user||!user.coachId) return 'Ton bilan est enregistré. Tu le retrouveras dans Évolution.';
+  const t=(typeof now==='number')?now:Date.now();
+  let suite='';
+  try{
+    const d=(profilCoachLocal(cleCoachDe(user))||{}).dispo||null;
+    if(d&&absenceEnCours(d,t)){
+      suite=' Absence déclarée jusqu\'au '+_dispoDateCourte(_dispoTs(d.absence.au))+'.';
+    } else {
+      const lib=dispoLibelle(d,t);
+      if(lib){
+        const nom=String(user.coachName||'').trim();
+        suite=' '+(nom?nom+' '+lib.charAt(0).toLowerCase()+lib.slice(1):lib)+'.';
+      }
+    }
+  }catch(e){ suite=''; }
+  return 'Ton coach est prévenu.'+suite;
+}
+function _htmlRestitutionBilan(user){
+  let r=null;
+  try{ r=restitutionBilan(user,Date.now()); }catch(e){ r=null; }
+  const ligne=l=>'<div class="rb-ligne"><span class="rb-l">'+escapeHtml(l.libelle)+'</span>'
+    +'<span class="rb-v'+(l.accord?' syn-vert':'')+'">'+escapeHtml(l.valeur)+'</span></div>';
+  let corps='';
+  if(r&&r.depart){
+    corps='<p class="rb-texte">Ton point de départ est enregistré. C\'est à partir de là que se mesurera ta progression.</p>'
+      +(r.lignes.length?'<div class="rb-carte"><div class="rb-titre-carte">Enregistré</div>'+r.lignes.map(ligne).join('')+'</div>':'');
+  } else if(r&&r.lignes.length){
+    corps='<div class="rb-carte"><div class="rb-titre-carte">Depuis ton bilan précédent</div>'+r.lignes.map(ligne).join('')+'</div>';
+  }
+  return '<h1 class="rb-titre">Bilan enregistré</h1>'
+    +corps
+    +'<p class="rb-coach">'+escapeHtml(r?r.coach:_phraseCoachBilan(user))+'</p>'
+    +'<button type="button" class="btn btn-red" onclick="loadProgress()">Voir ma progression</button>'
+    +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="go(\'s-client-home\');loadClientHome()">Retour à l\'accueil</button>';
+}
+// Ouvert par bilNext, APRES saveBilanFinal — qui n'est pas modifiee : elle
+// ramene a l'accueil, et cet ecran prend la place tout de suite derriere.
+function ouvrirRestitutionBilan(){
+  const z=document.getElementById('bf-contenu');
+  if(!z||!currentUser) return false;
+  z.innerHTML=_htmlRestitutionBilan(currentUser);
+  go('s-bilan-fait');
+  return true;
+}
 // PURE. Cette mesure a-t-elle été RELEVÉE à ce bilan, ou seulement reportée du
 // précédent parce que rien n'avait bougé ? La valeur est la même et compte
 // pareil ; ce qui change, c'est ce qu'on en dit — un report ne se donne jamais
@@ -85633,6 +85919,8 @@ function togglePoidsMasque(){
   if(!currentUser) return;
   currentUser.masquerPoids=!currentUser.masquerPoids;
   saveUser();
+  // R32 — la synthese suit : masque, le poids en sort aussitot.
+  try{ _renderSyntheseProgression(); }catch(e){}
   showProgressTab('poids',document.querySelector('#prog-tabs button'));
   renderCartePesee();
 }
