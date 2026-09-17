@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1249';
+window.RC_BUILD='1250';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5104,24 +5104,46 @@ textarea.vn-in{resize:vertical;line-height:1.5}
    la pastille y vire au blanc voile. Elle ne change pas de taille. */
 .series-table-wo th .rc-i{color:rgba(255,255,255,.72)}
 .series-table-wo th .rc-i:hover,.series-table-wo th .rc-i:focus-visible{color:#fff}
-/* Le contenu de la feuille. */
-.rci-t{font-size:var(--fs-md);font-weight:800;letter-spacing:.4px;color:var(--text);
-  line-height:1.3;margin-bottom:9px}
-.rci-d{font-size:var(--fs-sm);line-height:1.6;color:var(--text)}
-.rci-p{font-size:var(--fs-sm);line-height:1.55;color:var(--sub);margin-top:12px;
-  padding-left:11px;border-left:2px solid var(--red)}
-.rci-p b{color:var(--red-text);font-weight:800;letter-spacing:.3px}
-.rci-e{width:100%;border-collapse:collapse;margin-top:15px}
-.rci-e tr{border-top:1px solid var(--border)}
+/* ── LA FEUILLE ────────────────────────────────────────────────────────────
+   R11 — « stylise mieux les pages explicatives » (Kevin, 17/09/2026). Elle
+   reprend les motifs de l'application plutot que d'en inventer : le titre en
+   police de titre, le trait rouge de 24 px de l'accueil sous lui, le cadre
+   a filet rouge pour « En pratique », et les reperes d'echelle en rangees.
+   ⚠ TOUJOURS SANS DEFILEMENT : ni max-height ni overflow-y sur .rci-feuille.
+   La mesure « aucune entree ne fait defiler la feuille » la surveille. */
+.rci-feuille{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;
+  padding:10px 20px calc(18px + env(safe-area-inset-bottom,0px));width:100%;max-width:560px;
+  box-sizing:border-box;border-top:1px solid rgba(255,255,255,.08);
+  box-shadow:0 -14px 40px rgba(0,0,0,.55)}
+/* La poignee dit « feuille » : elle se ferme en touchant le voile. */
+.rci-grip{width:38px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 16px}
+.rci-t{font-family:var(--pile-titre);font-size:25px;font-weight:400;letter-spacing:1px;
+  line-height:1.1;color:var(--text)}
+.rci-t2{font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;
+  letter-spacing:0;color:var(--sub);vertical-align:2px}
+.rci-t::after{content:'';display:block;width:24px;height:2px;background:var(--red);
+  margin:10px 0 12px}
+.rci-d{font-size:var(--fs-md);line-height:1.6;color:var(--text-strong)}
+.rci-p{margin-top:14px;padding:10px 13px 11px;background:var(--surface-1);
+  border:1px solid var(--border);border-left:3px solid var(--red);border-radius:var(--r-2);
+  font-size:var(--fs-sm);line-height:1.55;color:var(--text)}
+.rci-p b{display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;
+  text-transform:uppercase;color:var(--red-text);margin-bottom:4px}
+/* L'ECHELLE EN RANGEES. border-spacing plutot que des bordures : chaque
+   repere est une ligne a part entiere, qu'on trouve du regard sans lire les
+   autres. */
+.rci-e{width:100%;border-collapse:separate;border-spacing:0 6px;margin-top:10px}
 /* La clef ne s'enroule pas et ne se comprime pas : c'est le repere qu'on
    cherche du regard, et une colonne qui bouge d'une ligne a l'autre ne se
    parcourt plus. */
-.rci-e th{width:60px;text-align:left;vertical-align:baseline;padding:7px 10px 7px 0;
+.rci-e th{width:64px;text-align:left;vertical-align:middle;padding:8px 10px;
+  background:rgba(224,32,32,.12);border-radius:var(--r-1) 0 0 var(--r-1);
   font-size:var(--fs-xs);font-weight:800;letter-spacing:.6px;color:var(--red-text);
   white-space:nowrap}
-.rci-e td{vertical-align:baseline;padding:7px 0;font-size:var(--fs-sm);line-height:1.45;
+.rci-e td{vertical-align:middle;padding:8px 12px;background:var(--surface-1);
+  border-radius:0 var(--r-1) var(--r-1) 0;font-size:var(--fs-sm);line-height:1.45;
   color:var(--text)}
-@media(max-width:360px){ .rci-e th{width:52px;padding-right:8px} }
+@media(max-width:360px){ .rci-e th{width:56px;padding:8px 8px} }
 .hit44,.back-btn,.exo-chip{position:relative}
 .hit44::before,.back-btn::before,.exo-chip::before{
   content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -10145,7 +10167,8 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="rc-lexique" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
   onclick="if(event.target===this)rcInfoFermer()" role="dialog" aria-modal="true"
   aria-labelledby="rc-lexique-titre">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:22px 20px 18px;width:100%;max-width:560px">
+  <div class="rci-feuille" onclick="event.stopPropagation()">
+    <div class="rci-grip" aria-hidden="true"></div>
     <div id="rc-lexique-corps"></div>
     <button id="rc-lexique-ok" class="btn btn-outline btn-sm" style="width:100%;margin-top:18px"
       onclick="rcInfoFermer()">J'ai compris</button>
@@ -13012,27 +13035,29 @@ let _subPalier=null;
 // pour empecher.
 const RC_LEXIQUE=Object.freeze({
   rir:Object.freeze({
-    t:'RIR — Répétitions en réserve',
+    t:'RIR (répétitions en réserve)',
     d:'Le nombre de répétitions que tu aurais encore pu faire après ta dernière.',
-    p:'Vise RIR 2 sur tes premières séries, RIR 0–1 sur la dernière.',
+    p:'Vise RIR 2 sur tes premières séries, RIR 0 à 1 sur la dernière.',
     e:Object.freeze([Object.freeze(['RIR 0','Échec : pas une de plus']),
       Object.freeze(['RIR 1','Une encore en réserve']),
       Object.freeze(['RIR 2','Deux encore : intense mais contrôlé']),
       Object.freeze(['RIR 3+','Encore loin de l\'échec'])])}),
   rpe:Object.freeze({
-    t:'RPE — Intensité demandée par ton coach',
+    t:'RPE (intensité demandée par ton coach)',
     d:'Une note sur 10 fixée par ton coach pour cette série.',
     p:'Tu ne la règles pas : note ta charge, c\'est tout.'}),
   e1rm:Object.freeze({
     t:'Force max estimée (e1RM)',
     d:'La charge que tu pourrais sans doute soulever une seule fois, calculée depuis tes séries.',
-    p:'Fiable jusqu\'à 12 répétitions, approximative au-delà. Jamais testée en vrai.'}),
+    // R11 — la precision que l'encadre de l'onglet Perfs portait seul : le
+    // calcul part des repetitions PREVUES, pas de celles reellement faites.
+    p:'Fiable jusqu\'à 12 répétitions, approximative au-delà. Jamais testée en vrai. Calculée sur les répétitions prévues au programme, pas celles réellement faites.'}),
   douleur:Object.freeze({
     t:'Échelle de gêne',
     d:'Note ce que tu as ressenti pendant la série, pas après.',
-    e:Object.freeze([Object.freeze(['1–2','À peine perceptible']),
+    e:Object.freeze([Object.freeze(['1 à 2','À peine perceptible']),
       Object.freeze(['3','Gênant mais supportable']),
-      Object.freeze(['4–5','Ça fait mal, ta technique se dégrade']),
+      Object.freeze(['4 à 5','Ça fait mal, ta technique se dégrade']),
       Object.freeze(['6','Je dois arrêter'])])}),
   neat:Object.freeze({
     t:'Activité hors sport (NEAT)',
@@ -13049,8 +13074,10 @@ const RC_LEXIQUE=Object.freeze({
     p:'RepCore le fait pour toi : la charge proposée monte toute seule.'}),
   masse_grasse:Object.freeze({
     t:'Masse grasse estimée',
-    d:'Estimée depuis ton tour de taille, ton cou et ta taille — jamais mesurée.',
-    p:'Marge de 3 à 4 points. Regarde la tendance, pas le chiffre exact.'}),
+    d:'Estimée depuis ton tour de taille, ton cou et ta taille (jamais mesurée).',
+    // R11 — la note de methode de l'onglet Masse grasse, qui s'affichait en
+    // permanence, vit desormais ici : la formule, les extremes, la tendance.
+    p:'Formule US Navy : marge de 3 à 4 points, davantage aux extrêmes (très maigre ou très corpulent). Regarde la tendance entre deux bilans, pas le chiffre exact.'}),
   '1rm':Object.freeze({
     t:'1RM',
     d:'La charge maximale que tu pourrais soulever une seule fois.'}),
@@ -13069,7 +13096,7 @@ const RC_LEXIQUE=Object.freeze({
     d:'La part des jours tenus : selon ta réponse du jour, ou ton journal comparé à tes cibles.',
     p:'Les jours non renseignés ne comptent ni en bien ni en mal.'}),
   reds:Object.freeze({
-    t:'RED-S — déficit énergétique relatif',
+    t:'RED-S (déficit énergétique relatif)',
     d:'Des signes que l\'apport alimentaire ne couvre plus la dépense : sommeil, cycle, blessures, humeur.'}),
   plateau:Object.freeze({
     t:'Plateau',
@@ -13107,11 +13134,21 @@ function rcInfoOuvrir(cle){
   // ⚠ TOUT PASSE PAR escapeHtml. Les textes viennent d'une constante gelee
   // aujourd'hui ; le jour ou une entree viendra d'ailleurs — R10 en ajoutera —
   // le composant n'aura pas a etre relu pour rester sur.
-  let h='<div class="rci-t" id="rc-lexique-titre">'+escapeHtml(e.t)+'</div>'
+  // R11 — LE TITRE EN DEUX VOIX. Le nom en capitales de titre, sa
+  // parenthese — « (répétitions en réserve) », « (e1RM) » — en texte courant,
+  // plus petit : c'est une precision, pas un second titre. Le texte lu reste
+  // mot pour mot celui du catalogue ; s'il n'a pas cette forme, il passe
+  // tel quel.
+  const _tm=/^(.*\S) (\([^()]+\))$/.exec(e.t);
+  const titre=_tm
+    ?escapeHtml(_tm[1])+' <span class="rci-t2">'+escapeHtml(_tm[2])+'</span>'
+    :escapeHtml(e.t);
+  let h='<div class="rci-t" id="rc-lexique-titre">'+titre+'</div>'
     +'<div class="rci-d">'+escapeHtml(e.d)+'</div>';
   // « En pratique » n'est pas la suite de la definition, c'est un autre
   // registre : l'une dit ce que c'est, l'autre dit quoi faire.
-  if(e.p) h+='<div class="rci-p"><b>En pratique</b> — '+escapeHtml(e.p)+'</div>';
+  // R11 — l'etiquette est sur sa propre ligne, plus de tiret pour la lier.
+  if(e.p) h+='<div class="rci-p"><b>En pratique</b><span>'+escapeHtml(e.p)+'</span></div>';
   // DEUX COLONNES, SANS EN-TETE. Un en-tete sur quatre lignes de reperes
   // ajouterait une ligne a lire pour n'annoncer que « libelle » et « sens ».
   if(e.e&&e.e.length){
@@ -42721,23 +42758,12 @@ function renderWoEx(){
                écran étroit la mettait en concurrence avec le rappel RIR. C'est
                une phrase, pas un intitulé de champ. -->
           <label class="hit44" style="font-size:var(--fs-xs);cursor:pointer;color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400;margin:0;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" id="film-ex" style="width:auto;margin:0">Filmer cet exercice</label>
-          <span style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
-            <button class="hit44" onclick="toggleRirExplain()" style="background:#1a1a1a;border:1.5px solid var(--text);border-radius:var(--r-full);width:19px;height:19px;color:var(--text);font-size:var(--fs-xs);font-weight:900;cursor:pointer;line-height:1;padding:0;flex-shrink:0;box-shadow:0 0 8px rgba(255,255,255,.45)">?</button>
-          </span>
-        </div>
-        <div id="rir-explain" style="display:none;margin-top:10px;background:#08080f;border:1px solid #1e1e3a;border-radius:var(--r-3);padding:14px;font-size:var(--fs-sm);line-height:1.7">
-          <div style="font-weight:800;color:#aaa;letter-spacing:.5px;margin-bottom:8px">RIR : Répétitions En Réserve</div>
-          <div style="color:var(--sub);font-size:var(--fs-xs);margin-bottom:10px">Le nombre de répétitions que tu pourrais encore réaliser <em>après</em> ta dernière rep, avant l'échec musculaire total.</div>
-          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--danger)">RIR 0</span><span style="color:#aaa;font-size:var(--fs-xs)">Échec : impossible de faire 1 rep de plus</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--warning)">RIR 1</span><span style="color:#aaa;font-size:var(--fs-xs)">1 rep encore dans le réservoir</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--info)">RIR 2</span><span style="color:#aaa;font-size:var(--fs-xs)">2 reps encore possibles : effort intense mais contrôlé</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--success)">RIR 3+</span><span style="color:#aaa;font-size:var(--fs-xs)">Encore loin de l'échec : échauffement ou séance légère</span></div>
-          </div>
-          <div style="border-top:1px solid #1a1a2a;padding-top:10px;color:var(--text-faint);font-size:var(--fs-xs);line-height:1.6">
-            💡 <strong style="color:#aaa">En pratique :</strong> vise <strong style="color:var(--info)">RIR 2</strong> sur tes premières séries pour préserver l'énergie, puis pousse à <strong style="color:var(--danger)">RIR 0–1</strong> sur ta <strong style="color:var(--text)">dernière série</strong> pour maximiser le stimulus musculaire.
-          </div>
+          <!-- R11 — LE PANNEAU « ? » DU RIR A ETE RETIRE (Kevin, 17/09/2026 :
+               « laisse le RIR, que dans le tableau, la def »). Il redisait
+               la fiche RIR du lexique, deja a un doigt dans la bande du
+               tableau. Le rappel de consigne, lui, reste : ce n'est pas une
+               definition, c'est ce qu'on vise. -->
+          <span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
         </div>
       </div>`:''}
       ${(()=>{ try{ return _carteCalibrageRir(groupe,gi===grs.length-1); }catch(e){ return ''; } })()}
@@ -43859,10 +43885,6 @@ function _dlrDeclarer(idx){
   _ctRepeindre();
 }
 
-function toggleRirExplain(){
-  const el=document.getElementById('rir-explain');
-  if(el) el.style.display=el.style.display==='none'?'block':'none';
-}
 // Fragment de phrase optionnel : « Poids: 82kg » ou rien du tout. Sert aux
 // textes courants, JAMAIS aux cases à remplir — celles-ci gardent leur tiret,
 // qui y signifie « en attente d'une valeur ».
@@ -62527,13 +62549,13 @@ function showProgressTab(tab,btn){
         <div class="metric-box"><div class="metric-val">${lb!==null?lb+'%':'—'}</div><div class="metric-label">MG actuel</div><span class="metric-i">${rcInfo('masse_grasse')}</span></div>
         <div class="metric-box"><div class="metric-val" style="color:${col}">${diff!==null?(diff>0?'+':'')+diff+'%':'—'}</div><div class="metric-label">Évolution</div></div>
       </div>
-      <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:14px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6">
-        Estimation par la formule US Navy, à partir de trois tours de mesure. Sa marge
-        d'erreur est de l'ordre de 3 à 4 points de pourcentage sur une mesure isolée,
-        et elle se trompe davantage aux extrêmes : très maigre ou très corpulent.
-        Ce qui est exploitable ici, c'est le SENS de l'évolution entre deux bilans
-        mesurés de la même façon, pas la valeur absolue.
-      </div>
+      <!-- R11 — LA NOTE DE METHODE PERMANENTE A ETE RETIREE (Kevin,
+           17/09/2026). Elle nommait la formule US Navy, sa marge de 3 a 4
+           points, l'erreur plus forte aux extremes et le conseil de lire le
+           SENS de l'evolution. RIEN N'EST PERDU : tout cela vit dans la fiche
+           « masse_grasse » du lexique, a un doigt, dans le coin de la tuile
+           « MG actuel ». L'honnetete sur la fiabilite reste ; c'est sa
+           repetition a chaque visite qui disparait. -->
       <div class="evo-carte" style="padding:16px">
         <div class="evo-titre">% de masse grasse corporelle</div>
         <canvas id="mg-chart" height="150" style="width:100%;display:block"></canvas>
@@ -62563,11 +62585,10 @@ function showProgressTab(tab,btn){
            de hanche chez la femme) + taille » — et la derivation des deux
            kilos affiches dans le tableau juste au-dessus : masse grasse =
            poids x (% MG / 100), masse musculaire = poids moins masse grasse.
-           CE QUI SUBSISTE, et c est le principal : la note de methode plus
-           haut dans la meme carte nomme toujours la formule ET donne sa marge
-           d erreur — 3 a 4 points sur une mesure isolee, davantage aux
-           extremes. L honnetete sur la fiabilite de l estimation reste donc
-           en place ; c est le rappel du CALCUL qui disparait. -->
+           CE QUI SUBSISTE, et c est le principal : la formule et sa marge
+           d erreur — 3 a 4 points, davantage aux extremes. La note de methode
+           qui les portait ici est devenue, en R11, la fiche « masse_grasse »
+           du lexique : le ⓘ de la tuile « MG actuel ». -->
     `;
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
     setTimeout(()=>{

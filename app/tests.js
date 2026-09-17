@@ -38932,6 +38932,89 @@ async function testExercices(){
       }
       return true;})());
 
+    // ══ 17/09/2026 — R11 : LES FICHES SANS TIRET, LE RIR À UN SEUL ENDROIT ══
+    //
+    // Retour de Kevin sur R10 : la précision de l'e1RM rejoint sa fiche, la
+    // note US Navy et le panneau « ? » du RIR disparaissent de l'écran, les
+    // fiches sont mieux mises en page et n'emploient plus de tiret.
+
+    ok('R11 — aucune fiche du lexique ne porte de tiret, ni dans ses textes ni à l’écran',(()=>{
+      const T=/[—–]/;
+      try{
+        for(const [k,e] of Object.entries(RC_LEXIQUE)){
+          const textes=[e.t,e.d,e.p].concat(...((e.e||[]).map(l=>[l[0],l[1]]))).filter(Boolean);
+          const t=textes.find(x=>T.test(x));
+          if(t) return _echec(k+' : « '+t+' »');
+          if(rcInfoOuvrir(k)===null) return _echec(k+' ne s’ouvre pas');
+          const rendu=document.getElementById('rc-lexique-corps').textContent;
+          if(T.test(rendu)) return _echec(k+' : un tiret est rendu à l’écran — « '+rendu+' »');
+        }
+        return true;
+      } finally { try{ rcInfoFermer(true); }catch(e){} }})());
+
+    ok('R11 — la fiche e1RM dit que le calcul part des répétitions prévues',(()=>{
+      const p=RC_LEXIQUE.e1rm.p||'';
+      if(p.indexOf('répétitions prévues')<0||p.indexOf('réellement faites')<0)
+        return _echec('précision absente : « '+p+' »');
+      // Et l'encadré qui la portait seul n'est pas revenu dans l'onglet Perfs.
+      return String(showProgressTab).indexOf('?PERF_ENCADRE')<0?true:_echec('PERF_ENCADRE est revenu dans Perfs');})());
+
+    ok('R11 — la note US Navy quitte l’onglet Masse grasse, sa substance est dans la fiche',(()=>{
+      const pc=document.getElementById('progress-content');
+      if(!pc) return _echec('#progress-content absent');
+      const sU=currentUser, sv=pc.innerHTML, J=864e5, now=Date.now();
+      const bil=(i,taille,poids)=>({type:i===0?'depart':'bilan',date:now-(40-i*20)*J,'deb-height':'178',
+        'bil-weight':String(poids),'deb-weight':String(poids),'bil-waist':String(taille),'deb-waist':String(taille),
+        'bil-neck':'38','deb-neck':'38'});
+      try{
+        currentUser={id:'r11',email:'r11@t.fr',fname:'A',lname:'B',role:'athlete',gender:'H',exAlias:{},exMuscles:{},
+          sessions:[],bilans:[bil(0,90,82),bil(1,86,80)],consent:{health:true,policyVersion:POLICY_VERSION}};
+        showProgressTab('masseGrasse',null);
+        const txt=pc.textContent;
+        if(/formule US Navy/i.test(txt)) return _echec('la note de méthode est encore affichée');
+        if(/marge d.erreur/i.test(txt)) return _echec('la marge d’erreur est encore écrite en permanence');
+        if(!pc.querySelector('.rc-i')) return _echec('le ⓘ de la masse grasse a disparu');
+        const p=RC_LEXIQUE.masse_grasse.p||'';
+        for(const m of ['US Navy','3 à 4 points','extrêmes','tendance'])
+          if(p.indexOf(m)<0) return _echec('la fiche ne dit plus « '+m+' »');
+        return true;
+      } finally { currentUser=sU; pc.innerHTML=sv; }})());
+
+    ok('R11 — le RIR ne se définit plus qu’à un endroit : la fiche de la bande du tableau',(()=>{
+      if(typeof toggleRirExplain!=='undefined') return _echec('toggleRirExplain existe encore');
+      const src=_prodSrc();
+      for(const m of ['rir-explain','Répétitions En Réserve','impossible de faire 1 rep de plus'])
+        if(src.indexOf(m)>=0) return _echec('le panneau « ? » a laissé « '+m+' »');
+      // Le rappel de consigne n'est pas une définition : il reste.
+      if(src.indexOf('Vise RIR 0 sur ta dernière série')<0) return _echec('le rappel « Vise RIR 0 » a disparu');
+      // Et la définition, elle, est toujours à un doigt dans la bande.
+      for(const large of [true,false])
+        if(_enteteSeries(large,false).indexOf('rcInfoOuvrir(\'rir\')')<0)
+          return _echec('la bande '+(large?'en cartes':'à cinq colonnes')+' n’ouvre plus la fiche RIR');
+      return true;})());
+
+    ok('R11 — la feuille : titre en deux voix, « En pratique » sur sa ligne, poignée, un seul bouton',(()=>{
+      const z=document.getElementById('rc-lexique'), c=document.getElementById('rc-lexique-corps');
+      try{
+        rcInfoOuvrir('rir');
+        const t=c.querySelector('.rci-t');
+        // Le texte lu reste mot pour mot celui du catalogue…
+        if(!t||t.textContent!==RC_LEXIQUE.rir.t) return _echec('titre : « '+(t&&t.textContent)+' »');
+        // …mais la parenthèse est une précision, pas un second titre.
+        const t2=t.querySelector('.rci-t2');
+        if(!t2||t2.textContent!=='(répétitions en réserve)') return _echec('la parenthèse n’est pas distinguée');
+        if(getComputedStyle(t).fontFamily===getComputedStyle(t2).fontFamily) return _echec('les deux voix du titre ont la même police');
+        const b=c.querySelector('.rci-p b');
+        if(!b||getComputedStyle(b).display!=='block') return _echec('« En pratique » n’est pas sur sa propre ligne');
+        if(!z.querySelector('.rci-grip')) return _echec('la poignée est absente');
+        if(z.querySelectorAll('button').length!==1) return _echec(z.querySelectorAll('button').length+' boutons dans la feuille');
+        // Un titre sans parenthèse passe tel quel.
+        rcInfoOuvrir('masse_grasse');
+        if(c.querySelector('.rci-t2')) return _echec('un titre sans parenthèse a été découpé');
+        if(c.querySelector('.rci-t').textContent!==RC_LEXIQUE.masse_grasse.t) return _echec('titre sans parenthèse altéré');
+        return true;
+      } finally { try{ rcInfoFermer(true); }catch(e){} }})());
+
     // ══ 17/09/2026 — R10 : LE LEXIQUE DÉPLOYÉ, LES EXPLICATIONS PERMANENTES REPLIÉES ══
     //
     // R06 avait posé le composant et le catalogue. Ce lot les met là où les
@@ -39894,15 +39977,18 @@ async function testExercices(){
     // ce catalogue existe pour empêcher — on la fige donc ici aussi.
     ok('Les définitions du lexique sont celles qui ont été validées',(()=>{
       const att={
-        rir:['RIR — Répétitions en réserve',
+        // R11 — plus aucun tiret dans les fiches (Kevin, 17/09/2026) : les
+        // titres passent a la parenthese, les plages a « à ».
+        rir:['RIR (répétitions en réserve)',
           'Le nombre de répétitions que tu aurais encore pu faire après ta dernière.',
-          'Vise RIR 2 sur tes premières séries, RIR 0–1 sur la dernière.'],
-        rpe:['RPE — Intensité demandée par ton coach',
+          'Vise RIR 2 sur tes premières séries, RIR 0 à 1 sur la dernière.'],
+        rpe:['RPE (intensité demandée par ton coach)',
           'Une note sur 10 fixée par ton coach pour cette série.',
           'Tu ne la règles pas : note ta charge, c\'est tout.'],
+        // R11 — la precision des repetitions prevues, retiree de l'onglet Perfs.
         e1rm:['Force max estimée (e1RM)',
           'La charge que tu pourrais sans doute soulever une seule fois, calculée depuis tes séries.',
-          'Fiable jusqu\'à 12 répétitions, approximative au-delà. Jamais testée en vrai.'],
+          'Fiable jusqu\'à 12 répétitions, approximative au-delà. Jamais testée en vrai. Calculée sur les répétitions prévues au programme, pas celles réellement faites.'],
         douleur:['Échelle de gêne',
           'Note ce que tu as ressenti pendant la série, pas après.',undefined],
         neat:['Activité hors sport (NEAT)',
@@ -39914,9 +40000,10 @@ async function testExercices(){
         surcharge:['Surcharge progressive',
           'Augmenter un peu la charge dès que tu gardes des répétitions en réserve.',
           'RepCore le fait pour toi : la charge proposée monte toute seule.'],
+        // R11 — la note de methode de l'onglet Masse grasse est venue ici.
         masse_grasse:['Masse grasse estimée',
-          'Estimée depuis ton tour de taille, ton cou et ta taille — jamais mesurée.',
-          'Marge de 3 à 4 points. Regarde la tendance, pas le chiffre exact.'],
+          'Estimée depuis ton tour de taille, ton cou et ta taille (jamais mesurée).',
+          'Formule US Navy : marge de 3 à 4 points, davantage aux extrêmes (très maigre ou très corpulent). Regarde la tendance entre deux bilans, pas le chiffre exact.'],
         '1rm':['1RM','La charge maximale que tu pourrais soulever une seule fois.',undefined],
         // R10 — les quatre entrees du lot. assiduite et score_diete sont
         // ecrites sur ce que le CODE compte (updateStreak, jourDieteTenu).
@@ -39925,7 +40012,7 @@ async function testExercices(){
         score_diete:['Diète respectée',
           'La part des jours tenus : selon ta réponse du jour, ou ton journal comparé à tes cibles.',
           'Les jours non renseignés ne comptent ni en bien ni en mal.'],
-        reds:['RED-S — déficit énergétique relatif',
+        reds:['RED-S (déficit énergétique relatif)',
           'Des signes que l\'apport alimentaire ne couvre plus la dépense : sommeil, cycle, blessures, humeur.',undefined],
         plateau:['Plateau','Aucun nouveau maximum sur cet exercice depuis plusieurs semaines.',undefined]
       };
@@ -39943,8 +40030,8 @@ async function testExercices(){
            +'RIR 2=Deux encore : intense mais contrôlé|RIR 3+=Encore loin de l\'échec')
         return _echec('échelle RIR : '+JSON.stringify(RC_LEXIQUE.rir.e));
       if(RC_LEXIQUE.douleur.e.map(l=>l.join('=')).join('|')
-         !=='1–2=À peine perceptible|3=Gênant mais supportable|'
-           +'4–5=Ça fait mal, ta technique se dégrade|6=Je dois arrêter')
+         !=='1 à 2=À peine perceptible|3=Gênant mais supportable|'
+           +'4 à 5=Ça fait mal, ta technique se dégrade|6=Je dois arrêter')
         return _echec('échelle gêne : '+JSON.stringify(RC_LEXIQUE.douleur.e));
       return true;})());
 
@@ -40208,9 +40295,11 @@ async function testExercices(){
     // ══ CE QUE CE LOT NE FAIT PAS ════════════════════════════════════════
     // Il crée le composant, il ne le déploie pas : R07 à R10 poseront les ⓘ.
     // Deux choses devaient rester intactes, et on le constate.
-    ok('R06 ne touche ni à toggleRirExplain ni aux title= existants',(()=>{
-      if(typeof toggleRirExplain!=='function')
-        return _echec('toggleRirExplain a disparu : R22 n’aura plus rien à reprendre');
+    // R11 — toggleRirExplain A ETE RETIRE, et c'est voulu : Kevin, 17/09/2026,
+    // « laisse le RIR, que dans le tableau, la def ». Le panneau « ? » de la
+    // séance redisait la fiche RIR. Cette assertion garde donc le seul point
+    // qui reste d'actualité : les title= existants.
+    ok('R06 ne touche pas aux title= existants',(()=>{
       const src=_prodSrc();
       // Le title= de la consigne RPE en séance : celui que le lexique
       // remplacera un jour, et qui n'est pas retiré aujourd'hui.
