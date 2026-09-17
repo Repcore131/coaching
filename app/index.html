@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1264';
+window.RC_BUILD='1265';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -17493,7 +17493,11 @@ function _histCalqueOuvert(){
   if(_wp&&_wp.style.display==='flex'&&!_wp.dataset.sortie) return true;
   // R26 — la feuille « Mon approche » : le retour la ferme et reste sur la
   // nutrition, comme le voile et « Annuler ».
-  for(const id of ['rc-diete','rc-confirm','rc-saisie']){
+  // L'ACHAT, LA VENTE, LE CONTACT ET LE LEXIQUE manquaient, alors que
+  // _histFermerCalque sait les fermer : le retour tombait plus bas, go()
+  // les fermait au passage, et l'ecran changeait avec. Meme ordre que
+  // _histFermerCalque, pour qu'on lise les deux listes cote a cote.
+  for(const id of ['rc-achat','rc-progvente','rc-contact','rc-lexique','rc-diete','rc-confirm','rc-saisie']){
     const z=document.getElementById(id);
     if(z&&z.style.display==='flex'&&!z.dataset.sortie) return true;
   }

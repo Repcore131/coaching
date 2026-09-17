@@ -41038,6 +41038,74 @@ async function testExercices(){
       return trop.length?_echec(trop.join(' | ')):true;
     });
 
+    // LE RETOUR DU SYSTÈME AVEC UNE FEUILLE STATIQUE OUVERTE. _histFermerCalque
+    // savait fermer l'achat, la vente, le contact et le lexique, mais
+    // _histCalqueOuvert ne les voyait pas : le retour tombait dans la
+    // navigation, go() fermait la feuille au passage, et l'écran changeait
+    // avec. Mesuré : rcInfoOuvrir('rir') puis _histPopstate() quittait l'écran.
+    okA('R21 — le retour ferme l’achat, la vente, le contact et le lexique, et reste sur l’écran',async()=>{
+      const sU=currentUser, svO=Object.assign({},_ecranOrigine), svSave=window.saveUser;
+      const svRat=window._ratProfilFait, svToast=window.toast;
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const sv=[...document.querySelectorAll('.screen.active')];
+      const actif=()=>(document.querySelector('.screen.active')||{}).id;
+      const attendre=()=>new Promise(r=>setTimeout(r,ARC.strike+60));
+      // L'achat, la vente et le contact s'ouvrent par _feuilleOuvrir, comme
+      // dans leurs fonctions : ouvrirAchatProgramme chargerait le SDK PayPal,
+      // et les deux autres demandent un programme ou des canaux. Le lexique
+      // passe par son vrai chemin, celui du bogue mesuré.
+      const FEUILLES=[['rc-achat',()=>_feuilleOuvrir('rc-achat')],
+                      ['rc-progvente',()=>_feuilleOuvrir('rc-progvente')],
+                      ['rc-contact',()=>_feuilleOuvrir('rc-contact')],
+                      ['rc-lexique',()=>rcInfoOuvrir('rir')]];
+      const ecran='s-athlete-profile';
+      // Le message est rendu à la fin, après le nettoyage : _echec le pose
+      // au moment de l'appel, et l'attente des tracés viendrait après.
+      const verifier=async()=>{
+        for(let k=0;k<4&&_histCalqueOuvert();k++){ try{ _histFermerCalque(); }catch(e){ break; } }
+        currentUser=Object.assign(_r13Neuf(),{coachId:'c1',birthdate:'1990-05-01',gender:'homme'});
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-client-home'); go(ecran);
+        if(actif()!==ecran) return 'le montage arrive sur '+actif()+' au lieu de '+ecran;
+        for(const [id,ouvrir] of FEUILLES){
+          const z=document.getElementById(id);
+          ouvrir();
+          if(!z||z.style.display!=='flex') return id+' : la feuille ne s’ouvre pas';
+          if(!_histCalqueOuvert()) return id+' : le retour ne voit pas la feuille ouverte';
+          _histPopstate();
+          if(actif()!==ecran) return id+' : le retour quitte '+ecran+' pour '+actif()+' au lieu de fermer la feuille';
+          // PENDANT LA SORTIE, la feuille ne compte plus : un second appui
+          // navigue au lieu d'être mangé une deuxième fois.
+          if(z.dataset.sortie&&_histCalqueOuvert()) return id+' : la feuille en sortie compte encore';
+          await attendre();
+          if(z.style.display!=='none') return id+' : le retour ne ferme pas la feuille';
+          if(actif()!==ecran) return id+' : l’écran a changé pendant la sortie de la feuille';
+        }
+        // SANS FEUILLE, le même retour quitte bien l'écran : ce n'est pas
+        // l'écran qui retenait le retour.
+        _histPopstate();
+        if(actif()===ecran) return 'sans feuille, le retour reste sur '+ecran;
+        return null;
+      };
+      let msg=null;
+      try{
+        window.saveUser=()=>true; window._ratProfilFait=true; window.toast=()=>{};
+        msg=await verifier();
+      } finally {
+        FEUILLES.forEach(([id])=>{ try{ _feuilleFermer(id,true); }catch(e){} });
+        window.saveUser=svSave; window._ratProfilFait=svRat; window.toast=svToast;
+        currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      // Même raison que l'itinéraire ci-dessus : les go() ont posé des tracés.
+      await new Promise(r=>setTimeout(r,900));
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return msg?_echec(msg):true;
+    });
+
     // ══ 17/09/2026 — R20 : ÉVOLUTION ROUVRE SUR LE DERNIER ONGLET ════════
     const _r20Plein=o=>Object.assign(_r13Neuf(),{
       bilans:[{type:'depart',date:Date.now()-30*864e5,'deb-weight':'82','deb-waist':'90'},
