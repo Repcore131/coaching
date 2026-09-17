@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1272';
+window.RC_BUILD='1274';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -81944,6 +81944,25 @@ function segMaxMs(){ return VID_BOUCLE_MAX_S*1000; }
 const SEG_BARRE_POINTS_MAX=150;
 const SEG_BARRE_PHASES=Object.freeze(['depart','pic_vitesse','point_haut','reception','point_bas']);
 const SEG_BARRE_ALERTES=Object.freeze(['fps_bas','disque_petit','perte_suivi','disque_bord','doutes']);
+// LES ARTICULATIONS : quatorze points du corps, soixante-douze échantillons
+// au plus. À douze par seconde, une répétition de trois secondes en compte
+// trente-six ; une de dix — le maximum — descend à sept par seconde. Bornes
+// hautes, car tout ceci part dans l'enregistrement complet de l'athlète à
+// chaque sauvegarde : sept kilo-octets par répétition analysée, l'ordre de
+// grandeur de la trajectoire de barre.
+const SEG_POSE_PTS=14, SEG_POSE_MAX=72;
+// LES SEPT ANGLES, nommés ici parce que le journal d'une correction les cite :
+// motion-lab.js les redéfinit avec leurs trois points, mais il n'est chargé
+// que dans le laboratoire, et une correction se valide à l'ouverture de
+// l'application. Un test vérifie que les deux listes ne divergent pas.
+const SEG_POSE_ANGLES=Object.freeze(['coude','epaule','hanche','genou','cheville','tronc','avantBras']);
+// PURE. Une chaîne base64 qui décode EXACTEMENT le nombre d'octets attendu.
+// Partagé par la trajectoire et les articulations : c'est la première chose
+// qu'on vérifie sur une donnée venue du réseau, et elle doit l'être pareil.
+function _segB64(s,octets){
+  return typeof s==='string'&&/^[A-Za-z0-9+/]*={0,2}$/.test(s)
+    &&Math.floor(s.length*3/4)-(s.endsWith('==')?2:s.endsWith('=')?1:0)===octets;
+}
 // PURE. La trajectoire compactée d'une répétition si elle est lisible et
 // correspond à ses bornes, null sinon. Tout est revérifié : la donnée vient du
 // réseau, et un tracé à moitié lisible ne s'affiche pas à moitié.
@@ -81952,9 +81971,7 @@ function segBarreValide(b,debutMs,finMs){
   if(Math.round(Number(b.debutMs))!==debutMs||Math.round(Number(b.finMs))!==finMs) return null;
   const n=Math.round(Number(b.n));
   if(!(n>=2&&n<=SEG_BARRE_POINTS_MAX)) return null;
-  const b64=(s,octets)=>typeof s==='string'&&/^[A-Za-z0-9+/]*={0,2}$/.test(s)
-    &&Math.floor(s.length*3/4)-(s.endsWith('==')?2:s.endsWith('=')?1:0)===octets;
-  if(!b64(b.xy,n*4)||!b64(b.c,n)||!b64(b.vy,n*2)) return null;
+  if(!_segB64(b.xy,n*4)||!_segB64(b.c,n)||!_segB64(b.vy,n*2)) return null;
   const num=(x,min,max)=>{ const v=Number(x); return isFinite(v)&&v>=min&&v<=max?v:null; };
   const disqueM=num(b.disqueM,0.1,1), vw=num(b.vw,16,8192), vh=num(b.vh,16,8192),
     rayonPx=num(b.rayonPx,1,4096), fps=num(b.fps,1,1000), pasMs=num(b.pasMs,1,1000),
@@ -81973,6 +81990,25 @@ function segBarreValide(b,debutMs,finMs){
     vw:Math.round(vw),vh:Math.round(vh),rayonPx:Math.round(rayonPx*10)/10,fps:Math.round(fps*100)/100,
     n,t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,xy:b.xy,c:b.c,vy:b.vy,m,ph,av};
 }
+// PURE. Les articulations d'une répétition si elles sont lisibles et
+// correspondent à ses bornes, null sinon. Même exigence que pour la
+// trajectoire : la donnée vient du réseau, et une pose à moitié lisible ne
+// s'affiche pas à moitié.
+function segPoseValide(p,debutMs,finMs){
+  if(!p||typeof p!=='object'||p.v!==1) return null;
+  if(Math.round(Number(p.debutMs))!==debutMs||Math.round(Number(p.finMs))!==finMs) return null;
+  if(p.cote!=='G'&&p.cote!=='D') return null;
+  const n=Math.round(Number(p.n));
+  if(!(n>=2&&n<=SEG_POSE_MAX)) return null;
+  // QUATRE OCTETS PAR POINT pour la position, un pour la visibilité : si les
+  // longueurs ne tombent pas juste, le reste ne se lira pas non plus.
+  if(!_segB64(p.xy,n*SEG_POSE_PTS*4)||!_segB64(p.vis,n*SEG_POSE_PTS)) return null;
+  const num=(x,min,max)=>{ const v=Number(x); return isFinite(v)&&v>=min&&v<=max?v:null; };
+  const vw=num(p.vw,16,8192), vh=num(p.vh,16,8192), pasMs=num(p.pasMs,1,5000), t0Ms=num(p.t0Ms,debutMs,finMs);
+  if([vw,vh,pasMs,t0Ms].some(x=>x===null)) return null;
+  return {v:1,debutMs,finMs,vw:Math.round(vw),vh:Math.round(vh),cote:p.cote,n,
+    t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,xy:p.xy,vis:p.vis};
+}
 // PURE. Les répétitions lisibles d'une vidéo, triées par début. Ce qui ne peut
 // pas se lire TOMBE — bornes absentes, inversées, trop courtes, trop longues —
 // plutôt que d'être « réparé » en une répétition que le coach n'a pas posée.
@@ -81990,6 +82026,8 @@ function segmentsVideo(v){
     const seg={id,label:String(s.label==null?'':s.label).trim().slice(0,SEG_LIBELLE_MAX),debutMs:d,finMs:f};
     const barre=segBarreValide(s.barre,d,f);
     if(barre) seg.barre=barre;
+    const pose=segPoseValide(s.pose,d,f);
+    if(pose) seg.pose=pose;
     l.push(seg);
   }
   l.sort((a,b)=>a.debutMs-b.debutMs||a.finMs-b.finMs);
@@ -82028,7 +82066,8 @@ function enregistrerSegmentsVideo(email,videoId,segments){
 //   videos[i].motion = {v:1, id, creeLe, envoyeLe, dureeMs, voix:{url}|null,
 //     debut:{s, r}, ev:[[t,'lecture'] | [t,'pause'] | [t,'effacer']
 //       | [t,'aller',sMs] | [t,'vitesse',r] | [t,'trait',couleur,'x,y x,y…']
-//       | [t,'calque','trajectoire',idRépétition,0|1]], cartes:[{id,aMs,dureeMs,texte}]}
+//       | [t,'calque',nom,idRépétition,0|1]], cartes:[{id,aMs,dureeMs,texte}]}
+//       nom : 'trajectoire' ou l'un des SEG_POSE_ANGLES.
 //
 // ⚠ DANS LE DOSSIER DE L'ATHLÈTE, pour la même raison que la trajectoire (voir
 // segBarreValide) — et BORNÉE pour la même raison : 3 minutes, 600 gestes,
@@ -82075,9 +82114,13 @@ function motionCorrectionValide(m){
       ev.push([tt,k,c,p]);
     }
     else if(k==='calque'){
+      // DEUX SORTES DE CALQUES : la trajectoire de la barre, et un angle.
+      // Le nom est repris tel quel — mais seulement s'il est dans la liste,
+      // car c'est lui qui décidera de ce qui se dessine chez l'athlète.
+      const nom=String(e[2]==null?'':e[2]);
       const seg=String(e[3]==null?'':e[3]).slice(0,40), on=Number(e[4]);
-      if(e[2]!=='trajectoire'||!seg||(on!==0&&on!==1)) return null;
-      ev.push([tt,k,'trajectoire',seg,on]);
+      if((nom!=='trajectoire'&&!SEG_POSE_ANGLES.includes(nom))||!seg||(on!==0&&on!==1)) return null;
+      ev.push([tt,k,nom,seg,on]);
     }
     else return null;
   }

@@ -1,0 +1,21 @@
+MediaPipe Pose (solution JavaScript) — Copyright 2020 The MediaPipe Authors.
+Sous licence Apache 2.0 : https://www.apache.org/licenses/LICENSE-2.0
+
+Fichiers repris tels quels du paquet npm @mediapipe/pose 0.5.1675469404,
+sans modification. Sept fichiers sur les vingt du paquet : la version SIMD du
+moteur et le modèle « lite » seulement. Les modèles « full » (6,1 Mo) et
+« heavy » (26,4 Mo) et la version sans SIMD (5,7 Mo) sont volontairement
+absents — le téléphone d'un coach n'a besoin ni de l'un ni des autres, et le
+dépôt n'a pas à les porter.
+
+  pose.js                                 l'API JavaScript
+  pose_solution_simd_wasm_bin.js/.wasm    le moteur, compilé en WebAssembly
+  pose_solution_packed_assets.data        le graphe de calcul et ses ressources
+  pose_solution_packed_assets_loader.js   son chargeur
+  pose_landmark_lite.tflite               le modèle de points du corps
+  pose_web.binarypb                       la description du graphe
+
+La solution « Pose » n'est plus maintenue par Google depuis mars 2023 : c'est
+justement pourquoi ces fichiers sont figés ici plutôt que tirés d'un CDN. Ils
+ne changeront plus, et l'application les sert elle-même — donc hors ligne, en
+salle, sans réseau, et sans qu'une requête parte chez un tiers à chaque analyse.

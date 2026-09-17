@@ -40511,7 +40511,7 @@ async function testExercices(){
       if(efface.traits.length) return _echec('l’effacement ne retire rien');
       // Les calques : allumé, éteint.
       const cal=mlEtatRejeu(m.debut,[[0,'calque','trajectoire','s1',1],[100,'calque','trajectoire','s1',0]],200);
-      if(cal.calques.s1!==false) return _echec('calque : '+JSON.stringify(cal.calques));
+      if(cal.calques['trajectoire|s1']!==false) return _echec('calque : '+JSON.stringify(cal.calques));
       // LES CARTES suivent la VIDÉO, pas la session.
       if(mlCartesVisibles(m.cartes,1000).length!==1||mlCartesVisibles(m.cartes,4000).length) return _echec('cartes visibles');
       const T=mlInstantDeCarte(m,m.cartes[0]);
@@ -40824,6 +40824,178 @@ async function testExercices(){
       await new Promise(r=>setTimeout(r,900));
       try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
       return msg?_echec(msg):true;
+    });
+
+    // ══ 17/09/2026 — R32 : MOTION LAB, LOT 4 — LES ARTICULATIONS ═══════════
+    //
+    // MediaPipe Pose rend trente-trois points ; on en garde quatorze, ceux qui
+    // portent les sept angles demandés. Tout ce qui suit est PUR : la mesure
+    // ne dépend pas du moteur, seulement des points qu'il a rendus. Le moteur,
+    // lui, n'est vérifié que sur un point — qu'il soit bien là, servi par
+    // l'application et non par un tiers.
+
+    okA('R32 — un angle se mesure en PIXELS : les coordonnées normées mentent sur une image 16/9',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // Genou : hanche au-dessus, cheville en diagonale. En pixels, 45°.
+      // Normalisé par 1280x720, le même triangle donnerait 29° — l'erreur
+      // qu'on ferait en oubliant que x est divisé par la largeur et y par la
+      // hauteur.
+      const a=mlAngleEn(640,360,640,460,740,360);
+      if(Math.abs(a-45)>1e-9) return _echec('angle de '+a);
+      const faux=mlAngleEn(0.5,0.5,0.5,460/720,740/1280,0.5);
+      if(Math.abs(faux-45)<1) return _echec('le test ne distingue rien : normé aussi ' + faux);
+      // Deux points confondus ne donnent pas d'angle.
+      if(mlAngleEn(1,1,1,1,2,2)!==null) return _echec('un angle sort de deux points confondus');
+      // L'inclinaison : 0 vers le haut, 90 à l'horizontale, 180 vers le bas.
+      if(mlInclinaison(0,100,0,0)!==0) return _echec('verticale montante : '+mlInclinaison(0,100,0,0));
+      if(Math.abs(mlInclinaison(0,0,100,0)-90)>1e-9) return _echec('horizontale');
+      if(Math.abs(mlInclinaison(0,0,0,100)-180)>1e-9) return _echec('verticale descendante');
+      if(mlInclinaison(5,5,5,5)!==null) return _echec('une inclinaison sort d’un point unique');
+      return true;
+    });
+
+    okA('R32 — les sept angles, et rien quand on ne voit pas',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // LES DEUX LISTES D'ANGLES NE DOIVENT PAS DIVERGER : index.html nomme les
+      // calques permis dans un journal de correction, motion-lab.js les définit
+      // avec leurs trois points. L'un est chargé sans l'autre.
+      if(ML_ANGLES.map(q=>q.cle).join()!==SEG_POSE_ANGLES.join())
+        return _echec('les deux listes d’angles divergent : '+ML_ANGLES.map(q=>q.cle).join()+' vs '+SEG_POSE_ANGLES.join());
+      if(ML_POSE_IDX.length!==SEG_POSE_PTS) return _echec('le nombre de points stockés ne correspond pas');
+      // LES RANGS : la droite est toujours juste après la gauche.
+      for(const nom of ['epaule','coude','poignet','hanche','genou','cheville','pointe'])
+        if(mlRangPose(nom,'D')!==mlRangPose(nom,'G')+1) return _echec('rangs de '+nom);
+      if(mlRangPose('nez','G')!==-1) return _echec('un point inconnu a un rang');
+      // UNE POSE CONSTRUITE À LA MAIN : genou à 90°, tronc à 30° de la verticale.
+      const X=new Array(14).fill(0), Y=new Array(14).fill(0), V=new Array(14).fill(0.9);
+      const pose=(nom,x,y)=>{ const r=mlRangPose(nom,'G'); X[r]=x; Y[r]=y; };
+      pose('hanche',600,400); pose('genou',600,550); pose('cheville',750,550); pose('pointe',750,450);
+      pose('epaule',600-150*Math.sin(Math.PI/6),400-150*Math.cos(Math.PI/6));
+      pose('coude',500,300); pose('poignet',500,200);
+      const a=mlAnglesPose(X,Y,V,'G');
+      if(Math.abs(a.genou-90)>1e-6) return _echec('genou : '+a.genou);
+      if(Math.abs(a.cheville-90)>1e-6) return _echec('cheville : '+a.cheville);
+      if(Math.abs(a.tronc-30)>1e-6) return _echec('tronc : '+a.tronc);
+      if(Math.abs(a.avantBras)>1e-6) return _echec('avant-bras : '+a.avantBras);
+      // UN POINT MAL VU EFFACE LES ANGLES QUI S'APPUIENT DESSUS, ET EUX SEULS.
+      const V2=V.slice(); V2[mlRangPose('cheville','G')]=ML_POSE_VIS_MIN-0.01;
+      const a2=mlAnglesPose(X,Y,V2,'G');
+      if(a2.genou!==null||a2.cheville!==null) return _echec('un angle survit à un point non vu');
+      if(a2.hanche===null||a2.tronc===null) return _echec('un angle voisin tombe pour rien');
+      // LE CÔTÉ NON RENSEIGNÉ n'invente pas : ses points sont à zéro et se
+      // confondent, donc pas d'angle.
+      const aD=mlAnglesPose(X,Y,V,'D');
+      if(aD.genou!==null) return _echec('un angle sort de points confondus : '+aD.genou);
+      return true;
+    });
+
+    okA('R32 — lissage, trous et côté : ce qu’on n’a pas vu se voit',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // LE LISSAGE : [1,2,1] au milieu, bords inchangés, trous gardés.
+      const l=mlLisserAngles([10,null,30,40,50,null]);
+      if(l[0]!==10) return _echec('le bord bouge : '+l[0]);
+      if(l[1]!==null||l[5]!==null) return _echec('un trou est comblé : '+JSON.stringify(l));
+      if(l[2]!==30) return _echec('un voisin absent devrait laisser la valeur : '+l[2]);
+      if(l[3]!==40) return _echec('moyenne pondérée : '+l[3]);
+      const l2=mlLisserAngles([0,10,0]);
+      if(l2[1]!==5) return _echec('pondération [1,2,1] : '+l2[1]);
+      // LES TROUS se regroupent, et se datent.
+      const t=[0,100,200,300,400,500];
+      const tr=mlTrousAngles(t,[1,null,null,4,null,6]);
+      if(JSON.stringify(tr)!=='[{"debutMs":100,"finMs":200},{"debutMs":400,"finMs":400}]')
+        return _echec('trous : '+JSON.stringify(tr));
+      if(mlTrousAngles(t,[1,2,3,4,5,6]).length) return _echec('un trou est inventé');
+      // LE CÔTÉ MESURÉ est le mieux vu, et c'est tout ce qui le décide.
+      const V=(g,d)=>{ const v=[]; for(let i=0;i<7;i++){ v.push(g); v.push(d); } return v; };
+      if(mlCotePose([{V:V(0.9,0.2)}])!=='G') return _echec('côté gauche');
+      if(mlCotePose([{V:V(0.2,0.9)}])!=='D') return _echec('côté droit');
+      if(mlCotePose([])!=='G') return _echec('sans échantillon, la gauche par défaut');
+      return true;
+    });
+
+    okA('R32 — l’aller-retour d’une pose : compactée, revalidée, relue au dixième de degré',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const X=new Array(14).fill(0), Y=new Array(14).fill(0), V=new Array(14).fill(0.9);
+      const pose=(nom,x,y)=>{ const r=mlRangPose(nom,'G'); X[r]=x; Y[r]=y; };
+      pose('hanche',600,400); pose('genou',600,550); pose('cheville',750,550); pose('pointe',750,450);
+      pose('epaule',500,260); pose('coude',500,300); pose('poignet',500,200);
+      const seg={id:'sp',label:'Rép 1',debutMs:1000,finMs:4000};
+      const ech=[];
+      for(let k=0;k<36;k++) ech.push({tMs:1000+k*(1000/12),X:X.slice(),Y:Y.slice(),V:V.slice()});
+      const brut=mlCompacterPose(seg,ech,{vw:1280,vh:720,cote:'G'});
+      const p=segPoseValide(brut,1000,4000);
+      if(!p) return _echec('la pose compactée ne se relit pas');
+      // SEPT KILO-OCTETS AU PLUS : tout ceci part dans l'enregistrement complet
+      // de l'athlète à chaque sauvegarde.
+      const octets=JSON.stringify(p).length;
+      if(octets>7600) return _echec(octets+' octets pour 36 échantillons');
+      const S=mlAnglesSerie(p);
+      if(S.t.length!==36) return _echec(S.t.length+' instants');
+      if(Math.abs(S.ang.genou[10]-90)>0.1) return _echec('genou relu : '+S.ang.genou[10]);
+      if(Math.abs(S.t[1]-S.t[0]-1000/12)>0.01) return _echec('pas relu : '+(S.t[1]-S.t[0]));
+      // LE CÔTÉ SE CHANGE À LA LECTURE : les deux sont enregistrés, on ne
+      // relance pas une minute d'analyse pour ça.
+      if(mlAnglesSerie(p,'D').cote!=='D') return _echec('le côté demandé n’est pas rendu');
+      // LES MÉTRIQUES ne retiennent que ce qui a été vu.
+      const m=mlMetriquesAngles(S);
+      if(!m.genou||m.genou.n!==36) return _echec('métriques du genou : '+JSON.stringify(m.genou));
+      const creux={...S,ang:{...S.ang,genou:S.ang.genou.map(()=>null)}};
+      if(mlMetriquesAngles(creux).genou) return _echec('un angle jamais vu entre dans les métriques');
+      // CE QUI NE SE LIT PAS TOMBE.
+      const casse=[['version',{...p,v:2}],['bornes',{...p,finMs:3999}],['côté',{...p,cote:'X'}],
+        ['n hors bornes',{...p,n:SEG_POSE_MAX+1}],['xy trop court',{...p,xy:p.xy.slice(0,-4)}],
+        ['visibilités illisibles',{...p,vis:'!!!'}],['largeur absurde',{...p,vw:2}]];
+      for(const [quoi,x] of casse)
+        if(segPoseValide(x,1000,4000)!==null) return _echec('acceptée malgré : '+quoi);
+      // LES BORNES : la pose suit la répétition tant qu'elle ne bouge pas.
+      if(!segmentsVideo({segments:[{...seg,pose:p}]})[0].pose) return _echec('segmentsVideo perd une pose valide');
+      if(segmentsVideo({segments:[{...seg,finMs:3900,pose:p}]})[0].pose) return _echec('une pose survit à un changement de borne');
+      if(mlBorner({...seg,pose:p},'fin',2500,8000).pose) return _echec('mlBorner garde la pose');
+      return true;
+    });
+
+    okA('R32 — un calque d’angle s’enregistre dans la correction, et ne se confond pas avec la trajectoire',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // DEUX CALQUES SUR LA MÊME RÉPÉTITION : la trajectoire et le genou. Keyés
+      // sur la seule répétition, ils s'écrasaient l'un l'autre.
+      const e=mlEtatRejeu({s:0,r:1},[[0,'calque','trajectoire','s1',1],[10,'calque','genou','s1',1],
+        [20,'calque','trajectoire','s1',0]],100);
+      if(e.calques['genou|s1']!==true) return _echec('le calque d’angle n’est pas retenu : '+JSON.stringify(e.calques));
+      if(e.calques['trajectoire|s1']!==false) return _echec('l’angle a écrasé la trajectoire : '+JSON.stringify(e.calques));
+      // LE JOURNAL VALIDÉ n'accepte que des noms connus.
+      const base={v:1,id:'c32',creeLe:1,envoyeLe:0,dureeMs:3000,voix:null,debut:{s:0,r:1},cartes:[]};
+      const avec=n=>motionCorrectionValide({...base,ev:[[0,'calque',n,'s1',1]]});
+      if(!avec('genou')) return _echec('un calque d’angle est refusé');
+      if((avec('genou').ev[0]||[])[2]!=='genou') return _echec('le nom du calque n’est pas gardé');
+      if(!avec('trajectoire')) return _echec('la trajectoire est refusée');
+      if(avec('coccyx')) return _echec('un calque inventé passe');
+      if(avec('')) return _echec('un calque sans nom passe');
+      return true;
+    });
+
+    okA('R32 — le moteur de pose est servi par l’application, pas par un tiers',async()=>{
+      // ⚠ CE TEST NE CHARGE PAS LE MOTEUR : douze mégaoctets à chaque suite
+      // seraient absurdes. Il vérifie que les fichiers sont là, servis d'ici.
+      const fichiers=['pose.js','pose_solution_simd_wasm_bin.js','pose_solution_simd_wasm_bin.wasm',
+        'pose_solution_packed_assets.data','pose_solution_packed_assets_loader.js',
+        'pose_landmark_lite.tflite','pose_web.binarypb'];
+      for(const f of fichiers){
+        let r=null;
+        try{ r=await fetch('./vendor/mediapipe/'+f,{method:'HEAD',cache:'no-store'}); }catch(e){}
+        if(!r||!r.ok) return _echec('fichier absent : vendor/mediapipe/'+f);
+      }
+      // LA LICENCE APACHE EXIGE QU'ELLE VOYAGE AVEC LE CODE.
+      let l=null;
+      try{ l=await fetch('./vendor/LICENSE-mediapipe.txt',{cache:'no-store'}); }catch(e){}
+      if(!l||!l.ok) return _echec('la licence de MediaPipe manque');
+      const txt=await l.text();
+      if(!/Apache/i.test(txt)||!/@mediapipe\/pose/.test(txt)) return _echec('la licence ne dit ni laquelle ni de quoi');
+      // AUCUNE ADRESSE DE TIERS dans le module : le moteur ne doit pas partir
+      // chercher son modèle sur un CDN au premier squat analysé.
+      const src=await (await fetch('./motion-lab.js?v='+RC_BUILD,{cache:'no-store'})).text();
+      const dehors=(src.match(/https?:\/\/[^'"\s)]+/g)||[]).filter(u=>!/^https?:\/\/(www\.)?w3\.org/.test(u));
+      if(dehors.length) return _echec('adresse extérieure : '+dehors[0]);
+      return true;
     });
 
     // ══ 17/09/2026 — R29 : MOTION LAB, LOTS 2 ET 3 — LA TRAJECTOIRE ════════

@@ -34,7 +34,7 @@
 
 /**
  * Une répétition : un intervalle sur la vidéo source, en millisecondes.
- * @typedef {{id:string, label:string, debutMs:number, finMs:number}} Segment
+ * @typedef {{id:string, label:string, debutMs:number, finMs:number, barre?:any, pose?:any}} Segment
  */
 /** @typedef {'debut'|'fin'} Borne */
 /**
@@ -47,12 +47,14 @@
  *   raf:number, seekEnAttente:number|null,
  *   mode:ModeMl, graine:Graine|null, disqueM:number, sens:string, fantome:boolean,
  *   analyseJeton:number, progres:string, suivis:Object<string,Suivi3>,
+ *   angCote:string, angCalques:string[],
+ *   cachePose:{cle:string, d:any}|null,
  *   cacheBarre:{cle:string, d:{t:number[], x:number[], y:number[], vy:number[], conf:number[]}}|null,
  *   rec:any, correction:{motion:any, blob:Blob|null, blobUrl:string, statut:'brouillon'|'envoi'|'envoye'|'erreur', erreur:string}|null,
  *   cartes:{id:string, aMs:number, dureeMs:number, texte:string}[], lecteur:any
  * }} EtatMl
  */
-/** @typedef {'lecture'|'graine'|'analyse'|'replacer'} ModeMl */
+/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'} ModeMl */
 /**
  * La graine : le disque posé par le coach, en pixels de la VIDÉO.
  * @typedef {{segId:string, tMs:number, x:number|null, y:number|null, r:number}} Graine
@@ -704,6 +706,247 @@ function mlDecompacterBarre(b){
   return {t,x,y,vy:v,conf};
 }
 
+// ══ LES ARTICULATIONS ═══════════════════════════════════════════════════════
+//
+// MediaPipe Pose rend trente-trois points ; on en garde quatorze — ceux qui
+// portent les sept angles demandés, des deux côtés. Le visage et les mains ne
+// disent rien d'un squat, et chaque point pèse dans ce que le téléphone renvoie
+// à chaque enregistrement.
+//
+// ⚠ LES DEUX CÔTÉS SONT GARDÉS, pas seulement celui qu'on regarde. Filmé de
+// profil, l'athlète en cache un, et MediaPipe le devine plus qu'il ne le voit ;
+// mais relancer une minute d'analyse parce que le coach change d'avis sur le
+// côté serait absurde. Le côté se choisit à la lecture, pas à l'analyse.
+
+/** Les indices MediaPipe conservés, dans l'ordre où ils sont stockés. */
+const ML_POSE_IDX=Object.freeze([11,12,13,14,15,16,23,24,25,26,27,28,31,32]);
+/** Le rang du point GAUCHE de chaque membre ; le droit est le rang suivant. */
+const ML_POSE_RANG=Object.freeze({epaule:0,coude:2,poignet:4,hanche:6,genou:8,cheville:10,pointe:12});
+/** Les os dessinés, d'un point à l'autre. */
+const ML_POSE_OS=Object.freeze([['epaule','coude'],['coude','poignet'],['epaule','hanche'],
+  ['hanche','genou'],['genou','cheville'],['cheville','pointe']]);
+/**
+ * Les sept angles demandés. `c` vide : l'angle se mesure par rapport à la
+ * verticale de l'image, et non entre trois points.
+ */
+const ML_ANGLES=Object.freeze([
+  {cle:'coude',nom:'Coude',a:'epaule',b:'coude',c:'poignet'},
+  {cle:'epaule',nom:'Épaule',a:'hanche',b:'epaule',c:'coude'},
+  {cle:'hanche',nom:'Hanche',a:'epaule',b:'hanche',c:'genou'},
+  {cle:'genou',nom:'Genou',a:'hanche',b:'genou',c:'cheville'},
+  {cle:'cheville',nom:'Cheville',a:'genou',b:'cheville',c:'pointe'},
+  {cle:'tronc',nom:'Tronc',a:'hanche',b:'epaule',c:''},
+  {cle:'avantBras',nom:'Avant-bras',a:'coude',b:'poignet',c:''}
+]);
+// LE SEUIL DU CAHIER DES CHARGES : sous cette visibilité, l'angle n'est pas
+// affiché. Il n'est pas « estimé », il n'est pas « approché » — il est absent.
+const ML_POSE_VIS_MIN=0.5;
+
+/**
+ * PURE. Le rang d'un point dans les tableaux stockés, -1 s'il n'existe pas.
+ * @param {string} nom
+ * @param {string} cote  'G' ou 'D'
+ * @returns {number}
+ */
+function mlRangPose(nom,cote){
+  const r=ML_POSE_RANG[nom];
+  return r===undefined?-1:r+(cote==='D'?1:0);
+}
+/**
+ * PURE. L'angle en B, entre 0 et 180 degrés, null si deux points se confondent.
+ * ⚠ LES COORDONNÉES SONT EN PIXELS. Les normalisées de MediaPipe divisent x par
+ * la largeur et y par la hauteur : sur une image 16/9 elles font lire 45° là où
+ * il y en a 28.
+ * @param {number} ax @param {number} ay
+ * @param {number} bx @param {number} by
+ * @param {number} cx @param {number} cy
+ * @returns {number|null}
+ */
+function mlAngleEn(ax,ay,bx,by,cx,cy){
+  const ux=ax-bx, uy=ay-by, vx=cx-bx, vy=cy-by;
+  const nu=Math.hypot(ux,uy), nv=Math.hypot(vx,vy);
+  if(!(nu>1e-6)||!(nv>1e-6)) return null;
+  return Math.acos(Math.max(-1,Math.min(1,(ux*vx+uy*vy)/(nu*nv))))*180/Math.PI;
+}
+/**
+ * PURE. L'inclinaison du segment A→B sur la verticale de l'image : 0 quand il
+ * monte tout droit, 90 à l'horizontale, 180 quand il descend. Y grandit vers le
+ * bas, donc « le haut » est (0,-1).
+ * @param {number} ax @param {number} ay
+ * @param {number} bx @param {number} by
+ * @returns {number|null}
+ */
+function mlInclinaison(ax,ay,bx,by){
+  const ux=bx-ax, uy=by-ay, n=Math.hypot(ux,uy);
+  if(!(n>1e-6)) return null;
+  return Math.acos(Math.max(-1,Math.min(1,-uy/n)))*180/Math.PI;
+}
+/**
+ * PURE. Les sept angles d'une pose, en degrés — null dès qu'un des points qui
+ * le portent est trop peu visible.
+ * ⚠ JAMAIS DE VALEUR INVENTÉE : un angle qu'on ne voit pas ne vaut pas mieux
+ * qu'un angle absent, et affiché il ferait corriger un geste sur du bruit.
+ * @param {number[]} X  quatorze abscisses, EN PIXELS
+ * @param {number[]} Y  quatorze ordonnées, EN PIXELS
+ * @param {number[]} V  quatorze visibilités, entre 0 et 1
+ * @param {string} cote  'G' ou 'D'
+ * @returns {Object<string,number|null>}
+ */
+function mlAnglesPose(X,Y,V,cote){
+  /** @type {Object<string,number|null>} */
+  const out={};
+  for(const d of ML_ANGLES){
+    const ra=mlRangPose(d.a,cote), rb=mlRangPose(d.b,cote), rc=d.c?mlRangPose(d.c,cote):-1;
+    const rangs=d.c?[ra,rb,rc]:[ra,rb];
+    out[d.cle]=rangs.some(r=>r<0||!isFinite(X[r])||!isFinite(Y[r])||!(V[r]>=ML_POSE_VIS_MIN))
+      ?null
+      :(d.c?mlAngleEn(X[ra],Y[ra],X[rb],Y[rb],X[rc],Y[rc])
+           :mlInclinaison(X[ra],Y[ra],X[rb],Y[rb]));
+  }
+  return out;
+}
+/**
+ * PURE. Un angle lissé : moyenne pondérée [1,2,1] sur trois échantillons, les
+ * trous restant des trous et les bords inchangés.
+ * ⚠ PAS PLUS LARGE. À douze échantillons par seconde, une fenêtre de sept
+ * points couvre six dixièmes de seconde : elle raboterait le fond du squat, qui
+ * est précisément ce qu'on vient regarder.
+ * @param {(number|null)[]} v
+ * @returns {(number|null)[]}
+ */
+function mlLisserAngles(v){
+  return v.map((x,i)=>{
+    if(x==null) return null;
+    const a=v[i-1], b=v[i+1];
+    return (a==null||b==null)?x:(a+2*x+b)/4;
+  });
+}
+/**
+ * PURE. Le côté filmé : celui dont les points sont les mieux vus. Un athlète de
+ * profil cache la moitié de son corps, et MediaPipe devine la moitié cachée —
+ * on préfère mesurer celle qu'on voit.
+ * @param {{V:number[]}[]} ech
+ * @returns {string}
+ */
+function mlCotePose(ech){
+  let g=0, d=0;
+  for(const e of ech||[]) for(let r=0;r<ML_POSE_IDX.length;r+=2){
+    g+=Number(e.V[r])||0; d+=Number(e.V[r+1])||0;
+  }
+  return d>g?'D':'G';
+}
+/**
+ * PURE. Les échantillons de pose compactés : deux entiers seize bits par point
+ * pour la position normée, un octet pour la visibilité. Soixante-douze
+ * échantillons au plus, soit sept kilo-octets en base64 — l'ordre de grandeur
+ * de la trajectoire de barre, pour une donnée du même genre.
+ * ⚠ LE PAS EST NOMINAL : chaque échantillon est pris sur l'image la plus proche
+ * de l'instant visé, à une demi-image près — huit millisecondes à 60 i/s, sous
+ * le bruit des points eux-mêmes.
+ * @param {Segment} seg
+ * @param {{tMs:number, X:number[], Y:number[], V:number[]}[]} ech  positions EN PIXELS
+ * @param {{vw:number, vh:number, cote:string}} p
+ * @returns {any}
+ */
+function mlCompacterPose(seg,ech,p){
+  const l=(ech||[]).slice(0,SEG_POSE_MAX), n=l.length, N=ML_POSE_IDX.length;
+  const xy=new DataView(new ArrayBuffer(n*N*4)), vis=new Uint8Array(n*N);
+  const pasMs=n>1?(l[n-1].tMs-l[0].tMs)/(n-1):0;
+  /** @param {number} v */
+  const i16=v=>isFinite(v)?Math.max(-32767,Math.min(32767,Math.round(v*32767))):ML_I16_TROU;
+  for(let k=0;k<n;k++) for(let r=0;r<N;r++){
+    const o=(k*N+r)*4;
+    xy.setInt16(o,i16(l[k].X[r]/p.vw),true);
+    xy.setInt16(o+2,i16(l[k].Y[r]/p.vh),true);
+    const v=Number(l[k].V[r]);
+    vis[k*N+r]=isFinite(v)?Math.round(255*Math.max(0,Math.min(1,v))):0;
+  }
+  return {v:1,debutMs:seg.debutMs,finMs:seg.finMs,vw:p.vw,vh:p.vh,cote:p.cote,n,
+    t0Ms:Math.round(n?l[0].tMs:seg.debutMs),pasMs:Math.round(pasMs*1000)/1000,
+    xy:mlB64(new Uint8Array(xy.buffer)),vis:mlB64(vis)};
+}
+/**
+ * PURE. La pose compactée, relue : temps, positions NORMÉES (NaN pour un point
+ * absent) et visibilités entre 0 et 1.
+ * @param {any} p  une pose passée par segPoseValide
+ * @returns {{t:number[], X:number[][], Y:number[][], V:number[][]}}
+ */
+function mlDecompacterPose(p){
+  const xy=new DataView(mlOctets(p.xy).buffer), vis=mlOctets(p.vis), N=ML_POSE_IDX.length;
+  const t=[], X=[], Y=[], V=[];
+  for(let k=0;k<p.n;k++){
+    const x=[], y=[], v=[];
+    for(let r=0;r<N;r++){
+      const o=(k*N+r)*4;
+      const xi=xy.getInt16(o,true), yi=xy.getInt16(o+2,true);
+      x.push(xi===ML_I16_TROU?NaN:xi/32767);
+      y.push(yi===ML_I16_TROU?NaN:yi/32767);
+      v.push(vis[k*N+r]/255);
+    }
+    t.push(p.t0Ms+k*p.pasMs); X.push(x); Y.push(y); V.push(v);
+  }
+  return {t,X,Y,V};
+}
+/**
+ * PURE. Les sept angles dans le temps, lissés, pour un côté donné.
+ * @param {any} p  une pose passée par segPoseValide
+ * @param {string} [cote]  'G' ou 'D' ; celui de l'enregistrement par défaut
+ * @returns {{t:number[], X:number[][], Y:number[][], V:number[][], ang:Object<string,(number|null)[]>, cote:string}}
+ */
+function mlAnglesSerie(p,cote){
+  const d=mlDecompacterPose(p), c=(cote==='G'||cote==='D')?cote:p.cote;
+  /** @type {Object<string,(number|null)[]>} */
+  const ang={};
+  for(const q of ML_ANGLES) ang[q.cle]=[];
+  for(let k=0;k<d.t.length;k++){
+    const a=mlAnglesPose(d.X[k].map(v=>v*p.vw),d.Y[k].map(v=>v*p.vh),d.V[k],c);
+    for(const q of ML_ANGLES) ang[q.cle].push(a[q.cle]);
+  }
+  for(const q of ML_ANGLES) ang[q.cle]=mlLisserAngles(ang[q.cle]);
+  return {t:d.t,X:d.X,Y:d.Y,V:d.V,ang,cote:c};
+}
+/**
+ * PURE. Par angle : son minimum, son maximum, l'instant du minimum et le
+ * nombre d'échantillons où il était lisible. Un angle jamais lisible n'entre
+ * pas — il n'y a rien à en dire.
+ * @param {{t:number[], ang:Object<string,(number|null)[]>}} serie
+ * @returns {Object<string,{min:number, max:number, tMin:number, n:number}>}
+ */
+function mlMetriquesAngles(serie){
+  /** @type {Object<string,{min:number, max:number, tMin:number, n:number}>} */
+  const out={};
+  for(const q of ML_ANGLES){
+    const v=serie.ang[q.cle]||[];
+    let min=Infinity, max=-Infinity, tMin=0, n=0;
+    for(let k=0;k<v.length;k++){
+      const x=v[k];
+      if(x==null) continue;
+      n++;
+      if(x<min){ min=x; tMin=serie.t[k]; }
+      if(x>max) max=x;
+    }
+    if(n) out[q.cle]={min:Math.round(min*10)/10,max:Math.round(max*10)/10,tMin:Math.round(tMin),n};
+  }
+  return out;
+}
+/**
+ * PURE. Les passages où l'angle manque, regroupés : le coach doit savoir QUAND
+ * on n'a pas vu, sans quoi une courbe trouée passe pour une courbe plate.
+ * @param {number[]} t
+ * @param {(number|null)[]} v
+ * @returns {{debutMs:number, finMs:number}[]}
+ */
+function mlTrousAngles(t,v){
+  const out=[];
+  let d=-1;
+  for(let k=0;k<v.length;k++){
+    if(v[k]==null){ if(d<0) d=k; continue; }
+    if(d>=0){ out.push({debutMs:Math.round(t[d]),finMs:Math.round(t[k-1])}); d=-1; }
+  }
+  if(d>=0) out.push({debutMs:Math.round(t[d]),finMs:Math.round(t[v.length-1])});
+  return out;
+}
+
 // ══ L'ÉTAT ET L'OUVERTURE ═════════════════════════════════════════════════════
 
 /** @type {EtatMl|null} */
@@ -744,7 +987,9 @@ function mlOuvrir(email,videoId){
     initiaux:segs,segments:segs.map(s=>({...s})),actifId:segs.length?segs[0].id:null,
     zoom:1,dureeMs:0,boucle:false,jeton:0,raf:0,seekEnAttente:null,
     mode:'lecture',graine:null,disqueM:ML_DISQUE_M,sens:'',fantome:false,
-    analyseJeton:0,progres:'',suivis:{},cacheBarre:null,rec:null,correction:null,cartes:[],lecteur:null};
+    analyseJeton:0,progres:'',suivis:{},cacheBarre:null,
+    angCote:'',angCalques:[],cachePose:null,
+    rec:null,correction:null,cartes:[],lecteur:null};
   go('s-coach-motion-lab');
   _mlRendre();
   return true;
@@ -859,6 +1104,7 @@ function _mlRendre(){
     +'</div></div>'
     +'<div id="ml-bornes"></div>'
     +'<div id="ml-traj"></div>'
+    +'<div id="ml-artic"></div>'
     +'<div id="ml-corr"></div>'
     +'<div class="ml-lab" style="margin-top:18px">Répétitions</div>'
     +'<div id="ml-liste"></div>'
@@ -1209,7 +1455,7 @@ function _mlAller(ms,rapide){
  */
 function _mlPoserBorne(quel,ms,glisse){
   const a=_mlActif();
-  if(!_ml||!a||!_ml.dureeMs||_ml.mode==='analyse') return false;
+  if(!_ml||!a||!_ml.dureeMs||_mlOccupe()) return false;
   const n=mlBorner(a,quel,ms,_ml.dureeMs);
   // UNE TRAJECTOIRE NE SURVIT PAS À SES BORNES. mlBorner rend la répétition
   // sans elle ; on oublie aussi le suivi gardé sur l'appareil, et on le dit
@@ -1337,7 +1583,7 @@ function mlZoom(sens){
 function mlChoisir(id){
   if(!_ml) return false;
   const s=_ml.segments.find(x=>x.id===id);
-  if(!s||_ml.mode==='analyse') return false;
+  if(!s||_mlOccupe()) return false;
   if(_ml.actifId!==s.id&&_ml.mode!=='lecture'){ _ml.mode='lecture'; _ml.graine=null; }
   // EN PLEINE CORRECTION, la trajectoire affichée change avec la répétition :
   // le journal le dit, pour que l'athlète voie la même.
@@ -1413,7 +1659,7 @@ function mlSupprimer(i){
   if(!_ml) return false;
   const s=_ml.segments[i];
   if(!s) return false;
-  if(_ml.mode==='analyse') return false;
+  if(_mlOccupe()) return false;
   _ml.segments=_ml.segments.filter(x=>x.id!==s.id);
   delete _ml.suivis[s.id];
   if(_ml.graine&&_ml.graine.segId===s.id){ _ml.graine=null; _ml.mode='lecture'; }
@@ -1626,6 +1872,10 @@ function _mlDessinerCalque(){
   // Pendant une correction, le coach peut masquer la trajectoire : le geste
   // est au journal, et l'athlète la verra disparaître au même moment.
   if(a&&d&&!(_ml.rec&&!_ml.rec.trace)) _mlDessinerTrajectoire(g,R,d,/** @type {any} */(a).barre,tNow,_ml.fantome);
+  if(a&&_ml.angCalques.length){
+    const S=_mlPoseLue(a);
+    if(S) _mlDessinerPose(g,R,S,tNow,_ml.angCalques);
+  }
   if(_ml.rec){
     _mlDessinerTraits(g,R,_ml.rec.traits);
     if(_ml.rec.enCours&&_ml.rec.enCours.length>1) _mlDessinerTraits(g,R,[[_ml.rec.couleur,_ml.rec.enCours]]);
@@ -1768,6 +2018,7 @@ function mlPassagesDouteux(points){
 }
 // Le panneau de la répétition choisie : poser, analyser, lire le résultat.
 function _mlMajTrajectoire(){
+  _mlMajArticulations();
   const z=_mlEl('ml-traj');
   if(!z||!_ml) return;
   const a=_mlActif();
@@ -2217,6 +2468,407 @@ async function _mlExtraire(url,debutMs,finMs,w,h,pasMs,surImage,arreter){
   }
 }
 
+// ══ LOT 4 — LES ARTICULATIONS : L'ANALYSE ET SON AFFICHAGE ════════════════════
+
+const ML_POSE_DIR='./vendor/mediapipe/';
+// DOUZE ÉCHANTILLONS PAR SECONDE. Une articulation ne bouge pas de dix degrés
+// en quatre-vingts millisecondes ; à soixante images par seconde on regarderait
+// cinq fois la même chose, pour cinq fois l'attente et cinq fois la place. Le
+// plafond de SEG_POSE_MAX ramène une répétition de dix secondes à sept par
+// seconde — toujours au-dessus de ce qu'un œil distingue sur une courbe.
+const ML_POSE_HZ=12;
+// TROIS CALQUES À LA FOIS, pas sept : au-delà, les arcs se chevauchent sur
+// l'articulation et plus rien ne se lit. Trois couleurs, celles du dessin.
+const ML_ANG_MAX=3;
+
+/** Le moteur, chargé une fois par session. */
+let _mlPose=null;
+/** Le chargement en cours, pour que deux demandes n'en fassent pas deux. */
+let _mlPosePret=null;
+
+/** @returns {boolean} Une analyse tourne : les répétitions ne bougent pas. */
+function _mlOccupe(){ return !!_ml&&(_ml.mode==='analyse'||_ml.mode==='pose'); }
+
+/**
+ * Le moteur de pose, chargé à la demande. Douze mégaoctets qui ne partent que
+ * si le coach demande vraiment ses articulations, et qui restent ensuite dans
+ * le cache du service worker — hors ligne compris, en salle.
+ * @returns {Promise<any>}
+ */
+function _mlChargerPose(){
+  if(_mlPose) return Promise.resolve(_mlPose);
+  if(_mlPosePret) return _mlPosePret;
+  _mlPosePret=new Promise((ok,ko)=>{
+    if(/** @type {any} */(window).Pose) return ok(null);
+    const s=document.createElement('script');
+    s.src=ML_POSE_DIR+'pose.js';
+    s.onload=()=>ok(null);
+    s.onerror=()=>ko(new Error('moteur'));
+    document.head.appendChild(s);
+  }).then(()=>{
+    const P=/** @type {any} */(window).Pose;
+    if(typeof P!=='function') throw new Error('moteur');
+    const p=new P({locateFile:(/** @type {string} */ f)=>ML_POSE_DIR+f});
+    // ⚠ smoothLandmarks À FAUX. Le lissage de MediaPipe suppose un flux continu
+    // à cadence vidéo ; ici les images arrivent d'une recherche, à quatre-vingts
+    // millisecondes d'écart, et son filtre traînerait derrière le mouvement.
+    // On lisse nous-mêmes, sur trois échantillons, et on sait ce que ça coûte.
+    p.setOptions({modelComplexity:0,smoothLandmarks:false,enableSegmentation:false,
+      minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+    _mlPose=p;
+    return p;
+  }).catch(e=>{ _mlPosePret=null; throw e; });
+  return _mlPosePret;
+}
+/**
+ * Parcourt une répétition en visant un instant tous les `pasMs`, et rend chaque
+ * image à `surImage`, qui peut être asynchrone.
+ * ⚠ CE N'EST PAS _mlExtraire, ET C'EST VOULU : lui parcourt TOUTES les images
+ * avec un sondage de cadence, parce qu'un disque qui monte vite se perd dès
+ * qu'on lit deux fois la même image. Ici on saute cinq images sur six : deux
+ * échantillons voisins ne peuvent pas être la même image, et le sondage ne
+ * ferait qu'ajouter une seconde d'attente.
+ * @param {string} url
+ * @param {number} debutMs
+ * @param {number} finMs
+ * @param {number} pasMs
+ * @param {(im:{tMs:number, toile:HTMLCanvasElement, vw:number, vh:number})=>Promise<boolean|string>|boolean|string} surImage
+ * @param {()=>boolean} arreter
+ * @returns {Promise<{ok:true, images:number, vw:number, vh:number}|{ok:false, code:string}>}
+ */
+async function _mlExtrairePose(url,debutMs,finMs,pasMs,surImage,arreter){
+  const adresse=safeUrlRaw(url);
+  if(adresse==='#') return {ok:false,code:'chargement'};
+  const ancien=_mlEl('ml-pose-src'); if(ancien) ancien.remove();
+  const v=document.createElement('video');
+  v.id='ml-pose-src'; v.crossOrigin='anonymous'; v.muted=true; v.playsInline=true; v.preload='auto';
+  v.setAttribute('playsinline',''); v.setAttribute('aria-hidden','true');
+  v.style.cssText='position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;left:0;top:0';
+  document.body.appendChild(v);
+  v.src=adresse;
+  try{
+    const pret=await new Promise(res=>{
+      const garde=setTimeout(()=>res(false),20000);
+      v.addEventListener('loadeddata',()=>{ clearTimeout(garde); res(true); },{once:true});
+      v.addEventListener('error',()=>{ clearTimeout(garde); res(false); },{once:true});
+    });
+    if(!pret) return {ok:false,code:'chargement'};
+    const vw=v.videoWidth||1280, vh=v.videoHeight||720;
+    // SIX CENT QUARANTE PIXELS DE LARGE SUFFISENT : mesuré, le moteur rend les
+    // mêmes points à la même vitesse qu'en 720p — il redimensionne lui-même.
+    const W=Math.min(640,vw), H=Math.max(1,Math.round(vh*W/vw));
+    const c=document.createElement('canvas'); c.width=W; c.height=H;
+    const g=c.getContext('2d');
+    if(!g) return {ok:false,code:'chargement'};
+    const etat={rvfc:false};
+    let images=0, echecs=0;
+    for(let t=debutMs;t<=finMs+0.5;t+=pasMs){
+      if(arreter()) return {ok:false,code:'arret'};
+      if(await _mlChercherImage(v,t/1000,etat)==null){
+        if(++echecs>5) return {ok:false,code:'recherche'};
+        continue;
+      }
+      echecs=0;
+      g.drawImage(v,0,0,W,H);
+      const suite=await surImage({tMs:Math.round(t*10)/10,toile:c,vw:W,vh:H});
+      images++;
+      if(typeof suite==='string') return {ok:false,code:suite};
+      if(suite===false) break;
+    }
+    return {ok:true,images,vw:W,vh:H};
+  } finally {
+    try{ v.removeAttribute('src'); v.load(); }catch(e){}
+    v.remove();
+  }
+}
+/**
+ * Les angles d'une répétition, décompactés une fois et gardés : le dessin les
+ * redemande à chaque image de la vidéo.
+ * @param {Segment} s
+ * @returns {ReturnType<typeof mlAnglesSerie>|null}
+ */
+function _mlPoseLue(s){
+  const p=/** @type {any} */(s).pose;
+  if(!_ml||!p) return null;
+  const cle=s.id+'|'+p.xy+'|'+(_ml.angCote||p.cote);
+  if(_ml.cachePose&&_ml.cachePose.cle===cle) return _ml.cachePose.d;
+  try{
+    const d=mlAnglesSerie(p,_ml.angCote||p.cote);
+    _ml.cachePose={cle,d};
+    return d;
+  }catch(e){ return null; }
+}
+/** Lance la lecture des articulations sur la répétition active. */
+async function mlAnalyserArticulations(){
+  const a=_mlActif();
+  if(!_ml||!a||!_ml.dureeMs||_ml.rec||_mlOccupe()) return false;
+  const jeton=++_ml.analyseJeton, segId=a.id, debut=a.debutMs, fin=a.finMs;
+  const arreter=()=>!_ml||_ml.analyseJeton!==jeton;
+  _ml.mode='pose'; _ml.progres='Chargement du moteur…';
+  _mlMajTrajectoire();
+  let moteur=null;
+  try{ moteur=await _mlChargerPose(); }
+  catch(e){
+    if(!arreter()){
+      _ml.mode='lecture';
+      toast('Le moteur d’analyse ne s’est pas chargé. La première fois, il lui faut du réseau.','var(--orange)');
+      _mlMajTrajectoire();
+    }
+    return false;
+  }
+  if(arreter()) return false;
+  /** @type {any} */
+  let dernier=null;
+  moteur.onResults((/** @type {any} */ r)=>{ dernier=r; });
+  const pas=Math.max(1000/ML_POSE_HZ,(fin-debut)/(SEG_POSE_MAX-1));
+  const total=Math.max(1,Math.floor((fin-debut)/pas)+1);
+  /** @type {{tMs:number, X:number[], Y:number[], V:number[]}[]} */
+  const ech=[];
+  let premiere=true;
+  const r=await _mlExtrairePose(_ml.url,debut,fin,pas,async im=>{
+    if(arreter()) return 'arret';
+    if(premiere){
+      premiere=false;
+      // LA VIDÉO VIENT D'AILLEURS : si elle teinte la toile, le moteur ne
+      // pourra pas la lire non plus. Autant le dire à la première image.
+      try{ /** @type {any} */(im.toile.getContext('2d')).getImageData(0,0,1,1); }
+      catch(e){ return 'cors'; }
+    }
+    dernier=null;
+    try{ await moteur.send({image:im.toile}); }catch(e){ return 'moteur'; }
+    const L=dernier&&dernier.poseLandmarks;
+    const X=[], Y=[], V=[];
+    for(const idx of ML_POSE_IDX){
+      const q=L&&L[idx];
+      X.push(q?q.x*im.vw:NaN);
+      Y.push(q?q.y*im.vh:NaN);
+      V.push(q?Math.max(0,Math.min(1,Number(q.visibility)||0)):0);
+    }
+    ech.push({tMs:im.tMs,X,Y,V});
+    if(_ml&&!arreter()){
+      _ml.progres='Articulations : image '+ech.length+' sur '+total+'…';
+      const t=_mlEl('ml-progres-txt'); if(t) t.textContent=_ml.progres;
+      const bar=_mlEl('ml-progres-barre');
+      if(bar) bar.style.transform='scaleX('+Math.min(1,ech.length/total).toFixed(3)+')';
+    }
+    return ech.length<SEG_POSE_MAX;
+  },arreter);
+  if(arreter()) return false;
+  _ml.mode='lecture';
+  if(!r.ok){
+    const msg={chargement:'La vidéo ne s’ouvre pas.',
+      cors:'Cette vidéo ne se laisse pas lire image par image.',
+      recherche:'La vidéo ne se déplace pas image par image ici.',
+      moteur:'Le moteur d’analyse s’est arrêté.',arret:''}[r.code];
+    if(msg) toast(msg,'var(--orange)');
+    _mlMajTrajectoire();
+    return false;
+  }
+  if(ech.length<2||!ech.some(e=>e.V.some(x=>x>=ML_POSE_VIS_MIN))){
+    toast('Personne n’a été reconnu sur ces images : cadre l’athlète en entier, de profil.','var(--orange)');
+    _mlMajTrajectoire();
+    return false;
+  }
+  const cote=mlCotePose(ech);
+  const pose=segPoseValide(mlCompacterPose({id:segId,label:'',debutMs:debut,finMs:fin},ech,
+    {vw:r.vw,vh:r.vh,cote}),debut,fin);
+  if(!pose){
+    toast('Les articulations calculées sont illisibles : réessaie.','var(--orange)');
+    _mlMajTrajectoire();
+    return false;
+  }
+  _ml.segments=_ml.segments.map(s=>s.id===segId?{...s,pose}:s);
+  _ml.cachePose=null;
+  _ml.angCote='';
+  // LE CALQUE OUVERT D'OFFICE est celui qui a le plus bougé : c'est celui qu'on
+  // est venu regarder. Aucun calque après une minute d'analyse donnerait un
+  // écran qui a l'air vide, et il faudrait deviner lequel ouvrir.
+  const met=mlMetriquesAngles(mlAnglesSerie(pose));
+  let large='', amp=-1;
+  for(const q of ML_ANGLES){
+    const x=met[q.cle];
+    if(x&&x.max-x.min>amp){ amp=x.max-x.min; large=q.cle; }
+  }
+  _ml.angCalques=large?[large]:[];
+  _mlMajEnregistrer();
+  _mlMajTrajectoire();
+  _mlDessinerCalque();
+  toast('Articulations lues sur '+ech.length+' images.');
+  return true;
+}
+/** Arrête la lecture des articulations en cours. */
+function mlArreterPose(){
+  if(!_ml||_ml.mode!=='pose') return false;
+  _ml.analyseJeton++;
+  _ml.mode='lecture';
+  _mlMajTrajectoire();
+  return true;
+}
+/** Efface les articulations de la répétition active pour les refaire. */
+function mlRefaireArticulations(){
+  const a=_mlActif();
+  if(!_ml||!a||!(/** @type {any} */(a).pose)||_ml.rec||_mlOccupe()) return false;
+  _ml.segments=_ml.segments.map(s=>s.id===a.id?{id:s.id,label:s.label,debutMs:s.debutMs,finMs:s.finMs,
+    ...(/** @type {any} */(s).barre?{barre:/** @type {any} */(s).barre}:{})}:s);
+  _ml.cachePose=null; _ml.angCalques=[];
+  _mlMajEnregistrer(); _mlMajTrajectoire(); _mlDessinerCalque();
+  return true;
+}
+/**
+ * Change le côté regardé. Les deux sont enregistrés : on ne relance rien.
+ * @param {string} c  'G' ou 'D'
+ */
+function mlCoteAngles(c){
+  if(!_ml||(c!=='G'&&c!=='D')) return false;
+  _ml.angCote=c;
+  _ml.cachePose=null;
+  _mlMajTrajectoire();
+  _mlDessinerCalque();
+  return true;
+}
+/**
+ * Allume ou éteint un calque d'angle. Pendant un enregistrement, le geste entre
+ * au journal : l'athlète verra le calque s'allumer au même instant.
+ * @param {string} cle
+ */
+function mlCalqueAngle(cle){
+  const a=_mlActif();
+  if(!_ml||!a||!(/** @type {any} */(a).pose)||!ML_ANGLES.some(q=>q.cle===cle)) return false;
+  const on=!_ml.angCalques.includes(cle);
+  if(on&&_ml.angCalques.length>=ML_ANG_MAX){
+    toast('Trois angles à la fois, pas plus : au-delà, les arcs se recouvrent.','var(--orange)');
+    return false;
+  }
+  _ml.angCalques=on?_ml.angCalques.concat([cle]):_ml.angCalques.filter(x=>x!==cle);
+  if(_ml.rec&&!_ml.rec.pause) _mlJournal([_mlRecT(),'calque',cle,a.id,on?1:0]);
+  _mlMajArticulations();
+  _mlDessinerCalque();
+  return true;
+}
+/** Le panneau des articulations, sous celui de la trajectoire. */
+function _mlMajArticulations(){
+  const z=_mlEl('ml-artic');
+  if(!z||!_ml) return;
+  const a=_mlActif();
+  if(!a){ z.innerHTML=''; return; }
+  const p=/** @type {any} */(a).pose;
+  const off=(_ml.dureeMs&&!_ml.rec&&!_mlOccupe())?'':' disabled';
+  let h='<div class="ml-traj"><div class="ml-traj-tete"><span class="ml-lab">Articulations</span>';
+  if(_ml.mode==='pose'){
+    h+='</div><div class="ml-progres" role="progressbar" aria-label="Lecture des articulations"><i id="ml-progres-barre"></i></div>'
+      +'<p class="ml-traj-aide" id="ml-progres-txt" aria-live="polite">'+escapeHtml(_ml.progres||'Chargement du moteur…')+'</p>'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlArreterPose()">Arrêter</button></div>';
+  } else if(!p){
+    h+='</div><p class="ml-traj-aide">Le corps est reconnu sur douze images par seconde, sur ce téléphone. '
+      +'Filme l’athlète en entier, de profil : un genou qu’on ne voit pas ne donne pas d’angle.</p>'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlAnalyserArticulations()"'+off+'>Lire les articulations</button></div>';
+  } else {
+    const S=_mlPoseLue(a);
+    const met=S?mlMetriquesAngles(S):{};
+    h+='<button type="button" class="ml-mini ml-refaire" onclick="mlRefaireArticulations()" aria-label="Refaire les articulations"'+off+'>↺</button></div>'
+      +'<div class="ml-champ"><span>Côté mesuré</span><span class="ml-choix">'
+      +[['G','Gauche'],['D','Droite']].map(o=>'<button type="button" class="ml-b" aria-pressed="'
+        +((S?S.cote:p.cote)===o[0])+'" onclick="mlCoteAngles(\''+o[0]+'\')">'+o[1]+'</button>').join('')
+      +'</span></div>'
+      +'<p class="ml-traj-aide">Touche un angle pour le poser sur la vidéo. '+ML_ANG_MAX+' à la fois.</p>'
+      +'<div class="ml-choix ml-ang">'
+      +ML_ANGLES.map(q=>{
+        const m=met[q.cle], on=_ml.angCalques.includes(q.cle);
+        const i=_ml.angCalques.indexOf(q.cle);
+        return '<button type="button" class="ml-b ml-ang-b" aria-pressed="'+on+'"'+(m?'':' disabled')
+          +(on?' style="--c:'+_mlCouleurTrait(i%3)+'"':'')
+          +' onclick="mlCalqueAngle(\''+q.cle+'\')">'+q.nom+(m?'':' —')+'</button>';
+      }).join('')
+      +'</div>';
+    const actifs=_ml.angCalques.filter(c=>met[c]);
+    if(actifs.length){
+      h+='<div class="ml-metr">'+actifs.map(c=>{
+        const m=met[c], q=ML_ANGLES.find(x=>x.cle===c);
+        return '<div><b>'+Math.round(m.min)+'°&nbsp;·&nbsp;'+Math.round(m.max)+'°</b><span>'
+          +escapeHtml(q?q.nom:c)+' · du plus fermé au plus ouvert</span></div>';
+      }).join('')+'</div>';
+    }
+    // CE QU'ON N'A PAS VU SE DIT. Une courbe trouée passe sinon pour une
+    // courbe plate, et le coach corrigerait un geste sur du vide.
+    if(S){
+      const manque=ML_ANGLES.filter(q=>_ml.angCalques.includes(q.cle))
+        .map(q=>({q,trous:mlTrousAngles(S.t,S.ang[q.cle])}))
+        .filter(x=>x.trous.length);
+      if(manque.length){
+        h+='<ul class="ml-alertes">'+manque.map(x=>'<li>'+escapeHtml(x.q.nom)+' : non vu '
+          +x.trous.map(t=>mlTempsTexte(t.debutMs)+(t.finMs>t.debutMs?'–'+mlTempsTexte(t.finMs):'')).join(', ')+'</li>').join('')+'</ul>';
+      }
+      h+='<p class="ml-perf">'+p.n+' images lues, '+Math.round(1000/Math.max(1,p.pasMs))+' par seconde.</p>';
+    }
+  }
+  z.innerHTML=h+'</div>';
+}
+/**
+ * Le squelette et les angles demandés, sur l'image courante.
+ * PARTAGÉ par le laboratoire et le lecteur de correction.
+ * @param {CanvasRenderingContext2D} g
+ * @param {{s:number, ox:number, oy:number, vw:number, vh:number}} R
+ * @param {ReturnType<typeof mlAnglesSerie>} S
+ * @param {number} tNow  instant de la vidéo source, en ms
+ * @param {string[]} cles
+ */
+function _mlDessinerPose(g,R,S,tNow,cles){
+  // L'ÉCHANTILLON LE PLUS PROCHE, et rien entre deux : on ne dessine pas une
+  // position qu'on n'a pas mesurée. Au-delà d'un pas, on ne montre rien.
+  let k=-1, e=Infinity;
+  for(let i=0;i<S.t.length;i++){ const d=Math.abs(S.t[i]-tNow); if(d<e){ e=d; k=i; } }
+  const pas=S.t.length>1?Math.abs(S.t[1]-S.t[0]):100;
+  if(k<0||e>pas) return;
+  const X=S.X[k], Y=S.Y[k], V=S.V[k];
+  /** @param {number} r @returns {[number,number]} */
+  const P=r=>[R.ox+X[r]*R.vw*R.s,R.oy+Y[r]*R.vh*R.s];
+  /** @param {number} r */
+  const vu=r=>r>=0&&isFinite(X[r])&&isFinite(Y[r])&&V[r]>=ML_POSE_VIS_MIN;
+  // LE SQUELETTE EN BASSE TENSION : c'est le repère, pas le propos.
+  g.strokeStyle=_tok('--arc-calm','#6E7A99'); g.lineWidth=2; g.globalAlpha=0.85;
+  for(const [d1,d2] of ML_POSE_OS){
+    const ra=mlRangPose(d1,S.cote), rb=mlRangPose(d2,S.cote);
+    if(!vu(ra)||!vu(rb)) continue;
+    const [x1,y1]=P(ra), [x2,y2]=P(rb);
+    g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke();
+  }
+  g.globalAlpha=1;
+  cles.forEach((cle,i)=>{
+    const def=ML_ANGLES.find(q=>q.cle===cle);
+    const val=def&&S.ang[cle]?S.ang[cle][k]:null;
+    if(!def||val==null) return;
+    const ra=mlRangPose(def.a,S.cote), rb=mlRangPose(def.b,S.cote);
+    const rc=def.c?mlRangPose(def.c,S.cote):-1;
+    if(!vu(ra)||!vu(rb)||(rc>=0&&!vu(rc))) return;
+    const c=_mlCouleurTrait(i%3);
+    const [bx,by]=P(rb), [ax,ay]=P(ra);
+    const [cx,cy]=rc>=0?P(rc):[bx,by-60*R.s];
+    g.strokeStyle=c; g.lineWidth=3; g.lineCap='round';
+    g.beginPath(); g.moveTo(ax,ay); g.lineTo(bx,by); g.lineTo(cx,cy); g.stroke();
+    // LA VERTICALE EST UN REPÈRE, PAS UN MEMBRE : en pointillé, on ne la
+    // confond pas avec un os.
+    if(rc<0){
+      g.setLineDash([5,4]); g.lineWidth=2;
+      g.beginPath(); g.moveTo(bx,by); g.lineTo(cx,cy); g.stroke();
+      g.setLineDash([]);
+    }
+    const r=Math.max(14,Math.min(30,26*R.s));
+    const a1=Math.atan2(ay-by,ax-bx), a2=Math.atan2(cy-by,cx-bx);
+    let d=a2-a1;
+    while(d>Math.PI) d-=2*Math.PI;
+    while(d<-Math.PI) d+=2*Math.PI;
+    g.lineWidth=2;
+    g.beginPath(); g.arc(bx,by,r,a1,a1+d,d<0); g.stroke();
+    const txt=Math.round(val)+'°';
+    g.font='800 13px Montserrat, sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+    const tx=bx+Math.cos(a1+d/2)*(r+14), ty=by+Math.sin(a1+d/2)*(r+14);
+    g.lineWidth=3; g.strokeStyle='rgba(0,0,0,.75)';
+    g.strokeText(txt,tx,ty);
+    g.fillStyle=c; g.fillText(txt,tx,ty);
+  });
+  g.lineCap='butt'; g.textAlign='start'; g.textBaseline='alphabetic';
+}
+
 // ══ LOTS 5 ET 6 — LA CORRECTION VIDÉO : ENREGISTRER, COMPOSER, REJOUER ════════
 //
 // Voir le modèle dans index.html (motionCorrectionValide) : une séquence
@@ -2273,7 +2925,7 @@ function mlEtatRejeu(debut,ev,T){
       case 'vitesse': r=e[2]; break;
       case 'trait': traits.push([e[2],e[3]]); break;
       case 'effacer': traits=[]; break;
-      case 'calque': calques[e[3]]=e[4]===1; break;
+      case 'calque': calques[e[2]+'|'+e[3]]=e[4]===1; break;
     }
   }
   if(jouer) s+=(T-tRef)*r;
@@ -2766,9 +3418,13 @@ function mlLecteurCorrection(hote,o){
   };
   /** @type {Object<string,{d:any, b:any}>} */
   const traj={};
+  /** @type {Object<string,any>} */
+  const poses={};
   for(const s of o.segments||[]){
     const b=/** @type {any} */(s).barre;
     if(b) try{ traj[s.id]={d:mlDecompacterBarre(b),b}; }catch(e){}
+    const p=/** @type {any} */(s).pose;
+    if(p) try{ poses[s.id]=mlAnglesSerie(p); }catch(e){}
   }
   let T=0, joue=false, dernier=0, raf=0, detruit=false;
   // LA CARTE AFFICHÉE, pour ne toucher au DOM qu'au changement : écrire le même
@@ -2783,7 +3439,12 @@ function mlLecteurCorrection(hote,o){
     g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
     const sNow=(Number(video.currentTime)||0)*1000;
     if(R){
-      for(const id of Object.keys(e.calques)) if(e.calques[id]&&traj[id]) _mlDessinerTrajectoire(g,R,traj[id].d,traj[id].b,sNow,false);
+      for(const k of Object.keys(e.calques)){
+        if(!e.calques[k]) continue;
+        const nom=k.slice(0,k.indexOf('|')), id=k.slice(k.indexOf('|')+1);
+        if(nom==='trajectoire'&&traj[id]) _mlDessinerTrajectoire(g,R,traj[id].d,traj[id].b,sNow,false);
+        else if(poses[id]&&poses[id].ang[nom]) _mlDessinerPose(g,R,poses[id],sNow,[nom]);
+      }
       _mlDessinerTraits(g,R,e.traits);
     }
     const k=mlCartesVisibles(m.cartes,sNow)[0];
@@ -3058,6 +3719,11 @@ function _mlInjecterStyle(){
     '.mlc-origine{display:block;width:100%;max-height:46vh;margin-top:10px;border-radius:var(--r-2);background:#000}',
     '.ml-metr-l{grid-template-columns:1fr 1fr;margin-top:8px}',
     '.ml-aide{font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin:10px 0 0}',
+    '.ml-ang{margin-top:8px;justify-content:flex-start}',
+    // LE CALQUE ALLUMÉ PORTE SA COULEUR, celle de son arc sur la vidéo :
+    // sans elle, trois angles allumés ensemble ne se rattachent à rien.
+    '.ml-ang-b[aria-pressed="true"]{border-color:var(--c,var(--red));color:var(--c,var(--text));background:rgba(255,255,255,.06)}',
+    '.ml-ang-b:disabled{opacity:.35}',
     '.mlc-absente{padding:26px 18px;margin:0;text-align:center;font-size:var(--fs-sm);color:var(--sub);line-height:1.6}',
     // ── Lot 7 : le mouvement, et rien qu'aux changements d'état ─────────────
     // ⚠ AUCUNE RÈGLE « prefers-reduced-motion » ICI, et ce n'est pas un oubli :
