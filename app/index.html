@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1265';
+window.RC_BUILD='1266';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5057,7 +5057,14 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
   text-shadow:0 0 34px rgba(224,32,32,.55)}
 .bq-dev-phase{font-size:var(--fs-2xs);letter-spacing:3.4px;text-transform:uppercase;
   font-weight:800;color:var(--red-text)}
-.bq-dev-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+/* L'AFFICHE ENTIERE, PAS UN RECADRAGE. La couverture de Fondations est au
+   format A4 et porte son texte jusqu'aux bords : dans le cadre 3/4 plafonne
+   a 360 px, le bandeau du haut et la signature du bas etaient coupes, un
+   demi-logo depassant du bord. Quand l'image est la, c'est ELLE qui donne la
+   hauteur ; si elle manque, onerror la retire, :has ne prend plus, et le
+   cadre 3/4 du dessin revient de lui-meme. */
+.bq-dev:has(>.bq-dev-img){aspect-ratio:auto;max-height:none}
+.bq-dev-img{position:relative;width:100%;height:auto;display:block}
 .bq-corps{padding:17px 16px 16px}
 .bq-tete{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .bq-nom{font-size:var(--fs-lg);font-weight:900;letter-spacing:.6px;color:var(--text)}
@@ -11815,11 +11822,13 @@ const RC_WHATSAPP='33778439205';
 // ⚠ LES PRIX SONT EN CENTIMES. Aucun flottant ne touche a de l'argent : 14,90
 // s'ecrit 1490, et 0,1+0,2 ne vaut pas 0,3 en binaire.
 //
-// ⚠ L'IMAGE N'EST PAS DANS LE DEPOT, et c'est le meme cas qu'arnold.png sur
-// l'ecran des seances : elle a ete envoyee dans la conversation, et rien ne
-// permet d'ecrire un fichier depuis une image collee. Tant qu'elle manque, la
-// devanture dessinee en CSS prend sa place — elle n'est pas un pis-aller, elle
-// est le repli permanent pour tout programme sans visuel.
+// L'AFFICHE DE FONDATIONS EST DANS LE DEPOT depuis le build 1266 :
+// app/img/programmes/fondations.jpg, 1080 px de large, sans metadonnees. Elle
+// n'est pas dans les ASSETS du service worker — la boutique demande le reseau
+// pour acheter, et le handler fetch la garde des la premiere vue. La devanture
+// dessinee en CSS reste le repli permanent pour tout programme sans visuel,
+// et pour celui-ci quand l'image ne se charge pas — hors ligne, avant toute
+// premiere vue.
 // ⚠ CE QUE LE PLAN SPARK NE PERMET PAS, ET QU'IL FAUT SAVOIR AVANT QUE DE
 // L'ARGENT CIRCULE. Sans fonction serveur, RIEN NE VERIFIE UN ACHAT COTE
 // SERVEUR : `programmesAchetes` est un champ du dossier, et les regles RTDB

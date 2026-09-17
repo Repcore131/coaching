@@ -38744,11 +38744,11 @@ async function testExercices(){
         +(h.indexOf('appliquerProgramme')>=0?1:0);
       if(act!==1) return _echec(act+' action(s) sur la carte : '
         +(h.match(/onclick="[^"]*"/g)||[]).join(' | '));
-      // ⚠ LA DEVANTURE SE RETIRE ELLE-MEME SI LE FICHIER MANQUE. L'image n'est
-      // pas dans le dépôt — elle a été envoyée dans la conversation, et rien
-      // ne permet d'écrire un fichier depuis une image collée ; c'est le même
-      // cas qu'arnold.png. Une devanture cassée abîme plus la page que son
-      // absence, et le dessin CSS est DESSOUS, prêt à apparaître.
+      // ⚠ LA DEVANTURE SE RETIRE ELLE-MEME SI LE FICHIER MANQUE. L'affiche de
+      // Fondations est dans le dépôt, mais elle manque hors ligne avant toute
+      // première vue, et un programme publié peut pointer vers une image
+      // morte. Une devanture cassée abîme plus la page que son absence, et le
+      // dessin CSS est DESSOUS, prêt à apparaître.
       if(h.indexOf('onerror="this.remove()"')<0)
         return _echec('une image de devanture absente laisserait un cadre cassé');
       if(h.indexOf('bq-dev-fond')<0) return _echec('pas de devanture de repli');
@@ -38782,6 +38782,46 @@ async function testExercices(){
       // Et l'identifiant est bien celui qui part dans le onclick.
       if(h.indexOf("('fondations')")<0) return _echec('l’action ne porte pas l’identifiant');
       return true;})());
+
+    // L'AFFICHE DE FONDATIONS, ENTIERE. Elle est au format A4 et porte son
+    // texte jusqu'aux bords : le cadre 3/4 plafonné à 360 px coupait le bandeau
+    // du haut et la signature du bas. On la charge pour de vrai, dans une carte
+    // à la largeur d'un téléphone, et on mesure.
+    okA('L’affiche de Fondations est livrée, légère, et la carte la montre entière',async()=>{
+      const p=RC_PROGRAMMES.find(x=>x.id==='fondations');
+      if(!p||p.image!=='./img/programmes/fondations.jpg') return _echec('chemin : '+(p&&p.image));
+      const r=await fetch(p.image,{cache:'no-store'});
+      if(!r.ok) return _echec('le fichier n’est pas servi ('+r.status+')');
+      const octets=(await r.arrayBuffer()).byteLength;
+      if(octets>300000) return _echec(Math.round(octets/1000)+' ko : l’affiche n’a pas été réduite');
+      const hote=document.createElement('div');
+      hote.style.cssText='position:fixed;left:-10000px;top:0;width:333px';
+      try{
+        document.body.appendChild(hote);
+        // Sans image : le cadre dessiné garde son 3/4 plafonné.
+        hote.innerHTML=_htmlCarteProgramme({id:'x',nom:'X',description:'d',prixCts:100});
+        const nu=hote.querySelector('.bq-dev');
+        const plafond=parseFloat(getComputedStyle(nu).maxHeight);
+        const cadre=Math.min(Math.round(nu.clientWidth*4/3),plafond);
+        if(!(plafond>0)||Math.abs(nu.clientHeight-cadre)>1) return _echec('cadre sans image : '+nu.clientWidth+'×'+nu.clientHeight+', plafond '+plafond);
+        // Avec l'affiche : c'est elle qui donne la hauteur.
+        hote.innerHTML=_htmlCarteProgramme(p);
+        const dev=hote.querySelector('.bq-dev'), img=hote.querySelector('.bq-dev-img');
+        if(!img) return _echec('la carte ne rend pas l’affiche');
+        img.loading='eager';
+        await new Promise(ok=>{ if(img.complete&&img.naturalWidth) ok();
+          else{ img.addEventListener('load',ok); img.addEventListener('error',ok); setTimeout(ok,4000); } });
+        if(!img.isConnected||!img.naturalWidth) return _echec('l’affiche ne se charge pas');
+        if(img.naturalWidth<900) return _echec(img.naturalWidth+' px de large : floue sur un écran dense');
+        // La LARGEUR RÉELLE du cadre, pas celle de l'hôte : la bordure de la
+        // carte en retire deux pixels.
+        const b=dev.getBoundingClientRect(), bi=img.getBoundingClientRect();
+        const attendu=b.width*img.naturalHeight/img.naturalWidth;
+        if(Math.abs(b.height-attendu)>1) return _echec('cadre de '+b.height.toFixed(1)+' px pour une affiche de '+attendu.toFixed(1)+' px : elle est recadrée');
+        if(Math.abs(bi.height-b.height)>1||Math.abs(bi.width-b.width)>1) return _echec('l’image ne remplit pas le cadre ('+bi.width.toFixed(1)+'×'+bi.height.toFixed(1)+' / '+b.width.toFixed(1)+'×'+b.height.toFixed(1)+')');
+        return true;
+      } finally { hote.remove(); }
+    });
 
     // LA PORTE. Une boutique qu'on n'atteint pas ne vend rien — et elle est
     // posée là où la question se pose : devant sept jours vides.
