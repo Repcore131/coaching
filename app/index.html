@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1266';
+window.RC_BUILD='1267';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4023,6 +4023,13 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 input.set-input{font-family:var(--pile-titre);font-weight:400;
   font-size:18px;letter-spacing:1px;font-variant-numeric:tabular-nums;
   padding:5px 4px 3px}
+/* R29 — LES REPETITIONS D'UNE FOURCHETTE, 42 PX ET NON 56. MESURE a 359 px,
+   cas le plus large (112.5 kg, « Échec », « visé : 2 », gêne notée, barre de
+   defilement presente) : a 56 px la colonne passait de 47 a 69 px et le
+   tableau debordait. A 42 px, avec la cellule a 1 px de marge (renderSets),
+   la colonne fait 47 px — exactement celle d'un nombre fixe — et « 12-15 »
+   en indication reste entier. */
+input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-right:2px}
 .set-input:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 2px rgba(198,15,8,.15)}
 /* ── R14 — LES SEGMENTS RIR ONT ETE RETIRES (Kevin, 17/09/2026) ──────────
    Ils passaient le tableau en cartes, et le rendu a l'ecran a ete juge
@@ -13317,8 +13324,9 @@ const RC_LEXIQUE=Object.freeze({
     t:'Force max estimée (e1RM)',
     d:'La charge que tu pourrais sans doute soulever une seule fois, calculée depuis tes séries.',
     // R11 — la precision que l'encadre de l'onglet Perfs portait seul : le
-    // calcul part des repetitions PREVUES, pas de celles reellement faites.
-    p:'Fiable jusqu\'à 12 répétitions, approximative au-delà. Jamais testée en vrai. Calculée sur les répétitions prévues au programme, pas celles réellement faites.'}),
+    // calcul part des repetitions PREVUES. R29 — sauf sur une fourchette, ou
+    // l'athlete note ce qu'il a fait (repsDone) : c'est alors ce chiffre-la.
+    p:'Fiable jusqu\'à 12 répétitions, approximative au-delà. Jamais testée en vrai. Calculée sur les répétitions prévues au programme, ou sur celles que tu as notées quand l\'exercice a une fourchette.'}),
   douleur:Object.freeze({
     t:'Échelle de gêne',
     d:'Note ce que tu as ressenti pendant la série, pas après.',
@@ -28101,7 +28109,9 @@ function _buildSessionCard(s){
     };
     const line=done.map(x=>(x.degressive
       ?`${x.weight||'?'}kg×${x.reps||'?'} / ${x.weight2||'?'}kg×${x.p2reps||'?'}`
-      :`${x.weight||'?'}kg×${x.reps||'?'}`)+_sfx(x)
+      // R29 — sur une fourchette, les repetitions NOTEES : « 36kg×10 », et non
+      // la prescription « 36kg×10-12 » qui ne dit pas ce qui a ete fait.
+      :`${x.weight||'?'}kg×${x.repsDone!=null?x.repsDone:(x.reps||'?')}`)+_sfx(x)
     ).join(' · ');
     // N4.5 — LE NOM DE L'EXERCICE EST LE CHEMIN. Un bouton et non un div : il
     // se prend au clavier, il s'annonce comme un bouton, et le reste de la
@@ -35421,7 +35431,10 @@ function tonnageSerie(s,ex){
   // Isométrie : reps est une durée. Multiplier 30 secondes par la charge
   // fabriquerait un tonnage qui ne veut rien dire.
   if(ex&&techniqueDe(ex)==='isometrie') return 0;
-  const r1=repsToNumber(s.reps), w1=parseFloat(s.weight||0);
+  // R29 — les repetitions NOTEES d'abord (repsDone, sur une fourchette), la
+  // prescription sinon : la meme lecture que la performance. Sans repsDone,
+  // _perfReps rend exactement repsToNumber(s.reps) — rien ne bouge.
+  const r1=_perfReps(s), w1=parseFloat(s.weight||0);
   if(!(w1>0&&r1>0)) return 0;
   let v=w1*r1;
   if(s.degressive&&s.weight2) v+=parseFloat(s.weight2||0)*parseFloat(s.p2reps||0);
@@ -36269,6 +36282,17 @@ function parseReps(r){
   if(/-/.test(s)&&!/jambe|bras|cote/i.test(s)){return{type:'range',label:s};}
   if(/jambe|bras|côté|cote|par/i.test(s)){return{type:'unilateral',label:s};}
   return{type:'normal',label:s};
+}
+// R29 — PURE. La fourchette d'une prescription de repetitions, ou null.
+// SEULE une fourchette « 10-12 » ouvre la saisie des repetitions faites
+// (Kevin, 17/09/2026) : un nombre fixe (« 8 ») est une consigne, il n'y a rien
+// a choisir dedans. Meme motif que repsToNumber ci-dessous, qui en prend la
+// moyenne quand rien n'a ete note.
+function fourchetteReps(reps){
+  const m=String(reps==null?'':reps).trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  if(!m) return null;
+  const a=parseInt(m[1],10), b=parseInt(m[2],10);
+  return (a>0&&b>a)?{min:a,max:b}:null;
 }
 // Valeur numérique de reps pour le calcul de volume.
 // Plage "6-8" → moyenne (7). Formats textuels ("15 Par Jambe", "10 PUIS 20") →
@@ -42002,10 +42026,11 @@ function bilanSeanceDonnees(sess,user){
   let repsTotal=0;
   for(const nom of noms){
     const sets=((data[nom]||{}).sets)||[];
-    let n=0, meilleure=null, rmin=null, rmax=null;
+    let n=0, meilleure=null, rmin=null, rmax=null, fourch=null;
     for(const st of sets){
       if(!st||st.done!==true) continue;
       n++;
+      if(!fourch) fourch=fourchetteReps(st.reps);
       const w=parseFloat(st.weight);
       const r=(typeof _perfReps==='function')?Number(_perfReps(st)):Number(st.reps);
       if(r>0){ repsTotal+=r;
@@ -42017,9 +42042,21 @@ function bilanSeanceDonnees(sess,user){
       // Kevin, 09/09/2026 : « pas la moyenne, mais la charge la plus lourde
       // qui a ete mise sur les trois series » — c'etait deja la regle.
       if(!meilleure||w>meilleure.kg||(w===meilleure.kg&&r>meilleure.reps))
-        meilleure={kg:w,reps:r};
+        meilleure={kg:w,reps:r,notees:st.repsDone!=null};
     }
     if(!n) continue;                 // exercice ouvert mais jamais valide
+    // ══ R29 — SUR UNE FOURCHETTE, LES REPETITIONS DE LA SERIE LA PLUS LOURDE ══
+    // Kevin, 17/09/2026 : 10-12 en programme, 11 reps a 34 puis 10 reps a 36 :
+    // le bilan retient « 10 reps a 36 », et rien d'autre — ni « 10-11 », ni la
+    // moyenne. Si les repetitions de cette serie n'ont pas ete notees, on
+    // ecrit la fourchette du programme (`fourchette`) plutot qu'une moyenne
+    // qu'il n'a jamais faite. Hors fourchette, rien ne change.
+    if(fourch&&meilleure){
+      const vu=meilleure.notees?meilleure.reps:null;
+      ex.push({nom:String(nom).toUpperCase(),series:n,kg:meilleure.kg,reps:vu,
+        rmin:vu,rmax:vu,fourchette:fourch.min+'-'+fourch.max});
+      continue;
+    }
     ex.push({nom:String(nom).toUpperCase(),series:n,
       kg:meilleure?meilleure.kg:null,reps:meilleure?meilleure.reps:null,
       // LA FOURCHETTE REELLE, pas celle du programme : « 3 × 12-15 » sur
@@ -42205,7 +42242,11 @@ function _dessinerBilanSeance(d){
     const yy=y+i*LH;
     // LA CHARGE LA PLUS LOURDE DES SERIES, a droite, en blanc plein : c'est le
     // chiffre qu'on cherche des yeux. Le compte de series le precede, atténué.
-    const rep=(e.rmin!=null)
+    // R29 — une fourchette montre les repetitions de la serie la plus lourde,
+    // ou la fourchette du programme si elles n'ont pas ete notees.
+    const rep=e.fourchette
+      ? (e.reps!=null?String(e.reps):e.fourchette)
+      : (e.rmin!=null)
       ? (e.rmin===e.rmax?String(e.rmin):(e.rmin+'-'+e.rmax))
       : '';
     const gauche=e.series+' × '+(rep||'—');
@@ -43613,6 +43654,33 @@ function _woChargeSaisie(idx,i,champ,el){
   // celle qui porte le focus est modifiee EN PLACE.
   _woMajLignes(woState.exercises[idx],d,idx);
 }
+// ══ R29 — LES REPETITIONS FAITES, DANS UNE FOURCHETTE ═══════════════════
+// Un entier de 1 a 999, ou rien : vide rend la prescription (repsDone retire),
+// jamais 0 — une serie validee a zero repetition n'a pas eu lieu. Hors de la
+// fourchette, on garde le chiffre : c'est ce qui a ete fait, et 13 sur un
+// 10-12 dit justement qu'il est temps de charger.
+function _woRepsSaisie(idx,i,el){
+  const d=woState&&woState.sessionData&&woState.sessionData[idx];
+  const s=d&&d.sets&&d.sets[i];
+  if(!s||!el) return false;
+  const brut=String(el.value).trim().replace(',','.');
+  if(brut===''){
+    delete s.repsDone;
+  } else {
+    const n=Number(brut);
+    if(!Number.isInteger(n)||n<1||n>999){
+      el.value=s.repsDone!=null?String(s.repsDone):'';
+      toast('Répétitions : un nombre entier, 1 ou plus','var(--orange)');
+      return false;
+    }
+    s.repsDone=n;
+    if(el.value!==String(n)) el.value=String(n);
+  }
+  try{ woPersist(); }catch(e){}
+  // Comme la charge (R25) : on ne repeint que ce qui change, le focus reste.
+  _woMajLignes(woState.exercises[idx],d,idx);
+  return true;
+}
 // ══ R25 — LA SAISIE ENCHAINEE DES CHARGES ═══════════════════════════════
 //
 // Ce que renderSets a rendu pour chaque tbody : _woMajLignes compare le rendu
@@ -43649,7 +43717,11 @@ function _woBrancherEnchainement(tb,idx){
       const s=d&&d.sets&&d.sets[i];
       if(s){
         const brut=String(el.value).replace(',','.');
-        if(brut!==String(s[champ]==null?'':s[champ])) _woChargeSaisie(idx,i,champ,el);
+        if(brut!==String(s[champ]==null?'':s[champ])){
+          // R29 — les repetitions d'une fourchette ont leur propre ecriture.
+          if(champ==='repsDone') _woRepsSaisie(idx,i,el);
+          else _woChargeSaisie(idx,i,champ,el);
+        }
       }
     }catch(err){}
     const suivant=_woChampSuivant(tb,i,champ);
@@ -44314,7 +44386,8 @@ function renderSets(ex,data,idx,opts){
   // tbody retrouve ainsi le suivant sans lire la mise en page. Le dernier
   // champ OUVERT de l'exercice dit « terminé » (enterkeyhint="done").
   const _iDernierOuvert=data.sets.map(x=>!(x&&x.done)).lastIndexOf(true);
-  const _eh=(i,champ)=>(i===_iDernierOuvert&&(champ==='weight2'||!isDeg))?'done':'next';
+  // R29 — les repetitions precedent la charge dans la ligne : jamais « done ».
+  const _eh=(i,champ)=>(champ!=='repsDone'&&i===_iDernierOuvert&&(champ==='weight2'||!isDeg))?'done':'next';
   const _attrs=(i,champ)=>`data-serie="${i}" data-champ="${champ}" enterkeyhint="${_eh(i,champ)}"`;
 
   const lignes=data.sets.map((s,i)=>{
@@ -44464,6 +44537,20 @@ function renderSets(ex,data,idx,opts){
       +` aria-label="Gêne ressentie sur la série ${i+1} : ${_painVal||'non notée'}" onclick="geneMenuOuvrir(${idx},${i},this)">`
       +`<span aria-hidden="true">${_painVal||'—'}</span><span class="gene-fl" aria-hidden="true">▾</span></button>`;
 
+    // ══ R29 — LES REPETITIONS FAITES, SUR UNE FOURCHETTE SEULEMENT ══════
+    // Kevin, 17/09/2026 : « quand la personne met une fourchette de
+    // repetitions (et uniquement quand il y en a une), laisse-lui la
+    // possibilite de modifier la colonne ». Sur « 8 », la case reste un
+    // affichage. Le chiffre va dans `repsDone`, que la performance, le tonnage
+    // et le bilan lisent deja en priorite ; vide, on retombe sur la
+    // prescription, comme avant. Il se ferme a la validation, comme la charge.
+    const _fourch=(!isDeg&&!s.rpeCible)?fourchetteReps(s.reps||ex.reps):null;
+    const repsAffiche=(taille)=>_fourch
+      ?`<input class="set-input wo-reps" type="number" min="1" max="999" step="1" inputmode="numeric" ${_attrs(i,'repsDone')}`
+        +` value="${s.repsDone!=null?s.repsDone:''}" placeholder="${_fourch.min}-${_fourch.max}"`
+        +` aria-label="Répétitions faites à la série ${i+1}, fourchette de ${_fourch.min} à ${_fourch.max}" onchange="_woRepsSaisie(${idx},${i},this)" ${dis}>`
+      :`<span style="font-family:var(--pile-titre);font-size:${taille}px;font-weight:400;letter-spacing:.5px;line-height:1.2"><span style="font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>`;
+
     // Done button
     const doneClr=s.done?'var(--green)':'var(--border)';
     const doneBg=s.done?'var(--green)':'transparent';
@@ -44485,7 +44572,7 @@ function renderSets(ex,data,idx,opts){
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <div style="text-align:center;min-width:28px;flex-shrink:0">
                 <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_badgeRecord(idx,i)}</div>
-                <div style="font-family:var(--pile-titre);font-size:18px;font-weight:400;letter-spacing:.5px;line-height:1.2"><span style="font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</div>
+                <div>${repsAffiche(18)}</div>
               </div>
               ${weightInner}
             </div>
@@ -44499,9 +44586,9 @@ function renderSets(ex,data,idx,opts){
       </tr>`;
     }
     return `<tr class="${rowCls}${painAlert}">
-      <td style="text-align:center;padding:4px 6px">
+      <td style="text-align:center;padding:${_fourch?'4px 1px':'4px 6px'}">
         <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_badgeRecord(idx,i)}</span>
-        <span style="font-family:var(--pile-titre);font-size:20px;font-weight:400;letter-spacing:.5px;line-height:1.2"><span style="font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>
+        ${repsAffiche(20)}
       </td>
       ${weightCell}
       <td class="wo-intensite">${rirSelect}</td>
@@ -45921,8 +46008,8 @@ const PERF_ETAT_LIB={
 const PERF_ENCADRE=`<div style="background:var(--surface-2);border-left:3px solid var(--sub);border-radius:var(--r-2);padding:10px 12px;margin-top:14px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
     Estimation basée sur tes séries validées. L'e1RM est un modèle : il est
     fiable jusqu'à 12 répétitions, approximatif au-delà. Le calcul retient les
-    répétitions <strong>prévues</strong> au programme, pas celles réellement
-    faites.
+    répétitions <strong>prévues</strong> au programme, ou celles que tu as
+    notées quand l'exercice a une fourchette.
   </div>`;
 
 // Exercices dont l'état a CHANGÉ avec la séance qu'on vient d'enregistrer.
@@ -47596,7 +47683,7 @@ function _htmlExercicesRelus(sc){
       +'<span class="rcf-rk-v">'+escapeHtml(String(x.series))+' série'
       +(x.series>1?'s':'')
       +(x.kg>0?' · '+nb(x.kg)+' kg':'')
-      +(x.reps>0?' × '+nb(x.reps):'')
+      +(x.reps>0?' × '+nb(x.reps):(x.fourchette?' × '+escapeHtml(x.fourchette):''))
       +'</span></div>').join('')
     +'</div>';
 }

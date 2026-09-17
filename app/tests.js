@@ -39281,7 +39281,8 @@ async function testExercices(){
 
     ok('R11 — la fiche e1RM dit que le calcul part des répétitions prévues',(()=>{
       const p=RC_LEXIQUE.e1rm.p||'';
-      if(p.indexOf('répétitions prévues')<0||p.indexOf('réellement faites')<0)
+      // R29 — et, sur une fourchette, celles que l'athlète a notées.
+      if(p.indexOf('répétitions prévues')<0||p.indexOf('notées quand l\'exercice a une fourchette')<0)
         return _echec('précision absente : « '+p+' »');
       // Et l'encadré qui la portait seul n'est pas revenu dans l'onglet Perfs.
       return String(showProgressTab).indexOf('?PERF_ENCADRE')<0?true:_echec('PERF_ENCADRE est revenu dans Perfs');})());
@@ -40431,6 +40432,123 @@ async function testExercices(){
         if(b.getAttribute('onclick')!=='openBilanChoice()') return _echec('la ligne ne mène pas au bilan');
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
+
+    // ══ 17/09/2026 — R29 : LES RÉPÉTITIONS D'UNE FOURCHETTE, ET LE BILAN ══════
+
+    ok('R29 — seule une fourchette « 10-12 » est une fourchette',(()=>{
+      const cas=[['10-12',[10,12]],[' 8 - 10 ',[8,10]],['8',null],['12',null],['12-10',null],['10-10',null],
+        ['10 PUIS 20',null],['15 par jambe',null],['8-10 par jambe',null],['',null],[null,null],[12,null]];
+      for(const [v,att] of cas){
+        const f=fourchetteReps(v);
+        if(JSON.stringify(f?[f.min,f.max]:null)!==JSON.stringify(att)) return _echec(JSON.stringify(v)+' → '+JSON.stringify(f));
+      }
+      return true;})());
+
+    okA('R29 — la colonne des répétitions s’ouvre sur une fourchette, et seulement sur elle',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const toasts=[];
+      try{
+        window.saveUser=()=>true; window.toast=m=>toasts.push(String(m));
+        currentUser={id:'r29',email:'r29@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'DEVELOPPE HALTERES',series:3,reps:'10-12',repos:'2 min'},
+            {name:'ROWING BARRE',series:2,reps:'8',repos:'2 min'},{name:'SQUAT',series:2,reps:'8 PUIS 8',repos:'2 min'}]}]};
+        localStorage.removeItem('rc_wo_state');
+        launchWorkout(currentUser.sessions_config[0],0);
+        const tb=document.getElementById('sets-body-0'), d=woState.sessionData[0];
+        const rep=i=>tb.querySelector('input.wo-reps[data-serie="'+i+'"]');
+        const ch=i=>tb.querySelector('input[data-serie="'+i+'"][data-champ="weight"]');
+        const entree=el=>el.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+        // FOURCHETTE : un champ par série, la fourchette en indication.
+        if(tb.querySelectorAll('input.wo-reps').length!==3) return _echec(tb.querySelectorAll('input.wo-reps').length+' champs de répétitions');
+        if(rep(0).placeholder!=='10-12'||rep(0).value!=='') return _echec('indication : « '+rep(0).placeholder+' »');
+        if(rep(2).getAttribute('enterkeyhint')!=='next'||ch(2).getAttribute('enterkeyhint')!=='done') return _echec('touches du clavier');
+        // ENCHAÎNEMENT : répétitions → charge → répétitions de la série suivante.
+        rep(0).focus(); rep(0).value='12'; entree(rep(0));
+        if(document.activeElement!==ch(0)) return _echec('les répétitions ne mènent pas à la charge');
+        ch(0).value='32'; entree(ch(0));
+        if(document.activeElement!==rep(1)) return _echec('la charge ne mène pas aux répétitions suivantes');
+        if(d.sets[0].repsDone!==12||d.sets[0].weight!=='32') return _echec('série 1 : '+d.sets[0].repsDone+' × '+d.sets[0].weight);
+        // Rangé dans l'instantané de la séance.
+        const snap=JSON.parse(localStorage.getItem('rc_wo_state')||'{}');
+        if(((snap.sessionData||{})[0]||{sets:[]}).sets[0].repsDone!==12) return _echec('les répétitions ne sont pas dans l’instantané');
+        // REFUS : zéro, négatif, décimal. Vide : retour à la prescription.
+        for(const v of ['0','-3','10.5']){
+          rep(1).value=v; rep(1).dispatchEvent(new Event('change',{bubbles:true}));
+          if(d.sets[1].repsDone!=null||rep(1).value!=='') return _echec('« '+v+' » accepté');
+        }
+        if(!toasts.some(t=>/Répétitions/.test(t))) return _echec('refus muet');
+        rep(1).value='11'; rep(1).dispatchEvent(new Event('change',{bubbles:true}));
+        rep(1).value=''; rep(1).dispatchEvent(new Event('change',{bubbles:true}));
+        if('repsDone' in d.sets[1]) return _echec('vider ne rend pas la prescription');
+        // HORS FOURCHETTE : gardé, c'est ce qui a été fait.
+        rep(1).value='13'; rep(1).dispatchEvent(new Event('change',{bubbles:true}));
+        if(d.sets[1].repsDone!==13) return _echec('13 sur un 10-12 est refusé');
+        // FERMÉ À LA VALIDATION, comme la charge.
+        d.sets[0].done=true; renderSets(woState.exercises[0],d,0);
+        if(!rep(0).disabled) return _echec('les répétitions restent modifiables après validation');
+        // 359 PX, LE CAS LE PLUS LARGE : le champ ne fait pas déborder le tableau.
+        const ecran=document.getElementById('s-workout'), svW=ecran.style.maxWidth;
+        try{
+          ecran.style.maxWidth='359px';
+          Object.assign(d.sets[1],{weight:'112.5',rir:'echec',pain:'4'}); d.sets[1].repsDone=15;
+          woState.exercises[0].rirCible='2';
+          renderSets(woState.exercises[0],d,0);
+          await new Promise(r=>setTimeout(r,60));
+          const w=tb.closest('table').parentElement;
+          if(w.scrollWidth>w.clientWidth) return _echec('le tableau déborde de '+(w.scrollWidth-w.clientWidth)+' px à 359 px');
+          const ph=rep(2);
+          if(ph.scrollWidth>ph.clientWidth) return _echec('l’indication « 10-12 » est coupée');
+        } finally { ecran.style.maxWidth=svW; }
+        // NOMBRE FIXE, ET DÉGRESSIVE : aucune saisie.
+        for(const k of [1,2]){
+          woState.currentEx=k; renderWoEx();
+          const t=document.getElementById('sets-body-'+k);
+          if(t.querySelectorAll('input.wo-reps,input[data-champ="repsDone"]').length) return _echec(woState.exercises[k].reps+' ouvre la saisie des répétitions');
+        }
+        return true;
+      } finally {
+        window.saveUser=svSave; window.toast=svToast;
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        localStorage.removeItem('rc_wo_state'); if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
+        currentUser=sU; woState=sW;
+      }
+    });
+
+    ok('R29 — le bilan et l’image retiennent la série la plus lourde, avec ses répétitions',(()=>{
+      // L'exemple de Kevin : 10-12 au programme, 12 à 32, 11 à 34, 10 à 36.
+      const dev={sets:[{weight:'32',reps:'10-12',repsDone:12,done:true},{weight:'34',reps:'10-12',repsDone:11,done:true},
+        {weight:'36',reps:'10-12',repsDone:10,done:true}]};
+      const row={sets:[{weight:'60',reps:'8',done:true},{weight:'62.5',reps:'8',done:true}]};
+      const sans={sets:[{weight:'34',reps:'10-12',repsDone:11,done:true},{weight:'36',reps:'10-12',done:true}]};
+      const sess={date:Date.now(),name:'Push',duration:40,sets:7,setsPlanned:7,volume:1000,
+        data:{'Développé haltères':dev,'Rowing barre':row,'Curl':sans}};
+      const b=bilanSeanceDonnees(sess,null);
+      const e=n=>b.ex.find(x=>x.nom===n);
+      const dv=e('DÉVELOPPÉ HALTÈRES');
+      if(dv.kg!==36||dv.reps!==10||dv.rmin!==10||dv.rmax!==10||dv.series!==3) return _echec('développé : '+JSON.stringify(dv));
+      // Nombre fixe : rien ne change.
+      const rw=e('ROWING BARRE');
+      if(rw.kg!==62.5||rw.rmin!==8||rw.rmax!==8||rw.fourchette) return _echec('rowing : '+JSON.stringify(rw));
+      // Répétitions non notées sur la série la plus lourde : la fourchette, pas une moyenne.
+      const cu=e('CURL');
+      if(cu.kg!==36||cu.reps!==null||cu.fourchette!=='10-12') return _echec('non notées : '+JSON.stringify(cu));
+      // L'IMAGE : même branche, et le dessin ne lève pas.
+      const src=String(_dessinerBilanSeance);
+      if(!/e\.fourchette[\s\S]{0,80}e\.reps!=null\?String\(e\.reps\):e\.fourchette/.test(src)) return _echec('le dessin ne lit pas la série la plus lourde');
+      let cv=null; try{ cv=_dessinerBilanSeance(b); }catch(x){ return _echec('dessin : '+x.message); }
+      if(!cv||!cv.width) return _echec('aucune image');
+      // L'HISTORIQUE (« Ce que tu as fait ») dit la même chose.
+      const z=document.createElement('div'); z.innerHTML=_htmlExercicesRelus(sess);
+      if(!/DÉVELOPPÉ HALTÈRES3 séries · 36 kg × 10(?!\d)/.test(z.textContent)) return _echec('historique : « '+z.textContent+' »');
+      if(!/CURL2 séries · 36 kg × 10-12/.test(z.textContent)) return _echec('historique sans notées : « '+z.textContent+' »');
+      // LE TONNAGE suit les répétitions notées, et seulement elles.
+      if(tonnageSerie(dev.sets[2],{name:'X'})!==360) return _echec('tonnage noté : '+tonnageSerie(dev.sets[2],{name:'X'}));
+      if(tonnageSerie({weight:'36',reps:'10-12',done:true},{name:'X'})!==36*11) return _echec('tonnage sans notées changé');
+      // LE COACH lit ce qui a été fait.
+      const carte=_buildSessionCard({date:Date.now(),data:{'Développé haltères':dev}});
+      if(!/32kg×12[\s\S]*34kg×11[\s\S]*36kg×10(?!-)/.test(carte)) return _echec('carte coach : '+(carte.match(/\d+kg×[\d-]+/g)||[]).join(' '));
+      return true;})());
 
     // ══ 17/09/2026 — R28 : PAS ET SOMMEIL, LA SAISIE DU JOUR D'ABORD ════════
 
@@ -41647,7 +41765,7 @@ async function testExercices(){
         // R11 — la precision des repetitions prevues, retiree de l'onglet Perfs.
         e1rm:['Force max estimée (e1RM)',
           'La charge que tu pourrais sans doute soulever une seule fois, calculée depuis tes séries.',
-          'Fiable jusqu\'à 12 répétitions, approximative au-delà. Jamais testée en vrai. Calculée sur les répétitions prévues au programme, pas celles réellement faites.'],
+          'Fiable jusqu\'à 12 répétitions, approximative au-delà. Jamais testée en vrai. Calculée sur les répétitions prévues au programme, ou sur celles que tu as notées quand l\'exercice a une fourchette.'],
         douleur:['Échelle de gêne',
           'Note ce que tu as ressenti pendant la série, pas après.',undefined],
         neat:['Activité hors sport (NEAT)',
