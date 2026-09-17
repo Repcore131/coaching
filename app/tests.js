@@ -33646,7 +33646,10 @@ async function testExercices(){
         // B1.1 — L'OUBLI. Le coach qui verifie une seance avant de la publier
         // retombait en colonne de 480 px, sans barre laterale, au milieu d'un
         // espace par ailleurs entierement elargi.
-        's-seance-apercu'];
+        's-seance-apercu',
+        // R28 — Motion Lab : un écran coach, qui a besoin de toute la largeur
+        // pour sa frise.
+        's-coach-motion-lab'];
 
       ok('LA BARRE LATERALE N\'EST PLUS ENFERMEE DANS LE TABLEAU DE BORD',(()=>{
         // Elle etait un enfant de #s-coach-home et disparaissait des que le
@@ -40467,6 +40470,230 @@ async function testExercices(){
         if(b.getAttribute('onclick')!=='openBilanChoice()') return _echec('la ligne ne mène pas au bilan');
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
+
+    // ══ 17/09/2026 — R28 : MOTION LAB, LOT 1 — LA DÉCOUPE ══════════════════
+    //
+    // Le coach isole le mouvement utile d'une vidéo déposée en répétitions :
+    // des bornes en millisecondes, jamais une copie. Le modèle vit dans
+    // index.html (le lecteur de correction le lit), l'éditeur dans
+    // app/motion-lab.js, chargé à la première ouverture.
+
+    // Un coach, son athlète et une vidéo, posés dans DB le temps d'un test.
+    const _r28Monter=(videos)=>{
+      const coach={id:'c28',email:'c28@t.fr',fname:'Kevin',lname:'G',role:'coach',clients:[],exAlias:{},exMuscles:{},
+        consent:{health:true,policyVersion:POLICY_VERSION}};
+      const lea={id:'a28',email:'a28@t.fr',fname:'Léa',lname:'B',role:'athlete',coachId:'c28',exAlias:{},exMuscles:{},
+        sessions:[],bilans:[],consent:{health:true,policyVersion:POLICY_VERSION},videos};
+      const users=DB.get('users')||{};
+      users['a28@t.fr']=lea; users['c28@t.fr']=coach;
+      DB.set('users',users);
+      currentUser=coach;
+      return {coach,lea};
+    };
+    const _r28Video=o=>Object.assign({id:'v28',name:'Arraché',url:location.origin+'/app/ml-absente-r28.mp4',
+      date:Date.UTC(2026,8,17),size:1000,feedback:null},o||{});
+
+    ok('R28 — segmentsVideo garde ce qui se lit, et rien d’inventé',(()=>{
+      const S=l=>segmentsVideo({segments:l});
+      // L'ordre, les noms par défaut, les bornes arrondies.
+      const a=S([{id:'b',debutMs:5000.4,finMs:7000},{id:'a',label:'  Arraché 1  ',debutMs:1000,finMs:2500}]);
+      if(JSON.stringify(a)!==JSON.stringify([{id:'a',label:'Arraché 1',debutMs:1000,finMs:2500},{id:'b',label:'Rép 2',debutMs:5000,finMs:7000}]))
+        return _echec('tri ou libellés : '+JSON.stringify(a));
+      // CE QUI NE SE LIT PAS TOMBE : absent, négatif, inversé, trop court, plus de dix secondes.
+      const b=S([{debutMs:'x',finMs:2000},{debutMs:-10,finMs:500},{debutMs:3000,finMs:2000},
+        {debutMs:0,finMs:SEG_MIN_MS-1},{debutMs:0,finMs:segMaxMs()+1},null,{debutMs:0,finMs:segMaxMs()}]);
+      if(b.length!==1||b[0].finMs!==10000) return _echec('filtre : '+JSON.stringify(b));
+      // Firebase rend une liste à trous en OBJET.
+      if(S({0:{id:'x',debutMs:0,finMs:1000},3:{id:'y',debutMs:2000,finMs:3000}}).length!==2) return _echec('objet Firebase non lu');
+      // Identifiants absents ou en double : chacun le sien, stable.
+      const c=S([{debutMs:0,finMs:1000},{id:'d',debutMs:2000,finMs:3000},{id:'d',debutMs:4000,finMs:5000}]);
+      if(new Set(c.map(s=>s.id)).size!==3) return _echec('identifiants : '+c.map(s=>s.id));
+      // Vingt au plus, libellé borné.
+      const d=S(Array.from({length:30},(_,i)=>({id:'r'+i,label:'x'.repeat(60),debutMs:i*1000,finMs:i*1000+500})));
+      if(d.length!==SEG_MAX||d[0].label.length!==SEG_LIBELLE_MAX) return _echec(d.length+' répétitions, libellé de '+d[0].label.length);
+      if(S(undefined).length||segmentsVideo(null).length) return _echec('une vidéo sans répétition en rend');
+      return true;})());
+
+    ok('R28 — les répétitions s’écrivent chez l’athlète, sans toucher à la correction',(()=>{
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), svPush=CLOUD.pushOne;
+      try{
+        const envois=[];
+        CLOUD.pushOne=(k,u)=>{ envois.push(k); return Promise.resolve(true); };
+        _r28Monter([_r28Video({feedback:'bien',feedbackSeen:true})]);
+        const r=enregistrerSegmentsVideo('a28@t.fr','v28',[{id:'s1',label:'Rép 1',debutMs:1200,finMs:3100},{debutMs:-1,finMs:4}]);
+        if(!r.ok||r.segments.length!==1) return _echec('écriture : '+JSON.stringify(r.segments));
+        const v=DB.get('users')['a28@t.fr'].videos[0];
+        if(JSON.stringify(v.segments)!=='[{"id":"s1","label":"Rép 1","debutMs":1200,"finMs":3100}]') return _echec('stocké : '+JSON.stringify(v.segments));
+        // DÉCOUPER N'EST PAS CORRIGER : ni commentaire, ni notification.
+        if(v.feedback!=='bien'||v.feedbackSeen!==true) return _echec('la correction a bougé');
+        if(envois.join()!=='a28@t.fr') return _echec('envois : '+envois.join());
+        // Une liste vide retire la clé.
+        enregistrerSegmentsVideo('a28@t.fr','v28',[]);
+        if('segments' in DB.get('users')['a28@t.fr'].videos[0]) return _echec('un tableau vide reste dans le dossier');
+        // UN AUTRE COACH NE PEUT RIEN ÉCRIRE.
+        currentUser={id:'autre',email:'autre@t.fr',role:'coach'};
+        const n=enregistrerSegmentsVideo('a28@t.fr','v28',[{debutMs:0,finMs:1000}]);
+        if(n.ok||'segments' in DB.get('users')['a28@t.fr'].videos[0]) return _echec('un autre coach a écrit');
+        return true;
+      } finally { CLOUD.pushOne=svPush; DB.set('users',JSON.parse(svUsers)); currentUser=sU; }})());
+
+    okA('R28 — le lecteur de correction lit les répétitions en boucle, et propose la découpe aux seules vidéos déposées',async()=>{
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{});
+      const svVc=[window._vcEmail,window._vcVideoId,window._tsAnnotations];
+      const hote=document.createElement('div');
+      const verifier=()=>{
+        _r28Monter([_r28Video({segments:[{id:'s1',label:'Rép 1',debutMs:1000,finMs:2500},{id:'s2',label:'Rép 2',debutMs:5000,finMs:7000}]}),
+          {id:'yt28',name:'Squat',url:'https://www.youtube.com/watch?v=aaaaaaaaaaa',date:1}]);
+        // LA DÉCOUPE : seulement pour un fichier.
+        const fichier=_vcCorpsHtml('a28@t.fr','v28'), lien=_vcCorpsHtml('a28@t.fr','yt28');
+        if(!/Découper les répétitions \(2\)/.test(fichier)) return 'pas de « Découper » sur la vidéo déposée';
+        if(/Découper les répétitions/.test(lien)) return 'la découpe est proposée sur un lien YouTube';
+        // LES PUCES, ACTIVES D'EMBLÉE.
+        hote.innerHTML='<video id="vid28"></video>'+htmlLecteurCorrection('vid28',DB.get('users')['a28@t.fr'].videos[0]);
+        document.body.appendChild(hote);
+        const puces=[...hote.querySelectorAll('#rc-reps-vid28 button[data-rep]')];
+        if(puces.map(b=>b.textContent.trim()).join()!=='Rép 1,Rép 2') return 'puces : '+puces.map(b=>b.textContent.trim());
+        if(puces.some(b=>b.disabled)) return 'une puce attend qu’on lance la lecture';
+        if(hote.querySelector('#rc-barre-vid28 button[data-cmd="pas"]').disabled!==true) return 'le reste de la barre ne suit plus sa règle';
+        // Sans l'entrée de la vidéo, la barre est celle d'avant.
+        if(/rc-reps-/.test(htmlLecteurCorrection('x'))) return 'une barre sans vidéo propose des répétitions';
+        // PAS ENCORE DE MÉTADONNÉES : la puce les demande.
+        const v=/** @type {HTMLVideoElement} */(hote.querySelector('#vid28'));
+        if(rcRepetition('vid28',1)!==true||v.preload!=='metadata') return 'une puce sans métadonnées ne les demande pas';
+        // AVEC MÉTADONNÉES : la boucle se pose sur les bornes.
+        Object.defineProperty(v,'readyState',{configurable:true,get:()=>4});
+        if(rcRepetition('vid28',1)!==true) return 'la répétition ne se lit pas';
+        if(!v._rcLoop||v._rcLoop.a!==5||v._rcLoop.b!==7) return 'boucle : '+JSON.stringify(v._rcLoop);
+        if(puces.map(b=>b.getAttribute('aria-pressed')).join()!=='false,true') return 'la puce choisie n’est pas marquée';
+        if(!/0:05 → 0:07/.test(hote.querySelector('#rc-ab-vid28').textContent)) return 'le libellé de boucle ne suit pas';
+        rcEffacerBoucle('vid28');
+        if(v._rcLoop||puces.some(b=>b.getAttribute('aria-pressed')==='true')) return 'effacer la boucle laisse une répétition marquée';
+        if(rcRepetition('vid28',9)!==false) return 'une répétition absente se lit';
+        return null;
+      };
+      let msg=null;
+      try{ msg=verifier(); }
+      finally {
+        hote.remove();
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        [window._vcEmail,window._vcVideoId,window._tsAnnotations]=svVc;
+      }
+      return msg?_echec(msg):true;
+    });
+
+    okA('R28 — Motion Lab se charge à la demande, et ses bornes tiennent',async()=>{
+      if(typeof mlOuvrir!=='function'){
+        if(document.querySelector('script[src*="motion-lab.js"]')) return _echec('le module est demandé sans être à la demande');
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      }
+      const sc=document.querySelector('script[src*="motion-lab.js"]');
+      if(!sc||sc.getAttribute('src').indexOf('?v='+RC_BUILD)<0) return _echec('le module n’est pas versionné par le build');
+      if(await chargerMotionLab()!==true) return _echec('un second chargement échoue');
+      if(document.querySelectorAll('script[src*="motion-lab.js"]').length!==1) return _echec('le module est chargé deux fois');
+      // Les textes.
+      if(mlTempsTexte(62345)!=='1:02.34'||mlTempsTexte(-5)!=='0:00.00') return _echec('temps : '+mlTempsTexte(62345));
+      if(mlDureeTexte(1750)!=='1,75 s') return _echec('durée : '+mlDureeTexte(1750));
+      // Le nom suivant ne redonne jamais un nom déjà vu.
+      if(mlProchainLibelle([])!=='Rép 1'||mlProchainLibelle([{label:'Rép 1'},{label:'Rép 3'}])!=='Rép 4'
+        ||mlProchainLibelle([{label:'Échec'},{label:'Belle'}])!=='Rép 3') return _echec('libellés');
+      // UNE RÉPÉTITION NEUVE reste dans la vidéo.
+      const n=mlNouveauSegment([],7950,8000);
+      if(!n||n.debutMs!==8000-SEG_MIN_MS||n.finMs!==8000) return _echec('en fin de vidéo : '+JSON.stringify(n));
+      if(mlNouveauSegment([],0,SEG_MIN_MS-1)!==null) return _echec('une vidéo trop courte accepte une répétition');
+      const m=mlNouveauSegment([],1500,8000);
+      if(!m||m.debutMs!==1500||m.finMs!==3500) return _echec('par défaut : '+JSON.stringify(m));
+      // LES BORNES : la borne qu'on déplace s'arrête, l'autre ne bouge pas.
+      const s={id:'s',label:'Rép 1',debutMs:1000,finMs:3000};
+      const B=(q,t,d)=>{ const r=mlBorner(s,q,t,d); return [r.debutMs,r.finMs].join('-'); };
+      if(B('fin',20000,60000)!=='1000-11000') return _echec('plus de dix secondes : '+B('fin',20000,60000));
+      if(B('fin',20000,8000)!=='1000-8000') return _echec('au-delà de la vidéo : '+B('fin',20000,8000));
+      if(B('fin',500,8000)!=='1000-'+(1000+SEG_MIN_MS)) return _echec('fin avant début : '+B('fin',500,8000));
+      if(B('debut',2990,8000)!==(3000-SEG_MIN_MS)+'-3000') return _echec('début après fin : '+B('debut',2990,8000));
+      if(B('debut',-40,8000)!=='0-3000') return _echec('début négatif : '+B('debut',-40,8000));
+      const loin={id:'l',label:'x',debutMs:15000,finMs:20000};
+      if(mlBorner(loin,'debut',1000,60000).debutMs!==10000) return _echec('début à plus de dix secondes de la fin');
+      if(mlBorner(s,'fin',NaN,8000)!==s) return _echec('une borne illisible déplace quand même');
+      // La frise, le pas d'une image, la règle, le zoom.
+      if(mlXVersTemps(173,346,8000)!==4000||mlXVersTemps(999,346,8000)!==8000||mlXVersTemps(10,0,8000)!==0) return _echec('x → temps');
+      if(mlTempsVersX(4000,346,8000)!==173||mlTempsVersX(9000,346,8000)!==346) return _echec('temps → x');
+      if(Math.abs(mlPasImageMs(60)-1000/60)>1e-9||Math.abs(mlPasImageMs(NaN)-1000/VID_FPS_DEFAUT)>1e-9) return _echec('pas d’une image');
+      if(mlPasRegleMs(346,8000)!==2000||mlPasRegleMs(2768,8000)!==250) return _echec('règle : '+mlPasRegleMs(346,8000)+' / '+mlPasRegleMs(2768,8000));
+      if(mlZoomVoisin(8,1)!==8||mlZoomVoisin(1,-1)!==1||mlZoomVoisin(2,1)!==4) return _echec('zoom');
+      if(!mlMemesSegments([{id:'a',label:'Rép 1',debutMs:0,finMs:1000}],[{id:'a',label:'Rép 1',debutMs:0.2,finMs:1000}])
+        ||mlMemesSegments([{id:'a',label:'Rép 1',debutMs:0,finMs:1000}],[])) return _echec('comparaison des listes');
+      return true;
+    });
+
+    okA('R28 — l’écran : quitter demande avant de perdre, et la correction revient avec son brouillon',async()=>{
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svC=window.rcConfirm, svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
+      const svVc=[window._vcEmail,window._vcVideoId,window._tsAnnotations];
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
+        try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
+        _r28Monter([_r28Video({segments:[{id:'s1',label:'Rép 1',debutMs:1000,finMs:2500}]})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        openVideoCorrection('a28@t.fr','v28');
+        document.getElementById('vc-general').value='Brouillon R28';
+        window._tsAnnotations=[{ts:'0:03',note:'coudes',sec:3.2}];
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        if((document.querySelector('.screen.active')||{}).id!=='s-coach-motion-lab') return 'mauvais écran';
+        if(document.getElementById('modal-overlay')) return 'la feuille de correction reste ouverte par-dessus';
+        if(document.getElementById('ml-titre').textContent!=='Arraché') return 'titre : '+document.getElementById('ml-titre').textContent;
+        if(!/^Motion Lab · Léa/.test(document.querySelector('.ml-sous').textContent)) return 'sous-titre';
+        const e=document.getElementById('ml-enreg');
+        if(!e.disabled) return '« Enregistrer » actif sans rien à enregistrer';
+        // Une répétition renommée : il y a quelque chose à enregistrer.
+        _ml.segments[0]={..._ml.segments[0],label:'Arraché 1'}; _mlMajEnregistrer();
+        if(e.disabled||e.textContent!=='ENREGISTRER •') return 'la modification ne se voit pas';
+        // QUITTER DEMANDE, et « Rester » garde tout.
+        let q=null; window.rcConfirm=async(t)=>{ q=t; return false; };
+        await fermerMotionLab();
+        if(!q||(document.querySelector('.screen.active')||{}).id!=='s-coach-motion-lab'||!_ml) return 'quitter sans enregistrer ne demande rien';
+        // ENREGISTRER : chez l'athlète, et il n'y a plus rien à demander.
+        mlEnregistrer();
+        if(DB.get('users')['a28@t.fr'].videos[0].segments[0].label!=='Arraché 1') return 'l’enregistrement n’a pas écrit';
+        if(!e.disabled) return '« Enregistrer » reste actif après l’enregistrement';
+        q=null;
+        await fermerMotionLab();
+        if(q) return 'une question est posée alors que tout est enregistré';
+        if(_ml!==null) return 'l’état du laboratoire survit à sa fermeture';
+        // LA CORRECTION REVIENT, brouillon compris, avec la répétition renommée.
+        if(!document.getElementById('modal-overlay')) return 'la correction ne se rouvre pas';
+        if(document.getElementById('vc-general').value!=='Brouillon R28') return 'le commentaire tapé est perdu';
+        if(!window._tsAnnotations||window._tsAnnotations.length!==1) return 'les repères posés sont perdus';
+        if(!/Arraché 1/.test(document.getElementById('rc-reps-vc-video')?.textContent||'')) return 'la répétition n’est pas proposée à la lecture';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      finally {
+        try{ if(document.getElementById('modal-overlay')) closeModal(); }catch(e){}
+        try{ if(typeof mlFermer==='function'&&_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        window.rcConfirm=svC; window._ratProfilFait=svRat; window.toast=svT; CLOUD.pushOne=svPush;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        [window._vcEmail,window._vcVideoId,window._tsAnnotations]=svVc;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      await new Promise(r=>setTimeout(r,900));
+      try{ document.getElementById('modal-overlay')?.remove(); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return msg?_echec(msg):true;
+    });
+
+    okA('R28 — le service worker ne reconduit pas motion-lab.js d’une version à l’autre',async()=>{
+      let src='';
+      try{ src=await (await fetch('./sw.js',{cache:'no-store'})).text(); }catch(e){ return _echec('sw.js illisible'); }
+      const ex=/const _exclu = u =>([\s\S]{0,400}?);/.exec(src);
+      if(!ex||ex[1].indexOf('motion-lab')<0) return _echec('motion-lab.js n’est pas écarté du report');
+      const as=src.match(/const\s+ASSETS\s*=\s*\[([^\]]*)\]/);
+      if(!as||/motion-lab/.test(as[1])) return _echec('motion-lab.js est téléchargé d’office par tous');
+      return true;
+    });
 
     // ══ 17/09/2026 — R27 : « MES PROGRAMMES », SANS RIEN MÉLANGER ═════════
     //

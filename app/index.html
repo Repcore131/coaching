@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1267';
+window.RC_BUILD='1268';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -11211,6 +11211,24 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- ══════ MOTION LAB — LOT 1 : LA DÉCOUPE ═════════════════════════════
+     Un écran plein, sur le modèle du comparateur juste au-dessus : une frise
+     et deux poignées ne tiennent pas dans une feuille modale. Son contenu est
+     dessiné par app/motion-lab.js, chargé à la première ouverture.
+     s-coach-… : go() réserve ce préfixe au coach, et c'est la garde voulue —
+     un athlète n'a rien à découper dans sa propre vidéo. -->
+<div id="s-coach-motion-lab" class="screen ecran-coach">
+  <div class="topbar">
+    <!-- R21 — fermeture dédiée : demande avant de perdre des répétitions non enregistrées, puis rouvre la correction de la vidéo. -->
+    <button class="back-btn" onclick="fermerMotionLab()">←</button>
+    <span class="topbar-title" id="ml-titre">Motion Lab</span>
+    <button id="ml-enreg" class="btn btn-red btn-sm" onclick="enregistrerMotionLab()" disabled style="margin:0;letter-spacing:1px;padding:7px 12px;min-height:0">ENREGISTRER</button>
+  </div>
+  <div class="scroll-area" style="flex:1;padding:0 14px 28px">
+    <div id="ml-contenu"></div>
+  </div>
+</div>
+
 <!-- ══════ TRAITEMENTS ═══════════════════════════════════════════════
      SEPARE de l'ecran des complements, et pour la meme raison que l'objet
      l'est du leur : un complement se conseille, un medicament ne se conseille
@@ -17147,6 +17165,9 @@ function go(id){
   // programme qu'on ne voit plus.
   try{ fermerVenteProgramme(true); }catch(e){}
   try{ fermerFicheVente(true); }catch(e){}
+  // MOTION LAB : sa vidéo continuerait de jouer, son compris, derrière
+  // l'écran suivant. La quitter par une autre porte que sa flèche l'arrête.
+  try{ if(id!=='s-coach-motion-lab'){ const _mv=document.getElementById('ml-video'); if(_mv&&!_mv.paused) _mv.pause(); } }catch(e){}
   try{ fermerContactCoach(true); }catch(e){}
   try{ fermerChoixDiete(true); }catch(e){}
   // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
@@ -81413,7 +81434,10 @@ function secsToTs(sec){
 // Sur une vidéo YouTube, il n'y a pas d'élément <video> à piloter : la barre
 // ne s'affiche pas du tout. La piloter demanderait l'API iframe de YouTube,
 // c'est-à-dire un script externe — exclu.
-function htmlLecteurCorrection(vidId){
+// `video` (facultatif) : l'entree de la video, pour proposer ses repetitions
+// decoupees dans Motion Lab. Sans elle, la barre est exactement celle d'avant.
+function htmlLecteurCorrection(vidId,video){
+  const segs=video?segmentsVideo(video):[];
   const b=(lib,act,titre,extra)=>`<button type="button" onclick="${act}" title="${escapeHtml(titre)}"
     aria-label="${escapeHtml(titre)}" ${extra||''} disabled
     style="min-width:44px;min-height:44px;padding:8px 10px;border-radius:var(--r-2);cursor:pointer;
@@ -81444,6 +81468,21 @@ function htmlLecteurCorrection(vidId){
       ${b('Effacer la boucle','rcEffacerBoucle(\''+vidId+'\')','Effacer la boucle','data-cmd="ab"')}
       <span id="rc-ab-${vidId}" aria-live="polite" style="font-size:var(--fs-2xs);color:var(--text-faint)"></span>
     </div>
+    ${segs.length?`<!-- MOTION LAB — LES REPETITIONS DECOUPEES. Une touche lit la
+         repetition en boucle, de son debut a sa fin : le lecteur respecte les
+         bornes posees, sans rien reencoder. Les bornes voyagent en attribut,
+         en millisecondes, pour que rcRepetition n'ait rien a relire du dossier. -->
+    <div id="rc-reps-${vidId}" data-segs="${escapeHtml(JSON.stringify(segs.map(s=>[s.debutMs,s.finMs])))}"
+      style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
+      <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.4px;font-weight:800;text-transform:uppercase">Répétitions</span>
+      ${segs.map((s,i)=>b(escapeHtml(s.label),'rcRepetition(\''+vidId+'\','+i+')',
+        'Lire '+s.label+' en boucle','data-cmd="rep" data-rep="'+i+'" aria-pressed="false"')
+        // ACTIVES D'EMBLEE, contrairement au reste de la barre : la video de la
+        // feuille est en preload="none", et une repetition qui attendrait qu'on
+        // lance la lecture pour se laisser choisir ferait un geste de trop.
+        // rcRepetition charge elle-meme les metadonnees.
+        .replace(' disabled','')).join('')}
+    </div>`:''}
     <div style="margin-top:8px">
       ${b('Annoter ici','rcAnnoterIci(\''+vidId+'\')','Créer une annotation au temps exact affiché','data-cmd="note" style="width:100%"')}
     </div>
@@ -81501,7 +81540,46 @@ function rcEffacerBoucle(vidId){
   videoClearLoop(v); v._rcAB={};
   const z=document.getElementById('rc-ab-'+vidId);
   if(z) z.textContent='';
+  _rcMarquerRepetition(vidId,-1);
   return true;
+}
+// MOTION LAB — LIRE UNE REPETITION DECOUPEE. Elle demarre a son debut et
+// boucle a sa fin : c'est la boucle A-B existante, posee sur les bornes du
+// coach. videoSetLoop refuse au-dela de dix secondes, et segmentsVideo n'en
+// laisse jamais passer de plus longue.
+function rcRepetition(vidId,i){
+  const v=_rcVideo(vidId), z=document.getElementById('rc-reps-'+vidId);
+  if(!v||!z) return false;
+  let l=[];
+  try{ l=JSON.parse(z.dataset.segs||'[]'); }catch(e){ l=[]; }
+  const s=l[i];
+  if(!Array.isArray(s)) return false;
+  // PAS ENCORE DE METADONNEES (preload="none") : on les demande, et la
+  // repetition se pose des qu'elles arrivent.
+  if(v.readyState<1){
+    v.addEventListener('loadedmetadata',()=>{ rcRepetition(vidId,i); },{once:true});
+    try{ v.preload='metadata'; v.load(); }catch(e){ return false; }
+    return true;
+  }
+  const r=videoSetLoop(v,Number(s[0])/1000,Number(s[1])/1000);
+  if(!r) return false;
+  v._rcAB={a:r.a,b:r.b};
+  try{ v.currentTime=r.a; }catch(e){}
+  const ab=document.getElementById('rc-ab-'+vidId);
+  if(ab) ab.textContent='Boucle '+secsToTs(r.a)+' → '+secsToTs(r.b);
+  _rcMarquerRepetition(vidId,i);
+  try{ const p=v.play(); if(p&&typeof p.catch==='function') p.catch(()=>{}); }catch(e){}
+  return true;
+}
+function _rcMarquerRepetition(vidId,i){
+  const z=document.getElementById('rc-reps-'+vidId);
+  if(!z) return;
+  z.querySelectorAll('button[data-rep]').forEach(b=>{
+    const on=Number(b.dataset.rep)===i;
+    b.setAttribute('aria-pressed',on?'true':'false');
+    b.style.borderColor=on?'var(--red)':'var(--border)';
+    b.style.background=on?'rgba(224,32,32,.12)':'#111';
+  });
 }
 // « Annoter ici ». Le timecode enregistré est le temps RÉEL de la vidéo, pas
 // le temps perçu au ralenti : currentTime ne dépend pas de playbackRate.
@@ -81626,7 +81704,10 @@ function _vcCorpsHtml(email,videoId){
          file, _fileVideosSuivantes rend un tableau vide et rien ne s’affiche. -->
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px">${escapeHtml(v.name)} · ${new Date(v.date).toLocaleDateString('fr-FR')}${_vcReste?` · <span id="vc-reste" style="display:inline-block">${_vcReste} restante${_vcReste>1?'s':''}</span>`:''}</p>
     ${_videoEmbed(v.url)}
-    ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?htmlLecteurCorrection('vc-video'):''}
+    ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?htmlLecteurCorrection('vc-video',v):''}
+    <!-- MOTION LAB : SEULEMENT POUR UNE VIDEO DEPOSEE. Un lien YouTube ou Drive
+         ne donne acces ni a un element <video> ni a ses images. -->
+    ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?`<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="ouvrirMotionLab(window._vcEmail,window._vcVideoId)">✂ Découper les répétitions${segmentsVideo(v).length?' ('+segmentsVideo(v).length+')':''}</button>`:''}
     <div style="margin-top:14px">
       <label style="margin-top:0">Commentaire général</label>
       <div id="qc-chips" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:4px"></div>
@@ -81783,6 +81864,132 @@ function saveVideoCorrection(){
     return;
   }
   openClientDetail(currentClientId,true);
+}
+
+// ══ MOTION LAB — LOT 1 : LES RÉPÉTITIONS D'UNE VIDÉO ═══════════════════════
+//
+// DES BORNES, JAMAIS UNE COPIE. Une répétition est un intervalle en
+// millisecondes sur la vidéo déposée : rien n'est réencodé, rien n'est
+// téléversé, la vidéo source ne bouge pas. Les répétitions vivent dans
+// l'entrée de la vidéo, chez l'athlète — quelques dizaines d'octets chacune,
+// écrites comme `feedback` :
+//
+//   videos[i].segments = [{id, label, debutMs, finMs}]
+//
+// LE MODÈLE VIT ICI, L'ÉDITEUR DANS app/motion-lab.js. Le lecteur de
+// correction lit les répétitions sans avoir à charger le module.
+//
+// ⚠ DIX SECONDES AU PLUS (décision D7). La lecture en boucle est plafonnée à
+// VID_BOUCLE_MAX_S pour ne pas retélécharger le média à chaque tour ; une
+// répétition dure bien moins, et une borne plus large ne se lirait pas en
+// boucle.
+const SEG_MAX=20, SEG_MIN_MS=100, SEG_LIBELLE_MAX=24;
+function segMaxMs(){ return VID_BOUCLE_MAX_S*1000; }
+// PURE. Les répétitions lisibles d'une vidéo, triées par début. Ce qui ne peut
+// pas se lire TOMBE — bornes absentes, inversées, trop courtes, trop longues —
+// plutôt que d'être « réparé » en une répétition que le coach n'a pas posée.
+// Firebase rend une liste à trous en objet : _tabBloc l'aplatit.
+function segmentsVideo(v){
+  const vus=new Set(), l=[];
+  for(const s of _tabBloc(v&&v.segments)){
+    if(typeof s!=='object') continue;
+    const d=Math.round(Number(s.debutMs)), f=Math.round(Number(s.finMs));
+    if(!isFinite(d)||!isFinite(f)||d<0||f-d<SEG_MIN_MS||f-d>segMaxMs()) continue;
+    let id=String(s.id==null?'':s.id).trim().slice(0,40);
+    if(!id||vus.has(id)) id='s'+d.toString(36)+'-'+f.toString(36);
+    if(vus.has(id)) continue;
+    vus.add(id);
+    l.push({id,label:String(s.label==null?'':s.label).trim().slice(0,SEG_LIBELLE_MAX),debutMs:d,finMs:f});
+  }
+  l.sort((a,b)=>a.debutMs-b.debutMs||a.finMs-b.finMs);
+  const out=l.slice(0,SEG_MAX);
+  out.forEach((s,i)=>{ if(!s.label) s.label='Rép '+(i+1); });
+  return out;
+}
+// L'ÉCRITURE. Le même chemin que saveVideoCorrection — le dossier de
+// l'athlète, DB puis CLOUD.pushOne — et la même garde : le coach désigné.
+// RIEN D'AUTRE NE BOUGE, ni `feedback` ni `feedbackSeen` : découper n'est pas
+// corriger, et l'athlète n'a pas à être prévenu d'un réglage de lecture.
+// Une liste vide RETIRE la clé : on n'écrit pas de tableau vide dans un dossier
+// poussé en entier à chaque synchronisation.
+function enregistrerSegmentsVideo(email,videoId,segments){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||c.coachId!==currentUser?.id) return {ok:false,raison:'Élève introuvable ou non autorisé'};
+  const idx=(Array.isArray(c.videos)?c.videos:[]).findIndex(v=>v&&v.id===videoId);
+  if(idx<0) return {ok:false,raison:'Vidéo introuvable'};
+  const propres=segmentsVideo({segments});
+  if(propres.length) c.videos[idx].segments=propres;
+  else delete c.videos[idx].segments;
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  return {ok,envoi:CLOUD.pushOne(email,c),segments:propres};
+}
+// LE CHARGEMENT DU MODULE (décision D3). Un fichier à part, demandé à la
+// première ouverture : un athlète qui n'ouvre jamais le laboratoire ne le
+// télécharge pas. `?v=` porte le build — le service worker sert ses assets
+// cache d'abord, et une adresse neuve à chaque version garantit le bon fichier.
+let _mlChargement=null;
+function chargerMotionLab(){
+  if(typeof window.mlOuvrir==='function') return Promise.resolve(true);
+  if(_mlChargement) return _mlChargement;
+  _mlChargement=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='./motion-lab.js?v='+encodeURIComponent(String(window.RC_BUILD||''));
+    s.onload=()=>(typeof window.mlOuvrir==='function')?res(true)
+      :(_mlChargement=null,rej(new Error('Motion Lab est illisible : recharge la page.')));
+    s.onerror=()=>{ _mlChargement=null; s.remove();
+      rej(new Error('Motion Lab n’a pas pu se charger : il faut être en ligne la première fois.')); };
+    document.head.appendChild(s);
+  });
+  return _mlChargement;
+}
+// LE BROUILLON DE LA CORRECTION EST GARDÉ. Le laboratoire est un écran, et la
+// feuille de correction se ferme pour le laisser passer : un commentaire tapé
+// et des repères posés, pas encore enregistrés, seraient perdus au retour.
+let _vcBrouillonMl=null;
+async function ouvrirMotionLab(email,videoId){
+  const c=(DB.get('users')||{})[email];
+  if(!c||c.coachId!==currentUser?.id){ toast('Élève introuvable ou non autorisé','var(--orange)'); return false; }
+  const v=(Array.isArray(c.videos)?c.videos:[]).find(x=>x&&x.id===videoId);
+  if(!v||!/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')){
+    toast('Seule une vidéo déposée se découpe : un lien YouTube ou Drive ne donne pas accès aux images.','var(--orange)');
+    return false;
+  }
+  try{ await chargerMotionLab(); }
+  catch(e){ toast(e.message,'var(--orange)'); return false; }
+  const g=document.getElementById('vc-general');
+  _vcBrouillonMl=(g&&window._vcEmail===email&&window._vcVideoId===videoId)
+    ?{email,videoId,general:g.value,tss:JSON.parse(JSON.stringify(window._tsAnnotations||[]))}:null;
+  if(document.getElementById('modal-overlay')) closeModal();
+  return window.mlOuvrir(email,videoId);
+}
+// LES DEUX BOUTONS DE LA BARRE sont écrits dans index.html, et un attribut
+// d'événement doit nommer une fonction qui existe sur window DÈS LE
+// CHARGEMENT — le module, lui, n'arrive qu'à la première ouverture.
+function enregistrerMotionLab(){
+  return (typeof window.mlEnregistrer==='function')?window.mlEnregistrer():false;
+}
+// La flèche de l'écran. Le module décide — il demande avant de perdre des
+// répétitions non enregistrées ; sans lui, on revient simplement.
+function fermerMotionLab(){
+  if(typeof window.mlFermer==='function') return window.mlFermer();
+  retourDe('s-coach-motion-lab');
+  return true;
+}
+// Rappelée par le module une fois le laboratoire quitté : on revient là d'où
+// l'on venait, et la correction de la même vidéo se rouvre, brouillon compris.
+function _vcRouvrirApresMotionLab(email,videoId){
+  retourDe('s-coach-motion-lab');
+  const b=_vcBrouillonMl;
+  _vcBrouillonMl=null;
+  openVideoCorrection(email,videoId);
+  if(b&&b.email===email&&b.videoId===videoId&&document.getElementById('vc-general')){
+    document.getElementById('vc-general').value=b.general;
+    window._tsAnnotations=b.tss;
+    _renderTsAnnotations();
+  }
+  return true;
 }
 
 // ======= AUDIO RECORDING =======

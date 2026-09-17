@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1267';
+const CACHE = 'repcore-v1268';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -255,8 +255,13 @@ self.addEventListener('activate', e => {
       // peut plus en contenir. Mais un cache d'AVANT ce lot en garde une copie,
       // et sans cette ligne le report la ferait passer de version en version,
       // indefiniment, pour un fichier que plus personne ne lira jamais.
+      //
+      // motion-lab.js NON PLUS : index.html le demande avec ?v=<build>, et
+      // chaque report reconduirait la copie d'une version que plus aucune
+      // page ne demandera.
       const _exclu = u => /\/index\.html$/.test(u) || /\/tests\.js$/.test(u)
         || /\/sw\.js$/.test(u) || /\/database\.rules\.json$/.test(u)
+        || /\/motion-lab\.js(\?|$)/.test(u)
         || (PURGE_EXERCICES === CACHE && /\/exercices\//.test(u));
       // LA BASE ALIMENTAIRE D'ABORD, ET HORS BUDGET. Elle n'entre dans le
       // cache que par un prefetch explicite, et le report ne la connaissait
