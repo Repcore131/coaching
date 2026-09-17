@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1267';
+window.RC_BUILD='1268';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -6602,6 +6602,25 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rep-btn-large .rep-btn-v{display:flex;align-items:center;gap:8px;letter-spacing:2px}
 .rep-btn-large .rep-chev{color:#5c5c5c;font-size:12px;letter-spacing:-2px}
 .rep-maj{text-transform:uppercase}
+/* ── R30 — LA LIGNE DU SON ─────────────────────────────────────────────────
+   18 PX AU PLUS, ET C'EST LA CONSIGNE : 4 de marge + une ligne de 14. Une
+   seule ligne, jamais deux — nowrap, et l'ellipse plutot que le retour.
+   LA ZONE TACTILE D'« Activer » S'ELARGIT SANS MONTER : .hit44 poserait 44 px
+   centres sur une ligne de 14, soit 15 px au-dessus d'elle, dans « Passer ».
+   Le pseudo-element deborde donc de 10 px sur les cotes et de 8 px vers le bas,
+   dans la marge de la carte, et de 3 px seulement vers le haut — sous « Passer »
+   restent 10 px de la colonne des commandes. */
+.rep-invite{margin-top:4px;height:14px;line-height:14px;font-size:10px;font-weight:600;
+  color:#8a8a8a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  display:flex;align-items:center;justify-content:center;gap:6px}
+.rep-invite[hidden]{display:none}
+.rep-invite[data-type="ok"] .rep-invite-t{color:var(--green)}
+.rep-invite-t{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.rep-invite-sep{color:#4a4a4a;flex:0 0 auto}
+.rep-invite-b{position:relative;flex:0 0 auto;background:none;border:none;padding:0;margin:0;
+  font:inherit;font-weight:800;line-height:14px;color:var(--red-text);cursor:pointer;
+  text-decoration:underline;text-underline-offset:2px}
+.rep-invite-b::before{content:'';position:absolute;top:-3px;bottom:-8px;left:-10px;right:-10px}
 /* Écran court : le cadran rétrécit, et lui seul — le corps du décompte et
    l'emprise de la décharge en découlent. */
 @media (max-height:700px){.rep-carte{--rep-d:82px}}
@@ -35797,6 +35816,11 @@ function _monterRepos(z){
         <span class="rep-btn-v rep-maj">Passer<span class="rep-chev">&#187;</span></span></button>
     </div>
     </div>
+    <!-- R30 — LA LIGNE DU SON, au premier repos de la seance seulement. Vide et
+         masquee a la construction : _peindreRepos la remplit une fois, a
+         l'entree du bandeau (_reposInviteSon). SOUS les deux colonnes, jamais
+         par-dessus : « Passer » reste entier. -->
+    <div id="rep-invite" class="rep-invite" hidden></div>
   </div>`;
 }
 // LA SORTIE, puis le retrait. pointer-events coupes TOUT DE SUITE : les boutons
@@ -35859,6 +35883,8 @@ function _peindreRepos(){
   // a chaque seconde.
   if(!_reposVisible){
     _reposVisible=true;
+    // R30 — le premier repos de la seance porte la ligne du son.
+    try{ _reposInviteSon(); }catch(e){}
     const c=z.firstElementChild;
     if(c&&!arcReduit()&&c.animate){
       _animer(c,[{transform:'translateY(14px)',opacity:0},{transform:'translateY(0)',opacity:1}],
@@ -35964,6 +35990,8 @@ function _peindreRepos(){
   const _sonOn=!!(currentUser&&currentUser.sonRepos);
   if(_sonOn!==_reposSonRendu){
     _reposSonRendu=_sonOn;
+    // R30 — la ligne ne doit pas contredire l'icone qu'on vient de toucher.
+    try{ _majInviteSon(_sonOn); }catch(e){}
     const b=document.getElementById('rep-son');
     if(b){
       b.setAttribute('aria-pressed',_sonOn?'true':'false');
@@ -36020,18 +36048,109 @@ function _bipRepos(){
 }
 function basculerSonRepos(){
   if(!currentUser) return;
-  currentUser.sonRepos=!currentUser.sonRepos;
+  _ecrireSonRepos(!currentUser.sonRepos);
+  toast(currentUser.sonRepos?'Son de fin de repos activé':'Son de fin de repos désactivé');
+}
+// R30 — L'ECRITURE DU REGLAGE, SEPAREE DE LA BASCULE. Le lien « Activer » du
+// minuteur doit ALLUMER, jamais inverser : si l'icone du bandeau a deja allume
+// le son entre-temps, une bascule l'eteindrait. Et il ne porte pas de toast —
+// la ligne dit elle-meme « Son activé ✓ ».
+// A N'APPELER QUE DEPUIS UN GESTE : c'est ici que le contexte audio s'ouvre.
+function _ecrireSonRepos(actif){
+  if(!currentUser) return false;
+  currentUser.sonRepos=!!actif;
   // LE GESTE EST ICI, et nulle part ailleurs dans la vie du son : c'est le
   // seul moment où l'on peut ouvrir le contexte. À l'extinction, on ne touche
   // à rien — le contexte déjà amorcé resservira si le son revient.
-  if(currentUser.sonRepos) _amorcerSon();
+  if(currentUser.sonRepos){
+    _amorcerSon();
+    // R30 — allumer casse la serie des « vue sans activer » : si le son est
+    // eteint plus tard, la proposition revient pour trois seances.
+    if(currentUser.vus&&typeof currentUser.vus==='object'&&currentUser.vus.reposSonVus) currentUser.vus.reposSonVus=0;
+  }
   saveUser();
-  toast(currentUser.sonRepos?'Son de fin de repos activé':'Son de fin de repos désactivé');
   // Les deux surfaces qui montrent l'état se remettent d'accord tout de suite.
   // _peindreRepos sort de lui-même quand aucun repos ne court : rien à garder
   // ici. _majSonReglages ne fait rien si l'écran de réglages n'est pas monté.
   try{ _peindreRepos(); }catch(e){}
   try{ _majSonReglages(); }catch(e){}
+  return true;
+}
+// ══ R30 — LE SON, PROPOSE AU PREMIER REPOS DE LA SEANCE ═══════════════════
+//
+// Eteint par defaut, et c'est juste (salle bruyante, ecouteurs). Mais sur
+// iPhone rien ne vibre : sans le son, la fin du repos n'emet aucun signal, et
+// l'athlete ne sait pas que le reglage existe. On le lui dit une fois par
+// seance, dans le minuteur, au moment ou ca le concerne. On propose, on
+// n'insiste pas : trois seances vues sans l'activer, et la ligne se tait.
+const REPOS_SON_VUS_MAX=3;
+// PURE. Ce que dit la ligne, ou null.
+function reposInviteSon(u){
+  if(!u) return null;
+  if(u.sonRepos) return {type:'actif',texte:'Un bip te préviendra'};
+  const n=Number(u.vus&&u.vus.reposSonVus)||0;
+  if(n>=REPOS_SON_VUS_MAX) return null;
+  // « un bip te préviendra » serait faux ici : le son est coupe. La ligne dit
+  // ce qui se passera VRAIMENT, et comment le changer.
+  return {type:'propose',texte:'Aucun son à la fin du repos',lien:'Activer'};
+}
+// Remplit la ligne a l'ENTREE du bandeau, au premier repos de la seance
+// seulement (woState._reposVu, local a la seance).
+function _reposInviteSon(){
+  if(typeof woState==='undefined'||!woState) return;
+  const z=document.getElementById('rep-invite');
+  if(!z) return;
+  if(woState._reposVu) return;
+  woState._reposVu=true;
+  const m=reposInviteSon(currentUser);
+  if(!m){ z.hidden=true; z.innerHTML=''; return; }
+  z.dataset.type=m.type;
+  z.innerHTML='<span class="rep-invite-t">'+escapeHtml(m.texte)+'</span>'
+    +(m.lien?'<span class="rep-invite-sep" aria-hidden="true">·</span>'
+      +'<button type="button" class="rep-invite-b" onclick="activerSonDepuisRepos(event)">'+escapeHtml(m.lien)+'</button>':'');
+  z.hidden=false;
+  if(m.type==='propose') _compterVueSonRepos();
+}
+// LE COMPTE DES SEANCES OU LA PROPOSITION A ETE VUE. Une fois par seance : la
+// seance est reconnue a son heure de depart, parce qu'un rechargement de
+// l'application en plein repos reconstruit woState sans _reposVu, et
+// compterait la meme seance deux fois.
+function _compterVueSonRepos(){
+  const u=currentUser;
+  if(!u||typeof woState==='undefined'||!woState) return false;
+  if(!u.vus||typeof u.vus!=='object') u.vus={};
+  const seance=woState.startTime||null;
+  if(seance&&u.vus.reposSonSeance===seance) return false;
+  u.vus.reposSonVus=(Number(u.vus.reposSonVus)||0)+1;
+  if(seance) u.vus.reposSonSeance=seance;
+  try{ saveUser(); }catch(e){}
+  return true;
+}
+// « Activer » : allume, confirme dans la ligne, puis la retire. Aucune
+// navigation — un <button type="button">, et l'evenement s'arrete ici.
+function activerSonDepuisRepos(ev){
+  try{ if(ev){ ev.preventDefault(); ev.stopPropagation(); } }catch(e){}
+  if(!currentUser) return false;
+  if(!currentUser.sonRepos) _ecrireSonRepos(true);
+  _majInviteSon(true);
+  return true;
+}
+// La ligne suit l'etat du son, quel que soit le chemin qui l'a change (le
+// lien, ou l'icone du bandeau). Allume alors qu'elle proposait : « Son activé ✓ »
+// deux secondes, puis rien. Eteint alors qu'elle promettait un bip : retiree.
+let _reposInviteMinuteur=null;
+function _majInviteSon(sonOn){
+  const z=document.getElementById('rep-invite');
+  if(!z||z.hidden) return;
+  if(sonOn&&z.dataset.type==='propose'){
+    z.dataset.type='ok';
+    z.innerHTML='<span class="rep-invite-t">Son activé ✓</span>';
+    if(_reposInviteMinuteur) clearTimeout(_reposInviteMinuteur);
+    _reposInviteMinuteur=setTimeout(()=>{ _reposInviteMinuteur=null;
+      if(z.isConnected&&z.dataset.type==='ok'){ z.hidden=true; z.innerHTML=''; } },2000);
+  } else if(!sonOn&&z.dataset.type==='actif'){
+    z.hidden=true; z.innerHTML='';
+  }
 }
 // L'interrupteur des réglages suit le dossier, jamais l'inverse : il est posé
 // à l'ouverture de l'écran et après chaque bascule.

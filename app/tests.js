@@ -40433,6 +40433,107 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R30 : LE SON DE FIN DE REPOS, PROPOSÉ DANS LE MINUTEUR ══
+
+    ok('R30 — ce que dit la ligne du son, selon le réglage et le compteur',(()=>{
+      if(reposInviteSon(null)!==null) return _echec('sans dossier, une ligne');
+      const a=reposInviteSon({sonRepos:true});
+      if(!a||a.type!=='actif'||a.texte!=='Un bip te préviendra'||a.lien) return _echec('son actif : '+JSON.stringify(a));
+      for(const vus of [undefined,{},{reposSonVus:2}]){
+        const p=reposInviteSon({sonRepos:false,vus});
+        if(!p||p.type!=='propose'||p.texte!=='Aucun son à la fin du repos'||p.lien!=='Activer') return _echec('son coupé ('+JSON.stringify(vus)+') : '+JSON.stringify(p));
+      }
+      // Coupé, la ligne ne promet JAMAIS un bip.
+      if(/bip/i.test(JSON.stringify(reposInviteSon({sonRepos:false})))) return _echec('un bip promis alors que le son est coupé');
+      if(reposInviteSon({sonRepos:false,vus:{reposSonVus:3}})!==null) return _echec('la ligne insiste après trois séances');
+      // Sans tiret.
+      if(/—/.test(JSON.stringify([a,reposInviteSon({})]))) return _echec('un tiret dans la ligne');
+      return true;})());
+
+    okA('R30 — la ligne du son : premier repos seulement, 18 px au plus, « Passer » intact, « Activer » reste dans la séance',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const toasts=[]; const pause=ms=>new Promise(r=>setTimeout(r,ms));
+      const inv=()=>document.getElementById('rep-invite');
+      const seance=()=>{ localStorage.removeItem('rc_wo_state'); launchWorkout(currentUser.sessions_config[0],0); };
+      try{
+        window.saveUser=()=>true; window.toast=m=>toasts.push(String(m));
+        currentUser={id:'r30',email:'r30@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},sonRepos:false,
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'ROWING BARRE',series:3,reps:'8',repos:'90 s'}]}]};
+        seance();
+        // La carte sans la ligne, pour mesurer ce que la ligne ajoute.
+        woState._reposVu=true; demarrerRepos(90,''); await pause(250);
+        const hSans=document.getElementById('rep-bandeau').getBoundingClientRect().height;
+        annulerRepos(); await pause(250);
+        // PREMIER REPOS DE LA SÉANCE.
+        woState._reposVu=false; const fin0=Date.now();
+        demarrerRepos(90,''); await pause(250);
+        const z=inv();
+        if(!z||z.hidden) return _echec('pas de ligne au premier repos');
+        if(z.textContent.replace(/\s+/g,' ')!=='Aucun son à la fin du repos·Activer') return _echec('ligne : « '+z.textContent+' »');
+        const carte=document.getElementById('rep-bandeau').getBoundingClientRect();
+        if(carte.height-hSans>18.5) return _echec('la ligne ajoute '+Math.round(carte.height-hSans)+' px');
+        const passer=document.querySelector('#rep-bandeau .rep-btn-large').getBoundingClientRect();
+        const lien=z.querySelector('.rep-invite-b');
+        if(z.getBoundingClientRect().top<passer.bottom) return _echec('la ligne passe sous « Passer »');
+        if(lien.getBoundingClientRect().top-3<passer.bottom) return _echec('la zone tactile d’« Activer » monte dans « Passer »');
+        // Un calque de la suite (accord, installation) peut couvrir le bas de
+        // l'écran pendant les tests : on ne juge que ce qui est DANS le minuteur.
+        const pt=document.elementFromPoint(passer.left+passer.width/2,passer.bottom-1);
+        if(pt&&pt.closest('#wo-repos')&&!pt.closest('.rep-btn-large')) return _echec('« Passer » n’est plus touchable en bas');
+        if((currentUser.vus||{}).reposSonVus!==1) return _echec('vue non comptée : '+JSON.stringify(currentUser.vus));
+        // ACTIVER : le son, la confirmation, rien d'autre.
+        const echeance=woState.reposFin;
+        lien.click();
+        if(currentUser.sonRepos!==true) return _echec('le son ne s’allume pas');
+        if((document.querySelector('.screen.active')||{}).id!=='s-workout') return _echec('« Activer » fait quitter la séance');
+        if(woState.reposFin!==echeance) return _echec('« Activer » touche au repos');
+        if(z.textContent!=='Son activé ✓') return _echec('confirmation : « '+z.textContent+' »');
+        if(toasts.length) return _echec('un toast en plus de la ligne : '+toasts.join(' | '));
+        if(currentUser.vus.reposSonVus!==0) return _echec('allumer ne remet pas le compteur à zéro');
+        await pause(2150);
+        if(!z.hidden) return _echec('la confirmation ne se retire pas');
+        // LE DEUXIÈME REPOS DE LA SÉANCE : rien.
+        annulerRepos(); await pause(250); demarrerRepos(90,''); await pause(250);
+        if(!inv().hidden) return _echec('la ligne revient au deuxième repos');
+        annulerRepos(); await pause(250);
+        // SON DÉJÀ ACTIF : « Un bip te préviendra », et l'icône qui le coupe retire la ligne.
+        seance(); demarrerRepos(90,''); await pause(250);
+        if(inv().textContent!=='Un bip te préviendra') return _echec('son actif : « '+inv().textContent+' »');
+        document.getElementById('rep-son').click();
+        if(!inv().hidden) return _echec('la ligne promet encore un bip après coupure');
+        annulerRepos(); await pause(250);
+        // TROIS SÉANCES SANS ACTIVER, PUIS PLUS RIEN.
+        currentUser.sonRepos=false; currentUser.vus={};
+        const vu=[];
+        for(let k=0;k<4;k++){
+          seance(); woState.startTime=Date.now()+k*1000;
+          demarrerRepos(90,''); await pause(200);
+          vu.push(!inv().hidden); annulerRepos(); await pause(220);
+        }
+        if(vu.join()!=='true,true,true,false') return _echec('séances : '+vu.join());
+        // UN RECHARGEMENT EN PLEIN REPOS ne compte pas la séance deux fois.
+        currentUser.vus={}; seance();
+        demarrerRepos(90,''); await pause(200); annulerRepos(); await pause(220);
+        woState._reposVu=false; demarrerRepos(90,''); await pause(200);
+        if(currentUser.vus.reposSonVus!==1) return _echec('rechargement : compté '+currentUser.vus.reposSonVus+' fois');
+        // L'ICÔNE DU BANDEAU ALLUME PENDANT LA PROPOSITION : la ligne suit.
+        document.getElementById('rep-son').click();
+        if(inv().textContent!=='Son activé ✓') return _echec('l’icône allume, la ligne dit encore « '+inv().textContent+' »');
+        annulerRepos();
+        // La bascule des réglages reste une bascule, avec son toast.
+        toasts.length=0; basculerSonRepos();
+        if(currentUser.sonRepos!==false||!/désactivé/.test(toasts.join())) return _echec('basculerSonRepos a changé');
+        return true;
+      } finally {
+        try{ annulerRepos(); }catch(e){}
+        window.saveUser=svSave; window.toast=svToast;
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        localStorage.removeItem('rc_wo_state'); if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
+        currentUser=sU; woState=sW;
+      }
+    });
+
     // ══ 17/09/2026 — R29 : LES RÉPÉTITIONS D'UNE FOURCHETTE, ET LE BILAN ══════
 
     ok('R29 — seule une fourchette « 10-12 » est une fourchette',(()=>{
