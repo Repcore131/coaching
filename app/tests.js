@@ -40471,6 +40471,212 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R29 : MOTION LAB, LOTS 2 ET 3 — LA TRAJECTOIRE ════════
+    //
+    // Tout se calcule sur l'appareil du coach (option A). Les images de ces
+    // tests sont FABRIQUÉES ici, pixel par pixel : un disque sombre à liseré
+    // clair sur un fond bruité, qui se déplace selon une loi connue. La suite
+    // n'a pas de vidéo, et une vérité terrain vaut mieux qu'un « à peu près ».
+
+    // Un générateur pseudo-aléatoire DÉTERMINISTE : un test qui échoue une fois
+    // sur dix n'apprend rien.
+    const _r29Alea=graine=>{ let s=graine>>>0; return ()=>((s=Math.imul(s^(s>>>15),2246822507)+0x9e3779b9>>>0)/4294967296); };
+    // Une image en niveaux de gris : fond bruité, disque de rayon r en (cx, cy).
+    const _r29Image=(w,h,cx,cy,r,alea,sansDisque)=>{
+      const g=new Float32Array(w*h);
+      for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+        let v=90+22*alea();
+        if(!sansDisque){
+          const d=Math.hypot(x-cx,y-cy);
+          if(d<=r) v=d>r*0.72?185:(d<r*0.2?210:28);
+          else if(d<r+1) v=v+(185-v)*(r+1-d);
+        }
+        g[y*w+x]=v;
+      }
+      return g;
+    };
+    // Des points de trajectoire : y(t) = y0 - A·sin²(πt/T), x(t) = x0 + B·sin(2πt/T), en px.
+    const _r29Points=(n,pasMs,o)=>Array.from({length:n},(_,i)=>{
+      const t=i*pasMs/1000, T=o.T||3;
+      return {tMs:i*pasMs,x:(o.x0||640)+(o.B||0)*Math.sin(2*Math.PI*t/T),
+        y:(o.y0||620)-(o.A||0)*Math.pow(Math.sin(Math.PI*t/T),2),conf:o.conf||0.95,etat:'ok'};
+    });
+
+    okA('R29 — la cadence se lit sur un sondage fin, et ne s’invente pas',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // 60 i/s, première image à 3 ms, sondée au 1/240 s sur 125 ms.
+      const sonde=[];
+      for(let t=0;t<=125;t+=1000/240) sonde.push({t,e:Math.floor((t-3)/(1000/60))});
+      const c=mlCadence(sonde,33);
+      if(!c.mesuree||Math.abs(c.periode-1000/60)>0.7) return _echec('période : '+JSON.stringify(c));
+      const phase=((c.origine-3)%(1000/60)+1000/60)%(1000/60);
+      if(Math.min(phase,1000/60-phase)>2.5) return _echec('origine : '+c.origine);
+      // Une image IDENTIQUE partout (scène figée, pas de bruit) : rien à lire, on le dit.
+      const fige=mlCadence(sonde.map(s=>({t:s.t,e:1})),33);
+      if(fige.mesuree||fige.periode!==33) return _echec('une scène figée donne une cadence : '+JSON.stringify(fige));
+      // UNE IMAGE QUI DURE DEUX FOIS PLUS (une image manquée à l'encodage) :
+      // la cadence est irrégulière, on ne la déclare pas mesurée.
+      const P=1000/60;
+      const long=[];
+      for(let t=0;t<=125;t+=1000/240){ const k=Math.floor(t/P); long.push({t,e:k<2?k:(k<4?2:k-1)}); }
+      const trou=mlCadence(long,20);
+      if(trou.mesuree) return _echec('une cadence irrégulière passe pour mesurée : '+JSON.stringify(trou));
+      if(trou.periode!==20) return _echec('le repli n’est pas pris');
+      return true;
+    });
+
+    okA('R29 — le disque se retrouve au sous-pixel, et un disque qui disparaît est déclaré perdu',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const alea=_r29Alea(29), w=160, h=120, r=10;
+      // UN GABARIT SUR UNE ZONE UNIFORME N'EXISTE PAS.
+      const plat=new Float32Array(w*h).fill(80);
+      if(mlSuiviDemarrer(plat,w,h,80,60,r)!==null) return _echec('un gabarit sur un fond uni');
+      // Le disque se déplace de (1,7 ; -2,9) px par image, sur 40 images.
+      const pos=i=>({x:40+1.7*i,y:100-2.9*i+0.02*i*i});
+      const s=mlSuiviDemarrer(_r29Image(w,h,pos(0).x,pos(0).y,r,alea),w,h,pos(0).x,pos(0).y,r);
+      if(!s) return _echec('le suivi ne démarre pas');
+      let erreurMax=0, confMin=1;
+      for(let i=1;i<=30;i++){
+        const p=pos(i), q=mlSuiviPas(s,_r29Image(w,h,p.x,p.y,r,alea),w,h);
+        erreurMax=Math.max(erreurMax,Math.hypot(q.x-p.x,q.y-p.y));
+        confMin=Math.min(confMin,q.conf);
+        if(q.etat!=='ok') return _echec('image '+i+' : '+q.etat+' ('+q.conf.toFixed(2)+')');
+      }
+      if(erreurMax>0.6) return _echec('erreur de '+erreurMax.toFixed(2)+' px');
+      if(confMin<0.8) return _echec('confiance tombée à '+confMin.toFixed(2));
+      // LE DISQUE DISPARAÎT : douteux, puis perdu au troisième, et plus rien après.
+      const etats=[];
+      for(let i=31;i<36;i++) etats.push(mlSuiviPas(s,_r29Image(w,h,0,0,r,alea,true),w,h,).etat);
+      if(etats.slice(0,3).join()!=='doute,doute,perdu'||etats.slice(3).some(e=>e!=='perdu')) return _echec('perte : '+etats.join());
+      return true;
+    });
+
+    okA('R29 — dérivée, trous et métriques : on retrouve la loi, et on n’invente rien',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // LA DÉRIVÉE d'une parabole est exacte, fenêtre pleine comme repliée.
+      const dt=0.01, par=Array.from({length:30},(_,i)=>3*(i*dt)*(i*dt)+2*(i*dt));
+      const d=mlDeriver(par,dt,4);
+      for(const i of [0,1,5,15,28,29]) if(Math.abs(d[i]-(6*i*dt+2))>1e-6&&!(i===0||i===29)) return _echec('dérivée en '+i+' : '+d[i]);
+      if(!isNaN(d[0])||!isNaN(d[29])) return _echec('une dérivée est inventée au bord');
+      par[12]=NaN;
+      if(!isFinite(mlDeriver(par,dt,4)[15])) return _echec('un trou voisin efface une dérivée calculable');
+      if(mlDemiFenetre(1000/60)!==4||mlDemiFenetre(1000/30)!==3||mlDemiFenetre(1000/240)!==8) return _echec('demi-fenêtre');
+      // LES TROUS : au-delà de trois pas, on ne relie pas.
+      const pts=_r29Points(60,1000/60,{A:450,T:3});
+      pts.splice(20,6,...pts.slice(20,26).map(p=>({...p,etat:'perdu',conf:0})));
+      const r=mlReechantillonner(pts);
+      if(!r||!r.x.some(v=>isNaN(v))) return _echec('un trou de six images est relié');
+      // LA LOI : A = 450 px, T = 3 s, mpp = 0,45 m / 120 px.
+      const mpp=0.45/120, loi=_r29Points(181,1000/60,{A:450,B:30,T:3});
+      const m=mlMetriquesBarre(loi,mpp);
+      if(!m) return _echec('aucune métrique');
+      const vVraie=450*Math.PI/3*mpp, hVraie=450*mpp, devVraie=30*mpp;
+      if(Math.abs(m.m.vMax-vVraie)/vVraie>0.01) return _echec('vitesse max '+m.m.vMax+' pour '+vVraie.toFixed(3));
+      if(Math.abs(m.m.tVMax-750)>20) return _echec('pic à '+m.m.tVMax+' ms');
+      if(Math.abs(m.m.hMax-hVraie)/hVraie>0.005) return _echec('hauteur '+m.m.hMax+' pour '+hVraie.toFixed(4));
+      if(Math.abs(m.m.devPlus-devVraie)>0.003||Math.abs(m.m.devMoins-devVraie)>0.003) return _echec('écarts '+m.m.devPlus+' / '+m.m.devMoins);
+      const noms=m.ph.map(p=>p[0]);
+      if(noms.slice(0,3).join()!=='depart,pic_vitesse,point_haut') return _echec('phases : '+noms.join());
+      const tHaut=m.ph.find(p=>p[0]==='point_haut')[1];
+      if(Math.abs(tHaut-1500)>20) return _echec('point haut à '+tHaut+' ms');
+      // IMMOBILE : ni départ, ni pic, ni point haut — seulement du bruit.
+      const fixe=mlMetriquesBarre(_r29Points(60,1000/60,{A:0}),mpp);
+      if(!fixe||fixe.ph.length) return _echec('des phases sont inventées sur une barre immobile : '+JSON.stringify(fixe&&fixe.ph));
+      // TROP PEU pour une trajectoire.
+      if(mlMetriquesBarre([pts[0]],mpp)!==null) return _echec('une trajectoire d’un point');
+      return true;
+    });
+
+    okA('R29 — la trajectoire compactée tient dans le dossier, se relit, et ne survit pas à ses bornes',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const mpp=0.45/120, loi=_r29Points(181,1000/60,{A:450,B:30,T:3});
+      const calc=mlMetriquesBarre(loi,mpp);
+      const seg={id:'s',label:'Rép 1',debutMs:0,finMs:3000};
+      const b=mlCompacterBarre(seg,calc,{disqueM:0.45,sens:'droite',vw:1280,vh:720,rayonPx:60,fps:60,alertes:['fps_bas','inconnue']});
+      const v=segBarreValide(b,0,3000);
+      if(!v) return _echec('la trajectoire compactée ne passe pas sa propre validation');
+      if(v.av.join()!=='fps_bas') return _echec('une alerte inconnue passe : '+v.av.join());
+      if(JSON.stringify(v).length>2600) return _echec(JSON.stringify(v).length+' caractères : le dossier grossit trop');
+      if(v.n!==SEG_BARRE_POINTS_MAX) return _echec(v.n+' points');
+      // LA RELECTURE : les positions à la précision d'un Int16, la vitesse au cm/s.
+      const d=mlDecompacterBarre(v);
+      let ex=0, ev=0;
+      d.t.forEach((t,k)=>{
+        const s=t/1000, xv=(640+30*Math.sin(2*Math.PI*s/3))/1280, yv=(620-450*Math.pow(Math.sin(Math.PI*s/3),2))/720;
+        if(isFinite(d.x[k])) ex=Math.max(ex,Math.abs(d.x[k]-xv),Math.abs(d.y[k]-yv));
+        const vv=450*Math.PI/3*Math.sin(2*Math.PI*s/3)*mpp;
+        if(isFinite(d.vy[k])&&k>4&&k<d.t.length-5) ev=Math.max(ev,Math.abs(d.vy[k]-vv));
+      });
+      if(ex>0.004) return _echec('positions relues à '+ex.toFixed(4)+' près');
+      if(ev>0.03) return _echec('vitesse relue à '+ev.toFixed(3)+' m/s près');
+      // CE QUI NE SE RELIT PAS TOMBE.
+      const casse=[['bornes',{...b,finMs:2999}],['base64',{...b,xy:b.xy.slice(0,-4)}],['points',{...b,n:151}],
+        ['nombre',{...b,vw:'x'}],['version',{...b,v:2}]];
+      for(const [quoi,x] of casse) if(segBarreValide(x,0,3000)!==null) return _echec('acceptée malgré : '+quoi);
+      // LES BORNES : la trajectoire suit la répétition tant qu'elle ne bouge pas.
+      if(!segmentsVideo({segments:[{...seg,barre:b}]})[0].barre) return _echec('segmentsVideo perd une trajectoire valide');
+      if(segmentsVideo({segments:[{...seg,finMs:2900,barre:b}]})[0].barre) return _echec('une trajectoire survit à un changement de borne');
+      if(mlBorner({...seg,barre:v},'fin',2500,8000).barre) return _echec('mlBorner garde la trajectoire');
+      // LE MAGENTA RESTE AUX RECORDS : le module ne le nomme nulle part.
+      const src=await (await fetch('./motion-lab.js?v='+RC_BUILD,{cache:'no-store'})).text();
+      if(/--arc-peak|#FF2E93/i.test(src)) return _echec('le magenta des records est employé dans Motion Lab');
+      return true;
+    });
+
+    okA('R29 — les passages douteux se regroupent, et les nombres se lisent à la française',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const p=mlPassagesDouteux([{t:0,conf:.9},{t:17,conf:.4},{t:33,conf:.2,etat:'doute'},{t:50,conf:.9},{t:67,conf:.1,etat:'perdu'}]);
+      if(JSON.stringify(p)!=='[{"tMs":17,"conf":20,"perdu":false},{"tMs":67,"conf":10,"perdu":true}]') return _echec(JSON.stringify(p));
+      if(mlNombre(1.8349,2)!=='1,83'||mlNombre(NaN,1)!=='0,0') return _echec('nombres');
+      if(mlMelange('#000000','#ffffff',0.5)!=='rgb(128,128,128)') return _echec('mélange : '+mlMelange('#000000','#ffffff',0.5));
+      return true;
+    });
+
+    okA('R29 — l’écran : une trajectoire se perd quand ses bornes bougent, et le coach en est prévenu',async()=>{
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast;
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const verifier=async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
+        window._ratProfilFait=true;
+        const vus=[]; window.toast=m=>{ vus.push(String(m)); };
+        const mpp=0.45/120, calc=mlMetriquesBarre(_r29Points(181,1000/60,{A:450,T:3}),mpp);
+        const seg={id:'s1',label:'Rép 1',debutMs:0,finMs:3000};
+        const barre=mlCompacterBarre(seg,calc,{disqueM:0.45,sens:'',vw:1280,vh:720,rayonPx:60,fps:60,alertes:[]});
+        _r28Monter([_r28Video({segments:[{...seg,barre}]})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        if(!_mlActif()||!_mlActif().barre) return 'la trajectoire enregistrée n’est pas relue';
+        // SANS VIDÉO LISIBLE, le panneau montre quand même la trajectoire.
+        const txt=document.getElementById('ml-traj').textContent;
+        if(!/Vitesse verticale max/.test(txt)||!/Point le plus haut/.test(txt)) return 'panneau : '+txt.slice(0,120);
+        if(/1,\d{3}/.test(txt)) return 'une valeur affiche trois décimales';
+        // LA BORNE BOUGE : la trajectoire tombe, et le coach le lit.
+        _ml.dureeMs=3000;
+        _mlPoserBorne('fin',2500,false);
+        if(_mlActif().barre) return 'la trajectoire survit à sa borne';
+        if(!vus.some(m=>/à refaire/.test(m))) return 'rien ne prévient : '+vus.join(' | ');
+        if(!/Tracer la trajectoire/.test(document.getElementById('ml-traj').textContent)) return 'le panneau ne propose pas de la refaire';
+        const n=vus.length; _mlPoserBorne('fin',2400,false);
+        if(vus.length!==n) return 'le coach est prévenu à chaque mouvement';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      finally {
+        try{ if(typeof _mlArreter==='function'&&_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      await new Promise(r=>setTimeout(r,900));
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return msg?_echec(msg):true;
+    });
+
     // ══ 17/09/2026 — R28 : MOTION LAB, LOT 1 — LA DÉCOUPE ══════════════════
     //
     // Le coach isole le mouvement utile d'une vidéo déposée en répétitions :

@@ -44,8 +44,22 @@
  *   email:string, videoId:string, url:string, nom:string, sousTitre:string,
  *   initiaux:Segment[], segments:Segment[], actifId:string|null,
  *   zoom:number, dureeMs:number, boucle:boolean, jeton:number,
- *   raf:number, seekEnAttente:number|null
+ *   raf:number, seekEnAttente:number|null,
+ *   mode:ModeMl, graine:Graine|null, disqueM:number, sens:string, fantome:boolean,
+ *   analyseJeton:number, progres:string, suivis:Object<string,Suivi3>,
+ *   cacheBarre:{cle:string, d:{t:number[], x:number[], y:number[], vy:number[], conf:number[]}}|null
  * }} EtatMl
+ */
+/** @typedef {'lecture'|'graine'|'analyse'|'replacer'} ModeMl */
+/**
+ * La graine : le disque posé par le coach, en pixels de la VIDÉO.
+ * @typedef {{segId:string, tMs:number, x:number|null, y:number|null, r:number}} Graine
+ */
+/**
+ * Le suivi image par image d'une répétition, gardé sur l'appareil pour relancer
+ * depuis une image douteuse. Points en pixels de la vidéo.
+ * @typedef {{points:PointBarre[], rayonPx:number, disqueM:number, vw:number, vh:number,
+ *   fps:number, perf:{images:number, doublons:number, ms:number}}} Suivi3
  */
 
 // ══ LES CONSTANTES ════════════════════════════════════════════════════════════
@@ -204,6 +218,453 @@ function mlZoomVoisin(zoom,sens){
   return ML_ZOOMS[Math.max(0,Math.min(ML_ZOOMS.length-1,i+(sens<0?-1:1)))];
 }
 
+// ══ LOT 3 — LA TRAJECTOIRE DE LA BARRE : LE CALCUL ════════════════════════════
+//
+// TOUT SE CALCULE SUR L'APPAREIL DU COACH (décision D1, option A). Pas de
+// serveur, pas de bibliothèque : une corrélation normalisée sur le disque,
+// image par image, dans une image réduite où le disque fait ~14 px de rayon.
+//
+// ⚠ AUCUNE VALEUR INVENTÉE. Chaque point porte un score de confiance ; un point
+// douteux est dit douteux, un point perdu n'est ni interpolé au-delà de trois
+// images ni compté dans les métriques, et une phase qu'on ne trouve pas n'est
+// pas affichée.
+
+/** @typedef {'graine'|'ok'|'doute'|'perdu'|'bord'} EtatPoint */
+/** @typedef {{tMs:number, x:number, y:number, conf:number, etat:EtatPoint}} PointBarre */
+/**
+ * Le gabarit : les pixels du disque, centrés sur leur moyenne.
+ * @typedef {{dx:Int16Array, dy:Int16Array, v:Float32Array, n:number, norme:number}} Gabarit
+ */
+/**
+ * L'état d'un suivi en cours, en pixels de l'image de TRAVAIL.
+ * @typedef {{gabs:Gabarit[], r:number, x:number, y:number, vx:number, vy:number, pertes:number, perdu:boolean}} Suivi
+ */
+/**
+ * Les métriques d'une trajectoire. `devPlus` est l'écart maximal vers la
+ * DROITE de l'image, `devMoins` vers la GAUCHE ; `sens` dit lequel est l'avant.
+ * @typedef {{vMax:number, tVMax:number, hMax:number, depVert:number, devPlus:number, devMoins:number}} Metriques
+ */
+/**
+ * Une série ré-échantillonnée à pas constant, en mètres (Y vers le haut).
+ * @typedef {{t:number[], px:number[], py:number[], X:number[], Y:number[], vy:number[], conf:number[]}} Serie
+ */
+
+// Le rayon du disque dans l'image de travail. Assez pour que la corrélation
+// soit franche, assez peu pour qu'une image se traite en quelques millisecondes.
+const ML_R_TRAVAIL=14;
+// Diamètre d'un disque bumper standard.
+const ML_DISQUE_M=0.45;
+// Sous ML_CONF_DOUTE, le point est douteux ; sous ML_CONF_PERTE trois fois de
+// suite, le suivi est perdu et s'arrête — continuer suivrait n'importe quoi.
+const ML_CONF_DOUTE=0.5;
+const ML_CONF_PERTE=0.3;
+const ML_PERTES_MAX=3;
+// Le gabarit s'adapte lentement quand le suivi est sûr : la lumière et le flou
+// changent pendant le mouvement. Le gabarit d'origine reste toujours comparé,
+// pour qu'une dérive ne puisse pas s'installer.
+const ML_ADAPTATION=0.2;
+const ML_CONF_ADAPTE=0.8;
+// Les seuils des phases, en m/s et en mètres.
+const ML_V_DEPART=0.15;
+const ML_CHUTE_MIN=0.02;
+
+/**
+ * PURE. La luminance (Rec. 601) d'une image RGBA.
+ * @param {Uint8ClampedArray|Uint8Array|number[]} rgba
+ * @param {number} w
+ * @param {number} h
+ * @returns {Float32Array}
+ */
+function mlGris(rgba,w,h){
+  const g=new Float32Array(w*h);
+  for(let i=0,j=0;i<g.length;i++,j+=4) g[i]=0.299*rgba[j]+0.587*rgba[j+1]+0.114*rgba[j+2];
+  return g;
+}
+/**
+ * PURE. Le gabarit du disque de rayon `r` centré en (cx, cy). Seuls les pixels
+ * DU CERCLE comptent : le fond derrière le disque change pendant le mouvement,
+ * et un carré le ferait entrer dans la ressemblance. Rend null si le cercle ne
+ * contient pas assez de pixels, ou s'ils sont tous identiques.
+ * @param {Float32Array} gris
+ * @param {number} w
+ * @param {number} h
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} r
+ * @returns {Gabarit|null}
+ */
+function mlGabarit(gris,w,h,cx,cy,r){
+  const ri=Math.ceil(r), x0=Math.round(cx), y0=Math.round(cy);
+  /** @type {number[]} */ const dx=[], dy=[], val=[];
+  for(let j=-ri;j<=ri;j++) for(let i=-ri;i<=ri;i++){
+    if(i*i+j*j>r*r) continue;
+    const x=x0+i, y=y0+j;
+    if(x<0||y<0||x>=w||y>=h) continue;
+    dx.push(i); dy.push(j); val.push(gris[y*w+x]);
+  }
+  if(val.length<12) return null;
+  let m=0; for(const p of val) m+=p; m/=val.length;
+  const v=new Float32Array(val.length);
+  let q=0;
+  for(let k=0;k<val.length;k++){ v[k]=val[k]-m; q+=v[k]*v[k]; }
+  const norme=Math.sqrt(q);
+  if(!(norme>1e-3)) return null;
+  return {dx:Int16Array.from(dx),dy:Int16Array.from(dy),v,n:val.length,norme};
+}
+/**
+ * PURE. La corrélation normalisée du gabarit centré en (cx, cy), entre -1 et 1.
+ * Rend -1 dès qu'un pixel sort de l'image : un disque à moitié dehors ne se
+ * compare pas à un disque entier.
+ * @param {Gabarit} gab
+ * @param {Float32Array} gris
+ * @param {number} w
+ * @param {number} h
+ * @param {number} cx
+ * @param {number} cy
+ * @returns {number}
+ */
+function mlScoreDisque(gab,gris,w,h,cx,cy){
+  let s=0, s2=0, st=0;
+  for(let k=0;k<gab.n;k++){
+    const x=cx+gab.dx[k], y=cy+gab.dy[k];
+    if(x<0||y<0||x>=w||y>=h) return -1;
+    const p=gris[y*w+x];
+    s+=p; s2+=p*p; st+=p*gab.v[k];
+  }
+  const varp=s2-s*s/gab.n;
+  if(!(varp>1e-6)) return 0;
+  return st/(Math.sqrt(varp)*gab.norme);
+}
+/**
+ * PURE. Cherche le disque dans un carré de demi-côté `rayon` autour de
+ * (px, py), avec le meilleur des gabarits, puis affine au sous-pixel par une
+ * parabole sur les voisins du maximum.
+ * @param {Gabarit[]} gabs
+ * @param {Float32Array} gris
+ * @param {number} w
+ * @param {number} h
+ * @param {number} px
+ * @param {number} py
+ * @param {number} rayon
+ * @returns {{x:number, y:number, conf:number}}
+ */
+function mlChercherDisque(gabs,gris,w,h,px,py,rayon){
+  const S=Math.max(1,Math.round(rayon)), x0=Math.round(px), y0=Math.round(py), c=2*S+1;
+  const scores=new Float32Array(c*c).fill(-2);
+  let meilleur=-2, bi=S, bj=S;
+  for(let j=0;j<c;j++) for(let i=0;i<c;i++){
+    let s=-2;
+    for(const g of gabs){ const v=mlScoreDisque(g,gris,w,h,x0+i-S,y0+j-S); if(v>s) s=v; }
+    scores[j*c+i]=s;
+    if(s>meilleur){ meilleur=s; bi=i; bj=j; }
+  }
+  /** @param {number} a @param {number} b @param {number} d */
+  const parab=(a,b,d)=>{
+    if(a<-1.5||d<-1.5) return 0;
+    const den=a-2*b+d;
+    return (den<0)?Math.max(-0.5,Math.min(0.5,(a-d)/(2*den))):0;
+  };
+  const sx=(bi>0&&bi<c-1)?parab(scores[bj*c+bi-1],meilleur,scores[bj*c+bi+1]):0;
+  const sy=(bj>0&&bj<c-1)?parab(scores[(bj-1)*c+bi],meilleur,scores[(bj+1)*c+bi]):0;
+  return {x:x0+bi-S+sx,y:y0+bj-S+sy,conf:Math.max(0,Math.min(1,meilleur))};
+}
+/**
+ * PURE. Démarre un suivi sur l'image de la graine. Rend null si le disque posé
+ * ne donne pas de gabarit — une zone uniforme, ou hors de l'image.
+ * @param {Float32Array} gris
+ * @param {number} w
+ * @param {number} h
+ * @param {number} x
+ * @param {number} y
+ * @param {number} r
+ * @returns {Suivi|null}
+ */
+function mlSuiviDemarrer(gris,w,h,x,y,r){
+  const g=mlGabarit(gris,w,h,x,y,r);
+  if(!g) return null;
+  const copie={dx:g.dx,dy:g.dy,v:new Float32Array(g.v),n:g.n,norme:g.norme};
+  return {gabs:[g,copie],r,x,y,vx:0,vy:0,pertes:0,perdu:false};
+}
+/**
+ * PURE (sur l'état du suivi). Un pas : prédit la position à vitesse constante,
+ * cherche autour, et qualifie le point. Le rayon de recherche suit la vitesse :
+ * un disque qui monte vite se déplace de plus d'un rayon entre deux images.
+ * @param {Suivi} s
+ * @param {Float32Array} gris
+ * @param {number} w
+ * @param {number} h
+ * @returns {{x:number, y:number, conf:number, etat:EtatPoint}}
+ */
+function mlSuiviPas(s,gris,w,h){
+  if(s.perdu) return {x:s.x,y:s.y,conf:0,etat:'perdu'};
+  const px=s.x+s.vx, py=s.y+s.vy;
+  const vitesse=Math.hypot(s.vx,s.vy);
+  const rayon=Math.min(3*s.r,Math.max(0.6*s.r,1.5*vitesse+0.4*s.r));
+  const t=mlChercherDisque(s.gabs,gris,w,h,px,py,rayon);
+  /** @type {EtatPoint} */
+  let etat='ok';
+  if(t.x<s.r||t.y<s.r||t.x>w-1-s.r||t.y>h-1-s.r) etat='bord';
+  if(t.conf<ML_CONF_PERTE){
+    s.pertes++;
+    if(s.pertes>=ML_PERTES_MAX){ s.perdu=true; return {x:t.x,y:t.y,conf:t.conf,etat:'perdu'}; }
+    // On ne suit pas un point qu'on ne voit pas : la position prédite reste la
+    // meilleure hypothèse, et la vitesse s'amortit.
+    s.x=px; s.y=py; s.vx*=0.5; s.vy*=0.5;
+    return {x:t.x,y:t.y,conf:t.conf,etat:'doute'};
+  }
+  s.pertes=0;
+  if(etat==='ok'&&t.conf<ML_CONF_DOUTE) etat='doute';
+  s.vx=t.x-s.x; s.vy=t.y-s.y; s.x=t.x; s.y=t.y;
+  if(t.conf>=ML_CONF_ADAPTE&&etat==='ok'){
+    const a=s.gabs[1], neuf=mlGabarit(gris,w,h,t.x,t.y,s.r);
+    if(neuf&&neuf.n===a.n){
+      let q=0;
+      for(let k=0;k<a.n;k++){ a.v[k]=(1-ML_ADAPTATION)*a.v[k]+ML_ADAPTATION*neuf.v[k]; q+=a.v[k]*a.v[k]; }
+      a.norme=Math.sqrt(q)||a.norme;
+    }
+  }
+  return {x:t.x,y:t.y,conf:t.conf,etat};
+}
+
+/**
+ * PURE. Lissage de Savitzky-Golay (fenêtre 7, degré 2). Un point dont les six
+ * voisins ne sont pas tous connus garde sa valeur brute.
+ * @param {number[]} v
+ * @returns {number[]}
+ */
+function mlLisser(v){
+  const C=[-2,3,6,7,6,3,-2];
+  return v.map((x,i)=>{
+    if(i<3||i>v.length-4||!isFinite(x)) return x;
+    let s=0;
+    for(let k=-3;k<=3;k++){ const y=v[i+k]; if(!isFinite(y)) return x; s+=C[k+3]*y; }
+    return s/21;
+  });
+}
+/**
+ * PURE. Dérivée de Savitzky-Golay de degré 2 sur 2m+1 points, repliée sur une
+ * fenêtre plus courte près des bords ou d'un trou, puis sur une différence
+ * centrée, NaN si même elle manque.
+ * @param {number[]} v
+ * @param {number} dt  secondes
+ * @param {number} [m]  demi-fenêtre, 3 par défaut
+ * @returns {number[]}
+ */
+function mlDeriver(v,dt,m){
+  const M=Math.max(1,Math.round(Number(m)||3));
+  return v.map((x,i)=>{
+    for(let q=M;q>=1;q--){
+      if(i<q||i>v.length-1-q) continue;
+      let s=0, den=0, ok=true;
+      for(let k=-q;k<=q;k++){ if(!isFinite(v[i+k])){ ok=false; break; } s+=k*v[i+k]; den+=k*k; }
+      if(ok) return s/(den*dt);
+    }
+    return NaN;
+  });
+}
+/**
+ * PURE. La demi-fenêtre de dérivée pour un pas donné : environ 150 ms, entre 3
+ * et 8 points de chaque côté. Mesuré sur une trajectoire de synthèse à 60 i/s :
+ * 7 points (119 ms) surestimaient la vitesse maximale de 2,9 %, le bruit d'un
+ * pixel passant dans le pic ; 9 points (153 ms) réduisent l'erreur au 95e
+ * centile de 0,069 à 0,054 m/s. Plus large, le pic bref d'un arraché serait
+ * écrasé.
+ * @param {number} pasMs
+ * @returns {number}
+ */
+function mlDemiFenetre(pasMs){
+  const p=Number(pasMs);
+  if(!(p>0)) return 3;
+  // 70 et non 75 : à 60 i/s, 75 / 16,67 tombe pile sur 4,5, et l'arrondi
+  // basculerait sur 5 ou 4 selon le dernier chiffre flottant.
+  return Math.max(3,Math.min(8,Math.round(70/p)));
+}
+/**
+ * PURE. Les points retenus, ré-échantillonnés à pas constant. Un trou de plus
+ * de trois pas reste un trou : on n'invente pas le mouvement qu'on n'a pas vu.
+ * @param {PointBarre[]} points
+ * @returns {{t:number[], x:number[], y:number[], conf:number[], pas:number}|null}
+ */
+function mlReechantillonner(points){
+  const p=(points||[]).filter(q=>q&&q.etat!=='perdu'&&q.conf>=ML_CONF_PERTE&&isFinite(q.tMs)&&isFinite(q.x)&&isFinite(q.y))
+    .slice().sort((a,b)=>a.tMs-b.tMs);
+  if(p.length<2) return null;
+  const ecarts=[];
+  for(let i=1;i<p.length;i++){ const d=p[i].tMs-p[i-1].tMs; if(d>0) ecarts.push(d); }
+  if(!ecarts.length) return null;
+  ecarts.sort((a,b)=>a-b);
+  const pas=ecarts[Math.floor(ecarts.length/2)];
+  const t=[], x=[], y=[], conf=[];
+  let j=0;
+  for(let tt=p[0].tMs;tt<=p[p.length-1].tMs+1e-6;tt+=pas){
+    while(j<p.length-2&&p[j+1].tMs<tt) j++;
+    const a=p[j], b=p[Math.min(j+1,p.length-1)];
+    t.push(tt);
+    if(Math.abs(tt-a.tMs)<1e-6){ x.push(a.x); y.push(a.y); conf.push(a.conf); continue; }
+    if(b.tMs-a.tMs>3*pas+1e-6||b===a){ x.push(NaN); y.push(NaN); conf.push(0); continue; }
+    const f=(tt-a.tMs)/(b.tMs-a.tMs);
+    x.push(a.x+f*(b.x-a.x)); y.push(a.y+f*(b.y-a.y)); conf.push(Math.min(a.conf,b.conf));
+  }
+  return {t,x,y,conf,pas};
+}
+/**
+ * PURE. Les métriques d'une trajectoire, en mètres et en secondes.
+ * `mpp` : mètres par pixel de la vidéo. L'origine est le premier point retenu ;
+ * Y monte, X va vers la droite de l'image.
+ * @param {PointBarre[]} points
+ * @param {number} mpp
+ * @returns {{serie:Serie, m:Metriques, ph:[string,number,number][], pas:number}|null}
+ */
+function mlMetriquesBarre(points,mpp){
+  const r=mlReechantillonner(points);
+  if(!r||!(mpp>0)) return null;
+  const x0=r.x.find(isFinite), y0=r.y.find(isFinite);
+  if(x0===undefined||y0===undefined) return null;
+  const X=r.x.map(v=>(v-x0)*mpp), Yb=r.y.map(v=>(y0-v)*mpp);
+  const Y=mlLisser(Yb), Xl=mlLisser(X);
+  const dt=r.pas/1000;
+  const vy=mlDeriver(Yb,dt,mlDemiFenetre(r.pas));
+  const n=r.t.length;
+  let vMax=-Infinity, iV=-1, hMax=-Infinity, iH=-1, depVert=0, devPlus=0, devMoins=0;
+  for(let i=0;i<n;i++){
+    if(isFinite(vy[i])&&vy[i]>vMax){ vMax=vy[i]; iV=i; }
+    if(isFinite(Y[i])&&Y[i]>hMax){ hMax=Y[i]; iH=i; }
+    if(i&&isFinite(Y[i])&&isFinite(Y[i-1])) depVert+=Math.abs(Y[i]-Y[i-1]);
+    if(isFinite(Xl[i])){ devPlus=Math.max(devPlus,Xl[i]); devMoins=Math.max(devMoins,-Xl[i]); }
+  }
+  /** @param {number} i @returns {number} */
+  const confAutour=i=>{
+    let s=0, k=0;
+    for(let j=Math.max(0,i-2);j<=Math.min(n-1,i+2);j++){ s+=r.conf[j]; k++; }
+    return Math.round(100*(k?s/k:0));
+  };
+  /** @type {[string,number,number][]} */
+  const ph=[];
+  let iD=-1;
+  for(let i=0;i+2<n;i++) if(vy[i]>ML_V_DEPART&&vy[i+1]>ML_V_DEPART&&vy[i+2]>ML_V_DEPART){ iD=i; break; }
+  if(iD>=0) ph.push(['depart',Math.round(r.t[iD]),confAutour(iD)]);
+  if(iV>=0&&vMax>2*ML_V_DEPART) ph.push(['pic_vitesse',Math.round(r.t[iV]),confAutour(iV)]);
+  // LE POINT HAUT n'a de sens qu'après un départ : sans montée, le maximum
+  // d'une série immobile n'est que du bruit.
+  let iHaut=-1;
+  if(iD>=0){
+    let h=-Infinity;
+    for(let i=iD;i<n;i++) if(isFinite(Y[i])&&Y[i]>h){ h=Y[i]; iHaut=i; }
+    if(iHaut>=0) ph.push(['point_haut',Math.round(r.t[iHaut]),confAutour(iHaut)]);
+  }
+  if(iHaut>=0){
+    // LA RÉCEPTION : la barre retombe d'au moins deux centimètres, puis cesse
+    // de descendre.
+    let iBas=-1, bas=Infinity;
+    for(let i=iHaut;i<n;i++) if(isFinite(Y[i])&&Y[i]<bas){ bas=Y[i]; iBas=i; }
+    if(iBas>iHaut&&Y[iHaut]-bas>=ML_CHUTE_MIN){
+      let iR=-1;
+      for(let i=iHaut+1;i<n;i++){
+        if(isFinite(vy[i-1])&&isFinite(vy[i])&&vy[i-1]<-0.05&&vy[i]>=-0.02){ iR=i; break; }
+      }
+      if(iR>=0) ph.push(['reception',Math.round(r.t[iR]),confAutour(iR)]);
+      ph.push(['point_bas',Math.round(r.t[iBas]),confAutour(iBas)]);
+    }
+  }
+  const arrondi=(/** @type {number} */ v)=>Math.round(v*1000)/1000;
+  return {
+    serie:{t:r.t,px:r.x,py:r.y,X:Xl,Y,vy,conf:r.conf},
+    m:{vMax:iV>=0?arrondi(vMax):0,tVMax:iV>=0?Math.round(r.t[iV]):0,hMax:iH>=0?arrondi(hMax):0,
+      depVert:arrondi(depVert),devPlus:arrondi(devPlus),devMoins:arrondi(devMoins)},
+    ph,pas:r.pas};
+}
+
+/**
+ * PURE. Octets → base64, par tranches : String.fromCharCode sur un tableau
+ * entier dépasse la pile au-delà de quelques dizaines de milliers d'octets.
+ * @param {Uint8Array} u8
+ * @returns {string}
+ */
+function mlB64(u8){
+  let s='';
+  for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,Array.from(u8.subarray(i,i+0x8000)));
+  return btoa(s);
+}
+/**
+ * PURE. base64 → octets.
+ * @param {string} b64
+ * @returns {Uint8Array}
+ */
+function mlOctets(b64){
+  const s=atob(String(b64||''));
+  const u=new Uint8Array(s.length);
+  for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i);
+  return u;
+}
+// La valeur « inconnu » d'un Int16 stocké : un trou dans la trajectoire.
+const ML_I16_TROU=-32768;
+/**
+ * PURE. La trajectoire, compactée pour le dossier de l'athlète (voir
+ * segBarreValide dans index.html). Au plus SEG_BARRE_POINTS_MAX points, pris à
+ * intervalles réguliers dans la série lissée ; x et y normés par la taille de
+ * la vidéo, la vitesse en cm/s, la confiance sur 255.
+ * @param {{debutMs:number, finMs:number}} seg
+ * @param {{serie:Serie, m:Metriques, ph:[string,number,number][], pas:number}} res
+ * @param {{disqueM:number, sens:string, vw:number, vh:number, rayonPx:number, fps:number, alertes:string[]}} p
+ * @returns {Object}
+ */
+function mlCompacterBarre(seg,res,p){
+  const S=res.serie, total=S.t.length;
+  const n=Math.max(2,Math.min(SEG_BARRE_POINTS_MAX,total));
+  const xy=new DataView(new ArrayBuffer(n*4)), vy=new DataView(new ArrayBuffer(n*2)), c=new Uint8Array(n);
+  /** @param {number} v @param {number} echelle */
+  const i16=(v,echelle)=>isFinite(v)?Math.max(-32767,Math.min(32767,Math.round(v*echelle))):ML_I16_TROU;
+  // Les positions LISSÉES, remises en pixels : c'est ce qui se dessine.
+  const x0=S.px.find(isFinite)||0, y0=S.py.find(isFinite)||0;
+  const mpp=p.disqueM/(2*p.rayonPx);
+  const pasMs=total>1?(S.t[total-1]-S.t[0])/(n-1):res.pas;
+  // INTERPOLÉES AUX INSTANTS EXACTS, et non prises à l'indice arrondi : un
+  // point pris à un demi-pas de l'instant qu'on lui attribue décale le tracé
+  // d'autant — 4 px à la vitesse maximale d'un arraché filmé à 60 i/s, mesuré.
+  // Un trou d'un côté ou de l'autre reste un trou.
+  /** @param {number[]} serie @param {number} f */
+  const lire=(serie,f)=>{
+    const i=Math.floor(f), j=Math.min(total-1,i+1), u=f-i;
+    const a=serie[i], b=serie[j];
+    if(u<1e-9) return a;
+    return (isFinite(a)&&isFinite(b))?a+u*(b-a):NaN;
+  };
+  for(let k=0;k<n;k++){
+    const f=Math.max(0,Math.min(total-1,(S.t[0]+k*pasMs-S.t[0])/res.pas));
+    const X=lire(S.X,f), Y=lire(S.Y,f);
+    const px=isFinite(X)?x0+X/mpp:NaN, py=isFinite(Y)?y0-Y/mpp:NaN;
+    xy.setInt16(4*k,i16(px/p.vw,32767),true);
+    xy.setInt16(4*k+2,i16(py/p.vh,32767),true);
+    vy.setInt16(2*k,i16(lire(S.vy,f),100),true);
+    const i=Math.floor(f), j=Math.min(total-1,i+1);
+    c[k]=Math.round(255*Math.max(0,Math.min(1,Math.min(S.conf[i]||0,S.conf[j]||0))));
+  }
+  return {v:1,debutMs:seg.debutMs,finMs:seg.finMs,disqueM:p.disqueM,sens:p.sens,vw:p.vw,vh:p.vh,
+    rayonPx:Math.round(p.rayonPx*10)/10,fps:Math.round(p.fps*100)/100,n,
+    t0Ms:Math.round(S.t[0]),pasMs:Math.round(pasMs*1000)/1000,
+    xy:mlB64(new Uint8Array(xy.buffer)),c:mlB64(c),vy:mlB64(new Uint8Array(vy.buffer)),
+    m:res.m,ph:res.ph.map(q=>[q[0],q[1],q[2]]),av:p.alertes.slice()};
+}
+/**
+ * PURE. La trajectoire compactée, relue : temps, x et y normés (NaN pour un
+ * trou), vitesse en m/s, confiance entre 0 et 1.
+ * @param {any} b  une trajectoire passée par segBarreValide
+ * @returns {{t:number[], x:number[], y:number[], vy:number[], conf:number[]}}
+ */
+function mlDecompacterBarre(b){
+  const xy=new DataView(mlOctets(b.xy).buffer), vy=new DataView(mlOctets(b.vy).buffer), c=mlOctets(b.c);
+  const t=[], x=[], y=[], v=[], conf=[];
+  for(let k=0;k<b.n;k++){
+    const xi=xy.getInt16(4*k,true), yi=xy.getInt16(4*k+2,true), vi=vy.getInt16(2*k,true);
+    t.push(b.t0Ms+k*b.pasMs);
+    x.push(xi===ML_I16_TROU?NaN:xi/32767);
+    y.push(yi===ML_I16_TROU?NaN:yi/32767);
+    v.push(vi===ML_I16_TROU?NaN:vi/100);
+    conf.push(c[k]/255);
+  }
+  return {t,x,y,vy:v,conf};
+}
+
 // ══ L'ÉTAT ET L'OUVERTURE ═════════════════════════════════════════════════════
 
 /** @type {EtatMl|null} */
@@ -242,7 +703,9 @@ function mlOuvrir(email,videoId){
   _ml={email,videoId,url:String(v.url||''),nom:String(v.name||'Vidéo'),
     sousTitre:['Motion Lab',String(c.fname||''),date].filter(Boolean).join(' · '),
     initiaux:segs,segments:segs.map(s=>({...s})),actifId:segs.length?segs[0].id:null,
-    zoom:1,dureeMs:0,boucle:false,jeton:0,raf:0,seekEnAttente:null};
+    zoom:1,dureeMs:0,boucle:false,jeton:0,raf:0,seekEnAttente:null,
+    mode:'lecture',graine:null,disqueM:ML_DISQUE_M,sens:'',fantome:false,
+    analyseJeton:0,progres:'',suivis:{},cacheBarre:null};
   go('s-coach-motion-lab');
   _mlRendre();
   return true;
@@ -269,9 +732,11 @@ async function mlFermer(){
 function _mlArreter(){
   const v=_mlVideo();
   if(v){ try{ v.pause(); }catch(e){} videoClearLoop(v); }
-  if(_ml){ _ml.jeton++; if(_ml.raf) cancelAnimationFrame(_ml.raf); _ml.raf=0; }
+  if(_ml){ _ml.jeton++; _ml.analyseJeton++; if(_ml.raf) cancelAnimationFrame(_ml.raf); _ml.raf=0; }
   const cache=_mlEl('ml-vign-src');
   if(cache) cache.remove();
+  const analyse=_mlEl('ml-analyse-src');
+  if(analyse) analyse.remove();
 }
 
 /** @returns {boolean} */
@@ -298,6 +763,10 @@ function _mlRendre(){
     +'<div class="ml-scene">'
       +'<video id="ml-video" src="'+safeUrl(_ml.url)+'" preload="metadata" playsinline webkit-playsinline '
       +'onerror="_videoIndisponible(this)" onclick="mlLecture()"></video>'
+      // LE CALQUE : la trajectoire, et le disque qu'on pose. Il ne capte le
+      // doigt que le temps de poser ou de replacer le disque.
+      +'<canvas id="ml-calque" class="ml-calque" aria-hidden="true"></canvas>'
+      +'<canvas id="ml-loupe" class="ml-loupe" width="220" height="220" aria-hidden="true" hidden></canvas>'
     +'</div>'
     +'<div class="ml-temps"><span id="ml-t" aria-live="off">0:00.00</span>'
       +'<span id="ml-fps" class="ml-fps">Chargement…</span></div>'
@@ -324,6 +793,7 @@ function _mlRendre(){
       +'<div class="ml-tete" id="ml-tete" aria-hidden="true"></div>'
     +'</div></div>'
     +'<div id="ml-bornes"></div>'
+    +'<div id="ml-traj"></div>'
     +'<div class="ml-lab" style="margin-top:18px">Répétitions</div>'
     +'<div id="ml-liste"></div>'
     +'<button type="button" class="btn btn-outline btn-sm" id="ml-ajouter" style="width:100%;margin:10px 0 0" '
@@ -391,6 +861,15 @@ function _mlBrancher(){
     const p=_mlEl('ml-p-'+q);
     if(p) _mlGlisser(p,/** @type {Borne} */(q));
   });
+  const calque=_mlEl('ml-calque');
+  if(calque) _mlBrancherCalque(calque);
+  // Le calque suit la taille affichée de la vidéo : une rotation du téléphone
+  // la change, et un tracé décalé mentirait sur la position du disque.
+  v.addEventListener('loadeddata',()=>_mlDessinerCalque());
+  if(!window._mlRedim){
+    window._mlRedim=true;
+    window.addEventListener('resize',()=>{ try{ if(_ml){ _mlDessinerCalque(); _mlDessinerCourbe(); } }catch(e){} });
+  }
   // LES FLÈCHES = IMAGE PAR IMAGE, sauf dans un champ de saisie et sauf sur
   // une poignée, qui a les siennes.
   const ecran=_mlEl('s-coach-motion-lab');
@@ -439,6 +918,8 @@ function _mlMajTete(suivre){
     if(x<frise.scrollLeft||x>frise.scrollLeft+frise.clientWidth-24)
       frise.scrollLeft=Math.max(0,x-24);
   }
+  _mlDessinerCalque();
+  _mlDessinerCourbe();
 }
 
 // La frise : largeur selon le zoom, règle, répétitions, poignées, tête.
@@ -513,7 +994,8 @@ function _mlMajListe(){
         +'aria-pressed="'+(!!a&&s.id===a.id)+'" onclick="mlChoisir(\''+escapeHtml(s.id)+'\')" '
         +'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}">'
         +'<span class="ml-rep-n">'+escapeHtml(s.label)+'</span>'
-        +'<span class="ml-rep-t">'+mlTempsTexte(s.debutMs)+' → '+mlTempsTexte(s.finMs)+' · '+mlDureeTexte(s.finMs-s.debutMs)+'</span>'
+        +'<span class="ml-rep-t">'+mlTempsTexte(s.debutMs)+' → '+mlTempsTexte(s.finMs)+' · '+mlDureeTexte(s.finMs-s.debutMs)
+          +(s.barre?' · <b class="ml-rep-traj">trajectoire</b>':'')+'</span>'
         +'<button type="button" class="ml-mini" onclick="event.stopPropagation();mlRenommer('+i+')" '
           +'aria-label="Renommer '+escapeHtml(s.label)+'">✎</button>'
         +'<button type="button" class="ml-mini" onclick="event.stopPropagation();mlSupprimer('+i+')" '
@@ -532,6 +1014,7 @@ function _mlMajListe(){
       +'</div></div>':'';
   if(!_ml.dureeMs) zb.querySelectorAll('button').forEach(x=>{ x.setAttribute('disabled',''); });
   _mlMajSegmentsFrise();
+  _mlMajTrajectoire();
 }
 function _mlMajEnregistrer(){
   const b=_mlEl('ml-enreg');
@@ -645,8 +1128,16 @@ function _mlAller(ms,rapide){
  */
 function _mlPoserBorne(quel,ms,glisse){
   const a=_mlActif();
-  if(!_ml||!a||!_ml.dureeMs) return false;
+  if(!_ml||!a||!_ml.dureeMs||_ml.mode==='analyse') return false;
   const n=mlBorner(a,quel,ms,_ml.dureeMs);
+  // UNE TRAJECTOIRE NE SURVIT PAS À SES BORNES. mlBorner rend la répétition
+  // sans elle ; on oublie aussi le suivi gardé sur l'appareil, et on le dit
+  // une fois — au premier déplacement, pas à chaque mouvement du doigt.
+  if((a.barre||_ml.suivis[a.id])&&(n.debutMs!==a.debutMs||n.finMs!==a.finMs)){
+    delete _ml.suivis[a.id];
+    toast('La trajectoire de '+a.label+' est à refaire : ses bornes ont changé.');
+  }
+  if(_ml.mode!=='lecture'&&(n.debutMs!==a.debutMs||n.finMs!==a.finMs)){ _ml.mode='lecture'; _ml.graine=null; }
   _ml.segments=_ml.segments.map(s=>s.id===n.id?n:s).sort((x,y)=>x.debutMs-y.debutMs||x.finMs-y.finMs);
   _mlAller(quel==='debut'?n.debutMs:n.finMs,glisse);
   if(glisse){
@@ -765,7 +1256,8 @@ function mlZoom(sens){
 function mlChoisir(id){
   if(!_ml) return false;
   const s=_ml.segments.find(x=>x.id===id);
-  if(!s) return false;
+  if(!s||_ml.mode==='analyse') return false;
+  if(_ml.actifId!==s.id&&_ml.mode!=='lecture'){ _ml.mode='lecture'; _ml.graine=null; }
   _ml.actifId=s.id;
   _mlMajListe();
   _mlAller(s.debutMs);
@@ -833,7 +1325,10 @@ function mlSupprimer(i){
   if(!_ml) return false;
   const s=_ml.segments[i];
   if(!s) return false;
+  if(_ml.mode==='analyse') return false;
   _ml.segments=_ml.segments.filter(x=>x.id!==s.id);
+  delete _ml.suivis[s.id];
+  if(_ml.graine&&_ml.graine.segId===s.id){ _ml.graine=null; _ml.mode='lecture'; }
   if(_ml.actifId===s.id){
     const suivant=_ml.segments[Math.min(i,_ml.segments.length-1)];
     _ml.actifId=suivant?suivant.id:null;
@@ -859,6 +1354,691 @@ function mlEnregistrer(){
   _mlMajEnregistrer();
   toastSync(r.ok,r.envoi,'Répétitions enregistrées','les répétitions sont');
   return true;
+}
+
+// ══ LOT 3 — LA TRAJECTOIRE : L'ANALYSE ET SON AFFICHAGE ═══════════════════════
+
+const ML_PHASES_LIB=Object.freeze({depart:'Départ',pic_vitesse:'Pic de vitesse',
+  point_haut:'Point le plus haut',reception:'Réception',point_bas:'Position la plus basse'});
+const ML_ALERTES_LIB=Object.freeze({
+  fps_bas:'Moins de 60 images par seconde : les vitesses sont moins précises.',
+  disque_petit:'Le disque est petit dans l’image : filme plus près, de profil.',
+  perte_suivi:'Le suivi a perdu le disque : replace-le sur l’image signalée, puis relance.',
+  disque_bord:'Le disque touche le bord de l’image : une partie du mouvement peut manquer.',
+  doutes:'Plusieurs images douteuses : la trajectoire est moins fiable.'});
+// Au-delà de ce nombre d'images douteuses signalées, la liste ne renseigne plus :
+// on montre les premières, c'est là qu'on relance.
+const ML_DOUTES_MONTRES=6;
+
+/**
+ * Le rectangle où l'image est réellement peinte dans l'élément vidéo
+ * (object-fit:contain laisse des bandes), et l'échelle vidéo → écran.
+ * @param {HTMLVideoElement} v
+ * @returns {{W:number, H:number, s:number, ox:number, oy:number, vw:number, vh:number}|null}
+ */
+function _mlVideoRect(v){
+  const W=v.clientWidth, H=v.clientHeight, vw=v.videoWidth, vh=v.videoHeight;
+  if(!(W>0&&H>0&&vw>0&&vh>0)) return null;
+  const s=Math.min(W/vw,H/vh);
+  return {W,H,s,ox:(W-vw*s)/2,oy:(H-vh*s)/2,vw,vh};
+}
+/**
+ * Poser ou replacer le disque : le doigt se pose au centre et le déplace ; la
+ * loupe grossit ce qu'il cache.
+ * @param {HTMLElement} calque
+ */
+function _mlBrancherCalque(calque){
+  /** @param {PointerEvent} e */
+  const poser=e=>{
+    const v=_mlVideo();
+    if(!_ml||!v||!_ml.graine||(_ml.mode!=='graine'&&_ml.mode!=='replacer')) return;
+    const R=_mlVideoRect(v); if(!R) return;
+    const b=calque.getBoundingClientRect();
+    _ml.graine.x=Math.max(0,Math.min(R.vw,(e.clientX-b.left-R.ox)/R.s));
+    _ml.graine.y=Math.max(0,Math.min(R.vh,(e.clientY-b.top-R.oy)/R.s));
+    _mlDessinerCalque();
+    _mlLoupe(true);
+  };
+  calque.addEventListener('pointerdown',e=>{
+    if(!_ml||(_ml.mode!=='graine'&&_ml.mode!=='replacer')) return;
+    e.preventDefault();
+    try{ calque.setPointerCapture(e.pointerId); }catch(x){}
+    poser(e);
+    const bouger=(/** @type {PointerEvent} */ ev)=>poser(ev);
+    const fin=()=>{
+      calque.removeEventListener('pointermove',bouger);
+      calque.removeEventListener('pointerup',fin);
+      calque.removeEventListener('pointercancel',fin);
+      _mlLoupe(false);
+      _mlMajTrajectoire();
+    };
+    calque.addEventListener('pointermove',bouger);
+    calque.addEventListener('pointerup',fin);
+    calque.addEventListener('pointercancel',fin);
+  });
+}
+/**
+ * La loupe, en haut à gauche de l'image : trois fois le disque, avec son
+ * cercle et sa croix. On y DESSINE depuis la vidéo — permis même pour une
+ * vidéo d'une autre origine, puisqu'on n'y lit aucun pixel.
+ * @param {boolean} visible
+ */
+function _mlLoupe(visible){
+  const l=_mlEl('ml-loupe'), v=_mlVideo();
+  if(!(l instanceof HTMLCanvasElement)) return;
+  const g=_ml&&_ml.graine;
+  if(!visible||!v||!g||g.x==null||g.y==null){ l.hidden=true; return; }
+  l.hidden=false;
+  const c=l.getContext('2d'); if(!c) return;
+  const cote=g.r*3, L=l.width;
+  c.clearRect(0,0,L,L);
+  try{ c.drawImage(v,g.x-cote,g.y-cote,2*cote,2*cote,0,0,L,L); }catch(e){}
+  const k=L/(2*cote);
+  c.strokeStyle=_tok('--arc-current','#4DE8FF'); c.lineWidth=2;
+  c.beginPath(); c.arc(L/2,L/2,g.r*k,0,2*Math.PI); c.stroke();
+  c.beginPath(); c.moveTo(L/2-8,L/2); c.lineTo(L/2+8,L/2); c.moveTo(L/2,L/2-8); c.lineTo(L/2,L/2+8); c.stroke();
+}
+/**
+ * La trajectoire compactée d'une répétition, relue une seule fois par valeur.
+ * @param {Segment} s
+ * @returns {{t:number[], x:number[], y:number[], vy:number[], conf:number[]}|null}
+ */
+function _mlBarreLue(s){
+  const b=/** @type {any} */(s).barre;
+  if(!_ml||!b) return null;
+  const cle=s.id+'|'+b.xy+'|'+b.vy;
+  if(_ml.cacheBarre&&_ml.cacheBarre.cle===cle) return _ml.cacheBarre.d;
+  try{ const d=mlDecompacterBarre(b); _ml.cacheBarre={cle,d}; return d; }catch(e){ return null; }
+}
+/**
+ * PURE. « 1,83 » : un nombre à la française, avec `dec` décimales.
+ * @param {number} v
+ * @param {number} dec
+ * @returns {string}
+ */
+function mlNombre(v,dec){
+  const x=Number(v);
+  return (isFinite(x)?x:0).toFixed(dec).replace('.',',');
+}
+/**
+ * PURE. Une couleur entre deux couleurs hexadécimales.
+ * @param {string} a
+ * @param {string} b
+ * @param {number} f
+ * @returns {string}
+ */
+function mlMelange(a,b,f){
+  /** @param {string} h */
+  const rgb=h=>{ const m=/^#?([0-9a-f]{6})$/i.exec(String(h).trim()); const n=m?parseInt(m[1],16):0x888888; return [n>>16&255,n>>8&255,n&255]; };
+  const x=rgb(a), y=rgb(b), k=Math.max(0,Math.min(1,Number(f)||0));
+  return 'rgb('+x.map((c,i)=>Math.round(c+(y[i]-c)*k)).join(',')+')';
+}
+// Le calque : le disque en cours de pose, ou la trajectoire de la répétition.
+function _mlDessinerCalque(){
+  const c=_mlEl('ml-calque'), v=_mlVideo();
+  if(!_ml||!(c instanceof HTMLCanvasElement)||!v) return;
+  const R=_mlVideoRect(v);
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const W=v.clientWidth, H=v.clientHeight;
+  if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){ c.width=Math.round(W*dpr); c.height=Math.round(H*dpr); }
+  c.classList.toggle('ml-calque-actif',_ml.mode==='graine'||_ml.mode==='replacer');
+  const g=c.getContext('2d'); if(!g) return;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,W,H);
+  if(!R) return;
+  /** @param {number} x @param {number} y @returns {[number,number]} */
+  const P=(x,y)=>[R.ox+x*R.s,R.oy+y*R.s];
+  const cyan=_tok('--arc-current','#4DE8FF'), calme=_tok('--arc-calm','#6E7A99');
+  if((_ml.mode==='graine'||_ml.mode==='replacer')&&_ml.graine&&_ml.graine.x!=null&&_ml.graine.y!=null){
+    const [x,y]=P(_ml.graine.x,_ml.graine.y), r=_ml.graine.r*R.s;
+    g.strokeStyle=cyan; g.lineWidth=2; g.setLineDash([6,4]);
+    g.beginPath(); g.arc(x,y,r,0,2*Math.PI); g.stroke();
+    g.setLineDash([]);
+    g.beginPath(); g.moveTo(x-6,y); g.lineTo(x+6,y); g.moveTo(x,y-6); g.lineTo(x,y+6); g.stroke();
+    return;
+  }
+  const a=_mlActif();
+  const d=a?_mlBarreLue(a):null;
+  if(!a||!d) return;
+  const b=/** @type {any} */(a).barre;
+  const tNow=(Number(v.currentTime)||0)*1000;
+  const vMax=Math.max(0.5,Number(b.m&&b.m.vMax)||0);
+  /** @param {boolean} fantome */
+  const tracer=fantome=>{
+    for(let i=1;i<d.t.length;i++){
+      if(!fantome&&d.t[i]>tNow) break;
+      if(!isFinite(d.x[i])||!isFinite(d.y[i])||!isFinite(d.x[i-1])||!isFinite(d.y[i-1])) continue;
+      const [x1,y1]=P(d.x[i-1]*R.vw,d.y[i-1]*R.vh), [x2,y2]=P(d.x[i]*R.vw,d.y[i]*R.vh);
+      const f=isFinite(d.vy[i])?Math.abs(d.vy[i])/vMax:0;
+      g.strokeStyle=fantome?calme:mlMelange(calme,cyan,f);
+      g.globalAlpha=fantome?0.35:1;
+      g.lineWidth=fantome?2:3;
+      // UN TRONÇON DOUTEUX SE DESSINE EN POINTILLÉ : on le montre, on ne
+      // le fait pas passer pour sûr.
+      g.setLineDash(d.conf[i]<ML_CONF_DOUTE?[5,4]:[]);
+      g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke();
+    }
+    g.globalAlpha=1; g.setLineDash([]);
+  };
+  if(_ml.fantome) tracer(true);
+  tracer(false);
+  // LE DISQUE À L'INSTANT AFFICHÉ, s'il est dans la trajectoire.
+  if(tNow>=d.t[0]&&tNow<=d.t[d.t.length-1]){
+    const k=Math.min(d.t.length-1,Math.max(0,Math.round((tNow-d.t[0])/b.pasMs)));
+    if(isFinite(d.x[k])&&isFinite(d.y[k])){
+      const [x,y]=P(d.x[k]*R.vw,d.y[k]*R.vh);
+      g.strokeStyle='#ffffff'; g.lineWidth=2; g.globalAlpha=0.85;
+      g.beginPath(); g.arc(x,y,Math.max(6,b.rayonPx*R.s),0,2*Math.PI); g.stroke();
+      g.globalAlpha=1;
+    }
+  }
+}
+// La courbe de vitesse verticale de la répétition, et la tête de lecture.
+function _mlDessinerCourbe(){
+  const c=_mlEl('ml-courbe'), v=_mlVideo(), a=_mlActif();
+  if(!_ml||!(c instanceof HTMLCanvasElement)||!a) return;
+  const d=_mlBarreLue(a);
+  if(!d) return;
+  const W=c.clientWidth||300, H=92, dpr=Math.min(2,window.devicePixelRatio||1);
+  if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){ c.width=Math.round(W*dpr); c.height=Math.round(H*dpr); }
+  const g=c.getContext('2d'); if(!g) return;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,W,H);
+  const vs=d.vy.filter(isFinite);
+  const hi=Math.max(0.5,...vs), lo=Math.min(-0.5,...vs);
+  const X=(/** @type {number} */ t)=>((t-a.debutMs)/Math.max(1,a.finMs-a.debutMs))*W;
+  const Y=(/** @type {number} */ val)=>6+(hi-val)/(hi-lo)*(H-18);
+  const faint=_tok('--text-faint','#828282');
+  g.strokeStyle=faint; g.globalAlpha=0.5; g.lineWidth=1;
+  g.beginPath(); g.moveTo(0,Y(0)); g.lineTo(W,Y(0)); g.stroke();
+  g.globalAlpha=1;
+  g.fillStyle=faint; g.font='600 10px Montserrat, sans-serif'; g.textBaseline='top';
+  g.fillText(String(Math.round(hi*10)/10).replace('.',',')+' m/s',4,2);
+  g.strokeStyle=_tok('--arc-current','#4DE8FF'); g.lineWidth=2;
+  g.beginPath();
+  let ouvert=false;
+  for(let i=0;i<d.t.length;i++){
+    if(!isFinite(d.vy[i])){ ouvert=false; continue; }
+    const x=X(d.t[i]), y=Y(d.vy[i]);
+    if(ouvert) g.lineTo(x,y); else { g.moveTo(x,y); ouvert=true; }
+  }
+  g.stroke();
+  const b=/** @type {any} */(a).barre;
+  if(b&&b.m&&isFinite(b.m.tVMax)&&b.m.vMax>0){
+    g.fillStyle=_tok('--arc-current','#4DE8FF');
+    g.beginPath(); g.arc(X(b.m.tVMax),Y(b.m.vMax),3.5,0,2*Math.PI); g.fill();
+  }
+  if(v){
+    const x=X((Number(v.currentTime)||0)*1000);
+    if(x>=0&&x<=W){ g.strokeStyle='#ffffff'; g.lineWidth=1.5; g.beginPath(); g.moveTo(x,0); g.lineTo(x,H); g.stroke(); }
+  }
+}
+/**
+ * PURE. Les passages douteux d'une trajectoire : les instants où la confiance
+ * tombe, regroupés quand ils se suivent. On relance depuis le premier.
+ * @param {{t:number, conf:number, etat?:string}[]} points
+ * @returns {{tMs:number, conf:number, perdu:boolean}[]}
+ */
+function mlPassagesDouteux(points){
+  /** @type {{tMs:number, conf:number, perdu:boolean}[]} */
+  const out=[];
+  let dans=false;
+  for(const p of points||[]){
+    const doute=p.etat==='perdu'||p.etat==='bord'||p.etat==='doute'||p.conf<ML_CONF_DOUTE;
+    if(doute&&!dans) out.push({tMs:Math.round(p.t),conf:Math.round(100*p.conf),perdu:p.etat==='perdu'});
+    else if(doute&&out.length){
+      const q=out[out.length-1];
+      q.conf=Math.min(q.conf,Math.round(100*p.conf)); if(p.etat==='perdu') q.perdu=true;
+    }
+    dans=doute;
+  }
+  return out;
+}
+// Le panneau de la répétition choisie : poser, analyser, lire le résultat.
+function _mlMajTrajectoire(){
+  const z=_mlEl('ml-traj');
+  if(!z||!_ml) return;
+  const a=_mlActif();
+  if(!a){ z.innerHTML=''; _mlDessinerCalque(); return; }
+  const b=/** @type {any} */(a).barre;
+  const off=_ml.dureeMs?'':' disabled';
+  let h='<div class="ml-traj"><div class="ml-traj-tete"><span class="ml-lab">Trajectoire de la barre</span>';
+  if(_ml.mode==='graine'||_ml.mode==='replacer'){
+    const g=_ml.graine, pose=!!(g&&g.x!=null);
+    const replacer=_ml.mode==='replacer';
+    h+='</div><p class="ml-traj-aide">'+(replacer
+        ?'Touche la vraie position du disque sur cette image ('+mlTempsTexte(g?g.tMs:0)+'), puis relance.'
+        :'Touche le centre du disque'+(g&&Math.abs(g.tMs-a.debutMs)>20?' — l’analyse part de cette image':'')
+          +'. Ajuste sa taille pour que le cercle suive son bord.')+'</p>'
+      +(replacer?'':'<label class="ml-champ"><span>Taille du disque</span><input type="range" id="ml-rayon" min="4" max="'
+          +Math.round((_mlVideo()?.videoHeight||720)/4)+'" step="0.5" value="'+(g?g.r:20)+'" oninput="mlGraineTaille(this.value)"></label>'
+        +'<label class="ml-champ"><span>Diamètre réel</span><span class="ml-cm"><input type="number" id="ml-diam" inputmode="decimal" min="10" max="100" step="0.5" value="'
+          +Math.round(_ml.disqueM*1000)/10+'" onchange="mlDisque(this.value)"><i>cm</i></span></label>'
+        +'<div class="ml-champ"><span>L’athlète regarde vers</span><span class="ml-choix">'
+          +[['gauche','← Gauche'],['droite','Droite →'],['','Je ne sais pas']].map(o=>'<button type="button" class="ml-b" aria-pressed="'
+            +(_ml&&_ml.sens===o[0])+'" onclick="mlSens(\''+o[0]+'\')">'+o[1]+'</button>').join('')+'</span></div>')
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" onclick="'+(replacer?'mlRelancer()':'mlAnalyser()')+'"'
+        +(pose?'':' disabled')+'>'+(replacer?'Relancer depuis ici':'Analyser')+'</button>'
+      +'<button type="button" class="btn btn-outline btn-sm" onclick="mlAnnulerTrace()">Annuler</button></div>';
+  } else if(_ml.mode==='analyse'){
+    h+='</div><div class="ml-progres" role="progressbar" aria-label="Analyse en cours"><i id="ml-progres-barre"></i></div>'
+      +'<p class="ml-traj-aide" id="ml-progres-txt" aria-live="polite">'+escapeHtml(_ml.progres||'Chargement de la vidéo…')+'</p>'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlArreterAnalyse()">Arrêter</button></div>';
+  } else if(!b){
+    h+='</div><p class="ml-traj-aide">Pose le disque sur la première image de la répétition : l’analyse le suit '
+        +'image par image, sur ce téléphone. Filme de profil, à 60 images par seconde de préférence.</p>'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlTracer()"'+off+'>Tracer la trajectoire</button></div>';
+  } else {
+    const m=b.m||{}, cm=(/** @type {number} */ x)=>Math.round((x||0)*100)+'\u00a0cm';
+    const avant=b.sens==='droite'?m.devPlus:b.sens==='gauche'?m.devMoins:null;
+    const arriere=b.sens==='droite'?m.devMoins:b.sens==='gauche'?m.devPlus:null;
+    const suivi=_ml.suivis[a.id];
+    const doutes=mlPassagesDouteux(suivi
+      ?suivi.points.map(p=>({t:p.tMs,conf:p.conf,etat:p.etat}))
+      :(()=>{ const d=_mlBarreLue(a); return d?d.t.map((t,i)=>({t,conf:d.conf[i]})):[]; })());
+    h+='<button type="button" class="ml-mini ml-refaire" onclick="mlRefaire()" aria-label="Refaire la trajectoire">↺</button></div>'
+      // DEUX DÉCIMALES, PAS TROIS : le millième est sous le bruit de l'analyse
+      // (≈ 4 % sur la vitesse maximale, mesuré sur une trajectoire de synthèse),
+      // et l'afficher promettrait une précision qu'elle n'a pas.
+      +'<div class="ml-metr">'
+        +'<div><b>'+mlNombre(m.vMax,2)+'\u00a0m/s</b><span>Vitesse verticale max'+(m.tVMax?' · '+mlTempsTexte(m.tVMax):'')+'</span></div>'
+        +'<div><b>'+mlNombre(m.hMax,2)+'\u00a0m</b><span>Hauteur maximale</span></div>'
+        +'<div><b>'+mlNombre(m.depVert,2)+'\u00a0m</b><span>Déplacement vertical total</span></div>'
+        +(avant!=null
+          ?'<div><b>'+cm(avant)+' · '+cm(arriere||0)+'</b><span>Écart max vers l’avant · l’arrière</span></div>'
+          :'<div><b>'+cm(m.devMoins)+' · '+cm(m.devPlus)+'</b><span>Écart max vers la gauche · la droite</span></div>')
+      +'</div>'
+      +'<canvas id="ml-courbe" class="ml-courbe" aria-label="Vitesse verticale dans le temps"></canvas>'
+      +(b.ph&&b.ph.length?'<div class="ml-phases">'+b.ph.map((/** @type {[string,number,number]} */ p)=>
+          '<button type="button" class="ml-phase" onclick="mlAllerA('+p[1]+')">'
+          +escapeHtml(ML_PHASES_LIB[/** @type {keyof typeof ML_PHASES_LIB} */(p[0])]||p[0])+' <i>'+mlTempsTexte(p[1])
+          +(p[2]<ML_CONF_DOUTE*100?' · incertain':'')+'</i></button>').join('')+'</div>'
+        :'<p class="ml-traj-aide">Aucune phase n’a pu être reconnue sur cette répétition.</p>')
+      +'<label class="ml-coche"><input type="checkbox" '+(_ml.fantome?'checked ':'')+'onchange="mlFantome(this.checked)"> Trajectoire complète</label>'
+      // LES AVERTISSEMENTS NE BLOQUENT RIEN : ils disent ce qui rend le
+      // résultat moins sûr. Le dernier vaut pour toute analyse en deux dimensions.
+      +'<ul class="ml-alertes">'
+        +(b.av||[]).map((/** @type {string} */ k)=>'<li>'+escapeHtml(ML_ALERTES_LIB[/** @type {keyof typeof ML_ALERTES_LIB} */(k)]||k)+'</li>').join('')
+        +'<li>Analyse en 2D : fiable de profil, moins de face ou de trois-quarts.</li></ul>'
+      +(doutes.length?'<div class="ml-lab" style="margin-top:12px">Images douteuses</div><div class="ml-phases">'
+          +doutes.slice(0,ML_DOUTES_MONTRES).map(p=>'<button type="button" class="ml-phase ml-doute" onclick="mlDouteuse('+p.tMs+')">'
+            +mlTempsTexte(p.tMs)+' <i>'+(p.perdu?'perdu':p.conf+'\u00a0%')+'</i></button>').join('')+'</div>':'')
+      +(suivi?'<p class="ml-perf">Analysé sur ce téléphone : '+suivi.perf.images+' images en '
+          +(Math.round(suivi.perf.ms/100)/10).toString().replace('.',',')+'\u00a0s ('
+          +Math.round(suivi.perf.ms/Math.max(1,suivi.perf.images))+'\u00a0ms par image).</p>':'');
+  }
+  z.innerHTML=h+'</div>';
+  _mlDessinerCalque();
+  _mlDessinerCourbe();
+}
+
+// ── Les gestes du panneau ────────────────────────────────────────────────────
+/** @param {number} tMs */
+function mlAllerA(tMs){
+  const v=_mlVideo(); if(!v) return false;
+  try{ v.pause(); }catch(e){}
+  _mlAller(Number(tMs)||0);
+  return true;
+}
+function mlTracer(){
+  const a=_mlActif(), v=_mlVideo();
+  if(!_ml||!a||!v||!_ml.dureeMs) return false;
+  try{ v.pause(); }catch(e){}
+  if(_ml.boucle){ _ml.boucle=false; _mlMajBoucle(); }
+  const ms=Math.round((Number(v.currentTime)||0)*1000);
+  // LA GRAINE SE POSE SUR LA PREMIÈRE IMAGE de la répétition, sauf si le coach
+  // est déjà dedans : il a pu choisir une image où le disque se voit mieux.
+  const t=(ms>=a.debutMs&&ms<a.finMs-SEG_MIN_MS)?ms:a.debutMs;
+  if(t!==ms) _mlAller(t);
+  _ml.mode='graine';
+  _ml.graine={segId:a.id,tMs:t,x:null,y:null,r:Math.max(8,Math.round((v.videoHeight||720)*0.05))};
+  _mlMajTrajectoire();
+  return true;
+}
+/** @param {string|number} val */
+function mlGraineTaille(val){
+  if(!_ml||!_ml.graine) return false;
+  const r=Number(val);
+  if(!(r>0)) return false;
+  _ml.graine.r=r;
+  _mlDessinerCalque();
+  return true;
+}
+/** @param {string|number} cm */
+function mlDisque(cm){
+  if(!_ml) return false;
+  const v=Number(String(cm).replace(',','.'));
+  if(!(v>=10&&v<=100)){ toast('Diamètre entre 10 et 100 cm.','var(--orange)'); _mlMajTrajectoire(); return false; }
+  _ml.disqueM=Math.round(v*10)/1000;
+  return true;
+}
+/** @param {string} s */
+function mlSens(s){
+  if(!_ml) return false;
+  _ml.sens=(s==='gauche'||s==='droite')?s:'';
+  _mlMajTrajectoire();
+  return true;
+}
+function mlAnnulerTrace(){
+  if(!_ml) return false;
+  _ml.mode='lecture'; _ml.graine=null;
+  _mlLoupe(false);
+  _mlMajTrajectoire();
+  return true;
+}
+/** @param {boolean} oui */
+function mlFantome(oui){
+  if(!_ml) return false;
+  _ml.fantome=!!oui;
+  _mlDessinerCalque();
+  return true;
+}
+function mlRefaire(){
+  const a=_mlActif();
+  if(!_ml||!a) return false;
+  _ml.segments=_ml.segments.map(s=>s.id===a.id?{id:s.id,label:s.label,debutMs:s.debutMs,finMs:s.finMs}:s);
+  delete _ml.suivis[a.id];
+  _mlMajEnregistrer();
+  return mlTracer();
+}
+/**
+ * Une image douteuse : on s'y rend, et on propose d'y replacer le disque. La
+ * position de départ est celle que le suivi croyait — le coach la corrige.
+ * @param {number} tMs
+ */
+function mlDouteuse(tMs){
+  const a=_mlActif(), v=_mlVideo();
+  if(!_ml||!a||!v) return false;
+  const b=/** @type {any} */(a).barre, d=_mlBarreLue(a);
+  if(!b||!d) return false;
+  try{ v.pause(); }catch(e){}
+  _mlAller(tMs);
+  const k=Math.max(0,Math.min(d.t.length-1,Math.round((tMs-d.t[0])/b.pasMs)));
+  let x=null, y=null;
+  for(let j=k;j>=0;j--) if(isFinite(d.x[j])&&isFinite(d.y[j])){ x=d.x[j]*b.vw; y=d.y[j]*b.vh; break; }
+  _ml.mode='replacer';
+  _ml.graine={segId:a.id,tMs:Math.round(tMs),x,y,r:b.rayonPx};
+  _ml.disqueM=b.disqueM; _ml.sens=b.sens;
+  _mlMajTrajectoire();
+  return true;
+}
+function mlArreterAnalyse(){
+  if(!_ml) return false;
+  _ml.analyseJeton++;
+  return true;
+}
+function mlRelancer(){ return mlAnalyser(true); }
+
+/**
+ * L'ANALYSE. Extrait les images de la répétition depuis la graine, suit le
+ * disque, calcule, compacte. Relancée depuis une image douteuse, elle garde
+ * ce qui précède et ne refait que la suite.
+ * @param {boolean} [relance]
+ * @returns {Promise<boolean>}
+ */
+async function mlAnalyser(relance){
+  const a=_mlActif(), v=_mlVideo();
+  if(!_ml||!a||!v||!_ml.graine||_ml.graine.x==null||_ml.graine.y==null) return false;
+  const g={..._ml.graine,x:/** @type {number} */(_ml.graine.x),y:/** @type {number} */(_ml.graine.y)};
+  const vw=v.videoWidth, vh=v.videoHeight;
+  if(!(vw>0&&vh>0)) return false;
+  // LA GRAINE EST L'IMAGE AFFICHÉE : la tête a pu bouger depuis qu'elle a été posée.
+  g.tMs=Math.max(a.debutMs,Math.min(a.finMs-SEG_MIN_MS,Math.round((Number(v.currentTime)||g.tMs/1000)*1000)));
+  // Ce qui précède la graine, quand on relance : le suivi gardé, ou la
+  // trajectoire compactée relue.
+  /** @type {PointBarre[]} */
+  let avant=[];
+  const prec=_ml.suivis[a.id], bPrec=/** @type {any} */(a).barre;
+  if(relance){
+    if(prec) avant=prec.points.filter(p=>p.tMs<g.tMs-1);
+    else if(bPrec){
+      const d=_mlBarreLue(a);
+      if(d) avant=d.t.map((t,i)=>({tMs:t,x:d.x[i]*bPrec.vw,y:d.y[i]*bPrec.vh,conf:d.conf[i],
+        etat:/** @type {EtatPoint} */(isFinite(d.x[i])?(d.conf[i]<ML_CONF_DOUTE?'doute':'ok'):'perdu')}))
+        .filter(p=>p.tMs<g.tMs-1);
+    }
+  }
+  const rayonPx=relance&&(prec||bPrec)?(prec?prec.rayonPx:bPrec.rayonPx):g.r;
+  const disqueM=_ml.disqueM, sens=_ml.sens;
+  const ech=Math.min(1,ML_R_TRAVAIL/rayonPx);
+  const w=Math.max(16,Math.round(vw*ech)), h=Math.max(16,Math.round(vh*ech));
+  const ex=w/vw, ey=h/vh;
+  const fpsMes=Number(/** @type {any} */(v)._rcFps);
+  const pasMs=1000/((isFinite(fpsMes)&&fpsMes>0)?fpsMes:60);
+  try{ v.pause(); }catch(e){}
+  _ml.mode='analyse'; _ml.progres='Chargement de la vidéo…';
+  const jeton=++_ml.analyseJeton;
+  _mlMajTrajectoire();
+  /** @type {PointBarre[]} */
+  const neufs=[];
+  /** @type {Suivi|null} */
+  let suivi=null;
+  const total=Math.max(1,Math.ceil((a.finMs-g.tMs)/pasMs));
+  const res=await _mlExtraire(_ml.url,g.tMs,a.finMs,w,h,pasMs,img=>{
+    // ARRÊTÉE PENDANT L'IMAGE : un code, et non false — false est une fin
+    // normale, et la moitié de répétition déjà suivie passerait pour entière.
+    if(!_ml||jeton!==_ml.analyseJeton) return 'arret';
+    if(!suivi){
+      suivi=mlSuiviDemarrer(img.gris,w,h,g.x*ex,g.y*ey,rayonPx*ex);
+      if(!suivi) return 'gabarit';
+      neufs.push({tMs:img.tMs,x:g.x,y:g.y,conf:1,etat:'graine'});
+    } else {
+      const p=mlSuiviPas(suivi,img.gris,w,h);
+      neufs.push({tMs:img.tMs,x:p.x/ex,y:p.y/ey,conf:p.conf,etat:p.etat});
+      if(p.etat==='perdu') return false;
+    }
+    if(neufs.length%3===1){
+      _ml.progres='Image '+neufs.length+' sur ~'+total+' · '+mlTempsTexte(img.tMs);
+      const t=_mlEl('ml-progres-txt'); if(t) t.textContent=_ml.progres;
+      const bar=_mlEl('ml-progres-barre'); if(bar) bar.style.transform='scaleX('+Math.min(1,neufs.length/total).toFixed(3)+')';
+    }
+    return true;
+  },()=>!_ml||jeton!==_ml.analyseJeton);
+  // L'écran a été quitté pendant l'analyse : plus rien à mettre à jour.
+  if(!_ml) return false;
+  const seg=_ml.segments.find(s=>s.id===a.id);
+  if(!res.ok){
+    _ml.mode='lecture';
+    const msg={cors:'L’hébergeur de cette vidéo n’autorise pas la lecture de ses images : l’analyse est impossible sur ce fichier.',
+      chargement:'La vidéo n’a pas pu être chargée pour l’analyse. Vérifie la connexion, puis réessaie.',
+      recherche:'La vidéo ne se laisse pas parcourir image par image sur ce téléphone.',
+      gabarit:'Le disque posé est illisible : pose-le au centre d’un disque bien visible.',
+      arret:'Analyse arrêtée.'}[res.code]||'L’analyse a échoué.';
+    if(res.code==='gabarit'||res.code==='arret'){ _ml.mode=relance?'replacer':'graine'; }
+    else _ml.graine=null;
+    toast(msg,res.code==='arret'?undefined:'var(--orange)');
+    _mlMajTrajectoire();
+    return false;
+  }
+  if(!seg) return false;
+  const points=avant.concat(neufs);
+  const calc=mlMetriquesBarre(points,disqueM/(2*rayonPx));
+  if(!calc){
+    _ml.mode='graine';
+    toast('Trop peu d’images suivies pour une trajectoire : pose le disque plus précisément.','var(--orange)');
+    _mlMajTrajectoire();
+    return false;
+  }
+  // LA CADENCE MESURÉE par le sondage ; à défaut, celle du lecteur ; à défaut,
+  // aucune alerte sur les images par seconde — on ne l'invente pas.
+  const fpsConnu=res.cadenceMesuree?res.fps:((isFinite(fpsMes)&&fpsMes>0)?fpsMes:0);
+  const fpsEstime=fpsConnu||res.fps;
+  const n=points.length;
+  const alertes=[];
+  if(fpsConnu&&fpsConnu<55) alertes.push('fps_bas');
+  if(rayonPx<10) alertes.push('disque_petit');
+  if(points.some(p=>p.etat==='perdu')) alertes.push('perte_suivi');
+  if(points.some(p=>p.etat==='bord')) alertes.push('disque_bord');
+  if(points.filter(p=>p.etat==='doute'||p.conf<ML_CONF_DOUTE).length>0.1*n) alertes.push('doutes');
+  const compacte=mlCompacterBarre(seg,calc,{disqueM,sens,vw,vh,rayonPx,fps:fpsEstime,alertes});
+  const valide=segBarreValide(compacte,seg.debutMs,seg.finMs);
+  if(!valide){ _ml.mode='lecture'; toast('La trajectoire calculée est illisible : réessaie.','var(--orange)'); _mlMajTrajectoire(); return false; }
+  _ml.segments=_ml.segments.map(s=>s.id===seg.id?{...s,barre:valide}:s);
+  _ml.suivis[seg.id]={points,rayonPx,disqueM,vw,vh,fps:fpsEstime,
+    perf:{images:res.images,doublons:res.doublons,ms:Math.round(res.ms)}};
+  _ml.mode='lecture'; _ml.graine=null; _ml.cacheBarre=null;
+  _mlMajListe();
+  _mlMajEnregistrer();
+  const perdu=neufs.find(p=>p.etat==='perdu');
+  if(perdu) toast('Suivi perdu à '+mlTempsTexte(perdu.tMs)+' : replace le disque sur cette image, puis relance.','var(--orange)');
+  _mlAller(seg.debutMs);
+  return true;
+}
+
+// ── L'extraction des images ─────────────────────────────────────────────────
+/**
+ * PURE. La cadence d'une vidéo, lue sur un sondage fin : `sonde` porte, pour
+ * des instants rapprochés, l'empreinte de l'image affichée. Une image commence
+ * entre le dernier échantillon de la précédente et le premier des siens ; la
+ * période est la médiane des écarts entre débuts. Sans assez de changements
+ * (moins de trois débuts), on retombe sur `repliMs` et on le DIT.
+ * @param {{t:number, e:number}[]} sonde
+ * @param {number} repliMs
+ * @returns {{periode:number, origine:number, mesuree:boolean}}
+ */
+function mlCadence(sonde,repliMs){
+  const debuts=[];
+  for(let i=1;i<(sonde||[]).length;i++)
+    if(sonde[i].e!==sonde[i-1].e) debuts.push((sonde[i].t+sonde[i-1].t)/2);
+  // LA PENTE, ET NON UN ÉCART : chaque début n'est connu qu'au pas du sondage
+  // (4 ms), mais l'écart entre le premier et le dernier, divisé par le nombre
+  // d'images, l'est à 4 ms près sur toute la fenêtre.
+  const n=debuts.length;
+  const periode=n>=3?(debuts[n-1]-debuts[0])/(n-1):NaN;
+  // Une période hors de 1/240 s à 1/15 s n'est pas une cadence vidéo ; un écart
+  // qui s'en éloigne de moitié dit qu'une image a été manquée.
+  const regulier=n>=3&&debuts.every((d,i)=>!i||Math.abs(d-debuts[i-1]-periode)<periode/2);
+  if(!(periode>=1000/240&&periode<=1000/15)||!regulier){
+    const p=Number(repliMs)>0?Number(repliMs):1000/60;
+    return {periode:p,origine:sonde&&sonde.length?sonde[0].t:0,mesuree:false};
+  }
+  // L'origine moyenne : la phase de toutes les images, pas celle de la première.
+  let o=0;
+  for(let i=0;i<n;i++) o+=debuts[i]-i*periode;
+  return {periode,origine:o/n,mesuree:true};
+}
+/**
+ * PURE. Une empreinte rapide d'une image, pour reconnaître une image répétée —
+ * une vidéo à 30 i/s parcourue au pas de 60 rend chaque image deux fois.
+ * @param {Uint8ClampedArray} data
+ * @returns {number}
+ */
+function mlEmpreinte(data){
+  let s=0x811c9dc5;
+  for(let i=0;i<data.length;i+=4*97){ s^=data[i]+(data[i+1]<<8)+(data[i+2]<<16); s=Math.imul(s,16777619); }
+  return s>>>0;
+}
+/**
+ * Amène une vidéo à un instant et attend l'image. Rend l'instant RÉEL de
+ * l'image affichée quand le navigateur le donne (requestVideoFrameCallback),
+ * l'instant demandé sinon. Une fois qu'il n'a pas répondu, on ne le lui
+ * redemande plus : sur une vidéo cachée il ne répond jamais, et l'attendre
+ * ralentirait chaque image.
+ * @param {HTMLVideoElement} v
+ * @param {number} t  secondes
+ * @param {{rvfc:boolean}} etat
+ * @returns {Promise<number|null>}
+ */
+function _mlChercherImage(v,t,etat){
+  return new Promise(res=>{
+    let fini=false;
+    /** @param {number|null} m */
+    const finir=m=>{ if(fini) return; fini=true; clearTimeout(garde); res(m); };
+    const garde=setTimeout(()=>finir(null),5000);
+    const apres=()=>{
+      const rv=/** @type {any} */(v);
+      if(etat.rvfc&&typeof rv.requestVideoFrameCallback==='function'){
+        const t2=setTimeout(()=>{ etat.rvfc=false; finir(Number(v.currentTime)); },120);
+        rv.requestVideoFrameCallback((/** @type {number} */ _n,/** @type {any} */ meta)=>{ clearTimeout(t2); finir(Number(meta.mediaTime)); });
+      } else finir(Number(v.currentTime));
+    };
+    if(Math.abs((Number(v.currentTime)||0)-t)<1e-4&&v.readyState>=2){ apres(); return; }
+    v.addEventListener('seeked',apres,{once:true});
+    try{ v.currentTime=t; }catch(e){ finir(null); }
+  });
+}
+/**
+ * Parcourt [debutMs, finMs] au pas `pasMs`, en niveaux de gris à w × h. La
+ * vidéo est chargée À PART, en crossOrigin anonyme : lire des pixels d'une
+ * autre origine exige que l'hébergeur l'autorise, et le dire vaut mieux que
+ * rendre un tracé vide.
+ * `surImage` rend true pour continuer, false pour s'arrêter, une chaîne pour
+ * échouer avec ce code.
+ * @param {string} url
+ * @param {number} debutMs
+ * @param {number} finMs
+ * @param {number} w
+ * @param {number} h
+ * @param {number} pasMs
+ * @param {(img:{tMs:number, gris:Float32Array})=>boolean|string} surImage
+ * @param {()=>boolean} arreter
+ * @returns {Promise<{ok:true, images:number, doublons:number, ms:number, fps:number, cadenceMesuree:boolean}|{ok:false, code:string}>}
+ */
+async function _mlExtraire(url,debutMs,finMs,w,h,pasMs,surImage,arreter){
+  const adresse=safeUrlRaw(url);
+  if(adresse==='#') return {ok:false,code:'chargement'};
+  const ancien=_mlEl('ml-analyse-src'); if(ancien) ancien.remove();
+  const v=document.createElement('video');
+  v.id='ml-analyse-src'; v.crossOrigin='anonymous'; v.muted=true; v.playsInline=true; v.preload='auto';
+  v.setAttribute('playsinline',''); v.setAttribute('aria-hidden','true');
+  v.style.cssText='position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;left:0;top:0';
+  document.body.appendChild(v);
+  v.src=adresse;
+  const t0=performance.now();
+  try{
+    const pret=await new Promise(res=>{
+      const garde=setTimeout(()=>res(false),20000);
+      v.addEventListener('loadeddata',()=>{ clearTimeout(garde); res(true); },{once:true});
+      v.addEventListener('error',()=>{ clearTimeout(garde); res(false); },{once:true});
+    });
+    if(!pret) return {ok:false,code:'chargement'};
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const g=c.getContext('2d',{willReadFrequently:true});
+    if(!g) return {ok:false,code:'chargement'};
+    const etat={rvfc:false};
+    /** @returns {Uint8ClampedArray|null} */
+    const lire=()=>{ g.drawImage(v,0,0,w,h); try{ return g.getImageData(0,0,w,h).data; }catch(e){ return null; } };
+    // LA CADENCE RÉELLE, AVANT DE PARCOURIR. Viser t = k / fps tombe sur la
+    // frontière entre deux images, et le navigateur rend tantôt l'une tantôt
+    // l'autre : mesuré sur une vidéo à 60 i/s, 38 doublons, autant d'images
+    // sautées, et 6 % d'erreur sur la vitesse. On repère donc les frontières
+    // réelles au 1/240 s, puis on vise le MILIEU de chaque image.
+    const sonde=[];
+    const finSonde=Math.min(finMs,debutMs+125);
+    for(let t=debutMs;t<=finSonde;t+=1000/240){
+      if(arreter()) return {ok:false,code:'arret'};
+      if(await _mlChercherImage(v,t/1000,etat)==null) break;
+      const d=lire();
+      if(!d) return {ok:false,code:'cors'};
+      sonde.push({t,e:mlEmpreinte(d)});
+    }
+    const cad=mlCadence(sonde,pasMs);
+    let precedente=-1, images=0, doublons=0, echecs=0;
+    for(let k=Math.ceil((debutMs-cad.origine)/cad.periode-0.5);;k++){
+      const t=cad.origine+(k+0.5)*cad.periode;
+      if(t>finMs+0.5) break;
+      if(t<debutMs-0.5) continue;
+      if(arreter()) return {ok:false,code:'arret'};
+      const m=await _mlChercherImage(v,t/1000,etat);
+      if(m==null){ if(++echecs>5) return {ok:false,code:'recherche'}; continue; }
+      echecs=0;
+      const data=lire();
+      if(!data) return {ok:false,code:'cors'};
+      const e=mlEmpreinte(data);
+      if(e===precedente){ doublons++; continue; }
+      precedente=e;
+      // Au dixième de milliseconde : arrondi à la milliseconde, le pas médian
+      // d'une vidéo à 60 i/s devenait 17 ms au lieu de 16,67.
+      const suite=surImage({tMs:Math.round(t*10)/10,gris:mlGris(data,w,h)});
+      images++;
+      if(typeof suite==='string') return {ok:false,code:suite};
+      if(suite===false) break;
+    }
+    return {ok:true,images,doublons,ms:performance.now()-t0,fps:1000/cad.periode,cadenceMesuree:cad.mesuree};
+  } finally {
+    try{ v.removeAttribute('src'); v.load(); }catch(e){}
+    v.remove();
+  }
 }
 
 // ══ LE STYLE ══════════════════════════════════════════════════════════════════
@@ -916,6 +2096,38 @@ function _mlInjecterStyle(){
     '.ml-mini{flex:0 0 auto;width:40px;height:40px;background:none;border:1px solid transparent;border-radius:var(--r-2);color:var(--text-faint);font-size:16px;cursor:pointer}',
     '.ml-mini:hover{color:var(--text);border-color:var(--border)}',
     '.ml-vide{font-size:var(--fs-sm);color:var(--sub);padding:8px 0 2px}',
+    // ── Lot 3 : la trajectoire ──
+    '.ml-calque{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}',
+    '.ml-calque-actif{pointer-events:auto;cursor:crosshair;touch-action:none}',
+    '.ml-loupe{position:absolute;left:8px;top:8px;width:110px;height:110px;border:2px solid var(--arc-current,#4DE8FF);border-radius:var(--r-2);background:#000;pointer-events:none}',
+    '.ml-loupe[hidden]{display:none}',
+    '.ml-rep-traj{font-weight:800;color:var(--arc-current,#4DE8FF)}',
+    '.ml-traj{margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px}',
+    '.ml-traj-tete{display:flex;align-items:center;justify-content:space-between;min-height:32px}',
+    '.ml-traj-aide{font-size:var(--fs-xs);color:var(--sub);line-height:1.55;margin:6px 0 0}',
+    '.ml-traj-cmd{display:flex;gap:8px;margin-top:10px}.ml-traj-cmd .btn{flex:1;margin:0;min-height:44px}',
+    '.ml-champ{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;font-size:var(--fs-xs);color:var(--sub);font-weight:700}',
+    '.ml-champ input[type=range]{flex:1;max-width:60%;accent-color:var(--red)}',
+    '.ml-cm{display:flex;align-items:center;gap:6px}.ml-cm input{width:72px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);text-align:right}.ml-cm i{font-style:normal}',
+    '.ml-choix{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}.ml-choix .ml-b{min-height:38px;padding:0 8px}',
+    '.ml-progres{height:6px;margin-top:10px;background:var(--surface-2);border-radius:3px;overflow:hidden}',
+    '.ml-progres i{display:block;height:100%;background:var(--arc-current,#4DE8FF);transform:scaleX(0);transform-origin:left}',
+    '.ml-metr{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}',
+    '.ml-metr div{background:var(--surface-2);border-radius:var(--r-2);padding:8px 10px;min-width:0}',
+    '.ml-metr b{display:block;font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:.6px;color:var(--text);font-weight:400;white-space:nowrap}',
+    '.ml-metr span{display:block;font-size:var(--fs-2xs);color:var(--sub);line-height:1.35;margin-top:2px}',
+    '.ml-courbe{display:block;width:100%;height:92px;margin-top:10px;background:#0a0a0a;border-radius:var(--r-2)}',
+    '.ml-phases{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}',
+    '.ml-phase{min-height:36px;padding:0 10px;border-radius:var(--r-full,99px);background:var(--surface-2);border:1px solid var(--border);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;cursor:pointer}',
+    '.ml-phase i{font-style:normal;color:var(--sub);font-weight:700}',
+    '.ml-doute{border-color:rgba(255,68,56,.45)}',
+    // Les <label> de l'application sont en capitales espacées : ici c'est une
+    // phrase, on la rend à son style.
+    '.ml-coche,.ml-champ{text-transform:none;letter-spacing:normal}',
+    '.ml-coche{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:var(--fs-xs);font-weight:600;color:var(--sub);cursor:pointer}.ml-coche input{accent-color:var(--red);width:18px;height:18px;margin:0}',
+    '.ml-alertes{margin:10px 0 0;padding-left:18px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55}',
+    '.ml-perf{font-size:var(--fs-2xs);color:var(--text-faint);margin:8px 0 0}',
+    '.ml-refaire{width:36px;height:36px}',
     '.ml-aide{font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin:10px 0 0}'
   ].join('\n');
   document.head.appendChild(s);
