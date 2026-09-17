@@ -2607,6 +2607,13 @@ async function mlCorrEnvoyer(){
     if(c.blob&&!voix){
       const type=c.blob.type||'audio/webm';
       const ext=/mp4/.test(type)?'.m4a':/ogg/.test(type)?'.ogg':'.webm';
+      // ⚠ COÛT : ce fichier de voix reste sur Cloudinary même si la correction
+      // est remplacée plus tard. L'effacer demande une signature, donc un
+      // secret, donc un serveur : il n'y en a pas, et en mettre un dans l'app
+      // le donnerait à tout le monde. Trois minutes d'Opus pèsent ~350 ko ;
+      // une correction refaite dix fois par semaine coûte ~180 Mo par an, très
+      // loin des 25 Go du palier gratuit. Le jour où un serveur existera, la
+      // purge se fera sur les voix qu'aucune vidéo ne cite plus.
       const url=await _cloudinaryUpload(new File([c.blob],'correction_'+Date.now()+ext,{type}));
       voix={url:String(url)};
       c.motion.voix=voix;          // gardée : un nouvel essai ne renvoie pas la voix
@@ -2636,7 +2643,7 @@ function _mlMajBarreRec(){
   z.hidden=false;
   const a=_mlActif();
   const t=_mlRecT();
-  z.innerHTML='<div class="ml-rec-l1"><span class="ml-rec-point'+(r.pause?' ml-rec-pause':'')+'" aria-hidden="true"></span>'
+  z.innerHTML='<div class="ml-rec-l1"><span class="ml-rec-point fx-loop'+(r.pause?' ml-rec-pause':'')+'" aria-hidden="true"></span>'
     +'<b class="ml-rec-t">'+mlTempsTexte(t).slice(0,-3)+'</b>'
     +'<span class="ml-rec-etat">'+(r.pause?'En pause':r.media?'Enregistrement':'Enregistrement sans voix')+'</span>'
     +'<button type="button" class="ml-b" onclick="mlRecPause()">'+(r.pause?'Reprendre':'❚❚ Pause')+'</button>'
@@ -2744,7 +2751,19 @@ function mlLecteurCorrection(hote,o){
   const temps=/** @type {HTMLElement} */(hote.querySelector('.mlc-temps'));
   const voix=o.voixUrl?new Audio(o.voixUrl):null;
   if(voix) voix.preload='auto';
-  if(video) video.onerror=()=>{ temps.textContent='Vidéo indisponible'; };
+  // ⚠ L'ÉTAT VIDE LE PLUS PROBABLE de cet écran : la vidéo a été supprimée, ou
+  // le réseau manque. Un rectangle noir et des commandes qui ne répondent pas
+  // laisseraient l'athlète croire à une panne de son téléphone.
+  if(video) video.onerror=()=>{
+    if(detruit) return;
+    pause();
+    const sc=hote.querySelector('.mlc-scene');
+    if(sc) sc.innerHTML='<p class="mlc-absente">Vidéo indisponible.<br>Elle a peut-être été supprimée, '
+      +'ou la connexion manque. La correction, elle, est gardée.</p>';
+    bJouer.setAttribute('disabled','');
+    barre.removeAttribute('tabindex');
+    barre.setAttribute('aria-disabled','true');
+  };
   /** @type {Object<string,{d:any, b:any}>} */
   const traj={};
   for(const s of o.segments||[]){
@@ -2752,6 +2771,9 @@ function mlLecteurCorrection(hote,o){
     if(b) try{ traj[s.id]={d:mlDecompacterBarre(b),b}; }catch(e){}
   }
   let T=0, joue=false, dernier=0, raf=0, detruit=false;
+  // LA CARTE AFFICHÉE, pour ne toucher au DOM qu'au changement : écrire le même
+  // texte soixante fois par seconde rejouerait son entrée sans fin.
+  let carteAff='';
   const dessiner=(/** @type {ReturnType<typeof mlEtatRejeu>} */ e)=>{
     const R=_mlVideoRect(video);
     const dpr=Math.min(2,window.devicePixelRatio||1), W=video.clientWidth, H=video.clientHeight;
@@ -2765,7 +2787,17 @@ function mlLecteurCorrection(hote,o){
       _mlDessinerTraits(g,R,e.traits);
     }
     const k=mlCartesVisibles(m.cartes,sNow)[0];
-    if(k){ carte.textContent=k.texte; carte.hidden=false; } else carte.hidden=true;
+    const cle=k?k.aMs+'|'+k.texte:'';
+    if(cle!==carteAff){
+      carteAff=cle;
+      if(k){ carte.textContent=k.texte; carte.hidden=false; } else carte.hidden=true;
+      // LA CLASSE EST RETIRÉE PUIS REPOSÉE, avec une lecture de mise en page
+      // entre les deux : sans elle, le navigateur ne voit aucun changement et
+      // la deuxième carte apparaîtrait sans un mot, l'entrée déjà consommée.
+      carte.classList.remove('mlc-carte-in');
+      void carte.offsetWidth;
+      if(k) carte.classList.add('mlc-carte-in');
+    }
   };
   const appliquer=(/** @type {boolean} */ saut)=>{
     const e=mlEtatRejeu(m.debut,m.ev,T);
@@ -3025,7 +3057,36 @@ function _mlInjecterStyle(){
     '.mlc-temps{font-size:var(--fs-2xs);color:var(--sub);font-variant-numeric:tabular-nums;flex:0 0 auto}',
     '.mlc-origine{display:block;width:100%;max-height:46vh;margin-top:10px;border-radius:var(--r-2);background:#000}',
     '.ml-metr-l{grid-template-columns:1fr 1fr;margin-top:8px}',
-    '.ml-aide{font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin:10px 0 0}'
+    '.ml-aide{font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin:10px 0 0}',
+    '.mlc-absente{padding:26px 18px;margin:0;text-align:center;font-size:var(--fs-sm);color:var(--sub);line-height:1.6}',
+    // ── Lot 7 : le mouvement, et rien qu'aux changements d'état ─────────────
+    // ⚠ AUCUNE RÈGLE « prefers-reduced-motion » ICI, et ce n'est pas un oubli :
+    // la feuille de l'application ramène déjà tous les crans à 1 ms et coupe
+    // les boucles qui portent .fx-loop. Tout passe ici par les jetons, donc
+    // tout suit — une règle de plus se contenterait de mentir sur son utilité.
+    // ⚠ NI LA SÉLECTION, NI LA TÊTE DE LECTURE, NI LES POIGNÉES : elles sont
+    // posées au pixel pendant le glissé, une transition les ferait traîner
+    // derrière le doigt.
+    '.ml-b{transition:background var(--t-1),border-color var(--t-1),color var(--t-1),transform var(--arc-strike) var(--arc-c-discharge)}',
+    '.ml-b:active:not(:disabled){transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}',
+    '.ml-rep{transition:background var(--t-1),border-color var(--t-1),transform var(--arc-strike) var(--arc-c-discharge)}',
+    '.ml-rep:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}',
+    '.ml-phase,.ml-pastille{transition:transform var(--arc-strike) var(--arc-c-discharge)}',
+    '.ml-phase:active,.ml-pastille:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}',
+    // LA JAUGE D'ANALYSE avance d'une image à l'autre : sans ce lissage, elle
+    // sautille à chaque pas au lieu de courir.
+    '.ml-progres i{transition:transform var(--arc-strike) linear}',
+    // LE POINT D'ENREGISTREMENT respire tant que ça tourne, et se fige en pause :
+    // c'est le seul endroit de l'écran qui dit que la voix est prise.
+    '@keyframes mlPouls{from{opacity:1}to{opacity:.3}}',
+    '.ml-rec-point:not(.ml-rec-pause){animation:mlPouls calc(var(--arc-ambient)/2) var(--arc-c-discharge) infinite alternate}',
+    // « ENVOYÉE ✓ » : une lueur, une seule, à l'instant où l'état bascule.
+    '@keyframes mlLueur{from{opacity:.2}to{opacity:1}}',
+    '.ml-statut-envoye{animation:mlLueur var(--arc-afterglow) var(--arc-c-discharge) both}',
+    // LA CARTE DU COACH monte sous la vidéo à chaque nouvelle carte, pour qu'on
+    // voie qu'il en est arrivé une autre même quand les mots se ressemblent.
+    '@keyframes mlcCarte{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}',
+    '.mlc-carte-in{animation:mlcCarte var(--arc-release) var(--arc-c-discharge) both}'
   ].join('\n');
   document.head.appendChild(s);
 }

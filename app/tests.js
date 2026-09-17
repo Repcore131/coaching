@@ -40735,6 +40735,97 @@ async function testExercices(){
       return msg?_echec(msg):true;
     });
 
+    // ══ 17/09/2026 — R31 : MOTION LAB, LOT 7 — LES FINITIONS ═══════════════
+    //
+    // Le mouvement ne se met qu'aux changements d'état, et il passe par les
+    // jetons ARC : « Réduire les animations » l'éteint donc sans que le module
+    // ait une seule règle à y consacrer. Et l'écran de l'athlète dit ce qui
+    // manque plutôt que de montrer un rectangle noir.
+
+    okA('R31 — aucune durée écrite en dur, et la seule boucle s’éteint avec les animations',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const src=await (await fetch('./motion-lab.js?v='+RC_BUILD,{cache:'no-store'})).text();
+      const decls=src.match(/(?:transition|animation):[^;'"}]*/g)||[];
+      if(decls.length<6) return _echec('le module ne déclare presque aucun mouvement : '+decls.length);
+      // UNE DURÉE ÉCRITE EN DUR échapperait à « Réduire les animations », qui
+      // agit en ramenant les jetons à 1 ms.
+      const dures=decls.filter(d=>/(^|[^-\w])\d*\.?\d+m?s(\b|$)/.test(d));
+      if(dures.length) return _echec('durée en dur : '+dures[0].slice(0,70));
+      // LES BOUCLES : une seule, et sur l'élément qui porte fx-loop — la classe
+      // que la feuille de l'application coupe net, au lieu de jouer la boucle
+      // une fois en accéléré et de la laisser figée sur sa dernière image.
+      const regles=src.match(/'[.#@][^'\n]*\{[^'\n]*\}'/g)||[];
+      const enBoucle=regles.filter(r=>/animation:[^;}]*infinite/.test(r));
+      if(enBoucle.length!==1) return _echec(enBoucle.length+' règle(s) en boucle');
+      if(enBoucle[0].indexOf('.ml-rec-point')<0) return _echec('boucle inattendue : '+enBoucle[0].slice(0,70));
+      if(src.indexOf('class="ml-rec-point fx-loop')<0) return _echec('le point d’enregistrement ne porte pas fx-loop');
+      // NI LA SÉLECTION, NI LA TÊTE DE LECTURE, NI LES POIGNÉES : posées au
+      // pixel pendant le glissé, elles traîneraient derrière le doigt.
+      for(const cl of ['.ml-sel{','.ml-tete{','.ml-poignee{','.ml-autre{'])
+        if(regles.some(r=>r.indexOf(cl)===1&&/transition:|animation:/.test(r))) return _echec('mouvement sur '+cl);
+      return true;
+    });
+
+    okA('R31 — la carte du coach n’entre qu’à son tour, et la vidéo perdue se dit',async()=>{
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast;
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=()=>{};
+        try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
+        // DEUX CARTES QUI NE SE CHEVAUCHENT PAS : la première de 0,9 à 1,5 s de
+        // vidéo, la seconde de 1,5 à 2,5 s.
+        _r28Monter([_r28Video({motion:_r30Motion({cartes:[
+          {id:'k1',aMs:900,dureeMs:600,texte:'Coudes hauts'},
+          {id:'k2',aMs:1500,dureeMs:1000,texte:'Genoux dehors'}]})})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        currentUser=DB.get('users')['a28@t.fr'];
+        go('s-videos');
+        if(await ouvrirCorrectionMotion('a28@t.fr','v28')!==true) return 'la correction ne s’ouvre pas';
+        const hote=document.getElementById('mlc-lecteur');
+        const v=hote&&hote.querySelector('.mlc-video'), carte=hote&&hote.querySelector('.mlc-carte');
+        if(!v||!carte) return 'pas de lecteur';
+        // ⚠ LA VIDÉO DE LA FIXTURE N'EXISTE PAS : son erreur arriverait au
+        // milieu des cartes. On la met de côté, on la rend, on la déclenche.
+        const surErreur=v.onerror; v.onerror=null;
+        // SANS VIDÉO CHARGÉE, currentTime garde ce qu'on lui pose : c'est
+        // l'horloge que lit l'affichage, et elle suffit à le juger.
+        v.currentTime=1.2;
+        if(mlCorrectionCarte(0)!==true) return 'la carte ne mène nulle part';
+        if(carte.hidden||carte.textContent!=='Coudes hauts') return 'carte : '+carte.textContent;
+        if(!carte.classList.contains('mlc-carte-in')) return 'la carte n’entre pas en scène';
+        // LE MÊME INSTANT NE REJOUE PAS L'ENTRÉE : sinon la carte battrait
+        // soixante fois par seconde.
+        carte.classList.remove('mlc-carte-in');
+        mlCorrectionCarte(0);
+        if(carte.classList.contains('mlc-carte-in')) return 'l’entrée est rejouée sans changement de carte';
+        // LA SUIVANTE, ELLE, ENTRE.
+        v.currentTime=1.8;
+        mlCorrectionCarte(1);
+        if(carte.textContent!=='Genoux dehors') return 'deuxième carte : '+carte.textContent;
+        if(!carte.classList.contains('mlc-carte-in')) return 'la deuxième carte n’entre pas en scène';
+        // LA VIDÉO PERDUE : dite en toutes lettres, et les commandes se ferment.
+        v.onerror=surErreur;
+        v.dispatchEvent(new Event('error'));
+        if(!/indisponible/i.test(hote.textContent)) return 'rien ne dit que la vidéo manque : '+hote.textContent.slice(0,80);
+        if(!hote.querySelector('.mlc-jouer[disabled]')) return 'le bouton de lecture répond encore';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      finally {
+        try{ if(typeof mlQuitterCorrection==='function') mlQuitterCorrection(); }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      await new Promise(r=>setTimeout(r,900));
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return msg?_echec(msg):true;
+    });
+
     // ══ 17/09/2026 — R29 : MOTION LAB, LOTS 2 ET 3 — LA TRAJECTOIRE ════════
     //
     // Tout se calcule sur l'appareil du coach (option A). Les images de ces
