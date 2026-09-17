@@ -119,8 +119,15 @@ async function testExercices(){
     // qui rejoue les différées, jamais l'endroit où l'assertion est écrite.
     const ou=_origine();
     _diff.push(async()=>{
+      // LE NOM DU TEST EN COURS, LISIBLE DE DEHORS. Une assertion asynchrone qui
+      // n'aboutit jamais — une promesse qui pend, une confirmation jamais
+      // bouchonnée — fige la suite entière SANS RIEN DIRE : le rapport n'arrive
+      // pas, et on cherche à l'aveugle. `window._rcEnCours` se lit depuis la
+      // console pendant que ça tourne.
+      try{ window._rcEnCours=n; }catch(e){}
       let v;
       try{ v=await f(); }catch(e){ v=_echec('exception : '+((e&&e.message)||e)); }
+      try{ window._rcEnCours=null; }catch(e){}
       ok(n,v);
       // La dernière entrée est celle qu'on vient de pousser : on lui rend son
       // origine réelle.
@@ -40471,6 +40478,263 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R30 : MOTION LAB, LOTS 5 ET 6 — LA CORRECTION ═════════
+    //
+    // Une séquence REJOUÉE, pas un MP4 : le journal des gestes du coach, sa
+    // voix, ses dessins et ses cartes. Ce qui est vérifié ici, c'est que le
+    // rejeu redonne EXACTEMENT l'état enregistré, et qu'une séquence à moitié
+    // lisible ne s'affiche pas à moitié.
+
+    // Une correction minimale : lecture, pause à 1 s, ralenti, un trait.
+    const _r30Motion=o=>Object.assign({v:1,id:'c30',creeLe:1,envoyeLe:2,dureeMs:5000,voix:null,
+      debut:{s:0,r:1},
+      ev:[[0,'lecture'],[1000,'pause'],[1000,'aller',900],[1200,'vitesse',0.5],
+          [1500,'trait',1,'100,200 300,400'],[2000,'lecture']],
+      cartes:[{id:'k1',aMs:900,dureeMs:3000,texte:'Coudes hauts'}]},o||{});
+
+    okA('R30 — le rejeu redonne l’état enregistré, geste par geste',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const m=_r30Motion();
+      const E=T=>mlEtatRejeu(m.debut,m.ev,T);
+      // Avant tout geste : l'état de départ, rien d'autre.
+      const e0=E(0);
+      if(e0.jouer!==true||e0.s!==0||e0.r!==1||e0.traits.length) return _echec('départ : '+JSON.stringify(e0));
+      // LA LECTURE AVANCE LA SOURCE : une seconde de session, une seconde de vidéo.
+      if(Math.round(E(500).s)!==500) return _echec('lecture : '+E(500).s);
+      // La pause fige, la recherche déplace, le ralenti divise l'avance.
+      if(E(1100).jouer||E(1100).s!==900) return _echec('pause : '+JSON.stringify(E(1100)));
+      if(E(1600).r!==0.5||E(1600).s!==900) return _echec('ralenti à l’arrêt : '+JSON.stringify(E(1600)));
+      if(Math.round(E(3000).s)!==900+500) return _echec('ralenti en lecture : '+E(3000).s);
+      // Le trait apparaît à son instant, et l'effacement le retire.
+      if(E(1400).traits.length!==0||E(1500).traits.length!==1) return _echec('trait');
+      const efface=mlEtatRejeu(m.debut,m.ev.concat([[3000,'effacer']]),3100);
+      if(efface.traits.length) return _echec('l’effacement ne retire rien');
+      // Les calques : allumé, éteint.
+      const cal=mlEtatRejeu(m.debut,[[0,'calque','trajectoire','s1',1],[100,'calque','trajectoire','s1',0]],200);
+      if(cal.calques.s1!==false) return _echec('calque : '+JSON.stringify(cal.calques));
+      // LES CARTES suivent la VIDÉO, pas la session.
+      if(mlCartesVisibles(m.cartes,1000).length!==1||mlCartesVisibles(m.cartes,4000).length) return _echec('cartes visibles');
+      const T=mlInstantDeCarte(m,m.cartes[0]);
+      if(T<0||Math.abs(mlEtatRejeu(m.debut,m.ev,T).s-900)>400) return _echec('instant de carte : '+T);
+      if(mlInstantDeCarte(m,{id:'x',aMs:60000,dureeMs:1000,texte:'x'})!==-1) return _echec('un instant est inventé');
+      return true;
+    });
+
+    okA('R30 — le journal reste court, et les traits tiennent en quarante points',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      /** @type {any[]} */ const ev=[];
+      mlJournaliser(ev,[0,'lecture']);
+      mlJournaliser(ev,[50,'lecture']);              // déjà en lecture : rien
+      if(ev.length!==1) return _echec('lecture répétée : '+ev.length);
+      mlJournaliser(ev,[100,'aller',500]);
+      mlJournaliser(ev,[180,'aller',700]);           // moins de 150 ms : remplace
+      if(ev.length!==2||ev[1][2]!==700) return _echec('recherches non regroupées : '+JSON.stringify(ev));
+      mlJournaliser(ev,[400,'aller',900]);
+      if(ev.length!==3) return _echec('une recherche lointaine est avalée');
+      mlJournaliser(ev,[500,'vitesse',0.5]);
+      mlJournaliser(ev,[600,'vitesse',0.5]);         // même vitesse : rien
+      if(ev.length!==4) return _echec('vitesse répétée');
+      // LE JOURNAL EST BORNÉ, et il le dit.
+      while(ev.length<CORR_EV_MAX) ev.push([700,'pause']);
+      if(mlJournaliser(ev,[800,'trait',1,'1,1 2,2'])!==false) return _echec('le journal dépasse sa borne');
+      // LES TRAITS : simplifiés, bornés, et relus tels qu'écrits.
+      const brut=Array.from({length:300},(_,i)=>[i*3,Math.round(200+90*Math.sin(i/9))]);
+      const s=mlSimplifierTrait(brut);
+      if(s.length<3||s.length>CORR_POINTS_MAX) return _echec(s.length+' points');
+      const txt=mlEncoderTrait(s), relu=mlDecoderTrait(txt);
+      if(relu.length!==s.length||!/^\d+,\d+( \d+,\d+)*$/.test(txt)) return _echec('encodage : '+txt.slice(0,40));
+      if(mlEncoderTrait([[-5,2000]])!=='0,1000') return _echec('les bornes du trait ne sont pas tenues');
+      return true;
+    });
+
+    ok('R30 — une correction à moitié lisible ne se rejoue pas à moitié',(()=>{
+      const bon=motionCorrectionValide(_r30Motion());
+      if(!bon||bon.ev.length!==6||bon.cartes.length!==1) return _echec('une correction correcte est refusée');
+      const casse=[
+        ['geste inconnu',{ev:[[0,'zoom']]}],
+        ['gestes désordonnés',{ev:[[900,'pause'],[100,'lecture']]}],
+        ['geste après la fin',{ev:[[9000,'pause']]}],
+        ['trait illisible',{ev:[[0,'trait',1,'100;200']]}],
+        ['couleur inconnue',{ev:[[0,'trait',9,'1,1 2,2']]}],
+        ['vitesse inconnue',{ev:[[0,'vitesse',3]]}],
+        ['calque sans répétition',{ev:[[0,'calque','trajectoire','',1]]}],
+        ['voix en clair',{voix:{url:'http://x.fr/a.webm'}}],
+        ['durée absente',{dureeMs:0}],
+        ['sans identifiant',{id:''}]];
+      for(const [quoi,o] of casse)
+        if(motionCorrectionValide(_r30Motion(o))!==null) return _echec('acceptée malgré : '+quoi);
+      // TROP DE TRAITS, TROP DE GESTES, TROP GROS : refusés aussi.
+      const traits=Array.from({length:CORR_TRAITS_MAX+1},(_,i)=>[i,'trait',0,'1,1 2,2']);
+      if(motionCorrectionValide(_r30Motion({ev:traits}))!==null) return _echec('trop de traits acceptés');
+      const longs=Array.from({length:CORR_EV_MAX+1},(_,i)=>[i,'pause']);
+      if(motionCorrectionValide(_r30Motion({ev:longs}))!==null) return _echec('trop de gestes acceptés');
+      // LES CARTES : triées, bornées, vidées de ce qui ne dit rien.
+      const c=motionCorrectionValide(_r30Motion({cartes:[
+        {id:'b',aMs:3000,dureeMs:2000,texte:'deux'},{id:'a',aMs:1000,dureeMs:2000,texte:'un'},
+        {id:'c',aMs:2000,dureeMs:2000,texte:'   '},{id:'d',aMs:2500,dureeMs:99999,texte:'trop long'}]}));
+      if(!c||c.cartes.map(k=>k.id).join()!=='a,b') return _echec('cartes : '+JSON.stringify(c&&c.cartes));
+      // Une durée de session à trois minutes passe, au-delà non.
+      if(!motionCorrectionValide(_r30Motion({dureeMs:CORR_DUREE_MAX_MS,ev:[]}))) return _echec('trois minutes refusées');
+      if(motionCorrectionValide(_r30Motion({dureeMs:CORR_DUREE_MAX_MS+1,ev:[]}))) return _echec('plus de trois minutes accepté');
+      return true;})());
+
+    okA('R30 — l’envoi écrit chez l’athlète, prévient, et n’écrase pas la correction écrite',async()=>{
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), svPush=CLOUD.pushOne;
+      try{
+        const envois=[];
+        CLOUD.pushOne=(k)=>{ envois.push(k); return Promise.resolve(true); };
+        _r28Monter([_r28Video({feedback:'commentaire écrit',feedbackTimestamps:[{ts:'0:03',note:'coudes'}],feedbackSeen:true})]);
+        const r=enregistrerCorrectionMotion('a28@t.fr','v28',_r30Motion());
+        if(!r.ok) return _echec('écriture : '+r.raison);
+        const v=DB.get('users')['a28@t.fr'].videos[0];
+        if(!v.motion||v.motion.id!=='c30') return _echec('la correction n’est pas dans la vidéo');
+        // LA PASTILLE ET LA NOTIFICATION : c'est feedbackSeen et feedbackDate.
+        if(v.feedbackSeen!==false||!v.feedbackDate) return _echec('l’athlète n’est pas prévenu');
+        // CE QUI EXISTAIT RESTE : une correction vidéo n'efface pas l'écrite.
+        if(v.feedback!=='commentaire écrit'||!v.feedbackTimestamps.length) return _echec('la correction écrite a été écrasée');
+        if(envois.join()!=='a28@t.fr') return _echec('envois : '+envois.join());
+        // UNE CORRECTION ILLISIBLE N'EST PAS ÉCRITE.
+        const n=enregistrerCorrectionMotion('a28@t.fr','v28',_r30Motion({ev:[[0,'zoom']]}));
+        if(n.ok||DB.get('users')['a28@t.fr'].videos[0].motion.id!=='c30') return _echec('une correction illisible est passée');
+        // UN AUTRE COACH NE PEUT RIEN ÉCRIRE.
+        currentUser={id:'autre',email:'autre@t.fr',role:'coach'};
+        if(enregistrerCorrectionMotion('a28@t.fr','v28',_r30Motion({id:'c31'})).ok) return _echec('un autre coach a écrit');
+        return true;
+      } finally { CLOUD.pushOne=svPush; DB.set('users',JSON.parse(svUsers)); currentUser=sU; }
+    });
+
+    okA('R30 — l’athlète revoit sa correction : lecteur, cartes, vidéo d’origine, et la voix se tait en sortant',async()=>{
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast;
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=()=>{};
+        try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
+        _r28Monter([_r28Video({motion:_r30Motion()})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        // L'ATHLÈTE : sa carte vidéo propose la correction.
+        currentUser=DB.get('users')['a28@t.fr'];
+        const carte=_buildVideoCard(currentUser.videos[0]);
+        if(!/Voir la correction vidéo/.test(carte)) return 'la carte de l’athlète ne propose pas la correction';
+        if(!/badge-green/.test(carte)) return 'la vidéo n’est pas marquée corrigée';
+        go('s-videos');
+        if(await ouvrirCorrectionMotion('a28@t.fr','v28')!==true) return 'la correction ne s’ouvre pas';
+        if((document.querySelector('.screen.active')||{}).id!=='s-motion-correction') return 'mauvais écran';
+        const z=document.getElementById('mlc-contenu');
+        if(!z.querySelector('.mlc-video')||!z.querySelector('.mlc-barre')) return 'pas de lecteur';
+        if(!/Coudes hauts/.test(z.textContent)) return 'la carte écrite n’est pas listée';
+        if(!/Répondre à mon coach/.test(z.textContent)) return 'l’athlète ne peut pas répondre';
+        // LA CARTE MÈNE AU MOMENT DE LA VIDÉO.
+        if(mlCorrectionCarte(0)!==true) return 'la carte ne mène nulle part';
+        // LA VIDÉO D'ORIGINE s'ouvre et se referme.
+        mlVoirOrigine();
+        if(!document.querySelector('#mlc-origine video')) return 'la vidéo d’origine ne s’ouvre pas';
+        mlVoirOrigine();
+        if(document.querySelector('#mlc-origine video')) return 'la vidéo d’origine ne se referme pas';
+        // EN SORTANT, LE LECTEUR S'ARRÊTE : sinon la voix continue sur l'écran suivant.
+        go('s-client-home');
+        if(document.querySelector('#mlc-lecteur .mlc-video')) return 'le lecteur survit au changement d’écran';
+        // UNE VIDÉO D'UN AUTRE ATHLÈTE NE S'OUVRE PAS.
+        currentUser={id:'x',email:'x@t.fr',role:'athlete'};
+        if(await ouvrirCorrectionMotion('a28@t.fr','v28')!==false) return 'la correction d’un autre athlète s’ouvre';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      finally {
+        try{ if(typeof mlQuitterCorrection==='function') mlQuitterCorrection(); }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      await new Promise(r=>setTimeout(r,900));
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return msg?_echec(msg):true;
+    });
+
+    okA('R30 — enregistrer sans micro reste possible, et la correction part quand même',async()=>{
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svC=window.rcConfirm;
+      const svPush=CLOUD.pushOne, svMedia=navigator.mediaDevices&&navigator.mediaDevices.getUserMedia;
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=()=>{}; window.rcConfirm=async()=>true;
+        CLOUD.pushOne=()=>Promise.resolve(true);
+        try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
+        _r28Monter([_r28Video({})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        // La vidéo de test n'existe pas : on pose un élément jouable pour la durée.
+        const scene=document.querySelector('#ml-contenu .ml-scene');
+        const vieux=document.getElementById('ml-video'); if(vieux) vieux.remove();
+        const v=document.createElement('video'); v.id='ml-video';
+        Object.defineProperty(v,'duration',{value:8,configurable:true});
+        scene.prepend(v);
+        _ml.dureeMs=8000;
+        // MICRO REFUSÉ : on continue sans voix, et on le dit.
+        if(navigator.mediaDevices) navigator.mediaDevices.getUserMedia=()=>Promise.reject(new Error('refusé'));
+        if(await mlCorrDemarrer()!==true) return 'l’enregistrement ne démarre pas sans micro';
+        if(!_ml.rec||_ml.rec.media) return 'un enregistreur audio existe sans micro';
+        if(document.getElementById('ml-rec').hidden) return 'la barre d’enregistrement ne s’affiche pas';
+        // Des gestes, un trait, un effacement.
+        _mlJournal([100,'aller',2500]);
+        _ml.rec.couleur=1;
+        _mlRecTrait([[10,10],[100,100],[200,120]]);
+        if(_ml.rec.traits.length!==1) return 'le trait n’est pas gardé';
+        mlRecEffacer();
+        if(_ml.rec.traits.length) return 'l’effacement ne vide pas les traits';
+        // La pause fige l'horloge de la session.
+        mlRecPause();
+        const t1=_mlRecT(); await new Promise(r=>setTimeout(r,120));
+        if(_mlRecT()!==t1) return 'l’horloge tourne pendant la pause';
+        mlRecPause();
+        // Une correction de moins de 300 ms n'est pas gardée : on laisse tourner.
+        await new Promise(r=>setTimeout(r,350));
+        if(await mlRecTerminer()!==true) return 'la correction ne se termine pas';
+        if(!_ml.correction||_ml.correction.statut!=='brouillon') return 'pas de brouillon';
+        if(_ml.correction.blob) return 'une voix existe sans micro';
+        // Une carte, puis l'envoi.
+        const champ=document.getElementById('ml-carte-txt');
+        champ.value='Coudes hauts'; mlCarteAjouter();
+        if(_ml.cartes.length!==1) return 'la carte n’est pas ajoutée';
+        // LE MODÈLE SE GARDE dans le profil du coach — avant l'envoi, car une
+        // correction envoyée verrouille son compositeur.
+        // ⚠ LE CHAMP EST RELU : ajouter une carte redessine le panneau, et
+        // l'ancien nœud n'est plus celui que lit mlModeleGarder.
+        currentUser.motionModeles=null;
+        const champ2=/** @type {HTMLInputElement} */(document.getElementById('ml-carte-txt'));
+        champ2.value='Reste gainé'; mlModeleGarder();
+        if(!(currentUser.motionModeles||[]).includes('Reste gainé')) return 'le modèle n’est pas gardé';
+        const champ3=/** @type {HTMLInputElement|null} */(document.getElementById('ml-carte-txt'));
+        if(champ3) champ3.value='';
+        if(await mlCorrEnvoyer()!==true) return 'l’envoi échoue : '+_ml.correction.erreur;
+        const stocke=DB.get('users')['a28@t.fr'].videos[0];
+        if(!stocke.motion||stocke.motion.cartes.length!==1) return 'la correction n’est pas arrivée chez l’athlète';
+        if(stocke.feedbackSeen!==false) return 'l’athlète n’est pas prévenu';
+        if(_ml.correction.statut!=='envoye') return 'statut : '+_ml.correction.statut;
+        // UNE CORRECTION ENVOYÉE NE SE RETOUCHE PLUS : son compositeur est fermé.
+        if(document.getElementById('ml-carte-txt')) return 'les cartes restent modifiables après l’envoi';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      finally {
+        try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        if(navigator.mediaDevices&&svMedia) navigator.mediaDevices.getUserMedia=svMedia;
+        window._ratProfilFait=svRat; window.toast=svT; window.rcConfirm=svC; CLOUD.pushOne=svPush;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      await new Promise(r=>setTimeout(r,900));
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return msg?_echec(msg):true;
+    });
+
     // ══ 17/09/2026 — R29 : MOTION LAB, LOTS 2 ET 3 — LA TRAJECTOIRE ════════
     //
     // Tout se calcule sur l'appareil du coach (option A). Les images de ces
@@ -40752,8 +41016,8 @@ async function testExercices(){
           {id:'yt28',name:'Squat',url:'https://www.youtube.com/watch?v=aaaaaaaaaaa',date:1}]);
         // LA DÉCOUPE : seulement pour un fichier.
         const fichier=_vcCorpsHtml('a28@t.fr','v28'), lien=_vcCorpsHtml('a28@t.fr','yt28');
-        if(!/Découper les répétitions \(2\)/.test(fichier)) return 'pas de « Découper » sur la vidéo déposée';
-        if(/Découper les répétitions/.test(lien)) return 'la découpe est proposée sur un lien YouTube';
+        if(!/Motion Lab : découper, tracer, corriger \(2\)/.test(fichier)) return 'pas d’entrée Motion Lab sur la vidéo déposée';
+        if(/Motion Lab/.test(lien)) return 'Motion Lab est proposé sur un lien YouTube';
         // LES PUCES, ACTIVES D'EMBLÉE.
         hote.innerHTML='<video id="vid28"></video>'+htmlLecteurCorrection('vid28',DB.get('users')['a28@t.fr'].videos[0]);
         document.body.appendChild(hote);

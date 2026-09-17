@@ -47,7 +47,9 @@
  *   raf:number, seekEnAttente:number|null,
  *   mode:ModeMl, graine:Graine|null, disqueM:number, sens:string, fantome:boolean,
  *   analyseJeton:number, progres:string, suivis:Object<string,Suivi3>,
- *   cacheBarre:{cle:string, d:{t:number[], x:number[], y:number[], vy:number[], conf:number[]}}|null
+ *   cacheBarre:{cle:string, d:{t:number[], x:number[], y:number[], vy:number[], conf:number[]}}|null,
+ *   rec:any, correction:{motion:any, blob:Blob|null, blobUrl:string, statut:'brouillon'|'envoi'|'envoye'|'erreur', erreur:string}|null,
+ *   cartes:{id:string, aMs:number, dureeMs:number, texte:string}[], lecteur:any
  * }} EtatMl
  */
 /** @typedef {'lecture'|'graine'|'analyse'|'replacer'} ModeMl */
@@ -705,7 +707,7 @@ function mlOuvrir(email,videoId){
     initiaux:segs,segments:segs.map(s=>({...s})),actifId:segs.length?segs[0].id:null,
     zoom:1,dureeMs:0,boucle:false,jeton:0,raf:0,seekEnAttente:null,
     mode:'lecture',graine:null,disqueM:ML_DISQUE_M,sens:'',fantome:false,
-    analyseJeton:0,progres:'',suivis:{},cacheBarre:null};
+    analyseJeton:0,progres:'',suivis:{},cacheBarre:null,rec:null,correction:null,cartes:[],lecteur:null};
   go('s-coach-motion-lab');
   _mlRendre();
   return true;
@@ -717,9 +719,13 @@ function mlOuvrir(email,videoId){
  */
 async function mlFermer(){
   if(!_ml){ _vcRouvrirApresMotionLab('',''); return true; }
-  if(_mlModifie()){
-    const quitter=await rcConfirm('Quitter sans enregistrer ?',
-      'Les répétitions modifiées depuis le dernier enregistrement seront perdues.','Quitter','Rester');
+  // UNE CORRECTION ENREGISTRÉE MAIS PAS ENVOYÉE se perd en quittant : la voix
+  // n'existe qu'en mémoire. On le demande avant, comme pour les répétitions.
+  const corr=!!(_ml.rec||(_ml.correction&&_ml.correction.statut!=='envoye'));
+  if(_mlModifie()||corr){
+    const quitter=await rcConfirm(corr?'Quitter sans envoyer la correction ?':'Quitter sans enregistrer ?',
+      corr?'La voix et les gestes enregistrés seront perdus.'
+        :'Les répétitions modifiées depuis le dernier enregistrement seront perdues.','Quitter','Rester');
     if(!quitter||!_ml) return false;
   }
   const {email,videoId}=_ml;
@@ -737,6 +743,25 @@ function _mlArreter(){
   if(cache) cache.remove();
   const analyse=_mlEl('ml-analyse-src');
   if(analyse) analyse.remove();
+  if(_ml&&_ml.rec){
+    const r=_ml.rec;
+    window.clearInterval(r.minuteur);
+    try{ if(r.media&&r.media.state!=='inactive') r.media.stop(); }catch(e){}
+    if(r.flux) r.flux.getTracks().forEach((/** @type {MediaStreamTrack} */ t)=>t.stop());
+    _ml.rec=null;
+  }
+  if(_ml) _mlCorrOublier();
+}
+/**
+ * Appelée par go() quand on quitte le laboratoire par une autre porte que sa
+ * flèche : un enregistrement se met en pause, un aperçu se tait. Rien n'est
+ * perdu, le coach retrouvera tout en revenant.
+ */
+function mlSortieEcran(){
+  if(!_ml) return false;
+  if(_ml.rec&&!_ml.rec.pause) mlRecPause();
+  if(_ml.lecteur) _ml.lecteur.pause();
+  return true;
 }
 
 /** @returns {boolean} */
@@ -759,7 +784,10 @@ function _mlRendre(){
   const b=(lib,act,titre,extra)=>'<button type="button" class="ml-b" onclick="'+act+'" '
     +'title="'+escapeHtml(titre)+'" aria-label="'+escapeHtml(titre)+'" disabled '+(extra||'')+'>'+lib+'</button>';
   z.innerHTML=
-    (_ml.sousTitre?'<div class="ml-sous">'+escapeHtml(_ml.sousTitre)+'</div>':'')
+    // LA BARRE D'ENREGISTREMENT reste en haut pendant qu'on fait défiler :
+    // arrêter, mettre en pause et dessiner doivent être à portée à tout moment.
+    '<div id="ml-rec" class="ml-rec" hidden></div>'
+    +(_ml.sousTitre?'<div class="ml-sous">'+escapeHtml(_ml.sousTitre)+'</div>':'')
     +'<div class="ml-scene">'
       +'<video id="ml-video" src="'+safeUrl(_ml.url)+'" preload="metadata" playsinline webkit-playsinline '
       +'onerror="_videoIndisponible(this)" onclick="mlLecture()"></video>'
@@ -794,6 +822,7 @@ function _mlRendre(){
     +'</div></div>'
     +'<div id="ml-bornes"></div>'
     +'<div id="ml-traj"></div>'
+    +'<div id="ml-corr"></div>'
     +'<div class="ml-lab" style="margin-top:18px">Répétitions</div>'
     +'<div id="ml-liste"></div>'
     +'<button type="button" class="btn btn-outline btn-sm" id="ml-ajouter" style="width:100%;margin:10px 0 0" '
@@ -803,6 +832,7 @@ function _mlRendre(){
       +'jamais modifiée.</p>';
   _mlBrancher();
   _mlMajListe();
+  _mlMajCorrection();
   _mlMajEnregistrer();
   return true;
 }
@@ -842,9 +872,23 @@ function _mlBrancher(){
       });
     }
     _mlSuivre();
+    _mlJournal([_mlRecT(),'lecture']);
   });
-  v.addEventListener('pause',()=>{ const p=_mlEl('ml-play'); if(p) p.textContent='▶ Lecture'; _mlMajTete(); });
-  v.addEventListener('seeked',()=>_mlMajTete());
+  v.addEventListener('pause',()=>{
+    const p=_mlEl('ml-play'); if(p) p.textContent='▶ Lecture';
+    _mlMajTete();
+    _mlJournal([_mlRecT(),'pause']);
+  });
+  // LE JOURNAL ÉCOUTE LA VIDÉO, et non les boutons : une boucle qui repart, une
+  // poignée qu'on tire, une fin de fichier qui arrête la lecture — tout ce qui
+  // change l'image y entre, quel qu'en soit le déclencheur.
+  v.addEventListener('seeked',()=>{
+    _mlMajTete();
+    _mlJournal([_mlRecT(),'aller',Math.round((Number(v.currentTime)||0)*1000)]);
+  });
+  v.addEventListener('ratechange',()=>{
+    if(VID_RATES.includes(v.playbackRate)) _mlJournal([_mlRecT(),'vitesse',v.playbackRate]);
+  });
   v.addEventListener('timeupdate',()=>{ if(v.paused) _mlMajTete(); });
   // UN TOUCHER SUR LA FRISE DÉPLACE LA TÊTE DE LECTURE ; un toucher sur une
   // autre répétition la choisit. `click` et non pointerdown : un glissement
@@ -1258,6 +1302,13 @@ function mlChoisir(id){
   const s=_ml.segments.find(x=>x.id===id);
   if(!s||_ml.mode==='analyse') return false;
   if(_ml.actifId!==s.id&&_ml.mode!=='lecture'){ _ml.mode='lecture'; _ml.graine=null; }
+  // EN PLEINE CORRECTION, la trajectoire affichée change avec la répétition :
+  // le journal le dit, pour que l'athlète voie la même.
+  const avant=_mlActif();
+  if(_ml.rec&&_ml.rec.trace&&avant&&avant.id!==s.id){
+    if(avant.barre) _mlJournal([_mlRecT(),'calque','trajectoire',avant.id,0]);
+    if(s.barre) _mlJournal([_mlRecT(),'calque','trajectoire',s.id,1]);
+  }
   _ml.actifId=s.id;
   _mlMajListe();
   _mlAller(s.debutMs);
@@ -1400,6 +1451,40 @@ function _mlBrancherCalque(calque){
     _mlLoupe(true);
   };
   calque.addEventListener('pointerdown',e=>{
+    // PENDANT UNE CORRECTION, LE DOIGT DESSINE : le trait part au journal
+    // quand on le lève, entier et simplifié.
+    if(_ml&&_ml.rec&&_ml.rec.outil==='dessin'&&!_ml.rec.pause){
+      const rec=_ml.rec;
+      e.preventDefault();
+      try{ calque.setPointerCapture(e.pointerId); }catch(x){}
+      /** @param {PointerEvent} ev @returns {number[]|null} */
+      const norme=ev=>{
+        const v=_mlVideo(); const R=v&&_mlVideoRect(v); if(!R) return null;
+        const b=calque.getBoundingClientRect();
+        return [Math.max(0,Math.min(1000,Math.round((ev.clientX-b.left-R.ox)/R.s/R.vw*1000))),
+                Math.max(0,Math.min(1000,Math.round((ev.clientY-b.top-R.oy)/R.s/R.vh*1000)))];
+      };
+      const p0=norme(e); if(!p0) return;
+      rec.enCours=[p0];
+      const bouger=(/** @type {PointerEvent} */ ev)=>{
+        const p=norme(ev), l=rec.enCours;
+        if(!p||!l) return;
+        const q=l[l.length-1];
+        if(Math.hypot(p[0]-q[0],p[1]-q[1])>=3){ l.push(p); _mlDessinerCalque(); }
+      };
+      const fin=()=>{
+        calque.removeEventListener('pointermove',bouger);
+        calque.removeEventListener('pointerup',fin);
+        calque.removeEventListener('pointercancel',fin);
+        const l=rec.enCours; rec.enCours=null;
+        if(l&&l.length>1) _mlRecTrait(l);
+        _mlDessinerCalque();
+      };
+      calque.addEventListener('pointermove',bouger);
+      calque.addEventListener('pointerup',fin);
+      calque.addEventListener('pointercancel',fin);
+      return;
+    }
     if(!_ml||(_ml.mode!=='graine'&&_ml.mode!=='replacer')) return;
     e.preventDefault();
     try{ calque.setPointerCapture(e.pointerId); }catch(x){}
@@ -1481,7 +1566,8 @@ function _mlDessinerCalque(){
   const dpr=Math.min(2,window.devicePixelRatio||1);
   const W=v.clientWidth, H=v.clientHeight;
   if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){ c.width=Math.round(W*dpr); c.height=Math.round(H*dpr); }
-  c.classList.toggle('ml-calque-actif',_ml.mode==='graine'||_ml.mode==='replacer');
+  c.classList.toggle('ml-calque-actif',_ml.mode==='graine'||_ml.mode==='replacer'
+    ||!!(_ml.rec&&_ml.rec.outil==='dessin'&&!_ml.rec.pause));
   const g=c.getContext('2d'); if(!g) return;
   g.setTransform(dpr,0,0,dpr,0,0);
   g.clearRect(0,0,W,H);
@@ -1499,20 +1585,42 @@ function _mlDessinerCalque(){
   }
   const a=_mlActif();
   const d=a?_mlBarreLue(a):null;
-  if(!a||!d) return;
-  const b=/** @type {any} */(a).barre;
   const tNow=(Number(v.currentTime)||0)*1000;
+  // Pendant une correction, le coach peut masquer la trajectoire : le geste
+  // est au journal, et l'athlète la verra disparaître au même moment.
+  if(a&&d&&!(_ml.rec&&!_ml.rec.trace)) _mlDessinerTrajectoire(g,R,d,/** @type {any} */(a).barre,tNow,_ml.fantome);
+  if(_ml.rec){
+    _mlDessinerTraits(g,R,_ml.rec.traits);
+    if(_ml.rec.enCours&&_ml.rec.enCours.length>1) _mlDessinerTraits(g,R,[[_ml.rec.couleur,_ml.rec.enCours]]);
+  }
+}
+/**
+ * Une trajectoire compactée sur un calque : progressive jusqu'à `tNow`, en
+ * fantôme complète si on le demande, et le disque à l'instant affiché.
+ * PARTAGÉE par le laboratoire et le lecteur de correction : le coach et
+ * l'athlète voient le même dessin, parce que c'est le même code.
+ * @param {CanvasRenderingContext2D} g
+ * @param {{s:number, ox:number, oy:number, vw:number, vh:number}} R
+ * @param {{t:number[], x:number[], y:number[], vy:number[], conf:number[]}} d
+ * @param {any} b  la trajectoire compactée
+ * @param {number} tNow  instant de la vidéo source, en ms
+ * @param {boolean} fantome
+ */
+function _mlDessinerTrajectoire(g,R,d,b,tNow,fantome){
+  /** @param {number} x @param {number} y @returns {[number,number]} */
+  const P=(x,y)=>[R.ox+x*R.s,R.oy+y*R.s];
+  const cyan=_tok('--arc-current','#4DE8FF'), calme=_tok('--arc-calm','#6E7A99');
   const vMax=Math.max(0.5,Number(b.m&&b.m.vMax)||0);
-  /** @param {boolean} fantome */
-  const tracer=fantome=>{
+  /** @param {boolean} complet */
+  const tracer=complet=>{
     for(let i=1;i<d.t.length;i++){
-      if(!fantome&&d.t[i]>tNow) break;
+      if(!complet&&d.t[i]>tNow) break;
       if(!isFinite(d.x[i])||!isFinite(d.y[i])||!isFinite(d.x[i-1])||!isFinite(d.y[i-1])) continue;
       const [x1,y1]=P(d.x[i-1]*R.vw,d.y[i-1]*R.vh), [x2,y2]=P(d.x[i]*R.vw,d.y[i]*R.vh);
       const f=isFinite(d.vy[i])?Math.abs(d.vy[i])/vMax:0;
-      g.strokeStyle=fantome?calme:mlMelange(calme,cyan,f);
-      g.globalAlpha=fantome?0.35:1;
-      g.lineWidth=fantome?2:3;
+      g.strokeStyle=complet?calme:mlMelange(calme,cyan,f);
+      g.globalAlpha=complet?0.35:1;
+      g.lineWidth=complet?2:3;
       // UN TRONÇON DOUTEUX SE DESSINE EN POINTILLÉ : on le montre, on ne
       // le fait pas passer pour sûr.
       g.setLineDash(d.conf[i]<ML_CONF_DOUTE?[5,4]:[]);
@@ -1520,7 +1628,7 @@ function _mlDessinerCalque(){
     }
     g.globalAlpha=1; g.setLineDash([]);
   };
-  if(_ml.fantome) tracer(true);
+  if(fantome) tracer(true);
   tracer(false);
   // LE DISQUE À L'INSTANT AFFICHÉ, s'il est dans la trajectoire.
   if(tNow>=d.t[0]&&tNow<=d.t[d.t.length-1]){
@@ -1531,6 +1639,31 @@ function _mlDessinerCalque(){
       g.beginPath(); g.arc(x,y,Math.max(6,b.rayonPx*R.s),0,2*Math.PI); g.stroke();
       g.globalAlpha=1;
     }
+  }
+}
+/**
+ * La couleur d'un trait : blanc, cyan ou rouge. Jamais le magenta des records.
+ * @param {number} i
+ * @returns {string}
+ */
+function _mlCouleurTrait(i){
+  return i===1?_tok('--arc-current','#4DE8FF'):i===2?_tok('--red','#E02020'):'#ffffff';
+}
+/**
+ * Des traits à main levée, en coordonnées normées de l'image (0 à 1000).
+ * @param {CanvasRenderingContext2D} g
+ * @param {{s:number, ox:number, oy:number, vw:number, vh:number}} R
+ * @param {[number, string|number[][]][]} traits
+ */
+function _mlDessinerTraits(g,R,traits){
+  g.lineCap='round'; g.lineJoin='round'; g.lineWidth=4; g.setLineDash([]);
+  for(const [c,brut] of traits){
+    const pts=typeof brut==='string'?mlDecoderTrait(brut):brut;
+    if(pts.length<2) continue;
+    g.strokeStyle=_mlCouleurTrait(c);
+    g.beginPath();
+    pts.forEach((p,i)=>{ const x=R.ox+p[0]/1000*R.vw*R.s, y=R.oy+p[1]/1000*R.vh*R.s; if(i) g.lineTo(x,y); else g.moveTo(x,y); });
+    g.stroke();
   }
 }
 // La courbe de vitesse verticale de la répétition, et la tête de lecture.
@@ -1601,7 +1734,9 @@ function _mlMajTrajectoire(){
   const a=_mlActif();
   if(!a){ z.innerHTML=''; _mlDessinerCalque(); return; }
   const b=/** @type {any} */(a).barre;
-  const off=_ml.dureeMs?'':' disabled';
+  // PENDANT UNE CORRECTION, on ne lance pas d'analyse : elle prend la vidéo,
+  // la parcourt image par image, et la séquence enregistrée n'aurait plus de sens.
+  const off=(_ml.dureeMs&&!_ml.rec)?'':' disabled';
   let h='<div class="ml-traj"><div class="ml-traj-tete"><span class="ml-lab">Trajectoire de la barre</span>';
   if(_ml.mode==='graine'||_ml.mode==='replacer'){
     const g=_ml.graine, pose=!!(g&&g.x!=null);
@@ -2041,6 +2176,686 @@ async function _mlExtraire(url,debutMs,finMs,w,h,pasMs,surImage,arreter){
   }
 }
 
+// ══ LOTS 5 ET 6 — LA CORRECTION VIDÉO : ENREGISTRER, COMPOSER, REJOUER ════════
+//
+// Voir le modèle dans index.html (motionCorrectionValide) : une séquence
+// REJOUÉE, pas un MP4. Le coach parle pendant qu'il manipule la vidéo ; chaque
+// geste part au journal sur l'horloge de la session, qui s'arrête quand il met
+// l'enregistrement en pause. L'athlète revoit sa vidéo pilotée par ce journal,
+// sous la voix du coach.
+
+/**
+ * Un geste du journal — union discriminée par son deuxième élément.
+ * @typedef {[number,'lecture']|[number,'pause']|[number,'effacer']|[number,'aller',number]
+ *   |[number,'vitesse',number]|[number,'trait',number,string]|[number,'calque','trajectoire',string,number]} Geste
+ */
+/** @typedef {{id:string, aMs:number, dureeMs:number, texte:string}} Carte */
+/**
+ * @typedef {{v:1, id:string, creeLe:number, envoyeLe:number, dureeMs:number,
+ *   voix:{url:string}|null, debut:{s:number, r:number}, ev:Geste[], cartes:Carte[]}} Correction
+ */
+/**
+ * L'état d'un enregistrement en cours.
+ * @typedef {{t0:number, pause:boolean, pauseDebut:number, pauseTotal:number, ev:Geste[],
+ *   debut:{s:number, r:number}, media:MediaRecorder|null, flux:MediaStream|null, morceaux:Blob[],
+ *   outil:'dessin'|null, couleur:number, traits:[number,string][], enCours:number[][]|null,
+ *   trace:boolean, minuteur:number, plein:boolean}} Enregistrement
+ */
+
+// Les modèles de cartes proposés tant que le coach n'a pas les siens.
+const ML_MODELES_DEFAUT=Object.freeze(['Garde les coudes hauts','Pousse avec les jambes plus longtemps',
+  'Barre plus près du corps','Reste sur les talons plus longtemps','Verrouille en haut avant de redescendre']);
+const ML_MODELES_MAX=12;
+const ML_DUREES_CARTE=Object.freeze([2000,3000,5000]);
+
+/**
+ * PURE. L'état de la séquence à l'instant T de la session : lecture ou pause,
+ * vitesse, position dans la vidéo source, traits visibles, trajectoires
+ * affichées. C'est LA règle du rejeu — le lecteur n'en a pas d'autre.
+ * @param {{s:number, r:number}} debut
+ * @param {Geste[]} ev  triés par instant
+ * @param {number} T
+ * @returns {{jouer:boolean, r:number, s:number, traits:[number,string][], calques:Object<string,boolean>}}
+ */
+function mlEtatRejeu(debut,ev,T){
+  let jouer=false, r=Number(debut&&debut.r)||1, s=Number(debut&&debut.s)||0, tRef=0;
+  /** @type {[number,string][]} */ let traits=[];
+  /** @type {Object<string,boolean>} */ const calques={};
+  for(const e of ev||[]){
+    if(e[0]>T) break;
+    if(jouer) s+=(e[0]-tRef)*r;
+    tRef=e[0];
+    switch(e[1]){
+      case 'lecture': jouer=true; break;
+      case 'pause': jouer=false; break;
+      case 'aller': s=e[2]; break;
+      case 'vitesse': r=e[2]; break;
+      case 'trait': traits.push([e[2],e[3]]); break;
+      case 'effacer': traits=[]; break;
+      case 'calque': calques[e[3]]=e[4]===1; break;
+    }
+  }
+  if(jouer) s+=(T-tRef)*r;
+  return {jouer,r,s:Math.max(0,s),traits,calques};
+}
+/**
+ * PURE. Ajoute un geste au journal en le gardant court : une recherche qui
+ * suit la précédente de moins de 150 ms la remplace (un glissement de poignée
+ * en émet des dizaines), et un geste qui ne change rien n'est pas écrit.
+ * Rend false quand le journal est plein.
+ * @param {Geste[]} ev
+ * @param {Geste} g
+ * @returns {boolean}
+ */
+function mlJournaliser(ev,g){
+  const der=ev[ev.length-1];
+  if(g[1]==='aller'&&der&&der[1]==='aller'&&g[0]-der[0]<150){ ev[ev.length-1]=g; return true; }
+  if(g[1]==='lecture'||g[1]==='pause'){
+    for(let i=ev.length-1;i>=0;i--){ const k=ev[i][1]; if(k==='lecture'||k==='pause'){ if(k===g[1]) return true; break; } }
+    if(g[1]==='pause'&&!ev.some(e=>e[1]==='lecture')) return true;
+  }
+  if(g[1]==='vitesse'){
+    for(let i=ev.length-1;i>=0;i--){ const e=ev[i]; if(e[1]==='vitesse'){ if(e[2]===g[2]) return true; break; } }
+  }
+  if(ev.length>=CORR_EV_MAX) return false;
+  ev.push(g);
+  return true;
+}
+/**
+ * PURE. Un trait simplifié (Ramer-Douglas-Peucker) jusqu'à tenir en
+ * CORR_POINTS_MAX points : on relâche la tolérance tant qu'il en déborde.
+ * @param {number[][]} pts
+ * @returns {number[][]}
+ */
+function mlSimplifierTrait(pts){
+  /** @param {number[][]} l @param {number} eps @returns {number[][]} */
+  const rdp=(l,eps)=>{
+    if(l.length<3) return l.slice();
+    const [a,b]=[l[0],l[l.length-1]];
+    let dMax=-1, iMax=0;
+    const dx=b[0]-a[0], dy=b[1]-a[1], n=Math.hypot(dx,dy)||1;
+    for(let i=1;i<l.length-1;i++){
+      const d=Math.abs(dy*l[i][0]-dx*l[i][1]+b[0]*a[1]-b[1]*a[0])/n;
+      if(d>dMax){ dMax=d; iMax=i; }
+    }
+    if(dMax<=eps) return [a,b];
+    return rdp(l.slice(0,iMax+1),eps).slice(0,-1).concat(rdp(l.slice(iMax),eps));
+  };
+  let eps=2, r=rdp(pts,eps);
+  while(r.length>CORR_POINTS_MAX&&eps<200){ eps*=1.6; r=rdp(pts,eps); }
+  return r.length>CORR_POINTS_MAX?r.filter((_,i)=>i%Math.ceil(r.length/CORR_POINTS_MAX)===0).slice(0,CORR_POINTS_MAX):r;
+}
+/**
+ * PURE. Un trait en texte : « x,y x,y », entiers de 0 à 1000.
+ * @param {number[][]} pts
+ * @returns {string}
+ */
+function mlEncoderTrait(pts){
+  return pts.map(p=>Math.max(0,Math.min(1000,Math.round(p[0])))+','+Math.max(0,Math.min(1000,Math.round(p[1])))).join(' ');
+}
+/**
+ * PURE. Le texte d'un trait, relu.
+ * @param {string} s
+ * @returns {number[][]}
+ */
+function mlDecoderTrait(s){
+  return String(s||'').split(' ').map(q=>q.split(',').map(Number)).filter(p=>p.length===2&&p.every(isFinite));
+}
+/**
+ * PURE. Les cartes affichées quand la vidéo source est à `sMs`.
+ * @param {Carte[]} cartes
+ * @param {number} sMs
+ * @returns {Carte[]}
+ */
+function mlCartesVisibles(cartes,sMs){
+  return (cartes||[]).filter(c=>sMs>=c.aMs&&sMs<c.aMs+c.dureeMs);
+}
+/**
+ * PURE. Le premier instant de la session où la vidéo montre une carte : c'est
+ * là qu'on saute quand l'athlète touche la carte dans la liste. -1 si la
+ * séquence ne passe jamais par ce moment.
+ * @param {Correction} m
+ * @param {Carte} c
+ * @returns {number}
+ */
+function mlInstantDeCarte(m,c){
+  for(let T=0;T<=m.dureeMs;T+=40){
+    const s=mlEtatRejeu(m.debut,m.ev,T).s;
+    if(s>=c.aMs-20&&s<c.aMs+c.dureeMs) return T;
+  }
+  return -1;
+}
+
+// ── L'enregistrement ────────────────────────────────────────────────────────
+/** @returns {number} l'instant de la session, en ms, pauses exclues */
+function _mlRecT(){
+  const r=_ml&&_ml.rec;
+  if(!r) return 0;
+  return Math.max(0,Math.round((r.pause?r.pauseDebut:performance.now())-r.t0-r.pauseTotal));
+}
+/** @param {Geste} g */
+function _mlJournal(g){
+  const r=_ml&&_ml.rec;
+  if(!r||r.pause) return;
+  if(!mlJournaliser(r.ev,g)&&!r.plein){
+    r.plein=true;
+    toast('Journal plein : termine la correction pour l’envoyer.','var(--orange)');
+  }
+}
+/** Le choix du type audio : ce que le navigateur sait enregistrer. */
+function _mlMimeVoix(){
+  const MR=/** @type {any} */(window).MediaRecorder;
+  if(!MR||typeof MR.isTypeSupported!=='function') return '';
+  return ['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus','audio/webm'].find(t=>MR.isTypeSupported(t))||'';
+}
+async function mlCorrDemarrer(){
+  const v=_mlVideo();
+  if(!_ml||!v||!_ml.dureeMs||_ml.mode!=='lecture'||_ml.rec) return false;
+  if(_ml.correction&&_ml.correction.statut!=='envoye'){
+    if(!await rcConfirm('Recommencer la correction ?','La correction enregistrée et pas encore envoyée sera perdue.','Recommencer','Garder'))
+      return false;
+    _mlCorrOublier();
+  }
+  if(!_ml) return false;
+  try{ v.pause(); }catch(e){}
+  /** @type {MediaStream|null} */ let flux=null;
+  /** @type {MediaRecorder|null} */ let media=null;
+  const morceaux=/** @type {Blob[]} */([]);
+  try{
+    flux=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    const mime=_mlMimeVoix();
+    media=new MediaRecorder(flux,mime?{mimeType:mime}:{});
+    media.ondataavailable=e=>{ if(e.data&&e.data.size>0) morceaux.push(e.data); };
+  }catch(e){
+    if(flux) flux.getTracks().forEach(t=>t.stop());
+    flux=null; media=null;
+    if(!await rcConfirm('Micro indisponible','La correction sera muette : les gestes, les dessins et les cartes seront gardés, sans ta voix.','Continuer sans voix','Annuler'))
+      return false;
+  }
+  if(!_ml){ if(flux) flux.getTracks().forEach(t=>t.stop()); return false; }
+  const a=_mlActif();
+  _ml.rec={t0:performance.now(),pause:false,pauseDebut:0,pauseTotal:0,ev:[],
+    debut:{s:Math.round((Number(v.currentTime)||0)*1000),r:VID_RATES.includes(v.playbackRate)?v.playbackRate:1},
+    media,flux,morceaux,outil:null,couleur:1,traits:[],enCours:null,trace:true,minuteur:0,plein:false};
+  if(a&&a.barre) _ml.rec.ev.push([0,'calque','trajectoire',a.id,1]);
+  if(media) media.start(250);
+  _ml.rec.minuteur=window.setInterval(()=>{
+    if(!_ml||!_ml.rec){ return; }
+    _mlMajBarreRec();
+    if(_mlRecT()>=CORR_DUREE_MAX_MS){ toast('Trois minutes : la correction s’arrête là.'); mlRecTerminer(); }
+  },250);
+  _mlMajCorrection();
+  _mlDessinerCalque();
+  return true;
+}
+function mlRecPause(){
+  const r=_ml&&_ml.rec, v=_mlVideo();
+  if(!r) return false;
+  if(!r.pause){
+    if(v&&!v.paused){ try{ v.pause(); }catch(e){} }
+    _mlJournal([_mlRecT(),'pause']);
+    r.pause=true; r.pauseDebut=performance.now(); r.outil=null;
+    try{ if(r.media&&r.media.state==='recording') r.media.pause(); }catch(e){}
+  } else {
+    r.pauseTotal+=performance.now()-r.pauseDebut; r.pause=false;
+    try{ if(r.media&&r.media.state==='paused') r.media.resume(); }catch(e){}
+    // CE QUI A BOUGÉ PENDANT LA PAUSE est remis au journal à la reprise : sans
+    // cela, l'athlète reverrait la vidéo là où le coach l'avait laissée avant.
+    if(v){
+      _mlJournal([_mlRecT(),'aller',Math.round((Number(v.currentTime)||0)*1000)]);
+      if(VID_RATES.includes(v.playbackRate)) _mlJournal([_mlRecT(),'vitesse',v.playbackRate]);
+    }
+  }
+  _mlMajBarreRec();
+  _mlDessinerCalque();
+  return true;
+}
+function mlRecDessin(){
+  const r=_ml&&_ml.rec;
+  if(!r||r.pause) return false;
+  r.outil=r.outil==='dessin'?null:'dessin';
+  _mlMajBarreRec(); _mlDessinerCalque();
+  return true;
+}
+/** @param {number} i */
+function mlRecCouleur(i){
+  const r=_ml&&_ml.rec;
+  if(!r) return false;
+  r.couleur=Math.max(0,Math.min(CORR_COULEURS-1,Math.round(Number(i)||0)));
+  r.outil='dessin';
+  _mlMajBarreRec(); _mlDessinerCalque();
+  return true;
+}
+/** @param {number[][]} brut */
+function _mlRecTrait(brut){
+  const r=_ml&&_ml.rec;
+  if(!r||r.pause) return false;
+  if(r.traits.length>=CORR_TRAITS_MAX){ toast('Soixante traits au plus : efface avant de redessiner.','var(--orange)'); return false; }
+  const txt=mlEncoderTrait(mlSimplifierTrait(brut));
+  r.traits.push([r.couleur,txt]);
+  _mlJournal([_mlRecT(),'trait',r.couleur,txt]);
+  return true;
+}
+function mlRecEffacer(){
+  const r=_ml&&_ml.rec;
+  if(!r||r.pause||!r.traits.length) return false;
+  r.traits=[];
+  _mlJournal([_mlRecT(),'effacer']);
+  _mlDessinerCalque();
+  return true;
+}
+function mlRecTrace(){
+  const r=_ml&&_ml.rec, a=_mlActif();
+  if(!r||r.pause||!a||!a.barre) return false;
+  r.trace=!r.trace;
+  _mlJournal([_mlRecT(),'calque','trajectoire',a.id,r.trace?1:0]);
+  _mlMajBarreRec(); _mlDessinerCalque();
+  return true;
+}
+/** @returns {Promise<boolean>} */
+async function mlRecTerminer(){
+  const r=_ml&&_ml.rec;
+  if(!_ml||!r) return false;
+  const v=_mlVideo();
+  if(r.pause){ r.pauseTotal+=performance.now()-r.pauseDebut; r.pause=false; }
+  const dureeMs=_mlRecT();
+  if(v&&!v.paused){ try{ v.pause(); }catch(e){} }
+  window.clearInterval(r.minuteur);
+  /** @type {Blob|null} */
+  const blob=await new Promise(res=>{
+    if(!r.media||r.media.state==='inactive') return res(null);
+    r.media.onstop=()=>res(r.morceaux.length?new Blob(r.morceaux,{type:(r.media&&r.media.mimeType)||'audio/webm'}):null);
+    try{ r.media.stop(); }catch(e){ res(null); }
+  });
+  if(r.flux) r.flux.getTracks().forEach(t=>t.stop());
+  if(!_ml) return false;
+  _ml.rec=null;
+  if(dureeMs<300){ toast('Correction trop courte : rien n’a été gardé.','var(--orange)'); _mlMajCorrection(); _mlDessinerCalque(); return false; }
+  /** @type {Correction} */
+  const motion={v:1,id:'c'+Date.now().toString(36),creeLe:Date.now(),envoyeLe:0,dureeMs,voix:null,
+    debut:r.debut,ev:r.ev.slice().sort((x,y)=>x[0]-y[0]),cartes:[]};
+  _ml.correction={motion,blob,blobUrl:blob?URL.createObjectURL(blob):'',statut:'brouillon',erreur:''};
+  _mlMajCorrection();
+  _mlDessinerCalque();
+  return true;
+}
+// Oublie le brouillon : l'aperçu, la voix gardée en mémoire.
+function _mlCorrOublier(){
+  if(!_ml) return;
+  if(_ml.lecteur){ _ml.lecteur.detruire(); _ml.lecteur=null; }
+  if(_ml.correction&&_ml.correction.blobUrl) URL.revokeObjectURL(_ml.correction.blobUrl);
+  _ml.correction=null;
+}
+async function mlCorrAbandonner(){
+  if(!_ml||!_ml.correction) return false;
+  if(_ml.correction.statut!=='envoye'
+    &&!await rcConfirm('Abandonner cette correction ?','La voix et les gestes enregistrés seront perdus.','Abandonner','Garder')) return false;
+  _mlCorrOublier();
+  _mlMajCorrection();
+  return true;
+}
+
+// ── Les cartes écrites et les modèles ───────────────────────────────────────
+/** @returns {string[]} */
+function _mlModeles(){
+  const l=currentUser&&Array.isArray(currentUser.motionModeles)?currentUser.motionModeles:null;
+  return (l||ML_MODELES_DEFAUT).map(x=>String(x).slice(0,CORR_CARTE_MAX)).filter(Boolean).slice(0,ML_MODELES_MAX);
+}
+function mlCarteAjouter(){
+  const v=_mlVideo(), champ=/** @type {HTMLInputElement|null} */(_mlEl('ml-carte-txt'));
+  const duree=/** @type {HTMLSelectElement|null} */(_mlEl('ml-carte-duree'));
+  if(!_ml||!v||!champ) return false;
+  const texte=champ.value.trim().slice(0,CORR_CARTE_MAX);
+  if(!texte){ toast('Écris la correction avant de l’ajouter.','var(--orange)'); return false; }
+  if(_ml.cartes.length>=CORR_CARTES_MAX){ toast('Vingt cartes au plus.','var(--orange)'); return false; }
+  const d=Number(duree&&duree.value);
+  _ml.cartes=_ml.cartes.concat([{id:'k'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+    aMs:Math.round((Number(v.currentTime)||0)*1000),dureeMs:ML_DUREES_CARTE.includes(d)?d:3000,texte}])
+    .sort((a,b)=>a.aMs-b.aMs);
+  champ.value='';
+  _mlMajCorrection();
+  return true;
+}
+/** @param {string} id */
+function mlCarteSupprimer(id){
+  if(!_ml) return false;
+  _ml.cartes=_ml.cartes.filter(c=>c.id!==id);
+  _mlMajCorrection();
+  return true;
+}
+/** @param {number} i */
+function mlModeleUtiliser(i){
+  const champ=/** @type {HTMLInputElement|null} */(_mlEl('ml-carte-txt'));
+  const m=_mlModeles()[i];
+  if(!champ||!m) return false;
+  champ.value=m; champ.focus();
+  return true;
+}
+function mlModeleGarder(){
+  const champ=/** @type {HTMLInputElement|null} */(_mlEl('ml-carte-txt'));
+  const t=champ?champ.value.trim().slice(0,CORR_CARTE_MAX):'';
+  if(!currentUser||!t) return false;
+  const l=_mlModeles().filter(x=>x!==t);
+  if(l.length>=ML_MODELES_MAX){ toast('Douze modèles au plus : retires-en un.','var(--orange)'); return false; }
+  currentUser.motionModeles=[t].concat(l);
+  toastEcriture(saveUser(),'Modèle gardé ✓','le modèle est');
+  _mlMajCorrection();
+  return true;
+}
+/** @param {number} i */
+function mlModeleRetirer(i){
+  if(!currentUser) return false;
+  const l=_mlModeles();
+  if(!l[i]) return false;
+  l.splice(i,1);
+  currentUser.motionModeles=l;
+  try{ saveUser(); }catch(e){}
+  _mlMajCorrection();
+  return true;
+}
+
+// ── L'envoi ─────────────────────────────────────────────────────────────────
+async function mlCorrEnvoyer(){
+  const c=_ml&&_ml.correction;
+  if(!_ml||!c||c.statut==='envoi'||c.statut==='envoye') return false;
+  const {email,videoId}=_ml;
+  c.statut='envoi'; c.erreur='';
+  _mlMajCorrection();
+  try{
+    let voix=c.motion.voix;
+    if(c.blob&&!voix){
+      const type=c.blob.type||'audio/webm';
+      const ext=/mp4/.test(type)?'.m4a':/ogg/.test(type)?'.ogg':'.webm';
+      const url=await _cloudinaryUpload(new File([c.blob],'correction_'+Date.now()+ext,{type}));
+      voix={url:String(url)};
+      c.motion.voix=voix;          // gardée : un nouvel essai ne renvoie pas la voix
+    }
+    if(!_ml||_ml.correction!==c) return false;
+    const motion={...c.motion,voix,cartes:_ml.cartes.slice(),envoyeLe:Date.now()};
+    const r=enregistrerCorrectionMotion(email,videoId,motion);
+    if(!r.ok&&r.raison) throw new Error(r.raison);
+    c.statut='envoye'; c.motion=r.motion||motion;
+    toastSync(r.ok,r.envoi,'Correction envoyée ✓','la correction est');
+  }catch(e){
+    if(!_ml||_ml.correction!==c) return false;
+    c.statut='erreur';
+    c.erreur=(e&&/** @type {any} */(e).message&&/illisible|introuvable|autorisé/.test(/** @type {any} */(e).message))
+      ?String(/** @type {any} */(e).message):_cloudinaryUserMsg(e,'audio');
+  }
+  _mlMajCorrection();
+  return c.statut==='envoye';
+}
+
+// ── Le panneau et la barre d'enregistrement ─────────────────────────────────
+function _mlMajBarreRec(){
+  const z=_mlEl('ml-rec');
+  if(!z||!_ml) return;
+  const r=_ml.rec;
+  if(!r){ z.innerHTML=''; z.hidden=true; return; }
+  z.hidden=false;
+  const a=_mlActif();
+  const t=_mlRecT();
+  z.innerHTML='<div class="ml-rec-l1"><span class="ml-rec-point'+(r.pause?' ml-rec-pause':'')+'" aria-hidden="true"></span>'
+    +'<b class="ml-rec-t">'+mlTempsTexte(t).slice(0,-3)+'</b>'
+    +'<span class="ml-rec-etat">'+(r.pause?'En pause':r.media?'Enregistrement':'Enregistrement sans voix')+'</span>'
+    +'<button type="button" class="ml-b" onclick="mlRecPause()">'+(r.pause?'Reprendre':'❚❚ Pause')+'</button>'
+    +'<button type="button" class="ml-b ml-b-plein" onclick="mlRecTerminer()">■ Terminer</button></div>'
+    +'<div class="ml-rec-l2">'
+      +'<button type="button" class="ml-b" aria-pressed="'+(r.outil==='dessin')+'" onclick="mlRecDessin()"'+(r.pause?' disabled':'')+'>✎ Dessiner</button>'
+      +[0,1,2].map(i=>'<button type="button" class="ml-pastille" style="--c:'+_mlCouleurTrait(i)+'" aria-pressed="'+(r.couleur===i)
+        +'" aria-label="Couleur '+['blanche','cyan','rouge'][i]+'" onclick="mlRecCouleur('+i+')"'+(r.pause?' disabled':'')+'></button>').join('')
+      +'<button type="button" class="ml-b" onclick="mlRecEffacer()"'+(r.pause||!r.traits.length?' disabled':'')+'>Effacer</button>'
+      +(a&&a.barre?'<button type="button" class="ml-b" aria-pressed="'+r.trace+'" onclick="mlRecTrace()"'+(r.pause?' disabled':'')+'>Trajectoire</button>':'')
+    +'</div>';
+}
+function _mlMajCorrection(){
+  const z=_mlEl('ml-corr');
+  if(!z||!_ml) return;
+  _mlMajBarreRec();
+  const c=_ml.correction;
+  const off=_ml.dureeMs?'':' disabled';
+  let h='<div class="ml-traj"><div class="ml-traj-tete"><span class="ml-lab">Correction vidéo</span></div>';
+  if(_ml.rec){
+    h+='<p class="ml-traj-aide">Enregistrement en cours : lis, fige, ralentis, avance image par image, dessine. '
+      +'Chaque geste est noté, et l’athlète reverra exactement cette séquence sous ta voix.</p>';
+  } else if(!c){
+    const v=_mlVideoSource();
+    h+='<p class="ml-traj-aide">Parle pendant que tu manipules la vidéo : l’athlète reverra ta voix, tes arrêts, tes ralentis '
+      +'et tes dessins, dans l’ordre. Trois minutes au plus.'
+      +(v&&motionCorrectionValide(v.motion)?' Une correction a déjà été envoyée'+(v.motion.envoyeLe?' le '+new Date(v.motion.envoyeLe).toLocaleDateString('fr-FR'):'')
+        +' : la nouvelle la remplacera.':'')+'</p>'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" onclick="mlCorrDemarrer()"'+off+'>🎙 Enregistrer une correction</button></div>';
+  } else {
+    const st={brouillon:'Prête à envoyer',envoi:'Envoi en cours…',envoye:'Envoyée ✓',erreur:'Échec de l’envoi'}[c.statut];
+    h+='<p class="ml-traj-aide"><b class="ml-statut ml-statut-'+c.statut+'">'+st+'</b> · '+_mlDureeCourte(c.motion.dureeMs)
+      +(c.blob?'':' · sans voix')+(c.erreur?' — '+escapeHtml(c.erreur):'')+'</p>'
+      +'<div id="ml-corr-lecteur" class="ml-corr-lecteur"></div>'
+      +'<div class="ml-traj-cmd">'
+      +(c.statut==='envoye'
+        ?'<button type="button" class="btn btn-outline btn-sm" onclick="mlCorrAbandonner()">Nouvelle correction</button>'
+        :'<button type="button" class="btn btn-red btn-sm" onclick="mlCorrEnvoyer()"'+(c.statut==='envoi'?' disabled':'')+'>'
+          +(c.statut==='erreur'?'Réessayer l’envoi':'Envoyer à l’athlète')+'</button>'
+          +'<button type="button" class="btn btn-outline btn-sm" onclick="mlCorrAbandonner()"'+(c.statut==='envoi'?' disabled':'')+'>Abandonner</button>')
+      +'</div>';
+  }
+  // LES CARTES : elles se préparent avant, pendant ou après l'enregistrement,
+  // et s'attachent à un instant de la VIDÉO — elles apparaissent quand la
+  // séquence y passe.
+  const verrou=c&&(c.statut==='envoi'||c.statut==='envoye');
+  h+='<div class="ml-lab" style="margin-top:14px">Corrections écrites</div>'
+    +(_ml.cartes.length?'<div class="ml-cartes">'+_ml.cartes.map(k=>'<div class="ml-carte-l"><span class="ml-carte-t">'
+        +mlTempsTexte(k.aMs)+'</span><span class="ml-carte-x">'+escapeHtml(k.texte)+'</span>'
+        +(verrou?'':'<button type="button" class="ml-mini" onclick="mlCarteSupprimer(\''+escapeHtml(k.id)+'\')" aria-label="Retirer cette carte">×</button>')
+        +'</div>').join('')+'</div>':'<p class="ml-traj-aide">Aucune pour l’instant.</p>')
+    +(verrou?'':'<div class="ml-carte-saisie"><input id="ml-carte-txt" class="vn-in" maxlength="'+CORR_CARTE_MAX+'" placeholder="Ex. : garde les coudes hauts" '
+        +'onkeydown="if(event.key===\'Enter\'){event.preventDefault();mlCarteAjouter()}">'
+      +'<select id="ml-carte-duree" class="vn-in" aria-label="Durée d’affichage">'
+        +ML_DUREES_CARTE.map(d=>'<option value="'+d+'"'+(d===3000?' selected':'')+'>'+(d/1000)+' s</option>').join('')+'</select></div>'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlCarteAjouter()"'+off+'>+ À l’image affichée</button>'
+        +'<button type="button" class="btn btn-outline btn-sm" onclick="mlModeleGarder()">★ Garder comme modèle</button></div>'
+      +'<div class="ml-phases">'+_mlModeles().map((m,i)=>'<span class="ml-modele"><button type="button" class="ml-phase" onclick="mlModeleUtiliser('+i+')">'
+        +escapeHtml(m)+'</button><button type="button" class="ml-modele-x" onclick="mlModeleRetirer('+i+')" aria-label="Retirer ce modèle">×</button></span>').join('')+'</div>');
+  z.innerHTML=h+'</div>';
+  // L'APERÇU : le lecteur de l'athlète, sur la voix gardée en mémoire.
+  const hote=_mlEl('ml-corr-lecteur');
+  if(_ml.lecteur){ _ml.lecteur.detruire(); _ml.lecteur=null; }
+  if(hote&&c){
+    _ml.lecteur=mlLecteurCorrection(hote,{url:_ml.url,correction:{...c.motion,cartes:_ml.cartes.slice()},
+      segments:_ml.segments,voixUrl:c.blobUrl||(c.motion.voix?c.motion.voix.url:'')});
+  }
+}
+/** @param {number} ms */
+function _mlDureeCourte(ms){ return mlTempsTexte(ms).slice(0,-3); }
+/** @returns {any} l'entrée de la vidéo dans le dossier de l'athlète */
+function _mlVideoSource(){
+  if(!_ml) return null;
+  const c=(DB.get('users')||{})[_ml.email];
+  return c&&Array.isArray(c.videos)?c.videos.find((/** @type {any} */ x)=>x&&x.id===_ml?.videoId):null;
+}
+
+// ── Le lecteur de correction ────────────────────────────────────────────────
+/**
+ * Rejoue une correction dans `hote`. La voix mène quand elle joue : c'est elle
+ * qu'on entend, et une voix qui saute s'entend plus qu'une image qui se
+ * recale. La vidéo suit l'état que mlEtatRejeu calcule, et se recale dès
+ * qu'elle s'en écarte de plus de 220 ms en lecture, 45 ms à l'arrêt.
+ * @param {HTMLElement} hote
+ * @param {{url:string, correction:Correction, segments:Segment[], voixUrl:string}} o
+ * @returns {{jouer:()=>void, pause:()=>void, aller:(T:number)=>void, detruire:()=>void, instant:()=>number}}
+ */
+function mlLecteurCorrection(hote,o){
+  const m=o.correction, D=m.dureeMs;
+  hote.innerHTML='<div class="mlc">'
+    +'<div class="mlc-scene"><video class="mlc-video" src="'+safeUrl(o.url)+'" playsinline webkit-playsinline preload="auto"'
+      // LA VOIX DU COACH COUVRE LE SON D'ORIGINE : la vidéo est muette sous elle.
+      +(o.voixUrl?' muted':'')+'></video>'
+    +'<canvas class="mlc-calque" aria-hidden="true"></canvas><div class="mlc-carte" aria-live="polite" hidden></div>'
+    +'<button type="button" class="mlc-grand" aria-label="Lire la correction">▶</button></div>'
+    +'<div class="mlc-cmd"><button type="button" class="ml-b mlc-jouer" aria-label="Lire la correction">▶</button>'
+    +'<div class="mlc-barre" role="slider" tabindex="0" aria-label="Position dans la correction" aria-valuemin="0" aria-valuemax="'+D+'"><i></i></div>'
+    +'<span class="mlc-temps">0:00 / '+_mlDureeCourte(D)+'</span></div></div>';
+  const video=/** @type {HTMLVideoElement} */(hote.querySelector('.mlc-video'));
+  const calque=/** @type {HTMLCanvasElement} */(hote.querySelector('.mlc-calque'));
+  const carte=/** @type {HTMLElement} */(hote.querySelector('.mlc-carte'));
+  const barre=/** @type {HTMLElement} */(hote.querySelector('.mlc-barre'));
+  const bJouer=/** @type {HTMLElement} */(hote.querySelector('.mlc-jouer'));
+  const grand=/** @type {HTMLElement} */(hote.querySelector('.mlc-grand'));
+  const temps=/** @type {HTMLElement} */(hote.querySelector('.mlc-temps'));
+  const voix=o.voixUrl?new Audio(o.voixUrl):null;
+  if(voix) voix.preload='auto';
+  if(video) video.onerror=()=>{ temps.textContent='Vidéo indisponible'; };
+  /** @type {Object<string,{d:any, b:any}>} */
+  const traj={};
+  for(const s of o.segments||[]){
+    const b=/** @type {any} */(s).barre;
+    if(b) try{ traj[s.id]={d:mlDecompacterBarre(b),b}; }catch(e){}
+  }
+  let T=0, joue=false, dernier=0, raf=0, detruit=false;
+  const dessiner=(/** @type {ReturnType<typeof mlEtatRejeu>} */ e)=>{
+    const R=_mlVideoRect(video);
+    const dpr=Math.min(2,window.devicePixelRatio||1), W=video.clientWidth, H=video.clientHeight;
+    if(calque.width!==Math.round(W*dpr)||calque.height!==Math.round(H*dpr)){ calque.width=Math.round(W*dpr); calque.height=Math.round(H*dpr); }
+    const g=calque.getContext('2d');
+    if(!g) return;
+    g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+    const sNow=(Number(video.currentTime)||0)*1000;
+    if(R){
+      for(const id of Object.keys(e.calques)) if(e.calques[id]&&traj[id]) _mlDessinerTrajectoire(g,R,traj[id].d,traj[id].b,sNow,false);
+      _mlDessinerTraits(g,R,e.traits);
+    }
+    const k=mlCartesVisibles(m.cartes,sNow)[0];
+    if(k){ carte.textContent=k.texte; carte.hidden=false; } else carte.hidden=true;
+  };
+  const appliquer=(/** @type {boolean} */ saut)=>{
+    const e=mlEtatRejeu(m.debut,m.ev,T);
+    if(video.readyState>=1){
+      if(Math.abs(video.playbackRate-e.r)>1e-6){ try{ video.playbackRate=e.r; }catch(x){} }
+      const d=Number(video.duration);
+      const cible=Math.min(e.s/1000,isFinite(d)&&d>0?d:Infinity);
+      const ecart=Math.abs((Number(video.currentTime)||0)-cible)*1000;
+      if(saut||ecart>((e.jouer&&joue)?220:45)){ try{ video.currentTime=cible; }catch(x){} }
+      if(e.jouer&&joue){ if(video.paused){ const p=video.play(); if(p&&p.catch) p.catch(()=>{}); } }
+      else if(!video.paused) video.pause();
+    }
+    dessiner(e);
+    const f=Math.min(1,T/D);
+    const i=/** @type {HTMLElement} */(barre.firstElementChild); if(i) i.style.transform='scaleX('+f.toFixed(4)+')';
+    barre.setAttribute('aria-valuenow',String(Math.round(T)));
+    temps.textContent=_mlDureeCourte(T)+' / '+_mlDureeCourte(D);
+  };
+  // UN PAS : l'horloge avance, l'état s'applique. La voix mène quand elle joue.
+  const pas=()=>{
+    if(detruit||!joue) return false;
+    const now=performance.now();
+    if(voix&&!voix.paused&&!voix.ended&&voix.currentTime*1000<D) T=voix.currentTime*1000;
+    else T+=now-dernier;
+    dernier=now;
+    if(T>=D){ T=D; appliquer(false); pause(); return false; }
+    appliquer(false);
+    return true;
+  };
+  const boucle=()=>{ if(pas()) raf=requestAnimationFrame(boucle); };
+  // ⚠ ET UN FILET, parce que requestAnimationFrame S'ARRÊTE quand l'onglet
+  // passe en arrière-plan : sans lui, la voix continuerait sur une image figée,
+  // et l'athlète qui revient retrouverait une séquence décalée.
+  const filet=window.setInterval(()=>{
+    if(!joue||detruit) return;
+    if(performance.now()-dernier>250) pas();
+  },250);
+  const jouer=()=>{
+    if(detruit) return;
+    if(T>=D) T=0;
+    joue=true; dernier=performance.now();
+    bJouer.textContent='❚❚'; bJouer.setAttribute('aria-label','Mettre en pause'); grand.hidden=true;
+    if(voix){ try{ voix.currentTime=T/1000; }catch(x){} const p=voix.play(); if(p&&p.catch) p.catch(()=>{}); }
+    appliquer(true);
+    cancelAnimationFrame(raf); raf=requestAnimationFrame(boucle);
+  };
+  const pause=()=>{
+    joue=false; cancelAnimationFrame(raf);
+    if(voix) voix.pause();
+    if(!video.paused) video.pause();
+    bJouer.textContent='▶'; bJouer.setAttribute('aria-label','Lire la correction');
+    grand.hidden=false; grand.textContent=T>=D?'↺':'▶';
+  };
+  const aller=(/** @type {number} */ t)=>{
+    T=Math.max(0,Math.min(D,Number(t)||0));
+    if(voix){ try{ voix.currentTime=T/1000; }catch(x){} }
+    appliquer(true);
+  };
+  bJouer.onclick=()=>{ joue?pause():jouer(); };
+  grand.onclick=()=>jouer();
+  video.onclick=()=>{ joue?pause():jouer(); };
+  barre.onclick=e=>{ const r=barre.getBoundingClientRect(); aller((e.clientX-r.left)/Math.max(1,r.width)*D); };
+  barre.onkeydown=e=>{
+    if(e.key==='ArrowLeft'||e.key==='ArrowRight'){ e.preventDefault(); aller(T+(e.key==='ArrowLeft'?-2000:2000)); }
+  };
+  video.addEventListener('loadedmetadata',()=>{ if(!detruit) appliquer(true); });
+  return {jouer,pause,aller,instant:()=>T,
+    detruire:()=>{ detruit=true; pause(); window.clearInterval(filet);
+      if(voix){ voix.removeAttribute('src'); try{ voix.load(); }catch(x){} } hote.innerHTML=''; }};
+}
+
+// ── L'écran de l'athlète ────────────────────────────────────────────────────
+/** @type {{lecteur:ReturnType<typeof mlLecteurCorrection>|null, m:Correction|null, url:string}} */
+const _mlc={lecteur:null,m:null,url:''};
+/**
+ * @param {any} u  le dossier de l'athlète
+ * @param {any} v  l'entrée de la vidéo
+ * @returns {boolean}
+ */
+function mlAfficherCorrection(u,v){
+  _mlInjecterStyle();
+  mlQuitterCorrection();
+  const z=_mlEl('mlc-contenu');
+  const m=/** @type {Correction|null} */(motionCorrectionValide(v&&v.motion));
+  if(!z||!m) return false;
+  const t=_mlEl('mlc-titre'); if(t) t.textContent=String(v.name||'Correction');
+  const segs=segmentsVideo(v);
+  const mesures=segs.filter(s=>/** @type {any} */(s).barre);
+  const coach=currentUser&&currentUser.role==='coach';
+  z.innerHTML='<div class="ml-sous">Correction de ton coach'
+      +(m.envoyeLe?' · '+new Date(m.envoyeLe).toLocaleDateString('fr-FR'):'')+' · '+_mlDureeCourte(m.dureeMs)+'</div>'
+    +'<div id="mlc-lecteur"></div>'
+    +(m.cartes.length?'<div class="ml-lab" style="margin-top:16px">Corrections écrites</div><div class="ml-cartes">'
+      +m.cartes.map((k,i)=>'<button type="button" class="ml-carte-l ml-carte-b" onclick="mlCorrectionCarte('+i+')">'
+        +'<span class="ml-carte-t">'+mlTempsTexte(k.aMs)+'</span><span class="ml-carte-x">'+escapeHtml(k.texte)+'</span></button>').join('')+'</div>':'')
+    +(mesures.length?'<div class="ml-lab" style="margin-top:16px">Tes mesures</div>'
+      +mesures.map(s=>{ const b=/** @type {any} */(s).barre, mm=b.m||{};
+        return '<div class="ml-metr ml-metr-l"><div><b>'+mlNombre(mm.vMax,2)+' m/s</b><span>'+escapeHtml(s.label)+' · vitesse max</span></div>'
+          +'<div><b>'+mlNombre(mm.hMax,2)+' m</b><span>'+escapeHtml(s.label)+' · hauteur max</span></div></div>'; }).join(''):'')
+    +'<div class="ml-traj-cmd" style="margin-top:16px"><button type="button" class="btn btn-outline btn-sm" onclick="mlVoirOrigine()">Voir ma vidéo d’origine</button>'
+      +(coach?'':'<button type="button" class="btn btn-outline btn-sm" onclick="repondreCorrectionMotion()">Répondre à mon coach</button>')+'</div>'
+    +'<div id="mlc-origine"></div>';
+  _mlc.m=m; _mlc.url=String(v.url||'');
+  const hote=_mlEl('mlc-lecteur');
+  if(hote) _mlc.lecteur=mlLecteurCorrection(hote,{url:_mlc.url,correction:m,segments:segs,voixUrl:m.voix?m.voix.url:''});
+  return true;
+}
+function mlQuitterCorrection(){
+  if(_mlc.lecteur){ _mlc.lecteur.detruire(); _mlc.lecteur=null; }
+  const o=_mlEl('mlc-origine'); if(o) o.innerHTML='';
+  return true;
+}
+/** @param {number} i */
+function mlCorrectionCarte(i){
+  const m=_mlc.m, k=m&&m.cartes[i];
+  if(!m||!k||!_mlc.lecteur) return false;
+  const T=mlInstantDeCarte(m,k);
+  if(T<0){ toast('La séquence ne passe pas par ce moment : ouvre ta vidéo d’origine pour le voir.'); return false; }
+  _mlc.lecteur.pause();
+  _mlc.lecteur.aller(T);
+  return true;
+}
+function mlVoirOrigine(){
+  const o=_mlEl('mlc-origine');
+  if(!o) return false;
+  if(o.innerHTML){ o.innerHTML=''; return true; }
+  if(_mlc.lecteur) _mlc.lecteur.pause();
+  o.innerHTML='<video class="mlc-origine" src="'+safeUrl(_mlc.url)+'" controls playsinline webkit-playsinline preload="metadata"></video>';
+  return true;
+}
+
 // ══ LE STYLE ══════════════════════════════════════════════════════════════════
 // INJECTÉ UNE FOIS, avec le module : un athlète qui n'ouvre jamais le
 // laboratoire ne paie ni le script ni ses règles. Les jetons viennent de
@@ -2128,6 +2943,47 @@ function _mlInjecterStyle(){
     '.ml-alertes{margin:10px 0 0;padding-left:18px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55}',
     '.ml-perf{font-size:var(--fs-2xs);color:var(--text-faint);margin:8px 0 0}',
     '.ml-refaire{width:36px;height:36px}',
+    // ── Lots 5 et 6 : la correction ──
+    '.ml-rec{position:sticky;top:0;z-index:5;margin:0 -14px 10px;padding:8px 14px;background:rgba(12,6,6,.96);border-bottom:1px solid rgba(224,32,32,.45)}',
+    '.ml-rec[hidden]{display:none}',
+    '.ml-rec-l1,.ml-rec-l2{display:flex;align-items:center;gap:6px;flex-wrap:wrap}',
+    '.ml-rec-l2{margin-top:6px}',
+    '.ml-rec-l1 .ml-b,.ml-rec-l2 .ml-b{min-height:38px;padding:0 9px}',
+    '.ml-rec-point{width:12px;height:12px;border-radius:50%;background:var(--red);flex:0 0 auto;box-shadow:0 0 8px rgba(224,32,32,.8)}',
+    '.ml-rec-pause{background:var(--sub);box-shadow:none}',
+    '.ml-rec-t{font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:1px;color:var(--text);font-variant-numeric:tabular-nums}',
+    '.ml-rec-etat{flex:1;min-width:0;font-size:var(--fs-2xs);color:var(--sub);font-weight:700}',
+    '.ml-pastille{width:34px;height:34px;border-radius:50%;border:2px solid var(--border);background:var(--c);cursor:pointer;flex:0 0 auto}',
+    '.ml-pastille[aria-pressed="true"]{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25)}',
+    '.ml-statut{font-weight:800}',
+    '.ml-statut-envoye{color:var(--green,#22c55e)}.ml-statut-erreur{color:var(--red-text)}.ml-statut-envoi{color:var(--orange)}',
+    '.ml-corr-lecteur{margin-top:10px}',
+    '.ml-cartes{display:flex;flex-direction:column;gap:6px;margin-top:8px}',
+    '.ml-carte-l{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 10px;width:100%;text-align:left}',
+    '.ml-carte-b{cursor:pointer;color:var(--text);font-family:Montserrat,sans-serif;min-height:44px}',
+    '.ml-carte-t{flex:0 0 auto;font-family:var(--pile-titre);font-size:var(--fs-md);color:var(--red-text);letter-spacing:.5px}',
+    '.ml-carte-x{flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text);line-height:1.4}',
+    '.ml-carte-saisie{display:flex;gap:6px;margin-top:8px}.ml-carte-saisie .vn-in{margin:0}',
+    '.ml-carte-saisie select{flex:0 0 76px}',
+    '.ml-modele{display:inline-flex;align-items:center;gap:2px}',
+    '.ml-modele-x{background:none;border:none;color:var(--text-faint);font-size:15px;cursor:pointer;padding:0 4px;min-height:36px}',
+    // Le lecteur de correction, chez le coach comme chez l'athlète.
+    '.mlc{margin-top:8px}',
+    '.mlc-scene{position:relative;background:#000;border:1px solid var(--border);border-radius:var(--r-3);overflow:hidden}',
+    '.mlc-video{display:block;width:100%;max-height:46vh;max-height:46dvh;object-fit:contain;background:#000}',
+    '.mlc-calque{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}',
+    '.mlc-carte{position:absolute;left:10px;right:10px;bottom:10px;padding:9px 12px;border-radius:var(--r-2);background:rgba(8,8,8,.86);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:var(--fs-sm);font-weight:700;line-height:1.4;text-align:center}',
+    '.mlc-carte[hidden]{display:none}',
+    '.mlc-grand{position:absolute;left:50%;top:50%;width:66px;height:66px;margin:-33px 0 0 -33px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.45);color:#fff;font-size:24px;cursor:pointer}',
+    '.mlc-grand[hidden]{display:none}',
+    '.mlc-cmd{display:flex;align-items:center;gap:10px;margin-top:8px}',
+    '.mlc-barre{flex:1;height:26px;display:flex;align-items:center;cursor:pointer}',
+    '.mlc-barre::before{content:"";position:absolute;width:0}',
+    '.mlc-barre i{display:block;width:100%;height:6px;border-radius:3px;background:var(--arc-current,#4DE8FF);transform:scaleX(0);transform-origin:left;box-shadow:0 0 0 100vmax transparent}',
+    '.mlc-barre{position:relative;background:linear-gradient(var(--surface-2),var(--surface-2)) center/100% 6px no-repeat;border-radius:3px}',
+    '.mlc-temps{font-size:var(--fs-2xs);color:var(--sub);font-variant-numeric:tabular-nums;flex:0 0 auto}',
+    '.mlc-origine{display:block;width:100%;max-height:46vh;margin-top:10px;border-radius:var(--r-2);background:#000}',
+    '.ml-metr-l{grid-template-columns:1fr 1fr;margin-top:8px}',
     '.ml-aide{font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin:10px 0 0}'
   ].join('\n');
   document.head.appendChild(s);

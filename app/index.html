@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1269';
+window.RC_BUILD='1270';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -11229,6 +11229,22 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- ══════ MOTION LAB — LA CORRECTION VIDÉO, REJOUÉE ═══════════════════
+     L'athlète y revoit la séquence enregistrée par son coach : sa vidéo,
+     pilotée par le journal des gestes, sous la voix du coach. Pas de préfixe
+     s-coach- : c'est d'abord l'écran de l'athlète. -->
+<div id="s-motion-correction" class="screen">
+  <div class="topbar">
+    <!-- R21 — fermeture dédiée : arrête la voix et la vidéo avant de rendre l'écran d'où l'on vient. -->
+    <button class="back-btn" onclick="fermerCorrectionMotion()">←</button>
+    <span class="topbar-title" id="mlc-titre">Correction</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1;padding:0 14px 28px">
+    <div id="mlc-contenu"></div>
+  </div>
+</div>
+
 <!-- ══════ TRAITEMENTS ═══════════════════════════════════════════════
      SEPARE de l'ecran des complements, et pour la meme raison que l'objet
      l'est du leur : un complement se conseille, un medicament ne se conseille
@@ -17166,8 +17182,15 @@ function go(id){
   try{ fermerVenteProgramme(true); }catch(e){}
   try{ fermerFicheVente(true); }catch(e){}
   // MOTION LAB : sa vidéo continuerait de jouer, son compris, derrière
-  // l'écran suivant. La quitter par une autre porte que sa flèche l'arrête.
-  try{ if(id!=='s-coach-motion-lab'){ const _mv=document.getElementById('ml-video'); if(_mv&&!_mv.paused) _mv.pause(); } }catch(e){}
+  // l'écran suivant. La quitter par une autre porte que sa flèche l'arrête —
+  // et met en pause une correction en cours d'enregistrement plutôt que de la
+  // laisser tourner sur un écran qu'on ne voit plus.
+  try{ if(id!=='s-coach-motion-lab'){
+    const _mv=document.getElementById('ml-video'); if(_mv&&!_mv.paused) _mv.pause();
+    if(typeof window.mlSortieEcran==='function') window.mlSortieEcran();
+  } }catch(e){}
+  // LA CORRECTION REJOUÉE : sa voix se tait quand on change d'écran.
+  try{ if(id!=='s-motion-correction'&&typeof window.mlQuitterCorrection==='function') window.mlQuitterCorrection(); }catch(e){}
   try{ fermerContactCoach(true); }catch(e){}
   try{ fermerChoixDiete(true); }catch(e){}
   // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
@@ -59943,9 +59966,14 @@ function checkFeedbackNotif(){
   // Une seule notification, même pour plusieurs corrections : en empiler une
   // par vidéo transformerait une bonne nouvelle en nuisance.
   const multi=nouveaux.length>1;
+  // MOTION LAB : une correction vidéo nomme l'exercice — « Ton coach a corrigé
+  // ton arraché » dit ce qui attend, et que c'est à regarder.
+  const _motionSeul=!multi&&!!nouveaux[0].motion;
   const titre=multi?('RepCore : '+nouveaux.length+' corrections de ton coach')
+                   :_motionSeul?('RepCore : Ton coach a corrigé ton '+String(nouveaux[0].name||'mouvement').toLowerCase())
                    :'RepCore : Ton coach a corrigé ta vidéo';
   const corps=multi?(nouveaux.length+' de tes vidéos viennent d\'être corrigées.')
+                   :_motionSeul?'Une correction vidéo t\'attend : regarde-la dans tes corrections.'
                    :('« '+(nouveaux[0].name||'sans nom')+' » vient d\'être corrigée.');
   if(_notifSupported()&&Notification.permission==='granted'){
     navigator.serviceWorker.ready.then(reg=>reg.showNotification(titre,{
@@ -80101,10 +80129,14 @@ function loadMoreVideos(){
 // C'est ce que l'eleve lisait en bas de son ecran, et c'est aussi pourquoi
 // aucune correction n'etait accessible : les cartes n'existaient pas.
 function _buildVideoCard(v){
-  const hasFb=v.feedback||v.feedbackTimestamps?.length;
+  // MOTION LAB : une correction vidéo compte comme un retour du coach, et
+  // s'ouvre d'un bouton — c'est la première chose que l'athlète doit voir.
+  const _motion=(()=>{ try{ return motionCorrectionValide(v.motion); }catch(e){ return null; } })();
+  const hasFb=v.feedback||v.feedbackTimestamps?.length||_motion;
   const tsInner=_renderTsAnnotations(v.feedbackTimestamps||[],{readonly:true,videoId:'vc-video-'+v.id});
   const tsBlock=tsInner?`<div style="margin-top:8px">${tsInner}</div>`:'';
-  const fbBlock=hasFb?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px;margin-top:10px;font-size:var(--fs-sm)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:var(--fs-xs);font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:var(--fs-xs);color:var(--text-dim)">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}</div>`:'';
+  const motionBtn=_motion?`<button class="btn btn-red btn-sm" style="width:100%;margin:${v.feedback||tsInner?'10px':'2px'} 0 0" onclick="ouvrirCorrectionMotion('${escapeHtml(currentUser?.email||'')}','${escapeHtml(v.id)}')">▶ Voir la correction vidéo · ${_motionDuree(_motion.dureeMs)}</button>`:'';
+  const fbBlock=hasFb?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px;margin-top:10px;font-size:var(--fs-sm)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:var(--fs-xs);font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:var(--fs-xs);color:var(--text-dim)">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}${motionBtn}</div>`:'';
   // COMPARER : offert seulement quand une deuxieme prise du meme exercice
   // existe. Un bouton qui repondrait « il faut deux prises » serait un geste
   // perdu, et c'est le genre de geste qui ramene sur Instagram.
@@ -81707,7 +81739,8 @@ function _vcCorpsHtml(email,videoId){
     ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?htmlLecteurCorrection('vc-video',v):''}
     <!-- MOTION LAB : SEULEMENT POUR UNE VIDEO DEPOSEE. Un lien YouTube ou Drive
          ne donne acces ni a un element <video> ni a ses images. -->
-    ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?`<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="ouvrirMotionLab(window._vcEmail,window._vcVideoId)">✂ Découper les répétitions${segmentsVideo(v).length?' ('+segmentsVideo(v).length+')':''}</button>`:''}
+    ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?`<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="ouvrirMotionLab(window._vcEmail,window._vcVideoId)">✂ Motion Lab : découper, tracer, corriger${segmentsVideo(v).length?' ('+segmentsVideo(v).length+')':''}</button>`
+      +(motionCorrectionValide(v.motion)?`<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:6px" onclick="ouvrirCorrectionMotion(window._vcEmail,window._vcVideoId)">▶ Revoir la correction vidéo envoyée${v.motion.envoyeLe?' le '+new Date(v.motion.envoyeLe).toLocaleDateString('fr-FR'):''}</button>`:''):''}
     <div style="margin-top:14px">
       <label style="margin-top:0">Commentaire général</label>
       <div id="qc-chips" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:4px"></div>
@@ -81982,6 +82015,136 @@ function enregistrerSegmentsVideo(email,videoId,segments){
   c.updatedAt=Date.now(); users[email]=c;
   const ok=DB.set('users',users);
   return {ok,envoi:CLOUD.pushOne(email,c),segments:propres};
+}
+// ── LA CORRECTION VIDÉO (lots 5 et 6) ──────────────────────────────────────────
+//
+// UNE SÉQUENCE REJOUÉE, PAS UN MP4 (décision D1, option A). Le coach enregistre
+// sa voix pendant qu'il lit, fige, ralentit, avance image par image et dessine ;
+// l'application garde le JOURNAL de ces gestes, horodaté sur l'horloge de la
+// session. L'athlète revoit la séquence : sa vidéo d'origine, pilotée par le
+// journal, sous la voix du coach — le même code dessine chez l'un et chez
+// l'autre, donc le même rendu.
+//
+//   videos[i].motion = {v:1, id, creeLe, envoyeLe, dureeMs, voix:{url}|null,
+//     debut:{s, r}, ev:[[t,'lecture'] | [t,'pause'] | [t,'effacer']
+//       | [t,'aller',sMs] | [t,'vitesse',r] | [t,'trait',couleur,'x,y x,y…']
+//       | [t,'calque','trajectoire',idRépétition,0|1]], cartes:[{id,aMs,dureeMs,texte}]}
+//
+// ⚠ DANS LE DOSSIER DE L'ATHLÈTE, pour la même raison que la trajectoire (voir
+// segBarreValide) — et BORNÉE pour la même raison : 3 minutes, 600 gestes,
+// 60 traits de 40 points, 20 cartes, 40 Ko au plus. La voix, elle, part chez
+// l'hébergeur vidéo du coach, comme les messages audio existants.
+//
+// VALIDÉE ENTIÈRE, OU REFUSÉE ENTIÈRE. Une séquence dont un geste est illisible
+// ne se rejoue pas « à peu près » : un seek manquant décale tout ce qui suit.
+const CORR_DUREE_MAX_MS=180000, CORR_EV_MAX=600, CORR_TRAITS_MAX=60, CORR_POINTS_MAX=40,
+  CORR_CARTES_MAX=20, CORR_CARTE_MAX=140, CORR_TAILLE_MAX=40000;
+const CORR_COULEURS=3;
+function motionCorrectionValide(m){
+  if(!m||typeof m!=='object'||m.v!==1) return null;
+  const num=(x,min,max)=>{ const v=Number(x); return isFinite(v)&&v>=min&&v<=max?v:null; };
+  const dureeMs=num(m.dureeMs,300,CORR_DUREE_MAX_MS);
+  const id=String(m.id==null?'':m.id).slice(0,40);
+  if(dureeMs===null||!id) return null;
+  let voix=null;
+  if(m.voix){
+    const u=String(m.voix.url||'');
+    if(u.length>600||!/^https:\/\/[^\s"'<>]+$/.test(u)) return null;
+    voix={url:u};
+  }
+  const r0=Number(m.debut&&m.debut.r);
+  const debut={s:Math.round(num(m.debut&&m.debut.s,0,86400000)||0),r:VID_RATES.includes(r0)?r0:1};
+  const ev=[];
+  let tPrec=0, traits=0;
+  for(const e of _tabBloc(m.ev)){
+    if(!Array.isArray(e)) return null;
+    const t=num(e[0],0,dureeMs), k=e[1];
+    if(t===null||t<tPrec) return null;
+    tPrec=t;
+    const tt=Math.round(t);
+    if(k==='lecture'||k==='pause'||k==='effacer') ev.push([tt,k]);
+    else if(k==='aller'){ const s=num(e[2],0,86400000); if(s===null) return null; ev.push([tt,k,Math.round(s)]); }
+    else if(k==='vitesse'){ const r=Number(e[2]); if(!VID_RATES.includes(r)) return null; ev.push([tt,k,r]); }
+    else if(k==='trait'){
+      const c=Number(e[2]), p=String(e[3]==null?'':e[3]);
+      if(!(Number.isInteger(c)&&c>=0&&c<CORR_COULEURS)) return null;
+      const pts=p.split(' ');
+      if(pts.length<2||pts.length>CORR_POINTS_MAX||!pts.every(q=>/^\d{1,4},\d{1,4}$/.test(q)
+        &&q.split(',').every(n=>Number(n)<=1000))) return null;
+      if(++traits>CORR_TRAITS_MAX) return null;
+      ev.push([tt,k,c,p]);
+    }
+    else if(k==='calque'){
+      const seg=String(e[3]==null?'':e[3]).slice(0,40), on=Number(e[4]);
+      if(e[2]!=='trajectoire'||!seg||(on!==0&&on!==1)) return null;
+      ev.push([tt,k,'trajectoire',seg,on]);
+    }
+    else return null;
+  }
+  if(ev.length>CORR_EV_MAX) return null;
+  const cartes=_tabBloc(m.cartes).map(c=>{
+    if(!c||typeof c!=='object') return null;
+    const texte=String(c.texte==null?'':c.texte).trim().slice(0,CORR_CARTE_MAX);
+    const aMs=num(c.aMs,0,86400000), d=num(c.dureeMs,500,10000);
+    const cid=String(c.id==null?'':c.id).slice(0,40);
+    return (texte&&aMs!==null&&d!==null&&cid)?{id:cid,aMs:Math.round(aMs),dureeMs:Math.round(d),texte}:null;
+  }).filter(Boolean).sort((a,b)=>a.aMs-b.aMs).slice(0,CORR_CARTES_MAX);
+  const out={v:1,id,creeLe:Math.round(num(m.creeLe,0,1e14)||0),envoyeLe:Math.round(num(m.envoyeLe,0,1e14)||0),
+    dureeMs:Math.round(dureeMs),voix,debut,ev,cartes};
+  return JSON.stringify(out).length<=CORR_TAILLE_MAX?out:null;
+}
+// L'ENVOI. Le chemin de la correction écrite : le dossier de l'athlète, la même
+// garde, et `feedbackSeen=false` + `feedbackDate` — la pastille de l'onglet
+// Corrections et la notification existantes font le reste.
+function enregistrerCorrectionMotion(email,videoId,motion){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||c.coachId!==currentUser?.id) return {ok:false,raison:'Élève introuvable ou non autorisé'};
+  const idx=(Array.isArray(c.videos)?c.videos:[]).findIndex(v=>v&&v.id===videoId);
+  if(idx<0) return {ok:false,raison:'Vidéo introuvable'};
+  const m=motionCorrectionValide(motion);
+  if(!m) return {ok:false,raison:'La correction est illisible : elle n’a pas été envoyée.'};
+  c.videos[idx].motion=m;
+  c.videos[idx].feedbackDate=Date.now();
+  c.videos[idx].feedbackSeen=false;
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  return {ok,envoi:CLOUD.pushOne(email,c),motion:m};
+}
+// PURE. « 0:45 » : la durée d'une correction.
+function _motionDuree(ms){
+  const s=Math.max(0,Math.round((Number(ms)||0)/1000));
+  return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+}
+// L'ÉCRAN DE LECTURE : l'athlète revoit la correction ; le coach peut la revoir
+// aussi. Le dossier lu est le sien pour l'athlète, celui de son athlète pour le
+// coach désigné — personne d'autre.
+async function ouvrirCorrectionMotion(email,videoId){
+  let u=null;
+  if(currentUser&&currentUser.email===email) u=currentUser;
+  else {
+    const c=(DB.get('users')||{})[email];
+    if(c&&currentUser&&currentUser.role==='coach'&&c.coachId===currentUser.id) u=c;
+  }
+  const v=u&&(Array.isArray(u.videos)?u.videos:[]).find(x=>x&&x.id===videoId);
+  if(!v||!motionCorrectionValide(v.motion)){ toast('Correction introuvable','var(--orange)'); return false; }
+  try{ await chargerMotionLab(); }
+  catch(e){ toast(e.message,'var(--orange)'); return false; }
+  go('s-motion-correction');
+  return window.mlAfficherCorrection(u,v);
+}
+function fermerCorrectionMotion(){
+  try{ if(typeof window.mlQuitterCorrection==='function') window.mlQuitterCorrection(); }catch(e){}
+  retourDe('s-motion-correction',currentUser?.role==='coach'?'s-coach-home':'s-videos');
+  return true;
+}
+// « Répondre » : les canaux que le coach a publiés — la même feuille que
+// « Un souci ? » sur l'accueil.
+function repondreCorrectionMotion(){
+  try{ _rendreContactCoach(currentUser); }catch(e){}
+  if(typeof ouvrirContactCoach==='function'&&ouvrirContactCoach()) return true;
+  toast('Ton coach n’a publié aucun moyen de contact.','var(--orange)');
+  return false;
 }
 // LE CHARGEMENT DU MODULE (décision D3). Un fichier à part, demandé à la
 // première ouverture : un athlète qui n'ouvre jamais le laboratoire ne le
