@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1258';
+window.RC_BUILD='1259';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -7277,6 +7277,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
   <!-- Topbar — bandeau uni, ombre portée vers le bas pour séparation visuelle -->
   <div class="topbar" style="border-bottom:1px solid rgba(255,255,255,.22);box-shadow:var(--e2);position:relative;z-index:2;background:#090909">
+    <!-- R21 — retour force : tunnel d'entree, on revient a l'accueil du tunnel et non a un ecran de session. -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
       <img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0">
@@ -7372,6 +7373,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
   <!-- Topbar — bandeau uni avec séparation visuelle identique coach -->
   <div class="topbar" style="border-bottom:1px solid rgba(255,255,255,.22);box-shadow:var(--e2);position:relative;z-index:2;background:#090909">
+    <!-- R21 — retour force : tunnel d'entree, on revient a l'accueil du tunnel et non a un ecran de session. -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
       <img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0">
@@ -7468,6 +7470,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- LOGIN -->
 <div id="s-login" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--border)">
+    <!-- R21 — retour force : tunnel de connexion ; laisse tel quel, voir le rapport du lot (« Ajouter un compte » y mene aussi depuis l'accueil). -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px"><img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0"></div>
     <span></span>
@@ -7528,6 +7531,7 @@ const COACH_PHOTO='icons/coach.jpg';
      servent des qu'un coach doit reconnaitre quelqu'un sur son tableau de
      bord — c'est ce moment-la, et la phrase du haut le dit. -->
 <div id="s-identite" class="screen">
+  <!-- R21 — pas un retour : « plus tard » est une reponse du tunnel, qui route ensuite l'utilisateur. -->
   <div class="topbar"><button class="back-btn" onclick="passerIdentite()">←</button><span class="topbar-title">Ton nom</span><span></span></div>
   <div class="pad scroll-area gap" style="flex:1">
     <div id="id-motif" style="font-size:var(--fs-lg);font-weight:800;line-height:1.35;color:var(--text-strong)"></div>
@@ -7548,6 +7552,7 @@ const COACH_PHOTO='icons/coach.jpg';
      quotidiens et age pour mon suivi sportif ». demanderNaissanceGenre
      enchaine donc le consentement sante avant d'ouvrir cet ecran. -->
 <div id="s-naissance" class="screen">
+  <!-- R21 — pas un retour : « plus tard » est une reponse du tunnel, qui route ensuite l'utilisateur. -->
   <div class="topbar"><button class="back-btn" onclick="passerNaissance()">←</button><span class="topbar-title">Tes repères</span><span></span></div>
   <div class="pad scroll-area gap" style="flex:1">
     <div id="nai-motif" style="font-size:var(--fs-lg);font-weight:800;line-height:1.35;color:var(--text-strong)"></div>
@@ -7565,6 +7570,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 <div id="s-consent-sante" class="screen">
+  <!-- R21 — pas un retour : quitter vaut refus du consentement, et ce refus doit etre enregistre. -->
   <div class="topbar"><button class="back-btn" onclick="refuserConsentementSante()">←</button><span class="topbar-title">Données de santé</span><span></span></div>
   <div class="pad scroll-area gap" style="flex:1">
     <div id="cs-motif" style="font-size:var(--fs-lg);font-weight:800;line-height:1.35;color:var(--text-strong)"></div>
@@ -7595,6 +7601,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 <div id="s-register" class="screen">
+  <!-- R21 — retour force : tunnel d'inscription, on revient a l'accueil du tunnel. -->
   <div class="topbar"><button class="back-btn" onclick="go('s-welcome')">←</button><span class="topbar-title">Créer un compte</span><span></span></div>
   <div class="pad scroll-area gap" style="flex:1">
     <!-- ══ LA PHOTO EST DEMANDEE A L'INSCRIPTION ══════════════════════════
@@ -7839,7 +7846,7 @@ const COACH_PHOTO='icons/coach.jpg';
      d un athlete : les trois actions ecrivent chez le coach. -->
 <div id="s-coach-file" class="screen ecran-coach">
   <div class="topbar">
-    <button class="back-btn" onclick="loadCoachHome()">←</button>
+    <button class="back-btn" onclick="retourDe('s-coach-file','s-coach-home')">←</button>
     <span class="topbar-title">Reprise</span><span></span>
   </div>
   <div class="scroll-area" style="flex:1">
@@ -7854,7 +7861,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <div id="s-coach-activite" class="screen ecran-coach">
   <div class="topbar">
-    <button class="back-btn" onclick="loadCoachHome()">←</button>
+    <button class="back-btn" onclick="retourDe('s-coach-activite','s-coach-home')">←</button>
     <span class="topbar-title">Activité</span><span></span>
   </div>
   <div class="scroll-area" style="flex:1">
@@ -8504,7 +8511,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 <!-- COACH CLIENT DETAIL -->
 <div id="s-coach-client" class="screen ecran-coach">
-  <div class="topbar"><button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button><span class="topbar-title" id="ccd-title">Athlète</span><span class="coach-sync-badge rc-sync-badge" style="font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px"></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-coach-client','s-coach-home')">←</button><span class="topbar-title" id="ccd-title">Athlète</span><span class="coach-sync-badge rc-sync-badge" style="font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px"></span></div>
   <!-- QUATRE ONGLETS POUR VINGT-CINQ SECTIONS. Ce commentaire annoncait cinq
        ANCRES : la barre menait alors a une section dans un rouleau. Elle
        CHOISIT desormais ce que la fiche affiche ; le dossier se lit en
@@ -8935,7 +8942,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- COACH SESSION MANAGER -->
 <div id="s-coach-sessions" class="screen ecran-coach">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-coach-client')">←</button>
+    <button class="back-btn" onclick="retourDe('s-coach-sessions','s-coach-client')">←</button>
     <span class="topbar-title" id="csm-title">Séances</span>
     <!-- N5.10 — DEUX ACTIONS PRIMAIRES QUI NE RESSEMBLAIENT A AUCUN .btn de
          la charte. Elles sont stylees en attribut, avec leur propre fond,
@@ -8988,7 +8995,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- COACH PROGRAMMES LIST -->
 <div id="s-coach-programs" class="screen ecran-coach">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button>
+    <button class="back-btn" onclick="retourDe('s-coach-programs','s-coach-home')">←</button>
     <span class="topbar-title">Mes programmes</span>
     <button class="btn btn-red btn-sm" onclick="createCoachProgTemplate()" style="margin:0;letter-spacing:1px;padding:7px 14px;min-height:0">+ CRÉER</button>
   </div>
@@ -9003,7 +9010,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- COACH PROGRAMME TEMPLATE EDITOR -->
 <div id="s-coach-prog-template" class="screen ecran-coach">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-coach-programs');loadCoachProgramsList()">←</button>
+    <button class="back-btn" onclick="retourDe('s-coach-prog-template','s-coach-programs')">←</button>
     <input id="cpt-name" placeholder="Nom du programme" style="flex:1;background:transparent;border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;outline:none;min-width:0;margin:0 8px" onchange="saveCoachProgTemplateName()">
     <button onclick="saveCoachProgTemplate()" style="background:var(--red);border:none;color:var(--text);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">SAUVEGARDER</button>
   </div>
@@ -9022,7 +9029,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- COACH PROGRAMME ASSIGN -->
 <div id="s-coach-prog-assign" class="screen ecran-coach">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-coach-programs');loadCoachProgramsList()">←</button>
+    <button class="back-btn" onclick="retourDe('s-coach-prog-assign','s-coach-programs')">←</button>
     <span class="topbar-title" id="cpa-title">Assigner</span>
     <button onclick="confirmAssignProgram()" style="background:var(--red);border:none;color:var(--text);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">ASSIGNER</button>
   </div>
@@ -9043,7 +9050,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- DÉCHARGE GROUPÉE -->
 <div id="s-coach-decharge" class="screen ecran-coach">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-coach-home')">←</button>
+    <button class="back-btn" onclick="retourDe('s-coach-decharge','s-coach-home')">←</button>
     <span class="topbar-title">Décharge groupée</span>
     <button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:#222;color:var(--text-dim);border:none;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1)">APPLIQUER</button>
     <!-- Le retrait groupe : meme selection, meme recapitulatif nomme, meme
@@ -9072,7 +9079,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- EVOLUTION BILANS COACH -->
 <div id="s-coach-bilan-evo" class="screen ecran-coach">
-  <div class="topbar"><button class="back-btn" onclick="go('s-coach-client')">←</button><span class="topbar-title" id="evo-title">Évolution</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-coach-bilan-evo','s-coach-client')">←</button><span class="topbar-title" id="evo-title">Évolution</span><span></span></div>
   <div class="scroll-area" style="flex:1" id="evo-content"></div>
 </div>
 
@@ -9082,7 +9089,7 @@ const COACH_PHOTO='icons/coach.jpg';
      le préfixe « s-coach- » suffit à ce que go() refuse l'écran à un athlète. -->
 <div id="s-coach-plan" class="screen ecran-coach">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-coach-client')">←</button>
+    <button class="back-btn" onclick="retourDe('s-coach-plan','s-coach-client')">←</button>
     <span class="topbar-title">Plan alimentaire</span>
     <button class="btn btn-red btn-sm" onclick="savePlanCoach()">Enregistrer</button>
   </div>
@@ -9093,6 +9100,7 @@ const COACH_PHOTO='icons/coach.jpg';
        composition, donc il ne perd jamais ce qu'il n'a pas encore enregistré. -->
   <div id="cpl-search" style="display:none;position:absolute;inset:0;background:var(--dark);z-index:var(--z-raised);flex-direction:column">
     <div class="topbar">
+      <!-- R21 — pas un retour d'ecran : referme la recherche en surcouche, la composition reste ouverte. -->
       <button class="back-btn" onclick="fermerRecherchePlan()">←</button>
       <span class="topbar-title" id="cpl-search-title">Choisir un aliment</span><span></span>
     </div>
@@ -9111,6 +9119,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- COACH PROGRAM EDITOR -->
 <div id="s-coach-program" class="screen">
+  <!-- R21 — garde de modifications non enregistrees : les trois ouvertures de l'editeur recablent cette fleche (backBtn.onclick). -->
   <div class="topbar"><button class="back-btn" onclick="go('s-coach-client')">←</button><span class="topbar-title">Programme</span>
     <!-- B2.F3 — L'ETAT D'ENREGISTREMENT, VISIBLE EN PERMANENCE.
          Le seul signal etait porte par le bouton lui-meme : bien fait, mais il
@@ -9288,7 +9297,7 @@ const COACH_PHOTO='icons/coach.jpg';
      destiné. -->
 <div id="s-client-reglages" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-client-home');clientTab('home')">←</button>
+    <button class="back-btn" onclick="retourDe('s-client-reglages')">←</button>
     <span class="topbar-title">Réglages</span>
     <span></span>
   </div>
@@ -9709,7 +9718,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- ATHLETE PROFILE EDITOR -->
 <div id="s-athlete-profile" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-client-home')">←</button>
+    <button class="back-btn" onclick="retourDe('s-athlete-profile')">←</button>
     <span class="topbar-title">Mon profil</span>
     <button onclick="saveAthleteProfile()" style="background:var(--red);border:none;color:var(--text);padding:7px 16px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">SAUVEGARDER</button>
   </div>
@@ -9918,7 +9927,7 @@ const COACH_PHOTO='icons/coach.jpg';
      Reserve au createur : la regle RTDB le tient, pas cet ecran. Un autre
      coach qui l'atteindrait ne pourrait rien ecrire. -->
 <div id="s-vente" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="go('s-boutique')">←</button><span class="topbar-title">Mes programmes</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-vente','s-boutique')">←</button><span class="topbar-title">Mes programmes</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div id="vn-liste"></div>
@@ -9999,7 +10008,7 @@ const COACH_PHOTO='icons/coach.jpg';
      compte client, pas de recommandations : on vient chercher un
      programme, on l'applique, on retourne s'entrainer. -->
 <div id="s-boutique" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="go('s-session-manager')">←</button><span class="topbar-title">Programmes</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-boutique','s-session-manager')">←</button><span class="topbar-title">Programmes</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div id="bq-vendeur"></div>
@@ -10015,7 +10024,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <div id="s-session-manager" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Mes séances</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-session-manager')">←</button><span class="topbar-title">Mes séances</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <!-- LA PORTE DE LA BOUTIQUE. Elle est ICI et pas sur l'accueil : c'est
@@ -10283,6 +10292,7 @@ const COACH_PHOTO='icons/coach.jpg';
      dans l'application : une preparation ne doit pas repeindre l'interface. -->
 <div id="s-echeance" class="screen">
   <div class="topbar">
+    <!-- R21 — fermeture dediee : oublie l'echeance ouverte et repeint l'ecran du role. -->
     <button class="back-btn" onclick="fermerEcheance()">←</button>
     <span class="topbar-title" id="ech-titre">Échéance</span>
     <span></span>
@@ -10301,6 +10311,7 @@ const COACH_PHOTO='icons/coach.jpg';
        repli, il n'y a pas de camera a ouvrir. -->
   <input id="wo-video-input" type="file" accept="video/*" capture="environment"
     style="display:none" onchange="_videoSerieEnvoyer(this)">
+  <!-- R21 — retour force : quitter une seance n'est pas un retour, la pause demande quoi faire. -->
   <div class="topbar" style="flex-shrink:0"><button class="back-btn" onclick="pauseWorkout()" aria-label="Mettre la séance en pause">←</button><span class="topbar-title" id="wo-title">Séance</span><span style="font-size:var(--fs-md);font-weight:700;color:var(--sub)" id="wo-timer">00:00:00</span></div>
   <!-- LE BANDEAU DE PROGRESSION A QUITTÉ CET EMPLACEMENT. Barre et compteurs
        vivent désormais DANS la carte de l'exercice, sous son nom : c'est là
@@ -10325,7 +10336,7 @@ const COACH_PHOTO='icons/coach.jpg';
      loadHistoriqueSeances. -->
 <div id="s-historique-seances" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-client-home')">←</button>
+    <button class="back-btn" onclick="retourDe('s-historique-seances')">←</button>
     <span class="topbar-title">Mes séances</span><span></span>
   </div>
   <div class="scroll-area" style="flex:1"><div class="pad">
@@ -10350,7 +10361,7 @@ const COACH_PHOTO='icons/coach.jpg';
      qui divergerait. -->
 <div id="s-seance-detail" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="loadHistoriqueSeances()">←</button>
+    <button class="back-btn" onclick="retourDe('s-seance-detail','s-historique-seances')">←</button>
     <span class="topbar-title">Séance</span><span></span>
   </div>
   <div class="scroll-area" style="flex:1"><div class="pad">
@@ -10374,6 +10385,7 @@ const COACH_PHOTO='icons/coach.jpg';
        vient d’enregistrer. La flèche affichée et le bouton matériel mènent
        désormais au même endroit : le cas 4 trouve celle-ci et la délègue. -->
   <div class="topbar" style="border-bottom:none">
+    <!-- R21 — retour force : revenir sur la seance qu'on vient d'enregistrer n'a aucun sens. -->
     <button class="back-btn" aria-label="Retour à l'accueil" onclick="go('s-client-home');loadClientHome()">←</button>
     <span></span><span></span>
   </div>
@@ -10505,6 +10517,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- BILAN (multi-step) -->
 <div id="s-bilan" class="screen">
   <div class="topbar" style="position:relative">
+    <!-- R21 — pas un retour d'ecran : la fleche recule d'une etape du bilan. -->
     <button class="back-btn" id="bil-back-btn" onclick="bilBack()">←</button>
     <span class="topbar-title" id="bil-title">Bilan</span>
     <span id="bil-step-label" style="font-size:13px;font-weight:800;color:#fff;letter-spacing:.5px">1/4</span>
@@ -10522,13 +10535,13 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- CHARGES ARTICULAIRES (coach) -->
 <div id="s-charges" class="screen ecran-coach">
-  <div class="topbar"><button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button><span class="topbar-title">Charges articulaires</span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-charges','s-coach-home')">←</button><span class="topbar-title">Charges articulaires</span></div>
   <div class="scroll-area" style="flex:1"><div class="pad" id="charges-content"></div></div>
 </div>
 
 <!-- PROGRESS -->
 <div id="s-progress" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button><span class="topbar-title">Évolution</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-progress')">←</button><span class="topbar-title">Évolution</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <!-- R19 — LE PROCHAIN BILAN, EN UNE LIGNE. Il vivait en grand sur l'ecran
@@ -10569,7 +10582,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- NUTRITION -->
 <!-- SANTÉ : constantes et analyses, consignation seule -->
 <div id="s-sante" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Santé</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-sante')">←</button><span class="topbar-title">Santé</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin:0">RepCore conserve tes mesures et tes analyses pour que tu les aies sous la main. Il ne les interprète pas.</p>
@@ -10579,7 +10592,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <div id="s-nutrition" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Nutrition</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-nutrition')">←</button><span class="topbar-title">Nutrition</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <!-- Sélecteur type de diet -->
@@ -10606,7 +10619,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- COMPLÉMENTS ALIMENTAIRES -->
 <div id="s-supplements" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title" style="display:inline-flex;align-items:center;gap:6px;color:var(--red-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M10.5 20.5 3.5 13.5a5 5 0 1 1 7-7l7 7a5 5 0 1 1-7 7z"/><line x1="14" y1="14" x2="10" y2="10"/></svg>Compléments</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-supplements','s-nutrition')">←</button><span class="topbar-title" style="display:inline-flex;align-items:center;gap:6px;color:var(--red-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M10.5 20.5 3.5 13.5a5 5 0 1 1 7-7l7 7a5 5 0 1 1-7 7z"/><line x1="14" y1="14" x2="10" y2="10"/></svg>Compléments</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div id="supp-table-content"></div>
@@ -10616,7 +10629,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- COMPLÉMENT — FORMULAIRE AJOUT/ÉDITION -->
 <div id="s-supplement-edit" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="loadSupplements()">←</button><span id="supp-edit-title" class="topbar-title">Nouveau complément</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-supplement-edit','s-nutrition')">←</button><span id="supp-edit-title" class="topbar-title">Nouveau complément</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <!-- Nom -->
@@ -10688,7 +10701,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- RECHERCHE ALIMENT -->
 <div id="s-food-search" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title">Ajouter un aliment</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-food-search','s-nutrition')">←</button><span class="topbar-title">Ajouter un aliment</span><span></span></div>
   <div style="padding:12px 16px;background:var(--surface-1);border-bottom:1px solid var(--surface-2);flex-shrink:0">
     <input id="fj-search-input" type="search" autocomplete="off" placeholder="Rechercher (ex: poulet, riz, œuf…)"
       style="width:100%;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box;outline:none"
@@ -10709,7 +10722,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- SAISIE QUANTITÉ -->
 <div id="s-food-add" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="go('s-food-search')">←</button><span class="topbar-title">Quantité</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-food-add','s-food-search')">←</button><span class="topbar-title">Quantité</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:var(--r-3);padding:14px;margin-bottom:18px">
@@ -10761,7 +10774,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- MON ALIMENT (saisie manuelle + lecture d'étiquette) -->
 <div id="s-food-perso" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="go('s-food-search')">←</button><span class="topbar-title" id="perso-titre">Créer un aliment</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-food-perso','s-food-search')">←</button><span class="topbar-title" id="perso-titre">Créer un aliment</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin:0 0 16px">
@@ -10856,7 +10869,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- CAFÉINE JOURNAL -->
 <div id="s-caffeine" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title" style="display:inline-flex;align-items:center;gap:6px;color:var(--red-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>Caféine</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-caffeine','s-nutrition')">←</button><span class="topbar-title" style="display:inline-flex;align-items:center;gap:6px;color:var(--red-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>Caféine</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div id="caff-date-nav" style="margin-bottom:12px"></div>
@@ -10875,6 +10888,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-caffeine-add" class="screen">
   <!-- fermerCaffeineAdd, et non loadNutrition() : le retour rend la main à
        l’écran d’où l’on vient, et à la date qu’il affichait. -->
+  <!-- R21 — fermeture dediee : elle sait deja d'ou la saisie a ete ouverte (_caffReturnToNutrition). -->
   <div class="topbar"><button class="back-btn" onclick="fermerCaffeineAdd()">←</button><span class="topbar-title">Ajouter une prise</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -10905,7 +10919,7 @@ const COACH_PHOTO='icons/coach.jpg';
        titre promettait des demonstrations, l'ecran demande un ENVOI. L'id
        s-videos et data-tab="videos" restent : TABBAR_ECRANS, la pastille et
        les notifications qui appellent loadVideos() les lisent. -->
-  <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Mes corrections</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-videos')">←</button><span class="topbar-title">Mes corrections</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad casc">
       <!-- BANNIÈRE DE BASCULE -->
@@ -11021,6 +11035,7 @@ const COACH_PHOTO='icons/coach.jpg';
      videos cote a cote. -->
 <div id="s-comparer" class="screen">
   <div class="topbar">
+    <!-- R21 — fermeture dediee : arrete les deux lecteurs et rend la liste du bon role. -->
     <button class="back-btn" onclick="fermerComparateur()">←</button>
     <span class="topbar-title" id="cmp-titre">Comparer</span>
     <span></span>
@@ -11037,7 +11052,7 @@ const COACH_PHOTO='icons/coach.jpg';
      pas. -->
 <div id="s-traitements" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-supplements');loadSupplements()">←</button>
+    <button class="back-btn" onclick="retourDe('s-traitements','s-supplements')">←</button>
     <span class="topbar-title">Traitements</span>
     <span></span>
   </div>
@@ -11051,7 +11066,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <div id="s-evictions" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="go('s-supplements');loadSupplements()">←</button>
+    <button class="back-btn" onclick="retourDe('s-evictions','s-supplements')">←</button>
     <span class="topbar-title">Ce que je ne mange pas</span>
     <span></span>
   </div>
@@ -11066,6 +11081,7 @@ const COACH_PHOTO='icons/coach.jpg';
      l'athlete seul peut affirmer. -->
 <div id="s-eviction-edit" class="screen">
   <div class="topbar">
+    <!-- R21 — fermeture dediee : l'editeur retient son ecran de retour (_evEdit.retour). -->
     <button class="back-btn" onclick="fermerEditeurEviction()">←</button>
     <span class="topbar-title" id="eve-titre">Éviction</span>
     <span></span>
@@ -11082,6 +11098,7 @@ const COACH_PHOTO='icons/coach.jpg';
      ecran, presque identique, aurait diverge au premier champ ajoute. -->
 <div id="s-traitement-edit" class="screen">
   <div class="topbar">
+    <!-- R21 — fermeture dediee : l'editeur retient son ecran de retour (_trtEdit.retour). -->
     <button class="back-btn" onclick="fermerEditeurTraitement()">←</button>
     <span class="topbar-title" id="trte-titre">Traitement</span>
     <span></span>
@@ -11094,7 +11111,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- STEPS -->
 <div id="s-steps" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
-    <button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button>
+    <button class="back-btn" onclick="retourDe('s-steps')">←</button>
     <span class="topbar-title">Mes pas</span>
     <span></span>
   </div>
@@ -11105,7 +11122,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <div id="s-sleep" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
-    <button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button>
+    <button class="back-btn" onclick="retourDe('s-sleep')">←</button>
     <span class="topbar-title">Mon sommeil</span>
     <span></span>
   </div>
@@ -11121,7 +11138,7 @@ const COACH_PHOTO='icons/coach.jpg';
      plus, et le resterait si quelqu'un le rendait atteignable autrement. -->
 <div id="s-coach-canal" class="screen ecran-coach">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
-    <button class="back-btn" onclick="go('s-coach-home')">←</button>
+    <button class="back-btn" onclick="retourDe('s-coach-canal','s-coach-home')">←</button>
     <span class="topbar-title">Mon canal</span>
     <span></span>
   </div>
@@ -11146,6 +11163,7 @@ const COACH_PHOTO='icons/coach.jpg';
      aboutit. Aucune image n est enregistree, transmise ni mise en cache. -->
 <div id="s-scan" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+    <!-- R21 — fermeture dediee : libere la camera, puis retourDe('s-scan'). -->
     <button class="back-btn" onclick="scanFermer()">←</button>
     <span style="font-size:var(--fs-md);font-weight:800;letter-spacing:1px">SCANNER</span>
   </div>
@@ -11271,7 +11289,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <div id="s-canal" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
-    <button class="back-btn" onclick="go('s-client-home')">←</button>
+    <button class="back-btn" onclick="retourDe('s-canal')">←</button>
     <span class="topbar-title">Canal</span>
     <span></span>
   </div>
@@ -11282,7 +11300,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <div id="s-lifestyle" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
-    <button class="back-btn" onclick="go('s-client-home')">←</button>
+    <button class="back-btn" onclick="retourDe('s-lifestyle')">←</button>
     <span class="topbar-title">Lifestyle</span>
     <span></span>
   </div>
@@ -11327,7 +11345,7 @@ const COACH_PHOTO='icons/coach.jpg';
      reconnait les ecrans de nutrition par leur nom. -->
 <div id="s-food-prep" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="loadNutrition()">←</button>
+    <button class="back-btn" onclick="retourDe('s-food-prep','s-nutrition')">←</button>
     <span class="topbar-title" id="prep-titre">Meal prep</span><span></span>
   </div>
   <div class="scroll-area" style="flex:1"><div class="pad"><div id="prep-corps"></div></div></div>
@@ -11425,6 +11443,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- ══════ CRÉATION D'UN PROTOCOLE SUR MESURE ══════ -->
 <div id="s-proto-edit" class="screen ecran-coach">
   <div class="topbar">
+    <!-- R21 — garde de modifications non enregistrees : ne pas remplacer. -->
     <button class="back-btn" onclick="_peQuitter()">←</button>
     <span class="topbar-title" id="pe-titre">Nouveau protocole</span>
     <span></span>
@@ -11462,6 +11481,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <div id="s-coach-banque" class="screen ecran-coach">
   <div class="topbar">
+    <!-- R21 — fermeture dediee : oublie le rappel du selecteur et rend _bqRetour. -->
     <button class="back-btn" onclick="fermerBanque()">←</button>
     <span class="topbar-title">Banque d'exercices</span>
     <span id="bq-compte" style="font-size:var(--fs-xs);color:var(--sub);min-width:38px;text-align:right"></span>
@@ -11492,6 +11512,7 @@ const COACH_PHOTO='icons/coach.jpg';
      pouce sans faire défiler jusqu'au bout. -->
 <div id="s-seance-apercu" class="screen ecran-coach">
   <div class="topbar">
+    <!-- R21 — fermeture dediee : oublie la seance apercue ; une seule entree, l'accueil. -->
     <button class="back-btn" onclick="fermerApercu()">←</button>
     <span class="topbar-title" id="ap-titre">Ma séance</span>
     <span></span>
@@ -11507,6 +11528,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <div id="s-protocoles" class="screen ecran-coach">
   <div class="topbar">
+    <!-- R21 — fermeture dediee : rend l'ecran d'ou le choix a ete ouvert (_pfRetour). -->
     <button class="back-btn" onclick="_pfRetourner()">←</button>
     <span class="topbar-title">Protocoles</span>
     <span></span>
@@ -11532,6 +11554,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- ══════ TUNNEL D'ACQUISITION (créateur uniquement) ══════ -->
 <div id="s-metrics" class="screen ecran-coach">
   <div class="topbar">
+    <!-- R21 — retour force : rend l'onglet Monetisation d'ou l'ecran s'ouvre, ce que retourDe ne sait pas choisir. -->
     <button class="back-btn" onclick="go('s-coach-home');coachTab('monetisation')">←</button>
     <span class="topbar-title">Tunnel : 7 jours</span>
     <span></span>
@@ -17212,7 +17235,17 @@ function go(id){
     // l’inverse crée un va-et-vient sans fin — c’est exactement ce que
     // s-access-gate et s-subscribe faisaient, l’aller par goAvecRetour et le
     // retour par retourDe.
-    if(_avant&&_avant!=='s-splash'&&_ecranOrigine[_avant]!==id) _ecranOrigine[id]=_avant;
+    // R21 — LA REGLE EST DANS _origineAEcrire : plus seulement le va-et-vient
+    // a deux ecrans, mais toute boucle, et jamais un ecran de saisie.
+    // ET UN RETOUR N'ECRIT AUCUNE ORIGINE : revenir sur A depuis B ne fait pas
+    // de B l'origine de A. L'ancienne garde ne le savait que lorsque l'origine
+    // de B etait deja A ; un retour vers l'ecran PAR DEFAUT (aucune origine
+    // connue) ecrivait donc l'inverse, et deux ecrans se renvoyaient la main.
+    if(!_navRetourEnCours){
+      const _o=_origineAEcrire(_avant,id);
+      if(_o===null) delete _ecranOrigine[id];
+      else if(_o) _ecranOrigine[id]=_o;
+    }
     _histPousser(id);
   }
 }
@@ -17225,6 +17258,43 @@ function go(id){
 // surveille. Le retour MATÉRIEL, lui, passe par le bloc juste en dessous, qui
 // réutilise _ecranOrigine comme source de l’écran précédent.
 const _ecranOrigine={};
+// ══ R21 — CE QUI PEUT ETRE UNE ORIGINE ══════════════════════════════════
+//
+// LES ECRANS DE SAISIE NE SONT JAMAIS L'ORIGINE D'UN AUTRE. Un formulaire qui
+// enregistre avance vers l'ecran suivant : l'ajout d'un aliment rouvre la
+// nutrition, la connexion ouvre l'accueil. Retenu comme origine, il faisait
+// revenir SUR LE FORMULAIRE qu'on vient de valider. On remonte donc a SA
+// propre origine — l'ecran d'ou le formulaire avait ete ouvert.
+//
+// Seulement des saisies qu'on quitte en avancant. Les editeurs a garde
+// (s-coach-program, s-proto-edit) n'y sont pas : goAvecRetour y pose une
+// origine explicite, qu'une inference ici ecraserait.
+const ECRANS_DE_SAISIE=new Set(['s-food-add','s-food-perso','s-supplement-edit',
+  's-caffeine-add','s-eviction-edit','s-traitement-edit','s-bilan','s-workout',
+  's-scan','s-login','s-register','s-identite','s-naissance','s-consent-sante',
+  's-client-code','s-coach-code','s-welcome','s-coach-entry','s-athlete-entry','s-install']);
+// PURE (a la lecture de _ecranOrigine pres). L'origine a ecrire pour `id`
+// quand on y arrive depuis `avant` : un ecran, `undefined` pour ne rien
+// changer, `null` pour effacer.
+//
+// ⚠ AUCUNE BOUCLE, DE QUELQUE LONGUEUR QUE CE SOIT. L'ancienne garde ne
+// voyait que le va-et-vient a deux ecrans (A → B → A). Les onglets en font de
+// plus longs : Nutrition → Corrections → Évolution → Nutrition ecrivait
+// Nutrition ← Évolution ← Corrections ← Nutrition, et la fleche tournait
+// entre les trois sans jamais rendre l'accueil. On suit donc la chaine des
+// origines depuis le candidat : si elle repasse par `id`, on n'ecrit rien et
+// l'origine d'avant — celle qui ne boucle pas — reste en place.
+function _origineAEcrire(avant,id){
+  if(!avant||avant==='s-splash'||avant===id) return undefined;
+  let o=avant, garde=0;
+  while(o&&ECRANS_DE_SAISIE.has(o)&&garde++<20) o=_ecranOrigine[o];
+  // Une saisie sans origine connue : aucune origine plutot qu'une fausse. Le
+  // retour retombera sur l'accueil du role, qui est previsible.
+  if(!o||o==='s-splash') return null;
+  if(o===id) return undefined;
+  for(let x=o,n=0;x&&n<60;x=_ecranOrigine[x],n++) if(x===id) return undefined;
+  return o;
+}
 function goAvecRetour(id){
   const actif=document.querySelector('.screen.active')?.id;
   // Rentrer sur l'écran depuis lui-même (rechargement de sa propre liste) ne
@@ -17232,9 +17302,36 @@ function goAvecRetour(id){
   if(actif&&actif!==id) _ecranOrigine[id]=actif;
   go(id);
 }
+// ══ R21 — LE RETOUR REPEINT L'ECRAN RETROUVE ════════════════════════════
+// Les fleches ecrites en dur appelaient le chargeur de leur destination —
+// « go('s-client-home');loadClientHome() », « loadNutrition() ». Un retour
+// par retourDe ne faisait que go() : l'ecran retrouve aurait montre ce qu'il
+// affichait AVANT la saisie qu'on vient de faire. Ces chargeurs-la, et
+// seulement eux, sont rappeles.
+// `nav` : le chargeur appelle go() lui-meme. On l'appelle alors A LA PLACE
+// de go(), pour que le sens de l'animation reste celui d'un retour.
+const RETOUR_RECHARGE=Object.freeze({
+  's-client-home':{f:()=>loadClientHome(),nav:false},
+  's-coach-home':{f:()=>loadCoachHome(),nav:true},
+  's-nutrition':{f:()=>loadNutrition(),nav:true},
+  's-supplements':{f:()=>loadSupplements(),nav:true},
+  's-historique-seances':{f:()=>loadHistoriqueSeances(),nav:true},
+  's-coach-programs':{f:()=>loadCoachProgramsList(),nav:false}
+});
+// Leve le temps d'un retour : go() n'ecrit alors aucune origine. Voir go().
+let _navRetourEnCours=false;
 function retourDe(id,defaut){
   _sensNav='ar';
-  go(_ecranOrigine[id]||defaut||(currentUser?.role==='coach'?'s-coach-home':'s-client-home'));
+  const cible=_ecranOrigine[id]||defaut||(currentUser?.role==='coach'?'s-coach-home':'s-client-home');
+  const r=RETOUR_RECHARGE[cible];
+  const avant=_navRetourEnCours;
+  _navRetourEnCours=true;
+  try{
+    if(r&&r.nav){ try{ r.f(); return; }catch(e){} }
+    go(cible);
+    // Seulement si go() a bien abouti : la garde de role peut rediriger.
+    if(r&&!r.nav&&document.querySelector('.screen.active')?.id===cible){ try{ r.f(); }catch(e){} }
+  } finally { _navRetourEnCours=avant; }
 }
 // ══════════════════ RETOUR MATÉRIEL (Android) ══════════════════════════
 //
@@ -17264,9 +17361,9 @@ const HIST_QUITTER_MS=2000;
 // LE SENS DE LA PROCHAINE NAVIGATION. Consomme par go(), remis a 'av'
 // immediatement : un seul go() consomme le sens, jamais deux.
 let _sensNav='av';
-// Les trente .back-btn qui appellent go('s-...') en dur ne passent pas par
-// retourDe() : une seule ecoute deleguee, en capture et passive, les couvre
-// toutes sans en reecrire une.
+// Les .back-btn qui ne passent pas par retourDe() — fermetures dediees et
+// retours forces, recenses au lot R21 — posent aussi le sens « retour » :
+// une seule ecoute deleguee, en capture et passive, les couvre toutes.
 document.addEventListener('pointerdown',e=>{
   if(e.target&&e.target.closest&&e.target.closest('.back-btn')) _sensNav='ar';
 },{passive:true,capture:true});

@@ -40425,6 +40425,154 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R21 : LA FLÈCHE ET LE RETOUR DU SYSTÈME, PARTOUT PAREILS ══
+    //
+    // Le retour matériel Android et le geste de retour passent par
+    // _histPopstate, qui délègue à la flèche visible de l'écran. Ce qu'on
+    // vérifie ici, route par route : les deux mènent aux MÊMES écrans, dans le
+    // même ordre, jusqu'à la racine — et sans jamais repasser par un écran.
+
+    ok('R21 — chaque flèche passe par retourDe, ou porte la raison de son retour forcé',(()=>{
+      const src=_prodSrc().split(/\r?\n/);
+      const hors=[];
+      let ecran=null, n=0;
+      for(let i=0;i<src.length&&i<12000;i++){
+        const m=src[i].match(/<div id="(s-[a-z0-9-]+)" class="screen/); if(m) ecran=m[1];
+        if(!/class="back-btn/.test(src[i])) continue;
+        n++;
+        const oc=(src[i].match(/onclick="([^"]*)"/)||[])[1]||'';
+        if(/^retourDe\('/.test(oc)){
+          const r=oc.match(/^retourDe\('([^']+)'/);
+          if(r[1]!==ecran) hors.push(ecran+' : retourDe(\''+r[1]+'\') vise un autre écran');
+          continue;
+        }
+        // Retour forcé ou fermeture dédiée : un commentaire R21 juste au-dessus.
+        const avant=(src[i-1]||'')+(src[i-2]||'');
+        if(!/<!-- R21 — /.test(avant)&&!/<!-- R21 — /.test(src[i])) hors.push(ecran+' : « '+oc+' » sans raison écrite');
+      }
+      if(n<60) return _echec(n+' flèches trouvées : la sonde ne regarde plus le balisage');
+      return hors.length?_echec(hors.join(' | ')):true;})());
+
+    ok('R21 — une origine ne boucle jamais, et un écran de saisie n’en est jamais une',(()=>{
+      const sv=Object.assign({},_ecranOrigine);
+      try{
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        const O=_ecranOrigine;
+        // Onglets en rond : Nutrition ← Évolution ← Corrections ← Nutrition.
+        O['s-nutrition']='s-client-home'; O['s-videos']='s-nutrition'; O['s-progress']='s-videos';
+        if(_origineAEcrire('s-progress','s-nutrition')!==undefined) return _echec('la boucle à trois onglets est écrite');
+        // Le va-et-vient à deux écrans, déjà gardé.
+        if(_origineAEcrire('s-videos','s-nutrition')!==undefined) return _echec('le va-et-vient est écrit');
+        // Un aliment ajouté rouvre la nutrition : l'origine reste l'accueil.
+        O['s-food-search']='s-nutrition'; O['s-food-add']='s-food-search';
+        if(_origineAEcrire('s-food-add','s-nutrition')!==undefined) return _echec('le formulaire devient l’origine de la nutrition');
+        // Une saisie ouverte ailleurs : on remonte à SON origine.
+        O['s-caffeine-add']='s-nutrition';
+        if(_origineAEcrire('s-caffeine-add','s-caffeine')!=='s-nutrition') return _echec('caféine : '+_origineAEcrire('s-caffeine-add','s-caffeine'));
+        // Une saisie sans origine connue : on efface plutôt que de mentir.
+        if(_origineAEcrire('s-login','s-nutrition')!==null) return _echec('la connexion devient une origine');
+        // Le cas ordinaire est intact.
+        if(_origineAEcrire('s-client-home','s-sante')!=='s-client-home') return _echec('le cas ordinaire ne s’écrit plus');
+        if(_origineAEcrire('s-splash','s-client-home')!==undefined) return _echec('le splash redevient une origine');
+        return true;
+      } finally {
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        Object.assign(_ecranOrigine,sv);
+      }})());
+
+    okA('R21 — la flèche et le retour du système mènent aux mêmes écrans, jusqu’à la racine, sans boucle',async()=>{
+      const sU=currentUser, svO=Object.assign({},_ecranOrigine), svSave=window.saveUser;
+      const svRat=window._ratProfilFait, svToast=window.toast;
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const sv=[...document.querySelectorAll('.screen.active')];
+      const actif=()=>(document.querySelector('.screen.active')||{}).id;
+      // Date de naissance et genre : sans eux, loadNutrition ouvre d'abord la
+      // question de l'âge — un autre écran, et un autre itinéraire.
+      const athlete=()=>Object.assign(_r13Neuf(),{coachId:'c1',birthdate:'1990-05-01',gender:'homme'});
+      const coach=()=>({id:'c1',email:'c1@t.fr',fname:'Kev',lname:'G',role:'coach',clients:[],
+        coachPrograms:[],exAlias:{},exMuscles:{},consent:{health:true,policyVersion:POLICY_VERSION}});
+      // [nom, fabrique de compte, chemin aller, écrans attendus au retour]
+      const ROUTES=[
+        ['nutrition › recherche › ajout',athlete,['s-client-home','s-nutrition','s-food-search','s-food-add'],['s-food-search','s-nutrition','s-client-home']],
+        ['onglets en rond',athlete,['s-client-home','s-nutrition','s-videos','s-progress','s-nutrition'],['s-client-home']],
+        ['aliment enregistré',athlete,['s-client-home','s-nutrition','s-food-search','s-food-add','s-nutrition'],['s-client-home']],
+        ['profil › santé',athlete,['s-client-home','s-athlete-profile','s-sante'],['s-athlete-profile','s-client-home']],
+        ['historique › détail',athlete,['s-client-home','s-historique-seances','s-seance-detail'],['s-historique-seances','s-client-home']],
+        ['séances › boutique › vente',athlete,['s-client-home','s-session-manager','s-boutique','s-vente'],['s-boutique','s-session-manager','s-client-home']],
+        ['caféine saisie puis liste',athlete,['s-client-home','s-nutrition','s-caffeine-add','s-caffeine'],['s-nutrition','s-client-home']],
+        // null : on oublie toutes les origines — l'état d'une application
+        // rechargée sur cet écran. Le retour suit alors les écrans par défaut.
+        ['traitements sans origine',athlete,['s-client-home','s-traitements',null],['s-supplements','s-nutrition','s-client-home']],
+        ['complément saisi',athlete,['s-client-home','s-nutrition','s-supplement-edit'],['s-nutrition','s-client-home']],
+        ['préparation',athlete,['s-client-home','s-nutrition','s-food-prep'],['s-nutrition','s-client-home']],
+        ['lifestyle › pas',athlete,['s-client-home','s-lifestyle','s-steps'],['s-lifestyle','s-client-home']],
+        ['onglets à la suite',athlete,['s-client-home','s-videos','s-canal'],['s-videos','s-client-home']],
+        ['réglages',athlete,['s-client-home','s-client-reglages'],['s-client-home']],
+        ['fiche › séances',coach,['s-coach-home','s-coach-client','s-coach-sessions'],['s-coach-client','s-coach-home']],
+        ['programmes › modèle',coach,['s-coach-home','s-coach-programs','s-coach-prog-template'],['s-coach-programs','s-coach-home']],
+        ['canal › fiche',coach,['s-coach-home','s-coach-canal','s-coach-client'],['s-coach-canal','s-coach-home']]
+      ];
+      const monter=(compte,chemin)=>{
+        // Un calque laissé par un chargeur de l'itinéraire précédent ferait
+        // prendre au retour du système sa première branche (fermer le calque).
+        for(let k=0;k<4&&_histCalqueOuvert();k++){ try{ _histFermerCalque(); }catch(e){ break; } }
+        currentUser=compte();
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        for(const e of chemin){
+          if(e===null){ Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); continue; }
+          go(e);
+        }
+      };
+      const derouler=(geste)=>{
+        const vus=[];
+        for(let n=0;n<10;n++){
+          const a=actif();
+          if(HIST_RACINES.includes(a)) break;
+          geste(a);
+          const b=actif();
+          vus.push(b);
+          if(b===a){ vus.push('(immobile)'); break; }
+        }
+        return vus;
+      };
+      const fleche=a=>{
+        const fl=[...document.querySelectorAll('#'+a+' .back-btn')].filter(b=>b.getClientRects().length);
+        const b=fl[fl.length-1];
+        if(b) b.click();
+      };
+      const trop=[];
+      try{
+        window.saveUser=()=>true; window._ratProfilFait=true; window.toast=()=>{};
+        for(const [nom,compte,chemin,attendu] of ROUTES){
+          let parFleche, parSysteme;
+          try{ monter(compte,chemin); parFleche=derouler(fleche); }catch(e){ trop.push(nom+' : flèche, exception '+e.message); continue; }
+          try{ monter(compte,chemin); parSysteme=derouler(()=>_histPopstate()); }catch(e){ trop.push(nom+' : système, exception '+e.message); continue; }
+          if(parFleche.join('>')!==parSysteme.join('>'))
+            trop.push(nom+' : flèche '+parFleche.join(' > ')+' / système '+parSysteme.join(' > '));
+          if(parFleche.join('>')!==attendu.join('>'))
+            trop.push(nom+' : '+parFleche.join(' > ')+' au lieu de '+attendu.join(' > '));
+          if(new Set(parFleche).size!==parFleche.length) trop.push(nom+' : un écran revient deux fois');
+        }
+      } finally {
+        window.saveUser=svSave; window._ratProfilFait=svRat; window.toast=svToast;
+        currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      // CHAQUE go() A POSÉ SES TRACÉS DE COURBES dans le calque d'animation, et
+      // ils s'effacent d'eux-mêmes quelques centaines de ms plus tard — au
+      // milieu du comptage des sondes d'animation qui suivent. On attend la fin
+      // des animations, puis on retire ce qui resterait.
+      // Les nœuds de passage d'onglet (.arc-onglet) ne partent qu'à la fin de
+      // leur animation, qui ne tourne pas quand le panneau ne se dessine pas :
+      // on retire tout ce que ce test a posé, et seulement cela.
+      await new Promise(r=>setTimeout(r,900));
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return trop.length?_echec(trop.join(' | ')):true;
+    });
+
     // ══ 17/09/2026 — R20 : ÉVOLUTION ROUVRE SUR LE DERNIER ONGLET ════════
     const _r20Plein=o=>Object.assign(_r13Neuf(),{
       bilans:[{type:'depart',date:Date.now()-30*864e5,'deb-weight':'82','deb-waist':'90'},
