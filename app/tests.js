@@ -40425,6 +40425,102 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R20 : ÉVOLUTION ROUVRE SUR LE DERNIER ONGLET ════════
+    const _r20Plein=o=>Object.assign(_r13Neuf(),{
+      bilans:[{type:'depart',date:Date.now()-30*864e5,'deb-weight':'82','deb-waist':'90'},
+              {type:'coaching',date:Date.now()-2*864e5,'bil-weight':'80','bil-waist':'88'}],
+      sessions:[{id:'s1',date:Date.now()-864e5,slot:0,name:'Push',
+        data:{'DEVELOPPE COUCHE':{sets:[{done:true,weight:'80',reps:'8',rir:'2'}]}}}]},o||{});
+    const _r20Rouges=()=>[...document.querySelectorAll('#prog-tabs button')].filter(b=>b.classList.contains('btn-red'));
+    const _r20Garde=async f=>{
+      const sU=currentUser, sv=[...document.querySelectorAll('.screen.active')], svSave=window.saveUser;
+      const c=document.getElementById('progress-content'), svC=c.innerHTML;
+      let n=0; window.saveUser=()=>{ n++; return true; };
+      try{ return await f(()=>n); }
+      finally{
+        window.saveUser=svSave; currentUser=sU; c.innerHTML=svC;
+        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+        sv.forEach(s=>s.classList.add('active'));
+      }
+    };
+
+    okA('R20 — le changement d’onglet est mémorisé, et saveUser n’est appelé que s’il change',()=>_r20Garde(n=>{
+      currentUser=_r20Plein();
+      if('uiProgressTab' in currentUser) return _echec('le décor porte déjà le champ');
+      showProgressTab('mensus',_progBoutonOnglet('mensus'));
+      if(currentUser.uiProgressTab!=='mensus'||n()!==1) return _echec('mensus : '+currentUser.uiProgressTab+', '+n()+' écriture(s)');
+      // LE MÊME ONGLET, REPEINT : aucune écriture.
+      showProgressTab('mensus',_progBoutonOnglet('mensus'));
+      showProgressTab('mensus',null);
+      if(n()!==1) return _echec('un repeint du même onglet a écrit ('+n()+')');
+      showProgressTab('perf',_progBoutonOnglet('perf'));
+      if(currentUser.uiProgressTab!=='perf'||n()!==2) return _echec('perf : '+currentUser.uiProgressTab+', '+n());
+      // Le rendu sans mémorisation, et un nom inconnu, n'écrivent rien.
+      showProgressTab('notes',null,true);
+      try{ showProgressTab('bidule',null); }catch(e){}
+      if(currentUser.uiProgressTab!=='perf'||n()!==2) return _echec('écrit à tort : '+currentUser.uiProgressTab+', '+n());
+      // Le champ est classé : il passe le verrou de l'article 9.
+      if(CHAMPS_NON_SANTE.indexOf('uiProgressTab')<0) return _echec('uiProgressTab n’est pas classé');
+      return true;}));
+
+    okA('R20 — loadProgress rouvre l’onglet mémorisé, sur SON bouton, et se replie sans réécrire',()=>_r20Garde(n=>{
+      if(PROG_ONGLETS.join()!=='poids,mensus,masseGrasse,perf,volume,photos,notes') return _echec('liste : '+PROG_ONGLETS.join());
+      // Chaque onglet a son bouton.
+      for(const t of PROG_ONGLETS) if(!_progBoutonOnglet(t)) return _echec('pas de bouton pour '+t);
+      // 1. L'onglet mémorisé, avec des données.
+      currentUser=_r20Plein({uiProgressTab:'mensus'});
+      loadProgress();
+      let r=_r20Rouges();
+      if(r.length!==1||r[0]!==_progBoutonOnglet('mensus')) return _echec('mensus : bouton allumé « '+r.map(b=>b.textContent.trim()).join(',')+' »');
+      if(document.querySelector('#progress-content .empty-state')) return _echec('mensus s’ouvre vide sur un dossier qui a des bilans');
+      if(n()) return _echec('la restauration a écrit ('+n()+')');
+      // 2. Un nom inconnu : Poids, premier bouton.
+      currentUser=_r20Plein({uiProgressTab:'bidule'});
+      loadProgress();
+      r=_r20Rouges();
+      if(r.length!==1||r[0]!==_progBoutonOnglet('poids')) return _echec('nom inconnu : « '+r.map(b=>b.textContent.trim()).join(',')+' »');
+      if(currentUser.uiProgressTab!=='bidule'||n()) return _echec('le nom inconnu a été réécrit');
+      // 3. « Perfs » sans aucune séance : l'affichage se replie sur Poids…
+      currentUser=_r20Plein({uiProgressTab:'perf',sessions:[]});
+      loadProgress();
+      r=_r20Rouges();
+      if(r.length!==1||r[0]!==_progBoutonOnglet('poids')) return _echec('repli : « '+r.map(b=>b.textContent.trim()).join(',')+' »');
+      // … mais le choix reste mémorisé, et rien n'est poussé.
+      if(currentUser.uiProgressTab!=='perf') return _echec('le repli a réécrit le choix : '+currentUser.uiProgressTab);
+      if(n()) return _echec('le repli a appelé saveUser ('+n()+')');
+      // 4. Sans champ : Poids, comme avant.
+      currentUser=_r20Plein();
+      loadProgress();
+      r=_r20Rouges();
+      if(r.length!==1||r[0]!==_progBoutonOnglet('poids')) return _echec('sans champ : « '+r.map(b=>b.textContent.trim()).join(',')+' »');
+      if('uiProgressTab' in currentUser||n()) return _echec('l’ouverture sans choix a créé le champ');
+      return true;}));
+
+    // ⚠ LE REPLI LIT LES MÊMES CONDITIONS QUE LE RENDU. _progOngletVide les
+    // recopie branche par branche : on rend chaque onglet et on compare.
+    okA('R20 — _progOngletVide dit vide exactement quand l’onglet s’ouvre vide',()=>_r20Garde(()=>{
+      const c=document.getElementById('progress-content');
+      const rendVide=t=>!!c.querySelector('.empty-state')
+        ||(t==='volume'&&/Fais ta première séance|Aucune séance cette semaine-là/.test(c.textContent));
+      const trop=[];
+      // Un bilan avec une réponse écrite : « Notes » a un état vide de plus.
+      const _q=BILAN_QUESTIONS.suivi[0];
+      const _ecrit=_r20Plein(); _ecrit.bilans[1][_q.k]='Bonne semaine, dos un peu raide.';
+      for(const [nom,u] of [['compte neuf',_r13Neuf()],['dossier rempli',_r20Plein()],['réponse écrite',_ecrit],
+          ['bilans sans mesure',Object.assign(_r13Neuf(),{bilans:[{type:'coaching',date:Date.now()-864e5}]})],
+          ['pesées sans bilan',Object.assign(_r13Neuf(),{weightLog:[{date:localISODate(new Date()),kg:80}]})]]){
+        for(const t of PROG_ONGLETS){
+          currentUser=JSON.parse(JSON.stringify(u));
+          try{ showProgressTab(t,null,true); }catch(e){ trop.push(nom+' · '+t+' : exception '+e.message); continue; }
+          const p=_progOngletVide(t,currentUser), v=rendVide(t);
+          if(p!==v) trop.push(nom+' · '+t+' : prédit '+(p?'vide':'plein')+', rendu '+(v?'vide':'plein'));
+        }
+      }
+      // Le décor doit prouver quelque chose : au moins un onglet plein.
+      currentUser=_r20Plein();
+      if(PROG_ONGLETS.every(t=>_progOngletVide(t,currentUser))) trop.push('le dossier rempli est vide partout');
+      return trop.length?_echec(trop.join(' | ')):true;}));
+
     // ══ 17/09/2026 — R15 : LE NORDIC CURL, ET LA CONSIGNE QUI DISPARAISSAIT ══
 
     ok('R15 — le nordic curl est un exercice d’ischios, et un ancien classement automatique en biceps est corrigé',(()=>{

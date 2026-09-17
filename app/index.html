@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1257';
+window.RC_BUILD='1258';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -15595,6 +15595,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'exAlias','exMuscles','exCatalogVersion','exCustom','exFavoris','exRecents',
   'chargesSchema','sessions_config','sessions','streak','streakWeek','lastSession',
   'videos','athletePhoto','objective','badges','habitudes','sonRepos',
+  // R20 — le dernier onglet d'Évolution ouvert : un NOM d'onglet ('perf',
+  // 'mensus'…), une preference d'affichage. Aucune mesure n'y transite.
+  'uiProgressTab',
   'questionnaireComplete','_firstBilanPending','_reprise','_repriseDeload',
   '_defaultCooldown','_defaultWarmup','_bilanFreq','_notifEnabled',
   '_woReminderDays','_woReminderEnabled','_woReminderHour','_woReminderMin',
@@ -60889,7 +60892,17 @@ function _renderEncartOsseux(){
   try{ renderReds(); }catch(e){}
 }
 function loadProgress(){
-  go('s-progress');_renderEncartOsseux();renderBandeauPhase();showProgressTab('poids',document.querySelector('#prog-tabs button'));
+  go('s-progress');_renderEncartOsseux();renderBandeauPhase();
+  // R20 — L'ONGLET OU L'ATHLETE S'ETAIT ARRETE, et non plus toujours « Poids ».
+  // Un nom inconnu (ancien onglet, valeur abimee) retombe sur « Poids ».
+  // LE REPLI SUR DONNEES ABSENTES N'EST PAS ECRIT : « Perfs » choisi sur un
+  // compte sans seance s'ouvre sur « Poids », mais reste le choix memorise —
+  // la premiere seance faite, Évolution rouvrira sur « Perfs ». D'ou le
+  // troisieme argument, qui coupe la memorisation pour ce rendu-ci.
+  const _memo=currentUser&&currentUser.uiProgressTab;
+  let _onglet=PROG_ONGLETS.indexOf(_memo)>=0?_memo:'poids';
+  if(_onglet!=='poids'&&_progOngletVide(_onglet,currentUser)) _onglet='poids';
+  showProgressTab(_onglet,_progBoutonOnglet(_onglet),true);
   // R19 — le prochain bilan, en une ligne en tete d'ecran.
   try{ _updateBilanCountdown(); }catch(e){}
   // LE DEGRADE ET LE BADGE « +n » SONT RETIRES AVEC LE DEFILEMENT. Ils
@@ -62841,7 +62854,60 @@ function renderVolumePrescrit(cfg,user){
   </div>`;
 }
 
-function showProgressTab(tab,btn){
+// ══ R20 — ÉVOLUTION ROUVRE SUR LE DERNIER ONGLET ═══════════════════════
+// Les sept onglets, dans l'ordre de la bande. Un nom hors de cette liste n'est
+// ni memorise ni restaure.
+const PROG_ONGLETS=Object.freeze(['poids','mensus','masseGrasse','perf','volume','photos','notes']);
+// Le bouton de la bande qui porte cet onglet — et non plus « le premier ».
+function _progBoutonOnglet(tab){
+  return [...document.querySelectorAll('#prog-tabs button')]
+    .find(b=>(b.getAttribute('onclick')||'').indexOf("showProgressTab('"+tab+"'")===0)||null;
+}
+// Une photo de bilan, sous toutes les clefs ou elle a pu etre rangee. Sortie
+// de showProgressTab pour que _progOngletVide lise EXACTEMENT la meme chose.
+function _progPhotoBilan(b,t){
+  return b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])
+    ||localStorage.getItem('rc_photo_'+b.date+'_bil-photo-'+t)
+    ||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-'+t)||null;
+}
+// PURE (a la lecture du stockage local pres, pour les photos). Cet onglet
+// s'ouvrirait-il sur un etat vide ? Les conditions sont CELLES de
+// showProgressTab et de renderVolume, recopiees branche par branche — une
+// assertion rend chaque onglet et verifie que les deux disent la meme chose.
+function _progOngletVide(tab,u){
+  u=u||{};
+  const bl=bilansOrdonnes(u);
+  if(tab==='poids') return !bl.length&&!(u.weightLog||[]).length;
+  if(tab==='mensus'||tab==='masseGrasse') return !bl.length;
+  // « Notes » a DEUX etats vides : aucun bilan, ou des bilans sans aucune
+  // reponse ecrite — renderReponsesBilans rend alors son propre etat vide.
+  // Memes filtres, memes questions, meme lecture de la reponse.
+  if(tab==='notes'){
+    return !bl.filter(b=>b&&b.date).some(b=>
+      (b.type==='depart'?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi).some(q=>_texteReponse(b[q.k])));
+  }
+  if(tab==='perf') return !(u.sessions||[]).length;
+  if(tab==='volume'){
+    try{ return !_calculSemaine(u,_volCleDecalee(_volDecalage)).seances; }catch(e){ return false; }
+  }
+  if(tab==='photos'){
+    if(bl.some(b=>['face','back','side'].some(t=>_progPhotoBilan(b,t)))) return false;
+    let php=''; try{ php=htmlPhotosProgression(u); }catch(e){ php=''; }
+    return !php;
+  }
+  return false;
+}
+// `sansMemo` : le rendu ne change pas le choix memorise. C'est le cas du repli
+// de loadProgress, et c'est le seul.
+function showProgressTab(tab,btn,sansMemo){
+  // R20 — LE CHOIX DE L'ATHLETE EST MEMORISE, ET SEULEMENT QUAND IL CHANGE.
+  // saveUser pousse le dossier : le rappeler a chaque rendu — et plusieurs
+  // gestes repeignent l'onglet courant (creneau de Perfs, masquer le poids,
+  // photos) — lancerait une synchronisation pour rien.
+  if(!sansMemo&&currentUser&&PROG_ONGLETS.indexOf(tab)>=0&&currentUser.uiProgressTab!==tab){
+    currentUser.uiProgressTab=tab;
+    try{ saveUser(); }catch(e){}
+  }
   document.querySelectorAll('#prog-tabs button').forEach(b=>{b.className='btn btn-outline btn-sm';b.style.whiteSpace='nowrap';});
   if(btn){btn.className='btn btn-red btn-sm';btn.style.whiteSpace='nowrap';}
   const c=document.getElementById('progress-content');
@@ -63116,7 +63182,7 @@ function showProgressTab(tab,btn){
     // PHOTOS DE PROGRESSION : elles se rendent AVANT la fresque des bilans,
     // qui n est pas touchee. Deux dispositifs distincts, deux sources.
     const _php=(()=>{ try{ return htmlPhotosProgression(currentUser); }catch(e){ return ''; } })();
-    const getP=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||localStorage.getItem('rc_photo_'+b.date+'_bil-photo-'+t)||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-'+t)||null;
+    const getP=_progPhotoBilan;
     const hasSome=bl.some(b=>getP(b,'face')||getP(b,'back')||getP(b,'side'));
     if(!hasSome){
       c.innerHTML='<div id="prog-photos-progression"></div>'+_php
