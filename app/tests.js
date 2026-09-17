@@ -40428,6 +40428,59 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R24 : « QUELLE CHARGE POUR QUEL OBJECTIF ? » ══════════
+
+    ok('R24 — le calculateur dit ce qu’il fait, sans promettre « optimale », et ses calculs n’ont pas bougé',(()=>{
+      const g=id=>document.getElementById(id);
+      const m=g('calc-modal');
+      if(!m) return _echec('#calc-modal absent');
+      // Les identifiants lus par le code.
+      for(const id of ['calc-pw','calc-pr','calc-prir','calc-table-body','calc-e1rm-val','calc-cycle-etat'])
+        if(!g(id)) return _echec('#'+id+' a disparu');
+      if(m.querySelector('h2').textContent.trim()!=='Quelle charge pour quel objectif ?') return _echec('titre : « '+m.querySelector('h2').textContent.trim()+' »');
+      const sous=m.querySelector('p.sub').textContent.trim();
+      if(sous!=='À partir de ta dernière performance, voici la charge correspondant à chaque nombre de répétitions.') return _echec('sous-titre : « '+sous+' »');
+      if(/optimal/i.test(m.textContent)) return _echec('« optimale » est encore écrit');
+      // LE BOUTON DE LA CARTE, avec son icône.
+      const src=String(_blocExo);
+      if(src.indexOf('Calculer ma charge</button>')<0||src.indexOf('Vue tableau')>=0) return _echec('le bouton ne dit pas « Calculer ma charge »');
+      if(!/<svg[^>]*width="13" height="13"><rect x="3" y="3"[^]*?<\/svg>Calculer ma charge/.test(src)) return _echec('le bouton a perdu son icône');
+      const av={pw:g('calc-pw').value,pr:g('calc-pr').value,prir:g('calc-prir').value};
+      try{
+        openCalc('100','8','2','homme');
+        // L'EN-TÊTE.
+        const th=[...m.querySelectorAll('#calc-table thead th')];
+        const lib=th.map(t=>t.textContent.replace('ⓘ','').trim());
+        if(JSON.stringify(lib)!==JSON.stringify(['','à l\'échec','RIR 1','RIR 2','RIR 3'])) return _echec('en-têtes : '+JSON.stringify(lib));
+        const i1=th[1].querySelector('.rc-i');
+        if(!i1||(i1.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'rir\')')<0) return _echec('pas de ⓘ RIR sur « à l’échec »');
+        if(th.slice(2).some(t=>t.querySelector('.rc-i'))) return _echec('un ⓘ de trop dans la bande');
+        // LA FORCE MAX.
+        const bloc=g('calc-e1rm-display');
+        if(!/^Force max estimée/.test(bloc.firstElementChild.textContent.trim())) return _echec('bloc : « '+bloc.firstElementChild.textContent.trim()+' »');
+        const i2=bloc.querySelector('.rc-i');
+        if(!i2||(i2.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'e1rm\')')<0) return _echec('pas de ⓘ e1rm sur la force max');
+        // UNE SECONDE OUVERTURE NE DOUBLE PAS LES ⓘ.
+        openCalc('100','8','2','homme');
+        if(m.querySelectorAll('.rc-i').length!==2) return _echec(m.querySelectorAll('.rc-i').length+' ⓘ après deux ouvertures');
+        // LES LIGNES, ET LES CHIFFRES D'AVANT. 100 kg × 8 à RIR 2 :
+        // 100 - 2,5×2 - 2,5×7 = 77,5 %, soit une force max de 129 kg.
+        if(g('calc-e1rm-val').textContent!=='129kg') return _echec('force max : '+g('calc-e1rm-val').textContent);
+        const lignes=[...g('calc-table-body').querySelectorAll('tr')];
+        const etiquettes=lignes.map(l=>l.firstElementChild.textContent.trim());
+        if(JSON.stringify(etiquettes)!==JSON.stringify(['3 reps','4 reps','5 reps','6 reps','7 reps','8 reps','10 reps','12 reps','15 reps','20 reps']))
+          return _echec('lignes : '+JSON.stringify(etiquettes));
+        const huit=lignes[5].querySelectorAll('td');
+        // 8 reps : à l'échec 82,5 % → 106,5 → 107,5 kg ; RIR 2 → 100 kg.
+        if(huit[1].textContent!=='107.5kg'||huit[3].textContent!=='100kg') return _echec('8 reps : '+[...huit].map(x=>x.textContent).join('|'));
+        // Le bloc de cycle suit toujours le tableau.
+        if(!(g('calc-table-body').compareDocumentPosition(g('calc-cycle-etat'))&4)) return _echec('la phrase de cycle n’est plus sous le tableau');
+        return true;
+      } finally {
+        m.style.display='none';
+        g('calc-pw').value=av.pw; g('calc-pr').value=av.pr; g('calc-prir').value=av.prir;
+      }})());
+
     // ══ 17/09/2026 — R23 : « COMMENT L'EXÉCUTER », ET LE TABLEAU REMONTE ══
 
     ok('R23 — la règle d’ouverture : jamais pratiqué, ou quelque chose a changé',(()=>{

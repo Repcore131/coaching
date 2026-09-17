@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1261';
+window.RC_BUILD='1262';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5176,6 +5176,11 @@ textarea.vn-in{resize:vertical;line-height:1.5}
    la pastille y vire au blanc voile. Elle ne change pas de taille. */
 .series-table-wo th .rc-i{color:rgba(255,255,255,.72)}
 .series-table-wo th .rc-i:hover,.series-table-wo th .rc-i:focus-visible{color:#fff}
+/* R24 — les ⓘ de « Quelle charge pour quel objectif ? » : sur la bande rouge
+   du tableau et sur le cartouche de force max, meme blanc voile, et une
+   emprise resserree pour ne pas elargir la colonne. */
+#calc-modal .calc-i .rc-i{color:rgba(255,255,255,.72);margin:-8px -6px -8px -2px}
+#calc-modal .calc-i .rc-i:hover,#calc-modal .calc-i .rc-i:focus-visible{color:#fff}
 /* R14 — DANS LE TABLEAU A CINQ COLONNES, « Gêne ⓘ » passait sur deux lignes :
    la colonne offre 66 px de contenu, le libelle et une boite de 32 en
    demandaient 74. Des marges negatives ramenent l'emprise a 22 px sans
@@ -9260,10 +9265,14 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="calc-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);overflow-y:auto">
   <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;margin-top:60px;min-height:calc(100vh - 60px);min-height:calc(100dvh - 60px)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <h2> Calculateur RIR</h2>
+      <!-- R24 — le titre dit a quoi sert l'ecran, pas le nom de l'outil. -->
+      <h2>Quelle charge pour quel objectif ?</h2>
       <button onclick="document.getElementById('calc-modal').style.display='none'" aria-label="Fermer" style="background:none;border:1px solid var(--border);border-radius:var(--r-full);width:32px;height:32px;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="15" height="15"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
     </div>
-    <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.5">Basé sur ta dernière performance. Le système calcule ta charge optimale pour chaque combinaison reps/RIR.</p>
+    <!-- R24 — « optimale » est retire : c'est une promesse que le calcul ne
+         tient pas. Il projette une charge par pourcentage d'une force max
+         estimee, rien de plus. -->
+    <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.5">À partir de ta dernière performance, voici la charge correspondant à chaque nombre de répétitions.</p>
     <div style="background:var(--surface-2);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
       <div class="grid2" style="gap:10px">
         <div><label for="calc-pw">Charge précédente (kg)</label><input type="number" id="calc-pw" placeholder="100" oninput="updateCalcTable()"></div>
@@ -9278,7 +9287,10 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
     </div>
     <div id="calc-e1rm-display" style="background:linear-gradient(135deg,#1a0000,#2a0000);border:1px solid #7f1d1d;border-radius:var(--r-3);padding:14px;margin-bottom:16px;display:none">
-      <div style="font-size:var(--fs-xs);color:#fca5a5;text-transform:uppercase;letter-spacing:.5px;font-weight:700">1RM estimé</div>
+      <!-- R24 — « Force max estimée » et non « 1RM estimé » : le mot du lexique.
+           Le ⓘ est pose par openCalc dans [data-lex], comme sur la fiche coach :
+           un gabarit statique ne peut pas appeler rcInfo. -->
+      <div style="display:flex;align-items:center;font-size:var(--fs-xs);color:#fca5a5;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Force max estimée<span class="calc-i" data-lex="e1rm"></span></div>
       <div style="font-size:var(--fs-2xl);font-weight:900;color:var(--text)" id="calc-e1rm-val">—</div>
     </div>
     <h3 style="margin-bottom:10px;font-size:var(--fs-md)">Table des charges suggérées</h3>
@@ -9286,8 +9298,11 @@ const COACH_PHOTO='icons/coach.jpg';
       <table id="calc-table" style="width:100%;border-collapse:collapse;font-size:var(--fs-sm)">
         <thead>
           <tr style="background:var(--red)">
-            <th style="padding:8px 6px;font-size:var(--fs-xs);text-align:center;color:var(--text)">Reps \ RIR</th>
-            <th style="padding:8px 6px;font-size:var(--fs-xs);text-align:center;color:var(--text)">RIR 0</th>
+            <!-- R24 — PREMIERE COLONNE SANS EN-TETE : chaque ligne dit « 8 reps ».
+                 « RIR 0 » devient « à l'échec », ce que ce chiffre veut dire ;
+                 son ⓘ est pose par openCalc. -->
+            <th style="padding:8px 6px;font-size:var(--fs-xs);text-align:center;color:var(--text)"></th>
+            <th style="padding:8px 6px;font-size:var(--fs-xs);text-align:center;color:var(--text);white-space:nowrap">à l'échec<span class="calc-i" data-lex="rir"></span></th>
             <th style="padding:8px 6px;font-size:var(--fs-xs);text-align:center;color:var(--text)">RIR 1</th>
             <th style="padding:8px 6px;font-size:var(--fs-xs);text-align:center;color:var(--text)">RIR 2</th>
             <th style="padding:8px 6px;font-size:var(--fs-xs);text-align:center;color:var(--text)">RIR 3</th>
@@ -43344,7 +43359,7 @@ function _blocExo(idx,estSS){
         </div>
         <div class="wo-cmd">
         ${_htmlBoutonRemplacer(idx,ex)}
-        <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
+        <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Calculer ma charge</button>
         </div>
         <div class="wo-ava"></div>
       </div>
@@ -45426,7 +45441,7 @@ function calEnregistrer(idx){
 // Une seule définition de l'e1RM dans le fichier. Elle vivait dans calcSug,
 // qui n'avait plus aucun appelant ; calcSug l'utilise désormais aussi, ce qui
 // évite d'en avoir deux versions qui divergeraient.
-// Attention : le calculateur « Vue tableau » (openCalc) utilise, lui, une table
+// Attention : le calculateur « Calculer ma charge » (openCalc) utilise, lui, une table
 // de pourcentages, un autre modèle. C'est pourquoi aucune valeur en kg n'est
 // affichée par la détection de plateau : elle contredirait ce calculateur.
 function e1rm(poids,reps,rir){
@@ -45710,7 +45725,7 @@ function renderEtatsSeance(user,sess){
 }
 
 // Courbe de la performance NORMALISÉE : on compare une forme, pas des kilos.
-// Aucune valeur absolue n'est affichée — le calculateur « Vue tableau » utilise
+// Aucune valeur absolue n'est affichée — le calculateur « Calculer ma charge » utilise
 // un autre modèle d'e1RM et les deux chiffres se contrediraient.
 function _sparkline(points,couleur){
   if(!points||points.length<2) return '';
@@ -87444,6 +87459,10 @@ function openCalc(pw,pr,prir,gender){
   document.getElementById('calc-prir').value=prir||'';
   // La phrase est posée par updateCalcTable, appelée juste en dessous : elle
   // suit la saisie au lieu d'être figée à l'ouverture.
+  // R24 — LES ⓘ DE LA MODALE (« à l'échec » → rir, « Force max estimée » →
+  // e1rm). Le gabarit est statique : on les pose ici, une fois.
+  try{ document.querySelectorAll('#calc-modal .calc-i[data-lex]').forEach(z=>{
+    if(!z.firstElementChild) z.innerHTML=rcInfo(z.getAttribute('data-lex')); }); }catch(e){}
   document.getElementById('calc-modal').style.display='block';
   updateCalcTable();
 }
@@ -87512,7 +87531,7 @@ function updateCalcTable(){
   tbody.innerHTML=repsRange.map(r=>{
     const isTargetReps=r===Math.round(pr);
     return `<tr style="background:${isTargetReps?'#1a0000':''}">
-      <td style="padding:8px 6px;font-weight:800;text-align:center;color:${isTargetReps?'var(--red)':'var(--sub)'}">${r}</td>
+      <td style="padding:8px 6px;font-weight:800;text-align:center;white-space:nowrap;color:${isTargetReps?'var(--red)':'var(--sub)'}">${r} reps</td>
       ${rirRange.map(rir=>{
         const p2=Math.max(100-2.5*rir-2.5*(r-1),1);
         let w=e1rm*(p2/100);
