@@ -47,7 +47,7 @@
  *   raf:number, seekEnAttente:number|null,
  *   mode:ModeMl, graine:Graine|null, disqueM:number, sens:string, fantome:boolean,
  *   analyseJeton:number, progres:string, suivis:Object<string,Suivi3>,
- *   angCote:string, angCalques:string[],
+ *   angCote:string, angCalques:string[], epingles:Epingle[],
  *   cachePose:{cle:string, d:any}|null,
  *   cacheBarre:{cle:string, d:{t:number[], x:number[], y:number[], vy:number[], conf:number[]}}|null,
  *   rec:any, correction:{motion:any, blob:Blob|null, blobUrl:string, statut:'brouillon'|'envoi'|'envoye'|'erreur', erreur:string}|null,
@@ -988,7 +988,7 @@ function mlOuvrir(email,videoId){
     zoom:1,dureeMs:0,boucle:false,jeton:0,raf:0,seekEnAttente:null,
     mode:'lecture',graine:null,disqueM:ML_DISQUE_M,sens:'',fantome:false,
     analyseJeton:0,progres:'',suivis:{},cacheBarre:null,
-    angCote:'',angCalques:[],cachePose:null,
+    angCote:'',angCalques:[],epingles:[],cachePose:null,
     rec:null,correction:null,cartes:[],lecteur:null};
   go('s-coach-motion-lab');
   _mlRendre();
@@ -1027,6 +1027,7 @@ function _mlArreter(){
   if(analyse) analyse.remove();
   if(_ml&&_ml.rec){
     const r=_ml.rec;
+    _mlRecEcouteArreter();
     window.clearInterval(r.minuteur);
     try{ if(r.media&&r.media.state!=='inactive') r.media.stop(); }catch(e){}
     if(r.flux) r.flux.getTracks().forEach((/** @type {MediaStreamTrack} */ t)=>t.stop());
@@ -1876,6 +1877,7 @@ function _mlDessinerCalque(){
     const S=_mlPoseLue(a);
     if(S) _mlDessinerPose(g,R,S,tNow,_ml.angCalques);
   }
+  if(_ml.epingles.length) _mlDessinerEpingles(g,R,_ml.epingles,tNow);
   if(_ml.rec){
     _mlDessinerTraits(g,R,_ml.rec.traits);
     if(_ml.rec.enCours&&_ml.rec.enCours.length>1) _mlDessinerTraits(g,R,[[_ml.rec.couleur,_ml.rec.enCours]]);
@@ -2785,6 +2787,13 @@ function _mlMajArticulations(){
       }).join('')
       +'</div>';
     const actifs=_ml.angCalques.filter(c=>met[c]);
+    const enCorrection=!!(_ml.rec||(_ml.correction&&_ml.correction.statut!=='envoi'&&_ml.correction.statut!=='envoye'));
+    if(actifs.length&&enCorrection){
+      h+='<div class="ml-choix ml-ang">'+actifs.map(c=>{
+        const q=ML_ANGLES.find(x=>x.cle===c);
+        return '<button type="button" class="ml-b" onclick="mlEpingler(\''+c+'\')">📌 '+escapeHtml(q?q.nom:c)+'</button>';
+      }).join('')+'</div>';
+    }
     if(actifs.length){
       h+='<div class="ml-metr">'+actifs.map(c=>{
         const m=met[c], q=ML_ANGLES.find(x=>x.cle===c);
@@ -2887,15 +2896,18 @@ function _mlDessinerPose(g,R,S,tNow,cles){
  *   |[number,'vitesse',number]|[number,'trait',number,string]|[number,'calque',string,string,number]} Geste
  */
 /** @typedef {{id:string, aMs:number, dureeMs:number, texte:string}} Carte */
+/** @typedef {{id:string, aMs:number, art:string, val:number}} Epingle */
 /**
  * @typedef {{v:1, id:string, creeLe:number, envoyeLe:number, dureeMs:number,
- *   voix:{url:string}|null, debut:{s:number, r:number}, ev:Geste[], cartes:Carte[]}} Correction
+ *   voix:{url:string}|null, debut:{s:number, r:number}, ev:Geste[], cartes:Carte[],
+ *   epingles?:Epingle[], st?:{t:number, x:string}[]}} Correction
  */
 /**
  * L'état d'un enregistrement en cours.
  * @typedef {{t0:number, pause:boolean, pauseDebut:number, pauseTotal:number, ev:Geste[],
  *   debut:{s:number, r:number}, media:MediaRecorder|null, flux:MediaStream|null, morceaux:Blob[],
  *   outil:'dessin'|null, couleur:number, traits:[number,string][], enCours:number[][]|null,
+ *   st:{t:number, x:string}[], reco:any,
  *   trace:boolean, minuteur:number, plein:boolean}} Enregistrement
  */
 
@@ -3073,7 +3085,8 @@ async function mlCorrDemarrer(){
   const a=_mlActif();
   _ml.rec={t0:performance.now(),pause:false,pauseDebut:0,pauseTotal:0,ev:[],
     debut:{s:Math.round((Number(v.currentTime)||0)*1000),r:VID_RATES.includes(v.playbackRate)?v.playbackRate:1},
-    media,flux,morceaux,outil:null,couleur:1,traits:[],enCours:null,trace:true,minuteur:0,plein:false};
+    media,flux,morceaux,outil:null,couleur:1,traits:[],enCours:null,trace:true,minuteur:0,plein:false,
+    st:[],reco:null};
   if(a&&a.barre) _ml.rec.ev.push([0,'calque','trajectoire',a.id,1]);
   if(media) media.start(250);
   _ml.rec.minuteur=window.setInterval(()=>{
@@ -3156,6 +3169,7 @@ async function mlRecTerminer(){
   const v=_mlVideo();
   if(r.pause){ r.pauseTotal+=performance.now()-r.pauseDebut; r.pause=false; }
   const dureeMs=_mlRecT();
+  _mlRecEcouteArreter();
   if(v&&!v.paused){ try{ v.pause(); }catch(e){} }
   window.clearInterval(r.minuteur);
   /** @type {Blob|null} */
@@ -3170,7 +3184,8 @@ async function mlRecTerminer(){
   if(dureeMs<300){ toast('Correction trop courte : rien n’a été gardé.','var(--orange)'); _mlMajCorrection(); _mlDessinerCalque(); return false; }
   /** @type {Correction} */
   const motion={v:1,id:'c'+Date.now().toString(36),creeLe:Date.now(),envoyeLe:0,dureeMs,voix:null,
-    debut:r.debut,ev:r.ev.slice().sort((x,y)=>x[0]-y[0]),cartes:[]};
+    debut:r.debut,ev:r.ev.slice().sort((x,y)=>x[0]-y[0]),cartes:[],epingles:[],
+    st:r.st.slice().sort((x,y)=>x.t-y.t)};
   _ml.correction={motion,blob,blobUrl:blob?URL.createObjectURL(blob):'',statut:'brouillon',erreur:''};
   _mlMajCorrection();
   _mlDessinerCalque();
@@ -3275,10 +3290,19 @@ async function mlCorrEnvoyer(){
       c.motion.voix=voix;          // gardée : un nouvel essai ne renvoie pas la voix
     }
     if(!_ml||_ml.correction!==c) return false;
-    const motion={...c.motion,voix,cartes:_ml.cartes.slice(),envoyeLe:Date.now()};
+    const motion={...c.motion,voix,cartes:_ml.cartes.slice(),epingles:_ml.epingles.slice(),envoyeLe:Date.now()};
     const r=enregistrerCorrectionMotion(email,videoId,motion);
     if(!r.ok&&r.raison) throw new Error(r.raison);
-    c.statut='envoye'; c.motion=r.motion||motion;
+    c.statut='envoye';
+    // CE QUI N'A PAS TENU SE DIT. La validation fait tomber les sous-titres,
+    // puis les épingles, quand la correction dépasse son plafond ; le coach
+    // doit l'apprendre autrement qu'en ne les voyant plus.
+    const garde=r.motion||motion;
+    const perdu=[];
+    if((motion.st||[]).length&&!(garde.st||[]).length) perdu.push('les sous-titres');
+    if((motion.epingles||[]).length&&!(garde.epingles||[]).length) perdu.push('les épingles');
+    c.motion=garde;
+    if(perdu.length) toast('Correction trop lourde : '+perdu.join(' et ')+' n’ont pas tenu.','var(--orange)');
     toastSync(r.ok,r.envoi,'Correction envoyée ✓','la correction est');
   }catch(e){
     if(!_ml||_ml.correction!==c) return false;
@@ -3309,6 +3333,11 @@ function _mlMajBarreRec(){
       +[0,1,2].map(i=>'<button type="button" class="ml-pastille" style="--c:'+_mlCouleurTrait(i)+'" aria-pressed="'+(r.couleur===i)
         +'" aria-label="Couleur '+['blanche','cyan','rouge'][i]+'" onclick="mlRecCouleur('+i+')"'+(r.pause?' disabled':'')+'></button>').join('')
       +'<button type="button" class="ml-b" onclick="mlRecEffacer()"'+(r.pause||!r.traits.length?' disabled':'')+'>Effacer</button>'
+      // ⚠ LA VOIX PART CHEZ UN TIERS quand c'est allumé : le navigateur
+      // fait la reconnaissance, pas nous. Éteint par défaut, et le
+      // panneau en dessous le dit en toutes lettres.
+      +'<button type="button" class="ml-b" aria-pressed="'+(!!r.reco)+'" onclick="mlRecSousTitres()"'
+        +(mlReconnaissanceDispo()?'':' disabled')+'>CC'+(r.st.length?' '+r.st.length:'')+'</button>'
       +(a&&a.barre?'<button type="button" class="ml-b" aria-pressed="'+r.trace+'" onclick="mlRecTrace()"'+(r.pause?' disabled':'')+'>Trajectoire</button>':'')
     +'</div>';
 }
@@ -3326,6 +3355,9 @@ function _mlMajCorrection(){
     const v=_mlVideoSource();
     h+='<p class="ml-traj-aide">Parle pendant que tu manipules la vidéo : l’athlète reverra ta voix, tes arrêts, tes ralentis '
       +'et tes dessins, dans l’ordre. Trois minutes au plus.'
+      // ⚠ DIT AVANT, PAS APRÈS : la bascule CC envoie la voix au service de
+      // reconnaissance du navigateur, qui n'est pas nous.
+      +(mlReconnaissanceDispo()?' Le bouton CC ajoute des sous-titres : la reconnaissance est celle du navigateur, et ta voix part alors chez son éditeur.':'')
       +(v&&motionCorrectionValide(v.motion)?' Une correction a déjà été envoyée'+(v.motion.envoyeLe?' le '+new Date(v.motion.envoyeLe).toLocaleDateString('fr-FR'):'')
         +' : la nouvelle la remplacera.':'')+'</p>'
       +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" onclick="mlCorrDemarrer()"'+off+'>🎙 Enregistrer une correction</button></div>';
@@ -3359,12 +3391,30 @@ function _mlMajCorrection(){
         +'<button type="button" class="btn btn-outline btn-sm" onclick="mlModeleGarder()">★ Garder comme modèle</button></div>'
       +'<div class="ml-phases">'+_mlModeles().map((m,i)=>'<span class="ml-modele"><button type="button" class="ml-phase" onclick="mlModeleUtiliser('+i+')">'
         +escapeHtml(m)+'</button><button type="button" class="ml-modele-x" onclick="mlModeleRetirer('+i+')" aria-label="Retirer ce modèle">×</button></span>').join('')+'</div>');
+  // LES ÉPINGLES : la valeur d'un angle, attachée à une image. Elle est
+  // gardée telle qu'elle a été vue, et non recalculée à la lecture : si les
+  // articulations sont refaites, ce que le coach a montré ne bouge pas.
+  h+='<div class="ml-lab" style="margin-top:14px">Angles épinglés</div>'
+    +(_ml.epingles.length
+      ?'<div class="ml-cartes">'+_ml.epingles.map(p=>{
+        const q=ML_ANGLES.find(x=>x.cle===p.art);
+        return '<div class="ml-carte-l"><span class="ml-carte-t">'+mlTempsTexte(p.aMs)+'</span>'
+          +'<span class="ml-carte-x">'+escapeHtml(q?q.nom:String(p.art))+' · '+mlNombre(p.val,1)+'°</span>'
+          +(verrou?'':'<button type="button" class="ml-mini" onclick="mlEpingleSupprimer(\''+escapeHtml(p.id)+'\')" aria-label="Retirer cette épingle">×</button>')
+          +'</div>';
+      }).join('')+'</div>'
+      :'<p class="ml-traj-aide">Aucun. Affiche un angle, place-toi sur l’image, et épingle-le depuis le panneau des articulations.</p>');
+  // LES SOUS-TITRES ne se retouchent pas mot à mot : ils se gardent ou se
+  // jettent. Une reconnaissance qui a compris de travers vaut mieux jetée.
+  const st=(c&&c.motion.st)||[];
+  if(st.length) h+='<p class="ml-traj-aide">'+st.length+' ligne'+(st.length>1?'s':'')+' de sous-titres, reconnues pendant l’enregistrement.'
+    +(verrou?'':' <button type="button" class="ml-modele-x" onclick="mlSousTitresRetirer()">Les retirer</button>')+'</p>';
   z.innerHTML=h+'</div>';
   // L'APERÇU : le lecteur de l'athlète, sur la voix gardée en mémoire.
   const hote=_mlEl('ml-corr-lecteur');
   if(_ml.lecteur){ _ml.lecteur.detruire(); _ml.lecteur=null; }
   if(hote&&c){
-    _ml.lecteur=mlLecteurCorrection(hote,{url:_ml.url,correction:{...c.motion,cartes:_ml.cartes.slice()},
+    _ml.lecteur=mlLecteurCorrection(hote,{url:_ml.url,correction:{...c.motion,cartes:_ml.cartes.slice(),epingles:_ml.epingles.slice()},
       segments:_ml.segments,voixUrl:c.blobUrl||(c.motion.voix?c.motion.voix.url:'')});
   }
 }
@@ -3375,6 +3425,232 @@ function _mlVideoSource(){
   if(!_ml) return null;
   const c=(DB.get('users')||{})[_ml.email];
   return c&&Array.isArray(c.videos)?c.videos.find((/** @type {any} */ x)=>x&&x.id===_ml?.videoId):null;
+}
+
+// ── LES ANGLES ÉPINGLÉS ─────────────────────────────────────────────────────
+//
+// Une épingle attache la valeur d'un angle à une IMAGE de la vidéo : le coach
+// s'arrête au fond du squat, épingle le genou, et l'athlète retrouvera la même
+// valeur sur la même image. La valeur est gardée telle qu'elle a été vue — pas
+// recalculée à la lecture : si les articulations sont refaites plus tard, ce
+// que le coach a montré ne doit pas changer dans son dos.
+const ML_EPINGLE_MS=150;
+
+/**
+ * PURE. L'échantillon le plus proche d'un instant de la vidéo, -1 si le plus
+ * proche est à plus d'un pas. On ne fabrique pas une mesure entre deux.
+ * @param {{t:number[]}} S
+ * @param {number} sMs
+ * @returns {number}
+ */
+function mlIndexA(S,sMs){
+  const t=S&&S.t;
+  if(!t||!t.length) return -1;
+  let k=-1, e=Infinity;
+  for(let i=0;i<t.length;i++){ const d=Math.abs(t[i]-sMs); if(d<e){ e=d; k=i; } }
+  const pas=t.length>1?Math.abs(t[1]-t[0]):100;
+  return (k<0||e>pas)?-1:k;
+}
+/**
+ * PURE. La valeur d'un angle à un instant de la vidéo, null si on ne l'a pas
+ * mesurée là.
+ * @param {{t:number[], ang:Object<string,(number|null)[]>}} S
+ * @param {string} cle
+ * @param {number} sMs
+ * @returns {number|null}
+ */
+function mlAngleA(S,cle,sMs){
+  const v=S&&S.ang&&S.ang[cle];
+  const k=v?mlIndexA(S,sMs):-1;
+  return k<0?null:v[k];
+}
+/**
+ * PURE. Les épingles visibles à cet instant de la vidéo. Une épingle tient à
+ * son image : elle paraît quand la séquence y passe, et disparaît après.
+ * @param {{aMs:number}[]} l
+ * @param {number} sMs
+ * @returns {any[]}
+ */
+function mlEpinglesVisibles(l,sMs){
+  return (l||[]).filter(p=>p&&Math.abs(sMs-p.aMs)<=ML_EPINGLE_MS);
+}
+/**
+ * Épingle un angle sur l'image affichée.
+ * @param {string} cle
+ */
+function mlEpingler(cle){
+  const v=_mlVideo(), a=_mlActif();
+  if(!_ml||!v||!a) return false;
+  const c=_ml.correction;
+  if(!_ml.rec&&!(c&&c.statut!=='envoi'&&c.statut!=='envoye')){
+    toast('Commence une correction : une épingle s’y attache.','var(--orange)');
+    return false;
+  }
+  if(_ml.epingles.length>=CORR_EPINGLES_MAX){
+    toast('Vingt épingles au plus.','var(--orange)');
+    return false;
+  }
+  const sMs=Math.round((Number(v.currentTime)||0)*1000);
+  const val=mlAngleA(_mlPoseLue(a),cle,sMs);
+  if(val==null){
+    toast('Cet angle n’est pas lisible sur cette image.','var(--orange)');
+    return false;
+  }
+  _ml.epingles=_ml.epingles.concat([{id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+    aMs:sMs,art:cle,val:Math.round(val*10)/10}]).sort((x,y)=>x.aMs-y.aMs);
+  _mlMajCorrection(); _mlMajArticulations(); _mlDessinerCalque();
+  return true;
+}
+/** Jette les sous-titres reconnus : mal compris, ils valent mieux absents. */
+function mlSousTitresRetirer(){
+  const c=_ml&&_ml.correction;
+  if(!c||c.statut==='envoi'||c.statut==='envoye') return false;
+  c.motion={...c.motion,st:[]};
+  _mlMajCorrection();
+  return true;
+}
+/** @param {string} id */
+function mlEpingleSupprimer(id){
+  if(!_ml) return false;
+  _ml.epingles=_ml.epingles.filter(p=>p.id!==id);
+  _mlMajCorrection(); _mlDessinerCalque();
+  return true;
+}
+/**
+ * Les épingles, en haut à droite de l'image. PARTAGÉ par le laboratoire et le
+ * lecteur de l'athlète.
+ * @param {CanvasRenderingContext2D} g
+ * @param {{s:number, ox:number, oy:number, vw:number, vh:number}} R
+ * @param {any[]} l
+ * @param {number} sMs
+ */
+function _mlDessinerEpingles(g,R,l,sMs){
+  const vis=mlEpinglesVisibles(l,sMs);
+  if(!vis.length) return;
+  g.font='800 12px Montserrat, sans-serif';
+  g.textAlign='right'; g.textBaseline='middle';
+  const bord=R.ox+R.vw*R.s-8;
+  let y=8;
+  for(const p of vis.slice(0,4)){
+    const def=ML_ANGLES.find(q=>q.cle===p.art);
+    const txt=(def?def.nom:String(p.art))+' '+mlNombre(p.val,1)+'°';
+    const w=Math.round(g.measureText(txt).width)+16;
+    g.fillStyle='rgba(8,8,8,.82)';
+    g.fillRect(bord-w,y,w,24);
+    g.strokeStyle=_tok('--arc-current','#4DE8FF'); g.lineWidth=1.5;
+    g.strokeRect(bord-w+0.5,y+0.5,w-1,23);
+    g.fillStyle='#ffffff';
+    g.fillText(txt,bord-8,y+12);
+    y+=30;
+  }
+  g.textAlign='start'; g.textBaseline='alphabetic';
+}
+
+// ── LES SOUS-TITRES ─────────────────────────────────────────────────────────
+//
+// ⚠ CE N'EST PAS UNE TRANSCRIPTION MAISON, et le coach doit le savoir : c'est
+// le moteur de reconnaissance du NAVIGATEUR. Chez Chrome, il envoie la voix à
+// un service de Google — donc à un tiers, pendant que le coach parle. La
+// bascule est donc éteinte par défaut, et l'écran le dit en toutes lettres.
+// Un service payant aurait demandé une clé, donc un serveur, qu'on n'a pas ;
+// un modèle local aurait pesé quarante mégaoctets de plus.
+const ML_ST_MAX_MS=6000;
+// ⚠ TROIS CENT VINGT MILLISECONDES PAR MOT : c'est une ESTIMATION, et elle sert
+// à une seule chose — placer la phrase là où elle a été DITE. Le moteur ne rend
+// son texte qu'une fois la phrase finie, avec un retard qui, sans correction,
+// afficherait chaque sous-titre après le geste qu'il commente.
+const ML_ST_MS_PAR_MOT=320;
+
+/** @returns {boolean} Le navigateur sait-il reconnaître la parole. */
+function mlReconnaissanceDispo(){
+  const A=/** @type {any} */(window);
+  return typeof (A.SpeechRecognition||A.webkitSpeechRecognition)==='function';
+}
+/**
+ * PURE. Le sous-titre à afficher à cet instant de la SESSION : la phrase
+ * commencée, tant qu'une autre n'a pas pris sa place et six secondes au plus.
+ * @param {{t:number, x:string}[]} st
+ * @param {number} T
+ * @returns {string}
+ */
+function mlSousTitreA(st,T){
+  const l=st||[];
+  for(let i=0;i<l.length;i++){
+    if(l[i].t>T) break;
+    const suivant=(i+1<l.length)?l[i+1].t:Infinity;
+    if(T<Math.min(l[i].t+ML_ST_MAX_MS,suivant)) return l[i].x;
+  }
+  return '';
+}
+/**
+ * PURE. Où poser une phrase reconnue : à l'instant où elle a commencé, estimé
+ * d'après sa longueur, jamais avant la fin de la précédente, jamais négatif.
+ * @param {number} arriveeMs  quand le moteur a rendu la phrase
+ * @param {string} texte
+ * @param {number} precedentMs  l'instant de la phrase d'avant, -1 s'il n'y en a pas
+ * @returns {number}
+ */
+function mlInstantPhrase(arriveeMs,texte,precedentMs){
+  const mots=String(texte||'').trim().split(/\s+/).filter(Boolean).length;
+  const duree=Math.min(ML_ST_MAX_MS,mots*ML_ST_MS_PAR_MOT);
+  return Math.max(0,precedentMs>=0?Math.max(precedentMs+200,arriveeMs-duree):arriveeMs-duree);
+}
+/** Démarre ou arrête la reconnaissance pendant l'enregistrement. */
+function mlRecSousTitres(){
+  const r=_ml&&_ml.rec;
+  if(!_ml||!r) return false;
+  if(r.reco){ _mlRecEcouteArreter(); _mlMajBarreRec(); return true; }
+  if(!mlReconnaissanceDispo()){
+    toast('Ce navigateur ne sait pas reconnaître la parole.','var(--orange)');
+    return false;
+  }
+  const A=/** @type {any} */(window);
+  const R=A.SpeechRecognition||A.webkitSpeechRecognition;
+  let reco=null;
+  try{ reco=new R(); }catch(e){ toast('La reconnaissance n’a pas démarré.','var(--orange)'); return false; }
+  reco.lang='fr-FR'; reco.continuous=true; reco.interimResults=false; reco.maxAlternatives=1;
+  reco.onresult=(/** @type {any} */ e)=>{
+    const rr=_ml&&_ml.rec;
+    if(!rr||rr.st.length>=CORR_ST_MAX) return;
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(!e.results[i].isFinal) continue;
+      const texte=String(e.results[i][0].transcript||'').trim().slice(0,CORR_ST_CHARS);
+      if(!texte) continue;
+      const der=rr.st.length?rr.st[rr.st.length-1].t:-1;
+      rr.st.push({t:Math.round(mlInstantPhrase(_mlRecT(),texte,der)),x:texte});
+      if(rr.st.length>=CORR_ST_MAX) break;
+    }
+    _mlMajBarreRec();
+  };
+  // ⚠ LE MOTEUR S'ARRÊTE TOUT SEUL après un silence : sans ce redémarrage, les
+  // sous-titres s'arrêteraient à la première respiration du coach.
+  reco.onend=()=>{
+    const rr=_ml&&_ml.rec;
+    if(!rr||rr.reco!==reco||rr.st.length>=CORR_ST_MAX) return;
+    try{ reco.start(); }catch(e){}
+  };
+  reco.onerror=(/** @type {any} */ e)=>{
+    const rr=_ml&&_ml.rec;
+    if(!rr||rr.reco!==reco) return;
+    // « no-speech » et « aborted » ne sont pas des pannes : le redémarrage suit.
+    if(e&&(e.error==='no-speech'||e.error==='aborted')) return;
+    rr.reco=null;
+    try{ reco.stop(); }catch(x){}
+    toast('Sous-titres interrompus : la voix, elle, continue d’être enregistrée.','var(--orange)');
+    _mlMajBarreRec();
+  };
+  try{ reco.start(); }catch(e){ toast('La reconnaissance n’a pas démarré.','var(--orange)'); return false; }
+  r.reco=reco;
+  _mlMajBarreRec();
+  return true;
+}
+/** Coupe la reconnaissance, sans toucher à l'enregistrement de la voix. */
+function _mlRecEcouteArreter(){
+  const r=_ml&&_ml.rec;
+  if(!r||!r.reco) return;
+  const reco=r.reco;
+  r.reco=null;
+  try{ reco.onend=null; reco.onresult=null; reco.onerror=null; reco.stop(); }catch(e){}
 }
 
 // ── Le lecteur de correction ────────────────────────────────────────────────
@@ -3397,7 +3673,8 @@ function mlLecteurCorrection(hote,o){
     +'<button type="button" class="mlc-grand" aria-label="Lire la correction">▶</button></div>'
     +'<div class="mlc-cmd"><button type="button" class="ml-b mlc-jouer" aria-label="Lire la correction">▶</button>'
     +'<div class="mlc-barre" role="slider" tabindex="0" aria-label="Position dans la correction" aria-valuemin="0" aria-valuemax="'+D+'"><i></i></div>'
-    +'<span class="mlc-temps">0:00 / '+_mlDureeCourte(D)+'</span></div></div>';
+    +'<span class="mlc-temps">0:00 / '+_mlDureeCourte(D)+'</span></div>'
+    +'<p class="mlc-st" aria-live="polite"></p></div>';
   const video=/** @type {HTMLVideoElement} */(hote.querySelector('.mlc-video'));
   const calque=/** @type {HTMLCanvasElement} */(hote.querySelector('.mlc-calque'));
   const carte=/** @type {HTMLElement} */(hote.querySelector('.mlc-carte'));
@@ -3405,6 +3682,7 @@ function mlLecteurCorrection(hote,o){
   const bJouer=/** @type {HTMLElement} */(hote.querySelector('.mlc-jouer'));
   const grand=/** @type {HTMLElement} */(hote.querySelector('.mlc-grand'));
   const temps=/** @type {HTMLElement} */(hote.querySelector('.mlc-temps'));
+  const sousTitre=/** @type {HTMLElement} */(hote.querySelector('.mlc-st'));
   const voix=o.voixUrl?new Audio(o.voixUrl):null;
   if(voix) voix.preload='auto';
   // ⚠ L'ÉTAT VIDE LE PLUS PROBABLE de cet écran : la vidéo a été supprimée, ou
@@ -3450,6 +3728,7 @@ function mlLecteurCorrection(hote,o){
         else if(poses[id]&&poses[id].ang[nom]) _mlDessinerPose(g,R,poses[id],sNow,[nom]);
       }
       _mlDessinerTraits(g,R,e.traits);
+      _mlDessinerEpingles(g,R,m.epingles||[],sNow);
     }
     const k=mlCartesVisibles(m.cartes,sNow)[0];
     const cle=k?k.aMs+'|'+k.texte:'';
@@ -3479,6 +3758,12 @@ function mlLecteurCorrection(hote,o){
     const f=Math.min(1,T/D);
     const i=/** @type {HTMLElement} */(barre.firstElementChild); if(i) i.style.transform='scaleX('+f.toFixed(4)+')';
     barre.setAttribute('aria-valuenow',String(Math.round(T)));
+    // LE SOUS-TITRE SUIT L'HORLOGE DE LA SESSION, comme la voix : c'est
+    // elle qu'il accompagne, pas l'image.
+    if(sousTitre){
+      const x=mlSousTitreA(m.st,T);
+      if(sousTitre.textContent!==x) sousTitre.textContent=x;
+    }
     temps.textContent=_mlDureeCourte(T)+' / '+_mlDureeCourte(D);
   };
   // UN PAS : l'horloge avance, l'état s'applique. La voix mène quand elle joue.
@@ -3724,6 +4009,9 @@ function _mlInjecterStyle(){
     '.ml-metr-l{grid-template-columns:1fr 1fr;margin-top:8px}',
     '.ml-aide{font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin:10px 0 0}',
     '.ml-ang{margin-top:8px;justify-content:flex-start}',
+    // LE SOUS-TITRE GARDE SA PLACE, vide ou plein : sans hauteur minimale,
+    // les commandes sauteraient à chaque phrase.
+    '.mlc-st{min-height:19px;margin:8px 0 0;font-size:var(--fs-xs);color:var(--sub);line-height:1.45;text-align:center}',
     // LE CALQUE ALLUMÉ PORTE SA COULEUR, celle de son arc sur la vidéo :
     // sans elle, trois angles allumés ensemble ne se rattachent à rien.
     '.ml-ang-b[aria-pressed="true"]{border-color:var(--c,var(--red));color:var(--c,var(--text));background:rgba(255,255,255,.06)}',

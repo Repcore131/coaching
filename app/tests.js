@@ -41028,6 +41028,177 @@ async function testExercices(){
       return true;
     });
 
+    // ══ 17/09/2026 — R34 : ÉPINGLER UN ANGLE, ET SOUS-TITRER LA VOIX ═══════
+    //
+    // Une épingle fige la valeur d'un angle sur une IMAGE de la vidéo : elle
+    // est gardée telle qu'elle a été vue, pas recalculée à la lecture — sinon
+    // refaire les articulations changerait après coup ce que le coach a montré.
+    // Les sous-titres, eux, sont datés sur l'horloge de la SESSION, comme les
+    // gestes : c'est la voix qu'ils accompagnent, pas l'image.
+
+    okA('R34 — une épingle tient à son image, un sous-titre à sa phrase',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const l=[{id:'p1',aMs:1000,art:'genou',val:47.3},{id:'p2',aMs:2000,art:'tronc',val:31}];
+      if(mlEpinglesVisibles(l,1000).length!==1) return _echec('invisible sur son image');
+      if(mlEpinglesVisibles(l,1150).length!==1) return _echec('perdue à 150 ms');
+      if(mlEpinglesVisibles(l,1200).length!==0) return _echec('encore là à 200 ms');
+      if(mlEpinglesVisibles(l,2000)[0].art!=='tronc') return _echec('mauvaise épingle');
+      if(mlEpinglesVisibles(null,0).length) return _echec('une épingle sort de rien');
+      // LE SOUS-TITRE : la phrase commencée, six secondes au plus.
+      const st=[{t:0,x:'un'},{t:1000,x:'deux'},{t:20000,x:'trois'}];
+      if(mlSousTitreA(st,-1)!=='') return _echec('un sous-titre avant le début');
+      if(mlSousTitreA(st,500)!=='un'||mlSousTitreA(st,1000)!=='deux') return _echec('mauvaise phrase');
+      if(mlSousTitreA(st,7100)!=='') return _echec('une phrase reste plus de six secondes');
+      if(mlSousTitreA(st,20500)!=='trois') return _echec('la dernière phrase manque');
+      if(mlSousTitreA(null,5)!=='') return _echec('un sous-titre sort de rien');
+      // L'INSTANT D'UNE PHRASE : le moteur ne rend son texte qu'une fois la
+      // phrase finie. Sans ce recul, chaque sous-titre s'afficherait après le
+      // geste qu'il commente.
+      if(mlInstantPhrase(5000,'un deux trois',-1)!==5000-3*320) return _echec('phrase non reculée');
+      if(mlInstantPhrase(200,'un deux trois quatre cinq',-1)!==0) return _echec('instant négatif');
+      if(mlInstantPhrase(5000,'un deux trois',4900)!==5100) return _echec('phrase avant la précédente');
+      if(mlInstantPhrase(99999,'x '.repeat(80),-1)!==99999-ML_ST_MAX_MS) return _echec('recul non borné');
+      return true;
+    });
+
+    okA('R34 — la valeur épinglée est celle qu’on a mesurée là, et nulle part ailleurs',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const S={t:[0,100,200],ang:{genou:[10,20,null]}};
+      if(mlIndexA(S,105)!==1) return _echec('mauvais échantillon');
+      if(mlIndexA({t:[]},0)!==-1) return _echec('un échantillon sort d’une série vide');
+      if(mlAngleA(S,'genou',40)!==10||mlAngleA(S,'genou',140)!==20) return _echec('mauvaise valeur');
+      if(mlAngleA(S,'genou',200)!==null) return _echec('un angle non mesuré est rendu');
+      if(mlAngleA(S,'genou',900)!==null) return _echec('un angle est inventé au loin');
+      if(mlAngleA(S,'coude',0)!==null) return _echec('un angle absent est rendu');
+      return true;
+    });
+
+    okA('R34 — épingles et sous-titres revalidés : ce qui ne se lit pas tombe, le reste tient',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const base={v:1,id:'c34',creeLe:1,envoyeLe:0,dureeMs:3000,voix:null,debut:{s:0,r:1},ev:[],cartes:[]};
+      const ok=motionCorrectionValide({...base,
+        epingles:[{id:'p1',aMs:1200,art:'genou',val:47.34},{id:'p2',aMs:400,art:'tronc',val:31}],
+        st:[{t:900,x:'  garde le dos droit  '},{t:100,x:'regarde'}]});
+      if(!ok) return _echec('une correction lisible est refusée');
+      if(ok.epingles.map(p=>p.aMs).join()!=='400,1200') return _echec('épingles non triées');
+      if(ok.epingles[1].val!==47.3) return _echec('valeur non arrondie : '+ok.epingles[1].val);
+      if(ok.st[0].x!=='regarde'||ok.st[1].x!=='garde le dos droit') return _echec('sous-titres : '+JSON.stringify(ok.st));
+      // CE QUI NE SE LIT PAS TOMBE, SANS FAIRE TOMBER LE RESTE.
+      const sale=motionCorrectionValide({...base,
+        epingles:[{id:'p1',aMs:100,art:'coccyx',val:10},{id:'',aMs:100,art:'genou',val:10},
+          {id:'p3',aMs:100,art:'genou',val:999},{id:'p4',aMs:100,art:'genou',val:12}],
+        st:[{t:-5,x:'avant le début'},{t:10,x:'   '},{t:20,x:'bon'}]});
+      if(!sale||sale.epingles.length!==1||sale.epingles[0].id!=='p4')
+        return _echec('épingles : '+JSON.stringify(sale&&sale.epingles));
+      if(sale.st.length!==1||sale.st[0].x!=='bon') return _echec('sous-titres : '+JSON.stringify(sale.st));
+      // LES PLAFONDS.
+      const trop=motionCorrectionValide({...base,
+        epingles:Array.from({length:30},(_,i)=>({id:'p'+i,aMs:i,art:'genou',val:10})),
+        st:Array.from({length:120},(_,i)=>({t:i*10,x:'x'.repeat(200)}))});
+      if(trop.epingles.length!==CORR_EPINGLES_MAX) return _echec(trop.epingles.length+' épingles');
+      if(trop.st.length!==CORR_ST_MAX) return _echec(trop.st.length+' sous-titres');
+      if(trop.st[0].x.length!==CORR_ST_CHARS) return _echec('ligne non tronquée');
+      // UNE CORRECTION SANS RIEN DE TOUT ÇA reste une correction.
+      const nue=motionCorrectionValide(base);
+      if(!nue||nue.epingles.length||nue.st.length) return _echec('les tableaux vides manquent');
+      return true;
+    });
+
+    okA('R34 — au maximum de tout, ce qui déborde est l’accessoire, pas la correction',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const ev=[];
+      for(let i=0;i<CORR_EV_MAX;i++){
+        if(i%10===0) ev.push([i*200,'trait',1,Array.from({length:CORR_POINTS_MAX},(_,k)=>(100+k)+','+(200+k)).join(' ')]);
+        else ev.push([i*200,'aller',i*37]);
+      }
+      const plein={v:1,id:'cmax',creeLe:1,envoyeLe:0,dureeMs:CORR_DUREE_MAX_MS,
+        voix:{url:'https://res.cloudinary.com/demo/video/upload/v1/abcdefghijklmno.webm'},debut:{s:0,r:1},ev,
+        cartes:Array.from({length:CORR_CARTES_MAX},(_,i)=>({id:'k'+i,aMs:i*100,dureeMs:3000,texte:'x'.repeat(CORR_CARTE_MAX)})),
+        epingles:Array.from({length:CORR_EPINGLES_MAX},(_,i)=>({id:'p'+i,aMs:i*100,art:'genou',val:123.4})),
+        st:Array.from({length:CORR_ST_MAX},(_,i)=>({t:i*1000,x:'é'.repeat(CORR_ST_CHARS)}))};
+      // ⚠ TOUT AU MAXIMUM DÉPASSE LE PLAFOND : ce qui doit tomber, ce sont les
+      // sous-titres — un confort que la voix elle-même porte — et non les six
+      // cents gestes qui SONT la correction.
+      const a=motionCorrectionValide(plein);
+      if(!a) return _echec('une correction au maximum est refusée en entier');
+      if(a.ev.length!==CORR_EV_MAX||a.cartes.length!==CORR_CARTES_MAX)
+        return _echec('le journal ou les cartes ont été rognés : '+a.ev.length+' / '+a.cartes.length);
+      if(a.st.length) return _echec('les sous-titres tiennent alors qu’ils ne devraient pas : '+JSON.stringify(a).length+' o');
+      if(JSON.stringify(a).length>CORR_TAILLE_MAX) return _echec(JSON.stringify(a).length+' octets');
+      // UNE CORRECTION ORDINAIRE garde tout, sous-titres compris.
+      const n=motionCorrectionValide({...plein,ev:ev.slice(0,60),cartes:plein.cartes.slice(0,4),st:plein.st.slice(0,20)});
+      if(!n||n.st.length!==20||n.epingles.length!==CORR_EPINGLES_MAX)
+        return _echec('une correction ordinaire perd quelque chose : '+JSON.stringify(n&&n.st.length));
+      return true;
+    });
+
+    okA('R34 — on épingle ce qu’on voit, et seulement pendant une correction',async()=>{
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast;
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const verifier=async()=>{
+        window._ratProfilFait=true;
+        const dits=[]; window.toast=m=>{ dits.push(String(m)); };
+        try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
+        // UNE POSE DE SYNTHÈSE : genou à 90°, sans moteur ni vidéo.
+        const X=new Array(14).fill(0), Y=new Array(14).fill(0), V=new Array(14).fill(0.9);
+        const p=(nom,x,y)=>{ const r=mlRangPose(nom,'G'); X[r]=x; Y[r]=y; };
+        p('hanche',600,400); p('genou',600,550); p('cheville',750,550); p('pointe',750,450);
+        p('epaule',500,260); p('coude',500,300); p('poignet',500,200);
+        // LE POIGNET N'EST PAS VU : le coude et l'avant-bras, qui s'appuient
+        // dessus, ne se mesurent donc pas — et ne s'épinglent pas non plus.
+        V[mlRangPose('poignet','G')]=ML_POSE_VIS_MIN-0.1;
+        const seg={id:'s34',label:'Rép 1',debutMs:0,finMs:3000};
+        const ech=[];
+        for(let k=0;k<24;k++) ech.push({tMs:k*125,X:X.slice(),Y:Y.slice(),V:V.slice()});
+        const pose=segPoseValide(mlCompacterPose(seg,ech,{vw:1280,vh:720,cote:'G'}),0,3000);
+        if(!pose) return 'la pose de synthèse ne se relit pas';
+        _r28Monter([_r28Video({segments:[{...seg,pose}]})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        _ml.angCalques=['genou'];
+        // SANS CORRECTION EN COURS, il n'y a rien à quoi attacher l'épingle.
+        if(mlEpingler('genou')!==false) return 'une épingle est posée hors correction';
+        if(!dits.some(m=>/correction/i.test(m))) return 'rien n’explique le refus : '+dits.join(' | ');
+        // UN BROUILLON, comme après un enregistrement.
+        _ml.correction={motion:{v:1,id:'c1',creeLe:1,envoyeLe:0,dureeMs:4000,voix:null,
+          debut:{s:0,r:1},ev:[],cartes:[],epingles:[],st:[{t:200,x:'descends plus bas'}]},
+          blob:null,blobUrl:'',statut:'brouillon',erreur:''};
+        if(mlEpingler('genou')!==true) return 'l’épingle ne se pose pas : '+dits.join(' | ');
+        if(_ml.epingles.length!==1) return _ml.epingles.length+' épingle(s)';
+        const e=_ml.epingles[0];
+        if(Math.abs(e.val-90)>0.2) return 'valeur épinglée : '+e.val;
+        if(e.art!=='genou'||e.aMs!==0) return JSON.stringify(e);
+        // UN ANGLE QU'ON NE MESURE PAS ne s'épingle pas.
+        if(mlEpingler('coude')!==false) return 'un angle non lisible s’épingle';
+        if(mlEpingler('coccyx')!==false) return 'un angle inconnu s’épingle';
+        // LE COMPOSITEUR la liste et compte les sous-titres.
+        const t=document.getElementById('ml-corr').textContent;
+        if(!/Angles épinglés/.test(t)||!/Genou/.test(t)) return 'le compositeur ne la liste pas';
+        if(!/1 ligne de sous-titres/.test(t)) return 'les sous-titres ne sont pas comptés : '+t.slice(-120);
+        // ET ELLE SE RETIRE.
+        if(mlEpingleSupprimer(e.id)!==true||_ml.epingles.length) return 'l’épingle ne se retire pas';
+        if(mlSousTitresRetirer()!==true||_ml.correction.motion.st.length) return 'les sous-titres ne se jettent pas';
+        // SANS ENREGISTREMENT EN COURS, la bascule des sous-titres ne fait rien.
+        if(mlRecSousTitres()!==false) return 'la reconnaissance démarre hors enregistrement';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      finally {
+        try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      await new Promise(r=>setTimeout(r,900));
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return msg?_echec(msg):true;
+    });
+
     // ══ 17/09/2026 — R29 : MOTION LAB, LOTS 2 ET 3 — LA TRAJECTOIRE ════════
     //
     // Tout se calcule sur l'appareil du coach (option A). Les images de ces

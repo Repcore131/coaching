@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1275';
+window.RC_BUILD='1276';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -82068,6 +82068,8 @@ function enregistrerSegmentsVideo(email,videoId,segments){
 //       | [t,'aller',sMs] | [t,'vitesse',r] | [t,'trait',couleur,'x,y x,y…']
 //       | [t,'calque',nom,idRépétition,0|1]], cartes:[{id,aMs,dureeMs,texte}]}
 //       nom : 'trajectoire' ou l'un des SEG_POSE_ANGLES.
+//       epingles:[{id,aMs,art,val}] : un angle figé sur une image de la vidéo.
+//       st:[{t,x}] : les sous-titres, datés sur l'horloge de la session.
 //
 // ⚠ DANS LE DOSSIER DE L'ATHLÈTE, pour la même raison que la trajectoire (voir
 // segBarreValide) — et BORNÉE pour la même raison : 3 minutes, 600 gestes,
@@ -82077,7 +82079,12 @@ function enregistrerSegmentsVideo(email,videoId,segments){
 // VALIDÉE ENTIÈRE, OU REFUSÉE ENTIÈRE. Une séquence dont un geste est illisible
 // ne se rejoue pas « à peu près » : un seek manquant décale tout ce qui suit.
 const CORR_DUREE_MAX_MS=180000, CORR_EV_MAX=600, CORR_TRAITS_MAX=60, CORR_POINTS_MAX=40,
-  CORR_CARTES_MAX=20, CORR_CARTE_MAX=140, CORR_TAILLE_MAX=40000;
+  CORR_CARTES_MAX=20, CORR_CARTE_MAX=140, CORR_TAILLE_MAX=40000,
+  // LES ÉPINGLES et LES SOUS-TITRES, ajoutés au même plafond de 40 ko : une
+  // correction entière part dans l'enregistrement complet de l'athlète à
+  // chaque sauvegarde. Quatre-vingts lignes de quatre-vingt-dix signes
+  // couvrent trois minutes de parole ; au-delà, ce n'est plus une correction.
+  CORR_EPINGLES_MAX=20, CORR_ST_MAX=80, CORR_ST_CHARS=90;
 const CORR_COULEURS=3;
 function motionCorrectionValide(m){
   if(!m||typeof m!=='object'||m.v!==1) return null;
@@ -82132,8 +82139,38 @@ function motionCorrectionValide(m){
     const cid=String(c.id==null?'':c.id).slice(0,40);
     return (texte&&aMs!==null&&d!==null&&cid)?{id:cid,aMs:Math.round(aMs),dureeMs:Math.round(d),texte}:null;
   }).filter(Boolean).sort((a,b)=>a.aMs-b.aMs).slice(0,CORR_CARTES_MAX);
-  const out={v:1,id,creeLe:Math.round(num(m.creeLe,0,1e14)||0),envoyeLe:Math.round(num(m.envoyeLe,0,1e14)||0),
-    dureeMs:Math.round(dureeMs),voix,debut,ev,cartes};
+  // LES ÉPINGLES : un angle connu, un instant de la vidéo, une valeur entre 0
+  // et 180 degrés. La valeur est celle que le coach a VUE : on la reprend
+  // telle quelle, sans la recalculer sur des articulations qui ont pu être
+  // refaites depuis.
+  const epingles=_tabBloc(m.epingles).map(p=>{
+    if(!p||typeof p!=='object') return null;
+    const art=String(p.art==null?'':p.art);
+    const aMs=num(p.aMs,0,86400000), val=num(p.val,0,180);
+    const pid=String(p.id==null?'':p.id).slice(0,40);
+    return (SEG_POSE_ANGLES.includes(art)&&aMs!==null&&val!==null&&pid)
+      ?{id:pid,aMs:Math.round(aMs),art,val:Math.round(val*10)/10}:null;
+  }).filter(Boolean).sort((a,b)=>a.aMs-b.aMs).slice(0,CORR_EPINGLES_MAX);
+  // LES SOUS-TITRES sont datés sur l'horloge de la SESSION, comme les gestes :
+  // c'est la voix qu'ils accompagnent, pas l'image.
+  const st=_tabBloc(m.st).map(x=>{
+    if(!x||typeof x!=='object') return null;
+    const texte=String(x.x==null?'':x.x).trim().slice(0,CORR_ST_CHARS);
+    const t=num(x.t,0,CORR_DUREE_MAX_MS);
+    return (texte&&t!==null)?{t:Math.round(t),x:texte}:null;
+  }).filter(Boolean).sort((a,b)=>a.t-b.t).slice(0,CORR_ST_MAX);
+  let out={v:1,id,creeLe:Math.round(num(m.creeLe,0,1e14)||0),envoyeLe:Math.round(num(m.envoyeLe,0,1e14)||0),
+    dureeMs:Math.round(dureeMs),voix,debut,ev,cartes,epingles,st};
+  // ⚠ LE PLAFOND NE DOIT PAS ÊTRE UNE SURPRISE À L'ENVOI. Tout au maximum —
+  // six cents gestes, vingt cartes pleines, vingt épingles et trois minutes
+  // de parole — dépasse les quarante kilo-octets, et refuser le tout ferait
+  // perdre au coach une correction qu'il vient d'enregistrer. Quelque chose
+  // tombe donc : les sous-titres d'abord, qui sont un confort que la voix
+  // elle-même porte déjà ; les épingles ensuite, posées à la main mais
+  // lisibles à l'écran. Le journal et les cartes SONT la correction : s'ils
+  // ne tiennent pas, rien ne tient, et là on refuse.
+  if(JSON.stringify(out).length>CORR_TAILLE_MAX) out={...out,st:[]};
+  if(JSON.stringify(out).length>CORR_TAILLE_MAX) out={...out,epingles:[]};
   return JSON.stringify(out).length<=CORR_TAILLE_MAX?out:null;
 }
 // L'ENVOI. Le chemin de la correction écrite : le dossier de l'athlète, la même
