@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1270';
+window.RC_BUILD='1271';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -62086,6 +62086,43 @@ function _cellEcartMensuration(bilans,cle){
   }
   return null;                        // mesure non bilaterale : rien a dire
 }
+// ══ R33 — CE QUE L'ONGLET MASSE GRASSE DIT QUAND IL N'A PAS DE CHIFFRE ══════
+//
+// L'ecart entre deux bilans sous le bruit : la formule US Navy a une marge de
+// 3 a 4 points, un point d'ecart ne dit rien. Au plus un point : « stable ».
+// SEUL L'ECART EST CONCERNE : chaque valeur de bilan reste affichee telle quelle.
+const MG_BRUIT_POINTS=1.0;
+function ecartMasseGrasse(diff){
+  if(diff==null||!isFinite(diff)) return null;
+  if(Math.abs(diff)<=MG_BRUIT_POINTS) return 'stable';
+  return (diff>0?'+':'')+diff+'%';
+}
+// PURE. Pourquoi calcBF rend null pour ce bilan, dit comme on le dit dans
+// l'onglet Mensurations : ce qui manque, et quand le reprendre. Null quand le
+// bilan a tout ce qu'il faut. La taille manquante a son propre message, plus
+// haut dans la carte : elle ne se releve pas au bilan, elle se saisit ici.
+function messageMesuresMasseGrasse(b,female){
+  if(!b) return null;
+  const manque=[];
+  if(getBM(b,'waist')==null) manque.push('ton tour de taille');
+  if(getBM(b,'neck')==null) manque.push('ton tour de cou');
+  if(female&&getBM(b,'hips')==null) manque.push('ton tour de hanches');
+  if(manque.length){
+    const liste=manque.length===1?manque[0]
+      :manque.slice(0,-1).join(', ')+' et '+manque[manque.length-1];
+    return 'Il manque '+liste+' pour estimer ta masse grasse. Relève-'
+      +(manque.length>1?'les':'le')+' au prochain bilan.';
+  }
+  // Toutes les mesures, et pourtant pas de chiffre : chez l'homme, la formule
+  // prend le logarithme de (taille − cou), impossible si le cou est plus grand.
+  if(!female){
+    const w=getBM(b,'waist'), n=getBM(b,'neck');
+    if(w!=null&&n!=null&&w<=n)
+      return 'Ton tour de taille ('+String(w).replace('.',',')+' cm) n’est pas plus grand que ton tour de cou ('
+        +String(n).replace('.',',')+' cm) : la masse grasse ne peut pas être estimée. Vérifie ces deux mesures au prochain bilan.';
+  }
+  return null;
+}
 function calcBF(waist,neck,hips,height,gender){
   // Formule US Navy (mesures en cm)
   if(!waist||!neck||!height) return null;
@@ -63982,9 +64019,22 @@ function showProgressTab(tab,btn,sansMemo){
     const valid=bfPcts.filter(v=>v!==null);
     const fb=valid[0]??null,lb=valid[valid.length-1]??null;
     const diff=fb!==null&&lb!==null?parseFloat((lb-fb).toFixed(1)):null;
-    const col=diff!==null?(diff<=0?'var(--green)':'var(--red)'):'var(--sub)';
+    // R33 — l'ecart sous le bruit se dit « stable », en gris : ni vert ni rouge
+    // pour un mouvement que la formule ne sait pas distinguer de sa marge.
+    const ecartLib=ecartMasseGrasse(diff);
+    const col=(diff===null||ecartLib==='stable')?'var(--sub)':(diff<=0?'var(--green)':'var(--red)');
     const missingHeight=!storedH;
-    const missingMeas=!missingHeight&&bl.some(b=>getBM(b,'neck')===null||getBM(b,'waist')===null||(female&&getBM(b,'hips')===null));
+    // R33 — LE MESSAGE NOMME CE QUI MANQUE, au DERNIER bilan : c'est lui qui
+    // decide s'il y a un chiffre « actuel ». Les bilans plus anciens sans
+    // estimation sont cites a part, en une ligne.
+    const _der=bl[bl.length-1];
+    const msgMesures=(!missingHeight&&bfPcts[bl.length-1]===null)?messageMesuresMasseGrasse(_der,female):null;
+    const _ancSans=missingHeight?[]:bl.slice(0,-1).map((b,i)=>bfPcts[i]===null?String(i+1):null).filter(Boolean);
+    const msgAnciens=_ancSans.length
+      ?'Pas d’estimation '+(_ancSans.length===1?'au bilan '+_ancSans[0]
+        :'aux bilans '+_ancSans.slice(0,-1).join(', ')+' et '+_ancSans[_ancSans.length-1])
+        +' : une mesure y manquait.'
+      :null;
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';
@@ -64017,12 +64067,14 @@ function showProgressTab(tab,btn,sansMemo){
           </div>
           <button class="btn btn-red btn-sm" onclick="refreshMG()" style="height:40px;padding:0 16px;align-self:flex-end;letter-spacing:1px">Enregistrer</button>
         </div>
-        ${missingHeight?`<div style="margin-top:10px;padding:8px 10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--warning);line-height:1.5">⚠ Renseigne ta taille ci-dessus pour calculer ta masse grasse.</div>`:missingMeas?`<div style="margin-top:10px;padding:8px 10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--warning);line-height:1.5">⚠ Certains bilans manquent : <strong>Tour de Cou</strong>${female?' + <strong>Tour de Hanche</strong>':''} + <strong>Tour de Taille</strong>. Renseigne ces mesures dans ton prochain bilan.</div>`:''}
+        ${missingHeight?`<div style="margin-top:10px;padding:8px 10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--warning);line-height:1.5">⚠ Renseigne ta taille ci-dessus pour calculer ta masse grasse.</div>`:''}
+        ${msgMesures?`<div class="mg-manque" style="margin-top:10px;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">${escapeHtml(msgMesures)}</div>`:''}
+        ${msgAnciens?`<div class="mg-anciens" style="margin-top:8px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5">${escapeHtml(msgAnciens)}</div>`:''}
       </div>
       <div style="display:flex;gap:8px;margin-bottom:14px">
         <div class="metric-box"><div class="metric-val">${fb!==null?fb+'%':'—'}</div><div class="metric-label">MG départ</div></div>
         <div class="metric-box"><div class="metric-val">${lb!==null?lb+'%':'—'}</div><div class="metric-label">MG actuel</div><span class="metric-i">${rcInfo('masse_grasse')}</span></div>
-        <div class="metric-box"><div class="metric-val" style="color:${col}">${diff!==null?(diff>0?'+':'')+diff+'%':'—'}</div><div class="metric-label">Évolution</div></div>
+        <div class="metric-box"><div class="metric-val" style="color:${col}">${ecartLib!==null?ecartLib:'—'}</div><div class="metric-label">Évolution</div></div>
       </div>
       <!-- R11 — LA NOTE DE METHODE PERMANENTE A ETE RETIREE (Kevin,
            17/09/2026). Elle nommait la formule US Navy, sa marge de 3 a 4

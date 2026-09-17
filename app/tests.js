@@ -40563,6 +40563,92 @@ async function testExercices(){
       }
     });
 
+    // ══ 17/09/2026 — R33 : L'ONGLET MASSE GRASSE, SON BRUIT ET SES MANQUES ══
+
+    const _r33J=864e5;
+    const _r33Ath=(sexe,bilans)=>({id:'r33',email:'r33@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},videos:[],
+      programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:sexe==='F'?'femme':'homme',_evol_gender:sexe,_evol_height:sexe==='F'?168:178,
+      sessions:[],bilans:bilans.map(([j,m])=>{ const b={type:'coaching',date:Date.now()-j*_r33J};
+        for(const k in m) b['bil-'+k]=String(m[k]); return b; })});
+    // Rend l'onglet pour un athlète de test et rend la main intacte.
+    const _r33Onglet=(u,f)=>{
+      const pc=document.getElementById('progress-content');
+      if(!pc) return _echec('#progress-content absent');
+      const sU=currentUser, sv=pc.innerHTML;
+      try{ currentUser=u; showProgressTab('masseGrasse',null); return f(pc); }
+      finally{ currentUser=sU; pc.innerHTML=sv; }
+    };
+    const _r33Tuiles=pc=>[...pc.querySelectorAll('.metric-box')].slice(0,3).map(t=>(t.querySelector('.metric-val')||{}).textContent.trim());
+
+    ok('R33 — l’écart de masse grasse : « stable » jusqu’à 1,0 point inclus, signé au-delà',(()=>{
+      if(MG_BRUIT_POINTS!==1) return _echec('seuil : '+MG_BRUIT_POINTS);
+      const r=[1.0,-1.0,0,0.4,1.1,-2.3,null].map(ecartMasseGrasse).join('|');
+      if(r!=='stable|stable|stable|stable|+1.1%|-2.3%|') return _echec('écarts : '+r);
+      return true;})());
+
+    ok('R33 — l’onglet : « stable » en gris sur la seule tuile Évolution, chaque bilan garde sa valeur brute',(()=>
+      _r33Onglet(_r33Ath('H',[[30,{weight:80,waist:85,neck:38}],[1,{weight:80,waist:86,neck:38}]]),pc=>{
+        const t=_r33Tuiles(pc).join('|');
+        if(t!=='16.4%|17.2%|stable') return _echec('tuiles : '+t);
+        const col=pc.querySelectorAll('.metric-box')[2].querySelector('.metric-val').getAttribute('style')||'';
+        if(col.indexOf('var(--sub)')<0) return _echec('« stable » colorié : '+col);
+        const txt=pc.textContent;
+        if(txt.indexOf('16.4%')<0||txt.indexOf('17.2%')<0) return _echec('les valeurs brutes ont disparu');
+        // Le ⓘ est à côté du pourcentage affiché.
+        const i=[...pc.querySelectorAll('.rc-i')].filter(b=>/masse_grasse/.test(b.getAttribute('onclick')||''));
+        if(i.length!==1||!/MG actuel/.test((i[0].closest('.metric-box')||{}).textContent||'')) return _echec('le ⓘ masse_grasse n’est pas sur « MG actuel »');
+        if(pc.querySelector('.mg-manque')||pc.querySelector('.mg-anciens')) return _echec('un manque signalé sur des bilans complets');
+        // Au-delà du seuil, l'écart reste signé et coloré.
+        return _r33Onglet(_r33Ath('H',[[30,{waist:84,neck:38}],[1,{waist:87,neck:38}]]),p2=>{
+          const t2=_r33Tuiles(p2).join('|');
+          if(t2!=='15.7%|18%|+2.3%') return _echec('écart : '+t2);
+          if((p2.querySelectorAll('.metric-box')[2].querySelector('.metric-val').getAttribute('style')||'').indexOf('var(--red)')<0) return _echec('écart non coloré');
+          return true;});})));
+
+    ok('R33 — une mesure jamais relevée : un message qui la nomme, pas un vide',(()=>
+      _r33Onglet(_r33Ath('H',[[30,{weight:80,waist:85}],[1,{weight:80,waist:86}]]),pc=>{
+        const m=pc.querySelector('.mg-manque');
+        if(!m) return _echec('aucun message');
+        if(m.textContent!=='Il manque ton tour de cou pour estimer ta masse grasse. Relève-le au prochain bilan.') return _echec('message : '+m.textContent);
+        if(/⚠|Certains bilans/.test(pc.textContent)) return _echec('l’ancien avertissement est encore là');
+        if(_r33Tuiles(pc).join('|')!=='—|—|—') return _echec('tuiles : '+_r33Tuiles(pc).join('|'));
+        // Chez une femme, les hanches ; la taille manquante garde son propre message.
+        return _r33Onglet(_r33Ath('F',[[1,{waist:72,neck:32}]]),p2=>{
+          const m2=(p2.querySelector('.mg-manque')||{}).textContent;
+          if(m2!=='Il manque ton tour de hanches pour estimer ta masse grasse. Relève-le au prochain bilan.') return _echec('femme : '+m2);
+          const u=_r33Ath('H',[[1,{waist:85}]]); u._evol_height=null;
+          return _r33Onglet(u,p3=>{
+            if(p3.querySelector('.mg-manque')) return _echec('le message des mesures double celui de la taille');
+            return /Renseigne ta taille/.test(p3.textContent)?true:_echec('le message de la taille a disparu');});});})));
+
+    ok('R33 — un ancien bilan sans estimation est cité, le dernier complet n’a pas de message',(()=>
+      _r33Onglet(_r33Ath('F',[[100,{waist:74,neck:32}],[80,{waist:73,neck:32,hips:99}],[1,{waist:72,neck:32,hips:98}]]),pc=>{
+        if(pc.querySelector('.mg-manque')) return _echec('message sur un dernier bilan complet');
+        const a=(pc.querySelector('.mg-anciens')||{}).textContent;
+        if(a!=='Pas d’estimation au bilan 1 : une mesure y manquait.') return _echec('anciens : '+a);
+        return true;})));
+
+    ok('R33 — messageMesuresMasseGrasse : chaque manque nommé, les hanches chez la femme seulement',(()=>{
+      const b=m=>{ const o={type:'coaching',date:Date.now()}; for(const k in m) o['bil-'+k]=String(m[k]); return o; };
+      const cas=[
+        [b({waist:85}),false,'Il manque ton tour de cou pour estimer ta masse grasse. Relève-le au prochain bilan.'],
+        [b({waist:85,neck:38}),false,null],
+        [b({waist:72,neck:32}),true,'Il manque ton tour de hanches pour estimer ta masse grasse. Relève-le au prochain bilan.'],
+        [b({waist:72}),true,'Il manque ton tour de cou et ton tour de hanches pour estimer ta masse grasse. Relève-les au prochain bilan.'],
+        [b({}),true,'Il manque ton tour de taille, ton tour de cou et ton tour de hanches pour estimer ta masse grasse. Relève-les au prochain bilan.'],
+        [b({waist:38,neck:38.5}),false,'Ton tour de taille (38 cm) n’est pas plus grand que ton tour de cou (38,5 cm) : la masse grasse ne peut pas être estimée. Vérifie ces deux mesures au prochain bilan.'],
+        [b({waist:72,neck:32,hips:98}),true,null]];
+      for(const [bil,f,att] of cas){ const r=messageMesuresMasseGrasse(bil,f);
+        if(r!==att) return _echec('attendu « '+att+' », reçu « '+r+' »'); }
+      return true;})());
+
+    ok('R33 — calcBF inchangée : mêmes chiffres, mêmes bornes, homme et femme distincts',(()=>{
+      const r=[calcBF(85,38,null,178,'H'),calcBF(72,32,98,168,'F'),calcBF(40,38,null,200,'H'),calcBF(160,30,null,150,'H'),
+        calcBF(38,38,null,178,'H'),calcBF(72,32,null,168,'F'),calcBF(85,null,null,178,'H'),calcBF(85,38,null,0,'H')].join('|');
+      if(r!=='16.4|26.6|2|60||||') return _echec('calcBF : '+r);
+      if(/MG_BRUIT|ecartMasseGrasse/.test(String(calcBF))) return _echec('le seuil est entré dans la formule');
+      return true;})());
+
     // ══ 17/09/2026 — R31 : UN VERBE PAR ACTE, LA CASSE, LE TUTOIEMENT ══════
 
     // L'inventaire des libellés de boutons écrits dans le source, comme celui
