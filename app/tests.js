@@ -19973,34 +19973,44 @@ async function testExercices(){
         return _echec('la vitrine se déclare vide alors qu’elle vend');
       return /Mes programmes/.test(h)?true:_echec('le bloc n’est pas rendu');})());
 
-    ok('Les bannières promo ont QUITTÉ l’accueil pour la vitrine',(()=>{
+    // R34 — les bannieres sont revenues en bas de l'accueil (Kevin, 17/09/2026).
+    ok('R34 — Les bannières promo sont revenues en bas de l’accueil, la vitrine n’en porte plus',(()=>{
       // UN SEUL CONTENEUR DANS TOUTE L'APPLICATION. Deux auraient affiche les
       // memes bannieres a deux endroits, et le premier trouve aurait decide.
-      if(document.getElementById('clh-promo-banners'))
-        return _echec('le conteneur d’accueil existe toujours');
+      const el=document.getElementById('clh-promo-banners');
+      if(!el||!document.getElementById('s-client-home').contains(el)) return _echec('le conteneur n’est pas sur l’accueil');
+      if(document.querySelectorAll('[id$="promo-banners"]').length!==1) return _echec('plus d’un conteneur de bannières');
+      // EN BAS : le dernier bloc de l'accueil, sous la carte Nutrition.
+      if(el.parentElement.lastElementChild!==el||(el.previousElementSibling||{}).id!=='clh-nut-card') return _echec('le conteneur n’est pas en bas de l’accueil, sous la Nutrition');
       const s=String(_renderPromoBanners);
-      if(s.indexOf('vit-promo-banners')<0) return _echec('_renderPromoBanners ne vise pas la vitrine');
-      if(s.indexOf('clh-promo-banners')>=0) return _echec('_renderPromoBanners vise encore l’accueil');
-      const h=_htmlVitrineCoach({fname:'K',bio:'ma bio'});
-      if(h.indexOf('vit-promo-banners')<0) return _echec('la vitrine n’émet pas le conteneur');
-      // EN BAS, et pas au milieu : c'est la demande, et c'est ce qui evite
-      // qu'une promotion coupe la lecture de la presentation.
-      return (h.indexOf('vit-promo-banners')>h.indexOf('Qui je suis'))
-        ?true:_echec('le conteneur est au-dessus de la présentation');})());
+      if(s.indexOf('clh-promo-banners')<0||s.indexOf('vit-promo-banners')>=0) return _echec('_renderPromoBanners ne vise pas l’accueil');
+      if(String(loadClientHome).indexOf('_renderPromoBanners(coachUser)')<0) return _echec('l’accueil ne rend pas les bannières du coach');
+      if(/promo-banners/.test(_htmlVitrineCoach({fname:'K',bio:'ma bio'}))) return _echec('la vitrine émet encore un conteneur');
+      if(/_renderPromoBanners/.test(String(ouvrirVitrineCoach)+String(apercuVitrineCoach))) return _echec('la vitrine rend encore les bannières');
+      // LE RENDU : une image par bannière qui en a une, son lien, et rien sans bannière.
+      const sv=el.innerHTML, sd=el.style.display;
+      try{
+        _renderPromoBanners({promoBanners:[{imageUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACw=',linkUrl:'https://example.com/promo'},{imageUrl:'',linkUrl:'https://x.fr'}]});
+        if(el.style.display!=='block'||el.querySelectorAll('img').length!==1) return _echec('rendu : '+el.innerHTML.slice(0,160));
+        if(!/example\.com\/promo/.test((el.querySelector('a')||{}).href||'')) return _echec('le lien de la bannière est perdu');
+        _renderPromoBanners(null);
+        if(el.style.display!=='none') return _echec('sans bannière, le conteneur reste affiché');
+      } finally { el.innerHTML=sv; el.style.display=sd; }
+      return true;})());
 
-    ok('La vitrine transporte bien les deux champs qu’elle dessine',(()=>{
-      // promoBanners et vitrineProgrammes doivent figurer dans les DEUX listes
-      // de champs d'ouvrirVitrineCoach — celle de l'ouverture et celle du
-      // rafraichissement. Absents de l'une, la vitrine s'affiche sans eux au
-      // premier rendu ; absents de l'autre, ils disparaissent quand le cloud
-      // repond. Les deux pannes sont muettes.
+    ok('La vitrine transporte bien le champ qu’elle dessine',(()=>{
+      // vitrineProgrammes doit figurer dans les DEUX listes de champs
+      // d'ouvrirVitrineCoach — celle de l'ouverture et celle du
+      // rafraichissement. Absent de l'une, la vitrine s'affiche sans lui au
+      // premier rendu ; absent de l'autre, il disparait quand le cloud repond.
+      // Les deux pannes sont muettes. R34 — promoBanners n'y est plus : les
+      // bannieres sont sur l'accueil.
       const s=String(ouvrirVitrineCoach);
       const listes=s.split('\'diplomes\'').length-1;
       if(listes<2) return _echec('moins de deux listes de champs : '+listes);
       const n=(t)=>s.split(t).length-1;
       if(n('\'vitrineProgrammes\'')<2) return _echec('vitrineProgrammes : '+n('\'vitrineProgrammes\'')+' occurrence(s)');
-      if(n('\'promoBanners\'')<2) return _echec('promoBanners : '+n('\'promoBanners\'')+' occurrence(s)');
-      return /_renderPromoBanners/.test(s)?true:_echec('les bannières ne sont jamais rendues');})());
+      return n('\'promoBanners\'')===0?true:_echec('la vitrine lit encore promoBanners');})());
 
     ok('La liste publiée se recalcule à la publication, jamais avant',(()=>{
       // Champ DERIVE : le poser a la main sur chacun des chemins qui publient
@@ -39004,15 +39014,16 @@ async function testExercices(){
       const sU=currentUser;
       const actif=()=>(document.querySelector('.screen.active')||{}).id;
       const sv=[...document.querySelectorAll('.screen.active')];
-      // R19 — openBilanChoice aiguille : un compte neuf va droit au questionnaire
-      // de départ. Le brouillon de l'appareil est mis de côté le temps du geste.
+      // R34 — openBilanChoice mène de nouveau à « QUEL BILAN ? », qui propose le
+      // départ à un compte neuf. Le brouillon de l'appareil est mis de côté le
+      // temps du geste.
       const svDraft=localStorage.getItem(BIL_DRAFT_KEY);
       try{
         localStorage.removeItem(BIL_DRAFT_KEY);
         currentUser=_r13Neuf();
         await openBilanChoice();
-        if(actif()!=='s-bilan') return _echec('openBilanChoice mène à '+actif());
-        if(bilType!=='depart') return _echec('le compte neuf ouvre un bilan '+bilType);
+        if(actif()!=='s-bilan-choice') return _echec('openBilanChoice mène à '+actif());
+        if(document.getElementById('bilan-choice-first').style.display!=='block') return _echec('le compte neuf ne se voit pas proposer le bilan de départ');
         loadSessionManager();
         if(actif()!=='s-session-manager') return _echec('loadSessionManager mène à '+actif());
         ouvrirPeseeAccueil();
@@ -39195,8 +39206,8 @@ async function testExercices(){
            ||(b[1].getAttribute('onclick')||'').indexOf('stepsToggleType(\'off\')')<0)
           return _echec('les valeurs enregistrées ont changé');
         // L'HISTORIQUE porte les mêmes mots.
-        const h=d.querySelector('details.hist-repli'); if(h) h.open=true;
-        const badges=[...d.querySelectorAll('details.hist-repli span')].map(s=>s.textContent).filter(x=>/^(Entraînement|Repos)$/.test(x));
+        // R34 — l'historique n'est plus replié.
+        const badges=[...d.querySelectorAll('.hist-bloc span')].map(s=>s.textContent).filter(x=>/^(Entraînement|Repos)$/.test(x));
         if(badges.length!==4) return _echec(badges.length+' badges d’historique sur 4');
         // Et les objectifs enregistrés sont intacts.
         return currentUser.stepsGoals.on===10000&&currentUser.stepsGoals.off===7000?true:_echec('objectifs modifiés');
@@ -39481,24 +39492,31 @@ async function testExercices(){
         return _premierNeatInfo('sans le mot')==='sans le mot'?true:_echec('un texte sans NEAT est modifié');
       } finally { currentUser=sU; }})());
 
-    ok('R10 — Accueil : ⓘ sur le badge de semaines et sur la diète respectée',(()=>{
-      const ii=document.getElementById('clh-streak-i'), m3=document.getElementById('clh-m3-i');
-      if(!ii||!m3) return _echec('les emplacements des ⓘ n’existent pas dans l’accueil');
-      const sU=currentUser, s1=ii.innerHTML, s2=m3.innerHTML;
+    // R34 — les deux ⓘ de l'accueil (R10) sont retires : le badge et la tuile
+    // ouvrent eux-memes leur fiche (Kevin, 17/09/2026).
+    ok('R34 — Accueil : le badge de semaines et la tuile de la diète ouvrent leur fiche, sans ⓘ',(()=>{
+      if(document.getElementById('clh-streak-i')||document.getElementById('clh-m3-i')) return _echec('un emplacement de ⓘ est encore dans l’accueil');
+      const badge=document.getElementById('clh-streak'), tuile=document.getElementById('clh-m3').closest('.metric-box');
+      if(_r10Cle(badge)!=='assiduite'||badge.getAttribute('role')!=='button'||badge.tabIndex!==0) return _echec('le badge n’ouvre pas la fiche « assiduite »');
+      if(_r10Cle(tuile)!=='score_diete'||tuile.getAttribute('role')!=='button'||tuile.tabIndex!==0) return _echec('la tuile n’ouvre pas la fiche « score_diete »');
+      const sU=currentUser, svLbl=badge.getAttribute('aria-label');
       try{
-        ii.innerHTML=''; m3.innerHTML='';
         currentUser=_r10Ath();
         _rendreStreak(currentUser,6); _majMetriquesAccueil(currentUser);
-        if(_r10Cle(ii.querySelector('.rc-i'))!=='assiduite') return _echec('pas de ⓘ « assiduite » à côté du badge');
-        // Hors du cadre mesuré au pixel, pas dedans.
-        if(document.getElementById('clh-streak').contains(ii)) return _echec('le ⓘ est dans le cadre du badge');
-        if(_r10Cle(m3.querySelector('.rc-i'))!=='score_diete') return _echec('pas de ⓘ « score_diete » sur la tuile');
-        if(m3.closest('.metric-box')!==document.getElementById('clh-m3').closest('.metric-box'))
-          return _echec('le ⓘ de la diète n’est pas dans sa tuile');
         const n=document.querySelectorAll('#s-client-home .rc-i').length;
-        return n<=3?true:_echec(n+' ⓘ sur l’accueil');
+        if(n) return _echec(n+' ⓘ sur l’accueil');
+        if(badge.getAttribute('aria-label')!=='6 semaines d’assiduité. Voir ce qui est compté') return _echec('nom du badge : « '+badge.getAttribute('aria-label')+' »');
+        // LE VRAI GESTE : le doigt sur le badge, la touche Entrée sur la tuile.
+        const titre=()=>{ const z=document.getElementById('rc-lexique'); return z&&z.style.display==='flex'?(document.getElementById('rc-lexique-titre')||{}).textContent:null; };
+        badge.click();
+        if(titre()!==RC_LEXIQUE.assiduite.t) return _echec('le badge ouvre « '+titre()+' »');
+        rcInfoFermer(true);
+        tuile.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+        if(titre()!==RC_LEXIQUE.score_diete.t) return _echec('la tuile ouvre « '+titre()+' »');
+        return true;
       } finally {
-        currentUser=sU; ii.innerHTML=s1; m3.innerHTML=s2;
+        try{ rcInfoFermer(true); }catch(e){}
+        currentUser=sU; if(svLbl===null) badge.removeAttribute('aria-label'); else badge.setAttribute('aria-label',svLbl);
         try{ if(sU&&sU.role!=='coach'){ _rendreStreak(sU,streakSemaines(sU)); _majMetriquesAccueil(sU); } }catch(e){}
       }})());
 
@@ -40324,66 +40342,93 @@ async function testExercices(){
 
     // ══ 17/09/2026 — R19 : « REMPLIR MON BILAN » EST UN AIGUILLAGE ═════════
     //
-    // L'écran « QUEL BILAN ? » s'intercalait entre chaque geste et le bilan,
-    // alors qu'un seul des deux était proposable dans presque tous les cas.
+    // R34 — L'AIGUILLAGE EST RETIRE (Kevin, 17/09/2026) : l'onglet Bilan ouvre
+    // de nouveau « QUEL BILAN ? », avec le bilan de depart tant qu'il manque,
+    // le bilan coaching, sa frequence et le compte a rebours. Les trois
+    // assertions de R19 sont remplacees par celles-ci.
 
-    ok('R19 — l’aiguillage : départ, coaching, ou choix quand les deux sont légitimes',(()=>{
-      const D=(type,n)=>({bilType:type,bilStep:1,bilData:n?{a:'x',b:'y'}:{},ts:Date.now()});
-      const cas=[
-        ['compte neuf',{bilans:[]},null,'depart'],
-        ['départ fait',{bilans:[{type:'depart'}]},null,'coaching'],
-        ['départ fait, suivi en route',{bilans:[{type:'depart'},{type:'coaching'}]},null,'coaching'],
-        ['départ reporté',{bilans:[],_firstBilanPending:true},null,'choix'],
-        ['coachings sans départ',{bilans:[{type:'coaching'}]},null,'choix'],
-        ['bilan ancien sans type, sans départ',{bilans:[{date:1}]},null,'choix'],
-        // ⚠ LE RISQUE DU LOT : un bilan coaching commencé, sans départ. Aiguillé
-        // vers le départ, openBilan aurait proposé d'EFFACER le brouillon.
-        ['brouillon coaching, sans départ',{bilans:[]},D('coaching',2),'coaching'],
-        ['brouillon départ, départ reporté',{bilans:[],_firstBilanPending:true},D('depart',2),'depart'],
-        ['brouillon vide : ignoré',{bilans:[]},D('coaching',0),'depart'],
-        ['brouillon de type inconnu : ignoré',{bilans:[{type:'depart'}]},D('autre',2),'coaching']];
-      for(const [nom,u,d,att] of cas){
-        const v=_bilanAiguillage(u,d);
-        if(v!==att) return _echec(nom+' : '+v+' au lieu de '+att);
-      }
-      // Les appelants ne changent pas : ils passent tous par openBilanChoice.
-      const src=_prodSrc();
-      const allers=(src.match(/go\('s-bilan-choice'\)/g)||[]).length;
-      if(allers!==2) return _echec(allers+' go(\'s-bilan-choice\') au lieu de 2 (openBilanChoice, bilBack)');
-      if(!document.getElementById('s-bilan-choice')) return _echec('l’écran de choix a été supprimé');
-      if(String(bilBack).indexOf('_bilanAiguillage(currentUser,null)')<0) return _echec('bilBack ne revient plus à l’écran de choix quand il sert');
-      return true;})());
+    ok('R34 — l’onglet Bilan ouvre toujours « QUEL BILAN ? », le départ proposé tant qu’il manque',(()=>{
+      if(typeof _bilanAiguillage!=='undefined') return _echec('l’aiguillage de R19 est encore là');
+      const choix=document.getElementById('s-bilan-choice');
+      if(!choix) return _echec('l’écran de choix a disparu');
+      const sU=currentUser, svDraft=localStorage.getItem(BIL_DRAFT_KEY), svSave=window.saveUser;
+      const actif=()=>(document.querySelector('.screen.active')||{}).id;
+      const sv=[...document.querySelectorAll('.screen.active')];
+      try{
+        window.saveUser=()=>true;
+        const J=864e5;
+        const cas=[
+          ['compte neuf',{bilans:[]},null,'block'],
+          ['départ fait',{bilans:[{type:'depart',date:Date.now()-J}]},null,'none'],
+          ['départ reporté',{bilans:[],_firstBilanPending:true},null,'block'],
+          ['coachings sans départ',{bilans:[{type:'coaching',date:Date.now()-J}]},null,'block'],
+          // Un brouillon ne court-circuite plus l'écran : la reprise se propose
+          // au toucher du bilan concerné (assertion suivante).
+          ['bilan coaching commencé',{bilans:[{type:'depart',date:Date.now()-J}]},{bilType:'coaching',bilStep:2,bilData:{'bil-weight':'80'}},'none']];
+        for(const [nom,o,d,depart] of cas){
+          currentUser=Object.assign(_r13Neuf(),o);
+          if(d) localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify(Object.assign({ts:Date.now(),email:currentUser.email},d)));
+          else localStorage.removeItem(BIL_DRAFT_KEY);
+          openBilanChoice();
+          if(actif()!=='s-bilan-choice') return _echec(nom+' : l’onglet mène à '+actif());
+          const vu=document.getElementById('bilan-choice-first').style.display;
+          if(vu!==depart) return _echec(nom+' : bilan de départ « '+vu+' » au lieu de « '+depart+' »');
+        }
+        // LE BILAN COACHING, SA FREQUENCE ET LE COMPTE A REBOURS, SUR L'ECRAN.
+        if(!choix.querySelector('[onclick="openBilan(\'coaching\')"]')) return _echec('le bilan coaching manque');
+        for(const id of ['bilan-freq-btn-1','bilan-freq-btn-2','bilan-countdown'])
+          if(!choix.contains(document.getElementById(id))) return _echec(id+' n’est pas sur l’écran de choix');
+        for(const id of ['bilan-freq-btn-1','bilan-freq-btn-2'])
+          if(document.getElementById(id).getAttribute('onclick')!=='setBilanFreq('+id.slice(-1)+');event.stopPropagation()') return _echec(id+' n’appelle plus setBilanFreq');
+        // ET PLUS AILLEURS : ni « Mon suivi » dans Réglages, ni ligne en tête d'Évolution.
+        if(document.getElementById('cr-suivi')) return _echec('« Mon suivi » est encore dans Réglages');
+        if(document.getElementById('s-progress').contains(document.getElementById('bilan-countdown'))) return _echec('le compte à rebours est resté dans Évolution');
+        if(/_updateBilanCountdown|_renderBilanChoiceUI/.test(String(loadProgress)+String(ouvrirReglagesAthlete))) return _echec('Évolution ou Réglages peignent encore le suivi');
+        // Tous les chemins vers un bilan passent par openBilanChoice ; l'écran
+        // n'est ouvert que par lui et par la flèche d'un bilan coaching.
+        const allers=(_prodSrc().match(/go\('s-bilan-choice'\)/g)||[]).length;
+        if(allers!==2) return _echec(allers+' go(\'s-bilan-choice\') au lieu de 2 (openBilanChoice, bilBack)');
+        return true;
+      } finally {
+        clearInterval(window._bilanCdInterval); window._bilanCdInterval=null;
+        window.saveUser=svSave;
+        if(svDraft===null) localStorage.removeItem(BIL_DRAFT_KEY); else localStorage.setItem(BIL_DRAFT_KEY,svDraft);
+        currentUser=sU;
+        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+        sv.forEach(s=>s.classList.add('active'));
+      }})());
 
     // ⚠ PAR LE VRAI GESTE, et la question posée est lue mot pour mot.
-    okA('R19 — un bilan commencé est toujours proposé en reprise, jamais en effacement',async()=>{
+    okA('R34 — par l’écran de choix, un bilan commencé est proposé en reprise, et la flèche y ramène',async()=>{
       const sU=currentUser, svDraft=localStorage.getItem(BIL_DRAFT_KEY), svConf=window.rcConfirm;
       const actif=()=>(document.querySelector('.screen.active')||{}).id;
       const sv=[...document.querySelectorAll('.screen.active')];
       const questions=[];
       try{
         window.rcConfirm=(t)=>{ questions.push(String(t)); return Promise.resolve(true); };
-        // 1. Départ fait : le bilan coaching, directement.
-        localStorage.removeItem(BIL_DRAFT_KEY);
         currentUser=Object.assign(_r13Neuf(),{bilans:[{type:'depart',date:Date.now()-864e5}]});
-        await openBilanChoice();
-        if(actif()!=='s-bilan'||bilType!=='coaching') return _echec('départ fait : '+actif()+' / '+bilType);
-        if(questions.length) return _echec('une question sans brouillon : '+questions[0]);
-        // 2. Pas de départ, un bilan COACHING commencé : la reprise.
-        currentUser=_r13Neuf();
         localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({bilType:'coaching',bilStep:2,
           bilData:{'bil-weight':'80','bil-ressenti':'bien'},ts:Date.now(),email:currentUser.email}));
-        await openBilanChoice();
+        openBilanChoice();
+        if(actif()!=='s-bilan-choice') return _echec('écran : '+actif());
+        if(questions.length) return _echec('une question avant le choix : '+questions[0]);
+        document.querySelector('#s-bilan-choice [onclick="openBilan(\'coaching\')"]').click();
+        for(let i=0;i<20&&actif()!=='s-bilan';i++) await new Promise(r=>setTimeout(r,25));
         if(questions.length!==1) return _echec(questions.length+' question(s) : '+questions.join(' | '));
         if(!/^Reprendre ton bilan en cours/.test(questions[0])) return _echec('question posée : « '+questions[0]+' »');
         if(/effacer|l’effacera/i.test(questions[0])) return _echec('la question parle d’effacer');
         if(actif()!=='s-bilan'||bilType!=='coaching') return _echec('reprise : '+actif()+' / '+bilType);
         if(bilStep!==2||bilData['bil-weight']!=='80') return _echec('le brouillon n’est pas repris : étape '+bilStep);
+        // LA FLECHE, A LA PREMIERE ETAPE D'UN BILAN COACHING : retour au choix.
+        bilStep=0; bilBack();
+        if(actif()!=='s-bilan-choice') return _echec('la flèche mène à '+actif());
         return true;
       } finally {
         window.rcConfirm=svConf;
         // renderBilStep a programmé une écriture du brouillon à 400 ms : elle
         // tomberait après la restauration, sous un autre compte.
         clearTimeout(_bilDraftTimer); _bilDraftTimer=null;
+        clearInterval(window._bilanCdInterval); window._bilanCdInterval=null;
         if(svDraft===null) localStorage.removeItem(BIL_DRAFT_KEY); else localStorage.setItem(BIL_DRAFT_KEY,svDraft);
         currentUser=sU;
         document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
@@ -40391,49 +40436,38 @@ async function testExercices(){
       }
     });
 
-    ok('R19 — la fréquence vit dans « Réglages › Mon suivi », le prochain bilan en tête d’Évolution',(()=>{
-      const choix=document.getElementById('s-bilan-choice');
-      const regl=document.getElementById('s-client-reglages');
-      const evo=document.getElementById('s-progress');
-      for(const id of ['bilan-freq-btn-1','bilan-freq-btn-2']){
-        const b=document.getElementById(id);
-        if(!b||!regl.contains(b)) return _echec(id+' n’est pas dans Réglages');
-        if(!b.closest('#cr-suivi')||!/Mon suivi/.test(document.getElementById('cr-suivi').textContent)) return _echec(id+' n’est pas dans « Mon suivi »');
-        if(b.getAttribute('onclick')!=='setBilanFreq('+id.slice(-1)+');event.stopPropagation()') return _echec(id+' n’appelle plus setBilanFreq');
-      }
-      if(choix.querySelector('[id^="bilan-freq-btn"]')) return _echec('la fréquence est restée sur l’écran de choix');
+    ok('R34 — la fréquence et le compte à rebours de l’écran de choix, dans leurs quatre états',(()=>{
       const cd=document.getElementById('bilan-countdown');
-      if(!cd||!evo.contains(cd)||choix.contains(cd)) return _echec('le compte à rebours n’est pas en tête d’Évolution');
-      if(String(loadProgress).indexOf('_updateBilanCountdown()')<0) return _echec('loadProgress ne peint pas le prochain bilan');
-      if(String(ouvrirReglagesAthlete).indexOf('_renderBilanChoiceUI()')<0) return _echec('Réglages ne pose pas l’état des boutons');
-      const sU=currentUser, svSave=window.saveUser;
+      const sU=currentUser, svSave=window.saveUser, svH=cd.innerHTML, svD=cd.style.display;
+      const txt=()=>cd.textContent.replace(/\s+/g,' ').trim();
       try{
         window.saveUser=()=>true;
-        // LE BOUTON ACTIF SUIT LE DOSSIER.
+        // LE BOUTON ACTIF ET LA PHRASE SUIVENT LE DOSSIER.
         currentUser=Object.assign(_r13Neuf(),{_bilanFreq:2});
         setBilanFreq(1);
         if(currentUser._bilanFreq!==1) return _echec('setBilanFreq n’écrit plus');
-        const rouge=getComputedStyle(document.getElementById('bilan-freq-btn-1')).backgroundColor;
-        if(rouge===getComputedStyle(document.getElementById('bilan-freq-btn-2')).backgroundColor) return _echec('le bouton actif ne se distingue pas');
-        // RIEN AVANT LE PREMIER BILAN.
+        if(document.getElementById('bilan-freq-display').textContent!=='Bilan chaque semaine :') return _echec('phrase : '+document.getElementById('bilan-freq-display').textContent);
+        const fond=id=>getComputedStyle(document.getElementById(id)).backgroundColor;
+        if(fond('bilan-freq-btn-1')===fond('bilan-freq-btn-2')) return _echec('le bouton actif ne se distingue pas');
+        // AVANT LE PREMIER BILAN.
         currentUser=_r13Neuf();
         _updateBilanCountdown();
-        if(cd.style.display!=='none'||cd.textContent.trim()) return _echec('une ligne sans aucun bilan');
-        // À VENIR : la date et le délai, sans bouton.
+        if(txt()!=='Après ton 1er bilan, ton prochain rendez-vous apparaîtra ici.') return _echec('sans bilan : « '+txt()+' »');
+        // A VENIR : la date, puis jours, heures et minutes.
         currentUser=Object.assign(_r13Neuf(),{_bilanFreq:2,bilans:[{type:'depart',date:Date.now()}]});
         _updateBilanCountdown();
-        if(!/^Prochain bilan/.test(cd.textContent.trim())||!/dans \d+ (j|h)/.test(cd.textContent)) return _echec('à venir : « '+cd.textContent.trim()+' »');
-        if(cd.querySelector('button')) return _echec('un bouton alors que rien n’est dû');
-        // DÛ : la phrase de retard de l'accueil, et la ligne mène au bilan.
+        const date=getNextBilanSaturday().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+        // Chiffre et unité sont deux blocs côte à côte : leur texte se lit collé.
+        if(!/^Prochain bilan/.test(txt())||txt().indexOf(date)<0||!/\d\dJOURS\d\dHEURES\d\dMIN$/.test(txt())) return _echec('à venir : « '+txt()+' »');
+        // EN RETARD : la phrase dit le vrai retard, pas « aujourd'hui ».
         currentUser=Object.assign(_r13Neuf(),{_bilanFreq:1,bilans:[{type:'depart',date:Date.now()-20*864e5}]});
         _updateBilanCountdown();
-        const b=cd.querySelector('button');
-        if(!b||!/Bilan à remplir/.test(b.textContent)) return _echec('dû : « '+cd.textContent.trim()+' »');
-        const att=_bilTexteRetard(_bilRetardJours(getNextBilanSaturday()));
-        if(!att||b.textContent.indexOf(att)<0) return _echec('le retard ne dit pas « '+att+' » : « '+b.textContent.trim()+' »');
-        if(b.getAttribute('onclick')!=='openBilanChoice()') return _echec('la ligne ne mène pas au bilan');
+        const n=_bilRetardJours(getNextBilanSaturday());
+        const quand=n<=0?'est prévu aujourd’hui':(n===1?'était attendu hier':'est attendu depuis '+n+' jours');
+        // Le titre et la phrase sont deux blocs : leur texte se lit collé.
+        if(txt()!=='C\'est le moment !Ton bilan '+quand+' : complète-le maintenant.') return _echec('en retard ('+n+' j) : « '+txt()+' »');
         return true;
-      } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
+      } finally { window.saveUser=svSave; currentUser=sU; cd.innerHTML=svH; cd.style.display=svD; }})());
 
     // ══ 17/09/2026 — R32 : LA SYNTHÈSE D'ÉVOLUTION, ET L'ÉCRAN APRÈS LE BILAN ══
 
@@ -41024,7 +41058,7 @@ async function testExercices(){
         sleepLog:[0,1,2].map(k=>({date:iso(k),duration:7+k*.5,bed:'23:00',wake:'07:00'}))};
     };
 
-    okA('R28 — Pas : saisie, objectif du jour, semaine, historique, réglages repliés, sur l’écran dédié comme dans Lifestyle',async()=>{
+    okA('R28/R34 — Pas : saisie, objectif du jour, semaine, historique, réglages, sans repli, sur l’écran dédié comme dans Lifestyle',async()=>{
       const sU=currentUser, svD=_stepsDate;
       const PAS=[['bandeau du jour','#steps-date-input'],['marquage du jour','button[onclick="stepsToggleType(\'on\')"]'],
         ['champ','#steps-today-input'],['Enregistrer','button[onclick="saveSteps()"]'],
@@ -41043,12 +41077,11 @@ async function testExercices(){
           if(b.textContent.trim()!=='Enregistrer'||/\bSauver\b/.test(z.textContent)) return _echec(ou+' : bouton « '+b.textContent.trim()+' »');
           // L'import DANS la carte de saisie, sous son bouton.
           if(z.querySelector('input[onchange="importerCaptureStats(this)"]').closest('.card-nut')!==b.closest('.card-nut')) return _echec(ou+' : l’import n’est pas dans la carte de saisie');
-          // Les deux replis, fermés ; les objectifs dans le second.
-          const det=[...z.querySelectorAll('details')];
-          const lib=det.map(d=>d.querySelector('summary').textContent.replace(/[▾\d]|jours?/g,'').trim());
-          if(lib.join('|')!=='Historique|Régler mes objectifs') return _echec(ou+' : replis '+lib.join('|'));
-          if(det.some(d=>d.open)) return _echec(ou+' : un repli s’ouvre tout seul');
-          if(!det[1].querySelector('#steps-goal-on')||!det[1].querySelector('#steps-goal-off')||!det[1].querySelector('button[onclick="saveStepsGoals()"]')) return _echec(ou+' : les objectifs ne sont pas dans leur repli');
+          // R34 — AUCUN REPLI : l'historique et les objectifs sont affichés en entier.
+          if(z.querySelector('details,summary')) return _echec(ou+' : un repli est encore là');
+          if(!z.querySelector('.hist-bloc')||z.querySelector('.hist-bloc').textContent.indexOf('Historique')<0) return _echec(ou+' : l’historique manque');
+          const regl=z.querySelector('.steps-reglages');
+          if(!regl||!regl.querySelector('#steps-goal-on')||!regl.querySelector('#steps-goal-off')||!regl.querySelector('button[onclick="saveStepsGoals()"]')) return _echec(ou+' : les objectifs ne sont pas dans leur carte');
         }
         // Sans import, la phrase part avec lui.
         loadSteps('lifestyle-steps-content',{avecImport:false});
@@ -41058,11 +41091,11 @@ async function testExercices(){
       function g(id){ return document.getElementById(id); }
     });
 
-    okA('R28 — Sommeil : la nuit à saisir d’abord, puis la semaine et l’historique replié, sur les deux rendus',async()=>{
+    okA('R28/R34 — Sommeil : la nuit à saisir d’abord, puis la semaine et l’historique sans repli, sur les deux rendus',async()=>{
       const sU=currentUser, svD=_sleepDate;
       const SOM=[['bandeau du jour','#sleep-date-input'],['coucher','#sleep-bed-input'],['lever','#sleep-wake-input'],
         ['Enregistrer','button[onclick="saveSleep()"]'],['« ou importe »',null,'ou importe une capture d\'écran de ton application de santé'],
-        ['semaine',null,'Cette semaine'],['moyenne',null,'Moyenne hebdomadaire'],['historique','details.hist-repli']];
+        ['semaine',null,'Cette semaine'],['moyenne',null,'Moyenne hebdomadaire'],['historique','.hist-bloc']];
       try{
         currentUser=_r28Compte(); _sleepDate=null;
         for(const [ou,conteneur] of [['écran dédié','sleep-content'],['Lifestyle','lifestyle-sleep-content']]){
@@ -41072,34 +41105,29 @@ async function testExercices(){
           const o=_r28Ordre(z,SOM); if(o) return _echec(ou+' : '+o);
           const b=z.querySelector('button[onclick="saveSleep()"]');
           if(z.querySelector('input[onchange="importerCaptureStats(this)"]').closest('.card-nut')!==b.closest('.card-nut')) return _echec(ou+' : l’import n’est pas dans la carte de la nuit');
-          if(z.querySelector('details.hist-repli').open) return _echec(ou+' : l’historique s’ouvre tout seul');
+          if(z.querySelector('details,summary')) return _echec(ou+' : un repli est encore là');
+          if(z.querySelector('.hist-bloc').textContent.indexOf('Historique')<0) return _echec(ou+' : l’historique n’a plus son titre');
         }
         return true;
       } finally { currentUser=sU; _sleepDate=svD; }
     });
 
-    okA('R28 — Lifestyle : MES PAS et MON SOMMEIL se replient, seule la section du moment est ouverte à l’arrivée',async()=>{
+    // R34 — les replis de R28 sont retires (Kevin, 17/09/2026).
+    okA('R34 — Lifestyle : MES PAS et MON SOMMEIL sont affichés en entier, sans repli',async()=>{
       const sU=currentUser;
       const p=document.getElementById('ls-pas'), s=document.getElementById('ls-sommeil');
       try{
-        if(!p||!s||p.tagName!=='DETAILS'||s.tagName!=='DETAILS') return _echec('les sections ne sont pas repliables');
-        if(!/MES PAS/.test(p.querySelector('summary').textContent)||!/MON SOMMEIL/.test(s.querySelector('summary').textContent)) return _echec('les en-têtes ont changé');
+        if(!p||!s) return _echec('les sections ont disparu');
+        if(document.querySelector('#s-lifestyle details, #s-lifestyle summary')) return _echec('un repli est encore sur Lifestyle');
+        if(!/MES PAS/.test((p.querySelector('.ls-sec-tete')||{}).textContent)||!/MON SOMMEIL/.test((s.querySelector('.ls-sec-tete')||{}).textContent)) return _echec('les en-têtes ont changé');
         if(!p.contains(document.getElementById('lifestyle-steps-content'))||!s.contains(document.getElementById('lifestyle-sleep-content'))) return _echec('le contenu n’est plus dans sa section');
-        // Le barème : la nuit le matin, les pas à partir de midi.
-        const cas=[[0,'sommeil'],[7,'sommeil'],[11,'sommeil'],[12,'pas'],[18,'pas'],[23,'pas']];
-        for(const [h,att] of cas){ const v=lifestyleSectionDuMoment(new Date(2026,0,15,h,59)); if(v!==att) return _echec(h+'h → '+v); }
+        if(typeof lifestyleSectionDuMoment!=='undefined') return _echec('le choix d’une section ouverte à l’arrivée est encore là');
         currentUser=_r28Compte();
-        p.open=true; s.open=true;
         loadLifestyle();
-        const att=lifestyleSectionDuMoment(new Date());
-        if(p.open!==(att==='pas')||s.open!==(att==='sommeil')) return _echec('à l’arrivée : pas '+p.open+', sommeil '+s.open+' (attendu '+att+')');
-        // Les cartes santé sont toujours là : seule leur enveloppe se replie.
-        if(document.querySelectorAll('#s-lifestyle .san-carte').length!==2) return _echec('les cartes santé ont disparu');
-        // UN REPLI CHOISI TIENT AUX RENDUS SUIVANTS.
-        p.open=!p.open; s.open=!s.open;
-        const avant=[p.open,s.open].join();
-        _rerenderLifestyle();
-        if([p.open,s.open].join()!==avant) return _echec('un rendu défait le repli choisi');
+        const cartes=[...document.querySelectorAll('#s-lifestyle .san-carte')];
+        if(cartes.length!==2) return _echec('les cartes santé ont disparu');
+        // LES DEUX SONT DESSINEES à l'arrivée, quelle que soit l'heure.
+        if(cartes.some(c=>!c.getClientRects().length)) return _echec('une carte santé est masquée à l’arrivée');
         return true;
       } finally { currentUser=sU; }
     });
@@ -41201,15 +41229,18 @@ async function testExercices(){
 
     // ══ 17/09/2026 — R26 : « MON APPROCHE », EN BAS DE LA NUTRITION ═══════
 
-    ok('R26 — la ligne du bas remplace le sélecteur, et la feuille dit ce que chaque diète change',(()=>{
+    // R34 — « Mon approche » remonte en tete, en bouton rouge (.banner-hero).
+    ok('R26/R34 — le bouton rouge de tête remplace le sélecteur, et la feuille dit ce que chaque diète change',(()=>{
       const g=id=>document.getElementById(id);
       if(g('nut-diet-select')) return _echec('le <select> de tête est encore là');
       const pad=document.querySelector('#s-nutrition .pad');
       const l=g('nut-approche');
-      if(!l||pad.lastElementChild!==l) return _echec('« Mon approche » n’est pas en bas de l’écran');
+      if(!l||pad.firstElementChild!==l) return _echec('« Mon approche » n’est pas en tête de l’écran');
+      if(l.tagName!=='BUTTON'||l.getAttribute('onclick')!=='ouvrirChoixDiete()') return _echec('« Mon approche » n’est pas un bouton qui ouvre la feuille');
+      if(!l.classList.contains('banner-hero')) return _echec('le bouton ne prend pas le style rouge de .banner-hero');
       if(!/^Mon approche : /.test(l.querySelector('.nut-approche-l').textContent)) return _echec('libellé : « '+l.textContent.trim()+' »');
-      const b=l.querySelector('button');
-      if(!b||b.textContent.trim()!=='Changer'||b.getAttribute('onclick')!=='ouvrirChoixDiete()') return _echec('le bouton « Changer » n’ouvre pas la feuille');
+      if((l.querySelector('.nut-approche-b')||{}).textContent!=='Changer') return _echec('l’indication « Changer » manque');
+      if(pad.querySelectorAll('#nut-approche, .nut-approche').length!==1) return _echec('« Mon approche » est affiché deux fois');
       const _pa=o=>Object.assign({id:'r26',role:'athlete',nutrition:{}},o);
       const lire=u=>{ const d=document.createElement('div'); d.innerHTML=_htmlChoixDiete(u);
         return [...d.querySelectorAll('.dch-opt')].map(x=>({type:x.dataset.diete,off:x.disabled,actif:x.classList.contains('actif'),

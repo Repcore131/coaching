@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1271';
+window.RC_BUILD='1272';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4133,17 +4133,18 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .rc-micro{display:block;font-size:var(--fs-2xs);line-height:13px;color:var(--sub);
   font-weight:400;letter-spacing:0;text-transform:none}
 /* ── R10 — LE ⓘ D'UNE TUILE CHIFFREE, DANS SON COIN ───────────────────────
-   Accueil (« Respect de la diète ») et masse grasse (« MG actuel »).
+   Masse grasse (« MG actuel »). R34 — la tuile « Respect de la diète » de
+   l'accueil n'en porte plus : c'est la tuile entiere qui ouvre sa fiche.
    La tuile offre 84 px utiles, en overflow:hidden et en nowrap : « RESPECT »
    plus un bouton de 32 px n'y tenaient pas, et le libelle aurait ete coupe.
    Le coin haut-droit ne pousse rien. La zone tactile recouvre un bout du
    chiffre, qui ne se touche pas : elle ne vole aucun geste. */
-/* LE ⓘ DU BADGE D'ASSIDUITE. Pose en flux avec ses 32 px, il reprenait au
-   bloc du profil la largeur qui tenait « MON PROFIL » sur une ligne —
-   constate a 359 px, le libelle passait a la ligne. Des marges negatives le
-   ramenent a 14 px d'emprise : le bouton garde ses 32 px, qui debordent sur
-   le vide a gauche et sur le cadre du badge a droite, qui ne se touche pas. */
-#clh-streak-i .rc-i{margin:0 -9px}
+/* R34 — LE BADGE D'ASSIDUITE ET LA TUILE DE LA DIETE SE TOUCHENT. Leur ⓘ est
+   retire (Kevin, 17/09/2026) : le badge ouvre la fiche « assiduite », la tuile
+   la fiche « score_diete ». Aucune dimension ne change — le badge reste mesure
+   au pixel — seul le curseur et le contour au clavier s'ajoutent. */
+#clh-streak,.clh-m-clic{cursor:pointer;-webkit-tap-highlight-color:transparent}
+#clh-streak:focus-visible,.clh-m-clic:focus-visible{outline:2px solid var(--red);outline-offset:3px}
 /* LE ⓘ DE L'e1RM, dans une ligne de 10 px. En flux, sa boite de 32 px
    portait la ligne a 32 px et la carte qui le porte depassait ses voisines —
    constate. Des marges verticales negatives lui rendent la hauteur du texte ;
@@ -5436,11 +5437,9 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .hist-repli>summary::-webkit-details-marker{display:none}
 .hist-repli>summary::marker{content:''}
 .hist-repli[open]>summary .hist-chevron{transform:rotate(180deg)}
-/* R28 — les deux sections repliables de Lifestyle. L'en-tete garde sa forme
-   (barre, icone, titre), il devient seulement le bouton du repli. */
-.ls-sec-tete{display:flex;align-items:center;gap:10px;list-style:none;cursor:pointer;
-  min-height:44px;-webkit-tap-highlight-color:transparent}
-.ls-sec[open]>.ls-sec-tete{margin-bottom:12px}
+/* Les deux sections de Lifestyle. R34 — elles ne se replient plus : l'en-tete
+   garde sa forme (barre, icone, titre) et redevient un simple titre. */
+.ls-sec-tete{display:flex;align-items:center;gap:10px;min-height:44px;margin-bottom:12px}
 .ls-sep{margin:20px 0}
 /* R32 — LA SYNTHESE D'EVOLUTION. Une phrase grise, sans cadre : elle resume,
    elle ne crie pas. Le vert n'y apparait que sur un ecart qui va dans le sens
@@ -5786,15 +5785,25 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   font-weight:700;letter-spacing:.5px;text-align:left}
 .cct-lien svg{width:13px;height:13px;flex-shrink:0}
 .cct-lien:active{opacity:.7}
-/* R26 — MON APPROCHE. Une ligne en bas de la nutrition, et la feuille qui
-   presente les deux dietes : chaque option est un bouton entier, son nom puis
-   ce qu'elle change, en une lecture. */
+/* R34 — MON APPROCHE, EN TETE DE LA NUTRITION, EN BOUTON ROUGE. Le fond, la
+   trame, le disque clair et l'ombre viennent de .banner-hero (Kevin,
+   17/09/2026 : « plus stylisé, rouge, texture, ombre ») ; ne sont poses ici
+   que ce qu'un <button> n'herite pas, la rangee et un halo rouge sous l'ombre.
+   La feuille qui presente les deux dietes est celle de R26 : chaque option est
+   un bouton entier, son nom puis ce qu'elle change, en une lecture. */
 .nut-approche{display:flex;align-items:center;justify-content:space-between;gap:12px;
-  margin-top:22px;padding:11px 12px 11px 14px;background:var(--surface-1);
-  border:1px solid var(--border);border-radius:var(--r-3)}
-.nut-approche-l{min-width:0;font-size:var(--fs-sm);color:var(--sub);line-height:1.4}
-.nut-approche-l strong{color:var(--text);font-weight:700}
-.nut-approche-b{margin:0;flex-shrink:0}
+  width:100%;box-sizing:border-box;margin:0 0 18px;padding:14px 14px 14px 18px;min-height:56px;
+  border:1px solid rgba(255,90,90,.32);color:var(--text);font-family:Montserrat,sans-serif;
+  text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  box-shadow:var(--e3),0 0 22px rgba(224,32,32,.3),inset 0 1px 0 rgba(255,255,255,.14)}
+.nut-approche:focus-visible{outline:2px solid #fff;outline-offset:2px}
+/* Au-dessus de la trame et du disque, qui sont des pseudo-elements absolus. */
+.nut-approche>span{position:relative;z-index:1}
+.nut-approche-l{min-width:0;font-size:var(--fs-sm);color:rgba(255,255,255,.78);line-height:1.4;letter-spacing:.3px}
+.nut-approche-l strong{color:#fff;font-weight:800;text-shadow:0 0 12px rgba(255,255,255,.35)}
+.nut-approche-b{flex-shrink:0;padding:7px 12px;border-radius:var(--r-2);
+  background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.24);
+  font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px;color:#fff}
 .dch-col{display:flex;flex-direction:column;gap:10px}
 .dch-opt{display:block;width:100%;text-align:left;padding:14px 15px;
   background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);
@@ -9460,21 +9469,9 @@ const COACH_PHOTO='icons/coach.jpg';
       </label>
     </div>
 
-    <!-- ══ R19 — MON SUIVI ════════════════════════════════════════════════
-         La frequence des bilans vivait sur l'ecran de choix, que l'aiguillage
-         de openBilanChoice ne montre presque plus. Elle vient ici, le seul
-         ecran de reglages de l'athlete. setBilanFreq est inchange : seul son
-         point d'appel a bouge. L'etat des deux boutons est pose par
-         ouvrirReglagesAthlete. -->
-    <div id="cr-suivi" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px">
-      <div style="font-size:var(--fs-xs);letter-spacing:2px;font-weight:800;color:var(--red-text);text-transform:uppercase;margin-bottom:8px">Mon suivi</div>
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Fréquence des bilans</div>
-      <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">Le rythme auquel ton bilan coaching te sera demandé.</div>
-      <div style="display:flex;gap:8px" role="group" aria-label="Fréquence des bilans">
-        <button id="bilan-freq-btn-1" onclick="setBilanFreq(1);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Chaque semaine</button>
-        <button id="bilan-freq-btn-2" onclick="setBilanFreq(2);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Toutes les 2 sem.</button>
-      </div>
-    </div>
+    <!-- R34 — « MON SUIVI » (R19) EST RETIRE : la frequence des bilans est
+         revenue sur l'ecran « QUEL BILAN ? », avec le compte a rebours
+         (Kevin, 17/09/2026). -->
 
     <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px">
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mes données</div>
@@ -9503,15 +9500,16 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="font-size:var(--fs-md);font-family:var(--pile-titre);letter-spacing:1px;line-height:1" id="clh-name"></div>
       </div>
     </div>
-    <!-- R10 — LE ⓘ DE L'ASSIDUITE, A GAUCHE DU BADGE. Pas dedans : le cadre est
-         mesure au pixel (136 x 52) et un bouton de 32 px le deformait. margin-left
-         auto le colle au badge, quelle que soit la longueur du nom. Peint par
-         _rendreStreak. -->
-    <span id="clh-streak-i" style="display:inline-flex;margin-left:auto;margin-right:2px;flex-shrink:0"></span>
     <!-- L'INDICATEUR DE SEMAINES. La flambée est DERRIÈRE le cadre : son corps
          noir masque le milieu des langues, et il n'en reste que les léchures
-         autour du bord — c'est ainsi que se rend un objet qui brûle. -->
-    <div id="clh-streak" class="sk-badge">
+         autour du bord — c'est ainsi que se rend un objet qui brûle.
+         R34 — LE BADGE EST LE BOUTON. Le ⓘ pose a sa gauche est retire (Kevin,
+         17/09/2026) : toucher le compte de semaines ouvre la fiche « Semaines
+         d'assiduité ». Le nom lu par un lecteur d'ecran est pose par
+         _rendreStreak, avec le compte. -->
+    <div id="clh-streak" class="sk-badge" role="button" tabindex="0" aria-haspopup="dialog"
+         onclick="rcInfoOuvrir('assiduite')"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <svg class="sk-flammes" viewBox="0 0 188 100" preserveAspectRatio="none" aria-hidden="true"><defs><radialGradient id="skGa" gradientUnits="userSpaceOnUse" cx="94" cy="50" r="55" gradientTransform="translate(94,50) scale(2.2,1) translate(-94,-50)"><stop offset="0" stop-color="#fff2d8" stop-opacity="1"/><stop offset=".46" stop-color="#ffa24a" stop-opacity="1"/><stop offset=".57" stop-color="#ff4f14" stop-opacity=".96"/><stop offset=".71" stop-color="#ec1608" stop-opacity=".85"/><stop offset=".87" stop-color="#8e0403" stop-opacity=".4"/><stop offset="1" stop-color="#3a0000" stop-opacity="0"/></radialGradient><radialGradient id="skGb" gradientUnits="userSpaceOnUse" cx="94" cy="50" r="60" gradientTransform="translate(94,50) scale(2.2,1) translate(-94,-50)"><stop offset="0" stop-color="#ff7a28" stop-opacity=".8"/><stop offset=".52" stop-color="#e82a0c" stop-opacity=".72"/><stop offset=".74" stop-color="#a80d04" stop-opacity=".5"/><stop offset="1" stop-color="#200000" stop-opacity="0"/></radialGradient><filter id="skT1" x="-45%" y="-45%" width="190%" height="190%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.070 0.019" numOctaves="3" seed="11" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="9" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="0.55"/></filter><filter id="skT2" x="-45%" y="-45%" width="190%" height="190%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.100 0.027" numOctaves="4" seed="37" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="8" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="0.3"/></filter><filter id="skT3" x="-45%" y="-45%" width="190%" height="190%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.140 0.038" numOctaves="4" seed="73" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="6" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="0.2"/></filter><linearGradient id="skFdV" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".06" stop-color="#fff" stop-opacity="1"/><stop offset=".94" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><linearGradient id="skFdH" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000"/><stop offset=".06" stop-color="#fff"/><stop offset=".94" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient><mask id="skM"><rect x="0" y="0" width="188" height="100" fill="url(#skFdV)"/><rect x="0" y="0" width="188" height="100" fill="url(#skFdH)" style="mix-blend-mode:multiply"/></mask></defs><g mask="url(#skM)"><g class="sk-n1 fx-loop"><path d="M10.8,9.6C19.7,6.3 47.8,9.7 66.3,10.1C84.8,10.5 103.2,12.0 121.7,11.9C140.2,11.8 167.8,6.7 177.2,9.6C186.5,12.6 177.4,23.2 177.6,29.8C177.7,36.3 178.2,42.7 178.0,49.2C177.7,55.7 176.1,62.2 175.9,68.7C175.8,75.1 186.2,84.8 177.2,88.1C168.1,91.5 140.2,88.5 121.7,88.7C103.2,88.9 84.8,90.0 66.3,89.5C47.8,89.1 20.2,89.5 10.8,86.0C1.5,82.6 10.6,74.8 10.4,68.7C10.1,62.5 8.9,55.7 9.3,49.2C9.7,42.7 12.6,36.4 12.9,29.8C13.2,23.1 2.0,12.8 10.8,9.6Z" fill="url(#skGb)" filter="url(#skT1)"/></g><g class="sk-n2 fx-loop"><path d="M12.8,12.9C21.9,9.5 48.9,10.0 67.0,10.0C85.0,9.9 103.0,12.0 121.0,12.6C139.1,13.2 166.0,10.7 175.2,13.7C184.3,16.7 176.1,24.8 176.0,30.8C175.9,36.7 174.6,43.1 174.4,49.2C174.3,55.4 174.9,61.5 175.0,67.7C175.1,73.8 184.1,82.7 175.2,85.8C166.2,89.0 139.1,86.8 121.1,86.6C103.0,86.4 85.0,84.4 67.0,84.5C48.9,84.7 21.7,90.2 12.8,87.4C4.0,84.6 13.9,74.0 13.8,67.7C13.6,61.3 12.3,55.4 12.2,49.2C12.0,43.1 12.5,36.8 12.6,30.8C12.8,24.7 3.8,16.4 12.8,12.9Z" fill="url(#skGa)" filter="url(#skT2)"/></g><g class="sk-n3 fx-loop"><path d="M14.8,13.4C23.5,10.6 50.0,14.3 67.6,14.6C85.2,14.8 102.8,14.9 120.4,14.9C138.0,14.8 164.3,11.5 173.2,14.3C182.0,17.2 173.5,25.9 173.4,31.8C173.4,37.6 173.0,43.4 172.9,49.2C172.9,55.0 173.1,60.9 173.1,66.7C173.1,72.4 181.9,80.7 173.2,83.4C164.4,86.1 138.0,82.9 120.4,83.0C102.8,83.0 85.2,83.1 67.6,83.7C50.0,84.2 23.8,89.2 14.8,86.3C5.9,83.5 13.6,72.8 13.6,66.7C13.7,60.5 14.9,55.0 15.3,49.2C15.6,43.4 15.7,37.7 15.6,31.8C15.6,25.8 6.2,16.3 14.8,13.4Z" fill="url(#skGa)" filter="url(#skT3)"/></g></g></svg>
       <div class="sk-cadre">
         <div class="sk-dial"><svg viewBox="0 0 100 100" aria-hidden="true"><line x1="17.7" y1="71.8" x2="10.6" y2="76.6" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="12.5" y1="67.8" x2="7.5" y2="70.2" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="10.3" y1="62.0" x2="5.0" y2="63.6" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="8.9" y1="55.9" x2="3.5" y2="56.7" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="8.5" y1="49.7" x2="3.0" y2="49.7" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="11.5" y1="43.9" x2="3.1" y2="42.6" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="10.4" y1="37.5" x2="5.2" y2="35.8" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="12.8" y1="31.7" x2="7.8" y2="29.2" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="15.9" y1="26.3" x2="11.4" y2="23.2" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="19.8" y1="21.5" x2="15.9" y2="17.7" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="26.0" y1="19.3" x2="20.8" y2="12.6" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="29.6" y1="13.8" x2="26.9" y2="9.1" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="35.3" y1="11.2" x2="33.3" y2="6.1" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="41.2" y1="9.4" x2="40.1" y2="4.1" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="47.4" y1="8.6" x2="47.0" y2="3.1" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="53.4" y1="11.1" x2="54.1" y2="2.7" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="59.8" y1="9.7" x2="61.1" y2="4.3" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="65.7" y1="11.6" x2="67.8" y2="6.5" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="71.2" y1="14.4" x2="74.1" y2="9.6" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="76.3" y1="17.9" x2="79.8" y2="13.7" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="79.0" y1="23.9" x2="85.3" y2="18.2" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="84.6" y1="27.2" x2="89.2" y2="24.1" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="87.7" y1="32.6" x2="92.7" y2="30.3" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="89.9" y1="38.4" x2="95.1" y2="36.9" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="91.1" y1="44.5" x2="96.6" y2="43.8" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><line x1="89.0" y1="50.7" x2="97.5" y2="50.8" stroke="#ff3b36" stroke-width="2.9" stroke-linecap="round" opacity=".92"/><line x1="90.9" y1="56.9" x2="96.3" y2="57.8" stroke="#ff3b36" stroke-width="2.1" stroke-linecap="round" opacity=".92"/><path d="M 93.0 59.1 A 44 44 0 0 1 16.3 78.3" fill="none" stroke="#ff2a24" stroke-width="3.4" stroke-linecap="round"/></svg><svg class="sk-ico" viewBox="0 0 32 32" aria-hidden="true"><path d="M12.2 20.8A3.4 3.4 0 0 0 15.6 17.4c0-1.9-.7-2.7-1.4-4.1-1.5-2.9-.3-5.5 2.7-8.2.7 3.4 2.7 6.7 5.5 8.9 2.7 2.2 4.1 4.8 4.1 7.5a9.5 9.5 0 1 1-19 0c0-1.6.6-3.1 1.4-4.1a3.4 3.4 0 0 0 3.4 4.1z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -9642,11 +9640,12 @@ const COACH_PHOTO='icons/coach.jpg';
           <div class="clh-m-sub" id="clh-m1-sub">cette semaine</div></div>
         <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances</div>
           <div class="clh-m-sub" id="clh-m2-sub">depuis le début</div></div>
-        <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Respect</div>
-          <div class="clh-m-sub" id="clh-m3-sub">de la diète</div>
-          <!-- R10 — LE ⓘ DE LA DIETE, DANS LE COIN. Peint par le rendu des
-               tuiles : voir .metric-i. -->
-          <span class="metric-i" id="clh-m3-i"></span></div>
+        <!-- R34 — LA TUILE EST LE BOUTON. Son ⓘ de coin est retire (Kevin,
+             17/09/2026) : toucher la tuile ouvre la fiche « Diète respectée ». -->
+        <div class="metric-box clh-m-clic" role="button" tabindex="0" aria-haspopup="dialog"
+             onclick="rcInfoOuvrir('score_diete')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Respect</div>
+          <div class="clh-m-sub" id="clh-m3-sub">de la diète</div></div>
       </div>
 
 
@@ -9840,11 +9839,13 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
 
-      <!-- LES BANNIERES DU COACH NE SONT PLUS ICI. Elles sont au bas de la
-           VITRINE, ou l'athlete est venu voir ce que son coach propose —
-           plutot qu'au bas de l'ecran ou il lit ses calories. Voir
-           _htmlVitrineCoach et #vit-promo-banners : un seul conteneur dans
-           toute l'application, jamais deux. -->
+      <!-- R34 — LES BANNIERES DU COACH REVIENNENT EN BAS DE L'ACCUEIL (Kevin,
+           17/09/2026). Elles etaient parties au bas de la vitrine, ou seul
+           l'athlete qui ouvre la fiche de son coach les voyait. Un seul
+           conteneur dans toute l'application, jamais deux : la vitrine n'en
+           emet plus. Rempli par _renderPromoBanners depuis loadClientHome,
+           masque tant qu'aucune banniere n'a d'image. -->
+      <div id="clh-promo-banners" style="display:none;margin-top:24px;margin-bottom:16px"></div>
     </div>
   </div>
   <!-- La barre d'onglets etait ici. Elle est desormais soeur des ecrans, plus
@@ -10673,10 +10674,21 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
     </div>
 
-    <!-- R19 — LA FREQUENCE EST PARTIE DANS « Réglages » (section « Mon suivi »)
-         et LE COMPTE A REBOURS EN TETE D'« Évolution » : openBilanChoice ouvre
-         desormais le bilan directement, et cet ecran n'est plus atteint que
-         lorsque les deux bilans sont proposables. -->
+    <!-- R34 — COMME AVANT R19 (Kevin, 17/09/2026) : l'onglet Bilan ouvre
+         toujours cet ecran, avec le bilan de depart tant qu'il n'est pas fait,
+         le bilan coaching, sa frequence et le compte a rebours. -->
+    <!-- Sélecteur fréquence -->
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px">
+      <div style="font-size:var(--fs-xs);letter-spacing:2px;font-weight:800;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Fréquence des bilans</div>
+      <div style="display:flex;gap:8px" role="group" aria-label="Fréquence des bilans">
+        <button id="bilan-freq-btn-1" onclick="setBilanFreq(1);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Chaque semaine</button>
+        <button id="bilan-freq-btn-2" onclick="setBilanFreq(2);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Toutes les 2 sem.</button>
+      </div>
+    </div>
+
+    <!-- Countdown prochain bilan -->
+    <div id="bilan-countdown" style="display:none;margin-bottom:14px"></div>
+
     <button class="btn btn-outline" onclick="go('s-client-home')">Annuler</button>
   </div>
 </div>
@@ -10714,10 +10726,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- R32 — LA SYNTHESE, EN UNE PHRASE, au-dessus de tout. Peinte par
            loadProgress (_renderSyntheseProgression) ; vide sous deux bilans. -->
       <div id="prog-synthese"></div>
-      <!-- R19 — LE PROCHAIN BILAN, EN UNE LIGNE. Il vivait en grand sur l'ecran
-           de choix, que l'aiguillage ne montre presque plus. Peint par
-           loadProgress (_updateBilanCountdown) ; vide avant le premier bilan. -->
-      <div id="bilan-countdown" style="display:none;margin-bottom:12px"></div>
+      <!-- R34 — la ligne « Prochain bilan » (R19) est repartie : le compte a
+           rebours est revenu sur l'ecran « QUEL BILAN ? ». -->
       <div id="prog-reds"></div>
       <div id="prog-encart-osseux"></div>
       <div id="prog-bandeau-phase"></div>
@@ -10774,9 +10784,17 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="retourDe('s-nutrition')">←</button><span class="topbar-title">Nutrition</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <!-- R26 — LE TYPE DE DIETE N EST PLUS EN TETE. On le choisit une fois,
-           on s en sert tous les jours : la premiere place revient a ce qui sert
-           tous les jours. Il est descendu en bas de l ecran (#nut-approche). -->
+      <!-- R34 — MON APPROCHE REMONTE EN TETE, en bouton rouge (Kevin,
+           17/09/2026). Il emprunte .banner-hero, la banniere rouge de l app
+           — degrade, trame diagonale, disque clair, ombre — plutot que de
+           recopier un cadre qui lui ressemblerait. Toucher le bouton ouvre la
+           meme feuille qu en R26. Le libelle est ecrit par _majApprocheNut,
+           appelee par _renderNutriContent : tout ce qui change le type de
+           diete repasse par la, et le bouton ne peut pas mentir. -->
+      <button type="button" id="nut-approche" class="banner-hero nut-approche" onclick="ouvrirChoixDiete()" aria-haspopup="dialog">
+        <span class="nut-approche-l">Mon approche : <strong id="nut-approche-val"></strong></span>
+        <span class="nut-approche-b" aria-hidden="true">Changer</span>
+      </button>
       <!-- Contenu dynamique -->
       <div id="nut-diet-content"></div>
       <!-- Journal Yazio (flexible) -->
@@ -10786,14 +10804,6 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="supp-embedded" style="margin-bottom:8px"></div>
       <!-- Caféine -->
       <div id="caff-embedded" style="margin-top:8px"></div>
-      <!-- R26 — MON APPROCHE, EN BAS. Le libelle est ecrit par
-           _majApprocheNut, appelee par _renderNutriContent : tout ce qui change
-           le type de diete — cette ligne, mais aussi le bouton du verrou —
-           repasse par la, et la ligne ne peut pas mentir. -->
-      <div id="nut-approche" class="nut-approche">
-        <span class="nut-approche-l">Mon approche : <strong id="nut-approche-val"></strong></span>
-        <button type="button" class="btn btn-outline btn-sm nut-approche-b" onclick="ouvrirChoixDiete()">Changer</button>
-      </div>
     </div>
   </div>
 </div>
@@ -11495,30 +11505,26 @@ const COACH_PHOTO='icons/coach.jpg';
            17/09/2026) : la saisie manuelle est le chemin principal, et
            l'import par capture devient son alternative, SOUS le bouton de
            saisie de chaque carte, Pas puis Sommeil. Voir _htmlCarteSante. -->
-      <!-- R28 — LES DEUX SECTIONS SE REPLIENT. L ecran est long : a l arrivee,
-           loadLifestyle n ouvre que celle du moment de la journee
-           (lifestyleSectionDuMoment) — la nuit le matin, les pas ensuite. Les
-           rendus suivants ne touchent qu a leur contenu : un repli choisi par
-           l athlete tient jusqu a la prochaine ouverture de l ecran. -->
-      <details id="ls-pas" class="hist-repli ls-sec" open>
-      <summary class="ls-sec-tete">
+      <!-- R34 — PLUS DE REPLI (Kevin, 17/09/2026). Les deux sections de R28
+           se repliaient, et a l arrivee une seule etait ouverte : les deux sont
+           de nouveau affichees en entier, l une sous l autre. -->
+      <section id="ls-pas" class="ls-sec">
+      <div class="ls-sec-tete">
         <div style="width:3px;height:22px;background:var(--red);border-radius:var(--r-1);box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
         <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
         <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--red-text);text-transform:uppercase;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)">MES PAS</span>
-        <span style="flex:1"></span><span class="hist-chevron" aria-hidden="true" style="font-size:var(--fs-md);color:var(--sub);transition:transform var(--t-1)">▾</span>
-      </summary>
+      </div>
       <div id="lifestyle-steps-content"></div>
-      </details>
+      </section>
       <div class="divider ls-sep"></div>
-      <details id="ls-sommeil" class="hist-repli ls-sec" open>
-      <summary class="ls-sec-tete">
+      <section id="ls-sommeil" class="ls-sec">
+      <div class="ls-sec-tete">
         <div style="width:3px;height:22px;background:#60a5fa;border-radius:var(--r-1);box-shadow:0 0 10px rgba(96,165,250,.9)"></div>
         <span style="display:inline-flex;color:#60a5fa;filter:drop-shadow(0 0 6px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
         <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--text);text-transform:uppercase;text-shadow:var(--halo-2)">MON SOMMEIL</span>
-        <span style="flex:1"></span><span class="hist-chevron" aria-hidden="true" style="font-size:var(--fs-md);color:var(--sub);transition:transform var(--t-1)">▾</span>
-      </summary>
+      </div>
       <div id="lifestyle-sleep-content"></div>
-      </details>
+      </section>
       <!-- LES HABITUDES DU COACH, SUR L'ECRAN DE LEUR SUJET. Elles restent
            aussi sur l'accueil : l'appui quotidien y est un rite, et le
            deplacer aurait echange une bonne place contre une autre. Ici elles
@@ -13271,8 +13277,6 @@ const RESIL_PAYPAL=Object.freeze([
 function ouvrirReglagesAthlete(){
   go('s-client-reglages');
   _renderAbonnement();
-  // R19 — les boutons de frequence refletent le dossier a chaque ouverture.
-  try{ _renderBilanChoiceUI(); }catch(e){}
   // L'interrupteur du son reflète le dossier à chaque ouverture.
   try{ _majSonReglages(); }catch(e){}
   const v=document.getElementById('cr-version');
@@ -38463,6 +38467,10 @@ function loadClientHome(){
   // cette fonction pour _rendreContactCoach. Le garde reste le meme : sans
   // coach rattache, rien n'est rendu.
   const contactLink=document.getElementById('clh-contact');
+  // R34 — sans coach, aucune banniere : celles d'un compte precedent, sur le
+  // meme appareil, ne restent pas affichees. Avec un coach, _applyCoachData
+  // les repeint juste en dessous, dans le meme tour.
+  try{ _renderPromoBanners(null); }catch(e){}
   if(contactLink&&u.coachId){
     // Déclarée AVANT _applyCoachData : le rapatriement plus bas s'en sert
     // aussi, et il vit hors de cette fonction.
@@ -38485,8 +38493,8 @@ function loadClientHome(){
       // vivent desormais dans _rendreContactCoach.
       try{ _rendreContactCoach(u,usrs); }catch(e){}
       _renderCoachBanner(coachUser, u.coachName);
-      // _renderPromoBanners N'EST PLUS APPELE ICI : son conteneur vit dans la
-      // vitrine, et ouvrirVitrineCoach s'en charge apres l'injection.
+      // R34 — les bannieres du coach, au bas de l'accueil.
+      _renderPromoBanners(coachUser);
     };
     _applyCoachData(users);
     if(CLOUD.ok()&&_cle){
@@ -47112,10 +47120,9 @@ function _majMetriquesAccueil(u){
   //    branches : le taux existe meme sans une seule seance.
   const di=_tauxDieteRespectee(u);
   const valM3=di?(di.pct+' %'):'—';
-  // R10 — le ⓘ de la diete, dans le coin de sa tuile. Pose meme sans donnee :
-  // c'est justement quand le « — » s'affiche qu'on se demande ce qui est compte.
-  const _m3i=document.getElementById('clh-m3-i');
-  if(_m3i&&!_m3i.firstChild) _m3i.innerHTML=rcInfo('score_diete');
+  // R34 — la fiche de la diete s'ouvre depuis la tuile entiere (gabarit),
+  // meme sans donnee : c'est justement quand le « — » s'affiche qu'on se
+  // demande ce qui est compte.
   // ⚠ LES QUALIFICATIFS SONT ECRITS DANS LE GABARIT, PAS ICI. Ils sont fixes
   // — « cette semaine », « depuis le début », « de la diète » — et les
   // reecrire a chaque rendu n'aurait servi qu'a les faire diverger du jour ou
@@ -49705,9 +49712,12 @@ function _rendreStreak(u,s){
   // septembre » demandait deux lignes et grandissait le cadre.
   const dt=document.getElementById('clh-streak-date');
   if(dt) dt.textContent=dateDuJourCourte();
-  // R10 — le ⓘ de l'assiduite, voisin du badge.
-  const ii=document.getElementById('clh-streak-i');
-  if(ii&&!ii.firstChild) ii.innerHTML=rcInfo('assiduite');
+  // R34 — le badge ouvre la fiche « assiduite » : son nom dit le compte, et
+  // ce que le toucher ouvre.
+  const badge=document.getElementById('clh-streak');
+  if(badge) badge.setAttribute('aria-label',(a.valeur!==null
+    ?a.valeur+' semaine'+(a.valeur>1?'s':'')+' d’assiduité'
+    :'Semaine 1'+(a.reste?', '+a.reste.toLowerCase():''))+'. Voir ce qui est compté');
   if(zone) zone.toggleAttribute('data-nul',a.nul);
   if(!el) return;
   if(a.valeur===null){
@@ -56477,38 +56487,12 @@ function skipFirstBilan(){
   go('s-client-home');
   loadClientHome();
 }
-// ══ R19 — « REMPLIR MON BILAN » EST UN AIGUILLAGE ══════════════════════
-//
-// PURE. 'depart', 'coaching', ou 'choix' quand les deux sont legitimes.
-//
-// 1. UN BROUILLON EN COURS D'ABORD, ET C'EST LE RISQUE DU LOT. openBilan ne
-//    propose la reprise que pour le type qu'on lui demande ; pour l'autre, il
-//    demande s'il faut EFFACER le brouillon. Aiguiller un athlete qui a un
-//    bilan coaching commence vers le questionnaire de depart lui aurait donc
-//    montre « Ouvrir un bilan de départ l'effacera » au lieu de « Reprendre ».
-//    Le brouillon passe par _bilLoadDraft : le sien, non perime. Un brouillon
-//    incertain sur un appareil a plusieurs comptes n'y est pas : openBilan
-//    pose lui-meme la question, comme avant.
-// 2. PAS DE BILAN DE DEPART : le questionnaire de depart.
-// 3. SAUF QUAND LE COACHING EST DEJA LEGITIME, et le code en connait deux cas :
-//    l'athlete a REPORTE son questionnaire (« Plus tard », _firstBilanPending),
-//    ou il a deja des bilans coaching sans depart — son rythme de bilans
-//    (getNextBilanSaturday) tourne, et l'alerte de retard lui en reclame un.
-//    Le renvoyer chaque fois au questionnaire de depart lui interdirait le
-//    bilan qu'on lui demande. Ce sont les seuls cas ou l'ecran de choix sert.
-// 4. SINON : le bilan coaching.
-function _bilanAiguillage(user,brouillon){
-  if(brouillon&&(brouillon.bilType==='depart'||brouillon.bilType==='coaching')
-     &&_bilDraftRempli(brouillon)>0) return brouillon.bilType;
-  const bilans=((user&&user.bilans)||[]).filter(Boolean);
-  if(bilans.some(b=>b.type==='depart')) return 'coaching';
-  if(user&&user._firstBilanPending) return 'choix';
-  return bilans.length?'choix':'depart';
-}
+// R34 — L'ECRAN « QUEL BILAN ? » A CHAQUE FOIS, comme avant R19 (Kevin,
+// 17/09/2026). L'aiguillage de R19, qui ouvrait directement le bilan, est
+// retire : l'ecran porte le bilan de depart tant qu'il n'est pas fait, le
+// bilan coaching, sa frequence et le compte a rebours. Un brouillon en cours
+// reste propose en reprise : openBilan le fait pour le type touche.
 function openBilanChoice(){
-  const voie=_bilanAiguillage(currentUser,_bilLoadDraft());
-  if(voie==='depart'||voie==='coaching') return openBilan(voie);
-  // L'ECRAN DE CHOIX RESTE, pour les cas ou les deux bilans sont proposables.
   const hasDepart=currentUser.bilans?.some(b=>b.type==='depart');
   document.getElementById('bilan-choice-first').style.display=hasDepart?'none':'block';
   go('s-bilan-choice');
@@ -56544,42 +56528,44 @@ function _renderBilanChoiceUI(){
     _updateBilanCountdown();
   },60000);
 }
-// ══ R19 — LE COMPTE A REBOURS, EN UNE LIGNE EN TETE D'ÉVOLUTION ═════════
-// Il occupait un grand bloc de l'ecran de choix, que l'aiguillage ne montre
-// presque plus. La date et le delai restent les memes : getNextBilanSaturday
-// sans rattrapage, comme avant, et _bilRetardJours / _bilTexteRetard pour dire
-// le retard — les memes phrases que la carte d'alerte de l'accueil.
-// RIEN AVANT LE PREMIER BILAN : les etats vides d'Évolution disent deja
-// « après ton premier bilan », avec le bouton pour le remplir.
+// R34 — LE COMPTE A REBOURS EST REVENU SUR L'ECRAN DE CHOIX, dans sa forme
+// d'avant R19 : la date, puis jours, heures et minutes en grands chiffres.
+// getNextBilanSaturday sans rattrapage : en retard, l'echeance est passee et
+// le bloc le dit.
 function _updateBilanCountdown(){
   const cd=document.getElementById('bilan-countdown');
   if(!cd) return;
-  const next=getNextBilanSaturday();
-  if(!next){ cd.style.display='none'; cd.innerHTML=''; return; }
   cd.style.display='block';
-  const ligne='display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;min-height:44px;margin:0;'
-    +'padding:10px 14px;border-radius:var(--r-3);font-family:Montserrat,sans-serif;text-align:left;';
-  const lib='flex:none;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)';
+  const next=getNextBilanSaturday();
+  if(!next){
+    cd.innerHTML=`<div style="text-align:center;padding:14px 12px;font-size:var(--fs-sm);color:var(--sub);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--r-3)">Après ton 1er bilan, ton prochain rendez-vous apparaîtra ici.</div>`;
+    return;
+  }
   const diffMs=next.getTime()-Date.now();
   const dateLabel=next.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
   if(diffMs<=0){
-    // LE BILAN EST DU : la ligne mene au bilan.
-    let retard=null;
-    try{ retard=_bilTexteRetard(_bilRetardJours(next)); }catch(e){ retard=null; }
-    cd.innerHTML=`<button type="button" onclick="openBilanChoice()" style="${ligne}background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.4);color:var(--text);cursor:pointer">`
-      +`<span style="${lib}">Bilan à remplir</span>`
-      +`<span style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text-strong)">${escapeHtml(retard||'C’est aujourd’hui.')}</span>`
-      +`<span aria-hidden="true" style="flex:none;font-weight:800;color:var(--red-text)">→</span></button>`;
+    // LA PHRASE DIT LE VRAI RETARD. Avant R19 elle disait « prévu aujourd'hui »
+    // meme quand l'echeance datait de plusieurs jours.
+    let n=null; try{ n=_bilRetardJours(next); }catch(e){ n=null; }
+    const quand=(n==null||n<=0)?'est prévu aujourd’hui'
+      :(n===1?'était attendu hier':'est attendu depuis '+n+' jours');
+    cd.innerHTML=`<div style="background:linear-gradient(135deg,#c10000,#7a0000);border-radius:var(--r-3);padding:20px 16px;text-align:center;box-shadow:0 0 32px rgba(224,32,32,.35)"><div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);letter-spacing:.5px;text-transform:uppercase">C'est le moment !</div><div style="font-size:var(--fs-sm);color:rgba(255,255,255,.75);margin-top:6px">Ton bilan ${quand} : complète-le maintenant.</div></div>`;
     return;
   }
   const totalMins=Math.floor(diffMs/60000);
   const days=Math.floor(totalMins/1440);
   const hours=Math.floor((totalMins%1440)/60);
   const mins=totalMins%60;
-  const reste=days>0?(days+' j '+hours+' h'):(hours+' h '+String(mins).padStart(2,'0')+' min');
-  cd.innerHTML=`<div style="${ligne}background:var(--surface-1);border:1px solid var(--border)">`
-    +`<span style="${lib}">Prochain bilan</span>`
-    +`<span style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text-strong)">${escapeHtml(dateLabel)} · dans ${escapeHtml(reste)}</span></div>`;
+  const pad=n=>String(n).padStart(2,'0');
+  const blocks=days>0
+    ?[{v:pad(days),l:'JOURS',red:true},{v:pad(hours),l:'HEURES',red:false},{v:pad(mins),l:'MIN',red:false}]
+    :[{v:pad(hours),l:'HEURES',red:true},{v:pad(mins),l:'MIN',red:false}];
+  cd.innerHTML=`<div style="background:linear-gradient(160deg,#1a0000 0%,#0d0d0d 60%);border:1px solid rgba(224,32,32,.22);border-radius:var(--r-3);padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:0 0 28px rgba(224,32,32,.07),0 6px 20px rgba(0,0,0,.55)">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,rgba(224,32,32,.95),rgba(224,32,32,.15),transparent)"></div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--red-text);margin-bottom:3px">Prochain bilan</div>
+    <div style="font-size:var(--fs-md);font-weight:700;color:var(--text);margin-bottom:14px">${dateLabel}</div>
+    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:5px">${b.l}</div></div>`).join('')}</div>
+  </div>`;
 }
 // forcerReprise : appelé depuis la carte de reprise de l'accueil, où l'athlète
 // a déjà exprimé son intention — lui reposer la question serait redondant.
@@ -56762,12 +56748,10 @@ function bilBack(){
     // AVANT la navigation : loadClientHome dessine la carte « Bilan commencé »
     // à partir du BROUILLON, et le débounce ne l’a peut-être pas encore écrit.
     _quitterEcranBilan(true);
-    // R19 — L'ECRAN DE CHOIX N'EST PLUS LE PASSAGE OBLIGE : on n'y revient que
-    // si on y etait passe, c'est-a-dire quand les deux bilans sont proposables.
-    // Sinon, l'accueil, comme pour le questionnaire de depart. Le brouillon
-    // n'entre pas dans la decision : on vient d'en ecrire un.
-    if(bilType==='depart'||_bilanAiguillage(currentUser,null)!=='choix'){go('s-client-home');loadClientHome();}
-    else{go('s-bilan-choice');}
+    // R34 — comme avant R19 : le bilan coaching revient a l'ecran de choix,
+    // par lequel on est toujours passe ; le questionnaire de depart, a
+    // l'accueil.
+    if(bilType==='depart'){go('s-client-home');loadClientHome();}else{go('s-bilan-choice');}
   }
 }
 async function bilNext(){
@@ -61600,8 +61584,6 @@ function loadProgress(){
   let _onglet=PROG_ONGLETS.indexOf(_memo)>=0?_memo:'poids';
   if(_onglet!=='poids'&&_progOngletVide(_onglet,currentUser)) _onglet='poids';
   showProgressTab(_onglet,_progBoutonOnglet(_onglet),true);
-  // R19 — le prochain bilan, en une ligne en tete d'ecran.
-  try{ _updateBilanCountdown(); }catch(e){}
   // LE DEGRADE ET LE BADGE « +n » SONT RETIRES AVEC LE DEFILEMENT. Ils
   // annoncaient ce qui depassait a droite ; la bande se repliant desormais,
   // plus rien ne depasse et le badge aurait compte zero onglet cache tout en
@@ -67052,8 +67034,8 @@ function _htmlNutEclairs(c){
   return '<svg class="nut-eclairs" viewBox="0 0 480 360" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="nutEg'+c+'" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff3a3a"/><stop offset=".26" stop-color="#e00808"/><stop offset="1" stop-color="#4a0000"/></linearGradient><filter id="nutEf'+c+'" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"/></filter></defs><g class="nut-ec nut-ec1 fx-loop"><path d="M470.0,-10.0 L456.5,13.5 L431.1,24.4 L417.1,47.4 L391.0,57.4 L371.3,74.4 L369.3,110.1 L349.8,127.2 L312.0,124.9 L300.0,150.0 M385.4,69.7 L373.6,84.7 L362.1,100.0 L355.6,118.7 L342.2,132.7 M361.6,92.0 L344.4,89.1 L345.7,110.2 L342.4,125.4 L324.1,121.1 M455.0,40.0 L428.1,52.8 L423.4,88.9 L378.7,83.0 L389.8,135.7 L340.9,125.3 L320.1,144.5 L318.9,184.3 L288.4,193.2 L260.8,205.3 L250.0,235.0 M337.9,151.4 L346.4,170.8 L368.9,171.1 L373.1,196.4 L396.8,195.1 M322.7,165.9 L313.0,181.7 L284.5,160.0 L281.4,189.0 L266.3,194.0" stroke="url(#nutEg'+c+')" stroke-width="8" fill="none" stroke-linecap="round" filter="url(#nutEf'+c+')" opacity=".9"/><path d="M470.0,-10.0 L456.5,13.5 L431.1,24.4 L417.1,47.4 L391.0,57.4 L371.3,74.4 L369.3,110.1 L349.8,127.2 L312.0,124.9 L300.0,150.0 M385.4,69.7 L373.6,84.7 L362.1,100.0 L355.6,118.7 L342.2,132.7 M361.6,92.0 L344.4,89.1 L345.7,110.2 L342.4,125.4 L324.1,121.1 M455.0,40.0 L428.1,52.8 L423.4,88.9 L378.7,83.0 L389.8,135.7 L340.9,125.3 L320.1,144.5 L318.9,184.3 L288.4,193.2 L260.8,205.3 L250.0,235.0 M337.9,151.4 L346.4,170.8 L368.9,171.1 L373.1,196.4 L396.8,195.1 M322.7,165.9 L313.0,181.7 L284.5,160.0 L281.4,189.0 L266.3,194.0" stroke="#ff7070" stroke-width="1" opacity=".55" fill="none" stroke-linecap="round"/></g><g class="nut-ec nut-ec2 fx-loop"><path d="M430.0,-12.0 L405.7,11.7 L375.0,29.0 L345.5,47.6 L341.2,91.1 L302.0,100.1 L281.0,127.0 L259.0,153.0 L246.5,188.4 L215.0,205.0 M352.2,66.6 L356.0,84.8 L365.9,97.3 L382.5,103.2 L396.3,111.7 M486.0,120.0 L462.7,142.1 L441.4,165.6 L438.3,203.5 L406.2,218.6 L399.3,253.4 L361.7,264.3 L355.7,299.8 L330.0,320.0 M423.8,199.8 L419.0,222.6 L399.8,233.3 L384.1,246.9 L371.1,262.7" stroke="url(#nutEg'+c+')" stroke-width="8" fill="none" stroke-linecap="round" filter="url(#nutEf'+c+')" opacity=".9"/><path d="M430.0,-12.0 L405.7,11.7 L375.0,29.0 L345.5,47.6 L341.2,91.1 L302.0,100.1 L281.0,127.0 L259.0,153.0 L246.5,188.4 L215.0,205.0 M352.2,66.6 L356.0,84.8 L365.9,97.3 L382.5,103.2 L396.3,111.7 M486.0,120.0 L462.7,142.1 L441.4,165.6 L438.3,203.5 L406.2,218.6 L399.3,253.4 L361.7,264.3 L355.7,299.8 L330.0,320.0 M423.8,199.8 L419.0,222.6 L399.8,233.3 L384.1,246.9 L371.1,262.7" stroke="#ff7070" stroke-width="1" opacity=".55" fill="none" stroke-linecap="round"/></g><g class="nut-ec nut-ec3 fx-loop"><path d="M300.0,-14.0 L276.3,12.9 L254.3,41.6 L231.4,69.4 L186.5,74.5 L169.8,108.6 L142.5,131.8 L120.0,160.0 M223.9,59.5 L226.4,76.5 L235.7,89.5 L241.5,104.5 L256.4,114.1 M219.4,63.9 L204.7,66.7 L200.7,87.5 L181.3,82.6 L171.1,92.9 M470.0,200.0 L443.9,220.9 L429.7,254.5 L390.7,261.7 L383.5,302.7 L341.7,306.9 L319.2,331.7 L300.0,360.0 M421.9,245.2 L416.0,256.9 L425.0,274.7 L415.0,284.8 L402.4,293.7 M60.0,-10.0 L57.1,18.7 L29.3,37.9 L38.6,71.3 L24.7,95.8 L10.0,120.0 M33.6,58.8 L30.9,69.7 L33.2,78.1 L48.2,80.3 L48.7,89.7" stroke="url(#nutEg'+c+')" stroke-width="8" fill="none" stroke-linecap="round" filter="url(#nutEf'+c+')" opacity=".9"/><path d="M300.0,-14.0 L276.3,12.9 L254.3,41.6 L231.4,69.4 L186.5,74.5 L169.8,108.6 L142.5,131.8 L120.0,160.0 M223.9,59.5 L226.4,76.5 L235.7,89.5 L241.5,104.5 L256.4,114.1 M219.4,63.9 L204.7,66.7 L200.7,87.5 L181.3,82.6 L171.1,92.9 M470.0,200.0 L443.9,220.9 L429.7,254.5 L390.7,261.7 L383.5,302.7 L341.7,306.9 L319.2,331.7 L300.0,360.0 M421.9,245.2 L416.0,256.9 L425.0,274.7 L415.0,284.8 L402.4,293.7 M60.0,-10.0 L57.1,18.7 L29.3,37.9 L38.6,71.3 L24.7,95.8 L10.0,120.0 M33.6,58.8 L30.9,69.7 L33.2,78.1 L48.2,80.3 L48.7,89.7" stroke="#ff7070" stroke-width="1" opacity=".55" fill="none" stroke-linecap="round"/></g></svg>';
 }
 function _renderNutriContent(type,dateAff){
-  // R26 — la ligne « Mon approche » suit chaque rendu, quel que soit le
-  // chemin qui a change la diete.
+  // R26 — « Mon approche » suit chaque rendu, quel que soit le chemin qui a
+  // change la diete. R34 — c'est desormais le bouton de tete.
   _majApprocheNut(type);
   const contentEl=document.getElementById('nut-diet-content');
   // Encart de transition : il se pose AVANT tout le reste, parce qu'il explique
@@ -73462,8 +73444,8 @@ function loadNutrition(dateAff,dateCaff){
   const dt=typeDiete(nut);
   // R26 — le <select> de tete est parti. L'option verrouillee, son cadenas et
   // la raison du verrou vivent dans la feuille « Mon approche »
-  // (_htmlChoixDiete), rendue a chaque ouverture ; la ligne du bas est ecrite
-  // par _renderNutriContent.
+  // (_htmlChoixDiete), rendue a chaque ouverture ; le bouton de tete (R34)
+  // est ecrit par _renderNutriContent.
   _renderNutriContent(dt,dateAff);
   loadSuppEmbedded();
   loadCaffeineEmbedded(dateCaff);
@@ -82574,8 +82556,9 @@ function loadSteps(containerId='steps-content',opts){
     }).join('');
     histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
-      <details class="hist-repli" style="position:relative"><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${Math.min(log.length,21)} jour${Math.min(log.length,21)>1?'s':''}</span><span style="flex:1"></span><span class="hist-chevron" style="font-size:var(--fs-md);color:var(--sub);transition:transform var(--t-1)">▾</span></summary>
-      ${rows}</details>
+      <!-- R34 — l'historique n'est plus replie : ses jours se lisent d'emblee. -->
+      <div class="hist-bloc" style="position:relative"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${Math.min(log.length,21)} jour${Math.min(log.length,21)>1?'s':''}</span></div>
+      ${rows}</div>
     </div>`;
   }
 
@@ -82666,12 +82649,13 @@ function loadSteps(containerId='steps-content',opts){
     </div>
 
     ${histHtml}
-    <!-- R28 — LES REGLAGES EN DERNIER, REPLIES. On regle ses objectifs une
-         fois ; on saisit ses pas tous les jours. -->
+    <!-- R28 — LES REGLAGES EN DERNIER. On regle ses objectifs une fois ; on
+         saisit ses pas tous les jours. R34 — plus replies : la carte est
+         affichee en entier. -->
     <div class="card-nut" style="margin:14px 0">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
-      <details class="hist-repli" style="position:relative">
-        <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Régler mes objectifs</div><span style="flex:1"></span><span class="hist-chevron" style="font-size:var(--fs-md);color:var(--sub);transition:transform var(--t-1)">▾</span></summary>
+      <div class="steps-reglages" style="position:relative">
+        <div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Régler mes objectifs</div>
         <!-- ALIGNES PAR LE BAS. « JOUR ON ENTRAÎNEMENT » se replie sur deux
              lignes la ou « JOUR OFF REPOS » tient sur une : les deux champs
              se retrouvaient decales. Les colonnes s etirent a la meme hauteur
@@ -82692,7 +82676,7 @@ function loadSteps(containerId='steps-content',opts){
           </div>
         </div>
         <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
-      </details>
+      </div>
     </div>
   `;
   // Les barres et le pourcentage du jour ne bougent que si quelqu'un leur donne
@@ -87808,12 +87792,13 @@ function loadSleep(containerId='sleep-content',user,opts){
       const badge=e.duration>=7&&e.duration<=9?'Idéal':'';
       return `<div style="font-size:var(--fs-sm);font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px">${(e.bed&&e.wake)?`<div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>`:''}${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:var(--fs-md);font-weight:800;color:${col}">${e.duration}h</div></div>`;
     },{pad:'9px 0',justify:'space-between',gap:0,border:'#111'});
-    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><details class="hist-repli" style="position:relative"><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${sortedLog.length} nuit${sortedLog.length>1?'s':''}</span><span style="flex:1"></span><span class="hist-chevron" style="font-size:var(--fs-md);color:var(--sub);transition:transform var(--t-1)">▾</span></summary>${rows}</details></div>`;
+    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><div class="hist-bloc" style="position:relative"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${sortedLog.length} nuit${sortedLog.length>1?'s':''}</span></div>${rows}</div></div>`;
   }
 
   document.getElementById(containerId).innerHTML=`
     <!-- R28 — MEME ORDRE QUE LES PAS : la nuit a saisir d abord, puis la
-         semaine et sa moyenne, la cafeine, l historique replie. -->
+         semaine et sa moyenne, la cafeine, l historique. R34 — l historique
+         n est plus replie. -->
     <div class="card-nut" style="margin-bottom:14px;${_animEntree('sleep-saisie')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,rgba(96,165,250,.13),transparent 68%);pointer-events:none"></div>
@@ -87940,24 +87925,10 @@ function saveSleep(){
   _rerenderLifestyle();
 }
 
-// R28 — PURE. La section ouverte en arrivant sur Lifestyle : le matin, la nuit
-// qu'on vient de finir ; a partir de midi, les pas de la journee. L'autre est
-// repliee — l'ecran portait les deux cartes depliees l'une sous l'autre.
-const LIFESTYLE_SOMMEIL_AVANT=12;
-function lifestyleSectionDuMoment(d){
-  const h=((d instanceof Date)?d:new Date()).getHours();
-  return h<LIFESTYLE_SOMMEIL_AVANT?'sommeil':'pas';
-}
+// R34 — lifestyleSectionDuMoment est retiree avec les replis de R28 : les
+// deux sections sont affichees en entier, il n'y a plus rien a ouvrir.
 function loadLifestyle(){
   go('s-lifestyle');
-  // A L'ARRIVEE SEULEMENT : _rerenderLifestyle ne repasse pas par ici, et un
-  // repli choisi a la main tient donc pendant la saisie.
-  try{
-    const q=lifestyleSectionDuMoment(new Date());
-    const p=document.getElementById('ls-pas'), s=document.getElementById('ls-sommeil');
-    if(p) p.open=q==='pas';
-    if(s) s.open=q==='sommeil';
-  }catch(e){}
   // ⚠ LES DEUX CARTES REMPLACENT LES DEUX ANCIENS RENDUS SUR CET ECRAN, et
   // seulement sur celui-ci : les ecrans s-steps et s-sleep gardent loadSteps
   // et loadSleep tels quels, avec leur saisie. Rien n'est supprime.
@@ -91571,16 +91542,8 @@ function _htmlVitrineCoach(pub){
         +'<div style="position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)"></div>'
         +img(p.signature,'max-width:210px;width:58%;display:inline-block;background:none')
         +'</div>'):'')
-    // ── LES BANNIERES DU COACH, EN BAS DE LA VITRINE ───────────────────
-    // ELLES VIVAIENT SUR L'ACCUEIL ATHLETE, sous le suivi nutritionnel. Un
-    // athlete qui ouvre son application vient s'entrainer : lui presenter une
-    // promotion au bas de l'ecran ou il lit ses calories, c'est occuper la
-    // place de quelque chose d'utile par quelque chose qu'il n'a pas demande.
-    // Ici, il est venu voir ce que propose son coach — la banniere repond a sa
-    // question au lieu de l'interrompre.
-    // Le conteneur est VIDE : _renderPromoBanners le remplit apres l'injection,
-    // et le laisse a display:none tant qu'aucune banniere n'a d'image.
-    +'<div id="vit-promo-banners" style="display:none;margin-top:24px"></div>'
+    // R34 — LES BANNIERES DU COACH NE SONT PLUS ICI : elles sont revenues au
+    // bas de l'accueil athlete (#clh-promo-banners), a la demande de Kevin.
     +'</div>';
 }
 // Diplomes et carte pro, et le texte qui dit pourquoi ca compte. Rien n'est
@@ -91649,12 +91612,13 @@ function ouvrirVitrineCoach(){
   // compte qu une valeur soit renseignee.
   const _plein=v=>Array.isArray(v)?v.length>0:!!(v&&String(v).trim());
   const pub={};
-  // promoBanners ET vitrineProgrammes ONT REJOINT CETTE LISTE. Les deux se
-  // dessinent desormais sur cet ecran : absents d'ici, ils n'auraient jamais
-  // atteint _htmlVitrineCoach, et la vitrine se serait affichee sans eux — sans
-  // erreur, sans trace, exactement comme la photo du coach avant eux.
+  // vitrineProgrammes A REJOINT CETTE LISTE. Il se dessine sur cet ecran :
+  // absent d'ici, il n'aurait jamais atteint _htmlVitrineCoach, et la vitrine
+  // se serait affichee sans lui — sans erreur, sans trace, exactement comme la
+  // photo du coach avant lui. R34 — promoBanners en est ressorti : les
+  // bannieres sont revenues sur l'accueil.
   ['fname','lname','teamName','catchphrase','bio','vision','photoVitrine',
-   'signature','cartePro','diplomes','promoBanners','vitrineProgrammes'].forEach(k=>{
+   'signature','cartePro','diplomes','vitrineProgrammes'].forEach(k=>{
     const v=[_pub[k],_loc[k],_moi[k]].find(_plein);
     if(v!==undefined) pub[k]=v;
   });
@@ -91662,7 +91626,6 @@ function ouvrirVitrineCoach(){
   const z=document.getElementById('vitrine-coach-corps');
   if(!z) return false;
   z.innerHTML=_htmlVitrineCoach(pub);
-  _renderPromoBanners(pub);
   goAvecRetour('s-vitrine');
   // ── LA MESURE ───────────────────────────────────────────────────────
   // rcmVue ET NON rcm : une fois par visite, comme les autres vues d'ecran.
@@ -91693,14 +91656,14 @@ function ouvrirVitrineCoach(){
         if(!frais) return;
         const maj={};
         ['fname','lname','teamName','catchphrase','bio','vision','photoVitrine',
-         'signature','cartePro','diplomes','promoBanners','vitrineProgrammes'].forEach(k=>{
+         'signature','cartePro','diplomes','vitrineProgrammes'].forEach(k=>{
           const v=[frais[k],pub[k]].find(x=>Array.isArray(x)?x.length:(x&&String(x).trim()));
           if(v!==undefined) maj[k]=v;
         });
         const zz=document.getElementById('vitrine-coach-corps');
         // AUCUNE MESURE ICI : c'est le meme ecran, deja compte a l'ouverture.
         // Le rafraichissement redessine, il ne revisite pas.
-        if(zz){ zz.innerHTML=_htmlVitrineCoach(maj); _renderPromoBanners(maj); }
+        if(zz) zz.innerHTML=_htmlVitrineCoach(maj);
       }).catch(()=>{});
     }
   }catch(e){}
@@ -91737,7 +91700,6 @@ function apercuVitrineCoach(){
   try{ brouillon.vitrineProgrammes=vitrineProgrammesDe(currentUser); }catch(e){}
   z.innerHTML=_htmlVitrineCoach(brouillon);
   // AUCUNE MESURE : un coach qui relit sa propre vitrine n'est pas une visite.
-  _renderPromoBanners(brouillon);
   goAvecRetour('s-vitrine');
 }
 function saveCoachIdentity(){
@@ -91946,12 +91908,12 @@ function saveCoachBanners(){
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
   toastSync(ok,_envoi,'Bannières enregistrées ✓','le profil public est');
 }
-// LE CONTENEUR A CHANGE D'ECRAN : il est desormais au bas de la VITRINE, emis
-// par _htmlVitrineCoach. Un seul identifiant dans toute l'application — un
-// second, reste sur l'accueil, aurait fait afficher les memes bannieres a deux
-// endroits, et le premier trouve aurait decide lequel.
+// R34 — LE CONTENEUR EST REVENU AU BAS DE L'ACCUEIL ATHLETE (#clh-promo-banners).
+// Un seul identifiant dans toute l'application — un second, reste dans la
+// vitrine, aurait fait afficher les memes bannieres a deux endroits, et le
+// premier trouve aurait decide lequel.
 function _renderPromoBanners(coach){
-  const el=document.getElementById('vit-promo-banners');
+  const el=document.getElementById('clh-promo-banners');
   if(!el) return;
   const banners=(coach?.promoBanners||[]).filter(b=>b.imageUrl);
   if(!banners.length){el.style.display='none';return;}
