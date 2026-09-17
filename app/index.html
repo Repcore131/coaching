@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1247';
+window.RC_BUILD='1248';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4032,6 +4032,14 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
 .gene-choix select{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;
   opacity:0;cursor:pointer;font-size:var(--fs-xs);border:none}
 .gene-choix:focus-within{border-color:var(--red);box-shadow:0 0 0 2px rgba(198,15,8,.15)}
+/* ── R09 — LE ⓘ DE « proposé » NE DECALE PAS LA CASE ─────────────────────
+   Pose en ligne, il elargissait le bloc de charge de 36 px : la case de la
+   serie qui le porte glissait de 10 px vers la droite, et les chiffres des
+   series ne s'alignaient plus — constate a l'ecran. Une marge droite egale a
+   sa largeur (32 + 4) le retire du calcul : « proposé » reste centre sous la
+   case comme sur les autres lignes, et le ⓘ deborde a droite, dans l'espace
+   libre de la carte. Il garde ses 32 px : on ne rapetisse pas une cible. */
+.wo-propose .rc-i{margin-right:-36px}
 
 /* ====== SUGGEST BOX ====== */
 .rir-tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;background:#7f1d1d22;color:#fca5a5;border:1px solid #7f1d1d44}
@@ -15316,6 +15324,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   '_woReminderDays','_woReminderEnabled','_woReminderHour','_woReminderMin',
   '_lastBilanNotif','_lastFbNotif','_lastRepBilanNotif','_lastWoNotif',
   '_notifDemandeeLe','_installDemandeeLe',
+  // R09 — CE QUE L'ATHLETE A DEJA VU : des booleens d'affichage, un par encart
+  // explicatif (« surcharge » d'abord). Ni mesure, ni ressenti — une
+  // preference d'interface.
+  'vus',
   // `innerHTML` est un faux positif du balayage : c'est une propriete du DOM,
   // jamais un champ de dossier. Il est nomme pour que le test reste exact.
   'innerHTML'
@@ -42903,6 +42915,10 @@ function _blocExo(idx,estSS){
            serie, qui change a chaque validation. -->
       <div id="wo-sets-actions-${idx}"></div>
       <div id="wo-douleur-${idx}"></div>
+      <!-- R09 — L'ENCART DE LA PREMIERE CHARGE PROPOSEE. Sous la carte de
+           douleur et non au-dessus : une question de securite passe avant
+           une explication. Peint par renderSets, comme elle. -->
+      <div id="wo-surcharge-${idx}"></div>
       ${ex.repos&&!isCardio(ex)&&!estSS?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:var(--fs-sm)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="flex-shrink:0"><circle cx="12" cy="14" r="8"/><line x1="12" y1="14" x2="12" y2="9.5"/><line x1="10" y1="2.5" x2="14" y2="2.5"/><line x1="12" y1="2.5" x2="12" y2="6"/></svg> <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
       </div>`;
 
@@ -43313,6 +43329,8 @@ function renderSets(ex,data,idx){
       </tr>`;
     }).join('');
     _majActionsSeries(ex,data,idx);
+    // Vide explicitement : un remplacement peut faire d'un exercice un cardio.
+    _majEncartSurcharge(idx);
     return;
   }
   // Plus aucune colonne de cycle ici : l ajustement est porte par la charge
@@ -43353,6 +43371,11 @@ function renderSets(ex,data,idx){
   // DLR_SEANCE_SEUIL lit toujours 4. Seuls les libelles s'ajoutent, aux quatre
   // reperes de l'entree 'douleur' du lexique ; 2 et 5 restent nus, entre deux.
   const PAIN_LIB={'1':'1 · à peine','3':'3 · gênant','4':'4 · ça fait mal','6':'6 · je dois arrêter'};
+  // R09 — LE ⓘ DE LA SURCHARGE, UNE FOIS PAR TABLEAU. Il se pose sur la
+  // PREMIERE serie qui porte « proposé » — pas sur chaque ligne, ce serait un
+  // mur de ⓘ. La serie 1 n'en porte jamais : rien ne la precede pour la
+  // proposer. Quand elle est validee, le ⓘ descend sur la suivante.
+  const _iPremierePropose=isDeg?-1:data.sets.findIndex(_chargeProposee);
 
   tb.innerHTML=data.sets.map((s,i)=>{
     const baseW=parseFloat(s.weight)||0;
@@ -43370,8 +43393,18 @@ function renderSets(ex,data,idx){
     // carte « ça t'a fait mal deux fois » au moment même de la saisie.
     const onChP=`woState.sessionData[${idx}].sets[${i}].pain=this.value;woPersist();renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
 
-    // Weight cell (with AUTO badge)
-    const autoLabel=s.isAuto&&!s.done?'<div style="font-size:var(--fs-xs);color:var(--green);text-align:center;margin-top:2px;letter-spacing:1px">AUTO</div>':'';
+    // Weight cell (with « proposé » label)
+    //
+    // R09 — « AUTO » DEVIENT « proposé ». « AUTO » disait comment la valeur
+    // etait arrivee, pas ce qu'on en fait : c'est une proposition, et on la
+    // corrige en tapant. En minuscules et en --sub : une indication, pas une
+    // alerte.
+    // LA BORDURE VERTE RESTE, et sur la meme condition qu'avant : elle dit
+    // que la case n'est pas une saisie.
+    // ⚠ PAS DE « proposé » SUR UN EXERCICE PROGRAMME. La charge y vient du
+    // coach et ne derive pas : _chargeProposee l'exclut.
+    const autoLabel=_chargeProposee(s)
+      ?`<div class="wo-propose" style="font-size:var(--fs-2xs);color:var(--sub);text-align:center;margin-top:2px">proposé${i===_iPremierePropose?rcInfo('surcharge'):''}</div>`:'';
     const weightBorder=s.isAuto&&!s.done?'border-color:var(--green)':'';
 
     // Wide-mode: content without <td> wrappers (for 2-sub-row card layout)
@@ -43553,6 +43586,76 @@ function renderSets(ex,data,idx){
   // Ici et pas dans toggleSet, parce que la douleur peut aussi être saisie
   // après coup sur une série déjà validée.
   _majCarteDouleur(idx);
+  // R09 — la premiere charge proposee de la seance se presente, une fois.
+  _majEncartSurcharge(idx);
+}
+// ══ R09 — LA CHARGE PROPOSEE, ET LA PREMIERE FOIS QU'ON LA VOIT ══════════
+//
+// PURE. Une charge que RepCore PROPOSE : posee par le remplissage automatique
+// (isAuto), pas encore validee — et hors des deux cas ou « proposé »
+// mentirait :
+// - une serie programmee (rpeCible) : la charge y vient du coach, elle ne
+//   derive pas, et isAuto n'y dit que « pre-remplie » ;
+// - une serie degressive : son tableau n'a aucune mention sous P1 / P2.
+// Elle ne lit que les drapeaux, et n'en change aucun.
+function _chargeProposee(s){
+  return !!(s&&s.isAuto&&!s.done&&!s.rpeCible&&!s.degressive);
+}
+const SURCHARGE_ENCART_TITRE='Ta charge monte toute seule';
+const SURCHARGE_ENCART_TEXTE='RepCore augmente ta charge quand tu gardes des '
+  +'répétitions en réserve. C\'est la surcharge progressive. Tu peux toujours '
+  +'la corriger : tape simplement une autre valeur.';
+// PURE. L'encart, ou rien.
+//
+// DEUX DRAPEAUX, ET IL FAUT LES DEUX.
+// - currentUser.vus.surcharge, PERSISTANT : pose par « J'ai compris », et
+//   par lui seul. Un utilisateur existant n'a pas le champ — il voit l'encart
+//   une fois, puis plus jamais. Aucune migration.
+// - woState._surchargeVue, LOCAL A LA SEANCE : la cle de l'exercice qui a pris
+//   l'encart. Sans lui, les quatre exercices de la seance le montreraient tour
+//   a tour. La cle et non l'index : un remplacement en cours de seance decale
+//   les index (meme choix que la carte de douleur).
+function _htmlEncartSurcharge(idx){
+  const u=currentUser;
+  if(!u||(u.vus&&u.vus.surcharge===true)) return '';
+  const ex=((woState&&woState.exercises)||[])[idx];
+  if(!ex||isCardio(ex)) return '';
+  const k=exKey(ex.name);
+  if(!k) return '';
+  const pris=woState._surchargeVue;
+  if(pris&&pris!==k) return '';
+  // Pas encore pris : il faut qu'une charge soit REELLEMENT proposee ici.
+  if(!pris){
+    const d=woState.sessionData&&woState.sessionData[idx];
+    if(!d||!Array.isArray(d.sets)||!d.sets.some(_chargeProposee)) return '';
+  }
+  return `<div class="wo-surcharge" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-top:10px">
+    <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);line-height:1.4;margin-bottom:6px">${escapeHtml(SURCHARGE_ENCART_TITRE)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(SURCHARGE_ENCART_TEXTE)}</div>
+    <button onclick="accuserEncartSurcharge()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
+  </div>`;
+}
+// Repeint la seule zone de l'encart. C'est ICI que l'exercice prend l'encart
+// pour la seance : au moment ou il s'affiche pour la premiere fois.
+// ⚠ LE RENDU N'ECRIT RIEN DANS LE DOSSIER. woState est la seance, pas le
+// dossier ; currentUser.vus ne s'ecrit que sur le geste.
+function _majEncartSurcharge(idx){
+  const z=document.getElementById('wo-surcharge-'+idx);
+  if(!z) return;
+  const h=_htmlEncartSurcharge(idx);
+  if(h&&woState&&!woState._surchargeVue)
+    woState._surchargeVue=exKey(woState.exercises[idx].name);
+  z.innerHTML=h;
+}
+// Le drapeau est pose par un GESTE, jamais par le rendu — meme doctrine que
+// accuserEncartOsseux.
+function accuserEncartSurcharge(){
+  if(!currentUser) return false;
+  if(!currentUser.vus||typeof currentUser.vus!=='object') currentUser.vus={};
+  currentUser.vus.surcharge=true;
+  saveUser();
+  document.querySelectorAll('[id^="wo-surcharge-"]').forEach(z=>{ z.innerHTML=''; });
+  return true;
 }
 // ══════════════ DOULEUR RÉPÉTÉE DANS LA SÉANCE EN COURS ════════════════════
 // Détection PURE et LOCALE : on compte les séries VALIDÉES de CE seul exercice,

@@ -38931,6 +38931,193 @@ async function testExercices(){
       }
       return true;})());
 
+    // ══ 17/09/2026 — R09 : LA CHARGE PROPOSÉE, ET LA PREMIÈRE FOIS ═══════
+    //
+    // « AUTO » disait comment la charge était arrivée, pas quoi en faire. Elle
+    // devient « proposé », et la première charge proposée de la première
+    // séance s'explique une fois : la surcharge progressive, et le fait qu'on
+    // la corrige en tapant.
+
+    // Le décor : EN TÊTE de page, pour la même raison que R08 — getElementById
+    // rend le premier nœud du document.
+    const _r09Fix=f=>{
+      const d=document.createElement('div');
+      d.style.cssText='position:fixed;left:0;top:0;width:359px;background:#000;z-index:-1';
+      d.innerHTML='<table class="series-table series-table-wo" style="width:100%">'
+        +'<thead><tr style="background:var(--red)"></tr></thead><tbody id="sets-body-0"></tbody></table>'
+        +'<div id="wo-surcharge-0"></div>';
+      document.body.insertBefore(d,document.body.firstChild);
+      const sw=woState, su=currentUser;
+      try{ return f(d); } finally { woState=sw; currentUser=su; d.remove(); }
+    };
+    const _r09Rendre=(d,ex,sets)=>{
+      woState={exercises:[ex],sessionData:{0:{sets:sets}},currentEx:0};
+      d.querySelector('thead tr').innerHTML=_enteteSeries(_seriesEnCartes({sets:sets}),false);
+      renderSets(ex,woState.sessionData[0],0);
+      return d.querySelector('#sets-body-0');
+    };
+    const _r09Ex={name:'DEVELOPPE COUCHE',series:3,reps:'8'};
+    const _r09S=o=>Object.assign({weight:'',weight2:'',reps:'8',rir:'',pain:'',done:false},o||{});
+    // Une série validée à 100 kg, RIR 2 : les suivantes reçoivent une charge.
+    const _r09Seance=()=>[_r09S({weight:'100',rir:'2',done:true}),_r09S(),_r09S()];
+    const _r09Sonde=(d,prop,val)=>{ const i=document.createElement('i'); i.style[prop]=val; d.appendChild(i);
+      const v=getComputedStyle(i)[prop]; i.remove(); return v; };
+    const _r09Ath=o=>Object.assign({id:'r09',email:'r09@t.fr',fname:'A',lname:'B',role:'athlete',
+      exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[]},o||{});
+
+    ok('R09 — « AUTO » devient « proposé », discret, et la bordure verte reste',(()=>
+      _r09Fix(d=>{
+        currentUser=_r09Ath({vus:{surcharge:true}});
+        const tb=_r09Rendre(d,_r09Ex,_r09Seance());
+        if(/AUTO/.test(tb.textContent)) return _echec('« AUTO » est encore affiché');
+        const [l1,l2,l3]=tb.querySelectorAll('tr');
+        if(l1.querySelector('.wo-propose')) return _echec('la série validée porte « proposé »');
+        for(const [n,l] of [[2,l2],[3,l3]]){
+          const p=l.querySelector('.wo-propose');
+          if(!p) return _echec('série '+n+' : pas de « proposé » sur une charge remplie');
+          // En minuscules, mot pour mot.
+          if(p.firstChild.textContent!=='proposé') return _echec('série '+n+' : « '+p.firstChild.textContent+' »');
+          if(getComputedStyle(p).color!==_r09Sonde(d,'color','var(--sub)'))
+            return _echec('série '+n+' : couleur '+getComputedStyle(p).color);
+          if(getComputedStyle(p).fontSize!==_r09Sonde(d,'fontSize','var(--fs-2xs)'))
+            return _echec('série '+n+' : taille '+getComputedStyle(p).fontSize);
+          // LA BORDURE VERTE : elle dit que la case n'est pas une saisie.
+          const inp=l.querySelector('input.set-input');
+          if(getComputedStyle(inp).borderTopColor!==_r09Sonde(d,'borderTopColor','var(--green)'))
+            return _echec('série '+n+' : la bordure verte a disparu ('+getComputedStyle(inp).borderTopColor+')');
+        }
+        return true;})));
+
+    ok('R09 — le ⓘ de la surcharge ne se pose que sur la première série proposée',(()=>
+      _r09Fix(d=>{
+        currentUser=_r09Ath({vus:{surcharge:true}});
+        if(!_lexEntree('surcharge')) return _echec('l’entrée « surcharge » du lexique manque');
+        const compte=tb=>[...tb.querySelectorAll('.rc-i')].filter(b=>
+          (b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'surcharge\')')>=0);
+        const sets=_r09Seance();
+        let tb=_r09Rendre(d,_r09Ex,sets);
+        let b=compte(tb);
+        if(b.length!==1) return _echec(b.length+' ⓘ « surcharge » dans le tableau');
+        if(b[0].closest('tr')!==tb.querySelectorAll('tr')[1]) return _echec('le ⓘ n’est pas sur la première série proposée');
+        if(!b[0].closest('.wo-propose')) return _echec('le ⓘ n’est pas à côté de « proposé »');
+        // La série 2 validée, le ⓘ descend sur la série 3 — et reste seul.
+        sets[1].weight=String(sets[1].weight); sets[1].done=true; sets[1].rir='2';
+        tb=_r09Rendre(d,_r09Ex,sets);
+        b=compte(tb);
+        if(b.length!==1||b[0].closest('tr')!==tb.querySelectorAll('tr')[2])
+          return _echec('après validation de la série 2 : '+b.length+' ⓘ, pas sur la série 3');
+        // ⚠ ET IL NE DÉCALE PAS LA CASE : les charges restent alignées.
+        const xs=[...tb.querySelectorAll('input.set-input')].map(x=>Math.round(x.getBoundingClientRect().left));
+        if(new Set(xs).size!==1) return _echec('les cases de charge ne sont plus alignées : '+xs.join('/'));
+        return true;})));
+
+    ok('R09 — un exercice programmé n’a ni « proposé » ni encart',(()=>
+      _r09Fix(d=>{
+        currentUser=_r09Ath();
+        // Ce que pose _blocExo : la charge du coach, isAuto, et le RPE demandé.
+        const sets=[_r09S({weight:'80',isAuto:true,rpeCible:8}),_r09S({weight:'80',isAuto:true,rpeCible:8})];
+        if(sets.some(_chargeProposee)) return _echec('_chargeProposee retient une série programmée');
+        const tb=_r09Rendre(d,_r09Ex,sets);
+        if(tb.querySelector('.wo-propose')) return _echec('« proposé » sur un exercice programmé');
+        if(d.querySelector('#wo-surcharge-0').innerHTML.trim()) return _echec('l’encart s’affiche sur un exercice programmé');
+        if(woState._surchargeVue) return _echec('l’exercice programmé a pris l’encart');
+        // Les drapeaux sont intacts : le lot n'en change aucun.
+        if(sets.some(s=>s.isAuto!==true)) return _echec('isAuto a été modifié');
+        return true;})));
+
+    ok('R09 — userEdited coupe toujours la proposition, et isAuto n’a pas changé de règle',(()=>
+      _r09Fix(d=>{
+        currentUser=_r09Ath({vus:{surcharge:true}});
+        const sets=[_r09S({weight:'100',rir:'2',done:true}),_r09S({weight:'90',userEdited:true}),_r09S()];
+        const tb=_r09Rendre(d,_r09Ex,sets);
+        if(sets[1].weight!=='90'||sets[1].isAuto) return _echec('une charge tapée a été remplacée : '+sets[1].weight);
+        if(tb.querySelectorAll('tr')[1].querySelector('.wo-propose')) return _echec('« proposé » sur une charge tapée');
+        // La série 2 n'a pas de RIR : rien ne se propose pour la 3.
+        if(sets[2].isAuto||tb.querySelectorAll('tr')[2].querySelector('.wo-propose'))
+          return _echec('une charge est proposée sans RIR la précédant');
+        return true;})));
+
+    // ⚠ DANS UNE VRAIE SÉANCE. Le drapeau local vit dans woState, et c'est
+    // launchWorkout qui le remet à zéro : un décor ne le montrerait pas.
+    ok('R09 — l’encart ne se montre qu’une fois par séance, et sur un seul exercice',(()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state');
+      try{
+        currentUser=_r09Ath({sessions_config:[{active:true,name:'Push',exercises:[
+          {name:'SQUAT',series:3,reps:'5',repos:'3 min'},{name:'ROWING BARRE',series:3,reps:'8',repos:'2 min'}]}]});
+        launchWorkout(currentUser.sessions_config[0],0);
+        // Rien de proposé sur le squat : il ne prend pas l'encart.
+        woState.sessionData={
+          0:{sets:[_r09S({weight:'100',done:true}),_r09S({weight:'100',userEdited:true})]},
+          1:{sets:[_r09S({weight:'60',rir:'2',done:true}),_r09S(),_r09S()]}};
+        renderSets(woState.exercises[0],woState.sessionData[0],0);
+        const z0=()=>document.getElementById('wo-surcharge-0');
+        if(!z0()) return _echec('la zone de l’encart n’existe pas dans l’écran de séance');
+        if(z0().innerHTML.trim()) return _echec('l’encart s’affiche sans charge proposée');
+        if(woState._surchargeVue) return _echec('un exercice sans proposition a pris l’encart');
+        // Le rowing, lui, a des charges proposées : il le prend.
+        woState.currentEx=1; renderWoEx();
+        const z1=document.getElementById('wo-surcharge-1');
+        if(!z1||z1.textContent.indexOf(SURCHARGE_ENCART_TITRE)<0) return _echec('l’encart ne s’affiche pas sous le rowing');
+        if(z1.textContent.indexOf(SURCHARGE_ENCART_TEXTE)<0) return _echec('le texte de l’encart n’est pas le texte demandé');
+        if(woState._surchargeVue!==exKey('ROWING BARRE')) return _echec('drapeau de séance : '+woState._surchargeVue);
+        // Un repeint du même exercice le garde : « une fois » n'est pas « un rendu ».
+        renderSets(woState.exercises[1],woState.sessionData[1],1);
+        if(document.getElementById('wo-surcharge-1').textContent.indexOf(SURCHARGE_ENCART_TITRE)<0)
+          return _echec('l’encart disparaît au premier repeint');
+        // Le squat reçoit maintenant une charge proposée : il ne le reprend PAS.
+        woState.sessionData[0].sets.push(_r09S());
+        woState.sessionData[0].sets[1]=_r09S({weight:'100',rir:'2',done:true});
+        woState.currentEx=0; renderWoEx();
+        if(!woState.sessionData[0].sets.some(_chargeProposee)) return _echec('le décor ne propose rien sur le squat');
+        if(z0().innerHTML.trim()) return _echec('l’encart apparaît sur un second exercice');
+        // ⚠ LE RENDU N'A RIEN ÉCRIT DANS LE DOSSIER.
+        if(currentUser.vus!==undefined) return _echec('le rendu a écrit currentUser.vus');
+        // Une nouvelle séance repart sans drapeau local.
+        launchWorkout(currentUser.sessions_config[0],0);
+        if(woState._surchargeVue) return _echec('le drapeau de séance survit à une nouvelle séance');
+        return true;
+      } finally {
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        localStorage.removeItem('rc_wo_state');
+        if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
+        currentUser=sU; woState=sW;
+      }})());
+
+    ok('R09 — « J’ai compris » pose vus.surcharge, sauvegarde, et retire l’encart pour de bon',(()=>
+      _r09Fix(d=>{
+        const sv=window.saveUser; let n=0;
+        window.saveUser=()=>{ n++; return true; };
+        try{
+          // UN UTILISATEUR EXISTANT, SANS LE CHAMP : il voit l'encart. D'autres
+          // clés de vus, s'il en a, ne sont pas écrasées.
+          currentUser=_r09Ath({vus:{autre:true}});
+          _r09Rendre(d,_r09Ex,_r09Seance());
+          const z=d.querySelector('#wo-surcharge-0');
+          const b=[...z.querySelectorAll('button')].find(x=>x.textContent.trim()==='J\'ai compris');
+          if(!b) return _echec('pas de bouton « J’ai compris »');
+          b.click();
+          if(!currentUser.vus||currentUser.vus.surcharge!==true) return _echec('vus.surcharge n’est pas posé');
+          if(currentUser.vus.autre!==true) return _echec('les autres clés de vus ont été écrasées');
+          if(n!==1) return _echec('saveUser appelé '+n+' fois');
+          if(z.innerHTML.trim()) return _echec('l’encart est resté');
+          renderSets(woState.exercises[0],woState.sessionData[0],0);
+          if(z.innerHTML.trim()) return _echec('l’encart revient au repeint');
+          // SANS vus DU TOUT : l'objet est créé.
+          currentUser=_r09Ath();
+          _r09Rendre(d,_r09Ex,_r09Seance());
+          if(!z.innerHTML.trim()) return _echec('sans vus, l’encart ne s’affiche pas');
+          accuserEncartSurcharge();
+          if(!currentUser.vus||currentUser.vus.surcharge!==true) return _echec('vus n’est pas créé');
+          // ET PLUS JAMAIS, même dans une séance neuve.
+          _r09Rendre(d,_r09Ex,_r09Seance());
+          if(z.innerHTML.trim()) return _echec('l’encart revient dans une nouvelle séance');
+          if(woState._surchargeVue) return _echec('une séance prend l’encart alors qu’il est vu');
+          return true;
+        } finally { window.saveUser=sv; }})));
+
+    ok('R09 — vus est classé, hors santé',
+       CHAMPS_NON_SANTE.indexOf('vus')>=0&&CHAMPS_SANTE.indexOf('vus')<0);
+
     // ══ 17/09/2026 — R08 : L'ÉCHELLE DE GÊNE, ET LE RIR EN SEGMENTS ══════
     //
     // Deux saisies de la séance passaient par un menu déroulant nu : la
