@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1260';
+window.RC_BUILD='1261';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5883,6 +5883,20 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    sont courtes et de même largeur, elles y perdent moins que le nom n'y gagne. */
 .wo-tete{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
 .wo-tete-txt{flex:1 1 auto;min-width:0}
+/* R23 — « COMMENT L'EXECUTER ». Replie, une seule ligne de 44 px : le
+   tableau des series remonte d'autant. Deplie, la consigne et la video
+   gardent exactement leur mise en page d'avant, sous la ligne. */
+.wo-comment{margin:0 0 12px}
+.wo-comment-s{display:flex;align-items:center;gap:10px;min-height:44px;box-sizing:border-box;
+  padding:10px 14px;background:var(--surface-2);border-radius:var(--r-3);cursor:pointer;list-style:none;
+  font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:var(--text-strong);text-transform:uppercase}
+.wo-comment-s::-webkit-details-marker{display:none}
+.wo-comment-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wo-comment-m{color:var(--sub);font-weight:700;letter-spacing:.5px;text-transform:none}
+.wo-comment-fl{flex:none;color:var(--sub);transition:transform var(--t-2)}
+.wo-comment[open] .wo-comment-fl{transform:rotate(180deg)}
+.wo-comment[open] .wo-comment-s{margin-bottom:8px}
+.wo-comment-s:focus-visible{outline:2px solid var(--red-text);outline-offset:2px}
 .wo-ss-rep{display:inline-block;background:var(--orange);color:#08080a;
   font-size:var(--fs-xs);font-weight:900;border-radius:var(--r-2);
   padding:2px 7px;margin-bottom:5px}
@@ -43081,11 +43095,13 @@ function renderWoEx(){
                une phrase, pas un intitulé de champ. -->
           <label class="hit44" style="font-size:var(--fs-xs);cursor:pointer;color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400;margin:0;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" id="film-ex" style="width:auto;margin:0">Filmer cet exercice</label>
           <!-- R11 — LE PANNEAU « ? » DU RIR A ETE RETIRE (Kevin, 17/09/2026 :
-               « laisse le RIR, que dans le tableau, la def »). Il redisait
-               la fiche RIR du lexique, deja a un doigt dans la bande du
-               tableau. Le rappel de consigne, lui, reste : ce n'est pas une
-               definition, c'est ce qu'on vise. -->
-          <span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
+               « laisse le RIR, que dans le tableau, la def »).
+               R23 — ET LE RAPPEL DE CONSIGNE RIR 0 DE BAS D'ECRAN AUSSI,
+               apres verification : RC_LEXIQUE.rir.p porte ce conseil (« Vise
+               RIR 2 sur tes premières séries, RIR 0 à 1 sur la dernière. »),
+               a un doigt dans l'en-tete RIR du tableau. La case « Filmer cet
+               exercice » reste : c'est une action, pas une explication. -->
+
         </div>
       </div>`:''}
       ${(()=>{ try{ return _carteCalibrageRir(groupe,gi===grs.length-1); }catch(e){ return ''; } })()}
@@ -43140,6 +43156,10 @@ function renderWoEx(){
         const z=document.getElementById('wo-consigne-'+i);
         const ex=woState&&woState.exercises&&woState.exercises[i];
         if(z&&ex) z.innerHTML=_htmlConsigneExo(ex);
+        // R23 — le <details> qui l'enveloppe devient visible s'il a enfin
+        // quelque chose a montrer. Son etat ouvert/replie n'est pas touche.
+        const d=document.getElementById('wo-comment-'+i);
+        if(d&&z) d.hidden=!(z.innerHTML.trim()||d.dataset.video==='1');
       }
     }).catch(()=>{});
   }
@@ -43171,6 +43191,44 @@ function _htmlConsigneExo(ex){
           <div style="flex:1;min-width:0;font-size:var(--fs-sm);color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}</div>
         </div>
       </div>`;
+}
+// R15 — LA VIDEO DU GUIDE QUAND LE PROGRAMME N'EN PORTE PAS. videosExo rend la
+// video posee par le coach d'abord, puis celle du guide (par slug, puis par
+// nom) : c'est deja ce que montrent l'apercu et la vue programme. La seance,
+// elle, ne lisait que ex.videoUrl, et un exercice du guide sans lien recopie
+// n'y avait plus de video.
+// R23 — sortie de _blocExo : elle vit dans « Comment l'exécuter ».
+function _htmlVideoTechniqueExo(ex){
+  let u='';
+  try{ const v=videosExo(ex).find(x=>x&&!x.methode); u=v?normaliserUrlVideo(v.url):''; }catch(e){ u=''; }
+  return u?`<a href="${safeUrl(u)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
+        <div style="width:32px;height:32px;background:#1a1a3a;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;font-size:var(--fs-md);flex-shrink:0">▶</div>
+        <div style="flex:1">
+          <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;color:#99aaff">VIDÉO TECHNIQUE</div>
+          <div style="font-size:var(--fs-xs);color:var(--link);margin-top:2px">Regarder la technique d'exécution</div>
+        </div>
+        <span style="font-size:var(--fs-md);color:var(--link)">→</span>
+      </a>`:'';
+}
+// ══ R23 — « COMMENT L'EXECUTER » EST-IL OUVERT ? ═══════════════════════
+// PURE. Ouvert tant que l'athlete n'a JAMAIS valide de serie sur cet
+// exercice : ni dans l'historique que la carte lit deja (getPrevPerf rend null
+// sans antecedent), ni dans la seance en cours. Aucun stockage neuf.
+//
+// ET OUVERT EN PERMANENCE, quel que soit l'historique, quand quelque chose a
+// change et doit etre lu :
+//   • le coach demande une video de cet exercice ;
+//   • une contrainte est active sur cet exercice ;
+//   • l'exercice vient d'etre remplace pendant cette seance.
+function _consigneOuverte(ex,data,prev,sig){
+  sig=sig||{};
+  if(sig.demandeVideo||sig.contrainte) return true;
+  try{
+    const k=exKey(ex&&ex.name);
+    if((woState&&woState.substitutions||[]).some(s=>s&&exKey(s.vers)===k)) return true;
+  }catch(e){}
+  const dejaFait=!!prev||((data&&data.sets)||[]).some(s=>s&&s.done);
+  return !dejaFait;
 }
 // Corps d'un seul exercice. Rend le HTML et renvoie de quoi câbler la suite :
 // l'index est explicite partout, car deux exercices peuvent être à l'écran en
@@ -43259,6 +43317,12 @@ function _blocExo(idx,estSS){
   // Repère A1 / A2 sur un superset, numéro d'ordre sinon : c'est ainsi que
   // l'exercice est écrit sur la fiche papier.
   const rep=_repereEx(woState.exercises,idx);
+  // ══ R23 — CE QUI EST LU UNE FOIS, ET CE QUI DECIDE DU REPLI ══════════
+  const _contrainteHtml=_blocContrainteSeance(ex,idx);
+  const _demandeVideo=!isCardio(ex)&&!!demandeVideoPour(ex.name,currentUser);
+  const _consigneHtml=_htmlConsigneExo(ex);
+  const _videoTech=_htmlVideoTechniqueExo(ex);
+  const _consOuverte=_consigneOuverte(ex,data,prev,{contrainte:!!_contrainteHtml,demandeVideo:_demandeVideo});
 
   const html=`
       <div${estSS?' style="border-left:2px solid var(--orange);padding-left:11px"':''}>
@@ -43317,35 +43381,29 @@ function _blocExo(idx,estSS){
       `<div id="wo-no-hist-${idx}" class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 13px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}
 
       ${_htmlMonteeCharge(sug,ex,idx)}
-      ${_blocContrainteSeance(ex,idx)}
-      <!-- R15 — LA CONSIGNE VIT DANS SA PROPRE ZONE : renderWoEx la repeint
-           seule quand l'index des illustrations arrive apres le rendu. -->
-      <div id="wo-consigne-${idx}">${_htmlConsigneExo(ex)}</div>
-
-      ${(()=>{
-        // R15 — LA VIDEO DU GUIDE QUAND LE PROGRAMME N'EN PORTE PAS. videosExo
-        // rend la video posee par le coach d'abord, puis celle du guide (par
-        // slug, puis par nom) : c'est deja ce que montrent l'apercu et la vue
-        // programme. La seance, elle, ne lisait que ex.videoUrl, et un
-        // exercice du guide sans lien recopie n'y avait plus de video.
-        let u='';
-        try{ const v=videosExo(ex).find(x=>x&&!x.methode); u=v?normaliserUrlVideo(v.url):''; }catch(e){ u=''; }
-        return u?`<a href="${safeUrl(u)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
-        <div style="width:32px;height:32px;background:#1a1a3a;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;font-size:var(--fs-md);flex-shrink:0">▶</div>
-        <div style="flex:1">
-          <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;color:#99aaff">VIDÉO TECHNIQUE</div>
-          <div style="font-size:var(--fs-xs);color:var(--link);margin-top:2px">Regarder la technique d'exécution</div>
-        </div>
-        <span style="font-size:var(--fs-md);color:var(--link)">→</span>
-      </a>`:'';
-      })()}
+      ${_contrainteHtml}
+      <!-- ══ R23 — « COMMENT L'EXECUTER » ════════════════════════════════
+           La CONSIGNE (tempo, materiel, vignette, description) et la VIDEO
+           TECHNIQUE, dans un seul <details> : ils poussaient le tableau des
+           series sous le pli sur un exercice que l'athlete connait deja.
+           Rien n'est retire, tout est a un doigt. Voir _consigneOuverte pour
+           la regle d'ouverture. hidden tant qu'il n'y a rien a montrer :
+           renderWoEx le rend visible si l'index des illustrations apporte une
+           image apres coup. -->
+      <details id="wo-comment-${idx}" class="wo-comment"${_consOuverte?' open':''}${_videoTech?' data-video="1"':''}${(_consigneHtml||_videoTech)?'':' hidden'}>
+        <summary class="wo-comment-s"><span class="wo-comment-t">Comment l'exécuter${ex.materiel?` <span class="wo-comment-m">· ${escapeHtml(ex.materiel)}</span>`:''}</span><span class="wo-comment-fl" aria-hidden="true">▾</span></summary>
+        <!-- R15 — LA CONSIGNE VIT DANS SA PROPRE ZONE : renderWoEx la repeint
+             seule quand l'index des illustrations arrive apres le rendu. -->
+        <div id="wo-consigne-${idx}">${_consigneHtml}</div>
+        ${_videoTech}
+      </details>
 
       ${!isCardio(ex)?banniereTechnique(ex,idx):''}
       ${!isCardio(ex)&&pr.type==='degressive'?`<div style="background:#7c2d1222;border:1px solid #9a3412;border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-sm);color:#fca5a5">
         <strong>Dégressive :</strong> Phase 1 → <strong>${pr.p1} reps</strong> lourd · Phase 2 → <strong>${pr.p2} reps</strong> léger (sans poser la charge)
       </div>`:''}
 
-      ${(!isCardio(ex)&&demandeVideoPour(ex.name,currentUser))?`<div class="wo-demande-video" style="display:flex;align-items:center;gap:9px;background:var(--surface-2);border-radius:var(--r-2);padding:10px 13px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6"><span style="flex-shrink:0">🎥</span><span>Ton coach t'a demandé une vidéo de cet exercice.</span></div>`:''}
+      ${_demandeVideo?`<div class="wo-demande-video" style="display:flex;align-items:center;gap:9px;background:var(--surface-2);border-radius:var(--r-2);padding:10px 13px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6"><span style="flex-shrink:0">🎥</span><span>Ton coach t'a demandé une vidéo de cet exercice.</span></div>`:''}
       <!-- LA BANDE DE TEMPO. Peinte par renderSets, comme les actions de
            series : son libelle depend de la serie en cours et du chronometre,
            qui changent tous les deux sans repasser par _blocExo. Elle vit HORS

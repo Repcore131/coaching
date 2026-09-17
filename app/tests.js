@@ -39308,8 +39308,11 @@ async function testExercices(){
       const src=_prodSrc();
       for(const m of ['rir-explain','Répétitions En Réserve','impossible de faire 1 rep de plus'])
         if(src.indexOf(m)>=0) return _echec('le panneau « ? » a laissé « '+m+' »');
-      // Le rappel de consigne n'est pas une définition : il reste.
-      if(src.indexOf('Vise RIR 0 sur ta dernière série')<0) return _echec('le rappel « Vise RIR 0 » a disparu');
+      // R23 — le rappel de bas d'écran est retiré à son tour, APRÈS avoir
+      // vérifié que la fiche RIR porte le conseil (Kevin, 17/09/2026).
+      if(src.indexOf('Vise RIR 0 sur ta dernière série')>=0) return _echec('le rappel « Vise RIR 0 » est encore là');
+      const p=(RC_LEXIQUE.rir&&RC_LEXIQUE.rir.p)||'';
+      if(!/RIR 0/.test(p)||!/dernière/.test(p)) return _echec('la fiche RIR ne porte plus le conseil de la dernière série : « '+p+' »');
       // Et la définition, elle, est toujours à un doigt dans la bande.
       for(const large of [true,false])
         if(_enteteSeries(large,false).indexOf('rcInfoOuvrir(\'rir\')')<0)
@@ -40424,6 +40427,98 @@ async function testExercices(){
         if(b.getAttribute('onclick')!=='openBilanChoice()') return _echec('la ligne ne mène pas au bilan');
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
+
+    // ══ 17/09/2026 — R23 : « COMMENT L'EXÉCUTER », ET LE TABLEAU REMONTE ══
+
+    ok('R23 — la règle d’ouverture : jamais pratiqué, ou quelque chose a changé',(()=>{
+      const sW=woState;
+      try{
+        woState={substitutions:[]};
+        const ex={name:'ROWING BARRE'};
+        const vide={sets:[{done:false}]}, fait={sets:[{done:true}]};
+        const prev={weight:60,rir:'2'};
+        if(_consigneOuverte(ex,vide,null)!==true) return _echec('un exercice jamais fait est replié');
+        if(_consigneOuverte(ex,vide,prev)!==false) return _echec('un exercice déjà fait reste ouvert');
+        if(_consigneOuverte(ex,fait,null)!==false) return _echec('une série validée dans la séance ne compte pas');
+        // LES TROIS SIGNAUX, même sur un exercice pratiqué.
+        if(_consigneOuverte(ex,vide,prev,{demandeVideo:true})!==true) return _echec('la demande de vidéo ne l’ouvre pas');
+        if(_consigneOuverte(ex,vide,prev,{contrainte:true})!==true) return _echec('la contrainte ne l’ouvre pas');
+        woState={substitutions:[{de:'TIRAGE',vers:'Rowing barre',date:Date.now()}]};
+        if(_consigneOuverte(ex,vide,prev)!==true) return _echec('le remplacement ne l’ouvre pas');
+        return true;
+      } finally { woState=sW; }})());
+
+    okA('R23 — dans la séance : consigne et vidéo repliées sur un exercice connu, le reste à sa place, le tableau sous les yeux',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser;
+      const ecran=document.getElementById('s-workout'), svW=ecran.style.maxWidth;
+      const mk=(name,o)=>Object.assign({name,series:4,reps:'8',repos:'2 min',rirCible:'2',
+        description:'Garde le dos plaqué, descends la barre au sternum, pousse en expirant.',
+        materiel:'Barre, banc plat',videoUrl:'https://youtu.be/eRglSFbnRro'},o||{});
+      try{
+        window.saveUser=()=>true;
+        currentUser={id:'r23',email:'r23@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},
+          bilans:[],videos:[],programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',
+          consent:{health:true,policyVersion:POLICY_VERSION},
+          sessions:[{id:'x',date:Date.now()-7*864e5,slot:0,name:'Push',
+            data:{'ROWING BARRE':{sets:[{done:true,weight:'60',reps:'8',rir:'2'}]}}}],
+          sessions_config:[{active:true,name:'Push',exercises:[mk('ROWING BARRE'),mk('TIRAGE VERTICAL')]}]};
+        localStorage.removeItem('rc_wo_state');
+        launchWorkout(currentUser.sessions_config[0],0);
+        const d0=document.getElementById('wo-comment-0');
+        if(!d0||d0.tagName!=='DETAILS') return _echec('pas de « Comment l’exécuter »');
+        // DÉJÀ PRATIQUÉ : replié, et le résumé dit le matériel.
+        if(d0.open) return _echec('un exercice déjà pratiqué s’ouvre déplié');
+        const s=d0.querySelector('summary').textContent.replace('▾','').replace(/\s+/g,' ').trim();
+        if(s!=='Comment l\'exécuter · Barre, banc plat') return _echec('résumé : « '+s+' »');
+        // CE QUI EST DEDANS.
+        if(!d0.contains(document.getElementById('wo-consigne-0'))) return _echec('la consigne n’est pas dans le bloc');
+        const video=[...document.getElementById('wo-content').querySelectorAll('a')].find(a=>/VIDÉO TECHNIQUE/.test(a.textContent));
+        if(!video||!d0.contains(video)) return _echec('la vidéo technique n’est pas dans le bloc');
+        // CE QUI N'Y EST PAS.
+        const box=document.querySelector('#wo-content .suggest-box');
+        if(box&&d0.contains(box)) return _echec('la charge proposée est repliée');
+        if(d0.querySelector('#sets-body-0,#wo-douleur-0,#wo-tempo-0,.wo-demande-video')) return _echec('un bloc d’action est replié');
+        // Le bloc ne porte que la consigne et la vidéo : rien d'autre ne s'y glisse.
+        if([...d0.children].some(c=>c.tagName!=='SUMMARY'&&c.id!=='wo-consigne-0'&&c!==video)) return _echec('le bloc contient autre chose que la consigne et la vidéo');
+        // « Filmer » reste, le rappel RIR 0 est parti.
+        if(!document.getElementById('film-ex')) return _echec('la case « Filmer cet exercice » a disparu');
+        if(/Vise RIR 0/.test(document.getElementById('wo-content').textContent)) return _echec('le rappel « Vise RIR 0 » est encore affiché');
+        // LE TABLEAU SOUS LES YEUX À 375 PX : de l'en-tête de la carte au bas de
+        // la bande du tableau, moins que ce qui reste d'un écran de 667 px une
+        // fois la barre de titre et la barre de navigation du bas posées.
+        ecran.style.maxWidth='375px';
+        await new Promise(r=>setTimeout(r,50));
+        const carte=document.querySelector('#wo-content .wo-tete').getBoundingClientRect().top;
+        const bande=document.querySelector('#sets-body-0').closest('table').querySelector('thead').getBoundingClientRect().bottom;
+        const titre=(document.querySelector('#s-workout .topbar')||{getBoundingClientRect:()=>({height:50})}).getBoundingClientRect().height;
+        if(bande-carte>667-titre-90) return _echec('la bande du tableau est à '+Math.round(bande-carte)+' px du haut de la carte');
+        // Déplié, elle descend : c'est ce que le repli fait gagner.
+        d0.open=true;
+        const ouvert=document.querySelector('#sets-body-0').closest('table').querySelector('thead').getBoundingClientRect().bottom;
+        if(ouvert<=bande) return _echec('le repli ne fait rien gagner');
+        // JAMAIS PRATIQUÉ : déplié.
+        woState.currentEx=1; renderWoEx();
+        const d1=document.getElementById('wo-comment-1');
+        if(!d1||!d1.open) return _echec('un exercice jamais fait s’ouvre replié');
+        // LA DEMANDE DE VIDÉO DU COACH : déplié, même pratiqué.
+        currentUser.demandesVideo=[{exercice:'ROWING BARRE',date:Date.now()}];
+        woState.currentEx=0; renderWoEx();
+        if(!document.getElementById('wo-comment-0').open) return _echec('la demande de vidéo ne déplie pas');
+        currentUser.demandesVideo=[];
+        // L'EXERCICE REMPLACÉ PENDANT LA SÉANCE : déplié.
+        woState.substitutions=[{de:'TIRAGE',vers:'ROWING BARRE',date:Date.now()}];
+        renderWoEx();
+        if(!document.getElementById('wo-comment-0').open) return _echec('le remplacement ne déplie pas');
+        return true;
+      } finally {
+        ecran.style.maxWidth=svW;
+        window.saveUser=svSave;
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        localStorage.removeItem('rc_wo_state');
+        if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
+        currentUser=sU; woState=sW;
+      }
+    });
 
     // ══ 17/09/2026 — R22 : TROIS FONCTIONS MIEUX EXPOSÉES ═════════════════
 
