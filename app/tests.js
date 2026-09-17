@@ -39010,10 +39010,11 @@ async function testExercices(){
         const f=document.activeElement&&document.activeElement.id;
         if(f!=='pesee-input'&&f!=='pdj-poids') return _echec('le doigt n’est pas sur le champ de poids : '+f);
         loadVideos();
-        _focusLienVideo();
-        if((document.activeElement||{}).id!=='vid-url-input') return _echec('le champ du lien n’a pas le focus');
+        // R17 — le geste mène au bouton « Choisir une vidéo », le lien est replié.
+        _focusEnvoiVideo();
+        if((document.activeElement||{}).id!=='vid-file-btn') return _echec('le bouton d’envoi n’a pas le focus');
         // ⚠ AUCUN GESTE ATHLÈTE NE VISE UN ÉCRAN COACH : go() le refuserait.
-        for(const g of [ouvrirPeseeAccueil,openBilanChoice,loadSessionManager,_focusLienVideo,_etatVideSeances])
+        for(const g of [ouvrirPeseeAccueil,openBilanChoice,loadSessionManager,_focusEnvoiVideo,_etatVideSeances])
           if(/s-coach-/.test(String(g))) return _echec(g.name+' vise un écran coach');
         return true;
       } finally {
@@ -39083,7 +39084,7 @@ async function testExercices(){
       // ctaFn est posé entre guillemets doubles : on rend chaque geste du lot et
       // on relit l'attribut. Il doit revenir intact, sans une lettre de moins.
       const G=['ouvrirPeseeAccueil()','openBilanChoice()','openSessionPicker()','loadSessionManager()',
-        '_focusLienVideo()','openAddAthlete()','createCoachProgTemplate()','generateStudentCode()',
+        '_focusEnvoiVideo()','openAddAthlete()','createCoachProgTemplate()','generateStudentCode()',
         'openCoachSessions()','chargerBanque(true).then(()=>_bqRendre())','_bqToutEffacer()',"go('s-client-code')"];
       const d=document.createElement('div'), casse=[];
       for(const g of G){
@@ -40200,6 +40201,106 @@ async function testExercices(){
         }
       }
       return trop.length?_echec(trop.join(' | ')):true;})());
+
+    // ══ 17/09/2026 — R17 : « MES CORRECTIONS », LE FICHIER D'ABORD ════════
+    //
+    // « Vidéos techniques » promettait des démonstrations ; l'écran demande un
+    // envoi. Et le chemin le plus simple — choisir la vidéo sur son téléphone —
+    // y était présenté comme le repli du plus complexe.
+
+    ok('R17 — l’écran s’appelle « Mes corrections », l’onglet « Corrections », et leurs identifiants n’ont pas bougé',(()=>{
+      const e=document.getElementById('s-videos');
+      if(!e) return _echec('l’écran s-videos a disparu');
+      const t=e.querySelector('.topbar-title');
+      if(!t||t.textContent.trim()!=='Mes corrections') return _echec('titre : « '+(t&&t.textContent.trim())+' »');
+      const b=document.querySelector('#client-tabbar .tab-btn[data-tab="videos"]');
+      if(!b) return _echec('l’onglet data-tab="videos" a disparu');
+      if(b.textContent.trim()!=='Corrections') return _echec('onglet : « '+b.textContent.trim()+' »');
+      if(TABBAR_ECRANS['s-videos']!=='videos') return _echec('TABBAR_ECRANS ne relie plus s-videos à l’onglet');
+      // « Vidéos techniques » ne subsiste nulle part côté athlète.
+      for(const s of document.querySelectorAll('.screen:not([id^="s-coach"]),#client-tabbar'))
+        if(/vidéos techniques/i.test(s.textContent)) return _echec('« Vidéos techniques » reste dans '+s.id);
+      // La pastille dit le nom que l'athlète voit.
+      const sU=currentUser;
+      try{
+        currentUser={email:'r17@t.fr',videos:[{id:'a',feedbackSeen:false}]};
+        _majPastilleVideos();
+        if(!/^Corrections : 1 retour/.test(b.getAttribute('aria-label')||'')) return _echec('pastille : « '+b.getAttribute('aria-label')+' »');
+      } finally { currentUser=sU; _majPastilleVideos(); }
+      return true;})());
+
+    // ⚠ « CORRECTIONS » FAIT 36 px DE PLUS QUE « VIDÉOS ». La règle des
+    // petits écrans ne s'applique pas dans le panneau de test : on la LIT dans
+    // la feuille, on la pose sur une copie de la barre large de 360 px, et on
+    // mesure. C'est la largeur d'un Galaxy ; sous 360, la barre défile.
+    ok('R17 — les sept onglets tiennent entiers sur un téléphone de 360 px',(()=>{
+      const css=[...document.querySelectorAll('style')].map(s=>s.textContent).join('\n');
+      const m=css.match(/@media\(max-width:420px\)\{\.tab-btn\{([^}]*)\}\}/);
+      if(!m) return _echec('la règle des petits écrans est introuvable');
+      const bar=document.getElementById('client-tabbar');
+      const trop=[];
+      for(const w of [360,375,390]){
+        const c=bar.cloneNode(true);
+        c.removeAttribute('id');
+        c.style.cssText='position:fixed;left:0;top:0;display:flex;width:'+w+'px;visibility:hidden;z-index:-1';
+        document.body.appendChild(c);
+        try{
+          const bs=[...c.querySelectorAll('.tab-btn')];
+          bs.forEach(b=>b.setAttribute('style',m[1]));
+          if(bs[3].textContent.trim()!=='Corrections') trop.push('l’onglet vidéos ne dit pas « Corrections »');
+          const coupes=bs.filter(b=>b.scrollWidth>b.clientWidth+1).map(b=>b.textContent.trim());
+          if(coupes.length) trop.push(w+' px : tronqué(s) '+coupes.join(', '));
+          if(parseFloat(getComputedStyle(bs[3]).fontSize)<10) trop.push(w+' px : police sous 10 px');
+        } finally { c.remove(); }
+      }
+      return trop.length?_echec(trop.join(' | ')):true;})());
+
+    ok('R17 — le fichier passe en premier, le lien est replié dessous, et l’avertissement Drive reste',(()=>{
+      const envoi=document.getElementById('vid-envoi'), lien=document.getElementById('vid-lien');
+      if(!envoi||!lien) return _echec('les deux blocs sont introuvables');
+      if(!(envoi.compareDocumentPosition(lien)&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('le lien passe avant le fichier');
+      if(lien.tagName!=='DETAILS') return _echec('le lien n’est pas replié dans un <details>');
+      if(lien.open) return _echec('le lien est ouvert d’office');
+      const sm=lien.querySelector(':scope > summary');
+      // Le libellé, sans la flèche décorative (aria-hidden).
+      const intitule=sm?[...sm.querySelectorAll('span:not([aria-hidden])')].map(x=>x.textContent).join('').trim():'';
+      if(intitule!=='J\'ai déjà un lien YouTube ou Google Drive') return _echec('intitulé : « '+intitule+' »');
+      // CHAQUE CHAMP DANS SON BLOC.
+      for(const id of ['vid-name-input','vid-file-btn','vid-file-input','vid-upload-progress','vid-upload-error'])
+        if(!envoi.contains(document.getElementById(id))) return _echec(id+' n’est pas dans le bloc fichier');
+      for(const id of ['vid-url-input','vid-drive-hint'])
+        if(!lien.contains(document.getElementById(id))) return _echec(id+' n’est pas dans le bloc lien');
+      // LES LIBELLÉS.
+      if(![...envoi.querySelectorAll('div')].some(x=>!x.childElementCount&&x.textContent.trim()==='Envoyer une vidéo'))
+        return _echec('le bloc fichier ne s’intitule pas « Envoyer une vidéo »');
+      // Le titre du bloc précède le champ et le bouton.
+      if(envoi.textContent.indexOf('Envoyer une vidéo')>envoi.textContent.indexOf('Choisir une vidéo')) return _echec('le titre suit le bouton');
+      const fb=document.getElementById('vid-file-btn');
+      if(fb.textContent.trim()!=='Choisir une vidéo') return _echec('bouton fichier : « '+fb.textContent.trim()+' »');
+      if(fb.getAttribute('for')!=='vid-file-input'||document.getElementById('vid-file-input').getAttribute('onchange')!=='uploadVideoFile(this)')
+        return _echec('le bouton n’ouvre plus le sélecteur branché sur uploadVideoFile');
+      if(fb.getAttribute('tabindex')!=='0') return _echec('le bouton fichier n’est pas atteignable au clavier');
+      const bl=[...lien.querySelectorAll('button')].find(x=>/addVideoLink\(\)/.test(x.getAttribute('onclick')||''));
+      if(!bl||bl.textContent.trim()!=='Envoyer à mon coach') return _echec('bouton lien : « '+(bl&&bl.textContent.trim())+' »');
+      const txt=document.getElementById('s-videos').textContent;
+      if(/upload/i.test(txt)) return _echec('« upload » reste affiché');
+      if(/Ajouter la vidéo|Partager une vidéo/.test(txt)) return _echec('un ancien libellé reste affiché');
+      // L'AVERTISSEMENT DRIVE, ENTIER, ET SA LOGIQUE.
+      const u=document.getElementById('vid-url-input'), h=document.getElementById('vid-drive-hint');
+      if(!/Partager → Toute personne avec le lien/.test(h.textContent)) return _echec('l’avertissement Drive a changé');
+      const sv=u.value;
+      try{
+        u.value='https://drive.google.com/file/d/x/view'; u.dispatchEvent(new Event('input'));
+        if(h.style.display!=='block') return _echec('un lien Drive n’affiche pas l’avertissement');
+        u.value='https://youtu.be/aaaaaaaaaaa'; u.dispatchEvent(new Event('input'));
+        if(h.style.display!=='none') return _echec('un lien YouTube affiche l’avertissement');
+      } finally { u.value=sv; h.style.display='none'; }
+      // AUCUN LIEN MORT : chaque go() de l'écran vise un écran qui existe.
+      for(const el of document.querySelectorAll('#s-videos [onclick]')){
+        const m=(el.getAttribute('onclick')||'').match(/go\('([^']+)'\)/);
+        if(m&&!document.getElementById(m[1])) return _echec('lien mort vers '+m[1]);
+      }
+      return true;})());
 
     // ══ 17/09/2026 — R15 : LE NORDIC CURL, ET LA CONSIGNE QUI DISPARAISSAIT ══
 
