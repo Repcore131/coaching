@@ -40428,6 +40428,152 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R25 : LES CHARGES À LA SUITE, SANS FERMER LE CLAVIER ══
+
+    // Une séance montée pour ces tests : `exs` dans une séance « Push », et la
+    // touche « Suivant » du clavier (Enter) envoyée au champ qui a le focus.
+    const _r25Monter=exs=>{
+      currentUser={id:'r25',email:'r25@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},
+        sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',
+        consent:{health:true,policyVersion:POLICY_VERSION},
+        sessions_config:[{active:true,name:'Push',exercises:exs}]};
+      localStorage.removeItem('rc_wo_state');
+      launchWorkout(currentUser.sessions_config[0],0);
+    };
+    const _r25Suivant=()=>{
+      const e=new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});
+      document.activeElement.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    const _r25Champ=(idx,i,champ)=>{
+      const tb=document.getElementById('sets-body-'+idx);
+      return tb&&tb.querySelector('input.set-input[data-serie="'+i+'"][data-champ="'+(champ||'weight')+'"]');
+    };
+    const _r25Ranger=(sU,sW,sSnap,svSave,svToast)=>{
+      window.saveUser=svSave; window.toast=svToast;
+      try{ document.activeElement&&document.activeElement.blur(); }catch(e){}
+      try{ clearInterval(woState.timerInterval); }catch(e){}
+      localStorage.removeItem('rc_wo_state');
+      if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
+      currentUser=sU; woState=sW;
+    };
+
+    okA('R25 — six séries d’affilée au clavier : le champ n’est jamais détruit, et chaque charge proposée est la bonne',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        _r25Monter([{name:'ROWING BARRE',series:6,reps:'8',repos:'2 min'}]);
+        const d=woState.sessionData[0];
+        if(d.sets.length!==6) return _echec(d.sets.length+' séries au lieu de 6');
+        // Le RIR de chaque série est déjà là : c'est lui qui fait proposer la
+        // charge de la suivante.
+        d.sets.forEach(s=>{ s.rir='2'; });
+        renderSets(woState.exercises[0],d,0);
+        const tb=document.getElementById('sets-body-0');
+        // LA TOUCHE DU CLAVIER : « Suivant » partout, « OK » sur la dernière.
+        const hints=[0,1,2,3,4,5].map(i=>_r25Champ(0,i).getAttribute('enterkeyhint')).join(',');
+        if(hints!=='next,next,next,next,next,done') return _echec('enterkeyhint : '+hints);
+        // Tapé, ou accepté tel que proposé (null) : les deux chemins.
+        const tape=['100',null,'110',null,'112.5',null];
+        let precedente=null;
+        _r25Champ(0,0).focus();
+        for(let i=0;i<6;i++){
+          const el=_r25Champ(0,i);
+          if(document.activeElement!==el) return _echec('série '+(i+1)+' : le focus n’est pas sur sa charge');
+          if(i>0){
+            const att=String(chargeSuivante(parseFloat(precedente),'2',false));
+            if(el.value!==att) return _echec('série '+(i+1)+' : proposé « '+el.value+' », attendu « '+att+' »');
+            if(d.sets[i].isAuto!==true) return _echec('série '+(i+1)+' : la charge proposée n’est pas marquée auto');
+          }
+          if(tape[i]!==null) el.value=tape[i];
+          precedente=el.value;
+          const suivant=i<5?_r25Champ(0,i+1):null;
+          if(!_r25Suivant()) return _echec('série '+(i+1)+' : Enter n’est pas intercepté');
+          if(suivant){
+            // LE MÊME ÉLÉMENT, TOUJOURS DANS LE DOCUMENT : le clavier reste ouvert.
+            if(!suivant.isConnected) return _echec('série '+(i+2)+' : son champ a été détruit par la saisie');
+            if(document.activeElement!==suivant) return _echec('série '+(i+1)+' : « Suivant » ne mène pas à la série '+(i+2));
+          } else if(tb.contains(document.activeElement)) return _echec('« OK » sur la dernière série ne ferme pas le clavier');
+        }
+        // AU GRAMME PRÈS : les valeurs connues, et ce que dit le dossier.
+        const etat=d.sets.map(s=>s.weight+(s.userEdited?'U':'')+(s.isAuto?'A':'')).join(',');
+        if(etat!=='100U,105A,110U,116.25A,112.5U,118.75A') return _echec('dossier : '+etat);
+        // LE RENDU PARTIEL ÉGALE LE RENDU COMPLET : ce que renderSets repeint de
+        // zéro ne change ni une valeur, ni un texte, ni le dossier.
+        const lu=()=>[...tb.rows].map(r=>r.textContent.replace(/\s+/g,' ').trim()+'|'+[...r.querySelectorAll('input')].map(x=>x.value+':'+x.getAttribute('enterkeyhint')).join('/')).join('\n');
+        const partiel=lu();
+        renderSets(woState.exercises[0],d,0);
+        if(lu()!==partiel) return _echec('le rendu partiel diffère du rendu complet :\n'+partiel+'\n---\n'+lu());
+        if(d.sets.map(s=>s.weight+(s.userEdited?'U':'')+(s.isAuto?'A':'')).join(',')!==etat) return _echec('le rendu complet change le dossier');
+        // AU DOIGT : on touche la case suivante, et le change du champ quitté
+        // arrive APRÈS que le focus s'y est posé. La case reste la même et reçoit
+        // sa charge proposée.
+        d.sets.forEach((s,i)=>{ if(i>0){ s.weight=''; s.userEdited=false; s.isAuto=false; } });
+        renderSets(woState.exercises[0],d,0);
+        const c0=_r25Champ(0,0), c1=_r25Champ(0,1);
+        c1.focus(); c0.value='80'; c0.dispatchEvent(new Event('change',{bubbles:true}));
+        if(!c1.isConnected||document.activeElement!==c1) return _echec('la case touchée a perdu le focus');
+        if(c1.value!==String(chargeSuivante(80,'2',false))) return _echec('la case touchée affiche « '+c1.value+' »');
+        // AUCUN RACCOURCI GLOBAL : Enter hors du tableau ne déplace rien.
+        if(/document\.addEventListener\(\s*'keydown'[^]{0,200}_woChampSuivant/.test(_prodSrc())) return _echec('un écouteur global enchaîne les charges');
+        return true;
+      } finally { _r25Ranger(sU,sW,sSnap,svSave,svToast); }
+    });
+
+    okA('R25 — dégressive P1 → P2 → série suivante, superset cloisonné, séries validées sautées, refus du négatif et repli',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const toasts=[];
+      try{
+        window.saveUser=()=>true; window.toast=m=>toasts.push(m);
+        // DÉGRESSIVE.
+        _r25Monter([{name:'SQUAT',series:3,reps:'8 PUIS 8',repos:'2 min'}]);
+        if(!woState.sessionData[0].sets[0].degressive) return _echec('« 8 PUIS 8 » n’est pas une dégressive');
+        const h=[0,1,2].map(i=>_r25Champ(0,i,'weight').getAttribute('enterkeyhint')+'/'+_r25Champ(0,i,'weight2').getAttribute('enterkeyhint')).join(',');
+        if(h!=='next/next,next/next,next/done') return _echec('enterkeyhint dégressive : '+h);
+        _r25Champ(0,0,'weight').focus(); document.activeElement.value='80'; _r25Suivant();
+        if(document.activeElement!==_r25Champ(0,0,'weight2')) return _echec('P1 ne mène pas à P2');
+        document.activeElement.value='50'; _r25Suivant();
+        if(document.activeElement!==_r25Champ(0,1,'weight')) return _echec('P2 ne mène pas au P1 de la série suivante');
+        if(woState.sessionData[0].sets[0].weight!=='80'||woState.sessionData[0].sets[0].weight2!=='50') return _echec('P1/P2 mal rangés');
+        _r25Champ(0,2,'weight2').focus(); _r25Suivant();
+        if(document.getElementById('sets-body-0').contains(document.activeElement)) return _echec('le dernier P2 ne ferme pas le clavier');
+        // SÉRIES VALIDÉES : sautées, et « OK » passe sur la dernière ouverte.
+        _r25Monter([{name:'ROWING BARRE',series:4,reps:'8',repos:'2 min'}]);
+        const d=woState.sessionData[0];
+        d.sets[1].done=true; d.sets[3].done=true;
+        renderSets(woState.exercises[0],d,0);
+        if(_r25Champ(0,2).getAttribute('enterkeyhint')!=='done') return _echec('la dernière série ouverte ne porte pas « OK »');
+        _r25Champ(0,0).focus(); _r25Suivant();
+        if(document.activeElement!==_r25Champ(0,2)) return _echec('la série validée n’est pas sautée');
+        _r25Suivant();
+        if(document.getElementById('sets-body-0').contains(document.activeElement)) return _echec('après la dernière série ouverte, le clavier reste');
+        // LE NÉGATIF EST REFUSÉ, ET ON AVANCE QUAND MÊME.
+        d.sets[1].done=false; d.sets[3].done=false;
+        renderSets(woState.exercises[0],d,0);
+        _r25Champ(0,0).focus(); document.activeElement.value='-5'; _r25Suivant();
+        if(d.sets[0].weight!==''||_r25Champ(0,0).value!=='') return _echec('la charge négative est gardée');
+        if(toasts.indexOf('Charge négative ignorée')<0) return _echec('pas d’avertissement pour le négatif');
+        if(document.activeElement!==_r25Champ(0,1)) return _echec('le refus du négatif bloque l’enchaînement');
+        // LE REPLI : rendu complet, focus rendu au même champ de la même série.
+        const avant=_r25Champ(0,1), tb=document.getElementById('sets-body-0');
+        _woLignesRendues.set(tb,['désynchronisé']);
+        avant.value='70'; _woChargeSaisie(0,1,'weight',avant);
+        const apres=_r25Champ(0,1);
+        if(avant.isConnected||apres===avant) return _echec('le repli n’a pas repeint le tableau');
+        if(document.activeElement!==apres) return _echec('le repli ne rend pas le focus au même champ');
+        if(d.sets[1].weight!=='70') return _echec('le repli perd la saisie');
+        // SUPERSET : deux tableaux, l'enchaînement ne sort pas du sien.
+        _r25Monter([{name:'ROWING BARRE',series:2,reps:'8',repos:'1 min'},{name:'CURL BARRE',series:2,reps:'10',repos:'1 min',ss:true}]);
+        const t1=document.getElementById('sets-body-1');
+        if(!t1) return _echec('le superset ne rend pas deux tableaux');
+        if(_r25Champ(0,1).getAttribute('enterkeyhint')!=='done') return _echec('la dernière série du premier exercice ne porte pas « OK »');
+        _r25Champ(0,1).focus(); _r25Suivant();
+        if(t1.contains(document.activeElement)) return _echec('« OK » saute dans le tableau de l’autre exercice');
+        if(document.getElementById('sets-body-0').contains(document.activeElement)) return _echec('le clavier reste ouvert en fin d’exercice');
+        return true;
+      } finally { _r25Ranger(sU,sW,sSnap,svSave,svToast); }
+    });
+
     // ══ 17/09/2026 — R24 : « QUELLE CHARGE POUR QUEL OBJECTIF ? » ══════════
 
     ok('R24 — le calculateur dit ce qu’il fait, sans promettre « optimale », et ses calculs n’ont pas bougé',(()=>{

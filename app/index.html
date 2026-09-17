@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1262';
+window.RC_BUILD='1263';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -43519,7 +43519,157 @@ function _woChargeSaisie(idx,i,champ,el){
     if(el.value!==brut) el.value=brut;
     if(principal){ s.userEdited=true; s.isAuto=false; }
   }
-  renderSets(woState.exercises[idx],d,idx);
+  // R25 — PAS renderSets : il reconstruit tout le tbody, et le champ ou le
+  // doigt vient d'arriver — la serie suivante — serait detruit avec son
+  // clavier. Meme raisonnement que pour la carte douleur, qui ne repasse pas
+  // par renderWoEx. On ne remplace que les lignes dont le rendu change, et
+  // celle qui porte le focus est modifiee EN PLACE.
+  _woMajLignes(woState.exercises[idx],d,idx);
+}
+// ══ R25 — LA SAISIE ENCHAINEE DES CHARGES ═══════════════════════════════
+//
+// Ce que renderSets a rendu pour chaque tbody : _woMajLignes compare le rendu
+// suivant a celui-ci, ligne par ligne.
+const _woLignesRendues=new WeakMap();
+// LE CHAMP SUIVANT, DANS CET EXERCICE SEULEMENT. L'ordre du document est celui
+// qu'on veut : serie par serie, P1 puis P2 sur une degressive. Les champs d'une
+// serie validee sont disabled, donc sautes. Un superset rend deux tbody : la
+// recherche ne sort jamais de celui-ci.
+function _woChampSuivant(tb,i,champ){
+  const l=[...tb.querySelectorAll('input.set-input[data-serie]')].filter(x=>!x.disabled);
+  const k=l.findIndex(x=>x.getAttribute('data-serie')===String(i)&&x.getAttribute('data-champ')===champ);
+  return k>=0?(l[k+1]||null):null;
+}
+// UN ECOUTEUR PAR TBODY, DELEGUE, et aucun raccourci global : la cible est le
+// clavier du telephone, dont la touche « Suivant » envoie Enter.
+function _woBrancherEnchainement(tb,idx){
+  if(!tb||tb._woEnchaine) return;
+  tb._woEnchaine=true;
+  tb.addEventListener('keydown',e=>{
+    if(e.key!=='Enter') return;
+    const el=e.target;
+    if(!el||!el.matches||!el.matches('input.set-input[data-serie]')) return;
+    e.preventDefault();
+    const i=parseInt(el.getAttribute('data-serie'),10), champ=el.getAttribute('data-champ');
+    // LA SAISIE EST VALIDEE ICI, AVANT DE PARTIR. Selon le navigateur, le
+    // change du champ quitte part pendant ou apres le deplacement du focus ;
+    // le faire d'abord rend l'ordre certain, et la serie suivante recoit sa
+    // charge proposee avant d'etre atteinte. Le change qui suivra ne changera
+    // plus rien. Rien n'est ecrit si la valeur n'a pas bouge : accepter la
+    // charge proposee d'un « Suivant » ne la transforme pas en saisie.
+    try{
+      const d=woState&&woState.sessionData&&woState.sessionData[idx];
+      const s=d&&d.sets&&d.sets[i];
+      if(s){
+        const brut=String(el.value).replace(',','.');
+        if(brut!==String(s[champ]==null?'':s[champ])) _woChargeSaisie(idx,i,champ,el);
+      }
+    }catch(err){}
+    const suivant=_woChampSuivant(tb,i,champ);
+    if(suivant){
+      try{ suivant.focus({preventScroll:false}); }catch(err){ try{ suivant.focus(); }catch(_){} }
+      // La charge proposee est selectionnee : taper la remplace, « Suivant »
+      // la garde.
+      try{ suivant.select(); }catch(err){}
+    } else {
+      try{ el.blur(); }catch(err){}
+    }
+  });
+}
+// ── NE REMPLACER QUE CE QUI CHANGE ──────────────────────────────────────
+// Le remplissage automatique tourne dans renderSets, a l'identique (mode
+// lignesSeules) : chargeSuivante, isAuto et userEdited ne sont lus et ecrits
+// qu'a un seul endroit. On compare ensuite chaque ligne a son rendu precedent.
+// Une ligne inchangee n'est pas touchee ; une ligne changee est remplacee —
+// modifiee EN PLACE : ses champs restent les memes elements.
+//
+// ⚠ POURQUOI EN PLACE, ET PAS SEULEMENT LA LIGNE FOCALISEE. Toucher la case de
+// la serie suivante du doigt deplace le focus, et le change du champ quitte
+// part AVANT que la case touchee ne le recoive. Remplacer sa ligne a ce
+// moment-la detruisait la case sous le doigt : le focus tombait dans le vide
+// et le clavier se fermait. Garder les elements rend l'ordre des evenements
+// indifferent.
+// REPLI : si le nombre de lignes a change, ou si la ligne focalisee n'a plus la
+// meme structure, renderSets complet, puis le focus est rendu au meme champ,
+// curseur compris.
+function _woMajLignes(ex,data,idx){
+  const tb=document.getElementById('sets-body-'+idx);
+  const avant=tb&&_woLignesRendues.get(tb);
+  if(!tb||!avant||isCardio(ex)||tb.rows.length!==avant.length) return _woRenduCompletFocus(ex,data,idx);
+  const apres=renderSets(ex,data,idx,{lignesSeules:true});
+  if(!Array.isArray(apres)||apres.length!==avant.length) return _woRenduCompletFocus(ex,data,idx);
+  const lignes=[...tb.rows];
+  for(let i=0;i<apres.length;i++){
+    if(apres[i]===avant[i]) continue;
+    const z=document.createElement('tbody');
+    z.innerHTML=apres[i];
+    const neuf=z.firstElementChild, vieux=lignes[i];
+    if(!neuf||!vieux) return _woRenduCompletFocus(ex,data,idx);
+    if(!_woPatcherNoeud(vieux,neuf)){
+      if(vieux.contains(document.activeElement)) return _woRenduCompletFocus(ex,data,idx);
+      vieux.replaceWith(neuf);
+    }
+  }
+  _woLignesRendues.set(tb,apres);
+  _majActionsSeries(ex,data,idx);
+  try{ _majBandeTempo(ex,data,idx); }catch(e){}
+  _majCarteDouleur(idx);
+  _majEncartSurcharge(idx);
+}
+// Met `vieux` a l'image de `neuf` en gardant ses elements : un champ reste le
+// meme champ, donc garde son focus et son clavier. Rend false si les deux
+// arbres n'ont pas la meme forme — l'appelant remplace alors la ligne, ou
+// repasse par le rendu complet si le focus est dedans.
+function _woPatcherNoeud(vieux,neuf){
+  if(!vieux||!neuf||vieux.nodeType!==neuf.nodeType) return false;
+  if(vieux.nodeType===3){ if(vieux.nodeValue!==neuf.nodeValue) vieux.nodeValue=neuf.nodeValue; return true; }
+  if(vieux.nodeType!==1) return true;
+  if(vieux.tagName!==neuf.tagName) return false;
+  // Les attributs : ceux du nouveau rendu, et seulement eux.
+  for(const a of [...vieux.attributes]) if(!neuf.hasAttribute(a.name)) vieux.removeAttribute(a.name);
+  for(const a of [...neuf.attributes]) if(vieux.getAttribute(a.name)!==a.value) vieux.setAttribute(a.name,a.value);
+  if(vieux.tagName==='INPUT'){
+    // La valeur AFFICHEE suit le dossier : la charge proposee de la serie
+    // suivante arrive dans la case, meme si le doigt y est deja.
+    const v=neuf.getAttribute('value')||'';
+    if(vieux.value!==v) vieux.value=v;
+    vieux.disabled=neuf.hasAttribute('disabled');
+    return true;
+  }
+  // LES ENFANTS, DANS L'ORDRE. Le cas courant est une mention qui apparait ou
+  // disparait APRES le champ — « proposé » sous la charge : le champ, en tete,
+  // est garde, la mention ajoutee ou retiree derriere lui.
+  const vk=[...vieux.childNodes], nk=[...neuf.childNodes];
+  const n=Math.min(vk.length,nk.length);
+  for(let k=0;k<n;k++){
+    if(!_woPatcherNoeud(vk[k],nk[k])){
+      if(vk[k].nodeType===1&&vk[k].contains(document.activeElement)) return false;
+      vk[k].replaceWith(nk[k]);
+    }
+  }
+  for(let k=n;k<vk.length;k++){
+    if(vk[k].nodeType===1&&vk[k].contains(document.activeElement)) return false;
+    vk[k].remove();
+  }
+  for(let k=n;k<nk.length;k++) vieux.appendChild(nk[k]);
+  return true;
+}
+// LE REPLI (b) : rendu complet, puis le focus rendu au meme champ de la meme
+// serie, position du curseur comprise quand le type de champ la donne.
+function _woRenduCompletFocus(ex,data,idx){
+  const a=document.activeElement;
+  const tb=document.getElementById('sets-body-'+idx);
+  const garde=(a&&tb&&tb.contains(a)&&a.matches&&a.matches('input.set-input[data-serie]'))
+    ?{serie:a.getAttribute('data-serie'),champ:a.getAttribute('data-champ'),
+      debut:(()=>{ try{ return a.selectionStart; }catch(e){ return null; } })(),
+      fin:(()=>{ try{ return a.selectionEnd; }catch(e){ return null; } })()}:null;
+  renderSets(ex,data,idx);
+  if(!garde) return;
+  const t=document.getElementById('sets-body-'+idx);
+  const el=t&&t.querySelector('input.set-input[data-serie="'+garde.serie+'"][data-champ="'+garde.champ+'"]');
+  if(!el||el.disabled) return;
+  try{ el.focus({preventScroll:true}); }catch(e){}
+  if(garde.debut!=null) try{ el.setSelectionRange(garde.debut,garde.fin); }catch(e){}
 }
 // LA FORME EST COPIEE, PAS REECRITE. La derniere serie porte, par
 // construction, la forme de _blocExo — y compris `degressive` et `p2reps`,
@@ -43997,11 +44147,17 @@ function _woTeteDeGroupe(idx){
     return !g||g[0]===idx;
   }catch(e){ return true; }
 }
-function renderSets(ex,data,idx){
+// R25 — `opts.lignesSeules` : rend le tableau des lignes HTML SANS toucher au
+// document. C'est ce que _woMajLignes compare au rendu precedent pour ne
+// remplacer que les lignes qui ont change. Le remplissage automatique de la
+// charge (plus bas) tourne dans les deux cas, a l'identique.
+function renderSets(ex,data,idx,opts){
+  const _lignesSeules=!!(opts&&opts.lignesSeules);
   if(idx==null) idx=woState.currentEx;
   const tb=document.getElementById('sets-body-'+idx);if(!tb) return;
   // Cardio : affichage simplifié sans poids ni RIR
   if(isCardio(ex)){
+    if(_lignesSeules) return null;
     tb.innerHTML=data.sets.map((s,i)=>{
       const done=s.done;
       return `<tr class="${done?'done':''}">
@@ -44066,8 +44222,15 @@ function renderSets(ex,data,idx){
   // il faisait quatre ⓘ pour quatre series, plus les deux de la bande : six a
   // l'ecran, le double du plafond. Il reste sur la premiere.
   const _iPremierRpe=_infosIci?data.sets.findIndex(s=>s&&s.rpeCible):-1;
+  // R25 — LA TOUCHE « SUIVANT » DU CLAVIER. Chaque champ de charge porte sa
+  // serie (data-serie) et son champ (data-champ) : l'ecouteur delegue du
+  // tbody retrouve ainsi le suivant sans lire la mise en page. Le dernier
+  // champ OUVERT de l'exercice dit « terminé » (enterkeyhint="done").
+  const _iDernierOuvert=data.sets.map(x=>!(x&&x.done)).lastIndexOf(true);
+  const _eh=(i,champ)=>(i===_iDernierOuvert&&(champ==='weight2'||!isDeg))?'done':'next';
+  const _attrs=(i,champ)=>`data-serie="${i}" data-champ="${champ}" enterkeyhint="${_eh(i,champ)}"`;
 
-  tb.innerHTML=data.sets.map((s,i)=>{
+  const lignes=data.sets.map((s,i)=>{
     const baseW=parseFloat(s.weight)||0;
     const dis=s.done?'disabled':'';
     const rowCls=s.done?'done':'';
@@ -44100,13 +44263,13 @@ function renderSets(ex,data,idx){
     // Wide-mode: content without <td> wrappers (for 2-sub-row card layout)
     const isWide=enCartes;
     const weightInner=isDeg
-      ?`<input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
-      :`<div><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" style="${weightBorder}" value="${s.weight||''}" onchange="${onChW}" ${dis}>${autoLabel}</div>`;
+      ?`<input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight2')} value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
+      :`<div><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${s.weight||''}" onchange="${onChW}" ${dis}>${autoLabel}</div>`;
 
     // Simple-mode: <td> wrappers for classic table layout
     const weightCell=isDeg
-      ?`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
-      :`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" style="${weightBorder}" value="${s.weight||''}" onchange="${onChW}" ${dis}>${autoLabel}</td>`;
+      ?`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight2')} value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
+      :`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${s.weight||''}" onchange="${onChW}" ${dis}>${autoLabel}</td>`;
 
     // Cycle cell
 
@@ -44258,7 +44421,13 @@ function renderSets(ex,data,idx){
       <td>${painSelect}</td>
       <td><button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
     </tr>`;
-  }).join('');
+  });
+  if(_lignesSeules) return lignes;
+  tb.innerHTML=lignes.join('');
+  // R25 — ce qui vient d'etre rendu, pour que la prochaine saisie de charge
+  // ne remplace que ce qui change ; et l'ecouteur de la touche « Suivant ».
+  _woLignesRendues.set(tb,lignes);
+  _woBrancherEnchainement(tb,idx);
   // Le « − » n'existe que tant que la dernière série n'est pas validée : sa
   // présence dépend donc du tableau qui vient d'être repeint.
   _majActionsSeries(ex,data,idx);
