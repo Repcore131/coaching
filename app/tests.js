@@ -39821,41 +39821,93 @@ async function testExercices(){
       if(String(_blocExo).indexOf('_enteteSeries(isWide,')<0) return _echec('_blocExo ne peint pas la bande par _enteteSeries');
       return true;})());
 
+    // R16 — la gêne passe par la même liste dessinée que le RIR.
+    const _r16Gene=(racine,v,ligne)=>{
+      const tr=racine.querySelectorAll('#sets-body-0 tr')[ligne||0];
+      const b=tr&&tr.querySelector('button.gene-choix');
+      if(!b) throw new Error('pas de case de gêne sur la série '+((ligne||0)+1));
+      b.click();
+      const m=document.getElementById('gene-menu');
+      if(!m) throw new Error('la liste de gêne ne s’ouvre pas');
+      const o=[...m.querySelectorAll('.rir-opt')].find(x=>x.getAttribute('data-v')===v);
+      if(!o){ woChoixFermer(false); throw new Error('pas d’option « '+v+' »'); }
+      o.click();
+    };
+
     ok('R08 — les repères de gêne sont dans la liste, et les valeurs n’ont pas bougé',(()=>
       _r08Fix(359,d=>{
         const tb=_r08Rendre(d,_r08Ex,[_r08S()]);
-        const sel=tb.querySelector('.gene-choix select');
-        if(!sel) return _echec('le menu de gêne a disparu');
-        const V=['','1','2','3','4','5','6'];
-        const T=['—','1 · à peine','2','3 · gênant','4 · ça fait mal','5','6 · je dois arrêter'];
-        const v=[...sel.options].map(o=>o.value), txt=[...sel.options].map(o=>o.textContent.trim());
-        if(JSON.stringify(v)!==JSON.stringify(V)) return _echec('valeurs : '+JSON.stringify(v));
-        if(JSON.stringify(txt)!==JSON.stringify(T)) return _echec('libellés : '+JSON.stringify(txt));
+        const b=tb.querySelector('button.gene-choix');
+        if(!b) return _echec('la case de gêne a disparu');
+        if(!/Gêne/.test(b.getAttribute('aria-label')||'')) return _echec('aria-label : « '+b.getAttribute('aria-label')+' »');
+        b.click();
+        const m=document.getElementById('gene-menu');
+        try{
+          if(!m) return _echec('la liste de gêne ne s’ouvre pas');
+          // R16 — 2 et 5 ont leur explication, et chaque définition commence
+          // par une majuscule. Les mots sont ceux du lexique.
+          const V=['1','2','3','4','5','6'];
+          const T=['1 (À peine perceptible)','2 (Perceptible, sans gêner le mouvement)','3 (Gênant mais supportable)',
+            '4 (Ça fait mal)','5 (Ça fait mal, ta technique se dégrade)','6 (Je dois arrêter)'];
+          const opts=[...m.querySelectorAll('.rir-opt')];
+          const v=opts.map(o=>o.getAttribute('data-v'));
+          const txt=opts.map(o=>o.querySelector('.rir-opt-v').textContent.trim()+' '+o.querySelector('.rir-opt-d').textContent.trim());
+          if(JSON.stringify(v)!==JSON.stringify(V)) return _echec('valeurs : '+JSON.stringify(v));
+          if(JSON.stringify(txt)!==JSON.stringify(T)) return _echec('libellés : '+JSON.stringify(txt));
+        } finally { woChoixFermer(false); }
         // AUCUN SEUIL NE BOUGE : la carte, l'allègement et leur échelle.
         if(DLR_SEANCE_SEUIL!==4||DLR_SEANCE_MIN!==2||DLR_ALLEGE!==0.80)
           return _echec('les constantes de la carte ont changé : '+[DLR_SEANCE_SEUIL,DLR_SEANCE_MIN,DLR_ALLEGE].join('/'));
-        // « 4 · ça fait mal » écrit '4', la même chaîne qu'avant.
-        sel.value='4'; sel.dispatchEvent(new Event('change'));
+        // « 4 » écrit '4', la même chaîne qu'avant.
+        _r16Gene(d,'4');
         const p=woState.sessionData[0].sets[0].pain;
-        if(p!=='4') return _echec('le menu a écrit '+JSON.stringify(p));
-        // LA CASE N'AFFICHE QUE LE CHIFFRE — c'est ce qui la garde étroite —,
-        // et le <select> reste l'élément nommé pour le lecteur d'écran.
+        if(p!=='4') return _echec('la liste a écrit '+JSON.stringify(p));
+        // LA CASE N'AFFICHE QUE LE CHIFFRE — c'est ce qui la garde étroite.
         const g=d.querySelector('#sets-body-0 .gene-choix');
         const vu=[...g.querySelectorAll('[aria-hidden="true"]')].map(x=>x.textContent).join('');
         if(vu.indexOf('4')!==0) return _echec('la case affiche « '+vu+' »');
-        const s2=g.querySelector('select');
-        if(s2.value!=='4') return _echec('après repeint, le menu montre « '+s2.value+' »');
-        if(!/Gêne/.test(s2.getAttribute('aria-label')||'')) return _echec('aria-label : « '+s2.getAttribute('aria-label')+' »');
+        if(/mal|arrêter|perceptible/i.test(g.textContent)) return _echec('la définition est dans la case');
+        if((g.getAttribute('aria-label')||'').indexOf(': 4')<0) return _echec('aria-label après choix : « '+g.getAttribute('aria-label')+' »');
+        // La gêne persiste avant de repeindre, le RIR non : les deux onchange d'origine.
+        if(WO_CHOIX.gene.persister!==true||WO_CHOIX.rir.persister!==false) return _echec('la persistance des deux listes a changé');
+        return true;})));
+
+    ok('R16 — les chiffres sont centrés sous « Échec », et les définitions commencent par une majuscule',(()=>
+      _r08Fix(359,d=>{
+        for(const [liste,c] of [['rir-menu',RIR_CHOIX],['gene-menu',GENE_CHOIX]])
+          for(const [,,def] of c)
+            if(def[0]!==def[0].toUpperCase()) return _echec(liste+' : « '+def+' » commence par une minuscule');
+        const tb=_r08Rendre(d,_r08Ex,[_r08S()]);
+        for(const [cls,id] of [['rir-choix','rir-menu'],['gene-choix','gene-menu']]){
+          tb.querySelector('button.'+cls).click();
+          const m=document.getElementById(id);
+          try{
+            if(!m) return _echec(id+' ne s’ouvre pas');
+            const centres=[...m.querySelectorAll('.rir-opt-v')].map(v=>{
+              const rg=document.createRange(); rg.selectNodeContents(v); const r=rg.getBoundingClientRect();
+              return (r.left+r.right)/2; });
+            if(Math.max(...centres)-Math.min(...centres)>1) return _echec(id+' : les valeurs ne sont pas centrées sur un même axe');
+            // « Échec » tient dans sa colonne : sinon le centre se décale.
+            const v0=m.querySelector('.rir-opt-v');
+            if(v0.scrollWidth>v0.clientWidth+1) return _echec(id+' : « '+v0.textContent+' » déborde de sa colonne');
+            // Les définitions partent toutes du même bord.
+            const bords=[...m.querySelectorAll('.rir-opt-d')].map(x=>Math.round(x.getBoundingClientRect().left));
+            if(new Set(bords).size!==1) return _echec(id+' : définitions décalées '+bords.join('/'));
+          } finally { woChoixFermer(false); }
+        }
         return true;})));
 
     ok('R08 — une série validée garde sa gêne ouverte, et ferme son RIR',(()=>
       _r08Fix(359,d=>{
         const tb=_r08Rendre(d,_r08Ex,[_r08S({done:true,rir:'1'}),_r08S()]);
         const [l1,l2]=tb.querySelectorAll('tr');
-        const sel=l1&&l1.querySelector('.gene-choix select');
-        if(!sel) return _echec('pas de menu de gêne sur la série validée');
+        const sel=l1&&l1.querySelector('button.gene-choix');
+        if(!sel) return _echec('pas de case de gêne sur la série validée');
         // « Une douleur se déclare souvent une fois la barre reposée. »
         if(sel.disabled) return _echec('la gêne est verrouillée après validation');
+        // R16 — et sa liste s'ouvre, et elle écrit.
+        _r16Gene(d,'3',0);
+        if(woState.sessionData[0].sets[0].pain!=='3') return _echec('la gêne d’une série validée ne s’écrit pas');
         const r1=_r14Sel(l1);
         if(!r1) return _echec('pas de menu RIR sur la série validée');
         if(!r1.disabled) return _echec('le RIR reste modifiable sur une série validée');
@@ -39877,12 +39929,7 @@ async function testExercices(){
           {weight:'100',reps:'5',rir:'1',pain:'',done:true},
           {weight:'100',reps:'5',rir:'',pain:'',done:false,userEdited:true}]}};
         renderSets(woState.exercises[0],woState.sessionData[0],0);
-        const choisir=(i,v)=>{
-          const tr=document.getElementById('sets-body-0').querySelectorAll('tr')[i];
-          const sel=tr&&tr.querySelector('.gene-choix select');
-          if(!sel) throw new Error('pas de menu de gêne sur la série '+(i+1));
-          sel.value=v; sel.dispatchEvent(new Event('change'));
-        };
+        const choisir=(i,v)=>_r16Gene(document,v,i);
         const carte=()=>/Qu'est-ce que tu veux faire/.test((document.getElementById('wo-douleur-0')||{}).innerHTML||'');
         if(carte()) return _echec('la carte est là avant toute gêne');
         choisir(0,'4');
@@ -40022,11 +40069,14 @@ async function testExercices(){
 
     ok('R14 — choisir dans le menu écrit la même valeur qu’avant, et la charge suivante en découle',(()=>
       _r08Fix(359,d=>{
-        const src=String(_woRirChoisir);
-        if(!/s\.rir=v;\s*renderSets\(woState\.exercises\[idx\],woState\.sessionData\[idx\],idx\)/.test(src))
-          return _echec('le choix du RIR n’écrit plus rir avant de repeindre');
-        // L'onchange d'origine ne persistait pas : le choix non plus.
-        if(/woPersist/.test(src)) return _echec('le choix persiste, ce que le menu ne faisait pas');
+        // R16 — une seule écriture pour le RIR et la gêne : _woChoixEcrire.
+        const src=String(_woChoixEcrire);
+        if(WO_CHOIX.rir.champ!=='rir') return _echec('la liste RIR n’écrit plus rir');
+        if(!/s\[c\.champ\]=v;[\s\S]*renderSets\(woState\.exercises\[idx\],woState\.sessionData\[idx\],idx\)/.test(src))
+          return _echec('le choix n’écrit plus avant de repeindre');
+        // L'onchange d'origine du RIR ne persistait pas : le choix non plus.
+        if(WO_CHOIX.rir.persister!==false||!/if\(c\.persister\) woPersist\(\)/.test(src))
+          return _echec('le RIR persiste, ce que le menu ne faisait pas');
         const s0=_r08S({weight:'100'});
         const cles=Object.keys(s0).sort().join(',');
         _r08Rendre(d,_r08Ex,[s0,_r08S({weight:''})]);

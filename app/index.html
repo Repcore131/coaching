@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1254';
+window.RC_BUILD='1255';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4023,17 +4023,13 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
    R15 — LA LISTE DU RIR N'EST PLUS NATIVE. Kevin : les definitions entre
    parentheses, deux fois plus petites que « Échec » ou le chiffre. Une liste
    native ne met qu'une taille par option : la liste est donc dessinee
-   (.rir-menu), et la case est un <button>. La gene garde sa liste native. */
-/* ── R08 — LE MENU DE GENE GARDE SA LARGEUR ───────────────────────────────
-   LES LIBELLES SONT DANS LA LISTE, PAS DANS LA CASE. Un <select> se dimensionne
-   sur sa plus longue option : « 6 · je dois arrêter » le portait a 125 px, et
-   un tableau de 359 px debordait de 18 — mesure. Le vrai <select> est donc
-   pose, transparent, sur une case qui n'affiche que le chiffre : le doigt
-   ouvre la liste native, qui montre les libelles en entier, et la case reste
-   a la largeur du chiffre.
-   ⚠ LE <select> RESTE L'ELEMENT QU'ON TOUCHE ET QU'ON LIT : il recoit le tap,
-   le focus clavier et le lecteur d'ecran. La case n'est qu'un affichage,
-   aria-hidden. */
+   (.rir-menu), et la case est un <button>.
+   R16 — LA GENE PREND LA MEME LISTE (Kevin : « le même style que le RIR »). */
+/* ── R08 — LA CASE DE GENE GARDE SA LARGEUR ───────────────────────────────
+   LES LIBELLES SONT DANS LA LISTE, PAS DANS LA CASE : « 6 · je dois arrêter »
+   portait un <select> a 125 px, et un tableau de 359 px debordait de 18 —
+   mesure. La case n'affiche que le chiffre ; le bouton est nomme pour le
+   lecteur d'ecran, et ce qu'il affiche est aria-hidden. */
 .gene-choix,.rir-choix{position:relative;display:inline-flex;align-items:center;justify-content:center;
   gap:3px;min-width:44px;min-height:38px;padding:0 6px;box-sizing:border-box;flex:none;
   background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);
@@ -4041,19 +4037,17 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
   white-space:nowrap;text-transform:none;letter-spacing:.5px;
   margin:0;line-height:1;vertical-align:middle;cursor:pointer}
 /* R15 — margin:0, ET C'EST CE QUI FAISAIT LES LIGNES HAUTES. La case de gene
-   est un <label> : elle heritait de la regle globale des libelles de
+   etait un <label> : elle heritait de la regle globale des libelles de
    formulaire, 16 px au-dessus et 6 px en dessous. Chaque ligne du tableau
    faisait 85 px pour 38 px de case — mesure. vertical-align:middle retire en
-   plus la descente de la ligne de base sous la case. */
-.rir-choix:focus-visible{outline:none;border-color:var(--red);box-shadow:0 0 0 2px rgba(198,15,8,.15)}
+   plus la descente de la ligne de base sous la case. La regle reste : un
+   <button> herite lui aussi de marges selon le contexte. */
+.gene-choix:focus-visible,.rir-choix:focus-visible{outline:none;border-color:var(--red);box-shadow:0 0 0 2px rgba(198,15,8,.15)}
 .rir-choix:disabled{cursor:default}
 /* R14 — « Échec » EN CASSE NORMALE, et pas en capitales espacees heritees du
    tableau : 63 px au lieu de 74. Mesure a 359 px, ces 11 px sont ce qui
    laisse « Gêne ⓘ » sur une ligne dans l'en-tete. */
 .gene-choix .gene-fl,.rir-choix .gene-fl{color:var(--sub);font-size:9px}
-.gene-choix select{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;
-  opacity:0;cursor:pointer;font-size:var(--fs-xs);border:none}
-.gene-choix:focus-within{border-color:var(--red);box-shadow:0 0 0 2px rgba(198,15,8,.15)}
 /* R14 — le RIR se ferme a la validation, comme avant les segments : il decrit
    un effort accompli. La gene, elle, reste ouverte. */
 .rir-choix.fermee{opacity:.55}
@@ -4072,7 +4066,10 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
   color:var(--text);font-family:Montserrat,sans-serif;text-align:left;cursor:pointer;
   text-transform:none;letter-spacing:normal}
 .rir-opt+.rir-opt{border-top:1px solid rgba(255,255,255,.05)}
-.rir-opt-v{flex:none;min-width:68px;font-size:22px;font-weight:800;line-height:1.1}
+/* R16 — LA VALEUR EST CENTREE DANS SA COLONNE, et la colonne a la largeur de
+   « Échec » (68 px mesures) : « 0 », « 1 »… tombent au milieu du mot, les
+   definitions partent toutes du meme bord. */
+.rir-opt-v{flex:none;width:74px;text-align:center;font-size:22px;font-weight:800;line-height:1.1}
 .rir-opt-d{flex:1;min-width:0;font-size:11px;font-weight:500;line-height:1.35;color:var(--sub)}
 .rir-opt[aria-selected="true"]{background:rgba(224,32,32,.14)}
 .rir-opt[aria-selected="true"] .rir-opt-v{color:var(--red-text)}
@@ -43561,45 +43558,75 @@ function _seriesEnCartes(data){
   const sets=(data&&Array.isArray(data.sets))?data.sets:[];
   return !!(sets[0]&&sets[0].degressive);
 }
-// ══ R15 — LA LISTE DU RIR ══════════════════════════════════════════════
+// ══ R15 / R16 — LES LISTES DU RIR ET DE LA GENE ═════════════════════════
 //
-// LES VALEURS ENREGISTREES SONT CELLES D'AVANT R08 : 'echec', '0' a '5'.
-// chargeSuivante, l'e1RM et rirMoyenSeance les lisent telles quelles.
+// LES VALEURS ENREGISTREES NE CHANGENT PAS. RIR : 'echec', '0' a '5', celles
+// d'avant R08 : chargeSuivante, l'e1RM et rirMoyenSeance les lisent telles
+// quelles. Gene : '1' a '6' : DLR_SEANCE_SEUIL lit toujours 4.
 // [valeur, ce que la case affiche, la definition]. La definition n'est que
 // dans la liste, en petit : la case du tableau n'affiche que la valeur.
+// R16 — une majuscule en tete de chaque definition (Kevin, 17/09/2026).
 const RIR_CHOIX=Object.freeze([
-  ['echec','Échec','tu n\'as pas réussi à finaliser ton nombre de reps'],
-  ['0','0','aucune rep de plus possible'],
-  ['1','1','encore 1 rep en réserve'],
-  ['2','2','encore 2 reps en réserve'],
-  ['3','3','encore 3 reps en réserve'],
-  ['4','4','encore 4 reps en réserve'],
+  ['echec','Échec','Tu n\'as pas réussi à finaliser ton nombre de reps'],
+  ['0','0','Aucune rep de plus possible'],
+  ['1','1','Encore 1 rep en réserve'],
+  ['2','2','Encore 2 reps en réserve'],
+  ['3','3','Encore 3 reps en réserve'],
+  ['4','4','Encore 4 reps en réserve'],
   ['5','5','5 reps ou plus en réserve']
 ]);
-// La liste ouverte, une seule a la fois : {idx, i, btn, voile, menu}.
-let _rirMenu=null;
-function rirMenuFermer(rendreFocus){
-  const m=_rirMenu;
+// R16 — LA GENE PREND LE DESSIN DU RIR, et 2 et 5 recoivent leur explication.
+// Les mots sont ceux de l'entree « douleur » du lexique : 1 a 2 « À peine
+// perceptible », 3 « Gênant mais supportable », 4 a 5 « Ça fait mal, ta
+// technique se dégrade », 6 « Je dois arrêter ». Pour 2 et 5, qui partagent
+// une ligne du lexique avec leur voisin, la definition dit ce qui les en
+// distingue, sans rien ajouter que le lexique ne dise deja.
+const GENE_CHOIX=Object.freeze([
+  ['1','1','À peine perceptible'],
+  ['2','2','Perceptible, sans gêner le mouvement'],
+  ['3','3','Gênant mais supportable'],
+  ['4','4','Ça fait mal'],
+  ['5','5','Ça fait mal, ta technique se dégrade'],
+  ['6','6','Je dois arrêter']
+]);
+// CE QUI DISTINGUE LES DEUX LISTES, et rien d'autre.
+// ⚠ LA GENE S'OUVRE SUR UNE SERIE VALIDEE, LE RIR NON : une douleur se declare
+// souvent une fois la barre reposee, le RIR decrit un effort accompli.
+// ⚠ LA GENE PERSISTE AVANT DE REPEINDRE, LE RIR NON : ce sont les deux
+// onchange d'origine, repris tels quels. La douleur doit etre dans
+// l'instantane meme si le rendu echoue.
+const WO_CHOIX=Object.freeze({
+  rir:Object.freeze({champ:'rir',choix:RIR_CHOIX,id:'rir-menu',caseCls:'rir-choix',
+    titre:'RIR de la série ',effacer:'Effacer le RIR noté',siValidee:false,persister:false}),
+  gene:Object.freeze({champ:'pain',choix:GENE_CHOIX,id:'gene-menu',caseCls:'gene-choix',
+    titre:'Gêne ressentie sur la série ',effacer:'Effacer la gêne notée',siValidee:true,persister:true})
+});
+// La liste ouverte, une seule a la fois : {genre, idx, i, btn, voile, menu}.
+let _woChoix=null;
+function woChoixFermer(rendreFocus){
+  const m=_woChoix;
   if(!m) return false;
-  _rirMenu=null;
+  _woChoix=null;
   try{ m.voile.remove(); m.menu.remove(); }catch(e){}
-  window.removeEventListener('scroll',_rirMenuSurDefilement,true);
-  window.removeEventListener('resize',_rirMenuSurDefilement);
+  window.removeEventListener('scroll',_woChoixSurDefilement,true);
+  window.removeEventListener('resize',_woChoixSurDefilement);
   if(m.btn){
     m.btn.setAttribute('aria-expanded','false');
     if(rendreFocus&&m.btn.isConnected) try{ m.btn.focus({preventScroll:true}); }catch(e){}
   }
   return true;
 }
+// Le nom de R15, garde : il est appele par la suite de tests.
+function rirMenuFermer(rendreFocus){ return woChoixFermer(rendreFocus); }
 // SOUS LA CASE, ou AU-DESSUS quand la place manque en bas ; toujours dans
 // l'ecran, a 8 px du bord.
-function _rirMenuPlacer(){
-  const m=_rirMenu;
+function _woChoixPlacer(){
+  const m=_woChoix;
   if(!m) return false;
   const r=m.btn.getBoundingClientRect();
   const vh=window.innerHeight, vw=window.innerWidth;
   // La case est sortie de l'ecran : la liste n'a plus rien a designer.
-  if(!m.btn.isConnected||r.bottom<0||r.top>vh){ rirMenuFermer(false); return false; }
+  if(!m.btn.isConnected||r.bottom<0||r.top>vh){ woChoixFermer(false); return false; }
   const mh=m.menu.offsetHeight, mw=m.menu.offsetWidth;
   let top=r.bottom+4;
   if(top+mh>vh-8) top=r.top-4-mh;
@@ -43610,40 +43637,44 @@ function _rirMenuPlacer(){
 }
 // LA PAGE DEFILE : la liste SUIT sa case, elle ne se ferme pas. La fermer au
 // premier evenement de defilement la faisait disparaitre sous le doigt des
-// qu'un defilement doux ou une inertie finissait sa course — constate.
+// qu'un defilement doux ou une inertie finissait sa course : constate.
 // Le defilement DANS la liste ne la deplace pas.
-function _rirMenuSurDefilement(e){
-  if(_rirMenu&&e&&e.target&&e.target.nodeType===1&&_rirMenu.menu.contains(e.target)) return;
-  _rirMenuPlacer();
+function _woChoixSurDefilement(e){
+  if(_woChoix&&e&&e.target&&e.target.nodeType===1&&_woChoix.menu.contains(e.target)) return;
+  _woChoixPlacer();
 }
-function rirMenuOuvrir(idx,i,btn){
-  rirMenuFermer(false);
+function _woChoixSerie(idx,i){
   const d=woState&&woState.sessionData&&woState.sessionData[idx];
-  const s=d&&Array.isArray(d.sets)?d.sets[i]:null;
-  // UNE SERIE VALIDEE NE S'OUVRE PAS : le bouton est disabled, et on le
+  return d&&Array.isArray(d.sets)?(d.sets[i]||null):null;
+}
+function _woChoixOuvrir(genre,idx,i,btn){
+  woChoixFermer(false);
+  const c=WO_CHOIX[genre];
+  const s=_woChoixSerie(idx,i);
+  // UNE SERIE VALIDEE N'OUVRE PAS SON RIR : le bouton est disabled, et on le
   // redit ici pour un appel direct.
-  if(!s||s.done||!btn) return false;
-  const cur=s.rir==null?'':String(s.rir);
+  if(!c||!s||!btn||(s.done&&!c.siValidee)) return false;
+  const cur=s[c.champ]==null?'':String(s[c.champ]);
   // « — » n'apparait que s'il y a quelque chose a effacer.
-  const opts=RIR_CHOIX.concat(cur!==''?[['','—','effacer le RIR noté']]:[]);
+  const opts=c.choix.concat(cur!==''?[['','—',c.effacer]]:[]);
   const voile=document.createElement('div');
   voile.className='rir-menu-voile';
   // AU CLIC ET NON AU pointerdown : fermee des l'appui, la liste laisserait le
   // relachement tomber sur ce qu'il y a dessous, la case d'une autre serie.
-  voile.addEventListener('click',e=>{ e.preventDefault(); rirMenuFermer(true); });
+  voile.addEventListener('click',e=>{ e.preventDefault(); woChoixFermer(true); });
   // `liste` et non `menu` : la suite de tests releve les affectations sur tout
   // nom finissant par « u » pour verifier la classification des champs du
   // dossier, et la classe de la liste s'y lisait comme un champ inconnu.
   const liste=document.createElement('div');
   liste.className='rir-menu';
-  liste.id='rir-menu';
+  liste.id=c.id;
   liste.setAttribute('role','listbox');
-  liste.setAttribute('aria-label','RIR de la série '+(i+1));
+  liste.setAttribute('aria-label',c.titre+(i+1));
   liste.innerHTML=opts.map(([v,l,def])=>`<button type="button" role="option" class="rir-opt" data-v="${v}" aria-selected="${cur===v}">`
     +`<span class="rir-opt-v">${l}</span><span class="rir-opt-d">(${escapeHtml(def)})</span></button>`).join('');
   liste.addEventListener('click',e=>{
     const o=e.target.closest('.rir-opt');
-    if(o) _woRirChoisir(idx,i,o.getAttribute('data-v'));
+    if(o) _woChoixEcrire(genre,idx,i,o.getAttribute('data-v'));
   });
   liste.addEventListener('keydown',e=>{
     const l=[...liste.querySelectorAll('.rir-opt')];
@@ -43653,39 +43684,44 @@ function rirMenuOuvrir(idx,i,btn){
     else if(e.key==='ArrowUp') n=l[Math.max(0,k-1)];
     else if(e.key==='Home') n=l[0];
     else if(e.key==='End') n=l[l.length-1];
-    else if(e.key==='Escape'){ e.preventDefault(); rirMenuFermer(true); return; }
-    else if(e.key==='Tab'){ rirMenuFermer(true); return; }
+    else if(e.key==='Escape'){ e.preventDefault(); woChoixFermer(true); return; }
+    else if(e.key==='Tab'){ woChoixFermer(true); return; }
     if(n){ e.preventDefault(); n.focus(); }
   });
   document.body.appendChild(voile);
   document.body.appendChild(liste);
   btn.setAttribute('aria-expanded','true');
-  _rirMenu={idx,i,btn,voile,menu:liste};
-  if(!_rirMenuPlacer()) return false;
-  window.addEventListener('scroll',_rirMenuSurDefilement,true);
-  window.addEventListener('resize',_rirMenuSurDefilement);
+  _woChoix={genre,idx,i,btn,voile,menu:liste};
+  if(!_woChoixPlacer()) return false;
+  window.addEventListener('scroll',_woChoixSurDefilement,true);
+  window.addEventListener('resize',_woChoixSurDefilement);
   const f=liste.querySelector('[aria-selected="true"]')||liste.querySelector('.rir-opt');
   if(f) try{ f.focus({preventScroll:true}); }catch(e){}
   return true;
 }
+function rirMenuOuvrir(idx,i,btn){ return _woChoixOuvrir('rir',idx,i,btn); }
+function geneMenuOuvrir(idx,i,btn){ return _woChoixOuvrir('gene',idx,i,btn); }
 // LE CHOIX. Ecrit ce qu'ecrivait le menu natif, au meme endroit, puis
-// repeint : la charge de la serie suivante se recalcule sur ce RIR. Pas de
-// woPersist, que l'onchange d'origine n'appelait pas non plus.
-function _woRirChoisir(idx,i,v){
-  rirMenuFermer(false);
-  const d=woState&&woState.sessionData&&woState.sessionData[idx];
-  const s=d&&Array.isArray(d.sets)?d.sets[i]:null;
-  if(!s||s.done) return false;
+// repeint : la charge de la serie suivante se recalcule sur le RIR, la carte
+// de douleur se leve sur la gene.
+function _woChoixEcrire(genre,idx,i,v){
+  woChoixFermer(false);
+  const c=WO_CHOIX[genre];
+  const s=_woChoixSerie(idx,i);
+  if(!c||!s||(s.done&&!c.siValidee)) return false;
   v=String(v==null?'':v);
-  if(v!==''&&!RIR_CHOIX.some(c=>c[0]===v)) return false;
-  s.rir=v;
+  if(v!==''&&!c.choix.some(x=>x[0]===v)) return false;
+  s[c.champ]=v;
+  if(c.persister) woPersist();
   renderSets(woState.exercises[idx],woState.sessionData[idx],idx);
   // Le focus revient sur la case repeinte, pas en haut de la page.
   const tr=document.querySelectorAll('#sets-body-'+idx+' tr')[i];
-  const b=tr&&tr.querySelector('.rir-choix');
+  const b=tr&&tr.querySelector('.'+c.caseCls);
   if(b) try{ b.focus({preventScroll:true}); }catch(e){}
   return true;
 }
+function _woRirChoisir(idx,i,v){ return _woChoixEcrire('rir',idx,i,v); }
+function _woGeneChoisir(idx,i,v){ return _woChoixEcrire('gene',idx,i,v); }
 // L'EN-TETE, UNE SEULE FOIS. Rendu par _blocExo, lu par la suite de tests :
 // c'est la vraie bande rouge qu'on mesure, pas une copie.
 //
@@ -43776,12 +43812,11 @@ function renderSets(ex,data,idx){
   // valeurs et leurs definitions vivent dans RIR_CHOIX (R15), que la liste
   // dessinee lit aussi.
   const RIR_OPTS=RIR_CHOIX.map(c=>c[0]);
-  const PAIN_OPTS=['1','2','3','4','5','6'];
   // R08 — L'ECHELLE DE GENE, DITE DANS LA LISTE. Les VALEURS ne changent pas :
-  // '1'..'6', comme avant, donc aucune migration et aucun seuil a revoir —
-  // DLR_SEANCE_SEUIL lit toujours 4. Seuls les libelles s'ajoutent, aux quatre
-  // reperes de l'entree 'douleur' du lexique ; 2 et 5 restent nus, entre deux.
-  const PAIN_LIB={'1':'1 · à peine','3':'3 · gênant','4':'4 · ça fait mal','6':'6 · je dois arrêter'};
+  // '1'..'6', comme avant, donc aucune migration et aucun seuil a revoir :
+  // DLR_SEANCE_SEUIL lit toujours 4. R16 : valeurs et definitions dans
+  // GENE_CHOIX, que la liste dessinee lit aussi.
+  const PAIN_OPTS=GENE_CHOIX.map(c=>c[0]);
   // R09 — LE ⓘ DE LA SURCHARGE, UNE FOIS PAR TABLEAU. Il se pose sur la
   // PREMIERE serie qui porte « proposé » — pas sur chaque ligne, ce serait un
   // mur de ⓘ. La serie 1 n'en porte jamais : rien ne la precede pour la
@@ -43804,11 +43839,11 @@ function renderSets(ex,data,idx){
     // une seule fois, et il est vérifiable.
     const onChW=`_woChargeSaisie(${idx},${i},'weight',this)`;
     const onChW2=`_woChargeSaisie(${idx},${i},'weight2',this)`;
-    // Persiste PUIS repeint. La persistance d'abord : si le rendu venait à
-    // échouer, la douleur serait quand même dans l'instantané. Et le rendu
-    // appelle _majCarteDouleur en fin de course, ce qui fait apparaître la
-    // carte « ça t'a fait mal deux fois » au moment même de la saisie.
-    const onChP=`woState.sessionData[${idx}].sets[${i}].pain=this.value;woPersist();renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
+    // La gene : persiste PUIS repeint (R16 : dans _woChoixEcrire). La
+    // persistance d'abord : si le rendu venait à échouer, la douleur serait
+    // quand même dans l'instantané. Et le rendu appelle _majCarteDouleur en fin
+    // de course, ce qui fait apparaître la carte « ça t'a fait mal deux fois »
+    // au moment même de la saisie.
 
     // Weight cell (with « proposé » label)
     //
@@ -43933,13 +43968,13 @@ function renderSets(ex,data,idx){
     // et les rouvrir permettrait de réécrire une séance validée.
     //
     // R08 — LA CASE N'AFFICHE QUE LE CHIFFRE, LA LISTE DIT CE QU'IL VEUT
-    // DIRE. Voir .gene-choix : un <select> se dimensionne sur sa plus longue
-    // option, et « 6 · je dois arrêter » faisait deborder le tableau.
+    // DIRE : « 6 · je dois arrêter » faisait deborder le tableau.
+    // R16 — la liste est celle du RIR (geneMenuOuvrir) : le chiffre en grand,
+    // la definition deux fois plus petite. La case est un <button>.
     const _painVal=PAIN_OPTS.indexOf(String(s.pain))>=0?String(s.pain):'';
-    const painSelect=`<label class="gene-choix"><span aria-hidden="true">${_painVal||'—'}</span><span class="gene-fl" aria-hidden="true">▾</span><select onchange="${onChP}" aria-label="Gêne ressentie sur cette série">
-      <option value="">—</option>
-      ${PAIN_OPTS.map(v=>`<option value="${v}" ${_painVal===v?'selected':''}>${PAIN_LIB[v]||v}</option>`).join('')}
-    </select></label>`;
+    const painSelect=`<button type="button" class="gene-choix" aria-haspopup="listbox" aria-expanded="false"`
+      +` aria-label="Gêne ressentie sur la série ${i+1} : ${_painVal||'non notée'}" onclick="geneMenuOuvrir(${idx},${i},this)">`
+      +`<span aria-hidden="true">${_painVal||'—'}</span><span class="gene-fl" aria-hidden="true">▾</span></button>`;
 
     // Done button
     const doneClr=s.done?'var(--green)':'var(--border)';
