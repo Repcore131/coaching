@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1264';
+window.RC_BUILD='1265';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4173,6 +4173,21 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
   animation:fjNeuf calc(var(--t-4)*2) var(--c-out) both}
 .fj-result{padding:12px 16px;border-bottom:1px solid #111;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .fj-result:active{background:var(--surface-2)}
+/* R27 — le bandeau du dernier ajout, en tete de la liste de recherche. Dans le
+   flux, jamais par-dessus : il ne peut pas couvrir le champ. */
+.fj-bandeau{margin:12px 16px 4px;padding:11px 12px 10px;background:var(--success-bg);
+  border:1px solid var(--success-border);border-radius:var(--r-3)}
+.fj-bandeau.annule{background:var(--surface-1);border-color:var(--border)}
+.fj-bandeau-t{font-size:var(--fs-sm);line-height:1.45;color:var(--success);font-weight:600;overflow-wrap:anywhere}
+.fj-bandeau-t strong{font-weight:800}
+.fj-bandeau.annule .fj-bandeau-t{color:var(--sub)}
+.fj-bandeau-a{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
+.fj-bandeau-annuler{background:none;border:none;padding:8px 2px;margin:-8px 0;min-height:36px;cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;color:var(--success);
+  text-decoration:underline;text-underline-offset:3px}
+.fj-bandeau-fin{margin:0;flex-shrink:0;background:transparent;color:var(--text);
+  border:1px solid var(--success-border)}
+.fj-bandeau.annule .fj-bandeau-fin{border-color:var(--border)}
 .fj-repas-btn{flex:1;padding:10px 6px;background:#111;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;cursor:pointer;text-align:center;transition:background var(--t-1),border-color var(--t-1),color var(--t-1)}
 .fj-repas-btn.active{background:#1a0000;border-color:var(--red);color:var(--text)}
 
@@ -10799,6 +10814,10 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="fj-actions" style="display:flex;gap:8px;margin-top:10px"></div>
   </div>
   <div class="scroll-area" style="flex:1">
+    <!-- R27 — LE BANDEAU DU DERNIER AJOUT, en tete de liste et SOUS le champ :
+         il defile avec la liste, il ne recouvre jamais la recherche. Rendu par
+         _renderFjBandeau, vide hors d une session de saisie. -->
+    <div id="fj-ajout-bandeau" aria-live="polite"></div>
     <div id="fj-recent-section"></div>
     <div id="fj-results-list"></div>
     <div style="padding:20px 16px;font-size:var(--fs-xs);color:var(--text-dim);text-align:center;letter-spacing:.5px">
@@ -69636,12 +69655,15 @@ async function _loadCiqual(){
 // Le barème est un REPÈRE, pas une vérité : on mange à des heures différentes
 // selon les gens et les jours. Il ne sert qu'à éviter de proposer « Matin » à
 // 21 h. L'athlète change d'un doigt, et son choix tient pour toute la session.
+// R27 — CINQ CRENEAUX, et non plus quatre : apres 22 h, c'est « Avant de se
+// coucher », que le barème ne proposait jamais. Minuit à 11 h reste « Matin ».
 const FJ_BAREME_REPAS=Object.freeze([
   {avant:11,repas:'matin'},
   {avant:15,repas:'dejeuner'},
   {avant:18,repas:'collation'},
+  {avant:22,repas:'diner'},
 ]);
-const FJ_REPAS_DEFAUT='diner';   // au-delà du dernier seuil
+const FJ_REPAS_DEFAUT='coucher';   // au-delà du dernier seuil
 function repasSelonHeure(ref){
   const d=(ref instanceof Date)?ref:new Date();
   const h=d.getHours();
@@ -69650,7 +69672,15 @@ function repasSelonHeure(ref){
 }
 // Vrai dès que l'athlète a touché un bouton de repas dans cette session. Tant
 // qu'il ne l'a pas fait, on déduit ; après, on respecte son choix.
+// R27 — ET DES LE PREMIER AJOUT : le second aliment herite du repas du premier,
+// qu'il ait ete choisi ou seulement propose par l'heure. Un barème qui change
+// de creneau entre deux aliments du meme repas les separerait. LA SESSION
+// commence a openFoodSearch, qui remet le drapeau a faux : il ne survit plus
+// d'un repas a l'autre, ni d'un soir au lendemain matin.
 let _fjRepasChoisi=false;
+// R27 — le dernier aliment ajoute pendant la session : ce que dit le bandeau de
+// la recherche, et ce qu'« Annuler » retire. null hors session.
+let _fjSaisieAjout=null;
 
 // ── Favoris ───────────────────────────────────────────────────────────────
 // recentFoods n'est PAS touché : il continue de se remplir et de s'afficher
@@ -70502,7 +70532,12 @@ function _htmlDernierAjout(date){
 }
 function openFoodSearch(date){
   _fjDate=date||localISODate(new Date());
+  // R27 — UNE NOUVELLE SESSION DE SAISIE : le repas se rededuit de l'heure, et
+  // le bandeau de la session precedente ne parle plus de rien.
+  _fjRepasChoisi=false;
+  _fjSaisieAjout=null;
   go('s-food-search');
+  _renderFjBandeau();
   const inp=document.getElementById('fj-search-input');
   if(inp){inp.value='';setTimeout(()=>inp.focus(),350);}
   // Re-rendue a chaque ouverture : le reseau a pu tomber depuis la derniere.
@@ -72392,6 +72427,15 @@ async function saveFoodEntry(){
   if(!currentUser.nutrition.log) currentUser.nutrition.log={};
   if(!currentUser.nutrition.log[_fjDate]) currentUser.nutrition.log[_fjDate]={entries:[]};
   currentUser.nutrition.log[_fjDate].entries.push(entry);
+  // R27 — CE QUE L'AJOUT VA CHANGER A COTE DE L'ENTREE, releve AVANT : les
+  // recents et le compteur d'usage de cet aliment. « Annuler » les rend tels
+  // quels ; sans ca, un aliment ajoute par erreur resterait en tete des
+  // recents et compterait pour devenir « fréquent ».
+  const _avantRecents=Array.isArray(currentUser.nutrition.recentFoods)
+    ?currentUser.nutrition.recentFoods.slice():undefined;
+  const _ufAvant=currentUser.nutrition.usageFoods;
+  const _avantUsage=(_ufAvant&&Object.prototype.hasOwnProperty.call(_ufAvant,String(f.id)))
+    ?Object.assign({},_ufAvant[String(f.id)]):undefined;
   // Les recents resolvent par _ciqualDB.find(f=>f.id===id) : un identifiant
   // OFF n y serait jamais retrouve, et la ligne serait morte.
   // FREQUENTS : le nombre de fois qu un aliment a ete ajoute, et la derniere.
@@ -72420,11 +72464,135 @@ async function saveFoodEntry(){
     currentUser.nutrition.recentFoods=[f.id,...rec.filter(id=>id!==f.id)].slice(0,10);
   }
   _fjIdNeuf=entry.id;
-  toastEcriture(saveUser(),'Ajouté ✓','cet aliment est');
-  // ON REVIENT SUR LE JOUR OÙ L'ON VIENT D'ÉCRIRE, et non sur aujourd'hui.
-  // L'entrée était bien enregistrée au bon jour ; c'est l'écran qui sautait,
-  // et l'ajout paraissait perdu.
-  loadNutrition(_fjDate);
+  // R27 — LE BANDEAU DIT « AJOUTÉ ✓ » : le toast de succes le repeterait. Le
+  // toast d'ECHEC d'ecriture, lui, reste — c'est la seule chose qu'il dise.
+  if(!saveUser()) toastEcriture(false,'','cet aliment est');
+  // R27 — ON ENCHAINE SUR L'ALIMENT SUIVANT. Un repas, c'est trois ou quatre
+  // aliments : revenir a la nutrition apres chacun obligeait a redescendre
+  // jusqu'au journal et a rouvrir la recherche. « Terminer », dans le bandeau,
+  // ramene au journal — sur le jour ou l'on vient d'ecrire (_fjDate).
+  _fjRepasChoisi=true;
+  const _n=currentUser.nutrition;
+  _fjSaisieAjout={date:_fjDate,id:entry.id,entree:entry,nom:entry.nom,qty:entry.qty,repas:entry.repas,
+    annule:false,cleUsage:String(f.id),avantRecents:_avantRecents,avantUsage:_avantUsage,
+    apresRecents:Array.isArray(_n.recentFoods)?_n.recentFoods.slice():undefined,
+    apresUsage:(_n.usageFoods&&_n.usageFoods[String(f.id)])?Object.assign({},_n.usageFoods[String(f.id)]):undefined};
+  _fjRetourRecherche();
+}
+// ══ R27 — LA SAISIE ENCHAINEE : LE BANDEAU, « ANNULER », « TERMINER » ══════
+//
+// PHRASE DU BANDEAU. « ajouté à <repas> » ne se dit pas en français pour
+// quatre repas sur cinq : on ecrit la preposition qui va avec chacun.
+const FJ_REPAS_AJOUTE=Object.freeze({matin:'au petit-déjeuner',dejeuner:'au déjeuner',
+  diner:'au dîner',collation:'à la collation',coucher:'au coucher'});
+function _fjRetourRecherche(){
+  go('s-food-search');
+  const res=document.getElementById('fj-results-list');
+  if(res) res.innerHTML='';
+  const inp=document.getElementById('fj-search-input');
+  // SANS DELAI, contrairement a openFoodSearch : le focus pose dans le meme
+  // geste que le toucher « Ajouter » est le seul que les telephones laissent
+  // ouvrir le clavier. preventScroll : go() vient de remettre la page en haut.
+  if(inp){ inp.value=''; try{ inp.focus({preventScroll:true}); }catch(e){ try{ inp.focus(); }catch(_){} } }
+  _renderFjBandeau();
+  // Re-rendue : le reseau a pu tomber pendant la saisie.
+  _renderFjActions();
+  if(_ciqualDB) _renderFjRecent(); else _loadCiqual().then(()=>_renderFjRecent());
+}
+// L'ENTREE EST-ELLE ENCORE LA, EXACTEMENT UNE FOIS ? deleteFoodEntry retire
+// PAR IDENTIFIANT tout ce qui le porte : si deux entrees le partageaient — une
+// copie de la veille numerotee dans la meme milliseconde —, « Annuler » en
+// retirerait deux. Et si elle a disparu ou change entre-temps — synchronisation,
+// remplacement par une equivalence —, il n'y a plus rien a annuler. Dans les
+// deux cas, pas de lien : un bouton qui ment est pire que pas de bouton.
+function _fjAjoutRetirable(s){
+  if(!s||s.annule) return false;
+  const memes=_fjEntrees(s.date).filter(e=>e&&e.id===s.id);
+  if(memes.length!==1) return false;
+  const e=memes[0];
+  return e===s.entree||(e.nom===s.nom&&e.qty===s.qty&&e.repas===s.repas);
+}
+function _htmlFjBandeau(s){
+  if(!s) return '';
+  const qte=String(s.qty).replace('.',',')+' g';
+  const ou=FJ_REPAS_AJOUTE[s.repas]||('au repas « '+(FJ_REPAS_LIB[s.repas]||s.repas)+' »');
+  // Le nom en gras : les noms Ciqual portent eux-memes des virgules et des
+  // « ajouté » (« Riz blanc, cuit, sans sel ajouté »), la phrase doit rester
+  // lisible d'un coup. Espace insecable devant ✓ : il ne part pas seul a la ligne.
+  const phrase=s.annule
+    ?'<strong>'+escapeHtml(s.nom)+'</strong> '+qte+' retiré du journal'
+    :'<strong>'+escapeHtml(s.nom)+'</strong> '+qte+' ajouté '+escapeHtml(ou)+' ✓';
+  return '<div class="fj-bandeau'+(s.annule?' annule':'')+'">'
+    +'<div class="fj-bandeau-t">'+phrase+'</div>'
+    +'<div class="fj-bandeau-a">'
+    +(_fjAjoutRetirable(s)?'<button type="button" class="fj-bandeau-annuler" onclick="annulerAjoutAliment()">Annuler</button>':'<span></span>')
+    +'<button type="button" class="btn btn-sm fj-bandeau-fin" onclick="terminerSaisieAliments()">Terminer</button>'
+    +'</div></div>';
+}
+function _renderFjBandeau(){
+  const z=document.getElementById('fj-ajout-bandeau');
+  if(z) z.innerHTML=_htmlFjBandeau(_fjSaisieAjout);
+}
+// « ANNULER » PASSE PAR deleteFoodEntry, la suppression du journal : pas une
+// seconde facon de retirer une entree. Rend true si l'entree est partie.
+function annulerAjoutAliment(){
+  const s=_fjSaisieAjout;
+  if(!s||s.annule) return false;
+  if(!_fjAjoutRetirable(s)){
+    toast('Cet aliment n\'est plus dans ton journal tel qu\'il a été ajouté : rien n\'a été retiré.','var(--orange)');
+    _renderFjBandeau();
+    return false;
+  }
+  // LES COMPTEURS D'ABORD, pour que la sauvegarde de deleteFoodEntry les
+  // emporte avec la suppression. Seulement s'ils sont encore ceux que l'ajout
+  // a poses : un autre ajout entre-temps les a legitimement changes.
+  const n=currentUser.nutrition||{};
+  const j=v=>JSON.stringify(v===undefined?null:v);
+  if(j(n.recentFoods)===j(s.apresRecents)){
+    if(s.avantRecents===undefined) delete n.recentFoods; else n.recentFoods=s.avantRecents.slice();
+  }
+  if(n.usageFoods&&j(n.usageFoods[s.cleUsage])===j(s.apresUsage)){
+    if(s.avantUsage===undefined) delete n.usageFoods[s.cleUsage];
+    else n.usageFoods[s.cleUsage]=Object.assign({},s.avantUsage);
+  }
+  deleteFoodEntry(s.date,s.id);
+  if(_fjEntrees(s.date).some(e=>e&&e.id===s.id)){
+    toast('L\'aliment n\'a pas pu être retiré.','var(--orange)');
+    _renderFjBandeau();
+    return false;
+  }
+  s.annule=true;
+  _renderFjBandeau();
+  if(_ciqualDB) _renderFjRecent();
+  return true;
+}
+// « TERMINER » : le journal du jour ou l'on vient d'ecrire, et a sa hauteur.
+// L'en-tete du jour en haut de l'ecran si le dernier aliment ajoute tient sous
+// lui ; sinon le repas de cet aliment, pour qu'il soit sous les yeux.
+function terminerSaisieAliments(){
+  const s=_fjSaisieAjout;
+  const date=(s&&s.date)||_fjDate;
+  _fjSaisieAjout=null;
+  loadNutrition(date);
+  // loadNutrition peut d'abord demander l'age : on ne defile que si c'est
+  // bien la nutrition qui s'est ouverte.
+  if((document.querySelector('.screen.active')||{}).id!=='s-nutrition') return false;
+  const viser=()=>{
+    const nav=document.getElementById('fj-nav-slot');
+    const neuf=document.querySelector('#fj-today-section .fj-entry.fj-neuf');
+    let cible=nav||document.getElementById('fj-today-section');
+    if(nav&&neuf){
+      const barre=document.getElementById('client-tabbar');
+      const bas=window.innerHeight-((barre&&barre.getBoundingClientRect().height)||0);
+      if(neuf.getBoundingClientRect().bottom-nav.getBoundingClientRect().top>bas) cible=neuf.parentElement||neuf;
+    }
+    if(cible) _defiler(cible,{behavior:'instant'});
+  };
+  viser();
+  // Une seconde fois apres la mise en page : les jauges et les cartes du haut
+  // peuvent encore changer de hauteur au premier rendu.
+  try{ requestAnimationFrame(viser); }catch(e){}
+  return true;
 }
 
 function deleteFoodEntry(date,id){

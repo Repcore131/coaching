@@ -32162,6 +32162,10 @@ async function testExercices(){
         const svE=document.querySelectorAll('.screen.active');
         const remettre=[...svE];
         try{
+          // AUCUN CHAMP NE DOIT AVOIR LE FOCUS AU DEPART : la garde 2 le lit.
+          // Depuis R27, un ajout d'aliment rend le focus a la recherche, et les
+          // assertions qui appellent saveFoodEntry plus tot le laissaient la.
+          try{ if(document.activeElement&&document.activeElement!==document.body) document.activeElement.blur(); }catch(e){}
           document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
           // GARDE 1 : PAS SUR UN ECRAN ATHLETE. Il a les mêmes touches sous
           // les doigts sur ses propres écrans.
@@ -40428,6 +40432,101 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R27 : LES ALIMENTS À LA SUITE, SANS REPASSER PAR LA NUTRITION ══
+
+    okA('R27 — ajouter, enchaîner, annuler, terminer : la saisie reste sur la recherche, hors ligne compris',async()=>{
+      const sU=currentUser, svSave=window.saveUser, svToast=window.toast, svH=window.repasSelonHeure;
+      const svDef=window._defiler, svFetch=window.fetch;
+      const sDB=_ciqualDB, sFood=_fjFood, sDate=_fjDate, sRepas=_fjRepas, sChoisi=_fjRepasChoisi, sSaisie=_fjSaisieAjout;
+      const toasts=[]; let vise=null;
+      const AUJ=localISODate(new Date());
+      const g=id=>document.getElementById(id);
+      const actif=()=>(document.querySelector('.screen.active')||{}).id;
+      const bandeau=()=>g('fj-ajout-bandeau').textContent.replace(/\s+/g,' ').trim();
+      const entrees=()=>((currentUser.nutrition.log||{})[AUJ]||{entries:[]}).entries;
+      const ajouter=async(id,q)=>{ selectFjFood(id); g('fja-qty').value=q; await saveFoodEntry(); };
+      try{
+        window.saveUser=()=>true; window.toast=m=>toasts.push(String(m));
+        // HORS LIGNE : la table est locale, rien de ce parcours ne doit passer
+        // par le réseau pour aboutir.
+        window.fetch=()=>Promise.reject(new TypeError('Failed to fetch'));
+        Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});
+        _ciqualDB=[
+          {id:901,n:'Poulet rôti',g:'viandes, oeufs, poissons',k:170,p:29,c:0,l:6,f:0,e:0.8},
+          {id:902,n:'Riz blanc cuit',g:'produits céréaliers',k:130,p:2.7,c:28,l:0.3,f:0.4,e:0.01},
+          {id:903,n:'Brocoli cuit',g:'fruits, légumes, légumineuses et oléagineux',k:35,p:2.8,c:4,l:0.4,f:3,e:0.02}];
+        currentUser={id:'r27',email:'r27@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},
+          sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',
+          consent:{health:true,policyVersion:POLICY_VERSION},sessions_config:[],coachId:'c1',
+          nutrition:{dietType:'flexible',recentFoods:[903],usageFoods:{'903':{n:4,t:1}}}};
+        loadNutrition();
+        // LA SESSION S'OUVRE : repas à redéduire, bandeau vide.
+        _fjRepasChoisi=true; _fjSaisieAjout={id:1};
+        openFoodSearch(AUJ);
+        if(_fjRepasChoisi!==false||_fjSaisieAjout!==null||bandeau()!=='') return _echec('la session précédente survit à openFoodSearch');
+        // LE BANDEAU EST SOUS LE CHAMP, DANS LE FLUX.
+        const z=g('fj-ajout-bandeau'), inp=g('fj-search-input');
+        if(!(inp.compareDocumentPosition(z)&Node.DOCUMENT_POSITION_FOLLOWING)||!z.closest('.scroll-area')) return _echec('le bandeau n’est pas sous le champ, dans la liste');
+        // 1) PREMIER AJOUT : repas proposé par l'heure.
+        window.repasSelonHeure=()=>'dejeuner';
+        await ajouter(901,150);
+        if(actif()!=='s-food-search') return _echec('après l’ajout : '+actif());
+        if(inp.value!==''||document.activeElement!==inp) return _echec('le champ n’est ni vidé ni focalisé');
+        if(g('fj-results-list').innerHTML!=='') return _echec('les résultats précédents restent');
+        if(bandeau()!=='Poulet rôti 150 g ajouté au déjeuner ✓AnnulerTerminer') return _echec('bandeau : « '+bandeau()+' »');
+        // Espaces insécables : « 150 g » et « ✓ » ne se séparent pas en fin de ligne.
+        if(!/150 g .* ✓$/.test(z.querySelector('.fj-bandeau-t').textContent)) return _echec('espaces insécables absents');
+        if(!/Récents/.test(g('fj-recent-section').textContent)||currentUser.nutrition.recentFoods[0]!==901) return _echec('les récents ne sont pas à jour');
+        if(toasts.some(t=>/Ajouté/.test(t))) return _echec('le toast répète le bandeau');
+        const f1=z.querySelector('.fj-bandeau');
+        if(['fixed','absolute','sticky'].indexOf(getComputedStyle(f1).position)>=0) return _echec('le bandeau flotte au-dessus de la page');
+        // 2) LE SECOND HÉRITE, MÊME SI L'HEURE A TOURNÉ, ET RESTE MODIFIABLE.
+        window.repasSelonHeure=()=>'collation';
+        selectFjFood(902);
+        if(_fjRepas!=='dejeuner') return _echec('le second aliment n’hérite pas : '+_fjRepas);
+        if(!document.querySelector('.fj-repas-btn.active[data-repas="dejeuner"]')) return _echec('le bouton du repas hérité n’est pas allumé');
+        selectRepas('diner');
+        if(_fjRepas!=='diner') return _echec('le repas hérité n’est plus modifiable');
+        // LA FLÈCHE de l'écran de quantité ramène toujours à la recherche.
+        document.querySelector('#s-food-add .back-btn').click();
+        if(actif()!=='s-food-search') return _echec('la flèche mène à '+actif());
+        const avantRiz={rec:JSON.stringify(currentUser.nutrition.recentFoods),uf:JSON.stringify(currentUser.nutrition.usageFoods)};
+        await ajouter(902,200);
+        if(!/^Riz blanc cuit 200 g ajouté au dîner ✓Annuler/.test(bandeau())) return _echec('second bandeau : « '+bandeau()+' »');
+        const idRiz=_fjSaisieAjout.id;
+        // 3) ANNULER : l'entrée, et elle seule ; les récents et l'usage d'avant.
+        if(annulerAjoutAliment()!==true) return _echec('Annuler échoue');
+        if(entrees().length!==1||entrees().some(e=>e.id===idRiz)) return _echec('entrées après Annuler : '+entrees().map(e=>e.nom));
+        if(JSON.stringify(currentUser.nutrition.recentFoods)!==avantRiz.rec||JSON.stringify(currentUser.nutrition.usageFoods)!==avantRiz.uf)
+          return _echec('récents ou usage non rendus');
+        if(bandeau()!=='Riz blanc cuit 200 g retiré du journalTerminer'||z.querySelector('.fj-bandeau-annuler')) return _echec('bandeau après Annuler : « '+bandeau()+' »');
+        if(annulerAjoutAliment()!==false||entrees().length!==1) return _echec('un second Annuler retire encore');
+        // 4) PAS DE LIEN QUI MENT : identifiant partagé, ou entrée disparue.
+        await ajouter(903,100);
+        const e3=entrees().slice(-1)[0];
+        entrees().push(Object.assign({},e3,{nom:'Copie de la veille'}));
+        _renderFjBandeau();
+        if(z.querySelector('.fj-bandeau-annuler')) return _echec('Annuler proposé sur un identifiant partagé');
+        if(annulerAjoutAliment()!==false||entrees().length!==3) return _echec('Annuler retire un identifiant partagé');
+        entrees().splice(1,2);
+        _renderFjBandeau();
+        if(z.querySelector('.fj-bandeau-annuler')) return _echec('Annuler proposé sur une entrée disparue');
+        // 5) TERMINER : le journal du jour, à sa hauteur.
+        window._defiler=(el)=>{ vise=el; };
+        if(terminerSaisieAliments()!==true||actif()!=='s-nutrition') return _echec('Terminer mène à '+actif());
+        if(_fjSaisieAjout!==null) return _echec('la session survit à Terminer');
+        const nav=g('fj-nav-slot');
+        if(!vise||!(vise===nav||g('fj-today-section').contains(vise))) return _echec('Terminer ne vise pas le journal du jour');
+        return true;
+      } finally {
+        delete navigator.onLine;
+        window.fetch=svFetch; window._defiler=svDef; window.repasSelonHeure=svH;
+        window.saveUser=svSave; window.toast=svToast; currentUser=sU;
+        _ciqualDB=sDB; _fjFood=sFood; _fjDate=sDate; _fjRepas=sRepas; _fjRepasChoisi=sChoisi; _fjSaisieAjout=sSaisie;
+        try{ _renderFjBandeau(); }catch(e){}
+      }
+    });
+
     // ══ 17/09/2026 — R26 : « MON APPROCHE », EN BAS DE LA NUTRITION ═══════
 
     ok('R26 — la ligne du bas remplace le sélecteur, et la feuille dit ce que chaque diète change',(()=>{
@@ -40961,6 +41060,8 @@ async function testExercices(){
         ['nutrition › recherche › ajout',athlete,['s-client-home','s-nutrition','s-food-search','s-food-add'],['s-food-search','s-nutrition','s-client-home']],
         ['onglets en rond',athlete,['s-client-home','s-nutrition','s-videos','s-progress','s-nutrition'],['s-client-home']],
         ['aliment enregistré',athlete,['s-client-home','s-nutrition','s-food-search','s-food-add','s-nutrition'],['s-client-home']],
+        // R27 — l'ajout ramène à la recherche : l'écran de quantité n'en devient pas l'origine.
+        ['aliment enregistré, on enchaîne',athlete,['s-client-home','s-nutrition','s-food-search','s-food-add','s-food-search'],['s-nutrition','s-client-home']],
         ['profil › santé',athlete,['s-client-home','s-athlete-profile','s-sante'],['s-athlete-profile','s-client-home']],
         ['historique › détail',athlete,['s-client-home','s-historique-seances','s-seance-detail'],['s-historique-seances','s-client-home']],
         ['séances › boutique › vente',athlete,['s-client-home','s-session-manager','s-boutique','s-vente'],['s-boutique','s-session-manager','s-client-home']],
@@ -45728,10 +45829,11 @@ async function testExercices(){
         _ciqualDB=DB;
 
         // ── 1) Le repas déduit de l'heure ─────────────────────────────────
-        ok('Le barème de l\'heure suit les quatre créneaux',(()=>{
+        // R27 — cinq créneaux : après 22 h, « Avant de se coucher ».
+        ok('Le barème de l\'heure suit les cinq créneaux',(()=>{
           const cas=[[7,'matin'],[10,'matin'],[11,'dejeuner'],[13,'dejeuner'],
             [14,'dejeuner'],[15,'collation'],[17,'collation'],[18,'diner'],
-            [19,'diner'],[23,'diner'],[0,'matin']];
+            [19,'diner'],[21,'diner'],[22,'coucher'],[23,'coucher'],[0,'matin']];
           for(const [h,att] of cas){
             const d=new Date(2026,0,15,h,30);
             const v=repasSelonHeure(d);
