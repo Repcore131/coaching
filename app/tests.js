@@ -4641,7 +4641,8 @@ async function testExercices(){
             return _echec('le texte ne le dit pas');
           if(!/prochain recalcul/.test(SOPK_MIGRATION_TEXTE))
             return _echec('le texte ne dit pas quand la valeur change');
-          return /fixé cette valeur vous-même/.test(SOPK_MIGRATION_TEXTE)
+          // R31 — au tutoiement, comme le reste de l'app.
+          return /fixé cette valeur toi-même/.test(SOPK_MIGRATION_TEXTE)
             ?true:_echec('le texte ne couvre pas le réglage manuel');})());
         ok('planSousAncienneRegleSopk et la garde sont PURES',(()=>{
           const u=_ath({id:'c13',sopk:true});
@@ -24300,7 +24301,7 @@ async function testExercices(){
       ok('Sans macros, la carte de proposition s\'affiche',(()=>{
         currentUser=_ath({nutrition:{dietType:'flexible'}});
         const h=_htmlDepartAthlete(currentUser.nutrition);
-        return /Point de départ proposé/.test(h)&&/Utiliser ces objectifs/.test(h)
+        return /Point de départ proposé/.test(h)&&/Enregistrer ces objectifs/.test(h)
           &&/JOUR ON/.test(h)&&/JOUR OFF/.test(h);})());
       ok('Aucune carte quand le calcul est impossible',(()=>{
         const u=_ath({nutrition:{dietType:'flexible'},_evol_height:null,height:null,
@@ -24308,7 +24309,7 @@ async function testExercices(){
         delete u['init-height'];
         currentUser=u;
         return _htmlDepartAthlete(currentUser.nutrition)==='';})());
-      ok('« Utiliser ces objectifs » écrit les macros et note l\'origine',(()=>{
+      ok('« Enregistrer ces objectifs » écrit les macros et note l\'origine',(()=>{
         currentUser=_ath({nutrition:{dietType:'flexible'}});
         const b=besoinsProposes(currentUser);
         try{ utiliserBesoinsProposes(); }catch(e){ return _echec('exception: '+e.message); }
@@ -29832,7 +29833,7 @@ async function testExercices(){
       const manquants=attendus.filter(n=>vus.indexOf(n)<0);
       return manquants.length?_echec('manquantes : '+manquants.join(', ')):true;})());
     ok('Rest in pause suit le guide : une seule relance',
-       /15 s de repos puis finissez votre série/.test(TECHNIQUES.rest_in_pause.desc));
+       /15 s de repos, puis termine ta série/.test(TECHNIQUES.rest_in_pause.desc));
 
     // ── POIDS_TECHNIQUE ──
     ok('Les sept familles ont un poids',
@@ -32032,7 +32033,7 @@ async function testExercices(){
           'T:Macronutriments',
           'B:Enregistrer ces chiffres',
           'B:Proposer un point de départ',
-          'DEUX:Enregistrer les réglages|Appliquer à l’athlète'];
+          'DEUX:Enregistrer les réglages|Enregistrer pour l’athlète'];
         return JSON.stringify(lu)===JSON.stringify(attendu)
           ?true:_echec('lu : '+JSON.stringify(lu));})());
       ok('« Enregistrer ces chiffres » est CENTRE et seul sur sa ligne',(()=>{
@@ -32835,8 +32836,8 @@ async function testExercices(){
         if(!b) return _echec('aucun bouton de fiche');
         const court=b.querySelector('.cr-fiche-c'), long=b.querySelector('.cr-fiche-l');
         if(!court||!long) return _echec('les deux libelles ne coexistent pas');
-        if(court.textContent!=='VOIR PROFIL') return _echec('court : « '+court.textContent+' »');
-        if(long.textContent!=='OUVRIR LA FICHE') return _echec('long : « '+long.textContent+' »');
+        if(court.textContent!=='Voir profil') return _echec('court : « '+court.textContent+' »');
+        if(long.textContent!=='Ouvrir la fiche') return _echec('long : « '+long.textContent+' »');
         // ET LE LIBELLE ENTIER RESTE ATTEIGNABLE : title et aria-label.
         return /Ouvrir la fiche de /.test(b.getAttribute('aria-label')||'')
           ?true:_echec('aucun libelle accessible complet');})());
@@ -34078,7 +34079,7 @@ async function testExercices(){
       ok('B2.F3 — le bouton et la garde de sortie n\'ont pas bouge',(()=>{
         const s=String(renderProgEx);
         if(s.indexOf("btn-attente")<0) return _echec('le bouton ne bascule plus');
-        if(s.indexOf("'SAUVEGARDER •'")<0) return _echec('le libelle d\'attente a disparu');
+        if(s.indexOf("'Enregistrer •'")<0) return _echec('le libelle d\'attente a disparu');
         // saveProgram RESTE SYNCHRONE : une trentaine d'appelants l'appellent
         // sans await, et la passer en async changerait son contrat.
         return String(saveProgram).indexOf('async')<0
@@ -36136,7 +36137,8 @@ async function testExercices(){
         // UN SEUL BOUTON : le bloc propose UNE chose.
         const b=d.querySelectorAll('button');
         if(b.length!==1) return _echec(b.length+' bouton(s) au lieu d’un');
-        if(!/commencer/i.test(b[0].textContent)) return _echec('le bouton dit : '+b[0].textContent);
+        // R31 — « Démarrer », le seul verbe pour lancer une séance.
+        if(!/^Démarrer/.test(b[0].textContent)) return _echec('le bouton dit : '+b[0].textContent);
         // ET AUCUN ADJECTIF GENRE : RepCore a des athletes des deux sexes, et
         // « Prete ? » en exclut la moitie.
         if(/\bpr[ê e]t[e]?\b/i.test(txt)) return _echec('un adjectif genre : '+txt.slice(0,80));
@@ -36341,7 +36343,7 @@ async function testExercices(){
         // UN SEUL BOUTON, et c'est le sien.
         const b=d.querySelectorAll('button');
         if(b.length!==1) return _echec(b.length+' bouton(s) au lieu d’un');
-        return /LANCER MA PREMI/i.test(b[0].textContent)
+        return /Démarrer ma première séance/.test(b[0].textContent)
           ?true:_echec('le bouton dit : '+b[0].textContent);
       } finally { _psRep=JSON.parse(sv); }})());
 
@@ -38116,11 +38118,11 @@ async function testExercices(){
       const _lignes=b=>b.innerHTML.split(/<br\s*\/?>/i)
         .map(x=>x.replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim());
       const t=[...duo].map(_lignes);
-      if(t[0].join('|')!=='GÉRER MES|SÉANCES')
+      if(t[0].join('|')!=='Gérer mes|séances')
         return _echec('premier bouton : '+t[0].join(' | '));
-      if(t[1].join('|')!=='HISTORIQUE DES|SÉANCES')
+      if(t[1].join('|')!=='Historique des|séances')
         return _echec('second bouton : '+t[1].join(' | '));
-      if(_lignes(rouge).join('|')!=='DÉMARRER MA SÉANCE|DU JOUR')
+      if(_lignes(rouge).join('|')!=='Démarrer ma séance|du jour')
         return _echec('bouton principal : '+_lignes(rouge).join(' | '));
       // ⚠ 11 px EST LE PLANCHER DE L'ACCUEIL, tenu par l'assertion « Aucun
       // texte de l'accueil athlete ne descend sous le plancher ». « Plus
@@ -40432,6 +40434,137 @@ async function testExercices(){
         if(b.getAttribute('onclick')!=='openBilanChoice()') return _echec('la ligne ne mène pas au bilan');
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
+
+    // ══ 17/09/2026 — R31 : UN VERBE PAR ACTE, LA CASSE, LE TUTOIEMENT ══════
+
+    // L'inventaire des libellés de boutons écrits dans le source, comme celui
+    // qui a servi au lot : balises <button>, commentaires et SVG retirés.
+    const _r31Libelles=()=>{
+      const src=_prodSrc(); const out=[]; const re=/<button\b[^>]*>([\s\S]*?)<\/button>/g; let m;
+      while((m=re.exec(src))){
+        if(m[1].length>1500) continue;
+        const l=m[1].replace(/<!--[\s\S]*?-->/g,'').replace(/<svg[\s\S]*?<\/svg>/g,'')
+          .replace(/\$\{[^{}]*\}/g,' ').replace(/'\s*\+[\s\S]*?\+\s*'/g,' ').replace(/<[^>]+>/g,' ')
+          .replace(/&#39;|\\'/g,"'").replace(/\s+/g,' ').trim();
+        if(/[A-Za-zÀ-ÿ]/.test(l)) out.push(l);
+      }
+      return out;
+    };
+
+    ok('R31 — un verbe par acte : « Enregistrer » écrit, plus de Sauver, Sauvegarder, OK ni Appliquer',(()=>{
+      const libs=_r31Libelles();
+      const interdits=libs.filter(l=>/^(Sauver|SAUVER|Sauvegarder|SAUVEGARDER|OK|Appliquer|APPLIQUER)\b/.test(l)
+        ||/Mémoriser comme modèle|Utiliser ces objectifs|^Noter$|^Valider et terminer$|^C'est parti$/.test(l));
+      if(interdits.length) return _echec('encore : '+[...new Set(interdits)].join(' | '));
+      // « Valider » : seulement pour clore une étape (la saisie générique, le code d'accès).
+      const valider=libs.filter(l=>/^Valider\b/i.test(l));
+      if(valider.some(l=>!/^(Valider|Valider → créer mon compte)$/.test(l))) return _echec('« Valider » ailleurs : '+valider.join(' | '));
+      // Les dialogues qui écrivent disent « Enregistrer ».
+      const src=_prodSrc();
+      for(const [quoi,re] of [['cibles',/rcConfirm\('Enregistrer ces cibles \?'[\s\S]{0,400}'Enregistrer'\)/],
+                              ['palier',/'Enregistrer le PREMIER palier \?',null,'Enregistrer'\)/],
+                              ['gabarit',/\{libelleOk:'Enregistrer'\}/]])
+        if(!re.test(src)) return _echec('dialogue '+quoi+' : pas « Enregistrer »');
+      if(/libelleOk:'Appliquer'|,'Appliquer'\)/.test(src)) return _echec('un dialogue dit encore « Appliquer »');
+      // L'état « à enregistrer » de l'éditeur de programme.
+      if(String(renderProgEx).indexOf("'Enregistrer •'")<0) return _echec('l’état à enregistrer n’a pas suivi');
+      return true;})());
+
+    ok('R31 — aucun acte n’a plus de deux formulations',(()=>{
+      const libs=new Set(_r31Libelles());
+      const familles={
+        'accuser réception':[/^J'ai compris$/,/^COMPRIS/,/^J'ai lu$/,/^OK$/],
+        'démarrer une séance':[/^▶? ?Démarrer( |$)/i,/^(LANCER|Lancer) /,/^(COMMENCER|Commencer)/,/^C'est parti$/],
+        'fermer':[/^Fermer$/,/^×$/,/^Close$/i],
+        'remettre à plus tard':[/^Plus tard$/,/^Pas maintenant$/,/^Une autre fois$/],
+        'refuser':[/^Refuser$/,/^Non merci$/,/^Ignorer$/],
+        'se déconnecter':[/^Se déconnecter$/,/^DÉCONNEXION$/,/^Déconnexion$/]};
+      const trop=[];
+      for(const [acte,formes] of Object.entries(familles)){
+        const vues=formes.filter(re=>[...libs].some(l=>re.test(l)));
+        if(vues.length>2) trop.push(acte+' ('+vues.length+')');
+      }
+      return trop.length?_echec('trop de formulations : '+trop.join(', ')):true;})());
+
+    ok('R31 — les capitales vont au CTA rouge pleine largeur, et à lui seul',(()=>{
+      const z=document.createElement('div');
+      z.style.cssText='position:fixed;left:-9999px;top:0;width:320px';
+      z.innerHTML='<button class="btn btn-red" id="r31a">x</button><button class="btn btn-red btn-sm" id="r31b">x</button>'
+        +'<button class="btn btn-outline" id="r31c">x</button><button class="btn btn-red btn-casse" id="r31d">x</button>'
+        +'<button class="btn btn-blanc" id="r31e">x</button><button class="btn" id="r31f">x</button>';
+      document.body.appendChild(z);
+      try{
+        const tt=id=>getComputedStyle(document.getElementById(id)).textTransform;
+        if(tt('r31a')!=='uppercase') return _echec('le CTA rouge pleine largeur a perdu ses capitales');
+        for(const id of ['r31b','r31c','r31d','r31e','r31f'])
+          if(tt(id)==='uppercase') return _echec(id+' ('+document.getElementById(id).className+') est en capitales');
+        return true;
+      } finally { z.remove(); }})());
+
+    okA('R31 — un seul bouton en capitales par écran, sur les écrans principaux de l’athlète',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const pause=ms=>new Promise(r=>setTimeout(r,ms));
+      const iso=k=>localISODate(new Date(Date.now()-k*864e5));
+      const NAV=/\b(sb-lien|tab-btn|pf-chip|ch-nav-large|hv-code|back-btn|rep-btn|jen-min|fj-repas-btn|gene-choix|rir-choix|san-nav-b|pil-compteur)\b/;
+      const enCapitales=()=>{
+        const scr=document.querySelector('.screen.active'); if(!scr) return [];
+        return [...scr.querySelectorAll('button')].filter(b=>{
+          const r=b.getBoundingClientRect(); if(!(r.width>0&&r.height>0)) return false;
+          if(NAV.test(b.className)||b.closest('nav,[role=tablist]')) return false;
+          if(/Bebas/i.test(getComputedStyle(b).fontFamily)) return false;
+          const x=(b.innerText||'').replace(/[^A-Za-zÀ-ÿ]/g,''); return x.length>=3&&x===x.toUpperCase();
+        }).map(b=>(b.innerText||'').replace(/\s+/g,' ').trim());
+      };
+      const trop=[];
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        currentUser={id:'r31',email:'r31@t.fr',fname:'Léa',lname:'B',role:'athlete',coachId:'c1',exAlias:{},exMuscles:{},bilans:[],videos:[],
+          programs:{},contraintesSante:[],consent:{health:true,policyVersion:POLICY_VERSION},birthdate:'1990-05-01',gender:'femme',height:168,weight:62,
+          sessions:[],sessions_config:[{active:true,name:'Push',exercises:[{name:'DEVELOPPE HALTERES',series:2,reps:'10',repos:'2 min'}]}],
+          nutrition:{dietType:'flexible',log:{[iso(0)]:{entries:[{id:1,nom:'Riz',qty:100,kcal:130,p:3,c:28,l:0,repas:'dejeuner'}]}}},
+          stepsLog:[{date:iso(0),count:8000}],sleepLog:[{date:iso(0),duration:7.5}]};
+        const ecrans=[['accueil',()=>{ go('s-client-home'); loadClientHome(); }],['nutrition',()=>loadNutrition()],
+          ['pas',()=>loadSteps()],['sommeil',()=>loadSleep()],['séances',()=>loadSessionManager()],
+          ['fin de séance',()=>{ localStorage.removeItem('rc_wo_state'); launchWorkout(currentUser.sessions_config[0],0);
+            woState.sessionData[0].sets.forEach(s=>{ s.weight='20'; s.done=true; }); finishWorkout(); }]];
+        for(const [nom,fn] of ecrans){
+          try{ fn(); }catch(e){ return _echec(nom+' : '+e.message); }
+          await pause(300);
+          const c=enCapitales();
+          if(c.length>1) trop.push(nom+' : '+c.join(' | '));
+        }
+        return trop.length?_echec(trop.join(' ; ')):true;
+      } finally {
+        window.saveUser=svSave; window.toast=svToast;
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        localStorage.removeItem('rc_wo_state'); if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
+        currentUser=sU; woState=sW;
+      }
+    });
+
+    ok('R31 — le tutoiement partout, sauf l’offre commerciale côté coach',(()=>{
+      const src=_prodSrc();
+      for(const t of ['Erreur réseau : vérifie ta connexion et réessaie.','Impossible de se connecter. Essaie "Mot de passe oublié ?" ou vérifie ta connexion.',
+                      'Active ce jour pour y mettre une séance','ne te mets pas de barrières'])
+        if(src.indexOf(t)<0) return _echec('absent : « '+t+' »');
+      for(const t of ['vérifiez votre connexion','Essayez "Mot de passe','Utilisez "Mot de passe','Activez ce jour','ne vous mettez pas','Adaptez selon','si vous aviez fixé'])
+        if(src.indexOf(t)>=0) return _echec('encore : « '+t+' »');
+      // Les protocoles : tutoiement, aucun vouvoiement, aucun infinitif d'instruction, noms intacts.
+      const T=Object.values(TECHNIQUES);
+      const faute=T.filter(t=>/\b(votre|vos|vous)\b/.test(t.desc)||/^(Faire|Mettre|Rester|Marquer|Enchainer|Enchaîner|Ne pas|Freiner|Ne travailler)\b/.test(t.desc));
+      if(faute.length) return _echec('protocoles : '+faute.map(t=>t.nom).join(', '));
+      if(TECHNIQUES.rest_in_pause.desc!=='Une fois ta limite atteinte : 15 s de repos, puis termine ta série.') return _echec('rest in pause : « '+TECHNIQUES.rest_in_pause.desc+' »');
+      for(const [k,n] of [['rest_in_pause','Rest in pause'],['stop_and_go','Stop and go'],['fst_7','FST 7'],['isotention','Isotention']])
+        if(TECHNIQUES[k].nom!==n) return _echec('nom changé : '+TECHNIQUES[k].nom);
+      // L'EXCEPTION ASSUMÉE : l'offre coach garde son vouvoiement.
+      if(!/votre premier client/.test(PROMESSE_COACH)) return _echec('l’offre coach a été retouchée');
+      return true;})());
+
+    ok('R31 — « envoi », plus « upload » ni « téléverser », à l’écran',(()=>{
+      const src=_prodSrc();
+      if(/Téléversement|téléverser/.test(src)) return _echec('« téléverser » est encore affiché');
+      if(!/>Preset d'envoi </.test(src)) return _echec('le réglage Cloudinary dit encore « Upload Preset »');
+      return true;})());
 
     // ══ 17/09/2026 — R30 : LE SON DE FIN DE REPOS, PROPOSÉ DANS LE MINUTEUR ══
 

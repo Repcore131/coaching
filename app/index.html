@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1268';
+window.RC_BUILD='1269';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1051,7 +1051,15 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
 /* .screen.active handled above */
 
 /* ====== BUTTONS ====== */
-.btn{width:100%;padding:16px;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;cursor:pointer;transition:box-shadow var(--t-1),background var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);text-transform:uppercase;letter-spacing:2.5px;-webkit-tap-highlight-color:transparent}
+/* R31 — LES CAPITALES NE SONT PLUS LE STYLE DE TOUS LES BOUTONS. Elles
+   marquent le CTA principal d'un ecran — le bouton rouge pleine largeur — et
+   lui seul ; tous les autres boutons parlent en casse phrase (« Enregistrer »,
+   « Voir l'historique »). Un ecran ou tout crie ne dit plus lequel compte.
+   `.btn-casse` rend la casse phrase a un bouton rouge pleine largeur qui n'est
+   pas le CTA de son ecran. L'interlettre de 2,5 px ne va qu'aux capitales : en
+   casse phrase il espacerait les mots comme un titre. */
+.btn{width:100%;padding:16px;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;cursor:pointer;transition:box-shadow var(--t-1),background var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);letter-spacing:.3px;-webkit-tap-highlight-color:transparent}
+.btn.btn-red:not(.btn-sm):not(.btn-casse){text-transform:uppercase;letter-spacing:2.5px}
 /* LE BOUTON PRIMAIRE, UNE SEULE FOIS. Le degrade et le liseré clair vivaient
    en style inline sur les boutons Pas et Sommeil ; les quatre autres boutons
    d action du module etaient des aplats. Ils remontent ici : une seule
@@ -1061,7 +1069,7 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
    de souris. Il s assombrit dans le meme sens, il ne change pas de nature. */
 .btn-red:hover{background:linear-gradient(160deg,#c91a1a,#7a0000);box-shadow:var(--glow-red)}
 .btn-red:active{transform:scale(var(--arc-scale-charge));box-shadow:var(--e1),var(--glow-red);transition:transform var(--arc-attack) var(--arc-c-charge)}
-.btn-outline{background:transparent;color:#aaa;border:1px solid rgba(255,255,255,.12);letter-spacing:2px}
+.btn-outline{background:transparent;color:#aaa;border:1px solid rgba(255,255,255,.12);letter-spacing:.3px}
 /* ══ LE BOUTON BLANC TEXTURE ══════════════════════════════════════════
    Demande de Kevin, 08/09/2026. Il vient prendre la place de .btn-outline la
    ou l'action est FRANCHE sans etre l'action principale : gerer ses seances,
@@ -1110,7 +1118,7 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
 
 .btn-outline:hover{border-color:var(--red);color:var(--red-text)}
 .btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
-.btn-sm{padding:9px 16px;font-size:var(--fs-xs);width:auto;border-radius:var(--r-1);letter-spacing:1.5px}
+.btn-sm{padding:9px 16px;font-size:var(--fs-xs);width:auto;border-radius:var(--r-1);letter-spacing:.3px}
 /* LES DEUX SORTIES DU BILAN SUR UNE LIGNE. « Finir plus tard » ne prend que
    sa largeur de texte, Suivant garde tout le reste : la porte de secours ne
    doit pas peser autant que l action principale. */
@@ -1962,8 +1970,11 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 /* ── LES ACTIONS : une dominante, une secondaire ─────────────────────── */
 .rcf-dl{position:relative;width:100%;display:flex;align-items:center;justify-content:center;
   gap:9px;min-height:56px;padding:16px 18px;border:none;border-radius:var(--r-3);
-  font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:900;letter-spacing:2px;
-  text-transform:uppercase;color:#fff;cursor:pointer;overflow:hidden;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:900;letter-spacing:.4px;
+  /* R31 — plus de capitales : sur cet ecran elles vont a « Enregistrer et
+     terminer », qui clot la seance. Le rouge et la pleine largeur restent :
+     le telechargement demeure le bouton le plus visible (Kevin, 09/09/2026). */
+  color:#fff;cursor:pointer;overflow:hidden;
   background:linear-gradient(160deg,#e21414,#8d0000);
   border:1px solid rgba(255,90,90,.42);
   box-shadow:0 0 26px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.2);
@@ -7515,7 +7526,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <input id="ae-code" type="text" placeholder="Ex: RC-A3KZ-W9MX ou le lien reçu" style="letter-spacing:1px;font-family:monospace" onclick="event.stopPropagation()"
           oninput="var v=this.value;if(!v.startsWith('http')&&!v.startsWith('RCACCESS')&&!v.startsWith('RCLINK'))this.value=v.toUpperCase()">
         <div id="ae-err" style="color:var(--red-text);font-size:var(--fs-xs);margin-top:6px;display:none"></div>
-        <button id="ae-valider" class="btn btn-red" onclick="event.stopPropagation();doAthleteCode()" style="margin-top:12px">VALIDER → CRÉER MON COMPTE</button>
+        <button id="ae-valider" class="btn btn-red" onclick="event.stopPropagation();doAthleteCode()" style="margin-top:12px">Valider → créer mon compte</button>
       </div>
     </div>
 
@@ -7582,7 +7593,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div><label for="l-email">Email</label><input type="email" id="l-email" placeholder="ton@email.com"></div>
     <div><label for="l-pwd">Mot de passe</label><input type="password" id="l-pwd" placeholder="••••••••"></div>
     <div id="l-err" style="color:var(--red-light);font-size:var(--fs-md);display:none"></div>
-    <button class="btn btn-red" style="margin-top:8px;letter-spacing:2px" onclick="doLogin()">SE CONNECTER</button>
+    <button class="btn btn-red" style="margin-top:8px;letter-spacing:2px" onclick="doLogin()">Se connecter</button>
     <p class="sub" style="text-align:center;margin-top:12px"><span style="cursor:pointer;font-size:var(--fs-md);color:#f97316;font-weight:700;text-decoration:underline;text-decoration-color:#f97316" onclick="forgotPassword()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Mot de passe oublié ?</span></p>
     <p class="sub" style="text-align:center;margin-top:8px">Pas de compte ? <span class="red" style="cursor:pointer;font-weight:700;color:var(--red-light)" onclick="goRegisterAthlete()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Créer un compte</span></p>
     <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
@@ -7592,7 +7603,7 @@ const COACH_PHOTO='icons/coach.jpg';
            d'authentification et rapatrie les données. Sur un compte déjà connu,
            Firebase répond EMAIL_EXISTS et rien ne change — d'où le renvoi vers
            « Mot de passe oublié ? », juste au-dessus. -->
-      <button class="btn" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:var(--fs-sm);letter-spacing:1px" onclick="showNewPwdRecovery()">JE N'AI JAMAIS RÉUSSI À ME CONNECTER ICI</button>
+      <button class="btn" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:var(--fs-sm);letter-spacing:1px" onclick="showNewPwdRecovery()">Je n'ai jamais réussi à me connecter ici</button>
     </div>
     <div id="new-pwd-recovery" style="display:none;margin-top:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:16px">
       <div style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px;margin-bottom:10px">PREMIÈRE CONNEXION SUR CET APPAREIL</div>
@@ -7600,7 +7611,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="margin-bottom:8px"><label style="font-size:var(--fs-xs)">Email</label><input id="rec-email" type="email" placeholder="ton@email.com"></div>
       <div style="margin-bottom:8px"><label style="font-size:var(--fs-xs)">Mot de passe à définir</label><input id="rec-pwd" type="password" placeholder="Min. 6 caractères"></div>
       <div id="rec-err" style="color:var(--red-light);font-size:var(--fs-sm);display:none;margin-bottom:8px"></div>
-      <button class="btn btn-red" style="width:100%;font-size:var(--fs-sm);letter-spacing:1px" onclick="doNewPwdRecovery()">RESTAURER MON COMPTE ICI</button>
+      <button class="btn btn-red" style="width:100%;font-size:var(--fs-sm);letter-spacing:1px" onclick="doNewPwdRecovery()">Restaurer mon compte ici</button>
     </div>
   </div>
 
@@ -8054,8 +8065,8 @@ const COACH_PHOTO='icons/coach.jpg';
                inegaux a l'oeil. CRM rejoint les deux autres : c'est le meme
                geste — atteindre ses athletes — par un autre canal. -->
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-outline btn-sm" onclick="loadCanalCoach()" title="Canal : écrire à tous mes athlètes" aria-label="Canal : écrire à tous mes athlètes" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">CANAL</button>
-            <button class="btn btn-outline btn-sm" onclick="openWaGroupe()" title="Message groupé WhatsApp" aria-label="Message groupé WhatsApp" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">GROUPÉ</button>
+            <button class="btn btn-outline btn-sm" onclick="loadCanalCoach()" title="Canal : écrire à tous mes athlètes" aria-label="Canal : écrire à tous mes athlètes" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">Canal</button>
+            <button class="btn btn-outline btn-sm" onclick="openWaGroupe()" title="Message groupé WhatsApp" aria-label="Message groupé WhatsApp" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">Groupé</button>
             <button class="btn btn-outline btn-sm" onclick="ouvrirCrmCoach()" title="Carnet d'adresses : mail, genre, téléphone" aria-label="Carnet d'adresses" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">CRM</button>
           </div>
         </div>
@@ -8349,7 +8360,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <button type="button" onclick="ajouterDiplomeRow()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">+ Ajouter un diplôme</button>
 </div>
 <button onclick="apercuVitrineCoach()" style="width:100%;background:none;border:1px solid var(--border);color:var(--text-strong);border-radius:var(--r-1);padding:11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;margin-bottom:10px">Prévisualiser ma vitrine</button>
-<button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
+<button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px">Enregistrer</button>
         </div>
         <!-- DISPONIBILITE. Ce que l athlete lit AVANT de t ecrire. Le compteur
              de delai reel, lui, ne quitte jamais cet ecran. -->
@@ -8373,7 +8384,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <input id="coach-dispo-msg" type="text" maxlength="140" placeholder="Message affiché à tes athlètes (facultatif)" style="width:100%;font-size:var(--fs-md);padding:11px 14px;box-sizing:border-box">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une date de fin est obligatoire, 90 jours au plus. L'absence s'éteint toute seule : tu n'as rien à décocher au retour. Elle n'empêche jamais un athlète de t'écrire.</div>
           </div>
-          <button onclick="saveCoachDispo()" style="width:100%;background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;margin-top:12px">ENREGISTRER</button>
+          <button onclick="saveCoachDispo()" style="width:100%;background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;margin-top:12px">Enregistrer</button>
           <div id="coach-dispo-median" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"></div>
         </div>
 
@@ -8383,7 +8394,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:14px;line-height:1.5">Affiché en bas de l'accueil de tes athlètes.<br>Format bannière cliquable (photo + lien).</div>
           <div id="coach-banners-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
           <button onclick="addCoachBannerRow()" style="width:100%;background:transparent;border:1px dashed #3a3a5a;color:var(--info);border-radius:var(--r-1);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;margin-bottom:12px">+ Ajouter une bannière</button>
-          <button onclick="saveCoachBanners()" style="width:100%;background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
+          <button onclick="saveCoachBanners()" style="width:100%;background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px">Enregistrer</button>
         </div>
 
         <!-- 📱 WhatsApp coach -->
@@ -8399,7 +8410,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div id="coach-contact-wa" style="display:none">
             <div style="display:flex;gap:8px;margin-bottom:8px">
               <input id="coach-phone-input" type="tel" placeholder="+33 6 12 34 56 78" style="flex:1;font-size:var(--fs-md);padding:11px 14px">
-              <button onclick="saveCoachPhone()" style="background:#22c55e;border:none;color:#000;border-radius:var(--r-1);padding:11px 18px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">ENREGISTRER</button>
+              <button onclick="saveCoachPhone()" style="background:#22c55e;border:none;color:#000;border-radius:var(--r-1);padding:11px 18px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">Enregistrer</button>
             </div>
             <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin-bottom:8px">
               <input type="checkbox" id="coach-contact-consent" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerConsentContact(this.checked)">
@@ -8503,9 +8514,9 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <label style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;display:block">Cloud Name</label>
           <input id="cld-cloud-name" placeholder="ex: dxyz12abc" style="margin-bottom:10px">
-          <label style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;display:block">Upload Preset <span style="font-weight:400;color:var(--text-dim)">(non signé)</span></label>
+          <label style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;display:block">Preset d'envoi <span style="font-weight:400;color:var(--text-dim)">(« Upload preset » non signé, dans Cloudinary)</span></label>
           <input id="cld-preset" placeholder="ex: repcore_videos" style="margin-bottom:10px">
-          <button onclick="saveCloudinaryConfig()" style="background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:10px 18px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;width:100%">ENREGISTRER</button>
+          <button onclick="saveCloudinaryConfig()" style="background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:10px 18px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;width:100%">Enregistrer</button>
           <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:8px;line-height:1.5">Créer un compte sur <b>cloudinary.com</b> → Settings → Upload → Add upload preset → choisir <b>Unsigned</b></div>
         </div>
 
@@ -8551,7 +8562,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="margin-bottom:16px">
             <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Réassigner mes athlètes</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">Transférer tous tes athlètes à un autre coach ou au créateur avant de fermer ton compte.</div>
-            <button onclick="offboardCoach(currentUser?.id)" style="width:100%;background:none;border:1px solid var(--red);border-radius:var(--r-2);padding:10px;color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px">RÉASSIGNER MES ATHLÈTES</button>
+            <button onclick="offboardCoach(currentUser?.id)" style="width:100%;background:none;border:1px solid var(--red);border-radius:var(--r-2);padding:10px;color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px">Réassigner mes athlètes</button>
           </div>
 
           <!-- DEUX EXPORTS RGPD COHABITAIENT SUR CET ECRAN. Celui-ci, le plus
@@ -8567,7 +8578,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="border-top:1px solid #2a0000;padding-top:16px">
             <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Supprimer mon compte</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">Action irréversible. Conformément au RGPD (Art. 17), toutes tes données personnelles seront effacées. Les données financières sont conservées 5 ans (obligation légale).</div>
-            <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:var(--r-2);padding:10px;color:#cc0000;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px">SUPPRIMER MON COMPTE DÉFINITIVEMENT</button>
+            <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:var(--r-2);padding:10px;color:#cc0000;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px">Supprimer mon compte définitivement</button>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin:26px 0 14px">
@@ -8585,7 +8596,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <select id="admin-offboard-select" style="width:100%;margin-bottom:10px;padding:10px;background:#1a1a08;border:1px solid #3a3a00;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-family:Montserrat,sans-serif">
             <option value="">— Sélectionne un coach —</option>
           </select>
-          <button onclick="_adminOffboardSelected()" style="width:100%;background:#a3a300;border:none;border-radius:var(--r-2);padding:10px;color:#000;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px">OFFBOARDER CE COACH →</button>
+          <button onclick="_adminOffboardSelected()" style="width:100%;background:#a3a300;border:none;border-radius:var(--r-2);padding:10px;color:#000;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px">Offboarder ce coach →</button>
         </div>
 
       </div>
@@ -8735,7 +8746,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-6px 0 14px;padding:0 2px">
         <div id="ccd-fraicheur" style="flex:1;min-width:0;line-height:1.4"></div>
         <button type="button" onclick="actualiserClient()" title="Redescendre son dossier maintenant"
-          style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:7px 12px;min-height:32px;cursor:pointer">Actualiser</button>
+          style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;padding:7px 12px;min-height:32px;cursor:pointer">Actualiser</button>
       </div>
       <!-- LES QUATRE ONGLETS. Vingt-sept sections sur un seul rouleau,
            c'etait une barre d'ancres qui menait a un fil interminable. Le
@@ -9105,11 +9116,11 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-prog-template','s-coach-programs')">←</button>
     <input id="cpt-name" placeholder="Nom du programme" style="flex:1;background:transparent;border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;outline:none;min-width:0;margin:0 8px" onchange="saveCoachProgTemplateName()">
-    <button onclick="saveCoachProgTemplate()" style="background:var(--red);border:none;color:var(--text);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">SAUVEGARDER</button>
+    <button onclick="saveCoachProgTemplate()" style="background:var(--red);border:none;color:var(--text);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">Enregistrer</button>
   </div>
   <div style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:#080808">
-    <button id="cpt-tab-h" onclick="loadProgTemplateSlots('H')" style="flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">HOMME</button>
-    <button id="cpt-tab-f" onclick="loadProgTemplateSlots('F')" style="flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">FEMME</button>
+    <button id="cpt-tab-h" onclick="loadProgTemplateSlots('H')" style="flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">Homme</button>
+    <button id="cpt-tab-f" onclick="loadProgTemplateSlots('F')" style="flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">Femme</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad" style="padding-top:16px">
@@ -9124,7 +9135,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-prog-assign','s-coach-programs')">←</button>
     <span class="topbar-title" id="cpa-title">Assigner</span>
-    <button onclick="confirmAssignProgram()" style="background:var(--red);border:none;color:var(--text);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">ASSIGNER</button>
+    <button onclick="confirmAssignProgram()" style="background:var(--red);border:none;color:var(--text);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">Assigner</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -9145,11 +9156,11 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-decharge','s-coach-home')">←</button>
     <span class="topbar-title">Décharge groupée</span>
-    <button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:#222;color:var(--text-dim);border:none;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1)">APPLIQUER</button>
+    <button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:#222;color:var(--text-dim);border:none;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1)">Enregistrer</button>
     <!-- Le retrait groupe : meme selection, meme recapitulatif nomme, meme
          rapport d echecs. Un booleen distingue les deux gestes, il n y a pas
          deux mecanismes de decharge a tenir d accord. -->
-    <button id="cdg-retirer" onclick="confirmDechargeGroupee(false)" disabled style="background:none;color:var(--text-dim);border:1px solid var(--border);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1);margin-left:7px">RETIRER</button>
+    <button id="cdg-retirer" onclick="confirmDechargeGroupee(false)" disabled style="background:none;color:var(--text-dim);border:1px solid var(--border);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1);margin-left:7px">Retirer</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -9223,7 +9234,7 @@ const COACH_PHOTO='icons/coach.jpg';
          DANS LA BARRE DE TITRE, qui est collante : c'est le seul endroit qui
          reste sous les yeux quel que soit l'exercice qu'on edite. -->
     <span id="cp-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;margin-right:8px"></span>
-    <button id="cp-sauver" class="btn btn-red btn-sm" onclick="saveProgram()">Sauvegarder</button>
+    <button id="cp-sauver" class="btn btn-red btn-sm" onclick="saveProgram()">Enregistrer</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -9264,7 +9275,7 @@ const COACH_PHOTO='icons/coach.jpg';
                ouvrent le même écran, mais filtré sur une phase et prêt à
                écrire dans le champ correspondant. -->
           <button type="button" class="pr-cmd" onclick="ouvrirProtocoles('',null,'s-coach-program')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Bibliothèque</button>
-          <button type="button" class="pr-cmd" onclick="saveWarmupTemplate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>Mémoriser comme modèle</button>
+          <button type="button" class="pr-cmd" onclick="saveWarmupTemplate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>Enregistrer comme modèle</button>
           </div>
         </div>
         <!-- La couleur de la phase se pose UNE FOIS, sur --c, et redescend sur
@@ -9438,8 +9449,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Fréquence des bilans</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">Le rythme auquel ton bilan coaching te sera demandé.</div>
       <div style="display:flex;gap:8px" role="group" aria-label="Fréquence des bilans">
-        <button id="bilan-freq-btn-1" onclick="setBilanFreq(1);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Chaque semaine</button>
-        <button id="bilan-freq-btn-2" onclick="setBilanFreq(2);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Toutes les 2 sem.</button>
+        <button id="bilan-freq-btn-1" onclick="setBilanFreq(1);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Chaque semaine</button>
+        <button id="bilan-freq-btn-2" onclick="setBilanFreq(2);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Toutes les 2 sem.</button>
       </div>
     </div>
 
@@ -9627,7 +9638,7 @@ const COACH_PHOTO='icons/coach.jpg';
              telephone, autrement ailleurs. Un <br> pose la meme coupure a
              toutes les largeurs, et l'interlettrage peut alors rester a 1,5 px
              puisque chaque ligne a de la place. -->
-        <button class="btn btn-red btn-2l" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">DÉMARRER MA SÉANCE<br>DU JOUR</button>
+        <button class="btn btn-red btn-2l" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">Démarrer ma séance<br>du jour</button>
         <!-- LES DEUX SECONDAIRES SUR UNE LIGNE. Gerer et relire sont deux
              gestes de meme rang — l'un prepare, l'autre revient — et les
              empiler aurait donne trois boutons pleine largeur sous un quatrieme.
@@ -9635,8 +9646,8 @@ const COACH_PHOTO='icons/coach.jpg';
              cote a cote n'y tiennent pas, et une cible qu'on ne peut pas viser
              ne vaut pas une ligne gagnee. -->
         <div class="hero-duo">
-          <button class="btn btn-blanc btn-2l" onclick="loadSessionManager()">GÉRER MES<br>SÉANCES</button>
-          <button class="btn btn-blanc btn-2l" onclick="loadHistoriqueSeances()">HISTORIQUE DES<br>SÉANCES</button>
+          <button class="btn btn-blanc btn-2l" onclick="loadSessionManager()">Gérer mes<br>séances</button>
+          <button class="btn btn-blanc btn-2l" onclick="loadHistoriqueSeances()">Historique des<br>séances</button>
         </div>
       </div>
 
@@ -9823,7 +9834,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-athlete-profile')">←</button>
     <span class="topbar-title">Mon profil</span>
-    <button onclick="saveAthleteProfile()" style="background:var(--red);border:none;color:var(--text);padding:7px 16px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">SAUVEGARDER</button>
+    <button onclick="saveAthleteProfile()" style="background:var(--red);border:none;color:var(--text);padding:7px 16px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">Enregistrer</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -9976,7 +9987,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <div class="card" id="atp-comptes"></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
-        <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">DÉCONNEXION</button>
+        <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">Se déconnecter</button>
         <!-- Pied athlète : deux clics depuis n'importe quel écran connecté —
              l'avatar de l'accueil ouvre ce profil, ce lien ouvre la page. -->
         <div style="margin-top:14px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.9">
@@ -9996,7 +10007,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="border:1px solid #2a0000;border-radius:var(--r-3);padding:16px;margin-top:22px;text-align:left">
           <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Supprimer mon compte</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">Action irréversible. Conformément au RGPD (Art. 17), toutes tes données seront effacées : profil, séances, bilans, photos, et tes données de santé — poids, mensurations, cycle, constantes, analyses.</div>
-          <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:var(--r-2);padding:10px;color:#cc0000;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">SUPPRIMER MON COMPTE</button>
+          <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:var(--r-2);padding:10px;color:#cc0000;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Supprimer mon compte</button>
         </div>
       </div>
     </div>
@@ -10147,7 +10158,7 @@ const COACH_PHOTO='icons/coach.jpg';
            commencer, et c'est la seule question a laquelle un programme tout
            fait repond. -->
       <button class="btn btn-red" style="width:100%;margin-bottom:16px"
-        onclick="ouvrirBoutique()">PARTIR D'UN PROGRAMME</button>
+        onclick="ouvrirBoutique()">Partir d'un programme</button>
       <!-- LA CITATION D'OUVERTURE. Demande de Kevin, 24/08/2026. Elle remplace
            le paragraphe qui expliquait où déposer la photo de sa fiche.
            LA PHOTO N'EST PAS DANS LE DÉPÔT. Elle a été envoyée dans la
@@ -10181,7 +10192,9 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <!-- HORS DU CADRE, a la demande de Kevin : le cadre rouge encadre la
            CITATION et sa photo, pas le commentaire qui les suit. -->
-      <p class="ma-texte">À l'entraînement, ne vous mettez pas de barrières : essayez. Si vous voulez rester dans votre zone de confort, autant rester chez vous. Mais maîtrisez un mouvement avant d'y ajouter du poids. On n'est pas là pour entraîner son ego. Et si vous échouez, ne culpabilisez pas : il vous manque du travail et un temps d'adaptation, rien d'autre. Tant que vous donnez le maximum, vous valez déjà mieux que tous ceux qui abandonnent à la première difficulté.</p>
+      <!-- R31 — AU TUTOIEMENT, comme le reste de l'app. La citation au-dessus
+           garde son « vous » : c'est une citation, on ne la reecrit pas. -->
+      <p class="ma-texte">À l'entraînement, ne te mets pas de barrières : essaie. Si tu veux rester dans ta zone de confort, autant rester chez toi. Mais maîtrise un mouvement avant d'y ajouter du poids. On n'est pas là pour entraîner son ego. Et si tu échoues, ne culpabilise pas : il te manque du travail et un temps d'adaptation, rien d'autre. Tant que tu donnes le maximum, tu vaux déjà mieux que tous ceux qui abandonnent à la première difficulté.</p>
       <!-- LA STRUCTURE DU BLOC. Au-DESSUS de la liste des jours : c'est le
            cadre dans lequel les sept creneaux se lisent, et il se lit
            avant eux. Vide tant qu'aucun bloc date n'existe. -->
@@ -10304,7 +10317,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
     </div>
-    <button onclick="closeIosInstallGuide()" style="width:100%;padding:14px;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;border-radius:var(--r-3);cursor:pointer">COMPRIS !</button>
+    <button onclick="closeIosInstallGuide()" style="width:100%;padding:14px;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;border-radius:var(--r-3);cursor:pointer;text-transform:uppercase">J'ai compris</button>
   </div>
 </div>
 <!-- PAUSE / CANCEL WORKOUT MODAL -->
@@ -10601,11 +10614,11 @@ const COACH_PHOTO='icons/coach.jpg';
               boutons pleine largeur se concurrencaient, et celui qui enregistre
               le ressenti n'etait pas plus evident que celui qui le jette. -->
       <div style="margin-top:4px">
-        <button class="btn btn-red" style="width:100%;margin:0" onclick="savePostSession()">Valider et terminer</button>
+        <button class="btn btn-red" style="width:100%;margin:0" onclick="savePostSession()">Enregistrer et terminer</button>
         <button type="button" onclick="go('s-client-home');loadClientHome()"
           style="display:block;width:100%;margin-top:12px;background:none;border:none;padding:10px;
           color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);
-          font-weight:700;letter-spacing:1.4px;text-transform:uppercase;cursor:pointer;
+          font-weight:700;letter-spacing:1.4px;cursor:pointer;
           text-decoration:underline;text-underline-offset:3px">Passer</button>
       </div>
       <div style="height:30px"></div>
@@ -10905,7 +10918,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <button class="fj-repas-btn" data-repas="coucher" onclick="selectRepas('coucher')">Nuit</button>
         </div>
       </div>
-      <button class="btn btn-red" onclick="saveFoodEntry()" style="font-size:var(--fs-md);letter-spacing:1px">AJOUTER AU JOURNAL</button>
+      <button class="btn btn-red" onclick="saveFoodEntry()" style="font-size:var(--fs-md);letter-spacing:1px">Ajouter au journal</button>
     </div>
   </div>
 </div>
@@ -10998,7 +11011,7 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
       </div>
       <div id="perso-coherence" style="margin-bottom:18px"></div>
-      <button class="btn btn-red" onclick="enregistrerAlimentPerso()" style="font-size:var(--fs-md);letter-spacing:1px">ENREGISTRER</button>
+      <button class="btn btn-red" onclick="enregistrerAlimentPerso()" style="font-size:var(--fs-md);letter-spacing:1px">Enregistrer</button>
       <button type="button" id="perso-supprimer" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px;display:none;color:var(--orange);border-color:var(--orange)"
         onclick="supprimerAlimentPerso()">Supprimer cet aliment</button>
     </div>
@@ -11157,7 +11170,7 @@ const COACH_PHOTO='icons/coach.jpg';
             onkeydown="if(event.key==='Enter')addVideoLink()"
             oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
           <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:var(--r-2);padding:9px 12px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5;margin-bottom:10px;text-align:left">⚠️ Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer · dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
-          <button onclick="addVideoLink()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Envoyer à mon coach</button>
+          <button onclick="addVideoLink()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Envoyer à mon coach</button>
           <div class="sub" style="font-size:var(--fs-xs);margin-top:11px;line-height:1.6">Partage sur <b style="color:var(--text-strong)">YouTube</b> (non répertoriée) ou <b style="color:var(--text-strong)">Google Drive</b>, puis colle le lien ici. L'exercice indiqué plus haut part avec le lien.</div>
         </div>
       </details>
@@ -11414,7 +11427,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
       <div style="padding:26px 0 8px">
-        <button class="btn btn-red" onclick="jenValider()" style="margin-bottom:14px;letter-spacing:1.5px;min-height:50px">C'est parti</button>
+        <button class="btn btn-red" onclick="jenValider()" style="margin-bottom:14px;letter-spacing:1.5px;min-height:50px">Enregistrer</button>
         <!-- TOUJOURS VISIBLE, et non cache derriere un repli : c'est la sortie,
              et une sortie qu'on cherche n'en est pas une. Elle n'ecrit AUCUN
              reglage — ni jours, ni heure, ni activation. -->
@@ -11667,7 +11680,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div style="flex-shrink:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));
        background:var(--bg);border-top:1px solid var(--border)">
-    <button class="btn btn-red" style="width:100%;letter-spacing:1.5px" onclick="commencerDepuisApercu()">COMMENCER</button>
+    <button class="btn btn-red" style="width:100%;letter-spacing:1.5px" onclick="commencerDepuisApercu()">Démarrer la séance</button>
   </div>
 </div>
 
@@ -14488,7 +14501,7 @@ const CLOUD={
   _storageBucket:STORAGE_BUCKET,
   async uploadPdf(emailKey,file){
     const token=await this._getToken();
-    if(!token) throw new Error('Non connecté : impossible de téléverser le PDF.');
+    if(!token) throw new Error('Non connecté : impossible d’envoyer le PDF.');
     const path='pdfs/'+emailKey+'/programme.pdf';
     const url='https://firebasestorage.googleapis.com/v0/b/'+this._storageBucket+'/o?name='+encodeURIComponent(path)+'&uploadType=media';
     const res=await fetch(url,{method:'POST',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/pdf'},body:file});
@@ -16161,7 +16174,7 @@ function _proposerImportAthlete(){
     ${d.connu?'':'<p class="sub" style="font-size:var(--fs-xs);margin-bottom:14px;line-height:1.6">Aucun dossier ne porte encore cet email : l\'import créerait une nouvelle fiche.</p>'}
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:16px;line-height:1.6">N'importe qui peut fabriquer un lien de ce type. N'accepte que s'il vient de ton élève.</p>
     <button class="btn btn-red" onclick="_confirmerImportAthlete()">Importer ce profil</button>
-    <button class="btn btn-outline" style="margin-top:10px" onclick="_refuserImportAthlete()">Ignorer</button>
+    <button class="btn btn-outline" style="margin-top:10px" onclick="_refuserImportAthlete()">Refuser</button>
   </div></div>`;
   // closeModal() et non un remove() direct : lui seul annule un enregistrement
   // audio en cours, que le remove laisserait tourner micro ouvert.
@@ -19372,14 +19385,14 @@ async function doLogin(){
       const ok=await CLOUD.signIn(em,pw);
       if(!ok){
         if(CLOUD._signInErr==='network')
-          return showErr('l-err','Erreur réseau : vérifiez votre connexion et réessayez.');
+          return showErr('l-err','Erreur réseau : vérifie ta connexion et réessaie.');
         if(CLOUD._signInErr==='wrong_password')
-          return showErr('l-err','Mot de passe incorrect. Utilisez "Mot de passe oublié ?" pour le réinitialiser par email.','l-pwd');
+          return showErr('l-err','Mot de passe incorrect. Utilise "Mot de passe oublié ?" pour le réinitialiser par email.','l-pwd');
         if(CLOUD._signInErr==='invalid_email')
           return showErr('l-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.','l-email');
         if(CLOUD._signInErr==='weak_password')
           return showErr('l-err','Mot de passe trop court : 6 caractères minimum.','l-pwd');
-        return showErr('l-err','Impossible de se connecter. Essayez "Mot de passe oublié ?" ou vérifiez votre connexion.');
+        return showErr('l-err','Impossible de se connecter. Essaie "Mot de passe oublié ?" ou vérifie ta connexion.');
       }
       // ══ UN COMPTE CREE A L'INSTANT N'EST PAS UN COMPTE RETROUVE ══════
       // Personne ne se connecte a une adresse jamais utilisee : c'est une
@@ -19408,7 +19421,7 @@ async function doLogin(){
 
     const ok=await CLOUD.signIn(em,pw);
     if(!ok) return showErr('l-err',CLOUD._signInErr==='network'
-      ?'Erreur réseau : vérifiez votre connexion.'
+      ?'Erreur réseau : vérifie ta connexion et réessaie.'
       :CLOUD._signInErr==='invalid_email'
         ?'Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.'
         :'Email ou mot de passe incorrect.');
@@ -19438,11 +19451,11 @@ function rescueLogin(em,pw){
       <div style="display:flex;gap:10px;margin-bottom:16px">
         <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','coach')"
           style="flex:1;background:#1a0000;border:1.5px solid var(--red);color:var(--text);padding:14px 8px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px">
-          🏋️ COACH
+          🏋️ Coach
         </button>
         <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','athlete')"
           style="flex:1;background:#0a1a0a;border:1.5px solid #22c55e;color:var(--text);padding:14px 8px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px">
-          💪 ATHLÈTE
+          💪 Athlète
         </button>
       </div>
       <button onclick="document.getElementById('rescue-panel').remove()"
@@ -26640,7 +26653,7 @@ function renderClientRow(c){
          geste vague, et il merite un apercu. -->
     <button class="btn btn-red btn-sm cr-fiche" onclick="event.stopPropagation();openClientDetail('${c.id}',false,true)"
       title="Ouvrir la fiche de ${_nm}" aria-label="Ouvrir la fiche de ${_nm}"
-      style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap"><span class="cr-fiche-l">OUVRIR LA FICHE</span><span class="cr-fiche-c">VOIR PROFIL</span></button>
+      style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap"><span class="cr-fiche-l">Ouvrir la fiche</span><span class="cr-fiche-c">Voir profil</span></button>
     ${_htmlCurseurSuivi(c)}
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;
@@ -28646,7 +28659,7 @@ function renderJournalCoach(c){
        // et la plupart n'ont rien a rappeler.
        +'<input type="date" id="jr-echeance" title="À revoir le… (facultatif)"'
        +' style="flex:1;min-width:0"'+'>'
-       +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="jrAjouter()">Noter</button>'
+       +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="jrAjouter()">Enregistrer</button>'
        +'</div>'
        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">'+escapeHtml(NOTE_MENTION)+'</div>'
        +'</div>')
@@ -32493,7 +32506,7 @@ async function cptReporterGenre(){
     +' vers l’onglet '+lD+' ?';
   if(nDst) txt+=nl+nl+'L’onglet '+lD+' porte déjà '+nDst+' séance'+(nDst>1?'s':'')
     +' : elle'+(nDst>1?'s seront remplacées':' sera remplacée')+'.';
-  txt+=nl+nl+'Rien n’est enregistré tant que tu n’as pas appuyé sur SAUVEGARDER.';
+  txt+=nl+nl+'Rien n’est enregistré tant que tu n’as pas appuyé sur « Enregistrer ».';
   if(!await rcConfirm(txt,null,'Reporter')) return false;
   const cle=(dst==='H')?'sessions_H':'sessions_F';
   p[cle]=a.map(s=>({
@@ -32504,7 +32517,7 @@ async function cptReporterGenre(){
   // On BASCULE sur l'onglet destination : le coach vient de le remplir, c'est
   // lui qu'il veut relire et ajuster.
   loadProgTemplateSlots(dst);
-  toast('Reporté vers '+lD+'. Appuie sur SAUVEGARDER pour l’enregistrer.');
+  toast('Reporté vers '+lD+'. Appuie sur « Enregistrer » pour le garder.');
   return true;
 }
 function loadProgTemplateSlots(gender){
@@ -32801,7 +32814,7 @@ function _boutonsCopieJour(fn,i){
     <!-- N4.17 — ET CHEZ UN AUTRE ATHLETE. Seulement depuis la fiche d'un
          athlete : un MODELE n'a pas de destinataire, et coachCopyDay est le
          seul appelant qui en ait un. -->
-    ${fn==='coachCopyDay'?`<button onclick="copierSeanceVersAthlete(${i})" title="Porter cette séance chez un autre athlète" aria-label="Porter cette séance chez un autre athlète" style="background:none;border:1px dashed var(--red);color:var(--red-text);border-radius:var(--r-2);min-height:44px;padding:4px 11px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">→ AUTRE ATHLÈTE</button>`:''}
+    ${fn==='coachCopyDay'?`<button onclick="copierSeanceVersAthlete(${i})" title="Porter cette séance chez un autre athlète" aria-label="Porter cette séance chez un autre athlète" style="background:none;border:1px dashed var(--red);color:var(--red-text);border-radius:var(--r-2);min-height:44px;padding:4px 11px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">→ Autre athlète</button>`:''}
   </div>`;
 }
 function _copierSeance(src,dst){
@@ -33174,7 +33187,7 @@ function openApplyTemplate(){
       <div style="display:flex;align-items:center;gap:8px">
         <button onclick="_atSwitchGenre(${i},'H')" id="at-g-H-${i}" style="min-height:44px;min-width:52px;padding:0 12px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${bg(genreDefaut==='H')};color:${fg(genreDefaut==='H')}">♂ H</button>
         <button onclick="_atSwitchGenre(${i},'F')" id="at-g-F-${i}" style="min-height:44px;min-width:52px;padding:0 12px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${bg(genreDefaut==='F')};color:${fg(genreDefaut==='F')}">♀ F</button>
-        <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="applyTemplateToClient(${i})">Appliquer</button>
+        <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="applyTemplateToClient(${i})">Enregistrer</button>
       </div>
     </div>`).join('');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
@@ -35189,36 +35202,36 @@ function _ecrireMuscles(k,r){
 // rien du tout). Elles portent `videos:[]`, PAS une URL inventee : une
 // pastille qui n'ouvre rien est pire que pas de pastille.
 const TECHNIQUES=Object.freeze({
-  "dropset_type_1":{nom:"Dropset type 1",sous:"3 x 12 répétitions",famille:"degressive",desc:"Faire 12 répétitions puis diminuer les charges, sans repos faire 12 répétitions de nouveau et réduire une seconde fois pour refaire 12 répétitions.",videos:["https://youtu.be/BeyRmP_R_d8"]},
-  "dropset_type_2":{nom:"Dropset type 2",sous:"3 x 8 répétitions",famille:"degressive",desc:"Faire 8 répétitions puis diminuer les charges, sans repos faire 8 répétitions de nouveau et réduire une seconde fois pour refaire 8 répétitions.",videos:["https://youtu.be/rYi9stYwuaU"]},
-  "dropset_type_3":{nom:"Dropset type 3",sous:"100 répétitions",famille:"degressive",desc:"Mettre un poids assez conséquent pour commencer, faire le maximum de répétitions, diminuer les charges refaire le maximum, rediminuer et recommencer jusqu’à atteindre un total de 100 répétitions.",videos:["https://youtu.be/aDXSxfCGYlE"]},
-  "methode_5_repetitions_10_sec":{nom:"Méthode 5 répétitions / 10 secondes",sous:"",famille:"myo_reps",desc:"Faire 5 répétitions puis 10 s de repos, refaire 5 répétitions de nouveaux 10 s de repos et finir par 5 répétitions.",videos:["https://youtu.be/fnifu6TSPkM"]},
-  "methode_10_repetitions_10_se":{nom:"Méthode 10 répétitions / 10 secondes",sous:"",famille:"myo_reps",desc:"Faire 10 répétitions puis 10 s de repos, refaire 10 répétitions de nouveaux 10 s de repos et finir par 10 répétitions.",videos:["https://youtu.be/wfuCe8SzLm4"]},
-  "methode_lourd_leger":{nom:"Méthode lourd / léger",sous:"",famille:"degressive",desc:"Faire 8 répétitions lourdes puis réduire la charge et faire 15 répétitions légères.",videos:["https://youtu.be/ScIXBxNgrCs"]},
-  "rest_in_pause":{nom:"Rest in pause",sous:"",famille:"rest_pause",desc:"Une fois votre limite de répétitions atteinte marquée, 15 s de repos puis finissez votre série.",videos:["https://youtu.be/K3b7rjKt9xg"]},
-  "stop_and_go":{nom:"Stop and go",sous:"",famille:"normale",desc:"Marquer 2 s de repos en haut/bas du mouvement.",videos:["https://youtu.be/TPbobxebyNs","https://youtu.be/nnjatRNzuu8"]},
-  "maximum":{nom:"Maximum",sous:"",famille:"normale",desc:"Ne pas compter le nombre de répétitions, faites le maximum de répétitions et dépasser la sensation de brûlure.",videos:["https://youtu.be/pvfzmIOnYPc"]},
-  "unilaterale":{nom:"Unilatérale",sous:"",famille:"normale",desc:"Faire _ _ répétitions du côté droit puis _ _ du gauche. Toucher le muscle qui travaille pour mieux le ressentir.",videos:["https://youtu.be/2nF1EggRxmQ"]},
-  "superset":{nom:"Superset",sous:"",famille:"superset",desc:"Enchainer 2 exercices à la suite sans temps de repos.",videos:["https://youtu.be/i0LlHtgMTo0"]},
-  "methode_curl_barre":{nom:"Méthode curl barre",sous:"",famille:"normale",desc:"Faire 10 répétitions prise serrées, 10 prise large et 10 avec une prise largeur d’épaules sans temps de repos.",videos:["https://youtu.be/yztTEdUz9Po"]},
-  "methode_1_des_demis_repetiti":{nom:"Méthode 1 des demis répétitions",sous:"10 b/m, 10 m/h, 10 entière",famille:"partielles",desc:"Faire 10 répétitions partant du bas du mouvement jusqu’au milieu, puis 10 partants du milieu jusqu’en haut du mouvement et enfin 10 répétitions entières.",videos:["https://youtu.be/2_Gd6MOBPL0"]},
-  "methode_isometrie_type_1":{nom:"Méthode isométrie type 1",sous:"20s puis 8 reps",famille:"normale",desc:"Faire une répétition et rester pendant 20 s contracter en haut/bas du mouvement puis enchaîner 8 répétitions à la suite.",videos:["https://youtu.be/3loSbniuDNA","https://youtu.be/dB6ENEkEwhQ"]},
-  "methode_isometrie_type_2":{nom:"Méthode isométrie type 2",sous:"8 reps puis 20s",famille:"normale",desc:"En fin de série lors de votre dernière répétition rester pendant 20 seconde contractée en haut/bas du mouvement.",videos:["https://youtu.be/OXnzVh8bKuM","https://youtu.be/UUISiSZQcUQ"]},
-  "triset":{nom:"Triset",sous:"",famille:"superset",desc:"Enchainer 3 exercices à la suite sans temps de repos.",videos:["https://youtu.be/fI2fVawJ4DA"]},
-  "fst_7":{nom:"FST 7",sous:"",famille:"myo_reps",desc:"Faire 8 à 12 répétitions, pendant les repos faire 20-30s en contractant les muscles utilisés pendant l’exercice puis 15 s de repos et recommencer.",videos:["https://youtu.be/udzloBhc8RU"]},
-  "repetition_partielle":{nom:"Répétition partielle",sous:"",famille:"partielles",desc:"Ne pas faire les mouvements en entier en tendant les bras/jambes.",videos:["https://youtu.be/du4tHFWQXbs"]},
-  "20_10_10_20":{nom:"20/10/10/20",sous:"",famille:"normale",desc:"Faire 20 répétitions pour la première et dernière série et 10 pour la deuxième et troisième.",videos:["https://youtu.be/BOljyOZbL30"]},
-  "bulgare":{nom:"Bulgare",sous:"",famille:"degressive",desc:"Faire 3 répétitions à 85 % de votre charge maximum sur une répétition puis 6 répétitions à 50 %",videos:["https://youtu.be/oQeJBHWgKSQ"]},
-  "isotention":{nom:"Isotention",sous:"3s en bas",famille:"normale",desc:"Rester 3 s en contraction en bas de votre mouvement.",videos:["https://youtu.be/CfozUMUqmKc"]},
-  "isometrie_max":{nom:"Isométrie max",sous:"",famille:"isometrie",desc:"Mettre une charge impossible à lever ou pousser puis tenter de la pousser/ou tirer pendant 4 s puis 4 s de repos et recommencer ça 2 fois.",videos:["https://youtu.be/nFL2bUg46z8"]},
-  "methode_2_des_demis_repetiti":{nom:"Méthode 2 des demis répétitions",sous:"",famille:"partielles",desc:"Faire 1 répétition partant du bas du mouvement jusqu’au milieu, puis 1 entière. Les deux ne comptent que pour 1 répétition.",videos:["https://youtu.be/YMwFRdaBeP0"]},
-  "methode_isometrie_type_3":{nom:"Méthode isométrie type 3",sous:"10 reps d’un côté iso de l’autre",famille:"normale",desc:"Faire 10 répétitions d’un bras pendant que l’autre est plié et contracté et reste en position fixe, puis inverser le travail des bras et finir par faire 10 répétitions avec les deux bras en même temps.",videos:["https://youtu.be/r70usBSJAr8"]},
-  "methode_7_7_7":{nom:"Méthode 7/7/7",sous:"3x 7 reps 7s",famille:"normale",desc:"Faire 7 répétitions puis à la suite maintenir la charge 7 s et recommencer cet enchaînement 2 fois à la suite (faire un total de 21 répétitions et 21 secondes).",videos:["https://youtu.be/Ym-coFOBAcY"]},
-  "excentrique_ralentit":{nom:"Excentrique ralentit",sous:"Descente de 5 secondes",famille:"normale",desc:"Freiner la descente de 5 secondes sur votre mouvement.",videos:["https://youtu.be/CN8X-2D1eD8"]},
-  "methode_trinite":{nom:"Méthode trinité",sous:"",famille:"partielles",desc:"Faire le maximum de répétitions normales puis sans repos le maximum de répétitions partiel (du bas/haut jusqu’au milieu du mouvement) et enfin maintenir la charge en haut du mouvement le plus longtemps possible.",videos:["https://youtu.be/-OjDIkIASBs"]},
-  "methode_infinite":{nom:"Méthode Infinité",sous:"120 répétitions",famille:"rest_pause",desc:"Faire 12 répétitions, 12s de repos, 24 répétitions, 24s de repos, 36 répétitions, 36s de repos, 50 répétitions, 50s de repos.",videos:["https://youtu.be/t4CLx1MHGPw"]},
-  "methode_sst":{nom:"Méthode SST",sous:"Patrick Tuor",famille:"degressive",desc:"Faire 6 à 8 répétitions lourdes, baisser la charge de 20 à 30 %, faire 5 répétitions en freinant la descente de 5s puis rebaisser de de 20 à 30 %, faire 5 répétitions en freinant la montée de 5s puis 5s de repos et faire 20s en maintenant la charge en bas/haut de l’exercice.",videos:["https://youtu.be/CqChnh7ZBnQ"]},
-  "8_reps_puis_5_5s":{nom:"8 reps puis 5 / 5s",sous:"",famille:"degressive",desc:"Faire 8 répétitions puis baisser la charge et faire 5 répétitions en freinant la descente de 5s.",videos:[]},
+  "dropset_type_1":{nom:"Dropset type 1",sous:"3 x 12 répétitions",famille:"degressive",desc:"Fais 12 répétitions, puis baisse la charge et, sans repos, refais 12 répétitions. Baisse une seconde fois et termine par 12 répétitions.",videos:["https://youtu.be/BeyRmP_R_d8"]},
+  "dropset_type_2":{nom:"Dropset type 2",sous:"3 x 8 répétitions",famille:"degressive",desc:"Fais 8 répétitions, puis baisse la charge et, sans repos, refais 8 répétitions. Baisse une seconde fois et termine par 8 répétitions.",videos:["https://youtu.be/rYi9stYwuaU"]},
+  "dropset_type_3":{nom:"Dropset type 3",sous:"100 répétitions",famille:"degressive",desc:"Prends une charge conséquente et fais le maximum de répétitions. Baisse la charge, refais le maximum, baisse encore, et continue jusqu’à un total de 100 répétitions.",videos:["https://youtu.be/aDXSxfCGYlE"]},
+  "methode_5_repetitions_10_sec":{nom:"Méthode 5 répétitions / 10 secondes",sous:"",famille:"myo_reps",desc:"Fais 5 répétitions puis 10 s de repos, refais 5 répétitions, 10 s de repos, et termine par 5 répétitions.",videos:["https://youtu.be/fnifu6TSPkM"]},
+  "methode_10_repetitions_10_se":{nom:"Méthode 10 répétitions / 10 secondes",sous:"",famille:"myo_reps",desc:"Fais 10 répétitions puis 10 s de repos, refais 10 répétitions, 10 s de repos, et termine par 10 répétitions.",videos:["https://youtu.be/wfuCe8SzLm4"]},
+  "methode_lourd_leger":{nom:"Méthode lourd / léger",sous:"",famille:"degressive",desc:"Fais 8 répétitions lourdes, puis baisse la charge et fais 15 répétitions légères.",videos:["https://youtu.be/ScIXBxNgrCs"]},
+  "rest_in_pause":{nom:"Rest in pause",sous:"",famille:"rest_pause",desc:"Une fois ta limite atteinte : 15 s de repos, puis termine ta série.",videos:["https://youtu.be/K3b7rjKt9xg"]},
+  "stop_and_go":{nom:"Stop and go",sous:"",famille:"normale",desc:"Marque 2 s de repos en haut ou en bas du mouvement.",videos:["https://youtu.be/TPbobxebyNs","https://youtu.be/nnjatRNzuu8"]},
+  "maximum":{nom:"Maximum",sous:"",famille:"normale",desc:"Ne compte pas tes répétitions : fais-en le maximum et va au-delà de la sensation de brûlure.",videos:["https://youtu.be/pvfzmIOnYPc"]},
+  "unilaterale":{nom:"Unilatérale",sous:"",famille:"normale",desc:"Fais _ _ répétitions du côté droit puis _ _ du côté gauche. Touche le muscle qui travaille pour mieux le ressentir.",videos:["https://youtu.be/2nF1EggRxmQ"]},
+  "superset":{nom:"Superset",sous:"",famille:"superset",desc:"Enchaîne 2 exercices à la suite, sans temps de repos.",videos:["https://youtu.be/i0LlHtgMTo0"]},
+  "methode_curl_barre":{nom:"Méthode curl barre",sous:"",famille:"normale",desc:"Fais 10 répétitions prise serrée, 10 prise large et 10 prise largeur d’épaules, sans temps de repos.",videos:["https://youtu.be/yztTEdUz9Po"]},
+  "methode_1_des_demis_repetiti":{nom:"Méthode 1 des demis répétitions",sous:"10 b/m, 10 m/h, 10 entière",famille:"partielles",desc:"Fais 10 répétitions du bas du mouvement jusqu’au milieu, puis 10 du milieu jusqu’en haut, et termine par 10 répétitions complètes.",videos:["https://youtu.be/2_Gd6MOBPL0"]},
+  "methode_isometrie_type_1":{nom:"Méthode isométrie type 1",sous:"20s puis 8 reps",famille:"normale",desc:"Fais une répétition et reste 20 s contracté en haut ou en bas du mouvement, puis enchaîne 8 répétitions.",videos:["https://youtu.be/3loSbniuDNA","https://youtu.be/dB6ENEkEwhQ"]},
+  "methode_isometrie_type_2":{nom:"Méthode isométrie type 2",sous:"8 reps puis 20s",famille:"normale",desc:"Sur la dernière répétition de ta série, reste 20 secondes contracté en haut ou en bas du mouvement.",videos:["https://youtu.be/OXnzVh8bKuM","https://youtu.be/UUISiSZQcUQ"]},
+  "triset":{nom:"Triset",sous:"",famille:"superset",desc:"Enchaîne 3 exercices à la suite, sans temps de repos.",videos:["https://youtu.be/fI2fVawJ4DA"]},
+  "fst_7":{nom:"FST 7",sous:"",famille:"myo_reps",desc:"Fais 8 à 12 répétitions. Pendant le repos, contracte 20 à 30 s les muscles travaillés, puis prends 15 s de repos et recommence.",videos:["https://youtu.be/udzloBhc8RU"]},
+  "repetition_partielle":{nom:"Répétition partielle",sous:"",famille:"partielles",desc:"Ne fais pas le mouvement en entier : arrête-toi avant de tendre les bras ou les jambes.",videos:["https://youtu.be/du4tHFWQXbs"]},
+  "20_10_10_20":{nom:"20/10/10/20",sous:"",famille:"normale",desc:"Fais 20 répétitions sur la première et la dernière série, et 10 sur la deuxième et la troisième.",videos:["https://youtu.be/BOljyOZbL30"]},
+  "bulgare":{nom:"Bulgare",sous:"",famille:"degressive",desc:"Fais 3 répétitions à 85 % de ta charge maximale sur une répétition, puis 6 répétitions à 50 %.",videos:["https://youtu.be/oQeJBHWgKSQ"]},
+  "isotention":{nom:"Isotention",sous:"3s en bas",famille:"normale",desc:"Reste 3 s en contraction en bas de ton mouvement.",videos:["https://youtu.be/CfozUMUqmKc"]},
+  "isometrie_max":{nom:"Isométrie max",sous:"",famille:"isometrie",desc:"Prends une charge impossible à lever ou à pousser, et tente de la pousser ou de la tirer pendant 4 s. Repose-toi 4 s et recommence 2 fois.",videos:["https://youtu.be/nFL2bUg46z8"]},
+  "methode_2_des_demis_repetiti":{nom:"Méthode 2 des demis répétitions",sous:"",famille:"partielles",desc:"Fais 1 répétition du bas du mouvement jusqu’au milieu, puis 1 complète. Les deux ne comptent que pour 1 répétition.",videos:["https://youtu.be/YMwFRdaBeP0"]},
+  "methode_isometrie_type_3":{nom:"Méthode isométrie type 3",sous:"10 reps d’un côté iso de l’autre",famille:"normale",desc:"Fais 10 répétitions d’un bras pendant que l’autre reste plié et contracté, en position fixe. Inverse, puis termine par 10 répétitions avec les deux bras en même temps.",videos:["https://youtu.be/r70usBSJAr8"]},
+  "methode_7_7_7":{nom:"Méthode 7/7/7",sous:"3x 7 reps 7s",famille:"normale",desc:"Fais 7 répétitions puis maintiens la charge 7 s, et enchaîne cette séquence 2 fois de plus (21 répétitions et 21 secondes au total).",videos:["https://youtu.be/Ym-coFOBAcY"]},
+  "excentrique_ralentit":{nom:"Excentrique ralentit",sous:"Descente de 5 secondes",famille:"normale",desc:"Freine la descente sur 5 secondes.",videos:["https://youtu.be/CN8X-2D1eD8"]},
+  "methode_trinite":{nom:"Méthode trinité",sous:"",famille:"partielles",desc:"Fais le maximum de répétitions complètes, puis sans repos le maximum de répétitions partielles (du bas ou du haut jusqu’au milieu du mouvement), et termine en maintenant la charge en haut du mouvement le plus longtemps possible.",videos:["https://youtu.be/-OjDIkIASBs"]},
+  "methode_infinite":{nom:"Méthode Infinité",sous:"120 répétitions",famille:"rest_pause",desc:"Fais 12 répétitions, 12 s de repos, 24 répétitions, 24 s de repos, 36 répétitions, 36 s de repos, 50 répétitions, 50 s de repos.",videos:["https://youtu.be/t4CLx1MHGPw"]},
+  "methode_sst":{nom:"Méthode SST",sous:"Patrick Tuor",famille:"degressive",desc:"Fais 6 à 8 répétitions lourdes, baisse la charge de 20 à 30 % et fais 5 répétitions en freinant la descente sur 5 s. Rebaisse de 20 à 30 %, fais 5 répétitions en freinant la montée sur 5 s, puis 5 s de repos, et termine par 20 s en maintenant la charge en bas ou en haut de l’exercice.",videos:["https://youtu.be/CqChnh7ZBnQ"]},
+  "8_reps_puis_5_5s":{nom:"8 reps puis 5 / 5s",sous:"",famille:"degressive",desc:"Fais 8 répétitions, puis baisse la charge et fais 5 répétitions en freinant la descente sur 5 s.",videos:[]},
   // ══════ TREIZE METHODES DE PLUS — guide du 26/08/2026 ══════
   // Recopiees telles qu'elles sont ecrites dans le guide : ce sont des
   // textes de coaching, relus par Kevin, et les reformuler serait les
@@ -35228,14 +35241,14 @@ const TECHNIQUES=Object.freeze({
   // La FAMILLE est ce qui compte pour le volume : chacune est rangee dans
   // l'une des sept familles existantes, on n'en cree pas une huitieme sans
   // donnee pour la ponderer.
-  "prefatigue":{nom:"Pré-fatigue",sous:"",famille:"normale",desc:"Faire un exercice d'isolation juste avant le mouvement polyarticulaire pour épuiser le muscle cible avant qu'il ne soit limité par les muscles secondaires (ex : leg extension avant squat).",videos:[]},
-  "repetitions_forcees":{nom:"Répétitions forcées",sous:"",famille:"normale",desc:"Une fois l'échec atteint, un partenaire aide légèrement à faire 2-3 reps supplémentaires en soulageant juste ce qu'il faut pour continuer le mouvement.",videos:[]},
-  "cluster_sets":{nom:"Cluster sets",sous:"séries en grappe",famille:"rest_pause",desc:"Faire 2-3 reps lourdes, reposer 10-15s, refaire 2-3 reps, reposer, etc., jusqu'à un total de 12-15 reps. Permet d'utiliser une charge plus lourde que d'habitude sur un volume plus important.",videos:[]},
+  "prefatigue":{nom:"Pré-fatigue",sous:"",famille:"normale",desc:"Fais un exercice d'isolation juste avant le mouvement polyarticulaire pour épuiser le muscle cible avant qu'il ne soit limité par les muscles secondaires (ex : leg extension avant squat).",videos:[]},
+  "repetitions_forcees":{nom:"Répétitions forcées",sous:"",famille:"normale",desc:"Une fois l'échec atteint, un partenaire t'aide légèrement à faire 2 ou 3 répétitions de plus, en soulageant juste ce qu'il faut pour que tu continues le mouvement.",videos:[]},
+  "cluster_sets":{nom:"Cluster sets",sous:"séries en grappe",famille:"rest_pause",desc:"Fais 2 ou 3 répétitions lourdes, repose-toi 10 à 15 s, refais 2 ou 3 répétitions, et ainsi de suite jusqu'à 12 à 15 répétitions au total. Tu utilises ainsi une charge plus lourde que d'habitude sur un volume plus important.",videos:[]},
   "myo_reps":{nom:"Myo-reps",sous:"",famille:"myo_reps",desc:"Une série d'activation à 12-15 reps proche de l'échec, puis des mini-séries de 3-5 reps avec seulement 10-20s de repos, répétées 4-5 fois. Très efficace pour l'hypertrophie en peu de temps.",videos:[]},
-  "repetitions_allongees":{nom:"Répétitions allongées",sous:"loaded stretch",famille:"partielles",desc:"Ne travailler que la portion basse/étirée du mouvement (ex : bas du curl, bas du développé couché) avec une pause. Technique très étudiée récemment pour l'hypertrophie.",videos:[]},
-  "serie_geante":{nom:"Série géante",sous:"",famille:"superset",desc:"Enchaîner 4 exercices ou plus sans repos, ciblant souvent le même groupe musculaire sous différents angles.",videos:[]},
-  "running_the_rack":{nom:"Running the rack",sous:"",famille:"degressive",desc:"Une variante du dropset spécifique aux haltères : enchaîner immédiatement plusieurs paires d'haltères de poids décroissant sans reposer les haltères, jusqu'à épuisement.",videos:[]},
-  "negatives_pures":{nom:"Négatives pures",sous:"",famille:"normale",desc:"Charge supérieure à son max concentrique (souvent avec assistance ou machine), en ne travaillant que la phase de descente, contrôlée sur 5-8 secondes.",videos:[]},
+  "repetitions_allongees":{nom:"Répétitions allongées",sous:"loaded stretch",famille:"partielles",desc:"Ne travaille que la portion basse, étirée, du mouvement (ex : bas du curl, bas du développé couché), avec une pause. Technique très étudiée récemment pour l'hypertrophie.",videos:[]},
+  "serie_geante":{nom:"Série géante",sous:"",famille:"superset",desc:"Enchaîne 4 exercices ou plus sans repos, souvent sur le même groupe musculaire, sous différents angles.",videos:[]},
+  "running_the_rack":{nom:"Running the rack",sous:"",famille:"degressive",desc:"Une variante du dropset propre aux haltères : enchaîne immédiatement plusieurs paires d'haltères de poids décroissant, sans les reposer, jusqu'à épuisement.",videos:[]},
+  "negatives_pures":{nom:"Négatives pures",sous:"",famille:"normale",desc:"Charge supérieure à ton max concentrique (souvent avec assistance ou machine) : tu ne travailles que la descente, contrôlée sur 5 à 8 secondes.",videos:[]},
   "contrast_training":{nom:"Contrast training",sous:"",famille:"normale",desc:"Alterner une série lourde (3-5 reps, 85%+) avec une série explosive légère du même mouvement, pour stimuler la force et la puissance en simultané.",videos:[]},
   "reps_tricheur":{nom:"Reps tricheur",sous:"",famille:"normale",desc:"Sur les dernières répétitions, utiliser un léger élan contrôlé pour dépasser le point de blocage, tout en gardant le contrôle de la descente.",videos:[]},
   "occlusion_bfr":{nom:"Occlusion / BFR",sous:"",famille:"normale",desc:"Utilisation de bandes de compression sur le haut des membres pour restreindre partiellement le flux sanguin, permettant de travailler à charge légère (20-30%) avec un stimulus hypertrophique élevé.",videos:[]},
@@ -37021,7 +37034,7 @@ function renderProgEx(){
           <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE" class="f-inline" style="color:var(--text);font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;flex:1">
         </div>
         <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 9px;display:flex;align-items:center;justify-content:center;font-family:inherit">COPIE</button>
+          <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 9px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
           <button onclick="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-md);cursor:pointer;border-radius:var(--r-full);width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
         </span>
       </div>
@@ -37182,7 +37195,7 @@ function renderProgEx(){
   const _bs=document.getElementById('cp-sauver');
   if(_bs){
     _bs.classList.toggle('btn-attente',_progExDirty);
-    _bs.textContent=_progExDirty?'SAUVEGARDER •':'Sauvegarder';
+    _bs.textContent=_progExDirty?'Enregistrer •':'Enregistrer';
   }
   _majEtatEnregistrement();
   _majSommaireSeance();
@@ -38591,7 +38604,7 @@ async function uploadAthletePdf(input){
   const f=input.files[0];if(!f) return;
   if(f.size>20*1024*1024){toast('PDF trop lourd (max 20 Mo)','var(--orange)');return;}
   const emailKey=currentUser.email.toLowerCase().replace(/\./g,',');
-  toast('Téléversement en cours…');
+  toast('Envoi en cours…');
   try{
     const storageUrl=await CLOUD.uploadPdf(emailKey,f);
     currentUser.programPdf=null;
@@ -39226,7 +39239,7 @@ function _rendreEntreeVente(){
   if(!z) return false;
   z.innerHTML=estVendeur()
     ?'<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 18px" '
-      +'onclick="ouvrirMesProgrammes()">GÉRER MES PROGRAMMES EN VENTE</button>'
+      +'onclick="ouvrirMesProgrammes()">Gérer mes programmes en vente</button>'
     :'';
   return true;
 }
@@ -39413,16 +39426,16 @@ function _htmlActionProgramme(p){
   let h='';
   if(acquis){
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:15px" '
-      +'onclick="appliquerProgramme(\''+id+'\')">APPLIQUER CE PROGRAMME</button>';
+      +'onclick="appliquerProgramme(\''+id+'\')">Enregistrer dans mes séances</button>';
     if(!RC_BOUTIQUE_GRATUITE&&p.prixCts) h+='<div class="bq-note">Programme acquis.</div>';
   } else {
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:15px" '
-      +'onclick="ouvrirAchatProgramme(\''+id+'\')">ACHETER — '+prixProgramme(p)+'</button>';
+      +'onclick="ouvrirAchatProgramme(\''+id+'\')">Acheter — '+prixProgramme(p)+'</button>';
     // ⚠ LE COACH L'APPLIQUE SANS PAYER, et c'est un pouvoir, pas un raccourci :
     // il vend ses propres programmes. La porte est fermee a tout autre compte.
     if(createur)
       h+='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" '
-        +'onclick="offrirProgramme(\''+id+'\')">L\'APPLIQUER SANS PAYER (coach)</button>';
+        +'onclick="offrirProgramme(\''+id+'\')">L\'enregistrer sans payer (coach)</button>';
   }
   return h;
 }
@@ -39686,7 +39699,7 @@ function loadSessionManager(){
           onclick="alternerSeance(${i})">⇄ Alterner ma séance</button>
         <div id="alt-${i}"></div>
       </div>`:
-      `<div style="padding:10px 16px;text-align:center"><span class="sub" style="font-size:var(--fs-sm)">Activez ce jour pour ajouter une séance</span></div>`}
+      `<div style="padding:10px 16px;text-align:center"><span class="sub" style="font-size:var(--fs-sm)">Active ce jour pour y mettre une séance</span></div>`}
     </div>`).join('');
 }
 
@@ -39976,7 +39989,7 @@ function _htmlSeanceDepart(s){
     },{pad:'9px 0',gap:11})
     +'<div style="margin-top:22px">'
     +'<button class="btn btn-red" onclick="psLancer()" style="margin:0;min-height:52px;letter-spacing:1.5px">'
-    +'LANCER MA PREMIÈRE SÉANCE</button></div>'
+    +'Démarrer ma première séance</button></div>'
     +'<div style="height:20px"></div>';
 }
 // Les deux accueils de nouvel inscrit, dans l'ordre ou ils se posent. Rend
@@ -40073,7 +40086,7 @@ function _htmlReprise(avecProgramme){
     +'Quinze minutes suffisent pour commencer'+' '+'— tu t’arrêtes quand tu veux.</div>'
     +'<button class="btn btn-red" onclick="reprendreMaintenant()" style="margin:0;min-height:52px;'
     +'letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">'
-    +'COMMENCER MAINTENANT</button>'
+    +'Démarrer maintenant</button>'
     +(avecProgramme
       ? '<div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-top:12px;text-align:center">'
         +'Ton programme t’attend.</div>'
@@ -42853,7 +42866,7 @@ function _renderWeeklyInto(el,sc){
               font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
-            </svg>TÉLÉCHARGER
+            </svg>Télécharger
           </button>
           <!-- PARTAGER n'apparaît QUE si la feuille de partage native existe.
                Sans elle, partagerSeanceDuJour retombe sur le téléchargement :
@@ -42866,7 +42879,7 @@ function _renderWeeklyInto(el,sc){
               font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
-            </svg>PARTAGER
+            </svg>Partager
           </button>`:''}
         </div>`:''}
       </div>
@@ -52378,7 +52391,7 @@ async function ajusterSemaineBloc(i){
     +'une répétition de plus en réserve.'+nl+nl
     +(porte?'Laisse vide pour remettre cette semaine au gabarit.'
            :'Laisse vide pour ne rien changer.'),
-    '',{libelleOk:'Appliquer'});
+    '',{libelleOk:'Enregistrer'});
   if(r===null||r===undefined) return false;
   const txt=String(r).trim();
   if(!txt){
@@ -55022,7 +55035,7 @@ function _htmlBlocPriorite(c){
     +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:7px"'
     +(depasse?' disabled style="width:100%;margin-bottom:7px;opacity:.45"':'')
     +' onclick="blocAppliquerSeries('+JSON.stringify(String((u&&u.id)||'')).replace(/"/g,'&quot;')+')">'
-    +'Appliquer les séries</button>'
+    +'Enregistrer les séries</button>'
     +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:7px" onclick="blocAppliquerOrdre('
     +JSON.stringify(String((u&&u.id)||'')).replace(/"/g,'&quot;')+')">'
     +'Remonter les prioritaires en tête de séance</button>'
@@ -55484,7 +55497,7 @@ function _htmlDispo(idx){
       : '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="'
         +(rouge?'dispoReporterSeance':'dispoAllegerSeance')
         +'('+(rouge?'':idx+',')+JSON.stringify({cause:d.cause,note:d.note}).replace(/"/g,'&quot;')+')">'
-        +(rouge?'Alléger la semaine':'Appliquer')+'</button>')
+        +(rouge?'Alléger la semaine':'Enregistrer')+'</button>')
     +(rouge
       ? '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:7px" onclick="clientTab(\'canal\')">En parler à ton coach</button>'
       : '')
@@ -60431,7 +60444,7 @@ function renderWoReminderCard(){
   const el=document.getElementById('clh-wo-reminder-row');if(!el)return;
   const u=currentUser;
   if(!u._woReminderEnabled){
-    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:11px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">
+    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:11px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;letter-spacing:.8px;margin-bottom:10px">
       <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Configurer un rappel séance</span>
     </button>`;
     return;
@@ -60959,14 +60972,14 @@ function _htmlPointDuJour(etat){
       +'<input type="number" id="pdj-poids" inputmode="decimal" step="0.1" '
       +'min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="—" class="pes-champ">'
       +'<span class="pes-unite">kg</span></span></label>'
-      +'<button class="btn btn-red btn-sm pdj-ok" onclick="pdjValiderPoids()">Valider</button></div>';
+      +'<button class="btn btn-red btn-sm pdj-ok" onclick="pdjValiderPoids()">Enregistrer</button></div>';
   } else if(etat.question==='pas'){
     controle='<div class="pdj-ligne">'
       +'<label class="pes-boite" for="pdj-pas"><span class="pes-duo">'
       +'<input type="number" id="pdj-pas" inputmode="numeric" step="100" '
       +'min="0" max="99999" placeholder="—" class="pes-champ">'
       +'<span class="pes-unite">pas</span></span></label>'
-      +'<button class="btn btn-red btn-sm pdj-ok" onclick="pdjValiderPas()">Valider</button></div>';
+      +'<button class="btn btn-red btn-sm pdj-ok" onclick="pdjValiderPas()">Enregistrer</button></div>';
   } else if(etat.question==='sommeil'){
     controle='<div class="pdj-choix">'+PDJ_NUITS.map((h,i)=>
       '<button type="button" class="pdj-past" onclick="pdjValiderSommeil('+h+')">'
@@ -62641,7 +62654,7 @@ function _htmlCarteDecharge(c){
       +escapeHtml(String(m.libelle||''))+` — <b>`+escapeHtml(String(m.valeur))+`</b> `
       +escapeHtml(String(m.unite||''))+`</div>`).join('')
     +`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="cdAppliquer()">Appliquer</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="cdAppliquer()">Enregistrer</button>
       <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="cdReporter()">Reporter</button>
       <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="cdRefuser()">Refuser</button>
     </div></div>`;
@@ -63716,7 +63729,7 @@ function showProgressTab(tab,btn,sansMemo){
               <button onclick="setEvolGender('F')" style="flex:1;padding:9px;border-radius:var(--r-1);border:1px solid ${female?'var(--red)':'var(--border)'};background:${female?'#1a0000':'#111'};color:${female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">F</button>
             </div>
           </div>
-          <button class="btn btn-red btn-sm" onclick="refreshMG()" style="height:40px;padding:0 16px;align-self:flex-end;letter-spacing:1px">Appliquer</button>
+          <button class="btn btn-red btn-sm" onclick="refreshMG()" style="height:40px;padding:0 16px;align-self:flex-end;letter-spacing:1px">Enregistrer</button>
         </div>
         ${missingHeight?`<div style="margin-top:10px;padding:8px 10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--warning);line-height:1.5">⚠ Renseigne ta taille ci-dessus pour calculer ta masse grasse.</div>`:missingMeas?`<div style="margin-top:10px;padding:8px 10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--warning);line-height:1.5">⚠ Certains bilans manquent : <strong>Tour de Cou</strong>${female?' + <strong>Tour de Hanche</strong>':''} + <strong>Tour de Taille</strong>. Renseigne ces mesures dans ton prochain bilan.</div>`:''}
       </div>
@@ -65939,7 +65952,7 @@ function _htmlDepartAthlete(nut){
       ${bloc('⚡ JOUR ON',b.on,'var(--success)')}
       ${bloc('💤 JOUR OFF',b.off,'var(--sub)')}
     </div>
-    <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="utiliserBesoinsProposes()">Utiliser ces objectifs</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="utiliserBesoinsProposes()">Enregistrer ces objectifs</button>
     <!-- R10 — LES HYPOTHESES SONT REPLIEES, PAS REECRITES. Le texte du repli
          est celui d'avant, au caractere pres : seul le ⓘ du NEAT s'y ajoute,
          apres le premier emploi du mot. -->
@@ -66492,7 +66505,7 @@ function htmlConsigneJournal(date,vide){
       <div class="nut-cap" style="margin-bottom:10px">Pour commencer</div>
       <ol class="fj-etapes">${etapes}</ol>
     </div>`:''}
-    <button class="btn btn-red" style="width:100%;margin:${vide?'12px 0 0':'0'};letter-spacing:1.5px" onclick="openFoodSearch('${date}')">+ AJOUTER UN ALIMENT</button>
+    <button class="btn btn-red" style="width:100%;margin:${vide?'12px 0 0':'0'};letter-spacing:1.5px" onclick="openFoodSearch('${date}')">+ Ajouter un aliment</button>
   </div>`;
 }
 // LA CIBLE DE SEL N'EST PAS UNE MACRO. Elle ne sort pas de
@@ -66985,8 +66998,8 @@ function _renderStrictDiet(){
         <div style="display:inline-flex;align-items:center;gap:7px;font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text);text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:var(--halo-1),0 0 18px rgba(255,255,255,.18)"><span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN${_sAuj?" AUJOURD'HUI":''}</div>
         ${_bandeauJour('strict-jour',_sjour,'setStrictJour')}
         <div style="display:flex;gap:10px">
-          <button onclick="setNutriRespected('${_sjour}',true)" style="flex:1;padding:16px 0;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'var(--text)':'#8fd9ab'};border:2px solid ${respYes?'#22c55e':'rgba(34,197,94,.35)'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">✓ OUI</button>
-          <button onclick="setNutriRespected('${_sjour}',false)" style="flex:1;padding:16px 0;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'var(--text)':'#e79b9b'};border:2px solid ${respNo?'var(--red)':'rgba(224,32,32,.35)'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">✗ NON</button>
+          <button onclick="setNutriRespected('${_sjour}',true)" style="flex:1;padding:16px 0;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'var(--text)':'#8fd9ab'};border:2px solid ${respYes?'#22c55e':'rgba(34,197,94,.35)'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">✓ Oui</button>
+          <button onclick="setNutriRespected('${_sjour}',false)" style="flex:1;padding:16px 0;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'var(--text)':'#e79b9b'};border:2px solid ${respNo?'var(--red)':'rgba(224,32,32,.35)'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">✗ Non</button>
         </div>
       </div>
     </div>
@@ -69260,7 +69273,7 @@ function renderPlanCoach(){
     <div id="cpl-sources">${_cplHtmlSources()}</div>
 
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-bottom:16px">${escapeHtml(PLAN_NOTE_CUISSON)}</div>
-    <button class="btn btn-red" onclick="savePlanCoach()" style="font-size:var(--fs-sm);letter-spacing:1px">ENREGISTRER LE PLAN</button>
+    <button class="btn btn-red" onclick="savePlanCoach()" style="font-size:var(--fs-sm);letter-spacing:1px">Enregistrer le plan</button>
     <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="supprimerPlanCoach()">Supprimer le plan de cet athlète</button>
   </div></div>`;
 }
@@ -70750,7 +70763,7 @@ function _htmlDernierAjout(date){
   if(!a||a.date!==date) return '';
   return `<div style="background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-3);padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
     <div style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--success);line-height:1.5">${escapeHtml(a.quoi)}</div>
-    <button onclick="annulerDernierAjout()" style="flex-shrink:0;background:none;border:1px solid var(--success-border);color:var(--success);border-radius:var(--r-2);padding:6px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">ANNULER</button>
+    <button onclick="annulerDernierAjout()" style="flex-shrink:0;background:none;border:1px solid var(--success-border);color:var(--success);border-radius:var(--r-2);padding:6px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">Annuler</button>
   </div>`;
 }
 function openFoodSearch(date){
@@ -74501,7 +74514,7 @@ function assertNoDiagnosisBoundNumericTarget(){
 // La note qui remplace le chiffre. Elle cite sa source et son année, et ne
 // porte AUCUNE valeur : c'est tout l'objet du lot.
 const SOPK_NOTE_LIPIDES='Aucune répartition de macronutriments n\'a démontré '
-  +'de supériorité dans le SOPK (guideline internationale 2023). Adaptez selon '
+  +'de supériorité dans le SOPK (guideline internationale 2023). Adapte selon '
   +'la tolérance de l\'athlète et l\'avis du praticien qui la suit.';
 // ── Migration : rien ne change en silence ────────────────────────────────
 // Le g/kg de lipides n'a JAMAIS été persisté — _propLip vit en mémoire et le
@@ -74514,8 +74527,8 @@ const SOPK_MIGRATION_TITRE='Règle de lipides retirée';
 const SOPK_MIGRATION_TEXTE='La suggestion automatique de lipides sous SOPK a '
   +'été retirée : aucune répartition n\'a démontré de supériorité. Au prochain '
   +'recalcul, la suggestion revient au standard. Le plan enregistré n\'a pas '
-  +'été modifié, et si vous aviez fixé cette valeur vous-même, rien ne vous '
-  +'empêche de la reprendre.';
+  +'été modifié, et si tu avais fixé cette valeur toi-même, rien ne t\'empêche '
+  +'de la reprendre.';
 const SOPK_LIP_ANCIENNE_REGLE=1.2;
 // PURE. Le plan de cette athlète ressemble-t-il à ce que produisait la règle ?
 // Tolérance d'un gramme : les grammes sont arrondis, et un poids relevé après
@@ -74545,7 +74558,7 @@ function _htmlMigrationSopk(c){
   return `<div style="background:var(--surface-1);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:13px;margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">${escapeHtml(SOPK_MIGRATION_TITRE)}</div>
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${escapeHtml(SOPK_MIGRATION_TEXTE)}</div>
-    <button onclick="accuserMigrationSopk()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai lu</button>
+    <button onclick="accuserMigrationSopk()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
   </div>`;
 }
 // ÉCRIT, et seulement sur un clic : l'indicateur est posé par le coach, pas
@@ -75301,11 +75314,11 @@ async function appliquerCiblesTableur(){
   // colonnes ON/OFF differentes alors que les tableaux lui en montraient une.
   const cyc=(function(){ try{ return dieteCyclee(c); }catch(e){ return false; } })();
   const j=_tbJournees(c,t,cyc);
-  const ok=await rcConfirm('Appliquer ces cibles ?',
+  const ok=await rcConfirm('Enregistrer ces cibles ?',
     'Ton athlète verra '+j.on.kcal+' kcal'+(cyc?(' les jours ON et '+j.off.kcal
       +' kcal les jours OFF'):' par jour')+', '+j.on.p+' g de protéines, '
     +j.on.g+' g de glucides et '+j.on.l+' g de lipides. Ses cibles actuelles '
-    +'seront remplacées.','Appliquer');
+    +'seront remplacées.','Enregistrer');
   if(!ok) return false;
   if(!c.nutrition) c.nutrition={};
   // Les reglages de calcul partent AVEC : sans eux, rouvrir la fiche
@@ -75687,7 +75700,7 @@ function _htmlTableauxTableur(c){
     +'<button type="button" class="btn btn-outline" '
     +'onclick="enregistrerReglagesTableur()">Enregistrer les réglages</button>'
     +'<button type="button" class="btn btn-red" '
-    +'onclick="appliquerCiblesTableur()">Appliquer à l’athlète</button>'
+    +'onclick="appliquerCiblesTableur()">Enregistrer pour l’athlète</button>'
     +'</div>';
   return h;
 }
@@ -78264,7 +78277,7 @@ function _htmlBlocSupplements(list,avant){
         <div style="width:3px;height:20px;background:var(--red);border-radius:var(--r-1)"></div>
         <h3 style="margin:0">Mes compléments</h3>
       </div>
-      <button class="btn btn-red btn-sm" onclick="openSuppEdit(-1)">+ AJOUTER</button>
+      <button class="btn btn-red btn-sm" onclick="openSuppEdit(-1)">+ Ajouter</button>
     </div>
     ${_htmlTraitementSupp(currentUser)}
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4);padding:14px">
@@ -78605,7 +78618,7 @@ function renderCoachSuppSection(c){
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Notes (optionnel)</div>
           <input id="ccd-supp-notes" class="form-input" style="padding:8px 10px;font-size:var(--fs-sm)" placeholder="Ex: à jeun, avec repas…">
         </div>
-        <button onclick="saveClientSuppEntry()" style="width:100%;padding:11px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">+ AJOUTER AU PROGRAMME</button>
+        <button onclick="saveClientSuppEntry()" style="width:100%;padding:11px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">+ Ajouter au programme</button>
       </div>
     </div>`;
 }
@@ -78706,8 +78719,8 @@ function openCoachSuppEdit(id){
       </div>
     </div>
     <input type="hidden" id="coach-supp-idx" value="${s?s.id:-1}">
-    <button onclick="saveCoachSuppEdit()" style="width:100%;padding:13px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer;margin-bottom:10px">SAUVEGARDER</button>
-    ${s?`<button onclick="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:11px 0;background:none;border:1px solid var(--border);color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;border-radius:var(--r-3);cursor:pointer">SUPPRIMER CE COMPLÉMENT</button>`:''}
+    <button onclick="saveCoachSuppEdit()" style="width:100%;padding:13px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer;margin-bottom:10px;text-transform:uppercase">Enregistrer</button>
+    ${s?`<button onclick="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:11px 0;background:none;border:1px solid var(--border);color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;border-radius:var(--r-3);cursor:pointer">Supprimer ce complément</button>`:''}
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -79529,7 +79542,9 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
        pouvoir y écrire : le bouton disparaissait, ce qui cachait le problème
        au lieu de le régler. Le futur reste impossible — la flèche « → » est
        désactivée sur aujourd'hui, et addCaffeineEntry le refuse de toute façon. -->
-  <button class="btn btn-red" onclick="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise${isToday?'':' le '+dateLbl}</button>
+  <!-- R31 — CTA de l'ecran Caféine, mais pas de la Nutrition qui l'embarque :
+       la, les capitales vont a « + Ajouter un aliment », et a lui seul. -->
+  <button class="btn btn-red${deleteFnName==='embedded'?' btn-casse':''}" onclick="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise${isToday?'':' le '+dateLbl}</button>
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
     <div style="width:20px;height:2px;background:var(--red)"></div>
     <h3>${dateLbl}</h3>
@@ -81333,7 +81348,7 @@ function qcEditRow(id){
     <input id="qce-lbl-${c.id}" value="${escapeHtml(c.label)}" maxlength="40" style="width:100%;box-sizing:border-box;margin-bottom:4px;font-size:var(--fs-sm)">
     <input id="qce-txt-${c.id}" value="${escapeHtml(c.text)}" maxlength="120" style="width:100%;box-sizing:border-box;font-size:var(--fs-xs)">
   </div>
-  <button data-id="${c.id}" onclick="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:7px 11px;font-size:var(--fs-xs);font-weight:800;cursor:pointer;font-family:Montserrat,sans-serif">OK</button>
+  <button data-id="${c.id}" onclick="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:7px 11px;font-size:var(--fs-xs);font-weight:800;cursor:pointer;font-family:Montserrat,sans-serif">Enregistrer</button>
   <button onclick="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:var(--r-1);padding:7px 10px;font-size:var(--fs-sm);cursor:pointer;color:var(--sub)">✕</button>`;
   document.getElementById('qce-lbl-'+c.id)?.focus();
 }
@@ -82338,7 +82353,7 @@ function loadSteps(containerId='steps-content',opts){
             <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
         </div>
-        <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
+        <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
       </details>
     </div>
   `;
@@ -83092,7 +83107,7 @@ function _htmlAjustement(user,lectureSeule){
     ${regimeHtml}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-bottom:${lectureSeule?'0':'11px'}">Tes protéines et tes lipides ne changent pas. Un seul ajustement par quinzaine.</div>
     ${lectureSeule?'':`<div style="display:flex;gap:8px">
-      <button class="btn btn-red btn-sm" style="flex:1;margin:0;letter-spacing:1px" onclick="appliquerAjustement()">Appliquer</button>
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0;letter-spacing:1px" onclick="appliquerAjustement()">Enregistrer</button>
       <button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;padding:0 14px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="refuserAjustement()">Garder comme ça</button>
     </div>`}
     ${lectureSeule?'':blocDisclaimerSante()}
@@ -84505,7 +84520,7 @@ async function ouvrirTransitionMaintien(){
     +String.fromCharCode(10)+String.fromCharCode(10)
     +'Protéines et lipides ne changent pas. Tu peux appliquer les paliers un par '
     +'un, ou sauter directement à la cible.';
-  if(!await rcConfirm(txt+String.fromCharCode(10)+String.fromCharCode(10)+'Appliquer le PREMIER palier ?',null,'Appliquer')){
+  if(!await rcConfirm(txt+String.fromCharCode(10)+String.fromCharCode(10)+'Enregistrer le PREMIER palier ?',null,'Enregistrer')){
     return false;
   }
   return appliquerPalierTransition(0);
@@ -85788,7 +85803,7 @@ function _htmlBandeauPhase(user){
   if(!p) return '';
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:8px 12px;margin-bottom:14px">
     <span style="font-size:var(--fs-xs);color:var(--sub)">Objectif actuel : <b style="color:var(--text-strong)">${PHASES[p.type].lib}</b></span>
-    <button onclick="ouvrirChoixPhase()" style="background:none;border:none;padding:0;cursor:pointer;font-size:var(--fs-2xs);letter-spacing:1px;text-transform:uppercase;color:var(--red-text);font-weight:700">Changer</button>
+    <button onclick="ouvrirChoixPhase()" style="background:none;border:none;padding:0;cursor:pointer;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--red-text);font-weight:700">Changer</button>
   </div>`;
 }
 function renderBandeauPhase(){
@@ -86257,7 +86272,7 @@ function _htmlCadreImportCapture(quoi,opts){
            lui-meme, avant meme d'etre lue. -->
       <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
       <button class="btn" onclick="this.previousElementSibling.click()"
-        style="width:100%;min-height:46px;margin:0;background:${teinte.g};border:1px solid ${teinte.b};color:#fff;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:900;letter-spacing:1.8px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px ${teinte.h},inset 0 1px 0 rgba(255,255,255,.18)">Envoyer une capture</button>
+        style="width:100%;min-height:46px;margin:0;background:${teinte.g};border:1px solid ${teinte.b};color:#fff;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:900;letter-spacing:1.8px;cursor:pointer;box-shadow:0 0 18px ${teinte.h},inset 0 1px 0 rgba(255,255,255,.18)">Envoyer une capture</button>
       <!-- LA PHRASE DE CONFIDENTIALITE EST UN ENGAGEMENT, PAS UNE MENTION
            LEGALE A ENTERRER : elle passe de --fs-2xs / --text-faint, ou elle
            etait illisible, a --fs-xs sur --text-dim. C'est elle qui autorise
@@ -88799,7 +88814,7 @@ function importOcrExercises(idx,maxN){
     _progExDirty=true;
     renderProgEx();
     closeModal();
-    toast(result.length+' exercices importés : pense à sauvegarder.');
+    toast(result.length+' exercices importés : pense à enregistrer.');
     return;
   }
 
