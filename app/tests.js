@@ -40425,6 +40425,63 @@ async function testExercices(){
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
+    // ══ 17/09/2026 — R22 : TROIS FONCTIONS MIEUX EXPOSÉES ═════════════════
+
+    ok('R22 — l’import par capture est l’alternative JUSTE SOUS la saisie, dans chaque carte',(()=>{
+      const u={stepsGoals:{on:10000,off:7000},sleepGoal:480,stepsLog:[],sleepLog:[]};
+      const sU=currentUser;
+      try{
+        currentUser=u;
+        for(const quoi of ['pas','sommeil']){
+          const d=document.createElement('div'); d.innerHTML=_htmlCarteSante(u,quoi);
+          const actions=d.querySelector('.san-actions');
+          const imp=d.querySelector('.san-import');
+          if(!actions||!imp) return _echec(quoi+' : saisie ou import absent');
+          // SOUS la saisie, et juste sous : le bloc suivant les actions.
+          if(actions.nextElementSibling!==imp) return _echec(quoi+' : l’import ne suit pas directement la saisie');
+          if(!/^ou importe une capture d'écran de ton application de santé$/.test(imp.firstElementChild.textContent.trim()))
+            return _echec(quoi+' : « '+imp.firstElementChild.textContent.trim()+' »');
+          const inp=imp.querySelector('input[type="file"]');
+          if(!inp||inp.getAttribute('onchange')!=='importerCaptureStats(this)') return _echec(quoi+' : le champ n’appelle plus importerCaptureStats');
+          // Le gestionnaire retrouve son bouton par nextElementSibling.
+          if(!inp.nextElementSibling||inp.nextElementSibling.tagName!=='BUTTON') return _echec(quoi+' : le bouton ne suit plus le champ');
+          if(!/ni envoyée ni conservée/.test(imp.textContent)) return _echec(quoi+' : la phrase de confidentialité a disparu');
+          // La saisie manuelle reste le bouton principal ; l'import est secondaire.
+          if(!d.querySelector('.san-a1.btn-red')||inp.nextElementSibling.classList.contains('btn-red')) return _echec(quoi+' : l’import a pris la place du chemin principal');
+        }
+      } finally { currentUser=sU; }
+      // Plus de cadre d'import en tête de Lifestyle.
+      if(document.getElementById('lifestyle-import')) return _echec('le cadre de tête de Lifestyle est toujours là');
+      return true;})());
+
+    ok('R22 — « Tension et analyses » est la première ligne du profil, et mène à un écran athlète',(()=>{
+      const pad=document.querySelector('#s-athlete-profile .scroll-area .pad');
+      const b=pad&&pad.firstElementChild;
+      if(!b||b.tagName!=='BUTTON') return _echec('la première ligne du profil n’est pas un bouton');
+      if(!/Tension et analyses/i.test(b.textContent)||!/Tension, analyses, constantes/.test(b.textContent))
+        return _echec('libellé : « '+b.textContent.replace(/\s+/g,' ').trim()+' »');
+      const m=(b.getAttribute('onclick')||'').match(/go\('([^']+)'\)/);
+      if(!m||m[1]!=='s-sante') return _echec('mène à '+(m&&m[1]));
+      if(/^s-coach-/.test(m[1])||!document.getElementById(m[1])) return _echec('écran inatteignable pour un athlète');
+      // Une seule entrée : l'ancien bouton du milieu est retiré.
+      const n=[...document.querySelectorAll('#s-athlete-profile [onclick]')].filter(x=>/go\('s-sante'\)/.test(x.getAttribute('onclick'))).length;
+      if(n!==1) return _echec(n+' entrées vers la santé dans le profil');
+      // La phrase d'avertissement reste, mot pour mot.
+      if(document.getElementById('s-sante').textContent.indexOf('RepCore conserve tes mesures et tes analyses pour que tu les aies sous la main. Il ne les interprète pas.')<0)
+        return _echec('la phrase d’avertissement de l’écran Santé a changé');
+      return true;})());
+
+    ok('R22 — rien dans la barre d’onglets, et l’import de fiche reste fermé comme décidé',(()=>{
+      const tabs=[...document.querySelectorAll('#client-tabbar .tab-btn')].map(b=>b.dataset.tab);
+      if(tabs.some(t=>/sante|scan|import|capture/.test(t||''))) return _echec('onglets : '+tabs.join(','));
+      if(tabs.length!==7) return _echec(tabs.length+' onglets');
+      // Kevin, 17/09/2026 : l'import par photo/PDF reste désactivé, et rien
+      // ne l'expose — une entrée mènerait à un refus.
+      if(LEGACY_PDF_IMPORT!==false) return _echec('l’import de fiche a été réactivé');
+      if(/Importer une fiche/i.test(document.getElementById('s-session-manager').textContent))
+        return _echec('une entrée « Importer une fiche » mène à un import fermé');
+      return true;})());
+
     // ══ 17/09/2026 — R21 : LA FLÈCHE ET LE RETOUR DU SYSTÈME, PARTOUT PAREILS ══
     //
     // Le retour matériel Android et le geste de retour passent par
@@ -52763,7 +52820,10 @@ vendredi 78 6h 44m
         sanRendre();
         ok('Lifestyle porte le cadre d\'import',cadres(life)>=1,
            'aucun cadre sur l\'ecran');
-        ok('Lifestyle ne le porte qu\'une fois',cadres(life)===1,
+        // R22 — UN PAR CARTE, sous la saisie : Pas et Sommeil portent chacune
+        // le leur, et plus aucun cadre en tête d'écran.
+        ok('Lifestyle le porte une fois par carte, et nulle part ailleurs',
+           cadres(life)===2&&[...life.querySelectorAll('.san-carte')].every(c=>cadres(c)===1),
            'compte '+cadres(life));
       } finally {
         bac.remove();
