@@ -2006,12 +2006,9 @@ async function testExercices(){
     const _cyF0=_cyMonter('femme','j6_14');          // facteur 1,00
     const _cyF5=_cyMonter('femme','j1_supportable'); // facteur 0,95
     const _cyF20=_cyMonter('femme','j1_difficile');  // facteur 0,80
-    // R08 — LES SEGMENTS RIR PASSENT LE TABLEAU EN CARTES, pour tout exercice
-    // libre et pour tout le monde : la bande porte « Séries », « RIR » et
-    // « Gêne » dans une seule cellule. Ce que ces contrôles gardent ne change
-    // pas — la MÊME mise en page chez l'homme et chez la femme, et pas de CYC.
-    ok('La bande des séries chez l\'homme : Séries, RIR, Gêne',
-       _cyH.col.length===1&&/^Séries\s*RIR\s*ⓘ\s*Gêne\s*ⓘ$/.test(_cyH.col[0]||''),JSON.stringify(_cyH.col));
+    // R14 — les segments RIR sont retirés : le tableau retrouve ses cinq
+    // colonnes, la MÊME mise en page chez l'homme et chez la femme, sans CYC.
+    ok('Cinq colonnes chez l\'homme',_cyH.col.length===5,JSON.stringify(_cyH.col));
     ok('Mêmes colonnes pour une femme en phase neutre',
        JSON.stringify(_cyF0.col)===JSON.stringify(_cyH.col),JSON.stringify(_cyF0.col));
     ok('Mêmes colonnes pour une femme en phase difficile',
@@ -39743,13 +39740,13 @@ async function testExercices(){
     ok('R09 — vus est classé, hors santé',
        CHAMPS_NON_SANTE.indexOf('vus')>=0&&CHAMPS_SANTE.indexOf('vus')<0);
 
-    // ══ 17/09/2026 — R08 : L'ÉCHELLE DE GÊNE, ET LE RIR EN SEGMENTS ══════
+    // ══ 17/09/2026 — R08 : L'ÉCHELLE DE GÊNE (et R14 : LE RIR EN MENU) ═══
     //
     // Deux saisies de la séance passaient par un menu déroulant nu : la
     // douleur, notée de 1 à 6 sans que rien nulle part ne dise ce que 4 veut
-    // dire, et le RIR, qui demandait deux gestes pour un seul choix. Le lot
-    // étiquette la première et passe le second en segments — SANS CHANGER UNE
-    // SEULE VALEUR ENREGISTRÉE.
+    // dire, et le RIR. Les deux menus disent maintenant ce que chaque valeur
+    // veut dire, dans la liste, SANS CHANGER UNE SEULE VALEUR ENREGISTRÉE.
+    // (R08 avait passé le RIR en segments ; R14 les a retirés.)
 
     // UN DÉCOR EN TÊTE DE PAGE. getElementById rend le PREMIER nœud du
     // document : ajouté en fin, le décor laisserait renderSets — et le tap
@@ -39780,13 +39777,14 @@ async function testExercices(){
     };
     const _r08Ex={name:'DEVELOPPE COUCHE',series:3,reps:'10'};
     const _r08S=o=>Object.assign({weight:'60',weight2:'',reps:'10',rir:'',pain:'',done:false},o||{});
-    const _r08Segs=tr=>tr?[...tr.querySelectorAll('.rir-seg')]:[];
-    const _r08Libs=tr=>_r08Segs(tr).map(x=>x.textContent.trim()).join(' ');
-    const _r08Tap=(d,l,ligne)=>{
-      const tr=d.querySelectorAll('#sets-body-0 tr')[ligne||0];
-      const b=_r08Segs(tr).find(x=>x.textContent.trim()===l);
-      if(!b) throw new Error('pas de segment « '+l+' » : '+_r08Libs(tr));
-      b.click();
+    // R14 — le menu RIR d'une ligne, et ce que sa case affiche.
+    const _r14Sel=tr=>tr?tr.querySelector('.rir-choix select'):null;
+    const _r14Vu=tr=>{ const l=tr&&tr.querySelector('.rir-choix');
+      return l?[...l.querySelectorAll('[aria-hidden="true"]')].map(x=>x.textContent).join('').replace('▾','').trim():null; };
+    const _r14Choisir=(d,v,ligne)=>{
+      const sel=_r14Sel(d.querySelectorAll('#sets-body-0 tr')[ligne||0]);
+      if(!sel) throw new Error('pas de menu RIR sur la série '+((ligne||0)+1));
+      sel.value=v; sel.dispatchEvent(new Event('change'));
     };
 
     // ── PARTIE 1 : L'ÉCHELLE DE GÊNE ──
@@ -39843,7 +39841,7 @@ async function testExercices(){
         if(!/Gêne/.test(s2.getAttribute('aria-label')||'')) return _echec('aria-label : « '+s2.getAttribute('aria-label')+' »');
         return true;})));
 
-    ok('R08 — une série validée garde sa gêne ouverte, et ferme ses segments',(()=>
+    ok('R08 — une série validée garde sa gêne ouverte, et ferme son RIR',(()=>
       _r08Fix(359,d=>{
         const tb=_r08Rendre(d,_r08Ex,[_r08S({done:true,rir:'1'}),_r08S()]);
         const [l1,l2]=tb.querySelectorAll('tr');
@@ -39851,10 +39849,10 @@ async function testExercices(){
         if(!sel) return _echec('pas de menu de gêne sur la série validée');
         // « Une douleur se déclare souvent une fois la barre reposée. »
         if(sel.disabled) return _echec('la gêne est verrouillée après validation');
-        const s1=_r08Segs(l1);
-        if(s1.length!==5) return _echec(s1.length+' segments sur la série validée');
-        if(s1.some(b=>!b.disabled)) return _echec('un segment reste touchable sur une série validée');
-        if(_r08Segs(l2).some(b=>b.disabled)) return _echec('la série non validée a des segments fermés');
+        const r1=_r14Sel(l1);
+        if(!r1) return _echec('pas de menu RIR sur la série validée');
+        if(!r1.disabled) return _echec('le RIR reste modifiable sur une série validée');
+        if(!_r14Sel(l2)||_r14Sel(l2).disabled) return _echec('la série non validée a son RIR fermé');
         return true;})));
 
     // ⚠ PAR LE VRAI MENU, DANS UNE VRAIE SÉANCE. Le lot change le balisage du
@@ -39894,91 +39892,82 @@ async function testExercices(){
         currentUser=sU; woState=sW;
       }})());
 
-    // ── PARTIE 2 : LE RIR EN SEGMENTS ──
+    // ── PARTIE 2 : LE RIR ──
+    //
+    // ══ 17/09/2026 — R14 : LES SEGMENTS SONT RETIRÉS ════════════════════
+    // Kevin, à l'écran : la mise en page en cartes était illisible. Le RIR
+    // redevient un menu déroulant, dans le tableau à cinq colonnes. La LISTE
+    // dit ce que chaque valeur veut dire ; la CASE n'affiche que la valeur.
+    // Les valeurs enregistrées sont celles d'avant R08 : 'echec', '0' à '5'.
 
-    ok('R08 — le segment « 3+ » écrit « 3 » dans sessionData',(()=>
+    ok('R14 — le RIR est un menu déroulant, et chaque valeur y porte sa définition',(()=>
       _r08Fix(359,d=>{
+        if(typeof _woRirSegment!=='undefined') return _echec('_woRirSegment existe encore');
+        if(_seriesEnCartes({sets:[_r08S(),_r08S()]})) return _echec('un exercice libre passe encore en cartes');
+        if(!_seriesEnCartes({sets:[_r08S({degressive:true})]})) return _echec('une dégressive ne passe plus en cartes');
         const tb=_r08Rendre(d,_r08Ex,[_r08S(),_r08S()]);
-        if(_r08Libs(tb.querySelector('tr'))!=='Échec 0 1 2 3+')
-          return _echec('segments : « '+_r08Libs(tb.querySelector('tr'))+' »');
-        // LE MENU RIR A DISPARU : un tap, plus deux.
-        if(d.querySelector('#sets-body-0 .wo-intensite select')) return _echec('le menu RIR est encore là');
-        _r08Tap(d,'3+');
-        const v=woState.sessionData[0].sets[0].rir;
-        if(v!=='3') return _echec('« 3+ » a écrit '+JSON.stringify(v));
-        if(woState.sessionData[0].sets[1].rir!=='') return _echec('la série 2 a reçu '+JSON.stringify(woState.sessionData[0].sets[1].rir));
-        // Le repeint suit : « 3+ » allumé, et lui seul.
-        const on=_r08Segs(d.querySelector('#sets-body-0 tr')).filter(x=>x.classList.contains('on'));
-        if(on.length!==1||on[0].textContent.trim()!=='3+') return _echec('allumés : '+on.map(x=>x.textContent).join(','));
-        if(on[0].getAttribute('aria-pressed')!=='true') return _echec('aria-pressed : '+on[0].getAttribute('aria-pressed'));
-        // L'ACCENT, c'est var(--red) — lu sur une sonde, pas écrit en dur.
-        const sonde=document.createElement('i'); sonde.style.background='var(--red)'; d.appendChild(sonde);
-        const rouge=getComputedStyle(sonde).backgroundColor; sonde.remove();
-        if(getComputedStyle(on[0]).backgroundColor!==rouge)
-          return _echec('le segment actif est '+getComputedStyle(on[0]).backgroundColor+', l’accent '+rouge);
+        const tr=tb.querySelector('tr');
+        if(tb.querySelector('.rir-seg')) return _echec('des segments sont encore rendus');
+        if(tr.children.length!==5) return _echec(tr.children.length+' cellules au lieu de 5');
+        const ths=[...d.querySelectorAll('thead th')].map(t=>t.textContent.replace(/ⓘ/g,'').trim());
+        if(JSON.stringify(ths)!==JSON.stringify(['Reps','Charge','RIR','Gêne','Validé']))
+          return _echec('en-tête : '+JSON.stringify(ths));
+        const sel=_r14Sel(tr);
+        if(!sel) return _echec('pas de menu RIR');
+        if(!sel.closest('.wo-intensite')) return _echec('le menu RIR n’est pas dans la colonne d’intensité');
+        const V=['','echec','0','1','2','3','4','5'];
+        const T=['RIR','Échec (tu n\'as pas réussi à finaliser ton nombre de reps)','0 (aucune rep de plus possible)',
+          '1 (encore 1 rep en réserve)','2 (encore 2 reps en réserve)','3 (encore 3 reps en réserve)',
+          '4 (encore 4 reps en réserve)','5 (5 reps ou plus en réserve)'];
+        const v=[...sel.options].map(o=>o.value), txt=[...sel.options].map(o=>o.textContent.trim());
+        if(JSON.stringify(v)!==JSON.stringify(V)) return _echec('valeurs : '+JSON.stringify(v));
+        if(JSON.stringify(txt)!==JSON.stringify(T)) return _echec('libellés : '+JSON.stringify(txt));
+        if(!/RIR/.test(sel.getAttribute('aria-label')||'')) return _echec('aria-label : « '+sel.getAttribute('aria-label')+' »');
         return true;})));
 
-    ok('R08 — 4 et 5 restent atteignables : un second tap sur « 3+ » les ouvre',(()=>
+    ok('R14 — la case n’affiche que la valeur : « Échec », jamais sa définition',(()=>
       _r08Fix(359,d=>{
-        const s0=_r08S();
-        _r08Rendre(d,_r08Ex,[s0]);
-        const cles=Object.keys(s0).sort().join(',');
-        const libs=()=>_r08Libs(d.querySelector('#sets-body-0 tr'));
-        const rir=()=>woState.sessionData[0].sets[0].rir;
-        _r08Tap(d,'3+');
-        if(libs()!=='Échec 0 1 2 3+') return _echec('un seul tap ouvre déjà : '+libs());
-        _r08Tap(d,'3+');
-        if(libs()!=='Échec 0 1 2 3 4 5') return _echec('le second tap n’ouvre pas 4 et 5 : '+libs());
-        if(rir()!=='3') return _echec('le second tap a changé la valeur : '+JSON.stringify(rir()));
-        _r08Tap(d,'4'); if(rir()!=='4') return _echec('« 4 » a écrit '+JSON.stringify(rir()));
-        _r08Tap(d,'5'); if(rir()!=='5') return _echec('« 5 » a écrit '+JSON.stringify(rir()));
-        _r08Tap(d,'3'); if(rir()!=='3') return _echec('« 3 » a écrit '+JSON.stringify(rir()));
-        // UN ÉTAT D'AFFICHAGE, PAS UNE DONNÉE : la série n'a gagné aucun champ,
-        // rien ne part dans l'instantané ni dans l'historique.
-        if(Object.keys(woState.sessionData[0].sets[0]).sort().join(',')!==cles)
-          return _echec('la série porte d’autres champs : '+Object.keys(woState.sessionData[0].sets[0]).join(','));
-        // Et une AUTRE série n'est pas ouverte pour autant.
-        const tb=_r08Rendre(d,_r08Ex,[_r08S({rir:'3'})]);
-        if(_r08Libs(tb.querySelector('tr'))!=='Échec 0 1 2 3+') return _echec('l’ouverture fuit sur une autre série');
-        return true;})));
-
-    ok('R08 — une série qui porte déjà 5 affiche toujours 5 après rendu',(()=>
-      _r08Fix(359,d=>{
-        const cas=[['5','5','Échec 0 1 2 3+ 5'],[5,'5','Échec 0 1 2 3+ 5'],['4','4','Échec 0 1 2 3+ 4'],
-          ['echec','Échec','Échec 0 1 2 3+'],['0','0','Échec 0 1 2 3+'],['3','3+','Échec 0 1 2 3+']];
+        const cas=[['','RIR'],['echec','Échec'],['0','0'],['1','1'],['3','3'],['4','4'],['5','5'],[5,'5']];
         for(const done of [false,true]){
-          for(const [v,allume,attendu] of cas){
+          for(const [v,attendu] of cas){
             const tb=_r08Rendre(d,_r08Ex,[_r08S({rir:v,done:done})]);
             const tr=tb.querySelector('tr');
             const nom='rir '+JSON.stringify(v)+(done?' (validée)':'');
-            if(_r08Libs(tr)!==attendu) return _echec(nom+' : segments « '+_r08Libs(tr)+' »');
-            const on=_r08Segs(tr).filter(x=>x.classList.contains('on'));
-            if(on.length!==1) return _echec(nom+' : '+on.length+' segments allumés');
-            if(on[0].textContent.trim()!==allume) return _echec(nom+' : « '+on[0].textContent.trim()+' » est allumé');
-            if(on[0].getAttribute('aria-pressed')!=='true') return _echec(nom+' : aria-pressed absent');
+            const vu=_r14Vu(tr);
+            if(vu!==attendu) return _echec(nom+' : la case affiche « '+vu+' »');
+            const sel=_r14Sel(tr);
+            if(sel.value!==String(v)) return _echec(nom+' : le menu montre « '+sel.value+' »');
+            if(sel.disabled!==done) return _echec(nom+' : disabled='+sel.disabled);
             // LE RENDU NE RÉÉCRIT RIEN : 5 reste 5, et reste du même type.
             if(woState.sessionData[0].sets[0].rir!==v) return _echec(nom+' : réécrit en '+JSON.stringify(woState.sessionData[0].sets[0].rir));
+            // La définition reste dans la liste : la case est étroite.
+            const l=tr.querySelector('.rir-choix');
+            if(l.getBoundingClientRect().width>72) return _echec(nom+' : la case fait '+l.getBoundingClientRect().width.toFixed(1)+' px');
           }
         }
         return true;})));
 
-    ok('R08 — le tap suit le flux du menu : même écriture, même repeint, et la charge suivante en découle',(()=>
+    ok('R14 — choisir dans le menu écrit la même valeur qu’avant, et la charge suivante en découle',(()=>
       _r08Fix(359,d=>{
-        const src=String(_woRirSegment);
-        if(!/\.rir=v\b/.test(src)) return _echec('le tap n’écrit pas rir');
-        if(!/renderSets\(woState\.exercises\[idx\],woState\.sessionData\[idx\],idx\)/.test(src))
-          return _echec('le tap ne repeint pas par renderSets');
-        // L'ancien onchange ne persistait pas : le tap non plus.
-        if(/woPersist/.test(src)) return _echec('le tap persiste, ce que le menu ne faisait pas');
-        if(/\bonChR\b/.test(String(renderSets))) return _echec('onChR est encore dans renderSets');
-        // chargeSuivante lit TOUJOURS le RIR : taper « 2 » sur la série 1 remplit
-        // la série 2, exactement comme le menu.
-        _r08Rendre(d,_r08Ex,[_r08S({weight:'100'}),_r08S({weight:''})]);
-        _r08Tap(d,'2');
+        if(!/\.rir=this\.value;renderSets\(/.test(String(renderSets)))
+          return _echec('l’onchange du RIR n’écrit plus rir avant de repeindre');
+        const s0=_r08S({weight:'100'});
+        const cles=Object.keys(s0).sort().join(',');
+        _r08Rendre(d,_r08Ex,[s0,_r08S({weight:''})]);
+        const rir=()=>woState.sessionData[0].sets[0].rir;
+        for(const v of ['echec','0','3','4','5','2']){
+          _r14Choisir(d,v);
+          if(rir()!==v) return _echec('« '+v+' » a écrit '+JSON.stringify(rir()));
+          const vu=_r14Vu(d.querySelector('#sets-body-0 tr'));
+          if(vu!==(v==='echec'?'Échec':v)) return _echec('après « '+v+' », la case affiche « '+vu+' »');
+        }
+        // chargeSuivante lit TOUJOURS le RIR : 2 sur la série 1 remplit la série 2.
         const att=chargeSuivante(100,'2',isCounterweightEx(_r08Ex.name));
         const s2=woState.sessionData[0].sets[1];
         if(Number(s2.weight)!==Number(att)) return _echec('série 2 à '+s2.weight+' au lieu de '+att);
-        if(s2.isAuto!==true) return _echec('la charge remplie n’est pas marquée AUTO');
+        if(s2.isAuto!==true) return _echec('la charge remplie n’est pas marquée proposée');
+        if(Object.keys(woState.sessionData[0].sets[0]).sort().join(',')!==cles)
+          return _echec('la série porte d’autres champs : '+Object.keys(woState.sessionData[0].sets[0]).join(','));
         return true;})));
 
     ok('R08 — un exercice programmé garde sa pastille verrouillée et ses cinq colonnes',(()=>
@@ -39988,7 +39977,7 @@ async function testExercices(){
         const tb=_r08Rendre(d,_r08Ex,sets);
         const tr=tb.querySelector('tr');
         if(tr.children.length!==5) return _echec(tr.children.length+' cellules au lieu de 5');
-        if(tb.querySelector('.rir-seg')) return _echec('des segments sur un exercice programmé');
+        if(tb.querySelector('.rir-choix')) return _echec('un menu RIR sur un exercice programmé');
         if(!tr.querySelector('.wo-intensite [role="img"]')) return _echec('la pastille verrouillée a disparu');
         if(!/Gêne/.test(d.querySelector('thead').textContent)) return _echec('la colonne ne s’appelle pas « Gêne »');
         // `rir` RESTE VIDE : la consigne ne passe pas pour une mesure.
@@ -39996,8 +39985,9 @@ async function testExercices(){
         // Mêlée à une série libre, une série programmée reste verrouillée.
         const tb2=_r08Rendre(d,_r08Ex,[_r08S({rpeCible:8}),_r08S()]);
         const [a,b]=tb2.querySelectorAll('tr');
-        if(_r08Segs(a).length||!a.querySelector('[role="img"]')) return _echec('la série programmée a perdu son verrou');
-        if(_r08Segs(b).length!==5) return _echec('la série libre n’a pas ses segments');
+        if(_r14Sel(a)||!a.querySelector('[role="img"]')) return _echec('la série programmée a perdu son verrou');
+        if(!_r14Sel(b)) return _echec('la série libre n’a pas son menu RIR');
+        if(a.children.length!==5||b.children.length!==5) return _echec('le tableau mêlé n’a plus ses cinq colonnes');
         return true;})));
 
     ok('R08 — le cardio n’a ni RIR ni gêne',(()=>
@@ -40008,55 +39998,64 @@ async function testExercices(){
         renderSets(ex,woState.sessionData[0],0);
         const tb=d.querySelector('#sets-body-0');
         if(!tb.querySelector('tr')) return _echec('la ligne de cardio n’est pas rendue');
-        if(tb.querySelector('.rir-seg,.gene-choix,select')) return _echec('un champ RIR ou gêne est rendu sur un cardio');
+        if(tb.querySelector('.rir-choix,.gene-choix,select')) return _echec('un champ RIR ou gêne est rendu sur un cardio');
         return true;})));
 
     // ══ LA PLACE ═════════════════════════════════════════════════════════
     //
-    // ⚠ CE TEST A DÉCIDÉ DU LOT. En cinq colonnes, les segments font 187 px
-    // pour une colonne de 79 : le tableau débordait de 143 px. Et le menu de
-    // gêne étiqueté, laissé à sa largeur naturelle, s'élargissait à 125 px —
-    // 18 px de trop à lui seul. D'où les cartes, et la case qui n'affiche que
-    // le chiffre. L'assertion garde les deux portes fermées, sans police réduite.
-    ok('R08 — chaque segment fait au moins 32 × 38, et rien ne déborde sur un écran de 359 px',(()=>{
+    // R14 — LES CINQ COLONNES TIENNENT, et c'est mesuré. Les deux menus ne
+    // montrent que leur valeur : c'est ce qui les garde étroits. Sur 319 px
+    // (le tableau d'un écran de 359) comme sur 359, avec la consigne, avec
+    // « Échec », avec « proposé » et son ⓘ : aucun débordement, aucune case
+    // sous 38 px de haut, aucune police réduite.
+    ok('R14 — cinq colonnes sur un écran de 359 px : rien ne déborde, et les cases restent grandes',(()=>{
       const trop=[];
       const EXC={name:'DEVELOPPE COUCHE',series:3,reps:'10',rirCible:'2'};
       const cas=[
-        ['libre',_r08Ex,()=>[_r08S(),_r08S({rir:'2',pain:'6'})],false],
-        ['consigne, série à 5, gêne 6',EXC,()=>[_r08S({rir:'5',pain:'6'})],false],
-        ['4 et 5 ouverts, consigne',EXC,()=>[_r08S()],true],
-        ['dégressive',{name:'SQUAT',series:3,reps:'8+8'},()=>[_r08S({degressive:true,weight2:'40',rir:'1',pain:'4'})],false],
-        ['RPE verrouillé',_r08Ex,()=>[_r08S({rpeCible:8,pain:'6'})],false]];
+        ['libre',_r08Ex,()=>[_r08S(),_r08S({rir:'2',pain:'6'})]],
+        ['échec, gêne 6',_r08Ex,()=>[_r08S({rir:'echec',pain:'6'})]],
+        ['consigne, échec, gêne 6',EXC,()=>[_r08S({rir:'echec',pain:'6'})]],
+        ['consigne, série à 5, gêne 6',EXC,()=>[_r08S({rir:'5',pain:'6'})]],
+        ['« proposé » et son ⓘ, consigne',EXC,()=>[_r08S({weight:'100',rir:'2',done:true}),_r08S({weight:''}),_r08S({weight:''})]],
+        ['dégressive',{name:'SQUAT',series:3,reps:'8+8'},()=>[_r08S({degressive:true,weight2:'40',rir:'echec',pain:'4'})]],
+        ['RPE verrouillé',_r08Ex,()=>[_r08S({rpeCible:8,pain:'6'})]]];
       for(const w of [319,359]){
-        for(const [nom,ex,sets,ouvrir] of cas){
+        for(const [nom,ex,sets] of cas){
           _r08Fix(w,d=>{
             _r08Rendre(d,ex,sets());
-            if(ouvrir){ _woRirSegment(0,0,'3'); _woRirSegment(0,0,'3'); }
             const ici=w+' px · '+nom;
             const sc=d.querySelector('.r08-sc'), tb=sc.querySelector('table');
             if(tb.scrollWidth>sc.clientWidth+1) trop.push(ici+' : le tableau déborde de '+(tb.scrollWidth-sc.clientWidth)+' px');
-            for(const th of d.querySelectorAll('thead th'))
-              if(th.scrollWidth>th.clientWidth+1) trop.push(ici+' : l’en-tête déborde');
-            for(const z of d.querySelectorAll('#sets-body-0 .wo-intensite'))
-              if(z.scrollWidth>z.clientWidth+1) trop.push(ici+' : la zone d’intensité déborde de '+(z.scrollWidth-z.clientWidth)+' px');
-            // EN CARTES, tout ce qu'on touche reste dans sa carte.
+            // L'EN-TÊTE, AU RECTANGLE ET PAS AU scrollWidth : le ⓘ y pose des
+            // marges négatives, et Chrome ajoute alors le padding de fin du <th>
+            // à son débordement, sans que rien ne sorte de la case à l'œil.
+            // Ce qui déborderait VRAIMENT fait déborder le tableau, testé juste
+            // au-dessus.
+            for(const th of d.querySelectorAll('thead th')){
+              const rt=th.getBoundingClientRect(), rg=document.createRange(); rg.selectNodeContents(th);
+              const rr=rg.getBoundingClientRect();
+              if(rr.right>rt.right+1||rr.left<rt.left-1) trop.push(ici+' : l’en-tête « '+th.textContent.trim()+' » sort de sa case');
+            }
+            // EN CARTES (la dégressive), tout ce qu'on touche reste dans sa carte.
             for(const carte of d.querySelectorAll('#sets-body-0 tr > td > div')){
               const rc=carte.getBoundingClientRect();
-              for(const el of carte.querySelectorAll('.rir-seg,.gene-choix,.set-input,button[data-arc]')){
+              for(const el of carte.querySelectorAll('.rir-choix,.gene-choix,.set-input,button[data-arc]')){
                 const r=el.getBoundingClientRect();
                 if(r.right>rc.right+0.5||r.left<rc.left-0.5) trop.push(ici+' : un élément sort de la carte ('+(el.className||el.tagName)+')');
               }
             }
-            for(const b of d.querySelectorAll('#sets-body-0 .rir-seg')){
-              const r=b.getBoundingClientRect();
-              if(r.width<31.5||r.height<37.5)
-                trop.push(ici+' : segment « '+b.textContent.trim()+' » de '+r.width.toFixed(1)+' × '+r.height.toFixed(1));
-              // ⚠ ET LA POLICE N'A PAS BAISSÉ POUR FAIRE TENIR.
-              if(parseFloat(getComputedStyle(b).fontSize)<11) trop.push(ici+' : police des segments à '+getComputedStyle(b).fontSize);
+            // EN COLONNES, le ⓘ de « proposé » ne mord pas sur le menu RIR voisin.
+            for(const p of d.querySelectorAll('#sets-body-0 .wo-propose')){
+              const tr=p.closest('tr'), i=p.querySelector('.rc-i'), r=tr&&tr.querySelector('.rir-choix');
+              if(!i||!r) continue;
+              if(i.getBoundingClientRect().right>r.getBoundingClientRect().left+0.5)
+                trop.push(ici+' : le ⓘ de « proposé » mord sur le menu RIR');
             }
-            for(const g of d.querySelectorAll('#sets-body-0 .gene-choix')){
+            for(const g of d.querySelectorAll('#sets-body-0 .rir-choix,#sets-body-0 .gene-choix')){
               const r=g.getBoundingClientRect();
-              if(r.width<37.5||r.height<37.5) trop.push(ici+' : la case de gêne fait '+r.width.toFixed(1)+' × '+r.height.toFixed(1));
+              if(r.width<37.5||r.height<37.5) trop.push(ici+' : la case '+g.className+' fait '+r.width.toFixed(1)+' × '+r.height.toFixed(1));
+              // ⚠ ET LA POLICE N'A PAS BAISSÉ POUR FAIRE TENIR.
+              if(parseFloat(getComputedStyle(g).fontSize)<11) trop.push(ici+' : police de '+g.className+' à '+getComputedStyle(g).fontSize);
             }
           });
         }
@@ -40085,10 +40084,9 @@ async function testExercices(){
       document.body.insertBefore(d,document.body.firstChild);
       try{ return f(d); } finally { d.remove(); }
     };
-    // R08 — L'EN-TÊTE SUIT LES SÉRIES. Des segments RIR passent le tableau en
-    // cartes : la bande est repeinte comme _blocExo la peint, et la zone
-    // d'intensité se lit par sa classe — en cartes, il n'y a plus de troisième
-    // cellule.
+    // R08 — L'EN-TÊTE SUIT LES SÉRIES : la bande est repeinte comme _blocExo
+    // la peint, et la zone d'intensité se lit par sa classe, qui est la même
+    // en colonnes (R14) et en cartes (dégressive).
     const _r07Cell=(ex,sets)=>{
       const tr=document.getElementById('r07-tr');
       if(tr) tr.innerHTML=_enteteSeries(_seriesEnCartes({sets:sets}),false);

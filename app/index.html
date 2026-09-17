@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1252';
+window.RC_BUILD='1253';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4012,22 +4012,11 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
   font-size:18px;letter-spacing:1px;font-variant-numeric:tabular-nums;
   padding:5px 4px 3px}
 .set-input:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 2px rgba(198,15,8,.15)}
-/* ── R08 — LE RIR EN SEGMENTS ─────────────────────────────────────────────
-   UN TAP AU LIEU DE DEUX. Le menu deroulant demandait d'ouvrir, puis de
-   choisir ; les segments ne demandent que de choisir.
-   32 × 38 AU MINIMUM, et c'est la regle du lot. 38 de haut : le meme plancher
-   que la case de charge a cote, pour que la rangee ne saute pas.
-   LE SEGMENT ACTIF PREND L'ACCENT, en blanc pur et non en --text : #efefef sur
-   --red donne 4,16:1, sous AA ; #fff donne 4,78:1. */
-.rir-segs{display:inline-flex;gap:3px;flex:none}
-.rir-seg{min-width:32px;min-height:38px;padding:0 5px;background:var(--dark);
-  border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);
-  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
-  line-height:1;cursor:pointer;touch-action:manipulation}
-.rir-seg.on{background:var(--red);border-color:var(--red);color:#fff}
-.rir-seg:focus-visible{outline:2px solid var(--red-text);outline-offset:1px}
-.rir-seg:disabled{cursor:default}
-.series-table tr.done .rir-seg:disabled{opacity:.55}
+/* ── R14 — LES SEGMENTS RIR ONT ETE RETIRES (Kevin, 17/09/2026) ──────────
+   Ils passaient le tableau en cartes, et le rendu a l'ecran a ete juge
+   illisible. Le RIR redevient un menu deroulant dans le tableau a cinq
+   colonnes, sur le meme principe que la gene juste dessous : la case ne
+   montre que la valeur, la liste native montre ce qu'elle veut dire. */
 /* ── R08 — LE MENU DE GENE GARDE SA LARGEUR ───────────────────────────────
    LES LIBELLES SONT DANS LA LISTE, PAS DANS LA CASE. Un <select> se dimensionne
    sur sa plus longue option : « 6 · je dois arrêter » le portait a 125 px, et
@@ -4038,14 +4027,22 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
    ⚠ LE <select> RESTE L'ELEMENT QU'ON TOUCHE ET QU'ON LIT : il recoit le tap,
    le focus clavier et le lecteur d'ecran. La case n'est qu'un affichage,
    aria-hidden. */
-.gene-choix{position:relative;display:inline-flex;align-items:center;justify-content:center;
+.gene-choix,.rir-choix{position:relative;display:inline-flex;align-items:center;justify-content:center;
   gap:3px;min-width:44px;min-height:38px;padding:0 6px;box-sizing:border-box;flex:none;
   background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);
-  color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800}
-.gene-choix .gene-fl{color:var(--sub);font-size:9px}
-.gene-choix select{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;
+  color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
+  white-space:nowrap;text-transform:none;letter-spacing:.5px}
+/* R14 — « Échec » EN CASSE NORMALE, et pas en capitales espacees heritees du
+   tableau : 63 px au lieu de 74. Mesure a 359 px, ces 11 px sont ce qui
+   laisse « Gêne ⓘ » sur une ligne dans l'en-tete. */
+.gene-choix .gene-fl,.rir-choix .gene-fl{color:var(--sub);font-size:9px}
+.gene-choix select,.rir-choix select{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;
   opacity:0;cursor:pointer;font-size:var(--fs-xs);border:none}
-.gene-choix:focus-within{border-color:var(--red);box-shadow:0 0 0 2px rgba(198,15,8,.15)}
+.gene-choix:focus-within,.rir-choix:focus-within{border-color:var(--red);box-shadow:0 0 0 2px rgba(198,15,8,.15)}
+/* R14 — le RIR se ferme a la validation, comme avant les segments : il decrit
+   un effort accompli. La gene, elle, reste ouverte. */
+.rir-choix.fermee{opacity:.55}
+.rir-choix select:disabled{cursor:default}
 /* ── R09 — LE ⓘ DE « proposé » NE DECALE PAS LA CASE ─────────────────────
    Pose en ligne, il elargissait le bloc de charge de 36 px : la case de la
    serie qui le porte glissait de 10 px vers la droite, et les chiffres des
@@ -4053,7 +4050,12 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
    sa largeur (32 + 4) le retire du calcul : « proposé » reste centre sous la
    case comme sur les autres lignes, et le ⓘ deborde a droite, dans l'espace
    libre de la carte. Il garde ses 32 px : on ne rapetisse pas une cible. */
-.wo-propose .rc-i{margin-right:-36px}
+/* R14 — DANS LA COLONNE « Charge » DU TABLEAU, la cellule ne fait qu'une
+   soixantaine de pixels : deborder de 36 px a droite mettait le glyphe sur le
+   menu RIR voisin. Des marges negatives des deux cotes ramenent la boite a
+   16 px d'emprise — « proposé » et son ⓘ tiennent ensemble dans la cellule —
+   et le haut et le bas a la hauteur du texte. La cible garde ses 32 px. */
+.wo-propose .rc-i{margin:-10px -9px -10px -7px}
 /* ── R12 — LA MICRO-DESCRIPTION ───────────────────────────────────────────
    Pour le jargon dont la definition tient en quelques mots, un ⓘ serait un
    geste de trop : une ligne permanente suffit.
@@ -5124,6 +5126,15 @@ textarea.vn-in{resize:vertical;line-height:1.5}
    la pastille y vire au blanc voile. Elle ne change pas de taille. */
 .series-table-wo th .rc-i{color:rgba(255,255,255,.72)}
 .series-table-wo th .rc-i:hover,.series-table-wo th .rc-i:focus-visible{color:#fff}
+/* R14 — DANS LE TABLEAU A CINQ COLONNES, « Gêne ⓘ » passait sur deux lignes :
+   la colonne offre 66 px de contenu, le libelle et une boite de 32 en
+   demandaient 74. Des marges negatives ramenent l'emprise a 22 px sans
+   toucher la boite (32 px dessines, 44 au doigt) ; a droite, -6 px s'arretent
+   au padding du <th> : le ⓘ ne sort pas de sa case.
+   ⚠ ENFANT DIRECT DU <th> SEULEMENT. Dans la bande d'une serie degressive,
+   le ⓘ de « Gêne » est le dernier element de la ligne : -6 px a droite y
+   ouvraient un defilement lateral de 6 px sur tout le tableau (mesure). */
+.series-table-wo th > .rc-i{margin:-8px -6px -8px -4px}
 /* ── LA FEUILLE ────────────────────────────────────────────────────────────
    R11 — « stylise mieux les pages explicatives » (Kevin, 17/09/2026). Elle
    reprend les motifs de l'application plutot que d'en inventer : le titre en
@@ -42981,9 +42992,8 @@ function _blocExo(idx,estSS){
   const _facteurCycle=(cycle.factor!==1.0)?cycle.factor:1;
   const sugAjustee=_facteurCycle!==1&&_sugBrut?roundWeight(_sugBrut*_facteurCycle):null;
   const sug=sugAjustee||_sugBrut;
-  // R08 — LES SEGMENTS RIR PASSENT LE TABLEAU EN CARTES. La regle est dans
-  // _seriesEnCartes, et renderSets la lit aussi : l'en-tete et les lignes ne
-  // peuvent pas diverger.
+  // QUAND LE TABLEAU PASSE EN CARTES : la regle est dans _seriesEnCartes, et
+  // renderSets la lit aussi : l'en-tete et les lignes ne peuvent pas diverger.
   const isWide=pr.type==='degressive'||_seriesEnCartes(data);
   // Repère A1 / A2 sur un superset, numéro d'ordre sinon : c'est ainsi que
   // l'exercice est écrit sur la fiche papier.
@@ -43442,22 +43452,16 @@ function _majBandeTempo(ex,data,idx){
   if(enCours&&_tempoEtat.guide) try{ _tempoPeindrePoint(); }catch(e){}
   return true;
 }
-// ══ R08 — L'ECHELLE DE GENE ET LE RIR EN SEGMENTS ═══════════════════════
+// ══ QUAND LE TABLEAU PASSE EN CARTES ═══════════════════════════════════
 //
-// QUAND LE TABLEAU PASSE EN CARTES. Des qu'une serie porte des segments RIR —
-// toute serie sans rpeCible. Mesure : les cinq segments font 187 px, la
-// colonne RIR en avait 79 dans un tableau de 359, qui debordait alors de
-// 143 px. La regle du
-// lot est de reutiliser la disposition a deux sous-lignes des series
-// degressives plutot que d'en inventer une.
-//
-// ⚠ UN EXERCICE PROGRAMME GARDE SES CINQ COLONNES. Toutes ses series portent
-// la pastille verrouillee, qui tenait deja (R07) : rien ne justifie de le
-// changer de forme.
+// R14 — SEULEMENT SUR UNE SERIE DEGRESSIVE, comme avant R08. Les segments RIR
+// qui forcaient les cartes sont retires (Kevin, 17/09/2026 : la mise en page
+// etait illisible) : le RIR et la gene sont deux menus deroulants, et le
+// tableau garde ses cinq colonnes. Une degressive a deux charges par ligne :
+// elle seule ne tient pas en colonnes.
 function _seriesEnCartes(data){
   const sets=(data&&Array.isArray(data.sets))?data.sets:[];
-  if(sets[0]&&sets[0].degressive) return true;
-  return sets.some(s=>s&&!s.rpeCible);
+  return !!(sets[0]&&sets[0].degressive);
 }
 // L'EN-TETE, UNE SEULE FOIS. Rendu par _blocExo, lu par la suite de tests :
 // c'est la vraie bande rouge qu'on mesure, pas une copie.
@@ -43495,25 +43499,6 @@ function _woTeteDeGroupe(idx){
     const g=_groupesEx(exs).find(x=>x.includes(idx));
     return !g||g[0]===idx;
   }catch(e){ return true; }
-}
-// LES SERIES DONT « 3+ » A ETE OUVERT SUR 4 ET 5. Un WeakSet sur l'objet
-// serie, et rien dans sessionData : c'est un etat d'affichage, il n'a pas a
-// partir dans l'instantane ni dans l'historique. Il meurt avec la serie.
-const _rirPlusOuverts=new WeakSet();
-// LE TAP SUR UN SEGMENT. Il ecrit ce qu'ecrivait le menu — la meme valeur,
-// au meme endroit — puis repeint. Rien d'autre dans le flux : pas de
-// woPersist, que l'ancien onchange n'appelait pas non plus.
-//
-// « 3+ » ENREGISTRE 3. Le toucher une seconde fois, quand la serie porte deja
-// 3, ouvre 4 et 5 : les deux valeurs restent atteignables sans occuper la
-// place de deux segments sur chaque ligne.
-function _woRirSegment(idx,i,v){
-  const d=woState&&woState.sessionData&&woState.sessionData[idx];
-  const s=d&&Array.isArray(d.sets)?d.sets[i]:null;
-  if(!s) return;
-  if(v==='3'&&String(s.rir)==='3') _rirPlusOuverts.add(s);
-  s.rir=v;
-  renderSets(woState.exercises[idx],woState.sessionData[idx],idx);
 }
 function renderSets(ex,data,idx){
   if(idx==null) idx=woState.currentEx;
@@ -43564,9 +43549,22 @@ function renderSets(ex,data,idx){
     }
   }
 
-  // R08 — LES SEGMENTS. « 3+ » vaut '3' ; 4 et 5 ne sont pas perdus, ils
-  // s'ouvrent (_woRirSegment) ou s'affichent d'office quand la serie les porte.
-  const RIR_SEGS=[['echec','Échec'],['0','0'],['1','1'],['2','2'],['3','3+']];
+  // R14 — LE RIR REDEVIENT UN MENU, avec les memes VALEURS qu'avant R08 :
+  // 'echec' et '0' a '5'. chargeSuivante, e1RM et rirMoyenSeance les lisent
+  // telles quelles.
+  // LA LISTE DIT CE QUE CHAQUE VALEUR VEUT DIRE ; LA CASE, ELLE, N'AFFICHE QUE
+  // LA VALEUR (« Échec », « 2 »). Meme principe que la gene : un <select> se
+  // dimensionne sur sa plus longue option, qui ferait deborder le tableau.
+  const RIR_OPTS=['echec','0','1','2','3','4','5'];
+  const RIR_LIB={
+    'echec':"Échec (tu n'as pas réussi à finaliser ton nombre de reps)",
+    '0':'0 (aucune rep de plus possible)',
+    '1':'1 (encore 1 rep en réserve)',
+    '2':'2 (encore 2 reps en réserve)',
+    '3':'3 (encore 3 reps en réserve)',
+    '4':'4 (encore 4 reps en réserve)',
+    '5':'5 (5 reps ou plus en réserve)'
+  };
   const PAIN_OPTS=['1','2','3','4','5','6'];
   // R08 — L'ECHELLE DE GENE, DITE DANS LA LISTE. Les VALEURS ne changent pas :
   // '1'..'6', comme avant, donc aucune migration et aucun seuil a revoir —
@@ -43600,6 +43598,9 @@ function renderSets(ex,data,idx){
     // appelle _majCarteDouleur en fin de course, ce qui fait apparaître la
     // carte « ça t'a fait mal deux fois » au moment même de la saisie.
     const onChP=`woState.sessionData[${idx}].sets[${i}].pain=this.value;woPersist();renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
+    // R14 — l'onchange d'avant R08, tel quel : ecrire, puis repeindre (la
+    // charge de la serie suivante se recalcule sur ce RIR).
+    const onChR=`woState.sessionData[${idx}].sets[${i}].rir=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
 
     // Weight cell (with « proposé » label)
     //
@@ -43616,7 +43617,6 @@ function renderSets(ex,data,idx){
     const weightBorder=s.isAuto&&!s.done?'border-color:var(--green)':'';
 
     // Wide-mode: content without <td> wrappers (for 2-sub-row card layout)
-    // R08 : aussi des qu'une serie porte des segments RIR — voir _seriesEnCartes.
     const isWide=enCartes;
     const weightInner=isDeg
       ?`<input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
@@ -43663,7 +43663,11 @@ function renderSets(ex,data,idx){
       // l'en-tete de colonne, et on NE REDUIT PAS la police pour le faire
       // tenir. L'explication du RPE reste donc a un doigt — en haut de la
       // meme colonne.
-      return `<span style="font-size:var(--fs-2xs);color:${loin?'var(--orange)':'var(--text-faint)'};`
+      // R14 — TOUJOURS SOUS LE MENU (display:block). En ligne, il se posait a
+      // cote de « 2 » mais passait dessous a cote de « Échec », plus large :
+      // deux places differentes dans la meme colonne. Dessous, la colonne RIR
+      // est aussi plus etroite, et « Gêne ⓘ » tient sur une ligne.
+      return `<span style="display:block;margin-top:2px;font-size:var(--fs-2xs);color:${loin?'var(--orange)':'var(--text-faint)'};`
         +`white-space:nowrap;flex:none" title="Intensité demandée par ton coach">visé : ${_cons}</span>`;
     })();
     // ══ LA COLONNE D'INTENSITE : RIR SAISI, OU RPE PRESCRIT ═══════════
@@ -43694,25 +43698,21 @@ function renderSets(ex,data,idx){
             align-items:center;justify-content:center;gap:4px;background:var(--surface-2);color:var(--text-strong);
             border:1px solid var(--border);border-radius:var(--r-1);white-space:nowrap">${icon('lock',10)}RPE ${s.rpeCible}</div>${i===_iPremierRpe?rcInfo('rpe'):''}`
       :(()=>{
-        // ══ R08 — LE RIR EN SEGMENTS ══════════════════════════════════════
-        // [Échec] [0] [1] [2] [3+], un tap chacun. Le menu en demandait deux.
+        // ══ R14 — LE RIR EN MENU DEROULANT ════════════════════════════════
+        // La case montre la valeur courte (« Échec », « 2 », ou « RIR » tant
+        // que rien n'est choisi) ; le <select> transparent pose dessus ouvre
+        // la liste native, ou chaque valeur porte sa definition.
         //
-        // ⚠ 4 ET 5 NE SONT PAS PERDUS. Une serie qui les porte deja affiche un
-        // sixieme segment a sa valeur ; sinon un second tap sur « 3+ » les
-        // ouvre tous les deux. « 3+ » devient alors « 3 », puisque 4 et 5 sont
-        // a cote.
-        //
-        // LE `${dis}` RESTE : comme le menu avant eux, les segments se ferment
-        // a la validation — ils decrivent un effort accompli.
+        // LE `${dis}` RESTE : le RIR se ferme a la validation, il decrit un
+        // effort accompli.
         const cur=s.rir==null?'':String(s.rir);
-        const ouvert=_rirPlusOuverts.has(s);
-        const segs=RIR_SEGS.map(([v,l])=>[v,(v==='3'&&ouvert)?'3':l]);
-        if(ouvert) segs.push(['4','4'],['5','5']);
-        else if(cur==='4'||cur==='5') segs.push([cur,cur]);
-        return `<div class="rir-segs" role="group" aria-label="RIR de la série ${i+1}">`
-          +segs.map(([v,l])=>`<button type="button" class="rir-seg${cur===v?' on':''}" aria-pressed="${cur===v}"`
-            +`${l==='3+'?' aria-label="3 ou plus"':''} onclick="_woRirSegment(${idx},${i},'${v}')" ${dis}>${l}</button>`).join('')
-          +`</div>${_consRappel}`;
+        const _rirVal=RIR_OPTS.indexOf(cur)>=0?cur:'';
+        const court=_rirVal==='echec'?'Échec':(_rirVal||'RIR');
+        return `<label class="rir-choix${s.done?' fermee':''}"><span aria-hidden="true">${court}</span><span class="gene-fl" aria-hidden="true">▾</span>`
+          +`<select onchange="${onChR}" ${dis} aria-label="RIR de la série ${i+1}">`
+          +`<option value="">RIR</option>`
+          +RIR_OPTS.map(v=>`<option value="${v}" ${_rirVal===v?'selected':''}>${RIR_LIB[v]}</option>`).join('')
+          +`</select></label>${_consRappel}`;
       })();
 
     // Pain dropdown
@@ -43742,14 +43742,10 @@ function renderSets(ex,data,idx){
 
     // Wide layout: 2-sub-row card (no horizontal scroll)
     //
-    // R08 — LA GENE ET LA VALIDATION MONTENT SUR LA PREMIERE LIGNE. La seconde
-    // est toute a l'intensite : cinq segments font 187 px, sept (4 et 5
-    // ouverts) 257, et la carte offre 282 px sur un ecran de 359. Segments,
-    // gene et validation sur une meme ligne n'y tenaient pas — mesure. Au-dela
-    // (sept segments ET la consigne), « visé » passe a la ligne plutot que de
-    // deborder. Le numero porte
-    // aussi le badge RECORD, que la disposition a cinq colonnes affichait deja
-    // et que la carte aurait perdu.
+    // R14 — SEULE LA SERIE DEGRESSIVE Y PASSE, et la carte retrouve sa forme
+    // d'avant R08 : numero et deux charges en haut ; RIR, gene et validation
+    // en bas. Le numero garde le badge RECORD, que la disposition a cinq
+    // colonnes affiche aussi.
     if(isWide){
       const highPain=s.pain&&parseInt(s.pain)>=4;
       const cardBg=highPain?'var(--danger-bg)':s.done?'#E0202015':'var(--surface-1)';
@@ -43763,13 +43759,11 @@ function renderSets(ex,data,idx){
                 <div style="font-family:var(--pile-titre);font-size:18px;font-weight:400;letter-spacing:.5px;line-height:1.2"><span style="font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</div>
               </div>
               ${weightInner}
-              <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
-              ${painSelect}
-              <button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
-              </div>
             </div>
-            <div class="wo-intensite" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px">
+            <div class="wo-intensite" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px">
               ${rirSelect}
+              ${painSelect}
+              <button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="margin-left:auto;width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
             </div>
           </div>
         </td>
