@@ -40341,6 +40341,145 @@ async function testExercices(){
       }
       return true;})());
 
+    // ══ 17/09/2026 — R36 : POUR DÉMARRER, ET LE BANDEAU DES SÉANCES D'ESSAI ══
+
+    const _r36J=864e5;
+    const _r36Ath=o=>Object.assign({id:'r36',email:'r36@t.fr',fname:'A',lname:'B',role:'athlete',coachId:'c36',
+      createdAt:Date.now()-3*_r36J,sessions:[],bilans:[],nutrition:{},videos:[],exAlias:{},exMuscles:{},programs:{},
+      contraintesSante:[],birthdate:'1990-01-01',gender:'homme',
+      sessions_config:_seancesViergesSemaine().map(s=>Object.assign(s,{_essai:true}))},o);
+
+    ok('R36 — les trois étapes se lisent dans les données, sans aucun drapeau',(()=>{
+      const auj=localISODate(new Date());
+      const cas=[
+        ['compte neuf',{},'false,false,false'],
+        ['questionnaire',{bilans:[{type:'coaching',date:1},{type:'depart',date:2}]},'true,false,false'],
+        ['séance',{sessions:[{date:1}]},'false,true,false'],
+        ['jour ouvert sans aliment',{nutrition:{log:{[auj]:{entries:[]}}}},'false,false,false'],
+        ['aliment noté',{nutrition:{log:{[auj]:{entries:[{id:1}]}}}},'false,false,true'],
+        ['réponse stricte « non »',{nutrition:{dietType:'strict',days:{[auj]:{respected:false}}}},'false,false,true'],
+        ['note sans réponse',{nutrition:{days:{[auj]:{note:'x'}}}},'false,false,false'],
+        // Un repas noté avant de passer en stricte compte encore.
+        ['journal puis stricte',{nutrition:{dietType:'strict',log:{[auj]:{entries:[{id:1}]}}}},'false,false,true']];
+      for(const [nom,o,att] of cas){
+        const e=etapesDemarrage(_r36Ath(o));
+        const v=[e.questionnaire,e.seance,e.repas].join();
+        if(v!==att) return _echec(nom+' : '+v+' au lieu de '+att);
+      }
+      const t=Date.now();
+      const vu=[
+        ['compte neuf, 3 jours',_r36Ath(),true],
+        ['coach',_r36Ath({role:'coach'}),false],
+        ['sans date de création',_r36Ath({createdAt:undefined}),false],
+        ['deux étapes sur trois',_r36Ath({bilans:[{type:'depart',date:1}],sessions:[{date:1}]}),true],
+        ['les trois faites',_r36Ath({bilans:[{type:'depart',date:1}],sessions:[{date:1}],nutrition:{log:{x:{entries:[{id:1}]}}}}),false],
+        ['compte de 31 jours',_r36Ath({createdAt:t-31*_r36J}),false]];
+      for(const [nom,u,att] of vu) if(_doitAfficherDemarrage(u,t)!==att) return _echec(nom+' : '+!att);
+      // AUCUNE ECRITURE : ni saveUser, ni champ posé sur le dossier.
+      const src=[etapesDemarrage,_doitAfficherDemarrage,_pdRepasNote,_pdSeance,_pdRepas,_htmlDemarrage,_rendreDemarrage,pdLancerSeance].map(String).join('\n');
+      if(/saveUser|currentUser\.[\w$]+\s*=[^=]|\bu\.[\w$]+\s*=[^=]/.test(src)) return _echec('le bloc écrit dans le dossier');
+      return true;})());
+
+    ok('R36 — le bloc : sous la santé, trois lignes qui mènent à leur acte, se cochent, et partent ensemble',(()=>{
+      const g=document.getElementById('s-client-home').innerHTML;
+      const i=id=>g.indexOf('id="'+id+'"');
+      if(i('clh-demarrer')<0) return _echec('le conteneur manque');
+      for(const id of ['clh-echeance','clh-contraintes','clh-douleur']) if(i(id)>i('clh-demarrer')) return _echec('#'+id+' est sous le bloc');
+      if(i('clh-point-jour')<i('clh-demarrer')||i('clh-reprise')<i('clh-demarrer')) return _echec('le bloc n’est pas en tête des propositions');
+      const sU=currentUser, ecran=document.getElementById('s-client-home'), z=document.getElementById('clh-demarrer');
+      const svH=z.innerHTML, svA=ecran.hasAttribute('data-demarrage');
+      const cache=id=>getComputedStyle(document.getElementById(id)).display==='none';
+      const svD={}; const MASQUES=['clh-coach-banner','clh-promo-banners','clh-phrase','clh-first-bilan-card','clh-reprise'];
+      try{
+        // Des éléments visibles d'eux-mêmes, pour voir la feuille les taire.
+        for(const id of MASQUES.concat(['clh-echeance','clh-contraintes','clh-douleur'])){ const e=document.getElementById(id); svD[id]=e.style.display; e.style.display='block'; }
+        currentUser=_r36Ath();
+        if(_rendreDemarrage()!==true) return _echec('le bloc ne paraît pas pour un compte neuf');
+        const b=[...z.querySelectorAll('button.pd-ligne')].map(x=>x.getAttribute('onclick'));
+        if(b.join('|')!=='openBilan(\'depart\')|pdLancerSeance()|loadNutrition()') return _echec('actions : '+b.join('|'));
+        const titres=[...z.querySelectorAll('.pd-titre')].map(x=>x.textContent).join('|');
+        if(titres!=='1 · Complète ton questionnaire|2 · Lance ta première séance|3 · Note ton premier repas') return _echec('titres : '+titres);
+        const sous=[...z.querySelectorAll('.pd-sous')].map(x=>x.textContent).join('|');
+        if(sous!=='~12 min · c’est ce qui permet à ton coach d’adapter tes charges|Trois questions, et ta séance est prête|Pour voir tes macros se remplir') return _echec('sous-titres : '+sous);
+        if(/Pour démarrer/.test(z.textContent)===false||z.querySelector('.pd-compte').textContent!=='0 sur 3') return _echec('en-tête : '+z.textContent.slice(0,40));
+        // CE QUI PEUT ATTENDRE SE TAIT ; la santé et l'accès, jamais.
+        for(const id of MASQUES) if(!cache(id)) return _echec('#'+id+' reste affiché pendant la mise en route');
+        for(const id of ['clh-echeance','clh-contraintes','clh-douleur']) if(cache(id)) return _echec('#'+id+' est masqué');
+        // Pas une modale : le bloc est dans le flux de l'accueil.
+        if(getComputedStyle(z.firstElementChild).position==='fixed') return _echec('le bloc est posé par-dessus l’écran');
+        // COCHÉE : plus un bouton, et dite « Fait ».
+        currentUser=_r36Ath({bilans:[{type:'depart',date:1}],sessions:[{date:1}]});
+        _rendreDemarrage();
+        const faits=[...z.querySelectorAll('.pd-fait')];
+        if(faits.length!==2||faits.some(f=>f.tagName==='BUTTON'||!/Fait$/.test(f.textContent))) return _echec('lignes faites : '+faits.map(f=>f.tagName+':'+f.textContent).join(' | '));
+        if(z.querySelectorAll('button.pd-ligne').length!==1||z.querySelector('.pd-compte').textContent!=='2 sur 3') return _echec('il reste '+z.querySelectorAll('button.pd-ligne').length+' ligne(s) à faire');
+        // SANS COACH : la raison du questionnaire ne parle pas d'un coach absent.
+        currentUser=_r36Ath({coachId:null});
+        _rendreDemarrage();
+        if(z.querySelector('.pd-sous').textContent!=='~12 min · c’est ce qui permet de calculer tes besoins') return _echec('sans coach : '+z.querySelector('.pd-sous').textContent);
+        // EN STRICTE OUVERTE : pas de journal, l'acte est la réponse du jour.
+        currentUser=_r36Ath({nutrition:{dietType:'strict',strictAcces:true}});
+        _rendreDemarrage();
+        if(z.querySelectorAll('.pd-titre')[2].textContent!=='3 · Note ta première journée') return _echec('stricte : '+z.querySelectorAll('.pd-titre')[2].textContent);
+        // LES TROIS FAITES : le bloc part, et l'accueil revient entier.
+        currentUser=_r36Ath({bilans:[{type:'depart',date:1}],sessions:[{date:1}],nutrition:{days:{x:{respected:true}}}});
+        if(_rendreDemarrage()!==false||z.innerHTML!==''||ecran.hasAttribute('data-demarrage')) return _echec('le bloc survit aux trois étapes');
+        for(const id of MASQUES) if(cache(id)) return _echec('#'+id+' reste masqué après la mise en route');
+        // Branché dans loadClientHome, après la reprise dont il tait la carte.
+        const l=String(loadClientHome);
+        if(!(l.indexOf('_rendreDemarrage()')>l.indexOf('_rendreReprise()'))) return _echec('loadClientHome ne rend pas le bloc après la reprise');
+        return true;
+      } finally {
+        currentUser=sU; z.innerHTML=svH; ecran.toggleAttribute('data-demarrage',svA);
+        for(const id of Object.keys(svD)) document.getElementById(id).style.display=svD[id];
+      }})());
+
+    ok('R36 — « Lance ta première séance » ne mène jamais à un sélecteur vide',(()=>{
+      const vierge=_r36Ath().sessions_config;
+      const essai=vierge.map((s,i)=>i?s:Object.assign({},s,{active:true,exercises:[{name:'SQUAT'}]}));
+      const reel=essai.map(s=>{ const c=Object.assign({},s); delete c._essai; return c; });
+      const r=[vierge,essai,reel].map(sc=>{ const x=_pdSeance(_r36Ath({sessions_config:sc})); return x.voie+':'+x.sous; }).join('|');
+      if(r!=='parcours:Trois questions, et ta séance est prête|selecteur:Ton programme d’essai t’attend|selecteur:Ton programme t’attend') return _echec(r);
+      const s=String(pdLancerSeance);
+      if(s.indexOf('openSessionPicker')<0||s.indexOf('ouvrirPremiereSeance')<0) return _echec('le routage a changé');
+      // LA RAISON : sur sept créneaux éteints, le sélecteur n'a rien à montrer.
+      if(String(openSessionPicker).indexOf('if(!active.length)')<0) return _echec('le sélecteur a changé : revoir la ligne 2');
+      // Ce qui ne devait pas bouger n'a pas bougé.
+      if(String(seanceEstExemple).replace(/\s+/g,'')!=='functionseanceEstExemple(s){return!!(s&&(s._essai||s._foundation));}') return _echec('seanceEstExemple a changé');
+      if(String(initSessionsConfig).indexOf('_seancesViergesSemaine()')<0||String(initSessionsConfig).indexOf('s._essai=true')<0) return _echec('initSessionsConfig a changé');
+      return true;})());
+
+    okA('R36 — le bandeau d’essai : un seul, avec ou sans coach, dans le sélecteur et dans « Mes séances »',async()=>{
+      const avec=_bandeauEssai({coachId:'c'}), sans=_bandeauEssai({coachId:null});
+      const txt=h=>{ const d=document.createElement('div'); d.innerHTML=h; return d.textContent.replace(/\s+/g,' ').trim(); };
+      if(txt(avec).indexOf('Ce programme d\'essai te permet de commencer tout de suite. Ton coach le remplacera par le tien.')<0) return _echec('avec coach : '+txt(avec));
+      if(txt(sans).indexOf('Ce programme d\'essai te permet de commencer tout de suite. Tu peux le modifier librement.')<0) return _echec('sans coach : '+txt(sans));
+      if(/n'a pas encore publié/.test(txt(avec)+txt(sans))) return _echec('l’ancienne phrase est restée');
+      // UN SEUL BANDEAU : les trois écrans appellent la même fonction.
+      for(const f of [openSessionPicker,loadSessionManager,_rendreSemaineAvecBandeau])
+        if(String(f).indexOf('_bandeauEssai(')<0) return _echec(f.name+' n’utilise pas _bandeauEssai');
+      const g=document.getElementById('s-session-manager').innerHTML;
+      if(g.indexOf('id="sm-essai"')<0||g.indexOf('id="sm-essai"')>g.indexOf('id="session-slots"')) return _echec('le bandeau n’est pas au-dessus des créneaux');
+      const sU=currentUser, svSave=window.saveUser, sv=[...document.querySelectorAll('.screen.active')];
+      try{
+        window.saveUser=()=>true;
+        const essai=_r36Ath().sessions_config.map((s,i)=>i?s:Object.assign({},s,{active:true,exercises:[{name:'SQUAT',series:3,reps:'8'}]}));
+        currentUser=_r36Ath({coachId:null,sessions_config:essai});
+        loadSessionManager();
+        const z=document.getElementById('sm-essai');
+        if(txt(z.innerHTML).indexOf('Tu peux le modifier librement.')<0) return _echec('« Mes séances » sans coach : '+txt(z.innerHTML));
+        // Sept créneaux vides : rien d'essai à annoncer.
+        currentUser=_r36Ath();
+        loadSessionManager();
+        if(z.innerHTML!=='') return _echec('un bandeau sur sept créneaux vides');
+        return true;
+      } finally {
+        window.saveUser=svSave; currentUser=sU;
+        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+        sv.forEach(s=>s.classList.add('active'));
+      }
+    });
+
     // ══ 17/09/2026 — R35 : LES LIBELLÉS DES DEUX QUESTIONNAIRES ════════════
     //
     // Les libellés changent, jamais les clés ni les valeurs. Les étapes sont

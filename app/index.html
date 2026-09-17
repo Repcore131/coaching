@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1273';
+window.RC_BUILD='1274';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4144,6 +4144,38 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
    la fiche « score_diete ». Aucune dimension ne change — le badge reste mesure
    au pixel — seul le curseur et le contour au clavier s'ajoutent. */
 #clh-streak,.clh-m-clic{cursor:pointer;-webkit-tap-highlight-color:transparent}
+/* R36 — POUR DÉMARRER. Une carte de l'accueil, trois lignes. Une ligne à faire
+   est un bouton entier ; une ligne faite n'est plus touchable, elle se coche
+   et le dit en toutes lettres. Aucun corps sous 11 px : le plancher de
+   l'accueil est tenu par une assertion. */
+.pd-carte{background:linear-gradient(160deg,#141414,#0d0d0d);border:1px solid var(--border);
+  border-left:3px solid var(--red);border-radius:14px;padding:13px 0 4px;margin-bottom:16px;
+  box-shadow:var(--e2)}
+.pd-tete{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:0 14px 9px}
+.pd-compte{font-size:var(--fs-xs);font-weight:700;color:var(--sub)}
+.pd-ligne{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;min-height:58px;
+  margin:0;padding:10px 14px;background:none;border:none;border-top:1px solid var(--border);border-radius:0;
+  color:var(--text);font-family:Montserrat,sans-serif;text-align:left;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+.pd-ligne:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
+.pd-case{flex:none;display:flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border-radius:6px;border:2px solid rgba(255,255,255,.35);font-size:var(--fs-sm);font-weight:900;color:#fff}
+.pd-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.pd-titre{font-size:var(--fs-md);font-weight:800;line-height:1.3}
+.pd-sous{font-size:var(--fs-xs);color:var(--sub);line-height:1.45}
+.pd-go{flex:none;font-size:var(--fs-lg);font-weight:800;color:var(--red-text)}
+.pd-fait{cursor:default}
+.pd-fait .pd-case{background:var(--green);border-color:var(--green)}
+.pd-fait .pd-titre{color:var(--sub);text-decoration:line-through}
+.pd-etat{flex:none;font-size:var(--fs-xs);font-weight:800;color:var(--green)}
+/* Pendant la mise en route, ce qui peut attendre se tait. !important : la carte
+   du coach et ses bannières reçoivent un display en ligne à chaque rendu, y
+   compris quand le profil du coach arrive du réseau après coup. */
+#s-client-home[data-demarrage] #clh-coach-banner,
+#s-client-home[data-demarrage] #clh-promo-banners,
+#s-client-home[data-demarrage] #clh-phrase,
+#s-client-home[data-demarrage] #clh-first-bilan-card,
+#s-client-home[data-demarrage] #clh-reprise{display:none!important}
 #clh-streak:focus-visible,.clh-m-clic:focus-visible{outline:2px solid var(--red);outline-offset:3px}
 /* LE ⓘ DE L'e1RM, dans une ligne de 10 px. En flux, sa boite de 32 px
    portait la ligne a 32 px et la carte qui le porte depassait ses voisines —
@@ -9578,6 +9610,20 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- DOULEUR SIGNALÉE -->
       <div id="clh-douleur"></div>
 
+      <!-- ══ R36 — POUR DÉMARRER ══════════════════════════════════════════
+           Trois lignes qui se cochent d'elles-mêmes : questionnaire de départ,
+           première séance, premier repas noté. Rempli par _rendreDemarrage,
+           appelée depuis loadClientHome. Ni modale, ni carrousel, ni tour
+           guidé : une liste qu'on peut ignorer, et aucune ligne ne bloque les
+           autres.
+           ⚠ SOUS LA SANTÉ, et c'est l'ordre du gabarit qui le garantit :
+           l'échéance d'accès, les signes à faire examiner et la douleur
+           restent au-dessus. Pendant qu'il est affiché, #s-client-home porte
+           data-demarrage, et la feuille masque ce qui peut attendre : carte et
+           bannières du coach, phrase du jour, et les deux cartes que ses lignes
+           remplacent (questionnaire de départ, première séance). -->
+      <div id="clh-demarrer"></div>
+
       <!-- ══ TON POINT DU JOUR ══════════════════════════════════════════
            UNE question, celle du jour, et rien d'autre. Rempli par
            _rendrePointDuJour, appelee depuis loadClientHome.
@@ -10222,6 +10268,10 @@ const COACH_PHOTO='icons/coach.jpg';
            cadre dans lequel les sept creneaux se lisent, et il se lit
            avant eux. Vide tant qu'aucun bloc date n'existe. -->
       <div id="sm-structure"></div>
+      <!-- R36 — LE BANDEAU DES SÉANCES D'ESSAI, au-dessus des créneaux : le
+           même que le sélecteur (_bandeauEssai), rempli par
+           loadSessionManager, vide dès qu'aucune séance n'est un essai. -->
+      <div id="sm-essai"></div>
       <div id="session-slots"></div>
       <!-- Discret et en bas : ce tri n'est utile que si quelque chose n'a pas
            été reconnu, et le compteur reste masqué tant que la file est vide. -->
@@ -38397,6 +38447,9 @@ function loadClientHome(){
   // pas : l'echeance d'acces, les signes a faire examiner et la douleur gardent
   // leur place et leur priorite.
   try{ _rendreReprise(); }catch(e){}
+  // R36 — « Pour démarrer », APRES la reprise : pendant qu'il est affiche, la
+  // feuille masque la carte de reprise, dont sa deuxieme ligne tient lieu.
+  try{ _rendreDemarrage(); }catch(e){}
   // ⚠ LE POINT DU JOUR AVANT LA CARTE DE PESEE. renderCartePesee se tait
   // quand la question du jour est celle du poids, et elle lit pdjEtat pour le
   // savoir : l'ordre n'est donc pas ce qui empeche le doublon, c'est la garde.
@@ -39686,6 +39739,13 @@ function loadSessionManager(){
         +escapeHtml(_l)+'</div>'
       :'';
   }
+  // R36 — le bandeau d'essai, meme predicat que le selecteur : il suit les
+  // badges « Exemple », et se tait sur sept creneaux vides.
+  const _zEssai=document.getElementById('sm-essai');
+  if(_zEssai){
+    let _e=false; try{ _e=programmeEstEssai(currentUser); }catch(e){ _e=false; }
+    _zEssai.innerHTML=_e?_bandeauEssai(currentUser):'';
+  }
 
   container.innerHTML=sessions.map((s,i)=>`
     <div style="background:var(--surface-1);border-radius:var(--r-4);margin-bottom:14px;overflow:hidden;border:1.5px solid ${s.active?'var(--red)':'var(--border)'}">
@@ -40179,6 +40239,120 @@ function _rendreReprise(){
     if(e) e.style.display=actif?'none':'';
   }
 }
+// ══ R36 — POUR DÉMARRER ════════════════════════════════════════════════
+//
+// Trois actes, et AUCUN DRAPEAU : chacun se lit dans les donnees qu'il laisse.
+//   • le questionnaire : un bilan de type 'depart' ;
+//   • la seance : une seance enregistree dans u.sessions ;
+//   • le repas : un aliment note au journal (nutrition.log), ou une reponse
+//     du jour en diete stricte (nutrition.days). Les deux sources sont lues
+//     quel que soit le type de diete actuel : un repas note avant de passer en
+//     stricte a bien ete note.
+//
+// ⚠ QUAND LE BLOC PARAIT. Il est pour qui commence : un athlete a qui il
+// manque au moins un des trois actes, dans les PD_JOURS qui suivent la
+// creation de son compte (createdAt, pose a l'inscription). Sans cette borne,
+// un athlete inscrit depuis des mois qui ne note jamais ses repas garderait
+// « Pour démarrer » en tete d'accueil pour toujours, et avec lui une carte et
+// des bannieres du coach masquees. Aucun champ n'est cree : createdAt existe.
+// Il disparait des que les trois sont faits.
+const PD_JOURS=30;
+function _pdRepasNote(u){
+  const nut=(u&&u.nutrition)||{};
+  const log=nut.log||{}, jours=nut.days||{};
+  for(const k of Object.keys(log)){
+    const v=log[k];
+    if(v&&Array.isArray(v.entries)&&v.entries.length) return true;
+  }
+  for(const k of Object.keys(jours)){
+    const v=jours[k];
+    if(v&&(v.respected===true||v.respected===false)) return true;
+  }
+  return false;
+}
+// PURE. L'etat des trois lignes.
+function etapesDemarrage(u){
+  const bilans=((u&&u.bilans)||[]).filter(Boolean);
+  return {
+    questionnaire:bilans.some(b=>b.type==='depart'),
+    seance:((u&&u.sessions)||[]).length>0,
+    repas:_pdRepasNote(u)
+  };
+}
+// PURE. Faut-il afficher le bloc ?
+function _doitAfficherDemarrage(u,maintenant){
+  if(!u||!u.email||u.role==='coach') return false;
+  const e=etapesDemarrage(u);
+  if(e.questionnaire&&e.seance&&e.repas) return false;
+  const c=Number(u.createdAt)||0, t=Number(maintenant)||0;
+  if(!c||!t) return false;
+  return (t-c)<=PD_JOURS*864e5;
+}
+// PURE. Ce qu'ouvre « Lance ta première séance », et ce qu'on en dit.
+// ⚠ PAS openSessionPicker SEUL : un compte neuf n'a que sept creneaux eteints
+// (initSessionsConfig ne pose plus de programme), et le selecteur n'y affiche
+// qu'un message d'erreur. Sans seance a lancer, la ligne mene au parcours de
+// premiere seance, qui pose trois questions et rend une seance — le meme
+// aiguillage que la carte de reprise (reprendreMaintenant).
+function _pdSeance(u){
+  const sc=(u&&u.sessions_config)||[];
+  let reel=false; try{ reel=_configReelle(sc); }catch(e){ reel=false; }
+  if(reel) return {voie:'selecteur',sous:'Ton programme t’attend'};
+  if(sc.some(s=>s&&s.active&&s.exercises&&s.exercises.length))
+    return {voie:'selecteur',sous:'Ton programme d’essai t’attend'};
+  return {voie:'parcours',sous:'Trois questions, et ta séance est prête'};
+}
+function pdLancerSeance(){
+  let v='parcours';
+  try{ v=_pdSeance(currentUser).voie; }catch(e){}
+  if(v==='selecteur') openSessionPicker(); else ouvrirPremiereSeance();
+}
+// PURE. La troisieme ligne suit la diete. En stricte ouverte, il n'y a pas de
+// journal : l'acte est de dire si le plan du jour a ete suivi. Une stricte
+// verrouillee montre son verrou et le passage en flexible : la ligne parle
+// alors de repas, comme en flexible.
+function _pdRepas(u){
+  let stricte=false;
+  try{ stricte=typeDiete((u&&u.nutrition)||{})==='strict'&&accesDieteStricte(u).ok; }catch(e){ stricte=false; }
+  return stricte
+    ?{titre:'Note ta première journée',sous:'Dis chaque jour si tu as suivi ton plan'}
+    :{titre:'Note ton premier repas',sous:'Pour voir tes macros se remplir'};
+}
+// PURE. Le bloc.
+function _htmlDemarrage(u){
+  const e=etapesDemarrage(u);
+  const s=_pdSeance(u), r=_pdRepas(u);
+  const lignes=[
+    {fait:e.questionnaire,titre:'Complète ton questionnaire',action:'openBilan(\'depart\')',
+     sous:'~12 min · c’est ce qui permet '+((u&&u.coachId)?'à ton coach d’adapter tes charges':'de calculer tes besoins')},
+    {fait:e.seance,titre:'Lance ta première séance',action:'pdLancerSeance()',sous:s.sous},
+    {fait:e.repas,titre:r.titre,action:'loadNutrition()',sous:r.sous}];
+  const faites=lignes.filter(l=>l.fait).length;
+  return '<div class="pd-carte clh-in clh-in-2">'
+    +'<div class="pd-tete"><span class="eyebrow eyebrow-act">Pour démarrer</span>'
+    +'<span class="pd-compte">'+faites+' sur 3</span></div>'
+    +lignes.map((l,i)=>{
+      const corps='<span class="pd-case" aria-hidden="true">'+(l.fait?'✓':'')+'</span>'
+        +'<span class="pd-txt"><span class="pd-titre">'+(i+1)+' · '+escapeHtml(l.titre)+'</span>'
+        +'<span class="pd-sous">'+escapeHtml(l.sous)+'</span></span>';
+      return l.fait
+        ?'<div class="pd-ligne pd-fait">'+corps+'<span class="pd-etat">Fait</span></div>'
+        :'<button type="button" class="pd-ligne" onclick="'+l.action+'">'+corps
+          +'<span class="pd-go" aria-hidden="true">›</span></button>';
+    }).join('')
+    +'</div>';
+}
+// Le tour impur : poser le bloc, et marquer l'ecran pour que la feuille taise
+// ce qui peut attendre. Rendu a chaque passage, dans les deux sens.
+function _rendreDemarrage(){
+  let actif=false;
+  try{ actif=_doitAfficherDemarrage(currentUser,Date.now()); }catch(e){ actif=false; }
+  const z=document.getElementById('clh-demarrer');
+  if(z) z.innerHTML=actif?_htmlDemarrage(currentUser):'';
+  const ecran=document.getElementById('s-client-home');
+  if(ecran) ecran.toggleAttribute('data-demarrage',actif);
+  return actif;
+}
 // PURE. Faut-il proposer la premiere marche a ce dossier ?
 //
 // LES TROIS GARDES, ET AUCUNE DE PLUS :
@@ -40385,16 +40559,25 @@ function _marquerCommePublie(cfg){
   (cfg||[]).forEach(s=>{delete s._essai;delete s._foundation;});
   return cfg;
 }
-// Un seul texte pour les deux écrans qui montrent le repli — le sélecteur de
-// séances et la vue programme. Les faire diverger reviendrait à raconter deux
-// histoires différentes sur le même état.
-function _bandeauEssai(){
-  return `<div style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
+// Un seul texte pour les écrans qui montrent le repli — le sélecteur de
+// séances, la vue programme de l'accueil et, depuis R36, « Mes séances ». Les
+// faire diverger reviendrait à raconter deux histoires différentes sur le
+// même état.
+// R36 — LE TEXTE DÉPEND DU COACH. « Ton coach n'a pas encore publié ton
+// programme » s'affichait aussi à qui n'a pas de coach : faux, et sans issue.
+// Avec un coach, sa publication remplace l'essai (_marquerCommePublie) ; sans
+// coach, toucher une séance la fait sienne (_personnaliserSeance).
+function _bandeauEssai(u){
+  const usr=u||currentUser;
+  const suite=(usr&&usr.coachId)
+    ?'Ton coach le remplacera par le tien.'
+    :'Tu peux le modifier librement.';
+  return `<div class="bandeau-essai" style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-size:var(--fs-lg)">⏳</span>
+        <span style="font-size:var(--fs-lg)" aria-hidden="true">⏳</span>
         <div style="font-weight:900;font-size:var(--fs-sm);color:var(--orange);text-transform:uppercase;letter-spacing:1px">Séances d'essai</div>
       </div>
-      <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">Ton coach n'a pas encore publié ton programme. Les séances marquées « exemple » sont génériques : elles te permettent de commencer, mais ne sont pas personnalisées pour toi.</div>
+      <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">Ce programme d'essai te permet de commencer tout de suite. ${suite}</div>
     </div>`;
 }
 
