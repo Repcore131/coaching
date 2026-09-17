@@ -38998,10 +38998,15 @@ async function testExercices(){
       const sU=currentUser;
       const actif=()=>(document.querySelector('.screen.active')||{}).id;
       const sv=[...document.querySelectorAll('.screen.active')];
+      // R19 — openBilanChoice aiguille : un compte neuf va droit au questionnaire
+      // de départ. Le brouillon de l'appareil est mis de côté le temps du geste.
+      const svDraft=localStorage.getItem(BIL_DRAFT_KEY);
       try{
+        localStorage.removeItem(BIL_DRAFT_KEY);
         currentUser=_r13Neuf();
-        openBilanChoice();
-        if(actif()!=='s-bilan-choice') return _echec('openBilanChoice mène à '+actif());
+        await openBilanChoice();
+        if(actif()!=='s-bilan') return _echec('openBilanChoice mène à '+actif());
+        if(bilType!=='depart') return _echec('le compte neuf ouvre un bilan '+bilType);
         loadSessionManager();
         if(actif()!=='s-session-manager') return _echec('loadSessionManager mène à '+actif());
         ouvrirPeseeAccueil();
@@ -39018,6 +39023,10 @@ async function testExercices(){
           if(/s-coach-/.test(String(g))) return _echec(g.name+' vise un écran coach');
         return true;
       } finally {
+        // renderBilStep a programmé une écriture du brouillon à 400 ms : elle
+        // tomberait après la restauration, sous un autre compte.
+        clearTimeout(_bilDraftTimer); _bilDraftTimer=null;
+        if(svDraft===null) localStorage.removeItem(BIL_DRAFT_KEY); else localStorage.setItem(BIL_DRAFT_KEY,svDraft);
         currentUser=sU;
         document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
         sv.forEach(s=>s.classList.add('active'));
@@ -40184,9 +40193,10 @@ async function testExercices(){
             if(nom!=='dégressive'){
               for(const tr of d.querySelectorAll('#sets-body-0 tr')){
                 const h=tr.getBoundingClientRect().height;
-                // 62 : la ligne la plus chargée — pastille RPE et son ⓘ dessous,
-                // ou case, « visé » et « proposé » — mesure 57 à 61 px.
-                if(h>62) trop.push(ici+' : une ligne fait '+h.toFixed(1)+' px de haut');
+                // 64 : la ligne la plus chargée — pastille RPE et son ⓘ dessous,
+                // ou case, « visé » et « proposé » — mesure 57 à 62,5 px selon le
+                // rendu des polices. Avant R15 : 76 et 85 px.
+                if(h>64) trop.push(ici+' : une ligne fait '+h.toFixed(1)+' px de haut');
               }
             }
             for(const g of d.querySelectorAll('#sets-body-0 .rir-choix,#sets-body-0 .gene-choix')){
@@ -40301,6 +40311,119 @@ async function testExercices(){
         if(m&&!document.getElementById(m[1])) return _echec('lien mort vers '+m[1]);
       }
       return true;})());
+
+    // ══ 17/09/2026 — R19 : « REMPLIR MON BILAN » EST UN AIGUILLAGE ═════════
+    //
+    // L'écran « QUEL BILAN ? » s'intercalait entre chaque geste et le bilan,
+    // alors qu'un seul des deux était proposable dans presque tous les cas.
+
+    ok('R19 — l’aiguillage : départ, coaching, ou choix quand les deux sont légitimes',(()=>{
+      const D=(type,n)=>({bilType:type,bilStep:1,bilData:n?{a:'x',b:'y'}:{},ts:Date.now()});
+      const cas=[
+        ['compte neuf',{bilans:[]},null,'depart'],
+        ['départ fait',{bilans:[{type:'depart'}]},null,'coaching'],
+        ['départ fait, suivi en route',{bilans:[{type:'depart'},{type:'coaching'}]},null,'coaching'],
+        ['départ reporté',{bilans:[],_firstBilanPending:true},null,'choix'],
+        ['coachings sans départ',{bilans:[{type:'coaching'}]},null,'choix'],
+        ['bilan ancien sans type, sans départ',{bilans:[{date:1}]},null,'choix'],
+        // ⚠ LE RISQUE DU LOT : un bilan coaching commencé, sans départ. Aiguillé
+        // vers le départ, openBilan aurait proposé d'EFFACER le brouillon.
+        ['brouillon coaching, sans départ',{bilans:[]},D('coaching',2),'coaching'],
+        ['brouillon départ, départ reporté',{bilans:[],_firstBilanPending:true},D('depart',2),'depart'],
+        ['brouillon vide : ignoré',{bilans:[]},D('coaching',0),'depart'],
+        ['brouillon de type inconnu : ignoré',{bilans:[{type:'depart'}]},D('autre',2),'coaching']];
+      for(const [nom,u,d,att] of cas){
+        const v=_bilanAiguillage(u,d);
+        if(v!==att) return _echec(nom+' : '+v+' au lieu de '+att);
+      }
+      // Les appelants ne changent pas : ils passent tous par openBilanChoice.
+      const src=_prodSrc();
+      const allers=(src.match(/go\('s-bilan-choice'\)/g)||[]).length;
+      if(allers!==2) return _echec(allers+' go(\'s-bilan-choice\') au lieu de 2 (openBilanChoice, bilBack)');
+      if(!document.getElementById('s-bilan-choice')) return _echec('l’écran de choix a été supprimé');
+      if(String(bilBack).indexOf('_bilanAiguillage(currentUser,null)')<0) return _echec('bilBack ne revient plus à l’écran de choix quand il sert');
+      return true;})());
+
+    // ⚠ PAR LE VRAI GESTE, et la question posée est lue mot pour mot.
+    okA('R19 — un bilan commencé est toujours proposé en reprise, jamais en effacement',async()=>{
+      const sU=currentUser, svDraft=localStorage.getItem(BIL_DRAFT_KEY), svConf=window.rcConfirm;
+      const actif=()=>(document.querySelector('.screen.active')||{}).id;
+      const sv=[...document.querySelectorAll('.screen.active')];
+      const questions=[];
+      try{
+        window.rcConfirm=(t)=>{ questions.push(String(t)); return Promise.resolve(true); };
+        // 1. Départ fait : le bilan coaching, directement.
+        localStorage.removeItem(BIL_DRAFT_KEY);
+        currentUser=Object.assign(_r13Neuf(),{bilans:[{type:'depart',date:Date.now()-864e5}]});
+        await openBilanChoice();
+        if(actif()!=='s-bilan'||bilType!=='coaching') return _echec('départ fait : '+actif()+' / '+bilType);
+        if(questions.length) return _echec('une question sans brouillon : '+questions[0]);
+        // 2. Pas de départ, un bilan COACHING commencé : la reprise.
+        currentUser=_r13Neuf();
+        localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({bilType:'coaching',bilStep:2,
+          bilData:{'bil-weight':'80','bil-ressenti':'bien'},ts:Date.now(),email:currentUser.email}));
+        await openBilanChoice();
+        if(questions.length!==1) return _echec(questions.length+' question(s) : '+questions.join(' | '));
+        if(!/^Reprendre ton bilan en cours/.test(questions[0])) return _echec('question posée : « '+questions[0]+' »');
+        if(/effacer|l’effacera/i.test(questions[0])) return _echec('la question parle d’effacer');
+        if(actif()!=='s-bilan'||bilType!=='coaching') return _echec('reprise : '+actif()+' / '+bilType);
+        if(bilStep!==2||bilData['bil-weight']!=='80') return _echec('le brouillon n’est pas repris : étape '+bilStep);
+        return true;
+      } finally {
+        window.rcConfirm=svConf;
+        // renderBilStep a programmé une écriture du brouillon à 400 ms : elle
+        // tomberait après la restauration, sous un autre compte.
+        clearTimeout(_bilDraftTimer); _bilDraftTimer=null;
+        if(svDraft===null) localStorage.removeItem(BIL_DRAFT_KEY); else localStorage.setItem(BIL_DRAFT_KEY,svDraft);
+        currentUser=sU;
+        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+        sv.forEach(s=>s.classList.add('active'));
+      }
+    });
+
+    ok('R19 — la fréquence vit dans « Réglages › Mon suivi », le prochain bilan en tête d’Évolution',(()=>{
+      const choix=document.getElementById('s-bilan-choice');
+      const regl=document.getElementById('s-client-reglages');
+      const evo=document.getElementById('s-progress');
+      for(const id of ['bilan-freq-btn-1','bilan-freq-btn-2']){
+        const b=document.getElementById(id);
+        if(!b||!regl.contains(b)) return _echec(id+' n’est pas dans Réglages');
+        if(!b.closest('#cr-suivi')||!/Mon suivi/.test(document.getElementById('cr-suivi').textContent)) return _echec(id+' n’est pas dans « Mon suivi »');
+        if(b.getAttribute('onclick')!=='setBilanFreq('+id.slice(-1)+');event.stopPropagation()') return _echec(id+' n’appelle plus setBilanFreq');
+      }
+      if(choix.querySelector('[id^="bilan-freq-btn"]')) return _echec('la fréquence est restée sur l’écran de choix');
+      const cd=document.getElementById('bilan-countdown');
+      if(!cd||!evo.contains(cd)||choix.contains(cd)) return _echec('le compte à rebours n’est pas en tête d’Évolution');
+      if(String(loadProgress).indexOf('_updateBilanCountdown()')<0) return _echec('loadProgress ne peint pas le prochain bilan');
+      if(String(ouvrirReglagesAthlete).indexOf('_renderBilanChoiceUI()')<0) return _echec('Réglages ne pose pas l’état des boutons');
+      const sU=currentUser, svSave=window.saveUser;
+      try{
+        window.saveUser=()=>true;
+        // LE BOUTON ACTIF SUIT LE DOSSIER.
+        currentUser=Object.assign(_r13Neuf(),{_bilanFreq:2});
+        setBilanFreq(1);
+        if(currentUser._bilanFreq!==1) return _echec('setBilanFreq n’écrit plus');
+        const rouge=getComputedStyle(document.getElementById('bilan-freq-btn-1')).backgroundColor;
+        if(rouge===getComputedStyle(document.getElementById('bilan-freq-btn-2')).backgroundColor) return _echec('le bouton actif ne se distingue pas');
+        // RIEN AVANT LE PREMIER BILAN.
+        currentUser=_r13Neuf();
+        _updateBilanCountdown();
+        if(cd.style.display!=='none'||cd.textContent.trim()) return _echec('une ligne sans aucun bilan');
+        // À VENIR : la date et le délai, sans bouton.
+        currentUser=Object.assign(_r13Neuf(),{_bilanFreq:2,bilans:[{type:'depart',date:Date.now()}]});
+        _updateBilanCountdown();
+        if(!/^Prochain bilan/.test(cd.textContent.trim())||!/dans \d+ (j|h)/.test(cd.textContent)) return _echec('à venir : « '+cd.textContent.trim()+' »');
+        if(cd.querySelector('button')) return _echec('un bouton alors que rien n’est dû');
+        // DÛ : la phrase de retard de l'accueil, et la ligne mène au bilan.
+        currentUser=Object.assign(_r13Neuf(),{_bilanFreq:1,bilans:[{type:'depart',date:Date.now()-20*864e5}]});
+        _updateBilanCountdown();
+        const b=cd.querySelector('button');
+        if(!b||!/Bilan à remplir/.test(b.textContent)) return _echec('dû : « '+cd.textContent.trim()+' »');
+        const att=_bilTexteRetard(_bilRetardJours(getNextBilanSaturday()));
+        if(!att||b.textContent.indexOf(att)<0) return _echec('le retard ne dit pas « '+att+' » : « '+b.textContent.trim()+' »');
+        if(b.getAttribute('onclick')!=='openBilanChoice()') return _echec('la ligne ne mène pas au bilan');
+        return true;
+      } finally { window.saveUser=svSave; currentUser=sU; try{ cd.style.display='none'; cd.innerHTML=''; }catch(e){} }})());
 
     // ══ 17/09/2026 — R15 : LE NORDIC CURL, ET LA CONSIGNE QUI DISPARAISSAIT ══
 

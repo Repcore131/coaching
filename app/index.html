@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1256';
+window.RC_BUILD='1257';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -9315,6 +9315,22 @@ const COACH_PHOTO='icons/coach.jpg';
       </label>
     </div>
 
+    <!-- ══ R19 — MON SUIVI ════════════════════════════════════════════════
+         La frequence des bilans vivait sur l'ecran de choix, que l'aiguillage
+         de openBilanChoice ne montre presque plus. Elle vient ici, le seul
+         ecran de reglages de l'athlete. setBilanFreq est inchange : seul son
+         point d'appel a bouge. L'etat des deux boutons est pose par
+         ouvrirReglagesAthlete. -->
+    <div id="cr-suivi" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px">
+      <div style="font-size:var(--fs-xs);letter-spacing:2px;font-weight:800;color:var(--red-text);text-transform:uppercase;margin-bottom:8px">Mon suivi</div>
+      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Fréquence des bilans</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">Le rythme auquel ton bilan coaching te sera demandé.</div>
+      <div style="display:flex;gap:8px" role="group" aria-label="Fréquence des bilans">
+        <button id="bilan-freq-btn-1" onclick="setBilanFreq(1);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Chaque semaine</button>
+        <button id="bilan-freq-btn-2" onclick="setBilanFreq(2);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Toutes les 2 sem.</button>
+      </div>
+    </div>
+
     <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px">
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mes données</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">Tout ce que RepCore conserve à ton sujet, dans un fichier que tu gardes. Disponible à tout moment, même si ton accès a expiré.</div>
@@ -10478,18 +10494,10 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
     </div>
 
-    <!-- Sélecteur fréquence -->
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px">
-      <div style="font-size:var(--fs-xs);letter-spacing:2px;font-weight:800;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Fréquence des bilans</div>
-      <div style="display:flex;gap:8px">
-        <button id="bilan-freq-btn-1" onclick="setBilanFreq(1);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Chaque semaine</button>
-        <button id="bilan-freq-btn-2" onclick="setBilanFreq(2);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Toutes les 2 sem.</button>
-      </div>
-    </div>
-
-    <!-- Countdown prochain bilan -->
-    <div id="bilan-countdown" style="display:none;margin-bottom:14px"></div>
-
+    <!-- R19 — LA FREQUENCE EST PARTIE DANS « Réglages » (section « Mon suivi »)
+         et LE COMPTE A REBOURS EN TETE D'« Évolution » : openBilanChoice ouvre
+         desormais le bilan directement, et cet ecran n'est plus atteint que
+         lorsque les deux bilans sont proposables. -->
     <button class="btn btn-outline" onclick="go('s-client-home')">Annuler</button>
   </div>
 </div>
@@ -10523,6 +10531,10 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button><span class="topbar-title">Évolution</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <!-- R19 — LE PROCHAIN BILAN, EN UNE LIGNE. Il vivait en grand sur l'ecran
+           de choix, que l'aiguillage ne montre presque plus. Peint par
+           loadProgress (_updateBilanCountdown) ; vide avant le premier bilan. -->
+      <div id="bilan-countdown" style="display:none;margin-bottom:12px"></div>
       <div id="prog-reds"></div>
       <div id="prog-encart-osseux"></div>
       <div id="prog-bandeau-phase"></div>
@@ -13044,6 +13056,8 @@ const RESIL_PAYPAL=Object.freeze([
 function ouvrirReglagesAthlete(){
   go('s-client-reglages');
   _renderAbonnement();
+  // R19 — les boutons de frequence refletent le dossier a chaque ouverture.
+  try{ _renderBilanChoiceUI(); }catch(e){}
   // L'interrupteur du son reflète le dossier à chaque ouverture.
   try{ _majSonReglages(); }catch(e){}
   const v=document.getElementById('cr-version');
@@ -55771,7 +55785,38 @@ function skipFirstBilan(){
   go('s-client-home');
   loadClientHome();
 }
+// ══ R19 — « REMPLIR MON BILAN » EST UN AIGUILLAGE ══════════════════════
+//
+// PURE. 'depart', 'coaching', ou 'choix' quand les deux sont legitimes.
+//
+// 1. UN BROUILLON EN COURS D'ABORD, ET C'EST LE RISQUE DU LOT. openBilan ne
+//    propose la reprise que pour le type qu'on lui demande ; pour l'autre, il
+//    demande s'il faut EFFACER le brouillon. Aiguiller un athlete qui a un
+//    bilan coaching commence vers le questionnaire de depart lui aurait donc
+//    montre « Ouvrir un bilan de départ l'effacera » au lieu de « Reprendre ».
+//    Le brouillon passe par _bilLoadDraft : le sien, non perime. Un brouillon
+//    incertain sur un appareil a plusieurs comptes n'y est pas : openBilan
+//    pose lui-meme la question, comme avant.
+// 2. PAS DE BILAN DE DEPART : le questionnaire de depart.
+// 3. SAUF QUAND LE COACHING EST DEJA LEGITIME, et le code en connait deux cas :
+//    l'athlete a REPORTE son questionnaire (« Plus tard », _firstBilanPending),
+//    ou il a deja des bilans coaching sans depart — son rythme de bilans
+//    (getNextBilanSaturday) tourne, et l'alerte de retard lui en reclame un.
+//    Le renvoyer chaque fois au questionnaire de depart lui interdirait le
+//    bilan qu'on lui demande. Ce sont les seuls cas ou l'ecran de choix sert.
+// 4. SINON : le bilan coaching.
+function _bilanAiguillage(user,brouillon){
+  if(brouillon&&(brouillon.bilType==='depart'||brouillon.bilType==='coaching')
+     &&_bilDraftRempli(brouillon)>0) return brouillon.bilType;
+  const bilans=((user&&user.bilans)||[]).filter(Boolean);
+  if(bilans.some(b=>b.type==='depart')) return 'coaching';
+  if(user&&user._firstBilanPending) return 'choix';
+  return bilans.length?'choix':'depart';
+}
 function openBilanChoice(){
+  const voie=_bilanAiguillage(currentUser,_bilLoadDraft());
+  if(voie==='depart'||voie==='coaching') return openBilan(voie);
+  // L'ECRAN DE CHOIX RESTE, pour les cas ou les deux bilans sont proposables.
   const hasDepart=currentUser.bilans?.some(b=>b.type==='depart');
   document.getElementById('bilan-choice-first').style.display=hasDepart?'none':'block';
   go('s-bilan-choice');
@@ -55807,36 +55852,42 @@ function _renderBilanChoiceUI(){
     _updateBilanCountdown();
   },60000);
 }
+// ══ R19 — LE COMPTE A REBOURS, EN UNE LIGNE EN TETE D'ÉVOLUTION ═════════
+// Il occupait un grand bloc de l'ecran de choix, que l'aiguillage ne montre
+// presque plus. La date et le delai restent les memes : getNextBilanSaturday
+// sans rattrapage, comme avant, et _bilRetardJours / _bilTexteRetard pour dire
+// le retard — les memes phrases que la carte d'alerte de l'accueil.
+// RIEN AVANT LE PREMIER BILAN : les etats vides d'Évolution disent deja
+// « après ton premier bilan », avec le bouton pour le remplir.
 function _updateBilanCountdown(){
   const cd=document.getElementById('bilan-countdown');
   if(!cd) return;
-  cd.style.display='block';
   const next=getNextBilanSaturday();
-  if(!next){
-    cd.innerHTML=`<div style="text-align:center;padding:14px 12px;font-size:var(--fs-sm);color:var(--sub);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--r-3)">Après ton 1er bilan, ton prochain rendez-vous apparaîtra ici.</div>`;
-    return;
-  }
-  const now=new Date();
-  const diffMs=next.getTime()-now.getTime();
+  if(!next){ cd.style.display='none'; cd.innerHTML=''; return; }
+  cd.style.display='block';
+  const ligne='display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;min-height:44px;margin:0;'
+    +'padding:10px 14px;border-radius:var(--r-3);font-family:Montserrat,sans-serif;text-align:left;';
+  const lib='flex:none;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)';
+  const diffMs=next.getTime()-Date.now();
   const dateLabel=next.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
   if(diffMs<=0){
-    cd.innerHTML=`<div style="background:linear-gradient(135deg,#c10000,#7a0000);border-radius:var(--r-3);padding:20px 16px;text-align:center;box-shadow:0 0 32px rgba(224,32,32,.35)"><div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);letter-spacing:.5px;text-transform:uppercase">C'est le moment !</div><div style="font-size:var(--fs-sm);color:rgba(255,255,255,.75);margin-top:6px">Ton bilan est prévu aujourd'hui : complète-le maintenant.</div></div>`;
+    // LE BILAN EST DU : la ligne mene au bilan.
+    let retard=null;
+    try{ retard=_bilTexteRetard(_bilRetardJours(next)); }catch(e){ retard=null; }
+    cd.innerHTML=`<button type="button" onclick="openBilanChoice()" style="${ligne}background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.4);color:var(--text);cursor:pointer">`
+      +`<span style="${lib}">Bilan à remplir</span>`
+      +`<span style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text-strong)">${escapeHtml(retard||'C’est aujourd’hui.')}</span>`
+      +`<span aria-hidden="true" style="flex:none;font-weight:800;color:var(--red-text)">→</span></button>`;
     return;
   }
   const totalMins=Math.floor(diffMs/60000);
   const days=Math.floor(totalMins/1440);
   const hours=Math.floor((totalMins%1440)/60);
   const mins=totalMins%60;
-  const pad=n=>String(n).padStart(2,'0');
-  const blocks=days>0
-    ?[{v:pad(days),l:'JOURS',red:true},{v:pad(hours),l:'HEURES',red:false},{v:pad(mins),l:'MIN',red:false}]
-    :[{v:pad(hours),l:'HEURES',red:true},{v:pad(mins),l:'MIN',red:false}];
-  cd.innerHTML=`<div style="background:linear-gradient(160deg,#1a0000 0%,#0d0d0d 60%);border:1px solid rgba(224,32,32,.22);border-radius:var(--r-3);padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:0 0 28px rgba(224,32,32,.07),0 6px 20px rgba(0,0,0,.55)">
-    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,rgba(224,32,32,.95),rgba(224,32,32,.15),transparent)"></div>
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--red-text);margin-bottom:3px">Prochain bilan</div>
-    <div style="font-size:var(--fs-md);font-weight:700;color:var(--text);margin-bottom:14px">${dateLabel}</div>
-    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:5px">${b.l}</div></div>`).join('')}</div>
-  </div>`;
+  const reste=days>0?(days+' j '+hours+' h'):(hours+' h '+String(mins).padStart(2,'0')+' min');
+  cd.innerHTML=`<div style="${ligne}background:var(--surface-1);border:1px solid var(--border)">`
+    +`<span style="${lib}">Prochain bilan</span>`
+    +`<span style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text-strong)">${escapeHtml(dateLabel)} · dans ${escapeHtml(reste)}</span></div>`;
 }
 // forcerReprise : appelé depuis la carte de reprise de l'accueil, où l'athlète
 // a déjà exprimé son intention — lui reposer la question serait redondant.
@@ -56019,7 +56070,12 @@ function bilBack(){
     // AVANT la navigation : loadClientHome dessine la carte « Bilan commencé »
     // à partir du BROUILLON, et le débounce ne l’a peut-être pas encore écrit.
     _quitterEcranBilan(true);
-    if(bilType==='depart'){go('s-client-home');loadClientHome();}else{go('s-bilan-choice');}
+    // R19 — L'ECRAN DE CHOIX N'EST PLUS LE PASSAGE OBLIGE : on n'y revient que
+    // si on y etait passe, c'est-a-dire quand les deux bilans sont proposables.
+    // Sinon, l'accueil, comme pour le questionnaire de depart. Le brouillon
+    // n'entre pas dans la decision : on vient d'en ecrire un.
+    if(bilType==='depart'||_bilanAiguillage(currentUser,null)!=='choix'){go('s-client-home');loadClientHome();}
+    else{go('s-bilan-choice');}
   }
 }
 async function bilNext(){
@@ -60834,6 +60890,8 @@ function _renderEncartOsseux(){
 }
 function loadProgress(){
   go('s-progress');_renderEncartOsseux();renderBandeauPhase();showProgressTab('poids',document.querySelector('#prog-tabs button'));
+  // R19 — le prochain bilan, en une ligne en tete d'ecran.
+  try{ _updateBilanCountdown(); }catch(e){}
   // LE DEGRADE ET LE BADGE « +n » SONT RETIRES AVEC LE DEFILEMENT. Ils
   // annoncaient ce qui depassait a droite ; la bande se repliant desormais,
   // plus rien ne depasse et le badge aurait compte zero onglet cache tout en
