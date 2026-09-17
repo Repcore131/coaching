@@ -32936,7 +32936,8 @@ async function testExercices(){
           if(n!=='--red'&&n!=='--border')
             return _echec('accent inattendu : '+n);
         // LE ROUGE EST RESERVE A CE QUI EXIGE UNE DECISION.
-        const ATTENDU=['Alertes','Douleur','Pourquoi ce dossier','Signaux RED-S',
+        // R10 — « Signaux RED-S » est devenu « Signaux de déficit énergétique (RED-S) ».
+        const ATTENDU=['Alertes','Douleur','Pourquoi ce dossier','Signaux de déficit énergétique (RED-S)',
                        'Sécurité','Suspension'];
         const trop=alerte.filter(x=>ATTENDU.indexOf(x)<0);
         if(trop.length) return _echec('en rouge sans décision à prendre : '+trop.join(', '));
@@ -38931,6 +38932,231 @@ async function testExercices(){
       }
       return true;})());
 
+    // ══ 17/09/2026 — R10 : LE LEXIQUE DÉPLOYÉ, LES EXPLICATIONS PERMANENTES REPLIÉES ══
+    //
+    // R06 avait posé le composant et le catalogue. Ce lot les met là où les
+    // mots apparaissent, retire ce qui redisait la même chose en permanence,
+    // et tient une règle : jamais plus de TROIS ⓘ à l'écran.
+
+    const _r10J=864e5;
+    // Un athlète qui a de quoi remplir chaque écran : des séances sur deux
+    // mois, dont une cette semaine, trois bilans mesurés, et une diète flexible
+    // sans objectifs — la carte du point de départ s'affiche alors.
+    const _r10Ath=()=>{
+      const now=Date.now(), sess=[];
+      for(let k=0;k<24;k++){
+        const w=String(60+k*1.25);
+        sess.push({id:'r10s'+k,date:now-(24-k)*2.5*_r10J+3600000,slot:0,name:'Push',volume:1000,duration:55,
+          data:{'DEVELOPPE COUCHE':{sets:[{done:true,weight:w,reps:'8',rir:'1'},{done:true,weight:w,reps:'8',rir:'1'}]},
+                'SQUAT':{sets:[{done:true,weight:'100',reps:'5',rir:'2'},{done:true,weight:'100',reps:'5',rir:'2'}]}}});
+      }
+      const bil=(i,taille,poids)=>({type:i===0?'depart':'bilan',date:now-(60-i*20)*_r10J,'deb-height':'178',
+        'bil-weight':String(poids),'deb-weight':String(poids),'bil-waist':String(taille),'deb-waist':String(taille),
+        'bil-neck':'38','deb-neck':'38'});
+      return {id:'r10',email:'r10t@t.fr',fname:'Alex',lname:'B',role:'athlete',gender:'H',exAlias:{},exMuscles:{},
+        sessions:sess,bilans:[bil(0,90,82),bil(1,88,81),bil(2,86,80)],videos:[],programs:{},contraintesSante:[],
+        streak:6,lastSession:now-_r10J,birthdate:'1990-01-01',
+        sessions_config:[{active:true,name:'Push',exercises:[{name:'DEVELOPPE COUCHE',series:2,reps:'8'},{name:'SQUAT',series:2,reps:'5'}]}],
+        nutrition:{type:'flexible'},consent:{health:true,policyVersion:POLICY_VERSION}};
+    };
+    const _r10Cle=b=>((b&&b.getAttribute('onclick'))||'').replace(/^rcInfoOuvrir\('|'\)$/g,'');
+    const _r10Infos=(z,cle)=>[...z.querySelectorAll('.rc-i')].filter(b=>!cle||_r10Cle(b)===cle);
+    // Rend un onglet d'Évolution et rend la main intacte.
+    const _r10Onglet=(tab,f)=>{
+      const pc=document.getElementById('progress-content');
+      if(!pc) return _echec('#progress-content absent');
+      const sU=currentUser, sv=pc.innerHTML, sd=_volDecalage;
+      try{
+        currentUser=_r10Ath(); _viderCachePlateau(); _viderCacheVolume(); _volDecalage=0;
+        showProgressTab(tab,null);
+        return f(pc,currentUser);
+      } finally {
+        currentUser=sU; _volDecalage=sd; _viderCachePlateau(); _viderCacheVolume(); pc.innerHTML=sv;
+      }
+    };
+
+    ok('R10 — Perfs : le ⓘ de l’e1RM remplace l’encadré permanent, qui vit encore ailleurs',(()=>
+      _r10Onglet('perf',pc=>{
+        if(/Estimation basée sur tes séries validées/.test(pc.textContent))
+          return _echec('l’encadré est encore affiché en permanence');
+        const e=_r10Infos(pc,'e1rm');
+        if(e.length!==1) return _echec(e.length+' ⓘ « e1rm » dans l’onglet');
+        // À CÔTÉ DU PREMIER EMPLOI DU SIGLE, et le sigle reste écrit.
+        const lignes=[...pc.querySelectorAll('.perf-met')].filter(l=>/e1RM/.test(l.textContent));
+        if(!lignes.length) return _echec('aucune ligne ne nomme l’e1RM : le décor ne teste rien');
+        if(e[0].closest('.perf-met')!==lignes[0]) return _echec('le ⓘ n’est pas sur la première ligne qui nomme l’e1RM');
+        // ⚠ LA CONSTANTE N'EST PAS SUPPRIMÉE : fin de séance et « Ce qui bloque ».
+        if(typeof PERF_ENCADRE!=='string'||!/e1RM est un mod[èe]le/.test(PERF_ENCADRE))
+          return _echec('PERF_ENCADRE a disparu ou changé');
+        if(String(renderEtatsSeance).indexOf('PERF_ENCADRE')<0) return _echec('l’écran de fin de séance ne rend plus l’encadré');
+        if(String(renderPlateauxCoach).indexOf('PERF_ENCADRE')<0) return _echec('« Ce qui bloque » ne rend plus l’encadré');
+        return _r10Infos(pc).length<=3?true:_echec(_r10Infos(pc).length+' ⓘ dans l’onglet');})));
+
+    ok('R10 — Volume : le ⓘ, et une description que le calcul tient',(()=>
+      _r10Onglet('volume',(pc,u)=>{
+        if(_r10Infos(pc,'volume').length!==1) return _echec(_r10Infos(pc,'volume').length+' ⓘ « volume »');
+        const desc='Séries hebdomadaires par muscle. Un muscle secondaire compte une demi-série.';
+        if(pc.textContent.replace(/\s+/g,' ').indexOf(desc)<0) return _echec('la description est absente ou réécrite');
+        // ⚠ ELLE DOIT ÊTRE VRAIE. Une séance de trois séries cette semaine :
+        // le muscle primaire compte 3 — des SÉRIES, pas des kilos —, le
+        // secondaire 1,5.
+        const t=Date.now();
+        const v={email:'r10v@t.fr',exAlias:{},exMuscles:{},sessions:[{id:'v',date:t,slot:0,name:'P',
+          data:{'DEVELOPPE COUCHE':{sets:[1,2,3].map(()=>({done:true,weight:'80',reps:'8',rir:'1'}))}}}]};
+        const cls=resoudreMusclesLecture('DEVELOPPE COUCHE',{name:'DEVELOPPE COUCHE',reps:'8'},v);
+        if(!cls||!(cls.p||[]).length||!(cls.s||[]).length) return _echec('le développé couché n’a plus de muscles rattachés');
+        const m=_calculSemaine(v,_volCleDecalee(0)).muscles;
+        const p=cls.p[0], s=cls.s.find(x=>(cls.p||[]).indexOf(x)<0);
+        if(m[p]!==3) return _echec('primaire '+p+' : '+m[p]+' au lieu de 3 séries');
+        if(s&&m[s]!==1.5) return _echec('secondaire '+s+' : '+m[s]+' au lieu de 1,5');
+        return _r10Infos(pc).length<=3?true:_echec(_r10Infos(pc).length+' ⓘ dans l’onglet');})));
+
+    ok('R10 — Masse grasse : le ⓘ se pose à côté du pourcentage actuel, calcBF intact',(()=>
+      _r10Onglet('masseGrasse',pc=>{
+        const b=_r10Infos(pc,'masse_grasse');
+        if(b.length!==1) return _echec(b.length+' ⓘ « masse_grasse »');
+        const box=b[0].closest('.metric-box');
+        if(!box||!/MG actuel/.test(box.textContent)) return _echec('le ⓘ n’est pas sur la tuile du pourcentage actuel');
+        if(!/%/.test((box.querySelector('.metric-val')||{}).textContent||'')) return _echec('la tuile n’affiche pas de pourcentage');
+        // La formule rend toujours la même chose : on ne touche à aucun calcul.
+        const bf=calcBF(86,38,null,178,'H');
+        if(!(bf>10&&bf<25)) return _echec('calcBF rend '+bf);
+        return _r10Infos(pc).length<=3?true:_echec(_r10Infos(pc).length+' ⓘ dans l’onglet');})));
+
+    ok('R10 — Nutrition : le ⓘ des macros est sur le titre des anneaux',(()=>{
+      const sU=currentUser;
+      try{
+        currentUser=_r10Ath();
+        currentUser.nutrition={type:'flexible',macros:{on:{kcal:2200,p:150,g:250,l:70,f:30},off:{kcal:2000,p:150,g:200,l:70,f:30}}};
+        const d=document.createElement('div'); d.innerHTML=_renderStrictMacroRings(currentUser.nutrition);
+        const t=d.querySelector('.nut-tete .nut-titre');
+        if(!t) return _echec('la carte des anneaux ne se rend pas');
+        const b=t.nextElementSibling;
+        if(!b||!b.classList.contains('rc-i')||_r10Cle(b)!=='macros') return _echec('le ⓘ « macros » ne suit pas le titre');
+        return _r10Infos(d).length<=3?true:_echec(_r10Infos(d).length+' ⓘ dans la carte');
+      } finally { currentUser=sU; }})());
+
+    ok('R10 — Nutrition : les hypothèses sont repliées, au caractère près, et le NEAT porte son ⓘ',(()=>{
+      const sU=currentUser;
+      try{
+        currentUser=_r10Ath();
+        const b=besoinsProposes(currentUser);
+        if(!b||b.source===null) return _echec('le décor ne produit pas de point de départ');
+        const d=document.createElement('div'); d.innerHTML=_htmlDepartAthlete(currentUser.nutrition);
+        const det=d.querySelector('details');
+        if(!det) return _echec('les hypothèses ne sont pas dans un <details>');
+        if(det.open) return _echec('le repli est ouvert par défaut');
+        if((det.querySelector('summary')||{}).textContent!=='Comment ces objectifs sont calculés')
+          return _echec('intitulé : « '+(det.querySelector('summary')||{}).textContent+' »');
+        const contenu=det.querySelector('div');
+        const nom=b.source==='katch'?'Katch-McArdle':'Mifflin-St Jeor';
+        const attendu=nom+' · dépense estimée '+b.depense+' kcal — '+b.hypotheses.join(' · ')+'.';
+        const cl=contenu.cloneNode(true); cl.querySelectorAll('.rc-i').forEach(x=>x.remove());
+        if(cl.textContent!==attendu) return _echec('le texte a changé : « '+cl.textContent+' »');
+        const i=_r10Infos(contenu);
+        if(i.length!==1||_r10Cle(i[0])!=='neat') return _echec(i.length+' ⓘ dans le repli');
+        // JUSTE APRÈS LE PREMIER « NEAT », et le mot reste écrit.
+        const avant=i[0].previousSibling&&i[0].previousSibling.textContent||'';
+        if(!/NEAT$/.test(avant)||avant.indexOf('NEAT')!==avant.length-4)
+          return _echec('le ⓘ n’est pas après le premier « NEAT »');
+        // Rien des hypothèses ne reste affiché hors du repli.
+        const hors=d.cloneNode(true); hors.querySelector('details').remove();
+        if(hors.textContent.indexOf(b.hypotheses[0])>=0) return _echec('une hypothèse reste affichée hors du repli');
+        return _premierNeatInfo('sans le mot')==='sans le mot'?true:_echec('un texte sans NEAT est modifié');
+      } finally { currentUser=sU; }})());
+
+    ok('R10 — Accueil : ⓘ sur le badge de semaines et sur la diète respectée',(()=>{
+      const ii=document.getElementById('clh-streak-i'), m3=document.getElementById('clh-m3-i');
+      if(!ii||!m3) return _echec('les emplacements des ⓘ n’existent pas dans l’accueil');
+      const sU=currentUser, s1=ii.innerHTML, s2=m3.innerHTML;
+      try{
+        ii.innerHTML=''; m3.innerHTML='';
+        currentUser=_r10Ath();
+        _rendreStreak(currentUser,6); _majMetriquesAccueil(currentUser);
+        if(_r10Cle(ii.querySelector('.rc-i'))!=='assiduite') return _echec('pas de ⓘ « assiduite » à côté du badge');
+        // Hors du cadre mesuré au pixel, pas dedans.
+        if(document.getElementById('clh-streak').contains(ii)) return _echec('le ⓘ est dans le cadre du badge');
+        if(_r10Cle(m3.querySelector('.rc-i'))!=='score_diete') return _echec('pas de ⓘ « score_diete » sur la tuile');
+        if(m3.closest('.metric-box')!==document.getElementById('clh-m3').closest('.metric-box'))
+          return _echec('le ⓘ de la diète n’est pas dans sa tuile');
+        const n=document.querySelectorAll('#s-client-home .rc-i').length;
+        return n<=3?true:_echec(n+' ⓘ sur l’accueil');
+      } finally {
+        currentUser=sU; ii.innerHTML=s1; m3.innerHTML=s2;
+        try{ if(sU&&sU.role!=='coach'){ _rendreStreak(sU,streakSemaines(sU)); _majMetriquesAccueil(sU); } }catch(e){}
+      }})());
+
+    ok('R10 — Dossier coach : sections renommées, ⓘ voisins du titre et pas dedans',(()=>{
+      const titres=[...document.querySelectorAll('#s-coach-client .cc-sect-t>span')].map(s=>s.textContent.trim());
+      for(const t of ['Signaux de déficit énergétique (RED-S)','Signaux faibles','Plateaux'])
+        if(titres.indexOf(t)<0) return _echec('section « '+t+' » absente');
+      for(const t of ['Signaux RED-S','Micro-signaux'])
+        if(titres.indexOf(t)>=0) return _echec('l’ancien titre « '+t+' » est encore là');
+      ccdAppliquerReplis();
+      for(const [id,cle] of [['ccd-reds','reds'],['ccd-plateaux','plateau']]){
+        const s=document.getElementById(id).closest('.cc-sect');
+        const b=s.querySelector(':scope>.cc-sect-i .rc-i');
+        if(!b||_r10Cle(b)!==cle) return _echec(id+' : pas de ⓘ « '+cle+' »');
+        // ⚠ PAS DANS LE TITRE : il est role="button" et replie la section.
+        if(s.querySelector(':scope>.cc-sect-t .rc-i')) return _echec(id+' : le ⓘ est dans le titre');
+      }
+      if(document.getElementById('ccd-micro').closest('.cc-sect').querySelector('.rc-i'))
+        return _echec('« Signaux faibles » porte un ⓘ');
+      // ET SON CLIC NE REPLIE RIEN.
+      _ccdArmerReplis();
+      const s=document.getElementById('ccd-plateaux').closest('.cc-sect');
+      const avant=s.classList.contains('replie');
+      try{ s.querySelector(':scope>.cc-sect-i .rc-i').click(); } finally { try{ rcInfoFermer(true); }catch(e){} }
+      if(s.classList.contains('replie')!==avant) return _echec('le clic sur le ⓘ a replié la section');
+      return true;})());
+
+    ok('R10 — Séance : jamais plus de trois ⓘ, exercice programmé et superset compris',(()=>{
+      const sW=woState;
+      const d=document.createElement('div');
+      d.style.cssText='position:fixed;left:0;top:0;width:359px;z-index:-1';
+      document.body.insertBefore(d,document.body.firstChild);
+      const S=o=>Object.assign({weight:'',weight2:'',reps:'8',rir:'',pain:'',done:false},o||{});
+      const tableaux=n=>{ d.innerHTML=Array.from({length:n},(_,i)=>'<table class="series-table series-table-wo"><thead><tr id="r10-th-'+i+'"></tr></thead><tbody id="sets-body-'+i+'"></tbody></table>').join(''); };
+      const rendre=()=>woState.exercises.forEach((ex,i)=>{
+        document.getElementById('r10-th-'+i).innerHTML=_enteteSeries(_seriesEnCartes(woState.sessionData[i]),false,!_woTeteDeGroupe(i));
+        renderSets(ex,woState.sessionData[i],i); });
+      try{
+        if(String(_blocExo).indexOf('!_woTeteDeGroupe(idx)')<0) return _echec('_blocExo ne passe pas la règle du superset à la bande');
+        // UN EXERCICE PROGRAMMÉ : quatre séries verrouillées, UN ⓘ RPE.
+        tableaux(1);
+        woState={exercises:[{name:'DEVELOPPE COUCHE',series:4,reps:'8'}],currentEx:0,
+          sessionData:{0:{sets:[1,2,3,4].map(()=>S({weight:'80',rpeCible:8,isAuto:true}))}}};
+        rendre();
+        const rpe=_r10Infos(d,'rpe');
+        if(rpe.length!==1) return _echec(rpe.length+' ⓘ RPE pour quatre séries');
+        if(rpe[0].closest('tr')!==document.querySelector('#sets-body-0 tr')) return _echec('le ⓘ RPE n’est pas sur la première série');
+        if(_r10Infos(d).length>3) return _echec(_r10Infos(d).length+' ⓘ sur l’exercice programmé');
+        // UN SUPERSET : deux tableaux, les ⓘ sur le premier seulement.
+        tableaux(2);
+        woState={exercises:[{name:'DEVELOPPE COUCHE',series:3,reps:'8'},{name:'ROWING BARRE',series:3,reps:'8',ss:true}],currentEx:0,
+          sessionData:{0:{sets:[S({weight:'80',rir:'2',done:true}),S(),S()]},1:{sets:[S({weight:'60',rir:'2',done:true}),S(),S()]}}};
+        if(_woTeteDeGroupe(0)!==true||_woTeteDeGroupe(1)!==false) return _echec('la tête de groupe est mal lue');
+        rendre();
+        const second=_r10Infos(document.getElementById('sets-body-1').closest('table'));
+        if(second.length) return _echec('le second tableau du superset porte '+second.length+' ⓘ');
+        if(_r10Infos(d).length>3) return _echec(_r10Infos(d).length+' ⓘ sur le superset');
+        // Hors séance, un exercice se comporte comme un exercice seul.
+        woState=null;
+        return _woTeteDeGroupe(3)===true?true:_echec('sans séance, les ⓘ disparaissent');
+      } finally { woState=sW; d.remove(); }})());
+
+    ok('R10 — Aucun écran de glossaire, et les sigles restent écrits',(()=>{
+      if(document.querySelector('.screen[id*="gloss" i],.screen[id*="lexique" i]')) return _echec('un écran de glossaire existe');
+      // Les sigles NE sont PAS remplacés par leur périphrase.
+      const e1=PERF_METRIQUE_LIB['e1RM']||'';
+      if(!/e1RM/.test(e1)) return _echec('« e1RM » a été remplacé : '+e1);
+      const sU=currentUser;
+      try{
+        currentUser=_r10Ath();
+        const h=besoinsProposes(currentUser).hypotheses.join(' ');
+        return /NEAT/.test(h)?true:_echec('« NEAT » a disparu des hypothèses');
+      } finally { currentUser=sU; }})());
+
     // ══ 17/09/2026 — R09 : LA CHARGE PROPOSÉE, ET LA PREMIÈRE FOIS ═══════
     //
     // « AUTO » disait comment la charge était arrivée, pas quoi en faire. Elle
@@ -39691,7 +39917,17 @@ async function testExercices(){
         masse_grasse:['Masse grasse estimée',
           'Estimée depuis ton tour de taille, ton cou et ta taille — jamais mesurée.',
           'Marge de 3 à 4 points. Regarde la tendance, pas le chiffre exact.'],
-        '1rm':['1RM','La charge maximale que tu pourrais soulever une seule fois.',undefined]
+        '1rm':['1RM','La charge maximale que tu pourrais soulever une seule fois.',undefined],
+        // R10 — les quatre entrees du lot. assiduite et score_diete sont
+        // ecrites sur ce que le CODE compte (updateStreak, jourDieteTenu).
+        assiduite:['Semaines d\'assiduité',
+          'Le nombre de semaines d\'affilée où tu as fait toutes les séances prévues à ton programme.',undefined],
+        score_diete:['Diète respectée',
+          'La part des jours tenus : selon ta réponse du jour, ou ton journal comparé à tes cibles.',
+          'Les jours non renseignés ne comptent ni en bien ni en mal.'],
+        reds:['RED-S — déficit énergétique relatif',
+          'Des signes que l\'apport alimentaire ne couvre plus la dépense : sommeil, cycle, blessures, humeur.',undefined],
+        plateau:['Plateau','Aucun nouveau maximum sur cet exercice depuis plusieurs semaines.',undefined]
       };
       for(const [k,[t,d,pr]] of Object.entries(att)){
         const e=RC_LEXIQUE[k];

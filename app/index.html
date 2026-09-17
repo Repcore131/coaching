@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1248';
+window.RC_BUILD='1249';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -3465,6 +3465,15 @@ html{scroll-behavior:smooth}
 #s-coach-client .cc-sect-t{padding:6px 11px;cursor:pointer;user-select:none;
   border-radius:8px}
 #s-coach-client .cc-sect.replie>.cc-sect-t{margin-bottom:0}
+/* R10 — LE ⓘ D'UNE SECTION EST LE VOISIN DU TITRE, PAS SON ENFANT. Le titre
+   entier est un role="button" qui replie la section : un bouton pose dedans
+   serait un controle dans un controle — illisible pour un lecteur d'ecran —
+   et son clic replierait la section en passant. Il se superpose donc au bout
+   droit du bandeau, et le titre lui laisse la place. */
+#s-coach-client .cc-sect>.cc-sect-i{position:absolute;top:0;right:4px;height:28px;
+  display:flex;align-items:center;z-index:1}
+#s-coach-client .cc-sect-t:has(+.cc-sect-i){padding-right:40px}
+#s-coach-client .cc-sect-i .rc-i{margin-left:0;color:rgba(255,255,255,.72)}
 /* N5.5 — les vingt-sept en-tetes repliables. AUCUN DEPLACEMENT VERTICAL ici :
    ce sont des lignes qui se suivent, et les faire monter au survol ferait
    sauter la lecture d'une colonne entiere. Le fond seul. */
@@ -4040,6 +4049,29 @@ input.set-input{font-family:var(--pile-titre);font-weight:400;
    case comme sur les autres lignes, et le ⓘ deborde a droite, dans l'espace
    libre de la carte. Il garde ses 32 px : on ne rapetisse pas une cible. */
 .wo-propose .rc-i{margin-right:-36px}
+/* ── R10 — LE ⓘ D'UNE TUILE CHIFFREE, DANS SON COIN ───────────────────────
+   Accueil (« Respect de la diète ») et masse grasse (« MG actuel »).
+   La tuile offre 84 px utiles, en overflow:hidden et en nowrap : « RESPECT »
+   plus un bouton de 32 px n'y tenaient pas, et le libelle aurait ete coupe.
+   Le coin haut-droit ne pousse rien. La zone tactile recouvre un bout du
+   chiffre, qui ne se touche pas : elle ne vole aucun geste. */
+/* LE ⓘ DU BADGE D'ASSIDUITE. Pose en flux avec ses 32 px, il reprenait au
+   bloc du profil la largeur qui tenait « MON PROFIL » sur une ligne —
+   constate a 359 px, le libelle passait a la ligne. Des marges negatives le
+   ramenent a 14 px d'emprise : le bouton garde ses 32 px, qui debordent sur
+   le vide a gauche et sur le cadre du badge a droite, qui ne se touche pas. */
+#clh-streak-i .rc-i{margin:0 -9px}
+/* LE ⓘ DE L'e1RM, dans une ligne de 10 px. En flux, sa boite de 32 px
+   portait la ligne a 32 px et la carte qui le porte depassait ses voisines —
+   constate. Des marges verticales negatives lui rendent la hauteur du texte ;
+   la zone tactile deborde sur la courbe et le rembourrage, qui ne se touchent
+   pas. */
+.perf-met .rc-i{margin-top:-10px;margin-bottom:-10px}
+/* -5 px et non 0 : colle au coin, le glyphe touchait le « % » de « 17.2% » —
+   constate a l'ecran. La boite deborde de 5 px, rognee par l'overflow de la
+   tuile ; le glyphe, centre, reste 11 px a l'interieur. */
+.metric-i{position:absolute;top:-5px;right:-5px;display:flex}
+.metric-i .rc-i{margin-left:0}
 
 /* ====== SUGGEST BOX ====== */
 .rir-tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;background:#7f1d1d22;color:#fca5a5;border:1px solid #7f1d1d44}
@@ -8548,7 +8580,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-c" id="ccd-volume"></div>
       </section>
       <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Plateaux</span></div>
+        <div class="cc-sect-t"><span>Plateaux</span></div><span class="cc-sect-i" data-lex="plateau"></span>
         <div class="cc-sect-c" id="ccd-plateaux"></div>
       </section>
       <section class="cc-sect" style="--cc-accent:var(--red)">
@@ -8628,7 +8660,7 @@ const COACH_PHOTO='icons/coach.jpg';
            signaux nutritionnels : ils se lisent avec le journal, pas avec le
            sommeil et les pas. -->
       <section class="cc-sect" style="--cc-accent:var(--border);display:none">
-        <div class="cc-sect-t"><span>Micro-signaux</span></div>
+        <div class="cc-sect-t"><span>Signaux faibles</span></div>
         <div class="cc-sect-c" id="ccd-micro"></div>
       </section>
       <!-- ⚠ « PROTEINES PAR PRISE » A ETE RETIRE le 08/09/2026, sur demande de
@@ -8768,7 +8800,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-c" id="ccd-dossier"></div>
       </section>
       <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Signaux RED-S</span></div>
+        <div class="cc-sect-t"><span>Signaux de déficit énergétique (RED-S)</span></div><span class="cc-sect-i" data-lex="reds"></span>
         <div class="cc-sect-c" id="ccd-reds"></div>
       </section>
       <section class="cc-sect" style="--cc-accent:var(--red)">
@@ -9207,6 +9239,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="font-size:var(--fs-md);font-family:var(--pile-titre);letter-spacing:1px;line-height:1" id="clh-name"></div>
       </div>
     </div>
+    <!-- R10 — LE ⓘ DE L'ASSIDUITE, A GAUCHE DU BADGE. Pas dedans : le cadre est
+         mesure au pixel (136 x 52) et un bouton de 32 px le deformait. margin-left
+         auto le colle au badge, quelle que soit la longueur du nom. Peint par
+         _rendreStreak. -->
+    <span id="clh-streak-i" style="display:inline-flex;margin-left:auto;margin-right:2px;flex-shrink:0"></span>
     <!-- L'INDICATEUR DE SEMAINES. La flambée est DERRIÈRE le cadre : son corps
          noir masque le milieu des langues, et il n'en reste que les léchures
          autour du bord — c'est ainsi que se rend un objet qui brûle. -->
@@ -9342,7 +9379,10 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances</div>
           <div class="clh-m-sub" id="clh-m2-sub">depuis le début</div></div>
         <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Respect</div>
-          <div class="clh-m-sub" id="clh-m3-sub">de la diète</div></div>
+          <div class="clh-m-sub" id="clh-m3-sub">de la diète</div>
+          <!-- R10 — LE ⓘ DE LA DIETE, DANS LE COIN. Peint par le rendu des
+               tuiles : voir .metric-i. -->
+          <span class="metric-i" id="clh-m3-i"></span></div>
       </div>
 
 
@@ -13013,7 +13053,27 @@ const RC_LEXIQUE=Object.freeze({
     p:'Marge de 3 à 4 points. Regarde la tendance, pas le chiffre exact.'}),
   '1rm':Object.freeze({
     t:'1RM',
-    d:'La charge maximale que tu pourrais soulever une seule fois.'})
+    d:'La charge maximale que tu pourrais soulever une seule fois.'}),
+  // ── R10 ─────────────────────────────────────────────────────────────────
+  // ⚠ DEUX DEFINITIONS ONT ETE ALIGNEES SUR LE CODE, et c'est la regle du lot :
+  // on n'ecrit pas une definition que le calcul ne tient pas.
+  // - assiduite : updateStreak ne credite une semaine que si les seances
+  //   PREVUES au programme sont faites — pas « au moins une ».
+  // - score_diete : en diete flexible, le jour se juge sur le journal compare
+  //   aux cibles (jourDieteTenu), pas sur une reponse « oui ».
+  assiduite:Object.freeze({
+    t:'Semaines d\'assiduité',
+    d:'Le nombre de semaines d\'affilée où tu as fait toutes les séances prévues à ton programme.'}),
+  score_diete:Object.freeze({
+    t:'Diète respectée',
+    d:'La part des jours tenus : selon ta réponse du jour, ou ton journal comparé à tes cibles.',
+    p:'Les jours non renseignés ne comptent ni en bien ni en mal.'}),
+  reds:Object.freeze({
+    t:'RED-S — déficit énergétique relatif',
+    d:'Des signes que l\'apport alimentaire ne couvre plus la dépense : sommeil, cycle, blessures, humeur.'}),
+  plateau:Object.freeze({
+    t:'Plateau',
+    d:'Aucun nouveau maximum sur cet exercice depuis plusieurs semaines.'})
 });
 // ⚠ ON LIT PAR hasOwnProperty, JAMAIS PAR L'ACCESSEUR. RC_LEXIQUE est un
 // objet litteral : il herite d'Object.prototype, et rcInfo('toString') y
@@ -21785,7 +21845,7 @@ function renderCoachMicroSection(c){
   // soit franchi, et n'entre dans aucun score d'urgence.
   let recup=''; try{ recup=_htmlRecuperationCoach(c); }catch(e){}
   // ⚠ LES TRAITEMENTS NE SONT PAS ICI, ET DEUX ASSERTIONS DU BANC L'EXIGENT.
-  // « Micro-signaux » est une zone de LECTURE : aucun bouton, rien qu'on
+  // « Signaux faibles » (ex « Micro-signaux », renomme en R10) est une zone de LECTURE : aucun bouton, rien qu'on
   // puisse faire disparaitre, et AUCUN bloc du tout quand il n'y a pas de
   // question a poser. Un editeur y aurait rendu le rappel masquable et fait
   // apparaitre un cadre sur toutes les fiches. Ils vivent dans leur propre
@@ -28255,6 +28315,9 @@ function _ccdPoserRepli(id,replie){
 // l'autre, mais leur visibilite change, et une section masquee puis remontree
 // doit retrouver son etat.
 function ccdAppliquerReplis(){
+  // R10 — les ⓘ des sections, peints une fois : ils sont statiques.
+  try{ document.querySelectorAll('#s-coach-client .cc-sect-i[data-lex]').forEach(z=>{
+    if(!z.firstChild) z.innerHTML=rcInfo(z.getAttribute('data-lex')); }); }catch(e){}
   try{
     const memo=_ccdReplis();
     document.querySelectorAll('#s-coach-client .cc-sect').forEach(s=>{
@@ -42623,6 +42686,7 @@ function renderWoEx(){
   </div>`:'';
 
   const blocs=groupe.map(i=>_blocExo(i,estSS));
+  // R10 — voir _woTeteDeGroupe : en superset, seul le premier bloc porte les ⓘ.
   const auMoinsUnMuscu=groupe.some(i=>!isCardio(woState.exercises[i]));
 
   // SANS anim-in : le fondu vertical de 320 ms recouvrait entierement le
@@ -42905,7 +42969,7 @@ function _blocExo(idx,estSS){
       :`<div id="wo-sets-scroll-${idx}"${!isWide?' style="overflow-x:auto"':''}>
       <table class="series-table series-table-wo" style="width:100%${!isWide?';min-width:260px':''}">
         <thead><tr style="background:var(--red)">
-          ${_enteteSeries(isWide,pr.type==='degressive')}
+          ${_enteteSeries(isWide,pr.type==='degressive',!_woTeteDeGroupe(idx))}
         </tr></thead>
         <tbody id="sets-body-${idx}"></tbody>
       </table>
@@ -43283,16 +43347,36 @@ function _seriesEnCartes(data){
 // ⚠ EN CARTES, LES COLONNES DISPARAISSENT, ET LEURS NOMS AVEC. « RIR » et
 // « Gêne » passent donc dans la bande, chacun avec son ⓘ : sans eux, la
 // pastille du lexique n'existerait plus que sur les exercices programmes.
-function _enteteSeries(large,degressive){
+//
+// R10 — `sansInfo` : le second bloc d'un superset ne repete pas les ⓘ. Deux
+// tableaux a l'ecran, c'etait quatre ⓘ de bande, au-dela du plafond de trois.
+function _enteteSeries(large,degressive,sansInfo){
+  const i=k=>sansInfo?'':rcInfo(k);
   if(large){
     return `<th style="color:var(--text);text-align:left;padding-left:10px;font-size:var(--fs-xs);letter-spacing:.5px">`
       +`<div style="display:flex;align-items:center;gap:6px">`
       +`<span style="flex:1;min-width:0">Séries${degressive?' · Dégressive':''}</span>`
-      +`<span style="white-space:nowrap">RIR${rcInfo('rir')}</span>`
-      +`<span style="white-space:nowrap">Gêne${rcInfo('douleur')}</span>`
+      +`<span style="white-space:nowrap">RIR${i('rir')}</span>`
+      +`<span style="white-space:nowrap">Gêne${i('douleur')}</span>`
       +`</div></th>`;
   }
-  return `<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th><th style="color:var(--text)">RIR${rcInfo('rir')}</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne${rcInfo('douleur')}</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`;
+  return sansInfo
+    ?`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th><th style="color:var(--text)">RIR</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`
+    :`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th><th style="color:var(--text)">RIR${rcInfo('rir')}</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne${rcInfo('douleur')}</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`;
+}
+// ══ R10 — LE PLAFOND DE TROIS ⓘ SUR L'ECRAN DE SEANCE ══════════════════
+// Un superset rend DEUX tableaux sur le meme ecran. Les ⓘ ne se posent que
+// sur le premier : RIR et Gene dans la bande, plus « proposé » ou RPE sur
+// une ligne — trois au plus. Le second tableau n'explique rien de nouveau.
+// ⚠ PAR DEFAUT, OUI. Sans seance, ou sur un index hors groupe (decors de
+// test, reprise), l'exercice se comporte comme un exercice seul.
+function _woTeteDeGroupe(idx){
+  try{
+    const exs=woState&&woState.exercises;
+    if(!Array.isArray(exs)||!exs.length) return true;
+    const g=_groupesEx(exs).find(x=>x.includes(idx));
+    return !g||g[0]===idx;
+  }catch(e){ return true; }
 }
 // LES SERIES DONT « 3+ » A ETE OUVERT SUR 4 ET 5. Un WeakSet sur l'objet
 // serie, et rien dans sessionData : c'est un etat d'affichage, il n'a pas a
@@ -43375,7 +43459,13 @@ function renderSets(ex,data,idx){
   // PREMIERE serie qui porte « proposé » — pas sur chaque ligne, ce serait un
   // mur de ⓘ. La serie 1 n'en porte jamais : rien ne la precede pour la
   // proposer. Quand elle est validee, le ⓘ descend sur la suivante.
-  const _iPremierePropose=isDeg?-1:data.sets.findIndex(_chargeProposee);
+  // R10 — et seulement sur le premier tableau d'un superset (plafond de trois).
+  const _infosIci=_woTeteDeGroupe(idx);
+  const _iPremierePropose=(isDeg||!_infosIci)?-1:data.sets.findIndex(_chargeProposee);
+  // R10 — LE ⓘ DU RPE, UNE FOIS PAR TABLEAU. Pose sur chaque ligne verrouillee,
+  // il faisait quatre ⓘ pour quatre series, plus les deux de la bande : six a
+  // l'ecran, le double du plafond. Il reste sur la premiere.
+  const _iPremierRpe=_infosIci?data.sets.findIndex(s=>s&&s.rpeCible):-1;
 
   tb.innerHTML=data.sets.map((s,i)=>{
     const baseW=parseFloat(s.weight)||0;
@@ -43484,7 +43574,7 @@ function renderSets(ex,data,idx){
           title="Intensité demandée par ton coach — tu ne la règles pas"
           style="padding:4px 5px;font-size:var(--fs-xs);min-width:44px;min-height:38px;display:flex;
             align-items:center;justify-content:center;gap:4px;background:var(--surface-2);color:var(--text-strong);
-            border:1px solid var(--border);border-radius:var(--r-1);white-space:nowrap">${icon('lock',10)}RPE ${s.rpeCible}</div>${rcInfo('rpe')}`
+            border:1px solid var(--border);border-radius:var(--r-1);white-space:nowrap">${icon('lock',10)}RPE ${s.rpeCible}</div>${i===_iPremierRpe?rcInfo('rpe'):''}`
       :(()=>{
         // ══ R08 — LE RIR EN SEGMENTS ══════════════════════════════════════
         // [Échec] [0] [1] [2] [3+], un tap chacun. Le menu en demandait deux.
@@ -45089,7 +45179,9 @@ function _listeEtats(user){
     return (b.joursDepuisRecord||0)-(a.joursDepuisRecord||0);
   });
 }
-function _ligneEtat(x){
+// `info` : R10 — la ligne porte le ⓘ de l'e1RM. L'appelant le donne a la
+// PREMIERE ligne qui nomme le sigle, et a elle seule.
+function _ligneEtat(x,info){
   const c=PERF_ETAT_COULEUR[x.etat]||'var(--sub)';
   const detail=x.etat==='insuffisant'
     ? (x.n<MIN_SEANCES?x.n+' séance'+(x.n>1?'s':'')+' sur ce créneau : pas encore de quoi juger'
@@ -45103,7 +45195,7 @@ function _ligneEtat(x){
     </div>
     <div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.5">${detail}</div>
     ${x.etat!=='insuffisant'?_sparkline(x.points,c):''}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">${PERF_METRIQUE_LIB[x.metrique]||''}${x.metriqueChangee?' · série repartie de zéro : le format de séries a changé':''}${x.aberrants?' · '+x.aberrants+' valeur'+(x.aberrants>1?'s':'')+' inhabituelle'+(x.aberrants>1?'s':'')+', vérifie ta saisie':''}</div>
+    <div class="perf-met" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">${PERF_METRIQUE_LIB[x.metrique]||''}${info?rcInfo('e1rm'):''}${x.metriqueChangee?' · série repartie de zéro : le format de séries a changé':''}${x.aberrants?' · '+x.aberrants+' valeur'+(x.aberrants>1?'s':'')+' inhabituelle'+(x.aberrants>1?'s':'')+', vérifie ta saisie':''}</div>
   </div>`;
 }
 
@@ -45922,6 +46014,10 @@ function _majMetriquesAccueil(u){
   //    branches : le taux existe meme sans une seule seance.
   const di=_tauxDieteRespectee(u);
   const valM3=di?(di.pct+' %'):'—';
+  // R10 — le ⓘ de la diete, dans le coin de sa tuile. Pose meme sans donnee :
+  // c'est justement quand le « — » s'affiche qu'on se demande ce qui est compte.
+  const _m3i=document.getElementById('clh-m3-i');
+  if(_m3i&&!_m3i.firstChild) _m3i.innerHTML=rcInfo('score_diete');
   // ⚠ LES QUALIFICATIFS SONT ECRITS DANS LE GABARIT, PAS ICI. Ils sont fixes
   // — « cette semaine », « depuis le début », « de la diète » — et les
   // reecrire a chaque rendu n'aurait servi qu'a les faire diverger du jour ou
@@ -48495,6 +48591,9 @@ function _rendreStreak(u,s){
   // septembre » demandait deux lignes et grandissait le cadre.
   const dt=document.getElementById('clh-streak-date');
   if(dt) dt.textContent=dateDuJourCourte();
+  // R10 — le ⓘ de l'assiduite, voisin du badge.
+  const ii=document.getElementById('clh-streak-i');
+  if(ii&&!ii.firstChild) ii.innerHTML=rcInfo('assiduite');
   if(zone) zone.toggleAttribute('data-nul',a.nul);
   if(!el) return;
   if(a.valeur===null){
@@ -60709,6 +60808,15 @@ function renderVolume(){
         style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:${_volDecalage<=0?'var(--text-faint)':'var(--text)'};width:38px;height:34px;cursor:pointer;font-size:var(--fs-lg)">→</button>
     </div>`;
 
+  // R10 — CE QUI EST COMPTE, DIT SOUS LE TITRE. La definition a ete ecrite
+  // APRES lecture de _calculSemaine : ce n'est PAS un tonnage (il a sa carte
+  // plus bas), c'est un decompte de series, par muscle, sur la semaine — et
+  // un muscle secondaire y recoit une demi-serie (POIDS_ROLE.SECONDAIRE). Rien
+  // de plus n'est affirme ici.
+  const tete=`<div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Volume${rcInfo('volume')}</div>
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5">Séries hebdomadaires par muscle. Un muscle secondaire compte une demi-série.</div>
+    </div>`;
   // Bandeau d'honnêteté : permanent, non masquable.
   const bandeau=`<div style="background:var(--surface-2);border-left:3px solid var(--sub);border-radius:var(--r-2);padding:10px 12px;margin-top:16px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Repères indicatifs. Ils varient fortement d'une personne à l'autre —
@@ -60717,7 +60825,7 @@ function renderVolume(){
     </div>`;
 
   if(!c.seances){
-    document.getElementById('progress-content').innerHTML=nav
+    document.getElementById('progress-content').innerHTML=nav+tete
       +`<div class="sub" style="font-size:var(--fs-sm);background:var(--surface-2);border-radius:var(--r-3);padding:18px;text-align:center;line-height:1.6">
           ${_volDecalage===0?'Fais ta première séance, ton volume apparaîtra ici.':'Aucune séance cette semaine-là.'}
         </div>`+bandeau;
@@ -60786,7 +60894,7 @@ function renderVolume(){
   // Charge axiale : sous les muscles, comme demandé, et sans repère absolu.
   const axial=_htmlChargeAxiale(u,_volDecalage,null,{});
   document.getElementById('progress-content').innerHTML=
-    nav+alertes+corps+zero+axial+_htmlTonnage(u,_volDecalage)+_htmlRecords(u)
+    nav+tete+alertes+corps+zero+axial+_htmlTonnage(u,_volDecalage)+_htmlRecords(u)
     +_htmlHydratation(u,nutIsOnDay(localISODate(new Date())))+conv+bandeau;
   // LE REMPLISSAGE SEUL BOUGE : le fond zone, le trait de MRV et le contour des
   // valeurs aberrantes sont des REPERES, pas des mesures, et restent poses a
@@ -62416,7 +62524,7 @@ function showProgressTab(tab,btn){
       </div>
       <div style="display:flex;gap:8px;margin-bottom:14px">
         <div class="metric-box"><div class="metric-val">${fb!==null?fb+'%':'—'}</div><div class="metric-label">MG départ</div></div>
-        <div class="metric-box"><div class="metric-val">${lb!==null?lb+'%':'—'}</div><div class="metric-label">MG actuel</div></div>
+        <div class="metric-box"><div class="metric-val">${lb!==null?lb+'%':'—'}</div><div class="metric-label">MG actuel</div><span class="metric-i">${rcInfo('masse_grasse')}</span></div>
         <div class="metric-box"><div class="metric-val" style="color:${col}">${diff!==null?(diff>0?'+':'')+diff+'%':'—'}</div><div class="metric-label">Évolution</div></div>
       </div>
       <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:14px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6">
@@ -62488,7 +62596,12 @@ function showProgressTab(tab,btn){
     try{ _blocFormePerf+=_htmlSatisfaction(currentUser); }catch(e){}
     let _lst=[];
     try{ _lst=_listeEtats(currentUser); }catch(e){ _lst=[]; }
-    const _jug=_lst.filter(x=>x.etat!=='insuffisant');
+    // R10 — L'ENCADRE PERMANENT DEVIENT UN ⓘ. PERF_ENCADRE redisait sous la
+    // liste, a chaque visite, ce que l'e1RM vaut ; l'explication est desormais
+    // dans le lexique, a un doigt, a cote du premier « e1RM » de l'ecran.
+    // ⚠ LA CONSTANTE N'EST PAS SUPPRIMEE : l'ecran de fin de seance et la carte
+    // « Ce qui bloque » la rendent toujours.
+    const _iE1rm=_lst.findIndex(x=>/e1RM/.test(PERF_METRIQUE_LIB[x.metrique]||''));
     c.innerHTML=`<div class="metric-row-4" style="margin-bottom:16px">
       <div class="metric-box"><div class="metric-val">${ss.length}</div><div class="metric-label">Total</div></div>
       <div class="metric-box"><div class="metric-val">${streakSemaines(currentUser)}</div><div class="metric-label">Semaines</div></div>
@@ -62499,8 +62612,7 @@ function showProgressTab(tab,btn){
     <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(currentUser)">Rapport de la période</button>
     <div id="perf-etats" style="margin-bottom:18px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Progression par exercice</div>
-      ${_lst.length?_lst.map(_ligneEtat).join(''):'<div class="sub" style="font-size:var(--fs-sm)">Aucun exercice suivi pour l\'instant.</div>'}
-      ${_jug.length?PERF_ENCADRE:''}
+      ${_lst.length?_lst.map((x,i)=>_ligneEtat(x,i===_iE1rm)).join(''):'<div class="sub" style="font-size:var(--fs-sm)">Aucun exercice suivi pour l\'instant.</div>'}
     </div>
     ${_htmlVolumeCreneau(currentUser)}`;
     setTimeout(()=>{ try{ _peindreVolumeCreneau(currentUser); }catch(e){} },50);
@@ -64604,6 +64716,12 @@ function macrosRemplies(nut){
   const rempli=o=>!!o&&['kcal','p','g','l'].some(k=>Number(o[k])>0);
   return rempli(m.on)||rempli(m.off);
 }
+// PURE. Le texte DEJA echappe, avec le ⓘ du NEAT pose juste apres le premier
+// « NEAT » — et nulle part ailleurs. Sans « NEAT », le texte revient intact.
+function _premierNeatInfo(h){
+  const i=String(h).indexOf('NEAT');
+  return i<0?h:h.slice(0,i+4)+rcInfo('neat')+h.slice(i+4);
+}
 function _htmlDepartAthlete(nut){
   if(macrosRemplies(nut)) return '';
   const b=besoinsProposes(currentUser);
@@ -64622,7 +64740,13 @@ function _htmlDepartAthlete(nut){
       ${bloc('💤 JOUR OFF',b.off,'var(--sub)')}
     </div>
     <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="utiliserBesoinsProposes()">Utiliser ces objectifs</button>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:9px">${escapeHtml(nom)} · dépense estimée ${b.depense} kcal — ${escapeHtml(b.hypotheses.join(' · '))}.</div>
+    <!-- R10 — LES HYPOTHESES SONT REPLIEES, PAS REECRITES. Le texte du repli
+         est celui d'avant, au caractere pres : seul le ⓘ du NEAT s'y ajoute,
+         apres le premier emploi du mot. -->
+    <details class="nut-hyp" style="margin-top:9px">
+      <summary style="font-size:var(--fs-2xs);color:var(--sub);cursor:pointer">Comment ces objectifs sont calculés</summary>
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:6px">${escapeHtml(nom)} · dépense estimée ${b.depense} kcal — ${_premierNeatInfo(escapeHtml(b.hypotheses.join(' · ')))}.</div>
+    </details>
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -65311,7 +65435,7 @@ function _renderStrictMacroRings(nut,jourAff){
     <div class="nut-tete">
       <span class="nut-boul">${icon('target',15)}</span>
       <span class="nut-sep"></span>
-      <span class="nut-titre">${estAuj?'Objectifs du jour':'Objectifs'}</span>
+      <span class="nut-titre">${estAuj?'Objectifs du jour':'Objectifs'}</span>${rcInfo('macros')}
       <span style="display:inline-flex;align-items:center;gap:6px;margin-left:auto">${badgePhase(currentUser)}${dayBadge}</span>
       ${estAuj?'':`<div style="flex-basis:100%;margin-top:2px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red-text)">${_libelleJourNut(today)}</div>`}
     </div>
