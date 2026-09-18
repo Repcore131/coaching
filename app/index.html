@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1284';
+window.RC_BUILD='1286';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -209,6 +209,10 @@ if('serviceWorker' in navigator){
 <!-- Encodeur QR local. Charge avec la page : 10 Ko, et il remplace un appel
      reseau a chaque ouverture de la fenetre de synchronisation. -->
 <script src="./vendor/qr.js"></script>
+<!-- ALLEGER AVANT D ENVOYER. Quinze kilo-octets en defer ; les deux copies
+     figees de vendor/mp4/ (230 Ko) ne partent qu a la premiere compression,
+     et pas du tout si le telephone ne sait pas encoder. -->
+<script defer src="./vendor/rc-video.js"></script>
 <style>
 /* Polices AUTO-HEBERGEES. Avant ce lot, chaque visiteur transmettait son
    adresse IP a Google — le service de polices distantes — AVANT
@@ -5687,6 +5691,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   font-size:var(--fs-2xs);font-weight:700;color:var(--text-dim);line-height:1.5}
 .rc-envoi.ok .rc-envoi-d{color:var(--green)}
 .rc-envoi.ko .rc-envoi-d{color:var(--red-text)}
+/* La note de compression : ce qui a ete fait au fichier, ou ce qui n a pas
+   pu l etre. Elle tient sur deux lignes et ne pousse pas le bouton dehors. */
+.rc-envoi-n{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;
+  margin-top:6px;display:none}
+/* 44 px de haut : c est une cible tactile, et elle est pressee dans
+   l urgence — quand quelqu un voit partir 130 Mo de son forfait. */
+.rc-envoi-x{display:block;width:100%;min-height:44px;margin-top:10px;
+  background:none;border:1px solid var(--border);border-radius:var(--r-2);
+  color:var(--text-dim);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);
+  font-weight:800;letter-spacing:1px;cursor:pointer}
+.rc-envoi-x:disabled{opacity:.45;cursor:default}
 @media (prefers-reduced-motion:reduce){
   .rc-envoi-jauge{transition:none}
   .rc-envoi.attente .rc-envoi-jauge{animation:none}
@@ -83012,6 +83027,19 @@ function addVideoLink(){
 }
 function _cloudinaryUserMsg(e,kind){
   const m=(e.message||'').toLowerCase();
+  // ⚠ CES TROIS-LÀ PASSENT AVANT LES AUTRES. « Envoi annulé » contient
+  //   « envoi », et se serait fait traduire en « Erreur d'envoi : vérifie
+  //   ta connexion » — on aurait accusé le réseau d'un geste volontaire.
+  if(/envoi annulé|annulé par/.test(m))
+    return 'Envoi annulé. Rien n’est parti, et le fichier est intact sur ton téléphone.';
+  if(/délai dépassé/.test(m))
+    return 'Le réseau ne répond plus depuis deux minutes : réessaie en Wi-Fi si tu peux.';
+  if(/plus lourd que l’original|ne sait pas alléger|compression/.test(m))
+    return 'Ton téléphone ne sait pas alléger cette vidéo : filme plus court, ou baisse la qualité vidéo dans les réglages.';
+  // Un morceau refusé porte son code : c'est un refus de contenu, pas une
+  // panne, et le redire « réessaie » ferait tourner en rond.
+  if(/erreur serveur 4/.test(m)&&!/401|413/.test(m))
+    return 'Un morceau de la vidéo a été refusé par le serveur : reprends l’envoi depuis le début.';
   if(/file size too large|exceeds.*maximum|too large|erreur serveur 413/.test(m))
     return 'Fichier trop volumineux : réduis la taille'+(kind==='video'?' ou la durée de la vidéo':'');
   if(/upload preset not found|unknown api key|invalid upload preset|erreur serveur 401/.test(m))
@@ -83027,6 +83055,55 @@ function _cloudinaryUserMsg(e,kind){
 // `options` EST FACULTATIF ET ARRIVE EN SECOND : les appels existants —
 // l'entree de fichier de l'ecran Videos — ne changent pas d'un iota. Avec lui,
 // l'entree ecrite porte son rattachement a la serie.
+// ══════════════ LES PLAFONDS, ET D'OÙ ILS VIENNENT ═════════════════════════
+//
+// ⚠ LE PLAFOND CLIENT ÉTAIT AU-DESSUS DU PLAFOND RÉEL, et c'est la pire des
+// combinaisons. 300 Mo étaient acceptés à l'écran ; Cloudinary refuse au-delà
+// de 100 Mo par requête en plan gratuit. Entre les deux, l'envoi montait
+// jusqu'à 100 %, attendait, puis échouait — on faisait payer deux minutes de
+// données mobiles pour un refus qu'on pouvait annoncer en une seconde.
+//
+// Au-delà de VIDEO_MAX_OCTETS_REQUETE, le fichier part en MORCEAUX. Le plafond
+// qui reste, VIDEO_MAX_OCTETS_TOTAL, n'est plus celui du transport : c'est
+// celui du bon sens. Une demi-heure d'envoi pour une vidéo qu'un coach regarde
+// dans un lecteur de 400 px n'a aucune contrepartie.
+
+/** Plafond Cloudinary par requête, plan gratuit. Au-delà : découpage. */
+const VIDEO_MAX_OCTETS_REQUETE=100*1024*1024;
+/** Plafond après découpage. Au-delà, on refuse AVANT d'attendre. */
+const VIDEO_MAX_OCTETS_TOTAL=500*1024*1024;
+/**
+ * La hauteur visée à la compression. Le coach regarde dans un lecteur de
+ * 400 px de large : 720 est déjà au-dessus du nécessaire, et c'est la
+ * résolution que tous les encodeurs matériels acceptent.
+ * ⚠ C'EST UNE BORNE, PAS UNE CIBLE : une vidéo déjà en 480p n'est jamais
+ * agrandie. Agrandir ne rajoute aucun détail, ça ne fait que peser.
+ */
+const VIDEO_CIBLE_HAUTEUR=720;
+/** Débit visé, en bits par seconde. 2,5 Mbit/s en 720p30 tient largement un
+ *  mouvement de musculation, où le fond ne bouge pas. */
+const VIDEO_CIBLE_DEBIT=2500000;
+/** Trois minutes. Au-delà, ce n'est plus une série, c'est une séance — et
+ *  personne ne la regarde en entier. */
+const VIDEO_DUREE_MAX_S=180;
+/**
+ * Le plafond audio, qui traînait à 300 Mo lui aussi. Un message vocal de coach
+ * dépasse rarement la minute ; vingt-cinq mégaoctets laissent de la marge pour
+ * un fichier importé, et restent sous le plafond Cloudinary par requête.
+ */
+const AUDIO_MAX_OCTETS=25*1024*1024;
+/**
+ * L'INACTIVITÉ, pas la durée. Deux minutes sans un octet qui bouge, c'est une
+ * ligne morte ; deux minutes d'envoi qui avance, c'est un envoi qui avance.
+ * ⚠ `XMLHttpRequest.timeout` MESURE LA DURÉE TOTALE, pas l'inactivité : posé à
+ * 120 s il tuerait un envoi légitime de 80 Mo sur un réseau lent. On le garde
+ * comme plafond absolu par MORCEAU — là, 120 s veut dire 50 ko/s, c'est-à-dire
+ * mort — et on surveille l'inactivité à la main pour l'envoi simple.
+ */
+const ENVOI_INACTIVITE_MS=120000;
+/** Le plafond absolu d'un morceau. Un morceau est borné par construction. */
+const ENVOI_MORCEAU_TIMEOUT_MS=120000;
+
 // ══════════════ L'ENVOI QUI SE VOIT ═════════════════════════
 //
 // ⚠ FETCH NE SAIT PAS DIRE OÙ EN EST UN ENVOI, et c'était tout le problème.
@@ -83049,14 +83126,42 @@ function _envoiPanneau(titre){
   z.setAttribute('aria-live','polite');
   z.innerHTML='<div class="rc-envoi-t"></div>'
     +'<div class="rc-envoi-piste"><div class="rc-envoi-jauge"></div></div>'
-    +'<div class="rc-envoi-d"><span class="rc-envoi-g"></span><span class="rc-envoi-dr"></span></div>';
+    +'<div class="rc-envoi-d"><span class="rc-envoi-g"></span><span class="rc-envoi-dr"></span></div>'
+    +'<div class="rc-envoi-n"></div>'
+    +'<button type="button" class="rc-envoi-x" style="display:none">Annuler</button>';
   const t=z.querySelector('.rc-envoi-t'), j=z.querySelector('.rc-envoi-jauge'),
-        g=z.querySelector('.rc-envoi-g'), d=z.querySelector('.rc-envoi-dr');
+        g=z.querySelector('.rc-envoi-g'), d=z.querySelector('.rc-envoi-dr'),
+        n=z.querySelector('.rc-envoi-n'),
+        x=/** @type {HTMLButtonElement} */(z.querySelector('.rc-envoi-x'));
   t.textContent=titre||'Envoi en cours';
-  g.textContent='0 %'; d.textContent='';
+  g.textContent='0 %'; d.textContent=''; n.textContent='';
   let mort=null;
   const fermer=()=>{ if(mort) clearTimeout(mort); if(z&&z.parentNode) z.parentNode.removeChild(z); };
   const differer=ms=>{ if(mort) clearTimeout(mort); mort=setTimeout(fermer,ms); };
+  // ── LE DÉBIT, LISSÉ. Un débit instantané saute d'un facteur trois entre deux
+  //    paquets : affiché tel quel il est illisible, et le temps restant qu'on
+  //    en tire saute avec lui. On garde les échantillons des huit dernières
+  //    secondes et on lit la pente sur cette fenêtre-là.
+  const FENETRE_MS=8000;
+  /** @type {{t:number, o:number}[]} */
+  let ech=[];
+  let derniereCle='';
+  const vitesse=(charge)=>{
+    const now=Date.now();
+    ech.push({t:now,o:charge});
+    while(ech.length>2&&now-ech[0].t>FENETRE_MS) ech.shift();
+    const a=ech[0], b=ech[ech.length-1];
+    const dt=(b.t-a.t)/1000, dOct=b.o-a.o;
+    // MOINS D'UNE SECONDE DE RECUL : on ne dit rien plutôt que d'annoncer un
+    // temps restant qui changerait à la seconde suivante.
+    return (dt>=1&&dOct>0)?dOct/dt:0;
+  };
+  /** « 2 min 10 s » — jamais « 130 secondes », que personne ne lit. */
+  const duree=(s)=>{
+    if(!(s>0)||!isFinite(s)) return '';
+    const m=Math.floor(s/60), r=Math.round(s%60);
+    return m?(m+' min'+(r?' '+r+' s':'')):(Math.max(1,r)+' s');
+  };
   return {
     // Pendant le transfert : le pourcentage ET les mégaoctets. Le pourcentage
     // seul ne dit pas si l'attente sera de dix secondes ou de deux minutes.
@@ -83065,7 +83170,30 @@ function _envoiPanneau(titre){
       const pct=total>0?Math.min(100,Math.round(charge/total*100)):0;
       j.style.width=pct+'%';
       g.textContent=pct+' %';
-      d.textContent=total>0?(_mo(charge)+' / '+_mo(total)):'';
+      const v=vitesse(charge);
+      const reste=(v>0&&total>charge)?duree((total-charge)/v):'';
+      d.textContent=total>0
+        ?(_mo(charge)+' / '+_mo(total)
+          +(v>0?' · '+String(Math.round(v/1048576*10)/10).replace('.',',')+' Mo/s':'')
+          +(reste?' · '+reste+' restantes':''))
+        :'';
+    },
+    // LE TITRE CHANGE DE PHASE. « Envoi » pendant qu'on allège serait un
+    // mensonge : rien n'est parti, et l'athlète qui coupe croit annuler un
+    // envoi alors qu'il annule une compression.
+    titre(txt){ t.textContent=txt||''; ech=[]; },
+    // Une ligne de contexte sous la jauge : ce que la compression a fait, ou
+    // ce qu'elle n'a pas pu faire. Elle reste tant qu'on ne la remplace pas.
+    note(txt){ n.textContent=txt||''; n.style.display=txt?'block':'none'; },
+    // ⚠ LE BOUTON N'APPARAÎT QUE S'IL FAIT QUELQUE CHOSE. Un « Annuler » qui
+    //   ne coupe rien est pire que pas de bouton : on le presse, il ne se passe
+    //   rien, et on presse le suivant.
+    annuler(cb){
+      if(typeof cb!=='function'){ x.style.display='none'; x.onclick=null; return; }
+      x.style.display='block';
+      x.disabled=false;
+      x.textContent='Annuler';
+      x.onclick=()=>{ x.disabled=true; x.textContent='Annulation…'; try{ cb(); }catch(e){} };
     },
     // Les octets sont partis, le serveur travaille encore. Une jauge figée à
     // 100 % se lirait comme un blocage : elle se met à balayer.
@@ -83073,12 +83201,14 @@ function _envoiPanneau(titre){
       z.className='rc-envoi attente';
       g.textContent=msg||'Traitement…';
       d.textContent='';
+      x.style.display='none';
     },
     fini(msg){
       z.className='rc-envoi ok';
       t.textContent='Envoi terminé';
       g.textContent=msg||'Vidéo envoyée';
       d.textContent='';
+      x.style.display='none';
       differer(4000);
     },
     rate(msg){
@@ -83086,6 +83216,7 @@ function _envoiPanneau(titre){
       t.textContent='Envoi interrompu';
       g.textContent=msg||'Échec';
       d.textContent='';
+      x.style.display='none';
       differer(7000);
     },
     fermer:fermer
@@ -83101,44 +83232,455 @@ function _mo(o){
 // ⚠ LES QUATRE FINS SONT TRAITÉES. Un envoi peut aboutir, échouer côté
 // serveur, tomber avec le réseau, ou être abandonné — et une promesse qui ne
 // se règle jamais laisserait le panneau à l'écran pour toujours.
-function _envoiXhr(url,corps,surProgres){
-  return new Promise((resolve,reject)=>{
-    const x=new XMLHttpRequest();
+//
+// ⚠ LA PROMESSE PORTE SON XHR. Sans lui, personne ne peut couper un envoi en
+// cours : l'objet mourait dans la closure, et le bouton « Annuler » n'aurait
+// rien eu à appeler. `p.xhr` est posé sur la promesse elle-même — c'est le
+// seul moyen de le rendre sans changer la signature des appelants.
+//
+// @param {string} url
+// @param {any} corps
+// @param {((charge:number,total:number)=>void)|null} [surProgres]
+// @param {{timeoutMs?:number, inactiviteMs?:number, signal?:any, entetes?:Object<string,string>}} [opt]
+function _envoiXhr(url,corps,surProgres,opt){
+  const o=opt||{};
+  const x=new XMLHttpRequest();
+  const p=new Promise((resolve,reject)=>{
     x.open('POST',url);
-    if(x.upload&&typeof surProgres==='function'){
+    for(const k in (o.entetes||{})) x.setRequestHeader(k,o.entetes[k]);
+    // ⚠ x.timeout MESURE LA DURÉE TOTALE, PAS L'INACTIVITÉ. Posé bas, il tue
+    //   un envoi lent mais vivant. On ne le pose donc QUE là où la taille est
+    //   bornée par construction — un morceau — et l'inactivité se surveille à
+    //   la main pour le reste. Jusqu'ici il n'était jamais posé du tout, et
+    //   x.ontimeout était du code mort.
+    if(Number(o.timeoutMs)>0) x.timeout=Number(o.timeoutMs);
+    let veille=null, mortParInactivite=false;
+    const inactivite=Number(o.inactiviteMs)>0?Number(o.inactiviteMs):ENVOI_INACTIVITE_MS;
+    const relancer=()=>{
+      if(veille) clearTimeout(veille);
+      veille=setTimeout(()=>{ mortParInactivite=true; try{ x.abort(); }catch(e){} },inactivite);
+    };
+    const eteindre=()=>{ if(veille) clearTimeout(veille); veille=null; };
+    if(x.upload){
       x.upload.onprogress=e=>{
+        relancer();
         // `lengthComputable` est faux quand la taille n'est pas connue : on
         // n'invente pas un pourcentage, on laisse l'appelant afficher l'attente.
-        if(e.lengthComputable) surProgres(e.loaded,e.total);
+        if(e.lengthComputable&&typeof surProgres==='function') surProgres(e.loaded,e.total);
       };
     }
     x.onload=()=>{
+      eteindre();
       if(x.status>=200&&x.status<300) resolve(x.responseText);
-      else reject(new Error('Erreur serveur '+x.status));
+      else{
+        const err=new Error('Erreur serveur '+x.status);
+        /** @type {any} */(err).statut=x.status;
+        /** @type {any} */(err).corps=String(x.responseText||'').slice(0,500);
+        reject(err);
+      }
     };
-    x.onerror=()=>reject(new Error('Réseau indisponible'));
-    x.onabort=()=>reject(new Error('Envoi annulé'));
-    x.ontimeout=()=>reject(new Error('Délai dépassé'));
+    x.onerror=()=>{ eteindre(); const e=new Error('Réseau indisponible'); /** @type {any} */(e).reseau=true; reject(e); };
+    x.onabort=()=>{
+      eteindre();
+      // UN ABANDON N'EST PAS TOUJOURS UNE ANNULATION : la veille d'inactivité
+      // coupe par le même chemin, et les deux ne se disent pas pareil.
+      if(mortParInactivite){ const e=new Error('Délai dépassé'); /** @type {any} */(e).reseau=true; reject(e); }
+      else reject(new Error('Envoi annulé'));
+    };
+    x.ontimeout=()=>{ eteindre(); const e=new Error('Délai dépassé'); /** @type {any} */(e).reseau=true; reject(e); };
+    // LE SIGNAL D'ANNULATION, quand l'appelant en pose un : c'est par lui que
+    // le bouton du panneau et la file d'attente coupent le même envoi.
+    if(o.signal){
+      if(o.signal.aborted){ eteindre(); reject(new Error('Envoi annulé')); return; }
+      try{ o.signal.addEventListener('abort',()=>{ try{ x.abort(); }catch(e){} },{once:true}); }catch(e){}
+    }
+    relancer();
     x.send(corps);
   });
+  /** @type {any} */(p).xhr=x;
+  return p;
 }
+
+// ══════════════ L'ENVOI PAR MORCEAUX, REPRENABLE ═══════════════════════════
+//
+// Un seul POST de quatre-vingts mégaoctets sur un réseau mobile, c'est une
+// minute et demie pendant laquelle UNE coupure d'ascenseur renvoie tout à
+// zéro. Découpé, on ne reperd que le morceau en cours.
+//
+// ⚠ LE PROTOCOLE CLOUDINARY SE RESPECTE AU MOT PRÈS, et chacune de ses règles
+//   a coûté cher à quelqu'un :
+//   · X-Unique-Upload-Id IDENTIQUE sur tous les morceaux d'un fichier, et
+//     UNIQUE entre deux fichiers — deux envois simultanés qui partageraient
+//     l'identifiant se mélangeraient en une seule vidéo illisible.
+//   · Content-Range en indices INCLUSIFS, et le total est celui du fichier
+//     ENTIER, jamais celui du morceau.
+//   · Chaque morceau fait au moins cinq mégaoctets, SAUF LE DERNIER. Un
+//     morceau plus petit au milieu est refusé, et le refus arrive tard.
+//   · SEULE LA RÉPONSE DU DERNIER MORCEAU porte secure_url et public_id. Les
+//     autres rendent un accusé de réception sans lien.
+
+/** Six mégaoctets. Au-dessus du minimum de cinq, et assez gros pour que les
+ *  allers-retours ne mangent pas le gain sur un fichier de cent mégaoctets. */
+const ENVOI_MORCEAU_OCTETS=6*1024*1024;
+/** Le plancher du protocole. Un morceau plus petit — hors le dernier — est
+ *  refusé par Cloudinary. */
+const ENVOI_MORCEAU_MIN=5*1024*1024;
+/** Trois tentatives par morceau, puis on rend la main. Les temporisations
+ *  triplent : une seconde absorbe un changement d'antenne, neuf secondes
+ *  absorbent un ascenseur, au-delà c'est que le réseau n'est pas là. */
+const ENVOI_TENTATIVES=3;
+const ENVOI_ATTENTES_MS=Object.freeze([1000,3000,9000]);
+
+/**
+ * PURE. Au-delà du plafond par requête, le fichier part en morceaux — en
+ * dessous, l’envoi simple. Le découpage coûte des allers-retours qui ne se
+ * justifient pas sur quinze mégaoctets.
+ * @param {number} octets @returns {boolean}
+ */
+function _envoiDecoupeRequis(octets){ return Number(octets)>VIDEO_MAX_OCTETS_REQUETE; }
+/**
+ * PURE. Le découpage d'un fichier, en indices INCLUSIFS.
+ * ⚠ LE DERNIER MORCEAU PEUT ÊTRE PLUS PETIT QUE LE PLANCHER, et lui seul.
+ *   Un reste de deux cent mille octets est un dernier morceau valide.
+ * @param {number} total  octets du fichier entier
+ * @param {number} [taille]
+ * @returns {{i:number, debut:number, fin:number, octets:number}[]}
+ */
+function _envoiMorceaux(total,taille){
+  const T=Math.max(0,Math.round(Number(total)||0));
+  const C=Math.max(1,Math.round(Number(taille)||ENVOI_MORCEAU_OCTETS));
+  const out=[];
+  if(!T) return out;
+  for(let d=0,i=0;d<T;d+=C,i++){
+    const f=Math.min(T-1,d+C-1);
+    out.push({i,debut:d,fin:f,octets:f-d+1});
+  }
+  return out;
+}
+/**
+ * PURE. « bytes 0-6291455/19123456 ». Les indices sont INCLUSIFS — `fin` est
+ * le dernier octet envoyé, pas le premier du suivant — et le total est celui
+ * du fichier entier.
+ * @param {number} debut @param {number} fin @param {number} total
+ * @returns {string}
+ */
+function _envoiContentRange(debut,fin,total){
+  return 'bytes '+Math.round(debut)+'-'+Math.round(fin)+'/'+Math.round(total);
+}
+/** Un identifiant d'envoi. Horodatage ET aléa : deux fichiers choisis dans la
+ *  même milliseconde — ça arrive, un sélecteur multiple — auraient sinon le
+ *  même, et Cloudinary les recollerait en une seule vidéo. */
+function _envoiIdUnique(){
+  return 'rc'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+}
+/**
+ * PURE. Ce qui vaut la peine d'être réessayé : une panne de réseau, ou un
+ * serveur qui a un mauvais moment.
+ * ⚠ UN 4xx EST DÉFINITIF. Un preset invalide, un fichier refusé, un morceau
+ *   hors séquence : réessayer trois fois ne changerait rien et ferait attendre
+ *   treize secondes de plus pour le même refus.
+ * @param {any} e
+ * @returns {boolean}
+ */
+function _envoiReessayable(e){
+  if(!e) return false;
+  if(e.reseau) return true;
+  const st=Number(e.statut);
+  if(st>=500&&st<600) return true;
+  if(st>=400&&st<500) return false;
+  return /réseau|reseau|network/i.test(String(e.message||''));
+}
+
+/**
+ * L'ENVOI DÉCOUPÉ. Rend le corps de la réponse du DERNIER morceau — c'est le
+ * seul qui porte le lien.
+ *
+ * @param {string} url
+ * @param {File|Blob} file
+ * @param {Object<string,string>} champs  upload_preset, folder…
+ * @param {{onProgres?:(charge:number,total:number)=>void, signal?:any,
+ *          tailleMorceau?:number, onMorceau?:(i:number,n:number)=>void}} [opt]
+ * @returns {Promise<string>}
+ */
+async function _envoiXhrDecoupe(url,file,champs,opt){
+  const o=opt||{};
+  const total=file.size;
+  const morceaux=_envoiMorceaux(total,o.tailleMorceau);
+  if(!morceaux.length) throw new Error('Fichier vide');
+  const id=_envoiIdUnique();
+  let dejaEnvoye=0, dernier='';
+  for(const m of morceaux){
+    if(o.signal&&o.signal.aborted) throw new Error('Envoi annulé');
+    if(typeof o.onMorceau==='function') o.onMorceau(m.i,morceaux.length);
+    let erreur=null;
+    for(let t=0;t<ENVOI_TENTATIVES;t++){
+      try{
+        const fd=new FormData();
+        fd.append('file',file.slice(m.debut,m.fin+1),/** @type {any} */(file).name||'video');
+        for(const k in (champs||{})) fd.append(k,champs[k]);
+        dernier=await _envoiXhr(url,fd,
+          // ⚠ LA PROGRESSION EST CELLE DU FICHIER, PAS DU MORCEAU. Une jauge
+          //   qui repart à zéro tous les six mégaoctets est pire que pas de
+          //   jauge : on croit que l'envoi recommence.
+          (charge)=>{ if(typeof o.onProgres==='function') o.onProgres(Math.min(total,dejaEnvoye+charge),total); },
+          {signal:o.signal,timeoutMs:ENVOI_MORCEAU_TIMEOUT_MS,
+           entetes:{'X-Unique-Upload-Id':id,'Content-Range':_envoiContentRange(m.debut,m.fin,total)}});
+        erreur=null;
+        break;
+      }catch(e){
+        erreur=e;
+        if(o.signal&&o.signal.aborted) throw e;
+        if(/annulé/i.test(String(e&&e.message))) throw e;
+        if(!_envoiReessayable(e)||t===ENVOI_TENTATIVES-1) break;
+        await new Promise(r=>setTimeout(r,ENVOI_ATTENTES_MS[t]||ENVOI_ATTENTES_MS[ENVOI_ATTENTES_MS.length-1]));
+      }
+    }
+    if(erreur) throw erreur;
+    dejaEnvoye+=m.octets;
+    if(typeof o.onProgres==='function') o.onProgres(dejaEnvoye,total);
+  }
+  return dernier;
+}
+
+
+// ══════════════ LA FILE QUI SURVIT À LA FERMETURE ══════════════════════════
+//
+// Un envoi de quatre-vingts mégaoctets prend deux minutes. Pendant ces deux
+// minutes, l'athlète verrouille son téléphone, prend un appel, ou l'app passe
+// en arrière-plan — et le transfert meurt avec l'onglet. Au retour, RIEN ne
+// disait qu'une vidéo avait failli partir.
+//
+// ⚠ ON PROPOSE, ON NE REPREND JAMAIS D'OFFICE. Une reprise silencieuse qui
+//   consomme cent trente mégaoctets de forfait sans prévenir est un abus, et
+//   c'est exactement ce que fait la concurrence. Le geste est explicite, et le
+//   poids est écrit sur le bouton.
+//
+// ⚠ LE BLOB VIT DANS INDEXEDDB, PAS DANS LE DOCUMENT. Aucun octet de vidéo
+//   n'approche de `users/{email}` : le document est relu et réécrit en entier
+//   à chaque poussée, et c'est ce volume qui est le plafond de RepCore.
+
+const ENVOI_FILE_BASE='repcore-envois';
+const ENVOI_FILE_MAGASIN='attente';
+/**
+ * VINGT-QUATRE HEURES. Au-delà, la vidéo décrit une séance d'hier : la
+ * proposer reviendrait à faire payer un envoi pour un contenu que personne
+ * n'attend plus. Et garder des blobs de cent mégaoctets indéfiniment remplit
+ * le stockage du téléphone sans que rien ne le dise.
+ */
+const ENVOI_FILE_MAX_MS=24*3600*1000;
+
+/** La base, ouverte à la demande. Rend null si IndexedDB n'est pas là —
+ *  navigation privée, vieux navigateur — et la file devient alors un
+ *  non-événement : l'envoi marche exactement comme avant. */
+function _fileOuvrir(){
+  return new Promise(res=>{
+    try{
+      if(typeof indexedDB==='undefined') return res(null);
+      const r=indexedDB.open(ENVOI_FILE_BASE,1);
+      r.onupgradeneeded=()=>{
+        const db=r.result;
+        if(!db.objectStoreNames.contains(ENVOI_FILE_MAGASIN))
+          db.createObjectStore(ENVOI_FILE_MAGASIN,{keyPath:'id'});
+      };
+      r.onsuccess=()=>res(r.result);
+      r.onerror=()=>res(null);
+      r.onblocked=()=>res(null);
+    }catch(e){ res(null); }
+  });
+}
+/** @param {IDBDatabase|null} db @param {string} mode */
+function _fileMagasin(db,mode){
+  if(!db) return null;
+  try{ return db.transaction(ENVOI_FILE_MAGASIN,mode).objectStore(ENVOI_FILE_MAGASIN); }
+  catch(e){ return null; }
+}
+/** @param {IDBRequest} r */
+function _fileAttendre(r){
+  return new Promise(res=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>res(null); });
+}
+/**
+ * PURE. Une entrée encore proposable ? Trop vieille, elle ne l'est plus.
+ * @param {any} e @param {number} [maintenant]
+ * @returns {boolean}
+ */
+function fileEnvoiFraiche(e,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const c=Number(e&&e.cree);
+  return !!(e&&e.blob&&c>0&&(t-c)<ENVOI_FILE_MAX_MS);
+}
+/**
+ * Pose un envoi dans la file AVANT de le tenter. Rend l'identifiant, ou ''
+ * quand la file n'est pas disponible — auquel cas l'envoi se poursuit sans
+ * filet, comme avant ce lot.
+ * @param {{blob:Blob, nom:string, emailCible:string, octetsOrigine:number,
+ *          voieCompression:string, lien?:any}} e
+ * @returns {Promise<string>}
+ */
+async function fileEnvoiPoser(e){
+  const db=await _fileOuvrir();
+  const m=_fileMagasin(db,'readwrite');
+  if(!m){ try{ if(db) db.close(); }catch(x){} return ''; }
+  const id='e_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  try{
+    await _fileAttendre(m.put({id,cree:Date.now(),blob:e.blob,nom:String(e.nom||''),
+      emailCible:String(e.emailCible||''),octetsOrigine:Number(e.octetsOrigine)||0,
+      voieCompression:String(e.voieCompression||'aucune'),
+      lien:(e.lien&&e.lien.exerciceCle)?e.lien:null}));
+  }catch(x){ try{ db.close(); }catch(y){} return ''; }
+  try{ db.close(); }catch(x){}
+  return id;
+}
+/** Retire une entrée. Appelée à la confirmation Cloudinary, et sur un refus
+ *  définitif : garder un fichier que le serveur refuse ne mène nulle part. */
+async function fileEnvoiRetirer(id){
+  if(!id) return false;
+  const db=await _fileOuvrir();
+  const m=_fileMagasin(db,'readwrite');
+  if(!m){ try{ if(db) db.close(); }catch(x){} return false; }
+  try{ await _fileAttendre(m.delete(id)); }catch(x){}
+  try{ db.close(); }catch(x){}
+  return true;
+}
+/** Les entrées encore fraîches, les périmées purgées au passage. */
+async function fileEnvoiLister(maintenant){
+  const db=await _fileOuvrir();
+  const m=_fileMagasin(db,'readwrite');
+  if(!m){ try{ if(db) db.close(); }catch(x){} return []; }
+  const tout=await _fileAttendre(m.getAll());
+  const l=Array.isArray(tout)?tout:[];
+  const bonnes=[], vieilles=[];
+  for(const e of l) (fileEnvoiFraiche(e,maintenant)?bonnes:vieilles).push(e);
+  // LA PURGE SE FAIT EN LISANT, pas dans un balayage à part : c'est le seul
+  // moment où on sait qu'on a la main sur la base, et un blob de cent
+  // mégaoctets oublié pèse sur le stockage du téléphone.
+  for(const v of vieilles){ try{ m.delete(v.id); }catch(x){} }
+  try{ db.close(); }catch(x){}
+  return bonnes;
+}
+
+/** Le carton de reprise, posé une seule fois par session. */
+let _repriseMontree=false;
+/**
+ * AU DÉMARRAGE : on PROPOSE. Le carton dit ce qui reste, combien ça pèse, et
+ * offre les deux issues — reprendre, ou oublier. Rien ne part tant que
+ * personne n'a touché un bouton.
+ */
+async function proposerRepriseEnvoi(){
+  if(_repriseMontree||!currentUser) return false;
+  _repriseMontree=true;
+  let l=[];
+  try{ l=await fileEnvoiLister(); }catch(e){ return false; }
+  const e=l.filter(x=>x.emailCible===currentUser.email)[0];
+  if(!e) return false;
+  const z=document.createElement('div');
+  z.id='rc-reprise';
+  z.className='rc-envoi';
+  z.setAttribute('role','status');
+  z.innerHTML='<div class="rc-envoi-t">Un envoi n’est pas allé au bout</div>'
+    +'<div class="rc-envoi-n" style="display:block">'+escapeHtml(e.nom||'Une vidéo')
+    +' · '+_mo(e.blob.size)+' · '+new Date(e.cree).toLocaleString('fr-FR')
+    +'. Rien ne repart tant que tu ne le demandes pas.</div>'
+    +'<button type="button" class="rc-envoi-x" id="rc-reprise-go">Reprendre l’envoi ('+_mo(e.blob.size)+')</button>'
+    +'<button type="button" class="rc-envoi-x" id="rc-reprise-non">Oublier cette vidéo</button>';
+  document.body.appendChild(z);
+  const partir=()=>{ try{ z.remove(); }catch(x){} };
+  const go=document.getElementById('rc-reprise-go');
+  const non=document.getElementById('rc-reprise-non');
+  if(go) go.onclick=()=>{ partir(); reprendreEnvoi(e.id); };
+  if(non) non.onclick=()=>{ partir(); fileEnvoiRetirer(e.id); toast('Envoi oublié'); };
+  return true;
+}
+/**
+ * LA REPRISE, sur geste explicite. Elle repasse par uploadVideoFile — le
+ * chemin d'envoi unique — avec le blob DÉJÀ allégé : on ne recompresse pas ce
+ * qui l'a été.
+ */
+async function reprendreEnvoi(id){
+  let l=[];
+  try{ l=await fileEnvoiLister(); }catch(e){ return false; }
+  const e=l.filter(x=>x.id===id)[0];
+  if(!e){ toast('Cet envoi n’est plus disponible.','var(--orange)'); return false; }
+  const f=new File([e.blob],(e.nom||'video')+'.mp4',{type:e.blob.type||'video/mp4'});
+  // ⚠ `dejaAllege` COUPE LA PHASE DE COMPRESSION : le blob en file est déjà
+  //   passé par elle, et la repasser coûterait une seconde compression pour
+  //   un résultat identique — ou pire, plus lourd.
+  await uploadVideoFile({files:[f],value:''},
+    {nom:e.nom,lien:e.lien||null,dejaAllege:true,octetsOrigine:e.octetsOrigine,
+     voieCompression:e.voieCompression,fileId:e.id});
+  return true;
+}
+
+/**
+ * PURE au sens de l'effet : la durée d'une vidéo, lue par un élément caché.
+ * Rend null quand le navigateur ne sait pas lire le fichier — c'est un cas
+ * fréquent (un .mov HEVC sur un Chrome de bureau) et ce n'est pas une raison
+ * de refuser l'envoi : on ne bloque que sur ce qu'on SAIT.
+ * @param {File|Blob} file
+ * @returns {Promise<number|null>}
+ */
+function _videoDureeS(file){
+  return new Promise(res=>{
+    let url='';
+    const v=document.createElement('video');
+    const finir=(d)=>{
+      try{ v.removeAttribute('src'); v.load(); }catch(e){}
+      try{ if(url) URL.revokeObjectURL(url); }catch(e){}
+      try{ v.remove(); }catch(e){}
+      res(d);
+    };
+    const garde=setTimeout(()=>finir(null),8000);
+    v.preload='metadata'; v.muted=true;
+    v.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    v.onloadedmetadata=()=>{ clearTimeout(garde);
+      finir(isFinite(v.duration)&&v.duration>0?v.duration:null); };
+    v.onerror=()=>{ clearTimeout(garde); finir(null); };
+    try{ url=URL.createObjectURL(file); }catch(e){ clearTimeout(garde); finir(null); return; }
+    document.body.appendChild(v);
+    v.src=url;
+  });
+}
+/** « 2 min 05 s » — la durée telle qu'on la dit à quelqu'un. */
+function _dureeTexte(s){
+  const n=Math.round(Number(s)||0);
+  const m=Math.floor(n/60), r=n%60;
+  return m?(m+' min'+(r?' '+(r<10?'0':'')+r+' s':'')):(n+' s');
+}
+
 async function uploadVideoFile(input,options){
   const _opt=options||{};
   const file=input.files[0];if(!file) return;
   const errEl=document.getElementById('vid-upload-error');
   const progEl=document.getElementById('vid-upload-progress');
+  const dire=(txt)=>{ if(errEl){ errEl.style.display='block'; errEl.textContent=txt; } };
   if(errEl) errEl.style.display='none';
   // La confirmation du PRECEDENT envoi part tout de suite : la laisser sous un
   // fichier refuse reviendrait a annoncer une reussite qui n'a pas eu lieu.
   if(progEl){ progEl.style.display='none'; progEl.textContent=''; }
+
+  // ══ 1. CE QUI SE REFUSE AVANT TOUTE ATTENTE ══════════════════════════════
+  //
+  // ⚠ ON NE FAIT PLUS PAYER DEUX MINUTES POUR UN REFUS PRÉVISIBLE. Tout ce
+  //   qui se sait en une seconde se dit en une seconde, AVEC l'issue concrète
+  //   — pas seulement le refus.
   if(!file.type.startsWith('video/')){
-    if(errEl){errEl.style.display='block';errEl.textContent='Fichier invalide : sélectionne une vidéo (MP4, MOV, WebM…)';}
+    dire('Fichier invalide : sélectionne une vidéo (MP4, MOV, WebM…)');
     input.value='';return;
   }
-  if(file.size>300*1024*1024){
-    if(errEl){errEl.style.display='block';errEl.textContent='Fichier trop volumineux (max 300 Mo).';}
+  if(file.size>VIDEO_MAX_OCTETS_TOTAL){
+    dire('Fichier trop volumineux ('+_mo(file.size)+', maximum '+_mo(VIDEO_MAX_OCTETS_TOTAL)
+      +'). Filme plus court, ou baisse la qualité vidéo dans les réglages du téléphone.');
     input.value='';return;
   }
+  // LA DURÉE, quand le navigateur sait la lire. Un fichier illisible ici n'est
+  // pas refusé : c'est souvent un .mov HEVC que le téléphone de l'athlète,
+  // lui, lit très bien.
+  const dureeS=await _videoDureeS(file);
+  if(dureeS!=null&&dureeS>VIDEO_DUREE_MAX_S){
+    dire('Vidéo trop longue ('+_dureeTexte(dureeS)+', maximum '+_dureeTexte(VIDEO_DUREE_MAX_S)
+      +'). Découpe la série qui t’intéresse : le coach regarde le mouvement, pas la séance.');
+    input.value='';return;
+  }
+
   const targetEmail=currentUser.email; // capturé avant tout await
 
   // Cherche la config Cloudinary du coach (ou de l'utilisateur lui-même si solo)
@@ -83150,31 +83692,103 @@ async function uploadVideoFile(input,options){
 
   // Le panneau flottant est le SEUL affichage commun aux deux ecrans d'envoi :
   // `vid-upload-progress` n'existe pas au milieu d'une seance.
-  const pan=_envoiPanneau('Envoi de la vidéo');
+  const pan=_envoiPanneau('Préparation de la vidéo');
+  const ctrl=(typeof AbortController==='function')?new AbortController():null;
+  if(ctrl) pan.annuler(()=>{ try{ ctrl.abort(); }catch(e){} });
   pan.maj(0,file.size);
-  if(progEl){progEl.style.display='block';progEl.textContent='Envoi en cours…';}
+  if(progEl){progEl.style.display='block';progEl.textContent='Préparation…';}
   try{
-    const fd=new FormData();
-    fd.append('file',file);
-    fd.append('upload_preset',uploadPreset);
-    fd.append('folder',folder);
-    const brut=await _envoiXhr('https://api.cloudinary.com/v1_1/'+cloudName+'/video/upload',fd,
-      (charge,total)=>{
-        pan.maj(charge,total);
-        if(progEl) progEl.textContent='Envoi… '+(total>0?Math.round(charge/total*100):0)+' %';
-        // Les octets sont partis : ce qui reste est le travail de Cloudinary.
-        if(total>0&&charge>=total){
-          pan.attente('Traitement de la vidéo…');
-          if(progEl) progEl.textContent='Traitement de la vidéo…';
+    // ══ 2. ALLÉGER. Le panneau dit « Allègement », jamais « Envoi » : rien
+    //    n'est parti, et quelqu'un qui coupe ici ne coupe pas un envoi.
+    let aEnvoyer=file, voie=_opt.voieCompression||'aucune', raisonVoie='';
+    const RCV=/** @type {any} */(window).RepCoreVideo;
+    // ⚠ UNE REPRISE NE REPASSE PAS PAR LA COMPRESSION. Le blob gardé en
+    //   file en sort déjà : le recompresser coûterait une seconde attente
+    //   pour un résultat identique, ou plus lourd.
+    if(!_opt.dejaAllege&&RCV&&typeof RCV.compresser==='function'){
+      pan.titre('Allègement de la vidéo');
+      const res=await RCV.compresser(file,{
+        hauteur:VIDEO_CIBLE_HAUTEUR,debit:VIDEO_CIBLE_DEBIT,dureeMaxS:VIDEO_DUREE_MAX_S,
+        signal:ctrl?ctrl.signal:null,
+        onVoie:(v)=>{
+          // LE TEMPS RÉEL S'ANNONCE. La voie MediaRecorder rejoue la vidéo à
+          // vitesse normale : laisser croire que c'est instantané, c'est
+          // garantir qu'on coupe au bout de dix secondes.
+          if(v==='recorder'&&dureeS) pan.note('Allègement en temps réel : compte environ '+_dureeTexte(dureeS)+'.');
+        },
+        onProgres:(p)=>{
+          const pct=Math.max(0,Math.min(100,Math.round(p*100)));
+          pan.maj(pct,100);
+          if(progEl) progEl.textContent='Allègement… '+pct+' %';
         }
       });
+      if(res&&res.blob){
+        aEnvoyer=new File([res.blob],(file.name||'video').replace(/\.[^.]+$/,'')+'.mp4',
+          {type:res.blob.type||'video/mp4'});
+        voie=res.voie;
+        pan.note('Allégée : '+_mo(res.octetsAvant)+' → '+_mo(res.octetsApres)
+          +' en '+res.hauteur+'p'+(res.sansAudio?', sans le son':''));
+      } else {
+        raisonVoie=(res&&res.raison)||'';
+        // ⚠ ON LE DIT. Un silence ici, et l'athlète attend trois minutes sans
+        //   savoir pourquoi — et sans savoir quoi faire la prochaine fois.
+        pan.note('Ton téléphone ne sait pas alléger cette vidéo. Elle part telle quelle : '
+          +_mo(file.size)+'. Filme plus court, ou baisse la qualité vidéo dans les réglages du téléphone.');
+      }
+    }
+    if(ctrl&&ctrl.signal.aborted) throw new Error('Envoi annulé');
+    // ⚠ LE PLAFOND SE REVÉRIFIE APRÈS COUP. Une vidéo non allégée peut passer
+    //   le plafond total et rester au-dessus du plafond par requête : c'est
+    //   exactement le cas qui part en morceaux.
+    if(aEnvoyer.size>VIDEO_MAX_OCTETS_TOTAL) throw new Error('Fichier trop volumineux');
+
+    // ══ 3. ENVOYER. La jauge repart de zéro : ce sont d'autres octets.
+    //
+    // ⚠ ON POSE DANS LA FILE AVANT DE TENTER. Le téléphone qui se verrouille
+    //   pendant deux minutes d’envoi tue le transfert avec l’onglet : sans
+    //   cette ligne, rien au retour ne dirait qu’une vidéo a failli partir.
+    let fileId=_opt.fileId||'';
+    if(!fileId){
+      try{ fileId=await fileEnvoiPoser({blob:aEnvoyer,nom:_opt.nom||file.name||'',
+        emailCible:targetEmail,octetsOrigine:_opt.octetsOrigine||file.size,voieCompression:voie,
+        lien:_opt.lien||null}); }catch(e){ fileId=''; }
+    }
+    pan.titre('Envoi de la vidéo');
+    pan.maj(0,aEnvoyer.size);
+    const surProgres=(charge,total)=>{
+      pan.maj(charge,total);
+      if(progEl) progEl.textContent='Envoi… '+(total>0?Math.round(charge/total*100):0)+' %';
+      // Les octets sont partis : ce qui reste est le travail de Cloudinary.
+      if(total>0&&charge>=total){
+        pan.attente('Traitement de la vidéo…');
+        if(progEl) progEl.textContent='Traitement de la vidéo…';
+      }
+    };
+    const cible='https://api.cloudinary.com/v1_1/'+cloudName+'/video/upload';
+    let brut;
+    if(_envoiDecoupeRequis(aEnvoyer.size)){
+      // AU-DELÀ DU PLAFOND PAR REQUÊTE : en morceaux. En dessous on garde
+      // l'envoi simple — le découpage coûte des allers-retours qui ne se
+      // justifient pas sur quinze mégaoctets.
+      brut=await _envoiXhrDecoupe(cible,aEnvoyer,{upload_preset:uploadPreset,folder:folder},
+        {onProgres:surProgres,signal:ctrl?ctrl.signal:null,
+         onMorceau:(i,n)=>{ pan.note('Morceau '+(i+1)+' sur '+n+' · une coupure ne fait reperdre que celui-ci.'); }});
+    } else {
+      const fd=new FormData();
+      fd.append('file',aEnvoyer);
+      fd.append('upload_preset',uploadPreset);
+      fd.append('folder',folder);
+      brut=await _envoiXhr(cible,fd,surProgres,{signal:ctrl?ctrl.signal:null});
+    }
     let data;
     // Une reponse qui n'est pas du JSON est une panne cote serveur, pas un
     // envoi reussi : la laisser passer poserait une entree sans URL.
     try{ data=JSON.parse(brut); }
     catch(_){ throw new Error('Réponse illisible du serveur vidéo'); }
     if(data.error) throw new Error(data.error.message);
-    if(!data.secure_url) throw new Error('Le serveur n\u2019a pas renvoyé de lien');
+    if(!data.secure_url) throw new Error('Le serveur n’a pas renvoyé de lien');
+    // CONFIRMÉ PAR CLOUDINARY : la file n’a plus rien à garder.
+    if(fileId){ try{ await fileEnvoiRetirer(fileId); }catch(e){} }
     const url=data.secure_url;
     const _saisi=_opt.nom||((document.getElementById('vid-name-input')||{}).value||'').trim();
     const name=_saisi||file.name.replace(/\.(mp4|mov|webm|mkv|avi)$/i,'');
@@ -83182,7 +83796,14 @@ async function uploadVideoFile(input,options){
     // rien de ce qui suit ne porte d'octet de video ou de vignette : le
     // document Firebase est relu et reecrit en entier a chaque poussee, et
     // c'est ce volume-la qui est le plafond de RepCore.
-    const entry={id:'v_'+Date.now(),name,url,date:Date.now(),size:Math.round(file.size/1024/1024*10)/10+' Mo',feedback:null,cloudinaryPublicId:data.public_id,cloudinaryName:cloudName};
+    //
+    // `octetsOrigine` et `voieCompression` sont deux CHAMPS COURTS — un nombre
+    // et un mot — et ils servent : le coach qui trouve une video floue sait si
+    // elle a ete reencodee, et nous savons quelle voie sert vraiment.
+    const entry={id:'v_'+Date.now(),name,url,date:Date.now(),
+      size:Math.round(aEnvoyer.size/1024/1024*10)/10+' Mo',
+      octetsOrigine:_opt.octetsOrigine||file.size,voieCompression:voie,
+      feedback:null,cloudinaryPublicId:data.public_id,cloudinaryName:cloudName};
     // LE RATTACHEMENT. Absent quand l'envoi ne vient pas d'une serie — et
     // absent vaut mieux qu'un objet a moitie rempli de nulls.
     if(_opt.lien&&_opt.lien.exerciceCle) entry.lien=_opt.lien;
@@ -83222,9 +83843,15 @@ async function uploadVideoFile(input,options){
     loadVideos();
   }catch(e){
     console.error('[uploadVideoFile]',e);
-    pan.rate(_cloudinaryUserMsg(e,'video'));
+    // ⚠ UN REFUS DÉFINITIF VIDE LA FILE. Reproposer chaque matin un fichier
+    //   que le serveur a refusé est une nuisance ; une coupure réseau, elle,
+    //   garde son entrée — c’est exactement pour elle que la file existe.
+    try{ if(typeof fileId!=='undefined'&&fileId&&!_envoiReessayable(e)
+      &&!/annulé/i.test(String(e&&e.message))) await fileEnvoiRetirer(fileId); }catch(x){}
+    const msg=_cloudinaryUserMsg(e,'video');
+    pan.rate(msg);
     if(progEl) progEl.style.display='none';
-    if(errEl){errEl.style.display='block';errEl.textContent=_cloudinaryUserMsg(e,'video');}
+    dire(msg);
     input.value='';
   }
 }
@@ -85194,9 +85821,9 @@ async function confirmAudioAnnotation(){
   try{
     const ext=_audioBlob.type.includes('ogg')?'.ogg':'.webm';
     const file=new File([_audioBlob],'audio_'+Date.now()+ext,{type:_audioBlob.type});
-    if(!file.type.startsWith('audio/')||file.size>300*1024*1024){
+    if(!file.type.startsWith('audio/')||file.size>AUDIO_MAX_OCTETS){
       if(status)status.textContent='';
-      return toast('Fichier audio invalide ou trop volumineux (max 300 Mo).','var(--orange)');
+      return toast('Fichier audio invalide ou trop volumineux (maximum '+_mo(AUDIO_MAX_OCTETS)+').','var(--orange)');
     }
     const url=await _cloudinaryUpload(file);
     if(currentUser?.email!==targetEmail){
@@ -85221,8 +85848,8 @@ async function uploadAudioFile(input){
     toast('Fichier invalide : sélectionne un fichier audio (MP3, M4A, WebM…)','var(--orange)');
     input.value='';return;
   }
-  if(file.size>300*1024*1024){
-    toast('Fichier trop volumineux (max 300 Mo).','var(--orange)');
+  if(file.size>AUDIO_MAX_OCTETS){
+    toast('Fichier trop volumineux (maximum '+_mo(AUDIO_MAX_OCTETS)+').','var(--orange)');
     input.value='';return;
   }
   const ts=(document.getElementById('vc-audio-ts')?.value||'').trim();
@@ -93565,6 +94192,10 @@ document.addEventListener('DOMContentLoaded',initLogos);
 // atteint autrement que par finishWorkout les trouvait vides.
 document.addEventListener('DOMContentLoaded',function(){
   try{ rcfPoserRessenti(); }catch(e){}
+  // UN ENVOI INTERROMPU SE PROPOSE, IL NE SE REPREND PAS TOUT SEUL. Trois
+  // secondes de retard : l’ouverture de l’app passe d’abord, et un carton
+  // qui arrive pendant le premier rendu n’est pas lu.
+  setTimeout(function(){ try{ proposerRepriseEnvoi(); }catch(e){} },3000);
 });
 // ═══════════════════════════════════════════════════
 // MONETISATION — Coach tabs

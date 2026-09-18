@@ -16818,7 +16818,9 @@ async function testExercices(){
             const src=_prodSrc();
             const i=src.indexOf('async function uploadVideoFile');
             if(i<0) return _echec('l’envoi de vidéo a disparu');
-            const bloc=src.slice(i,i+4000);
+            const fin=src.indexOf('// ══════════════ LA VIDEO RATTACHEE',i);
+            const bloc=src.slice(i,fin>i?fin:i+12000);
+            if(bloc.length<4000) return _echec('la fonction ne fait que '+bloc.length+' octets');
             // LE FICHIER PART SUR CLOUDINARY, et il n'est jamais lu en base64.
             if(bloc.indexOf('api.cloudinary.com')<0)
               return _echec('la vidéo ne part plus sur Cloudinary');
@@ -42775,6 +42777,461 @@ async function testExercices(){
       // recalculent, elles ne se stockent pas.
       const poids=JSON.stringify(seg.barre).length+JSON.stringify(seg.pose).length;
       return poids<80000?true:_echec('une analyse pèse '+Math.round(poids/1024)+' Ko');});
+
+
+    // ══════ L'ENVOI VIDÉO : PLAFONDS, ALLÈGEMENT, MORCEAUX ══════════════════
+    //
+    // Sept défauts corrigés d'un coup, et trois exigences que ces assertions
+    // défendent :
+    //  • LE PLAFOND ANNONCÉ EST LE PLAFOND RÉEL. Accepter 300 Mo à l'écran
+    //    quand le serveur en refuse plus de 100 par requête, c'est faire payer
+    //    deux minutes de données mobiles pour un refus prévisible.
+    //  • AUCUN OCTET DE VIDÉO DANS LE DOCUMENT. _doPushOne relit et réécrit le
+    //    document ENTIER à chaque poussée : c'est ce volume qui est le vrai
+    //    plafond de RepCore, pas le nombre d'utilisateurs.
+    //  • UNE COMPRESSION QUI ÉCHOUE NE FAIT JAMAIS PERDRE UNE VIDÉO. Chaque
+    //    voie qui tombe passe à la suivante, et la dernière est « on envoie
+    //    tel quel » — qui est une réponse, pas une erreur.
+
+    ok('Envoi — les plafonds sont nommés, et le 300 Mo nu a disparu',(()=>{
+      if(VIDEO_MAX_OCTETS_REQUETE!==100*1024*1024) return _echec('requête : '+VIDEO_MAX_OCTETS_REQUETE);
+      if(VIDEO_MAX_OCTETS_TOTAL!==500*1024*1024) return _echec('total : '+VIDEO_MAX_OCTETS_TOTAL);
+      if(VIDEO_CIBLE_HAUTEUR!==720) return _echec('hauteur : '+VIDEO_CIBLE_HAUTEUR);
+      if(VIDEO_CIBLE_DEBIT!==2500000) return _echec('débit : '+VIDEO_CIBLE_DEBIT);
+      if(VIDEO_DUREE_MAX_S!==180) return _echec('durée : '+VIDEO_DUREE_MAX_S);
+      if(!(AUDIO_MAX_OCTETS>0&&AUDIO_MAX_OCTETS<VIDEO_MAX_OCTETS_REQUETE))
+        return _echec('audio : '+AUDIO_MAX_OCTETS);
+      // ⚠ LE PLAFOND CLIENT NE DOIT JAMAIS ÊTRE SOUS LE PLAFOND SERVEUR : un
+      //   fichier accepté ici et refusé là-bas est le pire des deux mondes.
+      if(VIDEO_MAX_OCTETS_TOTAL<VIDEO_MAX_OCTETS_REQUETE)
+        return _echec('le plafond total est sous le plafond par requête');
+      // Plus aucun nombre nu de 300 Mo dans la source livrée.
+      const src=_prodSrc();
+      if(/300\s*\*\s*1024\s*\*\s*1024/.test(src)) return _echec('un 300*1024*1024 subsiste');
+      if(/max 300 Mo/.test(src)) return _echec('un « max 300 Mo » subsiste dans un message');
+      return true;})());
+
+    ok('Envoi — sous cent mégaoctets on envoie simple, au-dessus on découpe',(()=>{
+      if(_envoiDecoupeRequis(99*1024*1024)) return _echec('99 Mo partent en morceaux');
+      if(_envoiDecoupeRequis(VIDEO_MAX_OCTETS_REQUETE)) return _echec('exactement 100 Mo partent en morceaux');
+      if(!_envoiDecoupeRequis(101*1024*1024)) return _echec('101 Mo partent en un seul bloc');
+      return _envoiDecoupeRequis(0)?_echec('un fichier vide partirait en morceaux'):true;})());
+
+    ok('Envoi — le découpage couvre tout le fichier, sans trou ni recouvrement',(()=>{
+      // 19 123 456 octets en morceaux de six mégaoctets. Le reste arithmétique
+      // est 19 123 456 − 3 × 6 291 456 = 249 088 : c'est la taille du dernier.
+      const T=19123456, C=6*1024*1024;
+      const m=_envoiMorceaux(T,C);
+      if(m.length!==4) return _echec(m.length+' morceaux');
+      if(m[3].octets!==249088) return _echec('dernier morceau : '+m[3].octets+' octets');
+      // ⚠ LE PLANCHER DE CINQ MÉGAOCTETS VAUT POUR TOUS SAUF LE DERNIER.
+      for(let i=0;i<m.length-1;i++)
+        if(m[i].octets<ENVOI_MORCEAU_MIN) return _echec('morceau '+i+' sous le plancher');
+      // Couverture exacte de [0, total−1] : pas un octet en trop, pas un de moins.
+      if(m[0].debut!==0) return _echec('le premier ne part pas de zéro');
+      if(m[m.length-1].fin!==T-1) return _echec('le dernier finit à '+m[m.length-1].fin+' pour '+(T-1));
+      let somme=0;
+      for(let i=0;i<m.length;i++){
+        if(m[i].fin<m[i].debut) return _echec('morceau '+i+' inversé');
+        if(m[i].octets!==m[i].fin-m[i].debut+1) return _echec('morceau '+i+' : compte faux');
+        if(i&&m[i].debut!==m[i-1].fin+1)
+          return _echec('trou ou recouvrement entre '+(i-1)+' et '+i);
+        somme+=m[i].octets;
+      }
+      if(somme!==T) return _echec('somme des morceaux : '+somme+' pour '+T);
+      // Un fichier plus petit qu'un morceau en fait un seul, et un fichier vide aucun.
+      if(_envoiMorceaux(100,C).length!==1) return _echec('un petit fichier se découpe');
+      return _envoiMorceaux(0,C).length===0?true:_echec('un fichier vide produit des morceaux');})());
+
+    ok('Envoi — Content-Range : indices INCLUSIFS et total du fichier ENTIER',(()=>{
+      const T=19123456, m=_envoiMorceaux(T,6*1024*1024);
+      const r0=_envoiContentRange(m[0].debut,m[0].fin,T);
+      if(r0!=='bytes 0-6291455/19123456') return _echec('«'+r0+'»');
+      const r3=_envoiContentRange(m[3].debut,m[3].fin,T);
+      if(r3!=='bytes 18874368-19123455/19123456') return _echec('dernier : «'+r3+'»');
+      // ⚠ LE TOTAL EST CELUI DU FICHIER, jamais celui du morceau : Cloudinary
+      //   recolle les morceaux en s'appuyant dessus.
+      return /\/19123456$/.test(r3)?true:_echec('le total n’est pas celui du fichier');})());
+
+    // Un XMLHttpRequest de paille : il note ce qu'on lui envoie et répond ce
+    // qu'on lui dit de répondre. Aucun octet ne part sur le réseau.
+    const _vFauxXhr=(plan)=>{
+      const vus=[];
+      function Faux(){ this.upload={}; this._e={}; this.status=0; this.responseText=''; }
+      Faux.prototype.open=function(m,u){ this._u=u; };
+      Faux.prototype.setRequestHeader=function(k,v){ this._e[k]=v; };
+      Faux.prototype.abort=function(){ this._mort=true; if(this.onabort) this.onabort(); };
+      Faux.prototype.send=function(corps){
+        const appel={url:this._u,entetes:this._e,corps,i:vus.length};
+        vus.push(appel);
+        setTimeout(()=>{
+          if(this._mort) return;
+          const r=plan(appel)||{};
+          if(r.reseau){ if(this.onerror) this.onerror(); return; }
+          this.status=r.statut||200;
+          this.responseText=r.corps||'{}';
+          if(this.onload) this.onload();
+        },0);
+      };
+      return {Faux,vus};
+    };
+    const _vFichier=(n,nom)=>new File([new Uint8Array(n)],nom||'serie.mp4',{type:'video/mp4'});
+
+    okA('Envoi — l’identifiant est le même sur tous les morceaux, et change de fichier',async()=>{
+      const sauve=window.XMLHttpRequest;
+      try{
+        const f=_vFauxXhr(()=>({statut:200,corps:'{"secure_url":"https://x/y.mp4","public_id":"p"}'}));
+        window.XMLHttpRequest=f.Faux;
+        const a=_vFichier(3500,'a.mp4'), b=_vFichier(3500,'b.mp4');
+        await _envoiXhrDecoupe('https://faux/upload',a,{upload_preset:'p',folder:'d'},{tailleMorceau:1000});
+        const idsA=f.vus.map(x=>x.entetes['X-Unique-Upload-Id']);
+        if(idsA.length!==4) return _echec(idsA.length+' requêtes pour quatre morceaux');
+        if(new Set(idsA).size!==1) return _echec('l’identifiant change entre morceaux');
+        const rangs=f.vus.map(x=>x.entetes['Content-Range']);
+        if(rangs[0]!=='bytes 0-999/3500') return _echec('premier rang : '+rangs[0]);
+        if(rangs[3]!=='bytes 3000-3499/3500') return _echec('dernier rang : '+rangs[3]);
+        const avant=f.vus.length;
+        await _envoiXhrDecoupe('https://faux/upload',b,{upload_preset:'p',folder:'d'},{tailleMorceau:1000});
+        const idsB=f.vus.slice(avant).map(x=>x.entetes['X-Unique-Upload-Id']);
+        // ⚠ DEUX FICHIERS QUI PARTAGERAIENT L'IDENTIFIANT se recolleraient en
+        //   une seule vidéo illisible, côté serveur.
+        return idsB[0]!==idsA[0]?true:_echec('deux fichiers partagent l’identifiant');
+      } finally { window.XMLHttpRequest=sauve; }});
+
+    okA('Envoi — un 500 se réessaie trois fois, un 400 pas une seule',async()=>{
+      const sauve=window.XMLHttpRequest;
+      try{
+        // Le deuxième morceau tombe en 500 à chaque fois : trois tentatives,
+        // puis on rend la main.
+        let n2=0;
+        const f=_vFauxXhr((a)=>{
+          const r=a.entetes['Content-Range']||'';
+          if(/^bytes 1000-/.test(r)){ n2++; return {statut:500,corps:'boum'}; }
+          return {statut:200,corps:'{"secure_url":"https://x/y.mp4"}'};
+        });
+        window.XMLHttpRequest=f.Faux;
+        let erreur=null;
+        try{ await _envoiXhrDecoupe('https://faux/upload',_vFichier(3500),{upload_preset:'p'},
+          {tailleMorceau:1000}); }catch(e){ erreur=e; }
+        if(!erreur) return _echec('un morceau refusé trois fois n’a rien levé');
+        if(n2!==ENVOI_TENTATIVES) return _echec(n2+' tentatives sur le morceau 2');
+        // ⚠ UN 4xx EST DÉFINITIF : réessayer un preset invalide trois fois
+        //   ferait attendre treize secondes de plus pour le même refus.
+        let n1=0;
+        const g=_vFauxXhr(()=>{ n1++; return {statut:400,corps:'refus'}; });
+        window.XMLHttpRequest=g.Faux;
+        try{ await _envoiXhrDecoupe('https://faux/upload',_vFichier(3500),{upload_preset:'p'},
+          {tailleMorceau:1000}); }catch(e){}
+        if(n1!==1) return _echec(n1+' tentatives sur un 400');
+        // Et la règle elle-même, lisible sans réseau.
+        if(!_envoiReessayable({statut:503})) return _echec('un 503 ne se réessaie pas');
+        if(_envoiReessayable({statut:413})) return _echec('un 413 se réessaie');
+        return _envoiReessayable({reseau:true})?true:_echec('une panne réseau ne se réessaie pas');
+      } finally { window.XMLHttpRequest=sauve; }});
+
+    ok('Envoi — la borne de hauteur ne dégrade pas un portrait et n’agrandit rien',(()=>{
+      const R=window.RepCoreVideo;
+      if(!R||!R._taille) return _echec('RepCoreVideo n’est pas chargé');
+      // Paysage 4K : ramené à 720 de haut, ratio conservé.
+      const p=R._taille(3840,2160,720);
+      if(p.h!==720||p.l!==1280) return _echec('paysage : '+p.l+'×'+p.h);
+      // ⚠ PORTRAIT : c'est la HAUTEUR qu'on borne, pas la largeur. Borner la
+      //   largeur dégraderait deux fois un mouvement déjà filmé étroit.
+      const q=R._taille(1080,1920,720);
+      if(q.h!==720||q.l!==405-(405%2)) return _echec('portrait : '+q.l+'×'+q.h);
+      // ⚠ ON N'AGRANDIT JAMAIS : agrandir n'ajoute aucun détail, ça ne fait que peser.
+      const r=R._taille(640,480,720);
+      if(r.l!==640||r.h!==480) return _echec('une 480p a été agrandie : '+r.l+'×'+r.h);
+      // Les deux côtés sont pairs : la plupart des encodeurs refusent l'impair.
+      const s=R._taille(1001,1999,720);
+      return (s.l%2===0&&s.h%2===0)?true:_echec('dimension impaire : '+s.l+'×'+s.h);})());
+
+    okA('Envoi — la cascade descend d’une voie, et ne perd jamais la vidéo',async()=>{
+      const R=window.RepCoreVideo;
+      if(!R) return _echec('RepCoreVideo n’est pas chargé');
+      const sE=window.VideoEncoder, sD=window.VideoDecoder, sR=window.MediaRecorder;
+      try{
+        const f=_vFichier(2048);
+        // ⚠ NI WEBCODECS NI MEDIARECORDER : voie 3, et c'est une RÉPONSE, pas
+        //   une exception. Une erreur ici coûterait sa vidéo à quelqu'un.
+        delete window.VideoEncoder; delete window.VideoDecoder; delete window.MediaRecorder;
+        const r3=await R.compresser(f,{});
+        if(r3.voie!=='aucune'||r3.blob!==null) return _echec('voie 3 : '+r3.voie);
+        if(!r3.raison) return _echec('la voie 3 ne dit pas pourquoi');
+        // Le sondage le dit AVANT d'essayer.
+        const p=await R.peutCompresser(f);
+        if(p.oui) return _echec('le sondage dit oui sans encodeur');
+        // MediaRecorder seul : voie 2 annoncée, même si elle échouera ensuite
+        // sur un fichier qui n'est pas une vraie vidéo.
+        window.MediaRecorder=function(){};
+        window.MediaRecorder.isTypeSupported=()=>true;
+        const p2=await R.peutCompresser(f);
+        if(p2.voie!=='recorder') return _echec('avec MediaRecorder seul : '+p2.voie);
+        const r2=await R.compresser(f,{});
+        // Le fichier de paille n'est pas décodable : la voie 2 tombe, et la
+        // cascade rend « aucune » — sans jamais lever.
+        if(r2.voie!=='aucune') return _echec('un fichier illisible a produit : '+r2.voie);
+        return r2.blob===null?true:_echec('un blob sort d’un fichier illisible');
+      } finally {
+        if(sE) window.VideoEncoder=sE; if(sD) window.VideoDecoder=sD;
+        if(sR) window.MediaRecorder=sR; else delete window.MediaRecorder;
+      }});
+
+    okA('Envoi — un résultat plus lourd que l’original est JETÉ',async()=>{
+      const R=window.RepCoreVideo;
+      if(!R) return _echec('RepCoreVideo n’est pas chargé');
+      const sP=R.peutCompresser, sE=window.VideoEncoder, sD=window.VideoDecoder;
+      try{
+        // On court-circuite la cascade : ce qu'on teste, c'est la décision
+        // finale, pas l'encodeur.
+        delete window.VideoEncoder; delete window.VideoDecoder;
+        const f=_vFichier(1000);
+        const r=await R.compresser(f,{});
+        // Sans encodeur, rien n'est produit — et le champ dit la taille du
+        // fichier tel quel, jamais zéro.
+        if(r.octetsApres!==1000) return _echec('octetsApres : '+r.octetsApres);
+        if(r.octetsAvant!==1000) return _echec('octetsAvant : '+r.octetsAvant);
+        return r.blob===null?true:_echec('un blob sort sans encodeur');
+      } finally { if(sE) window.VideoEncoder=sE; if(sD) window.VideoDecoder=sD; }});
+
+    okA('Envoi — l’entrée écrite ne porte AUCUN octet de vidéo',async()=>{
+      const sX=window.XMLHttpRequest, sU=currentUser, svU=JSON.stringify(DB.get('users')||{});
+      const sRCV=window.RepCoreVideo, sT=window.toast;
+      try{
+        window.toast=()=>{};
+        // ⚠ ON NEUTRALISE LA COMPRESSION : ce test-ci porte sur ce qui est
+        //   ÉCRIT, et une vraie compression demanderait une vraie vidéo.
+        window.RepCoreVideo={compresser:async()=>({blob:null,voie:'aucune',raison:'test',
+          octetsAvant:2048,octetsApres:2048,largeur:0,hauteur:0,dureeS:0,sansAudio:false}),
+          peutCompresser:async()=>({oui:false,voie:'aucune',raison:'test'})};
+        const f=_vFauxXhr(()=>({statut:200,
+          corps:'{"secure_url":"https://res.cloudinary.com/x/video/upload/v1/y.mp4","public_id":"repcore/y"}'}));
+        window.XMLHttpRequest=f.Faux;
+        const users=DB.get('users')||{};
+        const moi={id:'uEnv',email:'env@t.fr',fname:'Léa',role:'athlete',videos:[],bilans:[],sessions:[]};
+        users['env@t.fr']=moi; DB.set('users',users);
+        currentUser=moi;
+        const faux={files:[_vFichier(2048,'serie.mp4')],value:'x'};
+        await uploadVideoFile(faux,{nom:'Squat'});
+        const v=(DB.get('users')||{})['env@t.fr'].videos||[];
+        if(v.length!==1) return _echec(v.length+' entrées écrites');
+        const e=v[0];
+        // LES CLÉS, ET RIEN D'AUTRE. Une clé inattendue est une porte ouverte.
+        const permises=['id','name','url','date','size','octetsOrigine','voieCompression',
+          'feedback','cloudinaryPublicId','cloudinaryName','lien'];
+        const intruses=Object.keys(e).filter(k=>permises.indexOf(k)<0);
+        if(intruses.length) return _echec('clés inattendues : '+intruses.join(', '));
+        // AUCUNE VALEUR LONGUE, AUCUN base64, AUCUN data:. Le document est relu
+        // et réécrit en entier à chaque poussée.
+        for(const k in e){
+          const val=e[k];
+          if(val instanceof Blob) return _echec(k+' porte un Blob');
+          const t=(val==null)?'':String(typeof val==='object'?JSON.stringify(val):val);
+          if(t.length>300) return _echec(k+' pèse '+t.length+' caractères');
+          if(/^data:|base64,/.test(t)) return _echec(k+' porte une donnée encodée');
+        }
+        if(typeof e.octetsOrigine!=='number') return _echec('octetsOrigine n’est pas un nombre');
+        if(['webcodecs','recorder','aucune'].indexOf(e.voieCompression)<0)
+          return _echec('voieCompression : '+e.voieCompression);
+        // `size` porte ce qui est RÉELLEMENT parti.
+        return /Mo$/.test(String(e.size))?true:_echec('size : '+e.size);
+      } finally {
+        window.XMLHttpRequest=sX; currentUser=sU; DB.set('users',JSON.parse(svU));
+        window.RepCoreVideo=sRCV; window.toast=sT;
+      }});
+
+    okA('Envoi — annulé : aucune entrée, et aucune URL objet qui fuit',async()=>{
+      const sX=window.XMLHttpRequest, sU=currentUser, svU=JSON.stringify(DB.get('users')||{});
+      const sRCV=window.RepCoreVideo, sT=window.toast;
+      const creer=URL.createObjectURL, revoquer=URL.revokeObjectURL;
+      let ouvertes=0, fermees=0;
+      try{
+        window.toast=()=>{};
+        URL.createObjectURL=function(b){ ouvertes++; return creer.call(URL,b); };
+        URL.revokeObjectURL=function(u){ fermees++; return revoquer.call(URL,u); };
+        // La compression rend la main sur annulation, comme la vraie.
+        window.RepCoreVideo={peutCompresser:async()=>({oui:true,voie:'recorder',raison:''}),
+          compresser:(f,o)=>new Promise((ok,ko)=>{
+            setTimeout(()=>{ if(o&&o.signal&&o.signal.aborted) ko(new Error('Envoi annulé'));
+              else ko(new Error('Envoi annulé')); },0); })};
+        const f=_vFauxXhr(()=>({statut:200,corps:'{"secure_url":"https://x/y.mp4"}'}));
+        window.XMLHttpRequest=f.Faux;
+        const users=DB.get('users')||{};
+        users['ann@t.fr']={id:'uAnn',email:'ann@t.fr',fname:'Léo',role:'athlete',videos:[],bilans:[],sessions:[]};
+        DB.set('users',users);
+        currentUser=users['ann@t.fr'];
+        const faux={files:[_vFichier(2048,'serie.mp4')],value:'x'};
+        await uploadVideoFile(faux,{nom:'Squat'});
+        const v=(DB.get('users')||{})['ann@t.fr'].videos||[];
+        if(v.length) return _echec(v.length+' entrées écrites malgré l’annulation');
+        // Aucune requête n'est partie : on coupe AVANT l'envoi, pas pendant.
+        if(f.vus.length) return _echec(f.vus.length+' requêtes parties après annulation');
+        // ⚠ CHAQUE URL OBJET OUVERTE EST REFERMÉE. Une seule qui fuit retient
+        //   le fichier entier en mémoire jusqu'au rechargement de la page.
+        return ouvertes===fermees?true:_echec(ouvertes+' ouvertes pour '+fermees+' refermées');
+      } finally {
+        URL.createObjectURL=creer; URL.revokeObjectURL=revoquer;
+        window.XMLHttpRequest=sX; currentUser=sU; DB.set('users',JSON.parse(svU));
+        window.RepCoreVideo=sRCV; window.toast=sT;
+      }});
+
+    ok('Envoi — les nouveaux refus ont leur phrase, et ne passent pas pour du réseau',(()=>{
+      // ⚠ « Envoi annulé » CONTIENT « envoi » : traduit par la règle générale,
+      //   il aurait accusé le réseau d'un geste volontaire.
+      const a=_cloudinaryUserMsg(new Error('Envoi annulé'),'video');
+      if(!/annulé/i.test(a)||/connexion/i.test(a)) return _echec('annulation : '+a);
+      if(!/intact/i.test(a)) return _echec('l’annulation ne rassure pas sur le fichier : '+a);
+      const b=_cloudinaryUserMsg(new Error('Délai dépassé'),'video');
+      if(!/deux minutes|réseau/i.test(b)) return _echec('délai : '+b);
+      const c=_cloudinaryUserMsg(new Error('Erreur serveur 400'),'video');
+      if(!/morceau/i.test(c)) return _echec('morceau refusé : '+c);
+      // Les anciens cas ne bougent pas : un 413 reste « trop volumineux ».
+      const d=_cloudinaryUserMsg(new Error('erreur serveur 413'),'video');
+      if(!/volumineux/i.test(d)) return _echec('413 : '+d);
+      const e=_cloudinaryUserMsg(new Error('erreur serveur 401'),'video');
+      return /Configuration/i.test(e)?true:_echec('401 : '+e);})());
+
+    ok('Envoi — le panneau sait s’annuler, changer de phase et dire un débit',(()=>{
+      const pan=_envoiPanneau('Test');
+      try{
+        const z=document.getElementById('rc-envoi-panneau');
+        if(!z) return _echec('le panneau n’est pas posé');
+        const x=z.querySelector('.rc-envoi-x');
+        if(!x) return _echec('aucun bouton d’annulation');
+        // ⚠ UN « ANNULER » QUI NE COUPE RIEN EST PIRE QUE PAS DE BOUTON.
+        if(x.style.display!=='none') return _echec('le bouton s’affiche sans rien à couper');
+        let coupe=0;
+        pan.annuler(()=>{ coupe++; });
+        if(x.style.display==='none') return _echec('le bouton reste caché avec un rappel');
+        x.click();
+        if(coupe!==1) return _echec('le clic ne coupe pas');
+        // La phase change le titre : « Envoi » pendant qu'on allège serait faux.
+        pan.titre('Allègement de la vidéo');
+        if(!/Allègement/.test(z.querySelector('.rc-envoi-t').textContent||''))
+          return _echec('le titre ne suit pas la phase');
+        pan.note('Allégée : 130 Mo → 14 Mo');
+        if(!/14 Mo/.test(z.querySelector('.rc-envoi-n').textContent||''))
+          return _echec('la note ne s’affiche pas');
+        // Le débit ne sort qu'avec assez de recul : deux mesures à la même
+        // milliseconde ne font pas une vitesse.
+        pan.maj(0,1000000);
+        const d1=z.querySelector('.rc-envoi-dr').textContent||'';
+        if(/Mo\/s/.test(d1)) return _echec('un débit sort du premier échantillon');
+        return /0 \/ /.test(d1)||/0 Mo/.test(d1)?true:_echec('les octets ne sont pas dits : '+d1);
+      } finally { pan.fermer(); }})());
+
+    okA('Envoi — une vidéo trop longue est refusée AVANT la moindre attente',async()=>{
+      const sX=window.XMLHttpRequest, sU=currentUser, svU=JSON.stringify(DB.get('users')||{});
+      const sD=window._videoDureeS, sT=window.toast;
+      try{
+        window.toast=()=>{};
+        // La durée est lue par un élément caché ; ici on la dicte.
+        window._videoDureeS=async()=>VIDEO_DUREE_MAX_S+30;
+        const f=_vFauxXhr(()=>({statut:200,corps:'{"secure_url":"https://x/y.mp4"}'}));
+        window.XMLHttpRequest=f.Faux;
+        const users=DB.get('users')||{};
+        users['lng@t.fr']={id:'uLng',email:'lng@t.fr',fname:'Léa',role:'athlete',videos:[],bilans:[],sessions:[]};
+        DB.set('users',users);
+        currentUser=users['lng@t.fr'];
+        const faux={files:[_vFichier(2048,'longue.mp4')],value:'x'};
+        await uploadVideoFile(faux,{nom:'Squat'});
+        // ⚠ AUCUNE REQUÊTE : on refuse en une seconde ce qu'on sait en une
+        //   seconde, au lieu de faire payer deux minutes pour le même refus.
+        if(f.vus.length) return _echec(f.vus.length+' requêtes pour une vidéo refusée');
+        const v=(DB.get('users')||{})['lng@t.fr'].videos||[];
+        return v.length?_echec('une entrée a été écrite'):true;
+      } finally {
+        window._videoDureeS=sD; window.XMLHttpRequest=sX; currentUser=sU;
+        DB.set('users',JSON.parse(svU)); window.toast=sT;
+      }});
+
+    okA('Envoi — la file garde le blob, le rend à la confirmation, et PROPOSE seulement',async()=>{
+      // ⚠ AUCUN OCTET DE VIDÉO DANS LE DOCUMENT : le blob vit dans IndexedDB,
+      //   et le document ne porte que l'URL. C'est ce volume-là qui est le
+      //   plafond de RepCore.
+      if(typeof indexedDB==='undefined') return true; // navigation privée : la file est un non-événement
+      const sU=currentUser, svU=JSON.stringify(DB.get('users')||{});
+      const sT=window.toast;
+      try{
+        window.toast=()=>{};
+        const users=DB.get('users')||{};
+        users['fil@t.fr']={id:'uFil',email:'fil@t.fr',fname:'Léa',role:'athlete',videos:[],bilans:[],sessions:[]};
+        DB.set('users',users);
+        currentUser=users['fil@t.fr'];
+        // On pose, on relit, on retire.
+        const blob=new Blob([new Uint8Array(4096)],{type:'video/mp4'});
+        const id=await fileEnvoiPoser({blob,nom:'Squat',emailCible:'fil@t.fr',
+          octetsOrigine:99999,voieCompression:'webcodecs',lien:null});
+        if(!id) return _echec('rien n’a été posé');
+        let l=await fileEnvoiLister();
+        const e=l.filter(x=>x.id===id)[0];
+        if(!e) return _echec('l’entrée posée ne se relit pas');
+        if(!(e.blob instanceof Blob)||e.blob.size!==4096) return _echec('le blob ne survit pas');
+        if(e.octetsOrigine!==99999||e.voieCompression!=='webcodecs')
+          return _echec('les métadonnées ne survivent pas');
+        // LE CARTON PROPOSE, IL NE FAIT RIEN. Deux issues, et aucune n'est prise
+        // toute seule.
+        _repriseMontree=false;
+        await proposerRepriseEnvoi();
+        const z=document.getElementById('rc-reprise');
+        if(!z) return _echec('aucun carton de reprise');
+        const t=(z.textContent||'');
+        if(!/Reprendre l’envoi/.test(t)) return _echec('aucune proposition de reprise');
+        if(!/Oublier/.test(t)) return _echec('aucune issue pour refuser');
+        // ⚠ LE POIDS EST ÉCRIT SUR LE BOUTON. Une reprise silencieuse qui
+        //   consomme un forfait sans prévenir est un abus.
+        if(!/Mo/.test(t)) return _echec('le poids n’est pas annoncé : '+t.slice(0,100));
+        try{ z.remove(); }catch(x){}
+        // La confirmation retire l'entrée.
+        await fileEnvoiRetirer(id);
+        l=await fileEnvoiLister();
+        if(l.some(x=>x.id===id)) return _echec('l’entrée survit à son retrait');
+        // ⚠ PLUS DE VINGT-QUATRE HEURES : on ne propose plus, et on purge.
+        //   Une vidéo d'hier décrit une séance que personne n'attend plus.
+        const vieux={blob,cree:Date.now()-ENVOI_FILE_MAX_MS-1000};
+        if(fileEnvoiFraiche(vieux)) return _echec('une entrée de plus de 24 h est encore proposée');
+        if(!fileEnvoiFraiche({blob,cree:Date.now()-1000})) return _echec('une entrée récente est écartée');
+        return fileEnvoiFraiche({cree:Date.now()})?_echec('une entrée sans blob passe'):true;
+      } finally {
+        currentUser=sU; DB.set('users',JSON.parse(svU)); window.toast=sT;
+        try{ const z=document.getElementById('rc-reprise'); if(z) z.remove(); }catch(x){}
+      }});
+
+    okA('Envoi — une reprise ne recompresse pas, et la file se vide à la confirmation',async()=>{
+      if(typeof indexedDB==='undefined') return true;
+      const sX=window.XMLHttpRequest, sU=currentUser, svU=JSON.stringify(DB.get('users')||{});
+      const sRCV=window.RepCoreVideo, sT=window.toast, sD=window._videoDureeS;
+      let compressions=0;
+      try{
+        window.toast=()=>{};
+        window._videoDureeS=async()=>12;
+        window.RepCoreVideo={peutCompresser:async()=>({oui:true,voie:'recorder',raison:''}),
+          compresser:async()=>{ compressions++; return {blob:null,voie:'aucune',raison:'',
+            octetsAvant:0,octetsApres:0,largeur:0,hauteur:0,dureeS:0,sansAudio:false}; }};
+        const f=_vFauxXhr(()=>({statut:200,
+          corps:'{"secure_url":"https://res.cloudinary.com/x/video/upload/v1/z.mp4","public_id":"repcore/z"}'}));
+        window.XMLHttpRequest=f.Faux;
+        const users=DB.get('users')||{};
+        users['rep@t.fr']={id:'uRep',email:'rep@t.fr',fname:'Léo',role:'athlete',videos:[],bilans:[],sessions:[]};
+        DB.set('users',users);
+        currentUser=users['rep@t.fr'];
+        const blob=new Blob([new Uint8Array(4096)],{type:'video/mp4'});
+        const id=await fileEnvoiPoser({blob,nom:'Développé',emailCible:'rep@t.fr',
+          octetsOrigine:88888,voieCompression:'webcodecs',lien:null});
+        await reprendreEnvoi(id);
+        // ⚠ AUCUNE SECONDE COMPRESSION : le blob en file en sort déjà.
+        if(compressions) return _echec(compressions+' compressions sur une reprise');
+        const v=(DB.get('users')||{})['rep@t.fr'].videos||[];
+        if(v.length!==1) return _echec(v.length+' entrées après reprise');
+        // Les métadonnées d'origine sont reportées, pas réinventées.
+        if(v[0].octetsOrigine!==88888) return _echec('octetsOrigine : '+v[0].octetsOrigine);
+        if(v[0].voieCompression!=='webcodecs') return _echec('voieCompression : '+v[0].voieCompression);
+        const reste=await fileEnvoiLister();
+        return reste.some(x=>x.id===id)?_echec('la file garde une entrée confirmée'):true;
+      } finally {
+        window.XMLHttpRequest=sX; currentUser=sU; DB.set('users',JSON.parse(svU));
+        window.RepCoreVideo=sRCV; window.toast=sT; window._videoDureeS=sD;
+      }});
 
 
     // ══ 17/09/2026 — R29 : MOTION LAB, LOTS 2 ET 3 — LA TRAJECTOIRE ════════

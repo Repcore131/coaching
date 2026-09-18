@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1284';
+const CACHE = 'repcore-v1286';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -103,7 +103,12 @@ const MEDAILLONS = ['new_record', 'multiple_records', 'new_load', 'personal_best
   'no_fail', 'perfect', 'streak', 'return', 'discipline']
   .map(n => './img/badges/' + n + '.png');
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
-  './vendor/qr.js', './fonts/montserrat-var-latin.woff2',
+  './vendor/qr.js', './vendor/rc-video.js',
+  // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
+  // filme souvent dans une salle sans reseau, et une compression qui echoue
+  // faute de script fait partir 170 Mo par la voie 3.
+  './vendor/mp4/mp4box.all.min.js', './vendor/mp4/mp4-muxer.js',
+  './fonts/montserrat-var-latin.woff2',
   './fonts/bebasneue-400-latin.woff2', './img/arn.png']
   .concat(AVATARS).concat(MEDAILLONS);
 
