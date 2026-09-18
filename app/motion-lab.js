@@ -57,7 +57,7 @@
  *   cartes:{id:string, aMs:number, dureeMs:number, texte:string}[], lecteur:any
  * }} EtatMl
  */
-/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'} ModeMl */
+/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'} ModeMl */
 /**
  * La graine : le disque posé par le coach, en pixels de la VIDÉO.
  * @typedef {{segId:string, tMs:number, x:number|null, y:number|null, r:number}} Graine
@@ -249,7 +249,8 @@ function mlZoomVoisin(zoom,sens){
 /**
  * Les métriques d'une trajectoire. `devPlus` est l'écart maximal vers la
  * DROITE de l'image, `devMoins` vers la GAUCHE ; `sens` dit lequel est l'avant.
- * @typedef {{vMax:number, tVMax:number, hMax:number, depVert:number, devPlus:number, devMoins:number}} Metriques
+ * @typedef {{vMax:number, tVMax:number, hMax:number, depVert:number, devPlus:number, devMoins:number,
+ *   vert?:number, vTanMax?:number}} Metriques
  */
 /**
  * Une série ré-échantillonnée à pas constant, en mètres (Y vers le haut).
@@ -619,10 +620,17 @@ function mlMetriquesBarre(points,mpp,theta){
   // vraie image — c'est là que la vidéo ira se placer.
   const vPic=iV>=0?mlSommetParabole(vy,iV,2):0;
   const arrondi=(/** @type {number} */ v)=>Math.round(v*1000)/1000;
+  // LOT 9 — LES TROIS VITESSES. La verticale reste celle d'avant, au
+  // millième près : mlVitesses appelle mlDeriver avec les mêmes arguments.
+  const VV=mlVitesses(X,Yb,dt,mlDemiFenetre(r.pas));
+  const TEMPO=mlTempo({t:r.t,v:VV.verticalite>=ML_VERTICALITE?VV.vv:VV.vp});
   return {
     serie:{t:r.t,px:r.x,py:r.y,X:Xl,Y,vy,conf:r.conf},
     m:{vMax:iV>=0?arrondi(vPic):0,tVMax:iV>=0?Math.round(r.t[iV]):0,hMax:iH>=0?arrondi(hMax):0,
-      depVert:arrondi(depVert),devPlus:arrondi(devPlus),devMoins:arrondi(devMoins)},
+      depVert:arrondi(depVert),devPlus:arrondi(devPlus),devMoins:arrondi(devMoins),
+      vert:Math.round(VV.verticalite*1000)/1000,
+      vTanMax:arrondi(VV.vt.reduce((/** @type {number} */ q,/** @type {number} */ x)=>isFinite(x)&&x>q?x:q,0)),
+      ...(TEMPO.complet?{tExc:TEMPO.excMs,tPau:TEMPO.pauseMs,tCon:TEMPO.conMs}:{})},
     ph,pas:r.pas};
 }
 
@@ -1303,6 +1311,976 @@ function mlAngleTexte(a){
   return a?a.deg+'° ±'+a.tol:'—';
 }
 
+
+// ══ LOT 9 — LE TEMPS : TROIS VITESSES, TEMPO, POINT DUR, JOINTURE ═══════════
+//
+// Tout ce qui précède ne dérive que Y. Sur une poulie haute, un écarté, une
+// presse inclinée ou une machine convergente, la charge se déplace surtout à
+// l'horizontale : la vitesse affichée ne veut rien dire et les phases ne se
+// déclenchent jamais. Trois vitesses règlent ça, et chacune répond à une
+// question différente.
+//
+// ⚠ LES RÉSULTATS DÉJÀ ENREGISTRÉS NE BOUGENT PAS. Les seuils de phase
+// continuent de travailler sur la vitesse VERTICALE pour toute charge
+// verticale — c'est-à-dire l'immense majorité des analyses existantes. Le
+// basculement sur la vitesse le long du chemin est réservé aux mouvements qui
+// ne sont PAS verticaux, et il est décidé par une mesure, pas par un réglage.
+
+/**
+ * LE SEUIL DE VERTICALITÉ. C'est le rapport du déplacement vertical cumulé au
+ * chemin parcouru : il vaut 1 sur une droite verticale, 0,707 sur une droite à
+ * 45°, et environ 0,64 sur un quart de cercle — la forme d'un écarté. À 0,75,
+ * la frontière tombe sur une direction moyenne à 41° de la verticale : un
+ * développé incliné reste vertical, un écarté et une convergente basculent.
+ * En dessous, la composante verticale seule perd plus du quart du mouvement,
+ * et le seuil de départ de 0,15 m/s se déclenche tard ou pas du tout.
+ */
+const ML_VERTICALITE=0.75;
+/**
+ * L'ARRÊT, en m/s : sous cette vitesse, on ne bouge plus. Trois fois le bruit
+ * résiduel de la dérivée lissée mesuré sur un disque immobile filmé à 60 i/s
+ * (de l'ordre de 0,015 m/s pour deux pixels de bruit de suivi) : au-dessous,
+ * une pause passerait pour un mouvement lent ; au-dessus, un vrai mouvement
+ * lent passerait pour une pause.
+ */
+const ML_TEMPO_ARRET=0.05;
+/**
+ * LE CREUX MINIMAL d'un point dur, en fraction du pic de vitesse. Sous 15 %,
+ * ce n'est pas un point dur : c'est l'ondulation ordinaire d'une courbe de
+ * vitesse lissée. Le cahier des charges le fixe, et il est cohérent avec le
+ * bruit résiduel mesuré plus haut.
+ */
+const ML_CREUX_MIN=0.15;
+/** La durée minimale d'une pause pour être comptée. Sous 80 ms, c'est le
+ *  passage par zéro d'un changement de sens, pas une pause tenue. */
+const ML_PAUSE_MIN_MS=80;
+
+/**
+ * PURE. L'axe principal d'un déplacement, par analyse en composantes
+ * principales, orienté vers le point le plus éloigné du départ.
+ *
+ * ⚠ IL FAUT UN SIGNE. Le cahier des charges demande `v_tan = ‖dP/dt‖`, qui est
+ * toujours positif : utilisable pour dire « ça va vite », inutilisable pour
+ * dire « ça part » puis « ça revient ». Les phases ont besoin d'une direction.
+ * On la prend sur l'axe principal du mouvement, orienté dans le sens où il
+ * s'éloigne le plus — c'est le sens concentrique d'un écarté comme d'un tirage.
+ *
+ * @param {number[]} X  mètres
+ * @param {number[]} Y  mètres
+ * @returns {{ux:number, uy:number}|null}
+ */
+function mlAxePrincipal(X,Y){
+  let n=0,sx=0,sy=0;
+  for(let i=0;i<X.length;i++){ if(!isFinite(X[i])||!isFinite(Y[i])) continue; n++; sx+=X[i]; sy+=Y[i]; }
+  if(n<3) return null;
+  const mx=sx/n, my=sy/n;
+  let cxx=0,cyy=0,cxy=0;
+  for(let i=0;i<X.length;i++){
+    if(!isFinite(X[i])||!isFinite(Y[i])) continue;
+    const a=X[i]-mx, b=Y[i]-my;
+    cxx+=a*a; cyy+=b*b; cxy+=a*b;
+  }
+  // Le vecteur propre de la plus grande valeur propre d'une matrice 2×2
+  // symétrique, écrit en clair : pas de bibliothèque pour deux lignes.
+  const tr=cxx+cyy, det=cxx*cyy-cxy*cxy;
+  const disc=tr*tr/4-det;
+  if(!(disc>=0)) return null;
+  const l=tr/2+Math.sqrt(disc);
+  let ux=cxy, uy=l-cxx;
+  if(Math.abs(ux)<1e-12&&Math.abs(uy)<1e-12){ ux=l-cyy; uy=cxy; }
+  const nn=Math.hypot(ux,uy);
+  if(!(nn>0)) return null;
+  ux/=nn; uy/=nn;
+  // L'ORIENTATION : vers le point le plus loin du départ. Sans elle, le signe
+  // de l'axe propre est arbitraire et le tempo s'inverserait d'une analyse à
+  // l'autre.
+  const x0=X.find(isFinite), y0=Y.find(isFinite);
+  let loin=0, s=1;
+  for(let i=0;i<X.length;i++){
+    if(!isFinite(X[i])||!isFinite(Y[i])) continue;
+    const p=(X[i]-(x0||0))*ux+(Y[i]-(y0||0))*uy;
+    if(Math.abs(p)>loin){ loin=Math.abs(p); s=p>=0?1:-1; }
+  }
+  return {ux:ux*s,uy:uy*s};
+}
+
+/**
+ * PURE. Les trois vitesses d'une trajectoire, en m/s.
+ *  · `vv` : la VERTICALE, celle d'avant, conservée telle quelle ;
+ *  · `vt` : le long du CHEMIN, `‖dP/dt‖`, toujours positive ;
+ *  · `vp` : la PROJETÉE sur l'axe principal, signée — c'est elle qui porte les
+ *    phases et le tempo quand le mouvement n'est pas vertical ;
+ *  · `verticalite` : la part verticale du chemin, qui décide du basculement.
+ *
+ * @param {number[]} X  mètres
+ * @param {number[]} Y  mètres
+ * @param {number} dt  secondes
+ * @param {number} [m]  demi-fenêtre de dérivée
+ * @returns {{vx:number[], vv:number[], vt:number[], vp:number[], axe:{ux:number, uy:number}|null, verticalite:number}}
+ */
+function mlVitesses(X,Y,dt,m){
+  const vx=mlDeriver(X,dt,m), vv=mlDeriver(Y,dt,m);
+  const n=X.length;
+  const vt=new Array(n).fill(NaN), vp=new Array(n).fill(NaN);
+  const axe=mlAxePrincipal(X,Y);
+  let chemin=0, vert=0;
+  for(let i=0;i<n;i++){
+    if(isFinite(vx[i])&&isFinite(vv[i])){
+      vt[i]=Math.hypot(vx[i],vv[i]);
+      if(axe) vp[i]=vx[i]*axe.ux+vv[i]*axe.uy;
+    }
+    if(i&&isFinite(X[i])&&isFinite(X[i-1])&&isFinite(Y[i])&&isFinite(Y[i-1])){
+      chemin+=Math.hypot(X[i]-X[i-1],Y[i]-Y[i-1]);
+      vert+=Math.abs(Y[i]-Y[i-1]);
+    }
+  }
+  return {vx,vv,vt,vp,axe,verticalite:chemin>0?vert/chemin:1};
+}
+
+/**
+ * PURE. LE TEMPO MESURÉ : excentrique, pause, concentrique, et le temps sous
+ * tension. C'est la consigne la plus prescrite et la moins vérifiée du métier.
+ *
+ * Le découpage se fait aux CHANGEMENTS DE SIGNE de la vitesse signée, avec une
+ * bande morte autour de zéro : ce qui est dedans est une pause, ce qui est
+ * dessous est l'excentrique, ce qui est dessus le concentrique.
+ *
+ * ⚠ `complet:false` QUAND LA RÉPÉTITION EST TRONQUÉE par les bornes du
+ * segment — c'est-à-dire quand ça bouge déjà à la première image ou encore à
+ * la dernière. Dans ce cas L'ÉCRAN N'AFFICHE PAS DE TEMPO : un excentrique
+ * commencé avant le début du segment donnerait un chiffre faux, et un chiffre
+ * faux est plus difficile à défaire qu'une case vide.
+ *
+ * @param {{t:number[], v:number[]}} serie  vitesse SIGNÉE, positive en concentrique
+ * @param {number} [seuil]  m/s, ML_TEMPO_ARRET par défaut
+ * @returns {{excMs:number, pauseMs:number, conMs:number, tutMs:number, complet:boolean}}
+ */
+function mlTempo(serie,seuil){
+  const t=(serie&&serie.t)||[], v=(serie&&serie.v)||[];
+  const s=Number(seuil)>0?Number(seuil):ML_TEMPO_ARRET;
+  const vide={excMs:0,pauseMs:0,conMs:0,tutMs:0,complet:false};
+  if(t.length<3||v.length!==t.length) return vide;
+  /** @param {number} x @returns {number} -1, 0 ou 1 */
+  const sgn=(x)=>!isFinite(x)?0:(x>s?1:(x<-s?-1:0));
+  let exc=0,pau=0,con=0;
+  let pauseCourante=0;
+  // ⚠ L’IMMOBILITÉ D’AVANT LE MOUVEMENT N’EST PAS UNE PAUSE. Un segment
+  // découpé large commence par une seconde où l’athlète est en place et ne
+  // bouge pas encore : la compter gonflerait le tempo d’autant, et le coach
+  // lirait une pause qu’il n’a pas demandée.
+  let commence=false;
+  for(let i=1;i<t.length;i++){
+    const d=t[i]-t[i-1];
+    if(!(d>0)) continue;
+    // Le signe du PAS, pris au milieu : un pas attribué à son extrémité
+    // décalerait chaque frontière d'une demi-image.
+    const a=sgn(v[i-1]), b=sgn(v[i]);
+    const k=(a===b)?a:(Math.abs(v[i])>Math.abs(v[i-1])?b:a);
+    if(k>0){ con+=d; if(commence&&pauseCourante) pau+=pauseCourante; pauseCourante=0; commence=true; }
+    else if(k<0){ exc+=d; if(commence&&pauseCourante) pau+=pauseCourante; pauseCourante=0; commence=true; }
+    else pauseCourante+=d;
+  }
+  // LA DERNIÈRE PAUSE N'EST PAS COMPTÉE : elle n'est pas tenue entre deux
+  // phases, elle est simplement la fin du segment. Et une pause plus courte
+  // que ML_PAUSE_MIN_MS est le passage par zéro d'un changement de sens.
+  if(pau<ML_PAUSE_MIN_MS) pau=0;
+  // TRONQUÉE ? Ça bougeait déjà à la première image, ou ça bougeait encore à
+  // la dernière.
+  /** @param {number} x @returns {boolean} */
+  const calme=(x)=>isFinite(x)&&Math.abs(x)<=s;
+  const premier=v.find(isFinite), dernier=v.slice().reverse().find(isFinite);
+  const complet=calme(/** @type {number} */(premier))&&calme(/** @type {number} */(dernier))
+    &&exc>0&&con>0;
+  return {excMs:Math.round(exc),pauseMs:Math.round(pau),conMs:Math.round(con),
+    tutMs:Math.round(exc+pau+con),complet};
+}
+/**
+ * PURE. « 1,2 – 0,0 – 0,9 » : un tempo tel qu'il s'écrit et se compare.
+ * @param {any} x @returns {string}
+ */
+function mlTempoTexte(x){
+  if(!x||!x.complet) return '';
+  const s=(/** @type {number} */ ms)=>(Math.round(ms/100)/10).toFixed(1).replace('.',',');
+  return s(x.excMs)+' – '+s(x.pauseMs)+' – '+s(x.conMs);
+}
+
+/**
+ * PURE. LE POINT DUR : le premier creux franc de la vitesse après le pic, dans
+ * la phase concentrique. La courbe le contient déjà ; l'outil se contentait de
+ * la dessiner.
+ *
+ * ⚠ IL N'EST PAS RENDU EN MILLISECONDES. Un coach ne règle rien avec « à
+ * 340 ms » : il règle avec « à 78° de flexion, soit 22 % de l'amplitude ».
+ * La conversion se fait dans mlSynthese, qui a les angles.
+ *
+ * @param {number[]} v  vitesse signée, positive en concentrique
+ * @param {number} iPic  l'indice du pic
+ * @returns {{i:number, creux:number, part:number}|null}
+ */
+function mlZoneFaiblesse(v,iPic){
+  const p=Number(iPic);
+  if(!Array.isArray(v)||!(p>=0)||p>=v.length) return null;
+  const pic=v[p];
+  if(!isFinite(pic)||!(pic>0)) return null;
+  for(let i=p+1;i<v.length-1;i++){
+    const a=v[i-1], b=v[i], c=v[i+1];
+    if(!isFinite(a)||!isFinite(b)||!isFinite(c)) continue;
+    // On s'arrête au retour à zéro : après, ce n'est plus le concentrique.
+    if(b<=0) return null;
+    if(!(b<=a&&b<=c)) continue;
+    if(b===a&&b===c) continue;
+    const creux=(pic-b)/pic;
+    if(creux>=ML_CREUX_MIN) return {i,creux:Math.round(creux*1000)/1000,part:0};
+  }
+  return null;
+}
+
+/**
+ * PURE. LA JOINTURE. La trajectoire vit à la cadence vidéo, la pose à douze
+ * images par seconde, dans deux objets disjoints — aucune fonction ne répondait
+ * à « quel angle de hanche au pic de vitesse ? ».
+ *
+ * Une seule base de temps : L'INSTANT VIDÉO, en millisecondes. Chaque phase de
+ * la trajectoire y est rapprochée de l'échantillon de pose le plus proche, ET
+ * ON DIT DE COMBIEN : un angle pris à 60 ms de la phase n'est pas l'angle de la
+ * phase, et le coach doit pouvoir en juger.
+ *
+ * ⚠ ELLE NE LÈVE JAMAIS. Pose absente, barre absente, plages qui ne se
+ * recouvrent qu'à moitié : chaque cas rend une ligne qui dit ce qui manque.
+ *
+ * @param {{t:number[], v:number[], ph:[string,number,number][], m?:any}|null} barre
+ * @param {{t:number[], ang:Object<string,(number|null)[]>, hp:number|null}|null} pose
+ * @param {{ecartMaxMs?:number, articulations?:string[]}} [options]
+ * @returns {{phase:string, tMs:number, conf:number, vitesse:number|null,
+ *   angles:Object<string,{deg:number, corrige:boolean, tol:number}|null>,
+ *   ecartPoseMs:number|null, manque:string|null}[]}
+ */
+function mlSynthese(barre,pose,options){
+  const o=options||{};
+  // CENT MILLISECONDES : à douze images par seconde, deux échantillons de pose
+  // sont à 83 ms l'un de l'autre. Au-delà d'un pas complet, l'angle rapproché
+  // n'est plus celui de la phase.
+  const ecartMax=Number(o.ecartMaxMs)>0?Number(o.ecartMaxMs):100;
+  const arts=Array.isArray(o.articulations)&&o.articulations.length
+    ?o.articulations:ML_ANGLES.map(q=>q.cle);
+  /** @type {any[]} */
+  const out=[];
+  if(!barre||!Array.isArray(barre.ph)||!barre.ph.length) return out;
+  const hp=pose&&pose.hp!=null&&isFinite(Number(pose.hp))?Number(pose.hp):undefined;
+  for(const [cle,tMs,conf] of barre.ph){
+    /** @type {any} */
+    const ligne={phase:cle,tMs:Math.round(tMs),conf:Math.round(conf)||0,vitesse:null,
+      angles:{},ecartPoseMs:null,manque:null};
+    // La vitesse à cet instant, prise sur la base de temps de la trajectoire.
+    if(Array.isArray(barre.t)&&Array.isArray(barre.v)&&barre.t.length===barre.v.length){
+      let best=-1, d=Infinity;
+      for(let i=0;i<barre.t.length;i++){
+        const e=Math.abs(barre.t[i]-tMs);
+        if(e<d&&isFinite(barre.v[i])){ d=e; best=i; }
+      }
+      if(best>=0) ligne.vitesse=Math.round(barre.v[best]*1000)/1000;
+    }
+    if(!pose||!Array.isArray(pose.t)||!pose.t.length){
+      ligne.manque='pose';
+      for(const a of arts) ligne.angles[a]=null;
+      out.push(ligne);
+      continue;
+    }
+    let k=-1, d=Infinity;
+    for(let i=0;i<pose.t.length;i++){
+      const e=Math.abs(pose.t[i]-tMs);
+      if(e<d){ d=e; k=i; }
+    }
+    ligne.ecartPoseMs=k>=0?Math.round(d):null;
+    if(k<0||d>ecartMax){
+      // LES DEUX PLAGES NE SE RECOUVRENT PAS ICI. On ne rapproche pas un angle
+      // d'une phase qu'il ne décrit pas.
+      ligne.manque='hors-plage';
+      for(const a of arts) ligne.angles[a]=null;
+      out.push(ligne);
+      continue;
+    }
+    let vus=0;
+    for(const a of arts){
+      const brut=(pose.ang[a]||[])[k];
+      const c=mlCorrigerAngle(a,mlFlexion(a,brut==null?null:brut),hp);
+      ligne.angles[a]=c;
+      if(c) vus++;
+    }
+    if(!vus) ligne.manque='angles';
+    out.push(ligne);
+  }
+  return out;
+}
+
+/**
+ * PURE. LA TRAJECTOIRE ENREGISTRÉE, RELUE EN MÈTRES, avec ses trois vitesses.
+ * C'est le point d'entrée unique des lots 9 à 14 : tout ce qui suit consomme
+ * cette série-là, et rien d'autre.
+ *
+ * ⚠ ON RECALCULE LES VITESSES PLUTÔT QUE D'EN STOCKER DEUX DE PLUS. La
+ * trajectoire garde ses positions ; deux tableaux d'entiers supplémentaires
+ * pèseraient trois cents octets par répétition pour une information qui se
+ * redérive exactement. Le budget de données ne bouge pas d'un octet.
+ *
+ * @param {any} b  une trajectoire passée par segBarreValide
+ * @returns {{t:number[], X:number[], Y:number[], px:number[], py:number[], conf:number[],
+ *   mpp:number, pasMs:number, vx:number[], vv:number[], vt:number[], vp:number[],
+ *   axe:{ux:number, uy:number}|null, verticalite:number, mode:string, v:number[]}|null}
+ */
+function mlSerieRelue(b){
+  if(!b||!(b.n>=2)) return null;
+  const d=mlDecompacterBarre(b);
+  // L'ÉCHELLE : l'étalon s'il a été posé, le disque sinon. C'est la même règle
+  // qu'à l'analyse, et elle vaut mieux qu'un second chemin qui divergerait.
+  const mpp=(b.etalon&&Number(b.etalon.px)>0)
+    ?(Number(b.etalon.cm)/100)/Number(b.etalon.px)
+    :Number(b.disqueM)/(2*Number(b.rayonPx));
+  if(!(mpp>0)) return null;
+  const px=d.x.map(v=>v*b.vw), py=d.y.map(v=>v*b.vh);
+  // REDRESSÉ, comme à l'analyse : les points sont stockés dans le repère de
+  // l'image, parce que c'est là qu'ils se dessinent.
+  const th=Number(b.theta)||0;
+  const r=th?mlRedresser(px,py,th):{X:px,Y:py};
+  const x0=r.X.find(isFinite), y0=r.Y.find(isFinite);
+  if(x0===undefined||y0===undefined) return null;
+  const X=r.X.map(v=>(v-x0)*mpp), Y=r.Y.map(v=>(y0-v)*mpp);
+  const V=mlVitesses(X,Y,b.pasMs/1000,mlDemiFenetre(b.pasMs));
+  const mode=V.verticalite>=ML_VERTICALITE?'vertical':'chemin';
+  return {t:d.t,X,Y,px:r.X,py:r.Y,conf:d.conf,mpp,pasMs:b.pasMs,
+    vx:V.vx,vv:V.vv,vt:V.vt,vp:V.vp,axe:V.axe,verticalite:V.verticalite,mode,
+    // LA VITESSE QUI PORTE LES PHASES ET LE TEMPO : la verticale pour une
+    // charge verticale — donc pour toutes les analyses déjà enregistrées — et
+    // la projection sur l'axe du mouvement pour le reste.
+    v:mode==='vertical'?V.vv:V.vp};
+}
+
+// ══ LOT 10 — LE LEVIER ET LE COUPLE ═════════════════════════════════════════
+//
+// L'outil connaît la position de la charge et celle des articulations, à la
+// même image. Il ne les soustrayait jamais : il mesurait des positions, jamais
+// des sollicitations. C'est le manque central, et c'est le sujet.
+//
+// ⚠ « CHARGE EXTERNE SEULE », ÉCRIT PARTOUT OÙ UN N·m EST AFFICHÉ. Ni masse
+// segmentaire, ni inertie, ni forces internes : ce couple-là est celui que la
+// barre impose à l'articulation, pas celui que le muscle produit. Les deux ne
+// se confondent pas, et l'écart n'est pas petit.
+
+/** Sous cette couverture d'amplitude, aucun profil n'est affiché : un profil
+ *  établi sur un tiers du mouvement n'est pas un profil. */
+const ML_COUVERTURE_MIN=0.60;
+/** Les deux frontières du profil, en part d'amplitude où tombe le pic. */
+const ML_PROFIL_LONGUE=0.35;
+const ML_PROFIL_COURTE=0.65;
+/** g, pour passer d'une masse à un couple. */
+const ML_G=9.81;
+
+/**
+ * PURE. La ligne d'action de la charge, normalisée.
+ *  · charge libre : la gravité, `(0, −1)` dans le repère redressé ;
+ *  · câble ou bras de machine : la direction des deux points posés par le
+ *    coach, orientée du second vers le premier — c'est le sens dans lequel la
+ *    charge tire.
+ * @param {string} mode  'libre' ou 'cable'
+ * @param {{x:number, y:number}} [p1]  pixels
+ * @param {{x:number, y:number}} [p2]
+ * @returns {{ux:number, uy:number, mode:string}}
+ */
+function mlLigneAction(mode,p1,p2){
+  // PAR DÉFAUT LA CHARGE EST LIBRE. Le passage en câble est un geste explicite
+  // du coach : deviner le mode fausserait tous les bras de levier d'un coup,
+  // et dans le même sens.
+  if(mode!=='cable'||!p1||!p2) return {ux:0,uy:-1,mode:'libre'};
+  const dx=Number(p1.x)-Number(p2.x), dy=Number(p1.y)-Number(p2.y);
+  const n=Math.hypot(dx,dy);
+  if(!(n>0)) return {ux:0,uy:-1,mode:'libre'};
+  return {ux:dx/n,uy:dy/n,mode:'cable'};
+}
+/**
+ * PURE. LE BRAS DE LEVIER, en mètres : la distance de l'articulation à la
+ * ligne d'action passant par la charge. C'est le déterminant 2D, qui se réduit
+ * à la distance HORIZONTALE quand la charge est libre.
+ * @param {{x:number, y:number}} Pcharge  pixels, repère redressé
+ * @param {{x:number, y:number}} Particulation
+ * @param {{ux:number, uy:number}} u
+ * @param {number} mpp
+ * @returns {number|null}
+ */
+function mlBrasLevier(Pcharge,Particulation,u,mpp){
+  if(!Pcharge||!Particulation||!u||!(Number(mpp)>0)) return null;
+  const dx=Number(Pcharge.x)-Number(Particulation.x), dy=Number(Pcharge.y)-Number(Particulation.y);
+  if(!isFinite(dx)||!isFinite(dy)) return null;
+  return Math.abs(dx*Number(u.uy)-dy*Number(u.ux))*Number(mpp);
+}
+/**
+ * PURE. Le couple de la CHARGE EXTERNE SEULE, en N·m. Rend null sans masse :
+ * un couple sans sa charge serait un chiffre sans unité déguisé en newton.
+ * @param {number|null} brasM
+ * @param {number|null|undefined} kg
+ * @returns {number|null}
+ */
+function mlCouple(brasM,kg){
+  const d=Number(brasM), m=Number(kg);
+  if(!isFinite(d)||d<0||!isFinite(m)||!(m>0)) return null;
+  return Math.round(m*ML_G*d*10)/10;
+}
+/**
+ * PURE. LE PROFIL DE RÉSISTANCE : où, dans l'amplitude, la charge pèse le plus.
+ * C'est la sortie principale du lot — elle reste valide même quand la charge
+ * absolue est inconnue, parce qu'elle est normalisée.
+ *
+ * ⚠ LA COURBE EST UNE FONCTION DE L'ANGLE, PAS DU TEMPS. C'est ce qui la rend
+ * superposable d'une machine à l'autre : deux athlètes ne mettent pas le même
+ * temps, ils passent par les mêmes angles.
+ *
+ * @param {{amp:number[], tau:number[]}} serie  amp en % d'amplitude (0 à 100)
+ * @returns {{pic:number, tauMax:number, classe:string, couverture:number, profil:{amp:number, tau:number}[]}|null}
+ */
+function mlProfilResistance(serie){
+  const amp=(serie&&serie.amp)||[], tau=(serie&&serie.tau)||[];
+  if(amp.length<3||amp.length!==tau.length) return null;
+  /** @type {{amp:number, tau:number}[]} */
+  const pts=[];
+  for(let i=0;i<amp.length;i++){
+    const a=Number(amp[i]), v=Number(tau[i]);
+    if(!isFinite(a)||!isFinite(v)||a<0||a>100) continue;
+    pts.push({amp:a,tau:v});
+  }
+  if(pts.length<3) return null;
+  pts.sort((a,b)=>a.amp-b.amp);
+  let tauMax=-Infinity, pic=0;
+  for(const p of pts) if(p.tau>tauMax){ tauMax=p.tau; pic=p.amp; }
+  if(!(tauMax>0)) return null;
+  // LA COUVERTURE : en vingtièmes d'amplitude, la part réellement visitée. Des
+  // points serrés au même endroit ne couvrent pas un mouvement.
+  const cases=new Array(20).fill(false);
+  for(const p of pts) cases[Math.min(19,Math.max(0,Math.floor(p.amp/5)))]=true;
+  const couverture=cases.filter(Boolean).length/20;
+  const part=pic/100;
+  return {pic:Math.round(pic),tauMax:Math.round(tauMax*1000)/1000,
+    classe:part<ML_PROFIL_LONGUE?'longue':(part>ML_PROFIL_COURTE?'courte':'cloche'),
+    couverture:Math.round(couverture*100)/100,
+    profil:pts.map(p=>({amp:Math.round(p.amp),tau:Math.round(p.tau/tauMax*1000)/1000}))};
+}
+/** Les trois classes, dites en français de coach. */
+const ML_PROFIL_LIB=Object.freeze({
+  longue:'la charge pèse le plus en position longue — profil descendant',
+  cloche:'la charge pèse le plus au milieu de l’amplitude — profil en cloche',
+  courte:'la charge pèse le plus en position courte — profil ascendant'});
+
+// ══ LOT 11 — LE REPÈRE CORPOREL ═════════════════════════════════════════════
+//
+// La trajectoire est tracée dans le repère de l'IMAGE. Sur machine, ce qui se
+// corrige n'est pas le trajet de la poignée dans la pièce : c'est son ARC
+// AUTOUR DE L'ÉPAULE. Dans le repère de l'image, cette question n'a aucune
+// représentation — et c'est pourtant la seule qui décide d'un réglage de siège.
+//
+// ⚠ ON NE DIT JAMAIS SI L'ARC EST BON. On le décrit. Le coach juge.
+
+/**
+ * PURE. Les positions d'une articulation dans le repère REDRESSÉ, en pixels.
+ * @param {{t:number[], X:number[][], Y:number[][], V:number[][], cote:string}} serie  sortie de mlAnglesSerie
+ * @param {string} nom  'epaule', 'hanche', 'genou'…
+ * @param {number} vw @param {number} vh @param {number} theta
+ * @returns {{t:number[], x:number[], y:number[], vis:number[]}|null}
+ */
+function mlPosePixels(serie,nom,vw,vh,theta){
+  if(!serie||!Array.isArray(serie.t)) return null;
+  const r=mlRangPose(nom,serie.cote);
+  if(r==null) return null;
+  const t=[], x=[], y=[], vis=[];
+  for(let k=0;k<serie.t.length;k++){
+    const bx=serie.X[k][r]*vw, by=serie.Y[k][r]*vh;
+    const p=theta?mlRedresser([bx],[by],theta):{X:[bx],Y:[by]};
+    t.push(serie.t[k]); x.push(p.X[0]); y.push(p.Y[0]); vis.push(serie.V[k][r]);
+  }
+  return {t,x,y,vis};
+}
+/**
+ * PURE. LE TRACÉ POLAIRE AUTOUR D'UNE ARTICULATION : le levier du membre et
+ * l'angle balayé. Superposable d'une répétition à l'autre et d'une machine à
+ * l'autre — ce que la fiche du fabricant ne donne pas, parce qu'elle ne connaît
+ * ni l'athlète ni son réglage de siège.
+ *
+ * @param {{t:number[], px:number[], py:number[], mpp:number}} barre  sortie de mlSerieRelue
+ * @param {{t:number[], x:number[], y:number[], vis:number[]}|null} art  sortie de mlPosePixels
+ * @param {number} [visMin]
+ * @returns {{t:number[], rho:number[], phi:number[], rhoMin:number, rhoMax:number,
+ *   conv:number, arc:number, n:number}|null}
+ */
+function mlRepereCorporel(barre,art,visMin){
+  if(!barre||!art||!art.t.length||!barre.t.length) return null;
+  const vm=Number(visMin)>0?Number(visMin):ML_POSE_VIS_MIN;
+  const t=[], rho=[], phi=[];
+  for(let i=0;i<barre.t.length;i++){
+    if(!isFinite(barre.px[i])||!isFinite(barre.py[i])) continue;
+    // L'ÉCHANTILLON DE POSE LE PLUS PROCHE : la pose vit à douze images par
+    // seconde, la barre à la cadence vidéo. Au-delà d'un pas de pose, on ne
+    // rapproche pas.
+    let k=-1, d=Infinity;
+    for(let j=0;j<art.t.length;j++){ const e=Math.abs(art.t[j]-barre.t[i]); if(e<d){ d=e; k=j; } }
+    if(k<0||d>100||!(art.vis[k]>=vm)||!isFinite(art.x[k])||!isFinite(art.y[k])) continue;
+    const dx=barre.px[i]-art.x[k], dy=barre.py[i]-art.y[k];
+    t.push(barre.t[i]);
+    rho.push(Math.hypot(dx,dy)*barre.mpp);
+    // L'ANGLE EST PRIS SUR LA VERTICALE DESCENDANTE, dans le sens horaire de
+    // l'image : c'est la convention de l'écran, et y a l'axe vers le bas.
+    phi.push(Math.atan2(dx,dy)*180/Math.PI);
+  }
+  if(t.length<3) return null;
+  let mn=Infinity, mx=-Infinity;
+  for(const r of rho){ if(r<mn) mn=r; if(r>mx) mx=r; }
+  // LA CONVERGENCE : de combien, et dans quel sens, l'arc tourne du début à la
+  // fin. Mesurée sur l'athlète réel avec SON réglage de siège.
+  let conv=phi[phi.length-1]-phi[0];
+  while(conv>180) conv-=360;
+  while(conv<-180) conv+=360;
+  // L'ARC BALAYÉ : d'un extrême à l'autre. C'est lui que le coach lit —
+  // la convergence d'un aller-retour complet vaut zéro, et ne dit rien.
+  let pMin=Infinity, pMax=-Infinity;
+  for(const q of phi){ if(q<pMin) pMin=q; if(q>pMax) pMax=q; }
+  return {t,rho:rho.map(r=>Math.round(r*1000)/1000),phi:phi.map(p=>Math.round(p*10)/10),
+    rhoMin:Math.round(mn*1000)/1000,rhoMax:Math.round(mx*1000)/1000,
+    conv:Math.round(conv),arc:Math.round(pMax-pMin),n:t.length};
+}
+
+// ══ LOT 12 — LA SÉRIE : CE QUE LES RÉPÉTITIONS SE DISENT ENTRE ELLES ════════
+//
+// Jusqu'à vingt segments coexistent sur une vidéo, et aucun n'était jamais
+// confronté aux autres. C'est la donnée la moins chère du lot et la plus
+// parlante : sous fatigue, la durée d'une répétition plus que double, la
+// vitesse chute, le pic arrive plus tôt, l'amplitude se réduit.
+//
+// ⚠ ON N'EN TIRE NI RIR, NI « PROXIMITÉ DE L'ÉCHEC », NI SCORE. On affiche la
+// perte ; le coach conclut. Convertir une perte de vitesse en réserve de
+// répétitions demande une relation charge-vitesse propre à l'athlète ET à
+// l'exercice, que rien ici n'établit.
+
+/**
+ * PURE. Une ligne par répétition. Les répétitions NON ANALYSÉES apparaissent
+ * en ligne vide, pas absentes : le coach doit voir qu'il en manque, sinon la
+ * série qu'il lit n'est pas celle qu'il a filmée.
+ *
+ * @param {Segment[]} segments
+ * @param {{cote?:string, articulation?:string}} [options]
+ * @returns {{id:string, label:string, debutMs:number, analysee:boolean,
+ *   vMax:number|null, amplitude:number|null, tempo:any, brasMax:number|null,
+ *   angleFond:{deg:number, corrige:boolean, tol:number}|null, conf:number|null,
+ *   tPicMs:number|null}[]}
+ */
+function mlTableauSerie(segments,options){
+  const o=options||{};
+  const art=o.articulation||'genou';
+  /** @type {any[]} */
+  const out=[];
+  for(const s of (segments||[])){
+    if(!s) continue;
+    /** @type {any} */
+    const l={id:s.id,label:s.label||'',debutMs:s.debutMs,analysee:false,
+      vMax:null,amplitude:null,tempo:null,brasMax:null,angleFond:null,conf:null,tPicMs:null};
+    const b=s.barre;
+    if(b){
+      const r=mlSerieRelue(b);
+      if(r){
+        l.analysee=true;
+        let mx=-Infinity, iMx=-1, yMin=Infinity, yMax=-Infinity;
+        for(let i=0;i<r.t.length;i++){
+          if(isFinite(r.v[i])&&r.v[i]>mx){ mx=r.v[i]; iMx=i; }
+          if(isFinite(r.Y[i])){ if(r.Y[i]<yMin) yMin=r.Y[i]; if(r.Y[i]>yMax) yMax=r.Y[i]; }
+        }
+        if(iMx>=0){ l.vMax=Math.round(mx*1000)/1000; l.tPicMs=Math.round(r.t[iMx]); }
+        // L'AMPLITUDE EST CELLE DU CHEMIN, pas de la hauteur : sur un écarté,
+        // la hauteur ne dit rien et le chemin dit tout.
+        if(r.mode==='vertical'&&isFinite(yMin)&&isFinite(yMax)) l.amplitude=Math.round((yMax-yMin)*1000)/1000;
+        else {
+          let a=-Infinity,z=Infinity;
+          for(let i=0;i<r.t.length;i++){
+            if(!isFinite(r.X[i])||!isFinite(r.Y[i])||!r.axe) continue;
+            const p=r.X[i]*r.axe.ux+r.Y[i]*r.axe.uy;
+            if(p>a) a=p; if(p<z) z=p;
+          }
+          if(isFinite(a)&&isFinite(z)) l.amplitude=Math.round((a-z)*1000)/1000;
+        }
+        const mt=b.m||{};
+        l.tempo=(mt.tExc!=null&&mt.tCon!=null)
+          ?{excMs:mt.tExc,pauseMs:mt.tPau||0,conMs:mt.tCon,
+            tutMs:mt.tExc+(mt.tPau||0)+mt.tCon,complet:true}
+          :mlTempo({t:r.t,v:r.v});
+        let c=0,n=0;
+        for(const q of r.conf){ if(isFinite(q)){ c+=q; n++; } }
+        l.conf=n?Math.round(100*c/n):null;
+      }
+    }
+    if(s.pose){
+      try{
+        const sp=mlAnglesSerie(s.pose,o.cote);
+        const met=mlMetriquesAngles(sp);
+        const m=met[art];
+        if(m) l.angleFond=mlCorrigerAngle(art,mlFlexion(art,m.min),sp.hp==null?undefined:sp.hp);
+      }catch(e){}
+    }
+    out.push(l);
+  }
+  return out;
+}
+/**
+ * PURE. LES DEUX PERTES : de la MEILLEURE répétition à la DERNIÈRE, jamais de
+ * la première à la dernière. La première est souvent la moins bonne — reprise
+ * de marques, mise en place — et la comparer fait apparaître des gains là où
+ * il n'y a qu'un échauffement.
+ * @param {{analysee:boolean, vMax:number|null, amplitude:number|null}[]} lignes
+ * @returns {{vitesse:number|null, amplitude:number|null, iMeilleure:number, iDerniere:number}|null}
+ */
+function mlPertesSerie(lignes){
+  const l=(lignes||[]).map((x,i)=>({x,i})).filter(q=>q.x&&q.x.analysee&&q.x.vMax!=null);
+  if(l.length<2) return null;
+  let best=l[0];
+  for(const q of l) if((q.x.vMax||0)>(best.x.vMax||0)) best=q;
+  const last=l[l.length-1];
+  if(best.i===last.i) return null;
+  const vB=Number(best.x.vMax), vD=Number(last.x.vMax);
+  const aB=best.x.amplitude, aD=last.x.amplitude;
+  return {
+    vitesse:(vB>0)?Math.round((vD-vB)/vB*1000)/10:null,
+    amplitude:(aB!=null&&aD!=null)?Math.round((aD-aB)*1000)/10:null,
+    iMeilleure:best.i,iDerniere:last.i};
+}
+
+// ══ LOT 13 — LES PROPORTIONS MESURÉES SUR LA VIDÉO ══════════════════════════
+//
+// ⚠ EN RAPPORTS, JAMAIS EN CENTIMÈTRES. L'incertitude d'une longueur absolue
+// lue sur une image est trop grande ; celle d'un rapport se compense en partie,
+// parce que les deux segments sont vus sous la même projection, à la même
+// échelle, avec la même erreur d'échelle — qui disparaît dans la division.
+//
+// ⚠ ENVERGURE/TAILLE N'EST PAS RENDU, ET C'EST DÉLIBÉRÉ. L'envergure se mesure
+// (poignet à poignet), la taille non : MediaPipe ne donne pas le sommet du
+// crâne, seulement le nez, les yeux et les oreilles. Combler l'écart
+// demanderait un coefficient crâne/stature que ce dépôt ne peut pas sourcer.
+// C'est la même raison qui interdit les centimètres sur une photo, côté morpho.
+//
+// ⚠ UN RAPPORT N'EST PAS UN DÉFAUT. La phrase qui l'accompagne est MÉCANIQUE —
+// « à profondeur égale, ton buste s'incline davantage » — jamais une
+// recommandation d'exercice, jamais un morphotype, jamais un jugement.
+
+/** Debout : genou et hanche quasi tendus. En dessous, les segments sont vus
+ *  raccourcis par la projection et le rapport se met à dériver. */
+const ML_DEBOUT_MIN=160;
+/** Sous vingt images utilisables, l'écart-type ne veut rien dire. */
+const ML_PROP_N_MIN=20;
+/** Les rapports rendus, et ce qu'ils changent — en mécanique, pas en conseil. */
+const ML_PROPORTIONS=Object.freeze([
+  {cle:'femur_tibia',lib:'Cuisse sur jambe',a:['hanche','genou'],b:['genou','cheville'],
+   haut:'Cuisse longue par rapport à la jambe : à profondeur égale, le genou avance moins et le buste s’incline davantage.',
+   bas:'Jambe longue par rapport à la cuisse : le genou peut avancer davantage, et le buste reste plus droit à profondeur égale.'},
+  {cle:'femur_tronc',lib:'Cuisse sur tronc',a:['hanche','genou'],b:['epaule','hanche'],
+   haut:'Cuisse longue par rapport au tronc : le bassin recule davantage à la descente, et le bras de levier de hanche augmente.',
+   bas:'Tronc long par rapport à la cuisse : le buste reste plus droit à profondeur égale, et le bras de levier s’allonge dès que la hanche se ferme.'},
+  {cle:'humerus_avantbras',lib:'Bras sur avant-bras',a:['epaule','coude'],b:['coude','poignet'],
+   haut:'Bras long par rapport à l’avant-bras : la course de la barre s’allonge en poussée, et l’ouverture de coude nécessaire augmente.',
+   bas:'Avant-bras long par rapport au bras : le levier change au curl, et la position de coude en tirage avec lui.'}
+]);
+
+/**
+ * PURE. Les proportions mesurées sur les images DEBOUT et bien vues.
+ * Rendues avec leur écart-type et leur nombre d'images : un rapport sans sa
+ * dispersion ne se lit pas.
+ *
+ * @param {{t:number[], X:number[][], Y:number[][], V:number[][], ang:Object<string,(number|null)[]>, cote:string, theta:number}} serie
+ * @param {number} vw @param {number} vh
+ * @param {number} [visMin]
+ * @returns {{cle:string, lib:string, valeur:number, ecartType:number, n:number, phrase:string}[]}
+ */
+function mlProportions(serie,vw,vh,visMin){
+  /** @type {any[]} */
+  const out=[];
+  if(!serie||!Array.isArray(serie.t)||!serie.t.length) return out;
+  const vm=Number(visMin)>0?Number(visMin):ML_HORIZON_VIS;
+  const th=Number(serie.theta)||0;
+  /** @param {string} nom @param {number} k */
+  const pt=(nom,k)=>{
+    const r=mlRangPose(nom,serie.cote);
+    if(r==null) return null;
+    if(!(serie.V[k][r]>=vm)) return null;
+    const x=serie.X[k][r]*vw, y=serie.Y[k][r]*vh;
+    if(!isFinite(x)||!isFinite(y)) return null;
+    const p=th?mlRedresser([x],[y],th):{X:[x],Y:[y]};
+    return {x:p.X[0],y:p.Y[0]};
+  };
+  /** @param {string[]} seg @param {number} k */
+  const lg=(seg,k)=>{
+    const a=pt(seg[0],k), b=pt(seg[1],k);
+    if(!a||!b) return null;
+    const d=Math.hypot(a.x-b.x,a.y-b.y);
+    return d>1?d:null;
+  };
+  // LES IMAGES DEBOUT : genou tendu. Un membre plié est vu raccourci, et le
+  // raccourcissement n'est pas le même sur les deux segments du rapport.
+  const debout=[];
+  for(let k=0;k<serie.t.length;k++){
+    const g=(serie.ang['genou']||[])[k];
+    if(g!=null&&isFinite(g)&&g>=ML_DEBOUT_MIN) debout.push(k);
+  }
+  for(const d of ML_PROPORTIONS){
+    const vals=[];
+    for(const k of debout){
+      const a=lg(d.a,k), b=lg(d.b,k);
+      if(a==null||b==null) continue;
+      vals.push(a/b);
+    }
+    if(vals.length<ML_PROP_N_MIN) continue;
+    const moy=vals.reduce((s,x)=>s+x,0)/vals.length;
+    const va=vals.reduce((s,x)=>s+(x-moy)*(x-moy),0)/vals.length;
+    const et=Math.sqrt(va);
+    // ⚠ PAS DE PHRASE SANS REPÈRE. On ne dit « longue » ou « courte » que
+    // quand un repère calibré existe côté morpho ; ici on rend la valeur et sa
+    // dispersion, et c'est morphoAxes qui la situe. Voir le lot M2.
+    out.push({cle:d.cle,lib:d.lib,valeur:Math.round(moy*1000)/1000,
+      ecartType:Math.round(et*1000)/1000,n:vals.length,phrase:''});
+  }
+  return out;
+}
+/**
+ * PURE. La phrase MÉCANIQUE d'un rapport, une fois qu'un repère l'a situé.
+ * `position` vient de morphoAxes ; sans lui, on ne dit rien.
+ * @param {string} cle @param {string|null} position
+ * @returns {string}
+ */
+function mlProportionPhrase(cle,position){
+  const d=ML_PROPORTIONS.find(q=>q.cle===cle);
+  if(!d||(position!=='haut'&&position!=='bas')) return '';
+  return position==='haut'?d.haut:d.bas;
+}
+
+/**
+ * PURE. LE PONT. Une répétition entre, tout ce que les lots 9 à 13 savent en
+ * sort — et chaque manque est nommé plutôt que tu.
+ *
+ * C'est ici, et nulle part ailleurs, que la position de la charge et celle de
+ * l'articulation sont enfin SOUSTRAITES. Tout le reste du module mesurait des
+ * positions ; celui-ci mesure une sollicitation.
+ *
+ * @param {Segment} seg
+ * @param {{cote?:string, articulation?:string, chargeKg?:number|null, prescrit?:string}} [options]
+ * @returns {{r:any, sp:any, u:any, profil:any, angleZone:any, couple:any,
+ *   synthese:any[], tempo:any, zone:any, repere:any, manque:string[]}}
+ */
+function mlLireRepetition(seg,options){
+  const o=options||{};
+  const art=o.articulation||'hanche';
+  /** @type {any} */
+  const out={r:null,sp:null,u:null,profil:null,angleZone:null,couple:null,
+    synthese:[],tempo:null,zone:null,repere:null,manque:[]};
+  if(!seg) return out;
+  const b=seg.barre;
+  if(!b){ out.manque.push('trajectoire'); return out; }
+  const r=mlSerieRelue(b);
+  if(!r){ out.manque.push('trajectoire'); return out; }
+  out.r=r;
+  // LE TEMPO MESURÉ À L'ANALYSE s'il a été rangé — il vaut mieux que celui
+  // qu'on redériverait de cent cinquante points. Le second reste le repli
+  // pour les analyses d'avant le lot 9.
+  const mt=b.m||{};
+  out.tempo=(mt.tExc!=null&&mt.tCon!=null)
+    ?{excMs:mt.tExc,pauseMs:mt.tPau||0,conMs:mt.tCon,tutMs:mt.tExc+(mt.tPau||0)+mt.tCon,complet:true}
+    :mlTempo({t:r.t,v:r.v});
+  // LE POINT DUR, cherché après le pic de la vitesse signée.
+  let iPic=-1, mx=-Infinity;
+  for(let i=0;i<r.v.length;i++) if(isFinite(r.v[i])&&r.v[i]>mx){ mx=r.v[i]; iPic=i; }
+  if(iPic>=0) out.zone=mlZoneFaiblesse(r.v,iPic);
+  // LA LIGNE D'ACTION : celle que le coach a posée, la gravité sinon.
+  const act=b.act&&typeof b.act==='object'?b.act:null;
+  out.u=(act&&act.mode==='cable')
+    ?mlLigneAction('cable',{x:act.x1,y:act.y1},{x:act.x2,y:act.y2})
+    :mlLigneAction('libre');
+  if(!seg.pose){ out.manque.push('articulations'); return out; }
+  /** @type {any} */
+  let sp=null;
+  try{ sp=mlAnglesSerie(seg.pose,o.cote); }catch(e){ sp=null; }
+  if(!sp){ out.manque.push('articulations'); return out; }
+  out.sp=sp;
+  out.synthese=mlSynthese({t:r.t,v:r.v,ph:/** @type {any} */(b.ph)||[]},sp,{articulations:[art]});
+  const pp=mlPosePixels(sp,art==='tronc'?'epaule':art,b.vw,b.vh,Number(b.theta)||0);
+  if(!pp){ out.manque.push('articulation-absente'); return out; }
+  out.repere=mlRepereCorporel(r,pp);
+  // ── LE BRAS DE LEVIER, IMAGE PAR IMAGE, ET LE PROFIL QUI EN SORT.
+  //    L'AMPLITUDE EST CELLE DE L'ANGLE, pas du temps : c'est ce qui rend deux
+  //    machines superposables.
+  const ang=sp.ang[art]||[];
+  let aMin=Infinity, aMax=-Infinity;
+  for(const x of ang) if(x!=null&&isFinite(x)){ if(x<aMin) aMin=x; if(x>aMax) aMax=x; }
+  const parAngle=isFinite(aMin)&&isFinite(aMax)&&aMax-aMin>5;
+  const amp=[], tau=[], tms=[];
+  let axeMin=Infinity, axeMax=-Infinity;
+  if(!parAngle){
+    for(let i=0;i<r.t.length;i++){
+      if(!isFinite(r.X[i])||!isFinite(r.Y[i])||!r.axe) continue;
+      const p=r.X[i]*r.axe.ux+r.Y[i]*r.axe.uy;
+      if(p<axeMin) axeMin=p; if(p>axeMax) axeMax=p;
+    }
+  }
+  for(let i=0;i<r.t.length;i++){
+    if(!isFinite(r.px[i])||!isFinite(r.py[i])) continue;
+    let k=-1, d=Infinity;
+    for(let j=0;j<pp.t.length;j++){ const e=Math.abs(pp.t[j]-r.t[i]); if(e<d){ d=e; k=j; } }
+    if(k<0||d>100||!(pp.vis[k]>=ML_POSE_VIS_MIN)) continue;
+    const bras=mlBrasLevier({x:r.px[i],y:r.py[i]},{x:pp.x[k],y:pp.y[k]},out.u,r.mpp);
+    if(bras==null) continue;
+    let a=null;
+    if(parAngle){
+      const x=ang[k];
+      if(x==null||!isFinite(x)) continue;
+      a=(x-aMin)/(aMax-aMin)*100;
+    } else {
+      if(!r.axe||!isFinite(axeMin)||!(axeMax-axeMin>0)) continue;
+      a=((r.X[i]*r.axe.ux+r.Y[i]*r.axe.uy)-axeMin)/(axeMax-axeMin)*100;
+    }
+    amp.push(a); tau.push(bras); tms.push(r.t[i]);
+  }
+  out.profil=mlProfilResistance({amp,tau});
+  if(out.profil){
+    // L'INSTANT ET L'ANGLE DU PIC : la phrase de tête les porte, et la vidéo
+    // doit pouvoir y aller d'une touche.
+    let best=-1, m2=-Infinity;
+    for(let i=0;i<amp.length;i++) if(tau[i]>m2){ m2=tau[i]; best=i; }
+    if(best>=0){
+      out.profil.tMs=tms[best];
+      out.profil.brasMax=Math.round(tau[best]*1000)/1000;
+      let k=-1, d=Infinity;
+      for(let j=0;j<sp.t.length;j++){ const e=Math.abs(sp.t[j]-tms[best]); if(e<d){ d=e; k=j; } }
+      if(k>=0) out.angleZone=mlCorrigerAngle(art,mlFlexion(art,(ang[k]==null?null:ang[k])),
+        sp.hp==null?undefined:sp.hp);
+      const kg=Number(o.chargeKg);
+      out.couple={kg:isFinite(kg)&&kg>0?kg:null,nm:mlCouple(tau[best],kg)};
+    }
+  } else out.manque.push('profil');
+  return out;
+}
+
+// ══ LOT 14 — LA LECTURE ═════════════════════════════════════════════════════
+//
+// C'est ce qui décide seul de l'adoption. Un bandeau de compteurs se regarde
+// une fois ; trois phrases se lisent, se cliquent, et entrent dans la
+// correction. Le reste ne disparaît pas — il descend d'un cran.
+//
+// ⚠ FORME IMPOSÉE, ET ELLE N'EST PAS DÉCORATIVE : un fait, sa valeur, sa
+// tolérance, son ancrage temporel. Jamais un impératif, jamais un score.
+//
+// ⚠ CHAQUE PHRASE A SA VERSION « PAS MESURABLE », qui dit POURQUOI et CE QU'IL
+// FAUDRAIT FAIRE. C'est la moitié de la valeur de l'outil : un coach qui ne
+// comprend pas pourquoi l'écran se tait cesse de l'ouvrir.
+
+/**
+ * LES LIBELLÉS DE PHASE, SELON LE CONTEXTE. Les CLÉS ne changent pas — les
+ * analyses déjà enregistrées doivent rester lisibles — seuls les libellés
+ * suivent le vocabulaire du geste.
+ *
+ * Le contexte se MESURE, il ne se règle pas : une réception n'existe qu'en
+ * haltérophilie, où la barre est rattrapée. Sans elle, on est en musculation,
+ * et « point le plus haut » s'y dit « position courte ».
+ */
+const ML_PHASES_LIB_MUSCU=Object.freeze({depart:'Début du concentrique',
+  pic_vitesse:'Pic de vitesse',point_haut:'Position courte',
+  reception:'Début de l’excentrique',point_bas:'Position longue'});
+/**
+ * PURE. Le jeu de libellés qui convient à ces phases-là.
+ * @param {[string,number,number][]} ph
+ * @returns {Object<string,string>}
+ */
+function mlPhasesLib(ph){
+  const halt=(ph||[]).some(p=>Array.isArray(p)&&p[0]==='reception');
+  return halt?ML_PHASES_LIB:ML_PHASES_LIB_MUSCU;
+}
+/**
+ * PURE. La convention d'angle, écrite pour l'écran. Elle y est parce qu'un
+ * coach qui lit « hanche 78° » sans savoir si c'est l'angle intérieur ou la
+ * flexion lit un chiffre au hasard.
+ */
+/** Le déterminant de chaque articulation. Sans lui, l'écran dit « sur la
+ *  coude » — et une phrase mal écrite fait douter du chiffre qu'elle porte. */
+const ML_ART_DET=Object.freeze({coude:'le ',epaule:'l’',hanche:'la ',genou:'le ',
+  cheville:'la ',tronc:'le ',avantBras:'l’'});
+/** PURE. Un nombre écrit en français. @param {any} x @returns {string} */
+function _mlVirgule(x){ return String(x).replace('.',','); }
+/** PURE. Un écart signé, avec le VRAI signe moins et la virgule. @param {any} x @returns {string} */
+function mlSigne(x){
+  const v=Number(x);
+  if(!isFinite(v)) return '—';
+  return (v>0?'+':(v<0?'\u2212':''))+_mlVirgule(Math.abs(v));
+}
+const ML_CONVENTION='Les angles sont des FLEXIONS : genou tendu 0°, plié à angle droit 90°. '
+  +'Le tronc et l’avant-bras portent une INCLINAISON sur la verticale, pas une flexion.';
+
+/**
+ * PURE. LES TROIS PHRASES DE TÊTE. Chacune rend soit un fait complet, soit la
+ * raison précise pour laquelle il manque et le geste qui le débloquerait.
+ *
+ * @param {{profil?:any, synthese?:any[], articulation?:string, tempo?:any,
+ *   prescrit?:string, pertes?:any, couple?:{kg:number|null, nm:number|null},
+ *   serie?:any, zone?:any, angleZone?:any}} ctx
+ * @returns {{cle:string, texte:string, tMs:number|null, mesurable:boolean}[]}
+ */
+function mlPhrases(ctx){
+  const c=ctx||{};
+  /** @type {any[]} */
+  const out=[];
+  const art=c.articulation||'hanche';
+  const nomArt=(ML_ANGLES.find(q=>q.cle===art)||{nom:art}).nom.toLowerCase();
+
+  // ── 1. OÙ LA CHARGE PÈSE LE PLUS.
+  if(c.profil&&c.profil.couverture>=ML_COUVERTURE_MIN){
+    const a=c.angleZone;
+    const nm=c.couple&&c.couple.nm!=null
+      ?', '+_mlVirgule(c.couple.nm)+' N·m à ce point (charge externe seule)':'';
+    const det=/** @type {Object<string,string>} */(ML_ART_DET)[art]||'la ';
+    out.push({cle:'profil',mesurable:true,tMs:c.profil.tMs==null?null:Math.round(c.profil.tMs),
+      texte:'Le couple sur '+det+nomArt+' culmine'
+        +(a?' à '+a.deg+'° de '+(art==='tronc'||art==='avantBras'?'inclinaison':'flexion')
+          +' (±'+a.tol+'°)':'')
+        +', soit à '+c.profil.pic+' % de l’amplitude'+nm+' : '
+        +(/** @type {Object<string,string>} */(ML_PROFIL_LIB)[c.profil.classe]||'')+'.'});
+  } else {
+    out.push({cle:'profil',mesurable:false,tMs:null,
+      texte:c.profil
+        ?'Pas de profil de résistance : le mouvement n’est vu que sur '
+          +Math.round(c.profil.couverture*100)+' % de son amplitude, et il en faut au moins '
+          +Math.round(ML_COUVERTURE_MIN*100)+' %. Reprends le découpage de la répétition, '
+          +'du tout début à la toute fin.'
+        :'Pas de profil de résistance : il faut la trajectoire ET les articulations sur la '
+          +'même répétition. Lance l’analyse des articulations après celle de la barre.'});
+  }
+
+  // ── 2. LE TEMPO.
+  if(c.tempo&&c.tempo.complet){
+    out.push({cle:'tempo',mesurable:true,tMs:null,
+      texte:'Tempo mesuré '+mlTempoTexte(c.tempo)
+        +(c.prescrit?' pour un '+c.prescrit+' prescrit':'')
+        +' · '+(Math.round(c.tempo.tutMs/100)/10).toFixed(1).replace('.',',')
+        +' s sous tension.'});
+  } else {
+    out.push({cle:'tempo',mesurable:false,tMs:null,
+      texte:c.tempo
+        ?'Pas de tempo : la répétition est tronquée par les bornes du segment — ça bougeait '
+          +'déjà à la première image, ou encore à la dernière. Élargis les bornes de quelques '
+          +'dixièmes de seconde de chaque côté.'
+        :'Pas de tempo : la trajectoire n’a pas été analysée sur cette répétition.'});
+  }
+
+  // ── 3. CE QUE LA SÉRIE A PERDU.
+  if(c.pertes&&c.pertes.vitesse!=null){
+    const a=c.pertes.amplitude;
+    out.push({cle:'serie',mesurable:true,tMs:null,
+      texte:'De la meilleure à la dernière répétition : '
+        +mlSigne(c.pertes.vitesse)+' % de vitesse'
+        +(a!=null?', '+mlSigne(a)+' cm d’amplitude':'')+'.'});
+  } else {
+    out.push({cle:'serie',mesurable:false,tMs:null,
+      texte:'Pas de comparaison de série : il faut au moins deux répétitions analysées sur '
+        +'cette vidéo. Découpe-en une seconde et lance son analyse.'});
+  }
+  return out;
+}
+
 // ══ L'ÉTAT ET L'OUVERTURE ═════════════════════════════════════════════════════
 
 /** @type {EtatMl|null} */
@@ -1463,6 +2441,7 @@ function _mlRendre(){
     +'</div></div>'
     +'<div id="ml-bornes"></div>'
     +'<div id="ml-prise"></div>'
+    +'<div id="ml-lecture"></div>'
     +'<div id="ml-traj"></div>'
     +'<div id="ml-artic"></div>'
     +'<div id="ml-corr"></div>'
@@ -2129,6 +3108,18 @@ function _mlBrancherCalque(calque){
       calque.addEventListener('pointercancel',fin);
       return;
     }
+    // LA LIGNE D'ACTION : deux points sur le câble, et c'est fini. Même
+    // geste que l'étalon, même loupe, parce que c'est la même précision
+    // qu'on demande au doigt.
+    if(_ml&&_ml.mode==='action'){
+      const v=_mlVideo(), R=v?_mlVideoRect(v):null;
+      if(!R) return;
+      e.preventDefault();
+      const b=calque.getBoundingClientRect();
+      _mlActionPoser(Math.max(0,Math.min(R.vw,(e.clientX-b.left-R.ox)/R.s)),
+        Math.max(0,Math.min(R.vh,(e.clientY-b.top-R.oy)/R.s)));
+      return;
+    }
     // L'ÉTALON : premier toucher, un bout ; second, l'autre. Puis c'est fini.
     if(_ml&&_ml.mode==='etalon'){
       const v=_mlVideo(), R=v?_mlVideoRect(v):null;
@@ -2224,7 +3215,7 @@ function _mlDessinerCalque(){
   const dpr=Math.min(2,window.devicePixelRatio||1);
   const W=v.clientWidth, H=v.clientHeight;
   if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){ c.width=Math.round(W*dpr); c.height=Math.round(H*dpr); }
-  c.classList.toggle('ml-calque-actif',_ml.mode==='graine'||_ml.mode==='replacer'||_ml.mode==='etalon'
+  c.classList.toggle('ml-calque-actif',_ml.mode==='graine'||_ml.mode==='replacer'||_ml.mode==='etalon'||_ml.mode==='action'
     ||!!(_ml.rec&&_ml.rec.outil==='dessin'&&!_ml.rec.pause));
   const g=c.getContext('2d'); if(!g) return;
   g.setTransform(dpr,0,0,dpr,0,0);
@@ -2263,6 +3254,21 @@ function _mlDessinerCalque(){
   const tNow=(Number(v.currentTime)||0)*1000;
   // Pendant une correction, le coach peut masquer la trajectoire : le geste
   // est au journal, et l'athlète la verra disparaître au même moment.
+  // LOT 12 — LA MEILLEURE ET LA DERNIÈRE, EN FANTÔME. Le mécanisme existe
+  // déjà pour la trajectoire complète : on le réutilise plutôt que d'en
+  // écrire un second.
+  if(/** @type {any} */(_ml).compare){
+    /** @type {any[]} */
+    let lignes=[];
+    try{ lignes=mlTableauSerie(_ml.segments||[],{articulation:_mlArtLue}); }catch(x){}
+    const pe=mlPertesSerie(lignes);
+    if(pe) for(const i of [pe.iMeilleure,pe.iDerniere]){
+      const s2=(_ml.segments||[])[i];
+      if(!s2||s2===a) continue;
+      const d2=_mlBarreLue(s2);
+      if(d2) _mlDessinerTrajectoire(g,R,d2,/** @type {any} */(s2).barre,Infinity,true);
+    }
+  }
   if(a&&d&&!(_ml.rec&&!_ml.rec.trace)) _mlDessinerTrajectoire(g,R,d,/** @type {any} */(a).barre,tNow,_ml.fantome);
   if(a&&_ml.angCalques.length){
     const S=_mlPoseLue(a);
@@ -2413,6 +3419,7 @@ function mlPassagesDouteux(points){
 function _mlMajTrajectoire(){
   _mlMajPrise();
   _mlMajArticulations();
+  try{ _mlMajLecture(); }catch(e){}
   const z=_mlEl('ml-traj');
   if(!z||!_ml) return;
   const a=_mlActif();
@@ -2461,6 +3468,7 @@ function _mlMajTrajectoire(){
       // trajectoires de synthèse), et l'afficher promettrait une précision
       // qu'elle n'a pas. Deux décimales suffisent pour comparer deux
       // répétitions filmées pareil : le biais y penche du même côté.
+      +'<details class="ml-repli"><summary>Compteurs détaillés</summary>'
       +'<div class="ml-metr">'
         +'<div><b>'+mlNombre(m.vMax,2)+'\u00a0m/s</b><span>Vitesse verticale max'+(m.tVMax?' · '+mlTempsTexte(m.tVMax):'')+'</span></div>'
         +'<div><b>'+mlNombre(m.hMax,2)+'\u00a0m</b><span>Hauteur maximale</span></div>'
@@ -2468,12 +3476,14 @@ function _mlMajTrajectoire(){
         +(avant!=null
           ?'<div><b>'+cm(avant)+' · '+cm(arriere||0)+'</b><span>Écart max vers l’avant · l’arrière</span></div>'
           :'<div><b>'+cm(m.devMoins)+' · '+cm(m.devPlus)+'</b><span>Écart max vers la gauche · la droite</span></div>')
-      +'</div>'
+        +(m.vert!=null?'<div><b>'+Math.round(m.vert*100)+' %</b><span>Part verticale du chemin'
+          +(m.vert<ML_VERTICALITE?' · phases lues le long du chemin':'')+'</span></div>':'')
+      +'</div></details>'
       +'<canvas id="ml-courbe" class="ml-courbe" aria-label="Vitesse verticale dans le temps"></canvas>'
-      +(b.ph&&b.ph.length?'<div class="ml-phases">'+b.ph.map((/** @type {[string,number,number]} */ p)=>
+      +(b.ph&&b.ph.length?(function(){ const LIB=mlPhasesLib(b.ph); return '<div class="ml-phases">'+b.ph.map((/** @type {[string,number,number]} */ p)=>
           '<button type="button" class="ml-phase" onclick="mlAllerA('+p[1]+')">'
-          +escapeHtml(ML_PHASES_LIB[/** @type {keyof typeof ML_PHASES_LIB} */(p[0])]||p[0])+' <i>'+mlTempsTexte(p[1])
-          +(p[2]<ML_CONF_DOUTE*100?' · incertain':'')+'</i></button>').join('')+'</div>'
+          +escapeHtml(LIB[p[0]]||p[0])+' <i>'+mlTempsTexte(p[1])
+          +(p[2]<ML_CONF_DOUTE*100?' · incertain':'')+'</i></button>').join('')+'</div>'; })()
         :'<p class="ml-traj-aide">Aucune phase n’a pu être reconnue sur cette répétition.</p>')
       +'<label class="ml-coche"><input type="checkbox" '+(_ml.fantome?'checked ':'')+'onchange="mlFantome(this.checked)"> Trajectoire complète</label>'
       // LES AVERTISSEMENTS NE BLOQUENT RIEN : ils disent ce qui rend le
@@ -2491,6 +3501,271 @@ function _mlMajTrajectoire(){
   z.innerHTML=h+'</div>';
   _mlDessinerCalque();
   _mlDessinerCourbe();
+}
+
+
+// ══ L'ÉCRAN DES LOTS 9 À 14 ═════════════════════════════════════════════════
+//
+// Trois phrases en tête, le tableau de la série dessous, et les compteurs
+// détaillés dans un repli. On ne retire rien : on hiérarchise.
+
+/** L'articulation lue, et la charge, pour la session. Ni l'une ni l'autre ne
+ *  sont enregistrées : ce sont des réglages de LECTURE, pas des mesures. */
+let _mlArtLue='hanche';
+/** @type {number|null} */
+let _mlChargeKg=null;
+/** Le cache de lecture, par répétition : mlLecture parcourt toute la série et
+ *  le panneau se redessine à chaque geste. @type {Object<string,any>} */
+let _mlLectures={};
+
+/** @param {string} cle */
+function mlArticulationLue(cle){
+  if(!ML_ANGLES.some(q=>q.cle===cle)) return false;
+  _mlArtLue=cle; _mlLectures={};
+  _mlMajLecture(); _mlMajTrajectoire();
+  return true;
+}
+/** @param {any} v */
+function mlChargeKg(v){
+  const x=parseFloat(String(v==null?'':v).replace(',','.'));
+  _mlChargeKg=(isFinite(x)&&x>0&&x<1000)?x:null;
+  _mlLectures={}; _mlMajLecture();
+  return true;
+}
+/** La lecture d'une répétition, calculée une fois puis gardée. */
+/** @param {any} seg @returns {any} */
+function _mlLecture(seg){
+  if(!seg) return null;
+  const k=seg.id+'|'+_mlArtLue+'|'+(_mlChargeKg||0)+'|'+((_ml&&_ml.angCote)||'');
+  if(_mlLectures[k]) return _mlLectures[k];
+  let r=null;
+  try{ r=mlLireRepetition(seg,{articulation:_mlArtLue,chargeKg:_mlChargeKg,
+    cote:(_ml&&_ml.angCote)||undefined}); }catch(e){ r=null; }
+  if(r) _mlLectures[k]=r;
+  return r;
+}
+
+/**
+ * LES TROIS PHRASES, LE TABLEAU DE SÉRIE, ET CE QUI SE TRACE.
+ * ⚠ CHAQUE PHRASE EST CLIQUABLE quand elle porte un instant, et chacune entre
+ *   dans la correction en une touche — c'est là qu'elle sert.
+ */
+function _mlMajLecture(){
+  const z=_mlEl('ml-lecture');
+  if(!z||!_ml) return;
+  const a=_mlActif();
+  if(!a||!(/** @type {any} */(a).barre)){ z.innerHTML=''; return; }
+  const L=_mlLecture(a);
+  const segs=_ml.segments||[];
+  const lignes=(function(){ try{ return mlTableauSerie(segs,
+    {articulation:_mlArtLue,cote:(_ml&&_ml.angCote)||undefined}); }
+    catch(e){ return /** @type {any[]} */([]); } })();
+  const pertes=(function(){ try{ return mlPertesSerie(lignes); }catch(e){ return null; } })();
+  const phrases=mlPhrases({profil:L&&L.profil,angleZone:L&&L.angleZone,couple:L&&L.couple,
+    tempo:L&&L.tempo,pertes,articulation:_mlArtLue});
+  const enCorrection=!!(_ml.dureeMs&&!_ml.rec);
+  let h='<div class="ml-traj"><div class="ml-traj-tete"><span class="ml-lab">Ce que dit cette répétition</span></div>';
+  h+='<div class="ml-phrases">'+phrases.map((/** @type {any} */ p,/** @type {number} */ i)=>
+    '<div class="ml-phrase'+(p.mesurable?'':' ml-phrase-vide')+'">'
+    +(p.tMs!=null
+      ?'<button type="button" class="ml-phrase-t" onclick="mlAllerA('+p.tMs+')" aria-label="Aller à cet instant">'
+        +mlTempsTexte(p.tMs)+'</button>'
+      :'')
+    +'<span>'+escapeHtml(p.texte)+'</span>'
+    +(p.mesurable&&enCorrection
+      ?'<button type="button" class="ml-mini" onclick="mlPhraseCarte('+i+')" aria-label="Ajouter cette phrase à la correction">+</button>'
+      :'')
+    +'</div>').join('')+'</div>';
+  // LA CONVENTION, ÉCRITE DANS L'ÉCRAN. Un coach qui lit « hanche 78° » sans
+  // savoir si c'est l'angle intérieur ou la flexion lit un chiffre au hasard.
+  h+='<p class="ml-traj-aide">'+escapeHtml(ML_CONVENTION)+'</p>';
+  // L'ARTICULATION LUE, ET LA CHARGE. Deux réglages de lecture, pas deux mesures.
+  h+='<div class="ml-champ"><span>Articulation lue</span><span class="ml-choix">'
+    +ML_ANGLES.filter(q=>q.c).map(q=>'<button type="button" class="ml-b" aria-pressed="'
+      +(_mlArtLue===q.cle)+'" onclick="mlArticulationLue(\''+q.cle+'\')">'+escapeHtml(q.nom)+'</button>').join('')
+    +'</span></div>'
+    +'<label class="ml-champ"><span>Charge externe</span><span class="ml-cm">'
+    +'<input type="number" inputmode="decimal" min="1" max="999" step="0.5" value="'
+    +(_mlChargeKg==null?'':_mlChargeKg)+'" onchange="mlChargeKg(this.value)"><i>kg</i></span></label>';
+  // LA LIGNE D'ACTION. Par défaut la gravité ; le passage en câble est un
+  // geste explicite, parce que le deviner fausserait tous les bras de levier
+  // d'un coup et dans le même sens.
+  const act=/** @type {any} */(a).barre.act;
+  const cable=!!(act&&act.mode==='cable');
+  h+='<div class="ml-champ"><span>Ligne d’action</span><span class="ml-choix">'
+    +'<button type="button" class="ml-b" aria-pressed="'+(!cable)+'" onclick="mlActionLibre()">Charge libre</button>'
+    +'<button type="button" class="ml-b" aria-pressed="'+cable+'" onclick="mlActionCable()">Câble ou machine</button>'
+    +'</span></div>'
+    +(_ml.mode==='action'
+      ?'<p class="ml-traj-aide">Touche DEUX points sur le câble, du côté de la charge vers la poulie. '
+        +(/** @type {any} */(_ml).action&&/** @type {any} */(_ml).action.p1?'Un point posé, encore un.':'Aucun point posé.')+'</p>'
+      :'');
+  if(L&&L.profil&&L.profil.couverture>=ML_COUVERTURE_MIN){
+    h+='<canvas id="ml-profil" class="ml-courbe" aria-label="Profil de résistance en fonction de l’amplitude"></canvas>'
+      +'<p class="ml-traj-aide">Bras de levier rapporté à son maximum, en fonction de l’amplitude '
+      +'d’articulation — et non du temps : c’est ce qui rend deux machines superposables. '
+      +'Couverture '+Math.round(L.profil.couverture*100)+' %.</p>';
+  }
+  if(L&&L.repere&&L.repere.n>=3){
+    h+='<div class="ml-lab" style="margin-top:12px">Arc autour de l’articulation</div>'
+      +'<canvas id="ml-polaire" class="ml-courbe" aria-label="Tracé polaire de la charge autour de l’articulation"></canvas>'
+      +'<p class="ml-traj-aide">L’arc imposé fait '+L.repere.arc+'°, et la charge reste entre '
+      +Math.round(L.repere.rhoMin*100)+' et '+Math.round(L.repere.rhoMax*100)+' cm de l’articulation. '
+      +'C’est une description, pas un verdict : le réglage du siège se juge en salle.</p>';
+  }
+  if(L&&L.zone&&L.synthese&&L.synthese.length){
+    h+='<p class="ml-traj-aide">Point dur : la vitesse creuse de '+Math.round(L.zone.creux*100)
+      +' % après le pic, dans le concentrique.</p>';
+  } else if(L&&L.r&&!L.zone){
+    h+='<p class="ml-traj-aide">Pas de point dur marqué sur cette répétition — c’est une information, '
+      +'pas un échec.</p>';
+  }
+  // LE TABLEAU DE LA SÉRIE. Les répétitions non analysées y sont en ligne
+  // VIDE : sans elles, la série lue n'est pas celle qui a été filmée.
+  if(lignes.length>1){
+    h+='<div class="ml-lab" style="margin-top:14px">La série, répétition par répétition</div>'
+      +'<div class="ml-tab" role="table"><div class="ml-tr ml-th" role="row">'
+      +['Rép.','V. max','Ampl.','Tempo','Levier max','Au fond'].map(t=>'<span role="columnheader">'+t+'</span>').join('')
+      +'</div>'
+      +lignes.map((l,i)=>{
+        const lu=_mlLecture(segs[i]);
+        const marque=(pertes&&i===pertes.iMeilleure)?' ml-tr-best':((pertes&&i===pertes.iDerniere)?' ml-tr-last':'');
+        return '<div class="ml-tr'+(l.analysee?'':' ml-tr-vide')+marque+'" role="row">'
+          +'<span role="cell">'+escapeHtml(l.label||('#'+(i+1)))+'</span>'
+          +'<span role="cell">'+(l.vMax!=null?mlNombre(l.vMax,2)+' m/s':'—')+'</span>'
+          +'<span role="cell">'+(l.amplitude!=null?Math.round(l.amplitude*100)+' cm':'—')+'</span>'
+          +'<span role="cell">'+(l.tempo&&l.tempo.complet?escapeHtml(mlTempoTexte(l.tempo)):'—')+'</span>'
+          +'<span role="cell">'+(lu&&lu.profil&&lu.profil.brasMax!=null?Math.round(lu.profil.brasMax*100)+' cm':'—')+'</span>'
+          +'<span role="cell">'+(l.angleFond?escapeHtml(mlAngleTexte(l.angleFond)):'—')+'</span>'
+          +'</div>';
+      }).join('')+'</div>'
+      +(pertes?'<label class="ml-coche"><input type="checkbox" '+(/** @type {any} */(_ml).compare?'checked ':'')
+        +'onchange="mlComparerSerie(this.checked)"> Superposer la meilleure et la dernière</label>':'');
+  }
+  z.innerHTML=h+'</div>';
+  _mlDessinerProfil(L);
+  _mlDessinerPolaire(L);
+}
+/** Une phrase de tête, glissée dans la correction en cours. */
+/** @param {number} i */
+function mlPhraseCarte(i){
+  if(!_ml||!_ml.dureeMs) return false;
+  const a=_mlActif();
+  const L=a?_mlLecture(a):null;
+  const lignes=(function(){ try{ return mlTableauSerie(_ml.segments||[],
+    {articulation:_mlArtLue}); }catch(e){ return /** @type {any[]} */([]); } })();
+  const p=mlPhrases({profil:L&&L.profil,angleZone:L&&L.angleZone,couple:L&&L.couple,
+    tempo:L&&L.tempo,pertes:mlPertesSerie(lignes),articulation:_mlArtLue})[i];
+  if(!p||!p.mesurable) return false;
+  return mlCarteTexte(p.texte);
+}
+/** @param {boolean} oui */
+function mlComparerSerie(oui){
+  if(!_ml) return false;
+  /** @type {any} */(_ml).compare=!!oui;
+  _mlDessinerCalque();
+  return true;
+}
+/** La charge est libre : c'est la gravité qui tire. */
+function mlActionLibre(){
+  const a=_mlActif();
+  if(!a||!(/** @type {any} */(a).barre)) return false;
+  delete /** @type {any} */(a).barre.act;
+  _ml && (_ml.mode='lecture');
+  /** @type {any} */(_ml||{}).action=null;
+  _mlLectures={};
+  _mlMajLecture(); _mlMajEnregistrer();
+  return true;
+}
+/** Deux points à poser sur le câble. */
+function mlActionCable(){
+  if(!_ml) return false;
+  const a=_mlActif();
+  if(!a||!(/** @type {any} */(a).barre)) return false;
+  _ml.mode='action';
+  /** @type {any} */(_ml).action={p1:null,p2:null};
+  _mlMajLecture(); _mlDessinerCalque();
+  return true;
+}
+/**
+ * Un point de la ligne d'action, posé à l'écran. Le second referme le geste.
+ * @param {number} x @param {number} y  pixels vidéo
+ */
+function _mlActionPoser(x,y){
+  if(!_ml||_ml.mode!=='action') return false;
+  const A=/** @type {any} */(_ml).action||{p1:null,p2:null};
+  if(!A.p1){ A.p1={x,y}; /** @type {any} */(_ml).action=A; _mlMajLecture(); _mlDessinerCalque(); return true; }
+  A.p2={x,y};
+  const a=_mlActif();
+  if(a&&/** @type {any} */(a).barre){
+    // LES DEUX POINTS SONT RANGÉS DANS LE REPÈRE DE L'IMAGE, comme la
+    // trajectoire : c'est là qu'ils se dessinent, et mlLecture les redresse
+    // au même titre qu'elle.
+    /** @type {any} */(a).barre.act={mode:'cable',
+      x1:Math.round(A.p1.x*10)/10,y1:Math.round(A.p1.y*10)/10,
+      x2:Math.round(x*10)/10,y2:Math.round(y*10)/10};
+  }
+  _ml.mode='lecture';
+  /** @type {any} */(_ml).action=null;
+  _mlLectures={};
+  _mlMajLecture(); _mlMajEnregistrer(); _mlDessinerCalque();
+  return true;
+}
+/** Le profil de résistance, en fonction de l'amplitude. */
+/** @param {any} L */
+function _mlDessinerProfil(L){
+  const c=_mlEl('ml-profil');
+  if(!(c instanceof HTMLCanvasElement)||!L||!L.profil) return;
+  const p=L.profil.profil||[];
+  if(p.length<3) return;
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const W=c.clientWidth||300, H=c.clientHeight||120;
+  c.width=Math.round(W*dpr); c.height=Math.round(H*dpr);
+  const g=c.getContext('2d');
+  if(!g) return;
+  g.scale(dpr,dpr); g.clearRect(0,0,W,H);
+  const pad=10, w=W-2*pad, h=H-2*pad;
+  g.strokeStyle='rgba(255,255,255,.12)'; g.lineWidth=1;
+  g.beginPath(); g.moveTo(pad,H-pad); g.lineTo(W-pad,H-pad); g.stroke();
+  g.beginPath();
+  p.forEach((/** @type {{amp:number, tau:number}} */ q,/** @type {number} */ i)=>{
+    const x=pad+q.amp/100*w, y=H-pad-q.tau*h;
+    i?g.lineTo(x,y):g.moveTo(x,y);
+  });
+  g.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--arc-current').trim()||'#4DE8FF';
+  g.lineWidth=2; g.stroke();
+  // LE PIC, marqué : c'est le seul point que la phrase de tête nomme.
+  const x=pad+L.profil.pic/100*w;
+  g.strokeStyle='rgba(255,255,255,.3)'; g.setLineDash([3,3]);
+  g.beginPath(); g.moveTo(x,pad); g.lineTo(x,H-pad); g.stroke(); g.setLineDash([]);
+}
+/** L'arc de la charge autour de l'articulation. */
+/** @param {any} L */
+function _mlDessinerPolaire(L){
+  const c=_mlEl('ml-polaire');
+  if(!(c instanceof HTMLCanvasElement)||!L||!L.repere) return;
+  const R=L.repere;
+  if(R.n<3) return;
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const W=c.clientWidth||300, H=c.clientHeight||120;
+  c.width=Math.round(W*dpr); c.height=Math.round(H*dpr);
+  const g=c.getContext('2d');
+  if(!g) return;
+  g.scale(dpr,dpr); g.clearRect(0,0,W,H);
+  const cx=W/2, cy=8, rMax=Math.max(R.rhoMax,1e-6), ech=(H-20)/rMax;
+  g.strokeStyle='rgba(255,255,255,.12)'; g.lineWidth=1;
+  g.beginPath(); g.arc(cx,cy,R.rhoMin*ech,0,Math.PI*2); g.stroke();
+  g.beginPath(); g.arc(cx,cy,R.rhoMax*ech,0,Math.PI*2); g.stroke();
+  g.beginPath();
+  for(let i=0;i<R.t.length;i++){
+    const a=R.phi[i]*Math.PI/180;
+    const x=cx+Math.sin(a)*R.rho[i]*ech, y=cy+Math.cos(a)*R.rho[i]*ech;
+    i?g.lineTo(x,y):g.moveTo(x,y);
+  }
+  g.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--arc-charge').trim()||'#7B3BFF';
+  g.lineWidth=2; g.stroke();
+  g.fillStyle='rgba(255,255,255,.5)';
+  g.beginPath(); g.arc(cx,cy,3,0,Math.PI*2); g.fill();
 }
 
 // ── Les gestes du panneau ────────────────────────────────────────────────────
@@ -3914,6 +5189,18 @@ function mlCarteAjouter(){
   _mlMajCorrection();
   return true;
 }
+/**
+ * Un texte tout fait, glissé dans le champ des cartes puis ajouté. On passe
+ * par mlCarteAjouter et non à côté : c'est elle qui porte les bornes, le
+ * compte maximal et le tri.
+ * @param {string} t
+ */
+function mlCarteTexte(t){
+  const champ=/** @type {HTMLInputElement|null} */(_mlEl('ml-carte-txt'));
+  if(!champ) return false;
+  champ.value=String(t||'').slice(0,CORR_CARTE_MAX);
+  return mlCarteAjouter();
+}
 /** @param {string} id */
 function mlCarteSupprimer(id){
   if(!_ml) return false;
@@ -4646,6 +5933,28 @@ function _mlInjecterStyle(){
     '.ml-metr b{display:block;font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:.6px;color:var(--text);font-weight:400;white-space:nowrap}',
     '.ml-metr span{display:block;font-size:var(--fs-2xs);color:var(--sub);line-height:1.35;margin-top:2px}',
     '.ml-courbe{display:block;width:100%;height:92px;margin-top:10px;background:#0a0a0a;border-radius:var(--r-2)}',
+    // LES TROIS PHRASES. Elles occupent la tête du panneau parce que ce sont
+    // elles qu'on lit ; les compteurs sont descendus dans un repli.
+    '.ml-phrases{display:flex;flex-direction:column;gap:8px;margin-top:8px}',
+    '.ml-phrase{display:flex;align-items:flex-start;gap:8px;background:var(--surface-2);border-radius:var(--r-2);border-left:2px solid var(--arc-current);padding:9px 11px;font-size:var(--fs-sm);line-height:1.55;color:var(--text)}',
+    // UNE PHRASE QUI NE SE MESURE PAS RESTE LISIBLE, en gris : elle dit
+    // pourquoi et quoi faire, et c'est la moitié de la valeur de l'outil.
+    '.ml-phrase-vide{border-left-color:var(--arc-calm);color:var(--sub)}',
+    '.ml-phrase-t{flex:none;min-height:24px;padding:0 7px;border-radius:var(--r-full,99px);background:#0a0a0a;border:1px solid var(--border);color:var(--text-dim);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;cursor:pointer}',
+    '.ml-phrase .ml-mini{flex:none;margin-left:auto}',
+    '.ml-repli{margin-top:10px}',
+    '.ml-repli>summary{cursor:pointer;font-size:var(--fs-2xs);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;color:var(--sub);min-height:32px;display:flex;align-items:center}',
+    // LE TABLEAU DE LA SÉRIE. Six colonnes tiennent en 375 px parce que
+    // chacune est un chiffre court ; au-delà, il défilerait, et un tableau
+    // qui défile ne se compare plus d'une ligne à l'autre.
+    '.ml-tab{margin-top:8px;border:1px solid var(--border);border-radius:var(--r-2);overflow:hidden}',
+    '.ml-tr{display:grid;grid-template-columns:1.1fr 1fr 1fr 1.2fr 1fr 1fr;gap:2px;padding:7px 8px;font-size:var(--fs-2xs);color:var(--text);border-top:1px solid var(--border);align-items:center}',
+    '.ml-tr:first-child{border-top:none}',
+    '.ml-tr span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.ml-th{background:#0a0a0a;color:var(--sub);font-weight:800;letter-spacing:.4px;text-transform:uppercase}',
+    '.ml-tr-vide{color:var(--text-faint)}',
+    '.ml-tr-best{box-shadow:inset 2px 0 0 var(--arc-current)}',
+    '.ml-tr-last{box-shadow:inset 2px 0 0 var(--arc-charge)}',
     '.ml-phases{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}',
     '.ml-phase{min-height:36px;padding:0 10px;border-radius:var(--r-full,99px);background:var(--surface-2);border:1px solid var(--border);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;cursor:pointer}',
     '.ml-phase i{font-style:normal;color:var(--sub);font-weight:700}',

@@ -42449,6 +42449,334 @@ async function testExercices(){
       return true;
     });
 
+    // ══════ MOTION LAB — LOTS 9 À 14 : LE TEMPS, LE LEVIER, LA LECTURE ══════
+    //
+    // Jusqu'ici l'outil mesurait des POSITIONS. Ces lots-là mesurent des
+    // SOLLICITATIONS : ils soustraient enfin la position de l'articulation de
+    // celle de la charge, sur la même image.
+    //
+    // Trois exigences défendues ici :
+    //  • LES RÉSULTATS DÉJÀ ENREGISTRÉS NE BOUGENT PAS. Les phases continuent
+    //    de se lire sur la vitesse verticale pour toute charge verticale.
+    //  • AUCUN SCORE, AUCUNE NOTE. Une perte de vitesse reste une perte de
+    //    vitesse : elle ne devient ni un RIR, ni une « proximité de l'échec ».
+    //  • CE QUI NE SE MESURE PAS SE DIT. Chaque phrase de tête a sa version
+    //    « pas mesurable », qui nomme la raison et le geste qui la lèverait.
+    const _L9=(()=>{
+      const FPS=60, MPP=0.45/120, VW=1280, VH=720;
+      const barre=(pts,act)=>{
+        const res=mlMetriquesBarre(pts.map(p=>({tMs:p.t,x:p.x,y:p.y,conf:0.9,etat:'ok'})),MPP,0);
+        if(!res) return null;
+        const b=mlCompacterBarre({debutMs:pts[0].t,finMs:pts[pts.length-1].t},res,
+          {disqueM:0.45,sens:'',vw:VW,vh:VH,rayonPx:60,fps:FPS,alertes:[],mpp:MPP,theta:0});
+        if(act) b.act=act;
+        return b;
+      };
+      // Le squelette d'un curl : épaule et coude fixes, avant-bras qui tourne.
+      const curl=(phi)=>{
+        const ep={x:400,y:200}, co={x:400,y:200+0.30/MPP}, a=phi*Math.PI/180;
+        const po={x:co.x+(0.28/MPP)*Math.sin(a),y:co.y+(0.28/MPP)*Math.cos(a)};
+        const ha={x:400,y:200+0.55/MPP}, ge={x:400,y:ha.y+0.42/MPP};
+        const ch={x:400,y:ge.y+0.40/MPP}, pi={x:400+0.15/MPP,y:ch.y};
+        return [ep,co,po,ha,ge,ch,pi];
+      };
+      const ech=(t,s)=>{ const X=[],Y=[],V=[];
+        for(const p of s){ X.push(p.x,p.x); Y.push(p.y,p.y); V.push(0.95,0.95); }
+        return {tMs:t,X,Y,V}; };
+      const faireCurl=(act)=>{
+        const pts=[], e=[];
+        for(let i=0;i<=120;i++){
+          const t=i*(1000/FPS), u=i/120, phi=140*(u<0.5?u*2:(1-u)*2), s=curl(phi);
+          pts.push({t,x:s[2].x,y:s[2].y}); e.push(ech(t,s));
+        }
+        const b=barre(pts,act);
+        const p=mlCompacterPose({debutMs:0,finMs:pts[pts.length-1].t},e,
+          {vw:VW,vh:VH,cote:'D',theta:0,hp:5});
+        return {id:'c1',label:'R1',debutMs:0,finMs:pts[pts.length-1].t,barre:b,pose:p};
+      };
+      return {FPS,MPP,VW,VH,barre,curl,ech,faireCurl};
+    })();
+
+    okA('R39 — les phases restent VERTICALES sur une charge verticale, et changent d’axe sur un arc',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // Une montée verticale : rien ne doit bouger par rapport à avant le lot 9.
+      const vert=[];
+      for(let i=0;i<=90;i++) vert.push({t:i*16.67,x:640,y:600-(i/90)*0.8/_L9.MPP});
+      const bv=_L9.barre(vert);
+      const rv=mlSerieRelue(bv);
+      if(!rv) return _echec('série verticale illisible');
+      if(rv.mode!=='vertical') return _echec('verticalité ' + Math.round(rv.verticalite*100)+' %');
+      // La vitesse qui porte les phases EST la verticale, au millième près.
+      for(let i=0;i<rv.v.length;i++){
+        if(!isFinite(rv.v[i])&&!isFinite(rv.vv[i])) continue;
+        if(Math.abs(rv.v[i]-rv.vv[i])>1e-9) return _echec('la vitesse de phase a changé');
+      }
+      // Un arc quasi horizontal : la verticale ne dit plus rien, le chemin si.
+      const arc=[];
+      for(let i=0;i<=90;i++){ const th=(-50+100*i/90)*Math.PI/180;
+        arc.push({t:i*16.67,x:640+Math.sin(th)*0.6/_L9.MPP,y:300+(1-Math.cos(th))*0.12/_L9.MPP}); }
+      const ra=mlSerieRelue(_L9.barre(arc));
+      if(!ra||ra.mode!=='chemin') return _echec('l’arc passe pour vertical : '+(ra&&Math.round(ra.verticalite*100)));
+      const vMaxChemin=ra.v.reduce((q,x)=>isFinite(x)&&x>q?x:q,0);
+      const vMaxVert=ra.vv.reduce((q,x)=>isFinite(x)&&Math.abs(x)>q?Math.abs(x):q,0);
+      return vMaxChemin>3*vMaxVert
+        ?true:_echec('chemin '+vMaxChemin.toFixed(2)+' m/s contre verticale '+vMaxVert.toFixed(2));});
+
+    okA('R39 — le tempo se mesure à 0,2 s près, et se tait quand la répétition est tronquée',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // Un 3 – 1 – 1 de synthèse, à vitesse quasi constante comme un vrai.
+      const pts=[]; let t=0;
+      const A=0.5/_L9.MPP, pas=1000/_L9.FPS;
+      const tra=u=>{ const r=0.06; return u<r?0.5*u*u/r:(u>1-r?1-0.5*(1-u)*(1-u)/r:(0.5*r+(u-r))/(1-r)); };
+      const pousse=(ms,f)=>{ for(let k=0;k<Math.round(ms/pas);k++){ pts.push({t,x:640,y:300+f(k*pas/ms)*A}); t+=pas; } };
+      pousse(300,()=>0);
+      pousse(3000,u=>Math.min(1,Math.max(0,tra(u))));
+      pousse(1000,()=>1);
+      pousse(1000,u=>1-Math.min(1,Math.max(0,tra(u))));
+      pousse(300,()=>0);
+      const b=_L9.barre(pts);
+      const m=b.m||{};
+      if(m.tExc==null) return _echec('aucun tempo mesuré');
+      const e=[Math.abs(m.tExc-3000),Math.abs(m.tPau-1000),Math.abs(m.tCon-1000)];
+      if(e.some(x=>x>200)) return _echec('écarts '+e.map(x=>(x/1000).toFixed(2)).join(' / ')+' s');
+      // TRONQUÉE : ça bouge déjà à la première image. Pas de tempo du tout —
+      // un chiffre faux est plus difficile à défaire qu'une case vide.
+      const b2=_L9.barre(pts.slice(40,240));
+      if(b2.m.tExc!=null) return _echec('un tempo sort d’une répétition tronquée');
+      // Et mlTempo le dit aussi quand on le rejoue sur la série relue.
+      const r2=mlSerieRelue(b2);
+      return mlTempo({t:r2.t,v:r2.v}).complet===false
+        ?true:_echec('mlTempo la croit complète');});
+
+    okA('R39 — le point dur sort d’un creux franc, et JAMAIS d’une courbe lisse',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const faire=(p)=>{ const v=[];
+        for(let i=0;i<60;i++){ const u=i/59; let x=Math.sin(Math.PI*u);
+          if(u>0.4&&u<0.7) x-=p*Math.sin(Math.PI*(u-0.4)/0.3); v.push(x); }
+        return v; };
+      const pic=(v)=>{ let i=0; v.forEach((x,k)=>{ if(x>v[i]) i=k; }); return i; };
+      const dur=faire(0.35), lisse=faire(0), petit=faire(0.08);
+      const z=mlZoneFaiblesse(dur,pic(dur));
+      if(!z) return _echec('un creux de 35 % n’est pas vu');
+      if(z.creux<ML_CREUX_MIN) return _echec('creux rendu à '+z.creux);
+      if(mlZoneFaiblesse(lisse,pic(lisse))) return _echec('faux positif sur une cloche');
+      // SOUS LE SEUIL, C'EST L'ONDULATION ORDINAIRE D'UNE COURBE LISSÉE.
+      if(mlZoneFaiblesse(petit,pic(petit))) return _echec('un creux de 8 % passe pour un point dur');
+      // Cas dégénérés : rien ne lève.
+      return (mlZoneFaiblesse([],0)===null&&mlZoneFaiblesse([1,2],9)===null
+        &&mlZoneFaiblesse([NaN,NaN,NaN],1)===null)
+        ?true:_echec('un cas dégénéré ne rend pas null');});
+
+    okA('R39 — le pic de couple d’un curl tombe où la mécanique le veut',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // LA VÉRIFICATION DE BON SENS : à la barre, l'avant-bras horizontal est
+      // le pire moment, et l'avant-bras est horizontal à 90° de flexion.
+      const seg=_L9.faireCurl(null);
+      const L=mlLireRepetition(seg,{articulation:'coude',chargeKg:20});
+      if(!L.angleZone) return _echec('aucun angle au pic');
+      if(Math.abs(L.angleZone.deg-90)>10) return _echec('pic à '+L.angleZone.deg+'° de flexion');
+      if(!(L.couple&&L.couple.nm>0)) return _echec('aucun couple malgré la charge');
+      // SANS CHARGE, LE PROFIL RESTE : il est normalisé, il ne dépend pas des kilos.
+      const sans=mlLireRepetition(seg,{articulation:'coude'});
+      if(!sans.profil) return _echec('le profil disparaît avec la charge');
+      if(sans.couple&&sans.couple.nm!==null) return _echec('un N·m sort sans masse');
+      // À LA POULIE, le pic se déplace — la mécanique n'est plus la même.
+      const cab=_L9.faireCurl({mode:'cable',x1:400,y1:400,x2:400+150,y2:400+260});
+      const Lc=mlLireRepetition(cab,{articulation:'coude',chargeKg:20});
+      if(!Lc.angleZone) return _echec('aucun angle au pic, à la poulie');
+      return Lc.angleZone.deg>L.angleZone.deg+10
+        ?true:_echec('barre '+L.angleZone.deg+'° et câble '+Lc.angleZone.deg+'° : rien n’a bougé');});
+
+    okA('R39 — le bras de levier d’une charge libre EST la distance horizontale',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const u=mlLigneAction('libre');
+      if(u.ux!==0||u.uy!==-1) return _echec('la gravité a changé de sens');
+      const d=mlBrasLevier({x:340,y:100},{x:300,y:500},u,0.01);
+      if(Math.abs(d-0.4)>1e-9) return _echec('bras de '+d+' m au lieu de 0,4');
+      // La hauteur n'entre pas : c'est bien un bras de levier, pas une distance.
+      const d2=mlBrasLevier({x:340,y:900},{x:300,y:500},u,0.01);
+      if(Math.abs(d2-0.4)>1e-9) return _echec('la hauteur compte : '+d2);
+      // Deux points confondus ne font pas une direction : repli sur la gravité.
+      const c=mlLigneAction('cable',{x:10,y:10},{x:10,y:10});
+      if(c.mode!=='libre') return _echec('une direction sort de deux points confondus');
+      // Un câble incliné : le bras change, et dans le bon sens.
+      const ob=mlLigneAction('cable',{x:0,y:0},{x:-100,y:100});
+      const dd=mlBrasLevier({x:340,y:100},{x:300,y:500},ob,0.01);
+      if(!(dd>0.4)) return _echec('un câble incliné ne change rien : '+dd);
+      return (mlBrasLevier(null,{x:0,y:0},u,1)===null&&mlBrasLevier({x:0,y:0},{x:0,y:0},u,0)===null
+        &&mlCouple(0.4,null)===null&&mlCouple(0.4,20)===Math.round(20*9.81*0.4*10)/10)
+        ?true:_echec('un cas dégénéré ne rend pas null');});
+
+    okA('R39 — un profil établi sur un tiers du mouvement N’EST PAS un profil',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // Couverture : la part d'amplitude réellement visitée. Des points serrés
+      // au même endroit ne couvrent pas un mouvement.
+      const serre={amp:[],tau:[]};
+      for(let i=0;i<40;i++){ serre.amp.push(30+i*0.2); serre.tau.push(1+Math.sin(i)); }
+      const p=mlProfilResistance(serre);
+      if(!p) return _echec('aucun profil calculé');
+      if(p.couverture>=ML_COUVERTURE_MIN) return _echec('couverture '+p.couverture+' sur un huitième');
+      // Large : la couverture passe, et la classe suit la position du pic.
+      const large=(picA)=>{ const s={amp:[],tau:[]};
+        for(let i=0;i<=100;i+=2){ s.amp.push(i); s.tau.push(1-Math.abs(i-picA)/100); }
+        return mlProfilResistance(s); };
+      const bas=large(10), mid=large(50), haut=large(90);
+      if(bas.classe!=='longue'||mid.classe!=='cloche'||haut.classe!=='courte')
+        return _echec(bas.classe+' / '+mid.classe+' / '+haut.classe);
+      if(bas.couverture<ML_COUVERTURE_MIN) return _echec('couverture large trop basse');
+      // Le profil est NORMALISÉ : son maximum vaut 1, quelle que soit l'unité.
+      if(Math.max(...mid.profil.map(q=>q.tau))!==1) return _echec('le profil n’est pas normalisé');
+      return (mlProfilResistance({amp:[1],tau:[1]})===null
+        &&mlProfilResistance({amp:[0,50,100],tau:[0,0,0]})===null)
+        ?true:_echec('un cas dégénéré ne rend pas null');});
+
+    okA('R39 — la jointure dit ce qui manque plutôt que de rapprocher n’importe quoi',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const ph=[['depart',0,90],['pic_vitesse',500,90]];
+      // Sans pose : une ligne par phase, et le manque nommé.
+      const a=mlSynthese({t:[0,500],v:[0,1],ph},null,{});
+      if(a.length!==2||a.some(x=>x.manque!=='pose')) return _echec('sans pose : '+JSON.stringify(a[0]));
+      // Sans barre : rien, parce qu'il n'y a aucune phase à décrire.
+      if(mlSynthese(null,{t:[0],ang:{},hp:null},{}).length) return _echec('des lignes sortent sans trajectoire');
+      // DEUX PLAGES QUI NE SE RECOUVRENT PAS : on ne rapproche pas un angle
+      // d'une phase qu'il ne décrit pas.
+      const loin=mlSynthese({t:[0,500],v:[0,1],ph},{t:[9000],ang:{hanche:[80]},hp:null},{articulations:['hanche']});
+      if(loin.some(x=>x.manque!=='hors-plage')) return _echec('un angle à neuf secondes a été rapproché');
+      if(loin[0].angles.hanche!==null) return _echec('un angle sort quand même');
+      // Qui se recouvrent : l'angle sort, avec son écart de pose.
+      const pres=mlSynthese({t:[0,500],v:[0,1],ph},{t:[0,480],ang:{hanche:[100,95]},hp:5},{articulations:['hanche']});
+      if(pres[1].angles.hanche==null) return _echec('aucun angle sur une plage qui se recouvre');
+      if(pres[1].ecartPoseMs!==20) return _echec('écart de pose : '+pres[1].ecartPoseMs);
+      // ⚠ L'ANGLE RENDU EST UNE FLEXION CORRIGÉE, avec sa tolérance — jamais
+      // un angle nu.
+      return (pres[1].angles.hanche.tol>0&&Number.isInteger(pres[1].angles.hanche.deg))
+        ?true:_echec('l’angle ne porte pas sa tolérance, ou porte un dixième');});
+
+    okA('R39 — la série se compare depuis la MEILLEURE, et ne devient jamais un score',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const l=[{analysee:true,vMax:0.5,amplitude:0.50},{analysee:true,vMax:0.7,amplitude:0.52},
+        {analysee:true,vMax:0.6,amplitude:0.51},{analysee:true,vMax:0.4,amplitude:0.45}];
+      const p=mlPertesSerie(l);
+      if(!p) return _echec('aucune perte calculée');
+      if(p.iMeilleure!==1||p.iDerniere!==3) return _echec('#'+p.iMeilleure+' → #'+p.iDerniere);
+      if(Math.abs(p.vitesse+42.9)>0.2) return _echec('perte de '+p.vitesse+' %');
+      // MOINS DE DEUX RÉPÉTITIONS ANALYSÉES : rien à comparer, et on le dit
+      // en rendant null plutôt qu'un zéro qui passerait pour une stabilité.
+      if(mlPertesSerie([l[0]])!==null) return _echec('une perte sort d’une seule répétition');
+      if(mlPertesSerie([])!==null) return _echec('une perte sort de rien');
+      // UNE RÉPÉTITION NON ANALYSÉE EST UNE LIGNE VIDE, PAS UNE LIGNE ABSENTE.
+      const t=mlTableauSerie([{id:'a',label:'R1',debutMs:0,finMs:1000},
+        {id:'b',label:'R2',debutMs:2000,finMs:3000}],{});
+      if(t.length!==2) return _echec(t.length+' lignes pour deux répétitions');
+      if(t.some(x=>x.analysee)) return _echec('une répétition sans trajectoire passe pour analysée');
+      // ⚠ AUCUN CHAMP DE JUGEMENT dans ce que la série produit.
+      const interdits=['rir','score','note','echec','proximite','niveau','feu'];
+      const champs=Object.keys(t[0]).concat(Object.keys(p)).map(k=>k.toLowerCase());
+      const fuite=champs.filter(k=>interdits.some(m=>k.indexOf(m)>=0));
+      return fuite.length?_echec('champs de jugement : '+fuite.join(', ')):true;});
+
+    okA('R39 — les proportions sortent en RAPPORTS, jamais en centimètres',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const e=[];
+      for(let i=0;i<40;i++) e.push(_L9.ech(i*80,_L9.curl(2)));
+      const p=mlCompacterPose({debutMs:0,finMs:3120},e,{vw:_L9.VW,vh:_L9.VH,cote:'D',theta:0,hp:5});
+      const pr=mlProportions(mlAnglesSerie(p,'D'),_L9.VW,_L9.VH);
+      const ft=pr.find(x=>x.cle==='femur_tibia');
+      // La géométrie posée : fémur 0,42 m sur tibia 0,40 m, soit 1,05.
+      if(!ft) return _echec('aucun rapport cuisse/jambe');
+      if(Math.abs(ft.valeur-1.05)>0.02) return _echec('rapport de '+ft.valeur+' pour 1,05 attendu');
+      if(!(ft.n>=ML_PROP_N_MIN)) return _echec(ft.n+' images seulement');
+      if(ft.ecartType==null) return _echec('aucune dispersion rendue');
+      // AUCUN CENTIMÈTRE, et aucune phrase tant qu'aucun repère ne situe.
+      if(pr.some(x=>x.phrase!=='')) return _echec('une phrase sort sans repère');
+      if(pr.some(x=>/cm/.test(JSON.stringify(x)))) return _echec('un centimètre a fui');
+      // SOUS VINGT IMAGES, RIEN : un écart-type sur cinq images ne veut rien dire.
+      const court=mlCompacterPose({debutMs:0,finMs:400},e.slice(0,6),
+        {vw:_L9.VW,vh:_L9.VH,cote:'D',theta:0,hp:5});
+      if(mlProportions(mlAnglesSerie(court,'D'),_L9.VW,_L9.VH).length)
+        return _echec('un rapport sort de six images');
+      // LA PHRASE EST MÉCANIQUE, jamais un conseil : on vérifie qu'aucune ne
+      // nomme un exercice ni ne donne un ordre.
+      const ph=ML_PROPORTIONS.map(d=>d.haut+' '+d.bas).join(' ').toLowerCase();
+      const mots=['squat','presse','évite','arrête','remplace','interdit','proscrit','défaut','mauvais'];
+      const fuite=mots.filter(m=>ph.indexOf(m)>=0);
+      return fuite.length?_echec('la phrase conseille : '+fuite.join(', ')):true;});
+
+    okA('R39 — trois phrases, et chacune dit POURQUOI quand elle ne mesure rien',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const vides=mlPhrases({});
+      if(vides.length!==3) return _echec(vides.length+' phrases');
+      if(vides.some(p=>p.mesurable)) return _echec('une phrase se dit mesurable sans rien');
+      // ⚠ LA MOITIÉ DE LA VALEUR DE L'OUTIL : une phrase vide nomme la raison
+      // ET le geste. Une phrase vide de dix mots ne sert à personne.
+      if(vides.some(p=>p.texte.length<60)) return _echec('une phrase vide est trop courte');
+      const seg=_L9.faireCurl(null);
+      const L=mlLireRepetition(seg,{articulation:'coude',chargeKg:20});
+      const pl=mlPhrases({profil:L.profil,angleZone:L.angleZone,couple:L.couple,tempo:L.tempo,
+        pertes:{vitesse:-19,amplitude:-4,iMeilleure:0,iDerniere:3},articulation:'coude'});
+      const pro=pl.find(x=>x.cle==='profil');
+      if(!pro.mesurable) return _echec('le profil ne se dit pas alors qu’il existe');
+      // FORME IMPOSÉE : un fait, sa valeur, sa tolérance, son ancrage.
+      if(!/±/.test(pro.texte)) return _echec('la phrase ne porte pas sa tolérance');
+      if(!/%/.test(pro.texte)) return _echec('la phrase ne situe pas dans l’amplitude');
+      if(!/charge externe seule/.test(pro.texte)) return _echec('le N·m n’est pas qualifié');
+      if(pro.tMs==null) return _echec('la phrase ne porte aucun instant à atteindre');
+      // AUCUN IMPÉRATIF, AUCUN SCORE dans une phrase mesurée.
+      const t=pl.filter(x=>x.mesurable).map(x=>x.texte).join(' ').toLowerCase();
+      const mots=['il faut','tu dois','corrige','score','note','mauvais','bon geste','faute'];
+      const fuite=mots.filter(m=>t.indexOf(m)>=0);
+      return fuite.length?_echec('la phrase ordonne ou juge : '+fuite.join(', ')):true;});
+
+    okA('R39 — le vocabulaire suit le geste, les CLÉS ne bougent jamais',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // ⚠ LES ANALYSES DÉJÀ ENREGISTRÉES DOIVENT RESTER LISIBLES : seuls les
+      // libellés changent, et les deux jeux portent exactement les mêmes clés.
+      const a=Object.keys(ML_PHASES_LIB).sort().join(','),
+            b=Object.keys(ML_PHASES_LIB_MUSCU).sort().join(',');
+      if(a!==b) return _echec('les deux jeux de libellés n’ont pas les mêmes clés');
+      const muscu=mlPhasesLib([['depart',0,90],['point_haut',500,90]]);
+      const halt=mlPhasesLib([['depart',0,90],['reception',500,90]]);
+      if(muscu.point_haut!=='Position courte') return _echec('musculation : '+muscu.point_haut);
+      if(halt.point_haut!==ML_PHASES_LIB.point_haut) return _echec('haltérophilie : '+halt.point_haut);
+      // La convention d'angle est ÉCRITE, pas supposée.
+      return (/flexion/i.test(ML_CONVENTION)&&/inclinaison/i.test(ML_CONVENTION))
+        ?true:_echec('la convention ne dit pas les deux');});
+
+    okA('R39 — la ligne d’action se relit, ou ne se relit pas du tout',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const pts=[];
+      for(let i=0;i<=60;i++) pts.push({t:i*16.67,x:640,y:600-(i/60)*0.6/_L9.MPP});
+      const b=_L9.barre(pts,{mode:'cable',x1:100,y1:100,x2:300,y2:500});
+      const ok=segBarreValide(b,0,Math.round(pts[pts.length-1].t));
+      if(!ok) return _echec('la trajectoire ne passe plus le validateur');
+      if(!ok.act||ok.act.mode!=='cable') return _echec('la ligne d’action est perdue à la relecture');
+      // DEUX POINTS CONFONDUS NE FONT PAS UNE DIRECTION : ils rendraient tous
+      // les bras de levier nuls sans que rien ne le dise.
+      const plat=_L9.barre(pts,{mode:'cable',x1:100,y1:100,x2:101,y2:100});
+      if(segBarreValide(plat,0,Math.round(pts[pts.length-1].t)).act)
+        return _echec('une ligne d’action réduite à un point est gardée');
+      // Sans ligne posée, c'est la gravité — et c'est le cas de toutes les
+      // analyses d'avant ce lot.
+      const nu=_L9.barre(pts);
+      return segBarreValide(nu,0,Math.round(pts[pts.length-1].t)).act===undefined
+        ?true:_echec('une ligne d’action apparaît toute seule');});
+
+    okA('R39 — rien de tout cela n’écrit dans le dossier de l’athlète',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // Les fonctions de calcul sont PURES : on leur passe un objet, et il ne
+      // doit pas bouger d'un octet.
+      const seg=_L9.faireCurl(null);
+      const avant=JSON.stringify(seg);
+      mlLireRepetition(seg,{articulation:'coude',chargeKg:20});
+      mlTableauSerie([seg],{});
+      mlSerieRelue(seg.barre);
+      if(JSON.stringify(seg)!==avant) return _echec('la répétition a été modifiée');
+      // Et le budget de données ne bouge pas : les trois vitesses se
+      // recalculent, elles ne se stockent pas.
+      const poids=JSON.stringify(seg.barre).length+JSON.stringify(seg.pose).length;
+      return poids<80000?true:_echec('une analyse pèse '+Math.round(poids/1024)+' Ko');});
+
+
     // ══ 17/09/2026 — R29 : MOTION LAB, LOTS 2 ET 3 — LA TRAJECTOIRE ════════
     //
     // Tout se calcule sur l'appareil du coach (option A). Les images de ces
@@ -42643,7 +42971,12 @@ async function testExercices(){
         if(!_mlActif()||!_mlActif().barre) return 'la trajectoire enregistrée n’est pas relue';
         // SANS VIDÉO LISIBLE, le panneau montre quand même la trajectoire.
         const txt=document.getElementById('ml-traj').textContent;
-        if(!/Vitesse verticale max/.test(txt)||!/Point le plus haut/.test(txt)) return 'panneau : '+txt.slice(0,120);
+        if(!/Vitesse verticale max/.test(txt)) return 'panneau : '+txt.slice(0,120);
+        // Le libellé suit le geste — pas de réception, donc pas d'haltérophilie —
+        // et la CLÉ ne bouge pas : c'est elle qui est enregistrée.
+        const cle=_mlActif().barre.ph.map((/** @type {any} */ q)=>q[0]);
+        if(cle.indexOf('point_haut')<0) return 'la clé point_haut a disparu : '+cle.join(',');
+        if(!/Position courte/.test(txt)) return 'le vocabulaire ne suit pas le geste : '+txt.slice(0,160);
         if(/1,\d{3}/.test(txt)) return 'une valeur affiche trois décimales';
         // LA BORNE BOUGE : la trajectoire tombe, et le coach le lit.
         _ml.dureeMs=3000;

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1282';
+window.RC_BUILD='1284';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -84786,7 +84786,11 @@ function segBarreValide(b,debutMs,finMs){
     t0Ms=num(b.t0Ms,debutMs,finMs);
   if([disqueM,vw,vh,rayonPx,fps,pasMs,t0Ms].some(x=>x===null)) return null;
   const m={};
-  for(const k of ['vMax','tVMax','hMax','depVert','devPlus','devMoins']){
+  // « vert » est la part VERTICALE du chemin, entre 0 et 1 : c'est elle qui
+  // dit si les phases ont été lues sur la vitesse verticale ou le long du
+  // chemin. Absente des analyses d'avant le lot 9, qui étaient toutes
+  // verticales — d'où le repli silencieux.
+  for(const k of ['vMax','tVMax','hMax','depVert','devPlus','devMoins','vert','vTanMax']){
     const v=num(b.m&&b.m[k],-100,100000);
     if(v!==null) m[k]=Math.round(v*1000)/1000;
   }
@@ -84798,13 +84802,26 @@ function segBarreValide(b,debutMs,finMs){
   // L'ÉTALON : la longueur connue sur laquelle l'échelle a été prise, quand ce
   // n'est pas le disque. Il ne sert qu'à DIRE d'où vient l'échelle — les
   // mesures, elles, sont déjà en mètres dans ce qui est stocké.
+  // LA LIGNE D'ACTION, quand la charge n'est pas libre : deux points en
+  // pixels de l'image. Sans elle, c'est la gravité — et c'est le cas de
+  // toutes les analyses d'avant le lot 10.
+  const ac=b.act&&typeof b.act==='object'&&b.act.mode==='cable'?b.act:null;
+  const acX1=ac?num(ac.x1,0,8192):null, acY1=ac?num(ac.y1,0,8192):null,
+    acX2=ac?num(ac.x2,0,8192):null, acY2=ac?num(ac.y2,0,8192):null;
+  // DEUX POINTS CONFONDUS NE FONT PAS UNE DIRECTION : on ne garde pas une
+  // ligne d'action qui se réduirait à un point, elle rendrait tous les
+  // bras de levier nuls sans que rien ne le dise.
+  const act=([acX1,acY1,acX2,acY2].every(x=>x!==null)
+    &&Math.hypot(Number(acX1)-Number(acX2),Number(acY1)-Number(acY2))>=4)
+    ?{mode:'cable',x1:Math.round(Number(acX1)*10)/10,y1:Math.round(Number(acY1)*10)/10,
+      x2:Math.round(Number(acX2)*10)/10,y2:Math.round(Number(acY2)*10)/10}:null;
   const et=b.etalon&&typeof b.etalon==='object'?b.etalon:null;
   const etCm=et?num(et.cm,1,1000):null, etPx=et?num(et.px,1,8192):null;
   const etalon=(etCm!==null&&etPx!==null)
     ?{cm:Math.round(etCm*10)/10,px:Math.round(etPx*10)/10,
       type:String(et.type==null?'':et.type).slice(0,24)}:null;
   return {v:1,debutMs,finMs,disqueM,sens:(b.sens==='gauche'||b.sens==='droite')?b.sens:'',
-    theta:thB===null?0:Math.round(thB*10)/10,...(etalon?{etalon}:{}),
+    theta:thB===null?0:Math.round(thB*10)/10,...(etalon?{etalon}:{}),...(act?{act}:{}),
     vw:Math.round(vw),vh:Math.round(vh),rayonPx:Math.round(rayonPx*10)/10,fps:Math.round(fps*100)/100,
     n,t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,xy:b.xy,c:b.c,vy:b.vy,m,ph,av};
 }
