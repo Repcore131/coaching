@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1289';
+window.RC_BUILD='1290';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -83824,7 +83824,14 @@ async function uploadVideoFile(input,options){
   // `vid-upload-progress` n'existe pas au milieu d'une seance.
   const pan=_envoiPanneau('Préparation de la vidéo');
   const ctrl=(typeof AbortController==='function')?new AbortController():null;
-  if(ctrl) pan.annuler(()=>{ try{ ctrl.abort(); }catch(e){} });
+  // UN CONTRÔLEUR PROPRE À L'ALLÈGEMENT. Il partage le bouton « Annuler » avec
+  // l'envoi, mais le délai de garde ci-dessous doit pouvoir couper la
+  // compression SANS couper le transfert qui la suit.
+  const ctrlAlleg=(typeof AbortController==='function')?new AbortController():null;
+  if(ctrl) pan.annuler(()=>{
+    try{ ctrl.abort(); }catch(e){}
+    try{ if(ctrlAlleg) ctrlAlleg.abort(); }catch(e){}
+  });
   pan.maj(0,file.size);
   if(progEl){progEl.style.display='block';progEl.textContent='Préparation…';}
   try{
@@ -83837,9 +83844,23 @@ async function uploadVideoFile(input,options){
     //   pour un résultat identique, ou plus lourd.
     if(!_opt.dejaAllege&&RCV&&typeof RCV.compresser==='function'){
       pan.titre('Allègement de la vidéo');
-      const res=await RCV.compresser(file,{
+      // ⚠ UNE COMPRESSION QUI NE REND JAMAIS LA MAIN RETIENT LA VIDÉO POUR
+      //   TOUJOURS. La voie `recorder` rejoue le fichier en temps réel : sur un
+      //   téléphone qui se verrouille, ou un onglet passé en arrière-plan, le
+      //   décodage s'arrête et la promesse ne se résout jamais. Le panneau reste
+      //   sur « Allègement… », aucune entrée n'est écrite, et l'athlète voit
+      //   simplement que sa vidéo « ne part pas » — sans erreur, sans rien.
+      //
+      //   LE DÉLAI EST LARGE, parce que la voie temps réel est LENTE PAR NATURE :
+      //   deux fois la durée de la vidéo, plus vingt secondes, jamais moins de
+      //   quarante-cinq. On n'attrape que le blocage, pas la lenteur normale.
+      //   Au-delà, on coupe l'allègement et le fichier d'origine part.
+      const _plafondAllegMs=Math.max(45000,Math.round((dureeS>0?dureeS:0)*2000)+20000);
+      let _allegDepasse=false;
+      const res=await Promise.race([
+        RCV.compresser(file,{
         hauteur:VIDEO_CIBLE_HAUTEUR,debit:VIDEO_CIBLE_DEBIT,dureeMaxS:VIDEO_DUREE_MAX_S,
-        signal:ctrl?ctrl.signal:null,
+        signal:ctrlAlleg?ctrlAlleg.signal:null,
         onVoie:(v)=>{
           // LE TEMPS RÉEL S'ANNONCE. La voie MediaRecorder rejoue la vidéo à
           // vitesse normale : laisser croire que c'est instantané, c'est
@@ -83851,7 +83872,20 @@ async function uploadVideoFile(input,options){
           pan.maj(pct,100);
           if(progEl) progEl.textContent='Allègement… '+pct+' %';
         }
-      });
+        }).catch(e=>{
+          // ⚠ UNE ANNULATION N'EST PAS UNE PANNE D'ALLÈGEMENT. Elle doit
+          //   REMONTER et arrêter tout l'envoi : avalée ici, elle laissait
+          //   partir le fichier d'origine que l'athlète venait justement de
+          //   refuser, et une entrée était écrite malgré l'annulation.
+          //   Seules les vraies pannes retombent sur l'envoi tel quel.
+          if(/annul/i.test(String(e&&e.message))) throw e;
+          return null;
+        }),
+        new Promise(r=>setTimeout(()=>{ _allegDepasse=true; r(null); },_plafondAllegMs))
+      ]);
+      // COUPER CE QUI TOURNE ENCORE : sans ça, une compression abandonnée
+      // continue de décoder pendant que l'envoi démarre.
+      if(_allegDepasse){ try{ if(ctrlAlleg) ctrlAlleg.abort(); }catch(e){} }
       // ⚠ UNE VIDÉO ALLÉGÉE QUI A PERDU SA DURÉE N'EST PLUS LA VIDÉO.
       //
       // La voie `recorder` rejoue le fichier EN TEMPS RÉEL dans un
@@ -83887,6 +83921,10 @@ async function uploadVideoFile(input,options){
         raisonVoie='duree_effondree';
         pan.note('L’allègement a abîmé la vidéo ('+_dureeTexte(_dureeApres)+' au lieu de '
           +_dureeTexte(dureeS)+') : elle part telle quelle, '+_mo(file.size)+'.');
+      } else if(_allegDepasse){
+        raisonVoie='allegement_trop_long';
+        pan.note('L’allègement a pris trop de temps sur ce téléphone : la vidéo part '
+          +'telle quelle, '+_mo(file.size)+'. Garde l’écran allumé pendant l’envoi.');
       } else {
         raisonVoie=(res&&res.raison)||'';
         // ⚠ ON LE DIT. Un silence ici, et l'athlète attend trois minutes sans
