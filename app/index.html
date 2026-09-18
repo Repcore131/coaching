@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1286';
+window.RC_BUILD='1287';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -14441,7 +14441,10 @@ const CLOUD={
     delete safe.cycle.contraception;
     return safe;
   },
-  async _doPushOne(email,user){
+  // `rattrapage` : ce dossier est deja le SECOND essai, celui qui part apres
+  // une descente. Il interdit de recommencer — voir le bloc « AVANT DE
+  // REFUSER » plus bas.
+  async _doPushOne(email,user,rattrapage){
     this._setSyncStatus('pending');
     try{
       const token=await this._getToken();
@@ -14607,6 +14610,39 @@ const CLOUD={
         // message qu'on ne comprend pas est un message qu'on clique sans lire.
         const travail=o=>{ try{ return _cptContenu((o&&o.sessions_config)||[]); }catch(e){ return 0; } };
         const _tS=travail(safe), _tD=travail(distant);
+        // ══ AVANT DE REFUSER : DESCENDRE, PUIS REPARTIR UNE FOIS ════════════
+        //
+        // Le dossier local est plus pauvre PARCE QU'IL N'A PAS ENCORE DESCENDU.
+        // Refuser sans rien tenter de plus laissait la situation SANS ISSUE :
+        // le refus est marque `_nonRejouable`, il n'entre donc pas dans la file
+        // de relance, et rien ne le rejoue jamais. Une video deposee dans cette
+        // fenetre-la n'atteignait jamais le coach — et l'athlete avait pourtant
+        // lu « Video envoyee au coach », puisque la confirmation ne repond que
+        // de l'ecriture LOCALE.
+        //
+        // LA REPARATION EST CELLE QUI MANQUAIT : on fusionne le distant dans le
+        // local — l'union garde ce que le serveur n'a jamais vu, video comprise
+        // — puis on repart une fois, avec le dossier complet. Le garde-fou n'a
+        // alors plus rien a refuser, puisque le local porte tout le distant.
+        //
+        // UNE SEULE FOIS, par le drapeau : si le second envoi se fait refuser a
+        // son tour, c'est que la fusion n'a pas suffi, et boucler n'y changerait
+        // rien.
+        if(!rattrapage&&((_tS<_tD)||(volume(safe)<volume(distant)))){
+          const descendu=await this.syncUser(email).catch(()=>false);
+          if(descendu){
+            const frais=(DB.get('users')||{})[email];
+            if(frais){
+              // HORODATE ICI, par exception a la regle posee dans pushOne : ce
+              // second envoi ne passe pas par elle, et sans date neuve le
+              // dossier repartirait avec celle du serveur. Les autres appareils
+              // le liraient « pas plus recent » et ne descendraient pas la
+              // video qu'on vient justement de sauver.
+              frais.updatedAt=Date.now();
+              return await this._doPushOne(email,frais,true);
+            }
+          }
+        }
         if(_tS<_tD){
           this._setSyncStatus(false);
           const refus=new Error('Le programme distant est plus récent et plus complet ('
@@ -14784,7 +14820,7 @@ const CLOUD={
       for(const k of Object.keys(o)) m.add(String(k));
       return m;
     };
-    return {sessions:lire(s.sessions),bilans:lire(s.bilans)};
+    return {sessions:lire(s.sessions),bilans:lire(s.bilans),videos:lire(s.videos)};
   },
   // Fusionner un seul utilisateur cloud → localStorage
   _mergeUser(merged,email,cloudUser){
@@ -14827,6 +14863,27 @@ const CLOUD={
     const sessMap=new Map();
     [...cloudSessions,...localSessions].forEach(s=>{if(s?.id&&!sessMap.has(s.id))sessMap.set(s.id,s);});
     const allSessions=[...sessMap.values()].sort((a,b)=>(a.date||0)-(b.date||0));
+    // ══ LES VIDEOS SE FUSIONNENT AUSSI, ET POUR LA MEME RAISON ══════════════
+    //
+    // Sans cette union, `merged[email]={...cloudUser}` quelques lignes plus bas
+    // remplacait le tableau local par celui du serveur. Une video deposee sur
+    // ce telephone et dont l'envoi n'etait pas encore parti — ou avait ete
+    // REFUSE par la defense en profondeur de _doPushOne — disparaissait a la
+    // premiere descente. Elle ne restait alors nulle part : ni chez le coach,
+    // qui ne l'avait jamais recue, ni chez l'athlete, a qui l'app avait pourtant
+    // affiche « Video envoyee au coach ». Seul le fichier Cloudinary survivait,
+    // orphelin, sans plus rien pour le designer.
+    //
+    // LE CLOUD PASSE EN PREMIER, comme pour les seances : sa copie porte la
+    // correction du coach — feedback, reperes horodates, feedbackSeen — et
+    // c'est elle qui doit gagner. La locale ne sert qu'a rattraper ce que le
+    // serveur n'a jamais vu.
+    const cloudVideos=Array.isArray(cloudUser.videos)?cloudUser.videos:[];
+    const localVideos=(Array.isArray(loc?.videos)?loc.videos:[])
+      .filter(v=>!(v&&_mort.videos.has(String(v.id))));
+    const vidMap=new Map();
+    [...cloudVideos,...localVideos].forEach(v=>{if(v?.id&&!vidMap.has(v.id))vidMap.set(v.id,v);});
+    const allVideos=[...vidMap.values()].sort((a,b)=>(a.date||0)-(b.date||0));
     // Constantes et analyses ne montent pas dans users/ — elles vivent dans
     // sante_privee, hors de portée du coach. Le dossier distant lu ici ne les
     // porte donc toujours pas, et l'écrasement ci-dessous les effacerait à
@@ -14854,6 +14911,7 @@ const CLOUD={
     }
     merged[email].bilans=allBilans;
     merged[email].sessions=allSessions;
+    merged[email].videos=allVideos;
     if(locConstantes!==undefined) merged[email].constantes=locConstantes;
     if(locAnalyses!==undefined) merged[email].analyses=locAnalyses;
     if(locGross!==undefined&&merged[email]&&merged[email].grossesse===undefined)
@@ -15684,7 +15742,10 @@ const DB={
 const SUPPRESSIONS_MAX=200;
 function marquerSupprime(user,type,cle){
   if(!user||typeof user!=='object') return false;
-  if(type!=='sessions'&&type!=='bilans') return false;
+  // `videos` depuis que _mergeUser les unit : sans pierre tombale, une video
+  // supprimee sur un telephone ressusciterait sur l'autre a la descente
+  // suivante — exactement ce que ce mecanisme existe pour empecher.
+  if(type!=='sessions'&&type!=='bilans'&&type!=='videos') return false;
   const k=String(cle||'');
   if(!k) return false;
   if(!user.supprimes||typeof user.supprimes!=='object') user.supprimes={};
@@ -82991,6 +83052,11 @@ async function deleteVideo(email,videoId){
   if(u.email!==currentUser?.email&&u.coachId!==currentUser?.id){toast('Élève introuvable ou non autorisé','var(--orange)');return;}
   const vid=u.videos.find(v=>v.id===videoId);
   if(!vid) return;
+  // LA PIERRE AVANT LE RETRAIT, comme pour les seances et les bilans : depuis
+  // que _mergeUser unit les videos, une entree retiree ici et absente du cloud
+  // reviendrait a la descente suivante si rien ne disait qu'elle a ete
+  // supprimee pour de bon.
+  marquerSupprime(u,'videos',videoId);
   u.videos=u.videos.filter(v=>v.id!==videoId);
   u.updatedAt=Date.now();
   users[email]=u;
