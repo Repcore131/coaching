@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1288';
+window.RC_BUILD='1289';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -83852,12 +83852,41 @@ async function uploadVideoFile(input,options){
           if(progEl) progEl.textContent='Allègement… '+pct+' %';
         }
       });
-      if(res&&res.blob){
+      // ⚠ UNE VIDÉO ALLÉGÉE QUI A PERDU SA DURÉE N'EST PLUS LA VIDÉO.
+      //
+      // La voie `recorder` rejoue le fichier EN TEMPS RÉEL dans un
+      // MediaRecorder. Si le décodage s'arrête en route — onglet passé en
+      // arrière-plan, téléphone verrouillé, source que le navigateur ne sait
+      // pas relire — elle rend un clip d'UNE IMAGE, sans lever la moindre
+      // erreur. Mesuré sur un clip de 2,0 s : la sortie faisait 0,033 s et
+      // 2,7 Ko, et Cloudinary l'acceptait sans broncher. L'athlète croyait
+      // avoir envoyé sa série ; le coach recevait un trentième de seconde.
+      //
+      // ON NE COMPARE PAS LES OCTETS MAIS LA DURÉE : un allègement qui marche
+      // divise légitimement le poids par vingt, jamais la durée. Le seuil est
+      // large — 80 % — parce qu'un réencodage peut rogner quelques dixièmes en
+      // fin de fichier, et qu'on ne veut refuser QUE l'effondrement.
+      let _dureeApres=null;
+      if(res&&res.blob&&dureeS>0){
+        try{ _dureeApres=await _videoDureeS(new File([res.blob],'v.mp4',
+          {type:res.blob.type||'video/mp4'})); }catch(e){ _dureeApres=null; }
+      }
+      // DURÉE ILLISIBLE : ON NE BLOQUE PAS. Même raison qu'au contrôle d'entrée
+      // — un fichier que le navigateur ne sait pas ouvrir n'est pas un fichier
+      // cassé, et refuser sur une lecture manquée coûterait plus que ça ne rend.
+      const _dureeEffondree=(dureeS>0&&_dureeApres!=null&&_dureeApres<dureeS*0.8);
+      if(res&&res.blob&&!_dureeEffondree){
         aEnvoyer=new File([res.blob],(file.name||'video').replace(/\.[^.]+$/,'')+'.mp4',
           {type:res.blob.type||'video/mp4'});
         voie=res.voie;
         pan.note('Allégée : '+_mo(res.octetsAvant)+' → '+_mo(res.octetsApres)
           +' en '+res.hauteur+'p'+(res.sansAudio?', sans le son':''));
+      } else if(_dureeEffondree){
+        // L'ORIGINAL PART À LA PLACE, et on dit pourquoi : c'est le seul cas où
+        // l'app a fabriqué elle-même un fichier inutilisable.
+        raisonVoie='duree_effondree';
+        pan.note('L’allègement a abîmé la vidéo ('+_dureeTexte(_dureeApres)+' au lieu de '
+          +_dureeTexte(dureeS)+') : elle part telle quelle, '+_mo(file.size)+'.');
       } else {
         raisonVoie=(res&&res.raison)||'';
         // ⚠ ON LE DIT. Un silence ici, et l'athlète attend trois minutes sans
