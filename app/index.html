@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1287';
+window.RC_BUILD='1288';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -14322,6 +14322,26 @@ const CLOUD={
   // Push ciblé d'un seul utilisateur (modifications coach sur profil athlète).
   // Retourne la promesse de _doPushOne — les appelants peuvent l'await (ou .then/.catch)
   // pour afficher un toast de succès/erreur ; les fire-and-forget l'ignorent simplement.
+  // Repose l'horodatage d'avant sur la copie locale. Appelee quand un envoi a
+  // echoue : sans elle, le dossier local garde une date que le serveur n'a
+  // jamais recue.
+  //
+  // setLocal ET NON set : `set` pousse, et reparer un horodatage declencherait
+  // un envoi complet de tous les dossiers.
+  _rendreHorodatage(email,avant){
+    try{
+      const _us=DB.get('users');
+      if(_us&&_us[email]){
+        if(avant===undefined) delete _us[email].updatedAt; else _us[email].updatedAt=avant;
+        DB.setLocal('users',_us);
+      }
+      const _se=DB.get('session');
+      if(_se&&_se.email===email){
+        if(avant===undefined) delete _se.updatedAt; else _se.updatedAt=avant;
+        DB.setLocal('session',_se);
+      }
+    }catch(e){}
+  },
   pushOne(email,user){
     // N3.1 — TOUTE POUSSEE HORODATE LE DOSSIER, ICI ET NULLE PART AILLEURS.
     // syncUser refuse de telecharger un dossier dont le updatedAt distant n'est
@@ -14335,6 +14355,25 @@ const CLOUD={
     // heritera sans que personne n'y pense. Et c'est le seul point ou l'on
     // sait qu'un dossier PART — un dossier ecrit localement sans etre pousse
     // n'a aucune raison d'etre horodate.
+    // B1.3 — L'HORODATAGE LOCAL NE VAUT QUE SI LE SERVEUR L'A ACCEPTE.
+    //
+    // La ligne ci-dessous avance updatedAt AVANT toute tentative d'envoi, et le
+    // bloc suivant l'ecrit dans la copie locale. Quand l'envoi echoue — reseau
+    // coupe, 500, jeton expire, ou le refus delibere de _doPushOne — le dossier
+    // local garde une date que le serveur n'a jamais recue. Il se croit alors
+    // plus recent que lui POUR TOUJOURS, et syncUser, qui ne telecharge que du
+    // STRICTEMENT plus recent, repond « rien de neuf » a chaque reveil.
+    //
+    // L'APPAREIL DEVIENT AVEUGLE A CE DOSSIER. Un coach dont une seule ecriture
+    // a echoue ne voyait plus jamais descendre les videos ni les seances de cet
+    // athlete, sans qu'aucun message ne le dise et sans que rien ne repare.
+    // Reproduit : un envoi en 500, puis une video deposee cote athlete que la
+    // synchro suivante refuse de tirer.
+    //
+    // ON RETIENT DONC LA VALEUR D'AVANT, et on la repose si l'envoi echoue.
+    const _horodatageAvant=(()=>{ try{
+      const _u=DB.get('users'); return (_u&&_u[email])?_u[email].updatedAt:undefined;
+    }catch(e){ return undefined; } })();
     try{ if(user&&typeof user==='object') user.updatedAt=Date.now(); }catch(e){}
     // B1.2 — ET LA COPIE LOCALE PORTE LE MEME HORODATAGE.
     //
@@ -14372,7 +14411,14 @@ const CLOUD={
     // capturé. `p` est tout de même retournée telle quelle — les appelants qui
     // l'await ou lui ajoutent un .catch reçoivent bien l'erreur (voir
     // addBilanPhoto). L'échec reste signalé par le badge de synchronisation.
-    p.catch(()=>{});
+    // B1.3 - LA REPARATION DE L'HORODATAGE, SUR UNE BRANCHE A ELLE.
+    // Elle ne peut pas s'ecrire dans le filet ci-dessous : un test lit le
+    // source de pushOne et exige d'y trouver `p.catch(()=>{})` A LA LETTRE,
+    // parce que c'est lui qui garantit qu'aucun des trente appelants « lance
+    // et oublie » ne produise de rejet non capture. `then(null, …)` fait le
+    // meme travail sans toucher au filet, et sans s'intercaler entre
+    // _doPushOne et ce que pushOne rend.
+    p.then(null,()=>{ this._rendreHorodatage(email,_horodatageAvant); });
     return p;
   },
   // La contraception ne monte QUE si l'athlète a activé le partage. Sans ça,
@@ -15472,7 +15518,11 @@ const CLOUD={
   derniereDescente(email){
     try{ return (this._descentes||{})[email]||null; }catch(e){ return null; }
   },
-  async syncUser(email){
+  // `force` : on descend le dossier SANS regarder les horodatages. Reserve a
+  // l'ouverture d'une fiche par le coach — c'est le geste qui repare un
+  // appareil rendu aveugle par un envoi rate avant le correctif B1.3, et le
+  // seul moment ou une lecture de plus se justifie.
+  async syncUser(email,force){
     const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
     const localAt=(local[email]&&local[email].updatedAt)||0;
     // On ne tire le dossier que si le distant est STRICTEMENT plus recent.
@@ -15480,7 +15530,7 @@ const CLOUD={
     const distantAt=await this.pullUpdatedAt(email);
     // La sonde a repondu et le dossier est deja a jour : c'est une descente
     // reussie, et c'est le cas de l'immense majorite des reveils.
-    if(distantAt!==null&&localAt&&distantAt<=localAt){ this._noterDescente(email,false); return false; }
+    if(!force&&distantAt!==null&&localAt&&distantAt<=localAt){ this._noterDescente(email,false); return false; }
     const cloudUser=await this.pullUser(email);
     if(!cloudUser) return false;
     const merged=Object.assign({},local);
@@ -31355,6 +31405,20 @@ function openClientDetail(cid,_refresh,_force){
   currentClientId=cid;
   const c=getOwnedClient(cid);
   if(!c) return;
+  // N3.19 — OUVRIR UNE FICHE FORCE UNE DESCENTE, sans regarder les horodatages.
+  // Un appareil dont un envoi a echoue porte une copie locale qui se croit plus
+  // recente que le serveur : la sonde repond « rien de neuf » et la fiche reste
+  // figee, video comprise. C'est le geste qui repare les appareils DEJA
+  // aveugles, pour lesquels B1.3 arrive trop tard.
+  //
+  // ICI ET PAS DANS LA BOUCLE DE RAFRAICHISSEMENT : une lecture par ouverture
+  // de fiche, pas une toutes les trente secondes. `_refresh` EST cette boucle,
+  // et elle ne passe donc pas par la.
+  if(!_refresh&&c.email){
+    CLOUD.syncUser(c.email,true)
+      .then(v=>{ if(v&&currentClientId===cid) openClientDetail(cid,true); })
+      .catch(()=>{});
+  }
   // La réponse au bilan se compose dans cette fiche : son contexte, c’est le
   // prénom de l’athlète. Posé ici et non dans blocReponseBilan, qui est un
   // rendu — un rendu ne doit pas modifier l’état de l’application, et il est
