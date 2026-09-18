@@ -41081,7 +41081,10 @@ async function testExercices(){
         st:[{t:900,x:'  garde le dos droit  '},{t:100,x:'regarde'}]});
       if(!ok) return _echec('une correction lisible est refusée');
       if(ok.epingles.map(p=>p.aMs).join()!=='400,1200') return _echec('épingles non triées');
-      if(ok.epingles[1].val!==47.3) return _echec('valeur non arrondie : '+ok.epingles[1].val);
+      // AU DEGRÉ ENTIER : depuis le lot 8, plus un seul dixième de degré n'entre
+      // dans la donnée — il promettait une précision que la mesure n'a pas.
+      if(ok.epingles[1].val!==47) return _echec('valeur non arrondie : '+ok.epingles[1].val);
+      if(ok.epingles[1].tol!==11) return _echec('tolérance par défaut : '+ok.epingles[1].tol);
       if(ok.st[0].x!=='regarde'||ok.st[1].x!=='garde le dos droit') return _echec('sous-titres : '+JSON.stringify(ok.st));
       // CE QUI NE SE LIT PAS TOMBE, SANS FAIRE TOMBER LE RESTE.
       const sale=motionCorrectionValide({...base,
@@ -41168,7 +41171,10 @@ async function testExercices(){
         if(mlEpingler('genou')!==true) return 'l’épingle ne se pose pas : '+dits.join(' | ');
         if(_ml.epingles.length!==1) return _ml.epingles.length+' épingle(s)';
         const e=_ml.epingles[0];
-        if(Math.abs(e.val-90)>0.2) return 'valeur épinglée : '+e.val;
+        // ⚠ CE QU'ON ÉPINGLE EST CE QU'ON MONTRE : la FLEXION corrigée, au
+        // degré entier. Un genou d'angle intérieur 90° fait 90° de flexion, que
+        // la correction du biais de projection porte à 101°, à ±5°.
+        if(e.val!==101||e.tol!==ML_TOL_CORRIGE) return 'valeur épinglée : '+JSON.stringify(e);
         if(e.art!=='genou'||e.aMs!==0) return JSON.stringify(e);
         // UN ANGLE QU'ON NE MESURE PAS ne s'épingle pas.
         if(mlEpingler('coude')!==false) return 'un angle non lisible s’épingle';
@@ -41197,6 +41203,196 @@ async function testExercices(){
       await new Promise(r=>setTimeout(r,900));
       try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
       return msg?_echec(msg):true;
+    });
+
+    // ══ 18/09/2026 — R35 : MOTION LAB, LOT 8 — LE REPÈRE ═══════════════════
+    //
+    // Sans repère juste, tout ce qui suit hérite du biais : un téléphone penché
+    // de cinq degrés décale de cinq degrés TOUS les angles de tronc, dans le
+    // même sens, sur toute la vidéo. Ces cinq fonctions sont donc les plus
+    // testées du lot — et chacune a son cas dégénéré, parce que c'est là
+    // qu'elles doivent dire « je ne sais pas » au lieu d'inventer.
+
+    // Une image de pose de synthèse : le corps dans le plan, incliné de `tilt`
+    // degrés, avec une largeur de bassin donnée en fraction du tronc.
+    const _r35Image=(tilt,largeurBassin,vis)=>{
+      const X=new Array(14).fill(0), Y=new Array(14).fill(0), V=new Array(14).fill(vis===undefined?0.9:vis);
+      const T=200;                    // longueur du tronc, en pixels
+      const demi=largeurBassin*T/2;
+      const r=(t)=>t*Math.PI/180;
+      // Hanches de part et d'autre du centre, tournées de `tilt`.
+      // LE CORPS TIENT DANS UNE IMAGE 1280x720 : centré à 300 px de haut, il
+      // va de l'épaule (100) à la pointe de pied (640), soit 75 % de la hauteur.
+      const pose=(nom,cote,x,y)=>{ const k=mlRangPose(nom,cote); X[k]=640+x*Math.cos(r(tilt))-y*Math.sin(r(tilt));
+        Y[k]=300+x*Math.sin(r(tilt))+y*Math.cos(r(tilt)); };
+      pose('hanche','G',-demi,0); pose('hanche','D',demi,0);
+      pose('epaule','G',-demi,-T); pose('epaule','D',demi,-T);
+      pose('genou','G',-demi,T*0.8); pose('genou','D',demi,T*0.8);
+      pose('cheville','G',-demi,T*1.6); pose('cheville','D',demi,T*1.6);
+      pose('pointe','G',-demi+30,T*1.7); pose('pointe','D',demi+30,T*1.7);
+      pose('coude','G',-demi,-T*0.6); pose('coude','D',demi,-T*0.6);
+      pose('poignet','G',-demi,-T*0.2); pose('poignet','D',demi,-T*0.2);
+      return {X,Y,V};
+    };
+
+    okA('R35 — l’aplomb se lit sur le bassin, et se tait quand il ne voit rien',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // HUIT DEGRÉS DE TRAVERS, DOUZE IMAGES : on les retrouve.
+      const l=Array.from({length:12},()=>_r35Image(8,0.6));
+      const h=mlHorizon(l);
+      if(!h) return _echec('aucun aplomb sur douze images pourtant nettes');
+      if(Math.abs(h.theta-8)>0.5) return _echec('aplomb lu : '+h.theta+'° au lieu de 8°');
+      if(h.n!==12) return _echec(h.n+' images retenues');
+      if(h.ecartType>0.5) return _echec('écart-type de '+h.ecartType+'° sur des images identiques');
+      // UNE IMAGE ABERRANTE ne déplace pas la médiane.
+      const sale=l.slice();
+      sale[5]=_r35Image(-70,0.6);
+      const h2=mlHorizon(sale);
+      if(!h2||Math.abs(h2.theta-8)>0.5) return _echec('une image aberrante déplace l’aplomb : '+(h2&&h2.theta));
+      // L'ORIENTATION DU SEGMENT ne change pas le résultat : gauche-droite ou
+      // droite-gauche, le téléphone penche pareil.
+      const retourne=l.map(e=>{
+        const X=e.X.slice(), Y=e.Y.slice();
+        const g=mlRangPose('hanche','G'), d=mlRangPose('hanche','D');
+        [X[g],X[d]]=[X[d],X[g]]; [Y[g],Y[d]]=[Y[d],Y[g]];
+        return {X,Y,V:e.V};
+      });
+      const h3=mlHorizon(retourne);
+      if(!h3||Math.abs(h3.theta-8)>0.5) return _echec('un bassin tourné donne un autre aplomb : '+(h3&&h3.theta));
+      // ── LES CAS OÙ IL FAUT SE TAIRE ──
+      if(mlHorizon([])!==null) return _echec('un aplomb sort de rien');
+      if(mlHorizon(Array.from({length:12},()=>_r35Image(8,0.6,0.4)))!==null)
+        return _echec('un aplomb sort de points qu’on ne voit pas');
+      if(mlHorizon(Array.from({length:9},()=>_r35Image(8,0.6)))!==null)
+        return _echec('neuf images suffisent, alors qu’on en exige dix');
+      // DE PROFIL, une hanche cache l'autre : le segment n'a plus de longueur,
+      // et son inclinaison n'est plus que du bruit. On refuse.
+      if(mlHorizon(Array.from({length:12},()=>_r35Image(8,0.05)))!==null)
+        return _echec('un aplomb sort d’un bassin vu de profil');
+      // DEUX POINTS CONFONDUS.
+      const confondus=Array.from({length:12},()=>_r35Image(0,0));
+      if(mlHorizon(confondus)!==null) return _echec('un aplomb sort de deux points confondus');
+      return true;
+    });
+
+    okA('R35 — redresser ne change aucun angle, et rend la verticale à la verticale',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const e=_r35Image(8,0.6);
+      // L'ANGLE EST INVARIANT PAR ROTATION : c'est ce qui autorise à redresser
+      // sans se soucier du centre choisi.
+      const g=mlRangPose('hanche','G'), k=mlRangPose('genou','G'), c=mlRangPose('cheville','G');
+      const avant=mlAngleEn(e.X[g],e.Y[g],e.X[k],e.Y[k],e.X[c],e.Y[c]);
+      const r=mlRedresser(e.X,e.Y,8,640,400);
+      const apres=mlAngleEn(r.X[g],r.Y[g],r.X[k],r.Y[k],r.X[c],r.Y[c]);
+      if(avant==null||apres==null||Math.abs(avant-apres)>1e-6) return _echec('l’angle change : '+avant+' → '+apres);
+      // ET L'INCLINAISON, ELLE, CHANGE : c'est tout l'objet de l'opération.
+      const hG=mlRangPose('hanche','G'), eG=mlRangPose('epaule','G');
+      const incAvant=mlInclinaison(e.X[hG],e.Y[hG],e.X[eG],e.Y[eG]);
+      const incApres=mlInclinaison(r.X[hG],r.Y[hG],r.X[eG],r.Y[eG]);
+      if(incAvant==null||incApres==null) return _echec('inclinaison illisible');
+      if(Math.abs(incAvant-8)>0.5) return _echec('le tronc penché devrait lire 8° : '+incAvant);
+      if(Math.abs(incApres)>0.5) return _echec('le tronc redressé devrait lire 0° : '+incApres);
+      // LE CENTRE NE CHANGE RIEN AUX ANGLES.
+      const r2=mlRedresser(e.X,e.Y,8);
+      const a2=mlAngleEn(r2.X[g],r2.Y[g],r2.X[k],r2.Y[k],r2.X[c],r2.Y[c]);
+      if(a2==null||Math.abs(a2-(apres||0))>1e-6) return _echec('le centre change l’angle');
+      // ── DÉGÉNÉRÉS ──
+      const z=mlRedresser([1,NaN],[2,3],10);
+      if(z.X.length!==2||isFinite(z.X[1])||isFinite(z.Y[1])) return _echec('un trou est comblé par la rotation');
+      const id=mlRedresser([5],[7],0);
+      if(Math.abs(id.X[0]-5)>1e-9||Math.abs(id.Y[0]-7)>1e-9) return _echec('zéro degré déplace les points');
+      if(mlRedresser([],[],10).X.length) return _echec('une rotation sort de rien');
+      return true;
+    });
+
+    okA('R35 — le hors-plan se lit sur la largeur du bassin, en ordre de grandeur',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // DE FACE : le bassin fait toute sa largeur, soit ML_BASSIN_TRONC fois le
+      // tronc. L'écart au profil vaut 90°.
+      const face=mlHorsPlan(Array.from({length:6},()=>_r35Image(0,0.36)));
+      if(!face||Math.abs(face.deg-90)>2) return _echec('de face : '+(face&&face.deg)+'°');
+      // À MOITIÉ : la largeur projetée vaut la moitié, l'écart 30°.
+      const trois=mlHorsPlan(Array.from({length:6},()=>_r35Image(0,0.18)));
+      if(!trois||Math.abs(trois.deg-30)>2) return _echec('de trois-quarts : '+(trois&&trois.deg)+'°');
+      // DE PROFIL : rien ne dépasse, l'écart est nul.
+      const profil=mlHorsPlan(Array.from({length:6},()=>_r35Image(0,0.01)));
+      if(!profil||profil.deg>3) return _echec('de profil : '+(profil&&profil.deg)+'°');
+      // ── DÉGÉNÉRÉS ──
+      if(mlHorsPlan([])!==null) return _echec('un hors-plan sort de rien');
+      if(mlHorsPlan(Array.from({length:6},()=>_r35Image(0,0.36,0.1)))!==null)
+        return _echec('un hors-plan sort de points qu’on ne voit pas');
+      return true;
+    });
+
+    okA('R35 — le contrôle de prise de vue juge la VIDÉO, et dit pourquoi',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const meta={vw:1280,vh:720,fps:60,fpsMesure:true};
+      // ⚠ LE SUJET DOIT OCCUPER LA MOITIÉ DE LA HAUTEUR : l'image de synthèse
+      // fait 200 px de tronc pour 720 px de haut, soit 520 px du poignet à la
+      // pointe de pied — assez.
+      const profil=mlControlePriseDeVue(Array.from({length:10},()=>_r35Image(0,0.02)),meta);
+      if(profil.niveau!=='ok') return _echec('profil jugé « '+profil.niveau+' » : '
+        +profil.points.filter(p=>p.etat!=='ok').map(p=>p.cle+'='+p.etat).join(', '));
+      if(!profil.points.every(p=>p.phrase&&p.phrase.length>10)) return _echec('un point sans phrase');
+      if(!profil.points.some(p=>p.cle==='profil'&&p.etat==='ok')) return _echec('le profil n’est pas reconnu');
+      // DE TROIS-QUARTS : on refilme.
+      const trois=mlControlePriseDeVue(Array.from({length:10},()=>_r35Image(0,0.30)),meta);
+      if(trois.niveau!=='refilmer') return _echec('trois-quarts jugé « '+trois.niveau+' »');
+      // PERSONNE : on le dit tout de suite, sans juger le reste.
+      const vide=mlControlePriseDeVue(Array.from({length:10},()=>_r35Image(0,0.3,0)),meta);
+      if(vide.niveau!=='refilmer'||vide.points.length!==1||vide.points[0].cle!=='sujet')
+        return _echec('aucun sujet : '+JSON.stringify(vide.points.map(p=>p.cle)));
+      if(mlControlePriseDeVue([],meta).niveau!=='refilmer') return _echec('aucune image');
+      // UNE CADENCE NON MESURÉE met une réserve, pas un refus.
+      const lent=mlControlePriseDeVue(Array.from({length:10},()=>_r35Image(0,0.02)),
+        {vw:1280,vh:720,fps:30,fpsMesure:false});
+      if(lent.niveau!=='reserve') return _echec('cadence non mesurée : '+lent.niveau);
+      // UN SUJET MINUSCULE : on refilme.
+      const loin=Array.from({length:10},()=>{
+        const e=_r35Image(0,0.02);
+        return {X:e.X,Y:e.Y.map(y=>300+(y-300)*0.12),V:e.V};
+      });
+      const rLoin=mlControlePriseDeVue(loin,meta);
+      if(!rLoin.points.some(p=>p.cle==='taille'&&p.etat==='refilmer'))
+        return _echec('un sujet minuscule passe : '+JSON.stringify(rLoin.points.find(p=>p.cle==='taille')));
+      return true;
+    });
+
+    okA('R35 — la flexion, sa correction, sa tolérance : jamais un dixième de degré',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // LA CONVENTION ANATOMIQUE : un genou tendu vaut zéro de flexion.
+      if(mlFlexion('genou',180)!==0) return _echec('genou tendu : '+mlFlexion('genou',180));
+      if(mlFlexion('genou',90)!==90) return _echec('genou à angle droit');
+      if(mlFlexion('coude',120)!==60) return _echec('coude');
+      // LES INCLINAISONS NE SONT PAS DES FLEXIONS et ne se convertissent pas.
+      if(mlFlexion('tronc',30)!==30) return _echec('le tronc a été converti');
+      if(mlFlexion('avantBras',45)!==45) return _echec('l’avant-bras a été converti');
+      if(mlFlexion('genou',null)!==null) return _echec('une flexion sort de rien');
+      // LA CORRECTION, DANS SON DOMAINE : décalage connu, tolérance serrée.
+      const g=mlCorrigerAngle('genou',80,5);
+      if(!g||!g.corrige||g.tol!==ML_TOL_CORRIGE) return _echec('genou non corrigé : '+JSON.stringify(g));
+      if(g.deg!==91) return _echec('genou corrigé à '+g.deg+'° au lieu de 91°');
+      if(!Number.isInteger(g.deg)) return _echec('un degré porte une décimale');
+      const h=mlCorrigerAngle('hanche',60);
+      if(!h||h.deg!==71) return _echec('hanche : '+JSON.stringify(h));
+      // HORS DU DOMAINE : l'angle reste BRUT, et le dit par sa tolérance.
+      const loin=mlCorrigerAngle('genou',80,30);
+      if(!loin||loin.corrige||loin.tol!==ML_TOL_BRUT||loin.deg!==80)
+        return _echec('hors-plan : '+JSON.stringify(loin));
+      const autre=mlCorrigerAngle('cheville',80,0);
+      if(!autre||autre.corrige||autre.tol!==ML_TOL_BRUT) return _echec('cheville : '+JSON.stringify(autre));
+      const tronc=mlCorrigerAngle('tronc',20,0);
+      if(!tronc||tronc.corrige) return _echec('le tronc ne doit pas être corrigé : '+JSON.stringify(tronc));
+      // UNE FLEXION NE SORT PAS DU POSSIBLE.
+      const plein=mlCorrigerAngle('genou',175,0);
+      if(!plein||plein.deg!==180) return _echec('flexion hors bornes : '+JSON.stringify(plein));
+      if(mlCorrigerAngle('genou',null,0)!==null) return _echec('une correction sort de rien');
+      // L'ÉCRITURE : le degré entier et la tolérance, toujours ensemble.
+      if(mlAngleTexte(g)!=='91° ±5') return _echec('écriture : '+mlAngleTexte(g));
+      if(mlAngleTexte(loin)!=='80° ±11') return _echec('écriture brute : '+mlAngleTexte(loin));
+      if(mlAngleTexte(null)!=='—') return _echec('un angle absent s’écrit : '+mlAngleTexte(null));
+      if(/\d,\d°/.test(mlAngleTexte(g))) return _echec('un dixième de degré est affiché');
+      return true;
     });
 
     // ══ 17/09/2026 — R29 : MOTION LAB, LOTS 2 ET 3 — LA TRAJECTOIRE ════════

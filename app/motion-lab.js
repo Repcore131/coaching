@@ -48,13 +48,16 @@
  *   mode:ModeMl, graine:Graine|null, disqueM:number, sens:string, fantome:boolean,
  *   analyseJeton:number, progres:string, suivis:Object<string,Suivi3>,
  *   angCote:string, angCalques:string[], epingles:Epingle[],
+ *   theta:number, thetaAuto:{theta:number, n:number, ecartType:number}|null, thetaMain:boolean,
+ *   etalon:{type:string, cm:number, ax:number|null, ay:number|null, bx:number|null, by:number|null},
+ *   prise:{etat:'encours'|'fait', res:any, ms:number}|null,
  *   cachePose:{cle:string, d:any}|null,
  *   cacheBarre:{cle:string, d:{t:number[], x:number[], y:number[], vy:number[], conf:number[]}}|null,
  *   rec:any, correction:{motion:any, blob:Blob|null, blobUrl:string, statut:'brouillon'|'envoi'|'envoye'|'erreur', erreur:string}|null,
  *   cartes:{id:string, aMs:number, dureeMs:number, texte:string}[], lecteur:any
  * }} EtatMl
  */
-/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'} ModeMl */
+/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'} ModeMl */
 /**
  * La graine : le disque posé par le coach, en pixels de la VIDÉO.
  * @typedef {{segId:string, tMs:number, x:number|null, y:number|null, r:number}} Graine
@@ -550,11 +553,19 @@ function mlReechantillonner(points){
  * Y monte, X va vers la droite de l'image.
  * @param {PointBarre[]} points
  * @param {number} mpp
+ * @param {number} [theta]  l'aplomb du téléphone, en degrés
  * @returns {{serie:Serie, m:Metriques, ph:[string,number,number][], pas:number}|null}
  */
-function mlMetriquesBarre(points,mpp){
-  const r=mlReechantillonner(points);
-  if(!r||!(mpp>0)) return null;
+function mlMetriquesBarre(points,mpp,theta){
+  const r0=mlReechantillonner(points);
+  if(!r0||!(mpp>0)) return null;
+  // ⚠ REDRESSÉ AVANT TOUT LE RESTE. Un téléphone penché de cinq degrés fait
+  // lire une hauteur de 62 cm là où il y en a 62,2, mais surtout il verse une
+  // partie de la montée dans l'écart horizontal — celui-là même qu'on regarde
+  // pour juger si la barre reste près du corps.
+  const th=Number(theta)||0;
+  const rr=th?mlRedresser(r0.x,r0.y,th):{X:r0.x,Y:r0.y};
+  const r={t:r0.t,x:rr.X,y:rr.Y,conf:r0.conf,pas:r0.pas};
   const x0=r.x.find(isFinite), y0=r.y.find(isFinite);
   if(x0===undefined||y0===undefined) return null;
   const X=r.x.map(v=>(v-x0)*mpp), Yb=r.y.map(v=>(y0-v)*mpp);
@@ -646,7 +657,8 @@ const ML_I16_TROU=-32768;
  * la vidéo, la vitesse en cm/s, la confiance sur 255.
  * @param {{debutMs:number, finMs:number}} seg
  * @param {{serie:Serie, m:Metriques, ph:[string,number,number][], pas:number}} res
- * @param {{disqueM:number, sens:string, vw:number, vh:number, rayonPx:number, fps:number, alertes:string[]}} p
+ * @param {{disqueM:number, sens:string, vw:number, vh:number, rayonPx:number, fps:number, alertes:string[],
+ *   mpp?:number, theta?:number, etalon?:{cm:number, px:number, type:string}|null}} p
  * @returns {Object}
  */
 function mlCompacterBarre(seg,res,p){
@@ -657,7 +669,8 @@ function mlCompacterBarre(seg,res,p){
   const i16=(v,echelle)=>isFinite(v)?Math.max(-32767,Math.min(32767,Math.round(v*echelle))):ML_I16_TROU;
   // Les positions LISSÉES, remises en pixels : c'est ce qui se dessine.
   const x0=S.px.find(isFinite)||0, y0=S.py.find(isFinite)||0;
-  const mpp=p.disqueM/(2*p.rayonPx);
+  const mpp=(Number(p.mpp)>0)?Number(p.mpp):p.disqueM/(2*p.rayonPx);
+  const theta=Number(p.theta)||0;
   const pasMs=total>1?(S.t[total-1]-S.t[0])/(n-1):res.pas;
   // INTERPOLÉES AUX INSTANTS EXACTS, et non prises à l'indice arrondi : un
   // point pris à un demi-pas de l'instant qu'on lui attribue décale le tracé
@@ -674,13 +687,18 @@ function mlCompacterBarre(seg,res,p){
     const f=Math.max(0,Math.min(total-1,(S.t[0]+k*pasMs-S.t[0])/res.pas));
     const X=lire(S.X,f), Y=lire(S.Y,f);
     const px=isFinite(X)?x0+X/mpp:NaN, py=isFinite(Y)?y0-Y/mpp:NaN;
-    xy.setInt16(4*k,i16(px/p.vw,32767),true);
-    xy.setInt16(4*k+2,i16(py/p.vh,32767),true);
+    // ⚠ ON REVIENT DANS LE REPÈRE DE L'IMAGE POUR STOCKER : ces points se
+    // dessinent sur la vidéo telle qu'elle a été filmée, pas sur une vidéo
+    // redressée. Les MESURES, elles, restent celles du monde.
+    const brut=theta?mlRedresser([px],[py],-theta):{X:[px],Y:[py]};
+    xy.setInt16(4*k,i16(brut.X[0]/p.vw,32767),true);
+    xy.setInt16(4*k+2,i16(brut.Y[0]/p.vh,32767),true);
     vy.setInt16(2*k,i16(lire(S.vy,f),100),true);
     const i=Math.floor(f), j=Math.min(total-1,i+1);
     c[k]=Math.round(255*Math.max(0,Math.min(1,Math.min(S.conf[i]||0,S.conf[j]||0))));
   }
   return {v:1,debutMs:seg.debutMs,finMs:seg.finMs,disqueM:p.disqueM,sens:p.sens,vw:p.vw,vh:p.vh,
+    theta:Math.round(theta*10)/10,...(p.etalon?{etalon:p.etalon}:{}),
     rayonPx:Math.round(p.rayonPx*10)/10,fps:Math.round(p.fps*100)/100,n,
     t0Ms:Math.round(S.t[0]),pasMs:Math.round(pasMs*1000)/1000,
     xy:mlB64(new Uint8Array(xy.buffer)),c:mlB64(c),vy:mlB64(new Uint8Array(vy.buffer)),
@@ -749,7 +767,7 @@ const ML_POSE_VIS_MIN=0.5;
  * @returns {number}
  */
 function mlRangPose(nom,cote){
-  const r=ML_POSE_RANG[nom];
+  const r=/** @type {Object<string,number>} */(ML_POSE_RANG)[nom];
   return r===undefined?-1:r+(cote==='D'?1:0);
 }
 /**
@@ -845,7 +863,7 @@ function mlCotePose(ech){
  * le bruit des points eux-mêmes.
  * @param {Segment} seg
  * @param {{tMs:number, X:number[], Y:number[], V:number[]}[]} ech  positions EN PIXELS
- * @param {{vw:number, vh:number, cote:string}} p
+ * @param {{vw:number, vh:number, cote:string, theta?:number, hp?:number|null}} p
  * @returns {any}
  */
 function mlCompacterPose(seg,ech,p){
@@ -862,6 +880,8 @@ function mlCompacterPose(seg,ech,p){
     vis[k*N+r]=isFinite(v)?Math.round(255*Math.max(0,Math.min(1,v))):0;
   }
   return {v:1,debutMs:seg.debutMs,finMs:seg.finMs,vw:p.vw,vh:p.vh,cote:p.cote,n,
+    theta:Math.round((Number(p.theta)||0)*10)/10,
+    ...(p.hp==null?{}:{hp:Math.round(Number(p.hp))}),
     t0Ms:Math.round(n?l[0].tMs:seg.debutMs),pasMs:Math.round(pasMs*1000)/1000,
     xy:mlB64(new Uint8Array(xy.buffer)),vis:mlB64(vis)};
 }
@@ -891,19 +911,25 @@ function mlDecompacterPose(p){
  * PURE. Les sept angles dans le temps, lissés, pour un côté donné.
  * @param {any} p  une pose passée par segPoseValide
  * @param {string} [cote]  'G' ou 'D' ; celui de l'enregistrement par défaut
- * @returns {{t:number[], X:number[][], Y:number[][], V:number[][], ang:Object<string,(number|null)[]>, cote:string}}
+ * @returns {{t:number[], X:number[][], Y:number[][], V:number[][], ang:Object<string,(number|null)[]>, cote:string, theta:number, hp:number|null}}
  */
 function mlAnglesSerie(p,cote){
   const d=mlDecompacterPose(p), c=(cote==='G'||cote==='D')?cote:p.cote;
+  const theta=Number(p.theta)||0;
   /** @type {Object<string,(number|null)[]>} */
   const ang={};
   for(const q of ML_ANGLES) ang[q.cle]=[];
   for(let k=0;k<d.t.length;k++){
-    const a=mlAnglesPose(d.X[k].map(v=>v*p.vw),d.Y[k].map(v=>v*p.vh),d.V[k],c);
+    // ⚠ LES ANGLES SE CALCULENT REDRESSÉS, LE DESSIN RESTE BRUT : la vidéo
+    // s'affiche telle qu'elle a été filmée, et le squelette doit tomber sur le
+    // corps qu'on y voit. Seules les MESURES passent dans le repère du monde.
+    const r=theta?mlRedresser(d.X[k].map(v=>v*p.vw),d.Y[k].map(v=>v*p.vh),theta,p.vw/2,p.vh/2)
+                 :{X:d.X[k].map(v=>v*p.vw),Y:d.Y[k].map(v=>v*p.vh)};
+    const a=mlAnglesPose(r.X,r.Y,d.V[k],c);
     for(const q of ML_ANGLES) ang[q.cle].push(a[q.cle]);
   }
   for(const q of ML_ANGLES) ang[q.cle]=mlLisserAngles(ang[q.cle]);
-  return {t:d.t,X:d.X,Y:d.Y,V:d.V,ang,cote:c};
+  return {t:d.t,X:d.X,Y:d.Y,V:d.V,ang,cote:c,theta,hp:p.hp==null?null:Number(p.hp)};
 }
 /**
  * PURE. Par angle : son minimum, son maximum, l'instant du minimum et le
@@ -945,6 +971,336 @@ function mlTrousAngles(t,v){
   }
   if(d>=0) out.push({debutMs:Math.round(t[d]),finMs:Math.round(t[v.length-1])});
   return out;
+}
+
+// ══ LOT 8 — LE REPÈRE : APLOMB, HORS-PLAN, ÉTALON, BIAIS ════════════════════
+//
+// Tout ce qui précède mesure des positions dans le repère de l'IMAGE. Or une
+// image n'est pas le monde : le téléphone penche, l'athlète n'est pas de profil
+// exact, et le modèle de pose sous-estime les flexions vues de côté. Trois
+// biais qui ne se voient pas, qui vont tous dans le même sens sur toute une
+// vidéo, et que tout ce qui suit hériterait.
+//
+// ⚠ AUCUN DE CES TROIS CORRECTIFS N'INVENTE UNE VALEUR. Quand l'aplomb ne
+// s'estime pas, il vaut zéro ET L'ÉCRAN LE DIT. Quand la prise de vue sort du
+// domaine où le biais de projection a été mesuré, l'angle reste BRUT et porte
+// sa tolérance large. On corrige ce qu'on sait corriger, pas davantage.
+
+// L'APLOMB SE CORRIGE À LA MAIN ENTRE CES BORNES. Au-delà de quinze degrés, ce
+// n'est plus un téléphone posé de travers : c'est un cadrage que le redressement
+// ne sauvera pas, et qu'il vaut mieux refilmer.
+const ML_APLOMB_MAX=15;
+// LE SEGMENT INTER-HANCHES doit porter du signal. Filmé de profil, il se réduit
+// à quelques pixels — une hanche cache l'autre — et son inclinaison n'est plus
+// que du bruit. On exige qu'il fasse au moins ce quart de la longueur du tronc
+// visible dans la même image : en dessous, un pixel d'erreur sur un point
+// déplacerait l'estimation de plus de dix degrés.
+const ML_HANCHES_MIN_TRONC=0.25;
+// DIX IMAGES : en dessous, l'écart-type de l'estimation ne veut rien dire.
+const ML_HORIZON_N_MIN=10;
+// LA VISIBILITÉ EXIGÉE des deux hanches. Plus haut que le seuil ordinaire
+// (0,5) : ici on ne mesure pas un angle du corps, on mesure le MONDE, et une
+// erreur se reporte ensuite sur toute la vidéo.
+const ML_HORIZON_VIS=0.7;
+
+/**
+ * PURE. L'angle du repère image sur la verticale réelle, en degrés, estimé sur
+ * le segment inter-hanches : il est horizontal dans le monde, donc ce qu'on lit
+ * de son inclinaison est celle de l'appareil. Positif quand la droite de
+ * l'image est plus basse que sa gauche.
+ *
+ * ⚠ RETOURNE null LE PLUS SOUVENT SUR UNE VIDÉO DE PROFIL, et c'est normal :
+ * de profil, une hanche cache l'autre et le segment n'a plus de longueur. C'est
+ * précisément pourquoi l'écran offre un curseur : l'estimation est un confort,
+ * pas la source de vérité.
+ *
+ * @param {{X:number[], Y:number[], V:number[]}[]} ech  positions EN PIXELS
+ * @returns {{theta:number, n:number, ecartType:number}|null}
+ */
+function mlHorizon(ech){
+  const hg=mlRangPose('hanche','G'), hd=mlRangPose('hanche','D');
+  const eg=mlRangPose('epaule','G'), ed=mlRangPose('epaule','D');
+  /** @type {number[]} */
+  const angles=[];
+  for(const e of ech||[]){
+    if(!e||!e.X||!e.Y||!e.V) continue;
+    if(!(e.V[hg]>=ML_HORIZON_VIS)||!(e.V[hd]>=ML_HORIZON_VIS)) continue;
+    const xg=e.X[hg], yg=e.Y[hg], xd=e.X[hd], yd=e.Y[hd];
+    if(![xg,yg,xd,yd].every(isFinite)) continue;
+    // LE TRONC DE LA MÊME IMAGE donne l'échelle : pas besoin de mètres pour
+    // savoir si le segment inter-hanches est assez long pour dire quelque chose.
+    const mx=(xg+xd)/2, my=(yg+yd)/2;
+    const sx=(e.X[eg]+e.X[ed])/2, sy=(e.Y[eg]+e.Y[ed])/2;
+    if(!isFinite(sx)||!isFinite(sy)) continue;
+    const tronc=Math.hypot(sx-mx,sy-my);
+    let dx=xd-xg, dy=yd-yg;
+    // L'ATHLÈTE PEUT ÊTRE TOURNÉ : on oriente le segment vers la droite de
+    // l'image, sinon la même inclinaison se lirait tantôt +5°, tantôt −175°.
+    if(dx<0){ dx=-dx; dy=-dy; }
+    const l=Math.hypot(dx,dy);
+    if(!(tronc>1e-6)||!(l>=ML_HANCHES_MIN_TRONC*tronc)) continue;
+    const a=Math.atan2(dy,dx)*180/Math.PI;
+    // DEBOUT, PAS COUCHÉ : au-delà, l'athlète n'est pas dans la position où le
+    // bassin est horizontal, et ce qu'on lirait serait sa posture.
+    if(Math.abs(a)>30) continue;
+    angles.push(a);
+  }
+  if(angles.length<ML_HORIZON_N_MIN) return null;
+  // LA MÉDIANE, PAS LA MOYENNE : une image où le modèle a confondu les deux
+  // hanches donne un angle absurde, et une seule suffirait à déplacer une
+  // moyenne. L'écart-type, lui, reste calculé sur tout pour DIRE la dispersion.
+  const tries=angles.slice().sort((a,b)=>a-b);
+  const n=tries.length;
+  const theta=n%2?tries[(n-1)/2]:(tries[n/2-1]+tries[n/2])/2;
+  let s=0;
+  for(const a of angles) s+=(a-theta)*(a-theta);
+  return {theta:Math.round(theta*10)/10,n,ecartType:Math.round(Math.sqrt(s/n)*10)/10};
+}
+/**
+ * PURE. Les points redressés de `theta` degrés : on tourne l'image de −theta
+ * pour remettre la verticale du monde sur la verticale de l'écran.
+ * Le centre ne change RIEN aux angles — une rotation les conserve tous — et ne
+ * décale les positions que d'un bloc ; il vaut l'origine par défaut.
+ * @param {number[]} X
+ * @param {number[]} Y
+ * @param {number} theta  degrés
+ * @param {number} [cx]
+ * @param {number} [cy]
+ * @returns {{X:number[], Y:number[]}}
+ */
+function mlRedresser(X,Y,theta,cx,cy){
+  const t=-(Number(theta)||0)*Math.PI/180;
+  const co=Math.cos(t), si=Math.sin(t);
+  const ox=Number(cx)||0, oy=Number(cy)||0;
+  const nx=[], ny=[];
+  for(let i=0;i<X.length;i++){
+    const x=X[i]-ox, y=Y[i]-oy;
+    if(!isFinite(x)||!isFinite(y)){ nx.push(NaN); ny.push(NaN); continue; }
+    nx.push(ox+x*co-y*si);
+    ny.push(oy+x*si+y*co);
+  }
+  return {X:nx,Y:ny};
+}
+
+// LA LARGEUR INTER-HANCHES rapportée à la longueur du tronc, chez l'adulte :
+// l'écart entre les deux têtes fémorales vaut environ 0,105 fois la stature, et
+// la distance hanche-épaule environ 0,288 fois. Le rapport tombe à 0,36. Il
+// varie d'un individu à l'autre d'environ ±20 %, ce qui déplace la frontière
+// des quinze degrés de ±4° : assez pour un verdict en trois niveaux sur la
+// PRISE DE VUE, bien trop peu pour en tirer une mesure.
+const ML_BASSIN_TRONC=0.36;
+// LES TROIS NIVEAUX DE PRISE DE VUE. Ce sont les SEULS verdicts en trois
+// niveaux du module, et ils portent sur la VIDÉO, jamais sur le mouvement.
+// À trente degrés hors du plan au lieu de quatre-vingt-dix, l'erreur sur une
+// vitesse horizontale est multipliée par 2,5 : d'où une réserve dès quinze.
+const ML_HORSPLAN_OK=15;
+const ML_HORSPLAN_REFAIRE=25;
+
+/**
+ * PURE. L'écart de la prise de vue au profil, en degrés : 0 de profil parfait,
+ * 90 de face. La largeur inter-hanches projetée vaut la vraie largeur multipliée
+ * par le sinus de cet écart ; on la rapporte au tronc de la même image, donc
+ * sans avoir besoin d'aucune échelle.
+ *
+ * ⚠ C'EST UNE ESTIMATION MORPHOLOGIQUE, pas une mesure : elle repose sur un
+ * rapport anthropométrique moyen. Elle sert à dire « de profil » ou « de
+ * trois-quarts », pas à corriger quoi que ce soit.
+ *
+ * @param {{X:number[], Y:number[], V:number[]}[]} ech  positions EN PIXELS
+ * @returns {{deg:number, n:number}|null}
+ */
+function mlHorsPlan(ech){
+  const hg=mlRangPose('hanche','G'), hd=mlRangPose('hanche','D');
+  const eg=mlRangPose('epaule','G'), ed=mlRangPose('epaule','D');
+  /** @type {number[]} */
+  const vals=[];
+  for(const e of ech||[]){
+    if(!e||!e.X||!e.Y||!e.V) continue;
+    if(!(e.V[hg]>=ML_HORIZON_VIS)||!(e.V[hd]>=ML_HORIZON_VIS)) continue;
+    const xg=e.X[hg], yg=e.Y[hg], xd=e.X[hd], yd=e.Y[hd];
+    if(![xg,yg,xd,yd].every(isFinite)) continue;
+    const mx=(xg+xd)/2, my=(yg+yd)/2;
+    const sx=(e.X[eg]+e.X[ed])/2, sy=(e.Y[eg]+e.Y[ed])/2;
+    if(!isFinite(sx)||!isFinite(sy)) continue;
+    const tronc=Math.hypot(sx-mx,sy-my);
+    if(!(tronc>1e-6)) continue;
+    const large=Math.hypot(xd-xg,yd-yg)/tronc/ML_BASSIN_TRONC;
+    vals.push(Math.asin(Math.max(0,Math.min(1,large)))*180/Math.PI);
+  }
+  if(!vals.length) return null;
+  vals.sort((a,b)=>a-b);
+  const n=vals.length;
+  const med=n%2?vals[(n-1)/2]:(vals[n/2-1]+vals[n/2])/2;
+  return {deg:Math.round(med),n};
+}
+/**
+ * PURE. Le contrôle de prise de vue, AVANT l'analyse : ce qui se verrait de
+ * toute façon dans le résultat, dit en dix images plutôt qu'en une minute.
+ * Rend un niveau d'ensemble et le détail, point par point.
+ *
+ * ⚠ CE VERDICT PORTE SUR LA VIDÉO, JAMAIS SUR LE MOUVEMENT. Il ne dit pas si le
+ * geste est bon : il dit si l'image permet de le mesurer.
+ *
+ * @param {{X:number[], Y:number[], V:number[]}[]} ech  positions EN PIXELS
+ * @param {{vw:number, vh:number, fps:number, fpsMesure:boolean}} meta
+ * @returns {{niveau:'ok'|'reserve'|'refilmer', points:{cle:string, etat:'ok'|'reserve'|'refilmer'|'inconnu', phrase:string}[]}}
+ */
+function mlControlePriseDeVue(ech,meta){
+  /** @type {{cle:string, etat:'ok'|'reserve'|'refilmer'|'inconnu', phrase:string}[]} */
+  const points=[];
+  const l=(ech||[]).filter(e=>e&&e.X&&e.Y&&e.V);
+  const vu=l.filter(e=>e.V.some(v=>v>=ML_POSE_VIS_MIN));
+  if(!vu.length){
+    points.push({cle:'sujet',etat:'refilmer',phrase:'Personne n’est reconnu sur ces images : cadre l’athlète en entier.'});
+    return {niveau:'refilmer',points};
+  }
+  // ── DE PROFIL ? ────────────────────────────────────────────────────────────
+  const hp=mlHorsPlan(l);
+  if(!hp) points.push({cle:'profil',etat:'inconnu',
+    phrase:'Impossible de juger l’angle de prise de vue : les deux hanches ne se voient pas assez.'});
+  else if(hp.deg<=ML_HORSPLAN_OK) points.push({cle:'profil',etat:'ok',
+    phrase:'Prise de vue de profil (≈ '+hp.deg+'° d’écart).'});
+  else if(hp.deg<=ML_HORSPLAN_REFAIRE) points.push({cle:'profil',etat:'reserve',
+    phrase:'Prise de vue de trois-quarts (≈ '+hp.deg+'° d’écart) : les distances horizontales sont sous-estimées.'});
+  else points.push({cle:'profil',etat:'refilmer',
+    phrase:'Prise de vue trop de face (≈ '+hp.deg+'° d’écart) : une mesure en deux dimensions n’y veut plus dire grand-chose.'});
+  // ── L'ATHLÈTE ENTIER DANS LE CADRE ────────────────────────────────────────
+  const bords=vu.filter(e=>{
+    for(let r=0;r<e.X.length;r++){
+      if(!(e.V[r]>=ML_POSE_VIS_MIN)) continue;
+      if(e.X[r]<0||e.Y[r]<0||e.X[r]>meta.vw||e.Y[r]>meta.vh) return true;
+    }
+    return false;
+  }).length;
+  if(bords>vu.length/3) points.push({cle:'cadre',etat:'refilmer',
+    phrase:'L’athlète sort du cadre : recule ou tourne le téléphone.'});
+  else if(bords) points.push({cle:'cadre',etat:'reserve',
+    phrase:'L’athlète touche le bord sur quelques images.'});
+  else points.push({cle:'cadre',etat:'ok',phrase:'L’athlète tient dans le cadre.'});
+  // ── SA TAILLE DANS L'IMAGE ────────────────────────────────────────────────
+  // MOINS DE LA MOITIÉ DE LA HAUTEUR : chaque point du corps porte alors plus
+  // d'un centimètre d'incertitude, et les angles qui s'en déduisent aussi.
+  let hautMax=0;
+  for(const e of vu){
+    let y0=Infinity, y1=-Infinity;
+    for(let r=0;r<e.X.length;r++){
+      if(!(e.V[r]>=ML_POSE_VIS_MIN)||!isFinite(e.Y[r])) continue;
+      y0=Math.min(y0,e.Y[r]); y1=Math.max(y1,e.Y[r]);
+    }
+    if(y1>y0) hautMax=Math.max(hautMax,(y1-y0)/Math.max(1,meta.vh));
+  }
+  const pc=Math.round(hautMax*100);
+  if(hautMax>=0.5) points.push({cle:'taille',etat:'ok',phrase:'L’athlète occupe '+pc+' % de la hauteur de l’image.'});
+  else if(hautMax>=0.3) points.push({cle:'taille',etat:'reserve',
+    phrase:'L’athlète n’occupe que '+pc+' % de la hauteur : approche-toi.'});
+  else points.push({cle:'taille',etat:'refilmer',
+    phrase:'L’athlète est trop loin ('+pc+' % de la hauteur) : les points du corps se confondent.'});
+  // ── L'APLOMB ──────────────────────────────────────────────────────────────
+  const hz=mlHorizon(l);
+  if(!hz) points.push({cle:'aplomb',etat:'inconnu',
+    phrase:'Aplomb non mesurable ici : il est considéré comme nul, et se corrige à la main.'});
+  else if(Math.abs(hz.theta)<=2) points.push({cle:'aplomb',etat:'ok',
+    phrase:'Téléphone d’aplomb (≈ '+Math.round(hz.theta)+'°).'});
+  else if(Math.abs(hz.theta)<=ML_APLOMB_MAX) points.push({cle:'aplomb',etat:'reserve',
+    phrase:'Téléphone penché d’environ '+Math.round(hz.theta)+'° : le redressement s’en charge.'});
+  else points.push({cle:'aplomb',etat:'refilmer',
+    phrase:'Téléphone penché de plus de '+ML_APLOMB_MAX+'° : redresse-le plutôt que de corriger après coup.'});
+  // ── LA CADENCE ────────────────────────────────────────────────────────────
+  if(!meta.fpsMesure) points.push({cle:'cadence',etat:'reserve',
+    phrase:'Cadence non mesurée : les vitesses seront approchées.'});
+  else if(meta.fps>=55) points.push({cle:'cadence',etat:'ok',phrase:Math.round(meta.fps)+' images par seconde.'});
+  else points.push({cle:'cadence',etat:'reserve',
+    phrase:Math.round(meta.fps)+' images par seconde : un geste rapide passe entre deux images.'});
+  // ── LE CADRAGE BOUGE-T-IL ? ───────────────────────────────────────────────
+  // ⚠ CE QU'ON MESURE ICI, c'est le déplacement du sujet DANS l'image pendant
+  // une seconde de mise en place. Un téléphone tenu à la main s'y voit ; un
+  // téléphone posé pendant que l'athlète marche vers la barre aussi, et c'est
+  // le défaut de la sonde — on le dit « à vérifier », jamais « à refilmer ».
+  let cx0=0, cy0=0, k=0, dMax=0, ech0=0;
+  for(const e of vu){
+    let sx=0, sy=0, m=0, y0=Infinity, y1=-Infinity;
+    for(let r=0;r<e.X.length;r++){
+      if(!(e.V[r]>=ML_POSE_VIS_MIN)||!isFinite(e.X[r])||!isFinite(e.Y[r])) continue;
+      sx+=e.X[r]; sy+=e.Y[r]; m++;
+      y0=Math.min(y0,e.Y[r]); y1=Math.max(y1,e.Y[r]);
+    }
+    if(!m||!(y1>y0)) continue;
+    sx/=m; sy/=m;
+    if(!k){ cx0=sx; cy0=sy; ech0=y1-y0; }
+    else dMax=Math.max(dMax,Math.hypot(sx-cx0,sy-cy0)/Math.max(1,ech0));
+    k++;
+  }
+  if(k<2) points.push({cle:'stabilite',etat:'inconnu',phrase:'Stabilité du cadrage non jugée : trop peu d’images.'});
+  else if(dMax<=0.15) points.push({cle:'stabilite',etat:'ok',phrase:'Cadrage stable.'});
+  else points.push({cle:'stabilite',etat:'reserve',
+    phrase:'Le sujet se déplace dans l’image : pose le téléphone si tu le tiens.'});
+  const niveau=points.some(p=>p.etat==='refilmer')?'refilmer'
+    :points.some(p=>p.etat==='reserve')?'reserve':'ok';
+  return {niveau,points};
+}
+
+// ── LE BIAIS DE PROJECTION ──────────────────────────────────────────────────
+//
+// ⚠ CES COEFFICIENTS VIENNENT DU CAHIER DES CHARGES, PAS D'UNE MESURE FAITE
+// ICI. Ils y sont donnés pour un SQUAT FILMÉ DE PROFIL : les angles bruts de
+// MediaPipe sous-estiment la flexion de 11,2° à la hanche et de 10,6° au genou,
+// et une correction linéaire ramène l'erreur quadratique de 11,6° à 4,0° et de
+// 10,9° à 3,9°. Le cahier des charges annonce DEUX coefficients par
+// articulation ; il n'en donne qu'un — le décalage. La pente vaut donc 1 ici,
+// faute de mieux, et la table est prête à la recevoir.
+//
+// ⚠ ET CE QUI N'EST PAS DIT NE SE CORRIGE PAS. Hors du domaine — une autre
+// articulation, une prise de vue à plus de quinze degrés du profil — l'angle
+// reste BRUT et porte sa tolérance large. Mieux vaut un angle franchement
+// approximatif qu'un angle faussement précis.
+const ML_BIAIS=Object.freeze({
+  hanche:Object.freeze({pente:1,decalage:11.2,source:'squat de profil'}),
+  genou:Object.freeze({pente:1,decalage:10.6,source:'squat de profil'})
+});
+// LES DEUX TOLÉRANCES, en degrés, affichées avec chaque angle.
+const ML_TOL_CORRIGE=5;
+const ML_TOL_BRUT=11;
+
+/**
+ * PURE. La flexion anatomique d'une articulation, à partir de l'angle intérieur
+ * mesuré : un genou tendu vaut 0° de flexion, plié à angle droit 90°. Les deux
+ * INCLINAISONS — tronc et avant-bras — ne sont pas des flexions et ne se
+ * convertissent pas : elles restent telles quelles.
+ * @param {string} cle
+ * @param {number|null} interieur
+ * @returns {number|null}
+ */
+function mlFlexion(cle,interieur){
+  if(interieur==null||!isFinite(interieur)) return null;
+  const d=ML_ANGLES.find(q=>q.cle===cle);
+  return (d&&d.c)?180-interieur:interieur;
+}
+/**
+ * PURE. La flexion corrigée du biais de projection, avec sa tolérance et son
+ * origine. `horsPlan` : l'écart au profil en degrés, quand on le connaît.
+ * @param {string} cle
+ * @param {number|null} flexion  DEGRÉS DE FLEXION, pas l'angle intérieur
+ * @param {number} [horsPlan]
+ * @returns {{deg:number, corrige:boolean, tol:number}|null}
+ */
+function mlCorrigerAngle(cle,flexion,horsPlan){
+  if(flexion==null||!isFinite(flexion)) return null;
+  const b=/** @type {Object<string,{pente:number, decalage:number, source:string}>} */(ML_BIAIS)[cle];
+  const dansLeDomaine=!!b&&(horsPlan==null||!isFinite(Number(horsPlan))||Number(horsPlan)<=ML_HORSPLAN_OK);
+  if(!dansLeDomaine) return {deg:Math.round(flexion),corrige:false,tol:ML_TOL_BRUT};
+  const d=b.pente*flexion+b.decalage;
+  // UNE FLEXION NE SORT PAS DE [0, 180] : la corriger ne doit pas la faire
+  // sortir du possible.
+  return {deg:Math.round(Math.max(0,Math.min(180,d))),corrige:true,tol:ML_TOL_CORRIGE};
+}
+/**
+ * PURE. « 131° ±5 » : un angle tel qu'il doit s'écrire — au degré entier,
+ * jamais au dixième, et toujours avec sa tolérance.
+ * @param {{deg:number, corrige:boolean, tol:number}|null} a
+ * @returns {string}
+ */
+function mlAngleTexte(a){
+  return a?a.deg+'° ±'+a.tol:'—';
 }
 
 // ══ L'ÉTAT ET L'OUVERTURE ═════════════════════════════════════════════════════
@@ -989,6 +1345,8 @@ function mlOuvrir(email,videoId){
     mode:'lecture',graine:null,disqueM:ML_DISQUE_M,sens:'',fantome:false,
     analyseJeton:0,progres:'',suivis:{},cacheBarre:null,
     angCote:'',angCalques:[],epingles:[],cachePose:null,
+    theta:0,thetaAuto:null,thetaMain:false,
+    etalon:{type:'disque45',cm:Math.round(ML_DISQUE_M*100),ax:null,ay:null,bx:null,by:null},prise:null,
     rec:null,correction:null,cartes:[],lecteur:null};
   go('s-coach-motion-lab');
   _mlRendre();
@@ -1104,6 +1462,7 @@ function _mlRendre(){
       +'<div class="ml-tete" id="ml-tete" aria-hidden="true"></div>'
     +'</div></div>'
     +'<div id="ml-bornes"></div>'
+    +'<div id="ml-prise"></div>'
     +'<div id="ml-traj"></div>'
     +'<div id="ml-artic"></div>'
     +'<div id="ml-corr"></div>'
@@ -1555,8 +1914,9 @@ function mlImage(sens){
 /** @param {number} r */
 function mlVitesse(r){
   const v=_mlVideo();
+  if(!v) return false;
   const applique=videoSetRate(v,r);
-  if(applique==null||!v) return false;
+  if(applique==null) return false;
   v.dataset.rate=String(applique);
   document.querySelectorAll('#ml-contenu button[data-rate]').forEach(x=>{
     const b=/** @type {HTMLElement} */(x);
@@ -1769,6 +2129,20 @@ function _mlBrancherCalque(calque){
       calque.addEventListener('pointercancel',fin);
       return;
     }
+    // L'ÉTALON : premier toucher, un bout ; second, l'autre. Puis c'est fini.
+    if(_ml&&_ml.mode==='etalon'){
+      const v=_mlVideo(), R=v?_mlVideoRect(v):null;
+      if(!R) return;
+      e.preventDefault();
+      const b=calque.getBoundingClientRect();
+      const x=Math.max(0,Math.min(R.vw,(e.clientX-b.left-R.ox)/R.s));
+      const y=Math.max(0,Math.min(R.vh,(e.clientY-b.top-R.oy)/R.s));
+      const et=_ml.etalon;
+      if(et.ax==null||et.bx!=null) _ml.etalon={...et,ax:x,ay:y,bx:null,by:null};
+      else { _ml.etalon={...et,bx:x,by:y}; _ml.mode='lecture'; }
+      _mlMajPrise(); _mlDessinerCalque();
+      return;
+    }
     if(!_ml||(_ml.mode!=='graine'&&_ml.mode!=='replacer')) return;
     e.preventDefault();
     try{ calque.setPointerCapture(e.pointerId); }catch(x){}
@@ -1850,7 +2224,7 @@ function _mlDessinerCalque(){
   const dpr=Math.min(2,window.devicePixelRatio||1);
   const W=v.clientWidth, H=v.clientHeight;
   if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){ c.width=Math.round(W*dpr); c.height=Math.round(H*dpr); }
-  c.classList.toggle('ml-calque-actif',_ml.mode==='graine'||_ml.mode==='replacer'
+  c.classList.toggle('ml-calque-actif',_ml.mode==='graine'||_ml.mode==='replacer'||_ml.mode==='etalon'
     ||!!(_ml.rec&&_ml.rec.outil==='dessin'&&!_ml.rec.pause));
   const g=c.getContext('2d'); if(!g) return;
   g.setTransform(dpr,0,0,dpr,0,0);
@@ -1859,6 +2233,23 @@ function _mlDessinerCalque(){
   /** @param {number} x @param {number} y @returns {[number,number]} */
   const P=(x,y)=>[R.ox+x*R.s,R.oy+y*R.s];
   const cyan=_tok('--arc-current','#4DE8FF'), calme=_tok('--arc-calm','#6E7A99');
+  // L'ÉTALON EN VIOLET : c'est une longueur de référence, pas du mouvement.
+  const et=_ml.etalon;
+  if(et&&et.ax!=null&&et.ay!=null){
+    const [x1,y1]=P(et.ax,et.ay);
+    g.strokeStyle=_tok('--arc-charge','#7B3BFF'); g.lineWidth=2;
+    g.beginPath(); g.moveTo(x1-7,y1); g.lineTo(x1+7,y1); g.moveTo(x1,y1-7); g.lineTo(x1,y1+7); g.stroke();
+    if(et.bx!=null&&et.by!=null){
+      const [x2,y2]=P(et.bx,et.by);
+      g.beginPath(); g.moveTo(x2-7,y2); g.lineTo(x2+7,y2); g.moveTo(x2,y2-7); g.lineTo(x2,y2+7); g.stroke();
+      g.setLineDash([6,4]); g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); g.setLineDash([]);
+      g.font='800 12px Montserrat, sans-serif'; g.textAlign='center'; g.textBaseline='bottom';
+      const txt=mlNombre(_ml.etalon.cm,1).replace(',0','')+' cm';
+      g.lineWidth=3; g.strokeStyle='rgba(0,0,0,.75)'; g.strokeText(txt,(x1+x2)/2,(y1+y2)/2-4);
+      g.fillStyle=_tok('--arc-charge','#7B3BFF'); g.fillText(txt,(x1+x2)/2,(y1+y2)/2-4);
+      g.textAlign='start'; g.textBaseline='alphabetic';
+    }
+  }
   if((_ml.mode==='graine'||_ml.mode==='replacer')&&_ml.graine&&_ml.graine.x!=null&&_ml.graine.y!=null){
     const [x,y]=P(_ml.graine.x,_ml.graine.y), r=_ml.graine.r*R.s;
     g.strokeStyle=cyan; g.lineWidth=2; g.setLineDash([6,4]);
@@ -2020,6 +2411,7 @@ function mlPassagesDouteux(points){
 }
 // Le panneau de la répétition choisie : poser, analyser, lire le résultat.
 function _mlMajTrajectoire(){
+  _mlMajPrise();
   _mlMajArticulations();
   const z=_mlEl('ml-traj');
   if(!z||!_ml) return;
@@ -2284,7 +2676,14 @@ async function mlAnalyser(relance){
   }
   if(!seg) return false;
   const points=avant.concat(neufs);
-  const calc=mlMetriquesBarre(points,disqueM/(2*rayonPx));
+  const mpp=_mlMpp(rayonPx);
+  if(!(mpp>0)){
+    _ml.mode='graine';
+    toast('Pose une échelle : un disque, ou deux points sur une longueur connue.','var(--orange)');
+    _mlMajTrajectoire();
+    return false;
+  }
+  const calc=mlMetriquesBarre(points,mpp,_ml.theta);
   if(!calc){
     _ml.mode='graine';
     toast('Trop peu d’images suivies pour une trajectoire : pose le disque plus précisément.','var(--orange)');
@@ -2302,7 +2701,9 @@ async function mlAnalyser(relance){
   if(points.some(p=>p.etat==='perdu')) alertes.push('perte_suivi');
   if(points.some(p=>p.etat==='bord')) alertes.push('disque_bord');
   if(points.filter(p=>p.etat==='doute'||p.conf<ML_CONF_DOUTE).length>0.1*n) alertes.push('doutes');
-  const compacte=mlCompacterBarre(seg,calc,{disqueM,sens,vw,vh,rayonPx,fps:fpsEstime,alertes});
+  const px=_mlEtalonPx();
+  const compacte=mlCompacterBarre(seg,calc,{disqueM,sens,vw,vh,rayonPx,fps:fpsEstime,alertes,
+    mpp,theta:_ml.theta,etalon:px>0?{cm:_ml.etalon.cm,px,type:_ml.etalon.type}:null});
   const valide=segBarreValide(compacte,seg.debutMs,seg.finMs);
   if(!valide){ _ml.mode='lecture'; toast('La trajectoire calculée est illisible : réessaie.','var(--orange)'); _mlMajTrajectoire(); return false; }
   _ml.segments=_ml.segments.map(s=>s.id===seg.id?{...s,barre:valide}:s);
@@ -2329,6 +2730,7 @@ async function mlAnalyser(relance){
  * @returns {{periode:number, origine:number, mesuree:boolean}}
  */
 function mlCadence(sonde,repliMs){
+  /** @type {number[]} */
   const debuts=[];
   for(let i=1;i<(sonde||[]).length;i++)
     if(sonde[i].e!==sonde[i-1].e) debuts.push((sonde[i].t+sonde[i-1].t)/2);
@@ -2486,9 +2888,9 @@ const ML_POSE_HZ=12;
 // l'articulation et plus rien ne se lit. Trois couleurs, celles du dessin.
 const ML_ANG_MAX=3;
 
-/** Le moteur, chargé une fois par session. */
+/** Le moteur, chargé une fois par session. @type {any} */
 let _mlPose=null;
-/** Le chargement en cours, pour que deux demandes n'en fassent pas deux. */
+/** Le chargement en cours, pour que deux demandes n'en fassent pas deux. @type {Promise<any>|null} */
 let _mlPosePret=null;
 
 /** @returns {boolean} Une analyse tourne : les répétitions ne bougent pas. */
@@ -2676,8 +3078,13 @@ async function mlAnalyserArticulations(){
     return false;
   }
   const cote=mlCotePose(ech);
+  // L'APLOMB, ESTIMÉ SUR LES MÊMES IMAGES que les articulations : c'est
+  // gratuit, et une correction à la main garde la main.
+  const hz=mlHorizon(ech), horsPlan=mlHorsPlan(ech);
+  if(hz) _ml.thetaAuto=hz;
+  if(!_ml.thetaMain&&hz) _ml.theta=hz.theta;
   const pose=segPoseValide(mlCompacterPose({id:segId,label:'',debutMs:debut,finMs:fin},ech,
-    {vw:r.vw,vh:r.vh,cote}),debut,fin);
+    {vw:r.vw,vh:r.vh,cote,theta:_ml.theta,hp:horsPlan?horsPlan.deg:null}),debut,fin);
   if(!pose){
     toast('Les articulations calculées sont illisibles : réessaie.','var(--orange)');
     _mlMajTrajectoire();
@@ -2755,6 +3162,9 @@ function mlCalqueAngle(cle){
 function _mlMajArticulations(){
   const z=_mlEl('ml-artic');
   if(!z||!_ml) return;
+  // LA GARDE CAPTURÉE : les fonctions fléchées qui suivent ne la voient pas,
+  // et `_ml` peut être vidé entre deux par une sortie d'écran.
+  const E=_ml;
   const a=_mlActif();
   if(!a){ z.innerHTML=''; return; }
   const p=/** @type {any} */(a).pose;
@@ -2770,6 +3180,7 @@ function _mlMajArticulations(){
       +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlAnalyserArticulations()"'+off+'>Lire les articulations</button></div>';
   } else {
     const S=_mlPoseLue(a);
+    /** @type {ReturnType<typeof mlMetriquesAngles>} */
     const met=S?mlMetriquesAngles(S):{};
     h+='<button type="button" class="ml-mini ml-refaire" onclick="mlRefaireArticulations()" aria-label="Refaire les articulations"'+off+'>↺</button></div>'
       +'<div class="ml-champ"><span>Côté mesuré</span><span class="ml-choix">'
@@ -2779,8 +3190,8 @@ function _mlMajArticulations(){
       +'<p class="ml-traj-aide">Touche un angle pour le poser sur la vidéo. '+ML_ANG_MAX+' à la fois.</p>'
       +'<div class="ml-choix ml-ang">'
       +ML_ANGLES.map(q=>{
-        const m=met[q.cle], on=_ml.angCalques.includes(q.cle);
-        const i=_ml.angCalques.indexOf(q.cle);
+        const m=met[q.cle], on=E.angCalques.includes(q.cle);
+        const i=E.angCalques.indexOf(q.cle);
         return '<button type="button" class="ml-b ml-ang-b" aria-pressed="'+on+'"'+(m?'':' disabled')
           +(on?' style="--c:'+_mlCouleurTrait(i%3)+'"':'')
           +' onclick="mlCalqueAngle(\''+q.cle+'\')">'+q.nom+(m?'':' —')+'</button>';
@@ -2797,14 +3208,22 @@ function _mlMajArticulations(){
     if(actifs.length){
       h+='<div class="ml-metr">'+actifs.map(c=>{
         const m=met[c], q=ML_ANGLES.find(x=>x.cle===c);
-        return '<div><b>'+Math.round(m.min)+'°&nbsp;·&nbsp;'+Math.round(m.max)+'°</b><span>'
-          +escapeHtml(q?q.nom:c)+' · du plus fermé au plus ouvert</span></div>';
+        // ⚠ CONVENTION ANATOMIQUE : un genou tendu vaut 0° de flexion, plié à
+        // angle droit 90°. L'angle intérieur, lui, dit l'inverse — et c'est lui
+        // qui est stocké, pour que les analyses d'hier restent lisibles.
+        const hp=S?S.hp:null;
+        const f1=mlFlexion(c,m.min), f2=mlFlexion(c,m.max);
+        const lo=mlCorrigerAngle(c,Math.min(Number(f1),Number(f2)),hp==null?undefined:hp);
+        const hi=mlCorrigerAngle(c,Math.max(Number(f1),Number(f2)),hp==null?undefined:hp);
+        return '<div><b>'+(lo?lo.deg:0)+'°&nbsp;·&nbsp;'+escapeHtml(mlAngleTexte(hi))+'</b><span>'
+          +escapeHtml(q?q.nom:c)+' · '+(q&&q.c?'flexion, du moins au plus fléchi':'inclinaison sur la verticale')
+          +(hi&&hi.corrige?' · corrigée':' · brute')+'</span></div>';
       }).join('')+'</div>';
     }
     // CE QU'ON N'A PAS VU SE DIT. Une courbe trouée passe sinon pour une
     // courbe plate, et le coach corrigerait un geste sur du vide.
     if(S){
-      const manque=ML_ANGLES.filter(q=>_ml.angCalques.includes(q.cle))
+      const manque=ML_ANGLES.filter(q=>E.angCalques.includes(q.cle))
         .map(q=>({q,trous:mlTrousAngles(S.t,S.ang[q.cle])}))
         .filter(x=>x.trous.length);
       if(manque.length){
@@ -2872,7 +3291,7 @@ function _mlDessinerPose(g,R,S,tNow,cles){
     while(d<-Math.PI) d+=2*Math.PI;
     g.lineWidth=2;
     g.beginPath(); g.arc(bx,by,r,a1,a1+d,d<0); g.stroke();
-    const txt=Math.round(val)+'°';
+    const txt=mlAngleTexte(mlCorrigerAngle(cle,Number(mlFlexion(cle,val)),S.hp==null?undefined:S.hp));
     g.font='800 13px Montserrat, sans-serif'; g.textAlign='center'; g.textBaseline='middle';
     const tx=bx+Math.cos(a1+d/2)*(r+14), ty=by+Math.sin(a1+d/2)*(r+14);
     g.lineWidth=3; g.strokeStyle='rgba(0,0,0,.75)';
@@ -2880,6 +3299,273 @@ function _mlDessinerPose(g,R,S,tNow,cles){
     g.fillStyle=c; g.fillText(txt,tx,ty);
   });
   g.lineCap='butt'; g.textAlign='start'; g.textBaseline='alphabetic';
+}
+
+// ── LE PANNEAU « PRISE DE VUE » (lot 8) ─────────────────────────────────────
+//
+// Ce panneau ne parle pas du mouvement : il parle de la VIDÉO. Il vient avant
+// les analyses parce que tout ce qu'elles diront en dépend — un téléphone
+// penché, une prise de vue de trois-quarts ou une échelle fausse se propagent
+// partout, dans le même sens, sans jamais se voir.
+
+// LES ÉTALONS PROPOSÉS. Le disque n'est plus qu'un cas : l'essentiel du
+// bodybuilding se fait sur machine, où il n'y en a pas. Les longueurs sont des
+// ordres de grandeur courants, et restent modifiables — c'est le coach qui sait
+// ce qu'il a sous les yeux.
+const ML_ETALONS=Object.freeze([
+  {cle:'disque45',nom:'Disque olympique',cm:45},
+  {cle:'disque40',nom:'Disque 40 cm',cm:40},
+  {cle:'banc',nom:'Hauteur de banc',cm:45},
+  {cle:'barre',nom:'Barre (bague à bague)',cm:131},
+  {cle:'taille',nom:'Taille de l’athlète',cm:0},
+  {cle:'repere',nom:'Repère collé',cm:20}
+]);
+
+/**
+ * L'échelle en mètres par pixel de la vidéo : l'étalon posé s'il existe, le
+ * disque suivi sinon. Rend 0 quand rien ne permet de mesurer.
+ * @param {number} [rayonPx]  le rayon du disque suivi, quand on l'a
+ * @returns {number}
+ */
+function _mlMpp(rayonPx){
+  if(!_ml) return 0;
+  const px=_mlEtalonPx();
+  if(px>0&&_ml.etalon.cm>0) return _ml.etalon.cm/100/px;
+  const r=Number(rayonPx);
+  return (r>0&&_ml.disqueM>0)?_ml.disqueM/(2*r):0;
+}
+/** La longueur, en pixels, entre les deux points de l'étalon. */
+function _mlEtalonPx(){
+  const e=_ml&&_ml.etalon;
+  if(!e||e.ax==null||e.ay==null||e.bx==null||e.by==null) return 0;
+  return Math.hypot(e.bx-e.ax,e.by-e.ay);
+}
+/**
+ * Choisit un préréglage d'étalon. « Taille de l'athlète » prend la taille du
+ * dossier — et la présente comme une ESTIMATION : une taille déclarée, mesurée
+ * chaussures aux pieds ou non, ne vaut pas un mètre ruban sur un banc.
+ * @param {string} cle
+ */
+function mlEtalonType(cle){
+  if(!_ml) return false;
+  const p=ML_ETALONS.find(x=>x.cle===cle);
+  if(!p) return false;
+  let cm=p.cm;
+  if(cle==='taille'){
+    const u=(DB.get('users')||{})[_ml.email];
+    const t=u?_tailleCm(u):null;
+    if(!t){ toast('La taille de cet athlète n’est pas renseignée.','var(--orange)'); return false; }
+    cm=t;
+  }
+  _ml.etalon={..._ml.etalon,type:cle,cm};
+  if(cle==='disque45'||cle==='disque40') _ml.disqueM=cm/100;
+  _mlMajPrise();
+  return true;
+}
+/** @param {string|number} v */
+function mlEtalonCm(v){
+  if(!_ml) return false;
+  const cm=Number(String(v).replace(',','.'));
+  if(!(cm>=1&&cm<=1000)){ toast('Longueur entre 1 et 1000 cm.','var(--orange)'); _mlMajPrise(); return false; }
+  _ml.etalon={..._ml.etalon,cm:Math.round(cm*10)/10};
+  _mlMajPrise();
+  return true;
+}
+/** Passe en pose d'étalon : deux touchers sur une longueur connue. */
+function mlEtalonPoser(){
+  if(!_ml||_mlOccupe()) return false;
+  _ml.mode='etalon';
+  _ml.etalon={..._ml.etalon,ax:null,ay:null,bx:null,by:null};
+  _mlMajPrise();
+  _mlDessinerCalque();
+  return true;
+}
+function mlEtalonEffacer(){
+  if(!_ml) return false;
+  _ml.etalon={..._ml.etalon,ax:null,ay:null,bx:null,by:null};
+  if(_ml.mode==='etalon') _ml.mode='lecture';
+  _mlMajPrise();
+  _mlDessinerCalque();
+  return true;
+}
+/**
+ * L'aplomb retenu, corrigé à la main. ⚠ UNE CORRECTION MANUELLE PRIME SUR
+ * L'ESTIMATION et ne se fait pas écraser par une analyse suivante : le coach
+ * voit l'image, le modèle ne voit que des points.
+ * @param {string|number} deg
+ */
+function mlAplomb(deg){
+  if(!_ml) return false;
+  const d=Math.max(-ML_APLOMB_MAX,Math.min(ML_APLOMB_MAX,Number(deg)||0));
+  _ml.theta=Math.round(d*10)/10;
+  _ml.thetaMain=true;
+  _mlAplombPoser();
+  return true;
+}
+/** Reprend l'aplomb estimé, quand il existe. */
+function mlAplombAuto(){
+  if(!_ml) return false;
+  _ml.theta=_ml.thetaAuto?_ml.thetaAuto.theta:0;
+  _ml.thetaMain=false;
+  _mlAplombPoser();
+  return true;
+}
+/**
+ * Pose l'aplomb courant sur les analyses DÉJÀ faites de cette vidéo : elles ont
+ * été calculées dans le repère de l'image, et c'est à la lecture qu'on redresse.
+ * Rien n'est recalculé — seul l'angle change, et tout ce qui en dépend.
+ */
+function _mlAplombPoser(){
+  if(!_ml) return;
+  const th=_ml.theta;
+  _ml.segments=_ml.segments.map(s=>{
+    const o={...s};
+    const b=/** @type {any} */(o).barre, p=/** @type {any} */(o).pose;
+    if(b) /** @type {any} */(o).barre={...b,theta:th};
+    if(p) /** @type {any} */(o).pose={...p,theta:th};
+    return o;
+  });
+  _ml.cachePose=null; _ml.cacheBarre=null;
+  _mlMajPrise();
+  _mlMajEnregistrer();
+  _mlMajTrajectoire();
+  _mlDessinerCalque();
+}
+/**
+ * LE CONTRÔLE DE PRISE DE VUE, sur dix images. Il tourne AVANT l'analyse et ne
+ * coûte qu'une seconde ; l'analyse, elle, en coûte soixante. Il ne bloque
+ * jamais : il dit ce qu'il voit, et le coach décide.
+ * @returns {Promise<boolean>}
+ */
+async function mlVerifierPriseDeVue(){
+  const a=_mlActif(), v=_mlVideo();
+  if(!_ml||!a||!v||!_ml.dureeMs||_ml.rec||_mlOccupe()) return false;
+  const jeton=++_ml.analyseJeton;
+  const arreter=()=>!_ml||_ml.analyseJeton!==jeton;
+  _ml.mode='pose'; _ml.progres='Contrôle de la prise de vue…';
+  _ml.prise={etat:'encours',res:null,ms:0};
+  _mlMajPrise();
+  let moteur=null;
+  try{ moteur=await _mlChargerPose(); }
+  catch(e){
+    if(!arreter()){ _ml.mode='lecture'; _ml.prise=null;
+      toast('Le moteur d’analyse ne s’est pas chargé. La première fois, il lui faut du réseau.','var(--orange)');
+      _mlMajPrise(); }
+    return false;
+  }
+  if(arreter()) return false;
+  const t0=performance.now();
+  /** @type {any} */
+  let dernier=null;
+  moteur.onResults((/** @type {any} */ r)=>{ dernier=r; });
+  /** @type {{X:number[], Y:number[], V:number[]}[]} */
+  const ech=[];
+  // DIX IMAGES SUR LA RÉPÉTITION : assez pour juger un cadrage, et c'est le
+  // minimum qu'exige l'estimation d'aplomb.
+  const pas=Math.max(1,(a.finMs-a.debutMs)/9);
+  const r=await _mlExtrairePose(_ml.url,a.debutMs,a.finMs,pas,async im=>{
+    if(arreter()) return 'arret';
+    dernier=null;
+    try{ await moteur.send({image:im.toile}); }catch(e){ return 'moteur'; }
+    const L=dernier&&dernier.poseLandmarks;
+    const X=[], Y=[], V=[];
+    for(const idx of ML_POSE_IDX){
+      const q=L&&L[idx];
+      X.push(q?q.x*im.vw:NaN); Y.push(q?q.y*im.vh:NaN);
+      V.push(q?Math.max(0,Math.min(1,Number(q.visibility)||0)):0);
+    }
+    ech.push({X,Y,V});
+    return ech.length<10;
+  },arreter);
+  if(arreter()) return false;
+  _ml.mode='lecture';
+  if(r.ok===false){
+    _ml.prise=null;
+    const msg={chargement:'La vidéo ne s’ouvre pas.',cors:'Cette vidéo ne se laisse pas lire image par image.',
+      recherche:'La vidéo ne se déplace pas image par image ici.',
+      moteur:'Le moteur d’analyse s’est arrêté.',arret:''}[r.code];
+    if(msg) toast(msg,'var(--orange)');
+    _mlMajPrise();
+    return false;
+  }
+  const fpsMes=Number(/** @type {any} */(v)._rcFps);
+  const res=mlControlePriseDeVue(ech,{vw:r.vw,vh:r.vh,fps:(isFinite(fpsMes)&&fpsMes>0)?fpsMes:0,
+    fpsMesure:isFinite(fpsMes)&&fpsMes>0});
+  _ml.prise={etat:'fait',res,ms:Math.round(performance.now()-t0)};
+  // L'APLOMB ESTIMÉ SUR LES MÊMES IMAGES — et gardé seulement si le coach n'a
+  // pas déjà tranché à la main.
+  _ml.thetaAuto=mlHorizon(ech);
+  if(!_ml.thetaMain){
+    _ml.theta=_ml.thetaAuto?_ml.thetaAuto.theta:0;
+    _mlAplombPoser();
+  }
+  _mlMajPrise();
+  return true;
+}
+/** Le panneau : contrôle, aplomb, étalon. */
+function _mlMajPrise(){
+  const z=_mlEl('ml-prise');
+  if(!z||!_ml) return;
+  const E=_ml;
+  const off=(E.dureeMs&&!E.rec&&!_mlOccupe())?'':' disabled';
+  const p=E.prise;
+  let h='<div class="ml-traj"><div class="ml-traj-tete"><span class="ml-lab">Prise de vue</span>'
+    +(p&&p.etat==='fait'?'<span class="ml-niv ml-niv-'+p.res.niveau+'">'
+      +(/** @type {Object<string,string>} */({ok:'Exploitable',reserve:'Avec réserve',refilmer:'À refilmer'})[p.res.niveau])+'</span>':'')
+    +'</div>';
+  if(p&&p.etat==='encours'){
+    h+='<p class="ml-traj-aide" aria-live="polite">Contrôle en cours sur dix images…</p>';
+  } else if(p&&p.etat==='fait'){
+    h+='<ul class="ml-alertes ml-prise-l">'+p.res.points.map((/** @type {any} */ q)=>
+      '<li class="ml-pt-'+q.etat+'">'+escapeHtml(q.phrase)+'</li>').join('')+'</ul>'
+      +'<p class="ml-perf">Dix images, '+p.ms+' ms. Ce verdict porte sur la vidéo, jamais sur le mouvement.</p>';
+    if(p.res.niveau==='refilmer')
+      h+='<p class="ml-traj-aide">Une analyse reste possible : elle sera simplement moins sûre.</p>';
+  } else {
+    h+='<p class="ml-traj-aide">Dix images suffisent à dire si la vidéo se laisse mesurer : profil, cadrage, '
+      +'aplomb, cadence. Une seconde, contre une minute pour l’analyse complète.</p>'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlVerifierPriseDeVue()"'+off+'>Vérifier la prise de vue</button></div>';
+  }
+  // ── L'APLOMB ──
+  const auto=E.thetaAuto;
+  h+='<div class="ml-lab" style="margin-top:14px">Aplomb</div>'
+    +'<p class="ml-traj-aide">'+(E.thetaMain
+      ?'Corrigé à la main : c’est cette valeur qui sert.'
+      :auto
+        ?'Estimé sur le bassin de '+auto.n+' images (±'+Math.round(auto.ecartType)+'°).'
+        :'Non estimé — il vaut zéro. De profil, une hanche cache l’autre et le bassin ne dit plus rien : '
+          +'corrige au doigt si le téléphone était penché.')+'</p>'
+    +'<label class="ml-champ"><span>Redressement</span>'
+      +'<input type="range" id="ml-aplomb" min="'+(-ML_APLOMB_MAX)+'" max="'+ML_APLOMB_MAX+'" step="1" '
+      +'value="'+E.theta+'" aria-label="Aplomb, en degrés" oninput="mlAplomb(this.value)"></label>'
+    +'<div class="ml-champ"><span>'+Math.round(E.theta)+'°</span>'
+      +'<span class="ml-choix">'
+      +(auto?'<button type="button" class="ml-b" onclick="mlAplombAuto()">Reprendre l’estimation</button>':'')
+      +'<button type="button" class="ml-b" onclick="mlAplomb(0)">Remettre à zéro</button></span></div>';
+  // ── L'ÉTALON ──
+  const e=E.etalon, px=_mlEtalonPx();
+  const pose=E.mode==='etalon';
+  h+='<div class="ml-lab" style="margin-top:14px">Échelle</div>'
+    +'<p class="ml-traj-aide">'+(pose
+      ?'Touche les deux bouts de la longueur connue sur l’image.'
+      :px?'Mesurée sur '+Math.round(px)+' pixels : '+mlNombre(e.cm,1).replace(',0','')+' cm, soit '
+        +mlNombre(100*_mlMpp(),2)+' cm par pixel.'
+      :'Sans étalon, l’échelle vient du disque suivi et de son diamètre. Sur machine, pose deux points '
+        +'sur une longueur que tu connais.')+'</p>'
+    +'<div class="ml-champ"><span>Étalon</span><span class="ml-choix">'
+      +ML_ETALONS.map(x=>'<button type="button" class="ml-b" aria-pressed="'+(e.type===x.cle)+'" '
+        +'onclick="mlEtalonType(\''+x.cle+'\')">'+escapeHtml(x.nom)+'</button>').join('')+'</span></div>'
+    +'<label class="ml-champ"><span>Longueur réelle</span><span class="ml-cm">'
+      +'<input type="number" id="ml-etalon-cm" inputmode="decimal" min="1" max="1000" step="0.5" value="'
+      +(e.cm||'')+'" onchange="mlEtalonCm(this.value)"><i>cm</i></span></label>'
+    +(e.type==='taille'?'<p class="ml-traj-aide">⚠ Une taille déclarée est une ESTIMATION, pas une mesure : '
+      +'l’échelle qui en découle l’est aussi.</p>':'')
+    +'<div class="ml-traj-cmd">'
+      +'<button type="button" class="btn btn-outline btn-sm" onclick="mlEtalonPoser()"'+off+'>'
+      +(px?'Reposer les deux points':'Poser deux points')+'</button>'
+      +(px?'<button type="button" class="btn btn-outline btn-sm" onclick="mlEtalonEffacer()">Revenir au disque</button>':'')
+    +'</div>';
+  z.innerHTML=h+'</div>';
 }
 
 // ══ LOTS 5 ET 6 — LA CORRECTION VIDÉO : ENREGISTRER, COMPOSER, REJOUER ════════
@@ -2896,7 +3582,7 @@ function _mlDessinerPose(g,R,S,tNow,cles){
  *   |[number,'vitesse',number]|[number,'trait',number,string]|[number,'calque',string,string,number]} Geste
  */
 /** @typedef {{id:string, aMs:number, dureeMs:number, texte:string}} Carte */
-/** @typedef {{id:string, aMs:number, art:string, val:number}} Epingle */
+/** @typedef {{id:string, aMs:number, art:string, val:number, tol:number}} Epingle */
 /**
  * @typedef {{v:1, id:string, creeLe:number, envoyeLe:number, dureeMs:number,
  *   voix:{url:string}|null, debut:{s:number, r:number}, ev:Geste[], cartes:Carte[],
@@ -3178,14 +3864,14 @@ async function mlRecTerminer(){
     r.media.onstop=()=>res(r.morceaux.length?new Blob(r.morceaux,{type:(r.media&&r.media.mimeType)||'audio/webm'}):null);
     try{ r.media.stop(); }catch(e){ res(null); }
   });
-  if(r.flux) r.flux.getTracks().forEach(t=>t.stop());
+  if(r.flux) r.flux.getTracks().forEach((/** @type {MediaStreamTrack} */ t)=>t.stop());
   if(!_ml) return false;
   _ml.rec=null;
   if(dureeMs<300){ toast('Correction trop courte : rien n’a été gardé.','var(--orange)'); _mlMajCorrection(); _mlDessinerCalque(); return false; }
   /** @type {Correction} */
   const motion={v:1,id:'c'+Date.now().toString(36),creeLe:Date.now(),envoyeLe:0,dureeMs,voix:null,
-    debut:r.debut,ev:r.ev.slice().sort((x,y)=>x[0]-y[0]),cartes:[],epingles:[],
-    st:r.st.slice().sort((x,y)=>x.t-y.t)};
+    debut:r.debut,ev:r.ev.slice().sort((/** @type {Geste} */ x,/** @type {Geste} */ y)=>x[0]-y[0]),cartes:[],epingles:[],
+    st:r.st.slice().sort((/** @type {{t:number}} */ x,/** @type {{t:number}} */ y)=>x.t-y.t)};
   _ml.correction={motion,blob,blobUrl:blob?URL.createObjectURL(blob):'',statut:'brouillon',erreur:''};
   _mlMajCorrection();
   _mlDessinerCalque();
@@ -3211,7 +3897,7 @@ async function mlCorrAbandonner(){
 /** @returns {string[]} */
 function _mlModeles(){
   const l=currentUser&&Array.isArray(currentUser.motionModeles)?currentUser.motionModeles:null;
-  return (l||ML_MODELES_DEFAUT).map(x=>String(x).slice(0,CORR_CARTE_MAX)).filter(Boolean).slice(0,ML_MODELES_MAX);
+  return (l||ML_MODELES_DEFAUT).map((/** @type {any} */ x)=>String(x).slice(0,CORR_CARTE_MAX)).filter(Boolean).slice(0,ML_MODELES_MAX);
 }
 function mlCarteAjouter(){
   const v=_mlVideo(), champ=/** @type {HTMLInputElement|null} */(_mlEl('ml-carte-txt'));
@@ -3399,7 +4085,7 @@ function _mlMajCorrection(){
       ?'<div class="ml-cartes">'+_ml.epingles.map(p=>{
         const q=ML_ANGLES.find(x=>x.cle===p.art);
         return '<div class="ml-carte-l"><span class="ml-carte-t">'+mlTempsTexte(p.aMs)+'</span>'
-          +'<span class="ml-carte-x">'+escapeHtml(q?q.nom:String(p.art))+' · '+mlNombre(p.val,1)+'°</span>'
+          +'<span class="ml-carte-x">'+escapeHtml(q?q.nom:String(p.art))+' · '+p.val+'°\u00a0±'+(p.tol||ML_TOL_BRUT)+'</span>'
           +(verrou?'':'<button type="button" class="ml-mini" onclick="mlEpingleSupprimer(\''+escapeHtml(p.id)+'\')" aria-label="Retirer cette épingle">×</button>')
           +'</div>';
       }).join('')+'</div>'
@@ -3491,13 +4177,18 @@ function mlEpingler(cle){
     return false;
   }
   const sMs=Math.round((Number(v.currentTime)||0)*1000);
-  const val=mlAngleA(_mlPoseLue(a),cle,sMs);
+  const S=_mlPoseLue(a);
+  const brut=S?mlAngleA(S,cle,sMs):null;
+  // ON ÉPINGLE CE QUI EST AFFICHÉ : la flexion corrigée, au degré entier, avec
+  // sa tolérance. Recalculer plus tard sur des articulations refaites ferait
+  // changer, dans le dos du coach, la valeur qu'il a montrée.
+  const val=brut==null?null:mlCorrigerAngle(cle,Number(mlFlexion(cle,brut)),S&&S.hp!=null?S.hp:undefined);
   if(val==null){
     toast('Cet angle n’est pas lisible sur cette image.','var(--orange)');
     return false;
   }
   _ml.epingles=_ml.epingles.concat([{id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-    aMs:sMs,art:cle,val:Math.round(val*10)/10}]).sort((x,y)=>x.aMs-y.aMs);
+    aMs:sMs,art:cle,val:val.deg,tol:val.tol}]).sort((x,y)=>x.aMs-y.aMs);
   _mlMajCorrection(); _mlMajArticulations(); _mlDessinerCalque();
   return true;
 }
@@ -3533,7 +4224,7 @@ function _mlDessinerEpingles(g,R,l,sMs){
   let y=8;
   for(const p of vis.slice(0,4)){
     const def=ML_ANGLES.find(q=>q.cle===p.art);
-    const txt=(def?def.nom:String(p.art))+' '+mlNombre(p.val,1)+'°';
+    const txt=(def?def.nom:String(p.art))+' '+p.val+'°\u00a0±'+(p.tol||ML_TOL_BRUT);
     const w=Math.round(g.measureText(txt).width)+16;
     g.fillStyle='rgba(8,8,8,.82)';
     g.fillRect(bord-w,y,w,24);
@@ -3761,7 +4452,7 @@ function mlLecteurCorrection(hote,o){
     // LE SOUS-TITRE SUIT L'HORLOGE DE LA SESSION, comme la voix : c'est
     // elle qu'il accompagne, pas l'image.
     if(sousTitre){
-      const x=mlSousTitreA(m.st,T);
+      const x=mlSousTitreA(m.st||[],T);
       if(sousTitre.textContent!==x) sousTitre.textContent=x;
     }
     temps.textContent=_mlDureeCourte(T)+' / '+_mlDureeCourte(D);
@@ -4009,6 +4700,19 @@ function _mlInjecterStyle(){
     '.ml-metr-l{grid-template-columns:1fr 1fr;margin-top:8px}',
     '.ml-aide{font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin:10px 0 0}',
     '.ml-ang{margin-top:8px;justify-content:flex-start}',
+    // LE VERDICT DE PRISE DE VUE : trois niveaux, sur la VIDÉO. Pas de vert ni
+    // de rouge de feu tricolore — le calme, le cyan et l'orange de l'app.
+    '.ml-niv{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:3px 9px;border-radius:var(--r-full,99px);border:1px solid}',
+    '.ml-niv-ok{color:var(--arc-current,#4DE8FF);border-color:rgba(77,232,255,.5)}',
+    '.ml-niv-reserve{color:var(--orange);border-color:rgba(255,160,0,.5)}',
+    '.ml-niv-refilmer{color:var(--red-text);border-color:rgba(224,32,32,.5)}',
+    '.ml-prise-l{list-style:none;padding-left:0}',
+    '.ml-prise-l li{padding-left:16px;position:relative;margin-bottom:2px}',
+    '.ml-prise-l li::before{position:absolute;left:0;top:0}',
+    '.ml-pt-ok::before{content:"·";color:var(--arc-current,#4DE8FF)}',
+    '.ml-pt-reserve::before{content:"!";color:var(--orange)}',
+    '.ml-pt-refilmer::before{content:"×";color:var(--red-text)}',
+    '.ml-pt-inconnu::before{content:"?";color:var(--text-faint)}',
     // LE SOUS-TITRE GARDE SA PLACE, vide ou plein : sans hauteur minimale,
     // les commandes sauteraient à chaque phrase.
     '.mlc-st{min-height:19px;margin:8px 0 0;font-size:var(--fs-xs);color:var(--sub);line-height:1.45;text-align:center}',

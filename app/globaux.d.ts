@@ -57,6 +57,8 @@ declare function escapeHtml(s: any): string;
 declare function safeUrl(u: any): string;
 declare function safeUrlRaw(u: any): string;
 declare function _tok(nom: string, repli: string): string;
+// La taille de l’athlète, en centimètres, ou null : elle sert d’étalon de secours.
+declare function _tailleCm(user: any): number | null;
 declare function _vcRouvrirApresMotionLab(email: string, videoId: string): any;
 
 // ── La vidéo ────────────────────────────────────────────────────────────────

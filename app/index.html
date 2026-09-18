@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1276';
+window.RC_BUILD='1279';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -81951,6 +81951,11 @@ const SEG_BARRE_ALERTES=Object.freeze(['fps_bas','disque_petit','perte_suivi','d
 // chaque sauvegarde : sept kilo-octets par répétition analysée, l'ordre de
 // grandeur de la trajectoire de barre.
 const SEG_POSE_PTS=14, SEG_POSE_MAX=72;
+// L'APLOMB : l'angle du téléphone sur la verticale, en degrés, gardé AVEC
+// l'analyse qui s'en est servie. Au-delà de quinze degrés ce n'est plus un
+// téléphone de travers, c'est un cadrage à refaire : on borne, on ne corrige
+// pas l'impossible.
+const SEG_APLOMB_MAX=15;
 // LES SEPT ANGLES, nommés ici parce que le journal d'une correction les cite :
 // motion-lab.js les redéfinit avec leurs trois points, mais il n'est chargé
 // que dans le laboratoire, et une correction se valide à l'ouverture de
@@ -81986,7 +81991,17 @@ function segBarreValide(b,debutMs,finMs){
       &&num(p[1],debutMs,finMs)!==null&&num(p[2],0,100)!==null)
     .map(p=>[p[0],Math.round(Number(p[1])),Math.round(Number(p[2]))]).slice(0,SEG_BARRE_PHASES.length);
   const av=_tabBloc(b.av).filter(a=>SEG_BARRE_ALERTES.includes(a)).slice(0,SEG_BARRE_ALERTES.length);
+  const thB=num(b.theta,-SEG_APLOMB_MAX,SEG_APLOMB_MAX);
+  // L'ÉTALON : la longueur connue sur laquelle l'échelle a été prise, quand ce
+  // n'est pas le disque. Il ne sert qu'à DIRE d'où vient l'échelle — les
+  // mesures, elles, sont déjà en mètres dans ce qui est stocké.
+  const et=b.etalon&&typeof b.etalon==='object'?b.etalon:null;
+  const etCm=et?num(et.cm,1,1000):null, etPx=et?num(et.px,1,8192):null;
+  const etalon=(etCm!==null&&etPx!==null)
+    ?{cm:Math.round(etCm*10)/10,px:Math.round(etPx*10)/10,
+      type:String(et.type==null?'':et.type).slice(0,24)}:null;
   return {v:1,debutMs,finMs,disqueM,sens:(b.sens==='gauche'||b.sens==='droite')?b.sens:'',
+    theta:thB===null?0:Math.round(thB*10)/10,...(etalon?{etalon}:{}),
     vw:Math.round(vw),vh:Math.round(vh),rayonPx:Math.round(rayonPx*10)/10,fps:Math.round(fps*100)/100,
     n,t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,xy:b.xy,c:b.c,vy:b.vy,m,ph,av};
 }
@@ -82006,8 +82021,15 @@ function segPoseValide(p,debutMs,finMs){
   const num=(x,min,max)=>{ const v=Number(x); return isFinite(v)&&v>=min&&v<=max?v:null; };
   const vw=num(p.vw,16,8192), vh=num(p.vh,16,8192), pasMs=num(p.pasMs,1,5000), t0Ms=num(p.t0Ms,debutMs,finMs);
   if([vw,vh,pasMs,t0Ms].some(x=>x===null)) return null;
+  // L'APLOMB EST FACULTATIF : les analyses d'avant le lot 8 n'en ont pas, et
+  // valent zéro — elles ont été calculées dans le repère de l'image.
+  const th=num(p.theta,-SEG_APLOMB_MAX,SEG_APLOMB_MAX);
+  // LE HORS-PLAN de la prise de vue, quand il a été estimé : c'est lui qui dit
+  // si la correction du biais de projection est dans son domaine.
+  const hp=num(p.hp,0,90);
   return {v:1,debutMs,finMs,vw:Math.round(vw),vh:Math.round(vh),cote:p.cote,n,
-    t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,xy:p.xy,vis:p.vis};
+    t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,xy:p.xy,vis:p.vis,
+    theta:th===null?0:Math.round(th*10)/10,...(hp===null?{}:{hp:Math.round(hp)})};
 }
 // PURE. Les répétitions lisibles d'une vidéo, triées par début. Ce qui ne peut
 // pas se lire TOMBE — bornes absentes, inversées, trop courtes, trop longues —
@@ -82146,10 +82168,12 @@ function motionCorrectionValide(m){
   const epingles=_tabBloc(m.epingles).map(p=>{
     if(!p||typeof p!=='object') return null;
     const art=String(p.art==null?'':p.art);
-    const aMs=num(p.aMs,0,86400000), val=num(p.val,0,180);
+    const aMs=num(p.aMs,0,86400000), val=num(p.val,0,180), tol=num(p.tol,0,90);
     const pid=String(p.id==null?'':p.id).slice(0,40);
     return (SEG_POSE_ANGLES.includes(art)&&aMs!==null&&val!==null&&pid)
-      ?{id:pid,aMs:Math.round(aMs),art,val:Math.round(val*10)/10}:null;
+      // LA VALEUR ÉPINGLÉE EST CELLE QUI A ÉTÉ MONTRÉE : une flexion corrigée,
+      // au degré entier, avec la tolérance qui l'accompagnait.
+      ?{id:pid,aMs:Math.round(aMs),art,val:Math.round(val),tol:tol===null?11:Math.round(tol)}:null;
   }).filter(Boolean).sort((a,b)=>a.aMs-b.aMs).slice(0,CORR_EPINGLES_MAX);
   // LES SOUS-TITRES sont datés sur l'horloge de la SESSION, comme les gestes :
   // c'est la voix qu'ils accompagnent, pas l'image.
