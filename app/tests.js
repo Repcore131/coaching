@@ -50268,6 +50268,385 @@ async function testExercices(){
           return fuites.length?_echec('visible côté athlète : '+fuites.join(', ')):true;
         } finally { currentUser=sauve; }})());
 
+      // ══════ MORPHO — LOTS M2 à M6 : LES AXES, LES PROFILS, LA PHOTO ══════
+      //
+      // Trois exigences que ces tests défendent, et qui priment sur tout le
+      // reste :
+      //  • L'ORDRE DE LECTURE. Acquis, fonctionnel, osseux — et un profil
+      //    osseux ne se lit jamais seul quand l'axe fonctionnel de son segment
+      //    est saillant ou n'a pas été mesuré.
+      //  • AUCUN REPÈRE INVENTÉ. Trois axes n'ont pas de repère de population
+      //    utilisable : ils restent sans position tant qu'un repère n'est pas
+      //    calibré sur les athlètes du coach. Une case vide vaut mieux qu'un
+      //    rapport faux.
+      //  • RIEN CÔTÉ ATHLÈTE. Ni axe, ni rapport, ni nom de profil.
+      const _mj=864e5;
+      const _m2=(extra,tests,age)=>{
+        const u={email:'m2@t.fr',fname:'Léo',role:'athlete',coachId:'co',gender:'Homme',
+          bilans:[Object.assign({type:'depart',date:Date.now()-10*_mj,'deb-height':'180'},extra||{})]};
+        if(tests) u.morphoTests=tests;
+        if(age!=null) u.birthdate=new Date(Date.now()-age*365.25*_mj).toISOString().slice(0,10);
+        return u;
+      };
+      // Des mesures qui tiennent debout et qui donnent un fémur long.
+      const _M2BASE={'deb-entrejambe':'91','deb-genou':'46','deb-bras':'78',
+        'deb-avantbras':'27','deb-epaules':'42','deb-bassin':'30','deb-poignet':'17'};
+      // Douze athlètes pour poser un repère local.
+      const _m2Pop=()=>{ const l=[];
+        for(let i=0;i<12;i++) l.push(_m2({'deb-height':'178','deb-entrejambe':String(82+i%3),
+          'deb-genou':String(48+i%2),'deb-bras':String(79+i%3),'deb-avantbras':String(27+i%2),
+          'deb-epaules':String(40+i%3),'deb-bassin':String(29+i%2),'deb-poignet':String(17+i%2)}));
+        return l; };
+      const _m2Cal=()=>morphoCalibrage(_m2Pop());
+      const _m2Ax=(u,cal)=>{ const o={}; morphoAxes(u,{calibrage:cal||null}).forEach(a=>{o[a.cle]=a;}); return o; };
+
+      ok('M2 — neuf axes, toujours, et dans l’ordre de lecture imposé',(()=>{
+        for(const u of [_m2(_M2BASE),_m2({}),null,{}]){
+          const l=morphoAxes(u);
+          if(!Array.isArray(l)||l.length!==9) return _echec((l&&l.length)+' axes');
+          const nat=l.map(a=>a.nature).join(',');
+          if(nat!=='acquis,fonctionnel,fonctionnel,osseux,osseux,osseux,osseux,osseux,osseux')
+            return _echec('ordre : '+nat);
+        }
+        // Chaque axe porte de quoi être lu : une clé, un libellé, un texte.
+        const l=morphoAxes(_m2(_M2BASE));
+        const nus=l.filter(a=>!a.cle||!a.lib||!a.court||typeof a.texte!=='string');
+        return nus.length?_echec('axes incomplets : '+nus.map(a=>a.cle).join(', ')):true;})());
+
+      ok('M2 — trois axes n’inventent aucun repère et le DISENT',(()=>{
+        // A2, A4, A5 : l'étude cite « 1,15–1,25 » pour le rapport fémur/tibia,
+        // mais ce chiffre porte sur les OS. Ce qu'un mètre mesure debout —
+        // entrejambe moins hauteur de genou, sur hauteur de genou — tourne
+        // autour de 0,7 : la hauteur de genou inclut le pied, et l'entrejambe
+        // n'est pas la tête fémorale. Reprendre 1,20 ici serait un repère
+        // inventé.
+        const a=_m2Ax(_m2(_M2BASE));
+        for(const cle of ['A2','A4','A5']){
+          if(a[cle].valeur==null) return _echec(cle+' ne se calcule pas');
+          if(a[cle].position!=null) return _echec(cle+' se positionne sans repère');
+          if(a[cle].manque!=='repere-a-calibrer') return _echec(cle+' : '+a[cle].manque);
+          if(!/calibrera/.test(a[cle].texte)) return _echec(cle+' ne dit pas qu’il attend un repère');
+        }
+        // A1 et A3 gardent les repères qui existaient avant ce lot.
+        if(a.A1.repere!==RATIO_JAMBES_REF||a.A3.repere!==RATIO_BRAS_REF)
+          return _echec('les deux repères d’origine ont bougé');
+        return a.A1.position==='haut'?true:_echec('A1 : '+a.A1.position);})());
+
+      ok('M2 — le repère local demande huit athlètes, et pas un de moins',(()=>{
+        const pop=_m2Pop();
+        if(Object.keys(morphoCalibrage(pop.slice(0,7))).length!==0)
+          return _echec('sept athlètes ont suffi');
+        const c=morphoCalibrage(pop.slice(0,8));
+        if(!c.A2||!(c.A2.n===8)) return _echec('huit n’ont pas suffi');
+        // La marge ne descend jamais sous deux fois l'erreur propagée : sinon
+        // on classerait du bruit de ruban en morphologie.
+        if(!(c.A2.marge>0.02)) return _echec('marge de '+c.A2.marge+' : sous le plancher');
+        return morphoCalibrage([]).A2===undefined?true:_echec('un repère sort de rien');})());
+
+      ok('M2 — le mètre prime sur la photo, et un désaccord efface l’axe',(()=>{
+        const u=_m2(_M2BASE);
+        // D'accord : la photo confirme, la confiance monte.
+        u.morphoPhoto={mesures:{'deb-entrejambe':{cm:90,date:Date.now()}}};
+        const ok1=_m2Ax(u).A1;
+        if(ok1.source!=='metre') return _echec('la photo a pris le pas : '+ok1.source);
+        if(!(ok1.confiance>MORPHO_CONF.metre)) return _echec('l’accord ne rapporte rien');
+        // Plus de 10 % d'écart : on ne tranche pas.
+        u.morphoPhoto={mesures:{'deb-entrejambe':{cm:80,date:Date.now()}}};
+        const ko=_m2Ax(u).A1;
+        if(ko.position!=null||ko.manque!=='desaccord') return _echec('l’axe survit au désaccord');
+        // La photo SEULE vaut moins que le mètre, mais elle vaut.
+        const seul=_m2({'deb-height':'180','deb-bras':'78'});
+        seul.morphoPhoto={mesures:{'deb-entrejambe':{cm:91,date:Date.now()}}};
+        const p=_m2Ax(seul).A1;
+        return (p.source==='photo'&&p.confiance===MORPHO_CONF.photo)
+          ?true:_echec('la photo seule : '+p.source+'/'+p.confiance);})());
+
+      ok('M2 — moins de dix-huit ans : aucun axe osseux, et la raison est dite',(()=>{
+        const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()}},16);
+        const a=_m2Ax(u,_m2Cal());
+        for(const cle of ['A1','A2','A3','A4','A5','A6']){
+          if(a[cle].position!=null||a[cle].valeur!=null) return _echec(cle+' est présenté');
+          if(a[cle].manque!=='croissance') return _echec(cle+' : '+a[cle].manque);
+        }
+        // Le fonctionnel, lui, reste : une cheville se mesure à tout âge.
+        if(a.A7.position!=='bas') return _echec('la cheville a disparu aussi');
+        // Et sans axe osseux, il n'y a pas trois axes : le moteur se tait.
+        return morphoProfils(morphoAxes(u,{calibrage:_m2Cal()})).silence==='moins-de-trois-axes'
+          ?true:_echec('un profil sort quand même');})());
+
+      ok('M2 — A9 lit le carnet AVANT le corps, et se tait quand il est vide',(()=>{
+        // Cinq couples antagonistes, pas un seul.
+        if(MORPHO_COUPLES.length!==5) return _echec(MORPHO_COUPLES.length+' couples');
+        const u=_m2(_M2BASE);
+        const a=_m2Ax(u).A9;
+        // Sans carnet, l'axe n'a NI position NI confiance : « rien à signaler »
+        // et « je n'ai pas regardé » ne sont pas la même phrase.
+        if(a.position!=null||a.confiance!==0) return _echec('un carnet vide prend position');
+        if(!/pas encore assez/.test(a.texte)) return _echec('le texte : '+a.texte);
+        return a.nature==='acquis'?true:_echec('A9 n’est pas acquis');})());
+
+      ok('M2 — une asymétrie demande trois bilans ET plus d’un centimètre',(()=>{
+        const bil=(n,g,d)=>({type:'suivi',date:Date.now()-n*_mj,'bil-bicep-l':String(g),'bil-bicep-r':String(d)});
+        const av=(l)=>{ const u=_m2(_M2BASE); u.bilans=u.bilans.concat(l);
+          return _m2Ax(u).A9.asymetries; };
+        // Trois bilans, deux centimètres, toujours du même côté : c'est un signal.
+        if(av([bil(1,36,38),bil(30,36,38),bil(60,35,37)]).length!==1)
+          return _echec('un écart franc et répété n’est pas vu');
+        // Le même écart sur deux bilans : rien.
+        if(av([bil(1,36,38),bil(30,36,38)]).length) return _echec('deux bilans ont suffi');
+        // Un centimètre, c'est l'erreur de mesure : rien.
+        if(av([bil(1,36,37),bil(30,36,37),bil(60,36,37)]).length)
+          return _echec('un centimètre passe pour une asymétrie');
+        // Un côté puis l'autre : ce n'est pas soutenu.
+        return av([bil(1,36,38),bil(30,38,36),bil(60,36,38)]).length
+          ?_echec('un écart qui change de côté passe'):true;})());
+
+      ok('M3 — deux axes ne font pas un profil',(()=>{
+        const u=_m2({'deb-height':'180','deb-entrejambe':'91'});
+        const r=morphoProfils(morphoAxes(u));
+        if(r.silence!=='moins-de-trois-axes') return _echec('silence : '+r.silence);
+        if(r.profils.length) return _echec('un profil sort de deux axes');
+        // Et le silence reste ACTIONNABLE : il dit ce qu'il faudrait mesurer.
+        return r.aMesurer.length?true:_echec('rien n’est proposé à mesurer');})());
+
+      ok('M3 — LA CHEVILLE AVANT LE FÉMUR, et la phrase qui le dit',(()=>{
+        // C'est le test qui compte le plus de ce lot. Un athlète aux fémurs
+        // longs ET à la cheville verrouillée doit voir LA CHEVILLE D'ABORD, et
+        // la phrase sur le fémur doit porter le renvoi. Inverser cet ordre,
+        // c'est justifier par la génétique ce qui relève d'une amplitude de
+        // trente secondes à mesurer.
+        const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-5*_mj}});
+        const r=morphoProfils(morphoAxes(u,{calibrage:_m2Cal()}));
+        const ordre=r.profils.map(p=>p.cle);
+        if(ordre.indexOf('P9')<0) return _echec('la cheville ne sort pas : '+ordre.join(','));
+        if(ordre.indexOf('P1')<0) return _echec('le fémur ne sort pas : '+ordre.join(','));
+        if(ordre.indexOf('P9')>ordre.indexOf('P1')) return _echec('le fémur passe devant : '+ordre.join(','));
+        const p1=r.profils.find(p=>p.cle==='P1');
+        if(!p1.avant||!/regarde la cheville avant de conclure/i.test(p1.avant))
+          return _echec('le renvoi manque : '+(p1.avant||'—'));
+        // La valeur du test est dans la phrase, pas seulement le mot.
+        if(!/7 cm au mur/.test(p1.avant)) return _echec('le renvoi ne porte pas la mesure');
+        // Et la cheville est en tête de ce qu'il faut regarder.
+        return /^Cheville/.test(r.aRegarder[0]||'')?true:_echec('à regarder : '+r.aRegarder[0]);})());
+
+      ok('M3 — un axe osseux ne se lit pas seul quand l’amplitude n’a JAMAIS été mesurée',(()=>{
+        // Le cas le plus fréquent, et le plus dangereux : aucun test, et un
+        // levier qui sort tout seul. G5 exige que le trou soit nommé.
+        const r=morphoProfils(morphoAxes(_m2(_M2BASE),{calibrage:_m2Cal()}));
+        const p1=r.profils.find(p=>p.cle==='P1');
+        if(!p1) return _echec('P1 ne sort pas');
+        if(!p1.avant) return _echec('le levier sort nu');
+        return /cheville n’a pas été mesurée/.test(p1.avant)
+          ?true:_echec('le renvoi ne nomme pas le trou : '+p1.avant);})());
+
+      ok('M3 — un test périmé SUSPEND le profil, il ne le supprime pas',(()=>{
+        const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-200*_mj}});
+        const r=morphoProfils(morphoAxes(u,{calibrage:_m2Cal()}));
+        const p9=r.profils.find(p=>p.cle==='P9');
+        if(!p9) return _echec('le profil a disparu au lieu d’être suspendu');
+        if(p9.suspendu!==true) return _echec('le profil n’est pas marqué suspendu');
+        return r.perime.length?true:_echec('rien ne dit qu’un test est à refaire');})());
+
+      ok('M4 — quatorze fiches, chacune avec son réglage, son schéma et son piège',(()=>{
+        if(MORPHO_PROFILS.length!==14) return _echec(MORPHO_PROFILS.length+' fiches');
+        const cles=MORPHO_PROFILS.map(p=>p.cle);
+        for(let i=1;i<=14;i++) if(cles.indexOf('P'+i)<0) return _echec('P'+i+' manque');
+        const pb=[];
+        MORPHO_PROFILS.forEach(p=>{
+          if(!p.piege||p.piege.length<40) pb.push(p.cle+' sans piège');
+          if(!p.mecanique||!p.privilegier||!p.accent) pb.push(p.cle+' incomplète');
+          if(!Array.isArray(p.amenager)||!p.amenager.length) pb.push(p.cle+' sans aménagement');
+          (p.amenager||[]).forEach(a=>{
+            // ⚠ UN AMÉNAGEMENT SANS SON RÉGLAGE EST UN INTERDIT DÉGUISÉ.
+            if(!a.reglage||a.reglage.length<25) pb.push(p.cle+' : « '+a.quoi+' » sans réglage');
+            if(!SCHEMA_LIB[a.schema]) pb.push(p.cle+' : schéma inconnu « '+a.schema+' »');
+          });
+          if(!Array.isArray(p.signature)||!p.signature.length) pb.push(p.cle+' sans signature');
+          (p.signature||[]).forEach(s=>{
+            if(!MORPHO_AXES.some(a=>a.cle===s.axe)) pb.push(p.cle+' : axe inconnu '+s.axe);
+          });
+        });
+        return pb.length?_echec(pb.slice(0,4).join(' | ')):true;})());
+
+      ok('M4 — aucune fiche ne proscrit, ne diagnostique ni ne pronostique',(()=>{
+        // Les mots interdits sont cherchés dans ce que l'app CONSEILLE. Le
+        // champ `piege`, lui, a le droit de les citer — il est là pour les
+        // réfuter : « lui parler de potentiel génétique » est un avertissement
+        // au coach, pas une promesse à l'athlète.
+        const INTERDITS=['proscrit','interdit','a eviter','contre-indique','retroversion',
+          'anteversion','impingement','insertion','pathologie','diagnostic','potentiel genetique',
+          'ffmi','plafond','blessure','risque','danger'];
+        const trouves=[];
+        MORPHO_PROFILS.forEach(p=>{
+          const conseil=[p.lib,p.signatureTexte,p.mecanique,p.privilegier,p.accent,p.specificite]
+            .concat((p.amenager||[]).map(a=>a.quoi+' '+a.reglage)).join(' ');
+          const n=conseil.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+          INTERDITS.forEach(m=>{ if(n.indexOf(m)>=0) trouves.push(p.cle+' → '+m); });
+        });
+        if(trouves.length) return _echec(trouves.join(' | '));
+        // Et chaque piège cité l'est bien pour le réfuter.
+        const p8=MORPHO_PROFILS.find(p=>p.cle==='P8');
+        return /ne prédit aucun plafond/.test(p8.piege)
+          ?true:_echec('le piège de P8 ne réfute rien');})());
+
+      ok('M5 — la prise se donne en INTERVALLE, et pas sans la mesure qu’elle multiplie',(()=>{
+        // Bras longs : entrejambe court pour que A1 ne sorte pas, bras long
+        // pour que A3 sorte.
+        const u=_m2({'deb-height':'180','deb-entrejambe':'83','deb-genou':'48','deb-bras':'88',
+          'deb-avantbras':'28','deb-epaules':'42','deb-bassin':'30','deb-poignet':'17'});
+        const ax=morphoAxes(u,{calibrage:_m2Cal()});
+        const pr=morphoProfils(ax);
+        if(!pr.profils.some(p=>p.cle==='P4')) return _echec('P4 ne sort pas : '+pr.profils.map(p=>p.cle).join(','));
+        const r=morphoReglages(ax,pr.profils).find(x=>x.cle==='prise');
+        if(!r) return _echec('aucune largeur de prise proposée');
+        // 42 cm d'épaules → 76 à 84 cm, jamais « 1,9 × » ni un chiffre unique.
+        if(!/entre 76 et 84/.test(r.consigne)) return _echec('consigne : '+r.consigne);
+        if(!/plage, pas un chiffre/.test(r.pourquoi)) return _echec('rien ne dit que c’est une plage');
+        // Sans largeur d'épaules, pas de prise : un pourcentage sans sa mesure
+        // est une phrase de magazine.
+        const sans=_m2({'deb-height':'180','deb-entrejambe':'83','deb-genou':'48','deb-bras':'88',
+          'deb-avantbras':'28','deb-poignet':'17'});
+        const ax2=morphoAxes(sans,{calibrage:_m2Cal()});
+        return morphoReglages(ax2,morphoProfils(ax2).profils).some(x=>x.cle==='prise')
+          ?_echec('une prise sort sans la largeur d’épaules'):true;})());
+
+      ok('M5 — la cale dit qu’elle est un contournement, et ce qu’elle coûte',(()=>{
+        const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-5*_mj}});
+        const ax=morphoAxes(u,{calibrage:_m2Cal()});
+        const r=morphoReglages(ax,morphoProfils(ax).profils).find(x=>x.cle==='cale');
+        if(!r) return _echec('aucune cale proposée');
+        if(!/2,5/.test(r.consigne)) return _echec('la hauteur n’est pas dite : '+r.consigne);
+        if(!/contournement, pas un traitement/.test(r.pourquoi))
+          return _echec('rien ne dit que c’est un contournement');
+        if(!/réduit/.test(r.pourquoi)) return _echec('rien ne dit ce qu’elle coûte');
+        return r.schemas.indexOf('squat')>=0?true:_echec('la cale n’est pas rattachée au squat');})());
+
+      ok('M5 — un exercice ne reçoit que ce qui le concerne',(()=>{
+        const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-5*_mj}});
+        const o={calibrage:_m2Cal()};
+        const sq=morphoPourExercice(u,{name:'SQUAT'},o);
+        if(sq.schema!=='squat') return _echec('schéma du squat : '+sq.schema);
+        if(!sq.lignes.length&&!sq.reglages.length) return _echec('le squat ne reçoit rien');
+        if(!sq.reglages.some(r=>r.cle==='cale')) return _echec('la cale manque au squat');
+        // Un exercice d'un AUTRE schéma ne reçoit pas la cale.
+        const cu=morphoPourExercice(u,{name:'CURL BARRE'},o);
+        if(cu.reglages.some(r=>r.cle==='cale')) return _echec('la cale arrive sur le curl');
+        // Les variantes proposées sont du même schéma, et jamais l'exercice lui-même.
+        return sq.variantes.every(n=>exKey(n)!=='SQUAT')
+          ?true:_echec('l’exercice se propose lui-même en variante');})());
+
+      ok('M5 — rien de la morpho n’entre dans l’éditeur côté ATHLÈTE',(()=>{
+        // L'éditeur d'exercices est PARTAGÉ : la garde est dans la fonction,
+        // pas chez l'appelant.
+        const sauve=currentUser, sauveC=currentClientId;
+        try{
+          currentUser={id:'_a',email:'a@t',role:'athlete',coachId:'co'};
+          currentClientId='co';
+          if(_htmlMorphoExercice({name:'SQUAT'})!=='') return _echec('l’athlète voit le bandeau');
+          currentUser={id:'_c',email:'c@t',role:'coach'};
+          currentClientId=null;
+          return _htmlMorphoExercice({name:'SQUAT'})===''
+            ?true:_echec('un bandeau sort sans athlète désigné');
+        } finally { currentUser=sauve; currentClientId=sauveC; }})());
+
+      ok('M6 — la photo ne rend AUCUN centimètre, et le dit',(()=>{
+        // Sans le sommet du crâne, il n'y a pas d'échelle : MediaPipe donne le
+        // nez, les yeux, les oreilles, jamais le vertex. Ce qu'elle rend, ce
+        // sont deux rapports SANS échelle.
+        if(MORPHO_PHOTO_RAPPORTS.length!==2) return _echec(MORPHO_PHOTO_RAPPORTS.length+' rapports');
+        const u=_m2(_M2BASE);
+        u.morphoPhoto={rapports:{A2photo:{v:1.02,date:Date.now()}}};
+        const r=_morphoRapportPhoto(u,'A2');
+        if(!r||r.valeur!==1.02) return _echec('le rapport ne se relit pas');
+        // Un rapport sans repère calibré ne prend pas position, comme le reste.
+        const a=_m2Ax(u).A2;
+        if(!a.photo||a.photo.position!=null) return _echec('la photo se positionne sans repère');
+        return MORPHO_PHOTO_CONF===0.6?true:_echec('confiance photo : '+MORPHO_PHOTO_CONF);})());
+
+      ok('M6 — quand la photo contredit le mètre, on ne tranche pas',(()=>{
+        const pop=_m2Pop();
+        // La population reçoit des rapports photo cohérents entre eux, pour
+        // qu'un repère local existe.
+        pop.forEach((p,i)=>{ p.morphoPhoto={rapports:{A2photo:{v:0.9+(i%3)*0.01,date:Date.now()}}}; });
+        const cal=morphoCalibrage(pop);
+        if(!cal.A2photo) return _echec('aucun repère photo calibré');
+        const u=_m2(_M2BASE);            // le mètre dit « fémur dominant »
+        u.morphoPhoto={rapports:{A2photo:{v:0.70,date:Date.now()}}};  // la photo dit l'inverse
+        const a=_m2Ax(u,cal).A2;
+        if(a.position!=null) return _echec('l’axe tranche : '+a.position);
+        if(a.manque!=='desaccord') return _echec('motif : '+a.manque);
+        if(!/se contredisent/.test(a.texte)) return _echec('le texte : '+a.texte);
+        // D'accord, en revanche : la photo confirme et l'axe survit.
+        u.morphoPhoto={rapports:{A2photo:{v:1.02,date:Date.now()}}};
+        const b=_m2Ax(u,cal).A2;
+        return (b.position==='haut'&&/confirme/.test(b.texte))
+          ?true:_echec('l’accord n’est pas restitué : '+b.position+' / '+b.texte);})());
+
+      ok('M6 — le contrôle de prise de vue est le SEUL verdict à trois niveaux',(()=>{
+        // Trois niveaux sur la QUALITÉ D'UNE PHOTO, jamais sur un corps. On
+        // vérifie qu'aucun axe et aucun profil ne porte de note, de score ni
+        // de couleur de feu.
+        const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-5*_mj}});
+        const ax=morphoAxes(u,{calibrage:_m2Cal()});
+        const interdits=['score','note','feu','vert','rouge','orange','bon','mauvais','niveau'];
+        const champs=[];
+        ax.forEach(a=>Object.keys(a).forEach(k=>{ if(interdits.indexOf(k)>=0) champs.push(a.cle+'.'+k); }));
+        morphoProfils(ax).profils.forEach(p=>Object.keys(p).forEach(k=>{
+          if(interdits.indexOf(k)>=0) champs.push(p.cle+'.'+k); }));
+        return champs.length?_echec('champs de jugement : '+champs.join(', ')):true;})());
+
+      ok('M6 — les rapports lus sur photo se rangent à part des mesures',(()=>{
+        // Deux formes dans la même clef finiraient par se marcher dessus : une
+        // mesure en centimètres et un rapport sans unité ne se comparent pas.
+        const u=_m2(_M2BASE);
+        u.morphoPhoto={mesures:{'deb-entrejambe':{cm:91,date:Date.now()}},
+          rapports:{A2photo:{v:1.0,date:Date.now()}}};
+        const a=_m2Ax(u);
+        if(a.A1.source!=='metre'||a.A1.position!=='haut') return _echec('la mesure photo s’est perdue');
+        return _morphoRapportPhoto(u,'A2')?true:_echec('le rapport photo s’est perdu');})());
+
+      ok('M2/M3 — toute valeur affichée porte sa source, sa date et sa tolérance',(()=>{
+        const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-5*_mj}});
+        const manque=[];
+        morphoAxes(u,{calibrage:_m2Cal()}).forEach(a=>{
+          if(a.valeur==null) return;
+          if(!a.source) manque.push(a.cle+' sans source');
+          if(!a.dateISO) manque.push(a.cle+' sans date');
+          // Un axe sans repère n'a pas de tolérance à afficher séparément : sa
+          // valeur brute la porte dans son texte.
+          if(a.position!=null&&!a.tolerance) manque.push(a.cle+' sans tolérance');
+          if(a.position!=null&&a.texte.indexOf('±')<0) manque.push(a.cle+' : le texte ne la porte pas');
+        });
+        return manque.length?_echec(manque.join(' | ')):true;})());
+
+      ok('M2/M5 — aucun angle ni rapport ne descend côté athlète',(()=>{
+        const sauve=currentUser;
+        try{
+          currentUser=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()}});
+          currentUser.role='athlete'; currentUser.coachId='co';
+          currentUser.morphoPhoto={rapports:{A2photo:{v:1.0,date:Date.now()}}};
+          let h='';
+          try{ loadClientHome(); h+=document.getElementById('s-client-home').textContent||''; }catch(e){}
+          try{ go('s-progress'); renderVolume();
+            h+=document.getElementById('progress-content').textContent||''; }catch(e){}
+          const mots=['Fémur','fémur','Profils composés','Levier fémoral','Charpente',
+            'cuisse sur jambe','Cuisse sur jambe','squatteur penché','Ossature fine'];
+          const fuites=mots.filter(m=>h.indexOf(m)>=0);
+          return fuites.length?_echec('visible côté athlète : '+fuites.join(', ')):true;
+        } finally { currentUser=sauve; }})());
+
+      ok('M5 — la fiche coach reste une zone de LECTURE, même remplie',(()=>{
+        const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-5*_mj}});
+        const h=_htmlQuestionsMorpho(u);
+        if(h.indexOf('<button')>=0||h.indexOf('onclick')>=0)
+          return _echec('un contrôle est entré dans la zone de lecture');
+        // Le piège du profil est AFFICHÉ : c'est la partie la plus utile.
+        if(h.indexOf('Le piège')<0) return _echec('le piège n’est pas montré');
+        if(!/Aménager, jamais retirer/.test(h)) return _echec('l’aménagement n’est pas cadré');
+        return /À regarder, dans cet ordre/.test(h)
+          ?true:_echec('l’ordre de lecture n’est pas rendu');})());
+
+
       // ══════ L'ÉCRAN RÉPONSES ══════
       ok('Un bilan à moitié rempli ne rend QUE ses réponses',(()=>{
         // LE PIÈGE : un tableau vide est truthy. « Raisons des écarts : [] »

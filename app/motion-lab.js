@@ -4752,3 +4752,182 @@ function _mlInjecterStyle(){
   ].join('\n');
   document.head.appendChild(s);
 }
+
+// ══ MORPHO — LOT M6 : CE QU'UNE PHOTO PEUT DIRE, ET CE QU'ELLE NE PEUT PAS ══
+//
+// Le moteur de pose est déjà là, chargé à la demande pour Motion Lab. Morpho
+// le REUTILISE : pas de second moteur, pas un octet de plus.
+//
+// ⚠ AUCUN CENTIMÈTRE NE SORT D'UNE PHOTO, ET C'EST UN CHOIX.
+//   Convertir des pixels en centimètres demande de connaître l'échelle, donc
+//   de repérer le SOMMET DU CRÂNE pour le rapporter à la taille. MediaPipe ne
+//   donne pas ce point : il donne le nez, les yeux, les oreilles. Combler
+//   l'écart demanderait un coefficient crâne/taille que ce dépôt ne peut pas
+//   sourcer — et un repère inventé est pire qu'une mesure absente.
+//
+//   Ce qu'une photo donne SANS ÉCHELLE, en revanche, elle le donne bien : des
+//   RAPPORTS entre deux segments de la même image. Cuisse sur jambe, humérus
+//   sur avant-bras. Ce sont exactement les deux axes que le mètre atteint le
+//   plus mal — A2 et A4 — et ils sortent ici d'un repère osseux à un repère
+//   osseux, sans ruban et sans erreur de repérage.
+//
+// ⚠ LES POINTS DE MEDIAPIPE NE SONT PAS LES REPÈRES DU MÈTRE. L'épaule rendue
+//   est le centre de l'articulation, pas l'acromion ; la hanche est le centre
+//   de la tête fémorale, pas la crête iliaque. C'est pourquoi ni la largeur
+//   d'épaules, ni la largeur de bassin, ni aucune longueur mesurée depuis ces
+//   points ne sortent d'ici. Genou et coude, eux, tombent sur l'interligne et
+//   sur l'olécrane à moins d'un centimètre : ce sont les deux seuls qu'on garde.
+
+/** Visibilité minimale d'un point pour qu'il compte. */
+const ML_MORPHO_VIS=0.7;
+/** En dessous, l'image n'a pas assez de pixels pour qu'un rapport tienne. */
+const ML_MORPHO_SPAN_MIN=300;
+/** Hanches trop rapprochées : la photo est prise de trois quarts ou de profil. */
+const ML_MORPHO_FACE_MIN=0.06;
+/** Un membre plié se raccourcit en projection : on veut des segments tendus. */
+const ML_MORPHO_TENDU=160;
+/** Les deux côtés qui divergent de plus de ça : le corps est tourné. */
+const ML_MORPHO_COTES=0.10;
+/** Les points dont on a besoin : épaules, coudes, poignets, hanches, genoux, chevilles. */
+const ML_MORPHO_PTS=Object.freeze([11,12,13,14,15,16,23,24,25,26,27,28]);
+
+/**
+ * Distance entre deux points, en pixels de l'image.
+ * @param {{x:number,y:number}} a @param {{x:number,y:number}} b
+ * @param {number} w @param {number} h @returns {number}
+ */
+function _mlmDist(a,b,w,h){
+  const dx=(a.x-b.x)*w, dy=(a.y-b.y)*h;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+/**
+ * Angle en B, en degrés, dans le plan de l'image.
+ * @param {{x:number,y:number}} a @param {{x:number,y:number}} b @param {{x:number,y:number}} c
+ * @param {number} w @param {number} h @returns {number}
+ */
+function _mlmAngle(a,b,c,w,h){
+  const ux=(a.x-b.x)*w, uy=(a.y-b.y)*h, vx=(c.x-b.x)*w, vy=(c.y-b.y)*h;
+  const nu=Math.hypot(ux,uy), nv=Math.hypot(vx,vy);
+  if(!(nu>0)||!(nv>0)) return 0;
+  return Math.acos(Math.max(-1,Math.min(1,(ux*vx+uy*vy)/(nu*nv))))*180/Math.PI;
+}
+
+/**
+ * LE CONTRÔLE DE PRISE DE VUE, AVANT TOUT LE RESTE.
+ * Trois niveaux — et c'est le SEUL verdict à trois niveaux de tout le module :
+ * il porte sur la QUALITÉ DE LA PHOTO, jamais sur le corps qu'elle montre.
+ * @param {any[]} p  les 33 points de MediaPipe
+ * @param {number} w @param {number} h
+ * @returns {{verdict:string, raisons:string[], span:number}}
+ */
+function mlMorphoPrise(p,w,h){
+  const raisons=[];
+  const manquants=ML_MORPHO_PTS.filter(i=>!p[i]||(p[i].visibility||0)<ML_MORPHO_VIS);
+  if(manquants.length)
+    raisons.push('l’athlète n’est pas entier dans le cadre, ou une partie est masquée');
+  const span=(p[23]&&p[27])?Math.max(_mlmDist(p[23],p[27],w,h),
+    (p[24]&&p[28])?_mlmDist(p[24],p[28],w,h):0):0;
+  if(span<ML_MORPHO_SPAN_MIN)
+    raisons.push('la photo est trop petite pour mesurer ('+Math.round(span)+' pixels de la hanche '
+      +'au pied, il en faut '+ML_MORPHO_SPAN_MIN+') — c’est la version haute définition qu’il faut, '
+      +'sur l’appareil qui a pris la photo');
+  if(p[23]&&p[24]&&span>0){
+    const large=Math.abs(p[23].x-p[24].x)*w/span;
+    if(large<ML_MORPHO_FACE_MIN) raisons.push('la photo n’est pas prise de face : les deux hanches '
+      +'se superposent, et les segments se raccourcissent en projection');
+  }
+  const plies=[];
+  if(p[23]&&p[25]&&p[27]&&_mlmAngle(p[23],p[25],p[27],w,h)<ML_MORPHO_TENDU) plies.push('la jambe gauche');
+  if(p[24]&&p[26]&&p[28]&&_mlmAngle(p[24],p[26],p[28],w,h)<ML_MORPHO_TENDU) plies.push('la jambe droite');
+  if(p[11]&&p[13]&&p[15]&&_mlmAngle(p[11],p[13],p[15],w,h)<ML_MORPHO_TENDU) plies.push('le bras gauche');
+  if(p[12]&&p[14]&&p[16]&&_mlmAngle(p[12],p[14],p[16],w,h)<ML_MORPHO_TENDU) plies.push('le bras droit');
+  if(plies.length) raisons.push(plies.join(' et ')+' n’'+(plies.length>1?'ont':'a')
+    +' pas été tendu'+(plies.length>1?'s':'')+' : un membre plié paraît plus court qu’il n’est');
+  return {verdict:raisons.length?(raisons.length>1?'a_refaire':'a_ameliorer'):'bon',raisons,span};
+}
+
+/**
+ * Les deux rapports qu'une photo de face donne honnêtement, sans échelle.
+ * @param {any[]} p @param {number} w @param {number} h
+ * @returns {{cle:string, valeur:number, ecartCotes:number}[]}
+ */
+function mlMorphoRapports(p,w,h){
+  /** @type {{cle:string, valeur:number, ecartCotes:number}[]} */
+  const out=[];
+  /**
+   * @param {string} cle
+   * @param {number} hautG @param {number} milG @param {number} basG
+   * @param {number} hautD @param {number} milD @param {number} basD
+   */
+  const paire=(cle,hautG,milG,basG,hautD,milD,basD)=>{
+    /** @param {number} a @param {number} b @param {number} c @returns {number|null} */
+    const cote=(a,b,c)=>{
+      if(!p[a]||!p[b]||!p[c]) return null;
+      if((p[a].visibility||0)<ML_MORPHO_VIS||(p[b].visibility||0)<ML_MORPHO_VIS
+        ||(p[c].visibility||0)<ML_MORPHO_VIS) return null;
+      const d1=_mlmDist(p[a],p[b],w,h), d2=_mlmDist(p[b],p[c],w,h);
+      return (d1>0&&d2>0)?d1/d2:null;
+    };
+    const g=cote(hautG,milG,basG), d=cote(hautD,milD,basD);
+    if(g==null&&d==null) return;
+    if(g!=null&&d!=null){
+      const ec=Math.abs(g-d)/((g+d)/2);
+      // LES DEUX CÔTÉS DOIVENT DIRE LA MÊME CHOSE. S'ils divergent, ce n'est
+      // pas une asymétrie : c'est un corps tourné, et la projection ment des
+      // deux côtés à la fois. On ne rend rien.
+      if(ec>ML_MORPHO_COTES) return;
+      out.push({cle,valeur:Math.round((g+d)/2*1000)/1000,ecartCotes:Math.round(ec*1000)/1000});
+      return;
+    }
+    const seul=(g==null)?d:g;
+    if(seul==null) return;
+    out.push({cle,valeur:Math.round(seul*1000)/1000,ecartCotes:-1});
+  };
+  // Cuisse sur jambe : hanche → genou → cheville.
+  paire('A2photo',23,25,27,24,26,28);
+  // Humérus sur avant-bras : épaule → coude → poignet.
+  paire('A4photo',11,13,15,12,14,16);
+  return out;
+}
+
+/**
+ * Lit une photo et rend ce qu'elle dit — après le contrôle de prise de vue,
+ * jamais avant.
+ * @param {string} src  l'image, telle que le bilan la porte
+ * @returns {Promise<{ok:boolean, code?:string, prise?:any, rapports?:any[], px?:{w:number,h:number}}>}
+ */
+async function mlMorphoPhoto(src){
+  if(!src||typeof src!=='string') return {ok:false,code:'image'};
+  let moteur=null;
+  try{ moteur=await _mlChargerPose(); }catch(e){ return {ok:false,code:'moteur'}; }
+  if(!moteur) return {ok:false,code:'moteur'};
+  /** @type {HTMLImageElement|null} */
+  const im=await new Promise(res=>{
+    const i=new Image();
+    i.crossOrigin='anonymous';
+    i.onload=()=>res(i); i.onerror=()=>res(null);
+    i.src=src;
+  });
+  if(!im||!im.naturalWidth) return {ok:false,code:'image'};
+  const w=im.naturalWidth, h=im.naturalHeight;
+  const t=document.createElement('canvas');
+  t.width=w; t.height=h;
+  const cx=t.getContext('2d');
+  if(!cx) return {ok:false,code:'image'};
+  cx.drawImage(im,0,0,w,h);
+  /** @type {any} */
+  const res=await new Promise((ok)=>{
+    const garde=setTimeout(()=>ok(null),15000);
+    moteur.onResults((/** @type {any} */ r)=>{ clearTimeout(garde); ok(r); });
+    moteur.send({image:t}).catch(()=>{ clearTimeout(garde); ok(null); });
+  });
+  const pts=res&&res.poseLandmarks;
+  if(!pts||pts.length<33) return {ok:false,code:'personne'};
+  const prise=mlMorphoPrise(pts,w,h);
+  // ⚠ LE CONTRÔLE PASSE AVANT LA MESURE. Une photo « à refaire » ne rend
+  //   aucun rapport : mesurer dessus donnerait un chiffre, et un chiffre faux
+  //   est plus difficile à défaire qu'une case vide.
+  if(prise.verdict==='a_refaire') return {ok:true,prise,rapports:[],px:{w,h}};
+  return {ok:true,prise,rapports:mlMorphoRapports(pts,w,h),px:{w,h}};
+}
+
