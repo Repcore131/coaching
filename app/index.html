@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1280';
+window.RC_BUILD='1281';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -9124,6 +9124,14 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Bilans</span></div>
         <div class="cc-sect-c" id="ccd-bilans"></div>
       </section>
+      <!-- LES AMPLITUDES SONT DES DONNEES DATEES SUR LE CORPS, comme les
+           bilans sous lesquels elles vivent. Elles ne sont pas dans les
+           « Signaux faibles » avec les proportions : ce bloc-la est une zone
+           de LECTURE, sans un bouton, et un relevé se saisit. -->
+      <section class="cc-sect" style="--cc-accent:var(--border)">
+        <div class="cc-sect-t"><span>Amplitudes</span></div>
+        <div class="cc-sect-c" id="ccd-amplitudes"></div>
+      </section>
       <!-- LE CALENDRIER. La section ci-dessus dit CE QUI a ete repondu ; elle
            ne dit pas QUAND, ni quand rien ne l'a ete. Un mois par ecran, les
            jours porteurs d'un bilan en rouge, les reponses du jour choisi
@@ -11375,6 +11383,16 @@ const COACH_PHOTO='icons/coach.jpg';
      dessiné par app/motion-lab.js, chargé à la première ouverture.
      s-coach-… : go() réserve ce préfixe au coach, et c'est la garde voulue —
      un athlète n'a rien à découper dans sa propre vidéo. -->
+<div id="s-coach-amplitudes" class="screen ecran-coach">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-coach-amplitudes','s-coach-client')">←</button>
+    <span class="topbar-title">Amplitudes</span>
+    <button id="amp-enreg" onclick="enregistrerAmplitudes()" style="background:var(--red);color:#fff;border:none;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">Enregistrer</button>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad" id="amp-contenu"></div>
+  </div>
+</div>
 <div id="s-coach-motion-lab" class="screen ecran-coach">
   <div class="topbar">
     <!-- R21 — fermeture dédiée : demande avant de perdre des répétitions non enregistrées, puis rouvre la correction de la vidéo. -->
@@ -22350,6 +22368,350 @@ function dominanceQuadIschio(user){
   return Math.round(q/i*100)/100;
 }
 
+// ══════════════ MORPHO — LOT M1 : SIX MESURES, QUATRE TESTS ══════════════
+//
+// Même discipline que les deux longueurs d'origine : facultatives, bornées, et
+// quand une mesure ne tient pas debout on le DIT au lieu de calculer dessus.
+// Elles ne bougent plus une fois adulte — on ne les redemande pas à chaque
+// bilan de suivi.
+//
+// ⚠ LA CONSIGNE FAIT LA MESURE, et c'est pourquoi chaque champ porte la sienne
+// à l'écran, au moment de la saisie. Une auto-mesure prise avec un protocole
+// affiché s'accorde bien avec celle d'un technicien ; prise sans, on ne sait
+// même pas ce qui a été mesuré, et deux bilans cessent d'être comparables.
+//
+// LES BORNES SONT LARGES À DESSEIN. Elles écartent la faute de frappe et
+// l'unité fausse — 7 cm de tour de poignet, 190 cm de hauteur de genou — pas la
+// morphologie inhabituelle. Chacune porte son ordre de grandeur en commentaire.
+
+/**
+ * Les mesures morphologiques, avec leur consigne et leurs bornes.
+ * `type` : une LONGUEUR ne peut pas dépasser la taille de la personne, un TOUR
+ * de membre n'a pas de raison d'être comparé à elle — la garde ne s'applique
+ * donc qu'aux longueurs.
+ * `origine` : les deux premières existaient avant ce lot ; leur calcul reste
+ * celui de longueurSegment, qu'on ne réécrit pas.
+ */
+const MORPHO_MESURES=Object.freeze([
+  {cle:'deb-entrejambe',lib:'Entrejambe',court:'Entrejambe',type:'longueur',origine:'M0',
+   consigne:'Du sol au pubis, pieds nus, dos au mur.'},
+  {cle:'deb-bras',lib:'Longueur de bras',court:'Bras',type:'longueur',origine:'M0',
+   consigne:'Bras tendu le long du corps, de la pointe de l’épaule au poignet.'},
+  // Du sol à l'interligne du genou : environ 27 % de la taille, soit 39 cm à
+  // 145 cm et 55 cm à 200 cm. Les bornes couvrent largement au-delà.
+  {cle:'deb-genou',lib:'Hauteur de genou',court:'Genou',type:'longueur',min:25,max:75,
+   consigne:'Debout, pieds nus : du sol au creux du genou, là où la jambe plie.'},
+  // Olécrane → styloïde : environ 14,5 % de la taille, soit 21 à 29 cm chez
+  // l'adulte.
+  {cle:'deb-avantbras',lib:'Avant-bras',court:'Av.-bras',type:'longueur',min:15,max:45,
+   consigne:'Coude plié à angle droit : de la pointe du coude à l’os du poignet.'},
+  // Largeur biacromiale : environ 23 % de la taille, soit 33 à 46 cm.
+  {cle:'deb-epaules',lib:'Largeur d’épaules',court:'Épaules',type:'longueur',min:25,max:65,
+   consigne:'De dos, bras relâchés : d’une pointe d’épaule à l’autre, en ligne droite.'},
+  // Largeur biiliaque : environ 16 à 18 % de la taille, soit 23 à 36 cm.
+  {cle:'deb-bassin',lib:'Largeur de bassin',court:'Bassin',type:'longueur',min:18,max:55,
+   consigne:'Mains à plat sur les crêtes des hanches : d’un os à l’autre, en ligne droite.'},
+  // Tour de poignet : 14 à 19 cm chez l'adulte, os fin ou large compris.
+  {cle:'deb-poignet',lib:'Tour de poignet',court:'Poignet',type:'tour',min:10,max:26,
+   consigne:'Juste sous l’os saillant, mètre ruban à plat, sans serrer.'},
+  // Tour de cheville au plus fin : 19 à 27 cm chez l'adulte.
+  {cle:'deb-cheville',lib:'Tour de cheville',court:'Cheville',type:'tour',min:14,max:38,
+   consigne:'Au plus fin, juste au-dessus de l’os de la cheville, sans serrer.'}
+]);
+
+/**
+ * PURE. Une mesure morphologique, si elle tient debout. Même contrat que
+ * longueurSegment — {cm} ou {motif} — et c'est LUI qui répond pour les deux
+ * mesures d'origine : elles ont leurs bornes historiques, et deux sources de
+ * vérité sur la même mesure finiraient par diverger.
+ * @returns {{cm:number|null, motif:string|null}}
+ */
+function mesureMorpho(user,cle){
+  const d=MORPHO_MESURES.find(m=>m.cle===cle);
+  if(!d) return {cm:null,motif:'inconnue'};
+  if(d.origine==='M0') return longueurSegment(user,cle);
+  const brut=_dernierChamp(user,cle);
+  if(brut==null||String(brut).trim()==='') return {cm:null,motif:'absente'};
+  const v=parseFloat(String(brut).replace(',','.'));
+  if(!isFinite(v)||v<=0) return {cm:null,motif:'aberrante'};
+  if(v<d.min||v>d.max) return {cm:null,motif:'aberrante'};
+  // UNE LONGUEUR PLUS GRANDE QUE LA PERSONNE est une saisie fausse, ou des
+  // millimètres pris pour des centimètres. On ne calcule pas, on le dit.
+  const t=_tailleCm(user);
+  if(d.type==='longueur'&&t!=null&&v>t) return {cm:null,motif:'aberrante'};
+  return {cm:v,motif:null};
+}
+
+/**
+ * Les incohérences entre deux mesures. Ce ne sont pas des morphologies rares :
+ * un genou plus haut que le pubis, un avant-bras plus long que le bras entier,
+ * un bassin plus large que les épaules d'un tiers — ce sont des saisies
+ * fausses, et tout rapport bâti dessus le serait aussi.
+ * `k` : le facteur appliqué à la seconde mesure avant comparaison.
+ */
+const MORPHO_COHERENCES=Object.freeze([
+  {cle:'coherence_genou',a:'deb-genou',b:'deb-entrejambe',k:1,lib:'Genou et entrejambe',
+   motif:'La hauteur de genou dépasse l’entrejambe, alors que le genou est forcément plus bas que le pubis.',
+   question:'Peux-tu reprendre les deux, pieds nus et dos au mur ?'},
+  {cle:'coherence_avantbras',a:'deb-avantbras',b:'deb-bras',k:1,lib:'Avant-bras et bras',
+   motif:'L’avant-bras est donné plus long que le bras entier, dont il fait partie.',
+   question:'Peux-tu reprendre l’avant-bras, coude plié à angle droit ?'},
+  // Un bassin plus large que les épaules existe ; plus large d'un tiers, non.
+  {cle:'coherence_bassin',a:'deb-bassin',b:'deb-epaules',k:1.3,lib:'Bassin et épaules',
+   motif:'Le bassin est donné nettement plus large que les épaules — plus d’un tiers d’écart.',
+   question:'Peux-tu reprendre les deux largeurs en ligne droite, de dos ?'}
+]);
+/**
+ * PURE. Les incohérences trouvées, au format de questionsMorpho. Rien n'est
+ * signalé tant que les DEUX mesures ne sont pas là et lisibles : une case vide
+ * n'est pas une faute.
+ * @returns {{cle:string, lib:string, motif:string, question:string}[]}
+ */
+function coherencesMorpho(user){
+  const out=[];
+  if(!user||typeof user!=='object') return out;
+  for(const c of MORPHO_COHERENCES){
+    const a=mesureMorpho(user,c.a), b=mesureMorpho(user,c.b);
+    if(a.cm==null||b.cm==null) continue;
+    if(a.cm>b.cm*c.k+1e-9) out.push({cle:c.cle,lib:'Mesures à revérifier — '+c.lib,
+      motif:c.motif,question:c.question});
+  }
+  return out;
+}
+
+// ── LES QUATRE TESTS D'AMPLITUDE ────────────────────────────────────────────
+//
+// ⚠ AUCUN NE NOMME UNE CAUSE. « Butée nette » est un constat : le mouvement
+// s'arrête franchement. Ce que cette butée est — os, capsule, muscle — ne se
+// décide pas au mur d'un salon, et l'app ne le dira pas.
+//
+// QUATRE-VINGT-DIX JOURS. Une amplitude se travaille et se perd : passé un
+// trimestre, un test ne décrit plus l'athlète d'aujourd'hui. Il n'est pas
+// effacé — il est marqué périmé, et reproposé.
+const MORPHO_PEREMPTION_J=90;
+const MORPHO_TESTS=Object.freeze([
+  {cle:'cheville',lib:'Cheville — genou au mur',champ:'cm',unite:'cm',min:0,max:25,
+   protocole:'Pied nu, orteils face à un mur. Avance le genou jusqu’à toucher le mur sans '
+     +'décoller le talon, puis recule le pied jusqu’à la distance la plus grande où le genou '
+     +'touche encore. Mesure de l’orteil au mur.'},
+  {cle:'hanche',lib:'Hanche — flexion et rotations',champ:'deg',unite:'°',min:30,max:160,
+   protocole:'Allongé sur le dos, l’autre jambe tendue au sol : monte le genou vers la '
+     +'poitrine jusqu’à ce que le bassin commence à basculer. Note l’angle atteint, et si '
+     +'l’arrêt est net ou élastique.'},
+  {cle:'epaule',lib:'Épaule — au mur et main dans le dos',champ:'paire',unite:'cm',min:0,max:60,
+   protocole:'Dos au mur, lombaires plaquées : monte les bras tendus, note la distance des '
+     +'poignets au mur. Puis main dans le dos, note la distance entre les deux mains. '
+     +'Un côté après l’autre.'},
+  {cle:'posterieur',lib:'Chaîne postérieure — flexion avant',champ:'niveau',unite:'',
+   protocole:'Debout, jambes tendues, descends les mains vers le sol sans forcer. Note où le '
+     +'dos commence à s’enrouler : haut du dos, milieu, ou bas du dos.',
+   niveaux:['haut','milieu','bas']}
+]);
+/**
+ * PURE. Les tests d'amplitude d'un athlète, normalisés et datés, avec leur
+ * péremption. Un test absent n'est pas une erreur : c'est un test à faire, et
+ * le moteur doit fonctionner sans.
+ * @param {any} user
+ * @param {number} [maintenant]  ms, pour que le test de la péremption soit reproductible
+ * @returns {{cle:string, lib:string, texte:string, date:number|null, jours:number|null, perime:boolean}[]}
+ */
+function testsMorpho(user,maintenant){
+  const now=Number(maintenant)||Date.now();
+  const src=(user&&user.morphoTests&&typeof user.morphoTests==='object')?user.morphoTests:{};
+  return MORPHO_TESTS.map(d=>{
+    const v=src[d.cle];
+    const date=(v&&isFinite(Number(v.date))&&Number(v.date)>0)?Math.round(Number(v.date)):null;
+    const jours=date==null?null:Math.floor((now-date)/864e5);
+    return {cle:d.cle,lib:d.lib,texte:_morphoTexteTest(d,v),date,jours,
+      perime:jours!=null&&jours>MORPHO_PEREMPTION_J};
+  });
+}
+/** PURE. Ce qu'un test dit, en une ligne — ou '' s'il n'a pas été fait. */
+function _morphoTexteTest(d,v){
+  if(!v||typeof v!=='object') return '';
+  const n=(x)=>{ const q=parseFloat(String(x).replace(',','.')); return isFinite(q)?q:null; };
+  if(d.champ==='cm'){ const q=n(v.cm); return q==null?'':Math.round(q)+' cm au mur'; }
+  if(d.champ==='deg'){
+    const q=n(v.deg);
+    if(q==null) return '';
+    const b=v.butee==='nette'?', butée nette':v.butee==='elastique'?', butée élastique':'';
+    return Math.round(q)+'°'+b;
+  }
+  if(d.champ==='paire'){
+    const g=n(v.g), dr=n(v.d);
+    if(g==null&&dr==null) return '';
+    return 'gauche '+(g==null?'—':Math.round(g)+' cm')+' · droite '+(dr==null?'—':Math.round(dr)+' cm');
+  }
+  if(d.champ==='niveau'){
+    const k=String(v.niveau||'');
+    return (d.niveaux||[]).includes(k)?'le dos s’enroule par le '+k+' du dos':'';
+  }
+  return '';
+}
+
+// ── LES TESTS D'AMPLITUDE (lot M1.2) ────────────────────────────────────────
+//
+// Quatre tests, côté COACH, avec leur protocole sous les yeux au moment de la
+// saisie. Ce sont des nombres : ils tiennent sans peine dans le dossier de
+// l'athlète, à côté de ses bilans.
+//
+// ⚠ AUCUN NE NOMME UNE CAUSE. On note ce qu'on voit — une distance, un angle,
+// un arrêt net ou élastique — et rien de ce qui pourrait l'expliquer.
+
+/** @type {{email:string, nom:string, v:any}|null} */
+let _amp=null;
+
+/**
+ * Ouvre l'écran des tests pour un athlète. Même garde que partout ailleurs :
+ * la fonction est globale, et une garde qui ne vit que dans l'appelant n'en
+ * est pas une.
+ */
+function ouvrirAmplitudes(email){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!currentUser||c.coachId!==currentUser.id){
+    toast('Élève introuvable ou non autorisé','var(--orange)'); return false;
+  }
+  const src=(c.morphoTests&&typeof c.morphoTests==='object')?c.morphoTests:{};
+  // Une COPIE : tant que le coach n'a pas enregistré, le dossier ne bouge pas.
+  _amp={email,nom:String(c.fname||c.email||''),v:JSON.parse(JSON.stringify(src))};
+  go('s-coach-amplitudes');
+  _ampRendre();
+  return true;
+}
+/** @param {string} cle @param {string} champ @param {any} val */
+function ampSaisie(cle,champ,val){
+  if(!_amp) return false;
+  const d=MORPHO_TESTS.find(x=>x.cle===cle);
+  if(!d) return false;
+  const o=Object.assign({},_amp.v[cle]||{});
+  o[champ]=val;
+  _amp.v[cle]=o;
+  // Les boutons (butée, niveau) se redessinent ; les champs chiffrés, non —
+  // redessiner sous les doigts ferait perdre le curseur.
+  if(champ==='butee'||champ==='niveau') _ampRendre();
+  else _ampMajEtat();
+  return true;
+}
+/** PURE au sens du rendu : ce que l'écran doit dire d'un test saisi. */
+function _ampEtatTest(d,v){
+  const n=(x)=>{ const q=parseFloat(String(x==null?'':x).replace(',','.')); return isFinite(q)?q:null; };
+  const bornes=[];
+  const champs=d.champ==='paire'?['g','d']:d.champ==='cm'?['cm']:d.champ==='deg'?['deg']:[];
+  let rempli=false;
+  for(const k of champs){
+    const q=n(v&&v[k]);
+    if(q==null){ if(v&&String(v[k]||'').trim()!=='') bornes.push(k); continue; }
+    rempli=true;
+    if(q<d.min||q>d.max) bornes.push(k);
+  }
+  if(d.champ==='niveau') rempli=!!(v&&(d.niveaux||[]).includes(String(v.niveau||'')));
+  return {rempli,horsBornes:bornes.length>0};
+}
+function _ampMajEtat(){
+  const b=document.getElementById('amp-enreg');
+  if(!(b instanceof HTMLButtonElement)||!_amp) return;
+  const mauvais=MORPHO_TESTS.some(d=>_ampEtatTest(d,_amp.v[d.cle]).horsBornes);
+  b.disabled=mauvais;
+  b.style.opacity=mauvais?'.4':'1';
+}
+function _ampRendre(){
+  const z=document.getElementById('amp-contenu');
+  if(!z||!_amp) return;
+  const E=_amp;
+  const num=(cle,champ,val,ph)=>'<input type="number" inputmode="decimal" step="any" value="'
+    +escapeHtml(String(val==null?'':val))+'" placeholder="'+escapeHtml(ph||'—')+'" '
+    +'oninput="ampSaisie(\''+cle+'\',\''+champ+'\',this.value)" '
+    +'style="width:88px;min-height:44px;background:#0c0c0c;border:1px solid var(--border);'
+    +'border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;'
+    +'font-size:var(--fs-md);text-align:center;padding:6px">';
+  const bouton=(cle,champ,val,cour,lib)=>'<button type="button" onclick="ampSaisie(\''+cle+'\',\''+champ
+    +'\',\''+cour+'\')" aria-pressed="'+(val===cour)+'" style="min-height:44px;padding:0 12px;'
+    +'border-radius:var(--r-2);border:1px solid '+(val===cour?'var(--red)':'var(--border)')+';'
+    +'background:'+(val===cour?'rgba(224,32,32,.12)':'none')+';color:var(--text);'
+    +'font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer">'
+    +escapeHtml(lib)+'</button>';
+  const faits=testsMorpho((DB.get('users')||{})[E.email]);
+  z.innerHTML='<div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>'
+    +'<h1 style="font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">Amplitudes</h1>'
+    +'<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:6px">'
+    +escapeHtml(E.nom)+' · quatre tests, chacun avec son protocole. Tout est facultatif : '
+    +'une case vide vaut mieux qu’une mesure prise autrement que ce qui est écrit.</p>'
+    +'<p style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-bottom:16px">'
+    +'On note ce qu’on voit — une distance, un angle, un arrêt net ou élastique. '
+    +'Rien ici ne dit d’où vient une limite, et rien ne descend côté athlète.</p>'
+    +MORPHO_TESTS.map(d=>{
+      const v=E.v[d.cle]||{};
+      const f=faits.find(x=>x.cle===d.cle);
+      const etat=_ampEtatTest(d,v);
+      let saisie='';
+      if(d.champ==='cm') saisie=num(d.cle,'cm',v.cm,'cm')+'<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700">cm</span>';
+      else if(d.champ==='deg') saisie=num(d.cle,'deg',v.deg,'°')
+        +'<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700">°</span>'
+        +bouton(d.cle,'butee',v.butee,'nette','Butée nette')
+        +bouton(d.cle,'butee',v.butee,'elastique','Butée élastique');
+      else if(d.champ==='paire') saisie='<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:800">G</span>'
+        +num(d.cle,'g',v.g,'cm')+'<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:800">D</span>'
+        +num(d.cle,'d',v.d,'cm');
+      else if(d.champ==='niveau') saisie=(d.niveaux||[]).map(k=>bouton(d.cle,'niveau',v.niveau,k,
+        k==='haut'?'Haut du dos':k==='milieu'?'Milieu':'Bas du dos')).join('');
+      return '<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">'
+        +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
+        +escapeHtml(d.lib)+'</div>'
+        +'<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:10px">'+escapeHtml(d.protocole)+'</p>'
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+saisie+'</div>'
+        +(etat.horsBornes?'<p style="font-size:var(--fs-xs);color:var(--orange);line-height:1.5;margin-top:8px">'
+          +'Valeur hors des bornes attendues ('+d.min+' à '+d.max+' '+(d.unite||'')+') : à revérifier avant d’enregistrer.</p>':'')
+        +(f&&f.date?'<p style="font-size:var(--fs-xs);color:'+(f.perime?'var(--orange)':'var(--text-faint)')
+          +';line-height:1.5;margin-top:8px">Dernier relevé : '+escapeHtml(f.texte||'—')+' · '
+          +new Date(f.date).toLocaleDateString('fr-FR')+(f.perime?' · périmé, à refaire':'')+'</p>':'')
+        +'</div>';
+    }).join('')
+    +'<p style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-top:4px">'
+    +'Un test vaut '+MORPHO_PEREMPTION_J+' jours : une amplitude se travaille et se perd, '
+    +'et passé un trimestre elle ne décrit plus l’athlète d’aujourd’hui.</p>';
+  _ampMajEtat();
+}
+/**
+ * Enregistre les tests dans le dossier de l'athlète. Chaque test rempli reçoit
+ * la date du jour ; un test vidé est retiré, pas gardé avec une vieille date.
+ */
+function enregistrerAmplitudes(){
+  if(!_amp) return false;
+  const users=DB.get('users')||{};
+  const c=users[_amp.email];
+  if(!c||!currentUser||c.coachId!==currentUser.id){
+    toast('Élève introuvable ou non autorisé','var(--orange)'); return false;
+  }
+  const avant=(c.morphoTests&&typeof c.morphoTests==='object')?c.morphoTests:{};
+  const out={};
+  const n=(x)=>{ const q=parseFloat(String(x==null?'':x).replace(',','.')); return isFinite(q)?q:null; };
+  for(const d of MORPHO_TESTS){
+    const v=_amp.v[d.cle]||{};
+    const etat=_ampEtatTest(d,v);
+    if(etat.horsBornes){ toast('Une valeur sort des bornes : reprends-la avant d’enregistrer.','var(--orange)'); return false; }
+    if(!etat.rempli) continue;
+    const o={};
+    if(d.champ==='cm') o.cm=n(v.cm);
+    else if(d.champ==='deg'){ o.deg=n(v.deg); if(v.butee==='nette'||v.butee==='elastique') o.butee=v.butee; }
+    else if(d.champ==='paire'){ const g=n(v.g), dr=n(v.d); if(g!=null) o.g=g; if(dr!=null) o.d=dr; }
+    else if(d.champ==='niveau') o.niveau=String(v.niveau||'');
+    // LA DATE NE BOUGE QUE SI LA MESURE BOUGE : rouvrir l'écran et le
+    // réenregistrer ne doit pas rajeunir un test qui n'a pas été refait.
+    const vieux=avant[d.cle]||{};
+    const sansDate=Object.assign({},vieux); delete sansDate.date;
+    o.date=(JSON.stringify(sansDate)===JSON.stringify(o)&&vieux.date)?vieux.date:Date.now();
+    out[d.cle]=o;
+  }
+  if(Object.keys(out).length) c.morphoTests=out; else delete c.morphoTests;
+  c.updatedAt=Date.now();
+  users[_amp.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(_amp.email,c),'Amplitudes enregistrées','les amplitudes sont');
+  _ampRendre();
+  return true;
+}
+
 // PURE. Même format que risquesMicro : {cle, lib, motif, question}.
 function questionsMorpho(user){
   const out=[];
@@ -22366,6 +22728,17 @@ function questionsMorpho(user){
           (lib==='entrejambe'?'l\'athlète pieds nus, du sol au pubis':'le bras tendu, de l\'acromion à la styloïde')+' ?'});
   });
 
+  // LES SIX MESURES DU LOT M1, au même endroit et pour la même raison : on le
+  // dit AVANT tout rapport, puisqu'aucun rapport ne sera calculé dessus.
+  for(const d of MORPHO_MESURES){
+    if(d.origine==='M0') continue;
+    if(mesureMorpho(user,d.cle).motif!=='aberrante') continue;
+    out.push({cle:'mesure_'+d.cle,lib:'Mesure à revérifier',
+      motif:'La mesure « '+d.lib.toLowerCase()+' » saisie au bilan sort des bornes attendues : '
+        +'entre '+d.min+' et '+d.max+' cm.',
+      question:'Peux-tu la reprendre ? '+d.consigne});
+  }
+  for(const c of coherencesMorpho(user)) out.push(c);
   const t=_tailleCm(user);
   const rj=ratioJambes(user);
   if(_horsMarge(rj,RATIO_JAMBES_REF)){
@@ -22403,16 +22776,31 @@ function questionsMorpho(user){
 // un test le vérifie sur le HTML produit par l'accueil et l'écran progression.
 function _htmlQuestionsMorpho(user){
   const l=(function(){ try{ return questionsMorpho(user); }catch(e){ return []; } })();
-  if(!l.length) return '';
+  const tests=(function(){ try{ return testsMorpho(user); }catch(e){ return []; } })();
+  const faits=tests.filter(t=>t.date&&t.texte);
+  // ⚠ ZONE DE LECTURE, ET RIEN D’AUTRE. Aucun bouton ici — ni fermeture, ni
+  // report, ni saisie — et AUCUN bloc du tout quand il n’y a rien à dire :
+  // un cadre qui s’affiche toujours finit par ne plus être lu. Le relevé des
+  // amplitudes se fait dans l’onglet Données, section Amplitudes.
+  if(!l.length&&!faits.length) return '';
+  // LES TESTS, AVEC LEUR DATE ET LEUR PÉREMPTION. Une amplitude relevée il y a
+  // six mois ne décrit plus l'athlète : on la montre quand même, marquée
+  // « périmé », plutôt que de la faire disparaître sans un mot.
+  const htmlTests=!faits.length?'':`<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Amplitudes</div>
+    ${faits.map(t=>`<div style="font-size:var(--fs-sm);color:${t.perime?'var(--orange)':'var(--text-strong)'};line-height:1.6">${escapeHtml(t.lib)} : ${escapeHtml(t.texte)} <span style="color:var(--text-faint)">(test, ${new Date(t.date).toLocaleDateString('fr-FR')}${t.perime?', périmé':''})</span></div>`).join('')}
+  </div>`;
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">Proportions</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des variantes à envisager, jamais un exercice à retirer.</div>
+    ${l.length?'':`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:12px">Aucune proportion à signaler avec ce qui est mesuré aujourd’hui.</div>`}
     ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:11px;margin-bottom:12px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(r.lib)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(r.motif)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(r.question)}</div>
     </div>`).join('')}
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MORPHO_DISCLAIMER)}</div>
+    ${htmlTests}
+    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px;margin-top:12px">${escapeHtml(MORPHO_DISCLAIMER)}</div>
   </div>`;
 }
 
@@ -29715,6 +30103,7 @@ function openClientDetail(cid,_refresh,_force){
   renderCoachSuppSection(c);
   try{ renderCoachEvictionsSection(c); }catch(e){}
   try{ renderCoachTraitementsSection(c); }catch(e){}
+  try{ renderCoachAmplitudesSection(c); }catch(e){}
   renderCoachCaffeineSection(c);
   try{ renderSommeilCoach(c); }catch(e){}
   try{ renderPasCoach(c); }catch(e){}
@@ -57871,11 +58260,13 @@ function bLongueurs(){
       <span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700;margin-left:2px">cm</span>
     </div>
   </div>`;
+  // HUIT MESURES, CHACUNE AVEC SA CONSIGNE SOUS LES YEUX. Sans protocole
+  // affiché, on ne sait pas ce qui a été mesuré, et deux bilans cessent d'être
+  // comparables : la consigne fait partie de la mesure.
   return `<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
     <div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Longueurs (facultatif)</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Deux mesures qui ne bougent plus une fois adulte. Elles servent à ton coach pour te proposer des variantes d'un mouvement, jamais pour en écarter un.</div>
-    ${champ('deb-entrejambe','Entrejambe','Du sol au pubis, pieds nus, dos au mur.')}
-    ${champ('deb-bras','Longueur de bras','Bras tendu le long du corps, de la pointe de l\'épaule au poignet.')}
+    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des mesures qui ne bougent plus une fois adulte. Elles servent à ton coach pour te proposer des variantes d'un mouvement, jamais pour en écarter un. Toutes sont facultatives : une case vide vaut mieux qu'une mesure approximative.</div>
+    ${MORPHO_MESURES.map(m=>champ(m.cle,m.lib,m.consigne)).join('')}
   </div>`;
 }
 function bBodyFocus(id,on){
@@ -57967,6 +58358,12 @@ const BILAN_QUESTIONS={
     {k:'deb-health',lbl:'Problèmes de santé / blessures',emoji:'🩺',alerte:true},
     {k:'deb-entrejambe',lbl:'Entrejambe (cm)',emoji:'📏'},
     {k:'deb-bras',lbl:'Longueur de bras (cm)',emoji:'📏'},
+    {k:'deb-genou',lbl:'Hauteur de genou (cm)',emoji:'📏'},
+    {k:'deb-avantbras',lbl:'Avant-bras (cm)',emoji:'📏'},
+    {k:'deb-epaules',lbl:'Largeur d’épaules (cm)',emoji:'📏'},
+    {k:'deb-bassin',lbl:'Largeur de bassin (cm)',emoji:'📏'},
+    {k:'deb-poignet',lbl:'Tour de poignet (cm)',emoji:'📏'},
+    {k:'deb-cheville',lbl:'Tour de cheville (cm)',emoji:'📏'},
     {k:'deb-traitement',lbl:'Traitement médicamenteux régulier',emoji:'💊',alerte:true},
     {k:'deb-traitement-detail',lbl:'Traitement — précisions',emoji:'💊'},
     {k:'deb-allergies',lbl:'Allergies / régime particulier',emoji:'🥜',alerte:true},
@@ -79488,8 +79885,29 @@ function renderCoachEvictionsSection(c){
 // par laquelle un coach peut saisir un traitement, et une porte qui n'apparait
 // que lorsqu'il y a deja quelque chose derriere n'est pas une porte. La
 // section est repliee par defaut, ce qui lui coute une ligne et pas un ecran.
-function renderCoachTraitementsSection(c){
-  const el=document.getElementById('ccd-traitements');
+/**
+ * La section Amplitudes de la fiche coach : ce qui a été relevé, quand, et
+ * l'entrée vers l'écran de relevé. C'est ici qu'un test se saisit — le bloc
+ * « Proportions » des Signaux faibles, lui, ne fait que lire.
+ */
+function renderCoachAmplitudesSection(c){
+  const el=document.getElementById('ccd-amplitudes');
+  if(!el) return;
+  const l=(function(){ try{ return testsMorpho(c); }catch(e){ return []; } })();
+  const faits=l.filter(t=>t.date&&t.texte);
+  const email=String((c&&c.email)||'');
+  const ligne=t=>`<div style="border-left:2px solid var(--border);padding-left:11px;margin-bottom:10px">`
+    +`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:3px">${escapeHtml(t.lib)}</div>`
+    +`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(t.texte)}</div>`
+    +`<div style="font-size:var(--fs-xs);color:${t.perime?'var(--orange)':'var(--text-faint)'};line-height:1.5">`
+    +`test, ${new Date(t.date).toLocaleDateString('fr-FR')}${t.perime?' · périmé, à refaire':''}</div></div>`;
+  el.innerHTML=`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">`
+    +`Quatre tests d’amplitude, chacun avec son protocole. Un relevé vaut ${MORPHO_PEREMPTION_J} jours`
+    +` : une amplitude se travaille et se perd.</div>`
+    +(faits.length?faits.map(ligne).join(''):`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;padding:4px 0 10px">Aucun test relevé pour l’instant.</div>`)
+    +`<button type="button" class="btn btn-outline" style="width:100%;margin:6px 0 0" onclick="ouvrirAmplitudes('${escapeHtml(email)}')">Relever les amplitudes</button>`;
+}
+function renderCoachTraitementsSection(c){  const el=document.getElementById('ccd-traitements');
   if(!el||!c) return false;
   try{ el.innerHTML=_htmlTraitementsCoach(c); }catch(e){ el.innerHTML=''; }
   return true;

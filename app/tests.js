@@ -33671,7 +33671,7 @@ async function testExercices(){
         's-seance-apercu',
         // R28 — Motion Lab : un écran coach, qui a besoin de toute la largeur
         // pour sa frise.
-        's-coach-motion-lab'];
+        's-coach-motion-lab','s-coach-amplitudes'];
 
       ok('LA BARRE LATERALE N\'EST PLUS ENFERMEE DANS LE TABLEAU DE BORD',(()=>{
         // Elle etait un enfant de #s-coach-home et disparaissait des que le
@@ -50099,6 +50099,175 @@ async function testExercices(){
           const manque=douze.filter(k=>h.indexOf('id="deb-'+k+'"')<0);
           return manque.length?_echec('perdues : '+manque.join(', ')):true;
         } finally { currentUser=sauve; }})());
+      // ══════ MORPHO — LOT M1 : SIX MESURES, QUATRE TESTS ══════
+      //
+      // Même exigence que pour les deux longueurs d'origine : une mesure hors
+      // bornes n'est pas calculée, elle est signalée ; une case vide n'est pas
+      // une faute ; et rien de tout cela ne descend côté athlète.
+      const _m1=(taille,extra)=>({email:'m1@t.fr',fname:'Léa',role:'athlete',coachId:'co',
+        bilans:[Object.assign({type:'depart',date:Date.now()-864e5,'deb-height':String(taille)},extra||{})]});
+
+      ok('M1 — huit mesures déclarées, chacune avec sa consigne et ses bornes',(()=>{
+        if(MORPHO_MESURES.length!==8) return _echec(MORPHO_MESURES.length+' mesures');
+        const sans=MORPHO_MESURES.filter(m=>!m.consigne||m.consigne.length<15);
+        if(sans.length) return _echec('sans consigne : '+sans.map(m=>m.cle).join(', '));
+        const neuves=MORPHO_MESURES.filter(m=>m.origine!=='M0');
+        if(neuves.length!==6) return _echec(neuves.length+' nouvelles');
+        const bornes=neuves.filter(m=>!(m.min>0&&m.max>m.min));
+        return bornes.length?_echec('bornes absentes : '+bornes.map(m=>m.cle).join(', ')):true;})());
+
+      ok('M1 — une mesure hors bornes n’est pas calculée, elle est signalée',(()=>{
+        // Un tour de poignet de 7 cm est une faute de frappe, pas une morphologie.
+        if(mesureMorpho(_m1(180,{'deb-poignet':'7'}),'deb-poignet').motif!=='aberrante')
+          return _echec('7 cm de poignet acceptés');
+        if(mesureMorpho(_m1(180,{'deb-poignet':'17'}),'deb-poignet').cm!==17)
+          return _echec('17 cm de poignet refusés');
+        if(mesureMorpho(_m1(180,{'deb-genou':'190'}),'deb-genou').motif!=='aberrante')
+          return _echec('190 cm de hauteur de genou acceptés');
+        const q=questionsMorpho(_m1(180,{'deb-genou':'190'})).find(x=>x.cle==='mesure_deb-genou');
+        if(!q) return _echec('rien n’est signalé au coach');
+        return /entre 25 et 75/.test(q.motif)&&/creux du genou/.test(q.question)
+          ?true:_echec('le signalement ne dit ni la borne ni la consigne : '+q.motif);})());
+
+      ok('M1 — un TOUR n’est pas comparé à la taille, une LONGUEUR si',(()=>{
+        // Un tour de cuisse peut dépasser la taille d'un enfant ; une hauteur
+        // de genou, jamais.
+        const petit=_m1(20,{'deb-poignet':'17','deb-genou':'40'});
+        if(mesureMorpho(petit,'deb-poignet').cm!==17) return _echec('le tour a été refusé');
+        return mesureMorpho(petit,'deb-genou').motif==='aberrante'
+          ?true:_echec('une longueur plus grande que la personne a été acceptée');})());
+
+      ok('M1 — les deux mesures d’origine passent toujours par longueurSegment',(()=>{
+        const u=_m1(180,{'deb-entrejambe':'88','deb-bras':'80'});
+        for(const cle of ['deb-entrejambe','deb-bras'])
+          if(JSON.stringify(mesureMorpho(u,cle))!==JSON.stringify(longueurSegment(u,cle)))
+            return _echec(cle+' a changé de règle');
+        return true;})());
+
+      ok('M1 — les trois incohérences sont refusées, et seulement elles',(()=>{
+        // Dans les bornes des deux côtés, mais impossibles ensemble.
+        const cas=[['coherence_genou',{'deb-entrejambe':'65','deb-genou':'70'},{'deb-entrejambe':'65','deb-genou':'45'}],
+          ['coherence_avantbras',{'deb-bras':'40','deb-avantbras':'42'},{'deb-bras':'40','deb-avantbras':'28'}],
+          ['coherence_bassin',{'deb-epaules':'30','deb-bassin':'45'},{'deb-epaules':'40','deb-bassin':'38'}]];
+        for(const [cle,faux,bon] of cas){
+          if(!questionsMorpho(_m1(175,faux)).some(x=>x.cle===cle)) return _echec(cle+' : non signalée');
+          if(questionsMorpho(_m1(175,bon)).some(x=>x.cle===cle)) return _echec(cle+' : signalée à tort');
+        }
+        // Une seule des deux mesures : on ne dit rien, une case vide n'est pas une faute.
+        return !questionsMorpho(_m1(175,{'deb-genou':'70'})).some(x=>/^coherence_/.test(x.cle))
+          ?true:_echec('une incohérence sort d’une seule mesure');})());
+
+      ok('M1 — un bilan sans aucune des six se comporte exactement comme avant',(()=>{
+        const u=_m1(180,{'deb-entrejambe':'88','deb-bras':'80'});
+        const neuf=questionsMorpho(u).map(x=>x.cle).sort().join(',');
+        const vieux=['jambes'].sort().join(',');
+        if(neuf!==vieux) return _echec('entrées : '+neuf);
+        return ratioJambes(u)!=null&&ratioBras(u)!=null
+          ?true:_echec('les deux ratios d’origine ne se calculent plus');})());
+
+      ok('M1 — les huit champs sont dans le bilan de DÉPART, avec leur consigne',(()=>{
+        const h=bLongueurs();
+        const manque=MORPHO_MESURES.filter(m=>h.indexOf('id="'+m.cle+'"')<0);
+        if(manque.length) return _echec('champs absents : '+manque.map(m=>m.cle).join(', '));
+        const sansAide=MORPHO_MESURES.filter(m=>h.indexOf(m.consigne)<0);
+        if(sansAide.length) return _echec('consignes absentes : '+sansAide.map(m=>m.cle).join(', '));
+        return /facultatif/i.test(h)?true:_echec('rien ne dit que c’est facultatif');})());
+
+      ok('M1 — le bilan de SUIVI ne redemande aucune des huit',(()=>{
+        const sauve=currentUser;
+        try{
+          currentUser={id:'_m1',email:'m1@t',gender:'Homme'};
+          const bil=bBodySchema('bil');
+          const fuites=MORPHO_MESURES.filter(m=>bil.indexOf('id="'+m.cle+'"')>=0);
+          return fuites.length?_echec('redemandées : '+fuites.map(m=>m.cle).join(', ')):true;
+        } finally { currentUser=sauve; }})());
+
+      ok('M1 — les quatre tests se relisent, datés, et périment à 90 jours',(()=>{
+        const j=864e5;
+        const u={morphoTests:{cheville:{cm:7,date:Date.now()-10*j},
+          hanche:{deg:110,butee:'nette',date:Date.now()-120*j},
+          epaule:{g:4,d:9,date:Date.now()-2*j}}};
+        const t=testsMorpho(u);
+        if(t.length!==4) return _echec(t.length+' tests');
+        const p=Object.fromEntries(t.map(x=>[x.cle,x]));
+        if(p.cheville.perime!==false||p.cheville.texte!=='7 cm au mur')
+          return _echec('cheville : '+JSON.stringify(p.cheville));
+        if(p.hanche.perime!==true||!/110°, butée nette/.test(p.hanche.texte))
+          return _echec('hanche : '+JSON.stringify(p.hanche));
+        if(!/gauche 4 cm · droite 9 cm/.test(p.epaule.texte)) return _echec('épaule : '+p.epaule.texte);
+        if(p.posterieur.date!==null||p.posterieur.texte!=='') return _echec('un test jamais fait porte une valeur');
+        // LA BORNE EXACTE : 90 jours vaut encore, 91 non.
+        const age=n=>testsMorpho({morphoTests:{cheville:{cm:7,date:Date.now()-n*j}}}).find(x=>x.cle==='cheville').perime;
+        if(age(90)!==false||age(91)!==true) return _echec('péremption à 90 : '+age(90)+' / à 91 : '+age(91));
+        return MORPHO_PEREMPTION_J===90?true:_echec('seuil à '+MORPHO_PEREMPTION_J);})());
+
+      ok('M1 — testsMorpho ne lève rien et ne modifie rien',(()=>{
+        try{
+          if(testsMorpho(null).length!==4||testsMorpho({}).length!==4
+            ||testsMorpho({morphoTests:'x'}).length!==4) return _echec('un dossier vide casse');
+          const u={morphoTests:{cheville:{cm:7,date:Date.now()}}};
+          const avant=JSON.stringify(u);
+          testsMorpho(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a bougé');
+        }catch(e){ return _echec('exception : '+e.message); }})());
+
+      ok('M1 — le bloc Proportions reste une zone de LECTURE',(()=>{
+        // Aucun bouton, aucun onclick : deux tests d'origine l'exigent déjà, et
+        // les amplitudes ne doivent pas les contredire.
+        const u=_m1(180,{'deb-entrejambe':'95'});
+        u.morphoTests={cheville:{cm:7,date:Date.now()-200*864e5}};
+        const h=_htmlQuestionsMorpho(u);
+        if(h.indexOf('<button')>=0||h.indexOf('onclick')>=0)
+          return _echec('un contrôle est entré dans la zone de lecture');
+        // Le test périmé y est dit, avec sa date.
+        return /périmé/.test(h)&&/7 cm au mur/.test(h)
+          ?true:_echec('le test périmé n’est pas restitué');})());
+
+      ok('M1 — un test périmé est marqué dans la fiche coach',(()=>{
+        const c=_m1(180,{'deb-entrejambe':'88'});
+        c.email='m1@t.fr';
+        c.morphoTests={hanche:{deg:105,butee:'nette',date:Date.now()-140*864e5}};
+        renderCoachAmplitudesSection(c);
+        const el=document.getElementById('ccd-amplitudes');
+        if(!el) return _echec('section absente de la fiche');
+        const t=el.textContent||'';
+        if(!/périmé/.test(t)) return _echec('«'+t.replace(/\s+/g,' ').slice(0,120)+'»');
+        return /Relever les amplitudes/.test(t)
+          ?true:_echec('aucune entrée vers le relevé');})());
+
+      ok('M1 — aucun protocole ne nomme une cause, aucun ne juge',(()=>{
+        const textes=[];
+        MORPHO_TESTS.forEach(d=>textes.push(d.lib,d.protocole));
+        MORPHO_MESURES.forEach(m=>textes.push(m.lib,m.consigne));
+        MORPHO_COHERENCES.forEach(c=>textes.push(c.lib,c.motif,c.question));
+        testsMorpho({morphoTests:{cheville:{cm:7,date:Date.now()},
+          hanche:{deg:110,butee:'elastique',date:Date.now()},
+          posterieur:{niveau:'bas',date:Date.now()}}}).forEach(t=>textes.push(t.texte));
+        const INTERDITS=['retroversion','anteversion','impingement','insertion','pathologie',
+          'anormal','anomalie','diagnostic','blessure','risque','danger','proscrit','interdit',
+          'a eviter','mauvais','defaut','norme'];
+        const trouves=[];
+        textes.forEach(t=>{
+          const n=String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+          INTERDITS.forEach(m=>{ if(n.indexOf(m)>=0&&trouves.indexOf(m)<0)
+            trouves.push(m+' → «'+String(t).slice(0,45)+'»'); });});
+        return trouves.length?_echec(trouves.join(' | ')):true;})());
+
+      ok('M1 — rien des amplitudes n’apparaît côté athlète',(()=>{
+        const sauve=currentUser;
+        try{
+          currentUser=_m1(180,{'deb-entrejambe':'95','deb-genou':'46'});
+          currentUser.role='athlete'; currentUser.coachId='co';
+          currentUser.morphoTests={cheville:{cm:7,date:Date.now()}};
+          let h='';
+          try{ loadClientHome(); h+=document.getElementById('s-client-home').textContent||''; }catch(e){}
+          try{ go('s-progress'); renderVolume();
+            h+=document.getElementById('progress-content').textContent||''; }catch(e){}
+          const mots=['Amplitudes','genou au mur','butée','Hauteur de genou','Tour de poignet'];
+          const fuites=mots.filter(m=>h.indexOf(m)>=0);
+          return fuites.length?_echec('visible côté athlète : '+fuites.join(', ')):true;
+        } finally { currentUser=sauve; }})());
+
       // ══════ L'ÉCRAN RÉPONSES ══════
       ok('Un bilan à moitié rempli ne rend QUE ses réponses',(()=>{
         // LE PIÈGE : un tableau vide est truthy. « Raisons des écarts : [] »
