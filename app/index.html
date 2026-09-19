@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1302';
+window.RC_BUILD='1303';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -30162,14 +30162,34 @@ function joursDepuisSigne(c,maintenant){
   return Math.floor((t-d)/864e5);
 }
 // PURE. « Dort », au sens de la grille de vignettes et de la liste d'athletes :
-// quelqu'un qui a sa propre ligne dans un des trois cadres du BAS de page, et
-// qui n'a donc rien a faire en haut. Une seule fonction pour les trois cas —
-// recopier la reunion a deux endroits aurait fini par en oublier un, et cet
-// athlete-la serait apparu deux fois ou pas du tout.
+// quelqu'un qui n'a rien a faire en haut de l'ecran. Une seule fonction pour
+// tous les cas — recopier la reunion a deux endroits aurait fini par en
+// oublier un, et cet athlete-la serait apparu deux fois ou pas du tout.
+//
+// ⚠ « JAMAIS DEMARRE » N'EST PLUS DORMANT. Demande de Kevin, 18/09/2026 :
+// remonter dans les ronds les gens qui se sont connectes, meme sans avoir
+// commence a utiliser l'app, des lors qu'ils ont AU MOINS fait leur compte ;
+// seuls ceux qui n'ont pas encore de compte restent en bas.
+// Un compte cree EST une presence : la personne est entree, elle a un visage,
+// un prenom et un age, et c'est precisement le moment ou le coach peut encore
+// faire quelque chose. La masquer jusqu'a sa premiere seance revenait a la
+// rendre invisible pendant la seule fenetre qui compte.
+//
+// LE DOUBLON EST ASSUME. Elle garde sa ligne dans le cadre « Jamais demarre »
+// du bas, qui porte le bouton de relance et le nombre de jours depuis le
+// rattachement — rien de tout cela ne tient dans un rond. Mieux vaut une
+// arrivee sans premiere seance affichee deux fois qu'une seule, tout en bas.
+//
+// CE QUI RESTE DORMANT, ET POURQUOI :
+//   _fromCode — le compte n'existe PAS encore. C'est la famille que cette
+//               demande designe nommement comme devant rester en bas.
+//   inactif   — le compte existe et l'athlete a DEJA pose des seances, puis
+//               plus rien depuis quatorze jours. Ce n'est pas quelqu'un « qui
+//               n'a pas commence » : c'est quelqu'un qui s'est arrete, et son
+//               cadre du bas dit exactement cela.
 function _estDormant(c,maintenant){
   if(!c) return false;
   if(c._fromCode) return true;                 // « En attente d'inscription »
-  try{ if(jamaisDemarre(c,maintenant)) return true; }catch(e){}
   try{ if(inactif(c,maintenant)) return true; }catch(e){}
   return false;
 }

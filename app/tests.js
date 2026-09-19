@@ -32346,7 +32346,12 @@ async function testExercices(){
           return _echec('le retour en arrière ne vise pas la vue de travail');
         return true;})());
 
-      ok('La grille et la liste montrent la MÊME chose, et masquent ce qui dort',(()=>{
+      ok('La grille et la liste montrent la MÊME chose, et gardent qui a un compte',(()=>{
+        // ⚠ LA RÈGLE A CHANGÉ LE 18/09/2026. « Jamais démarré » remonte dans les
+        // ronds : un compte créé est une présence, et c'est le moment où le coach
+        // peut encore faire quelque chose. Seules l'invitation sans compte et
+        // l'inactif — qui a déjà posé des séances puis s'est arrêté — restent en
+        // bas. C'est cette frontière-là, et pas une autre, que ce test tient.
         const _sU=currentUser, _sF=_filtreClients;
         const _sDB=DB.get('users');
         try{
@@ -32363,12 +32368,24 @@ async function testExercices(){
           const rech=document.getElementById('ch-search'); if(rech) rech.value='';
           renderClientList();
           const cnt=(document.getElementById('ch-count')||{}).textContent||'';
-          // 3 athlètes + 1 invitation = 4 au total, 1 seul en activité.
-          if(cnt.indexOf('1/4')<0) return _echec('compteur : '+cnt);
+          // 3 athlètes + 1 invitation = 4 au total ; l'actif et celui qui n'a
+          // jamais démarré sont en haut, soit 2.
+          if(cnt.indexOf('2/4')<0) return _echec('compteur : '+cnt);
           const grille=(document.getElementById('ch-vignettes')||{}).textContent||'';
           if(grille.indexOf('Actif')<0) return _echec('l’athlète actif manque dans la grille');
-          for(const absent of ['Dort','Jamais','Invité'])
+          // LE COMPTE CRÉÉ SUFFIT : pas besoin d'une première séance pour avoir
+          // un rond. C'est la demande du 18/09/2026, et l'assertion qui la tient.
+          if(grille.indexOf('Jamais')<0)
+            return _echec('un compte créé sans séance n’a pas son rond');
+          for(const absent of ['Dort','Invité'])
             if(grille.indexOf(absent)>=0) return _echec(absent+' est encore dans les ronds');
+          // ET IL GARDE SA LIGNE EN BAS. Le doublon est assumé : le cadre porte
+          // le bouton de relance et le nombre de jours, qui ne tiennent pas
+          // dans un rond. ⚠ Assertion sur la fonction PURE et non sur le DOM :
+          // #ch-jamais-demarre est rempli par loadCoachHome, pas par
+          // renderClientList, et l'interroger ici ne prouverait rien.
+          if(_htmlJamaisDemarre(listeJamaisDemarre(l,t),t).indexOf('Jamais')<0)
+            return _echec('le cadre « Jamais démarré » a perdu sa ligne');
           // « Tous » les ramène TOUS : c'est ce que son nombre promet.
           _filtreClients='tous'; renderClientList();
           const cnt2=(document.getElementById('ch-count')||{}).textContent||'';
