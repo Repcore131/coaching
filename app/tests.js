@@ -35226,6 +35226,157 @@ async function testExercices(){
           return document.getElementById('ccd-on-p').hasAttribute('readonly')
             ?_echec('le champ reste verrouille en saisie manuelle'):true;})());
 
+        // ── LE TABLEUR PART AU GESTE MEME ────────────────────────────────
+        // Demande de Kevin, 19/09/2026 : « dès que le coach modifie les calculs
+        // sur ce tableur, la modif se fait immédiatement côté athlète, que ce
+        // soit diète flexible ou stricte ».
+        //
+        // ⚠ MESURE FAITE AVANT LE CORRECTIF, dans un navigateur : deux
+        //   changements de menu laissaient le dossier de l'athlete a
+        //   `macros:null` et le compteur d'envois a ZERO. Les tableaux
+        //   n'etaient qu'un affichage tant que le coach n'avait pas trouve le
+        //   bouton rouge, trois ecrans plus bas.
+        const _envois=()=>{ let n=0; CLOUD.pushOne=()=>{ n++; return Promise.resolve(true); };
+          return ()=>n; };
+        ok('UN MENU DU TABLEUR ECRIT LES CIBLES ET LES POUSSE',(()=>{
+          poser({});
+          const lus=_envois();
+          const avant=((getOwnedClient('A9').nutrition||{}).macros)||null;
+          if(avant) return _echec('le dossier portait deja des cibles avant le geste');
+          majTableauTableur('coef','0.8');
+          const n=(getOwnedClient('A9').nutrition||{});
+          const m=n.macros||{};
+          if(!m.on||!(m.on.kcal>0)) return _echec('aucune cible ecrite : '+JSON.stringify(m));
+          if(m.origine!=='tableur') return _echec('la provenance n’est pas tracee : '+m.origine);
+          // LE REGLAGE PART AVEC : sans lui, rouvrir la fiche recalculerait
+          // autre chose que ce qui vient d'etre applique.
+          if(Number((n.tableur||{}).coef)!==0.8)
+            return _echec('le reglage n’est pas memorise : '+JSON.stringify(n.tableur));
+          return lus()===1?true:_echec('le dossier n’a pas ete pousse : '+lus()+' envoi(s)');})());
+
+        ok('LE CALCUL NE COCHE PAS « SAISIE MANUELLE » TOUT SEUL',(()=>{
+          // ⚠ LE DEFAUT ETAIT REEL ET ANTERIEUR : `saisieManuelle` rend VRAI des
+          //   qu'un dossier « porte des grammes ». Les grammes ecrits par le
+          //   calculateur suffisaient donc a retourner l'interrupteur — la case
+          //   se cochait d'elle-meme, dix champs de saisie apparaissaient, et
+          //   les menus cessaient de recalculer, alors que le coach n'avait
+          //   jamais rien tape.
+          poser({});
+          majTableauTableur('coef','0.8');
+          const c=getOwnedClient('A9');
+          if(saisieManuelle(c)!==false)
+            return _echec('le calcul a bascule le dossier en saisie manuelle');
+          const t=_tbkMacro();
+          const b=t&&t.querySelector('input[type=checkbox]');
+          if(!b) return _echec('l’interrupteur a disparu du tableau');
+          if(b.checked) return _echec('la case s’est cochee toute seule');
+          if(t.querySelectorAll('input[type=number]').length)
+            return _echec('des champs de saisie sont apparus');
+          // ET UN SECOND GESTE RECALCULE TOUJOURS : c'est la consequence qui
+          // compte, plus que le drapeau lui-meme.
+          const k1=((c.nutrition||{}).macros||{}).on.kcal;
+          majTableauTableur('coef','0.95');
+          const k2=((getOwnedClient('A9').nutrition||{}).macros||{}).on.kcal;
+          return k2!==k1?true
+            :_echec('le second changement n’a rien recalcule : '+k1+' puis '+k2);})());
+
+        ok('MAIS LES CIBLES DU COACH RESTENT CELLES QUI FONT FOI',(()=>{
+          // ⚠ LE PIEGE DE CE CORRECTIF, ET IL EST SERIEUX. Le reflexe aurait ete
+          //   d'ecrire `manuel:false` pour dire « on est en automatique ».
+          //   `ciblesPoseesParCoach` lit LE MEME CHAMP pour decider si l'athlete
+          //   peut reprendre la main : le correctif du matin — sa carte « Mon
+          //   objectif » verrouillee sur les chiffres du coach — aurait ete
+          //   defait par la porte d'a cote, et un seul clic sur ±20 aurait
+          //   efface la prescription.
+          poser({});
+          majTableauTableur('coef','0.8');
+          const c=getOwnedClient('A9');
+          if(typeof (c.nutrition||{}).manuel==='boolean')
+            return _echec('un drapeau `manuel` a ete pose : '+(c.nutrition||{}).manuel);
+          return ciblesPoseesParCoach(c)===true
+            ?true:_echec('l’athlete peut reprendre la main sur les cibles du coach');})());
+
+        ok('EN SAISIE MANUELLE, UN MENU NE TOUCHE PAS AUX GRAMMES',(()=>{
+          // C'est le contrat affiche sous l'interrupteur : « tes chiffres
+          // priment : ils ne bougeront plus si tu changes les g/kg ». Un coach
+          // qui deroule un menu pour COMPARER ne doit pas perdre sa saisie.
+          poser({manuel:true,macros:{on:{kcal:3000,p:285,g:243,l:98,f:45},
+                                     off:{kcal:2600,p:247,g:211,l:82,f:39}}});
+          majTableauTableur('protGkg','2.4');
+          const n=getOwnedClient('A9').nutrition||{};
+          if(((n.macros||{}).on||{}).kcal!==3000)
+            return _echec('les 3 000 kcal du coach ont bouge : '+JSON.stringify(n.macros.on));
+          // MAIS LE REGLAGE EST TOUT DE MEME MEMORISE : le menu dit ce que le
+          // CALCUL utiliserait, et il doit se retrouver a la reouverture.
+          return Number((n.tableur||{}).protGkg)===2.4
+            ?true:_echec('le reglage n’a pas ete memorise : '+JSON.stringify(n.tableur));})());
+
+        ok('FLEXIBLE ET STRICTE RECOIVENT EXACTEMENT LES MEMES CIBLES',(()=>{
+          // ⚠ UNE SEULE ECRITURE SERT LES DEUX, et c'est pour ca qu'il n'y a
+          //   rien de plus a faire pour la stricte : les deux lisent
+          //   `nutrition.macros` par _getEffectiveMacros. Une seconde source
+          //   pour la stricte aurait fini par diverger de la premiere — c'est
+          //   exactement le defaut repare le matin meme sur la carte « Mon
+          //   objectif ».
+          const cibles=(dt)=>{ poser({dietType:dt});
+            majTableauTableur('coef','0.8');
+            const m=((getOwnedClient('A9').nutrition||{}).macros)||{};
+            return JSON.stringify({on:m.on,off:m.off}); };
+          const f=cibles('flexible'), s=cibles('strict');
+          if(f==='{}'||!f) return _echec('aucune cible en flexible');
+          return f===s?true:_echec('les deux dietes divergent :\n  flexible '+f+'\n  stricte  '+s);})());
+
+        ok('ACTIVER LE CYCLAGE RECALCULE LES DEUX JOURNEES',(()=>{
+          // ⚠ LA RECOPIE NE REGLAIT QU'UN SENS. En ARRETANT le cyclage, ON etait
+          //   recopie sur OFF ; en l'ACTIVANT, rien ne recalculait — le tableau
+          //   « Journées » montrait deux colonnes pendant que le dossier de
+          //   l'athlete gardait une seule valeur les jours d'entrainement.
+          poser({cycle:false});
+          majTableauTableur('coef','0.8');
+          const a=((getOwnedClient('A9').nutrition||{}).macros)||{};
+          if(a.on.kcal!==a.off.kcal)
+            return _echec('non cyclee, les deux journees different deja : '
+              +a.on.kcal+' / '+a.off.kcal);
+          saveClientNutriCycle('1');
+          const b=((getOwnedClient('A9').nutrition||{}).macros)||{};
+          if(b.on.kcal===b.off.kcal)
+            return _echec('cyclage active, les deux journees restent egales : '+b.on.kcal);
+          // ET LE JOUR ON MANGE PLUS QUE LE JOUR OFF : verifier seulement
+          // qu'elles different laisserait passer un cyclage a l'envers.
+          if(!(b.on.kcal>b.off.kcal))
+            return _echec('le jour ON mange moins que le jour OFF : '
+              +b.on.kcal+' contre '+b.off.kcal);
+          // ET L'ARRET LES REMET D'ACCORD.
+          saveClientNutriCycle('0');
+          const z=((getOwnedClient('A9').nutrition||{}).macros)||{};
+          return z.on.kcal===z.off.kcal?true
+            :_echec('cyclage arrete, les journees different encore : '
+              +z.on.kcal+' / '+z.off.kcal);})());
+
+        ok('EN AUTOMATIQUE, AUCUN BOUTON NE PRETEND QU’IL RESTE A ENREGISTRER',(()=>{
+          // Garder « Enregistrer pour l’athlète » aurait laisse croire que rien
+          // n'etait parti tant qu'on ne l'avait pas clique — et sa demande de
+          // confirmation aurait annonce « ses cibles actuelles seront
+          // remplacées » pour un remplacement deja fait.
+          poser({});
+          const z=document.getElementById('ccd-nutrition');
+          const lib=[...z.querySelectorAll('button')].map(b=>b.textContent.trim());
+          if(lib.some(x=>/Enregistrer pour l’athlète/.test(x)))
+            return _echec('le bouton rouge survit en automatique');
+          if(lib.some(x=>/Enregistrer les réglages/.test(x)))
+            return _echec('le bouton de reglages survit en automatique');
+          // ET ON LE DIT, plutot que de laisser un vide sous les tableaux.
+          if(z.innerText.indexOf('dès que tu le changes')<0)
+            return _echec('rien n’annonce que les reglages partent seuls');
+          // ⚠ EN MANUEL ILS RESTENT LES SEULS CHEMINS. Les retirer partout
+          //   aurait laisse un coach en saisie manuelle sans aucun moyen de
+          //   publier ses chiffres.
+          poser({manuel:true,macros:{on:{kcal:3000}}});
+          const lib2=[...document.getElementById('ccd-nutrition')
+            .querySelectorAll('button')].map(b=>b.textContent.trim());
+          return lib2.some(x=>/Enregistrer pour l’athlète/.test(x))
+            ?true:_echec('le bouton a disparu AUSSI en saisie manuelle : '+lib2.join(' | '));})());
+
         ok('REPASSER EN AUTOMATIQUE REECRIT LES CIBLES TOUT DE SUITE',(()=>{
           // Les laisser telles quelles afficherait le calcul a l'ecran du coach
           // pendant que l'athlete garderait les anciens chiffres dans son journal.

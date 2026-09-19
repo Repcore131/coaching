@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1316';
+window.RC_BUILD='1317';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -69679,6 +69679,18 @@ function ciblesPoseesParCoach(u){
   // enregistrement du coach, qui repose l'origine a 'coach'.
   if(typeof n.manuel==='boolean') return n.manuel;
   if(((n.macros||{}).origine)==='athlete') return false;
+  // ⚠ LE CALCULATEUR DU COACH POSE UNE PRESCRIPTION, et cette ligne doit etre
+  //   lue avec celle de saisieManuelle qui vient d'ecarter la meme origine.
+  //   Les deux fonctions repondent a DEUX QUESTIONS DIFFERENTES que le drapeau
+  //   `manuel` confondait :
+  //     saisieManuelle      — « le coach tape-t-il les grammes a la main ? »
+  //     ciblesPoseesParCoach — « ses chiffres l'emportent-ils sur ceux de
+  //                             l'athlete ? »
+  //   Pour des grammes sortis du tableur, la reponse est NON a la premiere et
+  //   OUI a la seconde. Sans cette ligne, le correctif du matin — la carte
+  //   « Mon objectif » verrouillee sur les chiffres du coach — serait defait
+  //   par la porte d'a cote : l'athlete aurait repris la main au premier ±20.
+  if(((n.macros||{}).origine)==='tableur') return true;
   try{ return saisieManuelle(u)===true; }catch(e){ return false; }
 }
 // Les cibles EN VIGUEUR pour un jour donne, exactement celles des anneaux :
@@ -79070,6 +79082,22 @@ function saisieManuelle(user){
   const n=(user&&user.nutrition)||{};
   if(typeof n.manuel==='boolean') return n.manuel;
   const m=n.macros||{};
+  // ⚠ DES GRAMMES ECRITS PAR LE CALCUL NE SONT PAS DES GRAMMES TAPES A LA
+  //   MAIN, et les confondre retournait l'interrupteur tout seul. MESURE FAITE
+  //   dans un navigateur, sur un dossier neuf sans drapeau : le coach clique
+  //   « Enregistrer pour l'athlète », les grammes arrivent, et au rendu suivant
+  //   `saisieManuelle` rend VRAI parce que le dossier « porte des grammes ».
+  //   La case « Saisie manuelle » se cochait d'elle-meme, dix champs de saisie
+  //   apparaissaient, et les menus de g/kg cessaient de recalculer — alors que
+  //   le coach n'avait jamais rien tape.
+  //
+  //   `origine:'tableur'` EST ECRIT PAR LE CALCULATEUR, ET PAR LUI SEUL. Le
+  //   choix de cette valeur-la et d'aucune autre est deliberee : les grammes
+  //   tapes par un coach partent en `'coach'`, ceux de l'athlete en
+  //   `'athlete'`, et les dossiers d'avant les origines n'en portent aucune —
+  //   tous continuent de tomber dans le repli ci-dessous, exactement comme
+  //   avant.
+  if(m.origine==='tableur') return false;
   const pose=o=>!!(o&&(Number(o.kcal)>0||Number(o.p)>0||Number(o.g)>0||Number(o.l)>0));
   return pose(m.on)||pose(m.off);
 }
@@ -79233,8 +79261,16 @@ function saveClientNutriCycle(v){
   // sur OFF laisserait l'athlète avec deux totaux différents alors que l'écran
   // du coach n'en montre plus qu'un — il croirait avoir réglé une chose, et
   // son élève en verrait une autre les jours de repos.
+  //
+  // ⚠ ET DANS L'AUTRE SENS, LA RECOPIE NE SUFFISAIT PAS. En ACTIVANT le
+  //   cyclage, rien ne recalculait : le tableau « Journées » affichait deux
+  //   colonnes ON/OFF pendant que le dossier de l'athlète gardait une seule
+  //   valeur. En calcul automatique on repose donc les DEUX journées, par le
+  //   même chemin que les menus au-dessus — un second calcul du cyclage aurait
+  //   fini par donner deux répartitions pour le même réglage.
   const m=c.nutrition.macros;
-  if(!cycle&&m&&m.on) m.off=Object.assign({},m.on);
+  const jc=_tbEcrireCibles(c);
+  if(!jc&&!cycle&&m&&m.on) m.off=Object.assign({},m.on);
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   // La proposition de point de départ suit le même réglage : deux sources pour
@@ -79596,6 +79632,61 @@ function _tbOptsDe(c){
   return _tbOpts;
 }
 // Le geste des menus. `quoi` nomme le reglage, la valeur arrive en chaine.
+/**
+ * Recalcule les cibles depuis les tableaux et les ECRIT dans le dossier.
+ * Rend les deux journees ecrites, ou null si rien n'a ete ecrit.
+ *
+ * ⚠ ELLE NE TOUCHE A RIEN EN SAISIE MANUELLE. C'est le contrat affiche en
+ *   toutes lettres sous l'interrupteur — « tes chiffres priment : ils ne
+ *   bougeront plus si tu changes les g/kg ou la vitesse ». Un coach qui a
+ *   ecrit ses grammes a la main ne doit pas les voir disparaitre parce qu'il
+ *   a deroule un menu pour comparer.
+ *
+ * ⚠ ET ELLE N'ECRIT PAS `manuel:false`. Le reflexe serait de poser le drapeau
+ *   pour dire « on est en automatique » ; il verrouillerait la question dans
+ *   le mauvais sens, parce que `ciblesPoseesParCoach` lit le MEME champ pour
+ *   decider si l'athlete peut reprendre la main. `manuel:false` aurait rendu
+ *   les cibles du coach effacables d'un clic sur ±20, cote athlete. C'est
+ *   l'origine qui porte l'information, et elle repond juste aux deux
+ *   questions.
+ * @param {any} c  le dossier de l'athlete, deja sorti de DB
+ */
+function _tbEcrireCibles(c){
+  if(!c) return null;
+  try{ if(saisieManuelle(c)) return null; }catch(e){ return null; }
+  let t=null;
+  try{ t=cibleTableur(c,_tbOptsDe(c)); }catch(e){ return null; }
+  // CALCUL INCOMPLET : ON N'ECRIT RIEN. Les tableaux disent deja ce qui
+  // manque ; ecrire des cibles bancales serait pire que n'en pas ecrire.
+  if(!t||(t.manque&&t.manque.length)) return null;
+  const cyc=(function(){ try{ return dieteCyclee(c); }catch(e){ return false; } })();
+  let j=null;
+  try{ j=_tbJournees(c,t,cyc); }catch(e){ return null; }
+  if(!j||!j.on) return null;
+  if(!c.nutrition) c.nutrition={};
+  c.nutrition.macros={on:j.on,off:cyc?j.off:j.on,
+    origine:'tableur',origineDate:Date.now()};
+  return j;
+}
+// L'AVIS EST DIFFERE, PAS L'ENVOI. Les chiffres partent au premier geste ; ce
+// qui attend, c'est le message. Un coach qui compare trois coefficients de
+// suite aurait recu trois bandeaux en deux secondes, et les aurait appris a
+// ignorer — y compris celui qui annonce un echec de synchronisation.
+//
+// ⚠ TOUS LES ENVOIS SONT RETENUS, PAS LE DERNIER. Ne garder que la derniere
+//   promesse aurait avale l'echec d'un envoi precedent : le coach aurait vu
+//   « enregistre » alors qu'une de ses modifications n'etait jamais partie.
+let _tbAvisT=0, _tbAvisOk=true, _tbAvisEnvois=[];
+function _tbAvis(localOk,envoi,texte){
+  _tbAvisOk=_tbAvisOk&&!!localOk;
+  try{ _tbAvisEnvois.push(Promise.resolve(envoi)); }catch(e){}
+  try{ clearTimeout(_tbAvisT); }catch(e){}
+  _tbAvisT=setTimeout(()=>{
+    const ok=_tbAvisOk, envois=_tbAvisEnvois;
+    _tbAvisOk=true; _tbAvisEnvois=[];
+    try{ toastSync(ok,Promise.all(envois),texte,'la cible est'); }catch(e){}
+  },700);
+}
 function majTableauTableur(quoi,val){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
@@ -79611,14 +79702,39 @@ function majTableauTableur(quoi,val){
     // deux selecteurs existaient, chacun n'ecrivait que le sien et les deux
     // ecrans se contredisaient. Il n'en reste qu'un : il doit poser les deux,
     // sinon la vitesse chiffrerait avec un g/kg que plus personne n'affiche.
-    // On ne touche QUE la memoire de session — l'ecriture au dossier reste le
-    // geste explicite de « Enregistrer les réglages ».
     // On passe par les poseurs plutot que d'ecrire les variables : une seule
     // fonction pose chacune, et la regle « isFinite sinon null » ne vit qu'a
     // un endroit.
     if(quoi==='protGkg') _propSetProt(val,true);
     else if(quoi==='lipGkg') _propSetLip(val,true);
   }
+  // ⚠ ON ECRIT ET ON POUSSE ICI, au geste meme. Demande de Kevin, 19/09/2026 :
+  //   « dès que le coach modifie les calculs sur ce tableur, la modif se fait
+  //   immédiatement côté athlète, que ce soit diète flexible ou stricte ».
+  //   Jusqu'ici ce menu ne touchait QUE la memoire de session : mesure faite
+  //   dans un navigateur, deux changements de menu laissaient le dossier de
+  //   l'athlete a `macros:null` et le compteur d'envois a zero. Elle ne
+  //   recevait rien tant que le coach n'avait pas trouve le bouton rouge.
+  //
+  //   LES DEUX DIETES SONT SERVIES PAR LA MEME ECRITURE, et c'est pour ca
+  //   qu'il n'y a rien de plus a faire pour la stricte : flexible et stricte
+  //   lisent toutes les deux `nutrition.macros` par _getEffectiveMacros. Une
+  //   seconde source pour la stricte aurait fini par diverger de la premiere.
+  if(!c.nutrition) c.nutrition={};
+  const reg=Object.assign({},c.nutrition.tableur||{});
+  for(const k of ['naf','coef','protGkg','lipGkg']) if(o[k]!==undefined) reg[k]=o[k];
+  c.nutrition.tableur=reg;
+  const manuel=(function(){ try{ return saisieManuelle(c); }catch(e){ return false; } })();
+  const j=_tbEcrireCibles(c);
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  // CE QUE LE MESSAGE DIT DEPEND DE CE QUI S'EST VRAIMENT PASSE. « Cibles
+  // envoyées » sur un dossier en saisie manuelle — ou sur un calcul incomplet —
+  // aurait annonce un envoi qui n'a pas eu lieu.
+  _tbAvis(ok,CLOUD.pushOne(c.email,c),
+    j?('Ton athlète est sur '+_tbNb(j.on.kcal)+' kcal')
+     :(manuel?'Réglage enregistré — en saisie manuelle, tes chiffres priment'
+             :'Réglage enregistré — calcul incomplet, cibles inchangées'));
   try{ renderCoachNutriSection(c); }catch(e){}
   return true;
 }
@@ -80070,12 +80186,36 @@ function _htmlTableauxTableur(c){
   // garder le reglage. Le rouge est a droite : c'est celui qui touche le
   // dossier de l'athlete, et il ne se clique pas par inadvertance en visant le
   // premier. A l'etroit, ils repassent l'un sous l'autre (.tbk-deux).
-  h+='<div class="tbk-deux">'
-    +'<button type="button" class="btn btn-outline" '
-    +'onclick="enregistrerReglagesTableur()">Enregistrer les réglages</button>'
-    +'<button type="button" class="btn btn-red" '
-    +'onclick="appliquerCiblesTableur()">Enregistrer pour l’athlète</button>'
-    +'</div>';
+  // ⚠ LES DEUX BOUTONS N'EXISTENT PLUS QU'EN SAISIE MANUELLE. En automatique,
+  //   chaque menu ecrit et pousse de lui-meme : garder un bouton rouge
+  //   « Enregistrer pour l'athlète » aurait laisse croire que rien n'etait
+  //   parti tant qu'on ne l'avait pas clique — et sa demande de confirmation
+  //   aurait annonce « ses cibles actuelles seront remplacées » pour un
+  //   remplacement deja fait.
+  //
+  //   EN MANUEL ILS RESTENT LES SEULS CHEMINS, et ils gardent leur confirmation :
+  //   adopter le calcul par-dessus des grammes ecrits a la main efface une
+  //   decision, et ca se demande.
+  h+=_man
+    ? '<div class="tbk-deux">'
+      +'<button type="button" class="btn btn-outline" '
+      +'onclick="enregistrerReglagesTableur()">Enregistrer les réglages</button>'
+      +'<button type="button" class="btn btn-red" '
+      +'onclick="appliquerCiblesTableur()">Enregistrer pour l’athlète</button>'
+      +'</div>'
+    // ON DIT LE DELAI PLUTOT QUE « immédiatement ». La modification part a
+    // l'instant ; l'application de l'athlete, elle, releve toutes les cinq
+    // minutes et des qu'elle revient au premier plan. Promettre l'instantane
+    // ferait douter du reste le jour ou elle mettrait deux minutes.
+    : '<div style="display:flex;align-items:center;gap:9px;background:var(--surface-2);'
+      +'border:1px solid var(--border);border-left:3px solid var(--green);'
+      +'border-radius:var(--r-3);padding:10px 12px;font-size:var(--fs-2xs);'
+      +'line-height:1.55;color:var(--sub)">'
+      +'<span style="color:var(--green);flex:0 0 auto;display:flex">'+icon('check',15)+'</span>'
+      +'<span>Chaque réglage ci-dessus part vers ton athlète dès que tu le changes — '
+      +'en diète flexible comme en stricte. Son application les reçoit à sa prochaine '
+      +'ouverture, et au plus tard dans les cinq minutes si elle est ouverte.</span>'
+      +'</div>';
   return h;
 }
 function renderCoachNutriSection(c){
