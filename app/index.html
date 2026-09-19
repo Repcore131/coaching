@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1293';
+window.RC_BUILD='1294';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -83246,6 +83246,22 @@ function _cloudinaryUserMsg(e,kind){
 /** Plafond Cloudinary par requête, plan gratuit. Au-delà : découpage. */
 const VIDEO_MAX_OCTETS_REQUETE=100*1024*1024;
 /** Plafond après découpage. Au-delà, on refuse AVANT d'attendre. */
+// ⚠ DEUX PLAFONDS, ET PAS UN. Les confondre casse l'un ou l'autre des deux
+//   cas, et c'est ce qui est arrivé deux fois.
+//
+//   VIDEO_MAX_OCTETS_ENVOI — CE QUE CLOUDINARY ACCEPTE DE RECEVOIR. Cent
+//   mégaoctets, et le découpage en morceaux NE LÈVE PAS cette limite : elle
+//   porte sur la taille de l'ASSET, pas sur celle d'une requête. Mesuré, sur le
+//   PREMIER morceau d'un fichier de 121 Mo : « File size too large. Got
+//   127063304. Maximum is 104857600. » Il se vérifie APRÈS l'allègement, sur ce
+//   qui part réellement.
+//
+//   VIDEO_MAX_OCTETS_SOURCE — CE QU'ON ACCEPTE D'ESSAYER D'ALLÉGER. Beaucoup
+//   plus haut, parce qu'une vidéo de téléphone de 300 Mo descend couramment
+//   sous 20 Mo en 720p : la refuser sur sa taille d'origine reviendrait à
+//   refuser le cas que l'allègement existe pour traiter. Il se vérifie AVANT,
+//   et ne sert qu'à écarter ce qui ne tiendrait de toute façon pas en mémoire.
+const VIDEO_MAX_OCTETS_ENVOI=100*1024*1024;
 const VIDEO_MAX_OCTETS_TOTAL=500*1024*1024;
 /**
  * La hauteur visée à la compression. Le coach regarde dans un lecteur de
@@ -84011,7 +84027,15 @@ async function uploadVideoFile(input,options){
     // ⚠ LE PLAFOND SE REVÉRIFIE APRÈS COUP. Une vidéo non allégée peut passer
     //   le plafond total et rester au-dessus du plafond par requête : c'est
     //   exactement le cas qui part en morceaux.
-    if(aEnvoyer.size>VIDEO_MAX_OCTETS_TOTAL) throw new Error('Fichier trop volumineux');
+    // APRÈS L'ALLÈGEMENT, SUR CE QUI PART VRAIMENT. C'est ici que le plafond de
+    // Cloudinary s'applique — et le message doit dire quoi faire, parce qu'à ce
+    // stade l'athlète a déjà attendu.
+    if(aEnvoyer.size>VIDEO_MAX_OCTETS_ENVOI){
+      noter('trop_lourd_apres_allegement',aEnvoyer.size+' o (voie '+voie+')');
+      throw new Error('Même allégée, la vidéo pèse '+_mo(aEnvoyer.size)
+        +' et le serveur n’accepte pas au-delà de '+_mo(VIDEO_MAX_OCTETS_ENVOI)
+        +'. Filme la série seule, ou baisse la qualité vidéo dans les réglages du téléphone.');
+    }
 
     // ══ 3. ENVOYER. La jauge repart de zéro : ce sont d'autres octets.
     //

@@ -51,13 +51,34 @@ function _script(src){
   });
   return _charges[src];
 }
+/**
+ * `DataStream` DE MP4BOX, LÀ OÙ IL SE TROUVE VRAIMENT.
+ *
+ * ⚠ CE N'EST PAS `MP4Box.DataStream`. Le bundle expose deux globaux séparés —
+ *   `MP4Box` et `DataStream` — et l'ancien code lisait le second à travers le
+ *   premier. `window.MP4Box.DataStream` valant `undefined`, la lecture de
+ *   `.BIG_ENDIAN` levait « Cannot read properties of undefined », la voie
+ *   WebCodecs tombait À CHAQUE FOIS, et tout descendait vers la voie temps
+ *   réel. Une seule référence fausse, et l'allègement n'a jamais fonctionné
+ *   pour personne.
+ * @returns {any}
+ */
+function _dataStream(){
+  return (typeof window.DataStream!=='undefined')?window.DataStream
+       : ((window.MP4Box&&window.MP4Box.DataStream)||undefined);
+}
 /** Les deux bibliothèques MP4, chargées ensemble et une seule fois. */
 function _chargerMp4(){
   return Promise.all([
     (typeof window.MP4Box!=='undefined')?true:_script(MP4_DIR+'mp4box.all.min.js'),
     (typeof window.Mp4Muxer!=='undefined')?true:_script(MP4_DIR+'mp4-muxer.js')
   ]).then(function(){
-    if(typeof window.MP4Box==='undefined'||typeof window.Mp4Muxer==='undefined')
+    // ⚠ `DataStream` EST UN GLOBAL À PART, pas une propriété de MP4Box. On le
+    //   vérifie ici, avec les deux autres : sans lui, la voie WebCodecs meurt
+    //   plus bas, au milieu de la lecture des pistes, sur une erreur que rien
+    //   n'explique.
+    if(typeof window.MP4Box==='undefined'||typeof window.Mp4Muxer==='undefined'
+       ||typeof _dataStream()==='undefined')
       throw new Error('bibliothèques MP4 illisibles');
     return true;
   });
@@ -180,7 +201,8 @@ function _description(mp4,trakId){
     var e=entries[i];
     var box=e.avcC||e.hvcC||e.vpcC||e.av1C;
     if(!box) continue;
-    var flux=new window.MP4Box.DataStream(undefined,0,window.MP4Box.DataStream.BIG_ENDIAN);
+    var DS=_dataStream();
+    var flux=new DS(undefined,0,DS.BIG_ENDIAN);
     box.write(flux);
     // Les huit premiers octets sont l'en-tête de boîte : le décodeur veut ce
     // qui suit, et rien d'autre.
