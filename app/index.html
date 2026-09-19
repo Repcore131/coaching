@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1304';
+window.RC_BUILD='1305';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -27175,7 +27175,7 @@ function renderClientList(clients){
   //   seances, alertes, charges groupees -> avec suivi seulement
   //   acces, jamais demarre, en attente, actifs, tous -> les deux
   if(_filtreClients==='traiter') vus=vus.filter(c=>needsAlert(c)||hasNewBilan(c));
-  else if(_filtreClients==='attente') vus=vus.filter(c=>c._fromCode||!c.email);
+  else if(_filtreClients==='attente') vus=vus.filter(c=>_enAttenteInscription(c));
   // Les trois compteurs de la barre. MEMES predicats que agregerPortefeuille :
   // un compteur qui n'ouvre pas exactement sa propre liste serait pire que pas
   // de compteur du tout.
@@ -27186,27 +27186,21 @@ function renderClientList(clients){
   // MEMES predicats que agregerPortefeuille, aux memes fonctions.
   else if(_filtreClients==='pf-jamais') vus=vus.filter(c=>neverStarted(c));
   else if(_filtreClients==='pf-actifs') vus=vus.filter(c=>isActive(c));
-  // ── CE QUI DORT NE REMONTE PAS EN HAUT DE PAGE ──────────────────────
+  // ── LA VUE PAR DEFAUT GARDE TOUS CEUX QUI ONT UN COMPTE ─────────────
   //
-  // Demande de Kevin, 16/09/2026. La grille de vignettes montrait dix ronds
-  // dont sept vides — des invitations jamais honorees et des comptes qu'on
-  // n'a pas vus depuis des mois — et il fallait les lire tous pour trouver
-  // les trois athletes qui s'entrainent vraiment. Ces trois familles ont
-  // chacune leur cadre EN BAS de page, avec ce qu'il faut pour agir dessus :
-  // les laisser aussi en haut, c'est les afficher deux fois et diluer la
-  // seule question que cet ecran doit trancher — qui dois-je regarder
-  // aujourd'hui.
+  // Demande de Kevin, 19/09/2026 : « fais apparaitre tous les athletes qui ont
+  // cree leur compte, juste ne mets pas ceux en attente ». Cette ligne
+  // excluait trois familles le 16/09, deux le 18/09, une seule desormais.
+  // Voir _enAttenteInscription pour le pourquoi de chaque retrait.
   //
-  // ⚠ SEULEMENT EN VUE PAR DEFAUT. Une recherche, ou n'importe quelle puce de
-  // filtre, RAMENE tout le monde : « Jamais demarres », « En attente » et
-  // « Tous » sont precisement les puces qui servent a les retrouver, et un
-  // filtre qui ouvrirait une liste vide serait pire que pas de filtre. Taper
-  // un nom retrouve donc aussi bien un athlete endormi qu'un athlete actif —
-  // masquer quelqu'un a qui on pense nommement serait absurde.
+  // ⚠ SEULEMENT EN VUE PAR DEFAUT, et cette garde reste. Une recherche, ou
+  // n'importe quelle puce de filtre, RAMENE tout le monde : « En attente » est
+  // precisement la puce qui sert a retrouver ceux-la, et un filtre qui
+  // ouvrirait une liste vide serait pire que pas de filtre.
   //
   // L'EXCLUSION EST LA DERNIERE : posee avant les puces, elle les aurait
   // videes ; posee ici, elle ne mord que sur le jeu complet.
-  else if(_filtreClients==='travail'&&!q) vus=vus.filter(c=>!_estDormant(c,Date.now()));
+  else if(_filtreClients==='travail'&&!q) vus=vus.filter(c=>!_enAttenteInscription(c));
   if(_triClients==='taux') vus.sort((a,b)=>_triTaux(b)-_triTaux(a));
   else if(_triClients==='charge') vus.sort((a,b)=>_triCharge(b)-_triCharge(a));
   else if(_triClients==='progression') vus.sort((a,b)=>_triProgres(b)-_triProgres(a));
@@ -30161,10 +30155,9 @@ function joursDepuisSigne(c,maintenant){
   if(!d||!t||t<d) return 0;
   return Math.floor((t-d)/864e5);
 }
-// PURE. « Dort », au sens de la grille de vignettes et de la liste d'athletes :
-// quelqu'un qui n'a rien a faire en haut de l'ecran. Une seule fonction pour
-// tous les cas — recopier la reunion a deux endroits aurait fini par en
-// oublier un, et cet athlete-la serait apparu deux fois ou pas du tout.
+// PURE. « En attente d'inscription » : quelqu'un que le coach a rattache par un
+// code et qui n'a PAS encore cree son compte. C'est la SEULE famille que la
+// grille de vignettes et la liste d'athletes laissent en bas de page.
 //
 // ⚠ « JAMAIS DEMARRE » N'EST PLUS DORMANT. Demande de Kevin, 18/09/2026 :
 // remonter dans les ronds les gens qui se sont connectes, meme sans avoir
@@ -30180,18 +30173,31 @@ function joursDepuisSigne(c,maintenant){
 // rattachement — rien de tout cela ne tient dans un rond. Mieux vaut une
 // arrivee sans premiere seance affichee deux fois qu'une seule, tout en bas.
 //
-// CE QUI RESTE DORMANT, ET POURQUOI :
-//   _fromCode — le compte n'existe PAS encore. C'est la famille que cette
-//               demande designe nommement comme devant rester en bas.
-//   inactif   — le compte existe et l'athlete a DEJA pose des seances, puis
-//               plus rien depuis quatorze jours. Ce n'est pas quelqu'un « qui
-//               n'a pas commence » : c'est quelqu'un qui s'est arrete, et son
-//               cadre du bas dit exactement cela.
-function _estDormant(c,maintenant){
-  if(!c) return false;
-  if(c._fromCode) return true;                 // « En attente d'inscription »
-  try{ if(inactif(c,maintenant)) return true; }catch(e){}
-  return false;
+// ⚠ L'INACTIF AUSSI REMONTE, DEPUIS LE 19/09/2026. La version du 18/09 le
+// gardait en bas, en distinguant « qui n'a pas commence » de « qui s'est
+// arrete ». Kevin a tranche le lendemain, devant la grille : « fais apparaitre
+// tous les athletes qui ont cree leur compte, juste ne mets pas ceux en
+// attente ». La distinction etait juste en soi, mais elle repondait a une
+// autre question. La grille ne demande pas « qui dois-je regarder
+// aujourd'hui » — les trois cadres du bas et « Mes notifications » s'en
+// chargent. Elle demande « qui sont mes athletes », et quelqu'un qui s'est
+// arrete en fait toujours partie : c'est meme souvent celui qu'on cherche.
+//
+// IL N'EN RESTE DONC QU'UNE FAMILLE DEHORS : l'invitation non honoree. Pas de
+// dossier, pas de seance, pas de photo — son rond serait vide, sous un nom que
+// personne ne porte encore.
+//
+// LE DOUBLON EST ASSUME, et il l'etait deja : jamais demarre comme inactif
+// gardent leur ligne dans leur cadre du bas, qui porte le bouton de relance et
+// le nombre de jours depuis le dernier signe. Rien de tout cela ne tient dans
+// un rond.
+//
+// LE MEME PREDICAT SERT LA PUCE « En attente » ET CETTE EXCLUSION, et ce n'est
+// pas un detail : ce que l'une cache, l'autre le montre. Les ecrire deux fois,
+// c'etait se donner rendez-vous pour les voir diverger — la puce annoncant un
+// nombre, la liste en montrant un autre.
+function _enAttenteInscription(c){
+  return !!(c&&(c._fromCode||!c.email));
 }
 // PURE. La liste, du plus ancien rattachement au plus recent : celui qui
 // attend depuis douze jours passe avant celui qui attend depuis trois.

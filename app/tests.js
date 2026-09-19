@@ -32313,7 +32313,7 @@ async function testExercices(){
           return _echec('le drapeau de ce test n’est pas lu — la forme a changé, l’assertion ne prouve rien');
         if(jamaisDemarre(c,t)) return _echec('« jamais démarré » l’a pris malgré le drapeau');
         if(inactif(c,t)) return _echec('« inactif » l’a pris alors qu’il n’a aucune séance');
-        if(_estDormant(c,t)) return _echec('il a été masqué de la grille sans entrer nulle part');
+        if(_enAttenteInscription(c)) return _echec('il a été masqué de la grille sans entrer nulle part');
         return true;})());
 
       ok('Les inactifs sont triés du plus endormi au moins endormi',(()=>{
@@ -32347,11 +32347,13 @@ async function testExercices(){
         return true;})());
 
       ok('La grille et la liste montrent la MÊME chose, et gardent qui a un compte',(()=>{
-        // ⚠ LA RÈGLE A CHANGÉ LE 18/09/2026. « Jamais démarré » remonte dans les
-        // ronds : un compte créé est une présence, et c'est le moment où le coach
-        // peut encore faire quelque chose. Seules l'invitation sans compte et
-        // l'inactif — qui a déjà posé des séances puis s'est arrêté — restent en
-        // bas. C'est cette frontière-là, et pas une autre, que ce test tient.
+        // ⚠ LA RÈGLE A CHANGÉ DEUX FOIS, ET C'EST SA FORME DU 19/09/2026 que ce
+        // test tient. Le 18/09, « Jamais démarré » remontait dans les ronds ;
+        // l'inactif, lui, restait en bas. Le 19/09, Kevin a demandé « tous les
+        // athlètes qui ont créé leur compte, juste pas ceux en attente » : la
+        // grille répond à « qui sont mes athlètes », pas à « qui dois-je
+        // regarder aujourd'hui ». IL NE RESTE DEHORS QUE L'INVITATION SANS
+        // COMPTE. C'est cette frontière-là, et pas une autre, que ce test tient.
         const _sU=currentUser, _sF=_filtreClients;
         const _sDB=DB.get('users');
         try{
@@ -32368,17 +32370,24 @@ async function testExercices(){
           const rech=document.getElementById('ch-search'); if(rech) rech.value='';
           renderClientList();
           const cnt=(document.getElementById('ch-count')||{}).textContent||'';
-          // 3 athlètes + 1 invitation = 4 au total ; l'actif et celui qui n'a
-          // jamais démarré sont en haut, soit 2.
-          if(cnt.indexOf('2/4')<0) return _echec('compteur : '+cnt);
+          // 3 athlètes + 1 invitation = 4 au total ; les TROIS comptes sont en
+          // haut, seule l'invitation reste en bas.
+          if(cnt.indexOf('3/4')<0) return _echec('compteur : '+cnt);
           const grille=(document.getElementById('ch-vignettes')||{}).textContent||'';
-          if(grille.indexOf('Actif')<0) return _echec('l’athlète actif manque dans la grille');
-          // LE COMPTE CRÉÉ SUFFIT : pas besoin d'une première séance pour avoir
-          // un rond. C'est la demande du 18/09/2026, et l'assertion qui la tient.
-          if(grille.indexOf('Jamais')<0)
-            return _echec('un compte créé sans séance n’a pas son rond');
-          for(const absent of ['Dort','Invité'])
-            if(grille.indexOf(absent)>=0) return _echec(absent+' est encore dans les ronds');
+          const liste=(document.getElementById('ch-clients-list')||{}).textContent||'';
+          // ⚠ CE QUE LE TITRE PROMETTAIT SANS LE VÉRIFIER : les deux jeux sont
+          //   IDENTIQUES. Un athlète présent dans l'un et absent de l'autre
+          //   ferait chercher, sur le même écran, quelqu'un qui y est.
+          //   « Dort » tient la frontière du 19/09 ; « Jamais » celle du 18/09.
+          for(const present of ['Actif','Jamais','Dort']){
+            if(grille.indexOf(present)<0) return _echec(present+' manque dans les ronds');
+            if(liste.indexOf(present)<0) return _echec(present+' manque dans la liste');
+          }
+          // L'INVITATION NON HONORÉE EST LA SEULE À RESTER DEHORS, des deux
+          // côtés : pas de dossier, pas de séance, pas de photo — son rond
+          // serait vide, sous un nom que personne ne porte encore.
+          if(grille.indexOf('Invité')>=0) return _echec('l’invitation est encore dans les ronds');
+          if(liste.indexOf('Invité')>=0) return _echec('l’invitation est encore dans la liste');
           // ET IL GARDE SA LIGNE EN BAS. Le doublon est assumé : le cadre porte
           // le bouton de relance et le nombre de jours, qui ne tiennent pas
           // dans un rond. ⚠ Assertion sur la fonction PURE et non sur le DOM :
@@ -58521,10 +58530,18 @@ vendredi 78 6h 44m
         c.style.cssText='position:fixed;left:0;top:0;width:200px;height:60px';
         c.dataset.arcPret='1';
         document.body.appendChild(c);
-        const avant=_arcCalque().childElementCount;
+        //   • LE VOISINAGE. Ce calque est GLOBAL : toute toile peinte ailleurs
+        //     y pose son nœud et l'en retire quand elle a fini. Compter ses
+        //     enfants revenait à compter les nœuds des autres, et un départ
+        //     pendant l'attente rendait « -1 nœud ». On vide donc ce qui
+        //     traîne, puis on compte les nœuds VRAIMENT NOUVEAUX — par
+        //     identité, pas par nombre.
+        _arcCalque().querySelectorAll('.arc-trace').forEach(n=>n.remove());
+        const avant=new Set(_arcCalque().children);
+        const neufs=()=>[..._arcCalque().children].filter(n=>!avant.has(n));
         const un=arcTracerCourbes(c);
-        await _attendreImages(()=>_arcCalque().childElementCount>avant);
-        const pose=_arcCalque().childElementCount-avant;
+        await _attendreImages(()=>neufs().length>0);
+        const pose=neufs().length;
         const deux=arcTracerCourbes(c);
         _arcCalque().querySelectorAll('.arc-trace').forEach(n=>n.remove());
         c.remove();
