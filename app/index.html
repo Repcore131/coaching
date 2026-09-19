@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1313';
+window.RC_BUILD='1314';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1563,6 +1563,44 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 #ch-clients-list .badge{font-size:11px;letter-spacing:.6px;padding:4px 8px;border-radius:var(--r-pill);
   max-width:112px;white-space:normal;text-align:center;line-height:1.3}
 
+/* ══ LE TUNNEL COMMERCIAL ══════════════════════════════════════════════════
+   Des cartes, et non un tableau : une personne du tunnel porte cinq faits —
+   qui, combien de relances, quel statut, quand la derniere, quand la
+   prochaine — et cinq colonnes de tableau les auraient rendus egaux. La carte
+   les hierarchise : le nom et le statut en tete, l'echeance en pied. */
+.tun-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:6px;margin-bottom:14px}
+.tun-stat{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--c,var(--border));
+  border-radius:var(--r-3);padding:9px 11px;text-align:center}
+.tun-stat b{display:block;font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--c,var(--text))}
+.tun-stat span{display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;
+  text-transform:uppercase;color:var(--sub);margin-top:5px;line-height:1.25}
+.tun-barre{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.tun-f{background:var(--surface-1);border:1px solid var(--border);color:var(--text-dim);
+  border-radius:var(--r-4);padding:6px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);
+  font-weight:800;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;min-height:32px}
+.tun-f.actif{background:var(--red-bg);border-color:var(--red);color:var(--text);box-shadow:var(--glow-red)}
+.tun-f:hover:not(.actif){border-color:#3a3a3a;color:var(--text)}
+.tun-carte{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--c,var(--border));
+  border-radius:var(--r-3);padding:12px 14px;margin-bottom:8px}
+.tun-tete{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.tun-rond{width:42px;height:42px;border-radius:var(--r-full);overflow:hidden;flex:none;
+  background:var(--surface-2);border:2px solid var(--c,var(--border));display:flex;
+  align-items:center;justify-content:center;font-weight:900;color:var(--text-faint);font-size:var(--fs-sm)}
+.tun-rond img{width:100%;height:100%;object-fit:cover}
+.tun-nom{font-size:var(--fs-sm);font-weight:800;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tun-badge{flex:none;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;
+  color:var(--c);border:1px solid var(--c);border-radius:var(--r-4);padding:3px 9px;white-space:nowrap}
+.tun-jauge{display:flex;gap:3px;margin-top:5px}
+.tun-jauge i{width:16px;height:4px;border-radius:2px;background:var(--border)}
+.tun-jauge i.on{background:var(--c)}
+.tun-faits{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:var(--fs-2xs);color:var(--sub);margin-bottom:10px}
+.tun-faits b{color:var(--text-strong);font-weight:800}
+.tun-du{color:var(--orange);font-weight:800}
+.tun-retard{color:var(--red-text);font-weight:800}
+.tun-cmd{display:flex;gap:6px;flex-wrap:wrap}
+.tun-cmd .btn{flex:1 1 120px;margin:0;min-height:38px;padding:0 12px;letter-spacing:.5px;font-size:var(--fs-2xs)}
+.tun-c.actif{border-color:var(--red);color:#a00000;
+  box-shadow:0 1px 0 rgba(255,255,255,.55) inset,0 0 0 1px rgba(224,32,32,.45),var(--glow-red)}
 /* ══ LES QUATRE PUCES DE TRI, EN BLANC ═══════════════════════════════════
    Elles etaient sombres (.ch-chip) et actives sur fond rouge. Demande de
    Kevin, 19/09/2026 : quatre boutons blancs d'egale largeur, comme la ligne
@@ -7297,7 +7335,8 @@ const COACH_PHOTO='icons/coach.jpg';
       ATHLÈTES
     </button>
     <button onclick="openCoachPrograms()" class="sb-lien" data-ecran="s-coach-programs" data-icone="folder">MES PROGRAMMES</button>
-    <button onclick="loadFileReprise()" class="sb-lien" data-ecran="s-coach-file" data-icone="bell">À RELANCER</button>
+    <button onclick="tunnelOuvrir()" class="sb-lien" data-ecran="s-coach-tunnel" data-icone="target">TUNNEL COMMERCIAL</button>
+    <button onclick="loadFileReprise()" class="sb-lien" data-ecran="s-coach-file" data-icone="bell">ASSIDUITÉ</button>
     <button onclick="openDechargeGroupee()" class="sb-lien" data-ecran="s-coach-decharge" data-icone="moon">DÉCHARGE GROUPÉE</button>
     <button onclick="loadCoachActivite()" class="sb-lien" data-ecran="s-coach-activite" data-icone="trending-up">ACTIVITÉ</button>
     <button onclick="loadCharges()" class="sb-lien" data-ecran="s-charges" data-icone="biceps">CHARGES ARTICULAIRES</button>
@@ -8209,6 +8248,20 @@ const COACH_PHOTO='icons/coach.jpg';
      notification et ne modifie aucun état. -->
 <!-- FILE DE REPRISE. Ecran du coach seul. Aucune ecriture dans le dossier
      d un athlete : les trois actions ecrivent chez le coach. -->
+<div id="s-coach-tunnel" class="screen ecran-coach">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-coach-tunnel','s-coach-home')">←</button>
+    <span class="topbar-title">Tunnel</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
+      <h1 style="font-size:var(--fs-xl);line-height:1.3;font-weight:900;margin-bottom:4px">Tunnel commercial</h1>
+      <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">Relancer les personnes qui n’ont pas encore utilisé RepCore. Quatre relances au plus ; la quatrième ferme l’accès.</p>
+      <div id="tun-body"></div>
+    </div>
+  </div>
+</div>
 <div id="s-coach-file" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-file','s-coach-home')">←</button>
@@ -8430,8 +8483,25 @@ const COACH_PHOTO='icons/coach.jpg';
              ecrans complets pour un depliage. Ils prennent ici le rang de
              « Mes programmes » et « Charges articulaires », et ont quitte le
              volet — aucun lien n'est duplique. -->
+        <!-- ══ LE TUNNEL COMMERCIAL ═══════════════════════════════════════
+             Cette carte menait a « A relancer », l'ecran d'ASSIDUITE. Demande
+             de Kevin, 19/09/2026 : elle devient le centre commercial des gens
+             qui ont recu un acces et ne s'en sont jamais servis.
+             ⚠ L'ASSIDUITE N'EST PAS SUPPRIMEE POUR AUTANT : elle traite une
+               autre population — des athletes qui se sont ARRETES — et reprend
+               son nom propre juste en dessous. Reprendre l'entree d'une
+               fonction n'est pas une raison de la jeter.
+             Le resume est ecrit par _majResumeTunnel, appele par loadCoachHome. -->
+        <button onclick="tunnelOuvrir()" class="content-card ch-nav-large pil-lien" style="margin-bottom:10px;padding:14px 16px;text-align:left;letter-spacing:1px;align-items:flex-start">
+          <span style="flex:1;min-width:0">
+            <span style="display:block;font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">TUNNEL COMMERCIAL</span>
+            <span class="sub" style="display:block;font-size:var(--fs-2xs);letter-spacing:.2px;line-height:1.5;margin-top:3px;text-transform:none">Relancer les personnes qui n’ont pas encore utilisé RepCore.</span>
+            <span id="ch-tunnel-resume" class="sub" style="display:block;font-size:var(--fs-2xs);letter-spacing:.2px;line-height:1.5;margin-top:4px;text-transform:none"></span>
+          </span>
+          <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
+        </button>
         <button onclick="loadFileReprise()" class="content-card ch-nav-large pil-lien" style="margin-bottom:10px;padding:14px 16px;text-align:left;letter-spacing:1px">
-          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">À RELANCER</span>
+          <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">ASSIDUITÉ</span>
           <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
         </button>
         <button onclick="loadCoachActivite()" class="content-card ch-nav-large pil-lien" style="margin-bottom:10px;padding:14px 16px;text-align:left;letter-spacing:1px">
@@ -30014,6 +30084,7 @@ function loadCoachHome(){
     elList.innerHTML=emptyState('users','Aucun athlète pour l\'instant. Ils apparaîtront ici dès qu\'ils te rejoignent.'+(u.code?'<br>Partage ton code : <strong style="color:var(--red-text)">'+u.code+'</strong>':''),'Inviter un athlète','openAddAthlete()');return;
   }
   clients.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
+  try{ _majResumeTunnel(clients); }catch(e){}
   renderTodoBlock(clients);
   _rendreJamaisDemarre(clients);
   _rendreInactifs(clients);
@@ -30502,6 +30573,617 @@ function brouillonInactif(c,maintenant){
 }
 // Les objets de mail. Courts, et sans point d'interrogation anxieux dans la
 // boite de reception.
+// ══════════════ LE TUNNEL COMMERCIAL ═══════════════════════════════════════
+//
+// Relancer les gens qui ont RECU un acces et ne s'en sont jamais servis. Ce
+// n'est pas de l'assiduite — ceux-la ne se sont pas arretes, ils n'ont jamais
+// commence — et ce n'est pas du coaching : c'est du commercial, et ca se suit
+// comme tel.
+//
+// ══ OU VIT LA DONNEE, ET POURQUOI LA ═══════════════════════════════════════
+//
+// DANS L'ENTREE DU CODE, `currentUser.studentCodes[i].crm`. Pas dans un noeud
+// neuf, pas dans le dossier de l'athlete — qui n'existe pas encore, c'est tout
+// le sujet. Trois raisons, et elles se cumulent :
+//   • LE CODE EST DEJA LA SOURCE DE VERITE de cette population. getClients
+//     fabrique les profils `_code_…` a partir de lui ; le tunnel compte donc
+//     exactement les memes personnes, sans second predicat a faire diverger.
+//   • IL SE SYNCHRONISE DEJA. `studentCodes` est dans la liste des champs
+//     pousses du dossier coach : le tunnel suit le coach d'un appareil a
+//     l'autre sans une ligne de reseau de plus.
+//   • LA DESACTIVATION EST AU MEME ENDROIT. La quatrieme relance ferme le
+//     code ; le compteur qui l'a declenchee et le drapeau `active` qu'elle
+//     baisse sont deux champs voisins du meme objet.
+//
+// ⚠ AUCUNE DONNEE N'EST DETRUITE QUAND LE TUNNEL SE TERMINE. Le code passe a
+//   `active:false` — l'acces ne s'ouvre plus — mais l'entree reste, avec ses
+//   quatre relances, leurs canaux, leurs notes et leurs dates. Un dossier
+//   commercial ferme reste un dossier commercial.
+//
+// ══ RETROCOMPATIBILITE ═════════════════════════════════════════════════════
+//
+// AUCUNE MIGRATION N'EST ECRITE, ET C'EST VOULU. `tunnelCrm` rend un objet
+// complet pour une entree qui n'a jamais vu le tunnel : zero relance, aucune
+// echeance, dossier ouvert. Un code cree il y a six mois entre donc dans le
+// tunnel a 0/4 sans qu'on ait touche a un seul enregistrement — et un code
+// qu'on n'ouvre jamais ne se voit jamais reecrit. Une migration aurait reecrit
+// tous les dossiers coach pour y poser des objets vides.
+
+/** Quatre relances, et c'est fini. La quatrieme ferme l'acces. */
+const TUNNEL_MAX=4;
+/**
+ * PURE. Le statut commercial, DEDUIT du nombre de relances et de rien
+ * d'autre. Il ne se regle pas a la main : deux coachs qui l'ajusteraient
+ * chacun au juge ne compareraient plus rien.
+ * @param {number} n  relances effectuees
+ * @returns {'chaud'|'tiede'|'froid'|'fin'}
+ */
+function tunnelStatut(n){
+  const k=Math.max(0,Math.min(TUNNEL_MAX,Math.round(Number(n)||0)));
+  if(k>=TUNNEL_MAX) return 'fin';
+  if(k>=3) return 'froid';
+  if(k>=2) return 'tiede';
+  return 'chaud';
+}
+/** Les libelles et les couleurs des quatre statuts, en un seul endroit. */
+const TUNNEL_LIB=Object.freeze({
+  chaud:{lib:'Chaud',c:'#E02020'},
+  tiede:{lib:'Tiède',c:'#f5a524'},
+  froid:{lib:'Froid',c:'#4DA3FF'},
+  fin:{lib:'Fin du tunnel',c:'#8a8a8a'}});
+/**
+ * Les quatre canaux. `reel` dit si l'application sait VRAIMENT ouvrir l'envoi
+ * — un lien WhatsApp ou un mailto pre-rempli — ou si elle ne fait
+ * qu'enregistrer ce que le coach a fait de son cote. Voir tunnelValider : on
+ * n'ecrit jamais « envoye » quand rien n'est parti.
+ */
+const TUNNEL_CANAUX=Object.freeze([
+  {cle:'whatsapp',lib:'WhatsApp',reel:true},
+  {cle:'email',   lib:'Email',   reel:true},
+  {cle:'tel',     lib:'SMS / téléphone',reel:false},
+  {cle:'push',    lib:'Notification RepCore',reel:false}]);
+/**
+ * PURE. Le dossier commercial d'une entree de code, TOUJOURS complet — une
+ * entree qui n'a jamais vu le tunnel rend un dossier vierge plutot que null.
+ * C'est ce qui rend la migration inutile.
+ * @param {any} code  une entree de currentUser.studentCodes
+ * @returns {{relances:any[], prochaine:number|null, termineLe:number|null}}
+ */
+function tunnelCrm(code){
+  const k=(code&&code.crm&&typeof code.crm==='object')?code.crm:{};
+  const l=Array.isArray(k.relances)?k.relances:[];
+  // ⚠ BORNE A QUATRE A LA LECTURE AUSSI. Un dossier venu du reseau avec cinq
+  //   relances — appareil en retard, reprise de sauvegarde — ne doit pas faire
+  //   dire « 5/4 » ni sortir des quatre statuts.
+  const relances=l.filter(x=>x&&typeof x==='object').slice(0,TUNNEL_MAX);
+  const p=Number(k.prochaine);
+  const t=Number(k.termineLe);
+  return {relances,
+    prochaine:(isFinite(p)&&p>0)?p:null,
+    termineLe:(isFinite(t)&&t>0)?t:null};
+}
+/**
+ * PURE. L'etat de l'echeance : rien de prevu, a venir, aujourd'hui, ou en
+ * retard. Le jour se compare en JOURS CIVILS et non en millisecondes — une
+ * relance prevue ce matin a 9 h n'est pas « en retard » a 10 h, elle est
+ * d'aujourd'hui.
+ * @param {number|null} prochaine
+ * @param {number} maintenant
+ * @returns {'aucune'|'avenir'|'aujourdhui'|'retard'}
+ */
+function tunnelEcheance(prochaine,maintenant){
+  if(!prochaine) return 'aucune';
+  const t=Number(maintenant)||Date.now();
+  const j=x=>{ const q=new Date(x); return new Date(q.getFullYear(),q.getMonth(),q.getDate()).getTime(); };
+  const jp=j(prochaine), jt=j(t);
+  if(jp<jt) return 'retard';
+  if(jp===jt) return 'aujourdhui';
+  return 'avenir';
+}
+/**
+ * PURE. Les personnes du tunnel, telles qu'on les affiche.
+ *
+ * ⚠ LE MEME PREDICAT DE POPULATION QUE getClients, a la lettre : un code dont
+ *   l'eleve s'est inscrit n'est plus dans le tunnel, il est dans la liste des
+ *   athletes. La liste des inscrits est passee en argument plutot que lue ici,
+ *   pour que cette fonction reste PURE et testable hors application.
+ *
+ * ⚠ LES CODES DESACTIVES RESTENT, contrairement a getClients qui les ecarte.
+ *   C'est le tunnel qui les a fermes a la quatrieme relance : les faire
+ *   disparaitre effacerait le dossier commercial au moment precis ou il est
+ *   complet. Ils sortent de la liste ACTIVE par `fini`, pas de la donnee.
+ * @param {any} u  le dossier du coach
+ * @param {any[]} athletes  ses athletes inscrits
+ * @param {number} maintenant
+ * @returns {any[]}
+ */
+function tunnelPersonnes(u,athletes,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const inscrits=new Set((athletes||[]).filter(Boolean)
+    .map(a=>((a.fname||'')+' '+(a.lname||'')).toLowerCase().trim()).filter(Boolean));
+  const mails=new Set((athletes||[]).filter(Boolean)
+    .map(a=>String(a.email||'').toLowerCase()).filter(Boolean));
+  const out=[];
+  for(const c of ((u&&u.studentCodes)||[])){
+    if(!c||!c.codeId) continue;
+    const nom=String(c.studentName||'').toLowerCase().trim();
+    // DEJA INSCRIT : il a utilise son acces, il n'a plus rien a faire ici.
+    if(nom&&inscrits.has(nom)) continue;
+    if(!nom&&c.athleteEmail&&mails.has(String(c.athleteEmail).toLowerCase())) continue;
+    const k=tunnelCrm(c);
+    const n=k.relances.length;
+    const fini=n>=TUNNEL_MAX;
+    const libelle=String(c.studentName||c.usedBy||c.athleteEmail||'Élève sans nom').trim();
+    out.push({
+      codeId:c.codeId, code:c, id:'_code_'+c.codeId,
+      fname:libelle.split(' ')[0],
+      lname:libelle.split(' ').slice(1).join(' '),
+      nom:libelle,
+      email:String(c.athleteEmail||''),
+      tel:String(c.athletePhone||c.phone||''),
+      photo:String(c.athletePhoto||''),
+      nb:n, statut:tunnelStatut(n), fini,
+      derniere:n?(Number(k.relances[n-1].date)||0):0,
+      prochaine:k.prochaine,
+      // UN DOSSIER TERMINE N'A PLUS D'ECHEANCE : laisser « en retard » sur
+      // quelqu'un qu'on ne relancera plus le ferait remonter chaque jour.
+      echeance:fini?'aucune':tunnelEcheance(k.prochaine,t),
+      actif:c.active!==false,
+      relances:k.relances, termineLe:k.termineLe,
+      ajouteLe:Number(c.createdAt)||0});
+  }
+  return out;
+}
+/**
+ * PURE. Le resume affiche sur l'accueil et en tete du tunnel. Les dossiers
+ * termines sont comptes A PART : ils ne sont plus a relancer, et les melanger
+ * au total ferait annoncer douze personnes pour trois a traiter.
+ * @param {any[]} liste
+ * @returns {any}
+ */
+function tunnelResume(liste){
+  const l=(liste||[]).filter(Boolean);
+  const actifs=l.filter(p=>!p.fini);
+  return {
+    total:actifs.length,
+    chauds:actifs.filter(p=>p.statut==='chaud').length,
+    tiedes:actifs.filter(p=>p.statut==='tiede').length,
+    froids:actifs.filter(p=>p.statut==='froid').length,
+    aujourdhui:actifs.filter(p=>p.echeance==='aujourdhui').length,
+    retard:actifs.filter(p=>p.echeance==='retard').length,
+    termines:l.length-actifs.length};
+}
+/**
+ * PURE. La phrase de l'accueil. Elle dit ce qu'il y a A FAIRE, pas ce qu'il y
+ * a en stock : « 12 personnes » ne fait pas ouvrir un ecran, « 3 relances
+ * aujourd'hui » si.
+ * @param {any} r  un resume
+ * @returns {string}
+ */
+function tunnelPhrase(r){
+  const du=(r.aujourdhui||0)+(r.retard||0);
+  if(!r.total){
+    return r.termines
+      ? ('Personne à relancer · '+r.termines+' dossier'+(r.termines>1?'s':'')+' terminé'+(r.termines>1?'s':''))
+      : 'Personne à relancer.';
+  }
+  if(!du) return 'Aucune relance à effectuer.';
+  const bouts=[];
+  if(r.retard) bouts.push(r.retard+' en retard');
+  if(r.aujourdhui) bouts.push(r.aujourdhui+' aujourd’hui');
+  return du+' relance'+(du>1?'s':'')+' à effectuer : '+bouts.join(' · ')+'.';
+}
+
+// ══ LES GESTES DU TUNNEL ═══════════════════════════════════════════════════
+
+/** L'entree de code d'une personne du tunnel, ou null. */
+function _tunnelCode(codeId){
+  if(!currentUser) return null;
+  return ((currentUser.studentCodes)||[]).find(c=>c&&c.codeId===codeId)||null;
+}
+/** Ecrit le dossier coach et le pousse. Un seul chemin pour les trois gestes. */
+function _tunnelEcrire(){
+  currentUser.updatedAt=Date.now();
+  const users=DB.get('users')||{};
+  users[currentUser.email]=currentUser;
+  const ok=DB.set('users',users);
+  try{ DB.set('session',currentUser); }catch(e){}
+  return {ok,envoi:CLOUD.pushOne(currentUser.email,currentUser)};
+}
+/**
+ * ⚠ LE VERROU CONTRE LE DOUBLE APPUI. Une relance s'ecrit, se pousse au
+ *   reseau, et ferme parfois un code a distance : entre le premier appui et le
+ *   rendu qui suit, il y a de la place pour un second. Sans ce verrou, deux
+ *   appuis rapides faisaient passer quelqu'un de 2/4 a 4/4 — et fermaient son
+ *   acces deux relances trop tot.
+ *   UN VERROU PAR PERSONNE, et non un verrou global : le coach qui enchaine
+ *   trois relances sur trois personnes differentes ne doit pas attendre.
+ */
+const _tunnelEnCours=new Set();
+/**
+ * ⚠ LA CLEF SE REND APRES UN DELAI, ET C'EST TOUT L'INTERET DU VERROU.
+ *   Le chemin d'une relance ordinaire est ENTIEREMENT SYNCHRONE : rendre la
+ *   clef dans le `finally` la rendait avant meme que le second appui n'arrive,
+ *   et le verrou ne protegeait de rien. Mesure au banc : deux validations
+ *   enchainees faisaient passer quelqu'un de 0/4 a 2/4, puis a 4/4 — donc
+ *   fermer son acces deux relances trop tot, et perdre la note du premier
+ *   appui parce que la feuille etait deja refermee quand le second la lisait.
+ *   Sept cents millisecondes couvrent le double-tap ; personne n'enregistre
+ *   deux relances reelles dans cet intervalle.
+ */
+const TUNNEL_VERROU_MS=700;
+/**
+ * La feuille de relance : le canal, puis la note. Deux etapes dans la meme
+ * feuille — c'est un geste que le coach repete dix fois par jour, et deux
+ * fenetres l'auraient double.
+ * @param {string} codeId
+ */
+function tunnelRelancer(codeId){
+  const c=_tunnelCode(codeId);
+  if(!c){ toast('Dossier introuvable','var(--orange)'); return false; }
+  const k=tunnelCrm(c), n=k.relances.length;
+  // ⚠ PAS DE CINQUIEME RELANCE. Le dossier est clos, l'acces est ferme :
+  //   rouvrir la feuille laisserait croire qu'on peut encore agir.
+  if(n>=TUNNEL_MAX){ toast('Tunnel terminé : ce dossier ne se relance plus.','var(--orange)'); return false; }
+  const nom=String(c.studentName||c.athleteEmail||'cette personne').trim();
+  const rang=n+1;
+  const dernier=rang===TUNNEL_MAX;
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">'
+  +'<h2 style="margin-bottom:4px">Relance '+rang+'/'+TUNNEL_MAX+'</h2>'
+  +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px">'+escapeHtml(nom)+'</div>'
+  // ⚠ LA DERNIERE TENTATIVE SE DIT AVANT, PAS APRES. Fermer un acces est
+  //   irreversible du point de vue de la personne : elle ne peut plus entrer.
+  +(dernier?'<div style="background:var(--surface-1);border:1px solid var(--orange);border-left:3px solid var(--orange);border-radius:var(--r-2);padding:10px 12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.55;color:var(--text-strong)">'
+      +'<strong>Dernière tentative.</strong> En validant, le dossier passe en fin de tunnel et le code d’accès de '
+      +escapeHtml(nom)+' est désactivé. L’historique des quatre relances est conservé.</div>':'')
+  +'<div class="ml-lab" style="margin-bottom:6px">Canal utilisé</div>'
+  +'<div id="tun-canaux" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:6px">'
+  +TUNNEL_CANAUX.map((x,i)=>'<button type="button" class="btn btn-blanc btn-sm tun-c'+(i?'':' actif')+'" data-canal="'+x.cle+'"'
+     +' onclick="tunnelChoisirCanal(this)" style="min-height:40px;padding:8px 10px;letter-spacing:.3px">'+escapeHtml(x.lib)+'</button>').join('')
+  +'</div>'
+  // ⚠ ON N'ECRIT JAMAIS « ENVOYE ». RepCore n'envoie rien ici : il enregistre
+  //   ce que le coach a fait de son cote. Les deux canaux qui SAVENT ouvrir un
+  //   message pre-rempli le proposent par un lien ; les deux autres non.
+  +'<p class="sub" id="tun-avis" style="font-size:var(--fs-2xs);line-height:1.5;margin:0 0 12px"></p>'
+  +'<div class="ml-lab" style="margin-bottom:6px">Note (facultative)</div>'
+  +'<textarea id="tun-note" rows="3" maxlength="400" placeholder="WhatsApp envoyé — rappel de l’activation RepCore."'
+  +' style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);resize:vertical;margin-bottom:14px"></textarea>'
+  +'<div style="display:flex;gap:8px">'
+  +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>'
+  +'<button type="button" id="tun-valider" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="tunnelValider(\''+escapeHtml(codeId)+'\')">Enregistrer la relance</button>'
+  +'</div></div></div>');
+  _tunnelMajAvis();
+  return true;
+}
+/** Un seul canal a la fois. */
+function tunnelChoisirCanal(b){
+  const z=document.getElementById('tun-canaux');
+  if(!z||!b) return false;
+  z.querySelectorAll('.tun-c').forEach(x=>x.classList.toggle('actif',x===b));
+  _tunnelMajAvis();
+  return true;
+}
+/** Le canal choisi, ou le premier par defaut. */
+function _tunnelCanalChoisi(){
+  const a=document.querySelector('#tun-canaux .tun-c.actif');
+  return a?String(a.dataset.canal||''):TUNNEL_CANAUX[0].cle;
+}
+/**
+ * ⚠ LA PHRASE DIT LA VERITE SUR L'ENVOI. « Action enregistrée » n'est pas
+ *   « message envoyé », et le coach doit savoir lequel des deux il obtient.
+ */
+function _tunnelMajAvis(){
+  const p=document.getElementById('tun-avis');
+  if(!p) return;
+  const cle=_tunnelCanalChoisi();
+  const c=TUNNEL_CANAUX.find(x=>x.cle===cle);
+  p.textContent=(c&&c.reel)
+    ? 'RepCore peut ouvrir le message pré-rempli depuis la fiche. Ici, il enregistre seulement l’action : rien n’est envoyé par la validation.'
+    : 'RepCore n’envoie pas par ce canal. L’action est enregistrée telle que tu l’as faite de ton côté.';
+}
+/**
+ * Valider la relance : elle s'ajoute, le compteur monte, le statut suit, et la
+ * quatrieme ferme l'acces.
+ * @param {string} codeId
+ * @returns {Promise<boolean>}
+ */
+async function tunnelValider(codeId){
+  if(_tunnelEnCours.has(codeId)) return false;
+  const c=_tunnelCode(codeId);
+  if(!c) return false;
+  const k=tunnelCrm(c);
+  // ⚠ LE PLAFOND EST RELU ICI, et non seulement a l'ouverture de la feuille :
+  //   entre les deux, un autre appareil a pu pousser une quatrieme relance.
+  if(k.relances.length>=TUNNEL_MAX){ closeModal(); toast('Tunnel déjà terminé.','var(--orange)'); return false; }
+  _tunnelEnCours.add(codeId);
+  const b=document.getElementById('tun-valider');
+  if(b instanceof HTMLButtonElement){ b.disabled=true; b.textContent='Enregistrement…'; }
+  try{
+    const canal=_tunnelCanalChoisi();
+    const note=String((document.getElementById('tun-note')||{}).value||'').trim().slice(0,400);
+    const rang=k.relances.length+1;
+    const relance={n:rang,date:Date.now(),canal,note,
+      // LE COACH QUI A FAIT LE GESTE. Un cabinet a plusieurs coachs relit son
+      // historique et doit savoir qui a appele.
+      par:String((currentUser&&currentUser.email)||'')};
+    // ⚠ ON N'ECRASE JAMAIS : on ajoute. L'historique est la seule trace de ce
+    //   qui a ete tente, et il ne se reecrit pas.
+    c.crm={relances:k.relances.concat([relance]),
+      prochaine:null,   // l'echeance est consommee ; on en proposera une neuve
+      termineLe:k.termineLe};
+    const fini=rang>=TUNNEL_MAX;
+    if(fini) c.crm.termineLe=Date.now();
+    const {ok,envoi}=_tunnelEcrire();
+    closeModal();
+    if(fini){
+      // LA FERMETURE PASSE PAR LE CHEMIN EXISTANT, et par lui seul : le noeud
+      // distant d'abord, le drapeau local ensuite. C'est deja la regle de
+      // toggleStudentCode — « un code annonce ferme continuait d'ouvrir
+      // l'acces, avec un coach persuade du contraire ».
+      const ferme=await _tunnelFermerAcces(c);
+      tunnelRendre();
+      toast(ferme
+        ? 'Relance 4/4 · tunnel terminé, accès désactivé.'
+        : 'Relance 4/4 enregistrée, mais l’accès n’a PAS pu être désactivé : vérifie la connexion, puis ferme le code à la main.',
+        ferme?'var(--green)':'var(--orange)');
+      return true;
+    }
+    tunnelRendre();
+    toastSync(ok,envoi,'Relance '+rang+'/'+TUNNEL_MAX+' enregistrée','la relance est');
+    // ⚠ LA PLANIFICATION SUIT IMMEDIATEMENT. Une relance sans prochaine date
+    //   sort du radar : elle n'a plus d'echeance, donc plus rien ne la fait
+    //   remonter. C'est exactement comme cela qu'on perd un dossier.
+    setTimeout(()=>{ try{ tunnelPlanifier(codeId,true); }catch(e){} },260);
+    return true;
+  } finally {
+    setTimeout(()=>{ try{ _tunnelEnCours.delete(codeId); }catch(e){} },TUNNEL_VERROU_MS);
+  }
+}
+/**
+ * Ferme l'acces au bout du tunnel. Rend true seulement si le noeud distant a
+ * SUIVI : un code annonce ferme qui continue d'ouvrir l'acces est pire que
+ * pas de fermeture du tout.
+ * @param {any} c
+ * @returns {Promise<boolean>}
+ */
+async function _tunnelFermerAcces(c){
+  if(c.active===false) return true;          // deja ferme : rien a faire
+  // Un code trop ancien n'a pas de jeton, donc pas de noeud a fermer. On le
+  // DIT plutot que de laisser croire a une fermeture.
+  if(!c.token) return false;
+  let distant=false;
+  try{ distant=await _majActifDistant(c.token,false); }catch(e){ distant=false; }
+  if(!distant) return false;
+  c.active=false;
+  _tunnelEcrire();
+  return true;
+}
+/**
+ * Planifier — ou replanifier — la prochaine relance.
+ *
+ * ⚠ AUCUNE ECRITURE DANS L'HISTORIQUE. Replanifier n'est pas relancer : le
+ *   coach qui decale un rendez-vous trois fois ne doit pas apparaitre avec
+ *   trois relances faites. L'historique est reserve a ce qui a ete TENTE.
+ * @param {string} codeId
+ * @param {boolean} [apresRelance]  ouvre la feuille juste apres une relance
+ */
+function tunnelPlanifier(codeId,apresRelance){
+  const c=_tunnelCode(codeId);
+  if(!c) return false;
+  const k=tunnelCrm(c);
+  if(k.relances.length>=TUNNEL_MAX){ toast('Tunnel terminé : plus rien à planifier.','var(--orange)'); return false; }
+  const nom=String(c.studentName||c.athleteEmail||'cette personne').trim();
+  // PAR DEFAUT DANS TROIS JOURS, a dix heures : une proposition qu'on accepte
+  // d'un geste vaut mieux qu'un champ vide qu'il faut remplir deux fois.
+  const base=k.prochaine?new Date(k.prochaine):(()=>{ const q=new Date(); q.setDate(q.getDate()+3); q.setHours(10,0,0,0); return q; })();
+  const p2=x=>String(x).padStart(2,'0');
+  const dISO=base.getFullYear()+'-'+p2(base.getMonth()+1)+'-'+p2(base.getDate());
+  const hISO=p2(base.getHours())+':'+p2(base.getMinutes());
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px">'
+  +'<h2 style="margin-bottom:4px">'+(k.prochaine?'Replanifier':'Prochaine relance')+'</h2>'
+  +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px">'+escapeHtml(nom)
+  +(apresRelance?' · relance '+k.relances.length+'/'+TUNNEL_MAX+' enregistrée':'')+'</div>'
+  +'<div style="display:flex;gap:8px;margin-bottom:14px">'
+  +'<label style="flex:1"><span class="ml-lab" style="display:block;margin-bottom:5px">Date</span>'
+  +'<input type="date" id="tun-date" value="'+dISO+'" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)"></label>'
+  +'<label style="flex:0 0 120px"><span class="ml-lab" style="display:block;margin-bottom:5px">Heure</span>'
+  +'<input type="time" id="tun-heure" value="'+hISO+'" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)"></label>'
+  +'</div>'
+  +'<div style="display:flex;gap:8px">'
+  +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">'
+  +(apresRelance?'Plus tard':'Annuler')+'</button>'
+  +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="tunnelPoserEcheance(\''+escapeHtml(codeId)+'\')">Planifier</button>'
+  +'</div></div></div>');
+  return true;
+}
+/** Pose l'echeance choisie. Elle seule bouge — l'historique ne change pas. */
+function tunnelPoserEcheance(codeId){
+  const c=_tunnelCode(codeId);
+  if(!c) return false;
+  const jd=String((document.getElementById('tun-date')||{}).value||'');
+  const jh=String((document.getElementById('tun-heure')||{}).value||'10:00');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(jd)){ toast('Choisis une date.','var(--orange)'); return false; }
+  const t=new Date(jd+'T'+(/^\d{2}:\d{2}$/.test(jh)?jh:'10:00')).getTime();
+  if(!isFinite(t)){ toast('Date illisible.','var(--orange)'); return false; }
+  const k=tunnelCrm(c);
+  c.crm={relances:k.relances,prochaine:t,termineLe:k.termineLe};
+  const {ok,envoi}=_tunnelEcrire();
+  closeModal();
+  tunnelRendre();
+  toastSync(ok,envoi,'Prochaine relance : '+_tunnelQuand(t),'l’échéance est');
+  return true;
+}
+/** PURE-ish. « 23/09 à 10:00 » — la forme courte qu'on lit sur une carte. */
+function _tunnelQuand(t){
+  if(!t) return '';
+  const q=new Date(t), p2=x=>String(x).padStart(2,'0');
+  return p2(q.getDate())+'/'+p2(q.getMonth()+1)+' à '+p2(q.getHours())+':'+p2(q.getMinutes());
+}
+
+// ══ L'ECRAN DU TUNNEL ══════════════════════════════════════════════════════
+
+/** Le filtre et le tri ne sont pas enregistres : ce sont des gestes de lecture. */
+let _tunFiltre='tous';
+let _tunTri='prochaine';
+/** Les filtres, dans l'ordre ou on les touche : d'abord ce qui presse. */
+const TUNNEL_FILTRES=Object.freeze([
+  ['retard','En retard'],['aujourdhui','Aujourd’hui'],['tous','Tous'],
+  ['chaud','Chaud'],['tiede','Tiède'],['froid','Froid'],['fini','Tunnel terminé']]);
+const TUNNEL_TRIS=Object.freeze([
+  ['prochaine','Prochaine relance'],['derniere','Dernière relance'],
+  ['nb','Nombre de relances'],['nom','Nom']]);
+/** Ouvre le tunnel. */
+/**
+ * Le resume de la carte d'accueil. Il dit d'abord ce qu'il y a A FAIRE — une
+ * relance en retard fait ouvrir l'ecran, « 12 personnes » non — puis la
+ * repartition, qui dit ou en est le portefeuille.
+ * @param {any[]} [clients]  les athletes deja calcules, pour ne pas les relire
+ */
+function _majResumeTunnel(clients){
+  const z=document.getElementById('ch-tunnel-resume');
+  if(!z||!currentUser) return false;
+  let ath=clients;
+  if(!Array.isArray(ath)){ try{ ath=getClients()||[]; }catch(e){ ath=[]; } }
+  const r=tunnelResume(tunnelPersonnes(currentUser,ath.filter(c=>c&&!c._fromCode),Date.now()));
+  const bouts=[];
+  if(r.total) bouts.push(r.total+' personne'+(r.total>1?'s':''));
+  const rep=[];
+  if(r.chauds) rep.push(r.chauds+' chaud'+(r.chauds>1?'s':''));
+  if(r.tiedes) rep.push(r.tiedes+' tiède'+(r.tiedes>1?'s':''));
+  if(r.froids) rep.push(r.froids+' froid'+(r.froids>1?'s':''));
+  if(rep.length) bouts.push(rep.join(' · '));
+  z.textContent=tunnelPhrase(r)+(bouts.length?'  —  '+bouts.join('  ·  '):'');
+  return true;
+}
+function tunnelOuvrir(){
+  go('s-coach-tunnel');
+  tunnelRendre();
+  return true;
+}
+/** @param {string} f */
+function tunnelSetFiltre(f){ _tunFiltre=TUNNEL_FILTRES.some(x=>x[0]===f)?f:'tous'; tunnelRendre(); return true; }
+/** @param {string} t */
+function tunnelSetTri(t){ _tunTri=TUNNEL_TRIS.some(x=>x[0]===t)?t:'prochaine'; tunnelRendre(); return true; }
+/**
+ * PURE. Le filtre et le tri appliques a une liste. Sortie de la fonction de
+ * rendu pour qu'une assertion puisse la verifier sans peindre un ecran.
+ * @param {any[]} liste
+ * @param {string} filtre
+ * @param {string} tri
+ * @returns {any[]}
+ */
+function tunnelVue(liste,filtre,tri){
+  const l=(liste||[]).filter(Boolean);
+  // ⚠ « TOUS » NE VEUT PAS DIRE « Y COMPRIS LES TERMINES ». Un dossier clos
+  //   n'est plus a relancer : le melanger aux autres ferait chercher parmi des
+  //   gens qu'on ne rappellera jamais. Il a son propre filtre.
+  const v=filtre==='fini'?l.filter(p=>p.fini):l.filter(p=>!p.fini).filter(p=>
+      filtre==='tous'?true
+    : filtre==='retard'?p.echeance==='retard'
+    : filtre==='aujourdhui'?p.echeance==='aujourdhui'
+    : p.statut===filtre);
+  const parNom=(a,b)=>String(a.nom||'').localeCompare(String(b.nom||''),'fr');
+  if(tri==='nom') return v.sort(parNom);
+  if(tri==='nb') return v.sort((a,b)=>b.nb-a.nb||parNom(a,b));
+  if(tri==='derniere') return v.sort((a,b)=>b.derniere-a.derniere||parNom(a,b));
+  // PAR PROCHAINE RELANCE, ET C'EST LE DEFAUT : c'est la question que le coach
+  // se pose en ouvrant l'ecran. ⚠ SANS ECHEANCE PASSE EN DERNIER, et non en
+  // premier : `null` vaudrait zero, et les dossiers qu'on n'a pas encore
+  // planifies coifferaient ceux qui sont en retard depuis trois jours.
+  return v.sort((a,b)=>(a.prochaine||Infinity)-(b.prochaine||Infinity)||parNom(a,b));
+}
+/** La liste du tunnel, telle que l'application la voit. */
+function tunnelListe(){
+  let ath=[];
+  try{ ath=(getClients()||[]).filter(c=>c&&!c._fromCode); }catch(e){ ath=[]; }
+  return tunnelPersonnes(currentUser,ath,Date.now());
+}
+function tunnelRendre(){
+  const z=document.getElementById('tun-body');
+  if(!z||!currentUser) return false;
+  const tout=tunnelListe();
+  const r=tunnelResume(tout);
+  const vue=tunnelVue(tout,_tunFiltre,_tunTri);
+  const stat=(n,lib,c)=>'<div class="tun-stat" style="--c:'+c+'"><b>'+n+'</b><span>'+lib+'</span></div>';
+  const cpt={tous:r.total,retard:r.retard,aujourdhui:r.aujourdhui,
+    chaud:r.chauds,tiede:r.tiedes,froid:r.froids,fini:r.termines};
+  let h='<div class="tun-stats">'
+    +stat(r.total,'Dans le tunnel','var(--text)')
+    +stat(r.retard,'En retard','#E02020')
+    +stat(r.aujourdhui,'Aujourd’hui','#f5a524')
+    +stat(r.chauds,'Chauds',TUNNEL_LIB.chaud.c)
+    +stat(r.tiedes,'Tièdes',TUNNEL_LIB.tiede.c)
+    +stat(r.froids,'Froids',TUNNEL_LIB.froid.c)
+    +'</div>'
+    +'<div class="tun-barre">'+TUNNEL_FILTRES.map(([k,lib])=>
+      '<button type="button" class="tun-f'+(_tunFiltre===k?' actif':'')+'" onclick="tunnelSetFiltre(\''+k+'\')">'
+      +escapeHtml(lib)+' '+(cpt[k]||0)+'</button>').join('')+'</div>'
+    +'<div class="tun-barre" style="margin-bottom:14px"><span class="ml-lab" style="align-self:center;margin-right:2px">Trier</span>'
+    +TUNNEL_TRIS.map(([k,lib])=>'<button type="button" class="tun-f'+(_tunTri===k?' actif':'')+'" onclick="tunnelSetTri(\''+k+'\')">'
+      +escapeHtml(lib)+'</button>').join('')+'</div>';
+  if(!tout.length){
+    h+='<div class="sub" style="text-align:center;padding:28px 12px;font-size:var(--fs-sm);line-height:1.6">'
+      +'Personne dans le tunnel.<br>Les codes d’accès que tu crées y entrent automatiquement, '
+      +'et en sortent dès que la personne ouvre RepCore.</div>';
+  } else if(!vue.length){
+    h+='<div class="sub" style="text-align:center;padding:24px 12px;font-size:var(--fs-sm)">Aucun dossier dans ce filtre.</div>';
+  } else {
+    h+=vue.map(_tunCarte).join('');
+  }
+  z.innerHTML=h;
+  return true;
+}
+/** Une carte. Le nom et le statut en tete, l'echeance en pied. */
+function _tunCarte(p){
+  const s=TUNNEL_LIB[p.statut]||TUNNEL_LIB.chaud;
+  const nom=escapeHtml(p.nom||'Élève sans nom');
+  const ini=escapeHtml(((p.fname||'?')[0]||'?')+((p.lname||'')[0]||'')).toUpperCase();
+  const rond=p.photo
+    ? '<img src="'+escapeHtml(p.photo)+'" alt="">'
+    : ini;
+  // L'ECHEANCE EST LE FAIT QUI DECIDE : elle porte sa propre couleur, et les
+  // deux mots qui disent quoi faire — « aujourd'hui », « en retard ».
+  const ech=p.fini
+    ? '<span>Terminé le <b>'+(p.termineLe?_tunJour(p.termineLe):'—')+'</b></span>'
+    : p.prochaine
+      ? '<span>Prochaine : <b class="'+(p.echeance==='retard'?'tun-retard':p.echeance==='aujourdhui'?'tun-du':'')+'">'
+        +_tunnelQuand(p.prochaine)+'</b>'
+        +(p.echeance==='retard'?' <span class="tun-retard">· en retard</span>'
+         :p.echeance==='aujourdhui'?' <span class="tun-du">· aujourd’hui</span>':'')+'</span>'
+      : '<span class="tun-du">Aucune relance planifiée</span>';
+  return '<div class="tun-carte" style="--c:'+s.c+'">'
+    +'<div class="tun-tete">'
+      +'<span class="tun-rond">'+rond+'</span>'
+      +'<div style="flex:1;min-width:0"><div class="tun-nom">'+nom+'</div>'
+        +'<div class="tun-jauge">'+[0,1,2,3].map(i=>'<i class="'+(i<p.nb?'on':'')+'"></i>').join('')+'</div></div>'
+      +'<span class="tun-badge">'+escapeHtml(s.lib)+'</span>'
+    +'</div>'
+    +'<div class="tun-faits">'
+      +'<span>Relance <b>'+p.nb+'/'+TUNNEL_MAX+'</b></span>'
+      +'<span>Dernière : <b>'+(p.derniere?_tunJour(p.derniere):'jamais')+'</b></span>'
+      +ech
+      +(p.fini&&!p.actif?'<span>Accès désactivé — tunnel terminé</span>':'')
+    +'</div>'
+    +'<div class="tun-cmd">'
+      +(p.fini?''
+        :'<button type="button" class="btn btn-red btn-sm" onclick="tunnelRelancer(\''+escapeHtml(p.codeId)+'\')">Relancer</button>'
+         +'<button type="button" class="btn btn-blanc btn-sm" onclick="tunnelPlanifier(\''+escapeHtml(p.codeId)+'\')">'
+         +(p.prochaine?'Replanifier':'Planifier')+'</button>')
+      +'<button type="button" class="btn btn-outline btn-sm" onclick="openClientDetail(\''+escapeHtml(p.id)+'\',false,true)">Profil</button>'
+    +'</div></div>';
+}
+/** PURE-ish. « 23/09 » — la forme la plus courte qui reste lisible. */
+function _tunJour(t){
+  if(!t) return '—';
+  const q=new Date(t), p2=x=>String(x).padStart(2,'0');
+  return p2(q.getDate())+'/'+p2(q.getMonth()+1);
+}
 const INACTIF_OBJET='On fait le point ?';
 const JAMAIS_OBJET='On démarre ?';
 // ══ UNE RELANCE S'ADRESSE A UNE PERSONNE ════════════════════════════════════
@@ -31242,6 +31924,55 @@ function _jrHtmlNote(n,nom){
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6;white-space:pre-wrap;word-break:break-word">'
     +escapeHtml(n.texte)+'</div></div>';
 }
+/**
+ * L'HISTORIQUE DU TUNNEL, dans le profil de la personne. Une frise : chaque
+ * relance garde son rang, son canal, sa date, son heure et sa note.
+ *
+ * ⚠ RIEN N'EST JAMAIS ECRASE. `tunnelValider` ajoute au tableau, il ne le
+ *   remplace pas, et replanifier n'y touche pas du tout — l'historique est
+ *   reserve a ce qui a ete TENTE, pas a ce qui a ete prevu.
+ * @param {string} codeId
+ * @returns {string}
+ */
+function _tunnelHistorique(codeId){
+  const c=_tunnelCode(codeId);
+  if(!c) return '';
+  const k=tunnelCrm(c);
+  const n=k.relances.length;
+  const s=TUNNEL_LIB[tunnelStatut(n)];
+  const dt=t=>{ if(!t) return '—'; const q=new Date(t), p=x=>String(x).padStart(2,'0');
+    return p(q.getDate())+'/'+p(q.getMonth()+1)+'/'+q.getFullYear()+' à '+p(q.getHours())+':'+p(q.getMinutes()); };
+  const canal=cl=>{ const x=TUNNEL_CANAUX.find(y=>y.cle===cl); return x?x.lib:(cl||'—'); };
+  const ligne=(quand,titre,corps)=>'<div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--border)">'
+    +'<span style="flex:0 0 106px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5">'+escapeHtml(quand)+'</span>'
+    +'<span style="flex:1;min-width:0"><span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--text-strong)">'+titre+'</span>'
+    +(corps?'<span style="display:block;font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;margin-top:2px">'+corps+'</span>':'')
+    +'</span></div>';
+  let frise=ligne(dt(c.createdAt),'Ajouté au tunnel','Code d’accès créé.');
+  k.relances.forEach(r=>{
+    frise+=ligne(dt(r.date),'Relance #'+(r.n||'?')+' · '+escapeHtml(canal(r.canal)),
+      (r.note?escapeHtml(String(r.note)):'<i style="color:var(--text-faint)">Sans note</i>'));
+  });
+  if(k.termineLe) frise+=ligne(dt(k.termineLe),'Fin du tunnel',
+    c.active===false?'Accès désactivé — tunnel terminé.'
+                    :'Quatre relances atteintes. L’accès n’a PAS pu être désactivé : ferme le code à la main.');
+  const ech=(n<TUNNEL_MAX&&k.prochaine)
+    ?'<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:8px">Prochaine relance : <b style="color:var(--text-strong)">'+dt(k.prochaine)+'</b></div>'
+    :'';
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-top:12px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Historique du tunnel commercial</span>'
+    +'<span style="flex:none;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;'
+    +'color:'+s.c+';border:1px solid '+s.c+';border-radius:var(--r-4);padding:2px 8px">'+escapeHtml(s.lib)+' · '+n+'/'+TUNNEL_MAX+'</span>'
+    +'</div>'+frise+ech
+    +(n<TUNNEL_MAX
+      ?'<div style="display:flex;gap:6px;margin-top:11px">'
+       +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:38px;font-size:var(--fs-2xs)" onclick="tunnelRelancer(\''+escapeHtml(codeId)+'\')">Relancer</button>'
+       +'<button type="button" class="btn btn-blanc btn-sm" style="flex:1;margin:0;min-height:38px;font-size:var(--fs-2xs)" onclick="tunnelPlanifier(\''+escapeHtml(codeId)+'\')">'
+       +(k.prochaine?'Replanifier':'Planifier')+'</button></div>'
+      :'')
+    +'</div>';
+}
 function renderJournalCoach(c){
   const z=document.getElementById('ccd-journal');
   if(!z) return false;
@@ -31299,7 +32030,11 @@ function renderJournalCoach(c){
        +'</div>'
        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">'+escapeHtml(NOTE_MENTION)+'</div>'
        +'</div>')
-    +'</div>';
+    +'</div>'
+    // L'HISTORIQUE COMMERCIAL NE CONCERNE QUE CEUX QUI N'ONT PAS DE DOSSIER :
+    // un athlete inscrit est sorti du tunnel, et lui poser une frise de
+    // relances commerciales sous ses notes n'aurait aucun sens.
+    +(surCode?_tunnelHistorique(String(id).replace('_code_','')):'');
   return true;
 }
 function _jrRafraichir(){

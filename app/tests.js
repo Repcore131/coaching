@@ -33717,12 +33717,193 @@ async function testExercices(){
           sv.forEach(e=>e.classList.add('active'));
         }})());
     })();
+
+    // ══════ LE TUNNEL COMMERCIAL — 19/09/2026 ═══════════════════════════════
+    (()=>{
+      const _J=864e5;
+      const _t=Date.parse('2026-09-19T15:00:00');
+      const _code=(id,sup)=>Object.assign({codeId:id,token:'T'+id,active:true,
+        studentName:'Nom '+id,athleteEmail:id+'@t.fr',createdAt:_t-20*_J},sup||{});
+      const _rel=n=>({n,date:_t-(10-n)*_J,canal:'email',note:'note '+n});
+
+      ok('LE STATUT EST DEDUIT DU COMPTEUR, jamais choisi',(()=>{
+        // La regle metier, telle que Kevin l'a posee : 0 et 1 chaud, 2 tiede,
+        // 3 froid, 4 fin. Et rien au-dela — un dossier a cinq relances, venu
+        // d'un appareil en retard, ne doit pas inventer un cinquieme statut.
+        const v=[0,1,2,3,4,5,99].map(tunnelStatut).join(' ');
+        if(v!=='chaud chaud tiede froid fin fin fin') return _echec(v);
+        // ET AUCUN CHEMIN NE LE POSE A LA MAIN : le chercher dans la source
+        // est la seule facon de garantir qu'il n'y en aura jamais deux.
+        const src=_prodSrc();
+        return /statut\s*[:=]\s*['\"](chaud|tiede|froid|fin)['\"]/.test(src)
+          ?_echec('un statut est ecrit en dur quelque part'):true;})());
+
+      ok('L\'ECHEANCE SE COMPARE EN JOURS, pas en millisecondes',(()=>{
+        // Une relance prevue ce matin a 9 h n'est pas « en retard » a 15 h :
+        // elle est d'AUJOURD'HUI. Comparer les horodatages l'aurait fait
+        // basculer en retard une heure apres l'heure dite.
+        const c=[
+          [null,'aucune'],
+          [_t-_J,'retard'],
+          [Date.parse('2026-09-19T09:00:00'),'aujourdhui'],
+          [Date.parse('2026-09-19T23:59:00'),'aujourdhui'],
+          [_t+_J,'avenir']];
+        for(const [v,attendu] of c){
+          const r=tunnelEcheance(v,_t);
+          if(r!==attendu) return _echec(String(v)+' rend '+r+' au lieu de '+attendu);
+        }
+        return true;})());
+
+      ok('UN DOSSIER VIERGE N\'A BESOIN D\'AUCUNE MIGRATION',(()=>{
+        // ⚠ C'EST LE CHOIX D'ARCHITECTURE QUE CETTE ASSERTION TIENT. Aucune
+        //   migration n'a ete ecrite : tunnelCrm rend un dossier complet pour
+        //   une entree qui n'a jamais vu le tunnel. Si quelqu'un la rendait
+        //   partielle — ou null — tous les codes d'avant le 19/09 tomberaient.
+        const k=tunnelCrm(_code('a'));
+        if(!k||!Array.isArray(k.relances)) return _echec('pas de tableau de relances');
+        if(k.relances.length||k.prochaine!==null||k.termineLe!==null)
+          return _echec('un dossier vierge n’est pas vierge : '+JSON.stringify(k));
+        // Et une entree absurde ne fait pas tomber la lecture.
+        return tunnelCrm(null).relances.length===0?true:_echec('null n’est pas absorbe');})());
+
+      ok('LE COMPTEUR EST BORNE A QUATRE, A LA LECTURE AUSSI',(()=>{
+        const k=tunnelCrm(_code('b',{crm:{relances:[1,2,3,4,5,6].map(_rel)}}));
+        return k.relances.length===TUNNEL_MAX
+          ?true:_echec(k.relances.length+' relances gardees');})());
+
+      ok('LE TUNNEL NE COMPTE QUE CEUX QUI N\'ONT PAS UTILISE LEUR ACCES',(()=>{
+        const u={studentCodes:[
+          _code('x1'),
+          _code('x2',{studentName:'Deja Inscrit'}),
+          _code('x3',{active:false,crm:{relances:[1,2,3,4].map(_rel),termineLe:_t-_J}})]};
+        const ath=[{fname:'Deja',lname:'Inscrit',email:'x2@t.fr'}];
+        const l=tunnelPersonnes(u,ath,_t);
+        const ids=l.map(p=>p.codeId).join(',');
+        // x2 est inscrit : il a utilise son acces, il sort du tunnel.
+        if(ids!=='x1,x3') return _echec('population : '+ids);
+        // ⚠ x3 EST FERME ET RESTE : c'est le tunnel qui l'a ferme a la
+        //   quatrieme relance. Le faire disparaitre effacerait le dossier
+        //   commercial au moment precis ou il est complet.
+        const f=l.find(p=>p.codeId==='x3');
+        if(!f.fini||f.actif) return _echec('le dossier termine a change d’etat');
+        return f.relances.length===4?true:_echec('l’historique du dossier ferme a maigri');})());
+
+      ok('LE RESUME SEPARE CE QU\'IL RESTE A FAIRE DU STOCK',(()=>{
+        const u={studentCodes:[
+          _code('r1'),                                              // chaud, sans echeance
+          _code('r2',{crm:{relances:[_rel(1),_rel(2)],prochaine:_t-2*_J}}),  // tiede, en retard
+          _code('r3',{crm:{relances:[_rel(1),_rel(2),_rel(3)],prochaine:_t}}), // froid, aujourd'hui
+          _code('r4',{active:false,crm:{relances:[1,2,3,4].map(_rel),termineLe:_t}})]};
+        const r=tunnelResume(tunnelPersonnes(u,[],_t));
+        // LES TERMINES NE SONT PAS DANS LE TOTAL : annoncer quatre personnes
+        // pour trois a relancer ferait ouvrir l'ecran pour rien.
+        if(r.total!==3) return _echec('total '+r.total);
+        if(r.termines!==1) return _echec('termines '+r.termines);
+        if(r.chauds!==1||r.tiedes!==1||r.froids!==1) return _echec(JSON.stringify(r));
+        if(r.retard!==1||r.aujourdhui!==1) return _echec('echeances : '+JSON.stringify(r));
+        // La phrase dit ce qu'il y a A FAIRE, pas ce qu'il y a en stock.
+        const p=tunnelPhrase(r);
+        return /2 relances à effectuer/.test(p)?true:_echec('phrase : '+p);})());
+
+      ok('« TOUS » N\'INCLUT PAS LES DOSSIERS TERMINES',(()=>{
+        const u={studentCodes:[_code('v1'),
+          _code('v2',{active:false,crm:{relances:[1,2,3,4].map(_rel),termineLe:_t}})]};
+        const l=tunnelPersonnes(u,[],_t);
+        const tous=tunnelVue(l,'tous','nom').map(p=>p.codeId).join(',');
+        const fini=tunnelVue(l,'fini','nom').map(p=>p.codeId).join(',');
+        if(tous!=='v1') return _echec('« tous » contient : '+tous);
+        return fini==='v2'?true:_echec('« terminé » contient : '+fini);})());
+
+      ok('LE TRI PAR PROCHAINE RELANCE MET LES SANS-ECHEANCE EN DERNIER',(()=>{
+        // ⚠ LE PIEGE : `null` vaut zero dans une soustraction. Sans garde, les
+        //   dossiers qu'on n'a pas encore planifies coiffaient ceux qui sont en
+        //   retard depuis trois jours — exactement l'inverse de ce qu'on veut.
+        const u={studentCodes:[
+          _code('s1'),                                        // aucune echeance
+          _code('s2',{crm:{relances:[_rel(1)],prochaine:_t-3*_J}}),  // en retard
+          _code('s3',{crm:{relances:[_rel(1)],prochaine:_t+5*_J}})]};// plus tard
+        const o=tunnelVue(tunnelPersonnes(u,[],_t),'tous','prochaine').map(p=>p.codeId).join(',');
+        return o==='s2,s3,s1'?true:_echec('ordre : '+o);})());
+
+      ok('LA QUATRIEME RELANCE FERME L\'ACCES, ET RIEN D\'AUTRE NE LE FAIT',(()=>{
+        const s=String(tunnelValider)+String(_tunnelFermerAcces);
+        // ⚠ LA FERMETURE PASSE PAR LE NOEUD DISTANT D'ABORD. C'est la regle
+        //   deja ecrite pour toggleStudentCode : « un code annonce ferme
+        //   continuait d'ouvrir l'acces, avec un coach persuade du contraire ».
+        if(s.indexOf('_majActifDistant')<0) return _echec('la fermeture ne passe pas par le nœud distant');
+        if(!/if\(!distant\) return false/.test(s))
+          return _echec('un echec distant est avale : l’accès serait annoncé fermé sans l’être');
+        // ET L'HISTORIQUE SURVIT : on ne supprime pas l'entree du code.
+        if(/splice\(|studentCodes=.*filter\(/.test(s))
+          return _echec('la fin du tunnel supprime des données');
+        return /c\.active=false/.test(s)?true:_echec('le drapeau local ne suit pas');})());
+
+      ok('REPLANIFIER N\'ECRIT RIEN DANS L\'HISTORIQUE',(()=>{
+        // L'historique est reserve a ce qui a ete TENTE. Le coach qui decale
+        // un rendez-vous trois fois ne doit pas apparaitre avec trois relances.
+        const s=String(tunnelPoserEcheance);
+        if(/relances\s*:\s*\w+\.relances\.concat/.test(s))
+          return _echec('la replanification ajoute une relance');
+        return /relances\s*:\s*k\.relances/.test(s)
+          ?true:_echec('la replanification ne repose pas l’historique tel quel');})());
+
+      ok('LE DOUBLE APPUI NE PEUT PAS FAIRE DEUX RELANCES',(()=>{
+        // ⚠ LE DEFAUT QUE CECI EMPECHE, ET IL A ETE MESURE. Le chemin d'une
+        //   relance ordinaire est ENTIEREMENT SYNCHRONE : rendre la clef du
+        //   verrou dans le `finally` la rendait avant que le second appui
+        //   n'arrive. Deux validations enchainees faisaient passer quelqu'un
+        //   de 0/4 a 2/4, puis a 4/4 — donc fermaient son acces deux relances
+        //   trop tot, et perdaient la note du premier appui.
+        const s=String(tunnelValider);
+        if(s.indexOf('_tunnelEnCours.has')<0) return _echec('aucun verrou');
+        if(/finally\s*\{\s*_tunnelEnCours\.delete/.test(s))
+          return _echec('la clef est rendue dans le même tour : le verrou ne protège de rien');
+        if(s.indexOf('TUNNEL_VERROU_MS')<0) return _echec('la libération n’est pas différée');
+        // ET LE PLAFOND EST RELU AU MOMENT D'ECRIRE, pas seulement a
+        // l'ouverture de la feuille : un autre appareil a pu pousser entre-temps.
+        return /relances\.length>=TUNNEL_MAX/.test(s)
+          ?true:_echec('le plafond n’est pas revérifié à la validation');})());
+
+      ok('AUCUN CANAL NE PRETEND AVOIR ENVOYE QUOI QUE CE SOIT',(()=>{
+        // Deux des quatre canaux savent ouvrir un message pre-rempli, deux non.
+        // Dans les deux cas, VALIDER n'envoie rien : ca enregistre une action.
+        const reels=TUNNEL_CANAUX.filter(c=>c.reel).map(c=>c.cle).join(',');
+        if(reels!=='whatsapp,email') return _echec('canaux réels : '+reels);
+        const s=String(tunnelValider)+String(_tunnelMajAvis);
+        if(/envoyé|envoyée/.test(String(tunnelValider)))
+          return _echec('la validation annonce un envoi');
+        return /n’envoie pas par ce canal/.test(s)
+          ?true:_echec('rien ne dit au coach que RepCore n’envoie pas');})());
+
+      ok('L\'HISTORIQUE GARDE CANAL, DATE, HEURE ET NOTE',(()=>{
+        const u={studentCodes:[_code('h1',{crm:{relances:[
+          {n:1,date:_t-5*_J,canal:'whatsapp',note:'rappel activation',par:'c@t.fr'},
+          {n:2,date:_t-2*_J,canal:'push',note:''}],prochaine:_t+_J}})]};
+        const sv=(typeof currentUser!=='undefined')?currentUser:null;
+        try{
+          currentUser=u;
+          const h=_tunnelHistorique('h1');
+          const z=document.createElement('div'); z.innerHTML=h;
+          const txt=z.textContent;
+          for(const m of ['Historique du tunnel commercial','Ajouté au tunnel',
+                          'Relance #1','WhatsApp','rappel activation','Relance #2','Notification RepCore'])
+            if(txt.indexOf(m)<0) return _echec('absent de la frise : '+m);
+          // L'HEURE Y EST, et pas seulement le jour : deux relances le meme
+          // jour se distinguent par elle.
+          return /\d{2}\/\d{2}\/\d{4} à \d{2}:\d{2}/.test(txt)
+            ?true:_echec('la frise ne porte pas l’heure');
+        } finally { currentUser=sv; }})());
+    })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
       const ECRANS_COACH=['s-coach-home','s-coach-client','s-coach-sessions',
         's-coach-programs','s-coach-prog-template','s-coach-prog-assign',
         's-coach-decharge','s-coach-bilan-evo','s-coach-plan','s-coach-canal',
         's-coach-charge','s-coach-banque','s-charges','s-coach-file',
+        // LE TUNNEL COMMERCIAL, 19/09/2026. Ce registre est ce qui a rappele
+        // qu'un ecran coach neuf doit se declarer : la classe seule ne suffit
+        // pas, et l'assertion l'a dit avant que quiconque ne l'ouvre.
+        's-coach-tunnel',
         's-coach-activite','s-rapport','s-programme-print','s-vitrine',
         's-ex-classify','s-proto-edit','s-protocoles','s-metrics',
         // B1.1 — L'OUBLI. Le coach qui verifie une seance avant de la publier
