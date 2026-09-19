@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1292';
+window.RC_BUILD='1293';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -196,6 +196,47 @@ window._rcServiParCache=(()=>{
   }catch(err){ return false; }
 })();
 if('serviceWorker' in navigator){
+  // ══ LE GARDE-FOU DE VERSION ══════════════════════════════════════════════
+  //
+  // UN APPAREIL PEUT RESTER BLOQUÉ SUR UN VIEUX BUILD, ET RIEN NE LE DIT.
+  // Le service worker ne bascule qu'à l'`install` d'un sw.js neuf, et cet
+  // install n'a lieu que si le navigateur va le rechercher. Sur une PWA posée
+  // sur l'écran d'accueil — iOS en particulier — il peut ne pas y aller
+  // pendant des jours : l'app continue de servir sa copie en cache, et aucun
+  // correctif déployé ne l'atteint. Constaté : six versions publiées en deux
+  // jours, aucune reçue, et un envoi vidéo cassé qui le restait.
+  //
+  // ON DEMANDE DONC AU SERVEUR, à chaque ouverture, quelle est la version
+  // publiée. Si elle est plus récente que celle qui tourne, on désinscrit le
+  // worker, on vide les caches, et on recharge UNE fois.
+  //
+  // UNE FOIS, et c'est ce que garde `sessionStorage` : sans ce verrou, un
+  // serveur injoignable ou une comparaison qui échoue relancerait la page en
+  // boucle. Le numéro tenté y est inscrit — retomber sur le même ne relance
+  // rien.
+  (async()=>{
+    try{
+      if(!('caches' in window)) return;
+      const local=parseInt(String(window.RC_BUILD||'0'),10)||0;
+      if(!local) return;
+      const r=await fetch('./sw.js?v='+Date.now(),{cache:'no-store'});
+      if(!r.ok) return;
+      const m=(await r.text()).match(/repcore-v(\d+)/);
+      const distant=m?parseInt(m[1],10):0;
+      if(!distant||distant<=local) return;
+      if(sessionStorage.getItem('rc_maj_forcee')===String(distant)) return;
+      sessionStorage.setItem('rc_maj_forcee',String(distant));
+      try{
+        const regs=await navigator.serviceWorker.getRegistrations();
+        for(const g of regs) await g.unregister();
+      }catch(e){}
+      try{
+        const ks=await caches.keys();
+        for(const k of ks) await caches.delete(k);
+      }catch(e){}
+      location.reload();
+    }catch(e){}
+  })();
   navigator.serviceWorker.register('./sw.js').then(reg=>{
     reg.update();
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
