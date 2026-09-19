@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1301';
+window.RC_BUILD='1302';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -27137,9 +27137,21 @@ function _htmlSectionsSuivi(vus,rendu){
   // le curseur existait. Une fonctionnalite qu'on ne voit pas n'existe pas.
   // La section vide dit quoi faire ; c'est elle qui apprend le geste.
   if(!(vus||[]).length) return '';
+  // EN ROUGE, LES DEUX. Demande de Kévin. Ces titres sont les seuls repères
+  // d'une liste qui peut faire trente fiches : en gris, ils se confondaient
+  // avec le sous-texte des fiches elles-mêmes et on défilait sans voir qu'on
+  // avait changé de camp.
+  //
+  // `--red-text` ET NON `--red` : le rouge de la marque est conçu pour des
+  // aplats et des boutons, pas pour du texte de douze pixels sur du noir.
+  // `--red-text` est sa variante éclaircie, celle du bandeau « Mes
+  // notifications ».
+  //
+  // ⚠ LE COMPTE RESTE PÂLE, et c'est voulu : il dit combien, pas quoi. En
+  //   rouge lui aussi, on lirait « 17 » avant « avec suivi ».
   const titre=(t,n)=>'<div style="grid-column:1/-1;display:flex;align-items:baseline;gap:8px;'
     +'margin:18px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)">'
-    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub)">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text)">'
     +escapeHtml(t)+'</span><span style="font-size:var(--fs-2xs);color:var(--text-faint)">'+n+'</span></div>';
   const vide=t=>'<div style="grid-column:1/-1;font-size:var(--fs-xs);color:var(--text-dim);'
     +'line-height:1.6;padding:10px 2px 14px">'+t+'</div>';
