@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1299';
+window.RC_BUILD='1300';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -13756,6 +13756,16 @@ const ICONS={
   // prochain bouton de suppression n'en réinvente pas une variante.
   trash:'<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
   'chart-bar':'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+  // ── CINQ TRAITS POUR « À TRAITER » ────────────────────────────────────────
+  // Le bloc portait des emojis. Un emoji est rendu par la POLICE DU SYSTÈME :
+  // il change de dessin et de couleur d'un téléphone à l'autre, il ignore la
+  // palette, et il pose des visages là où il faut des signaux. Ces cinq-là
+  // manquaient au jeu ; les onze autres y étaient déjà.
+  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
+  activity:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  'trending-down':'<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>',
+  'user-plus':'<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
   utensils:'<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><line x1="7" y1="2" x2="7" y2="22"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3"/><line x1="21" y1="15" x2="21" y2="22"/>',
   video:'<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>',
   user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
@@ -25579,7 +25589,10 @@ function _waCorpsGroupe(type){
   if(type==='noprog') return 'je prépare ton programme, je te l\'envoie très vite 💪';
   return '';
 }
-// Bouton 💬 d'une ligne « À traiter ».
+// Bouton de contact d'une ligne « À traiter ». AU TRAIT, ET NON EN EMOJI :
+// une bulle emoji est verte chez Apple, grise chez Google et jaune vif sur
+// certains Android — elle ne peut pas porter la couleur du bouton, et elle
+// jure avec les seize signaux de la ligne, qui sont tous des traits.
 // Un seul athlète → vrai lien <a> : un clic, et aucun bloqueur de fenêtres ne
 // s'interpose. Plusieurs → ouvre la sélection groupée pré-cochée sur cette
 // ligne, où chaque envoi reste un geste distinct.
@@ -25594,11 +25607,11 @@ function _waBoutonTodo(r,idx){
       :'Ouvrir WhatsApp avec le message pré-rempli ('+(c.fname||'cet athlète')+' n\'a pas de numéro enregistré)';
     return `<a href="${safeUrl(waLink(tel,_waTexteTodo(r.type,c)))}" target="_blank" rel="noopener"
       onclick="event.stopPropagation()" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
-      style="${style}${tel?'':';opacity:.55'}">💬</a>`;
+      style="${style}${tel?'':';opacity:.55'}">${icon('message-circle',16)}</a>`;
   }
   return `<button onclick="event.stopPropagation();openWaGroupe(${idx})"
     title="Écrire aux ${r.list.length} athlètes de cette ligne" aria-label="Écrire aux ${r.list.length} athlètes de cette ligne"
-    style="${style}">💬</button>`;
+    style="${style}">${icon('message-circle',16)}</button>`;
 }
 // ── Envoi groupé ────────────────────────────────────────────────────────────
 // Appelée sans argument depuis le dashboard, ou avec l'index d'une ligne
@@ -28117,23 +28130,23 @@ function ajReporter(){
 function _lignesEntrainement(clients){
   const out=[], vus=new Set();
   const NIV=[
-    {type:'douleur',    cle:'douleur',       icon:'🩹',color:'var(--red)',   lib:'Douleur répétée'},
-    {type:'douleurdiff',cle:'douleurDiffuse',icon:'🩹',color:'var(--red)',   lib:'Douleurs diffuses'},
-    {type:'decrochage', cle:'decrochage',    icon:'📉',color:'var(--orange)',lib:'Séances écourtées'},
+    {type:'douleur',    cle:'douleur',       icon:icon('activity',16),color:'var(--red)',   lib:'Douleur répétée'},
+    {type:'douleurdiff',cle:'douleurDiffuse',icon:icon('activity',16),color:'var(--red)',   lib:'Douleurs diffuses'},
+    {type:'decrochage', cle:'decrochage',    icon:icon('trending-down',16),color:'var(--orange)',lib:'Séances écourtées'},
     // LA CHARGE PASSE DEVANT LE PLATEAU. Un plateau se corrige la semaine
     // prochaine ; une charge qui a saute de moitie deux semaines de suite se
     // regarde maintenant.
-    {type:'saut_charge', cle:'sautDeCharge',  icon:'📈',color:'var(--orange)',lib:'Charge en hausse marquée'},
-    {type:'entrainement',cle:null,           icon:'⚠️',color:'var(--orange)',lib:'Progression bloquée'},
+    {type:'saut_charge', cle:'sautDeCharge',  icon:icon('trending-up',16),color:'var(--orange)',lib:'Charge en hausse marquée'},
+    {type:'entrainement',cle:null,           icon:icon('chart-bar',16),color:'var(--orange)',lib:'Progression bloquée'},
     // DERNIER RANG, ET C'EST SA PLACE. `vus` fait que l'athlete deja remonte
     // pour une douleur, un decrochage ou un plateau n'apparait pas ici : on ne
     // parle pas d'entretien a un coach qui a un probleme de sante a traiter.
     // Gris et non orange : rien ne va mal, il manque juste une mesure.
-    {type:'calibrage',  cle:'calibrageDu',   icon:'🎯',color:'var(--sub)',   lib:'Calibrage RIR à faire'},
+    {type:'calibrage',  cle:'calibrageDu',   icon:icon('target',16),color:'var(--sub)',   lib:'Calibrage RIR à faire'},
     // ECHEANCE DE BLOC : une decision a prendre, pas une alerte. Dernier rang,
     // gris, et hors d'urgencyScore comme le calibrage — un bloc qui se termine
     // ne remonte personne dans la liste.
-    {type:'blocfini',   cle:'blocPrioriteFini',icon:'🏁',color:'var(--sub)', lib:'Bloc de priorité terminé'}
+    {type:'blocfini',   cle:'blocPrioriteFini',icon:icon('check-circle',16),color:'var(--sub)', lib:'Bloc de priorité terminé'}
   ];
   for(const n of NIV){
     for(const c of clients){
@@ -28468,16 +28481,16 @@ function renderTodoBlock(clients){
     // zone du corps, et « Général · une douleur dans la poitrine » nommerait
     // une région qui n’existe pas.
     const _z=(d.zone&&d.zone!==DRAPEAU_ZONE_GENERALE)?(libZone(d.zone)+' · '):'';
-    return {type:'drapeau',icon:'🛑',color:'var(--red)',label:'Drapeau rouge santé signalé',
+    return {type:'drapeau',icon:icon('flag',16),color:'var(--red)',label:'Drapeau rouge santé signalé',
       list:[c],sante:true,nonReportable:true,
       texte:_z+lib.join(' · ')+". Aucun exercice de remplacement n'est proposé."};
   });
   // Puis les signaux d'entrainement : la sante avant l'intendance.
   rows.push.apply(rows,_lignesEntrainement(clients));
   // En tête des lignes administratives : relancer un inscrit qui n'a jamais démarré prime sur tout le reste.
-  if(noStart.length) rows.push({type:'nostart',icon:'🆕',color:'var(--red)',label:'Inscrit, n\'a jamais commencé',list:noStart});
-  if(newBil.length) rows.push({type:'bilan',icon:'📥',color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
-  if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',15),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
+  if(noStart.length) rows.push({type:'nostart',icon:icon('user-plus',16),color:'var(--red)',label:'Inscrit, n\'a jamais commencé',list:noStart});
+  if(newBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
+  if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',16),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
   // N6.8 — LES VIDEOS A CORRIGER REMONTENT ICI. La donnee existait,
   // videoNonCorrigee disait deja lesquelles attendent, et agregerPortefeuille
   // les comptait pour le volet « Vue d'ensemble » — un volet ferme a chaque
@@ -28488,7 +28501,7 @@ function renderTodoBlock(clients){
     try{ return (c.videos||[]).some(videoNonCorrigee)&&!isAlertSnoozed('videos',c.id); }
     catch(e){ return false; }
   });
-  if(_vids.length) rows.push({type:'videos',icon:icon('video',15),color:'var(--orange)',
+  if(_vids.length) rows.push({type:'videos',icon:icon('video',16),color:'var(--orange)',
     label:'Vidéo'+(_vids.length>1?'s':'')+' à corriger',list:_vids});
   // N6.13 — LES NOTES DONT L'ECHEANCE EST ATTEINTE. Niveau administratif,
   // comme le rite : urgencyScore ne les connait pas et ne les connaitra pas —
@@ -28500,9 +28513,9 @@ function renderTodoBlock(clients){
       &&!isAlertSnoozed('notes',c.id); }
     catch(e){ return false; }
   });
-  if(_notes.length) rows.push({type:'notes',icon:'📌',color:'var(--sub)',
+  if(_notes.length) rows.push({type:'notes',icon:icon('pencil',16),color:'var(--sub)',
     label:'Note'+(_notes.length>1?'s':'')+' à revoir',list:_notes});
-  if(expiring.length) rows.push({type:'expiring',icon:'⏳',color:'var(--orange)',label:'Accès expire dans <14j',list:expiring});
+  if(expiring.length) rows.push({type:'expiring',icon:icon('clock',16),color:'var(--orange)',label:'Accès expire dans <14j',list:expiring});
   // RITE DE FIN DE CYCLE : niveau administratif. urgencyScore ne le connaît
   // pas et ne le connaîtra pas — la ligne se voit, elle ne remonte personne.
   // Elle se reporte comme les autres, via dismissTodoRow, qui n'écrit que dans
@@ -28523,9 +28536,9 @@ function renderTodoBlock(clients){
     const avant=l[l.length-2];
     return !(avant&&!avant.reponseCoach);      // deja relance une fois : plus rien
   });
-  if(_rites.length) rows.push({type:'rite',icon:'📆',color:'var(--sub)',
+  if(_rites.length) rows.push({type:'rite',icon:icon('calendar',16),color:'var(--sub)',
     label:'Bilan de 4 semaines à lire',list:_rites});
-  if(noProg.length) rows.push({type:'noprog',icon:'📋',color:'var(--sub)',label:'Sans programme',list:noProg});
+  if(noProg.length) rows.push({type:'noprog',icon:icon('clipboard',16),color:'var(--sub)',label:'Sans programme',list:noProg});
   if(!rows.length){ window._todoRows=[]; el.innerHTML=''; return; }
   // Un tableau de bord qui affiche trente alertes n'oriente plus rien. Les
   // lignes sont deja triees par gravite : on coupe la queue et on l'annonce.
@@ -28539,12 +28552,49 @@ function renderTodoBlock(clients){
   // Un drapeau rouge n'a rien a voir avec l'echelle de douleur de 1 a 6 : le
   // disclaimer qui convient est celui des contraintes de sante.
   const aDrapeau=vues.some(r=>r.type==='drapeau');
+  // ══ TROIS BANDES, PAS UNE PILE ═══════════════════════════════════════════
+  //
+  // Huit lignes d'affilée ne se lisent pas : le coach cherche d'abord ce qui
+  // ne peut pas attendre, et il devait pour cela relire la couleur de chaque
+  // intitulé. La couleur portait déjà le niveau — elle ne faisait que le
+  // colorier. Elle RANGE maintenant.
+  //
+  // ⚠ LE TRI ET LE PLAFOND NE BOUGENT PAS. `rows` reste ordonné par gravité,
+  //   `vues` reste les huit premières, et `window._todoRows` reste `vues` :
+  //   c'est l'index dans CE tableau que dismissTodoRow, ouvrirAjustement et
+  //   _entrerFileBilans reçoivent. On range à l'affichage, on ne renumérote
+  //   rien.
+  const BANDES=[
+    {titre:'Urgent',    couleur:'var(--red)',    test:(/** @type {any} */ r)=>r.color==='var(--red)'},
+    {titre:'Important', couleur:'var(--orange)', test:(/** @type {any} */ r)=>r.color==='var(--orange)'},
+    // VERT, ET NON GRIS — demande de Kévin, 19/09/2026. Ces lignes ne sont pas
+    // des alertes éteintes : ce sont des décisions à prendre — un calibrage,
+    // un bloc terminé, une note à revoir. Le gris les faisait lire comme du
+    // bruit de fond, et elles restaient au fond du bloc pour toujours.
+    {titre:'À traiter', couleur:'var(--green)',  test:()=>true}
+  ];
+  const _bande=(/** @type {any} */ r)=>BANDES.findIndex(b=>b.test(r));
+  // LE COMPTE D'UNE BANDE VIENT DE TOUTES LES LIGNES, pas des seules affichées.
+  // Le plafond de huit coupe la queue, donc la bande verte en premier : sans
+  // ce total, une colonne vidée par le plafond dirait « Rien » alors qu'il
+  // reste du travail dedans.
+  const _cols=BANDES.map((b,i)=>({...b,
+    total:rows.filter(r=>_bande(r)===i).length,
+    // On garde l'index d'origine avec la ligne : la colonne n'est qu'une vue.
+    lignes:vues.map((r,idx)=>({r,idx})).filter(x=>_bande(x.r)===i)}));
   el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:var(--r-card);margin-bottom:20px;overflow:hidden;box-shadow:var(--elev-3)">
     <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
       <span style="font-size:13px;font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2.4px">⚡ À traiter</span>
       <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 9px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
     </div>
-    ${renderDataList(vues,(r,idx)=>{
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:10px;padding:10px">
+    ${_cols.map(b=>`<div style="min-width:0;background:#0a0000;border:1px solid #1e0000;border-radius:var(--r-3);overflow:hidden">
+      <div style="padding:7px 11px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:#120000;border-bottom:1px solid #1e0000">
+        <span style="font-size:var(--fs-2xs);font-weight:800;color:${b.couleur};text-transform:uppercase;letter-spacing:1.8px">${b.titre}</span>
+        <span style="font-size:var(--fs-2xs);font-weight:800;color:${b.couleur};opacity:.7">${b.total}</span>
+      </div>
+      ${b.lignes.length?renderDataList(b.lignes,(x)=>{
+      const r=x.r, idx=x.idx, coul=b.couleur;
       // XSS stocké : le prénom est saisi par l'athlète lui-même et atterrissait
       // brut dans le tableau de bord de son coach. Trouvé en testant les liens
       // WhatsApp avec un prénom hostile — le défaut est antérieur.
@@ -28556,9 +28606,14 @@ function renderTodoBlock(clients){
       const _ini=(_n0.lname||'').charAt(0);
       const nomA=escapeHtml(((_n0.fname||'')+(_ini?' '+_ini+'.':'')).trim()||'Athlète');
       const corps=r.texte
-        ? `<div style="flex:1;min-width:0"><span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${nomA}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${r.color}"> · ${r.label}</span><div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:2px">${escapeHtml(r.texte)}</div></div>`
-        : `<div style="flex:1;min-width:0"><span style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:var(--fs-xs);color:var(--sub)"> · ${names}</span></div>`;
-      return{html:`<span style="font-size:var(--fs-lg);flex-shrink:0;align-self:flex-start;margin-top:1px">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color var(--t-1);border-radius:var(--r-1)" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
+        ? `<div style="flex:1;min-width:0"><span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${nomA}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${coul}"> · ${r.label}</span><div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:2px">${escapeHtml(r.texte)}</div></div>`
+        : `<div style="flex:1;min-width:0"><span style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${coul}">${r.label}</span><span style="font-size:var(--fs-xs);color:var(--sub)"> · ${names}</span></div>`;
+      // L'ICÔNE EST BLANCHE ET ELLE RAYONNE, quelle que soit la bande : la
+      // couleur est déjà portée par la colonne et par l'intitulé. Une icône
+      // colorée de plus ferait trois rouges côte à côte et plus rien ne
+      // ressortirait. Deux halos, un serré et un large : c'est ce qui fait le
+      // néon plutôt qu'un simple trait clair.
+      return{html:`<span style="flex-shrink:0;align-self:flex-start;margin-top:2px;display:inline-flex;color:#fff;filter:drop-shadow(0 0 4px rgba(255,255,255,.7)) drop-shadow(0 0 11px rgba(255,255,255,.3))">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color var(--t-1);border-radius:var(--r-1)" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
       // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
       // la fiche comme avant : elles ne décrivent pas une série à traiter.
       onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`
@@ -28568,7 +28623,12 @@ function renderTodoBlock(clients){
         :r.type==='rite'?`_ouvrirRiteClient('${r.list[0].id}')`
         :`openClientDetail('${r.list[0].id}')`,
       style:'cursor:pointer;transition:background var(--t-1);'};
-    },{pad:'10px 14px',gap:10,border:'#180000',hover:'#140000'})}
+    },{pad:'9px 11px',gap:9,border:'#180000',hover:'#140000'})
+      // UNE COLONNE VIDE LE DIT, et dit laquelle des deux raisons : il n'y a
+      // rien à ce niveau, ou le plafond de huit lignes a coupé ici.
+      :`<div style="padding:10px 11px;font-size:var(--fs-xs);color:var(--text-faint)">${b.total?'+ '+b.total+' plus bas':'Rien ici'}</div>`}
+    </div>`).join('')}
+    </div>
     ${restant?`<div style="padding:8px 14px;font-size:var(--fs-xs);color:var(--sub);border-top:1px solid #180000">+ ${restant} autre${restant>1?'s':''}</div>`:''}
     ${aDrapeau?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerSante()}</div>`:''}
     ${aDouleur?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerDouleur()}</div>`:''}
