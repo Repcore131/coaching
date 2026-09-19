@@ -11,6 +11,14 @@ node_modules/
 AUDIT_INVENTAIRE.md
 AUDIT_REPCORE.md
 AUDIT_REPCORE.pdf
+# ⚠ UN MOTIF, ET NON UNE LISTE DE NOMS. Les trois lignes ci-dessus nommaient
+# les audits un par un : AUDIT_ENVOI_VIDEO.md et son PDF, ecrits depuis, ne
+# tombaient donc dans aucune et attendaient en clair dans « git status ». Un
+# seul « git add -A » et ils partaient en ligne, definitivement — c'est
+# exactement ce que ce bloc existe pour empecher. Le motif couvre celui-la et
+# tous ceux qui suivront.
+AUDIT_*.md
+AUDIT_*.pdf
 audit/
 docs/audit/
 # La cartographie de Motion Lab (Phase 0) : meme nature, meme raison.
