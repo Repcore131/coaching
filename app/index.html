@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1308';
+window.RC_BUILD='1309';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1548,10 +1548,27 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 #ch-clients-list .badge{font-size:11px;letter-spacing:.6px;padding:4px 8px;border-radius:var(--r-pill);
   max-width:112px;white-space:normal;text-align:center;line-height:1.3}
 
-.ch-chip{background:var(--surface-1);border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-4);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;cursor:pointer;min-height:34px;transition:background var(--t-1),border-color var(--t-1),color var(--t-1),box-shadow var(--t-1)}
-.ch-chip{box-shadow:var(--e2)}
-.ch-chip.actif{box-shadow:var(--e2),var(--glow-red)}
-.ch-chip.actif{background:var(--red-bg);border-color:var(--red);color:var(--text)}
+/* ══ LES QUATRE PUCES DE TRI, EN BLANC ═══════════════════════════════════
+   Elles etaient sombres (.ch-chip) et actives sur fond rouge. Demande de
+   Kevin, 19/09/2026 : quatre boutons blancs d'egale largeur, comme la ligne
+   Canal / Groupe / CRM / Code. Le corps vient de .btn-blanc, deja pose le
+   08/09 ; il ne reste ici que la taille et l'etat actif.
+
+   ⚠ L'ACTIF NE PEUT PLUS ETRE UN APLAT ROUGE. Un fond rouge plein sur un
+     bouton blanc, ce n'est plus un bouton blanc — la demande disparaitrait.
+     Le signal reste ROUGE, mais il passe au contour et au texte : bordure
+     rouge, anneau rouge, libelle rouge sombre. #a00000 sur le blanc casse
+     donne plus de six pour un de contraste, la ou #E02020 en donne quatre.
+   ⚠ ET LE BLANC SE DENSIFIE QUAND IL EST ACTIF : a 0,82 d'opacite le fond
+     sombre remonte au travers, et la bordure rouge flottait sur un gris. */
+.ch-tri{min-height:34px;padding:7px 10px;font-size:var(--fs-xs);letter-spacing:.5px;
+  border-radius:var(--r-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-tri.actif{
+  background:
+    repeating-linear-gradient(-52deg,transparent 0 3px,rgba(0,0,0,.030) 3px 4px),
+    linear-gradient(168deg,rgba(251,250,248,.96) 0%,rgba(242,239,233,.96) 58%,rgba(230,226,218,.96) 100%);
+  border-color:var(--red);color:#a00000;
+  box-shadow:0 1px 0 rgba(255,255,255,.55) inset,0 0 0 1px rgba(224,32,32,.45),var(--glow-red)}
 /* N5.14 — LE MEME ASCENSEUR SUR LES CINQ ZONES DEFILANTES DU TABLEAU DE BORD.
    .scroll-area::-webkit-scrollbar habille ceux de l'app, mais les quatre
    panneaux d'onglets et la barre laterale portent overflow-y:auto sans cette
@@ -1608,8 +1625,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    MEME VOCABULAIRE QUE .client-row ET .pil-compteur, qui le font deja :
    bordure et fond, rien d'autre. La puce ACTIVE ne bouge pas au survol — elle
    dit deja ou l'on est, et la faire varier brouillerait ce qu'elle porte. */
-.ch-chip:hover:not(.actif),.ch-chip:focus-visible:not(.actif){
-  background:var(--surface-2);border-color:#3a3a3a;color:var(--text)}
+.ch-tri:hover:not(.actif),.ch-tri:focus-visible:not(.actif){border-color:rgba(0,0,0,.34)}
 .tab-dot{position:absolute;top:3px;left:calc(50% + 5px);width:9px;height:9px;
   border-radius:var(--r-full);background:var(--red);border:1.5px solid #0c0c0c;
   box-shadow:0 0 6px rgba(224,32,32,.9);display:none;pointer-events:none}
@@ -4011,9 +4027,16 @@ html{scroll-behavior:smooth}
    de classe : .ch-chip prenait .actif et un fond rouge sombre plus halo,
    .pf-chip prenait .active et un aplat rouge plein. Le coach devait apprendre
    deux fois la meme convention.
-   L'APPARENCE RETENUE EST CELLE DE .ch-chip : le fond sombre et le halo se
-   lisent aussi bien et pesent moins qu'un aplat plein — sur quatre onglets
-   cote a cote, l'aplat rouge criait.
+
+   ⚠ L'ANCRAGE A CHANGE LE 19/09/2026. Cette regle etait alignee sur .ch-chip,
+     qui n'existe plus : les quatre puces de tri sont devenues des boutons
+     BLANCS (.ch-tri), a la demande de Kevin, et un aplat rouge sombre sur du
+     blanc n'a aucun sens. La convention qui reste, et qui vaut partout, est
+     PLUS SIMPLE QU'UNE APPARENCE : l'element actif se signale EN ROUGE. Sur
+     un fond sombre — ici — c'est l'aplat et le halo ; sur un bouton blanc,
+     c'est le contour et le texte. Ce sont deux rendus de la meme regle, et
+     non deux conventions a apprendre.
+
    LES DEUX NOMS SONT ACCEPTES : `active` est pose par ccdVue et bqOnglet,
    `actif` par setFiltreClients et setTriClients. Les faire converger dans le
    CSS coute deux selecteurs ; les faire converger dans le JS demanderait de
@@ -8322,13 +8345,18 @@ const COACH_PHOTO='icons/coach.jpg';
                annoncaient ces memes nombres sans rien ouvrir. La barre d etat
                fait les deux : meme cle de filtre, meme predicat. -->
           <div class="sub" id="ch-count" style="font-size:var(--fs-xs);letter-spacing:.5px"></div>
-          <!-- Colonne triable : urgence par defaut, taux a la demande. -->
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <span style="font-size:10.5px;color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase">Trier</span>
-            <button class="ch-chip actif" data-tri="urgence" onclick="setTriClients('urgence')">Urgence</button>
-            <button class="ch-chip" data-tri="taux" onclick="setTriClients('taux')">Séances faites</button>
-            <button class="ch-chip" data-tri="charge" onclick="setTriClients('charge')">Charge</button>
-            <button class="ch-chip" data-tri="progression" onclick="setTriClients('progression')">Progression</button>
+          <!-- Colonne triable : urgence par defaut, taux a la demande.
+               QUATRE BOUTONS BLANCS D'EGALE LARGEUR, comme la ligne Canal /
+               Groupe / CRM / Code juste au-dessus. Demande de Kevin,
+               19/09/2026. « Trier » passe AU-DESSUS : c'est une etiquette, pas
+               un bouton, et la laisser dans la rangee volait sa largeur au
+               premier choix. -->
+          <div style="font-size:10.5px;color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Trier</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px">
+            <button class="btn btn-blanc btn-sm ch-tri actif" data-tri="urgence" onclick="setTriClients('urgence')">Urgence</button>
+            <button class="btn btn-blanc btn-sm ch-tri" data-tri="taux" onclick="setTriClients('taux')">Séances faites</button>
+            <button class="btn btn-blanc btn-sm ch-tri" data-tri="charge" onclick="setTriClients('charge')">Charge</button>
+            <button class="btn btn-blanc btn-sm ch-tri" data-tri="progression" onclick="setTriClients('progression')">Progression</button>
           </div>
         </div>
         <!-- N4.13 — LA BARRE D'ACTIONS DE LA SELECTION. HORS de

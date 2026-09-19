@@ -32720,7 +32720,7 @@ async function testExercices(){
 
       ok('N5.5 — LES TROIS FAMILLES LES PLUS CLIQUEES REPONDENT AU SURVOL',(()=>{
         const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
-        for(const [sel,quoi] of [['.ch-chip:hover','les puces de tri'],
+        for(const [sel,quoi] of [['.ch-tri:hover','les puces de tri'],
                                  ['.pf-chip:hover','les onglets du dossier'],
                                  ['#s-coach-client .cc-sect-t:hover','les en-têtes repliables']])
           if(css.indexOf(sel)<0) return _echec(quoi+' n’ont aucun état de survol');
@@ -32789,9 +32789,20 @@ async function testExercices(){
         const bloc=css.slice(i,css.indexOf('}',i));
         if(bloc.indexOf('var(--red-bg)')<0)
           return _echec('l’onglet actif garde l’aplat rouge plein : '+bloc);
-        // Et l'état actif de .ch-chip, la référence, n'a pas bougé.
-        return css.indexOf('.ch-chip.actif{background:var(--red-bg)')>=0
-          ?true:_echec('l’état actif de référence a changé');})());
+        // ⚠ L'ANCRAGE A CHANGÉ LE 19/09/2026. Cette ligne exigeait que
+        //   `.ch-chip.actif` garde `background:var(--red-bg)` — c'était
+        //   l'apparence de référence sur laquelle `.pf-chip` avait été aligné.
+        //   Les quatre puces de tri sont devenues des boutons BLANCS, et un
+        //   aplat rouge sombre sur du blanc n'a aucun sens.
+        //
+        //   CE QUI EST TENU N'EST PLUS UNE APPARENCE MAIS LA RÈGLE : l'élément
+        //   actif se signale EN ROUGE. Sur fond sombre c'est l'aplat, sur un
+        //   bouton blanc c'est le contour et le texte. Les deux sont vérifiés.
+        const i2=css.indexOf('.ch-tri.actif{');
+        if(i2<0) return _echec('les puces de tri n’ont plus d’état actif');
+        const b2=css.slice(i2,css.indexOf('}',i2));
+        return (b2.indexOf('border-color:var(--red)')>=0&&b2.indexOf('#a00000')>=0)
+          ?true:_echec('le tri actif ne se signale plus en rouge : '+b2);})());
 
       // Compte les intitules ECRITS dans renderClientList, sans dependre d'un
       // rendu : c'est la seule source disponible a tout moment de la suite.
