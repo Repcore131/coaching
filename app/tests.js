@@ -34559,6 +34559,24 @@ async function testExercices(){
           if(b.length===2&&!/ch-nav-large/.test(dansPanneau[0].className))
             return _echec(f+' reste allume sur le panneau alors que la barre le porte');
         }
+        // ⚠ ET LA REGLE PREND VRAIMENT, ce que cette assertion ne verifiait
+        //   PAS. Elle a ete sans effet pendant des semaines : les cinq boutons
+        //   portaient `display:flex` dans leur attribut `style`, et un style
+        //   inline bat une feuille de style. La classe etait bien la — c'est
+        //   tout ce qu'on regardait — et les cinq destinations paraissaient
+        //   quand meme deux fois. Signale par Kevin le 19/09/2026.
+        //
+        //   ON VERIFIE L'ABSENCE DE `display` INLINE, et non le display
+        //   CALCULE : la suite tourne en largeur telephone, ou ces boutons
+        //   DOIVENT etre visibles puisqu'aucune barre laterale ne les porte.
+        //   Mesurer le calcul ici ne prouverait donc rien de la largeur qui
+        //   pose probleme, alors que l'absence d'inline est vraie partout.
+        for(const x of document.querySelectorAll('.ch-nav-large')){
+          const st=x.getAttribute('style')||'';
+          if(/(^|;)\s*display\s*:/.test(st))
+            return _echec('display inline sur '+(x.getAttribute('onclick')||'?')
+              +' : la regle qui l’eteint au-dela de 1025 px ne prendra pas');
+        }
         // Et ils ont QUITTE le volet : remontes, ils n'y sont plus.
         return String(renderPilotage).indexOf('loadFileReprise()')<0
           ?true:_echec('le lien subsiste dans le volet de pilotage');})());

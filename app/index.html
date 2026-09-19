@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1312';
+window.RC_BUILD='1313';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5278,6 +5278,21 @@ textarea.vn-in{resize:vertical;line-height:1.5}
   border:1px solid rgba(34,197,94,.42)}
 .cpl-pill-off{color:var(--text-faint);background:var(--surface-2);
   border:1px solid var(--border)}
+/* ══ LES CINQ BOUTONS DE NAVIGATION DU PANNEAU ══════════════════════════════
+   ⚠ LE `display` VIT ICI, ET NON EN STYLE INLINE, et c'est tout l'objet de
+     cette regle. Les cinq boutons le portaient chacun dans leur attribut
+     `style` — « MES PROGRAMMES », « CHARGES ARTICULAIRES », « A RELANCER »,
+     « ACTIVITE DU PORTEFEUILLE », « DECHARGE GROUPEE ». Un style inline bat
+     une feuille de style : la regle qui les eteint au-dela de 1025 px, posee
+     pour que la barre laterale soit LE seul chemin a cette largeur, n'a donc
+     JAMAIS pris. Les cinq destinations paraissaient deux fois, dans la barre
+     ET au milieu du panneau — precisement ce que cette regle existait pour
+     empecher. Signale par Kevin le 19/09/2026 sur « MES PROGRAMMES ».
+
+   UN TEST VOYAIT LA CLASSE, PAS L'EFFET : il verifiait que le bouton du
+   panneau porte bien `.ch-nav-large`, ce qui etait vrai. Il mesure desormais
+   le `display` calcule. */
+.ch-nav-large{display:flex;align-items:center;justify-content:space-between}
 /* ══ MES PROGRAMMES : DES RAYONS, ET DANS CHAQUE CARTE H PUIS F ═══════════
    Demande de Kevin, 17/09/2026 : « que ce ne soit pas tout mélangé ». La
    carte disait « 3 séances H · 3 séances F » sur une ligne, et six commandes
@@ -8399,11 +8414,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Alerte anti-falaise et propositions de palier. Jamais bloquante,
              jamais une bascule : elle DIT, le coach decide. -->
         <div id="ch-alerte-palier"></div>
-        <button onclick="openCoachPrograms()" class="content-card ch-nav-large" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
+        <button onclick="openCoachPrograms()" class="content-card ch-nav-large" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left">
           <span>🗂️ MES PROGRAMMES (H/F)</span>
           <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
         </button>
-        <button onclick="loadCharges()" class="content-card ch-nav-large pil-lien" style="margin-bottom:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+        <button onclick="loadCharges()" class="content-card ch-nav-large pil-lien" style="margin-bottom:16px;padding:14px 16px;text-align:left;letter-spacing:1px">
           <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">CHARGES ARTICULAIRES</span>
           <span id="ch-charges-av" style="font-size:var(--fs-xs);color:var(--sub)"></span>
         </button>
@@ -8415,15 +8430,15 @@ const COACH_PHOTO='icons/coach.jpg';
              ecrans complets pour un depliage. Ils prennent ici le rang de
              « Mes programmes » et « Charges articulaires », et ont quitte le
              volet — aucun lien n'est duplique. -->
-        <button onclick="loadFileReprise()" class="content-card ch-nav-large pil-lien" style="margin-bottom:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+        <button onclick="loadFileReprise()" class="content-card ch-nav-large pil-lien" style="margin-bottom:10px;padding:14px 16px;text-align:left;letter-spacing:1px">
           <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">À RELANCER</span>
           <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
         </button>
-        <button onclick="loadCoachActivite()" class="content-card ch-nav-large pil-lien" style="margin-bottom:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+        <button onclick="loadCoachActivite()" class="content-card ch-nav-large pil-lien" style="margin-bottom:10px;padding:14px 16px;text-align:left;letter-spacing:1px">
           <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">ACTIVITÉ DU PORTEFEUILLE</span>
           <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
         </button>
-        <button onclick="openDechargeGroupee()" class="content-card ch-nav-large pil-lien" style="margin-bottom:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
+        <button onclick="openDechargeGroupee()" class="content-card ch-nav-large pil-lien" style="margin-bottom:16px;padding:14px 16px;text-align:left;letter-spacing:1px">
           <span style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px">DÉCHARGE GROUPÉE</span>
           <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
         </button>
