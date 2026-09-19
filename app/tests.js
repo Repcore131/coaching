@@ -14725,6 +14725,78 @@ async function testExercices(){
           if(l.length!==2) return _echec('attendu 2, obtenu '+l.length+' : '+l.join(','));
           return invitationsEnAttente({id:'c',email:'c@t',role:'coach'}).length===0
             ?true:_echec('un coach sans code a des invitations');})());
+        // ── La forme de « En attente » : des rectangles, deux gestes ──────
+        // Demande de Kevin, 19/09/2026 au soir : « mettre la meme chose mais 2
+        // boutons "relancer" en rouge et "son code" en blanc ». La meme grille
+        // que « Jamais demarre » juste au-dessus, parce que les deux blocs se
+        // suivent et posent la meme question.
+        ok('Chaque invitation en attente est un rectangle, avec ses deux gestes',(()=>{
+          const t=Date.now();
+          const u={id:'c1',email:'c@t',role:'coach',fname:'K',lname:'G',code:'RC-A-1',
+            studentCodes:[_inv('T-AAA','envoye',{createdAt:t-6*864e5})]};
+          const h=_htmlInvitationsEnAttente(u);
+          if(!h) return _echec('rien n’est rendu pour une invitation en attente');
+          const z=document.createElement('div'); z.innerHTML=h;
+          // LA GRILLE, ET LE RECTANGLE : plus une rangee pleine largeur.
+          if(!z.querySelector('.jd-grille')) return _echec('la grille des rectangles manque');
+          const cartes=z.querySelectorAll('.jd-carte');
+          if(cartes.length!==1) return _echec('attendu 1 rectangle, obtenu '+cartes.length);
+          if(z.innerText.indexOf('Léa')<0) return _echec('le nom n’est pas affiche');
+          // LA DATE, demandee explicitement.
+          if(z.innerText.indexOf(new Date(t-6*864e5).toLocaleDateString('fr-FR'))<0)
+            return _echec('la date manque : '+z.innerText);
+          // DEUX BOUTONS, ET LEURS DEUX COULEURS.
+          const bs=[...cartes[0].querySelectorAll('button')];
+          if(bs.length!==2) return _echec('attendu 2 boutons, obtenu '+bs.length);
+          const rouge=bs.find(b=>/btn-red/.test(b.className));
+          const blanc=bs.find(b=>/btn-blanc/.test(b.className));
+          if(!rouge) return _echec('aucun bouton rouge');
+          if(!blanc) return _echec('aucun bouton blanc');
+          if((rouge.getAttribute('onclick')||'').indexOf('relancerInvitation')!==0)
+            return _echec('le rouge ne relance pas : '+rouge.getAttribute('onclick'));
+          if((blanc.getAttribute('onclick')||'').indexOf('invCopierCode')!==0)
+            return _echec('le blanc ne copie pas le code : '+blanc.getAttribute('onclick'));
+          // ⚠ LE JETON VOYAGE, PAS L'INDEX. Un index dans studentCodes bouge des
+          //   qu'un code est cree ou supprime : le bouton d'un rectangle rendu
+          //   il y a dix secondes aurait copie l'invitation de quelqu'un
+          //   d'autre.
+          return /invCopierCode\(&quot;T-AAA&quot;\)/.test(h)
+            ?true:_echec('le bouton ne porte pas le jeton : '+h);})());
+        ok('Pendant les 48 h, le rectangle dit le temps qui reste et garde le code',(()=>{
+          // ⚠ LE DELAI NE GRISE PAS UN BOUTON SANS RIEN DIRE : ca apprend a
+          //   cliquer dans le vide. Le rectangle affiche les heures restantes a
+          //   la place du bouton rouge.
+          const t=Date.now();
+          const u={id:'c1',email:'c@t',role:'coach',fname:'K',lname:'G',code:'RC-A-1',
+            studentCodes:[_inv('T-BBB','envoye',{relanceLe:new Date(t-3600000).toISOString()})]};
+          const z=document.createElement('div'); z.innerHTML=_htmlInvitationsEnAttente(u);
+          const bs=[...z.querySelectorAll('.jd-carte button')];
+          if(bs.some(b=>/btn-red/.test(b.className)))
+            return _echec('le bouton rouge reste offert pendant le delai');
+          if(!/Encore\s*\d+/.test(z.innerText))
+            return _echec('le temps restant n’est pas dit : '+z.innerText);
+          // ⚠ ET « SON CODE » RESTE OUVERT. Copier une invitation n'envoie rien
+          //   a personne : c'est le coach qui decide ou il la colle, et lui
+          //   fermer cette porte n'aurait protege personne.
+          return bs.some(b=>/btn-blanc/.test(b.className)
+            &&(b.getAttribute('onclick')||'').indexOf('invCopierCode')===0)
+            ?true:_echec('« Son code » a disparu pendant le delai');})());
+        ok('Au-dela de huit invitations, le surplus est replie — pas perdu',(()=>{
+          const t=Date.now();
+          const u={id:'c1',email:'c@t',role:'coach',fname:'K',lname:'G',code:'RC-A-1',
+            studentCodes:Array.from({length:11},(_,i)=>_inv('T'+i,'envoye',{createdAt:t-i*864e5}))};
+          const z=document.createElement('div'); z.innerHTML=_htmlInvitationsEnAttente(u);
+          const tous=z.querySelectorAll('.jd-carte');
+          // ⚠ LES ONZE SONT RENDUS. Trois sont caches, aucun n'est absent : le
+          //   coach qui deplie doit les trouver sans nouveau rendu, et le
+          //   compte annonce en titre doit correspondre a ce qui est la.
+          if(tous.length!==11) return _echec('attendu 11 rectangles rendus, obtenu '+tous.length);
+          const vus=[...tous].filter(c=>!c.hasAttribute('hidden'));
+          if(vus.length!==8) return _echec('attendu 8 visibles, obtenu '+vus.length);
+          if(z.innerText.indexOf('En attente (11)')<0)
+            return _echec('le titre n’annonce pas les onze : '+z.innerText.slice(0,60));
+          return /\+ 3 autres/.test(z.innerText)
+            ?true:_echec('le surplus ne se laisse pas deplier : '+z.innerText);})());
         ok('Le lien d\'invitation porte le code, et le profil du coach',(()=>{
           // Sans le code, il n'y a rien à tracer : c'était le lien générique
           // d'avant ce lot, réutilisable par n'importe qui, sans destinataire.
@@ -37166,18 +37238,12 @@ async function testExercices(){
       // adresse ni numero la feuille de relance le dit — ce qui est le bon
       // comportement, mais pas celui qu'on teste ici.
       //
-      // ⚠ ALICE EST INSCRITE, ET ELLE NE PORTE DONC PAS DE `_codeInfo`. C'est
-      //   la nature meme de cette liste : `jamaisDemarre` ecarte `_fromCode`,
-      //   donc elle ne voit QUE des gens qui ont cree leur compte. Le code par
-      //   lequel Alice est entree se retrouve par rapprochement sur le nom —
-      //   d'ou le dossier coach pose juste au-dessus.
-      const _sauve=currentUser;
-      currentUser={id:'c1',role:'coach',email:'coach@t.fr',studentCodes:[
-        {codeId:'kA',token:'TA',active:true,studentName:'Alice Martin',
-         athleteEmail:'alice@t.fr',createdAt:t-30*864e5}]};
+      // ⚠ ALICE EST INSCRITE. C'est la nature meme de cette liste :
+      //   `jamaisDemarre` ecarte `_fromCode`, donc elle ne voit QUE des gens
+      //   qui ont cree leur compte. C'est ce qui la separe de « En attente »
+      //   juste en dessous, ou personne n'a encore de compte.
       const h=_htmlJamaisDemarre([{id:'a1',fname:'Alice',lname:'Martin',
         createdAt:t-12*864e5,sessions:[],email:'alice@t.fr',phone:'+33600000000'}],t);
-      currentUser=_sauve;
       if(!h) return _echec('la carte ne sort rien pour un athlete');
       const d=document.createElement('div'); d.innerHTML=h;
       // LE NOMBRE D'ATHLETES CONCERNES, demande explicitement.
@@ -37190,25 +37256,26 @@ async function testExercices(){
       //   les athletes suivis. Demande de Kevin : une relance s'adresse a une
       //   personne.
       //
-      // ⚠ LA FORME A CHANGE UNE SECONDE FOIS, le 19/09/2026 au soir. La carte
-      //   posait deux LIENS directs — WhatsApp et mail. Kevin : des
-      //   RECTANGLES, avec le nom, la date de creation du code, « Code
-      //   d'accès » et « Relancer » en blanc. Les deux liens n'ont pas disparu
-      //   du produit : ils sont derriere « Relancer ».
+      // ⚠ LA FORME A CHANGE DEUX FOIS DE PLUS, le 19/09/2026 au soir. D'abord
+      //   des RECTANGLES au lieu de la liste, avec « Code d'accès » et
+      //   « Relancer ». Puis, une heure apres : HUIT PAR LIGNE et UN SEUL
+      //   bouton, rouge. Le rapprochement qui retrouvait le code d'un inscrit
+      //   — `codeDeLAthlete` — est parti avec le bouton qu'il servait : ici
+      //   personne n'a plus besoin de son code, il est deja entre. Le code se
+      //   copie dans « En attente », juste en dessous, ou il a encore un sens.
       const cmd=[...d.querySelectorAll('button')].map(b=>b.getAttribute('onclick')||'');
-      if(!cmd.length) return _echec('aucun bouton sur la carte');
-      if(!cmd.some(x=>x.indexOf('jdCodeAcces')===0))
-        return _echec('aucun bouton « Code d’accès » : '+cmd.join(' | '));
-      if(!cmd.some(x=>x.indexOf('jdRelancer')===0))
-        return _echec('aucun bouton « Relancer » : '+cmd.join(' | '));
-      // LE BOUTON DE RELANCE EST BLANC, l'autre non : deux gestes de nature
-      // differente ne se peignent pas pareil.
-      const blanc=[...d.querySelectorAll('button')]
-        .find(b=>(b.getAttribute('onclick')||'').indexOf('jdRelancer')===0);
-      if(!/btn-blanc/.test(blanc.className)) return _echec('« Relancer » n’est pas le bouton blanc');
-      // LA DATE DU CODE, demandee explicitement.
-      if(d.innerText.indexOf('Code créé le')<0)
-        return _echec('la date de creation du code manque : '+d.innerText);
+      if(cmd.length!==1) return _echec('il faut UN bouton, il y en a '+cmd.length+' : '+cmd.join(' | '));
+      if(cmd[0].indexOf('jdRelancer')!==0)
+        return _echec('le bouton ne relance pas : '+cmd[0]);
+      // IL EST ROUGE, demande explicitement.
+      const b=d.querySelector('button');
+      if(!/btn-red/.test(b.className)) return _echec('« Relancer » n’est pas rouge : '+b.className);
+      if(/btn-blanc|btn-outline/.test(b.className))
+        return _echec('« Relancer » porte encore une autre peinture : '+b.className);
+      // LA DATE DE CREATION DU COMPTE, demandee explicitement — et c'est bien
+      // celle du COMPTE : ces gens se sont inscrits.
+      if(d.innerText.indexOf('Compte créé')<0)
+        return _echec('la date de creation du compte manque : '+d.innerText);
       // ET AUCUN CHEMIN VERS LE CANAL DE DIFFUSION.
       if(/openMessageCanal|relancerJamaisDemarre/.test(h))
         return _echec('la carte mene encore au canal');
@@ -37219,44 +37286,11 @@ async function testExercices(){
       //   desactive le code d'un athlete deja inscrit.
       if(/tunnelRelancer|tunnelOuvrir/.test(h))
         return _echec('la carte mene au tunnel, qui ne connait pas ces gens');
-      // ⚠ LE codeId VOYAGE, PAS L'INDEX. Un index dans `studentCodes` bouge
-      //   des qu'un code est cree ou supprime : le bouton d'une carte rendue
-      //   il y a dix secondes aurait copie l'invitation de quelqu'un d'autre.
-      return /jdCodeAcces\('[^']+'\)/.test(h)
-        ?true:_echec('le bouton ne porte pas d’identifiant de code');})());
-
-    // ⚠ LE RAPPROCHEMENT EST LE POINT FRAGILE DE TOUTE LA CARTE : sans lui,
-    //   aucun des deux boutons ne sait de quel code il parle. Il refait ce que
-    //   getClients fait pour decider qu'un code est « deja utilise », et les
-    //   deux doivent designer LE MEME code — sinon on affiche une date et on
-    //   copie une autre invitation.
-    ok('Le code d’un athlete inscrit se retrouve par son nom, puis par son adresse',(()=>{
-      const codes=[{codeId:'k1',studentName:'Alice Martin',athleteEmail:'vieux@t.fr'},
-                   {codeId:'k2',studentName:'',athleteEmail:'bob@t.fr'},
-                   {codeId:'k3',studentName:'Carla Diaz',athleteEmail:'carla@t.fr'}];
-      const par=(c)=>{ const k=codeDeLAthlete(c,codes); return k?k.codeId:null; };
-      // LE NOM D'ABORD : Alice a change d'adresse depuis, son code la suit.
-      if(par({fname:'Alice',lname:'Martin',email:'neuve@t.fr'})!=='k1')
-        return _echec('le nom ne retrouve pas le code');
-      // L'ADRESSE ENSUITE, pour les codes crees sans nommer l'eleve.
-      if(par({fname:'Bob',lname:'',email:'bob@t.fr'})!=='k2')
-        return _echec('l’adresse ne retrouve pas le code sans nom');
-      // LA CASSE ET LES ESPACES DE BORD NE COMPTENT PAS : le coach saisit a la
-      // main. Les espaces INTERIEURS, eux, comptent encore — comme dans
-      // getClients, et c'est voulu : deux rapprochements qui ne normalisent pas
-      // pareil designeraient deux codes differents pour la meme personne.
-      if(par({fname:' CARLA',lname:'diaz ',email:''})!=='k3')
-        return _echec('la casse fait rater le rapprochement');
-      // ET QUAND RIEN NE CORRESPOND, ON REND null — pas le premier code venu.
-      if(par({fname:'Zoé',lname:'Inconnue',email:'zoe@t.fr'})!==null)
-        return _echec('un inconnu se voit attribuer un code');
-      if(codeDeLAthlete(null,codes)!==null||codeDeLAthlete({fname:'Alice'},null)!==null)
-        return _echec('le cas vide ne rend pas null');
-      // ⚠ UN ATHLETE SANS NOM NI ADRESSE NE PREND PAS LE CODE SANS NOM. Les
-      //   deux chaines valent '' : une comparaison naive les aurait declarees
-      //   egales, et le coach aurait copie l'invitation d'un inconnu.
-      return codeDeLAthlete({fname:'',lname:'',email:''},codes)===null
-        ?true:_echec('une fiche vide s’approprie un code');})());
+      // ⚠ L'IDENTIFIANT DE L'ATHLETE VOYAGE, PAS SON RANG. Un rang dans la
+      //   liste bouge des qu'une personne s'entraine enfin : le bouton d'une
+      //   carte rendue il y a dix secondes aurait relance quelqu'un d'autre.
+      return /jdRelancer\('[^']+'\)/.test(h)
+        ?true:_echec('le bouton ne porte pas d’identifiant d’athlete');})());
 
     // XSS STOCKE : le prenom est saisi par l'athlete et atterrit dans le
     // tableau de bord de son coach. Le defaut avait deja ete trouve dans

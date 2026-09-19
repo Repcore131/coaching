@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1315';
+window.RC_BUILD='1316';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1570,18 +1570,39 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    quarante centimetres du nom qu'il concerne. Un rectangle rapproche le nom,
    la date et les deux gestes qui vont avec.
 
-   ⚠ `auto-fill` ET NON `auto-fit`. Avec `auto-fit`, une carte seule s'etire
-     sur toute la largeur de l'ecran : un rectangle de 1 100 px pour un nom et
-     deux boutons. `auto-fill` garde les pistes vides, donc la carte garde sa
-     taille. */
-.jd-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:8px;padding:12px 14px}
+   HUIT PAR LIGNE, demande de Kevin le 19/09/2026 au soir. C'est une densite
+   choisie : ces deux listes se BALAIENT — « qui attend, et depuis quand » —
+   elles ne se lisent pas dossier par dossier.
+
+   ⚠ HUIT PISTES FIXES SEULEMENT AU-DESSUS DE 900 px. En dessous, huit
+     colonnes donneraient des rectangles de quarante pixels ou ni un prenom ni
+     un bouton n'entre. `auto-fill` reprend alors la main et en met autant que
+     la largeur permet, jusqu'a une seule sur un telephone.
+
+   ⚠ `auto-fill` ET NON `auto-fit` pour ce repli. Avec `auto-fit`, une carte
+     seule s'etire sur toute la largeur de l'ecran : un rectangle de 1 100 px
+     pour un nom et un bouton. `auto-fill` garde les pistes vides, donc la
+     carte garde sa taille. */
+.jd-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(116px,1fr));gap:7px;padding:12px 14px}
+@media (min-width:900px){.jd-grille{grid-template-columns:repeat(8,minmax(0,1fr))}}
 .jd-carte{background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--sub);
-  border-radius:var(--r-3);padding:11px 12px;display:flex;flex-direction:column;gap:9px}
-.jd-nom{font-size:var(--fs-sm);font-weight:800;line-height:1.25;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jd-date{font-size:var(--fs-2xs);color:var(--sub);line-height:1.45}
-.jd-cmd{display:flex;gap:6px;margin-top:auto}
-.jd-cmd .btn{flex:1;margin:0;min-height:36px;padding:0 8px;font-size:var(--fs-2xs);letter-spacing:.3px;white-space:nowrap}
+  border-radius:var(--r-3);padding:9px;display:flex;flex-direction:column;gap:7px}
+/* ⚠ DEUX LIGNES, PAS UNE COUPURE. Sur 130 px, `text-overflow:ellipsis` rendait
+   « Jean Fago… » : le nom ne se lisait plus, et c'est la seule chose qui
+   identifie le rectangle. Deux lignes suffisent a presque tous les noms. */
+.jd-nom{font-size:var(--fs-xs);font-weight:800;line-height:1.3;overflow:hidden;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;word-break:break-word}
+.jd-date{font-size:var(--fs-2xs);color:var(--sub);line-height:1.4}
+/* LES BOUTONS S'EMPILENT : cote a cote dans 112 px utiles, « Relancer » et
+   « Son code » auraient fait cinquante pixels chacun. */
+.jd-cmd{display:flex;flex-direction:column;gap:5px;margin-top:auto}
+.jd-cmd .btn{width:100%;margin:0;min-height:32px;padding:0 6px;font-size:var(--fs-2xs);
+  letter-spacing:.2px;white-space:nowrap}
+/* Le delai de 48 h prend la place du bouton, et dit le temps qui reste : le
+   griser sans rien dire apprend a cliquer dans le vide. */
+.jd-attendre{font-size:var(--fs-2xs);color:var(--sub);text-align:center;line-height:1.25;
+  border:1px dashed var(--border);border-radius:var(--r-2);padding:5px 4px;min-height:32px;
+  display:flex;align-items:center;justify-content:center}
 /* ══ LE TUNNEL COMMERCIAL ══════════════════════════════════════════════════
    Des cartes, et non un tableau : une personne du tunnel porte cinq faits —
    qui, combien de relances, quel statut, quand la derniere, quand la
@@ -30516,45 +30537,6 @@ function brouillonJamaisDemarre(c){
 // n'est en retard. C'est une relance commerciale, et la peindre comme « A
 // traiter » lui volerait l'attention que la sante doit garder.
 /**
- * PURE. Le code d'acces par lequel un athlete DEJA INSCRIT est entre, ou null.
- *
- * ⚠ CETTE FONCTION EXISTE PARCE QUE `_codeInfo` N'EST PAS DISPONIBLE ICI, et
- *   c'est structurel : getClients ne pose `_codeInfo` que sur les profils
- *   `_code_…` qu'il FABRIQUE pour les codes non utilises, et `jamaisDemarre`
- *   ecarte precisement ceux-la (`c._fromCode` → false). « Jamais demarre »
- *   parle de gens qui ont cree leur compte et ne se sont jamais entraines :
- *   leur code existe toujours dans studentCodes, mais plus aucun lien ne le
- *   rattache a leur dossier. On refait donc le rapprochement.
- *
- * ⚠ ET ON LE REFAIT COMME getClients, pas autrement : le nom d'abord,
- *   l'adresse ensuite pour les codes crees sans nom. Deux rapprochements
- *   differents auraient designe deux codes differents pour la meme personne —
- *   celui qu'on affiche et celui qu'on copie.
- * @param {any} c      un athlete inscrit
- * @param {any[]} codes  currentUser.studentCodes
- * @returns {any}
- */
-function codeDeLAthlete(c,codes){
-  const l=(codes||[]).filter(Boolean);
-  if(!c||!l.length) return null;
-  const nom=String(((c.fname||'')+' '+(c.lname||''))).toLowerCase().trim();
-  const mail=String(c.email||'').toLowerCase().trim();
-  return l.find(k=>nom&&String(k.studentName||'').toLowerCase().trim()===nom)
-      || l.find(k=>mail&&String(k.athleteEmail||'').toLowerCase().trim()===mail)
-      || null;
-}
-/** Le geste « Code d'accès » d'une carte : l'invitation, prete a coller. */
-function jdCodeAcces(codeId){
-  // ⚠ ON RETROUVE L'INDEX ICI, ET ON NE LE TRANSPORTE PAS. Un index dans
-  //   `studentCodes` bouge des qu'un code est cree ou supprime, et le bouton
-  //   d'une carte rendue il y a dix secondes aurait copie l'invitation de
-  //   quelqu'un d'autre. Le codeId, lui, ne bouge jamais.
-  const i=((currentUser&&currentUser.studentCodes)||[]).findIndex(c=>c&&c.codeId===codeId);
-  if(i<0){ toast('Code introuvable','var(--orange)'); return false; }
-  _copierInvitationAthlete(i);
-  return true;
-}
-/**
  * Le geste « Relancer » d'une carte : les deux canaux directs, pour UNE
  * personne.
  *
@@ -30621,7 +30603,6 @@ function _htmlJamaisDemarre(liste,maintenant){
   const reste=Math.max(0,n-MAX);
   const jour=t=>{ if(!t) return '—'; const q=new Date(t), p=x=>String(x).padStart(2,'0');
     return p(q.getDate())+'/'+p(q.getMonth()+1)+'/'+q.getFullYear(); };
-  const codes=(currentUser&&currentUser.studentCodes)||[];
   return '<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
     // ⚠ L'ESPACE AU-DESSUS, demande par Kevin : le bandeau « Jamais démarré »
@@ -30645,25 +30626,18 @@ function _htmlJamaisDemarre(liste,maintenant){
       // pour la meme raison — le defaut y avait ete trouve en testant des
       // prenoms hostiles.
       const nom=escapeHtml(String(((c.fname||'')+' '+(c.lname||'')).trim())||'Athlète');
-      const code=codeDeLAthlete(c,codes);
-      const cid=escapeHtml(String((code&&code.codeId)||''));
-      // LA DATE DEMANDEE EST CELLE DU CODE. Quand le rapprochement ne donne
-      // rien — code supprime depuis, ou athlete arrive autrement — on affiche
-      // la date du COMPTE plutot qu'un tiret : c'est la meme question posee au
-      // coach, « depuis quand cette personne attend-elle ? », et elle garde une
-      // reponse.
+      // LA DATE DE CREATION DU COMPTE, demandee explicitement. Ces gens SE SONT
+      // INSCRITS — c'est ce qui les separe de « En attente » juste en dessous —
+      // et la date qui les concerne est celle de leur compte, pas celle du code
+      // qu'ils ont deja consomme.
       return '<div class="jd-carte'+(rang>=MAX?' jd-plus" hidden':'"')+'>'
         +'<div><div class="jd-nom" title="'+nom+'">'+nom+'</div>'
-        +'<div class="jd-date">'+(code?'Code créé le '+jour(code.createdAt)
-                                       :'Compte créé le '+jour(dateRattachement(c)))
-        +'<br>rattaché depuis '+j+' jour'+(j>1?'s':'')+'</div></div>'
+        +'<div class="jd-date">Compte créé<br>le '+jour(dateRattachement(c))
+        +'<br>il y a '+j+' jour'+(j>1?'s':'')+'</div></div>'
         +'<div class="jd-cmd">'
-        // SANS CODE RAPPROCHE, PAS DE BOUTON « CODE D'ACCES » : il copierait
-        // l'invitation de quelqu'un d'autre, ou rien du tout. « Relancer »
-        // prend alors toute la largeur — il marche, lui, il ne dépend que de
-        // la fiche.
-        +(cid?'<button type="button" class="btn btn-outline btn-sm" onclick="jdCodeAcces(\''+cid+'\')">Code d’accès</button>':'')
-        +'<button type="button" class="btn btn-blanc btn-sm" onclick="jdRelancer(\''+escapeHtml(String(c.id||''))+'\')">Relancer</button>'
+        // UN SEUL GESTE, ET IL EST ROUGE. Demande de Kevin : c'est la seule
+        // chose a faire pour quelqu'un qui a un compte et ne s'en sert pas.
+        +'<button type="button" class="btn btn-red btn-sm" onclick="jdRelancer(\''+escapeHtml(String(c.id||''))+'\')">Relancer</button>'
         +'</div></div>';
     }).join('')
     +'</div>'
@@ -30673,7 +30647,7 @@ function _htmlJamaisDemarre(liste,maintenant){
       +'cursor:pointer;padding:11px 14px;min-height:42px;text-align:left">+ '+reste+' autre'
       +(reste>1?'s':'')+' · tout afficher</button>':'')
     +'<div class="sub" style="font-size:var(--fs-2xs);line-height:1.55;padding:2px 14px 12px">'
-    +'« Code d’accès » copie l’invitation, prête à coller. « Relancer » ouvre le message pré-rédigé, en WhatsApp ou par mail.'
+    +'« Relancer » ouvre le message pré-rédigé, en WhatsApp ou par mail. RepCore n’envoie rien à ta place.'
     +'</div></div>';
 }
 // ⚠ AUCUN ENVOI, POUR LES DEUX CADRES. Les boutons OUVRENT WhatsApp ou le
@@ -98448,40 +98422,76 @@ function messageRelance(c,user){
     +lienInvitation(c&&c.token,u);
 }
 
-// Le rendu de la section « En attente ». Une ligne par invitation, avec son
-// état, sa date, et le seul geste qui serve : relancer.
+/**
+ * Le geste « Son code » d'une invitation : l'invitation entiere, prete a
+ * coller — le lien, le code, et la marche a suivre.
+ *
+ * ⚠ LE JETON VOYAGE, PAS L'INDEX. Un index dans `studentCodes` bouge des qu'un
+ *   code est cree ou supprime, et le bouton d'un rectangle rendu il y a dix
+ *   secondes aurait copie l'invitation de quelqu'un d'autre. Le jeton, lui, ne
+ *   bouge jamais — c'est deja par lui que `relancerInvitation` travaille.
+ * @param {string} token
+ */
+function invCopierCode(token){
+  const i=((currentUser&&currentUser.studentCodes)||[]).findIndex(c=>c&&c.token===token);
+  if(i<0){ toast('Invitation introuvable','var(--orange)'); return false; }
+  _copierInvitationAthlete(i);
+  return true;
+}
+// Le rendu de la section « En attente ». Un RECTANGLE par invitation, huit par
+// ligne, avec son etat, sa date, et les deux gestes qui servent : relancer, et
+// recuperer le code pour le coller soi-meme.
+//
+// ⚠ MEME GRILLE QUE « JAMAIS DEMARRE », ET C'EST VOULU. Les deux blocs se
+//   suivent a l'ecran et posent la meme question — qui attend, et depuis
+//   quand. Deux mises en page differentes pour deux listes voisines auraient
+//   fait croire a deux natures de donnees.
 function _htmlInvitationsEnAttente(user){
   const u=_dossier(user);
   if(!u||u.role!=='coach') return '';
   const l=invitationsEnAttente(u);
   if(!l.length) return '';
+  const MAX=8;
+  const reste=Math.max(0,l.length-MAX);
   const d=(iso)=>{ if(!iso) return ''; const t=Date.parse(iso);
     return isFinite(t)?new Date(t).toLocaleDateString('fr-FR'):''; };
-  const lignes=l.map(c=>{
+  const lignes=l.map((c,rang)=>{
     const e=etatInvitation(c);
     const quand=(e==='ouvert')?d(c.ouvertLe):(c.createdAt?new Date(c.createdAt).toLocaleDateString('fr-FR'):'');
     const r=relancePossible(c);
     const nom=((c.prenom||'')+' '+(c.nom||'')).trim()||c.studentName||'Invitation';
     const couleur=(e==='ouvert')?'var(--green)':'var(--sub)';
-    return '<div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);'
-      +'border:1px solid var(--border);border-radius:var(--r-3);padding:9px 11px;margin-bottom:7px">'
-      +'<div style="flex:1;min-width:0">'
-      +'<div style="font-weight:800;font-size:var(--fs-sm)">'+escapeHtml(nom)+'</div>'
-      +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px;color:'+couleur+'">'
-      +escapeHtml(INV_ETAT_LIB[e]||e)+(quand?(' · '+escapeHtml(quand)):'')+'</div></div>'
+    // ⚠ escapeHtml APRES JSON.stringify, ET NON UN SIMPLE REMPLACEMENT DES
+    //   GUILLEMETS. `&` doit etre echappe LE PREMIER, sinon un jeton contenant
+    //   `&quot;` se redecoderait en guillemet a la lecture de l'attribut et
+    //   sortirait de l'appel. escapeHtml tient deja cet ordre.
+    const jeton=escapeHtml(JSON.stringify(String(c.token||'')));
+    return '<div class="jd-carte'+(rang>=MAX?' jd-plus" hidden':'"')+'>'
+      +'<div><div class="jd-nom" title="'+escapeHtml(nom)+'">'+escapeHtml(nom)+'</div>'
+      +'<div class="jd-date" style="color:'+couleur+'">'+escapeHtml(INV_ETAT_LIB[e]||e)+'</div>'
+      +(quand?'<div class="jd-date">le '+escapeHtml(quand)+'</div>':'')
+      +'</div>'
+      +'<div class="jd-cmd">'
+      // ⚠ LES 48 H ENTRE DEUX RELANCES TIENNENT TOUJOURS. Ce n'est pas une
+      //   limite technique : c'est ce qui separe un rappel d'un harcelement, et
+      //   le rectangle DIT le temps qui reste plutot que de griser un bouton.
       +(r.ok
-        ? '<button class="btn btn-outline btn-sm" style="flex-shrink:0;min-height:40px" '
-          +'onclick="relancerInvitation('+JSON.stringify(c.token)+')">Relancer</button>'
-        // Griser sans dire pourquoi apprend a cliquer dans le vide. On dit
-        // le temps qui reste.
-        : '<span class="sub" style="font-size:var(--fs-2xs);flex-shrink:0;text-align:right;'
-          +'line-height:1.4;max-width:96px">Relancé<br>encore '+r.reste+' h</span>')
-      +'</div>';
+        ? '<button type="button" class="btn btn-red btn-sm" onclick="relancerInvitation('+jeton+')">Relancer</button>'
+        : '<span class="jd-attendre">Encore '+r.reste+' h</span>')
+      // « SON CODE » RESTE OUVERT MEME PENDANT LES 48 H : copier une invitation
+      // n'envoie rien a personne, c'est le coach qui decide ou il la colle.
+      +'<button type="button" class="btn btn-blanc btn-sm" onclick="invCopierCode('+jeton+')">Son code</button>'
+      +'</div></div>';
   }).join('');
   return '<div style="margin-bottom:18px">'
     +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:8px">En attente ('+l.length+')</div>'
-    +lignes+'</div>';
+    +'<div class="jd-grille" style="padding:0">'+lignes+'</div>'
+    +(reste?'<button type="button" onclick="jdVoirTout(this)" style="display:block;width:100%;background:none;border:none;'
+      +'color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;'
+      +'letter-spacing:1px;text-transform:uppercase;cursor:pointer;padding:10px 0 0;min-height:36px;'
+      +'text-align:left">+ '+reste+' autre'+(reste>1?'s':'')+' · tout afficher</button>':'')
+    +'</div>';
 }
 // Relancer : on ouvre WhatsApp avec le message pré-rédigé, et on horodate.
 // L'horodatage part MEME si le coach referme WhatsApp sans envoyer : on ne
