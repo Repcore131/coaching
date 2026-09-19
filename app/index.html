@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1303';
+window.RC_BUILD='1304';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -68511,6 +68511,58 @@ function _athPerso(u){
   return {objectif:ATH_OBJECTIFS.some(o=>o.k===p.objectif)?p.objectif:null,
           delta:Number(p.delta)||0};
 }
+// ══ QUAND LE COACH A POSE LES CHIFFRES, ILS FONT FOI ══════════════════════
+// Demande de Kevin, 19/09/2026, apres avoir constate le defaut : il reajustait
+// les macros d'une athlete en flexible et elle ne voyait RIEN changer.
+//
+// LES DEUX ECRANS SE CONTREDISAIENT, et c'est tout le defaut. La carte « Mon
+// objectif » RECALCULE ses cibles par cibleTableur — poids, taille, age, NAF,
+// coefficient — sans jamais lire nutrition.macros. Les anneaux, eux, lisent
+// nutrition.macros par _getEffectiveMacros. Le coach enregistrait 2 200 kcal :
+// la donnee partait, descendait, arrivait dans le dossier de l'athlete, et sa
+// carte continuait d'afficher les 2 013 du calcul pendant que ses anneaux
+// comptaient sur 2 200. Et au premier geste sur cette carte, _athEcrireCibles
+// REECRIVAIT nutrition.macros avec le calcul : la prescription du coach etait
+// effacee, sans un mot ni pour lui ni pour elle.
+//
+// L'ARBITRE EST LE COMMUTATEUR QUI EXISTE DEJA — « Saisie manuelle », sur la
+// fiche du coach. Il dit noir sur blanc « tes chiffres priment : ils ne
+// bougeront plus ». Il ne manquait qu'une chose : que l'ecran de l'athlete
+// l'ecoute. Aucun concept neuf, aucune migration, et un seul endroit ou la
+// question se decide.
+//
+// LE REPLI SANS DRAPEAU EST CELUI DE saisieManuelle — un dossier qui porte
+// deja des grammes porte une prescription — MOINS ceux que l'athlete a ecrits
+// elle-meme depuis cette carte. Sans ce retrait, une athlete qui a regle ses
+// propres cibles se retrouverait verrouillee sur elles, par un coach qui n'a
+// jamais rien pose.
+function ciblesPoseesParCoach(u){
+  const n=(u&&u.nutrition)||{};
+  // Le drapeau explicite gagne TOUJOURS, quelle que soit l'origine en place :
+  // un coach qui a leve l'interrupteur a dit ce qu'il voulait, et un dossier
+  // ou l'athlete avait pris la main avant ce lot se repare au premier
+  // enregistrement du coach, qui repose l'origine a 'coach'.
+  if(typeof n.manuel==='boolean') return n.manuel;
+  if(((n.macros||{}).origine)==='athlete') return false;
+  try{ return saisieManuelle(u)===true; }catch(e){ return false; }
+}
+// Les cibles EN VIGUEUR pour un jour donne, exactement celles des anneaux :
+// nutrition.macros, cyclage ON/OFF et adaptation de cycle compris. Un second
+// chemin vers la meme cible divergerait, et c'est precisement la divergence
+// qu'on repare ici.
+function ciblesEnVigueur(u,jourISO){
+  const nut=(u&&u.nutrition)||{};
+  if(!nut.macros) return null;
+  const j=jourISO||localISODate(new Date());
+  let m=null;
+  try{ m=_getEffectiveMacros(nut,nutIsOnDay(j,u),j,u); }catch(e){ return null; }
+  if(!m) return null;
+  const kcal=Math.round(Number(m.kcal)||0);
+  const p=Math.round(Number(m.p)||0), l=Math.round(Number(m.l)||0),
+        g=Math.round(Number(m.g)||0);
+  if(!kcal&&!p&&!l&&!g) return null;
+  return {kcal,p,l,g};
+}
 // PURE. Les cibles de l'athlete, moteur du coach compris, delta applique.
 // Le delta tombe sur les GLUCIDES et eux seuls : proteines et lipides sont
 // des planchers de sante, on ne les rabote pas pour vingt calories.
@@ -68519,8 +68571,15 @@ function ciblesAthlete(u){
   const reg=(typeof reglagesCalcul==='function')?reglagesCalcul(u):{};
   const opts={};
   if(per.objectif) opts.coef=objCoefDefaut(per.objectif);
-  if(typeof reg.prot==='number') opts.protGparKg=reg.prot;
-  if(typeof reg.lip==='number')  opts.lipGparKg=reg.lip;
+  // ⚠ protGkg / lipGkg ET NON protGparKg / lipGparKg. Les deux noms coexistent
+  // dans ce fichier : besoinsProposes lit `protGparKg`, cibleTableur lit
+  // `protGkg`. Ces deux lignes passaient les noms de la PREMIERE a la SECONDE,
+  // qui les ignorait en silence — les deux menus g/kg de la carte etaient donc
+  // inertes depuis leur mise en ligne : l'athlete choisissait 2,2 g/kg, le
+  // calcul restait sur la valeur suggeree et le menu retombait dessus au
+  // rendu suivant.
+  if(typeof reg.prot==='number') opts.protGkg=reg.prot;
+  if(typeof reg.lip==='number')  opts.lipGkg=reg.lip;
   let t=null;
   try{ t=cibleTableur(u,opts); }catch(e){ return null; }
   if(!t||(t.manque&&t.manque.length)) return t?{manque:t.manque||[]}:null;
@@ -68538,6 +68597,13 @@ function ciblesAthlete(u){
 // decision du coach, pas de l'athlete, et _getEffectiveMacros continue
 // d'appliquer par-dessus l'adaptation de cycle.
 function _athEcrireCibles(){
+  // ⚠ LE DERNIER VERROU AVANT L'ECRITURE, et il est volontairement redondant
+  // avec les trois gardes des boutons. Un ecran rendu AVANT que la
+  // modification du coach ne descende porte encore ses boutons actifs : le
+  // rendu n'est repeint que si l'athlete est sur l'accueil. Sans ce garde-ci,
+  // ce clic-la — sur une carte devenue perimee entre-temps — effacerait la
+  // prescription qui vient tout juste d'arriver.
+  if(ciblesPoseesParCoach(currentUser)) return false;
   const c=ciblesAthlete(currentUser);
   if(!c||(c.manque&&c.manque.length)) return false;
   if(!currentUser.nutrition) currentUser.nutrition={};
@@ -68549,7 +68615,23 @@ function _athEcrireCibles(){
   try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
   return true;
 }
+// LE GARDE DES TROIS BOUTONS, EN TETE ET NON AU MOMENT D'ECRIRE LES CIBLES.
+// athObjectif ecrit `nutrition.tableur.coef` — LA GRILLE DU COACH — avant
+// meme d'appeler _athEcrireCibles : s'arreter plus bas aurait laisse un clic
+// changer le coefficient d'objectif sur la fiche du coach, sans toucher aux
+// cibles. Un ecran qui ne fait rien a moitie.
+//
+// ET IL PARLE. Un bouton qui ne repond pas se clique trois fois avant qu'on
+// se demande pourquoi ; le repaint qui suit retire les boutons de l'ecran,
+// puisque la carte se rend alors dans sa forme verrouillee.
+function _athVerrouille(){
+  if(!ciblesPoseesParCoach(currentUser)) return false;
+  toast('Tes cibles sont posées par ton coach','var(--orange)');
+  try{ loadNutrition(); }catch(e){}
+  return true;
+}
 function athObjectif(k){
+  if(_athVerrouille()) return;
   if(!ATH_OBJECTIFS.some(o=>o.k===k)) return;
   if(!currentUser.nutrition) currentUser.nutrition={};
   const p=currentUser.nutrition.perso||{};
@@ -68564,6 +68646,7 @@ function athObjectif(k){
   _athEcrireCibles(); loadNutrition();
 }
 function athDelta(sens){
+  if(_athVerrouille()) return;
   if(!currentUser.nutrition) currentUser.nutrition={};
   const p=currentUser.nutrition.perso||{};
   // Borne a plus ou moins 500 kcal : au-dela ce n'est plus un ajustement,
@@ -68575,6 +68658,7 @@ function athDelta(sens){
   _athEcrireCibles(); loadNutrition();
 }
 function athGkg(quoi,val){
+  if(_athVerrouille()) return;
   const v=Number(val);
   if(!isFinite(v)||v<=0) return;
   if(!currentUser.nutrition) currentUser.nutrition={};
@@ -68602,6 +68686,42 @@ function _htmlReglageAthleteCoach(c){
     +escapeHtml(bouts.join(' · '))+'. Le calcul ci-dessous en tient compte.</div>';
 }
 function _htmlCiblesAthlete(u){
+  // ══ LA FORME VERROUILLEE PASSE DEVANT TOUT LE RESTE ══════════════════════
+  // Quand le coach a pose les chiffres, la carte MONTRE LES SIENS — pris a la
+  // meme source que les anneaux quinze lignes plus bas — et ne propose plus
+  // rien a regler. C'est le correctif du 19/09/2026 : voir ciblesPoseesParCoach.
+  //
+  // AVANT ciblesAthlete, ET C'EST DELIBERE : le calcul peut echouer faute de
+  // poids ou de taille, et la carte se serait tue — en cachant a l'athlete des
+  // cibles qui, elles, sont parfaitement ecrites dans son dossier. Ce qu'on
+  // affiche ici ne depend d'aucun calcul.
+  if(ciblesPoseesParCoach(u)){
+    const v=ciblesEnVigueur(u);
+    // Interrupteur leve, cibles pas encore ecrites : on le DIT. Retomber sur
+    // la carte reglable remettrait entre ses mains ce que le coach vient
+    // justement de reprendre.
+    if(!v) return '<div class="rc-obj-carte">'
+      +'<div class="rc-obj-titre">Mes cibles</div>'
+      +'<div class="rc-obj-note" style="margin-top:0;padding-top:0;border-top:none">'
+      +'Ton coach n’a pas encore posé tes cibles. Elles apparaîtront ici dès '
+      +'qu’il les aura enregistrées.</div></div>';
+    const l=(t,n)=>'<div class="rc-obj-l2"><span class="rc-obj-n2">'+t+'</span>'
+      +'<span class="rc-obj-v2"><span class="rc-obj-g">'+n+' g</span></span></div>';
+    return '<div class="rc-obj-carte">'
+      +'<div class="rc-obj-titre">Mes cibles</div>'
+      +'<div class="rc-obj-kcal" style="justify-content:center">'
+        +'<div class="rc-obj-centre">'
+          +'<div class="rc-obj-nb">'+Number(v.kcal).toLocaleString('fr-FR')+'</div>'
+          +'<div class="rc-obj-u">kcal par jour</div></div>'
+      +'</div>'
+      +'<div class="rc-obj-macros">'
+        +l('Protéines',v.p)+l('Lipides',v.l)+l('Glucides',v.g)
+      +'</div>'
+      +'<div class="rc-obj-note">Cibles posées par ton coach : elles ne se '
+      +'règlent pas depuis cet écran. Si elles ne te conviennent pas, '
+      +'parles-en avec lui.</div>'
+      +'</div>';
+  }
   const c=ciblesAthlete(u);
   if(!c) return '';
   if(c.manque&&c.manque.length){
@@ -77909,9 +78029,16 @@ function saveClientNutriManuel(v){
 // et AUCUN ecran ne le lisait. Le coach ne pouvait donc pas savoir que son
 // athlete avait modifie ses propres cibles depuis son ecran d'ajustement.
 // Rien de nouveau n'est ecrit : cette ligne LIT ce qui existe deja.
+// ⚠ 'athlete' MANQUAIT A CETTE TABLE depuis que la carte « Mon objectif » du
+// 14/09/2026 ecrit cette origine-la. Un libelle absent rend `dit` undefined,
+// donc la ligne ENTIERE disparaissait : le coach dont l'athlete venait de
+// remplacer ses cibles ne lisait plus rien du tout — pas meme la mention
+// rassurante « saisies par toi » qu'il avait la veille. Le silence disait le
+// contraire de ce qui s'etait passe.
 const NUT_ORIGINE=Object.freeze({
   coach:'saisies par toi',
   auto:'calculées automatiquement',
+  athlete:'réglées par ton athlète depuis son écran',
   ajustement:'issues d’un ajustement appliqué par ton athlète'});
 function _htmlOrigineCibles(c){
   const m=((c&&c.nutrition)||{}).macros||{};
@@ -77922,9 +78049,10 @@ function _htmlOrigineCibles(c){
     try{ quand=' le '+new Date(m.origineDate).toLocaleDateString('fr-FR',
       {day:'2-digit',month:'short',year:'numeric'}); }catch(e){}
   }
-  // L'ajustement vient de l'athlete : c'est le seul cas que le coach n'a pas
-  // decide lui-meme, et le seul qu'il faut donc distinguer a l'oeil.
-  const alerte=(m.origine==='ajustement');
+  // L'ajustement et la carte « Mon objectif » viennent tous deux de l'athlete :
+  // ce sont les deux cas que le coach n'a pas decides lui-meme, et les deux
+  // qu'il faut donc distinguer a l'oeil.
+  const alerte=(m.origine==='ajustement'||m.origine==='athlete');
   return '<div style="margin-top:8px;font-size:var(--fs-2xs);line-height:1.55;color:'
     +(alerte?'var(--orange)':'var(--text-faint)')+'">'
     +'Cibles enregistrées '+dit+quand+'.</div>';

@@ -34959,6 +34959,146 @@ async function testExercices(){
         DB.set('users',svD||{}); currentUser=svU; currentClientId=svC;
       }
     })();
+    // ── LES CIBLES DU COACH ATTEIGNENT BIEN L'ATHLETE ────────────────────
+    // Kevin, 19/09/2026 : « je fais les modifs sur la diete flexible en
+    // reajustant les macros de l'athlete et elle ne recoit rien ».
+    //
+    // LES CHIFFRES PARTAIENT POURTANT, ET ARRIVAIENT. C'est la carte « Mon
+    // objectif » — posee le 14/09/2026 — qui ne les lisait pas : elle
+    // RECALCULE ses cibles par cibleTableur sans jamais regarder
+    // nutrition.macros, pendant que les anneaux du meme ecran, eux, lisent
+    // nutrition.macros. Mesure faite avant le correctif, sur ce meme dossier :
+    // le coach enregistrait 2 200 kcal, la carte affichait 2 013, les anneaux
+    // comptaient sur 2 200, et UN SEUL clic sur ±20 ramenait la prescription a
+    // 2 033 en origine 'athlete'. Les chiffres du coach etaient effaces.
+    //
+    // AUCUN TEST NE COUVRAIT CE CHEMIN, et c'est ce qui l'a laisse passer.
+    (()=>{
+      const svU=currentUser, svD=DB.get('users'),
+            svL=window.loadNutrition, svT=window.toast, svP=CLOUD.pushOne,
+            svS=window.saveUser;
+      const mk=nut=>({id:'A7',email:'a7@t.fr',role:'athlete',fname:'T',lname:'X',
+        coachId:'C7',gender:'H',_evol_height:'178','init-age':30,
+        sessions_config:[{active:true},{active:false},{active:true},{active:false},
+                         {active:true},{active:false},{active:false}],
+        phase:{type:'seche',debut:Date.now()-10*864e5},
+        bilans:[{date:Date.now()-3*864e5,'bil-weight':'80','deb-height':'178','deb-age':30}],
+        nutrition:Object.assign({dietType:'flexible'},nut||{})});
+      // LES DEUX JOURNEES PORTENT LES MEMES CHIFFRES, et ce n'est pas une
+      // facilite : sans cela l'assertion dependrait du jour de la semaine ou
+      // la suite s'execute, et passerait au vert trois jours sur sept.
+      const CO={kcal:2200,p:160,g:220,l:70};
+      const mkCoach=extra=>mk(Object.assign({manuel:true,
+        macros:{on:Object.assign({},CO),off:Object.assign({},CO),
+                origine:'coach',origineDate:Date.now()}},extra||{}));
+      // Le total se lit dans rc-obj-nb, les grammes dans rc-obj-g. On retire
+      // TOUT ce qui n'est pas un chiffre : toLocaleString('fr-FR') glisse une
+      // espace insecable dans les milliers, et laquelle depend de l'ICU.
+      const _nb=h=>{ const m=/class="rc-obj-nb">([^<]*)</.exec(h);
+        return m?Number(m[1].replace(/\D/g,'')):null; };
+      const _gs=h=>[...h.matchAll(/class="rc-obj-g">([^<]*)</g)]
+        .map(m=>Number(m[1].replace(/\D/g,'')));
+      try{
+        window.loadNutrition=()=>{}; window.toast=()=>{};
+        window.saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true);
+
+        ok('LE COMMUTATEUR DU COACH DECIDE, ET L\'ECRAN DE L\'ATHLETE L\'ECOUTE',(()=>{
+          if(ciblesPoseesParCoach(mk({}))!==false)
+            return _echec('un dossier vierge est deja verrouille');
+          if(ciblesPoseesParCoach(mkCoach())!==true)
+            return _echec('le commutateur « manuel » leve ne verrouille rien');
+          if(ciblesPoseesParCoach(mk({manuel:false,macros:{on:{kcal:3000}}}))!==false)
+            return _echec('le choix explicite « automatique » est ignore');
+          // Sans drapeau, des grammes deja poses sont une prescription : c'est
+          // le repli de saisieManuelle, et il vaut ici aussi.
+          if(ciblesPoseesParCoach(mk({macros:{on:{kcal:3000},off:{kcal:3000}}}))!==true)
+            return _echec('une prescription existante n\'est pas reconnue');
+          // MOINS CE QUE L'ATHLETE A ECRIT ELLE-MEME. Sans ce retrait, une
+          // athlete qui a regle ses propres cibles se retrouverait verrouillee
+          // sur elles par un coach qui n'a jamais rien pose.
+          return ciblesPoseesParCoach(mk({macros:{on:{kcal:3000},origine:'athlete'}}))===false
+            ?true:_echec('les cibles reglees par l\'athlete la verrouillent');})());
+
+        ok('LA CARTE DE L\'ATHLETE MONTRE LES CHIFFRES DU COACH',(()=>{
+          const u=mkCoach();
+          const h=_htmlCiblesAthlete(u);
+          if(!h) return _echec('la carte ne se rend pas du tout');
+          if(_nb(h)!==CO.kcal)
+            return _echec('elle affiche '+_nb(h)+' kcal au lieu des '+CO.kcal+' du coach');
+          // L'ordre de la carte verrouillee : proteines, lipides, glucides.
+          const g=_gs(h);
+          if(g.join('/')!==[CO.p,CO.l,CO.g].join('/'))
+            return _echec('grammages affiches : '+g.join('/')+' au lieu de '
+              +[CO.p,CO.l,CO.g].join('/'));
+          return true;})());
+
+        ok('LA CARTE ET LES ANNEAUX DISENT LE MEME CHIFFRE',(()=>{
+          // LE DEFAUT LUI-MEME. Les deux vivent sur le meme ecran, a quinze
+          // lignes l'un de l'autre ; ils ne peuvent pas se contredire.
+          const u=mkCoach();
+          const j=localISODate(new Date());
+          const m=_getEffectiveMacros(u.nutrition,nutIsOnDay(j,u),j,u);
+          const vu=_nb(_htmlCiblesAthlete(u));
+          return vu===Math.round(Number(m.kcal)||0)?true
+            :_echec('la carte dit '+vu+' et les anneaux comptent sur '+Math.round(m.kcal));})());
+
+        ok('VERROUILLEE, LA CARTE N\'OFFRE PLUS AUCUN REGLAGE',(()=>{
+          const h=_htmlCiblesAthlete(mkCoach());
+          return /athDelta|athObjectif|athGkg/.test(h)
+            ?_echec('un bouton de reglage survit sur la carte verrouillee')
+            :true;})());
+
+        ok('UN GESTE DE L\'ATHLETE N\'EFFACE PLUS LA PRESCRIPTION',(()=>{
+          // LE PIRE DES DEUX EFFETS. _athEcrireCibles reecrivait
+          // nutrition.macros avec le RECALCUL des le premier clic : la
+          // prescription du coach disparaissait, et il n'en etait pas averti.
+          currentUser=mkCoach();
+          athDelta(1); athObjectif('masse'); athGkg('prot',2.4);
+          const m=(currentUser.nutrition||{}).macros||{};
+          if(Number((m.on||{}).kcal)!==CO.kcal)
+            return _echec('les cibles du coach sont passees a '+(m.on||{}).kcal+' kcal');
+          if(m.origine!=='coach')
+            return _echec('l\'origine des cibles est devenue « '+m.origine+' »');
+          // ET RIEN N'EST ECRIT A COTE NON PLUS. athObjectif pose
+          // nutrition.tableur.coef — la grille du COACH — avant meme
+          // d'appeler _athEcrireCibles : s'arreter plus bas aurait laisse le
+          // clic changer le coefficient d'objectif sur sa fiche.
+          const tb=(currentUser.nutrition||{}).tableur||{};
+          if(tb.objectifAthlete||tb.coef!=null)
+            return _echec('la grille du coach a bouge : '+JSON.stringify(tb));
+          const per=(currentUser.nutrition||{}).perso||{};
+          return (!per.objectif&&!per.delta)?true
+            :_echec('le reglage personnel a ete ecrit : '+JSON.stringify(per));})());
+
+        ok('EN AUTOMATIQUE, L\'ATHLETE GARDE LA MAIN',(()=>{
+          // NON-REGRESSION de la demande du 14/09/2026. Le correctif ne doit
+          // pas supprimer la carte reglable : il la reserve aux dossiers que
+          // le coach a laisses en calcul automatique.
+          const h=_htmlCiblesAthlete(mk({manuel:false}));
+          if(!h) return _echec('la carte disparait en automatique');
+          return /athObjectif/.test(h)?true
+            :_echec('les boutons d\'objectif ont disparu en automatique');})());
+
+        ok('LES MENUS g/kg DE L\'ATHLETE NE SONT PLUS INERTES',(()=>{
+          // ciblesAthlete passait `protGparKg` a cibleTableur, qui ne lit que
+          // `protGkg` : les deux menus etaient muets depuis leur mise en ligne.
+          // L'athlete choisissait 2,4 g/kg, le calcul restait sur la valeur
+          // suggeree, et le menu retombait dessus au rendu suivant.
+          const bas=ciblesAthlete(mk({manuel:false,reglages:{prot:1.4,lip:0.8}}));
+          const haut=ciblesAthlete(mk({manuel:false,reglages:{prot:2.4,lip:0.8}}));
+          if(!bas||!haut||(bas.manque||[]).length||(haut.manque||[]).length)
+            return _echec('le calcul ne rend pas de cibles');
+          if(Math.abs(Number(haut.protGkg)-2.4)>0.001)
+            return _echec('le g/kg demande n\'est pas celui du calcul : '+haut.protGkg);
+          return haut.p>bas.p?true
+            :_echec('2,4 g/kg ne donne pas plus de proteines que 1,4 : '
+              +haut.p+' contre '+bas.p);})());
+      } finally {
+        window.loadNutrition=svL; window.toast=svT; window.saveUser=svS;
+        CLOUD.pushOne=svP;
+        DB.set('users',svD||{}); currentUser=svU;
+      }
+    })();
     // ── DIETE CYCLEE OU NON, ET REMISE AU POINT DE DEPART ────────────────
     // Demande de Kevin, 25/08/2026. Le choix existait dans la proposition de
     // point de depart, en memoire et jamais ecrit : la grille de saisie
