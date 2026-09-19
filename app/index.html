@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1305';
+window.RC_BUILD='1306';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -8252,6 +8252,14 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Rempli par _rendreVignettesAthletes, appele par renderClientList :
              la grille suit le meme filtre et le meme tri que la liste. -->
         <div id="ch-vignettes" style="margin-bottom:18px"></div>
+        <!-- Croissance hebdomadaire, SOUS LES RONDS. Demande de Kevin,
+             19/09/2026. Elle a beaucoup voyage : au-dessus des notifications,
+             puis tout en bas parce que « la photo d'ensemble ne demande rien,
+             A traiter si ». Sa place est ici : les ronds disent QUI est la,
+             la courbe dit COMBIEN et DEPUIS QUAND — c'est la meme question,
+             et on la lit d'un seul regard au lieu de defiler jusqu'en bas.
+             Rempli par loadCoachHome. -->
+        <div id="ch-croissance" style="margin-bottom:18px"></div>
         <div style="margin-bottom:14px">
           <!-- LES EMOJIS SONT PARTIS. Ils n'ajoutaient rien qu'un libelle en
                capitales ne dise deja, et ils rendaient les trois boutons
@@ -8319,12 +8327,6 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Alerte anti-falaise et propositions de palier. Jamais bloquante,
              jamais une bascule : elle DIT, le coach decide. -->
         <div id="ch-alerte-palier"></div>
-        <!-- Croissance hebdomadaire. Elle etait AU-DESSUS des notifications —
-             « la photo d'ensemble avant le detail de ce qui presse ». Ce lot
-             renverse ce choix : la photo d'ensemble ne demande rien, « A
-             traiter » si, et c'est ce qui doit se voir sans defiler.
-             Rempli par loadCoachHome. -->
-        <div id="ch-croissance"></div>
         <button onclick="openCoachPrograms()" class="content-card ch-nav-large" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
           <span>🗂️ MES PROGRAMMES (H/F)</span>
           <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
@@ -29300,16 +29302,26 @@ function croissanceHebdo(athletes,now,nbSemaines){
   let socle=0; const dates=[];
   for(const a of l){
     const c=Number(a&&a.createdAt);
-    if(isFinite(c)&&c>0&&c<=t) dates.push(c); else socle++;
+    // ⚠ LE SUIVI EST GARDÉ AVEC LA DATE, et c'est lui qui donne les deux
+    //   couleurs de la barre. Le repli sur « avec suivi » n'est pas un aveu
+    //   d'ignorance : estSuivi rend vrai par défaut dans l'application, et une
+    //   barre entière vaut mieux qu'une barre amputée si la fonction manque.
+    let s=true;
+    try{ if(typeof estSuivi==='function') s=!!estSuivi(a); }catch(e){ s=true; }
+    if(isFinite(c)&&c>0&&c<=t) dates.push({t:c,suivi:s}); else socle++;
   }
   const debutFenetre=lundi(-(n-1));
-  let cumul=socle+dates.filter(c=>c<debutFenetre).length;
+  let cumul=socle+dates.filter(x=>x.t<debutFenetre).length;
   const out=[];
   for(let i=0;i<n;i++){
     const debut=lundi(i-(n-1)), fin=lundi(i-(n-1)+1);
-    const nouveaux=dates.filter(c=>c>=debut&&c<fin).length;
+    const dans=dates.filter(x=>x.t>=debut&&x.t<fin);
+    const nouveaux=dans.length, avec=dans.filter(x=>x.suivi).length;
     cumul+=nouveaux;
-    out.push({debut,fin,nouveaux,cumul});
+    // `nouveaux` ET `cumul` NE BOUGENT PAS : ce sont eux que lisent l'échelle
+    // de gauche, la ligne du total et les trois phrases de la carte. `avec` et
+    // `sans` s'ajoutent, ils ne remplacent rien.
+    out.push({debut,fin,nouveaux,avec,sans:nouveaux-avec,cumul});
   }
   return out;
 }
@@ -29344,21 +29356,51 @@ function _dessinerCroissance(id,pts){
     ctx.fillStyle='rgba(255,255,255,.42)';ctx.textAlign='left';
     ctx.fillText(String(Math.round(f*maxC)),gL+iw+5,y);
   });
-  // LES BARRES. Dégradé vertical, sommet arrondi, lueur : un aplat plat se
-  // lit comme un tableau, pas comme un graphique.
+  // LES BARRES, EN DEUX TEINTES. Demande de Kévin, 19/09/2026 : rouge pour
+  // ceux qu'on suit, blanc pour les autres. La carte disait déjà la
+  // répartition en une ligne de texte ; elle se lit maintenant semaine par
+  // semaine, là où la question se pose — « ce mois-ci, j'ai recruté quoi ? ».
+  //
+  // EMPILÉES, ET NON CÔTE À CÔTE. La hauteur totale reste le nombre
+  // d'arrivées, donc l'échelle de gauche continue de se lire et la ligne du
+  // total reste cohérente avec les barres. Deux barres jumelles auraient
+  // divisé la largeur par deux sur douze semaines : trois pixels chacune.
+  //
+  // LE ROUGE AU SOL. C'est la part qu'on veut voir grandir, et une base de
+  // référence commune se compare d'une semaine à l'autre ; posée en haut,
+  // elle flotterait à une altitude différente chaque fois.
   const bw=Math.max(3,Math.min(18,pas*0.52));
   pts.forEach((pt,i)=>{
     if(!pt.nouveaux) return;
-    const x=gL+i*pas+(pas-bw)/2, y=yN(pt.nouveaux), bh=gT+ih-y;
-    const g=ctx.createLinearGradient(0,y,0,gT+ih);
-    g.addColorStop(0,'#ff4a4a');g.addColorStop(1,'#6d0000');
-    ctx.fillStyle=g;ctx.shadowColor='rgba(224,32,32,.75)';ctx.shadowBlur=10;
-    ctx.beginPath();
-    if(ctx.roundRect) ctx.roundRect(x,y,bw,bh,[3,3,0,0]); else ctx.rect(x,y,bw,bh);
-    ctx.fill();ctx.shadowBlur=0;
-    // Un liseré clair sur l'arête haute : c'est lui qui donne le relief.
-    ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(x+1,y+.5);ctx.lineTo(x+bw-1,y+.5);ctx.stroke();
+    const x=gL+i*pas+(pas-bw)/2;
+    // ⚠ REPLI SUR UNE SEULE TEINTE quand la série ne porte pas la répartition.
+    //   Sans lui, un appelant d'avant ce lot aurait dessiné des barres VIDES :
+    //   Number(undefined)||0 vaut zéro, et zéro plus zéro ne fait aucune barre.
+    const deux=isFinite(Number(pt.avec))&&isFinite(Number(pt.sans));
+    const avec=deux?Math.max(0,Number(pt.avec)):pt.nouveaux;
+    const sans=deux?Math.max(0,Number(pt.sans)):0;
+    const segs=[];
+    if(avec) segs.push({n:avec,a:'#ff4a4a',b:'#6d0000',
+      lueur:'rgba(224,32,32,.75)',arete:'rgba(255,255,255,.35)'});
+    if(sans) segs.push({n:sans,a:'#ffffff',b:'#8f8f8f',
+      lueur:'rgba(255,255,255,.55)',arete:'rgba(255,255,255,.95)'});
+    let socle=0;
+    segs.forEach((s,k)=>{
+      const yBas=yN(socle), yHaut=yN(socle+s.n), bh=yBas-yHaut;
+      const g=ctx.createLinearGradient(0,yHaut,0,yBas);
+      g.addColorStop(0,s.a);g.addColorStop(1,s.b);
+      ctx.fillStyle=g;ctx.shadowColor=s.lueur;ctx.shadowBlur=10;
+      ctx.beginPath();
+      // SEUL LE SEGMENT DU HAUT porte les coins arrondis : les arrondir tous
+      // creuserait une encoche à la jonction des deux couleurs.
+      const r=(k===segs.length-1)?[3,3,0,0]:[0,0,0,0];
+      if(ctx.roundRect) ctx.roundRect(x,yHaut,bw,bh,r); else ctx.rect(x,yHaut,bw,bh);
+      ctx.fill();ctx.shadowBlur=0;
+      // Un liseré clair sur l'arête haute : c'est lui qui donne le relief.
+      ctx.strokeStyle=s.arete;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(x+1,yHaut+.5);ctx.lineTo(x+bw-1,yHaut+.5);ctx.stroke();
+      socle+=s.n;
+    });
   });
   // LA LIGNE DU TOTAL, sur les milieux de semaine.
   const ptsC=pts.map((pt,i)=>({x:gL+i*pas+pas/2,y:yC(pt.cumul)}));
@@ -29392,14 +29434,13 @@ function _dessinerCroissance(id,pts){
 }
 // La carte. Elle n'apparaît pas sans athlète : un graphique vide n'apprend
 // rien et occupe la place de ce qui compte quand on démarre.
-// QUI EST SUR L'APPLI, EN UNE LIGNE. La toile trace un total : elle ne dit pas
-// si ces arrivees sont accompagnees ou non, et c'est pourtant la question que
-// pose le coach en la regardant. Les barres, elles, restent d'une seule
-// couleur — elles sont tracees sur un canvas par _dessinerCroissance, qui ne
-// connait qu'une serie ; les repeindre en deux teintes demanderait de lui en
-// passer deux, ce qui est un autre chantier. La repartition est donc donnee
-// ici, avec les memes couleurs que celles demandees : rouge pour les suivis,
-// jaune pour les autres.
+// QUI EST SUR L'APPLI, EN UNE LIGNE — les totaux, sous le titre de la carte.
+// LE CHANTIER ANNONCE ICI A ETE FAIT le 19/09/2026 : ce commentaire disait que
+// repeindre les barres en deux teintes demanderait de passer deux series a
+// _dessinerCroissance. C'est exactement ce que croissanceHebdo rend desormais
+// — `avec` et `sans` a cote de `nouveaux` — et les barres sont empilees, rouge
+// pour les suivis, blanc pour les autres. Cette ligne de totaux reste : elle
+// dit le portefeuille ENTIER, la ou les barres disent semaine par semaine.
 // ══ LES ACCES QUI ARRIVENT A TERME, PAR MOIS ═══════════════════════════
 // « A relancer » dit qui est en train de decrocher. Il ne dit pas ce qui
 // tombe le mois prochain — or c'est la meme decision : qui rappeler, et quand.
@@ -29468,6 +29509,10 @@ function _htmlCroissanceCoach(athletes){
   // savoir si ça bouge, sans être trop courte pour dire quoi que ce soit.
   const recent=pts.slice(-4).reduce((n,p)=>n+p.nouveaux,0);
   const meilleure=pts.reduce((m,p)=>p.nouveaux>m.nouveaux?p:m,pts[0]);
+  // LE PORTEFEUILLE ENTIER, pas la somme des barres : les arrivées d'avant la
+  // fenêtre de douze semaines comptent aussi, et ce sont elles qui font la
+  // différence entre « 3 sur le graphique » et « 30 dans mes athlètes ».
+  const avecSuivi=l.filter(estSuivi).length, sansSuivi=l.length-avecSuivi;
   const dt=d=>new Date(d).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
   return `<div class="evo-carte" style="padding:15px 14px 12px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:2px">
@@ -29476,10 +29521,16 @@ function _htmlCroissanceCoach(athletes){
     </div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.4px;margin-bottom:9px">
       D'après la date de création de chaque dossier.</div>
-    ${_htmlRepartitionSuivi(l)}
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+    <!-- ⚠ UNE SEULE LIGNE, ET LES COMPTES SONT DEDANS. La carte portait la
+         répartition du portefeuille juste au-dessus de la légende des barres :
+         depuis que les deux parlent la même langue — rouge suivi, blanc sans
+         suivi — c'étaient les mêmes quatre mots, écrits deux fois, l'un sur
+         l'autre. Les nombres rejoignent donc les pastilles qu'ils décrivent. -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">
       <span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)">
-        <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px rgba(224,32,32,.8)"></span>Arrivées</span>
+        <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px rgba(224,32,32,.8)"></span>${avecSuivi} avec suivi</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
+        <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ffffff,#8f8f8f);box-shadow:0 0 7px rgba(255,255,255,.6)"></span>${sansSuivi} sans suivi</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
         <span style="width:11px;height:2px;border-radius:var(--r-1);background:#ffffff;box-shadow:0 0 7px rgba(255,255,255,.8)"></span>Total (${total})</span>
     </div>
