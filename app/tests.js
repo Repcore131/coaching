@@ -36963,18 +36963,32 @@ async function testExercices(){
       // cesse de la lire le jour ou elle dit quelque chose.
       if(_htmlJamaisDemarre([],Date.now())!=='') return _echec('un cadre vide est rendu');
       const t=Date.now();
-      const h=_htmlJamaisDemarre([{id:'a',fname:'Alice',createdAt:t-12*864e5,sessions:[]}],t);
+      // JOIGNABLE : depuis le 19/09/2026 la carte pose deux liens de contact,
+      // et sans adresse ni numero elle affiche « Ni numero ni adresse » — ce
+      // qui est le bon comportement, mais pas celui qu'on teste ici.
+      const h=_htmlJamaisDemarre([{id:'a',fname:'Alice',createdAt:t-12*864e5,sessions:[],
+        email:'alice@t.fr',phone:'+33600000000'}],t);
       if(!h) return _echec('la carte ne sort rien pour un athlete');
       const d=document.createElement('div'); d.innerHTML=h;
       // LE NOMBRE D'ATHLETES CONCERNES, demande explicitement.
       if(d.innerText.indexOf('1')<0) return _echec('le nombre n’est pas affiche');
       if(d.innerText.indexOf('Alice')<0) return _echec('le prenom n’est pas affiche');
       if(!/12 jours|12 jours/.test(d.innerText)) return _echec('les jours ne sont pas affiches : '+d.innerText);
-      // UN SEUL BOUTON PAR LIGNE.
-      const b=d.querySelectorAll('button');
-      if(b.length!==1) return _echec(b.length+' bouton(s) sur la ligne');
-      return /relancerJamaisDemarre\(/.test(b[0].getAttribute('onclick'))
-        ?true:_echec('le bouton ne mene pas a la relance');})());
+      // ⚠ LA RELANCE NE PASSE PLUS PAR LE CANAL, depuis le 19/09/2026.
+      //   Ce test exigeait UN SEUL bouton, menant a relancerJamaisDemarre, qui
+      //   ouvrait la fenetre du canal avec un brouillon nominatif — lu par tous
+      //   les athletes suivis. Demande de Kevin : une relance s'adresse a une
+      //   personne. Deux liens directs, comme le cadre « Inactifs ».
+      const liens=[...d.querySelectorAll('a')].map(a=>a.getAttribute('href')||'');
+      if(!liens.length) return _echec('aucun lien de contact sur la ligne');
+      if(!liens.some(h=>/^https:\/\/wa\.me\//.test(h)))
+        return _echec('aucun lien WhatsApp : '+liens.join(' | '));
+      if(!liens.some(h=>/^mailto:/.test(h)))
+        return _echec('aucun lien mail : '+liens.join(' | '));
+      // ET AUCUN CHEMIN VERS LE CANAL, ni en bouton ni en lien.
+      if(/openMessageCanal|relancerJamaisDemarre/.test(h))
+        return _echec('la carte mene encore au canal');
+      return true;})());
 
     // XSS STOCKE : le prenom est saisi par l'athlete et atterrit dans le
     // tableau de bord de son coach. Le defaut avait deja ete trouve dans
@@ -36991,34 +37005,56 @@ async function testExercices(){
       // Sans prenom, la phrase reste lisible plutot que de laisser un trou.
       if(brouillonJamaisDemarre({}).indexOf('Salut toi')<0)
         return _echec('sans prenom, le brouillon laisse un trou');
-      const r=String(relancerJamaisDemarre);
-      // ⚠ AUCUN ENVOI : le geste OUVRE la fenetre de redaction, il ne publie
-      // rien. Si ecrireMessageCanal apparaissait ici, ce serait un automate.
-      if(/ecrireMessageCanal|enregistrerMessageCanal/.test(r))
-        return _echec('la relance publie toute seule');
-      if(r.indexOf('openMessageCanal')<0) return _echec('la relance n’ouvre pas le canal');
-      // ⚠ LE COACH N'ECRIT PAS DANS LE DOSSIER DE L'ATHLETE : ce chemin ne
-      // passe ni par saveUser, ni par DB.set('users'), ni par CLOUD.push.
+      // ⚠ ELLE NE PASSE PLUS PAR LE CANAL. `relancerJamaisDemarre` n'existe
+      //   plus : le brouillon alimente deux LIENS — WhatsApp et mailto — et
+      //   c'est le client de messagerie qui s'ouvre, pre-rempli et modifiable.
+      if(typeof relancerJamaisDemarre!=='undefined')
+        return _echec('le chemin par le canal existe encore');
+      const k=canauxRelanceJamaisDemarre({fname:'Léa',email:'lea@t.fr',phone:'+33600000000'});
+      if(k.texte!==b) return _echec('les deux canaux ne portent pas le brouillon');
+      if(k.mail.indexOf(encodeURIComponent(b))<0)
+        return _echec('le mail ne porte pas le texte');
+      if(k.mail.indexOf('subject=')<0) return _echec('le mail n’a pas d’objet');
+      // ⚠ AUCUN ENVOI, ET AUCUNE ECRITURE : ce sont des liens. Ni publication
+      //   dans le canal, ni ecriture dans le dossier de l'athlete.
+      const r=String(canauxRelanceJamaisDemarre)+String(_canauxRelance);
+      if(/ecrireMessageCanal|enregistrerMessageCanal|openMessageCanal/.test(r))
+        return _echec('la relance touche encore au canal');
       return /saveUser\(|DB\.set\('users'|CLOUD\.push\(/.test(r)
         ?_echec('la relance ecrit dans le dossier de l’athlete'):true;})());
 
     // LE CANAL EST UNE DIFFUSION, et les regles RTDB le disent : /canaux/
-    // {coach}/messages est lisible par TOUT athlete rattache. Un brouillon qui
-    // nomme quelqu'un l'expose au groupe entier — le coach doit le savoir au
-    // moment ou il ecrit, pas apres.
-    ok('La fenetre avertit quand le brouillon nomme un athlete',(()=>{
+    // {coach}/messages est lisible par TOUT athlete rattache.
+    //
+    // ⚠ CE TEST EXIGEAIT UN AVERTISSEMENT, ET N'EN VEUT PLUS. Il verifiait que
+    //   la fenetre du canal prevenait quand un brouillon NOMMAIT quelqu'un :
+    //   « en l'envoyant tel quel, tu apprends a tout le groupe qu'Untel n'a pas
+    //   encore commence ». Un seul chemin posait un tel brouillon — la relance
+    //   « jamais demarre » — et depuis le 19/09/2026 elle part en WhatsApp ou
+    //   en mail, a la demande de Kevin.
+    //
+    //   LA CAUSE A DISPARU, L'AVERTISSEMENT AVEC ELLE, et c'est mieux qu'un
+    //   garde-fou conserve : un avertissement ne repare pas un chemin, il
+    //   demande a l'utilisateur de rattraper le produit. Ce qui est tenu
+    //   desormais, c'est que PLUS AUCUN brouillon nominatif n'entre ici.
+    ok('Aucun brouillon nominatif n’entre dans le canal',(()=>{
       const s=String(openMessageCanal);
-      if(s.indexOf('brouillon')<0) return _echec('la fenetre n’accepte pas de brouillon');
-      if(s.indexOf('lu par tous tes athl')<0)
-        return _echec('aucun avertissement de diffusion');
-      // L'AVERTISSEMENT NE PARAIT QUE LA OU IL SERT : un message general n'a
-      // pas a porter une mise en garde sur un prenom qu'il ne contient pas.
-      if(!/_br&&_br\.nomme/.test(s)) return _echec('l’avertissement n’est pas conditionne');
-      // ET LE NOM EST ECHAPPE DANS L'AVERTISSEMENT LUI-MEME.
-      if(!/escapeHtml\(_br\.nomme\)/.test(s)) return _echec('le prenom n’est pas echappe dans l’avis');
-      // LE BROUILLON N'ECRASE JAMAIS UN TEXTE DEJA ECRIT.
-      return /if\(_br&&!msgId&&_br\.texte\)/.test(s)
-        ?true:_echec('un brouillon pourrait ecraser un message en cours de modification');})());
+      if(/_br\b|brouillon/.test(s))
+        return _echec('la fenetre accepte encore un brouillon');
+      if(s.indexOf('lu par tous tes athl')>=0)
+        return _echec('l’avertissement subsiste alors que sa cause a disparu');
+      // ET RIEN NE PEUT LUI EN PASSER : la signature ne declare plus qu'UN
+      // parametre — l'identifiant du message qu'on modifie — et la clef qui
+      // portait le prenom n'existe plus nulle part dans le produit.
+      // ⚠ ON NE COMPTE PAS LES ARGUMENTS DES APPELS : le bouton « modifier »
+      //   passe legitimement `openMessageCanal('${escapeHtml(m.id)}')`, et une
+      //   sonde qui lit les parentheses prendrait cet identifiant pour un
+      //   brouillon. La signature et la clef disent la meme chose, sans faux
+      //   positif.
+      if(!/^function openMessageCanal\(msgId\)/.test(s))
+        return _echec('la signature accepte encore un second argument');
+      return _prodSrc().indexOf('nomme:')<0
+        ?true:_echec('un appelant passe encore un prenom au canal');})());
 
     // ⚠ TROIS LISTES, TROIS NATURES, AUCUNE FUSION. L'ecran d'assiduite et le
     // predicat de bilans restent mot pour mot ce qu'ils etaient.

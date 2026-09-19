@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1311';
+window.RC_BUILD='1312';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5353,12 +5353,15 @@ textarea.vn-in{resize:vertical;line-height:1.5}
    Ils se serrent plutot que de pousser le nom hors de la carte, et passent
    l'un sous l'autre si meme serres ils ne tiennent pas. `flex:0 0 auto` sur
    le conteneur : c'est le NOM qui absorbe la place restante, jamais eux. */
-.inact-a{flex:0 0 auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.inact-b{flex:0 0 auto;margin:0;padding:0 11px;min-height:38px;width:auto;
+/* Les deux boutons d'une ligne de relance — « Inactifs » ET « Jamais
+   demarre » depuis le 19/09/2026. `rel-` et non `inact-` : ils servent les
+   deux cadres, et un nom qui ment se paie au prochain qui le lit. */
+.rel-a{flex:0 0 auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.rel-b{flex:0 0 auto;margin:0;padding:0 11px;min-height:38px;width:auto;
   display:inline-flex;align-items:center;justify-content:center;
   font-size:var(--fs-2xs);letter-spacing:.8px;white-space:nowrap;
   text-decoration:none}
-@media(max-width:360px){ .inact-b{padding:0 8px;letter-spacing:.2px} }
+@media(max-width:360px){ .rel-b{padding:0 8px;letter-spacing:.2px} }
 /* 11 px, LE PLANCHER. Ces deux lignes disent ou va l'argent et combien de
    caracteres il reste : elles doivent se lire. */
 .cpv-mention{font-size:11px;line-height:1.55;color:var(--text-faint);margin-top:6px}
@@ -26306,29 +26309,21 @@ async function resyncCompteursCanal(msgId){
 // groupe, ET apprend au groupe qu'elle n'a pas commence. Le coach doit le
 // savoir AU MOMENT OU IL ECRIT, pas apres : d'ou l'avertissement ci-dessous,
 // pose seulement quand le brouillon porte un prenom.
-function openMessageCanal(msgId,brouillon){
+// ⚠ PLUS DE PARAMETRE `brouillon`, ET PLUS D'AVERTISSEMENT ORANGE. Un seul
+//   appelant en posait un : la relance « jamais demarre », qui ouvrait ce
+//   canal avec un texte nominatif. L'ecran prevenait alors que « le brouillon
+//   nomme Jean » et que l'envoyer tel quel l'apprendrait a tout le groupe.
+//   Depuis le 19/09/2026 cette relance part en WhatsApp ou en mail : la cause
+//   a disparu, l'avertissement avec elle. On ne garde pas un garde-fou pour
+//   un chemin qui n'existe plus — il ferait croire que le chemin existe.
+function openMessageCanal(msgId){
   document.getElementById('modal-overlay')?.remove();
   const m=(msgId&&(window._canalMsgsCoach||{})[msgId])||{};
-  const _br=(brouillon&&typeof brouillon==='object')?brouillon:null;
-  // Le brouillon ne remplit QUE le corps, et seulement sur un nouveau message :
-  // il n'ecrase jamais un texte deja ecrit.
-  if(_br&&!msgId&&_br.texte) m.texte=_br.texte;
-  const _avis=(_br&&_br.nomme)
-    ?'<div style="background:var(--surface-1);border:1px solid var(--orange);'
-      +'border-left:3px solid var(--orange);border-radius:var(--r-2);padding:10px 12px;'
-      +'margin-bottom:12px;font-size:var(--fs-xs);line-height:1.55;color:var(--text-strong)">'
-      +'<strong>Ce canal est lu par tous tes athlètes suivis.</strong> Le brouillon '
-      +'nomme '+escapeHtml(_br.nomme)+' : en l’envoyant tel quel, tu apprends à '
-      +'tout le groupe qu’'+escapeHtml(_br.nomme)+' n’a pas encore commencé. '
-      +'Retire le prénom pour en faire un message général, ou écris-lui '
-      +'directement depuis sa fiche.</div>'
-    :'';
   window._canalEdite=msgId||'';
   document.body.insertAdjacentHTML('beforeend',
   `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">${msgId?'Modifier le message':'Nouveau message'}</h2>
-    ${_avis}
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Il apparaît dans le canal de tous tes athlètes suivis, à leur prochaine ouverture de l'app. Ce n'est pas une notification : leur téléphone ne sonnera pas.</p>
     <label for="cm-titre">Titre (optionnel) · ${CANAL_TITRE_MAX} caractères</label>
     <input id="cm-titre" type="text" maxlength="${CANAL_TITRE_MAX}" value="${escapeHtml(m.titre||'')}" placeholder="Nouvelle vidéo technique">
@@ -30419,6 +30414,8 @@ function _htmlJamaisDemarre(liste,maintenant){
   const l=liste||[];
   if(!l.length) return '';
   const n=l.length;
+  const bouton=(href,lib)=>'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" '
+    +'class="btn btn-outline btn-sm rel-b">'+lib+'</a>';
   return '<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
     +'overflow:hidden;box-shadow:var(--el-1)">'
@@ -30438,29 +30435,32 @@ function _htmlJamaisDemarre(liste,maintenant){
       // pour la meme raison — le defaut y avait ete trouve en testant des
       // prenoms hostiles.
       const nom=escapeHtml(String(c.fname||'').trim()||'Athlète');
+      const k=canauxRelanceJamaisDemarre(c);
+      // NI NUMERO NI ADRESSE : on le DIT. Deux boutons qui n'ouvrent rien
+      // feraient croire a une panne, et le coach cliquerait deux fois avant de
+      // comprendre que le manque est dans la fiche de l'athlete.
+      const actions=(k.wa||k.mail)
+        ?('<div class="rel-a">'
+          +(k.wa?bouton(k.wa,'WhatsApp'):'')
+          +(k.mail?bouton(k.mail,'Mail'):'')+'</div>')
+        :'<span class="sub" style="font-size:var(--fs-2xs);flex:0 0 auto;text-align:right;'
+          +'line-height:1.4;max-width:104px">Ni numéro<br>ni adresse</span>';
       return '<div style="flex:1;min-width:0">'
         +'<div style="font-size:var(--fs-sm);font-weight:800;line-height:1.3">'+nom+'</div>'
         +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">'
         +'rattaché depuis '+j+' jour'+(j>1?'s':'')+'</div>'
         +'</div>'
-        // UN SEUL BOUTON. L'ecran n'a qu'une action a proposer, et deux
-        // boutons cote a cote obligeraient a choisir avant de savoir quoi.
-        +'<button type="button" onclick="relancerJamaisDemarre(\''+escapeHtml(String(c.id||''))+'\')" '
-        +'class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;margin:0;padding:0 14px;'
-        +'min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs);white-space:nowrap">'
-        +'Écrire</button>';
+        +actions;
     },{pad:'11px 0'})
+    +'</div>'
+    +'<div class="sub" style="font-size:var(--fs-2xs);line-height:1.55;padding:2px 14px 12px">'
+    +'Le message s’ouvre pré-rédigé et modifiable. RepCore n’envoie rien à ta place.'
     +'</div></div>';
 }
-// Le geste : ouvrir la fenetre de redaction du canal avec le brouillon dedans.
-//
-// ⚠ AUCUN ENVOI. Le message s'affiche dans le champ, modifiable, et rien ne
-// part tant que le coach n'a pas appuye sur « Publier » lui-meme. C'est la
-// demande exacte : un brouillon, pas un automate.
-//
-// ⚠ ET LE COACH N'ECRIT PAS DANS LE DOSSIER DE L'ATHLETE. Ce chemin aboutit a
-// /canaux/{coach}/messages, le seul noeud que les regles RTDB lui ouvrent en
-// ecriture. Rien ici ne touche /users/{athlete}.
+// ⚠ AUCUN ENVOI, POUR LES DEUX CADRES. Les boutons OUVRENT WhatsApp ou le
+// client mail avec le texte dedans, modifiable ; rien ne part tant que le
+// coach n'a pas appuye sur « envoyer » lui-meme. Et aucun des deux chemins
+// n'ecrit dans le dossier de l'athlete : ce sont des liens, pas des ecritures.
 // ══ LE CADRE « INACTIFS » ═════════════════════════════════════════════════
 //
 // PURE. Le brouillon propose au coach. Un BROUILLON : il ouvre WhatsApp ou le
@@ -30485,15 +30485,32 @@ function brouillonInactif(c,maintenant){
     +'Aucun reproche — je veux juste savoir ce qui bloque : le temps, le '
     +'programme, la motivation ? Dis-moi, on ajuste ensemble.';
 }
-// L'objet du mail. Court, et sans point d'interrogation anxieux dans la boite
-// de reception.
+// Les objets de mail. Courts, et sans point d'interrogation anxieux dans la
+// boite de reception.
 const INACTIF_OBJET='On fait le point ?';
+const JAMAIS_OBJET='On démarre ?';
+// ══ UNE RELANCE S'ADRESSE A UNE PERSONNE ════════════════════════════════════
+//
+// ⚠ JAMAIS PAR LE CANAL, et c'est une regle du produit depuis le 19/09/2026.
+//   Demande de Kevin. La relance « jamais demarre » ouvrait la fenetre du
+//   CANAL avec un brouillon nominatif dedans : « Salut Jean, j'ai vu que tu
+//   n'as pas encore lance ta premiere seance. » Le canal est lu par TOUS les
+//   athletes suivis — l'envoyer tel quel apprenait au groupe entier que Jean
+//   n'avait pas commence. L'ecran posait bien un avertissement orange, mais
+//   un avertissement ne repare pas un chemin : il demande a l'utilisateur de
+//   rattraper le produit. Les deux relances passent desormais par les memes
+//   canaux directs — WhatsApp ou mail — que le cadre « Inactifs » employait
+//   deja.
+//
 // PURE. Les deux adresses ouvrables pour cet athlete, ou '' pour chacune.
-// _numWa et non un replace brut : un numero saisi en « 06… » produit un lien
+// waLink et non un replace brut : un numero saisi en « 06… » produit un lien
 // que WhatsApp refuse, et mieux vaut ne pas poser le bouton qu'en poser un
 // mort — c'est la regle deja ecrite pour le contact du coach.
-function canauxRelanceInactif(c,maintenant){
-  const texte=brouillonInactif(c,maintenant);
+//
+// UNE SEULE FABRIQUE POUR LES DEUX CADRES : le durcissement du `mailto:`
+// ci-dessous est une precaution de securite, et une precaution recopiee est
+// une precaution qu'on oubliera de recopier la troisieme fois.
+function _canauxRelance(c,texte,objet){
   const tel=_telAthlete(c);
   const mail=String((c&&c.email)||'').trim();
   return {
@@ -30506,10 +30523,16 @@ function canauxRelanceInactif(c,maintenant){
     // en faire sortir : sans cela, un champ email contenant « ?body= » aurait
     // reecrit le message que le coach croit envoyer.
     mail:(mail.indexOf('@')>0&&!/[\s?&#<>"']/.test(mail))
-      ?('mailto:'+mail+'?subject='+encodeURIComponent(INACTIF_OBJET)
+      ?('mailto:'+mail+'?subject='+encodeURIComponent(objet)
         +'&body='+encodeURIComponent(texte))
       :''
   };
+}
+function canauxRelanceInactif(c,maintenant){
+  return _canauxRelance(c,brouillonInactif(c,maintenant),INACTIF_OBJET);
+}
+function canauxRelanceJamaisDemarre(c){
+  return _canauxRelance(c,brouillonJamaisDemarre(c),JAMAIS_OBJET);
 }
 // PURE. Le cadre, ou la chaine VIDE quand personne n'est concerne — jamais un
 // cadre vide annoncant zero. Meme regle que « Jamais demarre » juste en
@@ -30525,7 +30548,7 @@ function _htmlInactifs(liste,maintenant){
   const t=Number(maintenant)||Date.now();
   const n=l.length;
   const bouton=(href,lib)=>'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" '
-    +'class="btn btn-outline btn-sm inact-b">'+lib+'</a>';
+    +'class="btn btn-outline btn-sm rel-b">'+lib+'</a>';
   return '<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
     +'overflow:hidden;box-shadow:var(--el-1)">'
@@ -30548,7 +30571,7 @@ function _htmlInactifs(liste,maintenant){
       // feraient croire a une panne, et le coach cliquerait deux fois avant de
       // comprendre que le manque est dans la fiche de l'athlete.
       const actions=(k.wa||k.mail)
-        ?('<div class="inact-a">'
+        ?('<div class="rel-a">'
           +(k.wa?bouton(k.wa,'WhatsApp'):'')
           +(k.mail?bouton(k.mail,'Mail'):'')+'</div>')
         :'<span class="sub" style="font-size:var(--fs-2xs);flex:0 0 auto;text-align:right;'
@@ -30576,11 +30599,6 @@ function _rendreJamaisDemarre(clients){
   if(!z) return;
   try{ z.innerHTML=_htmlJamaisDemarre(listeJamaisDemarre(clients,Date.now()),Date.now()); }
   catch(e){ z.innerHTML=''; }
-}
-function relancerJamaisDemarre(id){
-  const c=getClients().find(x=>String(x.id)===String(id));
-  if(!c){ toast('Athlète introuvable','var(--orange)'); return; }
-  openMessageCanal('',{texte:brouillonJamaisDemarre(c),nomme:String(c.fname||'').trim()});
 }
 // Un athlète « a un programme » dès qu'UN de ces mécanismes est renseigné.
 // Source unique de vérité : tout code qui juge la présence d'un programme doit
