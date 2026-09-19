@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1317';
+window.RC_BUILD='1318';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5378,6 +5378,56 @@ textarea.vn-in{resize:vertical;line-height:1.5}
    Desormais : la version Homme, PUIS la version Femme, chacune sur sa rangee
    avec ses seances nommees ; deux gestes pleins ; le reste en pied de carte. */
 .cpl-intro{font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin:0 0 20px}
+/* ══ LE CADRAN ════════════════════════════════════════════════════════════
+   Demande de Kevin, 19/09/2026 : « mets un cadran en haut avec le nombre de
+   programmes faits […] un truc qui fait vraiment pro et business ».
+
+   ⚠ IL REPREND .metric-box PLUTOT QUE D'INVENTER SA VITRINE. Les tuiles
+     texturees, leur halo rouge et leurs chiffres en Bebas sont deja le langage
+     des chiffres dans cette application — l'accueil du coach, les paiements,
+     l'evolution du poids. Un cadran dessine a part aurait eu l'air d'un
+     morceau rapporte, et aurait double le nombre d'endroits a reprendre le
+     jour ou la marque bouge. */
+.cpl-cadran{position:relative;overflow:hidden;margin-bottom:24px;padding:14px 14px 13px;
+  border:1px solid var(--border);border-radius:var(--r-4);
+  background:radial-gradient(120% 100% at 0% 0%,rgba(224,32,32,.10),transparent 58%),
+             linear-gradient(168deg,var(--surface-1),#080808);
+  box-shadow:var(--el-1)}
+/* Le filet rouge en haut : la signature des cadres qui comptent, et il se
+   voit sans prendre de place. */
+.cpl-cadran::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--red),transparent 72%)}
+.cpl-cadran-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:2.4px;
+  text-transform:uppercase;color:var(--red-text);margin-bottom:11px}
+/* A L'ETROIT, DEUX PAR RANGEE PLUTOT QUE QUATRE COLONNES DE 70 px. Sous
+   380 px, quatre tuiles laissent 66 px utiles : « Athlètes équipés » y tient
+   sur quatre lignes, et le chiffre perd sa tuile. */
+.cpl-cadran-r{flex-wrap:wrap}
+.cpl-cadran-r .metric-box{flex:1 1 calc(25% - 8px);min-width:104px}
+@media(max-width:560px){ .cpl-cadran-r .metric-box{flex:1 1 calc(50% - 5px)} }
+.cpl-cadran-p{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:11px 0 0}
+.cpl-cadran-n{color:var(--text-faint);font-size:var(--fs-2xs)}
+/* ══ LE PUBLIC ET LE RESUME, SUR CHAQUE CARTE ═════════════════════════════
+   « Il doit y avoir 3 possibilités, soit femme, soit homme, soit femme et
+   homme » — trois segments, un seul actif. Le rouge marque le choix, et les
+   deux autres restent lisibles : un segment eteint n'est pas desactive, il
+   s'attend a etre touche. */
+.cpl-resume{font-size:var(--fs-xs);color:var(--text);line-height:1.55;
+  margin:9px 0 0;opacity:.88}
+.cpl-pub{display:flex;gap:0;margin-top:11px;border:1px solid var(--border);
+  border-radius:var(--r-2);overflow:hidden;background:var(--surface-2)}
+.cpl-pub-b{flex:1 1 0;min-width:0;min-height:36px;padding:0 6px;margin:0;border:none;
+  background:none;color:var(--sub);font-family:Montserrat,sans-serif;
+  font-size:var(--fs-2xs);font-weight:800;letter-spacing:.8px;text-transform:uppercase;
+  cursor:pointer;white-space:nowrap;
+  transition:background var(--t-1) var(--c-out),color var(--t-1) var(--c-out)}
+.cpl-pub-b+.cpl-pub-b{border-left:1px solid var(--border)}
+.cpl-pub-b:hover{color:var(--text)}
+.cpl-pub-b.on{background:var(--red);color:#0a0000}
+.cpl-pub-b:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
+/* Ce qui reste ecrit mais n'est plus propose. Orange et non rouge : rien n'est
+   casse, on previent d'un contenu devenu invisible. */
+.cpl-garde{font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin:8px 0 0}
 .cpl-sec{margin-bottom:26px}
 .cpl-sec-t{display:flex;align-items:baseline;gap:8px;margin:0 0 10px;
   font-size:var(--fs-2xs);font-weight:800;letter-spacing:2.4px;
@@ -9505,7 +9555,12 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <p class="cpl-intro">Chaque programme a sa version Homme et sa version Femme. Assigne-le à tes athlètes, ou mets-le en vente.</p>
+      <!-- ⚠ CETTE PHRASE DISAIT « chaque programme a sa version Homme ET sa
+           version Femme ». Ce n'est plus vrai depuis le 19/09/2026 : un
+           programme s'adresse aux hommes, aux femmes, ou aux deux. Une intro
+           qui contredit les trois boutons juste dessous est pire qu'une
+           absence d'intro. -->
+      <p class="cpl-intro">Un programme s’adresse aux hommes, aux femmes, ou aux deux. Assigne-le à tes athlètes, ou mets-le en vente.</p>
       <div id="cpl-list"></div>
     </div>
   </div>
@@ -35548,6 +35603,101 @@ const CPL_RAYONS=Object.freeze([
 // PURE. Le rayon d'un modele. Un modele cree avant ce lot ne porte pas
 // `origine` : il reste dans « Mes programmes », ou il a toujours ete.
 function _cplRayon(p){ return (p&&p.origine==='athlete')?'athlete':'moi'; }
+
+// ══ A QUI S'ADRESSE UN PROGRAMME ═══════════════════════════════════════════
+//
+// Demande de Kevin, 19/09/2026 : « il doit y avoir 3 possibilités, soit femme,
+// soit homme, soit femme et homme ».
+//
+// ⚠ LE CHAMP S'APPELLE `publicVise` ET NON `public`. `public` est un mot
+//   reserve en mode strict : legal en nom de propriete, il ne l'est pas en
+//   identifiant, et le premier qui aurait ecrit `const public=...` dans une
+//   fonction voisine aurait casse le fichier entier a l'analyse — une erreur
+//   de syntaxe, pas une exception qu'on rattrape.
+const PROG_PUBLICS=Object.freeze([
+  Object.freeze({cle:'H', lib:'Homme',    dit:'Pour les hommes'}),
+  Object.freeze({cle:'F', lib:'Femme',    dit:'Pour les femmes'}),
+  Object.freeze({cle:'HF',lib:'Les deux', dit:'Hommes et femmes'})
+]);
+/**
+ * PURE. Le public d'un programme : 'H', 'F' ou 'HF'.
+ *
+ * ⚠ AUCUNE MIGRATION, ET LE REPLI SE DEDUIT DU CONTENU. Les programmes
+ *   existants ne portent pas ce champ ; plutot que de les reecrire tous pour y
+ *   poser 'HF', on lit ce qu'ils CONTIENNENT : un modele dont seule la version
+ *   Homme est garnie s'adresse aux hommes, et il le disait deja — la version
+ *   Femme affichait « Aucune séance · À remplir », ce qui se lisait comme un
+ *   travail inacheve alors que c'etait un choix.
+ *
+ * ⚠ UN PROGRAMME VIDE S'ADRESSE AUX DEUX. C'est l'etat d'un modele qu'on vient
+ *   de creer : lui deduire un public a partir de rien aurait fait disparaitre
+ *   une des deux versions de l'ecran avant meme qu'on ait pu la remplir.
+ * @param {any} p
+ * @returns {'H'|'F'|'HF'}
+ */
+function progPublic(p){
+  const v=p&&p.publicVise;
+  if(v==='H'||v==='F'||v==='HF') return v;
+  const h=_cplSeancesPleines(p,'H').length>0;
+  const f=_cplSeancesPleines(p,'F').length>0;
+  if(h&&!f) return 'H';
+  if(f&&!h) return 'F';
+  return 'HF';
+}
+/** PURE. Le genre reellement servi quand on assigne ce programme. */
+function progGenreServi(p,genreVoulu){
+  const pu=progPublic(p);
+  // ⚠ UN PROGRAMME RESERVE A UN PUBLIC NE LIVRE QUE SA VERSION. Sans cette
+  //   regle, assigner un modele « Pour les hommes » a une athlete lui ecrasait
+  //   ses seances avec `sessions_F` — c'est-a-dire avec RIEN, puisque cette
+  //   version est vide par definition. Elle se retrouvait sans programme, et
+  //   la fiche du coach affichait pourtant « Programme : … » comme si tout
+  //   allait bien.
+  if(pu==='H'||pu==='F') return pu;
+  return genreVoulu==='F'?'F':'H';
+}
+/**
+ * PURE. Le resume d'un programme : a qui il s'adresse, et ce qu'il demande.
+ *
+ * Demande de Kevin : « un court résumé du programme, à qui il s'adresse ».
+ *
+ * ⚠ LE PUBLIC OUVRE TOUJOURS LA PHRASE, MEME QUAND LE COACH A ECRIT LA SUITE.
+ *   Rendre le pitch SEUL etait tentant — c'est sa description — mais la demande
+ *   est « à qui il s'adresse », et un pitch parle du contenu, pas du public :
+ *   « Trois séances par semaine pour reprendre sans se blesser » ne dit pas si
+ *   c'est pour elles ou pour eux. Le public devant, sa phrase apres : les deux
+ *   tiennent sur une ligne et aucune des deux n'est perdue.
+ * @param {any} p
+ * @returns {string}
+ */
+function progResume(p){
+  const pu=progPublic(p);
+  const dit=(PROG_PUBLICS.find(x=>x.cle===pu)||{}).dit||'Hommes et femmes';
+  const pitch=String((p&&p.pitch)||'').trim();
+  if(pitch) return dit+' · '+pitch;
+  // LE RYTHME EST CELUI DE LA VERSION LA PLUS GARNIE : les deux versions d'un
+  // programme mixte n'ont pas toujours le meme nombre de seances, et annoncer
+  // le plus petit ferait passer le programme pour plus leger qu'il n'est.
+  const n=Math.max(pu==='F'?0:_cplSeancesPleines(p,'H').length,
+                   pu==='H'?0:_cplSeancesPleines(p,'F').length);
+  if(!n) return dit+' · aucune séance pour l’instant';
+  return dit+' · '+n+' séance'+(n>1?'s':'')+' par semaine';
+}
+/** Le coach choisit le public. Rien n'est efface : voir progPublicPoser. */
+function progPublicPoser(i,v){
+  const l=(currentUser&&currentUser.coachPrograms)||[];
+  const p=l[i];
+  if(!p||!PROG_PUBLICS.some(x=>x.cle===v)) return false;
+  if(progPublic(p)===v&&p.publicVise===v) return true;
+  // ⚠ ON N'EFFACE JAMAIS LA VERSION QU'ON CESSE DE PROPOSER. Le reflexe serait
+  //   de vider `sessions_F` en passant un programme en « Homme » : ce serait
+  //   detruire un travail de plusieurs heures sur un choix qui se revient en
+  //   deux clics. Elle est MASQUEE, elle reste ecrite, et la carte le dit.
+  p.publicVise=v;
+  try{ saveUser(); }catch(e){}
+  try{ loadCoachProgramsList(); }catch(e){}
+  return true;
+}
 // PURE, ET SANS REPARATION. _cptSeances aplatit un objet Firebase et peut
 // alerter : c'est le travail de l'editeur, pas d'une liste qu'on parcourt.
 // On lit donc un tableau, ou les valeurs d'un objet, sans rien ecrire.
@@ -35594,6 +35744,24 @@ function _htmlCplCarte(p,i,premier,dernier){
   // LE CREATEUR VEND PAR LA BOUTIQUE, les autres par leur vitrine : un seul
   // bouton, et la fiche qui correspond a qui le touche.
   const vendre=estVendeur()?'ouvrirFicheVente(null,'+i+')':'ouvrirVenteProgramme('+i+')';
+  const pu=progPublic(p);
+  // LE SELECTEUR DE PUBLIC. Trois segments, un seul actif : c'est un CHOIX
+  // entre trois etats, pas trois interrupteurs — d'ou le groupe radio.
+  const seg='<div class="cpl-pub" role="radiogroup" aria-label="À qui s’adresse ce programme">'
+    +PROG_PUBLICS.map(x=>'<button type="button" role="radio" aria-checked="'+(x.cle===pu)+'"'
+      +' class="cpl-pub-b'+(x.cle===pu?' on':'')+'"'
+      +' onclick="progPublicPoser('+i+',\''+x.cle+'\')">'+escapeHtml(x.lib)+'</button>').join('')
+    +'</div>';
+  // ⚠ LA VERSION MASQUEE EST ANNONCEE QUAND ELLE PORTE QUELQUE CHOSE. Sans
+  //   cette ligne, passer un programme en « Homme » faisait disparaitre de
+  //   l'ecran trois seances Femme deja ecrites — elles existent toujours, mais
+  //   plus rien ne le disait, et le coach les aurait refaites.
+  const cachee=(pu==='H'?'F':pu==='F'?'H':null);
+  const nCachee=cachee?_cplSeancesPleines(p,cachee).length:0;
+  const garde=nCachee
+    ? '<p class="cpl-garde">La version '+(cachee==='F'?'Femme':'Homme')+' garde ses '
+      +nCachee+' séance'+(nCachee>1?'s':'')+' : elle n’est plus proposée, rien n’est effacé.</p>'
+    : '';
   return '<div class="cpl-c">'
     +'<div class="cpl-tete"><div>'
       +'<div class="cpl-nom">'+escapeHtml(p.name||'Sans nom')+'</div>'
@@ -35602,7 +35770,11 @@ function _htmlCplCarte(p,i,premier,dernier){
     // et elle n'en a pas l'air. VERT POUR « EN VENTE », GRIS POUR « PRIVE »,
     // et jamais de rouge : un programme garde pour soi n'est pas une faute.
     +'<span class="cpl-pill '+(on?'cpl-pill-on':'cpl-pill-off')+'">'+(on?'En vente':'Privé')+'</span></div>'
-    +'<div class="cpl-versions">'+_htmlCplVersion(i,'H',p)+_htmlCplVersion(i,'F',p)+'</div>'
+    +'<p class="cpl-resume">'+escapeHtml(progResume(p))+'</p>'
+    +seg+garde
+    +'<div class="cpl-versions">'
+      +(pu==='F'?'':_htmlCplVersion(i,'H',p))
+      +(pu==='H'?'':_htmlCplVersion(i,'F',p))+'</div>'
     +'<div class="cpl-actions">'
       +'<button class="btn btn-red btn-sm" onclick="openAssignProgram('+i+')">▶ Assigner</button>'
       +'<button class="btn btn-outline btn-sm" onclick="'+vendre+'">'+(on?'Modifier la vente':'Mettre en vente')+'</button>'
@@ -35641,15 +35813,121 @@ function _htmlCplBoutique(){
     +'<p class="cpl-sec-d">Vendus sans venir d’un de tes programmes, comme la Fondation livrée avec l’application.</p>'
     +rangs+'</section>';
 }
+/**
+ * PURE. Les chiffres du cadran. `enVente` est INJECTE et non lu ici : la
+ * reponse depend du cache de la boutique, et une fonction qui l'interroge ne se
+ * teste plus sans monter une boutique entiere.
+ *
+ * ⚠ CE QU'ON NE COMPTE PAS : L'ARGENT ENCAISSE. RepCore ne le connait pas —
+ *   le paiement d'un programme se fait sur la page du coach, par `lienAchat`,
+ *   hors de l'application, et `prix` est un texte LIBRE (« 49 € », « 3 × 20 € »,
+ *   « sur devis »). Un « chiffre d'affaires » ici serait une invention, et la
+ *   metrique du produit le dit deja pour elle-meme : « un depart, pas une
+ *   vente ». On compte donc ce qui est vrai — ce qui est construit, ce qui est
+ *   propose, et ce qui tourne reellement chez les athletes.
+ * @param {any[]} progs      coachPrograms
+ * @param {any[]} athletes   les athletes du coach
+ * @param {(p:any)=>boolean} enVente
+ */
+function cplChiffres(progs,athletes,enVente){
+  const l=(progs||[]).filter(Boolean);
+  const dit=typeof enVente==='function'?enVente:(()=>false);
+  let seances=0, vendus=0;
+  const noms=new Set();
+  l.forEach(p=>{
+    // LES SEANCES COMPTEES SONT CELLES QU'ON PROPOSE. Une version Femme
+    // conservee mais plus offerte n'est plus du travail en service : la
+    // compter gonflerait le chiffre d'un programme qu'on vient de restreindre.
+    const pu=progPublic(p);
+    if(pu!=='F') seances+=_cplSeancesPleines(p,'H').length;
+    if(pu!=='H') seances+=_cplSeancesPleines(p,'F').length;
+    if(dit(p)) vendus++;
+    const n=String(p.name||'').trim().toLowerCase();
+    if(n) noms.add(n);
+  });
+  // ⚠ LE LIEN ATHLETE→PROGRAMME PASSE PAR LE NOM, et c'est sa limite. C'est le
+  //   seul lien qui existe : _assignerModele ecrit `assignedProgramName`, pas
+  //   un identifiant. Deux programmes homonymes se confondent donc, et
+  //   renommer un modele detache ceux qui le suivaient. On l'emploie parce que
+  //   la fiche de l'athlete affiche deja ce nom-la — un second lien, pose pour
+  //   ce seul compteur, aurait diverge du premier.
+  const equipes=(athletes||[]).filter(a=>{
+    const n=String((a&&a.assignedProgramName)||'').trim().toLowerCase();
+    return !!n&&noms.has(n);
+  }).length;
+  return {total:l.length,vendus,seances,equipes,athletes:(athletes||[]).length};
+}
+/** Les prix affichables des programmes en vente, dedoublonnes et dans l'ordre. */
+function cplPrix(progs,enVente,prixDe){
+  const dit=typeof enVente==='function'?enVente:(()=>false);
+  const lire=typeof prixDe==='function'?prixDe:(p=>String((p&&p.prix)||'').trim());
+  const vus=[];
+  (progs||[]).filter(Boolean).forEach(p=>{
+    if(!dit(p)) return;
+    const x=String(lire(p)||'').trim();
+    if(x&&vus.indexOf(x)<0) vus.push(x);
+  });
+  return vus;
+}
+/**
+ * Le cadran. Rendu MEME A ZERO PROGRAMME ? Non : voir loadCoachProgramsList —
+ * un tableau de bord qui n'affiche que des zeros au-dessus d'un ecran vide
+ * n'oriente rien, et c'est l'etat d'accueil qui doit parler a ce moment-la.
+ */
+function _htmlCplCadran(){
+  const progs=(currentUser&&currentUser.coachPrograms)||[];
+  let athletes=[];
+  try{ athletes=Object.values(DB.get('users')||{}).filter(u=>_estMonAthlete(u,currentUser)); }
+  catch(e){ athletes=[]; }
+  const c=cplChiffres(progs,athletes,_cplEnVente);
+  const prix=cplPrix(progs,_cplEnVente,p=>{
+    // Le createur vend par la boutique : le prix y vit, pas sur le modele.
+    if(estVendeur()&&p&&p.boutiqueId){
+      try{ const e=programmeDuCatalogue(p.boutiqueId); if(e) return prixProgramme(e); }catch(x){}
+    }
+    return String((p&&p.prix)||'').trim();
+  });
+  // LA BARRE ROUGE SOUS CHAQUE CHIFFRE DIT UNE PROPORTION, ou rien. `--pct`
+  // existe deja sur .metric-box : une jauge inventee pour ce cadran aurait
+  // donne deux langages pour la meme idee.
+  const pct=(a,b)=>b>0?Math.max(0,Math.min(100,Math.round(a/b*100))):0;
+  const boite=(val,lib,p)=>'<div class="metric-box" style="--pct:'+p+'%">'
+    +'<div class="metric-val">'+val+'</div>'
+    +'<div class="metric-label">'+lib+'</div></div>';
+  return '<section class="cpl-cadran">'
+    +'<div class="cpl-cadran-t">Ton catalogue</div>'
+    +'<div class="metric-row-4 metric-row-compacte cpl-cadran-r">'
+      +boite(c.total,'Programmes',c.total?100:0)
+      +boite(c.vendus,'En vente',pct(c.vendus,c.total))
+      +boite(c.seances,'Séances',c.seances?100:0)
+      +boite(c.equipes,'Athlètes équipés',pct(c.equipes,c.athletes))
+    +'</div>'
+    // ⚠ ON NE PROMET PAS UN CHIFFRE D'AFFAIRES. On dit les prix pratiques —
+    //   ce qui est vrai et verifiable — et on dit POURQUOI le reste manque.
+    //   Afficher « 0 € encaissé » aurait ete faux, et « 240 € » aurait ete
+    //   invente.
+    +'<p class="cpl-cadran-p">'
+      +(c.vendus
+        ? escapeHtml(c.vendus+' programme'+(c.vendus>1?'s':'')+' en vente'
+            +(prix.length?(' · '+prix.slice(0,3).join(' · ')
+              +(prix.length>3?(' · +'+(prix.length-3)):'')):''))
+          +'<br><span class="cpl-cadran-n">Les paiements se font sur ta page, hors de RepCore : '
+          +'l’application ne peut pas compter ce que tu encaisses.</span>'
+        : 'Aucun programme en vente pour l’instant. '
+          +'<span class="cpl-cadran-n">« Mettre en vente » ouvre la fiche : un titre, une phrase, un prix, ton lien de paiement.</span>')
+    +'</p>'
+    +'</section>';
+}
 function loadCoachProgramsList(){
   const progs=(currentUser&&currentUser.coachPrograms)||[];
   const container=document.getElementById('cpl-list');if(!container)return;
   let bq=''; try{ bq=_htmlCplBoutique(); }catch(e){ bq=''; }
   if(!progs.length){
     // R13 — le geste est offert ici, plus renvoye au « + CRÉER » de la barre.
-    container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme pour l\'instant</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Un modèle Homme/Femme, créé une fois, sert à tous tes athlètes.</span>','Créer un programme','createCoachProgTemplate()')+bq;return;
+    container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme pour l\'instant</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Un modèle créé une fois sert à tous tes athlètes — pour eux, pour elles, ou pour les deux.</span>','Créer un programme','createCoachProgTemplate()')+bq;return;
   }
-  container.innerHTML=CPL_RAYONS.map(r=>{
+  let cadran=''; try{ cadran=_htmlCplCadran(); }catch(e){ cadran=''; }
+  container.innerHTML=cadran+CPL_RAYONS.map(r=>{
     const idx=[];
     progs.forEach((p,i)=>{ if(p&&_cplRayon(p)===r.cle) idx.push(i); });
     if(!idx.length) return '';
@@ -36734,6 +37012,10 @@ function openAssignProgram(idx){
   loadAssignAthletes();
 }
 
+/** Le modele en cours d'assignation, ou un objet vide. */
+function _progAssigne(){
+  return ((currentUser&&currentUser.coachPrograms)||[])[_assigningProgIdx]||{};
+}
 function loadAssignAthletes(){
   const users=DB.get('users')||{};
   // N4.13 — LE MEME PREDICAT QUE LA LISTE. Filtrer sur le seul coachId
@@ -36746,7 +37028,10 @@ function loadAssignAthletes(){
     // Detect gender from _evol_gender first, then fall back to gender field
     const gRaw=a._evol_gender||a.gender||'';
     const detectedF=isFemale(gRaw);
-    const defG=detectedF?'F':'H';
+    // LE PUBLIC DU PROGRAMME PASSE DEVANT LE GENRE DE L'ATHLETE : c'est le
+    // coach qui a decide a qui ce modele s'adresse, et l'ecran doit montrer ce
+    // qui sera reellement assigne plutot que ce qu'on aurait choisi par defaut.
+    const defG=progGenreServi(_progAssigne(),detectedF?'F':'H');
     return `
     <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:11px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:5px">
       <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
@@ -36854,7 +37139,13 @@ async function setClientPhone(){
 // sessions_config ET la trace du modèle : les deux chemins ne peuvent pas
 // diverger, et la fiche affichera toujours le bon nom quel que soit le geste.
 function _assignerModele(a,prog,genre){
-  const base=(genre==='F'?prog.sessions_F:prog.sessions_H)||[];
+  // ⚠ LE PUBLIC DU PROGRAMME TRANCHE, PAS LE GENRE DEMANDE. Un modele declare
+  //   « Pour les hommes » n'a pas de version Femme : la lui demander aurait
+  //   ecrase les seances de l'athlete avec un tableau VIDE, et la fiche aurait
+  //   affiche « Programme : … » par-dessus. Une seule regle, ici, au seul
+  //   endroit qui ecrit — les deux chemins d'assignation en heritent.
+  const g=progGenreServi(prog,genre);
+  const base=(g==='F'?prog.sessions_F:prog.sessions_H)||[];
   _pushSessionsHistory(a); // sauvegarde avant écrasement — rollback possible
   // Clone PROFOND. A plat, le tableau `sets` restait partagé : l'athlète
   // retouchait ses séries et le modèle du coach bougeait avec — donc aussi

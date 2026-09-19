@@ -20461,7 +20461,11 @@ async function testExercices(){
           if(m&&+m[0]>150&&+m[1]<90&&+m[2]<90) return _echec('pastille rouge : '+c);
         }
         // Et le sixieme bouton est bien la, nomme selon l'etat.
-        const b=[...z.children[0].querySelectorAll('button')]
+        // ⚠ ON DESIGNE LA CARTE, ON NE COMPTE PLUS LES ENFANTS. `z.children[0]`
+        //   etait le premier rayon ; depuis le 19/09/2026 c'est le CADRAN, qui
+        //   n'a aucun bouton de vente. Une position dans le DOM n'est pas une
+        //   designation : le premier element de cet ecran changera encore.
+        const b=[...z.querySelector('.cpl-c').querySelectorAll('button')]
           .map(x=>(x.textContent||'').trim());
         if(!b.some(x=>/vente/i.test(x))) return _echec('pas de bouton « Vendre » : '+b.join(' | '));
         return true;
@@ -44397,7 +44401,13 @@ async function testExercices(){
         currentUser={id:'c27',email:'c27@t.fr',role:'coach',coachPrograms:[
           _r27Modele('a','Débutant',['Push','','Legs'],['Fessiers']),
           _r27Modele('m','Marc',['Pecs'],['Pecs'],{origine:'athlete',depuis:'Marc'}),
-          _r27Modele('g','Spécial fessiers',[],['Fessiers A','Fessiers B'])]};
+          // ⚠ `publicVise:'HF'` EST NEUF, ET IL EST INDISPENSABLE ICI. Depuis
+          //   le 19/09/2026, un modele garni d'un seul cote s'adresse a ce
+          //   seul public — progPublic le DEDUIT — et sa version vide n'est
+          //   plus affichee du tout : c'est precisement ce que Kevin a demande.
+          //   Ce fixture veut l'autre cas, qui existe toujours : un coach qui
+          //   declare « les deux » et n'a pas encore rempli la seconde version.
+          _r27Modele('g','Spécial fessiers',[],['Fessiers A','Fessiers B'],{publicVise:'HF'})]};
         loadCoachProgramsList();
         const secs=[...z.querySelectorAll('.cpl-sec')];
         const rayons=secs.map(s=>s.querySelector('.cpl-sec-t').textContent.replace(/\s+\d+$/,'').trim());
@@ -44429,6 +44439,149 @@ async function testExercices(){
         if(/Dans la boutique/.test(z.textContent)) return _echec('un autre coach voit « Dans la boutique »');
         return true;
       } finally { currentUser=sU; if(z) z.innerHTML=sv; }})());
+
+    // ── TROIS PUBLICS POSSIBLES ───────────────────────────────────────────
+    // Demande de Kevin, 19/09/2026 : « il doit y avoir 3 possibilités, soit
+    // femme, soit homme, soit femme et homme ».
+    ok('Le public d’un programme se déduit de son contenu, sans migration',(()=>{
+      const m=(h,f,o)=>Object.assign({sessions_H:h.map(n=>({name:n,active:true,exercises:[{name:'X'}]})),
+        sessions_F:f.map(n=>({name:n,active:true,exercises:[{name:'X'}]}))},o||{});
+      // ⚠ AUCUN DES MILLIERS DE PROGRAMMES EXISTANTS NE PORTE LE CHAMP. Les
+      //   reecrire tous pour y poser 'HF' aurait ete une migration ; on lit ce
+      //   qu'ils CONTIENNENT, et la reponse est deja juste.
+      if(progPublic(m(['A'],['B']))!=='HF') return _echec('deux versions garnies ne donnent pas « les deux »');
+      if(progPublic(m(['A'],[]))!=='H') return _echec('seule la version Homme garnie ne donne pas « homme »');
+      if(progPublic(m([],['B']))!=='F') return _echec('seule la version Femme garnie ne donne pas « femme »');
+      // ⚠ UN PROGRAMME VIDE S'ADRESSE AUX DEUX : c'est l'etat d'un modele qu'on
+      //   vient de creer, et lui deduire un public a partir de RIEN aurait fait
+      //   disparaitre une version de l'ecran avant qu'on ait pu la remplir.
+      if(progPublic(m([],[]))!=='HF') return _echec('un modele vide n’offre pas les deux versions');
+      if(progPublic(null)!=='HF') return _echec('un modele absent fait tomber la deduction');
+      // LE CHOIX EXPLICITE GAGNE TOUJOURS, meme contre le contenu.
+      if(progPublic(m(['A'],['B']),'')!=='HF') return _echec('le cas nominal a bouge');
+      if(progPublic(m(['A'],['B'],{publicVise:'F'}))!=='F') return _echec('le choix du coach est ignoré');
+      if(progPublic(m([],[],{publicVise:'H'}))!=='H') return _echec('le choix sur un modele vide est ignoré');
+      // UNE VALEUR ABERRANTE NE PASSE PAS : une sauvegarde abimee, ou un
+      // dossier venu d'une version future, ne doit pas vider la carte.
+      return progPublic(m(['A'],['B'],{publicVise:'X'}))==='HF'
+        ?true:_echec('une valeur inconnue est acceptée telle quelle');})());
+
+    ok('Choisir un public N’EFFACE PAS la version qu’on cesse de proposer',(()=>{
+      const sU=currentUser, svSave=window.saveUser, z=document.getElementById('cpl-list'),
+            sv=z&&z.innerHTML;
+      try{
+        window.saveUser=()=>true;
+        currentUser={id:'c9',email:'c9@t.fr',role:'coach',coachPrograms:[
+          _r27Modele('a','Mixte',['Push','Legs'],['Fessiers'])]};
+        loadCoachProgramsList();
+        if(progPublic(currentUser.coachPrograms[0])!=='HF') return _echec('le depart n’est pas « les deux »');
+        if(progPublicPoser(0,'F')!==true) return _echec('le choix n’est pas accepté');
+        const p=currentUser.coachPrograms[0];
+        if(p.publicVise!=='F') return _echec('le champ n’est pas écrit : '+p.publicVise);
+        // ⚠ LE POINT QUI COMPTE. Le reflexe serait de vider sessions_H en
+        //   passant en « Femme » : ce serait detruire des heures de travail sur
+        //   un choix qui se revient en deux clics.
+        const gardees=(p.sessions_H||[]).filter(s=>s&&s.active&&s.exercises.length).length;
+        if(gardees!==2) return _echec('les séances Homme ont été effacées : '+gardees+' au lieu de 2');
+        // LA CARTE N'AFFICHE PLUS QU'UNE VERSION, ET ELLE DIT QUE L'AUTRE EST LA.
+        const c=z.querySelector('.cpl-c');
+        const g=[...c.querySelectorAll('.cpl-v-g')].map(x=>x.textContent.trim());
+        if(g.join()!=='Femme') return _echec('versions affichées : '+g.join(' | '));
+        const garde=c.querySelector('.cpl-garde');
+        if(!garde||!/2 séances/.test(garde.textContent))
+          return _echec('rien ne dit que la version Homme existe encore : '+(garde?garde.textContent:'(aucune ligne)'));
+        // LE SEGMENT ACTIF EST CELUI QU'ON A CHOISI, et un seul.
+        const on=[...c.querySelectorAll('.cpl-pub-b')].filter(b=>b.classList.contains('on'));
+        if(on.length!==1||on[0].textContent.trim()!=='Femme')
+          return _echec('segments actifs : '+on.map(b=>b.textContent.trim()).join(' | '));
+        // ET REVENIR EN ARRIERE REND LA VERSION, intacte.
+        progPublicPoser(0,'HF');
+        const g2=[...z.querySelector('.cpl-c').querySelectorAll('.cpl-v-n')].map(x=>x.textContent.trim());
+        return g2.join(' | ')==='2 séances | 1 séance'
+          ?true:_echec('la version Homme ne revient pas : '+g2.join(' | '));
+      } finally { window.saveUser=svSave; currentUser=sU; if(z) z.innerHTML=sv; }})());
+
+    ok('Un programme réservé à un public ne livre JAMAIS une version vide',(()=>{
+      // ⚠ LE DEFAUT QU'ON EVITE ICI EST SILENCIEUX ET COUTEUX. Assigner un
+      //   modele « Pour les hommes » a une athlete lui demandait `sessions_F`
+      //   — c'est-a-dire RIEN, puisque cette version est vide par definition.
+      //   Elle se retrouvait sans aucune seance, et sa fiche affichait pourtant
+      //   « Programme : … » comme si tout allait bien.
+      const m=(h,f,o)=>Object.assign({name:'P',
+        sessions_H:h.map(n=>({day:'L',name:n,active:true,exercises:[{name:'X'}]})),
+        sessions_F:f.map(n=>({day:'L',name:n,active:true,exercises:[{name:'X'}]}))},o||{});
+      const hommeSeul=m(['A','B'],[]), femmeSeule=m([],['C']), mixte=m(['A'],['C']);
+      if(progGenreServi(hommeSeul,'F')!=='H') return _echec('une athlète reçoit la version Femme d’un programme Homme');
+      if(progGenreServi(femmeSeule,'H')!=='F') return _echec('un athlète reçoit la version Homme d’un programme Femme');
+      // EN MIXTE, LE GENRE DEMANDE EST RESPECTE : la regle ne s'applique qu'aux
+      // programmes qui n'ont qu'un public.
+      if(progGenreServi(mixte,'F')!=='F') return _echec('le mixte ne respecte plus le genre demandé');
+      if(progGenreServi(mixte,'H')!=='H') return _echec('le mixte ne respecte plus le genre demandé (H)');
+      // ET LE CHEMIN REEL : _assignerModele ecrit les seances qui EXISTENT.
+      const ath={fname:'Ana',sessions_config:[]};
+      _assignerModele(ath,hommeSeul,'F');
+      const n=(ath.sessions_config||[]).filter(s=>s&&s.active).length;
+      if(n!==2) return _echec('l’athlète reçoit '+n+' séance(s) au lieu de 2');
+      return ath.assignedProgramName==='P'?true:_echec('le nom du modèle n’est pas tracé');})());
+
+    ok('Le résumé dit À QUI le programme s’adresse, avant tout le reste',(()=>{
+      const m=(h,f,o)=>Object.assign({
+        sessions_H:h.map(n=>({name:n,active:true,exercises:[{name:'X'}]})),
+        sessions_F:f.map(n=>({name:n,active:true,exercises:[{name:'X'}]}))},o||{});
+      if(!/^Pour les hommes · 2 séances/.test(progResume(m(['A','B'],[]))))
+        return _echec('homme : '+progResume(m(['A','B'],[])));
+      if(!/^Pour les femmes · 1 séance par semaine$/.test(progResume(m([],['C']))))
+        return _echec('femme : '+progResume(m([],['C'])));
+      // LE RYTHME EST CELUI DE LA VERSION LA PLUS GARNIE : annoncer le plus
+      // petit ferait passer le programme pour plus leger qu'il n'est.
+      if(!/^Hommes et femmes · 3 séances/.test(progResume(m(['A','B','C'],['D']))))
+        return _echec('mixte : '+progResume(m(['A','B','C'],['D'])));
+      // UN MODELE VIDE LE DIT, plutot que d'annoncer « 0 séance ».
+      if(!/aucune séance/.test(progResume(m([],[]))))
+        return _echec('vide : '+progResume(m([],[])));
+      // ⚠ LE PUBLIC OUVRE LA PHRASE MEME QUAND LE COACH A ECRIT UN PITCH. Sa
+      //   phrase parle du CONTENU — « trois séances pour reprendre » ne dit pas
+      //   si c'est pour elles ou pour eux — et la demande porte sur le public.
+      const p=progResume(m(['A'],[],{pitch:'Reprendre sans se blesser.'}));
+      if(p!=='Pour les hommes · Reprendre sans se blesser.')
+        return _echec('le pitch efface le public : '+p);
+      return true;})());
+
+    ok('Le cadran compte ce qui est VRAI, et rien de ce qu’il ne sait pas',(()=>{
+      const m=(nom,h,f,o)=>Object.assign({name:nom,
+        sessions_H:h.map(n=>({name:n,active:true,exercises:[{name:'X'}]})),
+        sessions_F:f.map(n=>({name:n,active:true,exercises:[{name:'X'}]}))},o||{});
+      const progs=[m('Alpha',['A','B'],['C'],{prix:'19,90 €'}),
+                   m('Beta',['D'],[]),
+                   m('Gamma',[],['E','F'],{prix:'49 €'})];
+      const vend=p=>p.name!=='Beta';
+      const ath=[{assignedProgramName:'Alpha'},{assignedProgramName:'alpha  '},
+                 {assignedProgramName:'Inconnu'},{},{assignedProgramName:'Gamma'}];
+      const c=cplChiffres(progs,ath,vend);
+      if(c.total!==3) return _echec('total : '+c.total);
+      if(c.vendus!==2) return _echec('en vente : '+c.vendus);
+      // ⚠ ON NE COMPTE QUE LES SEANCES PROPOSEES : « Beta » n'offre que sa
+      //   version Homme, « Gamma » que sa version Femme. Compter une version
+      //   conservee mais masquee gonflerait le chiffre d'un programme qu'on
+      //   vient justement de restreindre.
+      if(c.seances!==3+1+2) return _echec('séances : '+c.seances+' au lieu de 6');
+      // LE RAPPROCHEMENT IGNORE LA CASSE ET LES ESPACES, comme la fiche.
+      if(c.equipes!==3) return _echec('athlètes équipés : '+c.equipes+' au lieu de 3');
+      if(c.athletes!==5) return _echec('athlètes : '+c.athletes);
+      // LE CAS VIDE NE JETTE PAS.
+      const z=cplChiffres(null,null,null);
+      if(z.total!==0||z.equipes!==0) return _echec('le cas vide : '+JSON.stringify(z));
+      // LES PRIX SONT CEUX DES PROGRAMMES EN VENTE, dedoublonnes et sans trou.
+      const px=cplPrix(progs,vend,p=>String(p.prix||''));
+      if(px.join(' | ')!=='19,90 € | 49 €') return _echec('prix : '+px.join(' | '));
+      // ⚠ ET AUCUN CHIFFRE D'AFFAIRES N'EST INVENTE. RepCore ne connait pas ce
+      //   que le coach encaisse : le paiement se fait sur SA page, par
+      //   `lienAchat`, et `prix` est un texte libre (« sur devis », « 3 × 20 € »).
+      //   La metrique du produit le dit deja pour elle-meme — « un depart, pas
+      //   une vente ». Un total ici serait une invention, et elle serait lue.
+      for(const k of Object.keys(c))
+        if(/gain|chiffre|revenu|encaiss|ca\b/i.test(k)) return _echec('le cadran prétend connaître l’argent : '+k);
+      return true;})());
 
     ok('R27 — on réordonne dans son rayon, jamais par-dessus l’autre',(()=>{
       const sU=currentUser, svSave=window.saveUser;
@@ -45085,7 +45238,16 @@ async function testExercices(){
       const src=_prodSrc().split(/\r?\n/);
       const hors=[];
       let ecran=null, n=0;
-      for(let i=0;i<src.length&&i<12000;i++){
+      // ⚠ LA BORNE DE 12 000 LIGNES EST TOMBEE, ET C'EST ELLE QUI A ALERTE. Le
+      //   balisage se termine vers la ligne 12 270 : la sonde en laissait dix
+      //   fleches dehors, et chaque bloc de commentaire ajoute en poussait une
+      //   de plus hors de sa fenetre. Le 19/09/2026, cinq lignes d'explication
+      //   ont fait passer le compte de 60 a 59 et casse le test — c'est le
+      //   garde qui a fait son travail, mais il denoncait la sonde plutot que
+      //   le code. `class="back-btn` n'apparait nulle part ailleurs que dans
+      //   le balisage : on lit tout le fichier, et la fenetre ne peut plus
+      //   mentir.
+      for(let i=0;i<src.length;i++){
         const m=src[i].match(/<div id="(s-[a-z0-9-]+)" class="screen/); if(m) ecran=m[1];
         if(!/class="back-btn/.test(src[i])) continue;
         n++;
@@ -45099,6 +45261,8 @@ async function testExercices(){
         const avant=(src[i-1]||'')+(src[i-2]||'');
         if(!/<!-- R21 — /.test(avant)&&!/<!-- R21 — /.test(src[i])) hors.push(ecran+' : « '+oc+' » sans raison écrite');
       }
+      // LE PLANCHER RESTE : une sonde qui ne trouve plus rien doit crier
+      // plutot que de rendre « aucune anomalie ».
       if(n<60) return _echec(n+' flèches trouvées : la sonde ne regarde plus le balisage');
       return hors.length?_echec(hors.join(' | ')):true;})());
 
