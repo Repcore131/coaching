@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1309';
+window.RC_BUILD='1310';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -27212,7 +27212,9 @@ function _htmlSectionsSuivi(vus,rendu){
   const titre=(t,n)=>'<div style="grid-column:1/-1;display:flex;align-items:baseline;gap:8px;'
     +'margin:18px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text)">'
-    +escapeHtml(t)+'</span><span style="font-size:var(--fs-2xs);color:var(--text-faint)">'+n+'</span></div>';
+    // `sec-suivi` : la prise que _majComptesSectionsSuivi saisit pour
+    // recompter les deux sections sans repeindre la liste entiere.
+    +escapeHtml(t)+'</span><span class="sec-suivi" style="font-size:var(--fs-2xs);color:var(--text-faint)">'+n+'</span></div>';
   const vide=t=>'<div style="grid-column:1/-1;font-size:var(--fs-xs);color:var(--text-dim);'
     +'line-height:1.6;padding:10px 2px 14px">'+t+'</div>';
   return titre('Mes athlètes (avec suivi)',avec.length)
@@ -28972,6 +28974,36 @@ function selVersProgramme(){
 // dit. C'est LUI qui bascule, athlete par athlete — aucune deduction
 // automatique, aucune surprise.
 function estSuivi(c){ return !!c && c.suivi!==false; }
+// ══ LE TRI ATTEND QUE LE DOIGT AIT FINI ═════════════════════════════════════
+//
+// ⚠ LA PANNE QUE CECI CORRIGE, et elle ne ressemblait pas a ce qu'elle etait.
+//   Kevin : « le bouton on/off de suivi n'est pas tout le temps cliquable ».
+//   Le clic partait toujours. C'est la SUITE qui trompait : basculer un
+//   athlete le fait changer de section, la liste se repeignait aussitot, et il
+//   descendait de trois rangs. Mesure sur douze athletes — a3 bascule, passe
+//   du rang 3 au rang 6, et sous le point exact ou l'on venait de cliquer se
+//   trouvait desormais le curseur de a4. Un second clic au meme endroit
+//   basculait a4 : de la chaise du coach, le premier clic « n'avait rien
+//   fait » et un autre athlete changeait tout seul.
+//
+// LE TRI EST DONC DIFFERE. La bascule ecrit tout de suite — donnee, nuage,
+// message — et le curseur bascule sous le doigt, comme une case a cocher
+// ordinaire. Le reordonnancement, lui, attend que plus rien ne se touche. Le
+// coach qui fait passer cinq athletes d'un coup les touche tous les cinq, et
+// la liste se range UNE fois, quand il a fini.
+//
+// UNE SECONDE ET DEMIE : au-dela, le desordre dure assez pour qu'on s'y perde ;
+// en-deca, on retombe dans le saut sous le doigt.
+const SUIVI_REORDRE_MS=1500;
+let _suiviReordre=0;
+/**
+ * Range la liste, une fois que la salve de bascules est finie. Chaque appel
+ * repousse l'echeance : c'est ce qui rend la salve possible.
+ */
+function _suiviRangerPlusTard(){
+  try{ clearTimeout(_suiviReordre); }catch(e){}
+  _suiviReordre=setTimeout(()=>{ try{ renderClientList(); }catch(e){} },SUIVI_REORDRE_MS);
+}
 function coachBasculerSuivi(id,ev){
   if(ev&&ev.stopPropagation) ev.stopPropagation();
   const users=DB.get('users')||{};
@@ -28981,11 +29013,29 @@ function coachBasculerSuivi(id,ev){
   if(c.email) users[c.email]=c;
   const ok=DB.set('users',users);
   const envoi=CLOUD.pushOne(c.email,c);
-  // On repeint la liste ENTIERE : l'athlete change de section, et sa ligne
-  // seule ne saurait pas se deplacer.
-  try{ renderClientList(); }catch(e){}
+  // LES COMPTEURS ET LES TITRES DE SECTION, EUX, SUIVENT TOUT DE SUITE : ils
+  // ne sont pas sous le doigt, et les laisser mentir pendant une seconde et
+  // demie ferait douter du clic qu'on vient justement de rendre fiable.
+  try{ renderPortefeuille(); }catch(e){}
+  try{ _majComptesSectionsSuivi(); }catch(e){}
+  _suiviRangerPlusTard();
   try{ if(currentClientId===id) openClientDetail(id,true,true); }catch(e){}
   toastSync(ok,envoi,estSuivi(c)?'Passé en suivi':'Passé sans suivi',"le changement est");
+}
+/**
+ * Recompte « Mes athletes (avec / sans suivi) » sans repeindre la liste. Les
+ * deux titres portent la classe `.sec-suivi`, et leur compte est le second
+ * <span> — c'est _htmlSectionsSuivi qui les ecrit, et lui seul.
+ */
+function _majComptesSectionsSuivi(){
+  const z=document.getElementById('ch-clients-list');
+  if(!z) return;
+  const lignes=[...z.querySelectorAll('.client-row')];
+  const suivi=id=>{ try{ return estSuivi(getOwnedClient(id,DB.get('users')||{})||{}); }catch(e){ return false; } };
+  const avec=lignes.filter(l=>suivi(l.dataset.cid)).length;
+  const t=[...z.querySelectorAll('.sec-suivi')];
+  if(t[0]) t[0].textContent=String(avec);
+  if(t[1]) t[1].textContent=String(lignes.length-avec);
 }
 // Le curseur, tel qu'il apparait sur la ligne et sur la fiche.
 // ══ LE SUIVI EST UN INTERRUPTEUR, PLUS UNE PILULE ═══════════════════════
