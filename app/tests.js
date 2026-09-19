@@ -21861,9 +21861,18 @@ async function testExercices(){
       // Et aucun libellé de phase non plus.
       return !/Prise de masse|Sèche|Maintien/.test(h)
         ?true:_echec('un libellé de phase apparaît sans phase');})());
-    ok('Avec phase, la ligne porte le libellé et la semaine',
-       /Prise de masse · 7e semaine/.test(renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[],
-         phase:{type:'masse',debut:Date.now()-44*864e5,definiPar:'coach',historique:[]}})));
+    // ⚠ CE TEST DISAIT L'INVERSE JUSQU'AU 19/09/2026. Il exigeait que la ligne
+    //   porte « Prise de masse · 7e semaine ». Demande de Kevin : la phase
+    //   quitte le tableau, avec le poids et les progres — trois colonnes de
+    //   moins a balayer sur une ligne qu'on lit en diagonale. Elle n'a pas
+    //   disparu de l'application : le tiroir de contexte et la fiche coach la
+    //   portent toujours. L'assertion garde donc son objet, a l'envers.
+    ok('La phase ne s\'affiche plus sur la ligne du tableau',(()=>{
+      const h=renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[],
+        phase:{type:'masse',debut:Date.now()-44*864e5,definiPar:'coach',historique:[]}});
+      if(/7e semaine/.test(h)) return _echec('le rang de semaine est encore sur la ligne');
+      return !/Prise de masse/.test(h)
+        ?true:_echec('le libelle de phase est encore sur la ligne');})());
 
     // ── Le contrat entre la phase et la nutrition ──
     // Il a changé avec l'ajustement proposé, et le nouveau s'énonce en trois
@@ -32806,12 +32815,15 @@ async function testExercices(){
 
       // Compte les intitules ECRITS dans renderClientList, sans dependre d'un
       // rendu : c'est la seule source disponible a tout moment de la suite.
+      // ⚠ L'EN-TETE A DEMENAGE LE 19/09/2026. Il etait ecrit dans
+      //   renderClientList, une seule fois, tout en haut de la liste ; il est
+      //   desormais rendu par _htmlEnteteTableau et pose au-dessus de CHAQUE
+      //   section. On compte donc dans la fonction qui l'ecrit.
       const _crNbIntitules=()=>{
-        const src=String(renderClientList);
+        const src=String(_htmlEnteteTableau);
         const i=src.indexOf('cr-head');
         if(i<0) return 0;
-        const j=src.indexOf('</div>',i);
-        return (src.slice(i,j<0?undefined:j).match(/<span/g)||[]).length;
+        return (src.match(/<span/g)||[]).length;
       };
       ok('N5.1 et N5.16 — L\'EN-TETE DU TABLEAU S\'AFFICHE, et ses libelles tiennent',(()=>{
         const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
@@ -32871,7 +32883,10 @@ async function testExercices(){
           renderClientList(); rendu=true;
         }catch(e){}
         const r=document.querySelector('#ch-clients-list .client-row');
-        const nH=document.querySelectorAll('#ch-clients-list .cr-head>span').length;
+        // UN EN-TETE PAR SECTION : on compte les intitules du PREMIER, et non
+        // tous ceux de la liste — sinon deux sections en rendraient vingt-deux.
+        const _tete1=document.querySelector('#ch-clients-list .cr-head');
+        const nH=_tete1?_tete1.querySelectorAll('span').length:0;
         try{
           ok('CHAQUE ENFANT DE LA LIGNE A SA PISTE, et l\'en-tete son intitule',(()=>{
             // ⚠ C'EST L'ASSERTION QUI MANQUAIT. Le curseur de suivi avait ete
@@ -32938,10 +32953,12 @@ async function testExercices(){
             // Nom, phase et badge se coupent en colonne etroite. Une troncature
             // sans recours est une information perdue.
             if(!r) return _echec('aucune ligne');
-            // UNE CELLULE VIDE N'A RIEN A EXPLIQUER : la phase est absente par
-            // defaut, et exiger une infobulle sur du vide ferait echouer
-            // l'assertion sur un dossier parfaitement normal.
-            const manque=[['.cr-nom','le nom'],['.cr-phase','la phase'],['.badge','l\'etat']]
+            // UNE CELLULE VIDE N'A RIEN A EXPLIQUER : exiger une infobulle sur
+            // du vide ferait echouer l'assertion sur un dossier normal.
+            // ⚠ LA PHASE A QUITTE LA LIGNE le 19/09/2026 : elle n'a plus de
+            //   cellule a porter une infobulle. La charge prend sa place dans
+            //   cette liste — elle porte un nombre nu, donc elle en a besoin.
+            const manque=[['.cr-nom','le nom'],['.cr-charge','la charge'],['.badge','l\'etat']]
               .filter(([sel])=>{ const e=r.querySelector(sel);
                 return e&&(e.textContent||'').trim()&&!(e.getAttribute('title')||'').trim(); })
               .map(([,lib])=>lib);
@@ -33142,11 +33159,15 @@ async function testExercices(){
         // vitesseHebdo rend un OBJET : lire le nombre directement rendait NaN.
         if(String(_crPoids).indexOf('kgSem')<0)
           return _echec('la vitesse de poids ne lit pas kgSem');
-        // LES CELLULES SONT EMISES MEME VIDES, comme l'objectif et la phase :
-        // une cellule absente decalerait toutes les colonnes suivantes.
+        // LES CELLULES SONT EMISES MEME VIDES, comme l'objectif : une cellule
+        // absente decalerait toutes les colonnes suivantes.
+        // ⚠ LE POIDS A QUITTE LA LIGNE le 19/09/2026, avec la phase et les
+        //   progres. `_crPoids` reste teste juste au-dessus — il sert toujours,
+        //   dans le tiroir de contexte — mais il n'a plus de cellule ici.
         const h=renderClientRow({id:'x',fname:'A',lname:'B'});
         const d=document.createElement('div'); d.innerHTML=h;
-        for(const cls of ['cr-assidu','cr-poids','cr-diete']){
+        if(d.querySelector('.cr-poids')) return _echec('le poids est encore une colonne');
+        for(const cls of ['cr-assidu','cr-diete']){
           const el=d.querySelector('.'+cls);
           if(!el) return _echec('.'+cls+' n’est pas émise');
           if(el.innerHTML!=='') return _echec('.'+cls+' n’est pas vide sur un dossier sans mesure');
@@ -46174,11 +46195,18 @@ async function testExercices(){
       if(txt.indexOf('Objectif actuel :')<0) return _echec('libelle : '+txt);
       if(txt.indexOf('Prise de masse')<0) return _echec('la phase n\'est plus nommee : '+txt);
       if(/semaine/i.test(txt)) return _echec('le rang de semaine est encore la : '+txt);
-      // IL RESTE AILLEURS : la fiche coach et la carte d'objectif le portent
-      // toujours, et ordinalSemaine n'est donc pas devenue du code mort.
+      // IL RESTE AILLEURS, et c'est tout ce qui compte : ordinalSemaine n'est
+      // pas devenue du code mort.
+      // ⚠ LE SEUIL ETAIT DE TROIS, calibre sur les appels d'alors. La ligne du
+      //   tableau a perdu le sien le 19/09/2026 avec la colonne Phase. On
+      //   compte donc les APPELS, definition deduite : un seul suffit a dire
+      //   que la fonction sert encore, et le compte ne se perimera plus a
+      //   chaque site d'appel qui bouge.
       const prod=_prodSrc();
-      return (prod.match(/ordinalSemaine\(/g)||[]).length>=3
-        ?true:_echec('ordinalSemaine n\'est plus appelee ailleurs');})());
+      const tous=(prod.match(/ordinalSemaine\(/g)||[]).length;
+      const defs=(prod.match(/function ordinalSemaine\(/g)||[]).length;
+      return (tous-defs)>=1
+        ?true:_echec('ordinalSemaine n\'est plus appelee nulle part');})());
 
     // « Encore 4 pesees cette semaine avant une moyenne fiable » passait a la
     // ligne et faisait grandir la carte d'un rang pour trois mots.
@@ -57630,18 +57658,22 @@ vendredi 78 6h 44m
     ok('Le seuil est STRICTEMENT au-dessus de 1024 px',
        !!_cssLarge&&!/@media\(min-width:(?:1024|1023)px\)/.test(_cssNu));
     // Le tableau du grand ecran compte sur un nombre de colonnes constant.
-    ok('renderClientRow emet toujours les cellules objectif et phase',(()=>{
+    ok('renderClientRow emet toujours la cellule objectif, et la phase a disparu',(()=>{
       const src=renderClientRow.toString();
       if(src.indexOf('class="cr-obj"')<0) return _echec('cellule objectif conditionnelle');
-      if(src.indexOf('class="cr-phase"')<0) return _echec('cellule phase conditionnelle');
-      // Et elles sont bien VIDES quand la donnee manque, sinon `:empty` ne
-      // les effacerait pas et la carte du telephone gagnerait deux marges.
+      // ⚠ LA PHASE A QUITTE LA LIGNE le 19/09/2026, a la demande de Kevin.
+      //   Elle vit toujours dans le tiroir de contexte ; ce qui partait ici,
+      //   c'est une colonne de plus a balayer sur une ligne qu'on lit en
+      //   diagonale. L'assertion garde son sens en le disant a l'envers.
+      if(src.indexOf('class="cr-phase"')>=0) return _echec('la phase est revenue sur la ligne');
+      // Et l'objectif est bien VIDE quand la donnee manque, sinon `:empty` ne
+      // l'effacerait pas et la carte du telephone gagnerait une marge.
       const h=renderClientRow({id:'x',fname:'A',lname:'B'});
       const d=document.createElement('div'); d.innerHTML=h;
-      const o=d.querySelector('.cr-obj'), p=d.querySelector('.cr-phase');
-      if(!o||!p) return _echec('cellules absentes du rendu');
-      return (o.innerHTML===''&&p.innerHTML==='')
-        ?true:_echec('cellule non vide : "'+o.innerHTML+'" / "'+p.innerHTML+'"');})());
+      const o=d.querySelector('.cr-obj');
+      if(!o) return _echec('cellule objectif absente du rendu');
+      return o.innerHTML===''
+        ?true:_echec('cellule non vide : "'+o.innerHTML+'"');})());
 
     // ══════ ARC — SYSTÈME D'ANIMATION (lot 1) ══════
     (()=>{

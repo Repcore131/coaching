@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1310';
+window.RC_BUILD='1311';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -805,7 +805,13 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
        infobulle et se coupe proprement, le nom est justement ce qu'on a
        elargi. Le total ne bouge pas : 916 px de pistes pour 1 020 utiles a
        1 366, ecarts compris. */
-    --cr-cols:16px 34px minmax(168px,2.4fr) minmax(70px,1fr) minmax(94px,.9fr) 50px 42px 40px 76px 38px 28px 94px 46px 120px;
+    /* ══ ONZE PISTES DEPUIS LE 19/09/2026, et non plus quatorze. Demande de
+       Kevin : Phase, Poids et Progres quittent le tableau. Les 174 px qu'ils
+       prenaient retournent au NOM et a l'OBJECTIF — les deux colonnes qui se
+       coupaient, et les deux qu'on lit en premier. Les intitules entiers
+       redeviennent possibles : « Assiduite » et « Bilans » au lieu de
+       « Assidu. » et « Bil. ». */
+    --cr-cols:16px 34px minmax(190px,2.4fr) minmax(130px,1.3fr) 74px 54px 80px 54px 104px 46px 124px;
     /* L'ECART, ET C'EST LUI QUI MANQUAIT. Les treize pistes font 918 px a
        1366 — mesure — pour 1 054 px de ligne : elles tiennent largement. Ce
        sont les DOUZE ECARTS a douze pixels, 144 px, qui faisaient deborder de
@@ -843,9 +849,7 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
   body:has(#s-coach-home.active) #ch-clients-list .client-row>div:nth-child(3){display:contents}
   body:has(#s-coach-home.active) #ch-clients-list .client-row>*{margin-top:0}
   body:has(#s-coach-home.active) #ch-clients-list .cr-obj,
-  body:has(#s-coach-home.active) #ch-clients-list .cr-phase,
   body:has(#s-coach-home.active) #ch-clients-list .cr-charge,
-  body:has(#s-coach-home.active) #ch-clients-list .cr-progres,
   body:has(#s-coach-home.active) #ch-clients-list .cr-bilans{display:block}
   body:has(#s-coach-home.active) #ch-clients-list .client-row:hover{transform:none}
   /* ⚠ LE BADGE TIENT SUR UNE LIGNE, ET C'EST UNE QUESTION DE HAUTEUR, PAS DE
@@ -883,10 +887,8 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      elements, eux, se montrent et se cachent sans lutter. */
   body:has(#s-coach-home.active) #ch-clients-list .cr-fiche .cr-fiche-l{display:none}
   body:has(#s-coach-home.active) #ch-clients-list .cr-fiche .cr-fiche-c{display:inline}
-  /* LA PHASE TIENT SUR UNE LIGNE. « Maintien · 7e semaine » se cassait en
-     trois, ce qui remontait la ligne a 60 px pour une cellule secondaire.
-     Coupee et survolable, comme le badge d'etat. */
-  body:has(#s-coach-home.active) #ch-clients-list .cr-phase,
+  /* L'OBJECTIF TIENT SUR UNE LIGNE, coupe et survolable comme le badge
+     d'etat. La phase partageait cette regle avant de quitter le tableau. */
   body:has(#s-coach-home.active) #ch-clients-list .cr-obj{
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* L en-tete de colonnes n existe QUE dans ce mode : sous le point de
@@ -919,12 +921,26 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
        glisse donc sous rien.
        LE FOND EST OBLIGATOIRE : sans lui, les lignes defileraient EN
        TRANSPARENCE derriere les intitules. */
-    position:sticky;top:0;z-index:4;background:var(--bg);
+    /* ══ UNE LIGNE ROUGE, DEPUIS LE 19/09/2026 ════════════════════════════
+       Demande de Kevin. En gris sur le fond de la page, cette rangee se
+       lisait comme une premiere ligne de donnees pales — d'autant qu'elle est
+       maintenant repetee au-dessus de chaque section. Un aplat rouge la
+       designe pour ce qu'elle est : la tete du tableau.
+
+       ⚠ LE TEXTE EST PRESQUE NOIR, ET NON BLANC. Sur #E02020, du blanc donne
+         4,4 pour un et du noir 4,8 — et ces intitules font dix pixels et
+         demi. Le noir passe, le blanc non.
+       ⚠ LE FOND RESTE OBLIGATOIRE POUR LE COLLANT : sans lui, les lignes
+         defileraient EN TRANSPARENCE derriere les intitules. Il est
+         desormais rouge, ce qui le rend visible — donc verifiable. */
+    position:sticky;top:0;z-index:4;background:var(--red);
     display:grid;grid-template-columns:var(--cr-cols);gap:var(--cr-gap);
-    padding:0 14px 7px;border-left:5px solid transparent;
-    border-right:1px solid transparent;
+    align-items:center;min-height:26px;
+    padding:0 14px;border-left:5px solid var(--red);
+    border-right:1px solid var(--red);
     font-size:10.5px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;
-    color:var(--sub);border-bottom:1px solid #242424;margin-bottom:6px}
+    color:#0a0000;border-bottom:none;margin-bottom:6px;
+    border-radius:0 3px 3px 0}
 }
 /* N6.4 — LES TROIS MESURES QUI MANQUAIENT, A PARTIR DE 1440 PX.
    Assiduite, vitesse de poids et taux de diete sont les trois mesures les plus
@@ -968,8 +984,9 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      prix de la place, et il est assume : les trois valeurs qui disparaissent
      sont dans le tiroir, pour l'athlete qu'on regarde. */
   body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list{
-    /* ONZE PISTES : les dix d'avant plus l'interrupteur de suivi. */
-    --cr-cols:16px 34px minmax(168px,2.4fr) minmax(86px,1fr) minmax(100px,.9fr) 76px 38px 28px 94px 46px 120px;
+    /* NEUF PISTES avec le tiroir ouvert : les onze du tableau, moins
+       l'assiduite et la diete, que la regle ci-dessous eteint. */
+    --cr-cols:16px 34px minmax(190px,2.4fr) minmax(130px,1.2fr) 80px 54px 104px 46px 124px;
     --cr-gap:12px}
   body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list .cr-assidu,
   body:has(#s-coach-home.active) .ch-avec-tiroir:has(#ch-tiroir:not(:empty)) #ch-clients-list .cr-poids,
@@ -1538,8 +1555,6 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 #ch-clients-list .cr-act{font-size:12px;font-weight:700;color:#c8c8c8;margin-top:3px;
   letter-spacing:.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ch-clients-list .cr-obj{font-weight:500}
-#ch-clients-list .cr-phase{font-size:10.5px!important;font-weight:600;color:#8a8a8a!important;
-  letter-spacing:.9px;text-transform:uppercase}
 #ch-clients-list .avatar{box-shadow:0 0 0 1px rgba(255,255,255,.09),0 4px 12px rgba(0,0,0,.5)}
 /* LE BADGE, COMPACT ICI SEULEMENT. Mesuré : sur 343 px de ligne, « Nouveau
    bilan » en prenait 136 — quarante pour cent pour une étiquette — et il ne
@@ -4743,7 +4758,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
    du grand ecran garde un nombre de colonnes constant. Vides, elles ne doivent
    rien occuper ici : sous 1025 px la ligne est une carte empilee, et un div
    vide y ajouterait sa marge. Le bloc @media(min-width:1025px) les rallume. */
-.cr-obj:empty,.cr-phase:empty{display:none}
+.cr-obj:empty{display:none}
 /* LES TROIS MESURES, MASQUEES SOUS 1025 px QUEL QUE SOIT LEUR CONTENU.
 
    Vides, le patron ci-dessus suffisait ; PLEINES, elles s empilaient sur la
@@ -4756,7 +4771,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
    @media(min-width:1025px) les rallume en display:block, et les neuf
    colonnes de la grille supposent que les sept cellules du bloc
    `display:contents` sont TOUJOURS presentes, vides comprises. */
-.cr-charge,.cr-progres,.cr-bilans,.cr-assidu,.cr-poids,.cr-diete{display:none}
+.cr-charge,.cr-bilans,.cr-assidu,.cr-diete{display:none}
 /* ══════════ PLAN ALIMENTAIRE — DIÈTE STRICTE ══════════
    Même langage visuel que la diète flexible : carte en dégradé, filet
    diagonal, ombre portée, titre en Bebas sur un bandeau accentué. Le plan
@@ -27187,8 +27202,12 @@ function _rendreVignettesAthletes(vus){
 // pas, sur la meme donnee, c'est pire que pas de segmentation du tout.
 // `rendu` est la fonction qui sait peindre UNE fiche ; ce decoupage ne sait
 // rien d'autre que trier et titrer.
-function _htmlSectionsSuivi(vus,rendu){
+function _htmlSectionsSuivi(vus,rendu,enTete){
   const peindre=rendu||renderClientRow;
+  // L'EN-TETE N'EST PASSE QUE PAR LA LISTE. Les vignettes et le CRM partagent
+  // ce decoupage mais n'ont pas de colonnes : leur poser une ligne
+  // d'intitules n'aurait rien a surmonter.
+  const tete=typeof enTete==='function'?enTete():'';
   const avec=(vus||[]).filter(estSuivi),sans=(vus||[]).filter(c=>!estSuivi(c));
   // LES DEUX SECTIONS PARAISSENT TOUJOURS, meme vides — et c'est un
   // changement du 14/09/2026. La regle d'avant les masquait tant qu'un seul
@@ -27217,12 +27236,46 @@ function _htmlSectionsSuivi(vus,rendu){
     +escapeHtml(t)+'</span><span class="sec-suivi" style="font-size:var(--fs-2xs);color:var(--text-faint)">'+n+'</span></div>';
   const vide=t=>'<div style="grid-column:1/-1;font-size:var(--fs-xs);color:var(--text-dim);'
     +'line-height:1.6;padding:10px 2px 14px">'+t+'</div>';
+  // L'EN-TETE SUIT LE TITRE ET PRECEDE LA PREMIERE LIGNE — et seulement
+  // quand il y a une ligne a surmonter : au-dessus d'un « Personne ici pour
+  // l'instant », une rangee d'intitules ne designerait rien.
   return titre('Mes athlètes (avec suivi)',avec.length)
-    +(avec.length?avec.map(peindre).join('')
+    +(avec.length?tete+avec.map(peindre).join('')
        :vide('Personne ici pour l\'instant.'))
     +titre('Mes athlètes (sans suivi)',sans.length)
-    +(sans.length?sans.map(peindre).join('')
+    +(sans.length?tete+sans.map(peindre).join('')
        :vide('Personne ici pour l\'instant. Touche le curseur SUIVI sur une fiche pour l\'y basculer.'));
+}
+/**
+ * L'EN-TETE DU TABLEAU, POSE AU-DESSUS DE CHAQUE SECTION. Demande de Kevin,
+ * 19/09/2026. Il n'y en avait qu'un, tout en haut : arrive au titre
+ * « Mes athletes (sans suivi) », le coach avait dix lignes de colonnes
+ * au-dessus de lui et plus aucun intitule en vue. Chaque section porte
+ * desormais le sien.
+ *
+ * UNE LIGNE ROUGE, et pas un simple texte gris : c'est ce qui la fait lire
+ * comme la tete d'un tableau plutot que comme une premiere ligne de donnees.
+ * Le texte est presque noir dessus — sur l'aplat rouge, du blanc tombe sous
+ * quatre pour un et ces intitules font onze pixels.
+ *
+ * ONZE CELLULES, DANS L'ORDRE EXACT DE LA LIGNE : case, avatar, nom,
+ * objectif, assiduite, diete, charge, bilans, bouton, suivi, etat. Toute
+ * cellule ajoutee a la ligne doit en ajouter une ici, et une assertion
+ * compare les deux comptes a celui des pistes de la grille.
+ *
+ * ⚠ `cr-assidu` ET `cr-diete` SONT PORTES PAR LEURS INTITULES : c'est ce qui
+ *   les eteint avec leurs cellules quand le tiroir prend la place, sans quoi
+ *   l'en-tete aurait onze intitules pour neuf pistes et repasserait a la ligne.
+ * @returns {string}
+ */
+function _htmlEnteteTableau(){
+  return '<div class="cr-head"><span></span><span></span><span>Athlète</span>'
+    +'<span>Objectif</span>'
+    +'<span class="cr-assidu" title="Séances faites sur séances prévues">Assiduité</span>'
+    +'<span class="cr-diete" title="Jours où la cible a été tenue">Diète</span>'
+    +'<span title="Charge de la semaine, sur la moyenne des 4 précédentes">Charge</span>'
+    +'<span title="Bilans sans réponse">Bilans</span>'
+    +'<span>Accès profil</span><span>Suivi</span><span>État</span></div>';
 }
 function renderClientList(clients){
   const el=document.getElementById('ch-clients-list');
@@ -27306,32 +27359,10 @@ function renderClientList(clients){
           : el.innerHTML)
         : '<div class="sub" style="text-align:center;padding:28px 12px;font-size:var(--fs-sm)">Aucun athlète ne correspond.</div>');
   } else {
-    // L en-tete de colonnes est emis TOUJOURS : c est le CSS qui decide de
-    // l afficher, et seulement au-dela de 1360 px. Le sortir du rendu
-    // demanderait au JS de connaitre la largeur de la fenetre.
-    // Deux colonnes sans titre en tete : celle de la case de sélection et
-    // celle de l'avatar. Les libellés doivent tomber sous LEUR colonne.
-    // N6.4 — LES TROIS INTITULES PORTENT LA CLASSE DE LEUR CELLULE. Emis
-    // toujours, comme les autres, et eteints par la meme regle tant que la
-    // fenetre ne les porte pas : un intitule de plus que de colonnes, et la
-    // grille de l'en-tete repasse a la ligne.
-    // TREIZE CELLULES, DANS L'ORDRE EXACT DE LA LIGNE : case, avatar, nom,
-    // objectif, phase, assiduite, poids, diete, charge, progres, bilans,
-    // bouton, etat. Toute cellule ajoutee a la ligne doit en ajouter une ici,
-    // et une assertion compare desormais les deux.
-    el.innerHTML='<div class="cr-head"><span></span><span></span><span>Athlète</span>'
-      +'<span>Objectif</span><span>Phase</span>'
-      +'<span class="cr-assidu">Assidu.</span><span class="cr-poids">Poids</span>'
-      +'<span class="cr-diete">Diète</span>'
-      // ⚠ « Progrès » ET « Bilans » SONT ABREGES, et c'est la colonne qui
-      // commande : elles portent « 0/1 » et « 2 », vingt-quatre et douze
-      // pixels. Les mots entiers en demandaient cinquante-six, pris sur la
-      // PHASE, qui se coupait a « Maintien ·… ». Le mot entier vit dans le
-      // title, comme pour chaque mesure de la ligne.
-      +'<span>Charge</span><span title="Exercices en progrès">Prog.</span>'
-      +'<span title="Bilans sans réponse">Bil.</span>'
-      +'<span></span><span>Suivi</span><span>État</span></div>'
-      +_htmlSectionsSuivi(vus);
+    // L'EN-TETE EST EMIS TOUJOURS, une fois par section : c'est le CSS qui
+    // decide de l'afficher, et seulement au-dela de 1360 px. Le sortir du
+    // rendu demanderait au JS de connaitre la largeur de la fenetre.
+    el.innerHTML=_htmlSectionsSuivi(vus,null,_htmlEnteteTableau);
     // LA CASCADE NE JOUE QU'AU PREMIER REMPLISSAGE de la visite. Les rendus
     // suivants — frappe, filtre, tri, synchro — posent le contenu sans un
     // mouvement : une entree qui se rejoue n'est plus une entree, c'est un
@@ -29089,10 +29120,12 @@ function renderClientRow(c){
   // suivent. `.cr-obj:empty{display:none}` les efface sous 1025 px : la carte
   // empilee du telephone est rigoureusement celle d'avant.
   const objLine=`<div class="cr-obj" style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_objDisplay?escapeHtml(_objDisplay):''}</div>`;
-  // Phase : rien du tout quand elle est absente, ce qui est le cas par defaut.
-  const _ph=phaseCourante(c);
-  const _phTxt=_ph?(PHASES[_ph.type].lib+' · '+ordinalSemaine(semainesPhase(c))):'';
-  const phLine=`<div class="cr-phase" title="${escapeHtml(_phTxt)}" style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px">${escapeHtml(_phTxt)}</div>`;
+  // ⚠ PHASE, POIDS ET PROGRES ONT QUITTE LA LIGNE le 19/09/2026, a la demande
+  //   de Kevin. Ils n'ont pas disparu de l'application : le tiroir de
+  //   contexte les affiche pour l'athlete qu'on regarde, avec leur intitule
+  //   en toutes lettres — `_crPoids` et `_crProgres` y servent toujours. Ce
+  //   qui partait ici, c'est trois colonnes de plus a balayer sur une ligne
+  //   qu'on lit en diagonale.
   // Les trois mesures, EMISES MEME VIDES, pour la même raison que l’objectif
   // et la phase : sur grand écran la ligne devient une ligne de tableau, et
   // une cellule absente décalerait toutes les colonnes suivantes.
@@ -29102,12 +29135,10 @@ function renderClientRow(c){
   // tous les trois.
   const _cel=(cls,txt,titre)=>`<div class="${cls}" title="${escapeHtml(titre)}" style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;white-space:nowrap">${txt?escapeHtml(txt):''}</div>`;
   const chLine=_cel('cr-charge',_crCharge(c),'Charge de la semaine, sur la moyenne des 4 précédentes');
-  const prLine=_cel('cr-progres',_crProgres(c),'Exercices en hausse sur 28 jours');
   const biLine=_cel('cr-bilans',_crBilans(c),'Bilans sans réponse');
   // N6.4 — les trois mesures qui manquaient, sur le meme patron : emises MEME
   // VIDES, effacees sous le seuil du tableau par la regle :empty existante.
   const asLine=_cel('cr-assidu',_crAssidu(c),'Séances faites sur séances prévues');
-  const poLine=_cel('cr-poids',_crPoids(c),'Vitesse de poids, sur les dernières pesées');
   const diLine=_cel('cr-diete',_crDiete(c),'Jours où la cible a été tenue');
   const _nm=(escapeHtml(c.fname||'')+' '+escapeHtml(c.lname||'')).trim()||'Profil incomplet';
   // L'ETAT est porte par un attribut plutot que par une classe : il pilote la
@@ -29123,7 +29154,7 @@ function renderClientRow(c){
       onclick="selAthleteBascule('${c.id}',event)"
       aria-label="Sélectionner ${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète')}">
     <div class="avatar" style="width:44px;height:44px;font-size:var(--fs-lg);overflow:hidden;flex-shrink:0">${avatarHtml}</div>
-    <div style="flex:1;min-width:0"><div class="cr-nom" title="${_nm}">${_nm}</div>${objLine}${phLine}${asLine}${poLine}${diLine}${chLine}${prLine}${biLine}</div>
+    <div style="flex:1;min-width:0"><div class="cr-nom" title="${_nm}">${_nm}</div>${objLine}${asLine}${diLine}${chLine}${biLine}</div>
     <!-- ══ LE BOUTON EST DANS LA LIGNE, A COTE DU NOM ═══════════════════
          Demande de Kevin, 08/09/2026 : « je vois Claire Boumar, je peux
          cliquer directement sur ouvrir la fiche a cote de son prenom ».
