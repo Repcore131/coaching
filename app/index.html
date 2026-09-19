@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1290';
+window.RC_BUILD='1291';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -83860,6 +83860,11 @@ async function uploadVideoFile(input,options){
       const res=await Promise.race([
         RCV.compresser(file,{
         hauteur:VIDEO_CIBLE_HAUTEUR,debit:VIDEO_CIBLE_DEBIT,dureeMaxS:VIDEO_DUREE_MAX_S,
+        // ⚠ PAS DE VOIE TEMPS RÉEL. WebCodecs allège en une seconde ou ne fait
+        //   rien ; `recorder`, lui, rejoue la vidéo à vitesse normale et rend
+        //   soit un clip d'une image, soit rien du tout. Quand WebCodecs ne
+        //   peut pas, LE FICHIER PART TEL QUEL — c'est plus lourd, et ça arrive.
+        sansRecorder:true,
         signal:ctrlAlleg?ctrlAlleg.signal:null,
         onVoie:(v)=>{
           // LE TEMPS RÉEL S'ANNONCE. La voie MediaRecorder rejoue la vidéo à

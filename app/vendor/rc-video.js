@@ -403,7 +403,7 @@ function _voieRecorder(file,o){
  * @param {File|Blob} file
  * @param {{hauteur?:number, debit?:number, dureeMaxS?:number,
  *          onProgres?:(p:number)=>void, onVoie?:(v:string,raison:string)=>void,
- *          signal?:any}} [options]
+ *          signal?:any, sansRecorder?:boolean}} [options]
  * @returns {Promise<{blob:Blob|null, largeur:number, hauteur:number, dureeS:number,
  *          voie:string, octetsAvant:number, octetsApres:number, raison:string,
  *          sansAudio:boolean}>}
@@ -427,10 +427,24 @@ function compresser(file,options){
         if(_coupe(o.signal)) throw e;
         // ⚠ ON DESCEND, ON N'ABANDONNE PAS. Une erreur d'encodage ne doit
         //   jamais coûter sa vidéo à quelqu'un.
+        //
+        // SAUF VERS `recorder`, QUAND L'APPELANT LE REFUSE. Cette voie rejoue
+        // le fichier EN TEMPS RÉEL : sur un téléphone qui se verrouille elle ne
+        // rend jamais la main, et quand le décodage s'arrête en route elle rend
+        // un clip d'UNE IMAGE — mesuré, 2,0 s en entrée, 0,033 s en sortie.
+        // « Rien allégé » est une réponse valide ; un fichier abîmé, non.
+        if(o.sansRecorder){
+          onVoie('aucune',String((e&&e.message)||e));
+          return rien(String((e&&e.message)||e));
+        }
         onVoie('recorder',String((e&&e.message)||e));
         return _voieRecorder(file,o);
       });
     } else {
+      if(o.sansRecorder){
+        onVoie('aucune',p.raison);
+        return rien(p.raison);
+      }
       onVoie('recorder',p.raison);
       suite=_voieRecorder(file,o);
     }
