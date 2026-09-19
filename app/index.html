@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1291';
+window.RC_BUILD='1292';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -16124,6 +16124,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // numero d'ordre PayPal. De la facturation, pas de la sante — mais qui DOIT
   // etre classee, sinon elle n'est protegee par rien.
   'programmesAchetes',
+  // Le mouchard d'envoi video : une etape, un horodatage, une taille de
+  // fichier et un message d'erreur. Du diagnostic, pas de la sante — mais il
+  // DOIT etre classe, sinon il n'est protege par rien.
+  'videoDiag',
   'echeance','alertStatus','supprimes','_export',
   'coachId','coachName','coachEmailKey','coachCode','coachPhoto','code','clients',
   'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
@@ -83782,6 +83786,26 @@ async function uploadVideoFile(input,options){
   const errEl=document.getElementById('vid-upload-error');
   const progEl=document.getElementById('vid-upload-progress');
   const dire=(txt)=>{ if(errEl){ errEl.style.display='block'; errEl.textContent=txt; } };
+  // ══ LE MOUCHARD D'ENVOI ═══════════════════════════════════════════════════
+  //
+  // UN ENVOI QUI ÉCHOUE NE LAISSE AUCUNE TRACE AILLEURS QUE SUR L'ÉCRAN, et
+  // l'écran, personne ne le relit. Quand l'athlète dit « ça ne part pas », il
+  // n'y a rien à regarder : le dossier n'a pas bougé, et c'est précisément
+  // parce que rien n'a été écrit.
+  //
+  // On note donc l'ÉTAPE atteinte, et on la pousse. Quelques dizaines d'octets
+  // qui disent où ça s'arrête — la taille du fichier, sa durée, la voie
+  // d'allègement, le message d'erreur — sans rien du contenu de la vidéo.
+  // Effacé dès qu'un envoi aboutit : ce champ ne décrit QUE le dernier échec.
+  const noter=(etape,detail)=>{
+    try{
+      if(!currentUser) return;
+      currentUser.videoDiag={ quand:Date.now(), build:String(window.RC_BUILD||'?'),
+        etape:String(etape), detail:String(detail==null?'':detail).slice(0,180),
+        octets:(file&&file.size)||0, type:(file&&file.type)||'' };
+      saveUser();
+    }catch(e){}
+  };
   if(errEl) errEl.style.display='none';
   // La confirmation du PRECEDENT envoi part tout de suite : la laisser sous un
   // fichier refuse reviendrait a annoncer une reussite qui n'a pas eu lieu.
@@ -83794,11 +83818,13 @@ async function uploadVideoFile(input,options){
   //   — pas seulement le refus.
   if(!file.type.startsWith('video/')){
     dire('Fichier invalide : sélectionne une vidéo (MP4, MOV, WebM…)');
+    noter('refus_type',(file&&file.type)||'');
     input.value='';return;
   }
   if(file.size>VIDEO_MAX_OCTETS_TOTAL){
     dire('Fichier trop volumineux ('+_mo(file.size)+', maximum '+_mo(VIDEO_MAX_OCTETS_TOTAL)
       +'). Filme plus court, ou baisse la qualité vidéo dans les réglages du téléphone.');
+    noter('refus_taille',file.size);
     input.value='';return;
   }
   // LA DURÉE, quand le navigateur sait la lire. Un fichier illisible ici n'est
@@ -83808,6 +83834,7 @@ async function uploadVideoFile(input,options){
   if(dureeS!=null&&dureeS>VIDEO_DUREE_MAX_S){
     dire('Vidéo trop longue ('+_dureeTexte(dureeS)+', maximum '+_dureeTexte(VIDEO_DUREE_MAX_S)
       +'). Découpe la série qui t’intéresse : le coach regarde le mouvement, pas la séance.');
+    noter('refus_duree',dureeS);
     input.value='';return;
   }
 
@@ -83834,6 +83861,7 @@ async function uploadVideoFile(input,options){
   });
   pan.maj(0,file.size);
   if(progEl){progEl.style.display='block';progEl.textContent='Préparation…';}
+  noter('demarre',dureeS==null?'duree illisible':dureeS+' s');
   try{
     // ══ 2. ALLÉGER. Le panneau dit « Allègement », jamais « Envoi » : rien
     //    n'est parti, et quelqu'un qui coupe ici ne coupe pas un envoi.
@@ -83957,6 +83985,8 @@ async function uploadVideoFile(input,options){
     }
     pan.titre('Envoi de la vidéo');
     pan.maj(0,aEnvoyer.size);
+    noter('envoi_lance',voie+' · '+aEnvoyer.size+' o'
+      +(_envoiDecoupeRequis(aEnvoyer.size)?' · en morceaux':' · en une fois'));
     const surProgres=(charge,total)=>{
       pan.maj(charge,total);
       if(progEl) progEl.textContent='Envoi… '+(total>0?Math.round(charge/total*100):0)+' %';
@@ -84039,6 +84069,8 @@ async function uploadVideoFile(input,options){
     }
     const _nomEl=document.getElementById('vid-name-input'); if(_nomEl) _nomEl.value='';
     input.value='';
+    // RÉUSSI : le champ ne doit plus décrire un échec qui n'existe plus.
+    try{ if(currentUser&&currentUser.videoDiag){ delete currentUser.videoDiag; } }catch(e){}
     // La vidéo est bien sur Cloudinary, mais l'entrée qui la référence peut
     // n'exister nulle part en local : elle disparaîtrait alors de la liste.
     toastEcriture(_localOk,'Vidéo envoyée au coach !','la vidéo est référencée');
@@ -84050,6 +84082,7 @@ async function uploadVideoFile(input,options){
     //   garde son entrée — c’est exactement pour elle que la file existe.
     try{ if(typeof fileId!=='undefined'&&fileId&&!_envoiReessayable(e)
       &&!/annulé/i.test(String(e&&e.message))) await fileEnvoiRetirer(fileId); }catch(x){}
+    noter('echec',(e&&e.message)||String(e));
     const msg=_cloudinaryUserMsg(e,'video');
     pan.rate(msg);
     if(progEl) progEl.style.display='none';
