@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1296';
+window.RC_BUILD='1297';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -14793,7 +14793,27 @@ const CLOUD={
         const cl=Number(r.headers.get('content-length'));
         if(cl>0) _quotaCompter('in',cl); }catch(e){}
       this._setSyncStatus(r.ok);
-      if(!r.ok) throw new Error('Erreur serveur '+r.status+' ('+r.statusText+')');
+      if(!r.ok){
+        // ⚠ UN 401 NE DIT PAS CE QU'IL REFUSE, et c'est ce qui rend la panne
+        //   indéchiffrable. La règle d'écriture compare l'adresse PORTÉE PAR LE
+        //   JETON à la CLÉ du nœud visé ; une majuscule, un espace, un point de
+        //   plus d'un côté, et tout est refusé — définitivement, en silence.
+        //   Les deux valeurs tiennent en trente caractères : on les met dans le
+        //   message, c'est le seul endroit où elles peuvent être lues.
+        let _detail='';
+        if(r.status===401||r.status===403){
+          let _jeton='(illisible)';
+          try{
+            const _p=JSON.parse(atob(String(token).split('.')[1]
+              .replace(/-/g,'+').replace(/_/g,'/')));
+            _jeton=String(_p.email||'(jeton sans adresse)');
+          }catch(e){}
+          const _attendu=_jeton.replace(/\./g,',');
+          _detail=' · cible « '+safeKey+' » · jeton « '+_jeton+' » → attend « '
+            +_attendu+' »'+(_attendu===safeKey?' (identiques)':' (DIFFÉRENTS)');
+        }
+        throw new Error('Erreur serveur '+r.status+' ('+r.statusText+')'+_detail);
+      }
       // Le nœud distant est à jour : plus rien à rejouer pour cette clé, et le
       // réseau répond — la relance en attente n'a plus lieu d'être.
       this._defiler(email);
