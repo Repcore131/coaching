@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1307';
+window.RC_BUILD='1308';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1444,12 +1444,24 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 @media(prefers-reduced-motion:reduce){.pil-compteur{transition:none}.pil-compteur:hover{transform:none}}
 /* N1.11 — LA BARRE D ETAT DU PORTEFEUILLE. Huit compteurs, pas trois : elle
    absorbe les trois metric-box muets de la tete du panneau, la bande
-   « Portefeuille » du volet et les trois puces de filtre. flex:1 1 96px et non
-   1 1 0 : a huit, une repartition egale les ecraserait a 50 px de large. Ils
-   s enroulent — quatre par ligne sur telephone, huit sur grand ecran — et la
-   barre entiere tient dans ce que prenait UNE des trois representations. */
-.ch-pf{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-.ch-pf .pil-compteur{flex:1 1 96px;min-height:52px;padding:9px 5px}
+   « Portefeuille » du volet et les trois puces de filtre.
+
+   ══ UNE GRILLE, ET NON UN FLEX QUI S ENROULE. Demande de Kevin, 19/09/2026 :
+   « tous les carres ajustes en taille sur la meme ligne ». En flex, `flex:1 1
+   96px` donnait des largeurs INEGALES — chaque case grandissait a partir de
+   96 px selon la place restante sur sa ligne, et la derniere d une rangee
+   incomplete s etirait toute seule. Huit colonnes en `1fr` sont egales par
+   construction.
+
+   `minmax(0,1fr)` ET NON `1fr` : sans le zero, un libelle long — « Seances
+   ecourtees » — impose sa largeur minimale a sa colonne, la grille deborde le
+   conteneur et la barre pousse une glissiere horizontale.
+
+   QUATRE PAR LIGNE SOUS 900 px, huit au-dela. A huit sur un telephone, chaque
+   case ferait quarante pixels : le nombre y tiendrait, pas son libelle. */
+.ch-pf{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:12px}
+@media(min-width:900px){.ch-pf{grid-template-columns:repeat(8,minmax(0,1fr))}}
+.ch-pf .pil-compteur{min-height:52px;padding:9px 5px}
 .ch-pf .pil-val{font-size:var(--fs-xl)}
 .ch-pf .pil-lib{font-size:10px;margin-top:4px}
 
@@ -25040,10 +25052,14 @@ function renderPortefeuille(clients){
     ['attente',       'En attente',           p.enAttente,       '#8a8a8a'],
     ['pf-actifs',     'Actifs 14 j',          p.actifs,          '#22c55e'],
     ['tous',          'Tous',                 p.total,           '#c4c4c4']];
-  el.innerHTML=cases.map(c=>_pilCompteur(c[0],c[1],c[2],c[3])).join('')
-    // La repartition suivi / sans suivi ferme la carte : les compteurs
-    // au-dessus disent ce qu'il y a a faire, celle-ci dit sur qui.
-    +(l.length?'<div style="grid-column:1/-1;margin-top:4px">'+_htmlRepartitionSuivi(l)+'</div>':'');
+  // ⚠ RIEN D'AUTRE QUE LES HUIT COMPTEURS. La repartition « avec / sans
+  //   suivi » fermait cette barre : en flex, elle passait pour un neuvieme
+  //   element et s'installait au bout de la ligne, poussant « Tous » et
+  //   cassant l'alignement des cases. Demande de Kevin, 19/09/2026 : elle s'en
+  //   va. L'information reste dite deux fois ailleurs — les titres de section
+  //   « Mes athletes (avec / sans suivi) » portent chacun leur compte, et la
+  //   carte des arrivees les redit avec ses deux couleurs de barre.
+  el.innerHTML=cases.map(c=>_pilCompteur(c[0],c[1],c[2],c[3])).join('');
 }
 function _pilBande(cle,titre,corps,resume){
   return `<details class="plan-src pil-bande" style="margin:0 0 7px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
@@ -29504,16 +29520,12 @@ function _htmlCalendrierAcces(){
     +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">'
     +'Rouge : avec suivi. Jaune : sans suivi.</div></div>';
 }
-function _htmlRepartitionSuivi(l){
-  const avec=(l||[]).filter(estSuivi).length,sans=(l||[]).length-avec;
-  if(!avec||!sans) return '';
-  const pastille=(c,n,t)=>'<span style="display:inline-flex;align-items:center;gap:5px;'
-    +'font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--sub)">'
-    +'<span style="width:9px;height:9px;border-radius:var(--r-full);background:'+c+'"></span>'
-    +n+' '+t+'</span>';
-  return '<div style="display:flex;align-items:center;gap:14px;margin-bottom:9px;flex-wrap:wrap">'
-    +pastille('#E02020',avec,'avec suivi')+pastille('#f5a524',sans,'sans suivi')+'</div>';
-}
+// `_htmlRepartitionSuivi` VIVAIT ICI. Elle rendait « 17 avec suivi · 13 sans
+// suivi » en deux pastilles, pour la barre du portefeuille et pour la carte des
+// arrivees. La carte l'a absorbee le 19/09 — ses barres portent les deux
+// couleurs, et les comptes sont passes dans leur legende ; la barre l'a perdue
+// le meme jour, parce qu'elle y cassait l'alignement des huit compteurs. Plus
+// aucun appelant : on la retire plutot que de la laisser dormir.
 function _htmlCroissanceCoach(athletes){
   const l=Array.isArray(athletes)?athletes.filter(Boolean):[];
   if(!l.length) return '';
