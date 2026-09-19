@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1297';
+window.RC_BUILD='1298';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -14161,7 +14161,65 @@ const CLOUD={
     } finally { this._videEnCours=false; }
     return renvoyes;
   },
+  /**
+   * L'adresse PORTÉE PAR LE JETON, lue dans sa charge utile. Un JWT est trois
+   * sections base64 séparées par des points ; la deuxième est du JSON et porte
+   * la revendication `email`. Aucun appel réseau, aucun secret exposé.
+   * @returns {string}
+   */
+  _emailDuJeton(){
+    try{
+      const p=String(this._idToken||'').split('.')[1];
+      if(!p) return '';
+      const j=JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/')));
+      return String(j.email||'').toLowerCase();
+    }catch(e){ return ''; }
+  },
+  /** Le motif du dernier refus d'identité, pour que l'appelant puisse le dire. */
+  _jetonEtranger:'',
   async _getToken(){
+    // ══ LE JETON DOIT APPARTENIR AU COMPTE AFFICHÉ ═══════════════════════════
+    //
+    // `rc_fb_auth` ne porte QUE des jetons — pas l'adresse à qui ils sont. Sur
+    // un appareil où plusieurs comptes se succèdent, une bascule qui ne repose
+    // pas les bons laisse ceux du précédent : l'app affiche Kévin, écrit dans
+    // le dossier de Kévin, et signe avec le jeton de quelqu'un d'autre. La
+    // règle compare les deux adresses, n'en reconnaît aucune, et refuse TOUT —
+    // définitivement, avec pour seule trace « Erreur serveur 401 ».
+    //
+    // Constaté en production : cible « inkev8638@gmail,com », jeton
+    // « kevinquentin2@gmail.com ». Aucune écriture ne passait plus, et la
+    // vidéo de l'athlète n'atteignait jamais son coach.
+    //
+    // ON RÉPARE D'ABORD, on refuse ensuite : les jetons du bon compte sont
+    // souvent déjà dans le registre, et l'athlète n'a alors rien à faire.
+    try{
+      const _attendu=String((typeof currentUser==='object'&&currentUser&&currentUser.email)||'').toLowerCase();
+      const _actuel=this._emailDuJeton();
+      if(_attendu&&_actuel&&_actuel!==_attendu){
+        let _repare=false;
+        try{
+          const _c=(typeof comptesConnectes==='function'?comptesConnectes():[])
+            .find(x=>x&&String(x.email||'').toLowerCase()===_attendu);
+          if(_c&&_c.auth&&_c.auth.r){
+            this._idToken=_c.auth.i||null;
+            this._refreshToken=_c.auth.r;
+            this._tokenExpiry=_c.auth.e||0;
+            this._saveAuth();
+            _repare=(this._emailDuJeton()===_attendu)||!this._idToken;
+          }
+        }catch(e){}
+        if(!_repare){
+          // On ne signe RIEN avec le jeton d'un autre : la requête serait
+          // refusée, et surtout elle écrirait sous une identité qui n'est pas
+          // celle de la personne devant l'écran.
+          this._jetonEtranger=_actuel;
+          this._idToken=null; this._refreshToken=null; this._tokenExpiry=0;
+          return null;
+        }
+        this._jetonEtranger='';
+      }
+    }catch(e){}
     if(this._idToken&&Date.now()<this._tokenExpiry-60000) return this._idToken;
     if(!this._refreshToken) return null;
     try{
@@ -14538,9 +14596,21 @@ const CLOUD={
       // Sans jeton, l'ancien `return` laissait le badge figé sur « Synchronisation
       // en cours » et l'utilisateur croyait ses données envoyées. On signale l'échec
       // et on remonte une erreur actionnable aux appelants qui l'attendent.
+      // DEUX PANNES DIFFÉRENTES, DEUX MESSAGES. « Reconnecte-toi » n'aide
+      // personne quand le problème est qu'on est connecté avec le MAUVAIS
+      // compte : il faut nommer lequel, sinon on se reconnecte au même.
+      //
+      // ⚠ LE COMMENTAIRE VIT ICI, HORS DU BLOC. Un test borne la garde
+      //   `if(!token){…}` à six cents caractères pour vérifier qu'elle n'a pas
+      //   disparu ; l'allonger la fait échouer alors qu'elle est intacte.
+      const _msgSansJeton=this._jetonEtranger
+        ? ('Session ouverte avec « '+this._jetonEtranger+' » alors que l’app affiche « '
+           +(((typeof currentUser==='object'&&currentUser&&currentUser.email)||'?'))
+           +' ». Déconnecte-toi et reconnecte-toi avec le bon compte.')
+        : 'Non authentifié : modification enregistrée sur cet appareil uniquement.';
       if(!token){
         this._setSyncStatus(false);
-        const sansJeton=new Error('Non authentifié : modification enregistrée sur cet appareil uniquement.');
+        const sansJeton=new Error(_msgSansJeton);
         // Remonté tel quel par toastSync : « synchronisation en échec » ne dirait
         // pas à l'utilisateur qu'il lui suffit de se reconnecter.
         sansJeton._actionnable=true;
