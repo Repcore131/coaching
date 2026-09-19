@@ -37162,11 +37162,22 @@ async function testExercices(){
       // cesse de la lire le jour ou elle dit quelque chose.
       if(_htmlJamaisDemarre([],Date.now())!=='') return _echec('un cadre vide est rendu');
       const t=Date.now();
-      // JOIGNABLE : depuis le 19/09/2026 la carte pose deux liens de contact,
-      // et sans adresse ni numero elle affiche « Ni numero ni adresse » — ce
-      // qui est le bon comportement, mais pas celui qu'on teste ici.
-      const h=_htmlJamaisDemarre([{id:'a',fname:'Alice',createdAt:t-12*864e5,sessions:[],
-        email:'alice@t.fr',phone:'+33600000000'}],t);
+      // JOIGNABLE : depuis le 19/09/2026 la carte mene a deux gestes, et sans
+      // adresse ni numero la feuille de relance le dit — ce qui est le bon
+      // comportement, mais pas celui qu'on teste ici.
+      //
+      // ⚠ ALICE EST INSCRITE, ET ELLE NE PORTE DONC PAS DE `_codeInfo`. C'est
+      //   la nature meme de cette liste : `jamaisDemarre` ecarte `_fromCode`,
+      //   donc elle ne voit QUE des gens qui ont cree leur compte. Le code par
+      //   lequel Alice est entree se retrouve par rapprochement sur le nom —
+      //   d'ou le dossier coach pose juste au-dessus.
+      const _sauve=currentUser;
+      currentUser={id:'c1',role:'coach',email:'coach@t.fr',studentCodes:[
+        {codeId:'kA',token:'TA',active:true,studentName:'Alice Martin',
+         athleteEmail:'alice@t.fr',createdAt:t-30*864e5}]};
+      const h=_htmlJamaisDemarre([{id:'a1',fname:'Alice',lname:'Martin',
+        createdAt:t-12*864e5,sessions:[],email:'alice@t.fr',phone:'+33600000000'}],t);
+      currentUser=_sauve;
       if(!h) return _echec('la carte ne sort rien pour un athlete');
       const d=document.createElement('div'); d.innerHTML=h;
       // LE NOMBRE D'ATHLETES CONCERNES, demande explicitement.
@@ -37177,17 +37188,75 @@ async function testExercices(){
       //   Ce test exigeait UN SEUL bouton, menant a relancerJamaisDemarre, qui
       //   ouvrait la fenetre du canal avec un brouillon nominatif — lu par tous
       //   les athletes suivis. Demande de Kevin : une relance s'adresse a une
-      //   personne. Deux liens directs, comme le cadre « Inactifs ».
-      const liens=[...d.querySelectorAll('a')].map(a=>a.getAttribute('href')||'');
-      if(!liens.length) return _echec('aucun lien de contact sur la ligne');
-      if(!liens.some(h=>/^https:\/\/wa\.me\//.test(h)))
-        return _echec('aucun lien WhatsApp : '+liens.join(' | '));
-      if(!liens.some(h=>/^mailto:/.test(h)))
-        return _echec('aucun lien mail : '+liens.join(' | '));
-      // ET AUCUN CHEMIN VERS LE CANAL, ni en bouton ni en lien.
+      //   personne.
+      //
+      // ⚠ LA FORME A CHANGE UNE SECONDE FOIS, le 19/09/2026 au soir. La carte
+      //   posait deux LIENS directs — WhatsApp et mail. Kevin : des
+      //   RECTANGLES, avec le nom, la date de creation du code, « Code
+      //   d'accès » et « Relancer » en blanc. Les deux liens n'ont pas disparu
+      //   du produit : ils sont derriere « Relancer ».
+      const cmd=[...d.querySelectorAll('button')].map(b=>b.getAttribute('onclick')||'');
+      if(!cmd.length) return _echec('aucun bouton sur la carte');
+      if(!cmd.some(x=>x.indexOf('jdCodeAcces')===0))
+        return _echec('aucun bouton « Code d’accès » : '+cmd.join(' | '));
+      if(!cmd.some(x=>x.indexOf('jdRelancer')===0))
+        return _echec('aucun bouton « Relancer » : '+cmd.join(' | '));
+      // LE BOUTON DE RELANCE EST BLANC, l'autre non : deux gestes de nature
+      // differente ne se peignent pas pareil.
+      const blanc=[...d.querySelectorAll('button')]
+        .find(b=>(b.getAttribute('onclick')||'').indexOf('jdRelancer')===0);
+      if(!/btn-blanc/.test(blanc.className)) return _echec('« Relancer » n’est pas le bouton blanc');
+      // LA DATE DU CODE, demandee explicitement.
+      if(d.innerText.indexOf('Code créé le')<0)
+        return _echec('la date de creation du code manque : '+d.innerText);
+      // ET AUCUN CHEMIN VERS LE CANAL DE DIFFUSION.
       if(/openMessageCanal|relancerJamaisDemarre/.test(h))
         return _echec('la carte mene encore au canal');
-      return true;})());
+      // ⚠ NI VERS LE TUNNEL COMMERCIAL, ET C'EST LA MEME RIGUEUR. Le tunnel ne
+      //   compte que les gens qui n'ont JAMAIS utilise leur acces ; ceux-ci ont
+      //   ouvert un compte. Y brancher le bouton aurait ecrit des relances dans
+      //   un dossier que `tunnelListe` ne rend jamais, et la quatrieme aurait
+      //   desactive le code d'un athlete deja inscrit.
+      if(/tunnelRelancer|tunnelOuvrir/.test(h))
+        return _echec('la carte mene au tunnel, qui ne connait pas ces gens');
+      // ⚠ LE codeId VOYAGE, PAS L'INDEX. Un index dans `studentCodes` bouge
+      //   des qu'un code est cree ou supprime : le bouton d'une carte rendue
+      //   il y a dix secondes aurait copie l'invitation de quelqu'un d'autre.
+      return /jdCodeAcces\('[^']+'\)/.test(h)
+        ?true:_echec('le bouton ne porte pas d’identifiant de code');})());
+
+    // ⚠ LE RAPPROCHEMENT EST LE POINT FRAGILE DE TOUTE LA CARTE : sans lui,
+    //   aucun des deux boutons ne sait de quel code il parle. Il refait ce que
+    //   getClients fait pour decider qu'un code est « deja utilise », et les
+    //   deux doivent designer LE MEME code — sinon on affiche une date et on
+    //   copie une autre invitation.
+    ok('Le code d’un athlete inscrit se retrouve par son nom, puis par son adresse',(()=>{
+      const codes=[{codeId:'k1',studentName:'Alice Martin',athleteEmail:'vieux@t.fr'},
+                   {codeId:'k2',studentName:'',athleteEmail:'bob@t.fr'},
+                   {codeId:'k3',studentName:'Carla Diaz',athleteEmail:'carla@t.fr'}];
+      const par=(c)=>{ const k=codeDeLAthlete(c,codes); return k?k.codeId:null; };
+      // LE NOM D'ABORD : Alice a change d'adresse depuis, son code la suit.
+      if(par({fname:'Alice',lname:'Martin',email:'neuve@t.fr'})!=='k1')
+        return _echec('le nom ne retrouve pas le code');
+      // L'ADRESSE ENSUITE, pour les codes crees sans nommer l'eleve.
+      if(par({fname:'Bob',lname:'',email:'bob@t.fr'})!=='k2')
+        return _echec('l’adresse ne retrouve pas le code sans nom');
+      // LA CASSE ET LES ESPACES DE BORD NE COMPTENT PAS : le coach saisit a la
+      // main. Les espaces INTERIEURS, eux, comptent encore — comme dans
+      // getClients, et c'est voulu : deux rapprochements qui ne normalisent pas
+      // pareil designeraient deux codes differents pour la meme personne.
+      if(par({fname:' CARLA',lname:'diaz ',email:''})!=='k3')
+        return _echec('la casse fait rater le rapprochement');
+      // ET QUAND RIEN NE CORRESPOND, ON REND null — pas le premier code venu.
+      if(par({fname:'Zoé',lname:'Inconnue',email:'zoe@t.fr'})!==null)
+        return _echec('un inconnu se voit attribuer un code');
+      if(codeDeLAthlete(null,codes)!==null||codeDeLAthlete({fname:'Alice'},null)!==null)
+        return _echec('le cas vide ne rend pas null');
+      // ⚠ UN ATHLETE SANS NOM NI ADRESSE NE PREND PAS LE CODE SANS NOM. Les
+      //   deux chaines valent '' : une comparaison naive les aurait declarees
+      //   egales, et le coach aurait copie l'invitation d'un inconnu.
+      return codeDeLAthlete({fname:'',lname:'',email:''},codes)===null
+        ?true:_echec('une fiche vide s’approprie un code');})());
 
     // XSS STOCKE : le prenom est saisi par l'athlete et atterrit dans le
     // tableau de bord de son coach. Le defaut avait deja ete trouve dans

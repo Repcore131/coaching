@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1314';
+window.RC_BUILD='1315';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1563,6 +1563,25 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 #ch-clients-list .badge{font-size:11px;letter-spacing:.6px;padding:4px 8px;border-radius:var(--r-pill);
   max-width:112px;white-space:normal;text-align:center;line-height:1.3}
 
+/* ══ « JAMAIS DEMARRE » : DES RECTANGLES, PAS UNE LISTE ════════════════════
+   Demande de Kevin, 19/09/2026. En liste, treize personnes faisaient treize
+   rangees identiques de trente pixels : on les parcourait sans en distinguer
+   aucune, et le seul bouton — « Mail » — etait colle au bord droit, a
+   quarante centimetres du nom qu'il concerne. Un rectangle rapproche le nom,
+   la date et les deux gestes qui vont avec.
+
+   ⚠ `auto-fill` ET NON `auto-fit`. Avec `auto-fit`, une carte seule s'etire
+     sur toute la largeur de l'ecran : un rectangle de 1 100 px pour un nom et
+     deux boutons. `auto-fill` garde les pistes vides, donc la carte garde sa
+     taille. */
+.jd-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:8px;padding:12px 14px}
+.jd-carte{background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--sub);
+  border-radius:var(--r-3);padding:11px 12px;display:flex;flex-direction:column;gap:9px}
+.jd-nom{font-size:var(--fs-sm);font-weight:800;line-height:1.25;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jd-date{font-size:var(--fs-2xs);color:var(--sub);line-height:1.45}
+.jd-cmd{display:flex;gap:6px;margin-top:auto}
+.jd-cmd .btn{flex:1;margin:0;min-height:36px;padding:0 8px;font-size:var(--fs-2xs);letter-spacing:.3px;white-space:nowrap}
 /* ══ LE TUNNEL COMMERCIAL ══════════════════════════════════════════════════
    Des cartes, et non un tableau : une personne du tunnel porte cinq faits —
    qui, combien de relances, quel statut, quand la derniere, quand la
@@ -30496,14 +30515,119 @@ function brouillonJamaisDemarre(c){
 // LE GRIS ET NON LE ROUGE. Ce n'est pas une alerte : personne n'a mal, rien
 // n'est en retard. C'est une relance commerciale, et la peindre comme « A
 // traiter » lui volerait l'attention que la sante doit garder.
+/**
+ * PURE. Le code d'acces par lequel un athlete DEJA INSCRIT est entre, ou null.
+ *
+ * ⚠ CETTE FONCTION EXISTE PARCE QUE `_codeInfo` N'EST PAS DISPONIBLE ICI, et
+ *   c'est structurel : getClients ne pose `_codeInfo` que sur les profils
+ *   `_code_…` qu'il FABRIQUE pour les codes non utilises, et `jamaisDemarre`
+ *   ecarte precisement ceux-la (`c._fromCode` → false). « Jamais demarre »
+ *   parle de gens qui ont cree leur compte et ne se sont jamais entraines :
+ *   leur code existe toujours dans studentCodes, mais plus aucun lien ne le
+ *   rattache a leur dossier. On refait donc le rapprochement.
+ *
+ * ⚠ ET ON LE REFAIT COMME getClients, pas autrement : le nom d'abord,
+ *   l'adresse ensuite pour les codes crees sans nom. Deux rapprochements
+ *   differents auraient designe deux codes differents pour la meme personne —
+ *   celui qu'on affiche et celui qu'on copie.
+ * @param {any} c      un athlete inscrit
+ * @param {any[]} codes  currentUser.studentCodes
+ * @returns {any}
+ */
+function codeDeLAthlete(c,codes){
+  const l=(codes||[]).filter(Boolean);
+  if(!c||!l.length) return null;
+  const nom=String(((c.fname||'')+' '+(c.lname||''))).toLowerCase().trim();
+  const mail=String(c.email||'').toLowerCase().trim();
+  return l.find(k=>nom&&String(k.studentName||'').toLowerCase().trim()===nom)
+      || l.find(k=>mail&&String(k.athleteEmail||'').toLowerCase().trim()===mail)
+      || null;
+}
+/** Le geste « Code d'accès » d'une carte : l'invitation, prete a coller. */
+function jdCodeAcces(codeId){
+  // ⚠ ON RETROUVE L'INDEX ICI, ET ON NE LE TRANSPORTE PAS. Un index dans
+  //   `studentCodes` bouge des qu'un code est cree ou supprime, et le bouton
+  //   d'une carte rendue il y a dix secondes aurait copie l'invitation de
+  //   quelqu'un d'autre. Le codeId, lui, ne bouge jamais.
+  const i=((currentUser&&currentUser.studentCodes)||[]).findIndex(c=>c&&c.codeId===codeId);
+  if(i<0){ toast('Code introuvable','var(--orange)'); return false; }
+  _copierInvitationAthlete(i);
+  return true;
+}
+/**
+ * Le geste « Relancer » d'une carte : les deux canaux directs, pour UNE
+ * personne.
+ *
+ * ⚠ CE CHEMIN NE PASSE PAS PAR LE TUNNEL COMMERCIAL, ET C'EST DELIBERE. Le
+ *   tunnel compte les gens qui n'ont JAMAIS utilise leur acces
+ *   (`tunnelPersonnes` ecarte tout nom deja inscrit) ; ceux-ci ont ouvert un
+ *   compte. Brancher le bouton sur `tunnelRelancer` aurait ecrit des relances
+ *   dans un dossier que `tunnelListe` ne rend jamais — le coach aurait
+ *   enregistre dans le vide — et la quatrieme aurait DESACTIVE le code d'un
+ *   athlete deja inscrit, donc ferme la porte a quelqu'un qui est deja entre.
+ *
+ * ⚠ ET IL NE PASSE PAS NON PLUS PAR LE CANAL. Le canal est lu par tous les
+ *   athletes suivis : une relance s'adresse a une personne. C'est la regle
+ *   posee le 19/09/2026, elle ne bouge pas parce que la carte a change de
+ *   forme.
+ * @param {string} id  l'identifiant de l'athlete
+ */
+function jdRelancer(id){
+  const c=(getClients()||[]).find(x=>x&&String(x.id)===String(id));
+  if(!c){ toast('Athlète introuvable','var(--orange)'); return false; }
+  const k=canauxRelanceJamaisDemarre(c);
+  const nom=String(((c.fname||'')+' '+(c.lname||'')).trim())||'cet athlète';
+  const lien=(href,lib)=>'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" '
+    +'class="btn btn-blanc btn-sm" style="flex:1;margin:0;min-height:46px;display:flex;'
+    +'align-items:center;justify-content:center">'+lib+'</a>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">'
+  +'<h2 style="margin-bottom:4px">Relancer</h2>'
+  +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px">'+escapeHtml(nom)
+  +' · compte créé, aucune séance</div>'
+  // NI NUMERO NI ADRESSE : on le DIT. Deux boutons qui n'ouvrent rien feraient
+  // croire a une panne, et le coach cliquerait deux fois avant de comprendre
+  // que le manque est dans la fiche de l'athlete.
+  +((k.wa||k.mail)
+    ?'<div style="display:flex;gap:8px;margin-bottom:12px">'
+      +(k.wa?lien(k.wa,'WhatsApp'):'')+(k.mail?lien(k.mail,'Mail'):'')+'</div>'
+      +'<p class="sub" style="font-size:var(--fs-2xs);line-height:1.55;margin:0 0 14px">'
+      +'Le message s’ouvre pré-rédigé et modifiable dans l’application choisie. '
+      +'C’est toi qui appuies sur envoyer : RepCore n’envoie rien à ta place.</p>'
+    :'<p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin:0 0 14px">'
+      +'Cette fiche ne porte ni numéro ni adresse : RepCore ne peut ouvrir aucun '
+      +'message. Ajoute-les depuis le profil de l’athlète.</p>')
+  +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0;min-height:44px" '
+  +'onclick="closeModal()">Fermer</button>'
+  +'</div></div>');
+  return true;
+}
 function _htmlJamaisDemarre(liste,maintenant){
   const l=liste||[];
   if(!l.length) return '';
   const n=l.length;
-  const bouton=(href,lib)=>'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" '
-    +'class="btn btn-outline btn-sm rel-b">'+lib+'</a>';
+  // HUIT RECTANGLES OUVERTS, LE RESTE REPLIE. Demande de Kevin, et c'est aussi
+  // la regle deja posee pour « Mes notifications » : une carte d'accueil qui
+  // deroule treize dossiers n'oriente plus rien.
+  //
+  // ⚠ REPLIE, ET NON RENVOYE AILLEURS. Le surplus se deplie SUR PLACE parce
+  //   qu'aucun autre ecran ne montre cette population : le Tunnel commercial
+  //   compte les gens qui n'ont JAMAIS utilise leur acces, et ceux-ci ont
+  //   ouvert un compte. Un bouton « voir tout le tunnel » aurait mene a un
+  //   ecran ou aucun d'eux ne figure.
+  const MAX=8;
+  const reste=Math.max(0,n-MAX);
+  const jour=t=>{ if(!t) return '—'; const q=new Date(t), p=x=>String(x).padStart(2,'0');
+    return p(q.getDate())+'/'+p(q.getMonth()+1)+'/'+q.getFullYear(); };
+  const codes=(currentUser&&currentUser.studentCodes)||[];
   return '<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
+    // ⚠ L'ESPACE AU-DESSUS, demande par Kevin : le bandeau « Jamais démarré »
+    //   touchait le pied du cadre precedent, et les deux se lisaient comme un
+    //   seul bloc dont on ne voyait plus la couture.
+    +'margin-top:22px;'
     +'overflow:hidden;box-shadow:var(--el-1)">'
     +'<div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
@@ -30513,34 +30637,43 @@ function _htmlJamaisDemarre(liste,maintenant){
     +'font-size:14px;font-weight:400;padding:1px 9px;border-radius:var(--r-3);'
     +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
     +'</div>'
-    +'<div style="padding:0 14px">'
-    +renderDataList(l,c=>{
+    +'<div class="jd-grille">'
+    +l.map((c,rang)=>{
       const j=joursDepuisRattachement(c,maintenant);
       // XSS STOCKE : le prenom est saisi par l'athlete et atterrit dans le
       // tableau de bord de son coach. Meme precaution que renderTodoBlock, et
       // pour la meme raison — le defaut y avait ete trouve en testant des
       // prenoms hostiles.
-      const nom=escapeHtml(String(c.fname||'').trim()||'Athlète');
-      const k=canauxRelanceJamaisDemarre(c);
-      // NI NUMERO NI ADRESSE : on le DIT. Deux boutons qui n'ouvrent rien
-      // feraient croire a une panne, et le coach cliquerait deux fois avant de
-      // comprendre que le manque est dans la fiche de l'athlete.
-      const actions=(k.wa||k.mail)
-        ?('<div class="rel-a">'
-          +(k.wa?bouton(k.wa,'WhatsApp'):'')
-          +(k.mail?bouton(k.mail,'Mail'):'')+'</div>')
-        :'<span class="sub" style="font-size:var(--fs-2xs);flex:0 0 auto;text-align:right;'
-          +'line-height:1.4;max-width:104px">Ni numéro<br>ni adresse</span>';
-      return '<div style="flex:1;min-width:0">'
-        +'<div style="font-size:var(--fs-sm);font-weight:800;line-height:1.3">'+nom+'</div>'
-        +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">'
-        +'rattaché depuis '+j+' jour'+(j>1?'s':'')+'</div>'
-        +'</div>'
-        +actions;
-    },{pad:'11px 0'})
+      const nom=escapeHtml(String(((c.fname||'')+' '+(c.lname||'')).trim())||'Athlète');
+      const code=codeDeLAthlete(c,codes);
+      const cid=escapeHtml(String((code&&code.codeId)||''));
+      // LA DATE DEMANDEE EST CELLE DU CODE. Quand le rapprochement ne donne
+      // rien — code supprime depuis, ou athlete arrive autrement — on affiche
+      // la date du COMPTE plutot qu'un tiret : c'est la meme question posee au
+      // coach, « depuis quand cette personne attend-elle ? », et elle garde une
+      // reponse.
+      return '<div class="jd-carte'+(rang>=MAX?' jd-plus" hidden':'"')+'>'
+        +'<div><div class="jd-nom" title="'+nom+'">'+nom+'</div>'
+        +'<div class="jd-date">'+(code?'Code créé le '+jour(code.createdAt)
+                                       :'Compte créé le '+jour(dateRattachement(c)))
+        +'<br>rattaché depuis '+j+' jour'+(j>1?'s':'')+'</div></div>'
+        +'<div class="jd-cmd">'
+        // SANS CODE RAPPROCHE, PAS DE BOUTON « CODE D'ACCES » : il copierait
+        // l'invitation de quelqu'un d'autre, ou rien du tout. « Relancer »
+        // prend alors toute la largeur — il marche, lui, il ne dépend que de
+        // la fiche.
+        +(cid?'<button type="button" class="btn btn-outline btn-sm" onclick="jdCodeAcces(\''+cid+'\')">Code d’accès</button>':'')
+        +'<button type="button" class="btn btn-blanc btn-sm" onclick="jdRelancer(\''+escapeHtml(String(c.id||''))+'\')">Relancer</button>'
+        +'</div></div>';
+    }).join('')
     +'</div>'
+    +(reste?'<button type="button" onclick="jdVoirTout(this)" style="display:block;width:100%;background:none;border:none;'
+      +'border-top:1px solid var(--border);color:var(--red-text);font-family:Montserrat,sans-serif;'
+      +'font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;'
+      +'cursor:pointer;padding:11px 14px;min-height:42px;text-align:left">+ '+reste+' autre'
+      +(reste>1?'s':'')+' · tout afficher</button>':'')
     +'<div class="sub" style="font-size:var(--fs-2xs);line-height:1.55;padding:2px 14px 12px">'
-    +'Le message s’ouvre pré-rédigé et modifiable. RepCore n’envoie rien à ta place.'
+    +'« Code d’accès » copie l’invitation, prête à coller. « Relancer » ouvre le message pré-rédigé, en WhatsApp ou par mail.'
     +'</div></div>';
 }
 // ⚠ AUCUN ENVOI, POUR LES DEUX CADRES. Les boutons OUVRENT WhatsApp ou le
@@ -30847,7 +30980,13 @@ function tunnelRelancer(codeId){
   // ⚠ ON N'ECRIT JAMAIS « ENVOYE ». RepCore n'envoie rien ici : il enregistre
   //   ce que le coach a fait de son cote. Les deux canaux qui SAVENT ouvrir un
   //   message pre-rempli le proposent par un lien ; les deux autres non.
-  +'<p class="sub" id="tun-avis" style="font-size:var(--fs-2xs);line-height:1.5;margin:0 0 12px"></p>'
+  +'<p class="sub" id="tun-avis" style="font-size:var(--fs-2xs);line-height:1.5;margin:0 0 8px"></p>'
+  // ⚠ CE LIEN EST LA SEULE CHOSE QUI ENVOIE VRAIMENT — et encore, il ne fait
+  //   qu'OUVRIR le message pre-rempli dans WhatsApp ou le client mail, ou le
+  //   coach appuie lui-meme sur « envoyer ». Valider, en dessous, n'envoie
+  //   rien : ca enregistre l'action. Les deux gestes sont separes a l'ecran
+  //   parce qu'ils sont separes en fait.
+  +'<div id="tun-ouvrir" style="margin-bottom:12px"></div>'
   +'<div class="ml-lab" style="margin-bottom:6px">Note (facultative)</div>'
   +'<textarea id="tun-note" rows="3" maxlength="400" placeholder="WhatsApp envoyé — rappel de l’activation RepCore."'
   +' style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);resize:vertical;margin-bottom:14px"></textarea>'
@@ -30855,6 +30994,11 @@ function tunnelRelancer(codeId){
   +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>'
   +'<button type="button" id="tun-valider" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="tunnelValider(\''+escapeHtml(codeId)+'\')">Enregistrer la relance</button>'
   +'</div></div></div>');
+  // L'avis a besoin de savoir DE QUI il parle pour proposer le bon lien. Le
+  // codeId voyage sur le noeud plutot qu'en variable globale : deux feuilles
+  // ouvertes coup sur coup ne peuvent pas se melanger.
+  const _p=document.getElementById('tun-avis');
+  if(_p) _p.dataset.code=codeId;
   _tunnelMajAvis();
   return true;
 }
@@ -30877,11 +31021,26 @@ function _tunnelCanalChoisi(){
  */
 function _tunnelMajAvis(){
   const p=document.getElementById('tun-avis');
+  const z=document.getElementById('tun-ouvrir');
   if(!p) return;
   const cle=_tunnelCanalChoisi();
   const c=TUNNEL_CANAUX.find(x=>x.cle===cle);
+  const code=_tunnelCode(String(p.dataset.code||''));
+  const k=code?tunnelCanaux(code):{wa:'',mail:''};
+  const lien=cle==='whatsapp'?k.wa:cle==='email'?k.mail:'';
+  if(z){
+    z.innerHTML=lien
+      ? '<a href="'+_safeContactUrl(lien)+'" target="_blank" rel="noopener" class="btn btn-blanc btn-sm"'
+        +' style="width:100%;margin:0;min-height:40px;display:flex;align-items:center;justify-content:center">'
+        +'Ouvrir '+(cle==='whatsapp'?'WhatsApp':'le mail')+' pré-rempli</a>'
+      : '';
+  }
   p.textContent=(c&&c.reel)
-    ? 'RepCore peut ouvrir le message pré-rempli depuis la fiche. Ici, il enregistre seulement l’action : rien n’est envoyé par la validation.'
+    ? (lien
+       ? 'Le bouton ci-dessous OUVRE le message pré-rempli ; c’est toi qui appuies sur envoyer. Valider, en dessous, enregistre seulement l’action.'
+       : (cle==='whatsapp'?'Aucun numéro sur cette fiche : RepCore ne peut pas ouvrir WhatsApp.'
+                          :'Aucune adresse sur cette fiche : RepCore ne peut pas ouvrir le mail.')
+         +' L’action est enregistrée telle que tu l’as faite de ton côté.')
     : 'RepCore n’envoie pas par ce canal. L’action est enregistrée telle que tu l’as faite de ton côté.';
 }
 /**
@@ -31231,6 +31390,24 @@ function canauxRelanceInactif(c,maintenant){
 function canauxRelanceJamaisDemarre(c){
   return _canauxRelance(c,brouillonJamaisDemarre(c),JAMAIS_OBJET);
 }
+/**
+ * Les deux liens ouvrables pour une personne du TUNNEL. Elle n'a pas de
+ * dossier — c'est tout le sujet — donc on fabrique le minimum que
+ * `canauxRelanceJamaisDemarre` attend a partir de son entree de code.
+ *
+ * ⚠ UNE SEULE FABRIQUE DE LIENS POUR LES DEUX CHEMINS. Le durcissement du
+ *   `mailto:` vit dans `_canauxRelance` ; le recopier ici en aurait fait une
+ *   seconde version a oublier de corriger.
+ * @param {any} code  une entree de studentCodes
+ */
+function tunnelCanaux(code){
+  const nom=String((code&&code.studentName)||'').trim();
+  return canauxRelanceJamaisDemarre({
+    fname:nom.split(' ')[0]||'',
+    lname:nom.split(' ').slice(1).join(' '),
+    email:String((code&&code.athleteEmail)||''),
+    phone:String((code&&(code.athletePhone||code.phone))||'')});
+}
 // PURE. Le cadre, ou la chaine VIDE quand personne n'est concerne — jamais un
 // cadre vide annoncant zero. Meme regle que « Jamais demarre » juste en
 // dessous, et pour la meme raison : une liste de relance qui s'affiche a zero
@@ -31289,6 +31466,22 @@ function _rendreInactifs(clients){
   if(!z) return false;
   try{ z.innerHTML=_htmlInactifs(listeInactifs(clients,Date.now()),Date.now()); }
   catch(e){ z.innerHTML=''; }
+  return true;
+}
+/**
+ * Deplie le surplus de la carte « Jamais démarré », et retire le bouton.
+ *
+ * ⚠ `hidden` PLUTOT QUE `display:none` EN LIGNE : les cartes repliees sont
+ *   deja dans le document — elles sont rendues, juste cachees — et `hidden`
+ *   les retire aussi de l'arbre d'accessibilite. Un lecteur d'ecran ne
+ *   annoncait donc pas treize rectangles quand l'oeil en voit huit.
+ */
+function jdVoirTout(b){
+  const z=b&&b.closest?b.closest('div'):null;
+  const g=z?z.querySelector('.jd-grille'):document.querySelector('#ch-jamais-demarre .jd-grille');
+  if(!g) return false;
+  g.querySelectorAll('.jd-plus').forEach(x=>x.removeAttribute('hidden'));
+  if(b&&b.remove) b.remove();
   return true;
 }
 function _rendreJamaisDemarre(clients){
