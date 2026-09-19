@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1294';
+window.RC_BUILD='1295';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -84105,6 +84105,8 @@ async function uploadVideoFile(input,options){
     // absent vaut mieux qu'un objet a moitie rempli de nulls.
     if(_opt.lien&&_opt.lien.exerciceCle) entry.lien=_opt.lien;
     let _localOk=true;
+    /** La poussée vers Firebase. C'est ELLE qui décide si le coach recevra. */
+    let _envoi=null;
     if(currentUser?.email!==targetEmail){
       // Session changée pendant l'upload — écrire directement dans le compte cible
       const allUsers=DB.get('users')||{};
@@ -84115,31 +84117,62 @@ async function uploadVideoFile(input,options){
       target.updatedAt=Date.now();
       allUsers[targetEmail]=target;
       _localOk=DB.set('users',allUsers);
-      CLOUD.pushOne(targetEmail,target);
+      _envoi=CLOUD.pushOne(targetEmail,target);
     }else{
       if(!currentUser.videos) currentUser.videos=[];
       currentUser.videos.push(entry);
       consommerDemandeVideo(name,currentUser);
+      // RÉUSSI : le champ ne doit plus décrire un échec qui n'existe plus. Posé
+      // AVANT la poussée, sinon on enverrait le mouchard du coup précédent.
+      try{ delete currentUser.videoDiag; }catch(e){}
       _localOk=saveUser();
+      // ⚠ ON PREND LA PROMESSE DE LA POUSSÉE, ET ON L'ATTEND.
+      //
+      // saveUser() écrit en local et programme un envoi DIFFÉRÉ dont personne
+      // ne lit le résultat. « Vidéo envoyée au coach » se disait donc sur la
+      // seule écriture LOCALE : jeton expiré, réseau coupé, garde-fou de
+      // version — l'athlète lisait le ✓ vert, le serveur ne recevait rien, et
+      // le coach ne voyait jamais la vidéo. C'est exactement la leçon que
+      // N3.18 impose déjà à cinq autres écritures ; celle-ci y avait échappé.
+      if(CLOUD.canWrite()) _envoi=CLOUD.pushOne(currentUser.email,currentUser);
     }
     // ⚠ LA CONFIRMATION RESTE, elle ne se contente plus d'un toast. Le toast
     // dure trois secondes et part : quelqu'un qui a repose son telephone
     // pendant l'envoi ne le voit jamais, et ne sait pas si sa video est
     // partie. Le panneau se ferme seul ; la ligne sous le bouton, elle, tient
     // jusqu'au prochain envoi.
-    pan.fini('Vidéo envoyée au coach');
-    if(progEl){
-      progEl.style.display='block';
-      progEl.textContent='✓ Vidéo envoyée au coach · '+name;
-    }
     const _nomEl=document.getElementById('vid-name-input'); if(_nomEl) _nomEl.value='';
     input.value='';
-    // RÉUSSI : le champ ne doit plus décrire un échec qui n'existe plus.
-    try{ if(currentUser&&currentUser.videoDiag){ delete currentUser.videoDiag; } }catch(e){}
-    // La vidéo est bien sur Cloudinary, mais l'entrée qui la référence peut
-    // n'exister nulle part en local : elle disparaîtrait alors de la liste.
-    toastEcriture(_localOk,'Vidéo envoyée au coach !','la vidéo est référencée');
     loadVideos();
+    // ══ ON N'ANNONCE RIEN AVANT QUE LE COACH PUISSE LA VOIR ══════════════════
+    //
+    // Le fichier est sur Cloudinary, l'entrée est écrite en local — mais tant
+    // que la poussée n'a pas abouti, le coach n'a RIEN. Dire « envoyée au
+    // coach » à ce stade est un mensonge, et c'est celui qui a coûté le plus
+    // cher : l'athlète range son téléphone, le coach attend, et personne ne
+    // sait que rien n'est parti.
+    let _arrivee=true;
+    try{ if(_envoi) await _envoi; }catch(e){ _arrivee=false; }
+    if(_arrivee){
+      pan.fini('Vidéo envoyée au coach');
+      if(progEl){
+        progEl.style.display='block';
+        progEl.textContent='✓ Vidéo envoyée au coach · '+name;
+      }
+      toastEcriture(_localOk,'Vidéo envoyée au coach !','la vidéo est référencée');
+    }else{
+      // ⚠ LA VIDÉO N'EST PAS PERDUE : elle est sur Cloudinary et dans la liste
+      //   locale. Ce qui manque, c'est la synchronisation — et elle repartira
+      //   d'elle-même à la prochaine écriture réussie. On le dit, plutôt que
+      //   de laisser croire à un envoi abouti.
+      noter('poussee_refusee','le coach ne l’a pas encore reçue');
+      pan.rate('Vidéo enregistrée, mais pas encore synchronisée');
+      if(progEl){
+        progEl.style.display='block';
+        progEl.style.color='var(--orange)';
+        progEl.textContent='⚠ Vidéo gardée sur ton téléphone : elle n’est pas encore arrivée chez ton coach. Vérifie ta connexion, puis rouvre l’app.';
+      }
+    }
   }catch(e){
     console.error('[uploadVideoFile]',e);
     // ⚠ UN REFUS DÉFINITIF VIDE LA FILE. Reproposer chaque matin un fichier
