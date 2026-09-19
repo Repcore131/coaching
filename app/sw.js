@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1295';
+const CACHE = 'repcore-v1296';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.

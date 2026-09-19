@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1295';
+window.RC_BUILD='1296';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -84151,8 +84151,9 @@ async function uploadVideoFile(input,options){
     // coach » à ce stade est un mensonge, et c'est celui qui a coûté le plus
     // cher : l'athlète range son téléphone, le coach attend, et personne ne
     // sait que rien n'est parti.
-    let _arrivee=true;
-    try{ if(_envoi) await _envoi; }catch(e){ _arrivee=false; }
+    let _arrivee=true, _pourquoi='';
+    try{ if(_envoi) await _envoi; }
+    catch(e){ _arrivee=false; _pourquoi=String((e&&e.message)||e).slice(0,200); }
     if(_arrivee){
       pan.fini('Vidéo envoyée au coach');
       if(progEl){
@@ -84165,12 +84166,19 @@ async function uploadVideoFile(input,options){
       //   locale. Ce qui manque, c'est la synchronisation — et elle repartira
       //   d'elle-même à la prochaine écriture réussie. On le dit, plutôt que
       //   de laisser croire à un envoi abouti.
-      noter('poussee_refusee','le coach ne l’a pas encore reçue');
+      noter('poussee_refusee',_pourquoi);
       pan.rate('Vidéo enregistrée, mais pas encore synchronisée');
       if(progEl){
         progEl.style.display='block';
         progEl.style.color='var(--orange)';
-        progEl.textContent='⚠ Vidéo gardée sur ton téléphone : elle n’est pas encore arrivée chez ton coach. Vérifie ta connexion, puis rouvre l’app.';
+        // ⚠ LA RAISON S'AFFICHE, ET C'EST LE SEUL ENDROIT OÙ ELLE PEUT. Le
+        //   mouchard s'écrit bien dans le dossier, mais il n'en sort QUE par la
+        //   poussée — celle-là même qui vient d'être refusée. Tant qu'elle ne
+        //   passe pas, l'écran est le seul canal vers l'extérieur, et un message
+        //   qui tait la cause ne laisse rien à quoi se raccrocher.
+        progEl.textContent='⚠ Vidéo gardée sur ton téléphone : elle n’est pas encore '
+          +'arrivée chez ton coach.'+(_pourquoi?' Motif : '+_pourquoi:'')
+          +' Vérifie ta connexion, puis rouvre l’app.';
       }
     }
   }catch(e){
