@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1306';
+window.RC_BUILD='1307';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -8260,18 +8260,32 @@ const COACH_PHOTO='icons/coach.jpg';
              et on la lit d'un seul regard au lieu de defiler jusqu'en bas.
              Rempli par loadCoachHome. -->
         <div id="ch-croissance" style="margin-bottom:18px"></div>
-        <div style="margin-bottom:14px">
-          <!-- LES EMOJIS SONT PARTIS. Ils n'ajoutaient rien qu'un libelle en
-               capitales ne dise deja, et ils rendaient les trois boutons
-               inegaux a l'oeil. CRM rejoint les deux autres : c'est le meme
-               geste — atteindre ses athletes — par un autre canal. -->
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-outline btn-sm" onclick="loadCanalCoach()" title="Canal : écrire à tous mes athlètes" aria-label="Canal : écrire à tous mes athlètes" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">Canal</button>
-            <button class="btn btn-outline btn-sm" onclick="openWaGroupe()" title="Message groupé WhatsApp" aria-label="Message groupé WhatsApp" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">Groupé</button>
-            <button class="btn btn-outline btn-sm" onclick="ouvrirCrmCoach()" title="Carnet d'adresses : mail, genre, téléphone" aria-label="Carnet d'adresses" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">CRM</button>
-          </div>
+        <!-- ══ QUATRE BOUTONS D'ÉGALE LARGEUR, SUR TOUTE LA LIGNE ══════════
+             Demande de Kevin, 19/09/2026.
+
+             LE CODE ETAIT UNE LIGNE DE TEXTE sous les trois boutons : il se
+             lisait, il ne se touchait pas. C'est pourtant LUI qu'on cherche au
+             moment d'inscrire quelqu'un, et il fallait aller le rouvrir depuis
+             le menu de gauche. Il devient le quatrieme bouton, et le seul
+             rouge : les trois autres ecrivent a des athletes qu'on a deja,
+             celui-la en fait entrer un nouveau.
+
+             `repeat(auto-fit,minmax(150px,1fr))` : quatre colonnes des que la
+             place existe, deux sur un telephone. Jamais un libelle coupe, et
+             les quatre font toujours la meme largeur.
+
+             LES EMOJIS SONT PARTIS. Ils n'ajoutaient rien qu'un libelle en
+             capitales ne dise deja, et ils rendaient les boutons inegaux a
+             l'oeil. -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin-bottom:14px">
+          <button class="btn btn-blanc btn-sm" onclick="loadCanalCoach()" title="Canal : écrire à tous mes athlètes" aria-label="Canal : écrire à tous mes athlètes" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">Canal</button>
+          <button class="btn btn-blanc btn-sm" onclick="openWaGroupe()" title="Message groupé WhatsApp" aria-label="Message groupé WhatsApp" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">Groupé</button>
+          <button class="btn btn-blanc btn-sm" onclick="ouvrirCrmCoach()" title="Carnet d'adresses : mail, genre, téléphone" aria-label="Carnet d'adresses" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">CRM</button>
+          <!-- ⚠ L'ID NE BOUGE PAS. loadCoachHome ecrit son libelle dedans, et
+               deux tests lisent son textContent — c'etait un <div>, c'est un
+               <button>, `textContent` s'ecrit pareil sur les deux. -->
+          <button class="btn btn-red btn-sm" id="ch-code-small" onclick="showCoachCode()" title="Mon code d'inscription" aria-label="Mon code d'inscription" style="letter-spacing:2px;padding:9px 11px;margin:0;min-height:38px;font-family:monospace" hidden></button>
         </div>
-        <div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px;font-family:monospace;letter-spacing:2px" id="ch-code-small"></div>
         <!-- Barre de pilotage : trois compteurs qui filtrent la liste, et trois
              volets de contexte. HORS de #ch-clients-list, comme la recherche,
              pour survivre au rafraichissement. -->
@@ -29819,7 +29833,15 @@ function loadCoachHome(){
   const fullName=((u.fname||'')+' '+(u.lname||'')).trim()||'Profil incomplet';
   const el=document.getElementById('ch-name');if(el)el.textContent=fullName;
   const elSb=document.getElementById('ch-name-sidebar');if(elSb)elSb.textContent=fullName;
-  const codeEl=document.getElementById('ch-code-small');if(codeEl)codeEl.textContent=u.code?('Code: '+u.code):'';
+  const codeEl=document.getElementById('ch-code-small');
+  if(codeEl){
+    codeEl.textContent=u.code?('Code: '+u.code):'';
+    // ⚠ SANS CODE, LE BOUTON DISPARAIT. Du temps ou c'etait une ligne de
+    //   texte, une chaine vide suffisait a ne rien montrer. Un bouton vide,
+    //   lui, garde sa surface rouge et son clic : il ouvrirait un ecran qui
+    //   n'a aucun code a afficher.
+    codeEl.hidden=!u.code;
+  }
   const codeSb=document.getElementById('ch-code-sidebar');if(codeSb)codeSb.textContent=u.code||'';
   // Show desktop sidebar if wide screen
   const sidebar=document.getElementById('ch-sidebar');
