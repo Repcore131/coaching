@@ -53,11 +53,19 @@
  *   prise:{etat:'encours'|'fait', res:any, ms:number}|null,
  *   cachePose:{cle:string, d:any}|null,
  *   cacheBarre:{cle:string, d:{t:number[], x:number[], y:number[], vy:number[], conf:number[]}}|null,
+ *   cacheRep:{cle:string, d:any}|null, repere:{nom:string, couleur:number}|null,
  *   rec:any, correction:{motion:any, blob:Blob|null, blobUrl:string, statut:'brouillon'|'envoi'|'envoye'|'erreur', erreur:string}|null,
  *   cartes:{id:string, aMs:number, dureeMs:number, texte:string}[], lecteur:any
  * }} EtatMl
  */
-/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'} ModeMl */
+/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'|'repere'|'repsuivi'} ModeMl */
+/**
+ * Un point suivi nomme, pendant le parcours de la video. `sx`/`sy` est la
+ * graine, en pixels de l'image ; elle est gardee pour pouvoir tout relancer
+ * quand un point s'ajoute.
+ * @typedef {{nom:string, couleur:number, r:number, sx:number, sy:number,
+ *   points:PointBarre[]}} PisteRep
+ */
 /**
  * La graine : le disque posé par le coach, en pixels de la VIDÉO.
  * @typedef {{segId:string, tMs:number, x:number|null, y:number|null, r:number}} Graine
@@ -730,6 +738,90 @@ function mlDecompacterBarre(b){
     conf.push(c[k]/255);
   }
   return {t,x,y,vy:v,conf};
+}
+
+// ══ LES POINTS SUIVIS NOMMÉS ════════════════════════════════════════════════
+//
+// Le coach touche un endroit de l'image, lui donne un nom, et son déplacement
+// se dessine sous ce nom. Le suivi est CELUI DU DISQUE — mlSuiviDemarrer et
+// mlSuiviPas ne savent rien de ce qu'ils suivent — mais SANS ÉCHELLE : un
+// repère ne rend aucune mesure en mètres, seulement un chemin. Ni disque à
+// mesurer, ni étalon à poser, ni aplomb à corriger : rien de tout cela n'entre
+// dans un tracé.
+//
+// ⚠ TOUS LES POINTS SONT SUIVIS DANS LE MÊME PARCOURS DE LA VIDÉO. Décoder une
+//   image coûte cent fois la corrélation qui suit un point dessus : six
+//   parcours pour six points seraient six fois le prix, pour le même résultat.
+//   C'est aussi ce qui leur donne la base de temps commune dont le format de
+//   stockage dépend (voir segReperesValide dans index.html).
+
+/**
+ * PURE. Les points suivis, compactés pour le dossier de l'athlète. Toutes les
+ * pistes ont la MÊME longueur — un point perdu continue d'être échantillonné,
+ * à confiance nulle — et partagent donc `t0Ms` et `pasMs`.
+ * @param {{debutMs:number, finMs:number}} seg
+ * @param {PisteRep[]} pistes
+ * @param {{vw:number, vh:number}} p
+ * @returns {Object|null}
+ */
+function mlCompacterReperes(seg,pistes,p){
+  const total=pistes.length?pistes[0].points.length:0;
+  if(!pistes.length||total<2) return null;
+  const T=pistes[0].points.map(q=>q.tMs);
+  const n=Math.max(2,Math.min(SEG_REP_PTS_MAX,total));
+  const t0=T[0], pasMs=(T[total-1]-t0)/(n-1);
+  if(!(pasMs>0)) return null;
+  const vues=pistes.map(()=>({xy:new DataView(new ArrayBuffer(n*4)),cf:new Uint8Array(n)}));
+  // UN CURSEUR QUI NE RECULE JAMAIS : les instants demandés croissent comme
+  // ceux de la source, et une recherche depuis le début à chaque échantillon
+  // coûterait le carré du nombre d'images.
+  let i=0;
+  for(let k=0;k<n;k++){
+    const t=t0+k*pasMs;
+    while(i<total-2&&T[i+1]<=t) i++;
+    const j=Math.min(total-1,i+1), dt=T[j]-T[i];
+    const u=dt>0?Math.max(0,Math.min(1,(t-T[i])/dt)):0;
+    for(let q=0;q<pistes.length;q++){
+      const A=pistes[q].points[i], B=pistes[q].points[j], V=vues[q];
+      const x=A.x+u*(B.x-A.x), y=A.y+u*(B.y-A.y);
+      // LA CONFIANCE LA PLUS BASSE DES DEUX BORNES : un échantillon posé entre
+      // une image sûre et une image perdue n'est pas à moitié sûr.
+      const c=Math.max(0,Math.min(1,Math.min(A.conf,B.conf)));
+      V.xy.setInt16(4*k,Math.max(-32767,Math.min(32767,Math.round(x/p.vw*32767))),true);
+      V.xy.setInt16(4*k+2,Math.max(-32767,Math.min(32767,Math.round(y/p.vh*32767))),true);
+      V.cf[k]=Math.round(255*c);
+    }
+  }
+  return {v:1,debutMs:seg.debutMs,finMs:seg.finMs,vw:Math.round(p.vw),vh:Math.round(p.vh),n,
+    // BORNÉ AUX BORNES DE LA RÉPÉTITION : le décodeur peut rendre une image
+    // quelques millièmes avant celle qu'on lui a demandée, et le validateur
+    // rejetterait tout le lot pour cela.
+    t0Ms:Math.max(seg.debutMs,Math.min(seg.finMs,Math.round(t0))),
+    pasMs:Math.round(pasMs*1000)/1000,
+    pts:pistes.map((q,z)=>({nom:q.nom,c:q.couleur,r:Math.round(q.r*10)/10,
+      sx:Math.round(q.sx*10)/10,sy:Math.round(q.sy*10)/10,
+      xy:mlB64(new Uint8Array(vues[z].xy.buffer)),cf:mlB64(vues[z].cf)}))};
+}
+/**
+ * PURE. Les points suivis, relus : les instants communs, puis pour chacun son
+ * nom, sa couleur, ses positions normées et ses confiances entre 0 et 1.
+ * @param {any} r  un lot passé par segReperesValide
+ * @returns {{t:number[], pts:{nom:string, c:number, x:number[], y:number[], conf:number[]}[]}}
+ */
+function mlDecompacterReperes(r){
+  const t=[];
+  for(let k=0;k<r.n;k++) t.push(r.t0Ms+k*r.pasMs);
+  return {t,pts:r.pts.map((/** @type {any} */ p)=>{
+    const xy=new DataView(mlOctets(p.xy).buffer), cf=mlOctets(p.cf);
+    const x=[], y=[], conf=[];
+    for(let k=0;k<r.n;k++){
+      const xi=xy.getInt16(4*k,true), yi=xy.getInt16(4*k+2,true);
+      x.push(xi===ML_I16_TROU?NaN:xi/32767);
+      y.push(yi===ML_I16_TROU?NaN:yi/32767);
+      conf.push(cf[k]/255);
+    }
+    return {nom:p.nom,c:p.c,x,y,conf};
+  })};
 }
 
 // ══ LES ARTICULATIONS ═══════════════════════════════════════════════════════
@@ -2321,7 +2413,7 @@ function mlOuvrir(email,videoId){
     initiaux:segs,segments:segs.map(s=>({...s})),actifId:segs.length?segs[0].id:null,
     zoom:1,dureeMs:0,boucle:false,jeton:0,raf:0,seekEnAttente:null,
     mode:'lecture',graine:null,disqueM:ML_DISQUE_M,sens:'',fantome:false,
-    analyseJeton:0,progres:'',suivis:{},cacheBarre:null,
+    analyseJeton:0,progres:'',suivis:{},cacheBarre:null,cacheRep:null,repere:null,
     angCote:'',angCalques:[],epingles:[],cachePose:null,
     theta:0,thetaAuto:null,thetaMain:false,
     etalon:{type:'disque45',cm:Math.round(ML_DISQUE_M*100),ax:null,ay:null,bx:null,by:null},prise:null,
@@ -2407,6 +2499,19 @@ function _mlRendre(){
     // arrêter, mettre en pause et dessiner doivent être à portée à tout moment.
     '<div id="ml-rec" class="ml-rec" hidden></div>'
     +(_ml.sousTitre?'<div class="ml-sous">'+escapeHtml(_ml.sousTitre)+'</div>':'')
+    // ══ DEUX COLONNES AU-DELÀ DE 1000 px ════════════════════════════════════
+    //
+    // Une vidéo de téléphone est en PORTRAIT. Étalée sur toute la largeur d'un
+    // écran d'ordinateur, elle laisse deux bandes noires qui prennent les deux
+    // tiers de la place, pendant que les réglages — poser le disque, choisir le
+    // sens, lancer l'analyse — sont repoussés sous la ligne de flottaison. Le
+    // coach fait alors l'aller-retour entre l'image et le réglage qui la
+    // commande, alors qu'il doit voir l'effet du second sur la première.
+    //
+    // La vidéo prend la colonne de gauche et devient HAUTE ; tout ce qui se
+    // règle passe à droite, en vis-à-vis. Sous 1000 px — le téléphone du coach
+    // en salle — la grille n'existe pas et l'ordre vertical est inchangé.
+    +'<div class="ml-cols"><div class="ml-col-video">'
     +'<div class="ml-scene">'
       +'<video id="ml-video" src="'+safeUrl(_ml.url)+'" preload="metadata" playsinline webkit-playsinline '
       +'onerror="_videoIndisponible(this)" onclick="mlLecture()"></video>'
@@ -2425,6 +2530,9 @@ function _mlRendre(){
     +'<div class="ml-vit">'+VID_RATES.map(r=>b(String(r).replace('.',',')+'×','mlVitesse('+r+')',
         'Lire à '+String(r).replace('.',',')+' fois la vitesse normale','data-rate="'+r+'" aria-pressed="'+(r===1)+'"')).join('')
     +'</div>'
+    // La transport reste SOUS la vidéo : lecture, image par image et vitesse
+    // commandent l'image, elles ne se règlent pas à côté d'elle.
+    +'</div><div class="ml-col-panneau">'
     +'<div class="ml-frise-tete"><span class="ml-lab">Frise</span>'
       +'<span class="ml-zoom">'+b('−','mlZoom(-1)','Dézoomer la frise','data-zoom="-1"')
       +'<span id="ml-zoom-val">1×</span>'+b('+','mlZoom(1)','Zoomer la frise','data-zoom="1"')+'</span></div>'
@@ -2443,6 +2551,7 @@ function _mlRendre(){
     +'<div id="ml-prise"></div>'
     +'<div id="ml-lecture"></div>'
     +'<div id="ml-traj"></div>'
+    +'<div id="ml-pts"></div>'
     +'<div id="ml-artic"></div>'
     +'<div id="ml-corr"></div>'
     +'<div class="ml-lab" style="margin-top:18px">Répétitions</div>'
@@ -2451,7 +2560,8 @@ function _mlRendre(){
       +'onclick="mlAjouter()" disabled>+ Ajouter une répétition ici</button>'
     +'<p class="ml-aide">Place la tête de lecture au début du mouvement, ajoute une répétition, puis ajuste '
       +'son début et sa fin à l’image près. Dix secondes au plus par répétition. La vidéo d’origine n’est '
-      +'jamais modifiée.</p>';
+      +'jamais modifiée.</p>'
+    +'</div></div>';
   _mlBrancher();
   _mlMajListe();
   _mlMajCorrection();
@@ -3065,7 +3175,7 @@ function _mlBrancherCalque(calque){
   /** @param {PointerEvent} e */
   const poser=e=>{
     const v=_mlVideo();
-    if(!_ml||!v||!_ml.graine||(_ml.mode!=='graine'&&_ml.mode!=='replacer')) return;
+    if(!_ml||!v||!_ml.graine||(_ml.mode!=='graine'&&_ml.mode!=='replacer'&&_ml.mode!=='repere')) return;
     const R=_mlVideoRect(v); if(!R) return;
     const b=calque.getBoundingClientRect();
     _ml.graine.x=Math.max(0,Math.min(R.vw,(e.clientX-b.left-R.ox)/R.s));
@@ -3134,7 +3244,7 @@ function _mlBrancherCalque(calque){
       _mlMajPrise(); _mlDessinerCalque();
       return;
     }
-    if(!_ml||(_ml.mode!=='graine'&&_ml.mode!=='replacer')) return;
+    if(!_ml||(_ml.mode!=='graine'&&_ml.mode!=='replacer'&&_ml.mode!=='repere')) return;
     e.preventDefault();
     try{ calque.setPointerCapture(e.pointerId); }catch(x){}
     poser(e);
@@ -3215,7 +3325,7 @@ function _mlDessinerCalque(){
   const dpr=Math.min(2,window.devicePixelRatio||1);
   const W=v.clientWidth, H=v.clientHeight;
   if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){ c.width=Math.round(W*dpr); c.height=Math.round(H*dpr); }
-  c.classList.toggle('ml-calque-actif',_ml.mode==='graine'||_ml.mode==='replacer'||_ml.mode==='etalon'||_ml.mode==='action'
+  c.classList.toggle('ml-calque-actif',_ml.mode==='graine'||_ml.mode==='replacer'||_ml.mode==='repere'||_ml.mode==='etalon'||_ml.mode==='action'
     ||!!(_ml.rec&&_ml.rec.outil==='dessin'&&!_ml.rec.pause));
   const g=c.getContext('2d'); if(!g) return;
   g.setTransform(dpr,0,0,dpr,0,0);
@@ -3240,6 +3350,25 @@ function _mlDessinerCalque(){
       g.fillStyle=_tok('--arc-charge','#7B3BFF'); g.fillText(txt,(x1+x2)/2,(y1+y2)/2-4);
       g.textAlign='start'; g.textBaseline='alphabetic';
     }
+  }
+  // LES POINTS SUIVIS, AVANT LES BRANCHES DE POSE : le coach pose le septième
+  // en voyant les six autres, et pose le disque de la barre en les voyant tous.
+  const aR=_mlActif();
+  if(aR&&!(_ml.rec&&!_ml.rec.trace)){
+    const lu=_mlReperesLus(aR);
+    if(lu) _mlDessinerReperes(g,R,lu,(Number(v.currentTime)||0)*1000);
+  }
+  // LE REPÈRE EN COURS DE POSE porte déjà son nom : c'est la légende qu'on
+  // verra bouger, et la voir avant de valider évite de nommer à l'aveugle.
+  if(_ml.mode==='repere'&&_ml.graine&&_ml.graine.x!=null&&_ml.graine.y!=null){
+    const [x,y]=P(_ml.graine.x,_ml.graine.y), r=_ml.graine.r*R.s;
+    const col=_mlCouleurTrait(_ml.repere?_ml.repere.couleur:0);
+    g.strokeStyle=col; g.lineWidth=2; g.setLineDash([6,4]);
+    g.beginPath(); g.arc(x,y,r,0,2*Math.PI); g.stroke();
+    g.setLineDash([]);
+    g.beginPath(); g.moveTo(x-6,y); g.lineTo(x+6,y); g.moveTo(x,y-6); g.lineTo(x,y+6); g.stroke();
+    if(_ml.repere) _mlEtiquette(g,x+r+6,y,_ml.repere.nom,col,R.ox+R.vw*R.s-4);
+    return;
   }
   if((_ml.mode==='graine'||_ml.mode==='replacer')&&_ml.graine&&_ml.graine.x!=null&&_ml.graine.y!=null){
     const [x,y]=P(_ml.graine.x,_ml.graine.y), r=_ml.graine.r*R.s;
@@ -3326,6 +3455,91 @@ function _mlDessinerTrajectoire(g,R,d,b,tNow,fantome){
       g.globalAlpha=1;
     }
   }
+}
+/**
+ * Les points suivis : le chemin entier en sourdine, la part déjà lue en pleine
+ * couleur, le point à l'instant affiché, et SON NOM à côté de lui.
+ * @param {CanvasRenderingContext2D} g
+ * @param {{s:number, ox:number, oy:number, vw:number, vh:number}} R
+ * @param {{t:number[], pts:{nom:string, c:number, x:number[], y:number[], conf:number[]}[]}} lu
+ * @param {number} tNow
+ */
+function _mlDessinerReperes(g,R,lu,tNow){
+  /** @param {number} x @param {number} y @returns {[number,number]} */
+  const P=(x,y)=>[R.ox+x*R.s,R.oy+y*R.s];
+  const borne=R.ox+R.vw*R.s-4;
+  for(const p of lu.pts){
+    const col=_mlCouleurTrait(p.c);
+    // ⚠ LE CHEMIN S'ARRÊTE OÙ LE SUIVI S'EST PERDU. Une confiance nulle n'est
+    //   pas une position : mlSuiviPas rend la dernière connue, indéfiniment.
+    //   Prolonger le trait dessinerait un déplacement qui n'a pas eu lieu.
+    let fin=p.conf.length;
+    for(let i=1;i<p.conf.length;i++){ if(!(p.conf[i]>0)){ fin=i; break; } }
+    /** @param {boolean} complet */
+    const tracer=complet=>{
+      g.strokeStyle=col;
+      g.globalAlpha=complet?0.3:1;
+      g.lineWidth=complet?2:3;
+      for(let i=1;i<fin;i++){
+        if(!complet&&lu.t[i]>tNow) break;
+        if(!isFinite(p.x[i])||!isFinite(p.y[i])||!isFinite(p.x[i-1])||!isFinite(p.y[i-1])) continue;
+        const [x1,y1]=P(p.x[i-1]*R.vw,p.y[i-1]*R.vh), [x2,y2]=P(p.x[i]*R.vw,p.y[i]*R.vh);
+        // UN TRONÇON DOUTEUX EN POINTILLÉ, comme la trajectoire de la barre :
+        // on le montre, on ne le fait pas passer pour sûr.
+        g.setLineDash(p.conf[i]<ML_CONF_DOUTE?[5,4]:[]);
+        g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke();
+      }
+      g.globalAlpha=1; g.setLineDash([]);
+    };
+    tracer(true);
+    tracer(false);
+    // LE POINT ET SON NOM à l'instant affiché — sur la dernière position
+    // connue quand la tête de lecture est sortie de la répétition : une
+    // légende qui disparaît à l'arrêt ne légende plus rien.
+    const pas=lu.t.length>1?(lu.t[1]-lu.t[0]):1;
+    const k=Math.max(0,Math.min(fin-1,Math.round((tNow-lu.t[0])/(pas||1))));
+    if(isFinite(p.x[k])&&isFinite(p.y[k])){
+      const [x,y]=P(p.x[k]*R.vw,p.y[k]*R.vh);
+      g.fillStyle=col; g.globalAlpha=0.9;
+      g.beginPath(); g.arc(x,y,4,0,2*Math.PI); g.fill();
+      g.globalAlpha=1;
+      _mlEtiquette(g,x+8,y,p.nom,col,borne);
+    }
+  }
+}
+/**
+ * Un nom sur l'image, cerné de noir : une vidéo de salle est claire par
+ * endroits et sombre par d'autres, et un texte d'une seule couleur s'y perd.
+ * @param {CanvasRenderingContext2D} g
+ * @param {number} x
+ * @param {number} y
+ * @param {string} texte
+ * @param {string} couleur
+ * @param {number} [borneDroite]
+ */
+function _mlEtiquette(g,x,y,texte,couleur,borneDroite){
+  g.font='800 12px Montserrat, sans-serif';
+  g.textAlign='start'; g.textBaseline='middle';
+  // LE NOM RESTE DANS L'IMAGE : à droite du point d'ordinaire, à sa gauche
+  // quand il déborderait — une légende coupée ne légende rien.
+  const l=g.measureText(texte).width;
+  if(borneDroite!=null&&x+l>borneDroite) x=Math.max(2,x-l-16);
+  g.lineWidth=3; g.strokeStyle='rgba(0,0,0,.8)';
+  g.strokeText(texte,x,y);
+  g.fillStyle=couleur; g.fillText(texte,x,y);
+  g.textBaseline='alphabetic';
+}
+/**
+ * Les points suivis d'une répétition, relus une seule fois par valeur.
+ * @param {Segment} s
+ * @returns {{t:number[], pts:{nom:string, c:number, x:number[], y:number[], conf:number[]}[]}|null}
+ */
+function _mlReperesLus(s){
+  const r=/** @type {any} */(s).reperes;
+  if(!_ml||!r||!Array.isArray(r.pts)||!r.pts.length) return null;
+  const cle=s.id+'|'+r.n+'|'+r.pts.map((/** @type {any} */ p)=>p.xy).join('|');
+  if(_ml.cacheRep&&_ml.cacheRep.cle===cle) return _ml.cacheRep.d;
+  try{ const d=mlDecompacterReperes(r); _ml.cacheRep={cle,d}; return d; }catch(e){ return null; }
 }
 /**
  * La couleur d'un trait : blanc, cyan ou rouge. Jamais le magenta des records.
@@ -3415,10 +3629,258 @@ function mlPassagesDouteux(points){
   }
   return out;
 }
+// ══ LE PANNEAU DES POINTS SUIVIS ════════════════════════════════════════════
+
+/**
+ * Ce que le lot dit d'un point : perdu quelque part, ou suivi sans conviction.
+ * RIEN N'EST CACHÉ — un tracé qu'on croit complet alors qu'il s'arrête au
+ * tiers de la répétition fait conclure de travers.
+ * @param {Segment} s
+ * @param {number} i
+ * @returns {string}
+ */
+function _mlRepEtat(s,i){
+  const lu=_mlReperesLus(s);
+  const p=lu&&lu.pts[i];
+  if(!lu||!p) return '';
+  for(let k=1;k<p.conf.length;k++){
+    if(!(p.conf[k]>0)) return '<span class="ml-suiv-etat">perdu à '+mlTempsTexte(lu.t[k])+'</span>';
+  }
+  const doutes=p.conf.filter(c=>c<ML_CONF_DOUTE).length;
+  return doutes>0.1*p.conf.length?'<span class="ml-suiv-etat">suivi incertain</span>':'';
+}
+function _mlMajReperes(){
+  const z=_mlEl('ml-pts');
+  if(!z||!_ml) return;
+  const a=_mlActif();
+  if(!a){ z.innerHTML=''; return; }
+  const r=/** @type {any} */(a).reperes;
+  const n=(r&&r.pts.length)||0;
+  let h='<div class="ml-traj"><div class="ml-traj-tete"><span class="ml-lab">Points suivis</span></div>';
+  if(_ml.mode==='repere'){
+    const g=_ml.repere, pose=!!(_ml.graine&&_ml.graine.x!=null);
+    h+='<p class="ml-traj-aide">Touche « '+escapeHtml(g?g.nom:'')+' » sur l’image, au début de la '
+        +'répétition. Le point sera suivi jusqu’à la fin, et son déplacement dessiné sous ce nom. '
+        +'Ajuste la taille du cercle pour qu’il cerne ce que tu suis, sans plus.</p>'
+      +'<label class="ml-champ"><span>Taille du repère</span><input type="range" id="ml-suiv-rayon" min="5" max="'
+        +Math.round((_mlVideo()?.videoHeight||720)/6)+'" step="0.5" value="'+(_ml.graine?_ml.graine.r:16)
+        +'" oninput="mlRepTaille(this.value)"></label>'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" onclick="mlRepSuivre()"'
+        +(pose?'':' disabled')+'>Suivre</button>'
+      +'<button type="button" class="btn btn-outline btn-sm" onclick="mlRepAnnuler()">Annuler</button></div>';
+  } else if(_ml.mode==='repsuivi'){
+    h+='<div class="ml-progres" role="progressbar" aria-label="Suivi en cours"><i id="ml-suiv-barre"></i></div>'
+      +'<p class="ml-traj-aide" id="ml-suiv-txt" aria-live="polite">'+escapeHtml(_ml.progres||'Chargement de la vidéo…')+'</p>'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlArreterAnalyse()">Arrêter</button></div>';
+  } else {
+    const bloque=(_ml.dureeMs&&!_ml.rec)?'':' disabled';
+    h+=(n
+      ?'<ul class="ml-suiv">'+r.pts.map((/** @type {any} */ p,/** @type {number} */ i)=>
+          '<li><i class="ml-suiv-pastille" style="--c:'+_mlCouleurTrait(p.c)+'"></i>'
+          +'<b>'+escapeHtml(p.nom)+'</b>'+_mlRepEtat(a,i)
+          +'<button type="button" class="ml-mini" onclick="mlRepSupprimer('+i+')" aria-label="Retirer '
+          +escapeHtml(p.nom)+'">✕</button></li>').join('')+'</ul>'
+      :'<p class="ml-traj-aide">Aucun point suivi. Donne un nom à un endroit de l’image — « trajectoire », '
+        +'« genou », « coude » — et son déplacement se dessinera sous ce nom.</p>')
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlRepAjouter()"'
+        +(n>=SEG_REP_MAX?' disabled':bloque)+'>Ajouter un point</button></div>'
+      // ON DIT CE QUI TIENT ET CE QUI NE TIENT PAS. Le suivi reconnaît un motif
+      // d'image : il tient sur ce qui contraste, il décroche sur un aplat. Le
+      // coach qui l'apprend après coup accuse l'outil d'être capricieux.
+      +'<p class="ml-traj-aide">'+(n>=SEG_REP_MAX?'Six points au plus par répétition. ':'')
+        +'Un repère tient sur ce qui CONTRASTE : un disque, un autocollant, une chaussure claire sur un '
+        +'sol sombre. Sur un aplat — une peau nue, un vêtement uni — il décroche, et le tracé s’arrête '
+        +'là où il a décroché plutôt que d’inventer la suite.</p>';
+  }
+  z.innerHTML=h+'</div>';
+}
+/**
+ * Nommer un point, puis aller le poser. LE NOM D'ABORD : c'est lui qui fait la
+ * légende, et il s'affiche à côté du repère pendant qu'on le place.
+ * @returns {Promise<boolean>}
+ */
+async function mlRepAjouter(){
+  if(!_ml||_mlOccupe()||_ml.rec) return false;
+  const a=_mlActif();
+  if(!a||!_ml.dureeMs) return false;
+  const r=/** @type {any} */(a).reperes;
+  const pris=r?r.pts.map((/** @type {any} */ p)=>String(p.nom).toLowerCase()):[];
+  if(pris.length>=SEG_REP_MAX){ toast('Six points suivis au plus par répétition.','var(--orange)'); return false; }
+  const saisi=await rcSaisie('Nom du point','',{placeholder:'trajectoire',libelleOk:'Placer'});
+  const nom=String(saisi==null?'':saisi).trim().slice(0,SEG_REP_NOM_MAX);
+  if(!nom) return false;
+  if(pris.includes(nom.toLowerCase())){
+    toast('Un point porte déjà ce nom sur cette répétition.','var(--orange)');
+    return false;
+  }
+  if(!_ml) return false;
+  // ON REVIENT AU DÉBUT DE LA RÉPÉTITION, toujours : le suivi va vers la fin,
+  // et une graine posée au milieu ne dessinerait que la seconde moitié.
+  _mlAller(a.debutMs);
+  const v=_mlVideo();
+  const cote=Math.min(v&&v.videoWidth?v.videoWidth:720,v&&v.videoHeight?v.videoHeight:720);
+  _ml.repere={nom,couleur:pris.length%3};
+  _ml.graine={segId:a.id,tMs:a.debutMs,x:null,y:null,r:Math.max(6,Math.round(cote*0.03))};
+  _ml.mode='repere';
+  _mlMajTrajectoire();
+  toast('Touche « '+nom+' » sur l’image.');
+  return true;
+}
+/** @param {any} val */
+function mlRepTaille(val){
+  const r=Number(val);
+  if(!_ml||!_ml.graine||_ml.mode!=='repere'||!(r>=1)) return false;
+  _ml.graine={..._ml.graine,r};
+  _mlDessinerCalque();
+  _mlLoupe(true);
+  return true;
+}
+function mlRepAnnuler(){
+  if(!_ml) return false;
+  _ml.mode='lecture'; _ml.graine=null; _ml.repere=null;
+  _mlLoupe(false);
+  _mlMajTrajectoire();
+  return true;
+}
+/**
+ * Retirer un point. LE DERNIER RETIRÉ RETIRE LE LOT : on n'écrit pas une liste
+ * vide dans un dossier poussé en entier à chaque synchronisation.
+ * @param {number} i
+ * @returns {Promise<boolean>}
+ */
+async function mlRepSupprimer(i){
+  if(!_ml||_mlOccupe()) return false;
+  const a=_mlActif();
+  const r=a?/** @type {any} */(a).reperes:null;
+  if(!a||!r||!r.pts[i]) return false;
+  if(!await rcConfirm('Retirer « '+r.pts[i].nom+' » ?','Son tracé disparaît de cette répétition.','Retirer')) return false;
+  if(!_ml) return false;
+  const pts=r.pts.filter((/** @type {any} */ _p,/** @type {number} */ k)=>k!==i);
+  _ml.segments=_ml.segments.map(s=>{
+    if(s.id!==a.id) return s;
+    const c=/** @type {any} */({...s});
+    if(pts.length) c.reperes={...r,pts}; else delete c.reperes;
+    return c;
+  });
+  _ml.cacheRep=null;
+  _mlMajListe();
+  _mlMajEnregistrer();
+  _mlMajTrajectoire();
+  return true;
+}
+/**
+ * Suivre les points de la répétition : ceux qui y sont déjà, plus celui qu'on
+ * vient de poser, EN UN SEUL PARCOURS de la vidéo.
+ * @returns {Promise<boolean>}
+ */
+async function mlRepSuivre(){
+  if(!_ml||_mlOccupe()) return false;
+  const a=_mlActif(), v=_mlVideo();
+  if(!a||!v) return false;
+  const vw=v.videoWidth, vh=v.videoHeight;
+  if(!(vw>0&&vh>0)) return false;
+  const deja=/** @type {any} */(a).reperes;
+  /** @type {{nom:string, couleur:number, x:number, y:number, r:number}[]} */
+  const liste=[];
+  if(deja) for(const p of deja.pts) liste.push({nom:p.nom,couleur:p.c,x:p.sx,y:p.sy,r:p.r});
+  const g=_ml.graine, nouveau=_ml.repere;
+  if(g&&nouveau&&g.x!=null&&g.y!=null) liste.push({nom:nouveau.nom,couleur:nouveau.couleur,x:g.x,y:g.y,r:g.r});
+  if(!liste.length) return false;
+  // L'IMAGE DE TRAVAIL EST RÉDUITE jusqu'à ce que le PLUS PETIT repère fasse
+  // la taille de travail : c'est lui qui décide, réduire plus l'effacerait.
+  const ech=Math.min(1,ML_R_TRAVAIL/Math.max(4,Math.min(...liste.map(q=>q.r))));
+  const w=Math.max(16,Math.round(vw*ech)), h=Math.max(16,Math.round(vh*ech));
+  const ex=w/vw, ey=h/vh;
+  const fpsMes=Number(/** @type {any} */(v)._rcFps);
+  const pasMs=1000/((isFinite(fpsMes)&&fpsMes>0)?fpsMes:60);
+  try{ v.pause(); }catch(e){}
+  _ml.mode='repsuivi'; _ml.progres='Chargement de la vidéo…';
+  const jeton=++_ml.analyseJeton;
+  _mlMajReperes();
+  /** @type {PisteRep[]} */
+  const pistes=liste.map(q=>({nom:q.nom,couleur:q.couleur,r:q.r,sx:q.x,sy:q.y,points:[]}));
+  /** @type {(Suivi|null)[]} */
+  const suivis=liste.map(()=>null);
+  const total=Math.max(1,Math.ceil((a.finMs-a.debutMs)/pasMs));
+  let nb=0;
+  const res=await _mlExtraire(_ml.url,a.debutMs,a.finMs,w,h,pasMs,img=>{
+    if(!_ml||jeton!==_ml.analyseJeton) return 'arret';
+    if(!nb){
+      for(let q=0;q<liste.length;q++){
+        const s=mlSuiviDemarrer(img.gris,w,h,liste[q].x*ex,liste[q].y*ey,liste[q].r*ex);
+        // UN SEUL GABARIT ILLISIBLE ARRÊTE TOUT : on ne rend pas un lot où un
+        // point manque sans que son nom apparaisse nulle part.
+        if(!s) return 'gabarit';
+        suivis[q]=s;
+        pistes[q].points.push({tMs:img.tMs,x:liste[q].x,y:liste[q].y,conf:1,etat:'graine'});
+      }
+    } else {
+      for(let q=0;q<liste.length;q++){
+        const s=suivis[q];
+        if(!s) return 'gabarit';
+        const p=mlSuiviPas(s,img.gris,w,h);
+        // ⚠ ON NE S'ARRÊTE PAS AU PREMIER POINT PERDU, contrairement à la
+        //   trajectoire de la barre : les autres continuent, et toutes les
+        //   pistes doivent garder la même longueur pour partager leur base
+        //   de temps. Un point perdu est échantillonné à confiance nulle,
+        //   et c'est là que son tracé s'arrêtera.
+        pistes[q].points.push({tMs:img.tMs,x:p.x/ex,y:p.y/ey,
+          conf:p.etat==='perdu'?0:p.conf,etat:p.etat});
+      }
+    }
+    nb++;
+    if(nb%3===1){
+      _ml.progres='Image '+nb+' sur ~'+total+' · '+mlTempsTexte(img.tMs);
+      const t=_mlEl('ml-suiv-txt'); if(t) t.textContent=_ml.progres;
+      const bar=_mlEl('ml-suiv-barre'); if(bar) bar.style.transform='scaleX('+Math.min(1,nb/total).toFixed(3)+')';
+    }
+    return true;
+  },()=>!_ml||jeton!==_ml.analyseJeton);
+  if(!_ml) return false;
+  if(res.ok===false){
+    _ml.mode=(res.code==='gabarit'||res.code==='arret')?'repere':'lecture';
+    if(_ml.mode==='lecture'){ _ml.graine=null; _ml.repere=null; }
+    const msg={cors:'L’hébergeur de cette vidéo n’autorise pas la lecture de ses images : le suivi est impossible sur ce fichier.',
+      chargement:'La vidéo n’a pas pu être chargée. Vérifie la connexion, puis réessaie.',
+      recherche:'La vidéo ne se laisse pas parcourir image par image sur ce téléphone.',
+      gabarit:'Le repère est posé sur un aplat : rien ne s’y distingue d’une image à l’autre. Pose-le sur un détail contrasté.',
+      arret:'Suivi arrêté.'}[res.code]||'Le suivi a échoué.';
+    toast(msg,res.code==='arret'?undefined:'var(--orange)');
+    _mlMajTrajectoire();
+    return false;
+  }
+  const seg=_ml.segments.find(s=>s.id===a.id);
+  if(!seg) return false;
+  const compacte=mlCompacterReperes(seg,pistes,{vw,vh});
+  const valide=compacte?segReperesValide(compacte,seg.debutMs,seg.finMs):null;
+  if(!valide){
+    _ml.mode='lecture'; _ml.graine=null; _ml.repere=null;
+    toast('Le suivi n’a rien donné de lisible : réessaie.','var(--orange)');
+    _mlMajTrajectoire();
+    return false;
+  }
+  _ml.segments=_ml.segments.map(s=>s.id===seg.id?/** @type {any} */({...s,reperes:valide}):s);
+  _ml.mode='lecture'; _ml.graine=null; _ml.repere=null; _ml.cacheRep=null;
+  _mlMajListe();
+  _mlMajEnregistrer();
+  _mlAller(seg.debutMs);
+  // ON NOMME CE QUI S'EST PERDU, ET OÙ : « le suivi a échoué » laisse le coach
+  // chercher lequel, sur un tracé qui semble simplement court.
+  const perdus=pistes.filter(q=>q.points.some(p=>p.etat==='perdu'));
+  if(perdus.length){
+    const p0=perdus[0].points.find(p=>p.etat==='perdu');
+    toast(perdus.map(q=>'« '+q.nom+' »').join(', ')+(perdus.length>1?' se perdent':' se perd')
+      +(p0?' à '+mlTempsTexte(p0.tMs):'')+' : repose'+(perdus.length>1?'-les':'-le')
+      +' sur un détail plus contrasté.','var(--orange)');
+  }
+  return true;
+}
+
 // Le panneau de la répétition choisie : poser, analyser, lire le résultat.
 function _mlMajTrajectoire(){
   _mlMajPrise();
   _mlMajArticulations();
+  _mlMajReperes();
   try{ _mlMajLecture(); }catch(e){}
   const z=_mlEl('ml-traj');
   if(!z||!_ml) return;
@@ -4169,7 +4631,7 @@ let _mlPose=null;
 let _mlPosePret=null;
 
 /** @returns {boolean} Une analyse tourne : les répétitions ne bougent pas. */
-function _mlOccupe(){ return !!_ml&&(_ml.mode==='analyse'||_ml.mode==='pose'); }
+function _mlOccupe(){ return !!_ml&&(_ml.mode==='analyse'||_ml.mode==='pose'||_ml.mode==='repsuivi'); }
 
 /**
  * Le moteur de pose, chargé à la demande. Douze mégaoctets qui ne partent que
@@ -5680,11 +6142,15 @@ function mlLecteurCorrection(hote,o){
   const traj={};
   /** @type {Object<string,any>} */
   const poses={};
+  /** @type {Object<string,any>} */
+  const reperes={};
   for(const s of o.segments||[]){
     const b=/** @type {any} */(s).barre;
     if(b) try{ traj[s.id]={d:mlDecompacterBarre(b),b}; }catch(e){}
     const p=/** @type {any} */(s).pose;
     if(p) try{ poses[s.id]=mlAnglesSerie(p); }catch(e){}
+    const rp=/** @type {any} */(s).reperes;
+    if(rp) try{ reperes[s.id]=mlDecompacterReperes(rp); }catch(e){}
   }
   let T=0, joue=false, dernier=0, raf=0, detruit=false;
   // LA CARTE AFFICHÉE, pour ne toucher au DOM qu'au changement : écrire le même
@@ -5704,6 +6170,17 @@ function mlLecteurCorrection(hote,o){
         const nom=k.slice(0,k.indexOf('|')), id=k.slice(k.indexOf('|')+1);
         if(nom==='trajectoire'&&traj[id]) _mlDessinerTrajectoire(g,R,traj[id].d,traj[id].b,sNow,false);
         else if(poses[id]&&poses[id].ang[nom]) _mlDessinerPose(g,R,poses[id],sNow,[nom]);
+      }
+      // ⚠ LES POINTS SUIVIS NE SONT PAS UN CALQUE QU'ON ALLUME. Ils
+      //   appartiennent à la répétition : le coach les a nommés pour qu'ils
+      //   soient vus, et l'athlète n'a aucun bouton pour les faire venir. Ils
+      //   se dessinent donc quand la lecture PASSE DANS leurs bornes — hors
+      //   d'elles, rien, car six répétitions superposeraient six tracés dont
+      //   aucun ne se lirait.
+      for(const s of o.segments||[]){
+        if(sNow<s.debutMs-1||sNow>s.finMs+1) continue;
+        const lu=reperes[s.id];
+        if(lu) _mlDessinerReperes(g,R,lu,sNow);
       }
       _mlDessinerTraits(g,R,e.traits);
       _mlDessinerEpingles(g,R,m.epingles||[],sNow);
@@ -5872,6 +6349,18 @@ function _mlInjecterStyle(){
     '#ml-enreg:disabled{opacity:.4;box-shadow:none;cursor:default}',
     '.ml-scene{position:relative;background:#000;border:1px solid var(--border);border-radius:var(--r-3);overflow:hidden}',
     '.ml-scene video{display:block;width:100%;max-height:42vh;max-height:42dvh;object-fit:contain;background:#000}',
+    // LA GRILLE. `minmax(0,…)` sur les deux colonnes : sans le 0, une frise
+    // large impose sa largeur minimale à sa piste et déborde la fenêtre.
+    '@media (min-width:1000px){',
+    '  .ml-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(380px,1fr);gap:20px;align-items:start}',
+    // LA VIDÉO SUIT LE DÉFILEMENT : la liste des répétitions et les panneaux
+    // d'analyse sont longs, et régler sans voir l'image n'a pas de sens.
+    '  .ml-col-video{position:sticky;top:8px}',
+    '  .ml-col-video .ml-scene video{max-height:70vh;max-height:70dvh}',
+    // Le premier bloc de la colonne de droite monte au ras du haut : sa marge
+    // servait à le séparer de la vidéo, qui n'est plus au-dessus de lui.
+    '  .ml-col-panneau>.ml-frise-tete:first-child{margin-top:0}',
+    '}',
     '.ml-temps{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:8px 2px 0}',
     '#ml-t{font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}',
     '.ml-fps{font-size:var(--fs-2xs);color:var(--text-faint);text-align:right;line-height:1.4}',
@@ -5918,6 +6407,11 @@ function _mlInjecterStyle(){
     '.ml-loupe{position:absolute;left:8px;top:8px;width:110px;height:110px;border:2px solid var(--arc-current,#4DE8FF);border-radius:var(--r-2);background:#000;pointer-events:none}',
     '.ml-loupe[hidden]{display:none}',
     '.ml-rep-traj{font-weight:800;color:var(--arc-current,#4DE8FF)}',
+    '.ml-suiv{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}',
+    '.ml-suiv li{display:flex;align-items:center;gap:8px;background:var(--surface-2);border-radius:var(--r-2);padding:2px 2px 2px 10px}',
+    '.ml-suiv b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-sm)}',
+    '.ml-suiv-pastille{flex:none;width:12px;height:12px;border-radius:50%;background:var(--c)}',
+    '.ml-suiv-etat{flex:none;font-size:var(--fs-xs);color:var(--orange)}',
     '.ml-traj{margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px}',
     '.ml-traj-tete{display:flex;align-items:center;justify-content:space-between;min-height:32px}',
     '.ml-traj-aide{font-size:var(--fs-xs);color:var(--sub);line-height:1.55;margin:6px 0 0}',

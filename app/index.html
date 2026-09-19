@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1298';
+window.RC_BUILD='1299';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -85909,6 +85909,67 @@ function segPoseValide(p,debutMs,finMs){
     t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,xy:p.xy,vis:p.vis,
     theta:th===null?0:Math.round(th*10)/10,...(hp===null?{}:{hp:Math.round(hp)})};
 }
+// ── LES POINTS SUIVIS NOMMÉS ─────────────────────────────────────────────────
+//
+// Le coach touche un endroit de l'image, lui donne un nom — « trajectoire », «
+// genou », « coude » —, et ce point est suivi image par image sur la
+// répétition : son déplacement se dessine, sous son nom.
+//
+// ⚠ UNE SEULE BASE DE TEMPS POUR TOUS LES POINTS, et c'est ce qui autorise ce
+//   format compact : ils sont suivis dans LE MÊME parcours de la vidéo, donc
+//   échantillonnés aux mêmes instants. `t0Ms` et `pasMs` sont communs ; chaque
+//   point n'apporte que ses positions et ses confiances.
+//
+//   reperes = {v:1, debutMs, finMs, vw, vh, n, t0Ms, pasMs,
+//              pts:[{nom, c (0|1|2, la couleur du trait), r (rayon px),
+//                    sx, sy (la graine, en pixels de l'image),
+//                    xy (Int16 base64, x et y normés), cf (Uint8 base64)}]}
+//
+// LA GRAINE EST GARDÉE, et ce n'est pas du luxe : ajouter un septième point
+// relance le suivi des six premiers dans le même parcours, et sans leur graine
+// il faudrait les reposer un par un.
+//
+// LE PRIX EST BORNÉ pour la raison de toujours — ce dossier part EN ENTIER à
+// chaque synchronisation : six points, cent cinquante échantillons, cinq octets
+// par échantillon, soit ≈ 4,5 Ko par répétition. L'ordre de grandeur des
+// articulations.
+//
+// COMME LA TRAJECTOIRE, ILS NE SURVIVENT PAS À LEURS BORNES : segmentsVideo les
+// retire si la répétition a bougé depuis. Un tracé qui ne correspondrait plus à
+// la vidéo mentirait, et il mentirait sous un nom que le coach a écrit.
+const SEG_REP_MAX=6, SEG_REP_PTS_MAX=150, SEG_REP_NOM_MAX=18;
+// PURE. Les points suivis d'une répétition s'ils sont lisibles et correspondent
+// à ses bornes, null sinon. Un point illisible TOMBE SEUL : les autres restent,
+// parce que rien dans le lot ne dépend de lui.
+function segReperesValide(r,debutMs,finMs){
+  if(!r||typeof r!=='object'||r.v!==1) return null;
+  if(Math.round(Number(r.debutMs))!==debutMs||Math.round(Number(r.finMs))!==finMs) return null;
+  const n=Math.round(Number(r.n));
+  if(!(n>=2&&n<=SEG_REP_PTS_MAX)) return null;
+  const num=(x,min,max)=>{ const v=Number(x); return isFinite(v)&&v>=min&&v<=max?v:null; };
+  const vw=num(r.vw,16,8192), vh=num(r.vh,16,8192),
+    pasMs=num(r.pasMs,1,1000), t0Ms=num(r.t0Ms,debutMs,finMs);
+  if([vw,vh,pasMs,t0Ms].some(x=>x===null)) return null;
+  const vus=new Set(), pts=[];
+  for(const p of _tabBloc(r.pts)){
+    if(!p||typeof p!=='object'||pts.length>=SEG_REP_MAX) continue;
+    // UN NOM VIDE NE FAIT PAS UNE LÉGENDE, et deux points du même nom en font
+    // une ambiguë : on ne garde que le premier.
+    const nom=String(p.nom==null?'':p.nom).trim().slice(0,SEG_REP_NOM_MAX);
+    const cle=nom.toLowerCase();
+    if(!nom||vus.has(cle)) continue;
+    if(!_segB64(p.xy,n*4)||!_segB64(p.cf,n)) continue;
+    const rp=num(p.r,1,4096), sx=num(p.sx,0,8192), sy=num(p.sy,0,8192);
+    if([rp,sx,sy].some(x=>x===null)) continue;
+    const ci=Math.round(Number(p.c));
+    vus.add(cle);
+    pts.push({nom,c:(ci>=0&&ci<=2)?ci:0,r:Math.round(rp*10)/10,
+      sx:Math.round(sx*10)/10,sy:Math.round(sy*10)/10,xy:p.xy,cf:p.cf});
+  }
+  if(!pts.length) return null;
+  return {v:1,debutMs,finMs,vw:Math.round(vw),vh:Math.round(vh),n,
+    t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,pts};
+}
 // PURE. Les répétitions lisibles d'une vidéo, triées par début. Ce qui ne peut
 // pas se lire TOMBE — bornes absentes, inversées, trop courtes, trop longues —
 // plutôt que d'être « réparé » en une répétition que le coach n'a pas posée.
@@ -85928,6 +85989,8 @@ function segmentsVideo(v){
     if(barre) seg.barre=barre;
     const pose=segPoseValide(s.pose,d,f);
     if(pose) seg.pose=pose;
+    const reperes=segReperesValide(s.reperes,d,f);
+    if(reperes) seg.reperes=reperes;
     l.push(seg);
   }
   l.sort((a,b)=>a.debutMs-b.debutMs||a.finMs-b.finMs);
