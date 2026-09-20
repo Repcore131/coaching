@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1344';
+window.RC_BUILD='1345';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -52035,7 +52035,24 @@ function _htmlCorpsGraphe(titre,unite,series,o){
 function _htmlCorpsGraphes(u){
   let h='';
   // ── 1. LE POIDS ───────────────────────────────────────────────────────
-  h+=_htmlCorpsGraphe('Poids','kg',
+  //
+  // ⚠ AUCUNE COURBE DE POIDS EN MODE NEUTRE. Quand un antecedent de trouble
+  //   du comportement alimentaire est declare au questionnaire de depart,
+  //   blocPoidsCoach REFUSE deja de tracer quoi que ce soit : il remplace la
+  //   section par un encart d'explication et une seule phrase chiffree. Tracer
+  //   une courbe ici aurait defait cette decision trois sections plus haut,
+  //   dans la meme fiche et sous les memes yeux.
+  //
+  //   LA SECTION POIDS PORTE DEJA L'EXPLICATION : on ne la repete pas. Deux
+  //   annonces du meme fait dans le meme ecran, c'est une de trop — le fichier
+  //   l'a deja tranche pour le bandeau « nouveau bilan ».
+  //
+  //   ⚠ ET SEULEMENT LE POIDS. Les mensurations et la charge restent : c'est
+  //   la portee exacte de blocPoidsCoach, et l'elargir ici aurait invente une
+  //   regle que personne n'a ecrite.
+  let _neutre=false;
+  try{ _neutre=aTCA(u); }catch(e){ _neutre=false; }
+  if(!_neutre) h+=_htmlCorpsGraphe('Poids','kg',
     [{lib:'Poids',couleur:'#E02020',points:corpsPointsPoids(u)}],
     {h:44,dates:true,
      pied:'Relevé au bilan. La pesée quotidienne a son propre protocole '
@@ -52181,6 +52198,13 @@ function _htmlCorpsEtiquettes(u,genre,vue,charge){
 function _htmlCorpsCadre(c){
   const u=_dossier(c);
   if(!u) return '';
+  // ⚠ UNE INVITATION PAS ENCORE CONSOMMEE N'A PAS DE CORPS. `_fromCode` est un
+  //   profil minimal fabrique a partir d'un code : personne ne s'est inscrit,
+  //   il n'y a ni seance, ni bilan, ni silhouette a montrer. Le cadre sortait
+  //   quand meme, avec un bonhomme eteint et « Pas encore de bilan » — sous un
+  //   badge qui dit deja « En attente d'inscription ». _majBoutonBilan ecarte
+  //   ces dossiers pour la meme raison, et de la meme facon.
+  if(c&&c._fromCode) return '';
   try{ if(!phpDisponible(u)) return ''; }catch(e){}
   const genre=woGenreAvatar(u);
   const vue=(_corpsVue==='dos')?'dos':'face';

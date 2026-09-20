@@ -38069,6 +38069,46 @@ async function testExercices(){
       }
       return true;})());
 
+    ok('MODE NEUTRE : AUCUNE COURBE DE POIDS DANS LE CADRE CORPS',(()=>{
+      // ⚠ QUAND UN ANTECEDENT DE TCA EST DECLARE, blocPoidsCoach REFUSE deja
+      //   de tracer quoi que ce soit : il remplace la section par un encart
+      //   d'explication et une seule phrase chiffree. Tracer une courbe dans
+      //   le cadre Corps aurait defait cette decision trois sections plus
+      //   haut, dans la meme fiche et sous les memes yeux.
+      const J=864e5, t=Date.now();
+      const base=()=>({id:'T1',email:'t1@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-92*J,'bil-weight':'102.4','bil-chest':'106'},
+                {date:t-6*J, 'bil-weight':'100.9','bil-chest':'107.4'}]});
+      const normal=_htmlCorpsGraphes(base());
+      if(normal.indexOf('Poids')<0)
+        return _echec('la courbe de poids a disparu du cas ordinaire');
+      const neutre=_htmlCorpsGraphes(Object.assign(base(),{tcaRisque:true}));
+      if(neutre.indexOf('Poids')>=0)
+        return _echec('une courbe de poids est tracée en mode neutre');
+      // ⚠ ET SEULEMENT LE POIDS. C'est la portee exacte de blocPoidsCoach ;
+      //   l'elargir aurait invente une regle que personne n'a ecrite.
+      if(neutre.indexOf('Mensurations')<0)
+        return _echec('les mensurations ont disparu en mode neutre');
+      return true;})());
+
+    ok('UNE INVITATION PAS ENCORE CONSOMMÉE N\u2019A PAS DE CORPS',(()=>{
+      // `_fromCode` est un profil minimal fabrique a partir d'un code :
+      // personne ne s'est inscrit, il n'y a ni seance, ni bilan, ni silhouette
+      // a montrer. Le cadre sortait quand meme, avec un bonhomme eteint et
+      // « Pas encore de bilan » — sous un badge qui dit deja « En attente
+      // d'inscription ». _majBoutonBilan ecarte ces dossiers pour la meme
+      // raison, et de la meme facon.
+      const c={id:'_code_1',email:'',role:'athlete',fname:'Élève',_fromCode:true,
+        _codeInfo:{createdAt:Date.now(),expiry:Date.now()+30*864e5}};
+      if(_htmlCorpsCadre(c)!=='')
+        return _echec('un code non consommé reçoit une silhouette');
+      // ET UN VRAI DOSSIER, LUI, GARDE LE SIEN.
+      const vrai={id:'V1',email:'v1@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:Date.now()-9*864e5,'bil-weight':'80'}]};
+      if(!_htmlCorpsCadre(vrai))
+        return _echec('un dossier réel a perdu son cadre');
+      return true;})());
+
     ok('DES BILANS SANS MENSURATION NE PROMETTENT PAS DE TOLÉRANCE',(()=>{
       // ⚠ L'ETAT VIDE TROUVE A LA RELECTURE A FROID. Un athlete qui se pese
       //   sans jamais se mesurer : les treize etiquettes disaient « pas de
