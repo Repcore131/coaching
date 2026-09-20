@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1342';
+window.RC_BUILD='1343';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -51820,7 +51820,7 @@ function _htmlCorpsPlanche(u,genre,vue,teintes){
   //   premiere retouche des planches.
   let zones='';
   for(const m in (teintes||{}))
-    zones+='<div class="cc-corps-zone" style="--zc:'+teintes[m]+'">'
+    zones+='<div class="cc-corps-zone" style="--zc:'+escapeHtml(teintes[m])+'">'
       +woHtmlZones([m],src,vue,CORPS_NIVEAU,genre)+'</div>';
   return '<div class="cc-corps-planche" style="left:'+((100-CORPS_PART_CORPS)/2)
     +'%;width:'+CORPS_PART_CORPS+'%">'
@@ -51932,17 +51932,23 @@ function _corpsCourbe(series,o){
   if(n<2) return null;
   const H=Number((o||{}).h)||40;
   const dx=(xmax-xmin)||1, dv=(vmax-vmin)||1;
+  // ⚠ UNE SERIE QUI N'A PAS BOUGE SE TRACE AU MILIEU, PAS AU RAS DU SOL.
+  //   Releve a la relecture du code : avec vmax === vmin, l'ecart vaut zero et
+  //   la ligne tombait sur le plancher du cadre — un tour de buste stable a
+  //   99 cm se lisait comme un tour de buste a zero. Le plat est une
+  //   information ; le sol en est une autre, et fausse.
+  const plat=(vmax===vmin);
   // Deux pixels de marge en haut et en bas : une courbe qui touche le bord se
   // lit comme une courbe coupee.
   const X=p=>((p.x-xmin)/dx)*100;
-  const Y=p=>H-2-((p.v-vmin)/dv)*(H-4);
+  const Y=p=>plat?(H/2):(H-2-((p.v-vmin)/dv)*(H-4));
   let corps='';
   for(const g of s){
     const pts=g.points.filter(p=>isFinite(p.x)&&isFinite(p.v))
       .slice().sort((a,b)=>a.x-b.x);
     if(pts.length<2) continue;
     const d=pts.map((p,i)=>(i?'L':'M')+X(p).toFixed(2)+' '+Y(p).toFixed(2)).join(' ');
-    corps+='<path d="'+d+'" fill="none" stroke="'+g.couleur
+    corps+='<path d="'+d+'" fill="none" stroke="'+escapeHtml(g.couleur)
       +'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"'
       +' vector-effect="non-scaling-stroke"/>';
   }
@@ -51953,7 +51959,7 @@ function _corpsCourbe(series,o){
     +'" stroke="rgba(255,255,255,.12)" stroke-width="1" vector-effect="non-scaling-stroke"/>';
   return {svg:'<svg class="cc-corps-gc" viewBox="0 0 100 '+H+'"'
     +' preserveAspectRatio="none" aria-hidden="true">'+grille+corps+'</svg>',
-    min:vmin,max:vmax,x0:xmin,x1:xmax};
+    min:vmin,max:vmax,x0:xmin,x1:xmax,plat};
 }
 // « 100,9 ». Une decimale au plus, virgule francaise, et pas de zero inutile.
 function _corpsNb(v){
@@ -51975,7 +51981,7 @@ function _htmlCorpsGraphe(titre,unite,series,o){
   })();
   const leg=series.length>1
     ?'<div class="cc-corps-gk">'+series.map(g=>'<span><i style="background:'
-      +g.couleur+'"></i>'+escapeHtml(g.lib)+'</span>').join('')+'</div>':'';
+      +escapeHtml(g.couleur)+'"></i>'+escapeHtml(g.lib)+'</span>').join('')+'</div>':'';
   // ⚠ LA PERIODE, SUR LA CARTE, PARCE QU'UNE VALEUR PORTE SA DATE. Releve a la
   //   relecture a froid : « 100,9 kg » s'affichait en tete d'une courbe sans
   //   qu'on sache de quand datait ce chiffre ni sur quelle etendue la ligne
@@ -51986,11 +51992,20 @@ function _htmlCorpsGraphe(titre,unite,series,o){
     ?('du '+_corpsJour(c.x0)+' au '+_corpsJour(c.x1))
     :'';
   const pied=[(o||{}).pied||'',per].filter(Boolean).join(' · ');
+  // ⚠ TOUT CE QUI ENTRE DANS LE HTML PASSE PAR escapeHtml, MEME CE QUI NE
+  //   VIENT QUE DE CONSTANTES. Ces trois-la — la valeur en tete, les couleurs
+  //   de legende, les couleurs de trace — ne portent aujourd'hui que des
+  //   nombres et des jetons de palette, et etaient donc posees nues au milieu
+  //   de voisines echappees. C'est exactement l'asymetrie qui, dans six mois,
+  //   laisse passer la premiere chaine qui vient d'ailleurs.
   return '<div class="cc-corps-g">'
-    +'<div class="cc-corps-gt"><span>'+escapeHtml(titre)+'</span><b>'+der+'</b></div>'
+    +'<div class="cc-corps-gt"><span>'+escapeHtml(titre)+'</span><b>'
+    +escapeHtml(der)+'</b></div>'
+    // ET UNE SEULE BORNE QUAND RIEN N'A BOUGE : deux fois le meme nombre, en
+    // haut et en bas du meme cadre, se lit comme une etendue.
     +'<div class="cc-corps-gz">'+c.svg
-    +'<span class="cc-corps-gh">'+_corpsNb(c.max)+'</span>'
-    +'<span class="cc-corps-gb">'+_corpsNb(c.min)+'</span>'
+    +'<span class="cc-corps-gh">'+escapeHtml(_corpsNb(c.max))+'</span>'
+    +(c.plat?'':'<span class="cc-corps-gb">'+escapeHtml(_corpsNb(c.min))+'</span>')
     +'</div>'+leg+(pied?('<div class="cc-corps-gp">'+escapeHtml(pied)+'</div>'):'')
     +'</div>';
 }
@@ -52209,7 +52224,8 @@ function _htmlCorpsCadre(c){
       +'<span class="cc-corps-lt">Teinte : charge de la semaine du '
       +escapeHtml(_corpsLibSemaine(sem.cle))+'</span>'
       +Object.keys(GC_COULEURS).map(k=>'<span class="cc-corps-lp">'
-        +'<i style="background:'+GC_COULEURS[k]+'"></i>'+escapeHtml(k)+'</span>').join('')
+        +'<i style="background:'+escapeHtml(GC_COULEURS[k])+'"></i>'
+        +escapeHtml(k)+'</span>').join('')
       +'<span class="cc-corps-lt">Elle dit le volume d’entraînement, jamais le '
       +'développement. Un muscle sans repère de volume n’est pas teinté.</span>'
       +'</div>'

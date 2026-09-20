@@ -37905,6 +37905,26 @@ async function testExercices(){
         return _echec('du texte a été posé dans un viewBox étiré');
       if(c.svg.indexOf('non-scaling-stroke')<0)
         return _echec('le trait suivra l’étirement et s’épaissira en travers');
+      // ⚠ UNE SERIE QUI N'A PAS BOUGE SE TRACE AU MILIEU, PAS AU RAS DU SOL.
+      //   Releve a la relecture du code : avec vmax === vmin, l'ecart vaut
+      //   zero et la ligne tombait sur le plancher du cadre — un tour de buste
+      //   stable a 99 cm se lisait comme un tour de buste a zero. Le plat est
+      //   une information ; le sol en est une autre, et fausse.
+      const plat=_corpsCourbe([{lib:'x',couleur:'#fff',
+        points:[{x:0,v:99},{x:1,v:99}]}],{h:30});
+      if(!plat) return _echec('une série plate ne se trace pas du tout');
+      if(plat.plat!==true) return _echec('une série plate n’est pas reconnue comme telle');
+      const yp=[...plat.svg.matchAll(RE_Y_COURBE)].map(m=>Number(m[1]));
+      if(!yp.length) return _echec('la série plate n’a produit aucun point');
+      if(yp.some(y=>y!==15))
+        return _echec('la série plate est tracée à '+yp.join(' / ')+' au lieu de 15');
+      // ET UNE SERIE QUI BOUGE OCCUPE TOUJOURS TOUT LE CADRE.
+      const b=_corpsCourbe([{lib:'y',couleur:'#fff',
+        points:[{x:0,v:38},{x:1,v:39}]}],{h:30});
+      if(b.plat!==false) return _echec('une série qui bouge est déclarée plate');
+      const yb=[...b.svg.matchAll(RE_Y_COURBE)].map(m=>Number(m[1]));
+      if(!(Math.max(...yb)-Math.min(...yb)>20))
+        return _echec('une série qui bouge n’occupe plus le cadre : '+yb.join(' / '));
       // MOINS DE DEUX POINTS : RIEN. Un point unique n'est pas une courbe.
       if(_corpsCourbe([{lib:'x',couleur:'#fff',points:[{x:0,v:5}]}],{h:40})!==null)
         return _echec('un point seul produit une courbe');
