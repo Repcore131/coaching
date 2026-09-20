@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1320';
+window.RC_BUILD='1321';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -214,17 +214,48 @@ if('serviceWorker' in navigator){
   // serveur injoignable ou une comparaison qui échoue relancerait la page en
   // boucle. Le numéro tenté y est inscrit — retomber sur le même ne relance
   // rien.
-  (async()=>{
+  //
+  // ⚠ ET ELLE NE TOURNE PLUS SEULEMENT AU CHARGEMENT. Kevin, 20/09/2026 :
+  //   « ça n'a pas bougé ». Le site servait bien la version du jour — mesure
+  //   faite : /app/ rendait le build neuf, en no-cache, et /app/sw.js le
+  //   numero neuf. Son ONGLET, lui, etait ouvert depuis le matin : cette
+  //   sonde n'avait pas tourne une seule fois depuis la mise en ligne, et
+  //   rien dans l'app ne la relançait. Une application qu'on laisse ouverte
+  //   toute la journee — ce que fait un coach — ne recevait donc jamais rien
+  //   sans un rechargement a la main.
+  //
+  //   LE RETOUR AU PREMIER PLAN EST LE BON MOMENT, et c'est deja celui que la
+  //   synchro des donnees a choisi juste en dessous : c'est la seule seconde
+  //   ou l'on sait que quelqu'un regarde l'ecran.
+  const RC_MAJ_SURS=['s-splash','s-welcome','s-coach-home','s-client-home',
+    's-coach-entry','s-athlete-entry'];
+  let _rcDerniereVerifMaj=0;
+  window._rcVerifierVersion=async function(forcer){
     try{
-      if(!('caches' in window)) return;
+      if(!('caches' in window)) return false;
       const local=parseInt(String(window.RC_BUILD||'0'),10)||0;
-      if(!local) return;
-      const r=await fetch('./sw.js?v='+Date.now(),{cache:'no-store'});
-      if(!r.ok) return;
+      if(!local) return false;
+      // Garde anti-rafale : basculer entre deux applications declenche
+      // plusieurs evenements rapproches, qui feraient repartir autant de
+      // requetes. Meme garde, meme duree que la synchro des donnees.
+      const now=Date.now();
+      if(!forcer&&now-_rcDerniereVerifMaj<60000) return false;
+      _rcDerniereVerifMaj=now;
+      const r=await fetch('./sw.js?v='+now,{cache:'no-store'});
+      if(!r.ok) return false;
       const m=(await r.text()).match(/repcore-v(\d+)/);
       const distant=m?parseInt(m[1],10):0;
-      if(!distant||distant<=local) return;
-      if(sessionStorage.getItem('rc_maj_forcee')===String(distant)) return;
+      if(!distant||distant<=local) return false;
+      if(sessionStorage.getItem('rc_maj_forcee')===String(distant)) return false;
+      // ⚠ ON NE RECHARGE PAS SOUS LES DOIGTS. Au chargement, l'ecran actif est
+      //   le splash et la question ne se posait pas ; au retour au premier
+      //   plan, le coach peut etre au milieu d'un programme ou d'un bilan, et
+      //   recharger lui prendrait sa saisie. On pose alors le drapeau que go()
+      //   consomme deja : la mise a jour s'applique au prochain retour sur un
+      //   ecran sur. Et on NE POSE PAS le verrou de session dans ce cas —
+      //   sinon la version ne serait plus jamais reprise.
+      const actif=document.querySelector('.screen.active');
+      if(actif&&RC_MAJ_SURS.indexOf(actif.id)<0){ window._swUpdatePending=true; return false; }
       sessionStorage.setItem('rc_maj_forcee',String(distant));
       try{
         const regs=await navigator.serviceWorker.getRegistrations();
@@ -235,8 +266,13 @@ if('serviceWorker' in navigator){
         for(const k of ks) await caches.delete(k);
       }catch(e){}
       location.reload();
-    }catch(e){}
-  })();
+      return true;
+    }catch(e){ return false; }
+  };
+  window._rcVerifierVersion(true);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible') window._rcVerifierVersion(false);
+  });
   navigator.serviceWorker.register('./sw.js').then(reg=>{
     reg.update();
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
