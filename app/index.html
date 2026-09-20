@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1343';
+window.RC_BUILD='1344';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -51734,7 +51734,7 @@ function corpsSemaineVolume(u){
  * @param {Object.<string,number>} vol  le volume hebdomadaire par muscle
  * @returns {Object.<string,string>} muscle → couleur
  */
-function corpsTeintes(u,vue,vol){
+function corpsZones(u,vue,vol){
   const out={};
   const v=vol||{};
   for(const e of (CORPS_ETIQUETTES[vue]||[])){
@@ -51743,8 +51743,23 @@ function corpsTeintes(u,vue,vol){
     if(!rep) continue;
     let k=null;
     try{ k=_repereDe(Number(v[e.m])||0,rep); }catch(err){ k=null; }
-    if(k&&GC_COULEURS[k]) out[e.m]=GC_COULEURS[k];
+    if(k) out[e.m]=k;
   }
+  return out;
+}
+/**
+ * PURE. La meme chose, traduite en couleurs.
+ *
+ * ⚠ LA ZONE ET LA COULEUR SONT SEPAREES DEPUIS LE 21/09/2026, et ce n'est pas
+ *   de la symetrie pour la symetrie : la ZONE est une information — elle part
+ *   dans l'infobulle de chaque etiquette, ou elle se lit sans voir l'ecran —
+ *   tandis que la COULEUR n'est qu'une facon de la montrer. Les deux
+ *   melangees, il fallait retraduire une couleur en zone pour l'ecrire, ce qui
+ *   revenait a lire un fait dans sa representation.
+ */
+function corpsTeintes(u,vue,vol){
+  const z=corpsZones(u,vue,vol), out={};
+  for(const m in z){ const c=GC_COULEURS[z[m]]; if(c) out[m]=c; }
   return out;
 }
 // « semaine du 15 septembre ». Le pied de cadre doit nommer la semaine que la
@@ -52088,9 +52103,20 @@ function _htmlCorpsGraphes(u){
  *   donc toujours dans la meme encre. Le vert et le rouge, dans ce cadre,
  *   diront le VOLUME d'entrainement — une tout autre question, et la seule
  *   pour laquelle il existe des reperes.
+ * ⚠ ET ELLE PORTE AUSSI LA CHARGE, DANS SON INFOBULLE. La teinte ne se lit
+ *   qu'a l'oeil : pour qui n'a pas l'ecran devant lui — ou qui ne distingue
+ *   pas le bleu du vert — elle n'existait pas du tout. L'infobulle dit donc le
+ *   chiffre, la zone et la semaine : « charge de la semaine du 14 septembre :
+ *   12,5 series (MAV-MRV) ». Un fait, sa source, sa date.
+ *
+ * ⚠ ET LE VOLUME S'ARRONDIT AU DEMI, PAS AU DIXIEME. C'est l'inverse de la
+ *   regle des mensurations, et c'est voulu : volAffiche est faite pour des
+ *   series — « 12,5 series » a un sens, « 12,53 » n'en a aucun — la ou elle
+ *   detruirait un centimetre en transformant +0,8 en +1.
+ * @param {{zones:Object,vol:Object,semaine:string}} [charge]
  * @returns {{etiquettes:string,traits:string,avecEcart:number}}
  */
-function _htmlCorpsEtiquettes(u,genre,vue){
+function _htmlCorpsEtiquettes(u,genre,vue,charge){
   const liste=CORPS_ETIQUETTES[vue]||[];
   const g0=(100-CORPS_PART_CORPS)/2;
   const par={l:[],r:[]};
@@ -52107,13 +52133,20 @@ function _htmlCorpsEtiquettes(u,genre,vue){
       const cy=ys[i];
       const inf=corpsEtiquette(u,p.e.m);
       if(inf.ecart) avecEcart++;
+      const ch=charge||{};
+      const zone=(ch.zones||{})[p.e.m];
+      const nSer=(ch.vol||{})[p.e.m];
+      const titre=inf.titre+(zone
+        ?(' · charge de la semaine'+(ch.semaine?(' du '+ch.semaine):'')+' : '
+          +volAffiche(Number(nSer)||0)+' séries ('+zone+')')
+        :'');
       const lignes='<span class="cc-corps-em">'+escapeHtml(inf.lib)+'</span>'
         +(inf.valeur?'<span class="cc-corps-ev">'+escapeHtml(inf.valeur)+'</span>':'')
         +'<span class="cc-corps-es">'+escapeHtml(inf.source)+'</span>'
         +(inf.periode?'<span class="cc-corps-ed">'+escapeHtml(inf.periode)+'</span>':'');
       ets+='<div class="cc-corps-et" data-c="'+cote+'"'
         +(inf.ecart?'':' data-sans=""')
-        +' style="top:'+_arr1(cy)+'%" title="'+escapeHtml(inf.titre)+'">'
+        +' style="top:'+_arr1(cy)+'%" title="'+escapeHtml(titre)+'">'
         +lignes+'</div>';
       // LE TRAIT PART DU BORD INTERIEUR DE L'ETIQUETTE et rejoint le muscle par
       // une equerre : un segment horizontal a la hauteur de l'etiquette, puis
@@ -52168,8 +52201,6 @@ function _htmlCorpsCadre(c){
   // LES ETIQUETTES NE SORTENT QU'AVEC DEUX BILANS. Sous ce seuil il n'y a
   // aucun ecart a montrer, et treize libelles suivis de treize tirets seraient
   // un cadre plein qui ne dit rien.
-  const eti=(bilans.length>=2)?_htmlCorpsEtiquettes(u,genre,vue)
-                              :{etiquettes:'',traits:'',avecEcart:0};
   // LA TEINTE SORT DES LE PREMIER BILAN — elle ne depend pas des bilans du
   // tout, mais des seances. Sans aucun bilan le cadre reste eteint : c'est le
   // contrat affiche, et un corps colorie sous « Pas encore de bilan » aurait
@@ -52177,7 +52208,15 @@ function _htmlCorpsCadre(c){
   const sem=bilans.length?corpsSemaineVolume(u):null;
   let volSem={};
   if(sem){ try{ volSem=volumeSemaine(u,sem.cle)||{}; }catch(e){ volSem={}; } }
-  const teintes=sem?corpsTeintes(u,vue,volSem):{};
+  const zones=sem?corpsZones(u,vue,volSem):{};
+  const teintes={};
+  for(const m in zones){ const c=GC_COULEURS[zones[m]]; if(c) teintes[m]=c; }
+  // LA CHARGE DESCEND JUSQU'AUX ETIQUETTES : c'est la qu'elle devient lisible
+  // pour qui ne voit pas la couleur.
+  const eti=(bilans.length>=2)
+    ?_htmlCorpsEtiquettes(u,genre,vue,
+        {zones,vol:volSem,semaine:sem?_corpsLibSemaine(sem.cle):''})
+    :{etiquettes:'',traits:'',avecEcart:0};
   const scene='<div class="cc-corps-scene"'+(bilans.length?'':' data-eteint=""')
     +' style="aspect-ratio:'+_arr1(pl.w*100/CORPS_PART_CORPS)+'/'+pl.h
     +';--et-l:'+_arr1(CORPS_ETIQ_LARG)+'%">'

@@ -37998,6 +37998,46 @@ async function testExercices(){
       // AUCUN VOLUME : AUCUNE EXCEPTION. Un dossier sans seance passe ici.
       if(typeof corpsTeintes(u,'face',null)!=='object')
         return _echec('un volume absent fait tomber le calcul');
+      // ⚠ LA ZONE ET LA COULEUR NE PEUVENT PAS DIVERGER. La zone est une
+      //   information — elle part dans l'infobulle, ou elle se lit sans voir
+      //   l'ecran — et la couleur n'est qu'une facon de la montrer. Deux
+      //   calculs separes finiraient par dire deux choses.
+      const z=corpsZones(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
+      const t2=corpsTeintes(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
+      if(Object.keys(z).join(',')!==Object.keys(t2).join(','))
+        return _echec('zones et teintes ne couvrent pas les mêmes muscles');
+      for(const m in z)
+        if(t2[m]!==GC_COULEURS[z[m]])
+          return _echec(m+' : la couleur ne correspond pas à sa zone « '+z[m]+' »');
+      return true;})());
+
+    ok('LA CHARGE SE LIT SANS VOIR LA COULEUR',(()=>{
+      // ⚠ LA TEINTE NE SE LIT QU'A L'OEIL. Pour qui n'a pas l'ecran devant
+      //   lui — ou qui ne distingue pas le bleu du vert — elle n'existait pas
+      //   du tout. L'infobulle de chaque etiquette dit donc le chiffre, la
+      //   zone et la semaine : un fait, sa source, sa date.
+      const u={id:'Z1',email:'z1@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:Date.now()-90*864e5,'bil-chest':'106'},
+                {date:Date.now()-2*864e5, 'bil-chest':'107.4'}]};
+      const charge={zones:{PECTORAUX:'MAV-MRV'},vol:{PECTORAUX:14},
+        semaine:'14 septembre'};
+      const h=_htmlCorpsEtiquettes(u,'h','face',charge).etiquettes;
+      for(const bout of ['charge de la semaine du 14 septembre','14 séries','MAV-MRV'])
+        if(h.indexOf(bout.replace(/&/g,'&amp;'))<0&&h.indexOf(bout)<0)
+          return _echec('l’infobulle ne porte pas « '+bout+' »');
+      // ET RIEN N'EST INVENTE POUR UN MUSCLE SANS ZONE : les dorsaux n'ont
+      // aucune charge dans cet exemple, et n'en annoncent aucune.
+      const sansZone=_htmlCorpsEtiquettes(u,'h','face',{zones:{},vol:{},semaine:''}).etiquettes;
+      if(sansZone.indexOf('charge de la semaine')>=0)
+        return _echec('une charge est annoncée alors qu’aucune zone n’est connue');
+      // ⚠ ET LE VOLUME S'ARRONDIT AU DEMI, PAS AU DIXIEME — l'inverse de la
+      //   regle des mensurations, et c'est voulu : « 12,5 séries » a un sens,
+      //   « 12,53 » n'en a aucun, la ou le meme arrondi detruirait un
+      //   centimetre en transformant +0,8 en +1.
+      const demi=_htmlCorpsEtiquettes(u,'h','face',
+        {zones:{PECTORAUX:'MAV-MRV'},vol:{PECTORAUX:12.53},semaine:'x'}).etiquettes;
+      if(demi.indexOf('12,5 séries')<0)
+        return _echec('le volume n’est pas arrondi au demi dans l’infobulle');
       return true;})());
 
     ok('LA TABLE MUSCLE ↔ MENSURATION NE PROMET QUE CE QUI EXISTE',(()=>{
