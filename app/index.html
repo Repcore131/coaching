@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1333';
+window.RC_BUILD='1334';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -3857,6 +3857,47 @@ html{scroll-behavior:smooth}
 @media (prefers-reduced-motion:reduce){
   #s-coach-client .cc-sect-t::before{transition:none}
 }
+/* ══ LA LIGNE DE QUATRE ═════════════════════════════════════════════════
+   Kevin, 20/09/2026. display:contents sur les deux sections : leurs enfants —
+   le bandeau et le contenu — deviennent les elements de CETTE ligne, sans
+   qu'on touche au DOM. C'est tout l'interet : ccdReplier remonte par
+   c.closest('.cc-sect') et ccdAppliquerReplis redescend par
+   ':scope>.cc-sect-c'. Sortir le titre de sa section pour le ranger dans une
+   barre aurait casse le repli des deux cotes.
+   Les quatre bandeaux prennent order:1 et se partagent la largeur ; les
+   contenus prennent order:2 et une base de 100 %, donc ils passent a la ligne
+   suivante, pleine largeur, dans l'ordre des sections. */
+.ccd-barre4{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;margin-bottom:10px}
+#s-coach-client .ccd-barre4>.cc-sect{display:contents}
+/* UNE SECTION VIDE DISPARAIT TOUJOURS. Le display:contents ci-dessus est plus
+   specifique que la regle generale et la battrait : sans ces deux lignes,
+   « Son mot » vide laisserait un bandeau qui n'ouvre sur rien. */
+#s-coach-client .ccd-barre4>.cc-sect:has(>.cc-sect-c:empty),
+#s-coach-client .ccd-barre4>.cc-sect:has(>.cc-sect-c[style*="display:none"]){display:none}
+#s-coach-client .ccd-barre4>.cc-sect>.cc-sect-t{order:1;flex:1 1 0;min-width:0;
+  margin-bottom:0;align-items:center;padding:6px 7px}
+#s-coach-client .ccd-barre4>.cc-sect>.cc-sect-c{order:2;flex:0 0 100%;width:100%;padding:8px 0 0}
+/* QUATRE LIBELLES EN 375 px : 85 px chacun. A 13,5 px et 1,8 px d'interlettre,
+   « INFOS PRATIQUES » debordait de son rectangle — il tient sur deux lignes. */
+#s-coach-client .ccd-barre4 .cc-sect-t>span,.ccd-b4{font-size:10px;letter-spacing:.7px;
+  line-height:1.2;overflow-wrap:anywhere}
+/* LES DEUX BOUTONS PORTENT LE MEME RECTANGLE QUE LES BANDEAUX — meme fond,
+   meme filet a gauche, meme rayon — et PAS de chevron : ils n'ouvrent rien sur
+   place. Le texte est donc centre, faute de triangle pour l'ancrer a gauche. */
+.ccd-b4{order:1;flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;
+  text-align:center;padding:6px 7px;min-height:34px;cursor:pointer;
+  font-family:var(--pile-titre);font-weight:800;text-transform:uppercase;
+  color:#fff;text-shadow:0 0 8px rgba(255,255,255,.35);
+  background:var(--surface-1);border:none;border-left:3px solid var(--border);
+  border-radius:8px;transition:background var(--t-1) var(--c-out)}
+.ccd-b4:hover,.ccd-b4:focus-visible{background:var(--surface-2)}
+/* LE ROUGE DE LA QUATRIEME EST SUR L'ECRITURE, PAS SUR LE FOND. Un quatrieme
+   fond rouge dans cette ligne aurait reconstitue l'echelle de couleurs que
+   N5.11 a demontee. Le filet de gauche, lui, prend le rouge : dans toute la
+   fiche, c'est lui qui porte le niveau. */
+.ccd-b4-agit{color:var(--red);text-shadow:0 0 8px rgba(224,32,32,.45);
+  border-left-color:var(--red)}
+@media (prefers-reduced-motion:reduce){.ccd-b4{transition:none}}
 /* LA MARQUE D'ARRIVEE. ::before est libre — ::after porte deja les hachures. */
 .cc-sect-t.cc-vise::before{content:'';position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(90deg,rgba(255,255,255,.30),transparent 55%);
@@ -9524,47 +9565,68 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="ccd-tete-act"></div>
         </div>
       </div>
-      <!-- CONTRE-INDICATIONS — épinglées en permanence, jamais repliées.
-           Santé, allergies et TCA conditionnent toute la programmation : les
-           laisser au fond du questionnaire de départ revenait à demander au
-           coach de s'en souvenir. Rempli par openClientDetail. -->
-      <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Pourquoi ce dossier</span></div>
-        <div class="cc-sect-c" id="ccd-pourquoi"></div>
-      </section>
+      <!-- LES ALERTES RESTENT PLEINE LARGEUR, ET AU-DESSUS DE LA LIGNE.
+           Elles exigent une decision : les serrer dans un quart de ligne, a
+           cote de « Son mot », les aurait ramenees au rang de ce qui se lit. -->
       <section class="cc-sect" style="--cc-accent:var(--red);display:none">
         <div class="cc-sect-t"><span>Alertes</span></div>
         <div class="cc-sect-c" id="ccd-alertes"></div>
       </section>
-      <!-- CE QUE L'ATHLETE A ECRIT, TEL QUEL. Juste sous les alertes : ce
-           n'est pas une alerte — et c'est pourtant ce qui explique le plus
-           souvent celles qui la precedent. Section VISIBLE en permanence, a la
-           difference de « Alertes » : un champ qui ne se montre que lorsqu'il
-           est rempli n'est jamais rempli. -->
-      <!-- ACCENT NEUTRE, ET C'EST UNE REGLE DE LA FICHE : le rouge est
-           reserve a ce qui exige une DECISION du coach. Un mot se lit, il
-           ne se traite pas. Sans cet attribut, la section faisait un
-           troisieme etat d'accent — l'assertion N5.11 l'a vu. -->
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Son mot</span></div>
-        <div class="cc-sect-c" id="ccd-mot"></div>
-      </section>
+      <!-- ══ LES QUATRE COMMANDES, SUR UNE SEULE LIGNE ════════════════════
+           Kevin, 20/09/2026. Quatre commandes qui se suivaient sur quatre
+           lignes pleines repoussaient les onglets sous la ligne de flottaison.
+           Elles tiennent desormais cote a cote ; seul le contenu DEPLIE
+           descend, en pleine largeur, sous la ligne (voir .ccd-barre4).
+           LES QUATRE NE FONT PAS LA MEME CHOSE, et la forme le dit : les deux
+           premieres se deplient sur place — elles gardent leur chevron —, la
+           troisieme ouvre la saisie du numero, la quatrieme agit sans rien
+           montrer. Le ROUGE est reserve a cette derniere : c'est la seule qui
+           part travailler des qu'on la touche.
+           « Pourquoi ce dossier » est devenu « Infos pratiques » et a PERDU
+           son accent rouge. La regle N5.11 garde le rouge pour ce qui attend
+           une decision du coach ; ce qu'on lit la se consulte. -->
+      <div class="ccd-barre4">
+        <!-- CONTRE-INDICATIONS — épinglées en permanence, jamais repliées.
+             Santé, allergies et TCA conditionnent toute la programmation : les
+             laisser au fond du questionnaire de départ revenait à demander au
+             coach de s'en souvenir. Rempli par openClientDetail. -->
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Infos pratiques</span></div>
+          <div class="cc-sect-c" id="ccd-pourquoi"></div>
+        </section>
+        <!-- CE QUE L'ATHLETE A ECRIT, TEL QUEL. Ce n'est pas une alerte — et
+             c'est pourtant ce qui explique le plus souvent celles qui la
+             precedent. VISIBLE en permanence : un champ qui ne se montre que
+             lorsqu'il est rempli n'est jamais rempli.
+             ACCENT NEUTRE, ET C'EST UNE REGLE DE LA FICHE : le rouge est
+             reserve a ce qui exige une DECISION du coach. Un mot se lit, il
+             ne se traite pas. Sans cet attribut, la section faisait un
+             troisieme etat d'accent — l'assertion N5.11 l'a vu. -->
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Son mot</span></div>
+          <div class="cc-sect-c" id="ccd-mot"></div>
+        </section>
+        <!-- Sans ce bouton, la fonctionnalité ne servirait qu'aux comptes créés
+             après ce commit : aucun athlète existant n'a de numéro. PAS DE
+             CHEVRON : il n'ouvre rien sur place, il appelle la saisie. C'est
+             openClientDetail qui pose son infobulle selon qu'un numero est
+             deja enregistre ou non. -->
+        <button id="ccd-wa-set" class="ccd-b4" type="button" onclick="setClientPhone()">Son numéro</button>
+        <!-- N3.6 — QUAND CE DOSSIER EST-IL REELLEMENT DESCENDU, ET COMMENT LE
+             FORCER. La synchronisation est un sondage de cinq minutes — trente
+             en quota degrade — et sur PC l'onglet du coach reste visible, donc
+             le raccourci du retour au premier plan ne joue jamais. Le coach
+             publiait un programme, appelait son athlete, et n'avait aucun moyen
+             de savoir si sa modification etait arrivee. La DATE de descente,
+             elle, reste sous la ligne : c'est une phrase, pas une commande. -->
+        <button id="ccd-actu" class="ccd-b4 ccd-b4-agit" type="button" onclick="actualiserClient()"
+          title="Redescendre son dossier maintenant">Actualiser</button>
+      </div>
       <!-- Lien WhatsApp de l'athlète : libellé et cible posés par openClientDetail -->
       <a id="ccd-wa" href="#" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;gap:8px;min-height:46px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:var(--r-3);color:var(--green);text-decoration:none;font-size:var(--fs-md);font-weight:800;letter-spacing:.5px"></a>
-      <!-- Sans ce lien, la fonctionnalité ne servirait qu'aux comptes créés
-           après ce commit : aucun athlète existant n'a de numéro. -->
-      <button id="ccd-wa-set" onclick="setClientPhone()" style="display:block;width:100%;background:none;border:none;color:var(--text-dim);font-family:inherit;font-size:var(--fs-2xs);text-decoration:underline;cursor:pointer;min-height:28px;margin:0 0 10px">Enregistrer son numéro</button>
-      <!-- N3.6 — QUAND CE DOSSIER EST-IL REELLEMENT DESCENDU, ET COMMENT LE
-           FORCER. La synchronisation est un sondage de cinq minutes — trente
-           en quota degrade — et sur PC l'onglet du coach reste visible, donc
-           le raccourci du retour au premier plan ne joue jamais. Le coach
-           publiait un programme, appelait son athlete, et n'avait aucun moyen
-           de savoir si sa modification etait arrivee. Rempli par
-           _majFraicheur, appele par openClientDetail. -->
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-6px 0 14px;padding:0 2px">
+      <!-- Rempli par _majFraicheur, appele par openClientDetail. -->
+      <div style="display:flex;align-items:center;gap:10px;margin:-2px 0 14px;padding:0 2px">
         <div id="ccd-fraicheur" style="flex:1;min-width:0;line-height:1.4"></div>
-        <button type="button" onclick="actualiserClient()" title="Redescendre son dossier maintenant"
-          style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;padding:7px 12px;min-height:32px;cursor:pointer">Actualiser</button>
       </div>
       <!-- LES QUATRE ONGLETS. Vingt-sept sections sur un seul rouleau,
            c'etait une barre d'ancres qui menait a un fil interminable. Le
@@ -33436,8 +33498,12 @@ function openClientDetail(cid,_refresh,_force){
       // s'affichait juste en dessous : deux lignes pour dire qu'il manque une
       // donnee. Le lien seul le dit mieux, et il reste juste en dessous.
       _wa.style.display=_tel?'flex':'none';
+      // LE LIBELLE NE BOUGE PLUS : « Enregistrer son numéro » ne tient pas
+      // dans les 85 px d'un quart de ligne. La nuance passe dans l'infobulle,
+      // et l'etat se lit deja au-dessus — le lien vert ne s'affiche que
+      // lorsqu'un numero existe.
       const _def=document.getElementById('ccd-wa-set');
-      if(_def) _def.textContent=_tel?'Modifier le numéro':'Enregistrer son numéro';
+      if(_def) _def.title=_tel?'Modifier le numéro enregistré':'Enregistrer son numéro';
     }
   }
   // Modèle appliqué : sans cette ligne, le coach n'avait aucun moyen de savoir

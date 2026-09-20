@@ -33115,7 +33115,11 @@ async function testExercices(){
             return _echec('accent inattendu : '+n);
         // LE ROUGE EST RESERVE A CE QUI EXIGE UNE DECISION.
         // R10 — « Signaux RED-S » est devenu « Signaux de déficit énergétique (RED-S) ».
-        const ATTENDU=['Alertes','Douleur','Pourquoi ce dossier','Signaux de déficit énergétique (RED-S)',
+        // « Pourquoi ce dossier » A QUITTE CETTE LISTE le 20/09/2026 : la
+        // section est devenue « Infos pratiques », neutre, dans la ligne de
+        // quatre. Ce qu'on y lit se consulte, et le rouge reste a ce qui
+        // attend une decision.
+        const ATTENDU=['Alertes','Douleur','Signaux de déficit énergétique (RED-S)',
                        'Sécurité','Suspension'];
         const trop=alerte.filter(x=>ATTENDU.indexOf(x)<0);
         if(trop.length) return _echec('en rouge sans décision à prendre : '+trop.join(', '));
