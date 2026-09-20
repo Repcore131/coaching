@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1322';
+window.RC_BUILD='1323';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -333,13 +333,32 @@ if('serviceWorker' in navigator){
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='visible') window._rcVerifierVersion(false);
   });
+  // ⚠ UN SEUL ENDROIT DECIDE SI L'ON PEUT RECHARGER. Deux chemins y menent —
+  //   `controllerchange` et le message du worker — et ils repondaient
+  //   autrefois chacun pour soi. La regle est la meme dans les deux cas : on
+  //   ne recharge jamais sous les doigts de quelqu'un qui saisit.
+  const _rcRechargerSiPossible=()=>{
+    const active=document.querySelector('.screen.active')?.id;
+    if(!active||RC_MAJ_SURS.includes(active)){ location.reload(); return true; }
+    window._swUpdatePending=true;
+    try{ window._rcAnnoncerMaj&&window._rcAnnoncerMaj(0); }catch(e){}
+    return false;
+  };
+  // ⚠ LE MESSAGE DU WORKER, ET PAS SEULEMENT `controllerchange`. C'est la
+  //   lecon des 19 et 20/09/2026 : un onglet laisse ouvert ne rechargeait
+  //   jamais, donc ne recevait jamais rien. `controllerchange` ne se declenche
+  //   que si l'onglet n'avait pas deja un controleur — ce qui n'est justement
+  //   PAS le cas d'une app installee depuis des jours. Le worker, lui, poste a
+  //   TOUS les onglets a son activation.
+  try{
+    navigator.serviceWorker.addEventListener('message',(ev)=>{
+      if(ev&&ev.data&&ev.data.rc==='maj') _rcRechargerSiPossible();
+    });
+  }catch(e){}
   navigator.serviceWorker.register('./sw.js').then(reg=>{
     reg.update();
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
-      const safe=['s-splash','s-welcome','s-coach-home','s-client-home','s-coach-entry','s-athlete-entry'];
-      const active=document.querySelector('.screen.active')?.id;
-      if(!active||safe.includes(active)){location.reload();}
-      else{window._swUpdatePending=true;}
+      _rcRechargerSiPossible();
     });
   });
 }</script>

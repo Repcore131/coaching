@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1322';
+const CACHE = 'repcore-v1323';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -335,6 +335,34 @@ self.addEventListener('activate', e => {
           } catch (err) {}
         }
       }
+      // ⚠ 2 bis. LE DOCUMENT REPORTE VIENT D'UNE AUTRE VERSION, PAR
+      //    CONSTRUCTION. Le report ci-dessus existe pour une bonne raison —
+      //    une installation hors ligne n'a pas pu telecharger index.html — mais
+      //    il place le document d'HIER dans le cache d'AUJOURD'HUI. La branche
+      //    index.html du fetch le sert alors des que le reseau met plus de
+      //    2 500 ms a repondre : le worker annonce la version du jour, et
+      //    l'ecran affiche celle d'avant. Rien, nulle part, ne le signalait.
+      //
+      //    ON LE VERIFIE DONC, ET C'EST EXACT : le document porte son propre
+      //    numero, `window.RC_BUILD='1234'`, et le cache porte le sien dans son
+      //    nom. Deux numeros differents = un document etranger : on le RETIRE
+      //    plutot que de le servir. Le prochain chargement ira au reseau —
+      //    `if (!enCache) return reseau` attend alors le temps qu'il faut,
+      //    quel qu'il soit, ce qui est le bon comportement pour un document
+      //    dont on n'a aucune copie valable.
+      try {
+        const doc = await neuf.match('./index.html');
+        if (doc) {
+          const attendu = (CACHE.match(/(\d+)/) || [])[1] || '';
+          const txt = await doc.clone().text();
+          const vu = (txt.match(/RC_BUILD\s*=\s*'(\d+)'/) || [])[1] || '';
+          if (attendu && vu && vu !== attendu) {
+            console.warn('[RepCore SW] document en cache en version', vu,
+              'alors que le worker est en', attendu, '— on le retire');
+            await neuf.delete('./index.html');
+          }
+        }
+      } catch (err) { console.warn('[RepCore SW] verif version du document :', err); }
       // 3. Purge SOUS CONDITION. Le nouveau cache doit être utilisable.
       if (await neuf.match('./index.html')) {
         await Promise.all(anciens.map(k => caches.delete(k)));
@@ -342,6 +370,20 @@ self.addEventListener('activate', e => {
         console.warn('[RepCore SW] index.html absent du cache', CACHE,
           '— anciens caches conservés un cycle de plus');
       }
+      // ⚠ ET ON PREVIENT LES ONGLETS DEJA OUVERTS. C'est la lecon des 19 et
+      //    20/09/2026 : une application laissee ouverte ne rechargeait jamais,
+      //    donc ne recevait jamais rien — six versions publiees, aucune vue, et
+      //    rien a l'ecran pour le dire. `controllerchange` ne suffit pas : il
+      //    ne se declenche que si le client n'avait pas deja un controleur.
+      //    Le message, lui, part a TOUS les onglets de ce domaine, et c'est le
+      //    client qui decide s'il peut recharger — jamais sous les doigts de
+      //    quelqu'un qui saisit un bilan.
+      try {
+        const fenetres = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const f of fenetres) {
+          try { f.postMessage({ rc: 'maj', version: CACHE }); } catch (err) {}
+        }
+      } catch (err) {}
     } catch (err) { console.error('[RepCore SW] activate:', err); }
   })());
   self.clients.claim();
