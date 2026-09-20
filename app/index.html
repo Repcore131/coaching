@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1319';
+window.RC_BUILD='1320';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5378,6 +5378,97 @@ textarea.vn-in{resize:vertical;line-height:1.5}
    Desormais : la version Homme, PUIS la version Femme, chacune sur sa rangee
    avec ses seances nommees ; deux gestes pleins ; le reste en pied de carte. */
 .cpl-intro{font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin:0 0 20px}
+/* ══ L'EN-TETE DE LA VITRINE ══════════════════════════════════════════════
+   Maquette de Kevin, 20/09/2026.
+
+   ⚠ LE RELIEF EST DESSINE, PAS PHOTOGRAPHIE. La maquette pose un dos
+     travaille en fond ; on ne le reproduit pas — ce n'est pas notre image.
+     Deux diagonales rouges en `repeating-linear-gradient` et un halo radial
+     donnent la meme energie, pesent zero octet, et suivent la marque si elle
+     change de rouge. */
+.cpl-hero{position:relative;overflow:hidden;margin:0 0 20px;padding:18px 16px 16px;
+  border:1px solid var(--border);border-radius:var(--r-4);
+  background:
+    repeating-linear-gradient(118deg,transparent,transparent 26px,rgba(224,32,32,.055) 26px,rgba(224,32,32,.055) 30px),
+    radial-gradient(150% 120% at 100% 0%,rgba(224,32,32,.20),transparent 58%),
+    linear-gradient(168deg,#141414,#060606 70%);
+  box-shadow:var(--el-1);
+  display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px}
+.cpl-hero::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--red),transparent 74%)}
+.cpl-hero-marque{display:flex;flex-direction:column;align-items:center;gap:6px;
+  min-width:0;max-width:112px}
+.cpl-hero-l{width:62px;height:62px;border-radius:var(--r-3);flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  border:1px solid rgba(255,255,255,.10);
+  background:linear-gradient(165deg,#191919,#0a0a0a);box-shadow:var(--elev-1)}
+.cpl-hero-l img{width:100%;height:100%;object-fit:contain;display:block}
+.cpl-hero-l span{font-family:var(--pile-titre);font-size:32px;line-height:1;
+  color:var(--red-text);text-shadow:var(--halo-1)}
+.cpl-hero-n{font-size:9px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;
+  color:var(--text-faint);text-align:center;line-height:1.3;overflow-wrap:anywhere}
+.cpl-hero-c{min-width:0}
+/* La pile de titres — Bebas — et non Montserrat : « garde nos polices » veut
+   dire ne pas importer celle de la maquette, pas renoncer a la notre. */
+.cpl-hero-t{font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.9;
+  letter-spacing:2px;text-transform:uppercase;color:var(--red);
+  text-shadow:var(--halo-1);margin:0}
+.cpl-hero-s{font-size:var(--fs-xs);font-weight:800;letter-spacing:3.4px;
+  text-transform:uppercase;color:var(--text-strong);margin-top:5px}
+.cpl-hero-p{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;
+  margin:8px 0 0;font-style:italic}
+/* ── LES TROIS FILTRES ──────────────────────────────────────────────────
+   Ils BASCULENT : toucher celui qui est actif le relache. C'est ce qui rend
+   un quatrieme bouton « Tous » inutile — et sans ce relachement, trois
+   boutons seuls auraient enferme le coach dans une section. */
+.cpl-hero-f{display:flex;flex-direction:column;gap:6px;flex:0 0 auto}
+.cpl-f{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:0 13px;
+  margin:0;border:1px solid var(--border);border-radius:var(--r-2);
+  background:rgba(0,0,0,.35);color:var(--sub);font-family:Montserrat,sans-serif;
+  font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+  cursor:pointer;white-space:nowrap;
+  transition:background var(--t-1) var(--c-out),color var(--t-1) var(--c-out),
+             border-color var(--t-1) var(--c-out)}
+.cpl-f-s{font-size:14px;line-height:1;color:var(--red-text)}
+.cpl-f:hover{color:var(--text);border-color:var(--sub)}
+.cpl-f.on{background:var(--red);border-color:var(--red);color:#0a0000;
+  box-shadow:var(--glow-red)}
+.cpl-f.on .cpl-f-s{color:#0a0000}
+.cpl-f:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+/* A L'ETROIT, L'EN-TETE SE DEPLIE EN TROIS ETAGES et les filtres se mettent en
+   rangee : trois colonnes sur 360 px laisseraient 90 px au titre. */
+@media(max-width:700px){
+  .cpl-hero{grid-template-columns:auto 1fr;gap:12px;padding:15px 14px}
+  .cpl-hero-marque{max-width:74px}
+  .cpl-hero-l{width:48px;height:48px}
+  .cpl-hero-t{font-size:var(--fs-2xl)}
+  .cpl-hero-f{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}
+  .cpl-f{flex:1 1 0;min-width:0;justify-content:center;padding:0 8px;letter-spacing:.8px}
+}
+/* Le mot quand le filtre ne rend rien : une reponse vide n'est pas une panne,
+   et le chemin du retour est dans la phrase. */
+.cpl-vide{font-size:var(--fs-xs);color:var(--sub);line-height:1.7;margin:2px 0 22px;
+  padding:14px;border:1px dashed var(--border);border-radius:var(--r-3);text-align:center}
+.cpl-vide-b{background:none;border:none;color:var(--red-text);font-family:Montserrat,sans-serif;
+  font-size:var(--fs-xs);font-weight:800;cursor:pointer;padding:0;text-decoration:underline}
+/* La vignette de vente, a gauche du nom. Format portrait : c'est celui des
+   visuels de programme, et l'etirer en carre couperait les tetes. */
+.cpl-vig{float:left;width:62px;height:82px;margin:0 13px 8px 0;border-radius:var(--r-3);
+  overflow:hidden;border:1px solid var(--border);
+  background:linear-gradient(170deg,#15161a,#0a0a0c)}
+.cpl-vig img{width:100%;height:100%;object-fit:cover;display:block}
+/* Le flottant est referme par les actions : sans ce nettoyage, les deux
+   boutons remontaient a cote de la vignette sur une carte courte. */
+.cpl-c-vig .cpl-actions{clear:both}
+/* L'icone dans un bouton : elle suit la couleur du texte et ne bouge pas la
+   ligne de base. */
+.cpl-ic{display:inline-flex;align-items:center;margin-right:6px;vertical-align:-3px}
+.cpl-ic svg{display:block}
+/* Le signe de la rangee de version, devant le mot. */
+.cpl-v-sym{flex:0 0 auto;font-size:17px;line-height:1;color:var(--red-text)}
+.cpl-v-vide .cpl-v-sym{color:var(--text-faint)}
+/* Le cadenas de « Ma boutique » : ce qui est vendu sans venir d'un modele. */
+.cpl-band-ic{flex:0 0 auto;display:flex;align-items:center;color:var(--red-text)}
 /* ══ LE CADRAN ════════════════════════════════════════════════════════════
    Demande de Kevin, 19/09/2026 : « mets un cadran en haut avec le nombre de
    programmes faits […] un truc qui fait vraiment pro et business ».
@@ -14097,6 +14188,12 @@ const ICONS={
   smartphone:'<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
   cloud:'<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
   lock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  // Le panier et l'oeil : deux gestes de la boutique — ce qui s'achete, ce qui
+  // se relit. Ajoutes AU JEU plutot qu'inlines dans la carte, comme la
+  // corbeille au-dessus et pour la meme raison : le prochain bouton d'achat ne
+  // doit pas en redessiner une variante.
+  cart:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',
+  eye:'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
   key:'<path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
   'plus-circle':'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>',
   zap:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
@@ -35674,6 +35771,22 @@ function _cplRayon(p){ return (p&&p.origine==='athlete')?'athlete':'moi'; }
 //   invisible — rien ne bougeait a l'ecran, ou un programme sautait d'une
 //   section a l'autre sans qu'on l'ait touche.
 function _cplGroupe(p){ return progPublic(p); }
+// ══ LE FILTRE DE LA VITRINE ════════════════════════════════════════════════
+//
+// ⚠ TROIS BOUTONS, ET AUCUN QUATRIEME « TOUS ». Ils BASCULENT : toucher celui
+//   qui est deja actif le relache, et la liste redevient entiere. Un quatrieme
+//   bouton aurait dit la meme chose en prenant une place que la rangee n'a pas
+//   sur un telephone — et surtout, avec trois boutons seuls et aucun relachement
+//   possible, on ne pouvait plus JAMAIS revoir tout le catalogue.
+//
+// EN MEMOIRE, PAS DANS LE DOSSIER. C'est un regard porte sur la liste, pas une
+// preference : la rouvrir doit la montrer entiere, comme n'importe quel ecran.
+let _cplFiltre=null;
+function cplFiltrer(v){
+  _cplFiltre=(_cplFiltre===v)?null:(PROG_PUBLICS.some(x=>x.cle===v)?v:null);
+  try{ loadCoachProgramsList(); }catch(e){}
+  return true;
+}
 
 // ══ A QUI S'ADRESSE UN PROGRAMME ═══════════════════════════════════════════
 //
@@ -35801,8 +35914,14 @@ function _htmlCplVersion(i,genre,p){
   const l=_cplSeancesPleines(p,genre);
   const n=l.length;
   const noms=l.map(s=>String(s.name||'').trim()||String(s.day||'Séance')).join(' · ');
+  const sym=(PROG_PUBLICS.find(x=>x.cle===genre)||{}).sym||'';
   return '<button type="button" class="cpl-v'+(n?'':' cpl-v-vide')+'" '
     +'onclick="editCoachProgTemplate('+i+',\''+genre+'\')">'
+    // ⚠ LE SIGNE EST DANS SON PROPRE SPAN, hors de `.cpl-v-g`. Le test de la
+    //   rangee lit le libelle de cette classe et le compare au mot exact :
+    //   l'y coller aurait rendu « ♂Homme » et casse une assertion qui parle du
+    //   genre, pas du dessin.
+    +'<span class="cpl-v-sym" aria-hidden="true">'+sym+'</span>'
     +'<span class="cpl-v-g">'+(genre==='F'?'Femme':'Homme')+'</span>'
     +'<span class="cpl-v-c"><span class="cpl-v-n">'
       +(n?(n+' séance'+(n>1?'s':'')):'Aucune séance')+'</span>'
@@ -35854,7 +35973,17 @@ function _htmlCplCarte(p,i,premier,dernier){
   //   aurait mis en vente une version qu'il n'a pas relue.
   const consigne=(p.origine==='athlete')
     ? '<p class="cpl-note">Adapte l’autre version avant de le vendre.</p>' : '';
-  return '<div class="cpl-c">'
+  // LA VIGNETTE DE VENTE, quand le coach en a posé une. C'est le champ
+  // `visuel` de sa fiche de vente — la meme image que voit l'acheteur. Sans
+  // elle, pas de cadre vide : la carte reprend toute sa largeur.
+  const vis=String(p.visuel||'').trim();
+  const vign=vis
+    ? '<div class="cpl-vig" aria-hidden="true">'
+      +'<img src="'+escapeHtml(vis)+'" alt="" loading="lazy" onerror="this.closest(\'.cpl-vig\').remove()">'
+      +'</div>'
+    : '';
+  return '<div class="cpl-c'+(vis?' cpl-c-vig':'')+'">'
+    +vign
     +'<div class="cpl-tete"><div>'
       +'<div class="cpl-nom">'+escapeHtml(p.name||'Sans nom')+'</div>'
       +'<div class="cpl-meta">'+meta.join(' · ')+'</div>'
@@ -35870,7 +35999,11 @@ function _htmlCplCarte(p,i,premier,dernier){
       +(pu==='H'?'':_htmlCplVersion(i,'F',p))+'</div>'
     +'<div class="cpl-actions">'
       +'<button class="btn btn-red btn-sm" onclick="openAssignProgram('+i+')">▶ Assigner</button>'
-      +'<button class="btn btn-outline btn-sm" onclick="'+vendre+'">'+(on?'Modifier la vente':'Mettre en vente')+'</button>'
+      // L'ICONE DIT LEQUEL DES DEUX GESTES C'EST : le panier quand il s'agit
+      // d'ouvrir la vente, le crayon quand elle est deja ouverte.
+      +'<button class="btn btn-outline btn-sm" onclick="'+vendre+'">'
+        +'<span class="cpl-ic" aria-hidden="true">'+icon(on?'pencil':'cart',15)+'</span>'
+        +(on?'Modifier la vente':'Mettre en vente')+'</button>'
     +'</div>'
     // N4.18 — L'ORDRE SE REGLE, dans le rayon : les MEMES fleches que
     // l'editeur d'exercices, pour une liste qu'on reordonne trois fois par an.
@@ -35912,6 +36045,50 @@ function _htmlCplBoutique(){
     +rangs+'</section>';
 }
 /**
+ * L'EN-TETE DE LA VITRINE : la marque du coach, le titre, et les trois filtres.
+ *
+ * Demande de Kevin, 20/09/2026, maquette a l'appui.
+ *
+ * ⚠ AUCUNE PHOTO D'AGENCE. La maquette pose un dos travaille en fond ; on ne
+ *   le reproduit pas — ce n'est pas notre image, et la livrer dans
+ *   l'application engagerait Kevin. Le relief vient donc de ce qu'on maitrise :
+ *   ses diagonales rouges, son logo, et sa phrase.
+ *
+ * ⚠ LA PHRASE EST LA SIENNE, `catchphrase`, deja saisie dans son profil et
+ *   deja publiee sur sa vitrine. En inventer une aurait mis dans sa bouche un
+ *   slogan qu'il n'a pas choisi, sur l'ecran ou il vend.
+ */
+function _htmlCplHero(){
+  const u=currentUser||{};
+  const img=String(u.logo||u.coachPhoto||'').trim();
+  const nom=String(u.teamName||((u.fname||'')+' '+(u.lname||''))).trim();
+  const ini=(nom.match(/\S/)||['R'])[0].toUpperCase();
+  const phrase=String(u.catchphrase||'').trim();
+  const f=_cplFiltre;
+  return '<header class="cpl-hero">'
+    +'<div class="cpl-hero-marque">'
+      +'<div class="cpl-hero-l" aria-hidden="true">'
+        +(img?'<img src="'+escapeHtml(img)+'" alt="" loading="lazy" onerror="this.remove()">'
+             :'<span>'+escapeHtml(ini)+'</span>')
+      +'</div>'
+      +(nom?'<div class="cpl-hero-n">'+escapeHtml(nom)+'</div>':'')
+    +'</div>'
+    +'<div class="cpl-hero-c">'
+      +'<h2 class="cpl-hero-t">Ma boutique</h2>'
+      +'<div class="cpl-hero-s">Programmes d’entraînement</div>'
+      +(phrase?'<p class="cpl-hero-p">'+escapeHtml(phrase)+'</p>':'')
+    +'</div>'
+    // LES TROIS FILTRES. `aria-pressed` et non un groupe radio : ce sont des
+    // bascules — aucune n'est « le choix par defaut », et les trois relachees
+    // est un etat valide.
+    +'<div class="cpl-hero-f">'
+      +PROG_PUBLICS.map(x=>'<button type="button" class="cpl-f'+(f===x.cle?' on':'')+'"'
+        +' aria-pressed="'+(f===x.cle)+'" onclick="cplFiltrer(\''+x.cle+'\')">'
+        +'<span class="cpl-f-s" aria-hidden="true">'+x.sym+'</span>'
+        +escapeHtml(x.lib)+'</button>').join('')
+    +'</div></header>';
+}
+/**
  * Le bandeau d'un rayon : le logo du coach, le titre en rouge, la consigne.
  *
  * ⚠ LE LOGO DU COACH, ET AUCUNE IMAGE INVENTEE. La maquette montre une photo
@@ -35934,6 +36111,7 @@ function _htmlCplBandeau(titre,aide){
       +(img?'<img src="'+escapeHtml(img)+'" alt="" loading="lazy" onerror="this.remove()">'
            :'<span>'+escapeHtml(ini)+'</span>')
     +'</div>'
+    +'<span class="cpl-band-ic" aria-hidden="true">'+icon('lock',17)+'</span>'
     +'<div class="cpl-band-c">'
       +'<div class="cpl-band-t" role="heading" aria-level="2">'+escapeHtml(titre)+'</div>'
       +(aide?'<p class="cpl-band-d">'+escapeHtml(aide)+'</p>':'')
@@ -36053,9 +36231,16 @@ function loadCoachProgramsList(){
     container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme pour l\'instant</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Un modèle créé une fois sert à tous tes athlètes — pour eux, pour elles, ou pour les deux.</span>','Créer un programme','createCoachProgTemplate()')+bq;return;
   }
   let cadran=''; try{ cadran=_htmlCplCadran(); }catch(e){ cadran=''; }
+  let hero=''; try{ hero=_htmlCplHero(); }catch(e){ hero=''; }
   // TROIS TITRES POUR SEQUENCER : Homme, Femme, Mixte. Une section vide ne
   // s'affiche pas — annoncer « Femme 0 » n'oriente personne.
-  container.innerHTML=cadran+PROG_PUBLICS.map(r=>{
+  //
+  // ⚠ LE FILTRE MASQUE LES AUTRES SECTIONS, IL NE TOUCHE PAS AUX INDEX. Chaque
+  //   bouton porte l'index REEL dans coachPrograms : filtrer en reconstruisant
+  //   un tableau aurait renumerote « Assigner » et « Supprimer » sur la liste
+  //   visible, et le coach aurait supprime un programme qu'il ne voyait pas.
+  container.innerHTML=hero+cadran+PROG_PUBLICS.map(r=>{
+    if(_cplFiltre&&_cplFiltre!==r.cle) return '';
     const idx=[];
     progs.forEach((p,i)=>{ if(p&&_cplGroupe(p)===r.cle) idx.push(i); });
     if(!idx.length) return '';
@@ -36067,6 +36252,17 @@ function loadCoachProgramsList(){
       +idx.map((i,k)=>_htmlCplCarte(progs[i],i,k===0,k===idx.length-1)).join('')
       +'</section>';
   }).join('')+bq;
+  // ⚠ UN FILTRE QUI NE REND RIEN DOIT LE DIRE. Sans ce mot, toucher « Femme »
+  //   sur un catalogue qui n'en compte aucun vidait l'ecran : le coach voyait
+  //   un bug la ou il n'y avait qu'une reponse vide, et rien ne lui disait
+  //   comment revenir.
+  if(_cplFiltre&&!container.querySelector('.cpl-c')){
+    const lib=(PROG_PUBLICS.find(x=>x.cle===_cplFiltre)||{}).lib||'';
+    container.insertAdjacentHTML('beforeend',
+      '<p class="cpl-vide">Aucun programme « '+escapeHtml(lib)+' » pour l’instant. '
+      +'<button type="button" class="cpl-vide-b" onclick="cplFiltrer(\''+_cplFiltre+'\')">'
+      +'Revoir tout le catalogue</button></p>');
+  }
 }
 
 function _cptCount(sessions){return sessions?sessions.filter(s=>s.active&&s.exercises?.length).length:0;}

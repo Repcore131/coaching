@@ -44462,7 +44462,13 @@ async function testExercices(){
         const act=[...fg.querySelectorAll('.cpl-actions .btn')].map(b=>b.textContent.trim());
         if(act.join(' | ')!=='▶ Assigner | Mettre en vente') return _echec('actions : '+act.join(' | '));
         // Le rayon de la boutique n'existe que pour le créateur.
-        if(/Ma boutique/i.test(z.textContent)) return _echec('un autre coach voit « Ma boutique »');
+        // ⚠ ON DESIGNE LE RAYON, ON NE CHERCHE PLUS SON NOM. Depuis le
+        //   20/09/2026 l'en-tete de la vitrine porte lui aussi le titre « Ma
+        //   boutique » — et lui s'affiche pour TOUS les coachs. Chercher le mot
+        //   revenait a interdire au titre d'exister, alors que ce qui doit
+        //   rester reserve au createur, c'est le rayon des programmes vendus
+        //   sans modele.
+        if(z.querySelector('.cpl-band')) return _echec('un autre coach voit le rayon de la boutique');
         return true;
       } finally { currentUser=sU; if(z) z.innerHTML=sv; }})());
 
