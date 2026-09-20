@@ -35589,6 +35589,38 @@ async function testExercices(){
           return vu===Math.round(Number(m.kcal)||0)?true
             :_echec('la carte dit '+vu+' et les anneaux comptent sur '+Math.round(m.kcal));})());
 
+        ok('« Saisie manuelle » BAISSÉE NE FAIT PAS IGNORER LA GRILLE DU COACH',(()=>{
+          // ⚠ LE DEFAUT DU 20/09/2026 AU SOIR, sur les deux captures de Kevin :
+          //   son tableau annoncait 1,9 g/kg et 3 933 kcal en Recomposition,
+          //   l'ecran de l'athlete 2,2 g/kg et 4 082 en Seche, et la carte
+          //   portait « elles remplacent celles de sa grille » — elle n'etait
+          //   pas verrouillee.
+          //
+          //   `manuel:false` — ecrit des que le coach BAISSE l'interrupteur —
+          //   rendait false et lui rendait la main sur tout. C'etait juste au
+          //   14/09, quand le calcul automatique n'ecrivait rien. Depuis le
+          //   build 1317 chaque menu du tableur ECRIT : le coach pose des
+          //   chiffres en automatique aussi.
+          const pose={dietType:'flexible',manuel:false,
+            macros:{on:{kcal:3000,p:190,l:90,g:350},off:{kcal:3000,p:190,l:90,g:350},
+              origine:'tableur',origineDate:Date.now()}};
+          if(ciblesPoseesParCoach({nutrition:pose})!==true)
+            return _echec('la grille du coach est ignorée quand « saisie manuelle » est baissée');
+          // ET L'INTERRUPTEUR LEVE VERROUILLE TOUJOURS : un coach qui tape ses
+          // grammes a la main n'a pas perdu son verrou en chemin.
+          if(ciblesPoseesParCoach({nutrition:{manuel:true}})!==true)
+            return _echec('l’interrupteur levé ne verrouille plus');
+          // ⚠ ET « EN AUTOMATIQUE, L'ATHLETE GARDE LA MAIN » TIENT ENCORE —
+          //   demande du 14/09/2026. Tant que le coach n'a RIEN pose, elle
+          //   reste libre : c'est l'origine qui fait la difference, pas le
+          //   drapeau.
+          if(ciblesPoseesParCoach({nutrition:{manuel:false}})!==false)
+            return _echec('elle perd la main alors que le coach n’a rien posé');
+          if(ciblesPoseesParCoach({nutrition:{manuel:false,
+              macros:{on:{kcal:2000},origine:'athlete'}}})!==false)
+            return _echec('ses propres cibles la verrouillent');
+          return true;})());
+
         ok('VERROUILLEE, LA CARTE NE GARDE QUE LE RÉGLAGE PARTAGÉ',(()=>{
           // ⚠ CE TEST A CHANGE DE FRONTIERE, PAS D'INTENTION. Il interdisait
           //   TOUT reglage sur la carte verrouillee. Depuis le 20/09/2026, les

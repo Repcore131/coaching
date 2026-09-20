@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1330';
+window.RC_BUILD='1331';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -70528,10 +70528,30 @@ function _athPerso(u){
 // jamais rien pose.
 function ciblesPoseesParCoach(u){
   const n=(u&&u.nutrition)||{};
-  // Le drapeau explicite gagne TOUJOURS, quelle que soit l'origine en place :
-  // un coach qui a leve l'interrupteur a dit ce qu'il voulait, et un dossier
-  // ou l'athlete avait pris la main avant ce lot se repare au premier
-  // enregistrement du coach, qui repose l'origine a 'coach'.
+  // ⚠ LA GRILLE DU COACH PASSE DEVANT LE DRAPEAU, et cet ordre est le
+  //   correctif du 20/09/2026 au soir. Kevin : « malgre la modif sur le profil
+  //   du coach, cela ne s'affiche pas sur celui de l'athlete ». Mesure faite
+  //   sur ses deux captures : son tableau annonce 1,9 g/kg et 3 933 kcal en
+  //   Recomposition, l'ecran de l'athlete 2,2 g/kg et 4 082 kcal en Seche, et
+  //   sa carte porte « elles remplacent celles de sa grille » — donc elle
+  //   n'etait PAS verrouillee.
+  //
+  //   POURQUOI. `manuel:false` — ecrit des que le coach baisse l'interrupteur
+  //   « Saisie manuelle » — rendait false ici, et l'athlete reprenait la main
+  //   sur TOUT. C'etait juste au 14/09, quand le calcul automatique n'ecrivait
+  //   rien : « en automatique, l'athlete garde la main ». Ca ne l'est plus
+  //   depuis le build 1317, ou chaque menu du tableur ECRIT et POUSSE — le
+  //   coach pose donc des chiffres en automatique aussi, et `manuel:false`
+  //   les faisait ignorer.
+  //
+  //   `manuel:false` DIT « le coach ne tape pas les grammes a la main ». Il ne
+  //   dit pas « le coach n'a rien pose ». Ce sont deux phrases differentes, et
+  //   c'est leur confusion qui a produit deux ecrans qui ne parlent pas du
+  //   meme athlete.
+  if(((n.macros||{}).origine)==='tableur') return true;
+  // Le drapeau explicite gagne ensuite : un coach qui a LEVE l'interrupteur a
+  // dit ce qu'il voulait, et un dossier ou l'athlete avait pris la main avant
+  // ce lot se repare au premier enregistrement du coach.
   if(typeof n.manuel==='boolean') return n.manuel;
   if(((n.macros||{}).origine)==='athlete') return false;
   // ⚠ LE CALCULATEUR DU COACH POSE UNE PRESCRIPTION, et cette ligne doit etre
@@ -70733,7 +70753,12 @@ function _athEcrireGrille(){
     try{ j=_tbJournees(currentUser,t,cyc); }catch(e){ j=null; }
     if(!j||!j.on) return false;
     currentUser.nutrition=nut;
-    nut.macros={on:j.on,off:cyc?j.off:j.on,origine:'tableur',origineDate:Date.now()};
+    // ⚠ `'athlete'` ET NON `'tableur'` DANS CETTE BRANCHE. On n'y entre que
+    //   lorsque le dossier ne porte AUCUNE cible : le coach n'a rien pose, et
+    //   c'est elle qui regle les siennes. Marquer 'tableur' l'aurait
+    //   verrouillee hors de sa propre carte des le premier menu qu'elle
+    //   touche — depuis le 20/09/2026 au soir, cette origine ferme la carte.
+    nut.macros={on:j.on,off:cyc?j.off:j.on,origine:'athlete',origineDate:Date.now()};
     saveUser();
     try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
     return true;
