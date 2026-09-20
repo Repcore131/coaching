@@ -37741,6 +37741,123 @@ async function testExercices(){
       }
       return true;})());
 
+    ok('L\'ÉCART D\'UNE MENSURATION IGNORE LES VALEURS REPORTÉES',(()=>{
+      // ⚠ LE PIEGE PRINCIPAL, ET IL EST DEVANT LA PORTE. bilansOrdonnes passe
+      //   par _comblerMensurations : quand l'athlete confirme qu'un tour de
+      //   bras n'a pas bouge, la valeur du bilan precedent est RECOPIEE dans
+      //   le suivant et marquee `bmReportee`. La lire telle quelle affichait
+      //   « stable » sur une periode ou plus personne n'avait sorti le metre.
+      //   La maison a deja tranche ce cas pour l'ecart gauche/droite, dans les
+      //   memes termes : une valeur reportee est ECARTEE, pas ponderee.
+      const J=864e5, t=Date.parse('2026-09-14T10:00:00Z');
+      const B=(j,v,rep)=>{
+        const b={date:t-j*J,'bil-weight':'80'};
+        if(v!=null) b['bil-bicep-r']=String(v);
+        if(rep) b.reprises=['bil-bicep-r'];
+        return b;
+      };
+      // Trois bilans : 38,2 mesure · 39,0 mesure · 39,0 REPORTE.
+      const u={id:'E1',role:'athlete',bilans:[B(120,38.2),B(60,39.0),B(2,39.0,true)]};
+      const e=corpsEcart(u,'bicep-r');
+      if(!e) return _echec('aucun écart alors que deux relevés existent');
+      if(e.delta!==0.8) return _echec('écart de '+e.delta+' au lieu de 0,8');
+      // ET LA PERIODE EST CELLE DES DEUX RELEVES REELS, pas celle du dernier
+      // bilan : c'est ce que l'étiquette affiche, et ce doit être vrai.
+      if(e.fin.date!==t-60*J) return _echec('la période finit sur le bilan reporté');
+      // SANS DEUX RELEVES, RIEN. Un seul chiffre ne se compare qu'à lui-même.
+      if(corpsEcart({bilans:[B(2,39.0)]},'bicep-r')!==null)
+        return _echec('un seul relevé produit un écart');
+      if(corpsEcart({bilans:[B(60,39.0),B(2,39.0,true)]},'bicep-r')!==null)
+        return _echec('un relevé et un report produisent un écart');
+      // AUCUNE CLEF : AUCUN ECART, et pas une exception.
+      if(corpsEcart(u,null)!==null) return _echec('une clef absente rend autre chose que null');
+      if(corpsEcart(u,'bust')!==null) return _echec('une mesure jamais saisie rend un écart');
+      // ⚠ ARRONDI AU DIXIEME, JAMAIS AU DEMI. volAffiche arrondit a 0,5 : elle
+      //   convient aux series et detruit une mesure — +0,8 y devient « +1 ».
+      const d8=corpsEcart({bilans:[B(60,38.20),B(2,39.03)]},'bicep-r');
+      if(d8.delta!==0.8) return _echec('l’arrondi rend '+d8.delta+' au lieu de 0,8');
+      // ET LE SEUIL DE BRUIT EST PORTE PAR L'ECART, pas par l'affichage.
+      const petit=corpsEcart({bilans:[B(60,39.0),B(2,39.3)]},'bicep-r');
+      if(petit.stable!==true) return _echec('0,3 cm n’est pas déclaré stable');
+      if(corpsEcart({bilans:[B(60,39.0),B(2,39.6)]},'bicep-r').stable!==false)
+        return _echec('0,6 cm est déclaré stable');
+      return true;})());
+
+    ok('CHAQUE ÉTIQUETTE PORTE SA SOURCE, SES DATES ET SA TOLÉRANCE',(()=>{
+      // « Toute valeur affichée porte sa source, sa date et sa tolérance. »
+      // C'est la doctrine, et c'est verifiable.
+      const J=864e5, t=Date.parse('2026-09-14T10:00:00Z');
+      const u={id:'E2',role:'athlete',bilans:[
+        {date:t-90*J,'bil-bicep-r':'38.2','bil-thigh-r':'61.5','bil-glutes':'101','bil-calf-r':'39.1'},
+        {date:t-2*J, 'bil-bicep-r':'39.0','bil-thigh-r':'62.4','bil-glutes':'102.6','bil-calf-r':'39.9'}]};
+      const b=corpsEtiquette(u,'BICEPS');
+      // ⚠ ESPACE INSECABLE AVANT L'UNITE, et ce n'est pas un detail de style :
+      //   c'est _synEcart qui l'ecrit, pour que « 0,8 » et « cm » ne se
+      //   separent jamais en fin de ligne. La premiere version de cette
+      //   assertion comparait a une espace ordinaire et echouait en affichant
+      //   deux chaines rigoureusement identiques a l'oeil. On l'epingle
+      //   explicitement plutot que de la subir.
+      const NB=String.fromCharCode(160);
+      if(b.valeur!=='+0,8'+NB+'cm') return _echec('le biceps affiche « '+b.valeur+' »');
+      if(b.valeur.indexOf(' cm')>=0)
+        return _echec('l’unité est collée par une espace sécable');
+      if(b.source!=='biceps D') return _echec('la source est « '+b.source+' »');
+      if(!/→/.test(b.periode)) return _echec('la période ne porte pas deux dates : '+b.periode);
+      for(const bout of ['Biceps droit','tolérance','± 0,5 cm','du ','au '])
+        if(b.titre.indexOf(bout)<0)
+          return _echec('l’infobulle ne porte pas « '+bout+' » : '+b.titre);
+      // ⚠ AUCUN POURCENTAGE DE DEVELOPPEMENT, NULLE PART. Le modele visuel en
+      //   portait — « Épaules 68 % » — et ces chiffres-la n'existent pas : ni
+      //   source, ni unite, ni methode. C'est un score pose sur un corps.
+      for(const m of Object.keys(MUSCLES)){
+        const e=corpsEtiquette(u,m);
+        const tout=e.valeur+' '+e.source+' '+e.periode+' '+e.titre;
+        if(/%/.test(tout)) return _echec(m+' affiche un pourcentage : '+tout);
+      }
+      // UN MUSCLE SANS MENSURATION LE DIT, et l'infobulle donne la phrase que
+      // le reste de l'application ecrit deja.
+      const dor=corpsEtiquette(u,'DORSAUX');
+      if(dor.ecart!==null) return _echec('les dorsaux reçoivent un écart');
+      if(dor.source!=='pas de mesure') return _echec('les dorsaux disent « '+dor.source+' »');
+      if(dor.valeur!=='') return _echec('les dorsaux portent une valeur : « '+dor.valeur+' »');
+      if(dor.titre.indexOf('Aucune mensuration ne suit ce muscle sur la période.')<0)
+        return _echec('l’infobulle des dorsaux ne dit pas la phrase de la maison');
+      // LES TROIS CORRECTIONS DU 20/09/2026, EPINGLEES UNE PAR UNE.
+      if(corpsEtiquette(u,'FESSIERS').source!=='fessiers')
+        return _echec('les fessiers ne lisent plus le tour de fessiers');
+      if(corpsEtiquette(u,'MOLLETS').source!=='mollet D')
+        return _echec('les mollets ne lisent pas le tour de mollet');
+      return true;})());
+
+    ok('LA TABLE MUSCLE ↔ MENSURATION NE PROMET QUE CE QUI EXISTE',(()=>{
+      // ⚠ DORSAUX → chest A SAUTE. Un tour de poitrine mesure les pectoraux ET
+      //   le dos ensemble : le meme centimetre sur deux muscles faisait lire
+      //   deux progressions la ou il n'y en a qu'une.
+      if(BLOC_MESURE_DE.DORSAUX)
+        return _echec('les dorsaux sont de nouveau reliés à « '+BLOC_MESURE_DE.DORSAUX+' »');
+      if(BLOC_MESURE_DE.FESSIERS!=='glutes')
+        return _echec('les fessiers lisent « '+BLOC_MESURE_DE.FESSIERS+' » et non le tour de fessiers');
+      if(BLOC_MESURE_DE.MOLLETS!=='calf-r')
+        return _echec('les mollets ne sont pas reliés au tour de mollet');
+      // TOUTE MESURE PROMISE DOIT EXISTER DES DEUX COTES : dans MEAS, qui dit
+      // ce que l'athlete saisit, et dans RAP_MESURES, qui porte son libelle.
+      // Sans la seconde, blocMesureBilan cherche un libelle undefined et la
+      // ligne disparait en silence.
+      const mesurees=new Set(MEAS.map(m=>m.k));
+      const nommees=new Set(RAP_MESURES.map(m=>m.cle));
+      for(const [muscle,cle] of Object.entries(BLOC_MESURE_DE)){
+        if(!MUSCLES[muscle]) return _echec(muscle+' n’est pas un muscle connu');
+        if(!mesurees.has(cle)) return _echec(muscle+' promet « '+cle+' », que personne ne mesure');
+        if(!nommees.has(cle)) return _echec(muscle+' promet « '+cle+' », qui n’a pas de libellé');
+      }
+      // ET RAP_MESURES RESTE COHERENTE AVEC MEAS : une clef de rapport qui
+      // n'est pas saisie au bilan ferait une ligne toujours vide.
+      for(const m of RAP_MESURES){
+        if(!mesurees.has(m.cle)) return _echec('RAP_MESURES porte « '+m.cle+' », absent de MEAS');
+        if(!m.lib||!m.court) return _echec('« '+m.cle+' » n’a pas ses deux libellés');
+      }
+      return true;})());
+
     ok('GROSSESSE DÉCLARÉE : LE BLOC CORPS N\'EXISTE PAS',(()=>{
       // ⚠ MEME DOCTRINE QUE LES PHOTOS DE PROGRESSION, et la meme fonction —
       //   phpDisponible, pas une copie. On ne suit pas la transformation d'un
