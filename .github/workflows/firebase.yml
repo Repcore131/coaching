@@ -39,7 +39,10 @@ jobs:
         run: |
           set -e
           rm -rf _site && mkdir -p _site
-          cp -a app blog i _site/
+          # maj/ : la page de deblocage, DEHORS de /app/ et donc hors de
+          # portee du service worker de l'app. Elle doit etre deployee,
+          # sinon elle n'existe que sur le disque.
+          cp -a app blog i maj _site/
           cp -a index.html legal.html privacy.html terms.html 404.html _site/
           cp -a logo.png og-image.png robots.txt sitemap.xml _site/
           if [ -f .nojekyll ]; then cp -a .nojekyll _site/; fi
@@ -53,6 +56,7 @@ jobs:
           test -f _site/index.html
           test -f _site/app/index.html
           test -f _site/i/index.html
+          test -f _site/maj/index.html
           test -f _site/404.html
           # AUCUN SERVICE WORKER A LA RACINE. Servi depuis /, il prend la
           # portee / : il intercepte la page de vente et survit a la

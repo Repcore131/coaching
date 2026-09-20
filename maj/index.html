@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Mise à jour RepCore</title>
+<!--
+  POURQUOI CETTE PAGE EXISTE, ET POURQUOI ELLE N'EST PAS DANS /app/.
+
+  Kévin, 20/09/2026 : deux jours bloqué sur une version, six publiées, et rien
+  à l'écran pour le dire. Le serveur rendait bien la version du jour — mesuré,
+  sur deux nœuds Firebase — et la mise à jour automatique fonctionnait en
+  reproduction fidèle. C'est donc son navigateur qui servait l'ancienne copie,
+  et aucune des sorties tentées depuis /app/ n'a suffi.
+
+  ⚠ LE SERVICE WORKER DE L'APP A POUR PORTÉE /app/. Tout ce qui vit sous ce
+    chemin peut être intercepté par lui — y compris les adresses qu'on croyait
+    neuves. Cette page est DEHORS : il ne la voit pas, il ne peut pas y
+    répondre, elle arrive toujours du réseau.
+
+  ⚠ ET ELLE NE DÉPEND DE RIEN. Pas de police, pas de script externe, pas
+    d'image : une page qui sert à réparer un chargement ne doit pas avoir
+    besoin que le chargement fonctionne.
+
+  Ce qu'elle fait, dans cet ordre : désinscrire TOUS les service workers de ce
+  domaine — getRegistrations() les rend tous, quelle que soit leur portée, y
+  compris un worker racine oublié —, vider TOUS les caches, puis repartir vers
+  l'app avec une adresse neuve.
+-->
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;
+    padding:24px;background:#080808;color:#f2f2f2;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .c{width:100%;max-width:440px;background:#121212;border:1px solid #262626;
+    border-left:3px solid #E02020;border-radius:14px;padding:22px}
+  h1{margin:0 0 6px;font-size:19px;letter-spacing:.5px}
+  p{margin:0 0 16px;font-size:14px;line-height:1.6;color:#b9b9b9}
+  ul{margin:0 0 18px;padding:0;list-style:none;font-size:14px;line-height:1.9}
+  li{color:#8d8d8d}
+  li.ok{color:#22c55e}
+  li.ko{color:#f59e0b}
+  li b{display:inline-block;width:20px;color:inherit}
+  a.b,button.b{display:block;width:100%;text-align:center;text-decoration:none;
+    border:none;border-radius:10px;padding:14px;cursor:pointer;
+    background:#E02020;color:#0a0000;font-size:14px;font-weight:800;
+    letter-spacing:1px;text-transform:uppercase;font-family:inherit}
+  .n{margin:14px 0 0;font-size:12px;line-height:1.6;color:#6f6f6f}
+</style>
+</head>
+<body>
+<div class="c">
+  <h1>Mise à jour de RepCore</h1>
+  <p id="sous">Nettoyage de la copie gardée par ce navigateur…</p>
+  <ul>
+    <li id="l1"><b>·</b> Service workers</li>
+    <li id="l2"><b>·</b> Caches du site</li>
+  </ul>
+  <a class="b" id="go" href="../app/">Ouvrir RepCore</a>
+  <p class="n">Tes données sont dans le cloud : ce nettoyage ne touche qu’à la copie
+    que ce navigateur gardait de l’application. Tu devras peut-être te reconnecter.</p>
+</div>
+<script>
+(function(){
+  var l1=document.getElementById('l1'), l2=document.getElementById('l2');
+  var sous=document.getElementById('sous'), go=document.getElementById('go');
+  function dire(el,ok,txt){
+    el.className=ok?'ok':'ko';
+    el.innerHTML='<b>'+(ok?'✓':'!')+'</b> '+txt;
+  }
+  // ⚠ L'ADRESSE DE SORTIE PORTE UN NUMERO UNIQUE. Sans lui, on repartirait sur
+  //   l'adresse exacte que le navigateur vient peut-etre de garder en cache —
+  //   et le nettoyage aurait servi a revenir au meme endroit.
+  var sortie='../app/?maj='+Date.now();
+  go.setAttribute('href',sortie);
+  var nSW=0, nCache=0, souci=false;
+  function fini(){
+    dire(l1,!souci,nSW?('Service workers retirés : '+nSW):'Aucun service worker à retirer');
+    dire(l2,!souci,nCache?('Caches vidés : '+nCache):'Aucun cache à vider');
+    sous.textContent=souci
+      ? 'Nettoyage partiel. Ouvre RepCore : si l’ancienne version revient, supprime les données du site depuis l’icône à gauche de l’adresse.'
+      : 'C’est fait. RepCore va s’ouvrir dans sa version la plus récente.';
+    // ON N'EMMENE PAS DE FORCE TOUT DE SUITE : la personne doit voir ce qui a
+    // ete fait, sinon un aller-retour instantane ressemble a un bug de plus.
+    setTimeout(function(){ location.replace(sortie); }, 1800);
+  }
+  var t=[];
+  try{
+    if('serviceWorker' in navigator){
+      t.push(navigator.serviceWorker.getRegistrations().then(function(rs){
+        return Promise.all(rs.map(function(r){ nSW++; return r.unregister(); }));
+      }).catch(function(){ souci=true; }));
+    }
+  }catch(e){ souci=true; }
+  try{
+    if('caches' in window){
+      t.push(caches.keys().then(function(ks){
+        return Promise.all(ks.map(function(k){ nCache++; return caches.delete(k); }));
+      }).catch(function(){ souci=true; }));
+    }
+  }catch(e){ souci=true; }
+  // Un filet : si une promesse ne revient jamais, on ne laisse pas la page
+  // tourner indefiniment sur « nettoyage… ».
+  var fait=false;
+  function une(){ if(fait) return; fait=true; fini(); }
+  Promise.all(t).then(une, une);
+  setTimeout(une, 6000);
+})();
+</script>
+</body>
+</html>
