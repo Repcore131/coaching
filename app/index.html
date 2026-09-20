@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1336';
+window.RC_BUILD='1337';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4264,6 +4264,56 @@ html{scroll-behavior:smooth}
   .ccd-tete{padding:13px 13px 12px}
   .ccd-tete-b{padding:9px 12px}
 }
+/* ══ LE SCHEMA CORPOREL DE LA FICHE COACH ══════════════════════════════
+   Cadre noir, lisere rouge, etiquettes en peripherie reliees au corps par un
+   trait fin : la grammaire de l'ecran de mensurations du bilan (.bsch), qui
+   fait deja exactement ce geste. Deux schemas corporels dessines differemment
+   dans la meme application, ce serait deux conventions a apprendre. */
+.cc-corps{background:#0a0a0a;border:1px solid rgba(224,32,32,.42);
+  border-radius:var(--r-3);padding:12px 12px 11px;margin-bottom:16px;
+  box-shadow:0 0 18px rgba(224,32,32,.10),inset 0 1px 0 rgba(255,255,255,.05)}
+.cc-corps-h{display:flex;align-items:center;justify-content:space-between;
+  gap:10px;flex-wrap:wrap;margin-bottom:9px}
+.cc-corps-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;
+  color:var(--sub);text-transform:uppercase}
+/* LE SELECTEUR DE VUE, EN HAUT A DROITE. Deux onglets et non trois : il
+   n'existe aucune planche de profil, et un troisieme bouton aurait promis une
+   vue que personne ne peut dessiner. */
+.cc-corps-vue{display:inline-flex;border:1px solid var(--border);
+  border-radius:var(--r-2);overflow:hidden;flex:0 0 auto}
+.cc-corps-o{appearance:none;-webkit-appearance:none;border:none;
+  background:transparent;cursor:pointer;font-family:Montserrat,sans-serif;
+  font-size:9.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--sub);padding:7px 10px;min-height:32px;
+  transition:background var(--t-1) var(--c-out),color var(--t-1) var(--c-out)}
+.cc-corps-o+.cc-corps-o{border-left:1px solid var(--border)}
+.cc-corps-o.actif{background:rgba(224,32,32,.20);color:var(--text)}
+.cc-corps-o:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
+@media(prefers-reduced-motion:reduce){.cc-corps-o{transition:none}}
+/* LA SCENE PORTE UN RAPPORT FIXE, et c'est ce qui rend les traits de rappel
+   calculables : la planche y occupe toujours 34 % de la largeur, donc un point
+   du corps se repere en centiemes de scene quelle que soit la taille d'ecran.
+   Sans cadre fixe, un trait calcule en pourcentage pointerait a cote des que
+   la fenetre change. */
+.cc-corps-scene{position:relative;width:100%;max-width:470px;margin:0 auto}
+.cc-corps-planche{position:absolute;top:0;height:100%}
+.cc-corps-planche img{width:100%;height:100%;display:block;
+  filter:drop-shadow(0 0 5px rgba(224,32,32,.20))}
+/* SANS BILAN, LA SILHOUETTE EST ETEINTE — pas absente. Le cadre montre de qui
+   on parle et dit qu'il n'a rien a en dire ; un cadre vide dirait la meme
+   chose en donnant l'impression d'un bug. */
+.cc-corps-scene[data-eteint] .cc-corps-planche img{opacity:.38;filter:none}
+.cc-corps-tete{position:absolute;aspect-ratio:1;border-radius:var(--r-full);
+  overflow:hidden;display:flex;align-items:center;justify-content:center}
+/* ⚠ UN LISERE, PARCE QUE LA PLANCHE EST BLANCHE. Une photo posee a nu sur le
+   dessin se confondait avec lui : on ne voyait plus ou finissait la tete de
+   l'athlete et ou commencait celle du modele. */
+.cc-corps-tete img{width:100%;height:100%;object-fit:cover;display:block}
+.cc-corps-tete{border:1.5px solid rgba(224,32,32,.55);
+  box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.cc-corps-n{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;
+  margin-top:8px;text-align:center}
+
 /* ══ LES QUATRE TUILES DE LA FICHE ATHLETE ════════════════════
    Une grille de quatre colonnes egales, collee, sticky comme la barre de puces
    qu'elle remplace. Trois signaux marquent l'onglet ouvert plutot qu'un seul :
@@ -9668,6 +9718,12 @@ const COACH_PHOTO='icons/coach.jpg';
            meme fait dans le meme ecran, c'est une de trop. -->
       <button class="btn btn-red" style="width:100%;margin:0 0 14px;min-height:52px;font-size:var(--fs-md);letter-spacing:1.5px"
         onclick="openCoachSessions()">Modifier le programme</button>
+      <!-- ══ LE CORPS ════════════════════════════════════════════════════
+           La silhouette de l'athlete, ce qui a bouge depuis son dernier bilan,
+           et la charge de travail par muscle. Rempli par renderCorpsCoach ;
+           vide — donc masque par .ccd-vue>div:empty — quand il n'y a rien a
+           montrer, ou quand une grossesse est declaree. -->
+      <div id="ccd-corps"></div>
       <!-- Modèle appliqué : renseigné par openClientDetail -->
       <div id="ccd-assigned-prog" style="display:none;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 var(--r-2) var(--r-2) 0;line-height:1.5"></div>
       <!-- LES TECHNIQUES D'INTENSIFICATION : une phrase quand la semaine est
@@ -33401,6 +33457,11 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderJournalCoach(c); }catch(e){}
   try{ renderVolumeCoach(c); }catch(e){}
   try{ renderPlateauxCoach(c); }catch(e){}
+  // LE CORPS EST RENDU ICI, ET NULLE PART AILLEURS. C'est ce qui le fait
+  // repeindre a chaque descente de dossier : actualiserClient rappelle
+  // openClientDetail des que quelque chose a change, et le bloc suit sans un
+  // clic de plus.
+  try{ renderCorpsCoach(c); }catch(e){}
   try{ renderMethodesCoach(c); }catch(e){}
   try{ renderAsymetrieCoach(c); }catch(e){}
   try{ renderMotCoachFiche(c); }catch(e){}
@@ -51210,6 +51271,271 @@ function _ligneEtat(x,info){
 // LA LIGNE DES METHODES. UNE PHRASE, PAS UNE ALERTE ROUGE : le coach sait ce
 // qu'il fait, il a juste besoin de le voir. Aucune couleur d'alarme, aucun
 // pictogramme — le gris du texte secondaire, comme les ecarts au programme.
+// ══ LE SCHEMA CORPOREL DE LA FICHE COACH ═══════════════════════════════════
+//
+// Kevin, nuit du 20/09/2026 : « au reveil, je dois pouvoir ouvrir une fiche et
+// voir le corps de mon athlete, avec ce qui a bouge depuis le dernier bilan,
+// et rien que je ne puisse prouver ».
+//
+// ⚠ RIEN N'EST DESSINE ICI. Les vingt-huit planches d'avatar existent depuis
+//   toujours — sept niveaux, deux genres, face et dos — et WO_ZONES porte le
+//   contour de treize muscles par vue, releve ligne par ligne sur chaque
+//   planche. Redessiner une silhouette aurait donne deux corps differents pour
+//   le meme athlete selon l'ecran qui le montre.
+//
+// ⚠ LE NIVEAU EST FIXE, ET C'EST LE MILIEU. woNiveauAvatar fait grossir le
+//   bonhomme au fil de la seance : elle compte des ECRANS, pas des kilos de
+//   muscle. La brancher ici aurait fait maigrir l'athlete du coach entre deux
+//   seances — un jugement porte sur un corps, tire d'un nombre qui ne le
+//   mesure pas. La silhouette est un SUPPORT : elle dit ou, jamais combien.
+const CORPS_NIVEAU=4;
+// ⚠ LES QUATRE PLANCHES DU NIVEAU 4, MESUREES SUR LES FICHIERS et non
+//   estimees a l'oeil (lecture de l'alpha, nuit du 20/09/2026). Elles servent
+//   a deux choses, et a deux choses seulement :
+//     · le RAPPORT LARGEUR/HAUTEUR, qui fixe le cadre de la scene. Sans lui,
+//       le calque des zones — masque en 100 % x 100 % par woHtmlZones — se
+//       decalerait du dessin qu'il colore ;
+//     · la POSITION DE LA TETE, pour y poser la photo de l'athlete.
+//   `tete` : cx en centiemes de LARGEUR, cy en centiemes de HAUTEUR, r en
+//   centiemes de LARGEUR. Le crane occupe y 0 → 10 sur la planche masculine,
+//   y 0 → 14 sur la feminine, qui porte des cheveux.
+//
+//   ⚠ ET IL N'Y A PAS DE TETE DE DOS. Une photo de visage posee sur l'arriere
+//     d'un crane ne montre pas l'athlete : elle montre qu'on n'a pas regarde.
+const CORPS_PLANCHE=Object.freeze({
+  'h-face':{w:110,h:340,tete:{cx:50,cy:5.5,r:17}},
+  'h-dos' :{w:109,h:340,tete:null},
+  'f-face':{w:115,h:340,tete:{cx:50,cy:6.8,r:17}},
+  'f-dos' :{w:104,h:340,tete:null}
+});
+// La planche occupe 34 % de la largeur de la scene, les deux colonnes
+// d'etiquettes se partageant le reste. Une seule constante : les traits de
+// rappel et la planche doivent lire la meme.
+const CORPS_PART_CORPS=34;
+// LES BORNES DE LA COLONNE D'ETIQUETTES, en centiemes de scene.
+//
+// ⚠ LE PAS DE 11,5 EST UNE MESURE, PAS UN GOUT. Une etiquette porte trois
+//   lignes — le muscle, l'ecart, les deux dates — et fait 34 px de haut ; a
+//   375 px de large, la scene en fait 309. 34/309 = 11 %, et on prend un demi
+//   point de marge. Sept etiquettes tiennent donc de 1 a 70, dans un cadre qui
+//   va jusqu'a 93 : il reste de la place, et c'est voulu — une colonne pleine
+//   au centieme pres deborderait au premier libelle plus long.
+const CORPS_ETIQ_GAP=11.5, CORPS_ETIQ_HAUT=1, CORPS_ETIQ_BAS=93;
+/**
+ * PURE. Le centre d'une zone musculaire sur la planche, en centiemes.
+ *
+ * ⚠ IL EST CALCULE DEPUIS WO_ZONES, JAMAIS SAISI A LA MAIN. Une table de
+ *   points ecrite a cote aurait diverge du contour a la premiere retouche des
+ *   planches, et le trait de rappel aurait designe le vide juste a cote du
+ *   muscle — en ayant l'air juste.
+ *
+ * `cote` choisit le polygone : 'g' le plus a gauche, 'd' le plus a droite.
+ * Les muscles impairs — lombaires, trapezes vus de dos, abdominaux — n'en ont
+ * qu'un, et les deux cotes rendent alors le meme point.
+ * @returns {{x:number,y:number}|null}
+ */
+function corpsAncre(genre,vue,muscle,cote){
+  const polys=((((WO_ZONES||{})[genre]||{})[vue]||{})[CORPS_NIVEAU]||{})[muscle];
+  if(!polys||!polys.length) return null;
+  const centres=[];
+  for(const p of polys){
+    let x=0,y=0,n=0;
+    for(const t of String(p).trim().split(/\s+/)){
+      const c=t.split(',');
+      const a=Number(c[0]), b=Number(c[1]);
+      if(!isFinite(a)||!isFinite(b)) continue;
+      x+=a; y+=b; n++;
+    }
+    if(n) centres.push({x:x/n,y:y/n});
+  }
+  if(!centres.length) return null;
+  centres.sort((a,b)=>a.x-b.x);
+  return cote==='d'?centres[centres.length-1]:centres[0];
+}
+// LES ETIQUETTES, ET DE QUEL COTE ELLES SE POSENT. Treize muscles par vue —
+// c'est exactement ce que WO_ZONES sait dessiner, ni plus ni moins. Sept a
+// gauche, six a droite : la colonne de gauche prend le muscle du cote gauche,
+// celle de droite le cote droit, et le trait ne traverse donc jamais le corps
+// sauf pour les deux muscles centraux — trapeze et lombaires, vus de dos.
+const CORPS_ETIQUETTES=Object.freeze({
+  face:Object.freeze([
+    {m:'TRAP_SUP',  s:'l'}, {m:'DELT_ANT',  s:'r'},
+    {m:'DELT_LAT',  s:'l'}, {m:'TRICEPS',   s:'r'},
+    {m:'PECTORAUX', s:'l'}, {m:'ABDOS',     s:'r'},
+    {m:'BICEPS',    s:'l'}, {m:'AVANT_BRAS',s:'r'},
+    {m:'DORSAUX',   s:'l'}, {m:'ABDUCTEURS',s:'r'},
+    {m:'QUADRICEPS',s:'l'}, {m:'ADDUCTEURS',s:'r'},
+    {m:'MOLLETS',   s:'l'}
+  ]),
+  dos:Object.freeze([
+    {m:'DELT_LAT',  s:'l'}, {m:'DELT_POST', s:'r'},
+    {m:'DORSAUX',   s:'l'}, {m:'TRAP_SUP',  s:'r'},
+    {m:'TRICEPS',   s:'l'}, {m:'BICEPS',    s:'r'},
+    {m:'FESSIERS',  s:'l'}, {m:'LOMBAIRES', s:'r'},
+    {m:'ABDUCTEURS',s:'l'}, {m:'AVANT_BRAS',s:'r'},
+    {m:'ISCHIOS',   s:'l'}, {m:'ADDUCTEURS',s:'r'},
+    {m:'MOLLETS',   s:'l'}
+  ])
+});
+/**
+ * PURE. Etale des positions verticales pour qu'aucune ne chevauche sa voisine.
+ *
+ * Les points d'ancrage viennent de l'anatomie : le deltoide lateral et le
+ * deltoide anterieur sont a moins d'un centieme l'un de l'autre, et leurs deux
+ * etiquettes se superposaient exactement. On les ecarte APRES coup, sans
+ * toucher au trait de rappel — qui, lui, continue de pointer le vrai muscle.
+ * C'est tout l'interet des traits : l'etiquette peut bouger, la designation
+ * non.
+ *
+ * ⚠ LES ENTREES SONT SUPPOSEES TRIEES. Trier ici aurait rendu l'ordre des
+ *   etiquettes dependant de leur position, donc instable d'une vue a l'autre.
+ * ⚠ QUAND LA PLACE MANQUE — plus d'etiquettes que (max-min)/gap — elles
+ *   debordent par le bas plutot que de se superposer. Un depassement se voit
+ *   et se corrige ; un chevauchement se lit comme un chiffre faux.
+ * @param {number[]} ys
+ * @param {number} gap  ecart minimal
+ * @param {number} min  bord haut
+ * @param {number} max  bord bas
+ * @returns {number[]}
+ */
+function corpsEtaler(ys,gap,min,max){
+  const n=(ys||[]).length;
+  if(!n) return [];
+  const g=Number(gap)||0, a=Number(min)||0, b=Number(max)||0;
+  const out=ys.map(v=>Number(v)||0);
+  // Descente : on pousse vers le bas ce qui se touche.
+  for(let i=1;i<n;i++) if(out[i]<out[i-1]+g) out[i]=out[i-1]+g;
+  // Remontee : ce qui est sorti par le bas revient, et repousse vers le haut.
+  if(out[n-1]>b){
+    out[n-1]=b;
+    for(let i=n-2;i>=0;i--) if(out[i]>out[i+1]-g) out[i]=out[i+1]-g;
+  }
+  // Et une derniere descente si la remontee a debordé par le haut.
+  if(out[0]<a){
+    out[0]=a;
+    for(let i=1;i<n;i++) if(out[i]<out[i-1]+g) out[i]=out[i-1]+g;
+  }
+  return out;
+}
+// LA VUE EST UNE LENTILLE, PAS UNE DONNEE. Elle ne vit pas dans le dossier de
+// l'athlete : c'est le coach qui regarde de face ou de dos, et son choix n'a
+// rien a faire dans un document qui decrit quelqu'un d'autre.
+let _corpsVue='face';
+function corpsVue(v){
+  _corpsVue=(v==='dos')?'dos':'face';
+  try{
+    const c=getOwnedClient(currentClientId);
+    if(c) renderCorpsCoach(c);
+  }catch(e){}
+  return _corpsVue;
+}
+/**
+ * LA TETE. La photo de profil de l'athlete, posee sur la tete de la planche.
+ *
+ * ⚠ ET RIEN QUAND IL N'Y A PAS DE PHOTO — c'est un changement de plan, decide
+ *   au banc la nuit du 20/09/2026 apres avoir regarde le rendu. Le plan etait
+ *   de dessiner « un visage neutre au trait, dans le gris des planches » ;
+ *   mesure faite, LES PLANCHES EN PORTENT DEJA UN. Deux yeux et une bouche
+ *   ajoutes par-dessus faisaient un second visage, flottant sur le cou du
+ *   premier. La planche non recouverte EST le visage neutre.
+ *
+ * ⚠ JAMAIS photosProgression. Ces photos-la vivent en IndexedDB sur l'appareil
+ *   de l'athlete, sous un consentement dedie, et ne remontent au coach que sur
+ *   partage explicite. Les afficher ici serait une fuite de donnee de sante.
+ *   La seule photo autorisee est `athletePhoto` — celle du profil, que
+ *   l'athlete a posee pour etre vue, et que la liste d'athletes montre deja.
+ *
+ * ⚠ ELLE SE POSE DANS LE REPERE DE LA PLANCHE, pas dans celui de la scene.
+ *   Les centiemes de `tete` ont ete releves SUR LA PLANCHE ; poser le disque
+ *   en enfant de la scene les faisait lire sur une largeur trois fois
+ *   superieure, et la premiere mesure au banc l'a montre — un disque de cent
+ *   pixels a plat sur les epaules.
+ */
+function _htmlCorpsTete(u,genre,vue){
+  const pl=CORPS_PLANCHE[genre+'-'+vue];
+  const t=pl&&pl.tete;
+  if(!t) return '';
+  const photo=(u&&u.athletePhoto)||'';
+  if(!photo) return '';
+  // Le rayon est dit en centiemes de LARGEUR : pour le poser en haut, il faut
+  // le traduire en centiemes de HAUTEUR, sans quoi le disque descendrait sur
+  // une planche trois fois plus haute que large.
+  const rh=t.r*(pl.w/pl.h);
+  return '<div class="cc-corps-tete" style="left:'+_arr1(t.cx-t.r)
+    +'%;top:'+_arr1(t.cy-rh)+'%;width:'+_arr1(2*t.r)+'%">'
+    +'<img src="'+escapeHtml(photo)+'" alt="" aria-hidden="true"></div>';
+}
+// « 12,3 » sans trainee de virgule flottante : les pourcentages de position
+// partent dans un attribut style, et 5.500000000000001 % y serait illisible.
+function _arr1(v){ return Math.round((Number(v)||0)*10)/10; }
+// LA PLANCHE ET SON CALQUE. Le calque de zones est celui de la seance —
+// woHtmlZones — et pas un second : deux fonctions qui peignent le meme contour
+// finiraient par en peindre deux.
+function _htmlCorpsPlanche(u,genre,vue){
+  const src=woSrcAvatar(CORPS_NIVEAU,genre,vue);
+  return '<div class="cc-corps-planche" style="left:'+((100-CORPS_PART_CORPS)/2)
+    +'%;width:'+CORPS_PART_CORPS+'%">'
+    +'<img src="'+src+'" alt="" aria-hidden="true">'
+    +_htmlCorpsTete(u,genre,vue)
+    +'</div>';
+}
+/**
+ * Le cadre du corps. Rend '' quand il n'a rien le droit de montrer.
+ *
+ * ⚠ GROSSESSE OU ALLAITEMENT DECLARES : LE BLOC N'EXISTE PAS. Meme regle que
+ *   les photos de progression, et pour la meme raison — on ne suit pas la
+ *   transformation d'un corps qui change pour un motif qui ne nous regarde
+ *   pas. C'est phpDisponible qui tranche, la meme fonction, pas une copie.
+ */
+function _htmlCorpsCadre(c){
+  const u=_dossier(c);
+  if(!u) return '';
+  try{ if(!phpDisponible(u)) return ''; }catch(e){}
+  const genre=woGenreAvatar(u);
+  const vue=(_corpsVue==='dos')?'dos':'face';
+  const pl=CORPS_PLANCHE[genre+'-'+vue]||CORPS_PLANCHE['h-face'];
+  let bilans=[]; try{ bilans=bilansOrdonnes(u)||[]; }catch(e){ bilans=[]; }
+  const onglet=(k,lib)=>'<button type="button" class="cc-corps-o'+(vue===k?' actif':'')
+    +'" aria-pressed="'+(vue===k?'true':'false')
+    +'" onclick="corpsVue(\''+k+'\')">'+escapeHtml(lib)+'</button>';
+  const tete='<div class="cc-corps-h">'
+    +'<span class="cc-corps-t">Corps</span>'
+    +'<span class="cc-corps-vue" role="group" aria-label="Vue du corps">'
+    +onglet('face','Vue avant')+onglet('dos','Vue arrière')+'</span></div>';
+  // LA SCENE PORTE LE RAPPORT DE LA PLANCHE, elargi de 1/0,34 : la planche
+  // occupe 34 % de sa largeur, et tout — traits, etiquettes, disque de tete —
+  // se repere ensuite en centiemes de cette scene. Sans cadre fixe, un trait
+  // de rappel calcule en pourcentage pointerait ailleurs a chaque largeur
+  // d'ecran.
+  const scene='<div class="cc-corps-scene"'+(bilans.length?'':' data-eteint=""')
+    +' style="aspect-ratio:'+_arr1(pl.w*100/CORPS_PART_CORPS)+'/'+pl.h+'">'
+    +_htmlCorpsPlanche(u,genre,vue)
+    +'</div>';
+  // AUCUN BILAN : la silhouette reste eteinte, sans une zone teintee ni une
+  // etiquette, et le cadre le DIT. Un corps colorie sans mesure serait un
+  // chiffre invente avec une couleur autour.
+  if(!bilans.length)
+    return '<div class="cc-corps">'+tete+scene
+      +emptyState('calendar','<strong style="font-size:var(--fs-sm)">Pas encore de bilan</strong>'
+        +'<br><span style="font-size:var(--fs-xs);display:inline-block;margin-top:5px">'
+        +'La silhouette s’allumera dès qu’il aura envoyé son premier bilan.</span>','','',
+        'padding:6px 0 0')
+      +'</div>';
+  // UN SEUL BILAN : le corps sort, les ecarts non. Un ecart demande deux
+  // releves, et un seul ne se compare qu'a lui-meme.
+  const note=(bilans.length<2)
+    ?'<div class="cc-corps-n">Un seul bilan — les écarts apparaîtront au suivant.</div>'
+    :'';
+  return '<div class="cc-corps">'+tete+scene+note+'</div>';
+}
+function renderCorpsCoach(c){
+  const z=document.getElementById('ccd-corps');
+  if(!z) return false;
+  let h='';
+  try{ h=_htmlCorpsCadre(c)||''; }catch(e){ h=''; }
+  z.innerHTML=h;
+  return true;
+}
 // LA LIGNE D'ASYMETRIE. La phrase, puis le geste. Pas de couleur d'alarme :
 // c'est un signal de priorite BASSE, et il doit se lire comme tel.
 function renderAsymetrieCoach(c){

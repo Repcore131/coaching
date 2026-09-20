@@ -23,6 +23,11 @@ audit/
 docs/audit/
 # La cartographie de Motion Lab (Phase 0) : meme nature, meme raison.
 docs/motion-lab/
+# Le journal de la nuit du 20/09/2026 : il dit ce qui a ete tente, rate et
+# corrige, avec des mesures et des chemins de fichiers. C'est un carnet de
+# travail, pas une page du site — et `pages.yml` publie le depot ENTIER
+# (`path: .`), donc tout ce qui y entre devient lisible par n'importe qui.
+docs/journal-nuit-schema-corps.md
 
 # Copies de travail de l application. Publiee, une copie ancienne servirait une
 # version perimee de l app a qui en connait l adresse.

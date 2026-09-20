@@ -37640,6 +37640,123 @@ async function testExercices(){
       return joursDepuisRattachement(l[0],t)===12
         ?true:_echec('Alice attend depuis '+joursDepuisRattachement(l[0],t)+' jours');})());
 
+    // ══════ LE SCHEMA CORPOREL DE LA FICHE COACH ══════════════════════════
+    // Tout ce qui est PUR ici est epingle : l'ancrage des traits, l'etalement
+    // des etiquettes, la coherence des tables, et le masquage du bloc. Le
+    // rendu, lui, se juge au banc — une capture dit en une seconde ce qu'une
+    // assertion de DOM dirait en trente lignes.
+    ok('CHAQUE ÉTIQUETTE DU CORPS A UN POINT D\'ANCRAGE RÉEL',(()=>{
+      // ⚠ LE TRAIT DE RAPPEL EST UNE DESIGNATION. S'il pointe a cote, il
+      //   designe le mauvais muscle — et une etiquette qui designe le mauvais
+      //   muscle est pire qu'une etiquette absente : elle a l'air juste.
+      for(const vue of ['face','dos']){
+        const liste=CORPS_ETIQUETTES[vue]||[];
+        if(liste.length!==13)
+          return _echec(vue+' : '+liste.length+' étiquettes au lieu des 13 muscles de WO_ZONES');
+        const vus=new Set();
+        for(const e of liste){
+          if(vus.has(e.m)) return _echec(vue+' : '+e.m+' est étiqueté deux fois');
+          vus.add(e.m);
+          if(e.s!=='l'&&e.s!=='r') return _echec(vue+' : côté « '+e.s+' » pour '+e.m);
+          for(const g of ['h','f']){
+            const a=corpsAncre(g,vue,e.m,e.s==='l'?'g':'d');
+            if(!a) return _echec(g+'/'+vue+' : aucun contour pour '+e.m);
+            if(!(a.x>=0&&a.x<=100&&a.y>=0&&a.y<=100))
+              return _echec(g+'/'+vue+'/'+e.m+' : ancre hors planche ('+a.x+','+a.y+')');
+          }
+        }
+        // ET RIEN N'EST OUBLIE : les treize muscles que WO_ZONES sait dessiner
+        // sont les treize etiquetes. Un muscle dessine mais jamais nomme serait
+        // une zone qu'on colorie sans dire laquelle.
+        const dessines=Object.keys(((WO_ZONES.h||{})[vue]||{})[CORPS_NIVEAU]||{});
+        for(const m of dessines)
+          if(!vus.has(m)) return _echec(vue+' : '+m+' est dessiné mais pas étiqueté');
+      }
+      // LE COTE EST LE BON COTE. Sur un muscle pair, 'g' doit tomber a gauche
+      // de 'd' — sans quoi le trait traverserait le corps pour rejoindre le
+      // bras oppose.
+      const g=corpsAncre('h','face','BICEPS','g'), dr=corpsAncre('h','face','BICEPS','d');
+      if(!(g.x<dr.x)) return _echec('le biceps gauche n’est pas à gauche du droit');
+      // UN MUSCLE IMPAIR REND LE MEME POINT DES DEUX COTES : les lombaires
+      // n'ont qu'un contour, et demander « le droit » ne doit pas rendre null.
+      const l1=corpsAncre('h','dos','LOMBAIRES','g'), l2=corpsAncre('h','dos','LOMBAIRES','d');
+      if(!l1||!l2||l1.x!==l2.x) return _echec('les lombaires ont deux points alors qu’ils n’ont qu’un contour');
+      // ET UN MUSCLE QUE LA VUE NE MONTRE PAS N'A PAS D'ANCRE INVENTEE.
+      if(corpsAncre('h','face','FESSIERS','g')!==null)
+        return _echec('les fessiers reçoivent une ancre en vue de face');
+      return true;})());
+
+    ok('LES ÉTIQUETTES DU CORPS NE SE CHEVAUCHENT JAMAIS',(()=>{
+      // Le deltoide lateral et le deltoide anterieur sont a moins d'un centieme
+      // l'un de l'autre sur la planche : leurs deux etiquettes se superposaient
+      // exactement. On les ecarte, et le trait continue de pointer le vrai
+      // muscle — c'est tout l'interet des traits.
+      const serre=corpsEtaler([20,20.4,21,60],9,2,96);
+      for(let i=1;i<serre.length;i++)
+        if(serre[i]-serre[i-1]<9-1e-9)
+          return _echec('deux étiquettes à '+(serre[i]-serre[i-1]).toFixed(2)+' d’écart');
+      if(serre[0]!==20) return _echec('la première a bougé sans raison : '+serre[0]);
+      // DEJA ESPACEES : ON NE TOUCHE A RIEN. Un etalement qui deplace ce qui
+      // allait deja ferait mentir tous les traits d'un coup.
+      const large=corpsEtaler([10,30,50,70],9,2,96);
+      if(large.join(',')!=='10,30,50,70') return _echec('des positions correctes ont été déplacées : '+large.join(','));
+      // LE BORD BAS RETIENT, ET LA REMONTEE NE SORT PAS PAR LE HAUT.
+      const bas=corpsEtaler([80,82,84,86,88],9,2,96);
+      if(bas[bas.length-1]>96+1e-9) return _echec('la dernière déborde en bas : '+bas[bas.length-1]);
+      if(bas[0]<2-1e-9) return _echec('la première déborde en haut : '+bas[0]);
+      for(let i=1;i<bas.length;i++)
+        if(bas[i]-bas[i-1]<9-1e-9) return _echec('la remontée a recollé deux étiquettes');
+      // LES TREIZE DE LA VUE REELLE TIENNENT DANS LE CADRE. C'est le cas qui
+      // compte : sept a gauche, six a droite, aux vraies hauteurs.
+      for(const vue of ['face','dos']){
+        for(const cote of ['l','r']){
+          const ys=CORPS_ETIQUETTES[vue].filter(e=>e.s===cote)
+            .map(e=>corpsAncre('h',vue,e.m,cote==='l'?'g':'d').y)
+            .sort((a,b)=>a-b);
+          const et=corpsEtaler(ys,CORPS_ETIQ_GAP,CORPS_ETIQ_HAUT,CORPS_ETIQ_BAS);
+          if(et[et.length-1]>CORPS_ETIQ_BAS+1e-9)
+            return _echec(vue+'/'+cote+' : la dernière sort du cadre à '+et[et.length-1].toFixed(1));
+          for(let i=1;i<et.length;i++)
+            if(et[i]-et[i-1]<CORPS_ETIQ_GAP-1e-9)
+              return _echec(vue+'/'+cote+' : chevauchement à l’index '+i);
+        }
+      }
+      // AUCUNE ENTREE : AUCUNE SORTIE. Pas une exception.
+      return corpsEtaler([],9,2,96).length===0?true:_echec('une liste vide rend quelque chose');})());
+
+    ok('LES QUATRE PLANCHES SONT DÉCRITES, ET LE DOS N\'A PAS DE VISAGE',(()=>{
+      for(const g of ['h','f']) for(const v of ['face','dos']){
+        const p=CORPS_PLANCHE[g+'-'+v];
+        if(!p) return _echec('planche '+g+'-'+v+' absente de la table');
+        if(!(p.w>0&&p.h>0)) return _echec('planche '+g+'-'+v+' sans dimensions');
+        // ⚠ PAS DE TETE DE DOS. Une photo de visage posee sur l'arriere d'un
+        //   crane ne montre pas l'athlete : elle montre qu'on n'a pas regarde.
+        if(v==='dos'&&p.tete) return _echec('la planche de dos porte un emplacement de visage');
+        if(v==='face'&&!p.tete) return _echec('la planche de face n’a pas d’emplacement de visage');
+        if(v==='face'){
+          const t=p.tete;
+          if(!(t.cx-t.r>=0&&t.cx+t.r<=100)) return _echec(g+' : le disque déborde de la planche');
+          if(!(t.cy-t.r*(p.w/p.h)>=-0.05)) return _echec(g+' : le disque dépasse au-dessus du crâne');
+        }
+      }
+      return true;})());
+
+    ok('GROSSESSE DÉCLARÉE : LE BLOC CORPS N\'EXISTE PAS',(()=>{
+      // ⚠ MEME DOCTRINE QUE LES PHOTOS DE PROGRESSION, et la meme fonction —
+      //   phpDisponible, pas une copie. On ne suit pas la transformation d'un
+      //   corps qui change pour un motif qui ne nous regarde pas.
+      const base=()=>({id:'G1',email:'g1@t.fr',role:'athlete',fname:'A',gender:'F',
+        bilans:[{date:Date.now()-9*864e5,'bil-weight':'62','bil-thigh-r':'55'},
+                {date:Date.now()-2*864e5,'bil-weight':'61','bil-thigh-r':'55.9'}]});
+      if(_htmlCorpsCadre(base())==='')
+        return _echec('le bloc est vide alors que rien ne l’interdit');
+      for(const etat of ['enceinte','allaitement']){
+        const u=base(); u.grossesse={etat};
+        if(_htmlCorpsCadre(u)!=='')
+          return _echec('le bloc s’affiche malgré « '+etat+' »');
+      }
+      return true;})());
+
     ok('LE NUMÉRO D\'ATHLÈTE SUIT L\'ORDRE D\'ARRIVÉE',(()=>{
       // Kevin, 20/09/2026 : « mets "athlète n°__ : Kévin Guellec" selon son
       // arrivée ». Le numéro s'affiche en tête de sa fiche.
