@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1327';
+window.RC_BUILD='1328';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1736,9 +1736,40 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    etats d'une meme echelle — chaud, tiede, froid — doivent se comparer d'un
    coup d'oeil, donc tenir sur UNE rangee a toutes les largeurs. */
 .tun-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:14px}
-.tun-stat{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--c,var(--border));
+/* ⚠ LA COULEUR DE LA TUILE EST CELLE DE SON STATUT, DILUEE. Demande de Kevin,
+   20/09/2026 : « mets des couleurs en jouant sur l'opacite ». `color-mix` melange
+   `--c` au transparent : une seule teinte est nommee — celle du statut — et le
+   fond, le contour et l'etat actif en decoulent. Ecrire six rgba a la main
+   aurait fige les trois couleurs a six endroits de plus.
+
+   ⚠ LE FOND UNI EST POSE D'ABORD, EN REPLI. `color-mix` demande un navigateur
+     recent ; sur un plus ancien la declaration entiere est ignoree, et sans
+     cette premiere ligne la tuile serait sortie TRANSPARENTE sur le carbone —
+     un chiffre flottant sans boite. */
+.tun-stat{background:var(--surface-1);
+  background:linear-gradient(168deg,color-mix(in srgb,var(--c) 17%,transparent),
+                                    color-mix(in srgb,var(--c) 5%,transparent)),var(--surface-1);
+  border:1px solid var(--border);border-color:color-mix(in srgb,var(--c) 26%,var(--border));
+  border-left:3px solid var(--c,var(--border));
   border-radius:var(--r-3);padding:12px 8px 10px;text-align:center;
-  display:flex;flex-direction:column;align-items:center;gap:6px}
+  display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;
+  font-family:Montserrat,sans-serif;cursor:pointer;
+  transition:background var(--t-1) var(--c-out),border-color var(--t-1) var(--c-out)}
+.tun-stat:hover{border-color:color-mix(in srgb,var(--c) 52%,var(--border))}
+/* ACTIVE : la meme teinte, plus dense, et un contour franc. On ne change pas de
+   couleur pour dire « selectionne » — on en met davantage. */
+.tun-stat.actif{background:var(--surface-2);
+  background:linear-gradient(168deg,color-mix(in srgb,var(--c) 38%,transparent),
+                                    color-mix(in srgb,var(--c) 14%,transparent)),var(--surface-1);
+  border-color:var(--c)}
+.tun-stat:focus-visible{outline:2px solid var(--c);outline-offset:2px}
+/* La porte vers les dossiers termines : discrete, et absente quand il n'y en a
+   aucun. */
+.tun-fini{margin:-6px 0 14px}
+.tun-fini-b{background:none;border:none;color:var(--text-faint);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
+  letter-spacing:1px;text-transform:uppercase;cursor:pointer;padding:6px 0;min-height:32px}
+.tun-fini-b:hover,.tun-fini-b.actif{color:var(--red-text)}
 /* La silhouette prend la couleur de sa tuile par `currentColor` : un seul
    endroit fixe la teinte, et c'est `--c`. */
 .tun-sil{color:var(--c,var(--text));display:flex;opacity:.92}
@@ -31572,6 +31603,16 @@ function tunnelOuvrir(){
 }
 /** @param {string} f */
 function tunnelSetFiltre(f){ _tunFiltre=TUNNEL_FILTRES.some(x=>x[0]===f)?f:'tous'; tunnelRendre(); return true; }
+/**
+ * Le filtre des tuiles : il BASCULE. Toucher celle qui est deja active la
+ * relache et rend la liste entiere.
+ *
+ * ⚠ C'EST CE QUI REMPLACE LE BOUTON « TOUS », retire avec sa barre le
+ *   20/09/2026. Sans bascule, trois tuiles seules auraient enferme le coach
+ *   dans un statut sans aucun moyen d'en sortir.
+ * @param {string} f
+ */
+function tunnelBasculer(f){ return tunnelSetFiltre(_tunFiltre===f?'tous':f); }
 /** @param {string} t */
 function tunnelSetTri(t){ _tunTri=TUNNEL_TRIS.some(x=>x[0]===t)?t:'prochaine'; tunnelRendre(); return true; }
 /**
@@ -31635,28 +31676,37 @@ function tunnelRendre(){
   const tout=tunnelListe();
   const r=tunnelResume(tout);
   const vue=tunnelVue(tout,_tunFiltre,_tunTri);
-  const stat=(n,lib,c)=>'<div class="tun-stat" style="--c:'+c+'">'
+  // ⚠ LA TUILE EST LE FILTRE. Demande de Kevin, 20/09/2026 : « seuls les carres
+  //   sont cliquables ». Elle BASCULE — retoucher celle qui est active relache
+  //   le filtre et rend la liste entiere. Sans ce relachement, trois tuiles
+  //   sans bouton « Tous » auraient enferme le coach dans un statut.
+  const stat=(cle,n,lib,c)=>'<button type="button" class="tun-stat'
+    +(_tunFiltre===cle?' actif':'')+'" style="--c:'+c+'"'
+    +' aria-pressed="'+(_tunFiltre===cle)+'" onclick="tunnelBasculer(\''+cle+'\')">'
     +'<div class="tun-sil">'+_htmlSilhouette(34)+'</div>'
-    +'<b>'+n+'</b><span>'+lib+'</span></div>';
-  const cpt={tous:r.total,retard:r.retard,aujourdhui:r.aujourdhui,
-    chaud:r.chauds,tiede:r.tiedes,froid:r.froids,fini:r.termines};
-  // ⚠ TROIS TUILES, ET NON SIX. Demande de Kevin, 20/09/2026. Les trois qui
-  //   partent — « Dans le tunnel », « En retard », « Aujourd'hui » — ne sont
-  //   PAS perdues : leurs comptes vivent deja sur les boutons de filtre juste
-  //   en dessous, « TOUS 16 », « EN RETARD 0 », « AUJOURD'HUI 0 ». Elles
-  //   disaient donc deux fois la meme chose, a dix pixels d'ecart, et les six
-  //   ensemble noyaient les trois qui comptent : ou en sont les gens.
+    +'<b>'+n+'</b><span>'+lib+'</span></button>';
+  // ⚠ LES DEUX BARRES SONT RETIREES, demande de Kevin — sauf UNE porte, et elle
+  //   ne s'ouvre que s'il y a quelque chose derriere. « Tous » excluait deja les
+  //   dossiers TERMINES : `tunnelVue` le dit en toutes lettres, un dossier clos
+  //   n'est plus a relancer. Son filtre etait donc le SEUL chemin vers eux, et
+  //   le build 1314 promet noir sur blanc qu'ils « se relisent dans le filtre
+  //   Tunnel terminé ». Le supprimer sans rien aurait rendu ces dossiers — leurs
+  //   quatre relances, leurs canaux, leurs notes — definitivement invisibles.
+  //   La ligne n'apparait donc QUE s'il en existe : a zero, l'ecran est celui
+  //   que Kevin a demande, sans rien de plus.
+  const fini=(r.termines>0)
+    ? '<div class="tun-fini"><button type="button" class="tun-fini-b'
+      +(_tunFiltre==='fini'?' actif':'')+'" onclick="tunnelBasculer(\'fini\')">'
+      +(_tunFiltre==='fini'
+        ? '← Revenir au tunnel'
+        : (r.termines+' dossier'+(r.termines>1?'s':'')+' terminé'+(r.termines>1?'s':'')+' · voir'))
+      +'</button></div>'
+    : '';
   let h='<div class="tun-stats">'
-    +stat(r.chauds,'Chauds',TUNNEL_LIB.chaud.c)
-    +stat(r.tiedes,'Tièdes',TUNNEL_LIB.tiede.c)
-    +stat(r.froids,'Froids',TUNNEL_LIB.froid.c)
-    +'</div>'
-    +'<div class="tun-barre">'+TUNNEL_FILTRES.map(([k,lib])=>
-      '<button type="button" class="tun-f'+(_tunFiltre===k?' actif':'')+'" onclick="tunnelSetFiltre(\''+k+'\')">'
-      +escapeHtml(lib)+' '+(cpt[k]||0)+'</button>').join('')+'</div>'
-    +'<div class="tun-barre" style="margin-bottom:14px"><span class="ml-lab" style="align-self:center;margin-right:2px">Trier</span>'
-    +TUNNEL_TRIS.map(([k,lib])=>'<button type="button" class="tun-f'+(_tunTri===k?' actif':'')+'" onclick="tunnelSetTri(\''+k+'\')">'
-      +escapeHtml(lib)+'</button>').join('')+'</div>';
+    +stat('chaud',r.chauds,'Chauds',TUNNEL_LIB.chaud.c)
+    +stat('tiede',r.tiedes,'Tièdes',TUNNEL_LIB.tiede.c)
+    +stat('froid',r.froids,'Froids',TUNNEL_LIB.froid.c)
+    +'</div>'+fini;
   if(!tout.length){
     h+='<div class="sub" style="text-align:center;padding:28px 12px;font-size:var(--fs-sm);line-height:1.6">'
       +'Personne dans le tunnel.<br>Les codes d’accès que tu crées y entrent automatiquement, '
