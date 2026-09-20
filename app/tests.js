@@ -44449,15 +44449,20 @@ async function testExercices(){
         const oc=fg.querySelectorAll('.cpl-v')[1].getAttribute('onclick');
         if(oc!=="editCoachProgTemplate(2,'F')") return _echec('la version Femme ouvre : '+oc);
         if(!/openAssignProgram\(2\)/.test(fg.innerHTML)) return _echec('Assigner ne vise pas le bon modèle');
-        // ⚠ L'ORIGINE SURVIT A LA PERTE DE SON TITRE, avec sa consigne. Sans
-        //   elle, le coach mettrait en vente une version qu'il n'a pas relue.
+        // ⚠ L'ORIGINE SURVIT A LA PERTE DE SON TITRE. C'est le FAIT — d'ou
+        //   vient ce modele — et il reste sur la carte alors que le titre qui
+        //   le portait a disparu du classement.
+        //
+        //   LA CONSIGNE QUI L'ACCOMPAGNAIT, « Adapte l'autre version avant de
+        //   le vendre », a ete retiree le 20/09/2026 a la demande de Kevin :
+        //   c'etait un conseil, pas une donnee, et il n'avait a etre donne
+        //   qu'une fois. On ne l'attend donc plus — mais on tient toujours que
+        //   l'origine, elle, est bien la.
         const marc=secs[0].querySelector('.cpl-c');
         if(!/Depuis le programme de Marc/.test(marc.querySelector('.cpl-meta').textContent))
           return _echec('l’origine n’est pas sur la carte');
-        if(!/Adapte l’autre version/.test(marc.textContent))
-          return _echec('la consigne des modèles venus d’un athlète a disparu');
-        if(/Adapte l’autre version/.test(secs[1].textContent))
-          return _echec('la consigne s’affiche sur un modèle que le coach a écrit lui-même');
+        if(/Adapte l’autre version/.test(z.textContent))
+          return _echec('la consigne retirée est revenue');
         // DEUX GESTES PLEINS, et rien d'autre à côté d'eux.
         const act=[...fg.querySelectorAll('.cpl-actions .btn')].map(b=>b.textContent.trim());
         if(act.join(' | ')!=='▶ Assigner | Mettre en vente') return _echec('actions : '+act.join(' | '));
@@ -44515,13 +44520,18 @@ async function testExercices(){
         //   un choix qui se revient en deux clics.
         const gardees=(p.sessions_H||[]).filter(s=>s&&s.active&&s.exercises.length).length;
         if(gardees!==2) return _echec('les séances Homme ont été effacées : '+gardees+' au lieu de 2');
-        // LA CARTE N'AFFICHE PLUS QU'UNE VERSION, ET ELLE DIT QUE L'AUTRE EST LA.
+        // LA CARTE N'AFFICHE PLUS QU'UNE VERSION.
         const c=z.querySelector('.cpl-c');
         const g=[...c.querySelectorAll('.cpl-v-g')].map(x=>x.textContent.trim());
         if(g.join()!=='Femme') return _echec('versions affichées : '+g.join(' | '));
-        const garde=c.querySelector('.cpl-garde');
-        if(!garde||!/2 séances/.test(garde.textContent))
-          return _echec('rien ne dit que la version Homme existe encore : '+(garde?garde.textContent:'(aucune ligne)'));
+        // ⚠ LA LIGNE QUI ANNONCAIT LA VERSION MASQUEE A ETE RETIREE le
+        //   20/09/2026, a la demande de Kevin. Ce test ne l'attend donc plus —
+        //   mais il tient LA CHOSE qu'elle annoncait, et c'est le plus
+        //   important des deux : les seances de la version masquee sont
+        //   toujours dans le dossier, verifiees juste au-dessus sur les
+        //   DONNEES. Un message peut disparaitre ; un effacement, non.
+        if(/n’est plus proposée/.test(z.textContent))
+          return _echec('la ligne retirée est revenue');
         // LE SEGMENT ACTIF EST CELUI QU'ON A CHOISI, et un seul.
         // ⚠ ON LIT LE LIBELLE, PAS LE BOUTON ENTIER : depuis le 20/09/2026 le
         //   carre porte aussi son signe — ♀ — et `textContent` les colle en

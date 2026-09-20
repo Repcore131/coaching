@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1325';
+window.RC_BUILD='1326';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5606,8 +5606,6 @@ textarea.vn-in{resize:vertical;line-height:1.5}
 /* Le signe de la rangee de version, devant le mot. */
 .cpl-v-sym{flex:0 0 auto;font-size:17px;line-height:1;color:var(--pub,var(--red-text))}
 .cpl-v-vide .cpl-v-sym{color:var(--text-faint)}
-/* Le cadenas de « Ma boutique » : ce qui est vendu sans venir d'un modele. */
-.cpl-band-ic{flex:0 0 auto;display:flex;align-items:center;color:var(--red-text)}
 /* ══ LE CADRAN ════════════════════════════════════════════════════════════
    Demande de Kevin, 19/09/2026 : « mets un cadran en haut avec le nombre de
    programmes faits […] un truc qui fait vraiment pro et business ».
@@ -5693,11 +5691,6 @@ textarea.vn-in{resize:vertical;line-height:1.5}
    du carre : on le retire, le signe reste, et `title` porte la phrase entiere
    pour qui la veut. */
 @media(max-width:380px){ .cpl-pub-l{display:none} .cpl-pub-b{padding:0 10px} }
-/* La consigne des modeles venus d'un athlete, sur leur carte. */
-.cpl-note{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin:8px 0 0}
-/* Ce qui reste ecrit mais n'est plus propose. Orange et non rouge : rien n'est
-   casse, on previent d'un contenu devenu invisible. */
-.cpl-garde{font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin:8px 0 0}
 .cpl-sec{margin-bottom:26px}
 .cpl-sec-t{display:flex;align-items:baseline;gap:8px;margin:0 0 10px;
   font-size:var(--fs-2xs);font-weight:800;letter-spacing:2.4px;
@@ -5717,13 +5710,14 @@ textarea.vn-in{resize:vertical;line-height:1.5}
    Montserrat : c'est la police des chiffres et des grands mots de
    l'application, et « garde nos polices » veut dire ne pas importer celle de
    la maquette, pas renoncer a la notre. */
+/* ⚠ PLUS DE CADRE NI DE CADENAS SUR « MA BOUTIQUE ». Demande de Kevin,
+   20/09/2026. Le cadre repetait, a deux rayons d'ecart, ce que le cadran venait
+   de perdre pour la meme raison : une boite autour d'un titre et d'une phrase
+   n'ajoute rien qu'une bordure de plus. Et le cadenas disait « ferme » la ou le
+   rayon parle de ce qui est EN VENTE — il promettait le contraire de ce qu'il
+   accompagnait. */
 .cpl-sec-bq{margin-top:30px}
-.cpl-band{display:flex;align-items:center;gap:13px;margin-bottom:14px;padding:13px 14px;
-  position:relative;overflow:hidden;border:1px solid var(--border);border-radius:var(--r-4);
-  background:radial-gradient(130% 120% at 0% 0%,rgba(224,32,32,.14),transparent 62%),
-             linear-gradient(168deg,var(--surface-1),#070707)}
-.cpl-band::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
-  background:linear-gradient(90deg,var(--red),transparent 70%)}
+.cpl-band{display:flex;align-items:center;gap:13px;margin-bottom:14px}
 /* La vignette du logo. `contain` et non `cover` : un logo detoure recadre
    perdrait justement ce qui l'identifie. */
 .cpl-band-l{flex:0 0 46px;width:46px;height:46px;border-radius:var(--r-3);
@@ -36118,22 +36112,22 @@ function _htmlCplCarte(p,i,premier,dernier){
       +'<span class="cpl-pub-s" aria-hidden="true">'+x.sym+'</span>'
       +'<span class="cpl-pub-l">'+escapeHtml(x.lib)+'</span></button>').join('')
     +'</div>';
-  // ⚠ LA VERSION MASQUEE EST ANNONCEE QUAND ELLE PORTE QUELQUE CHOSE. Sans
-  //   cette ligne, passer un programme en « Homme » faisait disparaitre de
-  //   l'ecran trois seances Femme deja ecrites — elles existent toujours, mais
-  //   plus rien ne le disait, et le coach les aurait refaites.
-  const cachee=(pu==='H'?'F':pu==='F'?'H':null);
-  const nCachee=cachee?_cplSeancesPleines(p,cachee).length:0;
-  const garde=nCachee
-    ? '<p class="cpl-garde">La version '+(cachee==='F'?'Femme':'Homme')+' garde ses '
-      +nCachee+' séance'+(nCachee>1?'s':'')+' : elle n’est plus proposée, rien n’est effacé.</p>'
-    : '';
-  // ⚠ LA CONSIGNE DES MODELES VENUS D'UN ATHLETE SUIT SA CARTE. Elle vivait
-  //   sous le titre « Enregistrés depuis un athlète », qui ne sequence plus la
-  //   liste : la laisser la-bas l'aurait fait disparaitre avec lui, et le coach
-  //   aurait mis en vente une version qu'il n'a pas relue.
-  const consigne=(p.origine==='athlete')
-    ? '<p class="cpl-note">Adapte l’autre version avant de le vendre.</p>' : '';
+  // ⚠ LA LIGNE QUI ANNONCAIT LA VERSION MASQUEE A ETE RETIREE, demande de
+  //   Kevin le 20/09/2026. Elle disait « la version Femme garde ses 6 séances :
+  //   elle n'est plus proposée, rien n'est effacé ».
+  //
+  //   CE QU'ELLE PROTEGEAIT EXISTE TOUJOURS, et c'est le point : passer un
+  //   programme en « Homme » n'efface RIEN de sa version Femme — le test
+  //   « Choisir un public N'EFFACE PAS la version qu'on cesse de proposer » le
+  //   tient, sur les donnees et non sur le message. Ce qui disparait, c'est
+  //   seulement l'annonce : un coach qui restreint un programme ne verra plus
+  //   a l'ecran que l'autre version dort encore dans le dossier.
+  // ⚠ LA CONSIGNE « Adapte l'autre version avant de le vendre » A ETE RETIREE,
+  //   demande de Kevin le 20/09/2026. Elle suivait les modeles enregistres
+  //   depuis un athlete depuis que les titres ont change d'axe. L'origine, elle,
+  //   reste sur la carte : « Depuis le programme de … » dit d'ou vient le
+  //   modele, ce qui est le fait ; le conseil de relecture, lui, n'avait a etre
+  //   donne qu'une fois.
   // LA VIGNETTE DE VENTE, quand le coach en a posé une. C'est le champ
   // `visuel` de sa fiche de vente — la meme image que voit l'acheteur. Sans
   // elle, pas de cadre vide : la carte reprend toute sa largeur.
@@ -36154,7 +36148,6 @@ function _htmlCplCarte(p,i,premier,dernier){
     // et jamais de rouge : un programme garde pour soi n'est pas une faute.
     +'<span class="cpl-pill '+(on?'cpl-pill-on':'cpl-pill-off')+'">'+(on?'En vente':'Privé')+'</span></div>'
     +'<p class="cpl-resume">'+escapeHtml(progResume(p))+'</p>'
-    +consigne+garde
     +'<div class="cpl-versions">'
       +(pu==='F'?'':_htmlCplVersion(i,'H',p))
       +(pu==='H'?'':_htmlCplVersion(i,'F',p))+'</div>'
@@ -36273,7 +36266,7 @@ function _htmlCplBandeau(titre,aide){
       +(img?'<img src="'+escapeHtml(img)+'" alt="" loading="lazy" onerror="this.remove()">'
            :'<span>'+escapeHtml(ini)+'</span>')
     +'</div>'
-    +'<span class="cpl-band-ic" aria-hidden="true">'+icon('lock',17)+'</span>'
+
     +'<div class="cpl-band-c">'
       +'<div class="cpl-band-t" role="heading" aria-level="2">'+escapeHtml(titre)+'</div>'
       +(aide?'<p class="cpl-band-d">'+escapeHtml(aide)+'</p>':'')
