@@ -35150,6 +35150,86 @@ async function testExercices(){
       try{
         window.toastSync=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
 
+        // ── LE COEFFICIENT SUIT LA PHASE ──────────────────────────────────
+        // Kevin, 20/09/2026 : « le total ne bouge pas malgre le fait de changer
+        // prise de masse / seche ». Mesure faite sur sa capture : 3 711 kcal de
+        // depense, « Prise de masse » affichee, le menu sur « 105 % » — et un
+        // total de 3 154, soit 3 711 x 0,85. Le coefficient de la SECHE avait
+        // survecu au changement de phase.
+        ok('Un coefficient d’une autre phase n’est jamais appliqué',(()=>{
+          // LE CAS EXACT DU DEFAUT : 0,85 est le bareme de la seche, pas celui
+          // de la prise de masse.
+          if(coefPourPhase(0.85,'masse')!==objCoefDefaut('masse'))
+            return _echec('0,85 survit à la prise de masse : '+coefPourPhase(0.85,'masse'));
+          if(coefPourPhase(1.15,'seche')!==objCoefDefaut('seche'))
+            return _echec('1,15 survit à la sèche : '+coefPourPhase(1.15,'seche'));
+          // ET UN COEFFICIENT DU BON BAREME PASSE INTACT : la regle ecarte les
+          // etrangers, elle ne remplace pas les choix du coach.
+          for(const [ph,l] of Object.entries(OBJ_COEF_ECHELLE))
+            for(const v of l)
+              if(coefPourPhase(v,ph)!==v)
+                return _echec(ph+' : '+v+' est refusé alors qu’il est dans son barème');
+          // UNE VALEUR ABSENTE OU ABIMEE REND LE DEFAUT DE LA PHASE, jamais NaN
+          // — un NaN multiplierait la depense et afficherait « NaN kcal ».
+          for(const mauvais of [undefined,null,NaN,'0.85',{}])
+            if(coefPourPhase(mauvais,'seche')!==objCoefDefaut('seche'))
+              return _echec('une valeur abîmée ne rend pas le défaut : '+String(mauvais));
+          // ⚠ UNE PHASE INCONNUE NE FAIT PAS TOMBER LE CALCUL. Elle n'a pas de
+          //   bareme : on garde alors le coefficient tel quel plutot que de le
+          //   remplacer par celui du maintien, qui serait une decision prise a
+          //   la place du coach.
+          return coefPourPhase(0.85,'inconnue')===0.85
+            ?true:_echec('une phase inconnue écrase le coefficient');})());
+
+        ok('CHANGER DE PHASE CHANGE LE TOTAL, ET LE MENU LE DIT',(()=>{
+          // ⚠ LES DEUX DOIVENT S'ACCORDER, et c'est tout le defaut : le menu est
+          //   construit sur `OBJ_COEF_ECHELLE[phase]`, donc un coefficient
+          //   etranger n'y a AUCUNE option `selected` — et un navigateur affiche
+          //   alors la premiere. Le coach lisait « 105 % » au-dessus d'un calcul
+          //   fait a 85 %.
+          // ⚠ LE DOSSIER DOIT ETRE DANS LA BASE. `cibleTableur` passe par
+          //   `_dossier`, qui RELIT le dossier : muter un objet en memoire ne
+          //   l'atteint pas, et le calcul repondait « il manque le poids ».
+          //   Le decor est celui de `poser`, au rendu pres : le coach ET
+          //   l'athlete dans la base, en un seul DB.set.
+          const enBase=(type)=>{
+            const a=mk({tableur:{coef:0.85}});
+            a.phase={type,debut:Date.now()-10*864e5};
+            DB.set('users',{'c9@t.fr':COACH,'a9@t.fr':a});
+            currentUser=COACH; currentClientId='A9';
+            return getOwnedClient('A9');
+          };
+          const c=enBase('seche');
+          if(!c) return _echec('le dossier d’essai n’est pas retrouvé');
+          const seche=cibleTableur(c,{});
+          if(!seche) return _echec('cibleTableur ne rend rien en sèche');
+          // ⚠ `.length` ET NON LA SEULE PRESENCE DE LA CLEF : le retour NORMAL
+          //   de cibleTableur porte `manque:[]`, un tableau vide — donc vrai.
+          //   Le code du produit teste bien `t.manque && t.manque.length` ;
+          //   cette assertion, elle, s'etait trompee et accusait le calcul.
+          if(seche.manque&&seche.manque.length)
+            return _echec('calcul impossible : il manque '+seche.manque.join(', '));
+          if(seche.coef!==0.85) return _echec('la sèche n’applique pas 0,85 : '+seche.coef);
+          // On passe en prise de masse SANS toucher au coefficient enregistre :
+          // c'est exactement ce que fait le bouton de phase.
+          const cm=enBase('masse');
+          const masse=cibleTableur(cm,{});
+          if(masse.coef===0.85) return _echec('le coefficient de sèche survit à la prise de masse');
+          if(!OBJ_COEF_ECHELLE.masse.some(v=>Math.abs(v-masse.coef)<1e-9))
+            return _echec('le coefficient retenu n’est pas dans le barème de la masse : '+masse.coef);
+          if(!(masse.kcal>seche.kcal))
+            return _echec('la prise de masse ne mange pas plus : '+masse.kcal+' contre '+seche.kcal);
+          // LE TOTAL EST EXACTEMENT LA DEPENSE x LE COEFFICIENT AFFICHE : c'est
+          // la verification que l'ecran et le calcul disent la meme chose.
+          const attendu=Math.round((masse.kcal/masse.coef)*masse.coef);
+          if(Math.abs(attendu-masse.kcal)>1) return _echec('total incohérent : '+masse.kcal);
+          // ET LA VALEUR ENREGISTREE N'EST PAS EFFACEE : revenir a la seche
+          // rend au coach le 0,85 qu'il avait choisi.
+          if(((cm.nutrition||{}).tableur||{}).coef!==0.85)
+            return _echec('le coefficient enregistré a été écrasé');
+          return cibleTableur(enBase('seche'),{}).coef===0.85
+            ?true:_echec('le retour en sèche ne retrouve pas 0,85');})());
+
         ok('UN DOSSIER SANS CIBLES DEMARRE EN AUTOMATIQUE',(()=>{
           if(saisieManuelle(mk({}))!==false) return _echec('un dossier vierge demarre en manuel');
           return saisieManuelle(mk({macros:{on:{},off:{}}}))===false

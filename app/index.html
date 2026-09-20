@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1328';
+window.RC_BUILD='1329';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -79184,6 +79184,37 @@ const OBJ_COEF_ECHELLE=Object.freeze({
   // serait un protocole de charge deguise en coefficient.
   peak:    Object.freeze([1.00,1.05,1.10,1.15,1.20])
 });
+/**
+ * PURE. Le coefficient d'objectif REELLEMENT applicable a une phase.
+ *
+ * ⚠ UN COEFFICIENT D'UNE AUTRE PHASE N'EST PAS UN COEFFICIENT DE CELLE-CI.
+ *   Kevin, 20/09/2026 : « le total ne bouge pas malgré le fait de changer prise
+ *   de masse / sèche ». Mesure faite sur sa capture : 3 711 kcal de dépense,
+ *   « Prise de masse » affichée, le menu sur « 105 % » — et un total de 3 154,
+ *   soit 3 711 × 0,85. Le coefficient de la SECHE avait survécu au changement
+ *   de phase, et il continuait de piloter le calcul.
+ *
+ * ⚠ ET L'ECRAN MENTAIT DEUX FOIS. Le menu est construit sur
+ *   `OBJ_COEF_ECHELLE[phase]` : 0,85 n'est pas dans le barème de la prise de
+ *   masse, aucune option ne portait `selected`, et un navigateur affiche alors
+ *   LA PREMIERE. Le coach lisait donc « 105 % » au-dessus d'un calcul fait à
+ *   85 %, sans rien pour le signaler.
+ *
+ * ⚠ LA VALEUR STOCKEE N'EST PAS EFFACEE, et c'est voulu : un coach qui revient
+ *   à la sèche retrouve le 0,85 qu'il avait choisi. Ce qui change, c'est qu'on
+ *   ne l'APPLIQUE plus à une phase qui ne le connaît pas.
+ * @param {number} coef
+ * @param {string} phase
+ * @returns {number}
+ */
+function coefPourPhase(coef,phase){
+  const p=phase||'maintien';
+  const ech=OBJ_COEF_ECHELLE[p];
+  const c=Number(coef);
+  if(!isFinite(c)) return objCoefDefaut(p);
+  if(!Array.isArray(ech)) return c;
+  return ech.some(v=>Math.abs(v-c)<1e-9)?c:objCoefDefaut(p);
+}
 function objCoefDefaut(phase){
   return OBJ_COEF_DEFAUT[phase]!=null?OBJ_COEF_DEFAUT[phase]:1.00;
 }
@@ -79237,8 +79268,14 @@ function cibleTableur(user,opts){
   // ── Ligne 4 : le coefficient d'objectif ─────────────────────────────
   const phase=(typeof phaseCourante==='function')
     ? ((phaseCourante(u)||{}).type||'maintien') : 'maintien';
-  const coef=(typeof o.coef==='number'&&isFinite(o.coef))?o.coef
-    :((typeof reg.coef==='number'&&isFinite(reg.coef))?reg.coef:objCoefDefaut(phase));
+  // ⚠ LE COEFFICIENT EST RAMENE A LA PHASE EN COURS. Sans cette ligne, celui
+  //   d'une phase precedente pilotait encore le total pendant que le menu — qui
+  //   ne le trouve pas dans son bareme — affichait sa premiere option. Voir
+  //   coefPourPhase : le defaut du 20/09/2026.
+  const coef=coefPourPhase(
+    (typeof o.coef==='number'&&isFinite(o.coef))?o.coef
+      :((typeof reg.coef==='number'&&isFinite(reg.coef))?reg.coef:objCoefDefaut(phase)),
+    phase);
   const brut=Math.round(avecSport*coef);
 
   // ── Les macros ──────────────────────────────────────────────────────
@@ -79449,9 +79486,15 @@ function besoinsProposes(user,opts){
   // total reellement servi — ce que le code faisait deja pour le cas ou le
   // plancher relevait la journee. `o.vitesse` reste accepte : le coach qui
   // pilote encore par la vitesse n'est pas mis dehors du jour au lendemain.
-  const _coefTb=(typeof o.coef==='number'&&isFinite(o.coef))?o.coef
-    :((typeof (((user&&user.nutrition)||{}).tableur||{}).coef==='number')
-      ?user.nutrition.tableur.coef:objCoefDefaut(phase||'maintien'));
+  // ⚠ LA MEME REGLE QUE cibleTableur, PAR LA MEME FONCTION. Les deux resolvent
+  //   le coefficient d'objectif ; deux normalisations ecrites separement
+  //   auraient fini par donner deux totaux pour le meme athlete — le defaut
+  //   meme qu'on repare ici. Voir coefPourPhase.
+  const _coefTb=coefPourPhase(
+    (typeof o.coef==='number'&&isFinite(o.coef))?o.coef
+      :((typeof (((user&&user.nutrition)||{}).tableur||{}).coef==='number')
+        ?user.nutrition.tableur.coef:objCoefDefaut(phase||'maintien')),
+    phase);
   const pctVise=cibleVitesseChoisie(phase,
     (o.vitesse===undefined?null:o.vitesse),user);
   let cible;
