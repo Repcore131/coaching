@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1334';
+window.RC_BUILD='1335';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -3867,7 +3867,13 @@ html{scroll-behavior:smooth}
    Les quatre bandeaux prennent order:1 et se partagent la largeur ; les
    contenus prennent order:2 et une base de 100 %, donc ils passent a la ligne
    suivante, pleine largeur, dans l'ordre des sections. */
-.ccd-barre4{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;margin-bottom:10px}
+/* LA LIGNE DEBORDE LES 20 px DE .pad, DE DOUZE DE CHAQUE COTE. Quatre
+   rectangles dans 335 px n'en laissaient que 79 a chacun, et « ACTUALISER »
+   touchait ses deux bords. Le debord rend 24 px, le gain va au texte. Les
+   contenus deplies, eux, sont remis dans l'alignement de la fiche : eux se
+   lisent en colonne avec le reste. */
+.ccd-barre4{display:flex;flex-wrap:wrap;align-items:stretch;gap:5px;
+  margin:0 -12px 10px}
 #s-coach-client .ccd-barre4>.cc-sect{display:contents}
 /* UNE SECTION VIDE DISPARAIT TOUJOURS. Le display:contents ci-dessus est plus
    specifique que la regle generale et la battrait : sans ces deux lignes,
@@ -3875,17 +3881,20 @@ html{scroll-behavior:smooth}
 #s-coach-client .ccd-barre4>.cc-sect:has(>.cc-sect-c:empty),
 #s-coach-client .ccd-barre4>.cc-sect:has(>.cc-sect-c[style*="display:none"]){display:none}
 #s-coach-client .ccd-barre4>.cc-sect>.cc-sect-t{order:1;flex:1 1 0;min-width:0;
-  margin-bottom:0;align-items:center;padding:6px 7px}
-#s-coach-client .ccd-barre4>.cc-sect>.cc-sect-c{order:2;flex:0 0 100%;width:100%;padding:8px 0 0}
-/* QUATRE LIBELLES EN 375 px : 85 px chacun. A 13,5 px et 1,8 px d'interlettre,
-   « INFOS PRATIQUES » debordait de son rectangle — il tient sur deux lignes. */
-#s-coach-client .ccd-barre4 .cc-sect-t>span,.ccd-b4{font-size:10px;letter-spacing:.7px;
+  margin-bottom:0;align-items:center;padding:6px 5px}
+#s-coach-client .ccd-barre4>.cc-sect>.cc-sect-c{order:2;flex:0 0 100%;width:100%;padding:8px 12px 0}
+/* QUATRE LIBELLES EN 375 px : 88 px chacun apres le debord. A 13,5 px et
+   1,8 px d'interlettre — la mesure des sections pleine largeur — aucun n'y
+   entrait. L'INTERLETTRE PAIE LA POLICE : la ramener a 0,4 px rend une
+   dizaine de pixels par libelle, de quoi monter a 11 px sans que
+   « ACTUALISER », le plus long mot d'un seul tenant, se coupe en deux. */
+#s-coach-client .ccd-barre4 .cc-sect-t>span,.ccd-b4{font-size:11px;letter-spacing:.4px;
   line-height:1.2;overflow-wrap:anywhere}
 /* LES DEUX BOUTONS PORTENT LE MEME RECTANGLE QUE LES BANDEAUX — meme fond,
    meme filet a gauche, meme rayon — et PAS de chevron : ils n'ouvrent rien sur
    place. Le texte est donc centre, faute de triangle pour l'ancrer a gauche. */
 .ccd-b4{order:1;flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;
-  text-align:center;padding:6px 7px;min-height:34px;cursor:pointer;
+  text-align:center;padding:6px 5px;min-height:34px;cursor:pointer;
   font-family:var(--pile-titre);font-weight:800;text-transform:uppercase;
   color:#fff;text-shadow:0 0 8px rgba(255,255,255,.35);
   background:var(--surface-1);border:none;border-left:3px solid var(--border);
@@ -9624,10 +9633,16 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <!-- Lien WhatsApp de l'athlète : libellé et cible posés par openClientDetail -->
       <a id="ccd-wa" href="#" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;gap:8px;min-height:46px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:var(--r-3);color:var(--green);text-decoration:none;font-size:var(--fs-md);font-weight:800;letter-spacing:.5px"></a>
-      <!-- Rempli par _majFraicheur, appele par openClientDetail. -->
-      <div style="display:flex;align-items:center;gap:10px;margin:-2px 0 14px;padding:0 2px">
-        <div id="ccd-fraicheur" style="flex:1;min-width:0;line-height:1.4"></div>
-      </div>
+      <!-- ⚠ LA LIGNE « Derniere descente … » A ETE RETIREE le 20/09/2026, sur
+           demande de Kevin, capture a l'appui. Elle redisait a froid ce que le
+           bouton « Actualiser » dit deja quand on s'en sert — et depuis que ce
+           bouton est monte dans la ligne de quatre, elle trainait seule sous
+           lui. LA MECANIQUE RESTE ENTIERE : _majFraicheur sort sans rien faire
+           quand l'element est absent, actualiserClient teste `if(z)` avant
+           d'ecrire, et htmlFraicheurClient — la fonction pure — est toujours
+           couverte par l'assertion N3.6. Remettre la ligne = remettre ce div,
+           rien d'autre. -->
+
       <!-- LES QUATRE ONGLETS. Vingt-sept sections sur un seul rouleau,
            c'etait une barre d'ancres qui menait a un fil interminable. Le
            dossier se lit maintenant par domaine, et un onglet ne montre que
