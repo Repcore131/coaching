@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1323';
+window.RC_BUILD='1324';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -456,6 +456,14 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
   --text-faint:#828282;
   /* Bleus. #3355aa et #4466aa donnaient 2,7:1 et 3,4:1 sur #111 : c'etait un
      lien, donc un echec de contraste sur du texte actionnable. */
+  /* LES TROIS PUBLICS ONT CHACUN SA COULEUR. Demande de Kevin, 20/09/2026 :
+     « homme bleu, femme rose et mixte en blanc ». Elles sont posees en TOKENS
+     et non ecrites dans chaque regle : le signe, le libelle, le carre actif et
+     le titre de section les lisent tous — quatre endroits qui doivent dire la
+     meme chose, et un seul a corriger le jour ou une teinte bouge.
+     Mesure du contraste sur le carbone #0a0a0a : le bleu rend 7,9:1, le rose
+     8,4:1, le blanc casse 16,1:1. Les trois passent le palier AA large. */
+  --pub-h:#3d9bff;--pub-f:#ff6fae;--pub-m:#ececec;
   --link:#7aa7e8;--accent-blue:#4fc3f7;--green:#22c55e;--orange:#f97316;--success:var(--green);--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:var(--orange);--warning-bg:#1a0800;--warning-border:#3a1500;--danger:var(--red);--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;  /* Élévation. Cinq crans, un creux, un halo. Les trois tokens de lueur qu'ils
      remplacent totalisaient QUATRE appels et trois rouges differents. */
   --e0:none;
@@ -5501,6 +5509,14 @@ textarea.vn-in{resize:vertical;line-height:1.5}
      Deux diagonales rouges en `repeating-linear-gradient` et un halo radial
      donnent la meme energie, pesent zero octet, et suivent la marque si elle
      change de rouge. */
+/* ⚠ UN SEUL ENDROIT FAIT LE LIEN entre le public et sa couleur. Chaque element
+   concerne porte `data-pub`, et `--pub` en decoule : les regles plus bas
+   n'ecrivent jamais une teinte, elles lisent celle-ci. Sans ce relais, la
+   couleur aurait ete repetee dans huit declarations — et le jour ou le rose
+   bouge, on en aurait corrige six. */
+[data-pub="H"]{--pub:var(--pub-h)}
+[data-pub="F"]{--pub:var(--pub-f)}
+[data-pub="HF"]{--pub:var(--pub-m)}
 .cpl-hero{position:relative;overflow:hidden;margin:0 0 20px;padding:18px 16px 16px;
   border:1px solid var(--border);border-radius:var(--r-4);
   background:
@@ -5511,23 +5527,28 @@ textarea.vn-in{resize:vertical;line-height:1.5}
   display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px}
 .cpl-hero::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
   background:linear-gradient(90deg,var(--red),transparent 74%)}
-.cpl-hero-marque{display:flex;flex-direction:column;align-items:center;gap:6px;
-  min-width:0;max-width:112px}
-.cpl-hero-l{width:62px;height:62px;border-radius:var(--r-3);flex:0 0 auto;
+/* LE LOGO DOUBLE, demande de Kevin : 62 px le noyaient a cote d'un titre de
+   44 px. La colonne suit — un cadre de 124 px dans une boite de 112 aurait
+   debordé sur le titre. */
+.cpl-hero-marque{display:flex;flex-direction:column;align-items:center;gap:8px;
+  min-width:0;max-width:152px}
+.cpl-hero-l{width:124px;height:124px;border-radius:var(--r-3);flex:0 0 auto;
   display:flex;align-items:center;justify-content:center;overflow:hidden;
   border:1px solid rgba(255,255,255,.10);
   background:linear-gradient(165deg,#191919,#0a0a0a);box-shadow:var(--elev-1)}
 .cpl-hero-l img{width:100%;height:100%;object-fit:contain;display:block}
-.cpl-hero-l span{font-family:var(--pile-titre);font-size:32px;line-height:1;
-  color:var(--red-text);text-shadow:var(--halo-1)}
+.cpl-hero-l span{font-family:var(--pile-titre);font-size:60px;line-height:1;
+  color:var(--red-text)}
 .cpl-hero-n{font-size:9px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;
   color:var(--text-faint);text-align:center;line-height:1.3;overflow-wrap:anywhere}
 .cpl-hero-c{min-width:0}
 /* La pile de titres — Bebas — et non Montserrat : « garde nos polices » veut
    dire ne pas importer celle de la maquette, pas renoncer a la notre. */
+/* ⚠ AUCUN HALO SUR CE TITRE. Demande de Kevin : « ma boutique, ne mets pas en
+   néon ». Le rouge plein se suffit — la lueur epaississait les lettres et
+   donnait au mot un air d'enseigne, la ou il doit se lire comme un titre. */
 .cpl-hero-t{font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.9;
-  letter-spacing:2px;text-transform:uppercase;color:var(--red);
-  text-shadow:var(--halo-1);margin:0}
+  letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:0}
 .cpl-hero-s{font-size:var(--fs-xs);font-weight:800;letter-spacing:3.4px;
   text-transform:uppercase;color:var(--text-strong);margin-top:5px}
 .cpl-hero-p{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;
@@ -5544,18 +5565,21 @@ textarea.vn-in{resize:vertical;line-height:1.5}
   cursor:pointer;white-space:nowrap;
   transition:background var(--t-1) var(--c-out),color var(--t-1) var(--c-out),
              border-color var(--t-1) var(--c-out)}
-.cpl-f-s{font-size:14px;line-height:1;color:var(--red-text)}
-.cpl-f:hover{color:var(--text);border-color:var(--sub)}
-.cpl-f.on{background:var(--red);border-color:var(--red);color:#0a0000;
-  box-shadow:var(--glow-red)}
+.cpl-f-s{font-size:14px;line-height:1;color:var(--pub,var(--red-text))}
+.cpl-f:hover{color:var(--text);border-color:var(--pub,var(--sub))}
+/* ACTIF : la couleur du public en fond, l'encre sombre par-dessus. Garder le
+   rouge pour les trois aurait efface la distinction qu'on vient de poser. */
+.cpl-f.on{background:var(--pub,var(--red));border-color:var(--pub,var(--red));
+  color:#0a0000;box-shadow:none}
 .cpl-f.on .cpl-f-s{color:#0a0000}
 .cpl-f:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 /* A L'ETROIT, L'EN-TETE SE DEPLIE EN TROIS ETAGES et les filtres se mettent en
    rangee : trois colonnes sur 360 px laisseraient 90 px au titre. */
 @media(max-width:700px){
   .cpl-hero{grid-template-columns:auto 1fr;gap:12px;padding:15px 14px}
-  .cpl-hero-marque{max-width:74px}
-  .cpl-hero-l{width:48px;height:48px}
+  .cpl-hero-marque{max-width:104px}
+  .cpl-hero-l{width:96px;height:96px}
+  .cpl-hero-l span{font-size:46px}
   .cpl-hero-t{font-size:var(--fs-2xl)}
   .cpl-hero-f{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}
   .cpl-f{flex:1 1 0;min-width:0;justify-content:center;padding:0 8px;letter-spacing:.8px}
@@ -5580,7 +5604,7 @@ textarea.vn-in{resize:vertical;line-height:1.5}
 .cpl-ic{display:inline-flex;align-items:center;margin-right:6px;vertical-align:-3px}
 .cpl-ic svg{display:block}
 /* Le signe de la rangee de version, devant le mot. */
-.cpl-v-sym{flex:0 0 auto;font-size:17px;line-height:1;color:var(--red-text)}
+.cpl-v-sym{flex:0 0 auto;font-size:17px;line-height:1;color:var(--pub,var(--red-text))}
 .cpl-v-vide .cpl-v-sym{color:var(--text-faint)}
 /* Le cadenas de « Ma boutique » : ce qui est vendu sans venir d'un modele. */
 .cpl-band-ic{flex:0 0 auto;display:flex;align-items:center;color:var(--red-text)}
@@ -5639,9 +5663,9 @@ textarea.vn-in{resize:vertical;line-height:1.5}
              border-color var(--t-1) var(--c-out)}
 /* Le signe est plus gros que le mot : c'est lui qu'on reconnait de loin, et
    il porte la couleur quand le carre est eteint. */
-.cpl-pub-s{font-size:13px;line-height:1;color:var(--red-text)}
-.cpl-pub-b:hover{color:var(--text);border-color:var(--sub)}
-.cpl-pub-b.on{background:var(--red);border-color:var(--red);color:#0a0000}
+.cpl-pub-s{font-size:13px;line-height:1;color:var(--pub,var(--red-text))}
+.cpl-pub-b:hover{color:var(--text);border-color:var(--pub,var(--sub))}
+.cpl-pub-b.on{background:var(--pub,var(--red));border-color:var(--pub,var(--red));color:#0a0000}
 .cpl-pub-b.on .cpl-pub-s{color:#0a0000}
 .cpl-pub-b:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 /* A L'ETROIT, LE SIGNE SUFFIT. Sous 380 px le mot passait a la ligne au milieu
@@ -5665,8 +5689,8 @@ textarea.vn-in{resize:vertical;line-height:1.5}
   color:var(--text-strong);padding-bottom:9px;margin-bottom:13px;
   border-bottom:1px solid var(--border);position:relative}
 .cpl-sec-g::after{content:'';position:absolute;left:0;bottom:-1px;width:56px;height:2px;
-  background:var(--red)}
-.cpl-sec-s{font-size:16px;line-height:1;color:var(--red-text);letter-spacing:0}
+  background:var(--pub,var(--red))}
+.cpl-sec-s{font-size:16px;line-height:1;color:var(--pub,var(--red-text));letter-spacing:0}
 /* ── LE BANDEAU « MA BOUTIQUE » ─────────────────────────────────────────
    En rouge et plus gros, demande de Kevin. La pile de titres — Bebas — et non
    Montserrat : c'est la police des chiffres et des grands mots de
@@ -5688,13 +5712,12 @@ textarea.vn-in{resize:vertical;line-height:1.5}
 .cpl-band-l span{font-family:var(--pile-titre);font-size:24px;line-height:1;
   color:var(--red-text);text-shadow:var(--halo-2)}
 .cpl-band-c{flex:1;min-width:0}
-/* ⚠ LE HALO COURT, ET NON --halo-2. Le grand voile fait 30 px de flou : sur
-   un mot de 26 px il mangeait le contour des lettres, et « MA BOUTIQUE » se
-   lisait trouble. --halo-1 tient a 8 px — le rouge brille, les lettres
-   restent nettes. */
+/* ⚠ PAS DE HALO ICI NON PLUS. Il etait passe de --halo-2 a --halo-1 parce que
+   le grand voile — 30 px de flou — mangeait le contour des lettres. Kevin a
+   tranche plus court le 20/09/2026 : pas de neon du tout, ni sur l'en-tete ni
+   sur ce rayon, qui portent le meme mot. */
 .cpl-band-t{font-family:var(--pile-titre);font-size:var(--fs-2xl);line-height:1;
-  letter-spacing:2px;text-transform:uppercase;color:var(--red);
-  text-shadow:var(--halo-1)}
+  letter-spacing:2px;text-transform:uppercase;color:var(--red)}
 .cpl-band-d{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:5px 0 0}
 .cpl-sec-n{color:var(--text-faint);letter-spacing:1px}
 .cpl-sec-d{font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin:-4px 0 12px}
@@ -5719,7 +5742,7 @@ textarea.vn-in{resize:vertical;line-height:1.5}
 .cpl-v:hover{background:#1f1f1f}
 .cpl-v:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
 .cpl-v-g{flex:0 0 58px;font-size:var(--fs-2xs);font-weight:900;letter-spacing:1.6px;
-  text-transform:uppercase;color:var(--red-text)}
+  text-transform:uppercase;color:var(--pub,var(--red-text))}
 .cpl-v-c{flex:1;min-width:0;display:flex;flex-direction:column}
 .cpl-v-n{font-size:var(--fs-sm);font-weight:800;color:var(--text)}
 .cpl-v-s{font-size:var(--fs-xs);color:var(--sub);margin-top:2px;
@@ -36031,6 +36054,7 @@ function _htmlCplVersion(i,genre,p){
   const noms=l.map(s=>String(s.name||'').trim()||String(s.day||'Séance')).join(' · ');
   const sym=(PROG_PUBLICS.find(x=>x.cle===genre)||{}).sym||'';
   return '<button type="button" class="cpl-v'+(n?'':' cpl-v-vide')+'" '
+    +'data-pub="'+genre+'" '
     +'onclick="editCoachProgTemplate('+i+',\''+genre+'\')">'
     // ⚠ LE SIGNE EST DANS SON PROPRE SPAN, hors de `.cpl-v-g`. Le test de la
     //   rangee lit le libelle de cette classe et le compare au mot exact :
@@ -36067,7 +36091,8 @@ function _htmlCplCarte(p,i,premier,dernier){
   // interrupteurs — d'ou le groupe radio.
   const seg='<div class="cpl-pub" role="radiogroup" aria-label="À qui s’adresse ce programme">'
     +PROG_PUBLICS.map(x=>'<button type="button" role="radio" aria-checked="'+(x.cle===pu)+'"'
-      +' class="cpl-pub-b'+(x.cle===pu?' on':'')+'" title="'+escapeHtml(x.dit)+'"'
+      +' class="cpl-pub-b'+(x.cle===pu?' on':'')+'" data-pub="'+x.cle+'"'
+      +' title="'+escapeHtml(x.dit)+'"'
       +' onclick="progPublicPoser('+i+',\''+x.cle+'\')">'
       +'<span class="cpl-pub-s" aria-hidden="true">'+x.sym+'</span>'
       +'<span class="cpl-pub-l">'+escapeHtml(x.lib)+'</span></button>').join('')
@@ -36198,6 +36223,7 @@ function _htmlCplHero(){
     // est un etat valide.
     +'<div class="cpl-hero-f">'
       +PROG_PUBLICS.map(x=>'<button type="button" class="cpl-f'+(f===x.cle?' on':'')+'"'
+        +' data-pub="'+x.cle+'"'
         +' aria-pressed="'+(f===x.cle)+'" onclick="cplFiltrer(\''+x.cle+'\')">'
         +'<span class="cpl-f-s" aria-hidden="true">'+x.sym+'</span>'
         +escapeHtml(x.lib)+'</button>').join('')
@@ -36360,7 +36386,7 @@ function loadCoachProgramsList(){
     progs.forEach((p,i)=>{ if(p&&_cplGroupe(p)===r.cle) idx.push(i); });
     if(!idx.length) return '';
     return '<section class="cpl-sec">'
-      +'<div class="cpl-sec-t cpl-sec-g" role="heading" aria-level="2">'
+      +'<div class="cpl-sec-t cpl-sec-g" data-pub="'+r.cle+'" role="heading" aria-level="2">'
         +'<span class="cpl-sec-s" aria-hidden="true">'+r.sym+'</span>'
         +escapeHtml(r.lib)
         +' <span class="cpl-sec-n">'+idx.length+'</span></div>'
