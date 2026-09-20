@@ -37831,6 +37831,31 @@ async function testExercices(){
         return _echec('les mollets ne lisent pas le tour de mollet');
       return true;})());
 
+    ok('UN BILAN REÇU SE LIT CHEZ LE COACH SANS RECHARGEMENT',(()=>{
+      // ⚠ LA CHAINE SE VERIFIE SUR LE CODE, et c'est assume. Elle traverse le
+      //   reseau — CLOUD.syncUser — qu'une assertion synchrone ne peut pas
+      //   faire repondre. Ce qu'on epingle ici, ce sont les quatre maillons
+      //   dont la disparition casserait la chaine en silence ; le
+      //   comportement complet, lui, est mesure au banc (banc-bilan.mjs), et
+      //   le releve du 21/09/2026 est dans le journal de nuit.
+      const oc=String(openClientDetail), ac=String(actualiserClient);
+      // 1. LE CADRE EST RENDU PAR openClientDetail, donc a chaque descente.
+      if(oc.indexOf('renderCorpsCoach(c)')<0)
+        return _echec('le cadre Corps a quitté openClientDetail : il ne se repeindra plus');
+      // 2. actualiserClient REPEINT LA FICHE, et en place.
+      if(ac.indexOf('openClientDetail(currentClientId,true)')<0)
+        return _echec('actualiserClient ne repeint plus la fiche en place');
+      // 3. ET EN PLACE VEUT DIRE AVEC LE DRAPEAU. Sans lui, openClientDetail
+      //    repart du premier onglet : le coach qui actualisait en réglant des
+      //    macros se retrouvait en haut du programme — et une descente réseau
+      //    partait quatre fois au lieu d'une.
+      if(ac.indexOf('openClientDetail(currentClientId)')>=0)
+        return _echec('actualiserClient rouvre la fiche au lieu de la rafraîchir');
+      // 4. ET JAMAIS SOUS LES DOIGTS DU COACH.
+      if(ac.indexOf('_saisieEnCours()')<0)
+        return _echec('la fiche peut être repeinte pendant que le coach tape');
+      return true;})());
+
     ok('UNE COURBE NE RELIE QUE DES POINTS MESURÉS',(()=>{
       const J=864e5, t=Date.parse('2026-09-14T10:00:00Z');
       const B=(j,o)=>Object.assign({date:t-j*J},o);

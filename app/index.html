@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1340';
+window.RC_BUILD='1341';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -81816,7 +81816,23 @@ async function actualiserClient(){
       return true;
     }
     toast('Dossier mis à jour ✓','var(--success)');
-    try{ openClientDetail(currentClientId); }catch(e){}
+    // ⚠ `true` — C'EST UN RAFRAICHISSEMENT, PAS UNE OUVERTURE. Ce drapeau
+    //   manquait ici, et c'etait le SEUL des quinze appels en place a
+    //   l'oublier. Deux effets, tous deux mesures au banc le 21/09/2026 :
+    //
+    //   · L'ONGLET REVENAIT SUR « ENTRAINEMENT ». openClientDetail repart du
+    //     premier onglet quand le drapeau manque — c'est voulu en ouvrant la
+    //     fiche de quelqu'un d'autre, ca ne l'est pas en actualisant celle
+    //     qu'on a sous les yeux. Le coach qui cliquait « Actualiser » en
+    //     reglant des macros se retrouvait en haut du programme. La regle est
+    //     ecrite noir sur blanc dans openClientDetail ; cet appel-ci ne la
+    //     respectait pas.
+    //   · QUATRE DESCENTES RESEAU AU LIEU D'UNE. Sans le drapeau, la fonction
+    //     force une descente a chaque passage — « ouvrir une fiche force une
+    //     descente », ce qui est juste a l'ouverture et redondant ici, puisque
+    //     actualiserClient vient precisement d'en faire une. Compteur pose sur
+    //     CLOUD.syncUser : quatre appels pour un clic.
+    try{ openClientDetail(currentClientId,true); }catch(e){}
     return true;
   } finally {
     _majEnCours=false;
