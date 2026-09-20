@@ -44395,48 +44395,74 @@ async function testExercices(){
       return Object.assign({id,name:nom,createdAt:Date.UTC(2026,8,17),sessions_H:jeu(h),sessions_F:jeu(f)},o||{});
     };
 
-    ok('R27 — les rayons, et dans chaque carte la version Homme PUIS la version Femme',(()=>{
+    ok('R27 — trois titres séquencent la liste, et la carte garde ses deux versions',(()=>{
+      // ⚠ LES TITRES ONT CHANGE D'AXE, le 20/09/2026. Ils classaient par
+      //   ORIGINE — « Créés par moi » / « Enregistrés depuis un athlète »,
+      //   demande du 17/09 — et ils classent maintenant par PUBLIC, demande de
+      //   Kevin : « mets les titres pour séquencer homme, femme, mixte ». Le
+      //   classement par origine laissait un programme Homme et un programme
+      //   Femme cote a cote sous le meme titre, alors que c'est la question
+      //   qu'on se pose en parcourant la liste.
+      //
+      //   L'ORIGINE N'EST PAS PERDUE, et ce test le tient plus bas : elle reste
+      //   sur la carte, en toutes lettres, avec sa consigne.
       const sU=currentUser, z=document.getElementById('cpl-list'), sv=z&&z.innerHTML;
       try{
         currentUser={id:'c27',email:'c27@t.fr',role:'coach',coachPrograms:[
-          _r27Modele('a','Débutant',['Push','','Legs'],['Fessiers']),
-          _r27Modele('m','Marc',['Pecs'],['Pecs'],{origine:'athlete',depuis:'Marc'}),
-          // ⚠ `publicVise:'HF'` EST NEUF, ET IL EST INDISPENSABLE ICI. Depuis
-          //   le 19/09/2026, un modele garni d'un seul cote s'adresse a ce
-          //   seul public — progPublic le DEDUIT — et sa version vide n'est
-          //   plus affichee du tout : c'est precisement ce que Kevin a demande.
-          //   Ce fixture veut l'autre cas, qui existe toujours : un coach qui
-          //   declare « les deux » et n'a pas encore rempli la seconde version.
+          _r27Modele('a','Débutant',['Push','','Legs'],['Fessiers']),            // mixte
+          _r27Modele('m','Marc',['Pecs'],[],{origine:'athlete',depuis:'Marc'}),  // homme
+          // ⚠ `publicVise:'HF'` EST INDISPENSABLE ICI. Un modele garni d'un
+          //   seul cote s'adresse a ce seul public — progPublic le DEDUIT — et
+          //   sa version vide n'est plus affichee du tout. Ce fixture veut
+          //   l'autre cas : un coach qui declare « mixte » et n'a pas encore
+          //   rempli la seconde version.
           _r27Modele('g','Spécial fessiers',[],['Fessiers A','Fessiers B'],{publicVise:'HF'})]};
         loadCoachProgramsList();
         const secs=[...z.querySelectorAll('.cpl-sec')];
-        const rayons=secs.map(s=>s.querySelector('.cpl-sec-t').textContent.replace(/\s+\d+$/,'').trim());
-        if(rayons.join(' | ')!=='Créés par moi | Enregistrés depuis un athlète') return _echec('rayons : '+rayons.join(' | '));
+        // Le titre porte son signe et son compte : on lit le MOT, en retirant
+        // les deux — comparer le textContent entier reviendrait a figer la
+        // forme du signe dans un test qui parle du classement.
+        const titre=s=>{ const t=s.querySelector('.cpl-sec-t').cloneNode(true);
+          [...t.querySelectorAll('.cpl-sec-s,.cpl-sec-n')].forEach(x=>x.remove());
+          return t.textContent.trim(); };
+        const rayons=secs.map(titre);
+        if(rayons.join(' | ')!=='Homme | Mixte') return _echec('titres : '+rayons.join(' | '));
         const noms=s=>[...s.querySelectorAll('.cpl-nom')].map(x=>x.textContent);
-        if(noms(secs[0]).join()!=='Débutant,Spécial fessiers') return _echec('créés par moi : '+noms(secs[0]));
-        if(noms(secs[1]).join()!=='Marc') return _echec('depuis un athlète : '+noms(secs[1]));
+        if(noms(secs[0]).join()!=='Marc') return _echec('section Homme : '+noms(secs[0]));
+        if(noms(secs[1]).join()!=='Débutant,Spécial fessiers') return _echec('section Mixte : '+noms(secs[1]));
+        // UNE SECTION VIDE NE S'AFFICHE PAS : annoncer « Femme 0 » n'oriente
+        // personne, et trois titres dont un vide se lisent comme un manque.
+        if(/Femme/.test(rayons.join(' '))) return _echec('une section Femme vide est rendue');
         // LES DEUX VERSIONS, DANS CET ORDRE, avec leurs séances nommées.
         // Chaque partie de la rangée est lue à part : textContent les colle.
-        const v=[...secs[0].querySelector('.cpl-c').querySelectorAll('.cpl-v')]
+        const v=[...secs[1].querySelector('.cpl-c').querySelectorAll('.cpl-v')]
           .map(b=>['.cpl-v-g','.cpl-v-n','.cpl-v-s'].map(k=>b.querySelector(k).textContent.trim()).join(' | '));
         if(v.length!==2) return _echec(v.length+' version(s)');
         if(v[0]!=='Homme | 2 séances | Push · Legs') return _echec('Homme : '+v[0]);
         if(v[1]!=='Femme | 1 séance | Fessiers') return _echec('Femme : '+v[1]);
         // Une version vide LE DIT, au lieu d'afficher « 0 séances ».
-        const fg=secs[0].querySelectorAll('.cpl-c')[1];
+        const fg=secs[1].querySelectorAll('.cpl-c')[1];
         const vg=fg.querySelector('.cpl-v');
         if(!vg.classList.contains('cpl-v-vide')||!/Aucune séance/.test(vg.textContent)) return _echec('version vide : '+vg.textContent);
-        // L'INDEX EST CELUI DU TABLEAU, pas du rayon : « Spécial fessiers » est
-        // le troisième modèle, et le deuxième de son rayon.
+        // L'INDEX EST CELUI DU TABLEAU, pas de la section : « Spécial fessiers »
+        // est le troisième modèle, et le deuxième de sa section.
         const oc=fg.querySelectorAll('.cpl-v')[1].getAttribute('onclick');
         if(oc!=="editCoachProgTemplate(2,'F')") return _echec('la version Femme ouvre : '+oc);
         if(!/openAssignProgram\(2\)/.test(fg.innerHTML)) return _echec('Assigner ne vise pas le bon modèle');
-        if(!/Depuis le programme de Marc/.test(secs[1].querySelector('.cpl-meta').textContent)) return _echec('l’origine n’est pas sur la carte');
+        // ⚠ L'ORIGINE SURVIT A LA PERTE DE SON TITRE, avec sa consigne. Sans
+        //   elle, le coach mettrait en vente une version qu'il n'a pas relue.
+        const marc=secs[0].querySelector('.cpl-c');
+        if(!/Depuis le programme de Marc/.test(marc.querySelector('.cpl-meta').textContent))
+          return _echec('l’origine n’est pas sur la carte');
+        if(!/Adapte l’autre version/.test(marc.textContent))
+          return _echec('la consigne des modèles venus d’un athlète a disparu');
+        if(/Adapte l’autre version/.test(secs[1].textContent))
+          return _echec('la consigne s’affiche sur un modèle que le coach a écrit lui-même');
         // DEUX GESTES PLEINS, et rien d'autre à côté d'eux.
         const act=[...fg.querySelectorAll('.cpl-actions .btn')].map(b=>b.textContent.trim());
         if(act.join(' | ')!=='▶ Assigner | Mettre en vente') return _echec('actions : '+act.join(' | '));
         // Le rayon de la boutique n'existe que pour le créateur.
-        if(/Dans la boutique/.test(z.textContent)) return _echec('un autre coach voit « Dans la boutique »');
+        if(/Ma boutique/i.test(z.textContent)) return _echec('un autre coach voit « Ma boutique »');
         return true;
       } finally { currentUser=sU; if(z) z.innerHTML=sv; }})());
 
@@ -44491,9 +44517,14 @@ async function testExercices(){
         if(!garde||!/2 séances/.test(garde.textContent))
           return _echec('rien ne dit que la version Homme existe encore : '+(garde?garde.textContent:'(aucune ligne)'));
         // LE SEGMENT ACTIF EST CELUI QU'ON A CHOISI, et un seul.
+        // ⚠ ON LIT LE LIBELLE, PAS LE BOUTON ENTIER : depuis le 20/09/2026 le
+        //   carre porte aussi son signe — ♀ — et `textContent` les colle en
+        //   « ♀Femme ». Comparer le tout aurait fige la forme du signe dans un
+        //   test qui parle du choix.
+        const lib=b=>((b.querySelector('.cpl-pub-l')||b).textContent||'').trim();
         const on=[...c.querySelectorAll('.cpl-pub-b')].filter(b=>b.classList.contains('on'));
-        if(on.length!==1||on[0].textContent.trim()!=='Femme')
-          return _echec('segments actifs : '+on.map(b=>b.textContent.trim()).join(' | '));
+        if(on.length!==1||lib(on[0])!=='Femme')
+          return _echec('segments actifs : '+on.map(lib).join(' | '));
         // ET REVENIR EN ARRIERE REND LA VERSION, intacte.
         progPublicPoser(0,'HF');
         const g2=[...z.querySelector('.cpl-c').querySelectorAll('.cpl-v-n')].map(x=>x.textContent.trim());
@@ -44583,17 +44614,24 @@ async function testExercices(){
         if(/gain|chiffre|revenu|encaiss|ca\b/i.test(k)) return _echec('le cadran prétend connaître l’argent : '+k);
       return true;})());
 
-    ok('R27 — on réordonne dans son rayon, jamais par-dessus l’autre',(()=>{
+    ok('R27 — on réordonne dans sa section, jamais par-dessus l’autre',(()=>{
+      // ⚠ LA FLECHE SUIT CE QUE L'ON VOIT. `cplDeplacer` cherchait le voisin du
+      //   meme RAYON — l'origine — pendant que l'ecran classait par PUBLIC :
+      //   la fleche aurait echange un programme avec un voisin invisible, et
+      //   rien n'aurait bouge a l'ecran. Les deux lisent maintenant la meme
+      //   fonction, `_cplGroupe`.
       const sU=currentUser, svSave=window.saveUser;
       try{
         window.saveUser=()=>true;
         currentUser={id:'c27',email:'c27@t.fr',role:'coach',coachPrograms:[
-          _r27Modele('a','A',['X'],[]),_r27Modele('m','M',['X'],[],{origine:'athlete'}),_r27Modele('b','B',['X'],[])]};
+          _r27Modele('a','A',['X'],['Y']),   // mixte
+          _r27Modele('m','M',['X'],[]),      // homme — entre les deux
+          _r27Modele('b','B',['X'],['Y'])]}; // mixte
         const ordre=()=>currentUser.coachPrograms.map(p=>p.id).join(',');
-        // A descend sous B, par-dessus M qui est d'un autre rayon.
+        // A descend sous B, par-dessus M qui est d'une AUTRE section.
         if(cplDeplacer(0,1)!==true||ordre()!=='b,m,a') return _echec('A ne passe pas sous B : '+ordre());
-        // M est seul dans son rayon : il ne bouge ni vers le haut ni vers le bas.
-        if(cplDeplacer(1,-1)!==false||cplDeplacer(1,1)!==false) return _echec('le seul de son rayon bouge : '+ordre());
+        // M est seul dans sa section : il ne bouge ni vers le haut ni vers le bas.
+        if(cplDeplacer(1,-1)!==false||cplDeplacer(1,1)!==false) return _echec('le seul de sa section bouge : '+ordre());
         return true;
       } finally { window.saveUser=svSave; currentUser=sU; try{ loadCoachProgramsList(); }catch(e){} }})());
 

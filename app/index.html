@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1318';
+window.RC_BUILD='1319';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5414,17 +5414,36 @@ textarea.vn-in{resize:vertical;line-height:1.5}
    s'attend a etre touche. */
 .cpl-resume{font-size:var(--fs-xs);color:var(--text);line-height:1.55;
   margin:9px 0 0;opacity:.88}
-.cpl-pub{display:flex;gap:0;margin-top:11px;border:1px solid var(--border);
-  border-radius:var(--r-2);overflow:hidden;background:var(--surface-2)}
-.cpl-pub-b{flex:1 1 0;min-width:0;min-height:36px;padding:0 6px;margin:0;border:none;
-  background:none;color:var(--sub);font-family:Montserrat,sans-serif;
-  font-size:var(--fs-2xs);font-weight:800;letter-spacing:.8px;text-transform:uppercase;
-  cursor:pointer;white-space:nowrap;
-  transition:background var(--t-1) var(--c-out),color var(--t-1) var(--c-out)}
-.cpl-pub-b+.cpl-pub-b{border-left:1px solid var(--border)}
-.cpl-pub-b:hover{color:var(--text)}
-.cpl-pub-b.on{background:var(--red);color:#0a0000}
-.cpl-pub-b:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
+/* ── LE SELECTEUR DE PUBLIC, CONTRE LE NOM ──────────────────────────────
+   Demande de Kevin, 20/09/2026 : « les carrés à côté du titre du programme ».
+   Il ne prend plus la largeur : trois carres serres sous le nom, qui se lisent
+   comme une propriete de CE programme et non comme un filtre de la page.
+
+   ⚠ `flex-wrap` ET NON une largeur fixe. Trois carres a 74 px font 234 px ;
+     la carte en offre 106 sur un telephone de 320 px une fois le nom et la
+     pastille places. Ils passent alors a la ligne plutot que de pousser la
+     pastille « En vente » hors du cadre. */
+.cpl-pub{display:inline-flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.cpl-pub-b{flex:0 0 auto;min-height:32px;padding:0 9px;margin:0;
+  border:1px solid var(--border);border-radius:var(--r-2);
+  background:var(--surface-2);color:var(--sub);font-family:Montserrat,sans-serif;
+  font-size:var(--fs-2xs);font-weight:800;letter-spacing:.9px;text-transform:uppercase;
+  cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;
+  transition:background var(--t-1) var(--c-out),color var(--t-1) var(--c-out),
+             border-color var(--t-1) var(--c-out)}
+/* Le signe est plus gros que le mot : c'est lui qu'on reconnait de loin, et
+   il porte la couleur quand le carre est eteint. */
+.cpl-pub-s{font-size:13px;line-height:1;color:var(--red-text)}
+.cpl-pub-b:hover{color:var(--text);border-color:var(--sub)}
+.cpl-pub-b.on{background:var(--red);border-color:var(--red);color:#0a0000}
+.cpl-pub-b.on .cpl-pub-s{color:#0a0000}
+.cpl-pub-b:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+/* A L'ETROIT, LE SIGNE SUFFIT. Sous 380 px le mot passait a la ligne au milieu
+   du carre : on le retire, le signe reste, et `title` porte la phrase entiere
+   pour qui la veut. */
+@media(max-width:380px){ .cpl-pub-l{display:none} .cpl-pub-b{padding:0 10px} }
+/* La consigne des modeles venus d'un athlete, sur leur carte. */
+.cpl-note{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin:8px 0 0}
 /* Ce qui reste ecrit mais n'est plus propose. Orange et non rouge : rien n'est
    casse, on previent d'un contenu devenu invisible. */
 .cpl-garde{font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin:8px 0 0}
@@ -5432,6 +5451,45 @@ textarea.vn-in{resize:vertical;line-height:1.5}
 .cpl-sec-t{display:flex;align-items:baseline;gap:8px;margin:0 0 10px;
   font-size:var(--fs-2xs);font-weight:800;letter-spacing:2.4px;
   text-transform:uppercase;color:var(--sub)}
+/* ── LES TROIS TITRES DE SEQUENCE ───────────────────────────────────────
+   « Mets les titres pour séquencer homme, femme, mixte ». Ils portent le
+   filet rouge des sections qui comptent, et leur signe devant : on repere la
+   section qu'on cherche sans lire. */
+.cpl-sec-g{align-items:center;gap:9px;font-size:var(--fs-xs);letter-spacing:2.8px;
+  color:var(--text-strong);padding-bottom:9px;margin-bottom:13px;
+  border-bottom:1px solid var(--border);position:relative}
+.cpl-sec-g::after{content:'';position:absolute;left:0;bottom:-1px;width:56px;height:2px;
+  background:var(--red)}
+.cpl-sec-s{font-size:16px;line-height:1;color:var(--red-text);letter-spacing:0}
+/* ── LE BANDEAU « MA BOUTIQUE » ─────────────────────────────────────────
+   En rouge et plus gros, demande de Kevin. La pile de titres — Bebas — et non
+   Montserrat : c'est la police des chiffres et des grands mots de
+   l'application, et « garde nos polices » veut dire ne pas importer celle de
+   la maquette, pas renoncer a la notre. */
+.cpl-sec-bq{margin-top:30px}
+.cpl-band{display:flex;align-items:center;gap:13px;margin-bottom:14px;padding:13px 14px;
+  position:relative;overflow:hidden;border:1px solid var(--border);border-radius:var(--r-4);
+  background:radial-gradient(130% 120% at 0% 0%,rgba(224,32,32,.14),transparent 62%),
+             linear-gradient(168deg,var(--surface-1),#070707)}
+.cpl-band::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--red),transparent 70%)}
+/* La vignette du logo. `contain` et non `cover` : un logo detoure recadre
+   perdrait justement ce qui l'identifie. */
+.cpl-band-l{flex:0 0 46px;width:46px;height:46px;border-radius:var(--r-3);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  border:1px solid var(--border);background:linear-gradient(165deg,#161616,#0a0a0a)}
+.cpl-band-l img{width:100%;height:100%;object-fit:contain;display:block}
+.cpl-band-l span{font-family:var(--pile-titre);font-size:24px;line-height:1;
+  color:var(--red-text);text-shadow:var(--halo-2)}
+.cpl-band-c{flex:1;min-width:0}
+/* ⚠ LE HALO COURT, ET NON --halo-2. Le grand voile fait 30 px de flou : sur
+   un mot de 26 px il mangeait le contour des lettres, et « MA BOUTIQUE » se
+   lisait trouble. --halo-1 tient a 8 px — le rouge brille, les lettres
+   restent nettes. */
+.cpl-band-t{font-family:var(--pile-titre);font-size:var(--fs-2xl);line-height:1;
+  letter-spacing:2px;text-transform:uppercase;color:var(--red);
+  text-shadow:var(--halo-1)}
+.cpl-band-d{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:5px 0 0}
 .cpl-sec-n{color:var(--text-faint);letter-spacing:1px}
 .cpl-sec-d{font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin:-4px 0 12px}
 .cpl-c{background:var(--surface-1);border:1px solid var(--border);
@@ -35602,7 +35660,20 @@ const CPL_RAYONS=Object.freeze([
 ]);
 // PURE. Le rayon d'un modele. Un modele cree avant ce lot ne porte pas
 // `origine` : il reste dans « Mes programmes », ou il a toujours ete.
+//
+// ⚠ IL NE SEQUENCE PLUS LA LISTE, il reste lu par la carte. Demande de Kevin,
+//   20/09/2026 : « mets les titres pour séquencer homme, femme, mixte ». Le
+//   classement par ORIGINE — pose le 17/09 — laissait un programme Homme et un
+//   programme Femme cote a cote sous le meme titre, alors que c'est la question
+//   qu'on se pose en parcourant la liste. L'origine n'est pas perdue : elle
+//   reste sur chaque carte, en toutes lettres, et sa consigne avec elle.
 function _cplRayon(p){ return (p&&p.origine==='athlete')?'athlete':'moi'; }
+// ⚠ UN SEUL GROUPEMENT, LU PAR L'AFFICHAGE ET PAR LES FLECHES. `cplDeplacer`
+//   cherche le voisin « du meme rayon » : si les deux fonctions ne repondaient
+//   pas la meme chose, la fleche aurait echange un programme avec un voisin
+//   invisible — rien ne bougeait a l'ecran, ou un programme sautait d'une
+//   section a l'autre sans qu'on l'ait touche.
+function _cplGroupe(p){ return progPublic(p); }
 
 // ══ A QUI S'ADRESSE UN PROGRAMME ═══════════════════════════════════════════
 //
@@ -35614,10 +35685,18 @@ function _cplRayon(p){ return (p&&p.origine==='athlete')?'athlete':'moi'; }
 //   identifiant, et le premier qui aurait ecrit `const public=...` dans une
 //   fonction voisine aurait casse le fichier entier a l'analyse — une erreur
 //   de syntaxe, pas une exception qu'on rattrape.
+// ⚠ `lib` EST PASSE DE « Les deux » A « Mixte », demande de Kevin le
+//   20/09/2026 : c'est le mot de son maquette, et c'est aussi celui du titre
+//   de section — deux mots pour le meme etat auraient fait douter qu'il
+//   s'agisse du meme.
+// `sym` : le signe astronomique, pas un emoji. Il se peint a la couleur du
+// texte, il suit la graisse de la police, et il n'apporte aucune image a
+// charger. Les emojis genres sont peints par le systeme, dans une autre
+// couleur et une autre taille — ils auraient casse la rangee.
 const PROG_PUBLICS=Object.freeze([
-  Object.freeze({cle:'H', lib:'Homme',    dit:'Pour les hommes'}),
-  Object.freeze({cle:'F', lib:'Femme',    dit:'Pour les femmes'}),
-  Object.freeze({cle:'HF',lib:'Les deux', dit:'Hommes et femmes'})
+  Object.freeze({cle:'H', lib:'Homme', sym:'\u2642', dit:'Pour les hommes'}),
+  Object.freeze({cle:'F', lib:'Femme', sym:'\u2640', dit:'Pour les femmes'}),
+  Object.freeze({cle:'HF',lib:'Mixte', sym:'\u26A5', dit:'Hommes et femmes'})
 ]);
 /**
  * PURE. Le public d'un programme : 'H', 'F' ou 'HF'.
@@ -35745,12 +35824,19 @@ function _htmlCplCarte(p,i,premier,dernier){
   // bouton, et la fiche qui correspond a qui le touche.
   const vendre=estVendeur()?'ouvrirFicheVente(null,'+i+')':'ouvrirVenteProgramme('+i+')';
   const pu=progPublic(p);
-  // LE SELECTEUR DE PUBLIC. Trois segments, un seul actif : c'est un CHOIX
-  // entre trois etats, pas trois interrupteurs — d'ou le groupe radio.
+  // LE SELECTEUR DE PUBLIC, CONTRE LE NOM. Demande de Kevin, 20/09/2026 : « les
+  // carrés à côté du titre du programme pour sélectionner le genre attribué ».
+  // En barre pleine largeur sous le resume, il se lisait comme un filtre de la
+  // page ; collé au nom, il se lit comme une propriete de CE programme.
+  //
+  // Trois segments, un seul actif : c'est un CHOIX entre trois etats, pas trois
+  // interrupteurs — d'ou le groupe radio.
   const seg='<div class="cpl-pub" role="radiogroup" aria-label="À qui s’adresse ce programme">'
     +PROG_PUBLICS.map(x=>'<button type="button" role="radio" aria-checked="'+(x.cle===pu)+'"'
-      +' class="cpl-pub-b'+(x.cle===pu?' on':'')+'"'
-      +' onclick="progPublicPoser('+i+',\''+x.cle+'\')">'+escapeHtml(x.lib)+'</button>').join('')
+      +' class="cpl-pub-b'+(x.cle===pu?' on':'')+'" title="'+escapeHtml(x.dit)+'"'
+      +' onclick="progPublicPoser('+i+',\''+x.cle+'\')">'
+      +'<span class="cpl-pub-s" aria-hidden="true">'+x.sym+'</span>'
+      +'<span class="cpl-pub-l">'+escapeHtml(x.lib)+'</span></button>').join('')
     +'</div>';
   // ⚠ LA VERSION MASQUEE EST ANNONCEE QUAND ELLE PORTE QUELQUE CHOSE. Sans
   //   cette ligne, passer un programme en « Homme » faisait disparaitre de
@@ -35762,16 +35848,23 @@ function _htmlCplCarte(p,i,premier,dernier){
     ? '<p class="cpl-garde">La version '+(cachee==='F'?'Femme':'Homme')+' garde ses '
       +nCachee+' séance'+(nCachee>1?'s':'')+' : elle n’est plus proposée, rien n’est effacé.</p>'
     : '';
+  // ⚠ LA CONSIGNE DES MODELES VENUS D'UN ATHLETE SUIT SA CARTE. Elle vivait
+  //   sous le titre « Enregistrés depuis un athlète », qui ne sequence plus la
+  //   liste : la laisser la-bas l'aurait fait disparaitre avec lui, et le coach
+  //   aurait mis en vente une version qu'il n'a pas relue.
+  const consigne=(p.origine==='athlete')
+    ? '<p class="cpl-note">Adapte l’autre version avant de le vendre.</p>' : '';
   return '<div class="cpl-c">'
     +'<div class="cpl-tete"><div>'
       +'<div class="cpl-nom">'+escapeHtml(p.name||'Sans nom')+'</div>'
-      +'<div class="cpl-meta">'+meta.join(' · ')+'</div></div>'
+      +'<div class="cpl-meta">'+meta.join(' · ')+'</div>'
+      +seg+'</div>'
     // LA PASTILLE DIT L'ETAT, ELLE NE LE CHANGE PAS : ce n'est pas un bouton,
     // et elle n'en a pas l'air. VERT POUR « EN VENTE », GRIS POUR « PRIVE »,
     // et jamais de rouge : un programme garde pour soi n'est pas une faute.
     +'<span class="cpl-pill '+(on?'cpl-pill-on':'cpl-pill-off')+'">'+(on?'En vente':'Privé')+'</span></div>'
     +'<p class="cpl-resume">'+escapeHtml(progResume(p))+'</p>'
-    +seg+garde
+    +consigne+garde
     +'<div class="cpl-versions">'
       +(pu==='F'?'':_htmlCplVersion(i,'H',p))
       +(pu==='H'?'':_htmlCplVersion(i,'F',p))+'</div>'
@@ -35808,10 +35901,43 @@ function _htmlCplBoutique(){
       +'</div>';
   }).join('');
   if(!rangs) return '';
-  return '<section class="cpl-sec">'
-    +'<div class="cpl-sec-t" role="heading" aria-level="2">Dans la boutique</div>'
-    +'<p class="cpl-sec-d">Vendus sans venir d’un de tes programmes, comme la Fondation livrée avec l’application.</p>'
+  // « MA BOUTIQUE » ET NON « DANS LA BOUTIQUE », en rouge et plus gros —
+  // demande de Kevin, 20/09/2026. Ce n'est pas qu'une couleur : « dans la
+  // boutique » designait un ENDROIT ou des programmes se trouvent, « ma
+  // boutique » designe ce qui est A LUI. C'est le meme rayon, ce n'est pas la
+  // meme phrase.
+  return '<section class="cpl-sec cpl-sec-bq">'
+    +_htmlCplBandeau('Ma boutique',
+      'Vendus sans venir d’un de tes programmes, comme la Fondation livrée avec l’application.')
     +rangs+'</section>';
+}
+/**
+ * Le bandeau d'un rayon : le logo du coach, le titre en rouge, la consigne.
+ *
+ * ⚠ LE LOGO DU COACH, ET AUCUNE IMAGE INVENTEE. La maquette montre une photo
+ *   de dos travaillé en fond ; on ne la reproduit pas — ce n'est pas notre
+ *   image, et une photo d'agence livrée dans l'application engagerait Kevin.
+ *   Ce qu'on a de vrai, c'est SON logo : il est déjà dans son dossier, déjà
+ *   publié avec sa vitrine, et c'est sa marque à lui. Sans logo, l'initiale de
+ *   son équipe prend la place — la règle posée pour l'avatar, et pour la même
+ *   raison : une initiale nette vaut mieux qu'une image approximative.
+ * @param {string} titre
+ * @param {string} aide
+ */
+function _htmlCplBandeau(titre,aide){
+  const u=currentUser||{};
+  const img=String(u.logo||u.coachPhoto||'').trim();
+  const nom=String(u.teamName||((u.fname||'')+' '+(u.lname||''))).trim();
+  const ini=(nom.match(/\S/)||['R'])[0].toUpperCase();
+  return '<div class="cpl-band">'
+    +'<div class="cpl-band-l" aria-hidden="true">'
+      +(img?'<img src="'+escapeHtml(img)+'" alt="" loading="lazy" onerror="this.remove()">'
+           :'<span>'+escapeHtml(ini)+'</span>')
+    +'</div>'
+    +'<div class="cpl-band-c">'
+      +'<div class="cpl-band-t" role="heading" aria-level="2">'+escapeHtml(titre)+'</div>'
+      +(aide?'<p class="cpl-band-d">'+escapeHtml(aide)+'</p>':'')
+    +'</div></div>';
 }
 /**
  * PURE. Les chiffres du cadran. `enVente` est INJECTE et non lu ici : la
@@ -35927,14 +36053,17 @@ function loadCoachProgramsList(){
     container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme pour l\'instant</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Un modèle créé une fois sert à tous tes athlètes — pour eux, pour elles, ou pour les deux.</span>','Créer un programme','createCoachProgTemplate()')+bq;return;
   }
   let cadran=''; try{ cadran=_htmlCplCadran(); }catch(e){ cadran=''; }
-  container.innerHTML=cadran+CPL_RAYONS.map(r=>{
+  // TROIS TITRES POUR SEQUENCER : Homme, Femme, Mixte. Une section vide ne
+  // s'affiche pas — annoncer « Femme 0 » n'oriente personne.
+  container.innerHTML=cadran+PROG_PUBLICS.map(r=>{
     const idx=[];
-    progs.forEach((p,i)=>{ if(p&&_cplRayon(p)===r.cle) idx.push(i); });
+    progs.forEach((p,i)=>{ if(p&&_cplGroupe(p)===r.cle) idx.push(i); });
     if(!idx.length) return '';
     return '<section class="cpl-sec">'
-      +'<div class="cpl-sec-t" role="heading" aria-level="2">'+r.titre
+      +'<div class="cpl-sec-t cpl-sec-g" role="heading" aria-level="2">'
+        +'<span class="cpl-sec-s" aria-hidden="true">'+r.sym+'</span>'
+        +escapeHtml(r.lib)
         +' <span class="cpl-sec-n">'+idx.length+'</span></div>'
-      +(r.aide?'<p class="cpl-sec-d">'+r.aide+'</p>':'')
       +idx.map((i,k)=>_htmlCplCarte(progs[i],i,k===0,k===idx.length-1)).join('')
       +'</section>';
   }).join('')+bq;
@@ -35954,9 +36083,9 @@ function _cptCount(sessions){return sessions?sessions.filter(s=>s.active&&s.exer
 function cplDeplacer(i,sens){
   const l=(currentUser&&currentUser.coachPrograms)||[];
   if(!l[i]||(sens!==1&&sens!==-1)) return false;
-  const r=_cplRayon(l[i]);
+  const r=_cplGroupe(l[i]);
   let j=i+sens;
-  while(j>=0&&j<l.length&&_cplRayon(l[j])!==r) j+=sens;
+  while(j>=0&&j<l.length&&_cplGroupe(l[j])!==r) j+=sens;
   if(j<0||j>=l.length) return false;
   const t=l[i]; l[i]=l[j]; l[j]=t;
   try{ saveUser(); }catch(e){}
