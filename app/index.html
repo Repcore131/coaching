@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1324';
+window.RC_BUILD='1325';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5618,24 +5618,45 @@ textarea.vn-in{resize:vertical;line-height:1.5}
      l'evolution du poids. Un cadran dessine a part aurait eu l'air d'un
      morceau rapporte, et aurait double le nombre d'endroits a reprendre le
      jour ou la marque bouge. */
-.cpl-cadran{position:relative;overflow:hidden;margin-bottom:24px;padding:14px 14px 13px;
-  border:1px solid var(--border);border-radius:var(--r-4);
-  background:radial-gradient(120% 100% at 0% 0%,rgba(224,32,32,.10),transparent 58%),
-             linear-gradient(168deg,var(--surface-1),#080808);
-  box-shadow:var(--el-1)}
-/* Le filet rouge en haut : la signature des cadres qui comptent, et il se
-   voit sans prendre de place. */
-.cpl-cadran::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
-  background:linear-gradient(90deg,var(--red),transparent 72%)}
+/* ⚠ PLUS DE CADRE AUTOUR DES QUATRE TUILES. Demande de Kevin, 20/09/2026 :
+   « ne mets pas dans un gros rectangle, laisse les 4 rectangles par contre ».
+   Un cadre autour de quatre boites deja encadrees faisait un cadre dans un
+   cadre : deux bordures pour un seul groupe, et vingt-huit pixels de marge
+   perdus sur un telephone. Les tuiles se tiennent toutes seules — c'est
+   justement ce que leur relief est fait pour faire. */
+.cpl-cadran{position:relative;margin-bottom:24px}
 .cpl-cadran-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:2.4px;
-  text-transform:uppercase;color:var(--red-text);margin-bottom:11px}
+  text-transform:uppercase;color:var(--red-text);margin-bottom:10px}
 /* A L'ETROIT, DEUX PAR RANGEE PLUTOT QUE QUATRE COLONNES DE 70 px. Sous
    380 px, quatre tuiles laissent 66 px utiles : « Athlètes équipés » y tient
    sur quatre lignes, et le chiffre perd sa tuile. */
 .cpl-cadran-r{flex-wrap:wrap}
 .cpl-cadran-r .metric-box{flex:1 1 calc(25% - 8px);min-width:104px}
 @media(max-width:560px){ .cpl-cadran-r .metric-box{flex:1 1 calc(50% - 5px)} }
-.cpl-cadran-p{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:11px 0 0}
+.cpl-cadran-p{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:10px 0 0}
+/* ══ LA TUILE ROUGE ═══════════════════════════════════════════════════════
+   « Programmes en rouge, les autres en noir. » C'est le chiffre qui porte tout
+   le reste : sans programme, ni vente, ni seance, ni athlete equipe. Il se
+   detache donc, et les trois autres restent sombres — trois rouges cote a cote
+   n'auraient rien distingue du tout.
+
+   ⚠ MEME GRAMMAIRE QUE .metric-box, teintee. Les trois couches sont celles de
+     la tuile noire — hachures, halo radial, degrade de fond — avec le degrade
+     passe au rouge et les hachures un peu plus franches pour qu'elles se
+     voient encore sur une base claire. Redessiner une tuile a part aurait
+     donne deux objets qui se ressemblent sans etre les memes. */
+.cpl-box-r{
+  background:
+    repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.055) 11px,rgba(255,255,255,.055) 12px),
+    radial-gradient(110px 80px at 50% 0%,rgba(255,120,104,.32),transparent 74%),
+    linear-gradient(160deg,#9a1717,#5e0d0d 55%,#3b0808);
+  border-color:rgba(255,90,74,.45)}
+.cpl-box-r .metric-val{color:#fff}
+.cpl-box-r .metric-label{color:rgba(255,255,255,.80)}
+/* ⚠ LE FILET DU BAS CHANGE DE COULEUR AVEC ELLE. Il est rouge sur les tuiles
+   noires ; laisse rouge sur un fond rouge, il devenait invisible — la tuile
+   aurait perdu la jauge que les trois autres portent. */
+.cpl-box-r::after{background:linear-gradient(90deg,rgba(255,255,255,.85) var(--pct,0%),transparent var(--pct,0%))}
 .cpl-cadran-n{color:var(--text-faint);font-size:var(--fs-2xs)}
 /* ══ LE PUBLIC ET LE RESUME, SUR CHAQUE CARTE ═════════════════════════════
    « Il doit y avoir 3 possibilités, soit femme, soit homme, soit femme et
@@ -36336,13 +36357,13 @@ function _htmlCplCadran(){
   // existe deja sur .metric-box : une jauge inventee pour ce cadran aurait
   // donne deux langages pour la meme idee.
   const pct=(a,b)=>b>0?Math.max(0,Math.min(100,Math.round(a/b*100))):0;
-  const boite=(val,lib,p)=>'<div class="metric-box" style="--pct:'+p+'%">'
+  const boite=(val,lib,p,rouge)=>'<div class="metric-box'+(rouge?' cpl-box-r':'')+'" style="--pct:'+p+'%">'
     +'<div class="metric-val">'+val+'</div>'
     +'<div class="metric-label">'+lib+'</div></div>';
   return '<section class="cpl-cadran">'
     +'<div class="cpl-cadran-t">Ton catalogue</div>'
     +'<div class="metric-row-4 metric-row-compacte cpl-cadran-r">'
-      +boite(c.total,'Programmes',c.total?100:0)
+      +boite(c.total,'Programmes',c.total?100:0,true)
       +boite(c.vendus,'En vente',pct(c.vendus,c.total))
       +boite(c.seances,'Séances',c.seances?100:0)
       +boite(c.equipes,'Athlètes équipés',pct(c.equipes,c.athletes))
