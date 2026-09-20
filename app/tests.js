@@ -38009,6 +38009,33 @@ async function testExercices(){
       }
       return true;})());
 
+    ok('DES BILANS SANS MENSURATION NE PROMETTENT PAS DE TOLÉRANCE',(()=>{
+      // ⚠ L'ETAT VIDE TROUVE A LA RELECTURE A FROID. Un athlete qui se pese
+      //   sans jamais se mesurer : les treize etiquettes disaient « pas de
+      //   mesure » — ce qui est juste — sous une note qui annoncait « ± 0,5 cm
+      //   de tolerance », c'est-a-dire la precision d'ecarts qui n'existent
+      //   nulle part. Une tolerance sans mesure ne veut rien dire, et laisse
+      //   meme croire qu'il y en a une quelque part.
+      const J=864e5, t=Date.now();
+      const nu={id:'N1',email:'n1@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-90*J,'bil-weight':'80'},{date:t-2*J,'bil-weight':'79'}]};
+      const h=_htmlCorpsCadre(nu);
+      if(!h) return _echec('le cadre ne se rend pas du tout');
+      if(h.indexOf('tolérance')>=0)
+        return _echec('une tolérance est annoncée alors qu’aucune mensuration n’existe');
+      if(h.indexOf('Aucune mensuration relevée')<0)
+        return _echec('le cadre ne dit pas qu’il n’a aucune mensuration');
+      // ET DES QU'UNE MESURE EXISTE, LA TOLERANCE REVIENT : c'est elle qui
+      // donne son sens au mot « stable ».
+      const plein={id:'N2',email:'n2@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-90*J,'bil-weight':'80','bil-chest':'100'},
+                {date:t-2*J, 'bil-weight':'79','bil-chest':'101.4'}]};
+      const h2=_htmlCorpsCadre(plein);
+      if(h2.indexOf('tolérance')<0) return _echec('la tolérance a disparu');
+      if(h2.indexOf('Aucune mensuration relevée')>=0)
+        return _echec('le cadre dit « aucune mensuration » alors qu’il en affiche');
+      return true;})());
+
     ok('GROSSESSE DÉCLARÉE : LE BLOC CORPS N\'EXISTE PAS',(()=>{
       // ⚠ MEME DOCTRINE QUE LES PHOTOS DE PROGRESSION, et la meme fonction —
       //   phpDisponible, pas une copie. On ne suit pas la transformation d'un

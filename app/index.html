@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1341';
+window.RC_BUILD='1342';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4326,7 +4326,12 @@ html{scroll-behavior:smooth}
   text-transform:uppercase;color:var(--sub);white-space:nowrap}
 .cc-corps-ev{font-size:11.5px;font-weight:800;color:var(--text);white-space:nowrap}
 .cc-corps-es{font-size:7.5px;font-weight:700;color:var(--text-dim);white-space:nowrap}
-.cc-corps-ed{font-size:7.5px;color:var(--text-faint);white-space:nowrap;
+/* ⚠ 8,5 px, ET PAS 7,5. Releve a la relecture a froid : quatre regles de ce
+   bloc etaient descendues a 7 et 7,5 px, soit trois pixels SOUS --fs-2xs, le
+   plus petit corps de toute l'application. Le contraste passait (5,15 contre
+   un seuil de 4,5), la taille non : a 7 px sur un telephone, une date se
+   devine plus qu'elle ne se lit. */
+.cc-corps-ed{font-size:8.5px;color:var(--text-faint);white-space:nowrap;
   font-variant-numeric:tabular-nums}
 /* UN MUSCLE SANS MESURE S'EFFACE SANS DISPARAITRE : le taire aurait laisse
    croire qu'il n'a pas bouge. */
@@ -4427,17 +4432,17 @@ html{scroll-behavior:smooth}
    consequence de la largeur. */
 .cc-corps-gc{display:block;width:100%;height:56px}
 .cc-corps-m .cc-corps-gc{height:26px}
-.cc-corps-gh,.cc-corps-gb{position:absolute;right:0;font-size:7.5px;
+.cc-corps-gh,.cc-corps-gb{position:absolute;right:0;font-size:8.5px;
   color:var(--text-faint);font-variant-numeric:tabular-nums;
   background:rgba(10,10,10,.72);padding:0 2px;border-radius:2px}
 .cc-corps-gh{top:0}
 .cc-corps-gb{bottom:0}
 .cc-corps-gk{display:flex;flex-wrap:wrap;gap:3px 9px;margin-top:5px}
 .cc-corps-gk span{display:inline-flex;align-items:center;gap:4px;
-  font-size:7.5px;font-weight:700;color:var(--sub);white-space:nowrap}
+  font-size:8.5px;font-weight:700;color:var(--sub);white-space:nowrap}
 .cc-corps-gk i{width:8px;height:2.5px;border-radius:2px;display:inline-block;
   flex:0 0 auto}
-.cc-corps-gp{font-size:7.5px;color:var(--text-faint);line-height:1.5;
+.cc-corps-gp{font-size:8.5px;color:var(--text-faint);line-height:1.5;
   margin-top:5px}
 /* Les huit petites courbes de mensurations : deux colonnes, une echelle
    chacune. */
@@ -4445,10 +4450,10 @@ html{scroll-behavior:smooth}
 .cc-corps-m{min-width:0}
 .cc-corps-mt{display:flex;align-items:baseline;justify-content:space-between;
   gap:4px;margin-bottom:2px}
-.cc-corps-mt span{font-size:7px;font-weight:800;letter-spacing:.3px;
+.cc-corps-mt span{font-size:8.5px;font-weight:800;letter-spacing:.3px;
   text-transform:uppercase;color:var(--text-faint);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
-.cc-corps-mt b{font-size:8.5px;font-weight:800;color:var(--sub);white-space:nowrap}
+.cc-corps-mt b{font-size:9.5px;font-weight:800;color:var(--sub);white-space:nowrap}
 
 /* ══ LES QUATRE TUILES DE LA FICHE ATHLETE ════════════════════
    Une grille de quatre colonnes egales, collee, sticky comme la barre de puces
@@ -51466,7 +51471,10 @@ const CORPS_PART_CORPS=40;
 //   Posee a 1, la premiere passait sous le selecteur « Vue avant / Vue
 //   arriere », mesure faite au banc : « DELTOIDE ANT. » disparaissait
 //   derriere le bouton. Le bord bas, lui, garde 93 : 93 + 6 tient dans 100.
-const CORPS_ETIQ_GAP=13, CORPS_ETIQ_HAUT=7, CORPS_ETIQ_BAS=93;
+// ⚠ LE PAS EST PASSE DE 13 A 13,5 le 21/09/2026, quand la ligne de dates est
+//   remontee de 7,5 a 8,5 px : l'etiquette gagne deux pixels, et une colonne
+//   calculee au plus juste se serait mise a se chevaucher en silence.
+const CORPS_ETIQ_GAP=13.5, CORPS_ETIQ_HAUT=7, CORPS_ETIQ_BAS=93;
 // La largeur d'une colonne d'etiquettes, en centiemes de scene : ce qui reste
 // de part et d'autre du corps, moins une gouttiere de 2.
 const CORPS_ETIQ_LARG=(100-CORPS_PART_CORPS)/2-2;
@@ -51909,7 +51917,7 @@ function corpsPointsVolume(u,muscle,n,fin){
  *   serait aplatie. Les valeurs sont posees en HTML par-dessus.
  * @param {{lib:string,couleur:string,points:{x:number,v:number}[]}[]} series
  * @param {{h:number}} [o]
- * @returns {{svg:string,min:number,max:number}|null}
+ * @returns {{svg:string,min:number,max:number,x0:number,x1:number}|null}
  */
 function _corpsCourbe(series,o){
   const s=(series||[]).filter(x=>x&&Array.isArray(x.points)&&x.points.length);
@@ -51945,7 +51953,7 @@ function _corpsCourbe(series,o){
     +'" stroke="rgba(255,255,255,.12)" stroke-width="1" vector-effect="non-scaling-stroke"/>';
   return {svg:'<svg class="cc-corps-gc" viewBox="0 0 100 '+H+'"'
     +' preserveAspectRatio="none" aria-hidden="true">'+grille+corps+'</svg>',
-    min:vmin,max:vmax};
+    min:vmin,max:vmax,x0:xmin,x1:xmax};
 }
 // « 100,9 ». Une decimale au plus, virgule francaise, et pas de zero inutile.
 function _corpsNb(v){
@@ -51968,12 +51976,22 @@ function _htmlCorpsGraphe(titre,unite,series,o){
   const leg=series.length>1
     ?'<div class="cc-corps-gk">'+series.map(g=>'<span><i style="background:'
       +g.couleur+'"></i>'+escapeHtml(g.lib)+'</span>').join('')+'</div>':'';
+  // ⚠ LA PERIODE, SUR LA CARTE, PARCE QU'UNE VALEUR PORTE SA DATE. Releve a la
+  //   relecture a froid : « 100,9 kg » s'affichait en tete d'une courbe sans
+  //   qu'on sache de quand datait ce chiffre ni sur quelle etendue la ligne
+  //   etait tracee. Les etiquettes du corps, elles, portaient deja leurs dates.
+  //   Elle n'est ecrite QUE lorsque les x sont des dates : sur la courbe de
+  //   volume ce sont des rangs de semaine, et la semaine y est deja nommee.
+  const per=((o||{}).dates&&c.x1>0)
+    ?('du '+_corpsJour(c.x0)+' au '+_corpsJour(c.x1))
+    :'';
+  const pied=[(o||{}).pied||'',per].filter(Boolean).join(' · ');
   return '<div class="cc-corps-g">'
     +'<div class="cc-corps-gt"><span>'+escapeHtml(titre)+'</span><b>'+der+'</b></div>'
     +'<div class="cc-corps-gz">'+c.svg
     +'<span class="cc-corps-gh">'+_corpsNb(c.max)+'</span>'
     +'<span class="cc-corps-gb">'+_corpsNb(c.min)+'</span>'
-    +'</div>'+leg+(o&&o.pied?('<div class="cc-corps-gp">'+escapeHtml(o.pied)+'</div>'):'')
+    +'</div>'+leg+(pied?('<div class="cc-corps-gp">'+escapeHtml(pied)+'</div>'):'')
     +'</div>';
 }
 /**
@@ -51989,19 +52007,22 @@ function _htmlCorpsGraphes(u){
   // ── 1. LE POIDS ───────────────────────────────────────────────────────
   h+=_htmlCorpsGraphe('Poids','kg',
     [{lib:'Poids',couleur:'#E02020',points:corpsPointsPoids(u)}],
-    {h:44,pied:'Relevé au bilan. La pesée quotidienne a son propre protocole '
+    {h:44,dates:true,
+     pied:'Relevé au bilan. La pesée quotidienne a son propre protocole '
       +'et n’est pas mélangée ici.'});
   // ── 2. LES MENSURATIONS, PAR GROUPE ───────────────────────────────────
   // ⚠ HUIT PETITES COURBES PLUTOT QU'UNE GRANDE. Un tour de bras de 39 cm et
   //   un tour de taille de 86 sur le meme axe ecrasent le premier contre le
   //   sol : ils n'ont rien a faire sur la meme echelle. Chaque groupe garde la
   //   sienne, et c'est ce que fait deja l'ecran Mensurations de l'athlete.
-  let minis='';
+  let minis='', mx0=Infinity, mx1=-Infinity;
   for(const g of MENS_GROUPES){
     const series=g.items.map(it=>({lib:it.l||g.label,couleur:it.color,
       points:corpsPointsMesure(u,it.k)}));
     const c=_corpsCourbe(series,{h:30});
     if(!c) continue;
+    if(c.x0<mx0) mx0=c.x0;
+    if(c.x1>mx1) mx1=c.x1;
     const der=(()=>{
       const s=series.find(x=>x.points.length);
       return _corpsNb(s.points[s.points.length-1].v);
@@ -52015,7 +52036,14 @@ function _htmlCorpsGraphes(u){
       +'<span>Mensurations</span><b>cm</b></div>'
       +'<div class="cc-corps-mg">'+minis+'</div>'
       +'<div class="cc-corps-gp">Une échelle par groupe : un tour de bras et un '
-      +'tour de taille sur le même axe ne se comparent pas.</div></div>';
+      +'tour de taille sur le même axe ne se comparent pas.'
+      // ⚠ L'ETENDUE EST CELLE DE TOUTES LES COURBES REUNIES, et le mot « au
+      //   plus large » le dit : d'un groupe a l'autre la periode differe des
+      //   que l'athlete saute une mesure, et annoncer une periode unique comme
+      //   si elle valait pour chacune aurait menti sur les plus courtes.
+      +(mx1>0?(' Relevés du '+_corpsJour(mx0)+' au '+_corpsJour(mx1)
+        +', au plus large.'):'')
+      +'</div></div>';
   // ── 3. LE VOLUME HEBDOMADAIRE, TROIS MUSCLES ──────────────────────────
   // ⚠ TROIS, PAS DIX-HUIT. Dix-huit lignes sur quatre-vingts pixels de haut
   //   font une pelote. Ce sont les trois muscles les plus charges de la
@@ -52045,7 +52073,7 @@ function _htmlCorpsGraphes(u){
  *   donc toujours dans la meme encre. Le vert et le rouge, dans ce cadre,
  *   diront le VOLUME d'entrainement — une tout autre question, et la seule
  *   pour laquelle il existe des reperes.
- * @returns {{etiquettes:string,traits:string}}
+ * @returns {{etiquettes:string,traits:string,avecEcart:number}}
  */
 function _htmlCorpsEtiquettes(u,genre,vue){
   const liste=CORPS_ETIQUETTES[vue]||[];
@@ -52056,13 +52084,14 @@ function _htmlCorpsEtiquettes(u,genre,vue){
     if(!a) continue;
     (par[e.s]||par.l).push({e,x:g0+a.x*CORPS_PART_CORPS/100,y:a.y});
   }
-  let ets='', segments='', points='';
+  let ets='', segments='', points='', avecEcart=0;
   for(const cote of ['l','r']){
     const col=par[cote].slice().sort((p,q)=>p.y-q.y);
     const ys=corpsEtaler(col.map(p=>p.y),CORPS_ETIQ_GAP,CORPS_ETIQ_HAUT,CORPS_ETIQ_BAS);
     col.forEach((p,i)=>{
       const cy=ys[i];
       const inf=corpsEtiquette(u,p.e.m);
+      if(inf.ecart) avecEcart++;
       const lignes='<span class="cc-corps-em">'+escapeHtml(inf.lib)+'</span>'
         +(inf.valeur?'<span class="cc-corps-ev">'+escapeHtml(inf.valeur)+'</span>':'')
         +'<span class="cc-corps-es">'+escapeHtml(inf.source)+'</span>'
@@ -52091,7 +52120,7 @@ function _htmlCorpsEtiquettes(u,genre,vue){
   }
   const traits='<svg class="cc-corps-traits" viewBox="0 0 100 100"'
     +' preserveAspectRatio="none" aria-hidden="true">'+segments+'</svg>'+points;
-  return {etiquettes:ets,traits};
+  return {etiquettes:ets,traits,avecEcart};
 }
 /**
  * Le cadre du corps. Rend '' quand il n'a rien le droit de montrer.
@@ -52125,7 +52154,7 @@ function _htmlCorpsCadre(c){
   // aucun ecart a montrer, et treize libelles suivis de treize tirets seraient
   // un cadre plein qui ne dit rien.
   const eti=(bilans.length>=2)?_htmlCorpsEtiquettes(u,genre,vue)
-                              :{etiquettes:'',traits:''};
+                              :{etiquettes:'',traits:'',avecEcart:0};
   // LA TEINTE SORT DES LE PREMIER BILAN — elle ne depend pas des bilans du
   // tout, mais des seances. Sans aucun bilan le cadre reste eteint : c'est le
   // contrat affiche, et un corps colorie sous « Pas encore de bilan » aurait
@@ -52157,11 +52186,20 @@ function _htmlCorpsCadre(c){
   //   tolerance, et ce que veut dire un muscle gris. La source et les dates,
   //   elles, sont SUR chaque etiquette — une periode unique annoncee ici aurait
   //   menti sur les mesures relevees a d'autres dates.
+  // ⚠ ET UN TROISIEME ETAT, TROUVE A LA RELECTURE A FROID : des bilans, mais
+  //   AUCUNE mensuration. Les treize etiquettes disaient « pas de mesure » —
+  //   ce qui est juste — sous une note qui annoncait « ± 0,5 cm de
+  //   tolerance », c'est-a-dire la precision d'ecarts qui n'existent nulle
+  //   part. Une tolerance sans mesure ne veut rien dire ; elle donne meme a
+  //   croire qu'il y en a une quelque part.
   const note=(bilans.length<2)
     ?'<div class="cc-corps-n">Un seul bilan — les écarts apparaîtront au suivant.</div>'
-    :'<div class="cc-corps-n">Écart entre les deux derniers bilans qui portent '
-      +'la mesure, reports exclus · ± '
-      +String(SYN_BRUIT_MESURE).replace('.',',')+' cm de tolérance.</div>';
+    :(eti.avecEcart
+      ?'<div class="cc-corps-n">Écart entre les deux derniers bilans qui portent '
+        +'la mesure, reports exclus · ± '
+        +String(SYN_BRUIT_MESURE).replace('.',',')+' cm de tolérance.</div>'
+      :'<div class="cc-corps-n">Aucune mensuration relevée à ce jour : le corps '
+        +'montre la charge de travail, pas les écarts.</div>');
   // ⚠ LA LEGENDE DIT CE QUE LA COULEUR DECRIT, ET CE QU'ELLE NE DECRIT PAS.
   //   Sans elle, un quadriceps rouge a cote d'un « +0,9 cm » se lit comme un
   //   jugement sur la cuisse. Le rouge dit « au-dessus du MRV » — une charge
