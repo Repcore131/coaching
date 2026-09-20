@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1335';
+window.RC_BUILD='1336';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -3867,34 +3867,38 @@ html{scroll-behavior:smooth}
    Les quatre bandeaux prennent order:1 et se partagent la largeur ; les
    contenus prennent order:2 et une base de 100 %, donc ils passent a la ligne
    suivante, pleine largeur, dans l'ordre des sections. */
-/* LA LIGNE DEBORDE LES 20 px DE .pad, DE DOUZE DE CHAQUE COTE. Quatre
-   rectangles dans 335 px n'en laissaient que 79 a chacun, et « ACTUALISER »
-   touchait ses deux bords. Le debord rend 24 px, le gain va au texte. Les
-   contenus deplies, eux, sont remis dans l'alignement de la fiche : eux se
-   lisent en colonne avec le reste. */
+/* ⚠ PAS DE DEBORD. La ligne a deborde les 20 px de .pad de douze de chaque
+   cote pendant le build 1335 : sur un large ecran, elle passait par-dessus le
+   bouton rouge qui la suit, et ca se voyait. Elle tient desormais dans la
+   colonne, comme tout le reste de la fiche. LA PLACE SE PREND EN HAUTEUR,
+   PAS EN LARGEUR — Kevin, 20/09/2026, capture a l'appui. */
 .ccd-barre4{display:flex;flex-wrap:wrap;align-items:stretch;gap:5px;
-  margin:0 -12px 10px}
+  margin:0 0 10px}
 #s-coach-client .ccd-barre4>.cc-sect{display:contents}
 /* UNE SECTION VIDE DISPARAIT TOUJOURS. Le display:contents ci-dessus est plus
    specifique que la regle generale et la battrait : sans ces deux lignes,
    « Son mot » vide laisserait un bandeau qui n'ouvre sur rien. */
 #s-coach-client .ccd-barre4>.cc-sect:has(>.cc-sect-c:empty),
 #s-coach-client .ccd-barre4>.cc-sect:has(>.cc-sect-c[style*="display:none"]){display:none}
+/* LES QUATRE SONT CENTRES, chevron compris : le triangle voyage avec son
+   libelle au lieu de le pousser contre le bord gauche. Sans cela, deux
+   rectangles portaient leur texte a gauche et deux au milieu. */
 #s-coach-client .ccd-barre4>.cc-sect>.cc-sect-t{order:1;flex:1 1 0;min-width:0;
-  margin-bottom:0;align-items:center;padding:6px 5px}
-#s-coach-client .ccd-barre4>.cc-sect>.cc-sect-c{order:2;flex:0 0 100%;width:100%;padding:8px 12px 0}
-/* QUATRE LIBELLES EN 375 px : 88 px chacun apres le debord. A 13,5 px et
-   1,8 px d'interlettre — la mesure des sections pleine largeur — aucun n'y
-   entrait. L'INTERLETTRE PAIE LA POLICE : la ramener a 0,4 px rend une
-   dizaine de pixels par libelle, de quoi monter a 11 px sans que
-   « ACTUALISER », le plus long mot d'un seul tenant, se coupe en deux. */
-#s-coach-client .ccd-barre4 .cc-sect-t>span,.ccd-b4{font-size:11px;letter-spacing:.4px;
-  line-height:1.2;overflow-wrap:anywhere}
+  margin-bottom:0;align-items:center;justify-content:center;text-align:center;
+  gap:5px;padding:6px 5px;min-height:46px}
+#s-coach-client .ccd-barre4>.cc-sect>.cc-sect-c{order:2;flex:0 0 100%;width:100%;padding:8px 0 0}
+/* LA POLICE SUIT L'ECRAN, parce que le rectangle aussi. Sur telephone les
+   quatre se partagent 335 px — 80 px chacun — et « ACTUALISER », le plus long
+   mot d'un seul tenant, n'y entre qu'a 10 px ; sur l'ecran du coach, large,
+   rien n'empeche d'aller a 13. clamp() fait les deux sans point de rupture,
+   et l'interlettre reste a 0,4 px : c'est elle qui paie la taille. */
+#s-coach-client .ccd-barre4 .cc-sect-t>span,.ccd-b4{font-size:clamp(10px,2.6vw,13px);
+  letter-spacing:.4px;line-height:1.2;overflow-wrap:anywhere}
 /* LES DEUX BOUTONS PORTENT LE MEME RECTANGLE QUE LES BANDEAUX — meme fond,
    meme filet a gauche, meme rayon — et PAS de chevron : ils n'ouvrent rien sur
    place. Le texte est donc centre, faute de triangle pour l'ancrer a gauche. */
 .ccd-b4{order:1;flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;
-  text-align:center;padding:6px 5px;min-height:34px;cursor:pointer;
+  text-align:center;padding:6px 5px;min-height:46px;cursor:pointer;
   font-family:var(--pile-titre);font-weight:800;text-transform:uppercase;
   color:#fff;text-shadow:0 0 8px rgba(255,255,255,.35);
   background:var(--surface-1);border:none;border-left:3px solid var(--border);
