@@ -37641,6 +37641,8 @@ async function testExercices(){
         ?true:_echec('Alice attend depuis '+joursDepuisRattachement(l[0],t)+' jours');})());
 
     // ══════ LE SCHEMA CORPOREL DE LA FICHE COACH ══════════════════════════
+    // Les ordonnees d'un trace SVG : « M12.34 5.67 » ou « L88.00 21.50 ».
+    const RE_Y_COURBE=new RegExp('[ML]\\s*[0-9.]+\\s+([0-9.]+)','g');
     // Tout ce qui est PUR ici est epingle : l'ancrage des traits, l'etalement
     // des etiquettes, la coherence des tables, et le masquage du bloc. Le
     // rendu, lui, se juge au banc — une capture dit en une seconde ce qu'une
@@ -37827,6 +37829,85 @@ async function testExercices(){
         return _echec('les fessiers ne lisent plus le tour de fessiers');
       if(corpsEtiquette(u,'MOLLETS').source!=='mollet D')
         return _echec('les mollets ne lisent pas le tour de mollet');
+      return true;})());
+
+    ok('UNE COURBE NE RELIE QUE DES POINTS MESURÉS',(()=>{
+      const J=864e5, t=Date.parse('2026-09-14T10:00:00Z');
+      const B=(j,o)=>Object.assign({date:t-j*J},o);
+      const u={id:'C1',role:'athlete',bilans:[
+        B(120,{'bil-weight':'102.4','bil-chest':'106'}),
+        B(60, {'bil-weight':'101.0','bil-chest':'107.4'}),
+        // ⚠ LE DERNIER BILAN REPORTE LE TOUR DE POITRINE. Une courbe qui relie
+        //   un releve a un report dessine une progression que personne n'a
+        //   mesuree — et une courbe ment plus fort qu'un nombre, parce qu'elle
+        //   a l'air continue.
+        B(2,  {'bil-weight':'100.9','bil-chest':'107.4',reprises:['bil-chest']})]};
+      const ch=corpsPointsMesure(u,'chest');
+      if(ch.length!==2) return _echec('le tour de poitrine a '+ch.length+' points au lieu de 2');
+      if(ch[0].x>=ch[1].x) return _echec('les points ne sont pas du plus ancien au plus récent');
+      // LE POIDS, LUI, N'A PAS DE REPORT : ses trois relevés sortent.
+      if(corpsPointsPoids(u).length!==3)
+        return _echec('le poids a '+corpsPointsPoids(u).length+' points au lieu de 3');
+      // UNE MESURE JAMAIS SAISIE NE REND PAS DE POINT, et pas une exception.
+      if(corpsPointsMesure(u,'glutes').length!==0)
+        return _echec('une mesure absente produit des points');
+      if(corpsPointsMesure(u,null).length!==0)
+        return _echec('une clef nulle produit des points');
+      return true;})());
+
+    ok('LES DEUX SÉRIES D\u2019UNE COURBE PARTAGENT LEUR ÉCHELLE',(()=>{
+      // ⚠ C'EST LA SEULE RAISON DE NE PAS AVOIR REUTILISE _sparkline. Elle met
+      //   a l'echelle chaque appel SUR SES PROPRES points : deux appels pour la
+      //   cuisse droite et la cuisse gauche auraient donne deux courbes
+      //   normalisees separement, superposees, ou un ecart d'un demi centimetre
+      //   aurait l'air d'un ecart de dix.
+      const c=_corpsCourbe([
+        {lib:'D',couleur:'#fff',points:[{x:0,v:61.5},{x:1,v:62.4}]},
+        {lib:'G',couleur:'#aaa',points:[{x:0,v:40},{x:1,v:40.2}]}],{h:40});
+      if(!c) return _echec('rien n’est tracé avec quatre points');
+      if(c.min!==40||c.max!==62.4)
+        return _echec('l’échelle va de '+c.min+' à '+c.max+' au lieu de 40 à 62,4');
+      // LES DEUX SERIES SONT TRACEES SUR LA MEME ECHELLE : la seconde doit donc
+      // rester en bas du cadre, et non s'etirer sur toute sa hauteur.
+      const ys=[...c.svg.matchAll(RE_Y_COURBE)].map(m=>Number(m[1]));
+      if(ys.length<4) return _echec('il manque des points dans le tracé');
+      if(!(Math.max(...ys)-Math.min(...ys)>20))
+        return _echec('les deux séries occupent la même bande : l’échelle n’est pas partagée');
+      // ⚠ AUCUN TEXTE DANS LE SVG. Le viewBox est etire en largeur pour que les
+      //   x tombent juste ; une lettre y serait aplatie. Les valeurs sont
+      //   posees en HTML par-dessus.
+      if(c.svg.indexOf('<text')>=0)
+        return _echec('du texte a été posé dans un viewBox étiré');
+      if(c.svg.indexOf('non-scaling-stroke')<0)
+        return _echec('le trait suivra l’étirement et s’épaissira en travers');
+      // MOINS DE DEUX POINTS : RIEN. Un point unique n'est pas une courbe.
+      if(_corpsCourbe([{lib:'x',couleur:'#fff',points:[{x:0,v:5}]}],{h:40})!==null)
+        return _echec('un point seul produit une courbe');
+      if(_corpsCourbe([],{h:40})!==null) return _echec('une série vide produit une courbe');
+      if(_corpsCourbe(null,{h:40})!==null) return _echec('null produit une courbe');
+      return true;})());
+
+    ok('LES GROUPES DE MENSURATIONS SONT CEUX QUE L\u2019ATHLÈTE SAISIT',(()=>{
+      // Ils servent a DEUX ecrans — l'onglet Mensurations de l'athlete et le
+      // schema corporel du coach. Une liste par ecran aurait fini par decouper
+      // le meme corps de deux facons.
+      const mesurees=new Set(MEAS.map(m=>m.k));
+      const vus=new Set();
+      for(const g of MENS_GROUPES){
+        if(!g.label) return _echec('un groupe sans libellé');
+        if(!g.items||!g.items.length) return _echec(g.label+' n’a aucune mesure');
+        for(const it of g.items){
+          if(!mesurees.has(it.k))
+            return _echec(g.label+' trace « '+it.k+' », que personne ne saisit');
+          if(vus.has(it.k)) return _echec('« '+it.k+' » est tracé dans deux groupes');
+          vus.add(it.k);
+          if(!it.color) return _echec(g.label+' : « '+it.k+' » n’a pas de couleur');
+        }
+      }
+      // « 100,9 » : une decimale au plus, virgule francaise, pas de zero inutile.
+      if(_corpsNb(100.94)!=='100,9') return _echec('_corpsNb rend « '+_corpsNb(100.94)+' »');
+      if(_corpsNb(39)!=='39') return _echec('_corpsNb ajoute une décimale inutile : '+_corpsNb(39));
+      if(_corpsNb(0)!=='0') return _echec('_corpsNb ne sait pas dire zéro');
       return true;})());
 
     ok('LA TEINTE DIT LE VOLUME, ET SEULEMENT LA OU IL Y A UN REPERE',(()=>{

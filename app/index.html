@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1339';
+window.RC_BUILD='1340';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4369,6 +4369,86 @@ html{scroll-behavior:smooth}
   font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap}
 .cc-corps-lp i{width:9px;height:9px;border-radius:2px;display:inline-block;
   flex:0 0 auto}
+/* ── LES TROIS GRAPHIQUES ─────────────────────────────────────────────────
+   Empiles SOUS le corps par defaut — c'est la mise en page de reference, celle
+   de 375 px. Ils passent a DROITE du corps des que le bloc a la place, et pas
+   avant : voir le palier plus bas. */
+.cc-corps-grille{display:flex;flex-direction:column;gap:14px}
+/* ══ DEUX COLONNES : LE CORPS A GAUCHE, LES COURBES A DROITE ══════════════
+   ⚠ LE PALIER EST MESURE, PAS CHOISI. La scene du corps est plafonnee a
+   470 px et les courbes deviennent illisibles sous 260 : il faut donc
+   470 + 16 + 260 = 746 px DE BLOC pour que les deux tiennent cote a cote. La
+   fiche coach n'offre cette largeur qu'a partir de 1 260 px de fenetre —
+   releve au banc, barre laterale comprise. En dessous, les courbes seraient
+   plus etroites que leurs propres libelles.
+
+   ⚠ CE N'EST PAS LA MISE EN DEUX COLONNES DE LA FICHE, qui a ete RETIREE le
+   07/09/2026 a la demande de Kevin — « ca gache la lecture » : elle faisait
+   lire les sections en zigzag et faisait perdre l'ORDRE du dossier. Ici il
+   n'y a qu'un bloc qui se partage en deux, et l'ordre de lecture reste le
+   meme : le corps d'abord, les courbes ensuite.
+
+   ⚠ ET _ccdMajColonnes N'A PAS PU SERVIR. Elle repond a une autre question —
+   combien de blocs l'onglet affiche — et pose `data-solo` sur l'onglet
+   entier. Elle ne sait rien de la largeur disponible DANS un bloc.
+
+   ⚠ LA REGLE INTERROGE LE BLOC, PAS LA FENETRE, et c'est le fond du sujet.
+   Une premiere version basculait a 1 260 px de fenetre ; mesure faite, le
+   bloc fait deja 883 px a 1 200 px de fenetre, et la largeur qu'il obtient
+   depend de la barre laterale, des marges et de l'onglet ouvert. Un palier de
+   fenetre etait donc une devinette qu'il aurait fallu re-regler a chaque
+   changement de gabarit. La requete de conteneur pose la vraie question :
+   « ce bloc-ci a-t-il 746 px ? ».
+   Un navigateur qui ne connait pas @container garde la colonne unique, qui
+   est la mise en page de reference : le repli est correct, pas degrade. */
+.cc-corps{container-type:inline-size;container-name:corps}
+@container corps (min-width:746px){
+  .cc-corps-grille{display:grid;grid-template-columns:minmax(0,500px) minmax(260px,1fr);
+    align-items:start;gap:16px}
+}
+.cc-corps-col{min-width:0}
+.cc-corps-g{background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.09);
+  border-radius:var(--r-2);padding:9px 10px 8px}
+.cc-corps-g+.cc-corps-g{margin-top:10px}
+.cc-corps-gt{display:flex;align-items:baseline;justify-content:space-between;
+  gap:8px;margin-bottom:6px}
+.cc-corps-gt span{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.4px;
+  text-transform:uppercase;color:var(--sub)}
+.cc-corps-gt b{font-size:var(--fs-sm);font-weight:800;color:var(--text);
+  white-space:nowrap}
+/* LA ZONE DE TRACE. Le SVG est etire en largeur pour que les x tombent juste ;
+   les valeurs sont donc posees en HTML par-dessus, jamais dedans — une lettre
+   dans ce viewBox serait aplatie. */
+.cc-corps-gz{position:relative}
+/* ⚠ UNE HAUTEUR EN PIXELS, PAS `auto`. Avec preserveAspectRatio="none", un
+   `height:auto` fait suivre la hauteur a la LARGEUR : la courbe du poids
+   montait a 129 px sur un telephone et a plus du double sur un ecran large,
+   pour deux points. La hauteur est une decision de lecture, pas une
+   consequence de la largeur. */
+.cc-corps-gc{display:block;width:100%;height:56px}
+.cc-corps-m .cc-corps-gc{height:26px}
+.cc-corps-gh,.cc-corps-gb{position:absolute;right:0;font-size:7.5px;
+  color:var(--text-faint);font-variant-numeric:tabular-nums;
+  background:rgba(10,10,10,.72);padding:0 2px;border-radius:2px}
+.cc-corps-gh{top:0}
+.cc-corps-gb{bottom:0}
+.cc-corps-gk{display:flex;flex-wrap:wrap;gap:3px 9px;margin-top:5px}
+.cc-corps-gk span{display:inline-flex;align-items:center;gap:4px;
+  font-size:7.5px;font-weight:700;color:var(--sub);white-space:nowrap}
+.cc-corps-gk i{width:8px;height:2.5px;border-radius:2px;display:inline-block;
+  flex:0 0 auto}
+.cc-corps-gp{font-size:7.5px;color:var(--text-faint);line-height:1.5;
+  margin-top:5px}
+/* Les huit petites courbes de mensurations : deux colonnes, une echelle
+   chacune. */
+.cc-corps-mg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cc-corps-m{min-width:0}
+.cc-corps-mt{display:flex;align-items:baseline;justify-content:space-between;
+  gap:4px;margin-bottom:2px}
+.cc-corps-mt span{font-size:7px;font-weight:800;letter-spacing:.3px;
+  text-transform:uppercase;color:var(--text-faint);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.cc-corps-mt b{font-size:8.5px;font-weight:800;color:var(--sub);white-space:nowrap}
 
 /* ══ LES QUATRE TUILES DE LA FICHE ATHLETE ════════════════════
    Une grille de quatre colonnes egales, collee, sticky comme la barre de puces
@@ -51741,6 +51821,221 @@ function _htmlCorpsPlanche(u,genre,vue,teintes){
     +_htmlCorpsTete(u,genre,vue)
     +'</div>';
 }
+// ══ LES TROIS GRAPHIQUES DU CADRE CORPS ════════════════════════════════════
+//
+// ⚠ ILS SE NOURRISSENT DES BILANS ET DES SEANCES, DE RIEN D'AUTRE. Aucun
+//   chiffre n'est deduit d'une photo, aucun n'est extrapole entre deux
+//   releves : une courbe relie des points mesures, et s'arrete ou les mesures
+//   s'arretent.
+//
+// ⚠ ET AUCUN N'EST UN SCORE. Ce sont des kilos, des centimetres et des series
+//   dures — trois unites, trois protocoles, trois sources. Un « indice de
+//   progression » agrege n'aurait ni unite ni methode.
+const CORPS_GRAPHE_SEMAINES=8;
+/**
+ * PURE. Les points d'une mensuration : [{x:date, v:valeur}], du plus ancien au
+ * plus recent.
+ *
+ * ⚠ MEMES REGLES QUE L'ETIQUETTE : les valeurs REPORTEES sont ecartees. Une
+ *   courbe qui relie un releve a un report dessine une progression que
+ *   personne n'a mesuree — c'est exactement ce que corpsEcart refuse, et une
+ *   courbe ment plus fort qu'un nombre parce qu'elle a l'air continue.
+ */
+function corpsPointsMesure(u,cle){
+  if(!cle) return [];
+  let bl=[];
+  try{ bl=bilansOrdonnes(u)||[]; }catch(e){ return []; }
+  const out=[];
+  for(const b of bl){
+    let rep=false; try{ rep=bmReportee(b,cle); }catch(e){ rep=false; }
+    if(rep) continue;
+    let v=null; try{ v=getBM(b,cle); }catch(e){ v=null; }
+    if(v>0) out.push({x:Number(b&&b.date)||0,v});
+  }
+  return out;
+}
+// PURE. Les poids releves au bilan. getBW, et rien d'autre : la pesee
+// quotidienne vit ailleurs et n'a pas le meme protocole — a jeun, apres les
+// toilettes, sur la meme balance — ce qui rendrait les deux series
+// incomparables sur un meme axe.
+function corpsPointsPoids(u){
+  let bl=[];
+  try{ bl=bilansOrdonnes(u)||[]; }catch(e){ return []; }
+  const out=[];
+  for(const b of bl){
+    let v=null; try{ v=getBW(b); }catch(e){ v=null; }
+    if(v>0) out.push({x:Number(b&&b.date)||0,v});
+  }
+  return out;
+}
+/**
+ * Les series dures par semaine d'un muscle, sur les dernieres semaines.
+ * IMPURE — elle lit l'horloge par _volCleDecalee. `x` est un RANG de semaine,
+ * pas une date : les semaines sont regulieres, et les espacer par leur
+ * horodatage n'aurait fait qu'ajouter du bruit.
+ *
+ * ⚠ `fin` EST LE RANG DE LA DERNIERE SEMAINE MONTREE, et il n'est pas
+ *   decoratif. Mesure faite un LUNDI : la semaine en cours etait vide, la
+ *   courbe plongeait a zero au bord droit et le chiffre en tete du cadre
+ *   annoncait « 0 » — sur un athlete qui s'entraine six fois par semaine. Le
+ *   meme piege avait ete vu et traite pour la teinte ; il ne l'avait pas ete
+ *   pour la courbe. On s'arrete donc a la derniere semaine TRAVAILLEE, celle
+ *   que corpsSemaineVolume designe, et le pied du cadre la nomme.
+ */
+function corpsPointsVolume(u,muscle,n,fin){
+  const N=Math.max(2,Number(n)||CORPS_GRAPHE_SEMAINES);
+  const f=Math.max(0,Number(fin)||0);
+  const out=[];
+  for(let i=f+N-1;i>=f;i--){
+    let vol={};
+    try{ vol=volumeSemaine(u,_volCleDecalee(i))||{}; }catch(e){ vol={}; }
+    out.push({x:f+N-1-i,v:Math.round((Number(vol[muscle])||0)*10)/10});
+  }
+  return out;
+}
+/**
+ * PURE. Une courbe SVG, a echelle PARTAGEE entre ses series.
+ *
+ * ⚠ _sparkline N'A PAS PU SERVIR, ET C'EST LA SEULE RAISON D'AVOIR ECRIT
+ *   CECI. Elle met a l'echelle chaque appel SUR SES PROPRES points : deux
+ *   appels pour la cuisse droite et la cuisse gauche auraient donne deux
+ *   courbes normalisees separement, superposees, ou un ecart d'un demi
+ *   centimetre aurait l'air d'un ecart de dix. La geometrie, elle, est reprise
+ *   telle quelle — meme viewBox etire, meme vector-effect pour que le trait
+ *   garde son pixel.
+ *
+ * ⚠ AUCUN TEXTE DANS LE SVG. Le viewBox est etire en largeur
+ *   (preserveAspectRatio="none") pour que les x tombent juste ; une lettre y
+ *   serait aplatie. Les valeurs sont posees en HTML par-dessus.
+ * @param {{lib:string,couleur:string,points:{x:number,v:number}[]}[]} series
+ * @param {{h:number}} [o]
+ * @returns {{svg:string,min:number,max:number}|null}
+ */
+function _corpsCourbe(series,o){
+  const s=(series||[]).filter(x=>x&&Array.isArray(x.points)&&x.points.length);
+  if(!s.length) return null;
+  let xmin=Infinity,xmax=-Infinity,vmin=Infinity,vmax=-Infinity,n=0;
+  for(const g of s) for(const p of g.points){
+    if(!isFinite(p.x)||!isFinite(p.v)) continue;
+    n++;
+    if(p.x<xmin) xmin=p.x; if(p.x>xmax) xmax=p.x;
+    if(p.v<vmin) vmin=p.v; if(p.v>vmax) vmax=p.v;
+  }
+  if(n<2) return null;
+  const H=Number((o||{}).h)||40;
+  const dx=(xmax-xmin)||1, dv=(vmax-vmin)||1;
+  // Deux pixels de marge en haut et en bas : une courbe qui touche le bord se
+  // lit comme une courbe coupee.
+  const X=p=>((p.x-xmin)/dx)*100;
+  const Y=p=>H-2-((p.v-vmin)/dv)*(H-4);
+  let corps='';
+  for(const g of s){
+    const pts=g.points.filter(p=>isFinite(p.x)&&isFinite(p.v))
+      .slice().sort((a,b)=>a.x-b.x);
+    if(pts.length<2) continue;
+    const d=pts.map((p,i)=>(i?'L':'M')+X(p).toFixed(2)+' '+Y(p).toFixed(2)).join(' ');
+    corps+='<path d="'+d+'" fill="none" stroke="'+g.couleur
+      +'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"'
+      +' vector-effect="non-scaling-stroke"/>';
+  }
+  if(!corps) return null;
+  // Le filet du bas : il donne un sol a la courbe. Sans lui, une ligne seule
+  // sur du noir ne dit pas si elle monte ou si le cadre penche.
+  const grille='<line x1="0" y1="'+(H-2)+'" x2="100" y2="'+(H-2)
+    +'" stroke="rgba(255,255,255,.12)" stroke-width="1" vector-effect="non-scaling-stroke"/>';
+  return {svg:'<svg class="cc-corps-gc" viewBox="0 0 100 '+H+'"'
+    +' preserveAspectRatio="none" aria-hidden="true">'+grille+corps+'</svg>',
+    min:vmin,max:vmax};
+}
+// « 100,9 ». Une decimale au plus, virgule francaise, et pas de zero inutile.
+function _corpsNb(v){
+  const n=Math.round((Number(v)||0)*10)/10;
+  return String(n).replace('.',',');
+}
+// Une carte de graphique : titre, derniere valeur, courbe, bornes et legende.
+function _htmlCorpsGraphe(titre,unite,series,o){
+  const c=_corpsCourbe(series,o);
+  if(!c) return '';
+  // ⚠ LE CHIFFRE EN TETE NE SORT QUE S'IL DESIGNE QUELQUE CHOSE. Sur une
+  //   carte a trois series — trois muscles — il aurait affiche la valeur de la
+  //   PREMIERE sous un titre qui parle des trois. L'appelant passe alors une
+  //   chaine vide, et la legende porte le sens.
+  const der=(typeof (o||{}).valeur==='string')?o.valeur:(()=>{
+    const g=series.find(x=>x&&x.points&&x.points.length);
+    const p=g.points[g.points.length-1];
+    return _corpsNb(p.v)+(unite?(' '+unite):'');
+  })();
+  const leg=series.length>1
+    ?'<div class="cc-corps-gk">'+series.map(g=>'<span><i style="background:'
+      +g.couleur+'"></i>'+escapeHtml(g.lib)+'</span>').join('')+'</div>':'';
+  return '<div class="cc-corps-g">'
+    +'<div class="cc-corps-gt"><span>'+escapeHtml(titre)+'</span><b>'+der+'</b></div>'
+    +'<div class="cc-corps-gz">'+c.svg
+    +'<span class="cc-corps-gh">'+_corpsNb(c.max)+'</span>'
+    +'<span class="cc-corps-gb">'+_corpsNb(c.min)+'</span>'
+    +'</div>'+leg+(o&&o.pied?('<div class="cc-corps-gp">'+escapeHtml(o.pied)+'</div>'):'')
+    +'</div>';
+}
+/**
+ * Les trois graphiques, empiles.
+ *
+ * ⚠ L'ORDRE EST CELUI DE LA MISSION, et il va du plus sur au plus derive : le
+ *   poids est une lecture directe, les mensurations une lecture directe aussi
+ *   mais par groupe, le volume un calcul. Un graphique qui ne peut rien tracer
+ *   ne sort pas — une carte vide avec un titre est du mobilier.
+ */
+function _htmlCorpsGraphes(u){
+  let h='';
+  // ── 1. LE POIDS ───────────────────────────────────────────────────────
+  h+=_htmlCorpsGraphe('Poids','kg',
+    [{lib:'Poids',couleur:'#E02020',points:corpsPointsPoids(u)}],
+    {h:44,pied:'Relevé au bilan. La pesée quotidienne a son propre protocole '
+      +'et n’est pas mélangée ici.'});
+  // ── 2. LES MENSURATIONS, PAR GROUPE ───────────────────────────────────
+  // ⚠ HUIT PETITES COURBES PLUTOT QU'UNE GRANDE. Un tour de bras de 39 cm et
+  //   un tour de taille de 86 sur le meme axe ecrasent le premier contre le
+  //   sol : ils n'ont rien a faire sur la meme echelle. Chaque groupe garde la
+  //   sienne, et c'est ce que fait deja l'ecran Mensurations de l'athlete.
+  let minis='';
+  for(const g of MENS_GROUPES){
+    const series=g.items.map(it=>({lib:it.l||g.label,couleur:it.color,
+      points:corpsPointsMesure(u,it.k)}));
+    const c=_corpsCourbe(series,{h:30});
+    if(!c) continue;
+    const der=(()=>{
+      const s=series.find(x=>x.points.length);
+      return _corpsNb(s.points[s.points.length-1].v);
+    })();
+    minis+='<div class="cc-corps-m">'
+      +'<div class="cc-corps-mt"><span>'+escapeHtml(g.label)+'</span><b>'+der+'</b></div>'
+      +c.svg+'</div>';
+  }
+  if(minis)
+    h+='<div class="cc-corps-g"><div class="cc-corps-gt">'
+      +'<span>Mensurations</span><b>cm</b></div>'
+      +'<div class="cc-corps-mg">'+minis+'</div>'
+      +'<div class="cc-corps-gp">Une échelle par groupe : un tour de bras et un '
+      +'tour de taille sur le même axe ne se comparent pas.</div></div>';
+  // ── 3. LE VOLUME HEBDOMADAIRE, TROIS MUSCLES ──────────────────────────
+  // ⚠ TROIS, PAS DIX-HUIT. Dix-huit lignes sur quatre-vingts pixels de haut
+  //   font une pelote. Ce sont les trois muscles les plus charges de la
+  //   semaine de reference — ceux dont la charge decide du reste.
+  const sem=corpsSemaineVolume(u);
+  if(sem){
+    let vol={};
+    try{ vol=volumeSemaine(u,sem.cle)||{}; }catch(e){ vol={}; }
+    const top=Object.keys(vol).filter(m=>MUSCLES[m]&&vol[m]>0)
+      .sort((a,b)=>(vol[b]||0)-(vol[a]||0)).slice(0,3);
+    if(top.length)
+      h+=_htmlCorpsGraphe('Séries dures par semaine','',
+        top.map(m=>({lib:(MUSCLES[m]||{}).lib||m,couleur:(MUSCLES[m]||{}).c||'var(--sub)',
+          points:corpsPointsVolume(u,m,CORPS_GRAPHE_SEMAINES,sem.decalage)})),
+        {h:44,valeur:'',
+         pied:'Les trois muscles les plus chargés, sur '+CORPS_GRAPHE_SEMAINES
+           +' semaines, jusqu’à la semaine du '+_corpsLibSemaine(sem.cle)+'.'});
+  }
+  return h;
+}
 /**
  * Les deux colonnes d'etiquettes et leurs traits de rappel.
  *
@@ -51881,7 +52176,15 @@ function _htmlCorpsCadre(c){
       +'développement. Un muscle sans repère de volume n’est pas teinté.</span>'
       +'</div>'
     :'';
-  return '<div class="cc-corps">'+tete+scene+note+legende+'</div>';
+  // LES GRAPHIQUES NE SORTENT QUE S'ILS ONT DE QUOI TRACER. Chacun se tait
+  // tout seul quand il lui manque un point ; les trois muets, la colonne
+  // entiere disparait plutot que d'afficher un cadre a trois titres vides.
+  const graphes=_htmlCorpsGraphes(u);
+  return '<div class="cc-corps">'+tete
+    +'<div class="cc-corps-grille">'
+    +'<div class="cc-corps-col">'+scene+note+legende+'</div>'
+    +(graphes?('<div class="cc-corps-col cc-corps-cg">'+graphes+'</div>'):'')
+    +'</div></div>';
 }
 function renderCorpsCoach(c){
   const z=document.getElementById('ccd-corps');
@@ -67276,6 +67579,24 @@ function loadProgress(){
 /* --- helpers --- */
 function getBW(b){const v=parseFloat(b['bil-weight']||b['deb-weight']||b.weight);return isNaN(v)?null:v;}
 function getBM(b,k){const v=parseFloat(b['bil-'+k]||b['deb-'+k]||b[k]);return isNaN(v)?null:v;}
+// ══ LES GROUPES DE MENSURATIONS TRACABLES ══════════════════════════════════
+//
+// Ils servent a DEUX ecrans : l'onglet Mensurations de l'athlete, et le schema
+// corporel de la fiche coach. Une liste par ecran aurait fini par decouper le
+// meme corps de deux facons.
+//
+// TOUR DE HANCHE et TOUR DE COU n'ont pas de courbe : ils bougent trop peu pour
+// qu'une ligne dise quoi que ce soit. Ils restent dans le TABLEAU — la donnee
+// n'est pas perdue, elle n'a simplement pas besoin de son propre graphique.
+const MENS_GROUPES=Object.freeze([
+  {label:'Biceps (D / G)',items:[{k:'bicep-r',l:'Droit',color:'#E02020'},{k:'bicep-l',l:'Gauche',color:'#f97316'}]},
+  {label:'Cuisses (D / G)',items:[{k:'thigh-r',l:'Droit',color:'#06b6d4'},{k:'thigh-l',l:'Gauche',color:'#14b8a6'}]},
+  {label:'Mollets (D / G)',items:[{k:'calf-r',l:'Droit',color:'#f472b6'},{k:'calf-l',l:'Gauche',color:'#a78bfa'}]},
+  {label:'Tour de Poitrine',items:[{k:'chest',l:'',color:'#eab308'}]},
+  {label:'Tour de Taille',items:[{k:'waist',l:'',color:'#3b82f6'}]},
+  {label:'Fessier',items:[{k:'glutes',l:'',color:'#22c55e'}]},
+  {label:'Buste',items:[{k:'bust',l:'',color:'#fb923c'}]}
+]);
 // ══ R32 — LA SYNTHESE D'EVOLUTION, ET CE QUE LE BILAN VIENT DE CHANGER ══════
 //
 // Deux lectures des MEMES bilans (bilansOrdonnes, getBW, getBM, MEAS) : la
@@ -69587,19 +69908,11 @@ function showProgressTab(tab,btn,sansMemo){
 
   } else if(tab==='mensus'){
     if(!bl.length){c.innerHTML=emptyState('trending-up','Tes mensurations se remplissent pendant le bilan.','Remplir mon bilan','openBilanChoice()');return;}
-    const GROUPS=[
-      {label:'Biceps (D / G)',items:[{k:'bicep-r',l:'Droit',color:'#E02020'},{k:'bicep-l',l:'Gauche',color:'#f97316'}]},
-      {label:'Cuisses (D / G)',items:[{k:'thigh-r',l:'Droit',color:'#06b6d4'},{k:'thigh-l',l:'Gauche',color:'#14b8a6'}]},
-      {label:'Mollets (D / G)',items:[{k:'calf-r',l:'Droit',color:'#f472b6'},{k:'calf-l',l:'Gauche',color:'#a78bfa'}]},
-      {label:'Tour de Poitrine',items:[{k:'chest',l:'',color:'#eab308'}]},
-      {label:'Tour de Taille',items:[{k:'waist',l:'',color:'#3b82f6'}]},
-      {label:'Fessier',items:[{k:'glutes',l:'',color:'#22c55e'}]},
-      {label:'Buste',items:[{k:'bust',l:'',color:'#fb923c'}]},
-      // TOUR DE HANCHE et TOUR DE COU n'ont plus de courbe : ils bougent trop
-      // peu pour qu'une ligne dise quoi que ce soit. Ils restent dans le
-      // TABLEAU au-dessus — la donnée n'est pas perdue, elle n'a simplement
-      // pas besoin de son propre graphique.
-    ];
+    // ⚠ LA LISTE A ETE REMONTEE AU NIVEAU MODULE le 20/09/2026, sous le nom
+    //   MENS_GROUPES : le schema corporel de la fiche coach trace les memes
+    //   groupes, et deux listes auraient fini par montrer deux decoupages du
+    //   meme corps selon l'ecran. Rien d'autre n'a bouge ici.
+    const GROUPS=MENS_GROUPES;
     // UNE COLONNE. À deux, les cartes de droite sortaient de l'écran sur un
     // téléphone : on ne voyait qu'un tiers de la moitié des courbes.
     let miniCharts='<div style="display:flex;flex-direction:column;gap:12px;margin-top:6px">';
