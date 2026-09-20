@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1321';
+window.RC_BUILD='1322';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -230,6 +230,51 @@ if('serviceWorker' in navigator){
   const RC_MAJ_SURS=['s-splash','s-welcome','s-coach-home','s-client-home',
     's-coach-entry','s-athlete-entry'];
   let _rcDerniereVerifMaj=0;
+  // ⚠ LA SORTIE QUE LE WORKER NE PEUT PAS INTERCEPTER. Recharger la MEME
+  //   adresse repasse par lui : s'il repond depuis son cache, on revient sur
+  //   la meme version, indefiniment. `?rcv=<numero>` est une adresse qu'il n'a
+  //   jamais mise en cache — sa branche generique ne trouve rien et va au
+  //   reseau. C'est le dernier recours, apres desinscription et vidage.
+  window._rcForcerMaj=async function(n){
+    try{ const regs=await navigator.serviceWorker.getRegistrations();
+      for(const g of regs) await g.unregister(); }catch(e){}
+    try{ const ks=await caches.keys(); for(const k of ks) await caches.delete(k); }catch(e){}
+    try{ sessionStorage.removeItem('rc_maj_forcee'); }catch(e){}
+    location.replace(location.pathname+'?rcv='+(n||Date.now()));
+  };
+  // ⚠ UNE VERSION EN RETARD NE SE TAIT PLUS. C'est la lecon des 19 et
+  //   20/09/2026 : Kevin est reste deux jours sur une version pendant que six
+  //   etaient publiees, et RIEN a l'ecran ne le disait — ni un mot, ni un
+  //   point. Il a fallu une capture d'ecran et trois quarts d'heure de mesures
+  //   pour etablir que le serveur, lui, etait juste.
+  //   Le bandeau est POSE EN DERNIER RECOURS seulement : quand on ne peut pas
+  //   recharger tout seul, ou quand une tentative n'a pas abouti.
+  window._rcAnnoncerMaj=function(n){
+    try{
+      if(document.getElementById('rc-maj-bandeau')) return;
+      const b=document.createElement('div');
+      b.id='rc-maj-bandeau';
+      b.setAttribute('role','status');
+      b.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;'
+        +'display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;'
+        +'background:#141414;border:1px solid #E02020;box-shadow:0 10px 30px rgba(0,0,0,.6);'
+        +'font-family:Montserrat,sans-serif;color:#f2f2f2;font-size:13px;line-height:1.45;'
+        +'max-width:520px;margin:0 auto';
+      const t=document.createElement('span');
+      t.style.cssText='flex:1;min-width:0';
+      t.textContent='Une nouvelle version de RepCore est disponible.';
+      const a=document.createElement('button');
+      a.type='button';
+      a.style.cssText='flex:0 0 auto;border:none;border-radius:8px;cursor:pointer;'
+        +'background:#E02020;color:#0a0000;font-family:Montserrat,sans-serif;'
+        +'font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;'
+        +'padding:10px 14px;min-height:40px';
+      a.textContent='Mettre à jour';
+      a.onclick=function(){ window._rcForcerMaj(n); };
+      b.appendChild(t); b.appendChild(a);
+      (document.body||document.documentElement).appendChild(b);
+    }catch(e){}
+  };
   window._rcVerifierVersion=async function(forcer){
     try{
       if(!('caches' in window)) return false;
@@ -245,8 +290,21 @@ if('serviceWorker' in navigator){
       if(!r.ok) return false;
       const m=(await r.text()).match(/repcore-v(\d+)/);
       const distant=m?parseInt(m[1],10):0;
-      if(!distant||distant<=local) return false;
-      if(sessionStorage.getItem('rc_maj_forcee')===String(distant)) return false;
+      // A JOUR : on efface le verrou. Sans cela, une tentative ancienne
+      // resterait inscrite et bloquerait la prochaine mise a jour de la
+      // session.
+      if(!distant||distant<=local){
+        try{ sessionStorage.removeItem('rc_maj_forcee'); }catch(e){}
+        return false;
+      }
+      const deja=parseInt(sessionStorage.getItem('rc_maj_forcee')||'0',10)||0;
+      // ⚠ UNE TENTATIVE QUI N'A PAS ABOUTI NE DOIT PAS NOUS FAIRE TAIRE. Le
+      //   verrou existait pour ne pas relancer la page en boucle — mais il
+      //   rendait AUSSI muet le cas ou le rechargement echoue : on avait
+      //   inscrit « j'ai tente 1321 », on etait toujours en 1317, et la sonde
+      //   repondait « deja tente » a chaque ouverture, pour toujours. On ne
+      //   recharge plus dans ce cas — la boucle reste evitee — mais on le DIT.
+      if(deja>=distant){ window._rcAnnoncerMaj(distant); return false; }
       // ⚠ ON NE RECHARGE PAS SOUS LES DOIGTS. Au chargement, l'ecran actif est
       //   le splash et la question ne se posait pas ; au retour au premier
       //   plan, le coach peut etre au milieu d'un programme ou d'un bilan, et
@@ -255,7 +313,9 @@ if('serviceWorker' in navigator){
       //   ecran sur. Et on NE POSE PAS le verrou de session dans ce cas —
       //   sinon la version ne serait plus jamais reprise.
       const actif=document.querySelector('.screen.active');
-      if(actif&&RC_MAJ_SURS.indexOf(actif.id)<0){ window._swUpdatePending=true; return false; }
+      if(actif&&RC_MAJ_SURS.indexOf(actif.id)<0){
+        window._swUpdatePending=true; window._rcAnnoncerMaj(distant); return false;
+      }
       sessionStorage.setItem('rc_maj_forcee',String(distant));
       try{
         const regs=await navigator.serviceWorker.getRegistrations();
