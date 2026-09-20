@@ -30485,6 +30485,33 @@ async function testExercices(){
           if(!g) return _echec('la rangee de compteurs a disparu');
           return /repeat\(4,\s*1fr\)/.test(g.getAttribute('style')||'')
             ?true:_echec('les compteurs ne sont plus sur une seule rangee');})());
+        ok('LE BILAN REMONTE À CÔTÉ DE L\'OBJECTIF, SANS SECOND FILET',(()=>{
+          // Kevin, 20/09/2026 : « tu as toute la partie inférieure à
+          // supprimer, mets plutôt le carré nouveau bilan aligné à
+          // "objectif" ». Mesure sur la carte rendue avant le correctif :
+          // DEUX filets séparateurs, et entre eux la moitié droite vide sur
+          // trois lignes, puis le bouton seul tout en bas — 329 px de carte
+          // pour six lignes de texte.
+          const tete=document.querySelector('#s-coach-client .ccd-tete');
+          if(!tete) return _echec('la carte d\'en-tête a disparu');
+          const bas=tete.querySelector('.ccd-tete-bas');
+          if(!bas) return _echec('la rangée du bas a disparu');
+          const pd=document.getElementById('ccd-profile-details');
+          const act=document.getElementById('ccd-tete-act');
+          if(!pd||pd.parentElement!==bas)
+            return _echec('les détails de profil ont quitté la rangée');
+          if(!act||act.parentElement!==bas)
+            return _echec('le bouton bilan a quitté la rangée');
+          // UN SEUL FILET, ET C'EST LA RANGÉE QUI LE PORTE. Le laisser aussi
+          // sur ses deux enfants retraçait un trait au milieu.
+          const trait=el=>parseFloat(getComputedStyle(el).borderTopWidth)>0;
+          if(!trait(bas)) return _echec('la rangée ne porte plus le filet séparateur');
+          if(trait(pd)) return _echec('les détails de profil ont gardé un second filet');
+          // .ccd-tete-a n'existe que lorsqu'il y a un bilan à ouvrir : on ne
+          // l'exige pas, on vérifie seulement qu'il ne retrace rien.
+          const a=act.querySelector('.ccd-tete-a');
+          if(a&&trait(a)) return _echec('le bouton a gardé un second filet');
+          return true;})());
         ok('ccdAller ouvre l\'onglet de sa cible avant d\'y mener',(()=>{
           // Sinon elle faisait defiler vers un bloc masque, et il ne se passait
           // rien du tout.
@@ -37608,6 +37635,49 @@ async function testExercices(){
       // Le nombre de jours REVOLUS, pas arrondi.
       return joursDepuisRattachement(l[0],t)===12
         ?true:_echec('Alice attend depuis '+joursDepuisRattachement(l[0],t)+' jours');})());
+
+    ok('LE NUMÉRO D\'ATHLÈTE SUIT L\'ORDRE D\'ARRIVÉE',(()=>{
+      // Kevin, 20/09/2026 : « mets "athlète n°__ : Kévin Guellec" selon son
+      // arrivée ». Le numéro s'affiche en tête de sa fiche.
+      const J=864e5, t=Date.parse('2026-09-20T12:00:00Z');
+      const A=(id,em,j,o)=>Object.assign({id,email:em,role:'athlete',
+        createdAt:t-j*J},o||{});
+      const anna=A('A1','a@t.fr',400), bruno=A('A2','b@t.fr',300),
+            kev =A('A3','k@t.fr',200);
+      // ⚠ LA LISTE EST DANS LE DESORDRE, et c'est le coeur du test : passee
+      //   deja triee, elle aurait valide une fonction qui ne trie pas.
+      const l=[kev,anna,bruno];
+      if(rangArrivee(anna,l)!==1)
+        return _echec('le plus ancien n’est pas le n°1 : '+rangArrivee(anna,l));
+      if(rangArrivee(bruno,l)!==2) return _echec('Bruno est n°'+rangArrivee(bruno,l));
+      if(rangArrivee(kev,l)!==3)   return _echec('Kévin est n°'+rangArrivee(kev,l));
+      // `coachSince` PASSE DEVANT `createdAt` — dateRattachement le dit depuis
+      // le 15/09, et le rang doit le suivre : un athlète inscrit il y a
+      // longtemps mais rattaché la semaine dernière n'est pas arrivé le
+      // premier. Le jour où ce champ sera écrit, ce test tiendra déjà.
+      const tard=A('A4','z@t.fr',500,{coachSince:t-10*J});
+      const l4=[anna,bruno,kev,tard];
+      if(rangArrivee(tard,l4)!==4)
+        return _echec('coachSince est ignoré : n°'+rangArrivee(tard,l4));
+      // UNE INVITATION N'A PAS DE RANG, ET NE DÉCALE PERSONNE. Un code n'est
+      // arrivé nulle part ; lui en donner un aurait renuméroté tout le monde
+      // le jour où il expire sans avoir servi.
+      const code=Object.assign(A('_code_1','',0),{_fromCode:true});
+      const lc=[anna,code,bruno,kev];
+      if(rangArrivee(code,lc)!==0) return _echec('une invitation reçoit un numéro');
+      if(rangArrivee(kev,lc)!==3)
+        return _echec('une invitation décale les autres : Kévin est n°'+rangArrivee(kev,lc));
+      // ET UN DOSSIER ABSENT DU PORTEFEUILLE N'EN A PAS : mieux vaut aucun
+      // numéro qu'un faux.
+      if(rangArrivee(A('A9','n@t.fr',50),l)!==0)
+        return _echec('un dossier absent du portefeuille reçoit un numéro');
+      // L'ÉGALITÉ SE TRANCHE, ET TOUJOURS DE LA MÊME FAÇON. Deux comptes créés
+      // dans la même milliseconde — un import, une restauration — auraient
+      // sinon échangé leurs numéros d'un rendu à l'autre.
+      const x=A('B1','x@t.fr',100), y=A('B2','y@t.fr',100);
+      if(rangArrivee(x,[y,x])!==1||rangArrivee(y,[x,y])!==2)
+        return _echec('deux arrivées simultanées échangent leurs numéros');
+      return true;})());
 
     ok('La carte ne s’affiche pas quand la liste est vide',(()=>{
       // Une liste de relance qui s'affiche a zero devient du decor, et on
