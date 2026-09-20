@@ -36215,7 +36215,7 @@ function duplicateCoachProgTemplate(idx){
 async function deleteCoachProgTemplate(idx){
   // EN VENTE DANS LA BOUTIQUE, IL Y RESTE : la fiche ne depend pas du modele,
   // et ceux qui l'ont achete doivent le garder. On le dit avant, et la fiche
-  // reapparait sous « Dans la boutique », ou elle se retire de la vente.
+  // reapparait sous « Ma boutique », ou elle se retire de la vente.
   const _enBoutique=_cplEnVente(currentUser.coachPrograms[idx])&&estVendeur();
   if(!await rcConfirm('Supprimer ce programme ?',
     _enBoutique?'Il reste en vente dans la boutique : retire-le de la vente si tu ne veux plus le vendre.':null,
