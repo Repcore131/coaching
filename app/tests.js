@@ -37829,6 +37829,51 @@ async function testExercices(){
         return _echec('les mollets ne lisent pas le tour de mollet');
       return true;})());
 
+    ok('LA TEINTE DIT LE VOLUME, ET SEULEMENT LA OU IL Y A UN REPERE',(()=>{
+      // ⚠ LA COULEUR NE JUGE PAS UN CORPS. Elle dit MEV / MAV / MRV — une
+      //   charge de travail, la seule question de ce cadre pour laquelle il
+      //   existe des reperes publies. Le centimetre, lui, reste dans la meme
+      //   encre quoi qu'il fasse : regle R32.
+      const u={id:'V1',email:'v1@t.fr',role:'athlete',gender:'H'};
+      const rep=reperesEffectifs(u,'PECTORAUX');
+      if(!rep) return _echec('les pectoraux n’ont plus de repère de volume');
+      // LES QUATRE ZONES, UNE PAR UNE, SUR LE MEME MUSCLE.
+      const cas=[
+        [rep.mev-1,      'sous-MEV'],
+        [rep.mev,        'MEV-MAV'],
+        [rep.mavMin,     'MAV-MRV'],
+        [rep.mrv,        'MAV-MRV'],
+        [rep.mrv+1,      'sur-MRV']];
+      for(const [v,zone] of cas){
+        const t=corpsTeintes(u,'face',{PECTORAUX:v});
+        if(t.PECTORAUX!==GC_COULEURS[zone])
+          return _echec(v+' séries donnent « '+t.PECTORAUX+' » au lieu de la couleur « '+zone+' »');
+      }
+      // ⚠ LES COULEURS SONT CELLES DE LA GRILLE DE CHARGE, PAS UNE TROISIEME
+      //   PALETTE. Trois codes pour une notion finiraient par se contredire.
+      const palette=new Set(Object.values(GC_COULEURS));
+      const tout=corpsTeintes(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
+      for(const m in tout)
+        if(!palette.has(tout[m])) return _echec(m+' est peint hors palette : '+tout[m]);
+      // UN MUSCLE SANS REPERE N'EST PAS TEINTE. Les adducteurs et les
+      // abducteurs n'ont aucun MEV publie : les peindre d'une couleur
+      // quelconque aurait invente le repère qui manque.
+      for(const m of ['ABDUCTEURS','ADDUCTEURS']){
+        if(reperesEffectifs(u,m)) continue;   // un coach a pu en poser un
+        if(corpsTeintes(u,'face',{[m]:12})[m])
+          return _echec(m+' est teinté alors qu’il n’a aucun repère');
+      }
+      // ET LA VUE FILTRE : un muscle que la planche ne montre pas n'a pas de
+      // zone a peindre, et lui en donner une la poserait sur le vide.
+      if(corpsTeintes(u,'face',{FESSIERS:15}).FESSIERS)
+        return _echec('les fessiers sont teints en vue de face');
+      if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS)
+        return _echec('les fessiers ne sont pas teints en vue de dos');
+      // AUCUN VOLUME : AUCUNE EXCEPTION. Un dossier sans seance passe ici.
+      if(typeof corpsTeintes(u,'face',null)!=='object')
+        return _echec('un volume absent fait tomber le calcul');
+      return true;})());
+
     ok('LA TABLE MUSCLE ↔ MENSURATION NE PROMET QUE CE QUI EXISTE',(()=>{
       // ⚠ DORSAUX → chest A SAUTE. Un tour de poitrine mesure les pectoraux ET
       //   le dos ensemble : le meme centimetre sur deux muscles faisait lire

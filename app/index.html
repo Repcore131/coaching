@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1338';
+window.RC_BUILD='1339';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4343,8 +4343,32 @@ html{scroll-behavior:smooth}
 .cc-corps-pt{position:absolute;width:5px;height:5px;border-radius:var(--r-full);
   background:#0a0a0a;border:1.4px solid #8f8f8f;
   transform:translate(-50%,-50%);pointer-events:none}
+/* ── LA TEINTE DE VOLUME ──────────────────────────────────────────────────
+   Un calque par muscle, chacun peint par woHtmlZones et recolore par la
+   variable posee sur son porteur. Le multiply vient de .wo-ava-z : un aplat
+   opaque effacerait le dessin, le produit garde les traits du modele et ne
+   fait que colorer la chair. */
+/* ⚠ 0,58 D'OPACITE, ET CE N'EST PAS UN GOUT. A l'ecran de seance, woHtmlZones
+   peint UN muscle a pleine encre : c'est ce qu'on vient regarder. Ici onze
+   calques se superposent d'un coup, et la premiere mesure au banc a donne un
+   bonhomme bleu uni — le dessin musculaire disparaissait dessous, et avec lui
+   la seule chose qui permet de reconnaitre quelle zone est teintee. Le
+   multiply garde les traits, l'opacite garde le modele. */
+.cc-corps-zone{position:absolute;inset:0;pointer-events:none;opacity:.58}
+.cc-corps-zone .wo-ava-z polygon{fill:var(--zc,#ff2323)}
 .cc-corps-n{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;
   margin-top:8px;text-align:center}
+/* La legende des quatre zones : la meme grammaire que celle de la grille de
+   charge, pastille puis nom de zone. */
+.cc-corps-l{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
+  gap:4px 10px;margin-top:7px;padding-top:7px;
+  border-top:1px solid rgba(255,255,255,.10)}
+.cc-corps-lt{flex:0 0 100%;text-align:center;font-size:var(--fs-2xs);
+  color:var(--text-faint);line-height:1.5}
+.cc-corps-lp{display:inline-flex;align-items:center;gap:4px;
+  font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap}
+.cc-corps-lp i{width:9px;height:9px;border-radius:2px;display:inline-block;
+  flex:0 0 auto}
 
 /* ══ LES QUATRE TUILES DE LA FICHE ATHLETE ════════════════════
    Une grille de quatre colonnes egales, collee, sticky comme la barre de puces
@@ -51569,6 +51593,81 @@ function corpsEtiquette(u,muscle){
       +' · '+String(e.debut.valeur).replace('.',',')+' → '
       +String(e.fin.valeur).replace('.',',')+' cm'};
 }
+// Jusqu'ou remonter pour trouver une semaine travaillee. Huit semaines : au
+// dela, la charge ne decrit plus l'athlete d'aujourd'hui.
+const CORPS_SEM_MAX=8;
+/**
+ * La derniere semaine qui porte du volume, ou null. IMPURE — elle lit
+ * l'horloge par _volCleDecalee.
+ *
+ * ⚠ POURQUOI PAS SIMPLEMENT LA SEMAINE EN COURS. Un lundi matin, elle est
+ *   vide : les dix-huit muscles tombent sous le MEV et le corps entier vire au
+ *   gris. Le coach lirait « il ne fait rien » alors que la semaine n'a pas
+ *   commence. On remonte donc jusqu'a la derniere semaine REELLEMENT
+ *   travaillee, et le pied de cadre DIT laquelle — sans quoi la teinte
+ *   parlerait d'une semaine que personne n'a nommee.
+ *
+ * ⚠ ET ON NE PREVOIT RIEN. grilleCharge, elle, remplit une semaine vide avec
+ *   le volume PREVISIONNEL du gabarit ; c'est defendable dans une grille qui
+ *   annonce le bloc a venir, ca ne l'est pas sur un corps. Teinter un muscle
+ *   d'apres ce qui est prevu ferait lire une charge qui n'a pas eu lieu.
+ * @returns {{cle:string,decalage:number}|null}
+ */
+function corpsSemaineVolume(u){
+  for(let n=0;n<=CORPS_SEM_MAX;n++){
+    let cle=null;
+    try{ cle=_volCleDecalee(n); }catch(e){ return null; }
+    let vol={};
+    try{ vol=volumeSemaine(u,cle)||{}; }catch(e){ vol={}; }
+    for(const m in vol) if(vol[m]>0) return {cle,decalage:n};
+  }
+  return null;
+}
+/**
+ * PURE. La couleur de chaque zone d'une vue, pour un volume hebdomadaire.
+ *
+ * ⚠ LA TEINTE DIT LE VOLUME D'ENTRAINEMENT, JAMAIS LE DEVELOPPEMENT. C'est la
+ *   seule question sur ce corps pour laquelle il existe des reperes — MEV,
+ *   MAV, MRV — et donc la seule qu'une couleur a le droit de trancher. Un tour
+ *   de cuisse, lui, n'est ni bon ni mauvais : aucun objectif declare ne dit
+ *   dans quel sens il « doit » aller, et l'ecart en centimetres reste donc
+ *   toujours dans la meme encre. Regle R32.
+ *
+ * ⚠ LES QUATRE COULEURS SONT CELLES DE LA GRILLE DE CHARGE — GC_COULEURS, qui
+ *   reprennent elles-memes VOL_ZONES. Trois palettes pour une notion finiraient
+ *   par se contredire, et le coach apprendrait trois codes pour un seul fait.
+ *
+ * ⚠ UN MUSCLE SANS REPERE N'EST PAS TEINTE. reperesEffectifs rend null pour
+ *   les lombaires, les abducteurs et les adducteurs : il n'existe aucun MEV
+ *   publie pour eux. Les peindre d'une couleur quelconque aurait invente le
+ *   repere qui manque.
+ * @param {any} u
+ * @param {'face'|'dos'} vue
+ * @param {Object.<string,number>} vol  le volume hebdomadaire par muscle
+ * @returns {Object.<string,string>} muscle → couleur
+ */
+function corpsTeintes(u,vue,vol){
+  const out={};
+  const v=vol||{};
+  for(const e of (CORPS_ETIQUETTES[vue]||[])){
+    let rep=null;
+    try{ rep=reperesEffectifs(u,e.m); }catch(err){ rep=null; }
+    if(!rep) continue;
+    let k=null;
+    try{ k=_repereDe(Number(v[e.m])||0,rep); }catch(err){ k=null; }
+    if(k&&GC_COULEURS[k]) out[e.m]=GC_COULEURS[k];
+  }
+  return out;
+}
+// « semaine du 15 septembre ». Le pied de cadre doit nommer la semaine que la
+// teinte decrit : sans elle, un corps teinte d'apres une semaine vieille de
+// trois semaines aurait l'air de decrire celle-ci.
+function _corpsLibSemaine(cle){
+  const d=(function(){ try{ return _lundiDeSemaine(cle); }catch(e){ return null; } })();
+  if(!d) return '';
+  try{ return d.toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }
+  catch(e){ return ''; }
+}
 // LA VUE EST UNE LENTILLE, PAS UNE DONNEE. Elle ne vit pas dans le dossier de
 // l'athlete : c'est le coach qui regarde de face ou de dos, et son choix n'a
 // rien a faire dans un document qui decrit quelqu'un d'autre.
@@ -51623,11 +51722,22 @@ function _arr1(v){ return Math.round((Number(v)||0)*10)/10; }
 // LA PLANCHE ET SON CALQUE. Le calque de zones est celui de la seance —
 // woHtmlZones — et pas un second : deux fonctions qui peignent le meme contour
 // finiraient par en peindre deux.
-function _htmlCorpsPlanche(u,genre,vue){
+function _htmlCorpsPlanche(u,genre,vue,teintes){
   const src=woSrcAvatar(CORPS_NIVEAU,genre,vue);
+  // ⚠ UN CALQUE PAR MUSCLE, ET C'EST woHtmlZones QUI LE FABRIQUE — la fonction
+  //   de la seance, pas une copie. Elle peint tout d'une seule encre, fixee
+  //   par .wo-ava-z polygon ; on l'enveloppe donc dans un porteur qui pose la
+  //   couleur en variable CSS. Reecrire le trace ici aurait cree un second
+  //   endroit ou les contours vivent, et les deux auraient diverge a la
+  //   premiere retouche des planches.
+  let zones='';
+  for(const m in (teintes||{}))
+    zones+='<div class="cc-corps-zone" style="--zc:'+teintes[m]+'">'
+      +woHtmlZones([m],src,vue,CORPS_NIVEAU,genre)+'</div>';
   return '<div class="cc-corps-planche" style="left:'+((100-CORPS_PART_CORPS)/2)
     +'%;width:'+CORPS_PART_CORPS+'%">'
     +'<img src="'+src+'" alt="" aria-hidden="true">'
+    +zones
     +_htmlCorpsTete(u,genre,vue)
     +'</div>';
 }
@@ -51721,11 +51831,19 @@ function _htmlCorpsCadre(c){
   // un cadre plein qui ne dit rien.
   const eti=(bilans.length>=2)?_htmlCorpsEtiquettes(u,genre,vue)
                               :{etiquettes:'',traits:''};
+  // LA TEINTE SORT DES LE PREMIER BILAN — elle ne depend pas des bilans du
+  // tout, mais des seances. Sans aucun bilan le cadre reste eteint : c'est le
+  // contrat affiche, et un corps colorie sous « Pas encore de bilan » aurait
+  // dit deux choses contradictoires dans le meme cadre.
+  const sem=bilans.length?corpsSemaineVolume(u):null;
+  let volSem={};
+  if(sem){ try{ volSem=volumeSemaine(u,sem.cle)||{}; }catch(e){ volSem={}; } }
+  const teintes=sem?corpsTeintes(u,vue,volSem):{};
   const scene='<div class="cc-corps-scene"'+(bilans.length?'':' data-eteint=""')
     +' style="aspect-ratio:'+_arr1(pl.w*100/CORPS_PART_CORPS)+'/'+pl.h
     +';--et-l:'+_arr1(CORPS_ETIQ_LARG)+'%">'
     +eti.traits
-    +_htmlCorpsPlanche(u,genre,vue)
+    +_htmlCorpsPlanche(u,genre,vue,teintes)
     +eti.etiquettes
     +'</div>';
   // AUCUN BILAN : la silhouette reste eteinte, sans une zone teintee ni une
@@ -51749,7 +51867,21 @@ function _htmlCorpsCadre(c){
     :'<div class="cc-corps-n">Écart entre les deux derniers bilans qui portent '
       +'la mesure, reports exclus · ± '
       +String(SYN_BRUIT_MESURE).replace('.',',')+' cm de tolérance.</div>';
-  return '<div class="cc-corps">'+tete+scene+note+'</div>';
+  // ⚠ LA LEGENDE DIT CE QUE LA COULEUR DECRIT, ET CE QU'ELLE NE DECRIT PAS.
+  //   Sans elle, un quadriceps rouge a cote d'un « +0,9 cm » se lit comme un
+  //   jugement sur la cuisse. Le rouge dit « au-dessus du MRV » — une charge
+  //   de travail, pas un corps.
+  const legende=sem
+    ?'<div class="cc-corps-l">'
+      +'<span class="cc-corps-lt">Teinte : charge de la semaine du '
+      +escapeHtml(_corpsLibSemaine(sem.cle))+'</span>'
+      +Object.keys(GC_COULEURS).map(k=>'<span class="cc-corps-lp">'
+        +'<i style="background:'+GC_COULEURS[k]+'"></i>'+escapeHtml(k)+'</span>').join('')
+      +'<span class="cc-corps-lt">Elle dit le volume d’entraînement, jamais le '
+      +'développement. Un muscle sans repère de volume n’est pas teinté.</span>'
+      +'</div>'
+    :'';
+  return '<div class="cc-corps">'+tete+scene+note+legende+'</div>';
 }
 function renderCorpsCoach(c){
   const z=document.getElementById('ccd-corps');
