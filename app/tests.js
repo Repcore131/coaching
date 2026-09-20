@@ -35621,6 +35621,98 @@ async function testExercices(){
             return _echec('ses propres cibles la verrouillent');
           return true;})());
 
+        ok('LA GRILLE DU COACH REPREND LA MAIN À L\'OUVERTURE DE LA FICHE',(()=>{
+          // ⚠ LE DEFAUT DU 20/09/2026, TROISIEME COUCHE. Kevin : « toujours
+          //   pas les memes prot, glucides et lipides qui s'affichent ».
+          //   Mesure faite au banc sur son dossier : la grille du coach portait
+          //   1,9 g/kg et calculait 192 / 81 / 367, pendant que
+          //   `nutrition.macros` tenait encore le bloc ecrit la veille par
+          //   l'athlete, 222 / 81 / 616. SES ANNEAUX LISAIENT CELUI-LA.
+          //
+          //   Le build 1331 avait bien fait passer l'origine devant le drapeau,
+          //   mais ca ne suffisait pas : tant que le coach ne touchait AUCUN
+          //   menu, rien ne reecrivait le bloc. Il fallait reconcilier a
+          //   l'ouverture de la fiche, pas seulement au geste.
+          const svO=_tbOpts;
+          try{
+            // ── 1. CE QUI COMPTE POUR UNE GRILLE, ET CE QUI N'EN EST PAS ──
+            // LE PIEGE EST ICI. protGkg et lipGkg sont PARTAGES depuis le build
+            // 1330 — athGkg les ecrit depuis l'ecran de l'athlete — et coef
+            // l'est depuis le 07/09 via athObjectif. Les compter aurait
+            // verrouille hors de sa propre carte une athlete que personne
+            // n'avait jamais reglee.
+            if(grilleCoachPosee(mk({tableur:{protGkg:2.2,lipGkg:1,coef:0.85,
+                deltaAthlete:40,objectifAthlete:'seche'}}))!==false)
+              return _echec('les réglages partagés de l’athlète passent pour une grille de coach');
+            if(grilleCoachPosee(mk({tableur:{naf:'modere'}}))!==true)
+              return _echec('une grille réglée n’est pas reconnue');
+
+            // ── 2. SANS GRILLE POSEE, ON NE TOUCHE A RIEN ──────────────────
+            // « En automatique, l'athlete garde la main » — demande du
+            // 14/09/2026. Elle tient encore.
+            const sien={on:{kcal:4082,p:222,l:81,g:616},off:{kcal:4082,p:222,l:81,g:616},
+              origine:'athlete',origineDate:Date.now()-864e5};
+            const libre=mk({manuel:false,macros:JSON.parse(JSON.stringify(sien))});
+            if(_tbReconcilier(libre)!==false)
+              return _echec('une athlète que le coach n’a jamais réglée est écrasée');
+            if(((libre.nutrition.macros||{}).origine)!=='athlete')
+              return _echec('ses cibles ont changé d’origine sans grille de coach');
+
+            // ── 3. LE CAS DE KEVIN ────────────────────────────────────────
+            const k=mk({manuel:false,tableur:{naf:'modere',protGkg:1.9},
+              macros:JSON.parse(JSON.stringify(sien))});
+            if(_tbReconcilier(k)!==true)
+              return _echec('la grille du coach ne reprend pas la main');
+            if(((k.nutrition.macros||{}).origine)!=='tableur')
+              return _echec('l’origine reste « '+(k.nutrition.macros||{}).origine+' »');
+            if(ciblesPoseesParCoach(k)!==true)
+              return _echec('elle n’est toujours pas verrouillée');
+            const att=cibleTableur(k,{email:k.email});
+            if(Number(k.nutrition.macros.on.p)!==att.p)
+              return _echec('ses protéines restent à '+k.nutrition.macros.on.p
+                +' g au lieu des '+att.p+' de la grille');
+            // ⚠ LES GLUCIDES NE SE COMPARENT PAS A LA GRILLE PLATE, et la
+            //   premiere version de ce test le faisait : elle echouait sur
+            //   « 238 g au lieu des 207 de la grille » alors que le produit
+            //   avait raison. Cette athlete est en diete cyclee — _tbJournees
+            //   module le jour ON de +15 % et le jour OFF de -15 %. C'est
+            //   l'assertion qui a ete corrigee, pas la regle.
+            //
+            //   ON COMPARE DONC LA MOYENNE DES DEUX JOURNEES, qui doit retomber
+            //   sur la grille : c'est une propriete du cyclage, pas un
+            //   recalcul de _tbJournees par lui-meme.
+            const moy=(Number(k.nutrition.macros.on.g)
+                      +Number(k.nutrition.macros.off.g))/2;
+            if(Math.abs(moy-att.g)>1)
+              return _echec('ses glucides ne tournent plus autour des '+att.g
+                +' g de la grille : '+k.nutrition.macros.on.g+' / '
+                +k.nutrition.macros.off.g);
+            // ET ILS ONT BIEN QUITTE LES SIENS : sans cette ligne, un bloc
+            // reste intact passerait la moyenne si la grille tombait juste.
+            if(Number(k.nutrition.macros.on.g)===616)
+              return _echec('ses glucides sont restés à ceux qu’elle avait écrits');
+
+            // ── 4. ET LE SECOND PASSAGE N'ECRIT PLUS RIEN ─────────────────
+            // renderCoachNutriSection est appelee une vingtaine de fois dans le
+            // fichier : sans cette garde, chaque repeinture aurait pousse le
+            // dossier vers le cloud. La comparaison ignore `origineDate`, que
+            // _tbEcrireCibles rafraichit a chaque appel — la comparer aurait
+            // rendu tout different, tout le temps.
+            if(_tbReconcilier(k)!==false)
+              return _echec('elle réécrit et repousse à chaque repeinture');
+
+            // ── 5. LA SAISIE MANUELLE RESTE INTOUCHABLE ───────────────────
+            const man=mk({manuel:true,tableur:{naf:'modere'},
+              macros:{on:Object.assign({},CO),off:Object.assign({},CO),
+                origine:'coach',origineDate:Date.now()}});
+            if(_tbReconcilier(man)!==false)
+              return _echec('la saisie manuelle est recalculée');
+            if(Number(man.nutrition.macros.on.kcal)!==CO.kcal)
+              return _echec('les grammes tapés à la main sont passés à '
+                +man.nutrition.macros.on.kcal);
+            return true;
+          } finally { _tbOpts=svO; }})());
+
         ok('VERROUILLEE, LA CARTE NE GARDE QUE LE RÉGLAGE PARTAGÉ',(()=>{
           // ⚠ CE TEST A CHANGE DE FRONTIERE, PAS D'INTENTION. Il interdisait
           //   TOUT reglage sur la carte verrouillee. Depuis le 20/09/2026, les

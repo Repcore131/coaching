@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1331';
+window.RC_BUILD='1332';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -81263,7 +81263,82 @@ function _htmlTableauxTableur(c){
       +'</div>';
   return h;
 }
+/**
+ * PURE. La grille du coach est-elle CONFIGUREE ?
+ *
+ * ⚠ UNE SEULE CLEF REPOND, ET C'EST `naf`. Le reflexe serait de lire aussi
+ *   `protGkg`, `lipGkg` ou `coef` : ce serait faux, et dangereusement. Depuis
+ *   le build 1330 les deux g/kg sont PARTAGES — `athGkg` les ecrit depuis
+ *   l'ecran de l'athlete — et `coef` l'est depuis le 07/09, `athObjectif`
+ *   l'ecrivant quand elle choisit « Seche ». Les compter ici aurait fait
+ *   passer SES reglages pour une grille de coach, et verrouille hors de sa
+ *   propre carte une athlete que personne n'avait jamais reglee.
+ *
+ *   `naf` — le niveau d'activite — n'est ecrit que par `majTableauTableur` et
+ *   `enregistrerReglagesTableur`, tous deux sur la fiche du coach. Il ne
+ *   figure pas dans `manque` : le calcul tourne sans lui, avec un defaut.
+ *   C'est donc bien un CHOIX, pas un passage oblige — et le poser, c'est dire
+ *   « j'ai regle cette athlete ».
+ * @param {any} c
+ */
+function grilleCoachPosee(c){
+  const naf=(((c&&c.nutrition&&c.nutrition.tableur)||{}).naf);
+  return naf!=null&&naf!=='';
+}
+/**
+ * Remet les cibles ecrites en accord avec la grille du coach, a l'ouverture de
+ * sa fiche. Rend true si quelque chose a bouge.
+ *
+ * ⚠ POURQUOI A L'OUVERTURE, ET PAS SEULEMENT AU GESTE. Kevin, 20/09/2026 :
+ *   « toujours pas les memes prot, glucides et lipides qui s'affichent ».
+ *   Mesure faite sur son cas, au banc : sa grille portait deja 1,9 g/kg — son
+ *   tableau affichait donc 192 / 81 / 367 — pendant que `nutrition.macros`
+ *   tenait encore le bloc que l'athlete avait ecrit la veille, 222 / 81 / 616.
+ *   SES ANNEAUX LISAIENT CELUI-LA. Depuis le build 1317 chaque menu du tableur
+ *   ecrit, et depuis le 1331 l'origine `'tableur'` verrouille ; mais tant que
+ *   le coach ne touchait AUCUN menu, l'ancien bloc survivait sous une grille
+ *   qui disait autre chose. Les deux ecrans se contredisaient en silence, et
+ *   le seul moyen de les reconcilier etait un geste que rien ne reclamait.
+ *
+ * ⚠ LE VERROU SEUL N'AURAIT PAS SUFFI. Marquer l'athlete verrouillee ferme sa
+ *   carte, mais ses anneaux continuent de lire `nutrition.macros` : il fallait
+ *   REECRIRE le bloc, pas seulement retirer les boutons.
+ *
+ * ⚠ ELLE NE S'APPLIQUE PAS EN SAISIE MANUELLE — `_tbEcrireCibles` refuse deja,
+ *   et c'est le contrat affiche sous l'interrupteur : les grammes tapes par le
+ *   coach sont la prescription, les recalculer serait les effacer.
+ *
+ * ⚠ NI QUAND SA GRILLE N'EST PAS POSEE : une athlete que le coach n'a jamais
+ *   reglee garde la main sur ses cibles, c'est la demande du 14/09/2026.
+ *
+ * ⚠ ET ELLE N'ECRIT QUE SI LES CHIFFRES CHANGENT. `renderCoachNutriSection`
+ *   est appelee a chaque repeinture — une vingtaine d'appels dans le fichier.
+ *   Ecrire a chaque passage aurait fait partir une poussee par clic. La
+ *   comparaison ignore DELIBEREMENT `origineDate`, que `_tbEcrireCibles`
+ *   rafraichit a chaque fois : la comparer aurait rendu tout different, tout
+ *   le temps, et la garde n'aurait jamais retenu personne.
+ * @param {any} c  le dossier de l'athlete, deja sorti de DB
+ */
+function _tbReconcilier(c){
+  if(!c||!c.email) return false;
+  if(!grilleCoachPosee(c)) return false;
+  const chiffres=m=>JSON.stringify(m?{on:m.on,off:m.off,origine:m.origine}:null);
+  const avant=chiffres((c.nutrition||{}).macros);
+  if(!_tbEcrireCibles(c)) return false;
+  if(chiffres((c.nutrition||{}).macros)===avant) return false;
+  try{
+    const users=DB.get('users')||{};
+    c.updatedAt=Date.now(); users[c.email]=c;
+    DB.set('users',users);
+    CLOUD.pushOne(c.email,c);
+  }catch(e){}
+  return true;
+}
 function renderCoachNutriSection(c){
+  // ⚠ AVANT LE RENDU, PAS APRES : les tableaux qu'on peint juste en dessous
+  //   doivent montrer ce que l'athlete a REELLEMENT dans son dossier, pas ce
+  //   qu'elle aurait si on reconciliait une fois l'ecran deja dessine.
+  try{ _tbReconcilier(c); }catch(e){}
   _plOublierSiAutreAthlete(c&&c.email);
   const el=document.getElementById('ccd-nutrition');
   if(!el||!c) return;
