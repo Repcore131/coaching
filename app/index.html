@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1329';
+window.RC_BUILD='1330';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -70570,7 +70570,6 @@ function ciblesEnVigueur(u,jourISO){
 // des planchers de sante, on ne les rabote pas pour vingt calories.
 function ciblesAthlete(u){
   const per=_athPerso(u);
-  const reg=(typeof reglagesCalcul==='function')?reglagesCalcul(u):{};
   const opts={};
   if(per.objectif) opts.coef=objCoefDefaut(per.objectif);
   // ⚠ protGkg / lipGkg ET NON protGparKg / lipGparKg. Les deux noms coexistent
@@ -70580,8 +70579,12 @@ function ciblesAthlete(u){
   // inertes depuis leur mise en ligne : l'athlete choisissait 2,2 g/kg, le
   // calcul restait sur la valeur suggeree et le menu retombait dessus au
   // rendu suivant.
-  if(typeof reg.prot==='number') opts.protGkg=reg.prot;
-  if(typeof reg.lip==='number')  opts.lipGkg=reg.lip;
+  // ⚠ ON NE SURCHARGE PLUS DEPUIS `nutrition.reglages`. C'etait la seconde
+  //   maison du meme reglage : l'athlete y ecrivait, le coach lisait
+  //   `nutrition.tableur`, et aucun des deux ne voyait l'autre. `cibleTableur`
+  //   lit maintenant le foyer commun — et garde `reglages` en dernier recours
+  //   pour les dossiers d'avant ce lot, ce qui rend cette surcharge inutile en
+  //   plus d'etre nuisible.
   let t=null;
   try{ t=cibleTableur(u,opts); }catch(e){ return null; }
   if(!t||(t.manque&&t.manque.length)) return t?{manque:t.manque||[]}:null;
@@ -70659,15 +70662,99 @@ function athDelta(sens){
   tb.deltaAthlete=p.delta; currentUser.nutrition.tableur=tb;
   _athEcrireCibles(); loadNutrition();
 }
+/**
+ * Le g/kg vu de l'ecran de l'athlete.
+ *
+ * ⚠ CE GESTE N'EST PLUS BLOQUE PAR LE VERROU DU COACH, et c'est la demande de
+ *   Kevin du 20/09/2026 : « si c'est l'athlete qui modifie, ca se modifie sur
+ *   la page du coach, et inversement ». Elle ne contourne rien — elle ecrit
+ *   dans LA MEME case que lui, `nutrition.tableur`, et le total se recalcule
+ *   depuis cette grille commune.
+ *
+ * ⚠ ET LE CORRECTIF DU 19/09 TIENT TOUJOURS. Ce qu'il protegeait, c'est que la
+ *   carte de l'athlete RECALCULE ses cibles dans son coin et efface la
+ *   prescription du coach — en la marquant `origine:'athlete'`, ce qui defait
+ *   son verrou. Ici l'origine reste `'tableur'` : la grille partagee. Son ±20
+ *   et son objectif personnel, eux, restent bloques quand le coach a pose les
+ *   chiffres — ce sont des ecarts a SA grille, pas la grille elle-meme.
+ * @param {'prot'|'lip'} quoi
+ * @param {string|number} val
+ */
 function athGkg(quoi,val){
-  if(_athVerrouille()) return;
   const v=Number(val);
   if(!isFinite(v)||v<=0) return;
+  if(quoi!=='prot'&&quoi!=='lip') return;
   if(!currentUser.nutrition) currentUser.nutrition={};
-  const r=currentUser.nutrition.reglages||{};
-  if(quoi==='prot') r.prot=v; else if(quoi==='lip') r.lip=v; else return;
-  currentUser.nutrition.reglages=r;
-  _athEcrireCibles(); loadNutrition();
+  const tb=currentUser.nutrition.tableur||{};
+  if(quoi==='prot') tb.protGkg=v; else tb.lipGkg=v;
+  currentUser.nutrition.tableur=tb;
+  // ⚠ ON EFFACE LE REPLI DEVENU FAUX. `nutrition.reglages` est lu en dernier
+  //   recours par cibleTableur : laisser une vieille valeur a cote de la
+  //   neuve n'aurait rien casse aujourd'hui — le foyer passe devant — mais
+  //   aurait laisse deux chiffres pour un reglage, et le prochain a lire le
+  //   dossier n'aurait pas su lequel fait foi.
+  try{
+    const r=currentUser.nutrition.reglages;
+    if(r){ if(quoi==='prot') delete r.prot; else delete r.lip; }
+  }catch(e){}
+  _athEcrireGrille();
+  loadNutrition();
+}
+/**
+ * Reecrit les macros apres un changement de g/kg venu de l'ecran de l'athlete.
+ *
+ * ⚠ LE TOTAL NE BOUGE PAS. C'est la limite exacte de ce qu'elle peut faire, et
+ *   elle vient d'un test du 19/09/2026 qui l'a rattrapee : recalculer tout le
+ *   bloc depuis la grille remplacait le total du coach — 2 100 kcal poses a la
+ *   main devenaient 2 112 — c'est-a-dire precisement l'effacement de
+ *   prescription que ce correctif-la interdisait. Elle regle la REPARTITION a
+ *   l'interieur du total ; le total reste a celui qui l'a pose.
+ *
+ * ⚠ ET L'ORIGINE N'EST PAS TOUCHEE. La marquer 'athlete' aurait leve le verrou
+ *   du coach — c'est le sens de cette valeur. Un changement de repartition
+ *   n'est pas une reprise en main : on laisse l'origine telle qu'elle est.
+ */
+function _athEcrireGrille(){
+  if(!currentUser) return false;
+  const nut=currentUser.nutrition||{};
+  const m=nut.macros||{};
+  const poids=(function(){ try{ return poidsNutritionnel(currentUser).kg; }catch(e){ return 0; } })();
+  if(!(poids>0)) return false;
+  const tb=nut.tableur||{};
+  const pk=Number(tb.protGkg), lk=Number(tb.lipGkg);
+  // AUCUNE CIBLE ENCORE : il n'y a pas de total a respecter, la grille entiere
+  // fait foi — c'est le cas de l'athlete que le coach n'a pas encore reglee.
+  if(!m.on||!(Number(m.on.kcal)>0)){
+    let t=null;
+    try{ t=cibleTableur(currentUser,{}); }catch(e){ return false; }
+    if(!t||(t.manque&&t.manque.length)) return false;
+    const cyc=(function(){ try{ return dieteCyclee(currentUser); }catch(e){ return false; } })();
+    let j=null;
+    try{ j=_tbJournees(currentUser,t,cyc); }catch(e){ j=null; }
+    if(!j||!j.on) return false;
+    currentUser.nutrition=nut;
+    nut.macros={on:j.on,off:cyc?j.off:j.on,origine:'tableur',origineDate:Date.now()};
+    saveUser();
+    try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
+    return true;
+  }
+  // LE CAS ORDINAIRE : on garde le kcal de chaque journee et on redistribue.
+  const refaire=(bloc)=>{
+    const kcal=Math.round(Number(bloc&&bloc.kcal)||0);
+    if(!(kcal>0)) return bloc;
+    const r=_repartition(kcal,poids,
+      isFinite(pk)&&pk>0?pk:(Number(bloc.p)/poids),
+      isFinite(lk)&&lk>0?lk:undefined);
+    // Le kcal EST celui d'avant, pas celui que _bloc recalculerait a partir
+    // des grammes : arrondir trois macros puis re-multiplier les ferait
+    // deriver de quelques calories a chaque passage.
+    return Object.assign({},bloc,{p:r.p,l:r.l,g:r.g,kcal});
+  };
+  currentUser.nutrition=nut;
+  nut.macros=Object.assign({},m,{on:refaire(m.on),off:refaire(m.off||m.on)});
+  saveUser();
+  try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
+  return true;
 }
 // Cote coach : une ligne, et seulement quand l'athlete a effectivement
 // touche a quelque chose. Un bandeau permanent qui repete « rien n'a change »
@@ -70707,8 +70794,20 @@ function _htmlCiblesAthlete(u){
       +'<div class="rc-obj-note" style="margin-top:0;padding-top:0;border-top:none">'
       +'Ton coach n’a pas encore posé tes cibles. Elles apparaîtront ici dès '
       +'qu’il les aura enregistrées.</div></div>';
-    const l=(t,n)=>'<div class="rc-obj-l2"><span class="rc-obj-n2">'+t+'</span>'
-      +'<span class="rc-obj-v2"><span class="rc-obj-g">'+n+' g</span></span></div>';
+    // ⚠ LES DEUX MENUS g/kg RESTENT, MEME VERROUILLEE. Demande de Kevin,
+    //   20/09/2026 : le reglage est PARTAGE, elle doit pouvoir y toucher et le
+    //   coach doit le voir. Ce qui reste bloque, ce sont le ±20 et l'objectif
+    //   personnel — des ecarts a la grille du coach, pas la grille elle-meme.
+    const _gr=(function(){ try{ return cibleTableur(u,{}); }catch(e){ return null; } })();
+    const _ech=(bas,haut)=>{ const o=[];for(let x=bas;x<=haut;x+=0.1) o.push(Math.round(x*10)/10); return o; };
+    const _sel=(quoi,val,bas,haut)=>'<select onchange="athGkg(\''+quoi+'\',this.value)" onclick="event.stopPropagation()" '
+      +'style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
+      +'font-size:var(--fs-2xs);padding:4px 6px">'
+      +_ech(bas,haut).map(x=>'<option value="'+x+'"'+(Math.abs(x-val)<0.05?' selected':'')+'>'+String(x).replace('.',',')+' g/kg</option>').join('')
+      +'</select>';
+    const l=(t,n,extra)=>'<div class="rc-obj-l2"><span class="rc-obj-n2">'+t+'</span>'
+      +'<span class="rc-obj-v2">'+(extra||'')
+      +'<span class="rc-obj-g">'+n+' g</span></span></div>';
     return '<div class="rc-obj-carte">'
       +'<div class="rc-obj-titre">Mes cibles</div>'
       +'<div class="rc-obj-kcal" style="justify-content:center">'
@@ -70717,11 +70816,13 @@ function _htmlCiblesAthlete(u){
           +'<div class="rc-obj-u">kcal par jour</div></div>'
       +'</div>'
       +'<div class="rc-obj-macros">'
-        +l('Protéines',v.p)+l('Lipides',v.l)+l('Glucides',v.g)
+        +l('Protéines',v.p,_gr?_sel('prot',Number(_gr.protGkg)||1.8,1.2,2.6):'')
+        +l('Lipides',v.l,_gr?_sel('lip',Number(_gr.lipGkg)||0.9,0.6,1.4):'')
+        +l('Glucides',v.g,'<span class="rc-obj-reste">le reste</span>')
       +'</div>'
-      +'<div class="rc-obj-note">Cibles posées par ton coach : elles ne se '
-      +'règlent pas depuis cet écran. Si elles ne te conviennent pas, '
-      +'parles-en avec lui.</div>'
+      +'<div class="rc-obj-note">Le total est posé par ton coach. Les grammes '
+      +'par kilo se règlent des deux côtés : ce que tu changes ici, il le voit '
+      +'sur sa grille.</div>'
       +'</div>';
   }
   const c=ciblesAthlete(u);
@@ -79296,10 +79397,20 @@ function cibleTableur(user,opts){
     catch(e){}
     return (PROT_DEFAUT[phase]!=null?PROT_DEFAUT[phase]:PROT_BASE);
   })();
+  // ⚠ UN SEUL FOYER POUR LE g/kg : `nutrition.tableur`. Kevin, 20/09/2026 :
+  //   « il faut que les modifs se fassent dans les 2 sens ». Le coach ecrivait
+  //   dans `nutrition.tableur.protGkg`, l'athlete dans
+  //   `nutrition.reglages.prot` — deux maisons pour le MEME reglage, qui ne se
+  //   parlaient pas. `nutrition.reglages` reste lu EN REPLI, et seulement en
+  //   repli : les dossiers ou l'athlete avait choisi son g/kg avant ce lot ne
+  //   doivent pas le perdre en silence.
+  const _regAnc=((u&&u.nutrition&&u.nutrition.reglages)||{});
   const protGkg=(typeof o.protGkg==='number'&&isFinite(o.protGkg))?o.protGkg
-    :((typeof reg.protGkg==='number'&&isFinite(reg.protGkg))?reg.protGkg:_protSug);
+    :((typeof reg.protGkg==='number'&&isFinite(reg.protGkg))?reg.protGkg
+      :((typeof _regAnc.prot==='number'&&isFinite(_regAnc.prot))?_regAnc.prot:_protSug));
   const lipGkg=(typeof o.lipGkg==='number'&&isFinite(o.lipGkg))?o.lipGkg
-    :((typeof reg.lipGkg==='number'&&isFinite(reg.lipGkg))?reg.lipGkg:LIP_G_PAR_KG);
+    :((typeof reg.lipGkg==='number'&&isFinite(reg.lipGkg))?reg.lipGkg
+      :((typeof _regAnc.lip==='number'&&isFinite(_regAnc.lip))?_regAnc.lip:LIP_G_PAR_KG));
   // ⚠ LE PLANCHER CALORIQUE GARDE LE DERNIER MOT, comme sur le chemin
   // automatique. Un coefficient de 0,70 sur une petite depense peut descendre
   // sous ce qu'un adulte doit manger ; le tableur, lui, ne le savait pas.
@@ -80518,15 +80629,26 @@ function _majFraicheur(){
 // pouvoir le VERIFIER LIGNE A LIGNE. Un total qu'on ne peut pas decomposer ne
 // se corrige pas, il se subit.
 //
-// ⚠ LES REGLAGES EN COURS VIVENT EN MEMOIRE, PAS DANS LE DOSSIER. Le coach
-// deroule un menu, le tableau se recalcule, et rien n'est ecrit tant qu'il n'a
-// pas enregistre. Ecrire a chaque changement de menu ferait partir une
-// poussee par clic, et l'athlete verrait defiler des cibles intermediaires.
-let _tbOpts=null;   // {email, naf, coef, protGkg, lipGkg}
-
+// ⚠ CETTE MEMOIRE NE SURVIT PLUS D'UN GESTE A L'AUTRE, et c'est le dernier
+//   maillon du va-et-vient demande par Kevin le 20/09/2026. Elle avait un sens
+//   tant que les menus du tableur ne touchaient QUE la session — l'ecriture au
+//   dossier attendait un bouton. Depuis le build 1317, chaque menu ecrit et
+//   pousse immediatement : le dossier est alors la seule verite, et garder une
+//   copie a cote ne pouvait plus que MASQUER quelque chose.
+//
+//   CE QU'ELLE MASQUAIT, MESURE : le coach met 1,6 g/kg, l'athlete met 2,2
+//   depuis son ecran ; le dossier porte bien 2,2, sa carte affiche 176 g — et
+//   le tableau du coach continuait d'afficher 1,6, parce que sa session le
+//   tenait encore. Les deux ecrans annoncaient deux grilles differentes pour
+//   le meme athlete.
+//
+//   RENDRE UN OBJET NEUF A CHAQUE APPEL NE PERD RIEN : le seul ecrivain,
+//   majTableauTableur, y pose la valeur qu'il vient de recevoir puis la
+//   persiste dans la foulee. Les autres clefs, absentes de l'objet, gardent
+//   simplement celles du dossier — ce qui est exactement ce qu'on veut.
+let _tbOpts=null;   // conserve pour les deux ecritures qui le relisent
 function _tbOptsDe(c){
-  const mail=(c&&c.email)||'';
-  if(!_tbOpts||_tbOpts.email!==mail) _tbOpts={email:mail};
+  _tbOpts={email:(c&&c.email)||''};
   return _tbOpts;
 }
 // Le geste des menus. `quoi` nomme le reglage, la valeur arrive en chaine.

@@ -35589,23 +35589,44 @@ async function testExercices(){
           return vu===Math.round(Number(m.kcal)||0)?true
             :_echec('la carte dit '+vu+' et les anneaux comptent sur '+Math.round(m.kcal));})());
 
-        ok('VERROUILLEE, LA CARTE N\'OFFRE PLUS AUCUN REGLAGE',(()=>{
+        ok('VERROUILLEE, LA CARTE NE GARDE QUE LE RÉGLAGE PARTAGÉ',(()=>{
+          // ⚠ CE TEST A CHANGE DE FRONTIERE, PAS D'INTENTION. Il interdisait
+          //   TOUT reglage sur la carte verrouillee. Depuis le 20/09/2026, les
+          //   deux menus g/kg y restent : Kevin les a rendus PARTAGES — ce que
+          //   l'athlete y change, le coach le voit sur sa grille, et
+          //   inversement. Ce qui reste interdit, c'est ce qui creuse un ECART
+          //   a la grille du coach : le ±20 et l'objectif personnel.
           const h=_htmlCiblesAthlete(mkCoach());
-          return /athDelta|athObjectif|athGkg/.test(h)
-            ?_echec('un bouton de reglage survit sur la carte verrouillee')
-            :true;})());
+          if(/athDelta/.test(h)) return _echec('le ±20 survit sur la carte verrouillee');
+          if(/athObjectif/.test(h)) return _echec('l’objectif personnel survit sur la carte verrouillee');
+          return /athGkg/.test(h)?true
+            :_echec('les menus g/kg partagés ont disparu de la carte verrouillée');})());
 
         ok('UN GESTE DE L\'ATHLETE N\'EFFACE PLUS LA PRESCRIPTION',(()=>{
           // LE PIRE DES DEUX EFFETS. _athEcrireCibles reecrivait
           // nutrition.macros avec le RECALCUL des le premier clic : la
           // prescription du coach disparaissait, et il n'en etait pas averti.
+          //
+          // ⚠ LE g/kg AGIT DESORMAIS, ET LE TOTAL NE BOUGE TOUJOURS PAS. C'est
+          //   la frontiere posee le 20/09/2026 : elle regle la REPARTITION a
+          //   l'interieur du total, le total reste a celui qui l'a pose. La
+          //   premiere version du partage recalculait tout le bloc depuis la
+          //   grille et faisait passer 2 100 kcal a 2 112 — c'est ce test qui
+          //   l'a attrape, et la regle s'est resserree plutot que le test.
           currentUser=mkCoach();
+          const avant=Object.assign({},((currentUser.nutrition||{}).macros||{}).on||{});
           athDelta(1); athObjectif('masse'); athGkg('prot',2.4);
           const m=(currentUser.nutrition||{}).macros||{};
           if(Number((m.on||{}).kcal)!==CO.kcal)
             return _echec('les cibles du coach sont passees a '+(m.on||{}).kcal+' kcal');
           if(m.origine!=='coach')
             return _echec('l\'origine des cibles est devenue « '+m.origine+' »');
+          // ET LE GESTE A BIEN AGI : sans cette verification, un athGkg
+          // silencieusement inerte passerait ce test les yeux fermes.
+          if(Number((m.on||{}).p)===Number(avant.p))
+            return _echec('le g/kg partagé n’a rien changé : '+(m.on||{}).p+' g');
+          if(Number((m.on||{}).p)!==Math.round(2.4*poidsNutritionnel(currentUser).kg))
+            return _echec('la répartition ne suit pas 2,4 g/kg : '+(m.on||{}).p+' g');
           // ET RIEN N'EST ECRIT A COTE NON PLUS. athObjectif pose
           // nutrition.tableur.coef — la grille du COACH — avant meme
           // d'appeler _athEcrireCibles : s'arreter plus bas aurait laisse le
