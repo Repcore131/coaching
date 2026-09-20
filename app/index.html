@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1326';
+window.RC_BUILD='1327';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1731,12 +1731,20 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    qui, combien de relances, quel statut, quand la derniere, quand la
    prochaine — et cinq colonnes de tableau les auraient rendus egaux. La carte
    les hierarchise : le nom et le statut en tete, l'echeance en pied. */
-.tun-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:6px;margin-bottom:14px}
+/* ⚠ TROIS COLONNES FIXES, ET NON `auto-fit`. Avec `auto-fit` et trois tuiles,
+   un ecran etroit en passait deux sur une ligne et une sur la suivante : trois
+   etats d'une meme echelle — chaud, tiede, froid — doivent se comparer d'un
+   coup d'oeil, donc tenir sur UNE rangee a toutes les largeurs. */
+.tun-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:14px}
 .tun-stat{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--c,var(--border));
-  border-radius:var(--r-3);padding:9px 11px;text-align:center}
-.tun-stat b{display:block;font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--c,var(--text))}
+  border-radius:var(--r-3);padding:12px 8px 10px;text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:6px}
+/* La silhouette prend la couleur de sa tuile par `currentColor` : un seul
+   endroit fixe la teinte, et c'est `--c`. */
+.tun-sil{color:var(--c,var(--text));display:flex;opacity:.92}
+.tun-stat b{display:block;font-family:var(--pile-titre);font-size:var(--fs-2xl);line-height:1;color:var(--c,var(--text))}
 .tun-stat span{display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;
-  text-transform:uppercase;color:var(--sub);margin-top:5px;line-height:1.25}
+  text-transform:uppercase;color:var(--sub);margin-top:0;line-height:1.25}
 .tun-barre{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .tun-f{background:var(--surface-1);border:1px solid var(--border);color:var(--text-dim);
   border-radius:var(--r-4);padding:6px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);
@@ -31600,19 +31608,45 @@ function tunnelListe(){
   try{ ath=(getClients()||[]).filter(c=>c&&!c._fromCode); }catch(e){ ath=[]; }
   return tunnelPersonnes(currentUser,ath,Date.now());
 }
+/**
+ * PURE. Un buste et une tete, PLEINS.
+ *
+ * ⚠ ELLE N'ENTRE PAS DANS `ICONS`, ET C'EST VOULU. Tout ce jeu est dessine au
+ *   TRAIT — `icon()` rend `fill="none" stroke="currentColor"` — et une
+ *   silhouette est par definition une forme PLEINE. L'y mettre l'aurait rendue
+ *   creuse, c'est-a-dire tout sauf une silhouette ; et changer `icon()` pour
+ *   elle aurait touche les cinquante autres.
+ *
+ * `currentColor` : elle prend la teinte de la tuile qui la porte, sans qu'on
+ * ait a la lui passer.
+ * @param {number} px
+ */
+function _htmlSilhouette(px){
+  const t=Number(px)||30;
+  return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" '
+    +'style="width:'+t+'px;height:'+t+'px;display:block">'
+    +'<circle cx="12" cy="7.1" r="4.3"/>'
+    +'<path d="M12 12.9c-4.5 0-7.8 2.7-7.8 6.3 0 .9.7 1.6 1.6 1.6h12.4c.9 0 1.6-.7 1.6-1.6 0-3.6-3.3-6.3-7.8-6.3z"/>'
+    +'</svg>';
+}
 function tunnelRendre(){
   const z=document.getElementById('tun-body');
   if(!z||!currentUser) return false;
   const tout=tunnelListe();
   const r=tunnelResume(tout);
   const vue=tunnelVue(tout,_tunFiltre,_tunTri);
-  const stat=(n,lib,c)=>'<div class="tun-stat" style="--c:'+c+'"><b>'+n+'</b><span>'+lib+'</span></div>';
+  const stat=(n,lib,c)=>'<div class="tun-stat" style="--c:'+c+'">'
+    +'<div class="tun-sil">'+_htmlSilhouette(34)+'</div>'
+    +'<b>'+n+'</b><span>'+lib+'</span></div>';
   const cpt={tous:r.total,retard:r.retard,aujourdhui:r.aujourdhui,
     chaud:r.chauds,tiede:r.tiedes,froid:r.froids,fini:r.termines};
+  // ⚠ TROIS TUILES, ET NON SIX. Demande de Kevin, 20/09/2026. Les trois qui
+  //   partent — « Dans le tunnel », « En retard », « Aujourd'hui » — ne sont
+  //   PAS perdues : leurs comptes vivent deja sur les boutons de filtre juste
+  //   en dessous, « TOUS 16 », « EN RETARD 0 », « AUJOURD'HUI 0 ». Elles
+  //   disaient donc deux fois la meme chose, a dix pixels d'ecart, et les six
+  //   ensemble noyaient les trois qui comptent : ou en sont les gens.
   let h='<div class="tun-stats">'
-    +stat(r.total,'Dans le tunnel','var(--text)')
-    +stat(r.retard,'En retard','#E02020')
-    +stat(r.aujourdhui,'Aujourd’hui','#f5a524')
     +stat(r.chauds,'Chauds',TUNNEL_LIB.chaud.c)
     +stat(r.tiedes,'Tièdes',TUNNEL_LIB.tiede.c)
     +stat(r.froids,'Froids',TUNNEL_LIB.froid.c)
