@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1368';
+window.RC_BUILD='1369';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -10032,14 +10032,15 @@ const COACH_PHOTO='icons/coach.jpg';
            l'athlete, qui n'est pas a nous.
            LA FICHE A IMPRIMER, juste en dessous, reste : elle, elle FABRIQUE
            un PDF a partir du programme compose dans l'application. -->
-      <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirProgrammePrint(getOwnedClient(currentClientId))">Fiche programme à imprimer</button>
+      <!-- ROUGE ET BLANC — Kevin, 21/09/2026 : « bouton 1 rouge et le 2 blanc ». -->
+      <button class="btn btn-red btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirProgrammePrint(getOwnedClient(currentClientId))">Fiche programme à imprimer</button>
       <!-- CHARGE DU BLOC. L'ecran s-coach-charge, sa fonction d'ouverture et
            son export existaient depuis leur ecriture SANS AUCUN APPELANT : une
            recherche sur tout le fichier ne trouvait ni onclick, ni gabarit, ni
            appel indirect — seules deux references dans la suite de tests. La
            fonction prend un ATHLETE en parametre : sa place est ici, dans
            l'onglet Entrainement de la fiche, a cote de la fiche a imprimer. -->
-      <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirGrilleCharge(getOwnedClient(currentClientId))">Charge du bloc</button>
+      <button class="btn btn-blanc btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirGrilleCharge(getOwnedClient(currentClientId))">Charge du bloc</button>
       <div id="ccd-demandes-video"></div>
       <div id="ccd-videos"></div>
       </div>
