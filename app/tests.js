@@ -22517,6 +22517,55 @@ async function testExercices(){
         return h.indexOf('webkit-playsinline')>=0
           ?true:_echec('le repli des anciens iOS manque');})());
 
+      ok('CORRIGER LA VIDÉO : la maquette garde toutes les commandes, et ne promet rien que le code ne tienne',(()=>{
+        // Kevin, 21/09/2026 : la feuille de correction reprend sa maquette.
+        const h=htmlLecteurCorrection('vx1');
+        const b=document.createElement('div'); b.innerHTML='<video id="vx1"></video>'+h;
+        // LES COMMANDES D'AVANT SONT TOUTES LA, avec leurs attributs.
+        for(const sel of ['#rc-barre-vx1','button[data-cmd="pas"]','button[data-cmd="ab"]','#rc-boucle-vx1','#rc-ab-vx1','#rc-fps-vx1'])
+          if(!b.querySelector(sel)) return _echec('commande perdue : '+sel);
+        // 2x, comme sur la maquette.
+        const vit=[...b.querySelectorAll('button[data-rate]')].map(x=>Number(x.dataset.rate));
+        if(vit.join()!=='0.25,0.5,1,2') return _echec('vitesses : '+vit);
+        // LA LECTURE EST ACTIVE D'EMBLEE (elle charge la vidéo) ; le reste attend
+        // les métadonnées, glissière comprise.
+        if(b.querySelector('#rc-lire-vx1').disabled) return _echec('le bouton de lecture attend des métadonnées qu’il doit charger');
+        if(!b.querySelector('button[data-cmd="pas"]').disabled||!b.querySelector('#rc-pos-vx1').disabled)
+          return _echec('une commande est active avant les métadonnées');
+        // LE FORMAT EST LU, PAS CHOISI.
+        const f=formatVideo(1080,1920), p=formatVideo(1920,1080), bz=formatVideo(1000,2100);
+        if(!f||f.ratio!=='9:16'||f.dims!=='1080 × 1920') return _echec('9:16 mal lu');
+        if(p.ratio!=='16:9'||p.lib!=='Paysage') return _echec('16:9 mal lu');
+        if(bz.ratio!==''||bz.lib!=='Vertical') return _echec('un rapport inventé pour un format hors norme : '+JSON.stringify(bz));
+        if(formatVideo(0,0)!==null) return _echec('un format sans dimensions');
+        // LA FEUILLE ENTIERE.
+        const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{});
+        const svVc=[window._vcEmail,window._vcVideoId,window._tsAnnotations];
+        try{
+          currentUser={id:'VXC',email:'vxc@t.fr',role:'coach'};
+          DB.set('users',{'vxa@t.fr':{id:'VXA',email:'vxa@t.fr',role:'athlete',coachId:'VXC',fname:'Zoé',
+            videos:[{id:'vv1',name:'Tirage',url:'https://x.test/a.mp4',date:Date.now()},
+                    {id:'vv2',name:'Squat',url:'https://www.youtube.com/watch?v=aaaaaaaaaaa',date:Date.now()}]}});
+          const corps=_vcCorpsHtml('vxa@t.fr','vv1'), lien=_vcCorpsHtml('vxa@t.fr','vv2');
+          const z=document.createElement('div'); z.innerHTML=corps;
+          for(const sel of ['.vcx-g','.vcx-c','.vcx-d','.vcx-pied','#vc-general','#qc-chips','#vc-ts-time','#vc-ts-note',
+                            '#vc-ts-list','#vc-audio-ts','#vc-audio-btn','#vc-audio-preview','#vc-audio-status','#vc-video'])
+            if(!z.querySelector(sel)) return _echec('la feuille a perdu '+sel);
+          if(!z.querySelector('[onclick="saveVideoCorrection()"]')||!z.querySelector('[onclick="closeModal()"]'))
+            return _echec('enregistrer ou annuler a disparu');
+          // « ANNOTER ICI » VIT DANS LES REPÈRES, rattaché au lecteur.
+          const an=z.querySelector('[data-rc-hors="vc-video"]');
+          if(!an||!an.closest('.vcx-rep')||!an.disabled) return _echec('« Annoter ici » n’est pas rattaché au lecteur');
+          // PAS DE PLAFOND AFFICHÉ QU'AUCUN CODE NE TIENT.
+          if(/\/500|maxlength/i.test(corps)) return _echec('un plafond de caractères est promis');
+          // h3 porte la police des gros titres en !important : les titres de
+          // carte n'en sont pas.
+          if(/<h3 class="vcx-ct"/.test(corps)) return _echec('un titre de carte est un h3');
+          // UN LIEN YOUTUBE : ni lecteur, ni Motion Lab, ni format.
+          if(/rc-barre|Motion Lab|vcx-fmt|data-rc-hors/.test(lien)) return _echec('un lien YouTube reçoit les commandes d’un fichier');
+        } finally { currentUser=sU; DB.set('users',JSON.parse(svUsers)); [window._vcEmail,window._vcVideoId,window._tsAnnotations]=svVc; }
+        return true;})());
+
       ok('Vidéo YouTube : aucune barre de correction',(()=>{
         // L'iframe n'est pas pilotable sans le script externe de YouTube.
         const h=_videoEmbed('https://youtu.be/abcdefghijk');

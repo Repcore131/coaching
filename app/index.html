@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1375';
+window.RC_BUILD='1376';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5329,6 +5329,177 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   font-size:var(--fs-md);letter-spacing:1.5px}
 @media(prefers-reduced-motion:reduce){.dtc-t{transition:none}}
 
+/* ══ CORRIGER LA VIDEO — la maquette de Kevin, 21/09/2026 ════════════════
+   Trois colonnes quand la feuille est large (lecteur a gauche, image au
+   centre, correction a droite), une seule en dessous de 860 px de feuille —
+   la video d'abord, puis ce qui la pilote, puis ce qu'on en dit. Le pied
+   (audio + enregistrer) reste colle en bas sur grand ecran : c'est le geste
+   de fin, il ne doit jamais sortir de la vue.
+   !important sur la feuille et sur les puces : leurs styles sont en ligne. */
+#modal-overlay>.mdl-video{background:radial-gradient(110% 55% at 50% 0,rgba(224,32,32,.07),transparent 62%),#0b0b0b!important}
+.vcx{container-type:inline-size;container-name:vcx;color:var(--text)}
+.vcx-tete{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.vcx-retour{flex:0 0 auto;width:48px;height:48px;border-radius:10px;border:1px solid rgba(255,255,255,.16);
+  background:rgba(255,255,255,.04);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.vcx-retour:hover{border-color:rgba(255,255,255,.32)}
+.vcx-retour:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.vcx-tt{flex:1;min-width:0}
+.vcx-titre{margin:0;font-family:var(--pile-titre);font-size:38px;font-weight:400;line-height:1;letter-spacing:1px;
+  text-transform:uppercase;color:var(--text)}
+.vcx-titre em{font-style:normal;color:var(--red)}
+.vcx-sous{margin:5px 0 0;font-size:var(--fs-sm);color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vcx-devise{flex:0 0 auto;display:flex;align-items:center;gap:12px;pointer-events:none}
+.vcx-devise i{display:block;width:44px;height:1.5px;background:linear-gradient(90deg,rgba(224,32,32,0),var(--red))}
+.vcx-devise span{font-size:9px;letter-spacing:2px;color:var(--sub);text-transform:uppercase;white-space:nowrap}
+.vcx-grille{display:grid;grid-template-columns:minmax(0,30fr) minmax(0,32fr) minmax(0,34fr);gap:16px;align-items:stretch}
+.vcx-g,.vcx-d,.rcx{display:flex;flex-direction:column;gap:12px;min-width:0}
+.vcx-carte{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
+  border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 16px}
+.vcx-carte-r{border-color:rgba(224,32,32,.5);box-shadow:inset 0 0 22px rgba(224,32,32,.07)}
+.vcx-ct{display:flex;align-items:center;gap:12px;margin:0 0 12px;font-family:Montserrat,sans-serif;
+  font-size:var(--fs-xs);font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text)}
+.vcx-ct svg{flex:0 0 auto;color:var(--red)}
+.vcx-ct label{display:flex;align-items:center;gap:12px;margin:0;font:inherit;letter-spacing:inherit;
+  text-transform:inherit;color:inherit}
+.vcx-opt{font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--sub);font-weight:600}
+.vcx-champ{display:flex;align-items:center;gap:14px;background:rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 14px}
+.vcx-champ+.vcx-champ{margin-top:8px}
+.vcx-champ svg{flex:0 0 auto;color:var(--text)}
+.vcx-champ div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.vcx-champ span{font-size:var(--fs-xs);color:var(--sub)}
+.vcx-champ b{font-size:var(--fs-md);font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* LE LECTEUR */
+.rcx-vitesses{display:grid;grid-template-columns:repeat(auto-fit,minmax(52px,1fr));gap:8px}
+.rcx-b{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:44px;padding:0 12px;margin:0;
+  border-radius:9px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--text);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;cursor:pointer;
+  transition:border-color var(--t-1),background var(--t-1)}
+.rcx-b:hover:not(:disabled){border-color:rgba(255,255,255,.3)}
+.rcx-b:disabled{cursor:default}
+.rcx-b:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.rcx-b[aria-pressed="true"]{border-color:var(--red);background:rgba(224,32,32,.15);box-shadow:0 0 12px rgba(224,32,32,.25)}
+.rcx-son[aria-pressed="true"]{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.04);box-shadow:none;color:var(--sub)}
+.rcx-ligne{display:flex;align-items:center;gap:10px}
+.rcx-ligne .rcx-b{width:56px;padding:0}
+.rcx-son{margin-left:auto}
+.rcx-temps{display:flex;align-items:center;gap:12px;margin:12px 0}
+/* LA GLISSIERE : 22 px de prise pour le doigt, 5 px de piste a l'oeil. La
+   part lue est peinte en rouge par --p, pose a chaque timeupdate. */
+.rcx-pos{-webkit-appearance:none;appearance:none;flex:1;min-width:0;height:22px;margin:0;padding:0;border:none;cursor:pointer;
+  background:linear-gradient(90deg,var(--red) 0 var(--p,0%),rgba(255,255,255,.22) var(--p,0%) 100%) center/100% 5px no-repeat}
+.rcx-pos::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:none;
+  box-shadow:0 0 0 3px rgba(224,32,32,.35)}
+.rcx-pos::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:none}
+.rcx-pos:disabled{cursor:default}
+.rcx-pos:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.rcx-t{font-size:var(--fs-sm);color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rcx-ab{display:grid;grid-template-columns:52px 52px minmax(0,1fr);gap:8px}
+.rcx-lettre{font-size:var(--fs-md);font-weight:800;padding:0}
+.rcx-info{margin-top:8px;font-size:var(--fs-2xs);color:var(--text-faint)}
+.rcx-info:empty{display:none}
+.rcx-fps{margin-left:auto;font-size:var(--fs-2xs);font-weight:500;letter-spacing:0;text-transform:none;color:var(--text-faint)}
+.rcx-reps{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
+.rcx-reps-t{margin-right:4px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--sub)}
+.rcx-rep{min-height:36px;font-size:var(--fs-xs)}
+/* L'IMAGE, AU CENTRE. La video remplit le cadre sans se deformer : verticale
+   ou horizontale, elle garde ses proportions sur fond noir. */
+.vcx-c{display:flex;min-width:0}
+.vcx-cadre{position:relative;flex:1;min-height:min(62vh,560px);display:flex;align-items:center;justify-content:center;
+  border-radius:14px;overflow:hidden;background:#000;border:1px solid rgba(255,255,255,.1)}
+.vcx-cadre video,.vcx-cadre iframe{position:absolute;inset:0;width:100%!important;height:100%!important;
+  max-height:none!important;margin:0!important;border-radius:0!important;object-fit:contain;background:#000}
+.vcx-cadre>a,.vcx-cadre>.video-absente{margin:16px!important}
+.vcx-badge{position:absolute;top:12px;left:12px;z-index:2;display:flex;flex-direction:column;gap:1px;
+  padding:7px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.62);
+  font-size:var(--fs-sm);font-weight:600;color:var(--text);pointer-events:none}
+.vcx-badge small{font-size:var(--fs-xs);font-weight:500;color:var(--sub)}
+.vcx-badge[hidden]{display:none}
+.vcx-plein{position:absolute;top:12px;right:12px;z-index:2;width:44px;height:44px;display:flex;align-items:center;
+  justify-content:center;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.55);
+  color:#fff;cursor:pointer}
+.vcx-plein:focus-visible{outline:2px solid #fff;outline-offset:2px}
+/* LA CORRECTION, A DROITE */
+.vcx-ml{display:flex;align-items:center;gap:18px;width:100%;margin:0;padding:18px 20px;text-align:left;cursor:pointer;
+  border:1px solid rgba(224,32,32,.75);border-radius:12px;color:var(--text);font-family:inherit;
+  background:linear-gradient(90deg,rgba(224,32,32,.24),rgba(110,0,0,.12) 60%,rgba(224,32,32,.06));
+  box-shadow:0 0 22px rgba(224,32,32,.16),inset 0 1px 0 rgba(255,255,255,.05);transition:box-shadow var(--t-1)}
+.vcx-ml:hover{box-shadow:0 0 30px rgba(224,32,32,.32),inset 0 1px 0 rgba(255,255,255,.05)}
+.vcx-ml:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.vcx-ml-ico,.vcx-ml-fl{display:flex;flex:0 0 auto;color:#fff}
+.vcx-ml-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.vcx-ml-t b{font-size:var(--fs-lg);font-weight:800}
+.vcx-ml-t span{font-size:var(--fs-sm);color:var(--text-strong)}
+.vcx-revoir{width:100%;margin:-4px 0 0;min-height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.03);color:var(--text-strong);font-family:inherit;font-size:var(--fs-xs);font-weight:700;cursor:pointer}
+#qc-chips.vcx-chips{flex-wrap:wrap!important;overflow:visible!important;padding:0 0 12px!important;margin:0!important}
+.vcx-chips>button{height:40px!important;padding:0 16px!important;max-width:none!important;border-radius:999px!important;
+  background:rgba(255,255,255,.04)!important;border-color:rgba(255,255,255,.14)!important;
+  font-size:var(--fs-sm)!important;font-weight:500!important}
+.vcx textarea#vc-general{width:100%;min-height:92px;margin:0;padding:12px 14px;border-radius:10px;resize:vertical;
+  background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);color:var(--text);font-size:var(--fs-md);line-height:1.5}
+.vcx textarea#vc-general:focus{border-color:var(--red)}
+.vcx-compte{margin-top:6px;text-align:right;font-size:var(--fs-xs);color:var(--sub)}
+.vcx-ts-list{margin:-4px 0 8px}
+.vcx-ts-list:empty{display:none}
+.vcx-ts{display:flex;align-items:stretch;gap:8px}
+.vcx-ts input{margin:0;height:48px;padding:0 14px;border-radius:10px;background:rgba(0,0,0,.4);
+  border:1px solid rgba(255,255,255,.1);font-size:var(--fs-md)}
+.vcx-ts input:focus{border-color:var(--red)}
+.vcx #vc-ts-time{flex:0 0 76px;width:76px;padding:0 4px;text-align:center;font-variant-numeric:tabular-nums}
+.vcx #vc-ts-note{flex:1;min-width:0}
+.vcx-plus{flex:0 0 48px;height:48px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);
+  color:var(--text);font-size:24px;font-weight:300;line-height:1;cursor:pointer}
+.vcx-plus:hover{border-color:rgba(255,255,255,.3)}
+.vcx-ts-pied{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;
+  font-size:var(--fs-xs);color:var(--sub)}
+.vcx-annoter{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:0 12px;border-radius:9px;
+  border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);color:var(--text-strong);
+  font-family:inherit;font-size:var(--fs-xs);font-weight:700;cursor:pointer}
+.vcx-annoter:disabled{cursor:default}
+/* LE PIED : l'audio a gauche, l'enregistrement a droite. */
+.vcx-pied{display:flex;align-items:center;gap:14px;margin-top:14px;padding:12px 14px;border-radius:12px;
+  border:1px solid rgba(255,255,255,.1);background:#0e0e0e}
+.vcx-audio{flex:1;min-width:0}
+.vcx-audio-l{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.vcx-audio-t{display:inline-flex;align-items:center;gap:8px;margin-right:4px;font-size:var(--fs-2xs);font-weight:700;
+  letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
+.vcx-audio-t svg{color:var(--text)}
+.vcx #vc-audio-ts{flex:0 0 64px;width:64px;height:40px;margin:0;padding:0 4px;text-align:center;border-radius:9px;
+  background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);font-size:var(--fs-sm);font-variant-numeric:tabular-nums}
+.vcx-rec,.vcx-import{display:inline-flex;align-items:center;gap:8px;min-height:40px;margin:0;padding:0 14px;border-radius:9px;
+  border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--text-strong);cursor:pointer;
+  font-family:inherit;font-size:var(--fs-xs);font-weight:700}
+.vcx-import{letter-spacing:1.2px;text-transform:uppercase;color:var(--sub)}
+.vcx-import svg{color:var(--text)}
+.vcx-rec:hover,.vcx-import:hover{border-color:rgba(255,255,255,.28)}
+#vc-audio-preview{margin-top:10px}
+.vcx-audio-s{font-size:var(--fs-xs);color:var(--sub);margin-top:4px}
+.vcx-audio-s:empty{display:none}
+.vcx-save{flex:0 0 46%;margin:0!important;min-height:56px;display:inline-flex;align-items:center;justify-content:center;gap:12px}
+@container vcx (min-width:861px){
+  .vcx-pied{position:sticky;bottom:0;z-index:3;box-shadow:0 -12px 24px rgba(0,0,0,.55)}
+}
+@container vcx (max-width:1000px){ .vcx-devise{display:none} }
+/* SOUS 860 px DE FEUILLE : UNE COLONNE. Les colonnes s'effacent (contents) et
+   leurs cartes se rangent dans l'ordre du geste. */
+@container vcx (max-width:860px){
+  .vcx-grille{grid-template-columns:minmax(0,1fr);gap:12px}
+  .vcx-g,.vcx-d{display:contents}
+  .vcx-c{order:1}
+  .rcx{order:2}
+  .vcx-ml{order:3}
+  .vcx-revoir{order:4;margin:0}
+  .vcx-com{order:5}
+  .vcx-rep{order:6}
+  .vcx-info{order:7}
+  .vcx-fmt{order:8}
+  .vcx-cadre{min-height:min(58vh,440px)}
+  .vcx-titre{font-size:30px}
+  .vcx-retour{width:44px;height:44px}
+  .vcx-pied{flex-direction:column;align-items:stretch}
+  .vcx-save{flex:0 0 auto;width:100%}
+}
 /* ══ DIETE RESPECTEE — la maquette de Kevin, 21/09/2026 ══════════════
    Meme famille que la demande de video : cadre a liseré rouge, photo en fond,
    devise en marge. A gauche le titre, l'anneau et ses compteurs ; a droite la
@@ -90661,7 +90832,7 @@ async function qcReset(){
 // annotation, qui est la seule façon de garder la précision que le ralenti
 // fait justement gagner (voir _vcAnnoterIci).
 const VID_FPS_DEFAUT=30;
-const VID_RATES=[0.25,0.5,1];
+const VID_RATES=[0.25,0.5,1,2];
 const VID_BOUCLE_MAX_S=10;      // au-delà, on retéléchargerait le média entier
 const VID_DUREE_MIN_BOUCLE=2;   // sous 2 s, une boucle n'a aucun sens
 
@@ -90766,63 +90937,95 @@ function secsToTs(sec){
 // c'est-à-dire un script externe — exclu.
 // `video` (facultatif) : l'entree de la video, pour proposer ses repetitions
 // decoupees dans Motion Lab. Sans elle, la barre est exactement celle d'avant.
+// ══ LA MAQUETTE « CORRIGER LA VIDEO » DE KEVIN, 21/09/2026 ════════════════
+// La barre devient deux cartes, « Vitesse de lecture » et « Contrôles » :
+// image par image, lecture, son, position, boucle A-B. Les identifiants et les
+// attributs data-* d'avant sont TOUS conserves : rcVitesse, rcPas, rcMarque,
+// rcRepetition et _rcActiver les retrouvent sans changer de regle.
+const _VCX_SVG=(p,t,plein)=>'<svg viewBox="0 0 24 24" width="'+t+'" height="'+t+'" aria-hidden="true"'
+  +(plein?' fill="currentColor"':' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"')
+  +'>'+p+'</svg>';
+const _VCX_P=Object.freeze({
+  jauge:'<path d="M4.5 17a8.5 8.5 0 1 1 15 0"/><path d="m12 13 4-4"/><circle cx="12" cy="13" r="1.4" fill="currentColor"/>',
+  prec:'<path d="M6 5v14"/><path d="M18 5 9 12l9 7z" fill="currentColor"/>',
+  suiv:'<path d="M18 5v14"/><path d="m6 5 9 7-9 7z" fill="currentColor"/>',
+  lire:'<path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none"/>',
+  pause:'<rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor" stroke="none"/>',
+  son:'<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+  muet:'<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="m16 9.5 5 5M21 9.5l-5 5"/>',
+  boucle:'<path d="M20 12a8 8 0 0 1-13.7 5.7M4 12a8 8 0 0 1 13.7-5.7"/><path d="M17.7 2.5v3.8h-3.8M6.3 21.5v-3.8h3.8"/>',
+  retour:'<path d="m15 18-6-6 6-6"/>',
+  camera:'<rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/>',
+  reglages:'<path d="M6 3v6M6 13v8M12 3v10M12 17v4M18 3v4M18 11v10"/><circle cx="6" cy="11" r="2"/><circle cx="12" cy="15" r="2"/><circle cx="18" cy="9" r="2"/>',
+  agenda:'<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/>',
+  format:'<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/>',
+  ciseaux:'<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/>',
+  fleche:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  bulle:'<path d="M4 5h16v11H9.5L4 20z"/>',
+  horloge:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  micro:'<path d="M12 2.5a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0v-6a3 3 0 0 0-3-3z"/><path d="M18.5 10.5v1a6.5 6.5 0 0 1-13 0v-1M12 18v3.5M8.5 21.5h7"/>',
+  dossier:'<path d="M21 18.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2h4.5l2 2.5H19a2 2 0 0 1 2 2z"/>',
+  plein:'<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'});
 function htmlLecteurCorrection(vidId,video){
   const segs=video?segmentsVideo(video):[];
-  const b=(lib,act,titre,extra)=>`<button type="button" onclick="${act}" title="${escapeHtml(titre)}"
-    aria-label="${escapeHtml(titre)}" ${extra||''} disabled
-    style="min-width:44px;min-height:44px;padding:8px 10px;border-radius:var(--r-2);cursor:pointer;
-      background:#111;border:1px solid var(--border);color:var(--text-strong);font-family:Montserrat,sans-serif;
-      font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px">${lib}</button>`;
-  return `<div id="rc-barre-${vidId}" data-vid="${vidId}" style="margin-top:8px;background:#101010;
-    border:1px solid var(--border);border-radius:var(--r-3);padding:9px 10px">
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-      <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.4px;font-weight:800;text-transform:uppercase">Vitesse</span>
-      ${VID_RATES.map(r=>`<button type="button" onclick="rcVitesse('${vidId}',${r})"
+  const q='\''+vidId+'\'';
+  const b=(lib,act,titre,extra,cl)=>`<button type="button" class="rcx-b${cl?' '+cl:''}" onclick="${act}" title="${escapeHtml(titre)}"
+    aria-label="${escapeHtml(titre)}" ${extra||''} disabled>${lib}</button>`;
+  return `<div id="rc-barre-${vidId}" data-vid="${vidId}" class="rcx">
+    <section class="vcx-carte rcx-carte">
+      <div class="vcx-ct" role="heading" aria-level="3">${_VCX_SVG(_VCX_P.jauge,22)}Vitesse de lecture</div>
+      <div class="rcx-vitesses">
+      ${VID_RATES.map(r=>`<button type="button" class="rcx-b rcx-v" onclick="rcVitesse(${q},${r})"
         data-rate="${r}" disabled aria-pressed="false"
-        aria-label="Lire à ${String(r).replace('.',',')} fois la vitesse normale"
-        style="min-width:44px;min-height:38px;padding:6px 9px;border-radius:var(--r-2);cursor:pointer;
-          background:#111;border:1px solid var(--border);color:var(--sub);
-          font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${String(r).replace('.',',')}×</button>`).join('')}
-      <span id="rc-badge-${vidId}" aria-live="polite"
-        style="margin-left:auto;font-family:var(--pile-titre);font-size:var(--fs-lg);
-        color:var(--red-text);letter-spacing:1px;--halo-c:rgba(224,32,32,.7);text-shadow:var(--halo-1)">1×</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
-      ${b('◀ 1','rcPas(\''+vidId+'\',-1)','Reculer d\'une image (flèche gauche)','data-cmd="pas"')}
-      ${b('1 ▶','rcPas(\''+vidId+'\',1)','Avancer d\'une image (flèche droite)','data-cmd="pas"')}
-      <span id="rc-fps-${vidId}" style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.3px"></span>
-    </div>
-    <div id="rc-boucle-${vidId}" style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
-      ${b('A','rcMarque(\''+vidId+'\',\'a\')','Poser le début de la boucle ici','data-cmd="ab"')}
-      ${b('B','rcMarque(\''+vidId+'\',\'b\')','Poser la fin de la boucle ici','data-cmd="ab"')}
-      ${b('Effacer la boucle','rcEffacerBoucle(\''+vidId+'\')','Effacer la boucle','data-cmd="ab"')}
-      <span id="rc-ab-${vidId}" aria-live="polite" style="font-size:var(--fs-2xs);color:var(--text-faint)"></span>
-    </div>
-    ${segs.length?`<!-- MOTION LAB — LES REPETITIONS DECOUPEES. Une touche lit la
-         repetition en boucle, de son debut a sa fin : le lecteur respecte les
-         bornes posees, sans rien reencoder. Les bornes voyagent en attribut,
-         en millisecondes, pour que rcRepetition n'ait rien a relire du dossier. -->
-    <div id="rc-reps-${vidId}" data-segs="${escapeHtml(JSON.stringify(segs.map(s=>[s.debutMs,s.finMs])))}"
-      style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
-      <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.4px;font-weight:800;text-transform:uppercase">Répétitions</span>
-      ${segs.map((s,i)=>b(escapeHtml(s.label),'rcRepetition(\''+vidId+'\','+i+')',
-        'Lire '+s.label+' en boucle','data-cmd="rep" data-rep="'+i+'" aria-pressed="false"')
-        // ACTIVES D'EMBLEE, contrairement au reste de la barre : la video de la
-        // feuille est en preload="none", et une repetition qui attendrait qu'on
-        // lance la lecture pour se laisser choisir ferait un geste de trop.
-        // rcRepetition charge elle-meme les metadonnees.
-        .replace(' disabled','')).join('')}
-    </div>`:''}
-    <div style="margin-top:8px">
-      ${b('Annoter ici','rcAnnoterIci(\''+vidId+'\')','Créer une annotation au temps exact affiché','data-cmd="note" style="width:100%"')}
-    </div>
+        aria-label="Lire à ${String(r).replace('.',',')} fois la vitesse normale">${String(r).replace('.',',')}×</button>`).join('')}
+      </div>
+    </section>
+    <section class="vcx-carte rcx-carte">
+      <div class="vcx-ct" role="heading" aria-level="3">${_VCX_SVG(_VCX_P.jauge,22)}Contrôles<span id="rc-fps-${vidId}" class="rcx-fps"></span></div>
+      <div class="rcx-ligne">
+        ${b(_VCX_SVG(_VCX_P.prec,20),'rcPas('+q+',-1)','Reculer d\'une image (flèche gauche)','data-cmd="pas"')}
+        ${/* LA LECTURE EST ACTIVE D'EMBLEE, comme les repetitions : la video est
+             en preload="none", et c'est ce bouton qui la charge. */
+          b(_VCX_SVG(_VCX_P.lire,20),'rcLecture('+q+')','Lire la vidéo','data-cmd="lecture" id="rc-lire-'+vidId+'"').replace(' disabled','')}
+        ${b(_VCX_SVG(_VCX_P.suiv,20),'rcPas('+q+',1)','Avancer d\'une image (flèche droite)','data-cmd="pas"')}
+        ${b(_VCX_SVG(_VCX_P.son,22),'rcSon('+q+')','Couper le son','data-cmd="son" id="rc-son-'+vidId+'" aria-pressed="false"','rcx-son')}
+      </div>
+      <div class="rcx-temps">
+        <input type="range" id="rc-pos-${vidId}" class="rcx-pos" min="0" max="1000" step="1" value="0" disabled
+          aria-label="Position dans la vidéo" oninput="rcAller(${q},this.value)">
+        <span id="rc-t-${vidId}" class="rcx-t">0:00 / 0:00</span>
+      </div>
+      <div id="rc-boucle-${vidId}" class="rcx-ab">
+        ${b('A','rcMarque('+q+',\'a\')','Poser le début de la boucle ici','data-cmd="ab"','rcx-lettre')}
+        ${b('B','rcMarque('+q+',\'b\')','Poser la fin de la boucle ici','data-cmd="ab"','rcx-lettre')}
+        ${b(_VCX_SVG(_VCX_P.boucle,20)+'<span>Effacer la boucle</span>','rcEffacerBoucle('+q+')','Effacer la boucle','data-cmd="ab"')}
+      </div>
+      <div id="rc-ab-${vidId}" class="rcx-info" aria-live="polite"></div>
+      ${segs.length?`<!-- MOTION LAB — LES REPETITIONS DECOUPEES. Une touche lit la
+           repetition en boucle, de son debut a sa fin : le lecteur respecte les
+           bornes posees, sans rien reencoder. Les bornes voyagent en attribut,
+           en millisecondes, pour que rcRepetition n'ait rien a relire du dossier. -->
+      <div id="rc-reps-${vidId}" data-segs="${escapeHtml(JSON.stringify(segs.map(s=>[s.debutMs,s.finMs])))}" class="rcx-reps">
+        <span class="rcx-reps-t">Répétitions</span>
+        ${segs.map((s,i)=>b(escapeHtml(s.label),'rcRepetition('+q+','+i+')',
+          'Lire '+s.label+' en boucle','data-cmd="rep" data-rep="'+i+'" aria-pressed="false"','rcx-rep')
+          // ACTIVES D'EMBLEE, contrairement au reste de la barre : la video de la
+          // feuille est en preload="none", et une repetition qui attendrait qu'on
+          // lance la lecture pour se laisser choisir ferait un geste de trop.
+          // rcRepetition charge elle-meme les metadonnees.
+          .replace(' disabled','')).join('')}
+      </div>`:''}
+    </section>
   </div>`;
 }
 function _rcVideo(vidId){ return document.getElementById(vidId); }
 function _rcActiver(vidId,ok){
   const z=document.getElementById('rc-barre-'+vidId);
   if(!z) return;
-  z.querySelectorAll('button').forEach(b=>{ b.disabled=!ok; b.style.opacity=ok?'1':'.45'; });
+  // La glissiere en fait partie, et « Annoter ici », posee dans la carte des
+  // repères, s'y rattache par data-rc-hors.
+  [...z.querySelectorAll('button,input[type="range"]'),...document.querySelectorAll('[data-rc-hors="'+vidId+'"]')]
+    .forEach(b=>{ b.disabled=!ok; b.style.opacity=ok?'1':'.45'; });
 }
 function rcVitesse(vidId,r){
   const v=_rcVideo(vidId);
@@ -90832,9 +91035,6 @@ function rcVitesse(vidId,r){
   if(z) z.querySelectorAll('button[data-rate]').forEach(b=>{
     const actif=Math.abs(Number(b.dataset.rate)-applique)<1e-6;
     b.setAttribute('aria-pressed',actif?'true':'false');
-    b.style.borderColor=actif?'var(--red)':'var(--border)';
-    b.style.background=actif?'rgba(224,32,32,.12)':'#111';
-    b.style.color=actif?'var(--text)':'var(--sub)';
   });
   const badge=document.getElementById('rc-badge-'+vidId);
   if(badge) badge.textContent=String(applique).replace('.',',')+'×';
@@ -90907,9 +91107,117 @@ function _rcMarquerRepetition(vidId,i){
   z.querySelectorAll('button[data-rep]').forEach(b=>{
     const on=Number(b.dataset.rep)===i;
     b.setAttribute('aria-pressed',on?'true':'false');
-    b.style.borderColor=on?'var(--red)':'var(--border)';
-    b.style.background=on?'rgba(224,32,32,.12)':'#111';
   });
+}
+// ── LES COMMANDES DE LA MAQUETTE : lecture, son, position, plein ecran ─────
+// Elles doublent les controles natifs de la video, qui restent la : un coach
+// qui a pris l'habitude du lecteur du navigateur ne perd rien.
+function rcLecture(vidId){
+  const v=_rcVideo(vidId);
+  if(!v) return false;
+  try{
+    if(v.paused||v.ended){ const p=v.play(); if(p&&typeof p.catch==='function') p.catch(()=>{}); }
+    else v.pause();
+  }catch(e){ return false; }
+  return true;
+}
+function rcSon(vidId){
+  const v=_rcVideo(vidId);
+  if(!v) return false;
+  v.muted=!v.muted;
+  _rcMajSon(vidId);
+  return true;
+}
+// `val` sur 1000 : la glissiere ne connait pas la duree, la video si.
+function rcAller(vidId,val){
+  const v=_rcVideo(vidId);
+  const d=Number(v&&v.duration);
+  if(!v||!isFinite(d)||d<=0) return false;
+  try{ v.currentTime=d*Math.max(0,Math.min(1000,Number(val)||0))/1000; }catch(e){ return false; }
+  _rcMajTemps(vidId);
+  return true;
+}
+function rcPleinEcran(vidId){
+  const v=_rcVideo(vidId);
+  if(!v) return false;
+  try{
+    if(v.requestFullscreen){ const p=v.requestFullscreen(); if(p&&typeof p.catch==='function') p.catch(()=>{}); }
+    else if(v.webkitEnterFullscreen) v.webkitEnterFullscreen();     // iPhone
+    else if(v.webkitRequestFullscreen) v.webkitRequestFullscreen();
+    else return false;
+  }catch(e){ return false; }
+  return true;
+}
+function _rcMajTemps(vidId){
+  const v=_rcVideo(vidId);
+  if(!v) return;
+  const d=Number(v.duration), t=Number(v.currentTime)||0;
+  const ok=isFinite(d)&&d>0;
+  const pos=document.getElementById('rc-pos-'+vidId);
+  if(pos){
+    const p=ok?Math.max(0,Math.min(1000,Math.round(t/d*1000))):0;
+    if(document.activeElement!==pos) pos.value=String(p);
+    pos.style.setProperty('--p',(p/10)+'%');
+  }
+  const l=document.getElementById('rc-t-'+vidId);
+  if(l) l.textContent=secsToTs(t)+' / '+(ok?secsToTs(d):'0:00');
+}
+function _rcMajLecture(vidId){
+  const v=_rcVideo(vidId), b=document.getElementById('rc-lire-'+vidId);
+  if(!v||!b) return;
+  const joue=!v.paused&&!v.ended;
+  b.innerHTML=_VCX_SVG(joue?_VCX_P.pause:_VCX_P.lire,20);
+  const lib=joue?'Mettre en pause':'Lire la vidéo';
+  b.title=lib; b.setAttribute('aria-label',lib);
+}
+function _rcMajSon(vidId){
+  const v=_rcVideo(vidId), b=document.getElementById('rc-son-'+vidId);
+  if(!v||!b) return;
+  b.innerHTML=_VCX_SVG(v.muted?_VCX_P.muet:_VCX_P.son,22);
+  b.setAttribute('aria-pressed',v.muted?'true':'false');
+  const lib=v.muted?'Remettre le son':'Couper le son';
+  b.title=lib; b.setAttribute('aria-label',lib);
+}
+// PURE. Le format d'une video, lu dans ses VRAIES dimensions. La maquette
+// proposait un menu « Story Instagram (9:16) » ; rien ici ne reencode ni
+// n'exporte une video, et un menu qui ne change rien mentirait. On dit donc
+// ce que la video EST — c'est ce que le coach a besoin de savoir pour la
+// regarder, et pour la reprendre dans Motion Lab.
+const VID_FORMATS=Object.freeze([[9,16,'Vertical'],[3,4,'Portrait'],[4,5,'Portrait'],[1,1,'Carré'],[4,3,'Paysage'],[16,9,'Paysage']]);
+function formatVideo(w,h){
+  w=Number(w); h=Number(h);
+  if(!(w>0&&h>0)) return null;
+  const r=w/h;
+  let m=null;
+  for(const [a,b,lib] of VID_FORMATS){
+    const e=Math.abs(Math.log(r/(a/b)));
+    if(!m||e<m.e) m={a:a,b:b,lib:lib,e:e};
+  }
+  const dims=Math.round(w)+' × '+Math.round(h);
+  // Au-dela de 4 % d'ecart, aucun format courant : l'orientation et les
+  // dimensions, sans rapport invente.
+  if(m.e>0.04) return {lib:r<1?'Vertical':(r>1?'Paysage':'Carré'),ratio:'',dims:dims};
+  return {lib:m.lib,ratio:m.a+':'+m.b,dims:dims};
+}
+function _rcMajFormat(vidId){
+  const v=_rcVideo(vidId);
+  const f=v?formatVideo(v.videoWidth,v.videoHeight):null;
+  if(!f) return;
+  const nom=f.lib+(f.ratio?' ('+f.ratio+')':'');
+  const z=document.getElementById('vcx-format'), dm=document.getElementById('vcx-dims');
+  if(z) z.textContent=nom;
+  if(dm) dm.textContent=f.dims;
+  const bd=document.getElementById('vcx-badge');
+  if(bd){ bd.innerHTML=escapeHtml(f.lib)+(f.ratio?'<small>'+escapeHtml(f.ratio)+'</small>':''); bd.hidden=false; }
+}
+// Le compteur de caracteres du commentaire. Il n'y a PAS de limite : la
+// maquette affichait « 0/500 », mais saveVideoCorrection n'en impose aucune, et
+// un plafond affiche qu'aucun code ne tient serait un mensonge.
+function _vcxCompte(){
+  const ta=document.getElementById('vc-general'), z=document.getElementById('vcx-compte');
+  if(!ta||!z) return;
+  const n=String(ta.value||'').length;
+  z.textContent=n+' caractère'+(n>1?'s':'');
 }
 // « Annoter ici ». Le timecode enregistré est le temps RÉEL de la vidéo, pas
 // le temps perçu au ralenti : currentTime ne dépend pas de playbackRate.
@@ -90943,6 +91251,14 @@ function rcInitLecteur(vidId){
     });
   };
   if(v.readyState>=1) pret(); else v.addEventListener('loadedmetadata',pret,{once:true});
+  // LA MAQUETTE : la position, la lecture, le son et le format suivent la video.
+  const maj=()=>_rcMajTemps(vidId);
+  ['timeupdate','durationchange','loadedmetadata','seeked'].forEach(ev=>v.addEventListener(ev,maj));
+  ['play','pause','ended'].forEach(ev=>v.addEventListener(ev,()=>_rcMajLecture(vidId)));
+  v.addEventListener('volumechange',()=>_rcMajSon(vidId));
+  v.addEventListener('loadedmetadata',()=>_rcMajFormat(vidId));
+  if(v.readyState>=1) _rcMajFormat(vidId);
+  _rcMajTemps(vidId); _rcMajLecture(vidId); _rcMajSon(vidId);
   // iOS remet playbackRate à 1 apres un play() : on le repose.
   v.addEventListener('play',()=>{ if(v._rcRate&&v._rcRate!==1) videoSetRate(v,v._rcRate); });
   // Flèches gauche/droite = image par image. IGNORÉES quand le focus est dans
@@ -91027,64 +91343,113 @@ function _vcCorpsHtml(email,videoId){
   tplContexte({prenom:c.fname,exercice:v.name},'vc-general');
   window._tsAnnotations=v.feedbackTimestamps?JSON.parse(JSON.stringify(v.feedbackTimestamps)):[];
   const _vcReste=(()=>{ try{ return _fileVideosSuivantes(email,videoId).length; }catch(e){ return 0; } })();
-  return `
-    <h2 style="margin-bottom:2px">✏️ Corriger</h2>
-    <!-- LE RESTE DE LA FILE, quand il y en a une. Des modales qui
-         s’enchaînent sans dire combien il en reste sont désorientantes ; hors
-         file, _fileVideosSuivantes rend un tableau vide et rien ne s’affiche. -->
-    <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px">${escapeHtml(v.name)} · ${new Date(v.date).toLocaleDateString('fr-FR')}${_vcReste?` · <span id="vc-reste" style="display:inline-block">${_vcReste} restante${_vcReste>1?'s':''}</span>`:''}</p>
-    ${_videoEmbed(v.url)}
-    ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?htmlLecteurCorrection('vc-video',v):''}
-    <!-- MOTION LAB : SEULEMENT POUR UNE VIDEO DEPOSEE. Un lien YouTube ou Drive
-         ne donne acces ni a un element <video> ni a ses images. -->
-    ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?`<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="ouvrirMotionLab(window._vcEmail,window._vcVideoId)">✂ Motion Lab : découper, tracer, corriger${segmentsVideo(v).length?' ('+segmentsVideo(v).length+')':''}</button>`
-      +(motionCorrectionValide(v.motion)?`<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:6px" onclick="ouvrirCorrectionMotion(window._vcEmail,window._vcVideoId)">▶ Revoir la correction vidéo envoyée${v.motion.envoyeLe?' le '+new Date(v.motion.envoyeLe).toLocaleDateString('fr-FR'):''}</button>`:''):''}
-    <div style="margin-top:14px">
-      <label style="margin-top:0">Commentaire général</label>
-      <div id="qc-chips" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:4px"></div>
-      <textarea id="vc-general" rows="3" placeholder="Impression globale sur l'exécution...">${escapeHtml(v.feedback||'')}</textarea>
-    </div>
-    <div style="margin-top:12px">
-      <label style="margin-top:0">Repères par timestamp <span class="badge badge-gray" style="font-size:var(--fs-xs);margin-left:4px">optionnel</span></label>
-      <div id="vc-ts-list" style="margin:6px 0 10px"></div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input id="vc-ts-time" placeholder="0:45" style="width:62px;flex-shrink:0;text-align:center;font-family:var(--pile-titre);font-size:var(--fs-lg);padding:8px 4px" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('vc-ts-note').focus();}">
-        <input id="vc-ts-note" placeholder="Ex : genoux qui rentrent" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addTsAnnotation();}">
-        <button class="btn btn-outline btn-sm" style="flex-shrink:0;padding:9px 12px" onclick="addTsAnnotation()">+</button>
+  // LA MAQUETTE DE KEVIN, 21/09/2026 : trois colonnes sur grand ecran — la
+  // video et son lecteur a gauche, l'image au centre, la correction a droite —,
+  // une seule sur telephone, la video d'abord. Tous les identifiants d'avant
+  // sont gardes : brouillon, modeles, repères, audio et enchainement de file
+  // les retrouvent tels quels.
+  const fichier=/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'');
+  const nSeg=fichier?segmentsVideo(v).length:0;
+  const quand=new Date(v.date).toLocaleDateString('fr-FR');
+  const S=_VCX_SVG, P=_VCX_P;
+  return `<div class="vcx">
+    <header class="vcx-tete">
+      <button type="button" class="vcx-retour" onclick="closeModal()" title="Annuler" aria-label="Annuler et fermer">${S(P.retour,22)}</button>
+      <div class="vcx-tt">
+        <h2 class="vcx-titre">Corriger <em>la vidéo</em></h2>
+        <!-- LE RESTE DE LA FILE, quand il y en a une. Des modales qui
+             s’enchaînent sans dire combien il en reste sont désorientantes ; hors
+             file, _fileVideosSuivantes rend un tableau vide et rien ne s’affiche. -->
+        <p class="vcx-sous">${escapeHtml(v.name)} · ${quand}${_vcReste?` · <span id="vc-reste" style="display:inline-block">${_vcReste} restante${_vcReste>1?'s':''}</span>`:''}</p>
       </div>
-      <div class="sub" style="font-size:var(--fs-xs);margin-top:5px">Format m:ss : ex: 0:15 · 1:30 · 12:05</div>
-    </div>
-    <div style="margin-top:12px;padding:12px;background:#080808;border:1px solid var(--surface-2);border-radius:var(--r-3)">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--sub);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Message audio</div>
-      <div style="display:flex;gap:6px;margin-bottom:6px">
-        <input id="vc-audio-ts" placeholder="0:45" style="width:62px;flex-shrink:0;text-align:center;font-family:var(--pile-titre);font-size:var(--fs-lg);padding:8px 4px">
-        <button id="vc-audio-btn" class="btn btn-outline btn-sm" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px" onclick="toggleAudioRec()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Démarrer l'enregistrement</button>
+      <div class="vcx-devise" aria-hidden="true"><i></i><span>Discipline, travail et résultats</span></div>
+    </header>
+    <div class="vcx-grille">
+      <div class="vcx-g">
+        <section class="vcx-carte vcx-carte-r vcx-info">
+          <div class="vcx-ct" role="heading" aria-level="3">${S(P.camera,22)}Vidéo à corriger</div>
+          <div class="vcx-champ">${S(P.reglages,24)}<div><span>Exercice</span><b>${escapeHtml(v.name)}</b></div></div>
+          <div class="vcx-champ">${S(P.agenda,24)}<div><span>Date</span><b>${quand}</b></div></div>
+        </section>
+        ${fichier?`<section class="vcx-carte vcx-fmt">
+          <div class="vcx-ct" role="heading" aria-level="3">Format vidéo</div>
+          <div class="vcx-champ">${S(P.format,24)}<div><b id="vcx-format">Lu au lancement</b><span id="vcx-dims">Dimensions réelles de la vidéo</span></div></div>
+        </section>`:''}
+        ${fichier?htmlLecteurCorrection('vc-video',v):''}
       </div>
-      <div id="vc-audio-preview" style="display:none;margin-top:8px">
-        <audio id="vc-audio-player" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-red btn-sm" style="flex:1" onclick="confirmAudioAnnotation()">✓ Ajouter ce message</button>
-          <button class="btn btn-outline btn-sm" style="flex:1" onclick="cancelAudioAnnotation()">✗ Recommencer</button>
+      <div class="vcx-c">
+        <div class="vcx-cadre">
+          ${fichier?`<span class="vcx-badge" id="vcx-badge" hidden></span>
+          <button type="button" class="vcx-plein" onclick="rcPleinEcran('vc-video')" title="Plein écran" aria-label="Plein écran">${S(P.plein,20)}</button>`:''}
+          ${_videoEmbed(v.url)}
         </div>
       </div>
-      <div id="vc-audio-status" class="sub" style="font-size:var(--fs-xs);margin-top:4px;min-height:14px"></div>
-      <div style="margin-top:8px;border-top:1px solid var(--surface-2);padding-top:8px">
-        <label style="display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);color:var(--sub);cursor:pointer;margin:0">
-          <input type="file" accept="audio/*" style="display:none" onchange="uploadAudioFile(this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> <span>Ou importe un mémo vocal existant</span>
-        </label>
+      <div class="vcx-d">
+        <!-- MOTION LAB : SEULEMENT POUR UNE VIDEO DEPOSEE. Un lien YouTube ou Drive
+             ne donne acces ni a un element <video> ni a ses images. -->
+        ${fichier?`<button type="button" class="vcx-ml" onclick="ouvrirMotionLab(window._vcEmail,window._vcVideoId)"
+          aria-label="Motion Lab : découper, tracer, corriger${nSeg?' ('+nSeg+')':''}">
+          <span class="vcx-ml-ico">${S(P.ciseaux,34)}</span>
+          <span class="vcx-ml-t"><b>Motion Lab</b><span>Découper, tracer, corriger ta vidéo${nSeg?' · '+nSeg+' répétition'+(nSeg>1?'s':''):''}</span></span>
+          <span class="vcx-ml-fl">${S(P.fleche,24)}</span></button>`
+          +(motionCorrectionValide(v.motion)?`<button type="button" class="vcx-revoir" onclick="ouvrirCorrectionMotion(window._vcEmail,window._vcVideoId)">▶ Revoir la correction vidéo envoyée${v.motion.envoyeLe?' le '+new Date(v.motion.envoyeLe).toLocaleDateString('fr-FR'):''}</button>`:''):''}
+        <section class="vcx-carte vcx-com">
+          <div class="vcx-ct" role="heading" aria-level="3"><label for="vc-general">${S(P.bulle,22)}Commentaire général</label></div>
+          <div id="qc-chips" class="vcx-chips" style="display:flex;gap:8px"></div>
+          <textarea id="vc-general" rows="3" placeholder="Impression globale sur l'exécution..." oninput="_vcxCompte()">${escapeHtml(v.feedback||'')}</textarea>
+          <div id="vcx-compte" class="vcx-compte" aria-live="off"></div>
+        </section>
+        <section class="vcx-carte vcx-rep">
+          <div class="vcx-ct" role="heading" aria-level="3">${S(P.horloge,22)}Repères par timestamp <span class="vcx-opt">optionnel</span></div>
+          <div id="vc-ts-list" class="vcx-ts-list"></div>
+          <div class="vcx-ts">
+            <input id="vc-ts-time" placeholder="0:45" aria-label="Moment du repère (m:ss)" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('vc-ts-note').focus();}">
+            <input id="vc-ts-note" placeholder="Ex : genoux qui rentrent" aria-label="Ce que tu vois à ce moment" onkeydown="if(event.key==='Enter'){event.preventDefault();addTsAnnotation();}">
+            <button type="button" class="vcx-plus" onclick="addTsAnnotation()" title="Ajouter le repère" aria-label="Ajouter le repère">+</button>
+          </div>
+          <div class="vcx-ts-pied"><span>Format m:ss : ex: 0:15 · 1:30 · 12:05</span>
+            ${/* « ANNOTER ICI » quitte la barre pour la carte des repères : c'est
+                 elle qu'il remplit. data-rc-hors le rattache au lecteur, qui
+                 l'active avec le reste quand les metadonnees arrivent. */
+              fichier?`<button type="button" class="vcx-annoter" data-rc-hors="vc-video" disabled onclick="rcAnnoterIci('vc-video')"
+              title="Créer une annotation au temps exact affiché" aria-label="Créer une annotation au temps exact affiché">${S(P.horloge,16)} Annoter ici</button>`:''}
+          </div>
+        </section>
       </div>
     </div>
-    <div style="position:sticky;bottom:0;height:32px;background:linear-gradient(transparent,var(--surface-2));pointer-events:none;margin-top:-32px"></div>
-    <button class="btn btn-red" style="margin-top:12px;width:100%" onclick="saveVideoCorrection()">Enregistrer la correction</button>
-    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Annuler</button>
-`;
+    <footer class="vcx-pied">
+      <div class="vcx-audio">
+        <div class="vcx-audio-l">
+          <span class="vcx-audio-t">${S(P.micro,20)}Message audio</span>
+          <input id="vc-audio-ts" placeholder="0:45" aria-label="Moment du message audio (m:ss)">
+          <button id="vc-audio-btn" type="button" class="vcx-rec" onclick="toggleAudioRec()">${icon('mic',14)} Démarrer l'enregistrement</button>
+          <label class="vcx-import">
+            <input type="file" accept="audio/*" style="display:none" onchange="uploadAudioFile(this)">
+            ${S(P.dossier,18)}<span>Ou importe un mémo vocal existant</span>
+          </label>
+        </div>
+        <div id="vc-audio-preview" style="display:none">
+          <audio id="vc-audio-player" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-red btn-sm" style="flex:1" onclick="confirmAudioAnnotation()">✓ Ajouter ce message</button>
+            <button class="btn btn-outline btn-sm" style="flex:1" onclick="cancelAudioAnnotation()">✗ Recommencer</button>
+          </div>
+        </div>
+        <div id="vc-audio-status" class="vcx-audio-s"></div>
+      </div>
+      <button type="button" class="btn btn-red vcx-save" onclick="saveVideoCorrection()">Enregistrer la correction ${S(P.fleche,20)}</button>
+    </footer>
+  </div>`;
 }
 // Ce qui doit tourner APRES l'insertion du gabarit, que la feuille vienne
 // d'etre creee ou que son contenu ait ete remplace sur place.
 function _vcApres(){
   _renderTsAnnotations();
   _renderQuickCommentChips();
+  // Le compteur suit aussi les puces, qui ecrivent dans le champ sans evenement.
+  _vcxCompte();
+  const qc=document.getElementById('qc-chips');
+  if(qc) qc.addEventListener('click',()=>setTimeout(_vcxCompte,0));
   // La barre de correction n'existe que pour un vrai <video> : sur une video
   // YouTube, htmlLecteurCorrection n'a rien produit et rcInitLecteur sort.
   try{ rcInitLecteur('vc-video'); }catch(e){}
@@ -91689,6 +92054,7 @@ function _vcRouvrirApresMotionLab(email,videoId){
   openVideoCorrection(email,videoId);
   if(b&&b.email===email&&b.videoId===videoId&&document.getElementById('vc-general')){
     document.getElementById('vc-general').value=b.general;
+    _vcxCompte();
     window._tsAnnotations=b.tss;
     _renderTsAnnotations();
   }
