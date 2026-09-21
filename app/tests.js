@@ -18421,8 +18421,13 @@ async function testExercices(){
             // LE PIÈGE FIREBASE : sessions_config revient en objet dès qu'une
             // clef manque. _blocExercicesDe et l'ordre le normalisent avant
             // toute méthode de tableau.
+            // Depuis le 21/09/2026 ils passent par _creneauxDe, qui aplatit ET
+            // rend la liste : lire le retour de _aplatirSessionsConfig comme une
+            // liste faisait planter les deux (il rend le dossier).
+            if(String(_creneauxDe).indexOf('_aplatirSessionsConfig')<0)
+              return _echec('_creneauxDe n’aplatit plus');
             for(const f of [_blocExercicesDe,blocAppliquerOrdre])
-              if(String(f).indexOf('_aplatirSessionsConfig')<0)
+              if(String(f).indexOf('_aplatirSessionsConfig')<0&&String(f).indexOf('_creneauxDe(')<0)
                 return _echec(f.name+' lit sessions_config sans l’aplatir');
             return true;})());
 
@@ -38046,6 +38051,76 @@ async function testExercices(){
         if(!(s&&s.classList.contains('active'))&&_repeintUtile('rep@t.fr')!==false)
           return _echec('le coach repeint une fiche qui n’est pas à l’écran');
       } finally { currentUser=sauve; }
+      return true;})());
+
+    ok('CE QUI BLOQUE : TROIS PAR LIGNE, ET LA CASE DES DEUX BOUTONS EN DERNIER',(()=>{
+      // Kevin, 21/09/2026 : « 3 muscles par ligne ; en bas une 3e case avec 2
+      // boutons l'un au-dessus de l'autre — modifier le programme en rouge, et
+      // en dessous un bouton blanc pour attribuer des muscles ».
+      const z=document.getElementById('ccd-plateaux');
+      if(!z) return _echec('le conteneur de la carte a disparu');
+      const sv=window.plateauxParGroupe, avant=z.innerHTML;
+      try{
+        const g=(m,n)=>({m,lib:(MUSCLES[m]||{}).lib||m,couleur:'#fff',musculaire:false,
+          exercices:Array.from({length:n},(_,i)=>({nom:m+i,etat:'plateau',dateRecord:Date.now()}))});
+        window.plateauxParGroupe=()=>[g('DORSAUX',2),g('PECTORAUX',1),g('BICEPS',1),g('TRICEPS',1),g('MOLLETS',1)];
+        renderPlateauxCoach({id:'P1',email:'p1@t.fr',sessions:[{id:'s',date:Date.now()}],sessions_config:[]});
+        const grille=z.querySelector('.plx-grille');
+        if(!grille) return _echec('la carte n’est plus une grille');
+        const cases=[...grille.children];
+        if(cases.length!==6) return _echec(cases.length+' cases au lieu de 5 groupes + 1');
+        const der=cases[cases.length-1];
+        if(!der.classList.contains('plx-actions')) return _echec('la case des boutons n’est pas la dernière');
+        const bs=[...der.querySelectorAll('button')];
+        if(bs.length!==2) return _echec(bs.length+' boutons dans la case');
+        if(!bs[0].classList.contains('btn-red')||(bs[0].getAttribute('onclick')||'').indexOf('openCoachSessions')<0)
+          return _echec('le premier bouton n’est pas « Modifier le programme », en rouge');
+        if(!bs[1].classList.contains('btn-blanc')||(bs[1].getAttribute('onclick')||'').indexOf('coachAttribuerMuscles')<0)
+          return _echec('le second bouton n’est pas l’attribution des muscles, en blanc');
+      } finally { window.plateauxParGroupe=sv; z.innerHTML=avant; }
+      // TROIS COLONNES : la regle vit dans la feuille de style.
+      let trois=false;
+      for(const s of document.styleSheets){
+        let r=[]; try{ r=s.cssRules||[]; }catch(e){ continue; }
+        for(const x of r) if(x.cssRules) for(const y of x.cssRules)
+          if(y.selectorText==='.plx-grille'&&/repeat\(3/.test(y.style.gridTemplateColumns)) trois=true;
+      }
+      return trois?true:_echec('la grille n’a plus trois colonnes');})());
+
+    ok('LES EXERCICES DU PROGRAMME SANS MUSCLE, ET RIEN D’AUTRE',(()=>{
+      const c={id:'X1',email:'x1@t.fr',exMuscles:{},sessions_config:{
+        0:{active:true,exercises:[{name:'Développé couché'},{name:'Exo mystère'},{name:'Exo mystère'}]},
+        2:{active:true,exercises:[{name:'Truc inconnu'},{name:'Tapis de course',cardio:true}]},
+        4:{active:false,exercises:[{name:'Autre inconnu'}]}}};
+      const l=exosProgrammeSansMuscle(c).map(x=>x.nom);
+      // Le developpe couche est connu ; le creneau inactif ne compte pas ; un
+      // doublon ne sort qu'une fois.
+      if(l.indexOf('Développé couché')>=0) return _echec('un exercice connu est déclaré sans muscle');
+      if(l.indexOf('Autre inconnu')>=0) return _echec('un créneau inactif est compté');
+      if(l.filter(x=>x==='Exo mystère').length!==1) return _echec('un doublon sort deux fois : '+l.join(', '));
+      if(l.indexOf('Truc inconnu')<0) return _echec('un inconnu du programme manque : '+l.join(', '));
+      // ET UNE ATTRIBUTION LE FAIT SORTIR DE LA LISTE — sous la clef que lit
+      // resoudreMusclesLecture.
+      c.exMuscles[_aliasPour(exKey('Truc inconnu'),c)]={p:['DORSAUX'],s:[],src:'manuel'};
+      if(exosProgrammeSansMuscle(c).some(x=>x.nom==='Truc inconnu')) return _echec('l’attribution n’est pas lue');
+      // LE SELECTEUR ECRIT DANS LE DOSSIER DE L'ATHLETE depuis la fiche coach,
+      // et l'ouverture ordinaire remet le detour a zero.
+      if(String(_validerSelecteurMuscles).indexOf('_selMusclesEcrire')<0) return _echec('le sélecteur ne sait plus écrire ailleurs');
+      if(String(ouvrirSelecteurMuscles).indexOf('_selMusclesEcrire=null')<0) return _echec('le détour survit à une ouverture ordinaire');
+      if(String(_coachClasserMuscles).indexOf('CLOUD.pushOne')<0) return _echec('l’attribution du coach ne part pas chez l’athlète');
+      return true;})());
+
+    ok('LE BLOC PRIORITAIRE RETROUVE SES EXERCICES — _aplatirSessionsConfig REND LE DOSSIER',(()=>{
+      // Releve le 21/09/2026 : trois appelants lisaient le retour de
+      // _aplatirSessionsConfig comme la liste des creneaux, et faisaient
+      // cfg.forEach sur un dossier. Les gestes du bloc prioritaire tombaient.
+      const c={id:'B1',email:'b1@t.fr',sessions_config:{0:{active:true,exercises:[{name:'Développé couché',series:4}]},
+        2:{active:true,exercises:[{name:'Squat',series:3}]}}};
+      let r=null; try{ r=_blocExercicesDe(c,'PECTORAUX'); }catch(e){ return _echec('_blocExercicesDe plante : '+e.message); }
+      if(!Array.isArray(r)||r.length!==1||r[0].slot!==0) return _echec('exercices trouvés : '+JSON.stringify(r));
+      if(!Array.isArray(_creneauxDe(c))||!Array.isArray(_creneauxDe({}))) return _echec('_creneauxDe ne rend pas toujours un tableau');
+      for(const f of [_blocExercicesDe,blocAppliquerOrdre,exosProgrammeSansMuscle])
+        if(/cfg=_aplatirSessionsConfig\(/.test(String(f))) return _echec((f.name||'?')+' relit le dossier comme une liste');
       return true;})());
 
     // ══════ LE SCHEMA CORPOREL DE LA FICHE COACH ══════════════════════════

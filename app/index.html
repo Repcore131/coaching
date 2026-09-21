@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1366';
+window.RC_BUILD='1367';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4151,6 +4151,25 @@ html{scroll-behavior:smooth}
   text-overflow:ellipsis;white-space:nowrap}
 .plx-ex-e{font-size:var(--fs-2xs);white-space:nowrap}
 .plx-ex-t{font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-top:2px}
+/* ── TROIS GROUPES PAR LIGNE — Kevin, 21/09/2026 ────────────────────────────
+   « Divise ca en 3 colonnes, 3 muscles par ligne ; en bas, la derniere ligne
+   avec 2 muscles et une 3e case avec 2 boutons l'un au-dessus de l'autre. »
+   La case des boutons est TOUJOURS la derniere de la grille : elle complete la
+   ligne quand il reste une place, et en ouvre une sinon.
+   ⚠ align-items:start : un groupe qu'on deplie ne doit pas etirer ses deux
+   voisins de ligne jusqu'a sa hauteur.
+   ⚠ LA REGLE INTERROGE LA CARTE, PAS LA FENETRE : sous 560 px de carte (un
+   telephone), trois colonnes feraient des cases de cent pixels ou le nom du
+   groupe ne tient plus ; elles s'empilent. */
+.plx-carte{container-type:inline-size;container-name:plx}
+.plx-grille{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:start}
+@container plx (min-width:560px){
+  .plx-grille{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+.plx-grille .plx-g,.plx-grille .plx-g:first-of-type{border:1px solid var(--surface-2);
+  border-radius:var(--r-2);padding:0 10px;background:rgba(255,255,255,.012)}
+.plx-actions{display:flex;flex-direction:column;justify-content:center;gap:8px}
+.plx-actions .btn{margin:0;padding:10px 12px;min-height:44px}
 /* LA BARRE « NOUVEAU BILAN A CHECKER ». Orange et non rouge : le rouge de la
    fiche est reserve a ce qui bloque un athlete — douleur, acces expire. Un
    bilan qui attend est une TACHE, pas une alerte. Le point pulse doucement,
@@ -17315,6 +17334,18 @@ function _aplatirChamp(u,champ,max,garderTrous){
 // Le creneau hebdomadaire : sept cases, l'indice EST le jour. Le plafond a 64
 // est large a dessein — il ecarte une clef aberrante sans jamais tronquer.
 function _aplatirSessionsConfig(u){ return _aplatirChamp(u,'sessions_config',64,true); }
+// LA LISTE DES CRENEAUX, aplatie, toujours un tableau.
+// ⚠ _aplatirSessionsConfig APLATIT EN PLACE ET REND LE DOSSIER, pas la liste.
+//   Trois appelants la lisaient comme si elle rendait les creneaux —
+//   `cfg=_aplatirSessionsConfig(c)||[]` puis cfg.map / cfg.forEach : sur un
+//   dossier, TypeError. Les gestes du bloc prioritaire (reordonner, retrouver
+//   les exercices d'un muscle) tombaient donc a chaque appel. Releve le
+//   21/09/2026 en branchant l'attribution des muscles sur la meme ligne.
+function _creneauxDe(u){
+  try{ _aplatirSessionsConfig(u); }catch(e){}
+  const v=u&&u.sessions_config;
+  return Array.isArray(v)?v:[];
+}
 // ══════ LES MODELES DE PROGRAMME DU COACH ══════════════════════════════
 //
 // MEME PIEGE, ET C'EST CELUI QUI COUTE LE PLUS CHER. Un modele porte deux jeux
@@ -52934,6 +52965,8 @@ function renderPlateauxCoach(c){
   if(!groupes.length){ z.innerHTML=''; return; }
   const dat=(t)=>t?new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'}):'';
   const nBlo=groupes.reduce((n,g)=>n+g.exercices.length,0);
+  // Le compte sur le bouton blanc : ce qu'il reste a attribuer, dit d'avance.
+  let nSans=0; try{ nSans=exosProgrammeSansMuscle(c).length; }catch(e){ nSans=0; }
   const nMus=groupes.filter(g=>g.musculaire).length;
   const ligne=(x)=>`<div class="plx-ex">
       <div class="plx-ex-h">
@@ -52950,6 +52983,7 @@ function renderPlateauxCoach(c){
       <span>Ce qui bloque</span>
       <span class="plx-tete-n">${nBlo} exercice${nBlo>1?'s':''}${nMus?' · '+nMus+' groupe'+(nMus>1?'s':'')+' en plateau':''}</span>
     </div>
+    <div class="plx-grille">
     ${groupes.map((g,i)=>`<details class="plx-g"${i===0?' open':''}${g.musculaire?' data-mus':''}>
       <summary class="plx-s">
         ${_plxFigurine(g.m,c)}
@@ -52961,8 +52995,95 @@ function renderPlateauxCoach(c){
       </summary>
       <div class="plx-c">${g.exercices.map(ligne).join('')}</div>
     </details>`).join('')}
+    <div class="plx-actions">
+      <button type="button" class="btn btn-red" onclick="openCoachSessions()">Modifier le programme</button>
+      <button type="button" class="btn btn-blanc" onclick="coachAttribuerMuscles()">Attribuer les muscles${nSans?' · '+nSans:''}</button>
+    </div>
+    </div>
     ${PERF_ENCADRE}
   </div>`;
+}
+// ── ATTRIBUER LES MUSCLES DU PROGRAMME, DEPUIS LA FICHE COACH ─────────────
+// Kevin, 21/09/2026 : « un bouton blanc pour attribuer des muscles aux exos
+// sans attribution de groupe musculaire du programme ».
+//
+// PURE. Les exercices du PROGRAMME (creneaux actifs) dont aucun muscle n'est
+// connu — ni guide, ni regle, ni attribution anterieure. Un exercice sans
+// muscle ne compte nulle part : ni dans le volume, ni dans les plateaux par
+// groupe, ou il finit sous « Sans groupe identifie ».
+// ⚠ LE CARDIO N'EST PAS « SANS MUSCLE » : resoudreMusclesLecture rend
+//   VOL_CARDIO, qui est vrai, et il est donc ecarte comme les autres.
+function exosProgrammeSansMuscle(c){
+  const u=_dossier(c);
+  if(!u) return [];
+  const cfg=_creneauxDe(u);
+  const vus=new Map();
+  for(const s of cfg){
+    if(!s||s.active!==true||!Array.isArray(s.exercises)) continue;
+    for(const ex of s.exercises){
+      const nom=ex&&ex.name;
+      const k=nom?exKey(nom):'';
+      if(!k||vus.has(k)) continue;
+      let cls=null; try{ cls=resoudreMusclesLecture(nom,ex,u); }catch(e){ cls=null; }
+      if(cls) continue;
+      vus.set(k,{nom,k});
+    }
+  }
+  return [...vus.values()].sort((a,b)=>a.nom.localeCompare(b.nom));
+}
+let _coachExSansMuscle=[];
+function coachAttribuerMuscles(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return false;
+  _coachExSansMuscle=exosProgrammeSansMuscle(c);
+  const n=_coachExSansMuscle.length;
+  const corps=n
+    ?_coachExSansMuscle.map((a,i)=>`<div style="display:flex;align-items:center;gap:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;margin-bottom:7px">
+        <span style="flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.nom)}</span>
+        <button class="btn btn-outline btn-sm" style="width:auto;flex:0 0 auto;margin:0" onclick="_coachClasserMuscles(${i})">Attribuer</button>
+      </div>`).join('')
+    :emptyState('check','Tous les exercices du programme ont leurs muscles.',null,null,'padding:22px 0');
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 18px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
+      <h2 style="margin-bottom:2px;font-size:var(--fs-lg)">Attribuer les muscles</h2>
+      <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.5">${n
+        ?n+' exercice'+(n>1?'s':'')+' du programme sans groupe musculaire : il'+(n>1?'s ne comptent':' ne compte')+' ni dans le volume, ni dans ce qui bloque.'
+        :'Rien à attribuer.'}</p>
+      <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">${corps}</div>
+      <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Fermer</button>
+    </div></div>`;
+  const old=document.getElementById('modal-overlay'); if(old) old.remove();
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+// LE SELECTEUR DE LA SEANCE, TEL QUEL — deux colonnes, primaire et
+// secondaire — mais il ECRIT DANS LE DOSSIER DE L'ATHLETE et l'envoie : sans
+// ce detour, _validerSelecteurMuscles aurait classe l'exercice dans le dossier
+// du COACH, qui ne s'en sert pas.
+function _coachClasserMuscles(i){
+  const a=_coachExSansMuscle[i];
+  if(!a) return false;
+  _selMusclesIdx=null; _selMusclesP=[]; _selMusclesS=[];
+  _selMusclesTitre=escapeHtml(a.nom);
+  _selMusclesEcrire=(r)=>{
+    const users=DB.get('users')||{};
+    const cc=getOwnedClient(currentClientId,users);
+    if(!cc||!cc.email){ closeModal(); return; }
+    if(!cc.exMuscles||typeof cc.exMuscles!=='object') cc.exMuscles={};
+    // LA CLEF QUE LIT resoudreMusclesLecture : le nom, passe par les alias de
+    // l'athlete. Une autre clef serait une attribution que personne ne lit.
+    cc.exMuscles[_aliasPour(exKey(a.nom),cc)]=r;
+    cc.updatedAt=Date.now(); users[cc.email]=cc;
+    const ok=DB.set('users',users);
+    toastSync(ok,CLOUD.pushOne(cc.email,cc),'Muscles attribués ✓','l’attribution est');
+    try{ _viderCacheVolume(); }catch(e){}
+    closeModal();
+    try{ renderPlateauxCoach(cc); }catch(e){}
+    try{ renderVolumeCoach(cc); }catch(e){}
+    coachAttribuerMuscles();
+  };
+  _rendreSelecteurMuscles(_selMusclesTitre);
+  return true;
 }
 // ══════════════ TROIS CHIFFRES D'ENTRAÎNEMENT ══════════════
 // L'accueil mettait en avant le nombre total de séances, les semaines de suite
@@ -61426,7 +61547,7 @@ function blocSynthese(user,arb,pla){
 // qu'une clef manque, et .map leverait alors dans une fonction async.
 function _blocExercicesDe(c,muscle){
   const u=_dossier(c);
-  let cfg=[]; try{ cfg=_aplatirSessionsConfig(u)||[]; }catch(e){ cfg=[]; }
+  const cfg=_creneauxDe(u);
   const out=[];
   cfg.forEach((s,slot)=>{
     if(!s||s.active!==true||!Array.isArray(s.exercises)) return;
@@ -61537,7 +61658,7 @@ function blocAppliquerOrdre(clientId){
   const c=res.c, users=res.users;
   const b=blocPriorite(c);
   if(!b||!b.hauts.length){ toast('Aucun muscle prioritaire.','var(--orange)'); return false; }
-  let cfg=[]; try{ cfg=_aplatirSessionsConfig(c)||[]; }catch(e){ cfg=[]; }
+  const cfg=_creneauxDe(c);
   let bouge=0;
   const out=cfg.map(s=>{
     if(!s||s.active!==true||!Array.isArray(s.exercises)) return s;
@@ -102922,8 +103043,14 @@ function _ligneMuscles(ex,i){
 // Un même groupe ne peut pas être les deux à la fois — cocher d'un côté
 // décoche de l'autre, sinon un exercice sortirait « pectoraux ET pectoraux ».
 let _selMusclesIdx=null,_selMusclesP=[],_selMusclesS=[];
+// UN TITRE ET UNE ECRITURE DE RECHANGE, pour la fiche coach (voir
+// _coachClasserMuscles) : le selecteur ecrit sinon dans le dossier de
+// l'utilisateur connecte. Remis a zero a chaque ouverture ordinaire, sans quoi
+// une attribution coach annulee aurait detourne la suivante.
+let _selMusclesTitre=null,_selMusclesEcrire=null;
 function ouvrirSelecteurMuscles(i){
   const ex=progEx[i]; if(!ex||!ex.name) return;
+  _selMusclesTitre=null; _selMusclesEcrire=null;
   const r=resoudreMuscles(ex.name,ex);
   _selMusclesIdx=i; _selMusclesP=r?r.p.slice():[]; _selMusclesS=r?r.s.slice():[];
   _rendreSelecteurMuscles(escapeHtml(ex.name));
@@ -102952,14 +103079,20 @@ function _rendreSelecteurMuscles(titre){
 function _selMusclePrim(g){
   _selMusclesS=_selMusclesS.filter(x=>x!==g);
   _selMusclesP=_selMusclesP.includes(g)?_selMusclesP.filter(x=>x!==g):[..._selMusclesP,g];
-  _rendreSelecteurMuscles(escapeHtml(progEx[_selMusclesIdx]?.name||''));
+  _rendreSelecteurMuscles(_selMusclesTitre||escapeHtml(progEx[_selMusclesIdx]?.name||''));
 }
 function _selMuscleSec(g){
   _selMusclesP=_selMusclesP.filter(x=>x!==g);
   _selMusclesS=_selMusclesS.includes(g)?_selMusclesS.filter(x=>x!==g):[..._selMusclesS,g];
-  _rendreSelecteurMuscles(escapeHtml(progEx[_selMusclesIdx]?.name||''));
+  _rendreSelecteurMuscles(_selMusclesTitre||escapeHtml(progEx[_selMusclesIdx]?.name||''));
 }
 function _validerSelecteurMuscles(){
+  if(typeof _selMusclesEcrire==='function'){
+    if(!_selMusclesP.length) return toast('Choisis au moins un muscle principal','var(--orange)');
+    const f=_selMusclesEcrire; _selMusclesEcrire=null; _selMusclesTitre=null;
+    f({p:_selMusclesP.slice(),s:_selMusclesS.slice(),src:'manuel'});
+    return;
+  }
   const ex=progEx[_selMusclesIdx]; if(!ex) return closeModal();
   if(!_selMusclesP.length) return toast('Choisis au moins un muscle principal','var(--orange)');
   const k=resoudreAlias(exKey(ex.name));
@@ -103032,6 +103165,7 @@ function _exemplaireExercice(k){
 // Classer depuis la file : on réutilise le sélecteur de l'éditeur en lui
 // fabriquant un exercice temporaire, plutôt que d'en écrire un second.
 function _classerDepuisFile(k){
+  _selMusclesTitre=null; _selMusclesEcrire=null;
   const ex=_exemplaireExercice(k)||{name:k,reps:''};
   progEx=[ex]; _selMusclesIdx=0;
   const r=resoudreMuscles(ex.name,ex);
