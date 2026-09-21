@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1377';
+window.RC_BUILD='1378';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -12829,13 +12829,11 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 <div id="s-coach-motion-lab" class="screen ecran-coach">
-  <div class="topbar">
-    <!-- R21 — fermeture dédiée : demande avant de perdre des répétitions non enregistrées, puis rouvre la correction de la vidéo. -->
-    <button class="back-btn" onclick="fermerMotionLab()">←</button>
-    <span class="topbar-title" id="ml-titre">Motion Lab</span>
-    <button id="ml-enreg" class="btn btn-red btn-sm" onclick="enregistrerMotionLab()" disabled style="margin:0;letter-spacing:1px;padding:7px 12px;min-height:0">ENREGISTRER</button>
-  </div>
-  <div class="scroll-area" style="flex:1;padding:0 14px 28px">
+  <!-- LA REFONTE DU 21/09/2026 : l'en-tête — retour, titre, exercice, logo — et
+       « Enregistrer la correction » sont dessinés par app/motion-lab.js, dans
+       ml-contenu. R21 : la flèche passe toujours par fermerMotionLab, qui
+       demande avant de perdre des séquences ou des tracés non enregistrés. -->
+  <div class="scroll-area" style="flex:1">
     <div id="ml-contenu"></div>
   </div>
 </div>
@@ -88827,10 +88825,12 @@ function _buildVideoCard(v){
   // MOTION LAB : une correction vidéo compte comme un retour du coach, et
   // s'ouvre d'un bouton — c'est la première chose que l'athlète doit voir.
   const _motion=(()=>{ try{ return motionCorrectionValide(v.motion); }catch(e){ return null; } })();
-  const hasFb=v.feedback||v.feedbackTimestamps?.length||_motion;
+  // LES ANNOTATIONS DU MOTION LAB comptent aussi comme un retour du coach.
+  const _annot=(()=>{ try{ return annotAMontrer(v.annot); }catch(e){ return false; } })();
+  const hasFb=v.feedback||v.feedbackTimestamps?.length||_motion||_annot;
   const tsInner=_renderTsAnnotations(v.feedbackTimestamps||[],{readonly:true,videoId:'vc-video-'+v.id});
   const tsBlock=tsInner?`<div style="margin-top:8px">${tsInner}</div>`:'';
-  const motionBtn=_motion?`<button class="btn btn-red btn-sm" style="width:100%;margin:${v.feedback||tsInner?'10px':'2px'} 0 0" onclick="ouvrirCorrectionMotion('${escapeHtml(currentUser?.email||'')}','${escapeHtml(v.id)}')">▶ Voir la correction vidéo · ${_motionDuree(_motion.dureeMs)}</button>`:'';
+  const motionBtn=(_motion||_annot)?`<button class="btn btn-red btn-sm" style="width:100%;margin:${v.feedback||tsInner?'10px':'2px'} 0 0" onclick="ouvrirCorrectionMotion('${escapeHtml(currentUser?.email||'')}','${escapeHtml(v.id)}')">${_motion?'▶ Voir la correction vidéo · '+_motionDuree(_motion.dureeMs):'▶ Voir ma vidéo annotée par mon coach'}</button>`:'';
   const fbBlock=hasFb?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px;margin-top:10px;font-size:var(--fs-sm)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:var(--fs-xs);font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:var(--fs-xs);color:var(--text-dim)">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}${motionBtn}</div>`:'';
   // COMPARER : offert seulement quand une deuxieme prise du meme exercice
   // existe. Un bouton qui repondrait « il faut deux prises » serait un geste
@@ -91407,7 +91407,7 @@ function _vcCorpsHtml(email,videoId){
           <span class="vcx-ml-ico">${S(P.ciseaux,34)}</span>
           <span class="vcx-ml-t"><b>Motion Lab</b><span>Découper, tracer, corriger ta vidéo${nSeg?' · '+nSeg+' répétition'+(nSeg>1?'s':''):''}</span></span>
           <span class="vcx-ml-fl">${S(P.fleche,24)}</span></button>`
-          +(motionCorrectionValide(v.motion)?`<button type="button" class="vcx-revoir" onclick="ouvrirCorrectionMotion(window._vcEmail,window._vcVideoId)">▶ Revoir la correction vidéo envoyée${v.motion.envoyeLe?' le '+new Date(v.motion.envoyeLe).toLocaleDateString('fr-FR'):''}</button>`:''):''}
+          +((motionCorrectionValide(v.motion)||annotAMontrer(v.annot))?`<button type="button" class="vcx-revoir" onclick="ouvrirCorrectionMotion(window._vcEmail,window._vcVideoId)">▶ Revoir la correction envoyée${(()=>{ const d=(v.motion&&v.motion.envoyeLe)||(v.annot&&v.annot.majLe); return d?' le '+new Date(d).toLocaleDateString('fr-FR'):''; })()}</button>`:''):''}
         <section class="vcx-carte vcx-com">
           <div class="vcx-ct" role="heading" aria-level="3"><label for="vc-general">${S(P.bulle,22)}Commentaire général</label></div>
           <div id="qc-chips" class="vcx-chips" style="display:flex;gap:8px"></div>
@@ -91973,6 +91973,139 @@ function enregistrerCorrectionMotion(email,videoId,motion){
   const ok=DB.set('users',users);
   return {ok,envoi:CLOUD.pushOne(email,c),motion:m};
 }
+// ══ MOTION LAB — LES ANNOTATIONS (refonte du 21/09/2026) ═════════════════════
+//
+// Kevin : « Motion Lab doit devenir le véritable laboratoire d'analyse
+// technique ». Le coach trace sur la vidéo — trajectoires, lignes, flèches,
+// angles, repères anatomiques, textes, zones — chaque tracé avec son nom, sa
+// couleur, son épaisseur et sa durée d'apparition, et une légende posée sur
+// l'image. L'athlète revoit sa vidéo avec ces tracés, à leurs instants.
+//
+// ⚠ DANS L'ENTRÉE DE LA VIDÉO, ET NON DANS UN NŒUD À PART — même raison que
+// les répétitions : les règles de la base ne partent pas avec le déploiement
+// automatique, un nœud neuf serait refusé en production sans un mot. Le
+// dossier de l'athlète a déjà les bons droits : le coach désigné écrit,
+// l'athlète lit.
+//
+// ⚠ NON DESTRUCTIF. La vidéo n'est jamais touchée : un tracé est une donnée de
+// quelques dizaines d'octets, posée PAR-DESSUS l'image au moment de la lire.
+//
+//   videos[i].annot = {v:1, majLe, leg:{on, titre, pos, taille, fond, op},
+//     a:[{id, n (nom), t (type), c (#rrggbb), e (épaisseur px), d, f (ms),
+//         p ("x,y x,y" normés 0-1000), k ([[ms,"x,y …"]…] images clés),
+//         x (texte), ts (taille du texte), tf (fond), tc (contour),
+//         cb (angle cible), lb ([étiquettes des points]), rel (points reliés),
+//         et (nom affiché sur l'image), lg (dans la légende), h (masquée),
+//         seg (la séquence)}]}
+//
+// LE PRIX EST BORNÉ pour la raison de toujours — ce dossier part EN ENTIER à
+// chaque synchronisation : trente tracés, soixante-quatre points chacun, vingt-
+// quatre images clés, et vingt-quatre kilo-octets au plus pour le tout.
+const ANNOT_MAX=30, ANNOT_PTS_MAX=64, ANNOT_CLES_MAX=24, ANNOT_NOM_MAX=40, ANNOT_TEXTE_MAX=80,
+  ANNOT_ETIQ_MAX=14, ANNOT_TAILLE_MAX=24000;
+// LES TYPES, et ce que chacun demande de points : [minimum, maximum].
+const ANNOT_TYPES=Object.freeze({ligne:[2,2],fleche:[2,2],libre:[2,ANNOT_PTS_MAX],courbe:[2,24],
+  cercle:[2,2],rect:[2,2],angle:[3,3],point:[1,12],texte:[1,1],zone:[2,2]});
+const ANNOT_LEG_POS=Object.freeze(['hg','hd','bg','bd']);
+// PURE. Un tracé de points normés, relu : null s'il n'a pas le bon nombre de
+// points ou un point hors de l'image.
+function _annotPoints(s,min,max){
+  const pts=String(s==null?'':s).trim().split(' ');
+  if(pts.length<min||pts.length>max) return null;
+  if(!pts.every(q=>/^\d{1,4},\d{1,4}$/.test(q)&&q.split(',').every(n=>Number(n)<=1000))) return null;
+  return pts.join(' ');
+}
+// PURE. Les annotations d'une vidéo si elles sont lisibles, null sinon. Tout
+// est revérifié, et un tracé illisible TOMBE SEUL : les autres restent, parce
+// que rien ne dépend de lui. La donnée vient du réseau et se dessine chez
+// l'athlète — une couleur, un nom ou un nombre non contrôlé n'y entre pas.
+function annotValide(doc){
+  if(!doc||typeof doc!=='object'||doc.v!==1) return null;
+  const num=(x,min,max)=>{ const v=Number(x); return isFinite(v)&&v>=min&&v<=max?v:null; };
+  const txt=(x,max)=>String(x==null?'':x).replace(/[\u0000-\u001f]/g,' ').trim().slice(0,max);
+  const couleur=x=>/^#[0-9a-f]{6}$/i.test(String(x||''))?String(x).toLowerCase():null;
+  const L=doc.leg&&typeof doc.leg==='object'?doc.leg:{};
+  const leg={on:L.on?1:0,titre:txt(L.titre,40)||'Analyse technique',
+    pos:ANNOT_LEG_POS.includes(L.pos)?L.pos:'hg',
+    taille:['s','m','l'].includes(L.taille)?L.taille:'m',
+    fond:['sombre','clair','aucun'].includes(L.fond)?L.fond:'sombre',
+    op:Math.round((num(L.op,0.3,1)||0.85)*100)/100};
+  const vus=new Set();
+  const a=_tabBloc(doc.a).map(x=>{
+    if(!x||typeof x!=='object') return null;
+    const id=txt(x.id,40);
+    const bornes=ANNOT_TYPES[x.t];
+    const c=couleur(x.c);
+    const d=num(x.d,0,86400000), f=num(x.f,0,86400000);
+    if(!id||vus.has(id)||!bornes||!c||d===null||f===null||f<=d) return null;
+    const p=_annotPoints(x.p,bornes[0],bornes[1]);
+    if(!p) return null;
+    vus.add(id);
+    const n=p.split(' ').length;
+    const o={id,n:txt(x.n,ANNOT_NOM_MAX)||'Annotation',t:x.t,c,e:Math.round(num(x.e,1,12)||4),
+      d:Math.round(d),f:Math.round(f),p};
+    // LES IMAGES CLÉS : même nombre de points que le tracé, instants croissants
+    // et distincts. Une clé fautive tombe ; le suivi garde les autres.
+    const k=[];
+    for(const q of _tabBloc(x.k)){
+      if(!Array.isArray(q)) continue;
+      const t=num(q[0],0,86400000), pk=_annotPoints(q[1],n,n);
+      if(t===null||!pk||(k.length&&Math.round(t)<=k[k.length-1][0])) continue;
+      k.push([Math.round(t),pk]);
+      if(k.length>=ANNOT_CLES_MAX) break;
+    }
+    if(k.length) o.k=k;
+    if(x.t==='texte'){
+      o.x=txt(x.x,ANNOT_TEXTE_MAX);
+      if(!o.x) return null;
+      o.ts=['s','m','l'].includes(x.ts)?x.ts:'m';
+      o.tf=[0,1,2].includes(Number(x.tf))?Number(x.tf):1;
+      if(x.tc) o.tc=1;
+    }
+    if(x.t==='angle'){ const cb=num(x.cb,0,180); if(cb!==null) o.cb=Math.round(cb); }
+    if(x.t==='point'){
+      const lb=_tabBloc(x.lb).slice(0,n).map(l=>txt(l,ANNOT_ETIQ_MAX));
+      if(lb.some(Boolean)) o.lb=lb;
+      if(x.rel&&n>1) o.rel=1;
+    }
+    // LES BASCULES : on n'écrit que ce qui s'écarte du défaut, pour garder la
+    // donnée courte. Nom affiché et légende sont ALLUMÉS par défaut.
+    if(x.et===0) o.et=0;
+    if(x.lg===0) o.lg=0;
+    if(x.h) o.h=1;
+    const seg=txt(x.seg,40); if(seg) o.seg=seg;
+    return o;
+  }).filter(Boolean).slice(0,ANNOT_MAX);
+  let out={v:1,majLe:Math.round(num(doc.majLe,0,1e14)||0),leg,a};
+  // ⚠ LE PLAFOND NE DOIT PAS ÊTRE UNE SURPRISE À L'ENREGISTREMENT : les images
+  // clés tombent d'abord — le tracé reste, immobile —, puis les derniers tracés.
+  if(JSON.stringify(out).length>ANNOT_TAILLE_MAX) out={...out,a:out.a.map(({k,...r})=>r)};
+  while(JSON.stringify(out).length>ANNOT_TAILLE_MAX&&out.a.length) out={...out,a:out.a.slice(0,-1)};
+  return out;
+}
+// PURE. Y a-t-il quelque chose à montrer à l'athlète ? Un document vide, ou
+// dont tous les tracés sont masqués, ne vaut pas un bouton.
+function annotAMontrer(doc){
+  const d=annotValide(doc);
+  return !!(d&&d.a.some(x=>!x.h));
+}
+// L'ENREGISTREMENT. Le chemin de la correction : le dossier de l'athlète, la
+// même garde, et `feedbackSeen=false` + `feedbackDate` — la pastille et la
+// notification existantes font le reste.
+function enregistrerAnnotationsVideo(email,videoId,doc){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||c.coachId!==currentUser?.id) return {ok:false,raison:'Élève introuvable ou non autorisé'};
+  const idx=(Array.isArray(c.videos)?c.videos:[]).findIndex(v=>v&&v.id===videoId);
+  if(idx<0) return {ok:false,raison:'Vidéo introuvable'};
+  const a=annotValide({...doc,majLe:Date.now()});
+  if(!a) return {ok:false,raison:'Les annotations sont illisibles : elles n’ont pas été enregistrées.'};
+  c.videos[idx].annot=a;
+  if(a.a.some(x=>!x.h)){ c.videos[idx].feedbackDate=Date.now(); c.videos[idx].feedbackSeen=false; }
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  return {ok,envoi:CLOUD.pushOne(email,c),annot:a};
+}
 // PURE. « 0:45 » : la durée d'une correction.
 function _motionDuree(ms){
   const s=Math.max(0,Math.round((Number(ms)||0)/1000));
@@ -91989,7 +92122,7 @@ async function ouvrirCorrectionMotion(email,videoId){
     if(c&&currentUser&&currentUser.role==='coach'&&c.coachId===currentUser.id) u=c;
   }
   const v=u&&(Array.isArray(u.videos)?u.videos:[]).find(x=>x&&x.id===videoId);
-  if(!v||!motionCorrectionValide(v.motion)){ toast('Correction introuvable','var(--orange)'); return false; }
+  if(!v||(!motionCorrectionValide(v.motion)&&!annotAMontrer(v.annot))){ toast('Correction introuvable','var(--orange)'); return false; }
   try{ await chargerMotionLab(); }
   catch(e){ toast(e.message,'var(--orange)'); return false; }
   go('s-motion-correction');

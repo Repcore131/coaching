@@ -55,7 +55,11 @@
  *   cacheBarre:{cle:string, d:{t:number[], x:number[], y:number[], vy:number[], conf:number[]}}|null,
  *   cacheRep:{cle:string, d:any}|null, repere:{nom:string, couleur:number}|null,
  *   rec:any, correction:{motion:any, blob:Blob|null, blobUrl:string, statut:'brouillon'|'envoi'|'envoye'|'erreur', erreur:string}|null,
- *   cartes:{id:string, aMs:number, dureeMs:number, texte:string}[], lecteur:any
+ *   cartes:{id:string, aMs:number, dureeMs:number, texte:string}[], lecteur:any,
+ *   annot:DocAnnot, annotInit:string, outil:OutilMl, couleur:string, epaisseur:number, sel:string|null,
+ *   trace:{t:TypeAnnot, pts:number[][], lb?:string[]}|null, curseur:number[]|null, annule:string[], refait:string[],
+ *   original:boolean, comparaison:boolean, guide:{m:ModeleAnnot, i:number}|null, repereAnat:number,
+ *   relier:boolean, phrase:string, tailleTexte:string, onglet:string, jetonVseq:number
  * }} EtatMl
  */
 /** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'|'repere'|'repsuivi'} ModeMl */
@@ -87,7 +91,7 @@ const ML_DUREE_DEFAUT_MS=2000;
 // Les miniatures : assez pour reconnaître les phases, pas au point de faire
 // quarante recherches dans la vidéo sur un téléphone.
 const ML_VIGNETTES_MAX=40;
-const ML_VIGNETTE_H=56;
+const ML_VIGNETTE_H=40;
 
 // ══ LES FONCTIONS PURES ═══════════════════════════════════════════════════════
 
@@ -2373,6 +2377,1492 @@ function mlPhrases(ctx){
   return out;
 }
 
+// ══ LA REFONTE — LES ANNOTATIONS ═════════════════════════════════════════════
+//
+// Kevin, 21/09/2026 : « Motion Lab doit devenir le véritable laboratoire
+// d'analyse technique de RepCore ». Le coach montre à l'athlète « ce que tu
+// fais », « ce que je veux que tu fasses », « ce que tu dois corriger » : des
+// tracés posés sur l'image, chacun avec son nom, sa couleur, son épaisseur et
+// sa durée d'apparition, une légende, et une timeline où ils se déplacent.
+//
+// LE MODÈLE VIT DANS index.html (annotValide, enregistrerAnnotationsVideo) : le
+// lecteur de l'athlète les valide à l'ouverture de l'application. Ce module
+// les ÉDITE et les DESSINE — le même dessin chez le coach et chez l'athlète,
+// parce que c'est le même code.
+//
+// ⚠ NON DESTRUCTIF : rien ne touche la vidéo. « Version originale » éteint le
+// calque, et c'est tout.
+
+/** @typedef {'ligne'|'fleche'|'libre'|'courbe'|'cercle'|'rect'|'angle'|'point'|'texte'|'zone'} TypeAnnot */
+/** @typedef {'selection'|'gomme'|TypeAnnot} OutilMl */
+/**
+ * Un tracé. Les points sont normés sur l'image (0 à 1000 en largeur ET en
+ * hauteur), en texte « x,y x,y » — le format des traits de la correction.
+ * @typedef {{id:string, n:string, t:TypeAnnot, c:string, e:number, d:number, f:number, p:string,
+ *   k?:[number,string][], x?:string, ts?:string, tf?:number, tc?:number, cb?:number,
+ *   lb?:string[], rel?:number, et?:number, lg?:number, h?:number, seg?:string}} Annot
+ */
+/** @typedef {{on:number, titre:string, pos:string, taille:string, fond:string, op:number}} Legende */
+/** @typedef {{v:1, majLe:number, leg:Legende, a:Annot[]}} DocAnnot */
+/** @typedef {{t:TypeAnnot, c:string, n:string}} EtapeModele */
+/** @typedef {{nom:string, ico:string, titre:string, etapes:EtapeModele[], comparer?:boolean}} ModeleAnnot */
+/**
+ * Le rectangle de l'image dans l'élément qui la montre, et l'échelle.
+ * @typedef {{s:number, ox:number, oy:number, vw:number, vh:number}} RectImage
+ */
+
+// LES SEPT COULEURS RAPIDES, et ce qu'elles veulent dire par défaut. Le coach
+// réécrit le sens dans « Réglages » : il sert de nom au tracé qu'on pose.
+const ML_PALETTE=Object.freeze([
+  {c:'#ff3b3b',nom:'Rouge',sens:'Erreur'},
+  {c:'#22c55e',nom:'Vert',sens:'Correction'},
+  {c:'#3b82f6',nom:'Bleu',sens:'Repère anatomique'},
+  {c:'#facc15',nom:'Jaune',sens:'Point d’attention'},
+  {c:'#fb923c',nom:'Orange',sens:''},
+  {c:'#a855f7',nom:'Violet',sens:''},
+  {c:'#ffffff',nom:'Blanc',sens:'Repère neutre'}]);
+// LES OUTILS, dans l'ordre de la boîte. `r` est le raccourci clavier.
+/** @type {ReadonlyArray<{o:OutilMl, lib:string, r:string}>} */
+const ML_OUTILS=Object.freeze([
+  {o:'selection',lib:'Sélection',r:'v'},{o:'ligne',lib:'Ligne',r:'l'},{o:'fleche',lib:'Flèche',r:'f'},
+  {o:'libre',lib:'Trajectoire',r:'t'},{o:'courbe',lib:'Courbe',r:'u'},{o:'cercle',lib:'Cercle',r:'c'},
+  {o:'rect',lib:'Rectangle',r:'r'},{o:'angle',lib:'Angle',r:'a'},{o:'point',lib:'Point',r:'p'},
+  {o:'texte',lib:'Texte',r:'x'},{o:'zone',lib:'Zone',r:'z'},{o:'gomme',lib:'Gomme',r:'e'}]);
+/** @type {Object<string,string>} */
+const ML_TYPE_LIB=Object.freeze({ligne:'Ligne',fleche:'Flèche',libre:'Trajectoire',courbe:'Courbe',
+  cercle:'Cercle',rect:'Rectangle',angle:'Angle',point:'Repère',texte:'Texte',zone:'Zone'});
+// LES REPÈRES ANATOMIQUES de l'outil Point : chaque toucher pose le suivant.
+const ML_REPERES_ANAT=Object.freeze(['Tête','Épaule','Coude','Poignet','Hanche','Genou','Cheville']);
+// LES PHRASES DE L'OUTIL TEXTE, en capitales comme sur l'image.
+const ML_PHRASES=Object.freeze(['DESCENDS PLUS BAS','GARDE LE GENOU DANS L’AXE','BARRE PLUS PROCHE DU CORPS',
+  'TRÈS BONNE POSITION','GAINE AVANT DE DESCENDRE','COUDES SOUS LA BARRE']);
+const ML_ANNOT_DUREE_MS=4000;     // la durée d'un tracé posé hors séquence
+const ML_EPAISSEUR_DEFAUT=4;
+// LES SEPT MODÈLES D'ANNOTATION. Un modèle arme les outils l'un après l'autre,
+// avec leur couleur et leur nom : le coach dessine, et le suivant s'arme.
+/** @type {ReadonlyArray<ModeleAnnot>} */
+const ML_MODELES_ANNOT=Object.freeze([
+  {nom:'Trajectoire',ico:'traj',titre:'Trajectoire',etapes:[{t:'libre',c:'#ff3b3b',n:'Trajectoire actuelle'},
+    {t:'libre',c:'#22c55e',n:'Trajectoire idéale'}]},
+  {nom:'Angles articulaires',ico:'angle',titre:'Angles articulaires',etapes:[{t:'angle',c:'#3b82f6',n:'Angle actuel'},
+    {t:'angle',c:'#22c55e',n:'Angle cible'}]},
+  {nom:'Placement corporel',ico:'corps',titre:'Placement corporel',etapes:[{t:'point',c:'#3b82f6',n:'Alignement'},
+    {t:'ligne',c:'#ffffff',n:'Axe du corps'}]},
+  {nom:'Amplitude',ico:'ampl',titre:'Amplitude',etapes:[{t:'ligne',c:'#facc15',n:'Point haut'},
+    {t:'ligne',c:'#facc15',n:'Point bas'},{t:'fleche',c:'#22c55e',n:'Amplitude cible'}]},
+  {nom:'Stabilité',ico:'stab',titre:'Stabilité',etapes:[{t:'zone',c:'#facc15',n:'Zone d’instabilité'},
+    {t:'ligne',c:'#ffffff',n:'Axe de référence'}]},
+  {nom:'Tempo',ico:'tempo',titre:'Tempo',etapes:[{t:'texte',c:'#ffffff',n:'DESCENTE 3 S'},
+    {t:'texte',c:'#ffffff',n:'PAUSE 1 S'},{t:'texte',c:'#ffffff',n:'MONTÉE 1 S'}]},
+  {nom:'Comparaison',ico:'comp',titre:'Comparaison',comparer:true,etapes:[{t:'libre',c:'#ff3b3b',n:'Mouvement actuel'},
+    {t:'libre',c:'#22c55e',n:'Mouvement cible'}]}]);
+const ML_MODELES_ANNOT_MAX=12;
+
+/**
+ * PURE. Un document vide : une légende éteinte, aucun tracé.
+ * @returns {DocAnnot}
+ */
+function mlDocVide(){
+  return {v:1,majLe:0,leg:{on:0,titre:'Analyse technique',pos:'hg',taille:'m',fond:'sombre',op:0.85},a:[]};
+}
+/**
+ * PURE. Les points d'un tracé à l'instant `sMs` de la vidéo. Sans image clé,
+ * ceux du tracé ; avec, l'interpolation LINÉAIRE entre les deux clés qui
+ * encadrent l'instant — tenus avant la première et après la dernière. C'est la
+ * règle du suivi : le coach ajuste le point sur quelques images, et le
+ * mouvement se remplit entre elles.
+ * @param {Annot} a
+ * @param {number} sMs
+ * @returns {number[][]}
+ */
+function mlAnnotPointsA(a,sMs){
+  const base=mlDecoderTrait(a.p);
+  const k=Array.isArray(a.k)?a.k:[];
+  if(!k.length) return base;
+  if(sMs<=k[0][0]) return mlDecoderTrait(k[0][1]);
+  const der=k[k.length-1];
+  if(sMs>=der[0]) return mlDecoderTrait(der[1]);
+  for(let i=0;i<k.length-1;i++){
+    const [t0,s0]=k[i], [t1,s1]=k[i+1];
+    if(sMs>=t0&&sMs<=t1){
+      const A=mlDecoderTrait(s0), B=mlDecoderTrait(s1), f=(sMs-t0)/Math.max(1,t1-t0);
+      if(A.length!==B.length) return A;
+      return A.map((p,j)=>[p[0]+(B[j][0]-p[0])*f,p[1]+(B[j][1]-p[1])*f]);
+    }
+  }
+  return base;
+}
+/**
+ * PURE. Le tracé porte-t-il une image clé à `sMs` (à 20 ms près) ? Rend son
+ * rang, ou -1.
+ * @param {Annot} a
+ * @param {number} sMs
+ * @returns {number}
+ */
+function mlCleA(a,sMs){
+  const k=Array.isArray(a.k)?a.k:[];
+  return k.findIndex(q=>Math.abs(q[0]-sMs)<=20);
+}
+/**
+ * PURE. Le tracé avec une image clé posée — ou remplacée — à `sMs`. La
+ * première clé fige aussi le tracé de base : c'est lui qu'on voit sans suivi.
+ * @param {Annot} a
+ * @param {number} sMs
+ * @param {number[][]} pts
+ * @returns {Annot}
+ */
+function mlClesMaj(a,sMs,pts){
+  const s=mlEncoderTrait(pts), t=Math.max(0,Math.round(sMs));
+  /** @type {[number,string][]} */
+  let k=(Array.isArray(a.k)?a.k:[]).filter(q=>Math.abs(q[0]-t)>20);
+  k.push([t,s]);
+  k.sort((x,y)=>x[0]-y[0]);
+  // AU-DELÀ DU PLAFOND, la clé la plus proche de la nouvelle tombe : c'est
+  // celle qu'on vient de préciser qui compte.
+  while(k.length>ANNOT_CLES_MAX){
+    let iMin=-1, dMin=Infinity;
+    k.forEach((q,i)=>{ const dd=Math.abs(q[0]-t); if(q[0]!==t&&dd<dMin){ dMin=dd; iMin=i; } });
+    if(iMin<0) break;
+    k.splice(iMin,1);
+  }
+  return {...a,k,p:k[0][1]};
+}
+/**
+ * PURE. L'angle au sommet B du trio A-B-C, en degrés entiers de 0 à 180,
+ * mesuré dans l'IMAGE : les points sont normés séparément en largeur et en
+ * hauteur, on les ramène donc aux pixels avant de mesurer — sans quoi une
+ * vidéo en portrait donnerait des angles faux.
+ * @param {number[]} A
+ * @param {number[]} B
+ * @param {number[]} C
+ * @param {number} vw
+ * @param {number} vh
+ * @returns {number|null}
+ */
+function mlAngleTrois(A,B,C,vw,vh){
+  const ax=(A[0]-B[0])*vw, ay=(A[1]-B[1])*vh, cx=(C[0]-B[0])*vw, cy=(C[1]-B[1])*vh;
+  const na=Math.hypot(ax,ay), nc=Math.hypot(cx,cy);
+  if(!(na>0&&nc>0)) return null;
+  const cos=Math.max(-1,Math.min(1,(ax*cx+ay*cy)/(na*nc)));
+  return Math.round(Math.acos(cos)*180/Math.PI);
+}
+/**
+ * PURE. Le tracé est-il à l'écran à `sMs` ? En comparaison, les tracés de
+ * forme — trajectoires, lignes, angles, repères — restent tous visibles : c'est
+ * ce qui permet de superposer l'actuel et le cible, posés à deux instants.
+ * @param {Annot} a
+ * @param {number} sMs
+ * @param {boolean} [comparaison]
+ * @returns {boolean}
+ */
+function mlAnnotVisible(a,sMs,comparaison){
+  if(a.h) return false;
+  if(comparaison&&['libre','courbe','ligne','fleche','angle','point'].includes(a.t)) return true;
+  return sMs>=a.d&&sMs<a.f;
+}
+/**
+ * PURE. Le nom d'un tracé qu'on vient de poser : le sens de sa couleur pour un
+ * tracé de forme, le nom de l'outil sinon.
+ * @param {TypeAnnot} t
+ * @param {string} c
+ * @param {Object<string,string>} [sens]
+ * @returns {string}
+ */
+function mlNomDefaut(t,c,sens){
+  const s=String((sens&&sens[c])||'').trim().slice(0,ANNOT_NOM_MAX);
+  const p=ML_PALETTE.find(x=>x.c===c);
+  if(t==='libre'||t==='courbe'){
+    // LE SENS RÉÉCRIT PAR LE COACH passe devant : c'est son vocabulaire.
+    if(s&&(!p||s!==p.sens)) return s;
+    if(c==='#ff3b3b') return 'Trajectoire actuelle';
+    if(c==='#22c55e') return 'Trajectoire idéale';
+    return s?('Trajectoire — '+s).slice(0,ANNOT_NOM_MAX):'Trajectoire';
+  }
+  if(t==='angle'||t==='texte') return ML_TYPE_LIB[t];
+  return s||ML_TYPE_LIB[t]||'Annotation';
+}
+/**
+ * PURE. Un trait simplifié jusqu'à tenir en `max` points (Ramer-Douglas-
+ * Peucker, tolérance relâchée tant qu'il déborde). La même règle que les traits
+ * de la correction, avec le plafond des annotations.
+ * @param {number[][]} pts
+ * @param {number} max
+ * @returns {number[][]}
+ */
+function mlSimplifierMax(pts,max){
+  /** @param {number[][]} l @param {number} eps @returns {number[][]} */
+  const rdp=(l,eps)=>{
+    if(l.length<3) return l.slice();
+    const [a,b]=[l[0],l[l.length-1]];
+    let dMax=-1, iMax=0;
+    const dx=b[0]-a[0], dy=b[1]-a[1], n=Math.hypot(dx,dy)||1;
+    for(let i=1;i<l.length-1;i++){
+      const d=Math.abs(dy*l[i][0]-dx*l[i][1]+b[0]*a[1]-b[1]*a[0])/n;
+      if(d>dMax){ dMax=d; iMax=i; }
+    }
+    if(dMax<=eps) return [a,b];
+    return rdp(l.slice(0,iMax+1),eps).slice(0,-1).concat(rdp(l.slice(iMax),eps));
+  };
+  let eps=1.5, r=rdp(pts,eps);
+  while(r.length>max&&eps<200){ eps*=1.5; r=rdp(pts,eps); }
+  return r.length>max?r.filter((_,i)=>i%Math.ceil(r.length/max)===0).slice(0,max):r;
+}
+/**
+ * PURE. Une courbe de Catmull-Rom qui PASSE par les points posés : le coach
+ * touche la barre à quelques instants, la courbe épouse le chemin entre eux.
+ * @param {number[][]} pts  en pixels d'écran
+ * @param {number} [pas]
+ * @returns {number[][]}
+ */
+function mlCatmull(pts,pas){
+  if(pts.length<3) return pts.slice();
+  const n=Math.max(2,pas||10), out=[];
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[Math.max(0,i-1)], p1=pts[i], p2=pts[i+1], p3=pts[Math.min(pts.length-1,i+2)];
+    for(let j=0;j<n;j++){
+      const t=j/n, t2=t*t, t3=t2*t;
+      out.push([0,1].map(q=>0.5*((2*p1[q])+(-p0[q]+p2[q])*t+(2*p0[q]-5*p1[q]+4*p2[q]-p3[q])*t2
+        +(-p0[q]+3*p1[q]-3*p2[q]+p3[q])*t3)));
+    }
+  }
+  out.push(pts[pts.length-1].slice());
+  return out;
+}
+/**
+ * PURE. La valeur d'un angle à `sMs`, et l'écart à la cible s'il y en a une.
+ * @param {Annot} a
+ * @param {number} sMs
+ * @param {number} vw
+ * @param {number} vh
+ * @returns {{val:number, cible:number|null, ecart:number|null}|null}
+ */
+function mlAngleAnnot(a,sMs,vw,vh){
+  if(a.t!=='angle') return null;
+  const q=mlAnnotPointsA(a,sMs);
+  if(q.length<3) return null;
+  const val=mlAngleTrois(q[0],q[1],q[2],vw,vh);
+  if(val===null) return null;
+  const cible=typeof a.cb==='number'?a.cb:null;
+  return {val,cible,ecart:cible===null?null:val-cible};
+}
+/**
+ * PURE. Ce qu'on lit d'un tracé dans la légende ou sur son étiquette : son nom,
+ * et pour un angle sa valeur — « Angle coude : 92° (cible 100°) ».
+ * @param {Annot} a
+ * @param {number} sMs
+ * @param {number} vw
+ * @param {number} vh
+ * @returns {string}
+ */
+function mlAnnotLibelle(a,sMs,vw,vh){
+  if(a.t==='texte') return a.n;
+  const an=mlAngleAnnot(a,sMs,vw,vh);
+  if(!an) return a.n;
+  return a.n+' : '+an.val+'°'+(an.cible===null?'':' (cible '+an.cible+'°)');
+}
+
+// ── LE DESSIN ──────────────────────────────────────────────────────────────
+/**
+ * Tous les tracés visibles à `sMs`, puis la légende. PARTAGÉ par l'éditeur, le
+ * lecteur annoté de l'athlète et la correction commentée : le coach et
+ * l'athlète voient le même dessin, parce que c'est le même code.
+ *
+ * L'ÉCHELLE SUIT L'IMAGE : une épaisseur de 4 px est pensée pour une image de
+ * 720 px de haut, et s'affine d'autant sur l'écran d'un téléphone.
+ * @param {CanvasRenderingContext2D} g
+ * @param {RectImage} R
+ * @param {DocAnnot} doc
+ * @param {number} sMs
+ * @param {{sel?:string|null, poignees?:boolean, comparaison?:boolean, apercu?:Annot|null}} [o]
+ */
+function mlDessinerAnnotations(g,R,doc,sMs,o){
+  const opt=o||{};
+  const k=Math.max(0.45,R.vh*R.s/720);
+  /** @param {number[]} p @returns {number[]} */
+  const P=p=>[R.ox+p[0]/1000*R.vw*R.s,R.oy+p[1]/1000*R.vh*R.s];
+  const liste=(doc&&Array.isArray(doc.a)?doc.a:[]).slice();
+  if(opt.apercu) liste.push(opt.apercu);
+  g.save();
+  for(const a of liste){
+    const estApercu=!!opt.apercu&&a===opt.apercu;
+    if(!estApercu&&!mlAnnotVisible(a,sMs,opt.comparaison)) continue;
+    const pts=mlAnnotPointsA(a,sMs).map(P);
+    if(!pts.length) continue;
+    _mlxDessinerUne(g,a,pts,k,R,sMs,!!opt.comparaison);
+    if(opt.sel===a.id&&opt.poignees) _mlxPoignees(g,pts,a.c,k);
+  }
+  if(doc&&doc.leg&&doc.leg.on) _mlxLegende(g,R,doc,sMs,k);
+  g.restore();
+}
+/**
+ * @param {CanvasRenderingContext2D} g
+ * @param {Annot} a
+ * @param {number[][]} pts  en pixels d'écran
+ * @param {number} k
+ * @param {RectImage} R
+ * @param {number} sMs
+ * @param {boolean} comparaison
+ */
+function _mlxDessinerUne(g,a,pts,k,R,sMs,comparaison){
+  const lw=Math.max(1,a.e*k);
+  g.lineCap='round'; g.lineJoin='round'; g.setLineDash([]);
+  g.strokeStyle=a.c; g.fillStyle=a.c; g.lineWidth=lw;
+  // UN LISERÉ SOMBRE sous chaque trait : un blanc sur un mur clair, un jaune
+  // sur un sol doré se perdraient sinon dans l'image.
+  /** @param {()=>void} tracer */
+  const avecLisere=tracer=>{
+    g.save(); g.strokeStyle='rgba(0,0,0,.45)'; g.lineWidth=lw+2.5*k; tracer(); g.stroke(); g.restore();
+    tracer(); g.stroke();
+  };
+  const [x0,y0]=pts[0];
+  switch(a.t){
+    case 'ligne':
+    case 'fleche':{
+      if(pts.length<2) break;
+      const [x1,y1]=pts[1];
+      avecLisere(()=>{ g.beginPath(); g.moveTo(x0,y0); g.lineTo(x1,y1); });
+      if(a.t==='fleche') _mlxPointe(g,x0,y0,x1,y1,lw,a.c);
+      break;
+    }
+    case 'libre':
+    case 'courbe':{
+      if(pts.length<2) break;
+      const l=a.t==='courbe'?mlCatmull(pts,12):pts;
+      avecLisere(()=>{
+        g.beginPath(); g.moveTo(l[0][0],l[0][1]);
+        if(a.t==='libre'&&l.length>2){
+          // Lissé par les milieux : un tracé à main levée garde son geste
+          // sans les angles de la simplification.
+          for(let i=1;i<l.length-1;i++){
+            const mx=(l[i][0]+l[i+1][0])/2, my=(l[i][1]+l[i+1][1])/2;
+            g.quadraticCurveTo(l[i][0],l[i][1],mx,my);
+          }
+          g.lineTo(l[l.length-1][0],l[l.length-1][1]);
+        } else for(let i=1;i<l.length;i++) g.lineTo(l[i][0],l[i][1]);
+      });
+      // LE SENS DU MOUVEMENT : une pointe au bout d'une trajectoire.
+      const n=l.length;
+      if(n>=2) _mlxPointe(g,l[Math.max(0,n-4)][0],l[Math.max(0,n-4)][1],l[n-1][0],l[n-1][1],lw,a.c);
+      break;
+    }
+    case 'cercle':{
+      if(pts.length<2) break;
+      const r=Math.hypot(pts[1][0]-x0,pts[1][1]-y0);
+      avecLisere(()=>{ g.beginPath(); g.arc(x0,y0,r,0,Math.PI*2); });
+      break;
+    }
+    case 'rect':
+    case 'zone':{
+      if(pts.length<2) break;
+      const x=Math.min(x0,pts[1][0]), y=Math.min(y0,pts[1][1]);
+      const w=Math.abs(pts[1][0]-x0), h=Math.abs(pts[1][1]-y0);
+      if(a.t==='zone'){
+        // LA ZONE DE SURBRILLANCE : un voile de la couleur, un bord fin en
+        // tirets. Elle désigne, elle ne cache pas.
+        g.save(); g.globalAlpha=0.22; g.fillRect(x,y,w,h); g.restore();
+        g.save(); g.lineWidth=Math.max(1,1.5*k); g.setLineDash([6*k,4*k]); g.strokeRect(x,y,w,h); g.restore();
+      } else avecLisere(()=>{ g.beginPath(); g.rect(x,y,w,h); });
+      break;
+    }
+    case 'angle':{
+      if(pts.length<3) break;
+      const [A,B,C]=pts;
+      avecLisere(()=>{ g.beginPath(); g.moveTo(A[0],A[1]); g.lineTo(B[0],B[1]); g.lineTo(C[0],C[1]); });
+      const a1=Math.atan2(A[1]-B[1],A[0]-B[0]), a2=Math.atan2(C[1]-B[1],C[0]-B[0]);
+      let d=a2-a1; while(d>Math.PI) d-=2*Math.PI; while(d<-Math.PI) d+=2*Math.PI;
+      const rA=Math.max(14,26*k);
+      g.save(); g.lineWidth=Math.max(1,2*k); g.globalAlpha=0.9;
+      g.beginPath(); g.arc(B[0],B[1],rA,a1,a1+d,d<0); g.stroke(); g.restore();
+      // L'ANGLE CIBLE, en comparaison : la branche où la cible voudrait le
+      // bras, en tirets verts, depuis le même sommet.
+      const an=mlAngleAnnot(a,sMs,R.vw,R.vh);
+      if(comparaison&&an&&an.cible!==null){
+        const sens=d<0?-1:1, lc=Math.hypot(C[0]-B[0],C[1]-B[1]);
+        const ac=a1+sens*an.cible*Math.PI/180;
+        g.save(); g.strokeStyle='#22c55e'; g.lineWidth=Math.max(1,lw*0.8); g.setLineDash([7*k,5*k]);
+        g.beginPath(); g.moveTo(B[0],B[1]); g.lineTo(B[0]+Math.cos(ac)*lc,B[1]+Math.sin(ac)*lc); g.stroke(); g.restore();
+      }
+      for(const q of pts) _mlxPastille(g,q[0],q[1],Math.max(3,4*k),a.c);
+      break;
+    }
+    case 'point':{
+      if(a.rel&&pts.length>1) avecLisere(()=>{ g.beginPath(); pts.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])); });
+      /** @type {string[]} */
+      const lb=Array.isArray(a.lb)?a.lb:[];
+      pts.forEach((q,i)=>{
+        _mlxPastille(g,q[0],q[1],Math.max(4,6*k),a.c);
+        if(lb[i]) _mlxEtiquette(g,q[0]+9*k,q[1]-9*k,lb[i],a.c,k,R,true);
+      });
+      break;
+    }
+    case 'texte':{
+      _mlxTexte(g,a,x0,y0,k,R);
+      return;
+    }
+  }
+  // LE NOM SUR L'IMAGE, dans une étiquette bordée de sa couleur — éteint à la
+  // demande, et jamais pour un texte, qui se dit lui-même.
+  if(a.et!==0){
+    const an=a.t==='angle'?mlAngleAnnot(a,sMs,R.vw,R.vh):null;
+    const lib=an?a.n+' '+an.val+'°':a.n;
+    const rc=a.t==='cercle'&&pts.length>1?Math.hypot(pts[1][0]-x0,pts[1][1]-y0)*0.72:0;
+    const ref=a.t==='angle'&&pts.length>1?pts[1]:a.t==='cercle'?[x0+rc,y0-rc]:pts[pts.length-1];
+    _mlxEtiquette(g,ref[0]+12*k,ref[1]-12*k,lib,a.c,k,R,false);
+  }
+}
+/**
+ * La pointe d'une flèche, au bout (x1,y1), dans la direction de (x0,y0)→(x1,y1).
+ * @param {CanvasRenderingContext2D} g
+ * @param {number} x0 @param {number} y0 @param {number} x1 @param {number} y1
+ * @param {number} lw
+ * @param {string} c
+ */
+function _mlxPointe(g,x0,y0,x1,y1,lw,c){
+  const ang=Math.atan2(y1-y0,x1-x0), L=Math.max(10,lw*3.4);
+  if(!isFinite(ang)||Math.hypot(x1-x0,y1-y0)<2) return;
+  g.save(); g.fillStyle=c; g.beginPath();
+  g.moveTo(x1+Math.cos(ang)*lw*0.6,y1+Math.sin(ang)*lw*0.6);
+  g.lineTo(x1-Math.cos(ang-0.42)*L,y1-Math.sin(ang-0.42)*L);
+  g.lineTo(x1-Math.cos(ang+0.42)*L,y1-Math.sin(ang+0.42)*L);
+  g.closePath(); g.fill(); g.restore();
+}
+/**
+ * Un point : la couleur, cerclée de blanc puis d'un liseré sombre.
+ * @param {CanvasRenderingContext2D} g
+ * @param {number} x @param {number} y @param {number} r
+ * @param {string} c
+ */
+function _mlxPastille(g,x,y,r,c){
+  g.save();
+  g.beginPath(); g.arc(x,y,r+2.5,0,Math.PI*2); g.fillStyle='rgba(0,0,0,.5)'; g.fill();
+  g.beginPath(); g.arc(x,y,r+1.2,0,Math.PI*2); g.fillStyle='#ffffff'; g.fill();
+  g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.fillStyle=c; g.fill();
+  g.restore();
+}
+/**
+ * Les poignées du tracé choisi : un carré blanc bordé de sa couleur par point.
+ * @param {CanvasRenderingContext2D} g
+ * @param {number[][]} pts
+ * @param {string} c
+ * @param {number} k
+ */
+function _mlxPoignees(g,pts,c,k){
+  const r=Math.max(5,6*k);
+  g.save();
+  for(const [x,y] of pts){
+    g.fillStyle='#ffffff'; g.strokeStyle=c; g.lineWidth=2;
+    g.beginPath(); g.rect(x-r,y-r,2*r,2*r); g.fill(); g.stroke();
+  }
+  g.restore();
+}
+/**
+ * Une étiquette : fond sombre, bord de la couleur, texte blanc. Elle reste
+ * dans l'image : poussée à gauche ou en bas si elle en sortirait.
+ * @param {CanvasRenderingContext2D} g
+ * @param {number} x @param {number} y
+ * @param {string} texte
+ * @param {string} c
+ * @param {number} k
+ * @param {RectImage} R
+ * @param {boolean} petite
+ */
+function _mlxEtiquette(g,x,y,texte,c,k,R,petite){
+  if(!texte) return;
+  const fs=Math.round(Math.max(10,(petite?11:13)*k));
+  g.save();
+  g.font='700 '+fs+'px Montserrat, sans-serif';
+  g.textBaseline='middle'; g.textAlign='left';
+  const w=Math.ceil(g.measureText(texte).width)+fs*1.1, h=Math.round(fs*1.9);
+  const xmax=R.ox+R.vw*R.s-4, ymax=R.oy+R.vh*R.s-4;
+  let bx=Math.min(x,xmax-w), by=Math.max(R.oy+4,Math.min(y-h/2,ymax-h));
+  bx=Math.max(R.ox+4,bx);
+  g.fillStyle='rgba(8,8,8,.84)';
+  _mlxRectArrondi(g,bx,by,w,h,Math.min(6,h/3)); g.fill();
+  g.strokeStyle=c; g.lineWidth=Math.max(1,1.4*k);
+  _mlxRectArrondi(g,bx+0.5,by+0.5,w-1,h-1,Math.min(6,h/3)); g.stroke();
+  g.fillStyle='#ffffff';
+  g.fillText(texte,bx+fs*0.55,by+h/2+0.5);
+  g.restore();
+}
+/**
+ * @param {CanvasRenderingContext2D} g
+ * @param {number} x @param {number} y @param {number} w @param {number} h @param {number} r
+ */
+function _mlxRectArrondi(g,x,y,w,h,r){
+  g.beginPath();
+  g.moveTo(x+r,y); g.lineTo(x+w-r,y); g.quadraticCurveTo(x+w,y,x+w,y+r);
+  g.lineTo(x+w,y+h-r); g.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  g.lineTo(x+r,y+h); g.quadraticCurveTo(x,y+h,x,y+h-r);
+  g.lineTo(x,y+r); g.quadraticCurveTo(x,y,x+r,y); g.closePath();
+}
+/**
+ * La géométrie d'un texte posé : sa boîte, centrée sur son point. Partagée par
+ * le dessin et la sélection au doigt.
+ * @param {CanvasRenderingContext2D} g
+ * @param {Annot} a
+ * @param {number} x @param {number} y
+ * @param {number} k
+ * @returns {{bx:number, by:number, w:number, h:number, fs:number}}
+ */
+function _mlxBoiteTexte(g,a,x,y,k){
+  const fs=Math.round(Math.max(11,({s:15,m:21,l:30}[a.ts||'m']||21)*k));
+  g.save(); g.font='900 '+fs+'px Montserrat, sans-serif';
+  const w=Math.ceil(g.measureText(a.x||a.n).width)+fs*1.2;
+  g.restore();
+  const h=Math.round(fs*1.7);
+  return {bx:x-w/2,by:y-h/2,w,h,fs};
+}
+/**
+ * @param {CanvasRenderingContext2D} g
+ * @param {Annot} a
+ * @param {number} x @param {number} y
+ * @param {number} k
+ * @param {RectImage} R
+ */
+function _mlxTexte(g,a,x,y,k,R){
+  const b=_mlxBoiteTexte(g,a,x,y,k);
+  const xmin=R.ox+2, xmax=R.ox+R.vw*R.s-2;
+  const bx=Math.max(xmin,Math.min(b.bx,xmax-b.w));
+  g.save();
+  if(a.tf===1||a.tf===2){
+    g.globalAlpha=a.tf===1?0.8:0.92;
+    g.fillStyle=a.tf===1?'#080808':a.c;
+    _mlxRectArrondi(g,bx,b.by,b.w,b.h,Math.min(8,b.h/3)); g.fill();
+    g.globalAlpha=1;
+  }
+  g.font='900 '+b.fs+'px Montserrat, sans-serif';
+  g.textAlign='center'; g.textBaseline='middle';
+  const coul=a.tf===2?(_mlxClair(a.c)?'#0b0b0b':'#ffffff'):a.c;
+  if(a.tc){ g.lineWidth=Math.max(2,b.fs/7); g.strokeStyle='rgba(0,0,0,.85)'; g.lineJoin='round'; g.strokeText(a.x||a.n,bx+b.w/2,b.by+b.h/2+1); }
+  g.fillStyle=coul;
+  g.fillText(a.x||a.n,bx+b.w/2,b.by+b.h/2+1);
+  g.restore();
+}
+/**
+ * PURE. Une couleur claire, sur laquelle un texte doit être sombre.
+ * @param {string} c
+ * @returns {boolean}
+ */
+function _mlxClair(c){
+  const m=/^#([0-9a-f]{6})$/i.exec(String(c));
+  if(!m) return false;
+  const n=parseInt(m[1],16), r=n>>16&255, v=n>>8&255, b=n&255;
+  return (0.299*r+0.587*v+0.114*b)>160;
+}
+/**
+ * LA LÉGENDE SUR LA VIDÉO : un titre, et une ligne par tracé — pastille, nom,
+ * valeur d'un angle. Tous les tracés gardés dans la légende y sont, même hors
+ * de leur durée, pour qu'elle ne saute pas pendant la lecture ; ceux qui ne
+ * sont pas à l'écran à cet instant sont atténués.
+ * @param {CanvasRenderingContext2D} g
+ * @param {RectImage} R
+ * @param {DocAnnot} doc
+ * @param {number} sMs
+ * @param {number} k
+ */
+function _mlxLegende(g,R,doc,sMs,k){
+  const l=doc.a.filter(a=>!a.h&&a.lg!==0&&a.t!=='texte');
+  const L=doc.leg;
+  const e={s:0.8,m:1,l:1.25}[L.taille]||1;
+  const fs=Math.round(Math.max(9,11*k*e)), ft=Math.round(Math.max(10,13*k*e));
+  const pad=Math.round(10*k*e), lh=Math.round(fs*1.75);
+  const lignes=l.slice(0,9);
+  g.save();
+  g.font='800 '+ft+'px Montserrat, sans-serif';
+  let w=g.measureText(L.titre.toUpperCase()).width;
+  g.font='600 '+fs+'px Montserrat, sans-serif';
+  const libs=lignes.map(a=>mlAnnotLibelle(a,sMs,R.vw,R.vh));
+  for(const t of libs) w=Math.max(w,g.measureText(t).width+fs*1.6);
+  if(l.length>lignes.length) w=Math.max(w,g.measureText('+'+(l.length-lignes.length)+' autres').width);
+  w=Math.ceil(w)+pad*2;
+  const h=pad*2+ft*1.5+lignes.length*lh+(l.length>lignes.length?lh:0);
+  const marge=Math.round(10*k);
+  const x=L.pos==='hd'||L.pos==='bd'?R.ox+R.vw*R.s-w-marge:R.ox+marge;
+  const y=L.pos==='bg'||L.pos==='bd'?R.oy+R.vh*R.s-h-marge:R.oy+marge;
+  const clair=L.fond==='clair';
+  if(L.fond!=='aucun'){
+    g.globalAlpha=L.op;
+    g.fillStyle=clair?'#f4f4f4':'#080808';
+    _mlxRectArrondi(g,x,y,w,h,Math.round(8*k)); g.fill();
+    g.globalAlpha=Math.min(1,L.op+0.1);
+    g.strokeStyle=clair?'rgba(0,0,0,.15)':'rgba(255,255,255,.18)'; g.lineWidth=1;
+    _mlxRectArrondi(g,x+0.5,y+0.5,w-1,h-1,Math.round(8*k)); g.stroke();
+    g.globalAlpha=1;
+  }
+  const encre=clair?'#111111':'#ffffff';
+  if(L.fond==='aucun'){ g.shadowColor='rgba(0,0,0,.9)'; g.shadowBlur=4; }
+  g.textBaseline='middle'; g.textAlign='left';
+  g.font='800 '+ft+'px Montserrat, sans-serif'; g.fillStyle=encre;
+  g.fillText(L.titre.toUpperCase(),x+pad,y+pad+ft*0.65);
+  g.font='600 '+fs+'px Montserrat, sans-serif';
+  lignes.forEach((a,i)=>{
+    const yy=y+pad+ft*1.5+lh*i+lh/2;
+    g.globalAlpha=mlAnnotVisible(a,sMs)?1:0.5;
+    g.beginPath(); g.arc(x+pad+fs*0.45,yy,fs*0.42,0,Math.PI*2); g.fillStyle=a.c; g.fill();
+    g.fillStyle=encre; g.fillText(libs[i],x+pad+fs*1.35,yy+0.5);
+  });
+  g.globalAlpha=1;
+  if(l.length>lignes.length){
+    g.fillStyle=clair?'#555555':'#bbbbbb';
+    g.fillText('+'+(l.length-lignes.length)+' autres',x+pad,y+pad+ft*1.5+lh*lignes.length+lh/2);
+  }
+  g.restore();
+}
+/**
+ * PURE. Le tracé touché au point (x,y) de l'écran, le plus haut d'abord : son
+ * identifiant, et le rang du point saisi (-1 : le tracé entier). Seuls les
+ * tracés à l'écran à `sMs` se touchent.
+ * @param {DocAnnot} doc
+ * @param {RectImage} R
+ * @param {number} sMs
+ * @param {number} x
+ * @param {number} y
+ * @param {{sel?:string|null, comparaison?:boolean, g?:CanvasRenderingContext2D|null}} [o]
+ * @returns {{id:string, i:number}|null}
+ */
+function mlAnnotToucher(doc,R,sMs,x,y,o){
+  const opt=o||{};
+  const k=Math.max(0.45,R.vh*R.s/720);
+  /** @param {number[]} p @returns {number[]} */
+  const P=p=>[R.ox+p[0]/1000*R.vw*R.s,R.oy+p[1]/1000*R.vh*R.s];
+  const tol=Math.max(10,9*k);
+  /** @param {number[]} a @param {number[]} b @returns {number} */
+  const dSeg=(a,b)=>{
+    const dx=b[0]-a[0], dy=b[1]-a[1], L=dx*dx+dy*dy;
+    const t=L?Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/L)):0;
+    return Math.hypot(x-(a[0]+t*dx),y-(a[1]+t*dy));
+  };
+  const l=(doc&&doc.a)||[];
+  // LE TRACÉ CHOISI D'ABORD, pour ses poignées : on doit pouvoir saisir un de
+  // ses points même quand un autre tracé passe par-dessus.
+  const ordre=l.slice().reverse().sort((a,b)=>(b.id===opt.sel?1:0)-(a.id===opt.sel?1:0));
+  for(const a of ordre){
+    if(!mlAnnotVisible(a,sMs,opt.comparaison)) continue;
+    const pts=mlAnnotPointsA(a,sMs).map(P);
+    if(a.id===opt.sel){
+      const i=pts.findIndex(q=>Math.hypot(q[0]-x,q[1]-y)<=tol+2);
+      if(i>=0&&a.t!=='texte') return {id:a.id,i};
+    }
+    let touche=false;
+    switch(a.t){
+      case 'ligne': case 'fleche': touche=pts.length>1&&dSeg(pts[0],pts[1])<=tol; break;
+      case 'libre': case 'point':
+        touche=pts.some((q,i)=>i?dSeg(pts[i-1],q)<=tol:Math.hypot(q[0]-x,q[1]-y)<=tol); break;
+      case 'courbe':{ const c=mlCatmull(pts,8); touche=c.some((q,i)=>i>0&&dSeg(c[i-1],q)<=tol); break; }
+      case 'angle': touche=pts.length>2&&(dSeg(pts[0],pts[1])<=tol||dSeg(pts[1],pts[2])<=tol); break;
+      case 'cercle':{
+        if(pts.length<2) break;
+        const r=Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]), d=Math.hypot(x-pts[0][0],y-pts[0][1]);
+        touche=Math.abs(d-r)<=tol||d<=Math.min(r,tol*2); break;
+      }
+      case 'rect': case 'zone':{
+        if(pts.length<2) break;
+        const x1=Math.min(pts[0][0],pts[1][0]), x2=Math.max(pts[0][0],pts[1][0]);
+        const y1=Math.min(pts[0][1],pts[1][1]), y2=Math.max(pts[0][1],pts[1][1]);
+        touche=a.t==='zone'?(x>=x1-tol&&x<=x2+tol&&y>=y1-tol&&y<=y2+tol)
+          :(x>=x1-tol&&x<=x2+tol&&y>=y1-tol&&y<=y2+tol&&!(x>x1+tol&&x<x2-tol&&y>y1+tol&&y<y2-tol));
+        break;
+      }
+      case 'texte':{
+        const g=opt.g;
+        const b=g?_mlxBoiteTexte(g,a,pts[0][0],pts[0][1],k):{bx:pts[0][0]-60,by:pts[0][1]-16,w:120,h:32,fs:16};
+        touche=x>=b.bx-4&&x<=b.bx+b.w+4&&y>=b.by-4&&y<=b.by+b.h+4; break;
+      }
+    }
+    if(touche) return {id:a.id,i:-1};
+  }
+  return null;
+}
+
+// ── L'ÉDITION ──────────────────────────────────────────────────────────────
+
+/** @returns {Object<string,string>} le sens de chaque couleur, réécrit par le coach */
+function _mlxSens(){
+  const u=currentUser&&currentUser.mlCouleurs&&typeof currentUser.mlCouleurs==='object'?currentUser.mlCouleurs:{};
+  /** @type {Object<string,string>} */
+  const o={};
+  for(const p of ML_PALETTE) o[p.c]=typeof u[p.c]==='string'?String(u[p.c]).slice(0,ANNOT_NOM_MAX):p.sens;
+  return o;
+}
+/**
+ * Le sens d'une couleur, gardé dans le profil du coach : il le retrouve sur
+ * tous ses appareils, et il sert de nom aux tracés qu'il pose.
+ * @param {string} c
+ * @param {string} texte
+ */
+function mlCouleurSens(c,texte){
+  if(!currentUser||!ML_PALETTE.some(p=>p.c===c)) return false;
+  const o={..._mlxSens()};
+  o[c]=String(texte||'').trim().slice(0,ANNOT_NOM_MAX);
+  currentUser.mlCouleurs=o;
+  try{ saveUser(); }catch(e){}
+  return true;
+}
+/** @returns {number} l'instant affiché, en ms */
+function _mlxTempsMs(){
+  const v=_mlVideo();
+  return Math.round((Number(v&&v.currentTime)||0)*1000);
+}
+/** @param {string|null} id @returns {Annot|null} */
+function _mlxAnnot(id){
+  if(!_ml||!id) return null;
+  return _ml.annot.a.find(a=>a.id===id)||null;
+}
+/** @returns {boolean} des annotations restent à enregistrer */
+function _mlxModifie(){ return !!_ml&&JSON.stringify(_ml.annot)!==_ml.annotInit; }
+// L'HISTORIQUE : une photographie du document AVANT chaque changement.
+// Soixante pas, et un nouveau geste efface ce qu'on pouvait rétablir.
+function _mlxMemoriser(){
+  if(!_ml) return;
+  _ml.annule.push(JSON.stringify(_ml.annot));
+  if(_ml.annule.length>60) _ml.annule.shift();
+  _ml.refait=[];
+}
+function mlAnnuler(){
+  if(!_ml||!_ml.annule.length) return false;
+  _ml.refait.push(JSON.stringify(_ml.annot));
+  _ml.annot=JSON.parse(String(_ml.annule.pop()));
+  if(_ml.sel&&!_mlxAnnot(_ml.sel)) _ml.sel=null;
+  _mlxApresChangement();
+  return true;
+}
+function mlRetablir(){
+  if(!_ml||!_ml.refait.length) return false;
+  _ml.annule.push(JSON.stringify(_ml.annot));
+  _ml.annot=JSON.parse(String(_ml.refait.pop()));
+  if(_ml.sel&&!_mlxAnnot(_ml.sel)) _ml.sel=null;
+  _mlxApresChangement();
+  return true;
+}
+// Ce qui suit un changement du document : les listes, la timeline, le calque,
+// et l'état du bouton d'enregistrement.
+function _mlxApresChangement(){
+  _mlxMajListe(); _mlxMajEditeur(); _mlxMajPistes(); _mlxMajLegende(); _mlxMajOutils();
+  _mlDessinerCalque(); _mlMajEnregistrer();
+}
+function _mlxApresSelection(){
+  _mlxMajListe(); _mlxMajEditeur(); _mlxMajPistes(); _mlDessinerCalque();
+}
+/**
+ * Un document modifié tracé par tracé, sans jamais muter l'ancien : c'est ce
+ * qui rend l'historique fiable.
+ * @param {string} id
+ * @param {(a:Annot)=>Annot} f
+ */
+function _mlxChanger(id,f){
+  if(!_ml) return;
+  _ml.annot={..._ml.annot,a:_ml.annot.a.map(a=>a.id===id?f(a):a)};
+}
+/** @param {number} x @returns {number} */
+function _mlxBorne(x){ return Math.max(0,Math.min(1000,Math.round(x))); }
+
+/**
+ * Un tracé qu'on vient de poser : il prend l'outil, la couleur et l'épaisseur
+ * en cours — ou celles de l'étape du modèle —, et une durée : la séquence
+ * choisie si la tête de lecture y est, quatre secondes sinon.
+ * @param {TypeAnnot} t
+ * @param {number[][]} pts
+ * @param {{x?:string, lb?:string[], rel?:number, ts?:string, tf?:number}} [extra]
+ * @returns {Annot|null}
+ */
+function _mlxCreer(t,pts,extra){
+  if(!_ml) return null;
+  if(_ml.annot.a.length>=ANNOT_MAX){ toast(ANNOT_MAX+' tracés au plus par vidéo.','var(--orange)'); return null; }
+  const bornes=ANNOT_TYPES[t];
+  if(!bornes) return null;
+  const propres=pts.slice(0,bornes[1]).map(p=>[_mlxBorne(p[0]),_mlxBorne(p[1])]);
+  if(propres.length<bornes[0]) return null;
+  const s=_mlxTempsMs(), seq=_mlActif(), duree=_ml.dureeMs||s+ML_ANNOT_DUREE_MS;
+  let d=s, f=Math.min(duree,s+ML_ANNOT_DUREE_MS);
+  if(seq&&s>=seq.debutMs&&s<=seq.finMs){ d=seq.debutMs; f=seq.finMs; }
+  if(f<=d){ d=Math.max(0,duree-ML_ANNOT_DUREE_MS); f=duree; }
+  if(f<=d) f=d+ML_ANNOT_DUREE_MS;
+  const etape=_ml.guide?_ml.guide.m.etapes[_ml.guide.i]:null;
+  const guide=!!etape&&etape.t===t;
+  const c=guide&&etape?etape.c:_ml.couleur;
+  const x=extra&&extra.x?String(extra.x).slice(0,ANNOT_TEXTE_MAX):'';
+  const chaine=t==='point'&&extra&&Array.isArray(extra.lb)?extra.lb.filter(Boolean).join(' → ').slice(0,ANNOT_NOM_MAX):'';
+  const n=guide&&etape?etape.n:(t==='texte'&&x?x.slice(0,ANNOT_NOM_MAX):(chaine||mlNomDefaut(t,c,_mlxSens())));
+  /** @type {Annot} */
+  const a={id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),n,t,c,e:_ml.epaisseur,d,f,
+    p:mlEncoderTrait(propres)};
+  if(t==='texte'){ a.x=x||n; a.ts=extra&&extra.ts||'m'; a.tf=extra&&typeof extra.tf==='number'?extra.tf:1; }
+  if(t==='point'){
+    if(extra&&Array.isArray(extra.lb)&&extra.lb.some(Boolean)) a.lb=extra.lb.slice(0,propres.length).map(l=>String(l||'').slice(0,ANNOT_ETIQ_MAX));
+    if(propres.length>1&&(!extra||extra.rel!==0)) a.rel=1;
+  }
+  if(seq&&d===seq.debutMs&&f===seq.finMs) a.seg=seq.id;
+  _mlxMemoriser();
+  _ml.annot={..._ml.annot,a:_ml.annot.a.concat([a])};
+  _ml.sel=a.id;
+  if(guide) _mlxGuideSuivant();
+  _mlxApresChangement();
+  // LE NOM D'ABORD : « Nom de l'annotation » est la première chose qu'on règle
+  // d'un tracé neuf. Le champ est déjà rempli ; Entrée le valide.
+  if(t!=='texte') requestAnimationFrame(()=>{
+    const i=_mlEl('mlx-nom');
+    if(i instanceof HTMLInputElement){ try{ i.focus({preventScroll:true}); i.select(); }catch(e){} }
+  });
+  return a;
+}
+/**
+ * Les points d'un tracé déplacés : dans le tracé lui-même, ou — s'il suit le
+ * mouvement — dans l'image clé de l'instant affiché.
+ * @param {string} id
+ * @param {number[][]} pts
+ * @param {number} sMs
+ */
+function _mlxPoserPoints(id,pts,sMs){
+  _mlxChanger(id,a=>{
+    const q=pts.map(p=>[_mlxBorne(p[0]),_mlxBorne(p[1])]);
+    return Array.isArray(a.k)&&a.k.length?mlClesMaj(a,sMs,q):{...a,p:mlEncoderTrait(q)};
+  });
+}
+
+// ── LES OUTILS ─────────────────────────────────────────────────────────────
+/** @param {string} o */
+function mlOutil(o){
+  if(!_ml) return false;
+  const def=ML_OUTILS.find(x=>x.o===o);
+  if(!def) return false;
+  _ml.trace=null;
+  _ml.outil=def.o;
+  _mlxMajOutils();
+  _mlDessinerCalque();
+  return true;
+}
+/**
+ * La couleur des tracés à venir — et, en sélection, celle du tracé choisi.
+ * @param {string} c
+ */
+function mlCouleur(c){
+  if(!_ml||!/^#[0-9a-f]{6}$/i.test(String(c))) return false;
+  _ml.couleur=String(c).toLowerCase();
+  const a=_ml.outil==='selection'?_mlxAnnot(_ml.sel):null;
+  if(a&&a.c!==_ml.couleur){ _mlxMemoriser(); _mlxChanger(a.id,x=>({...x,c:String(c).toLowerCase()})); _mlxApresChangement(); }
+  else { _mlxMajOutils(); _mlDessinerCalque(); }
+  return true;
+}
+/** @param {number|string} v */
+function mlEpaisseur(v){
+  if(!_ml) return false;
+  const e=Math.max(1,Math.min(12,Math.round(Number(v)||ML_EPAISSEUR_DEFAUT)));
+  _ml.epaisseur=e;
+  const lab=_mlEl('mlx-ep-val'); if(lab) lab.textContent=e+' px';
+  const a=_ml.outil==='selection'?_mlxAnnot(_ml.sel):null;
+  if(a&&a.e!==e){ _mlxChanger(a.id,x=>({...x,e})); _mlxMajEditeur(); _mlDessinerCalque(); _mlMajEnregistrer(); }
+  return true;
+}
+/** Le repère anatomique que le prochain toucher de l'outil Point posera. @param {number} i */
+function mlRepereAnat(i){
+  if(!_ml) return false;
+  _ml.repereAnat=Math.max(-1,Math.min(ML_REPERES_ANAT.length-1,Math.round(Number(i))));
+  _mlxMajOutils();
+  return true;
+}
+/** La phrase que l'outil Texte proposera. @param {number} i */
+function mlPhrase(i){
+  if(!_ml) return false;
+  _ml.phrase=ML_PHRASES[i]||'';
+  _mlxMajOutils();
+  return true;
+}
+/** Termine une courbe ou une chaîne de repères. */
+function mlTerminerTrace(){
+  const tr=_ml&&_ml.trace;
+  if(!_ml||!tr) return false;
+  // UN DOUBLE-CLIC POSE DEUX FOIS LE MÊME POINT : on le retire.
+  /** @type {number[][]} */
+  const pts=[];
+  /** @type {string[]} */
+  const lb=[];
+  tr.pts.forEach((p,i)=>{
+    const q=pts[pts.length-1];
+    if(q&&Math.hypot(p[0]-q[0],p[1]-q[1])<5) return;
+    pts.push(p); lb.push((tr.lb||[])[i]||'');
+  });
+  _ml.trace=null;
+  if(tr.t==='courbe'&&pts.length>=2) _mlxCreer('courbe',pts);
+  else if(tr.t==='point'&&pts.length>=1) _mlxCreer('point',pts,{lb,rel:_ml.relier?1:0});
+  else { _mlxMajOutils(); _mlDessinerCalque(); }
+  return true;
+}
+function _mlxAnnulerTrace(){
+  if(!_ml||!_ml.trace) return false;
+  _ml.trace=null;
+  _mlxMajOutils(); _mlDessinerCalque();
+  return true;
+}
+/** @param {number[]} p */
+async function _mlxTexteNouveau(p){
+  if(!_ml) return false;
+  const brut=await rcSaisie('Texte sur la vidéo',_ml.phrase||'',{libelleOk:'Poser',placeholder:'Ex. : DESCENDS PLUS BAS'});
+  const x=String(brut==null?'':brut).trim().slice(0,ANNOT_TEXTE_MAX);
+  if(!x||!_ml) return false;
+  return !!_mlxCreer('texte',[p],{x,ts:_ml.tailleTexte,tf:1});
+}
+/**
+ * Un toucher sur l'image quand un outil d'annotation est armé.
+ * @param {PointerEvent} e
+ * @param {HTMLElement} calque
+ */
+function _mlxPointer(e,calque){
+  const v=_mlVideo(), R=v?_mlVideoRect(v):null;
+  if(!_ml||!v||!R) return;
+  const b=calque.getBoundingClientRect();
+  /** @param {number} cx @param {number} cy @returns {number[]} */
+  const N=(cx,cy)=>[_mlxBorne((cx-b.left-R.ox)/R.s/R.vw*1000),_mlxBorne((cy-b.top-R.oy)/R.s/R.vh*1000)];
+  const outil=_ml.outil, sMs=_mlxTempsMs();
+  e.preventDefault();
+  if(outil==='selection'||outil==='gomme'){
+    const g=calque instanceof HTMLCanvasElement?calque.getContext('2d'):null;
+    const hit=mlAnnotToucher(_ml.annot,R,sMs,e.clientX-b.left,e.clientY-b.top,{sel:_ml.sel,comparaison:_ml.comparaison,g});
+    if(outil==='gomme'){ if(hit) mlAnnotSupprimer(hit.id); return; }
+    if(!hit){ if(_ml.sel){ _ml.sel=null; _mlxApresSelection(); } return; }
+    if(_ml.sel!==hit.id){ _ml.sel=hit.id; _mlxApresSelection(); }
+    const a0=_mlxAnnot(hit.id);
+    if(!a0) return;
+    try{ v.pause(); }catch(x){}
+    const depart=N(e.clientX,e.clientY), pts0=mlAnnotPointsA(a0,sMs), avant=JSON.stringify(_ml.annot);
+    let bouge=false;
+    try{ calque.setPointerCapture(e.pointerId); }catch(x){}
+    /** @param {PointerEvent} ev */
+    const bouger=ev=>{
+      if(!_ml) return;
+      const q=N(ev.clientX,ev.clientY), dx=q[0]-depart[0], dy=q[1]-depart[1];
+      if(!bouge&&Math.hypot(dx,dy)<3) return;
+      bouge=true;
+      const pts=hit.i>=0?pts0.map((p,j)=>j===hit.i?[p[0]+dx,p[1]+dy]:p.slice()):pts0.map(p=>[p[0]+dx,p[1]+dy]);
+      _mlxPoserPoints(hit.id,pts,sMs);
+      _mlDessinerCalque();
+    };
+    const fin=()=>{
+      calque.removeEventListener('pointermove',bouger);
+      calque.removeEventListener('pointerup',fin);
+      calque.removeEventListener('pointercancel',fin);
+      if(bouge&&_ml){ _ml.annule.push(avant); if(_ml.annule.length>60) _ml.annule.shift(); _ml.refait=[]; _mlxApresChangement(); }
+    };
+    calque.addEventListener('pointermove',bouger);
+    calque.addEventListener('pointerup',fin);
+    calque.addEventListener('pointercancel',fin);
+    return;
+  }
+  // DESSINER FIGE L'IMAGE : un tracé se pose sur une image, pas sur un
+  // mouvement qui défile sous le doigt.
+  try{ v.pause(); }catch(x){}
+  const p=N(e.clientX,e.clientY);
+  if(outil==='texte'){ _mlxTexteNouveau(p); return; }
+  if(outil==='angle'||outil==='courbe'||outil==='point'){
+    if(!_ml.trace||_ml.trace.t!==outil) _ml.trace={t:outil,pts:[],lb:[]};
+    const tr=_ml.trace;
+    tr.pts.push(p);
+    if(outil==='point'){
+      const i=_ml.repereAnat;
+      (tr.lb=tr.lb||[]).push(i>=0?ML_REPERES_ANAT[i]:'');
+      // LE REPÈRE SUIVANT S'ARME : épaule, puis coude, puis poignet.
+      if(i>=0&&i<ML_REPERES_ANAT.length-1) _ml.repereAnat=i+1;
+    }
+    if(outil==='angle'&&tr.pts.length>=3){ const pts=tr.pts.slice(0,3); _ml.trace=null; _mlxCreer('angle',pts); return; }
+    if((outil==='courbe'&&tr.pts.length>=24)||(outil==='point'&&tr.pts.length>=12)){ mlTerminerTrace(); return; }
+    _mlxMajOutils(); _mlDessinerCalque();
+    return;
+  }
+  // LES TRACÉS QU'ON TIRE : ligne, flèche, cercle, rectangle, zone, trajectoire.
+  const t=/** @type {TypeAnnot} */(outil);
+  _ml.trace={t,pts:outil==='libre'?[p]:[p,p]};
+  try{ calque.setPointerCapture(e.pointerId); }catch(x){}
+  /** @param {PointerEvent} ev */
+  const bouger=ev=>{
+    const tr=_ml&&_ml.trace;
+    if(!tr) return;
+    const q=N(ev.clientX,ev.clientY);
+    if(tr.t==='libre'){
+      const der=tr.pts[tr.pts.length-1];
+      if(Math.hypot((q[0]-der[0])*R.vw*R.s/1000,(q[1]-der[1])*R.vh*R.s/1000)>=3) tr.pts.push(q);
+    } else tr.pts[1]=q;
+    _mlDessinerCalque();
+  };
+  const fin=()=>{
+    calque.removeEventListener('pointermove',bouger);
+    calque.removeEventListener('pointerup',fin);
+    calque.removeEventListener('pointercancel',fin);
+    const tr=_ml&&_ml.trace;
+    if(!_ml||!tr) return;
+    _ml.trace=null;
+    // UN TOUCHER SANS GLISSER NE POSE RIEN : il aurait donné un tracé de zéro
+    // pixel, invisible et pourtant compté.
+    const a0=tr.pts[0], a1=tr.pts[tr.pts.length-1];
+    const long=Math.hypot((a1[0]-a0[0])*R.vw*R.s/1000,(a1[1]-a0[1])*R.vh*R.s/1000);
+    if(tr.t==='libre'){
+      if(tr.pts.length>=2&&long+tr.pts.length>6) _mlxCreer('libre',mlSimplifierMax(tr.pts,ANNOT_PTS_MAX));
+      else _mlDessinerCalque();
+    } else if(long>=6) _mlxCreer(tr.t,tr.pts);
+    else _mlDessinerCalque();
+  };
+  calque.addEventListener('pointermove',bouger);
+  calque.addEventListener('pointerup',fin);
+  calque.addEventListener('pointercancel',fin);
+}
+
+// ── LE TRACÉ CHOISI ────────────────────────────────────────────────────────
+/**
+ * Choisir un tracé — ou le relâcher d'un second toucher sur son nom. Le
+ * crayon, la timeline et le toucher sur l'image, eux, CHOISISSENT toujours :
+ * « Modifier » ne doit jamais fermer ce qu'on voulait modifier.
+ * @param {string} id
+ * @param {boolean} [garder]
+ */
+function mlAnnotChoisir(id,garder){
+  if(!_ml||!_mlxAnnot(id)) return false;
+  _ml.sel=(_ml.sel===id&&!garder)?null:id;
+  if(_ml.sel){
+    // LE TRACÉ CHOISI HORS DE SA DURÉE ne se verrait pas : on y amène la vidéo.
+    const a=_mlxAnnot(id), s=_mlxTempsMs();
+    if(a&&!(s>=a.d&&s<a.f)) _mlAller(a.d);
+    if(_ml.outil!=='selection'){ _ml.outil='selection'; _mlxMajOutils(); }
+  }
+  _mlxApresSelection();
+  return true;
+}
+/** @param {string} id */
+function mlAnnotSupprimer(id){
+  if(!_ml||!_mlxAnnot(id)) return false;
+  _mlxMemoriser();
+  _ml.annot={..._ml.annot,a:_ml.annot.a.filter(a=>a.id!==id)};
+  if(_ml.sel===id) _ml.sel=null;
+  _mlxApresChangement();
+  return true;
+}
+/** @param {string} id */
+function mlAnnotVisibilite(id){
+  if(!_ml||!_mlxAnnot(id)) return false;
+  _mlxMemoriser();
+  _mlxChanger(id,a=>{ const o={...a}; if(o.h) delete o.h; else o.h=1; return o; });
+  _mlxApresChangement();
+  return true;
+}
+/** La photo prise quand un champ de l'éditeur prend le focus : la frappe, lettre à lettre, n'empile pas l'historique. */
+function mlAnnotFocus(){ _mlxMemoriser(); return true; }
+/** @param {string} v */
+function mlAnnotNom(v){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a) return false;
+  const n=String(v||'').replace(/[\u0000-\u001f]/g,' ').slice(0,ANNOT_NOM_MAX);
+  _mlxChanger(a.id,x=>({...x,n:n||x.n}));
+  _mlxMajListe(); _mlxMajPistes(); _mlDessinerCalque(); _mlMajEnregistrer();
+  return true;
+}
+/** @param {string} v */
+function mlAnnotTexte(v){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a||a.t!=='texte') return false;
+  const x=String(v||'').replace(/[\u0000-\u001f]/g,' ').slice(0,ANNOT_TEXTE_MAX);
+  if(!x.trim()) return false;
+  _mlxChanger(a.id,y=>({...y,x,n:x.slice(0,ANNOT_NOM_MAX)}));
+  _mlxMajListe(); _mlxMajPistes(); _mlDessinerCalque(); _mlMajEnregistrer();
+  return true;
+}
+/** @param {string} c */
+function mlAnnotCouleur(c){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a||!/^#[0-9a-f]{6}$/i.test(String(c))) return false;
+  _mlxMemoriser();
+  _mlxChanger(a.id,x=>({...x,c:String(c).toLowerCase()}));
+  _mlxApresChangement();
+  return true;
+}
+/** @param {number|string} v */
+function mlAnnotEpaisseur(v){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a) return false;
+  const e=Math.max(1,Math.min(12,Math.round(Number(v)||ML_EPAISSEUR_DEFAUT)));
+  _mlxChanger(a.id,x=>({...x,e}));
+  const lab=_mlEl('mlx-aep-val'); if(lab) lab.textContent=e+' px';
+  _mlDessinerCalque(); _mlMajEnregistrer();
+  return true;
+}
+/**
+ * Le début ou la fin de la durée d'apparition : à la tête de lecture, ou à la
+ * valeur écrite (« 0:03.25 », « 3.25 », « 3 »).
+ * @param {'d'|'f'} quel
+ * @param {string|number} [val]  absent : l'instant affiché
+ */
+function mlAnnotBorne(quel,val){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a) return false;
+  let ms=val==null?_mlxTempsMs():_mlxLireTemps(String(val));
+  if(ms==null){ toast('Temps illisible : écris par exemple 0:03.25.','var(--orange)'); _mlxMajEditeur(); return false; }
+  const D=_ml.dureeMs||86400000;
+  ms=Math.max(0,Math.min(D,ms));
+  let {d,f}=a;
+  if(quel==='d') d=Math.min(ms,f-SEG_MIN_MS); else f=Math.max(ms,d+SEG_MIN_MS);
+  d=Math.max(0,d); f=Math.min(Math.max(D,d+SEG_MIN_MS),f);
+  _mlxMemoriser();
+  _mlxChanger(a.id,x=>{ const o={...x,d:Math.round(d),f:Math.round(f)}; delete o.seg; return o; });
+  _mlxApresChangement();
+  return true;
+}
+/**
+ * PURE. Un temps écrit par le coach, en ms : « 1:03.5 », « 63.5 », « 63 ».
+ * @param {string} s
+ * @returns {number|null}
+ */
+function _mlxLireTemps(s){
+  const m=/^\s*(?:(\d{1,3}):)?(\d{1,5})(?:[.,](\d{1,3}))?\s*$/.exec(String(s));
+  if(!m) return null;
+  const min=Number(m[1]||0), sec=Number(m[2]), frac=m[3]?Number((m[3]+'00').slice(0,3)):0;
+  if(m[1]&&sec>=60) return null;
+  return (min*60+sec)*1000+frac;
+}
+/** Toute la vidéo, ou la séquence choisie. @param {'video'|'sequence'} quoi */
+function mlAnnotDuree(quoi){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a||!_ml.dureeMs) return false;
+  const s=_mlActif();
+  if(quoi==='sequence'&&!s){ toast('Choisis d’abord une séquence.','var(--orange)'); return false; }
+  _mlxMemoriser();
+  _mlxChanger(a.id,x=>{
+    const o=quoi==='sequence'&&s?{...x,d:s.debutMs,f:s.finMs,seg:s.id}:{...x,d:0,f:_ml?_ml.dureeMs:x.f};
+    if(quoi==='video') delete o.seg;
+    return o;
+  });
+  _mlxApresChangement();
+  return true;
+}
+/**
+ * Une bascule ou un réglage du tracé choisi : nom affiché (et), légende (lg),
+ * points reliés (rel), contour (tc), fond (tf), taille du texte (ts), angle
+ * cible (cb).
+ * @param {string} cle
+ * @param {any} val
+ */
+function mlAnnotOption(cle,val){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a) return false;
+  _mlxMemoriser();
+  _mlxChanger(a.id,x=>{
+    const o=/** @type {any} */({...x});
+    if(cle==='et'||cle==='lg'){ if(val) delete o[cle]; else o[cle]=0; }
+    else if(cle==='rel'||cle==='tc'){ if(val) o[cle]=1; else delete o[cle]; }
+    else if(cle==='tf'&&[0,1,2].includes(Number(val))) o.tf=Number(val);
+    else if(cle==='ts'&&['s','m','l'].includes(String(val))) o.ts=String(val);
+    else if(cle==='cb'){
+      const n=Number(String(val).replace(',','.'));
+      if(String(val).trim()===''||!isFinite(n)) delete o.cb; else o.cb=Math.max(0,Math.min(180,Math.round(n)));
+    }
+    return /** @type {Annot} */(o);
+  });
+  _mlxApresChangement();
+  return true;
+}
+/**
+ * « SUIVRE LE MOUVEMENT ». Allumé, le tracé reçoit sa première image clé à
+ * l'instant affiché ; chaque point qu'on déplace ensuite, image par image,
+ * pose une clé, et le mouvement s'interpole entre elles. Éteint, il reprend
+ * les points de l'instant affiché et redevient immobile.
+ */
+function mlAnnotSuivre(){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a) return false;
+  const s=_mlxTempsMs();
+  _mlxMemoriser();
+  if(Array.isArray(a.k)&&a.k.length){
+    const pts=mlAnnotPointsA(a,s);
+    _mlxChanger(a.id,x=>{ const o={...x,p:mlEncoderTrait(pts.map(p=>[_mlxBorne(p[0]),_mlxBorne(p[1])]))}; delete o.k; return o; });
+  } else _mlxChanger(a.id,x=>mlClesMaj(x,s,mlDecoderTrait(x.p)));
+  _mlxApresChangement();
+  return true;
+}
+/** L'image clé précédente ou suivante. @param {number} sens */
+function mlCleAller(sens){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a||!Array.isArray(a.k)||!a.k.length) return false;
+  const s=_mlxTempsMs();
+  const l=a.k.map(q=>q[0]);
+  const t=sens<0?l.filter(x=>x<s-20).pop():l.find(x=>x>s+20);
+  if(t==null) return false;
+  _mlAller(t);
+  return true;
+}
+/** Retire l'image clé de l'instant affiché. */
+function mlCleSupprimer(){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a||!Array.isArray(a.k)) return false;
+  const i=mlCleA(a,_mlxTempsMs());
+  if(i<0) return false;
+  _mlxMemoriser();
+  _mlxChanger(a.id,x=>{
+    const k=(x.k||[]).filter((_,j)=>j!==i);
+    const o={...x};
+    if(k.length){ o.k=k; o.p=k[0][1]; } else delete o.k;
+    return o;
+  });
+  _mlxApresChangement();
+  return true;
+}
+/**
+ * L'ordre des tracés : le dernier se dessine par-dessus les autres.
+ * @param {string} id
+ * @param {number} rang
+ */
+function mlAnnotDeplacer(id,rang){
+  if(!_ml) return false;
+  const l=_ml.annot.a.slice(), i=l.findIndex(a=>a.id===id);
+  if(i<0) return false;
+  const [a]=l.splice(i,1);
+  l.splice(Math.max(0,Math.min(l.length,Math.round(rang))),0,a);
+  _mlxMemoriser();
+  _ml.annot={..._ml.annot,a:l};
+  _mlxApresChangement();
+  return true;
+}
+/** Le bouton « + Ajouter » : l'outil du dernier tracé, ou la trajectoire. */
+function mlAnnotAjouter(){
+  if(!_ml) return false;
+  const der=_ml.annot.a[_ml.annot.a.length-1];
+  mlOutil(der?der.t:'libre');
+  toast('Dessine sur la vidéo : '+(ML_OUTILS.find(x=>x.o===_ml?.outil)||{lib:''}).lib.toLowerCase()+'.');
+  return true;
+}
+/** Efface tous les tracés, après confirmation. */
+async function mlAnnotToutEffacer(){
+  if(!_ml||!_ml.annot.a.length) return false;
+  if(!await rcConfirm('Effacer tous les tracés ?','La légende reste. Tu pourras annuler tant que le laboratoire est ouvert.','Effacer','Garder')) return false;
+  if(!_ml) return false;
+  _mlxMemoriser();
+  _ml.annot={..._ml.annot,a:[]};
+  _ml.sel=null;
+  _mlxApresChangement();
+  return true;
+}
+
+// ── LA LÉGENDE ─────────────────────────────────────────────────────────────
+/**
+ * @param {string} cle  on, titre, pos, taille, fond, op
+ * @param {any} val
+ */
+function mlLegende(cle,val){
+  if(!_ml) return false;
+  /** @type {any} */
+  const L={..._ml.annot.leg};
+  if(cle==='on') L.on=val?1:0;
+  else if(cle==='titre') L.titre=String(val||'').replace(/[\u0000-\u001f]/g,' ').slice(0,40)||'Analyse technique';
+  else if(cle==='pos'&&['hg','hd','bg','bd'].includes(val)) L.pos=val;
+  else if(cle==='taille'&&['s','m','l'].includes(val)) L.taille=val;
+  else if(cle==='fond'&&['sombre','clair','aucun'].includes(val)) L.fond=val;
+  else if(cle==='op'){ const n=Number(val); if(isFinite(n)) L.op=Math.round(Math.max(0.3,Math.min(1,n))*100)/100; }
+  else return false;
+  if(cle!=='titre'&&cle!=='op') _mlxMemoriser();
+  _ml.annot={..._ml.annot,leg:/** @type {Legende} */(L)};
+  if(cle==='on') _mlxMajLegende();
+  _mlDessinerCalque(); _mlMajEnregistrer();
+  return true;
+}
+
+// ── LES MODÈLES ────────────────────────────────────────────────────────────
+/** @returns {ModeleAnnot[]} les sept d'origine, puis ceux du coach */
+function _mlxModeles(){
+  /** @type {any[]} */
+  const perso=currentUser&&Array.isArray(currentUser.mlModelesAnnot)?currentUser.mlModelesAnnot:[];
+  /** @type {ModeleAnnot[]} */
+  const propres=[];
+  for(const m of perso.slice(0,ML_MODELES_ANNOT_MAX)){
+    if(!m||typeof m!=='object') continue;
+    /** @type {EtapeModele[]} */
+    const etapes=(Array.isArray(m.etapes)?m.etapes:[]).filter((/** @type {any} */ e)=>e&&ANNOT_TYPES[e.t]
+      &&/^#[0-9a-f]{6}$/i.test(String(e.c))).slice(0,8)
+      .map((/** @type {any} */ e)=>({t:/** @type {TypeAnnot} */(e.t),c:String(e.c).toLowerCase(),n:String(e.n||'').slice(0,ANNOT_NOM_MAX)||ML_TYPE_LIB[e.t]}));
+    if(!etapes.length) continue;
+    propres.push({nom:String(m.nom||'Mon modèle').slice(0,30),ico:'perso',titre:String(m.titre||m.nom||'Analyse').slice(0,40),etapes,
+      comparer:!!m.comparer});
+  }
+  return ML_MODELES_ANNOT.slice().concat(propres);
+}
+/** Arme un modèle : ses étapes s'enchaînent, sa légende s'allume. @param {number} i */
+function mlModeleAnnot(i){
+  if(!_ml) return false;
+  const m=_mlxModeles()[i];
+  if(!m) return false;
+  _mlxMemoriser();
+  _ml.annot={..._ml.annot,leg:{..._ml.annot.leg,on:1,titre:m.titre.slice(0,40)}};
+  _ml.guide={m,i:0};
+  if(m.comparer&&!_ml.comparaison) mlComparaison();
+  _mlxArmerEtape();
+  _mlxApresChangement();
+  _mlxMajModeles();
+  return true;
+}
+function _mlxArmerEtape(){
+  const G=_ml&&_ml.guide;
+  if(!_ml||!G) return;
+  const e=G.m.etapes[G.i];
+  if(!e) return;
+  _ml.outil=e.t; _ml.couleur=e.c; _ml.trace=null;
+  if(e.t==='texte') _ml.phrase=e.n;
+  _mlxMajOutils();
+}
+function _mlxGuideSuivant(){
+  const G=_ml&&_ml.guide;
+  if(!_ml||!G) return;
+  G.i++;
+  if(G.i>=G.m.etapes.length){
+    _ml.guide=null;
+    toast('Modèle « '+G.m.nom+' » terminé ✓');
+    _mlxMajModeles();
+    return;
+  }
+  _mlxArmerEtape();
+  _mlxMajModeles();
+}
+function mlGuidePasser(){ if(!_ml||!_ml.guide) return false; _mlxGuideSuivant(); _mlxMajOutils(); return true; }
+function mlGuideArreter(){ if(!_ml||!_ml.guide) return false; _ml.guide=null; _mlxMajOutils(); _mlxMajModeles(); return true; }
+/** Garde les tracés affichés comme un modèle du coach. */
+async function mlModeleCreer(){
+  if(!_ml||!currentUser) return false;
+  const l=_ml.annot.a.filter(a=>!a.h);
+  if(!l.length){ toast('Pose d’abord les tracés du modèle : il reprendra leurs outils, couleurs et noms.','var(--orange)'); return false; }
+  const nom=await rcSaisie('Nom du modèle','',{libelleOk:'Créer',placeholder:'Ex. : Squat — genoux'});
+  const n=String(nom==null?'':nom).trim().slice(0,30);
+  if(!n||!_ml||!currentUser) return false;
+  const perso=Array.isArray(currentUser.mlModelesAnnot)?currentUser.mlModelesAnnot.slice():[];
+  if(perso.length>=ML_MODELES_ANNOT_MAX){ toast(ML_MODELES_ANNOT_MAX+' modèles au plus : retires-en un.','var(--orange)'); return false; }
+  perso.push({nom:n,titre:_ml.annot.leg.titre,comparer:_ml.comparaison?1:0,
+    etapes:l.slice(0,8).map(a=>({t:a.t,c:a.c,n:a.t==='texte'?(a.x||a.n):a.n}))});
+  currentUser.mlModelesAnnot=perso;
+  toastEcriture(saveUser(),'Modèle « '+n+' » créé ✓','le modèle est');
+  _mlxMajModeles();
+  return true;
+}
+/** @param {number} i  le rang dans la liste complète */
+async function mlModeleAnnotRetirer(i){
+  if(!currentUser) return false;
+  const j=i-ML_MODELES_ANNOT.length;
+  const perso=Array.isArray(currentUser.mlModelesAnnot)?currentUser.mlModelesAnnot.slice():[];
+  if(j<0||!perso[j]) return false;
+  if(!await rcConfirm('Retirer ce modèle ?',String(perso[j].nom||''),'Retirer','Garder')) return false;
+  perso.splice(j,1);
+  currentUser.mlModelesAnnot=perso;
+  try{ saveUser(); }catch(e){}
+  _mlxMajModeles();
+  return true;
+}
+
+// ── LA VUE ─────────────────────────────────────────────────────────────────
+/** « VERSION ORIGINALE » : le calque s'éteint, la vidéo reste telle quelle. */
+function mlVersionOriginale(){
+  if(!_ml) return false;
+  _ml.original=!_ml.original;
+  const b=_mlEl('mlx-orig'); if(b) b.setAttribute('aria-pressed',String(_ml.original));
+  const s=document.querySelector('#ml-contenu .ml-scene'); if(s) s.classList.toggle('mlx-original',_ml.original);
+  _mlDessinerCalque();
+  return true;
+}
+/** « COMPARAISON » : les tracés de forme restent tous à l'écran, et les meilleures répétitions en fantôme. */
+function mlComparaison(){
+  if(!_ml) return false;
+  _ml.comparaison=!_ml.comparaison;
+  /** @type {any} */(_ml).compare=_ml.comparaison;
+  const b=_mlEl('mlx-comp'); if(b) b.setAttribute('aria-pressed',String(_ml.comparaison));
+  _mlDessinerCalque();
+  return true;
+}
+function mlSon(){
+  const v=_mlVideo();
+  if(!v) return false;
+  v.muted=!v.muted;
+  const b=_mlEl('mlx-son');
+  if(b){ b.setAttribute('aria-pressed',String(v.muted)); b.innerHTML=_mlxIco(v.muted?'muet':'son',20);
+    b.setAttribute('aria-label',v.muted?'Remettre le son':'Couper le son'); }
+  return true;
+}
+/** Le plein écran de la SCÈNE, et non de la vidéo : le calque doit suivre. */
+function mlPleinEcran(){
+  const s=/** @type {any} */(document.querySelector('#ml-contenu .ml-scene')), v=/** @type {any} */(_mlVideo());
+  try{
+    if(document.fullscreenElement){ document.exitFullscreen(); return true; }
+    if(s&&s.requestFullscreen){ const p=s.requestFullscreen(); if(p&&p.catch) p.catch(()=>{}); return true; }
+    if(s&&s.webkitRequestFullscreen){ s.webkitRequestFullscreen(); return true; }
+    if(v&&v.webkitEnterFullscreen){ v.webkitEnterFullscreen(); return true; }
+  }catch(e){}
+  return false;
+}
+/** @param {string} o  trace, analyse, voix, reglages */
+function mlOnglet(o){
+  if(!_ml||!['trace','analyse','voix','reglages'].includes(o)) return false;
+  _ml.onglet=o;
+  document.querySelectorAll('#ml-contenu [data-onglet]').forEach(x=>{
+    const el=/** @type {HTMLElement} */(x), on=el.dataset.onglet===o;
+    if(el.getAttribute('role')==='tab') el.setAttribute('aria-selected',String(on));
+    else el.hidden=!on;
+  });
+  return true;
+}
+function mlMenu(){
+  const m=_mlEl('mlx-menu'), b=_mlEl('mlx-menu-b');
+  if(!m) return false;
+  m.hidden=!m.hidden;
+  if(b) b.setAttribute('aria-expanded',String(!m.hidden));
+  return true;
+}
+/** @returns {Annot|null} le tracé en cours de pose, pour l'aperçu sur le calque */
+function _mlxApercu(){
+  const tr=_ml&&_ml.trace;
+  if(!_ml||!tr||!tr.pts.length) return null;
+  let pts=tr.pts.slice();
+  if(_ml.curseur&&(tr.t==='angle'||tr.t==='courbe'||tr.t==='point')) pts=pts.concat([_ml.curseur]);
+  /** @type {TypeAnnot} */
+  let t=tr.t;
+  if((t==='angle'&&pts.length<3)||(t==='courbe'&&pts.length<2)) t='point';
+  const etape=_ml.guide?_ml.guide.m.etapes[_ml.guide.i]:null;
+  const c=etape&&etape.t===tr.t?etape.c:_ml.couleur;
+  /** @type {Annot} */
+  const a={id:'_apercu',n:'',t,c,e:_ml.epaisseur,d:0,f:1e12,
+    p:mlEncoderTrait(pts.slice(0,64).map(p=>[_mlxBorne(p[0]),_mlxBorne(p[1])])),et:0};
+  if(t==='point'){
+    if(pts.length>1&&(tr.t!=='point'||_ml.relier)) a.rel=1;
+    if(tr.t==='point'&&tr.lb) a.lb=tr.lb.slice();
+  }
+  return a;
+}
+/** L'état de l'image clé à l'instant affiché, sans redessiner l'éditeur. */
+function _mlxMajCleEtat(){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  const z=_mlEl('mlx-cle-etat'), b=_mlEl('mlx-cle-suppr');
+  if(!a||!Array.isArray(a.k)) return;
+  const i=mlCleA(a,_mlxTempsMs());
+  if(z) z.textContent=i>=0?' · clé à cet instant':'';
+  if(b instanceof HTMLButtonElement) b.disabled=i<0;
+}
+/**
+ * Les raccourcis du laboratoire. Ignorés dans un champ de saisie — c'est
+ * l'appelant qui l'a vérifié — et sur un bouton pour Espace et Entrée, qui
+ * l'activent déjà.
+ * @param {KeyboardEvent} e
+ * @returns {boolean}
+ */
+function _mlxClavier(e){
+  if(!_ml) return false;
+  const k=e.key, mod=e.ctrlKey||e.metaKey;
+  const t=e.target instanceof Element?e.target:null;
+  if(mod&&(k==='z'||k==='Z')){ e.preventDefault(); if(e.shiftKey) mlRetablir(); else mlAnnuler(); return true; }
+  if(mod&&(k==='y'||k==='Y')){ e.preventDefault(); mlRetablir(); return true; }
+  if(mod||e.altKey) return false;
+  const surBouton=!!(t&&t.closest('button,[role="button"],[role="slider"],[role="tab"]'));
+  if(k===' '){ if(surBouton) return false; e.preventDefault(); mlLecture(); return true; }
+  if(k==='Escape'){
+    if(_mlxAnnulerTrace()) return true;
+    const m=_mlEl('mlx-menu'); if(m&&!m.hidden){ mlMenu(); return true; }
+    if(_ml.sel){ _ml.sel=null; _mlxApresSelection(); return true; }
+    return false;
+  }
+  if(k==='Enter'){ if(_ml.trace&&!surBouton){ e.preventDefault(); mlTerminerTrace(); return true; } return false; }
+  if((k==='Delete'||k==='Backspace')&&_ml.sel){ e.preventDefault(); mlAnnotSupprimer(_ml.sel); return true; }
+  if(k==='o'||k==='O'){ mlVersionOriginale(); return true; }
+  const o=ML_OUTILS.find(x=>x.r===k.toLowerCase());
+  if(o&&k.length===1){ mlOutil(o.o); return true; }
+  return false;
+}
+
 // ══ L'ÉTAT ET L'OUVERTURE ═════════════════════════════════════════════════════
 
 /** @type {EtatMl|null} */
@@ -2408,8 +3898,11 @@ function mlOuvrir(email,videoId){
   _mlInjecterStyle();
   const segs=segmentsVideo(v);
   const date=Number(v.date)?new Date(Number(v.date)).toLocaleDateString('fr-FR'):'';
+  // LES ANNOTATIONS DÉJÀ ENVOYÉES se rouvrent telles que l'athlète les voit.
+  /** @type {DocAnnot} */
+  const annotDoc=/** @type {DocAnnot|null} */(annotValide(v.annot))||mlDocVide();
   _ml={email,videoId,url:String(v.url||''),nom:String(v.name||'Vidéo'),
-    sousTitre:['Motion Lab',String(c.fname||''),date].filter(Boolean).join(' · '),
+    sousTitre:[String(c.fname||''),date].filter(Boolean).join(' · '),
     initiaux:segs,segments:segs.map(s=>({...s})),actifId:segs.length?segs[0].id:null,
     zoom:1,dureeMs:0,boucle:false,jeton:0,raf:0,seekEnAttente:null,
     mode:'lecture',graine:null,disqueM:ML_DISQUE_M,sens:'',fantome:false,
@@ -2417,7 +3910,10 @@ function mlOuvrir(email,videoId){
     angCote:'',angCalques:[],epingles:[],cachePose:null,
     theta:0,thetaAuto:null,thetaMain:false,
     etalon:{type:'disque45',cm:Math.round(ML_DISQUE_M*100),ax:null,ay:null,bx:null,by:null},prise:null,
-    rec:null,correction:null,cartes:[],lecteur:null};
+    rec:null,correction:null,cartes:[],lecteur:null,
+    annot:annotDoc,annotInit:JSON.stringify(annotDoc),outil:'selection',couleur:ML_PALETTE[0].c,
+    epaisseur:ML_EPAISSEUR_DEFAUT,sel:null,trace:null,curseur:null,annule:[],refait:[],original:false,
+    comparaison:false,guide:null,repereAnat:1,relier:true,phrase:'',tailleTexte:'m',onglet:'trace',jetonVseq:0};
   go('s-coach-motion-lab');
   _mlRendre();
   return true;
@@ -2435,7 +3931,7 @@ async function mlFermer(){
   if(_mlModifie()||corr){
     const quitter=await rcConfirm(corr?'Quitter sans envoyer la correction ?':'Quitter sans enregistrer ?',
       corr?'La voix et les gestes enregistrés seront perdus.'
-        :'Les répétitions modifiées depuis le dernier enregistrement seront perdues.','Quitter','Rester');
+        :'Les séquences et les tracés modifiés depuis le dernier enregistrement seront perdus.','Quitter','Rester');
     if(!quitter||!_ml) return false;
   }
   const {email,videoId}=_ml;
@@ -2453,6 +3949,8 @@ function _mlArreter(){
   if(cache) cache.remove();
   const analyse=_mlEl('ml-analyse-src');
   if(analyse) analyse.remove();
+  const vseq=_mlEl('ml-vseq-src');
+  if(vseq) vseq.remove();
   if(_ml&&_ml.rec){
     const r=_ml.rec;
     _mlRecEcouteArreter();
@@ -2476,7 +3974,7 @@ function mlSortieEcran(){
 }
 
 /** @returns {boolean} */
-function _mlModifie(){ return !!_ml&&!mlMemesSegments(_ml.initiaux,_ml.segments); }
+function _mlModifie(){ return !!_ml&&(!mlMemesSegments(_ml.initiaux,_ml.segments)||_mlxModifie()); }
 /** @returns {Segment|null} */
 function _mlActif(){
   if(!_ml) return null;
@@ -2485,91 +3983,624 @@ function _mlActif(){
 }
 
 // ══ LE RENDU ══════════════════════════════════════════════════════════════════
+//
+// LA REFONTE (21/09/2026) : un logiciel d'analyse en paysage, et non plus une
+// colonne de formulaires. À gauche les séquences et les modèles ; au centre la
+// vidéo — l'élément dominant —, son calque et ses commandes ; à droite les
+// outils de tracé, la liste des annotations et la légende ; en bas la timeline
+// des annotations et « Enregistrer la correction ».
+//
+// RIEN DE L'ANCIEN N'EST PERDU. Les panneaux d'analyse automatique —
+// trajectoire de la barre, points suivis, articulations, lecture —, la
+// correction vocale et la prise de vue (aplomb, échelle) gardent leur code et
+// leurs identifiants : ils vivent dans les onglets « Analyse », « Voix » et
+// « Réglages » de la colonne de droite. La calibration n'est plus sur le
+// chemin du coach : elle est dans « Paramètres avancés ».
+
+/**
+ * Les icônes, en traits : currentColor, pour suivre l'état du bouton.
+ * @param {string} nom
+ * @param {number} t
+ * @returns {string}
+ */
+function _mlxIco(nom,t){
+  /** @type {Object<string,string>} */
+  const P={
+    selection:'<path d="M5 3.5 18.5 11l-6.2 1.6L9 19z" fill="currentColor" stroke="none"/>',
+    ligne:'<path d="M5 19 19 5"/>',
+    fleche:'<path d="M5 19 18 6M10 6h8v8"/>',
+    libre:'<path d="M3 16.5c2.5-7 5.5 3 8.5-3.5S17 5 21 8"/>',
+    courbe:'<path d="M4.5 18.5C7 8 16.5 16.5 19.5 5.5"/><circle cx="4.5" cy="18.5" r="1.7" fill="currentColor"/><circle cx="19.5" cy="5.5" r="1.7" fill="currentColor"/>',
+    cercle:'<circle cx="12" cy="12" r="8"/>',
+    rect:'<rect x="4" y="6" width="16" height="12" rx="1.2"/>',
+    angle:'<path d="M4 19.5h16M4 19.5 14.5 5"/><path d="M9.2 19.5a6 6 0 0 0-2-4.6"/>',
+    point:'<circle cx="12" cy="12" r="4.2" fill="currentColor"/>',
+    texte:'<path d="M5 7V4.5h14V7M12 4.5v15M9 19.5h6"/>',
+    zone:'<rect x="4" y="5" width="16" height="14" rx="1.5" stroke-dasharray="3 2.4"/>',
+    gomme:'<path d="M8.5 20H20M5.2 14.8l7.9-7.9a2 2 0 0 1 2.8 0l2.3 2.3a2 2 0 0 1 0 2.8L11.3 19H8.5z"/>',
+    oeil:'<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    oeilnon:'<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><path d="M4 4l16 16"/>',
+    crayon:'<path d="M4 20h4L19.2 8.8l-4-4L4 16z"/>',
+    corbeille:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',
+    poignee:'<circle cx="9" cy="7" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="7" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="17" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="17" r="1.3" fill="currentColor" stroke="none"/>',
+    plus:'<path d="M12 5v14M5 12h14"/>',
+    retour:'<path d="m15 18-6-6 6-6"/>',
+    menu:'<circle cx="12" cy="5.5" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="18.5" r="1.6" fill="currentColor" stroke="none"/>',
+    haltere:'<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/>',
+    lire:'<path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none"/>',
+    pause:'<rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor" stroke="none"/>',
+    prec:'<path d="M6 5v14"/><path d="M18 5 9 12l9 7z" fill="currentColor"/>',
+    suiv:'<path d="M18 5v14"/><path d="m6 5 9 7-9 7z" fill="currentColor"/>',
+    son:'<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+    muet:'<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="m16 9.5 5 5M21 9.5l-5 5"/>',
+    plein:'<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+    comp:'<circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/>',
+    orig:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m3.5 15 5-4 4 3 3-2.5 5 4"/><path d="M4 4l16 16"/>',
+    reglages:'<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+    fleched:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+    annuler:'<path d="M9 7 4.5 11.5 9 16"/><path d="M4.5 11.5H15a4.5 4.5 0 0 1 0 9h-3"/>',
+    retablir:'<path d="m15 7 4.5 4.5L15 16"/><path d="M19.5 11.5H9a4.5 4.5 0 0 0 0 9h3"/>',
+    ajuster:'<path d="M4 12h16M7 8l-3 4 3 4M17 8l3 4-3 4"/>',
+    traj:'<path d="M4 18c3-9 8-11 16-12"/><path d="M15 4.5 20 6l-2 4.5"/>',
+    corps:'<circle cx="12" cy="4.8" r="2.2"/><path d="M12 7.5v7M7 10.5l5-1.5 5 1.5M9 21l3-6.5 3 6.5"/>',
+    ampl:'<path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"/>',
+    stab:'<path d="M12 3v14M5 21h14M7 9h10"/><circle cx="12" cy="9" r="1.5" fill="currentColor"/>',
+    tempo:'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M10 2.5h4"/>',
+    perso:'<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8 6.8 19.6l1-5.8L3.5 9.7l5.9-.9z"/>',
+    cle:'<path d="M12 3.5 20.5 12 12 20.5 3.5 12z"/>'};
+  return '<svg viewBox="0 0 24 24" width="'+t+'" height="'+t+'" aria-hidden="true" fill="none" stroke="currentColor" '
+    +'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(P[nom]||'')+'</svg>';
+}
+/** @param {number} ms @returns {string} « 0:03.25 » */
+function _mlxT(ms){ return mlTempsTexte(Math.max(0,Math.round(ms))); }
 
 function _mlRendre(){
   const z=_mlEl('ml-contenu');
   if(!z||!_ml) return false;
-  const t=_mlEl('ml-titre');
-  if(t) t.textContent=_ml.nom;
+  const S=_mlxIco;
   /** @param {string} lib @param {string} act @param {string} titre @param {string} [extra] */
   const b=(lib,act,titre,extra)=>'<button type="button" class="ml-b" onclick="'+act+'" '
     +'title="'+escapeHtml(titre)+'" aria-label="'+escapeHtml(titre)+'" disabled '+(extra||'')+'>'+lib+'</button>';
-  z.innerHTML=
-    // LA BARRE D'ENREGISTREMENT reste en haut pendant qu'on fait défiler :
-    // arrêter, mettre en pause et dessiner doivent être à portée à tout moment.
-    '<div id="ml-rec" class="ml-rec" hidden></div>'
-    +(_ml.sousTitre?'<div class="ml-sous">'+escapeHtml(_ml.sousTitre)+'</div>':'')
-    // ══ DEUX COLONNES AU-DELÀ DE 1000 px ════════════════════════════════════
-    //
-    // Une vidéo de téléphone est en PORTRAIT. Étalée sur toute la largeur d'un
-    // écran d'ordinateur, elle laisse deux bandes noires qui prennent les deux
-    // tiers de la place, pendant que les réglages — poser le disque, choisir le
-    // sens, lancer l'analyse — sont repoussés sous la ligne de flottaison. Le
-    // coach fait alors l'aller-retour entre l'image et le réglage qui la
-    // commande, alors qu'il doit voir l'effet du second sur la première.
-    //
-    // La vidéo prend la colonne de gauche et devient HAUTE ; tout ce qui se
-    // règle passe à droite, en vis-à-vis. Sous 1000 px — le téléphone du coach
-    // en salle — la grille n'existe pas et l'ordre vertical est inchangé.
-    +'<div class="ml-cols"><div class="ml-col-video">'
-    +'<div class="ml-scene">'
-      +'<video id="ml-video" src="'+safeUrl(_ml.url)+'" preload="metadata" playsinline webkit-playsinline '
-      +'onerror="_videoIndisponible(this)" onclick="mlLecture()"></video>'
-      // LE CALQUE : la trajectoire, et le disque qu'on pose. Il ne capte le
-      // doigt que le temps de poser ou de replacer le disque.
-      +'<canvas id="ml-calque" class="ml-calque" aria-hidden="true"></canvas>'
-      +'<canvas id="ml-loupe" class="ml-loupe" width="220" height="220" aria-hidden="true" hidden></canvas>'
+  const logo=String((currentUser||{}).logo||'').trim();
+  z.innerHTML='<div class="mlx">'
+    // ── L'EN-TÊTE ─────────────────────────────────────────────────────────
+    +'<header class="mlx-tete">'
+      +'<button type="button" class="mlx-retour" onclick="fermerMotionLab()" aria-label="Retour à la correction">'
+        +S('retour',20)+'<span>Retour</span></button>'
+      +'<div class="mlx-marque"><h1 class="mlx-titre">Motion <em>Lab</em></h1>'
+        +'<p class="mlx-sous-t">Analyse et correction technique</p></div>'
+      +'<div class="mlx-pilule">'+S('haltere',24)+'<div><b id="ml-titre"></b><span class="ml-sous"></span></div></div>'
+      +'<div class="mlx-menu-z"><button type="button" id="mlx-menu-b" class="mlx-ico-b" onclick="mlMenu()" '
+        +'aria-haspopup="true" aria-expanded="false" aria-label="Plus d’actions">'+S('menu',20)+'</button>'
+        +'<div id="mlx-menu" class="mlx-menu" role="menu" hidden>'
+          +'<button type="button" role="menuitem" onclick="mlMenu();mlOnglet(\'reglages\')">Paramètres avancés</button>'
+          +'<button type="button" role="menuitem" onclick="mlMenu();mlOnglet(\'analyse\')">Analyse automatique</button>'
+          +'<button type="button" role="menuitem" onclick="mlMenu();mlOnglet(\'voix\')">Correction vocale</button>'
+          +'<button type="button" role="menuitem" onclick="mlMenu();mlRaccourcis()">Raccourcis clavier</button>'
+          +'<button type="button" role="menuitem" onclick="mlMenu();mlAnnotToutEffacer()">Effacer tous les tracés</button>'
+        +'</div></div>'
+      +'<div class="mlx-esp"></div>'
+      +'<div class="mlx-devise" aria-hidden="true"><i></i><span>Discipline, travail et résultats</span></div>'
+      +(logo?'<img class="mlx-logo" src="'+escapeHtml(logo)+'" alt="" onerror="this.remove()">':'')
+    +'</header>'
+    // LA BARRE D'ENREGISTREMENT de la correction vocale reste en haut.
+    +'<div id="ml-rec" class="ml-rec" hidden></div>'
+    +'<div class="mlx-grille">'
+      // ── GAUCHE : SÉQUENCES ET MODÈLES ─────────────────────────────────────
+      +'<aside class="mlx-g">'
+        +'<section class="mlx-carte"><div class="mlx-ct"><span>Séquences</span>'
+          +'<button type="button" class="mlx-ico-b mlx-ico-p" id="ml-ajouter" onclick="mlAjouter()" disabled '
+            +'title="Ajouter une séquence à la tête de lecture" aria-label="Ajouter une séquence à la tête de lecture">'+S('plus',18)+'</button></div>'
+          +'<div id="ml-liste"></div><div id="ml-bornes"></div>'
+          +'<p class="ml-aide">Place la tête de lecture au début du mouvement, ajoute une séquence, puis ajuste son '
+            +'début et sa fin à l’image près. Dix secondes au plus. La vidéo d’origine n’est jamais modifiée.</p></section>'
+        +'<section class="mlx-carte"><div class="mlx-ct"><span>Modèles d’annotation</span></div><div id="mlx-modeles"></div></section>'
+      +'</aside>'
+      // ── CENTRE : LA VIDÉO ─────────────────────────────────────────────────
+      +'<main class="mlx-c">'
+        +'<div class="ml-scene">'
+          +'<video id="ml-video" src="'+safeUrl(_ml.url)+'" preload="metadata" playsinline webkit-playsinline '
+            +'onerror="_videoIndisponible(this)"></video>'
+          +'<canvas id="ml-calque" class="ml-calque" aria-hidden="true"></canvas>'
+          +'<canvas id="ml-loupe" class="ml-loupe" width="220" height="220" aria-hidden="true" hidden></canvas>'
+          +'<span class="mlx-badge-orig" aria-hidden="true">Version originale</span>'
+        +'</div>'
+        +'<div class="mlx-transport">'
+          +'<div class="mlx-tr-l1">'
+            +b(S('prec',18),'mlImage(-1)','Image précédente (flèche gauche)')
+            +'<button type="button" id="ml-play" class="ml-b mlx-play" onclick="mlLecture()" disabled aria-label="Lecture (espace)">'+S('lire',20)+'</button>'
+            +b(S('suiv',18),'mlImage(1)','Image suivante (flèche droite)')
+            +'<span class="mlx-temps"><span id="ml-t" aria-live="off">0:00.00</span><span id="mlx-duree"></span></span>'
+            +'<span class="mlx-esp"></span>'
+            +'<span class="mlx-vit">'+VID_RATES.map(r=>b(String(r).replace('.',',')+'×','mlVitesse('+r+')',
+              'Lire à '+String(r).replace('.',',')+' fois la vitesse normale','data-rate="'+r+'" aria-pressed="'+(r===1)+'"')).join('')+'</span>'
+            +b(S('son',20),'mlSon()','Couper le son','id="mlx-son" aria-pressed="false"')
+            +b(S('comp',20),'mlComparaison()','Comparaison : superposer les tracés actuels et cibles','id="mlx-comp" aria-pressed="false"')
+            +b(S('plein',20),'mlPleinEcran()','Plein écran')
+          +'</div>'
+          +'<div class="mlx-tr-l2"><input type="range" id="mlx-pos" min="0" max="1000" step="1" value="0" disabled '
+            +'aria-label="Position dans la vidéo" oninput="mlPosition(this.value)">'
+            +'<span id="ml-fps" class="ml-fps">Chargement…</span></div>'
+        +'</div>'
+      +'</main>'
+      // ── DROITE : OUTILS, ANNOTATIONS, LÉGENDE — ET LES ONGLETS DE L'ANCIEN ──
+      +'<aside class="mlx-d">'
+        +'<div class="mlx-onglets" role="tablist" aria-label="Panneaux du laboratoire">'
+          +[['trace','Tracé'],['analyse','Analyse'],['voix','Voix'],['reglages','Réglages']].map(([k,l])=>
+            '<button type="button" role="tab" data-onglet="'+k+'" aria-selected="'+(k===_ml?.onglet)+'" onclick="mlOnglet(\''+k+'\')">'+l+'</button>').join('')
+        +'</div>'
+        +'<div role="tabpanel" data-onglet="trace"'+(_ml.onglet==='trace'?'':' hidden')+'>'
+          +'<section class="mlx-carte"><div class="mlx-ct"><span>Outils de tracé</span><span id="mlx-histo" class="mlx-histo"></span></div>'
+            +'<div id="mlx-outils"></div></section>'
+          +'<section class="mlx-carte"><div class="mlx-ct"><span id="mlx-n-annot">Annotations</span>'
+            +'<button type="button" class="mlx-b mlx-b-r" onclick="mlAnnotAjouter()">'+S('plus',14)+' Ajouter</button></div>'
+            +'<div id="mlx-liste"></div><div id="mlx-editeur"></div></section>'
+          +'<section class="mlx-carte"><div class="mlx-ct"><span>Légende sur la vidéo</span>'
+            +'<label class="mlx-bascule" title="Afficher la légende sur la vidéo"><input type="checkbox" id="mlx-leg-on" '
+              +'aria-label="Afficher la légende sur la vidéo" onchange="mlLegende(\'on\',this.checked)"><i></i></label></div>'
+            +'<div id="mlx-legende"></div></section>'
+        +'</div>'
+        +'<div role="tabpanel" data-onglet="analyse"'+(_ml.onglet==='analyse'?'':' hidden')+'>'
+          +'<p class="mlx-intro">Les mesures automatiques : la trajectoire de la barre suivie image par image, les points '
+            +'suivis, les articulations, et ce qu’ils disent du mouvement.</p>'
+          +'<div id="ml-traj"></div><div id="ml-pts"></div><div id="ml-artic"></div><div id="ml-lecture"></div>'
+        +'</div>'
+        +'<div role="tabpanel" data-onglet="voix"'+(_ml.onglet==='voix'?'':' hidden')+'><div id="ml-corr"></div></div>'
+        +'<div role="tabpanel" data-onglet="reglages"'+(_ml.onglet==='reglages'?'':' hidden')+'>'
+          +'<p class="mlx-intro">Paramètres avancés. La prise de vue, l’aplomb et l’échelle ne servent qu’aux mesures '
+            +'automatiques : les tracés n’en ont pas besoin.</p>'
+          +'<div id="ml-prise"></div>'
+          +'<section class="mlx-carte"><div class="mlx-ct"><span>Sens des couleurs</span></div><div id="mlx-sens"></div></section>'
+        +'</div>'
+      +'</aside>'
     +'</div>'
-    +'<div class="ml-temps"><span id="ml-t" aria-live="off">0:00.00</span>'
-      +'<span id="ml-fps" class="ml-fps">Chargement…</span></div>'
-    +'<div class="ml-cmd">'
-      +b('◀ 1 img','mlImage(-1)','Image précédente (flèche gauche)')
-      +'<button type="button" id="ml-play" class="ml-b ml-b-plein" onclick="mlLecture()" disabled>▶ Lecture</button>'
-      +b('1 img ▶','mlImage(1)','Image suivante (flèche droite)')
-    +'</div>'
-    +'<div class="ml-vit">'+VID_RATES.map(r=>b(String(r).replace('.',',')+'×','mlVitesse('+r+')',
-        'Lire à '+String(r).replace('.',',')+' fois la vitesse normale','data-rate="'+r+'" aria-pressed="'+(r===1)+'"')).join('')
-    +'</div>'
-    // La transport reste SOUS la vidéo : lecture, image par image et vitesse
-    // commandent l'image, elles ne se règlent pas à côté d'elle.
-    +'</div><div class="ml-col-panneau">'
-    +'<div class="ml-frise-tete"><span class="ml-lab">Frise</span>'
-      +'<span class="ml-zoom">'+b('−','mlZoom(-1)','Dézoomer la frise','data-zoom="-1"')
-      +'<span id="ml-zoom-val">1×</span>'+b('+','mlZoom(1)','Zoomer la frise','data-zoom="1"')+'</span></div>'
-    +'<div class="ml-frise" id="ml-frise"><div class="ml-frise-in" id="ml-frise-in">'
-      +'<canvas id="ml-vign" class="ml-vign" aria-hidden="true"></canvas>'
-      +'<canvas id="ml-regle" class="ml-regle" aria-hidden="true"></canvas>'
-      +'<div id="ml-autres"></div>'
-      +'<div class="ml-sel" id="ml-sel" hidden></div>'
-      +'<div class="ml-poignee" id="ml-p-debut" data-borne="debut" role="slider" tabindex="0" '
-        +'aria-label="Début de la répétition" hidden><i></i></div>'
-      +'<div class="ml-poignee" id="ml-p-fin" data-borne="fin" role="slider" tabindex="0" '
-        +'aria-label="Fin de la répétition" hidden><i></i></div>'
-      +'<div class="ml-tete" id="ml-tete" aria-hidden="true"></div>'
-    +'</div></div>'
-    +'<div id="ml-bornes"></div>'
-    +'<div id="ml-prise"></div>'
-    +'<div id="ml-lecture"></div>'
-    +'<div id="ml-traj"></div>'
-    +'<div id="ml-pts"></div>'
-    +'<div id="ml-artic"></div>'
-    +'<div id="ml-corr"></div>'
-    +'<div class="ml-lab" style="margin-top:18px">Répétitions</div>'
-    +'<div id="ml-liste"></div>'
-    +'<button type="button" class="btn btn-outline btn-sm" id="ml-ajouter" style="width:100%;margin:10px 0 0" '
-      +'onclick="mlAjouter()" disabled>+ Ajouter une répétition ici</button>'
-    +'<p class="ml-aide">Place la tête de lecture au début du mouvement, ajoute une répétition, puis ajuste '
-      +'son début et sa fin à l’image près. Dix secondes au plus par répétition. La vidéo d’origine n’est '
-      +'jamais modifiée.</p>'
-    +'</div></div>';
+    // ── LA TIMELINE DES ANNOTATIONS ─────────────────────────────────────────
+    +'<section class="mlx-tl">'
+      +'<div class="mlx-tl-tete"><span class="mlx-lab">Timeline des annotations</span><span class="mlx-esp"></span>'
+        +'<span class="ml-zoom">'+b('−','mlZoom(-1)','Dézoomer la timeline','data-zoom="-1"')
+          +'<span id="ml-zoom-val">1×</span>'+b('+','mlZoom(1)','Zoomer la timeline','data-zoom="1"')+'</span>'
+        +b(S('ajuster',16)+'<span>Ajuster</span>','mlZoomAjuster()','Toute la vidéo dans la timeline','class="ml-b mlx-ajuster"')
+        +'<span id="mlx-tl-t" class="mlx-tl-t">0:00 / 0:00</span></div>'
+      +'<div class="mlx-tl-corps">'
+        +'<div class="mlx-tl-g"><button type="button" class="mlx-tl-lire" onclick="mlLecture()" aria-label="Lecture">'+S('lire',18)+'</button>'
+          +'<div id="mlx-tl-noms" class="mlx-tl-noms"></div></div>'
+        +'<div class="ml-frise" id="ml-frise"><div class="ml-frise-in" id="ml-frise-in">'
+          +'<canvas id="ml-regle" class="ml-regle" aria-hidden="true"></canvas>'
+          +'<canvas id="ml-vign" class="ml-vign" aria-hidden="true"></canvas>'
+          +'<div id="ml-autres"></div>'
+          +'<div class="ml-sel" id="ml-sel" hidden></div>'
+          +'<div class="ml-poignee" id="ml-p-debut" data-borne="debut" role="slider" tabindex="0" '
+            +'aria-label="Début de la séquence" hidden><i></i></div>'
+          +'<div class="ml-poignee" id="ml-p-fin" data-borne="fin" role="slider" tabindex="0" '
+            +'aria-label="Fin de la séquence" hidden><i></i></div>'
+          +'<div id="ml-pistes" class="mlx-pistes"></div>'
+          +'<div class="ml-tete" id="ml-tete" aria-hidden="true"></div>'
+        +'</div></div>'
+      +'</div>'
+    +'</section>'
+    // ── LE PIED ─────────────────────────────────────────────────────────────
+    +'<footer class="mlx-pied">'
+      +'<button type="button" id="mlx-orig" class="mlx-pied-b" aria-pressed="false" onclick="mlVersionOriginale()" '
+        +'title="Revoir la vidéo sans aucune annotation (O)">'+S('orig',18)+'<span>Version originale</span></button>'
+      +'<span class="mlx-esp"></span>'
+      +'<button type="button" class="mlx-pied-b" onclick="mlOnglet(\'reglages\')">'+S('reglages',18)+'<span>Paramètres avancés</span></button>'
+      +'<button type="button" id="ml-enreg" class="mlx-enreg" onclick="enregistrerMotionLab()" disabled>'
+        +'<span>Enregistrer la correction</span><i class="mlx-enreg-pt" aria-hidden="true"></i>'+S('fleched',20)+'</button>'
+    +'</footer>'
+  +'</div>';
+  const t=_mlEl('ml-titre'); if(t) t.textContent=_ml.nom;
+  const ss=document.querySelector('#ml-contenu .ml-sous'); if(ss) ss.textContent=_ml.sousTitre;
   _mlBrancher();
   _mlMajListe();
   _mlMajCorrection();
-  _mlMajEnregistrer();
+  _mlxMajTout();
+  return true;
+}
+function _mlxMajTout(){
+  _mlxMajOutils(); _mlxMajListe(); _mlxMajEditeur(); _mlxMajLegende(); _mlxMajModeles(); _mlxMajPistes();
+  _mlxMajSens(); _mlMajEnregistrer();
+}
+/** La position de la glissière, sur 1000. @param {string|number} val */
+function mlPosition(val){
+  const v=_mlVideo();
+  if(!_ml||!v||!_ml.dureeMs) return false;
+  _mlAller(Math.round(_ml.dureeMs*Math.max(0,Math.min(1000,Number(val)||0))/1000),true);
+  return true;
+}
+function mlZoomAjuster(){
+  if(!_ml||!_ml.dureeMs) return false;
+  const frise=_mlEl('ml-frise');
+  _ml.zoom=ML_ZOOMS[0];
+  _mlMajFrise();
+  if(frise) frise.scrollLeft=0;
+  _mlVignettes();
+  _mlxMajPistes();
+  return true;
+}
+async function mlRaccourcis(){
+  await rcConfirm('Raccourcis clavier',
+    'Espace : lecture / pause · ← → : image par image (Maj : dix images) · V sélection · L ligne · F flèche · '
+    +'T trajectoire · U courbe · C cercle · R rectangle · A angle · P point · X texte · Z zone · E gomme · '
+    +'Entrée : terminer une courbe ou des repères · Échap : annuler le tracé en cours · Suppr : effacer le tracé choisi · '
+    +'Ctrl+Z : annuler · Ctrl+Maj+Z : rétablir · O : version originale.','Compris','Fermer');
   return true;
 }
 
+// ── LES OUTILS ─────────────────────────────────────────────────────────────
+function _mlxMajOutils(){
+  const z=_mlEl('mlx-outils');
+  if(!z||!_ml) return;
+  const S=_mlxIco, o=_ml.outil, sens=_mlxSens();
+  const cours=_ml.trace&&(_ml.trace.t==='courbe'||_ml.trace.t==='point'||_ml.trace.t==='angle')?_ml.trace:null;
+  /** @type {Object<string,string>} */
+  const aides={selection:'Touche un tracé pour le choisir ; glisse-le, ou tire un de ses points.',
+    ligne:'Glisse sur la vidéo pour tirer une ligne.',fleche:'Glisse sur la vidéo : la pointe va là où tu lâches.',
+    libre:'Dessine la trajectoire au doigt ou à la souris, d’un seul geste.',
+    courbe:'Touche la vidéo point par point : la courbe passe par chacun. Entrée pour terminer.',
+    cercle:'Glisse du centre vers le bord.',rect:'Glisse d’un coin à l’autre.',
+    angle:'Touche trois points — par exemple épaule, coude, poignet : l’angle au deuxième s’affiche.',
+    point:'Touche les repères anatomiques un par un ; ils se relient. Entrée pour terminer.',
+    texte:'Touche la vidéo là où le texte doit apparaître.',zone:'Glisse pour surligner une zone.',
+    gomme:'Touche un tracé pour l’effacer.'};
+  let h='<div class="mlx-outils">'+ML_OUTILS.map(x=>'<button type="button" class="mlx-outil" data-outil="'+x.o+'" '
+    +'aria-pressed="'+(x.o===o)+'" onclick="mlOutil(\''+x.o+'\')" title="'+escapeHtml(x.lib+' ('+x.r.toUpperCase()+')')+'">'
+    +S(x.o,22)+'<span>'+x.lib+'</span></button>').join('')+'</div>';
+  h+='<div class="mlx-ligne"><span class="mlx-lab-s">Couleur</span><div class="mlx-couleurs">'
+    +ML_PALETTE.map(p=>'<button type="button" class="mlx-pastille" style="--c:'+p.c+'" aria-pressed="'+(p.c===_ml?.couleur)+'" '
+      +'title="'+escapeHtml(p.nom+(sens[p.c]?' — '+sens[p.c]:''))+'" aria-label="'+escapeHtml(p.nom)+'" onclick="mlCouleur(\''+p.c+'\')"></button>').join('')
+    +'<label class="mlx-perso" title="Couleur personnalisée"><input type="color" value="'+escapeHtml(_ml.couleur)+'" '
+      +'aria-label="Couleur personnalisée" onchange="mlCouleur(this.value)"></label></div></div>'
+    +'<div class="mlx-ligne"><span class="mlx-lab-s">Épaisseur</span><input type="range" min="1" max="12" step="1" value="'+_ml.epaisseur+'" '
+      +'aria-label="Épaisseur du trait" oninput="mlEpaisseur(this.value)"><span id="mlx-ep-val">'+_ml.epaisseur+' px</span></div>';
+  // LE MODÈLE EN COURS : l'étape, et de quoi la passer ou s'arrêter.
+  const G=_ml.guide;
+  if(G){
+    const e=G.m.etapes[G.i];
+    if(e) h+='<div class="mlx-guide"><i class="mlx-an-pt" style="--c:'+e.c+'"></i><span>Modèle <b>'+escapeHtml(G.m.nom)+'</b> · étape '
+      +(G.i+1)+'/'+G.m.etapes.length+' : <b>'+escapeHtml(e.n)+'</b> ('+escapeHtml((ML_OUTILS.find(x=>x.o===e.t)||{lib:''}).lib.toLowerCase())+')</span>'
+      +'<span class="mlx-esp"></span><button type="button" class="mlx-b" onclick="mlGuidePasser()">Passer</button>'
+      +'<button type="button" class="mlx-b" onclick="mlGuideArreter()">Arrêter</button></div>';
+  }
+  if(o==='point') h+='<div class="mlx-chips" role="group" aria-label="Repère anatomique posé au prochain toucher">'
+    +ML_REPERES_ANAT.map((r,i)=>'<button type="button" class="mlx-chip" aria-pressed="'+(i===_ml?.repereAnat)+'" onclick="mlRepereAnat('+i+')">'+r+'</button>').join('')
+    +'<button type="button" class="mlx-chip" aria-pressed="'+(_ml.repereAnat<0)+'" onclick="mlRepereAnat(-1)">Sans nom</button></div>'
+    +'<label class="mlx-coche"><input type="checkbox"'+(_ml.relier?' checked':'')+' onchange="mlRelier(this.checked)"> Relier les points</label>';
+  if(o==='texte') h+='<div class="mlx-chips" role="group" aria-label="Phrase proposée">'
+    +ML_PHRASES.map((p,i)=>'<button type="button" class="mlx-chip" aria-pressed="'+(p===_ml?.phrase)+'" onclick="mlPhrase('+i+')">'+escapeHtml(p)+'</button>').join('')
+    +'</div><div class="mlx-ligne"><span class="mlx-lab-s">Taille</span><div class="mlx-chips mlx-chips-l">'
+    +[['s','Petite'],['m','Moyenne'],['l','Grande']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+(k===_ml?.tailleTexte)+'" onclick="mlTailleTexte(\''+k+'\')">'+l+'</button>').join('')
+    +'</div></div>';
+  if(cours) h+='<div class="mlx-cours"><span>'+(cours.t==='angle'?'Angle : point '+(cours.pts.length+1)+' sur 3'
+      :cours.pts.length+' point'+(cours.pts.length>1?'s':'')+' posé'+(cours.pts.length>1?'s':''))+'</span><span class="mlx-esp"></span>'
+    +(cours.t!=='angle'?'<button type="button" class="mlx-b mlx-b-r" onclick="mlTerminerTrace()">Terminer ↵</button>':'')
+    +'<button type="button" class="mlx-b" onclick="mlAnnulerTrace()">Annuler</button></div>';
+  h+='<p class="mlx-aide-o">'+escapeHtml(aides[o]||'')+'</p>';
+  z.innerHTML=h;
+  const hi=_mlEl('mlx-histo');
+  if(hi) hi.innerHTML='<button type="button" class="mlx-ico-b mlx-ico-p" onclick="mlAnnuler()" title="Annuler (Ctrl+Z)" aria-label="Annuler"'
+    +(_ml.annule.length?'':' disabled')+'>'+S('annuler',16)+'</button>'
+    +'<button type="button" class="mlx-ico-b mlx-ico-p" onclick="mlRetablir()" title="Rétablir (Ctrl+Maj+Z)" aria-label="Rétablir"'
+    +(_ml.refait.length?'':' disabled')+'>'+S('retablir',16)+'</button>';
+  const c=_mlEl('ml-calque');
+  if(c) c.dataset.outil=o;
+}
+/** @param {boolean} oui */
+function mlRelier(oui){ if(!_ml) return false; _ml.relier=!!oui; _mlDessinerCalque(); return true; }
+/** @param {string} t */
+function mlTailleTexte(t){ if(!_ml||!['s','m','l'].includes(t)) return false; _ml.tailleTexte=t; _mlxMajOutils(); return true; }
+function mlAnnulerTrace(){ return _mlxAnnulerTrace(); }
+
+// ── LA LISTE DES ANNOTATIONS ───────────────────────────────────────────────
+function _mlxMajListe(){
+  const z=_mlEl('mlx-liste');
+  if(!z||!_ml) return;
+  const S=_mlxIco, l=_ml.annot.a, sMs=_mlxTempsMs();
+  const v=_mlVideo(), vw=(v&&v.videoWidth)||1000, vh=(v&&v.videoHeight)||1000;
+  const n=_mlEl('mlx-n-annot'); if(n) n.textContent='Annotations ('+l.length+')';
+  z.innerHTML=l.length?l.map(a=>'<div class="mlx-an'+(a.id===_ml?.sel?' on':'')+(a.h?' masque':'')+'" draggable="true" data-id="'+escapeHtml(a.id)+'">'
+      +'<span class="mlx-an-poignee" title="Glisse pour changer l’ordre : le dernier se dessine au-dessus">'+S('poignee',16)+'</span>'
+      +'<button type="button" class="mlx-an-oeil" aria-pressed="'+(!a.h)+'" onclick="mlAnnotVisibilite(\''+escapeHtml(a.id)+'\')" '
+        +'aria-label="'+(a.h?'Afficher ':'Masquer ')+escapeHtml(a.n)+'">'+S(a.h?'oeilnon':'oeil',17)+'</button>'
+      +'<i class="mlx-an-pt" style="--c:'+a.c+'"></i>'
+      +'<button type="button" class="mlx-an-nom" onclick="mlAnnotChoisir(\''+escapeHtml(a.id)+'\')" title="'+escapeHtml(ML_TYPE_LIB[a.t]||'')+'">'
+        +escapeHtml(mlAnnotLibelle(a,Math.max(a.d,Math.min(a.f-1,sMs)),vw,vh))
+        +(Array.isArray(a.k)&&a.k.length?' <span class="mlx-an-suivi" title="Suit le mouvement">'+S('cle',11)+a.k.length+'</span>':'')+'</button>'
+      +'<span class="mlx-an-t">'+_mlxT(a.d).slice(0,-3)+' – '+_mlxT(a.f).slice(0,-3)+'</span>'
+      +'<button type="button" class="mlx-an-act" onclick="mlAnnotChoisir(\''+escapeHtml(a.id)+'\',true)" aria-label="Modifier '+escapeHtml(a.n)+'">'+S('crayon',16)+'</button>'
+      +'<button type="button" class="mlx-an-act" onclick="mlAnnotSupprimer(\''+escapeHtml(a.id)+'\')" aria-label="Supprimer '+escapeHtml(a.n)+'">'+S('corbeille',16)+'</button>'
+    +'</div>').join('')
+    :'<p class="mlx-vide">Aucun tracé. Choisis un outil et dessine sur la vidéo — ou arme un modèle à gauche.</p>';
+  // L'ORDRE AU GLISSER : le tracé lâché prend la place de celui qu'il survole.
+  z.querySelectorAll('.mlx-an').forEach(x=>{
+    const el=/** @type {HTMLElement} */(x);
+    el.addEventListener('dragstart',e=>{ if(e.dataTransfer){ e.dataTransfer.setData('text/plain',el.dataset.id||''); e.dataTransfer.effectAllowed='move'; } el.classList.add('mlx-an-glisse'); });
+    el.addEventListener('dragend',()=>el.classList.remove('mlx-an-glisse'));
+    el.addEventListener('dragover',e=>{ e.preventDefault(); if(e.dataTransfer) e.dataTransfer.dropEffect='move'; });
+    el.addEventListener('drop',e=>{
+      e.preventDefault();
+      const id=e.dataTransfer?e.dataTransfer.getData('text/plain'):'';
+      if(!_ml||!id||id===el.dataset.id) return;
+      mlAnnotDeplacer(id,_ml.annot.a.findIndex(a=>a.id===el.dataset.id));
+    });
+  });
+}
+// ── LE TRACÉ CHOISI ────────────────────────────────────────────────────────
+let _mlxEdVu='';
+function _mlxMajEditeur(){
+  const z=_mlEl('mlx-editeur');
+  if(!z||!_ml) return;
+  const a=_mlxAnnot(_ml.sel);
+  if(!a){ z.innerHTML=''; _mlxEdVu=''; return; }
+  const S=_mlxIco, id=escapeHtml(a.id), sMs=_mlxTempsMs();
+  const v=_mlVideo(), vw=(v&&v.videoWidth)||1000, vh=(v&&v.videoHeight)||1000;
+  const suit=Array.isArray(a.k)&&a.k.length>0, cle=suit?mlCleA(a,sMs):-1;
+  const an=mlAngleAnnot(a,Math.max(a.d,Math.min(a.f-1,sMs)),vw,vh);
+  let h='<div class="mlx-ed" role="group" aria-label="Annotation choisie">'
+    +'<div class="mlx-ed-tete"><i class="mlx-an-pt" style="--c:'+a.c+'"></i><b>'+escapeHtml(ML_TYPE_LIB[a.t]||'Annotation')+'</b>'
+      +'<span class="mlx-esp"></span><button type="button" class="mlx-b mlx-b-r" onclick="mlAnnotChoisir(\''+id+'\')">Valider</button></div>'
+    +'<label class="mlx-champ"><span>Nom de l’annotation</span><input id="mlx-nom" class="mlx-in" type="text" maxlength="'+ANNOT_NOM_MAX+'" '
+      +'value="'+escapeHtml(a.n)+'" onfocus="mlAnnotFocus()" oninput="mlAnnotNom(this.value)" '
+      +'onkeydown="if(event.key===\'Enter\'||event.key===\'Escape\'){event.preventDefault();this.blur()}"></label>';
+  if(a.t==='texte') h+='<label class="mlx-champ"><span>Texte sur la vidéo</span><input class="mlx-in" type="text" maxlength="'+ANNOT_TEXTE_MAX+'" '
+      +'value="'+escapeHtml(a.x||a.n)+'" onfocus="mlAnnotFocus()" oninput="mlAnnotTexte(this.value)" '
+      +'onkeydown="if(event.key===\'Enter\'||event.key===\'Escape\'){event.preventDefault();this.blur()}"></label>'
+    +'<div class="mlx-champ"><span>Taille · fond</span><div class="mlx-chips mlx-chips-l">'
+      +[['s','Petite'],['m','Moyenne'],['l','Grande']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+((a.ts||'m')===k)+'" onclick="mlAnnotOption(\'ts\',\''+k+'\')">'+l+'</button>').join('')
+      +[[0,'Sans fond'],[1,'Fond sombre'],[2,'Fond couleur']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+((typeof a.tf==='number'?a.tf:1)===k)+'" onclick="mlAnnotOption(\'tf\','+k+')">'+l+'</button>').join('')
+    +'</div></div>'
+    +'<label class="mlx-coche"><input type="checkbox"'+(a.tc?' checked':'')+' onchange="mlAnnotOption(\'tc\',this.checked)"> Contour</label>';
+  h+='<div class="mlx-champ"><span>Couleur</span><div class="mlx-couleurs">'
+      +ML_PALETTE.map(p=>'<button type="button" class="mlx-pastille" style="--c:'+p.c+'" aria-pressed="'+(p.c===a.c)+'" aria-label="'+escapeHtml(p.nom)+'" onclick="mlAnnotCouleur(\''+p.c+'\')"></button>').join('')
+      +'<label class="mlx-perso" title="Couleur personnalisée"><input type="color" value="'+escapeHtml(a.c)+'" aria-label="Couleur personnalisée" onchange="mlAnnotCouleur(this.value)"></label></div></div>'
+    +(a.t==='texte'?'':'<div class="mlx-champ"><span>Épaisseur</span><div class="mlx-ligne mlx-ligne-0"><input type="range" min="1" max="12" step="1" value="'+a.e+'" '
+      +'aria-label="Épaisseur" onfocus="mlAnnotFocus()" oninput="mlAnnotEpaisseur(this.value)"><span id="mlx-aep-val">'+a.e+' px</span></div></div>')
+    +'<div class="mlx-champ"><span>Durée d’apparition</span><div class="mlx-duree">'
+      +'<input class="mlx-in mlx-tps" type="text" inputmode="decimal" value="'+_mlxT(a.d)+'" aria-label="Début" onchange="mlAnnotBorne(\'d\',this.value)">'
+      +'<button type="button" class="mlx-b" onclick="mlAnnotBorne(\'d\')" title="Début à la tête de lecture">Ici</button>'
+      +'<span class="mlx-fl">→</span>'
+      +'<input class="mlx-in mlx-tps" type="text" inputmode="decimal" value="'+_mlxT(a.f)+'" aria-label="Fin" onchange="mlAnnotBorne(\'f\',this.value)">'
+      +'<button type="button" class="mlx-b" onclick="mlAnnotBorne(\'f\')" title="Fin à la tête de lecture">Ici</button></div>'
+      +'<div class="mlx-chips"><button type="button" class="mlx-chip" onclick="mlAnnotDuree(\'video\')">Toute la vidéo</button>'
+      +'<button type="button" class="mlx-chip" onclick="mlAnnotDuree(\'sequence\')"'+(_mlActif()?'':' disabled')+'>Séquence choisie</button></div></div>';
+  if(a.t==='angle') h+='<div class="mlx-champ"><span>Angle cible</span><div class="mlx-ligne mlx-ligne-0">'
+      +'<input class="mlx-in mlx-tps" type="number" min="0" max="180" step="1" value="'+(typeof a.cb==='number'?a.cb:'')+'" placeholder="—" '
+      +'aria-label="Angle cible en degrés" onchange="mlAnnotOption(\'cb\',this.value)"><span class="mlx-deg">°</span>'
+      +'<span class="mlx-angle-l">'+(an?'Actuel <b>'+an.val+'°</b>'+(an.ecart!==null?' · écart <b>'+(an.ecart>0?'+':'')+an.ecart+'°</b>':''):'')+'</span></div>'
+      +'<span class="mlx-note">En comparaison, la branche cible se dessine en tirets verts.</span></div>';
+  if(a.t==='point'&&mlDecoderTrait(a.p).length>1) h+='<label class="mlx-coche"><input type="checkbox"'+(a.rel?' checked':'')+' onchange="mlAnnotOption(\'rel\',this.checked)"> Relier les points</label>';
+  if(a.t!=='texte') h+='<label class="mlx-coche"><input type="checkbox"'+(a.et!==0?' checked':'')+' onchange="mlAnnotOption(\'et\',this.checked)"> Afficher le nom sur la vidéo</label>'
+    +'<label class="mlx-coche"><input type="checkbox"'+(a.lg!==0?' checked':'')+' onchange="mlAnnotOption(\'lg\',this.checked)"> Dans la légende</label>';
+  // LE SUIVI DU MOUVEMENT : images clés, et l'interpolation entre elles.
+  h+='<div class="mlx-suivi"><label class="mlx-coche"><input type="checkbox"'+(suit?' checked':'')+' onchange="mlAnnotSuivre()"> Suivre le mouvement</label>'
+    +(suit?'<div class="mlx-cles"><span>'+S('cle',12)+' '+(a.k||[]).length+' image'+((a.k||[]).length>1?'s':'')+' clé'+((a.k||[]).length>1?'s':'')
+        +'<b id="mlx-cle-etat">'+(cle>=0?' · clé à cet instant':'')+'</b></span><span class="mlx-esp"></span>'
+      +'<button type="button" class="mlx-b" onclick="mlCleAller(-1)" aria-label="Image clé précédente">◀</button>'
+      +'<button type="button" class="mlx-b" onclick="mlCleAller(1)" aria-label="Image clé suivante">▶</button>'
+      +'<button type="button" id="mlx-cle-suppr" class="mlx-b" onclick="mlCleSupprimer()"'+(cle>=0?'':' disabled')+'>Retirer la clé</button></div>'
+      +'<p class="mlx-note">Avance image par image (→) et replace les points : chaque déplacement pose une image clé, et le mouvement '
+        +'se remplit entre elles.</p>'
+      :'<p class="mlx-note">Allume-le pour que le tracé suive un repère — genou, barre, coude — image par image.</p>')+'</div>'
+    +'<div class="mlx-ed-pied"><button type="button" class="mlx-b mlx-suppr" onclick="mlAnnotSupprimer(\''+id+'\')">'+S('corbeille',14)+' Supprimer</button></div>'
+  +'</div>';
+  z.innerHTML=h;
+  // L'ÉDITEUR VIENT EN VUE quand on choisit un autre tracé — et seulement
+  // alors : à chaque retouche, la colonne sauterait sous la souris.
+  if(_mlxEdVu!==a.id){ _mlxEdVu=a.id; try{ z.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }
+}
+// ── LA LÉGENDE ─────────────────────────────────────────────────────────────
+function _mlxMajLegende(){
+  const z=_mlEl('mlx-legende'), on=_mlEl('mlx-leg-on');
+  if(!z||!_ml) return;
+  const L=_ml.annot.leg;
+  if(on instanceof HTMLInputElement) on.checked=!!L.on;
+  /** @param {string} cle @param {[string,string][]} opts @param {string} val */
+  const sel=(cle,opts,val)=>'<select class="mlx-in" onchange="mlLegende(\''+cle+'\',this.value)">'
+    +opts.map(([k,l])=>'<option value="'+k+'"'+(k===val?' selected':'')+'>'+l+'</option>').join('')+'</select>';
+  z.innerHTML='<div class="mlx-leg'+(L.on?'':' mlx-leg-off')+'">'
+    +'<label class="mlx-champ"><span>Titre</span><input class="mlx-in" type="text" maxlength="40" value="'+escapeHtml(L.titre)+'" '
+      +'onfocus="mlAnnotFocus()" oninput="mlLegende(\'titre\',this.value)"></label>'
+    +'<div class="mlx-champs2"><label class="mlx-champ"><span>Position</span>'+sel('pos',[['hg','Haut gauche'],['hd','Haut droite'],['bg','Bas gauche'],['bd','Bas droite']],L.pos)+'</label>'
+    +'<label class="mlx-champ"><span>Style</span>'+sel('fond',[['sombre','Fond sombre'],['clair','Fond clair'],['aucun','Sans fond']],L.fond)+'</label></div>'
+    +'<div class="mlx-champs2"><label class="mlx-champ"><span>Taille</span>'+sel('taille',[['s','Petite'],['m','Moyenne'],['l','Grande']],L.taille)+'</label>'
+    +'<label class="mlx-champ"><span>Opacité du fond</span><input type="range" min="30" max="100" step="5" value="'+Math.round(L.op*100)+'" '
+      +'aria-label="Opacité du fond de la légende" onfocus="mlAnnotFocus()" oninput="mlLegende(\'op\',Number(this.value)/100)"></label></div>'
+    +'<p class="mlx-note">Elle liste les tracés gardés « dans la légende », avec la valeur de leurs angles, et part avec la correction.</p>'
+  +'</div>';
+}
+// ── LES MODÈLES ────────────────────────────────────────────────────────────
+function _mlxMajModeles(){
+  const z=_mlEl('mlx-modeles');
+  if(!z||!_ml) return;
+  const S=_mlxIco, l=_mlxModeles(), G=_ml.guide;
+  z.innerHTML=l.map((m,i)=>'<div class="mlx-mod-l"><button type="button" class="mlx-mod'+(G&&G.m.nom===m.nom?' on':'')+'" onclick="mlModeleAnnot('+i+')" '
+      +'title="'+escapeHtml(m.etapes.map(e=>e.n).join(' · '))+'">'+S(m.ico,18)+'<span>'+escapeHtml(m.nom)+'</span>'
+      +(G&&G.m.nom===m.nom?'<small>'+(G.i+1)+'/'+m.etapes.length+'</small>':'')+'</button>'
+      +(i>=ML_MODELES_ANNOT.length?'<button type="button" class="mlx-an-act" onclick="mlModeleAnnotRetirer('+i+')" aria-label="Retirer le modèle '+escapeHtml(m.nom)+'">×</button>':'')
+    +'</div>').join('')
+    +'<button type="button" class="mlx-mod mlx-mod-creer" onclick="mlModeleCreer()">'+S('plus',16)+'<span>Créer un modèle</span></button>';
+}
+// ── LE SENS DES COULEURS (Réglages) ────────────────────────────────────────
+function _mlxMajSens(){
+  const z=_mlEl('mlx-sens');
+  if(!z||!_ml) return;
+  const sens=_mlxSens();
+  z.innerHTML='<p class="mlx-note">Le sens d’une couleur devient le nom des tracés que tu poses avec elle. Une trajectoire '
+      +'rouge s’appelle « Trajectoire actuelle », une verte « Trajectoire idéale » — sauf si tu réécris leur sens. Ce réglage suit ton compte.</p>'
+    +ML_PALETTE.map(p=>'<label class="mlx-sens-l"><i class="mlx-an-pt" style="--c:'+p.c+'"></i><span>'+p.nom+'</span>'
+      +'<input class="mlx-in" type="text" maxlength="'+ANNOT_NOM_MAX+'" value="'+escapeHtml(sens[p.c]||'')+'" placeholder="Sans nom par défaut" '
+      +'onchange="mlCouleurSens(\''+p.c+'\',this.value)"></label>').join('');
+}
+
+// ── LA TIMELINE : LES PISTES ───────────────────────────────────────────────
+// Une piste par tracé, sous la piste des séquences. Chaque barre se déplace
+// au doigt, et ses deux bords règlent le début et la fin.
+const MLX_TL_REGLE=24, MLX_TL_SEQ=48, MLX_TL_PISTE=26;
+function _mlxMajPistes(){
+  const zp=_mlEl('ml-pistes'), zn=_mlEl('mlx-tl-noms'), inner=_mlEl('ml-frise-in');
+  if(!_ml||!zp||!zn||!inner) return;
+  const l=_ml.annot.a, D=_ml.dureeMs, w=inner.clientWidth;
+  const haut=MLX_TL_REGLE+MLX_TL_SEQ+Math.max(1,l.length)*MLX_TL_PISTE+6;
+  inner.style.height=haut+'px';
+  zn.style.height=haut+'px';
+  zn.innerHTML='<div class="mlx-tl-nom mlx-tl-nom-seq" style="top:'+MLX_TL_REGLE+'px;height:'+MLX_TL_SEQ+'px">Séquences</div>'
+    +l.map((a,i)=>'<button type="button" class="mlx-tl-nom'+(a.id===_ml?.sel?' on':'')+(a.h?' masque':'')+'" style="top:'+(MLX_TL_REGLE+MLX_TL_SEQ+i*MLX_TL_PISTE)+'px" '
+      +'onclick="mlAnnotChoisir(\''+escapeHtml(a.id)+'\',true)"><i class="mlx-an-pt" style="--c:'+a.c+'"></i><span>'+escapeHtml(a.n)+'</span></button>').join('')
+    +(l.length?'':'<div class="mlx-tl-nom mlx-tl-vide" style="top:'+(MLX_TL_REGLE+MLX_TL_SEQ)+'px">Aucun tracé</div>');
+  zp.style.top=(MLX_TL_REGLE+MLX_TL_SEQ)+'px';
+  zp.innerHTML=D?l.map((a,i)=>{
+    const x=mlTempsVersX(a.d,w,D), x2=mlTempsVersX(Math.min(a.f,D),w,D);
+    return '<div class="mlx-barre'+(a.id===_ml?.sel?' on':'')+(a.h?' masque':'')+'" data-id="'+escapeHtml(a.id)+'" '
+      +'style="left:'+x.toFixed(1)+'px;width:'+Math.max(6,x2-x).toFixed(1)+'px;top:'+(i*MLX_TL_PISTE+3)+'px;--c:'+a.c+';color:'+(_mlxClair(a.c)?'#0b0b0b':'#ffffff')+'" '
+      +'title="'+escapeHtml(a.n+' · '+_mlxT(a.d)+' → '+_mlxT(a.f))+'">'
+      +'<i class="mlx-bg" data-bord="d"></i><span>'+escapeHtml(a.n)+'</span><i class="mlx-bd" data-bord="f"></i></div>';
+  }).join(''):'';
+}
+/**
+ * Le glisser d'une barre : tout entière, ou un de ses bords. Branché une fois
+ * sur la piste — les barres, elles, sont redessinées à chaque changement.
+ * @param {HTMLElement} zp
+ */
+function _mlxBrancherPistes(zp){
+  zp.addEventListener('pointerdown',e=>{
+    const cible=e.target instanceof Element?e.target:null;
+    const barre=/** @type {HTMLElement|null} */(cible?cible.closest('.mlx-barre'):null);
+    const inner=_mlEl('ml-frise-in');
+    if(!_ml||!barre||!inner||!_ml.dureeMs) return;
+    const id=barre.dataset.id||'', a0=_mlxAnnot(id);
+    if(!a0) return;
+    e.preventDefault(); e.stopPropagation();
+    const bord=cible instanceof HTMLElement&&cible.dataset.bord?cible.dataset.bord:'';
+    const r=inner.getBoundingClientRect(), D=_ml.dureeMs, x0=e.clientX, avant=JSON.stringify(_ml.annot);
+    let bouge=false;
+    try{ barre.setPointerCapture(e.pointerId); }catch(x){}
+    /** @param {PointerEvent} ev */
+    const bouger=ev=>{
+      if(!_ml) return;
+      const dms=(ev.clientX-x0)/Math.max(1,r.width)*D;
+      if(!bouge&&Math.abs(ev.clientX-x0)<3) return;
+      bouge=true;
+      let d=a0.d, f=a0.f;
+      if(bord==='d') d=Math.max(0,Math.min(a0.f-SEG_MIN_MS,a0.d+dms));
+      else if(bord==='f') f=Math.min(D,Math.max(a0.d+SEG_MIN_MS,a0.f+dms));
+      else { const L=a0.f-a0.d; d=Math.max(0,Math.min(D-L,a0.d+dms)); f=d+L; }
+      _mlxChanger(id,x=>{ const o={...x,d:Math.round(d),f:Math.round(f)}; delete o.seg; return o; });
+      const w=inner.clientWidth, xa=mlTempsVersX(d,w,D), xb=mlTempsVersX(f,w,D);
+      barre.style.left=xa.toFixed(1)+'px'; barre.style.width=Math.max(6,xb-xa).toFixed(1)+'px';
+      _mlAller(bord==='f'?f:d,true);
+    };
+    const fin=()=>{
+      barre.removeEventListener('pointermove',bouger);
+      barre.removeEventListener('pointerup',fin);
+      barre.removeEventListener('pointercancel',fin);
+      if(!_ml) return;
+      if(bouge){ _ml.annule.push(avant); if(_ml.annule.length>60) _ml.annule.shift(); _ml.refait=[];
+        _ml.sel=id; _mlxApresChangement(); }
+      else if(_ml.sel!==id) mlAnnotChoisir(id,true);
+      else _mlAller(a0.d);
+    };
+    barre.addEventListener('pointermove',bouger);
+    barre.addEventListener('pointerup',fin);
+    barre.addEventListener('pointercancel',fin);
+  });
+}
+
+// ── LES SÉQUENCES : LA LISTE ───────────────────────────────────────────────
+// Chaque séquence avec son numéro, la vignette de sa première image, son nom
+// et ses bornes ; celle qu'on a choisie se règle à l'image près en dessous.
+function _mlMajListe(){
+  const z=_mlEl('ml-liste'), zb=_mlEl('ml-bornes');
+  if(!_ml||!z||!zb) return;
+  const a=_mlActif(), S=_mlxIco;
+  z.innerHTML=_ml.segments.length
+    ?_ml.segments.map((s,i)=>'<div class="ml-rep mlx-seq'+(a&&s.id===a.id?' ml-rep-on':'')+'" role="button" tabindex="0" '
+        +'aria-pressed="'+(!!a&&s.id===a.id)+'" onclick="mlChoisir(\''+escapeHtml(s.id)+'\')" '
+        +'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}">'
+        +'<span class="mlx-seq-n">'+(i+1)+'</span>'
+        +'<canvas class="mlx-sv" data-seg="'+escapeHtml(s.id)+'" width="112" height="72" aria-hidden="true"></canvas>'
+        +'<span class="mlx-seq-t"><b class="ml-rep-n">'+escapeHtml(s.label)+'</b>'
+          +'<span class="ml-rep-t">'+_mlxT(s.debutMs).slice(0,-3)+' – '+_mlxT(s.finMs).slice(0,-3)
+          +(s.barre?' · <b class="ml-rep-traj">trajectoire</b>':'')+'</span></span>'
+        +'<button type="button" class="ml-mini" onclick="event.stopPropagation();mlRenommer('+i+')" '
+          +'aria-label="Renommer '+escapeHtml(s.label)+'">'+S('crayon',15)+'</button>'
+        +'<button type="button" class="ml-mini" onclick="event.stopPropagation();mlSupprimer('+i+')" '
+          +'aria-label="Supprimer '+escapeHtml(s.label)+'">×</button></div>').join('')
+    :'<div class="ml-vide">Aucune séquence pour l’instant.</div>';
+  zb.innerHTML=a?'<div class="ml-bornes">'
+      +['debut','fin'].map(q=>'<div class="ml-borne"><span class="ml-lab">'+(q==='debut'?'Début':'Fin')+'</span>'
+        +'<span class="ml-val" id="ml-v-'+q+'">'+mlTempsTexte(q==='debut'?a.debutMs:a.finMs)+'</span>'
+        +'<button type="button" class="ml-b" onclick="mlPas(\''+q+'\',-1)" aria-label="'+(q==='debut'?'Début':'Fin')+' : une image plus tôt">◀ 1</button>'
+        +'<button type="button" class="ml-b" onclick="mlIci(\''+q+'\')" aria-label="'+(q==='debut'?'Début':'Fin')+' à la tête de lecture">Ici</button>'
+        +'<button type="button" class="ml-b" onclick="mlPas(\''+q+'\',1)" aria-label="'+(q==='debut'?'Début':'Fin')+' : une image plus tard">1 ▶</button>'
+        +'</div>').join('')
+      +'<div class="ml-borne-pied">'
+        +'<button type="button" class="ml-b" id="ml-boucle" aria-pressed="'+_ml.boucle+'" onclick="mlBoucle()">⟲ Lire en boucle</button>'
+        +'<span id="ml-duree">'+escapeHtml(a.label)+' · '+mlDureeTexte(a.finMs-a.debutMs)+'</span>'
+      +'</div></div>':'';
+  if(!_ml.dureeMs) zb.querySelectorAll('button').forEach(x=>{ x.setAttribute('disabled',''); });
+  _mlMajSegmentsFrise();
+  _mlMajTrajectoire();
+  _mlxVignettesSeq();
+}
+// LES VIGNETTES DES SÉQUENCES. Une vidéo cachée va chercher la première image
+// de chacune ; le dessin est gardé dans un canevas hors écran, et recopié à
+// chaque rendu de la liste. On y DESSINE sans jamais y LIRE un pixel : une
+// vidéo d'une autre origine « contamine » le canevas, et le dessin reste permis.
+/** @type {Map<string,HTMLCanvasElement>} */
+const _mlxVignCache=new Map();
+function _mlxVignettesSeq(){
+  if(!_ml||!_ml.dureeMs) return;
+  const url=_ml.url;
+  /** @param {HTMLCanvasElement} c @param {HTMLCanvasElement} src */
+  const peindre=(c,src)=>{ const g=c.getContext('2d'); if(!g) return; g.clearRect(0,0,c.width,c.height); try{ g.drawImage(src,0,0,c.width,c.height); }catch(e){} };
+  /** @type {{cle:string, id:string, t:number}[]} */
+  const aFaire=[];
+  document.querySelectorAll('#ml-liste canvas.mlx-sv').forEach(x=>{
+    const c=/** @type {HTMLCanvasElement} */(x), s=_ml?_ml.segments.find(q=>q.id===c.dataset.seg):null;
+    if(!s) return;
+    const cle=url+'|'+s.debutMs, en=_mlxVignCache.get(cle);
+    if(en) peindre(c,en); else if(!aFaire.some(q=>q.cle===cle)) aFaire.push({cle,id:s.id,t:s.debutMs});
+  });
+  if(!aFaire.length) return;
+  const jeton=++_ml.jetonVseq;
+  const adresse=safeUrlRaw(url);
+  if(adresse==='#') return;
+  const ancien=_mlEl('ml-vseq-src'); if(ancien) ancien.remove();
+  const scene=_mlEl('ml-contenu'); if(!scene) return;
+  const src=document.createElement('video');
+  src.id='ml-vseq-src'; src.muted=true; src.playsInline=true; src.preload='auto';
+  src.setAttribute('playsinline',''); src.setAttribute('aria-hidden','true');
+  src.style.cssText='position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px';
+  src.src=adresse;
+  scene.appendChild(src);
+  const encore=()=>!!_ml&&_ml.jetonVseq===jeton;
+  /** @param {number} t @returns {Promise<boolean>} */
+  const chercher=t=>new Promise(res=>{
+    const fini=(/** @type {boolean} */ ok)=>{ clearTimeout(m); src.removeEventListener('seeked',ok1); res(ok); };
+    const ok1=()=>fini(true);
+    const m=setTimeout(()=>fini(false),4000);
+    src.addEventListener('seeked',ok1);
+    try{ src.currentTime=Math.max(0.001,t/1000); }catch(e){ fini(false); }
+  });
+  const lancer=async()=>{
+    for(const q of aFaire){
+      if(!encore()||!await chercher(q.t)||!encore()) break;
+      const off=document.createElement('canvas'); off.width=112; off.height=72;
+      const g=off.getContext('2d'); if(!g) break;
+      const vw=src.videoWidth||16, vh=src.videoHeight||9, rC=off.width/off.height, rS=vw/vh;
+      let sx=0, sy=0, sw=vw, sh=vh;
+      if(rS>rC){ sw=vh*rC; sx=(vw-sw)/2; } else { sh=vw/rC; sy=(vh-sh)/2; }
+      try{ g.drawImage(src,sx,sy,sw,sh,0,0,off.width,off.height); }catch(e){ break; }
+      _mlxVignCache.set(q.cle,off);
+      document.querySelectorAll('#ml-liste canvas.mlx-sv[data-seg="'+q.id+'"]').forEach(x=>peindre(/** @type {HTMLCanvasElement} */(x),off));
+    }
+    if(encore()) src.remove();
+  };
+  if(src.readyState>=1) lancer();
+  else { src.addEventListener('loadedmetadata',()=>{ lancer(); },{once:true}); src.addEventListener('error',()=>{ src.remove(); },{once:true}); }
+}
+
 // Les écoutes : la vidéo, la frise, les poignées, le clavier.
+let _mlxEcoutesGlobales=false, _mlxClavierBranche=false;
 function _mlBrancher(){
   const v=_mlVideo(), frise=_mlEl('ml-frise-in');
   if(!v||!frise||!_ml) return;
@@ -2581,15 +4612,20 @@ function _mlBrancher(){
     _ml.dureeMs=Math.round(d*1000);
     document.querySelectorAll('#ml-contenu button[disabled]').forEach(x=>{ x.removeAttribute('disabled'); });
     _mlFps('i/s non mesuré : lance la lecture pour le mesurer');
+    const pos=_mlEl('mlx-pos'); if(pos instanceof HTMLInputElement) pos.disabled=false;
     const a=_mlActif();
     if(a) _mlAller(a.debutMs);
     _mlMajFrise();
     _mlVignettes();
+    // LES PANNEAUX NEUFS SE REDESSINENT avec la durée : leurs boutons en
+    // dépendent, et la boucle ci-dessus vient de tous les réactiver.
+    _mlMajListe();
+    _mlxMajTout();
   };
   if(v.readyState>=1) pret(); else v.addEventListener('loadedmetadata',pret,{once:true});
   let fpsDemande=false;
   v.addEventListener('play',()=>{
-    const p=_mlEl('ml-play'); if(p) p.textContent='❚❚ Pause';
+    const p=_mlEl('ml-play'); if(p){ p.innerHTML=_mlxIco('pause',20); p.setAttribute('aria-label','Pause (espace)'); }
     // iOS remet playbackRate à 1 après un play() : on le repose, comme le
     // lecteur de correction.
     const r=Number(v.dataset.rate||1); if(r!==1) videoSetRate(v,r);
@@ -2607,7 +4643,7 @@ function _mlBrancher(){
     _mlJournal([_mlRecT(),'lecture']);
   });
   v.addEventListener('pause',()=>{
-    const p=_mlEl('ml-play'); if(p) p.textContent='▶ Lecture';
+    const p=_mlEl('ml-play'); if(p){ p.innerHTML=_mlxIco('lire',20); p.setAttribute('aria-label','Lecture (espace)'); }
     _mlMajTete();
     _mlJournal([_mlRecT(),'pause']);
   });
@@ -2629,7 +4665,7 @@ function _mlBrancher(){
     if(!_ml||!_ml.dureeMs) return;
     const cible=/** @type {HTMLElement|null} */(e.target instanceof Element?e.target.closest('[data-seg]'):null);
     if(cible&&cible.dataset.seg){ mlChoisir(cible.dataset.seg); return; }
-    if(e.target instanceof Element&&e.target.closest('.ml-poignee')) return;
+    if(e.target instanceof Element&&(e.target.closest('.ml-poignee')||e.target.closest('.mlx-barre'))) return;
     const r=frise.getBoundingClientRect();
     _mlAller(mlXVersTemps(e.clientX-r.left,r.width,_ml.dureeMs));
   });
@@ -2639,6 +4675,21 @@ function _mlBrancher(){
   });
   const calque=_mlEl('ml-calque');
   if(calque) _mlBrancherCalque(calque);
+  // L'APERÇU SUIT LE CURSEUR : le segment qui va de l'angle ou de la courbe
+  // en cours jusqu'à la souris dit où tombera le prochain point.
+  if(calque){
+    calque.addEventListener('pointermove',e=>{
+      if(!_ml||!_ml.trace||!['angle','courbe','point'].includes(_ml.trace.t)) return;
+      const v2=_mlVideo(), R2=v2?_mlVideoRect(v2):null; if(!R2) return;
+      const b2=calque.getBoundingClientRect();
+      _ml.curseur=[_mlxBorne((e.clientX-b2.left-R2.ox)/R2.s/R2.vw*1000),_mlxBorne((e.clientY-b2.top-R2.oy)/R2.s/R2.vh*1000)];
+      _mlDessinerCalque();
+    });
+    calque.addEventListener('pointerleave',()=>{ if(_ml&&_ml.curseur){ _ml.curseur=null; _mlDessinerCalque(); } });
+    calque.addEventListener('dblclick',e=>{ if(_ml&&_ml.trace&&(_ml.trace.t==='courbe'||_ml.trace.t==='point')){ e.preventDefault(); mlTerminerTrace(); } });
+  }
+  const zp=_mlEl('ml-pistes');
+  if(zp) _mlxBrancherPistes(zp);
   // Le calque suit la taille affichée de la vidéo : une rotation du téléphone
   // la change, et un tracé décalé mentirait sur la position du disque.
   v.addEventListener('loadeddata',()=>_mlDessinerCalque());
@@ -2648,14 +4699,34 @@ function _mlBrancher(){
   }
   // LES FLÈCHES = IMAGE PAR IMAGE, sauf dans un champ de saisie et sauf sur
   // une poignée, qui a les siennes.
-  const ecran=_mlEl('s-coach-motion-lab');
-  if(ecran&&!ecran.dataset.mlClavier){
-    ecran.dataset.mlClavier='1';
-    ecran.addEventListener('keydown',e=>{
+  // ⚠ LE CLAVIER ÉCOUTE LE DOCUMENT, et non l'écran : un clic sur la vidéo —
+  // un canevas, qui ne prend pas le focus — laissait le focus au corps de la
+  // page, et les touches n'arrivaient jamais à une écoute posée sur l'écran.
+  // On ne répond que si le laboratoire est l'écran actif, et que le focus est
+  // chez lui ou nulle part : une boîte de dialogue ouverte garde ses touches.
+  if(!_mlxClavierBranche){
+    _mlxClavierBranche=true;
+    document.addEventListener('keydown',e=>{
+      const ecran=_mlEl('s-coach-motion-lab');
+      if(!_ml||!ecran||!ecran.classList.contains('active')) return;
       const t=e.target instanceof Element?e.target:null;
+      if(t&&t!==document.body&&t!==document.documentElement&&!ecran.contains(t)) return;
       if(t&&(t.closest('input,textarea,select')||t.closest('.ml-poignee'))) return;
-      if(e.key==='ArrowLeft'){ e.preventDefault(); mlImage(-1); }
-      else if(e.key==='ArrowRight'){ e.preventDefault(); mlImage(1); }
+      if(e.key==='ArrowLeft'){ e.preventDefault(); for(let i=0;i<(e.shiftKey?10:1);i++) mlImage(-1); }
+      else if(e.key==='ArrowRight'){ e.preventDefault(); for(let i=0;i<(e.shiftKey?10:1);i++) mlImage(1); }
+      else _mlxClavier(e);
+    });
+  }
+  // LE PLEIN ÉCRAN ET LA FENÊTRE changent la taille de l'image : le calque et
+  // la timeline se recalent.
+  if(!_mlxEcoutesGlobales){
+    _mlxEcoutesGlobales=true;
+    const recaler=()=>{ try{ if(_ml){ _mlMajFrise(); _mlxMajPistes(); _mlDessinerCalque(); } }catch(x){} };
+    document.addEventListener('fullscreenchange',()=>setTimeout(recaler,60));
+    window.addEventListener('resize',recaler);
+    document.addEventListener('click',e=>{
+      const m=_mlEl('mlx-menu');
+      if(m&&!m.hidden&&!(e.target instanceof Element&&e.target.closest('.mlx-menu-z'))) mlMenu();
     });
   }
 }
@@ -2694,6 +4765,15 @@ function _mlMajTete(suivre){
     if(x<frise.scrollLeft||x>frise.scrollLeft+frise.clientWidth-24)
       frise.scrollLeft=Math.max(0,x-24);
   }
+  const pos=_mlEl('mlx-pos');
+  if(pos instanceof HTMLInputElement&&_ml.dureeMs){
+    const p=Math.round(ms/_ml.dureeMs*1000);
+    if(document.activeElement!==pos) pos.value=String(p);
+    pos.style.setProperty('--p',(p/10)+'%');
+  }
+  const du=_mlEl('mlx-duree'); if(du) du.textContent=' / '+_mlDureeCourte(_ml.dureeMs);
+  const tl=_mlEl('mlx-tl-t'); if(tl) tl.textContent=_mlDureeCourte(ms)+' / '+_mlDureeCourte(_ml.dureeMs);
+  if(v.paused) _mlxMajCleEtat();
   _mlDessinerCalque();
   _mlDessinerCourbe();
 }
@@ -2710,6 +4790,8 @@ function _mlMajFrise(){
   });
   _mlRegle();
   _mlMajSegmentsFrise();
+  // Les barres des tracés sont posées au pixel : le zoom les recale.
+  _mlxMajPistes();
   _mlMajTete();
 }
 function _mlRegle(){
@@ -2760,44 +4842,13 @@ function _mlMajSegmentsFrise(){
   }
 }
 
-// La liste des répétitions, et le réglage fin de celle qu'on a choisie.
-function _mlMajListe(){
-  const z=_mlEl('ml-liste'), zb=_mlEl('ml-bornes');
-  if(!_ml||!z||!zb) return;
-  const a=_mlActif();
-  z.innerHTML=_ml.segments.length
-    ?_ml.segments.map((s,i)=>'<div class="ml-rep'+(a&&s.id===a.id?' ml-rep-on':'')+'" role="button" tabindex="0" '
-        +'aria-pressed="'+(!!a&&s.id===a.id)+'" onclick="mlChoisir(\''+escapeHtml(s.id)+'\')" '
-        +'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}">'
-        +'<span class="ml-rep-n">'+escapeHtml(s.label)+'</span>'
-        +'<span class="ml-rep-t">'+mlTempsTexte(s.debutMs)+' → '+mlTempsTexte(s.finMs)+' · '+mlDureeTexte(s.finMs-s.debutMs)
-          +(s.barre?' · <b class="ml-rep-traj">trajectoire</b>':'')+'</span>'
-        +'<button type="button" class="ml-mini" onclick="event.stopPropagation();mlRenommer('+i+')" '
-          +'aria-label="Renommer '+escapeHtml(s.label)+'">✎</button>'
-        +'<button type="button" class="ml-mini" onclick="event.stopPropagation();mlSupprimer('+i+')" '
-          +'aria-label="Supprimer '+escapeHtml(s.label)+'">×</button></div>').join('')
-    :'<div class="ml-vide">Aucune répétition pour l’instant.</div>';
-  zb.innerHTML=a?'<div class="ml-bornes">'
-      +['debut','fin'].map(q=>'<div class="ml-borne"><span class="ml-lab">'+(q==='debut'?'Début':'Fin')+'</span>'
-        +'<span class="ml-val" id="ml-v-'+q+'">'+mlTempsTexte(q==='debut'?a.debutMs:a.finMs)+'</span>'
-        +'<button type="button" class="ml-b" onclick="mlPas(\''+q+'\',-1)" aria-label="'+(q==='debut'?'Début':'Fin')+' : une image plus tôt">◀ 1</button>'
-        +'<button type="button" class="ml-b" onclick="mlIci(\''+q+'\')" aria-label="'+(q==='debut'?'Début':'Fin')+' à la tête de lecture">Ici</button>'
-        +'<button type="button" class="ml-b" onclick="mlPas(\''+q+'\',1)" aria-label="'+(q==='debut'?'Début':'Fin')+' : une image plus tard">1 ▶</button>'
-        +'</div>').join('')
-      +'<div class="ml-borne-pied">'
-        +'<button type="button" class="ml-b" id="ml-boucle" aria-pressed="'+_ml.boucle+'" onclick="mlBoucle()">⟲ Lire en boucle</button>'
-        +'<span id="ml-duree">'+escapeHtml(a.label)+' · '+mlDureeTexte(a.finMs-a.debutMs)+'</span>'
-      +'</div></div>':'';
-  if(!_ml.dureeMs) zb.querySelectorAll('button').forEach(x=>{ x.setAttribute('disabled',''); });
-  _mlMajSegmentsFrise();
-  _mlMajTrajectoire();
-}
 function _mlMajEnregistrer(){
   const b=_mlEl('ml-enreg');
   if(!(b instanceof HTMLButtonElement)) return;
   const m=_mlModifie();
   b.disabled=!m;
-  b.textContent=m?'ENREGISTRER •':'ENREGISTRER';
+  const pt=b.querySelector('.mlx-enreg-pt'); if(pt) pt.textContent=m?'•':'';
+  b.setAttribute('aria-label',m?'Enregistrer la correction — des modifications attendent':'Enregistrer la correction : tout est enregistré');
 }
 
 // ══ LES MINIATURES ════════════════════════════════════════════════════════════
@@ -3123,20 +5174,46 @@ function mlSupprimer(i){
   _mlMajEnregistrer();
   return true;
 }
-/** L'enregistrement, par le chemin d'index.html. */
+/**
+ * « ENREGISTRER LA CORRECTION » : les séquences et les tracés, par les chemins
+ * d'index.html — le dossier de l'athlète, la garde du coach désigné. L'athlète
+ * est prévenu comme pour une correction écrite.
+ * @returns {boolean}
+ */
 function mlEnregistrer(){
   if(!_ml) return false;
-  const r=enregistrerSegmentsVideo(_ml.email,_ml.videoId,_ml.segments);
-  if(!r.ok&&r.raison){ toast(r.raison,'var(--orange)'); return false; }
-  /** @type {Segment[]} */
-  const propres=Array.isArray(r.segments)?r.segments:[];
-  _ml.initiaux=propres.map(s=>({...s}));
-  _ml.segments=propres.map(s=>({...s}));
-  if(_ml.actifId&&!_ml.segments.some(s=>s.id===_ml?.actifId))
-    _ml.actifId=_ml.segments.length?_ml.segments[0].id:null;
+  const segs=!mlMemesSegments(_ml.initiaux,_ml.segments), annots=_mlxModifie();
+  /** @type {any} */ let envoi=null, ok=true;
+  if(segs){
+    const r=enregistrerSegmentsVideo(_ml.email,_ml.videoId,_ml.segments);
+    if(!r.ok&&r.raison){ toast(r.raison,'var(--orange)'); return false; }
+    /** @type {Segment[]} */
+    const propres=Array.isArray(r.segments)?r.segments:[];
+    _ml.initiaux=propres.map(s=>({...s}));
+    _ml.segments=propres.map(s=>({...s}));
+    if(_ml.actifId&&!_ml.segments.some(s=>s.id===_ml?.actifId))
+      _ml.actifId=_ml.segments.length?_ml.segments[0].id:null;
+    ok=ok&&r.ok; envoi=r.envoi;
+  }
+  if(annots){
+    const avant=_ml.annot.a.length, cles=_ml.annot.a.some(a=>Array.isArray(a.k)&&a.k.length);
+    const r=enregistrerAnnotationsVideo(_ml.email,_ml.videoId,_ml.annot);
+    if(!r.ok&&r.raison){ toast(r.raison,'var(--orange)'); return false; }
+    // CE QUE LE PLAFOND A FAIT TOMBER SE DIT : le coach doit l'apprendre
+    // autrement qu'en ne le voyant plus.
+    /** @type {DocAnnot} */
+    const garde=r.annot||_ml.annot;
+    if(garde.a.length<avant) toast('Correction trop lourde : '+(avant-garde.a.length)+' tracé(s) n’ont pas tenu.','var(--orange)');
+    else if(cles&&!garde.a.some(a=>Array.isArray(a.k)&&a.k.length)) toast('Correction trop lourde : le suivi du mouvement n’a pas tenu.','var(--orange)');
+    _ml.annot=garde;
+    _ml.annotInit=JSON.stringify(garde);
+    if(_ml.sel&&!_mlxAnnot(_ml.sel)) _ml.sel=null;
+    ok=ok&&r.ok; envoi=r.envoi;
+  }
+  if(!segs&&!annots) return false;
   _mlMajListe();
-  _mlMajEnregistrer();
-  toastSync(r.ok,r.envoi,'Répétitions enregistrées','les répétitions sont');
+  _mlxMajTout();
+  toastSync(ok,envoi,'Correction enregistrée ✓','la correction est');
   return true;
 }
 
@@ -3244,6 +5321,8 @@ function _mlBrancherCalque(calque){
       _mlMajPrise(); _mlDessinerCalque();
       return;
     }
+    // LES OUTILS D'ANNOTATION : c'est le mode ordinaire du laboratoire.
+    if(_ml&&_ml.mode==='lecture'){ _mlxPointer(e,calque); return; }
     if(!_ml||(_ml.mode!=='graine'&&_ml.mode!=='replacer'&&_ml.mode!=='repere')) return;
     e.preventDefault();
     try{ calque.setPointerCapture(e.pointerId); }catch(x){}
@@ -3325,12 +5404,15 @@ function _mlDessinerCalque(){
   const dpr=Math.min(2,window.devicePixelRatio||1);
   const W=v.clientWidth, H=v.clientHeight;
   if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){ c.width=Math.round(W*dpr); c.height=Math.round(H*dpr); }
-  c.classList.toggle('ml-calque-actif',_ml.mode==='graine'||_ml.mode==='replacer'||_ml.mode==='repere'||_ml.mode==='etalon'||_ml.mode==='action'
+  c.classList.toggle('ml-calque-actif',_ml.mode==='lecture'||_ml.mode==='graine'||_ml.mode==='replacer'||_ml.mode==='repere'||_ml.mode==='etalon'||_ml.mode==='action'
     ||!!(_ml.rec&&_ml.rec.outil==='dessin'&&!_ml.rec.pause));
   const g=c.getContext('2d'); if(!g) return;
   g.setTransform(dpr,0,0,dpr,0,0);
   g.clearRect(0,0,W,H);
   if(!R) return;
+  // « VERSION ORIGINALE » : rien par-dessus l'image — sauf un geste en cours
+  // de pose, qu'on ne peut pas faire à l'aveugle.
+  if(_ml.original&&_ml.mode==='lecture'&&!_ml.rec) return;
   /** @param {number} x @param {number} y @returns {[number,number]} */
   const P=(x,y)=>[R.ox+x*R.s,R.oy+y*R.s];
   const cyan=_tok('--arc-current','#4DE8FF'), calme=_tok('--arc-calm','#6E7A99');
@@ -3404,6 +5486,9 @@ function _mlDessinerCalque(){
     if(S) _mlDessinerPose(g,R,S,tNow,_ml.angCalques);
   }
   if(_ml.epingles.length) _mlDessinerEpingles(g,R,_ml.epingles,tNow);
+  // LES ANNOTATIONS, par-dessus les mesures : c'est ce que le coach montre.
+  mlDessinerAnnotations(g,R,_ml.annot,tNow,{sel:_ml.sel,poignees:_ml.outil==='selection',
+    comparaison:_ml.comparaison,apercu:_mlxApercu()});
   if(_ml.rec){
     _mlDessinerTraits(g,R,_ml.rec.traits);
     if(_ml.rec.enCours&&_ml.rec.enCours.length>1) _mlDessinerTraits(g,R,[[_ml.rec.couleur,_ml.rec.enCours]]);
@@ -5849,7 +7934,7 @@ function _mlMajCorrection(){
   const hote=_mlEl('ml-corr-lecteur');
   if(_ml.lecteur){ _ml.lecteur.detruire(); _ml.lecteur=null; }
   if(hote&&c){
-    _ml.lecteur=mlLecteurCorrection(hote,{url:_ml.url,correction:{...c.motion,cartes:_ml.cartes.slice(),epingles:_ml.epingles.slice()},
+    _ml.lecteur=mlLecteurCorrection(hote,{url:_ml.url,annot:_ml.annot.a.length?_ml.annot:null,correction:{...c.motion,cartes:_ml.cartes.slice(),epingles:_ml.epingles.slice()},
       segments:_ml.segments,voixUrl:c.blobUrl||(c.motion.voix?c.motion.voix.url:'')});
   }
 }
@@ -6100,7 +8185,7 @@ function _mlRecEcouteArreter(){
  * recale. La vidéo suit l'état que mlEtatRejeu calcule, et se recale dès
  * qu'elle s'en écarte de plus de 220 ms en lecture, 45 ms à l'arrêt.
  * @param {HTMLElement} hote
- * @param {{url:string, correction:Correction, segments:Segment[], voixUrl:string}} o
+ * @param {{url:string, correction:Correction, segments:Segment[], voixUrl:string, annot?:DocAnnot|null}} o
  * @returns {{jouer:()=>void, pause:()=>void, aller:(T:number)=>void, detruire:()=>void, instant:()=>number}}
  */
 function mlLecteurCorrection(hote,o){
@@ -6182,6 +8267,8 @@ function mlLecteurCorrection(hote,o){
         const lu=reperes[s.id];
         if(lu) _mlDessinerReperes(g,R,lu,sNow);
       }
+      // LES TRACÉS DU COACH, à l'instant de la vidéo que la séquence montre.
+      if(o.annot) mlDessinerAnnotations(g,R,o.annot,sNow,{});
       _mlDessinerTraits(g,R,e.traits);
       _mlDessinerEpingles(g,R,m.epingles||[],sNow);
     }
@@ -6274,10 +8361,142 @@ function mlLecteurCorrection(hote,o){
       if(voix){ voix.removeAttribute('src'); try{ voix.load(); }catch(x){} } hote.innerHTML=''; }};
 }
 
-// ── L'écran de l'athlète ────────────────────────────────────────────────────
-/** @type {{lecteur:ReturnType<typeof mlLecteurCorrection>|null, m:Correction|null, url:string}} */
-const _mlc={lecteur:null,m:null,url:''};
+// ── LE LECTEUR ANNOTÉ ───────────────────────────────────────────────────────
+//
+// Ce que l'athlète revoit : SA vidéo, telle quelle, avec les tracés de son
+// coach posés par-dessus à leurs instants, la légende, les ralentis et l'image
+// par image — et « Version originale » pour la revoir sans rien. Le coach y
+// relit aussi ce qu'il a envoyé : c'est le même lecteur.
 /**
+ * @param {HTMLElement} hote
+ * @param {{url:string, annot:DocAnnot}} o
+ * @returns {{pause:()=>void, aller:(ms:number)=>void, detruire:()=>void}}
+ */
+function mlLecteurAnnote(hote,o){
+  const doc=o.annot;
+  const ico=_mlxIco;
+  hote.innerHTML='<div class="mla">'
+    +'<div class="mla-scene"><video class="mla-video" src="'+safeUrl(o.url)+'" playsinline webkit-playsinline preload="metadata"></video>'
+    +'<canvas class="mla-calque" aria-hidden="true"></canvas>'
+    +'<span class="mlx-badge-orig" aria-hidden="true">Version originale</span>'
+    +'<button type="button" class="mlc-grand mla-grand" aria-label="Lire la vidéo annotée">▶</button></div>'
+    +'<div class="mla-cmd">'
+      +'<button type="button" class="ml-b mla-b" data-a="prec" aria-label="Image précédente">'+ico('prec',16)+'</button>'
+      +'<button type="button" class="ml-b mla-b mla-jouer" data-a="jouer" aria-label="Lire">'+ico('lire',18)+'</button>'
+      +'<button type="button" class="ml-b mla-b" data-a="suiv" aria-label="Image suivante">'+ico('suiv',16)+'</button>'
+      +'<input type="range" class="mla-pos" min="0" max="1000" step="1" value="0" aria-label="Position dans la vidéo">'
+      +'<span class="mla-temps">0:00</span>'
+    +'</div>'
+    +'<div class="mla-cmd mla-cmd2">'
+      +VID_RATES.map(r=>'<button type="button" class="ml-b mla-v" data-rate="'+r+'" aria-pressed="'+(r===1)+'">'+String(r).replace('.',',')+'×</button>').join('')
+      +'<span class="mlx-esp"></span>'
+      +'<button type="button" class="ml-b mla-b mla-orig" data-a="orig" aria-pressed="false">'+ico('orig',16)+'<span>Version originale</span></button>'
+      +'<button type="button" class="ml-b mla-b" data-a="plein" aria-label="Plein écran">'+ico('plein',16)+'</button>'
+    +'</div>'
+    +'<div class="mla-liste"></div>'
+  +'</div>';
+  const video=/** @type {HTMLVideoElement} */(hote.querySelector('.mla-video'));
+  const calque=/** @type {HTMLCanvasElement} */(hote.querySelector('.mla-calque'));
+  const scene=/** @type {HTMLElement} */(hote.querySelector('.mla-scene'));
+  const pos=/** @type {HTMLInputElement} */(hote.querySelector('.mla-pos'));
+  const temps=/** @type {HTMLElement} */(hote.querySelector('.mla-temps'));
+  const bJouer=/** @type {HTMLElement} */(hote.querySelector('.mla-jouer'));
+  const grand=/** @type {HTMLElement} */(hote.querySelector('.mla-grand'));
+  const liste=/** @type {HTMLElement} */(hote.querySelector('.mla-liste'));
+  let original=false, raf=0, detruit=false;
+  const visibles=doc.a.filter(a=>!a.h);
+  // LA LISTE DES TRACÉS : un toucher amène la vidéo à l'instant où il paraît.
+  liste.innerHTML=visibles.length?'<div class="ml-lab" style="margin-top:14px">Ce que ton coach a tracé</div>'
+    +visibles.map((a,i)=>'<button type="button" class="ml-carte-l ml-carte-b mla-an" data-i="'+i+'">'
+      +'<i class="mlx-an-pt" style="--c:'+a.c+'"></i><span class="ml-carte-x">'+escapeHtml(a.t==='texte'?(a.x||a.n):a.n)+'</span>'
+      +'<span class="ml-carte-t">'+_mlDureeCourte(a.d)+'</span></button>').join(''):'';
+  const dessiner=()=>{
+    if(detruit) return;
+    const dpr=Math.min(2,window.devicePixelRatio||1), W=video.clientWidth, H=video.clientHeight;
+    if(calque.width!==Math.round(W*dpr)||calque.height!==Math.round(H*dpr)){ calque.width=Math.round(W*dpr); calque.height=Math.round(H*dpr); }
+    const g=calque.getContext('2d');
+    if(!g) return;
+    g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+    const R=_mlVideoRect(video);
+    const sMs=(Number(video.currentTime)||0)*1000;
+    if(R&&!original) mlDessinerAnnotations(g,R,doc,sMs,{});
+    const d=Number(video.duration);
+    if(isFinite(d)&&d>0){
+      if(document.activeElement!==pos) pos.value=String(Math.round(sMs/(d*1000)*1000));
+      pos.style.setProperty('--p',(sMs/(d*10)).toFixed(2)+'%');
+      temps.textContent=_mlDureeCourte(sMs)+' / '+_mlDureeCourte(d*1000);
+    }
+  };
+  const boucle=()=>{ dessiner(); if(!video.paused&&!video.ended&&!detruit) raf=requestAnimationFrame(boucle); };
+  const majJouer=()=>{
+    const joue=!video.paused&&!video.ended;
+    bJouer.innerHTML=ico(joue?'pause':'lire',18);
+    bJouer.setAttribute('aria-label',joue?'Mettre en pause':'Lire');
+    grand.hidden=joue;
+  };
+  const jouer=()=>{ const p=video.play(); if(p&&p.catch) p.catch(()=>{}); };
+  const pause=()=>{ if(!video.paused) video.pause(); };
+  const aller=(/** @type {number} */ ms)=>{ try{ video.currentTime=Math.max(0,ms/1000); }catch(e){} dessiner(); };
+  video.addEventListener('play',()=>{ majJouer(); const r=Number(video.dataset.rate||1); if(r!==1) videoSetRate(video,r); cancelAnimationFrame(raf); raf=requestAnimationFrame(boucle); });
+  video.addEventListener('pause',()=>{ majJouer(); dessiner(); });
+  video.addEventListener('ended',()=>{ majJouer(); });
+  ['loadedmetadata','loadeddata','seeked','timeupdate'].forEach(ev=>video.addEventListener(ev,()=>{ if(video.paused) dessiner(); }));
+  video.onerror=()=>{
+    if(detruit) return;
+    scene.innerHTML='<p class="mlc-absente">Vidéo indisponible.<br>Elle a peut-être été supprimée, ou la connexion manque.</p>';
+  };
+  grand.onclick=jouer;
+  video.onclick=()=>{ video.paused?jouer():pause(); };
+  pos.oninput=()=>{ const d=Number(video.duration); if(isFinite(d)&&d>0) aller(Number(pos.value)/1000*d*1000); };
+  hote.addEventListener('click',e=>{
+    const b=/** @type {HTMLElement|null} */(e.target instanceof Element?e.target.closest('button'):null);
+    if(!b||!hote.contains(b)) return;
+    const act=b.dataset.a;
+    if(act==='jouer'){ video.paused?jouer():pause(); return; }
+    if(act==='prec'||act==='suiv'){
+      pause();
+      aller((Number(video.currentTime)||0)*1000+(act==='prec'?-1:1)*mlPasImageMs(videoDetectFps(video)));
+      return;
+    }
+    if(act==='orig'){ original=!original; b.setAttribute('aria-pressed',String(original)); scene.classList.toggle('mlx-original',original); dessiner(); return; }
+    if(act==='plein'){
+      const s=/** @type {any} */(scene), v=/** @type {any} */(video);
+      try{
+        if(document.fullscreenElement) document.exitFullscreen();
+        else if(s.requestFullscreen){ const p=s.requestFullscreen(); if(p&&p.catch) p.catch(()=>{}); }
+        else if(v.webkitEnterFullscreen) v.webkitEnterFullscreen();
+      }catch(x){}
+      return;
+    }
+    if(b.dataset.rate){
+      const r=videoSetRate(video,Number(b.dataset.rate));
+      if(r==null) return;
+      video.dataset.rate=String(r);
+      hote.querySelectorAll('.mla-v').forEach(x=>x.setAttribute('aria-pressed',String(Math.abs(Number(/** @type {HTMLElement} */(x).dataset.rate)-r)<1e-6)));
+      return;
+    }
+    if(b.classList.contains('mla-an')){
+      const a=visibles[Number(b.dataset.i)];
+      if(a){ pause(); aller(a.d); }
+    }
+  });
+  const redim=()=>{ if(!detruit) dessiner(); };
+  window.addEventListener('resize',redim);
+  document.addEventListener('fullscreenchange',redim);
+  return {pause,aller,detruire:()=>{
+    detruit=true; cancelAnimationFrame(raf); pause();
+    window.removeEventListener('resize',redim); document.removeEventListener('fullscreenchange',redim);
+    hote.innerHTML='';
+  }};
+}
+
+// ── L'écran de l'athlète ────────────────────────────────────────────────────
+/** @type {{lecteur:ReturnType<typeof mlLecteurCorrection>|null, annote:ReturnType<typeof mlLecteurAnnote>|null, m:Correction|null, url:string}} */
+const _mlc={lecteur:null,annote:null,m:null,url:''};
+/**
+ * L'écran de la correction : la vidéo ANNOTÉE — les tracés du coach à leurs
+ * instants — et, s'il en a enregistré une, la correction COMMENTÉE sous sa
+ * voix. L'une ou l'autre peut manquer, pas les deux.
  * @param {any} u  le dossier de l'athlète
  * @param {any} v  l'entrée de la vidéo
  * @returns {boolean}
@@ -6287,31 +8506,40 @@ function mlAfficherCorrection(u,v){
   mlQuitterCorrection();
   const z=_mlEl('mlc-contenu');
   const m=/** @type {Correction|null} */(motionCorrectionValide(v&&v.motion));
-  if(!z||!m) return false;
+  const an=/** @type {DocAnnot|null} */(annotValide(v&&v.annot));
+  const aAnnot=!!(an&&an.a.some(x=>!x.h));
+  if(!z||(!m&&!aAnnot)) return false;
   const t=_mlEl('mlc-titre'); if(t) t.textContent=String(v.name||'Correction');
   const segs=segmentsVideo(v);
   const mesures=segs.filter(s=>/** @type {any} */(s).barre);
   const coach=currentUser&&currentUser.role==='coach';
+  const date=m&&m.envoyeLe?m.envoyeLe:(an&&an.majLe?an.majLe:0);
   z.innerHTML='<div class="ml-sous">Correction de ton coach'
-      +(m.envoyeLe?' · '+new Date(m.envoyeLe).toLocaleDateString('fr-FR'):'')+' · '+_mlDureeCourte(m.dureeMs)+'</div>'
-    +'<div id="mlc-lecteur"></div>'
-    +(m.cartes.length?'<div class="ml-lab" style="margin-top:16px">Corrections écrites</div><div class="ml-cartes">'
-      +m.cartes.map((k,i)=>'<button type="button" class="ml-carte-l ml-carte-b" onclick="mlCorrectionCarte('+i+')">'
-        +'<span class="ml-carte-t">'+mlTempsTexte(k.aMs)+'</span><span class="ml-carte-x">'+escapeHtml(k.texte)+'</span></button>').join('')+'</div>':'')
+      +(date?' · '+new Date(date).toLocaleDateString('fr-FR'):'')+(m?' · '+_mlDureeCourte(m.dureeMs)+' commentées':'')+'</div>'
+    +(aAnnot?'<div class="ml-lab" style="margin-top:6px">Ta vidéo annotée</div><div id="mlc-annot"></div>':'')
+    +(m?(aAnnot?'<div class="ml-lab" style="margin-top:18px">La correction commentée · '+_mlDureeCourte(m.dureeMs)+'</div>':'')
+      +'<div id="mlc-lecteur"></div>'
+      +(m.cartes.length?'<div class="ml-lab" style="margin-top:16px">Corrections écrites</div><div class="ml-cartes">'
+        +m.cartes.map((k,i)=>'<button type="button" class="ml-carte-l ml-carte-b" onclick="mlCorrectionCarte('+i+')">'
+          +'<span class="ml-carte-t">'+mlTempsTexte(k.aMs)+'</span><span class="ml-carte-x">'+escapeHtml(k.texte)+'</span></button>').join('')+'</div>':''):'')
     +(mesures.length?'<div class="ml-lab" style="margin-top:16px">Tes mesures</div>'
       +mesures.map(s=>{ const b=/** @type {any} */(s).barre, mm=b.m||{};
-        return '<div class="ml-metr ml-metr-l"><div><b>'+mlNombre(mm.vMax,2)+' m/s</b><span>'+escapeHtml(s.label)+' · vitesse max</span></div>'
-          +'<div><b>'+mlNombre(mm.hMax,2)+' m</b><span>'+escapeHtml(s.label)+' · hauteur max</span></div></div>'; }).join(''):'')
+        return '<div class="ml-metr ml-metr-l"><div><b>'+mlNombre(mm.vMax,2)+' m/s</b><span>'+escapeHtml(s.label)+' · vitesse max</span></div>'
+          +'<div><b>'+mlNombre(mm.hMax,2)+' m</b><span>'+escapeHtml(s.label)+' · hauteur max</span></div></div>'; }).join(''):'')
     +'<div class="ml-traj-cmd" style="margin-top:16px"><button type="button" class="btn btn-outline btn-sm" onclick="mlVoirOrigine()">Voir ma vidéo d’origine</button>'
       +(coach?'':'<button type="button" class="btn btn-outline btn-sm" onclick="repondreCorrectionMotion()">Répondre à mon coach</button>')+'</div>'
     +'<div id="mlc-origine"></div>';
   _mlc.m=m; _mlc.url=String(v.url||'');
+  const ha=_mlEl('mlc-annot');
+  if(ha&&an&&aAnnot) _mlc.annote=mlLecteurAnnote(ha,{url:_mlc.url,annot:an});
   const hote=_mlEl('mlc-lecteur');
-  if(hote) _mlc.lecteur=mlLecteurCorrection(hote,{url:_mlc.url,correction:m,segments:segs,voixUrl:m.voix?m.voix.url:''});
+  if(hote&&m) _mlc.lecteur=mlLecteurCorrection(hote,{url:_mlc.url,correction:m,segments:segs,voixUrl:m.voix?m.voix.url:'',
+    annot:aAnnot?an:null});
   return true;
 }
 function mlQuitterCorrection(){
   if(_mlc.lecteur){ _mlc.lecteur.detruire(); _mlc.lecteur=null; }
+  if(_mlc.annote){ _mlc.annote.detruire(); _mlc.annote=null; }
   const o=_mlEl('mlc-origine'); if(o) o.innerHTML='';
   return true;
 }
@@ -6330,6 +8558,7 @@ function mlVoirOrigine(){
   if(!o) return false;
   if(o.innerHTML){ o.innerHTML=''; return true; }
   if(_mlc.lecteur) _mlc.lecteur.pause();
+  if(_mlc.annote) _mlc.annote.pause();
   o.innerHTML='<video class="mlc-origine" src="'+safeUrl(_mlc.url)+'" controls playsinline webkit-playsinline preload="metadata"></video>';
   return true;
 }
@@ -6551,7 +8780,228 @@ function _mlInjecterStyle(){
     // LA CARTE DU COACH monte sous la vidéo à chaque nouvelle carte, pour qu'on
     // voie qu'il en est arrivé une autre même quand les mots se ressemblent.
     '@keyframes mlcCarte{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}',
-    '.mlc-carte-in{animation:mlcCarte var(--arc-release) var(--arc-c-discharge) both}'
+    '.mlc-carte-in{animation:mlcCarte var(--arc-release) var(--arc-c-discharge) both}',
+    // ── LA REFONTE (21/09/2026) : un logiciel d'analyse en paysage ──────────
+    // TOUTE LA LARGEUR : le laboratoire a sa propre flèche de retour, et la
+    // barre latérale du coach lui prenait deux cent soixante pixels.
+    '@media (min-width:1025px){body:has(#s-coach-motion-lab.active){max-width:none}body:has(#s-coach-motion-lab.active) #ch-sidebar{display:none!important}body:has(#s-coach-motion-lab.active) #s-coach-motion-lab{padding-left:0}}',
+    '#s-coach-motion-lab .scroll-area{padding:0 16px 16px}',
+    '.mlx{display:flex;flex-direction:column;gap:12px;padding-top:12px;color:var(--text)}',
+    '.mlx-esp{flex:1 1 auto}',
+    '.mlx-tete{display:flex;align-items:center;gap:14px;flex-wrap:wrap}',
+    '.mlx-retour{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 16px 0 10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;cursor:pointer}',
+    '.mlx-retour:hover,.mlx-ico-b:hover:not(:disabled),.mlx-pied-b:hover{border-color:rgba(255,255,255,.3)}',
+    '.mlx-marque{padding-left:14px;border-left:1px solid rgba(255,255,255,.12)}',
+    '.mlx .mlx-titre{margin:0;font-size:34px;font-weight:400;line-height:1;letter-spacing:1px;text-transform:uppercase;color:var(--text)}',
+    '.mlx-titre em{font-style:normal;color:var(--red)}',
+    '.mlx-sous-t{margin:4px 0 0;font-size:var(--fs-xs);color:var(--sub)}',
+    '.mlx-pilule{display:flex;align-items:center;gap:12px;min-height:52px;min-width:0;padding:6px 16px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03)}',
+    '.mlx-pilule svg{flex:0 0 auto;color:var(--text)}',
+    '.mlx-pilule div{display:flex;flex-direction:column;min-width:0}',
+    '.mlx-pilule b{max-width:280px;font-size:var(--fs-sm);font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.mlx .mlx-pilule .ml-sous{margin:2px 0 0;font-size:var(--fs-2xs);color:var(--sub)}',
+    '.mlx-ico-b{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;flex:0 0 auto;padding:0;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--text);cursor:pointer}',
+    '.mlx-ico-b:disabled{opacity:.35;cursor:default}',
+    '.mlx-ico-p{width:34px;height:34px;border-radius:8px}',
+    '.mlx-histo{display:inline-flex;gap:6px}',
+    '.mlx-menu-z{position:relative}',
+    '.mlx-menu{position:absolute;top:52px;left:0;z-index:30;min-width:240px;padding:6px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:#111;box-shadow:0 18px 40px rgba(0,0,0,.6)}',
+    '.mlx-menu[hidden]{display:none}',
+    '.mlx-menu button{display:block;width:100%;padding:11px 12px;border:none;border-radius:8px;background:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);text-align:left;cursor:pointer}',
+    '.mlx-menu button:hover{background:rgba(255,255,255,.06)}',
+    '.mlx-devise{display:flex;align-items:center;gap:12px;pointer-events:none}',
+    '.mlx-devise i{display:block;width:44px;height:1.5px;background:linear-gradient(90deg,rgba(224,32,32,0),var(--red))}',
+    '.mlx-devise span{font-size:9px;letter-spacing:2px;color:var(--sub);text-transform:uppercase;white-space:nowrap}',
+    '.mlx-logo{display:block;height:46px;width:auto;max-width:150px;object-fit:contain;padding-left:14px;border-left:1px solid rgba(255,255,255,.14)}',
+    // LA GRILLE : la vidéo au milieu prend tout ce qui reste.
+    '.mlx-grille{display:grid;grid-template-columns:minmax(230px,17%) minmax(0,1fr) minmax(340px,27%);gap:12px;align-items:start}',
+    '.mlx-g,.mlx-d{display:flex;flex-direction:column;gap:12px;min-width:0}',
+    '.mlx-carte{padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))}',
+    '.mlx-ct{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:34px;margin:-2px 0 10px;padding-left:10px;border-left:3px solid var(--red);font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--text)}',
+    '.mlx-intro{margin:0;font-size:var(--fs-xs);color:var(--sub);line-height:1.55}',
+    '.mlx-note{display:block;margin:6px 0 0;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;text-transform:none;letter-spacing:0;font-weight:500}',
+    '.mlx-vide{margin:4px 0;font-size:var(--fs-xs);color:var(--sub);line-height:1.5}',
+    '.mlx-b{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 12px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;letter-spacing:.3px;cursor:pointer}',
+    '.mlx-b:disabled{opacity:.35;cursor:default}',
+    '.mlx-b-r{border-color:rgba(224,32,32,.7);background:rgba(224,32,32,.12)}',
+    // LE CENTRE : la vidéo, haute, et ses commandes juste dessous.
+    '.mlx-c{display:flex;flex-direction:column;gap:8px;min-width:0;position:sticky;top:8px}',
+    '.mlx .ml-scene{border-radius:12px;border-color:rgba(255,255,255,.1)}',
+    '.mlx .ml-scene video{height:min(62vh,660px);height:min(62dvh,660px);max-height:none}',
+    '.mlx .ml-scene:fullscreen video{height:100vh}',
+    '.mlx-badge-orig{display:none;position:absolute;left:12px;bottom:12px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.22);background:rgba(0,0,0,.72);font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#fff;pointer-events:none}',
+    '.mlx-original .mlx-badge-orig{display:block}',
+    '.ml-calque[data-outil="selection"]{cursor:default}',
+    '.ml-calque[data-outil="gomme"]{cursor:cell}',
+    '.mlx-transport{padding:8px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.02)}',
+    '.mlx-tr-l1{display:flex;align-items:center;gap:6px;flex-wrap:wrap}',
+    '.mlx-tr-l1 .ml-b{display:inline-flex;align-items:center;justify-content:center;min-width:42px;min-height:42px;padding:0 9px}',
+    '.mlx .mlx-play{min-width:56px;background:linear-gradient(160deg,#e21414,#8d0000);border-color:rgba(255,90,90,.4)}',
+    '.mlx-temps{display:flex;align-items:baseline;gap:4px;margin-left:6px}',
+    '#mlx-duree{font-size:var(--fs-xs);color:var(--sub);font-variant-numeric:tabular-nums}',
+    '.mlx-vit{display:flex;gap:4px}',
+    '.mlx-tr-l2{display:flex;align-items:center;gap:12px;margin-top:4px}',
+    '#mlx-pos,.mla-pos{-webkit-appearance:none;appearance:none;flex:1;min-width:0;height:22px;margin:0;padding:0;border:none;cursor:pointer;background:linear-gradient(90deg,var(--red) 0 var(--p,0%),rgba(255,255,255,.22) var(--p,0%) 100%) center/100% 5px no-repeat}',
+    '#mlx-pos::-webkit-slider-thumb,.mla-pos::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:none;box-shadow:0 0 0 3px rgba(224,32,32,.35)}',
+    '#mlx-pos::-moz-range-thumb,.mla-pos::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:none}',
+    '.mlx .ml-fps{flex:0 1 auto;max-width:45%}',
+    // LA DROITE : les onglets, puis les outils.
+    '.mlx-onglets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:4px;border-radius:12px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.02)}',
+    '.mlx-onglets button{min-height:38px;border:none;border-radius:8px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer}',
+    '.mlx-onglets button[aria-selected="true"]{background:rgba(224,32,32,.14);color:var(--text);box-shadow:inset 0 0 0 1px rgba(224,32,32,.55)}',
+    '.mlx-d [role="tabpanel"]{display:flex;flex-direction:column;gap:12px}',
+    '.mlx-d [role="tabpanel"][hidden]{display:none}',
+    '.mlx-d .ml-traj{margin-top:0}',
+    '.mlx-outils{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}',
+    '.mlx-outil{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:60px;padding:6px 2px;border-radius:9px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);color:var(--text);font-family:Montserrat,sans-serif;font-size:10px;font-weight:600;cursor:pointer;min-width:0}',
+    '.mlx-outil span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.mlx-outil:hover{border-color:rgba(255,255,255,.26)}',
+    '.mlx-outil[aria-pressed="true"]{border-color:var(--red);background:rgba(224,32,32,.14);box-shadow:0 0 14px rgba(224,32,32,.28)}',
+    '.mlx-outil[aria-pressed="true"] svg{color:var(--red)}',
+    '.mlx-ligne{display:flex;align-items:center;gap:10px;margin-top:10px}',
+    '.mlx-ligne-0{margin-top:0}',
+    '.mlx-lab-s{flex:0 0 72px;font-size:var(--fs-2xs);font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--sub)}',
+    '.mlx-ligne input[type=range]{flex:1;min-width:0;accent-color:var(--red);padding:0;border:none;background:none}',
+    '#mlx-ep-val,#mlx-aep-val{flex:0 0 42px;text-align:right;font-size:var(--fs-xs);color:var(--text)}',
+    '.mlx-couleurs{display:flex;align-items:center;gap:6px;flex-wrap:wrap}',
+    '.mlx-pastille{width:28px;height:28px;flex:0 0 auto;padding:0;border-radius:50%;border:2px solid rgba(255,255,255,.18);background:var(--c);cursor:pointer}',
+    '.mlx-pastille[aria-pressed="true"]{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25)}',
+    '.mlx-perso{position:relative;width:28px;height:28px;flex:0 0 auto;border-radius:50%;border:2px solid rgba(255,255,255,.3);overflow:hidden;cursor:pointer;background:conic-gradient(#ff3b3b,#facc15,#22c55e,#3b82f6,#a855f7,#ff3b3b)}',
+    '.mlx-perso input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:none;opacity:0;cursor:pointer}',
+    '.mlx-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}',
+    '.mlx-chips-l{margin-top:0}',
+    '.mlx-chip{min-height:32px;padding:0 10px;border-radius:99px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0}',
+    '.mlx-chip[aria-pressed="true"]{border-color:var(--red);background:rgba(224,32,32,.16)}',
+    '.mlx-chip:disabled{opacity:.35;cursor:default}',
+    '.mlx-guide{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding:9px 10px;border-radius:9px;border:1px solid rgba(224,32,32,.55);background:rgba(224,32,32,.08);font-size:var(--fs-xs);line-height:1.45;color:var(--text)}',
+    '.mlx-cours{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:var(--fs-xs);color:var(--text-strong)}',
+    '.mlx-aide-o{margin:10px 0 0;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5}',
+    '.mlx-coche{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:var(--fs-xs);font-weight:600;color:var(--text-strong);text-transform:none;letter-spacing:0;cursor:pointer}',
+    '.mlx-coche input{width:18px;height:18px;margin:0;padding:0;accent-color:var(--red)}',
+    // LA LISTE DES ANNOTATIONS.
+    '.mlx-an{display:flex;align-items:center;gap:4px;min-height:40px;padding:2px 4px;border-radius:8px;border:1px solid transparent}',
+    '.mlx-an+.mlx-an{margin-top:2px}',
+    '.mlx-an.on{border-color:rgba(224,32,32,.6);background:rgba(224,32,32,.07)}',
+    '.mlx-an-glisse{opacity:.45}',
+    '.mlx-an-poignee{display:flex;color:var(--text-faint);cursor:grab}',
+    '.mlx-an-oeil,.mlx-an-act{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:0 0 auto;padding:0;border:none;border-radius:7px;background:none;color:var(--sub);font-size:16px;cursor:pointer}',
+    '.mlx-an-oeil:hover,.mlx-an-act:hover{background:rgba(255,255,255,.06);color:var(--text)}',
+    '.mlx-an-oeil[aria-pressed="false"]{color:var(--text-faint)}',
+    '.mlx-an-pt{display:inline-block;flex:0 0 12px;width:12px;height:12px;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px rgba(255,255,255,.12)}',
+    '.mlx-an-nom{flex:1;min-width:0;padding:0 0 0 4px;border:none;background:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}',
+    '.mlx-an.masque .mlx-an-nom{color:var(--text-faint);text-decoration:line-through}',
+    '.mlx-an-suivi{display:inline-flex;align-items:center;gap:2px;margin-left:4px;font-size:10px;color:var(--sub)}',
+    '.mlx-an-t{flex:0 0 auto;font-size:var(--fs-2xs);color:var(--sub);font-variant-numeric:tabular-nums}',
+    // L'ÉDITEUR DU TRACÉ CHOISI.
+    '.mlx-ed{margin-top:10px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.35)}',
+    '.mlx-ed-tete{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs)}',
+    '.mlx-champ{display:flex;flex-direction:column;gap:6px;margin-top:12px;font-size:var(--fs-2xs);font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--sub)}',
+    '.mlx input.mlx-in,.mlx select.mlx-in{height:40px;margin:0;padding:0 12px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.4);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);text-transform:none;letter-spacing:0}',
+    '.mlx input.mlx-in:focus,.mlx select.mlx-in:focus{border-color:var(--red)}',
+    '.mlx-duree{display:flex;align-items:center;gap:6px}',
+    '.mlx input.mlx-tps{width:92px;flex:0 0 92px;padding:0 6px;text-align:center;font-variant-numeric:tabular-nums}',
+    '.mlx-fl{color:var(--sub)}',
+    '.mlx-deg{font-size:var(--fs-sm);color:var(--sub)}',
+    '.mlx-angle-l{font-size:var(--fs-xs);color:var(--text-strong);text-transform:none;letter-spacing:0;font-weight:500}',
+    '.mlx-suivi{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}',
+    '.mlx-cles{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:var(--fs-2xs);color:var(--text-strong)}',
+    '.mlx-ed-pied{display:flex;justify-content:flex-end;margin-top:12px}',
+    '.mlx-suppr{color:var(--red-text)}',
+    // LA LÉGENDE.
+    '.mlx-bascule{position:relative;display:inline-block;width:46px;height:26px;flex:0 0 auto;cursor:pointer}',
+    '.mlx-bascule input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:pointer}',
+    '.mlx-bascule i{position:absolute;inset:0;border-radius:99px;background:rgba(255,255,255,.14);transition:background var(--t-1)}',
+    '.mlx-bascule i::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform var(--t-1)}',
+    '.mlx-bascule input:checked+i{background:var(--red)}',
+    '.mlx-bascule input:checked+i::after{transform:translateX(20px)}',
+    '.mlx-bascule input:focus-visible+i{outline:2px solid #fff;outline-offset:2px}',
+    '.mlx-leg-off{opacity:.55}',
+    '.mlx-leg .mlx-champ:first-child{margin-top:0}',
+    '.mlx-champs2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}',
+    '.mlx-champs2 input[type=range]{height:40px;accent-color:var(--red);margin:0;padding:0;border:none;background:none}',
+    '.mlx-sens-l{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:var(--fs-xs);font-weight:600;color:var(--text-strong);text-transform:none;letter-spacing:0}',
+    '.mlx-sens-l span{flex:0 0 52px}',
+    '.mlx-sens-l .mlx-in{flex:1;min-width:0}',
+    // LES MODÈLES.
+    '.mlx-mod-l{display:flex;align-items:center;gap:4px}',
+    '.mlx-mod-l+.mlx-mod-l{margin-top:6px}',
+    '.mlx-mod{display:flex;align-items:center;gap:12px;flex:1;min-width:0;min-height:42px;padding:0 12px;border-radius:9px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600;text-align:left;cursor:pointer}',
+    '.mlx-mod:hover{border-color:rgba(255,255,255,.24)}',
+    '.mlx-mod span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.mlx-mod small{font-size:var(--fs-2xs);color:var(--red-text);font-weight:800}',
+    '.mlx-mod.on{border-color:var(--red);background:rgba(224,32,32,.1)}',
+    '.mlx-mod-creer{justify-content:center;width:100%;margin-top:8px;border-style:dashed}',
+    '.mlx-mod-creer span{flex:0 1 auto}',
+    // LES SÉQUENCES.
+    '.mlx .mlx-seq{gap:8px;margin-top:6px;padding:4px 2px 4px 6px}',
+    '.mlx-seq-n{flex:0 0 18px;text-align:center;font-size:var(--fs-sm);font-weight:800;color:var(--text)}',
+    '.mlx-sv{display:block;flex:0 0 56px;width:56px;height:36px;border-radius:5px;background:#0a0a0a}',
+    '.mlx-seq-t{display:flex;flex-direction:column;flex:1;min-width:0}',
+    '.mlx-seq-t .ml-rep-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.mlx .ml-mini{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center}',
+    '.mlx .ml-bornes{margin-top:10px}',
+    '.mlx .ml-borne .ml-b{min-height:38px;min-width:38px;padding:0 8px}',
+    // LA TIMELINE.
+    '.mlx-tl{padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))}',
+    '.mlx-tl-tete{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}',
+    '.mlx-lab{padding-left:10px;border-left:3px solid var(--red);font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--text)}',
+    '.mlx-ajuster{display:inline-flex;align-items:center;gap:6px}',
+    '.mlx-tl-t{min-width:92px;text-align:right;font-size:var(--fs-xs);color:var(--text-strong);font-variant-numeric:tabular-nums}',
+    '.mlx-tl-corps{display:grid;grid-template-columns:160px minmax(0,1fr);max-height:250px;overflow-y:auto;overflow-x:hidden}',
+    '.mlx-tl-g{position:relative}',
+    '.mlx-tl-lire{position:absolute;left:0;top:0;width:44px;height:22px;display:flex;align-items:center;justify-content:center;padding:0;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--text);cursor:pointer}',
+    '.mlx-tl-noms{position:relative}',
+    '.mlx-tl-nom{position:absolute;left:0;right:8px;display:flex;align-items:center;gap:8px;height:26px;padding:0;border:none;background:none;color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;text-align:left;white-space:nowrap;overflow:hidden;cursor:pointer}',
+    '.mlx-tl-nom span{overflow:hidden;text-overflow:ellipsis}',
+    '.mlx-tl-nom.on{color:#fff}',
+    '.mlx-tl-nom.masque{opacity:.45}',
+    '.mlx-tl-nom-seq{align-items:center;color:var(--sub);letter-spacing:1px;text-transform:uppercase;cursor:default}',
+    '.mlx-tl-vide{color:var(--text-faint);font-weight:500;cursor:default}',
+    '.mlx .ml-frise{border-radius:8px;overflow-y:hidden}',
+    '.mlx .ml-frise-in{min-height:100px}',
+    '.mlx .ml-regle{top:0;bottom:auto;height:22px}',
+    '.mlx .ml-vign{top:26px;height:40px}',
+    '.mlx .ml-autre{top:26px;height:40px}',
+    '.mlx .ml-sel{top:24px;height:44px}',
+    '.mlx .ml-poignee{top:20px;height:52px}',
+    '.mlx .ml-poignee i{top:4px;height:44px}',
+    '.mlx .ml-poignee i::after{top:14px}',
+    '.mlx .ml-tete{top:0;bottom:0;height:auto;background:var(--red);box-shadow:0 0 6px rgba(224,32,32,.7);z-index:3}',
+    '.mlx .ml-tete::before{content:"";position:absolute;top:0;left:-5px;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid var(--red)}',
+    '.mlx-pistes{position:absolute;left:0;right:0}',
+    '.mlx-barre{position:absolute;height:20px;display:flex;align-items:center;justify-content:center;border-radius:5px;background:var(--c);font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;cursor:grab;touch-action:none;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18);z-index:2}',
+    '.mlx-barre span{padding:0 10px;overflow:hidden;text-overflow:ellipsis;pointer-events:none}',
+    '.mlx-barre.on{box-shadow:0 0 0 2px #fff,0 0 12px rgba(255,255,255,.35)}',
+    '.mlx-barre.masque{opacity:.35}',
+    '.mlx-barre i{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize}',
+    '.mlx-bg{left:0}.mlx-bd{right:0}',
+    // LE PIED.
+    '.mlx-pied{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:4px}',
+    '.mlx-pied-b{display:inline-flex;align-items:center;gap:10px;min-height:52px;padding:0 18px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;cursor:pointer}',
+    '.mlx-pied-b[aria-pressed="true"]{border-color:var(--red);background:rgba(224,32,32,.14)}',
+    '.mlx-enreg{display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:56px;min-width:min(340px,100%);padding:0 26px;border-radius:10px;border:1px solid rgba(255,90,90,.5);background:linear-gradient(160deg,#e21414,#8d0000);color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;box-shadow:0 0 22px rgba(224,32,32,.35);transition:box-shadow var(--t-1),opacity var(--t-1)}',
+    '.mlx-enreg:hover:not(:disabled){box-shadow:0 0 30px rgba(224,32,32,.5)}',
+    '.mlx-enreg:disabled{opacity:.45;box-shadow:none;cursor:default}',
+    '.mlx-enreg-pt{font-style:normal}',
+    // LE LECTEUR ANNOTÉ, chez l'athlète.
+    '.mla{margin-top:8px}',
+    '.mla-scene{position:relative;background:#000;border:1px solid var(--border);border-radius:var(--r-3);overflow:hidden}',
+    '.mla-video{display:block;width:100%;max-height:58vh;max-height:58dvh;object-fit:contain;background:#000}',
+    '.mla-scene:fullscreen .mla-video{max-height:none;height:100vh}',
+    '.mla-calque{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}',
+    '.mla-cmd{display:flex;align-items:center;gap:8px;margin-top:8px}',
+    '.mla-cmd .ml-b{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;min-width:40px;padding:0 9px}',
+    '.mla-cmd2{flex-wrap:wrap}',
+    '.mla-temps{flex:0 0 auto;font-size:var(--fs-2xs);color:var(--sub);font-variant-numeric:tabular-nums}',
+    '.mla-an{gap:10px}',
+    // UNE APPLICATION, PAS UNE PAGE, dès que l'écran le permet : l'en-tête, la
+    // timeline et « Enregistrer » restent en vue ; les deux colonnes défilent
+    // chacune de leur côté, et la vidéo prend toute la hauteur qui reste.
+    '@media (min-width:1181px) and (min-height:700px){#s-coach-motion-lab{height:100vh;height:100dvh;overflow:hidden}#s-coach-motion-lab .scroll-area{min-height:0;overflow:hidden;display:flex;flex-direction:column}#ml-contenu{flex:1;min-height:0;display:flex;flex-direction:column}.mlx{flex:1;min-height:0;padding-bottom:10px}.mlx-grille{flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch}.mlx-g,.mlx-d{min-height:0;overflow-y:auto;scrollbar-width:thin;padding-right:2px}.mlx-c{position:static;min-height:0}.mlx .ml-scene{flex:1;min-height:0}.mlx .ml-scene video{width:100%;height:100%}.mlx-tl-corps{height:164px;max-height:none}}',
+    // LES LARGEURS MOYENNES : la vidéo et la droite, puis la gauche sous elles.
+    '@media (max-width:1180px){.mlx-grille{grid-template-columns:minmax(0,1fr) minmax(320px,40%)}.mlx-g{grid-column:1/-1;order:3;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.mlx-c{position:static}}',
+    // LE TÉLÉPHONE DU COACH EN SALLE : une colonne, la vidéo d'abord.
+    '@media (max-width:820px){.mlx-grille{grid-template-columns:minmax(0,1fr)}.mlx-g{grid-template-columns:minmax(0,1fr)}.mlx-devise,.mlx-sous-t{display:none}.mlx .mlx-titre{font-size:26px}.mlx .ml-scene video{height:auto;max-height:56vh;max-height:56dvh}.mlx-tl-corps{grid-template-columns:100px minmax(0,1fr)}.mlx-outils{grid-template-columns:repeat(4,minmax(0,1fr))}.mlx-enreg{flex:1 1 100%}.mlx-pied-b{flex:1 1 0;justify-content:center;padding:0 10px}.mlx-logo{height:34px;max-width:90px}}',
   ].join('\n');
   document.head.appendChild(s);
 }

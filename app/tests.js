@@ -45963,12 +45963,15 @@ async function testExercices(){
         if((document.querySelector('.screen.active')||{}).id!=='s-coach-motion-lab') return 'mauvais écran';
         if(document.getElementById('modal-overlay')) return 'la feuille de correction reste ouverte par-dessus';
         if(document.getElementById('ml-titre').textContent!=='Arraché') return 'titre : '+document.getElementById('ml-titre').textContent;
-        if(!/^Motion Lab · Léa/.test(document.querySelector('.ml-sous').textContent)) return 'sous-titre';
+        // LA REFONTE (21/09/2026) : « Motion Lab » est le titre de l'écran ; la
+        // pilule de l'exercice dit, sous son nom, l'athlète et la date.
+        if(!/^Léa/.test(document.querySelector('#ml-contenu .ml-sous').textContent)) return 'sous-titre';
         const e=document.getElementById('ml-enreg');
         if(!e.disabled) return '« Enregistrer » actif sans rien à enregistrer';
         // Une répétition renommée : il y a quelque chose à enregistrer.
         _ml.segments[0]={..._ml.segments[0],label:'Arraché 1'}; _mlMajEnregistrer();
-        if(e.disabled||e.textContent!=='ENREGISTRER •') return 'la modification ne se voit pas';
+        // Le point rouge de « Enregistrer la correction » dit qu'il reste à enregistrer.
+        if(e.disabled||e.textContent.indexOf('•')<0) return 'la modification ne se voit pas';
         // QUITTER DEMANDE, et « Rester » garde tout.
         let q=null; window.rcConfirm=async(t)=>{ q=t; return false; };
         await fermerMotionLab();
@@ -46002,6 +46005,211 @@ async function testExercices(){
       }
       await new Promise(r=>setTimeout(r,900));
       try{ document.getElementById('modal-overlay')?.remove(); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      return msg?_echec(msg):true;
+    });
+
+    // ══ 21/09/2026 — LA REFONTE DU MOTION LAB : LES ANNOTATIONS ════════════
+    //
+    // Kevin : « Motion Lab doit devenir le véritable laboratoire d'analyse
+    // technique ». Des tracés posés sur l'image — nom, couleur, épaisseur,
+    // durée —, une légende, une timeline ; le tout dans l'entrée de la vidéo,
+    // et revu par l'athlète à ses instants.
+
+    ok('MLX — annotValide garde ce qui se dessine, et rien d’autre',(()=>{
+      const d=annotValide({v:1,majLe:5,leg:{on:1,titre:'  Analyse\u0007 technique ',pos:'bd',taille:'l',fond:'clair',op:2},a:[
+        {id:'a1',n:'Trajectoire actuelle',t:'libre',c:'#FF3B3B',e:4,d:3000,f:9000,p:'100,900 200,600 300,300'},
+        {id:'a2',n:'Angle coude',t:'angle',c:'#3b82f6',e:3,d:0,f:5000,p:'500,300 600,450 500,600',cb:100},
+        {id:'a3',n:'x',t:'angle',c:'#3b82f6',e:3,d:0,f:5000,p:'500,300 600,450'},            // deux points : tombe
+        {id:'a4',n:'x',t:'etoile',c:'#3b82f6',e:3,d:0,f:5000,p:'1,1 2,2'},                  // type inconnu : tombe
+        {id:'a5',n:'x',t:'ligne',c:'red',e:3,d:0,f:5000,p:'1,1 2,2'},                       // couleur non hexa : tombe
+        {id:'a6',n:'x',t:'ligne',c:'#ffffff',e:3,d:5000,f:5000,p:'1,1 2,2'},                // durée nulle : tombe
+        {id:'a1',n:'doublon',t:'ligne',c:'#ffffff',e:3,d:0,f:5000,p:'1,1 2,2'},             // id déjà vu : tombe
+        {id:'a7',n:'',t:'texte',c:'#ffffff',e:3,d:0,f:5000,p:'500,100'},                    // texte vide : tombe
+        {id:'a8',n:'T',t:'texte',c:'#ffffff',e:40,d:0,f:5000,p:'500,100',x:'DESCENDS PLUS BAS',ts:'xl',tf:7},
+        {id:'a9',n:'Genou',t:'point',c:'#facc15',e:4,d:0,f:5000,p:'100,100 200,200',lb:['Hanche','Genou','Cheville'],rel:1,
+          k:[[0,'100,100 200,200'],[1000,'150,100 250,200'],[900,'1,1 2,2'],[2000,'1,1']]},
+        {id:'a10',n:'Hors image',t:'ligne',c:'#ffffff',e:3,d:0,f:5000,p:'1001,5 2,2'}]});   // point hors image : tombe
+      if(!d) return _echec('document refusé');
+      if(d.a.map(x=>x.id).join()!=='a1,a2,a8,a9') return _echec('tracés gardés : '+d.a.map(x=>x.id).join());
+      if(d.a[0].c!=='#ff3b3b') return _echec('la couleur n’est pas ramenée en minuscules');
+      if(d.leg.titre!=='Analyse  technique'||d.leg.op!==0.85||d.leg.pos!=='bd') return _echec('légende : '+JSON.stringify(d.leg));
+      const t=d.a[2];
+      if(t.e!==4||t.ts!=='m'||t.tf!==1||t.x!=='DESCENDS PLUS BAS') return _echec('texte : '+JSON.stringify(t));
+      // LES IMAGES CLÉS : même nombre de points, instants croissants.
+      const g=d.a[3];
+      if(!g.k||g.k.length!==2||g.k[1][0]!==1000) return _echec('images clés : '+JSON.stringify(g.k));
+      if(g.lb.length!==2||!g.rel) return _echec('étiquettes des repères : '+JSON.stringify(g));
+      if(d.a[1].cb!==100) return _echec('angle cible perdu');
+      // LE PLAFOND : les images clés tombent d'abord, puis les derniers tracés.
+      const lourd={v:1,a:Array.from({length:ANNOT_MAX+5},(_,i)=>({id:'z'+i,n:'Trajectoire '+i,t:'libre',c:'#ff3b3b',e:4,d:0,f:9000,
+        p:Array.from({length:ANNOT_PTS_MAX},(_,j)=>(j*10%1000)+','+(j*7%1000)).join(' ')}))};
+      const L=annotValide(lourd);
+      if(L.a.length>ANNOT_MAX) return _echec('plus de '+ANNOT_MAX+' tracés');
+      if(JSON.stringify(L).length>ANNOT_TAILLE_MAX) return _echec('le plafond de taille ne tient pas');
+      if(annotValide(null)!==null||annotValide({v:2})!==null) return _echec('un document illisible passe');
+      // RIEN À MONTRER : vide, ou tout masqué.
+      if(annotAMontrer({v:1,a:[]})||annotAMontrer({v:1,a:[{id:'q',n:'q',t:'ligne',c:'#ffffff',e:2,d:0,f:9,p:'1,1 2,2',h:1}]}))
+        return _echec('un document sans tracé visible vaut un bouton');
+      return true;})());
+
+    okA('MLX — le suivi s’interpole entre ses images clés, et l’angle se mesure dans l’image',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const a={id:'x',n:'Genou',t:'point',c:'#ffffff',e:4,d:0,f:10000,p:'100,500'};
+      if(mlAnnotPointsA(a,5000)[0][0]!==100) return _echec('sans clé, le tracé bouge');
+      let b=mlClesMaj(a,1000,[[100,500]]);
+      b=mlClesMaj(b,3000,[[300,700]]);
+      const mi=mlAnnotPointsA(b,2000)[0];
+      if(mi[0]!==200||mi[1]!==600) return _echec('interpolation : '+mi);
+      if(mlAnnotPointsA(b,0)[0][0]!==100||mlAnnotPointsA(b,9000)[0][0]!==300) return _echec('hors des clés, le point n’est pas tenu');
+      if(mlCleA(b,3010)!==1||mlCleA(b,2500)!==-1) return _echec('clé à l’instant');
+      // Une clé reposée au même instant REMPLACE l'ancienne.
+      if(mlClesMaj(b,3005,[[310,700]]).k.length!==2) return _echec('une clé se double');
+      // LE PLAFOND : jamais plus de ANNOT_CLES_MAX clés.
+      let c=a; for(let i=0;i<ANNOT_CLES_MAX+6;i++) c=mlClesMaj(c,i*100,[[i,500]]);
+      if(c.k.length!==ANNOT_CLES_MAX) return _echec(c.k.length+' clés');
+      // L'ANGLE : 90° dans l'image, même quand la vidéo est en portrait —
+      // les points sont normés séparément en largeur et en hauteur.
+      if(mlAngleTrois([0,500],[0,0],[500,0],1080,1920)!==90) return _echec('angle droit');
+      // 45° dans l'IMAGE : 100 px de large pour 100 px de haut, soit 1000·100/1080 et 1000·100/1920 en normé.
+      if(mlAngleTrois([92.6,0],[0,0],[92.6,52.08],1080,1920)!==45) return _echec('angle en portrait : '+mlAngleTrois([92.6,0],[0,0],[92.6,52.08],1080,1920));
+      if(mlAngleTrois([0,0],[0,0],[1,1],100,100)!==null) return _echec('un angle sans branche se mesure');
+      // LA VISIBILITÉ : sa durée, sauf en comparaison pour les tracés de forme.
+      const t={id:'y',n:'T',t:'libre',c:'#ffffff',e:4,d:1000,f:2000,p:'1,1 2,2'};
+      if(mlAnnotVisible(t,500)||!mlAnnotVisible(t,1500)||mlAnnotVisible(t,2000)) return _echec('durée d’apparition');
+      if(!mlAnnotVisible(t,5000,true)) return _echec('la comparaison ne superpose pas');
+      if(mlAnnotVisible({...t,t:'texte'},5000,true)) return _echec('un texte sort de sa durée en comparaison');
+      if(mlAnnotVisible({...t,h:1},1500)) return _echec('un tracé masqué se voit');
+      return true;});
+
+    okA('MLX — les noms par défaut, les temps écrits à la main, le trait simplifié',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const sens=_mlxSens();
+      if(mlNomDefaut('libre','#ff3b3b',sens)!=='Trajectoire actuelle') return _echec('trajectoire rouge');
+      if(mlNomDefaut('courbe','#22c55e',sens)!=='Trajectoire idéale') return _echec('trajectoire verte');
+      if(mlNomDefaut('zone','#ff3b3b',sens)!=='Erreur') return _echec('zone rouge : '+mlNomDefaut('zone','#ff3b3b',sens));
+      if(mlNomDefaut('angle','#3b82f6',sens)!=='Angle') return _echec('angle');
+      // LE SENS RÉÉCRIT PAR LE COACH passe devant.
+      if(mlNomDefaut('libre','#ff3b3b',{...sens,'#ff3b3b':'Barre qui part'})!=='Barre qui part') return _echec('le sens du coach est ignoré');
+      if(mlNomDefaut('ligne','#fb923c',{...sens,'#fb923c':''})!=='Ligne') return _echec('couleur sans sens');
+      for(const [s,ms] of [['0:03.25',3250],['3.5',3500],['63',63000],['1:03',63000],['2,5',2500]])
+        if(_mlxLireTemps(s)!==ms) return _echec('temps '+s+' → '+_mlxLireTemps(s));
+      if(_mlxLireTemps('1:75')!==null||_mlxLireTemps('abc')!==null) return _echec('un temps illisible passe');
+      const pts=Array.from({length:500},(_,i)=>[i*2,Math.round(500+300*Math.sin(i/40))]);
+      const r=mlSimplifierMax(pts,ANNOT_PTS_MAX);
+      if(r.length>ANNOT_PTS_MAX||r.length<8) return _echec('trait simplifié : '+r.length+' points');
+      return true;});
+
+    okA('MLX — chaque type se dessine, la légende aussi, et le doigt touche ce qu’il vise',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const cv=document.createElement('canvas'); cv.width=400; cv.height=700;
+      const g=cv.getContext('2d');
+      const R={s:1,ox:0,oy:0,vw:400,vh:700};
+      const doc={v:1,majLe:0,leg:{on:1,titre:'Analyse technique',pos:'hd',taille:'m',fond:'sombre',op:0.85},a:[
+        {id:'l',n:'Ligne',t:'ligne',c:'#ffffff',e:4,d:0,f:9000,p:'100,100 100,900'},
+        {id:'f',n:'Flèche',t:'fleche',c:'#22c55e',e:4,d:0,f:9000,p:'200,800 300,200'},
+        {id:'tr',n:'Trajectoire',t:'libre',c:'#ff3b3b',e:4,d:0,f:9000,p:'500,900 520,700 560,500 600,300'},
+        {id:'co',n:'Courbe',t:'courbe',c:'#ff3b3b',e:4,d:0,f:9000,p:'600,900 650,600 700,300'},
+        {id:'ce',n:'Cercle',t:'cercle',c:'#facc15',e:4,d:0,f:9000,p:'800,200 850,200'},
+        {id:'re',n:'Rect',t:'rect',c:'#fb923c',e:4,d:0,f:9000,p:'700,700 900,800'},
+        {id:'zo',n:'Zone',t:'zone',c:'#facc15',e:4,d:0,f:9000,p:'100,950 300,990'},
+        {id:'an',n:'Angle coude',t:'angle',c:'#3b82f6',e:4,d:0,f:9000,p:'400,300 500,450 400,600',cb:100},
+        {id:'po',n:'Repères',t:'point',c:'#a855f7',e:4,d:0,f:9000,p:'300,400 350,500',lb:['Épaule','Coude'],rel:1},
+        {id:'te',n:'Texte',t:'texte',c:'#ffffff',e:4,d:0,f:9000,p:'500,50',x:'DESCENDS PLUS BAS',ts:'m',tf:1,tc:1}]};
+      try{ mlDessinerAnnotations(g,R,doc,1000,{sel:'an',poignees:true,comparaison:true}); }
+      catch(e){ return _echec('le dessin lève : '+e.message); }
+      // LE DOIGT : sur la ligne verticale x=40 px, et loin de tout.
+      const h=mlAnnotToucher(doc,R,1000,41,350,{g});
+      if(!h||h.id!=='l') return _echec('la ligne n’est pas touchée : '+JSON.stringify(h));
+      const p=mlAnnotToucher(doc,R,1000,200,315,{sel:'an',g});
+      if(!p||p.id!=='an'||p.i!==1) return _echec('le sommet de l’angle choisi ne se saisit pas : '+JSON.stringify(p));
+      if(mlAnnotToucher(doc,R,20000,41,350,{g})) return _echec('un tracé hors de sa durée se touche');
+      // CE QUE LA LÉGENDE ET LA LISTE LISENT D'UN ANGLE.
+      const lib=mlAnnotLibelle(doc.a[7],1000,400,700);
+      if(!/^Angle coude : \d+° \(cible 100°\)$/.test(lib)) return _echec('libellé : '+lib);
+      return true;});
+
+    okA('MLX — le coach trace, nomme, enregistre ; l’athlète revoit sa vidéo annotée',async()=>{
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svC=window.rcConfirm, svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
+      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
+        try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
+        _r28Monter([_r28Video({segments:[{id:'s1',label:'Rép 1',debutMs:1000,finMs:2500}]})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        // LA MAQUETTE : les trois colonnes, la timeline, le pied.
+        for(const sel of ['.mlx-g','.mlx-c','.mlx-d','.mlx-tl','#ml-enreg','#mlx-orig','#mlx-outils','#mlx-modeles','#ml-pistes'])
+          if(!document.querySelector('#ml-contenu '+sel)) return 'élément absent : '+sel;
+        if(document.querySelectorAll('#mlx-outils .mlx-outil').length!==12) return 'la boîte n’a pas ses douze outils';
+        if(document.querySelectorAll('#mlx-modeles .mlx-mod').length!==ML_MODELES_ANNOT.length+1) return 'les sept modèles manquent';
+        // Les anciens panneaux vivent dans leurs onglets.
+        for(const id of ['ml-traj','ml-pts','ml-artic','ml-lecture','ml-corr','ml-prise'])
+          if(!document.getElementById(id)) return 'panneau perdu : '+id;
+        _ml.dureeMs=8000;
+        // UN TRACÉ : l'outil, la couleur, l'épaisseur en cours ; la séquence choisie pour durée.
+        _ml.couleur='#22c55e'; _ml.epaisseur=6;
+        const a=_mlxCreer('libre',[[100,800],[200,500],[300,200]]);
+        if(!a||a.n!=='Trajectoire idéale'||a.c!=='#22c55e'||a.e!==6) return 'tracé : '+JSON.stringify(a);
+        if(_ml.sel!==a.id) return 'le tracé neuf n’est pas choisi';
+        if(!document.getElementById('mlx-nom')) return 'l’éditeur du tracé ne s’ouvre pas';
+        mlAnnotNom('Barre idéale');
+        if(_mlxAnnot(a.id).n!=='Barre idéale') return 'le nom ne se pose pas';
+        // L'HISTORIQUE : annuler retire le tracé, rétablir le rend.
+        mlAnnuler();
+        if(_ml.annot.a.length) return 'annuler ne retire pas le tracé';
+        mlRetablir();
+        if(_ml.annot.a.length!==1) return 'rétablir ne rend pas le tracé';
+        // LA LÉGENDE, et une barre de timeline par tracé.
+        mlLegende('on',true);
+        if(document.querySelectorAll('#ml-pistes .mlx-barre').length!==1) return 'la timeline n’a pas sa barre';
+        const e=document.getElementById('ml-enreg');
+        if(e.disabled||e.textContent.indexOf('•')<0) return 'rien n’attend l’enregistrement';
+        // QUITTER DEMANDE, pour les tracés aussi.
+        let q=null; window.rcConfirm=async(t,x)=>{ q=x; return false; };
+        await fermerMotionLab();
+        if(!q||!/tracés/.test(q)||!_ml) return 'quitter avec des tracés non enregistrés ne demande rien';
+        // ENREGISTRER : dans l'entrée de la vidéo, et l'athlète est prévenu.
+        if(mlEnregistrer()!==true) return 'l’enregistrement échoue';
+        const v=DB.get('users')['a28@t.fr'].videos[0];
+        if(!v.annot||v.annot.a.length!==1||v.annot.a[0].n!=='Barre idéale'||!v.annot.leg.on) return 'rien n’est arrivé chez l’athlète';
+        if(v.feedbackSeen!==false) return 'l’athlète n’est pas prévenu';
+        if(!e.disabled||_mlModifie()) return 'il reste quelque chose à enregistrer';
+        // LA RÉOUVERTURE : le tracé revient tel quel.
+        q=null; window.rcConfirm=async()=>{ q=true; return true; };
+        await fermerMotionLab();
+        if(q) return 'une question est posée alors que tout est enregistré';
+        try{ closeModal(); }catch(x){}
+        await ouvrirMotionLab('a28@t.fr','v28');
+        if(!_ml||_ml.annot.a.length!==1||_ml.annot.a[0].n!=='Barre idéale') return 'le tracé ne revient pas à la réouverture';
+        _mlArreter(); _ml=null;
+        // L'ATHLÈTE : un bouton sur sa carte, et sa vidéo annotée.
+        const lea=DB.get('users')['a28@t.fr'];
+        currentUser=lea;
+        const carte=_buildVideoCard(lea.videos[0]);
+        if(!/vidéo annotée/.test(carte)) return 'la carte de l’athlète ne propose pas la vidéo annotée';
+        if(await ouvrirCorrectionMotion('a28@t.fr','v28')!==true) return 'la correction ne s’ouvre pas';
+        if(!document.querySelector('#mlc-annot .mla')) return 'le lecteur annoté manque';
+        if(document.querySelectorAll('#mlc-annot .mla-an').length!==1) return 'la liste des tracés manque';
+        if(document.getElementById('mlc-lecteur')) return 'un lecteur de correction commentée sort sans correction';
+        fermerCorrectionMotion();
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      finally {
+        try{ if(document.getElementById('modal-overlay')) closeModal(); }catch(e){}
+        try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        try{ mlQuitterCorrection(); }catch(e){}
+        window.rcConfirm=svC; window._ratProfilFait=svRat; window.toast=svT; CLOUD.pushOne=svPush;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      await new Promise(r=>setTimeout(r,900));
       try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
       return msg?_echec(msg):true;
     });

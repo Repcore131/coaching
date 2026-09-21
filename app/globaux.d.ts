@@ -45,6 +45,23 @@ declare function enregistrerSegmentsVideo(email: string, videoId: string, segmen
 declare function motionCorrectionValide(m: any): any;
 declare function enregistrerCorrectionMotion(email: string, videoId: string, motion: any):
   { ok: boolean; raison?: string; envoi?: any; motion?: any };
+// Les points suivis nommés d'une répétition (lot 8 bis).
+declare const SEG_REP_MAX: number;
+declare const SEG_REP_PTS_MAX: number;
+declare const SEG_REP_NOM_MAX: number;
+declare function segReperesValide(r: any, debutMs: number, finMs: number): any;
+// Les annotations du laboratoire (refonte du 21/09/2026).
+declare const ANNOT_MAX: number;
+declare const ANNOT_PTS_MAX: number;
+declare const ANNOT_CLES_MAX: number;
+declare const ANNOT_NOM_MAX: number;
+declare const ANNOT_TEXTE_MAX: number;
+declare const ANNOT_ETIQ_MAX: number;
+declare const ANNOT_TYPES: { readonly [type: string]: readonly [number, number] };
+declare function annotValide(doc: any): any;
+declare function annotAMontrer(doc: any): boolean;
+declare function enregistrerAnnotationsVideo(email: string, videoId: string, doc: any):
+  { ok: boolean; raison?: string; envoi?: any; annot?: any };
 
 // ── L'écran, ses dialogues et ses messages ──────────────────────────────────
 declare function go(id: string): any;
