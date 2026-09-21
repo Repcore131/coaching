@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1346';
+window.RC_BUILD='1347';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4291,10 +4291,13 @@ html{scroll-behavior:smooth}
 .cc-corps-o:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
 @media(prefers-reduced-motion:reduce){.cc-corps-o{transition:none}}
 /* LA SCENE PORTE UN RAPPORT FIXE, et c'est ce qui rend les traits de rappel
-   calculables : la planche y occupe toujours 34 % de la largeur, donc un point
-   du corps se repere en centiemes de scene quelle que soit la taille d'ecran.
-   Sans cadre fixe, un trait calcule en pourcentage pointerait a cote des que
-   la fenetre change. */
+   calculables : la planche y occupe toujours la meme part de la largeur —
+   CORPS_PART_CORPS — donc un point du corps se repere en centiemes de scene
+   quelle que soit la taille d'ecran. Sans cadre fixe, un trait calcule en
+   pourcentage pointerait a cote des que la fenetre change.
+   ⚠ LA PART N'EST PAS REPETEE ICI. Elle a valu 34 % avant le 21/09/2026, et
+   ce commentaire disait encore 34 quand elle etait passee a 40 : un chiffre
+   recopie a cote de sa constante finit toujours par mentir. */
 .cc-corps-scene{position:relative;width:100%;max-width:470px;margin:0 auto}
 .cc-corps-planche{position:absolute;top:0;height:100%}
 .cc-corps-planche img{width:100%;height:100%;display:block;
@@ -51449,22 +51452,28 @@ const CORPS_PLANCHE=Object.freeze({
   'f-face':{w:115,h:340,tete:{cx:50,cy:6.8,r:17}},
   'f-dos' :{w:104,h:340,tete:null}
 });
-// La planche occupe 34 % de la largeur de la scene, les deux colonnes
+// La part de largeur que la planche occupe sur la scene, les deux colonnes
 // d'etiquettes se partageant le reste. Une seule constante : les traits de
-// rappel et la planche doivent lire la meme.
+// rappel, la planche et le calcul du pas d'etiquettes lisent tous celle-ci.
 const CORPS_PART_CORPS=40;
 // LES BORNES DE LA COLONNE D'ETIQUETTES, en centiemes de scene.
 //
-// ⚠ LE PAS DE 13 EST UNE MESURE, PAS UN GOUT. Une etiquette porte quatre
-//   lignes — le muscle, l'ecart, la mensuration d'ou il sort, ses deux dates —
-//   et fait 45 px de haut. A 375 px de large, la scene en fait 364 : 45/364
-//   vaut 12,4 %, et on prend un demi-point de marge. Sept etiquettes tiennent
-//   donc de 7 a 85, dans un cadre qui va jusqu'a 93.
+// ⚠ LE PAS EST UNE MESURE, PAS UN GOUT — et une mesure RELEVEE, pas calculee
+//   de tete. Releve au banc a 375 px : la scene fait 363 px de haut, et
+//   l'etiquette la plus haute — quatre lignes : le muscle, l'ecart, la
+//   mensuration d'ou il sort, ses deux dates — en fait 43, soit 11,8 %. Le pas
+//   de 13,5 laisse donc six pixels de blanc entre deux voisines. Sept
+//   etiquettes tiennent de 7 a 88, dans un cadre qui va jusqu'a 93.
 //
-// ⚠ ET C'EST CE CALCUL QUI A FAIT PASSER LE CORPS DE 34 A 40 % DE LA SCENE.
-//   A 34 %, la scene ne faisait que 309 px de haut : les sept etiquettes de
+//   ⚠ NE PAS RECALCULER CE CHIFFRE DE TETE. En corrigeant ce commentaire le
+//     21/09/2026 j'y ai d'abord ecrit 47 px et 12,9 % — deduits des tailles de
+//     police, et faux tous les deux. Le banc a tranche.
+//
+// ⚠ ET C'EST CE CALCUL QUI A FAIT GRANDIR LE CORPS SUR LA SCENE. A 34 % de
+//   largeur, la scene ne faisait que 309 px de haut : les sept etiquettes de
 //   gauche en demandaient 315, et la derniere sortait du cadre. Le corps plus
-//   large rend la scene plus haute, et la colonne rentre.
+//   large rend la scene plus haute, et la colonne rentre. C'est de la que
+//   vient CORPS_PART_CORPS, et non d'un reglage a l'oeil.
 //
 // ⚠ LE BORD HAUT EST A 7, ET NON A 1 : une etiquette est CENTREE sur sa
 //   position, donc elle deborde vers le haut de sa demi-hauteur — 6 centiemes.
@@ -52236,11 +52245,11 @@ function _htmlCorpsCadre(c){
     +'<span class="cc-corps-t">Corps</span>'
     +'<span class="cc-corps-vue" role="group" aria-label="Vue du corps">'
     +onglet('face','Vue avant')+onglet('dos','Vue arrière')+'</span></div>';
-  // LA SCENE PORTE LE RAPPORT DE LA PLANCHE, elargi de 1/0,34 : la planche
-  // occupe 34 % de sa largeur, et tout — traits, etiquettes, disque de tete —
-  // se repere ensuite en centiemes de cette scene. Sans cadre fixe, un trait
-  // de rappel calcule en pourcentage pointerait ailleurs a chaque largeur
-  // d'ecran.
+  // LA SCENE PORTE LE RAPPORT DE LA PLANCHE, elargi de 100/CORPS_PART_CORPS :
+  // la planche occupe cette part de sa largeur, et tout — traits, etiquettes,
+  // disque de tete — se repere ensuite en centiemes de cette scene. Sans cadre
+  // fixe, un trait de rappel calcule en pourcentage pointerait ailleurs a
+  // chaque largeur d'ecran.
   // LES ETIQUETTES NE SORTENT QU'AVEC DEUX BILANS. Sous ce seuil il n'y a
   // aucun ecart a montrer, et treize libelles suivis de treize tirets seraient
   // un cadre plein qui ne dit rien.
@@ -52319,7 +52328,7 @@ function _htmlCorpsCadre(c){
   return '<div class="cc-corps">'+tete
     +'<div class="cc-corps-grille">'
     +'<div class="cc-corps-col">'+scene+note+legende+'</div>'
-    +(graphes?('<div class="cc-corps-col cc-corps-cg">'+graphes+'</div>'):'')
+    +(graphes?('<div class="cc-corps-col">'+graphes+'</div>'):'')
     +'</div></div>';
 }
 function renderCorpsCoach(c){
