@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1345';
+window.RC_BUILD='1346';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -51780,6 +51780,14 @@ function corpsVue(v){
   try{
     const c=getOwnedClient(currentClientId);
     if(c) renderCorpsCoach(c);
+    // ⚠ LE BOUTON QU'ON VIENT DE CLIQUER N'EXISTE PLUS. renderCorpsCoach
+    //   remplace tout le cadre, lui compris : au clavier, le focus retombait
+    //   sur le corps de la page et il fallait re-tabuler depuis le haut de la
+    //   fiche pour revenir a l'autre vue. On le repose sur l'onglet devenu
+    //   actif. A la souris, rien ne se voit : la bague de focus est en
+    //   :focus-visible, qui ne s'allume pas sur un clic.
+    const b=document.querySelector('#ccd-corps .cc-corps-o.actif');
+    if(b) b.focus();
   }catch(e){}
   return _corpsVue;
 }
@@ -52161,8 +52169,19 @@ function _htmlCorpsEtiquettes(u,genre,vue,charge){
         +(inf.valeur?'<span class="cc-corps-ev">'+escapeHtml(inf.valeur)+'</span>':'')
         +'<span class="cc-corps-es">'+escapeHtml(inf.source)+'</span>'
         +(inf.periode?'<span class="cc-corps-ed">'+escapeHtml(inf.periode)+'</span>':'');
+      // ⚠ role="img" ET aria-label, LA CONVENTION DE LA MAISON pour « cet
+      //   ensemble visuel dit ceci » — celle des badges et des jauges de RPE.
+      //   Sans elle, un lecteur d'ecran enfilait quatre fragments detaches —
+      //   « Biceps », « +0,8 cm », « biceps D », « 21/06 → 15/09 » — sans dire
+      //   qu'ils parlent du meme muscle, et l'attribut `title` d'un div non
+      //   interactif n'est pas lu par tous.
+      //
+      // ⚠ ET LES POINTS MEDIANS DEVIENNENT DES VIRGULES. Ils separent a l'oeil
+      //   et ne s'entendent pas : la phrase lue devenait un seul souffle.
+      const parle=String(titre).split(' · ').join(', ');
       ets+='<div class="cc-corps-et" data-c="'+cote+'"'
         +(inf.ecart?'':' data-sans=""')
+        +' role="img" aria-label="'+escapeHtml(parle)+'"'
         +' style="top:'+_arr1(cy)+'%" title="'+escapeHtml(titre)+'">'
         +lignes+'</div>';
       // LE TRAIT PART DU BORD INTERIEUR DE L'ETIQUETTE et rejoint le muscle par

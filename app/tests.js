@@ -38069,6 +38069,45 @@ async function testExercices(){
       }
       return true;})());
 
+    ok('CHAQUE ÉTIQUETTE S\u2019ANNONCE D\u2019UNE SEULE PHRASE',(()=>{
+      // ⚠ SANS role="img" ET aria-label, un lecteur d'ecran enfilait quatre
+      //   fragments detaches — « Biceps », « +0,8 cm », « biceps D »,
+      //   « 21/06 → 15/09 » — sans dire qu'ils parlent du meme muscle. Et
+      //   l'attribut `title` d'un div non interactif n'est pas lu par tous.
+      //   role="img" est la convention de la maison : celle des badges et des
+      //   jauges de RPE.
+      const J=864e5, t=Date.now();
+      const u={id:'P1',email:'p1@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-92*J,'bil-bicep-r':'38.2'},{date:t-6*J,'bil-bicep-r':'39.0'}]};
+      const boite=document.createElement('div');
+      boite.innerHTML=_htmlCorpsEtiquettes(u,'h','face',
+        {zones:{BICEPS:'sous-MEV'},vol:{BICEPS:4},semaine:'14 septembre'}).etiquettes;
+      const ets=[...boite.querySelectorAll('.cc-corps-et')];
+      if(ets.length!==13) return _echec(ets.length+' étiquettes au lieu de 13');
+      for(const e of ets){
+        if(e.getAttribute('role')!=='img')
+          return _echec('une étiquette n’est pas annoncée comme un tout');
+        const l=e.getAttribute('aria-label')||'';
+        if(!l.trim()) return _echec('une étiquette n’a rien à dire');
+        // ⚠ LES POINTS MEDIANS DEVIENNENT DES VIRGULES : ils separent a l'oeil
+        //   et ne s'entendent pas. La phrase lue devenait un seul souffle.
+        if(l.indexOf(' · ')>=0)
+          return _echec('un point médian survit dans la phrase lue : '+l);
+        // ET LE NOM DU MUSCLE Y EST : sans lui, on entend un chiffre sans sujet.
+        if(!/[A-Za-zÀ-ÿ]/.test(l)) return _echec('la phrase lue ne nomme rien : '+l);
+      }
+      // LA CHARGE Y EST AUSSI, pour qui ne voit pas la couleur.
+      const bi=ets.find(e=>/biceps/i.test(e.textContent)&&!/triceps/i.test(e.textContent));
+      const lb=bi.getAttribute('aria-label');
+      if(lb.indexOf('sous-MEV')<0||lb.indexOf('4 séries')<0)
+        return _echec('la charge ne s’entend pas : '+lb);
+      // ⚠ ET LA BASCULE DE VUE REND LE FOCUS. renderCorpsCoach remplace tout le
+      //   cadre, bouton compris : au clavier, le focus retombait sur le corps
+      //   de la page et il fallait re-tabuler depuis le haut de la fiche.
+      if(String(corpsVue).indexOf('.focus()')<0)
+        return _echec('la bascule de vue ne rend plus le focus');
+      return true;})());
+
     ok('MODE NEUTRE : AUCUNE COURBE DE POIDS DANS LE CADRE CORPS',(()=>{
       // ⚠ QUAND UN ANTECEDENT DE TCA EST DECLARE, blocPoidsCoach REFUSE deja
       //   de tracer quoi que ce soit : il remplace la section par un encart
