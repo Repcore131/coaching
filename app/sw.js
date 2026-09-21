@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1362';
+const CACHE = 'repcore-v1363';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -102,6 +102,10 @@ const MEDAILLONS = ['new_record', 'multiple_records', 'new_load', 'personal_best
   'new_perf', 'progression', 'monster', 'high_volume', 'no_mercy', 'full_session',
   'no_fail', 'perfect', 'streak', 'return', 'discipline']
   .map(n => './img/badges/' + n + '.png');
+// LES QUATRE SILHOUETTES DU CADRE « EVOLUTION ELEVE » de la fiche coach
+// (140 ko) : le coach ouvre une fiche en salle aussi, et sans elles le cadre
+// sortirait sans corps, les etiquettes pointant dans le vide.
+const CORPS = ['h-face', 'h-dos', 'f-face', 'f-dos'].map(n => './img/corps/' + n + '.webp');
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -110,7 +114,7 @@ const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/mp4/mp4box.all.min.js', './vendor/mp4/mp4-muxer.js',
   './fonts/montserrat-var-latin.woff2',
   './fonts/bebasneue-400-latin.woff2', './img/arn.png']
-  .concat(AVATARS).concat(MEDAILLONS);
+  .concat(AVATARS).concat(MEDAILLONS).concat(CORPS);
 
 // Une séance en cours interdit la bascule. Prendre le contrôle en pleine
 // séance, c'est purger le cache sous les pieds de quelqu'un qui est peut-être

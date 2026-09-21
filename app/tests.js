@@ -37966,74 +37966,77 @@ async function testExercices(){
     // des etiquettes, la coherence des tables, et le masquage du bloc. Le
     // rendu, lui, se juge au banc — une capture dit en une seconde ce qu'une
     // assertion de DOM dirait en trente lignes.
-    ok('CHAQUE ÉTIQUETTE DU CORPS A UN POINT D\'ANCRAGE RÉEL',(()=>{
-      // ⚠ LE TRAIT DE RAPPEL EST UNE DESIGNATION. S'il pointe a cote, il
-      //   designe le mauvais muscle — et une etiquette qui designe le mauvais
-      //   muscle est pire qu'une etiquette absente : elle a l'air juste.
+    ok('CHAQUE MENSURATION A SON POINT, DU BON CÔTÉ, SUR LES QUATRE SILHOUETTES',(()=>{
+      // ⚠ LE TRAIT DE RAPPEL EST UNE DESIGNATION. S'il pointe a cote — ou sur
+      //   le bras oppose —, il designe la mauvaise mensuration en ayant l'air
+      //   juste. Le modele de Kevin (21/09/2026) est une image : ses points ont
+      //   ete releves a la main, et c'est ici qu'on les tient.
+      const mesurees=new Set(MEAS.map(m=>m.k));
+      const montrees=new Set();
       for(const vue of ['face','dos']){
-        const liste=CORPS_ETIQUETTES[vue]||[];
-        if(liste.length!==13)
-          return _echec(vue+' : '+liste.length+' étiquettes au lieu des 13 muscles de WO_ZONES');
+        const liste=CORPS_MESURES[vue]||[];
         const vus=new Set();
-        for(const e of liste){
-          if(vus.has(e.m)) return _echec(vue+' : '+e.m+' est étiqueté deux fois');
-          vus.add(e.m);
-          if(e.s!=='l'&&e.s!=='r') return _echec(vue+' : côté « '+e.s+' » pour '+e.m);
+        for(const m of liste){
+          if(!mesurees.has(m.k)) return _echec(vue+' : « '+m.k+' » n’est pas une mensuration du bilan');
+          if(vus.has(m.k)) return _echec(vue+' : « '+m.k+' » est posé deux fois');
+          vus.add(m.k); montrees.add(m.k);
+          if(m.s!=='l'&&m.s!=='r') return _echec(vue+' : côté « '+m.s+' » pour '+m.k);
+          if(!CORPS_NOMS[m.k]) return _echec(m.k+' n’a pas de nom court');
           for(const g of ['h','f']){
-            const a=corpsAncre(g,vue,e.m,e.s==='l'?'g':'d');
-            if(!a) return _echec(g+'/'+vue+' : aucun contour pour '+e.m);
-            if(!(a.x>=0&&a.x<=100&&a.y>=0&&a.y<=100))
-              return _echec(g+'/'+vue+'/'+e.m+' : ancre hors planche ('+a.x+','+a.y+')');
+            const a=corpsAncre(g,vue,m.k);
+            if(!a) return _echec(g+'/'+vue+' : aucun point pour '+m.k);
+            if(!(a.x>0&&a.x<100&&a.y>0&&a.y<100))
+              return _echec(g+'/'+vue+'/'+m.k+' : point hors silhouette ('+a.x+','+a.y+')');
+            // LE TRAIT NE TRAVERSE PAS LE CORPS : une etiquette de gauche
+            // designe un point de la moitie gauche de l'image — a un centieme
+            // pres pour ce qui est sur l'axe, comme le cou.
+            if(m.s==='l'&&a.x>51) return _echec(g+'/'+vue+'/'+m.k+' : étiquette à gauche, point à droite');
+            if(m.s==='r'&&a.x<49) return _echec(g+'/'+vue+'/'+m.k+' : étiquette à droite, point à gauche');
           }
         }
-        // ET RIEN N'EST OUBLIE : les treize muscles que WO_ZONES sait dessiner
-        // sont les treize etiquetes. Un muscle dessine mais jamais nomme serait
-        // une zone qu'on colorie sans dire laquelle.
-        const dessines=Object.keys(((WO_ZONES.h||{})[vue]||{})[CORPS_NIVEAU]||{});
-        for(const m of dessines)
-          if(!vus.has(m)) return _echec(vue+' : '+m+' est dessiné mais pas étiqueté');
       }
-      // LE COTE EST LE BON COTE. Sur un muscle pair, 'g' doit tomber a gauche
-      // de 'd' — sans quoi le trait traverserait le corps pour rejoindre le
-      // bras oppose.
-      const g=corpsAncre('h','face','BICEPS','g'), dr=corpsAncre('h','face','BICEPS','d');
-      if(!(g.x<dr.x)) return _echec('le biceps gauche n’est pas à gauche du droit');
-      // UN MUSCLE IMPAIR REND LE MEME POINT DES DEUX COTES : les lombaires
-      // n'ont qu'un contour, et demander « le droit » ne doit pas rendre null.
-      const l1=corpsAncre('h','dos','LOMBAIRES','g'), l2=corpsAncre('h','dos','LOMBAIRES','d');
-      if(!l1||!l2||l1.x!==l2.x) return _echec('les lombaires ont deux points alors qu’ils n’ont qu’un contour');
-      // ET UN MUSCLE QUE LA VUE NE MONTRE PAS N'A PAS D'ANCRE INVENTEE.
-      if(corpsAncre('h','face','FESSIERS','g')!==null)
-        return _echec('les fessiers reçoivent une ancre en vue de face');
-      // ⚠ ET LE TRAIT PASSE PAR-DESSUS LA PLANCHE, PAS DESSOUS. Le corps est
-      //   opaque : dessine dessous, le trait disparaissait des qu'il le
-      //   touchait. Sans consequence pour un biceps, ancre au bord ; fatal
-      //   pour le trapeze et les lombaires, ancres au CENTRE de la planche en
-      //   vue de dos — leur trait s'arretait au bord du dos et ne designait
-      //   plus rien. L'ordre du DOM est donc une garantie, pas un detail.
+      // LES DOUZE TOURS DU BILAN SONT TOUS QUELQUE PART : un tour saisi par
+      // l'athlete et montre nulle part serait une mesure perdue pour le coach.
+      for(const k of mesurees)
+        if(!montrees.has(k)) return _echec('« '+k+' » est saisi au bilan mais n’apparaît sur aucune vue');
+      // ⚠ LE COTE EST CELUI DE L'ATHLETE. De face, son bras droit est a gauche
+      //   de l'image ; de dos, a droite.
+      for(const g of ['h','f']){
+        if(!(corpsAncre(g,'face','bicep-r').x<corpsAncre(g,'face','bicep-l').x))
+          return _echec(g+' : de face, le biceps droit n’est pas à gauche de l’image');
+        if(!(corpsAncre(g,'dos','bicep-l').x<corpsAncre(g,'dos','bicep-r').x))
+          return _echec(g+' : de dos, le biceps gauche n’est pas à gauche de l’image');
+        // LE BUSTE AU-DESSUS DE LA POITRINE : la convention de l'ecran de saisie.
+        if(!(corpsAncre(g,'face','bust').y<corpsAncre(g,'face','chest').y))
+          return _echec(g+' : le buste est posé sous la poitrine');
+      }
+      // ET UNE VUE QUI NE MONTRE PAS UN TOUR N'A PAS DE POINT INVENTE.
+      if(corpsAncre('h','face','glutes')!==null) return _echec('les fessiers reçoivent un point de face');
+      if(corpsAncre('f','dos','chest')!==null) return _echec('la poitrine reçoit un point de dos');
+      // ⚠ ET LE TRAIT PASSE PAR-DESSUS LA SILHOUETTE, PAS DESSOUS : l'ordre du
+      //   DOM est une garantie, pas un detail.
       const u0={id:'O1',email:'o1@t.fr',role:'athlete',gender:'H',
         bilans:[{date:Date.now()-90*864e5,'bil-chest':'100'},
                 {date:Date.now()-2*864e5, 'bil-chest':'101.4'}]};
       const html=_htmlCorpsCadre(u0);
       const iPlanche=html.indexOf('cc-corps-planche');
       const iTraits=html.indexOf('cc-corps-traits');
-      if(iPlanche<0||iTraits<0) return _echec('planche ou traits absents du cadre');
+      if(iPlanche<0||iTraits<0) return _echec('silhouette ou traits absents du cadre');
       if(!(iPlanche<iTraits))
-        return _echec('les traits sont dessinés sous la planche : ils s’arrêteront au bord du corps');
+        return _echec('les traits sont dessinés sous la silhouette : ils s’arrêteront au bord du corps');
       return true;})());
 
     ok('LES ÉTIQUETTES DU CORPS NE SE CHEVAUCHENT JAMAIS',(()=>{
-      // Le deltoide lateral et le deltoide anterieur sont a moins d'un centieme
-      // l'un de l'autre sur la planche : leurs deux etiquettes se superposaient
-      // exactement. On les ecarte, et le trait continue de pointer le vrai
-      // muscle — c'est tout l'interet des traits.
+      // Deux tours voisins — le cou et le buste, le biceps et la poitrine —
+      // sont a quelques centiemes l'un de l'autre : leurs etiquettes se
+      // superposeraient. On les ecarte, et le trait continue de pointer le vrai
+      // point — c'est tout l'interet des traits.
       const serre=corpsEtaler([20,20.4,21,60],9,2,96);
       for(let i=1;i<serre.length;i++)
         if(serre[i]-serre[i-1]<9-1e-9)
           return _echec('deux étiquettes à '+(serre[i]-serre[i-1]).toFixed(2)+' d’écart');
       if(serre[0]!==20) return _echec('la première a bougé sans raison : '+serre[0]);
-      // DEJA ESPACEES : ON NE TOUCHE A RIEN. Un etalement qui deplace ce qui
-      // allait deja ferait mentir tous les traits d'un coup.
+      // DEJA ESPACEES : ON NE TOUCHE A RIEN.
       const large=corpsEtaler([10,30,50,70],9,2,96);
       if(large.join(',')!=='10,30,50,70') return _echec('des positions correctes ont été déplacées : '+large.join(','));
       // LE BORD BAS RETIENT, ET LA REMONTEE NE SORT PAS PAR LE HAUT.
@@ -38042,38 +38045,48 @@ async function testExercices(){
       if(bas[0]<2-1e-9) return _echec('la première déborde en haut : '+bas[0]);
       for(let i=1;i<bas.length;i++)
         if(bas[i]-bas[i-1]<9-1e-9) return _echec('la remontée a recollé deux étiquettes');
-      // LES TREIZE DE LA VUE REELLE TIENNENT DANS LE CADRE. C'est le cas qui
-      // compte : sept a gauche, six a droite, aux vraies hauteurs.
-      for(const vue of ['face','dos']){
-        for(const cote of ['l','r']){
-          const ys=CORPS_ETIQUETTES[vue].filter(e=>e.s===cote)
-            .map(e=>corpsAncre('h',vue,e.m,cote==='l'?'g':'d').y)
-            .sort((a,b)=>a-b);
-          const et=corpsEtaler(ys,CORPS_ETIQ_GAP,CORPS_ETIQ_HAUT,CORPS_ETIQ_BAS);
-          if(et[et.length-1]>CORPS_ETIQ_BAS+1e-9)
-            return _echec(vue+'/'+cote+' : la dernière sort du cadre à '+et[et.length-1].toFixed(1));
-          for(let i=1;i<et.length;i++)
-            if(et[i]-et[i-1]<CORPS_ETIQ_GAP-1e-9)
-              return _echec(vue+'/'+cote+' : chevauchement à l’index '+i);
-        }
+      // TOUTES LES MENSURATIONS D'UNE VUE, AUX VRAIES HAUTEURS, SUR LES DEUX
+      // SEXES : c'est le cas qui compte — un athlete qui a tout mesure.
+      for(const g of ['h','f']) for(const vue of ['face','dos']) for(const cote of ['l','r']){
+        const ys=CORPS_MESURES[vue].filter(m=>m.s===cote)
+          .map(m=>corpsAncre(g,vue,m.k).y).sort((a,b)=>a-b);
+        const et=corpsEtaler(ys,CORPS_ETIQ_GAP,CORPS_ETIQ_HAUT,CORPS_ETIQ_BAS);
+        if(et[et.length-1]>CORPS_ETIQ_BAS+1e-9)
+          return _echec(g+'/'+vue+'/'+cote+' : la dernière sort du cadre à '+et[et.length-1].toFixed(1));
+        for(let i=1;i<et.length;i++)
+          if(et[i]-et[i-1]<CORPS_ETIQ_GAP-1e-9)
+            return _echec(g+'/'+vue+'/'+cote+' : chevauchement à l’index '+i);
       }
       // AUCUNE ENTREE : AUCUNE SORTIE. Pas une exception.
       return corpsEtaler([],9,2,96).length===0?true:_echec('une liste vide rend quelque chose');})());
 
-    ok('LES QUATRE PLANCHES SONT DÉCRITES, ET LE DOS N\'A PAS DE VISAGE',(()=>{
-      for(const g of ['h','f']) for(const v of ['face','dos']){
-        const p=CORPS_PLANCHE[g+'-'+v];
-        if(!p) return _echec('planche '+g+'-'+v+' absente de la table');
-        if(!(p.w>0&&p.h>0)) return _echec('planche '+g+'-'+v+' sans dimensions');
-        // ⚠ PAS DE TETE DE DOS. Une photo de visage posee sur l'arriere d'un
-        //   crane ne montre pas l'athlete : elle montre qu'on n'a pas regarde.
-        if(v==='dos'&&p.tete) return _echec('la planche de dos porte un emplacement de visage');
-        if(v==='face'&&!p.tete) return _echec('la planche de face n’a pas d’emplacement de visage');
-        if(v==='face'){
-          const t=p.tete;
-          if(!(t.cx-t.r>=0&&t.cx+t.r<=100)) return _echec(g+' : le disque déborde de la planche');
-          if(!(t.cy-t.r*(p.w/p.h)>=-0.05)) return _echec(g+' : le disque dépasse au-dessus du crâne');
+    ok('LES QUATRE SILHOUETTES SONT CELLES DE L’IMAGE, ET AUCUNE TÊTE N’EST RECOUVERTE',(()=>{
+      // Kevin, 21/09/2026 : « hommes pour les hommes, femmes pour les femmes »,
+      // et « supprime le rond sur la tete ».
+      for(const g of ['h','f']){
+        const a=CORPS_PLANCHE[g+'-face'], b=CORPS_PLANCHE[g+'-dos'];
+        for(const [v,p] of [['face',a],['dos',b]]){
+          if(!p) return _echec('silhouette '+g+'-'+v+' absente de la table');
+          if(p.src!=='./img/corps/'+g+'-'+v+'.webp') return _echec(g+'-'+v+' pointe vers « '+p.src+' »');
+          if(!(p.w>0&&p.h>0)) return _echec(g+'-'+v+' sans dimensions');
+          if('tete' in p) return _echec(g+'-'+v+' porte encore un emplacement de visage');
         }
+        // UNE TOILE PAR SEXE : sans elle, le cadre changeait de hauteur a
+        // chaque bascule avant / arriere.
+        if(a.w!==b.w||a.h!==b.h) return _echec(g+' : les deux vues n’ont pas la même toile');
+      }
+      const J=864e5, t=Date.now();
+      const bil=[{date:t-60*J,'bil-waist':'80'},{date:t-3*J,'bil-waist':'78.5'}];
+      const f=_htmlCorpsCadre({id:'Q1',email:'q1@t.fr',role:'athlete',gender:'F',bilans:bil,
+        athletePhoto:'data:image/png;base64,AAAA'});
+      const h=_htmlCorpsCadre({id:'Q2',email:'q2@t.fr',role:'athlete',gender:'H',bilans:bil,
+        athletePhoto:'data:image/png;base64,AAAA'});
+      if(f.indexOf('./img/corps/f-')<0) return _echec('une athlète reçoit la silhouette masculine');
+      if(h.indexOf('./img/corps/h-')<0) return _echec('un athlète reçoit la silhouette féminine');
+      // ⚠ PLUS DE ROND SUR LA TETE, MEME AVEC UNE PHOTO DE PROFIL.
+      for(const x of [f,h]){
+        if(x.indexOf('cc-corps-tete')>=0) return _echec('le disque de tête est revenu');
+        if(x.indexOf('base64,AAAA')>=0) return _echec('la photo de profil est posée sur la silhouette');
       }
       return true;})());
 
@@ -38119,50 +38132,36 @@ async function testExercices(){
         return _echec('0,6 cm est déclaré stable');
       return true;})());
 
-    ok('CHAQUE ÉTIQUETTE PORTE SA SOURCE, SES DATES ET SA TOLÉRANCE',(()=>{
+    ok('CHAQUE ÉTIQUETTE PORTE SA MENSURATION, SES DATES ET SA TOLÉRANCE',(()=>{
       // « Toute valeur affichée porte sa source, sa date et sa tolérance. »
       // C'est la doctrine, et c'est verifiable.
       const J=864e5, t=Date.parse('2026-09-14T10:00:00Z');
       const u={id:'E2',role:'athlete',bilans:[
         {date:t-90*J,'bil-bicep-r':'38.2','bil-thigh-r':'61.5','bil-glutes':'101','bil-calf-r':'39.1'},
         {date:t-2*J, 'bil-bicep-r':'39.0','bil-thigh-r':'62.4','bil-glutes':'102.6','bil-calf-r':'39.9'}]};
-      const b=corpsEtiquette(u,'BICEPS');
-      // ⚠ ESPACE INSECABLE AVANT L'UNITE, et ce n'est pas un detail de style :
-      //   c'est _synEcart qui l'ecrit, pour que « 0,8 » et « cm » ne se
-      //   separent jamais en fin de ligne. La premiere version de cette
-      //   assertion comparait a une espace ordinaire et echouait en affichant
-      //   deux chaines rigoureusement identiques a l'oeil. On l'epingle
-      //   explicitement plutot que de la subir.
+      const b=corpsMesureEtiquette(u,'bicep-r');
+      if(!b) return _echec('aucune étiquette pour un biceps mesuré deux fois');
+      // ⚠ ESPACE INSECABLE AVANT L'UNITE : c'est _synEcart qui l'ecrit, pour
+      //   que « 0,8 » et « cm » ne se separent jamais en fin de ligne.
       const NB=String.fromCharCode(160);
       if(b.valeur!=='+0,8'+NB+'cm') return _echec('le biceps affiche « '+b.valeur+' »');
-      if(b.valeur.indexOf(' cm')>=0)
-        return _echec('l’unité est collée par une espace sécable');
-      if(b.source!=='biceps D') return _echec('la source est « '+b.source+' »');
+      if(b.lib!=='Biceps D') return _echec('le nom court est « '+b.lib+' »');
       if(!/→/.test(b.periode)) return _echec('la période ne porte pas deux dates : '+b.periode);
-      for(const bout of ['Biceps droit','tolérance','± 0,5 cm','du ','au '])
+      for(const bout of ['Tour de biceps droit','tolérance','± 0,5 cm','du ','au '])
         if(b.titre.indexOf(bout)<0)
           return _echec('l’infobulle ne porte pas « '+bout+' » : '+b.titre);
-      // ⚠ AUCUN POURCENTAGE DE DEVELOPPEMENT, NULLE PART. Le modele visuel en
-      //   portait — « Épaules 68 % » — et ces chiffres-la n'existent pas : ni
-      //   source, ni unite, ni methode. C'est un score pose sur un corps.
-      for(const m of Object.keys(MUSCLES)){
-        const e=corpsEtiquette(u,m);
-        const tout=e.valeur+' '+e.source+' '+e.periode+' '+e.titre;
-        if(/%/.test(tout)) return _echec(m+' affiche un pourcentage : '+tout);
+      // ⚠ AUCUN POURCENTAGE, NULLE PART : un « Épaules 68 % » n'a ni source,
+      //   ni unite, ni methode. C'est un score pose sur un corps.
+      for(const m of MEAS){
+        const e=corpsMesureEtiquette(u,m.k);
+        if(!e) continue;
+        const tout=e.lib+' '+e.valeur+' '+e.periode+' '+e.titre;
+        if(/%/.test(tout)) return _echec(m.k+' affiche un pourcentage : '+tout);
       }
-      // UN MUSCLE SANS MENSURATION LE DIT, et l'infobulle donne la phrase que
-      // le reste de l'application ecrit deja.
-      const dor=corpsEtiquette(u,'DORSAUX');
-      if(dor.ecart!==null) return _echec('les dorsaux reçoivent un écart');
-      if(dor.source!=='pas de mesure') return _echec('les dorsaux disent « '+dor.source+' »');
-      if(dor.valeur!=='') return _echec('les dorsaux portent une valeur : « '+dor.valeur+' »');
-      if(dor.titre.indexOf('Aucune mensuration ne suit ce muscle sur la période.')<0)
-        return _echec('l’infobulle des dorsaux ne dit pas la phrase de la maison');
-      // LES TROIS CORRECTIONS DU 20/09/2026, EPINGLEES UNE PAR UNE.
-      if(corpsEtiquette(u,'FESSIERS').source!=='fessiers')
-        return _echec('les fessiers ne lisent plus le tour de fessiers');
-      if(corpsEtiquette(u,'MOLLETS').source!=='mollet D')
-        return _echec('les mollets ne lisent pas le tour de mollet');
+      // ⚠ PAS D'ETIQUETTE SANS ECART — Kevin : « les mensurations uniquement
+      //   avec les +/- cm ». Le cou n'a jamais ete mesure : pas d'etiquette.
+      if(corpsMesureEtiquette(u,'neck')!==null) return _echec('un tour jamais mesuré reçoit une étiquette');
+      if(corpsMesureEtiquette(u,'glutes').lib!=='Fessiers') return _echec('les fessiers ont perdu leur nom');
       return true;})());
 
     ok('UN BILAN REÇU SE LIT CHEZ LE COACH SANS RECHARGEMENT',(()=>{
@@ -38289,89 +38288,27 @@ async function testExercices(){
       if(_corpsNb(0)!=='0') return _echec('_corpsNb ne sait pas dire zéro');
       return true;})());
 
-    ok('LA TEINTE DIT LE VOLUME, ET SEULEMENT LA OU IL Y A UN REPERE',(()=>{
-      // ⚠ LA COULEUR NE JUGE PAS UN CORPS. Elle dit MEV / MAV / MRV — une
-      //   charge de travail, la seule question de ce cadre pour laquelle il
-      //   existe des reperes publies. Le centimetre, lui, reste dans la meme
-      //   encre quoi qu'il fasse : regle R32.
-      const u={id:'V1',email:'v1@t.fr',role:'athlete',gender:'H'};
-      const rep=reperesEffectifs(u,'PECTORAUX');
-      if(!rep) return _echec('les pectoraux n’ont plus de repère de volume');
-      // LES QUATRE ZONES, UNE PAR UNE, SUR LE MEME MUSCLE.
-      const cas=[
-        [rep.mev-1,      'sous-MEV'],
-        [rep.mev,        'MEV-MAV'],
-        [rep.mavMin,     'MAV-MRV'],
-        [rep.mrv,        'MAV-MRV'],
-        [rep.mrv+1,      'sur-MRV']];
-      for(const [v,zone] of cas){
-        const t=corpsTeintes(u,'face',{PECTORAUX:v});
-        if(t.PECTORAUX!==GC_COULEURS[zone])
-          return _echec(v+' séries donnent « '+t.PECTORAUX+' » au lieu de la couleur « '+zone+' »');
-      }
-      // ⚠ LES COULEURS SONT CELLES DE LA GRILLE DE CHARGE, PAS UNE TROISIEME
-      //   PALETTE. Trois codes pour une notion finiraient par se contredire.
-      const palette=new Set(Object.values(GC_COULEURS));
-      const tout=corpsTeintes(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
-      for(const m in tout)
-        if(!palette.has(tout[m])) return _echec(m+' est peint hors palette : '+tout[m]);
-      // UN MUSCLE SANS REPERE N'EST PAS TEINTE. Les adducteurs et les
-      // abducteurs n'ont aucun MEV publie : les peindre d'une couleur
-      // quelconque aurait invente le repère qui manque.
-      for(const m of ['ABDUCTEURS','ADDUCTEURS']){
-        if(reperesEffectifs(u,m)) continue;   // un coach a pu en poser un
-        if(corpsTeintes(u,'face',{[m]:12})[m])
-          return _echec(m+' est teinté alors qu’il n’a aucun repère');
-      }
-      // ET LA VUE FILTRE : un muscle que la planche ne montre pas n'a pas de
-      // zone a peindre, et lui en donner une la poserait sur le vide.
-      if(corpsTeintes(u,'face',{FESSIERS:15}).FESSIERS)
-        return _echec('les fessiers sont teints en vue de face');
-      if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS)
-        return _echec('les fessiers ne sont pas teints en vue de dos');
-      // AUCUN VOLUME : AUCUNE EXCEPTION. Un dossier sans seance passe ici.
-      if(typeof corpsTeintes(u,'face',null)!=='object')
-        return _echec('un volume absent fait tomber le calcul');
-      // ⚠ LA ZONE ET LA COULEUR NE PEUVENT PAS DIVERGER. La zone est une
-      //   information — elle part dans l'infobulle, ou elle se lit sans voir
-      //   l'ecran — et la couleur n'est qu'une facon de la montrer. Deux
-      //   calculs separes finiraient par dire deux choses.
-      const z=corpsZones(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
-      const t2=corpsTeintes(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
-      if(Object.keys(z).join(',')!==Object.keys(t2).join(','))
-        return _echec('zones et teintes ne couvrent pas les mêmes muscles');
-      for(const m in z)
-        if(t2[m]!==GC_COULEURS[z[m]])
-          return _echec(m+' : la couleur ne correspond pas à sa zone « '+z[m]+' »');
-      return true;})());
-
-    ok('LA CHARGE SE LIT SANS VOIR LA COULEUR',(()=>{
-      // ⚠ LA TEINTE NE SE LIT QU'A L'OEIL. Pour qui n'a pas l'ecran devant
-      //   lui — ou qui ne distingue pas le bleu du vert — elle n'existait pas
-      //   du tout. L'infobulle de chaque etiquette dit donc le chiffre, la
-      //   zone et la semaine : un fait, sa source, sa date.
-      const u={id:'Z1',email:'z1@t.fr',role:'athlete',gender:'H',
-        bilans:[{date:Date.now()-90*864e5,'bil-chest':'106'},
-                {date:Date.now()-2*864e5, 'bil-chest':'107.4'}]};
-      const charge={zones:{PECTORAUX:'MAV-MRV'},vol:{PECTORAUX:14},
-        semaine:'14 septembre'};
-      const h=_htmlCorpsEtiquettes(u,'h','face',charge).etiquettes;
-      for(const bout of ['charge de la semaine du 14 septembre','14 séries','MAV-MRV'])
-        if(h.indexOf(bout.replace(/&/g,'&amp;'))<0&&h.indexOf(bout)<0)
-          return _echec('l’infobulle ne porte pas « '+bout+' »');
-      // ET RIEN N'EST INVENTE POUR UN MUSCLE SANS ZONE : les dorsaux n'ont
-      // aucune charge dans cet exemple, et n'en annoncent aucune.
-      const sansZone=_htmlCorpsEtiquettes(u,'h','face',{zones:{},vol:{},semaine:''}).etiquettes;
-      if(sansZone.indexOf('charge de la semaine')>=0)
-        return _echec('une charge est annoncée alors qu’aucune zone n’est connue');
-      // ⚠ ET LE VOLUME S'ARRONDIT AU DEMI, PAS AU DIXIEME — l'inverse de la
-      //   regle des mensurations, et c'est voulu : « 12,5 séries » a un sens,
-      //   « 12,53 » n'en a aucun, la ou le meme arrondi detruirait un
-      //   centimetre en transformant +0,8 en +1.
-      const demi=_htmlCorpsEtiquettes(u,'h','face',
-        {zones:{PECTORAUX:'MAV-MRV'},vol:{PECTORAUX:12.53},semaine:'x'}).etiquettes;
-      if(demi.indexOf('12,5 séries')<0)
-        return _echec('le volume n’est pas arrondi au demi dans l’infobulle');
+    ok('PLUS DE MUSCLES SUR LA SILHOUETTE : NI ÉTIQUETTE, NI TEINTE',(()=>{
+      // Kevin, 21/09/2026 : « mets pas les muscles, mets les mensurations ».
+      // Les treize etiquettes de muscles et la teinte de volume ont quitte le
+      // cadre ; ce test garde la porte fermee.
+      for(const f of ['corpsEtiquette','corpsTeintes','corpsZones','_htmlCorpsTete'])
+        if(typeof window[f]==='function') return _echec(f+' est revenu');
+      const J=864e5, t=Date.now();
+      const u={id:'M1',email:'m1@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-90*J,'bil-chest':'106','bil-bicep-r':'38'},
+                {date:t-2*J, 'bil-chest':'107.4','bil-bicep-r':'39'}],
+        sessions:[{date:t-2*J,exercises:[{name:'Développé couché',sets:[{kg:80,reps:8,done:true}]}]}]};
+      const h=_htmlCorpsCadre(u);
+      if(h.indexOf('cc-corps-zone')>=0||h.indexOf('wo-ava-z')>=0) return _echec('une zone musculaire est peinte');
+      if(h.indexOf('Teinte')>=0) return _echec('la légende de teinte est revenue');
+      const boite=document.createElement('div'); boite.innerHTML=h;
+      const noms=[...boite.querySelectorAll('.cc-corps-em')].map(e=>e.textContent);
+      const muscles=new Set(Object.values(MUSCLES).map(m=>String(m.lib||'').toLowerCase()));
+      for(const n of noms)
+        if(muscles.has(n.toLowerCase())) return _echec('une étiquette nomme un muscle : '+n);
+      if(noms.indexOf('Poitrine')<0||noms.indexOf('Biceps D')<0)
+        return _echec('les mensurations mesurées ne sont pas étiquetées : '+noms.join(', '));
       return true;})());
 
     ok('LA TABLE MUSCLE ↔ MENSURATION NE PROMET QUE CE QUI EXISTE',(()=>{
@@ -38403,53 +38340,34 @@ async function testExercices(){
       }
       return true;})());
 
-    ok('« PAS DE MESURE » NE COUVRE PLUS TROIS SITUATIONS DIFFÉRENTES',(()=>{
-      // ⚠ RELEVE A LA RELECTURE DU 21/09/2026. Une seule phrase servait pour
-      //   trois faits qui n'ont rien a voir, et deux d'entre eux etaient FAUX :
-      //
-      //     · aucune mensuration ne suit ce muscle — personne ne le mesurera
-      //       jamais avec un metre ;
-      //     · la mensuration existe et l'athlete l'a prise UNE fois — lui
-      //       repondre « pas de mesure » etait faux, et decourageait la seule
-      //       chose a faire : en prendre une seconde ;
-      //     · la mensuration existe et aucun releve REEL n'est au dossier —
-      //       jamais remplie, ou tout reporte d'un bilan a l'autre.
+    ok('UNE MENSURATION SANS DEUX RELEVÉS RÉELS NE SORT PAS',(()=>{
+      // Trois situations, un seul comportement : pas d'ecart, pas d'etiquette.
+      // C'est le pied de cadre qui dit pourquoi — et il dit la RAISON, qui
+      // couvre les trois.
       const J=864e5, t=Date.now();
-      // AUCUNE MENSURATION : les dorsaux, depuis que DORSAUX → chest a sauté.
-      const plein={id:'R0',role:'athlete',gender:'H',
-        bilans:[{date:t-92*J,'bil-chest':'106'},{date:t-6*J,'bil-chest':'107.4'}]};
-      if(corpsEtiquette(plein,'DORSAUX').source!=='pas de mesure')
-        return _echec('les dorsaux disent « '+corpsEtiquette(plein,'DORSAUX').source+' »');
-      // UN SEUL RELEVE : le biceps mesuré une fois.
+      // UN SEUL RELEVE : le biceps mesure une fois.
       const unSeul={id:'R1',role:'athlete',gender:'H',
-        bilans:[{date:t-92*J,'bil-chest':'106'},
-                {date:t-6*J, 'bil-chest':'107.4','bil-bicep-r':'39.0'}]};
-      const b=corpsEtiquette(unSeul,'BICEPS');
-      if(b.source!=='un seul relevé')
-        return _echec('un biceps mesuré une fois dit « '+b.source+' »');
-      if(b.titre.indexOf('Biceps droit')<0)
-        return _echec('l’infobulle ne nomme pas la mensuration concernée');
-      // AUCUN RELEVE REEL : la cuisse, reportée d'un bilan à l'autre.
+        bilans:[{date:t-92*J,'bil-weight':'80'},{date:t-6*J,'bil-weight':'79','bil-bicep-r':'39.0'}]};
+      if(corpsMesureEtiquette(unSeul,'bicep-r')!==null) return _echec('un seul relevé produit une étiquette');
+      // AUCUN RELEVE REEL : la cuisse, reportee d'un bilan a l'autre.
       const reporte={id:'R2',role:'athlete',gender:'H',
-        bilans:[{date:t-92*J,'bil-chest':'106'},
-                {date:t-6*J,'bil-chest':'107.4','bil-thigh-r':'61',
-                 reprises:['bil-thigh-r']}]};
-      if(corpsEtiquette(reporte,'QUADRICEPS').source!=='aucun relevé')
-        return _echec('une cuisse jamais relevée dit « '
-          +corpsEtiquette(reporte,'QUADRICEPS').source+' »');
-      // ET LES TROIS PHRASES SONT DIFFERENTES : trois faits, trois reponses.
-      const trois=new Set([corpsEtiquette(plein,'DORSAUX').source,
-        b.source, corpsEtiquette(reporte,'QUADRICEPS').source]);
-      if(trois.size!==3) return _echec('deux situations partagent la même phrase');
+        bilans:[{date:t-92*J,'bil-thigh-r':'61'},
+                {date:t-6*J,'bil-thigh-r':'61',reprises:['bil-thigh-r']}]};
+      if(corpsMesureEtiquette(reporte,'thigh-r')!==null) return _echec('un report produit une étiquette');
+      // JAMAIS MESURE.
+      if(corpsMesureEtiquette(unSeul,'neck')!==null) return _echec('un tour jamais mesuré produit une étiquette');
+      // ET LE CADRE LE DIT, SANS PROMETTRE DE TOLERANCE.
+      const boite=document.createElement('div');
+      boite.innerHTML=_htmlCorpsCadre(Object.assign({email:'r1@t.fr'},unSeul));
+      if(boite.querySelectorAll('.cc-corps-et').length) return _echec('des étiquettes sortent sans écart');
+      if(boite.textContent.indexOf('il faut deux relevés')<0) return _echec('le cadre ne dit pas pourquoi il se tait');
       return true;})());
 
-    ok('UNE MENSURATION QUI DESCEND S\u2019ÉCRIT COMME UNE QUI MONTE',(()=>{
+    ok('UNE MENSURATION QUI DESCEND S’ÉCRIT COMME UNE QUI MONTE',(()=>{
       // ⚠ REGLE R32, ET C'EST LE CAS QUI COMPTE POUR KEVIN : son athlete est
       //   en seche, donc le signe moins est chez lui le cas NORMAL. Aucun
-      //   objectif declare ne dit dans quel sens un tour de cuisse « doit »
-      //   aller — un tour de taille qui descend est un but, un tour de bras
-      //   qui descend une perte, et RIEN dans le dossier ne permet de
-      //   trancher. L'ecart s'ecrit donc toujours dans la meme encre.
+      //   objectif declare ne dit dans quel sens un tour « doit » aller.
+      //   L'ecart s'ecrit donc toujours dans la meme encre.
       const J=864e5, t=Date.now();
       const bil=(a,b)=>[{date:t-92*J,'bil-bicep-r':String(a)},
                         {date:t-6*J, 'bil-bicep-r':String(b)}];
@@ -38457,119 +38375,86 @@ async function testExercices(){
       const descend={id:'S-',role:'athlete',gender:'H',bilans:bil(39.6,38.8)};
       const lire=u=>{
         const boite=document.createElement('div');
-        boite.innerHTML=_htmlCorpsEtiquettes(u,'h','face',null).etiquettes;
-        const e=[...boite.querySelectorAll('.cc-corps-et')]
-          .find(x=>/biceps/i.test(x.textContent)&&!/triceps/i.test(x.textContent));
+        boite.innerHTML=_htmlCorpsEtiquettes(u,'h','face').etiquettes;
+        const e=boite.querySelector('.cc-corps-et[data-k="bicep-r"]');
         const v=e.querySelector('.cc-corps-ev');
-        return {etiq:e.className+'|'+(e.getAttribute('data-sans')||''),
-                val:v.className+'|'+(v.getAttribute('style')||''),
-                texte:v.textContent};
+        return {etiq:e.className, val:v.className+'|'+(v.getAttribute('style')||''), texte:v.textContent};
       };
       const a=lire(monte), b=lire(descend);
-      if(a.etiq!==b.etiq)
-        return _echec('l’étiquette change d’habillage selon le sens : '+a.etiq+' vs '+b.etiq);
-      if(a.val!==b.val)
-        return _echec('la valeur change d’encre selon le sens : '+a.val+' vs '+b.val);
+      if(a.etiq!==b.etiq) return _echec('l’étiquette change d’habillage selon le sens');
+      if(a.val!==b.val) return _echec('la valeur change d’encre selon le sens : '+a.val+' vs '+b.val);
       if(a.texte===b.texte) return _echec('les deux sens affichent la même chose');
       // ⚠ ET LE SIGNE MOINS EST UN VRAI MOINS (U+2212), pas un trait d'union.
-      //   C'est _synEcart qui l'ecrit ; un trait d'union se lit comme une
-      //   cesure et se casse en fin de ligne.
       if(b.texte.charCodeAt(0)!==8722)
-        return _echec('le signe négatif n’est pas un vrai moins : ' + b.texte.charCodeAt(0));
-      if(a.texte.charCodeAt(0)!==43)
-        return _echec('le signe positif a disparu : '+a.texte);
+        return _echec('le signe négatif n’est pas un vrai moins : '+b.texte.charCodeAt(0));
+      if(a.texte.charCodeAt(0)!==43) return _echec('le signe positif a disparu : '+a.texte);
       return true;})());
 
-    ok('L\u2019ONGLET FERMÉ DIT CE QU\u2019IL Y A DE L\u2019AUTRE CÔTÉ',(()=>{
-      // ⚠ LA MOITIE DES MUSCLES N'EXISTE QUE DANS UNE VUE : fessiers, ischios,
-      //   lombaires et deltoide posterieur ne se montrent que de dos. Un coach
-      //   qui ne retourne jamais la silhouette ne voyait donc jamais qu'un
-      //   fessier avait pris 1,6 cm, et rien a l'ecran ne le lui disait.
+    ok('L’ONGLET FERMÉ DIT CE QU’IL Y A DE L’AUTRE CÔTÉ',(()=>{
+      // ⚠ ON NE COMPTE QUE CE QUE L'AUTRE VUE EST SEULE A MONTRER : poitrine et
+      //   buste de face, fessiers de dos. Le reste se lit des deux cotes, et
+      //   le compter allumerait la pastille presque toujours, pour rien.
       const J=864e5, t=Date.now();
       const u={id:'P9',email:'p9@t.fr',role:'athlete',gender:'H',
         bilans:[{date:t-92*J,'bil-bicep-r':'38.2','bil-chest':'106',
                  'bil-glutes':'101','bil-calf-r':'39.1','bil-thigh-r':'61.5'},
                 {date:t-6*J, 'bil-bicep-r':'39.0','bil-chest':'107.4',
                  'bil-glutes':'102.6','bil-calf-r':'39.9','bil-thigh-r':'62.4'}]};
-      // ⚠ ON COMPTE DES MESURES, PAS DES MUSCLES. Biceps et triceps lisent le
-      //   meme tour de bras, quadriceps et ischios la meme cuisse : compter
-      //   les etiquettes aurait annonce cinq ecarts la ou il y en a quatre.
-      if(corpsEcartsDeVue(u,'dos')!==4)
-        return _echec('la vue de dos compte '+corpsEcartsDeVue(u,'dos')+' écarts au lieu de 4');
-      // UN ECART SOUS LA TOLERANCE NE COMPTE PAS : il s'ecrit « stable » sur
-      // l'etiquette, et faire clignoter un onglet pour un demi-millimetre
-      // serait un signal qui ne veut rien dire.
+      if(corpsEcartsDeVue(u,'dos')!==1)
+        return _echec('la vue de dos compte '+corpsEcartsDeVue(u,'dos')+' écarts propres au lieu de 1 (fessiers)');
+      if(corpsEcartsDeVue(u,'face')!==1)
+        return _echec('la vue de face compte '+corpsEcartsDeVue(u,'face')+' écarts propres au lieu de 1 (poitrine)');
+      // UN ECART SOUS LA TOLERANCE NE COMPTE PAS.
       const calme={id:'P8',role:'athlete',gender:'H',
         bilans:[{date:t-92*J,'bil-glutes':'101'},{date:t-6*J,'bil-glutes':'101.2'}]};
-      if(corpsEcartsDeVue(calme,'dos')!==0)
-        return _echec('un écart sous la tolérance allume l’onglet');
-      // ET LA PASTILLE NE SORT QUE SUR L'ONGLET FERME : sur celui qu'on
-      // regarde, les etiquettes sont deja la.
-      const boite=document.createElement('div');
-      boite.innerHTML=_htmlCorpsCadre(u);
-      const bs=[...boite.querySelectorAll('.cc-corps-o')];
-      if(bs.length!==2) return _echec(bs.length+' onglets de vue au lieu de 2');
-      for(const b of bs){
-        const actif=b.classList.contains('actif');
-        const pastille=!!b.querySelector('.cc-corps-pa');
-        if(actif&&pastille) return _echec('l’onglet ouvert porte une pastille');
-        if(!actif&&!pastille) return _echec('l’onglet fermé ne signale rien');
-        if(!actif&&!(b.getAttribute('title')||'').trim())
-          return _echec('la pastille ne dit pas ce qu’elle signale');
-      }
+      if(corpsEcartsDeVue(calme,'dos')!==0) return _echec('un écart sous la tolérance allume l’onglet');
+      // ET LA PASTILLE NE SORT QUE SUR L'ONGLET FERME.
+      const sv=_corpsVue;
+      try{
+        _corpsVue='face';
+        const boite=document.createElement('div');
+        boite.innerHTML=_htmlCorpsCadre(u);
+        const bs=[...boite.querySelectorAll('.cc-corps-o')];
+        if(bs.length!==2) return _echec(bs.length+' onglets de vue au lieu de 2');
+        for(const b of bs){
+          const actif=b.classList.contains('actif');
+          const pastille=!!b.querySelector('.cc-corps-pa');
+          if(actif&&pastille) return _echec('l’onglet ouvert porte une pastille');
+          if(!actif&&!pastille) return _echec('l’onglet fermé ne signale rien');
+          if(!actif&&!(b.getAttribute('title')||'').trim()) return _echec('la pastille ne dit pas ce qu’elle signale');
+        }
+        // ⚠ ET LE PIED DE CADRE NE DIT PAS « AUCUN ECART » QUAND ILS SONT DE
+        //   L'AUTRE COTE : seuls les fessiers ont bouge, et l'on regarde de face.
+        const fess={id:'P7',email:'p7@t.fr',role:'athlete',gender:'H',
+          bilans:[{date:t-92*J,'bil-glutes':'101'},{date:t-6*J,'bil-glutes':'102.6'}]};
+        const hf=_htmlCorpsCadre(fess);
+        if(hf.indexOf('il faut deux relevés')>=0) return _echec('le cadre nie des écarts qui sont en vue arrière');
+        if(hf.indexOf('en vue arrière')<0) return _echec('le cadre ne dit pas où lire les écarts');
+      } finally { _corpsVue=sv; }
       return true;})());
 
-    ok('CHAQUE ÉTIQUETTE S\u2019ANNONCE D\u2019UNE SEULE PHRASE',(()=>{
-      // ⚠ SANS role="img" ET aria-label, un lecteur d'ecran enfilait quatre
-      //   fragments detaches — « Biceps », « +0,8 cm », « biceps D »,
-      //   « 21/06 → 15/09 » — sans dire qu'ils parlent du meme muscle. Et
-      //   l'attribut `title` d'un div non interactif n'est pas lu par tous.
-      //   role="img" est la convention de la maison : celle des badges et des
-      //   jauges de RPE.
+    ok('CHAQUE ÉTIQUETTE S’ANNONCE D’UNE SEULE PHRASE',(()=>{
+      // ⚠ SANS role="img" ET aria-label, un lecteur d'ecran enfilait trois
+      //   fragments detaches sans dire qu'ils parlent du meme tour.
       const J=864e5, t=Date.now();
       const u={id:'P1',email:'p1@t.fr',role:'athlete',gender:'H',
-        bilans:[{date:t-92*J,'bil-bicep-r':'38.2'},{date:t-6*J,'bil-bicep-r':'39.0'}]};
+        bilans:[{date:t-92*J,'bil-bicep-r':'38.2','bil-waist':'86'},
+                {date:t-6*J,'bil-bicep-r':'39.0','bil-waist':'83.5'}]};
       const boite=document.createElement('div');
-      boite.innerHTML=_htmlCorpsEtiquettes(u,'h','face',
-        {zones:{BICEPS:'sous-MEV'},vol:{BICEPS:4},semaine:'14 septembre'}).etiquettes;
+      boite.innerHTML=_htmlCorpsEtiquettes(u,'h','face').etiquettes;
       const ets=[...boite.querySelectorAll('.cc-corps-et')];
-      if(ets.length!==13) return _echec(ets.length+' étiquettes au lieu de 13');
+      if(ets.length!==2) return _echec(ets.length+' étiquettes au lieu de 2 (biceps D, taille)');
       for(const e of ets){
-        if(e.getAttribute('role')!=='img')
-          return _echec('une étiquette n’est pas annoncée comme un tout');
+        if(e.getAttribute('role')!=='img') return _echec('une étiquette n’est pas annoncée comme un tout');
         const l=e.getAttribute('aria-label')||'';
         if(!l.trim()) return _echec('une étiquette n’a rien à dire');
-        // ⚠ LES POINTS MEDIANS DEVIENNENT DES VIRGULES : ils separent a l'oeil
-        //   et ne s'entendent pas. La phrase lue devenait un seul souffle.
-        if(l.indexOf(' · ')>=0)
-          return _echec('un point médian survit dans la phrase lue : '+l);
-        // ET LE NOM DU MUSCLE Y EST : sans lui, on entend un chiffre sans sujet.
-        if(!/[A-Za-zÀ-ÿ]/.test(l)) return _echec('la phrase lue ne nomme rien : '+l);
+        // Les points medians deviennent des virgules : ils ne s'entendent pas.
+        if(l.indexOf(' · ')>=0) return _echec('un point médian survit dans la phrase lue : '+l);
+        // LA PHRASE COMMENCE PAR LA MENSURATION EN TOUTES LETTRES.
+        if(!/^Tour de /.test(l)) return _echec('la phrase lue ne commence pas par la mensuration : '+l);
       }
-      // ⚠ ET CHAQUE ETIQUETTE NOMME SON MUSCLE, PAS CELUI DE SA MENSURATION.
-      //   Le titre commencait par l'ecart puis la MENSURATION — « +0,8 cm ·
-      //   Biceps droit · … » — si bien que l'etiquette du TRICEPS annoncait
-      //   « Biceps droit » et ne nommait jamais le triceps. A l'oeil ca
-      //   passait, le nom etant la premiere ligne de l'etiquette ; a la voix
-      //   non, puisque role="img" fait lire l'aria-label et RIEN d'autre. Un
-      //   lecteur d'ecran entendait le biceps deux fois et le triceps jamais.
-      for(const e of ets){
-        const nom=(e.querySelector('.cc-corps-em')||{}).textContent||'';
-        const dit=e.getAttribute('aria-label')||'';
-        if(!nom) return _echec('une étiquette sans nom de muscle');
-        if(dit.indexOf(nom)!==0)
-          return _echec('« '+nom+' » s’annonce « '+dit.slice(0,40)+'… »');
-      }
-      // LA CHARGE Y EST AUSSI, pour qui ne voit pas la couleur.
-      const bi=ets.find(e=>/biceps/i.test(e.textContent)&&!/triceps/i.test(e.textContent));
-      const lb=bi.getAttribute('aria-label');
-      if(lb.indexOf('sous-MEV')<0||lb.indexOf('4 séries')<0)
-        return _echec('la charge ne s’entend pas : '+lb);
-      // ⚠ ET LA BASCULE DE VUE REND LE FOCUS. renderCorpsCoach remplace tout le
-      //   cadre, bouton compris : au clavier, le focus retombait sur le corps
-      //   de la page et il fallait re-tabuler depuis le haut de la fiche.
-      if(String(corpsVue).indexOf('.focus()')<0)
-        return _echec('la bascule de vue ne rend plus le focus');
+      // ⚠ ET LA BASCULE DE VUE REND LE FOCUS.
+      if(String(corpsVue).indexOf('.focus()')<0) return _echec('la bascule de vue ne rend plus le focus');
       return true;})());
 
     ok('MODE NEUTRE : AUCUNE COURBE DE POIDS DANS LE CADRE CORPS',(()=>{
@@ -38669,6 +38554,35 @@ async function testExercices(){
           return _echec('le bloc s’affiche malgré « '+etat+' »');
       }
       return true;})());
+
+    ok('LE CADRE S’INTITULE « ÉVOLUTION ÉLÈVE NUMÉRO N », EN ROUGE',(()=>{
+      // Kevin, 21/09/2026 : « mets le titre “ evolution eleve numero __ ” en
+      // rouge dans le cadre ». Le numero est celui de la carte d'identite —
+      // rangArrivee, la meme fonction.
+      const J=864e5, t=Date.now();
+      const u={id:'N7',email:'n7@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-60*J,'bil-waist':'80'},{date:t-3*J,'bil-waist':'78.5'}]};
+      const titre=h=>{ const b=document.createElement('div'); b.innerHTML=h;
+        return ((b.querySelector('.cc-corps-t')||{}).textContent)||''; };
+      const sv=window.rangArrivee;
+      try{
+        window.rangArrivee=()=>7;
+        if(titre(_htmlCorpsCadre(u))!=='Évolution élève numéro 7')
+          return _echec('le titre est « '+titre(_htmlCorpsCadre(u))+' »');
+        // SANS RANG CONNU, PAS DE « NUMÉRO 0 ».
+        window.rangArrivee=()=>0;
+        if(titre(_htmlCorpsCadre(u))!=='Évolution élève')
+          return _echec('sans rang, le titre est « '+titre(_htmlCorpsCadre(u))+' »');
+      } finally { window.rangArrivee=sv; }
+      // LE TITRE N'EST PLUS « CORPS ».
+      if(/^Corps$/i.test(titre(_htmlCorpsCadre(u)))) return _echec('le cadre s’appelle encore « Corps »');
+      // ET IL EST ROUGE : la regle vit dans la feuille de style.
+      let rouge=false;
+      for(const s of document.styleSheets){
+        let r=[]; try{ r=s.cssRules||[]; }catch(e){ continue; }
+        for(const x of r) if(x.selectorText==='.cc-corps-t'&&/--red/.test(x.style.color)) rouge=true;
+      }
+      return rouge?true:_echec('le titre n’est pas en rouge');})());
 
     ok('LE NUMÉRO D\'ATHLÈTE SUIT L\'ORDRE D\'ARRIVÉE',(()=>{
       // Kevin, 20/09/2026 : « mets "athlète n°__ : Kévin Guellec" selon son

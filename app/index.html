@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1362';
+window.RC_BUILD='1363';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4274,8 +4274,8 @@ html{scroll-behavior:smooth}
   box-shadow:0 0 18px rgba(224,32,32,.10),inset 0 1px 0 rgba(255,255,255,.05)}
 .cc-corps-h{display:flex;align-items:center;justify-content:space-between;
   gap:10px;flex-wrap:wrap;margin-bottom:9px}
-.cc-corps-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;
-  color:var(--sub);text-transform:uppercase}
+.cc-corps-t{font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;
+  color:var(--red);text-transform:uppercase}
 /* LE SELECTEUR DE VUE, EN HAUT A DROITE. Deux onglets et non trois : il
    n'existe aucune planche de profil, et un troisieme bouton aurait promis une
    vue que personne ne peut dessiner. */
@@ -4306,34 +4306,29 @@ html{scroll-behavior:smooth}
 .cc-corps-scene{position:relative;width:100%;max-width:470px;margin:0 auto}
 .cc-corps-planche{position:absolute;top:0;height:100%}
 .cc-corps-planche img{width:100%;height:100%;display:block;
-  filter:drop-shadow(0 0 5px rgba(224,32,32,.20))}
+  mix-blend-mode:lighten}
 /* SANS BILAN, LA SILHOUETTE EST ETEINTE — pas absente. Le cadre montre de qui
    on parle et dit qu'il n'a rien a en dire ; un cadre vide dirait la meme
    chose en donnant l'impression d'un bug. */
 .cc-corps-scene[data-eteint] .cc-corps-planche img{opacity:.38;filter:none}
-.cc-corps-tete{position:absolute;aspect-ratio:1;border-radius:var(--r-full);
-  overflow:hidden;display:flex;align-items:center;justify-content:center}
-/* ⚠ UN LISERE, PARCE QUE LA PLANCHE EST BLANCHE. Une photo posee a nu sur le
-   dessin se confondait avec lui : on ne voyait plus ou finissait la tete de
-   l'athlete et ou commencait celle du modele. */
-.cc-corps-tete img{width:100%;height:100%;object-fit:cover;display:block}
-.cc-corps-tete{border:1.5px solid rgba(224,32,32,.55);
-  box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+/* ⚠ LA SILHOUETTE A UN FOND NOIR, PAS TRANSPARENT (voir CORPS_PLANCHE) : les
+   vetements du dessin descendent aussi bas que le fond, et un detourage les
+   trouait. mix-blend-mode:lighten garde le plus clair des deux : le noir de
+   l'image prend la couleur du cadre, le dessin reste tel quel. Le cadre est
+   noir dans les deux themes — c'est ce qui rend le procede sur.
+   ⚠ ET PLUS DE drop-shadow : sur une image rectangulaire, il dessinait le
+   rectangle. */
 /* ── LES ETIQUETTES EN PERIPHERIE ─────────────────────────────────────────
-   Quatre lignes : le muscle, l'ecart, la mensuration d'ou il sort, ses deux
-   dates. La troisieme ligne n'est pas decorative — c'est elle qui empeche de
-   lire deux progressions la ou il n'y a qu'une mesure : biceps et triceps
-   portent tous deux « biceps D », et ca se voit.
+   Trois lignes : la mensuration, l'ecart, ses deux dates.
    ⚠ AUCUNE COULEUR DE JUGEMENT SUR UN CENTIMETRE (regle R32). L'ecart est
    toujours dans la meme encre, qu'il monte ou qu'il descende. */
 .cc-corps-et{position:absolute;width:var(--et-l);transform:translateY(-50%);
   display:flex;flex-direction:column;gap:1px;line-height:1.14;pointer-events:auto}
 .cc-corps-et[data-c="l"]{left:0;align-items:flex-end}
 .cc-corps-et[data-c="r"]{right:0;align-items:flex-start}
-.cc-corps-em{font-size:8px;font-weight:800;letter-spacing:.4px;
+.cc-corps-em{font-size:8.5px;font-weight:800;letter-spacing:.4px;
   text-transform:uppercase;color:var(--sub);white-space:nowrap}
 .cc-corps-ev{font-size:11.5px;font-weight:800;color:var(--text);white-space:nowrap}
-.cc-corps-es{font-size:7.5px;font-weight:700;color:var(--text-dim);white-space:nowrap}
 /* ⚠ 8,5 px, ET PAS 7,5. Releve a la relecture a froid : quatre regles de ce
    bloc etaient descendues a 7 et 7,5 px, soit trois pixels SOUS --fs-2xs, le
    plus petit corps de toute l'application. Le contraste passait (5,15 contre
@@ -4341,11 +4336,6 @@ html{scroll-behavior:smooth}
    devine plus qu'elle ne se lit. */
 .cc-corps-ed{font-size:8.5px;color:var(--text-faint);white-space:nowrap;
   font-variant-numeric:tabular-nums}
-/* UN MUSCLE SANS MESURE S'EFFACE SANS DISPARAITRE : le taire aurait laisse
-   croire qu'il n'a pas bouge. */
-.cc-corps-et[data-sans] .cc-corps-em{color:var(--text-faint)}
-.cc-corps-et[data-sans] .cc-corps-es{color:var(--text-faint);font-weight:800;
-  font-size:8.5px}
 /* LE TRAIT DE RAPPEL. preserveAspectRatio="none" pour que les centiemes
    tombent juste sur la scene ; vector-effect garde le trait a un pixel
    malgre l'etirement, sans quoi il serait trois fois plus epais en travers
@@ -4356,32 +4346,8 @@ html{scroll-behavior:smooth}
 .cc-corps-pt{position:absolute;width:5px;height:5px;border-radius:var(--r-full);
   background:#0a0a0a;border:1.4px solid #8f8f8f;
   transform:translate(-50%,-50%);pointer-events:none}
-/* ── LA TEINTE DE VOLUME ──────────────────────────────────────────────────
-   Un calque par muscle, chacun peint par woHtmlZones et recolore par la
-   variable posee sur son porteur. Le multiply vient de .wo-ava-z : un aplat
-   opaque effacerait le dessin, le produit garde les traits du modele et ne
-   fait que colorer la chair. */
-/* ⚠ 0,58 D'OPACITE, ET CE N'EST PAS UN GOUT. A l'ecran de seance, woHtmlZones
-   peint UN muscle a pleine encre : c'est ce qu'on vient regarder. Ici onze
-   calques se superposent d'un coup, et la premiere mesure au banc a donne un
-   bonhomme bleu uni — le dessin musculaire disparaissait dessous, et avec lui
-   la seule chose qui permet de reconnaitre quelle zone est teintee. Le
-   multiply garde les traits, l'opacite garde le modele. */
-.cc-corps-zone{position:absolute;inset:0;pointer-events:none;opacity:.58}
-.cc-corps-zone .wo-ava-z polygon{fill:var(--zc,#ff2323)}
 .cc-corps-n{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;
   margin-top:8px;text-align:center}
-/* La legende des quatre zones : la meme grammaire que celle de la grille de
-   charge, pastille puis nom de zone. */
-.cc-corps-l{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
-  gap:4px 10px;margin-top:7px;padding-top:7px;
-  border-top:1px solid rgba(255,255,255,.10)}
-.cc-corps-lt{flex:0 0 100%;text-align:center;font-size:var(--fs-2xs);
-  color:var(--text-faint);line-height:1.5}
-.cc-corps-lp{display:inline-flex;align-items:center;gap:4px;
-  font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap}
-.cc-corps-lp i{width:9px;height:9px;border-radius:2px;display:inline-block;
-  flex:0 0 auto}
 /* ── LES TROIS GRAPHIQUES ─────────────────────────────────────────────────
    Empiles SOUS le corps par defaut — c'est la mise en page de reference, celle
    de 375 px. Ils passent a DROITE du corps des que le bloc a la place, et pas
@@ -51912,36 +51878,41 @@ function _ligneEtat(x,info){
 // voir le corps de mon athlete, avec ce qui a bouge depuis le dernier bilan,
 // et rien que je ne puisse prouver ».
 //
-// ⚠ RIEN N'EST DESSINE ICI. Les vingt-huit planches d'avatar existent depuis
-//   toujours — sept niveaux, deux genres, face et dos — et WO_ZONES porte le
-//   contour de treize muscles par vue, releve ligne par ligne sur chaque
-//   planche. Redessiner une silhouette aurait donne deux corps differents pour
-//   le meme athlete selon l'ecran qui le montre.
+// ⚠ LE MODELE A CHANGE LE 21/09/2026, A LA DEMANDE DE KEVIN, capture a
+//   l'appui : « change le modele par celui-ci, qui doivent etre les memes a
+//   100 %, hommes pour les hommes, femmes pour les femmes ; mets pas les
+//   muscles, mets les mensurations uniquement avec les +/- cm ; supprime le
+//   rond sur la tete ; mets le titre “ evolution eleve numero __ ” en rouge
+//   dans le cadre ».
 //
-// ⚠ LE NIVEAU EST FIXE, ET C'EST LE MILIEU. woNiveauAvatar fait grossir le
-//   bonhomme au fil de la seance : elle compte des ECRANS, pas des kilos de
-//   muscle. La brancher ici aurait fait maigrir l'athlete du coach entre deux
-//   seances — un jugement porte sur un corps, tire d'un nombre qui ne le
-//   mesure pas. La silhouette est un SUPPORT : elle dit ou, jamais combien.
-const CORPS_NIVEAU=4;
-// ⚠ LES QUATRE PLANCHES DU NIVEAU 4, MESUREES SUR LES FICHIERS et non
-//   estimees a l'oeil (lecture de l'alpha, nuit du 20/09/2026). Elles servent
-//   a deux choses, et a deux choses seulement :
-//     · le RAPPORT LARGEUR/HAUTEUR, qui fixe le cadre de la scene. Sans lui,
-//       le calque des zones — masque en 100 % x 100 % par woHtmlZones — se
-//       decalerait du dessin qu'il colore ;
-//     · la POSITION DE LA TETE, pour y poser la photo de l'athlete.
-//   `tete` : cx en centiemes de LARGEUR, cy en centiemes de HAUTEUR, r en
-//   centiemes de LARGEUR. Le crane occupe y 0 → 10 sur la planche masculine,
-//   y 0 → 14 sur la feminine, qui porte des cheveux.
+//   Ce qui en decoule, et qui remplace la version de la nuit :
+//     · les quatre silhouettes sont celles de SON image, decoupees telles
+//       quelles (img/corps/) — homme face et dos, femme face et dos. Plus les
+//       planches d'avatar de la seance, plus leur niveau ;
+//     · les etiquettes disent une MENSURATION et son ecart en centimetres —
+//       jamais un muscle. Les treize etiquettes de muscles, leurs « pas de
+//       mesure » et la teinte de volume sont retirees ;
+//     · plus de photo sur la tete ;
+//     · le titre dit l'eleve, par le meme numero que sa carte d'identite
+//       (rangArrivee).
 //
-//   ⚠ ET IL N'Y A PAS DE TETE DE DOS. Une photo de visage posee sur l'arriere
-//     d'un crane ne montre pas l'athlete : elle montre qu'on n'a pas regarde.
+// ⚠ LA SILHOUETTE EST UN SUPPORT : elle dit OU, jamais combien. Aucun chiffre
+//   n'est tire de l'image — elle est la meme pour tous les athletes d'un meme
+//   sexe.
+//
+// ⚠ LES QUATRE FICHIERS, ET LEUR TOILE. Les deux vues d'un meme sexe sont
+//   posees sur UNE toile — meme largeur, meme hauteur, pieds alignes en bas :
+//   sans cela le cadre changeait de hauteur a chaque bascule avant / arriere.
+//   Le fond est NOIR, pas transparent : les vetements et les cheveux du
+//   dessin descendent aussi bas que le fond, et un detourage trouait le short.
+//   L'image se fond dans le cadre par mix-blend-mode:lighten (voir le CSS).
+//   `w` et `h` sont ceux des fichiers, en pixels : ils fixent le rapport de la
+//   scene, sans lequel les traits de rappel pointeraient a cote.
 const CORPS_PLANCHE=Object.freeze({
-  'h-face':{w:110,h:340,tete:{cx:50,cy:5.5,r:17}},
-  'h-dos' :{w:109,h:340,tete:null},
-  'f-face':{w:115,h:340,tete:{cx:50,cy:6.8,r:17}},
-  'f-dos' :{w:104,h:340,tete:null}
+  'h-face':{src:'./img/corps/h-face.webp',w:360,h:898},
+  'h-dos' :{src:'./img/corps/h-dos.webp', w:360,h:898},
+  'f-face':{src:'./img/corps/f-face.webp',w:310,h:866},
+  'f-dos' :{src:'./img/corps/f-dos.webp', w:310,h:866}
 });
 // La part de largeur que la planche occupe sur la scene, les deux colonnes
 // d'etiquettes se partageant le reste. Une seule constante : les traits de
@@ -51949,91 +51920,87 @@ const CORPS_PLANCHE=Object.freeze({
 const CORPS_PART_CORPS=40;
 // LES BORNES DE LA COLONNE D'ETIQUETTES, en centiemes de scene.
 //
-// ⚠ LE PAS EST UNE MESURE, PAS UN GOUT — et une mesure RELEVEE, pas calculee
-//   de tete. Releve au banc a 375 px : la scene fait 363 px de haut, et
-//   l'etiquette la plus haute — quatre lignes : le muscle, l'ecart, la
-//   mensuration d'ou il sort, ses deux dates — en fait 43, soit 11,8 %. Le pas
-//   de 13,5 laisse donc six pixels de blanc entre deux voisines. Sept
-//   etiquettes tiennent de 7 a 88, dans un cadre qui va jusqu'a 93.
+// ⚠ LE PAS EST UNE MESURE, PAS UN GOUT — releve au banc a 375 px sur le
+//   nouveau modele (21/09/2026) : l'etiquette tient en TROIS lignes (la
+//   mensuration, l'ecart, ses deux dates) et mesure 34,5 px ; la scene fait
+//   308 px de haut pour l'homme, 345 pour la femme. A 11 %, les etiquettes de
+//   l'homme ne laissaient que 3 px entre elles ; 12,5 % en laisse 4 chez lui
+//   et 8 chez elle, et les six etiquettes d'une colonne tiennent de 7 a 93.
+//   Ne pas recalculer ce chiffre de tete : la version de la nuit l'avait
+//   fait, et s'etait trompee deux fois.
 //
-//   ⚠ NE PAS RECALCULER CE CHIFFRE DE TETE. En corrigeant ce commentaire le
-//     21/09/2026 j'y ai d'abord ecrit 47 px et 12,9 % — deduits des tailles de
-//     police, et faux tous les deux. Le banc a tranche.
-//
-// ⚠ ET C'EST CE CALCUL QUI A FAIT GRANDIR LE CORPS SUR LA SCENE. A 34 % de
-//   largeur, la scene ne faisait que 309 px de haut : les sept etiquettes de
-//   gauche en demandaient 315, et la derniere sortait du cadre. Le corps plus
-//   large rend la scene plus haute, et la colonne rentre. C'est de la que
-//   vient CORPS_PART_CORPS, et non d'un reglage a l'oeil.
-//
-// ⚠ LE BORD HAUT EST A 7, ET NON A 1 : une etiquette est CENTREE sur sa
-//   position, donc elle deborde vers le haut de sa demi-hauteur — 6 centiemes.
-//   Posee a 1, la premiere passait sous le selecteur « Vue avant / Vue
-//   arriere », mesure faite au banc : « DELTOIDE ANT. » disparaissait
-//   derriere le bouton. Le bord bas, lui, garde 93 : 93 + 6 tient dans 100.
-// ⚠ LE PAS EST PASSE DE 13 A 13,5 le 21/09/2026, quand la ligne de dates est
-//   remontee de 7,5 a 8,5 px : l'etiquette gagne deux pixels, et une colonne
-//   calculee au plus juste se serait mise a se chevaucher en silence.
-const CORPS_ETIQ_GAP=13.5, CORPS_ETIQ_HAUT=7, CORPS_ETIQ_BAS=93;
+// ⚠ LE BORD HAUT RESTE A 7 : une etiquette est CENTREE sur sa position, et
+//   posee plus haut la premiere passait sous le selecteur « Vue avant / Vue
+//   arriere ».
+const CORPS_ETIQ_GAP=12.5, CORPS_ETIQ_HAUT=7, CORPS_ETIQ_BAS=93;
 // La largeur d'une colonne d'etiquettes, en centiemes de scene : ce qui reste
 // de part et d'autre du corps, moins une gouttiere de 2.
 const CORPS_ETIQ_LARG=(100-CORPS_PART_CORPS)/2-2;
 /**
- * PURE. Le centre d'une zone musculaire sur la planche, en centiemes.
+ * OU SE MESURE CHAQUE TOUR, SUR CHAQUE SILHOUETTE — en centiemes de la toile.
  *
- * ⚠ IL EST CALCULE DEPUIS WO_ZONES, JAMAIS SAISI A LA MAIN. Une table de
- *   points ecrite a cote aurait diverge du contour a la premiere retouche des
- *   planches, et le trait de rappel aurait designe le vide juste a cote du
- *   muscle — en ayant l'air juste.
+ * ⚠ RELEVES A LA MAIN, ET C'EST LE SEUL ENDROIT OU IL FALLAIT LE FAIRE. Le
+ *   dessin vient d'une image, pas d'un trace : aucun contour ne dit ou passe
+ *   le metre. Chaque point a ete pose sur une grille au 2 %, puis verifie
+ *   dessine sur la silhouette (21/09/2026) : le cou a sa base, la poitrine sur
+ *   les pectoraux, le buste AU-DESSUS — c'est la convention de l'ecran de
+ *   saisie du bilan (bBodySchema) —, la taille au nombril, les hanches au plus
+ *   large, les fessiers au milieu du fessier, la cuisse et le mollet a leur
+ *   plus fort.
  *
- * `cote` choisit le polygone : 'g' le plus a gauche, 'd' le plus a droite.
- * Les muscles impairs — lombaires, trapezes vus de dos, abdominaux — n'en ont
- * qu'un, et les deux cotes rendent alors le meme point.
- * @returns {{x:number,y:number}|null}
+ * ⚠ LE COTE EST CELUI DE L'ATHLETE, PAS CELUI DE L'ECRAN. De face, son bras
+ *   DROIT est a GAUCHE de l'image ; de dos, a droite. Se tromper ici ferait
+ *   designer le biceps gauche sous l'etiquette du droit, avec un trait qui a
+ *   l'air juste.
  */
-function corpsAncre(genre,vue,muscle,cote){
-  const polys=((((WO_ZONES||{})[genre]||{})[vue]||{})[CORPS_NIVEAU]||{})[muscle];
-  if(!polys||!polys.length) return null;
-  const centres=[];
-  for(const p of polys){
-    let x=0,y=0,n=0;
-    for(const t of String(p).trim().split(/\s+/)){
-      const c=t.split(',');
-      const a=Number(c[0]), b=Number(c[1]);
-      if(!isFinite(a)||!isFinite(b)) continue;
-      x+=a; y+=b; n++;
-    }
-    if(n) centres.push({x:x/n,y:y/n});
-  }
-  if(!centres.length) return null;
-  centres.sort((a,b)=>a.x-b.x);
-  return cote==='d'?centres[centres.length-1]:centres[0];
-}
-// LES ETIQUETTES, ET DE QUEL COTE ELLES SE POSENT. Treize muscles par vue —
-// c'est exactement ce que WO_ZONES sait dessiner, ni plus ni moins. Sept a
-// gauche, six a droite : la colonne de gauche prend le muscle du cote gauche,
-// celle de droite le cote droit, et le trait ne traverse donc jamais le corps
-// sauf pour les deux muscles centraux — trapeze et lombaires, vus de dos.
-const CORPS_ETIQUETTES=Object.freeze({
+const CORPS_POINTS=Object.freeze({
+  'h-face':{neck:[50,17.5],bust:[58,23.5],chest:[42,27.5],'bicep-r':[17,32],'bicep-l':[83,32],
+    waist:[40,42],hips:[68,50],'thigh-r':[34,63],'thigh-l':[66,63],'calf-r':[31,80],'calf-l':[69,80]},
+  'h-dos':{neck:[49.9,17.8],'bicep-l':[16.5,32.7],'bicep-r':[83.2,32.7],waist:[40.3,42.6],
+    hips:[68.9,50.5],glutes:[38.4,54.5],'thigh-l':[33.7,64.4],'thigh-r':[66.1,64.4],
+    'calf-l':[32.7,80.2],'calf-r':[67,80.2]},
+  'f-face':{neck:[50,19],bust:[58.8,25.4],chest:[42.2,29.4],'bicep-r':[19.6,33.4],'bicep-l':[80.4,33.4],
+    waist:[40.2,41.3],hips:[68.6,50.3],'thigh-r':[33.3,62.2],'thigh-l':[66.7,62.2],
+    'calf-r':[27.4,80.1],'calf-l':[72.6,80.1]},
+  'f-dos':{neck:[50,19],'bicep-l':[17,33],'bicep-r':[83,33],waist:[40,42],hips:[71,50],
+    glutes:[38,54],'thigh-l':[33,64],'thigh-r':[67,64],'calf-l':[31,80],'calf-r':[69,80]}
+});
+// LES MENSURATIONS DE CHAQUE VUE, ET DE QUEL COTE ELLES SE POSENT. Ce sont les
+// douze tours que l'athlete saisit au bilan (MEAS), ni plus ni moins. Chaque
+// colonne prend le cote du corps qui est de son cote de l'image : le trait ne
+// traverse jamais la silhouette.
+//
+// ⚠ LA PLUPART FIGURENT SUR LES DEUX VUES — un tour de bras se lit aussi bien
+//   de face que de dos, et une vue qui n'en montrerait que la moitie
+//   obligerait a basculer pour tout lire. Seules la poitrine et le buste sont
+//   propres a la vue avant, les fessiers a la vue arriere.
+const CORPS_MESURES=Object.freeze({
   face:Object.freeze([
-    {m:'TRAP_SUP',  s:'l'}, {m:'DELT_ANT',  s:'r'},
-    {m:'DELT_LAT',  s:'l'}, {m:'TRICEPS',   s:'r'},
-    {m:'PECTORAUX', s:'l'}, {m:'ABDOS',     s:'r'},
-    {m:'BICEPS',    s:'l'}, {m:'AVANT_BRAS',s:'r'},
-    {m:'DORSAUX',   s:'l'}, {m:'ABDUCTEURS',s:'r'},
-    {m:'QUADRICEPS',s:'l'}, {m:'ADDUCTEURS',s:'r'},
-    {m:'MOLLETS',   s:'l'}
+    {k:'bicep-r',s:'l'}, {k:'chest',s:'l'}, {k:'waist',s:'l'}, {k:'thigh-r',s:'l'}, {k:'calf-r',s:'l'},
+    {k:'neck',s:'r'}, {k:'bust',s:'r'}, {k:'bicep-l',s:'r'}, {k:'hips',s:'r'},
+    {k:'thigh-l',s:'r'}, {k:'calf-l',s:'r'}
   ]),
   dos:Object.freeze([
-    {m:'DELT_LAT',  s:'l'}, {m:'DELT_POST', s:'r'},
-    {m:'DORSAUX',   s:'l'}, {m:'TRAP_SUP',  s:'r'},
-    {m:'TRICEPS',   s:'l'}, {m:'BICEPS',    s:'r'},
-    {m:'FESSIERS',  s:'l'}, {m:'LOMBAIRES', s:'r'},
-    {m:'ABDUCTEURS',s:'l'}, {m:'AVANT_BRAS',s:'r'},
-    {m:'ISCHIOS',   s:'l'}, {m:'ADDUCTEURS',s:'r'},
-    {m:'MOLLETS',   s:'l'}
+    {k:'bicep-l',s:'l'}, {k:'waist',s:'l'}, {k:'glutes',s:'l'}, {k:'thigh-l',s:'l'}, {k:'calf-l',s:'l'},
+    {k:'neck',s:'r'}, {k:'bicep-r',s:'r'}, {k:'hips',s:'r'}, {k:'thigh-r',s:'r'}, {k:'calf-r',s:'r'}
   ])
 });
+// Le nom court de chaque tour, sur l'etiquette : la place manque, et « Tour
+// de » se lit dans l'infobulle, qui donne le libelle entier de MEAS.
+const CORPS_NOMS=Object.freeze({
+  neck:'Cou', chest:'Poitrine', bust:'Buste', 'bicep-r':'Biceps D', 'bicep-l':'Biceps G',
+  waist:'Taille', hips:'Hanches', glutes:'Fessiers', 'thigh-r':'Cuisse D', 'thigh-l':'Cuisse G',
+  'calf-r':'Mollet D', 'calf-l':'Mollet G'
+});
+/**
+ * PURE. Le point d'un tour sur une silhouette, en centiemes de la toile, ou
+ * null si cette vue ne le montre pas.
+ * @returns {{x:number,y:number}|null}
+ */
+function corpsAncre(genre,vue,cle){
+  const p=((CORPS_POINTS[genre+'-'+vue])||{})[cle];
+  return p?{x:p[0],y:p[1]}:null;
+}
 /**
  * PURE. Etale des positions verticales pour qu'aucune ne chevauche sa voisine.
  *
@@ -52144,82 +52111,42 @@ function _corpsJourLong(ts){
   try{ return new Date(t).toLocaleDateString('fr-FR'); }catch(e){ return ''; }
 }
 /**
- * PURE. Ce que porte une etiquette, pour un muscle et un dossier.
+ * PURE. Ce que porte l'etiquette d'une mensuration, ou null si elle n'a
+ * aucun ecart a montrer.
  *
- * ⚠ UNE ETIQUETTE SANS MESURE N'EST PAS UNE ETIQUETTE VIDE. Elle dit « pas de
- *   mesure », en gris, et son infobulle donne la phrase que le reste de
- *   l'application ecrit deja. Le trapeze, les lombaires, les deltoides, les
- *   abdominaux, les avant-bras, les adducteurs, les abducteurs et les ischios
- *   n'ont AUCUNE mensuration qui les suive : les taire aurait laisse croire
- *   qu'ils n'ont pas bouge.
- * @returns {{muscle:string,lib:string,cle:string|null,ecart:object|null,
- *            valeur:string,source:string,periode:string,titre:string}}
+ * ⚠ PAS D'ETIQUETTE SANS ECART. Kevin, 21/09/2026 : « les mensurations
+ *   uniquement avec les +/- cm ». Un tour mesure une seule fois — ou jamais,
+ *   ou seulement reporte d'un bilan a l'autre — ne dit rien d'une evolution :
+ *   il ne sort pas. Quand AUCUN tour n'a d'ecart, c'est le pied de cadre qui
+ *   dit pourquoi.
+ *
+ * ⚠ « stable » SOUS LA TOLERANCE, ET NON « +0,3 cm ». C'est _synEcart qui
+ *   tranche, avec le meme seuil que le reste de l'application : un metre de
+ *   couturiere se trompe d'un demi-centimetre, et un ecart plus petit que
+ *   l'erreur de mesure n'est pas un ecart. L'afficher en chiffres le ferait
+ *   lire comme un resultat.
+ *
+ * ⚠ AUCUNE COULEUR DE JUGEMENT (regle R32) : un tour de taille qui descend
+ *   est un but, un tour de bras qui descend une perte, et rien dans le
+ *   dossier ne dit lequel des deux on cherche. L'ecart s'ecrit toujours dans
+ *   la meme encre.
+ * @returns {{cle:string,lib:string,valeur:string,periode:string,titre:string,
+ *            ecart:object}|null}
  */
-function corpsEtiquette(u,muscle){
-  const lib=((MUSCLES||{})[muscle]||{}).lib||muscle;
-  const cle=BLOC_MESURE_DE[muscle]||null;
-  const m=cle?(RAP_MESURES.find(x=>x.cle===cle)||null):null;
-  const e=cle?corpsEcart(u,cle):null;
-  // ⚠ PAS DE TIRET EN GUISE DE VALEUR. La premiere version posait « — » sur la
-  //   ligne de l'ecart : a onze pixels sur fond noir il ne se lisait pas, et
-  //   il laissait surtout croire a une valeur qu'on n'aurait pas su calculer.
-  //   « pas de mesure » dit la seule chose vraie — personne n'a jamais mesure
-  //   ce muscle.
-  // ⚠ TROIS SILENCES DIFFERENTS, ET « PAS DE MESURE » LES COUVRAIT TOUS LES
-  //   TROIS. Releve a la relecture du 21/09/2026 :
-  //
-  //     · AUCUNE MENSURATION NE SUIT CE MUSCLE — trapezes, lombaires,
-  //       deltoides, abdominaux, avant-bras, adducteurs, abducteurs, dorsaux.
-  //       Personne ne les mesurera jamais avec un metre : « pas de mesure »
-  //       est exact, et c'est la phrase que le reste de l'application ecrit.
-  //     · LA MENSURATION EXISTE, MAIS UN SEUL RELEVE. L'athlete a bel et bien
-  //       mesure son biceps — une fois. Lui repondre « pas de mesure » etait
-  //       FAUX, et decourageait la seule chose a faire : en prendre une
-  //       seconde.
-  //     · LA MENSURATION EXISTE, ET AUCUN RELEVE REEL — la case n'a jamais ete
-  //       remplie, ou tout ce qui s'y trouve a ete reporte d'un bilan a
-  //       l'autre sans re-mesure.
-  //
-  //   Le nombre vient de corpsPointsMesure, qui ecarte deja les reports : une
-  //   seconde facon de compter les releves aurait fini par en compter
-  //   autrement.
-  if(!e){
-    const n=cle?corpsPointsMesure(u,cle).length:0;
-    const nomMes=(m&&m.lib)||cle;
-    if(!cle)
-      return {muscle,lib,cle,ecart:null,valeur:'',source:'pas de mesure',periode:'',
-        titre:lib+' — Aucune mensuration ne suit ce muscle sur la période.'};
-    if(n===1)
-      return {muscle,lib,cle,ecart:null,valeur:'',source:'un seul relevé',periode:'',
-        titre:lib+' — '+nomMes+' : un seul relevé au dossier. Il en faut deux '
-          +'pour un écart.'};
-    return {muscle,lib,cle,ecart:null,valeur:'',source:'aucun relevé',periode:'',
-      titre:lib+' — '+nomMes+' : aucun relevé au dossier. Les valeurs reportées '
-        +'d’un bilan à l’autre ne comptent pas comme une mesure.'};
-  }
-  // _synEcart tient la mise en forme ET le seuil : « stable » sous 0,5 cm,
-  // sinon « +0,8 cm » avec le vrai signe moins. Une seconde mise en forme
-  // ecrite ici aurait fini par afficher « -0.8cm » a cote de « −0,8 cm ».
+function corpsMesureEtiquette(u,cle){
+  let e=null;
+  try{ e=corpsEcart(u,cle); }catch(err){ e=null; }
+  if(!e) return null;
+  const nom=CORPS_NOMS[cle]||cle;
+  const long=_libMesure(((MEAS.find(m=>m.k===cle)||{}).l)||nom,true);
   const t=_synEcart(e.delta,'cm',SYN_BRUIT_MESURE);
-  const court=(m&&m.court)||(m&&m.lib)||cle;
   const periode=_corpsJour(e.debut.date)+' → '+_corpsJour(e.fin.date);
-  // ⚠ LE TITRE COMMENCE PAR LE MUSCLE, ET C'EST UN CORRECTIF DU 21/09/2026.
-  //   Il commencait par l'ecart et enchainait sur la MENSURATION — « +0,8 cm ·
-  //   Biceps droit · … » — si bien que l'etiquette du TRICEPS annoncait
-  //   « Biceps droit » et ne nommait jamais le triceps. A l'oeil ca passait :
-  //   le nom du muscle est la premiere ligne de l'etiquette. A la voix, non :
-  //   depuis que l'etiquette porte role="img", SEUL l'aria-label est lu, et il
-  //   est construit sur ce titre. Un lecteur d'ecran entendait donc le biceps
-  //   deux fois et le triceps jamais.
-  //
-  //   Le muscle d'abord, la mensuration ensuite : « Triceps · +0,8 cm · tour
-  //   de bras : Biceps droit · … ». Les deux sont nommes, et on voit lequel
-  //   est mesure.
-  return {muscle,lib,cle,ecart:e,valeur:t.delta,source:court,periode,
-    titre:lib+' · '+t.delta+' · mesuré par : '+((m&&m.lib)||cle)
-      +' · du '+_corpsJourLong(e.debut.date)
-      +' au '+_corpsJourLong(e.fin.date)+' · tolérance ± '
-      +String(SYN_BRUIT_MESURE).replace('.',',')+' cm'
+  // L'infobulle et la phrase lue commencent par la MENSURATION, en toutes
+  // lettres : l'etiquette n'en montre que le nom court.
+  return {cle,lib:nom,valeur:t.delta,periode,ecart:e,
+    titre:long+' · '+t.delta
+      +' · du '+_corpsJourLong(e.debut.date)+' au '+_corpsJourLong(e.fin.date)
+      +' · tolérance ± '+String(SYN_BRUIT_MESURE).replace('.',',')+' cm'
       +' · '+String(e.debut.valeur).replace('.',',')+' → '
       +String(e.fin.valeur).replace('.',',')+' cm'};
 }
@@ -52228,19 +52155,18 @@ function corpsEtiquette(u,muscle){
 const CORPS_SEM_MAX=8;
 /**
  * La derniere semaine qui porte du volume, ou null. IMPURE — elle lit
- * l'horloge par _volCleDecalee.
+ * l'horloge par _volCleDecalee. Elle borne la courbe des series dures.
  *
  * ⚠ POURQUOI PAS SIMPLEMENT LA SEMAINE EN COURS. Un lundi matin, elle est
- *   vide : les dix-huit muscles tombent sous le MEV et le corps entier vire au
- *   gris. Le coach lirait « il ne fait rien » alors que la semaine n'a pas
- *   commence. On remonte donc jusqu'a la derniere semaine REELLEMENT
- *   travaillee, et le pied de cadre DIT laquelle — sans quoi la teinte
- *   parlerait d'une semaine que personne n'a nommee.
+ *   vide : la courbe tomberait a zero, et le coach lirait « il ne fait rien »
+ *   alors que la semaine n'a pas commence. On remonte donc jusqu'a la
+ *   derniere semaine REELLEMENT travaillee, et le pied de la courbe DIT
+ *   laquelle.
  *
  * ⚠ ET ON NE PREVOIT RIEN. grilleCharge, elle, remplit une semaine vide avec
  *   le volume PREVISIONNEL du gabarit ; c'est defendable dans une grille qui
- *   annonce le bloc a venir, ca ne l'est pas sur un corps. Teinter un muscle
- *   d'apres ce qui est prevu ferait lire une charge qui n'a pas eu lieu.
+ *   annonce le bloc a venir, ca ne l'est pas ici : ce serait tracer une
+ *   charge qui n'a pas eu lieu.
  * @returns {{cle:string,decalage:number}|null}
  */
 function corpsSemaineVolume(u){
@@ -52253,60 +52179,14 @@ function corpsSemaineVolume(u){
   }
   return null;
 }
-/**
- * PURE. La couleur de chaque zone d'une vue, pour un volume hebdomadaire.
- *
- * ⚠ LA TEINTE DIT LE VOLUME D'ENTRAINEMENT, JAMAIS LE DEVELOPPEMENT. C'est la
- *   seule question sur ce corps pour laquelle il existe des reperes — MEV,
- *   MAV, MRV — et donc la seule qu'une couleur a le droit de trancher. Un tour
- *   de cuisse, lui, n'est ni bon ni mauvais : aucun objectif declare ne dit
- *   dans quel sens il « doit » aller, et l'ecart en centimetres reste donc
- *   toujours dans la meme encre. Regle R32.
- *
- * ⚠ LES QUATRE COULEURS SONT CELLES DE LA GRILLE DE CHARGE — GC_COULEURS, qui
- *   reprennent elles-memes VOL_ZONES. Trois palettes pour une notion finiraient
- *   par se contredire, et le coach apprendrait trois codes pour un seul fait.
- *
- * ⚠ UN MUSCLE SANS REPERE N'EST PAS TEINTE. reperesEffectifs rend null pour
- *   les lombaires, les abducteurs et les adducteurs : il n'existe aucun MEV
- *   publie pour eux. Les peindre d'une couleur quelconque aurait invente le
- *   repere qui manque.
- * @param {any} u
- * @param {'face'|'dos'} vue
- * @param {Object.<string,number>} vol  le volume hebdomadaire par muscle
- * @returns {Object.<string,string>} muscle → couleur
- */
-function corpsZones(u,vue,vol){
-  const out={};
-  const v=vol||{};
-  for(const e of (CORPS_ETIQUETTES[vue]||[])){
-    let rep=null;
-    try{ rep=reperesEffectifs(u,e.m); }catch(err){ rep=null; }
-    if(!rep) continue;
-    let k=null;
-    try{ k=_repereDe(Number(v[e.m])||0,rep); }catch(err){ k=null; }
-    if(k) out[e.m]=k;
-  }
-  return out;
-}
-/**
- * PURE. La meme chose, traduite en couleurs.
- *
- * ⚠ LA ZONE ET LA COULEUR SONT SEPAREES DEPUIS LE 21/09/2026, et ce n'est pas
- *   de la symetrie pour la symetrie : la ZONE est une information — elle part
- *   dans l'infobulle de chaque etiquette, ou elle se lit sans voir l'ecran —
- *   tandis que la COULEUR n'est qu'une facon de la montrer. Les deux
- *   melangees, il fallait retraduire une couleur en zone pour l'ecrire, ce qui
- *   revenait a lire un fait dans sa representation.
- */
-function corpsTeintes(u,vue,vol){
-  const z=corpsZones(u,vue,vol), out={};
-  for(const m in z){ const c=GC_COULEURS[z[m]]; if(c) out[m]=c; }
-  return out;
-}
-// « semaine du 15 septembre ». Le pied de cadre doit nommer la semaine que la
-// teinte decrit : sans elle, un corps teinte d'apres une semaine vieille de
-// trois semaines aurait l'air de decrire celle-ci.
+// ⚠ LA TEINTE DE VOLUME A ETE RETIREE DU CADRE le 21/09/2026, avec les
+//   etiquettes de muscles : corpsZones, corpsTeintes et leur legende. Kevin ne
+//   veut plus les muscles sur la silhouette, et la teinte en etait une autre
+//   facon de les montrer. La charge de travail reste lisible a cote, dans la
+//   courbe « Séries dures par semaine ».
+// « 15 septembre ». La courbe des series dures nomme la semaine ou elle
+// s'arrete : sans elle, une courbe arretee trois semaines plus tot aurait
+// l'air de decrire celle-ci.
 function _corpsLibSemaine(cle){
   const d=(function(){ try{ return _lundiDeSemaine(cle); }catch(e){ return null; } })();
   if(!d) return '';
@@ -52314,40 +52194,30 @@ function _corpsLibSemaine(cle){
   catch(e){ return ''; }
 }
 /**
- * PURE. Combien de MENSURATIONS DISTINCTES ont bouge, parmi les muscles que
- * cette vue montre.
+ * PURE. Combien de mensurations PROPRES A CETTE VUE ont bouge.
  *
- * ⚠ DISTINCTES, ET C'EST TOUT LE SUJET. Biceps et triceps lisent le meme tour
- *   de bras, quadriceps et ischios la meme cuisse : compter les etiquettes
- *   aurait annonce « quatre ecarts » la ou il y en a deux. On compte les
- *   mesures, pas les muscles qui les affichent.
+ * ⚠ PROPRES A CETTE VUE, ET C'EST TOUT LE SUJET DEPUIS LE NOUVEAU MODELE. Le
+ *   cou, les bras, la taille, les hanches, les cuisses et les mollets se
+ *   lisent sur les deux silhouettes : les compter aurait allume la pastille
+ *   de l'onglet ferme presque toujours, pour rien qu'on ne voie deja. Seules
+ *   la poitrine et le buste n'existent que de face, les fessiers que de dos —
+ *   ce sont eux qu'un coach qui ne retourne jamais la silhouette manquerait.
  *
  * ⚠ ET SEULEMENT CE QUI DEPASSE LE BRUIT. Un ecart sous la tolerance s'ecrit
- *   « stable » sur l'etiquette ; le compter ici ferait clignoter un onglet
- *   pour un demi-millimetre.
+ *   « stable » ; le compter ferait clignoter un onglet pour un
+ *   demi-millimetre.
  * @param {any} u
  * @param {'face'|'dos'} vue
  * @returns {number}
  */
 function corpsEcartsDeVue(u,vue){
-  // ⚠ ON DEMANDE A L'ECART, PAS A L'ETIQUETTE. La premiere version appelait
-  //   corpsEtiquette treize fois et lisait son resultat : elle posait la
-  //   question « que dit l'etiquette ? » pour repondre a « une mesure a-t-elle
-  //   bouge ? ». Deux consequences : elle fabriquait treize infobulles pour
-  //   les jeter, et elle faisait dependre un compte d'un texte.
-  //
-  //   Les clefs DISTINCTES d'abord, la question ensuite : quatre ou cinq
-  //   appels au lieu de treize, et biceps et triceps ne comptent qu'une fois
-  //   le tour de bras qu'ils partagent.
-  const cles=new Set();
-  for(const e of (CORPS_ETIQUETTES[vue]||[])){
-    const k=BLOC_MESURE_DE[e.m];
-    if(k) cles.add(k);
-  }
+  const autre=(vue==='dos')?'face':'dos';
+  const ailleurs=new Set((CORPS_MESURES[autre]||[]).map(m=>m.k));
   let n=0;
-  for(const k of cles){
+  for(const m of (CORPS_MESURES[vue]||[])){
+    if(ailleurs.has(m.k)) continue;
     let x=null;
-    try{ x=corpsEcart(u,k); }catch(err){ x=null; }
+    try{ x=corpsEcart(u,m.k); }catch(err){ x=null; }
     if(x&&!x.stable) n++;
   }
   return n;
@@ -52372,66 +52242,20 @@ function corpsVue(v){
   }catch(e){}
   return _corpsVue;
 }
-/**
- * LA TETE. La photo de profil de l'athlete, posee sur la tete de la planche.
- *
- * ⚠ ET RIEN QUAND IL N'Y A PAS DE PHOTO — c'est un changement de plan, decide
- *   au banc la nuit du 20/09/2026 apres avoir regarde le rendu. Le plan etait
- *   de dessiner « un visage neutre au trait, dans le gris des planches » ;
- *   mesure faite, LES PLANCHES EN PORTENT DEJA UN. Deux yeux et une bouche
- *   ajoutes par-dessus faisaient un second visage, flottant sur le cou du
- *   premier. La planche non recouverte EST le visage neutre.
- *
- * ⚠ JAMAIS photosProgression. Ces photos-la vivent en IndexedDB sur l'appareil
- *   de l'athlete, sous un consentement dedie, et ne remontent au coach que sur
- *   partage explicite. Les afficher ici serait une fuite de donnee de sante.
- *   La seule photo autorisee est `athletePhoto` — celle du profil, que
- *   l'athlete a posee pour etre vue, et que la liste d'athletes montre deja.
- *
- * ⚠ ELLE SE POSE DANS LE REPERE DE LA PLANCHE, pas dans celui de la scene.
- *   Les centiemes de `tete` ont ete releves SUR LA PLANCHE ; poser le disque
- *   en enfant de la scene les faisait lire sur une largeur trois fois
- *   superieure, et la premiere mesure au banc l'a montre — un disque de cent
- *   pixels a plat sur les epaules.
- */
-function _htmlCorpsTete(u,genre,vue){
-  const pl=CORPS_PLANCHE[genre+'-'+vue];
-  const t=pl&&pl.tete;
-  if(!t) return '';
-  const photo=(u&&u.athletePhoto)||'';
-  if(!photo) return '';
-  // Le rayon est dit en centiemes de LARGEUR : pour le poser en haut, il faut
-  // le traduire en centiemes de HAUTEUR, sans quoi le disque descendrait sur
-  // une planche trois fois plus haute que large.
-  const rh=t.r*(pl.w/pl.h);
-  return '<div class="cc-corps-tete" style="left:'+_arr1(t.cx-t.r)
-    +'%;top:'+_arr1(t.cy-rh)+'%;width:'+_arr1(2*t.r)+'%">'
-    +'<img src="'+escapeHtml(photo)+'" alt="" aria-hidden="true"></div>';
-}
+// ⚠ PLUS DE PHOTO SUR LA TETE — Kevin, 21/09/2026 : « supprime le rond sur la
+//   tete, c'est pas utile ». _htmlCorpsTete et son emplacement de visage sont
+//   retires ; la regle qui les gardait tient toujours ailleurs : jamais
+//   photosProgression dans la fiche coach.
 // « 12,3 » sans trainee de virgule flottante : les pourcentages de position
 // partent dans un attribut style, et 5.500000000000001 % y serait illisible.
 function _arr1(v){ return Math.round((Number(v)||0)*10)/10; }
-// LA PLANCHE ET SON CALQUE. Le calque de zones est celui de la seance —
-// woHtmlZones — et pas un second : deux fonctions qui peignent le meme contour
-// finiraient par en peindre deux.
-function _htmlCorpsPlanche(u,genre,vue,teintes){
-  const src=woSrcAvatar(CORPS_NIVEAU,genre,vue);
-  // ⚠ UN CALQUE PAR MUSCLE, ET C'EST woHtmlZones QUI LE FABRIQUE — la fonction
-  //   de la seance, pas une copie. Elle peint tout d'une seule encre, fixee
-  //   par .wo-ava-z polygon ; on l'enveloppe donc dans un porteur qui pose la
-  //   couleur en variable CSS. Reecrire le trace ici aurait cree un second
-  //   endroit ou les contours vivent, et les deux auraient diverge a la
-  //   premiere retouche des planches.
-  let zones='';
-  for(const m in (teintes||{}))
-    zones+='<div class="cc-corps-zone" style="--zc:'+escapeHtml(teintes[m])+'">'
-      +woHtmlZones([m],src,vue,CORPS_NIVEAU,genre)+'</div>';
+// LA SILHOUETTE, SEULE. Plus de calque de zones : Kevin ne veut plus les
+// muscles, et la teinte de volume disait des muscles.
+function _htmlCorpsPlanche(genre,vue){
+  const pl=CORPS_PLANCHE[genre+'-'+vue]||CORPS_PLANCHE['h-face'];
   return '<div class="cc-corps-planche" style="left:'+((100-CORPS_PART_CORPS)/2)
     +'%;width:'+CORPS_PART_CORPS+'%">'
-    +'<img src="'+src+'" alt="" aria-hidden="true">'
-    +zones
-    +_htmlCorpsTete(u,genre,vue)
-    +'</div>';
+    +'<img src="'+pl.src+'" alt="" aria-hidden="true" decoding="async"></div>';
 }
 // ══ LES TROIS GRAPHIQUES DU CADRE CORPS ════════════════════════════════════
 //
@@ -52701,35 +52525,23 @@ function _htmlCorpsGraphes(u){
   return h;
 }
 /**
- * Les deux colonnes d'etiquettes et leurs traits de rappel.
+ * Les deux colonnes d'etiquettes et leurs traits de rappel : une etiquette
+ * par MENSURATION qui a un ecart, jamais par muscle.
  *
  * ⚠ AUCUNE COULEUR DE JUGEMENT SUR UN CENTIMETRE. C'est la regle R32 : aucun
- *   objectif declare ne dit dans quel sens un tour de cuisse « doit » aller,
- *   et un tour de taille qui monte n'est ni bon ni mauvais. L'ecart s'ecrit
- *   donc toujours dans la meme encre. Le vert et le rouge, dans ce cadre,
- *   diront le VOLUME d'entrainement — une tout autre question, et la seule
- *   pour laquelle il existe des reperes.
- * ⚠ ET ELLE PORTE AUSSI LA CHARGE, DANS SON INFOBULLE. La teinte ne se lit
- *   qu'a l'oeil : pour qui n'a pas l'ecran devant lui — ou qui ne distingue
- *   pas le bleu du vert — elle n'existait pas du tout. L'infobulle dit donc le
- *   chiffre, la zone et la semaine : « charge de la semaine du 14 septembre :
- *   12,5 series (MAV-MRV) ». Un fait, sa source, sa date.
- *
- * ⚠ ET LE VOLUME S'ARRONDIT AU DEMI, PAS AU DIXIEME. C'est l'inverse de la
- *   regle des mensurations, et c'est voulu : volAffiche est faite pour des
- *   series — « 12,5 series » a un sens, « 12,53 » n'en a aucun — la ou elle
- *   detruirait un centimetre en transformant +0,8 en +1.
- * @param {{zones:Object,vol:Object,semaine:string}} [charge]
+ *   objectif declare ne dit dans quel sens un tour de cuisse « doit » aller.
+ *   L'ecart s'ecrit donc toujours dans la meme encre.
  * @returns {{etiquettes:string,traits:string,avecEcart:number}}
  */
-function _htmlCorpsEtiquettes(u,genre,vue,charge){
-  const liste=CORPS_ETIQUETTES[vue]||[];
+function _htmlCorpsEtiquettes(u,genre,vue){
   const g0=(100-CORPS_PART_CORPS)/2;
   const par={l:[],r:[]};
-  for(const e of liste){
-    const a=corpsAncre(genre,vue,e.m,e.s==='l'?'g':'d');
+  for(const m of (CORPS_MESURES[vue]||[])){
+    const inf=corpsMesureEtiquette(u,m.k);
+    if(!inf) continue;
+    const a=corpsAncre(genre,vue,m.k);
     if(!a) continue;
-    (par[e.s]||par.l).push({e,x:g0+a.x*CORPS_PART_CORPS/100,y:a.y});
+    (par[m.s]||par.l).push({inf,x:g0+a.x*CORPS_PART_CORPS/100,y:a.y});
   }
   let ets='', segments='', points='', avecEcart=0;
   for(const cote of ['l','r']){
@@ -52737,39 +52549,27 @@ function _htmlCorpsEtiquettes(u,genre,vue,charge){
     const ys=corpsEtaler(col.map(p=>p.y),CORPS_ETIQ_GAP,CORPS_ETIQ_HAUT,CORPS_ETIQ_BAS);
     col.forEach((p,i)=>{
       const cy=ys[i];
-      const inf=corpsEtiquette(u,p.e.m);
-      if(inf.ecart) avecEcart++;
-      const ch=charge||{};
-      const zone=(ch.zones||{})[p.e.m];
-      const nSer=(ch.vol||{})[p.e.m];
-      const titre=inf.titre+(zone
-        ?(' · charge de la semaine'+(ch.semaine?(' du '+ch.semaine):'')+' : '
-          +volAffiche(Number(nSer)||0)+' séries ('+zone+')')
-        :'');
+      const inf=p.inf;
+      avecEcart++;
+      // TROIS LIGNES : la mensuration, son ecart, ses deux dates. La source
+      // et la date sont SUR l'etiquette, la tolerance dans l'infobulle et au
+      // pied du cadre — la doctrine, verifiable.
       const lignes='<span class="cc-corps-em">'+escapeHtml(inf.lib)+'</span>'
-        +(inf.valeur?'<span class="cc-corps-ev">'+escapeHtml(inf.valeur)+'</span>':'')
-        +'<span class="cc-corps-es">'+escapeHtml(inf.source)+'</span>'
-        +(inf.periode?'<span class="cc-corps-ed">'+escapeHtml(inf.periode)+'</span>':'');
+        +'<span class="cc-corps-ev">'+escapeHtml(inf.valeur)+'</span>'
+        +'<span class="cc-corps-ed">'+escapeHtml(inf.periode)+'</span>';
       // ⚠ role="img" ET aria-label, LA CONVENTION DE LA MAISON pour « cet
-      //   ensemble visuel dit ceci » — celle des badges et des jauges de RPE.
-      //   Sans elle, un lecteur d'ecran enfilait quatre fragments detaches —
-      //   « Biceps », « +0,8 cm », « biceps D », « 21/06 → 15/09 » — sans dire
-      //   qu'ils parlent du meme muscle, et l'attribut `title` d'un div non
-      //   interactif n'est pas lu par tous.
-      //
-      // ⚠ ET LES POINTS MEDIANS DEVIENNENT DES VIRGULES. Ils separent a l'oeil
-      //   et ne s'entendent pas : la phrase lue devenait un seul souffle.
-      const parle=String(titre).split(' · ').join(', ');
-      ets+='<div class="cc-corps-et" data-c="'+cote+'"'
-        +(inf.ecart?'':' data-sans=""')
+      //   ensemble visuel dit ceci ». Sans elle, un lecteur d'ecran enfilait
+      //   trois fragments detaches sans dire qu'ils parlent du meme tour. Les
+      //   points medians deviennent des virgules : ils separent a l'oeil et
+      //   ne s'entendent pas.
+      const parle=String(inf.titre).split(' · ').join(', ');
+      ets+='<div class="cc-corps-et" data-c="'+cote+'" data-k="'+escapeHtml(inf.cle)+'"'
         +' role="img" aria-label="'+escapeHtml(parle)+'"'
-        +' style="top:'+_arr1(cy)+'%" title="'+escapeHtml(titre)+'">'
+        +' style="top:'+_arr1(cy)+'%" title="'+escapeHtml(inf.titre)+'">'
         +lignes+'</div>';
-      // LE TRAIT PART DU BORD INTERIEUR DE L'ETIQUETTE et rejoint le muscle par
+      // LE TRAIT PART DU BORD INTERIEUR DE L'ETIQUETTE et rejoint le tour par
       // une equerre : un segment horizontal a la hauteur de l'etiquette, puis
-      // une oblique courte. C'est la geometrie de bBodySchema, a l'identique —
-      // deux schemas corporels traces differemment dans la meme application,
-      // ce serait deux conventions a apprendre.
+      // une oblique courte. C'est la geometrie de bBodySchema, a l'identique.
       const bx=(cote==='l')?CORPS_ETIQ_LARG:(100-CORPS_ETIQ_LARG);
       const mx=(cote==='l')?Math.max(bx,p.x-5):Math.min(bx,p.x+5);
       const droit=Math.abs(p.y-cy)<=1.5;
@@ -52779,7 +52579,7 @@ function _htmlCorpsEtiquettes(u,genre,vue,charge){
       segments+='<path class="cc-corps-tr" d="'+dd+'" vector-effect="non-scaling-stroke"/>';
       // LE POINT EST UN DIV, PAS UN <circle>. La scene est tracee en
       // preserveAspectRatio="none" pour que les centiemes tombent juste : un
-      // cercle SVG y deviendrait une ellipse, large de trois fois sa hauteur.
+      // cercle SVG y deviendrait une ellipse.
       points+='<div class="cc-corps-pt" style="left:'+_arr1(p.x)+'%;top:'+_arr1(p.y)+'%"></div>';
     });
   }
@@ -52788,7 +52588,8 @@ function _htmlCorpsEtiquettes(u,genre,vue,charge){
   return {etiquettes:ets,traits,avecEcart};
 }
 /**
- * Le cadre du corps. Rend '' quand il n'a rien le droit de montrer.
+ * Le cadre « Évolution élève numéro N ». Rend '' quand il n'a rien le droit
+ * de montrer.
  *
  * ⚠ GROSSESSE OU ALLAITEMENT DECLARES : LE BLOC N'EXISTE PAS. Meme regle que
  *   les photos de progression, et pour la meme raison — on ne suit pas la
@@ -52800,28 +52601,21 @@ function _htmlCorpsCadre(c){
   if(!u) return '';
   // ⚠ UNE INVITATION PAS ENCORE CONSOMMEE N'A PAS DE CORPS. `_fromCode` est un
   //   profil minimal fabrique a partir d'un code : personne ne s'est inscrit,
-  //   il n'y a ni seance, ni bilan, ni silhouette a montrer. Le cadre sortait
-  //   quand meme, avec un bonhomme eteint et « Pas encore de bilan » — sous un
-  //   badge qui dit deja « En attente d'inscription ». _majBoutonBilan ecarte
-  //   ces dossiers pour la meme raison, et de la meme facon.
+  //   il n'y a ni bilan ni silhouette a montrer. _majBoutonBilan ecarte ces
+  //   dossiers pour la meme raison, et de la meme facon.
   if(c&&c._fromCode) return '';
   try{ if(!phpDisponible(u)) return ''; }catch(e){}
   const genre=woGenreAvatar(u);
   const vue=(_corpsVue==='dos')?'dos':'face';
   const pl=CORPS_PLANCHE[genre+'-'+vue]||CORPS_PLANCHE['h-face'];
   let bilans=[]; try{ bilans=bilansOrdonnes(u)||[]; }catch(e){ bilans=[]; }
-  // ⚠ L'ONGLET INACTIF DIT S'IL Y A QUELQUE CHOSE A VOIR DE L'AUTRE COTE.
-  //   La moitie des muscles n'existe que dans une vue : fessiers, ischios,
-  //   lombaires et deltoide posterieur ne se montrent que de dos. Un coach qui
-  //   ne retourne jamais la silhouette ne voyait donc jamais qu'un fessier
-  //   avait pris 1,6 cm — et rien a l'ecran ne le lui disait. La pastille et
-  //   son infobulle le disent.
+  // ⚠ L'ONGLET FERME DIT S'IL Y A QUELQUE CHOSE A VOIR DE L'AUTRE COTE — ce
+  //   que cette vue ne montre pas : la poitrine et le buste n'existent que de
+  //   face, les fessiers que de dos. La pastille et son infobulle le disent.
   //
-  //   ⚠ ELLE NE SORT QUE SUR L'ONGLET FERME. Sur celui qu'on regarde, les
-  //     etiquettes sont deja la : un rappel serait du bruit.
-  //
-  //   ⚠ ET ELLE N'EST PAS ROUGE. Dans cette application le rouge appelle une
-  //     decision ; ici il n'y a rien a decider, juste quelque chose a lire.
+  //   ⚠ ELLE NE SORT QUE SUR L'ONGLET FERME, et elle n'est pas rouge : dans
+  //     cette application le rouge appelle une decision, et ici il n'y a rien
+  //     a decider, juste quelque chose a lire.
   const onglet=(k,lib)=>{
     const ferme=(vue!==k);
     let n=0;
@@ -52834,59 +52628,34 @@ function _htmlCorpsCadre(c){
       +(n?'<span class="cc-corps-pa" aria-hidden="true"></span>':'')
       +'</button>';
   };
+  // LE TITRE DIT L'ELEVE, par le numero de sa carte d'identite — rangArrivee,
+  // la meme fonction : deux numeros pour le meme athlete sur la meme fiche
+  // seraient deux reperes contradictoires. Sans rang connu, le titre se tait
+  // sur le numero plutot que d'afficher « numéro 0 ».
+  const rang=(function(){ try{ return rangArrivee(c); }catch(e){ return 0; } })();
+  const titre='Évolution élève'+(rang?(' numéro '+rang):'');
   const tete='<div class="cc-corps-h">'
-    +'<span class="cc-corps-t">Corps</span>'
+    +'<span class="cc-corps-t">'+escapeHtml(titre)+'</span>'
     +'<span class="cc-corps-vue" role="group" aria-label="Vue du corps">'
     +onglet('face','Vue avant')+onglet('dos','Vue arrière')+'</span></div>';
-  // LA SCENE PORTE LE RAPPORT DE LA PLANCHE, elargi de 100/CORPS_PART_CORPS :
-  // la planche occupe cette part de sa largeur, et tout — traits, etiquettes,
-  // disque de tete — se repere ensuite en centiemes de cette scene. Sans cadre
-  // fixe, un trait de rappel calcule en pourcentage pointerait ailleurs a
-  // chaque largeur d'ecran.
-  // LES ETIQUETTES NE SORTENT QU'AVEC DEUX BILANS. Sous ce seuil il n'y a
-  // aucun ecart a montrer, et treize libelles suivis de treize tirets seraient
-  // un cadre plein qui ne dit rien.
-  // LA TEINTE SORT DES LE PREMIER BILAN — elle ne depend pas des bilans du
-  // tout, mais des seances. Sans aucun bilan le cadre reste eteint : c'est le
-  // contrat affiche, et un corps colorie sous « Pas encore de bilan » aurait
-  // dit deux choses contradictoires dans le meme cadre.
-  const sem=bilans.length?corpsSemaineVolume(u):null;
-  let volSem={};
-  if(sem){ try{ volSem=volumeSemaine(u,sem.cle)||{}; }catch(e){ volSem={}; } }
-  // ⚠ ON APPELLE corpsTeintes PLUTOT QUE DE REFAIRE SA BOUCLE. Elle etait
-  //   recopiee ici — « pour ne pas recalculer les zones », qui coutent treize
-  //   recherches — et cette copie pouvait diverger de l'originale : c'est
-  //   exactement ce qu'une assertion de cette suite interdit par ailleurs.
-  //
-  //   ET LA COPIE PORTAIT UN PIEGE : elle declarait `const c` pour la couleur,
-  //   qui MASQUAIT le parametre `c` — le dossier de l'athlete. Sans effet
-  //   aujourd'hui, le bloc etant clos ; faux le jour ou quelqu'un ajoute une
-  //   ligne qui lit le dossier a l'interieur de cette boucle.
-  const zones=sem?corpsZones(u,vue,volSem):{};
-  const teintes=sem?corpsTeintes(u,vue,volSem):{};
-  // LA CHARGE DESCEND JUSQU'AUX ETIQUETTES : c'est la qu'elle devient lisible
-  // pour qui ne voit pas la couleur.
+  // LES ETIQUETTES NE SORTENT QU'AVEC DEUX BILANS : sous ce seuil il n'y a
+  // aucun ecart a montrer.
   const eti=(bilans.length>=2)
-    ?_htmlCorpsEtiquettes(u,genre,vue,
-        {zones,vol:volSem,semaine:sem?_corpsLibSemaine(sem.cle):''})
+    ?_htmlCorpsEtiquettes(u,genre,vue)
     :{etiquettes:'',traits:'',avecEcart:0};
+  // LA SCENE PORTE LE RAPPORT DE LA TOILE, elargi de 100/CORPS_PART_CORPS : la
+  // silhouette occupe cette part de sa largeur, et tout — traits, etiquettes —
+  // se repere ensuite en centiemes de cette scene.
+  // ⚠ LES TRAITS PASSENT PAR-DESSUS LA SILHOUETTE : dessines dessous, ils
+  //   disparaitraient des qu'ils touchent le corps.
   const scene='<div class="cc-corps-scene"'+(bilans.length?'':' data-eteint=""')
     +' style="aspect-ratio:'+_arr1(pl.w*100/CORPS_PART_CORPS)+'/'+pl.h
     +';--et-l:'+_arr1(CORPS_ETIQ_LARG)+'%">'
-    // ⚠ LES TRAITS PASSENT PAR-DESSUS LA PLANCHE, ET C'EST UNE CORRECTION DU
-    //   21/09/2026. Dessines dessous, ils disparaissaient des qu'ils touchaient
-    //   le corps — qui est opaque. Sans consequence pour un biceps, ancre au
-    //   bord ; fatal pour le trapeze et les lombaires, ancres au CENTRE de la
-    //   planche en vue de dos : leur trait s'arretait au bord du dos et ne
-    //   designait plus rien. Un trait de rappel qui n'atteint pas son point
-    //   n'est plus un rappel, c'est une rature.
-    +_htmlCorpsPlanche(u,genre,vue,teintes)
+    +_htmlCorpsPlanche(genre,vue)
     +eti.traits
     +eti.etiquettes
     +'</div>';
-  // AUCUN BILAN : la silhouette reste eteinte, sans une zone teintee ni une
-  // etiquette, et le cadre le DIT. Un corps colorie sans mesure serait un
-  // chiffre invente avec une couleur autour.
+  // AUCUN BILAN : la silhouette reste eteinte, et le cadre le DIT.
   if(!bilans.length)
     return '<div class="cc-corps">'+tete+scene
       +emptyState('calendar','<strong style="font-size:var(--fs-sm)">Pas encore de bilan</strong>'
@@ -52894,56 +52663,40 @@ function _htmlCorpsCadre(c){
         +'La silhouette s’allumera dès qu’il aura envoyé son premier bilan.</span>','','',
         'padding:6px 0 0')
       +'</div>';
-  // UN SEUL BILAN : le corps sort, les ecarts non. Un ecart demande deux
-  // releves, et un seul ne se compare qu'a lui-meme.
-  // ⚠ LE PIED DE CADRE PORTE CE QUE LES ETIQUETTES NE PEUVENT PAS TENIR : la
-  //   tolerance, et ce que veut dire un muscle gris. La source et les dates,
-  //   elles, sont SUR chaque etiquette — une periode unique annoncee ici aurait
-  //   menti sur les mesures relevees a d'autres dates.
-  // ⚠ ET UN TROISIEME ETAT, TROUVE A LA RELECTURE A FROID : des bilans, mais
-  //   AUCUNE mensuration. Les treize etiquettes disaient « pas de mesure » —
-  //   ce qui est juste — sous une note qui annoncait « ± 0,5 cm de
-  //   tolerance », c'est-a-dire la precision d'ecarts qui n'existent nulle
-  //   part. Une tolerance sans mesure ne veut rien dire ; elle donne meme a
-  //   croire qu'il y en a une quelque part.
+  // ⚠ LE PIED DE CADRE DIT LA RAISON, PAS L'ETAT. Trois silences possibles :
+  //   un seul bilan ; des bilans sans deux releves d'une meme mensuration ; et
+  //   des ecarts qui existent, mais de L'AUTRE cote — seulement les fessiers,
+  //   et l'on regarde de face. Dire « aucun ecart » dans ce dernier cas serait
+  //   faux.
+  // ⚠ ET PAS DE TOLERANCE SANS MESURE : annoncer « ± 0,5 cm » au-dessus d'un
+  //   cadre sans un seul ecart donnerait a croire qu'il y en a quelque part.
+  let ailleurs=0;
+  if(bilans.length>=2&&!eti.avecEcart){
+    const ici=new Set((CORPS_MESURES[vue]||[]).map(m=>m.k));
+    for(const m of (CORPS_MESURES[vue==='dos'?'face':'dos']||[])){
+      if(ici.has(m.k)) continue;
+      let x=null; try{ x=corpsEcart(u,m.k); }catch(e){ x=null; }
+      if(x) ailleurs++;
+    }
+  }
   const note=(bilans.length<2)
     ?'<div class="cc-corps-n">Un seul bilan — les écarts apparaîtront au suivant.</div>'
     :(eti.avecEcart
       ?'<div class="cc-corps-n">Écart entre les deux derniers bilans qui portent '
         +'la mesure, reports exclus · ± '
         +String(SYN_BRUIT_MESURE).replace('.',',')+' cm de tolérance.</div>'
-      // ⚠ ON DIT LA RAISON, PAS L'ETAT — et c'est un correctif du meme jour,
-      //   quelques minutes apres avoir distingue « un seul releve » de « pas de
-      //   mesure ». La note annoncait « Aucune mensuration relevee a ce jour » :
-      //   vrai quand rien n'a jamais ete mesure, FAUX des que l'athlete a pris
-      //   ses mesures UNE fois — ce qui est precisement le cas que je venais de
-      //   nommer sur les etiquettes. La raison, elle, couvre les deux : il faut
-      //   deux releves de la MEME mensuration pour en tirer un ecart.
-      :'<div class="cc-corps-n">Aucun écart à afficher : il faut deux relevés '
-        +'d’une même mensuration pour en calculer un. Le corps montre en '
-        +'attendant la charge de travail.</div>');
-  // ⚠ LA LEGENDE DIT CE QUE LA COULEUR DECRIT, ET CE QU'ELLE NE DECRIT PAS.
-  //   Sans elle, un quadriceps rouge a cote d'un « +0,9 cm » se lit comme un
-  //   jugement sur la cuisse. Le rouge dit « au-dessus du MRV » — une charge
-  //   de travail, pas un corps.
-  const legende=sem
-    ?'<div class="cc-corps-l">'
-      +'<span class="cc-corps-lt">Teinte : charge de la semaine du '
-      +escapeHtml(_corpsLibSemaine(sem.cle))+'</span>'
-      +Object.keys(GC_COULEURS).map(k=>'<span class="cc-corps-lp">'
-        +'<i style="background:'+escapeHtml(GC_COULEURS[k])+'"></i>'
-        +escapeHtml(k)+'</span>').join('')
-      +'<span class="cc-corps-lt">Elle dit le volume d’entraînement, jamais le '
-      +'développement. Un muscle sans repère de volume n’est pas teinté.</span>'
-      +'</div>'
-    :'';
+      :(ailleurs
+        ?'<div class="cc-corps-n">Rien à lire de ce côté : les écarts relevés sont '
+          +(vue==='dos'?'en vue avant':'en vue arrière')+'.</div>'
+        :'<div class="cc-corps-n">Aucun écart à afficher : il faut deux relevés '
+          +'d’une même mensuration pour en calculer un.</div>'));
   // LES GRAPHIQUES NE SORTENT QUE S'ILS ONT DE QUOI TRACER. Chacun se tait
   // tout seul quand il lui manque un point ; les trois muets, la colonne
   // entiere disparait plutot que d'afficher un cadre a trois titres vides.
   const graphes=_htmlCorpsGraphes(u);
   return '<div class="cc-corps">'+tete
     +'<div class="cc-corps-grille">'
-    +'<div class="cc-corps-col">'+scene+note+legende+'</div>'
+    +'<div class="cc-corps-col">'+scene+note+'</div>'
     +(graphes?('<div class="cc-corps-col">'+graphes+'</div>'):'')
     +'</div></div>';
 }
