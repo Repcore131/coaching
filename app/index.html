@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1347';
+window.RC_BUILD='1348';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -52272,8 +52272,15 @@ function _htmlCorpsCadre(c){
   const scene='<div class="cc-corps-scene"'+(bilans.length?'':' data-eteint=""')
     +' style="aspect-ratio:'+_arr1(pl.w*100/CORPS_PART_CORPS)+'/'+pl.h
     +';--et-l:'+_arr1(CORPS_ETIQ_LARG)+'%">'
-    +eti.traits
+    // ⚠ LES TRAITS PASSENT PAR-DESSUS LA PLANCHE, ET C'EST UNE CORRECTION DU
+    //   21/09/2026. Dessines dessous, ils disparaissaient des qu'ils touchaient
+    //   le corps — qui est opaque. Sans consequence pour un biceps, ancre au
+    //   bord ; fatal pour le trapeze et les lombaires, ancres au CENTRE de la
+    //   planche en vue de dos : leur trait s'arretait au bord du dos et ne
+    //   designait plus rien. Un trait de rappel qui n'atteint pas son point
+    //   n'est plus un rappel, c'est une rature.
     +_htmlCorpsPlanche(u,genre,vue,teintes)
+    +eti.traits
     +eti.etiquettes
     +'</div>';
   // AUCUN BILAN : la silhouette reste eteinte, sans une zone teintee ni une

@@ -37686,6 +37686,21 @@ async function testExercices(){
       // ET UN MUSCLE QUE LA VUE NE MONTRE PAS N'A PAS D'ANCRE INVENTEE.
       if(corpsAncre('h','face','FESSIERS','g')!==null)
         return _echec('les fessiers reçoivent une ancre en vue de face');
+      // ⚠ ET LE TRAIT PASSE PAR-DESSUS LA PLANCHE, PAS DESSOUS. Le corps est
+      //   opaque : dessine dessous, le trait disparaissait des qu'il le
+      //   touchait. Sans consequence pour un biceps, ancre au bord ; fatal
+      //   pour le trapeze et les lombaires, ancres au CENTRE de la planche en
+      //   vue de dos — leur trait s'arretait au bord du dos et ne designait
+      //   plus rien. L'ordre du DOM est donc une garantie, pas un detail.
+      const u0={id:'O1',email:'o1@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:Date.now()-90*864e5,'bil-chest':'100'},
+                {date:Date.now()-2*864e5, 'bil-chest':'101.4'}]};
+      const html=_htmlCorpsCadre(u0);
+      const iPlanche=html.indexOf('cc-corps-planche');
+      const iTraits=html.indexOf('cc-corps-traits');
+      if(iPlanche<0||iTraits<0) return _echec('planche ou traits absents du cadre');
+      if(!(iPlanche<iTraits))
+        return _echec('les traits sont dessinés sous la planche : ils s’arrêteront au bord du corps');
       return true;})());
 
     ok('LES ÉTIQUETTES DU CORPS NE SE CHEVAUCHENT JAMAIS',(()=>{
