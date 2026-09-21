@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1364';
+window.RC_BUILD='1365';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -9951,10 +9951,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Tendances</span></div>
         <div class="cc-sect-c" id="ccd-tendances"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Forme</span></div>
-        <div class="cc-sect-c" id="ccd-forme"></div>
-      </section>
+      <!-- LA FORME, SANS BANDEAU REPLIABLE. Kevin, 21/09/2026 : « pas besoin
+           que ce soit un menu deroulant ». Le bloc porte son propre titre,
+           « Evolution de sa forme » ; un bandeau « Forme » au-dessus le
+           redisait. Vide, il est masque par .ccd-vue>div:empty. -->
+      <div id="ccd-forme"></div>
       <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Volume</span></div>
         <div class="cc-sect-c" id="ccd-volume"></div>
@@ -56100,11 +56101,12 @@ function blocForme(user,pourCoach){
     const c=composanteFaible(user);
     if(suite>=3) phrase='Forme déclarée en baisse depuis '+suite+' séances'
       +(c&&c.delta<-0.5?' ('+c.lib+' surtout)':'')+'.';
-    else{
-      const z=(t[t.length-1].v-base)/ecart;
-      phrase=(pourCoach?'Dernière séance ':'Tu es ')+(pourCoach?FORME_ETAT_LIB[etatForme(z)]:FORME_ETAT_PHRASE[etatForme(z)])+'.';
-    }
-    if(baseFormeDatee(user)) phrase+=' Base de plus de deux mois.';
+    // ⚠ L'ETAT ORDINAIRE NE S'ECRIT PLUS — Kevin, 21/09/2026, capture a
+    //   l'appui : « supprime ca, pas besoin ». « Derniere seance tres bonne
+    //   forme » redisait ce que l'etat actuel, sa fleche et la courbe montrent
+    //   deja. Restent les cas que rien d'autre a l'ecran ne dit : des notes
+    //   figees, pas encore de normale, une serie en baisse, une base datee.
+    if(baseFormeDatee(user)) phrase+=(phrase?' ':'')+'Base de plus de deux mois.';
   }
   // L'ATHLETE LIT « ta forme », LE COACH « sa forme » : la maquette parle a
   // l'athlete, et la fiche coach ne tutoie pas.
@@ -56132,15 +56134,17 @@ function blocForme(user,pourCoach){
     +'</div>';
   const tete='<div class="fm-tete"><div class="fm-titres">'
     +'<div class="fm-titre">Évolution de '+qui+' forme</div>'
-    +'<div class="fm-sous">Une vision globale de '+qui+' forme sur les '+n+' dernières séances.</div>'
+    // Le rappel « declaratif » quitte le pied du cadre (meme demande) et passe
+    // dans l'infobulle du sous-titre : il reste lisible pour qui le cherche.
+    +'<div class="fm-sous" title="Déclaratif, comparé à '+qui+' propre moyenne. Ce n\'est pas une mesure.">'
+    +'Une vision globale de '+qui+' forme sur les '+n+' dernières séances.</div>'
     +'</div>'+legende+etat+'</div>';
   // NOTES FIGEES : ni courbe ni cartes — une courbe plate et trois barres
   // identiques auraient l'air de dire quelque chose. La phrase le dit.
   return '<div class="fm">'
     +'<div class="fm-cadre">'+tete+(fige?'':_formeCourbe(pts,base,ecart,pourCoach))+'</div>'
     +(fige?'':_formeComposantes(user,pourCoach))
-    +'<div class="fm-pied">'+escapeHtml(phrase)
-    +'<small>Déclaratif, comparé à '+qui+' propre moyenne. Ce n\'est pas une mesure.</small></div>'
+    +(phrase?'<div class="fm-pied">'+escapeHtml(phrase)+'</div>':'')
     +'</div>';
 }
 function renderFormeCoach(c){

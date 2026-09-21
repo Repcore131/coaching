@@ -21198,8 +21198,25 @@ async function testExercices(){
       const h=_fb(_fbU([6,7,6,5,6,7,6,5,7,6]),true);
       return !/\bTu es\b/.test(h);})());
     ok('La vue athlète tutoie',(()=>{
+      // Depuis le 21/09/2026 la phrase ordinaire (« Tu es dans ta normale »)
+      // ne s'ecrit plus : c'est le titre qui tutoie.
       const h=_fb(_fbU([6,7,6,5,6,7,6,5,7,6]),false);
-      return /\bTu es\b/.test(h)||/en baisse depuis/.test(h);})());
+      return /Évolution de ta forme/.test(h)||/en baisse depuis/.test(h);})());
+    ok('Ni phrase ordinaire, ni rappel en pied, ni bandeau repliable',(()=>{
+      // Kevin, 21/09/2026 : « supprime ca, pas besoin », et « pas besoin que ce
+      // soit un menu deroulant ».
+      const d=document.createElement('div');
+      d.innerHTML=_fb(_fbU([6,7,6,5,6,7,6,5,7,6]),true)+_fb(_fbU([6,7,6,5,6,7,6,5,7,6]),false);
+      const txt=d.textContent||'';
+      if(/Dernière séance|Tu es /.test(txt)) return _echec('la phrase d’état ordinaire est revenue');
+      if(/Déclaratif/.test(txt)) return _echec('le rappel « déclaratif » est revenu en pied de cadre');
+      // IL RESTE LISIBLE DANS L'INFOBULLE du sous-titre.
+      if(!/Déclaratif/.test((d.querySelector('.fm-sous')||{}).title||'')) return _echec('le rappel a disparu tout à fait');
+      // LES CAS QUE RIEN D'AUTRE NE DIT PARLENT TOUJOURS.
+      if(!/avant de pouvoir comparer/.test(_fb(_fbU([6,7,6])))) return _echec('le manque de séances ne se dit plus');
+      const z=document.getElementById('ccd-forme');
+      if(z&&z.closest('.cc-sect')) return _echec('la forme est encore dans une section repliable');
+      return true;})());
 
     // ── La maquette de Kevin (21/09/2026) : « Évolution de ta forme » ──
     ok('Les cartes affichent la note SAISIE — la fatigue n’est plus inversée',(()=>{
