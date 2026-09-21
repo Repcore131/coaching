@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1360';
+window.RC_BUILD='1361';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -15278,7 +15278,10 @@ const CLOUD={
   //   descentes de ce dossier et l'athlete ne recevrait plus rien. Passe ce
   //   delai, on repart comme avant : en parallele.
   _filesDossier:{},
-  _ATTENTE_FILE:20000,
+  // Plus long que _DELAI_ENVOI, la borne d'un PUT : un envoi abandonne a
+  // toujours rendu la main avant que le suivant ne parte.
+  _DELAI_ENVOI:45000,
+  _ATTENTE_FILE:60000,
   _aTonTour(email,fn){
     const prec=this._filesDossier[email]||Promise.resolve();
     const tour=Promise.race([prec,new Promise(r=>setTimeout(r,this._ATTENTE_FILE))]).then(fn);
@@ -16019,7 +16022,8 @@ const CLOUD={
       //   serveur, puis de son propre telephone a la descente suivante.
       //   L'envoi est remis en file, comme une coupure : il repartira avec une
       //   lecture.
-      if(!distant&&_base) throw new Error('Serveur illisible : envoi remis à plus tard pour ne rien écraser.');
+      if(!distant&&_base) throw new Error('Serveur illisible ('+((this._lectures||{})[email]||'?')
+        +') : envoi remis à plus tard pour ne rien écraser.');
       if(distant&&_base){
         const _avant=Number(safe.updatedAt)||0;
         safe=syncFusion(_base.h,safe,distant);
@@ -16141,7 +16145,19 @@ const CLOUD={
       // envoie alors normalement — la file de relance couvre le cas où la page
       // meurt avant la fin.
       if(document.hidden&&corps.length<60000) opts.keepalive=true;
-      const r=await fetch(url+'?auth='+token,opts);
+      // UN ENVOI BORNE DANS LE TEMPS. Sans borne, un PUT pendu sur un reseau
+      // mobile qui bascule pouvait aboutir des minutes plus tard, APRES un
+      // envoi plus recent du meme dossier, et le defaire. Abandonne, il part
+      // en file comme une coupure et repartira avec une relecture — donc une
+      // fusion. La file d'attente par dossier (_ATTENTE_FILE) attend plus
+      // longtemps que cette borne : deux envois du meme dossier ne peuvent
+      // plus se chevaucher.
+      const _arret=new AbortController();
+      const _minuteur=setTimeout(()=>{ try{ _arret.abort(); }catch(e){} },this._DELAI_ENVOI);
+      opts.signal=_arret.signal;
+      let r;
+      try{ r=await fetch(url+'?auth='+token,opts); }
+      finally{ clearTimeout(_minuteur); }
       // Sortant : le corps envoyé. Entrant : la réponse de Firebase, qui
       // renvoie l'objet écrit — d'où le doublement du coût par envoi.
       try{ _quotaCompter('out',corps.length);
@@ -16190,11 +16206,14 @@ const CLOUD={
         const _us=DB.get('users')||{};
         const _b=_us[email]?this._baseDe(email,_us[email]):null;
         if(_b&&_us[email]){
+          const _clesAvant=Object.keys(_us[email]);
           _us[email]=syncFusion(_b.h,_us[email],safe);
           _us[email]._syncMaj=Number(safe.updatedAt)||0;
           DB.setLocal('users',_us);
           if(typeof currentUser==='object'&&currentUser&&currentUser.email===email){
             Object.assign(currentUser,_us[email]);
+            // Ce que l'autre appareil a supprime disparait aussi — voir syncUser.
+            for(const k of _clesAvant) if(!(k in _us[email])) delete currentUser[k];
             DB.setLocal('session',currentUser);
           }
         }
@@ -16476,6 +16495,11 @@ const CLOUD={
       return r.ok;
     }catch(e){ console.error('[RepCore] suppression dossier:',e); return false; }
   },
+  // Le dernier statut de lecture de chaque dossier — 200, 401, « réseau »…
+  // Il ne sert qu'a dire POURQUOI un envoi a ete remis (voir « PAS D'ENVOI A
+  // L'AVEUGLE » dans _doPushOne) : un 401 et une coupure ne se reparent pas
+  // pareil.
+  _lectures:{},
   async pullUser(email){
     const key=email.replace(/\./g,',');
     const base=this._fbUrl.replace('users.json','users/'+key+'.json');
@@ -16484,6 +16508,7 @@ const CLOUD={
       const token=await this._getToken();
       const url=token?base+'?auth='+token:base;
       const r=await fetch(url,{signal:ctrl.signal});
+      this._lectures[email]=r.status;
       if(r.ok){
         // .text() puis JSON.parse plutôt que .json() : c'est le seul moyen
         // de connaître la taille reçue quand content-length manque, ce qui
@@ -16493,7 +16518,7 @@ const CLOUD={
         const d=t?JSON.parse(t):null;
         if(d) return d;
       }
-    }catch{}
+    }catch{ this._lectures[email]='réseau'; }
     return null;
   },
   // ── Profil coach visible par ses athlètes ────────────────────────────────
@@ -17023,6 +17048,9 @@ const CLOUD={
     //   fusion, l'ecriture et la base tiennent dans le meme instant.
     const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
     const merged=Object.assign({},local);
+    // Les cles du dossier AVANT la fusion : celles qu'elle retire ont ete
+    // supprimees par l'autre appareil, et currentUser doit les perdre aussi.
+    const _clesAvant=Object.keys((local&&local[email])||{});
     // LA FUSION PEUT LEVER, ET SON ECHEC NE DOIT PLUS DISPARAITRE. Personne
     // n'attend le resultat de syncUser : une exception y devient un rejet non
     // capture, l'ecriture qui suit n'a pas lieu, et l'utilisateur voit un badge
@@ -17051,8 +17079,18 @@ const CLOUD={
     //   minutes le faisait deja ; le retour au premier plan, qui appelle la
     //   meme descente, ne le faisait pas — la copie de travail restait
     //   perimee, et le prochain saveUser remettait l'ancienne valeur en place.
+    //
+    //   ⚠ ET CE QUE L'AUTRE A SUPPRIME DISPARAIT AUSSI. Object.assign n'efface
+    //   rien : le coach levait un drapeau — `delete u.drapeauGeneral` —, le
+    //   dossier stocke de l'athlete le perdait, mais son ecran le gardait, son
+    //   entrainement restait suspendu, et son prochain enregistrement le
+    //   renvoyait au serveur. Mesure au banc. On ne retire que les cles que
+    //   la fusion vient d'enlever : les champs de travail de currentUser, que
+    //   le dossier stocke ne porte pas, ne sont pas touches.
     if(typeof currentUser==='object'&&currentUser&&currentUser.email===email&&merged[email]){
-      try{ Object.assign(currentUser,merged[email]); DB.setLocal('session',currentUser); }catch(e){}
+      try{ Object.assign(currentUser,merged[email]);
+        for(const k of _clesAvant) if(!(k in merged[email])) delete currentUser[k];
+        DB.setLocal('session',currentUser); }catch(e){}
     }
     this._noterDescente(email,true);
     return true;

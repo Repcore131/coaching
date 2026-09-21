@@ -37891,6 +37891,45 @@ async function testExercices(){
       if(env.indexOf('delete safe._syncMaj')<0) return _echec('la lignée monte au serveur');
       return true;})());
 
+    ok('UN ENVOI PENDU RENONCE AVANT QUE LE SUIVANT NE PARTE',(()=>{
+      // Un PUT sans borne pouvait aboutir des minutes plus tard, apres un
+      // envoi plus recent du meme dossier, et le defaire. La borne du PUT
+      // doit etre plus courte que l'attente de la file : sinon le suivant
+      // part pendant que le premier vit encore, et les deux se croisent.
+      const env=String(CLOUD._doPushOne);
+      if(env.indexOf('opts.signal=')<0) return _echec('le PUT n’a plus de borne dans le temps');
+      if(env.indexOf('this._DELAI_ENVOI')<0) return _echec('la borne du PUT n’est plus la constante partagée');
+      if(!(CLOUD._DELAI_ENVOI>0&&CLOUD._ATTENTE_FILE>CLOUD._DELAI_ENVOI))
+        return _echec('la file attend '+CLOUD._ATTENTE_FILE+' ms, le PUT peut vivre '+CLOUD._DELAI_ENVOI+' ms : ils se chevauchent');
+      // Et le statut de lecture dit pourquoi un envoi a ete remis.
+      if(String(CLOUD.pullUser).indexOf('_lectures[email]')<0) return _echec('la lecture ne garde plus son statut');
+      return true;})());
+
+    ok('CE QUE L’AUTRE APPAREIL SUPPRIME DISPARAÎT AUSSI DE L’ÉCRAN',(()=>{
+      // LE DEFAUT, MESURE AU BANC : le coach leve un drapeau — `delete
+      // u.drapeauGeneral`. Le dossier stocke de l'athlete le perdait a la
+      // descente, mais currentUser, mis a jour par Object.assign, le gardait :
+      // son entrainement restait suspendu, et son geste suivant renvoyait le
+      // drapeau au serveur. La levee du coach etait defaite.
+      const sy=String(CLOUD.syncUser), env=String(CLOUD._doPushOne);
+      for(const [nom,src] of [['la descente',sy],['l’intégration après envoi',env]]){
+        if(src.indexOf('_clesAvant')<0) return _echec(nom+' ne retient plus les clés d’avant la fusion');
+        if(src.indexOf('delete currentUser[k]')<0) return _echec(nom+' ne retire plus de currentUser ce que l’autre a supprimé');
+      }
+      // Et la fusion, elle, retire bien la cle supprimee par l'autre — sinon
+      // il n'y aurait rien a retirer de l'ecran.
+      const B={id:'D1',updatedAt:1,drapeauGeneral:{zone:'general',cases:['souffle']}};
+      const L=JSON.parse(JSON.stringify(B));
+      const D={id:'D1',updatedAt:2};
+      const r=syncFusion(syncEmpreintes(B),L,D);
+      if('drapeauGeneral' in r) return _echec('la fusion garde un drapeau que le coach a levé');
+      // MAIS PAS UN CHAMP PRIVE que le serveur n'a jamais porte : la fusion
+      // le garde, et l'ecran aussi.
+      const L2=Object.assign(JSON.parse(JSON.stringify(D)),{pwdHash:'x'});
+      const r2=syncFusion(syncEmpreintes({id:'D1',updatedAt:2}),L2,D);
+      if(r2.pwdHash!=='x') return _echec('un champ local jamais envoyé est retiré');
+      return true;})());
+
     // ══════ LE SCHEMA CORPOREL DE LA FICHE COACH ══════════════════════════
     // Les ordonnees d'un trace SVG : « M12.34 5.67 » ou « L88.00 21.50 ».
     const RE_Y_COURBE=new RegExp('[ML]\\s*[0-9.]+\\s+([0-9.]+)','g');
