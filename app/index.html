@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1365';
+window.RC_BUILD='1366';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -56062,26 +56062,21 @@ function phraseEnergie(e){
 function blocEnergie(user,pourCoach){
   const e=energieMoyenne(user);
   if(!e) return '';
-  // Mêmes seuils que l'indice de forme, sur la DERNIÈRE séance renseignée.
-  const t=_serieEnergie(user);
-  const der=t.length?t[t.length-1]:null;
-  const z=der?energieZ({id:der.id,metrics:{energie:der.v}},user):null;
-  const et=etatForme(z);
-  const phrase=et
-    ? (pourCoach?'Dernière séance ':'Tu es ')
-      +(pourCoach?FORME_ETAT_LIB[et]:FORME_ETAT_PHRASE[et])+'.'
-    : '';
   // LA MEME GRAMMAIRE QUE LE CADRE DE FORME — titre condense, valeur a
   // droite —, mais un cadre A PART : l'energie n'entre pas dans l'indice.
+  //
+  // ⚠ NI PHRASE D'ETAT, NI RAPPEL EN PIED — Kevin, 21/09/2026 : « supprime
+  //   aussi pour l'energie », apres l'avoir fait pour la forme. Le rappel
+  //   « declaratif, n'entre pas dans l'indice » passe dans l'infobulle du
+  //   sous-titre : il doit rester dit quelque part, c'est lui qui empeche de
+  //   lire l'energie comme une composante de la forme.
   return `<div class="fm fm-energie"><div class="fm-cadre">
     <div class="fm-tete">
       <div class="fm-titres"><div class="fm-titre">Énergie hors séances</div>
-        <div class="fm-sous">${escapeHtml(phraseEnergie(e))}</div></div>
+        <div class="fm-sous" title="Déclaratif, comparé à ${pourCoach?'sa':'ta'} propre moyenne. N'entre pas dans l'indice de forme.">${escapeHtml(phraseEnergie(e))}</div></div>
       <div class="fm-etat"><div class="fm-etat-l">Normale</div>
         <div class="fm-etat-v"><b>${_fmtForme(e.moyenne)}</b><span> / 10</span></div></div>
     </div>
-    ${phrase?`<div class="fm-pied">${escapeHtml(phrase)}</div>`:''}
-    <div class="fm-pied"><small>Déclaratif, comparé à ${pourCoach?'sa':'ta'} propre moyenne. N'entre pas dans l'indice de forme.</small></div>
   </div></div>`;
 }
 function blocForme(user,pourCoach){

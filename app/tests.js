@@ -21202,6 +21202,22 @@ async function testExercices(){
       // ne s'ecrit plus : c'est le titre qui tutoie.
       const h=_fb(_fbU([6,7,6,5,6,7,6,5,7,6]),false);
       return /Évolution de ta forme/.test(h)||/en baisse depuis/.test(h);})());
+    ok('L\u2019énergie non plus : ni phrase d\u2019état, ni rappel en pied',(()=>{
+      // Kevin, 21/09/2026 : « supprime aussi pour l'energie ».
+      const u={email:'en@t.fr',sessions:[3,5,7,4,6,8,2].map((x,i)=>({id:'e'+i,
+        date:Date.now()-(7-i)*86400000,metrics:{energie:String(x)}}))};
+      for(const coach of [true,false]){
+        const h=blocEnergie(u,coach);
+        if(!h) return _echec('fixture muette');
+        const d=document.createElement('div'); d.innerHTML=h;
+        const txt=d.textContent||'';
+        if(/Dernière séance|Tu es /.test(txt)) return _echec('la phrase d’état de l’énergie est revenue');
+        if(/Déclaratif/.test(txt)) return _echec('le rappel de l’énergie est revenu en pied');
+        // IL RESTE DIT, DANS L'INFOBULLE : l'energie n'entre pas dans l'indice.
+        if(!/N'entre pas dans l'indice/.test((d.querySelector('.fm-sous')||{}).title||''))
+          return _echec('plus rien ne dit que l’énergie n’entre pas dans l’indice');
+      }
+      return true;})());
     ok('Ni phrase ordinaire, ni rappel en pied, ni bandeau repliable',(()=>{
       // Kevin, 21/09/2026 : « supprime ca, pas besoin », et « pas besoin que ce
       // soit un menu deroulant ».
