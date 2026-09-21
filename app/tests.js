@@ -21403,7 +21403,22 @@ async function testExercices(){
       if(z){
         currentUser=_uPds(true,null);  renderCartePesee();
         ok('Mode neutre : aucune invitation à se peser',z.innerHTML==='');
-        currentUser=_uPds(false,null); renderCartePesee();
+        // ⚠ LE POINT DU JOUR PASSE DEVANT LA CARTE, ET C'EST VOULU. PDJ_SEMAINE
+        //   associe le LUNDI a la question « poids » : ce jour-la,
+        //   renderCartePesee s'efface pour ne pas demander deux fois la meme
+        //   chose sur le meme ecran. Cette assertion echouait donc tous les
+        //   lundis — elle l'a fait cette nuit, quand la date a bascule — et LE
+        //   PRODUIT AVAIT RAISON.
+        //
+        //   Le decor pose donc une pesee DU JOUR, ce qui eteint la question
+        //   (pdjDejaSaisi) et rend la carte a tous les jours de la semaine.
+        //   L'assertion parle enfin de ce qu'elle veut dire : en mode normal,
+        //   la carte est proposee. Les pesees de _uPds datent de janvier 2026,
+        //   et ne pouvaient pas jouer ce role.
+        currentUser=_uPds(false,null);
+        currentUser.weightLog=currentUser.weightLog.concat(
+          [{date:localISODate(new Date()),kg:80}]);
+        renderCartePesee();
         ok('Mode normal : la carte de pesée est proposée',
            z.innerHTML.includes('pesee-input')&&/Pesée du jour/.test(z.innerHTML));
         currentUser=_uPds(false,null); currentUser.masquerPoids=true; renderCartePesee();
@@ -38960,7 +38975,20 @@ async function testExercices(){
     // existaient avant ce lot.
     ok('Les cinq critères se lisent dans le dossier, et nulle part ailleurs',(()=>{
       const J=864e5, now=Date.now();
-      const lundi=_lundiDe(now).getTime();
+      // ⚠ LE LUNDI DE LA SEMAINE PRECEDENTE, ET NON DE CELLE-CI. Le decor
+      //   posait ses seances a `lundi`, `lundi+1` et `lundi+2` : UN LUNDI, les
+      //   deux dernieres tombaient donc DEMAIN et APRES-DEMAIN. Consequence
+      //   mesuree le 21/09/2026 : _riteRecords cherche les records entre la
+      //   DEUXIEME seance et maintenant — un intervalle inverse quand la
+      //   deuxieme est dans l'avenir — et n'en trouvait aucun. Le cas 4
+      //   (100 kg puis 110 kg) perdait « premier-record », et la contre-epreuve
+      //   finale ne comptait que quatre badges sur cinq.
+      //
+      //   LE PRODUIT AVAIT RAISON : un record etabli demain n'en est pas un
+      //   aujourd'hui. C'est le decor qui datait mal. En reculant d'une
+      //   semaine, les sept jours du gabarit sont tous passes et chaque cas
+      //   garde exactement le sens qu'il avait.
+      const lundi=_lundiDe(now-7*J).getTime();
       const cfg3=[{active:true},{active:true},{active:true},{active:false}];
       const seance=(d,nom,poids,reps)=>({date:d,exercises:[{name:nom,
         sets:[{weight:poids,reps:reps,repsDone:reps,rir:0,done:true}]}]});
