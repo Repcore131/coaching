@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1352';
+window.RC_BUILD='1353';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -51815,13 +51815,27 @@ function _corpsLibSemaine(cle){
  * @returns {number}
  */
 function corpsEcartsDeVue(u,vue){
-  const vus=new Set();
+  // ⚠ ON DEMANDE A L'ECART, PAS A L'ETIQUETTE. La premiere version appelait
+  //   corpsEtiquette treize fois et lisait son resultat : elle posait la
+  //   question « que dit l'etiquette ? » pour repondre a « une mesure a-t-elle
+  //   bouge ? ». Deux consequences : elle fabriquait treize infobulles pour
+  //   les jeter, et elle faisait dependre un compte d'un texte.
+  //
+  //   Les clefs DISTINCTES d'abord, la question ensuite : quatre ou cinq
+  //   appels au lieu de treize, et biceps et triceps ne comptent qu'une fois
+  //   le tour de bras qu'ils partagent.
+  const cles=new Set();
   for(const e of (CORPS_ETIQUETTES[vue]||[])){
-    let inf=null;
-    try{ inf=corpsEtiquette(u,e.m); }catch(err){ inf=null; }
-    if(inf&&inf.ecart&&!inf.ecart.stable&&inf.cle) vus.add(inf.cle);
+    const k=BLOC_MESURE_DE[e.m];
+    if(k) cles.add(k);
   }
-  return vus.size;
+  let n=0;
+  for(const k of cles){
+    let x=null;
+    try{ x=corpsEcart(u,k); }catch(err){ x=null; }
+    if(x&&!x.stable) n++;
+  }
+  return n;
 }
 // LA VUE EST UNE LENTILLE, PAS UNE DONNEE. Elle ne vit pas dans le dossier de
 // l'athlete : c'est le coach qui regarde de face ou de dos, et son choix n'a
