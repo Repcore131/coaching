@@ -29446,6 +29446,18 @@ async function testExercices(){
           const b2=document.createElement('div'); b2.innerHTML=_htmlDieteRespect(u);
           if(b2.querySelectorAll('.drs-j.drs-c-oui').length!==1) return _echec('la fenêtre d’avant ne montre pas son jour tenu');
           if((b2.querySelector('.drs-pct b')||{}).textContent!=='100%') return _echec('l’anneau ne suit pas la fenêtre choisie');
+          // LE BOUTON TELECHARGE LE VISUEL (Kevin, 21/09/2026). « Reste
+          // régulier ! » vit dans l'image, plus dans un bouton du bloc.
+          const dl=b.querySelector('button.drs-dl');
+          if(!dl||String(dl.getAttribute('onclick')).indexOf('telechargerDieteRespectee')<0)
+            return _echec('le bouton de téléchargement du visuel manque');
+          if(b.textContent.indexOf('Reste régulier')>=0) return _echec('« Reste régulier » est encore un bouton du bloc');
+          const cv=dessinerDieteRespectee(u);
+          if(!cv||cv.width!==DRS_IMG_L*2||!(cv.height>0)) return _echec('le visuel ne se dessine pas');
+          // AUCUN NOM D'ATHLETE, ni dans l'image ni dans le fichier.
+          for(const f of [dessinerDieteRespectee,telechargerDieteRespectee,_drsDonnees])
+            for(const nom of ['fname','lname','nomAffiche','_nomAthlete'])
+              if(String(f).indexOf(nom)>=0) return _echec('le visuel lit un nom : '+nom);
           // EN STRICTE, LE MEME CALENDRIER : la journée déclarée.
           const s={id:'DRS2',email:'drs2@t.fr',role:'athlete',nutrition:{dietType:'strict',days:{[iso(1)]:{respected:true}}}};
           const b3=document.createElement('div'); b3.innerHTML=_htmlDieteRespect(s);

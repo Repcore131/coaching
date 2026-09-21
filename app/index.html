@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1373';
+window.RC_BUILD='1374';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5357,7 +5357,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .drs-devise span{font-size:9px;letter-spacing:2.5px;line-height:1.6;color:var(--sub);
   text-transform:uppercase;text-align:right}
 .drs-cols{display:grid;grid-template-columns:minmax(300px,34%) minmax(0,1fr);gap:22px 34px}
-.drs-gauche,.drs-droite{display:flex;flex-direction:column;gap:22px;min-width:0}
+.drs-gauche,.drs-droite{display:flex;flex-direction:column;gap:16px;min-width:0}
 .drs-tete{display:flex;align-items:center;gap:18px}
 .drs-ico{width:58px;height:58px;border-radius:10px;border:1px solid rgba(224,32,32,.45);
   background:rgba(224,32,32,.08);display:flex;align-items:center;justify-content:center;
@@ -5393,19 +5393,18 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .drs-p-vide,.drs-c-vide{background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
 .drs-sub{border-top:1px solid rgba(255,255,255,.12);margin-top:10px;padding-top:14px;
   font-size:var(--fs-sm);color:var(--sub);line-height:1.5}
-.drs-conseil{display:flex;align-items:center;gap:18px;width:100%;margin:0;text-align:left;
-  border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(255,255,255,.035);
-  padding:16px 20px;color:var(--text);font-family:inherit;font-size:inherit}
-button.drs-conseil{cursor:pointer;transition:border-color var(--t-1),background var(--t-1)}
-button.drs-conseil:hover{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.05)}
-button.drs-conseil:focus-visible{outline:2px solid #fff;outline-offset:2px}
-.drs-conseil-ico{color:var(--red);display:flex;flex:0 0 auto;filter:drop-shadow(0 0 6px rgba(224,32,32,.6))}
-.drs-conseil-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
-.drs-conseil-t b{font-size:var(--fs-md);font-weight:800}
-.drs-conseil-t span{font-size:var(--fs-sm);color:var(--sub);line-height:1.45}
-.drs-conseil-fl{color:var(--text-strong);display:flex;flex:0 0 auto}
+.drs-dl{display:flex;align-items:center;gap:13px;width:100%;margin:0;text-align:left;cursor:pointer;
+  border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(255,255,255,.035);
+  padding:10px 14px;color:var(--text);font-family:inherit;font-size:inherit;
+  transition:border-color var(--t-1),background var(--t-1)}
+.drs-dl:hover{border-color:rgba(224,32,32,.55);background:rgba(224,32,32,.07)}
+.drs-dl:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.drs-dl-ico{color:var(--red);display:flex;flex:0 0 auto}
+.drs-dl-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.drs-dl-t b{font-size:var(--fs-sm);font-weight:800}
+.drs-dl-t span{font-size:var(--fs-xs);color:var(--sub);line-height:1.4}
 .drs-per{align-self:flex-start;margin-left:14%;display:flex;align-items:center;gap:12px;width:min(380px,48%);
-  height:50px;padding:0 16px;border:1px solid rgba(255,255,255,.22);border-radius:10px;
+  height:42px;padding:0 14px;border:1px solid rgba(255,255,255,.22);border-radius:10px;
   background:rgba(0,0,0,.55);cursor:pointer;color:var(--text)}
 .drs-per:focus-within{border-color:var(--red)}
 .drs-per-ico,.drs-per-fl{display:flex;flex:0 0 auto}
@@ -5413,17 +5412,17 @@ button.drs-conseil:focus-visible{outline:2px solid #fff;outline-offset:2px}
   border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);
   padding:0;cursor:pointer;outline:none;text-overflow:ellipsis}
 .drs-per option{background:#141414;color:var(--text)}
-.drs-pan{flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:20px;
+.drs-pan{flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:12px;
   border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(17,17,17,.86);
-  padding:22px 22px 18px}
+  padding:14px 16px 12px}
 /* LE CALENDRIER DES TRENTE JOURS. Kevin, 21/09/2026 : « pas les repas mais
    les jours en entier ». Une case par JOURNEE, sept colonnes, lundi en
    premier. Le numero du jour est ecrit dans la case, en sombre sur le vert et
    le rouge : le blanc s'y lisait mal. */
-.drs-cal{display:flex;flex-direction:column;gap:8px}
-.drs-sem,.drs-grille{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.drs-cal{display:flex;flex-direction:column;gap:6px}
+.drs-sem,.drs-grille{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
 .drs-sem span{text-align:center;font-size:var(--fs-2xs);font-weight:700;letter-spacing:1px;color:var(--sub)}
-.drs-j{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;height:38px;
+.drs-j{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;height:30px;
   border-radius:7px;border:none;padding:0 4px;margin:0;overflow:hidden;white-space:nowrap;
   font-family:Montserrat,sans-serif;font-size:var(--fs-sm);color:var(--sub);font-variant-numeric:tabular-nums}
 .drs-j b{font-weight:700}
@@ -5437,7 +5436,7 @@ button.drs-conseil:focus-visible{outline:2px solid #fff;outline-offset:2px}
 button.drs-j{cursor:pointer}
 button.drs-j:hover{filter:brightness(1.15)}
 button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
-.drs-pied{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 26px;flex-wrap:wrap}
+.drs-pied{display:flex;align-items:center;justify-content:space-between;gap:10px 24px;flex-wrap:wrap}
 .drs-note{margin:0;flex:1 1 260px;max-width:440px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5}
 .drs-leg{display:flex;flex-wrap:wrap;gap:10px 26px;font-size:var(--fs-sm);color:var(--text-strong)}
 .drs-leg span{display:inline-flex;align-items:center;gap:9px}
@@ -5453,8 +5452,8 @@ button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .drs-pct span{font-size:7.5px;letter-spacing:0}
   .drs-l{font-size:var(--fs-sm);gap:10px;white-space:nowrap}
   .drs-p{width:16px;height:16px;border-radius:4px}
-  .drs-sem,.drs-grille{gap:6px}
-  .drs-j{height:34px}
+  .drs-sem,.drs-grille{gap:5px}
+  .drs-j{height:26px;border-radius:6px}
   .drs-devise i{width:56px}
 }
 @container drs (max-width:880px){
@@ -5478,11 +5477,11 @@ button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .drs-l{font-size:var(--fs-xs);gap:8px;padding:5px 0;white-space:normal}
   .drs-p{width:14px;height:14px;border-radius:4px}
   .drs-sub{font-size:var(--fs-xs);margin-top:6px;padding-top:9px}
-  .drs-conseil{padding:13px 14px;gap:13px}
+  .drs-dl{padding:9px 12px}
   .drs-pan{padding:14px 10px 12px;gap:14px}
   .drs-cal{gap:6px}
   .drs-sem,.drs-grille{gap:5px}
-  .drs-j{height:32px;border-radius:5px;font-size:var(--fs-xs)}
+  .drs-j{height:28px;border-radius:5px;font-size:var(--fs-xs)}
   .drs-j small{display:none}
   .drs-j.drs-c-oui,.drs-j.drs-c-non{box-shadow:none}
   .drs-leg{gap:8px 16px;font-size:var(--fs-xs)}
@@ -84290,8 +84289,12 @@ function joursDieteRecents(c,n){
 const _DRS_SVG=(p,t,plein)=>'<svg viewBox="0 0 24 24" width="'+t+'" height="'+t+'" aria-hidden="true"'
   +(plein?' fill="currentColor"':' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"')
   +'>'+p+'</svg>';
-const _DRS_P_COUVERTS='<path d="M4 2h1.4v5.5h1.3V2h1.4v5.5h1.3V2h1.4v6.8c0 1.6-1.1 2.9-2.6 3.2V22H6.6V12C5.1 11.7 4 10.4 4 8.8z"/>'
-  +'<path d="M14.5 2c3.1.4 5 3.6 5 8.5v3H17V22h-2.5z"/>';
+// Les couverts, en tracés bruts : le bloc les pose en SVG, l'image les
+// redessine en Path2D. Une seule source, deux rendus identiques.
+const _DRS_D_COUVERTS=Object.freeze([
+  'M4 2h1.4v5.5h1.3V2h1.4v5.5h1.3V2h1.4v6.8c0 1.6-1.1 2.9-2.6 3.2V22H6.6V12C5.1 11.7 4 10.4 4 8.8z',
+  'M14.5 2c3.1.4 5 3.6 5 8.5v3H17V22h-2.5z']);
+const _DRS_P_COUVERTS=_DRS_D_COUVERTS.map(p=>'<path d="'+p+'"/>').join('');
 let _drsFenetre=0;      // 0 = les trente derniers jours, 1 = les trente d'avant…
 let _drsClient=null;    // le dossier pour lequel _drsFenetre a ete choisie
 function drsFenetre(n){
@@ -84314,13 +84317,14 @@ function drsVoirJournal(){
   try{ s.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){ try{ s.scrollIntoView(); }catch(e2){} }
   return true;
 }
-function _htmlDieteRespect(c){
+// PURE, a l'etat de fenetre pres. Tout ce que le bloc et l'image affichent,
+// calcule une fois : deux calculs finiraient par montrer deux chiffres.
+// null quand aucun jour n'est juge en cinq mois.
+function _drsDonnees(c){
   const nut=(c&&c.nutrition)||{};
   let flexible=true; try{ flexible=typeDiete(nut)==='flexible'; }catch(e){ flexible=true; }
   let tous=[]; try{ tous=joursDieteRecents(c,DRS_JOURS); }catch(e){ tous=[]; }
-  // '' et non « 0 % » : aucun jour juge en cinq mois n'est pas la meme chose
-  // que zero jour tenu.
-  if(!tous.some(j=>j.v!==null)) return '';
+  if(!tous.some(j=>j.v!==null)) return null;
   const nbF=Math.floor(DRS_JOURS/DRS_COLONNES);
   const fen=w=>tous.slice(DRS_JOURS-(w+1)*DRS_COLONNES,DRS_JOURS-w*DRS_COLONNES);
   // UN AUTRE DOSSIER : on repart des trente derniers jours — ou de la fenetre
@@ -84351,34 +84355,44 @@ function _htmlDieteRespect(c){
   if(di&&(di.tenus!==tenus||di.juges!==juges)) di=null;
   if(!di&&juges) di={pct:Math.round(tenus*100/juges),tenus:tenus,juges:juges,
     flexible:flexible,jours:DRS_COLONNES,tendance:null};
-  const pct=di?Math.max(0,Math.min(100,Number(di.pct)||0)):0;
   let sub=''; try{ sub=_sousTitreDiete(di); }catch(e){ sub=''; }
   const jj=iso=>iso.slice(8,10)+'/'+iso.slice(5,7);
   const libF=(l,k)=>k?('Du '+jj(l[0].iso)+' au '+jj(l[l.length-1].iso)):(DRS_COLONNES+' derniers jours');
-  const LIB={oui:'diète respectée',non:'hors cible',neutre:'noté, sans cible ce jour-là',vide:'non renseigné'};
   const date=iso=>new Date(iso+'T12:00:00');
-  // La colonne du premier jour : lundi = 0. getDay() rend 0 pour dimanche.
-  const dec=(date(jours[0].iso).getDay()+6)%7;
-  let neutres=false;
   const cases=jours.map((j,i)=>{
-    const et=j.v===true?'oui':(j.v===false?'non':(note(j.iso)?'neutre':'vide'));
-    if(et==='neutre') neutres=true;
-    const d=date(j.iso);
-    const quand=isNaN(d.getTime())?j.iso:d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-    const titre=escapeHtml(quand+' : '+LIB[et]);
-    // Le mois s'ecrit sur le premier jour affiche et sur chaque 1er : sans lui,
-    // « 3 » ne dit pas de quel mois.
+    const d=date(j.iso), lisible=!isNaN(d.getTime());
     const n=parseInt(j.iso.slice(8,10),10);
-    const mois=(i===0||n===1)&&!isNaN(d.getTime())
-      ?'<small>'+escapeHtml(d.toLocaleDateString('fr-FR',{month:'short'}))+'</small>':'';
-    const cl='drs-j drs-c-'+et+(w===0&&i===jours.length-1?' drs-j-auj':'');
-    const dedans='<b>'+n+'</b>'+mois;
+    return {iso:j.iso, n:n, note:note(j.iso), auj:w===0&&i===jours.length-1,
+      et:j.v===true?'oui':(j.v===false?'non':(note(j.iso)?'neutre':'vide')),
+      quand:lisible?d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}):j.iso,
+      // Le mois s'ecrit sur le premier jour affiche et sur chaque 1er : sans
+      // lui, « 3 » ne dit pas de quel mois.
+      mois:((i===0||n===1)&&lisible)?d.toLocaleDateString('fr-FR',{month:'short'}):''};
+  });
+  return {flexible:flexible, w:w, periodes:Array.from({length:nbF},(_,k)=>libF(fen(k),k)),
+    tenus:tenus, hors:hors, sansCible:sansCible, rien:rien, juges:juges,
+    pct:di?Math.max(0,Math.min(100,Number(di.pct)||0)):0, sub:sub,
+    // La colonne du premier jour : lundi = 0. getDay() rend 0 pour dimanche.
+    dec:(date(jours[0].iso).getDay()+6)%7, cases:cases};
+}
+const _DRS_LIB={oui:'diète respectée',non:'hors cible',neutre:'noté, sans cible ce jour-là',vide:'non renseigné'};
+function _htmlDieteRespect(c){
+  const d=_drsDonnees(c);
+  // '' et non « 0 % » : aucun jour juge en cinq mois n'est pas la meme chose
+  // que zero jour tenu.
+  if(!d) return '';
+  _drsPrechargerPhoto();
+  const cases=d.cases.map(k=>{
+    const titre=escapeHtml(k.quand+' : '+_DRS_LIB[k.et]);
+    const cl='drs-j drs-c-'+k.et+(k.auj?' drs-j-auj':'');
+    const dedans='<b>'+k.n+'</b>'+(k.mois?'<small>'+escapeHtml(k.mois)+'</small>':'');
     // Un jour note s'ouvre dans le journal ; les autres ne menent a rien.
-    return note(j.iso)
+    return k.note
       ?'<button type="button" class="'+cl+'" title="'+titre+'" aria-label="'+titre+'"'
-        +' onclick="drsOuvrirJour('+JSON.stringify(j.iso).replace(/"/g,'&quot;')+')">'+dedans+'</button>'
+        +' onclick="drsOuvrirJour('+JSON.stringify(k.iso).replace(/"/g,'&quot;')+')">'+dedans+'</button>'
       :'<span class="'+cl+'" title="'+titre+'" role="img" aria-label="'+titre+'">'+dedans+'</span>';
   }).join('');
+  const neutres=d.cases.some(k=>k.et==='neutre');
   const ligne=(cl,lib,n)=>'<div class="drs-l"><i class="drs-p drs-p-'+cl+'"></i><span>'+lib+'</span><b>'+n+'</b></div>';
   return '<div class="drs">'
     +'<div class="drs-photo" aria-hidden="true"></div>'
@@ -84393,43 +84407,44 @@ function _htmlDieteRespect(c){
     // carre rouge qui dit « hors cible » : le vert est celui des jours tenus
     // dans la legende et dans le calendrier. Toujours un cercle de
     // circonference 100 : la longueur de l'arc EST le pourcentage.
-    +'<svg viewBox="0 0 40 40" role="img" aria-label="'+(juges?pct+' % des jours notés respectés':'aucun jour noté')+'">'
+    +'<svg viewBox="0 0 40 40" role="img" aria-label="'+(d.juges?d.pct+' % des jours notés respectés':'aucun jour noté')+'">'
     +'<defs><linearGradient id="drs-deg" x1="0" y1="0" x2="1" y2="1">'
       +'<stop offset="0" stop-color="#7ee39a"/><stop offset=".5" stop-color="#34c759"/><stop offset="1" stop-color="#1e9a41"/>'
     +'</linearGradient></defs>'
     +'<circle class="drs-piste" cx="20" cy="20" r="15.915" fill="none" stroke-width="3.4"/>'
-    +(pct>0?'<circle class="drs-arc" cx="20" cy="20" r="15.915" fill="none" stroke-width="3.4" stroke="url(#drs-deg)"'
-      +' stroke-dasharray="'+pct+' '+(100-pct)+'" stroke-dashoffset="25"/>':'')
+    +(d.pct>0?'<circle class="drs-arc" cx="20" cy="20" r="15.915" fill="none" stroke-width="3.4" stroke="url(#drs-deg)"'
+      +' stroke-dasharray="'+d.pct+' '+(100-d.pct)+'" stroke-dashoffset="25"/>':'')
     +'</svg>'
-    +'<div class="drs-pct"><b>'+(juges?pct+'<small>%</small>':'—')+'</b><span>Jours respectés</span></div></div>'
+    +'<div class="drs-pct"><b>'+(d.juges?d.pct+'<small>%</small>':'—')+'</b><span>Jours respectés</span></div></div>'
     +'<div class="drs-leg-g">'
-      +ligne('oui','Jours respectés',tenus)
-      +ligne('non','Jours hors cible',hors)
-      +ligne('vide','Jours non renseignés',rien)
-      +(sansCible?ligne('neutre','Jours notés, sans cible',sansCible):'')
-      +(sub?'<div class="drs-sub">'+escapeHtml(sub)+'</div>':'')
+      +ligne('oui','Jours respectés',d.tenus)
+      +ligne('non','Jours hors cible',d.hors)
+      +ligne('vide','Jours non renseignés',d.rien)
+      +(d.sansCible?ligne('neutre','Jours notés, sans cible',d.sansCible):'')
+      +(d.sub?'<div class="drs-sub">'+escapeHtml(d.sub)+'</div>':'')
     +'</div></div>'
-    // « Reste régulier ! » : en flexible, la fleche descend au journal.
-    +(flexible
-      ?'<button type="button" class="drs-conseil" onclick="drsVoirJournal()" title="Voir le journal alimentaire">'
-      :'<div class="drs-conseil">')
-    +'<span class="drs-conseil-ico">'+_DRS_SVG('<circle cx="12" cy="12" r="7.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/><path d="M12 9.2 14.8 12 12 14.8 9.2 12z" fill="currentColor" stroke="none"/>',30)+'</span>'
-    +'<span class="drs-conseil-t"><b>Reste régulier !</b><span>Plus tu es constant, plus les résultats suivent.</span></span>'
-    +(flexible?'<span class="drs-conseil-fl">'+_DRS_SVG('<path d="m9 6 6 6-6 6"/>',22)+'</span></button>':'</div>')
+    // LE BOUTON TELECHARGE LE VISUEL. Kevin, 21/09/2026 : « donne plutot la
+    // possibilite de telecharger le visuel avec ce bouton ». « Reste
+    // régulier ! » passe dans l'image : c'est a l'athlete que la phrase parle,
+    // et c'est lui qui la recevra.
+    +'<button type="button" class="drs-dl" onclick="telechargerDieteRespectee()">'
+    +'<span class="drs-dl-ico">'+_DRS_SVG('<path d="M12 3.5v11.5"/><path d="m7 10.5 5 5 5-5"/><path d="M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17"/>',22)+'</span>'
+    +'<span class="drs-dl-t"><b>Télécharger le visuel</b><span>Image PNG, prête à envoyer à ton athlète</span></span>'
+    +'</button>'
     +'</div><div class="drs-droite">'
-    +'<label class="drs-per"><span class="drs-per-ico">'+_DRS_SVG('<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="M8 13.5h3M8 16.5h6"/>',24)+'</span>'
+    +'<label class="drs-per"><span class="drs-per-ico">'+_DRS_SVG('<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="M8 13.5h3M8 16.5h6"/>',22)+'</span>'
       +'<select onchange="drsFenetre(this.value)" aria-label="Période affichée">'
-      +Array.from({length:nbF},(_,k)=>'<option value="'+k+'"'+(k===w?' selected':'')+'>'+libF(fen(k),k)+'</option>').join('')
+      +d.periodes.map((p,k)=>'<option value="'+k+'"'+(k===d.w?' selected':'')+'>'+p+'</option>').join('')
       +'</select><span class="drs-per-fl">'+_DV_ICO_FLECHE+'</span></label>'
     +'<div class="drs-pan">'
     +'<div class="drs-cal">'
     +'<div class="drs-sem" aria-hidden="true">'+['L','M','M','J','V','S','D'].map(x=>'<span>'+x+'</span>').join('')+'</div>'
     +'<div class="drs-grille" role="group" aria-label="Les '+DRS_COLONNES+' jours, du plus ancien au plus récent">'
-    +'<span class="drs-j drs-j-hors" aria-hidden="true"></span>'.repeat(dec)
+    +'<span class="drs-j drs-j-hors" aria-hidden="true"></span>'.repeat(d.dec)
     +cases+'</div></div>'
     +'<div class="drs-pied"><p class="drs-note">'
-      +(flexible
-        ?'Une case par journée : kcal et protéines du jour à ±10 % de la cible. Touche un jour noté pour l’ouvrir dans le journal.'
+      +(d.flexible
+        ?'Une case par journée : kcal et protéines à ±10 % de la cible. Touche un jour noté pour l’ouvrir dans le journal.'
         :'Une case par journée : la réponse de l’athlète, diète tenue ou non.')
     +'</p><div class="drs-leg">'
       +'<span><i class="drs-c-oui"></i>Respecté</span>'
@@ -84438,6 +84453,218 @@ function _htmlDieteRespect(c){
       +'<span><i class="drs-c-vide"></i>Non renseigné</span>'
     +'</div></div>'
     +'</div></div></div></div>';
+}
+// ══ LE VISUEL A TELECHARGER ══════════════════════════════════════════════
+//
+// Le bloc REDESSINE sur un canevas, comme la charge du bloc et la story de
+// seance : un dessin ne depend d'aucune mise en page, il sort identique sur
+// tous les ecrans, et il n'emporte ni le menu ni les boutons.
+// AUCUN NOM D'ATHLETE, ni dans l'image ni dans le fichier : elle peut finir
+// n'importe ou.
+// TOUT EST SYNCHRONE — la photo est prechargee au rendu du bloc, les polices
+// sont celles que le bloc affiche deja — : le moindre await consommerait le
+// geste, et iOS refuserait la sortie.
+const DRS_IMG_L=1000;   // largeur logique ; le fichier sort en double
+let _drsPhoto=null;
+function _drsPrechargerPhoto(){
+  if(_drsPhoto||typeof Image==='undefined') return;
+  try{ _drsPhoto=new Image(); _drsPhoto.src='./img/diete-respectee.webp'; }catch(e){ _drsPhoto=null; }
+}
+// L'espacement des lettres a la main : ctx.letterSpacing manque encore a
+// plusieurs navigateurs. Rend la largeur ecrite.
+function _drsTexteEspace(g,txt,x,y,esp,droite){
+  const car=Array.from(String(txt));
+  const larg=car.reduce((a,ch)=>a+g.measureText(ch).width+esp,0)-esp;
+  let cx=droite?x-larg:x;
+  const al=g.textAlign; g.textAlign='left';
+  for(const ch of car){ g.fillText(ch,cx,y); cx+=g.measureText(ch).width+esp; }
+  g.textAlign=al;
+  return larg;
+}
+function _drsLignesTexte(g,txt,max){
+  const out=[]; let l='';
+  for(const m of String(txt).split(/\s+/)){
+    const t=l?l+' '+m:m;
+    if(l&&g.measureText(t).width>max){ out.push(l); l=m; } else l=t;
+  }
+  if(l) out.push(l);
+  return out;
+}
+function _drsArrondi(g,x,y,w,h,r){
+  g.beginPath();
+  g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
+  g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath();
+}
+function dessinerDieteRespectee(c){
+  const d=_drsDonnees(c);
+  if(!d||typeof document==='undefined') return null;
+  const K=2, L=DRS_IMG_L, P=30;
+  const ROUGE=_tok('--red','#E02020'), TXT='#efefef', SUB='#8a8a8a';
+  const COUL={oui:'#34c759',non:'#ff3b47',neutre:'rgba(255,255,255,.36)',vide:'rgba(255,255,255,.1)'};
+  const T="'Bebas Neue','Arial Narrow',Impact,sans-serif", M='Montserrat,sans-serif';
+  // LES DEUX COLONNES : 380 a gauche, le reste a droite.
+  const LG=380, xD=P+LG+34, lD=L-P-xD;
+  const lignes=Math.ceil((d.dec+d.cases.length)/7);
+  const TH=30, TG=6, PP=16;
+  const hPan=PP+12+8+lignes*TH+(lignes-1)*TG+16+16+PP;
+  const hDroite=6+40+16+hPan+20;
+  const hGauche=58+26+150+22+64;
+  const H=P*2+Math.max(hDroite,hGauche);
+  const cv=document.createElement('canvas'); cv.width=L*K; cv.height=H*K;
+  const g=cv.getContext('2d');
+  if(!g) return null;
+  g.scale(K,K);
+  // LE CADRE.
+  _drsArrondi(g,.75,.75,L-1.5,H-1.5,18); g.fillStyle='#0b0b0b'; g.fill();
+  g.strokeStyle='rgba(224,32,32,.6)'; g.lineWidth=1.5; g.stroke();
+  // LA PHOTO, fondue a gauche, a droite et en bas — deux masques qui se
+  // multiplient sur un canevas a part.
+  if(_drsPhoto&&_drsPhoto.complete&&_drsPhoto.naturalWidth){
+    try{
+      const pw=L*0.18, ph=H*0.82, px=L*0.22;
+      const o=document.createElement('canvas'); o.width=Math.round(pw*K); o.height=Math.round(ph*K);
+      const og=o.getContext('2d');
+      const r=Math.max(o.width/_drsPhoto.naturalWidth,o.height/_drsPhoto.naturalHeight);
+      const iw=_drsPhoto.naturalWidth*r, ih=_drsPhoto.naturalHeight*r;
+      og.drawImage(_drsPhoto,(o.width-iw)/2,0,iw,ih);
+      og.globalCompositeOperation='destination-in';
+      let gr=og.createLinearGradient(0,0,o.width,0);
+      gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(.3,'#000'); gr.addColorStop(.72,'#000'); gr.addColorStop(1,'rgba(0,0,0,0)');
+      og.fillStyle=gr; og.fillRect(0,0,o.width,o.height);
+      gr=og.createLinearGradient(0,0,0,o.height);
+      gr.addColorStop(0,'#000'); gr.addColorStop(.45,'#000'); gr.addColorStop(1,'rgba(0,0,0,0)');
+      og.fillStyle=gr; og.fillRect(0,0,o.width,o.height);
+      g.drawImage(o,px,0,pw,ph);
+      o.width=0; o.height=0;
+    }catch(e){}
+  }
+  g.textBaseline='alphabetic'; g.textAlign='left';
+  // LA DEVISE, en haut a droite.
+  g.font='600 8.5px '+M; g.fillStyle=SUB;
+  let lDev=0;
+  ['DISCIPLINE','AUJOURD’HUI','RÉSULTATS','DEMAIN'].forEach((s,k)=>{
+    lDev=Math.max(lDev,_drsTexteEspace(g,s,L-P,P+8+k*13,2.5,true)); });
+  let gr=g.createLinearGradient(L-P-lDev-80,0,L-P-lDev-16,0);
+  gr.addColorStop(0,'rgba(224,32,32,0)'); gr.addColorStop(1,ROUGE);
+  g.fillStyle=gr; g.fillRect(L-P-lDev-80,P+23,64,1.5);
+  // LE TITRE ET SA PASTILLE.
+  _drsArrondi(g,P,P,58,58,11); g.fillStyle='rgba(224,32,32,.08)'; g.fill();
+  g.strokeStyle='rgba(224,32,32,.45)'; g.lineWidth=1; g.stroke();
+  if(typeof Path2D!=='undefined'){
+    g.save(); g.translate(P+13,P+13); g.scale(32/24,32/24); g.fillStyle=ROUGE;
+    for(const p of _DRS_D_COUVERTS) g.fill(new Path2D(p));
+    g.restore();
+  }
+  const xT=P+58+18;
+  g.font='40px '+T; g.fillStyle=TXT; g.fillText('DIÈTE ',xT,P+37);
+  const wD=g.measureText('DIÈTE ').width; g.fillStyle=ROUGE; g.fillText('RESPECTÉE',xT+wD,P+37);
+  g.font='600 10px '+M; g.fillStyle=SUB;
+  _drsTexteEspace(g,'SUIVI NUTRITIONNEL SUR '+DRS_COLONNES+' JOURS',xT,P+55,3);
+  // L'ANNEAU, vert comme dans le bloc.
+  const yA=P+58+26, cx=P+75, cy=yA+75, R=63;
+  g.lineWidth=12.5; g.strokeStyle='#1e1e1e';
+  g.beginPath(); g.arc(cx,cy,R,0,Math.PI*2); g.stroke();
+  if(d.pct>0){
+    gr=g.createLinearGradient(cx-R,cy-R,cx+R,cy+R);
+    gr.addColorStop(0,'#7ee39a'); gr.addColorStop(.5,'#34c759'); gr.addColorStop(1,'#1e9a41');
+    g.strokeStyle=gr; g.lineCap='butt';
+    g.beginPath(); g.arc(cx,cy,R,-Math.PI/2,-Math.PI/2+Math.PI*2*d.pct/100); g.stroke();
+  }
+  g.fillStyle=TXT;
+  if(d.juges){
+    const tn=String(d.pct);
+    g.font='800 40px '+M; const wn=g.measureText(tn).width;
+    g.font='700 20px '+M; const wp=g.measureText('%').width;
+    const x0=cx-(wn+2+wp)/2;
+    g.font='800 40px '+M; g.fillText(tn,x0,cy+8);
+    g.font='700 20px '+M; g.fillText('%',x0+wn+2,cy+8);
+  } else { g.font='800 40px '+M; g.textAlign='center'; g.fillText('—',cx,cy+8); }
+  g.textAlign='center'; g.font='500 8px '+M; g.fillStyle='#dddddd';
+  g.fillText('JOURS RESPECTÉS',cx,cy+26);
+  // LES COMPTEURS.
+  const xl=P+172, xr=P+LG;
+  const cpt=[['oui','Jours respectés',d.tenus],['non','Jours hors cible',d.hors],['vide','Jours non renseignés',d.rien]];
+  if(d.sansCible) cpt.push(['neutre','Jours notés, sans cible',d.sansCible]);
+  let y=yA+(cpt.length>3?10:20);
+  for(const [et,lib,n] of cpt){
+    _drsArrondi(g,xl,y-12,16,16,4); g.fillStyle=COUL[et]; g.fill();
+    g.textAlign='left'; g.font='500 14px '+M; g.fillStyle=TXT; g.fillText(lib,xl+26,y+1);
+    g.textAlign='right'; g.font='700 14px '+M; g.fillText(String(n),xr,y+1);
+    y+=30;
+  }
+  g.fillStyle='rgba(255,255,255,.12)'; g.fillRect(xl,y-12,xr-xl,1);
+  g.textAlign='left'; g.font='400 11.5px '+M; g.fillStyle=SUB;
+  _drsLignesTexte(g,d.sub,xr-xl).slice(0,3).forEach((l,k)=>g.fillText(l,xl,y+8+k*16));
+  // « RESTE REGULIER ! » — la phrase est pour l'athlete, qui recoit l'image.
+  const yC=yA+150+22;
+  _drsArrondi(g,P,yC,LG,64,12); g.fillStyle='rgba(255,255,255,.035)'; g.fill();
+  g.strokeStyle='rgba(255,255,255,.14)'; g.lineWidth=1; g.stroke();
+  const ix=P+32, iy=yC+32;
+  g.strokeStyle=ROUGE; g.lineWidth=1.8; g.lineCap='round';
+  g.beginPath(); g.arc(ix,iy,10,0,Math.PI*2); g.stroke();
+  g.beginPath(); g.moveTo(ix,iy-15); g.lineTo(ix,iy-11); g.moveTo(ix,iy+11); g.lineTo(ix,iy+15);
+  g.moveTo(ix-15,iy); g.lineTo(ix-11,iy); g.moveTo(ix+11,iy); g.lineTo(ix+15,iy); g.stroke();
+  g.fillStyle=ROUGE; g.beginPath(); g.moveTo(ix,iy-4); g.lineTo(ix+4,iy); g.lineTo(ix,iy+4); g.lineTo(ix-4,iy); g.closePath(); g.fill();
+  g.lineCap='butt';
+  g.fillStyle=TXT; g.font='800 14px '+M; g.fillText('Reste régulier !',P+60,yC+27);
+  g.fillStyle=SUB; g.font='400 11.5px '+M; g.fillText('Plus tu es constant, plus les résultats suivent.',P+60,yC+46);
+  // LA PERIODE : une etiquette, pas un menu — une image ne se deroule pas.
+  const pl=Math.min(300,lD*0.56), pX=xD+lD*0.1, pY=P+6;
+  _drsArrondi(g,pX,pY,pl,40,10); g.fillStyle='rgba(0,0,0,.55)'; g.fill();
+  g.strokeStyle='rgba(255,255,255,.22)'; g.lineWidth=1; g.stroke();
+  g.strokeStyle=TXT; g.lineWidth=1.5;
+  _drsArrondi(g,pX+15,pY+12,18,16,2.5); g.stroke();
+  g.fillStyle=TXT; g.fillRect(pX+15,pY+17,18,1.5);
+  g.font='500 14px '+M; g.fillStyle=TXT; g.textAlign='left';
+  g.fillText(d.periodes[d.w]||'',pX+46,pY+25);
+  // LE CALENDRIER.
+  const yP=pY+40+16;
+  _drsArrondi(g,xD,yP,lD,hPan,14); g.fillStyle='rgba(17,17,17,.86)'; g.fill();
+  g.strokeStyle='rgba(255,255,255,.1)'; g.lineWidth=1; g.stroke();
+  const cw=(lD-2*PP-6*TG)/7;
+  g.textAlign='center'; g.font='700 10px '+M; g.fillStyle=SUB;
+  ['L','M','M','J','V','S','D'].forEach((x,k)=>g.fillText(x,xD+PP+k*(cw+TG)+cw/2,yP+PP+10));
+  const y0=yP+PP+12+8;
+  d.cases.forEach((k,i)=>{
+    const idx=d.dec+i, col=idx%7, lig=Math.floor(idx/7);
+    const x=xD+PP+col*(cw+TG), yy=y0+lig*(TH+TG);
+    _drsArrondi(g,x,yy,cw,TH,6); g.fillStyle=COUL[k.et]; g.fill();
+    if(k.auj){ _drsArrondi(g,x-3,yy-3,cw+6,TH+6,8); g.strokeStyle='rgba(255,255,255,.8)'; g.lineWidth=1.5; g.stroke(); }
+    const fonce=k.et!=='vide';
+    g.font='700 12.5px '+M; const wn=g.measureText(String(k.n)).width;
+    g.font='600 9px '+M; const wm=k.mois?g.measureText(k.mois).width+5:0;
+    const x0=x+cw/2-(wn+wm)/2;
+    g.textAlign='left'; g.fillStyle=fonce?'#0b0b0b':SUB;
+    g.font='700 12.5px '+M; g.fillText(String(k.n),x0,yy+TH/2+4.5);
+    if(k.mois){ g.font='600 9px '+M; g.fillText(k.mois,x0+wn+5,yy+TH/2+4); }
+  });
+  // LA LEGENDE, a droite ; la regle, a gauche si elle tient.
+  const yL=yP+hPan-PP-3;
+  const leg=[['oui','Respecté'],['non','Hors cible']];
+  if(d.cases.some(k=>k.et==='neutre')) leg.push(['neutre','Noté, sans cible']);
+  leg.push(['vide','Non renseigné']);
+  g.font='500 11.5px '+M;
+  let xg=xD+lD-PP;
+  for(const [et,lib] of leg.slice().reverse()){
+    const wl=g.measureText(lib).width;
+    g.textAlign='left'; g.fillStyle='#dddddd'; g.fillText(lib,xg-wl,yL);
+    _drsArrondi(g,xg-wl-22,yL-11,14,14,3); g.fillStyle=COUL[et]; g.fill();
+    xg-=wl+22+20;
+  }
+  g.font='400 10px '+M; g.fillStyle='#828282';
+  const regle=d.flexible?'Une case par journée · kcal et protéines à ±10 %':'Une case par journée, déclarée par l’athlète';
+  if(g.measureText(regle).width<xg-(xD+PP)) g.fillText(regle,xD+PP,yL);
+  // LA SIGNATURE.
+  g.textAlign='right'; g.font='600 9.5px '+M; g.fillStyle='#5a5a5a';
+  g.fillText('RepCore · '+new Date().toLocaleDateString('fr-FR'),xD+lD,yP+hPan+15);
+  return cv;
+}
+function telechargerDieteRespectee(){
+  let c=null; try{ c=getOwnedClient(currentClientId); }catch(e){ c=null; }
+  let cv=null; try{ cv=c?dessinerDieteRespectee(c):null; }catch(e){ cv=null; }
+  if(!cv){ toast('Rien à télécharger.','var(--orange)'); return false; }
+  try{ return _storySortirTelechargement(cv,'repcore-diete-respectee-'+localISODate(new Date())+'.png'); }
+  catch(e){ toast('Téléchargement impossible sur cet appareil.','var(--orange)'); return false; }
 }
 function renderDieteRespectCoach(c){
   const z=document.getElementById('ccd-diete-respect');
