@@ -37670,6 +37670,119 @@ async function testExercices(){
       return joursDepuisRattachement(l[0],t)===12
         ?true:_echec('Alice attend depuis '+joursDepuisRattachement(l[0],t)+' jours');})());
 
+    // ══════ LA FUSION A TROIS VOIES DES DOSSIERS ═════════════════════════
+    // Le defaut mesure le 21/09/2026 sur deux appareils : chaque envoi etait un
+    // PUT du document entier, et le dernier a ecrire effacait l'autre. Le
+    // coach posait 2 350 kcal, l'athlete se pesait sans avoir redescendu, et
+    // le serveur retombait a 2 000 ; le coach, perime, effacait la seance et
+    // le bilan que l'athlete venait d'envoyer. Chaque cas ci-dessous est un
+    // de ces trous, rebouche.
+    ok('LA FUSION GARDE CE QUE CHACUN A ÉCRIT, ET RIEN DE PLUS',(()=>{
+      // LE DOSSIER DE DEPART, tel que les deux appareils l'ont vu la derniere
+      // fois — c'est leur base commune.
+      const depart={updatedAt:100,fname:'Ana',
+        nutrition:{macros:{on:{kcal:2000,p:140}},log:{'2026-09-20':{e:1}}},
+        sessions_config:[{active:true,name:'Push'}],
+        sessions:[{id:'S1',date:1}],
+        bilans:[{date:10,type:'depart','bil-weight':'62'}]};
+      const base=syncEmpreintes(depart);
+      const copie=o=>JSON.parse(JSON.stringify(o));
+
+      // 1. LE COACH CHANGE LES CALORIES ; L'ATHLETE, SANS LE SAVOIR, NOTE UN
+      //    REPAS. Les deux sont dans le meme objet `nutrition` : fusionner cet
+      //    objet d'un bloc aurait perdu l'un des deux.
+      const coach=copie(depart); coach.nutrition.macros.on.kcal=2350; coach.updatedAt=200;
+      const ath=copie(depart); ath.nutrition.log['2026-09-21']={e:2}; ath.updatedAt=300;
+      const r1=syncFusion(base,ath,coach);          // l'athlete envoie, perimee
+      if(r1.nutrition.macros.on.kcal!==2350)
+        return _echec('les calories du coach sont perdues : '+r1.nutrition.macros.on.kcal);
+      if(!r1.nutrition.log['2026-09-21'])
+        return _echec('le repas de l’athlète est perdu');
+      if(!r1.nutrition.log['2026-09-20'])
+        return _echec('un repas ancien a disparu');
+
+      // 2. L'ATHLETE ENVOIE UNE SEANCE ET UN BILAN ; LE COACH, PERIME, CHANGE
+      //    LE PROGRAMME. Son envoi effacait la seance et le bilan.
+      const a2=copie(depart);
+      a2.sessions.push({id:'S2',date:5});
+      a2.bilans.push({date:20,type:'suivi','bil-weight':'61'});
+      const c2=copie(depart); c2.sessions_config[0].name='Push lourd';
+      const r2=syncFusion(base,c2,a2);              // le coach envoie, perime
+      if(!r2.sessions.some(s=>s.id==='S2')) return _echec('la séance de l’athlète est effacée');
+      if(!r2.bilans.some(b=>b.type==='suivi')) return _echec('le bilan de l’athlète est effacé');
+      if(r2.sessions_config[0].name!=='Push lourd') return _echec('le programme du coach est perdu');
+      if(r2.sessions.length!==2) return _echec(r2.sessions.length+' séances au lieu de 2');
+
+      // 3. LE COACH REPOND AU BILAN ; L'ATHLETE Y AJOUTE UNE PHOTO. Le coach
+      //    ecrit A L'INTERIEUR de l'element de l'athlete : fusionner le bilan
+      //    comme un bloc aurait perdu la reponse ou la photo.
+      const c3=copie(depart); c3.bilans[0].reponseCoach='Bravo';
+      const a3=copie(depart); a3.bilans[0]['bil-photo-face']='data:photo';
+      const r3=syncFusion(base,a3,c3);
+      if(r3.bilans[0].reponseCoach!=='Bravo') return _echec('la réponse du coach au bilan est perdue');
+      if(r3.bilans[0]['bil-photo-face']!=='data:photo') return _echec('la photo de l’athlète est perdue');
+
+      // 4. LES DEUX TOUCHENT A LA MEME FEUILLE : celui qui ecrit maintenant
+      //    l'emporte. C'est un vrai conflit, et quelqu'un doit perdre.
+      const c4=copie(depart); c4.nutrition.macros.on.p=150;
+      const a4=copie(depart); a4.nutrition.macros.on.p=160;
+      if(syncFusion(base,a4,c4).nutrition.macros.on.p!==160)
+        return _echec('un vrai conflit n’est pas tranché en faveur de celui qui écrit');
+
+      // 5. UNE SUPPRESSION VOULUE N'EST PAS RESSUSCITEE PAR L'AUTRE COTE.
+      const a5=copie(depart); a5.sessions=[]; a5.supprimes={sessions:{S1:500}};
+      const c5=copie(depart); c5.fname='Ana B';
+      const r5=syncFusion(base,c5,a5);              // le coach, perime, porte encore S1
+      if(r5.sessions.some(s=>s.id==='S1')) return _echec('une séance supprimée est ressuscitée');
+      if(r5.fname!=='Ana B') return _echec('le changement du coach est perdu en chemin');
+
+      // 6. LE VIDE AU SENS DE FIREBASE : un `nutrition:{}` local et un champ
+      //    absent du serveur sont le MEME etat. Le compter comme un changement
+      //    aurait fait gagner un objet vide contre les macros du coach.
+      const b6=syncEmpreintes({updatedAt:1,fname:'X'});
+      const r6=syncFusion(b6,{updatedAt:2,fname:'X',nutrition:{}},
+        {updatedAt:3,fname:'X',nutrition:{macros:{on:{kcal:1800}}}});
+      if(!r6.nutrition||!r6.nutrition.macros||r6.nutrition.macros.on.kcal!==1800)
+        return _echec('un objet vide local a effacé les macros du coach');
+
+      // 7. SANS BASE, LE COMPORTEMENT D'AVANT : la version locale l'emporte.
+      //    C'est le filet de la premiere synchronisation, et il ne doit pas
+      //    inventer de fusion qu'il ne sait pas faire.
+      const r7=syncFusion(null,{updatedAt:5,fname:'L'},{updatedAt:6,fname:'D',x:1});
+      if(r7.fname!=='L') return _echec('sans base, la version locale ne l’emporte plus');
+
+      // 8. L'HORODATAGE EST LE PLUS RECENT DES DEUX, jamais fusionne champ par
+      //    champ : l'autre appareil doit voir qu'il y a du neuf.
+      if(r1.updatedAt!==300) return _echec('horodatage fusionné : '+r1.updatedAt);
+      return true;})());
+
+    ok('LA DESCENTE NE RENONCE PLUS PARCE QUE L\u2019APPAREIL A BOUGÉ',(()=>{
+      // ⚠ syncUser comparait l'horodatage du serveur a celui de la copie
+      //   LOCALE, et renoncait a descendre des que le local etait plus recent
+      //   — c'est-a-dire au moindre geste. L'athlete qui se pesait apres la
+      //   modification de son coach ne la recevait JAMAIS. Il compare
+      //   desormais le serveur a la derniere version qu'il en a integree.
+      const src=String(CLOUD.syncUser);
+      if(src.indexOf('distantAt<=localAt')>=0)
+        return _echec('le raccourci compare encore le serveur à la copie locale');
+      if(src.indexOf('_lireBase(')<0||src.indexOf('_poserBase(')<0)
+        return _echec('la descente ne tient plus sa base');
+      // ET currentUser SUIT, dans syncUser lui-meme : le retour au premier
+      // plan appelle la meme descente sans rafraichir la copie de travail.
+      if(src.indexOf('Object.assign(currentUser')<0)
+        return _echec('currentUser ne suit plus la descente');
+      // ET L'ENVOI FUSIONNE AVANT D'ECRIRE, PUIS INTEGRE CE QU'IL A ENVOYE.
+      const env=String(CLOUD._doPushOne);
+      if(env.indexOf('syncFusion(')<0) return _echec('l’envoi écrase de nouveau le dossier entier');
+      if(env.indexOf('DB.setLocal(\'users\'')<0)
+        return _echec('l’appareil n’intègre plus ce qu’il vient d’envoyer');
+      // ⚠ ET LES RETRAITS DE CONFIDENTIALITE SONT REJOUES APRES LA FUSION : elle
+      //   prend des champs du distant, et un champ qu'on a cesse de partager a
+      //   pu y rester.
+      const n=(env.match(/_retirerPrives\(\)/g)||[]).length;
+      if(n<2) return _echec('les retraits de confidentialité ne sont joués que '+n+' fois');
+      return true;})());
+
     // ══════ LE SCHEMA CORPOREL DE LA FICHE COACH ══════════════════════════
     // Les ordonnees d'un trace SVG : « M12.34 5.67 » ou « L88.00 21.50 ».
     const RE_Y_COURBE=new RegExp('[ML]\\s*[0-9.]+\\s+([0-9.]+)','g');

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1357';
+window.RC_BUILD='1358';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -14976,6 +14976,203 @@ function compressImage(file, maxPx, quality, cb, onError){
 // téléversement de PDF partait donc vers un bucket fantôme.
 // Une seule constante, pour que les deux ne puissent plus diverger.
 const STORAGE_BUCKET='repcore-sync.firebasestorage.app';
+// ══ LA FUSION A TROIS VOIES DES DOSSIERS ════════════════════════════════════
+//
+// ⚠ LE DEFAUT QU'ELLE REPARE, MESURE LE 21/09/2026 SUR DEUX APPAREILS REELS.
+//   Chaque envoi etait un PUT du document ENTIER. Le garde-fou « la version
+//   distante est plus recente » ne se declenchait jamais : pushOne pose
+//   updatedAt = maintenant AVANT de comparer, donc la copie locale gagnait
+//   toujours. Consequences relevees au banc a deux navigateurs :
+//
+//     · le coach pose 2 350 kcal ; l'athlete, qui n'a pas encore redescendu,
+//       se pese — son telephone renvoie son dossier perime et le serveur
+//       retombe a 2 000. La descente suivante ne ramene rien : l'athlete est
+//       devenue « la plus recente ». Modification du coach perdue pour de bon.
+//     · l'athlete envoie une seance et un bilan ; le coach, perime, ajoute un
+//       exercice — son envoi EFFACE la seance et le bilan du serveur.
+//
+//   Et la descente avait le meme travers : hors seances, bilans et videos,
+//   tout le dossier passait en « le plus recent gagne ». Nutrition, programme,
+//   phase, reponses aux bilans : ce que l'autre avait ecrit disparaissait des
+//   que l'appareil avait touche a n'importe quoi entre-temps.
+//
+// ⚠ LE PRINCIPE, CELUI DE GIT. Chaque appareil retient l'EMPREINTE de la
+//   derniere version du serveur qu'il a integree — sa « base ». A l'envoi comme
+//   a la descente, champ par champ :
+//     · je n'y ai pas touche depuis la base → je prends la valeur de l'autre ;
+//     · l'autre n'y a pas touche → je garde la mienne ;
+//     · les deux y ont touche → on descend d'un niveau, et au dernier niveau
+//       celui qui ecrit maintenant l'emporte.
+//   Aucune liste de champs « du coach » ou « de l'athlete » : une telle liste
+//   aurait vieilli au premier champ ajoute, et le defaut serait revenu par la.
+//
+// ⚠ LES TABLEAUX A IDENTIFIANT SE FUSIONNENT ELEMENT PAR ELEMENT, ET CHAMP PAR
+//   CHAMP DANS CHAQUE ELEMENT. Le coach ecrit A L'INTERIEUR des elements de
+//   l'athlete — `reponseCoach` sur un bilan, `feedback` sur une video — et
+//   l'athlete ajoute des photos au meme bilan. Fusionner le bilan comme un bloc
+//   aurait perdu l'un ou l'autre.
+//
+// ⚠ ET LE VIDE AU SENS DE FIREBASE. La base ne stocke ni null, ni objet vide,
+//   ni tableau vide. Un `nutrition:{}` pose localement et absent du serveur est
+//   donc le MEME etat ; les compter comme differents aurait fait « gagner » un
+//   objet vide contre les macros du coach.
+const SYNC_PROFONDEUR=4;
+const SYNC_SEP='';
+// Les tableaux qui se fusionnent par identifiant, et comment on nomme chaque
+// element. Les bilans n'ont pas d'identifiant : on reprend la clef que les
+// pierres tombales emploient deja, date et type.
+const SYNC_PAR_CLEF=Object.freeze({
+  sessions:s=>(s&&s.id!=null)?('s:'+s.id):null,
+  videos:  v=>(v&&v.id!=null)?('v:'+v.id):null,
+  bilans:  b=>b?('b:'+String(b.date)+'|'+String(b.type||'')):null
+});
+// L'horodatage n'est pas une donnee : il est recalcule a chaque envoi.
+const SYNC_HORS_FUSION=Object.freeze(['updatedAt']);
+const SYNC_VIDE='0';
+function _syncFnv(s){
+  let h=0x811c9dc5;
+  for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193); }
+  return (h>>>0).toString(36);
+}
+function _syncEstObjet(v){
+  return v!==null&&typeof v==='object'&&!Array.isArray(v);
+}
+// PURE. La forme canonique d'une valeur : clefs triees, vides elagues — ce
+// que Firebase en garderait.
+function _syncCanon(v){
+  if(v===undefined||v===null) return undefined;
+  if(typeof v==='number') return isFinite(v)?v:undefined;
+  if(typeof v!=='object') return v;
+  if(Array.isArray(v)){
+    if(!v.length) return undefined;
+    return v.map(x=>{ const c=_syncCanon(x); return c===undefined?null:c; });
+  }
+  const o={};
+  for(const k of Object.keys(v).sort()){
+    const c=_syncCanon(v[k]);
+    if(c!==undefined) o[k]=c;
+  }
+  return Object.keys(o).length?o:undefined;
+}
+// PURE. Les tableaux a identifiant deviennent des objets indexes, pour que la
+// fusion les traite comme n'importe quel objet. Rend une copie de surface.
+function _syncVersArbre(doc){
+  if(!_syncEstObjet(doc)) return doc;
+  const t=Object.assign({},doc);
+  for(const k of Object.keys(SYNC_PAR_CLEF)){
+    let a=t[k];
+    if(a==null) continue;
+    // Firebase rend parfois un tableau sous forme d'objet {0:…,1:…}.
+    if(_syncEstObjet(a)) a=Object.values(a);
+    if(!Array.isArray(a)) continue;
+    const m={};
+    for(const x of a){
+      if(x==null) continue;
+      let c=SYNC_PAR_CLEF[k](x);
+      if(c==null) c='x:'+_syncFnv(JSON.stringify(_syncCanon(x))||'');
+      if(!(c in m)) m[c]=x;
+    }
+    t[k]=m;
+  }
+  return t;
+}
+// PURE. L'inverse : les objets indexes redeviennent des tableaux, dans
+// l'ordre chronologique.
+function _syncDepuisArbre(t){
+  if(!_syncEstObjet(t)) return t;
+  const d=Object.assign({},t);
+  for(const k of Object.keys(SYNC_PAR_CLEF)){
+    const m=d[k];
+    if(!_syncEstObjet(m)) continue;
+    d[k]=Object.values(m).filter(x=>x!=null)
+      .sort((a,b)=>(Number(a&&a.date)||0)-(Number(b&&b.date)||0));
+  }
+  return d;
+}
+// PURE. Carte chemin → empreinte de chaque noeud, jusqu'a SYNC_PROFONDEUR.
+// Empreinte de Merkle : celle d'un objet se calcule sur celles de ses
+// enfants, si bien que tout le dossier se parcourt UNE fois.
+function _syncCarte(t){
+  const out={};
+  const rec=(v,p,prof)=>{
+    let h;
+    if(_syncEstObjet(v)&&prof<SYNC_PROFONDEUR){
+      const parts=[];
+      for(const k of Object.keys(v).sort()){
+        if(!p&&SYNC_HORS_FUSION.indexOf(k)>=0) continue;
+        const hk=rec(v[k],p?(p+SYNC_SEP+k):k,prof+1);
+        if(hk!==SYNC_VIDE) parts.push(k+'='+hk);
+      }
+      h=parts.length?_syncFnv('{'+parts.join(',')+'}'):SYNC_VIDE;
+    } else {
+      const c=_syncCanon(v);
+      h=(c===undefined)?SYNC_VIDE:_syncFnv(JSON.stringify(c));
+    }
+    out[p]=h;
+    return h;
+  };
+  rec(t,'',0);
+  return out;
+}
+// PURE. Les empreintes d'un dossier tel que le serveur le porte : c'est ce
+// qu'un appareil retient comme base.
+function syncEmpreintes(doc){ return _syncCarte(_syncVersArbre(doc)); }
+/**
+ * PURE. La fusion a trois voies de deux versions d'un dossier.
+ *
+ * @param {Object|null} base    empreintes de la derniere version du serveur
+ *                              integree par CET appareil ; null s'il n'en a
+ *                              aucune — alors la version locale l'emporte,
+ *                              exactement comme avant ce correctif.
+ * @param {Object} local        la version de cet appareil
+ * @param {Object} distant      la version du serveur
+ * @returns {Object}            le dossier fusionne, pierres tombales appliquees
+ */
+function syncFusion(base,local,distant){
+  if(!_syncEstObjet(distant)) return local;
+  if(!_syncEstObjet(local)) return distant;
+  const L=_syncVersArbre(local), D=_syncVersArbre(distant);
+  const HL=_syncCarte(L), HD=_syncCarte(D);
+  const B=_syncEstObjet(base)?base:null;
+  const rec=(l,d,p,prof)=>{
+    const hl=HL[p]||SYNC_VIDE, hd=HD[p]||SYNC_VIDE;
+    if(hl===hd) return l;
+    if(B){
+      const hb=(p in B)?B[p]:SYNC_VIDE;
+      if(hl===hb) return d;           // je n'y ai pas touche : la valeur de l'autre
+      if(hd===hb) return l;           // l'autre n'y a pas touche : la mienne
+    }
+    if(prof<SYNC_PROFONDEUR&&_syncEstObjet(l)&&_syncEstObjet(d)){
+      const out={};
+      const cles=new Set(Object.keys(l).concat(Object.keys(d)));
+      for(const k of cles){
+        if(!p&&SYNC_HORS_FUSION.indexOf(k)>=0) continue;
+        const v=rec(l[k],d[k],p?(p+SYNC_SEP+k):k,prof+1);
+        if(v!==undefined) out[k]=v;
+      }
+      return out;
+    }
+    // Les deux ont touche a la meme feuille — ou il n'y a aucune base : celui
+    // qui ecrit maintenant l'emporte.
+    return l;
+  };
+  const r=_syncDepuisArbre(rec(L,D,'',0));
+  // LES PIERRES TOMBALES DU DOSSIER FUSIONNE. Elles se sont unies champ par
+  // champ comme le reste ; un element supprime d'un cote ne revient pas par
+  // l'autre.
+  const tb=(r&&r.supprimes)||{};
+  const mort=o=>new Set(_syncEstObjet(o)?Object.keys(o).map(String):[]);
+  const ms=mort(tb.sessions), mv=mort(tb.videos), mb=mort(tb.bilans);
+  if(Array.isArray(r.sessions)) r.sessions=r.sessions.filter(s=>!(s&&ms.has(String(s.id))));
+  if(Array.isArray(r.videos)) r.videos=r.videos.filter(v=>!(v&&mv.has(String(v.id))));
+  if(Array.isArray(r.bilans))
+    r.bilans=r.bilans.filter(b=>!(b&&mb.has(String(b.date)+'|'+String(b.type||''))));
+  // L'horodatage n'est pas fusionne : le plus recent des deux, pour que
+  // l'autre appareil voie bien qu'il y a du neuf.
+  const ua=Math.max(Number(local.updatedAt)||0,Number(distant.updatedAt)||0);
+  if(ua) r.updatedAt=ua;
+  return r;
+}
 const CLOUD={
   _fbUrl:'https://repcore-sync-default-rtdb.firebaseio.com/users.json',
   _fbKey:'AIzaSyDQ_9jqpYMD6_32LRz1s7xyJOvEUPyr9K0',
@@ -14988,6 +15185,33 @@ const CLOUD={
   },
   _saveAuth(){
     try{localStorage.setItem('rc_fb_auth',JSON.stringify({i:this._idToken,r:this._refreshToken,e:this._tokenExpiry}));}catch{}
+  },
+
+  // ── La base de la fusion a trois voies ──────────────────────────────────
+  // UNE CLEF PAR DOSSIER, ET NON UNE CARTE GLOBALE. Un coach synchronise tous
+  // ses athletes a chaque cycle : une carte unique aurait ete relue et
+  // reecrite en entier trente fois de suite. Chaque base ne pese que ses
+  // empreintes — quelques kilo-octets — et non le dossier.
+  //
+  // ⚠ UNE BASE QUI NE PEUT PAS S'ECRIRE EST RETIREE, PAS GARDEE. Si le quota
+  //   est plein, on efface l'ancienne plutot que de laisser une base perimee
+  //   qui ferait passer une modification de l'autre pour la mienne. Sans base,
+  //   la fusion retombe sur le comportement d'avant : la version locale gagne.
+  _cleBase(email){ return 'rc_sync_base:'+email; },
+  _lireBase(email){
+    try{
+      const b=JSON.parse(localStorage.getItem(this._cleBase(email))||'null');
+      return (b&&b.h&&typeof b.h==='object')?b:null;
+    }catch(e){ return null; }
+  },
+  _poserBase(email,doc){
+    if(!email||!doc||typeof doc!=='object') return;
+    try{
+      localStorage.setItem(this._cleBase(email),
+        JSON.stringify({h:syncEmpreintes(doc),maj:Number(doc.updatedAt)||0}));
+    }catch(e){
+      try{ localStorage.removeItem(this._cleBase(email)); }catch(e2){}
+    }
   },
 
   // ── File de renvoi ────────────────────────────────────────────────────────
@@ -15553,6 +15777,14 @@ const CLOUD={
       // AVANT TOUT LE RESTE : les traitements ne doivent jamais traverser en
       // clair, quelle que soit la suite du traitement de `safe`.
       try{ safe=this._masquerTraitements(safe,user)||safe; }catch(e){}
+      // ⚠ LES RETRAITS SONT ENVELOPPES POUR ETRE JOUES DEUX FOIS, et c'est un
+      //   ajout du 21/09/2026. Une fois ici ; une fois APRES la fusion a trois
+      //   voies, qui prend des champs du distant — et un champ qu'on a cesse de
+      //   partager a pu y rester d'une epoque ou il l'etait. Sans ce second
+      //   passage, la fusion aurait pu renvoyer au serveur ce que l'athlete
+      //   venait de retirer. La fermeture lit `safe` a chaque appel, donc la
+      //   version fusionnee au second.
+      const _retirerPrives=()=>{
       delete safe.pwd;delete safe.pwdHash;delete safe._st;delete safe._stb64;delete safe._sk;
       // seenBilans uses email addresses as keys (dots/@ invalid in Firebase) — strip before push
       delete safe.seenBilans;
@@ -15594,6 +15826,8 @@ const CLOUD={
       // coach. Le consentement de partage part avec elle, sinon un dossier
       // portant « pesPartagee:true » sans « pes » se lirait tout seul.
       if(!safe.pesPartagee){ delete safe.pes; delete safe.pesPartagee; }
+      };
+      _retirerPrives();
       // Permettre aux règles RTDB de vérifier qui est le coach de cet athlète
       // Les trois cas doivent être traités EXPLICITEMENT. L'ancienne forme ne
       // touchait à coachEmailKey que lorsqu'un coach était trouvé : après un
@@ -15677,6 +15911,25 @@ const CLOUD={
           const _dp=((distant||{}).sante||{}).prises;
           if(_dp!=null) safe.sante.prises=_dp; else delete safe.sante.prises;
         }catch(e){}
+      }
+      // ⚠ LA FUSION A TROIS VOIES, AVANT D'ECRIRE QUOI QUE CE SOIT. C'est le
+      //   coeur du correctif du 21/09/2026 : sans elle, ce PUT ecrasait le
+      //   document entier, et l'appareil qui envoyait en dernier effacait ce
+      //   que l'autre venait d'ecrire — les calories du coach, la seance et le
+      //   bilan de l'athlete, la reponse du coach a ce bilan. Voir syncFusion.
+      //
+      //   SANS BASE, RIEN NE CHANGE : syncFusion rend alors la version locale,
+      //   comme avant. La base s'etablit a la premiere descente, c'est-a-dire
+      //   a l'ouverture de l'app.
+      const _base=this._lireBase(email);
+      if(distant&&_base){
+        const _avant=Number(safe.updatedAt)||0;
+        safe=syncFusion(_base.h,safe,distant);
+        _retirerPrives();
+        // UN HORODATAGE STRICTEMENT SUPERIEUR A CELUI DU SERVEUR. Un appareil
+        // dont l'horloge retarde aurait sinon pose une date anterieure, et
+        // l'autre appareil aurait conclu qu'il n'y avait rien de neuf.
+        safe.updatedAt=Math.max(_avant,(Number(distant.updatedAt)||0)+1);
       }
       if(distant&&(distant.updatedAt||0)>(safe.updatedAt||0)){
         const volume=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length);
@@ -15820,6 +16073,32 @@ const CLOUD={
       // réseau répond — la relance en attente n'a plus lieu d'être.
       this._defiler(email);
       this._annulerRetry();
+      // ⚠ L'APPAREIL INTEGRE CE QU'IL VIENT D'ENVOYER. La fusion a pu prendre
+      //   au serveur des champs que cet appareil n'avait pas — les calories
+      //   que le coach venait de poser, la reponse a un bilan. S'il ne les
+      //   recopiait pas chez lui, sa copie restait perimee, et comme elle porte
+      //   desormais l'horodatage le plus recent, la descente suivante ne les
+      //   aurait jamais ramenes.
+      //
+      //   ⚠ setLocal ET NON set. DB.set('users') declenche lui-meme un envoi :
+      //   l'appeler ici aurait relance un envoi apres chaque envoi.
+      //
+      //   ⚠ ET currentUser AUSSI. saveUser reecrit la base locale a partir de
+      //   currentUser : si celui-ci gardait l'ancienne valeur, le prochain geste
+      //   de l'athlete l'aurait remise en place, et renvoyee.
+      try{
+        const _b=this._lireBase(email);
+        const _us=DB.get('users')||{};
+        if(_b&&_us[email]){
+          _us[email]=syncFusion(_b.h,_us[email],safe);
+          DB.setLocal('users',_us);
+          if(typeof currentUser==='object'&&currentUser&&currentUser.email===email){
+            Object.assign(currentUser,_us[email]);
+            DB.setLocal('session',currentUser);
+          }
+        }
+      }catch(e){ console.warn('[RepCore] integration apres envoi :',e); }
+      this._poserBase(email,safe);
     }catch(e){
       console.error('[RepCore] sync push error:',e);
       this._setSyncStatus(false);
@@ -15949,6 +16228,24 @@ const CLOUD={
     // les nomme en un seul endroit.
     try{ _aplatirDossier(cloudUser); }catch(e){}
     const loc=merged[email];
+    // ⚠ AVEC UNE BASE, LA FUSION A TROIS VOIES — LA MEME QU'A L'ENVOI. Sans
+    //   elle, tout ce qui n'etait ni seance, ni bilan, ni video passait en
+    //   « le plus recent gagne » sur le document entier : un appareil qui avait
+    //   touche a n'importe quoi depuis la derniere descente ignorait tout ce
+    //   que l'autre avait ecrit, nutrition et programme compris.
+    //
+    //   SANS BASE — premiere descente sur cet appareil — le comportement
+    //   d'avant, ci-dessous, a l'identique.
+    const _b=loc?this._lireBase(email):null;
+    if(_b){
+      const locConstantes=loc.constantes, locAnalyses=loc.analyses;
+      merged[email]=syncFusion(_b.h,loc,cloudUser);
+      // Ces deux-la vivent sur l'appareil et dans l'espace de sante prive :
+      // ce que le dossier partage en dit ne fait jamais foi.
+      if(locConstantes!==undefined) merged[email].constantes=locConstantes;
+      if(locAnalyses!==undefined) merged[email].analyses=locAnalyses;
+      return;
+    }
     // N3.7 — les pierres tombales DISTANTES : ce que quelqu'un a reellement
     // supprime, ailleurs. Les locales ne comptent pas ici — elles n'ont pas
     // encore ete poussees, et c'est le dossier local qui les porte deja.
@@ -16587,13 +16884,19 @@ const CLOUD={
   // seul moment ou une lecture de plus se justifie.
   async syncUser(email,force){
     const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
-    const localAt=(local[email]&&local[email].updatedAt)||0;
-    // On ne tire le dossier que si le distant est STRICTEMENT plus recent.
-    // Egalite = rien de neuf : c'est le cas de l'immense majorite des reveils.
     const distantAt=await this.pullUpdatedAt(email);
-    // La sonde a repondu et le dossier est deja a jour : c'est une descente
-    // reussie, et c'est le cas de l'immense majorite des reveils.
-    if(!force&&distantAt!==null&&localAt&&distantAt<=localAt){ this._noterDescente(email,false); return false; }
+    // ⚠ LE RACCOURCI COMPARE LE SERVEUR A CE QU'ON EN A VU, PAS A SA PROPRE
+    //   COPIE. Il comparait l'horodatage distant a l'horodatage LOCAL, et
+    //   renoncait a descendre des que le local etait plus recent. Or le local
+    //   devient plus recent au moindre geste — une pesee, une serie : mesure
+    //   faite au banc, l'athlete qui se pesait apres la modification de son
+    //   coach ne la recevait plus JAMAIS.
+    //
+    //   La bonne question est « le serveur a-t-il change depuis la derniere
+    //   version que j'ai integree ? ». La base garde cet horodatage-la.
+    //   Sans base, on descend : c'est le prix d'une premiere synchronisation.
+    const _b=this._lireBase(email);
+    if(!force&&distantAt!==null&&_b&&_b.maj===distantAt){ this._noterDescente(email,false); return false; }
     const cloudUser=await this.pullUser(email);
     if(!cloudUser) return false;
     const merged=Object.assign({},local);
@@ -16615,6 +16918,16 @@ const CLOUD={
     // async dont personne n'attend le resultat — donc une unhandled rejection,
     // et une synchro silencieusement perdue.
     DB.set('users',merged);
+    // La base devient la version du serveur qu'on vient d'integrer — APRES la
+    // fusion, qui avait besoin de l'ancienne.
+    this._poserBase(email,cloudUser);
+    // ⚠ ET currentUser SUIT, ICI ET PAS CHEZ LES APPELANTS. La boucle de cinq
+    //   minutes le faisait deja ; le retour au premier plan, qui appelle la
+    //   meme descente, ne le faisait pas — la copie de travail restait
+    //   perimee, et le prochain saveUser remettait l'ancienne valeur en place.
+    if(typeof currentUser==='object'&&currentUser&&currentUser.email===email&&merged[email]){
+      try{ Object.assign(currentUser,merged[email]); DB.setLocal('session',currentUser); }catch(e){}
+    }
     this._noterDescente(email,true);
     return true;
   },
