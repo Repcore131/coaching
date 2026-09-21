@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1363';
+window.RC_BUILD='1364';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4264,6 +4264,102 @@ html{scroll-behavior:smooth}
   .ccd-tete{padding:13px 13px 12px}
   .ccd-tete-b{padding:9px 12px}
 }
+/* ══ LA FORME DECLAREE ═════════════════════════════════════════════════════
+   La maquette de Kevin (21/09/2026) : un cadre « Evolution de ta forme » —
+   titre condense, legende, etat actuel a droite, courbe rouge sur un axe
+   0-10 —, puis trois cartes a icone, note sur 10 et barre en huit segments.
+   Partage par la fiche coach et l'onglet Perfs de l'athlete.
+   ⚠ LA REGLE INTERROGE LE BLOC, PAS LA FENETRE (meme raisonnement que le
+   cadre du corps) : la fiche coach et l'onglet de l'athlete n'offrent pas la
+   meme largeur. Sous 720 px de bloc, les cartes s'empilent et la legende passe
+   sous le titre ; au-dessus, tout tient sur une ligne, comme la maquette. */
+.fm{margin-bottom:16px;container-type:inline-size;container-name:forme}
+.fm-cadre{position:relative;
+  background:radial-gradient(120% 90% at 0% 0%,rgba(224,32,32,.10),transparent 55%),#0b0b0b;
+  border:1px solid rgba(224,32,32,.22);border-radius:14px;padding:16px 16px 12px;
+  box-shadow:0 0 22px rgba(224,32,32,.07),inset 0 1px 0 rgba(255,255,255,.04)}
+.fm-tete{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;
+  gap:10px 18px;margin-bottom:12px}
+.fm-titres{flex:1 1 150px;min-width:0}
+.fm-titre{font-family:var(--pile-titre);font-size:26px;letter-spacing:1px;line-height:1;
+  color:var(--text);text-transform:uppercase}
+.fm-sous{font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:6px}
+/* SUR TELEPHONE, LA LEGENDE PASSE A LA LIGNE : ses separateurs verticaux se
+   retrouvaient alors en tete de la seconde ligne, orphelins. Ils ne sortent
+   que sur une seule ligne, au palier large. */
+.fm-leg{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:var(--fs-2xs);
+  color:var(--text);order:3;flex:1 1 100%}
+.fm-leg>span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.fm-leg-pt{width:10px;height:10px;border-radius:var(--r-full);background:var(--red);
+  box-shadow:0 0 6px rgba(224,32,32,.6)}
+.fm-leg-moy{width:18px;height:0;border-top:2px dashed rgba(255,255,255,.6)}
+.fm-leg-zone{width:18px;height:12px;border-radius:3px;background:rgba(224,32,32,.30)}
+.fm-etat{flex:0 0 auto;text-align:right}
+.fm-etat-l{font-size:var(--fs-2xs);color:var(--sub);line-height:1.4}
+.fm-etat-v{font-family:var(--pile-titre);color:var(--text);line-height:1;margin:3px 0 3px}
+.fm-etat-v b{font-weight:400;font-size:40px}
+.fm-etat-v span{font-size:22px;color:var(--sub)}
+.fm-etat-d{font-size:var(--fs-sm);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.3}
+@container forme (min-width:720px){
+  .fm-leg{order:0;flex:0 1 auto;align-self:flex-start;margin-top:8px;margin-right:170px;
+    gap:6px 0;font-size:var(--fs-xs)}
+  .fm-leg>span{padding:0 12px}
+  .fm-leg>span:first-child{padding-left:0}
+  .fm-leg>span+span{border-left:1px solid rgba(255,255,255,.14)}
+  /* L'ETAT ACTUEL SE POSE EN HAUT A DROITE, par-dessus le coin de la courbe,
+     comme la maquette : dans le flux, sa hauteur repoussait toute la courbe
+     vers le bas. Le coin haut-droit de l'axe 0-10 est vide en pratique — la
+     note y serait de 10. */
+  .fm-etat{position:absolute;top:14px;right:16px}
+}
+/* LA COURBE. Le trace est en preserveAspectRatio="none" : les pastilles sont
+   des span poses en pourcentages, sans quoi elles deviendraient des ellipses. */
+.fm-graphe{position:relative;display:grid;grid-template-columns:20px minmax(0,1fr);
+  gap:0 10px;height:170px;margin:6px 0 26px}
+.fm-axe-y{position:relative}
+.fm-axe-y span{position:absolute;right:0;transform:translateY(-50%);font-size:var(--fs-2xs);
+  color:var(--sub);font-variant-numeric:tabular-nums;line-height:1}
+.fm-trace{position:relative}
+.fm-trace svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.fm-grille{stroke:rgba(255,255,255,.06);stroke-width:1}
+.fm-grille-h{stroke:rgba(255,255,255,.035)}
+.fm-zone{fill:rgba(224,32,32,.16)}
+.fm-moy{stroke:rgba(255,255,255,.5);stroke-width:1.2;stroke-dasharray:6 5}
+.fm-ligne{fill:none;stroke:var(--red);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;
+  filter:drop-shadow(0 0 4px rgba(224,32,32,.55))}
+.fm-pt{position:absolute;width:9px;height:9px;border-radius:var(--r-full);background:var(--red);
+  transform:translate(-50%,-50%);box-shadow:0 0 6px rgba(224,32,32,.7)}
+.fm-pt-der{width:13px;height:13px;background:#fff;border:3px solid var(--red);box-sizing:border-box}
+.fm-axe-x{position:absolute;left:0;right:0;top:100%;height:16px;margin-top:8px}
+.fm-axe-x span{position:absolute;transform:translateX(-50%);font-size:var(--fs-2xs);
+  color:var(--sub);line-height:1}
+/* LES TROIS CARTES. La couleur de la note vient de son ecart a la moyenne de
+   l'athlete (--fm-c) : vert au-dessus, orange en dessous, blanc dans sa
+   normale — jamais un seuil absolu. */
+.fm-cartes{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-top:12px}
+@container forme (min-width:720px){
+  .fm-cartes{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+}
+.fm-carte{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:0 14px;
+  background:linear-gradient(135deg,rgba(224,32,32,.11),rgba(224,32,32,.02) 60%),#0e0b0b;
+  border:1px solid rgba(224,32,32,.20);border-radius:12px;padding:14px 16px}
+.fm-ico{width:44px;height:44px;border-radius:var(--r-full);display:flex;align-items:center;
+  justify-content:center;background:rgba(224,32,32,.14);color:#ff2d3f;flex:0 0 auto}
+.fm-ico svg{width:24px;height:24px;display:block}
+.fm-ico-motivation{color:#ff5b6b}
+.fm-carte-t{font-family:var(--pile-titre);font-size:21px;letter-spacing:1px;line-height:1;
+  color:var(--text);text-transform:uppercase}
+.fm-carte-s{font-size:var(--fs-xs);color:var(--sub);line-height:1.45;margin-top:4px}
+.fm-carte-v{font-family:var(--pile-titre);line-height:1;white-space:nowrap}
+.fm-carte-v b{font-weight:400;font-size:38px;color:var(--fm-c,var(--text))}
+.fm-carte-v span{font-size:22px;color:var(--sub)}
+.fm-barre{grid-column:2 / 4;display:flex;gap:5px;margin-top:12px}
+.fm-barre i{flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.10)}
+.fm-barre i.on{background:var(--fm-b,var(--fm-c,var(--success)))}
+.fm-pied{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:10px}
+.fm-pied small{display:block;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:3px}
+.fm-energie .fm-cadre{padding-bottom:14px}
+.fm-energie .fm-tete{margin-bottom:0}
 /* ══ LE SCHEMA CORPOREL DE LA FICHE COACH ══════════════════════════════
    Cadre noir, lisere rouge, etiquettes en peripherie reliees au corps par un
    trait fin : la grammaire de l'ecran de mensurations du bilan (.bsch), qui
@@ -55823,56 +55919,132 @@ function togglePsDetail(){
 }
 
 // ── Courbe de forme déclarée ────────────────────────────────────────────────
-// Échelle FIXE de 0 à 10, contrairement à la sparkline de progression qui
-// normalise sur ses propres extrêmes : ici la bande « base ± écart » n'aurait
-// aucun sens sur une échelle mouvante.
-const FORME_DERNIERES=12;
-function _formeCourbe(pts,base,ecart){
-  if(!pts||pts.length<2) return '';
-  const L=100,H=44,marge=3;
-  // Échelle cadrée sur ce qui est réellement tracé, bande comprise, et non sur
-  // 0-10 : avec des notes entre 4 et 7, la courbe n'occupait qu'un tiers de la
-  // hauteur et la bande devenait invisible. Une plage minimale de 3 points
-  // évite l'effet inverse, où un écart de 0,2 remplirait tout le cadre.
-  const vals=pts.concat(base!=null&&ecart?[base-ecart,base+ecart]:[]);
-  let lo=Math.min(...vals), hi=Math.max(...vals);
-  const centre=(lo+hi)/2, demi=Math.max(1.5,(hi-lo)/2);
-  lo=Math.max(0,centre-demi); hi=Math.min(FORME_MAX,centre+demi);
-  if(hi-lo<0.5){ lo=Math.max(0,lo-0.5); hi=Math.min(FORME_MAX,hi+0.5); }
-  const y=v=>H-marge-((v-lo)/(hi-lo))*(H-2*marge);
-  const x=i=>(i/(pts.length-1))*L;
-  const d=pts.map((p,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(p).toFixed(1)).join(' ');
-  let bande='';
-  if(base!=null&&ecart){
-    const haut=y(Math.min(hi,base+ecart)), bas=y(Math.max(lo,base-ecart));
-    bande=`<rect x="0" y="${haut.toFixed(1)}" width="${L}" height="${(bas-haut).toFixed(1)}"
-             fill="var(--sub)" opacity=".22"/>
-           <line x1="0" y1="${y(base).toFixed(1)}" x2="${L}" y2="${y(base).toFixed(1)}"
-             stroke="var(--sub)" stroke-width=".6" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>`;
-  }
-  return `<svg viewBox="0 0 ${L} ${H}" preserveAspectRatio="none" style="width:100%;height:44px;overflow:visible" aria-hidden="true">
-    ${bande}
-    <path d="${d}" fill="none" stroke="var(--accent-blue)" stroke-width="1.6"
-      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  </svg>`;
+// ⚠ LA MISE EN PAGE EST CELLE DE LA MAQUETTE DE KEVIN (21/09/2026), capture a
+//   l'appui : « remplace les infos, mise en page exactement comme le 2 ». Une
+//   courbe « Forme globale » sur les dix dernieres seances, la moyenne en
+//   tirets, la zone normale en bande, l'etat actuel a droite avec son ecart a
+//   la seance precedente, puis trois cartes — fatigue, motivation, sensations —
+//   chacune avec son icone, sa note sur 10 et une barre en huit segments.
+//
+// ⚠ ECHELLE FIXE DE 0 A 10, et non plus cadree sur ce qui est trace : la
+//   maquette gradue l'axe 0-2-4-6-8-10, et a cette hauteur (170 px) une bande
+//   de deux points reste lisible — l'ancienne courbe ne faisait que 44 px, et
+//   c'est ce qui l'obligeait a zoomer.
+//
+// ⚠ « ZONE NORMALE », PAS « ZONE OPTIMALE ». La bande est la moyenne de
+//   l'athlete plus ou moins son ecart-type : ce qui est habituel CHEZ LUI, pas
+//   un optimum. L'appeler optimale lui preterait une valeur que rien ne mesure
+//   — le reste de l'application dit deja « normale », et c'est le seul mot vrai.
+const FORME_DERNIERES=10;
+// Les icones pleines des trois cartes. Pleines et non au trait, comme la
+// maquette : elles sont le premier repere de la carte.
+const FORME_ICONES={
+  fatigue:'<path d="M13.2 2 4.5 13.4h6.2l-1 8.6 8.8-11.6h-6.3z" fill="currentColor"/>',
+  motivation:'<path d="M9.3 3.4a3 3 0 0 0-3 2.5 3.2 3.2 0 0 0-2.5 3.2c0 .8.3 1.5.7 2.1a3.3 3.3 0 0 0-.7 2.1 3.3 3.3 0 0 0 2.4 3.2 3 3 0 0 0 3.1 3.9c.9 0 1.7-.4 2.2-1V4.5a3 3 0 0 0-2.2-1.1zm5.4 0a3 3 0 0 1 3 2.5 3.2 3.2 0 0 1 2.5 3.2c0 .8-.3 1.5-.7 2.1.4.6.7 1.3.7 2.1a3.3 3.3 0 0 1-2.4 3.2 3 3 0 0 1-3.1 3.9c-.9 0-1.7-.4-2.2-1V4.5a3 3 0 0 1 2.2-1.1z" fill="currentColor"/>'
+    +'<path d="M8.2 8.6c.9 0 1.6.6 1.9 1.4M6.7 13.4c.8-.5 1.9-.5 2.7.1M15.8 8.6c-.9 0-1.6.6-1.9 1.4M17.3 13.4c-.8-.5-1.9-.5-2.7.1M9 17c.5-.6 1.2-.9 2-.9M15 17c-.5-.6-1.2-.9-2-.9" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1.1" stroke-linecap="round"/>',
+  sensation:'<path d="M12 20.6s-7.4-4.5-9.4-9C1.2 8.4 3 5 6.4 5c2 0 3.5 1.1 4.3 2.4.6.9 1.9.9 2.6 0C14.1 6.1 15.6 5 17.6 5 21 5 22.8 8.4 21.4 11.6c-2 4.5-9.4 9-9.4 9z" fill="currentColor"/>'
+};
+// Ce que chaque carte explique en une ligne. L'athlete lit a la deuxieme
+// personne, le coach a la troisieme : « Ton envie » sur la fiche d'un autre ne
+// parlerait a personne.
+const FORME_CARTES=Object.freeze({
+  fatigue:   {titre:'Fatigue',   athlete:'Plus la valeur est basse, mieux c’est.', coach:'Plus la valeur est basse, mieux c’est.'},
+  motivation:{titre:'Motivation',athlete:'Ton envie et ton engagement.',            coach:'Son envie et son engagement.'},
+  sensation: {titre:'Sensations',athlete:'Comment tu te sens globalement.',         coach:'Comment l’athlète se sent globalement.'}
+});
+// Huit segments, comme la maquette : 3/10 en allume deux, 9/10 sept.
+const FORME_SEGMENTS=8;
+function _formeSegmentsAllumes(v){
+  const x=Number(v);
+  if(!isFinite(x)) return 0;
+  return Math.max(0,Math.min(FORME_SEGMENTS,Math.round(x*FORME_SEGMENTS/FORME_MAX)));
 }
-// Les trois composantes séparément : la fatigue et la motivation n'appellent
-// pas la même réponse, l'athlète doit voir LAQUELLE décroche.
-function _formeComposantes(user){
+// PURE. La couleur d'une note, jugee contre la PROPRE moyenne de l'athlete et
+// dans le bon sens : une fatigue qui BAISSE est une bonne nouvelle. C'est la
+// regle de l'indice de forme — declaratif, compare a soi — et non un seuil
+// absolu : un 6 de motivation est bas chez l'un, haut chez l'autre.
+//
+// ⚠ L'ANCIENNE LIGNE AFFICHAIT LA FATIGUE INVERSEE. « Fatigue 3 » y voulait
+//   dire une fatigue declaree de 7 — la contribution a l'indice, pas la note
+//   saisie — et s'ecrivait en orange. Sous « plus la valeur est basse, mieux
+//   c'est », il fallait la VRAIE note : 7, en orange.
+function _formeTeinte(ecartQualite){
+  if(!(isFinite(ecartQualite))) return 'var(--text)';
+  if(ecartQualite>=1) return 'var(--success)';
+  if(ecartQualite<=-1) return 'var(--orange)';
+  return 'var(--text)';
+}
+/**
+ * La courbe « Forme globale » : axe 0-10, zone normale, moyenne en tirets,
+ * une pastille par seance, la derniere cerclee de blanc.
+ *
+ * ⚠ LES PASTILLES SONT DES DIV, PAS DES <circle>. La courbe est tracee en
+ *   preserveAspectRatio="none" pour occuper toute la largeur : un cercle SVG y
+ *   deviendrait une ellipse. Meme choix que le schema corporel.
+ * ⚠ PAS DE <rect> SANS MOYENNE : sous six seances, aucune zone n'est dessinee
+ *   — une bande sans base serait un jugement sans reference.
+ */
+function _formeCourbe(pts,base,ecart,pourCoach){
+  if(!pts||pts.length<2) return '';
+  const n=pts.length;
+  const X=i=>n===1?50:(i/(n-1))*100;
+  const Y=v=>100-(Math.max(0,Math.min(FORME_MAX,v))/FORME_MAX)*100;
+  const d=pts.map((p,i)=>(i?'L':'M')+X(i).toFixed(2)+' '+Y(p).toFixed(2)).join(' ');
+  let fond='';
+  for(let i=0;i<n;i++)
+    fond+='<line x1="'+X(i).toFixed(2)+'" y1="0" x2="'+X(i).toFixed(2)+'" y2="100" class="fm-grille" vector-effect="non-scaling-stroke"/>';
+  for(let g=0;g<=FORME_MAX;g+=2)
+    fond+='<line x1="0" y1="'+Y(g).toFixed(2)+'" x2="100" y2="'+Y(g).toFixed(2)+'" class="fm-grille fm-grille-h" vector-effect="non-scaling-stroke"/>';
+  let zone='';
+  if(base!=null&&ecart){
+    const h=Y(Math.min(FORME_MAX,base+ecart)), b=Y(Math.max(0,base-ecart));
+    zone='<rect x="0" y="'+h.toFixed(2)+'" width="100" height="'+(b-h).toFixed(2)+'" class="fm-zone"/>'
+      +'<line x1="0" y1="'+Y(base).toFixed(2)+'" x2="100" y2="'+Y(base).toFixed(2)+'" class="fm-moy" vector-effect="non-scaling-stroke"/>';
+  }
+  const pastilles=pts.map((p,i)=>'<span class="fm-pt'+(i===n-1?' fm-pt-der':'')+'" style="left:'
+    +X(i).toFixed(2)+'%;top:'+Y(p).toFixed(2)+'%" title="S'+(i+1)+' : '+_fmtForme(p)+' / 10"></span>').join('');
+  const axeY=[10,8,6,4,2,0].map(g=>'<span style="top:'+Y(g).toFixed(2)+'%">'+g+'</span>').join('');
+  const axeX=pts.map((p,i)=>'<span style="left:'+X(i).toFixed(2)+'%">S'+(i+1)+'</span>').join('');
+  const dit='Forme globale sur '+n+' séances : '+_fmtForme(pts[0])+' puis '+_fmtForme(pts[n-1])+' sur 10'
+    +(base!=null?', moyenne '+_fmtForme(base)+' sur 10':'')+'.';
+  return '<div class="fm-graphe" role="img" aria-label="'+escapeHtml(dit)+'">'
+    +'<div class="fm-axe-y" aria-hidden="true">'+axeY+'</div>'
+    +'<div class="fm-trace">'
+      +'<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">'
+      +fond+zone
+      +'<path d="'+d+'" class="fm-ligne" vector-effect="non-scaling-stroke"/></svg>'
+      +pastilles
+      +'<div class="fm-axe-x" aria-hidden="true">'+axeX+'</div>'
+    +'</div></div>';
+}
+// Les trois cartes : la note de la derniere seance, sur 10, dans la couleur
+// de son ecart a la moyenne de l'athlete, et sa barre en huit segments.
+function _formeComposantes(user,pourCoach){
   const t=_serieForme(user).slice(-FORME_DERNIERES);
   if(t.length<2) return '';
-  return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">`
+  return '<div class="fm-cartes">'
     +FORME_ITEMS.map(it=>{
-      const v=t.map(x=>_contribForme(x.metrics,it)).filter(z=>z!=null);
-      if(v.length<2) return '';
-      const der=v[v.length-1], moy=_moyenne(v);
-      const ecart=der-moy;
-      const c=ecart<=-1?'var(--orange)':ecart>=1?'var(--success)':'var(--sub)';
-      return `<div style="flex:1;min-width:78px">
-        <div style="font-size:var(--fs-2xs);letter-spacing:1px;color:var(--text-faint);text-transform:uppercase">${it.lib}</div>
-        <div style="font-size:var(--fs-sm);font-weight:800;color:${c}">${_fmtForme(der)}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:400"> / moy ${_fmtForme(moy)}</span></div>
-      </div>`;}).join('')
-    +`</div>`;
+      const brut=t.map(x=>_valForme(x.metrics&&x.metrics[it.cle])).filter(z=>z!=null);
+      const qual=t.map(x=>_contribForme(x.metrics,it)).filter(z=>z!=null);
+      if(brut.length<2||qual.length<2) return '';
+      const der=brut[brut.length-1];
+      const ecartQ=qual[qual.length-1]-_moyenne(qual);
+      const coul=_formeTeinte(ecartQ);
+      const on=_formeSegmentsAllumes(der);
+      const c=FORME_CARTES[it.cle]||{titre:it.lib,athlete:'',coach:''};
+      const moy=_moyenne(brut);
+      const barre=Array.from({length:FORME_SEGMENTS},(_,i)=>'<i'+(i<on?' class="on"':'')+'></i>').join('');
+      // Dans sa normale, la note reste blanche et sa barre d'un blanc voile.
+      return '<div class="fm-carte" style="--fm-c:'+coul
+        +(coul==='var(--text)'?';--fm-b:rgba(255,255,255,.55)':'')+'"'
+        +' title="'+escapeHtml(c.titre+' : '+_fmtForme(der)+' / 10 — moyenne '+_fmtForme(moy)+' / 10')+'">'
+        +'<span class="fm-ico fm-ico-'+it.cle+'" aria-hidden="true"><svg viewBox="0 0 24 24">'+(FORME_ICONES[it.cle]||'')+'</svg></span>'
+        +'<div class="fm-carte-txt"><div class="fm-carte-t">'+escapeHtml(c.titre)+'</div>'
+        +'<div class="fm-carte-s">'+escapeHtml(pourCoach?c.coach:c.athlete)+'</div></div>'
+        +'<div class="fm-carte-v"><b>'+_fmtForme(der)+'</b><span> / 10</span></div>'
+        +'<div class="fm-barre" aria-hidden="true">'+barre+'</div>'
+        +'</div>';}).join('')
+    +'</div>';
 }
 // Bloc complet, partagé par l'onglet Perfs et la fiche coach.
 // À CÔTÉ de blocForme, jamais dedans : deux encadrés distincts, deux titres
@@ -55898,15 +56070,18 @@ function blocEnergie(user,pourCoach){
     ? (pourCoach?'Dernière séance ':'Tu es ')
       +(pourCoach?FORME_ETAT_LIB[et]:FORME_ETAT_PHRASE[et])+'.'
     : '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
-      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Énergie hors séances</span>
-      <span style="font-size:var(--fs-2xs);color:var(--text-faint)">normale ${_fmtForme(e.moyenne)}/10</span>
+  // LA MEME GRAMMAIRE QUE LE CADRE DE FORME — titre condense, valeur a
+  // droite —, mais un cadre A PART : l'energie n'entre pas dans l'indice.
+  return `<div class="fm fm-energie"><div class="fm-cadre">
+    <div class="fm-tete">
+      <div class="fm-titres"><div class="fm-titre">Énergie hors séances</div>
+        <div class="fm-sous">${escapeHtml(phraseEnergie(e))}</div></div>
+      <div class="fm-etat"><div class="fm-etat-l">Normale</div>
+        <div class="fm-etat-v"><b>${_fmtForme(e.moyenne)}</b><span> / 10</span></div></div>
     </div>
-    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(phraseEnergie(e))}</div>
-    ${phrase?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(phrase)}</div>`:''}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Déclaratif, comparé à ta propre moyenne. N'entre pas dans l'indice de forme.</div>
-  </div>`;
+    ${phrase?`<div class="fm-pied">${escapeHtml(phrase)}</div>`:''}
+    <div class="fm-pied"><small>Déclaratif, comparé à ${pourCoach?'sa':'ta'} propre moyenne. N'entre pas dans l'indice de forme.</small></div>
+  </div></div>`;
 }
 function blocForme(user,pourCoach){
   const t=_serieForme(user);
@@ -55931,16 +56106,42 @@ function blocForme(user,pourCoach){
     }
     if(baseFormeDatee(user)) phrase+=' Base de plus de deux mois.';
   }
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
-      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Forme déclarée</span>
-      ${base!=null&&!fige?`<span style="font-size:var(--fs-2xs);color:var(--text-faint)">normale ${_fmtForme(base)}/10</span>`:''}
-    </div>
-    ${fige?'':_formeCourbe(pts,fige?null:base,fige?null:ecart)}
-    ${fige?'':_formeComposantes(user)}
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px">${escapeHtml(phrase)}</div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Déclaratif, comparé à ta propre moyenne. Ce n'est pas une mesure.</div>
-  </div>`;
+  // L'ATHLETE LIT « ta forme », LE COACH « sa forme » : la maquette parle a
+  // l'athlete, et la fiche coach ne tutoie pas.
+  const qui=pourCoach?'sa':'ta';
+  const n=pts.length;
+  // L'ETAT ACTUEL : la derniere seance, et son ecart a la precedente. Une
+  // fleche et un signe, dans la couleur du sens — l'indice monte quand la
+  // forme declaree s'ameliore, fatigue comprise.
+  const der=pts[n-1], prec=n>1?pts[n-2]:null;
+  const dv=prec==null?null:Math.round((der-prec)*10)/10;
+  const etat='<div class="fm-etat"><div class="fm-etat-l">État actuel</div>'
+    +'<div class="fm-etat-v"><b>'+_fmtForme(der)+'</b><span> / 10</span></div>'
+    +(dv==null?'':'<div class="fm-etat-d" style="color:'
+      +(dv>0?'var(--success)':dv<0?'var(--orange)':'var(--sub)')+'">'
+      +(dv>0?'↗ +':dv<0?'↘ −':'→ ')+_fmtForme(Math.abs(dv))+'</div>'
+      +'<div class="fm-etat-l">vs. la séance précédente</div>')
+    +'</div>';
+  const legende=fige?'':'<div class="fm-leg">'
+    +'<span><i class="fm-leg-pt"></i>Forme globale</span>'
+    +(base!=null
+      ?'<span title="Moyenne '+_fmtForme(base)+' / 10"><i class="fm-leg-moy"></i>Moyenne</span>'
+        +'<span title="Moyenne ± un écart-type : ce qui est habituel chez '+(pourCoach?'l’athlète':'toi')+'">'
+        +'<i class="fm-leg-zone"></i>Zone normale</span>'
+      :'')
+    +'</div>';
+  const tete='<div class="fm-tete"><div class="fm-titres">'
+    +'<div class="fm-titre">Évolution de '+qui+' forme</div>'
+    +'<div class="fm-sous">Une vision globale de '+qui+' forme sur les '+n+' dernières séances.</div>'
+    +'</div>'+legende+etat+'</div>';
+  // NOTES FIGEES : ni courbe ni cartes — une courbe plate et trois barres
+  // identiques auraient l'air de dire quelque chose. La phrase le dit.
+  return '<div class="fm">'
+    +'<div class="fm-cadre">'+tete+(fige?'':_formeCourbe(pts,base,ecart,pourCoach))+'</div>'
+    +(fige?'':_formeComposantes(user,pourCoach))
+    +'<div class="fm-pied">'+escapeHtml(phrase)
+    +'<small>Déclaratif, comparé à '+qui+' propre moyenne. Ce n\'est pas une mesure.</small></div>'
+    +'</div>';
 }
 function renderFormeCoach(c){
   const z=document.getElementById('ccd-forme');

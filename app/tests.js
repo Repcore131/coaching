@@ -21201,6 +21201,62 @@ async function testExercices(){
       const h=_fb(_fbU([6,7,6,5,6,7,6,5,7,6]),false);
       return /\bTu es\b/.test(h)||/en baisse depuis/.test(h);})());
 
+    // ── La maquette de Kevin (21/09/2026) : « Évolution de ta forme » ──
+    ok('Les cartes affichent la note SAISIE — la fatigue n’est plus inversée',(()=>{
+      // L'ancienne ligne montrait la contribution a l'indice : « Fatigue 3 »
+      // pour une fatigue declaree de 7. Sous « plus la valeur est basse, mieux
+      // c'est », c'etait l'inverse de ce qu'il fallait lire.
+      const u=_fbU([6,6,6,6,6,6,6,6,6,3]);   // derniere seance : fatigue 7, motivation 3
+      const d=document.createElement('div'); d.innerHTML=_fb(u,true);
+      const cartes=[...d.querySelectorAll('.fm-carte')];
+      if(cartes.length!==3) return _echec(cartes.length+' cartes au lieu de 3');
+      const val=i=>(cartes[i].querySelector('.fm-carte-v b')||{}).textContent;
+      if(val(0)!=='7') return _echec('la fatigue affiche « '+val(0)+' » au lieu de 7');
+      if(val(1)!=='3') return _echec('la motivation affiche « '+val(1)+' » au lieu de 3');
+      // HUIT SEGMENTS, comme la maquette : 7/10 en allume six, 3/10 deux.
+      const allumes=i=>cartes[i].querySelectorAll('.fm-barre i.on').length;
+      if(cartes[0].querySelectorAll('.fm-barre i').length!==8) return _echec('la barre n’a pas huit segments');
+      if(allumes(0)!==6||allumes(1)!==2) return _echec('segments allumés : '+allumes(0)+' et '+allumes(1));
+      if(_formeSegmentsAllumes(0)!==0||_formeSegmentsAllumes(10)!==8||_formeSegmentsAllumes(9)!==7)
+        return _echec('le compte de segments dérive aux bornes');
+      return true;})());
+    ok('La couleur d’une carte suit la moyenne de l’athlète, dans le bon sens',(()=>{
+      // Une fatigue qui MONTE est une mauvaise nouvelle, une motivation qui
+      // monte une bonne : la couleur juge l'ecart a SA moyenne, jamais un seuil.
+      const pire=_fbU([6,6,6,6,6,6,6,6,6,3]), mieux=_fbU([5,5,5,5,5,5,5,5,5,8]);
+      const coul=(u,i)=>{ const d=document.createElement('div'); d.innerHTML=_fb(u,true);
+        return d.querySelectorAll('.fm-carte')[i].getAttribute('style')||''; };
+      if(coul(pire,0).indexOf('--orange')<0) return _echec('une fatigue plus haute que d’habitude n’est pas orange');
+      if(coul(pire,1).indexOf('--orange')<0) return _echec('une motivation plus basse que d’habitude n’est pas orange');
+      if(coul(mieux,0).indexOf('--success')<0) return _echec('une fatigue plus basse que d’habitude n’est pas verte');
+      if(coul(mieux,1).indexOf('--success')<0) return _echec('une motivation plus haute que d’habitude n’est pas verte');
+      if(_formeTeinte(0.4)!=='var(--text)') return _echec('un écart dans la normale prend une couleur');
+      return true;})());
+    ok('La bande dit « Zone normale », jamais « optimale »',(()=>{
+      // Moyenne ± ecart-type : ce qui est habituel chez l'athlete, pas un optimum.
+      const h=_fb(_fbU([6,7,6,5,6,7,6,5,7,6]),false);
+      if(h.indexOf('Zone normale')<0) return _echec('la légende de la zone a disparu');
+      if(/optimal/i.test(h)) return _echec('la zone est présentée comme optimale');
+      return true;})());
+    ok('Le titre et les cartes parlent à la bonne personne',(()=>{
+      const u=_fbU([6,7,6,5,6,7,6,5,7,6]);
+      const coach=_fb(u,true), ath=_fb(u,false);
+      if(coach.indexOf('Évolution de sa forme')<0) return _echec('la fiche coach ne titre pas « sa forme »');
+      if(/\bta forme\b|\bTon envie\b|\bta propre\b/.test(coach)) return _echec('la fiche coach tutoie l’athlète');
+      if(ath.indexOf('Évolution de ta forme')<0) return _echec('l’athlète ne lit pas « ta forme »');
+      return true;})());
+    ok('L’état actuel est la dernière séance, et son écart à la précédente',(()=>{
+      const u=_fbU([5,5,5,5,5,5,5,5,4,6]);       // indice des deux dernieres : 4 puis 6
+      const d=document.createElement('div'); d.innerHTML=_fb(u,true);
+      const v=(d.querySelector('.fm-etat-v b')||{}).textContent;
+      const e=(d.querySelector('.fm-etat-d')||{}).textContent||'';
+      if(v!=='6') return _echec('l’état actuel vaut « '+v+' » au lieu de 6');
+      if(e.indexOf('↗')<0||e.indexOf('+2')<0) return _echec('l’écart dit « '+e+' » au lieu de ↗ +2');
+      const bas=document.createElement('div'); bas.innerHTML=_fb(_fbU([5,5,5,5,5,5,5,5,6,4]),true);
+      if(((bas.querySelector('.fm-etat-d')||{}).textContent||'').indexOf('↘')<0)
+        return _echec('une baisse ne s’annonce pas ↘');
+      return true;})());
+
     // ── Écriture conditionnelle des trois curseurs secondaires ──
     ok('Le repli est fermé par défaut',_psDetailOuvert===false);
     // F-61 : l'intensité a quitté l'écran, il reste DEUX curseurs repliés —
