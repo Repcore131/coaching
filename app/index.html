@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1358';
+window.RC_BUILD='1359';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -15027,7 +15027,7 @@ const SYNC_PAR_CLEF=Object.freeze({
   bilans:  b=>b?('b:'+String(b.date)+'|'+String(b.type||'')):null
 });
 // L'horodatage n'est pas une donnee : il est recalcule a chaque envoi.
-const SYNC_HORS_FUSION=Object.freeze(['updatedAt']);
+const SYNC_HORS_FUSION=Object.freeze(['updatedAt','_syncMaj']);
 const SYNC_VIDE='0';
 function _syncFnv(s){
   let h=0x811c9dc5;
@@ -15206,12 +15206,84 @@ const CLOUD={
   },
   _poserBase(email,doc){
     if(!email||!doc||typeof doc!=='object') return;
+    // L'ANCIENNE BASE PASSE EN MEMOIRE, pour les dossiers qui en derivent
+    // encore — voir _baseDe.
+    try{
+      const avant=this._lireBase(email);
+      if(avant&&avant.maj!==(Number(doc.updatedAt)||0)){
+        const hist=this._histBases[email]||(this._histBases[email]=[]);
+        hist.push(avant);
+        while(hist.length>this._HIST_BASES) hist.shift();
+      }
+    }catch(e){}
     try{
       localStorage.setItem(this._cleBase(email),
         JSON.stringify({h:syncEmpreintes(doc),maj:Number(doc.updatedAt)||0}));
     }catch(e){
       try{ localStorage.removeItem(this._cleBase(email)); }catch(e2){}
     }
+  },
+
+  // ── Quelle base pour CE dossier ? ───────────────────────────────────────
+  // UNE COPIE PERIMEE N'A PAS LA MEME BASE QUE LA COPIE A JOUR. Une quinzaine
+  // de gestes du coach lisent le dossier, ouvrent une boite de dialogue —
+  // « Lever ce drapeau ? », « Combien de semaines ? » — puis l'ecrivent et
+  // l'envoient. Si une descente arrive pendant que la boite est ouverte, la
+  // copie qu'ils renvoient date d'AVANT elle. Fusionnee contre la base
+  // d'APRES, elle semblait avoir retire tout ce que la descente venait
+  // d'apporter — la seance de l'athlete, son bilan — et la fusion l'effacait
+  // du serveur. DB.set, qui reecrit tout rc_users, ramenait de meme les autres
+  // dossiers en arriere.
+  //
+  // CHAQUE COPIE LOCALE PORTE DONC SA LIGNEE : `_syncMaj`, l'horodatage de la
+  // version du serveur dont elle derive, pose a chaque integration. Elle
+  // voyage avec la copie — un geste lit le dossier, le modifie, l'ecrit : la
+  // marque suit — et ne monte jamais (retirée avant l'envoi, hors empreintes).
+  //
+  // LES BASES PRECEDENTES RESTENT EN MEMOIRE, PAS DANS LE STOCKAGE : une base
+  // pese jusqu'a une centaine de kilo-octets, et le cas qu'elles couvrent — un
+  // geste en cours pendant une descente — ne survit pas a un rechargement.
+  //
+  // LIGNEE INCONNUE (marque perimee, memoire perdue) : la base est la copie
+  // elle-meme, et c'est donc le serveur qui l'emporte partout. Une copie
+  // qu'on sait perimee ne doit rien effacer.
+  _histBases:{},
+  _HIST_BASES:3,
+  _baseDe(email,doc){
+    const cur=this._lireBase(email);
+    if(!cur) return null;
+    const m=doc&&doc._syncMaj;
+    if(m==null||m===cur.maj) return cur;
+    const h=(this._histBases[email]||[]).find(b=>b&&b.maj===m);
+    if(h) return h;
+    return {h:syncEmpreintes(doc),maj:m};
+  },
+
+  // ── Un dossier, un echange a la fois ────────────────────────────────────
+  // LES ENVOIS ET LES DESCENTES D'UN MEME DOSSIER PASSENT A LA FILE. Chacun
+  // fait deux allers-retours — lire le serveur, puis ecrire — et ils se
+  // croisaient. Mesure au banc a deux appareils : deux gestes du coach a une
+  // seconde d'intervalle, le premier PUT parti arrive le dernier, et le
+  // serveur garde la premiere modification en perdant la seconde ; l'appareil
+  // du coach la perd aussi, en integrant l'envoi qui revient. Une descente qui
+  // lit le serveur juste avant un envoi et fusionne juste apres defait de meme
+  // ce qu'on vient d'envoyer.
+  //
+  // UNE FILE PAR DOSSIER, PAS UNE SEULE : un coach descend tous ses athletes
+  // en parallele, et rien ne justifie de les mettre les uns derriere les
+  // autres.
+  //
+  // ⚠ UNE ATTENTE BORNEE. Un fetch peut rester pendu des minutes sur un
+  //   reseau mobile qui bascule ; sans borne, il bloquerait toutes les
+  //   descentes de ce dossier et l'athlete ne recevrait plus rien. Passe ce
+  //   delai, on repart comme avant : en parallele.
+  _filesDossier:{},
+  _ATTENTE_FILE:20000,
+  _aTonTour(email,fn){
+    const prec=this._filesDossier[email]||Promise.resolve();
+    const tour=Promise.race([prec,new Promise(r=>setTimeout(r,this._ATTENTE_FILE))]).then(fn);
+    this._filesDossier[email]=tour.then(()=>{},()=>{});
+    return tour;
   },
 
   // ── File de renvoi ────────────────────────────────────────────────────────
@@ -15285,9 +15357,10 @@ const CLOUD={
     this._videEnCours=true;
     let renvoyes=0;
     try{
-      const users=DB.get('users')||{};
+      // RELU A CHAQUE TOUR, pour la meme raison que _doPush : l'envoi du
+      // dossier precedent a pu en integrer un autre dans rc_users.
       for(const email of f){
-        const u=users[email];
+        const u=(DB.get('users')||{})[email];
         // Le dossier n'existe plus localement : plus rien à renvoyer.
         if(!u){this._defiler(email);continue;}
         try{
@@ -15745,7 +15818,20 @@ const CLOUD={
   // `rattrapage` : ce dossier est deja le SECOND essai, celui qui part apres
   // une descente. Il interdit de recommencer — voir le bloc « AVANT DE
   // REFUSER » plus bas.
-  async _doPushOne(email,user,rattrapage){
+  //
+  // `_tour` : la base lue quand l'appelant a remis son dossier. Absent, on se
+  // met a la file ; present, c'est notre tour.
+  async _doPushOne(email,user,rattrapage,_tour){
+    // LA BASE EST LUE ICI, A LA REMISE DU DOSSIER, et non quand vient son
+    // tour. Elle doit etre la version du serveur dont CE dossier derive. Lue
+    // plus tard — apres qu'un envoi ou une descente l'a avancee — elle ferait
+    // passer pour un retrait tout ce que le dossier n'avait pas encore vu : la
+    // seance que l'athlete vient d'envoyer, la reponse du coach a un bilan. La
+    // fusion l'effacerait du serveur, puis de l'autre appareil.
+    if(!_tour){
+      const tour={base:this._baseDe(email,user)};
+      return this._aTonTour(email,()=>this._doPushOne(email,user,rattrapage,tour));
+    }
     this._setSyncStatus('pending');
     try{
       const token=await this._getToken();
@@ -15788,6 +15874,9 @@ const CLOUD={
       delete safe.pwd;delete safe.pwdHash;delete safe._st;delete safe._stb64;delete safe._sk;
       // seenBilans uses email addresses as keys (dots/@ invalid in Firebase) — strip before push
       delete safe.seenBilans;
+      // La lignee de la copie locale (voir _baseDe) : elle n'a de sens que sur
+      // cet appareil.
+      delete safe._syncMaj;
       delete safe.programPdf; // base64 blob — stocké dans Firebase Storage, pas dans RTDB
       // Constantes physiologiques et analyses biologiques : elles ne quittent
       // PAS l'appareil. Le dossier /users est lisible par le coach ; une tension
@@ -15921,7 +16010,16 @@ const CLOUD={
       //   SANS BASE, RIEN NE CHANGE : syncFusion rend alors la version locale,
       //   comme avant. La base s'etablit a la premiere descente, c'est-a-dire
       //   a l'ouverture de l'app.
-      const _base=this._lireBase(email);
+      const _base=_tour.base;
+      // ⚠ PAS D'ENVOI A L'AVEUGLE. Un dossier dont on tient une base existe
+      //   sur le serveur : si la lecture ne rend rien, c'est le reseau qui a
+      //   cede, pas le dossier qui manque. Le PUT partait quand meme, avec la
+      //   seule copie locale, et effacait ce que l'autre appareil avait pose
+      //   depuis. Mesure au banc : la seance de l'athlete disparaissait du
+      //   serveur, puis de son propre telephone a la descente suivante.
+      //   L'envoi est remis en file, comme une coupure : il repartira avec une
+      //   lecture.
+      if(!distant&&_base) throw new Error('Serveur illisible : envoi remis à plus tard pour ne rien écraser.');
       if(distant&&_base){
         const _avant=Number(safe.updatedAt)||0;
         safe=syncFusion(_base.h,safe,distant);
@@ -15971,7 +16069,9 @@ const CLOUD={
         // son tour, c'est que la fusion n'a pas suffi, et boucler n'y changerait
         // rien.
         if(!rattrapage&&((_tS<_tD)||(volume(safe)<volume(distant)))){
-          const descendu=await this.syncUser(email).catch(()=>false);
+          // DANS LE TOUR EN COURS : passer par la file attendrait la fin de
+          // cet envoi, qui attend cette descente.
+          const descendu=await this.syncUser(email,false,true).catch(()=>false);
           if(descendu){
             const frais=(DB.get('users')||{})[email];
             if(frais){
@@ -15981,7 +16081,7 @@ const CLOUD={
               // le liraient « pas plus recent » et ne descendraient pas la
               // video qu'on vient justement de sauver.
               frais.updatedAt=Date.now();
-              return await this._doPushOne(email,frais,true);
+              return await this._doPushOne(email,frais,true,{base:this._baseDe(email,frais)});
             }
           }
         }
@@ -16087,10 +16187,11 @@ const CLOUD={
       //   currentUser : si celui-ci gardait l'ancienne valeur, le prochain geste
       //   de l'athlete l'aurait remise en place, et renvoyee.
       try{
-        const _b=this._lireBase(email);
         const _us=DB.get('users')||{};
+        const _b=_us[email]?this._baseDe(email,_us[email]):null;
         if(_b&&_us[email]){
           _us[email]=syncFusion(_b.h,_us[email],safe);
+          _us[email]._syncMaj=Number(safe.updatedAt)||0;
           DB.setLocal('users',_us);
           if(typeof currentUser==='object'&&currentUser&&currentUser.email===email){
             Object.assign(currentUser,_us[email]);
@@ -16152,8 +16253,14 @@ const CLOUD={
     if(!currentUser?.email) return;
     // Push groupé débounce, toujours appelé depuis un setTimeout sans capture :
     // il ne doit jamais rejeter. L'échec est déjà porté par le badge (_doPushOne).
+    //
+    // LE DOSSIER TEL QU'IL EST AU DEPART, et non l'instantane pris au DB.set
+    // deux secondes plus tot : un envoi ou une descente a pu avancer la base
+    // entre-temps, et l'instantane aurait defait ce qu'ils venaient
+    // d'apporter.
+    const _frais=DB.get('users')||users||{};
     try{
-      await this._doPushOne(currentUser.email, users[currentUser.email]||currentUser);
+      await this._doPushOne(currentUser.email, _frais[currentUser.email]||currentUser);
     }catch(e){}
   },
 
@@ -16236,7 +16343,7 @@ const CLOUD={
     //
     //   SANS BASE — premiere descente sur cet appareil — le comportement
     //   d'avant, ci-dessous, a l'identique.
-    const _b=loc?this._lireBase(email):null;
+    const _b=loc?this._baseDe(email,loc):null;
     if(_b){
       const locConstantes=loc.constantes, locAnalyses=loc.analyses;
       merged[email]=syncFusion(_b.h,loc,cloudUser);
@@ -16882,8 +16989,11 @@ const CLOUD={
   // l'ouverture d'une fiche par le coach — c'est le geste qui repare un
   // appareil rendu aveugle par un envoi rate avant le correctif B1.3, et le
   // seul moment ou une lecture de plus se justifie.
-  async syncUser(email,force){
-    const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
+  //
+  // `_dansLeTour` : appelee depuis un envoi de ce meme dossier, qui tient deja
+  // la file.
+  async syncUser(email,force,_dansLeTour){
+    if(!_dansLeTour) return this._aTonTour(email,()=>this.syncUser(email,force,true));
     const distantAt=await this.pullUpdatedAt(email);
     // ⚠ LE RACCOURCI COMPARE LE SERVEUR A CE QU'ON EN A VU, PAS A SA PROPRE
     //   COPIE. Il comparait l'horodatage distant a l'horodatage LOCAL, et
@@ -16896,9 +17006,22 @@ const CLOUD={
     //   version que j'ai integree ? ». La base garde cet horodatage-la.
     //   Sans base, on descend : c'est le prix d'une premiere synchronisation.
     const _b=this._lireBase(email);
-    if(!force&&distantAt!==null&&_b&&_b.maj===distantAt){ this._noterDescente(email,false); return false; }
+    // ET LA COPIE LOCALE EN DERIVE BIEN : une ecriture perimee a pu la ramener
+    // a une version anterieure (voir _baseDe). Il faut alors redescendre pour
+    // la recoller, meme si le serveur n'a pas bouge.
+    const _m=(()=>{ try{ const d=(DB.get('users')||{})[email]; return d?d._syncMaj:undefined; }catch(e){ return undefined; } })();
+    if(!force&&distantAt!==null&&_b&&_b.maj===distantAt&&(_m==null||_m===distantAt)){ this._noterDescente(email,false); return false; }
     const cloudUser=await this.pullUser(email);
     if(!cloudUser) return false;
+    // ⚠ rc_users EST LU ICI, APRES LES DEUX ALLERS-RETOURS, et non en tete. Il
+    //   etait lu avant, puis reecrit EN ENTIER apres : tout ce qui s'etait
+    //   ecrit entre-temps disparaissait — un geste du coach, et surtout la
+    //   descente d'un autre dossier, puisque syncRelevantUsers les lance
+    //   toutes en meme temps. Mesure au banc : le dossier du coach descendait,
+    //   puis celui de l'athlete l'effacait. La base, elle, disait « integre »,
+    //   et l'appareil ne le redescendait plus jamais. Lu ici, la lecture, la
+    //   fusion, l'ecriture et la base tiennent dans le meme instant.
+    const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
     const merged=Object.assign({},local);
     // LA FUSION PEUT LEVER, ET SON ECHEC NE DOIT PLUS DISPARAITRE. Personne
     // n'attend le resultat de syncUser : une exception y devient un rejet non
@@ -16917,6 +17040,9 @@ const CLOUD={
     // quota. L'ecriture brute levait une QuotaExceededError dans une fonction
     // async dont personne n'attend le resultat — donc une unhandled rejection,
     // et une synchro silencieusement perdue.
+    // LA LIGNEE : cette copie derive desormais de cette version du serveur.
+    if(merged[email]&&typeof merged[email]==='object')
+      merged[email]._syncMaj=Number(cloudUser.updatedAt)||0;
     DB.set('users',merged);
     // La base devient la version du serveur qu'on vient d'integrer — APRES la
     // fusion, qui avait besoin de l'ancienne.

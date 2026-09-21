@@ -37783,6 +37783,87 @@ async function testExercices(){
       if(n<2) return _echec('les retraits de confidentialité ne sont joués que '+n+' fois');
       return true;})());
 
+    ok('UNE COPIE PÉRIMÉE SE FUSIONNE CONTRE SA PROPRE BASE, PAS CONTRE LA DERNIÈRE',(()=>{
+      // LE DEFAUT, MESURE AU BANC A DEUX APPAREILS : le coach ouvre « Numero
+      // WhatsApp » — le dossier est lu AVANT la boite —, l'athlete envoie une
+      // seance, le coach descend, puis valide. La copie qui part date d'avant
+      // la descente. Fusionnee contre la base d'APRES, elle semblait avoir
+      // retire la seance : le serveur la perdait, puis le telephone de
+      // l'athlete lui-meme a la descente suivante.
+      const B0={id:'L1',email:'l@t',updatedAt:100,sessions:[],phone:null};
+      const D={id:'L1',email:'l@t',updatedAt:200,sessions:[{id:'S1',date:150,name:'Legs'}],phone:null};
+      const L={id:'L1',email:'l@t',updatedAt:300,sessions:[],phone:'+33612345678'};
+      const bon=syncFusion(syncEmpreintes(B0),L,D);
+      if(!(bon.sessions||[]).some(s=>s.id==='S1')) return _echec('contre sa base, la séance de l’athlète est perdue');
+      if(bon.phone!=='+33612345678') return _echec('contre sa base, le numéro du coach est perdu');
+      // TEMOIN : contre la base d'apres, la seance disparait. Sans ce temoin,
+      // l'assertion ci-dessus pourrait passer pour une autre raison.
+      const faux=syncFusion(syncEmpreintes(D),L,D);
+      if((faux.sessions||[]).some(s=>s.id==='S1'))
+        return _echec('témoin : la base d’après ne perd plus la séance — le cas ne discrimine plus');
+      // Et la lignee ne compte pas dans les empreintes : elle ne doit ni
+      // creer ni masquer une difference.
+      if(syncEmpreintes({a:1,_syncMaj:5})['']!==syncEmpreintes({a:1})[''])
+        return _echec('la lignée locale entre dans les empreintes');
+      return true;})());
+
+    ok('_baseDe RETROUVE LA BASE DE LA LIGNÉE, ET SANS ELLE LE SERVEUR L’EMPORTE',(()=>{
+      const email='lignee@banc.test', k=CLOUD._cleBase(email);
+      const svK=localStorage.getItem(k), svH=CLOUD._histBases[email];
+      try{
+        localStorage.removeItem(k); delete CLOUD._histBases[email];
+        if(CLOUD._baseDe(email,{_syncMaj:1})!==null) return _echec('une base inventée sans aucune descente');
+        const B0={a:1,updatedAt:100}, B1={a:2,s:'x',updatedAt:200};
+        CLOUD._poserBase(email,B0); CLOUD._poserBase(email,B1);
+        const cur=CLOUD._baseDe(email,{_syncMaj:200});
+        if(!cur||cur.maj!==200) return _echec('la copie à jour ne reçoit pas la base courante');
+        const sansMarque=CLOUD._baseDe(email,{a:2});
+        if(!sansMarque||sansMarque.maj!==200) return _echec('une copie sans lignée ne reçoit plus la base courante');
+        const vieille=CLOUD._baseDe(email,{_syncMaj:100});
+        if(!vieille||vieille.maj!==100) return _echec('la copie périmée ne retrouve pas sa base en mémoire');
+        if(vieille.h['a']!==syncEmpreintes(B0)['a']) return _echec('la base retrouvée n’est pas celle de la lignée');
+        // LIGNEE INCONNUE : la base est la copie elle-meme, donc le serveur
+        // l'emporte partout — une copie qu'on sait perimee n'efface rien.
+        const perdue={a:9,z:1,_syncMaj:50};
+        const b=CLOUD._baseDe(email,perdue);
+        const r=syncFusion(b.h,perdue,B1);
+        if(r.a!==2||r.s!=='x'||('z' in r)) return _echec('lignée inconnue : la copie périmée l’emporte encore '+JSON.stringify(r));
+        return true;
+      } finally {
+        if(svK===null) localStorage.removeItem(k); else localStorage.setItem(k,svK);
+        if(svH===undefined) delete CLOUD._histBases[email]; else CLOUD._histBases[email]=svH;
+      }})());
+
+    ok('UN DOSSIER, UN ÉCHANGE À LA FOIS — ET RIEN NE PART À L’AVEUGLE',(()=>{
+      // Quatre defauts mesures au banc, quatre maillons a tenir.
+      const env=String(CLOUD._doPushOne);
+      // 1. Les envois du meme dossier passent a la file : le premier PUT parti
+      //    arrivait le dernier, et le serveur perdait la seconde modification.
+      if(env.indexOf('_aTonTour(')<0) return _echec('les envois ne passent plus à la file');
+      // 2. La base est lue A LA REMISE du dossier, avant toute attente.
+      const iBase=env.indexOf('this._baseDe(email,user)'), iAwait=env.indexOf('await ');
+      if(iBase<0) return _echec('la base n’est plus celle de la copie remise');
+      if(iAwait>=0&&iBase>iAwait) return _echec('la base est lue après une attente : une descente a pu l’avancer');
+      // 3. Serveur illisible et base connue : on n'ecrase pas a l'aveugle.
+      if(!/if\(!distant&&_base\)\s*throw/.test(env)) return _echec('un envoi part encore sans avoir lu le serveur');
+      // Le rattrapage descend DANS le tour en cours — par la file, il
+      // attendrait la fin de l'envoi qui l'attend.
+      if(env.indexOf('syncUser(email,false,true)')<0) return _echec('le rattrapage repasse par la file : interblocage');
+      // 4. La descente passe a la file, et lit rc_users APRES le reseau : lu
+      //    avant puis reecrit en entier, il effacait la descente parallele
+      //    d'un autre dossier.
+      const sy=String(CLOUD.syncUser);
+      if(sy.indexOf('_aTonTour(')<0) return _echec('les descentes ne passent plus à la file');
+      const iPull=sy.indexOf('this.pullUser('), iLocal=sy.indexOf("localStorage.getItem('rc_users')");
+      if(iPull<0||iLocal<0||iLocal<iPull) return _echec('rc_users est relu avant le réseau, puis réécrit en entier');
+      // Les envois differes et la file de renvoi partent du dossier du moment.
+      if(String(CLOUD._doPush).indexOf("DB.get('users')")<0) return _echec('l’envoi différé part d’un instantané périmé');
+      if(String(CLOUD.viderFile).indexOf("(DB.get('users')||{})[email]")<0) return _echec('la file de renvoi part d’un instantané périmé');
+      // Et la lignee ne monte jamais.
+      if(SYNC_HORS_FUSION.indexOf('_syncMaj')<0) return _echec('la lignée entre dans la fusion');
+      if(env.indexOf('delete safe._syncMaj')<0) return _echec('la lignée monte au serveur');
+      return true;})());
+
     // ══════ LE SCHEMA CORPOREL DE LA FICHE COACH ══════════════════════════
     // Les ordonnees d'un trace SVG : « M12.34 5.67 » ou « L88.00 21.50 ».
     const RE_Y_COURBE=new RegExp('[ML]\\s*[0-9.]+\\s+([0-9.]+)','g');
