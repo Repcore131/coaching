@@ -29100,9 +29100,24 @@ async function testExercices(){
         // jourDieteTenu. Recopier la règle aurait fabriqué un jugement de plus,
         // et le jour où la tolérance bougerait, la pastille aurait contredit le
         // pourcentage qui la résume.
-        const auj=new Date(), lundi=new Date(auj);
-        lundi.setDate(auj.getDate()-((auj.getDay()+6)%7));
-        const cle=n=>{const d=new Date(lundi);d.setDate(lundi.getDate()+n);return localISODate(d);};
+        // ⚠ LES SEPT JOURS SONT DANS LE PASSE, ET C'EST LE CORRECTIF DU
+        //   21/09/2026. Ils partaient du LUNDI de la semaine en cours : un
+        //   lundi, les jours 1 a 6 tombaient donc dans l'AVENIR. Les pastilles,
+        //   qui balayent une semaine donnee, les comptaient ; le camembert, qui
+        //   regarde trente jours EN ARRIERE, refusait a juste titre de compter
+        //   demain. Le test echouait donc sur « camembert 1/1 contre pastilles
+        //   2/3 » un jour sur sept, sans qu'une ligne du produit n'ait bouge —
+        //   et il l'a fait cette nuit meme, quand la date a bascule.
+        //
+        //   LE PRODUIT AVAIT RAISON, LE DECOR AVAIT TORT. Le commentaire de la
+        //   fenetre glissante, vingt lignes plus bas, dit deja la regle : « un
+        //   test qui dependrait de l'heure d'execution tomberait une nuit sur
+        //   deux ». Celui-ci la violait.
+        //
+        //   cle(6) est AUJOURD'HUI, cle(0) il y a six jours : les sept jours
+        //   examines sont tous passes, et les trois journees notees tombent
+        //   dans la fenetre de trente jours du camembert.
+        const cle=n=>localISODate(new Date(Date.now()-(6-n)*864e5));
         const cib={kcal:2000,p:150,g:200,l:60};
         const u={id:'nc',email:'nc@t',role:'athlete',
           nutrition:{dietType:'flexible',macros:{on:cib,off:cib},days:{},log:{
