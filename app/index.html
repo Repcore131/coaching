@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1379';
+window.RC_BUILD='1380';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1308,32 +1308,66 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
    sa largeur de texte, Suivant garde tout le reste : la porte de secours ne
    doit pas peser autant que l action principale. */
 .bil-actions{display:flex;gap:10px;align-items:stretch}
-/* LA DERNIERE CARTE NE LAISSE PLUS DE VIDE A SA DROITE. Avec un nombre
-   impair de complements dans un creneau, la derniere occupait une colonne
-   sur deux et le trou d a cote se lisait comme un oubli.
-   LE NOMBRE DE COLONNES N EST PAS DEVINABLE A L ECRITURE : il depend de la
-   largeur du conteneur, pas de celle de la fenetre. Mesure au navigateur,
-   sur la version servie : la grille fait 306 px chez l athlete sur un
-   telephone de 375 px — deux colonnes — 408 px sur un poste de travail,
-   deux colonnes encore, et 542 px dans la fiche coach — TROIS colonnes.
-   Une regle « impair, donc pleine largeur » aurait ete fausse chez le coach.
-   D ou la requete de CONTENEUR, qui interroge la largeur reelle du bac.
-   Les seuils viennent de la grille elle-meme : n colonnes tiennent des que
-   la largeur atteint n*140 + (n-1)*8, soit 288 px pour deux et 436 px pour
-   trois. Sous 288 px il n y a qu une colonne, et chaque carte est deja
-   pleine largeur : aucune regle n y est necessaire. */
+/* LES COMPLEMENTS EN PANNEAUX, UN PAR MOMENT DE LA JOURNEE (build 1380,
+   maquette de Kevin). Le panneau porte un liseré a gauche dans la couleur du
+   moment, son icone, son nom, un sous-titre et « Tout prendre » ; les cartes
+   portent la vignette du produit, son nom, sa dose, sa famille et la coche
+   du jour.
+   LA DERNIERE CARTE NE LAISSE PLUS DE VIDE A SA DROITE — l'ancienne regle,
+   tenue autrement. Les cartes etaient dans une grille a colonnes fixes, et
+   trois requetes de conteneur rattrapaient la derniere rangee selon la
+   largeur du bac. Elles sont maintenant en FLEX : chacune part de 220 px et
+   s'etire — deux cartes tiennent donc des 448 px de bac, la fiche coach (480). Trois cartes sur une rangee large se partagent la largeur par
+   tiers, deux par moitie, une seule la prend toute — la maquette, sans une
+   seule requete. Sur un telephone (306 px de bac) elles s'empilent : a deux
+   colonnes, 145 px ne laissaient pas la place au nom a cote de sa vignette. */
 .supp-bac{container-type:inline-size}
-.supp-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
-@container (min-width:288px) and (max-width:435.98px){
-  .supp-grille>*:last-child:nth-child(odd){grid-column:1/-1}
+.supp-grille{display:flex;flex-wrap:wrap;gap:8px}
+.supp-grille>*{flex:1 1 220px;min-width:0}
+.supp-moment{--mc:#6a6a6a;container-type:inline-size;position:relative;margin:0 0 12px;padding:12px 12px 12px 13px;border-radius:14px;background:linear-gradient(160deg,#151515,#0b0b0b 72%);border:1px solid #222;border-left:3px solid var(--mc);box-shadow:-3px 0 14px -7px var(--mc),var(--e2)}
+.supp-mh{display:flex;align-items:center;gap:11px;margin:0 0 10px}
+.supp-mi{flex-shrink:0;display:inline-flex;filter:drop-shadow(0 0 6px var(--mc))}
+.supp-mt{font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-md);letter-spacing:2.4px;line-height:1.15;color:var(--mc);text-transform:uppercase}
+.supp-ms{font-size:var(--fs-2xs);font-weight:600;letter-spacing:1.6px;line-height:1.3;color:#9a9a9a;text-transform:uppercase;margin-top:3px}
+.supp-tout{margin-left:auto;flex-shrink:0;background:#0b0b0b;border:1px solid #3a3a3a;border-radius:10px;color:#f2f2f2;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;padding:8px 12px;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.supp-tout:hover{border-color:#5a5a5a}
+.supp-tout:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.supp-tout:disabled{cursor:default;color:#22c55e;border-color:color-mix(in srgb,#22c55e 40%,transparent)}
+.supp-carte{position:relative;display:flex;align-items:flex-start;gap:12px;padding:10px;border-radius:12px;background:linear-gradient(150deg,#161616,#0e0e0e);border:1px solid #242424;cursor:pointer}
+.supp-carte:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.supp-carte.eteint{opacity:.5}
+/* LA VIGNETTE VIENT D'UNE PLANCHE : 12 × 5 cases, une seule image pour les
+   soixante. background-size 1200 % 500 % fait d'une case la taille de la
+   vignette ; la position, calculee par suppIconePos, choisit la case. */
+.supp-ico{flex-shrink:0;width:58px;height:58px;border-radius:12px;background-color:#111;background-image:url(img/complements.webp);background-repeat:no-repeat;background-size:1200% 500%;border:1px solid #2c2c2c;box-shadow:0 2px 8px rgba(0,0,0,.55)}
+.supp-txt{flex:1;min-width:0;padding-top:1px}
+.supp-nomr{min-width:0}
+/* LA PASTILLE SUIT LE DERNIER MOT DU NOM. En flex, un nom qui passait a la
+   ligne — « Whey / Protéine en poudre » sur 276 px — la renvoyait SEULE sur
+   une troisieme ligne. En ligne, elle se pose apres « poudre ». */
+.supp-nomr>span+span{margin-left:6px;vertical-align:2px}
+.supp-nom{font-size:var(--fs-md);font-weight:700;line-height:1.25;color:#fff;overflow-wrap:break-word;min-width:0}
+.supp-dose{font-size:var(--fs-sm);color:#a3a3a3;line-height:1.35;margin-top:3px}
+.supp-etiq{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px}
+.supp-etiq:empty{display:none}
+.supp-etiq details[open]{flex-basis:100%}
+.supp-tag{--tc:#f59e0b;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;line-height:1;text-transform:uppercase;padding:4px 7px;border-radius:5px;color:var(--tc);border:1px solid color-mix(in srgb,var(--tc) 45%,transparent);background:color-mix(in srgb,var(--tc) 9%,transparent)}
+/* LA COCHE : 28 px dessines, 46 px au doigt — le ::after deborde de 9 px de
+   chaque cote, sans deplacer la mise en page. */
+.supp-coche{position:relative;flex-shrink:0;width:28px;height:28px;margin:2px 0 0;padding:0;border-radius:50%;border:2px solid #666;background:transparent;color:transparent;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.supp-coche::after{content:'';position:absolute;inset:-9px}
+.supp-coche:focus-visible{outline:2px solid var(--red);outline-offset:3px}
+/* UN PANNEAU ETROIT (telephone : 305 px) serre l'en-tete. Mesure au
+   navigateur : « ENTRAÎNEMENT », un seul mot, reclamait 135 px a cote d'un
+   bouton de 110 px, pour 122 disponibles — il passait SOUS le bouton. Titre
+   et bouton se resserrent d'un cran, et le mot tient. */
+@container (max-width:380px){
+  .supp-mt{font-size:var(--fs-sm);letter-spacing:1.5px}
+  .supp-ms{letter-spacing:1.1px}
+  .supp-tout{padding:7px 9px;font-size:var(--fs-xs)}
+  .supp-mh{gap:9px}
 }
-@container (min-width:436px){
-  /* Reste UNE carte sur la derniere rangee : elle prend les trois colonnes. */
-  .supp-grille>*:last-child:nth-child(3n+1){grid-column:1/-1}
-  /* Il en reste DEUX : la derniere prend les deux colonnes qui restent, et
-     la rangee se ferme sans trou. */
-  .supp-grille>*:last-child:nth-child(3n+2){grid-column:span 2}
-}
+.supp-coche[aria-pressed="true"]{background:#22c55e;border-color:#22c55e;color:#07170c;box-shadow:0 0 10px color-mix(in srgb,#22c55e 45%,transparent)}
 
 /* L'ATTENTE SE VOIT. Il n'existait aucune regle .btn:disabled : rien ne
    distinguait un bouton verrouille d'un bouton pret, et trois sites sur onze
@@ -86627,6 +86661,263 @@ function _suppIndexParId(list,id){
   if(!Number.isFinite(n)) return -1;
   return list.findIndex(x=>x&&Number(x.id)===n);
 }
+// ── LES VIGNETTES DES COMPLEMENTS (build 1380) ─────────────────────────
+//
+// Soixante vignettes decoupees dans la planche de Kevin (« RepCore —
+// compléments alimentaires, icônes officielles »), rangees dans UNE image :
+// img/complements.webp, 12 × 5 cases de 128 px, 85 ko. Une seule requete, et
+// en cache des l'installation du service worker, comme les medaillons : le
+// plan de complements se lit en salle, souvent sans reseau.
+//
+// L'ORDRE EST CELUI DE LA PLANCHE, rangee par rangee — la colonne de gauche
+// puis celle de droite. Le rang dans ce tableau EST la case : le changer sans
+// recouper l'image decalerait toutes les vignettes d'un cran.
+const SUPP_ICO_COLS=12, SUPP_ICO_RANGS=5;
+const SUPP_ICONES=Object.freeze([
+  'whey','isolat','caseine','beef','vegetale','clear-whey',
+  'bcaa','eaa','glutamine','taurine','glycine','citrulline',
+  'creatine','creatine-hcl','creatine-ethyl','creatine-kre','creatine-magnapower','creatine-buffered',
+  'pre-workout','cafeine','the-vert','theobromine','dmha','dmaa',
+  'vitamine-a','vitamine-b','vitamine-c','vitamine-d','vitamine-e','vitamine-k',
+  'magnesium','zinc','fer','calcium','potassium','selenium',
+  'omega-3','collagene','coq10','probiotiques','curcumine','resveratrol',
+  'melatonine','ashwagandha','rhodiola','l-theanine','5-htp','gaba',
+  'psyllium','enzymes','l-glutamine','charbon','betaine','fibres',
+  'multivitamines','nac','alpha-gpc','hmb','spiruline','adaptogenes']);
+// LA FAMILLE DIT CE QU'EST LE PRODUIT, JAMAIS CE QU'IL FAIT. La maquette
+// portait « Énergie », « Immunité », « Anti-catabolisme », « Force » : autant
+// d'effets promis, dont l'un contredisait la fiche du produit (les EAA,
+// « redondants si le total de protéines est atteint », niveau C). Une
+// etiquette qui promet ce que la fiche dement ne tient pas dans cet ecran. On
+// garde la forme de la maquette — l'etiquette coloree sous la dose — et on y
+// met ce qui est vrai de tous les produits de la famille.
+const SUPP_FAMILLES=Object.freeze({
+  proteine:   {lib:'Protéine',    c:'#ef4444'},
+  acide:      {lib:'Acide aminé', c:'#f59e0b'},
+  creatine:   {lib:'Créatine',    c:'#fb923c'},
+  booster:    {lib:'Booster',     c:'#E02020'},
+  vitamine:   {lib:'Vitamine',    c:'#facc15'},
+  mineral:    {lib:'Minéral',     c:'#f59e0b'},
+  gras:       {lib:'Acides gras', c:'#f59e0b'},
+  sante:      {lib:'Santé',       c:'#f59e0b'},
+  sommeil:    {lib:'Sommeil',     c:'#a78bfa'},
+  plante:     {lib:'Plante',      c:'#84cc16'},
+  algue:      {lib:'Algue',       c:'#84cc16'},
+  digestion:  {lib:'Digestion',   c:'#84cc16'},
+  glucides:   {lib:'Glucides',    c:'#f59e0b'},
+  hydratation:{lib:'Électrolytes',c:'#38bdf8'}
+});
+// LE NOM SAISI, RAPPROCHE D'UNE VIGNETTE. Les dossiers stockent un nom libre :
+// « Vitamine C 1000 », « Mon iso vanille », « Électrolytes ». On compare sans
+// accent, en minuscules, la ponctuation reduite a des espaces — et LE PREMIER
+// MOTIF QUI RECONNAIT GAGNE : les formes precises passent avant les mots
+// generiques (« clear whey » avant « whey », « créatine HCl » avant
+// « créatine »).
+//
+// ⚠ Quand deux produits partagent une vignette — la crème de riz prend la
+// dosette de la caséine, les électrolytes le potassium, faute de mieux sur
+// la planche —, la FAMILLE reste juste : c'est elle qui se lit.
+const SUPP_ICO_REGLES=Object.freeze([
+  [/\bclear\b/,'clear-whey','proteine'],
+  [/\bisolat|\biso\b|\bisolate\b/,'isolat','proteine'],
+  [/\bcasein/,'caseine','proteine'],
+  [/\bbeef\b|\bboeuf\b/,'beef','proteine'],
+  [/\bvegetal|\bvegan|\bpois\b|\bchanvre\b|\bproteine de riz\b|\bsoja\b/,'vegetale','proteine'],
+  [/\bcollagen/,'collagene','proteine'],
+  [/\bwhey\b|\bprotein|\bgainer\b/,'whey','proteine'],
+  [/\belectrolyte|\bisotonique\b|\bhydratation\b/,'potassium','hydratation'],
+  [/\bcreme de riz\b|\bcream of rice\b|\bmaltodextrine\b|\bdextrose\b|\bglucide|\bcyclodextrine\b|\bvitargo\b|\bpalatinose\b|\bavoine\b|\bgel energetique\b/,'caseine','glucides'],
+  [/\bhcl\b.*\bcreatine\b|\bcreatine\b.*\bhcl\b|\bchlorhydrate de creatine\b/,'creatine-hcl','creatine'],
+  [/\bethyl ester\b/,'creatine-ethyl','creatine'],
+  [/\bkre\b|\balkalyn/,'creatine-kre','creatine'],
+  [/\bmagnapower\b/,'creatine-magnapower','creatine'],
+  [/\bcreatine\b.*\b(buffered|tamponnee)\b/,'creatine-buffered','creatine'],
+  [/\bcreatine\b/,'creatine','creatine'],
+  [/\bbcaa\b|\bleucine\b/,'bcaa','acide'],
+  [/\beaa\b|\bacides? amines? essentiels?\b/,'eaa','acide'],
+  [/\bglutamine\b/,'glutamine','acide'],
+  [/\btaurine\b/,'taurine','acide'],
+  [/\bglycine\b/,'glycine','acide'],
+  [/\bcitrulline\b|\barginine\b|\bbeta alanine\b|\bornithine\b|\bcarnitine\b/,'citrulline','acide'],
+  [/\btheanine\b/,'l-theanine','acide'],
+  [/\b5 htp\b|\bgriffonia\b|\btryptophane?\b/,'5-htp','acide'],
+  [/\bgaba\b/,'gaba','acide'],
+  [/\bnac\b|\bacetyl ?cysteine\b/,'nac','acide'],
+  [/\bpre ?workout\b|\bpre entrainement\b|\bbooster\b/,'pre-workout','booster'],
+  [/\bcafeine\b|\bcaffeine\b|\bguarana\b/,'cafeine','booster'],
+  [/\bdmha\b/,'dmha','booster'],
+  [/\bdmaa\b/,'dmaa','booster'],
+  [/\btheobromine\b|\bcacao\b/,'theobromine','booster'],
+  [/\bthe vert\b|\bgreen tea\b|\begcg\b|\bmatcha\b/,'the-vert','plante'],
+  [/\bmulti ?vitamine|\bmultivit|\bmulti\b/,'multivitamines','vitamine'],
+  [/\bvit(amine)?s? ?a\b|\bretinol\b/,'vitamine-a','vitamine'],
+  [/\bvit(amine)?s? ?b\d*\b|\bb12\b|\bb6\b|\bb9\b|\bfolate|\bbiotine\b/,'vitamine-b','vitamine'],
+  [/\bvit(amine)?s? ?c\b|\bascorbique\b/,'vitamine-c','vitamine'],
+  [/\bvit(amine)?s? ?d\d?\b|\bd3\b|\bcholecalciferol\b/,'vitamine-d','vitamine'],
+  [/\bvit(amine)?s? ?e\b|\btocopherol/,'vitamine-e','vitamine'],
+  [/\bvit(amine)?s? ?k\d?\b|\bk2\b/,'vitamine-k','vitamine'],
+  [/\bzma\b|\bzinc\b/,'zinc','mineral'],
+  [/\bmagnesium\b/,'magnesium','mineral'],
+  [/\bfer\b|\biron\b/,'fer','mineral'],
+  [/\bcalcium\b/,'calcium','mineral'],
+  [/\bpotassium\b|\bsodium\b/,'potassium','mineral'],
+  [/\bselenium\b|\biode\b/,'selenium','mineral'],
+  [/\bomega\b|\bhuile de poisson\b|\bfish oil\b|\bepa\b|\bdha\b|\bkrill\b/,'omega-3','gras'],
+  [/\bq10\b|\bcoenzyme\b|\bubiquinol\b/,'coq10','sante'],
+  [/\bprobiotique|\blactobac|\bbifido/,'probiotiques','digestion'],
+  [/\bcurcum|\bturmeric\b|\bgingembre\b/,'curcumine','plante'],
+  [/\bresveratrol\b/,'resveratrol','sante'],
+  [/\bmelatonine\b/,'melatonine','sommeil'],
+  [/\bashwagandha\b|\bksm\b/,'ashwagandha','plante'],
+  [/\brhodiola\b/,'rhodiola','plante'],
+  [/\bpsyllium\b/,'psyllium','digestion'],
+  [/\benzyme/,'enzymes','digestion'],
+  [/\bcharbon\b/,'charbon','digestion'],
+  [/\bbetaine\b/,'betaine','digestion'],
+  [/\bfibre|\bprebiotique|\binuline\b/,'fibres','digestion'],
+  [/\balpha ?gpc\b|\bcholine\b/,'alpha-gpc',null],
+  [/\bhmb\b/,'hmb',null],
+  [/\bspirulin|\bchlorella\b/,'spiruline','algue'],
+  [/\badaptogene|\bmaca\b|\bginseng\b/,'adaptogenes','plante']
+]);
+// PURE. Le nom reduit a ce qui se compare.
+function _suppIcoNorm(s){
+  return ' '+String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()+' ';
+}
+// PURE. Aucun motif ne reconnait le nom : la vignette suit L'UNITE — une
+// gelule pour des gelules, un comprime pour des comprimes, une dosette pour
+// des scoops. Elle ressemble a ce que l'athlete a dans la main, et AUCUNE
+// famille n'est inventee : l'etiquette reste vide.
+function _suppIconeParUnite(unite){
+  const u=_suppIcoNorm(unite);
+  if(/\bgelule|\bcapsule|\bcaps\b/.test(u)) return 'nac';
+  if(/\bcomprime|\bcp\b|\bpastille/.test(u)) return 'calcium';
+  if(/\bscoop|\bdose|\bmesure|\bcuill/.test(u)) return 'caseine';
+  if(/\bml\b|\bcl\b|\bgoutte/.test(u)) return 'vitamine-d';
+  if(/\bmg\b|\bmcg\b|\bug\b|\bui\b/.test(u)) return 'l-theanine';
+  if(/\bg\b|\bgramme/.test(u)) return 'glycine';
+  return 'nac';
+}
+// PURE. {ico, fam} pour une entree du dossier. fam vaut null quand rien ne
+// permet de dire ce qu'est le produit.
+function suppIcone(s){
+  const n=_suppIcoNorm(s&&s.name);
+  for(const [re,ico,fam] of SUPP_ICO_REGLES) if(re.test(n)) return {ico:ico,fam:fam};
+  return {ico:_suppIconeParUnite(s&&s.dosage_unit),fam:null};
+}
+// PURE. La position CSS de la case. Une cle inconnue retombe sur la
+// premiere case plutot que de montrer un carre vide.
+function suppIconePos(ico){
+  const i=Math.max(0,SUPP_ICONES.indexOf(ico));
+  const c=i%SUPP_ICO_COLS, r=Math.floor(i/SUPP_ICO_COLS);
+  const p=(v,n)=>(Math.round(v/(n-1)*10000)/100)+'%';
+  return p(c,SUPP_ICO_COLS)+' '+p(r,SUPP_ICO_RANGS);
+}
+// Le sous-titre de chaque moment, sous son nom. Ceux de la maquette pour
+// les cinq qu'elle montre ; les autres dans le meme registre.
+const SUPP_MOMENT_SOUS=Object.freeze({
+  'jeun':'Au réveil, avant de manger',
+  'matin':'Énergie & focus',
+  'avant-entrainement':'Performance maximale',
+  'intra':'Hydratation & endurance',
+  'apres-entrainement':'Juste après la séance',
+  'midi':'Soutien au quotidien',
+  'apres-midi':'Le cap de la journée',
+  'soir':'Récupération & sommeil',
+  'coucher':'Avant la nuit',
+  'toutes-4h':'Prises réparties',
+  '_none':'À placer dans la journée'
+});
+
+// ── LA COCHE DU JOUR (build 1380) ──────────────────────────────────────
+//
+// nutrition.suppPrises : { 'AAAA-MM-JJ': ['<id>@<moment>', …] }. UNE CLE PAR
+// PRISE, et non par produit : la whey du matin et celle du coucher se cochent
+// chacune a son heure.
+//
+// ⚠ C'EST UNE DONNEE DE SANTE, parce que nutrition en est une — CHAMPS_SANTE
+// le dit, et _sansSante la couperait sans consentement. Le geste passe donc
+// par la porte : demanderConsentementSante('complement', …).
+//
+// BORNEE A 35 JOURS, purgee a chaque ecriture : le dossier est reecrit en
+// entier a chaque sauvegarde, et un journal qui ne s'arrete jamais finirait
+// par peser plus que tout le reste. Le rendu, lui, NE PURGE PAS — un rendu
+// n'ecrit rien dans le dossier.
+//
+// Le coach ne voit pas la coche : son ecran montre le plan, pas le journal.
+const SUPP_PRISES_JOURS=35;
+function _suppCle(id,mid){ return String(id)+'@'+String(mid); }
+// PURE. Les cles cochees un jour donne. Firebase peut rendre un tableau a
+// trous sous forme d'objet : on accepte les deux.
+function suppPrisesDuJour(user,iso){
+  const p=user&&user.nutrition&&user.nutrition.suppPrises;
+  if(!p||typeof p!=='object'||Array.isArray(p)) return [];
+  const l=p[iso];
+  const a=Array.isArray(l)?l:((l&&typeof l==='object')?Object.values(l):[]);
+  return a.filter(x=>typeof x==='string');
+}
+function _suppPrisesEcrire(cles,on){
+  if(!currentUser) return false;
+  const n=currentUser.nutrition||(currentUser.nutrition={});
+  const iso=localISODate(new Date());
+  const p=(n.suppPrises&&typeof n.suppPrises==='object'&&!Array.isArray(n.suppPrises))?n.suppPrises:{};
+  const l=suppPrisesDuJour(currentUser,iso);
+  cles.forEach(k=>{
+    const i=l.indexOf(k);
+    if(on&&i<0) l.push(k);
+    else if(!on&&i>=0) l.splice(i,1);
+  });
+  if(l.length) p[iso]=l; else delete p[iso];
+  const borne=localISODate(new Date(Date.now()-SUPP_PRISES_JOURS*864e5));
+  Object.keys(p).forEach(k=>{ if(!/^\d{4}-\d{2}-\d{2}$/.test(k)||k<borne) delete p[k]; });
+  if(Object.keys(p).length) n.suppPrises=p; else delete n.suppPrises;
+  return saveUser();
+}
+// Les entrees ACTIVES d'un moment, dans le dossier. « _none » est le moment
+// des produits qui n'en ont aucun de connu — le meme critere que le rendu.
+function _suppEntreesDuMoment(mid){
+  return _suppStore().filter(s=>{
+    if(!s||s.active===false) return false;
+    const mts=(s.timings||[]).filter(id=>TIMINGS_LIST.some(x=>x.id===id));
+    return mid==='_none'?!mts.length:mts.indexOf(mid)>=0;
+  });
+}
+function basculerPriseSupp(id,mid){
+  if(!demanderConsentementSante('complement',()=>basculerPriseSupp(id,mid))) return false;
+  const s=_suppEntreesDuMoment(mid).find(x=>String(x.id)===String(id));
+  if(!s) return false;
+  const k=_suppCle(s.id,mid);
+  const on=suppPrisesDuJour(currentUser,localISODate(new Date())).indexOf(k)<0;
+  _suppPrisesEcrire([k],on);
+  _suppMajCoches();
+  return on;
+}
+function prendreToutSupp(mid){
+  if(!demanderConsentementSante('complement',()=>prendreToutSupp(mid))) return false;
+  const cles=_suppEntreesDuMoment(mid).map(s=>_suppCle(s.id,mid));
+  if(!cles.length) return false;
+  _suppPrisesEcrire(cles,true);
+  _suppMajCoches();
+  return cles.length;
+}
+// L'ECRAN SUIT SANS ETRE REDESSINE. Redessiner fermerait un depli ouvert et
+// ferait sauter la page ; on met a jour les coches et les boutons en place,
+// dans les deux emplacements qui peuvent les porter (la page et la diete).
+function _suppMajCoches(){
+  const pris=new Set(suppPrisesDuJour(currentUser,localISODate(new Date())));
+  document.querySelectorAll('[data-supp-coche]').forEach(b=>{
+    b.setAttribute('aria-pressed',pris.has(b.getAttribute('data-supp-coche'))?'true':'false');
+  });
+  document.querySelectorAll('[data-supp-tout]').forEach(bt=>{
+    const sec=bt.closest('.supp-moment');
+    if(!sec) return;
+    const l=Array.from(sec.querySelectorAll('[data-supp-coche]'));
+    const tout=l.length>0&&l.every(b=>b.getAttribute('aria-pressed')==='true');
+    bt.disabled=tout;
+    bt.textContent=tout?'✓ Tout pris':'Tout prendre ('+l.length+')';
+  });
+}
 function _renderSuppTable(list, isCoach, editFn){
   _suppAssurerIds(list);
   // L encart de sourcing survivait ici a la liste vide — l athlete qui n a
@@ -86640,7 +86931,6 @@ function _renderSuppTable(list, isCoach, editFn){
       ?'Aucun complément noté pour l\'instant. Tu peux en ajouter un juste en dessous.'
       :'Aucun complément noté pour l\'instant. Ajoute le premier avec « + Ajouter », juste au-dessus.',
     null,null,'padding:28px 0');
-  const TRAME='repeating-linear-gradient(-55deg,transparent,transparent 14px,rgba(255,255,255,.012) 14px,rgba(255,255,255,.012) 15px)';
   // Virgule francaise, et pas de decimale inutile : « 2 » et non « 2,0 ».
   const nb=v=>(Math.round(v*100)/100).toString().replace('.',',');
   // Les moments d un complement suivent la JOURNEE, jamais l ordre de saisie :
@@ -86664,12 +86954,6 @@ function _renderSuppTable(list, isCoach, editFn){
       q:q, prises:prises, total:(q!=null&&mts.length)?q*prises:null,
       unite:s.dosage_unit||'', fiche:_suppFiche(s.name), eteint:s.active===false};
   };
-
-  // ── LA TUILE D'ICONE ──────────────────────────────────────────────────
-  // Le liseré de gauche disait déjà le moment, mais il fallait le savoir. Une
-  // icône, elle, se reconnaît : le soleil du matin et la lune du coucher se
-  // lisent sans légende, et la couleur n'a plus à porter seule l'information.
-  const pave=(x,t)=>`<span aria-hidden="true" style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:${t}px;height:${t}px;border-radius:var(--r-3);background:${x.c}12;border:1px solid ${x.c}59;box-shadow:0 0 9px ${x.c}24,inset 0 0 9px ${x.c}12">${_suppTimingIcon(x.id,Math.round(t*0.52),x.c)}</span>`;
 
   // Le dépli « à savoir ». Il ne tient pas sur la ligne de tous les jours :
   // c'est une information d'achat, pas une information de prise.
@@ -86697,37 +86981,25 @@ function _renderSuppTable(list, isCoach, editFn){
       +bloc(s.notes,'color:var(--text-dim);font-style:italic')
       +bloc(_suppEcartMoment(s),'color:var(--text-dim);line-height:1.5');
     if(!corps) return '';
-    return `<details onclick="event.stopPropagation()" style="flex-shrink:0;${pose||''}">
+    return `<details onclick="event.stopPropagation()" style="flex-shrink:0;min-width:0;${pose||''}">
       <summary style="font-size:var(--fs-sm);color:var(--sub);cursor:pointer;list-style:none;padding:0 2px">▾</summary>
       ${corps}
     </details>`;
   };
 
-  // LA QUANTITE DE CETTE PRISE, plus celle de la journee entiere. Le total
-  // et son « · 3× » disaient six scoops la ou l athlete devait en servir
-  // deux : il fallait diviser de tete, devant sa boite, chaque matin.
-  // Maintenant que le produit figure sous chacun de ses creneaux, chaque
-  // carte porte ce qu on prend A CE MOMENT-LA, et rien d autre.
-  // CHIFFRE ET UNITE SUR UNE SEULE LIGNE. Ils occupaient deux lignes
-  // empilees, soit une quinzaine de pixels de hauteur pour dire « 1
-  // comprime » — une information qui tient dans une ligne. L alignement se
-  // fait sur la LIGNE DE BASE et non au centre : Bebas et Montserrat n ont
-  // ni la meme hauteur d oeil ni le meme talon, un centrage ferait flotter
-  // l unite au-dessus du pied du chiffre.
-  //
-  // flex-wrap reste : une unite longue sur une tuile etroite doit pouvoir
-  // repasser dessous plutot que deborder d une carte en overflow:hidden.
-  // L INCISE EST OPTIONNELLE, ET LA BANDE N EN VEUT PAS. Mesure au
-  // navigateur, bande de 306 px : en la placant a cote de la dose, la colonne
-  // de droite passe de 44 a 84 px, le nom perd d autant et repasse sur deux
-  // lignes — la bande GRANDIT de 64 a 75 px. C est l inverse du but. Dans une
-  // bande la dose est a l autre bout de la carte ; la reference reste donc
-  // sous le nom, la ou elle se lit avec lui.
-  const chiffre=(x,taille,aDroite,avecRef)=>`<div style="display:flex;align-items:baseline;gap:3px;flex-wrap:wrap${aDroite?';justify-content:flex-end':''}">
-      <span style="font-family:var(--pile-titre);font-size:${taille};line-height:1;color:${x.eteint?'var(--text-dim)':x.c};--halo-c:${x.c};text-shadow:var(--halo-2)66">${x.q!=null?nb(x.q):'—'}</span>
-      <span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.3px;text-transform:uppercase">${escapeHtml(/\(s\)/i.test(x.unite)?x.unite:planUnitePluriel(x.q,x.unite))}</span>
-      ${avecRef?reference(x):''}
-    </div>`;
+  // LA DOSE DE CETTE PRISE, en toutes lettres : « 1 comprimé », « 2 scoops »,
+  // « 6 g ». L'unite « comprimé(s) » du formulaire se resout sur la quantite
+  // — la maquette ecrit « 1 comprimé », pas « 1 comprimé(s) ». Les unites de
+  // mesure ne prennent jamais d's : « 2 mcg », pas « 2 mcgs ».
+  const dose=x=>{
+    const u0=String(x.unite||'');
+    const plur=x.q!=null&&Math.abs(x.q)>=2;
+    let u;
+    if(/\(s\)/i.test(u0)) u=u0.replace(/\(s\)/i,plur?'s':'');
+    else if(/^(g|kg|mg|mcg|µg|ug|ml|cl|dl|l|ui|kcal|%)$/i.test(u0)) u=u0;
+    else u=planUnitePluriel(x.q,u0);
+    return x.q!=null?(nb(x.q)+(u?' '+u:'')):u;
+  };
 
   // LA REFERENCE REJOINT LA DOSE, ENTRE PARENTHESES. Elle occupait une ligne
   // a elle, sous le couple chiffre-unite, alors qu elle ne fait que le
@@ -86735,7 +87007,10 @@ function _renderSuppTable(list, isCoach, editFn){
   // seule information. En incise elle se lit dans la foulee, et la carte perd
   // une ligne quand la place suffit — sinon flex-wrap la renvoie dessous, ce
   // qui vaut toujours mieux qu un texte coupe par overflow:hidden.
-  const reference=x=>x.fiche?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px">(réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(x.fiche.unite||'')})</span>`:'';
+  // L'unite « gélule(s) » de la fiche se resout comme celle de la dose : « 1 à
+  // 2 gélules », « 1 comprimé » — le « (s) » est une facon d'ecrire le
+  // formulaire, pas une facon de parler.
+  const reference=x=>x.fiche?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px">(réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(String(x.fiche.unite||'').replace(/\(s\)/i,/[2-9]|\d\d/.test(String(x.fiche.dose))?'s':''))})</span>`:'';
 
   // L'IDENTITÉ, ET NON LE RANG. `list.indexOf(s)` donnait la position dans la
   // liste REÇUE — filtrée sur les actifs côté athlète — pendant que
@@ -86743,84 +87018,56 @@ function _renderSuppTable(list, isCoach, editFn){
   // suffisait à ouvrir, puis écraser, la mauvaise entrée.
   const ouverture=s=>`onclick="${editFn}(${s.id})" role="button" tabindex="0" aria-label="${escapeHtml(s.name||'Complément')}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"`;
 
-  // ── LA TUILE : un seul moment, rien d'autre à montrer ─────────────────
-  // La pastille de preuve se pose en HAUT À DROITE et non à la suite du nom :
-  // un nom qui passe à la ligne la promènerait au milieu de la carte.
-  const tuile=(s,mid)=>{
+  // LA COCHE DU JOUR : l'athlete seul, et seulement sur un produit actif.
+  // Son clic et sa touche s'arretent a elle : sans quoi la carte, qui ouvre
+  // la fiche au clic comme a Entree, s'ouvrirait avec.
+  const iso=localISODate(new Date());
+  const pris=new Set(isCoach?[]:suppPrisesDuJour(currentUser,iso));
+  const coche=(s,mid)=>{
+    const k=_suppCle(s.id,mid);
+    return `<button type="button" class="supp-coche" data-supp-coche="${k}" aria-pressed="${pris.has(k)?'true':'false'}" aria-label="Pris : ${escapeHtml(s.name||'Complément')}" onclick="event.stopPropagation();basculerPriseSupp(${s.id},'${mid}')" onkeydown="event.stopPropagation()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"/></svg></button>`;
+  };
+
+  // ── LA CARTE ───────────────────────────────────────────────────────────
+  // La vignette du produit, son nom et sa pastille de preuve, sa dose et sa
+  // reference, sa famille et le depli « à savoir », puis la coche. La
+  // pastille reste COLLEE AU NOM : c'est lui qu'elle qualifie, et la legende
+  // qui l'explique est sous les panneaux.
+  const carte=(s,mid)=>{
     const x=lu(s,mid);
-    return `<div ${ouverture(s)} style="position:relative;overflow:hidden;display:flex;gap:7px;
-      padding:8px 8px 5px;cursor:pointer;border-radius:var(--r-3);
-      background:linear-gradient(150deg,#161616,#101010 60%,#0d0d0d);
-      border:1px solid #202020;box-shadow:var(--e2);opacity:${x.eteint?'.5':'1'}">
-      <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:${TRAME}"></div>
-      ${x.fiche?`<span style="position:absolute;top:8px;right:8px;z-index:1">${_suppPastille(x.fiche.preuve)}</span>`:''}
-      ${depli(s,x,'position:absolute;bottom:3px;right:7px;z-index:1;max-width:78%')}
-      ${pave(x,34)}
-      <div style="position:relative;flex:1;min-width:0">
-        <!-- LA RESERVE POUR LA PASTILLE NE VAUT QUE POUR LE NOM. Elle etait
-             posee sur toute la colonne, alors que la pastille est calee en
-             haut a droite et ne descend jamais plus bas que la premiere
-             ligne du nom. La ligne du chiffre payait donc 18 px qu elle
-             n avait aucune raison de ceder — assez pour renvoyer
-             « 2 comprime(s) » a la ligne sur une tuile a deux colonnes. -->
-        <div style="font-size:var(--fs-sm);font-weight:800;color:${x.eteint?'var(--text-dim)':'var(--text)'};letter-spacing:.2px;line-height:1.2;overflow-wrap:break-word;${x.fiche?'padding-right:18px':''}">${escapeHtml(s.name||'')}</div>
-        <div style="margin-top:4px">${chiffre(x,'var(--fs-lg)',false,true)}</div>
-      </div>
+    const ic=suppIcone(s);
+    const fam=ic.fam?SUPP_FAMILLES[ic.fam]:null;
+    const etiq=(fam?`<span class="supp-tag" style="--tc:${fam.c}">${escapeHtml(fam.lib)}</span>`:'')+depli(s,x);
+    return `<div class="supp-carte${x.eteint?' eteint':''}" ${ouverture(s)}>
+      <span class="supp-ico" aria-hidden="true" style="background-position:${suppIconePos(ic.ico)}"></span>
+      <div class="supp-txt">
+        <div class="supp-nomr"><span class="supp-nom">${escapeHtml(s.name||'')}</span>${x.fiche?_suppPastille(x.fiche.preuve):''}</div>
+        <div class="supp-dose">${escapeHtml(dose(x))}${x.fiche?' '+reference(x):''}</div>
+        <div class="supp-etiq">${etiq}</div>
+      </div>${(!isCoach&&!x.eteint)?coche(s,mid):''}
     </div>`;
   };
 
-  // ── LA BANDE : plusieurs moments, ou seul de son créneau ──────────────
-  // LES PASTILLES DE MOMENTS ONT DISPARU, et leur calcul avec elles. Elles
-  // disaient « ☀ 6 · ☾ 6 » sur une carte rangee sous Midi seulement : il
-  // fallait les reperer, les lire, et comprendre que le soir en faisait
-  // partie. Le produit figure maintenant sous CHACUN de ses creneaux ; la
-  // repetition dit la meme chose sans rien demander.
-  const bande=(s,mid)=>{
-    const x=lu(s,mid);
-    return `<div ${ouverture(s)} style="grid-column:1/-1;position:relative;overflow:hidden;display:flex;align-items:center;gap:11px;
-      padding:8px 12px;cursor:pointer;border-radius:var(--r-3);
-      background:linear-gradient(150deg,#161616,#101010 60%,#0d0d0d);
-      border:1px solid #202020;border-left:4px solid ${x.c};
-      box-shadow:var(--e2);opacity:${x.eteint?'.5':'1'}">
-      <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:${TRAME}"></div>
-      ${pave(x,34)}
-      <div style="position:relative;flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap">
-          <span style="font-size:var(--fs-sm);font-weight:800;color:${x.eteint?'var(--text-dim)':'var(--text)'};letter-spacing:.2px;line-height:1.25;overflow-wrap:break-word">${escapeHtml(s.name||'')}</span>
-          ${x.fiche?_suppPastille(x.fiche.preuve):''}
-        </div>
-        <!-- LE DEPLI DESCEND SUR LA LIGNE DE LA REFERENCE. Mesure au
-             navigateur, bande de 305 px : la ligne du nom offre 191 px et son
-             contenu en reclamait exactement 191 — nom 148, pastille 17, depli
-             14, plus deux gouttieres de 6. A zero pixel pres, le depli
-             basculait sur une seconde ligne et coutait 20 px de hauteur a la
-             bande. La ligne du dessous ne porte qu une incise courte : il y
-             tient sans rien deplacer, et le nom retrouve sa ligne entiere. -->
-        ${(()=>{
-          // LA RANGEE AUSSI ETAIT SUSPENDUE A LA FICHE, et c'est elle qui
-          // portait le defaut jusqu'au bout : le depli avait beau savoir quoi
-          // montrer, la ligne qui l'accueille n'etait pas rendue. La reference
-          // vient de la fiche et disparait avec elle, c'est normal ; le depli,
-          // lui, existe des que l'athlete a quelque chose a y lire.
-          const _r=x.fiche?reference(x):'', _d=depli(s,x);
-          return (_r||_d)?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">${_r}${_d}</div>`:'';
-        })()}
+  // ── LE PANNEAU D'UN MOMENT ─────────────────────────────────────────────
+  // Une bande par creneau, la whey figurant sous chacun des siens : la
+  // repetition EST l'information — c'est ce qu'on a devant soi au moment de
+  // servir. « Tout prendre (N) » compte les produits ACTIFS du moment ; tous
+  // coches, il devient « ✓ Tout pris » et se desactive — decocher se fait
+  // produit par produit, jamais d'un geste qui effacerait toute une prise.
+  const panneau=sec=>{
+    const mc=(SUPP_TIMING_META[sec.id]||{color:'#6a6a6a'}).color;
+    const actifs=sec.items.filter(e=>e.s.active!==false);
+    const tous=actifs.length>0&&actifs.every(e=>pris.has(_suppCle(e.s.id,sec.id)));
+    const tout=(!isCoach&&actifs.length)
+      ?`<button type="button" class="supp-tout" data-supp-tout="${sec.id}" onclick="prendreToutSupp('${sec.id}')"${tous?' disabled':''}>${tous?'✓ Tout pris':'Tout prendre ('+actifs.length+')'}</button>`:'';
+    return `<section class="supp-moment" style="--mc:${mc}" data-moment="${sec.id}">
+      <div class="supp-mh">
+        <span class="supp-mi" aria-hidden="true">${_suppTimingIcon(sec.id,26,mc)}</span>
+        <div style="flex:1;min-width:0"><div class="supp-mt" role="heading" aria-level="3">${escapeHtml(sec.lib||'')}</div><div class="supp-ms">${escapeHtml(SUPP_MOMENT_SOUS[sec.id]||'')}</div></div>
+        ${tout}
       </div>
-      <div style="position:relative;flex-shrink:0;text-align:right">${chiffre(x,'var(--fs-2xl)',true)}</div>
-    </div>`;
-  };
-
-  // Une bannière par créneau. Elle rythme la journée, et la whey figure
-  // desormais sous chacun des siens : « Matin », « Avant entraînement »,
-  // « Au coucher ». La répétition EST l'information — c'est ce qu'on a
-  // devant soi au moment de servir.
-  const banniere=(id,lib)=>{
-    const mc=(SUPP_TIMING_META[id]||{color:'#6a6a6a'}).color;
-    return `<div style="display:flex;align-items:center;gap:8px;margin:15px 0 8px">
-      <span style="display:inline-flex;filter:drop-shadow(0 0 6px ${mc}cc)">${_suppTimingIcon(id,13,mc)}</span>
-      <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:2.5px;color:${mc};--halo-c:${mc};text-shadow:var(--halo-2)55">${escapeHtml(String(lib||'').toUpperCase())}</span>
-      <span style="flex:1;height:1px;background:linear-gradient(90deg,${mc}55,transparent)"></span>
-    </div>`;
+      <div class="supp-bac"><div class="supp-grille">${sec.items.map(e=>carte(e.s,e.id)).join('')}</div></div>
+    </section>`;
   };
 
   // UNE ENTREE PAR PRISE, ET NON PAR PRODUIT. Un complement pris trois fois
@@ -86847,21 +87094,8 @@ function _renderSuppTable(list, isCoach, editFn){
     else der.items.push(e);
   });
 
-  // PLUS DE MELANGE TUILES/BANDES DANS UN MEME CRENEAU. Chaque entree ne
-  // porte plus qu un seul moment : le critere qui faisait passer un produit
-  // en bande — « il en a plusieurs » — n existe plus. Il ne reste que le cas
-  // du creneau qui ne contient qu une entree, ou la bande pleine largeur
-  // vaut mieux qu une tuile seule laissant un vide a sa droite.
-  const grille=(items,seul)=>{
-    const rendu=seul
-      ?items.map(e=>bande(e.s,e.id))
-      :items.map(e=>tuile(e.s,e.id));
-    return `<div class="supp-bac"><div class="supp-grille">${rendu.join('')}</div></div>`;
-  };
-
   return _htmlSuppInteractions(list)
-    +sections.map(sec=>banniere(sec.id,sec.lib)
-      +grille(sec.items,sec.items.length===1)).join('')
+    +sections.map(panneau).join('')
     +_htmlSuppLegende(isCoach);
 }
 

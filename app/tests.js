@@ -50408,6 +50408,106 @@ async function testExercices(){
         const a=achat.filter(x=>n.indexOf(x)>=0);
         return a.length?_echec('lien ou incitation : '+a.join(', ')):true;})());
 
+      // ── Les vignettes, les panneaux et la coche du jour (build 1380) ─────
+      ok('COMPLÉMENTS — chaque fiche a sa vignette et sa famille, un nom libre la sienne',(()=>{
+        try{
+          if(SUPP_ICONES.length!==SUPP_ICO_COLS*SUPP_ICO_RANGS) return _echec(SUPP_ICONES.length+' vignettes pour '+SUPP_ICO_COLS*SUPP_ICO_RANGS+' cases');
+          if(new Set(SUPP_ICONES).size!==SUPP_ICONES.length) return _echec('une vignette est nommée deux fois');
+          // Chaque règle vise une vignette qui existe, et une famille qui existe.
+          const mortes=SUPP_ICO_REGLES.filter(([re,ico,fam])=>SUPP_ICONES.indexOf(ico)<0||(fam!==null&&!SUPP_FAMILLES[fam]));
+          if(mortes.length) return _echec('règle sans vignette ou sans famille : '+mortes.map(r=>r[1]).join(', '));
+          // LES QUINZE FICHES sont reconnues par une règle — jamais par l'unité.
+          const sans=SUPPLEMENTS_LIST.filter(f=>!suppIcone({name:f.nom,dosage_unit:f.unite}).fam);
+          if(sans.length) return _echec('fiche sans famille : '+sans.map(f=>f.nom).join(', '));
+          const att={'Créatine monohydrate':'creatine','Whey / Protéine en poudre':'whey','Oméga-3 (EPA/DHA)':'omega-3',
+            'Vitamine D3':'vitamine-d','ZMA':'zinc','Bêta-alanine':'citrulline','Vitamine C 1000':'vitamine-c',
+            'Clear whey pêche':'clear-whey','Créatine HCl':'creatine-hcl','Mélatonine':'melatonine',
+            'Électrolytes':'potassium','Crème de riz':'caseine','Multivitamines':'multivitamines'};
+          for(const n in att){ const r=suppIcone({name:n}); if(r.ico!==att[n]) return _echec(n+' → '+r.ico+' au lieu de '+att[n]); }
+          // Une vignette partagée garde SA famille : la crème de riz n'est pas une protéine.
+          if(suppIcone({name:'Crème de riz'}).fam!=='glucides') return _echec('la crème de riz prend la famille de sa vignette');
+          if(suppIcone({name:'Électrolytes'}).fam!=='hydratation') return _echec('les électrolytes deviennent un minéral');
+          // « Vitamines et minéraux » n'est pas une vitamine E, « ferment » n'est pas du fer.
+          if(suppIcone({name:'Vitamines et minéraux'}).ico==='vitamine-e') return _echec('« et » lu comme la vitamine E');
+          if(suppIcone({name:'Lait fermenté'}).ico==='fer') return _echec('« fermenté » lu comme du fer');
+          // UN NOM QUE RIEN NE RECONNAÎT : la vignette suit l'unité, et aucune famille n'est inventée.
+          const g=suppIcone({name:'Mon mélange perso',dosage_unit:'gélule(s)'});
+          const c=suppIcone({name:'Truc',dosage_unit:'comprimé(s)'});
+          const s=suppIcone({name:'Truc',dosage_unit:'scoop(s)'});
+          if(g.fam!==null||c.fam!==null) return _echec('une famille est inventée pour un nom inconnu');
+          if(g.ico!=='nac'||c.ico!=='calcium'||s.ico!=='caseine') return _echec('repli par unité : '+[g.ico,c.ico,s.ico].join(', '));
+          // LA CASE : première en 0 % 0 %, dernière en 100 % 100 %, inconnue sur la première.
+          if(suppIconePos('whey')!=='0% 0%'||suppIconePos('adaptogenes')!=='100% 100%'||suppIconePos('???')!=='0% 0%')
+            return _echec('positions : '+[suppIconePos('whey'),suppIconePos('adaptogenes'),suppIconePos('???')].join(' | '));
+          return true;
+        }catch(e){ return _echec(e.message); }})());
+      ok('COMPLÉMENTS — un panneau par moment, la coche et « Tout prendre » à l’athlète seul',(()=>{
+        const avant=currentUser, sv=window.saveUser;
+        try{
+          window.saveUser=()=>true;
+          const S=(id,n,q,u,tm,x)=>Object.assign({id:id,name:n,dosage_quantity:q,dosage_unit:u,timings:tm,active:true},x||{});
+          currentUser={email:'t1380@t.fr',role:'athlete',consent:{health:true,policyVersion:POLICY_VERSION},
+            nutrition:{supplements:[S(1,'Vitamine C',1,'comprimé(s)',['matin']),S(2,'Whey / Protéine en poudre',2,'scoop(s)',['matin','coucher']),
+              S(3,'ZMA',2,'gélule(s)',['coucher'],{active:false}),S(4,'Truc maison',3,'g',[])]}};
+          const l=currentUser.nutrition.supplements;
+          const d=document.createElement('div');
+          d.innerHTML=_renderSuppTable(l,false,'openSuppEdit');
+          const secs=Array.from(d.querySelectorAll('.supp-moment')).map(x=>x.dataset.moment);
+          if(secs.join()!=='matin,coucher,_none') return _echec('panneaux : '+secs.join());
+          // Une carte PAR PRISE : la whey sous le matin ET sous le coucher.
+          if(d.querySelectorAll('.supp-carte').length!==5) return _echec(d.querySelectorAll('.supp-carte').length+' cartes');
+          // La dose se lit comme on la dit.
+          if(!/1 comprimé(?!\()/.test(d.textContent)||!/2 scoops/.test(d.textContent)) return _echec('dose : '+d.textContent.slice(0,200));
+          // La coche : une par prise ACTIVE — le ZMA éteint n'en a pas.
+          if(d.querySelectorAll('.supp-coche').length!==4) return _echec(d.querySelectorAll('.supp-coche').length+' coches');
+          if(d.querySelector('[data-supp-coche="3@coucher"]')) return _echec('un produit éteint se coche');
+          const tout=d.querySelector('[data-supp-tout="coucher"]');
+          if(!tout||!/Tout prendre \(1\)/.test(tout.textContent)) return _echec('« Tout prendre » du coucher : '+(tout?tout.textContent:'absent'));
+          // La coche ne rouvre pas la fiche : son clic et sa touche s'arrêtent à elle.
+          const b=d.querySelector('[data-supp-coche="1@matin"]');
+          if(!/stopPropagation/.test(b.getAttribute('onclick')||'')||!/stopPropagation/.test(b.getAttribute('onkeydown')||''))
+            return _echec('la coche laisse passer le clic à la carte');
+          // COCHER, DÉCOCHER, TOUT PRENDRE — dans le dossier, sous la date du jour.
+          const iso=localISODate(new Date());
+          if(basculerPriseSupp(1,'matin')!==true) return _echec('la coche ne prend pas');
+          if(suppPrisesDuJour(currentUser,iso).join()!=='1@matin') return _echec('journal : '+JSON.stringify(currentUser.nutrition.suppPrises));
+          if(basculerPriseSupp(1,'matin')!==false||suppPrisesDuJour(currentUser,iso).length) return _echec('la coche ne se retire pas');
+          if(currentUser.nutrition.suppPrises) return _echec('un journal vide reste dans le dossier');
+          if(basculerPriseSupp(3,'coucher')!==false) return _echec('un produit éteint se coche');
+          if(prendreToutSupp('matin')!==2) return _echec('« Tout prendre » du matin');
+          if(suppPrisesDuJour(currentUser,iso).sort().join()!=='1@matin,2@matin') return _echec('après tout prendre : '+suppPrisesDuJour(currentUser,iso));
+          if(prendreToutSupp('_none')!==1) return _echec('le moment non défini ne se prend pas');
+          d.innerHTML=_renderSuppTable(l,false,'openSuppEdit');
+          const bm=d.querySelector('[data-supp-tout="matin"]');
+          if(!bm.disabled||!/Tout pris/.test(bm.textContent)) return _echec('le matin pris en entier reste proposé');
+          if(d.querySelector('[data-supp-coche="2@coucher"]').getAttribute('aria-pressed')!=='false') return _echec('la whey du coucher est cochée avec celle du matin');
+          // LA PURGE : un jour au-delà de 35 jours part à l'écriture suivante.
+          const vieux=localISODate(new Date(Date.now()-40*864e5));
+          currentUser.nutrition.suppPrises[vieux]=['1@matin'];
+          basculerPriseSupp(2,'coucher');
+          if(currentUser.nutrition.suppPrises[vieux]) return _echec('le journal n’est pas borné');
+          // LE RENDU N'ÉCRIT RIEN.
+          const j=JSON.stringify(currentUser);
+          _renderSuppTable(l,false,'openSuppEdit'); _renderSuppTable(l,true,'openCoachSuppEdit');
+          if(JSON.stringify(currentUser)!==j) return _echec('le rendu modifie le dossier');
+          // LE COACH VOIT LE PLAN, PAS LE JOURNAL : ni coche, ni « Tout prendre ».
+          d.innerHTML=_renderSuppTable(l,true,'openCoachSuppEdit');
+          if(d.querySelector('.supp-coche,.supp-tout')) return _echec('le coach reçoit la coche');
+          if(d.querySelectorAll('.supp-moment').length!==3) return _echec('le coach n’a pas les panneaux');
+          // SANS CONSENTEMENT, la porte s'ouvre et rien n'est écrit.
+          currentUser.consent={health:false};
+          const avantJ=JSON.stringify(currentUser.nutrition.suppPrises||null);
+          // go est neutralisé le temps de l'appel : la porte ouvre son écran,
+          // et la suite n'a pas à changer d'écran pour autant.
+          const g0=window.go; let vu='';
+          let r;
+          try{ window.go=id=>{ vu=id; }; r=basculerPriseSupp(1,'coucher'); }finally{ window.go=g0; }
+          if(vu!=='s-consent-sante') return _echec('la porte de consentement ne s’ouvre pas : '+vu);
+          if(r!==false||JSON.stringify(currentUser.nutrition.suppPrises||null)!==avantJ) return _echec('la coche passe sans consentement');
+          return true;
+        }catch(e){ return _echec(e.message); }
+        finally{ window.saveUser=sv; currentUser=avant; try{ _santeSuite=null; }catch(e){} }})());
+
       // ── La forme retenue dans le dossier ───────────────────────────────
       ok('_libelleForme traduit une clé connue',
         _libelleForme(_suppFiche('Magnésium'),'bisglycinate')==='Bisglycinate');

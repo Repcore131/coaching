@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1379';
+const CACHE = 'repcore-v1380';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -113,6 +113,10 @@ const CORPS = ['h-face', 'h-dos', 'f-face', 'f-dos']
 CORPS.push('./img/demande-video.webp');
 // La photo de fond de la diete respectee, fiche coach (1 ko).
 CORPS.push('./img/diete-respectee.webp');
+// LA PLANCHE DES SOIXANTE VIGNETTES DE COMPLEMENTS (85 ko), une seule image.
+// Le plan de complements se consulte au moment de la prise — le matin, en
+// salle, souvent sans reseau — et sans elle chaque carte perdrait sa vignette.
+CORPS.push('./img/complements.webp');
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
