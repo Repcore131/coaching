@@ -38452,27 +38452,120 @@ async function testExercices(){
       if(_corpsNb(0)!=='0') return _echec('_corpsNb ne sait pas dire zéro');
       return true;})());
 
-    ok('PLUS DE MUSCLES SUR LA SILHOUETTE : NI ÉTIQUETTE, NI TEINTE',(()=>{
-      // Kevin, 21/09/2026 : « mets pas les muscles, mets les mensurations ».
-      // Les treize etiquettes de muscles et la teinte de volume ont quitte le
-      // cadre ; ce test garde la porte fermee.
-      for(const f of ['corpsEtiquette','corpsTeintes','corpsZones','_htmlCorpsTete'])
+    ok('PAS D’ÉTIQUETTE DE MUSCLE, MAIS LA TEINTE DE VOLUME EST REVENUE',(()=>{
+      // Kevin, 21/09/2026 : « mets pas les muscles » (les etiquettes), puis
+      // « remets les zones de differente couleur comme c'etait ce matin ».
+      for(const f of ['corpsEtiquette','_htmlCorpsTete'])
         if(typeof window[f]==='function') return _echec(f+' est revenu');
+      for(const f of ['corpsZones','corpsTeintes','_corpsPeindreCalques'])
+        if(typeof window[f]!=='function') return _echec(f+' a disparu');
       const J=864e5, t=Date.now();
-      const u={id:'M1',email:'m1@t.fr',role:'athlete',gender:'H',
-        bilans:[{date:t-90*J,'bil-chest':'106','bil-bicep-r':'38'},
-                {date:t-2*J, 'bil-chest':'107.4','bil-bicep-r':'39'}],
-        sessions:[{date:t-2*J,exercises:[{name:'Développé couché',sets:[{kg:80,reps:8,done:true}]}]}]};
-      const h=_htmlCorpsCadre(u);
-      if(h.indexOf('cc-corps-zone')>=0||h.indexOf('wo-ava-z')>=0) return _echec('une zone musculaire est peinte');
-      if(h.indexOf('Teinte')>=0) return _echec('la légende de teinte est revenue');
-      const boite=document.createElement('div'); boite.innerHTML=h;
-      const noms=[...boite.querySelectorAll('.cc-corps-em')].map(e=>e.textContent);
-      const muscles=new Set(Object.values(MUSCLES).map(m=>String(m.lib||'').toLowerCase()));
-      for(const n of noms)
-        if(muscles.has(n.toLowerCase())) return _echec('une étiquette nomme un muscle : '+n);
-      if(noms.indexOf('Poitrine')<0||noms.indexOf('Biceps D')<0)
-        return _echec('les mensurations mesurées ne sont pas étiquetées : '+noms.join(', '));
+      const serie=()=>({weight:'40',reps:'10',rir:'2',done:true});
+      const donnees=l=>Object.fromEntries(l.map(([n,k])=>[n,{sets:Array.from({length:k},serie)}]));
+      const bil=[{date:t-90*J,'bil-chest':'106','bil-bicep-r':'38'},{date:t-2*J,'bil-chest':'107.4','bil-bicep-r':'39'}];
+      const avec={id:'M1',email:'m1@t.fr',role:'athlete',gender:'H',bilans:bil,
+        sessions:[{id:'s1',date:t-J,data:donnees([['Développé couché',8],['Squat',12]])}]};
+      const sans={id:'M2',email:'m2@t.fr',role:'athlete',gender:'H',bilans:bil,sessions:[]};
+      const sv=_corpsVue;
+      try{
+        _corpsVue='face';
+        const h=_htmlCorpsCadre(avec);
+        if(h.indexOf('cc-corps-calque')<0) return _echec('aucun calque de zones pour une semaine travaillée');
+        if(h.indexOf('data-teinte')<0) return _echec('la silhouette teintée ne passe pas en gris clair');
+        if(h.indexOf('Teinte : charge de la semaine')<0) return _echec('la légende de la teinte a disparu');
+        // LA CHARGE SE LIT SANS VOIR LA COULEUR : le muscle, ses séries, sa zone.
+        const b=document.createElement('div'); b.innerHTML=h;
+        const lu=(b.querySelector('.cc-corps-lu')||{}).textContent||'';
+        if(!/Pectoraux .*séries \((sous-MEV|MEV-MAV|MAV-MRV|sur-MRV)\)/.test(lu))
+          return _echec('la charge ne se lit pas en toutes lettres : « '+lu+' »');
+        // ET LES ETIQUETTES RESTENT DES MENSURATIONS.
+        const muscles=new Set(Object.values(MUSCLES).map(m=>String(m.lib||'').toLowerCase()));
+        for(const e of b.querySelectorAll('.cc-corps-em'))
+          if(muscles.has(e.textContent.toLowerCase())) return _echec('une étiquette nomme un muscle : '+e.textContent);
+        // SANS SEMAINE TRAVAILLEE : pas de calque, pas de legende, et la
+        // silhouette garde son rouge.
+        const h2=_htmlCorpsCadre(sans);
+        if(h2.indexOf('cc-corps-calque')>=0||h2.indexOf('data-teinte')>=0) return _echec('une teinte sort sans séance');
+        if(h2.indexOf('Teinte :')>=0) return _echec('une légende de teinte sort sans séance');
+      } finally { _corpsVue=sv; }
+      return true;})());
+
+    ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
+      // Chaque silhouette porte sa carte : une image ou chaque pixel du corps
+      // vaut le rang de son muscle dans CORPS_ZONES_ORDRE, fois CORPS_ZONES_PAS.
+      if(CORPS_ZONES_ORDRE.length*CORPS_ZONES_PAS>255) return _echec('les rangs débordent un octet');
+      if(new Set(CORPS_ZONES_ORDRE).size!==CORPS_ZONES_ORDRE.length) return _echec('un muscle a deux rangs');
+      for(const vue of ['face','dos']){
+        const l=CORPS_MUSCLES_VUE[vue]||[];
+        if(l.length!==13) return _echec(vue+' : '+l.length+' muscles au lieu des 13 de ce matin');
+        for(const m of l){
+          if(CORPS_ZONES_ORDRE.indexOf(m)<0) return _echec(vue+' : '+m+' n’a pas de rang dans la carte');
+          if(!MUSCLES[m]) return _echec(m+' n’est pas un muscle connu');
+        }
+      }
+      for(const g of ['h','f']) for(const v of ['face','dos'])
+        if(CORPS_PLANCHE[g+'-'+v].zones!=='./img/corps/z-'+g+'-'+v+'.png')
+          return _echec(g+'-'+v+' n’a pas sa carte de zones');
+      // UNE VUE NE TEINTE QUE CE QU'ELLE MONTRE.
+      const u={id:'V1',email:'v1@t.fr',role:'athlete',gender:'H'};
+      if(corpsTeintes(u,'face',{FESSIERS:15}).FESSIERS) return _echec('les fessiers sont teints de face');
+      if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS) return _echec('les fessiers ne sont pas teints de dos');
+      return true;})());
+
+    ok('LA TEINTE DIT LE VOLUME, ET SEULEMENT LA OU IL Y A UN REPERE',(()=>{
+      // ⚠ LA COULEUR NE JUGE PAS UN CORPS. Elle dit MEV / MAV / MRV — une
+      //   charge de travail, la seule question de ce cadre pour laquelle il
+      //   existe des reperes publies. Le centimetre, lui, reste dans la meme
+      //   encre quoi qu'il fasse : regle R32.
+      const u={id:'V1',email:'v1@t.fr',role:'athlete',gender:'H'};
+      const rep=reperesEffectifs(u,'PECTORAUX');
+      if(!rep) return _echec('les pectoraux n’ont plus de repère de volume');
+      // LES QUATRE ZONES, UNE PAR UNE, SUR LE MEME MUSCLE.
+      const cas=[
+        [rep.mev-1,      'sous-MEV'],
+        [rep.mev,        'MEV-MAV'],
+        [rep.mavMin,     'MAV-MRV'],
+        [rep.mrv,        'MAV-MRV'],
+        [rep.mrv+1,      'sur-MRV']];
+      for(const [v,zone] of cas){
+        const t=corpsTeintes(u,'face',{PECTORAUX:v});
+        if(t.PECTORAUX!==GC_COULEURS[zone])
+          return _echec(v+' séries donnent « '+t.PECTORAUX+' » au lieu de la couleur « '+zone+' »');
+      }
+      // ⚠ LES COULEURS SONT CELLES DE LA GRILLE DE CHARGE, PAS UNE TROISIEME
+      //   PALETTE. Trois codes pour une notion finiraient par se contredire.
+      const palette=new Set(Object.values(GC_COULEURS));
+      const tout=corpsTeintes(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
+      for(const m in tout)
+        if(!palette.has(tout[m])) return _echec(m+' est peint hors palette : '+tout[m]);
+      // UN MUSCLE SANS REPERE N'EST PAS TEINTE. Les adducteurs et les
+      // abducteurs n'ont aucun MEV publie : les peindre d'une couleur
+      // quelconque aurait invente le repère qui manque.
+      for(const m of ['ABDUCTEURS','ADDUCTEURS']){
+        if(reperesEffectifs(u,m)) continue;   // un coach a pu en poser un
+        if(corpsTeintes(u,'face',{[m]:12})[m])
+          return _echec(m+' est teinté alors qu’il n’a aucun repère');
+      }
+      // ET LA VUE FILTRE : un muscle que la planche ne montre pas n'a pas de
+      // zone a peindre, et lui en donner une la poserait sur le vide.
+      if(corpsTeintes(u,'face',{FESSIERS:15}).FESSIERS)
+        return _echec('les fessiers sont teints en vue de face');
+      if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS)
+        return _echec('les fessiers ne sont pas teints en vue de dos');
+      // AUCUN VOLUME : AUCUNE EXCEPTION. Un dossier sans seance passe ici.
+      if(typeof corpsTeintes(u,'face',null)!=='object')
+        return _echec('un volume absent fait tomber le calcul');
+      // ⚠ LA ZONE ET LA COULEUR NE PEUVENT PAS DIVERGER. La zone est une
+      //   information — elle part dans l'infobulle, ou elle se lit sans voir
+      //   l'ecran — et la couleur n'est qu'une facon de la montrer. Deux
+      //   calculs separes finiraient par dire deux choses.
+      const z=corpsZones(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
+      const t2=corpsTeintes(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
+      if(Object.keys(z).join(',')!==Object.keys(t2).join(','))
+        return _echec('zones et teintes ne couvrent pas les mêmes muscles');
+      for(const m in z)
+        if(t2[m]!==GC_COULEURS[z[m]])
+          return _echec(m+' : la couleur ne correspond pas à sa zone « '+z[m]+' »');
       return true;})());
 
     ok('LA TABLE MUSCLE ↔ MENSURATION NE PROMET QUE CE QUI EXISTE',(()=>{

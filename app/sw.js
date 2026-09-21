@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1367';
+const CACHE = 'repcore-v1368';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -105,7 +105,10 @@ const MEDAILLONS = ['new_record', 'multiple_records', 'new_load', 'personal_best
 // LES QUATRE SILHOUETTES DU CADRE « EVOLUTION ELEVE » de la fiche coach
 // (140 ko) : le coach ouvre une fiche en salle aussi, et sans elles le cadre
 // sortirait sans corps, les etiquettes pointant dans le vide.
-const CORPS = ['h-face', 'h-dos', 'f-face', 'f-dos'].map(n => './img/corps/' + n + '.webp');
+// Et leurs quatre cartes de zones musculaires (37 ko), lues pour peindre la
+// charge de la semaine par muscle.
+const CORPS = ['h-face', 'h-dos', 'f-face', 'f-dos']
+  .flatMap(n => ['./img/corps/' + n + '.webp', './img/corps/z-' + n + '.png']);
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se

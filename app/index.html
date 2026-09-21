@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1367';
+window.RC_BUILD='1368';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4463,6 +4463,28 @@ html{scroll-behavior:smooth}
   transform:translate(-50%,-50%);pointer-events:none}
 .cc-corps-n{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;
   margin-top:8px;text-align:center}
+/* ── LES ZONES DE VOLUME ───────────────────────────────────────────────────
+   Teintee, la silhouette passe en GRIS CLAIR — le bonhomme blanc de ce matin :
+   son rouge d'origine se serait lu « au-dessus du MRV » sur les muscles non
+   teintes. Le calque se pose en multiply : il colore la chair et garde les
+   traits du dessin. */
+.cc-corps-planche[data-teinte] img{filter:grayscale(1) brightness(1.55) contrast(1.05)}
+.cc-corps-calque{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
+  mix-blend-mode:multiply;opacity:.82}
+/* La legende des quatre zones : la meme grammaire que celle de la grille de
+   charge, pastille puis nom de zone. */
+.cc-corps-l{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
+  gap:4px 10px;margin-top:7px;padding-top:7px;
+  border-top:1px solid rgba(255,255,255,.10)}
+.cc-corps-lt{flex:0 0 100%;text-align:center;font-size:var(--fs-2xs);
+  color:var(--text-faint);line-height:1.5}
+.cc-corps-lp{display:inline-flex;align-items:center;gap:4px;
+  font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap}
+.cc-corps-lp i{width:9px;height:9px;border-radius:2px;display:inline-block;
+  flex:0 0 auto}
+/* La charge en toutes lettres, pour un lecteur d'ecran : visuellement cachee. */
+.cc-corps-lu{position:absolute;width:1px;height:1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap}
 /* ── LES TROIS GRAPHIQUES ─────────────────────────────────────────────────
    Empiles SOUS le corps par defaut — c'est la mise en page de reference, celle
    de 375 px. Ils passent a DROITE du corps des que le bloc a la place, et pas
@@ -52036,11 +52058,42 @@ function _ligneEtat(x,info){
 //   L'image se fond dans le cadre par mix-blend-mode:lighten (voir le CSS).
 //   `w` et `h` sont ceux des fichiers, en pixels : ils fixent le rapport de la
 //   scene, sans lequel les traits de rappel pointeraient a cote.
+//   `zones` : la carte des zones musculaires de la silhouette — voir
+//   CORPS_ZONES_ORDRE.
 const CORPS_PLANCHE=Object.freeze({
-  'h-face':{src:'./img/corps/h-face.webp',w:360,h:898},
-  'h-dos' :{src:'./img/corps/h-dos.webp', w:360,h:898},
-  'f-face':{src:'./img/corps/f-face.webp',w:310,h:866},
-  'f-dos' :{src:'./img/corps/f-dos.webp', w:310,h:866}
+  'h-face':{src:'./img/corps/h-face.webp',zones:'./img/corps/z-h-face.png',w:360,h:898},
+  'h-dos' :{src:'./img/corps/h-dos.webp', zones:'./img/corps/z-h-dos.png', w:360,h:898},
+  'f-face':{src:'./img/corps/f-face.webp',zones:'./img/corps/z-f-face.png',w:310,h:866},
+  'f-dos' :{src:'./img/corps/f-dos.webp', zones:'./img/corps/z-f-dos.png', w:310,h:866}
+});
+// ── LES ZONES DE VOLUME, REPOSEES SUR LE NOUVEAU MODELE ────────────────────
+// Kevin, 21/09/2026, apres le changement de modele : « remets les zones de
+// differente couleur comme c'etait ce matin ». La teinte dit la charge de la
+// semaine par muscle — MEV / MAV / MRV —, les quatre couleurs de la grille de
+// charge ; c'est le calcul de ce matin, a l'identique (corpsZones).
+//
+// ⚠ LES CONTOURS DE CE MATIN NE SERVAIENT PLUS : WO_ZONES decoupe les planches
+//   d'avatar, pas l'image de Kevin. Chaque silhouette porte donc sa CARTE
+//   (img/corps/z-*.png) : une image en niveaux de gris ou chaque pixel du corps
+//   vaut le rang de son muscle dans CORPS_ZONES_ORDRE, multiplie par
+//   CORPS_ZONES_PAS — 0 hors muscle (tete, mains, genoux, pieds, vetements).
+//   Elle a ete calculee une fois, hors de l'application, a partir de points
+//   poses muscle par muscle sur chaque silhouette et verifies dessines.
+//
+// ⚠ LA SILHOUETTE PASSE EN GRIS CLAIR QUAND ELLE EST TEINTEE. Le dessin est
+//   rouge partout ; or le rouge, dans cette legende, dit « au-dessus du MRV ».
+//   Un muscle sans repere serait reste rouge et se serait lu comme surcharge.
+//   En gris clair — le bonhomme blanc de ce matin — il se lit « non teinte ».
+const CORPS_ZONES_ORDRE=Object.freeze(['TRAP_SUP','DELT_ANT','DELT_LAT','DELT_POST',
+  'PECTORAUX','BICEPS','TRICEPS','AVANT_BRAS','ABDOS','DORSAUX','LOMBAIRES','FESSIERS',
+  'ABDUCTEURS','ADDUCTEURS','QUADRICEPS','ISCHIOS','MOLLETS']);
+const CORPS_ZONES_PAS=12;
+// Les muscles que chaque vue montre — les treize de ce matin, par vue.
+const CORPS_MUSCLES_VUE=Object.freeze({
+  face:Object.freeze(['TRAP_SUP','DELT_ANT','DELT_LAT','PECTORAUX','BICEPS','TRICEPS',
+    'AVANT_BRAS','ABDOS','DORSAUX','ABDUCTEURS','QUADRICEPS','ADDUCTEURS','MOLLETS']),
+  dos:Object.freeze(['TRAP_SUP','DELT_LAT','DELT_POST','DORSAUX','TRICEPS','BICEPS',
+    'AVANT_BRAS','LOMBAIRES','FESSIERS','ABDUCTEURS','ISCHIOS','ADDUCTEURS','MOLLETS'])
 });
 // La part de largeur que la planche occupe sur la scene, les deux colonnes
 // d'etiquettes se partageant le reste. Une seule constante : les traits de
@@ -52307,11 +52360,39 @@ function corpsSemaineVolume(u){
   }
   return null;
 }
-// ⚠ LA TEINTE DE VOLUME A ETE RETIREE DU CADRE le 21/09/2026, avec les
-//   etiquettes de muscles : corpsZones, corpsTeintes et leur legende. Kevin ne
-//   veut plus les muscles sur la silhouette, et la teinte en etait une autre
-//   facon de les montrer. La charge de travail reste lisible a cote, dans la
-//   courbe « Séries dures par semaine ».
+/**
+ * PURE. La zone de charge de chaque muscle d'une vue, pour un volume
+ * hebdomadaire — MEV / MAV / MRV.
+ *
+ * ⚠ LA TEINTE DIT LE VOLUME D'ENTRAINEMENT, JAMAIS LE DEVELOPPEMENT. C'est la
+ *   seule question sur ce corps pour laquelle il existe des reperes. Un tour
+ *   de cuisse, lui, n'est ni bon ni mauvais, et reste dans la meme encre
+ *   (regle R32).
+ * ⚠ UN MUSCLE SANS REPERE N'EST PAS TEINTE : reperesEffectifs rend null pour
+ *   les lombaires, les abducteurs et les adducteurs. Les peindre aurait
+ *   invente le repere qui manque.
+ * @returns {Object.<string,string>} muscle → zone
+ */
+function corpsZones(u,vue,vol){
+  const out={};
+  const v=vol||{};
+  for(const m of (CORPS_MUSCLES_VUE[vue]||[])){
+    let rep=null;
+    try{ rep=reperesEffectifs(u,m); }catch(err){ rep=null; }
+    if(!rep) continue;
+    let k=null;
+    try{ k=_repereDe(Number(v[m])||0,rep); }catch(err){ k=null; }
+    if(k) out[m]=k;
+  }
+  return out;
+}
+// PURE. La meme chose, traduite dans les couleurs de la grille de charge — une
+// seule palette pour une notion.
+function corpsTeintes(u,vue,vol){
+  const z=corpsZones(u,vue,vol), out={};
+  for(const m in z){ const c=GC_COULEURS[z[m]]; if(c) out[m]=c; }
+  return out;
+}
 // « 15 septembre ». La courbe des series dures nomme la semaine ou elle
 // s'arrete : sans elle, une courbe arretee trois semaines plus tot aurait
 // l'air de decrire celle-ci.
@@ -52377,13 +52458,68 @@ function corpsVue(v){
 // « 12,3 » sans trainee de virgule flottante : les pourcentages de position
 // partent dans un attribut style, et 5.500000000000001 % y serait illisible.
 function _arr1(v){ return Math.round((Number(v)||0)*10)/10; }
-// LA SILHOUETTE, SEULE. Plus de calque de zones : Kevin ne veut plus les
-// muscles, et la teinte de volume disait des muscles.
-function _htmlCorpsPlanche(genre,vue){
+// LA SILHOUETTE ET SON CALQUE DE ZONES. Le calque est un <canvas> vide : il
+// est peint APRES l'insertion par _corpsPeindreCalques, qui lit la carte de
+// zones de la silhouette. Sans teinte, pas de calque, et la silhouette garde
+// son rouge.
+function _htmlCorpsPlanche(genre,vue,teintes){
   const pl=CORPS_PLANCHE[genre+'-'+vue]||CORPS_PLANCHE['h-face'];
-  return '<div class="cc-corps-planche" style="left:'+((100-CORPS_PART_CORPS)/2)
+  const t=teintes||{};
+  const n=Object.keys(t).length;
+  return '<div class="cc-corps-planche"'+(n?' data-teinte=""':'')+' style="left:'+((100-CORPS_PART_CORPS)/2)
     +'%;width:'+CORPS_PART_CORPS+'%">'
-    +'<img src="'+pl.src+'" alt="" aria-hidden="true" decoding="async"></div>';
+    +'<img src="'+pl.src+'" alt="" aria-hidden="true" decoding="async">'
+    +(n?'<canvas class="cc-corps-calque" width="'+pl.w+'" height="'+pl.h+'" aria-hidden="true"'
+      +' data-carte="'+pl.zones+'" data-t="'+escapeHtml(JSON.stringify(t))+'"></canvas>':'')
+    +'</div>';
+}
+// Les cartes de zones, lues une fois chacune.
+const _corpsCartes={};
+function _corpsCarte(src){
+  if(!_corpsCartes[src]) _corpsCartes[src]=new Promise((ok,ko)=>{
+    const i=new Image();
+    i.onload=()=>{
+      try{
+        const c=document.createElement('canvas');
+        c.width=i.naturalWidth; c.height=i.naturalHeight;
+        const x=c.getContext('2d',{willReadFrequently:true});
+        x.drawImage(i,0,0);
+        ok(x.getImageData(0,0,c.width,c.height));
+      }catch(e){ ko(e); }
+    };
+    i.onerror=()=>{ delete _corpsCartes[src]; ko(new Error('carte de zones illisible')); };
+    i.src=src;
+  });
+  return _corpsCartes[src];
+}
+function _corpsRvb(h){
+  const m=/^#?([0-9a-f]{6})$/i.exec(String(h||''));
+  if(!m) return null;
+  const v=parseInt(m[1],16);
+  return [(v>>16)&255,(v>>8)&255,v&255];
+}
+// PEINT LES CALQUES d'un cadre rendu : chaque pixel de la carte prend la
+// couleur de la zone de son muscle, ou reste transparent. Le multiply du CSS
+// garde le dessin dessous — un aplat opaque l'aurait efface.
+async function _corpsPeindreCalques(racine){
+  const cs=(racine||document).querySelectorAll('canvas.cc-corps-calque');
+  for(const cv of cs){
+    try{
+      const carte=await _corpsCarte(cv.getAttribute('data-carte'));
+      let t={}; try{ t=JSON.parse(cv.getAttribute('data-t')||'{}'); }catch(e){ t={}; }
+      const lut=[null].concat(CORPS_ZONES_ORDRE.map(m=>_corpsRvb(t[m])));
+      cv.width=carte.width; cv.height=carte.height;
+      const ctx=cv.getContext('2d');
+      const out=ctx.createImageData(carte.width,carte.height);
+      const s=carte.data, d=out.data;
+      for(let i=0;i<s.length;i+=4){
+        const k=Math.round(s[i]/CORPS_ZONES_PAS);
+        const c=(k>0&&k<lut.length)?lut[k]:null;
+        if(c){ d[i]=c[0]; d[i+1]=c[1]; d[i+2]=c[2]; d[i+3]=255; }
+      }
+      ctx.putImageData(out,0,0);
+    }catch(e){}
+  }
 }
 // ══ LES TROIS GRAPHIQUES DU CADRE CORPS ════════════════════════════════════
 //
@@ -52771,6 +52907,13 @@ function _htmlCorpsCadre(c){
   const eti=(bilans.length>=2)
     ?_htmlCorpsEtiquettes(u,genre,vue)
     :{etiquettes:'',traits:'',avecEcart:0};
+  // LA TEINTE SORT DES LE PREMIER BILAN — elle depend des seances, pas des
+  // bilans ; sans aucun bilan le cadre reste eteint, comme ce matin.
+  const sem=bilans.length?corpsSemaineVolume(u):null;
+  let volSem={};
+  if(sem){ try{ volSem=volumeSemaine(u,sem.cle)||{}; }catch(e){ volSem={}; } }
+  const zonesVol=sem?corpsZones(u,vue,volSem):{};
+  const teintes=sem?corpsTeintes(u,vue,volSem):{};
   // LA SCENE PORTE LE RAPPORT DE LA TOILE, elargi de 100/CORPS_PART_CORPS : la
   // silhouette occupe cette part de sa largeur, et tout — traits, etiquettes —
   // se repere ensuite en centiemes de cette scene.
@@ -52779,7 +52922,7 @@ function _htmlCorpsCadre(c){
   const scene='<div class="cc-corps-scene"'+(bilans.length?'':' data-eteint=""')
     +' style="aspect-ratio:'+_arr1(pl.w*100/CORPS_PART_CORPS)+'/'+pl.h
     +';--et-l:'+_arr1(CORPS_ETIQ_LARG)+'%">'
-    +_htmlCorpsPlanche(genre,vue)
+    +_htmlCorpsPlanche(genre,vue,teintes)
     +eti.traits
     +eti.etiquettes
     +'</div>';
@@ -52818,13 +52961,34 @@ function _htmlCorpsCadre(c){
           +(vue==='dos'?'en vue avant':'en vue arrière')+'.</div>'
         :'<div class="cc-corps-n">Aucun écart à afficher : il faut deux relevés '
           +'d’une même mensuration pour en calculer un.</div>'));
+  // ⚠ LA LEGENDE DIT CE QUE LA COULEUR DECRIT, ET CE QU'ELLE NE DECRIT PAS.
+  //   Sans elle, un quadriceps rouge a cote d'un « -1,5 cm » se lirait comme un
+  //   jugement sur la cuisse. Le rouge dit « au-dessus du MRV » — une charge
+  //   de travail, pas un corps.
+  // ET LA CHARGE SE LIT SANS VOIR LA COULEUR : la liste des muscles, leur
+  // volume et leur zone, pour un lecteur d'ecran.
+  const muscles=Object.keys(zonesVol);
+  const legende=sem
+    ?'<div class="cc-corps-l">'
+      +'<span class="cc-corps-lt">Teinte : charge de la semaine du '
+      +escapeHtml(_corpsLibSemaine(sem.cle))+'</span>'
+      +Object.keys(GC_COULEURS).map(k=>'<span class="cc-corps-lp">'
+        +'<i style="background:'+escapeHtml(GC_COULEURS[k])+'"></i>'
+        +escapeHtml(k)+'</span>').join('')
+      +'<span class="cc-corps-lt">Elle dit le volume d’entraînement, jamais le '
+      +'développement. Un muscle sans repère de volume n’est pas teinté.</span>'
+      +(muscles.length?'<span class="cc-corps-lu">Charge de la semaine : '
+        +muscles.map(m=>escapeHtml(((MUSCLES[m]||{}).lib||m)+' '+volAffiche(Number(volSem[m])||0)
+          +' séries ('+zonesVol[m]+')')).join(', ')+'.</span>':'')
+      +'</div>'
+    :'';
   // LES GRAPHIQUES NE SORTENT QUE S'ILS ONT DE QUOI TRACER. Chacun se tait
   // tout seul quand il lui manque un point ; les trois muets, la colonne
   // entiere disparait plutot que d'afficher un cadre a trois titres vides.
   const graphes=_htmlCorpsGraphes(u);
   return '<div class="cc-corps">'+tete
     +'<div class="cc-corps-grille">'
-    +'<div class="cc-corps-col">'+scene+note+'</div>'
+    +'<div class="cc-corps-col">'+scene+note+legende+'</div>'
     +(graphes?('<div class="cc-corps-col">'+graphes+'</div>'):'')
     +'</div></div>';
 }
@@ -52834,6 +52998,9 @@ function renderCorpsCoach(c){
   let h='';
   try{ h=_htmlCorpsCadre(c)||''; }catch(e){ h=''; }
   z.innerHTML=h;
+  // Les calques de zones se peignent une fois dans la page : ils lisent une
+  // image, ce qu'une chaine HTML ne sait pas faire.
+  try{ _corpsPeindreCalques(z); }catch(e){}
   return true;
 }
 // LA LIGNE D'ASYMETRIE. La phrase, puis le geste. Pas de couleur d'alarme :
