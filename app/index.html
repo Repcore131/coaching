@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1361';
+window.RC_BUILD='1362';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -16207,6 +16207,7 @@ const CLOUD={
         const _b=_us[email]?this._baseDe(email,_us[email]):null;
         if(_b&&_us[email]){
           const _clesAvant=Object.keys(_us[email]);
+          const _hAvant=_repeintUtile(email)?syncEmpreintes(_us[email])['']:null;
           _us[email]=syncFusion(_b.h,_us[email],safe);
           _us[email]._syncMaj=Number(safe.updatedAt)||0;
           DB.setLocal('users',_us);
@@ -16216,6 +16217,8 @@ const CLOUD={
             for(const k of _clesAvant) if(!(k in _us[email])) delete currentUser[k];
             DB.setLocal('session',currentUser);
           }
+          // L'envoi a ramene du nouveau de l'autre appareil : l'ecran suit.
+          if(_hAvant!==null&&_hAvant!==syncEmpreintes(_us[email])['']) _planifierRepeint(email);
         }
       }catch(e){ console.warn('[RepCore] integration apres envoi :',e); }
       this._poserBase(email,safe);
@@ -17051,6 +17054,9 @@ const CLOUD={
     // Les cles du dossier AVANT la fusion : celles qu'elle retire ont ete
     // supprimees par l'autre appareil, et currentUser doit les perdre aussi.
     const _clesAvant=Object.keys((local&&local[email])||{});
+    // L'empreinte d'avant, seulement si ce dossier est a l'ecran : voir
+    // _planifierRepeint.
+    const _hAvant=_repeintUtile(email)?syncEmpreintes((local&&local[email])||{})['']:null;
     // LA FUSION PEUT LEVER, ET SON ECHEC NE DOIT PLUS DISPARAITRE. Personne
     // n'attend le resultat de syncUser : une exception y devient un rejet non
     // capture, l'ecriture qui suit n'a pas lieu, et l'utilisateur voit un badge
@@ -17092,6 +17098,8 @@ const CLOUD={
         for(const k of _clesAvant) if(!(k in merged[email])) delete currentUser[k];
         DB.setLocal('session',currentUser); }catch(e){}
     }
+    // ET L'ECRAN SUIT, s'il montre ce dossier et que la descente l'a change.
+    try{ if(_hAvant!==null&&_hAvant!==syncEmpreintes(merged[email]||{})['']) _planifierRepeint(email); }catch(e){}
     this._noterDescente(email,true);
     return true;
   },
@@ -17113,7 +17121,10 @@ const CLOUD={
         ||currentUser.coachEmailKey?.replace(/,/g,'.');
       if(coachEmail) pulls.push(this.syncUser(coachEmail));
     }
-    await Promise.all(pulls);
+    // Rend s'il y a eu du nouveau : le retour au premier plan en a besoin pour
+    // savoir s'il doit repeindre (voir _descenteAuRetour).
+    const _r=await Promise.all(pulls);
+    return _r.some(x=>x===true);
   },
 
   // Upload vidéo vers Firebase Storage
@@ -18532,13 +18543,8 @@ window.onload=()=>{
         // d’arrière-plan qu’un jour a pu passer, et ces deux gardes sortent
         // tôt — l’un pendant 60 s, l’autre dès que le réseau manque.
         try{ _repeindreSiJourChange(); }catch(e){}
-        if(!CLOUD.ok()||!currentUser) return;
-        // Garde anti-rafale : basculer entre deux apps déclenche plusieurs
-        // évènements rapprochés, qui feraient repartir autant de requêtes.
-        const _now=Date.now();
-        if(window._derniereSyncVisible&&_now-window._derniereSyncVisible<60000) return;
-        window._derniereSyncVisible=_now;
-        CLOUD.syncRelevantUsers().catch(()=>{});
+        // La descente, ses deux gardes ET LE REPEINT : voir _descenteAuRetour.
+        _descenteAuRetour().catch(()=>{});
       });
     },220);
   };
@@ -96924,6 +96930,86 @@ function toastEcriture(ok,succes,perdu){
 // serveur ait répondu.
 // Retourne une promesse qui n'échoue jamais : les appelants « fire-and-forget »
 // peuvent l'ignorer sans provoquer de rejet non capturé.
+// ── LE RETOUR AU PREMIER PLAN : DESCENDRE, PUIS REPEINDRE ─────────────────
+// ⚠ LA DESCENTE SEULE NE SUFFISAIT PAS. Mesure au banc a deux appareils : le
+//   coach passe les calories a 2 777 ; l'athlete, sur son accueil, remet
+//   l'app au premier plan. Son dossier recoit bien 2 777 — son accueil
+//   continue d'afficher 2 000. Et la boucle de fond, qui repeint quand ELLE
+//   trouve du nouveau, n'en trouvait plus : la descente du retour l'avait
+//   deja integre. L'athlete gardait l'ancien chiffre sous les yeux jusqu'a
+//   changer d'onglet — exactement le moment ou l'on regarde l'ecran.
+//
+// LE MEME REPEINT QUE LA BOUCLE DE FOND, aux memes ecrans, avec la meme
+// retenue : rien tant qu'un champ a le focus.
+//
+// ⚠ ET PAS SEULEMENT AU RETOUR AU PREMIER PLAN. La modification du coach
+//   arrive aussi par l'INTEGRATION APRES ENVOI : l'athlete enregistre une
+//   pesee, son envoi relit le serveur et en ramene les nouvelles calories.
+//   Mesure au banc : c'est meme ce chemin-la qui les avait apportees, et il
+//   ne repeignait rien. D'ou _planifierRepeint, appele par les DEUX points
+//   d'integration (syncUser, _doPushOne) des que le dossier affiche change
+//   reellement — empreinte avant, empreinte apres.
+//
+// `emails` : les dossiers qui ont change. Le coach ne rouvre la fiche que si
+// c'est celle de l'athlete concerne.
+function _repeindreApresDescente(emails){
+  try{
+    if(!currentUser) return false;
+    const _ae=document.activeElement;
+    if(_ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(_ae.tagName)) return false;
+    const _actif=id=>{ const e=document.getElementById(id); return !!(e&&e.classList.contains('active')); };
+    if(currentUser.role==='athlete'){
+      try{ checkFeedbackNotif(); _majPastilleVideos(); checkReponseBilanNotif(); _majPastilleBilan(); }catch(e){}
+      if(_actif('s-client-home')) loadClientHome();
+    } else if(currentUser.role==='coach'){
+      if(_actif('s-coach-home')){
+        const _db=document.getElementById('ct-dashboard');
+        if(_db&&getComputedStyle(_db).display!=='none') loadCoachHome();
+      }
+      if(_actif('s-coach-client')&&currentClientId){
+        let _vu=null; try{ _vu=(getOwnedClient(currentClientId)||{}).email; }catch(e){}
+        if(!emails||(_vu&&emails.indexOf(_vu)>=0)) openClientDetail(currentClientId,true);
+      }
+    }
+    return true;
+  }catch(e){ console.warn('[RepCore] repeint apres descente :',e); return false; }
+}
+// Ce dossier est-il a l'ecran ? L'athlete : le sien. Le coach : la fiche
+// ouverte. Sinon, inutile de calculer des empreintes.
+function _repeintUtile(email){
+  try{
+    if(typeof currentUser!=='object'||!currentUser||!email) return false;
+    if(currentUser.role!=='coach') return currentUser.email===email;
+    const s=document.getElementById('s-coach-client');
+    if(!s||!s.classList.contains('active')||!currentClientId) return false;
+    return ((getOwnedClient(currentClientId)||{}).email)===email;
+  }catch(e){ return false; }
+}
+// Regroupe les repeints : une descente de plusieurs dossiers, ou une descente
+// suivie d'un envoi, ne repeint qu'une fois.
+let _repeintMinuteur=null, _repeintEmails=[];
+function _planifierRepeint(email){
+  try{
+    if(email) _repeintEmails.push(email); else _repeintEmails=null;
+    clearTimeout(_repeintMinuteur);
+    _repeintMinuteur=setTimeout(()=>{
+      const e=_repeintEmails; _repeintEmails=[]; _repeintMinuteur=null;
+      _repeindreApresDescente(e);
+    },400);
+  }catch(e){}
+}
+async function _descenteAuRetour(){
+  if(!CLOUD.ok()||!currentUser) return false;
+  // Garde anti-rafale : basculer entre deux apps déclenche plusieurs
+  // évènements rapprochés, qui feraient repartir autant de requêtes.
+  const _now=Date.now();
+  if(window._derniereSyncVisible&&_now-window._derniereSyncVisible<60000) return false;
+  window._derniereSyncVisible=_now;
+  let _change=false;
+  try{ _change=await CLOUD.syncRelevantUsers(); }catch(e){ return false; }
+  if(_change) _planifierRepeint();
+  return !!_change;
+}
 function toastSync(localOk,promesse,succes,perdu){
   return Promise.resolve(promesse).then(
     ()=>toastEcriture(localOk,succes,perdu),

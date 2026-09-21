@@ -37930,6 +37930,35 @@ async function testExercices(){
       if(r2.pwdHash!=='x') return _echec('un champ local jamais envoyé est retiré');
       return true;})());
 
+    ok('L’ÉCRAN SUIT CE QUI ARRIVE DE L’AUTRE APPAREIL, PAR LES DEUX PORTES',(()=>{
+      // MESURE AU BANC : le coach passe les calories a 2 777 ; le dossier de
+      // l'athlete les recoit, son accueil affiche toujours 2 000. Ni le
+      // retour au premier plan ni l'integration apres envoi ne repeignaient,
+      // et la boucle de fond, qui repeint quand ELLE trouve du nouveau, n'en
+      // trouvait plus.
+      for(const f of ['_repeindreApresDescente','_planifierRepeint','_repeintUtile','_descenteAuRetour'])
+        if(typeof window[f]!=='function') return _echec(f+' a disparu');
+      const sy=String(CLOUD.syncUser), env=String(CLOUD._doPushOne);
+      if(sy.indexOf('_planifierRepeint(email)')<0) return _echec('la descente ne repeint plus');
+      if(env.indexOf('_planifierRepeint(email)')<0) return _echec('l’intégration après envoi ne repeint plus');
+      // SEULEMENT SI LE DOSSIER A CHANGE : sans la comparaison d'empreintes,
+      // la descente forcee de openClientDetail repeindrait, qui rouvrirait la
+      // fiche, qui redescendrait — une boucle.
+      if(sy.indexOf('_hAvant')<0||env.indexOf('_hAvant')<0) return _echec('le repeint ne compare plus les empreintes : boucle possible');
+      if(_prodSrc().indexOf('_descenteAuRetour().catch')<0) return _echec('le retour au premier plan ne passe plus par _descenteAuRetour');
+      // LE BON DOSSIER : l'athlete, le sien ; le coach, la fiche ouverte.
+      const sauve=currentUser;
+      try{
+        currentUser={email:'rep@t.fr',role:'athlete'};
+        if(_repeintUtile('rep@t.fr')!==true) return _echec('l’athlète ne repeint pas pour son propre dossier');
+        if(_repeintUtile('autre@t.fr')!==false) return _echec('l’athlète repeint pour le dossier d’un autre');
+        currentUser={email:'coach@t.fr',role:'coach'};
+        const s=document.getElementById('s-coach-client');
+        if(!(s&&s.classList.contains('active'))&&_repeintUtile('rep@t.fr')!==false)
+          return _echec('le coach repeint une fiche qui n’est pas à l’écran');
+      } finally { currentUser=sauve; }
+      return true;})());
+
     // ══════ LE SCHEMA CORPOREL DE LA FICHE COACH ══════════════════════════
     // Les ordonnees d'un trace SVG : « M12.34 5.67 » ou « L88.00 21.50 ».
     const RE_Y_COURBE=new RegExp('[ML]\\s*[0-9.]+\\s+([0-9.]+)','g');
