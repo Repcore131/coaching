@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1353';
+window.RC_BUILD='1354';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -51679,9 +51679,38 @@ function corpsEtiquette(u,muscle){
   //   il laissait surtout croire a une valeur qu'on n'aurait pas su calculer.
   //   « pas de mesure » dit la seule chose vraie — personne n'a jamais mesure
   //   ce muscle.
-  if(!e)
-    return {muscle,lib,cle,ecart:null,valeur:'',source:'pas de mesure',periode:'',
-      titre:lib+' — Aucune mensuration ne suit ce muscle sur la période.'};
+  // ⚠ TROIS SILENCES DIFFERENTS, ET « PAS DE MESURE » LES COUVRAIT TOUS LES
+  //   TROIS. Releve a la relecture du 21/09/2026 :
+  //
+  //     · AUCUNE MENSURATION NE SUIT CE MUSCLE — trapezes, lombaires,
+  //       deltoides, abdominaux, avant-bras, adducteurs, abducteurs, dorsaux.
+  //       Personne ne les mesurera jamais avec un metre : « pas de mesure »
+  //       est exact, et c'est la phrase que le reste de l'application ecrit.
+  //     · LA MENSURATION EXISTE, MAIS UN SEUL RELEVE. L'athlete a bel et bien
+  //       mesure son biceps — une fois. Lui repondre « pas de mesure » etait
+  //       FAUX, et decourageait la seule chose a faire : en prendre une
+  //       seconde.
+  //     · LA MENSURATION EXISTE, ET AUCUN RELEVE REEL — la case n'a jamais ete
+  //       remplie, ou tout ce qui s'y trouve a ete reporte d'un bilan a
+  //       l'autre sans re-mesure.
+  //
+  //   Le nombre vient de corpsPointsMesure, qui ecarte deja les reports : une
+  //   seconde facon de compter les releves aurait fini par en compter
+  //   autrement.
+  if(!e){
+    const n=cle?corpsPointsMesure(u,cle).length:0;
+    const nomMes=(m&&m.lib)||cle;
+    if(!cle)
+      return {muscle,lib,cle,ecart:null,valeur:'',source:'pas de mesure',periode:'',
+        titre:lib+' — Aucune mensuration ne suit ce muscle sur la période.'};
+    if(n===1)
+      return {muscle,lib,cle,ecart:null,valeur:'',source:'un seul relevé',periode:'',
+        titre:lib+' — '+nomMes+' : un seul relevé au dossier. Il en faut deux '
+          +'pour un écart.'};
+    return {muscle,lib,cle,ecart:null,valeur:'',source:'aucun relevé',periode:'',
+      titre:lib+' — '+nomMes+' : aucun relevé au dossier. Les valeurs reportées '
+        +'d’un bilan à l’autre ne comptent pas comme une mesure.'};
+  }
   // _synEcart tient la mise en forme ET le seuil : « stable » sous 0,5 cm,
   // sinon « +0,8 cm » avec le vrai signe moins. Une seconde mise en forme
   // ecrite ici aurait fini par afficher « -0.8cm » a cote de « −0,8 cm ».

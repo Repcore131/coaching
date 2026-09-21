@@ -38084,6 +38084,46 @@ async function testExercices(){
       }
       return true;})());
 
+    ok('« PAS DE MESURE » NE COUVRE PLUS TROIS SITUATIONS DIFFÉRENTES',(()=>{
+      // ⚠ RELEVE A LA RELECTURE DU 21/09/2026. Une seule phrase servait pour
+      //   trois faits qui n'ont rien a voir, et deux d'entre eux etaient FAUX :
+      //
+      //     · aucune mensuration ne suit ce muscle — personne ne le mesurera
+      //       jamais avec un metre ;
+      //     · la mensuration existe et l'athlete l'a prise UNE fois — lui
+      //       repondre « pas de mesure » etait faux, et decourageait la seule
+      //       chose a faire : en prendre une seconde ;
+      //     · la mensuration existe et aucun releve REEL n'est au dossier —
+      //       jamais remplie, ou tout reporte d'un bilan a l'autre.
+      const J=864e5, t=Date.now();
+      // AUCUNE MENSURATION : les dorsaux, depuis que DORSAUX → chest a sauté.
+      const plein={id:'R0',role:'athlete',gender:'H',
+        bilans:[{date:t-92*J,'bil-chest':'106'},{date:t-6*J,'bil-chest':'107.4'}]};
+      if(corpsEtiquette(plein,'DORSAUX').source!=='pas de mesure')
+        return _echec('les dorsaux disent « '+corpsEtiquette(plein,'DORSAUX').source+' »');
+      // UN SEUL RELEVE : le biceps mesuré une fois.
+      const unSeul={id:'R1',role:'athlete',gender:'H',
+        bilans:[{date:t-92*J,'bil-chest':'106'},
+                {date:t-6*J, 'bil-chest':'107.4','bil-bicep-r':'39.0'}]};
+      const b=corpsEtiquette(unSeul,'BICEPS');
+      if(b.source!=='un seul relevé')
+        return _echec('un biceps mesuré une fois dit « '+b.source+' »');
+      if(b.titre.indexOf('Biceps droit')<0)
+        return _echec('l’infobulle ne nomme pas la mensuration concernée');
+      // AUCUN RELEVE REEL : la cuisse, reportée d'un bilan à l'autre.
+      const reporte={id:'R2',role:'athlete',gender:'H',
+        bilans:[{date:t-92*J,'bil-chest':'106'},
+                {date:t-6*J,'bil-chest':'107.4','bil-thigh-r':'61',
+                 reprises:['bil-thigh-r']}]};
+      if(corpsEtiquette(reporte,'QUADRICEPS').source!=='aucun relevé')
+        return _echec('une cuisse jamais relevée dit « '
+          +corpsEtiquette(reporte,'QUADRICEPS').source+' »');
+      // ET LES TROIS PHRASES SONT DIFFERENTES : trois faits, trois reponses.
+      const trois=new Set([corpsEtiquette(plein,'DORSAUX').source,
+        b.source, corpsEtiquette(reporte,'QUADRICEPS').source]);
+      if(trois.size!==3) return _echec('deux situations partagent la même phrase');
+      return true;})());
+
     ok('UNE MENSURATION QUI DESCEND S\u2019ÉCRIT COMME UNE QUI MONTE',(()=>{
       // ⚠ REGLE R32, ET C'EST LE CAS QUI COMPTE POUR KEVIN : son athlete est
       //   en seche, donc le signe moins est chez lui le cas NORMAL. Aucun
