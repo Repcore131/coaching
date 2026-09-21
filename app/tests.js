@@ -29397,6 +29397,61 @@ async function testExercices(){
             if(nu(f).indexOf(ecrit)>=0) return _echec('écriture détectée : '+ecrit);
         return true;})());
 
+      ok('DIÈTE RESPECTÉE : LA GRILLE REPAS × JOURS NE JUGE QUE LA JOURNÉE',(()=>{
+        // Kevin, 21/09/2026 : la maquette « Diète respectée » à quatre lignes
+        // de repas. Il n'existe pas de cible par repas : un repas noté prend
+        // la couleur de SA JOURNÉE, un repas non noté reste gris, et l'anneau
+        // compte les mêmes jours que la grille.
+        const iso=n=>{ const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()-n); return localISODate(d); };
+        const cible={kcal:2000,p:150,g:200,l:70};
+        const ent=(repas,f)=>repas.map(m=>({nom:'x',repas:m,qty:100,kcal:Math.round(2000*f/repas.length),
+          p:Math.round(150*f/repas.length),c:0,l:0}));
+        const log={};
+        log[iso(1)]={entries:ent(['matin','diner'],1)};       // tenu, deux repas
+        log[iso(2)]={entries:ent(['dejeuner'],0.5)};          // hors cible
+        log[iso(40)]={entries:ent(['collation'],1)};          // fenêtre d'avant
+        const u={id:'DRS1',email:'drs1@t.fr',role:'athlete',
+          nutrition:{dietType:'flexible',macros:{on:cible,off:cible},log:log}};
+        const sv=[_drsFenetre,_drsClient];
+        try{
+          const b=document.createElement('div'); b.innerHTML=_htmlDieteRespect(u);
+          if(!b.querySelector('.drs')) return _echec('le bloc ne sort pas');
+          const ligne=lib=>{ const r=[...b.querySelectorAll('.drs-rep')].find(x=>x.textContent===lib);
+            if(!r) return null; const out=[]; let n=r.nextElementSibling;
+            while(n&&n.classList.contains('drs-c')){ out.push(n); n=n.nextElementSibling; } return out; };
+          const pdj=ligne('Petit-déj.'), dej=ligne('Déjeuner'), din=ligne('Dîner'), col=ligne('Collation');
+          if(!pdj||!dej||!din||!col) return _echec('une ligne de repas manque');
+          if(pdj.length!==DRS_COLONNES) return _echec(pdj.length+' cases au lieu de '+DRS_COLONNES);
+          const k1=DRS_COLONNES-2, k2=DRS_COLONNES-3;   // hier, avant-hier
+          if(!pdj[k1].classList.contains('drs-c-oui')||!din[k1].classList.contains('drs-c-oui'))
+            return _echec('les repas notés d’un jour tenu ne sont pas verts');
+          // LE DEJEUNER N'A PAS ETE NOTE HIER : gris, même si la journée est tenue.
+          if(!dej[k1].classList.contains('drs-c-vide')) return _echec('un repas non noté prend une couleur');
+          if(!dej[k2].classList.contains('drs-c-non')) return _echec('le repas d’un jour hors cible n’est pas rouge');
+          if(!pdj[k2].classList.contains('drs-c-vide')) return _echec('un repas non noté d’un jour hors cible est coloré');
+          // L'ANNEAU ET LES COMPTEURS RESUMENT LA GRILLE.
+          const nb=l=>{ const x=[...b.querySelectorAll('.drs-l')].find(e=>e.textContent.indexOf(l)===0); return x?Number(x.querySelector('b').textContent):NaN; };
+          if(nb('Jours respectés')!==1||nb('Jours hors cible')!==1||nb('Jours non renseignés')!==DRS_COLONNES-2)
+            return _echec('compteurs faux : '+nb('Jours respectés')+'/'+nb('Jours hors cible')+'/'+nb('Jours non renseignés'));
+          if((b.querySelector('.drs-pct b')||{}).textContent!=='50%') return _echec('l’anneau ne dit pas 50 %');
+          // LE MENU : cinq fenêtres de trente jours, et la collation d'il y a
+          // quarante jours se retrouve dans la deuxième.
+          if(b.querySelectorAll('.drs-per option').length!==DRS_JOURS/DRS_COLONNES) return _echec('le menu n’a pas ses cinq fenêtres');
+          _drsFenetre=1;
+          const b2=document.createElement('div'); b2.innerHTML=_htmlDieteRespect(u);
+          if(!b2.querySelector('.drs-c-oui')) return _echec('la fenêtre d’avant ne montre pas son jour tenu');
+          if((b2.querySelector('.drs-pct b')||{}).textContent!=='100%') return _echec('l’anneau ne suit pas la fenêtre choisie');
+          // EN STRICTE, UNE SEULE LIGNE : la journée déclarée.
+          const s={id:'DRS2',email:'drs2@t.fr',role:'athlete',nutrition:{dietType:'strict',days:{[iso(1)]:{respected:true}}}};
+          const b3=document.createElement('div'); b3.innerHTML=_htmlDieteRespect(s);
+          const reps=[...b3.querySelectorAll('.drs-rep')].map(x=>x.textContent);
+          if(reps.join()!=='Journée') return _echec('stricte : lignes « '+reps.join(', ')+' »');
+          // RIEN A JUGER EN CINQ MOIS : pas de bloc, et non un « 0 % ».
+          if(_htmlDieteRespect({id:'DRS3',email:'drs3@t.fr',nutrition:{dietType:'flexible',log:{}}})!=='')
+            return _echec('un bloc sort sans aucun jour jugé');
+        } finally { _drsFenetre=sv[0]; _drsClient=sv[1]; }
+        return true;})());
+
       ok('Le rendu des pastilles n’écrit RIEN dans le dossier',(()=>{
         // Le verdict flexible se CALCULE à la lecture. Le stocker figerait un
         // jugement que l'ajout d'un aliment doit pouvoir corriger — et

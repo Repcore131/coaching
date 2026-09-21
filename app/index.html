@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1370';
+window.RC_BUILD='1371';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5329,68 +5329,161 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   font-size:var(--fs-md);letter-spacing:1.5px}
 @media(prefers-reduced-motion:reduce){.dtc-t{transition:none}}
 
-/* ══ LE CAMEMBERT DE DIETE RESPECTEE ════════════════════════════════
-   Kevin : « un cercle type camembert, du rouge pour le non, du vert pour le
-   oui ». L'anneau est un SVG de rayon 15,915 — circonference 100 — si bien que
-   la longueur de l'arc EST le pourcentage : aucune conversion, donc aucun
-   arrondi qui ferait mentir le dessin par rapport au nombre ecrit au centre.
-   L'ARC PART DU HAUT : stroke-dashoffset 25 recule d'un quart de tour, sans
-   quoi il commencerait a trois heures. */
-/* LE CADRE, ET DEDANS UNE RANGEE DE TROIS : l'anneau, sa legende, et le pave
-   des jours a droite. La bande a d'abord ete posee sous la carte, puis dedans
-   sur toute la largeur — une seule ligne de vingt-huit carres qui laissait la
-   moitie droite du cadre vide. Kevin, 08/09/2026 : « a droite dans le cadre,
-   tu remplis de petits carres, pas qu'une ligne ».
-   flex-wrap : sous 620 px le pave passe a la ligne plutot que d'ecraser la
-   legende, qui est ce qu'on vient lire. */
-.drs{background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);
-  padding:13px 15px;margin-bottom:14px}
-.drs-h{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-.drs-g{position:relative;flex:0 0 auto;width:78px;height:78px}
+/* ══ DIETE RESPECTEE — la maquette de Kevin, 21/09/2026 ══════════════
+   Meme famille que la demande de video : cadre a liseré rouge, photo en fond,
+   devise en marge. A gauche le titre, l'anneau et ses compteurs ; a droite la
+   periode et la grille REPAS × JOURS.
+   L'ANNEAU reste un SVG de rayon 15,915 — circonference 100 — : la longueur
+   de l'arc EST le pourcentage. stroke-dashoffset 25 le fait partir du haut.
+   Sous 880 px de bloc les deux colonnes s'empilent ; sous 560, les repas ne
+   gardent que leur icone et les jours un numero sur cinq : trente colonnes
+   tiennent alors sur un telephone sans deborder du cadre. */
+.drs{position:relative;overflow:hidden;background:#0b0b0b;border:1px solid rgba(224,32,32,.6);
+  border-radius:14px;padding:20px 22px;margin-bottom:16px;
+  box-shadow:0 0 22px rgba(224,32,32,.14),inset 0 1px 0 rgba(255,255,255,.04);
+  container-type:inline-size;container-name:drs}
+@media(max-width:620px){.drs{padding:16px 14px}}
+/* UN SEUL MASQUE, HORIZONTAL (regle de la maison, voir .dv-photo) ; le fondu
+   du bas est un degrade pose par-dessus. */
+.drs-photo{position:absolute;top:0;left:22%;width:18%;height:82%;pointer-events:none;
+  background:url(./img/diete-respectee.webp) center top/cover no-repeat;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 30%,#000 72%,transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0,#000 30%,#000 72%,transparent 100%)}
+.drs-photo::after{content:'';position:absolute;inset:0;
+  background:linear-gradient(0deg,#0b0b0b 0,rgba(11,11,11,0) 55%)}
+.drs>*:not(.drs-photo){position:relative}
+.drs-devise{position:absolute!important;top:18px;right:22px;display:flex;align-items:center;gap:16px;
+  pointer-events:none}
+.drs-devise i{display:block;width:110px;height:1.5px;background:linear-gradient(90deg,rgba(224,32,32,0),var(--red))}
+.drs-devise span{font-size:9px;letter-spacing:2.5px;line-height:1.6;color:var(--sub);
+  text-transform:uppercase;text-align:right}
+.drs-cols{display:grid;grid-template-columns:minmax(300px,34%) minmax(0,1fr);gap:22px 34px}
+.drs-gauche,.drs-droite{display:flex;flex-direction:column;gap:22px;min-width:0}
+.drs-tete{display:flex;align-items:center;gap:18px}
+.drs-ico{width:58px;height:58px;border-radius:10px;border:1px solid rgba(224,32,32,.45);
+  background:rgba(224,32,32,.08);display:flex;align-items:center;justify-content:center;
+  color:var(--red);flex:0 0 auto;box-shadow:inset 0 0 12px rgba(224,32,32,.12)}
+.drs-titre{font-family:var(--pile-titre);font-size:38px;line-height:1;letter-spacing:1px;
+  color:var(--text);text-transform:uppercase}
+.drs-titre em{font-style:normal;color:var(--red)}
+.drs-sous{font-size:var(--fs-2xs);letter-spacing:4px;color:var(--sub);text-transform:uppercase;
+  margin-top:8px;line-height:1.5}
+.drs-corps{display:flex;align-items:center;gap:26px}
+.drs-g{position:relative;flex:0 0 auto;width:176px;height:176px}
 .drs-g svg{width:100%;height:100%;display:block}
-.drs-non{stroke:#ff2d3f}
-.drs-oui{stroke:#22c55e}
-.drs-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:800;color:var(--text)}
-.drs-pct small{font-size:var(--fs-2xs);font-weight:700;margin-left:1px;color:var(--sub)}
-.drs-t{flex:1;min-width:0}
-.drs-titre{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:2px;font-weight:800;
-  text-transform:uppercase;margin-bottom:6px}
-.drs-l{display:flex;align-items:center;gap:7px;font-size:var(--fs-xs);
-  color:var(--text-strong);line-height:1.6}
-.drs-p{flex:0 0 auto;width:9px;height:9px;border-radius:2px}
-.drs-p-oui{background:#22c55e}
-.drs-p-non{background:#ff2d3f}
-.drs-sub{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:5px}
-/* LA BANDE DES 28 DERNIERS JOURS. Une grille a pas fixe et non un flex :
-   les carres doivent s'aligner en colonnes d'une ligne a l'autre, sinon la
-   bande se lit comme un nuage et plus comme un calendrier.
-   auto-fill AVEC UN MINIMUM DE 12 px : sur un ecran large les 28 tiennent sur
-   une ligne, sur un telephone ils se replient sans jamais se rogner. */
-/* ⚠ TRENTE COLONNES SUR CINQ LIGNES = CENT CINQUANTE JOURS, soit cinq mois.
-   Le maximum de 13 px par colonne borne le pave a ~450 px : etire a la largeur
-   disponible, il deviendrait un damier de tuiles et cesserait d'etre un
-   resume. Le minimum est 0 — les colonnes se resserrent d'elles-memes sur un
-   ecran etroit plutot que de deborder du cadre. */
-.drs-bande{flex:1 1 260px;display:grid;grid-template-columns:repeat(30,minmax(0,13px));
-  gap:2px;justify-content:center;align-content:center;
-  padding-left:16px;border-left:1px solid var(--surface-2);align-self:stretch}
-@media(max-width:620px){
-  /* A l'etroit le pave passe sous la legende : le filet vertical n'a plus de
-     sens, il redevient horizontal. */
-  .drs-bande{flex:1 1 100%;padding:11px 0 0;margin-top:2px;
-    border-left:none;border-top:1px solid var(--surface-2);justify-content:start}
+.drs-piste{stroke:#1e1e1e}
+.drs-arc{filter:drop-shadow(0 0 2px rgba(255,31,53,.5))}
+.drs-pct{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:6px}
+.drs-pct b{font-family:Montserrat,sans-serif;font-size:44px;font-weight:800;color:var(--text);
+  line-height:1;letter-spacing:-1px}
+.drs-pct small{font-size:22px;font-weight:700;margin-left:2px;letter-spacing:0}
+.drs-pct span{font-size:10px;letter-spacing:.4px;color:var(--text-strong);text-transform:uppercase}
+.drs-leg-g{flex:1;min-width:0}
+.drs-l{display:flex;align-items:center;gap:13px;font-size:var(--fs-md);color:var(--text);
+  line-height:1.2;padding:8px 0}
+.drs-l span{flex:1;min-width:0}
+.drs-l b{font-weight:700;font-variant-numeric:tabular-nums}
+.drs-p{flex:0 0 auto;width:20px;height:20px;border-radius:5px}
+.drs-p-oui,.drs-c-oui{background:#34c759}
+.drs-p-non,.drs-c-non{background:#ff3b47}
+.drs-p-neutre,.drs-c-neutre{background:rgba(255,255,255,.36)}
+/* LE GRIS N'EST PAS UN ECHEC ATTENUE : c'est un jour dont on ne sait rien.
+   Plus sombre que les autres et sans saturation, il ne se lit pas comme une
+   troisieme note sur la meme echelle. */
+.drs-p-vide,.drs-c-vide{background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+.drs-sub{border-top:1px solid rgba(255,255,255,.12);margin-top:10px;padding-top:14px;
+  font-size:var(--fs-sm);color:var(--sub);line-height:1.5}
+.drs-conseil{display:flex;align-items:center;gap:18px;width:100%;margin:0;text-align:left;
+  border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(255,255,255,.035);
+  padding:16px 20px;color:var(--text);font-family:inherit;font-size:inherit}
+button.drs-conseil{cursor:pointer;transition:border-color var(--t-1),background var(--t-1)}
+button.drs-conseil:hover{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.05)}
+button.drs-conseil:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.drs-conseil-ico{color:var(--red);display:flex;flex:0 0 auto;filter:drop-shadow(0 0 6px rgba(224,32,32,.6))}
+.drs-conseil-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.drs-conseil-t b{font-size:var(--fs-md);font-weight:800}
+.drs-conseil-t span{font-size:var(--fs-sm);color:var(--sub);line-height:1.45}
+.drs-conseil-fl{color:var(--text-strong);display:flex;flex:0 0 auto}
+.drs-per{align-self:flex-start;margin-left:14%;display:flex;align-items:center;gap:12px;width:min(380px,48%);
+  height:50px;padding:0 16px;border:1px solid rgba(255,255,255,.22);border-radius:10px;
+  background:rgba(0,0,0,.55);cursor:pointer;color:var(--text)}
+.drs-per:focus-within{border-color:var(--red)}
+.drs-per-ico,.drs-per-fl{display:flex;flex:0 0 auto}
+.drs-per select{appearance:none;-webkit-appearance:none;flex:1;min-width:0;background:transparent;
+  border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);
+  padding:0;cursor:pointer;outline:none;text-overflow:ellipsis}
+.drs-per option{background:#141414;color:var(--text)}
+.drs-pan{flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:20px;
+  border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(17,17,17,.86);
+  padding:22px 22px 18px}
+.drs-grille{display:grid;grid-template-columns:auto repeat(var(--drs-n,30),minmax(0,1fr));
+  column-gap:6px;row-gap:20px;align-items:center}
+.drs-n{text-align:center;font-size:var(--fs-xs);color:var(--sub);font-variant-numeric:tabular-nums;
+  margin-bottom:-6px;white-space:nowrap}
+.drs-rep{display:flex;align-items:center;gap:12px;padding-right:12px;font-size:var(--fs-xs);
+  font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text);white-space:nowrap}
+.drs-rep svg{flex:0 0 auto}
+.drs-c{display:block;width:100%;max-width:32px;aspect-ratio:1;justify-self:center;
+  border-radius:18%;border:none;padding:0;margin:0;font:inherit}
+.drs-c.drs-c-oui{box-shadow:0 0 8px rgba(52,199,89,.22)}
+.drs-c.drs-c-non{box-shadow:0 0 8px rgba(255,59,71,.22)}
+button.drs-c{cursor:pointer}
+button.drs-c:hover{filter:brightness(1.18)}
+button.drs-c:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.drs-pied{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 26px;flex-wrap:wrap}
+.drs-note{margin:0;flex:1 1 260px;max-width:440px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5}
+.drs-leg{display:flex;flex-wrap:wrap;gap:10px 26px;font-size:var(--fs-sm);color:var(--text-strong)}
+.drs-leg span{display:inline-flex;align-items:center;gap:9px}
+.drs-leg i{display:block;width:18px;height:18px;border-radius:4px}
+/* ENTRE 880 ET 1300 px DE BLOC, la colonne de gauche n'a plus la place de
+   la maquette : l'anneau raccourcit et les libelles tiennent sur une ligne. */
+@container drs (max-width:1300px){
+  .drs-sous{letter-spacing:2.5px}
+  .drs-corps{gap:18px}
+  .drs-g{width:134px;height:134px}
+  .drs-pct b{font-size:34px}
+  .drs-pct small{font-size:17px}
+  .drs-pct span{font-size:7.5px;letter-spacing:0}
+  .drs-l{font-size:var(--fs-sm);gap:10px;white-space:nowrap}
+  .drs-p{width:16px;height:16px;border-radius:4px}
+  .drs-grille{column-gap:4px;row-gap:16px}
+  .drs-n{font-size:10px;letter-spacing:-.3px}
+  .drs-devise i{width:56px}
 }
-/* PAS DE min-height : a trente colonnes sur un telephone, une hauteur
-   plancher rendrait les carres rectangulaires. aspect-ratio suffit, et les
-   carres restent carres a toutes les largeurs. */
-.drs-c{display:block;aspect-ratio:1;border-radius:1.5px}
-.drs-c-oui{background:#22c55e}
-.drs-c-non{background:#ff2d3f}
-/* LE GRIS N'EST PAS UN ECHEC ATTENUE : c'est un jour dont on ne sait rien. Il
-   est plus sombre que les deux autres et sans saturation — il ne doit pas se
-   lire comme une troisieme note sur la meme echelle. */
-.drs-c-vide{background:rgba(255,255,255,.09);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+@container drs (max-width:880px){
+  .drs-cols{grid-template-columns:minmax(0,1fr)}
+  .drs-photo{left:auto;right:0;width:42%;height:46%;opacity:.5}
+  .drs-cols{row-gap:18px}
+  .drs-per{width:auto;margin-left:0;align-self:stretch}
+}
+@container drs (max-width:560px){
+  .drs-devise{display:none}
+  .drs-tete{gap:14px}
+  .drs-ico{width:50px;height:50px}
+  .drs-titre{font-size:30px}
+  .drs-sous{letter-spacing:1.5px}
+  .drs-corps{gap:14px}
+  .drs-g{width:108px;height:108px}
+  .drs-pct{gap:3px}
+  .drs-pct b{font-size:27px}
+  .drs-pct small{font-size:14px}
+  .drs-pct span{font-size:6.5px}
+  .drs-l{font-size:var(--fs-xs);gap:8px;padding:5px 0;white-space:normal}
+  .drs-p{width:14px;height:14px;border-radius:4px}
+  .drs-sub{font-size:var(--fs-xs);margin-top:6px;padding-top:9px}
+  .drs-conseil{padding:13px 14px;gap:13px}
+  .drs-pan{padding:14px 10px 12px;gap:14px}
+  .drs-grille{column-gap:2px;row-gap:10px}
+  .drs-rep{padding-right:6px}
+  .drs-rep span{display:none}
+  .drs-n{font-size:9px;margin-bottom:-4px}
+  .drs-n:not(.drs-n-rep){visibility:hidden}
+  .drs-c{border-radius:2px}
+  .drs-c.drs-c-oui,.drs-c.drs-c-non{box-shadow:none}
+  .drs-leg{gap:8px 16px;font-size:var(--fs-xs)}
+  .drs-leg i{width:13px;height:13px}
+}
 
 /* ══ LE JOURNAL EN CALENDRIER ═══════════════════════════════════════
    Kevin : « comme le calendrier de Garmin, je clique sur un jour et j'ai ses
@@ -84168,53 +84261,198 @@ function joursDieteRecents(c,n){
   }
   return out;
 }
+// ══ DIETE RESPECTEE — LA MAQUETTE DE KEVIN, 21/09/2026 ═══════════════════
+//
+// Kevin, capture a l'appui : « fais de meme, remplace cette partie par le
+// second design ». L'anneau, sa legende et la bande de cent cinquante carres
+// deviennent un tableau de bord : titre, anneau, trois compteurs, et une
+// grille REPAS × JOURS sur trente jours.
+//
+// ⚠ LE VERDICT RESTE CELUI DE LA JOURNEE. Il n'existe pas de cible par repas :
+// les cibles sont journalieres (kcal et proteines a ±10 %) et jourDieteTenu
+// juge le TOTAL du jour. Chaque repas NOTE prend donc la couleur de sa
+// journee, et la grille le dit en toutes lettres sous elle. Colorer un repas
+// selon un verdict propre — « le petit-dejeuner etait hors cible » —
+// affirmerait une mesure qu'on n'a pas faite. Ce que la grille ajoute au
+// pourcentage est ailleurs : QUELS repas manquent, et quand.
+//
+// EN DIETE STRICTE, UNE SEULE LIGNE, « Journée » : l'athlete declare sa
+// journee entiere, pas repas par repas, et quatre lignes identiques feraient
+// croire a quatre reponses.
+//
+// LE MENU « 30 DERNIERS JOURS » EST UN VRAI CHOIX : les cinq fenetres de
+// trente jours des cent cinquante que la bande montrait jusqu'ici — Kevin
+// tenait a voir cinq mois d'un coup (08/09/2026), on ne les perd pas. L'anneau
+// et les compteurs suivent la fenetre choisie : un pourcentage qui ne resume
+// pas la grille d'a cote la contredirait.
+const _DRS_SVG=(p,t,plein)=>'<svg viewBox="0 0 24 24" width="'+t+'" height="'+t+'" aria-hidden="true"'
+  +(plein?' fill="currentColor"':' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"')
+  +'>'+p+'</svg>';
+const _DRS_P_COUVERTS='<path d="M4 2h1.4v5.5h1.3V2h1.4v5.5h1.3V2h1.4v6.8c0 1.6-1.1 2.9-2.6 3.2V22H6.6V12C5.1 11.7 4 10.4 4 8.8z"/>'
+  +'<path d="M14.5 2c3.1.4 5 3.6 5 8.5v3H17V22h-2.5z"/>';
+const _DRS_REPAS=Object.freeze([
+  {k:'matin',lib:'Petit-déj.',ico:_DRS_SVG('<path d="M4 10h12v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M3 21.5h15"/><path d="M8 3.5c-.8 1 .8 2 0 3M12 3.5c-.8 1 .8 2 0 3"/>',20)},
+  {k:'dejeuner',lib:'Déjeuner',ico:_DRS_SVG(_DRS_P_COUVERTS,20,true)},
+  {k:'collation',lib:'Collation',ico:_DRS_SVG('<path d="M8.2 2h7.6v2.6H8.2z"/><path d="M7 5.8h10l-1.3 15a1.3 1.3 0 0 1-1.3 1.2H9.6a1.3 1.3 0 0 1-1.3-1.2z"/>',20,true)},
+  {k:'diner',lib:'Dîner',ico:_DRS_SVG('<circle cx="12" cy="6" r="1.5"/><path d="M3.5 17a8.5 8.5 0 0 1 17 0z"/><rect x="2" y="18.2" width="20" height="2.2" rx="1.1"/>',20,true)},
+]);
+// Les repas rares n'ont leur ligne que s'ils sont notes dans la fenetre : une
+// ligne toujours grise ne dirait rien, mais un repas note sans ligne ferait
+// disparaitre sa journee de la grille.
+const _DRS_REPAS_RARES=Object.freeze([
+  {k:'coucher',lib:'Coucher',ico:_DRS_SVG('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',20,true)},
+  {k:'_autre',lib:'Sans repas',ico:_DRS_SVG('<circle cx="12" cy="12" r="4"/>',20,true)},
+]);
+const _DRS_JOURNEE={k:'_jour',lib:'Journée',
+  ico:_DRS_SVG('<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="m9 14.5 2 2 4-4"/>',20)};
+let _drsFenetre=0;      // 0 = les trente derniers jours, 1 = les trente d'avant…
+let _drsClient=null;    // le dossier pour lequel _drsFenetre a ete choisie
+function drsFenetre(n){
+  const nb=Math.floor(DRS_JOURS/DRS_COLONNES);
+  _drsFenetre=Math.max(0,Math.min(nb-1,parseInt(n,10)||0));
+  try{ const c=getOwnedClient(currentClientId); if(c) renderDieteRespectCoach(c); }catch(e){}
+  return _drsFenetre;
+}
+// Toucher une case notee ouvre ce jour dans le journal alimentaire, plus bas :
+// c'est le « je clique sur un jour et j'ai ses donnees » du calendrier.
+function drsOuvrirJour(iso){
+  _ccdCalMois=_calMois(iso); _ccdCalJour=iso;
+  try{ const c=getOwnedClient(currentClientId); if(c) renderJournalNutriCoach(c); }catch(e){}
+  drsVoirJournal();
+  return iso;
+}
+function drsVoirJournal(){
+  const s=document.getElementById('ccd-cal-sect');
+  if(!s||s.style.display==='none') return false;
+  try{ s.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){ try{ s.scrollIntoView(); }catch(e2){} }
+  return true;
+}
 function _htmlDieteRespect(c){
-  let di=null; try{ di=_tauxDieteRespectee(c); }catch(e){ di=null; }
-  // '' et non « 0 % » : aucun jour enregistre n'est pas la meme chose que
-  // zero jour tenu.
-  if(!di) return '';
+  const nut=(c&&c.nutrition)||{};
+  let flexible=true; try{ flexible=typeDiete(nut)==='flexible'; }catch(e){ flexible=true; }
+  let tous=[]; try{ tous=joursDieteRecents(c,DRS_JOURS); }catch(e){ tous=[]; }
+  // '' et non « 0 % » : aucun jour juge en cinq mois n'est pas la meme chose
+  // que zero jour tenu.
+  if(!tous.some(j=>j.v!==null)) return '';
+  const nbF=Math.floor(DRS_JOURS/DRS_COLONNES);
+  const fen=w=>tous.slice(DRS_JOURS-(w+1)*DRS_COLONNES,DRS_JOURS-w*DRS_COLONNES);
+  // UN AUTRE DOSSIER : on repart des trente derniers jours — ou de la fenetre
+  // la plus recente qui porte un jour juge, pour ne pas ouvrir sur un vide.
+  const cid=(c&&(c.id||c.email))||null;
+  if(cid!==_drsClient){
+    _drsClient=cid; _drsFenetre=0;
+    while(_drsFenetre<nbF-1&&!fen(_drsFenetre).some(j=>j.v!==null)) _drsFenetre++;
+  }
+  const w=Math.max(0,Math.min(nbF-1,_drsFenetre|0));
+  const jours=fen(w);
+  const log=nut.log||{};
+  const entreesDe=iso=>((log[iso]||{}).entries)||[];
+  const rep=jours.map(j=>{
+    const s=new Set();
+    for(const e of entreesDe(j.iso)) s.add(FJ_REPAS_LIB[(e||{}).repas]?e.repas:'_autre');
+    return s;
+  });
+  let tenus=0,hors=0,sansCible=0,rien=0;
+  jours.forEach(j=>{
+    if(j.v===true) tenus++;
+    else if(j.v===false) hors++;
+    else if(flexible&&entreesDe(j.iso).length) sansCible++;
+    else rien++;
+  });
+  const juges=tenus+hors;
+  // LES TRENTE DERNIERS JOURS PASSENT PAR _tauxDieteRespectee, comme avant :
+  // c'est lui qui porte la tendance du sous-titre. Il compte les memes jours
+  // par le meme jourDieteTenu — s'il divergeait, on garderait le compte de la
+  // grille, que l'anneau resume.
+  let di=null;
+  if(w===0){ try{ di=_tauxDieteRespectee(c); }catch(e){ di=null; } }
+  if(di&&(di.tenus!==tenus||di.juges!==juges)) di=null;
+  if(!di&&juges) di={pct:Math.round(tenus*100/juges),tenus:tenus,juges:juges,
+    flexible:flexible,jours:DRS_COLONNES,tendance:null};
+  const pct=di?Math.max(0,Math.min(100,Number(di.pct)||0)):0;
   let sub=''; try{ sub=_sousTitreDiete(di); }catch(e){ sub=''; }
-  const pct=Math.max(0,Math.min(100,Number(di.pct)||0));
-  const rates=di.juges-di.tenus;
-  // ⚠ LA BANDE EST DANS LA CARTE, PAS SOUS ELLE. Kevin, 08/09/2026 : « mets
-  // les carres dans le rectangle, pas dessous ». Posee dehors, elle flottait
-  // sur le fond de l'onglet et se lisait comme un bloc de plus — alors qu'elle
-  // ne dit rien toute seule : c'est le DETAIL du pourcentage juste au-dessus.
-  // .drs-h porte la rangee anneau + legende ; .drs, elle, redevient le cadre.
-  return '<div class="drs"><div class="drs-h">'
-    +'<div class="drs-g">'
-    +'<svg viewBox="0 0 40 40" role="img" aria-label="'+pct+' % des jours tenus">'
-    +'<circle class="drs-non" cx="20" cy="20" r="15.915" fill="none" stroke-width="5"/>'
-    +'<circle class="drs-oui" cx="20" cy="20" r="15.915" fill="none" stroke-width="5"'
-    +' stroke-dasharray="'+pct+' '+(100-pct)+'" stroke-dashoffset="25"'
-    +(pct>0&&pct<100?' stroke-linecap="butt"':'')+'/>'
+  const jj=iso=>iso.slice(8,10)+'/'+iso.slice(5,7);
+  const libF=(l,k)=>k?('Du '+jj(l[0].iso)+' au '+jj(l[l.length-1].iso)):(DRS_COLONNES+' derniers jours');
+  const lignes=flexible
+    ?_DRS_REPAS.concat(_DRS_REPAS_RARES.filter(r=>rep.some(s=>s.has(r.k))))
+    :[_DRS_JOURNEE];
+  const LIB={oui:'journée respectée',non:'journée hors cible',neutre:'noté, sans cible ce jour-là',vide:'non renseigné'};
+  const etat=(j,i,k)=>{
+    if(!flexible) return j.v===true?'oui':(j.v===false?'non':'vide');
+    if(!rep[i].has(k)) return 'vide';
+    return j.v===true?'oui':(j.v===false?'non':'neutre');
+  };
+  let neutres=false;
+  const quand=iso=>{ const d=new Date(iso+'T12:00:00');
+    return isNaN(d.getTime())?iso:d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'}); };
+  const cases=r=>jours.map((j,i)=>{
+    const et=etat(j,i,r.k);
+    if(et==='neutre') neutres=true;
+    const titre=escapeHtml(r.lib+' · '+quand(j.iso)+' : '+LIB[et]);
+    // Une case notee s'ouvre dans le journal ; les autres ne menent a rien.
+    return (flexible&&entreesDe(j.iso).length)
+      ?'<button type="button" class="drs-c drs-c-'+et+'" title="'+titre+'" aria-label="'+titre+'"'
+        +' onclick="drsOuvrirJour('+JSON.stringify(j.iso).replace(/"/g,'&quot;')+')"></button>'
+      :'<i class="drs-c drs-c-'+et+'" title="'+titre+'"></i>';
+  }).join('');
+  const grille=lignes.map(r=>'<span class="drs-rep" title="'+escapeHtml(r.lib)+'">'+r.ico
+    +'<span>'+escapeHtml(r.lib)+'</span></span>'+cases(r)).join('');
+  const ligne=(cl,lib,n)=>'<div class="drs-l"><i class="drs-p drs-p-'+cl+'"></i><span>'+lib+'</span><b>'+n+'</b></div>';
+  return '<div class="drs">'
+    +'<div class="drs-photo" aria-hidden="true"></div>'
+    +'<div class="drs-devise" aria-hidden="true"><i></i><span>Discipline<br>Aujourd’hui<br>Résultats<br>Demain</span></div>'
+    +'<div class="drs-cols"><div class="drs-gauche">'
+    +'<div class="drs-tete"><span class="drs-ico">'+_DRS_SVG(_DRS_P_COUVERTS,32,true)+'</span>'
+      +'<div><div class="drs-titre">Diète <em>respectée</em></div>'
+      +'<div class="drs-sous">Suivi nutritionnel sur '+DRS_COLONNES+' jours</div></div></div>'
+    +'<div class="drs-corps"><div class="drs-g">'
+    // L'ANNEAU DE LA MAQUETTE : un arc rouge sur une piste sombre. Toujours un
+    // cercle de circonference 100 : la longueur de l'arc EST le pourcentage.
+    +'<svg viewBox="0 0 40 40" role="img" aria-label="'+(juges?pct+' % des jours notés respectés':'aucun jour noté')+'">'
+    +'<defs><linearGradient id="drs-deg" x1="0" y1="0" x2="1" y2="1">'
+      +'<stop offset="0" stop-color="#ff6b74"/><stop offset=".5" stop-color="#ff1f35"/><stop offset="1" stop-color="#c3001b"/>'
+    +'</linearGradient></defs>'
+    +'<circle class="drs-piste" cx="20" cy="20" r="15.915" fill="none" stroke-width="3.4"/>'
+    +(pct>0?'<circle class="drs-arc" cx="20" cy="20" r="15.915" fill="none" stroke-width="3.4" stroke="url(#drs-deg)"'
+      +' stroke-dasharray="'+pct+' '+(100-pct)+'" stroke-dashoffset="25"/>':'')
     +'</svg>'
-    +'<span class="drs-pct">'+pct+'<small>%</small></span>'
-    +'</div>'
-    +'<div class="drs-t">'
-    +'<div class="drs-titre">Diète respectée</div>'
-    +'<div class="drs-l"><span class="drs-p drs-p-oui"></span>'
-      +di.tenus+' jour'+(di.tenus>1?'s':'')+' tenu'+(di.tenus>1?'s':'')+'</div>'
-    +'<div class="drs-l"><span class="drs-p drs-p-non"></span>'
-      +rates+' jour'+(rates>1?'s':'')+' hors cible</div>'
-    +(sub?'<div class="drs-sub">'+escapeHtml(sub)+'</div>':'')
-    +'</div>'
-    // ══ LA BANDE DES VINGT-HUIT DERNIERS JOURS ═══════════════════════════
-    // Kevin, 08/09/2026 : « rajoute plein de carres a cote representant les
-    // jours — vert diete respectee, rouge pas respectee, gris pas rempli ».
-    // C'est ce que l'anneau ne peut pas dire : la REGULARITE. 60 % sur cinq
-    // jours declares et 60 % sur vingt-huit ne se lisent pas pareil, et le
-    // pourcentage seul ne distingue pas un athlete qui derape d'un athlete qui
-    // ne remplit rien. Le gris n'est pas un echec — c'est un jour dont on ne
-    // sait rien, et c'est une information differente.
-    +'<div class="drs-bande" role="img" aria-label="'
-      +'Les '+DRS_JOURS+' derniers jours, du plus ancien au plus recent">'
-    +joursDieteRecents(c,DRS_JOURS).map(function(j){
-      const et=j.v===true?'oui':(j.v===false?'non':'vide');
-      const lib=j.v===true?'tenu':(j.v===false?'hors cible':'non rempli');
-      return '<i class="drs-c drs-c-'+et+'" title="'+escapeHtml(j.iso)+' : '+lib+'"></i>';
-    }).join('')
-    +'</div></div>';
+    +'<div class="drs-pct"><b>'+(juges?pct+'<small>%</small>':'—')+'</b><span>Jours respectés</span></div></div>'
+    +'<div class="drs-leg-g">'
+      +ligne('oui','Jours respectés',tenus)
+      +ligne('non','Jours hors cible',hors)
+      +ligne('vide','Jours non renseignés',rien)
+      +(sansCible?ligne('neutre','Jours notés, sans cible',sansCible):'')
+      +(sub?'<div class="drs-sub">'+escapeHtml(sub)+'</div>':'')
+    +'</div></div>'
+    // « Reste régulier ! » : en flexible, la fleche descend au journal.
+    +(flexible
+      ?'<button type="button" class="drs-conseil" onclick="drsVoirJournal()" title="Voir le journal alimentaire">'
+      :'<div class="drs-conseil">')
+    +'<span class="drs-conseil-ico">'+_DRS_SVG('<circle cx="12" cy="12" r="7.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/><path d="M12 9.2 14.8 12 12 14.8 9.2 12z" fill="currentColor" stroke="none"/>',30)+'</span>'
+    +'<span class="drs-conseil-t"><b>Reste régulier !</b><span>Plus tu es constant, plus les résultats suivent.</span></span>'
+    +(flexible?'<span class="drs-conseil-fl">'+_DRS_SVG('<path d="m9 6 6 6-6 6"/>',22)+'</span></button>':'</div>')
+    +'</div><div class="drs-droite">'
+    +'<label class="drs-per"><span class="drs-per-ico">'+_DRS_SVG('<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="M8 13.5h3M8 16.5h6"/>',24)+'</span>'
+      +'<select onchange="drsFenetre(this.value)" aria-label="Période affichée">'
+      +Array.from({length:nbF},(_,k)=>'<option value="'+k+'"'+(k===w?' selected':'')+'>'+libF(fen(k),k)+'</option>').join('')
+      +'</select><span class="drs-per-fl">'+_DV_ICO_FLECHE+'</span></label>'
+    +'<div class="drs-pan">'
+    +'<div class="drs-grille" role="group" aria-label="'+(flexible?'Repas':'Journées')+' des '+DRS_COLONNES+' jours, du plus ancien au plus récent"'
+      +' style="--drs-n:'+DRS_COLONNES+'">'
+    +'<span class="drs-coin"></span>'
+    +jours.map((j,i)=>'<span class="drs-n'+(i%5===0?' drs-n-rep':'')+'">'+parseInt(j.iso.slice(8,10),10)+'</span>').join('')
+    +grille+'</div>'
+    +'<div class="drs-pied"><p class="drs-note">'
+      +(flexible
+        ?'Chaque repas noté prend la couleur de sa journée : le verdict porte sur le total du jour. Touche une case pour ouvrir ce jour dans le journal.'
+        :'Diète stricte : l’athlète déclare sa journée entière, pas repas par repas.')
+    +'</p><div class="drs-leg">'
+      +'<span><i class="drs-c-oui"></i>Respecté</span>'
+      +'<span><i class="drs-c-non"></i>Hors cible</span>'
+      +(neutres?'<span><i class="drs-c-neutre"></i>Noté, sans cible</span>':'')
+      +'<span><i class="drs-c-vide"></i>Non renseigné</span>'
+    +'</div></div>'
+    +'</div></div></div></div>';
 }
 function renderDieteRespectCoach(c){
   const z=document.getElementById('ccd-diete-respect');
