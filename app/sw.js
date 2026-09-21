@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1369';
+const CACHE = 'repcore-v1370';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -109,6 +109,8 @@ const MEDAILLONS = ['new_record', 'multiple_records', 'new_load', 'personal_best
 // charge de la semaine par muscle.
 const CORPS = ['h-face', 'h-dos', 'f-face', 'f-dos']
   .flatMap(n => ['./img/corps/' + n + '.webp', './img/corps/z-' + n + '.png']);
+// La photo de fond de la demande de video, fiche coach (4 ko).
+CORPS.push('./img/demande-video.webp');
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se

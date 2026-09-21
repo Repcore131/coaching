@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1369';
+window.RC_BUILD='1370';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4104,6 +4104,83 @@ html{scroll-behavior:smooth}
 .cvv-d{font-size:var(--fs-2xs);color:var(--sub);margin-top:3px;line-height:1.4}
 .cvv-att-l{color:var(--orange);font-weight:700}
 .cvv-b{margin:0;flex:0 0 auto;min-height:40px}
+/* ══ LA DEMANDE DE VIDEO — la maquette de Kevin, 21/09/2026 ════════════════
+   Cadre a liseré rouge, photo d'athlete en fond a droite, devise en marge.
+   Sous 720 px de bloc (telephone), la devise et le slogan se retirent, le
+   champ et le bouton s'empilent : la photo reste, plus discrete. */
+.dv{position:relative;overflow:hidden;background:#0b0b0b;border:1px solid rgba(224,32,32,.6);
+  border-radius:14px;padding:18px 20px 14px;margin-bottom:16px;
+  box-shadow:0 0 22px rgba(224,32,32,.14),inset 0 1px 0 rgba(255,255,255,.04);
+  container-type:inline-size;container-name:dv}
+/* UN SEUL MASQUE, HORIZONTAL : la regle de la maison interdit de composer deux
+   masques (la composition degenere selon le moteur et la couche reparait
+   entiere). Le fondu du bas est un degrade pose PAR-DESSUS, dans le noir du
+   cadre — ce qui revient au meme sur un fond uni. */
+.dv-photo{position:absolute;top:0;right:9%;width:52%;height:100%;pointer-events:none;
+  background:url(./img/demande-video.webp) right center/cover no-repeat;opacity:.72;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 38%,#000 82%,transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0,#000 38%,#000 82%,transparent 100%)}
+.dv-photo::after{content:'';position:absolute;inset:0;
+  background:linear-gradient(0deg,#0b0b0b 0,rgba(11,11,11,0) 45%)}
+.dv>*:not(.dv-photo){position:relative}
+.dv-devise{position:absolute!important;top:16px;right:20px;display:flex;flex-direction:column;
+  align-items:flex-end;font-family:var(--pile-titre);font-size:20px;letter-spacing:1px;line-height:1.22;
+  color:rgba(255,255,255,.62);text-transform:uppercase}
+.dv-devise span:last-child{color:rgba(255,255,255,.34)}
+.dv-tete{display:flex;align-items:center;gap:18px;padding-right:130px}
+.dv-ico{width:54px;height:54px;border-radius:10px;border:1px solid rgba(224,32,32,.45);
+  background:rgba(224,32,32,.08);display:flex;align-items:center;justify-content:center;
+  color:var(--red);flex:0 0 auto;box-shadow:inset 0 0 12px rgba(224,32,32,.12)}
+.dv-titres{min-width:0}
+.dv-titre{font-family:var(--pile-titre);font-size:36px;line-height:1;letter-spacing:1px;
+  color:var(--text);text-transform:uppercase}
+.dv-titre em{font-style:normal;color:var(--red)}
+.dv-sous{font-size:var(--fs-2xs);letter-spacing:3.5px;color:var(--sub);text-transform:uppercase;
+  margin-top:7px;line-height:1.5}
+.dv-txt{font-size:var(--fs-sm);color:var(--text);line-height:1.65;margin:14px 0;max-width:600px}
+.dv-cours{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:-2px 0 14px}
+.dv-cours-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--orange);
+  text-transform:uppercase;margin-right:4px}
+.dv-form{display:flex;gap:16px;align-items:stretch}
+.dv-champ{flex:1;min-width:0;display:flex;align-items:center;gap:14px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.24);border-radius:10px;background:rgba(0,0,0,.5);
+  padding:8px 16px;min-height:64px}
+.dv-champ:focus-within{border-color:var(--red)}
+.dv-champ-ico{color:var(--sub);display:flex;padding-right:14px;border-right:1px solid rgba(255,255,255,.12)}
+.dv-champ-c{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.dv-champ-l{font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub);text-transform:uppercase}
+.dv-champ select{appearance:none;-webkit-appearance:none;background:transparent;border:none;
+  color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);padding:0;width:100%;
+  cursor:pointer;outline:none;text-overflow:ellipsis}
+.dv-champ select option{background:#141414;color:var(--text)}
+.dv-champ-fl{color:var(--text);display:flex;flex:0 0 auto}
+.dv-btn{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:14px;
+  min-width:250px;padding:0 26px;min-height:64px;border-radius:10px;border:1.5px solid var(--red);
+  background:linear-gradient(180deg,rgba(224,32,32,.30),rgba(110,0,0,.38));color:var(--text);
+  font-family:var(--pile-titre);font-size:23px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;
+  box-shadow:0 0 18px rgba(224,32,32,.32),inset 0 1px 0 rgba(255,255,255,.08);
+  transition:background var(--t-1),box-shadow var(--t-1)}
+.dv-btn svg{color:var(--red)}
+.dv-btn:hover{background:linear-gradient(180deg,rgba(224,32,32,.42),rgba(130,0,0,.48));
+  box-shadow:0 0 24px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.1)}
+.dv-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.dv-pied{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:var(--fs-xs);
+  color:var(--sub);line-height:1.5}
+.dv-info{display:flex;color:var(--sub);flex:0 0 auto}
+.dv-pied-t{flex:1;min-width:0}
+.dv-slogan{display:flex;align-items:center;gap:12px;font-size:var(--fs-2xs);letter-spacing:4px;
+  color:var(--sub);text-transform:uppercase;white-space:nowrap}
+.dv-slogan b{color:var(--red);font-weight:400}
+.dv-slogan i{display:inline-block;width:90px;height:1.5px;background:linear-gradient(90deg,var(--red),rgba(224,32,32,.35))}
+@container dv (max-width:720px){
+  .dv-devise,.dv-slogan,.dv-br{display:none}
+  .dv-tete{padding-right:0;gap:14px}
+  .dv-titre{font-size:28px}
+  .dv-sous{letter-spacing:2px}
+  .dv-form{flex-direction:column}
+  .dv-btn{min-width:0;width:100%}
+  .dv-photo{right:0;width:75%;opacity:.45}
+}
 /* ══ « CE QUI BLOQUE » : UNE CARTE, DES LIGNES DEROULANTES ═════
    <details>/<summary> et non un basculement en JS : l'etat d'ouverture est
    porte par le DOM, le clavier et le lecteur d'ecran le connaissent sans
@@ -34508,31 +34585,65 @@ function _vignetteVideoHtml(url){
       +'playsinline webkit-playsinline tabindex="-1" aria-hidden="true"></video>';
   return vide;
 }
+// ⚠ L'HABILLAGE EST CELUI DE LA MAQUETTE DE KEVIN (21/09/2026) : « stylise
+//   l'image 1 exactement comme la 2 ». Cadre a liseré rouge, photo d'athlete
+//   en fond, titre « DEMANDE DE VIDEO », champ « Exercice concerne » a
+//   icone, bouton « Demander la video », devise en marge.
+//   La photo est celle de la maquette, decoupee hors de ses elements
+//   d'interface (img/demande-video.webp).
+//
+// ⚠ UNE PHRASE DE LA MAQUETTE N'EST PAS REPRISE, ET C'EST VOULU : « ton
+//   athlete recevra une notification ». Aucune notification n'est envoyee —
+//   un test l'exige, et le promettre ferait attendre au coach un signal qui
+//   ne vient jamais. Le pied dit ce qui se passe vraiment.
+//
+// Les demandes en cours restent la, entre le texte et le champ : sans elles,
+// le coach ne pourrait plus en retirer une.
+const _DV_ICO_LECTURE='<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor" stroke="none"/></svg>';
+const _DV_ICO_ENVOI='<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2.5 10.8 13.2"/><path d="M21.5 2.5 14.6 21.3l-3.8-8.1-8.1-3.8z"/></svg>';
+const _DV_ICO_INFO='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v5.5"/><circle cx="12" cy="7.6" r=".9" fill="currentColor" stroke="none"/></svg>';
+const _DV_ICO_FLECHE='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 function _htmlDemandesVideo(c){
   const prog=exercicesDuProgramme(c);
   const dem=((c&&c.demandesVideo)||[]).filter(Boolean);
   if(!prog.length&&!dem.length) return '';
-  // MEME CARTE QUE LA LISTE JUSTE EN DESSOUS. Les deux blocs parlaient de la
-  // meme chose — les videos de cet athlete — avec deux habillages differents :
-  // un cadre gris a intertitre pour la demande, des cartes blanches pour la
-  // liste. Ils partagent desormais .cvv-tete et le meme cadre.
-  return `<div class="cvv-bloc">
-    <div class="cvv-tete"><span>Demander une vidéo</span>${dem.length?`<span class="badge badge-orange">${dem.length} en cours</span>`:''}</div>
-    ${dem.length?`<div class="cvv-dem">
+  const cours=dem.length?`<div class="dv-cours">
+      <span class="dv-cours-t">${dem.length} en cours</span>
       ${dem.map((d,i)=>`<span class="cvv-puce">
         <span class="cvv-puce-n">${escapeHtml(d.exercice)}</span>
         <span class="cvv-puce-d">${new Date(d.date).toLocaleDateString('fr-FR')}</span>
         <button class="cvd-annul" data-i="${i}" title="Retirer la demande" aria-label="Retirer la demande de ${escapeHtml(d.exercice)}">×</button>
       </span>`).join('')}
-    </div>`:''}
-    ${prog.length?`<div class="cvv-form">
-      <select id="cvd-select" aria-label="Exercice à filmer">
-        ${prog.map((n,i)=>`<option value="${i}">${escapeHtml(n)}</option>`).join('')}
-      </select>
-      <button class="btn btn-outline btn-sm" onclick="demanderVideo()">Demander</button>
+    </div>`:'';
+  return `<div class="dv">
+    <div class="dv-photo" aria-hidden="true"></div>
+    <div class="dv-devise" aria-hidden="true"><span>Discipline</span><span>Aujourd’hui</span><span>Résultats</span><span>Demain</span></div>
+    <div class="dv-tete">
+      <span class="dv-ico" aria-hidden="true">${_DV_ICO_LECTURE}</span>
+      <div class="dv-titres"><div class="dv-titre">Demande <em>de vidéo</em></div>
+        <div class="dv-sous">Demande à ton athlète de t’envoyer une vidéo</div></div>
     </div>
-    <div class="cvv-note">La demande apparaît dans sa séance et s'efface d'elle-même quand il dépose la vidéo. Aucune notification n'est envoyée.</div>`
-    :`<div class="cvv-note">Aucun exercice dans ses créneaux actifs : il n'y a rien à demander.</div>`}
+    <p class="dv-txt">Sélectionne l’exercice pour lequel tu souhaites recevoir une vidéo de réalisation.<br class="dv-br">
+      Ton athlète pourra te l’envoyer directement depuis l’application.</p>
+    ${cours}
+    ${prog.length?`<div class="dv-form">
+      <label class="dv-champ">
+        <span class="dv-champ-ico" aria-hidden="true">${icon('haltere',26)}</span>
+        <span class="dv-champ-c"><span class="dv-champ-l">Exercice concerné</span>
+          <select id="cvd-select" aria-label="Exercice à filmer">
+            <option value="" disabled selected>Sélectionner un exercice</option>
+            ${prog.map((n,i)=>`<option value="${i}">${escapeHtml(n)}</option>`).join('')}
+          </select></span>
+        <span class="dv-champ-fl" aria-hidden="true">${_DV_ICO_FLECHE}</span>
+      </label>
+      <button type="button" class="dv-btn" onclick="demanderVideo()">${_DV_ICO_ENVOI}<span>Demander la vidéo</span></button>
+    </div>
+    <div class="dv-pied">
+      <span class="dv-info" aria-hidden="true">${_DV_ICO_INFO}</span>
+      <span class="dv-pied-t">Ton athlète la verra dans sa séance et pourra t’envoyer sa vidéo directement depuis l’application. Aucune notification n’est envoyée.</span>
+      <span class="dv-slogan" aria-hidden="true">Progresser <b>•</b> Un jour à la fois <i></i></span>
+    </div>`
+    :`<div class="dv-pied"><span class="dv-pied-t">Aucun exercice dans ses créneaux actifs : il n'y a rien à demander.</span></div>`}
   </div>`;
 }
 function demanderVideo(){
@@ -34541,6 +34652,11 @@ function demanderVideo(){
   if(!c) return;
   if(!c.email){ toast('Cet élève n\'a pas encore de dossier synchronisé','var(--orange)'); return; }
   const sel=document.getElementById('cvd-select');
+  // LE CHAMP S'OUVRE SUR « Selectionner un exercice », comme la maquette : sans
+  // choix, on le dit — la suite aurait repondu « pas dans son programme ».
+  if(sel&&sel.value===''&&sel.selectedIndex<=0&&sel.options[0]&&sel.options[0].value===''){
+    toast('Choisis d’abord un exercice','var(--orange)'); return;
+  }
   const prog=exercicesDuProgramme(c);
   const nom=prog[parseInt(sel&&sel.value,10)];
   // Une demande hors programme est REFUSÉE : l'athlète ne verrait jamais la
