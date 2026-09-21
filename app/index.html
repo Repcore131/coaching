@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1376';
+window.RC_BUILD='1377';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5351,6 +5351,9 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .vcx-devise{flex:0 0 auto;display:flex;align-items:center;gap:12px;pointer-events:none}
 .vcx-devise i{display:block;width:44px;height:1.5px;background:linear-gradient(90deg,rgba(224,32,32,0),var(--red))}
 .vcx-devise span{font-size:9px;letter-spacing:2px;color:var(--sub);text-transform:uppercase;white-space:nowrap}
+/* Le logo du coach, separe de la devise par un filet, comme sur la maquette. */
+.vcx-logo{flex:0 0 auto;display:block;height:48px;width:auto;max-width:160px;object-fit:contain;
+  padding-left:16px;border-left:1px solid rgba(255,255,255,.14)}
 .vcx-grille{display:grid;grid-template-columns:minmax(0,30fr) minmax(0,32fr) minmax(0,34fr);gap:16px;align-items:stretch}
 .vcx-g,.vcx-d,.rcx{display:flex;flex-direction:column;gap:12px;min-width:0}
 .vcx-carte{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
@@ -5481,6 +5484,11 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   .vcx-pied{position:sticky;bottom:0;z-index:3;box-shadow:0 -12px 24px rgba(0,0,0,.55)}
 }
 @container vcx (max-width:1000px){ .vcx-devise{display:none} }
+@container vcx (max-width:480px){
+  .vcx-tete{gap:12px}
+  .vcx .vcx-titre{font-size:26px}
+  .vcx .vcx-logo{height:30px;max-width:72px;padding-left:10px}
+}
 /* SOUS 860 px DE FEUILLE : UNE COLONNE. Les colonnes s'effacent (contents) et
    leurs cartes se rangent dans l'ordre du geste. */
 @container vcx (max-width:860px){
@@ -5497,6 +5505,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   .vcx-cadre{min-height:min(58vh,440px)}
   .vcx-titre{font-size:30px}
   .vcx-retour{width:44px;height:44px}
+  .vcx-logo{height:38px;max-width:96px;padding-left:12px}
   .vcx-pied{flex-direction:column;align-items:stretch}
   .vcx-save{flex:0 0 auto;width:100%}
 }
@@ -91352,6 +91361,11 @@ function _vcCorpsHtml(email,videoId){
   const nSeg=fichier?segmentsVideo(v).length:0;
   const quand=new Date(v.date).toLocaleDateString('fr-FR');
   const S=_VCX_SVG, P=_VCX_P;
+  // LE LOGO DU COACH, a droite de la devise. Kevin : « oui mets le logo ». C'est
+  // celui de SON profil (le champ Logo, qui signe deja les images de seance et
+  // la boutique) : chaque coach voit le sien, et rien ne s'affiche sans logo.
+  // La signature n'y va pas — elle est faite pour le bas d'une vitrine.
+  const logo=String((currentUser||{}).logo||'').trim();
   return `<div class="vcx">
     <header class="vcx-tete">
       <button type="button" class="vcx-retour" onclick="closeModal()" title="Annuler" aria-label="Annuler et fermer">${S(P.retour,22)}</button>
@@ -91363,6 +91377,7 @@ function _vcCorpsHtml(email,videoId){
         <p class="vcx-sous">${escapeHtml(v.name)} · ${quand}${_vcReste?` · <span id="vc-reste" style="display:inline-block">${_vcReste} restante${_vcReste>1?'s':''}</span>`:''}</p>
       </div>
       <div class="vcx-devise" aria-hidden="true"><i></i><span>Discipline, travail et résultats</span></div>
+      ${logo?`<img class="vcx-logo" src="${escapeHtml(logo)}" alt="" onerror="this.remove()">`:''}
     </header>
     <div class="vcx-grille">
       <div class="vcx-g">

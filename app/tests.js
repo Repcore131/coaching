@@ -22563,6 +22563,12 @@ async function testExercices(){
           if(/<h3 class="vcx-ct"/.test(corps)) return _echec('un titre de carte est un h3');
           // UN LIEN YOUTUBE : ni lecteur, ni Motion Lab, ni format.
           if(/rc-barre|Motion Lab|vcx-fmt|data-rc-hors/.test(lien)) return _echec('un lien YouTube reçoit les commandes d’un fichier');
+          // LE LOGO : celui du profil du coach, et rien sans logo.
+          if(z.querySelector('.vcx-logo')) return _echec('un logo s’affiche pour un coach qui n’en a pas');
+          currentUser={id:'VXC',email:'vxc@t.fr',role:'coach',logo:'data:image/png;base64,iVBORw0KGgo='};
+          const z2=document.createElement('div'); z2.innerHTML=_vcCorpsHtml('vxa@t.fr','vv1');
+          const lg=z2.querySelector('.vcx-tete img.vcx-logo');
+          if(!lg||lg.getAttribute('src')!=='data:image/png;base64,iVBORw0KGgo=') return _echec('le logo du profil ne s’affiche pas');
         } finally { currentUser=sU; DB.set('users',JSON.parse(svUsers)); [window._vcEmail,window._vcVideoId,window._tsAnnotations]=svVc; }
         return true;})());
 
