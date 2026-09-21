@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1372';
+window.RC_BUILD='1373';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5332,12 +5332,11 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 /* ══ DIETE RESPECTEE — la maquette de Kevin, 21/09/2026 ══════════════
    Meme famille que la demande de video : cadre a liseré rouge, photo en fond,
    devise en marge. A gauche le titre, l'anneau et ses compteurs ; a droite la
-   periode et la grille REPAS × JOURS.
+   periode et le calendrier des trente jours.
    L'ANNEAU reste un SVG de rayon 15,915 — circonference 100 — : la longueur
    de l'arc EST le pourcentage. stroke-dashoffset 25 le fait partir du haut.
-   Sous 880 px de bloc les deux colonnes s'empilent ; sous 560, les repas ne
-   gardent que leur icone et les jours un numero sur cinq : trente colonnes
-   tiennent alors sur un telephone sans deborder du cadre. */
+   Sous 880 px de bloc les deux colonnes s'empilent ; sous 560, les cases du
+   calendrier se resserrent et le nom du mois s'efface. */
 .drs{position:relative;overflow:hidden;background:#0b0b0b;border:1px solid rgba(224,32,32,.6);
   border-radius:14px;padding:20px 22px;margin-bottom:16px;
   box-shadow:0 0 22px rgba(224,32,32,.14),inset 0 1px 0 rgba(255,255,255,.04);
@@ -5417,20 +5416,27 @@ button.drs-conseil:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .drs-pan{flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:20px;
   border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(17,17,17,.86);
   padding:22px 22px 18px}
-.drs-grille{display:grid;grid-template-columns:auto repeat(var(--drs-n,30),minmax(0,1fr));
-  column-gap:6px;row-gap:20px;align-items:center}
-.drs-n{text-align:center;font-size:var(--fs-xs);color:var(--sub);font-variant-numeric:tabular-nums;
-  margin-bottom:-6px;white-space:nowrap}
-.drs-rep{display:flex;align-items:center;gap:12px;padding-right:12px;font-size:var(--fs-xs);
-  font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text);white-space:nowrap}
-.drs-rep svg{flex:0 0 auto}
-.drs-c{display:block;width:100%;max-width:32px;aspect-ratio:1;justify-self:center;
-  border-radius:18%;border:none;padding:0;margin:0;font:inherit}
-.drs-c.drs-c-oui{box-shadow:0 0 8px rgba(52,199,89,.22)}
-.drs-c.drs-c-non{box-shadow:0 0 8px rgba(255,59,71,.22)}
-button.drs-c{cursor:pointer}
-button.drs-c:hover{filter:brightness(1.18)}
-button.drs-c:focus-visible{outline:2px solid #fff;outline-offset:1px}
+/* LE CALENDRIER DES TRENTE JOURS. Kevin, 21/09/2026 : « pas les repas mais
+   les jours en entier ». Une case par JOURNEE, sept colonnes, lundi en
+   premier. Le numero du jour est ecrit dans la case, en sombre sur le vert et
+   le rouge : le blanc s'y lisait mal. */
+.drs-cal{display:flex;flex-direction:column;gap:8px}
+.drs-sem,.drs-grille{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.drs-sem span{text-align:center;font-size:var(--fs-2xs);font-weight:700;letter-spacing:1px;color:var(--sub)}
+.drs-j{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;height:38px;
+  border-radius:7px;border:none;padding:0 4px;margin:0;overflow:hidden;white-space:nowrap;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-sm);color:var(--sub);font-variant-numeric:tabular-nums}
+.drs-j b{font-weight:700}
+.drs-j small{font-size:9px;font-weight:600;opacity:.8}
+.drs-j.drs-c-oui,.drs-j.drs-c-non,.drs-j.drs-c-neutre{color:#0b0b0b}
+.drs-j.drs-c-oui{box-shadow:0 0 10px rgba(52,199,89,.22)}
+.drs-j.drs-c-non{box-shadow:0 0 10px rgba(255,59,71,.22)}
+.drs-j-hors{visibility:hidden}
+/* AUJOURD'HUI, cerne : la journee n'est pas finie, sa case peut encore changer. */
+.drs-j-auj{outline:1.5px solid rgba(255,255,255,.8);outline-offset:2px}
+button.drs-j{cursor:pointer}
+button.drs-j:hover{filter:brightness(1.15)}
+button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .drs-pied{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 26px;flex-wrap:wrap}
 .drs-note{margin:0;flex:1 1 260px;max-width:440px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5}
 .drs-leg{display:flex;flex-wrap:wrap;gap:10px 26px;font-size:var(--fs-sm);color:var(--text-strong)}
@@ -5447,8 +5453,8 @@ button.drs-c:focus-visible{outline:2px solid #fff;outline-offset:1px}
   .drs-pct span{font-size:7.5px;letter-spacing:0}
   .drs-l{font-size:var(--fs-sm);gap:10px;white-space:nowrap}
   .drs-p{width:16px;height:16px;border-radius:4px}
-  .drs-grille{column-gap:4px;row-gap:16px}
-  .drs-n{font-size:10px;letter-spacing:-.3px}
+  .drs-sem,.drs-grille{gap:6px}
+  .drs-j{height:34px}
   .drs-devise i{width:56px}
 }
 @container drs (max-width:880px){
@@ -5474,13 +5480,11 @@ button.drs-c:focus-visible{outline:2px solid #fff;outline-offset:1px}
   .drs-sub{font-size:var(--fs-xs);margin-top:6px;padding-top:9px}
   .drs-conseil{padding:13px 14px;gap:13px}
   .drs-pan{padding:14px 10px 12px;gap:14px}
-  .drs-grille{column-gap:2px;row-gap:10px}
-  .drs-rep{padding-right:6px}
-  .drs-rep span{display:none}
-  .drs-n{font-size:9px;margin-bottom:-4px}
-  .drs-n:not(.drs-n-rep){visibility:hidden}
-  .drs-c{border-radius:2px}
-  .drs-c.drs-c-oui,.drs-c.drs-c-non{box-shadow:none}
+  .drs-cal{gap:6px}
+  .drs-sem,.drs-grille{gap:5px}
+  .drs-j{height:32px;border-radius:5px;font-size:var(--fs-xs)}
+  .drs-j small{display:none}
+  .drs-j.drs-c-oui,.drs-j.drs-c-non{box-shadow:none}
   .drs-leg{gap:8px 16px;font-size:var(--fs-xs)}
   .drs-leg i{width:13px;height:13px}
 }
@@ -84265,46 +84269,29 @@ function joursDieteRecents(c,n){
 //
 // Kevin, capture a l'appui : « fais de meme, remplace cette partie par le
 // second design ». L'anneau, sa legende et la bande de cent cinquante carres
-// deviennent un tableau de bord : titre, anneau, trois compteurs, et une
-// grille REPAS × JOURS sur trente jours.
+// deviennent un tableau de bord : titre, anneau, trois compteurs, et le
+// calendrier des trente jours.
 //
-// ⚠ LE VERDICT RESTE CELUI DE LA JOURNEE. Il n'existe pas de cible par repas :
-// les cibles sont journalieres (kcal et proteines a ±10 %) et jourDieteTenu
-// juge le TOTAL du jour. Chaque repas NOTE prend donc la couleur de sa
-// journee, et la grille le dit en toutes lettres sous elle. Colorer un repas
-// selon un verdict propre — « le petit-dejeuner etait hors cible » —
-// affirmerait une mesure qu'on n'a pas faite. Ce que la grille ajoute au
-// pourcentage est ailleurs : QUELS repas manquent, et quand.
+// ⚠ UNE CASE PAR JOURNEE, PAS PAR REPAS. La maquette avait quatre lignes de
+// repas ; Kevin, le meme jour : « pas les repas mais les jours en entier ou la
+// diete est respectee ». C'est aussi la seule lecture juste : les cibles sont
+// journalieres (kcal et proteines a ±10 %) et jourDieteTenu juge le TOTAL du
+// jour — il n'existe pas de verdict par repas.
 //
-// EN DIETE STRICTE, UNE SEULE LIGNE, « Journée » : l'athlete declare sa
-// journee entiere, pas repas par repas, et quatre lignes identiques feraient
-// croire a quatre reponses.
+// SEPT COLONNES, LUNDI EN PREMIER, comme le journal plus bas : un trou du
+// vendredi au dimanche se lit comme une colonne. Diete flexible et stricte
+// partagent la meme grille, puisque les deux jugent la journee.
 //
 // LE MENU « 30 DERNIERS JOURS » EST UN VRAI CHOIX : les cinq fenetres de
 // trente jours des cent cinquante que la bande montrait jusqu'ici — Kevin
 // tenait a voir cinq mois d'un coup (08/09/2026), on ne les perd pas. L'anneau
 // et les compteurs suivent la fenetre choisie : un pourcentage qui ne resume
-// pas la grille d'a cote la contredirait.
+// pas le calendrier d'a cote le contredirait.
 const _DRS_SVG=(p,t,plein)=>'<svg viewBox="0 0 24 24" width="'+t+'" height="'+t+'" aria-hidden="true"'
   +(plein?' fill="currentColor"':' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"')
   +'>'+p+'</svg>';
 const _DRS_P_COUVERTS='<path d="M4 2h1.4v5.5h1.3V2h1.4v5.5h1.3V2h1.4v6.8c0 1.6-1.1 2.9-2.6 3.2V22H6.6V12C5.1 11.7 4 10.4 4 8.8z"/>'
   +'<path d="M14.5 2c3.1.4 5 3.6 5 8.5v3H17V22h-2.5z"/>';
-const _DRS_REPAS=Object.freeze([
-  {k:'matin',lib:'Petit-déj.',ico:_DRS_SVG('<path d="M4 10h12v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M3 21.5h15"/><path d="M8 3.5c-.8 1 .8 2 0 3M12 3.5c-.8 1 .8 2 0 3"/>',20)},
-  {k:'dejeuner',lib:'Déjeuner',ico:_DRS_SVG(_DRS_P_COUVERTS,20,true)},
-  {k:'collation',lib:'Collation',ico:_DRS_SVG('<path d="M8.2 2h7.6v2.6H8.2z"/><path d="M7 5.8h10l-1.3 15a1.3 1.3 0 0 1-1.3 1.2H9.6a1.3 1.3 0 0 1-1.3-1.2z"/>',20,true)},
-  {k:'diner',lib:'Dîner',ico:_DRS_SVG('<circle cx="12" cy="6" r="1.5"/><path d="M3.5 17a8.5 8.5 0 0 1 17 0z"/><rect x="2" y="18.2" width="20" height="2.2" rx="1.1"/>',20,true)},
-]);
-// Les repas rares n'ont leur ligne que s'ils sont notes dans la fenetre : une
-// ligne toujours grise ne dirait rien, mais un repas note sans ligne ferait
-// disparaitre sa journee de la grille.
-const _DRS_REPAS_RARES=Object.freeze([
-  {k:'coucher',lib:'Coucher',ico:_DRS_SVG('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',20,true)},
-  {k:'_autre',lib:'Sans repas',ico:_DRS_SVG('<circle cx="12" cy="12" r="4"/>',20,true)},
-]);
-const _DRS_JOURNEE={k:'_jour',lib:'Journée',
-  ico:_DRS_SVG('<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="m9 14.5 2 2 4-4"/>',20)};
 let _drsFenetre=0;      // 0 = les trente derniers jours, 1 = les trente d'avant…
 let _drsClient=null;    // le dossier pour lequel _drsFenetre a ete choisie
 function drsFenetre(n){
@@ -84313,8 +84300,8 @@ function drsFenetre(n){
   try{ const c=getOwnedClient(currentClientId); if(c) renderDieteRespectCoach(c); }catch(e){}
   return _drsFenetre;
 }
-// Toucher une case notee ouvre ce jour dans le journal alimentaire, plus bas :
-// c'est le « je clique sur un jour et j'ai ses donnees » du calendrier.
+// Toucher un jour note l'ouvre dans le journal alimentaire, plus bas : c'est
+// le « je clique sur un jour et j'ai ses donnees » du calendrier.
 function drsOuvrirJour(iso){
   _ccdCalMois=_calMois(iso); _ccdCalJour=iso;
   try{ const c=getOwnedClient(currentClientId); if(c) renderJournalNutriCoach(c); }catch(e){}
@@ -84346,24 +84333,19 @@ function _htmlDieteRespect(c){
   const w=Math.max(0,Math.min(nbF-1,_drsFenetre|0));
   const jours=fen(w);
   const log=nut.log||{};
-  const entreesDe=iso=>((log[iso]||{}).entries)||[];
-  const rep=jours.map(j=>{
-    const s=new Set();
-    for(const e of entreesDe(j.iso)) s.add(FJ_REPAS_LIB[(e||{}).repas]?e.repas:'_autre');
-    return s;
-  });
+  const note=iso=>flexible&&((((log[iso]||{}).entries)||[]).length>0);
   let tenus=0,hors=0,sansCible=0,rien=0;
   jours.forEach(j=>{
     if(j.v===true) tenus++;
     else if(j.v===false) hors++;
-    else if(flexible&&entreesDe(j.iso).length) sansCible++;
+    else if(note(j.iso)) sansCible++;
     else rien++;
   });
   const juges=tenus+hors;
   // LES TRENTE DERNIERS JOURS PASSENT PAR _tauxDieteRespectee, comme avant :
   // c'est lui qui porte la tendance du sous-titre. Il compte les memes jours
-  // par le meme jourDieteTenu — s'il divergeait, on garderait le compte de la
-  // grille, que l'anneau resume.
+  // par le meme jourDieteTenu — s'il divergeait, on garderait le compte du
+  // calendrier, que l'anneau resume.
   let di=null;
   if(w===0){ try{ di=_tauxDieteRespectee(c); }catch(e){ di=null; } }
   if(di&&(di.tenus!==tenus||di.juges!==juges)) di=null;
@@ -84373,30 +84355,30 @@ function _htmlDieteRespect(c){
   let sub=''; try{ sub=_sousTitreDiete(di); }catch(e){ sub=''; }
   const jj=iso=>iso.slice(8,10)+'/'+iso.slice(5,7);
   const libF=(l,k)=>k?('Du '+jj(l[0].iso)+' au '+jj(l[l.length-1].iso)):(DRS_COLONNES+' derniers jours');
-  const lignes=flexible
-    ?_DRS_REPAS.concat(_DRS_REPAS_RARES.filter(r=>rep.some(s=>s.has(r.k))))
-    :[_DRS_JOURNEE];
-  const LIB={oui:'journée respectée',non:'journée hors cible',neutre:'noté, sans cible ce jour-là',vide:'non renseigné'};
-  const etat=(j,i,k)=>{
-    if(!flexible) return j.v===true?'oui':(j.v===false?'non':'vide');
-    if(!rep[i].has(k)) return 'vide';
-    return j.v===true?'oui':(j.v===false?'non':'neutre');
-  };
+  const LIB={oui:'diète respectée',non:'hors cible',neutre:'noté, sans cible ce jour-là',vide:'non renseigné'};
+  const date=iso=>new Date(iso+'T12:00:00');
+  // La colonne du premier jour : lundi = 0. getDay() rend 0 pour dimanche.
+  const dec=(date(jours[0].iso).getDay()+6)%7;
   let neutres=false;
-  const quand=iso=>{ const d=new Date(iso+'T12:00:00');
-    return isNaN(d.getTime())?iso:d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'}); };
-  const cases=r=>jours.map((j,i)=>{
-    const et=etat(j,i,r.k);
+  const cases=jours.map((j,i)=>{
+    const et=j.v===true?'oui':(j.v===false?'non':(note(j.iso)?'neutre':'vide'));
     if(et==='neutre') neutres=true;
-    const titre=escapeHtml(r.lib+' · '+quand(j.iso)+' : '+LIB[et]);
-    // Une case notee s'ouvre dans le journal ; les autres ne menent a rien.
-    return (flexible&&entreesDe(j.iso).length)
-      ?'<button type="button" class="drs-c drs-c-'+et+'" title="'+titre+'" aria-label="'+titre+'"'
-        +' onclick="drsOuvrirJour('+JSON.stringify(j.iso).replace(/"/g,'&quot;')+')"></button>'
-      :'<i class="drs-c drs-c-'+et+'" title="'+titre+'"></i>';
+    const d=date(j.iso);
+    const quand=isNaN(d.getTime())?j.iso:d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+    const titre=escapeHtml(quand+' : '+LIB[et]);
+    // Le mois s'ecrit sur le premier jour affiche et sur chaque 1er : sans lui,
+    // « 3 » ne dit pas de quel mois.
+    const n=parseInt(j.iso.slice(8,10),10);
+    const mois=(i===0||n===1)&&!isNaN(d.getTime())
+      ?'<small>'+escapeHtml(d.toLocaleDateString('fr-FR',{month:'short'}))+'</small>':'';
+    const cl='drs-j drs-c-'+et+(w===0&&i===jours.length-1?' drs-j-auj':'');
+    const dedans='<b>'+n+'</b>'+mois;
+    // Un jour note s'ouvre dans le journal ; les autres ne menent a rien.
+    return note(j.iso)
+      ?'<button type="button" class="'+cl+'" title="'+titre+'" aria-label="'+titre+'"'
+        +' onclick="drsOuvrirJour('+JSON.stringify(j.iso).replace(/"/g,'&quot;')+')">'+dedans+'</button>'
+      :'<span class="'+cl+'" title="'+titre+'" role="img" aria-label="'+titre+'">'+dedans+'</span>';
   }).join('');
-  const grille=lignes.map(r=>'<span class="drs-rep" title="'+escapeHtml(r.lib)+'">'+r.ico
-    +'<span>'+escapeHtml(r.lib)+'</span></span>'+cases(r)).join('');
   const ligne=(cl,lib,n)=>'<div class="drs-l"><i class="drs-p drs-p-'+cl+'"></i><span>'+lib+'</span><b>'+n+'</b></div>';
   return '<div class="drs">'
     +'<div class="drs-photo" aria-hidden="true"></div>'
@@ -84409,8 +84391,8 @@ function _htmlDieteRespect(c){
     // L'ANNEAU DE LA MAQUETTE, MAIS L'ARC EN VERT. Kevin, 21/09/2026 : « mets
     // l'arc en vert ». Rouge, il mesurait les jours RESPECTES a cote d'un
     // carre rouge qui dit « hors cible » : le vert est celui des jours tenus
-    // dans la legende et dans la grille. Toujours un cercle de circonference
-    // 100 : la longueur de l'arc EST le pourcentage.
+    // dans la legende et dans le calendrier. Toujours un cercle de
+    // circonference 100 : la longueur de l'arc EST le pourcentage.
     +'<svg viewBox="0 0 40 40" role="img" aria-label="'+(juges?pct+' % des jours notés respectés':'aucun jour noté')+'">'
     +'<defs><linearGradient id="drs-deg" x1="0" y1="0" x2="1" y2="1">'
       +'<stop offset="0" stop-color="#7ee39a"/><stop offset=".5" stop-color="#34c759"/><stop offset="1" stop-color="#1e9a41"/>'
@@ -84440,15 +84422,15 @@ function _htmlDieteRespect(c){
       +Array.from({length:nbF},(_,k)=>'<option value="'+k+'"'+(k===w?' selected':'')+'>'+libF(fen(k),k)+'</option>').join('')
       +'</select><span class="drs-per-fl">'+_DV_ICO_FLECHE+'</span></label>'
     +'<div class="drs-pan">'
-    +'<div class="drs-grille" role="group" aria-label="'+(flexible?'Repas':'Journées')+' des '+DRS_COLONNES+' jours, du plus ancien au plus récent"'
-      +' style="--drs-n:'+DRS_COLONNES+'">'
-    +'<span class="drs-coin"></span>'
-    +jours.map((j,i)=>'<span class="drs-n'+(i%5===0?' drs-n-rep':'')+'">'+parseInt(j.iso.slice(8,10),10)+'</span>').join('')
-    +grille+'</div>'
+    +'<div class="drs-cal">'
+    +'<div class="drs-sem" aria-hidden="true">'+['L','M','M','J','V','S','D'].map(x=>'<span>'+x+'</span>').join('')+'</div>'
+    +'<div class="drs-grille" role="group" aria-label="Les '+DRS_COLONNES+' jours, du plus ancien au plus récent">'
+    +'<span class="drs-j drs-j-hors" aria-hidden="true"></span>'.repeat(dec)
+    +cases+'</div></div>'
     +'<div class="drs-pied"><p class="drs-note">'
       +(flexible
-        ?'Chaque repas noté prend la couleur de sa journée : le verdict porte sur le total du jour. Touche une case pour ouvrir ce jour dans le journal.'
-        :'Diète stricte : l’athlète déclare sa journée entière, pas repas par repas.')
+        ?'Une case par journée : kcal et protéines du jour à ±10 % de la cible. Touche un jour noté pour l’ouvrir dans le journal.'
+        :'Une case par journée : la réponse de l’athlète, diète tenue ou non.')
     +'</p><div class="drs-leg">'
       +'<span><i class="drs-c-oui"></i>Respecté</span>'
       +'<span><i class="drs-c-non"></i>Hors cible</span>'
