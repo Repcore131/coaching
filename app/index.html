@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1348';
+window.RC_BUILD='1349';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4288,6 +4288,11 @@ html{scroll-behavior:smooth}
   transition:background var(--t-1) var(--c-out),color var(--t-1) var(--c-out)}
 .cc-corps-o+.cc-corps-o{border-left:1px solid var(--border)}
 .cc-corps-o.actif{background:rgba(224,32,32,.20);color:var(--text)}
+/* La pastille de l'onglet ferme : « il y a quelque chose a lire de ce cote ».
+   Pas de rouge — dans cette application, le rouge appelle une decision, et ici
+   il n'y a rien a decider. */
+.cc-corps-pa{display:inline-block;width:5px;height:5px;border-radius:var(--r-full);
+  background:rgba(255,255,255,.78);margin-left:5px;vertical-align:middle}
 .cc-corps-o:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
 @media(prefers-reduced-motion:reduce){.cc-corps-o{transition:none}}
 /* LA SCENE PORTE UN RAPPORT FIXE, et c'est ce qui rend les traits de rappel
@@ -51780,6 +51785,31 @@ function _corpsLibSemaine(cle){
   try{ return d.toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }
   catch(e){ return ''; }
 }
+/**
+ * PURE. Combien de MENSURATIONS DISTINCTES ont bouge, parmi les muscles que
+ * cette vue montre.
+ *
+ * ⚠ DISTINCTES, ET C'EST TOUT LE SUJET. Biceps et triceps lisent le meme tour
+ *   de bras, quadriceps et ischios la meme cuisse : compter les etiquettes
+ *   aurait annonce « quatre ecarts » la ou il y en a deux. On compte les
+ *   mesures, pas les muscles qui les affichent.
+ *
+ * ⚠ ET SEULEMENT CE QUI DEPASSE LE BRUIT. Un ecart sous la tolerance s'ecrit
+ *   « stable » sur l'etiquette ; le compter ici ferait clignoter un onglet
+ *   pour un demi-millimetre.
+ * @param {any} u
+ * @param {'face'|'dos'} vue
+ * @returns {number}
+ */
+function corpsEcartsDeVue(u,vue){
+  const vus=new Set();
+  for(const e of (CORPS_ETIQUETTES[vue]||[])){
+    let inf=null;
+    try{ inf=corpsEtiquette(u,e.m); }catch(err){ inf=null; }
+    if(inf&&inf.ecart&&!inf.ecart.stable&&inf.cle) vus.add(inf.cle);
+  }
+  return vus.size;
+}
 // LA VUE EST UNE LENTILLE, PAS UNE DONNEE. Elle ne vit pas dans le dossier de
 // l'athlete : c'est le coach qui regarde de face ou de dos, et son choix n'a
 // rien a faire dans un document qui decrit quelqu'un d'autre.
@@ -52238,9 +52268,30 @@ function _htmlCorpsCadre(c){
   const vue=(_corpsVue==='dos')?'dos':'face';
   const pl=CORPS_PLANCHE[genre+'-'+vue]||CORPS_PLANCHE['h-face'];
   let bilans=[]; try{ bilans=bilansOrdonnes(u)||[]; }catch(e){ bilans=[]; }
-  const onglet=(k,lib)=>'<button type="button" class="cc-corps-o'+(vue===k?' actif':'')
-    +'" aria-pressed="'+(vue===k?'true':'false')
-    +'" onclick="corpsVue(\''+k+'\')">'+escapeHtml(lib)+'</button>';
+  // ⚠ L'ONGLET INACTIF DIT S'IL Y A QUELQUE CHOSE A VOIR DE L'AUTRE COTE.
+  //   La moitie des muscles n'existe que dans une vue : fessiers, ischios,
+  //   lombaires et deltoide posterieur ne se montrent que de dos. Un coach qui
+  //   ne retourne jamais la silhouette ne voyait donc jamais qu'un fessier
+  //   avait pris 1,6 cm — et rien a l'ecran ne le lui disait. La pastille et
+  //   son infobulle le disent.
+  //
+  //   ⚠ ELLE NE SORT QUE SUR L'ONGLET FERME. Sur celui qu'on regarde, les
+  //     etiquettes sont deja la : un rappel serait du bruit.
+  //
+  //   ⚠ ET ELLE N'EST PAS ROUGE. Dans cette application le rouge appelle une
+  //     decision ; ici il n'y a rien a decider, juste quelque chose a lire.
+  const onglet=(k,lib)=>{
+    const ferme=(vue!==k);
+    let n=0;
+    if(ferme&&bilans.length>=2){ try{ n=corpsEcartsDeVue(u,k); }catch(e){ n=0; } }
+    const t=n?(n+' mensuration'+(n>1?'s ont':' a')+' bougé de ce côté'):'';
+    return '<button type="button" class="cc-corps-o'+(ferme?'':' actif')
+      +'" aria-pressed="'+(ferme?'false':'true')+'"'
+      +(t?(' title="'+escapeHtml(t)+'" aria-label="'+escapeHtml(lib+' — '+t)+'"'):'')
+      +' onclick="corpsVue(\''+k+'\')">'+escapeHtml(lib)
+      +(n?'<span class="cc-corps-pa" aria-hidden="true"></span>':'')
+      +'</button>';
+  };
   const tete='<div class="cc-corps-h">'
     +'<span class="cc-corps-t">Corps</span>'
     +'<span class="cc-corps-vue" role="group" aria-label="Vue du corps">'

@@ -38084,6 +38084,45 @@ async function testExercices(){
       }
       return true;})());
 
+    ok('L\u2019ONGLET FERMÉ DIT CE QU\u2019IL Y A DE L\u2019AUTRE CÔTÉ',(()=>{
+      // ⚠ LA MOITIE DES MUSCLES N'EXISTE QUE DANS UNE VUE : fessiers, ischios,
+      //   lombaires et deltoide posterieur ne se montrent que de dos. Un coach
+      //   qui ne retourne jamais la silhouette ne voyait donc jamais qu'un
+      //   fessier avait pris 1,6 cm, et rien a l'ecran ne le lui disait.
+      const J=864e5, t=Date.now();
+      const u={id:'P9',email:'p9@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-92*J,'bil-bicep-r':'38.2','bil-chest':'106',
+                 'bil-glutes':'101','bil-calf-r':'39.1','bil-thigh-r':'61.5'},
+                {date:t-6*J, 'bil-bicep-r':'39.0','bil-chest':'107.4',
+                 'bil-glutes':'102.6','bil-calf-r':'39.9','bil-thigh-r':'62.4'}]};
+      // ⚠ ON COMPTE DES MESURES, PAS DES MUSCLES. Biceps et triceps lisent le
+      //   meme tour de bras, quadriceps et ischios la meme cuisse : compter
+      //   les etiquettes aurait annonce cinq ecarts la ou il y en a quatre.
+      if(corpsEcartsDeVue(u,'dos')!==4)
+        return _echec('la vue de dos compte '+corpsEcartsDeVue(u,'dos')+' écarts au lieu de 4');
+      // UN ECART SOUS LA TOLERANCE NE COMPTE PAS : il s'ecrit « stable » sur
+      // l'etiquette, et faire clignoter un onglet pour un demi-millimetre
+      // serait un signal qui ne veut rien dire.
+      const calme={id:'P8',role:'athlete',gender:'H',
+        bilans:[{date:t-92*J,'bil-glutes':'101'},{date:t-6*J,'bil-glutes':'101.2'}]};
+      if(corpsEcartsDeVue(calme,'dos')!==0)
+        return _echec('un écart sous la tolérance allume l’onglet');
+      // ET LA PASTILLE NE SORT QUE SUR L'ONGLET FERME : sur celui qu'on
+      // regarde, les etiquettes sont deja la.
+      const boite=document.createElement('div');
+      boite.innerHTML=_htmlCorpsCadre(u);
+      const bs=[...boite.querySelectorAll('.cc-corps-o')];
+      if(bs.length!==2) return _echec(bs.length+' onglets de vue au lieu de 2');
+      for(const b of bs){
+        const actif=b.classList.contains('actif');
+        const pastille=!!b.querySelector('.cc-corps-pa');
+        if(actif&&pastille) return _echec('l’onglet ouvert porte une pastille');
+        if(!actif&&!pastille) return _echec('l’onglet fermé ne signale rien');
+        if(!actif&&!(b.getAttribute('title')||'').trim())
+          return _echec('la pastille ne dit pas ce qu’elle signale');
+      }
+      return true;})());
+
     ok('CHAQUE ÉTIQUETTE S\u2019ANNONCE D\u2019UNE SEULE PHRASE',(()=>{
       // ⚠ SANS role="img" ET aria-label, un lecteur d'ecran enfilait quatre
       //   fragments detaches — « Biceps », « +0,8 cm », « biceps D »,
