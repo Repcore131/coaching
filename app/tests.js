@@ -46214,6 +46214,45 @@ async function testExercices(){
       return msg?_echec(msg):true;
     });
 
+    okA('MLX — le suivi automatique se range en images clés, et l’export a sa taille et son format',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // UN MOUVEMENT RECTILIGNE À VITESSE CONSTANTE : deux clés suffisent.
+      const T=[], P=[];
+      for(let i=0;i<=150;i++){ T.push(i*33.3); P.push([[100+i*2,800-i*3],[500,500]]); }
+      const k=mlClesDepuisSuivi(T,P,ANNOT_CLES_MAX);
+      if(k.length!==2||k[0][0]!==0||k[1][0]!==Math.round(T[150])) return _echec('rectiligne : '+JSON.stringify(k.map(q=>q[0])));
+      // UN VIRAGE : la clé tombe dans le virage.
+      const T2=[], P2=[];
+      for(let i=0;i<=100;i++){ T2.push(i*40); P2.push([i<=50?[100+i*6,500]:[400,500+(i-50)*6]]); }
+      const k2=mlClesDepuisSuivi(T2,P2,ANNOT_CLES_MAX);
+      if(k2.length!==3||k2[1][0]!==2000) return _echec('virage : '+JSON.stringify(k2.map(q=>q[0])));
+      // L'INTERPOLATION ENTRE CES CLÉS REDIT LE SUIVI à la tolérance près.
+      const a={id:'s',n:'S',t:'point',c:'#ffffff',e:4,d:0,f:9000,p:'100,500',k:k2.map(q=>[q[0],mlEncoderTrait(q[1])])};
+      for(let i=0;i<=100;i+=7){ const q=mlAnnotPointsA(a,T2[i])[0]; if(Math.hypot(q[0]-P2[i][0][0],q[1]-P2[i][0][1])>ML_SUIVI_TOL+1) return _echec('écart à '+T2[i]+' ms'); }
+      // UN MOUVEMENT AGITÉ ne dépasse jamais le plafond.
+      const T3=[], P3=[];
+      for(let i=0;i<=600;i++){ T3.push(i*16); P3.push([[500+300*Math.sin(i/5),500+300*Math.cos(i/7)]]); }
+      if(mlClesDepuisSuivi(T3,P3,ANNOT_CLES_MAX).length>ANNOT_CLES_MAX) return _echec('plafond de clés dépassé');
+      if(mlClesDepuisSuivi([],[],10).length!==0) return _echec('un suivi vide rend des clés');
+      // L'EXPORT : le plus grand côté borné, des dimensions paires.
+      const t1=mlTailleExport(1080,1920), t2=mlTailleExport(3840,2160), t3=mlTailleExport(541,961);
+      if(t1.w!==1080||t1.h!==1920) return _echec('1080 × 1920 : '+JSON.stringify(t1));
+      if(t2.w!==1920||t2.h!==1080) return _echec('4K ramené : '+JSON.stringify(t2));
+      if(t3.w%2||t3.h%2) return _echec('dimensions impaires : '+JSON.stringify(t3));
+      // CE NAVIGATEUR SAIT ENREGISTRER, et le format le dit.
+      const f=mlFormatExport();
+      if(!f||!/^video\/(mp4|webm)/.test(f.mime)||!['mp4','webm'].includes(f.ext)) return _echec('format : '+JSON.stringify(f));
+      // LA FENÊTRE : les choix, puis elle se ferme sans rien laisser.
+      mlOuvrirExport({url:'https://x.test/a.mp4',annot:null,nom:'Squat',sequence:{id:'s1',label:'Rép 1',debutMs:1000,finMs:3000},dureeMs:8000,logo:''});
+      const d=document.getElementById('mle');
+      if(!d||d.querySelectorAll('[data-choix="portion"] [data-v]').length!==2||d.querySelectorAll('[data-choix="vitesse"] [data-v]').length!==3)
+        return _echec('la fenêtre d’export n’a pas ses choix');
+      d.querySelector('[data-choix="vitesse"] [data-v="0.5"]').click();
+      if(!document.getElementById('mle-son').disabled) return _echec('le son reste proposé au ralenti');
+      mlFermerExport();
+      if(document.getElementById('mle')) return _echec('la fenêtre reste ouverte');
+      return true;});
+
     okA('R28 — le service worker ne reconduit pas motion-lab.js d’une version à l’autre',async()=>{
       let src='';
       try{ src=await (await fetch('./sw.js',{cache:'no-store'})).text(); }catch(e){ return _echec('sw.js illisible'); }

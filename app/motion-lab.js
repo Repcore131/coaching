@@ -62,7 +62,7 @@
  *   relier:boolean, phrase:string, tailleTexte:string, onglet:string, jetonVseq:number
  * }} EtatMl
  */
-/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'|'repere'|'repsuivi'} ModeMl */
+/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'|'repere'|'repsuivi'|'annotsuivi'} ModeMl */
 /**
  * Un point suivi nomme, pendant le parcours de la video. `sx`/`sy` est la
  * graine, en pixels de l'image ; elle est gardee pour pouvoir tout relancer
@@ -3863,6 +3863,540 @@ function _mlxClavier(e){
   return false;
 }
 
+// ── LE SUIVI AUTOMATIQUE D'UN TRACÉ ─────────────────────────────────────────
+//
+// Kevin, 21/09/2026 : « le suivi d'un tracé se fait à la main — fais-le
+// automatique ». Le coach pose ses points sur l'image de départ ; le suiveur
+// des points nommés (même gabarit, même corrélation, même adaptation) les
+// accompagne image par image jusqu'à la fin du tracé, et le mouvement est
+// rangé en IMAGES CLÉS — les mêmes que le suivi à la main, qu'il peut donc
+// reprendre ensuite, une clé à la fois.
+//
+// DEUX FAÇONS DE SUIVRE, selon ce que le tracé désigne :
+//   • un repère, un angle, une ligne, une flèche : chaque point est UN détail
+//     du corps ou de la barre, et chacun est suivi pour lui-même ;
+//   • un cercle, une zone, un rectangle, un texte, une trajectoire : la forme
+//     entoure ou montre quelque chose, et elle le suit EN BLOC — son centre
+//     est suivi, tous ses points se déplacent d'autant. Un cercle dont le bord
+//     suivrait un autre détail que le centre se déformerait.
+const ML_SUIVI_MAX_MS=20000;      // au-delà, le suivi s'arrête : c'est une séquence, pas un film
+const ML_SUIVI_TOL=2.5;           // l'écart toléré à l'interpolation, en millièmes de l'image
+const ML_SUIVI_TYPES_POINTS=Object.freeze(['point','angle','ligne','fleche']);
+/**
+ * PURE. Les images clés qui suffisent à redire un suivi dense : la première,
+ * la dernière, et entre elles celles que l'interpolation linéaire ne saurait
+ * pas rendre à `tol` près — un Ramer-Douglas-Peucker sur le TEMPS, dont l'écart
+ * est le plus grand de tous les points. La tolérance se relâche tant que le
+ * résultat dépasse `max` clés.
+ * @param {number[]} T  instants, croissants, en ms
+ * @param {number[][][]} P  pour chaque instant, les points (normés 0-1000)
+ * @param {number} max
+ * @param {number} [tol]
+ * @returns {[number,number[][]][]}
+ */
+function mlClesDepuisSuivi(T,P,max,tol){
+  const n=Math.min(T.length,P.length);
+  if(!n) return [];
+  if(n===1) return [[T[0],P[0]]];
+  /** @param {number} i @param {number} j @returns {{d:number, k:number}} */
+  const pire=(i,j)=>{
+    let d=-1, k=-1;
+    for(let m=i+1;m<j;m++){
+      const f=(T[m]-T[i])/Math.max(1e-6,T[j]-T[i]);
+      for(let q=0;q<P[m].length;q++){
+        const ex=P[i][q][0]+(P[j][q][0]-P[i][q][0])*f, ey=P[i][q][1]+(P[j][q][1]-P[i][q][1])*f;
+        const e=Math.hypot(P[m][q][0]-ex,P[m][q][1]-ey);
+        if(e>d){ d=e; k=m; }
+      }
+    }
+    return {d,k};
+  };
+  let eps=Math.max(0.1,tol||ML_SUIVI_TOL);
+  for(;;){
+    /** @type {Set<number>} */
+    const garde=new Set([0,n-1]);
+    /** @type {[number,number][]} */
+    const pile=[[0,n-1]];
+    while(pile.length){
+      const [i,j]=/** @type {[number,number]} */(pile.pop());
+      if(j-i<2) continue;
+      const r=pire(i,j);
+      if(r.d>eps&&r.k>0){ garde.add(r.k); pile.push([i,r.k],[r.k,j]); }
+    }
+    if(garde.size<=Math.max(2,max)||eps>400){
+      const l=[...garde].sort((a,b)=>a-b);
+      return l.slice(0,Math.max(2,max)).map(i=>[Math.round(T[i]),P[i].map(p=>[Math.round(p[0]),Math.round(p[1])])]);
+    }
+    eps*=1.5;
+  }
+}
+/**
+ * « SUIVI AUTOMATIQUE » du tracé choisi, depuis l'image affichée jusqu'à la fin
+ * de sa durée — vingt secondes au plus.
+ * @returns {Promise<boolean>}
+ */
+async function mlAnnotSuiviAuto(){
+  const a0=_ml&&_mlxAnnot(_ml.sel), v=_mlVideo();
+  if(!_ml||!a0||!v||_mlOccupe()) return false;
+  const vw=v.videoWidth, vh=v.videoHeight;
+  if(!(vw>0&&vh>0)){ toast('Lance d’abord la vidéo une fois : ses dimensions ne sont pas encore connues.','var(--orange)'); return false; }
+  try{ v.pause(); }catch(e){}
+  const debut=_mlxTempsMs();
+  const fin=Math.min(a0.f,_ml.dureeMs||a0.f,debut+ML_SUIVI_MAX_MS);
+  if(fin-debut<200){ toast('Place la tête de lecture au début du mouvement, avant la fin du tracé.','var(--orange)'); return false; }
+  const id=a0.id;
+  // LES POINTS DE DÉPART : ceux de l'image affichée — le coach vient de les
+  // poser là, ou de les y ajuster.
+  const depart=mlAnnotPointsA(a0,debut);
+  const parPoint=ML_SUIVI_TYPES_POINTS.includes(a0.t);
+  /** @type {number[][]} */
+  const cibles=parPoint?depart.map(p=>p.slice())
+    :[[depart.reduce((s,p)=>s+p[0],0)/depart.length,depart.reduce((s,p)=>s+p[1],0)/depart.length]];
+  if(a0.t==='cercle'&&depart.length) cibles[0]=depart[0].slice();
+  // LE GABARIT : un disque de 2,5 % de l'image, et une image de travail
+  // réduite à la taille de travail du suiveur — la règle des points nommés.
+  const r=Math.max(8,Math.min(vw,vh)*0.025);
+  const ech=Math.min(1,ML_R_TRAVAIL/r);
+  const w=Math.max(16,Math.round(vw*ech)), h=Math.max(16,Math.round(vh*ech));
+  const ex=w/vw, ey=h/vh;
+  const fpsMes=Number(/** @type {any} */(v)._rcFps);
+  const pasMs=1000/Math.min(30,(isFinite(fpsMes)&&fpsMes>0)?fpsMes:30);
+  _ml.mode='annotsuivi'; _ml.progres='Chargement de la vidéo…';
+  const jeton=++_ml.analyseJeton;
+  _mlxMajEditeur();
+  /** @type {(Suivi|null)[]} */
+  const suivis=cibles.map(()=>null);
+  /** @type {number[]} */ const T=[];
+  /** @type {number[][][]} */ const P=[];
+  /** @type {number[]} */ const perdusA=cibles.map(()=>-1);
+  const total=Math.max(1,Math.ceil((fin-debut)/pasMs));
+  let nb=0;
+  const res=await _mlExtraire(_ml.url,debut,fin,w,h,pasMs,img=>{
+    if(!_ml||jeton!==_ml.analyseJeton) return 'arret';
+    /** @type {number[][]} */
+    const ici=[];
+    for(let q=0;q<cibles.length;q++){
+      const c=cibles[q];
+      if(!nb){
+        const s=mlSuiviDemarrer(img.gris,w,h,c[0]/1000*vw*ex,c[1]/1000*vh*ey,r*ex);
+        if(!s) return 'gabarit';
+        suivis[q]=s;
+        ici.push(c.slice());
+        continue;
+      }
+      const s=suivis[q];
+      if(!s) return 'gabarit';
+      // UN POINT PERDU EST TENU là où on l'a vu en dernier : un tracé qui
+      // saute au hasard mentirait plus qu'un tracé qui s'arrête.
+      if(perdusA[q]>=0){ ici.push(P[P.length-1][q].slice()); continue; }
+      const p=mlSuiviPas(s,img.gris,w,h);
+      if(p.etat==='perdu'){ perdusA[q]=img.tMs; ici.push(P[P.length-1][q].slice()); continue; }
+      ici.push([_mlxBorne(p.x/ex/vw*1000),_mlxBorne(p.y/ey/vh*1000)]);
+    }
+    T.push(img.tMs); P.push(ici);
+    nb++;
+    if(nb%4===1){
+      _ml.progres='Image '+nb+' sur ~'+total+' · '+mlTempsTexte(img.tMs);
+      const t=_mlEl('mlx-suivi-txt'); if(t) t.textContent=_ml.progres;
+      const b=_mlEl('mlx-suivi-barre'); if(b) b.style.transform='scaleX('+Math.min(1,nb/total).toFixed(3)+')';
+    }
+    // TOUS PERDUS : inutile de parcourir le reste.
+    return !perdusA.every(x=>x>=0);
+  },()=>!_ml||jeton!==_ml.analyseJeton);
+  if(!_ml) return false;
+  _ml.mode='lecture'; _ml.progres='';
+  if(res.ok===false){
+    const msg={cors:'L’hébergeur de cette vidéo n’autorise pas la lecture de ses images : le suivi automatique est impossible sur ce fichier.',
+      chargement:'La vidéo n’a pas pu être chargée. Vérifie la connexion, puis réessaie.',
+      recherche:'La vidéo ne se laisse pas parcourir image par image sur cet appareil.',
+      gabarit:'Un point est posé sur un aplat : rien ne s’y distingue d’une image à l’autre. Pose-le sur un détail contrasté.',
+      arret:'Suivi arrêté.'}[res.code]||'Le suivi a échoué.';
+    toast(msg,res.code==='arret'?undefined:'var(--orange)');
+    _mlxMajEditeur();
+    return false;
+  }
+  const a=_mlxAnnot(id);
+  if(!a||T.length<2){ toast('Le suivi n’a rien donné de lisible : réessaie.','var(--orange)'); _mlxMajEditeur(); return false; }
+  // DU SUIVI AUX POINTS DU TRACÉ : par point, ou le centre et la forme en bloc.
+  const ref=cibles[0];
+  const PP=parPoint?P:P.map(q=>depart.map(p=>[_mlxBorne(p[0]+q[0][0]-ref[0]),_mlxBorne(p[1]+q[0][1]-ref[1])]));
+  // LES CLÉS D'AVANT LE DÉPART RESTENT ; celles du parcours sont remplacées.
+  const avant=(Array.isArray(a.k)?a.k:[]).filter(q=>q[0]<debut-20);
+  const cles=mlClesDepuisSuivi(T,PP,Math.max(2,ANNOT_CLES_MAX-avant.length));
+  _mlxMemoriser();
+  _mlxChanger(id,x=>{
+    /** @type {[number,string][]} */
+    const k=avant.concat(cles.map(q=>/** @type {[number,string]} */([q[0],mlEncoderTrait(q[1])])));
+    return {...x,k,p:k[0][1]};
+  });
+  _mlxApresChangement();
+  _mlAller(debut);
+  const perdu=perdusA.filter(x=>x>=0);
+  if(perdu.length) toast((parPoint&&cibles.length>1?perdu.length+' point'+(perdu.length>1?'s se perdent':' se perd'):'Le suivi se perd')
+    +' à '+mlTempsTexte(Math.min(...perdu))+' : replace-le à cet instant, puis relance le suivi depuis là.','var(--orange)');
+  else toast('Suivi posé : '+cles.length+' images clés sur '+mlTempsTexte(T[T.length-1]-T[0]).slice(0,-3)+' ✓');
+  return true;
+}
+/** Arrête un suivi automatique en cours. */
+function mlAnnotSuiviArreter(){
+  if(!_ml||_ml.mode!=='annotsuivi') return false;
+  _ml.analyseJeton++;
+  return true;
+}
+
+// ── L'EXPORT : LA VIDÉO AVEC SES TRACÉS GRAVÉS ─────────────────────────────
+//
+// Kevin, 21/09/2026 : « on ne peut pas encore télécharger une vidéo où les
+// tracés sont gravés — fais-le ». La vidéo est REJOUÉE dans un canevas caché :
+// chaque image y est peinte, les tracés et la légende par-dessus — le même
+// dessin que l'écran, parce que c'est le même code —, et le canevas est
+// enregistré par le navigateur (MediaRecorder). Rien ne part sur un serveur :
+// le fichier naît sur l'appareil, et la vidéo d'origine n'est pas touchée.
+//
+// ⚠ EN TEMPS RÉEL. Le navigateur enregistre ce qu'il joue : exporter vingt
+//   secondes prend vingt secondes, et quatre-vingts au quart de vitesse. C'est
+//   le prix d'un export sans serveur ni bibliothèque de plusieurs mégaoctets ;
+//   l'écran le dit avant de commencer.
+// ⚠ L'ONGLET DOIT RESTER VISIBLE : un onglet caché ne peint plus. L'export se
+//   met alors en pause, vidéo et enregistreur ensemble, et reprend au retour.
+// ⚠ L'HÉBERGEUR DOIT PERMETTRE LA LECTURE DES IMAGES (CORS), comme pour les
+//   analyses : sans cela le canevas est « contaminé » et le navigateur refuse
+//   de l'enregistrer. On le vérifie sur la première image, et on le dit.
+
+/** @typedef {{blob:Blob, type:string, ext:string, dureeMs:number, largeur:number, hauteur:number, reel:number}} ResultatExport */
+const ML_EXPORT_COTE_MAX=1920;       // le plus grand côté du fichier, en pixels
+const ML_EXPORT_DEBIT=8000000;       // bits par seconde : la netteté d'un 1080p
+/** @returns {{mime:string, ext:string}|null} le meilleur format que ce navigateur sait enregistrer */
+function mlFormatExport(){
+  const MR=/** @type {any} */(window).MediaRecorder;
+  if(!MR||typeof MR.isTypeSupported!=='function') return null;
+  // LE MP4 D'ABORD : c'est lui que les téléphones, les messageries et les
+  // réseaux lisent partout. Le WebM ensuite, que Chrome et Firefox savent faire.
+  for(const [mime,ext] of [['video/mp4;codecs=avc1.42E01E,mp4a.40.2','mp4'],['video/mp4;codecs=avc1','mp4'],['video/mp4','mp4'],
+    ['video/webm;codecs=vp9,opus','webm'],['video/webm;codecs=vp8,opus','webm'],['video/webm','webm']])
+    if(MR.isTypeSupported(mime)) return {mime,ext};
+  return null;
+}
+/**
+ * PURE. La taille du fichier : celle de la vidéo, ramenée à ML_EXPORT_COTE_MAX
+ * sur son plus grand côté, en nombres pairs — les encodeurs l'exigent.
+ * @param {number} vw
+ * @param {number} vh
+ * @returns {{w:number, h:number}}
+ */
+function mlTailleExport(vw,vh){
+  const k=Math.min(1,ML_EXPORT_COTE_MAX/Math.max(1,vw,vh));
+  const pair=(/** @type {number} */ x)=>Math.max(2,Math.round(x*k/2)*2);
+  return {w:pair(vw),h:pair(vh)};
+}
+/**
+ * Enregistre [debutMs, finMs] de la vidéo, tracés gravés.
+ * @param {{url:string, annot:DocAnnot|null, debutMs:number, finMs:number, vitesse:number, son:boolean,
+ *   logo:string, ac:AudioContext|null, surProgres:(f:number, msg:string)=>void, arreter:()=>boolean}} o
+ * @returns {Promise<{ok:true, r:ResultatExport}|{ok:false, code:string}>}
+ */
+async function mlExporterVideo(o){
+  const fmt=mlFormatExport();
+  if(!fmt) return {ok:false,code:'format'};
+  const adresse=safeUrlRaw(o.url);
+  if(adresse==='#') return {ok:false,code:'chargement'};
+  const v=document.createElement('video');
+  v.crossOrigin='anonymous'; v.playsInline=true; v.preload='auto';
+  v.setAttribute('playsinline',''); v.setAttribute('aria-hidden','true');
+  v.style.cssText='position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;left:0;top:0';
+  document.body.appendChild(v);
+  v.src=adresse;
+  /** @type {MediaRecorder|null} */ let rec=null;
+  /** @type {MediaStream|null} */ let flux=null;
+  let raf=0;
+  const surVisibilite=()=>{
+    if(!rec) return;
+    if(document.hidden){ try{ v.pause(); if(rec.state==='recording') rec.pause(); }catch(e){} }
+    else { try{ if(rec.state==='paused') rec.resume(); const p=v.play(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} }
+  };
+  try{
+    const pret=await new Promise(res=>{
+      const garde=setTimeout(()=>res(false),20000);
+      v.addEventListener('loadeddata',()=>{ clearTimeout(garde); res(true); },{once:true});
+      v.addEventListener('error',()=>{ clearTimeout(garde); res(false); },{once:true});
+    });
+    if(!pret) return {ok:false,code:'chargement'};
+    const vw=v.videoWidth, vh=v.videoHeight;
+    if(!(vw>0&&vh>0)) return {ok:false,code:'chargement'};
+    const D=Number(v.duration)*1000;
+    const debut=Math.max(0,Math.min(o.debutMs,isFinite(D)?D:o.debutMs));
+    const fin=Math.min(isFinite(D)&&D>0?D:o.finMs,o.finMs);
+    if(!(fin-debut>=200)) return {ok:false,code:'duree'};
+    const {w,h}=mlTailleExport(vw,vh);
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const g=c.getContext('2d');
+    if(!g) return {ok:false,code:'chargement'};
+    /** @type {RectImage} */
+    const R={s:w/vw,ox:0,oy:0,vw,vh};
+    // LE LOGO DU COACH, en bas à droite. Une image d'une autre origine
+    // contaminerait le canevas : sans autorisation, on s'en passe.
+    /** @type {HTMLImageElement|null} */
+    let logo=null;
+    if(o.logo){
+      logo=await new Promise(res=>{
+        const im=new Image();
+        if(!/^data:/.test(o.logo)) im.crossOrigin='anonymous';
+        const garde=setTimeout(()=>res(null),4000);
+        im.onload=()=>{ clearTimeout(garde); res(im); };
+        im.onerror=()=>{ clearTimeout(garde); res(null); };
+        im.src=o.logo;
+      });
+    }
+    const peindre=(/** @type {number} */ sMs)=>{
+      g.drawImage(v,0,0,w,h);
+      if(o.annot) mlDessinerAnnotations(g,R,o.annot,sMs,{});
+      if(logo&&logo.naturalWidth){
+        const lh=Math.round(h*0.07), lw=Math.round(lh*logo.naturalWidth/logo.naturalHeight), m=Math.round(h*0.025);
+        g.save(); g.globalAlpha=0.92; g.drawImage(logo,w-lw-m,h-lh-m,lw,lh); g.restore();
+      }
+    };
+    // LA PREMIÈRE IMAGE, ET LA VÉRIFICATION CORS avant tout le reste.
+    await new Promise(res=>{ v.addEventListener('seeked',()=>res(true),{once:true}); try{ v.currentTime=debut/1000; }catch(e){ res(false); } });
+    peindre(debut);
+    try{ g.getImageData(0,0,1,1); }catch(e){ return {ok:false,code:'cors'}; }
+    if(logo) try{ g.getImageData(w-2,h-2,1,1); }catch(e){ logo=null; peindre(debut); }
+    // LE FLUX : le canevas, image par image, et le son d'origine à vitesse normale.
+    const cc=/** @type {any} */(c);
+    const avecRequete=typeof cc.captureStream==='function';
+    if(!avecRequete) return {ok:false,code:'format'};
+    flux=/** @type {MediaStream} */(cc.captureStream(30));
+    const pisteV=/** @type {any} */(flux.getVideoTracks()[0]);
+    let sonOk=false;
+    if(o.son&&o.vitesse===1&&o.ac){
+      try{
+        // ⚠ resume() ATTEND UN GESTE et ne rend jamais la main sans lui : on
+        //   borne l'attente, et l'export se fait muet plutôt que de rester figé.
+        if(o.ac.state==='suspended') await Promise.race([o.ac.resume().catch(()=>{}),new Promise(r=>setTimeout(r,800))]);
+        if(o.ac.state!=='running') throw new Error('muet');
+        const src=o.ac.createMediaElementSource(v), dest=o.ac.createMediaStreamDestination();
+        src.connect(dest);
+        const pa=dest.stream.getAudioTracks()[0];
+        if(pa){ flux.addTrack(pa); sonOk=true; }
+      }catch(e){ sonOk=false; }
+    }
+    v.muted=!sonOk;
+    const morceaux=/** @type {Blob[]} */([]);
+    rec=new MediaRecorder(flux,{mimeType:fmt.mime,videoBitsPerSecond:ML_EXPORT_DEBIT});
+    rec.ondataavailable=e=>{ if(e.data&&e.data.size) morceaux.push(e.data); };
+    const arrete=new Promise(res=>{ if(rec) rec.onstop=()=>res(true); });
+    videoSetRate(v,o.vitesse);
+    document.addEventListener('visibilitychange',surVisibilite);
+    rec.start(500);
+    try{ await v.play(); }
+    catch(e){
+      // LA LECTURE AVEC SON peut être refusée sans geste récent : on repart
+      // muet plutôt que d'échouer.
+      v.muted=true;
+      try{ await v.play(); }catch(e2){ try{ rec.stop(); }catch(x){} return {ok:false,code:'lecture'}; }
+    }
+    const t0=performance.now();
+    /** @type {string} */
+    let code='';
+    // ⚠ LA BOUCLE SUIT L'AFFICHAGE DE LA PAGE, et non les images de la vidéo :
+    //   requestVideoFrameCallback ne se déclenche plus pour une vidéo que
+    //   personne ne voit — et celle-ci est cachée. Mesuré : soixante-dix-neuf
+    //   images en 2,6 s, puis plus rien, sur une vidéo de six secondes qui, elle,
+    //   jouait jusqu'au bout. On peint donc à chaque tour d'affichage, dès que
+    //   l'instant de la vidéo a avancé.
+    await new Promise(res=>{
+      let fini=false, dernier=-1;
+      const finir=()=>{ if(fini) return; fini=true; cancelAnimationFrame(raf); res(true); };
+      const pas=()=>{
+        if(fini) return;
+        if(o.arreter()){ code='arret'; finir(); return; }
+        const sMs=Number(v.currentTime)*1000;
+        if(sMs!==dernier){
+          dernier=sMs;
+          peindre(sMs);
+          if(pisteV&&typeof pisteV.requestFrame==='function') try{ pisteV.requestFrame(); }catch(e){}
+          const f=Math.max(0,Math.min(1,(sMs-debut)/(fin-debut)));
+          o.surProgres(f,mlTempsTexte(Math.max(0,sMs-debut)).slice(0,-3)+' / '+mlTempsTexte(fin-debut).slice(0,-3));
+        }
+        if(sMs>=fin-1||v.ended){ finir(); return; }
+        raf=requestAnimationFrame(pas);
+      };
+      v.addEventListener('ended',()=>finir(),{once:true});
+      raf=requestAnimationFrame(pas);
+    });
+    try{ v.pause(); }catch(e){}
+    if(rec.state!=='inactive') rec.stop();
+    await arrete;
+    if(code) return {ok:false,code};
+    const blob=new Blob(morceaux,{type:fmt.mime.split(';')[0]});
+    if(!blob.size) return {ok:false,code:'vide'};
+    return {ok:true,r:{blob,type:blob.type,ext:fmt.ext,dureeMs:Math.round((fin-debut)/o.vitesse),largeur:w,hauteur:h,
+      reel:performance.now()-t0}};
+  } catch(e){
+    return {ok:false,code:'echec'};
+  } finally {
+    document.removeEventListener('visibilitychange',surVisibilite);
+    cancelAnimationFrame(raf);
+    try{ if(rec&&rec.state!=='inactive') rec.stop(); }catch(e){}
+    if(flux) flux.getTracks().forEach(t=>{ try{ t.stop(); }catch(e){} });
+    try{ v.pause(); v.removeAttribute('src'); v.load(); }catch(e){}
+    v.remove();
+  }
+}
+const ML_EXPORT_MSG=Object.freeze({
+  format:'Ce navigateur ne sait pas enregistrer de vidéo. Essaie Chrome, Edge, Firefox ou Safari récent.',
+  chargement:'La vidéo n’a pas pu être chargée. Vérifie la connexion, puis réessaie.',
+  cors:'L’hébergeur de cette vidéo n’autorise pas la lecture de ses images : l’export est impossible sur ce fichier.',
+  duree:'Le passage choisi est trop court pour une vidéo.',
+  lecture:'La vidéo refuse de se lancer sur cet appareil.',
+  vide:'L’enregistrement n’a rien donné : réessaie, en gardant l’onglet ouvert.',
+  echec:'L’export a échoué.',arret:'Export arrêté.'});
+
+// ── LA FENÊTRE D'EXPORT, commune au coach et à l'athlète ────────────────────
+/** @type {{arret:boolean, url:string, ac:AudioContext|null, o:any}|null} */
+let _mle=null;
+/**
+ * @param {{url:string, annot:DocAnnot|null, nom:string, sequence:Segment|null, dureeMs:number, logo:string, libLogo?:string}} o
+ * @returns {boolean}
+ */
+function mlOuvrirExport(o){
+  _mlInjecterStyle();
+  mlFermerExport();
+  const fmt=mlFormatExport();
+  const d=document.createElement('div');
+  d.id='mle'; d.className='mle-voile';
+  d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Exporter la vidéo annotée');
+  const seq=o.sequence;
+  const S=_mlxIco;
+  d.innerHTML='<div class="mle">'
+    +'<div class="mle-tete"><span class="mle-ico">'+S('export',22)+'</span><div><b>Exporter la vidéo</b>'
+      +'<span>Les tracés et la légende gravés dans l’image, sans toucher à l’original.</span></div>'
+      +'<button type="button" class="mlx-ico-b mlx-ico-p" onclick="mlFermerExport()" aria-label="Fermer">×</button></div>'
+    +(fmt?'':'<p class="mle-alerte">'+ML_EXPORT_MSG.format+'</p>')
+    +'<div class="mle-choix"><span class="mlx-lab-s">Passage</span><div class="mlx-chips mlx-chips-l" data-choix="portion">'
+      +'<button type="button" class="mlx-chip" aria-pressed="true" data-v="tout">Toute la vidéo · '+_mlDureeCourte(o.dureeMs)+'</button>'
+      +(seq?'<button type="button" class="mlx-chip" aria-pressed="false" data-v="seq">'+escapeHtml(seq.label)+' · '+_mlDureeCourte(seq.finMs-seq.debutMs)+'</button>':'')
+    +'</div></div>'
+    +'<div class="mle-choix"><span class="mlx-lab-s">Vitesse</span><div class="mlx-chips mlx-chips-l" data-choix="vitesse">'
+      +[[1,'Normale'],[0.5,'Ralenti ½'],[0.25,'Ralenti ¼']].map(([k,l],i)=>'<button type="button" class="mlx-chip" aria-pressed="'+(i===0)+'" data-v="'+k+'">'+l+'</button>').join('')
+    +'</div></div>'
+    +'<label class="mlx-coche"><input type="checkbox" id="mle-son" checked> Garder le son d’origine (à vitesse normale)</label>'
+    +(o.logo?'<label class="mlx-coche"><input type="checkbox" id="mle-logo" checked> '+escapeHtml(o.libLogo||'Mon logo en bas à droite')+'</label>':'')
+    +'<p class="mlx-note" id="mle-note"></p>'
+    +'<div class="mle-prog" hidden><div class="mle-barre"><i id="mle-barre"></i></div><span id="mle-txt">Préparation…</span></div>'
+    +'<div class="mle-fin" id="mle-fin" hidden></div>'
+    +'<div class="mle-pied"><button type="button" class="mlx-b" onclick="mlFermerExport()">Fermer</button>'
+      +'<button type="button" class="mlx-enreg mle-go" id="mle-go"'+(fmt?'':' disabled')+'>'+S('export',18)+'<span>Créer la vidéo</span></button></div>'
+  +'</div>';
+  document.body.appendChild(d);
+  _mle={arret:false,url:'',ac:null,o};
+  const majNote=()=>{
+    const ch=_mlexChoix(d);
+    const duree=ch.portion==='seq'&&seq?seq.finMs-seq.debutMs:o.dureeMs;
+    const son=/** @type {HTMLInputElement|null} */(d.querySelector('#mle-son'));
+    if(son){ son.disabled=ch.vitesse!==1; if(ch.vitesse!==1) son.checked=false; }
+    const n=d.querySelector('#mle-note');
+    if(n) n.textContent='Environ '+_mlDureeCourte(duree/ch.vitesse)+' d’enregistrement, en '+(fmt?fmt.ext.toUpperCase():'—')
+      +'. Garde cet onglet ouvert et visible pendant l’export : il se met en pause sinon.';
+  };
+  d.addEventListener('click',e=>{
+    const b=/** @type {HTMLElement|null} */(e.target instanceof Element?e.target.closest('[data-v]'):null);
+    if(e.target===d){ mlFermerExport(); return; }
+    if(!b) return;
+    const grp=b.closest('[data-choix]');
+    if(!grp) return;
+    grp.querySelectorAll('[data-v]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+    majNote();
+  });
+  const go=d.querySelector('#mle-go');
+  if(go) go.addEventListener('click',()=>{ mlLancerExport(); });
+  majNote();
+  return true;
+}
+/** @param {HTMLElement} d @returns {{portion:string, vitesse:number}} */
+function _mlexChoix(d){
+  const p=d.querySelector('[data-choix="portion"] [aria-pressed="true"]');
+  const v=d.querySelector('[data-choix="vitesse"] [aria-pressed="true"]');
+  return {portion:p instanceof HTMLElement?String(p.dataset.v):'tout',vitesse:v instanceof HTMLElement?Number(v.dataset.v)||1:1};
+}
+/** Lance l'export avec les choix de la fenêtre. Le contexte audio naît ICI, dans le geste. */
+async function mlLancerExport(){
+  const d=_mlEl('mle');
+  if(!d||!_mle) return false;
+  const E=_mle, o=E.o, ch=_mlexChoix(d);
+  const son=/** @type {HTMLInputElement|null} */(d.querySelector('#mle-son'));
+  const lg=/** @type {HTMLInputElement|null} */(d.querySelector('#mle-logo'));
+  const avecSon=!!(son&&son.checked&&ch.vitesse===1);
+  try{ const AC=/** @type {any} */(window).AudioContext||/** @type {any} */(window).webkitAudioContext; if(avecSon&&AC) E.ac=new AC(); }catch(e){ E.ac=null; }
+  const seq=ch.portion==='seq'?o.sequence:null;
+  const go=/** @type {HTMLButtonElement|null} */(d.querySelector('#mle-go'));
+  const prog=/** @type {HTMLElement|null} */(d.querySelector('.mle-prog'));
+  const fin=/** @type {HTMLElement|null} */(d.querySelector('#mle-fin'));
+  if(go){ go.disabled=true; go.innerHTML='<span>Export en cours…</span>'; }
+  if(prog) prog.hidden=false;
+  if(fin){ fin.hidden=true; fin.innerHTML=''; }
+  d.querySelectorAll('.mle-choix button, .mlx-coche input').forEach(x=>{ /** @type {HTMLButtonElement} */(x).disabled=true; });
+  const pied=d.querySelector('.mle-pied .mlx-b');
+  if(pied){ pied.textContent='Arrêter'; pied.setAttribute('onclick','mlArreterExport()'); }
+  E.arret=false;
+  const res=await mlExporterVideo({url:o.url,annot:o.annot,debutMs:seq?seq.debutMs:0,finMs:seq?seq.finMs:o.dureeMs||86400000,
+    vitesse:ch.vitesse,son:avecSon,logo:lg&&lg.checked?o.logo:'',ac:E.ac,
+    surProgres:(f,msg)=>{ const b=_mlEl('mle-barre'); if(b) b.style.transform='scaleX('+f.toFixed(3)+')'; const t=_mlEl('mle-txt'); if(t) t.textContent=msg; },
+    arreter:()=>!_mle||_mle.arret});
+  if(E.ac) try{ E.ac.close(); }catch(e){}
+  E.ac=null;
+  if(!_mle||_mle!==E||!_mlEl('mle')) return false;
+  if(prog) prog.hidden=true;
+  if(pied){ pied.textContent='Fermer'; pied.setAttribute('onclick','mlFermerExport()'); }
+  d.querySelectorAll('.mle-choix button, .mlx-coche input').forEach(x=>{ /** @type {HTMLButtonElement} */(x).disabled=false; });
+  if(go){ go.disabled=false; go.innerHTML=_mlxIco('export',18)+'<span>'+(res.ok?'Recréer':'Réessayer')+'</span>'; }
+  if(!res.ok){
+    toast(ML_EXPORT_MSG[/** @type {keyof typeof ML_EXPORT_MSG} */(res.code)]||ML_EXPORT_MSG.echec,res.code==='arret'?undefined:'var(--orange)');
+    return false;
+  }
+  if(E.url) try{ URL.revokeObjectURL(E.url); }catch(e){}
+  E.url=URL.createObjectURL(res.r.blob);
+  const nom=('repcore-'+String(o.nom||'video').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'video')+'-annotee.'+res.r.ext;
+  const mo=(res.r.blob.size/1048576).toFixed(1).replace('.',',');
+  let partage=false;
+  try{
+    const f=new File([res.r.blob],nom,{type:res.r.type});
+    const n=/** @type {any} */(navigator);
+    partage=!!(n.canShare&&n.canShare({files:[f]})&&n.share);
+    E.o.fichier=f;
+  }catch(e){ partage=false; }
+  if(fin){
+    fin.hidden=false;
+    fin.innerHTML='<video class="mle-apercu" src="'+E.url+'" controls playsinline></video>'
+      +'<p class="mlx-note">'+escapeHtml(nom)+' · '+res.r.largeur+' × '+res.r.hauteur+' · '+mo+' Mo</p>'
+      +'<div class="mle-pied"><a class="mlx-enreg mle-dl" href="'+E.url+'" download="'+escapeHtml(nom)+'">'+_mlxIco('export',18)+'<span>Télécharger</span></a>'
+      +(partage?'<button type="button" class="mlx-b" onclick="mlPartagerExport()">Partager…</button>':'')+'</div>';
+  }
+  toast('Vidéo prête ✓');
+  return true;
+}
+function mlArreterExport(){ if(!_mle) return false; _mle.arret=true; return true; }
+function mlPartagerExport(){
+  const f=_mle&&_mle.o&&_mle.o.fichier;
+  const n=/** @type {any} */(navigator);
+  if(!f||!n.share) return false;
+  try{ const p=n.share({files:[f],title:'Vidéo annotée'}); if(p&&p.catch) p.catch(()=>{}); }catch(e){ return false; }
+  return true;
+}
+function mlFermerExport(){
+  const d=_mlEl('mle');
+  if(_mle){ _mle.arret=true; if(_mle.url) try{ URL.revokeObjectURL(_mle.url); }catch(e){} }
+  _mle=null;
+  if(d) d.remove();
+  return true;
+}
+/** Le bouton du laboratoire : la vidéo ouverte, ses tracés en cours, la séquence choisie. */
+function mlExporterLab(){
+  if(!_ml) return false;
+  return mlOuvrirExport({url:_ml.url,annot:_ml.annot,nom:_ml.nom,sequence:_mlActif(),dureeMs:_ml.dureeMs,
+    logo:String((currentUser||{}).logo||'').trim()});
+}
+
 // ══ L'ÉTAT ET L'OUVERTURE ═════════════════════════════════════════════════════
 
 /** @type {EtatMl|null} */
@@ -3960,6 +4494,7 @@ function _mlArreter(){
     _ml.rec=null;
   }
   if(_ml) _mlCorrOublier();
+  try{ mlFermerExport(); }catch(e){}
 }
 /**
  * Appelée par go() quand on quitte le laboratoire par une autre porte que sa
@@ -4047,7 +4582,9 @@ function _mlxIco(nom,t){
     stab:'<path d="M12 3v14M5 21h14M7 9h10"/><circle cx="12" cy="9" r="1.5" fill="currentColor"/>',
     tempo:'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M10 2.5h4"/>',
     perso:'<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8 6.8 19.6l1-5.8L3.5 9.7l5.9-.9z"/>',
-    cle:'<path d="M12 3.5 20.5 12 12 20.5 3.5 12z"/>'};
+    cle:'<path d="M12 3.5 20.5 12 12 20.5 3.5 12z"/>',
+    export:'<path d="M12 3.5v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 16.5V19a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-2.5"/>',
+    cible:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/>'};
   return '<svg viewBox="0 0 24 24" width="'+t+'" height="'+t+'" aria-hidden="true" fill="none" stroke="currentColor" '
     +'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(P[nom]||'')+'</svg>';
 }
@@ -4073,6 +4610,7 @@ function _mlRendre(){
       +'<div class="mlx-menu-z"><button type="button" id="mlx-menu-b" class="mlx-ico-b" onclick="mlMenu()" '
         +'aria-haspopup="true" aria-expanded="false" aria-label="Plus d’actions">'+S('menu',20)+'</button>'
         +'<div id="mlx-menu" class="mlx-menu" role="menu" hidden>'
+          +'<button type="button" role="menuitem" onclick="mlMenu();mlExporterLab()">Exporter la vidéo annotée</button>'
           +'<button type="button" role="menuitem" onclick="mlMenu();mlOnglet(\'reglages\')">Paramètres avancés</button>'
           +'<button type="button" role="menuitem" onclick="mlMenu();mlOnglet(\'analyse\')">Analyse automatique</button>'
           +'<button type="button" role="menuitem" onclick="mlMenu();mlOnglet(\'voix\')">Correction vocale</button>'
@@ -4183,6 +4721,7 @@ function _mlRendre(){
       +'<button type="button" id="mlx-orig" class="mlx-pied-b" aria-pressed="false" onclick="mlVersionOriginale()" '
         +'title="Revoir la vidéo sans aucune annotation (O)">'+S('orig',18)+'<span>Version originale</span></button>'
       +'<span class="mlx-esp"></span>'
+      +'<button type="button" id="mlx-export" class="mlx-pied-b" onclick="mlExporterLab()" title="Une vidéo où les tracés et la légende sont gravés">'+S('export',18)+'<span>Exporter la vidéo</span></button>'
       +'<button type="button" class="mlx-pied-b" onclick="mlOnglet(\'reglages\')">'+S('reglages',18)+'<span>Paramètres avancés</span></button>'
       +'<button type="button" id="ml-enreg" class="mlx-enreg" onclick="enregistrerMotionLab()" disabled>'
         +'<span>Enregistrer la correction</span><i class="mlx-enreg-pt" aria-hidden="true"></i>'+S('fleched',20)+'</button>'
@@ -4372,6 +4911,15 @@ function _mlxMajEditeur(){
     +'<label class="mlx-coche"><input type="checkbox"'+(a.lg!==0?' checked':'')+' onchange="mlAnnotOption(\'lg\',this.checked)"> Dans la légende</label>';
   // LE SUIVI DU MOUVEMENT : images clés, et l'interpolation entre elles.
   h+='<div class="mlx-suivi"><label class="mlx-coche"><input type="checkbox"'+(suit?' checked':'')+' onchange="mlAnnotSuivre()"> Suivre le mouvement</label>'
+    // LE SUIVI AUTOMATIQUE : depuis l'image affichée jusqu'à la fin du tracé.
+    +(_ml.mode==='annotsuivi'
+      ?'<div class="mle-prog mlx-suivi-prog"><div class="mle-barre"><i id="mlx-suivi-barre"></i></div>'
+        +'<span id="mlx-suivi-txt">'+escapeHtml(_ml.progres||'Suivi en cours…')+'</span>'
+        +'<button type="button" class="mlx-b" onclick="mlAnnotSuiviArreter()">Arrêter</button></div>'
+      :'<div class="mlx-auto-l"><button type="button" class="mlx-b mlx-b-r" onclick="mlAnnotSuiviAuto()"'+(_mlOccupe()?' disabled':'')+'>'
+        +S('cible',14)+' Suivi automatique</button><span class="mlx-note">Pose '+(ML_SUIVI_TYPES_POINTS.includes(a.t)?'les points':'le tracé')
+        +' sur l’image de départ : le suivi '+(ML_SUIVI_TYPES_POINTS.includes(a.t)?'les ':'l’')+'accompagne jusqu’à '+_mlxT(Math.min(a.f,sMs+ML_SUIVI_MAX_MS))
+        +'.</span></div>')
     +(suit?'<div class="mlx-cles"><span>'+S('cle',12)+' '+(a.k||[]).length+' image'+((a.k||[]).length>1?'s':'')+' clé'+((a.k||[]).length>1?'s':'')
         +'<b id="mlx-cle-etat">'+(cle>=0?' · clé à cet instant':'')+'</b></span><span class="mlx-esp"></span>'
       +'<button type="button" class="mlx-b" onclick="mlCleAller(-1)" aria-label="Image clé précédente">◀</button>'
@@ -6716,7 +7264,7 @@ let _mlPose=null;
 let _mlPosePret=null;
 
 /** @returns {boolean} Une analyse tourne : les répétitions ne bougent pas. */
-function _mlOccupe(){ return !!_ml&&(_ml.mode==='analyse'||_ml.mode==='pose'||_ml.mode==='repsuivi'); }
+function _mlOccupe(){ return !!_ml&&(_ml.mode==='analyse'||_ml.mode==='pose'||_ml.mode==='repsuivi'||_ml.mode==='annotsuivi'); }
 
 /**
  * Le moteur de pose, chargé à la demande. Douze mégaoctets qui ne partent que
@@ -8369,7 +8917,7 @@ function mlLecteurCorrection(hote,o){
 // relit aussi ce qu'il a envoyé : c'est le même lecteur.
 /**
  * @param {HTMLElement} hote
- * @param {{url:string, annot:DocAnnot}} o
+ * @param {{url:string, annot:DocAnnot, nom?:string, logo?:string}} o
  * @returns {{pause:()=>void, aller:(ms:number)=>void, detruire:()=>void}}
  */
 function mlLecteurAnnote(hote,o){
@@ -8392,6 +8940,7 @@ function mlLecteurAnnote(hote,o){
       +'<span class="mlx-esp"></span>'
       +'<button type="button" class="ml-b mla-b mla-orig" data-a="orig" aria-pressed="false">'+ico('orig',16)+'<span>Version originale</span></button>'
       +'<button type="button" class="ml-b mla-b" data-a="plein" aria-label="Plein écran">'+ico('plein',16)+'</button>'
+      +'<button type="button" class="ml-b mla-b mla-export" data-a="export" title="Une vidéo où les tracés sont gravés">'+ico('export',16)+'<span>Télécharger</span></button>'
     +'</div>'
     +'<div class="mla-liste"></div>'
   +'</div>';
@@ -8456,6 +9005,12 @@ function mlLecteurAnnote(hote,o){
     if(act==='prec'||act==='suiv'){
       pause();
       aller((Number(video.currentTime)||0)*1000+(act==='prec'?-1:1)*mlPasImageMs(videoDetectFps(video)));
+      return;
+    }
+    if(act==='export'){
+      pause();
+      mlOuvrirExport({url:o.url,annot:doc,nom:o.nom||'video',sequence:null,dureeMs:(Number(video.duration)||0)*1000,logo:o.logo||'',
+        libLogo:'Le logo de mon coach en bas à droite'});
       return;
     }
     if(act==='orig'){ original=!original; b.setAttribute('aria-pressed',String(original)); scene.classList.toggle('mlx-original',original); dessiner(); return; }
@@ -8531,13 +9086,16 @@ function mlAfficherCorrection(u,v){
     +'<div id="mlc-origine"></div>';
   _mlc.m=m; _mlc.url=String(v.url||'');
   const ha=_mlEl('mlc-annot');
-  if(ha&&an&&aAnnot) _mlc.annote=mlLecteurAnnote(ha,{url:_mlc.url,annot:an});
+  // LE LOGO DU COACH signe la vidéo que l'athlète télécharge — et partage.
+  const logoCoach=(()=>{ try{ const c=/** @type {any} */(window).coachAffichable(u); return String((c&&c.logo)||'').trim(); }catch(e){ return ''; } })();
+  if(ha&&an&&aAnnot) _mlc.annote=mlLecteurAnnote(ha,{url:_mlc.url,annot:an,nom:String(v.name||'video'),logo:logoCoach});
   const hote=_mlEl('mlc-lecteur');
   if(hote&&m) _mlc.lecteur=mlLecteurCorrection(hote,{url:_mlc.url,correction:m,segments:segs,voixUrl:m.voix?m.voix.url:'',
     annot:aAnnot?an:null});
   return true;
 }
 function mlQuitterCorrection(){
+  try{ mlFermerExport(); }catch(e){}
   if(_mlc.lecteur){ _mlc.lecteur.detruire(); _mlc.lecteur=null; }
   if(_mlc.annote){ _mlc.annote.detruire(); _mlc.annote=null; }
   const o=_mlEl('mlc-origine'); if(o) o.innerHTML='';
@@ -8998,6 +9556,28 @@ function _mlInjecterStyle(){
     // timeline et « Enregistrer » restent en vue ; les deux colonnes défilent
     // chacune de leur côté, et la vidéo prend toute la hauteur qui reste.
     '@media (min-width:1181px) and (min-height:700px){#s-coach-motion-lab{height:100vh;height:100dvh;overflow:hidden}#s-coach-motion-lab .scroll-area{min-height:0;overflow:hidden;display:flex;flex-direction:column}#ml-contenu{flex:1;min-height:0;display:flex;flex-direction:column}.mlx{flex:1;min-height:0;padding-bottom:10px}.mlx-grille{flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch}.mlx-g,.mlx-d{min-height:0;overflow-y:auto;scrollbar-width:thin;padding-right:2px}.mlx-c{position:static;min-height:0}.mlx .ml-scene{flex:1;min-height:0}.mlx .ml-scene video{width:100%;height:100%}.mlx-tl-corps{height:164px;max-height:none}}',
+    // LA FENÊTRE D'EXPORT, au-dessus de tout.
+    '.mle-voile{position:fixed;inset:0;z-index:var(--z-modal,1000);display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.72)}',
+    '.mle{width:min(520px,100%);max-height:92vh;max-height:92dvh;overflow-y:auto;padding:16px 18px;border-radius:14px;border:1px solid rgba(224,32,32,.5);background:#0e0e0e;box-shadow:0 20px 60px rgba(0,0,0,.7),0 0 24px rgba(224,32,32,.15);color:var(--text)}',
+    '.mle-tete{display:flex;align-items:flex-start;gap:12px;margin-bottom:6px}',
+    '.mle-tete div{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}',
+    '.mle-tete b{font-size:var(--fs-md);font-weight:800}',
+    '.mle-tete span:not(.mle-ico){font-size:var(--fs-xs);color:var(--sub);line-height:1.45}',
+    '.mle-ico{display:flex;color:var(--red);padding-top:2px}',
+    '.mle-choix{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}',
+    '.mle-alerte{margin:10px 0 0;padding:10px 12px;border-radius:9px;border:1px solid rgba(255,160,0,.5);background:rgba(255,160,0,.08);font-size:var(--fs-xs);color:var(--text-strong)}',
+    '.mle-prog{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:var(--fs-xs);color:var(--text-strong)}',
+    '.mle-prog[hidden]{display:none}',
+    '.mle-barre{flex:1 1 100%;height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden}',
+    '.mle-barre i{display:block;height:100%;background:var(--red);transform:scaleX(0);transform-origin:left;transition:transform var(--arc-strike) linear}',
+    '.mle-fin{margin-top:12px}',
+    '.mle-fin[hidden]{display:none}',
+    '.mle-apercu{display:block;width:100%;max-height:40vh;border-radius:10px;background:#000}',
+    '.mle-pied{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}',
+    '.mle .mlx-enreg{min-width:0;min-height:48px;padding:0 20px;font-size:var(--fs-sm);text-decoration:none}',
+    '.mlx-auto-l{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:10px}',
+    '.mlx-suivi-prog{margin-top:10px}',
+    '.mla-export span{margin-left:2px}',
     // LES LARGEURS MOYENNES : la vidéo et la droite, puis la gauche sous elles.
     '@media (max-width:1180px){.mlx-grille{grid-template-columns:minmax(0,1fr) minmax(320px,40%)}.mlx-g{grid-column:1/-1;order:3;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.mlx-c{position:static}}',
     // LE TÉLÉPHONE DU COACH EN SALLE : une colonne, la vidéo d'abord.
