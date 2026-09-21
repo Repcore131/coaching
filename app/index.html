@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1359';
+window.RC_BUILD='1360';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -17659,6 +17659,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // explicatif (« surcharge » d'abord). Ni mesure, ni ressenti — une
   // preference d'interface.
   'vus',
+  // La lignee de synchronisation (voir CLOUD._baseDe) : un horodatage du
+  // serveur, retire avant tout envoi. Rien de l'athlete.
+  '_syncMaj',
   // `innerHTML` est un faux positif du balayage : c'est une propriete du DOM,
   // jamais un champ de dossier. Il est nomme pour que le test reste exact.
   'innerHTML'
@@ -83266,7 +83269,22 @@ function grilleCoachPosee(c){
  */
 function _tbReconcilier(c){
   if(!c||!c.email) return false;
-  if(!grilleCoachPosee(c)) return false;
+  // ⚠ DES CIBLES QUE LA GRILLE A ECRITES SUIVENT LA GRILLE, NAF CHOISI OU NON.
+  //   Mesure au banc a deux appareils, 21/09/2026 : en automatique, le coach
+  //   regle les proteines au tableau — les cibles s'ecrivent, origine
+  //   « tableur » — puis passe en prise de masse. Sa fiche affiche le calcul,
+  //   2 096 kcal ; l'athlete garde 1 892. Idem apres une pesee : le calcul du
+  //   coach suit le nouveau poids, le dossier non. Le pied du tableau promet
+  //   pourtant « chaque reglage part vers ton athlete des que tu le changes ».
+  //   La garde n'acceptait qu'une grille au niveau d'activite CHOISI, et ce
+  //   coach n'en avait pas choisi : le calcul tournait sur le defaut.
+  //
+  //   L'ORIGINE « tableur » SUFFIT, et c'est la meme regle que
+  //   ciblesPoseesParCoach : ces chiffres, c'est le coach qui les a poses. Ce
+  //   que l'athlete a ecrit elle-meme (origine « athlete ») reste a elle — la
+  //   demande du 14/09/2026 tient.
+  const _duTableur=(((c.nutrition||{}).macros||{}).origine)==='tableur';
+  if(!grilleCoachPosee(c)&&!_duTableur) return false;
   const chiffres=m=>JSON.stringify(m?{on:m.on,off:m.off,origine:m.origine}:null);
   const avant=chiffres((c.nutrition||{}).macros);
   if(!_tbEcrireCibles(c)) return false;

@@ -35774,6 +35774,33 @@ async function testExercices(){
             return true;
           } finally { _tbOpts=svO; }})());
 
+        ok('DES CIBLES ÉCRITES PAR LA GRILLE SUIVENT LA GRILLE, NAF CHOISI OU NON',(()=>{
+          // ⚠ LE DEFAUT DU 21/09/2026, MESURE AU BANC A DEUX APPAREILS. En
+          //   automatique, le coach regle les proteines au tableau : les cibles
+          //   s'ecrivent, origine « tableur ». Il passe ensuite en prise de
+          //   masse : sa fiche affiche le calcul — 2 096 kcal —, l'athlete
+          //   garde 1 892. La reconciliation exigeait un niveau d'activite
+          //   choisi, et ce coach n'en avait pas choisi.
+          const svO=_tbOpts;
+          try{
+            const perime={on:{kcal:1892,p:147,l:68,g:173},off:{kcal:1892,p:147,l:68,g:173},
+              origine:'tableur',origineDate:Date.now()-864e5};
+            const t=mk({manuel:false,tableur:{protGkg:2.4},macros:JSON.parse(JSON.stringify(perime))});
+            // TEMOIN : sans NAF, sinon le cas redevient celui du test precedent.
+            if(grilleCoachPosee(t)) return _echec('témoin : le NAF est posé, le cas ne teste plus rien');
+            if(_tbReconcilier(t)!==true) return _echec('des cibles de la grille restent sur l’ancien calcul');
+            const att=cibleTableur(t,{email:t.email});
+            if(Number(t.nutrition.macros.on.p)!==att.p)
+              return _echec('protéines '+t.nutrition.macros.on.p+' g au lieu des '+att.p+' de la grille');
+            if(t.nutrition.macros.origine!=='tableur') return _echec('l’origine a changé : '+t.nutrition.macros.origine);
+            // ET CE QUE L'ATHLETE A ECRIT ELLE-MEME RESTE A ELLE — 14/09/2026.
+            const sienne=mk({manuel:false,tableur:{protGkg:2.4},
+              macros:Object.assign(JSON.parse(JSON.stringify(perime)),{origine:'athlete'})});
+            if(_tbReconcilier(sienne)!==false) return _echec('les cibles de l’athlète sont recalculées');
+            if(Number(sienne.nutrition.macros.on.kcal)!==1892) return _echec('ses calories ont bougé');
+            return true;
+          } finally { _tbOpts=svO; }})());
+
         ok('VERROUILLEE, LA CARTE NE GARDE QUE LE RÉGLAGE PARTAGÉ',(()=>{
           // ⚠ CE TEST A CHANGE DE FRONTIERE, PAS D'INTENTION. Il interdisait
           //   TOUT reglage sur la carte verrouillee. Depuis le 20/09/2026, les
