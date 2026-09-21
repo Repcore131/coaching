@@ -38084,6 +38084,43 @@ async function testExercices(){
       }
       return true;})());
 
+    ok('UNE MENSURATION QUI DESCEND S\u2019ÉCRIT COMME UNE QUI MONTE',(()=>{
+      // ⚠ REGLE R32, ET C'EST LE CAS QUI COMPTE POUR KEVIN : son athlete est
+      //   en seche, donc le signe moins est chez lui le cas NORMAL. Aucun
+      //   objectif declare ne dit dans quel sens un tour de cuisse « doit »
+      //   aller — un tour de taille qui descend est un but, un tour de bras
+      //   qui descend une perte, et RIEN dans le dossier ne permet de
+      //   trancher. L'ecart s'ecrit donc toujours dans la meme encre.
+      const J=864e5, t=Date.now();
+      const bil=(a,b)=>[{date:t-92*J,'bil-bicep-r':String(a)},
+                        {date:t-6*J, 'bil-bicep-r':String(b)}];
+      const monte={id:'S+',role:'athlete',gender:'H',bilans:bil(38.2,39.0)};
+      const descend={id:'S-',role:'athlete',gender:'H',bilans:bil(39.6,38.8)};
+      const lire=u=>{
+        const boite=document.createElement('div');
+        boite.innerHTML=_htmlCorpsEtiquettes(u,'h','face',null).etiquettes;
+        const e=[...boite.querySelectorAll('.cc-corps-et')]
+          .find(x=>/biceps/i.test(x.textContent)&&!/triceps/i.test(x.textContent));
+        const v=e.querySelector('.cc-corps-ev');
+        return {etiq:e.className+'|'+(e.getAttribute('data-sans')||''),
+                val:v.className+'|'+(v.getAttribute('style')||''),
+                texte:v.textContent};
+      };
+      const a=lire(monte), b=lire(descend);
+      if(a.etiq!==b.etiq)
+        return _echec('l’étiquette change d’habillage selon le sens : '+a.etiq+' vs '+b.etiq);
+      if(a.val!==b.val)
+        return _echec('la valeur change d’encre selon le sens : '+a.val+' vs '+b.val);
+      if(a.texte===b.texte) return _echec('les deux sens affichent la même chose');
+      // ⚠ ET LE SIGNE MOINS EST UN VRAI MOINS (U+2212), pas un trait d'union.
+      //   C'est _synEcart qui l'ecrit ; un trait d'union se lit comme une
+      //   cesure et se casse en fin de ligne.
+      if(b.texte.charCodeAt(0)!==8722)
+        return _echec('le signe négatif n’est pas un vrai moins : ' + b.texte.charCodeAt(0));
+      if(a.texte.charCodeAt(0)!==43)
+        return _echec('le signe positif a disparu : '+a.texte);
+      return true;})());
+
     ok('L\u2019ONGLET FERMÉ DIT CE QU\u2019IL Y A DE L\u2019AUTRE CÔTÉ',(()=>{
       // ⚠ LA MOITIE DES MUSCLES N'EXISTE QUE DANS UNE VUE : fessiers, ischios,
       //   lombaires et deltoide posterieur ne se montrent que de dos. Un coach
