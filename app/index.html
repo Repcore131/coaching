@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1374';
+window.RC_BUILD='1375';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5351,13 +5351,16 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .drs-photo::after{content:'';position:absolute;inset:0;
   background:linear-gradient(0deg,#0b0b0b 0,rgba(11,11,11,0) 55%)}
 .drs>*:not(.drs-photo){position:relative}
-.drs-devise{position:absolute!important;top:18px;right:22px;display:flex;align-items:center;gap:16px;
+.drs-devise{position:absolute!important;top:22px;right:22px;display:flex;align-items:center;gap:12px;
   pointer-events:none}
 .drs-devise i{display:block;width:110px;height:1.5px;background:linear-gradient(90deg,rgba(224,32,32,0),var(--red))}
-.drs-devise span{font-size:9px;letter-spacing:2.5px;line-height:1.6;color:var(--sub);
-  text-transform:uppercase;text-align:right}
+.drs-devise span{font-size:9px;letter-spacing:2px;line-height:1.6;color:var(--sub);
+  text-transform:uppercase;white-space:nowrap}
 .drs-cols{display:grid;grid-template-columns:minmax(300px,34%) minmax(0,1fr);gap:22px 34px}
 .drs-gauche,.drs-droite{display:flex;flex-direction:column;gap:16px;min-width:0}
+/* LE MENU MORD SUR LE PADDING DU HAUT : 10 px de la bordure, et le calendrier
+   remonte d'autant. Kevin : « monte le bouton pres de la bordure haute ». */
+.drs-droite{gap:10px}
 .drs-tete{display:flex;align-items:center;gap:18px}
 .drs-ico{width:58px;height:58px;border-radius:10px;border:1px solid rgba(224,32,32,.45);
   background:rgba(224,32,32,.08);display:flex;align-items:center;justify-content:center;
@@ -5403,8 +5406,8 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .drs-dl-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .drs-dl-t b{font-size:var(--fs-sm);font-weight:800}
 .drs-dl-t span{font-size:var(--fs-xs);color:var(--sub);line-height:1.4}
-.drs-per{align-self:flex-start;margin-left:14%;display:flex;align-items:center;gap:12px;width:min(380px,48%);
-  height:42px;padding:0 14px;border:1px solid rgba(255,255,255,.22);border-radius:10px;
+.drs-per{align-self:flex-start;margin:-10px 0 0;display:flex;align-items:center;gap:12px;width:min(330px,46%);
+  height:38px;padding:0 14px;border:1px solid rgba(255,255,255,.22);border-radius:10px;
   background:rgba(0,0,0,.55);cursor:pointer;color:var(--text)}
 .drs-per:focus-within{border-color:var(--red)}
 .drs-per-ico,.drs-per-fl{display:flex;flex:0 0 auto}
@@ -5437,7 +5440,7 @@ button.drs-j{cursor:pointer}
 button.drs-j:hover{filter:brightness(1.15)}
 button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .drs-pied{display:flex;align-items:center;justify-content:space-between;gap:10px 24px;flex-wrap:wrap}
-.drs-note{margin:0;flex:1 1 260px;max-width:440px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5}
+.drs-note{margin:0;flex:1 1 200px;max-width:440px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5}
 .drs-leg{display:flex;flex-wrap:wrap;gap:10px 26px;font-size:var(--fs-sm);color:var(--text-strong)}
 .drs-leg span{display:inline-flex;align-items:center;gap:9px}
 .drs-leg i{display:block;width:18px;height:18px;border-radius:4px}
@@ -5454,16 +5457,18 @@ button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .drs-p{width:16px;height:16px;border-radius:4px}
   .drs-sem,.drs-grille{gap:5px}
   .drs-j{height:26px;border-radius:6px}
-  .drs-devise i{width:56px}
+  .drs-devise i{width:44px}
+  .drs-leg{gap:8px 16px;font-size:var(--fs-xs)}
+  .drs-leg i{width:14px;height:14px}
 }
 @container drs (max-width:880px){
   .drs-cols{grid-template-columns:minmax(0,1fr)}
   .drs-photo{left:auto;right:0;width:42%;height:46%;opacity:.5}
   .drs-cols{row-gap:18px}
-  .drs-per{width:auto;margin-left:0;align-self:stretch}
+  .drs-per{width:auto;margin:0;align-self:stretch}
 }
+@container drs (max-width:720px){ .drs-devise{display:none} }
 @container drs (max-width:560px){
-  .drs-devise{display:none}
   .drs-tete{gap:14px}
   .drs-ico{width:50px;height:50px}
   .drs-titre{font-size:30px}
@@ -84396,7 +84401,7 @@ function _htmlDieteRespect(c){
   const ligne=(cl,lib,n)=>'<div class="drs-l"><i class="drs-p drs-p-'+cl+'"></i><span>'+lib+'</span><b>'+n+'</b></div>';
   return '<div class="drs">'
     +'<div class="drs-photo" aria-hidden="true"></div>'
-    +'<div class="drs-devise" aria-hidden="true"><i></i><span>Discipline<br>Aujourd’hui<br>Résultats<br>Demain</span></div>'
+    +'<div class="drs-devise" aria-hidden="true"><i></i><span>Discipline, travail et résultats</span></div>'
     +'<div class="drs-cols"><div class="drs-gauche">'
     +'<div class="drs-tete"><span class="drs-ico">'+_DRS_SVG(_DRS_P_COUVERTS,32,true)+'</span>'
       +'<div><div class="drs-titre">Diète <em>respectée</em></div>'
@@ -84444,8 +84449,8 @@ function _htmlDieteRespect(c){
     +cases+'</div></div>'
     +'<div class="drs-pied"><p class="drs-note">'
       +(d.flexible
-        ?'Une case par journée : kcal et protéines à ±10 % de la cible. Touche un jour noté pour l’ouvrir dans le journal.'
-        :'Une case par journée : la réponse de l’athlète, diète tenue ou non.')
+        ?'Touche un jour noté pour l’ouvrir dans le journal.'
+        :'La réponse de l’athlète, jour par jour.')
     +'</p><div class="drs-leg">'
       +'<span><i class="drs-c-oui"></i>Respecté</span>'
       +'<span><i class="drs-c-non"></i>Hors cible</span>'
@@ -84507,9 +84512,10 @@ function dessinerDieteRespectee(c){
   const lignes=Math.ceil((d.dec+d.cases.length)/7);
   const TH=30, TG=6, PP=16;
   const hPan=PP+12+8+lignes*TH+(lignes-1)*TG+16+16+PP;
-  const hDroite=6+40+16+hPan+20;
+  // Le menu a 12 px du haut, le calendrier 12 px sous lui, la signature dessous.
+  const pY=12, yP=pY+38+12;
   const hGauche=58+26+150+22+64;
-  const H=P*2+Math.max(hDroite,hGauche);
+  const H=Math.max(yP+hPan+20+24,P*2+hGauche);
   const cv=document.createElement('canvas'); cv.width=L*K; cv.height=H*K;
   const g=cv.getContext('2d');
   if(!g) return null;
@@ -84539,14 +84545,12 @@ function dessinerDieteRespectee(c){
     }catch(e){}
   }
   g.textBaseline='alphabetic'; g.textAlign='left';
-  // LA DEVISE, en haut a droite.
+  // LA DEVISE, une phrase sur une ligne, a la hauteur du menu.
   g.font='600 8.5px '+M; g.fillStyle=SUB;
-  let lDev=0;
-  ['DISCIPLINE','AUJOURD’HUI','RÉSULTATS','DEMAIN'].forEach((s,k)=>{
-    lDev=Math.max(lDev,_drsTexteEspace(g,s,L-P,P+8+k*13,2.5,true)); });
-  let gr=g.createLinearGradient(L-P-lDev-80,0,L-P-lDev-16,0);
+  const lDev=_drsTexteEspace(g,'DISCIPLINE, TRAVAIL ET RÉSULTATS',L-P,pY+22,2,true);
+  let gr=g.createLinearGradient(L-P-lDev-50,0,L-P-lDev-12,0);
   gr.addColorStop(0,'rgba(224,32,32,0)'); gr.addColorStop(1,ROUGE);
-  g.fillStyle=gr; g.fillRect(L-P-lDev-80,P+23,64,1.5);
+  g.fillStyle=gr; g.fillRect(L-P-lDev-50,pY+18.5,38,1.5);
   // LE TITRE ET SA PASTILLE.
   _drsArrondi(g,P,P,58,58,11); g.fillStyle='rgba(224,32,32,.08)'; g.fill();
   g.strokeStyle='rgba(224,32,32,.45)'; g.lineWidth=1; g.stroke();
@@ -84609,16 +84613,15 @@ function dessinerDieteRespectee(c){
   g.fillStyle=TXT; g.font='800 14px '+M; g.fillText('Reste régulier !',P+60,yC+27);
   g.fillStyle=SUB; g.font='400 11.5px '+M; g.fillText('Plus tu es constant, plus les résultats suivent.',P+60,yC+46);
   // LA PERIODE : une etiquette, pas un menu — une image ne se deroule pas.
-  const pl=Math.min(300,lD*0.56), pX=xD+lD*0.1, pY=P+6;
-  _drsArrondi(g,pX,pY,pl,40,10); g.fillStyle='rgba(0,0,0,.55)'; g.fill();
+  const pl=Math.min(260,lD*0.47), pX=xD;
+  _drsArrondi(g,pX,pY,pl,38,10); g.fillStyle='rgba(0,0,0,.55)'; g.fill();
   g.strokeStyle='rgba(255,255,255,.22)'; g.lineWidth=1; g.stroke();
   g.strokeStyle=TXT; g.lineWidth=1.5;
-  _drsArrondi(g,pX+15,pY+12,18,16,2.5); g.stroke();
-  g.fillStyle=TXT; g.fillRect(pX+15,pY+17,18,1.5);
+  _drsArrondi(g,pX+15,pY+11,18,16,2.5); g.stroke();
+  g.fillStyle=TXT; g.fillRect(pX+15,pY+16,18,1.5);
   g.font='500 14px '+M; g.fillStyle=TXT; g.textAlign='left';
-  g.fillText(d.periodes[d.w]||'',pX+46,pY+25);
+  g.fillText(d.periodes[d.w]||'',pX+46,pY+24);
   // LE CALENDRIER.
-  const yP=pY+40+16;
   _drsArrondi(g,xD,yP,lD,hPan,14); g.fillStyle='rgba(17,17,17,.86)'; g.fill();
   g.strokeStyle='rgba(255,255,255,.1)'; g.lineWidth=1; g.stroke();
   const cw=(lD-2*PP-6*TG)/7;
