@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1354';
+window.RC_BUILD='1355';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -52426,8 +52426,16 @@ function _htmlCorpsCadre(c){
       ?'<div class="cc-corps-n">Écart entre les deux derniers bilans qui portent '
         +'la mesure, reports exclus · ± '
         +String(SYN_BRUIT_MESURE).replace('.',',')+' cm de tolérance.</div>'
-      :'<div class="cc-corps-n">Aucune mensuration relevée à ce jour : le corps '
-        +'montre la charge de travail, pas les écarts.</div>');
+      // ⚠ ON DIT LA RAISON, PAS L'ETAT — et c'est un correctif du meme jour,
+      //   quelques minutes apres avoir distingue « un seul releve » de « pas de
+      //   mesure ». La note annoncait « Aucune mensuration relevee a ce jour » :
+      //   vrai quand rien n'a jamais ete mesure, FAUX des que l'athlete a pris
+      //   ses mesures UNE fois — ce qui est precisement le cas que je venais de
+      //   nommer sur les etiquettes. La raison, elle, couvre les deux : il faut
+      //   deux releves de la MEME mensuration pour en tirer un ecart.
+      :'<div class="cc-corps-n">Aucun écart à afficher : il faut deux relevés '
+        +'d’une même mensuration pour en calculer un. Le corps montre en '
+        +'attendant la charge de travail.</div>');
   // ⚠ LA LEGENDE DIT CE QUE LA COULEUR DECRIT, ET CE QU'ELLE NE DECRIT PAS.
   //   Sans elle, un quadriceps rouge a cote d'un « +0,9 cm » se lit comme un
   //   jugement sur la cuisse. Le rouge dit « au-dessus du MRV » — une charge

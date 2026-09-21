@@ -38307,8 +38307,23 @@ async function testExercices(){
       if(!h) return _echec('le cadre ne se rend pas du tout');
       if(h.indexOf('tolérance')>=0)
         return _echec('une tolérance est annoncée alors qu’aucune mensuration n’existe');
-      if(h.indexOf('Aucune mensuration relevée')<0)
-        return _echec('le cadre ne dit pas qu’il n’a aucune mensuration');
+      // ⚠ LA NOTE DIT LA RAISON, PAS L'ETAT. Elle annoncait « Aucune
+      //   mensuration relevée à ce jour » : vrai quand rien n'a jamais été
+      //   mesuré, FAUX dès que l'athlète a pris ses mesures UNE fois. La
+      //   raison, elle, couvre les deux — et c'est la même phrase qu'il faut
+      //   trouver dans les deux cas.
+      if(h.indexOf('il faut deux relevés')<0)
+        return _echec('le cadre ne dit pas pourquoi il n’affiche aucun écart');
+      // UN SEUL RELEVE PAR MENSURATION : meme silence, meme raison, et surtout
+      // pas « aucune mensuration relevée », qui serait faux.
+      const unSeul={id:'N3',email:'n3@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-90*J,'bil-weight':'80'},
+                {date:t-2*J, 'bil-weight':'79','bil-chest':'101.4'}]};
+      const h3=_htmlCorpsCadre(unSeul);
+      if(h3.indexOf('il faut deux relevés')<0)
+        return _echec('un seul relevé ne reçoit pas la bonne explication');
+      if(h3.indexOf('Aucune mensuration relevée')>=0)
+        return _echec('le cadre nie une mensuration qui existe');
       // ET DES QU'UNE MESURE EXISTE, LA TOLERANCE REVIENT : c'est elle qui
       // donne son sens au mot « stable ».
       const plein={id:'N2',email:'n2@t.fr',role:'athlete',gender:'H',
