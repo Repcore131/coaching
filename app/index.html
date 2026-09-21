@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1349';
+window.RC_BUILD='1350';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -52311,9 +52311,17 @@ function _htmlCorpsCadre(c){
   const sem=bilans.length?corpsSemaineVolume(u):null;
   let volSem={};
   if(sem){ try{ volSem=volumeSemaine(u,sem.cle)||{}; }catch(e){ volSem={}; } }
+  // ⚠ ON APPELLE corpsTeintes PLUTOT QUE DE REFAIRE SA BOUCLE. Elle etait
+  //   recopiee ici — « pour ne pas recalculer les zones », qui coutent treize
+  //   recherches — et cette copie pouvait diverger de l'originale : c'est
+  //   exactement ce qu'une assertion de cette suite interdit par ailleurs.
+  //
+  //   ET LA COPIE PORTAIT UN PIEGE : elle declarait `const c` pour la couleur,
+  //   qui MASQUAIT le parametre `c` — le dossier de l'athlete. Sans effet
+  //   aujourd'hui, le bloc etant clos ; faux le jour ou quelqu'un ajoute une
+  //   ligne qui lit le dossier a l'interieur de cette boucle.
   const zones=sem?corpsZones(u,vue,volSem):{};
-  const teintes={};
-  for(const m in zones){ const c=GC_COULEURS[zones[m]]; if(c) teintes[m]=c; }
+  const teintes=sem?corpsTeintes(u,vue,volSem):{};
   // LA CHARGE DESCEND JUSQU'AUX ETIQUETTES : c'est la qu'elle devient lisible
   // pour qui ne voit pas la couleur.
   const eti=(bilans.length>=2)
