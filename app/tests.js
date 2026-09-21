@@ -38187,6 +38187,20 @@ async function testExercices(){
         // ET LE NOM DU MUSCLE Y EST : sans lui, on entend un chiffre sans sujet.
         if(!/[A-Za-zÀ-ÿ]/.test(l)) return _echec('la phrase lue ne nomme rien : '+l);
       }
+      // ⚠ ET CHAQUE ETIQUETTE NOMME SON MUSCLE, PAS CELUI DE SA MENSURATION.
+      //   Le titre commencait par l'ecart puis la MENSURATION — « +0,8 cm ·
+      //   Biceps droit · … » — si bien que l'etiquette du TRICEPS annoncait
+      //   « Biceps droit » et ne nommait jamais le triceps. A l'oeil ca
+      //   passait, le nom etant la premiere ligne de l'etiquette ; a la voix
+      //   non, puisque role="img" fait lire l'aria-label et RIEN d'autre. Un
+      //   lecteur d'ecran entendait le biceps deux fois et le triceps jamais.
+      for(const e of ets){
+        const nom=(e.querySelector('.cc-corps-em')||{}).textContent||'';
+        const dit=e.getAttribute('aria-label')||'';
+        if(!nom) return _echec('une étiquette sans nom de muscle');
+        if(dit.indexOf(nom)!==0)
+          return _echec('« '+nom+' » s’annonce « '+dit.slice(0,40)+'… »');
+      }
       // LA CHARGE Y EST AUSSI, pour qui ne voit pas la couleur.
       const bi=ets.find(e=>/biceps/i.test(e.textContent)&&!/triceps/i.test(e.textContent));
       const lb=bi.getAttribute('aria-label');

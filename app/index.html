@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1351';
+window.RC_BUILD='1352';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -51688,8 +51688,21 @@ function corpsEtiquette(u,muscle){
   const t=_synEcart(e.delta,'cm',SYN_BRUIT_MESURE);
   const court=(m&&m.court)||(m&&m.lib)||cle;
   const periode=_corpsJour(e.debut.date)+' → '+_corpsJour(e.fin.date);
+  // ⚠ LE TITRE COMMENCE PAR LE MUSCLE, ET C'EST UN CORRECTIF DU 21/09/2026.
+  //   Il commencait par l'ecart et enchainait sur la MENSURATION — « +0,8 cm ·
+  //   Biceps droit · … » — si bien que l'etiquette du TRICEPS annoncait
+  //   « Biceps droit » et ne nommait jamais le triceps. A l'oeil ca passait :
+  //   le nom du muscle est la premiere ligne de l'etiquette. A la voix, non :
+  //   depuis que l'etiquette porte role="img", SEUL l'aria-label est lu, et il
+  //   est construit sur ce titre. Un lecteur d'ecran entendait donc le biceps
+  //   deux fois et le triceps jamais.
+  //
+  //   Le muscle d'abord, la mensuration ensuite : « Triceps · +0,8 cm · tour
+  //   de bras : Biceps droit · … ». Les deux sont nommes, et on voit lequel
+  //   est mesure.
   return {muscle,lib,cle,ecart:e,valeur:t.delta,source:court,periode,
-    titre:t.delta+' · '+((m&&m.lib)||cle)+' · du '+_corpsJourLong(e.debut.date)
+    titre:lib+' · '+t.delta+' · mesuré par : '+((m&&m.lib)||cle)
+      +' · du '+_corpsJourLong(e.debut.date)
       +' au '+_corpsJourLong(e.fin.date)+' · tolérance ± '
       +String(SYN_BRUIT_MESURE).replace('.',',')+' cm'
       +' · '+String(e.debut.valeur).replace('.',',')+' → '
