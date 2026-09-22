@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1406';
+window.RC_BUILD='1407';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -19348,6 +19348,8 @@ window.onload=()=>{
           }
           // ET SON ECRAN NUTRITION : voir _repeindreNutritionAthlete.
           if(currentUser.role==='athlete') _repeindreNutritionAthlete();
+          // ET TOUS SES AUTRES ECRANS : voir _repeindreEcransAthlete.
+          if(currentUser.role==='athlete') _repeindreEcransAthlete();
         }catch(e){console.warn('sync periodique :',e);}
        }finally{
         // TOUTES LES SORTIES PASSENT ICI : les quatre `return`, la fin
@@ -45991,6 +45993,11 @@ async function appliquerProgramme(id){
 }
 function loadSessionManager(){
   go('s-session-manager');
+  _renderSessionManager();
+}
+// LE RENDU SEUL, SANS go() : c'est lui que la descente rejoue — voir
+// _repeindreSeancesAthlete. go() fermerait une saisie ouverte.
+function _renderSessionManager(){
   setTimeout(_majLiensClasser,0);
   if(!currentUser.sessions_config) initSessionsConfig();
   // Migration : sept créneaux, un TABLEAU même si Firebase a rendu un objet,
@@ -87955,6 +87962,10 @@ function _htmlBlocSupplements(list,avant){
 }
 function loadSupplements(){
   go('s-supplements');
+  _renderSupplements();
+}
+// LE TABLEAU SEUL, SANS go() — voir _repeindreComplementsAthlete.
+function _renderSupplements(){
   const list=_suppStore();
   const el=document.getElementById('supp-table-content');
   if(!el) return;
@@ -89794,6 +89805,10 @@ function loadVideos(nomPrerempli){
   // changent pas de comportement.
   const _nom=document.getElementById('vid-name-input');
   if(_nom&&nomPrerempli) _nom.value=String(nomPrerempli);
+  _renderVideosListe();
+}
+// LA LISTE SEULE, SANS go() ni champ pre-rempli — voir _repeindreVideosAthlete.
+function _renderVideosListe(){
   _vidsSorted=(currentUser.videos||[]).slice().sort((a,b)=>b.date-a.date);
   const el=document.getElementById('vid-list');
   if(!_vidsSorted.length){
@@ -93618,7 +93633,10 @@ function _htmlBarreSemaine(pct,col,isToday,accentBas){
 // que c'est le seul endroit ou l'oubli serait invisible.
 function loadSteps(containerId='steps-content',opts){
   const _avecImport=!opts||opts.avecImport!==false;
-  if(containerId==='steps-content') go('s-steps');
+  // « repeint » : la descente repeint l'ecran deja affiche, SANS go() — voir
+  // _repeindreLifestyleAthlete. Tous les autres appels passent par go() comme
+  // avant.
+  if(containerId==='steps-content'&&!(opts&&opts.repeint)) go('s-steps');
   const log=currentUser.stepsLog||[];
   const goals=currentUser.stepsGoals||STEPS_GOALS_DEFAUT;
   const dayTypes=currentUser.stepsDayType||{};
@@ -99413,9 +99431,183 @@ function _repeindreNutritionAthlete(){
     const y=se.scrollTop, ys=s.scrollTop;
     _renderNutriContent(typeDiete(currentUser.nutrition||{}),
       (typeof _fjDate!=='undefined'&&_fjDate)||undefined);
+    // ET LA LISTE DES COMPLEMENTS, que le coach change aussi (build 1405).
+    try{ loadSuppEmbedded(); }catch(e){}
     try{ se.scrollTop=y; s.scrollTop=ys; }catch(e){}
     return true;
   }catch(e){ console.warn('[RepCore] repeint de la nutrition :',e); return false; }
+}
+// ⚠ LES AUTRES ECRANS DE L'ATHLETE AVAIENT LE MEME ANGLE MORT (build 1405).
+//   Apres la nutrition (1403), l'audit de tous les ecrans ou l'athlete lit
+//   quelque chose que son coach peut changer : la descente ne repeignait
+//   QUE l'accueil et la nutrition. Mesure au banc a deux appareils, athlete
+//   immobile sur l'ecran : le coach renomme une seance, repond a un bilan,
+//   corrige une video, assigne une habitude, pose un objectif de pas, ajoute
+//   un complement, remplit une journee d'affutage — tout arrivait dans le
+//   dossier, rien a l'ecran tant qu'elle n'en sortait pas.
+//
+//   REPEINTS, un par ecran : Mes seances, l'apercu d'une seance, Évolution
+//   (bandeau de phase et reponses aux bilans), Corrections, Lifestyle et
+//   l'ecran Pas, Compléments, Échéance.
+//   PAS REPEINTS, et pourquoi :
+//   • Canal : ses messages ne voyagent pas dans le dossier — l'ecran les
+//     telecharge lui-meme a l'ouverture, aucune descente ne les apporte ;
+//   • Sommeil, Caféine, Santé, Traitements, Évictions, Historique, Quel
+//     bilan ? : rien que le coach puisse y changer ;
+//   • le profil, l'edition de sa propre seance, les parcours d'accueil, la
+//     saisie d'un bilan : des formulaires en cours — repeindre y effacerait
+//     ce qui n'est pas encore enregistre ;
+//   • la correction Motion Lab et le comparateur : une video qui joue.
+//
+// LES MEMES QUATRE RETENUES POUR TOUS, dans _ecranAthleteRepeignable :
+// l'ecran doit etre CELUI qu'on regarde, aucun champ ne doit avoir le focus,
+// aucune seance ne doit etre en cours — et jamais de go(), qui fermerait une
+// saisie ouverte et recalculerait les pastilles d'onglets. Seul le contenu
+// est repeint, a la meme hauteur.
+//
+// UNE SEANCE EN COURS : l'ecran de seance a l'ecran, ou un instantane
+// rc_wo_state a soi, encore valable. Tant qu'il existe, la seance peut
+// reprendre d'un geste : on ne touche a rien. Le repeint attendra la
+// descente suivante — ou le prochain passage sur l'ecran, qui le redessine.
+function _seanceEnCours(){
+  try{
+    const w=document.getElementById('s-workout');
+    if(w&&w.classList.contains('active')) return true;
+    return !!_woLoadSnap();
+  }catch(e){ return true; }   // dans le doute, on ne derange pas
+}
+// L'ecran `id` peut-il etre repeint maintenant ? Rend l'ecran, ou null.
+function _ecranAthleteRepeignable(id){
+  if(!currentUser||currentUser.role==='coach') return null;
+  const s=document.getElementById(id);
+  if(!s||!s.classList.contains('active')) return null;
+  const ae=document.activeElement;
+  if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return null;
+  if(_seanceEnCours()) return null;
+  return s;
+}
+// A LA MEME HAUTEUR. Les ecrans defilent dans leur .scroll-area, pas dans la
+// page : garder le seul scrollTop du document ne retenait rien.
+function _repeindreSansBouger(s,peindre){
+  const se=document.scrollingElement||document.documentElement;
+  const zones=[s].concat(Array.prototype.slice.call(s.querySelectorAll('.scroll-area')));
+  const hauts=zones.map(z=>z.scrollTop), y=se.scrollTop;
+  try{ peindre(); }
+  finally{
+    try{ zones.forEach((z,i)=>{ if(z.isConnected) z.scrollTop=hauts[i]; }); se.scrollTop=y; }catch(e){}
+  }
+  return true;
+}
+// MES SEANCES. Le choix « Alterner » deplie sous un creneau serait referme
+// sous le doigt : on attend qu'il soit replie.
+function _repeindreSeancesAthlete(){
+  try{
+    const s=_ecranAthleteRepeignable('s-session-manager');
+    if(!s) return false;
+    if(s.querySelector('[id^="alt-"]:not(:empty)')) return false;
+    return _repeindreSansBouger(s,_renderSessionManager);
+  }catch(e){ console.warn('[RepCore] repeint des séances :',e); return false; }
+}
+// L'APERCU D'UNE SEANCE, avant de la lancer : le mot du coach et les
+// exercices. Les lignes deja depliees le restent — tant que leur nombre n'a
+// pas change, sans quoi le rang ne designerait plus le meme exercice.
+function _repeindreApercuAthlete(){
+  try{
+    const s=_ecranAthleteRepeignable('s-seance-apercu');
+    if(!s) return false;
+    const z=document.getElementById('ap-contenu');
+    const lignes=()=>z?Array.prototype.slice.call(z.querySelectorAll(':scope > details')):[];
+    const ouverts=lignes().map(d=>d.open);
+    let fait=false;
+    _repeindreSansBouger(s,()=>{
+      fait=_renderApercu()!==false;
+      const l=lignes();
+      if(fait&&l.length===ouverts.length) l.forEach((d,i)=>{ if(ouverts[i]) d.open=true; });
+    });
+    return fait;
+  }catch(e){ console.warn('[RepCore] repeint de l’aperçu :',e); return false; }
+}
+// ÉVOLUTION : le bandeau de phase, la synthese, et l'onglet ouvert — c'est
+// dans « Notes » que la reponse du coach a un bilan s'affiche. showProgressTab
+// avec sansMemo : un repeint n'est pas un choix d'onglet, il n'ecrit rien.
+// LE QUESTIONNAIRE LEAF-Q ENTAME n'est pas redessine : ses reponses vivent
+// dans _leafqRep, mais leur surlignage dans le DOM.
+function _repeindreEvolutionAthlete(){
+  try{
+    const s=_ecranAthleteRepeignable('s-progress');
+    if(!s) return false;
+    const onglet=PROG_ONGLETS.find(t=>{ const b=_progBoutonOnglet(t); return !!(b&&b.classList.contains('btn-red')); })||'poids';
+    return _repeindreSansBouger(s,()=>{
+      const z=document.getElementById('prog-encart-osseux');
+      if(z) z.innerHTML=_htmlEncartOsseux(currentUser);
+      if(!Object.keys(_leafqRep||{}).length){ try{ renderReds(); }catch(e){} }
+      renderBandeauPhase();
+      try{ _renderSyntheseProgression(); }catch(e){}
+      showProgressTab(onglet,_progBoutonOnglet(onglet),true);
+    });
+  }catch(e){ console.warn('[RepCore] repeint d’Évolution :',e); return false; }
+}
+// CORRECTIONS. Autant de cartes qu'avant : « voir plus » deja touche ne se
+// replie pas. La zone d'envoi, hors de la liste, n'est pas touchee.
+function _repeindreVideosAthlete(){
+  try{
+    const s=_ecranAthleteRepeignable('s-videos');
+    if(!s) return false;
+    const l=document.getElementById('vid-card-list');
+    const n=l?l.children.length:0;
+    return _repeindreSansBouger(s,()=>{
+      _renderVideosListe();
+      if(n>20) _renderVideoBatch(20,n-20);
+    });
+  }catch(e){ console.warn('[RepCore] repeint des corrections :',e); return false; }
+}
+// LIFESTYLE, et l'ecran Pas : les habitudes et les objectifs de pas du coach.
+// Meme repli que _rerenderLifestyle si les cartes echouent.
+function _repeindreLifestyleAthlete(){
+  try{
+    let s=_ecranAthleteRepeignable('s-lifestyle');
+    if(s) return _repeindreSansBouger(s,()=>{
+      try{ sanRendre(); }catch(e){
+        loadSteps('lifestyle-steps-content',{avecImport:false});
+        loadSleep('lifestyle-sleep-content',null,{avecImport:false});
+      }
+    });
+    s=_ecranAthleteRepeignable('s-steps');
+    if(s) return _repeindreSansBouger(s,()=>loadSteps('steps-content',{repeint:true}));
+    return false;
+  }catch(e){ console.warn('[RepCore] repeint de Lifestyle :',e); return false; }
+}
+// COMPLÉMENTS : le coach en ajoute, en retire, en change la dose.
+function _repeindreComplementsAthlete(){
+  try{
+    const s=_ecranAthleteRepeignable('s-supplements');
+    if(!s) return false;
+    return _repeindreSansBouger(s,_renderSupplements);
+  }catch(e){ console.warn('[RepCore] repeint des compléments :',e); return false; }
+}
+// ÉCHÉANCE : les journees d'affutage que le coach pose une a une. Chez
+// l'athlete, le dossier affiche est le sien — on repart de currentUser.
+function _repeindreEcheanceAthlete(){
+  try{
+    const s=_ecranAthleteRepeignable('s-echeance');
+    if(!s) return false;
+    if(_echCible&&_echCible.email!==currentUser.email) return false;
+    _echCible=currentUser;
+    return _repeindreSansBouger(s,_renderEcheance);
+  }catch(e){ console.warn('[RepCore] repeint de l’échéance :',e); return false; }
+}
+// Un seul ecran est actif a la fois : au plus un repeint. Rend les noms de
+// ceux qui ont eu lieu.
+const _REPEINTS_ATHLETE=[
+  ['seances',_repeindreSeancesAthlete],['apercu',_repeindreApercuAthlete],
+  ['evolution',_repeindreEvolutionAthlete],['corrections',_repeindreVideosAthlete],
+  ['lifestyle',_repeindreLifestyleAthlete],['complements',_repeindreComplementsAthlete],
+  ['echeance',_repeindreEcheanceAthlete]];
+function _repeindreEcransAthlete(){
+  const faits=[];
+  if(!currentUser||currentUser.role==='coach') return faits;
+  for(const [nom,f] of _REPEINTS_ATHLETE){ try{ if(f()) faits.push(nom); }catch(e){} }
+  return faits;
 }
 function _repeindreApresDescente(emails){
   try{
@@ -99427,6 +99619,8 @@ function _repeindreApresDescente(emails){
       try{ checkFeedbackNotif(); _majPastilleVideos(); checkReponseBilanNotif(); _majPastilleBilan(); }catch(e){}
       if(_actif('s-client-home')) loadClientHome();
       _repeindreNutritionAthlete();
+      // ET TOUS SES AUTRES ECRANS : voir _repeindreEcransAthlete.
+      _repeindreEcransAthlete();
     } else if(currentUser.role==='coach'){
       if(_actif('s-coach-home')){
         const _db=document.getElementById('ct-dashboard');

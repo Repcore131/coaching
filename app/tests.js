@@ -27644,7 +27644,9 @@ async function testExercices(){
         // « Supprime ca et la possibilite de le faire ». Le bloc part ; la voie
         // du COACH reste ouverte, et la vignette du selecteur continue
         // d afficher les photos deja deposees.
-        const src=String(loadSessionManager);
+        // LES DEUX FONCTIONS : depuis 1405, loadSessionManager ne fait plus que
+        // go() + _renderSessionManager, qui porte le rendu.
+        const src=String(loadSessionManager)+String(_renderSessionManager);
         if(/uploadSessionPhoto\(/.test(src))
           return _echec('le gestionnaire propose encore le televersement');
         return /htmlCarteSeanceSlot\(/.test(src)
@@ -32753,6 +32755,257 @@ async function testExercices(){
           currentUser=sU; currentClientId=sId;
           if(sDB) DB.set('users',sDB);
         }})());
+
+      // BUILD 1407 — LE BANC A DEUX APPAREILS, ENCORE : apres la nutrition
+      // (1403), TOUS les autres ecrans ou l'athlete lit quelque chose que son
+      // coach peut changer restaient sur l'ancienne valeur. Mesure, athlete
+      // immobile : le coach renomme une seance, repond a un bilan, corrige une
+      // video, assigne une habitude, pose un objectif de pas, ajoute un
+      // complement, remplit une journee d'affutage — le dossier recevait tout,
+      // l'ecran rien.
+      ok('1407 — LES AUTRES ÉCRANS DE L’ATHLÈTE SUIVENT LA DESCENTE, PAR LES DEUX PORTES',(()=>{
+        const src=_prodSrc();
+        for(const f of ['_repeindreEcransAthlete','_ecranAthleteRepeignable','_repeindreSansBouger',
+                        '_seanceEnCours','_repeindreSeancesAthlete','_repeindreApercuAthlete',
+                        '_repeindreEvolutionAthlete','_repeindreVideosAthlete','_repeindreLifestyleAthlete',
+                        '_repeindreComplementsAthlete','_repeindreEcheanceAthlete',
+                        '_renderSessionManager','_renderVideosListe','_renderSupplements'])
+          if(typeof window[f]!=='function') return _echec(f+' a disparu');
+        // LES DEUX PORTES : la boucle de fond et le repeint apres descente.
+        if(src.indexOf("if(currentUser.role==='athlete') _repeindreEcransAthlete();")<0)
+          return _echec('la synchro de fond ne repeint pas les autres écrans');
+        const i=src.indexOf('function _repeindreApresDescente(');
+        if(i<0) return _echec('_repeindreApresDescente a disparu');
+        if(src.slice(i,i+1200).indexOf('_repeindreEcransAthlete()')<0)
+          return _echec('le repeint après descente ignore les autres écrans');
+        // ⚠ AUCUN NE PASSE PAR go() NI PAR UN CHARGEUR D'ECRAN : go() ferme les
+        //   saisies ouvertes et recalcule les pastilles d'onglets.
+        const interdit=/\bgo\(|loadSessionManager\(|loadVideos\(|loadSupplements\(|loadProgress\(|loadLifestyle\(|loadNutrition\(|openBilanChoice\(/;
+        for(const f of ['_repeindreSeancesAthlete','_repeindreApercuAthlete','_repeindreEvolutionAthlete',
+                        '_repeindreVideosAthlete','_repeindreLifestyleAthlete','_repeindreComplementsAthlete',
+                        '_repeindreEcheanceAthlete','_repeindreEcransAthlete'])
+          if(interdit.test(String(window[f]))) return _echec(f+' change d’écran ou rappelle un chargeur');
+        // Et les trois rendus extraits ne portent plus de go() non plus.
+        for(const f of ['_renderSessionManager','_renderVideosListe','_renderSupplements'])
+          if(/\bgo\(/.test(String(window[f]))) return _echec(f+' appelle encore go()');
+        // L'ECRAN PAS se repeint sans go() : c'est la seule porte qui le permet.
+        if(String(loadSteps).indexOf('opts.repeint')<0)
+          return _echec('loadSteps ne sait pas repeindre sans changer d’écran');
+        return true;})());
+
+      // Le fixture commun : une athlete suivie, son programme, ses bilans, sa
+      // video, ses complements. AUCUN go(), AUCUN loadX : on allume l'ecran a
+      // la main, et on le rend comme le fait la descente.
+      const _f1407=()=>{
+        const j=Date.now();
+        return {id:'R1407',email:'r1407@t.fr',role:'athlete',gender:'F',fname:'Rita',lname:'T',
+          birthdate:'1994-04-04','init-age':32,createdAt:j-200*864e5,
+          consent:{health:true,policyVersion:POLICY_VERSION,date:j-200*864e5},
+          sessions_config:['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche']
+            .map((d,i)=>({day:d,name:i===0?'PUSH':'',active:i===0,notes:'',
+              exercises:i===0?[{name:'Développé couché',series:'4',reps:'8',repos:'90s'},
+                               {name:'Dips',series:'3',reps:'10',repos:'90s'}]:[]})),
+          sessions:[],
+          bilans:[{type:'depart',date:j-60*864e5,'deb-weight':'62','deb-height':'168','deb-age':'32','deb-gender':'Femme'},
+                  {type:'coaching',date:j-5*864e5,'bil-weight':'61','bil-motivation':'Motivée'}],
+          videos:[{id:'v1407',name:'Squat',url:'x',date:j-864e5,size:'—',feedback:null}],
+          nutrition:{supplements:[{id:1789000000001,name:'Créatine',dosage_quantity:'5',
+            dosage_unit:'g',timings:['matin'],active:true}]},
+          habitudes:[],stepsGoals:{on:8000,off:6000},weightLog:[{date:localISODate(new Date(j-864e5)),kg:61}]};
+      };
+      // Allume UN ecran, joue `f`, et remet tout comme c'etait — y compris
+      // l'ecran de seance, qu'un test precedent aurait pu laisser allume : il
+      // vaut « séance en cours » et bloquerait tous les repeints.
+      const _surEcran1407=(id,f)=>{
+        const sauve=currentUser, s=document.getElementById(id);
+        if(!s) return _echec('écran introuvable : '+id);
+        const etait=s.classList.contains('active');
+        const wo=document.getElementById('s-workout');
+        const woEtait=!!(wo&&wo.classList.contains('active'));
+        const snap=(()=>{ try{ return localStorage.getItem('rc_wo_state'); }catch(e){ return null; } })();
+        const _saveUser=window.saveUser;
+        try{ if(document.activeElement&&document.activeElement.blur) document.activeElement.blur(); }catch(e){}
+        try{
+          if(wo) wo.classList.remove('active');
+          try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
+          // UN RENDU NE DOIT RIEN ECRIRE : si l'un d'eux appelle saveUser, on
+          // le voit ici plutot que de pousser un dossier de test au cloud.
+          window.saveUser=()=>true;
+          currentUser=_f1407();
+          s.classList.add('active');
+          return f(currentUser,s);
+        } finally {
+          window.saveUser=_saveUser;
+          currentUser=sauve;
+          s.classList.toggle('active',etait);
+          if(wo) wo.classList.toggle('active',woEtait);
+          try{ if(snap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',snap); }catch(e){}
+        }
+      };
+      const _txt1407=id=>((document.getElementById(id)||{}).innerText
+        ||(document.getElementById(id)||{}).textContent||'').replace(/\s+/g,' ');
+
+      ok('1407 — MES SÉANCES : le nom posé par le coach arrive à l’écran',_surEcran1407('s-session-manager',(u,s)=>{
+          _renderSessionManager();
+          if(!/PUSH/.test(_txt1407('session-slots'))) return _echec('la séance n’est pas rendue');
+          u.sessions_config[0].name='PUSH LOURD';
+          if(_repeindreSeancesAthlete()!==true) return _echec('le repeint a refusé');
+          if(!/PUSH LOURD/.test(_txt1407('session-slots'))) return _echec('l’écran garde l’ancien nom');
+          // LE CHOIX « ALTERNER » OUVERT NE SE REFERME PAS SOUS LE DOIGT.
+          const alt=document.getElementById('alt-0');
+          if(!alt) return _echec('le tiroir « alterner » a disparu du gabarit');
+          alt.innerHTML='<div>choix ouvert</div>';
+          u.sessions_config[0].name='PUSH ENCORE PLUS LOURD';
+          if(_repeindreSeancesAthlete()!==false) return _echec('le repeint a écrasé un choix ouvert');
+          alt.innerHTML='';
+          // HORS DE CET ECRAN, RIEN.
+          s.classList.remove('active');
+          return _repeindreSeancesAthlete()===false?true:_echec('le repeint agit hors de l’écran');
+        }));
+
+      ok('1407 — APERÇU DE SÉANCE : le mot du coach et ses exercices suivent',_surEcran1407('s-seance-apercu',u=>{
+          const si=(typeof _apIdx!=='undefined')?_apIdx:null, sa=(typeof _apAnime!=='undefined')?_apAnime:false;
+          try{
+            _apIdx=0; _apAnime=true;
+            if(_renderApercu()===false) return _echec('l’aperçu ne se rend pas');
+            u.sessions_config[0].notes='Serre les omoplates';
+            u.sessions_config[0].name='PUSH TRÈS LOURD';
+            if(_repeindreApercuAthlete()!==true) return _echec('le repeint a refusé');
+            const t=_txt1407('ap-contenu')+' '+_txt1407('ap-titre');
+            if(t.indexOf('Serre les omoplates')<0) return _echec('le mot du coach n’arrive pas');
+            return /PUSH TRÈS LOURD/.test(t)?true:_echec('le titre garde l’ancien nom');
+          } finally { _apIdx=si; _apAnime=sa; }
+        }));
+
+      ok('1407 — ÉVOLUTION : la réponse du coach au bilan et le bandeau de phase',_surEcran1407('s-progress',u=>{
+          const b=u.bilans[1];
+          showProgressTab('notes',_progBoutonOnglet('notes'),true);
+          if(_txt1407('progress-content').indexOf('Motivée')<0)
+            return _echec('l’onglet Notes ne rend pas les réponses du bilan');
+          b.reponseCoach='Bravo pour cette semaine';
+          b.reponseDate=Date.now(); b.reponseVue=false;
+          if(!changerPhase(u,'masse',null,'coach')) return _echec('la phase du coach ne se pose pas');
+          if(_repeindreEvolutionAthlete()!==true) return _echec('le repeint a refusé');
+          if(_txt1407('progress-content').indexOf('Bravo pour cette semaine')<0)
+            return _echec('la réponse du coach n’arrive pas dans Notes');
+          // ET L'ONGLET OUVERT RESTE OUVERT : un repeint n'est pas un choix.
+          const bt=_progBoutonOnglet('notes');
+          if(!bt||!bt.classList.contains('btn-red')) return _echec('le repeint a changé d’onglet');
+          return _txt1407('prog-bandeau-phase').indexOf(PHASES.masse.lib)>=0
+            ?true:_echec('le bandeau de phase reste vide');
+        }));
+
+      ok('1407 — CORRECTIONS : le retour du coach arrive sur la carte de la vidéo',_surEcran1407('s-videos',u=>{
+          _renderVideosListe();
+          if(_txt1407('vid-list').indexOf('Squat')<0) return _echec('la vidéo n’est pas rendue');
+          // feedbackSeen reste absent : une correction JAMAIS vue ecrirait dans
+          // le dossier au rendu, et ce test ne doit rien enregistrer.
+          u.videos[0].feedback='Descends plus bas';
+          u.videos[0].feedbackDate=Date.now();
+          if(_repeindreVideosAthlete()!==true) return _echec('le repeint a refusé');
+          return _txt1407('vid-list').indexOf('Descends plus bas')>=0
+            ?true:_echec('le retour du coach n’arrive pas à l’écran');
+        }));
+
+      ok('1407 — LIFESTYLE : l’habitude assignée et l’objectif de pas du coach',_surEcran1407('s-lifestyle',u=>{
+          sanRendre();
+          u.habitudes=[{cle:'libre-eau',libelle:'Boire deux litres'}];
+          u.stepsGoals={on:12345,off:6000};
+          if(_repeindreLifestyleAthlete()!==true) return _echec('le repeint a refusé');
+          const t=(_txt1407('lifestyle-habitudes')+' '+_txt1407('lifestyle-steps-content'))
+            .replace(/[\s  ]/g,'');
+          if(t.indexOf('Boiredeuxlitres')<0) return _echec('l’habitude du coach n’arrive pas');
+          return t.indexOf('12345')>=0?true:_echec('l’objectif de pas du coach n’arrive pas');
+        }));
+
+      ok('1407 — L’ÉCRAN PAS se repeint SANS changer d’écran',_surEcran1407('s-steps',u=>{
+          const _g=window.go; let alle=null;
+          try{
+            window.go=id=>{ alle=id; };
+            u.stepsGoals={on:11111,off:6000};
+            if(_repeindreLifestyleAthlete()!==true) return _echec('le repeint a refusé');
+            if(alle!==null) return _echec('le repeint est passé par go(\''+alle+'\')');
+            return _txt1407('steps-content').replace(/[\s  ]/g,'').indexOf('11111')>=0
+              ?true:_echec('l’objectif du coach n’arrive pas sur l’écran Pas');
+          } finally { window.go=_g; }
+        }));
+
+      ok('1407 — COMPLÉMENTS : celui que le coach ajoute arrive à l’écran',_surEcran1407('s-supplements',u=>{
+          _renderSupplements();
+          if(_txt1407('supp-table-content').indexOf('Créatine')<0) return _echec('les compléments ne sont pas rendus');
+          u.nutrition.supplements.push({id:1789000000002,name:'Magnésium bisglycinate',
+            dosage_quantity:'300',dosage_unit:'mg',timings:['soir'],active:true});
+          if(_repeindreComplementsAthlete()!==true) return _echec('le repeint a refusé');
+          return _txt1407('supp-table-content').indexOf('Magnésium')>=0
+            ?true:_echec('le complément du coach n’arrive pas');
+        }));
+
+      ok('1407 — ÉCHÉANCE : la journée d’affûtage posée par le coach arrive',_surEcran1407('s-echeance',u=>{
+          const sc=(typeof _echCible!=='undefined')?_echCible:null;
+          try{
+            u.echeance={date:Date.now()+4*864e5,type:'COMPETITION',federation:null,categorie:null,
+              poidsCible:null,fiches:{},journal:[],vueLe:Date.now()};
+            _echCible=u;
+            if(_renderEcheance()!==true) return _echec('l’échéance ne se rend pas');
+            const r=poserFicheEcheance(u,4,{cibleGlucides:'250',cibleSodium:'',cibleEau:'',
+              seance:'dos léger 30 min',poses:false});
+            if(!r||r.ok!==true) return _echec('le coach ne peut pas poser la journée : '+(r&&r.raison));
+            if(_repeindreEcheanceAthlete()!==true) return _echec('le repeint a refusé');
+            return _txt1407('ech-contenu').indexOf('dos léger 30 min')>=0
+              ?true:_echec('la journée du coach n’arrive pas à l’écran');
+          } finally { _echCible=sc; }
+        }));
+
+      ok('1407 — LE REPEINT NE S’INVITE PAS : séance en cours, champ au focus, autre écran',(()=>{
+        const sauve=currentUser, s=document.getElementById('s-videos');
+        const etait=s.classList.contains('active');
+        const snap=(()=>{ try{ return localStorage.getItem('rc_wo_state'); }catch(e){ return null; } })();
+        const wo=document.getElementById('s-workout');
+        const woEtait=!!(wo&&wo.classList.contains('active'));
+        try{
+          if(wo) wo.classList.remove('active');
+          try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
+          currentUser=_f1407();
+          s.classList.add('active');
+          if(!_ecranAthleteRepeignable('s-videos')) return _echec('l’écran affiché est refusé sans raison');
+          // 1 — UNE SEANCE EN COURS : l'instantane est a elle, il vaut reprise.
+          try{ localStorage.setItem('rc_wo_state',JSON.stringify({email:currentUser.email,
+            startTime:Date.now()-600000,exercises:[{name:'Squat'}],currentEx:0,sessionData:{}})); }catch(e){}
+          if(_seanceEnCours()!==true) return _echec('une séance reprenable n’est pas vue');
+          if(_ecranAthleteRepeignable('s-videos')!==null) return _echec('le repeint dérange une séance en cours');
+          try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
+          // 2 — L'ECRAN DE SEANCE A L'ECRAN.
+          if(wo){
+            wo.classList.add('active');
+            if(_ecranAthleteRepeignable('s-videos')!==null) return _echec('le repeint agit pendant l’écran de séance');
+            wo.classList.remove('active');
+          }
+          // 3 — UN CHAMP AU FOCUS : la saisie passe avant le rafraîchissement.
+          const ch=document.getElementById('vid-name-input');
+          if(!ch) return _echec('le champ de nom de vidéo a disparu');
+          ch.focus();
+          const bloque=_ecranAthleteRepeignable('s-videos')===null;
+          ch.blur();
+          if(!bloque) return _echec('le repeint écrase une saisie en cours');
+          // 4 — UN COACH n'a pas ces ecrans.
+          currentUser={email:'c1407@t.fr',role:'coach',id:'C1407'};
+          if(_ecranAthleteRepeignable('s-videos')!==null) return _echec('le repeint s’applique au coach');
+          return _repeindreEcransAthlete().length===0?true:_echec('le coach repeint des écrans d’athlète');
+        } finally {
+          currentUser=sauve;
+          s.classList.toggle('active',etait);
+          if(wo) wo.classList.toggle('active',woEtait);
+          try{ if(snap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',snap); }catch(e){}
+        }})());
+
+      ok('1407 — LE REPEINT DE LA NUTRITION REJOUE AUSSI LES COMPLÉMENTS',(()=>{
+        // Mesure au banc : le complement ajoute par le coach arrivait dans le
+        // dossier, la liste de l'ecran Nutrition gardait l'ancienne — 1403 ne
+        // rejouait que _renderNutriContent, quand loadNutrition en rend trois.
+        if(String(_repeindreNutritionAthlete).indexOf('loadSuppEmbedded()')<0)
+          return _echec('le repeint de la nutrition ignore les compléments');
+        return /\bgo\(|loadNutrition\(/.test(String(_repeindreNutritionAthlete))
+          ?_echec('le repeint de la nutrition change d’écran'):true;})());
 
       ok('« Enregistrer ces chiffres » est CENTRE et seul sur sa ligne',(()=>{
         // Pleine largeur il se confondait avec le tableau qu'il enregistre.
@@ -43393,7 +43646,8 @@ async function testExercices(){
       if(txt(sans).indexOf('Ce programme d\'essai te permet de commencer tout de suite. Tu peux le modifier librement.')<0) return _echec('sans coach : '+txt(sans));
       if(/n'a pas encore publié/.test(txt(avec)+txt(sans))) return _echec('l’ancienne phrase est restée');
       // UN SEUL BANDEAU : les trois écrans appellent la même fonction.
-      for(const f of [openSessionPicker,loadSessionManager,_rendreSemaineAvecBandeau])
+      // _renderSessionManager depuis 1405 : c'est lui qui rend « Mes séances ».
+      for(const f of [openSessionPicker,_renderSessionManager,_rendreSemaineAvecBandeau])
         if(String(f).indexOf('_bandeauEssai(')<0) return _echec(f.name+' n’utilise pas _bandeauEssai');
       const g=document.getElementById('s-session-manager').innerHTML;
       if(g.indexOf('id="sm-essai"')<0||g.indexOf('id="sm-essai"')>g.indexOf('id="session-slots"')) return _echec('le bandeau n’est pas au-dessus des créneaux');
