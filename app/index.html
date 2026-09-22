@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1407';
+window.RC_BUILD='1408';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5273,8 +5273,11 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
    confondait avec le tableau qu'il enregistre ; centre et dimensionne sur son
    libelle, il se lit comme une action. nowrap : « Enregistrer ces chiffres »
    coupe en deux sur un telephone etroit se lirait comme deux boutons. */
+/* ⚠ LE LIBELLE PEUT SE COUPER DEPUIS LE BUILD 1408 : « Enregistrer et
+   transmettre à l'athlète » ne tient pas sur une ligne a 375 px, et un bouton
+   qui deborde de sa carte serait pire qu'un libelle sur deux lignes. */
 .tbk-save-c{display:block;width:auto;min-width:min(100%,240px);max-width:100%;
-  margin:0 auto 10px;padding:0 22px;min-height:46px;white-space:nowrap}
+  margin:0 auto 10px;padding:9px 22px;min-height:46px;white-space:normal;line-height:1.25}
 /* ══ LES CARTES DES CALCULS ALIMENTAIRES (build 1403) ══════════════════
    Kevin, 22/09/2026, maquette a l'appui. Chaque tableau vit dans une carte :
    filet rouge, pastille d'icone, titre et sous-titre en <caption>, lignes en
@@ -5642,9 +5645,38 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
    « Appliquer » si. Le rouge est a DROITE : la main qui vise le premier bouton
    ne tombe pas dessus par inadvertance. A l'etroit ils repassent l'un sous
    l'autre, et l'ordre tient — le rouge reste dessous. */
-.tbk-deux{display:grid;grid-template-columns:1fr;gap:8px;margin:0 0 16px}
-.tbk-deux .btn{width:100%;margin:0;min-height:46px}
-@media(min-width:520px){.tbk-deux{grid-template-columns:1fr 1fr}}
+/* ══ L'HISTORIQUE DES CIBLES (build 1408) ══════════════════════════════
+   Le nombre de calories en grand, la date entre parentheses a cote, les trois
+   macros dessous, et le bouton qui la remet en place. */
+.tbk-histo{margin:0 0 14px;display:flex;flex-direction:column;gap:6px}
+.tbk-h-e{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 12px;
+  padding:8px 11px;border-radius:11px;border:1px solid rgba(255,255,255,.09);
+  background:rgba(255,255,255,.028)}
+.tbk-h-e.tbk-h-cur{border-color:rgba(224,32,32,.42);background:rgba(224,32,32,.10)}
+.tbk-h-t{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;min-width:0}
+.tbk-h-k{font-size:19px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
+.tbk-h-d{font-size:11.5px;color:var(--text-faint)}
+.tbk-h-b2,.tbk-h-b3{padding:2px 7px;border-radius:6px;font-size:9.5px;font-weight:800;
+  letter-spacing:1px;text-transform:uppercase}
+.tbk-h-b2{color:#ff4d4d;background:rgba(224,32,32,.14);border:1px solid rgba(224,32,32,.4)}
+.tbk-h-b3{color:#4ade80;background:rgba(74,222,128,.10);border:1px solid rgba(74,222,128,.4)}
+.tbk-h-m{grid-column:1;font-size:11.5px;color:var(--sub);line-height:1.4}
+.tbk-h-r{grid-row:1/3;grid-column:2;align-self:center;padding:7px 12px;border-radius:9px;
+  border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:var(--text);
+  font-family:Montserrat,sans-serif;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.tbk-h-r:hover,.tbk-h-r:focus-visible{border-color:rgba(224,32,32,.5);color:#ff5a5a}
+.tbk-h-vide{padding:9px 11px;border-radius:11px;border:1px dashed rgba(255,255,255,.14);
+  font-size:11.5px;color:var(--text-faint);line-height:1.45}
+.tbk-h-an{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:8px 11px;
+  border-radius:11px;border:1px solid rgba(245,197,66,.45);background:rgba(245,197,66,.10);
+  font-size:11.5px;color:var(--text)}
+.tbk-h-x{padding:0;border:0;background:none;color:var(--link,#60a5fa);font:inherit;
+  text-decoration:underline;cursor:pointer}
+/* La preuve du transfert, sous les boutons. */
+.tbk-tr{display:flex;align-items:center;gap:8px;margin:0 0 12px;padding:7px 11px;
+  border-radius:10px;border:1px solid rgba(74,222,128,.35);background:rgba(74,222,128,.08);
+  font-size:11.5px;color:var(--text-dim)}
+.tbk-tr svg{color:#4ade80;flex:0 0 auto}
 
 /* ══ LE TYPE DE DIETE, EN TETE DE L'ONGLET NUTRITION ════════════════
    Kevin, 08/09/2026 : « que je sache l'eleve, il est mis en quoi ». Deux
@@ -73788,7 +73820,9 @@ function ciblesPoseesParCoach(u){
   //   dit pas « le coach n'a rien pose ». Ce sont deux phrases differentes, et
   //   c'est leur confusion qui a produit deux ecrans qui ne parlent pas du
   //   meme athlete.
-  if(((n.macros||{}).origine)==='tableur') return true;
+  // `'histo'` : le coach a remis une ancienne cible en place — c'est lui qui
+  // decide, au meme titre que s'il venait de la calculer.
+  if(((n.macros||{}).origine)==='tableur'||((n.macros||{}).origine)==='histo') return true;
   // Le drapeau explicite gagne ensuite : un coach qui a LEVE l'interrupteur a
   // dit ce qu'il voulait, et un dossier ou l'athlete avait pris la main avant
   // ce lot se repare au premier enregistrement du coach.
@@ -83384,7 +83418,11 @@ function saisieManuelle(user){
   //   `'athlete'`, et les dossiers d'avant les origines n'en portent aucune —
   //   tous continuent de tomber dans le repli ci-dessous, exactement comme
   //   avant.
-  if(m.origine==='tableur') return false;
+  //   `'histo'` — une cible remise en place depuis l'historique (build 1408) —
+  //   se lit comme elle : ce sont des grammes deja calcules, remis en place,
+  //   pas des grammes tapes. Sans cette ligne, un dossier en automatique
+  //   basculait en saisie manuelle des qu'on remettait une ancienne cible.
+  if(m.origine==='tableur'||m.origine==='histo') return false;
   const pose=o=>!!(o&&(Number(o.kcal)>0||Number(o.p)>0||Number(o.g)>0||Number(o.l)>0));
   return pose(m.on)||pose(m.off);
 }
@@ -83451,6 +83489,7 @@ function saveClientNutriManuel(v){
       if(!viol.length){
         c.nutrition.macros=Object.assign({},c.nutrition.macros,
           Object.assign({},saisie,{origine:'auto',origineDate:Date.now()}));
+        _histoNoter(c,'auto');
         _poserReglagesCalcul(c);
       } else {
         const pl=plancherEffectif(c);
@@ -83980,6 +84019,7 @@ function _tbEcrireCibles(c){
   if(!c.nutrition) c.nutrition={};
   c.nutrition.macros={on:j.on,off:cyc?j.off:j.on,
     origine:'tableur',origineDate:Date.now()};
+  _histoNoter(c,'tableur');
   return j;
 }
 // L'AVIS EST DIFFERE, PAS L'ENVOI. Les chiffres partent au premier geste ; ce
@@ -84125,25 +84165,182 @@ function sportsTableurAuto(){
   try{ renderCoachNutriSection(c); }catch(e){}
   return true;
 }
-// L'ECRITURE. Elle range les quatre reglages sous nutrition.tableur — le
-// meme endroit que cibleTableur relit, sans quoi le tableau montrerait un
-// reglage que le calcul ignore.
-function enregistrerReglagesTableur(){
-  const o=_tbOpts||{};
+// ══ L'HISTORIQUE DES CIBLES (build 1408) ═════════════════════════════════
+// Kevin, 22/09/2026 : « un historique des modifications pour voir les anciens
+// enregistrements avec le nombre de calories en gros, la date entre
+// parentheses a cote, et en dessous glucides, proteines et lipides ; ou l'on
+// peut selectionner un ancien enregistrement pour le remettre en place, et la
+// possibilite d'annuler quand meme ».
+//
+// IL VIT DANS LE DOSSIER (nutrition.histo) et non sur l'appareil du coach :
+// c'est l'historique des cibles de l'ATHLETE, il doit survivre a un changement
+// de telephone et se lire depuis n'importe quel appareil du coach.
+//
+// ⚠ UNE LIGNE PAR CIBLE REELLEMENT DIFFERENTE, et pas une par geste. Chaque
+//   menu du tableau reecrit les cibles : sans regroupement, trois secondes de
+//   reglages auraient rempli l'historique de vingt lignes identiques a une
+//   kilocalorie pres. Deux ecritures rapprochees se fondent en une, sauf un
+//   ENVOI EXPLICITE (« Enregistrer et transmettre »), qui garde sa ligne.
+const HISTO_MAX=25;
+const HISTO_FUSION_MS=600000;   // 10 min
+const HISTO_LIB=Object.freeze({tableur:'réglage du tableau',coach:'saisie manuelle',
+  transmis:'transmis à l’athlète',auto:'calcul automatique',histo:'remise en place',
+  reinit:'remise au point de départ'});
+function _histoBloc(b){
+  const n=v=>Math.round(Number(v)||0);
+  const o=b||{};
+  return {kcal:n(o.kcal),p:n(o.p),g:n(o.g),l:n(o.l),f:n(o.f)};
+}
+/** PURE. L'historique d'un dossier, quelle que soit la forme rendue par Firebase. */
+function histoCibles(c){
+  const h=c&&c.nutrition&&c.nutrition.histo;
+  const l=Array.isArray(h)?h:(h&&typeof h==='object'
+    ?Object.keys(h).sort((a,b)=>a-b).map(k=>h[k]):[]);
+  return l.filter(e=>e&&e.on&&Number(e.on.kcal)>0)
+    .map(e=>({d:Number(e.d)||0,src:String(e.src||'coach'),on:_histoBloc(e.on),off:_histoBloc(e.off||e.on)}));
+}
+function _histoNoter(c,src){
+  try{
+    const m=(c&&c.nutrition&&c.nutrition.macros)||null;
+    if(!m||!m.on||!(Number(m.on.kcal)>0)) return;
+    const e={d:Date.now(),src:src||'coach',on:_histoBloc(m.on),off:_histoBloc(m.off||m.on)};
+    const l=histoCibles(c);
+    const der=l[l.length-1];
+    const memes=der&&JSON.stringify(der.on)===JSON.stringify(e.on)
+      &&JSON.stringify(der.off)===JSON.stringify(e.off);
+    if(memes){
+      // La meme cible : on ne la note pas deux fois — mais un envoi explicite
+      // le dit, parce que c'est lui qui prouve que l'athlete l'a recue.
+      if(e.src==='transmis'){ der.src='transmis'; der.d=e.d; }
+      c.nutrition.histo=l; return;
+    }
+    if(der&&e.d-der.d<HISTO_FUSION_MS&&der.src!=='transmis'&&e.src!=='transmis') l.pop();
+    l.push(e);
+    while(l.length>HISTO_MAX) l.shift();
+    c.nutrition.histo=l;
+  }catch(err){}
+}
+// LA DERNIERE TRANSMISSION CONFIRMEE, sur CET appareil. Elle ne va pas dans le
+// dossier : ce serait une ecriture de plus a pousser pour dire qu'on vient de
+// pousser. L'historique, lui, garde la ligne « transmis ».
+const TBK_TRANSMIS_CLE='rc_tbk_transmis';
+function _transmisLire(){
+  try{ const o=JSON.parse(localStorage.getItem(TBK_TRANSMIS_CLE)||'null');
+    return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; }
+}
+function _transmisPoser(email,info){
+  if(!email) return;
+  try{ const o=_transmisLire(); o[email]=info;
+    localStorage.setItem(TBK_TRANSMIS_CLE,JSON.stringify(o)); }catch(e){}
+}
+// ⚠ ON ATTEND LA REPONSE DU SERVEUR AVANT DE DIRE « TRANSMIS ». Un message
+//   « transmis » pendant qu'une synchro echoue ferait croire l'athlete servi —
+//   c'est exactement ce que Kevin demande de pouvoir verifier.
+function _confirmerTransmission(c,localOk,envoi){
+  return Promise.resolve(envoi).then(r=>{
+    if(r===false) throw new Error('envoi refusé');
+    const _on=((c.nutrition||{}).macros||{}).on||{};
+    _transmisPoser(c.email,{d:Date.now(),kcal:Math.round(Number(_on.kcal)||0)});
+    toast('Transmis à ton athlète ✓ — reçu à sa prochaine ouverture, au plus tard dans cinq minutes','var(--green)');
+    try{ renderCoachNutriSection(getOwnedClient(currentClientId)||c); }catch(e){}
+    return true;
+  }).catch(()=>{
+    toast(localOk?'Enregistré ici, mais PAS ENCORE TRANSMIS : la synchronisation a échoué, l’envoi repartira tout seul'
+                 :'Échec : ni enregistré sur cet appareil, ni transmis. Recommence.','var(--orange)');
+    try{ renderCoachNutriSection(getOwnedClient(currentClientId)||c); }catch(e){}
+    return false;
+  });
+}
+// UN SEUL BOUTON D'ENREGISTREMENT. Kevin : « il y a trop de boutons
+// similaires, fais juste un “enregistrer et transmettre à l'athlète” ou le
+// coach a la confirmation du transfert ».
+//   · en saisie manuelle, il enregistre les chiffres tapes (meme controle de
+//     plancher qu'avant, meme trace de derogation) ;
+//   · en calcul automatique, il envoie les cibles du tableau.
+// Dans les deux cas, il attend la reponse du serveur et le DIT.
+async function enregistrerEtTransmettre(malgrePlancher){
+  const c0=getOwnedClient(currentClientId);
+  if(!c0){ toast('Aucun athlète ouvert','var(--orange)'); return false; }
+  const manuel=(function(){ try{ return saisieManuelle(c0); }catch(e){ return false; } })();
+  if(manuel){
+    const ok=saveClientNutriMacros(malgrePlancher,true);
+    if(!ok) return false;
+    return _confirmerTransmission(getOwnedClient(currentClientId)||c0,true,window._tbDernierEnvoi);
+  }
+  const ok=await appliquerCiblesTableur(true);
+  if(!ok) return false;
+  return _confirmerTransmission(getOwnedClient(currentClientId)||c0,true,window._tbDernierEnvoi);
+}
+// ── REMETTRE EN PLACE UN ANCIEN ENREGISTREMENT, ET POUVOIR L'ANNULER ──────
+// L'etat d'avant est garde en memoire de session : « annuler » doit ramener
+// EXACTEMENT ce qui etait en place, y compris si l'ancienne cible remise est
+// elle-meme deja dans l'historique.
+let _histoAnnul=null;
+let _histoOuvert=false;
+function basculerHistoTableur(){
+  _histoOuvert=!_histoOuvert;
+  try{ renderCoachNutriSection(getOwnedClient(currentClientId)); }catch(e){}
+  return _histoOuvert;
+}
+async function histoRemettre(i){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return false;
+  const l=histoCibles(c);
+  const e=l[Number(i)];
+  if(!e){ toast('Cet enregistrement n’existe plus','var(--orange)'); return false; }
+  const cyc=(function(){ try{ return dieteCyclee(c); }catch(e2){ return false; } })();
+  const manuel=(function(){ try{ return saisieManuelle(c); }catch(e2){ return false; } })();
+  const ok=await rcConfirm('Remettre ces cibles en place ?',
+    'Ton athlète passera à '+_tbNb(e.on.kcal)+' kcal'
+    +(cyc&&e.off.kcal!==e.on.kcal?(' les jours ON et '+_tbNb(e.off.kcal)+' les jours OFF'):' par jour')
+    +', '+_tbNb(e.on.p)+' g de protéines, '+_tbNb(e.on.g)+' g de glucides et '
+    +_tbNb(e.on.l)+' g de lipides.'
+    +(manuel?' Tu pourras annuler juste après.'
+            :' En calcul automatique, le prochain réglage du tableau recalculera les cibles ;'
+             +' tu pourras annuler juste après.'),'Remettre en place');
+  if(!ok) return false;
+  const m=(c.nutrition||{}).macros||{};
+  _histoAnnul={email:c.email,date:Date.now(),remis:e.on.kcal,
+    avant:{on:Object.assign({},m.on||{}),off:Object.assign({},m.off||m.on||{}),
+           origine:m.origine||null,origineDate:m.origineDate||null}};
   if(!c.nutrition) c.nutrition={};
-  const t=Object.assign({},c.nutrition.tableur||{});
-  for(const k of ['naf','coef','protGkg','lipGkg'])
-    if(o[k]!==undefined) t[k]=o[k];
-  c.nutrition.tableur=t;
+  // ⚠ `origine:'histo'` EST LUE PAR TROIS FONCTIONS, et il a fallu les trois.
+  //   MESURE AU BANC : sans elles, la remise en place ne tenait pas dix
+  //   millisecondes — `_tbReconcilier`, appelee AVANT chaque rendu de la
+  //   section, recalculait la cible du tableau et l'ecrasait — et elle
+  //   basculait le dossier en saisie manuelle, parce que `saisieManuelle` ne
+  //   reconnait comme « calculee » que l'origine « tableur ».
+  //   Une cible remise en place est une PRESCRIPTION : elle tient jusqu'au
+  //   prochain reglage du tableau, qui la recalcule et le dit dans la
+  //   confirmation ci-dessus.
+  c.nutrition.macros={on:Object.assign({},e.on),off:Object.assign({},cyc?e.off:e.on),
+    origine:'histo',origineDate:Date.now()};
+  _histoNoter(c,'histo');
   c.updatedAt=Date.now(); users[c.email]=c;
-  const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Réglages enregistrés','le réglage est');
-  return ok;
+  const localOk=DB.set('users',users);
+  return _confirmerTransmission(c,localOk,CLOUD.pushOne(c.email,c));
 }
-
+function histoAnnuler(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c||!_histoAnnul||_histoAnnul.email!==c.email) return false;
+  const a=_histoAnnul.avant||{};
+  if(!a.on||!(Number(a.on.kcal)>0)){ _histoAnnul=null; return false; }
+  if(!c.nutrition) c.nutrition={};
+  c.nutrition.macros={on:Object.assign({},a.on),off:Object.assign({},a.off||a.on),
+    origine:a.origine||'coach',origineDate:a.origineDate||Date.now()};
+  _histoNoter(c,'histo');
+  _histoAnnul=null;
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const localOk=DB.set('users',users);
+  return _confirmerTransmission(c,localOk,CLOUD.pushOne(c.email,c));
+}
+// ⚠ enregistrerReglagesTableur A ETE RETIREE le 22/09/2026 (build 1408).
+// C'etait le bouton « Enregistrer les reglages », l'un des quatre que Kevin a
+// demande de fondre en un seul : il rangeait sous nutrition.tableur ce que
+// chaque menu y ecrit deja de lui-meme depuis le 19/09. Sans bouton, elle
+// n'avait plus d'appelant.
 const _tbNb=v=>(v==null||!isFinite(v))?'—':String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g,' ');
 const _tbDec=v=>(v==null||!isFinite(v))?'—':String(Math.round(v*100)/100).replace('.',',');
 
@@ -84173,7 +84370,7 @@ function _tbJournees(user,t,cyclee){
 // LE GESTE EST EXPLICITE ET SEPARE de l'enregistrement des reglages : regler
 // le calcul et decider que son resultat devient la cible de l'athlete sont
 // deux decisions, et la seconde change ce qu'il mange demain.
-async function appliquerCiblesTableur(){
+async function appliquerCiblesTableur(silencieux){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return false;
@@ -84206,9 +84403,12 @@ async function appliquerCiblesTableur(){
   c.nutrition.tableur=reg;
   c.nutrition.macros={on:j.on,off:cyc?j.off:j.on,
     origine:'tableur',origineDate:Date.now()};
+  _histoNoter(c,'transmis');
   c.updatedAt=Date.now(); users[c.email]=c;
   const _ok=DB.set('users',users);
-  toastSync(_ok,CLOUD.pushOne(c.email,c),'Cibles appliquées','la cible est');
+  const envoi=CLOUD.pushOne(c.email,c);
+  window._tbDernierEnvoi=envoi;
+  if(!silencieux) toastSync(_ok,envoi,'Cibles appliquées','la cible est');
   try{ renderCoachNutriSection(c); }catch(e){}
   return _ok;
 }
@@ -84650,10 +84850,21 @@ function _htmlTableauxTableur(c){
   // sortant des champs. « Proposer un point de depart », lui, se fait AVANT de
   // remplir : il pre-remplit les cases. Il passe donc en second, en retrait,
   // pleine largeur : on n'y revient pas a chaque reglage.
-  if(_man) h+='<button type="button" class="btn btn-red tbk-save-c" '
-    +'onclick="saveClientNutriMacros()">Enregistrer ces chiffres</button>'
-    +'<button type="button" class="btn btn-outline tbk-save" '
-    +'onclick="proposerPointDepart()">Proposer un point de départ</button>';
+  // ══ TROIS BOUTONS, PLUS QUATRE (build 1408) ══════════════════════════
+  // Kevin : « il y a trop de boutons similaires ». « Enregistrer ces
+  // chiffres », « Enregistrer les réglages » et « Enregistrer pour l'athlète »
+  // faisaient tous les trois la meme promesse ; il n'en reste qu'un, qui
+  // attend la reponse du serveur et dit si l'athlete a recu. Les deux autres
+  // ne s'enregistrent pas : ils proposent, et ils racontent.
+  const _nbH=histoCibles(c).length;
+  h+='<button type="button" class="btn btn-red tbk-save-c" '
+    +'onclick="enregistrerEtTransmettre()">Enregistrer et transmettre à l’athlète</button>'
+    +(_man?('<button type="button" class="btn btn-outline tbk-save" '
+      +'onclick="proposerPointDepart()">Proposer un point de départ</button>'):'')
+    +'<button type="button" class="btn btn-outline tbk-save tbk-h-b" aria-expanded="'
+      +(_histoOuvert?'true':'false')+'" onclick="basculerHistoTableur()">'
+      +'Historique des modifications'+(_nbH?' ('+_nbH+')':'')+'</button>'
+    +(_histoOuvert?_htmlHistoTableur(c):'');
 
 
 
@@ -84675,29 +84886,23 @@ function _htmlTableauxTableur(c){
   // continue de piloter les alertes de poids et le suivi de l'athlete. Ce qui
   // disparait, c'est son role d'ENTREE du calcul des cibles.
 
-  // DEUX BOUTONS COTE A COTE. Kevin : « fais plutot deux boutons, un a droite,
-  // un a gauche ». Empiles pleine largeur, ils se lisaient comme une action et
-  // sa confirmation ; cote a cote, ce sont deux choix — publier, ou seulement
-  // garder le reglage. Le rouge est a droite : c'est celui qui touche le
-  // dossier de l'athlete, et il ne se clique pas par inadvertance en visant le
-  // premier. A l'etroit, ils repassent l'un sous l'autre (.tbk-deux).
-  // ⚠ LES DEUX BOUTONS N'EXISTENT PLUS QU'EN SAISIE MANUELLE. En automatique,
-  //   chaque menu ecrit et pousse de lui-meme : garder un bouton rouge
-  //   « Enregistrer pour l'athlète » aurait laisse croire que rien n'etait
-  //   parti tant qu'on ne l'avait pas clique — et sa demande de confirmation
-  //   aurait annonce « ses cibles actuelles seront remplacées » pour un
-  //   remplacement deja fait.
-  //
-  //   EN MANUEL ILS RESTENT LES SEULS CHEMINS, et ils gardent leur confirmation :
-  //   adopter le calcul par-dessus des grammes ecrits a la main efface une
-  //   decision, et ca se demande.
+  // ⚠ « ENREGISTRER LES REGLAGES » ET « ENREGISTRER POUR L'ATHLETE » ONT ETE
+  //   FONDUS DANS « ENREGISTRER ET TRANSMETTRE » le 22/09/2026 (build 1408).
+  //   Kevin : « il y a trop de boutons similaires ». Les trois disaient la
+  //   meme chose — j'enregistre — et aucun ne disait ce que le coach veut
+  //   savoir : est-ce que c'est ARRIVE. Le bouton unique attend la reponse du
+  //   serveur, et la ligne verte ci-dessous garde la date du dernier envoi
+  //   confirme. En automatique, chaque menu ecrit et pousse toujours de
+  //   lui-meme : la note verte le dit, juste en dessous.
+  // LA DERNIERE TRANSMISSION CONFIRMEE, dite en clair : c'est la preuve que
+  // Kevin demande — non pas « j'ai cliqué », mais « c'est parti, et le serveur
+  // l'a pris ».
+  const _tr=(function(){ try{ return _transmisLire()[c.email]||null; }catch(e){ return null; } })();
+  if(_tr&&_tr.d>0) h+='<div class="tbk-tr">'+icon('check',14)
+    +'<span>Transmis le '+escapeHtml(_histoDate(_tr.d))
+    +(_tr.kcal>0?(' — '+_tbNb(_tr.kcal)+' kcal'):'')+'</span></div>';
   h+=_man
-    ? '<div class="tbk-deux">'
-      +'<button type="button" class="btn btn-outline" '
-      +'onclick="enregistrerReglagesTableur()">Enregistrer les réglages</button>'
-      +'<button type="button" class="btn btn-red" '
-      +'onclick="appliquerCiblesTableur()">Enregistrer pour l’athlète</button>'
-      +'</div>'
+    ? ''
     // ON DIT LE DELAI PLUTOT QUE « immédiatement ». La modification part a
     // l'instant ; l'application de l'athlete, elle, releve toutes les cinq
     // minutes et des qu'elle revient au premier plan. Promettre l'instantane
@@ -84713,6 +84918,48 @@ function _htmlTableauxTableur(c){
       +'</div>';
   return h;
 }
+// La date d'une ligne d'historique : « 22 sept. 18:41 ».
+function _histoDate(d){
+  try{
+    const x=new Date(Number(d)||0);
+    return x.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})
+      +' '+x.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){ return ''; }
+}
+// LE PANNEAU D'HISTORIQUE. Kevin : le nombre de calories en gros, la date
+// entre parentheses a cote, en dessous glucides, proteines et lipides, et de
+// quoi remettre un ancien enregistrement en place — en pouvant annuler.
+function _htmlHistoTableur(c){
+  const l=histoCibles(c);
+  const cyc=(function(){ try{ return dieteCyclee(c); }catch(e){ return false; } })();
+  const cur=_histoBloc(((c.nutrition||{}).macros||{}).on||{});
+  const annul=(_histoAnnul&&_histoAnnul.email===c.email)
+    ? '<div class="tbk-h-an"><span>Remis en place : '+_tbNb(_histoAnnul.remis)+' kcal.</span>'
+      +'<button type="button" class="tbk-h-x" onclick="histoAnnuler()">Annuler et revenir à l’état précédent</button></div>'
+    : '';
+  if(!l.length) return '<div class="tbk-histo">'+annul
+    +'<div class="tbk-h-vide">Aucun enregistrement pour l’instant : les cibles enregistrées s’ajouteront ici, '
+    +'et tu pourras en remettre une en place.</div></div>';
+  // UNE SEULE LIGNE PORTE « EN COURS » : la plus recente qui a ces chiffres.
+  // Deux lignes identiques — une remise en place puis son annulation — se
+  // presentaient toutes les deux comme la cible du moment.
+  let iCur=-1;
+  for(let k=l.length-1;k>=0;k--) if(JSON.stringify(l[k].on)===JSON.stringify(cur)){ iCur=k; break; }
+  const lignes=l.map((e,i)=>({e,i})).reverse().map(({e,i})=>{
+    const enCours=(i===iCur);
+    return '<div class="tbk-h-e'+(enCours?' tbk-h-cur':'')+'">'
+      +'<div class="tbk-h-t"><span class="tbk-h-k">'+_tbNb(e.on.kcal)+' kcal</span>'
+      +'<span class="tbk-h-d">('+escapeHtml(_histoDate(e.d))+')</span>'
+      +(enCours?'<span class="tbk-h-b2">en cours</span>':'')
+      +(e.src==='transmis'?'<span class="tbk-h-b3">transmis</span>':'')+'</div>'
+      +'<div class="tbk-h-m">Glucides '+_tbNb(e.on.g)+' g · Protéines '+_tbNb(e.on.p)
+      +' g · Lipides '+_tbNb(e.on.l)+' g'
+      +(cyc&&e.off.kcal!==e.on.kcal?(' · jour OFF '+_tbNb(e.off.kcal)+' kcal'):'')+'</div>'
+      +(enCours?'':'<button type="button" class="tbk-h-r" onclick="histoRemettre('+i+')">Remettre en place</button>')
+      +'</div>';
+  }).join('');
+  return '<div class="tbk-histo">'+annul+lignes+'</div>';
+}
 /**
  * PURE. La grille du coach est-elle CONFIGUREE ?
  *
@@ -84724,8 +84971,8 @@ function _htmlTableauxTableur(c){
  *   passer SES reglages pour une grille de coach, et verrouille hors de sa
  *   propre carte une athlete que personne n'avait jamais reglee.
  *
- *   `naf` — le niveau d'activite — n'est ecrit que par `majTableauTableur` et
- *   `enregistrerReglagesTableur`, tous deux sur la fiche du coach. Il ne
+ *   `naf` — le niveau d'activite — n'est ecrit que par `majTableauTableur`,
+ *   sur la fiche du coach. Il ne
  *   figure pas dans `manque` : le calcul tourne sans lui, avec un defaut.
  *   C'est donc bien un CHOIX, pas un passage oblige — et le poser, c'est dire
  *   « j'ai regle cette athlete ».
@@ -84785,6 +85032,12 @@ function _tbReconcilier(c){
   //   ciblesPoseesParCoach : ces chiffres, c'est le coach qui les a poses. Ce
   //   que l'athlete a ecrit elle-meme (origine « athlete ») reste a elle — la
   //   demande du 14/09/2026 tient.
+  // ⚠ UNE CIBLE REMISE EN PLACE NE SE RECALCULE PAS DANS SON DOS (build 1408).
+  //   Elle vaut prescription jusqu'au prochain reglage du tableau ; sans cette
+  //   sortie, le rendu qui suit la remise en place la remplacait aussitot par
+  //   le calcul courant, et le bouton « Remettre en place » n'avait aucun effet
+  //   visible. MESURE AU BANC.
+  if((((c.nutrition||{}).macros||{}).origine)==='histo') return false;
   const _duTableur=(((c.nutrition||{}).macros||{}).origine)==='tableur';
   if(!grilleCoachPosee(c)&&!_duTableur) return false;
   const chiffres=m=>JSON.stringify(m?{on:m.on,off:m.off,origine:m.origine}:null);
@@ -85723,7 +85976,7 @@ function saveClientStrictAcces(ouvert){
   renderCoachNutriSection(c);
 }
 
-function saveClientNutriMacros(malgrePlancher){
+function saveClientNutriMacros(malgrePlancher,transmettre){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return;
@@ -85794,6 +86047,7 @@ function saveClientNutriMacros(malgrePlancher){
   saisie.origine=_auto?'auto':'coach';
   saisie.origineDate=Date.now();
   c.nutrition.macros=saisie;
+  _histoNoter(c,transmettre?'transmis':(_auto?'auto':'coach'));
   // LES REGLAGES QUI ONT SERVI AU CALCUL PARTENT AVEC LES GRAMMES. Les deux
   // decrivent la meme decision ; les separer ferait un dossier dont les
   // cibles ne correspondent plus a ses propres reglages, et le calcul
@@ -85805,7 +86059,12 @@ function saveClientNutriMacros(malgrePlancher){
   // s'appliquerait au clic suivant, sur des chiffres que le coach croit
   // enregistres.
   window._plDerniereViol=null; _plConfirme=null;
-  toastSync(ok,CLOUD.pushOne(c.email,c),
+  // ⚠ L'ENVOI EST GARDE : « Enregistrer et transmettre » attend SA reponse pour
+  //   dire au coach si l'athlete a bien recu. Sans cette ligne il aurait
+  //   annonce un transfert sans jamais l'avoir vu aboutir.
+  const envoi=CLOUD.pushOne(c.email,c);
+  window._tbDernierEnvoi=envoi;
+  if(!transmettre) toastSync(ok,envoi,
     viol.length?'Enregistré, confirmation tracée':'Objectifs enregistrés ✓','les objectifs sont');
   renderCoachNutriSection(c);
   return true;

@@ -32454,9 +32454,11 @@ async function testExercices(){
       //   [Facteurs | Besoins caloriques]
       //   [Depense selon l'activite sportive | Journees]
       //   [Macronutriments]
-      //   [Enregistrer ces chiffres]  centre, seul sur sa ligne
-      //   [Proposer un point de depart]
-      //   [Enregistrer les reglages | Appliquer a l'athlete]
+      //   [Enregistrer et transmettre a l'athlete]  centre, seul sur sa ligne
+      //   [Proposer un point de depart]      (saisie manuelle seulement)
+      //   [Historique des modifications]
+      // ⚠ QUATRE BOUTONS D'ENREGISTREMENT SONT DEVENUS UN (build 1408), sur
+      //   demande de Kevin : « il y a trop de boutons similaires ».
       ok('Les tableaux de nutrition sortent dans l\'ordre demande',(()=>{
         const c={id:'T9',email:'t9@t.fr',role:'athlete',gender:'F',_evol_gender:'Femme',
           _evol_height:'168','init-age':29,
@@ -32478,17 +32480,15 @@ async function testExercices(){
           if(e.classList.contains('tbk-carte')) return 'T:'+titre(e.querySelector('table'));
           if(e.classList.contains('tbk-duo'))
             return 'DUO:'+[...e.querySelectorAll('table')].map(titre).join('|');
-          if(e.classList.contains('tbk-deux'))
-            return 'DEUX:'+[...e.querySelectorAll('button')].map(x=>x.textContent).join('|');
           if(e.tagName==='BUTTON') return 'B:'+e.textContent;
           return e.tagName;
         });
         const attendu=['DUO:Facteurs|Besoins caloriques',
           'DUO:Dépense selon l’activité sportive|Journées',
           'T:Macronutriments',
-          'B:Enregistrer ces chiffres',
+          'B:Enregistrer et transmettre à l’athlète',
           'B:Proposer un point de départ',
-          'DEUX:Enregistrer les réglages|Enregistrer pour l’athlète'];
+          'B:Historique des modifications'];
         return JSON.stringify(lu)===JSON.stringify(attendu)
           ?true:_echec('lu : '+JSON.stringify(lu));})());
       // BUILD 1403 — Kevin, maquette a l'appui : « change la mise en page des
@@ -33007,7 +33007,136 @@ async function testExercices(){
         return /\bgo\(|loadNutrition\(/.test(String(_repeindreNutritionAthlete))
           ?_echec('le repeint de la nutrition change d’écran'):true;})());
 
-      ok('« Enregistrer ces chiffres » est CENTRE et seul sur sa ligne',(()=>{
+      // BUILD 1408 — Kevin : « un historique des modifications pour voir les
+      // anciens enregistrements […] où l'on peut sélectionner un ancien
+      // enregistrement pour le remettre en place et possibilité d'annuler ».
+      ok('1408 — L’HISTORIQUE NOTE, REGROUPE, ET NE GARDE QUE CE QUI CHANGE',(()=>{
+        const c={id:'H1408',email:'h1408@t.fr',role:'athlete',nutrition:{}};
+        const pose=(k,p,g,l)=>{ c.nutrition.macros={on:{kcal:k,p:p,g:g,l:l,f:30},
+          off:{kcal:k,p:p,g:g,l:l,f:30}}; };
+        pose(2500,180,260,80); _histoNoter(c,'tableur');
+        if(histoCibles(c).length!==1) return _echec('la première cible n’est pas notée');
+        // LA MEME CIBLE NE SE NOTE PAS DEUX FOIS.
+        _histoNoter(c,'tableur');
+        if(histoCibles(c).length!==1) return _echec('la même cible est notée deux fois');
+        // DEUX REGLAGES RAPPROCHES NE FONT QU'UNE LIGNE : sans ce
+        // regroupement, trois secondes de menus en auraient ecrit vingt.
+        pose(2550,185,260,80); _histoNoter(c,'tableur');
+        pose(2600,190,260,80); _histoNoter(c,'tableur');
+        if(histoCibles(c).length!==1)
+          return _echec(histoCibles(c).length+' lignes : les réglages rapprochés ne se regroupent pas');
+        if(histoCibles(c)[0].on.kcal!==2600) return _echec('le regroupement garde la mauvaise valeur');
+        // PASSE LE QUART D'HEURE, une nouvelle ligne s'ouvre.
+        c.nutrition.histo[0].d=Date.now()-HISTO_FUSION_MS-1000;
+        pose(2620,190,265,80); _histoNoter(c,'tableur');
+        if(histoCibles(c).length!==2) return _echec('un réglage bien plus tard ne s’écrit pas à part');
+        // UN ENVOI EXPLICITE GARDE SA LIGNE, meme juste apres.
+        pose(2650,190,260,80); _histoNoter(c,'transmis');
+        const l=histoCibles(c);
+        if(l.length!==3||l[2].src!=='transmis') return _echec('l’envoi explicite ne garde pas sa ligne');
+        // LA LISTE EST BORNEE : un dossier de trois ans ne porte pas mille lignes.
+        for(let i=0;i<40;i++){ pose(2000+i,180,200,70); c.nutrition.histo[c.nutrition.histo.length-1].d=1; _histoNoter(c,'coach'); }
+        if(histoCibles(c).length>HISTO_MAX) return _echec(histoCibles(c).length+' lignes gardées');
+        // ET ELLE SE RELIT DANS LA FORME QUE FIREBASE RENVOIE PARFOIS.
+        const o={id:'H2',nutrition:{histo:{0:{d:1,src:'coach',on:{kcal:2200,p:150,g:200,l:70,f:28}}}}};
+        return histoCibles(o).length===1&&histoCibles(o)[0].on.kcal===2200
+          ?true:_echec('la forme objet n’est pas relue');})());
+
+      ok('1408 — LE PANNEAU DIT LES CALORIES EN GROS, LA DATE ENTRE PARENTHÈSES ET LES TROIS MACROS',(()=>{
+        const j=Date.now();
+        const c={id:'P1408',email:'p1408@t.fr',role:'athlete',nutrition:{cycle:false,
+          macros:{on:{kcal:2500,p:180,g:260,l:80,f:30},off:{kcal:2500,p:180,g:260,l:80,f:30}},
+          histo:[{d:j-86400000,src:'coach',on:{kcal:2300,p:170,g:230,l:75,f:28},off:{kcal:2300,p:170,g:230,l:75,f:28}},
+                 {d:j-3600000,src:'transmis',on:{kcal:2500,p:180,g:260,l:80,f:30},off:{kcal:2500,p:180,g:260,l:80,f:30}}]}};
+        const d=document.createElement('div');
+        d.innerHTML=_htmlHistoTableur(c);
+        const e=[...d.querySelectorAll('.tbk-h-e')];
+        if(e.length!==2) return _echec(e.length+' lignes dans le panneau');
+        // LA PLUS RECENTE EN PREMIER, et c'est elle qui est « en cours ».
+        if((e[0].querySelector('.tbk-h-k')||{}).textContent!=='2 500 kcal')
+          return _echec('la plus récente n’est pas en tête : '+e[0].textContent);
+        if(!e[0].classList.contains('tbk-h-cur')) return _echec('la cible en cours n’est pas marquée');
+        if(d.querySelectorAll('.tbk-h-cur').length!==1) return _echec('deux lignes se disent « en cours »');
+        // LA DATE ENTRE PARENTHESES, A COTE.
+        if(!/^\(.+\)$/.test(((e[0].querySelector('.tbk-h-d')||{}).textContent||'').trim()))
+          return _echec('la date n’est pas entre parenthèses');
+        // LES TROIS MACROS EN DESSOUS.
+        const m=(e[1].querySelector('.tbk-h-m')||{}).textContent||'';
+        for(const bout of ['Glucides 230 g','Protéines 170 g','Lipides 75 g'])
+          if(m.indexOf(bout)<0) return _echec('« '+bout+' » manque : '+m);
+        // ON NE REMET PAS EN PLACE LA CIBLE DEJA EN PLACE.
+        if(e[0].querySelector('.tbk-h-r')) return _echec('la cible en cours s’offre d’être remise');
+        return /histoRemettre\(0\)/.test((e[1].querySelector('.tbk-h-r')||{}).getAttribute&&e[1].querySelector('.tbk-h-r').getAttribute('onclick')||'')
+          ?true:_echec('l’ancienne ligne ne se remet pas en place');})());
+
+      okA('1408 — REMETTRE EN PLACE TIENT, NE CHANGE PAS LE MODE, ET S’ANNULE',async()=>{
+        const sU=currentUser, sId=currentClientId, sDB=DB.get('users'), sPush=CLOUD.pushOne,
+              sTS=window.toastSync, sConf=window.rcConfirm, sToast=window.toast;
+        try{
+          CLOUD.pushOne=()=>Promise.resolve(true);
+          window.toastSync=()=>Promise.resolve(true); window.toast=()=>{};
+          window.rcConfirm=async()=>true;
+          const j=Date.now();
+          const CO={id:'C1408',email:'c1408@t.fr',role:'coach',fname:'K',seenBilans:{},alertStatus:{}};
+          const AT={id:'A1408',email:'a1408@t.fr',role:'athlete',coachId:'C1408',gender:'H',_evol_gender:'H',
+            _evol_height:'180','init-age':30,sessions_config:Array.from({length:7},(_,i)=>({active:i<4})),
+            bilans:[{type:'debut',date:j-60*864e5,'deb-weight':'80','deb-height':'180','deb-age':'30','deb-gender':'Homme'}],
+            weightLog:[{date:localISODate(new Date()),kg:80}],sessions:[],
+            nutrition:{cycle:false,tableur:{naf:'sedentaire'},
+              macros:{on:{kcal:2500,p:180,g:260,l:80,f:30},off:{kcal:2500,p:180,g:260,l:80,f:30},origine:'tableur'},
+              histo:[{d:j-86400000,src:'transmis',on:{kcal:2100,p:170,g:180,l:70,f:26},
+                      off:{kcal:2100,p:170,g:180,l:70,f:26}}]}};
+          DB.set('users',{[CO.email]:CO,[AT.email]:AT}); currentUser=CO; currentClientId='A1408';
+          const lu=()=>getOwnedClient('A1408');
+          // ⚠ L'ETAT DE DEPART EST CELUI DU TABLEAU, et pas un nombre invente.
+          //   En calcul automatique, `_tbReconcilier` recalcule la cible avant
+          //   chaque rendu : une cible de fixture qui ne serait pas celle du
+          //   calcul serait remplacee par lui, et l'annulation semblerait rater
+          //   alors qu'elle aurait ramene exactement l'etat d'avant.
+          const c0=lu(); _tbEcrireCibles(c0);
+          const _us=DB.get('users')||{}; _us[c0.email]=c0; DB.set('users',_us);
+          const avant=(((lu().nutrition||{}).macros||{}).on||{}).kcal;
+          if(!(avant>0)) return _echec('aucune cible de départ');
+          const manuelAvant=saisieManuelle(lu());
+          await histoRemettre(0);
+          const on=(((lu().nutrition||{}).macros||{}).on)||{};
+          if(on.kcal!==2100) return _echec('la cible n’a pas été remise : '+on.kcal);
+          // ⚠ ELLE TIENT AU RENDU SUIVANT : _tbReconcilier recalculait la cible
+          //   du tableau avant chaque rendu et l'ecrasait aussitot.
+          renderCoachNutriSection(lu());
+          if((((lu().nutrition||{}).macros||{}).on||{}).kcal!==2100)
+            return _echec('le rendu a recalculé par-dessus la remise en place');
+          // LE MODE N'A PAS BOUGE, et les cibles restent celles du coach.
+          if(saisieManuelle(lu())!==manuelAvant) return _echec('la remise en place a changé le mode de saisie');
+          if(ciblesPoseesParCoach(lu())!==true) return _echec('l’athlète a repris la main sur les cibles');
+          // ET ON PEUT ANNULER.
+          const fin=()=>(((lu().nutrition||{}).macros||{}).on||{}).kcal;
+          await histoAnnuler();
+          if(fin()!==avant) return _echec('l’annulation n’a pas ramené l’état précédent : '+fin()+' pour '+avant);
+          // Deux annulations de suite ne cassent rien.
+          await histoAnnuler();
+          return fin()===avant?true:_echec('une seconde annulation a changé les cibles');
+        } finally {
+          CLOUD.pushOne=sPush; window.toastSync=sTS; window.rcConfirm=sConf; window.toast=sToast;
+          currentUser=sU; currentClientId=sId; if(sDB) DB.set('users',sDB);
+        }});
+
+      ok('1408 — LA CONFIRMATION DE TRANSFERT ATTEND LA REPONSE DU SERVEUR',(()=>{
+        // Un « transmis » affiché pendant qu'une synchro echoue ferait croire
+        // l'athlete servi : c'est exactement ce que Kevin veut pouvoir verifier.
+        const s=String(_confirmerTransmission);
+        if(s.indexOf('Promise.resolve(envoi)')<0) return _echec('elle n’attend pas l’envoi');
+        if(!/Transmis à ton athlète/.test(s)) return _echec('elle ne dit pas que c’est transmis');
+        if(!/PAS ENCORE TRANSMIS/.test(s)) return _echec('un échec d’envoi passerait pour un succès');
+        // ET LE CHEMIN D'ENREGISTREMENT GARDE SON ENVOI pour pouvoir l'attendre.
+        if(String(saveClientNutriMacros).indexOf('window._tbDernierEnvoi=envoi')<0)
+          return _echec('la saisie manuelle ne garde pas son envoi');
+        if(String(appliquerCiblesTableur).indexOf('window._tbDernierEnvoi=envoi')<0)
+          return _echec('le calcul automatique ne garde pas son envoi');
+        return /_confirmerTransmission/.test(String(enregistrerEtTransmettre))
+          ?true:_echec('le bouton ne confirme pas le transfert');})());
+
+      ok('LE BOUTON D\'ENREGISTREMENT EST CENTRE ET SEUL SUR SA LIGNE',(()=>{
         // Pleine largeur il se confondait avec le tableau qu'il enregistre.
         const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
         const m=css.match(/\.tbk-save-c\{([^}]*)\}/);
@@ -33016,10 +33145,12 @@ async function testExercices(){
         // ⚠ `max-width:100%` N'EST PAS `width:100%` : le premier borne, le
         // second impose. Le motif nu attrapait les deux.
         if(/(?:^|;)width:100%/.test(m[1])) return _echec('il reprend toute la largeur');
-        // ET SON LIBELLE NE SE COUPE PAS : « Enregistrer ces chiffres » casse
-        // en deux se lirait comme deux boutons.
-        return /white-space:nowrap/.test(m[1])
-          ?true:_echec('le libelle peut se couper');})());
+        // ⚠ ET SON LIBELLE PEUT SE COUPER DEPUIS LE BUILD 1408, a l'inverse de
+        //   la regle d'avant : « Enregistrer et transmettre à l'athlète » ne
+        //   tient pas sur une ligne a 375 px, et un bouton qui deborde de sa
+        //   carte serait pire qu'un libelle sur deux lignes.
+        return /white-space:normal/.test(m[1])
+          ?true:_echec('le libelle ne peut pas passer a la ligne');})());
       ok('.tbk-serre N\'IMPOSE PLUS de grille a deux colonnes',(()=>{
         // ⚠ C'EST ELLE QUI ECRASAIT TOUT. Elle appariait DEUX A DEUX tous ses
         // enfants des 900 px : les deux paires se retrouvaient cote a cote —
@@ -36308,29 +36439,30 @@ async function testExercices(){
             :_echec('cyclage arrete, les journees different encore : '
               +z.on.kcal+' / '+z.off.kcal);})());
 
-        ok('EN AUTOMATIQUE, AUCUN BOUTON NE PRETEND QU’IL RESTE A ENREGISTRER',(()=>{
-          // Garder « Enregistrer pour l’athlète » aurait laisse croire que rien
-          // n'etait parti tant qu'on ne l'avait pas clique — et sa demande de
-          // confirmation aurait annonce « ses cibles actuelles seront
-          // remplacées » pour un remplacement deja fait.
+        ok('1408 — UN SEUL BOUTON D’ENREGISTREMENT, DANS LES DEUX MODES',(()=>{
+          // Kevin : « il y a trop de boutons similaires, fais juste un
+          // “enregistrer et transmettre à l'athlète” ». Les trois autres
+          // promettaient la meme chose sans dire ce que le coach veut savoir :
+          // est-ce que c'est ARRIVE.
           poser({});
           const z=document.getElementById('ccd-nutrition');
-          const lib=[...z.querySelectorAll('button')].map(b=>b.textContent.trim());
-          if(lib.some(x=>/Enregistrer pour l’athlète/.test(x)))
-            return _echec('le bouton rouge survit en automatique');
-          if(lib.some(x=>/Enregistrer les réglages/.test(x)))
-            return _echec('le bouton de reglages survit en automatique');
-          // ET ON LE DIT, plutot que de laisser un vide sous les tableaux.
+          const lib=()=>[...z.querySelectorAll('button')].map(b=>b.textContent.trim());
+          for(const mort of ['Enregistrer pour l’athlète','Enregistrer les réglages','Enregistrer ces chiffres'])
+            if(lib().some(x=>x===mort)) return _echec('« '+mort+' » est encore là');
+          const nb=lib().filter(x=>/Enregistrer et transmettre/.test(x)).length;
+          if(nb!==1) return _echec(nb+' boutons « Enregistrer et transmettre » en automatique');
+          // ET ON DIT TOUJOURS que les reglages partent tout seuls : le bouton
+          // confirme le transfert, il ne le conditionne pas.
           if(z.innerText.indexOf('dès que tu le changes')<0)
             return _echec('rien n’annonce que les reglages partent seuls');
-          // ⚠ EN MANUEL ILS RESTENT LES SEULS CHEMINS. Les retirer partout
-          //   aurait laisse un coach en saisie manuelle sans aucun moyen de
-          //   publier ses chiffres.
+          // EN SAISIE MANUELLE, LE MEME BOUTON — et lui seul enregistre.
           poser({manuel:true,macros:{on:{kcal:3000}}});
           const lib2=[...document.getElementById('ccd-nutrition')
             .querySelectorAll('button')].map(b=>b.textContent.trim());
-          return lib2.some(x=>/Enregistrer pour l’athlète/.test(x))
-            ?true:_echec('le bouton a disparu AUSSI en saisie manuelle : '+lib2.join(' | '));})());
+          if(!lib2.some(x=>/Enregistrer et transmettre/.test(x)))
+            return _echec('le bouton a disparu en saisie manuelle : '+lib2.join(' | '));
+          return lib2.some(x=>/Historique des modifications/.test(x))
+            ?true:_echec('l’historique n’est pas offert');})());
 
         ok('REPASSER EN AUTOMATIQUE REECRIT LES CIBLES TOUT DE SUITE',(()=>{
           // Les laisser telles quelles afficherait le calcul a l'ecran du coach
