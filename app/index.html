@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1383';
+window.RC_BUILD='1384';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -92286,6 +92286,10 @@ function annotValide(doc){
     taille:['s','m','l'].includes(L.taille)?L.taille:'m',
     fond:['sombre','clair','aucun'].includes(L.fond)?L.fond:'sombre',
     op:Math.round((num(L.op,0.3,1)||0.85)*100)/100};
+  // LA LÉGENDE DÉPLACÉE AU DOUBLE-CLIC (build 1384) : son coin, en millièmes
+  // de l'image. Les deux ou aucun.
+  const lx=num(L.x,0,1000), ly=num(L.y,0,1000);
+  if(lx!==null&&ly!==null){ leg.x=Math.round(lx); leg.y=Math.round(ly); }
   const vus=new Set();
   const a=_tabBloc(doc.a).map(x=>{
     if(!x||typeof x!=='object') return null;
@@ -92326,6 +92330,12 @@ function annotValide(doc){
     }
     // LES BASCULES : on n'écrit que ce qui s'écarte du défaut, pour garder la
     // donnée courte. Nom affiché et légende sont ALLUMÉS par défaut.
+    // L'ÉTIQUETTE DÉPLACÉE (build 1384) : son décalage, en millièmes de
+    // l'image ; absent tant qu'elle est à sa place. Un texte n'en a pas.
+    if(x.t!=='texte'&&Array.isArray(x.eo)&&x.eo.length===2){
+      const ex=num(x.eo[0],-1000,1000), ey=num(x.eo[1],-1000,1000);
+      if(ex!==null&&ey!==null&&(Math.round(ex)||Math.round(ey))) o.eo=[Math.round(ex),Math.round(ey)];
+    }
     if(x.et===0) o.et=0;
     if(x.lg===0) o.lg=0;
     if(x.h) o.h=1;

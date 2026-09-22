@@ -46366,6 +46366,120 @@ async function testExercices(){
       }
       return msg?_echec(msg):true;
     });
+    okA('MLX — l’étiquette et la légende se déplacent au double-clic, et gardent leur place',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // LA DONNÉE : le décalage se garde, le nul et le hors-borne tombent, un
+      // texte n'en a pas ; la légende garde son coin libre, les deux ou aucun.
+      const dv=annotValide({v:1,majLe:0,leg:{on:1,x:120,y:800},a:[
+        {id:'a',n:'A',t:'ligne',c:'#ffffff',e:4,d:0,f:9000,p:'100,100 900,100',eo:[-150,40.4]},
+        {id:'b',n:'B',t:'ligne',c:'#ffffff',e:4,d:0,f:9000,p:'100,100 900,100',eo:[0,0]},
+        {id:'c',n:'C',t:'ligne',c:'#ffffff',e:4,d:0,f:9000,p:'100,100 900,100',eo:[5000,0]},
+        {id:'e',n:'E',t:'texte',c:'#ffffff',e:4,d:0,f:9000,p:'500,50',x:'OK',eo:[10,10]}]});
+      if(JSON.stringify(dv.a.map(a=>a.eo||null))!=='[[-150,40],null,null,null]') return _echec('décalages gardés : '+JSON.stringify(dv.a.map(a=>a.eo||null)));
+      if(dv.leg.x!==120||dv.leg.y!==800) return _echec('le coin libre de la légende se perd');
+      if('x' in annotValide({v:1,majLe:0,leg:{x:120},a:[]}).leg) return _echec('une légende à moitié placée passe');
+      // LA GÉOMÉTRIE : le décalage est en millièmes de l'image, et le fil se dessine.
+      const cv=document.createElement('canvas'); cv.width=400; cv.height=700;
+      const g=cv.getContext('2d'), R={s:1,ox:0,oy:0,vw:400,vh:700};
+      const a0={id:'l',n:'Axe',t:'ligne',c:'#ff0000',e:4,d:0,f:9000,p:'100,500 300,500'};
+      const p0=_mlxEtiqPlace(a0,[[40,350],[120,350]],1,R,100), p1=_mlxEtiqPlace({...a0,eo:[500,-200]},[[40,350],[120,350]],1,R,100);
+      if(Math.round(p1.x-p0.x)!==200||Math.round(p1.y-p0.y)!==-140) return _echec('décalage mal converti : '+[p1.x-p0.x,p1.y-p0.y]);
+      mlDessinerAnnotations(g,R,{v:1,majLe:0,leg:{on:0},a:[{...a0,eo:[500,-200]}]},100);
+      // Le milieu du fil, entre le bout de la ligne (120,350) et l'étiquette.
+      const b=_mlxEtiqBoite(g,p1.x,p1.y,p1.lib,Math.max(0.45,700/720),R,false);
+      const cx=Math.max(b.bx,Math.min(120,b.bx+b.w)), cy=Math.max(b.by,Math.min(350,b.by+b.h));
+      const m=g.getImageData(Math.round((120+cx)/2),Math.round((350+cy)/2),1,1).data;
+      if(!(m[0]>150&&m[1]<90)) return _echec('le fil qui relie l’étiquette à son tracé manque : '+[...m]);
+      // LE DOIGT : l'étiquette déplacée se touche là où elle est, la légende aussi.
+      const doc={v:1,majLe:0,leg:{on:1,titre:'Amplitude',pos:'hg',taille:'m',fond:'sombre',op:0.85},a:[{...a0,eo:[500,-200]}]};
+      const h1=mlEtiquetteToucher(doc,R,100,b.bx+b.w/2,b.by+b.h/2,g);
+      if(!h1||h1.kind!=='etiq'||h1.id!=='l') return _echec('l’étiquette déplacée ne se touche pas : '+JSON.stringify(h1));
+      const lg=_mlxLegendeMesure(g,R,doc,100,Math.max(0.45,700/720));
+      const h2=mlEtiquetteToucher(doc,R,100,lg.x+5,lg.y+5,g);
+      if(!h2||h2.kind!=='leg') return _echec('la légende ne se touche pas');
+      if(mlEtiquetteToucher(doc,R,100,395,695,g)) return _echec('un toucher dans le vide attrape quelque chose');
+      // LE GESTE, dans le laboratoire.
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
+      const svR=window._mlVideoRect, svTps=window._mlxTempsMs;
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
+        _r28Monter([_r28Video({segments:[]})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        _ml.dureeMs=20000;
+        window._mlVideoRect=()=>({s:1,ox:0,oy:0,vw:400,vh:700});
+        window._mlxTempsMs=()=>3000;
+        const calque=document.getElementById('ml-calque'), bc=calque.getBoundingClientRect();
+        const pe=(type,x,y,btn)=>calque.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:1,
+          pointerType:'mouse',clientX:bc.left+x,clientY:bc.top+y,buttons:btn?1:0}));
+        const dbl=(x,y)=>{ pe('pointerdown',x,y,1); pe('pointerup',x,y,0); pe('pointerdown',x,y,1); pe('pointerup',x,y,0);
+          calque.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,clientX:bc.left+x,clientY:bc.top+y})); };
+        const G=_mlxCalqueGeo();
+        if(!G) return 'le calque n’a pas de géométrie';
+        const centreEtiq=id=>{ const a=_mlxAnnot(id), P=p=>[p[0]/1000*400,p[1]/1000*700];
+          const pl=_mlxEtiqPlace(a,mlAnnotPointsA(a,3000).map(P),G.k,G.R,3000), bb=_mlxEtiqBoite(G.g,pl.x,pl.y,pl.lib,G.k,G.R,false);
+          return [bb.bx+bb.w/2,bb.by+bb.h/2]; };
+        const a=_mlxCreer('angle',[[500,300],[450,420],[560,420]]);
+        if(!a) return 'l’angle ne se crée pas';
+        mlLegende('on',true);
+        const n0=_ml.annule.length;
+        // DOUBLE-CLIC, LA SOURIS L'EMMÈNE, UN CLIC LA POSE.
+        mlOutil('selection');
+        let [x,y]=centreEtiq(a.id);
+        dbl(x,y);
+        if(!_ml.deplEtiq||_ml.deplEtiq.kind!=='etiq'||_ml.deplEtiq.id!==a.id) return 'le double-clic ne prend pas l’étiquette';
+        if(!/Déplace l’étiquette/.test(document.getElementById('mlx-outils').textContent)) return 'rien ne dit que l’étiquette est en main';
+        pe('pointermove',x-100,y-80,0);
+        // À 3 millièmes près : le double-clic arrive en pixels entiers, le
+        // déplacement en fractions — moins d'un pixel d'écart sur 400.
+        const eo1=_mlxAnnot(a.id).eo||[];
+        if(!(Math.abs(eo1[0]+250)<=3&&Math.abs(eo1[1]+114)<=3)) return 'l’étiquette ne suit pas la souris : '+eo1.join();
+        pe('pointerdown',x-100,y-80,1); pe('pointerup',x-100,y-80,0);
+        if(_ml.deplEtiq) return 'le clic ne pose pas l’étiquette';
+        const posee=(_mlxAnnot(a.id).eo||[]).join();
+        if(_ml.annule.length!==n0+1) return 'la pose n’entre pas dans l’historique';
+        // ÉCHAP la rend à sa place d'avant, AVEC L'OUTIL LIGNE ARMÉ — et le
+        // double-clic n'a posé aucun tracé.
+        mlOutil('ligne');
+        [x,y]=centreEtiq(a.id);
+        dbl(x,y);
+        if(!_ml.deplEtiq||_ml.trace||_ml.annot.a.length!==1) return 'avec l’outil ligne, le double-clic pose un tracé ou ne prend rien';
+        pe('pointermove',x+60,y+60,0);
+        document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+        if(_ml.deplEtiq||(_mlxAnnot(a.id).eo||[]).join()!==posee) return 'Échap ne rend pas l’étiquette à sa place d’avant';
+        // LA LÉGENDE, et « la remettre dans son coin ».
+        mlOutil('selection');
+        const L0=_mlxLegendeMesure(G.g,G.R,_ml.annot,3000,G.k);
+        dbl(L0.x+8,L0.y+8);
+        if(!_ml.deplEtiq||_ml.deplEtiq.kind!=='leg') return 'le double-clic ne prend pas la légende';
+        pe('pointermove',L0.x+8,500,0); pe('pointerdown',L0.x+8,500,1); pe('pointerup',L0.x+8,500,0);
+        if(typeof _ml.annot.leg.y!=='number'||_ml.annot.leg.y<600) return 'la légende ne descend pas : '+_ml.annot.leg.y;
+        if(!document.querySelector('#mlx-legende [onclick="mlLegendeReplacer()"]')) return 'le panneau n’offre pas de remettre la légende dans son coin';
+        mlLegendeReplacer();
+        if('y' in _ml.annot.leg) return 'la légende ne revient pas dans son coin';
+        // L'ÉDITEUR : « Le remettre près du tracé ».
+        mlAnnotChoisir(a.id,true);
+        if(!document.querySelector('#mlx-editeur [onclick="mlEtiqReplacer()"]')) return 'l’éditeur n’offre pas de remettre l’étiquette';
+        mlEtiqReplacer();
+        if('eo' in _mlxAnnot(a.id)) return 'l’étiquette ne revient pas près du tracé';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      catch(e){ msg='exception : '+e.message; }
+      finally {
+        window._mlVideoRect=svR; window._mlxTempsMs=svTps;
+        try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT; CLOUD.pushOne=svPush;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      return msg?_echec(msg):true;
+    });
 
     okA('R28 — le service worker ne reconduit pas motion-lab.js d’une version à l’autre',async()=>{
       let src='';

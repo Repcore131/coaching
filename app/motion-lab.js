@@ -60,7 +60,7 @@
  *   trace:TraceEnCours|null, curseur:number[]|null, annule:string[], refait:string[],
  *   original:boolean, comparaison:boolean, guide:{m:ModeleAnnot, i:number}|null, repereAnat:number,
  *   relier:boolean, phrase:string, tailleTexte:string, onglet:string, jetonVseq:number,
- *   enLecture:boolean, style:string
+ *   enLecture:boolean, style:string, deplEtiq:DeplEtiq|null
  * }} EtatMl
  */
 /** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'|'repere'|'repsuivi'|'annotsuivi'} ModeMl */
@@ -2401,7 +2401,13 @@ function mlPhrases(ctx){
  * hauteur), en texte « x,y x,y » — le format des traits de la correction.
  * @typedef {{id:string, n:string, t:TypeAnnot, c:string, e:number, d:number, f:number, p:string,
  *   k?:[number,string][], x?:string, ts?:string, tf?:number, tc?:number, cb?:number,
- *   lb?:string[], rel?:number, et?:number, lg?:number, h?:number, seg?:string, st?:string}} Annot
+ *   lb?:string[], rel?:number, et?:number, lg?:number, h?:number, seg?:string, st?:string, eo?:number[]}} Annot
+ */
+/**
+ * Une étiquette ou la légende qu'on déplace : ce qui bouge (`kind` 'etiq' ou
+ * 'leg'), le tracé s'il s'agit d'une étiquette, le document d'avant (pour
+ * Échap et l'historique), et l'écart entre le doigt et le coin saisi.
+ * @typedef {{kind:string, id:string, avant:string, grab:number[]}} DeplEtiq
  */
 /**
  * Le tracé en cours de pose. `clic` : commencé d'un clic sans glisser, il
@@ -2409,7 +2415,7 @@ function mlPhrases(ctx){
  * qui ouvre la durée du tracé, surtout quand la vidéo tourne pendant le geste.
  * @typedef {{t:TypeAnnot, pts:number[][], lb?:string[], clic?:boolean, d0?:number}} TraceEnCours
  */
-/** @typedef {{on:number, titre:string, pos:string, taille:string, fond:string, op:number}} Legende */
+/** @typedef {{on:number, titre:string, pos:string, taille:string, fond:string, op:number, x?:number, y?:number}} Legende */
 /** @typedef {{v:1, majLe:number, leg:Legende, a:Annot[]}} DocAnnot */
 /** @typedef {{t:TypeAnnot, c:string, n:string}} EtapeModele */
 /** @typedef {{nom:string, ico:string, titre:string, etapes:EtapeModele[], comparer?:boolean}} ModeleAnnot */
@@ -2824,13 +2830,44 @@ function _mlxDessinerUne(g,a,pts,k,R,sMs,comparaison){
   }
   // LE NOM SUR L'IMAGE, dans une étiquette bordée de sa couleur — éteint à la
   // demande, et jamais pour un texte, qui se dit lui-même.
-  if(a.et!==0){
-    const an=a.t==='angle'?mlAngleAnnot(a,sMs,R.vw,R.vh):null;
-    const lib=an?a.n+' '+an.val+'°':a.n;
-    const rc=a.t==='cercle'&&pts.length>1?Math.hypot(pts[1][0]-x0,pts[1][1]-y0)*0.72:0;
-    const ref=a.t==='angle'&&pts.length>1?pts[1]:a.t==='cercle'?[x0+rc,y0-rc]:pts[pts.length-1];
-    _mlxEtiquette(g,ref[0]+12*k,ref[1]-12*k,lib,a.c,k,R,false);
+  const pl=_mlxEtiqPlace(a,pts,k,R,sMs);
+  if(pl){
+    // LE FIL : une étiquette que le coach a éloignée de son tracé (build 1384)
+    // y reste reliée d'un trait fin — sans lui, on ne saurait plus à quel
+    // tracé elle appartient.
+    if(Array.isArray(a.eo)){
+      const b=_mlxEtiqBoite(g,pl.x,pl.y,pl.lib,k,R,false);
+      const cx=Math.max(b.bx,Math.min(pl.ref[0],b.bx+b.w)), cy=Math.max(b.by,Math.min(pl.ref[1],b.by+b.h));
+      if(Math.hypot(cx-pl.ref[0],cy-pl.ref[1])>6*k){
+        g.save(); g.setLineDash([]); g.strokeStyle='rgba(0,0,0,.45)'; g.lineWidth=Math.max(2,3*k);
+        g.beginPath(); g.moveTo(pl.ref[0],pl.ref[1]); g.lineTo(cx,cy); g.stroke();
+        g.strokeStyle=a.c; g.lineWidth=Math.max(1,1.3*k); g.stroke(); g.restore();
+      }
+    }
+    _mlxEtiquette(g,pl.x,pl.y,pl.lib,a.c,k,R,false);
   }
+}
+/**
+ * Où se pose le nom d'un tracé : le point du tracé auquel il se rattache, et
+ * le coin de son étiquette — décalé de `eo` quand le coach l'a déplacée.
+ * `eo` est en millièmes de l'image, comme les points : l'étiquette garde sa
+ * place sur un téléphone comme sur un poste, et dans l'export.
+ * @param {Annot} a
+ * @param {number[][]} pts  en pixels d'écran
+ * @param {number} k
+ * @param {RectImage} R
+ * @param {number} sMs
+ * @returns {{ref:number[], x:number, y:number, lib:string}|null}
+ */
+function _mlxEtiqPlace(a,pts,k,R,sMs){
+  if(a.et===0||a.t==='texte'||!pts.length) return null;
+  const an=a.t==='angle'?mlAngleAnnot(a,sMs,R.vw,R.vh):null;
+  const lib=an?a.n+' '+an.val+'°':a.n;
+  const x0=pts[0][0], y0=pts[0][1];
+  const rc=a.t==='cercle'&&pts.length>1?Math.hypot(pts[1][0]-x0,pts[1][1]-y0)*0.72:0;
+  const ref=a.t==='angle'&&pts.length>1?pts[1]:a.t==='cercle'?[x0+rc,y0-rc]:pts[pts.length-1];
+  const eo=Array.isArray(a.eo)&&a.eo.length===2?a.eo:[0,0];
+  return {ref,x:ref[0]+12*k+eo[0]/1000*R.vw*R.s,y:ref[1]-12*k+eo[1]/1000*R.vh*R.s,lib};
 }
 /**
  * La pointe d'une flèche, au bout (x1,y1), dans la direction de (x0,y0)→(x1,y1).
@@ -2890,14 +2927,10 @@ function _mlxPoignees(g,pts,c,k){
  */
 function _mlxEtiquette(g,x,y,texte,c,k,R,petite){
   if(!texte) return;
-  const fs=Math.round(Math.max(10,(petite?11:13)*k));
+  const {bx,by,w,h,fs}=_mlxEtiqBoite(g,x,y,texte,k,R,petite);
   g.save();
   g.font='700 '+fs+'px Montserrat, sans-serif';
   g.textBaseline='middle'; g.textAlign='left';
-  const w=Math.ceil(g.measureText(texte).width)+fs*1.1, h=Math.round(fs*1.9);
-  const xmax=R.ox+R.vw*R.s-4, ymax=R.oy+R.vh*R.s-4;
-  let bx=Math.min(x,xmax-w), by=Math.max(R.oy+4,Math.min(y-h/2,ymax-h));
-  bx=Math.max(R.ox+4,bx);
   g.fillStyle='rgba(8,8,8,.84)';
   _mlxRectArrondi(g,bx,by,w,h,Math.min(6,h/3)); g.fill();
   g.strokeStyle=c; g.lineWidth=Math.max(1,1.4*k);
@@ -2905,6 +2938,28 @@ function _mlxEtiquette(g,x,y,texte,c,k,R,petite){
   g.fillStyle='#ffffff';
   g.fillText(texte,bx+fs*0.55,by+h/2+0.5);
   g.restore();
+}
+/**
+ * La boîte d'une étiquette, mesurée comme elle sera dessinée — le dessin et
+ * le doigt qui la saisit lisent la MÊME, sans quoi on attraperait à côté.
+ * @param {CanvasRenderingContext2D} g
+ * @param {number} x @param {number} y
+ * @param {string} texte
+ * @param {number} k
+ * @param {RectImage} R
+ * @param {boolean} petite
+ * @returns {{bx:number, by:number, w:number, h:number, fs:number}}
+ */
+function _mlxEtiqBoite(g,x,y,texte,k,R,petite){
+  const fs=Math.round(Math.max(10,(petite?11:13)*k));
+  g.save(); g.font='700 '+fs+'px Montserrat, sans-serif';
+  const w=Math.ceil(g.measureText(texte).width)+fs*1.1, h=Math.round(fs*1.9);
+  g.restore();
+  const xmax=R.ox+R.vw*R.s-4, ymax=R.oy+R.vh*R.s-4;
+  let bx=Math.min(x,xmax-w);
+  const by=Math.max(R.oy+4,Math.min(y-h/2,ymax-h));
+  bx=Math.max(R.ox+4,bx);
+  return {bx,by,w,h,fs};
 }
 /**
  * @param {CanvasRenderingContext2D} g
@@ -2982,7 +3037,16 @@ function _mlxClair(c){
  * @param {number} sMs
  * @param {number} k
  */
-function _mlxLegende(g,R,doc,sMs,k){
+/**
+ * La légende mesurée : ses lignes, ses tailles, et sa boîte. Séparée du
+ * dessin pour que le double-clic qui la saisit lise la même boîte.
+ * @param {CanvasRenderingContext2D} g
+ * @param {RectImage} R
+ * @param {DocAnnot} doc
+ * @param {number} sMs
+ * @param {number} k
+ */
+function _mlxLegendeMesure(g,R,doc,sMs,k){
   const l=doc.a.filter(a=>!a.h&&a.lg!==0&&a.t!=='texte');
   const L=doc.leg;
   const e={s:0.8,m:1,l:1.25}[L.taille]||1;
@@ -2996,11 +3060,30 @@ function _mlxLegende(g,R,doc,sMs,k){
   const libs=lignes.map(a=>mlAnnotLibelle(a,sMs,R.vw,R.vh));
   for(const t of libs) w=Math.max(w,g.measureText(t).width+fs*1.6);
   if(l.length>lignes.length) w=Math.max(w,g.measureText('+'+(l.length-lignes.length)+' autres').width);
+  g.restore();
   w=Math.ceil(w)+pad*2;
   const h=pad*2+ft*1.5+lignes.length*lh+(l.length>lignes.length?lh:0);
   const marge=Math.round(10*k);
-  const x=L.pos==='hd'||L.pos==='bd'?R.ox+R.vw*R.s-w-marge:R.ox+marge;
-  const y=L.pos==='bg'||L.pos==='bd'?R.oy+R.vh*R.s-h-marge:R.oy+marge;
+  let x=L.pos==='hd'||L.pos==='bd'?R.ox+R.vw*R.s-w-marge:R.ox+marge;
+  let y=L.pos==='bg'||L.pos==='bd'?R.oy+R.vh*R.s-h-marge:R.oy+marge;
+  // LA PLACE LIBRE (build 1384) : posée au double-clic, elle l'emporte sur le
+  // coin choisi, et reste dans l'image quelle que soit sa taille d'affichage.
+  if(typeof L.x==='number'&&typeof L.y==='number'){
+    x=Math.max(R.ox+marge,Math.min(R.ox+L.x/1000*R.vw*R.s,R.ox+R.vw*R.s-w-marge));
+    y=Math.max(R.oy+marge,Math.min(R.oy+L.y/1000*R.vh*R.s,R.oy+R.vh*R.s-h-marge));
+  }
+  return {l,L,fs,ft,pad,lh,lignes,libs,w,h,x,y};
+}
+/**
+ * @param {CanvasRenderingContext2D} g
+ * @param {RectImage} R
+ * @param {DocAnnot} doc
+ * @param {number} sMs
+ * @param {number} k
+ */
+function _mlxLegende(g,R,doc,sMs,k){
+  const {l,L,fs,ft,pad,lh,lignes,libs,w,h,x,y}=_mlxLegendeMesure(g,R,doc,sMs,k);
+  g.save();
   const clair=L.fond==='clair';
   if(L.fond!=='aucun'){
     g.globalAlpha=L.op;
@@ -3094,6 +3177,170 @@ function mlAnnotToucher(doc,R,sMs,x,y,o){
     if(touche) return {id:a.id,i:-1};
   }
   return null;
+}
+
+/**
+ * L'étiquette touchée au point (x,y) de l'écran — la légende d'abord, qui se
+ * dessine par-dessus tout, puis le tracé le plus haut.
+ * @param {DocAnnot} doc
+ * @param {RectImage} R
+ * @param {number} sMs
+ * @param {number} x
+ * @param {number} y
+ * @param {CanvasRenderingContext2D} g
+ * @param {boolean} [comparaison]
+ * @returns {{kind:string, id:string}|null}
+ */
+function mlEtiquetteToucher(doc,R,sMs,x,y,g,comparaison){
+  if(!doc||!g) return null;
+  const k=Math.max(0.45,R.vh*R.s/720);
+  /** @param {number[]} p @returns {number[]} */
+  const P=p=>[R.ox+p[0]/1000*R.vw*R.s,R.oy+p[1]/1000*R.vh*R.s];
+  if(doc.leg&&doc.leg.on){
+    const b=_mlxLegendeMesure(g,R,doc,sMs,k);
+    if(x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h) return {kind:'leg',id:''};
+  }
+  for(const a of (doc.a||[]).slice().reverse()){
+    if(!mlAnnotVisible(a,sMs,comparaison)) continue;
+    const pl=_mlxEtiqPlace(a,mlAnnotPointsA(a,sMs).map(P),k,R,sMs);
+    if(!pl) continue;
+    const b=_mlxEtiqBoite(g,pl.x,pl.y,pl.lib,k,R,false);
+    if(x>=b.bx-3&&x<=b.bx+b.w+3&&y>=b.by-3&&y<=b.by+b.h+3) return {kind:'etiq',id:a.id};
+  }
+  return null;
+}
+
+// ── DÉPLACER UNE ÉTIQUETTE OU LA LÉGENDE (build 1384) ──────────────────────
+//
+// Kevin : « donne la possibilité, en double-cliquant sur la légende, de
+// déplacer l'écriture, pour pas qu'elle se place sur la personne ». Le nom
+// d'un tracé se pose à côté du tracé, et un angle au coude le met souvent en
+// plein sur l'athlète. Double-clic sur l'étiquette — ou sur la légende — : elle
+// suit la souris, et un clic la pose ; au doigt, on la fait glisser. Échap la
+// rend à sa place d'avant.
+/**
+ * Le toucher précédent sur l'image, pour reconnaître un DOUBLE toucher : le
+ * navigateur d'un téléphone n'envoie pas toujours de dblclick (Safari).
+ * @type {{t:number, x:number, y:number}|null}
+ */
+let _mlxDernierToucher=null;
+/**
+ * Un double toucher — ou un double-clic — sur une étiquette ou la légende la
+ * met en main. Les deux touchers ont pu commencer un tracé AU MÊME ENDROIT —
+ * un point, un angle, une ligne au clic-clic — : il ne comptait pas, on le
+ * retire. Un tracé commencé ailleurs, lui, reste : c'est le double-clic qui le
+ * termine, comme avant.
+ * @param {number} px  position sur le calque
+ * @param {number} py
+ * @returns {boolean}
+ */
+function _mlxEtiqDoubleToucher(px,py){
+  const G=_mlxCalqueGeo();
+  if(!_ml||!G||_ml.deplEtiq) return false;
+  const R3=G.R;
+  const hit=mlEtiquetteToucher(_ml.annot,R3,_mlxTempsMs(),px,py,G.g,_ml.comparaison);
+  if(!hit) return false;
+  const tr=_ml.trace;
+  if(tr&&!tr.pts.every(p=>Math.hypot(R3.ox+p[0]/1000*R3.vw*R3.s-px,R3.oy+p[1]/1000*R3.vh*R3.s-py)<12)) return false;
+  _ml.trace=null;
+  return _mlxEtiqPrendre(hit,px,py);
+}
+/** @returns {{R:RectImage, g:CanvasRenderingContext2D, k:number, c:HTMLCanvasElement}|null} */
+function _mlxCalqueGeo(){
+  const c=_mlEl('ml-calque'), v=_mlVideo(), R=v?_mlVideoRect(v):null;
+  if(!(c instanceof HTMLCanvasElement)||!R) return null;
+  const g=c.getContext('2d');
+  if(!g) return null;
+  return {R,g,k:Math.max(0.45,R.vh*R.s/720),c};
+}
+/**
+ * @param {{kind:string, id:string}} hit
+ * @param {number} px  position sur le calque
+ * @param {number} py
+ */
+function _mlxEtiqPrendre(hit,px,py){
+  const G=_mlxCalqueGeo();
+  if(!_ml||!G) return false;
+  const {R,g,k}=G, sMs=_mlxTempsMs();
+  /** @param {number[]} p @returns {number[]} */
+  const P=p=>[R.ox+p[0]/1000*R.vw*R.s,R.oy+p[1]/1000*R.vh*R.s];
+  let ox=0, oy=0;
+  if(hit.kind==='leg'){ const b=_mlxLegendeMesure(g,R,_ml.annot,sMs,k); ox=b.x; oy=b.y; }
+  else {
+    const a=_mlxAnnot(hit.id);
+    const pl=a?_mlxEtiqPlace(a,mlAnnotPointsA(a,sMs).map(P),k,R,sMs):null;
+    if(!pl) return false;
+    ox=pl.x; oy=pl.y;
+    _ml.sel=hit.id;
+  }
+  _ml.deplEtiq={kind:hit.kind,id:hit.id,avant:JSON.stringify(_ml.annot),grab:[px-ox,py-oy]};
+  _mlxApresSelection(); _mlxMajOutils();
+  return true;
+}
+/** @param {number} px @param {number} py  position sur le calque */
+function _mlxEtiqBouger(px,py){
+  const d=_ml&&_ml.deplEtiq, G=_mlxCalqueGeo();
+  if(!_ml||!d||!G) return false;
+  const {R,k}=G, sMs=_mlxTempsMs();
+  const tx=px-d.grab[0], ty=py-d.grab[1];
+  /** @param {number} v @param {number} a @param {number} b @returns {number} */
+  const borne=(v,a,b)=>Math.max(a,Math.min(b,Math.round(v)));
+  if(d.kind==='leg'){
+    _ml.annot={..._ml.annot,leg:{..._ml.annot.leg,x:borne((tx-R.ox)/(R.vw*R.s)*1000,0,1000),y:borne((ty-R.oy)/(R.vh*R.s)*1000,0,1000)}};
+  } else {
+    const a=_mlxAnnot(d.id);
+    if(!a) return false;
+    /** @param {number[]} p @returns {number[]} */
+    const P=p=>[R.ox+p[0]/1000*R.vw*R.s,R.oy+p[1]/1000*R.vh*R.s];
+    const base=_mlxEtiqPlace({...a,eo:[0,0]},mlAnnotPointsA(a,sMs).map(P),k,R,sMs);
+    if(!base) return false;
+    const eo=[borne((tx-base.x)/(R.vw*R.s)*1000,-1000,1000),borne((ty-base.y)/(R.vh*R.s)*1000,-1000,1000)];
+    _mlxChanger(d.id,x=>({...x,eo}));
+  }
+  _mlDessinerCalque();
+  return true;
+}
+/** Pose l'étiquette là où elle est : un pas d'historique, et c'est tout. */
+function _mlxEtiqPoser(){
+  const d=_ml&&_ml.deplEtiq;
+  if(!_ml||!d) return false;
+  _ml.deplEtiq=null;
+  // Ramenée exactement à sa place : on ne garde pas un décalage nul.
+  if(d.kind==='etiq') _mlxChanger(d.id,x=>{
+    if(!Array.isArray(x.eo)||x.eo[0]||x.eo[1]) return x;
+    const o={...x}; delete o.eo; return o;
+  });
+  if(JSON.stringify(_ml.annot)!==d.avant){
+    _ml.annule.push(d.avant); if(_ml.annule.length>60) _ml.annule.shift(); _ml.refait=[];
+  }
+  _mlxApresChangement();
+  return true;
+}
+function mlEtiqAnnuler(){
+  const d=_ml&&_ml.deplEtiq;
+  if(!_ml||!d) return false;
+  _ml.annot=JSON.parse(d.avant);
+  _ml.deplEtiq=null;
+  _mlxApresChangement();
+  return true;
+}
+/** L'étiquette du tracé choisi, rendue à sa place à côté du tracé. */
+function mlEtiqReplacer(){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a||!Array.isArray(a.eo)) return false;
+  _mlxMemoriser();
+  _mlxChanger(a.id,x=>{ const o={...x}; delete o.eo; return o; });
+  _mlxApresChangement();
+  return true;
+}
+/** La légende, rendue au coin choisi dans son panneau. */
+function mlLegendeReplacer(){
+  if(!_ml||typeof _ml.annot.leg.x!=='number') return false;
+  _mlxMemoriser();
+  const L={..._ml.annot.leg}; delete L.x; delete L.y;
+  _ml.annot={..._ml.annot,leg:L};
+  _mlxApresChangement();
+  return true;
 }
 
 // ── L'ÉDITION ──────────────────────────────────────────────────────────────
@@ -3378,6 +3625,31 @@ function _mlxPointer(e,calque){
   const N=(cx,cy)=>[_mlxBorne((cx-b.left-R.ox)/R.s/R.vw*1000),_mlxBorne((cy-b.top-R.oy)/R.s/R.vh*1000)];
   const outil=_ml.outil, sMs=_mlxTempsMs();
   e.preventDefault();
+  // UNE ÉTIQUETTE EN MAIN : ce toucher la pose — ou, si le doigt glisse,
+  // l'emmène d'abord.
+  if(_ml.deplEtiq){
+    try{ calque.setPointerCapture(e.pointerId); }catch(x){}
+    _mlxEtiqBouger(e.clientX-b.left,e.clientY-b.top);
+    /** @param {PointerEvent} ev */
+    const suivre=ev=>{ _mlxEtiqBouger(ev.clientX-b.left,ev.clientY-b.top); };
+    const poser=()=>{
+      calque.removeEventListener('pointermove',suivre);
+      calque.removeEventListener('pointerup',poser);
+      calque.removeEventListener('pointercancel',poser);
+      _mlxEtiqPoser();
+    };
+    calque.addEventListener('pointermove',suivre);
+    calque.addEventListener('pointerup',poser);
+    calque.addEventListener('pointercancel',poser);
+    return;
+  }
+  // LE DOUBLE TOUCHER, reconnu ici plutôt qu'attendu du navigateur : au
+  // doigt, le second toucher d'un double sur une étiquette la prend.
+  {
+    const maintenant=performance.now(), px=e.clientX-b.left, py=e.clientY-b.top, prec=_mlxDernierToucher;
+    _mlxDernierToucher={t:maintenant,x:px,y:py};
+    if(prec&&maintenant-prec.t<400&&Math.hypot(px-prec.x,py-prec.y)<20&&_mlxEtiqDoubleToucher(px,py)){ _mlxDernierToucher=null; return; }
+  }
   if(outil==='selection'||outil==='gomme'){
     const g=calque instanceof HTMLCanvasElement?calque.getContext('2d'):null;
     const hit=mlAnnotToucher(_ml.annot,R,sMs,e.clientX-b.left,e.clientY-b.top,{sel:_ml.sel,comparaison:_ml.comparaison,g});
@@ -3748,14 +4020,15 @@ function mlLegende(cle,val){
   const L={..._ml.annot.leg};
   if(cle==='on') L.on=val?1:0;
   else if(cle==='titre') L.titre=String(val||'').replace(/[\u0000-\u001f]/g,' ').slice(0,40)||'Analyse technique';
-  else if(cle==='pos'&&['hg','hd','bg','bd'].includes(val)) L.pos=val;
+  // Choisir un coin rend la légende à ce coin, même déplacée à la main.
+  else if(cle==='pos'&&['hg','hd','bg','bd'].includes(val)){ L.pos=val; delete L.x; delete L.y; }
   else if(cle==='taille'&&['s','m','l'].includes(val)) L.taille=val;
   else if(cle==='fond'&&['sombre','clair','aucun'].includes(val)) L.fond=val;
   else if(cle==='op'){ const n=Number(val); if(isFinite(n)) L.op=Math.round(Math.max(0.3,Math.min(1,n))*100)/100; }
   else return false;
   if(cle!=='titre'&&cle!=='op') _mlxMemoriser();
   _ml.annot={..._ml.annot,leg:/** @type {Legende} */(L)};
-  if(cle==='on') _mlxMajLegende();
+  if(cle==='on'||cle==='pos') _mlxMajLegende();
   _mlDessinerCalque(); _mlMajEnregistrer();
   return true;
 }
@@ -3954,6 +4227,7 @@ function _mlxClavier(e){
   const surBouton=!!(t&&t.closest('button,[role="button"],[role="slider"],[role="tab"]'));
   if(k===' '){ if(surBouton) return false; e.preventDefault(); mlLecture(); return true; }
   if(k==='Escape'){
+    if(mlEtiqAnnuler()) return true;
     if(_mlxAnnulerTrace()) return true;
     const m=_mlEl('mlx-menu'); if(m&&!m.hidden){ mlMenu(); return true; }
     if(_ml.sel){ _ml.sel=null; _mlxApresSelection(); return true; }
@@ -4552,7 +4826,7 @@ function mlOuvrir(email,videoId){
     annot:annotDoc,annotInit:JSON.stringify(annotDoc),outil:'selection',couleur:ML_PALETTE[0].c,
     epaisseur:ML_EPAISSEUR_DEFAUT,sel:null,trace:null,curseur:null,annule:[],refait:[],original:false,
     comparaison:false,guide:null,repereAnat:1,relier:true,phrase:'',tailleTexte:'m',onglet:'trace',jetonVseq:0,
-    enLecture:_mlxPrefLecture(),style:''};
+    enLecture:_mlxPrefLecture(),style:'',deplEtiq:null};
   go('s-coach-motion-lab');
   _mlRendre();
   return true;
@@ -4877,7 +5151,7 @@ function _mlxMajOutils(){
   const S=_mlxIco, o=_ml.outil, sens=_mlxSens();
   const cours=_ml.trace&&(_ml.trace.t==='courbe'||_ml.trace.t==='point'||_ml.trace.t==='angle')?_ml.trace:null;
   /** @type {Object<string,string>} */
-  const aides={selection:'Touche un tracé pour le choisir ; glisse-le, ou tire un de ses points.',
+  const aides={selection:'Touche un tracé pour le choisir ; glisse-le, ou tire un de ses points. Double-clique une étiquette ou la légende pour la déplacer.',
     ligne:'Glisse sur la vidéo — ou touche le départ, puis l’arrivée.',
     fleche:'Glisse sur la vidéo — ou touche le départ, puis la pointe.',
     libre:'Dessine d’un seul geste — ou touche pour commencer, suis le mouvement à la souris, touche pour finir.',
@@ -4923,6 +5197,10 @@ function _mlxMajOutils(){
     +'</div><div class="mlx-ligne"><span class="mlx-lab-s">Taille</span><div class="mlx-chips mlx-chips-l">'
     +[['s','Petite'],['m','Moyenne'],['l','Grande']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+(k===_ml?.tailleTexte)+'" onclick="mlTailleTexte(\''+k+'\')">'+l+'</button>').join('')
     +'</div></div>';
+  // UNE ÉTIQUETTE EN MAIN : où la poser, et de quoi renoncer.
+  if(_ml.deplEtiq) h+='<div class="mlx-cours"><span>'+(_ml.deplEtiq.kind==='leg'?'Déplace la légende':'Déplace l’étiquette')
+      +', puis touche pour la poser</span><span class="mlx-esp"></span>'
+    +'<button type="button" class="mlx-b" onclick="mlEtiqAnnuler()">Annuler</button></div>';
   // COMMENCÉ D'UN CLIC : ce qu'attend le clic suivant, et de quoi renoncer.
   if(_ml.trace&&_ml.trace.clic) h+='<div class="mlx-cours"><span>'+(_ml.trace.t==='libre'
       ?'Suis le mouvement à la souris, puis touche pour finir (ou Entrée)':'Touche le point d’arrivée')+'</span><span class="mlx-esp"></span>'
@@ -4939,7 +5217,7 @@ function _mlxMajOutils(){
     +'<button type="button" class="mlx-ico-b mlx-ico-p" onclick="mlRetablir()" title="Rétablir (Ctrl+Maj+Z)" aria-label="Rétablir"'
     +(_ml.refait.length?'':' disabled')+'>'+S('retablir',16)+'</button>';
   const c=_mlEl('ml-calque');
-  if(c) c.dataset.outil=o;
+  if(c){ c.dataset.outil=o; c.dataset.depl=_ml.deplEtiq?'1':''; }
 }
 /**
  * Le petit trait qui montre chaque style sur son bouton.
@@ -5039,6 +5317,8 @@ function _mlxMajEditeur(){
       +'<span class="mlx-note">En comparaison, la branche cible se dessine en tirets verts.</span></div>';
   if(a.t==='point'&&mlDecoderTrait(a.p).length>1) h+='<label class="mlx-coche"><input type="checkbox"'+(a.rel?' checked':'')+' onchange="mlAnnotOption(\'rel\',this.checked)"> Relier les points</label>';
   if(a.t!=='texte') h+='<label class="mlx-coche"><input type="checkbox"'+(a.et!==0?' checked':'')+' onchange="mlAnnotOption(\'et\',this.checked)"> Afficher le nom sur la vidéo</label>'
+    +(a.et!==0?'<p class="mlx-note">Double-clique le nom sur la vidéo pour le déplacer.'
+      +(Array.isArray(a.eo)?' <button type="button" class="mlx-b" onclick="mlEtiqReplacer()">Le remettre près du tracé</button>':'')+'</p>':'')
     +'<label class="mlx-coche"><input type="checkbox"'+(a.lg!==0?' checked':'')+' onchange="mlAnnotOption(\'lg\',this.checked)"> Dans la légende</label>';
   // LE SUIVI DU MOUVEMENT : images clés, et l'interpolation entre elles.
   h+='<div class="mlx-suivi"><label class="mlx-coche"><input type="checkbox"'+(suit?' checked':'')+' onchange="mlAnnotSuivre()"> Suivre le mouvement</label>'
@@ -5083,7 +5363,9 @@ function _mlxMajLegende(){
     +'<div class="mlx-champs2"><label class="mlx-champ"><span>Taille</span>'+sel('taille',[['s','Petite'],['m','Moyenne'],['l','Grande']],L.taille)+'</label>'
     +'<label class="mlx-champ"><span>Opacité du fond</span><input type="range" min="30" max="100" step="5" value="'+Math.round(L.op*100)+'" '
       +'aria-label="Opacité du fond de la légende" onfocus="mlAnnotFocus()" oninput="mlLegende(\'op\',Number(this.value)/100)"></label></div>'
-    +'<p class="mlx-note">Elle liste les tracés gardés « dans la légende », avec la valeur de leurs angles, et part avec la correction.</p>'
+    +'<p class="mlx-note">Elle liste les tracés gardés « dans la légende », avec la valeur de leurs angles, et part avec la correction. '
+      +'Double-clique-la sur la vidéo pour la déplacer.'
+      +(typeof L.x==='number'?' <button type="button" class="mlx-b" onclick="mlLegendeReplacer()">La remettre dans son coin</button>':'')+'</p>'
   +'</div>';
 }
 // ── LES MODÈLES ────────────────────────────────────────────────────────────
@@ -5358,6 +5640,12 @@ function _mlBrancher(){
   // en cours jusqu'à la souris dit où tombera le prochain point.
   if(calque){
     calque.addEventListener('pointermove',e=>{
+      // L'ÉTIQUETTE EN MAIN SUIT LA SOURIS, bouton lâché.
+      if(_ml&&_ml.deplEtiq&&!e.buttons){
+        const b3=calque.getBoundingClientRect();
+        _mlxEtiqBouger(e.clientX-b3.left,e.clientY-b3.top);
+        return;
+      }
       const tr=_ml&&_ml.trace;
       if(!_ml||!tr) return;
       const v2=_mlVideo(), R2=v2?_mlVideoRect(v2):null; if(!R2) return;
@@ -5378,7 +5666,15 @@ function _mlBrancher(){
       _mlDessinerCalque();
     });
     calque.addEventListener('pointerleave',()=>{ if(_ml&&_ml.curseur){ _ml.curseur=null; _mlDessinerCalque(); } });
-    calque.addEventListener('dblclick',e=>{ if(_ml&&_ml.trace&&(_ml.trace.t==='courbe'||_ml.trace.t==='point')){ e.preventDefault(); mlTerminerTrace(); } });
+    calque.addEventListener('dblclick',e=>{
+      if(!_ml||_ml.mode!=='lecture') return;
+      // LE DOUBLE-CLIC SUR UNE ÉTIQUETTE OU LA LÉGENDE LA MET EN MAIN — s'il
+      // ne l'a pas déjà fait au second toucher.
+      if(_ml.deplEtiq){ e.preventDefault(); return; }
+      const b3=calque.getBoundingClientRect();
+      if(_mlxEtiqDoubleToucher(e.clientX-b3.left,e.clientY-b3.top)){ e.preventDefault(); return; }
+      if(_ml.trace&&(_ml.trace.t==='courbe'||_ml.trace.t==='point')){ e.preventDefault(); mlTerminerTrace(); }
+    });
   }
   const zp=_mlEl('ml-pistes');
   if(zp) _mlxBrancherPistes(zp);
@@ -9535,6 +9831,7 @@ function _mlInjecterStyle(){
     '.mlx-original .mlx-badge-orig{display:block}',
     '.ml-calque[data-outil="selection"]{cursor:default}',
     '.ml-calque[data-outil="gomme"]{cursor:cell}',
+    '.ml-calque[data-depl="1"]{cursor:move}',
     '.mlx-transport{padding:8px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.02)}',
     '.mlx-tr-l1{display:flex;align-items:center;gap:6px;flex-wrap:wrap}',
     '.mlx-tr-l1 .ml-b{display:inline-flex;align-items:center;justify-content:center;min-width:42px;min-height:42px;padding:0 9px}',
