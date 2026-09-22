@@ -31116,6 +31116,9 @@ async function testExercices(){
         const t=s.querySelector(':scope>.cc-sect-t');
         const lib=t?t.textContent.trim():'';
         if(lib!=='Calculs alimentaires') return _echec('le titre est « '+lib+' »');
+        // 1403 : le second mot en rouge, comme la maquette.
+        if(!t.querySelector('em')||t.querySelector('em').textContent!=='alimentaires')
+          return _echec('« alimentaires » n’est plus mis en valeur');
         if(!s.classList.contains('cc-sect-fixe')) return _echec('la section n’est pas marquée fixe');
         // MEME RETENUE REPLIEE par un ancien clic, elle s'ouvre, et son titre
         // n'est plus un bouton.
@@ -32463,10 +32466,16 @@ async function testExercices(){
             macros:{on:{kcal:2200,p:130,g:230,l:70,f:30},off:{kcal:2000,p:130,g:180,l:70,f:28}}}};
         const d=document.createElement('div');
         d.innerHTML=_htmlTableauxTableur(c);
+        // DEPUIS LE BUILD 1403, chaque tableau vit dans une carte (.tbk-carte)
+        // et sa legende porte une icone et un sous-titre : le TITRE se lit dans
+        // .tbk-cap-t. L'ordre, lui, est celui qu'on tient ici.
+        const titre=tb=>{ const cap=tb&&tb.querySelector('caption'); if(!cap) return '';
+          const tt=cap.querySelector('.tbk-cap-t'); return (tt||cap).textContent||''; };
         const lu=[...d.children].map(e=>{
-          if(e.tagName==='TABLE') return 'T:'+((e.querySelector('caption')||{}).textContent||'');
+          if(e.tagName==='TABLE') return 'T:'+titre(e);
+          if(e.classList.contains('tbk-carte')) return 'T:'+titre(e.querySelector('table'));
           if(e.classList.contains('tbk-duo'))
-            return 'DUO:'+[...e.querySelectorAll('caption')].map(x=>x.textContent).join('|');
+            return 'DUO:'+[...e.querySelectorAll('table')].map(titre).join('|');
           if(e.classList.contains('tbk-deux'))
             return 'DEUX:'+[...e.querySelectorAll('button')].map(x=>x.textContent).join('|');
           if(e.tagName==='BUTTON') return 'B:'+e.textContent;
@@ -32480,6 +32489,159 @@ async function testExercices(){
           'DEUX:Enregistrer les réglages|Enregistrer pour l’athlète'];
         return JSON.stringify(lu)===JSON.stringify(attendu)
           ?true:_echec('lu : '+JSON.stringify(lu));})());
+      // BUILD 1403 — Kevin, maquette a l'appui : « change la mise en page des
+      // tableaux comme l'image trois ». Les cinq tableaux deviennent des cartes ;
+      // ce qui les relit ne doit rien perdre.
+      ok('1403 — LES CINQ TABLEAUX SONT DES CARTES, ET RIEN DE CE QUI LES RELIT NE CHANGE',(()=>{
+        const c={id:'T1403',email:'t1403@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+          _evol_height:'190','init-age':26,
+          sessions_config:Array.from({length:7},(_,i)=>({active:i<6})),
+          bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'100','deb-height':'190',
+                   'deb-age':'26','deb-gender':'Homme'}],
+          weightLog:[{date:localISODate(new Date()),kg:100.9}],nutrition:{cycle:false}};
+        const d=document.createElement('div');
+        d.innerHTML=_htmlTableauxTableur(c);
+        const cartes=[...d.querySelectorAll('.tbk-carte')];
+        if(cartes.length!==5) return _echec(cartes.length+' cartes au lieu de 5');
+        const tables=[...d.querySelectorAll('table.tbk')];
+        if(tables.length!==5) return _echec(tables.length+' tableaux');
+        // CHAQUE TABLEAU DANS SA CARTE, avec son en-tete : pastille, titre, sous-titre.
+        for(const tb of tables){
+          if(!tb.parentElement||!tb.parentElement.classList.contains('tbk-carte'))
+            return _echec('un tableau vit hors de sa carte');
+          const cap=tb.querySelector('caption');
+          if(!cap||!cap.querySelector('.tbk-cap-i svg')) return _echec('une légende sans pastille d’icône');
+          if(!cap.querySelector('.tbk-cap-t')||!cap.querySelector('.tbk-cap-s'))
+            return _echec('une légende sans titre ou sans sous-titre : '+cap.textContent);
+        }
+        const par=nom=>tables.find(tb=>(tb.querySelector('.tbk-cap-t')||{}).textContent===nom);
+        // LES BESOINS : l'etiquette « Estimation », la formule NOMMEE (celle qui a
+        // calcule, pas une autre), et la note des estimations.
+        const bes=par('Besoins caloriques');
+        if(!bes) return _echec('« Besoins caloriques » introuvable');
+        if(!/Estimation/.test((bes.querySelector('.tbk-cap-b')||{}).textContent||''))
+          return _echec('l’étiquette « Estimation » manque');
+        const s=(bes.querySelector('.tbk-cap-s')||{}).textContent||'';
+        const premiere=(bes.querySelector('tbody tr .tbk-aide')||{}).textContent||'';
+        const formule=(s.match(/méthode (.+)$/)||[])[1]||'';
+        if(!formule||premiere.indexOf(formule)<0)
+          return _echec('le sous-titre nomme « '+formule+' », la ligne dit « '+premiere+' »');
+        if(!/estimations/.test((bes.querySelector('tfoot .tbk-note')||{}).textContent||''))
+          return _echec('la note des estimations manque');
+        // LES LIGNES PORTENT LEUR ICONE, sans changer leur texte.
+        const fac=par('Facteurs');
+        if(fac.querySelectorAll('tbody tr .tbk-ri svg').length!==5)
+          return _echec('les cinq facteurs n’ont pas tous leur icône');
+        const poids=[...fac.querySelectorAll('tbody tr')].find(r=>/Poids/.test(r.textContent));
+        if(!poids||!poids.querySelector('.tbk-v')) return _echec('le poids n’est pas dans sa case');
+        if(poids.textContent.replace(/\s+/g,' ').trim()!=='Poidsdernière pesée enregistrée100,9 kg')
+          return _echec('le texte de la ligne a changé : « '+poids.textContent+' »');
+        // LE SPORT : l'intensite en pastille ; LES JOURNEES : leur propre classe.
+        const sp=par('Dépense selon l’activité sportive');
+        if(!sp||!sp.querySelector('.tbk-pill')) return _echec('l’intensité n’est pas en pastille');
+        if(!par('Journées')||!par('Journées').classList.contains('tbk-jr'))
+          return _echec('« Journées » a perdu sa classe');
+        // LES MACROS : cinq cartes + le commutateur + le total, et les attributs
+        // que le calcul relit.
+        const mac=par('Macronutriments');
+        if(!mac||!mac.classList.contains('tbk-mac')) return _echec('les macros ne sont pas en cartes');
+        const rs=[...mac.querySelectorAll('tbody tr')];
+        if(rs.length!==7) return _echec(rs.length+' rangs de macros au lieu de 7');
+        if(!rs[0].classList.contains('tbk-swi-r')||!rs[0].querySelector('input[type=checkbox]'))
+          return _echec('le commutateur n’est plus le premier rang');
+        const noms=rs.slice(1,6).map(r=>(r.querySelector('.tbk-lt')||{}).firstChild);
+        const lib=noms.map(n=>n?n.textContent:'').join('|');
+        if(lib!=='Protéines|Lipides|Glucides|Fibres|Sel') return _echec('les cinq cartes : '+lib);
+        if(rs.slice(1,6).some(r=>!r.querySelector('.tbk-ri svg'))) return _echec('une carte de macro sans icône');
+        if(!/^Total calorique/.test(rs[6].textContent)||!rs[6].classList.contains('tbk-tot'))
+          return _echec('le total : « '+rs[6].textContent+' »');
+        for(const k of ['p','l','g','f','kcal'])
+          if(!mac.querySelector('td[data-m="'+k+'"][data-cible]')) return _echec('data-cible manque pour '+k);
+        // LE GRAMMAGE RESTE EN FIN DE LIGNE, apres le menu : c'est la ou les
+        // lecteurs du tableau le cherchent.
+        if(!/\d\s*g$/.test(rs[1].textContent.replace(/\s+/g,' ').trim()))
+          return _echec('le grammage des protéines n’est plus en fin de ligne');
+        // LA FEUILLE : la grille des macros et le repli des paires a la largeur
+        // de la SECTION, pas de la fenetre.
+        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        if(!/\.tbk-carte \.tbk-mac tbody\{display:grid/.test(css)) return _echec('les macros ne sont pas en grille');
+        if(css.indexOf('@container tbk-serre (max-width:719px)')<0)
+          return _echec('les paires ne se replient pas quand la section est étroite');
+        return true;})());
+
+      // BUILD 1403 — LE BANC A DEUX APPAREILS L'A MONTRE : les reglages du coach
+      // arrivaient dans le dossier de l'athlete, pas sur son ecran Nutrition.
+      ok('1403 — L’ÉCRAN NUTRITION DE L’ATHLÈTE SUIT LA DESCENTE DES RÉGLAGES DU COACH',(()=>{
+        const src=[...document.scripts].map(s=>s.textContent||'').join('\n');
+        const i=src.indexOf('function _repeindreApresDescente(');
+        if(i<0) return _echec('_repeindreApresDescente a disparu');
+        if(src.slice(i,i+1200).indexOf('_repeindreNutritionAthlete()')<0)
+          return _echec('le repeint après descente ignore l’écran Nutrition');
+        const k=src.indexOf("if(currentUser.role==='athlete') _repeindreNutritionAthlete();");
+        if(k<0) return _echec('la synchro de fond ne repeint pas l’écran Nutrition');
+        // ET IL NE PASSE PAS PAR go() : une saisie ouverte ne doit pas se fermer.
+        if(/\bgo\(|loadNutrition\(/.test(String(_repeindreNutritionAthlete)))
+          return _echec('le repeint change d’écran, et fermerait une saisie ouverte');
+        // POUR DE BON : l'ecran montre 2 500, le dossier passe a 3 100 par une
+        // descente, le repeint suit.
+        // ⚠ SANS go() NI loadNutrition : changer d'ecran recalcule les pastilles
+        //   d'onglets avec le dossier de test, et « 1 » restait sur « Bilan »
+        //   pour les tests suivants. On allume l'ecran a la main.
+        const sauve=currentUser, sn=document.getElementById('s-nutrition');
+        if(!sn) return _echec('l’écran Nutrition est introuvable');
+        const etaitActif=sn.classList.contains('active');
+        try{ if(document.activeElement&&document.activeElement.blur) document.activeElement.blur(); }catch(e){}
+        const j=Date.now();
+        const m=k=>({kcal:k,p:180,l:80,g:Math.round((k-4*180-9*80)/4),f:35});
+        try{
+          const u={id:'R1403',email:'r1403@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+            _evol_height:'180',birthdate:'1996-01-01','init-age':30,createdAt:j-90*864e5,
+            bilans:[{type:'debut',date:j-60*864e5,'deb-weight':'80','deb-height':'180','deb-age':'30','deb-gender':'Homme'}],
+            weightLog:[{date:localISODate(new Date(j-864e5)),kg:80}],sessions:[],
+            nutrition:{dietType:'flexible',cycle:false,
+              macros:{on:m(2500),off:m(2500),origine:'tableur',origineDate:j}}};
+          currentUser=u;
+          sn.classList.add('active');
+          _renderNutriContent('flexible');
+          const lire=()=>((document.querySelector('#s-nutrition .rc-obj-nb')||{}).textContent||'').replace(/\D/g,'');
+          if(lire()!=='2500') return _echec('au départ l’écran montre « '+lire()+' »');
+          u.nutrition.macros={on:m(3100),off:m(3100),origine:'tableur',origineDate:j+1};
+          if(!_repeindreNutritionAthlete()) return _echec('le repeint a refusé');
+          if(lire()!=='3100') return _echec('après la descente l’écran montre « '+lire()+' »');
+          // HORS DE L'ECRAN NUTRITION, IL NE FAIT RIEN.
+          sn.classList.remove('active');
+          return _repeindreNutritionAthlete()===false
+            ?true:_echec('le repeint agit hors de l’écran Nutrition');
+        } finally {
+          currentUser=sauve;
+          sn.classList.toggle('active',etaitActif);
+        }})());
+
+      ok('1403 — LE TOTAL DU TABLEAU EST CELUI QUE REÇOIT L’ATHLÈTE',(()=>{
+        // Le banc lisait 3 411 kcal au tableau et 3 413 chez l'athlete.
+        const c={id:'T1403b',email:'t1403b@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+          _evol_height:'190','init-age':26,
+          sessions_config:Array.from({length:7},(_,i)=>({active:i<6})),
+          bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'100','deb-height':'190',
+                   'deb-age':'26','deb-gender':'Homme'}],
+          weightLog:[{date:localISODate(new Date()),kg:100.9}],
+          nutrition:{cycle:false}};
+        const d=document.createElement('div');
+        d.innerHTML=_htmlTableauxTableur(c);
+        const t=cibleTableur(c,{});
+        const j=_tbJournees(c,t,false).on;
+        const lu=s=>Number(String(s||'').replace(/\D/g,''));
+        const tot=d.querySelector('.tbk-mac tr.tbk-tot .tbk-mv');
+        if(!tot) return _echec('le total calorique n’est pas rendu');
+        if(lu(tot.textContent)!==j.kcal)
+          return _echec('le tableau annonce '+tot.textContent+', l’athlète reçoit '+j.kcal+' kcal');
+        const tj=[...d.querySelectorAll('.tbk-jr tbody tr')].find(r=>/Tous les jours/.test(r.textContent));
+        if(!tj||lu((tj.querySelector('td')||{}).textContent)!==j.kcal)
+          return _echec('« Tous les jours » annonce '+(tj&&tj.querySelector('td').textContent)+' pour '+j.kcal);
+        // Le total est bien la somme de ses grammes.
+        return j.kcal===Math.round(4*j.p+9*j.l+4*j.g)
+          ?true:_echec('la journée écrite n’est pas la somme de ses grammes');})());
+
       ok('« Enregistrer ces chiffres » est CENTRE et seul sur sa ligne',(()=>{
         // Pleine largeur il se confondait avec le tableau qu'il enregistre.
         const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');

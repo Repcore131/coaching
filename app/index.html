@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1402';
+window.RC_BUILD='1403';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5275,6 +5275,195 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
    coupe en deux sur un telephone etroit se lirait comme deux boutons. */
 .tbk-save-c{display:block;width:auto;min-width:min(100%,240px);max-width:100%;
   margin:0 auto 10px;padding:0 22px;min-height:46px;white-space:nowrap}
+/* ══ LES CARTES DES CALCULS ALIMENTAIRES (build 1403) ══════════════════
+   Kevin, 22/09/2026, maquette a l'appui. Chaque tableau vit dans une carte :
+   filet rouge, pastille d'icone, titre et sous-titre en <caption>, lignes en
+   bandes arrondies avec leur icone, valeurs lues dans des cases, le resultat
+   en rouge. Les macros passent en cartes cote a cote (.tbk-mac).
+   LA CARTE EST UN CONTENEUR : c'est sa largeur, et non celle de la fenetre,
+   qui decide des icones de ligne et du nombre de cartes de macros — une
+   demi-colonne de PC et un telephone se ressemblent plus qu'ils ne different. */
+/* ⚠ LES PAIRES SE LISENT A LA LARGEUR DE LA SECTION, PAS DE LA FENETRE. A
+   900 px de fenetre, la barre laterale du coach laisse 440 px a la fiche : la
+   regle a 700 px mettait pourtant Facteurs et Besoins cote a cote, 180 px
+   chacun, menus rognes a deux lettres. Les regles de fenetre restent (elles
+   decident au-dessus) ; ces requetes de conteneur les reprennent quand la
+   section est trop etroite pour deux cartes. */
+.tbk-serre{container:tbk-serre/inline-size}
+@container tbk-serre (max-width:719px){
+  .tbk-serre .tbk-duo,.tbk-serre .tbk-duo.tbk-duo-l{grid-template-columns:1fr}
+}
+@container tbk-serre (max-width:899px){
+  .tbk-serre .tbk-duo.tbk-duo-l{grid-template-columns:1fr}
+}
+.tbk-carte{position:relative;container-type:inline-size;margin-bottom:14px;
+  padding:4px 14px 12px;border:1px solid rgba(224,32,32,.30);border-radius:16px;
+  background:radial-gradient(120% 90% at 0% 0%,rgba(224,32,32,.10),transparent 55%),
+    linear-gradient(180deg,rgba(26,12,12,.92),rgba(12,12,12,.96));
+  box-shadow:0 14px 34px -22px rgba(224,32,32,.55),inset 0 1px 0 rgba(255,255,255,.04)}
+.tbk-duo>.tbk-carte{margin-bottom:14px}
+.tbk-carte .tbk{margin:0;background:none;border:0;border-radius:0;overflow:visible;
+  border-collapse:separate;border-spacing:0 6px}
+.tbk-carte .tbk caption{background:none;padding:10px 0 6px;text-transform:none;
+  letter-spacing:0;color:#fff;font-size:inherit}
+.tbk-cap{display:flex;align-items:center;gap:14px;min-width:0}
+.tbk-cap-i{flex:0 0 46px;width:46px;height:46px;border-radius:12px;display:flex;
+  align-items:center;justify-content:center;color:#ff3b3b;background:rgba(224,32,32,.14);
+  border:1px solid rgba(224,32,32,.38);box-shadow:0 0 18px -6px rgba(224,32,32,.6)}
+.tbk-cap-x{min-width:0;flex:1 1 auto}
+.tbk-cap-t{display:block;font-size:15px;font-weight:800;letter-spacing:2.4px;
+  text-transform:uppercase;color:#fff;line-height:1.25}
+.tbk-cap-s{display:block;margin-top:3px;font-size:12px;font-weight:500;
+  color:var(--text-faint);line-height:1.4}
+.tbk-cap-b{flex:0 0 auto;margin-left:auto;padding:6px 12px;border-radius:8px;
+  font-size:10.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+  color:#ff4d4d;background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.35)}
+/* LES LIGNES : des bandes arrondies, une icone a gauche. */
+.tbk-carte .tbk:not(.tbk-mac) tbody th,.tbk-carte .tbk:not(.tbk-mac) tbody td{
+  background:rgba(255,255,255,.028);border-top:1px solid rgba(255,255,255,.06);
+  border-bottom:1px solid rgba(255,255,255,.06);padding:9px 12px}
+.tbk-carte .tbk:not(.tbk-mac) tbody tr>:first-child{border-left:1px solid rgba(255,255,255,.06);
+  border-radius:12px 0 0 12px}
+.tbk-carte .tbk:not(.tbk-mac) tbody tr>:last-child{border-right:1px solid rgba(255,255,255,.06);
+  border-radius:0 12px 12px 0}
+.tbk-carte .tbk tr:nth-child(even){background:none}
+.tbk-carte .tbk:not(.tbk-mac) tbody td{font-size:16px}
+.tbk-l{display:flex;align-items:center;gap:12px;min-width:0}
+.tbk-ri{flex:0 0 38px;width:38px;height:38px;border-radius:10px;display:flex;
+  align-items:center;justify-content:center;color:#d4d4d4;
+  background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09)}
+.tbk-lt{min-width:0;color:#fff;font-weight:600}
+.tbk-carte .tbk .tbk-aide{color:var(--text-faint);font-weight:400}
+.tbk-v{display:inline-block;min-width:min(100%,150px);padding:8px 14px;border-radius:10px;
+  border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.35);text-align:right;
+  box-sizing:border-box}
+.tbk-carte .tbk select{max-width:260px;min-height:42px;padding:6px 12px;border-radius:10px;
+  background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14);text-align:left}
+/* LE RESULTAT : bande rouge, valeur rouge, icone rouge. */
+.tbk-carte .tbk:not(.tbk-mac) tr.tbk-tot>th,.tbk-carte .tbk:not(.tbk-mac) tr.tbk-tot>td{
+  background:rgba(224,32,32,.15);border-color:rgba(224,32,32,.45);font-size:var(--fs-sm)}
+.tbk-carte .tbk:not(.tbk-mac) tr.tbk-tot>td{color:#ff3b3b;font-size:22px}
+.tbk-carte .tbk tr.tbk-tot .tbk-ri{color:#ff3b3b;background:rgba(224,32,32,.14);
+  border-color:rgba(224,32,32,.4)}
+/* Dans « Journees », les journees sont des lectures, pas LE resultat. */
+.tbk-carte .tbk.tbk-jr tr.tbk-tot>th,.tbk-carte .tbk.tbk-jr tr.tbk-tot>td{
+  background:rgba(255,255,255,.028);border-color:rgba(255,255,255,.06)}
+.tbk-carte .tbk.tbk-jr tr.tbk-tot>td{color:#fff;font-size:18px}
+.tbk-carte .tbk.tbk-jr tr.tbk-tot .tbk-ri{color:#d4d4d4;background:rgba(255,255,255,.045);
+  border-color:rgba(255,255,255,.09)}
+/* Le sport : le total en rouge, libelle compris ; l'intensite en pastille. */
+.tbk-carte .tbk-4 tr.tbk-tot .tbk-lt{color:#ff3b3b}
+.tbk-carte .tbk-4 thead th{padding:6px 12px 0;background:none;border:0}
+/* Quatre colonnes a largeur dite : la depense (« 2 100 kcal ») ne se casse
+   plus en deux, et les intitules ne se coupent pas au milieu d'un mot. */
+.tbk-carte .tbk-4 thead th{overflow-wrap:normal;word-break:normal;hyphens:none}
+.tbk-carte .tbk-4 thead th:nth-child(1){width:34%}
+.tbk-carte .tbk-4 thead th:nth-child(2){width:16%}
+.tbk-carte .tbk-4 thead th:nth-child(3){width:22%}
+.tbk-carte .tbk-4 thead th:nth-child(4){width:28%}
+.tbk-pill{display:inline-block;padding:4px 10px;border-radius:7px;font-size:12px;
+  font-weight:700;color:#f5c542;background:rgba(245,197,66,.12);
+  border:1px solid rgba(245,197,66,.45)}
+.tbk-note{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
+  border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.45;
+  color:var(--text-faint);font-weight:500;text-align:left}
+.tbk-carte .tbk tfoot td{padding:0;background:none;border:0}
+/* ══ LES MACROS : cinq cartes cote a cote ══════════════════════════════
+   Le tableau passe en grille ; chaque ligne devient une carte a la couleur de
+   sa macro (--tbk-c, la meme qu'avant). Le commutateur de saisie manuelle et
+   le total prennent toute la largeur ; le commutateur remonte a droite de
+   l'en-tete des que la carte a la place. */
+.tbk-carte .tbk.tbk-mac{display:block;border-spacing:0}
+.tbk-carte .tbk-mac caption{display:block}
+.tbk-carte .tbk-mac thead{display:none}
+.tbk-carte .tbk-mac tbody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;padding-top:6px}
+.tbk-carte .tbk-mac tbody tr{display:flex;flex-direction:column;gap:8px;min-width:0;
+  padding:12px;border-radius:14px;
+  border:1px solid color-mix(in srgb,var(--tbk-c,#666) 40%,transparent);
+  background:linear-gradient(160deg,color-mix(in srgb,var(--tbk-c,#666) 14%,transparent),
+    rgba(255,255,255,.02) 70%)}
+.tbk-carte .tbk-mac tbody tr>th,.tbk-carte .tbk-mac tbody tr>td{display:block;width:auto;
+  padding:0;border:0;border-radius:0;background:none;box-shadow:none;text-align:left}
+.tbk-carte .tbk-mac tbody tr>td{margin-top:auto}
+.tbk-carte .tbk-mac .tbk-l{align-items:flex-start}
+.tbk-carte .tbk-mac .tbk-lt{color:var(--tbk-c);font-weight:800}
+.tbk-carte .tbk-mac .tbk-ri{flex-basis:40px;width:40px;height:40px;color:var(--tbk-c);
+  background:color-mix(in srgb,var(--tbk-c) 16%,transparent);
+  border-color:color-mix(in srgb,var(--tbk-c) 45%,transparent)}
+.tbk-carte .tbk-mac select,.tbk-carte .tbk-mac .tbk-in{width:100%;max-width:none}
+.tbk-mv{display:block;margin-top:6px;font-size:24px;font-weight:800;color:#fff;
+  font-variant-numeric:tabular-nums;line-height:1.15}
+.tbk-mi{margin-top:6px}
+.tbk-carte .tbk-mac tr.tbk-swi-r{grid-column:1/-1;flex-direction:row;align-items:center;
+  justify-content:space-between;gap:14px;padding:4px 2px;border:0;background:none}
+.tbk-carte .tbk-mac tr.tbk-swi-r .tbk-lt{color:#fff;font-weight:700}
+.tbk-carte .tbk-mac tr.tbk-swi-r>td{margin:0;flex:0 0 auto}
+.tbk-carte .tbk-mac tr.tbk-tot{grid-column:1/-1;flex-direction:row;align-items:center;
+  justify-content:space-between;gap:14px;border-color:rgba(224,32,32,.45);
+  background:linear-gradient(90deg,rgba(224,32,32,.22),rgba(224,32,32,.08))}
+.tbk-carte .tbk-mac tr.tbk-tot .tbk-l{align-items:center}
+.tbk-carte .tbk-mac tr.tbk-tot>td{margin:0;flex:0 0 auto;text-align:right}
+.tbk-carte .tbk-mac tr.tbk-tot .tbk-mv{margin:0;color:#ff3b3b;font-size:26px}
+/* En cycle manuel : deux champs par carte, nommes. */
+.tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:nth-of-type(1)::before,
+.tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:nth-of-type(2)::before{display:block;
+  margin-bottom:4px;font-size:10px;font-weight:800;letter-spacing:1px;color:var(--sub)}
+.tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:nth-of-type(1)::before{content:'JOUR ON'}
+.tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:nth-of-type(2)::before{content:'JOUR OFF'}
+.tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:empty{display:none}
+.tbk-carte .tbk-mac.tbk-man tr.tbk-tot{flex-direction:column;align-items:stretch}
+/* A deux colonnes, le sel (5e carte) prend la rangee entiere ; a trois, les
+   deux dernieres se partagent la seconde rangee plutot que d'y laisser un
+   trou. Rangs : 1 commutateur, 2-6 les cinq macros, 7 le total. */
+.tbk-carte .tbk-mac tbody tr:nth-child(6){grid-column:1/-1}
+@container (min-width:560px){
+  .tbk-carte .tbk-mac tbody{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .tbk-carte .tbk-mac tbody tr{grid-column:span 2}
+  .tbk-carte .tbk-mac tbody tr:nth-child(5),.tbk-carte .tbk-mac tbody tr:nth-child(6){grid-column:span 3}
+  .tbk-carte .tbk-mac tr.tbk-swi-r,.tbk-carte .tbk-mac tr.tbk-tot{grid-column:1/-1}
+}
+@container (min-width:900px){
+  .tbk-carte .tbk-mac tbody{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .tbk-carte .tbk-mac tbody tr,
+  .tbk-carte .tbk-mac tbody tr:nth-child(5),.tbk-carte .tbk-mac tbody tr:nth-child(6){grid-column:auto}
+  .tbk-carte .tbk-mac tr.tbk-swi-r,.tbk-carte .tbk-mac tr.tbk-tot{grid-column:1/-1}
+  .tbk-carte .tbk-mac caption{padding-right:min(46%,440px)}
+  .tbk-carte .tbk-mac tr.tbk-swi-r{position:absolute;top:16px;right:16px;max-width:44%}
+}
+/* A L'ETROIT, la place va a la valeur : plus d'icone de ligne. */
+@container (max-width:440px){
+  .tbk-carte .tbk:not(.tbk-mac) .tbk-ri{display:none}
+  .tbk-carte .tbk:not(.tbk-mac) tbody td{font-size:14px}
+  .tbk-carte .tbk:not(.tbk-mac) tr.tbk-tot>td{font-size:17px}
+  .tbk-v{min-width:0;padding:6px 10px}
+  .tbk-cap-i{flex-basis:38px;width:38px;height:38px}
+  .tbk-cap{flex-wrap:wrap;gap:10px 14px}
+  .tbk-cap-x{flex:1 1 calc(100% - 56px)}
+  .tbk-cap-t{font-size:13.5px;letter-spacing:1.6px}
+  .tbk-cap-b{margin-left:52px}
+  .tbk-mv{font-size:20px}
+  .tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody th,.tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody td,
+  .tbk-carte .tbk.tbk-4 thead th{padding-left:5px;padding-right:5px}
+  .tbk-carte .tbk.tbk-4 thead th{font-size:9px;letter-spacing:.4px}
+  .tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody td{font-size:13px;white-space:nowrap}
+  .tbk-carte .tbk.tbk-4:not(.tbk-mac) tr.tbk-tot>td{font-size:15px}
+  .tbk-carte .tbk.tbk-4 .tbk-lt{font-size:12.5px}
+  .tbk-carte .tbk.tbk-4 thead th:nth-child(1){width:34%}
+  .tbk-carte .tbk.tbk-4 thead th:nth-child(2){width:12%}
+  .tbk-carte .tbk.tbk-4 thead th:nth-child(3){width:24%}
+  .tbk-carte .tbk.tbk-4 thead th:nth-child(4){width:30%}
+  .tbk-carte .tbk.tbk-4 .tbk-pill{padding:3px 6px;font-size:11px}
+  .tbk-carte .tbk-mac tr.tbk-tot{flex-direction:column;align-items:flex-start}
+  .tbk-carte .tbk-mac tr.tbk-tot>td{text-align:left}
+}
+/* LE TITRE DE LA SECTION, comme la maquette : grand, penche, le second mot en
+   rouge, sans bandeau. */
+#s-coach-client .cc-sect-fixe>.cc-sect-t{background:none;border-left:0;padding:4px 2px 8px}
+#s-coach-client .cc-sect-fixe>.cc-sect-t::after{display:none}
+#s-coach-client .cc-sect-fixe>.cc-sect-t>span{font-size:30px;letter-spacing:1px;
+  font-style:italic;text-shadow:none}
+#s-coach-client .cc-sect-fixe>.cc-sect-t>span em{font-style:italic;color:#ff2d2d}
 /* ══ LE PANNEAU DE SUIVI DU PLAN ALIMENTAIRE ════════════════════════
    Kevin, 08/09/2026 : « un menu qui ne bouge pas a droite ». Le tableau
    d'apercu dit deja cible / squelette / restant, mais il est en haut : des
@@ -10509,7 +10698,7 @@ const COACH_PHOTO='icons/coach.jpg';
               « mets pas de menu déroulant mais plutôt un titre « Calculs
               alimentaires » ») : cc-sect-fixe, que le repli ignore. -->
       <section class="cc-sect cc-sect-fixe" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Calculs alimentaires</span></div>
+        <div class="cc-sect-t"><span>Calculs <em>alimentaires</em></span></div>
         <div class="cc-sect-c" id="ccd-nutrition"></div>
       </section>
       <!-- MICRO-SIGNAUX, REMONTE DE LIFESTYLE LE 26/08/2026. Ce sont des
@@ -19072,6 +19261,8 @@ window.onload=()=>{
           if(currentUser.role==='athlete'&&document.getElementById('s-client-home')?.classList.contains('active')){
             loadClientHome();
           }
+          // ET SON ECRAN NUTRITION : voir _repeindreNutritionAthlete.
+          if(currentUser.role==='athlete') _repeindreNutritionAthlete();
         }catch(e){console.warn('sync periodique :',e);}
        }finally{
         // TOUTES LES SORTIES PASSENT ICI : les quatre `return`, la fin
@@ -83794,6 +83985,55 @@ async function appliquerCiblesTableur(){
   try{ renderCoachNutriSection(c); }catch(e){}
   return _ok;
 }
+// ══ LES CARTES DES CALCULS ALIMENTAIRES (build 1403) ══════════════════════
+// Kevin, 22/09/2026, maquette a l'appui : « change la mise en page des
+// tableaux comme l'image trois ». Chaque tableau devient une CARTE — pastille
+// d'icone rouge, titre et sous-titre, lignes a icone, valeurs en cases, le
+// resultat en rouge — et les macros passent en cinq cartes cote a cote.
+// ⚠ LES TABLEAUX RESTENT DES <table> ET GARDENT LEUR <caption>, leurs id,
+//   leurs data-m / data-cible et l'ordre de leurs cellules : tout ce qui les
+//   relit (la suite de tests, saveClientNutriMacros, le calcul relu en
+//   attribut) ne change pas. Seuls l'habillage et les icones s'ajoutent.
+// Les pictogrammes qui manquaient au registre commun. Meme gabarit que
+// ICONS (24 x 24, trait) : _tbkIco retombe sur ICONS pour les autres.
+const TBK_ICO={
+  poids:'<path d="M9 7a3 3 0 0 1 6 0"/><path d="M6.5 9h11l1.8 10.2a1.5 1.5 0 0 1-1.5 1.8H6.2a1.5 1.5 0 0 1-1.5-1.8z"/>',
+  taille:'<line x1="12" y1="4" x2="12" y2="20"/><line x1="8" y1="4" x2="16" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/>',
+  course:'<circle cx="15" cy="4.5" r="1.8"/><path d="M8 21l3.2-5.2L14 17v4"/><path d="M11.2 15.8L12.5 10l-3.2 1.2L7.5 14"/><path d="M12.5 10l2.8 2.5H19"/>',
+  calc:'<rect x="5" y="3" width="14" height="18" rx="2"/><rect x="8" y="6" width="8" height="3.5" rx=".5"/><path d="M8.5 13h.01M12 13h.01M15.5 13h.01M8.5 16.5h.01M12 16.5h.01M15.5 16.5h.01"/>',
+  canape:'<path d="M5 11V8.5A2.5 2.5 0 0 1 7.5 6h9A2.5 2.5 0 0 1 19 8.5V11"/><path d="M3 13.5a1.8 1.8 0 0 1 3.6 0V15h10.8v-1.5a1.8 1.8 0 0 1 3.6 0V18H3z"/><path d="M5 18v2M19 18v2"/>',
+  sigma:'<path d="M17.5 5H6.5l6 7-6 7h11"/>',
+  viande:'<path d="M15.4 3.6a5.2 5.2 0 0 1 0 7.4l-2.2 2.2a4.4 4.4 0 0 1-6.2-6.2l2.2-2.2a5.2 5.2 0 0 1 6.2-1.2z"/><path d="M8.6 15.4L5.2 18.8"/><circle cx="4.2" cy="19.8" r="1.6"/>'
+};
+function _tbkIco(n,taille){
+  const p=TBK_ICO[n];
+  if(!p) return icon(n,taille);
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+    +'stroke-linejoin="round" style="width:'+taille+'px;height:'+taille+'px;display:inline-block;'
+    +'vertical-align:middle;flex-shrink:0">'+p+'</svg>';
+}
+// Le libelle d'une ligne : l'icone dans sa case, puis le libelle et son aide.
+// Le TEXTE de la cellule ne change pas — libelle puis aide —, seule
+// l'enveloppe s'ajoute.
+function _tbkLib(lbl,aide,ico){
+  return '<span class="tbk-l">'
+    +(ico?'<span class="tbk-ri" aria-hidden="true">'+_tbkIco(ico,18)+'</span>':'')
+    +'<span class="tbk-lt">'+escapeHtml(lbl)
+    +(aide?'<span class="tbk-aide">'+escapeHtml(aide)+'</span>':'')+'</span></span>';
+}
+// L'en-tete d'une carte : pastille d'icone, titre, sous-titre, et une
+// etiquette a droite quand il y a lieu. C'est la <caption> du tableau.
+function _tbkCap(ico,titre,sous,etiq){
+  return '<caption><span class="tbk-cap">'
+    +'<span class="tbk-cap-i" aria-hidden="true">'+_tbkIco(ico,22)+'</span>'
+    +'<span class="tbk-cap-x"><span class="tbk-cap-t">'+escapeHtml(titre)+'</span>'
+    +(sous?'<span class="tbk-cap-s">'+escapeHtml(sous)+'</span>':'')+'</span>'
+    +(etiq?'<span class="tbk-cap-b">'+escapeHtml(etiq)+'</span>':'')
+    +'</span></caption>';
+}
+function _tbkCarte(html,cls){
+  return '<div class="tbk-carte'+(cls?' '+cls:'')+'">'+html+'</div>';
+}
 function _htmlTableauxTableur(c){
   let t=null;
   try{ t=cibleTableur(c,_tbOptsDe(c)); }catch(e){ return ''; }
@@ -83812,9 +84052,10 @@ function _htmlTableauxTableur(c){
   // Declaree plus bas, elle tombait dans la zone morte temporelle du `const` :
   // une ReferenceError qui coupe le rendu, pas une valeur fausse.
   const _cycT=(function(){ try{ return dieteCyclee(c); }catch(e){ return false; } })();
-  const li=(lbl,val,aide,tot)=>'<tr'+(tot?' class="tbk-tot"':'')+'><th>'+escapeHtml(lbl)
-    +(aide?'<span class="tbk-aide">'+escapeHtml(aide)+'</span>':'')
+  const li=(lbl,val,aide,tot,ico)=>'<tr'+(tot?' class="tbk-tot"':'')+'><th>'+_tbkLib(lbl,aide,ico)
     +'</th><td>'+val+'</td></tr>';
+  // Une valeur lue dans le dossier, dans sa case — elle ne se saisit pas ici.
+  const vb=v=>'<span class="tbk-v">'+v+'</span>';
   const sel=(id,quoi,options,courant)=>'<select id="'+id+'" onchange="majTableauTableur(\''
     +quoi+'\',this.value)">'
     +options.map(o=>'<option value="'+escapeHtml(String(o.v))+'"'
@@ -83837,10 +84078,10 @@ function _htmlTableauxTableur(c){
   // « Poids en kg | 82 » oblige a relire l'intitule pour savoir ce que vaut le
   // nombre ; « Poids | 82 kg » se lit d'un coup, et c'est la valeur qu'on
   // parcourt du regard en descendant la colonne.
-  let h='<table class="tbk"><caption>Facteurs</caption><tbody>'
-    +li('Poids',_tbDec(t.poids)+' kg','dernière pesée enregistrée')
-    +li('Taille',_tbNb(t.taille)+' cm','premier bilan')
-    +li('Âge',_tbNb(t.age)+' ans',_srcAge)
+  let h='<table class="tbk">'+_tbkCap('user','Facteurs','Informations de base pour affiner ses besoins')+'<tbody>'
+    +li('Poids',vb(_tbDec(t.poids)+' kg'),'dernière pesée enregistrée',false,'poids')
+    +li('Taille',vb(_tbNb(t.taille)+' cm'),'premier bilan',false,'taille')
+    +li('Âge',vb(_tbNb(t.age)+' ans'),_srcAge,false,'calendar')
     +li('Niveau d’activité hors sport',
         sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+' — ×'+String(x.f).replace('.',',')})),
           t.naf.cle),
@@ -83848,12 +84089,12 @@ function _htmlTableauxTableur(c){
         :t.nafSource==='metier'?('déduit de « '+t.metier+' »')
           :(t.nafSource==='reglage'?'choisi par toi'
             :(t.metier?('« '+t.metier+' » non reconnue — choisis le niveau')
-              :'aucune profession renseignée — choisis le niveau')))
+              :'aucune profession renseignée — choisis le niveau')),false,'course')
     +li('Coefficient d’objectif',
         sel('tbk-coef','coef',(OBJ_COEF_ECHELLE[t.phase]||[1]).map(v=>({v:v,
           lib:Math.round(v*100)+' % de la dépense'})),t.coef),
         (PHASES[t.phase]?PHASES[t.phase].lib:'Maintien')
-          +' : s’applique au total avec le sport')
+          +' : s’applique au total avec le sport',false,'target')
     +'</tbody></table>';
 
   // ── TABLEAU 2 — LE SPORT ────────────────────────────────────────────
@@ -83862,7 +84103,8 @@ function _htmlTableauxTableur(c){
   const dm=t.sportSemaine>0;
   // Mis de cote : il passe SOUS le duo Facteurs / Besoins, en pleine largeur —
   // c'est un releve a quatre colonnes, il ne tient pas dans une demi-largeur.
-  let hSport='<table class="tbk tbk-4"><caption>Dépense selon l’activité sportive</caption>'
+  let hSport='<table class="tbk tbk-4">'+_tbkCap('chart-bar','Dépense selon l’activité sportive',
+      'Sa dépense énergétique liée à l’entraînement')
     +'<thead><tr><th>Discipline</th><th>Heures / sem.</th><th>Intensité</th><th>Dépense</th></tr></thead>'
     +'<tbody>';
   let lignes=[];
@@ -83873,10 +84115,10 @@ function _htmlTableauxTableur(c){
   if(t.creneaux>0)
     // Les creneaux RepCore : les HEURES REELLES, creneaux x duree de seance,
     // et non un compte de creneaux deguise en heures.
-    hSport+='<tr><th>Musculation <span class="tbk-aide">'+t.creneaux+' créneau'
-      +(t.creneaux>1?'x':'')+' RepCore</span></th><td style="text-align:left">'
+    hSport+='<tr><th>'+_tbkLib('Musculation',t.creneaux+' créneau'
+      +(t.creneaux>1?'x':'')+' RepCore','haltere')+'</th><td style="text-align:left">'
       +_tbDec(t.creneaux*((t.dureeMin||60)/60))+' h</td>'
-      +'<td style="text-align:left">Modérée</td><td>'
+      +'<td style="text-align:left"><span class="tbk-pill">Modérée</span></td><td>'
       +_tbNb(t.sportSemaine)+' kcal</td></tr>';
   else if(lignes.length)
     // ⚠ CHAQUE LIGNE PORTE SA PROPRE DEPENSE, et le libelle d'intensite est
@@ -83890,30 +84132,35 @@ function _htmlTableauxTableur(c){
       const inten=(SPORT_INTENSITES.filter(i=>i.cle===x.intensite)[0]||{}).lib
         ||String(x.intensite||'');
       const sem=(kh!=null)?Math.round(kh*Number(x.heures)):null;
-      return '<tr><th>'+escapeHtml(String(x.sport))+'</th>'
+      return '<tr><th>'+_tbkLib(String(x.sport),'','activity')+'</th>'
         +'<td style="text-align:left">'+_tbDec(Number(x.heures))+' h</td>'
-        +'<td style="text-align:left">'+escapeHtml(inten)+'</td>'
+        +'<td style="text-align:left">'+(inten?'<span class="tbk-pill">'+escapeHtml(inten)+'</span>':'')+'</td>'
         +'<td>'+(sem!=null?(_tbNb(sem)+' kcal')
           :'<span style="color:var(--orange);font-weight:700">hors barème</span>')
         +'</td></tr>';
     }).join('');
   else
     hSport+='<tr><th>Aucune activité déclarée</th><td></td><td></td><td>0 kcal</td></tr>';
-  hSport+='<tr class="tbk-tot"><th>Dépense sportive par jour</th><td></td><td></td><td>'
+  hSport+='<tr class="tbk-tot"><th>'+_tbkLib('Dépense sportive par jour','','zap')+'</th><td></td><td></td><td>'
     +_tbNb(t.sportJour)+' kcal</td></tr></tbody></table>';
 
   // ── TABLEAU 3 — LES BESOINS, LIGNE A LIGNE ──────────────────────────
   const libMB=t.mbSource==='katch'?'masse maigre mesurée (Katch-McArdle)'
     :(t.mbSource==='harris'?'Harris-Benedict, poids taille âge sexe'
       :'Mifflin-St Jeor, poids taille âge sexe');
-  let hBesoins='<table class="tbk"><caption>Besoins caloriques</caption><tbody>'
+  // Le sous-titre NOMME LA FORMULE QUI A CALCULE, lue au meme endroit que la
+  // premiere ligne : une maquette qui dirait « Harris-Benedict » pour un
+  // calcul fait en Katch-McArdle mentirait.
+  const nomMB=t.mbSource==='katch'?'Katch-McArdle':(t.mbSource==='harris'?'Harris-Benedict':'Mifflin-St Jeor');
+  let hBesoins='<table class="tbk">'+_tbkCap('flame','Besoins caloriques',
+      'Estimation basée sur la méthode '+nomMB,'Estimation')+'<tbody>'
     +li('Besoins de base',_tbNb(t.mb)+' kcal',libMB
         +(t.correction!==1?' · corrigé de '+(t.correction>1?'+':'')
-          +Math.round((t.correction-1)*100)+' % sur ta décision':''))
+          +Math.round((t.correction-1)*100)+' % sur ta décision':''),false,'calc')
     +li('Besoins selon l’activité hors sport',_tbNb(t.horsSport)+' kcal',
-        'base × '+String(t.naf.f).replace('.',',')+' : '+t.naf.lib.toLowerCase())
+        'base × '+String(t.naf.f).replace('.',',')+' : '+t.naf.lib.toLowerCase(),false,'canape')
     +li('Besoins selon l’activité sportive',_tbNb(t.avecSport)+' kcal',
-        '+ '+_tbNb(t.sportJour)+' kcal de sport par jour')
+        '+ '+_tbNb(t.sportJour)+' kcal de sport par jour',false,'haltere')
     // ⚠ CETTE LIGNE N'EST PAS CE QUE L'ATHLETE MANGE UN JOUR D'ENTRAINEMENT,
     // et c'est exactement le piege que Kevin a releve le 08/09/2026 : il
     // comparait ce total au « APERCU · JOUR D'ENTRAINEMENT » du plan et
@@ -83923,12 +84170,20 @@ function _htmlTableauxTableur(c){
     // comparer a des chiffres d'apres.
     +li('Besoin selon l’objectif',_tbNb(t.brut)+' kcal',
         '× '+String(t.coef).replace('.',',')
-        +(_cycT?' · avant cyclage : voir « Journées » juste en dessous':''),true)
+        +(_cycT?' · avant cyclage : voir « Journées » juste en dessous':''),true,'target')
     +(t.sousPlancher
       ? li('Relevé au plancher',_tbNb(t.kcal)+' kcal',
-          'le calcul descendait à '+_tbNb(t.brut)+' kcal, sous le plancher de sécurité',true)
+          'le calcul descendait à '+_tbNb(t.brut)+' kcal, sous le plancher de sécurité',true,'alert-triangle')
       : '')
-    +'</tbody></table>';
+    +'</tbody>'
+    // CE QUE DIT LA MAQUETTE, DIT AU COACH : ce sont des estimations. Une
+    // formule de metabolisme se trompe de quelques centaines de kilocalories
+    // d'une personne a l'autre — c'est la pesee qui tranche ensuite.
+    +'<tfoot><tr><td colspan="2"><div class="tbk-note">'
+    +'<span aria-hidden="true" style="display:flex;flex:0 0 auto">'+_tbkIco('info',16)+'</span>'
+    +'<span>Ces valeurs sont des estimations : le métabolisme réel varie d’une personne '
+    +'à l’autre et selon son mode de vie.</span></div></td></tr></tfoot>'
+    +'</table>';
   // ⚠ LES FACTEURS ET LES BESOINS SE LISENT COTE A COTE, EN DEUX COLONNES.
   // Kevin, 08/09/2026 : « pour le poids, la taille, tu peux mettre ca sur une
   // colonne, et juste a cote me faire une deuxieme colonne avec les besoins
@@ -83958,19 +84213,29 @@ function _htmlTableauxTableur(c){
     +'<option value="1"'+(_cycT?' selected':'')+'>Oui — jour ON / jour OFF</option>'
     +'<option value="0"'+(_cycT?'':' selected')+'>Non — mêmes valeurs tous les jours</option>'
     +'</select>';
-  let hJournees='<table class="tbk"><caption>Journées</caption><tbody>'
+  let hJournees='<table class="tbk tbk-jr">'+_tbkCap('calendar','Journées',
+      'Ajustement de la répartition des glucides')+'<tbody>'
     +li('Cycler les glucides',_optCyc,
         'décale les glucides de ±'+Math.round(CYCLE_GLUC*100)
-        +' % entre jours d’entraînement et jours de repos')
+        +' % entre jours d’entraînement et jours de repos',false,'refresh-cw')
     +(function(){
-      if(!_cycT) return li('Tous les jours',_tbNb(t.kcal)+' kcal',
-        _tbNb(t.g)+' g de glucides, mêmes valeurs sept jours sur sept',true);
+      // ⚠ LA JOURNEE ECRITE, PAS LE TOTAL AVANT ARRONDI. Mesure au banc a deux
+      //   appareils : le tableau annoncait 3 411 kcal et l'athlete en recevait
+      //   3 413 — les grammes sont arrondis, et la journee ecrite est recomptee
+      //   depuis eux (_bloc). Deux chiffres pour la meme cible : on montre
+      //   celui qui part.
+      if(!_cycT){
+        let j=null; try{ j=_tbJournees(c,t,false); }catch(e){ j=null; }
+        const jj=(j&&j.on)||{kcal:t.kcal,g:t.g};
+        return li('Tous les jours',_tbNb(jj.kcal)+' kcal',
+          _tbNb(jj.g)+' g de glucides, mêmes valeurs sept jours sur sept',true,'sigma');
+      }
       let j=null; try{ j=_tbJournees(c,t,true); }catch(e){ j=null; }
       if(!j) return '';
       return li('Jour ON',_tbNb(j.on.kcal)+' kcal',
-          _tbNb(j.on.g)+' g de glucides, soit +'+Math.round(CYCLE_GLUC*100)+' %',true)
+          _tbNb(j.on.g)+' g de glucides, soit +'+Math.round(CYCLE_GLUC*100)+' %',true,'zap')
         +li('Jour OFF',_tbNb(j.off.kcal)+' kcal',
-          _tbNb(j.off.g)+' g de glucides, soit −'+Math.round(CYCLE_GLUC*100)+' %',true);
+          _tbNb(j.off.g)+' g de glucides, soit −'+Math.round(CYCLE_GLUC*100)+' %',true,'moon');
     })()
     +'</tbody></table>';
   // ── L'ASSEMBLAGE ────────────────────────────────────────────────────
@@ -83986,8 +84251,8 @@ function _htmlTableauxTableur(c){
   // pourtant que de `t` et de `_cycT`, tous deux connus ici : le deplacer ne
   // change aucun calcul, seulement l'ordre du balisage.
   // LES DEUX GRILLES RETOMBENT SUR UNE COLONNE SOUS 700 px — voir .tbk-duo.
-  h='<div class="tbk-duo">'+h+hBesoins+'</div>'
-    +'<div class="tbk-duo tbk-duo-l">'+hSport+hJournees+'</div>';
+  h='<div class="tbk-duo">'+_tbkCarte(h)+_tbkCarte(hBesoins)+'</div>'
+    +'<div class="tbk-duo tbk-duo-l">'+_tbkCarte(hSport)+_tbkCarte(hJournees)+'</div>';
 
   // ── TABLEAU 5 — LES MACROS, PLEINE LARGEUR ──────────────────────────
   let selG=null;
@@ -84044,9 +84309,8 @@ function _htmlTableauxTableur(c){
   // lecteur — la suite de tests, ou n'importe quel code futur — doit pouvoir
   // le relire sans deviner un format d'affichage, qui change avec la langue et
   // avec l'espace insecable des milliers.
-  const liC=(coul,lbl,val,aide,tot,val2,cle,cible)=>'<tr class="tbk-c'+(tot?' tbk-tot':'')
-    +'" style="--tbk-c:'+coul+'"><th>'+escapeHtml(lbl)
-    +(aide?'<span class="tbk-aide">'+escapeHtml(aide)+'</span>':'')
+  const liC=(coul,lbl,val,aide,tot,val2,cle,cible,ico)=>'<tr class="tbk-c'+(tot?' tbk-tot':'')
+    +'" style="--tbk-c:'+coul+'"><th>'+_tbkLib(lbl,aide,ico)
     +'</th><td'+(cle?(' data-m="'+cle+'" data-cible="'+(cible==null?'':escapeHtml(String(cible)))+'"'):'')
     +'>'+val+'</td>'+(_man&&_cycT?('<td>'+(val2||'')+'</td>'):'')+'</tr>';
   // Un champ de saisie de macro. `min` a 0 : une cible negative n'existe pas,
@@ -84059,14 +84323,31 @@ function _htmlTableauxTableur(c){
   // chercher apres avoir constate que les champs ne repondent pas.
   const _swi='<label class="tbk-swi"><input type="checkbox"'+(_man?' checked':'')
     +' onchange="saveClientNutriManuel(this.checked)"><span class="tbk-swi-p"></span></label>';
-  h+='<table class="tbk'+(_man&&_cycT?' tbk-man':'')+'"><caption>Macronutriments</caption>'
+  // LES CINQ MACROS EN CARTES (build 1403) : .tbk-mac les range en grille, le
+  // commutateur remonte a droite de l'en-tete quand la carte est large.
+  // mv : la valeur, en grand ; mi : un champ de saisie.
+  const mv=v=>'<span class="tbk-mv">'+v+'</span>';
+  // LE TOTAL CALORIQUE EST LA SOMME DES GRAMMES AFFICHES : sans cyclage, la
+  // journee meme qui part chez l'athlete ; avec, la base avant cyclage, dont
+  // « Journées » donne les deux jours. t.kcal, avant l'arrondi des grammes,
+  // s'en ecartait de une a deux kilocalories.
+  const totK=(function(){
+    try{
+      if(!_cycT){ const j=_tbJournees(c,t,false); if(j&&j.on&&isFinite(j.on.kcal)) return j.on.kcal; }
+      const b=_bloc(t.p,t.l,t.g); if(b&&isFinite(b.kcal)) return b.kcal;
+    }catch(e){}
+    return t.kcal;
+  })();
+  const mi=v=>'<div class="tbk-mi">'+v+'</div>';
+  h+=_tbkCarte('<table class="tbk tbk-mac'+(_man&&_cycT?' tbk-man':'')+'">'
+    +_tbkCap('utensils','Macronutriments','Répartition de ses apports journaliers')
     +(_man&&_cycT?'<thead><tr><th></th><th>Jour ON</th><th>Jour OFF</th></tr></thead>':'')
     +'<tbody>'
-    +'<tr class="tbk-c" style="--tbk-c:'+(_man?'#f59e0b':'var(--border)')+'"><th>Saisie manuelle'
-      +'<span class="tbk-aide">'+(_man
+    +'<tr class="tbk-c tbk-swi-r" style="--tbk-c:'+(_man?'#f59e0b':'var(--border)')+'"><th>'
+      +_tbkLib('Saisie manuelle',_man
         ?'Tes chiffres priment : ils ne bougeront plus si tu changes les g/kg ou la vitesse.'
         :'Les cibles se recalculent seules. Bascule pour les écrire toi-même.')
-      +'</span></th><td'+(_man&&_cycT?' colspan="2"':'')+'>'+_swi+'</td></tr>'
+      +'</th><td'+(_man&&_cycT?' colspan="2"':'')+'>'+_swi+'</td></tr>'
     // ⚠ LE MENU DE g/kg RESTE AFFICHE EN SAISIE MANUELLE, et ce n'est pas un
     // detail : saisieManuelle() rend VRAI des qu'un dossier porte des macros,
     // meme sans drapeau explicite — donc pour presque tous les athletes
@@ -84077,36 +84358,34 @@ function _htmlTableauxTableur(c){
     // c'est voir de combien on s'ecarte du calcul.
     +liC('#ff2d3f','Protéines',
         selEch('tbk-prot','protGkg',echProt)
-          +(_man?('<div style="margin-top:5px">'+_in('ccd-on-p',_mOn.p)+'</div>')
-                :('<div style="margin-top:5px">'+_tbNb(t.p)+' g</div>')),
+          +(_man?mi(_in('ccd-on-p',_mOn.p)):mv(_tbNb(t.p)+' g')),
         _man?('le calcul donnerait '+_tbNb(t.p)+' g : tes chiffres priment')
             :(String(t.protGkg).replace('.',',')+' g par kilo de poids de corps'),
-        false,_in('ccd-off-p',_mOff.p),'p',t.p)
+        false,_in('ccd-off-p',_mOff.p),'p',t.p,'viande')
     +liC('#22c55e','Lipides',
         selEch('tbk-lip','lipGkg',echLip)
-          +(_man?('<div style="margin-top:5px">'+_in('ccd-on-l',_mOn.l)+'</div>')
-                :('<div style="margin-top:5px">'+_tbNb(t.l)+' g</div>')),
+          +(_man?mi(_in('ccd-on-l',_mOn.l)):mv(_tbNb(t.l)+' g')),
         _man?('le calcul donnerait '+_tbNb(t.l)+' g : tes chiffres priment')
             :(String(t.lipGkg).replace('.',',')+' g par kilo, plancher '
               +String(LIP_PLANCHER_G_KG).replace('.',',')+' g/kg'),
-        false,_in('ccd-off-l',_mOff.l),'l',t.l)
-    +liC('#f5c518','Glucides',_man?_in('ccd-on-g',_mOn.g):(_tbNb(t.g)+' g'),
+        false,_in('ccd-off-l',_mOff.l),'l',t.l,'droplet')
+    +liC('#f5c518','Glucides',_man?_in('ccd-on-g',_mOn.g):mv(_tbNb(t.g)+' g'),
         _man?('en grammes, écrits par toi · le calcul donnerait '+_tbNb(t.g)+' g')
             :'ce qui reste une fois protéines et lipides posés',
-        false,_in('ccd-off-g',_mOff.g),'g',t.g)
-    +liC('#7f9f4e','Fibres',_man?_in('ccd-on-f',_mOn.f):(_tbNb(t.f)+' g'),
-        FIBRES_PAR_1000+' g pour 1 000 kcal',false,_in('ccd-off-f',_mOff.f),'f',t.f)
+        false,_in('ccd-off-g',_mOff.g),'g',t.g,'wheat')
+    +liC('#7f9f4e','Fibres',_man?_in('ccd-on-f',_mOn.f):mv(_tbNb(t.f)+' g'),
+        FIBRES_PAR_1000+' g pour 1 000 kcal',false,_in('ccd-off-f',_mOff.f),'f',t.f,'leaf')
     // LE SEL RESTE CALCULE, MEME EN MANUEL : il sort du moteur sodique, qui
     // derive d'un poids et d'un climat, pas d'une decision de repartition.
     // Rien a taper, donc rien a ouvrir.
-    +liC('#9aa0a6','Sel',selG?(_tbDec(selG.targetSaltG)+' g'):'—',
-        selG?'cible du moteur sodique':'cible indisponible',false,'')
-    +liC('var(--red)','Total',_man?_in('ccd-on-kcal',_mOn.kcal):(_tbNb(t.kcal)+' kcal'),
-        _man?('en kilocalories, écrites par toi · le calcul donnerait '+_tbNb(t.kcal))
+    +liC('#9aa0a6','Sel',mv(selG?(_tbDec(selG.targetSaltG)+' g'):'—'),
+        selG?'cible du moteur sodique':'cible indisponible',false,'',undefined,undefined,'salt')
+    +liC('var(--red)','Total calorique',_man?_in('ccd-on-kcal',_mOn.kcal):mv(_tbNb(totK)+' kcal'),
+        _man?('en kilocalories, écrites par toi · le calcul donnerait '+_tbNb(totK))
             :(_tbNb(t.p)+' g de protéines · '+_tbNb(t.g)+' g de glucides · '
               +_tbNb(t.l)+' g de lipides'),
-        true,_in('ccd-off-kcal',_mOff.kcal),'kcal',t.kcal)
-    +'</tbody></table>';
+        true,_in('ccd-off-kcal',_mOff.kcal),'kcal',totK,'zap')
+    +'</tbody></table>','tbk-mac-c');
   // LE BOUTON D'ENREGISTREMENT N'EXISTE QU'EN MANUEL. En automatique, ce sont
   // « Appliquer à l'athlète » et « Enregistrer les réglages », plus bas, qui
   // font le travail ; un troisieme bouton qui ecrirait la meme chose par un
@@ -98865,6 +99144,31 @@ function toastEcriture(ok,succes,perdu){
 //
 // `emails` : les dossiers qui ont change. Le coach ne rouvre la fiche que si
 // c'est celle de l'athlete concerne.
+// ⚠ L'ECRAN NUTRITION DE L'ATHLETE SUIT LA DESCENTE (build 1403). Mesure au
+//   banc a deux appareils, le 22/09/2026 : les huit reglages du coach —
+//   coefficient, activite, g/kg, cyclage, phase, saisie manuelle et retour a
+//   l'automatique — arrivaient TOUS dans le dossier de l'athlete, et son ecran
+//   Nutrition restait sur les anciens chiffres tant qu'elle n'en sortait pas :
+//   la descente ne repeignait que l'accueil. Kevin : « verifie bien que toute
+//   modif du coach s'applique sur le profil de l'athlete automatiquement ».
+//   ON NE PASSE PAS PAR loadNutrition : elle appelle go(), qui ferme les
+//   saisies ouvertes — un aliment en cours d'ajout disparaitrait sous les
+//   doigts. Seul le contenu est repeint, au jour affiche, a la meme hauteur.
+function _repeindreNutritionAthlete(){
+  try{
+    if(!currentUser||currentUser.role==='coach') return false;
+    const s=document.getElementById('s-nutrition');
+    if(!s||!s.classList.contains('active')) return false;
+    const ae=document.activeElement;
+    if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return false;
+    const se=document.scrollingElement||document.documentElement;
+    const y=se.scrollTop, ys=s.scrollTop;
+    _renderNutriContent(typeDiete(currentUser.nutrition||{}),
+      (typeof _fjDate!=='undefined'&&_fjDate)||undefined);
+    try{ se.scrollTop=y; s.scrollTop=ys; }catch(e){}
+    return true;
+  }catch(e){ console.warn('[RepCore] repeint de la nutrition :',e); return false; }
+}
 function _repeindreApresDescente(emails){
   try{
     if(!currentUser) return false;
@@ -98874,6 +99178,7 @@ function _repeindreApresDescente(emails){
     if(currentUser.role==='athlete'){
       try{ checkFeedbackNotif(); _majPastilleVideos(); checkReponseBilanNotif(); _majPastilleBilan(); }catch(e){}
       if(_actif('s-client-home')) loadClientHome();
+      _repeindreNutritionAthlete();
     } else if(currentUser.role==='coach'){
       if(_actif('s-coach-home')){
         const _db=document.getElementById('ct-dashboard');
