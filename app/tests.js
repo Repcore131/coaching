@@ -52453,6 +52453,44 @@ async function testExercices(){
             return _echec('positions : '+[suppIconePos('whey'),suppIconePos('adaptogenes'),suppIconePos('???')].join(' | '));
           return true;
         }catch(e){ return _echec(e.message); }})());
+      ok('1410 — TROIS COMPLÉMENTS SUR UNE LIGNE EN LARGE, DEUX SUR TÉLÉPHONE',(()=>{
+        // Kevin : « sur le format ordi uniquement, mets les 3 compléments sur
+        // la même ligne ». On MESURE, on ne relit pas la feuille de style : la
+        // règle des deux colonnes (build 1381) porte trois sélecteurs simples
+        // et l'emportait sur une reprise trop faible — trois cartes seraient
+        // revenues à deux plus une sans qu'aucun texte ne change.
+        // ⚠ LA LARGEUR EST CELLE DU CONTENEUR, PAS DE LA FENÊTRE : le banc
+        // tourne en 395 px, et c'est justement ce qu'on veut prouver — une
+        // .supp-bac large donne trois colonnes même dans une fenêtre étroite,
+        // et la fiche du coach, étroite à côté de sa barre, en garde deux.
+        const S=(id,n)=>({id:id,name:n,dosage_quantity:1,dosage_unit:'comprimé(s)',timings:['matin'],active:true});
+        const bac=document.createElement('div');
+        bac.style.cssText='position:fixed;left:-9999px;top:0';
+        document.body.appendChild(bac);
+        try{
+          const lignes=(largeur,n)=>{
+            bac.style.width=largeur+'px';
+            bac.innerHTML=_renderSuppTable(Array.from({length:n},(_,i)=>S(i+1,'Produit '+(i+1))),true,'openSuppEdit');
+            const g=bac.querySelector('.supp-grille');
+            if(!g) return null;
+            const t=[...g.children].map(c=>Math.round(c.getBoundingClientRect().top));
+            return {rangees:new Set(t).size,
+                    largeurs:[...g.children].map(c=>Math.round(c.getBoundingClientRect().width))};
+          };
+          const large=lignes(900,3);
+          if(!large) return _echec('pas de grille rendue');
+          if(large.rangees!==1) return _echec('en large, 3 cartes tiennent sur '+large.rangees+' rangées');
+          if(new Set(large.largeurs).size!==1) return _echec('les trois n’ont pas la même largeur : '+large.largeurs.join('/'));
+          // Une rangée incomplète s'étale : jamais de trou au bout.
+          const l4=lignes(900,4);
+          if(l4.largeurs[3]<=l4.largeurs[0]) return _echec('la 4e carte ne prend pas la rangée : '+l4.largeurs.join('/'));
+          // Et le téléphone n'a pas bougé : deux colonnes, la 3e en dessous.
+          const etroit=lignes(360,3);
+          if(etroit.rangees!==2) return _echec('sur téléphone, 3 cartes sur '+etroit.rangees+' rangée(s)');
+          return etroit.largeurs[2]>etroit.largeurs[0]
+            ?true:_echec('sur téléphone la 3e ne prend plus la ligne entière : '+etroit.largeurs.join('/'));
+        }catch(e){ return _echec(e.message);
+        } finally { bac.remove(); }})());
       ok('COMPLÉMENTS — un panneau par moment, la coche et « Tout prendre » à l’athlète seul',(()=>{
         const avant=currentUser, sv=window.saveUser;
         try{

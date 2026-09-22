@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1409';
+window.RC_BUILD='1410';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1319,9 +1319,34 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
    DERNIERE carte d'un nombre impair prend les deux : une seule carte occupe
    toute la ligne, trois font deux plus une. Plus aucune requete de conteneur
    pour la grille : deux colonnes ne dependent pas de la largeur. */
-.supp-bac{container-type:inline-size}
+/* ⚠ TROIS PAR RANGEE SUR ORDINATEUR (build 1410, demande de Kevin : « sur le
+   format ordi uniquement, mets les 3 complements sur la meme ligne »). Le
+   telephone garde ses deux colonnes : trois cartes a 375 px feraient 110 px
+   chacune, nom et dose coupes en quatre lignes.
+   C'EST UNE REQUETE DE CONTENEUR, PAS DE FENETRE : la fiche du coach ne
+   recoit que 440 px a cote de sa barre laterale sur un ecran de 900 px — elle
+   doit rester a deux colonnes, alors que la fenetre, elle, est « ordi ».
+   LA GRILLE COMPTE SIX COLONNES POUR N'EN MONTRER QUE TROIS : une carte en
+   prend deux, et la derniere rangee incomplete s'etale — une carte seule
+   prend les six, deux cartes en prennent trois chacune. C'est la meme regle
+   qu'a deux colonnes depuis le build 1381 (« s'ils sont 3 pour le matin,
+   laisser le 3e sur une ligne entiere »), tenue a trois : jamais de trou au
+   bout d'une rangee. */
+.supp-bac{container:supp-bac/inline-size}
 .supp-grille{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .supp-grille>*:last-child:nth-child(odd){grid-column:1/-1}
+@container supp-bac (min-width:640px){
+  .supp-grille{grid-template-columns:repeat(6,minmax(0,1fr))}
+  /* La regle des deux colonnes ci-dessus porte trois selecteurs simples :
+     sans la reprendre ici, elle etalerait encore la derniere carte d'un
+     nombre IMPAIR sur toute la rangee — trois cartes feraient de nouveau
+     deux plus une. */
+  .supp-grille>*,
+  .supp-grille>*:last-child:nth-child(odd){grid-column:span 2}
+  .supp-grille>*:last-child:nth-child(3n+1){grid-column:1/-1}
+  .supp-grille>*:nth-last-child(2):nth-child(3n+1),
+  .supp-grille>*:nth-last-child(2):nth-child(3n+1)~*{grid-column:span 3}
+}
 .supp-moment{--mc:#6a6a6a;container:supp-moment / inline-size;position:relative;margin:0 0 12px;padding:12px 12px 12px 13px;border-radius:14px;background:linear-gradient(160deg,#151515,#0b0b0b 72%);border:1px solid #222;border-left:3px solid var(--mc);box-shadow:-3px 0 14px -7px var(--mc),var(--e2)}
 .supp-mh{display:flex;align-items:center;gap:11px;margin:0 0 10px}
 .supp-mi{flex-shrink:0;display:inline-flex;filter:drop-shadow(0 0 6px var(--mc))}
