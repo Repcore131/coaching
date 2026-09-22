@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1401';
+window.RC_BUILD='1402';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -3887,7 +3887,8 @@ html{scroll-behavior:smooth}
 /* N5.5 — les vingt-sept en-tetes repliables. AUCUN DEPLACEMENT VERTICAL ici :
    ce sont des lignes qui se suivent, et les faire monter au survol ferait
    sauter la lecture d'une colonne entiere. Le fond seul. */
-#s-coach-client .cc-sect-t:hover,#s-coach-client .cc-sect-t:focus-visible{
+#s-coach-client .cc-sect-t:hover:not(.cc-sect-fixe>.cc-sect-t),
+#s-coach-client .cc-sect-t:focus-visible:not(.cc-sect-fixe>.cc-sect-t){
   background:var(--surface-2)}
 #s-coach-client .cc-sect-t>span{font-size:13.5px;letter-spacing:1.8px}
 #s-coach-client .cc-sect-c{padding:8px 0 0}
@@ -3905,6 +3906,11 @@ html{scroll-behavior:smooth}
   transform:rotate(0deg);transition:transform var(--t-1) var(--c-out)}
 #s-coach-client .cc-sect.replie>.cc-sect-t::before{transform:rotate(-90deg)}
 #s-coach-client .cc-sect.replie>.cc-sect-c{display:none}
+/* UNE SECTION FIXE (build 1402) : un titre, pas un menu deroulant — « Calculs
+   alimentaires ». Ni chevron, ni main au survol, ni repli, meme retenu. */
+#s-coach-client .cc-sect-fixe>.cc-sect-t{cursor:default}
+#s-coach-client .cc-sect-fixe>.cc-sect-t::before{display:none}
+#s-coach-client .cc-sect-fixe.replie>.cc-sect-c{display:block}
 @media (prefers-reduced-motion:reduce){
   #s-coach-client .cc-sect-t::before{transition:none}
 }
@@ -10499,9 +10505,11 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-phase"></div>
       <!-- 2. EST-CE QUE CA TIENT. Le camembert de diete respectee. -->
       <div id="ccd-diete-respect"></div>
-      <!-- 3. LES CHIFFRES. -->
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Nutrition</span></div>
+      <!-- 3. LES CHIFFRES. UN TITRE, PAS UN MENU DEROULANT (build 1402, Kevin :
+              « mets pas de menu déroulant mais plutôt un titre « Calculs
+              alimentaires » ») : cc-sect-fixe, que le repli ignore. -->
+      <section class="cc-sect cc-sect-fixe" style="--cc-accent:var(--border)">
+        <div class="cc-sect-t"><span>Calculs alimentaires</span></div>
         <div class="cc-sect-c" id="ccd-nutrition"></div>
       </section>
       <!-- MICRO-SIGNAUX, REMONTE DE LIFESTYLE LE 26/08/2026. Ce sont des
@@ -34176,6 +34184,13 @@ function ccdAppliquerReplis(){
     document.querySelectorAll('#s-coach-client .cc-sect').forEach(s=>{
       const c=s.querySelector(':scope>.cc-sect-c');
       const id=c&&c.id; if(!id) return;
+      // UNE SECTION FIXE ne se replie jamais, et son titre n'est pas un bouton.
+      if(s.classList.contains('cc-sect-fixe')){
+        s.classList.remove('replie');
+        const t0=s.querySelector(':scope>.cc-sect-t');
+        if(t0){ t0.removeAttribute('role'); t0.removeAttribute('tabindex'); t0.removeAttribute('aria-expanded'); }
+        return;
+      }
       const r=memo&&Object.prototype.hasOwnProperty.call(memo,id)
         ? !!memo[id]
         : CCD_REPLI_DEFAUT.indexOf(id)>=0;
@@ -34213,6 +34228,7 @@ function _ccdArmerReplis(){
   const bascule=ev=>{
     const t=ev.target&&ev.target.closest&&ev.target.closest('.cc-sect-t');
     if(!t||!e.contains(t)) return;
+    if(t.parentElement&&t.parentElement.classList.contains('cc-sect-fixe')) return;
     const c=t.parentElement&&t.parentElement.querySelector(':scope>.cc-sect-c');
     if(!c||!c.id) return;
     ev.preventDefault();
@@ -73722,24 +73738,6 @@ function _athEcrireGrille(){
   try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
   return true;
 }
-// Cote coach : une ligne, et seulement quand l'athlete a effectivement
-// touche a quelque chose. Un bandeau permanent qui repete « rien n'a change »
-// n'avertit de rien.
-function _htmlReglageAthleteCoach(c){
-  const tb=(c&&c.nutrition&&c.nutrition.tableur)||{};
-  const per=(c&&c.nutrition&&c.nutrition.perso)||{};
-  const obj=tb.objectifAthlete||per.objectif||null;
-  const d=Number(tb.deltaAthlete!=null?tb.deltaAthlete:per.delta)||0;
-  if(!obj&&!d) return '';
-  const lib=(ATH_OBJECTIFS.find(o=>o.k===obj)||{}).lib||obj;
-  const bouts=[];
-  if(obj) bouts.push('objectif « '+lib+' »');
-  if(d)   bouts.push((d>0?'+':'')+d+' kcal');
-  return '<div style="grid-column:1/-1;background:rgba(224,32,32,.10);border:1px solid rgba(224,32,32,.45);'
-    +'border-radius:var(--r-3);padding:10px 12px;margin-bottom:10px;font-size:var(--fs-xs);'
-    +'color:var(--text-strong);line-height:1.55">Réglé par l\'athlète depuis son écran : '
-    +escapeHtml(bouts.join(' · '))+'. Le calcul ci-dessous en tient compte.</div>';
-}
 function _htmlCiblesAthlete(u){
   // ══ LA FORME VERROUILLEE PASSE DEVANT TOUT LE RESTE ══════════════════════
   // Quand le coach a pose les chiffres, la carte MONTRE LES SIENS — pris a la
@@ -74412,37 +74410,6 @@ function poidsNutritionnel(user){
   const init=parseFloat((user&&user['init-weight'])||0);
   return (init>0)?{kg:init,source:'initial',date:null}
                  :{kg:null,source:null,date:null};
-}
-// PURE. Le poids de reference et sa provenance, en une ligne. Le doc demande
-// qu'il soit affiche UNE FOIS, en clair : tout ce qui est calcule en dessous
-// en depend, et il etait jusqu'ici invisible.
-function htmlPoidsReference(user){
-  const r=poidsNutritionnel(user);
-  if(!(r.kg>0)) return '<div class="sub" style="font-size:var(--fs-2xs);line-height:1.6;margin-bottom:10px">'
-    +'Aucun poids connu : ni pesée, ni bilan, ni poids d’inscription. Rien ne peut être calculé.</div>';
-  const dit={pesee:'dernière pesée',bilan:'dernier bilan',initial:'poids d’inscription, jamais mesuré'};
-  let quand='';
-  if(r.date){
-    try{
-      const [y,m,d]=r.date.split('-').map(Number);
-      quand=' du '+new Date(y,m-1,d).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
-    }catch(e){}
-  }
-  // Le poids d'inscription est signale en orange : il n'a ete mesure par
-  // personne, et tout ce qui en decoule herite de cette incertitude.
-  const alerte=(r.source==='initial');
-  return '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:12px;'
-    +'padding:8px 10px;background:var(--surface-1);border:1px solid var(--border);'
-    +'border-left:3px solid '+(alerte?'var(--orange)':'var(--link)')+';border-radius:var(--r-2)">'
-    +'<span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;'
-    +'text-transform:uppercase;font-weight:800">Poids de référence</span>'
-    +'<b style="font-size:var(--fs-md);color:var(--text-strong)">'
-    +String(r.kg).replace('.',',')+' kg</b>'
-    +'<span class="sub" style="font-size:var(--fs-2xs)">'
-    +escapeHtml(dit[r.source]||'source inconnue')+quand+'</span>'
-    +'<span class="sub" style="font-size:var(--fs-2xs);flex-basis:100%;line-height:1.5">'
-    +'Les grammages, les g/kg et le plancher calorique s’y réfèrent tous les trois.</span>'
-    +'</div>';
 }
 // N2.6 — CETTE FONCTION NE DECIDE PLUS RIEN. Elle remontait les bilans de son
 // cote pendant que deux autres lectures en faisaient autant, differemment.
@@ -84504,10 +84471,12 @@ function renderCoachNutriSection(c){
     // s'etiraient sur toute la longueur de l'ecran, et il fallait defiler
     // pour comparer deux chiffres qui se repondent.
     + '<div class="tbk-serre">'
-      // CE QUE L'ATHLETE A REGLE, DIT AU COACH. Sans cette ligne, le coach
-      // verrait des chiffres bouger sans savoir qui les a bouges.
-      + (()=>{ try{ return _htmlReglageAthleteCoach(c); }catch(e){ return ''; } })()
-      + (()=>{ try{ return htmlPoidsReference(c); }catch(e){ return ''; } })()
+      // ⚠ LE BANDEAU « RÉGLÉ PAR L'ATHLÈTE » ET LE « POIDS DE RÉFÉRENCE » ONT
+      //   ÉTÉ RETIRÉS le 22/09/2026 (build 1402), sur demande de Kevin :
+      //   « supprime les trucs ». Le CALCUL n'a pas changé : il tient toujours
+      //   compte de l'objectif réglé par l'athlète et du poids de référence
+      //   (poidsNutritionnel). Seuls les deux encadrés qui le disaient
+      //   au-dessus des tableaux ont disparu, avec leurs fonctions.
       + (()=>{ try{ return _htmlTableauxTableur(c); }catch(e){ return ''; } })()
       + '</div>'
     + _sect('ccd-nut-reglages','Régler les objectifs','var(--border)',_reglages)

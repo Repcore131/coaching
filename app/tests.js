@@ -31097,17 +31097,72 @@ async function testExercices(){
         if(b.mb!==mbMifflin(71,178,32,'Homme'))
           return _echec('les grammages sont cales sur un autre poids : mb='+b.mb
             +' contre '+mbMifflin(71,178,32,'Homme')+' a 71 kg');
-        // ET LE POIDS EST AFFICHE, avec sa provenance.
-        const h=htmlPoidsReference(u).replace(/<[^>]*>/g,' ');
-        if(h.indexOf('71')<0) return _echec('le poids n’est pas affiche');
-        if(h.indexOf('pesée')<0) return _echec('la provenance n’est pas affichee : '+h.slice(0,140));
+        // (L'encadré « Poids de référence » qui l'affichait a été retiré de la
+        // fiche coach le 22/09/2026, build 1402 : la lecture reste, pas lui.)
         // SANS AUCUNE PESEE NI BILAN CHIFFRE : le poids d'inscription sert de
         // dernier recours, et il est dit comme n'ayant jamais ete mesure.
         const v={id:'PV',email:'pv@t.fr','init-weight':'80',bilans:[],weightLog:[]};
         const rv=poidsNutritionnel(v);
         if(rv.kg!==80||rv.source!=='initial') return _echec('dernier recours : '+JSON.stringify(rv));
-        return htmlPoidsReference(v).indexOf('jamais mesuré')>=0
-          ?true:_echec('le poids d’inscription n’est pas signale comme non mesure');})());
+        return true;})());
+
+      // BUILD 1402 — Kevin, captures a l'appui : « mets pas de menu déroulant
+      // mais plutôt un titre « Calculs alimentaires », et supprime les trucs »
+      // (le bandeau « Réglé par l'athlète… » et le « Poids de référence »).
+      ok('1402 — « CALCULS ALIMENTAIRES » EST UN TITRE, ET LES DEUX ENCADRÉS SONT PARTIS',(()=>{
+        const z=document.getElementById('ccd-nutrition');
+        const s=z&&z.closest('.cc-sect');
+        if(!s) return _echec('la section des calculs a disparu');
+        const t=s.querySelector(':scope>.cc-sect-t');
+        const lib=t?t.textContent.trim():'';
+        if(lib!=='Calculs alimentaires') return _echec('le titre est « '+lib+' »');
+        if(!s.classList.contains('cc-sect-fixe')) return _echec('la section n’est pas marquée fixe');
+        // MEME RETENUE REPLIEE par un ancien clic, elle s'ouvre, et son titre
+        // n'est plus un bouton.
+        let sv=null; try{ sv=localStorage.getItem(CCD_REPLI_CLE); }catch(e){}
+        try{
+          localStorage.setItem(CCD_REPLI_CLE,JSON.stringify({'ccd-nutrition':true}));
+          ccdAppliquerReplis();
+          if(s.classList.contains('replie')) return _echec('un repli retenu la ferme encore');
+          if(t.hasAttribute('role')||t.hasAttribute('tabindex')||t.hasAttribute('aria-expanded'))
+            return _echec('le titre se présente encore comme un bouton');
+          // UN CLIC SUR LE TITRE NE LA REPLIE PAS.
+          _ccdArmerReplis();
+          t.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+          if(s.classList.contains('replie')) return _echec('un clic sur le titre la replie');
+          // NI CHEVRON NI MAIN.
+          if(getComputedStyle(t,'::before').display!=='none') return _echec('le chevron est encore là');
+          if(getComputedStyle(t).cursor==='pointer') return _echec('le titre montre encore une main');
+          // LES AUTRES SECTIONS SE REPLIENT TOUJOURS.
+          const autre=document.getElementById('ccd-journal');
+          const sa=autre&&autre.closest('.cc-sect');
+          const ta=sa&&sa.querySelector(':scope>.cc-sect-t');
+          if(ta&&ta.getAttribute('role')!=='button') return _echec('les autres titres ont perdu leur repli');
+        } finally {
+          try{ if(sv==null) localStorage.removeItem(CCD_REPLI_CLE);
+               else localStorage.setItem(CCD_REPLI_CLE,sv); }catch(e){}
+          try{ ccdAppliquerReplis(); }catch(e){}
+        }
+        // LES DEUX ENCADRES : un athlete qui a regle « Sèche » et +200 kcal, et
+        // une pesee — ni le bandeau ni le poids de reference ne sont rendus.
+        if(typeof _htmlReglageAthleteCoach!=='undefined'||typeof htmlPoidsReference!=='undefined')
+          return _echec('les fonctions des encadrés sont revenues');
+        const sauve=currentUser;
+        try{
+          currentUser={id:'_t1402',email:'t1402@t.fr',role:'coach',fname:'K',seenBilans:{},alertStatus:{}};
+          const j=Date.now();
+          renderCoachNutriSection({id:'a1402',email:'a1402@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+            _evol_height:'180','init-age':30,'init-weight':'100',createdAt:j-200*864e5,
+            bilans:[{type:'debut',date:j-100*864e5,'deb-weight':'102','deb-height':'180',
+                     'deb-age':'30','deb-gender':'Homme'}],
+            weightLog:[{date:new Date(j-864e5).toISOString().slice(0,10),kg:100.9}],sessions:[],videos:[],
+            nutrition:{tableur:{objectifAthlete:'seche',deltaAthlete:200},perso:{objectif:'seche',delta:200}}});
+          const h=(z.textContent||'');
+          if(/Réglé par l.athlète/.test(h)) return _echec('le bandeau « Réglé par l’athlète » est encore rendu');
+          if(/Poids de référence/i.test(h)) return _echec('l’encadré « Poids de référence » est encore rendu');
+          if(!z.querySelector('table.tbk')) return _echec('les tableaux de calcul ont disparu avec eux');
+        } finally { currentUser=sauve; }
+        return true;})());
 
       ok('N2.8 — LE MESSAGE DE PLANCHER NOMME LA REGLE QUI A GAGNE',(()=>{
         if(typeof direRegplePlancher!=='function') return _echec('la regle n’est pas dite');
