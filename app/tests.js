@@ -47102,6 +47102,9 @@ async function testExercices(){
         _ml.sel=null;
         document.dispatchEvent(new KeyboardEvent('keydown',{key:'r',bubbles:true}));
         if(_ml.outil!=='echelle') return 'la touche R n’arme pas l’échelle';
+        // À LA MAIN (build 1393) : en automatique, un toucher sans glisser
+        // cherche le bord — c'est l'objet du test suivant.
+        mlEchMode(false);
         if(!/haut du disque/i.test(document.getElementById('mlx-outils').textContent)) return 'l’outil ne dit pas quoi pointer';
         // AU CLIC PUIS AU CLIC : le bas suit la souris ; Échap renonce.
         pe('pointerdown',X(300),Y(100),1); pe('pointerup',X(300),Y(100),0);
@@ -47196,6 +47199,150 @@ async function testExercices(){
       catch(e){ msg='exception : '+e.message; }
       finally {
         window._mlVideoRect=svR; window._mlxTempsMs=svTps; window.mlTrajectoireAuto=svAuto; window.saveUser=svSave;
+        try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT; CLOUD.pushOne=svPush;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      return msg?_echec(msg):true;
+    });
+
+    okA('MLX — le bord du disque se trouve seul : un toucher au centre, le diamètre au pixel près',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // UNE SALLE FACTICE : des montants sombres et clairs, une ligne de banc,
+      // du grain ; et un disque noir à liseré, lettrage et moyeu d'acier.
+      const image=(W,H,o)=>{
+        const c=document.createElement('canvas'); c.width=W; c.height=H;
+        const g=c.getContext('2d');
+        g.fillStyle='#6f6f6f'; g.fillRect(0,0,W,H);
+        for(let x=0;x<W;x+=37){ g.fillStyle=(x/37)%2?'#1b1b1b':'#a0a0a0'; g.fillRect(x,0,11,H); }
+        g.fillStyle='#8a8a8a'; g.fillRect(0,Math.round(H*0.72),W,5);
+        if(o){
+          const {cx,cy,r,sx}=o;
+          const disque=(rr,col)=>{ g.fillStyle=col; g.beginPath(); g.ellipse(cx,cy,rr*sx,rr,0,0,2*Math.PI); g.fill(); };
+          disque(r,'#3c3c40'); disque(r*0.965,'#1e1e21'); disque(r*0.62,'#1a1a1d');
+          g.fillStyle='#e0e0e0'; g.font='bold '+Math.round(r*0.16)+'px sans-serif'; g.textAlign='center';
+          g.fillText('20 KG',cx,cy-r*0.7);
+          disque(r*0.24,'#b4b6bc'); disque(r*0.11,'#0e0e10');
+          if(o.manchon){ g.fillStyle='#a5a7ac'; g.fillRect(cx+r*sx*0.15,cy-r*0.11,W,r*0.22); }
+        }
+        const d=g.getImageData(0,0,W,H).data;
+        let s=12345;
+        for(let i=0;i<d.length;i+=4){ s=(s*1103515245+12345)&0x7fffffff; const n=(s%9)-4; d[i]+=n; d[i+1]+=n; d[i+2]+=n; }
+        return mlGris(d,W,H);
+      };
+      const W=540, H=960;
+      const D=r=>Math.hypot(r.B[0]-r.A[0],r.B[1]-r.A[1]);
+      // DE PROFIL : un cercle de 220 px, touché au centre ou à côté.
+      const g1=image(W,H,{cx:300,cy:520,r:110,sx:1});
+      for(const [ox,oy] of [[0,0],[16,-10],[-12,18]]){
+        const r=mlDisqueDetecter(g1,W,H,300+ox,520+oy,20,270);
+        if(r.erreur) return _echec('de profil, touché à '+ox+','+oy+' : '+r.erreur);
+        if(Math.abs(D(r)-220)>1) return _echec('de profil : '+D(r).toFixed(2)+' px au lieu de 220');
+        if(Math.abs(r.A[0]-r.B[0])>0.5) return _echec('un disque rond ne se mesure pas du haut au bas');
+      }
+      // DE TROIS QUARTS, le manchon de la barre en travers : le GRAND AXE, vertical, reste 220.
+      const g2=image(W,H,{cx:280,cy:520,r:110,sx:0.7,manchon:true});
+      const r2=mlDisqueDetecter(g2,W,H,282,515,20,270);
+      if(r2.erreur) return _echec('de trois quarts : '+r2.erreur);
+      if(Math.abs(D(r2)-220)>1.2) return _echec('de trois quarts : '+D(r2).toFixed(2)+' px au lieu de 220');
+      if(Math.abs(2*r2.b-154)>4) return _echec('de trois quarts, le petit axe : '+(2*r2.b).toFixed(1)+' au lieu de 154');
+      if(Math.abs(r2.uy)<0.99) return _echec('de trois quarts, le grand axe n’est pas vertical');
+      // RIEN À TROUVER : un décor sans disque, ou un toucher loin de lui.
+      const r3=mlDisqueDetecter(image(W,H,null),W,H,300,520,20,270);
+      if(!r3.erreur) return _echec('un disque est trouvé dans un décor qui n’en a pas');
+      const r4=mlDisqueDetecter(g1,W,H,60,120,20,270);
+      if(!r4.erreur&&Math.abs(D(r4)-220)<3) return _echec('un toucher loin du disque le trouve quand même');
+      // L'AJUSTEMENT D'ELLIPSE retrouve une ellipse tournée, points exacts.
+      const pts=[];
+      for(let k=0;k<40;k++){ const t=k*Math.PI/20, x=90*Math.cos(t), y=50*Math.sin(t), c=Math.cos(0.4), s=Math.sin(0.4); pts.push([200+x*c-y*s,300+x*s+y*c]); }
+      const e=mlEllipseAjuster(pts);
+      if(!e||Math.abs(e.a-90)>1e-6||Math.abs(e.b-50)>1e-6||Math.abs(e.cx-200)>1e-6||Math.abs(Math.abs(e.ux*Math.cos(0.4)+e.uy*Math.sin(0.4))-1)>1e-9)
+        return _echec('ellipse ajustée : '+JSON.stringify(e));
+      if(mlEllipseAjuster([[0,0],[1,1],[2,2],[3,3],[4,4],[5,5]])) return _echec('des points alignés donnent une ellipse');
+      // LES POINTS DE L'ÉCHELLE AU DIXIÈME, et relus tels quels.
+      if(mlEchEncoder([[610.94,593.36],[609.6,843.3]])!=='610.9,593.4 609.6,843.3') return _echec('encodage au dixième');
+      if(mlEchEncoder([[500,200],[500,500]])!=='500,200 500,500') return _echec('un point entier garde des décimales');
+      const doc=o=>annotValide({v:1,majLe:0,leg:{},a:[],ech:{p:o,mm:450,src:'iwf|20 kg'}}).ech;
+      if(!doc('610.9,593.4 609.6,843.3')||doc('610.9,593.4 609.6,843.3').p!=='610.9,593.4 609.6,843.3') return _echec('une échelle au dixième ne se relit pas');
+      if(doc('610.95,593 609,843')||doc('1000.5,0 0,1')) return _echec('une échelle mal écrite passe');
+      return true;
+    });
+    okA('MLX — l’échelle automatique : un toucher au centre pose le diamètre, un glisser la pose à la main',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
+      const svR=window._mlVideoRect, svTps=window._mlxTempsMs, svImg=window._mlxImageGris, svSave=window.saveUser;
+      let toasts=[];
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=m=>{ toasts.push(String(m)); }; CLOUD.pushOne=()=>Promise.resolve(true); window.saveUser=()=>true;
+        _r28Monter([_r28Video({segments:[]})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        _ml.dureeMs=20000;
+        window._mlVideoRect=()=>({s:1,ox:0,oy:0,vw:400,vh:700});
+        window._mlxTempsMs=()=>3000;
+        // L'IMAGE AFFICHÉE : un disque de 160 px de haut, centré en (200, 400).
+        const c=document.createElement('canvas'); c.width=400; c.height=700;
+        const g=c.getContext('2d');
+        g.fillStyle='#474747'; g.fillRect(0,0,400,700);
+        for(let x=0;x<400;x+=31){ g.fillStyle=(x/31)%2?'#202020':'#6a6a6a'; g.fillRect(x,0,9,700); }
+        const disque=(rr,col)=>{ g.fillStyle=col; g.beginPath(); g.ellipse(200,400,rr,rr,0,0,2*Math.PI); g.fill(); };
+        disque(80,'#1d1d20'); disque(19,'#b4b6bc'); disque(9,'#0e0e10');
+        const gris=mlGris(g.getImageData(0,0,400,700).data,400,700);
+        let lu='plein';
+        window._mlxImageGris=async()=>lu==='cors'?{erreur:'cors'}:{gris:lu==='vide'?new Float32Array(400*700).fill(70):gris,w:400,h:700};
+        const calque=document.getElementById('ml-calque'), bc=calque.getBoundingClientRect();
+        const pe=(type,x,y,btn)=>calque.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:1,
+          pointerType:'mouse',clientX:bc.left+x,clientY:bc.top+y,buttons:btn?1:0}));
+        const attendre=async()=>{ for(let i=0;i<100&&_ml.echCherche;i++) await new Promise(r=>setTimeout(r,20)); };
+        mlOutil('echelle');
+        if(!_ml.echAuto) return 'l’échelle ne démarre pas en automatique';
+        if(!/CENTRE d’un disque/.test(document.getElementById('mlx-outils').textContent)) return 'le panneau ne dit pas de toucher le centre';
+        // UN TOUCHER AU CENTRE, un peu à côté : le diamètre de 160 px.
+        pe('pointerdown',206,395,1); pe('pointerup',206,395,0);
+        await attendre();
+        const e=_ml.annot.ech;
+        if(!e) return 'le toucher au centre ne pose pas d’échelle : '+toasts.join(' / ');
+        const px=mlEchellePx(e,400,700);
+        if(Math.abs(px-160)>1) return 'diamètre trouvé : '+px.toFixed(2)+' px au lieu de 160';
+        const q=mlDecoderTrait(e.p);
+        if(Math.abs(q[0][0]-q[1][0])>1||q[0][1]>q[1][1]) return 'l’échelle ne va pas du haut au bas : '+e.p;
+        if(!_ml.echEllipse||_ml.echEllipse.p!==e.p) return 'l’ellipse trouvée n’est pas retenue pour être dessinée';
+        if(!/Bord trouvé sur \d+ % du tour/.test(document.getElementById('mlx-outils').textContent)) return 'le panneau ne dit pas ce qui a été trouvé';
+        // UN ANNULER rend l'état d'avant.
+        mlAnnuler();
+        if(_ml.annot.ech) return 'Annuler ne retire pas l’échelle trouvée';
+        mlRetablir();
+        // UN GLISSER, en automatique, pose l'échelle à la main — et l'ellipse s'efface.
+        pe('pointerdown',100,100,1);
+        for(let i=1;i<=4;i++) pe('pointermove',100,100+i*50,1);
+        pe('pointerup',100,300,0);
+        await attendre();
+        if(!_ml.annot.ech||_ml.annot.ech.p!=='250,143 250,429') return 'le glisser ne pose pas l’échelle à la main : '+JSON.stringify(_ml.annot.ech);
+        if(_ml.echPose) return 'le glisser laisse une échelle commencée';
+        // RIEN À TROUVER : l'échelle ne bouge pas, et le coach le sait. La
+        // détection est appelée directement et attendue : deux touchers au
+        // même endroit, à quelques millisecondes, font un double-clic.
+        const avant=_ml.annot.ech.p; lu='vide'; toasts=[];
+        if(await _mlxEchDetecter([500,571])!==false) return 'un décor sans disque donne une échelle';
+        if(_ml.annot.ech.p!==avant) return 'un toucher sans disque change l’échelle';
+        if(!toasts.some(t=>/Aucun bord de disque/.test(t))) return 'rien ne dit que le bord est introuvable';
+        // UNE VIDÉO D'AILLEURS, illisible : on passe à la main, et on le dit.
+        lu='cors'; toasts=[];
+        await _mlxEchDetecter([500,571]);
+        if(_ml.echAuto) return 'une vidéo illisible laisse le mode automatique';
+        if(!toasts.some(t=>/à la main/.test(t))) return 'rien ne dit de poser l’échelle à la main';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      catch(e){ msg='exception : '+e.message; }
+      finally {
+        window._mlVideoRect=svR; window._mlxTempsMs=svTps; window._mlxImageGris=svImg; window.saveUser=svSave;
         try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
         window._ratProfilFait=svRat; window.toast=svT; CLOUD.pushOne=svPush;
         DB.set('users',JSON.parse(svUsers)); currentUser=sU;

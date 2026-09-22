@@ -62,7 +62,8 @@
  *   relier:boolean, phrase:string, tailleTexte:string, onglet:string, jetonVseq:number,
  *   enLecture:boolean, style:string, deplEtiq:DeplEtiq|null,
  *   trajAuto:boolean, trajStop:boolean, trajZone:{c:number[], r:number}|null,
- *   echUi:{m:string, g:string, c:string, mm:string}, echPose:{avant:string, a:number[]}|null
+ *   echUi:{m:string, g:string, c:string, mm:string}, echPose:{avant:string, a:number[]}|null,
+ *   echAuto:boolean, echCherche:boolean, echEllipse:EllipseTrouvee|null
  * }} EtatMl
  */
 /** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'|'repere'|'repsuivi'|'annotsuivi'|'trajsuivi'} ModeMl */
@@ -2417,6 +2418,12 @@ function mlPhrases(ctx){
  * @typedef {{p:string, mm?:number, src?:string, ok?:number}} Echelle
  */
 /**
+ * Le bord d'un disque trouvé seul (build 1393), en pixels de la vidéo (w × h),
+ * pour l'échelle `p` qu'il a posée : dessiné tant que l'échelle n'a pas bougé.
+ * @typedef {{p:string, cx:number, cy:number, a:number, b:number, ux:number, uy:number, w:number, h:number,
+ *   couverture:number, residu:number}} EllipseTrouvee
+ */
+/**
  * Une étiquette, une mesure ou la légende qu'on déplace : ce qui bouge
  * (`kind` 'etiq', 'mes' ou 'leg'), le tracé s'il s'agit d'une étiquette ou
  * d'une mesure, le document d'avant (pour Échap et l'historique), et l'écart
@@ -2915,6 +2922,568 @@ function mlMesureTrace(a,pts,s,mmpx,k){
     }
   }
   return null;
+}
+
+// ══ LE BORD DU DISQUE, TROUVÉ SEUL (build 1393) ════════════════════════════
+//
+// Kevin, 22/09/2026 : un toucher au centre du disque, et RepCore trouve son
+// bord. Pointer le haut et le bas à la main coûte un à trois pixels d'erreur à
+// chaque bout ; le bord ajusté sur tout le tour en coûte une fraction.
+//
+// TROIS TEMPS, parce qu'aucun ne suffit seul :
+//   1. SUR UNE IMAGE RÉDUITE, deux votes. Le CENTRE : une ellipse est
+//      symétrique par rapport à son centre, donc le milieu de deux points de
+//      son bord qui se font face — même orientation — est le centre, pour un
+//      cercle comme pour un disque vu de biais ; on garde le plus fort près du
+//      toucher. Les DEMI-AXES : pour une ellipse droite centrée là, un point du
+//      bord et la direction de son gradient donnent a et b d'un coup ; parmi
+//      les ellipses vues sur une bonne part du tour, la plus grande — moyeu,
+//      lettrage et lèvre en sont de plus petites.
+//   2. À PLEINE RÉSOLUTION, le long de 144 rayons tirés du centre, les sauts
+//      de luminosité au dixième de pixel. On retient l'anneau que le plus de
+//      rayons confirment — un tibia ou la barre derrière le disque ne se
+//      trouvent que sur quelques-uns —, et une ELLIPSE y est ajustée, trois
+//      fois, en écartant les points qui s'en éloignent.
+//   3. AUX DEUX BOUTS DU GRAND AXE, qui font l'échelle, un éventail de rayons
+//      moyennés cherche un bord plus extérieur : le liseré d'un bumper ou la
+//      lèvre d'un disque en fonte sont des anneaux plus nets que le bord
+//      lui-même. Il n'est retenu que s'il se voit AUX DEUX BOUTS, au même
+//      rapport — un bord du décor ne se trouve qu'à un seul.
+//
+// Vérifié sur trois disques incrustés dans une vraie vidéo de salle, puis
+// compressés : bumper de profil, bumper de trois quarts sur un t-shirt noir,
+// disque en fonte à poignées devant la barre — diamètre à 0,3 px près sur
+// 200 à 240 px, pour un toucher jusqu'à 20 % du rayon à côté du centre.
+//
+// ⚠ LE DIAMÈTRE EST LE GRAND AXE DE L'ELLIPSE. Un disque vu de biais n'est
+//   plus un cercle : un axe rétrécit, l'autre reste son diamètre, quel que
+//   soit l'angle de vue. Les deux bouts de l'échelle sont ceux du grand axe
+//   — le haut et le bas pour un disque vu de profil, ou vu de trois quarts.
+//
+// ⚠ RIEN N'EST DEVINÉ. Un bord vu sur moins de 45 % du tour, un ajustement
+//   qui s'écarte de plus de 1,5 % du rayon, une ellipse aplatie à moins d'un
+//   quart, un toucher hors du disque : aucune échelle ne sort, et le coach la
+//   pose à la main.
+/** Le plus grand rayon de l'image réduite où l'on vote. */
+const ML_DISQUE_HOUGH_R=110;
+/** Les rayons tirés du centre pour trouver le bord à pleine résolution. */
+const ML_DISQUE_RAYONS=144;
+/** La part du tour où le bord doit être vu. */
+const ML_DISQUE_COUV=0.45;
+/** L'écart médian toléré entre les points du bord et l'ellipse, en part du rayon. */
+const ML_DISQUE_RESIDU=0.015;
+/** Le plus petit saut de luminosité qu'on tient pour un bord, par pixel. */
+const ML_DISQUE_SAUT=3;
+/**
+ * PURE. Une image ramenée à W × H par moyenne de blocs.
+ * @param {Float32Array} g @param {number} w @param {number} h @param {number} W @param {number} H
+ * @returns {Float32Array}
+ */
+function _mlxReduire(g,w,h,W,H){
+  const out=new Float32Array(W*H), n=new Float32Array(W*H);
+  const fx=W/w, fy=H/h;
+  for(let y=0;y<h;y++){
+    const o=Math.min(H-1,Math.floor(y*fy))*W;
+    for(let x=0;x<w;x++){ const i=o+Math.min(W-1,Math.floor(x*fx)); out[i]+=g[y*w+x]; n[i]++; }
+  }
+  for(let i=0;i<out.length;i++) out[i]=n[i]?out[i]/n[i]:0;
+  return out;
+}
+/**
+ * PURE. Un lissage [1 2 1] dans les deux sens : il ôte le grain de la
+ * compression sans déplacer un bord.
+ * @param {Float32Array} g @param {number} w @param {number} h
+ * @returns {Float32Array}
+ */
+function _mlxLisser(g,w,h){
+  const t=new Float32Array(w*h), o=new Float32Array(w*h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const i=y*w+x; t[i]=(g[x>0?i-1:i]+2*g[i]+g[x<w-1?i+1:i])/4;
+  }
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const i=y*w+x; o[i]=(t[y>0?i-w:i]+2*t[i]+t[y<h-1?i+w:i])/4;
+  }
+  return o;
+}
+/**
+ * PURE. L'ellipse qui passe au plus près des points — l'ajustement d'une
+ * conique A·x² + B·xy + C·y² + D·x + E·y = 1 aux moindres carrés, sur des
+ * points recentrés et remis à l'échelle pour la stabilité du calcul. Rend son
+ * centre, ses demi-axes (a ≥ b) et la direction du grand axe — ou null si les
+ * points ne dessinent pas une ellipse.
+ * @param {number[][]} pts
+ * @returns {{cx:number, cy:number, a:number, b:number, ux:number, uy:number}|null}
+ */
+function mlEllipseAjuster(pts){
+  if(!pts||pts.length<6) return null;
+  let mx=0, my=0;
+  for(const p of pts){ mx+=p[0]; my+=p[1]; }
+  mx/=pts.length; my/=pts.length;
+  let s=0;
+  for(const p of pts) s+=Math.hypot(p[0]-mx,p[1]-my);
+  s=s/pts.length||1;
+  /** @type {number[][]} */
+  const M=[[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0]];
+  for(const p of pts){
+    const x=(p[0]-mx)/s, y=(p[1]-my)/s, f=[x*x,x*y,y*y,x,y];
+    for(let i=0;i<5;i++){ for(let j=0;j<5;j++) M[i][j]+=f[i]*f[j]; M[i][5]+=f[i]; }
+  }
+  // Gauss, pivot partiel.
+  for(let c=0;c<5;c++){
+    let piv=c;
+    for(let r=c+1;r<5;r++) if(Math.abs(M[r][c])>Math.abs(M[piv][c])) piv=r;
+    if(Math.abs(M[piv][c])<1e-12) return null;
+    [M[c],M[piv]]=[M[piv],M[c]];
+    for(let r=0;r<5;r++){
+      if(r===c) continue;
+      const k=M[r][c]/M[c][c];
+      for(let j=c;j<6;j++) M[r][j]-=k*M[c][j];
+    }
+  }
+  const [A,B,C,D,E]=M.map((l,i)=>l[5]/l[i]);
+  const det=4*A*C-B*B;
+  if(!(det>0)) return null;
+  const x0=(B*E-2*C*D)/det, y0=(B*D-2*A*E)/det;
+  const F0=A*x0*x0+B*x0*y0+C*y0*y0+D*x0+E*y0-1;
+  const tr=A+C, dif=Math.hypot(A-C,B);
+  const l1=(tr-dif)/2, l2=(tr+dif)/2;
+  if(!(l1>0)||!(-F0>0)) return null;
+  // LE GRAND AXE va avec la plus petite valeur propre.
+  let ux=B/2, uy=l1-A;
+  if(Math.hypot(ux,uy)<1e-12){ ux=l1-C; uy=B/2; }
+  if(Math.hypot(ux,uy)<1e-12){ ux=A<=C?1:0; uy=A<=C?0:1; }
+  const n=Math.hypot(ux,uy);
+  return {cx:mx+x0*s,cy:my+y0*s,a:Math.sqrt(-F0/l1)*s,b:Math.sqrt(-F0/l2)*s,ux:ux/n,uy:uy/n};
+}
+/**
+ * PURE. La distance, le long du rayon issu du centre, entre un point et
+ * l'ellipse ; et le rayon de l'ellipse dans une direction.
+ * @param {{cx:number, cy:number, a:number, b:number, ux:number, uy:number}} e
+ * @param {number} dx @param {number} dy  une direction (unitaire), ou un point relatif au centre
+ * @returns {number}  le rayon de l'ellipse dans cette direction, rapporté à la longueur de (dx,dy)
+ */
+function _mlxEllipseRho(e,dx,dy){
+  const u=dx*e.ux+dy*e.uy, v=-dx*e.uy+dy*e.ux;
+  return Math.sqrt((u/e.a)*(u/e.a)+(v/e.b)*(v/e.b));
+}
+/**
+ * PURE. Le disque autour du toucher (tx, ty) : son bord extérieur ajusté en
+ * ellipse, et les deux bouts de son grand axe — son diamètre. Les coordonnées
+ * sont celles de l'image `gris` (w × h, niveaux de gris).
+ * @param {Float32Array} gris
+ * @param {number} w @param {number} h
+ * @param {number} tx @param {number} ty
+ * @param {number} rMin @param {number} rMax  les rayons possibles, en pixels
+ * @returns {{cx:number, cy:number, a:number, b:number, ux:number, uy:number, A:number[], B:number[],
+ *   couverture:number, residu:number}|{erreur:string}}
+ */
+function mlDisqueDetecter(gris,w,h,tx,ty,rMin,rMax){
+  if(!gris||!(w>16&&h>16)||!(rMax>rMin&&rMin>0)||!isFinite(tx)||!isFinite(ty)) return {erreur:'image'};
+  // ── 1. LE VOTE, sur une image réduite ──
+  const f=Math.min(1,ML_DISQUE_HOUGH_R/rMax);
+  const W=Math.max(16,Math.round(w*f)), H=Math.max(16,Math.round(h*f));
+  const fx=W/w, fy=H/h;
+  const p=_mlxLisser(W===w&&H===h?gris:_mlxReduire(gris,w,h,W,H),W,H);
+  const gx=new Float32Array(W*H), gy=new Float32Array(W*H), mg=new Float32Array(W*H);
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    const i=y*W+x;
+    const a=p[i-W-1], b=p[i-W], c=p[i-W+1], d=p[i-1], e=p[i+1], f2=p[i+W-1], g=p[i+W], hh=p[i+W+1];
+    gx[i]=(c+2*e+hh)-(a+2*d+f2); gy[i]=(f2+2*g+hh)-(a+2*b+c);
+    mg[i]=Math.hypot(gx[i],gy[i]);
+  }
+  // DES BORDS D'UN PIXEL, MÊME FAIBLES. Un disque noir sur un décor sombre
+  // n'a qu'un bord pâle — vingt-cinq niveaux de gris —, quand les néons et
+  // les montants d'une salle en ont de bien plus nets : un seuil pris sur les
+  // plus forts l'effaçait. On amincit chaque contour à son pixel le plus net
+  // (comme Canny), puis on garde tout ce qui dépasse un saut de cinq niveaux.
+  const tri=Float32Array.from(mg).sort();
+  const seuil=Math.max(20,0.08*tri[Math.floor(tri.length*0.99)]);
+  const fin=new Uint8Array(W*H);
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    const i=y*W+x, m=mg[i];
+    if(!(m>=seuil)) continue;
+    const o=Math.atan2(gy[i],gx[i]), q=((Math.round(o/(Math.PI/4))%4)+4)%4;
+    const pas=q===0?1:q===1?W+1:q===2?W:W-1;
+    if(m>=mg[i-pas]&&m>mg[i+pas]) fin[i]=1;
+  }
+  const r0=Math.max(2,Math.floor(rMin*Math.min(fx,fy))), r1=Math.max(r0+3,Math.ceil(rMax*Math.max(fx,fy)));
+  /** @type {number[]} */
+  const bords=[];
+  for(let i=0;i<W*H;i++) if(fin[i]) bords.push(i);
+  if(bords.length<20) return {erreur:'bord'};
+  // LE CENTRE : UNE ELLIPSE EST SYMÉTRIQUE PAR RAPPORT À SON CENTRE. Deux
+  // points de son bord qui se font face ont la même orientation, et leur
+  // milieu est le centre — pour un cercle comme pour un disque vu de biais.
+  // Le vote le long du gradient, lui, ne converge qu'au centre d'un cercle.
+  // On apparie donc les bords de même orientation (à 5° près), assez loin
+  // l'un de l'autre pour être deux côtés du disque, et leur milieu vote. Seuls
+  // comptent les bords proches du toucher, et les milieux proches de lui.
+  const Tx=tx*fx, Ty=ty*fy, Dw=Math.max(5,0.4*r1);
+  const NB=36;
+  /** @type {number[][]} */
+  const seaux=Array.from({length:NB},()=>[]);
+  for(const i of bords){
+    const x=i%W, y=(i-x)/W;
+    if(Math.hypot(x-Tx,y-Ty)>r1+Dw) continue;
+    let o=Math.atan2(gy[i],gx[i]); if(o<0) o+=Math.PI; if(o>=Math.PI) o-=Math.PI;
+    seaux[Math.min(NB-1,Math.floor(o/Math.PI*NB))].push(i);
+  }
+  // ⚠ CHAQUE ORIENTATION PÈSE AUTANT. Les montants verticaux d'une cage
+  //   remplissent à eux seuls une orientation — des milliers de bords contre
+  //   quelques dizaines pour le disque — et leurs millions de paires votaient
+  //   pour les milieux entre deux montants. Une paire vaut donc l'inverse de
+  //   la taille de son orientation : le disque, vu sous toutes, l'emporte. Et
+  //   une orientation trop pleine est éclaircie à 300 bords, un sur n.
+  for(let s=0;s<NB;s++) if(seaux[s].length>300){ const l=seaux[s], pas=l.length/300; seaux[s]=Array.from({length:300},(_,q)=>l[Math.floor(q*pas)]); }
+  const acc=new Float32Array(W*H);
+  const dMin=2*r0, dMax=2*r1;
+  for(let s=0;s<NB;s++){
+    const A2=seaux[s], B2=seaux[(s+1)%NB];
+    for(const L2 of [A2,B2]){
+      const poids=1/Math.max(1,Math.max(A2.length,L2.length));
+      for(let u=0;u<A2.length;u++){
+        const i=A2[u], xi=i%W, yi=(i-xi)/W;
+        for(let v=(L2===A2?u+1:0);v<L2.length;v++){
+          const j=L2[v], xj=j%W, yj=(j-xj)/W;
+          const d=Math.hypot(xj-xi,yj-yi);
+          if(d<dMin||d>dMax) continue;
+          const mx=(xi+xj)/2, my=(yi+yj)/2;
+          if(Math.hypot(mx-Tx,my-Ty)>Dw) continue;
+          acc[Math.round(my)*W+Math.round(mx)]+=poids;
+        }
+      }
+    }
+  }
+  // Le plus fort près du toucher — un peu moins fort s'il est loin.
+  let best=0, bx=-1, by=-1;
+  for(let Y=Math.max(1,Math.floor(Ty-Dw));Y<=Math.min(H-2,Math.ceil(Ty+Dw));Y++)
+    for(let X=Math.max(1,Math.floor(Tx-Dw));X<=Math.min(W-2,Math.ceil(Tx+Dw));X++){
+      const d=Math.hypot(X-Tx,Y-Ty);
+      if(d>Dw) continue;
+      let sc=0;
+      for(let j=-1;j<=1;j++) for(let k=-1;k<=1;k++) sc+=acc[(Y+j)*W+X+k];
+      sc*=1-0.5*(d/Dw)*(d/Dw);
+      if(sc>best){ best=sc; bx=X; by=Y; }
+    }
+  if(bx<0) return {erreur:'centre'};
+  let sx=0, sy=0, sw=0;
+  for(let j=-1;j<=1;j++) for(let k=-1;k<=1;k++){ const v=acc[(by+j)*W+bx+k]; sx+=(bx+k)*v; sy+=(by+j)*v; sw+=v; }
+  const cxs=sw?sx/sw:bx, cys=sw?sy/sw:by;
+  // LES DEUX DEMI-AXES : un disque vu de biais est une ellipse, et un seul
+  // rayon ne la décrit pas. Pour une ellipse droite centrée ici, un point du
+  // bord et la direction de son gradient donnent a et b d'un coup :
+  //   s = dx·nx + dy·ny ;  a² = dx·s / nx ;  b² = dy·s / ny.
+  // Chaque bord vote pour son couple (a, b), et note le secteur du tour où
+  // il est vu (32 secteurs). Les points presque sur un axe ne votent pas :
+  // ils ne disent rien de l'autre demi-axe.
+  const nA=r1+3;
+  const vote=new Float32Array(nA*nA), secteurs=new Uint32Array(nA*nA);
+  for(const i of bords){
+    const x=i%W, y=(i-x)/W, dx=x-cxs, dy=y-cys;
+    const nx=gx[i]/mg[i], ny=gy[i]/mg[i];
+    if(Math.abs(nx)<0.2||Math.abs(ny)<0.2) continue;
+    const s=dx*nx+dy*ny, a2=dx*s/nx, b2=dy*s/ny;
+    if(!(a2>0&&b2>0)) continue;
+    const ka=Math.round(Math.sqrt(a2)), kb=Math.round(Math.sqrt(b2));
+    if(ka<r0||kb<r0||ka>r1||kb>r1) continue;
+    vote[kb*nA+ka]++;
+    secteurs[kb*nA+ka]|=1<<(Math.floor((Math.atan2(dy,dx)+Math.PI)/(2*Math.PI)*32)&31);
+  }
+  /** @param {number} m @returns {number} */
+  const compte=m=>{ let n=0; while(m){ n+=m&1; m>>>=1; } return n; };
+  /** @param {number} ka @param {number} kb @returns {{n:number, sec:number}} */
+  const voisinage=(ka,kb)=>{
+    let n=0, sec=0;
+    for(let j=-1;j<=1;j++) for(let k=-1;k<=1;k++){
+      const A2=ka+k, B2=kb+j;
+      if(A2<0||B2<0||A2>=nA||B2>=nA) continue;
+      n+=vote[B2*nA+A2]; sec|=secteurs[B2*nA+A2];
+    }
+    return {n,sec};
+  };
+  // LE BORD EXTÉRIEUR : parmi les ellipses vues sur une bonne part du tour,
+  // la plus grande. Moyeu, lettrage et lèvre en sont de plus petites.
+  let Ra=0, Rb=0, aire=0;
+  for(let kb=r0;kb<=r1;kb++) for(let ka=r0;ka<=r1;ka++){
+    if(!vote[kb*nA+ka]||ka*kb<=aire) continue;
+    // Assez de votes pour son pourtour, et vu sur une bonne part du tour.
+    const v=voisinage(ka,kb), tour=Math.PI*(3*(ka+kb)-Math.sqrt((3*ka+kb)*(ka+3*kb)));
+    if(v.n>=0.12*tour&&compte(v.sec)>=Math.ceil(ML_DISQUE_COUV*24)){ Ra=ka; Rb=kb; aire=ka*kb; }
+  }
+  if(!aire) return {erreur:'bord'};
+  // ── 2. LE BORD À PLEINE RÉSOLUTION, le long de rayons ──
+  let cx=cxs/fx, cy=cys/fy;
+  const Rp=Math.max(Ra/fx,Rb/fy);
+  const x0=Math.max(0,Math.floor(cx-1.35*Rp)), x1=Math.min(w-1,Math.ceil(cx+1.35*Rp));
+  const y0=Math.max(0,Math.floor(cy-1.35*Rp)), y1=Math.min(h-1,Math.ceil(cy+1.35*Rp));
+  const cw=x1-x0+1, ch=y1-y0+1;
+  const brut=new Float32Array(cw*ch);
+  for(let y=0;y<ch;y++) for(let x=0;x<cw;x++) brut[y*cw+x]=gris[(y+y0)*w+x+x0];
+  const L=_mlxLisser(brut,cw,ch);
+  /** @param {number} x @param {number} y @returns {number} */
+  const lire=(x,y)=>{
+    const X=x-x0, Y=y-y0;
+    if(!(X>=0&&Y>=0&&X<cw-1&&Y<ch-1)) return NaN;
+    const i=Math.floor(X), j=Math.floor(Y), u=X-i, v=Y-j, o=j*cw+i;
+    return (L[o]*(1-u)+L[o+1]*u)*(1-v)+(L[o+cw]*(1-u)+L[o+cw+1]*u)*v;
+  };
+  /** @type {{cx:number, cy:number, a:number, b:number, ux:number, uy:number}} */
+  let ell=Ra/fx>=Rb/fy?{cx,cy,a:Ra/fx,b:Rb/fy,ux:1,uy:0}:{cx,cy,a:Rb/fy,b:Ra/fx,ux:0,uy:1};
+  /** @type {number[][]} */
+  let gardes=[];
+  let residu=Infinity;
+  /**
+   * Les sauts de luminosité d'un rayon, entre lo·rc et hi·rc : leur distance
+   * au centre, au dixième de pixel, et leur force.
+   * @param {{cx:number, cy:number, a:number, b:number, ux:number, uy:number}} E
+   * @param {number} ux @param {number} uy
+   * @param {number} lo @param {number} hi
+   * @returns {{rc:number, pics:{r:number, s:number}[]}|null}
+   */
+  const profil=(E,ux,uy,lo,hi)=>{
+    const rc=1/_mlxEllipseRho(E,ux,uy);
+    /** @type {number[]} */ const I=[];
+    for(let r=rc*lo;r<=rc*hi;r+=0.5) I.push(lire(E.cx+ux*r,E.cy+uy*r));
+    if(I.length<5||I.some(v=>!isFinite(v))) return null;
+    /** @type {number[]} */ const D=[0];
+    for(let j=1;j<I.length-1;j++) D.push(Math.abs(I[j+1]-I[j-1]));
+    D.push(0);
+    let dmax=0; for(const v of D) dmax=Math.max(dmax,v);
+    /** @type {{r:number, s:number}[]} */ const pics=[];
+    for(let j=1;j<D.length-1;j++){
+      if(!(D[j]>=0.3*dmax&&D[j]>=ML_DISQUE_SAUT&&D[j]>=D[j-1]&&D[j]>D[j+1])) continue;
+      const den=D[j-1]-2*D[j]+D[j+1];
+      const dj=den<0?Math.max(-0.5,Math.min(0.5,0.5*(D[j-1]-D[j+1])/den)):0;
+      pics.push({r:rc*lo+(j+dj)*0.5,s:D[j]});
+    }
+    return {rc,pics};
+  };
+  /**
+   * L'échelle ρ de l'ellipse que le plus de rayons confirment, dans [r0, r1] :
+   * pour chaque ρ, les rayons qui ont un saut à ρ·rc près de la tolérance.
+   * Rend le plus extérieur des plateaux qui atteignent `part` du meilleur — et
+   * au moins `min` rayons —, pris en son sommet.
+   * @param {{ux:number, uy:number, rc:number, pics:{r:number, s:number}[]}[]} rayons
+   * @param {number} a @param {number} b @param {number} pas @param {number} tol
+   * @param {number} part @param {number} min
+   * @returns {{rho:number, n:number}|null}
+   */
+  const consensus=(rayons,a,b,pas,tol,part,min)=>{
+    /** @type {{rho:number, n:number}[]} */
+    const c=[];
+    let nMax=0;
+    for(let rho=a;rho<=b+1e-9;rho+=pas){
+      let n=0;
+      for(const R2 of rayons){
+        const cible=rho*R2.rc, t=Math.max(0.7,tol*R2.rc);
+        if(R2.pics.some(q=>Math.abs(q.r-cible)<=t)) n++;
+      }
+      c.push({rho,n}); nMax=Math.max(nMax,n);
+    }
+    const seuil2=Math.max(min,part*nMax);
+    let fin=-1;
+    for(let i=0;i<c.length;i++) if(c[i].n>=seuil2) fin=i;
+    if(fin<0) return null;
+    let deb=fin;
+    while(deb>0&&c[deb-1].n>=seuil2) deb--;
+    let best=c[deb];
+    for(let i=deb;i<=fin;i++) if(c[i].n>best.n) best=c[i];
+    return best;
+  };
+  /** @param {{cx:number, cy:number, a:number, b:number, ux:number, uy:number}} E @param {number[]} q @returns {number} */
+  const ecart=(E,q)=>{ const dx=q[0]-E.cx, dy=q[1]-E.cy, d=Math.hypot(dx,dy); return d?Math.abs(d-d/_mlxEllipseRho(E,dx,dy)):Infinity; };
+  // ── LA PREMIÈRE PASSE, PAR TIRAGES (RANSAC) ──
+  // Le vote ne donne qu'une ellipse grossière : quelques pixels de centre,
+  // quelques pour cent de rayon — assez pour qu'un anneau à échelle unique ne
+  // s'aligne plus, et qu'un décor à barreaux (les montants d'une cage) passe
+  // devant le bord. On tire donc six rayons répartis sur le tour, un saut sur
+  // chacun — les plus nets plus souvent —, l'ellipse qui passe au plus près
+  // de ces six points, et on compte les rayons qui la confirment. La meilleure
+  // l'emporte. Le tirage est FIXE (même graine à chaque fois) : un même
+  // toucher sur une même image rend toujours la même échelle.
+  {
+    const N=ML_DISQUE_RAYONS;
+    /** @type {({x:number, y:number, s:number}[]|null)[]} */
+    const parRayon=[];
+    let nVus=0;
+    for(let k=0;k<N;k++){
+      const th=2*Math.PI*k/N, ux=Math.cos(th), uy=Math.sin(th);
+      const pr=profil(ell,ux,uy,0.7,1.3);
+      if(pr&&pr.pics.length){ parRayon.push(pr.pics.map(q=>({x:ell.cx+ux*q.r,y:ell.cy+uy*q.r,s:q.s}))); nVus++; }
+      else parRayon.push(null);
+    }
+    if(nVus<ML_DISQUE_COUV*N) return {erreur:'bord'};
+    let graine=0x2545f491;
+    const alea=()=>{ graine^=graine<<13; graine^=graine>>>17; graine^=graine<<5; return (graine>>>0)/4294967296; };
+    /** @param {{x:number, y:number, s:number}[]} l */
+    const tirer=l=>{ let t=0; for(const q of l) t+=q.s; let u=alea()*t; for(const q of l){ u-=q.s; if(u<=0) return q; } return l[l.length-1]; };
+    const dMax=Math.max(5,0.4*rMax);
+    /** @type {{cx:number, cy:number, a:number, b:number, ux:number, uy:number}|null} */
+    let best=null;
+    let scoreMax=0;
+    for(let it=0;it<2500;it++){
+      const dep=Math.floor(alea()*N);
+      /** @type {number[][]} */
+      const six=[];
+      for(let j=0;j<6;j++){
+        const idx=((dep+Math.round(j*N/6)+Math.floor((alea()-0.5)*N/12))%N+N)%N;
+        const l=parRayon[idx];
+        if(!l) break;
+        const q=tirer(l); six.push([q.x,q.y]);
+      }
+      if(six.length<6) continue;
+      const e=mlEllipseAjuster(six);
+      if(!e||e.b<0.25*e.a||e.b<rMin||e.a>1.1*rMax) continue;
+      if(Math.hypot(e.cx-tx,e.cy-ty)>dMax||_mlxEllipseRho(e,tx-e.cx,ty-e.cy)>1) continue;
+      const t=Math.max(1,0.008*e.a);
+      let sc=0;
+      for(const l of parRayon) if(l&&l.some(q=>ecart(e,[q.x,q.y])<=t)) sc++;
+      // À score égal, la plus grande : le bord plutôt que le liseré.
+      if(sc>scoreMax||(sc===scoreMax&&best&&e.a*e.b>best.a*best.b)){ scoreMax=sc; best=e; }
+    }
+    if(!best||scoreMax<ML_DISQUE_COUV*N) return {erreur:'bord'};
+    const b0=best, t0=Math.max(1,0.008*b0.a);
+    /** @type {number[][]} */
+    const pts=[];
+    for(const l of parRayon){
+      if(!l) continue;
+      let m=null, dm=Infinity;
+      for(const q of l){ const d=ecart(b0,[q.x,q.y]); if(d<=t0&&d<dm){ dm=d; m=q; } }
+      if(m) pts.push([m.x,m.y]);
+    }
+    const e=mlEllipseAjuster(pts);
+    if(!e) return {erreur:'forme'};
+    ell=e;
+  }
+  for(let passe=1;passe<3;passe++){
+    // DEUX PASSES SERRÉES autour de l'ellipse ajustée.
+    const fen=0.06, tol=0.008;
+    /** @type {{ux:number, uy:number, rc:number, pics:{r:number, s:number}[]}[]} */
+    const rayons=[];
+    for(let k=0;k<ML_DISQUE_RAYONS;k++){
+      const th=2*Math.PI*k/ML_DISQUE_RAYONS, ux=Math.cos(th), uy=Math.sin(th);
+      const pr=profil(ell,ux,uy,1-fen,1+fen);
+      if(pr&&pr.pics.length) rayons.push({ux,uy,rc:pr.rc,pics:pr.pics});
+    }
+    if(rayons.length<ML_DISQUE_COUV*ML_DISQUE_RAYONS) return {erreur:'bord'};
+    // LE CONTOUR QUE LES RAYONS ONT EN COMMUN. Un bord du décor derrière le
+    // disque — un tibia, la barre, un sac — ne se trouve que sur quelques
+    // rayons ; un anneau du disque, sur presque tous. Parmi les anneaux
+    // presque aussi confirmés que le meilleur, le plus extérieur.
+    const cs=consensus(rayons,1-fen,1+fen,0.001,tol,0.7,0);
+    if(!cs) return {erreur:'bord'};
+    // UN POINT PAR RAYON : le saut le plus proche de ce contour.
+    /** @type {number[][]} */
+    const pts=[];
+    for(const R2 of rayons){
+      const cible=cs.rho*R2.rc, t=Math.max(0.7,tol*R2.rc);
+      let meilleur=null, dm=Infinity;
+      for(const q of R2.pics){ const d=Math.abs(q.r-cible); if(d<=t&&d<dm){ dm=d; meilleur=q; } }
+      if(meilleur) pts.push([ell.cx+R2.ux*meilleur.r,ell.cy+R2.uy*meilleur.r]);
+    }
+    if(pts.length<ML_DISQUE_COUV*ML_DISQUE_RAYONS) return {erreur:'bord'};
+    let e=mlEllipseAjuster(pts);
+    if(!e) return {erreur:'forme'};
+    // LES POINTS QUI S'ÉCARTENT DE L'ELLIPSE SONT ÉCARTÉS, puis on la refait.
+    const e0=e;
+    const ec0=pts.map(q=>ecart(e0,q)).sort((u,v)=>u-v);
+    const lim=Math.max(1,3*ec0[Math.floor(ec0.length/2)]);
+    gardes=pts.filter(q=>ecart(e0,q)<=lim);
+    if(gardes.length<ML_DISQUE_COUV*ML_DISQUE_RAYONS) return {erreur:'bord'};
+    e=mlEllipseAjuster(gardes);
+    if(!e) return {erreur:'forme'};
+    const e1=e;
+    const ec=gardes.map(q=>ecart(e1,q)).sort((u,v)=>u-v);
+    residu=ec[Math.floor(ec.length/2)];
+    ell=e1;
+  }
+  let couverture=gardes.length/ML_DISQUE_RAYONS;
+  // ── 3. LES DEUX BOUTS DU DIAMÈTRE, là où il se mesure ──
+  // UN BORD ARRONDI OU UNE LÈVRE : le contour le plus confirmé peut être un
+  // anneau intérieur — le liseré d'un bumper se voit tout autour, son bord
+  // extérieur seulement là où le décor contraste. Or l'échelle ne dépend que
+  // des DEUX BOUTS DU GRAND AXE. On y regarde de près : un éventail de 31
+  // rayons autour de chaque bout, les profils alignés sur l'ellipse, et la
+  // force des sauts MOYENNÉE. Le bord du disque est au même endroit sur tous
+  // les rayons et s'additionne ; le décor, jamais au même endroit, se dilue.
+  // ⚠ UN BORD EXTÉRIEUR SE VOIT AUX DEUX BOUTS, AU MÊME RAPPORT. Le bord et
+  //   son liseré sont concentriques : au-delà de l'anneau trouvé, le vrai bord
+  //   est à la même distance relative en haut et en bas. Une ligne du décor —
+  //   le bord d'un banc sous le disque — ne l'est qu'à un bout : elle est
+  //   refusée, et l'anneau trouvé reste le bord.
+  {
+    const E0=ell;
+    const P0=0.9, P1=1.1, PAS=0.0025, n=Math.round((P1-P0)/PAS)+1;
+    /**
+     * La force moyenne des sauts le long de l'éventail d'un bout.
+     * @param {number} sens  +1 : le bout (cx,cy)+a·u ; -1 : l'autre
+     * @returns {number[]}
+     */
+    const eventail=sens=>{
+      const th0=Math.atan2(sens*E0.uy,sens*E0.ux);
+      const somme=new Float32Array(n), nb=new Float32Array(n);
+      for(let dg=-15;dg<=15;dg++){
+        const th=th0+dg*Math.PI/180, ux=Math.cos(th), uy=Math.sin(th);
+        const rc=1/_mlxEllipseRho(E0,ux,uy);
+        /** @type {number[]} */ const I=[];
+        for(let j=0;j<n;j++) I.push(lire(E0.cx+ux*rc*(P0+j*PAS),E0.cy+uy*rc*(P0+j*PAS)));
+        // La dérivée sur un pixel, quel que soit le pas en part du rayon.
+        const dj=Math.max(1,Math.round(0.5/(rc*PAS)));
+        for(let j=dj;j<n-dj;j++){
+          const d=Math.abs(I[j+dj]-I[j-dj]);
+          if(isFinite(d)){ somme[j]+=d; nb[j]++; }
+        }
+      }
+      return Array.from(somme,(s,j)=>nb[j]>=10?s/nb[j]:0);
+    };
+    /** @param {number[]} D @param {number} j @returns {number} la position au dixième de pas */
+    const sommet=(D,j)=>{
+      const den=D[j-1]-2*D[j]+D[j+1];
+      return j+(den<0?Math.max(-0.5,Math.min(0.5,0.5*(D[j-1]-D[j+1])/den)):0);
+    };
+    const j1=Math.round((1-P0)/PAS), jMax=Math.round((1.08-P0)/PAS);
+    /** @param {number[]} D */
+    const lire2=D=>{
+      // L'anneau trouvé, autour de ρ = 1, et les sauts francs au-delà.
+      let s1=0, js=j1;
+      for(let j=j1-6;j<=j1+6;j++) if(D[j]>s1){ s1=D[j]; js=j; }
+      /** @type {number[]} */ const dehors=[];
+      for(let j=js+4;j<=jMax;j++) if(D[j]>=0.35*s1&&D[j]>=D[j-1]&&D[j]>D[j+1]) dehors.push(j);
+      return {s1,js,dehors};
+    };
+    const Dh=eventail(1), Db=eventail(-1), H=lire2(Dh), B2=lire2(Db);
+    if(H.s1>0&&B2.s1>0){
+      let jh=H.js, jb=B2.js;
+      // Le plus extérieur des bords vus aux deux bouts au même rapport à leur
+      // anneau, à 0,6 % près — sinon l'anneau trouvé. LE RAPPORT, et non la
+      // position : un centre décalé d'un pixel décale les deux bouts d'autant.
+      /** @param {number} j @param {number} js @returns {number} */
+      const rap=(j,js)=>(P0+j*PAS)/(P0+js*PAS);
+      for(let i=H.dehors.length-1;i>=0;i--){
+        const rh=rap(H.dehors[i],H.js);
+        const k=B2.dehors.find(j=>Math.abs(rap(j,B2.js)-rh)<=0.006);
+        if(k!==undefined){ jh=H.dehors[i]; jb=k; break; }
+      }
+      const k1=P0+sommet(Dh,jh)*PAS, k2=P0+sommet(Db,jb)*PAS;
+      // LE DIAMÈTRE : de bout à bout ; le centre au milieu, la forme gardée.
+      const km=(k1+k2)/2;
+      ell={...E0,cx:E0.cx+E0.ux*E0.a*(k1-k2)/2,cy:E0.cy+E0.uy*E0.a*(k1-k2)/2,a:E0.a*km,b:E0.b*km};
+    }
+  }
+  if(residu>Math.max(0.8,ML_DISQUE_RESIDU*ell.a)) return {erreur:'forme'};
+  if(ell.b<0.25*ell.a||2*ell.a<ML_ECHELLE_MIN_PX||ell.a>Math.max(w,h)) return {erreur:'forme'};
+  if(_mlxEllipseRho(ell,tx-ell.cx,ty-ell.cy)>1) return {erreur:'dehors'};
+  // Les deux bouts du grand axe, le plus haut d'abord. UN DISQUE PRESQUE
+  // ROND — vu de face, à 3 % près — n'a pas de grand axe qui vaille : son
+  // orientation n'est que le bruit de l'ajustement, et le petit axe n'est
+  // qu'un côté où le liseré a pris la place du bord. On garde la longueur du
+  // GRAND axe, mais VERTICALE : l'échelle se lit du haut au bas du disque,
+  // comme le coach la poserait.
+  const rond=ell.b>=0.97*ell.a;
+  let A=rond?[ell.cx,ell.cy-ell.a]:[ell.cx+ell.ux*ell.a,ell.cy+ell.uy*ell.a];
+  let B=rond?[ell.cx,ell.cy+ell.a]:[ell.cx-ell.ux*ell.a,ell.cy-ell.uy*ell.a];
+  if(A[1]>B[1]){ const t=A; A=B; B=t; }
+  return {...ell,A,B,couverture,residu};
 }
 
 // ── LE DESSIN ──────────────────────────────────────────────────────────────
@@ -3974,9 +4543,96 @@ function _mlxEchPoints(a,b){
   if(!_ml) return;
   const ch=mlEchChoix(_ml.echUi);
   /** @type {Echelle} */
-  const ech={p:mlEncoderTrait([a,b].map(p=>[_mlxBorne(p[0]),_mlxBorne(p[1])]))};
+  const ech={p:mlEchEncoder([a,b])};
   if(ch){ ech.mm=ch.mm; ech.src=ch.src; }
   _ml.annot={..._ml.annot,ech};
+}
+/**
+ * PURE. Les deux points de l'échelle en texte, AU DIXIÈME : le bord trouvé
+ * seul l'est au dixième de pixel, et des millièmes entiers de l'image en
+ * perdraient la moitié. Un point entier s'écrit sans décimale.
+ * @param {number[][]} pts  normés
+ * @returns {string}
+ */
+function mlEchEncoder(pts){
+  /** @param {number} v @returns {string} */
+  const f=v=>String(Math.round(Math.max(0,Math.min(1000,v))*10)/10);
+  return pts.map(p=>f(p[0])+','+f(p[1])).join(' ');
+}
+/**
+ * L'image affichée, en niveaux de gris, à la taille de la vidéo. Une vidéo
+ * d'une autre origine ne se lit pas depuis le lecteur — la toile est
+ * « teintée » : on la relit alors à part, en crossOrigin, comme le suivi
+ * (_mlExtraire), à l'instant affiché.
+ * @returns {Promise<{gris:Float32Array, w:number, h:number}|{erreur:string}>}
+ */
+async function _mlxImageGris(){
+  const v=_mlVideo();
+  if(!_ml||!v||!(v.videoWidth>0&&v.videoHeight>0)) return {erreur:'video'};
+  const w=v.videoWidth, h=v.videoHeight;
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const g=c.getContext('2d',{willReadFrequently:true});
+  if(g){ try{ g.drawImage(v,0,0,w,h); return {gris:mlGris(g.getImageData(0,0,w,h).data,w,h),w,h}; }catch(e){} }
+  const t=_mlxTempsMs();
+  /** @type {{tMs:number, gris:Float32Array}|null} */
+  let im=null;
+  const r=await _mlExtraire(_ml.url,Math.max(0,t-40),t+40,w,h,1000/30,x=>{
+    // L'image qui couvre l'instant affiché : la plus proche de lui.
+    if(!im||Math.abs(x.tMs-t)<Math.abs(im.tMs-t)) im=x;
+    return x.tMs<t;
+  },()=>!_ml);
+  if(im) return {gris:/** @type {{tMs:number, gris:Float32Array}} */(im).gris,w,h};
+  return {erreur:(r&&r.ok===false&&r.code)||'image'};
+}
+/**
+ * Le toucher au centre d'un disque, en automatique : l'image affichée est
+ * lue, le bord trouvé (mlDisqueDetecter), et les deux bouts du diamètre
+ * deviennent l'échelle. L'ellipse trouvée reste dessinée tant que l'outil est
+ * armé : le coach voit ce qui a été mesuré, et tire un bout s'il le faut.
+ * @param {number[]} p  le toucher, normé
+ */
+async function _mlxEchDetecter(p){
+  if(!_ml||_ml.echCherche) return false;
+  _ml.echCherche=true; _ml.echEllipse=null;
+  _mlxMajOutils(); _mlDessinerCalque();
+  /** @type {{gris:Float32Array, w:number, h:number}|{erreur:string}} */
+  let img;
+  try{ img=await _mlxImageGris(); }catch(e){ img={erreur:'image'}; }
+  if(!_ml) return false;
+  _ml.echCherche=false;
+  if('erreur' in img){
+    toast(img.erreur==='cors'
+      ?'L’hébergeur de cette vidéo n’autorise pas la lecture de ses images : pose le haut et le bas du disque à la main.'
+      :'L’image n’a pas pu être lue : pose le haut et le bas du disque à la main.','var(--orange)');
+    _ml.echAuto=false;
+    _mlxMajOutils(); _mlDessinerCalque();
+    return false;
+  }
+  const {gris,w,h}=img;
+  const r=mlDisqueDetecter(gris,w,h,p[0]/1000*w,p[1]/1000*h,ML_ECHELLE_MIN_PX/2,0.5*Math.min(w,h));
+  if('erreur' in r){
+    toast(r.erreur==='dehors'
+      ?'Le toucher tombe hors du disque trouvé : touche le centre du disque, sur son moyeu.'
+      :'Aucun bord de disque net autour du toucher. Touche le centre sur une image nette — ou glisse du haut au bas pour le poser à la main.',
+      'var(--orange)');
+    _mlxMajOutils(); _mlDessinerCalque();
+    return false;
+  }
+  _mlxMemoriser();
+  _mlxEchPoints([r.A[0]/w*1000,r.A[1]/h*1000],[r.B[0]/w*1000,r.B[1]/h*1000]);
+  const ech=_ml.annot.ech;
+  _ml.echEllipse=ech?{p:ech.p,cx:r.cx,cy:r.cy,a:r.a,b:r.b,ux:r.ux,uy:r.uy,w,h,
+    couverture:r.couverture,residu:r.residu}:null;
+  _mlxApresChangement();
+  return true;
+}
+/** @param {boolean} auto  automatique, ou à la main */
+function mlEchMode(auto){
+  if(!_ml) return false;
+  _mlxEchAnnulerPose();
+  _ml.echAuto=!!auto;
+  _mlxMajOutils();
+  return true;
 }
 /**
  * La loupe, pendant qu'on pose un bout de l'échelle : un pixel d'erreur sur
@@ -4030,9 +4686,14 @@ function _mlxEchPointer(e,calque,R,b,N){
   // UN PREMIER TOUCHER SUR UNE ÉTIQUETTE ne pose rien : c'est peut-être le
   // début d'un double-clic pour la déplacer.
   if(i<0&&G&&mlEtiquetteToucher(_ml.annot,R,_mlxTempsMs(),px,py,G.g,_ml.comparaison)) return;
+  if(_ml.echCherche) return;
   const avant=JSON.stringify(_ml.annot);
   const depart=N(e.clientX,e.clientY);
-  if(i<0) _mlxEchPoints(depart,depart);
+  // EN AUTOMATIQUE, RIEN N'EST POSÉ AU PREMIER TOUCHER : s'il ne glisse pas,
+  // c'est le centre du disque, et RepCore cherche son bord ; s'il glisse, le
+  // coach pose l'échelle à la main, du haut au bas.
+  const auto=_ml.echAuto;
+  if(i<0&&!auto) _mlxEchPoints(depart,depart);
   _mlxLoupeEchelle(i>=0?q[i]:depart);
   _mlDessinerCalque();
   const x0=e.clientX, y0=e.clientY;
@@ -4042,12 +4703,13 @@ function _mlxEchPointer(e,calque,R,b,N){
   const bouger=ev=>{
     if(!_ml) return;
     if(!bouge&&Math.hypot(ev.clientX-x0,ev.clientY-y0)<(i>=0?2:6)) return;
+    if(i<0&&auto&&!bouge) _mlxEchPoints(depart,depart);
     bouge=true;
     const p=N(ev.clientX,ev.clientY);
     const e2=_ml.annot.ech;
     if(i>=0&&e2){
       const r=mlDecoderTrait(e2.p); r[i]=[_mlxBorne(p[0]),_mlxBorne(p[1])];
-      _ml.annot={..._ml.annot,ech:{...e2,p:mlEncoderTrait(r)}};
+      _ml.annot={..._ml.annot,ech:{...e2,p:mlEchEncoder(r)}};
     } else if(i<0) _mlxEchPoints(depart,p);
     _mlxLoupeEchelle(p);
     _mlDessinerCalque();
@@ -4058,8 +4720,10 @@ function _mlxEchPointer(e,calque,R,b,N){
     calque.removeEventListener('pointercancel',fin);
     _mlxLoupeEchelle(null);
     if(!_ml) return;
-    // UN TOUCHER SANS GLISSER pose le haut ; le bas viendra du clic suivant,
+    // UN TOUCHER SANS GLISSER : en automatique, le centre du disque — RepCore
+    // cherche son bord ; à la main, le haut — le bas viendra du clic suivant,
     // et la souris le montre d'ici là.
+    if(i<0&&!bouge&&auto){ _mlxEchDetecter(depart); return; }
     if(i<0&&!bouge){ _ml.echPose={avant,a:depart}; _mlxMajOutils(); _mlDessinerCalque(); return; }
     if(JSON.stringify(_ml.annot)!==avant){ _ml.annule.push(avant); if(_ml.annule.length>60) _ml.annule.shift(); _ml.refait=[]; }
     _mlxApresChangement();
@@ -6064,7 +6728,7 @@ function mlOuvrir(email,videoId){
     epaisseur:ML_EPAISSEUR_DEFAUT,sel:null,trace:null,curseur:null,annule:[],refait:[],original:false,
     comparaison:false,guide:null,repereAnat:1,relier:true,phrase:'',tailleTexte:'m',onglet:'trace',jetonVseq:0,
     enLecture:_mlxPrefLecture(),style:'',deplEtiq:null,trajAuto:true,trajStop:false,trajZone:null,
-    echUi:_mlxEchUiDepuis(annotDoc.ech),echPose:null};
+    echUi:_mlxEchUiDepuis(annotDoc.ech),echPose:null,echAuto:true,echCherche:false,echEllipse:null};
   go('s-coach-motion-lab');
   _mlRendre();
   return true;
@@ -6399,7 +7063,9 @@ function _mlxMajOutils(){
       :'Dessine d’un seul geste — ou touche pour commencer, suis le mouvement à la souris, touche pour finir.',
     courbe:'Touche la vidéo point par point : la courbe passe par chacun. Entrée pour terminer.',
     cercle:'Glisse du centre vers le bord — ou touche le centre, puis le bord.',
-    echelle:'Touche le HAUT d’un disque, puis son BAS — ou glisse de l’un à l’autre. La hauteur d’un disque reste son diamètre même vu de biais. Tire un bout pour l’ajuster.',
+    echelle:_ml.echAuto
+      ?'Touche le centre d’un disque : RepCore trouve son bord et en tire le diamètre — le grand axe, même vu de biais. Ou glisse du haut au bas pour le poser à la main. Tire un bout pour l’ajuster.'
+      :'Touche le HAUT d’un disque, puis son BAS — ou glisse de l’un à l’autre. La hauteur d’un disque reste son diamètre même vu de biais. Tire un bout pour l’ajuster.',
     angle:'Touche trois points — par exemple épaule, coude, poignet : l’angle au deuxième s’affiche.',
     point:'Touche les repères anatomiques un par un ; ils se relient. Entrée pour terminer.',
     texte:'Touche la vidéo là où le texte doit apparaître.',zone:'Glisse pour surligner une zone — ou touche un coin, puis l’autre.',
@@ -6493,13 +7159,27 @@ function _mlxHtmlEchelle(){
     +'<option value=""'+(val?'':' selected')+'>Choisir…</option>'
     +opts.map(([k,l])=>'<option value="'+escapeHtml(k)+'"'+(k===val?' selected':'')+'>'+escapeHtml(l)+'</option>').join('')+'</select></label>';
   // OÙ ON EN EST : une seule phrase, la prochaine chose à faire.
+  const auto=_ml.echAuto;
+  const trouve=_ml.echEllipse&&e&&_ml.echEllipse.p===e.p?_ml.echEllipse:null;
   let etat;
-  if(!e) etat='<b>1.</b> Touche le haut du disque sur la vidéo, puis son bas.';
+  if(_ml.echCherche) etat='Recherche du bord du disque…';
+  else if(!e) etat=auto?'<b>1.</b> Touche le CENTRE d’un disque, sur une image nette : RepCore trouve son bord.'
+    :'<b>1.</b> Touche le haut du disque sur la vidéo, puis son bas.';
   else if(px<ML_ECHELLE_MIN_PX) etat='Le disque ne fait que '+Math.round(px)+' pixels à l’image : un pixel d’erreur y pèserait trop. Rapproche-toi ou zoome, puis repose-le.';
   else if(!(Number(e.mm)>0)) etat='<b>2.</b> Choisis ce disque : les mesures apparaîtront sur tes tracés.';
   else if(!e.ok) etat='<b>3.</b> Vérifie les mesures sur tes tracés, puis enregistre.';
   else etat='Échelle enregistrée : elle n’apparaît plus sur la vidéo, les mesures restent. Tire un bout pour l’ajuster.';
-  let h='<div class="mlx-ech"><p class="mlx-note mlx-ech-etat">'+etat+'</p>';
+  // AUTOMATIQUE OU À LA MAIN. En automatique, glisser du haut au bas pose
+  // quand même l'échelle à la main : le premier geste le dit.
+  let h='<div class="mlx-ech"><div class="mlx-chips" role="group" aria-label="Façon de poser l’échelle">'
+    +'<button type="button" class="mlx-chip" aria-pressed="'+auto+'" onclick="mlEchMode(true)">Automatique</button>'
+    +'<button type="button" class="mlx-chip" aria-pressed="'+(!auto)+'" onclick="mlEchMode(false)">À la main</button></div>'
+    +'<p class="mlx-note mlx-ech-etat">'+etat+'</p>';
+  // CE QUI A ÉTÉ TROUVÉ, pour que le coach le vérifie d'un coup d'œil : le
+  // liseré bleu sur la vidéo, et la part du tour où le bord a été vu.
+  if(trouve) h+='<p class="mlx-note">Bord trouvé sur '+Math.round(trouve.couverture*100)+' % du tour, à '
+    +mlNombre(trouve.residu,1)+' px près. Vérifie le liseré bleu sur le disque ; s’il en suit un autre — un disque plus petit '
+    +'devant —, touche le centre de celui que tu veux, ou tire un bout de l’échelle.</p>';
   const gammes=ui.m?mlEchGammes(ui.m):[];
   h+=sel('mlEchMarque','Marque',mlEchMarques().map(m=>[m,m]),ui.m);
   if(gammes.length>1) h+=sel('mlEchGamme','Gamme',gammes.map(g=>[g.id,g.lib]),ui.g);
@@ -7813,6 +8493,18 @@ function _mlDessinerCalque(){
   mlDessinerAnnotations(g,R,_ml.annot,tNow,{sel:_ml.sel,poignees:_ml.outil==='selection',
     comparaison:_ml.comparaison,apercu:_mlxApercu(),
     echelle:_ml.outil==='echelle'||!!(_ml.annot.ech&&!_ml.annot.ech.ok)});
+  // LE BORD TROUVÉ SEUL, en liseré bleu, tant que l'outil Échelle est armé et
+  // que l'échelle n'a pas bougé depuis : le coach voit ce qui a été mesuré.
+  const trouve=_ml.echEllipse, ech2=_ml.annot.ech;
+  if(_ml.outil==='echelle'&&trouve&&ech2&&trouve.p===ech2.p){
+    const sx=R.vw/trouve.w, sy=R.vh/trouve.h;
+    g.save(); g.setLineDash([]);
+    g.beginPath();
+    g.ellipse(R.ox+trouve.cx*sx*R.s,R.oy+trouve.cy*sy*R.s,trouve.a*sx*R.s,trouve.b*sy*R.s,Math.atan2(trouve.uy,trouve.ux),0,2*Math.PI);
+    g.lineWidth=3.5; g.strokeStyle='rgba(0,0,0,.55)'; g.stroke();
+    g.lineWidth=1.6; g.strokeStyle=cyan; g.stroke();
+    g.restore();
+  }
   // LA ZONE SUIVIE, pendant le suivi d'une trajectoire : on voit ce que le
   // suiveur regarde.
   if(_ml.mode==='trajsuivi'&&_ml.trajZone){

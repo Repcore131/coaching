@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1392';
+window.RC_BUILD='1393';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -92580,8 +92580,12 @@ function annotValide(doc){
   // en millimètres, d'où vient la cote, et `ok` une fois enregistrée. Sans
   // ses deux points elle tombe ; un diamètre hors de 10 à 60 cm n'est pas un
   // disque — il tombe seul, et l'échelle reste à compléter.
+  // SES DEUX POINTS SONT AU DIXIÈME (build 1393) : le bord trouvé seul l'est au
+  // dixième de pixel, et des millièmes entiers de l'image en perdraient la
+  // moitié. Les tracés, eux, restent en millièmes entiers.
   const E=doc.ech&&typeof doc.ech==='object'?doc.ech:null;
-  const ep=E?_annotPoints(E.p,2,2):null;
+  const EP=/^\d{1,4}(\.\d)?,\d{1,4}(\.\d)? \d{1,4}(\.\d)?,\d{1,4}(\.\d)?$/;
+  const ep=E&&typeof E.p==='string'&&EP.test(E.p.trim())&&E.p.trim().split(/[ ,]/).every(n=>Number(n)<=1000)?E.p.trim():null;
   if(ep){
     const ech={p:ep};
     const mm=num(E.mm,100,600);
