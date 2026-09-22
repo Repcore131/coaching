@@ -2873,12 +2873,30 @@ function _mlxLongueur(pts){
   return l;
 }
 /**
+ * PURE. L'amplitude d'un ensemble de points : les deux points les plus
+ * éloignés, et leur distance — la plus grande longueur que le mouvement
+ * couvre, quel que soit le nombre d'allers-retours. En pixels d'écran comme
+ * les points reçus.
+ * @param {number[][]} l
+ * @returns {{a:number[], b:number[], d:number}|null}
+ */
+function mlAmplitude(l){
+  if(!Array.isArray(l)||l.length<2) return null;
+  let best={a:l[0],b:l[1],d:-1};
+  for(let i=0;i<l.length;i++) for(let j=i+1;j<l.length;j++){
+    const d=Math.hypot(l[j][0]-l[i][0],l[j][1]-l[i][1]);
+    if(d>best.d) best={a:l[i],b:l[j],d};
+  }
+  return best;
+}
+/**
  * PURE. Ce que mesure un tracé, et où l'écrire. Les points sont ceux de
  * l'écran ; `s` ramène l'écran à la vidéo (R.s), `mmpx` la vidéo au monde.
  * Rend null pour un tracé qui ne se mesure pas : un angle dit déjà ses
  * degrés, un texte et un repère n'ont pas de longueur.
- *   ligne, flèche → sa longueur ; trajectoire, courbe → la distance
- *   parcourue ; cercle → son diamètre ; zone, rectangle → largeur × hauteur.
+ *   ligne, flèche → sa longueur ; trajectoire, courbe → son AMPLITUDE, la
+ *   plus grande distance entre deux de ses points (1401 : plus le chemin
+ *   parcouru) ; cercle → son diamètre ; zone, rectangle → largeur × hauteur.
  * Le point rendu est le CENTRE du texte, avant le décalage `mo`.
  * @param {Annot} a
  * @param {number[][]} pts
@@ -2905,20 +2923,19 @@ function mlMesureTrace(a,pts,s,mmpx,k){
       return {x,y,txt:mlLongueurTexte(mm(Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1])))};
     }
     case 'libre': case 'courbe':{
+      // UNE LONGUEUR, PAS LE CHEMIN PARCOURU (build 1401, Kevin : « ton calcul
+      // de taille doit ne prendre qu'une longueur, pas l'ensemble des
+      // allers-retours »). Une trajectoire suivie sur huit répétitions
+      // additionnait chaque montée et chaque descente — 4,75 m pour une barre
+      // qui parcourt un demi-mètre. La mesure est désormais l'AMPLITUDE : la
+      // plus grande distance entre deux points de la trajectoire. Un seul
+      // aller donne la même valeur qu'avant ; des allers-retours sur le même
+      // chemin ne s'additionnent plus.
       const l=a.t==='courbe'?mlCatmull(pts,12):pts;
-      const tot=_mlxLongueur(l);
-      if(!(tot>0)) return null;
-      // Au milieu du CHEMIN, pas au point du milieu : une trajectoire dense
-      // au départ mettrait sinon sa mesure près de son début.
-      let acc=0, i=1;
-      for(;i<l.length;i++){
-        const d=Math.hypot(l[i][0]-l[i-1][0],l[i][1]-l[i-1][1]);
-        if(acc+d>=tot/2) break;
-        acc+=d;
-      }
-      const A=l[Math.min(i,l.length-1)-1], B=l[Math.min(i,l.length-1)];
-      const [x,y]=aCote(A,B);
-      return {x,y,txt:mlLongueurTexte(mm(tot))};
+      const d=mlAmplitude(l);
+      if(!d||!(d.d>0)) return null;
+      const [x,y]=aCote(d.a,d.b);
+      return {x,y,txt:mlLongueurTexte(mm(d.d))};
     }
     case 'cercle':{
       const r=Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]);

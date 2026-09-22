@@ -47191,6 +47191,13 @@ async function testExercices(){
       if(tx('ligne',[[100,100],[100,600]])!=='75,0 cm') return _echec('ligne : '+tx('ligne',[[100,100],[100,600]]));
       if(tx('fleche',[[100,100],[100,600]])!=='75,0 cm') return _echec('flèche : '+tx('fleche',[[100,100],[100,600]]));
       if(tx('libre',[[700,300],[700,450],[700,600]])!=='45,0 cm') return _echec('trajectoire : '+tx('libre',[[700,300],[700,450],[700,600]]));
+      // UNE LONGUEUR, PAS LES ALLERS-RETOURS (1401) : trois montées et deux
+      // descentes sur le même chemin mesurent une seule montée.
+      const ar=[[700,300],[700,600],[700,300],[700,600],[700,300],[700,600]];
+      if(tx('libre',ar)!=='45,0 cm') return _echec('les allers-retours s’additionnent : '+tx('libre',ar));
+      const am=mlAmplitude([[0,0],[3,4],[1,1]]);
+      if(!am||am.d!==5) return _echec('amplitude : '+JSON.stringify(am));
+      if(mlAmplitude([[1,1]])!==null) return _echec('un point seul a une amplitude');
       if(tx('cercle',[[250,650],[300,650]])!=='Ø 8,6 cm') return _echec('cercle : '+tx('cercle',[[250,650],[300,650]]));
       if(tx('zone',[[600,100],[800,200]])!=='17,1 × 15,0 cm') return _echec('zone : '+tx('zone',[[600,100],[800,200]]));
       if(M('angle',[[1,1],[2,2],[3,3]])||M('point',[[1,1],[2,2]])||M('texte',[[1,1]])) return _echec('un angle, un repère ou un texte porte une longueur');
