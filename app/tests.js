@@ -309,16 +309,22 @@ async function testExercices(){
       // qui avait fait exactement ce qu'on lui demandait. Depuis B3.2, ce
       // chiffre serait faux toutes les semaines qui portent un ecart.
       ok('B3.13 — la comparaison porte sur la semaine effective',(()=>{
-        const s=String(ecartPrescritRealise);
+        // DEPUIS LE 1389, LE PREVU D'UNE SEMAINE SE CALCULE DANS
+        // volumePrescritSemaine — partage avec la teinte « Evolution eleve ».
+        // La comparaison doit l'appeler, et c'est LUI qui doit lire la
+        // semaine effective avant le gabarit.
+        if(String(ecartPrescritRealise).indexOf('volumePrescritSemaine(')<0)
+          return _echec('la comparaison ne lit plus le prévu de la semaine');
+        const s=String(volumePrescritSemaine);
         if(s.indexOf('getSemaineEffective(')<0)
           return _echec('la comparaison lit encore le gabarit seul');
         // ET UN ATHLETE SANS BLOC DATE NE PERD RIEN : le repli sur le gabarit
         // reste ecrit, apres.
-        const i=s.indexOf('getSemaineEffective('), j=s.indexOf('user.sessions_config||[]');
+        const i=s.indexOf('getSemaineEffective('), j=s.indexOf('user.sessions_config)||[]');
         if(j<0) return _echec('le repli sur le gabarit a disparu');
         if(!(i<j)) return _echec('le gabarit passe encore devant la semaine effective');
         // ON NE DIVISE PAS PAR ZERO POUR ANNONCER UN DEPASSEMENT INFINI.
-        return s.indexOf('p>0')>=0
+        return String(ecartPrescritRealise).indexOf('p>0')>=0
           ?true:_echec('la regle d\'abstention sans prescription a saute');})());
       ok('B3.13 — une semaine de decharge se compare a ce qui etait prevu POUR ELLE',(()=>{
         const u={email:'a@x.fr',sessions:[],
@@ -38578,6 +38584,51 @@ async function testExercices(){
       if(_corpsNb(100.94)!=='100,9') return _echec('_corpsNb rend « '+_corpsNb(100.94)+' »');
       if(_corpsNb(39)!=='39') return _echec('_corpsNb ajoute une décimale inutile : '+_corpsNb(39));
       if(_corpsNb(0)!=='0') return _echec('_corpsNb ne sait pas dire zéro');
+      return true;})());
+
+    ok('LA TEINTE DIT LA SEMAINE DU PROGRAMME, ENTIÈRE — PAS LES SÉANCES DÉJÀ FAITES',(()=>{
+      // Kevin, 22/09/2026 : « je parle de la semaine dans sa globalité, le
+      // volume grâce au programme, pas qui se remplit au fur et à mesure ».
+      const J=864e5, t=Date.now();
+      const bil=[{date:t-90*J,'bil-chest':'106'},{date:t-2*J,'bil-chest':'107.4'}];
+      const cfg=[{active:true,name:'A',exercises:[{name:'Développé couché',series:'4',reps:'8'},{name:'Squat',series:'5',reps:'5'}]},
+        {active:true,name:'B',exercises:[{name:'Développé couché',series:'4',reps:'8'}]},
+        {active:false},{active:false},{active:false},{active:false},{active:false}];
+      const base={id:'P1',email:'p1@t.fr',role:'athlete',gender:'H',bilans:bil,sessions_config:cfg,sessions:[]};
+      const sv=_corpsVue;
+      try{
+        _corpsVue='face';
+        // LE PRÉVU COMPTE LES DEUX CRÉNEAUX : la semaine entière, pas une séance.
+        const prevu=volumePrescritSemaine(base,new Date()).muscles;
+        if(!(prevu.PECTORAUX>=8)) return _echec('le volume prévu ne compte pas les deux créneaux : '+JSON.stringify(prevu));
+        const lire=x=>{
+          const b=document.createElement('div'); b.innerHTML=_htmlCorpsCadre(x);
+          return {lt:[...b.querySelectorAll('.cc-corps-lt')].map(e=>e.textContent).join(' | '),
+            lu:(b.querySelector('.cc-corps-lu')||{}).textContent||'', calque:!!b.querySelector('.cc-corps-calque')};
+        };
+        // AUCUNE SÉANCE FAITE : la semaine programmée teinte déjà la silhouette.
+        const r0=lire(base);
+        if(!r0.calque) return _echec('aucune séance faite : la semaine programmée ne teinte rien');
+        if(!/séries programmées la semaine du/.test(r0.lt)) return _echec('la légende ne dit pas le programme : '+r0.lt);
+        if(/en cours/.test(r0.lt)) return _echec('la semaine du programme se dit « en cours »');
+        if(!/^Séries programmées : /.test(r0.lu)) return _echec('la lecture à voix haute ne dit pas le programme : '+r0.lu);
+        if(!/Pectoraux : 8 séries/.test(r0.lu)) return _echec('les pectoraux ne disent pas leurs 8 séries programmées : '+r0.lu);
+        // UNE SÉANCE FAITE NE CHANGE RIEN : la teinte ne se remplit pas au fur et à mesure.
+        const serie=()=>({weight:'60',reps:'8',rir:'2',done:true});
+        // Une ADRESSE PAR VARIANTE : le volume réalisé se met en cache par
+        // adresse et par semaine, et la variante d'avant y resterait.
+        const fait=Object.assign({},base,{email:'p2@t.fr',sessions:[{id:'s1',date:t-J,data:{'Développé couché':{sets:[serie(),serie(),serie(),serie()]}}}]});
+        const r1=lire(fait);
+        if(r1.lu!==r0.lu) return _echec('une séance faite change la teinte : « '+r0.lu+' » → « '+r1.lu+' »');
+        // SANS PROGRAMME : les séries faites, et la légende le dit.
+        const r2=lire(Object.assign({},fait,{email:'p3@t.fr',sessions_config:[]}));
+        if(!r2.calque) return _echec('sans programme, la semaine faite ne teinte plus rien');
+        if(!/pas de programme actif/.test(r2.lt)) return _echec('sans programme, le repli ne se dit pas : '+r2.lt);
+        if(!/^Séries de la semaine : /.test(r2.lu)) return _echec('sans programme, la lecture dit encore « programmées » : '+r2.lu);
+        // L'ÉCART PRESCRIT / RÉALISÉ lit le même prévu, calculé au même endroit.
+        const ec=ecartPrescritRealise(fait).find(x=>x.muscle==='PECTORAUX');
+        if(!ec||ec.prescrit!==Math.round(prevu.PECTORAUX*10)/10) return _echec('l’écart prescrit/réalisé ne lit plus le même prévu : '+JSON.stringify(ec));
+      } finally { _corpsVue=sv; }
       return true;})());
 
     ok('PAS D’ÉTIQUETTE DE MUSCLE, MAIS LA TEINTE DE VOLUME EST REVENUE',(()=>{
