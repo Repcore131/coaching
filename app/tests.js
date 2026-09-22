@@ -46253,6 +46253,120 @@ async function testExercices(){
       if(document.getElementById('mle')) return _echec('la fenêtre reste ouverte');
       return true;});
 
+    okA('MLX — tracer au clic puis au clic, pendant la lecture, en tirets ou en pointillé',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // LA DONNÉE : le style se garde, l'inconnu tombe, un texte n'en a pas.
+      const dv=annotValide({v:1,majLe:0,leg:{},a:[
+        {id:'a',n:'A',t:'ligne',c:'#ffffff',e:4,d:0,f:9000,p:'100,100 900,100',st:'t'},
+        {id:'b',n:'B',t:'cercle',c:'#ffffff',e:4,d:0,f:9000,p:'500,500 600,500',st:'p'},
+        {id:'c',n:'C',t:'ligne',c:'#ffffff',e:4,d:0,f:9000,p:'100,100 900,100',st:'x'},
+        {id:'e',n:'E',t:'texte',c:'#ffffff',e:4,d:0,f:9000,p:'500,50',x:'OK',st:'t'}]});
+      const sts=dv.a.map(a=>a.st||'-').join();
+      if(sts!=='t,p,-,-') return _echec('styles gardés : '+sts);
+      // LE DESSIN : une ligne pleine est continue, les tirets ont des trous,
+      // le pointillé en a davantage.
+      const trous=s=>{
+        const cv=document.createElement('canvas'); cv.width=400; cv.height=400;
+        const g=cv.getContext('2d');
+        const a={id:'x',n:'',t:'ligne',c:'#ffffff',e:4,d:0,f:9000,p:'100,500 900,500',et:0}; if(s) a.st=s;
+        mlDessinerAnnotations(g,{s:1,ox:0,oy:0,vw:400,vh:400},{v:1,majLe:0,leg:{on:0},a:[a]},100);
+        const px=g.getImageData(0,200,400,1).data; let n=0, prec=null;
+        for(let x=60;x<340;x++){ const on=px[x*4]>128; if(prec!==null&&on!==prec) n++; prec=on; }
+        return n;
+      };
+      const tP=trous(''), tT=trous('t'), tD=trous('p');
+      if(tP!==0) return _echec('la ligne pleine a des trous : '+tP);
+      if(tT<6) return _echec('les tirets ne se voient pas : '+tT);
+      if(tD<=tT) return _echec('le pointillé n’est pas plus serré que les tirets : '+tD+' / '+tT);
+      if(ML_TRAITS.length!==3) return _echec('trois styles attendus');
+      // LE GESTE, dans le laboratoire.
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
+      const svR=window._mlVideoRect, svTps=window._mlxTempsMs;
+      let svPref=null; try{ svPref=localStorage.getItem(ML_PREF_LECTURE); }catch(e){}
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
+        _r28Monter([_r28Video({segments:[]})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        _ml.dureeMs=20000;
+        // L'IMAGE : 400 × 700 px, en haut à gauche du calque ; l'instant se règle à la main.
+        window._mlVideoRect=()=>({s:1,ox:0,oy:0,vw:400,vh:700});
+        let tps=3000; window._mlxTempsMs=()=>tps;
+        const calque=document.getElementById('ml-calque'), b=calque.getBoundingClientRect();
+        const ev=(type,x,y,btn)=>calque.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:1,
+          pointerType:'mouse',clientX:b.left+x,clientY:b.top+y,buttons:btn?1:0}));
+        const clic=(x,y)=>{ ev('pointerdown',x,y,1); ev('pointerup',x,y,0); };
+        const touche=k=>document.dispatchEvent(new KeyboardEvent('keydown',{key:k,bubbles:true}));
+        const v=_mlVideo(); let pauses=0; const svP=v.pause;
+        v.pause=function(){ pauses++; return svP.call(this); };
+        try{
+          // UN CLIC, PUIS UN CLIC : la ligne se pose sans bouton tenu.
+          mlOutil('ligne'); mlTracerEnLecture(false);
+          clic(40,70);
+          if(!_ml.trace||!_ml.trace.clic||_ml.annot.a.length) return 'un clic sans glisser ne commence pas le tracé';
+          if(!/arrivée/.test(document.getElementById('mlx-outils').textContent)) return 'rien ne dit d’attendre l’arrivée';
+          ev('pointermove',200,140,0);
+          if(_ml.trace.pts[1].join()!=='500,200') return 'l’arrivée ne suit pas la souris : '+_ml.trace.pts[1];
+          tps=3400; clic(360,210);
+          let a=_ml.annot.a[0];
+          if(!a||a.t!=='ligne'||a.p!=='100,100 900,300') return 'la ligne au clic-clic : '+JSON.stringify(a);
+          if(a.d!==3000) return 'le tracé commence au clic d’arrivée ('+a.d+'), pas au premier';
+          if(_ml.trace) return 'le tracé reste en cours';
+          // LE GLISSER MARCHE TOUJOURS, et le style en cours se pose.
+          mlStyleTrait('t');
+          ev('pointerdown',40,350,1); ev('pointermove',200,350,1); ev('pointermove',360,350,1); ev('pointerup',360,350,0);
+          a=_ml.annot.a[1];
+          if(!a||a.st!=='t'||a.p!=='100,500 900,500') return 'le glisser en tirets : '+JSON.stringify(a);
+          // DEUX CLICS AU MÊME ENDROIT ne posent rien ; Échap renonce.
+          clic(100,600); clic(101,601);
+          if(_ml.annot.a.length!==2||_ml.trace) return 'un tracé de zéro pixel est posé';
+          clic(100,600); touche('Escape');
+          if(_ml.trace) return 'Échap ne renonce pas';
+          // LA TRAJECTOIRE SUIT LA SOURIS SANS BOUTON, et Entrée la termine.
+          mlStyleTrait('p'); mlOutil('libre');
+          tps=5000; clic(40,600);
+          for(let i=1;i<=20;i++) ev('pointermove',40+i*14,600-Math.sin(i/20*Math.PI)*200,0);
+          tps=6000; touche('Enter');
+          a=_ml.annot.a[2];
+          if(!a||a.t!=='libre'||a.st!=='p'||mlDecoderTrait(a.p).length<4) return 'la trajectoire suivie : '+JSON.stringify(a);
+          if(a.d!==5000) return 'la trajectoire commence à '+a.d+' et non au premier toucher';
+          // SANS LA CASE, dessiner fige l'image ; AVEC, la vidéo continue.
+          pauses=0; mlOutil('ligne'); clic(40,650);
+          if(!pauses) return 'sans la case, le dessin ne fige pas l’image';
+          _mlxAnnulerTrace();
+          pauses=0; mlTracerEnLecture(true); clic(40,650);
+          if(pauses) return 'avec la case, le dessin fige quand même l’image';
+          const cc=document.getElementById('mlx-en-lecture');
+          if(!cc||!cc.checked) return 'la case n’est pas cochée à l’écran';
+          _mlxAnnulerTrace();
+          // L'ÉDITEUR change le style du tracé choisi, et le plein efface la clé.
+          mlAnnotChoisir(_ml.annot.a[0].id,true);
+          if(document.querySelectorAll('#mlx-editeur .mlx-trait').length!==3) return 'l’éditeur n’a pas ses trois traits';
+          mlAnnotOption('st','p');
+          if(_ml.annot.a[0].st!=='p') return 'le style du tracé choisi ne change pas';
+          mlAnnotOption('st','');
+          if('st' in _ml.annot.a[0]) return 'revenir au plein laisse la clé';
+        } finally { v.pause=svP; }
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      catch(e){ msg='exception : '+e.message; }
+      finally {
+        window._mlVideoRect=svR; window._mlxTempsMs=svTps;
+        try{ if(svPref===null) localStorage.removeItem(ML_PREF_LECTURE); else localStorage.setItem(ML_PREF_LECTURE,svPref); }catch(e){}
+        try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT; CLOUD.pushOne=svPush;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      return msg?_echec(msg):true;
+    });
+
     okA('R28 — le service worker ne reconduit pas motion-lab.js d’une version à l’autre',async()=>{
       let src='';
       try{ src=await (await fetch('./sw.js',{cache:'no-store'})).text(); }catch(e){ return _echec('sw.js illisible'); }

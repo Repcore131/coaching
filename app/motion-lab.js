@@ -57,9 +57,10 @@
  *   rec:any, correction:{motion:any, blob:Blob|null, blobUrl:string, statut:'brouillon'|'envoi'|'envoye'|'erreur', erreur:string}|null,
  *   cartes:{id:string, aMs:number, dureeMs:number, texte:string}[], lecteur:any,
  *   annot:DocAnnot, annotInit:string, outil:OutilMl, couleur:string, epaisseur:number, sel:string|null,
- *   trace:{t:TypeAnnot, pts:number[][], lb?:string[]}|null, curseur:number[]|null, annule:string[], refait:string[],
+ *   trace:TraceEnCours|null, curseur:number[]|null, annule:string[], refait:string[],
  *   original:boolean, comparaison:boolean, guide:{m:ModeleAnnot, i:number}|null, repereAnat:number,
- *   relier:boolean, phrase:string, tailleTexte:string, onglet:string, jetonVseq:number
+ *   relier:boolean, phrase:string, tailleTexte:string, onglet:string, jetonVseq:number,
+ *   enLecture:boolean, style:string
  * }} EtatMl
  */
 /** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'|'repere'|'repsuivi'|'annotsuivi'} ModeMl */
@@ -2400,7 +2401,13 @@ function mlPhrases(ctx){
  * hauteur), en texte « x,y x,y » — le format des traits de la correction.
  * @typedef {{id:string, n:string, t:TypeAnnot, c:string, e:number, d:number, f:number, p:string,
  *   k?:[number,string][], x?:string, ts?:string, tf?:number, tc?:number, cb?:number,
- *   lb?:string[], rel?:number, et?:number, lg?:number, h?:number, seg?:string}} Annot
+ *   lb?:string[], rel?:number, et?:number, lg?:number, h?:number, seg?:string, st?:string}} Annot
+ */
+/**
+ * Le tracé en cours de pose. `clic` : commencé d'un clic sans glisser, il
+ * attend le clic d'arrivée. `d0` : l'instant du premier toucher — c'est lui
+ * qui ouvre la durée du tracé, surtout quand la vidéo tourne pendant le geste.
+ * @typedef {{t:TypeAnnot, pts:number[][], lb?:string[], clic?:boolean, d0?:number}} TraceEnCours
  */
 /** @typedef {{on:number, titre:string, pos:string, taille:string, fond:string, op:number}} Legende */
 /** @typedef {{v:1, majLe:number, leg:Legende, a:Annot[]}} DocAnnot */
@@ -2437,6 +2444,14 @@ const ML_REPERES_ANAT=Object.freeze(['Tête','Épaule','Coude','Poignet','Hanche
 const ML_PHRASES=Object.freeze(['DESCENDS PLUS BAS','GARDE LE GENOU DANS L’AXE','BARRE PLUS PROCHE DU CORPS',
   'TRÈS BONNE POSITION','GAINE AVANT DE DESCENDRE','COUDES SOUS LA BARRE']);
 const ML_ANNOT_DUREE_MS=4000;     // la durée d'un tracé posé hors séquence
+// LES STYLES DE TRAIT (build 1382, Kevin : « pouvoir faire des tracés en
+// pointillé, pas que ligne pleine »). Plein est le défaut, donc ABSENT de la
+// donnée : `st` ne s'écrit que pour les tirets ('t') et le pointillé ('p').
+/** @type {ReadonlyArray<[string,string]>} */
+const ML_TRAITS=Object.freeze([['','Plein'],['t','Tirets'],['p','Pointillé']]);
+// La case « Tracer pendant la lecture », retenue d'une ouverture à l'autre sur
+// CET appareil : c'est une manière de travailler, pas une donnée du dossier.
+const ML_PREF_LECTURE='rc-ml-tracer-en-lecture';
 const ML_EPAISSEUR_DEFAUT=4;
 // LES SEPT MODÈLES D'ANNOTATION. Un modèle arme les outils l'un après l'autre,
 // avec leur couleur et leur nom : le coach dessine, et le suivant s'arme.
@@ -2709,10 +2724,14 @@ function _mlxDessinerUne(g,a,pts,k,R,sMs,comparaison){
   g.strokeStyle=a.c; g.fillStyle=a.c; g.lineWidth=lw;
   // UN LISERÉ SOMBRE sous chaque trait : un blanc sur un mur clair, un jaune
   // sur un sol doré se perdraient sinon dans l'image.
+  // LE STYLE DU TRAIT, proportionné à l'épaisseur : des tirets deux fois et
+  // demie plus longs que le trait n'est large, ou des points ronds de son
+  // diamètre. Le liseré sombre suit le même rythme, tiret sous tiret.
+  const tirets=a.st==='t'?[lw*2.4+5*k,lw*1.6+4*k]:a.st==='p'?[0.01,lw*1.9+2.5*k]:[];
   /** @param {()=>void} tracer */
   const avecLisere=tracer=>{
-    g.save(); g.strokeStyle='rgba(0,0,0,.45)'; g.lineWidth=lw+2.5*k; tracer(); g.stroke(); g.restore();
-    tracer(); g.stroke();
+    g.save(); g.strokeStyle='rgba(0,0,0,.45)'; g.lineWidth=lw+2.5*k; g.setLineDash(tirets); tracer(); g.stroke(); g.restore();
+    g.save(); g.setLineDash(tirets); tracer(); g.stroke(); g.restore();
   };
   const [x0,y0]=pts[0];
   switch(a.t){
@@ -2760,7 +2779,10 @@ function _mlxDessinerUne(g,a,pts,k,R,sMs,comparaison){
         // LA ZONE DE SURBRILLANCE : un voile de la couleur, un bord fin en
         // tirets. Elle désigne, elle ne cache pas.
         g.save(); g.globalAlpha=0.22; g.fillRect(x,y,w,h); g.restore();
-        g.save(); g.lineWidth=Math.max(1,1.5*k); g.setLineDash([6*k,4*k]); g.strokeRect(x,y,w,h); g.restore();
+        g.save(); g.lineWidth=Math.max(1,1.5*k);
+        // Son bord est en tirets de naissance ; en pointillé, des points ronds.
+        if(a.st==='p'){ g.lineWidth=Math.max(1.5,2.2*k); g.setLineDash([0.01,4.5*k]); } else g.setLineDash([6*k,4*k]);
+        g.strokeRect(x,y,w,h); g.restore();
       } else avecLisere(()=>{ g.beginPath(); g.rect(x,y,w,h); });
       break;
     }
@@ -3162,7 +3184,7 @@ function _mlxBorne(x){ return Math.max(0,Math.min(1000,Math.round(x))); }
  * choisie si la tête de lecture y est, quatre secondes sinon.
  * @param {TypeAnnot} t
  * @param {number[][]} pts
- * @param {{x?:string, lb?:string[], rel?:number, ts?:string, tf?:number}} [extra]
+ * @param {{x?:string, lb?:string[], rel?:number, ts?:string, tf?:number, d0?:number}} [extra]
  * @returns {Annot|null}
  */
 function _mlxCreer(t,pts,extra){
@@ -3172,7 +3194,10 @@ function _mlxCreer(t,pts,extra){
   if(!bornes) return null;
   const propres=pts.slice(0,bornes[1]).map(p=>[_mlxBorne(p[0]),_mlxBorne(p[1])]);
   if(propres.length<bornes[0]) return null;
-  const s=_mlxTempsMs(), seq=_mlActif(), duree=_ml.dureeMs||s+ML_ANNOT_DUREE_MS;
+  // LE TRACÉ COMMENCE AU PREMIER TOUCHER, pas au dernier : la vidéo a pu
+  // tourner pendant le geste, et le coach dessinait ce qu'il voyait alors.
+  const s=(extra&&typeof extra.d0==='number'&&isFinite(extra.d0))?Math.max(0,Math.round(extra.d0)):_mlxTempsMs();
+  const seq=_mlActif(), duree=_ml.dureeMs||s+ML_ANNOT_DUREE_MS;
   let d=s, f=Math.min(duree,s+ML_ANNOT_DUREE_MS);
   if(seq&&s>=seq.debutMs&&s<=seq.finMs){ d=seq.debutMs; f=seq.finMs; }
   if(f<=d){ d=Math.max(0,duree-ML_ANNOT_DUREE_MS); f=duree; }
@@ -3187,6 +3212,7 @@ function _mlxCreer(t,pts,extra){
   const a={id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),n,t,c,e:_ml.epaisseur,d,f,
     p:mlEncoderTrait(propres)};
   if(t==='texte'){ a.x=x||n; a.ts=extra&&extra.ts||'m'; a.tf=extra&&typeof extra.tf==='number'?extra.tf:1; }
+  else if(_ml.style==='t'||_ml.style==='p') a.st=_ml.style;
   if(t==='point'){
     if(extra&&Array.isArray(extra.lb)&&extra.lb.some(Boolean)) a.lb=extra.lb.slice(0,propres.length).map(l=>String(l||'').slice(0,ANNOT_ETIQ_MAX));
     if(propres.length>1&&(!extra||extra.rel!==0)) a.rel=1;
@@ -3253,6 +3279,37 @@ function mlEpaisseur(v){
   if(a&&a.e!==e){ _mlxChanger(a.id,x=>({...x,e})); _mlxMajEditeur(); _mlDessinerCalque(); _mlMajEnregistrer(); }
   return true;
 }
+/**
+ * Le style du trait des tracés à venir — et, en sélection, celui du tracé
+ * choisi, comme la couleur.
+ * @param {string} s  '' (plein), 't' (tirets) ou 'p' (pointillé)
+ */
+function mlStyleTrait(s){
+  if(!_ml||!ML_TRAITS.some(x=>x[0]===s)) return false;
+  _ml.style=s;
+  const a=_ml.outil==='selection'?_mlxAnnot(_ml.sel):null;
+  if(a&&a.t!=='texte'&&(a.st||'')!==s) mlAnnotOption('st',s);
+  else { _mlxMajOutils(); _mlDessinerCalque(); }
+  return true;
+}
+/** @returns {boolean} la case « Tracer pendant la lecture », telle que cet appareil l'a laissée */
+function _mlxPrefLecture(){
+  try{ return localStorage.getItem(ML_PREF_LECTURE)==='1'; }catch(e){ return false; }
+}
+/**
+ * « TRACER PENDANT LA LECTURE ». Éteinte — le défaut —, dessiner fige l'image :
+ * un tracé se pose sur une image, pas sur un mouvement qui défile sous le
+ * doigt. Allumée, la vidéo continue : le coach suit la barre du doigt pendant
+ * qu'elle monte, et le tracé commence à l'instant du premier toucher.
+ * @param {boolean} oui
+ */
+function mlTracerEnLecture(oui){
+  if(!_ml) return false;
+  _ml.enLecture=!!oui;
+  try{ if(_ml.enLecture) localStorage.setItem(ML_PREF_LECTURE,'1'); else localStorage.removeItem(ML_PREF_LECTURE); }catch(e){}
+  _mlxMajOutils();
+  return true;
+}
 /** Le repère anatomique que le prochain toucher de l'outil Point posera. @param {number} i */
 function mlRepereAnat(i){
   if(!_ml) return false;
@@ -3271,6 +3328,13 @@ function mlPhrase(i){
 function mlTerminerTrace(){
   const tr=_ml&&_ml.trace;
   if(!_ml||!tr) return false;
+  // UN TRACÉ COMMENCÉ D'UN CLIC se termine là où il en est : Entrée vaut le
+  // clic d'arrivée — utile pour une trajectoire suivie à la souris.
+  if(tr.clic){
+    const v=_mlVideo(), R=v?_mlVideoRect(v):null;
+    if(R) _mlxFinirTire(tr,R); else _mlxAnnulerTrace();
+    return true;
+  }
   // UN DOUBLE-CLIC POSE DEUX FOIS LE MÊME POINT : on le retire.
   /** @type {number[][]} */
   const pts=[];
@@ -3282,8 +3346,8 @@ function mlTerminerTrace(){
     pts.push(p); lb.push((tr.lb||[])[i]||'');
   });
   _ml.trace=null;
-  if(tr.t==='courbe'&&pts.length>=2) _mlxCreer('courbe',pts);
-  else if(tr.t==='point'&&pts.length>=1) _mlxCreer('point',pts,{lb,rel:_ml.relier?1:0});
+  if(tr.t==='courbe'&&pts.length>=2) _mlxCreer('courbe',pts,{d0:tr.d0});
+  else if(tr.t==='point'&&pts.length>=1) _mlxCreer('point',pts,{lb,rel:_ml.relier?1:0,d0:tr.d0});
   else { _mlxMajOutils(); _mlDessinerCalque(); }
   return true;
 }
@@ -3347,13 +3411,19 @@ function _mlxPointer(e,calque){
     calque.addEventListener('pointercancel',fin);
     return;
   }
+  // LE CHAMP DU NOM RELÂCHE LE CLAVIER. Un tracé neuf y met le curseur, et
+  // toucher la vidéo ne le lui reprend pas (pointerdown est empêché) : Échap
+  // et Entrée, pendant un tracé commencé d'un clic, iraient au champ.
+  const af=document.activeElement;
+  if(af instanceof HTMLInputElement||af instanceof HTMLTextAreaElement) af.blur();
   // DESSINER FIGE L'IMAGE : un tracé se pose sur une image, pas sur un
-  // mouvement qui défile sous le doigt.
-  try{ v.pause(); }catch(x){}
+  // mouvement qui défile sous le doigt — SAUF si le coach a allumé « Tracer
+  // pendant la lecture ». Le texte fige toujours : il ouvre une saisie.
+  if(!_ml.enLecture||outil==='texte'){ try{ v.pause(); }catch(x){} }
   const p=N(e.clientX,e.clientY);
   if(outil==='texte'){ _mlxTexteNouveau(p); return; }
   if(outil==='angle'||outil==='courbe'||outil==='point'){
-    if(!_ml.trace||_ml.trace.t!==outil) _ml.trace={t:outil,pts:[],lb:[]};
+    if(!_ml.trace||_ml.trace.t!==outil) _ml.trace={t:outil,pts:[],lb:[],d0:sMs};
     const tr=_ml.trace;
     tr.pts.push(p);
     if(outil==='point'){
@@ -3362,19 +3432,33 @@ function _mlxPointer(e,calque){
       // LE REPÈRE SUIVANT S'ARME : épaule, puis coude, puis poignet.
       if(i>=0&&i<ML_REPERES_ANAT.length-1) _ml.repereAnat=i+1;
     }
-    if(outil==='angle'&&tr.pts.length>=3){ const pts=tr.pts.slice(0,3); _ml.trace=null; _mlxCreer('angle',pts); return; }
+    if(outil==='angle'&&tr.pts.length>=3){ const pts=tr.pts.slice(0,3), d0=tr.d0; _ml.trace=null; _mlxCreer('angle',pts,{d0}); return; }
     if((outil==='courbe'&&tr.pts.length>=24)||(outil==='point'&&tr.pts.length>=12)){ mlTerminerTrace(); return; }
     _mlxMajOutils(); _mlDessinerCalque();
     return;
   }
   // LES TRACÉS QU'ON TIRE : ligne, flèche, cercle, rectangle, zone, trajectoire.
+  // DEUX FAÇONS DE LES POSER (build 1382, Kevin : « cliquer une fois et une
+  // deuxième pour placer le point au lieu de devoir maintenir ») : glisser,
+  // comme avant — ou toucher sans glisser, puis toucher l'arrivée. Aucun
+  // réglage : c'est le premier geste qui le dit.
   const t=/** @type {TypeAnnot} */(outil);
-  _ml.trace={t,pts:outil==='libre'?[p]:[p,p]};
+  const enCours=_ml.trace;
+  if(enCours&&enCours.clic&&enCours.t===t){
+    // LE CLIC D'ARRIVÉE.
+    if(t==='libre') enCours.pts.push(p); else enCours.pts[1]=p;
+    _mlxFinirTire(enCours,R);
+    return;
+  }
+  _ml.trace={t,pts:outil==='libre'?[p]:[p,p],d0:sMs};
+  const x0=e.clientX, y0=e.clientY;
+  let loin=0;
   try{ calque.setPointerCapture(e.pointerId); }catch(x){}
   /** @param {PointerEvent} ev */
   const bouger=ev=>{
     const tr=_ml&&_ml.trace;
     if(!tr) return;
+    loin=Math.max(loin,Math.hypot(ev.clientX-x0,ev.clientY-y0));
     const q=N(ev.clientX,ev.clientY);
     if(tr.t==='libre'){
       const der=tr.pts[tr.pts.length-1];
@@ -3388,20 +3472,36 @@ function _mlxPointer(e,calque){
     calque.removeEventListener('pointercancel',fin);
     const tr=_ml&&_ml.trace;
     if(!_ml||!tr) return;
-    _ml.trace=null;
-    // UN TOUCHER SANS GLISSER NE POSE RIEN : il aurait donné un tracé de zéro
-    // pixel, invisible et pourtant compté.
-    const a0=tr.pts[0], a1=tr.pts[tr.pts.length-1];
-    const long=Math.hypot((a1[0]-a0[0])*R.vw*R.s/1000,(a1[1]-a0[1])*R.vh*R.s/1000);
-    if(tr.t==='libre'){
-      if(tr.pts.length>=2&&long+tr.pts.length>6) _mlxCreer('libre',mlSimplifierMax(tr.pts,ANNOT_PTS_MAX));
-      else _mlDessinerCalque();
-    } else if(long>=6) _mlxCreer(tr.t,tr.pts);
-    else _mlDessinerCalque();
+    // UN TOUCHER SANS GLISSER COMMENCE LE TRACÉ au lieu de ne rien poser :
+    // l'arrivée viendra du clic suivant, et la souris la montre d'ici là.
+    if(loin<6){
+      tr.clic=true;
+      tr.pts=tr.t==='libre'?[tr.pts[0]]:[tr.pts[0],tr.pts[0].slice()];
+      _mlxMajOutils(); _mlDessinerCalque();
+      return;
+    }
+    _mlxFinirTire(tr,R);
   };
   calque.addEventListener('pointermove',bouger);
   calque.addEventListener('pointerup',fin);
   calque.addEventListener('pointercancel',fin);
+}
+/**
+ * Un tracé tiré, terminé — au lâcher d'un glisser ou au clic d'arrivée.
+ * UN TRACÉ DE MOINS DE 6 PX NE SE POSE PAS : invisible, il serait pourtant
+ * compté, listé et envoyé.
+ * @param {TraceEnCours} tr
+ * @param {RectImage} R
+ */
+function _mlxFinirTire(tr,R){
+  if(!_ml) return;
+  _ml.trace=null;
+  const a0=tr.pts[0], a1=tr.pts[tr.pts.length-1];
+  const long=Math.hypot((a1[0]-a0[0])*R.vw*R.s/1000,(a1[1]-a0[1])*R.vh*R.s/1000);
+  const o={d0:tr.d0};
+  if(tr.t==='libre'&&tr.pts.length>=2&&long+tr.pts.length>6) _mlxCreer('libre',mlSimplifierMax(tr.pts,ANNOT_PTS_MAX),o);
+  else if(tr.t!=='libre'&&long>=6) _mlxCreer(tr.t,tr.pts,o);
+  else { _mlxMajOutils(); _mlDessinerCalque(); }
 }
 
 // ── LE TRACÉ CHOISI ────────────────────────────────────────────────────────
@@ -3546,6 +3646,7 @@ function mlAnnotOption(cle,val){
     else if(cle==='rel'||cle==='tc'){ if(val) o[cle]=1; else delete o[cle]; }
     else if(cle==='tf'&&[0,1,2].includes(Number(val))) o.tf=Number(val);
     else if(cle==='ts'&&['s','m','l'].includes(String(val))) o.ts=String(val);
+    else if(cle==='st'&&o.t!=='texte'){ if(val==='t'||val==='p') o.st=val; else delete o.st; }
     else if(cle==='cb'){
       const n=Number(String(val).replace(',','.'));
       if(String(val).trim()===''||!isFinite(n)) delete o.cb; else o.cb=Math.max(0,Math.min(180,Math.round(n)));
@@ -3813,11 +3914,14 @@ function _mlxApercu(){
   /** @type {TypeAnnot} */
   let t=tr.t;
   if((t==='angle'&&pts.length<3)||(t==='courbe'&&pts.length<2)) t='point';
+  // COMMENCÉ D'UN CLIC, rien encore de tiré : le départ se montre d'un point.
+  if(tr.clic&&(pts.length<2||Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1])<1)){ t='point'; pts=[pts[0]]; }
   const etape=_ml.guide?_ml.guide.m.etapes[_ml.guide.i]:null;
   const c=etape&&etape.t===tr.t?etape.c:_ml.couleur;
   /** @type {Annot} */
   const a={id:'_apercu',n:'',t,c,e:_ml.epaisseur,d:0,f:1e12,
-    p:mlEncoderTrait(pts.slice(0,64).map(p=>[_mlxBorne(p[0]),_mlxBorne(p[1])])),et:0};
+    p:mlEncoderTrait((pts.length>64?mlSimplifierMax(pts,64):pts).map(p=>[_mlxBorne(p[0]),_mlxBorne(p[1])])),et:0};
+  if(_ml.style==='t'||_ml.style==='p') a.st=_ml.style;
   if(t==='point'){
     if(pts.length>1&&(tr.t!=='point'||_ml.relier)) a.rel=1;
     if(tr.t==='point'&&tr.lb) a.lb=tr.lb.slice();
@@ -4447,7 +4551,8 @@ function mlOuvrir(email,videoId){
     rec:null,correction:null,cartes:[],lecteur:null,
     annot:annotDoc,annotInit:JSON.stringify(annotDoc),outil:'selection',couleur:ML_PALETTE[0].c,
     epaisseur:ML_EPAISSEUR_DEFAUT,sel:null,trace:null,curseur:null,annule:[],refait:[],original:false,
-    comparaison:false,guide:null,repereAnat:1,relier:true,phrase:'',tailleTexte:'m',onglet:'trace',jetonVseq:0};
+    comparaison:false,guide:null,repereAnat:1,relier:true,phrase:'',tailleTexte:'m',onglet:'trace',jetonVseq:0,
+    enLecture:_mlxPrefLecture(),style:''};
   go('s-coach-motion-lab');
   _mlRendre();
   return true;
@@ -4773,13 +4878,15 @@ function _mlxMajOutils(){
   const cours=_ml.trace&&(_ml.trace.t==='courbe'||_ml.trace.t==='point'||_ml.trace.t==='angle')?_ml.trace:null;
   /** @type {Object<string,string>} */
   const aides={selection:'Touche un tracé pour le choisir ; glisse-le, ou tire un de ses points.',
-    ligne:'Glisse sur la vidéo pour tirer une ligne.',fleche:'Glisse sur la vidéo : la pointe va là où tu lâches.',
-    libre:'Dessine la trajectoire au doigt ou à la souris, d’un seul geste.',
+    ligne:'Glisse sur la vidéo — ou touche le départ, puis l’arrivée.',
+    fleche:'Glisse sur la vidéo — ou touche le départ, puis la pointe.',
+    libre:'Dessine d’un seul geste — ou touche pour commencer, suis le mouvement à la souris, touche pour finir.',
     courbe:'Touche la vidéo point par point : la courbe passe par chacun. Entrée pour terminer.',
-    cercle:'Glisse du centre vers le bord.',rect:'Glisse d’un coin à l’autre.',
+    cercle:'Glisse du centre vers le bord — ou touche le centre, puis le bord.',
+    rect:'Glisse d’un coin à l’autre — ou touche un coin, puis l’autre.',
     angle:'Touche trois points — par exemple épaule, coude, poignet : l’angle au deuxième s’affiche.',
     point:'Touche les repères anatomiques un par un ; ils se relient. Entrée pour terminer.',
-    texte:'Touche la vidéo là où le texte doit apparaître.',zone:'Glisse pour surligner une zone.',
+    texte:'Touche la vidéo là où le texte doit apparaître.',zone:'Glisse pour surligner une zone — ou touche un coin, puis l’autre.',
     gomme:'Touche un tracé pour l’effacer.'};
   let h='<div class="mlx-outils">'+ML_OUTILS.map(x=>'<button type="button" class="mlx-outil" data-outil="'+x.o+'" '
     +'aria-pressed="'+(x.o===o)+'" onclick="mlOutil(\''+x.o+'\')" title="'+escapeHtml(x.lib+' ('+x.r.toUpperCase()+')')+'">'
@@ -4790,7 +4897,14 @@ function _mlxMajOutils(){
     +'<label class="mlx-perso" title="Couleur personnalisée"><input type="color" value="'+escapeHtml(_ml.couleur)+'" '
       +'aria-label="Couleur personnalisée" onchange="mlCouleur(this.value)"></label></div></div>'
     +'<div class="mlx-ligne"><span class="mlx-lab-s">Épaisseur</span><input type="range" min="1" max="12" step="1" value="'+_ml.epaisseur+'" '
-      +'aria-label="Épaisseur du trait" oninput="mlEpaisseur(this.value)"><span id="mlx-ep-val">'+_ml.epaisseur+' px</span></div>';
+      +'aria-label="Épaisseur du trait" oninput="mlEpaisseur(this.value)"><span id="mlx-ep-val">'+_ml.epaisseur+' px</span></div>'
+    +'<div class="mlx-ligne"><span class="mlx-lab-s">Trait</span><div class="mlx-chips mlx-chips-l" role="group" aria-label="Style du trait">'
+      +ML_TRAITS.map(([k,l])=>'<button type="button" class="mlx-chip mlx-trait" aria-pressed="'+(k===(_ml?.style||''))+'" onclick="mlStyleTrait(\''+k+'\')">'
+        +_mlxTraitIco(k)+l+'</button>').join('')+'</div></div>';
+  // LA LECTURE CONTINUE PENDANT LE GESTE, si le coach le veut. Proposé pour
+  // les outils qui dessinent ; le texte ouvre une saisie, il fige toujours.
+  if(o!=='selection'&&o!=='gomme'&&o!=='texte') h+='<label class="mlx-coche"><input type="checkbox" id="mlx-en-lecture"'
+    +(_ml.enLecture?' checked':'')+' onchange="mlTracerEnLecture(this.checked)"> Tracer pendant la lecture</label>';
   // LE MODÈLE EN COURS : l'étape, et de quoi la passer ou s'arrêter.
   const G=_ml.guide;
   if(G){
@@ -4809,6 +4923,10 @@ function _mlxMajOutils(){
     +'</div><div class="mlx-ligne"><span class="mlx-lab-s">Taille</span><div class="mlx-chips mlx-chips-l">'
     +[['s','Petite'],['m','Moyenne'],['l','Grande']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+(k===_ml?.tailleTexte)+'" onclick="mlTailleTexte(\''+k+'\')">'+l+'</button>').join('')
     +'</div></div>';
+  // COMMENCÉ D'UN CLIC : ce qu'attend le clic suivant, et de quoi renoncer.
+  if(_ml.trace&&_ml.trace.clic) h+='<div class="mlx-cours"><span>'+(_ml.trace.t==='libre'
+      ?'Suis le mouvement à la souris, puis touche pour finir (ou Entrée)':'Touche le point d’arrivée')+'</span><span class="mlx-esp"></span>'
+    +'<button type="button" class="mlx-b" onclick="mlAnnulerTrace()">Annuler</button></div>';
   if(cours) h+='<div class="mlx-cours"><span>'+(cours.t==='angle'?'Angle : point '+(cours.pts.length+1)+' sur 3'
       :cours.pts.length+' point'+(cours.pts.length>1?'s':'')+' posé'+(cours.pts.length>1?'s':''))+'</span><span class="mlx-esp"></span>'
     +(cours.t!=='angle'?'<button type="button" class="mlx-b mlx-b-r" onclick="mlTerminerTrace()">Terminer ↵</button>':'')
@@ -4822,6 +4940,16 @@ function _mlxMajOutils(){
     +(_ml.refait.length?'':' disabled')+'>'+S('retablir',16)+'</button>';
   const c=_mlEl('ml-calque');
   if(c) c.dataset.outil=o;
+}
+/**
+ * Le petit trait qui montre chaque style sur son bouton.
+ * @param {string} k
+ * @returns {string}
+ */
+function _mlxTraitIco(k){
+  const d=k==='t'?' stroke-dasharray="5 3.5"':k==='p'?' stroke-dasharray="0.01 4.2"':'';
+  return '<svg class="mlx-trait-ico" viewBox="0 0 26 8" width="26" height="8" aria-hidden="true"><line x1="2" y1="4" x2="24" y2="4" '
+    +'stroke="currentColor" stroke-width="2.6" stroke-linecap="round"'+d+'/></svg>';
 }
 /** @param {boolean} oui */
 function mlRelier(oui){ if(!_ml) return false; _ml.relier=!!oui; _mlDessinerCalque(); return true; }
@@ -4892,7 +5020,10 @@ function _mlxMajEditeur(){
       +ML_PALETTE.map(p=>'<button type="button" class="mlx-pastille" style="--c:'+p.c+'" aria-pressed="'+(p.c===a.c)+'" aria-label="'+escapeHtml(p.nom)+'" onclick="mlAnnotCouleur(\''+p.c+'\')"></button>').join('')
       +'<label class="mlx-perso" title="Couleur personnalisée"><input type="color" value="'+escapeHtml(a.c)+'" aria-label="Couleur personnalisée" onchange="mlAnnotCouleur(this.value)"></label></div></div>'
     +(a.t==='texte'?'':'<div class="mlx-champ"><span>Épaisseur</span><div class="mlx-ligne mlx-ligne-0"><input type="range" min="1" max="12" step="1" value="'+a.e+'" '
-      +'aria-label="Épaisseur" onfocus="mlAnnotFocus()" oninput="mlAnnotEpaisseur(this.value)"><span id="mlx-aep-val">'+a.e+' px</span></div></div>')
+      +'aria-label="Épaisseur" onfocus="mlAnnotFocus()" oninput="mlAnnotEpaisseur(this.value)"><span id="mlx-aep-val">'+a.e+' px</span></div></div>'
+      +'<div class="mlx-champ"><span>Trait</span><div class="mlx-chips mlx-chips-l" role="group" aria-label="Style du trait">'
+      +ML_TRAITS.map(([k,l])=>'<button type="button" class="mlx-chip mlx-trait" aria-pressed="'+((a.st||'')===k)+'" onclick="mlAnnotOption(\'st\',\''+k+'\')">'
+        +_mlxTraitIco(k)+l+'</button>').join('')+'</div></div>')
     +'<div class="mlx-champ"><span>Durée d’apparition</span><div class="mlx-duree">'
       +'<input class="mlx-in mlx-tps" type="text" inputmode="decimal" value="'+_mlxT(a.d)+'" aria-label="Début" onchange="mlAnnotBorne(\'d\',this.value)">'
       +'<button type="button" class="mlx-b" onclick="mlAnnotBorne(\'d\')" title="Début à la tête de lecture">Ici</button>'
@@ -5227,10 +5358,23 @@ function _mlBrancher(){
   // en cours jusqu'à la souris dit où tombera le prochain point.
   if(calque){
     calque.addEventListener('pointermove',e=>{
-      if(!_ml||!_ml.trace||!['angle','courbe','point'].includes(_ml.trace.t)) return;
+      const tr=_ml&&_ml.trace;
+      if(!_ml||!tr) return;
       const v2=_mlVideo(), R2=v2?_mlVideoRect(v2):null; if(!R2) return;
       const b2=calque.getBoundingClientRect();
-      _ml.curseur=[_mlxBorne((e.clientX-b2.left-R2.ox)/R2.s/R2.vw*1000),_mlxBorne((e.clientY-b2.top-R2.oy)/R2.s/R2.vh*1000)];
+      const q=[_mlxBorne((e.clientX-b2.left-R2.ox)/R2.s/R2.vw*1000),_mlxBorne((e.clientY-b2.top-R2.oy)/R2.s/R2.vh*1000)];
+      // LE TRACÉ COMMENCÉ D'UN CLIC : l'arrivée suit la souris, et une
+      // trajectoire s'écrit sous elle, sans bouton tenu.
+      if(tr.clic){
+        if(tr.t==='libre'){
+          const der=tr.pts[tr.pts.length-1];
+          if(tr.pts.length<2000&&Math.hypot((q[0]-der[0])*R2.vw*R2.s/1000,(q[1]-der[1])*R2.vh*R2.s/1000)>=3) tr.pts.push(q);
+        } else tr.pts[1]=q;
+        _mlDessinerCalque();
+        return;
+      }
+      if(!['angle','courbe','point'].includes(tr.t)) return;
+      _ml.curseur=q;
       _mlDessinerCalque();
     });
     calque.addEventListener('pointerleave',()=>{ if(_ml&&_ml.curseur){ _ml.curseur=null; _mlDessinerCalque(); } });
@@ -9429,6 +9573,8 @@ function _mlInjecterStyle(){
     '.mlx-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}',
     '.mlx-chips-l{margin-top:0}',
     '.mlx-chip{min-height:32px;padding:0 10px;border-radius:99px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0}',
+    '.mlx-trait{display:inline-flex;align-items:center;gap:6px}',
+    '.mlx-trait-ico{flex-shrink:0;opacity:.85}',
     '.mlx-chip[aria-pressed="true"]{border-color:var(--red);background:rgba(224,32,32,.16)}',
     '.mlx-chip:disabled{opacity:.35;cursor:default}',
     '.mlx-guide{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding:9px 10px;border-radius:9px;border:1px solid rgba(224,32,32,.55);background:rgba(224,32,32,.08);font-size:var(--fs-xs);line-height:1.45;color:var(--text)}',
