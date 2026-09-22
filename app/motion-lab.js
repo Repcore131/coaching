@@ -60,10 +60,11 @@
  *   trace:TraceEnCours|null, curseur:number[]|null, annule:string[], refait:string[],
  *   original:boolean, comparaison:boolean, guide:{m:ModeleAnnot, i:number}|null, repereAnat:number,
  *   relier:boolean, phrase:string, tailleTexte:string, onglet:string, jetonVseq:number,
- *   enLecture:boolean, style:string, deplEtiq:DeplEtiq|null
+ *   enLecture:boolean, style:string, deplEtiq:DeplEtiq|null,
+ *   trajAuto:boolean, trajStop:boolean, trajZone:{c:number[], r:number}|null
  * }} EtatMl
  */
-/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'|'repere'|'repsuivi'|'annotsuivi'} ModeMl */
+/** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'|'repere'|'repsuivi'|'annotsuivi'|'trajsuivi'} ModeMl */
 /**
  * Un point suivi nomme, pendant le parcours de la video. `sx`/`sy` est la
  * graine, en pixels de l'image ; elle est gardee pour pouvoir tout relancer
@@ -2401,7 +2402,8 @@ function mlPhrases(ctx){
  * hauteur), en texte « x,y x,y » — le format des traits de la correction.
  * @typedef {{id:string, n:string, t:TypeAnnot, c:string, e:number, d:number, f:number, p:string,
  *   k?:[number,string][], x?:string, ts?:string, tf?:number, tc?:number, cb?:number,
- *   lb?:string[], rel?:number, et?:number, lg?:number, h?:number, seg?:string, st?:string, eo?:number[]}} Annot
+ *   lb?:string[], rel?:number, et?:number, lg?:number, h?:number, seg?:string, st?:string, eo?:number[],
+ *   tp?:string}} Annot
  */
 /**
  * Une étiquette ou la légende qu'on déplace : ce qui bouge (`kind` 'etiq' ou
@@ -2579,7 +2581,11 @@ function mlAngleTrois(A,B,C,vw,vh){
 function mlAnnotVisible(a,sMs,comparaison){
   if(a.h) return false;
   if(comparaison&&['libre','courbe','ligne','fleche','angle','point'].includes(a.t)) return true;
-  return sMs>=a.d&&sMs<a.f;
+  // LA FIN EST COMPRISE. Un tracé réglé sur « toute la vidéo » finit à sa
+  // durée exacte, et la vidéo s'arrête sur cet instant précis : exclue, la fin
+  // effaçait le tracé sur la dernière image — celle qu'on regarde, à l'arrêt,
+  // une fois le mouvement fini (vu au banc sur une trajectoire suivie, 1385).
+  return sMs>=a.d&&sMs<=a.f;
 }
 /**
  * PURE. Le nom d'un tracé qu'on vient de poser : le sens de sa couleur pour un
@@ -2709,7 +2715,12 @@ function mlDessinerAnnotations(g,R,doc,sMs,o){
     if(!estApercu&&!mlAnnotVisible(a,sMs,opt.comparaison)) continue;
     const pts=mlAnnotPointsA(a,sMs).map(P);
     if(!pts.length) continue;
-    _mlxDessinerUne(g,a,pts,k,R,sMs,!!opt.comparaison);
+    // UNE TRAJECTOIRE SUIVIE SE TRACE AVEC LE MOUVEMENT : on n'en dessine que
+    // la part déjà parcourue, et un point en tête. Les poignées, elles, restent
+    // sur le tracé entier — on édite toute la trajectoire, pas son début.
+    const tp=estApercu?null:_mlxTempsTraj(a);
+    const vue=tp?mlTrajVue(pts,tp,sMs):{pts,enCours:false};
+    _mlxDessinerUne(g,a,vue.pts,k,R,sMs,!!opt.comparaison,vue.enCours);
     if(opt.sel===a.id&&opt.poignees) _mlxPoignees(g,pts,a.c,k);
   }
   if(doc&&doc.leg&&doc.leg.on) _mlxLegende(g,R,doc,sMs,k);
@@ -2723,8 +2734,9 @@ function mlDessinerAnnotations(g,R,doc,sMs,o){
  * @param {RectImage} R
  * @param {number} sMs
  * @param {boolean} comparaison
+ * @param {boolean} [enCours]  une trajectoire suivie encore en train de se tracer
  */
-function _mlxDessinerUne(g,a,pts,k,R,sMs,comparaison){
+function _mlxDessinerUne(g,a,pts,k,R,sMs,comparaison,enCours){
   const lw=Math.max(1,a.e*k);
   g.lineCap='round'; g.lineJoin='round'; g.setLineDash([]);
   g.strokeStyle=a.c; g.fillStyle=a.c; g.lineWidth=lw;
@@ -2751,7 +2763,7 @@ function _mlxDessinerUne(g,a,pts,k,R,sMs,comparaison){
     }
     case 'libre':
     case 'courbe':{
-      if(pts.length<2) break;
+      if(pts.length<2){ if(enCours&&pts.length) _mlxPastille(g,x0,y0,Math.max(4,6*k),a.c); break; }
       const l=a.t==='courbe'?mlCatmull(pts,12):pts;
       avecLisere(()=>{
         g.beginPath(); g.moveTo(l[0][0],l[0][1]);
@@ -2765,9 +2777,11 @@ function _mlxDessinerUne(g,a,pts,k,R,sMs,comparaison){
           g.lineTo(l[l.length-1][0],l[l.length-1][1]);
         } else for(let i=1;i<l.length;i++) g.lineTo(l[i][0],l[i][1]);
       });
-      // LE SENS DU MOUVEMENT : une pointe au bout d'une trajectoire.
+      // LE SENS DU MOUVEMENT : une pointe au bout d'une trajectoire — ou, tant
+      // qu'elle se trace, le point qui suit le détail.
       const n=l.length;
-      if(n>=2) _mlxPointe(g,l[Math.max(0,n-4)][0],l[Math.max(0,n-4)][1],l[n-1][0],l[n-1][1],lw,a.c);
+      if(enCours) _mlxPastille(g,l[n-1][0],l[n-1][1],Math.max(4,6*k),a.c);
+      else if(n>=2) _mlxPointe(g,l[Math.max(0,n-4)][0],l[Math.max(0,n-4)][1],l[n-1][0],l[n-1][1],lw,a.c);
       break;
     }
     case 'cercle':{
@@ -2846,6 +2860,35 @@ function _mlxDessinerUne(g,a,pts,k,R,sMs,comparaison){
     }
     _mlxEtiquette(g,pl.x,pl.y,pl.lib,a.c,k,R,false);
   }
+}
+/**
+ * Les instants d'une trajectoire suivie, un par point — ou null.
+ * @param {Annot} a
+ * @returns {number[]|null}
+ */
+function _mlxTempsTraj(a){
+  if(a.t!=='libre'||typeof a.tp!=='string'||!a.tp) return null;
+  const l=a.tp.split(' ').map(Number);
+  return l.length>=2&&l.every(x=>isFinite(x))?l:null;
+}
+/**
+ * PURE. La part d'une trajectoire suivie déjà parcourue à `sMs` : les points
+ * passés, puis la tête, interpolée entre le dernier point passé et le suivant.
+ * Avant le premier instant, le seul point de départ ; après le dernier, tout.
+ * @param {number[][]} pts
+ * @param {number[]} tp  un instant par point, croissants
+ * @param {number} sMs
+ * @returns {{pts:number[][], enCours:boolean}}
+ */
+function mlTrajVue(pts,tp,sMs){
+  if(!tp||tp.length!==pts.length||pts.length<2) return {pts,enCours:false};
+  if(sMs>=tp[tp.length-1]) return {pts,enCours:false};
+  if(sMs<=tp[0]) return {pts:[pts[0]],enCours:true};
+  let i=0;
+  while(i<tp.length-2&&tp[i+1]<=sMs) i++;
+  const f=(sMs-tp[i])/Math.max(1,tp[i+1]-tp[i]);
+  const tete=[pts[i][0]+(pts[i+1][0]-pts[i][0])*f,pts[i][1]+(pts[i+1][1]-pts[i][1])*f];
+  return {pts:pts.slice(0,i+1).concat([tete]),enCours:true};
 }
 /**
  * Où se pose le nom d'un tracé : le point du tracé auquel il se rattache, et
@@ -3431,7 +3474,7 @@ function _mlxBorne(x){ return Math.max(0,Math.min(1000,Math.round(x))); }
  * choisie si la tête de lecture y est, quatre secondes sinon.
  * @param {TypeAnnot} t
  * @param {number[][]} pts
- * @param {{x?:string, lb?:string[], rel?:number, ts?:string, tf?:number, d0?:number}} [extra]
+ * @param {{x?:string, lb?:string[], rel?:number, ts?:string, tf?:number, d0?:number, f0?:number, tp?:number[]}} [extra]
  * @returns {Annot|null}
  */
 function _mlxCreer(t,pts,extra){
@@ -3449,6 +3492,9 @@ function _mlxCreer(t,pts,extra){
   if(seq&&s>=seq.debutMs&&s<=seq.finMs){ d=seq.debutMs; f=seq.finMs; }
   if(f<=d){ d=Math.max(0,duree-ML_ANNOT_DUREE_MS); f=duree; }
   if(f<=d) f=d+ML_ANNOT_DUREE_MS;
+  // UNE TRAJECTOIRE SUIVIE a sa propre durée : du premier point à un peu après
+  // le dernier. Ni la séquence ni les quatre secondes par défaut ne la disent.
+  if(extra&&typeof extra.f0==='number'&&isFinite(extra.f0)&&extra.f0>s){ d=s; f=Math.round(extra.f0); }
   const etape=_ml.guide?_ml.guide.m.etapes[_ml.guide.i]:null;
   const guide=!!etape&&etape.t===t;
   const c=guide&&etape?etape.c:_ml.couleur;
@@ -3460,6 +3506,7 @@ function _mlxCreer(t,pts,extra){
     p:mlEncoderTrait(propres)};
   if(t==='texte'){ a.x=x||n; a.ts=extra&&extra.ts||'m'; a.tf=extra&&typeof extra.tf==='number'?extra.tf:1; }
   else if(_ml.style==='t'||_ml.style==='p') a.st=_ml.style;
+  if(t==='libre'&&extra&&Array.isArray(extra.tp)&&extra.tp.length===propres.length) a.tp=extra.tp.map(x=>Math.round(x)).join(' ');
   if(t==='point'){
     if(extra&&Array.isArray(extra.lb)&&extra.lb.some(Boolean)) a.lb=extra.lb.slice(0,propres.length).map(l=>String(l||'').slice(0,ANNOT_ETIQ_MAX));
     if(propres.length>1&&(!extra||extra.rel!==0)) a.rel=1;
@@ -3694,6 +3741,38 @@ function _mlxPointer(e,calque){
   if(!_ml.enLecture||outil==='texte'){ try{ v.pause(); }catch(x){} }
   const p=N(e.clientX,e.clientY);
   if(outil==='texte'){ _mlxTexteNouveau(p); return; }
+  // LA TRAJECTOIRE EN SUIVI AUTOMATIQUE : le toucher désigne le détail, le
+  // glisser l'entoure ; au lâcher, le suivi part de l'image affichée.
+  if(outil==='libre'&&_ml.trajAuto){
+    try{ v.pause(); }catch(x){}
+    _ml.trace={t:'cercle',pts:[p,p.slice()],d0:sMs};
+    const x0=e.clientX, y0=e.clientY;
+    let loin=0;
+    try{ calque.setPointerCapture(e.pointerId); }catch(x){}
+    /** @param {PointerEvent} ev */
+    const entourer=ev=>{
+      const tr=_ml&&_ml.trace;
+      if(!tr) return;
+      loin=Math.max(loin,Math.hypot(ev.clientX-x0,ev.clientY-y0));
+      tr.pts[1]=N(ev.clientX,ev.clientY);
+      _mlDessinerCalque();
+    };
+    const lacher=()=>{
+      calque.removeEventListener('pointermove',entourer);
+      calque.removeEventListener('pointerup',lacher);
+      calque.removeEventListener('pointercancel',lacher);
+      const tr=_ml&&_ml.trace;
+      if(!_ml||!tr) return;
+      _ml.trace=null;
+      const q=tr.pts[1];
+      const rVid=loin<6?0:Math.hypot((q[0]-p[0])/1000*R.vw,(q[1]-p[1])/1000*R.vh);
+      mlTrajectoireAuto(p,rVid);
+    };
+    calque.addEventListener('pointermove',entourer);
+    calque.addEventListener('pointerup',lacher);
+    calque.addEventListener('pointercancel',lacher);
+    return;
+  }
   if(outil==='angle'||outil==='courbe'||outil==='point'){
     if(!_ml.trace||_ml.trace.t!==outil) _ml.trace={t:outil,pts:[],lb:[],d0:sMs};
     const tr=_ml.trace;
@@ -4227,6 +4306,7 @@ function _mlxClavier(e){
   const surBouton=!!(t&&t.closest('button,[role="button"],[role="slider"],[role="tab"]'));
   if(k===' '){ if(surBouton) return false; e.preventDefault(); mlLecture(); return true; }
   if(k==='Escape'){
+    if(mlTrajArreter()) return true;
     if(mlEtiqAnnuler()) return true;
     if(_mlxAnnulerTrace()) return true;
     const m=_mlEl('mlx-menu'); if(m&&!m.hidden){ mlMenu(); return true; }
@@ -4413,6 +4493,138 @@ async function mlAnnotSuiviAuto(){
   if(perdu.length) toast((parPoint&&cibles.length>1?perdu.length+' point'+(perdu.length>1?'s se perdent':' se perd'):'Le suivi se perd')
     +' à '+mlTempsTexte(Math.min(...perdu))+' : replace-le à cet instant, puis relance le suivi depuis là.','var(--orange)');
   else toast('Suivi posé : '+cles.length+' images clés sur '+mlTempsTexte(T[T.length-1]-T[0]).slice(0,-3)+' ✓');
+  return true;
+}
+// ── LA TRAJECTOIRE SUIVIE AUTOMATIQUEMENT (build 1385) ──────────────────────
+//
+// Kevin : « le bouton Trajectoire doit permettre de mettre un point qui suit
+// automatiquement la partie sélectionnée lors du mouvement, afin de tracer la
+// trajectoire pendant le lancement de la vidéo : il doit identifier la zone
+// sélectionnée et la suivre, et tracer les traits seul ».
+//
+// Un toucher sur le détail — le bout de la barre, un genou, un poignet — le
+// désigne ; un glisser, du centre vers le bord, entoure une zone plus large.
+// Le suiveur des points nommés (le même que le suivi d'un tracé) la suit
+// image par image, depuis l'image affichée jusqu'à la fin de la séquence
+// choisie, ou vingt secondes au plus ; la vidéo avance à l'écran et le trait
+// s'y dessine au fur et à mesure.
+//
+// LA TRAJECTOIRE GARDE SON HORAIRE : un instant par point (`tp`). Rejouée, elle
+// se trace avec le mouvement, un point en tête — chez le coach, chez l'athlète,
+// et dans la vidéo exportée. Les points sont choisis dans l'espace ET dans le
+// temps (mlClesDepuisSuivi) : un arrêt en bas du mouvement reste un arrêt, là
+// où une simplification du seul dessin l'aurait effacé.
+const ML_TRAJ_TENUE_MS=2000;      // la trajectoire entière reste à l'écran après le mouvement
+/**
+ * @param {number[]} p  le détail, en millièmes de l'image
+ * @param {number} rVid  le rayon de la zone en pixels de la vidéo — 0 : la taille par défaut
+ * @returns {Promise<boolean>}
+ */
+async function mlTrajectoireAuto(p,rVid){
+  const v=_mlVideo();
+  if(!_ml||!v||_mlOccupe()) return false;
+  const vw=v.videoWidth, vh=v.videoHeight;
+  if(!(vw>0&&vh>0)){ toast('Lance d’abord la vidéo une fois : ses dimensions ne sont pas encore connues.','var(--orange)'); return false; }
+  if(_ml.annot.a.length>=ANNOT_MAX){ toast(ANNOT_MAX+' tracés au plus par vidéo.','var(--orange)'); return false; }
+  try{ v.pause(); }catch(e){}
+  const debut=_mlxTempsMs(), seq=_mlActif();
+  const finVideo=_ml.dureeMs||debut+ML_SUIVI_MAX_MS;
+  const finSeq=(seq&&debut>=seq.debutMs&&debut<seq.finMs-100)?seq.finMs:finVideo;
+  const fin=Math.min(finVideo,finSeq,debut+ML_SUIVI_MAX_MS);
+  if(fin-debut<200){ toast('Place la tête de lecture avant la fin de la vidéo : il ne reste rien à suivre.','var(--orange)'); return false; }
+  // LA ZONE : celle que le coach a entourée, bornée ; sinon 2,5 % de l'image,
+  // la règle des points nommés. L'image de travail est réduite à la taille
+  // de travail du suiveur.
+  const r=rVid>0?Math.max(6,Math.min(rVid,Math.min(vw,vh)*0.12)):Math.max(8,Math.min(vw,vh)*0.025);
+  const ech=Math.min(1,ML_R_TRAVAIL/r);
+  const w=Math.max(16,Math.round(vw*ech)), h=Math.max(16,Math.round(vh*ech));
+  const ex=w/vw, ey=h/vh;
+  const fpsMes=Number(/** @type {any} */(v)._rcFps);
+  const pasMs=1000/Math.min(30,(isFinite(fpsMes)&&fpsMes>0)?fpsMes:30);
+  const total=Math.max(1,Math.ceil((fin-debut)/pasMs));
+  _ml.mode='trajsuivi'; _ml.progres='Chargement de la vidéo…'; _ml.trajStop=false;
+  _ml.trace={t:'libre',pts:[p.slice()]}; _ml.trajZone={c:p.slice(),r};
+  const jeton=++_ml.analyseJeton;
+  _mlxMajOutils(); _mlDessinerCalque();
+  /** @type {Suivi|null} */
+  let s=null;
+  /** @type {number[]} */ const T=[];
+  /** @type {number[][][]} */ const P=[];
+  let perdu=-1, nb=0;
+  const res=await _mlExtraire(_ml.url,debut,fin,w,h,pasMs,img=>{
+    if(!_ml||jeton!==_ml.analyseJeton) return 'arret';
+    // « ARRÊTER » GARDE CE QUI EST SUIVI : c'est une trajectoire plus courte,
+    // pas une erreur.
+    if(_ml.trajStop) return false;
+    /** @type {number[]} */
+    let q;
+    if(!nb){
+      s=mlSuiviDemarrer(img.gris,w,h,p[0]/1000*vw*ex,p[1]/1000*vh*ey,r*ex);
+      if(!s) return 'gabarit';
+      q=p.slice();
+    } else {
+      if(!s) return 'gabarit';
+      const st=mlSuiviPas(s,img.gris,w,h);
+      // PERDU : la trajectoire s'arrête là où le détail a été vu en dernier.
+      // Un trait qui saute au hasard mentirait plus qu'un trait qui s'arrête.
+      if(st.etat==='perdu'){ perdu=img.tMs; return false; }
+      q=[_mlxBorne(st.x/ex/vw*1000),_mlxBorne(st.y/ey/vh*1000)];
+    }
+    T.push(img.tMs); P.push([q]); nb++;
+    // LE TRAIT SE DESSINE PENDANT QU'IL SE CALCULE, et la vidéo suit.
+    if(_ml.trace&&_ml.trace.t==='libre') _ml.trace.pts.push(q);
+    if(_ml.trajZone) _ml.trajZone.c=q;
+    if(nb%3===1){
+      _ml.progres='Suivi : '+mlTempsTexte(img.tMs-debut).slice(0,-3)+' / '+mlTempsTexte(fin-debut).slice(0,-3)
+        +' · image '+nb+' sur ~'+total;
+      const z=_mlEl('mlx-traj-txt'); if(z) z.textContent=_ml.progres;
+      if(!v.seeking){ try{ v.currentTime=img.tMs/1000; }catch(e){} }
+      _mlDessinerCalque();
+    }
+    return true;
+  },()=>!_ml||jeton!==_ml.analyseJeton);
+  if(!_ml) return false;
+  _ml.mode='lecture'; _ml.progres=''; _ml.trace=null; _ml.trajZone=null;
+  if(res.ok===false){
+    const msg={cors:'L’hébergeur de cette vidéo n’autorise pas la lecture de ses images : le suivi est impossible sur ce fichier. Trace la trajectoire à la main.',
+      chargement:'La vidéo n’a pas pu être chargée. Vérifie la connexion, puis réessaie.',
+      recherche:'La vidéo ne se laisse pas parcourir image par image sur cet appareil. Trace la trajectoire à la main.',
+      gabarit:'Rien ne se distingue à cet endroit d’une image à l’autre. Touche un détail contrasté — le bout de la barre, un disque, une articulation.',
+      arret:'Suivi arrêté.'}[res.code]||'Le suivi a échoué.';
+    toast(msg,res.code==='arret'?undefined:'var(--orange)');
+    _mlxMajOutils(); _mlDessinerCalque();
+    return false;
+  }
+  if(T.length<2){
+    toast('Le détail s’est perdu dès le départ. Touche un détail plus contrasté, ou entoure-le en glissant.','var(--orange)');
+    _mlxMajOutils(); _mlDessinerCalque();
+    return false;
+  }
+  const cles=mlClesDepuisSuivi(T,P,ANNOT_PTS_MAX);
+  const tp=cles.map(q=>Math.round(q[0]));
+  const a=_mlxCreer('libre',cles.map(q=>q[1][0]),{d0:tp[0],f0:Math.min(finVideo,tp[tp.length-1]+ML_TRAJ_TENUE_MS),tp});
+  if(!a){ _mlxMajOutils(); _mlDessinerCalque(); return false; }
+  toast(perdu>=0
+    ?'Le détail se perd à '+mlTempsTexte(perdu).slice(0,-3)+' : la trajectoire s’arrête là.'
+    :'Trajectoire suivie sur '+mlTempsTexte(tp[tp.length-1]-tp[0]).slice(0,-3)+' ✓',perdu>=0?'var(--orange)':undefined);
+  // ELLE SE REJOUE AUSSITÔT : la vidéo repart du premier point, et le trait se
+  // trace avec le mouvement.
+  _mlAller(tp[0]);
+  setTimeout(()=>{ const v2=_mlVideo(); if(_ml&&v2&&_ml.mode==='lecture'){ try{ const pr=v2.play(); if(pr&&pr.catch) pr.catch(()=>{}); }catch(e){} } },300);
+  return true;
+}
+/** Arrête la trajectoire en cours de suivi, et garde ce qui est déjà suivi. */
+function mlTrajArreter(){
+  if(!_ml||_ml.mode!=='trajsuivi') return false;
+  _ml.trajStop=true;
+  return true;
+}
+/** @param {boolean} auto  suivi automatique, ou tracé à la main */
+function mlTrajMode(auto){
+  if(!_ml) return false;
+  _ml.trajAuto=!!auto;
+  if(_ml.trace&&_ml.trace.t==='libre') _ml.trace=null;
+  _mlxMajOutils(); _mlDessinerCalque();
   return true;
 }
 /** Arrête un suivi automatique en cours. */
@@ -4826,7 +5038,7 @@ function mlOuvrir(email,videoId){
     annot:annotDoc,annotInit:JSON.stringify(annotDoc),outil:'selection',couleur:ML_PALETTE[0].c,
     epaisseur:ML_EPAISSEUR_DEFAUT,sel:null,trace:null,curseur:null,annule:[],refait:[],original:false,
     comparaison:false,guide:null,repereAnat:1,relier:true,phrase:'',tailleTexte:'m',onglet:'trace',jetonVseq:0,
-    enLecture:_mlxPrefLecture(),style:'',deplEtiq:null};
+    enLecture:_mlxPrefLecture(),style:'',deplEtiq:null,trajAuto:true,trajStop:false,trajZone:null};
   go('s-coach-motion-lab');
   _mlRendre();
   return true;
@@ -5154,7 +5366,9 @@ function _mlxMajOutils(){
   const aides={selection:'Touche un tracé pour le choisir ; glisse-le, ou tire un de ses points. Double-clique une étiquette ou la légende pour la déplacer.',
     ligne:'Glisse sur la vidéo — ou touche le départ, puis l’arrivée.',
     fleche:'Glisse sur la vidéo — ou touche le départ, puis la pointe.',
-    libre:'Dessine d’un seul geste — ou touche pour commencer, suis le mouvement à la souris, touche pour finir.',
+    libre:_ml.trajAuto
+      ?'Touche le détail à suivre — le bout de la barre, un genou — ou entoure-le en glissant : la vidéo avance et la trajectoire se trace seule.'
+      :'Dessine d’un seul geste — ou touche pour commencer, suis le mouvement à la souris, touche pour finir.',
     courbe:'Touche la vidéo point par point : la courbe passe par chacun. Entrée pour terminer.',
     cercle:'Glisse du centre vers le bord — ou touche le centre, puis le bord.',
     rect:'Glisse d’un coin à l’autre — ou touche un coin, puis l’autre.',
@@ -5177,7 +5391,11 @@ function _mlxMajOutils(){
         +_mlxTraitIco(k)+l+'</button>').join('')+'</div></div>';
   // LA LECTURE CONTINUE PENDANT LE GESTE, si le coach le veut. Proposé pour
   // les outils qui dessinent ; le texte ouvre une saisie, il fige toujours.
-  if(o!=='selection'&&o!=='gomme'&&o!=='texte') h+='<label class="mlx-coche"><input type="checkbox" id="mlx-en-lecture"'
+  // LA TRAJECTOIRE : suivie automatiquement, ou tracée à la main.
+  if(o==='libre') h+='<div class="mlx-chips" role="group" aria-label="Façon de tracer la trajectoire">'
+    +'<button type="button" class="mlx-chip" aria-pressed="'+(!!_ml.trajAuto)+'" onclick="mlTrajMode(true)">Suivi automatique</button>'
+    +'<button type="button" class="mlx-chip" aria-pressed="'+(!_ml.trajAuto)+'" onclick="mlTrajMode(false)">À la main</button></div>';
+  if(o!=='selection'&&o!=='gomme'&&o!=='texte'&&!(o==='libre'&&_ml.trajAuto)) h+='<label class="mlx-coche"><input type="checkbox" id="mlx-en-lecture"'
     +(_ml.enLecture?' checked':'')+' onchange="mlTracerEnLecture(this.checked)"> Tracer pendant la lecture</label>';
   // LE MODÈLE EN COURS : l'étape, et de quoi la passer ou s'arrêter.
   const G=_ml.guide;
@@ -5197,6 +5415,10 @@ function _mlxMajOutils(){
     +'</div><div class="mlx-ligne"><span class="mlx-lab-s">Taille</span><div class="mlx-chips mlx-chips-l">'
     +[['s','Petite'],['m','Moyenne'],['l','Grande']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+(k===_ml?.tailleTexte)+'" onclick="mlTailleTexte(\''+k+'\')">'+l+'</button>').join('')
     +'</div></div>';
+  // LE SUIVI D'UNE TRAJECTOIRE EN COURS : où il en est, et de quoi l'arrêter
+  // en gardant ce qui est déjà tracé.
+  if(_ml.mode==='trajsuivi') h+='<div class="mlx-cours"><span id="mlx-traj-txt">'+escapeHtml(_ml.progres||'Suivi en cours…')+'</span>'
+    +'<span class="mlx-esp"></span><button type="button" class="mlx-b mlx-b-r" onclick="mlTrajArreter()">Arrêter</button></div>';
   // UNE ÉTIQUETTE EN MAIN : où la poser, et de quoi renoncer.
   if(_ml.deplEtiq) h+='<div class="mlx-cours"><span>'+(_ml.deplEtiq.kind==='leg'?'Déplace la légende':'Déplace l’étiquette')
       +', puis touche pour la poser</span><span class="mlx-esp"></span>'
@@ -6477,6 +6699,14 @@ function _mlDessinerCalque(){
   // LES ANNOTATIONS, par-dessus les mesures : c'est ce que le coach montre.
   mlDessinerAnnotations(g,R,_ml.annot,tNow,{sel:_ml.sel,poignees:_ml.outil==='selection',
     comparaison:_ml.comparaison,apercu:_mlxApercu()});
+  // LA ZONE SUIVIE, pendant le suivi d'une trajectoire : on voit ce que le
+  // suiveur regarde.
+  if(_ml.mode==='trajsuivi'&&_ml.trajZone){
+    const z=_ml.trajZone, zx=R.ox+z.c[0]/1000*R.vw*R.s, zy=R.oy+z.c[1]/1000*R.vh*R.s;
+    g.save(); g.setLineDash([4,3]); g.lineWidth=2; g.strokeStyle='rgba(0,0,0,.6)';
+    g.beginPath(); g.arc(zx,zy,Math.max(6,z.r*R.s),0,Math.PI*2); g.stroke();
+    g.setLineDash([4,3]); g.lineWidth=1.2; g.strokeStyle='#ffffff'; g.stroke(); g.restore();
+  }
   if(_ml.rec){
     _mlDessinerTraits(g,R,_ml.rec.traits);
     if(_ml.rec.enCours&&_ml.rec.enCours.length>1) _mlDessinerTraits(g,R,[[_ml.rec.couleur,_ml.rec.enCours]]);
@@ -7704,7 +7934,7 @@ let _mlPose=null;
 let _mlPosePret=null;
 
 /** @returns {boolean} Une analyse tourne : les répétitions ne bougent pas. */
-function _mlOccupe(){ return !!_ml&&(_ml.mode==='analyse'||_ml.mode==='pose'||_ml.mode==='repsuivi'||_ml.mode==='annotsuivi'); }
+function _mlOccupe(){ return !!_ml&&(_ml.mode==='analyse'||_ml.mode==='pose'||_ml.mode==='repsuivi'||_ml.mode==='annotsuivi'||_ml.mode==='trajsuivi'); }
 
 /**
  * Le moteur de pose, chargé à la demande. Douze mégaoctets qui ne partent que

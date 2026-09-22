@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1384';
+window.RC_BUILD='1385';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -92330,6 +92330,12 @@ function annotValide(doc){
     }
     // LES BASCULES : on n'écrit que ce qui s'écarte du défaut, pour garder la
     // donnée courte. Nom affiché et légende sont ALLUMÉS par défaut.
+    // L'HORAIRE D'UNE TRAJECTOIRE SUIVIE (build 1385) : un instant par point,
+    // croissants. Sinon il tombe, et la trajectoire redevient un trait fixe.
+    if(x.t==='libre'&&typeof x.tp==='string'){
+      const tl=x.tp.trim().split(/\s+/).map(Number);
+      if(tl.length===n&&tl.every((v,i)=>Number.isInteger(v)&&v>=0&&v<=86400000&&(!i||v>=tl[i-1]))) o.tp=tl.join(' ');
+    }
     // L'ÉTIQUETTE DÉPLACÉE (build 1384) : son décalage, en millièmes de
     // l'image ; absent tant qu'elle est à sa place. Un texte n'en a pas.
     if(x.t!=='texte'&&Array.isArray(x.eo)&&x.eo.length===2){

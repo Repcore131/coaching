@@ -46076,7 +46076,9 @@ async function testExercices(){
       if(mlAngleTrois([0,0],[0,0],[1,1],100,100)!==null) return _echec('un angle sans branche se mesure');
       // LA VISIBILITÉ : sa durée, sauf en comparaison pour les tracés de forme.
       const t={id:'y',n:'T',t:'libre',c:'#ffffff',e:4,d:1000,f:2000,p:'1,1 2,2'};
-      if(mlAnnotVisible(t,500)||!mlAnnotVisible(t,1500)||mlAnnotVisible(t,2000)) return _echec('durée d’apparition');
+      // LA FIN EST COMPRISE depuis le 1385 : exclue, un tracé « toute la vidéo »
+      // disparaissait sur la dernière image, celle où la vidéo s'arrête.
+      if(mlAnnotVisible(t,500)||!mlAnnotVisible(t,1500)||!mlAnnotVisible(t,2000)||mlAnnotVisible(t,2001)) return _echec('durée d’apparition');
       if(!mlAnnotVisible(t,5000,true)) return _echec('la comparaison ne superpose pas');
       if(mlAnnotVisible({...t,t:'texte'},5000,true)) return _echec('un texte sort de sa durée en comparaison');
       if(mlAnnotVisible({...t,h:1},1500)) return _echec('un tracé masqué se voit');
@@ -46325,7 +46327,8 @@ async function testExercices(){
           clic(100,600); touche('Escape');
           if(_ml.trace) return 'Échap ne renonce pas';
           // LA TRAJECTOIRE SUIT LA SOURIS SANS BOUTON, et Entrée la termine.
-          mlStyleTrait('p'); mlOutil('libre');
+          // « À la main » : depuis le 1385, la trajectoire suit un détail par défaut.
+          mlStyleTrait('p'); mlOutil('libre'); mlTrajMode(false);
           tps=5000; clic(40,600);
           for(let i=1;i<=20;i++) ev('pointermove',40+i*14,600-Math.sin(i/20*Math.PI)*200,0);
           tps=6000; touche('Enter');
@@ -46479,6 +46482,42 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       return msg?_echec(msg):true;
+    });
+    okA('MLX — la trajectoire suivie garde son horaire, et se trace avec le mouvement',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // LA PART PARCOURUE : le départ seul avant, la tête interpolée pendant, tout après.
+      const pts=[[100,500],[300,300],[500,500]], tp=[1000,2000,3000];
+      let v=mlTrajVue(pts,tp,500);
+      if(v.pts.length!==1||!v.enCours) return _echec('avant le départ : '+JSON.stringify(v));
+      v=mlTrajVue(pts,tp,1500);
+      if(v.pts.length!==2||!v.enCours||v.pts[1].join()!=='200,400') return _echec('à mi-chemin : '+JSON.stringify(v));
+      v=mlTrajVue(pts,tp,2500);
+      if(v.pts.length!==3||v.pts[2].join()!=='400,400') return _echec('au second tronçon : '+JSON.stringify(v));
+      v=mlTrajVue(pts,tp,3000);
+      if(v.pts.length!==3||v.enCours) return _echec('à l’arrivée : '+JSON.stringify(v));
+      if(mlTrajVue(pts,[1000,2000],1500).enCours) return _echec('un horaire incomplet anime quand même');
+      // LA DONNÉE : un instant par point, croissants ; sinon l'horaire tombe.
+      const A=(p,t,x)=>Object.assign({id:'t'+Math.random().toString(36).slice(2,6),n:'T',t:x||'libre',c:'#ff0000',e:4,d:0,f:9000,p},t===undefined?{}:{tp:t});
+      const dv=annotValide({v:1,majLe:0,leg:{},a:[A('100,500 300,300 500,500','1000 2000 3000'),A('100,500 300,300 500,500','1000 3000 2000'),
+        A('100,500 300,300 500,500','1000 2000'),A('100,500 300,300','1000 2000','ligne'),A('100,500 300,300 500,500','1000 2000.5 3000')]});
+      const tps=dv.a.map(a=>a.tp||'-').join('|');
+      if(tps!=='1000 2000 3000|-|-|-|-') return _echec('horaires gardés : '+tps);
+      // LE DESSIN : à mi-parcours, la fin de la trajectoire n'est pas encore là.
+      const dessin=sMs=>{
+        const cv=document.createElement('canvas'); cv.width=400; cv.height=400;
+        const g=cv.getContext('2d');
+        mlDessinerAnnotations(g,{s:1,ox:0,oy:0,vw:400,vh:400},{v:1,majLe:0,leg:{on:0},
+          a:[{id:'x',n:'',t:'libre',c:'#ff0000',e:4,d:0,f:9000,p:'100,500 500,500 900,500',tp:'1000 2000 3000',et:0}]},sMs);
+        const px=g.getImageData(0,200,400,1).data, rouge=x=>px[x*4]>150&&px[x*4+1]<90;
+        return {debut:rouge(60),fin:rouge(330)};
+      };
+      const m=dessin(1600), f=dessin(3000);
+      if(!m.debut||m.fin) return _echec('à mi-parcours, la trajectoire n’est pas tracée à moitié : '+JSON.stringify(m));
+      if(!f.debut||!f.fin) return _echec('à l’arrivée, la trajectoire n’est pas entière : '+JSON.stringify(f));
+      // L'OUTIL : deux façons, et le mode se choisit.
+      if(typeof mlTrajectoireAuto!=='function'||typeof mlTrajArreter!=='function') return _echec('le suivi de trajectoire manque');
+      if(mlTrajArreter()!==false) return _echec('« Arrêter » répond sans suivi en cours');
+      return true;
     });
 
     okA('R28 — le service worker ne reconduit pas motion-lab.js d’une version à l’autre',async()=>{
