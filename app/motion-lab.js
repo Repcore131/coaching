@@ -5821,6 +5821,90 @@ const ML_REACQ_CONF=0.55;
 // Tous les points perdus depuis ce temps-là : le parcours s'arrête. En deçà,
 // on continue de chercher — une répétition cachée derrière la machine.
 const ML_REACQ_ABANDON_MS=4000;
+// ══ LA LONGUEUR DES SEGMENTS, PLAFONNÉE (build 1400) ══════════════════════
+//
+// Kevin, 22/09/2026 : « tes points se perdent trop vite niveau angle, ce
+// n'est pas normal : le point finit par être placé quatre fois plus haut.
+// Trouve une solution, type longueur max sur les trois premières secondes, qui
+// ne peut être dépassée ». Un genou flou ou caché un instant, et le suiveur se
+// raccrochait au premier détail qui lui ressemblait — un pli du short, une
+// poignée de la machine —, puis le suivait avec aplomb, loin de la jambe.
+//
+// UN SEGMENT DE MEMBRE NE S'ALLONGE PAS. Vu de côté, la cuisse et le tibia
+// peuvent paraître plus courts quand ils tournent vers la caméra, jamais plus
+// longs que leur vraie longueur. D'où deux règles, pour un angle (hanche-genou,
+// genou-cheville) et pour une chaîne de repères reliés :
+//   · LE PLAFOND : la plus grande longueur vue pendant les ML_SEG_FENETRE_MS
+//     premières millisecondes du suivi — un cycle entier, en général —, plus
+//     ML_SEG_MARGE. Au-delà, le point fautif est déclaré PERDU, au lieu de
+//     suivre le mauvais détail : il est ensuite cherché à nouveau, et le trou
+//     se comble entre deux positions vues. Pendant la fenêtre elle-même, le
+//     plafond est la longueur posée par le coach fois ML_SEG_DEPART_MAX ;
+//   · LES RETROUVAILLES : un point retrouvé doit garder, à ML_SEG_REACQ_ECART
+//     près, la longueur de ses segments au moment de la perte — un membre ne
+//     change pas de longueur pendant qu'il est caché.
+const ML_SEG_FENETRE_MS=3000;
+const ML_SEG_MARGE=0.15;
+const ML_SEG_DEPART_MAX=1.6;
+const ML_SEG_REACQ_ECART=0.2;
+// UN POINT RETROUVÉ DOIT RESSEMBLER PRESQUE AUTANT QU'AVANT : au moins
+// ML_REACQ_REL de sa ressemblance habituelle (moyenne glissante de ses images
+// suivies), en plus du seuil absolu ML_REACQ_CONF. Vu au banc (1400) : un
+// genou suivi à 1,00 de ressemblance, caché une seconde, a été « retrouvé » sur
+// un détail du fond à 0,56 — juste au-dessus du seuil absolu de 0,55 — et y
+// est resté jusqu'à la fin, le vrai genou revenant à portée une seconde plus
+// tard.
+const ML_REACQ_REL=0.8;
+/**
+ * PURE. Les segments d'un tracé dont la longueur ne change pas : les deux
+ * branches d'un angle, les maillons d'une chaîne de repères RELIÉS. Une ligne
+ * ou une flèche peut relier deux choses qui s'éloignent : aucun segment.
+ * @param {{t:string, rel?:number}} a
+ * @param {number} n  le nombre de points suivis
+ * @returns {[number,number][]}
+ */
+function mlSegmentsRigides(a,n){
+  if(a&&a.t==='angle'&&n===3) return [[0,1],[1,2]];
+  if(a&&a.t==='point'&&a.rel&&n>=2) return Array.from({length:n-1},(_,i)=>/** @type {[number,number]} */([i,i+1]));
+  return [];
+}
+/**
+ * PURE. Les points qui rendent un segment plus long que son plafond. Un point
+ * pris dans deux segments trop longs est le fautif — le sommet d'un angle qui
+ * s'envole ; sinon, des deux bouts, celui qui a le plus bougé depuis l'image
+ * précédente.
+ * @param {(number[]|null)[]} pts  les points de l'image, null si perdu
+ * @param {(number[]|null)[]} avant  les points de l'image précédente
+ * @param {[number,number][]} segs
+ * @param {number[]} plafonds  un par segment, dans l'unité de `longueur`
+ * @param {(a:number[],b:number[])=>number} longueur
+ * @returns {number[]}
+ */
+function mlSegmentsFautifs(pts,avant,segs,plafonds,longueur){
+  /** @type {number[]} */
+  const trop=[];
+  segs.forEach(([i,j],k)=>{ const A=pts[i], B=pts[j]; if(A&&B&&longueur(A,B)>plafonds[k]) trop.push(k); });
+  if(!trop.length) return [];
+  /** @type {Map<number,number>} */
+  const n=new Map();
+  for(const k of trop) for(const q of segs[k]) n.set(q,(n.get(q)||0)+1);
+  /** @type {Set<number>} */
+  const fautifs=new Set();
+  for(const k of trop){
+    const [i,j]=segs[k];
+    if(fautifs.has(i)||fautifs.has(j)) continue;
+    const ni=n.get(i)||0, nj=n.get(j)||0;
+    let q=i;
+    if(ni!==nj) q=ni>nj?i:j;
+    else {
+      const Pi=pts[i], Pj=pts[j], Ai=avant[i], Aj=avant[j];
+      const di=Pi&&Ai?longueur(Pi,Ai):0, dj=Pj&&Aj?longueur(Pj,Aj):0;
+      q=di>=dj?i:j;
+    }
+    fautifs.add(q);
+  }
+  return [...fautifs];
+}
 /**
  * Cherche à nouveau un point perdu, autour de (cx,cy), avec le gabarit
  * d'origine et le gabarit adapté. Rend sa position s'il ressemble franchement,
@@ -5980,8 +6064,25 @@ async function mlAnnotSuiviAuto(opts){
   // À LA PERTE, on photographie où étaient les AUTRES points : c'est leur
   // déplacement depuis qui dit où chercher celui-ci. Un genou qui disparaît
   // pendant que la hanche et la cheville descendent est descendu avec elles.
-  /** @type {({L:number[], refs:(number[]|null)[]}|null)[]} */
+  /** @type {({L:number[], refs:(number[]|null)[], longueurs?:(number|null)[]}|null)[]} */
   const ancres=cibles.map(()=>null);
+  // LES SEGMENTS RIGIDES ET LEURS LONGUEURS, en pixels de la vidéo : celle
+  // posée par le coach (L0), et la plus grande vue pendant la fenêtre (Lmax).
+  const segs=parPoint?mlSegmentsRigides(a0,cibles.length):[];
+  /** @param {number[]} A @param {number[]} B @returns {number} */
+  const Lpx=(A,B)=>Math.hypot((A[0]-B[0])/1000*vw,(A[1]-B[1])/1000*vh);
+  const L0=segs.map(([i,j])=>Lpx(cibles[i],cibles[j]));
+  const Lmax=L0.slice();
+  /** @param {number} k @param {number} tMs @returns {number} */
+  const plafond=(k,tMs)=>tMs-debut<=ML_SEG_FENETRE_MS?L0[k]*ML_SEG_DEPART_MAX:Lmax[k]*(1+ML_SEG_MARGE);
+  /** Les points écartés par la longueur de leurs segments, pour le dire au coach. */
+  const ecartes=cibles.map(()=>0);
+  // LA RESSEMBLANCE HABITUELLE DE CHAQUE POINT, en moyenne glissante sur ses
+  // images suivies : c'est elle qui juge un point retrouvé.
+  /** @type {(number|null)[]} */
+  const confRef=cibles.map(()=>null);
+  /** @param {number} q @returns {(number|null)[]} la longueur de chaque segment de q, à cet instant */
+  const longueursDe=q=>segs.map(([i,j])=>(i===q||j===q)?Lpx(vus[i],vus[j]):null);
   /** @param {number} q @returns {number[]} en millièmes */
   const ouChercher=q=>{
     const an=ancres[q];
@@ -6000,6 +6101,7 @@ async function mlAnnotSuiviAuto(opts){
     if(!_ml||jeton!==_ml.analyseJeton) return 'arret';
     /** @type {(number[]|null)[]} */
     const ici=[];
+    const avantVus=vus.map(p=>p.slice());
     for(let q=0;q<cibles.length;q++){
       const c=cibles[q];
       if(!nb){
@@ -6018,10 +6120,27 @@ async function mlAnnotSuiviAuto(opts){
       if(perdusA[q]>=0){
         if(nb%ML_REACQ_PAS===0){
           const C=ouChercher(q);
-          const t=mlSuiviRetrouver(s,img.gris,w,h,C[0]/1000*vw*ex,C[1]/1000*vh*ey);
+          let t=mlSuiviRetrouver(s,img.gris,w,h,C[0]/1000*vw*ex,C[1]/1000*vh*ey);
+          // TROP PEU RESSEMBLANT pour ce point-là : un autre détail.
+          const cr=confRef[q];
+          if(t&&typeof cr==='number'&&t.conf<ML_REACQ_REL*cr){ s.perdu=true; t=null; }
           if(t){
-            perdusA[q]=-1; ancres[q]=null; retrouves[q]++;
             const pt=[_mlxBorne(t.x/ex/vw*1000),_mlxBorne(t.y/ey/vh*1000)];
+            // UN POINT RETROUVÉ GARDE SES SEGMENTS : sous le plafond, et à
+            // ML_SEG_REACQ_ECART près de leur longueur au moment de la perte.
+            // Sinon, c'est un autre détail qui lui ressemble : il reste perdu.
+            const an=ancres[q];
+            const faux=segs.some(([i,j],k)=>{
+              if(i!==q&&j!==q) return false;
+              const o=i===q?j:i;
+              if(perdusA[o]>=0) return false;
+              const d=Lpx(pt,vus[o]);
+              if(d>plafond(k,img.tMs)) return true;
+              const l0=an&&an.longueurs?an.longueurs[k]:null;
+              return typeof l0==='number'&&l0>0&&Math.abs(d/l0-1)>ML_SEG_REACQ_ECART;
+            });
+            if(faux){ s.perdu=true; ici.push(null); continue; }
+            perdusA[q]=-1; ancres[q]=null; retrouves[q]++;
             vus[q]=pt; ici.push(pt); continue;
           }
         }
@@ -6030,11 +6149,33 @@ async function mlAnnotSuiviAuto(opts){
       const p=mlSuiviPas(s,img.gris,w,h);
       if(p.etat==='perdu'){
         perdusA[q]=img.tMs;
-        ancres[q]={L:vus[q].slice(),refs:vus.map((x,j)=>(j!==q&&perdusA[j]<0)?x.slice():null)};
+        ancres[q]={L:vus[q].slice(),refs:vus.map((x,j)=>(j!==q&&perdusA[j]<0)?x.slice():null),longueurs:longueursDe(q)};
         ici.push(null); continue;
       }
+      // UNE IMAGE OÙ LE POINT NE RESSEMBLE À RIEN (sous ML_CONF_PERTE) ne
+      // donne pas de position : le suiveur y tient sa prédiction, et la
+      // meilleure correspondance trouvée n'est qu'un endroit au hasard. Le trou
+      // se comblera entre deux positions vues.
+      if(p.etat==='doute'&&p.conf<ML_CONF_PERTE){ ici.push(null); continue; }
+      if(p.etat==='ok') confRef[q]=confRef[q]===null?p.conf:0.9*/** @type {number} */(confRef[q])+0.1*p.conf;
       const pt=[_mlxBorne(p.x/ex/vw*1000),_mlxBorne(p.y/ey/vh*1000)];
       vus[q]=pt; ici.push(pt);
+    }
+    // LE PLAFOND DES SEGMENTS : un point qui rend un segment trop long suit
+    // un autre détail que le sien. Il est déclaré perdu à cet instant — sa
+    // dernière position vue reste celle de l'image précédente —, puis cherché
+    // à nouveau comme n'importe quel point perdu.
+    if(segs.length&&nb>0){
+      const plaf=segs.map((_,k)=>plafond(k,img.tMs));
+      for(const q of mlSegmentsFautifs(ici,avantVus,segs,plaf,Lpx)){
+        const s=suivis[q]; if(s) s.perdu=true;
+        vus[q]=avantVus[q].slice(); ici[q]=null;
+        perdusA[q]=img.tMs; ecartes[q]++;
+        ancres[q]={L:vus[q].slice(),refs:vus.map((x,j)=>(j!==q&&perdusA[j]<0)?x.slice():null),longueurs:longueursDe(q)};
+      }
+      // LA FENÊTRE APPREND LA VRAIE LONGUEUR — sans les positions écartées.
+      if(img.tMs-debut<=ML_SEG_FENETRE_MS)
+        segs.forEach(([i,j],k)=>{ const A=ici[i], B=ici[j]; if(A&&B) Lmax[k]=Math.max(Lmax[k],Lpx(A,B)); });
     }
     T.push(img.tMs); P.push(ici);
     nb++;
@@ -6084,10 +6225,12 @@ async function mlAnnotSuiviAuto(opts){
   // le passage comblé mérite un coup d'oeil.
   const perdu=perdusA.filter(x=>x>=0);
   const nRetr=retrouves.filter(x=>x>0).length;
+  const nEcart=ecartes.reduce((s,x)=>s+x,0);
   if(perdu.length) toast((parPoint&&cibles.length>1?perdu.length+' point'+(perdu.length>1?'s se perdent':' se perd'):'Le suivi se perd')
     +' à '+mlTempsTexte(Math.min(...perdu))+' sans se retrouver : replace-le à cet instant, puis relance le suivi depuis là.','var(--orange)');
   else if(!o.reparation) toast('Suivi posé : '+cles.length+' images clés sur '+mlTempsTexte(T[T.length-1]-T[0]).slice(0,-3)
-    +(nRetr?(' · '+(nRetr>1?nRetr+' points perdus un instant, retrouvés':'un point perdu un instant, retrouvé')):'')+' ✓');
+    +(nRetr?(' · '+(nRetr>1?nRetr+' points perdus un instant, retrouvés':'un point perdu un instant, retrouvé')):'')
+    +(nEcart?(' · '+nEcart+' décrochage'+(nEcart>1?'s':'')+' bloqué'+(nEcart>1?'s':'')+' par la longueur des segments'):'')+' ✓');
   return true;
 }
 // ══ LES SUIVIS COUPÉS PAR L'ANCIENNE BORNE, PROLONGÉS À L'OUVERTURE ═══════
@@ -7337,7 +7480,9 @@ function _mlxMajEditeur(){
       :'<div class="mlx-auto-l"><button type="button" class="mlx-b mlx-b-r" onclick="mlAnnotSuiviAuto()"'+(_mlOccupe()?' disabled':'')+'>'
         +S('cible',14)+' Suivi automatique</button><span class="mlx-note">Pose '+(ML_SUIVI_TYPES_POINTS.includes(a.t)?'les points':'le tracé')
         +' sur l’image de départ : le suivi '+(ML_SUIVI_TYPES_POINTS.includes(a.t)?'les ':'l’')+'accompagne jusqu’à '+_mlxT(Math.min(a.f,sMs+ML_SUIVI_ANNOT_MAX_MS))
-        +'.</span></div>')
+        +'.'+(mlSegmentsRigides(a,mlDecoderTrait(a.p).length).length
+          ?' Les segments gardent la longueur vue pendant les trois premières secondes : un point qui s’en écarte est repris.':'')
+        +'</span></div>')
     +(suit?'<div class="mlx-cles"><span>'+S('cle',12)+' '+(a.k||[]).length+' image'+((a.k||[]).length>1?'s':'')+' clé'+((a.k||[]).length>1?'s':'')
         +'<b id="mlx-cle-etat">'+(cle>=0?' · clé à cet instant':'')+'</b></span><span class="mlx-esp"></span>'
       +'<button type="button" class="mlx-b" onclick="mlCleAller(-1)" aria-label="Image clé précédente">◀</button>'

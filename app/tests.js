@@ -47103,6 +47103,35 @@ async function testExercices(){
       }
       return msg?_echec(msg):true;
     });
+    okA('MLX — un segment de membre ne s’allonge pas : le point qui décroche est repris',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // LES SEGMENTS RIGIDES : les deux branches d'un angle, les maillons d'une
+      // chaîne de repères reliés — rien pour une ligne, qui peut relier deux
+      // choses qui s'éloignent.
+      if(JSON.stringify(mlSegmentsRigides({t:'angle'},3))!=='[[0,1],[1,2]]') return _echec('les branches de l’angle');
+      if(JSON.stringify(mlSegmentsRigides({t:'point',rel:1},4))!=='[[0,1],[1,2],[2,3]]') return _echec('les maillons de la chaîne');
+      if(mlSegmentsRigides({t:'point'},4).length) return _echec('des repères non reliés sont tenus ensemble');
+      if(mlSegmentsRigides({t:'ligne'},2).length||mlSegmentsRigides({t:'fleche'},2).length) return _echec('une ligne est tenue à sa longueur');
+      const L=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]), segs=[[0,1],[1,2]], plaf=[115,115];
+      const avant=[[0,0],[0,100],[0,200]];
+      // UN ANGLE SAGE : personne n'est accusé.
+      if(mlSegmentsFautifs([[0,0],[5,100],[0,200]],avant,segs,plaf,L).length) return _echec('un angle sage est accusé');
+      // LE SOMMET S'ENVOLE (Kevin : « le point finit par être placé quatre fois
+      // plus haut ») : ses deux branches sont trop longues, c'est lui.
+      if(mlSegmentsFautifs([[0,0],[300,100],[0,200]],avant,segs,plaf,L).join()!=='1') return _echec('le sommet qui s’envole n’est pas le fautif');
+      // UN BOUT DÉCROCHE : une seule branche trop longue — celui des deux qui a bougé.
+      if(mlSegmentsFautifs([[0,0],[0,100],[0,400]],avant,segs,plaf,L).join()!=='2') return _echec('la cheville qui décroche n’est pas la fautive');
+      if(mlSegmentsFautifs([[0,-300],[0,100],[0,200]],avant,segs,plaf,L).join()!=='0') return _echec('la hanche qui décroche n’est pas la fautive');
+      // UN POINT PERDU (null) n'est pas accusé, et n'accuse personne.
+      if(mlSegmentsFautifs([[0,0],null,[0,900]],avant,segs,plaf,L).length) return _echec('un point perdu fait accuser un voisin');
+      // LES RÉGLAGES : la fenêtre des trois premières secondes, une marge
+      // modeste, et des retrouvailles qui exigent une ressemblance proche.
+      if(ML_SEG_FENETRE_MS!==3000) return _echec('la fenêtre n’est pas de trois secondes');
+      if(!(ML_SEG_MARGE>0&&ML_SEG_MARGE<=0.25)) return _echec('marge : '+ML_SEG_MARGE);
+      if(!(ML_SEG_REACQ_ECART>0&&ML_SEG_REACQ_ECART<=0.3)) return _echec('écart aux retrouvailles : '+ML_SEG_REACQ_ECART);
+      if(!(ML_REACQ_REL>0.5&&ML_REACQ_REL<1)) return _echec('ressemblance relative : '+ML_REACQ_REL);
+      return true;
+    });
 
     okA('MLX — l’échelle : un catalogue de fiches lues, des centimètres justes, et une donnée qui se valide',async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
