@@ -32454,11 +32454,16 @@ async function testExercices(){
       //   [Facteurs | Besoins caloriques]
       //   [Depense selon l'activite sportive | Journees]
       //   [Macronutriments]
+      //   [Proposer un point de depart | Historique | Remettre au depart]
       //   [Enregistrer et transmettre a l'athlete]  centre, seul sur sa ligne
-      //   [Proposer un point de depart]      (saisie manuelle seulement)
-      //   [Historique des modifications]
       // ⚠ QUATRE BOUTONS D'ENREGISTREMENT SONT DEVENUS UN (build 1408), sur
       //   demande de Kevin : « il y a trop de boutons similaires ».
+      // ⚠ L'ORDRE DES BOUTONS A CHANGE AU BUILD 1409, sur capture : « le
+      //   bouton enregistrer et transmettre a l'athlete doit se retrouver en
+      //   bas des 4 boutons, les 3 autres se retrouvent en haut en blanc sur
+      //   la meme ligne ». Les trois blancs — dont la remise au point de
+      //   depart, qui vivait plus bas — tiennent dans une barre .tbk-trio ;
+      //   le rouge ferme le groupe.
       ok('Les tableaux de nutrition sortent dans l\'ordre demande',(()=>{
         const c={id:'T9',email:'t9@t.fr',role:'athlete',gender:'F',_evol_gender:'Femme',
           _evol_height:'168','init-age':29,
@@ -32481,14 +32486,16 @@ async function testExercices(){
           if(e.classList.contains('tbk-duo'))
             return 'DUO:'+[...e.querySelectorAll('table')].map(titre).join('|');
           if(e.tagName==='BUTTON') return 'B:'+e.textContent;
+          if(e.classList.contains('tbk-trio'))
+            return 'TRIO:'+[...e.querySelectorAll('button')].map(b=>b.textContent).join('|');
           return e.tagName;
         });
         const attendu=['DUO:Facteurs|Besoins caloriques',
           'DUO:Dépense selon l’activité sportive|Journées',
           'T:Macronutriments',
-          'B:Enregistrer et transmettre à l’athlète',
-          'B:Proposer un point de départ',
-          'B:Historique des modifications'];
+          'TRIO:Proposer un point de départ|Historique des modifications'
+            +'|Remettre les calculs au point de départ',
+          'B:Enregistrer et transmettre à l’athlète'];
         return JSON.stringify(lu)===JSON.stringify(attendu)
           ?true:_echec('lu : '+JSON.stringify(lu));})());
       // BUILD 1403 — Kevin, maquette a l'appui : « change la mise en page des
@@ -33151,6 +33158,21 @@ async function testExercices(){
         //   carte serait pire qu'un libelle sur deux lignes.
         return /white-space:normal/.test(m[1])
           ?true:_echec('le libelle ne peut pas passer a la ligne');})());
+      ok('1409 — LES TROIS BLANCS TIENNENT SUR UNE SEULE LIGNE, A PARTS EGALES',(()=>{
+        // Kevin : « les 3 autres se retrouvent en haut en blanc sur la meme
+        // ligne ». Un flex qui se replie (flex-wrap:wrap, ou une base en px)
+        // redonnerait les quatre lignes empilees qu'on vient de supprimer des
+        // que la fiche est etroite — or c'est justement la qu'on la lit.
+        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const barre=css.match(/\.tbk-trio\{([^}]*)\}/);
+        if(!barre) return _echec('la regle .tbk-trio a disparu');
+        if(!/display:flex/.test(barre[1])) return _echec('la barre n\'est pas une ligne');
+        if(/flex-wrap:wrap/.test(barre[1])) return _echec('la barre se replie');
+        const bouton=css.match(/\.tbk-trio \.tbk-trio-b\{([^}]*)\}/);
+        if(!bouton) return _echec('la regle des boutons de la barre a disparu');
+        if(!/flex:1 1 0/.test(bouton[1])) return _echec('les trois ne se partagent pas la ligne');
+        if(!/min-width:0/.test(bouton[1])) return _echec('un libelle long pourra pousser les autres dehors');
+        return /color:#fff/.test(bouton[1])?true:_echec('ils ne sont pas blancs');})());
       ok('.tbk-serre N\'IMPOSE PLUS de grille a deux colonnes',(()=>{
         // ⚠ C'EST ELLE QUI ECRASAIT TOUT. Elle appariait DEUX A DEUX tous ses
         // enfants des 900 px : les deux paires se retrouvaient cote a cote —
@@ -36924,8 +36946,11 @@ async function testExercices(){
           return /origine:'reinit'/.test(s)?true:_echec('la provenance n\'est pas tracee');})());
 
         // BUILD 1404 — Kevin : « mets pas de menu déroulant mais laisse le bouton
-        // en rouge ».
-        ok('1404 — « RÉGLER LES OBJECTIFS » N’EST PLUS UN MENU DÉROULANT, LE BOUTON EST ROUGE',(()=>{
+        // en rouge ». ⚠ LE ROUGE EST TOMBÉ AU BUILD 1409 : la remise au point de
+        // départ a rejoint les deux autres boutons blancs, sur une ligne, et le
+        // seul rouge du groupe est l'enregistrement. Ce que ce test garde du
+        // 1404, c'est l'absence de menu déroulant et la section non repliable.
+        ok('1404/1409 — PAS DE MENU DÉROULANT, ET LA REMISE AU POINT DE DÉPART EST BLANCHE DANS LA BARRE',(()=>{
           const z=document.getElementById('ccd-nutrition');
           poser(null); renderCoachNutriSection(getOwnedClient('A1'));
           const r=document.getElementById('ccd-nut-reglages');
@@ -36935,21 +36960,31 @@ async function testExercices(){
           const s=r.closest('.cc-sect');
           if(s&&!s.classList.contains('cc-sect-fixe')) return _echec('il vit encore dans une section repliable');
           if(/Régler les objectifs/.test(z.textContent)) return _echec('le titre du menu déroulant est encore là');
-          const b=[...r.querySelectorAll('button')].find(x=>/Remettre les calculs au point de départ/.test(x.textContent));
+          const b=[...z.querySelectorAll('button')].find(x=>/Remettre les calculs au point de départ/.test(x.textContent));
           if(!b) return _echec('le bouton de remise au point de départ manque');
-          if(!b.classList.contains('btn-red')) return _echec('le bouton n’est pas rouge : '+b.className);
+          if(!b.closest('.tbk-trio')) return _echec('il n’est pas dans la barre des trois : '+b.className);
+          if(b.classList.contains('btn-red')) return _echec('il est resté rouge : '+b.className);
           return /reinitialiserCalculs\(\)/.test(b.getAttribute('onclick')||'')
             ?true:_echec('le bouton n’appelle plus la remise au point de départ');})());
 
         ok('Le bouton de remise a zero est atteignable, et separe du bouton rouge',(()=>{
           const z=document.getElementById('ccd-nutrition');
           poser(null); renderCoachNutriSection(getOwnedClient('A1'));
-          if(z.innerHTML.indexOf('reinitialiserCalculs()')<0)
-            return _echec('le bouton a disparu');
+          const reinit=z.innerHTML.indexOf('reinitialiserCalculs()');
+          if(reinit<0) return _echec('le bouton a disparu');
           // Il ecrit et remet le compteur de phase a zero : il ne doit pas se
-          // cliquer par erreur a la place de l'enregistrement.
-          return z.innerHTML.indexOf('saveClientNutriMacros()')<z.innerHTML.indexOf('reinitialiserCalculs()')
-            ?true:_echec('il passe devant l\'enregistrement');})());
+          // cliquer par erreur a la place de l'enregistrement. Depuis le build
+          // 1409 ils sont VOISINS — la remise ferme la ligne des trois blancs,
+          // l'enregistrement est juste dessous — donc ce qui les separe n'est
+          // plus la distance mais la COULEUR : un seul des deux est rouge.
+          const save=z.innerHTML.indexOf('enregistrerEtTransmettre()');
+          if(save<0) return _echec('le bouton d\'enregistrement a disparu');
+          if(!(reinit<save)) return _echec('la remise passe derriere l\'enregistrement');
+          const br=[...z.querySelectorAll('button')].find(x=>/reinitialiserCalculs/.test(x.getAttribute('onclick')||''));
+          const be=[...z.querySelectorAll('button')].find(x=>/enregistrerEtTransmettre/.test(x.getAttribute('onclick')||''));
+          if(br.classList.contains('btn-red')) return _echec('la remise est rouge elle aussi');
+          return be.classList.contains('btn-red')
+            ?true:_echec('l\'enregistrement n\'est plus le rouge du groupe');})());
 
         ok('AUCUN BADGE JOUR ON / JOUR OFF sur une diete non cyclee',(()=>{
           // Les deux jours portent alors les memes cibles : annoncer « JOUR OFF »

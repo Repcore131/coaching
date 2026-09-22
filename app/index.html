@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1408';
+window.RC_BUILD='1409';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5278,6 +5278,18 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
    qui deborde de sa carte serait pire qu'un libelle sur deux lignes. */
 .tbk-save-c{display:block;width:auto;min-width:min(100%,240px);max-width:100%;
   margin:0 auto 10px;padding:9px 22px;min-height:46px;white-space:normal;line-height:1.25}
+/* ══ LA BARRE DES TROIS BOUTONS BLANCS (build 1409) ═══════════════════
+   Kevin : « les 3 autres se retrouvent en haut en blanc sur la meme ligne ».
+   flex:1 1 0 et min-width:0 les gardent sur UNE ligne a toutes les largeurs,
+   a trois parts egales : a 375 px ils font 110 px chacun et leur libelle
+   passe a la ligne DANS le bouton — c'est ce que « sur la meme ligne »
+   demande, et c'est preferable a trois boutons qui se replient l'un sous
+   l'autre et redonnent les quatre lignes qu'on vient de supprimer.
+   En blanc franc (#fff) et non le #aaa de .btn-outline : ils ne sont pas en
+   retrait, ils sont le premier etage du groupe. */
+.tbk-trio{display:flex;gap:8px;align-items:stretch;margin:0 0 10px}
+.tbk-trio .tbk-trio-b{flex:1 1 0;min-width:0;margin:0;padding:9px 10px;
+  min-height:46px;color:#fff;white-space:normal;line-height:1.2}
 /* ══ LES CARTES DES CALCULS ALIMENTAIRES (build 1403) ══════════════════
    Kevin, 22/09/2026, maquette a l'appui. Chaque tableau vit dans une carte :
    filet rouge, pastille d'icone, titre et sous-titre en <caption>, lignes en
@@ -84844,27 +84856,41 @@ function _htmlTableauxTableur(c){
   // que le coach corrige ensuite. Sa place est donc contre ces champs, pas
   // trois ecrans plus bas, et il ne s'offre qu'en manuel : en automatique il
   // remplirait des cases avec ce qu'elles portent deja.
-  // ⚠ L'ENREGISTREMENT PASSE DEVANT, ET IL EST CENTRE SUR SA PROPRE LIGNE.
-  // Demande de Kevin, 15/09/2026. C'est le geste qu'on fait APRES avoir rempli
-  // le tableau juste au-dessus — donc celui qu'on cherche en premier en
-  // sortant des champs. « Proposer un point de depart », lui, se fait AVANT de
-  // remplir : il pre-remplit les cases. Il passe donc en second, en retrait,
-  // pleine largeur : on n'y revient pas a chaque reglage.
+  // ⚠ L'ENREGISTREMENT PASSAIT DEVANT DEPUIS LE 15/09/2026 — IL EST PASSE
+  // DERRIERE le 22/09/2026 (build 1409, plus bas). Ce qui n'a pas change :
+  // il est CENTRE SUR SA PROPRE LIGNE et il est le seul rouge. « Proposer un
+  // point de depart », lui, se fait AVANT de remplir : il pre-remplit les
+  // cases, et il ne s'offre qu'en manuel.
   // ══ TROIS BOUTONS, PLUS QUATRE (build 1408) ══════════════════════════
   // Kevin : « il y a trop de boutons similaires ». « Enregistrer ces
   // chiffres », « Enregistrer les réglages » et « Enregistrer pour l'athlète »
   // faisaient tous les trois la meme promesse ; il n'en reste qu'un, qui
   // attend la reponse du serveur et dit si l'athlete a recu. Les deux autres
   // ne s'enregistrent pas : ils proposent, et ils racontent.
+  // ══ LES TROIS BLANCS SUR UNE LIGNE, LE ROUGE DESSOUS (build 1409) ═════
+  // Kevin, 22/09/2026, capture a l'appui : « le bouton enregistrer et
+  // transmettre a l'athlete doit se retrouver en bas des 4 boutons, les 3
+  // autres se retrouvent en haut en blanc sur la meme ligne ».
+  // LA REMISE AU POINT DE DEPART REMONTE DONC ICI : elle vivait dans
+  // _reglages, sous les alertes, et elle etait rouge (build 1404). Les quatre
+  // boutons se suivaient a l'ecran sans se ressembler — deux rouges, deux
+  // blancs, quatre lignes. Ils forment maintenant un seul groupe : ce qui
+  // PROPOSE, RACONTE ou DEFAIT en haut, en blanc, cote a cote ; ce qui
+  // ENREGISTRE en dessous, seul et rouge. Le garde-fou de la remise reste sa
+  // confirmation dans reinitialiserCalculs, pas sa couleur.
   const _nbH=histoCibles(c).length;
-  h+='<button type="button" class="btn btn-red tbk-save-c" '
-    +'onclick="enregistrerEtTransmettre()">Enregistrer et transmettre à l’athlète</button>'
-    +(_man?('<button type="button" class="btn btn-outline tbk-save" '
+  h+='<div class="tbk-trio">'
+    +(_man?('<button type="button" class="btn btn-outline tbk-trio-b" '
       +'onclick="proposerPointDepart()">Proposer un point de départ</button>'):'')
-    +'<button type="button" class="btn btn-outline tbk-save tbk-h-b" aria-expanded="'
+    +'<button type="button" class="btn btn-outline tbk-trio-b tbk-h-b" aria-expanded="'
       +(_histoOuvert?'true':'false')+'" onclick="basculerHistoTableur()">'
       +'Historique des modifications'+(_nbH?' ('+_nbH+')':'')+'</button>'
-    +(_histoOuvert?_htmlHistoTableur(c):'');
+    +'<button type="button" class="btn btn-outline tbk-trio-b" '
+      +'onclick="reinitialiserCalculs()">Remettre les calculs au point de départ</button>'
+    +'</div>'
+    +(_histoOuvert?_htmlHistoTableur(c):'')
+    +'<button type="button" class="btn btn-red tbk-save-c" '
+    +'onclick="enregistrerEtTransmettre()">Enregistrer et transmettre à l’athlète</button>';
 
 
 
@@ -85209,13 +85235,16 @@ function renderCoachNutriSection(c){
         const _o=((c.nutrition||{}).macros||{}).origine;
         return _o==='ajustement'?_htmlOrigineCibles(c):'';
       }catch(e){ return ''; } })()}
-      <!-- REMISE AU POINT DE DEPART. Demande de Kevin : « si la personne lache
-           sa seche ou sa PDM quelque temps ». EN ROUGE depuis le 22/09/2026
-           (build 1404), a sa demande : « laisse le bouton en rouge ». Il ecrit
-           et remet le compteur de phase a zero — la confirmation de
-           reinitialiserCalculs reste le garde-fou contre le clic de trop. -->
-      <button class="btn btn-red" onclick="reinitialiserCalculs()"
-        style="width:100%;margin:8px 0 16px;min-height:46px">Remettre les calculs au point de départ</button>`;
+      <!-- ⚠ LA REMISE AU POINT DE DEPART A QUITTE CETTE SECTION le 22/09/2026
+           (build 1409). Elle etait ici, rouge et pleine largeur (build 1404),
+           juste sous les alertes — donc collee aux trois boutons du tableau,
+           sans faire groupe avec eux. Kevin : « les 3 autres se retrouvent en
+           haut en blanc sur la meme ligne ». Elle est maintenant le troisieme
+           bouton blanc de la barre de _htmlTableauxTableur, au-dessus du seul
+           bouton rouge. Rien d'autre n'a bouge : meme appel, meme
+           confirmation dans reinitialiserCalculs, meme garde-fou.
+           CE QUI RESTE ICI, ce sont les alertes : violations, ajustement
+           propose, et l'origine des cibles quand elle previent. -->`;
   // ⚠ DEUX BLOCS ONT QUITTE CETTE FONCTION le 08/09/2026.
   //   • LE TAUX DE DIETE RESPECTEE est remonte au-dessus de cette section,
   //     en camembert, juste sous le type de diete : c'est un CONSTAT, il n'a
