@@ -3519,7 +3519,12 @@ function _mlxCreer(t,pts,extra){
   _mlxApresChangement();
   // LE NOM D'ABORD : « Nom de l'annotation » est la première chose qu'on règle
   // d'un tracé neuf. Le champ est déjà rempli ; Entrée le valide.
-  if(t!=='texte') requestAnimationFrame(()=>{
+  // ⚠ SAUF QUAND LA VIDÉO TOURNE, ou va tourner — la trajectoire suivie se
+  // rejoue d'elle-même. Le champ prenait alors la barre d'espace : elle tapait
+  // un espace dans le nom au lieu d'arrêter la vidéo, et le coach croyait le
+  // bouton cassé (Kevin, 22/09/2026 : « elle ne veut plus s'arrêter »).
+  const vid=_mlVideo();
+  if(t!=='texte'&&!(extra&&extra.tp)&&!!vid&&vid.paused) requestAnimationFrame(()=>{
     const i=_mlEl('mlx-nom');
     if(i instanceof HTMLInputElement){ try{ i.focus({preventScroll:true}); i.select(); }catch(e){} }
   });
@@ -3735,6 +3740,7 @@ function _mlxPointer(e,calque){
   // et Entrée, pendant un tracé commencé d'un clic, iraient au champ.
   const af=document.activeElement;
   if(af instanceof HTMLInputElement||af instanceof HTMLTextAreaElement) af.blur();
+  const jouait=!v.paused&&!v.ended;
   // DESSINER FIGE L'IMAGE : un tracé se pose sur une image, pas sur un
   // mouvement qui défile sous le doigt — SAUF si le coach a allumé « Tracer
   // pendant la lecture ». Le texte fige toujours : il ouvre une saisie.
@@ -3745,6 +3751,11 @@ function _mlxPointer(e,calque){
   // glisser l'entoure ; au lâcher, le suivi part de l'image affichée.
   if(outil==='libre'&&_ml.trajAuto){
     try{ v.pause(); }catch(x){}
+    // LA VIDÉO TOURNAIT : ce toucher l'ARRÊTE, et c'est tout. Il lançait un
+    // nouveau suivi, qui se rejouait à son tour — chaque toucher pour arrêter
+    // la vidéo la relançait avec une trajectoire de plus. Le détail se désigne
+    // sur une image arrêtée.
+    if(jouait){ toast('Vidéo arrêtée : touche maintenant le détail à suivre.'); return; }
     _ml.trace={t:'cercle',pts:[p,p.slice()],d0:sMs};
     const x0=e.clientX, y0=e.clientY;
     let loin=0;
@@ -4607,6 +4618,10 @@ async function mlTrajectoireAuto(p,rVid){
   toast(perdu>=0
     ?'Le détail se perd à '+mlTempsTexte(perdu).slice(0,-3)+' : la trajectoire s’arrête là.'
     :'Trajectoire suivie sur '+mlTempsTexte(tp[tp.length-1]-tp[0]).slice(0,-3)+' ✓',perdu>=0?'var(--orange)':undefined);
+  // L'OUTIL SE REPOSE sur Sélection : la trajectoire est posée, et un toucher
+  // sur l'image pendant sa relecture ne doit pas en lancer une autre. Un
+  // modèle en cours garde la main — il arme lui-même son étape suivante.
+  if(!_ml.guide) mlOutil('selection');
   // ELLE SE REJOUE AUSSITÔT : la vidéo repart du premier point, et le trait se
   // trace avec le mouvement.
   _mlAller(tp[0]);

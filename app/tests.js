@@ -46582,6 +46582,78 @@ async function testExercices(){
       if(mlTrajArreter()!==false) return _echec('« Arrêter » répond sans suivi en cours');
       return true;
     });
+    okA('MLX — après une trajectoire, la vidéo s’arrête : ni le champ du nom ni un toucher ne la retiennent',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
+      const svR=window._mlVideoRect, svTps=window._mlxTempsMs, svAuto=window.mlTrajectoireAuto;
+      // LES DEMANDES D'IMAGE DE CE TRACÉ-LÀ, et elles seules, jouées tout de
+      // suite : dans la suite, l'affichage est ralenti, et la demande de focus
+      // d'un test précédent tombait au milieu de celui-ci.
+      const creer=(...args)=>{
+        const q=[], r0=window.requestAnimationFrame;
+        window.requestAnimationFrame=cb=>{ q.push(cb); return 0; };
+        try{ _mlxCreer(...args); } finally { window.requestAnimationFrame=r0; }
+        q.forEach(cb=>{ try{ cb(performance.now()); }catch(e){} });
+      };
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
+        _r28Monter([_r28Video({segments:[]})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        _ml.dureeMs=20000;
+        window._mlVideoRect=()=>({s:1,ox:0,oy:0,vw:400,vh:700});
+        window._mlxTempsMs=()=>3000;
+        let suivis=0; window.mlTrajectoireAuto=async()=>{ suivis++; return true; };
+        const v=_mlVideo(), calque=document.getElementById('ml-calque'), bc=calque.getBoundingClientRect();
+        const pe=(type,x,y,btn)=>calque.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:1,
+          pointerType:'mouse',clientX:bc.left+x,clientY:bc.top+y,buttons:btn?1:0}));
+        let pauses=0, joue=true;
+        const svP=v.pause;
+        Object.defineProperty(v,'paused',{configurable:true,get:()=>!joue});
+        v.pause=function(){ pauses++; joue=false; };
+        try{
+          // UNE VIDÉO QUI TOURNE, L'OUTIL TRAJECTOIRE ARMÉ : le toucher l'arrête, rien d'autre.
+          mlOutil('libre'); mlTrajMode(true);
+          pe('pointerdown',200,300,1); pe('pointerup',200,300,0);
+          if(!pauses) return 'le toucher n’arrête pas la vidéo';
+          if(suivis||_ml.trace) return 'le toucher relance un suivi au lieu d’arrêter la vidéo';
+          // IMAGE ARRÊTÉE : le même toucher désigne le détail, et le suivi part.
+          pe('pointerdown',200,300,1); pe('pointerup',200,300,0);
+          if(suivis!==1) return 'sur une image arrêtée, le toucher ne lance pas le suivi';
+          // LE CHAMP DU NOM ne prend pas le clavier quand la vidéo tourne…
+          joue=true;
+          const b=document.createElement('button'); document.body.appendChild(b); b.focus();
+          creer('ligne',[[100,100],[900,100]]);
+          if(document.activeElement&&document.activeElement.id==='mlx-nom') return 'vidéo en lecture : le champ du nom prend le clavier';
+          // … ni pour une trajectoire suivie, qui va se rejouer…
+          joue=false; b.focus();
+          creer('libre',[[100,500],[500,500]],{d0:1000,f0:4000,tp:[1000,3000]});
+          if(document.activeElement&&document.activeElement.id==='mlx-nom') return 'trajectoire suivie : le champ du nom prend le clavier';
+          // … mais le prend toujours pour un tracé posé sur une image arrêtée.
+          b.focus();
+          creer('ligne',[[100,200],[900,200]]);
+          b.remove();
+          if(!document.activeElement||document.activeElement.id!=='mlx-nom') return 'image arrêtée : le nom ne prend plus la main';
+        } finally { v.pause=svP; delete v.paused; }
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      catch(e){ msg='exception : '+e.message; }
+      finally {
+        window._mlVideoRect=svR; window._mlxTempsMs=svTps; window.mlTrajectoireAuto=svAuto;
+        try{ if(document.activeElement&&document.activeElement.blur) document.activeElement.blur(); }catch(e){}
+        try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT; CLOUD.pushOne=svPush;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      return msg?_echec(msg):true;
+    });
 
     okA('R28 — le service worker ne reconduit pas motion-lab.js d’une version à l’autre',async()=>{
       let src='';
