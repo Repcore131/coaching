@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1395';
+window.RC_BUILD='1396';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -52807,10 +52807,13 @@ const CORPS_SEM_MAX=8;
  *   derniere semaine REELLEMENT travaillee, et le pied de la courbe DIT
  *   laquelle.
  *
- * ⚠ ET ON NE PREVOIT RIEN. grilleCharge, elle, remplit une semaine vide avec
- *   le volume PREVISIONNEL du gabarit ; c'est defendable dans une grille qui
- *   annonce le bloc a venir, ca ne l'est pas ici : ce serait tracer une
- *   charge qui n'a pas eu lieu.
+ * ⚠ ET ON NE PREVOIT RIEN DANS LE TRAIT PLEIN. grilleCharge, elle, remplit
+ *   une semaine vide avec le volume PREVISIONNEL du gabarit ; tracer ce
+ *   previsionnel comme du realise serait tracer une charge qui n'a pas eu
+ *   lieu. Depuis le 1396, quand un programme existe, corpsCourbesVolume ne
+ *   passe plus par ici : la semaine en cours y est la semaine ENTIERE du
+ *   programme, EN POINTILLE, et le pied le dit. Cote courbe, cette fonction
+ *   ne borne plus que celle d'un athlete sans programme.
  * @returns {{cle:string,decalage:number}|null}
  */
 function corpsSemaineVolume(u){
@@ -53195,6 +53198,69 @@ function corpsPointsVolume(u,muscle,n,fin){
   return out;
 }
 /**
+ * La semaine EN COURS, ENTIERE, telle que le programme la prevoit — ou null
+ * quand il ne prevoit aucune serie. IMPURE : elle lit l'horloge.
+ *
+ * ⚠ KEVIN, 22/09/2026 : « sur une semaine entiere de programme ». Le bord
+ *   droit de la courbe etait la semaine en cours comptee sur les seules
+ *   seances deja faites : un mardi, les trois courbes plongeaient, et le
+ *   graphique disait l'avancee de la semaine au lieu de la charge du
+ *   programme. volumePrescritSemaine rend la semaine effective du bloc —
+ *   decharge et ecarts compris —, ou le gabarit sans bloc date.
+ * @returns {{cle:string,muscles:Object.<string,number>,source:string}|null}
+ */
+function corpsSemainePrevue(u){
+  let v=null;
+  try{ v=volumePrescritSemaine(u,new Date()); }catch(e){ v=null; }
+  const muscles=(v&&v.muscles)||{};
+  if(!Object.keys(muscles).some(m=>MUSCLES[m]&&muscles[m]>0)) return null;
+  let cle=null;
+  try{ cle=_volCleDecalee(0); }catch(e){ return null; }
+  return {cle,muscles,source:v.source};
+}
+/**
+ * Les trois courbes des series dures et la phrase qui les date, ou null.
+ * IMPURE — elle lit l'horloge.
+ *
+ * ⚠ AVEC UN PROGRAMME, LES SEMAINES PASSEES SONT CE QUI A ETE FAIT, ET LA
+ *   SEMAINE EN COURS EST LA SEMAINE ENTIERE DU PROGRAMME, en pointillé. Elle
+ *   n'est plus coupee a « aujourd'hui », et le lundi vide ne fait plus
+ *   plonger la courbe. Les trois muscles sont les plus charges du PROGRAMME
+ *   ENTIER — ceux que la silhouette peint le plus fonce, a cote.
+ * ⚠ SANS PROGRAMME, RIEN N'EST PREVU ET RIEN NE S'INVENTE : la courbe
+ *   s'arrete a la derniere semaine travaillee, comme avant.
+ * @returns {{series:{lib:string,couleur:string,points:{x:number,v:number,prevu?:boolean}[]}[],pied:string}|null}
+ */
+function corpsCourbesVolume(u){
+  const N=CORPS_GRAPHE_SEMAINES;
+  const serie=(m,points)=>({lib:(MUSCLES[m]||{}).lib||m,
+    couleur:(MUSCLES[m]||{}).c||'var(--sub)',points});
+  const lesTrois=ref=>Object.keys(ref).filter(m=>MUSCLES[m]&&ref[m]>0)
+    .sort((a,b)=>(ref[b]||0)-(ref[a]||0)).slice(0,3);
+  const prev=corpsSemainePrevue(u);
+  if(prev){
+    let prog=null;
+    try{ prog=volumePrescritProgramme(u); }catch(e){ prog=null; }
+    let top=lesTrois((prog&&prog.muscles)||{});
+    if(!top.length) top=lesTrois(prev.muscles);
+    if(!top.length) return null;
+    return {series:top.map(m=>serie(m,corpsPointsVolume(u,m,N-1,1).concat([{x:N-1,
+        v:Math.round((Number(prev.muscles[m])||0)*10)/10,prevu:true}]))),
+      pied:'Les trois muscles les plus chargés du programme, sur '+N+' semaines : '
+        +'les séries faites, puis en pointillé la semaine du '+_corpsLibSemaine(prev.cle)
+        +' entière, telle que le programme la prévoit — pas son avancée.'};
+  }
+  const sem=corpsSemaineVolume(u);
+  if(!sem) return null;
+  let vol={};
+  try{ vol=volumeSemaine(u,sem.cle)||{}; }catch(e){ vol={}; }
+  const top=lesTrois(vol);
+  if(!top.length) return null;
+  return {series:top.map(m=>serie(m,corpsPointsVolume(u,m,N,sem.decalage))),
+    pied:'Les trois muscles les plus chargés, sur '+N
+      +' semaines, jusqu’à la semaine du '+_corpsLibSemaine(sem.cle)+'.'};
+}
+/**
  * PURE. Une courbe SVG, a echelle PARTAGEE entre ses series.
  *
  * ⚠ _sparkline N'A PAS PU SERVIR, ET C'EST LA SEULE RAISON D'AVOIR ECRIT
@@ -53235,15 +53301,25 @@ function _corpsCourbe(series,o){
   // lit comme une courbe coupee.
   const X=p=>((p.x-xmin)/dx)*100;
   const Y=p=>plat?(H/2):(H-2-((p.v-vmin)/dv)*(H-4));
+  const trait=(pts,couleur,tirets)=>'<path d="'
+    +pts.map((p,i)=>(i?'L':'M')+X(p).toFixed(2)+' '+Y(p).toFixed(2)).join(' ')
+    +'" fill="none" stroke="'+escapeHtml(couleur)
+    +'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"'
+    +(tirets?' stroke-dasharray="3 3"':'')
+    +' vector-effect="non-scaling-stroke"/>';
   let corps='';
   for(const g of s){
     const pts=g.points.filter(p=>isFinite(p.x)&&isFinite(p.v))
       .slice().sort((a,b)=>a.x-b.x);
     if(pts.length<2) continue;
-    const d=pts.map((p,i)=>(i?'L':'M')+X(p).toFixed(2)+' '+Y(p).toFixed(2)).join(' ');
-    corps+='<path d="'+d+'" fill="none" stroke="'+escapeHtml(g.couleur)
-      +'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"'
-      +' vector-effect="non-scaling-stroke"/>';
+    // ⚠ UN POINT PREVU SE TRACE EN POINTILLE, JAMAIS DANS LE TRAIT PLEIN. Le
+    //   trait plein dit ce qui a ete fait ; prolonger ce trait jusqu'a un
+    //   point prevu ferait passer le programme pour des seances faites.
+    const i0=pts.findIndex(p=>p.prevu);
+    const pleins=i0<0?pts:pts.slice(0,i0);
+    const prevus=i0<0?[]:pts.slice(Math.max(0,i0-1));
+    if(pleins.length>=2) corps+=trait(pleins,g.couleur,false);
+    if(prevus.length>=2) corps+=trait(prevus,g.couleur,true);
   }
   if(!corps) return null;
   // Le filet du bas : il donne un sol a la courbe. Sans lui, une ligne seule
@@ -53373,20 +53449,9 @@ function _htmlCorpsGraphes(u){
   // ⚠ TROIS, PAS DIX-HUIT. Dix-huit lignes sur quatre-vingts pixels de haut
   //   font une pelote. Ce sont les trois muscles les plus charges de la
   //   semaine de reference — ceux dont la charge decide du reste.
-  const sem=corpsSemaineVolume(u);
-  if(sem){
-    let vol={};
-    try{ vol=volumeSemaine(u,sem.cle)||{}; }catch(e){ vol={}; }
-    const top=Object.keys(vol).filter(m=>MUSCLES[m]&&vol[m]>0)
-      .sort((a,b)=>(vol[b]||0)-(vol[a]||0)).slice(0,3);
-    if(top.length)
-      h+=_htmlCorpsGraphe('Séries dures par semaine','',
-        top.map(m=>({lib:(MUSCLES[m]||{}).lib||m,couleur:(MUSCLES[m]||{}).c||'var(--sub)',
-          points:corpsPointsVolume(u,m,CORPS_GRAPHE_SEMAINES,sem.decalage)})),
-        {h:44,valeur:'',
-         pied:'Les trois muscles les plus chargés, sur '+CORPS_GRAPHE_SEMAINES
-           +' semaines, jusqu’à la semaine du '+_corpsLibSemaine(sem.cle)+'.'});
-  }
+  const cv=corpsCourbesVolume(u);
+  if(cv) h+=_htmlCorpsGraphe('Séries dures par semaine','',cv.series,
+    {h:44,valeur:'',pied:cv.pied});
   return h;
 }
 /**

@@ -39032,6 +39032,62 @@ async function testExercices(){
         return _echec('les mensurations ont disparu en mode neutre');
       return true;})());
 
+    ok('LA COURBE DES SÉRIES DURES FINIT SUR LA SEMAINE ENTIÈRE DU PROGRAMME, PAS SUR SON AVANCÉE',(()=>{
+      // KEVIN, 22/09/2026 : « sur une semaine entiere de programme ». Un
+      // mardi, la semaine en cours ne comptait que la seance deja faite, et
+      // les trois courbes plongeaient au bord droit : le graphique disait
+      // l'avancee de la semaine, pas la charge du programme.
+      const J=864e5, t=Date.now();
+      const serie=()=>({weight:'60',reps:'8',rir:'2',done:true});
+      const faites=(nom,k)=>({[nom]:{sets:Array.from({length:k},serie)}});
+      const u={id:'V1',email:'v1-1396@t.fr',role:'athlete',gender:'H',
+        sessions_config:[{active:true,name:'Haut',exercises:[
+          {name:'Développé couché',series:'12',rir:'2'},
+          {name:'Squat',series:'4',rir:'2'}]}],
+        sessions:[
+          {id:'a',date:t-7*J,data:faites('Développé couché',10)},  // la semaine d'avant, entiere
+          {id:'b',date:t,data:faites('Développé couché',1)}]};     // la semaine en cours, entamee
+      const cv=corpsCourbesVolume(u);
+      if(!cv) return _echec('aucune courbe avec un programme et des séances');
+      const prevu=volumePrescritSemaine(u,new Date()).muscles;
+      const top=Object.keys(prevu).filter(m=>MUSCLES[m]&&prevu[m]>0)
+        .sort((a,b)=>prevu[b]-prevu[a])[0];
+      if(!top) return _echec('le programme d’essai ne prévoit rien');
+      const s=cv.series.find(x=>x.lib===((MUSCLES[top]||{}).lib||top));
+      if(!s) return _echec('le muscle le plus chargé du programme n’a pas sa courbe');
+      if(s.points.length!==CORPS_GRAPHE_SEMAINES)
+        return _echec(s.points.length+' semaines au lieu de '+CORPS_GRAPHE_SEMAINES);
+      const r1=v=>Math.round((Number(v)||0)*10)/10;
+      const der=s.points[s.points.length-1];
+      if(der.prevu!==true) return _echec('la semaine en cours n’est pas marquée prévue');
+      if(der.v!==r1(prevu[top]))
+        return _echec('la semaine en cours vaut '+der.v+' au lieu des '+r1(prevu[top])+' du programme');
+      const entamee=r1((volumeSemaine(u,_volCleDecalee(0))||{})[top]);
+      if(der.v===entamee)
+        return _echec('le bord droit est encore l’avancée de la semaine : '+der.v);
+      // LES SEMAINES PASSEES RESTENT CE QUI A ETE FAIT.
+      const avant=s.points[s.points.length-2];
+      if(avant.prevu) return _echec('une semaine passée est marquée prévue');
+      if(avant.v!==r1((volumeSemaine(u,_volCleDecalee(1))||{})[top]))
+        return _echec('la semaine passée ne dit plus ce qui a été fait : '+avant.v);
+      // LE PREVU EST EN POINTILLE, JAMAIS DANS LE TRAIT PLEIN, ET LE PIED LE DIT.
+      const h=_htmlCorpsGraphes(u);
+      if(h.indexOf('stroke-dasharray')<0) return _echec('la semaine prévue n’est pas en pointillé');
+      if(h.indexOf('entière, telle que le programme la prévoit')<0)
+        return _echec('le pied ne dit pas que la semaine en cours est celle du programme');
+      if(h.indexOf('semaine du '+_corpsLibSemaine(_volCleDecalee(0)))<0)
+        return _echec('la semaine prévue n’est pas nommée');
+      // SANS PROGRAMME, RIEN NE S'INVENTE : la courbe s'arrete a la derniere
+      // semaine faite, sans pointille.
+      const sans=Object.assign({},u,{email:'v2-1396@t.fr',sessions_config:[]});
+      const cs=corpsCourbesVolume(sans);
+      if(!cs) return _echec('l’athlète sans programme perd sa courbe');
+      if(cs.series.some(x=>x.points.some(p=>p.prevu)))
+        return _echec('un point prévu apparaît sans programme');
+      if(_htmlCorpsGraphes(sans).indexOf('stroke-dasharray')>=0)
+        return _echec('du pointillé sans programme');
+      return true;})());
+
     ok('UNE INVITATION PAS ENCORE CONSOMMÉE N\u2019A PAS DE CORPS',(()=>{
       // `_fromCode` est un profil minimal fabrique a partir d'un code :
       // personne ne s'est inscrit, il n'y a ni seance, ni bilan, ni silhouette
