@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1397';
+window.RC_BUILD='1398';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4619,6 +4619,17 @@ html{scroll-behavior:smooth}
   font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap}
 .cc-corps-lp i{width:9px;height:9px;border-radius:2px;display:inline-block;
   flex:0 0 auto}
+/* LE BAS DU CADRE (build 1398) : note des ecarts et legende a gauche, petit
+   cadre de l'explication a droite. Les deux blocs partent de 220 px : cote a
+   cote des 454 px de large — le poste, la fiche coach —, empiles en dessous
+   (telephone) : le cadre passe alors sous la legende, jamais ecrase a cote
+   d'elle. */
+.cc-corps-bas{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.cc-corps-bas-g{flex:1 1 220px;min-width:0}
+.cc-corps-x{flex:1 1 220px;min-width:0;margin-top:7px;padding:9px 12px;
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.12);
+  border-radius:var(--r-3)}
+.cc-corps-x .cc-corps-lt{display:block;margin:0;text-align:left}
 /* La charge en toutes lettres, pour un lecteur d'ecran : visuellement cachee. */
 .cc-corps-lu{position:absolute;width:1px;height:1px;overflow:hidden;
   clip:rect(0 0 0 0);white-space:nowrap}
@@ -53636,16 +53647,6 @@ function _htmlCorpsCadre(c){
       +Object.keys(GC_COULEURS).map(k=>'<span class="cc-corps-lp">'
         +'<i style="background:'+escapeHtml(GC_COULEURS[k])+'"></i>'
         +escapeHtml(k)+'</span>').join('')
-      +(aProg
-        // LE PREVU SE DIT PREVU, et son intensite aussi : sans consigne de
-        // RIR, une serie programmee compte pleine — c'est un maximum, comme
-        // le dit deja le panneau « Volume prescrit ».
-        ?'<span class="cc-corps-lt">Chaque muscle prend la couleur de sa zone pour le volume que le '
-          +'programme lui donne par semaine — ni l’avancée de la semaine, ni le développement. '
-          +(prog.avecConsigne?'Séries pondérées par l’intensité prescrite. ':'Sans intensité prescrite, c’est un maximum. ')
-          +'Un muscle sans série programmée, ou sans repère de volume, n’est pas teinté. Touchez un muscle pour son chiffre.</span>'
-        :'<span class="cc-corps-lt">Elle dit la zone du volume d’entraînement, jamais le '
-          +'développement. Un muscle sans série, ou sans repère de volume, n’est pas teinté. Touchez un muscle pour son chiffre.</span>')
       // Les points medians separent a l'oeil et ne s'entendent pas : a voix
       // haute, deux-points puis virgules, et un point-virgule entre muscles.
       +(lus.length?'<span class="cc-corps-lu">'+(aProg?'Séries programmées : ':'Séries de la semaine : ')
@@ -53653,13 +53654,33 @@ function _htmlCorpsCadre(c){
           .join(' ; ')+'.</span>':'')
       +'</div>'
     :'';
+  // L'EXPLICATION DE LA TEINTE, DANS UN PETIT CADRE EN FACE DE LA LEGENDE
+  // (build 1398, Kevin : « mets ça en face, dans un petit rectangle »). Elle
+  // garde la classe cc-corps-lt : c'est toujours la legende qui parle.
+  const explication=!teinte?'':('<div class="cc-corps-x"><p class="cc-corps-lt">'
+    +(aProg
+      // LE PREVU SE DIT PREVU, et son intensite aussi : sans consigne de
+      // RIR, une serie programmee compte pleine — c'est un maximum, comme
+      // le dit deja le panneau « Volume prescrit ».
+      ?'Chaque muscle prend la couleur de sa zone pour le volume que le '
+        +'programme lui donne par semaine — ni l’avancée de la semaine, ni le développement. '
+        +(prog.avecConsigne?'Séries pondérées par l’intensité prescrite. ':'Sans intensité prescrite, c’est un maximum. ')
+        +'Un muscle sans série programmée, ou sans repère de volume, n’est pas teinté. Touchez un muscle pour son chiffre.'
+      :'Elle dit la zone du volume d’entraînement, jamais le '
+        +'développement. Un muscle sans série, ou sans repère de volume, n’est pas teinté. Touchez un muscle pour son chiffre.')
+    +'</p></div>');
+  // LE BAS DU CADRE : la note des ecarts et la legende a gauche, le petit
+  // cadre de l'explication a droite — et dessous quand la largeur manque.
+  const bas=(explication
+    ?'<div class="cc-corps-bas"><div class="cc-corps-bas-g">'+note+legende+'</div>'+explication+'</div>'
+    :note+legende);
   // LES GRAPHIQUES NE SORTENT QUE S'ILS ONT DE QUOI TRACER. Chacun se tait
   // tout seul quand il lui manque un point ; les trois muets, la colonne
   // entiere disparait plutot que d'afficher un cadre a trois titres vides.
   const graphes=_htmlCorpsGraphes(u);
   return '<div class="cc-corps">'+tete
     +'<div class="cc-corps-grille">'
-    +'<div class="cc-corps-col">'+scene+note+legende+'</div>'
+    +'<div class="cc-corps-col">'+scene+bas+'</div>'
     +(graphes?('<div class="cc-corps-col">'+graphes+'</div>'):'')
     +'</div></div>';
 }
