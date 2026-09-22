@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1405';
+window.RC_BUILD='1406';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5296,64 +5296,65 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 @container tbk-serre (max-width:899px){
   .tbk-serre .tbk-duo.tbk-duo-l{grid-template-columns:1fr}
 }
-.tbk-carte{position:relative;container-type:inline-size;margin-bottom:14px;
-  padding:4px 14px 12px;border:1px solid rgba(224,32,32,.30);border-radius:16px;
-  background:radial-gradient(120% 90% at 0% 0%,rgba(224,32,32,.10),transparent 55%),
-    linear-gradient(180deg,rgba(26,12,12,.92),rgba(12,12,12,.96));
-  box-shadow:0 14px 34px -22px rgba(224,32,32,.55),inset 0 1px 0 rgba(255,255,255,.04)}
-.tbk-duo>.tbk-carte{margin-bottom:14px}
+.tbk-carte{position:relative;container-type:inline-size;margin-bottom:10px;
+  padding:0 11px 8px;border:1px solid rgba(224,32,32,.26);border-radius:14px;
+  background:radial-gradient(120% 90% at 0% 0%,rgba(224,32,32,.08),transparent 55%),
+    linear-gradient(180deg,rgba(24,12,12,.88),rgba(12,12,12,.95));
+  box-shadow:0 10px 26px -22px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.03)}
+.tbk-duo>.tbk-carte{margin-bottom:10px}
 .tbk-carte .tbk{margin:0;background:none;border:0;border-radius:0;overflow:visible;
-  border-collapse:separate;border-spacing:0 6px}
-.tbk-carte .tbk caption{background:none;padding:10px 0 6px;text-transform:none;
+  border-collapse:separate;border-spacing:0 4px}
+.tbk-carte .tbk caption{background:none;padding:8px 0 3px;text-transform:none;
   letter-spacing:0;color:#fff;font-size:inherit}
-.tbk-cap{display:flex;align-items:center;gap:14px;min-width:0}
-.tbk-cap-i{flex:0 0 46px;width:46px;height:46px;border-radius:12px;display:flex;
-  align-items:center;justify-content:center;color:#ff3b3b;background:rgba(224,32,32,.14);
-  border:1px solid rgba(224,32,32,.38);box-shadow:0 0 18px -6px rgba(224,32,32,.6)}
+.tbk-cap{display:flex;align-items:center;gap:10px;min-width:0}
+.tbk-cap-i{flex:0 0 36px;width:36px;height:36px;border-radius:10px;display:flex;
+  align-items:center;justify-content:center;color:#ff3b3b;background:rgba(224,32,32,.12);
+  border:1px solid rgba(224,32,32,.34);box-shadow:0 0 14px -8px rgba(224,32,32,.6)}
 .tbk-cap-x{min-width:0;flex:1 1 auto}
-.tbk-cap-t{display:block;font-size:15px;font-weight:800;letter-spacing:2.4px;
-  text-transform:uppercase;color:#fff;line-height:1.25}
-.tbk-cap-s{display:block;margin-top:3px;font-size:12px;font-weight:500;
-  color:var(--text-faint);line-height:1.4}
-.tbk-cap-b{flex:0 0 auto;margin-left:auto;padding:6px 12px;border-radius:8px;
-  font-size:10.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+.tbk-cap-t{display:block;font-size:13.5px;font-weight:800;letter-spacing:2px;
+  text-transform:uppercase;color:#fff;line-height:1.2}
+.tbk-cap-s{display:block;margin-top:1px;font-size:11.5px;font-weight:500;
+  color:var(--text-faint);line-height:1.35}
+.tbk-cap-b{flex:0 0 auto;margin-left:auto;padding:4px 10px;border-radius:7px;
+  font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;
   color:#ff4d4d;background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.35)}
 /* LES LIGNES : des bandes arrondies, une icone a gauche. */
 .tbk-carte .tbk:not(.tbk-mac) tbody th,.tbk-carte .tbk:not(.tbk-mac) tbody td{
   background:rgba(255,255,255,.028);border-top:1px solid rgba(255,255,255,.06);
-  border-bottom:1px solid rgba(255,255,255,.06);padding:9px 12px}
+  border-bottom:1px solid rgba(255,255,255,.06);padding:5px 10px}
 .tbk-carte .tbk:not(.tbk-mac) tbody tr>:first-child{border-left:1px solid rgba(255,255,255,.06);
-  border-radius:12px 0 0 12px}
+  border-radius:10px 0 0 10px}
 .tbk-carte .tbk:not(.tbk-mac) tbody tr>:last-child{border-right:1px solid rgba(255,255,255,.06);
-  border-radius:0 12px 12px 0}
+  border-radius:0 10px 10px 0}
 .tbk-carte .tbk tr:nth-child(even){background:none}
-.tbk-carte .tbk:not(.tbk-mac) tbody td{font-size:16px}
-.tbk-l{display:flex;align-items:center;gap:12px;min-width:0}
-.tbk-ri{flex:0 0 38px;width:38px;height:38px;border-radius:10px;display:flex;
+.tbk-carte .tbk:not(.tbk-mac) tbody td{font-size:15px}
+.tbk-l{display:flex;align-items:center;gap:9px;min-width:0}
+.tbk-ri{flex:0 0 30px;width:30px;height:30px;border-radius:8px;display:flex;
   align-items:center;justify-content:center;color:#d4d4d4;
-  background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09)}
-.tbk-lt{min-width:0;color:#fff;font-weight:600}
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+.tbk-lt{min-width:0;color:#fff;font-weight:600;line-height:1.25}
+.tbk-carte .tbk .tbk-aide{margin-top:0;line-height:1.3}
 .tbk-carte .tbk .tbk-aide{color:var(--text-faint);font-weight:400}
-.tbk-v{display:inline-block;min-width:min(100%,150px);padding:8px 14px;border-radius:10px;
+.tbk-v{display:inline-block;min-width:min(100%,140px);padding:5px 11px;border-radius:9px;
   border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.35);text-align:right;
   box-sizing:border-box}
-.tbk-carte .tbk select{max-width:260px;min-height:42px;padding:6px 12px;border-radius:10px;
+.tbk-carte .tbk select{max-width:260px;min-height:34px;padding:4px 10px;border-radius:9px;
   background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14);text-align:left}
 /* LE RESULTAT : bande rouge, valeur rouge, icone rouge. */
 .tbk-carte .tbk:not(.tbk-mac) tr.tbk-tot>th,.tbk-carte .tbk:not(.tbk-mac) tr.tbk-tot>td{
-  background:rgba(224,32,32,.15);border-color:rgba(224,32,32,.45);font-size:var(--fs-sm)}
-.tbk-carte .tbk:not(.tbk-mac) tr.tbk-tot>td{color:#ff3b3b;font-size:22px}
+  background:rgba(224,32,32,.14);border-color:rgba(224,32,32,.42);font-size:var(--fs-xs)}
+.tbk-carte .tbk:not(.tbk-mac) tr.tbk-tot>td{color:#ff3b3b;font-size:19px}
 .tbk-carte .tbk tr.tbk-tot .tbk-ri{color:#ff3b3b;background:rgba(224,32,32,.14);
   border-color:rgba(224,32,32,.4)}
 /* Dans « Journees », les journees sont des lectures, pas LE resultat. */
 .tbk-carte .tbk.tbk-jr tr.tbk-tot>th,.tbk-carte .tbk.tbk-jr tr.tbk-tot>td{
   background:rgba(255,255,255,.028);border-color:rgba(255,255,255,.06)}
-.tbk-carte .tbk.tbk-jr tr.tbk-tot>td{color:#fff;font-size:18px}
+.tbk-carte .tbk.tbk-jr tr.tbk-tot>td{color:#fff;font-size:16px}
 .tbk-carte .tbk.tbk-jr tr.tbk-tot .tbk-ri{color:#d4d4d4;background:rgba(255,255,255,.045);
   border-color:rgba(255,255,255,.09)}
 /* Le sport : le total en rouge, libelle compris ; l'intensite en pastille. */
 .tbk-carte .tbk-4 tr.tbk-tot .tbk-lt{color:#ff3b3b}
-.tbk-carte .tbk-4 thead th{padding:6px 12px 0;background:none;border:0}
+.tbk-carte .tbk-4 thead th{padding:2px 10px 0;background:none;border:0;font-size:10px}
 /* Quatre colonnes a largeur dite : la depense (« 2 100 kcal ») ne se casse
    plus en deux, et les intitules ne se coupent pas au milieu d'un mot. */
 .tbk-carte .tbk-4 thead th{overflow-wrap:normal;word-break:normal;hyphens:none}
@@ -5372,14 +5373,23 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .tbk-carte .tbk-4 tr.tbk-sp .tbk-ri{display:none}
 .tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody tr.tbk-sp>th,
 .tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody tr.tbk-sp>td{padding-left:8px;padding-right:8px}
-.tbk-carte .tbk-4 .tbk-sp-s{width:100%;max-width:none;min-height:36px;padding:4px 6px;
+.tbk-carte .tbk-4 .tbk-sp-s{width:100%;max-width:none;min-height:30px;padding:3px 6px;
   font-size:13px;font-weight:700;color:#fff}
 .tbk-sp-h{display:inline-flex;align-items:center;gap:6px}
-.tbk-carte .tbk-4 .tbk-sp-i{width:54px;max-width:54px;padding:6px 6px;font-size:15px;
+.tbk-carte .tbk-4 .tbk-sp-i{width:54px;max-width:54px;padding:4px 6px;font-size:15px;
   text-align:right;border-radius:10px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14)}
-.tbk-carte .tbk-4 select.tbk-sp-n{width:auto;max-width:100%;min-height:32px;padding:3px 22px 3px 8px;
+/* ⚠ FLECHE DESSINEE, PAS CELLE DU SYSTEME. Chrome reserve une vingtaine de
+   pixels a SA fleche EN PLUS de la marge droite : sur un telephone,
+   « Modérée » se lisait « Mod ». appearance:none rend cette place au texte,
+   et la fleche est peinte en fond. */
+.tbk-carte .tbk-4 select.tbk-sp-n{width:auto;max-width:100%;min-height:28px;padding:2px 20px 2px 8px;
   border-radius:8px;font-size:12px;font-weight:700;color:#f5c542;
-  background-color:rgba(245,197,66,.12);border:1px solid rgba(245,197,66,.45)}
+  appearance:none;-webkit-appearance:none;text-overflow:ellipsis;
+  background-color:rgba(245,197,66,.12);border:1px solid rgba(245,197,66,.45);
+  background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),
+    linear-gradient(135deg,currentColor 50%,transparent 50%);
+  background-position:right 9px center,right 5px center;
+  background-size:4px 4px,4px 4px;background-repeat:no-repeat}
 .tbk-carte .tbk-4 select.tbk-sp-n-faible{color:#4ade80;background-color:rgba(74,222,128,.10);border-color:rgba(74,222,128,.45)}
 .tbk-carte .tbk-4 select.tbk-sp-n-haute{color:#ff5a5a;background-color:rgba(255,90,90,.10);border-color:rgba(255,90,90,.45)}
 .tbk-carte .tbk-4 tr.tbk-sp>td:last-child{white-space:nowrap}
@@ -5388,9 +5398,9 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   vertical-align:middle}
 .tbk-sp-x:hover,.tbk-sp-x:focus-visible{color:#ff5a5a;border-color:rgba(255,90,90,.5)}
 .tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody tr.tbk-sp-add>td{background:none;border:0;border-radius:0;
-  padding:2px 0 4px;text-align:left}
+  padding:1px 0 2px;text-align:left}
 .tbk-sp-bas{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px}
-.tbk-sp-plus{padding:8px 14px;border-radius:10px;border:1px dashed rgba(224,32,32,.55);
+.tbk-sp-plus{padding:6px 12px;border-radius:9px;border:1px dashed rgba(224,32,32,.50);
   background:rgba(224,32,32,.08);color:#ff4d4d;font-family:Montserrat,sans-serif;font-size:12.5px;
   font-weight:800;letter-spacing:.3px;cursor:pointer}
 .tbk-sp-plus:hover,.tbk-sp-plus:focus-visible{background:rgba(224,32,32,.16)}
@@ -5411,21 +5421,31 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
     gap:8px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.028);
     border:1px solid rgba(255,255,255,.06)}
   .tbk-carte .tbk.tbk-4 tbody tr>td:empty{display:none}
-  .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp{display:grid;grid-template-columns:auto auto 1fr;
+  /* La depense garde sa place entiere (« 2 100 kcal » et sa croix) ; c'est
+     l'intensite qui se comprime. */
+  .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;
     grid-template-areas:"s s s" "h n d";gap:8px 10px}
+  .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>td select.tbk-sp-n{width:100%;max-width:100%}
+  /* Les 8 px de marge des cellules larges rognaient le menu d'intensite : en
+     pile, c'est la ligne qui porte la marge, pas la cellule. */
+  .tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody tr.tbk-sp>th,
+  .tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody tr.tbk-sp>td{padding:0}
   .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>th{grid-area:s}
   .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>td:nth-of-type(1){grid-area:h}
   .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>td:nth-of-type(2){grid-area:n}
   .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>td:nth-of-type(3){grid-area:d;text-align:right;white-space:nowrap}
   .tbk-carte .tbk.tbk-4 tbody tr.tbk-tot{background:rgba(224,32,32,.15);border-color:rgba(224,32,32,.45)}
   .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp-add{display:block;padding:2px 0;background:none;border:0}
-  .tbk-carte .tbk-4 .tbk-sp-i{width:50px;max-width:50px}
-  .tbk-carte .tbk-4 select.tbk-sp-n{padding:3px 22px 3px 8px;font-size:12px}
+  .tbk-carte .tbk-4 .tbk-sp-i{width:44px;max-width:44px;padding:4px 4px}
+  .tbk-carte .tbk-4 select.tbk-sp-n{padding:2px 17px 2px 6px;font-size:11.5px;
+    background-position:right 7px center,right 3px center}
   .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>*{min-width:0}
-  .tbk-carte .tbk-4 tr.tbk-sp .tbk-sp-d{font-size:13.5px}
+  .tbk-carte .tbk-4 tr.tbk-sp .tbk-sp-d{font-size:13px}
+  .tbk-carte .tbk-4 tr.tbk-sp .tbk-sp-x{margin-left:4px;width:19px;height:19px;font-size:12px}
+  .tbk-sp-h{gap:2px}
 }
-.tbk-note{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
-  border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.45;
+.tbk-note{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:10px;
+  border:1px solid rgba(255,255,255,.09);font-size:11.5px;line-height:1.4;
   color:var(--text-faint);font-weight:500;text-align:left}
 .tbk-carte .tbk tfoot td{padding:0;background:none;border:0}
 /* ══ LES MACROS : cinq cartes cote a cote ══════════════════════════════
@@ -5437,9 +5457,9 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .tbk-carte .tbk-mac caption{display:block}
 .tbk-carte .tbk-mac thead{display:none}
 .tbk-carte .tbk-mac tbody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:10px;padding-top:6px}
-.tbk-carte .tbk-mac tbody tr{display:flex;flex-direction:column;gap:8px;min-width:0;
-  padding:12px;border-radius:14px;
+  gap:8px;padding-top:4px}
+.tbk-carte .tbk-mac tbody tr{display:flex;flex-direction:column;gap:5px;min-width:0;
+  padding:9px 10px;border-radius:12px;
   border:1px solid color-mix(in srgb,var(--tbk-c,#666) 40%,transparent);
   background:linear-gradient(160deg,color-mix(in srgb,var(--tbk-c,#666) 14%,transparent),
     rgba(255,255,255,.02) 70%)}
@@ -5448,15 +5468,15 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .tbk-carte .tbk-mac tbody tr>td{margin-top:auto}
 .tbk-carte .tbk-mac .tbk-l{align-items:flex-start}
 .tbk-carte .tbk-mac .tbk-lt{color:var(--tbk-c);font-weight:800}
-.tbk-carte .tbk-mac .tbk-ri{flex-basis:40px;width:40px;height:40px;color:var(--tbk-c);
+.tbk-carte .tbk-mac .tbk-ri{flex-basis:32px;width:32px;height:32px;color:var(--tbk-c);
   background:color-mix(in srgb,var(--tbk-c) 16%,transparent);
   border-color:color-mix(in srgb,var(--tbk-c) 45%,transparent)}
 .tbk-carte .tbk-mac select,.tbk-carte .tbk-mac .tbk-in{width:100%;max-width:none}
-.tbk-mv{display:block;margin-top:6px;font-size:24px;font-weight:800;color:#fff;
-  font-variant-numeric:tabular-nums;line-height:1.15}
-.tbk-mi{margin-top:6px}
+.tbk-mv{display:block;margin-top:3px;font-size:20px;font-weight:800;color:#fff;
+  font-variant-numeric:tabular-nums;line-height:1.1}
+.tbk-mi{margin-top:4px}
 .tbk-carte .tbk-mac tr.tbk-swi-r{grid-column:1/-1;flex-direction:row;align-items:center;
-  justify-content:space-between;gap:14px;padding:4px 2px;border:0;background:none}
+  justify-content:space-between;gap:12px;padding:2px;border:0;background:none}
 .tbk-carte .tbk-mac tr.tbk-swi-r .tbk-lt{color:#fff;font-weight:700}
 .tbk-carte .tbk-mac tr.tbk-swi-r>td{margin:0;flex:0 0 auto}
 .tbk-carte .tbk-mac tr.tbk-tot{grid-column:1/-1;flex-direction:row;align-items:center;
@@ -5464,7 +5484,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   background:linear-gradient(90deg,rgba(224,32,32,.22),rgba(224,32,32,.08))}
 .tbk-carte .tbk-mac tr.tbk-tot .tbk-l{align-items:center}
 .tbk-carte .tbk-mac tr.tbk-tot>td{margin:0;flex:0 0 auto;text-align:right}
-.tbk-carte .tbk-mac tr.tbk-tot .tbk-mv{margin:0;color:#ff3b3b;font-size:26px}
+.tbk-carte .tbk-mac tr.tbk-tot .tbk-mv{margin:0;color:#ff3b3b;font-size:22px}
 /* En cycle manuel : deux champs par carte, nommes. */
 .tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:nth-of-type(1)::before,
 .tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:nth-of-type(2)::before{display:block;
@@ -5489,7 +5509,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   .tbk-carte .tbk-mac tbody tr:nth-child(5),.tbk-carte .tbk-mac tbody tr:nth-child(6){grid-column:auto}
   .tbk-carte .tbk-mac tr.tbk-swi-r,.tbk-carte .tbk-mac tr.tbk-tot{grid-column:1/-1}
   .tbk-carte .tbk-mac caption{padding-right:min(46%,440px)}
-  .tbk-carte .tbk-mac tr.tbk-swi-r{position:absolute;top:16px;right:16px;max-width:44%}
+  .tbk-carte .tbk-mac tr.tbk-swi-r{position:absolute;top:11px;right:12px;max-width:44%}
 }
 /* A L'ETROIT, la place va a la valeur : plus d'icone de ligne. */
 @container (max-width:440px){
@@ -5516,7 +5536,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   .tbk-carte .tbk-4 .tbk-sp-i{width:44px;max-width:44px;padding:5px 4px;font-size:13px}
   .tbk-sp-h{gap:3px}
   .tbk-carte .tbk-4 .tbk-sp-s{font-size:12px;padding:3px 4px}
-  .tbk-carte .tbk-4 select.tbk-sp-n{padding:3px 18px 3px 6px;font-size:11px}
+  .tbk-carte .tbk-4 select.tbk-sp-n{padding:3px 17px 3px 6px;font-size:11px}
   .tbk-sp-x{margin-left:4px;width:20px;height:20px;font-size:13px}
   .tbk-carte .tbk.tbk-4 .tbk-pill{padding:3px 6px;font-size:11px}
   .tbk-carte .tbk-mac tr.tbk-tot{flex-direction:column;align-items:flex-start}
@@ -5524,9 +5544,9 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 }
 /* LE TITRE DE LA SECTION, comme la maquette : grand, penche, le second mot en
    rouge, sans bandeau. */
-#s-coach-client .cc-sect-fixe>.cc-sect-t{background:none;border-left:0;padding:4px 2px 8px}
+#s-coach-client .cc-sect-fixe>.cc-sect-t{background:none;border-left:0;padding:2px 2px 6px}
 #s-coach-client .cc-sect-fixe>.cc-sect-t::after{display:none}
-#s-coach-client .cc-sect-fixe>.cc-sect-t>span{font-size:30px;letter-spacing:1px;
+#s-coach-client .cc-sect-fixe>.cc-sect-t>span{font-size:26px;letter-spacing:1px;
   font-style:italic;text-shadow:none}
 #s-coach-client .cc-sect-fixe>.cc-sect-t>span em{font-style:italic;color:#ff2d2d}
 /* ══ LE PANNEAU DE SUIVI DU PLAN ALIMENTAIRE ════════════════════════
@@ -84217,7 +84237,7 @@ function _tbkIco(n,taille){
 // l'enveloppe s'ajoute.
 function _tbkLib(lbl,aide,ico){
   return '<span class="tbk-l">'
-    +(ico?'<span class="tbk-ri" aria-hidden="true">'+_tbkIco(ico,18)+'</span>':'')
+    +(ico?'<span class="tbk-ri" aria-hidden="true">'+_tbkIco(ico,16)+'</span>':'')
     +'<span class="tbk-lt">'+escapeHtml(lbl)
     +(aide?'<span class="tbk-aide">'+escapeHtml(aide)+'</span>':'')+'</span></span>';
 }
@@ -84225,7 +84245,7 @@ function _tbkLib(lbl,aide,ico){
 // etiquette a droite quand il y a lieu. C'est la <caption> du tableau.
 function _tbkCap(ico,titre,sous,etiq){
   return '<caption><span class="tbk-cap">'
-    +'<span class="tbk-cap-i" aria-hidden="true">'+_tbkIco(ico,22)+'</span>'
+    +'<span class="tbk-cap-i" aria-hidden="true">'+_tbkIco(ico,19)+'</span>'
     +'<span class="tbk-cap-x"><span class="tbk-cap-t">'+escapeHtml(titre)+'</span>'
     +(sous?'<span class="tbk-cap-s">'+escapeHtml(sous)+'</span>':'')+'</span>'
     +(etiq?'<span class="tbk-cap-b">'+escapeHtml(etiq)+'</span>':'')
@@ -84332,7 +84352,7 @@ function _htmlTableauxTableur(c){
         :(x.origine==='bilan'?'déclaré au bilan':''));
     const nom=escapeHtml(String(x.sport));
     return '<tr class="tbk-sp"><th><span class="tbk-l"><span class="tbk-ri" aria-hidden="true">'
-      +_tbkIco(_estMusculation(x.sport)?'haltere':'activity',18)+'</span><span class="tbk-lt">'
+      +_tbkIco(_estMusculation(x.sport)?'haltere':'activity',16)+'</span><span class="tbk-lt">'
       +'<select class="tbk-sp-s" aria-label="Sport" onchange="majSportTableur('+i+',\'sport\',this.value)">'
       +optSport(String(x.sport))+'</select>'
       +(aide?'<span class="tbk-aide"'+(kh==null?' style="color:var(--orange)"':'')+'>'+escapeHtml(aide)+'</span>':'')
@@ -84359,7 +84379,9 @@ function _htmlTableauxTableur(c){
       +'<button type="button" class="tbk-sp-auto" onclick="sportsTableurAuto()">Revenir au calcul automatique</button></span>'
       :'<span class="tbk-sp-note">Modifie une ligne ou ajoute un sport : la liste devient la tienne.</span>')
     +'</div></td></tr>';
-  hSport+='<tr class="tbk-tot"><th>'+_tbkLib('Dépense sportive par jour','','zap')+'</th><td></td><td></td><td>'
+  // LE LIBELLE PREND LES TROIS PREMIERES COLONNES : sur un tiers de la largeur
+  // il se coupait en deux (« Dépense sportive / par jour »).
+  hSport+='<tr class="tbk-tot"><th colspan="3">'+_tbkLib('Dépense sportive par jour','','zap')+'</th><td>'
     +_tbNb(t.sportJour)+' kcal</td></tr></tbody></table>';
 
   // ── TABLEAU 3 — LES BESOINS, LIGNE A LIGNE ──────────────────────────
