@@ -38586,9 +38586,12 @@ async function testExercices(){
       if(_corpsNb(0)!=='0') return _echec('_corpsNb ne sait pas dire zéro');
       return true;})());
 
-    ok('LA TEINTE DIT LA SEMAINE DU PROGRAMME, ENTIÈRE — PAS LES SÉANCES DÉJÀ FAITES',(()=>{
+    ok('LA TEINTE DIT LE PROGRAMME ENTIER — PAS LES SÉANCES DÉJÀ FAITES',(()=>{
       // Kevin, 22/09/2026 : « je parle de la semaine dans sa globalité, le
-      // volume grâce au programme, pas qui se remplit au fur et à mesure ».
+      // volume grâce au programme, pas qui se remplit au fur et à mesure » ;
+      // puis (build 1395) « selon le volume total de la prog, pas selon
+      // l'avancée de la semaine ». Sans bloc daté, le programme est sa semaine
+      // type ; le test suivant tient le bloc.
       const J=864e5, t=Date.now();
       const bil=[{date:t-90*J,'bil-chest':'106'},{date:t-2*J,'bil-chest':'107.4'}];
       const cfg=[{active:true,name:'A',exercises:[{name:'Développé couché',series:'4',reps:'8'},{name:'Squat',series:'5',reps:'5'}]},
@@ -38609,8 +38612,10 @@ async function testExercices(){
         // AUCUNE SÉANCE FAITE : la semaine programmée teinte déjà la silhouette.
         const r0=lire(base);
         if(!r0.calque) return _echec('aucune séance faite : la semaine programmée ne teinte rien');
-        if(!/séries programmées la semaine du/.test(r0.lt)) return _echec('la légende ne dit pas le programme : '+r0.lt);
-        if(/en cours/.test(r0.lt)) return _echec('la semaine du programme se dit « en cours »');
+        if(!/volume total du programme — sa semaine type/.test(r0.lt)) return _echec('la légende ne dit pas le programme : '+r0.lt);
+        if(/en cours|semaine du \d/.test(r0.lt)) return _echec('la teinte du programme se date encore d’une semaine : '+r0.lt);
+        if(JSON.stringify(volumePrescritProgramme(base).muscles)!==JSON.stringify(prevu))
+          return _echec('sans bloc, le programme entier n’est pas sa semaine type');
         if(!/^Séries programmées : /.test(r0.lu)) return _echec('la lecture à voix haute ne dit pas le programme : '+r0.lu);
         if(!/Pectoraux : 8 séries/.test(r0.lu)) return _echec('les pectoraux ne disent pas leurs 8 séries programmées : '+r0.lu);
         // UNE SÉANCE FAITE NE CHANGE RIEN : la teinte ne se remplit pas au fur et à mesure.
@@ -38628,6 +38633,55 @@ async function testExercices(){
         // L'ÉCART PRESCRIT / RÉALISÉ lit le même prévu, calculé au même endroit.
         const ec=ecartPrescritRealise(fait).find(x=>x.muscle==='PECTORAUX');
         if(!ec||ec.prescrit!==Math.round(prevu.PECTORAUX*10)/10) return _echec('l’écart prescrit/réalisé ne lit plus le même prévu : '+JSON.stringify(ec));
+      } finally { _corpsVue=sv; }
+      return true;})());
+
+    ok('LA TEINTE NE BOUGE PAS D’UNE SEMAINE À L’AUTRE DU BLOC : ELLE DIT TOUT LE PROGRAMME',(()=>{
+      // Kevin, 22/09/2026 : « selon le volume total de la prog, pas selon
+      // l'avancée de la semaine ». Un bloc de quatre semaines dont la deuxième
+      // monte le couché à 6 séries et la quatrième est une décharge à 2 + 2 :
+      // la silhouette est la même que l'on soit en semaine 1 ou en décharge.
+      const J=864e5, t=Date.now();
+      const bil=[{date:t-90*J,'bil-chest':'106'},{date:t-2*J,'bil-chest':'107.4'}];
+      const couche=n=>({name:'Développé couché',series:String(n),reps:'8'});
+      const cfg=[{active:true,name:'A',exercises:[couche(4)]},{active:true,name:'B',exercises:[couche(4)]},
+        {active:false},{active:false},{active:false},{active:false},{active:false}];
+      const programme=debut=>({debut,semaines:4,decharges:[3],ecarts:{
+        '1':{'0':{exercises:[couche(6)]}},
+        '3':{'0':{exercises:[couche(2)]},'1':{exercises:[couche(2)]}}}});
+      const lundi=_lundiDe(new Date(t)).getTime();
+      // Aujourd'hui en semaine 1 du bloc, puis aujourd'hui en semaine de décharge.
+      const a1={id:'Q1',email:'q1@t.fr',role:'athlete',gender:'H',bilans:bil,sessions_config:cfg,sessions:[],
+        programme:programme(lundi)};
+      const a2=Object.assign({},a1,{id:'Q2',email:'q2@t.fr',programme:programme(_datePlusJours(lundi,-21).getTime())});
+      const v1=volumePrescritProgramme(a1), v2=volumePrescritProgramme(a2);
+      if(v1.source!=='bloc'||v1.semaines!==4||v1.decharges!==1) return _echec('le bloc n’est pas lu en entier : '+JSON.stringify(v1));
+      // LE TOTAL EST LA SOMME DES QUATRE SEMAINES, et la teinte sa moyenne.
+      let somme=0;
+      const parSem=[0,1,2,3].map(i=>volumePrescritSemaine(a1,_datePlusJours(lundi,i*7)).muscles.PECTORAUX||0);
+      for(const x of parSem) somme+=x;
+      if(new Set(parSem).size<3) return _echec('le bloc d’essai ne varie pas d’une semaine à l’autre : '+parSem.join('/'));
+      if(Math.abs(v1.total.PECTORAUX-somme)>1e-9) return _echec('total '+v1.total.PECTORAUX+' au lieu de '+somme);
+      if(Math.abs(v1.muscles.PECTORAUX-somme/4)>1e-9) return _echec('moyenne '+v1.muscles.PECTORAUX+' au lieu de '+(somme/4));
+      if(JSON.stringify(v1.muscles)!==JSON.stringify(v2.muscles)) return _echec('la teinte change selon la semaine en cours');
+      // L'ÉCART PRESCRIT / RÉALISÉ, lui, compare bien la semaine en cours.
+      if(volumePrescritSemaine(a2,new Date()).muscles.PECTORAUX!==parSem[3]) return _echec('l’écart prescrit/réalisé ne lit plus la semaine en cours');
+      const sv=_corpsVue;
+      try{
+        _corpsVue='face';
+        const lire=x=>{
+          const b=document.createElement('div'); b.innerHTML=_htmlCorpsCadre(x);
+          return {lt:[...b.querySelectorAll('.cc-corps-lt')].map(e=>e.textContent).join(' | '),
+            lu:(b.querySelector('.cc-corps-lu')||{}).textContent||''};
+        };
+        const r1=lire(a1), r2=lire(a2);
+        if(r1.lu!==r2.lu||r1.lt!==r2.lt) return _echec('le cadre change selon la semaine : « '+r1.lu+' » / « '+r2.lu+' »');
+        if(!/volume total du programme — 4 semaines, décharge comprise, ramené à la semaine/.test(r1.lt))
+          return _echec('la légende ne dit pas le programme entier : '+r1.lt);
+        if(!/ni l’avancée de la semaine/.test(r1.lt)) return _echec('la légende ne dit pas ce que la teinte ne suit pas : '+r1.lt);
+        const moy=volAffiche(somme/4).replace('.',',');
+        if(!new RegExp('Pectoraux : '+volAffiche(somme).replace('.',',')+' séries sur 4 semaines, '+moy+' par semaine').test(r1.lu))
+          return _echec('le muscle ne dit pas son total et sa moyenne : '+r1.lu);
       } finally { _corpsVue=sv; }
       return true;})());
 

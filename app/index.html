@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1394';
+window.RC_BUILD='1395';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -52925,14 +52925,26 @@ function corpsTeintes(u,vue,vol){
 // PURE. Ce que dit chaque muscle d'une vue quand on le touche : son nom, ses
 // series, et sa zone quand il a un repere. Un muscle a zero le dit aussi —
 // le gris n'est pas un oubli, c'est une semaine sans serie.
-function corpsInfobulles(u,vue,vol){
+// `prog` : le volume du programme entier (volumePrescritProgramme). Pour un
+// bloc de plusieurs semaines, le muscle dit son TOTAL sur le programme, puis
+// sa moyenne par semaine — celle que la couleur et la zone lisent.
+function corpsInfobulles(u,vue,vol,prog){
   const v=vol||{}, z=corpsZones(u,vue,v), out={};
+  const nSem=prog&&prog.source==='bloc'&&prog.semaines>1?prog.semaines:0;
+  const tot=nSem&&prog.total?prog.total:null;
+  /** Une demi-série près, au singulier sous deux. */
+  const series=n=>{ const r=Math.round(n*2)/2; return volAffiche(n)+' série'+(r>=2?'s':''); };
   for(const m of (CORPS_MUSCLES_VUE[vue]||[])){
     const lib=(MUSCLES[m]||{}).lib||m;
     const n=Number(v[m])||0;
     // volAffiche arrondit a la demi-serie : un quart de serie secondaire
     // s'afficherait « 0 série » sur un muscle pourtant teinte.
     const a=volAffiche(n), r=Math.round(n*2)/2;
+    if(tot&&n>0){
+      out[m]=lib+' · '+series(Number(tot[m])||0)+' sur '+nSem+' semaines · '
+        +(r>0?a:'moins d’une demi-série')+' par semaine'+(z[m]?(' · '+z[m]):'');
+      continue;
+    }
     out[m]=lib+' · '+(!(n>0)?'aucune série'
       :((r>0?(a+' série'+(r>=2?'s':'')):'moins d’une demi-série')
         +(z[m]?(' · '+z[m]):'')));
@@ -53499,18 +53511,19 @@ function _htmlCorpsCadre(c){
   // LA TEINTE SORT DES LE PREMIER BILAN ; sans aucun bilan le cadre reste
   // eteint, comme ce matin.
   //
-  // ⚠ ELLE DIT LA SEMAINE DU PROGRAMME, ENTIERE (Kevin, 22/09/2026 : « je
-  //   parle de la semaine dans sa globalité, le volume grâce au programme, pas
-  //   qui se remplit au fur et à mesure »). Le 1386 la tirait des seances deja
-  //   faites : un lundi la silhouette etait pale, un samedi elle etait pleine,
-  //   et elle disait l'avancement de la semaine au lieu de sa charge. Elle lit
-  //   maintenant volumePrescritSemaine — la semaine effective du bloc, decharge
-  //   comprise —, le meme chiffre que le « Volume prescrit » du programme.
+  // ⚠ ELLE DIT LE VOLUME TOTAL DU PROGRAMME (Kevin, 22/09/2026 : « selon le
+  //   volume total de la prog, pas selon l'avancée de la semaine »). Le 1386
+  //   la tirait des seances deja faites — pale le lundi, pleine le samedi ;
+  //   le 1389, de la semaine EN COURS du bloc — elle changeait encore d'une
+  //   semaine a l'autre, avec la progression et les decharges. Elle lit
+  //   maintenant volumePrescritProgramme : toutes les semaines du programme,
+  //   additionnees puis ramenees a la semaine. Elle ne bouge plus tant que le
+  //   programme ne bouge pas.
   //
-  // SANS PROGRAMME ACTIF, il n'y a pas de semaine prevue a montrer : la teinte
+  // SANS PROGRAMME ACTIF, il n'y a pas de volume prevu a montrer : la teinte
   // retombe sur les series reellement faites (le calcul d'avant), et la
   // legende le dit.
-  const prog=bilans.length?(function(){ try{ return volumePrescritSemaine(u,new Date()); }catch(e){ return null; } })():null;
+  const prog=bilans.length?(function(){ try{ return volumePrescritProgramme(u); }catch(e){ return null; } })():null;
   const aProg=!!prog&&Object.keys(prog.muscles||{}).some(m=>(Number(prog.muscles[m])||0)>0);
   const sem=(bilans.length&&!aProg)?corpsSemaineVolume(u):null;
   let volSem={};
@@ -53518,7 +53531,7 @@ function _htmlCorpsCadre(c){
   else if(sem){ try{ volSem=volumeSemaine(u,sem.cle)||{}; }catch(e){ volSem={}; } }
   const teinte=aProg||!!sem;
   const teintes=teinte?corpsTeintes(u,vue,volSem):{};
-  const infos=teinte?corpsInfobulles(u,vue,volSem):{};
+  const infos=teinte?corpsInfobulles(u,vue,volSem,aProg?prog:null):{};
   // LA SCENE PORTE LE RAPPORT DE LA TOILE, elargi de 100/CORPS_PART_CORPS : la
   // silhouette occupe cette part de sa largeur, et tout — traits, etiquettes —
   // se repere ensuite en centiemes de cette scene.
@@ -53578,18 +53591,22 @@ function _htmlCorpsCadre(c){
   //   rien », et le coach doit pouvoir le lire.
   // ET LA CHARGE SE LIT SANS VOIR LA COULEUR : chaque muscle, ses series et sa
   // zone, pour un lecteur d'ecran — les memes phrases que sous le doigt.
-  // LE PROGRAMME : la semaine du bloc (ou la semaine courante pour un
-  // gabarit), et « semaine de décharge » quand c'en est une — une silhouette
-  // plus pale ce jour-la est voulue, pas un relachement.
+  // LE PROGRAMME : combien de semaines il compte, et « décharges comprises »
+  // quand il en a — elles tirent la moyenne vers le bas, et une silhouette un
+  // peu plus pale pour cette raison-la doit pouvoir se lire. Sans bloc daté :
+  // sa semaine type, le programme entier.
+  const nd=aProg?(Number(prog.decharges)||0):0;
   const libSem=aProg
-    ?(_corpsLibSemaine(prog.semaine?prog.semaine.cle:_volCleDecalee(0))
-      +(prog.semaine&&prog.semaine.decharge?' · semaine de décharge':''))
+    ?(prog.source==='bloc'
+      ?(prog.semaines+' semaine'+(prog.semaines>1?'s':'')
+        +(nd?(', '+(nd>1?'décharges comprises':'décharge comprise')):'')+', ramené à la semaine')
+      :'sa semaine type')
     :(sem?(_corpsLibSemaine(sem.cle)+(sem.decalage===0?' (en cours)':'')):'');
   const lus=Object.keys(infos).filter(m=>(Number(volSem[m])||0)>0)
     .sort((a,b)=>(Number(volSem[b])||0)-(Number(volSem[a])||0));
   const legende=teinte
     ?'<div class="cc-corps-l">'
-      +'<span class="cc-corps-lt">'+(aProg?'Teinte : séries programmées la semaine du ':'Teinte : séries dures de la semaine du ')
+      +'<span class="cc-corps-lt">'+(aProg?'Teinte : volume total du programme — ':'Teinte : séries dures de la semaine du ')
       +escapeHtml(libSem)+(aProg?'':' — pas de programme actif')+'</span>'
       +'<span class="cc-corps-ech" aria-hidden="true">'
         +'<span class="cc-corps-eb" style="background:linear-gradient(90deg,'
@@ -53601,8 +53618,8 @@ function _htmlCorpsCadre(c){
         // LE PREVU SE DIT PREVU, et son intensite aussi : sans consigne de
         // RIR, une serie programmee compte pleine — c'est un maximum, comme
         // le dit deja le panneau « Volume prescrit ».
-        ?'<span class="cc-corps-lt">Elle dit le volume d’entraînement prévu au programme sur toute '
-          +'la semaine, jamais le développement. '
+        ?'<span class="cc-corps-lt">Elle dit le volume d’entraînement de tout le programme — ni '
+          +'l’avancée de la semaine, ni le développement. '
           +(prog.avecConsigne?'Séries pondérées par l’intensité prescrite. ':'Sans intensité prescrite, c’est un maximum. ')
           +'Gris : aucune série programmée. Touchez un muscle pour son chiffre.</span>'
         :'<span class="cc-corps-lt">Elle dit le volume d’entraînement, jamais le '
@@ -71327,14 +71344,46 @@ function _badgeRecord(idx,i){
 
 // PURE. Le volume que le programme PREVOIT pour la semaine de `date`, en
 // ENTIER : la semaine effective du bloc — decharge et ecarts compris —, ou le
-// gabarit quand l'athlete n'a pas de bloc date. Ecrit une fois : l'ecart
-// prescrit / realise et la teinte de la silhouette « Evolution eleve » lisent
-// le meme chiffre, et ne peuvent plus dire deux choses du meme programme.
+// gabarit quand l'athlete n'a pas de bloc date. L'ecart prescrit / realise le
+// lit : lui compare bien UNE semaine a ce qui y a ete fait.
 function volumePrescritSemaine(user,date){
   let w=null;
   try{ w=getSemaineEffective(user,date||new Date()); }catch(e){ w=null; }
   if(w&&Array.isArray(w.creneaux)) return Object.assign(volumePrescrit(w.creneaux,user),{semaine:w,source:'bloc'});
   return Object.assign(volumePrescrit((user&&user.sessions_config)||[],user),{semaine:null,source:'gabarit'});
+}
+// PURE. Le volume que prevoit TOUT LE PROGRAMME : chacune de ses semaines —
+// ecarts et decharges compris —, additionnees (`total`), puis ramenees a la
+// semaine (`muscles`). La teinte de la silhouette « Evolution eleve » le lit.
+//
+// ⚠ RAMENE A LA SEMAINE, ET C'EST VOULU. Les reperes MEV/MAV/MRV et la rampe
+//   orange (qui sature a CORPS_VOL_HAUT) sont hebdomadaires : un total brut
+//   de huit semaines passerait les vingt series partout, et la silhouette
+//   deviendrait d'une seule couleur. La moyenne garde la repartition du total
+//   — le muscle le plus charge du programme reste le plus fonce —, et le
+//   total reste dit en toutes lettres sous le doigt.
+// SANS BLOC DATE, le programme est son gabarit : une semaine type, entiere.
+function volumePrescritProgramme(user){
+  const p=programmeDe(user);
+  const total={};
+  let semaines=0, avec=0, sans=0, nonR=0;
+  if(p) for(let i=0;i<p.semaines;i++){
+    let w=null;
+    try{ w=getSemaineEffective(user,_datePlusJours(p.debut,i*7)); }catch(e){ w=null; }
+    if(!w||!Array.isArray(w.creneaux)) continue;
+    const v=volumePrescrit(w.creneaux,user);
+    semaines++;
+    for(const m in v.muscles) total[m]=(total[m]||0)+v.muscles[m];
+    avec+=v.avecConsigne||0; sans+=v.sansConsigne||0; nonR+=v.nonRattaches||0;
+  }
+  if(!semaines){
+    const v=volumePrescrit((user&&user.sessions_config)||[],user);
+    return Object.assign(v,{total:Object.assign({},v.muscles),semaines:1,decharges:0,source:'gabarit'});
+  }
+  const muscles={};
+  for(const m in total) muscles[m]=total[m]/semaines;
+  return {muscles,total,semaines,decharges:p?p.decharges.length:0,
+    avecConsigne:avec,sansConsigne:sans,nonRattaches:nonR,source:'bloc'};
 }
 function volumePrescrit(cfg,user){
   const out={muscles:{},nonRattaches:0,avecConsigne:0,sansConsigne:0};
