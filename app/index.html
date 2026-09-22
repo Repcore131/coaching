@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1404';
+window.RC_BUILD='1405';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5357,13 +5357,73 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 /* Quatre colonnes a largeur dite : la depense (« 2 100 kcal ») ne se casse
    plus en deux, et les intitules ne se coupent pas au milieu d'un mot. */
 .tbk-carte .tbk-4 thead th{overflow-wrap:normal;word-break:normal;hyphens:none}
-.tbk-carte .tbk-4 thead th:nth-child(1){width:34%}
-.tbk-carte .tbk-4 thead th:nth-child(2){width:16%}
-.tbk-carte .tbk-4 thead th:nth-child(3){width:22%}
+.tbk-carte .tbk-4 thead th:nth-child(1){width:32%}
+.tbk-carte .tbk-4 thead th:nth-child(2){width:17%}
+.tbk-carte .tbk-4 thead th:nth-child(3){width:23%}
 .tbk-carte .tbk-4 thead th:nth-child(4){width:28%}
 .tbk-pill{display:inline-block;padding:4px 10px;border-radius:7px;font-size:12px;
   font-weight:700;color:#f5c542;background:rgba(245,197,66,.12);
   border:1px solid rgba(245,197,66,.45)}
+/* LES SPORTS SE REGLENT (build 1405) : sport, heures et intensite en champs,
+   une croix pour retirer, un bouton pour ajouter. L'intensite garde sa
+   pastille — sa couleur dit son niveau. */
+/* La ligne de sport garde la place pour ses champs : pas d'icone, des
+   marges plus courtes. Le menu du sport dit deja de quoi il s'agit. */
+.tbk-carte .tbk-4 tr.tbk-sp .tbk-ri{display:none}
+.tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody tr.tbk-sp>th,
+.tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody tr.tbk-sp>td{padding-left:8px;padding-right:8px}
+.tbk-carte .tbk-4 .tbk-sp-s{width:100%;max-width:none;min-height:36px;padding:4px 6px;
+  font-size:13px;font-weight:700;color:#fff}
+.tbk-sp-h{display:inline-flex;align-items:center;gap:6px}
+.tbk-carte .tbk-4 .tbk-sp-i{width:54px;max-width:54px;padding:6px 6px;font-size:15px;
+  text-align:right;border-radius:10px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14)}
+.tbk-carte .tbk-4 select.tbk-sp-n{width:auto;max-width:100%;min-height:32px;padding:3px 22px 3px 8px;
+  border-radius:8px;font-size:12px;font-weight:700;color:#f5c542;
+  background-color:rgba(245,197,66,.12);border:1px solid rgba(245,197,66,.45)}
+.tbk-carte .tbk-4 select.tbk-sp-n-faible{color:#4ade80;background-color:rgba(74,222,128,.10);border-color:rgba(74,222,128,.45)}
+.tbk-carte .tbk-4 select.tbk-sp-n-haute{color:#ff5a5a;background-color:rgba(255,90,90,.10);border-color:rgba(255,90,90,.45)}
+.tbk-carte .tbk-4 tr.tbk-sp>td:last-child{white-space:nowrap}
+.tbk-sp-x{margin-left:8px;width:24px;height:24px;border-radius:7px;border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.04);color:var(--text-faint);font-size:15px;line-height:1;cursor:pointer;
+  vertical-align:middle}
+.tbk-sp-x:hover,.tbk-sp-x:focus-visible{color:#ff5a5a;border-color:rgba(255,90,90,.5)}
+.tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody tr.tbk-sp-add>td{background:none;border:0;border-radius:0;
+  padding:2px 0 4px;text-align:left}
+.tbk-sp-bas{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px}
+.tbk-sp-plus{padding:8px 14px;border-radius:10px;border:1px dashed rgba(224,32,32,.55);
+  background:rgba(224,32,32,.08);color:#ff4d4d;font-family:Montserrat,sans-serif;font-size:12.5px;
+  font-weight:800;letter-spacing:.3px;cursor:pointer}
+.tbk-sp-plus:hover,.tbk-sp-plus:focus-visible{background:rgba(224,32,32,.16)}
+.tbk-sp-note{font-size:11.5px;font-weight:500;color:var(--text-faint);line-height:1.45}
+.tbk-sp-auto{padding:0;border:0;background:none;color:var(--link,#60a5fa);font:inherit;
+  text-decoration:underline;cursor:pointer}
+/* A L'ETROIT (carte de 440 px et moins), quatre colonnes de champs ne
+   tiennent pas : chaque sport passe sur deux lignes — le sport en haut ; les
+   heures, l'intensite et la depense dessous. Le tableau devient une pile. */
+@container (max-width:440px){
+  .tbk-carte .tbk.tbk-4{display:block}
+  .tbk-carte .tbk.tbk-4 caption{display:block}
+  .tbk-carte .tbk.tbk-4 thead{display:none}
+  .tbk-carte .tbk.tbk-4 tbody{display:flex;flex-direction:column;gap:6px;padding-top:6px}
+  .tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody tr>:is(th,td){display:block;width:auto;padding:0;
+    border:0;border-radius:0;background:none;white-space:normal}
+  .tbk-carte .tbk.tbk-4 tbody tr{display:flex;align-items:center;justify-content:space-between;
+    gap:8px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.028);
+    border:1px solid rgba(255,255,255,.06)}
+  .tbk-carte .tbk.tbk-4 tbody tr>td:empty{display:none}
+  .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp{display:grid;grid-template-columns:auto auto 1fr;
+    grid-template-areas:"s s s" "h n d";gap:8px 10px}
+  .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>th{grid-area:s}
+  .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>td:nth-of-type(1){grid-area:h}
+  .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>td:nth-of-type(2){grid-area:n}
+  .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>td:nth-of-type(3){grid-area:d;text-align:right;white-space:nowrap}
+  .tbk-carte .tbk.tbk-4 tbody tr.tbk-tot{background:rgba(224,32,32,.15);border-color:rgba(224,32,32,.45)}
+  .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp-add{display:block;padding:2px 0;background:none;border:0}
+  .tbk-carte .tbk-4 .tbk-sp-i{width:50px;max-width:50px}
+  .tbk-carte .tbk-4 select.tbk-sp-n{padding:3px 22px 3px 8px;font-size:12px}
+  .tbk-carte .tbk.tbk-4 tbody tr.tbk-sp>*{min-width:0}
+  .tbk-carte .tbk-4 tr.tbk-sp .tbk-sp-d{font-size:13.5px}
+}
 .tbk-note{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
   border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.45;
   color:var(--text-faint);font-weight:500;text-align:left}
@@ -5449,10 +5509,15 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   .tbk-carte .tbk.tbk-4:not(.tbk-mac) tbody td{font-size:13px;white-space:nowrap}
   .tbk-carte .tbk.tbk-4:not(.tbk-mac) tr.tbk-tot>td{font-size:15px}
   .tbk-carte .tbk.tbk-4 .tbk-lt{font-size:12.5px}
-  .tbk-carte .tbk.tbk-4 thead th:nth-child(1){width:34%}
-  .tbk-carte .tbk.tbk-4 thead th:nth-child(2){width:12%}
+  .tbk-carte .tbk.tbk-4 thead th:nth-child(1){width:30%}
+  .tbk-carte .tbk.tbk-4 thead th:nth-child(2){width:18%}
   .tbk-carte .tbk.tbk-4 thead th:nth-child(3){width:24%}
-  .tbk-carte .tbk.tbk-4 thead th:nth-child(4){width:30%}
+  .tbk-carte .tbk.tbk-4 thead th:nth-child(4){width:28%}
+  .tbk-carte .tbk-4 .tbk-sp-i{width:44px;max-width:44px;padding:5px 4px;font-size:13px}
+  .tbk-sp-h{gap:3px}
+  .tbk-carte .tbk-4 .tbk-sp-s{font-size:12px;padding:3px 4px}
+  .tbk-carte .tbk-4 select.tbk-sp-n{padding:3px 18px 3px 6px;font-size:11px}
+  .tbk-sp-x{margin-left:4px;width:20px;height:20px;font-size:13px}
   .tbk-carte .tbk.tbk-4 .tbk-pill{padding:3px 6px;font-size:11px}
   .tbk-carte .tbk-mac tr.tbk-tot{flex-direction:column;align-items:flex-start}
   .tbk-carte .tbk-mac tr.tbk-tot>td{text-align:left}
@@ -81956,7 +82021,51 @@ function _estMusculation(nom){
 // déclaration ferait BAISSER la dépense de tout athlète qui avait déclaré plus
 // d'heures que ses créneaux n'en valent — une régression silencieuse sur des
 // dossiers en cours. Le prix assumé : qui surdéclare garde son chiffre.
+// ══ LES SPORTS REGLES PAR LE COACH (build 1405) ══════════════════════════
+// Kevin, 22/09/2026, sur le tableau « Dépense selon l'activité sportive » :
+// « donne la possibilité de rajouter un sport ou modifier heure et
+// intensité ». La liste du coach vit dans nutrition.tableur.sports — avec
+// les autres reglages du tableau, synchronisee avec eux — sous la forme
+// {lignes:[{sport,heures,intensite}], date}.
+// ⚠ UN OBJET ET NON UN TABLEAU NU : Firebase ne garde pas un tableau vide.
+//   Un coach qui retire tous les sports aurait vu sa liste disparaitre du
+//   serveur, et l'athlete retomber sur les creneaux et le bilan. `date`
+//   garde le noeud en vie ; `lignes` peut revenir en objet a clefs
+//   numeriques, on le relit donc dans les deux formes.
+// QUAND ELLE EXISTE, ELLE FAIT FOI, seule : les creneaux RepCore et le bilan
+// ne sont plus lus — sinon un sport corrige par le coach serait compte une
+// seconde fois depuis la declaration. Le tableau le dit, et offre le retour
+// au calcul automatique.
+function _sportsCoach(user){
+  const s=user&&user.nutrition&&user.nutrition.tableur&&user.nutrition.tableur.sports;
+  if(!s||typeof s!=='object'||Array.isArray(s)) return null;
+  const brut=Array.isArray(s.lignes)?s.lignes
+    :(s.lignes&&typeof s.lignes==='object'?Object.keys(s.lignes).sort((a,b)=>a-b).map(k=>s.lignes[k]):[]);
+  return brut.filter(e=>e&&typeof e.sport==='string'&&e.sport)
+    .map(e=>({sport:e.sport,
+      heures:Math.min(60,Math.max(0,Number(e.heures)||0)),
+      intensite:SPORT_INTENSITES.some(x=>x.cle===e.intensite)?e.intensite:'moderee'}));
+}
 function kcalSportParJour(user){
+  // ── LA LISTE DU COACH, SI ELLE EXISTE ──
+  const _sc=_sportsCoach(user);
+  if(_sc){
+    const connus=[],inconnus=[];
+    for(const e of _sc){
+      if(kcalHeureSport(e.sport,e.intensite)==null){ if(e.heures>0) inconnus.push(e.sport); continue; }
+      connus.push(e);
+    }
+    const tout=depenseSportsParJour(connus);
+    const dM=depenseSportsParJour(connus.filter(e=>_estMusculation(e.sport)));
+    const dA=depenseSportsParJour(connus.filter(e=>!_estMusculation(e.sport)));
+    const cr=((user&&user.sessions_config)||[]).filter(x=>x&&x.active).length;
+    const du=_dureeSeanceMin(user);
+    return {jour:Math.round(tout.semaine/7),semaine:tout.semaine,source:'coach',doublon:false,inconnus,
+      detailMuscu:dM.detail,creneaux:cr,dureeMin:du.min,dureeSource:du.source,dureeBrut:du.brut,
+      semaineMuscu:dM.semaine,semaineCreneaux:Math.round(cr*(du.min/60)*kcalHeureSport('Musculation','moderee')),
+      semaineDeclaree:dM.semaine,detail:dA.detail,autres:dA.semaine,
+      lignes:_sc.map(e=>Object.assign({},e,{origine:'coach'}))};
+  }
   const brut=_dernierChamp(user,'deb-sports');
   const liste=Array.isArray(brut)?brut:[];
   const autres=[],muscu=[],inconnus=[];
@@ -81985,11 +82094,24 @@ function kcalSportParJour(user){
   else if(creneaux>0){ semMuscu=semCreneaux; source='creneaux'; }
   else { semMuscu=0; source='aucune'; }
   const semaine=dAutres.semaine+semMuscu;
+  // LES LIGNES QUE LE TABLEAU MONTRE — exactement celles qui sont comptees,
+  // plus les sports hors bareme (nommes, a zero). Le tableau montrait une
+  // seule ligne « Musculation » portant la depense de TOUS les sports, et les
+  // autres sports declares n'apparaissaient nulle part.
+  const lignes=[];
+  if(source==='creneaux') lignes.push({sport:'Musculation',
+    heures:Math.round(creneaux*(duree.min/60)*100)/100,intensite:'moderee',origine:'creneaux'});
+  else if(source==='declaree') for(const e of muscu) if(Number(e.heures)>0)
+    lignes.push({sport:'Musculation',heures:Number(e.heures),intensite:e.intensite||'moderee',origine:'bilan'});
+  for(const e of autres) if(Number(e.heures)>0)
+    lignes.push({sport:String(e.sport),heures:Number(e.heures),intensite:e.intensite||'moderee',origine:'bilan'});
+  for(const e of liste) if(e&&e.sport&&inconnus.indexOf(String(e.sport))>=0&&Number(e.heures)>0)
+    lignes.push({sport:String(e.sport),heures:Number(e.heures),intensite:e.intensite||'moderee',origine:'bilan'});
   return {jour:Math.round(semaine/7),semaine,source,doublon,inconnus,
     detailMuscu:dMuscu.detail,
     creneaux,dureeMin:duree.min,dureeSource:duree.source,dureeBrut:duree.brut,
     semaineMuscu:semMuscu,semaineCreneaux:semCreneaux,semaineDeclaree:dMuscu.semaine,
-    detail:dAutres.detail,autres:dAutres.semaine};
+    detail:dAutres.detail,autres:dAutres.semaine,lignes};
 }
 
 // ── Protéines : le coach choisit, la phase propose ─────────────────────────
@@ -82549,6 +82671,7 @@ function cibleTableur(user,opts){
     naf:naf.n, nafSource:naf.source, metier:naf.metier||null,
     horsSport, sportJour:sport.jour, sportSemaine:sport.semaine,
     sportSource:sport.source, creneaux:sport.creneaux, dureeMin:sport.dureeMin,
+    sportLignes:sport.lignes||[],
     avecSport,
     coef, phase, brut, plancher:pl, sousPlancher:kcal>brut,
     kcal, p:bloc.p, l:bloc.l, g:bloc.g, f:bloc.f,
@@ -82655,7 +82778,10 @@ function besoinsProposes(user,opts){
   const _dm=sport.dureeMin;
   const _dTxt=_dm%60===0?(_dm/60)+' h':(_dm>60?Math.floor(_dm/60)+' h '+(_dm%60):_dm+' min');
   const _jMuscu=Math.round(sport.semaineMuscu/7);
-  if(sport.source==='creneaux'&&sport.creneaux>0)
+  if(sport.source==='coach')
+    hypotheses.push('sports réglés à la main par le coach → '+sport.semaine
+      +' kcal par semaine, soit '+sport.jour+' par jour');
+  else if(sport.source==='creneaux'&&sport.creneaux>0)
     hypotheses.push(sport.creneaux+' créneau'+(sport.creneaux>1?'x':'')+' RepCore × '
       +_dTxt+' → '+sport.semaineMuscu+' kcal par semaine, soit '+_jMuscu+' par jour');
   else if(sport.source==='declaree')
@@ -82676,7 +82802,8 @@ function besoinsProposes(user,opts){
     hypotheses.push('durée de séance '+(sport.dureeBrut?'illisible (« '+sport.dureeBrut+' »)'
       :'non renseignée')+' : '+SEANCE_MIN_DEFAUT+' min retenues');
   // ── Les autres sports ──
-  if(sport.autres>0)
+  if(sport.source==='coach'){}
+  else if(sport.autres>0)
     hypotheses.push('sports déclarés '+sport.detail.join(', ')+' → '+sport.autres
       +' kcal par semaine, soit '+Math.round(sport.autres/7)+' par jour');
   else if(!sport.doublon&&sport.source!=='declaree')
@@ -83898,6 +84025,79 @@ function majTableauTableur(quoi,val){
   try{ renderCoachNutriSection(c); }catch(e){}
   return true;
 }
+// ── LES SPORTS DU TABLEAU : ajouter, regler, retirer (build 1405) ─────────
+// Le PREMIER geste fige la liste affichee — creneaux RepCore et bilan — en
+// liste du coach, puis la modifie : le coach part de ce qu'il voit, pas d'une
+// page blanche. Chaque geste ecrit, recalcule les cibles et pousse, comme
+// les menus du tableau : l'athlete le recoit a sa prochaine synchro.
+function _tbSportsEcrire(modif,texte){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  if(!c.nutrition) c.nutrition={};
+  let lignes=[];
+  try{ lignes=((kcalSportParJour(c)||{}).lignes||[])
+    .map(e=>({sport:e.sport,heures:Number(e.heures)||0,intensite:e.intensite||'moderee'})); }catch(e){ lignes=[]; }
+  if(modif(lignes)===false){ try{ renderCoachNutriSection(c); }catch(e){} return false; }
+  const reg=Object.assign({},c.nutrition.tableur||{});
+  reg.sports={lignes:lignes.map(e=>({sport:String(e.sport),
+    heures:Math.min(60,Math.max(0,Number(e.heures)||0)),
+    intensite:SPORT_INTENSITES.some(x=>x.cle===e.intensite)?e.intensite:'moderee'})),date:Date.now()};
+  c.nutrition.tableur=reg;
+  const manuel=(function(){ try{ return saisieManuelle(c); }catch(e){ return false; } })();
+  const j=_tbEcrireCibles(c);
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  _tbAvis(ok,CLOUD.pushOne(c.email,c),
+    j?((texte?texte+' — ':'')+'ton athlète est sur '+_tbNb(j.on.kcal)+' kcal')
+     :(manuel?'Sport enregistré — en saisie manuelle, tes chiffres priment'
+             :'Sport enregistré — calcul incomplet, cibles inchangées'));
+  try{ renderCoachNutriSection(c); }catch(e){}
+  return true;
+}
+function majSportTableur(i,champ,val){
+  return _tbSportsEcrire(l=>{
+    const e=l[Number(i)];
+    if(!e) return false;
+    if(champ==='heures'){
+      const v=parseFloat(String(val).replace(',','.'));
+      if(!isFinite(v)||v<0||v>60) return false;
+      e.heures=Math.round(v*4)/4;
+    } else if(champ==='intensite'){
+      if(!SPORT_INTENSITES.some(x=>x.cle===val)) return false;
+      e.intensite=val;
+    } else if(champ==='sport'){
+      if(!SPORTS_KCAL_H[val]||val==='Aucun') return false;
+      e.sport=val;
+    } else return false;
+  },'Sport modifié');
+}
+// UN SPORT AJOUTE COMPTE ZERO HEURE : le total ne bouge qu'au moment ou le
+// coach dit combien. Ajouter une ligne ne doit pas, a soi seul, faire manger
+// quatre-vingts kilocalories de plus.
+function ajouterSportTableur(){
+  return _tbSportsEcrire(l=>{ l.push({sport:'Course à pied',heures:0,intensite:'moderee'}); },'Sport ajouté');
+}
+function retirerSportTableur(i){
+  return _tbSportsEcrire(l=>{ if(!l[Number(i)]) return false; l.splice(Number(i),1); },'Sport retiré');
+}
+// LE RETOUR AU CALCUL AUTOMATIQUE : la liste du coach s'efface, les creneaux
+// RepCore et le bilan reprennent la main.
+function sportsTableurAuto(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c||!c.nutrition||!c.nutrition.tableur||!c.nutrition.tableur.sports) return false;
+  const reg=Object.assign({},c.nutrition.tableur);
+  delete reg.sports;
+  c.nutrition.tableur=reg;
+  const j=_tbEcrireCibles(c);
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  _tbAvis(ok,CLOUD.pushOne(c.email,c),
+    'Sports recalculés depuis les créneaux et le bilan'+(j?' — ton athlète est sur '+_tbNb(j.on.kcal)+' kcal':''));
+  try{ renderCoachNutriSection(c); }catch(e){}
+  return true;
+}
 // L'ECRITURE. Elle range les quatre reglages sous nutrition.tableur — le
 // meme endroit que cibleTableur relit, sans quoi le tableau montrerait un
 // reglage que le calcul ignore.
@@ -84107,40 +84307,58 @@ function _htmlTableauxTableur(c){
       'Sa dépense énergétique liée à l’entraînement')
     +'<thead><tr><th>Discipline</th><th>Heures / sem.</th><th>Intensité</th><th>Dépense</th></tr></thead>'
     +'<tbody>';
-  let lignes=[];
-  try{
-    const brut=_dernierChamp(c,'deb-sports');
-    if(Array.isArray(brut)) lignes=brut.filter(x=>x&&x.sport&&Number(x.heures)>0);
-  }catch(e){ lignes=[]; }
-  if(t.creneaux>0)
-    // Les creneaux RepCore : les HEURES REELLES, creneaux x duree de seance,
-    // et non un compte de creneaux deguise en heures.
-    hSport+='<tr><th>'+_tbkLib('Musculation',t.creneaux+' créneau'
-      +(t.creneaux>1?'x':'')+' RepCore','haltere')+'</th><td style="text-align:left">'
-      +_tbDec(t.creneaux*((t.dureeMin||60)/60))+' h</td>'
-      +'<td style="text-align:left"><span class="tbk-pill">Modérée</span></td><td>'
-      +_tbNb(t.sportSemaine)+' kcal</td></tr>';
-  else if(lignes.length)
-    // ⚠ CHAQUE LIGNE PORTE SA PROPRE DEPENSE, et le libelle d'intensite est
-    // celui de la table — pas la clef brute. « moderee » affiche tel quel se
-    // lit comme une faute de frappe, et une colonne « — » ne dit pas si le
-    // sport a ete compte ou ignore : c'est precisement ce qu'on vient
-    // verifier. Un sport absent du bareme le DIT.
-    hSport+=lignes.map(x=>{
-      const kh=(function(){ try{ return kcalHeureSport(String(x.sport),x.intensite); }
-        catch(e){ return null; } })();
-      const inten=(SPORT_INTENSITES.filter(i=>i.cle===x.intensite)[0]||{}).lib
-        ||String(x.intensite||'');
-      const sem=(kh!=null)?Math.round(kh*Number(x.heures)):null;
-      return '<tr><th>'+_tbkLib(String(x.sport),'','activity')+'</th>'
-        +'<td style="text-align:left">'+_tbDec(Number(x.heures))+' h</td>'
-        +'<td style="text-align:left">'+(inten?'<span class="tbk-pill">'+escapeHtml(inten)+'</span>':'')+'</td>'
-        +'<td>'+(sem!=null?(_tbNb(sem)+' kcal')
-          :'<span style="color:var(--orange);font-weight:700">hors barème</span>')
-        +'</td></tr>';
-    }).join('');
-  else
-    hSport+='<tr><th>Aucune activité déclarée</th><td></td><td></td><td>0 kcal</td></tr>';
+  // ══ CHAQUE LIGNE SE REGLE (build 1405) ════════════════════════════════
+  // Kevin : « donne la possibilité de rajouter un sport ou modifier heure et
+  // intensité ». Le sport, les heures et l'intensite sont des champs ; la
+  // croix retire la ligne ; « Ajouter un sport » en ouvre une a zero heure.
+  // Les lignes sont CELLES QUE LE CALCUL COMPTE (kcalSportParJour().lignes),
+  // chacune avec sa propre depense.
+  // ⚠ LE TABLEAU MONTRAIT UNE SEULE LIGNE « Musculation » des qu'il y avait
+  //   des creneaux, avec la depense de TOUS les sports dans sa case, et
+  //   taisait les autres sports declares. Chaque sport a desormais sa ligne.
+  const lignesSp=Array.isArray(t.sportLignes)?t.sportLignes:[];
+  const spCoach=t.sportSource==='coach';
+  const optSport=cur=>Object.keys(SPORTS_KCAL_H).filter(k=>k!=='Aucun')
+    .concat(SPORTS_KCAL_H[cur]&&cur!=='Aucun'?[]:[cur])
+    .map(k=>'<option value="'+escapeHtml(k)+'"'+(k===cur?' selected':'')+'>'
+      +escapeHtml(k)+(SPORTS_KCAL_H[k]?'':' (hors barème)')+'</option>').join('');
+  const optInt=cur=>SPORT_INTENSITES.map(x=>'<option value="'+x.cle+'"'+(x.cle===cur?' selected':'')+'>'
+    +escapeHtml(x.lib)+'</option>').join('');
+  hSport+=lignesSp.map((x,i)=>{
+    const kh=(function(){ try{ return kcalHeureSport(String(x.sport),x.intensite); }catch(e){ return null; } })();
+    const sem=(kh!=null)?Math.round(kh*Number(x.heures)):null;
+    const aide=kh==null?'hors barème — choisis un sport'
+      :(x.origine==='creneaux'?t.creneaux+' créneau'+(t.creneaux>1?'x':'')+' RepCore'
+        :(x.origine==='bilan'?'déclaré au bilan':''));
+    const nom=escapeHtml(String(x.sport));
+    return '<tr class="tbk-sp"><th><span class="tbk-l"><span class="tbk-ri" aria-hidden="true">'
+      +_tbkIco(_estMusculation(x.sport)?'haltere':'activity',18)+'</span><span class="tbk-lt">'
+      +'<select class="tbk-sp-s" aria-label="Sport" onchange="majSportTableur('+i+',\'sport\',this.value)">'
+      +optSport(String(x.sport))+'</select>'
+      +(aide?'<span class="tbk-aide"'+(kh==null?' style="color:var(--orange)"':'')+'>'+escapeHtml(aide)+'</span>':'')
+      +'</span></span></th>'
+      +'<td style="text-align:left"><span class="tbk-sp-h"><input class="tbk-in tbk-sp-i" type="number" '
+      +'min="0" max="60" step="0.5" inputmode="decimal" aria-label="Heures par semaine — '+nom+'" '
+      +'value="'+escapeHtml(String(Number(x.heures)||0))+'" '
+      +'onchange="majSportTableur('+i+',\'heures\',this.value)"><span>h</span></span></td>'
+      +'<td style="text-align:left"><select class="tbk-sp-n tbk-sp-n-'+escapeHtml(String(x.intensite||'moderee'))+'" '
+      +'aria-label="Intensité — '+nom+'" onchange="majSportTableur('+i+',\'intensite\',this.value)">'
+      +optInt(x.intensite||'moderee')+'</select></td>'
+      +'<td><span class="tbk-sp-d">'+(sem!=null?(_tbNb(sem)+' kcal')
+        :'<span style="color:var(--orange);font-weight:700">hors barème</span>')+'</span>'
+      +'<button type="button" class="tbk-sp-x" onclick="retirerSportTableur('+i+')" '
+      +'aria-label="Retirer '+nom+'" title="Retirer ce sport">×</button></td></tr>';
+  }).join('');
+  if(!lignesSp.length)
+    hSport+='<tr><th>'+_tbkLib(spCoach?'Aucun sport':'Aucune activité déclarée','','')
+      +'</th><td></td><td></td><td>0 kcal</td></tr>';
+  // L'AJOUT, et quand la liste est celle du coach, le retour a l'automatique.
+  hSport+='<tr class="tbk-sp-add"><td colspan="4"><div class="tbk-sp-bas">'
+    +'<button type="button" class="tbk-sp-plus" onclick="ajouterSportTableur()">+ Ajouter un sport</button>'
+    +(spCoach?'<span class="tbk-sp-note">Réglés par toi : les créneaux RepCore et le bilan ne sont plus lus. '
+      +'<button type="button" class="tbk-sp-auto" onclick="sportsTableurAuto()">Revenir au calcul automatique</button></span>'
+      :'<span class="tbk-sp-note">Modifie une ligne ou ajoute un sport : la liste devient la tienne.</span>')
+    +'</div></td></tr>';
   hSport+='<tr class="tbk-tot"><th>'+_tbkLib('Dépense sportive par jour','','zap')+'</th><td></td><td></td><td>'
     +_tbNb(t.sportJour)+' kcal</td></tr></tbody></table>';
 

@@ -32538,7 +32538,8 @@ async function testExercices(){
           return _echec('le texte de la ligne a changé : « '+poids.textContent+' »');
         // LE SPORT : l'intensite en pastille ; LES JOURNEES : leur propre classe.
         const sp=par('Dépense selon l’activité sportive');
-        if(!sp||!sp.querySelector('.tbk-pill')) return _echec('l’intensité n’est pas en pastille');
+        // (Depuis 1405, l'intensite est un MENU habille en pastille : elle se regle.)
+        if(!sp||!sp.querySelector('select.tbk-sp-n')) return _echec('l’intensité n’est pas un menu en pastille');
         if(!par('Journées')||!par('Journées').classList.contains('tbk-jr'))
           return _echec('« Journées » a perdu sa classe');
         // LES MACROS : cinq cartes + le commutateur + le total, et les attributs
@@ -32641,6 +32642,117 @@ async function testExercices(){
         // Le total est bien la somme de ses grammes.
         return j.kcal===Math.round(4*j.p+9*j.l+4*j.g)
           ?true:_echec('la journée écrite n’est pas la somme de ses grammes');})());
+
+      // BUILD 1405 — Kevin : « donne la possibilité de rajouter un sport ou
+      // modifier heure et intensité », sur « Dépense selon l'activité sportive ».
+      ok('1405 — LA LISTE DE SPORTS DU COACH FAIT FOI, ET SE RELIT DANS SES DEUX FORMES',(()=>{
+        const j=Date.now();
+        const base=nut=>({id:'S1405',email:'s1405@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+          _evol_height:'180','init-age':30,sessions_config:Array.from({length:7},(_,i)=>({active:i<4})),
+          bilans:[{type:'debut',date:j-60*864e5,'deb-weight':'80','deb-height':'180','deb-age':'30',
+            'deb-gender':'Homme','deb-sports':[{sport:'Tennis',heures:2,intensite:'moderee'}]}],
+          nutrition:nut||{}});
+        // SANS LISTE : les creneaux ET le sport declare, chacun sur sa ligne.
+        const a=kcalSportParJour(base());
+        if(a.source!=='creneaux') return _echec('source auto : '+a.source);
+        const lib=(a.lignes||[]).map(x=>x.sport+'/'+x.origine).join(',');
+        if(lib!=='Musculation/creneaux,Tennis/bilan') return _echec('lignes auto : '+lib);
+        const kM=kcalHeureSport('Musculation','moderee'), kT=kcalHeureSport('Tennis','moderee');
+        const hM=a.lignes[0].heures;
+        if(Math.abs(a.semaine-Math.round(hM*kM+2*kT))>1) return _echec('le total auto n’est pas la somme des lignes');
+        // AVEC LA LISTE DU COACH : elle seule compte.
+        const b=kcalSportParJour(base({tableur:{sports:{lignes:[{sport:'Boxe',heures:3,intensite:'haute'}],date:j}}}));
+        if(b.source!=='coach') return _echec('source coach : '+b.source);
+        if(b.semaine!==3*kcalHeureSport('Boxe','haute')) return _echec('semaine coach : '+b.semaine);
+        if(b.jour!==Math.round(b.semaine/7)) return _echec('jour coach : '+b.jour);
+        // LISTE VIDEE : zero, sans retomber sur les creneaux.
+        const c=kcalSportParJour(base({tableur:{sports:{date:j}}}));
+        if(c.source!=='coach'||c.semaine!==0) return _echec('liste vidée : '+c.source+' / '+c.semaine);
+        // LA FORME QUE FIREBASE RENVOIE PARFOIS : un objet a clefs numeriques.
+        const d=kcalSportParJour(base({tableur:{sports:{lignes:{0:{sport:'Marche',heures:5,intensite:'faible'},
+          1:{sport:'Yoga',heures:1,intensite:'moderee'}},date:j}}}));
+        if(d.lignes.map(x=>x.sport).join(',')!=='Marche,Yoga') return _echec('forme objet : '+JSON.stringify(d.lignes));
+        if(d.semaine!==Math.round(5*kcalHeureSport('Marche','faible')+kcalHeureSport('Yoga','moderee')))
+          return _echec('forme objet, total : '+d.semaine);
+        // UN SPORT HORS BAREME : nomme, pas compte.
+        const e=kcalSportParJour(base({tableur:{sports:{lignes:[{sport:'Pétanque',heures:2,intensite:'moderee'}],date:j}}}));
+        if(e.semaine!==0||e.inconnus.indexOf('Pétanque')<0) return _echec('hors barème : '+JSON.stringify(e));
+        // ET cibleTableur LA SUIT : c'est elle que tous les ecrans lisent.
+        const t1=cibleTableur(base({tableur:{sports:{lignes:[{sport:'Boxe',heures:3,intensite:'haute'}],date:j}}}),{});
+        return t1.sportSemaine===b.semaine&&t1.sportSource==='coach'
+          ?true:_echec('cibleTableur ne suit pas la liste : '+t1.sportSemaine);})());
+
+      ok('1405 — LE COACH AJOUTE, RÈGLE ET RETIRE UN SPORT, ET LES CIBLES SUIVENT',(()=>{
+        const sU=currentUser, sId=currentClientId, sDB=DB.get('users'), sPush=CLOUD.pushOne, sTS=window.toastSync;
+        let envois=0;
+        try{
+          CLOUD.pushOne=()=>{ envois++; return Promise.resolve(true); };
+          window.toastSync=()=>Promise.resolve(true);
+          const j=Date.now();
+          const CO={id:'C1405',email:'c1405@t.fr',role:'coach',fname:'K',seenBilans:{},alertStatus:{}};
+          const AT={id:'A1405',email:'a1405@t.fr',role:'athlete',coachId:'C1405',gender:'H',_evol_gender:'H',
+            _evol_height:'180','init-age':30,sessions_config:Array.from({length:7},(_,i)=>({active:i<4})),
+            bilans:[{type:'debut',date:j-60*864e5,'deb-weight':'80','deb-height':'180','deb-age':'30',
+              'deb-gender':'Homme','deb-sports':[{sport:'Tennis',heures:2,intensite:'moderee'}]}],
+            weightLog:[{date:localISODate(new Date()),kg:80}],sessions:[],nutrition:{cycle:false}};
+          DB.set('users',{[CO.email]:CO,[AT.email]:AT}); currentUser=CO; currentClientId='A1405';
+          const lu=()=>getOwnedClient('A1405');
+          renderCoachNutriSection(lu());
+          const z=document.getElementById('ccd-nutrition');
+          // LE TABLEAU : une ligne par sport, chacune avec sa depense, et l'ajout.
+          const rangs=()=>[...z.querySelectorAll('table.tbk-4 tr.tbk-sp')];
+          if(rangs().length!==2) return _echec(rangs().length+' lignes de sport au lieu de 2');
+          const r0=rangs()[0];
+          if(!r0.querySelector('select.tbk-sp-s')||!r0.querySelector('input.tbk-sp-i')||!r0.querySelector('select.tbk-sp-n')
+            ||!r0.querySelector('.tbk-sp-x')) return _echec('une ligne n’a pas ses trois champs et sa croix');
+          if(!z.querySelector('.tbk-sp-plus')) return _echec('« Ajouter un sport » manque');
+          const dep=r=>Number(((r.querySelector('.tbk-sp-d')||{}).textContent||'').replace(/\D/g,''));
+          if(dep(rangs()[1])!==2*kcalHeureSport('Tennis','moderee'))
+            return _echec('le tennis ne porte pas sa propre dépense : '+dep(rangs()[1]));
+          const k0=lu().nutrition.macros?lu().nutrition.macros.on.kcal:null;
+          // LES HEURES : 10 h de musculation.
+          majSportTableur(0,'heures','10');
+          let s=kcalSportParJour(lu());
+          if(s.source!=='coach') return _echec('la liste n’est pas devenue celle du coach');
+          if(s.lignes[0].heures!==10||s.lignes[1].sport!=='Tennis')
+            return _echec('lignes après les heures : '+JSON.stringify(s.lignes));
+          const k1=lu().nutrition.macros.on.kcal;
+          if(!(k1>0)||k1===k0) return _echec('les cibles n’ont pas suivi : '+k0+' puis '+k1);
+          // L'INTENSITE.
+          majSportTableur(0,'intensite','haute');
+          if(kcalSportParJour(lu()).lignes[0].intensite!=='haute') return _echec('l’intensité n’a pas été prise');
+          if(!(lu().nutrition.macros.on.kcal>k1)) return _echec('« haute » n’a rien ajouté');
+          // UN AJOUT : a zero heure, il ne change rien tant qu'on ne dit pas combien.
+          const k2=lu().nutrition.macros.on.kcal;
+          ajouterSportTableur();
+          s=kcalSportParJour(lu());
+          if(s.lignes.length!==3||s.lignes[2].heures!==0) return _echec('ajout : '+JSON.stringify(s.lignes));
+          if(lu().nutrition.macros.on.kcal!==k2) return _echec('un sport ajouté à zéro heure a changé les cibles');
+          majSportTableur(2,'sport','Boxe'); majSportTableur(2,'heures','2');
+          s=kcalSportParJour(lu());
+          if(s.lignes[2].sport!=='Boxe'||s.lignes[2].heures!==2) return _echec('boxe : '+JSON.stringify(s.lignes[2]));
+          // LES VALEURS HORS BORNES SONT REFUSEES.
+          majSportTableur(2,'heures','-3'); majSportTableur(2,'heures','200'); majSportTableur(2,'sport','Zzz');
+          s=kcalSportParJour(lu());
+          if(s.lignes[2].heures!==2||s.lignes[2].sport!=='Boxe') return _echec('une valeur absurde est passée');
+          // LE RETRAIT.
+          retirerSportTableur(1);
+          s=kcalSportParJour(lu());
+          if(s.lignes.map(x=>x.sport).join(',')!=='Musculation,Boxe') return _echec('retrait : '+s.lignes.map(x=>x.sport));
+          // CHAQUE GESTE EST PARTI VERS L'ATHLETE.
+          if(envois<6) return _echec(envois+' envois seulement sur six gestes');
+          // LE RETOUR A L'AUTOMATIQUE.
+          sportsTableurAuto();
+          s=kcalSportParJour(lu());
+          if(s.source!=='creneaux'||(lu().nutrition.tableur||{}).sports) return _echec('le retour à l’automatique n’a pas effacé la liste');
+          const tt=cibleTableur(lu(),_tbOptsDe(lu())), jj=_tbJournees(lu(),tt,false).on;
+          return lu().nutrition.macros.on.kcal===jj.kcal
+            ?true:_echec('l’automatique n’a pas recalculé les cibles : '+lu().nutrition.macros.on.kcal+' pour '+jj.kcal);
+        } finally {
+          CLOUD.pushOne=sPush; window.toastSync=sTS;
+          currentUser=sU; currentClientId=sId;
+          if(sDB) DB.set('users',sDB);
+        }})());
 
       ok('« Enregistrer ces chiffres » est CENTRE et seul sur sa ligne',(()=>{
         // Pleine largeur il se confondait avec le tableau qu'il enregistre.
