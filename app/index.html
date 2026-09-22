@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1385';
+window.RC_BUILD='1386';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4591,25 +4591,39 @@ html{scroll-behavior:smooth}
   transform:translate(-50%,-50%);pointer-events:none}
 .cc-corps-n{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;
   margin-top:8px;text-align:center}
-/* ── LES ZONES DE VOLUME ───────────────────────────────────────────────────
-   Teintee, la silhouette passe en GRIS CLAIR — le bonhomme blanc de ce matin :
-   son rouge d'origine se serait lu « au-dessus du MRV » sur les muscles non
-   teintes. Le calque se pose en multiply : il colore la chair et garde les
-   traits du dessin. */
+/* ── LE VOLUME DE LA SEMAINE ───────────────────────────────────────────────
+   Teintee, la silhouette passe en GRIS CLAIR : c'est le bas de l'echelle —
+   « aucune serie » — et la rampe orange monte a partir de lui. Son rouge
+   d'origine aurait teinte tout le corps d'une couleur qui, ici, appelle une
+   decision. Le calque se pose en multiply : il colore la chair et garde les
+   traits du dessin.
+   ⚠ OPACITE PLEINE, ET PLUS .82. L'attenuation convenait a quatre aplats
+   francs ; sur une rampe, elle ecrasait justement l'ecart entre deux pas
+   voisins — tout ce que la rampe existe pour montrer. */
 .cc-corps-planche[data-teinte] img{filter:grayscale(1) brightness(1.55) contrast(1.05)}
 .cc-corps-calque{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
-  mix-blend-mode:multiply;opacity:.82}
-/* La legende des quatre zones : la meme grammaire que celle de la grille de
-   charge, pastille puis nom de zone. */
+  mix-blend-mode:multiply}
+/* LA BULLE DU MUSCLE TOUCHE. Posee au-dessus du doigt, pas dessous : sous le
+   doigt, elle serait cachee par lui. Encre de texte, jamais la couleur du
+   muscle — le chiffre se lit, la teinte se compare. */
+.cc-corps-bulle{position:absolute;z-index:2;transform:translate(-50%,calc(-100% - 10px));
+  pointer-events:none;white-space:nowrap;background:rgba(12,12,14,.94);
+  border:1px solid rgba(255,255,255,.16);border-radius:var(--r-2);padding:4px 8px;
+  font-size:var(--fs-2xs);font-weight:700;color:var(--text);line-height:1.3;
+  box-shadow:0 4px 14px rgba(0,0,0,.45)}
+.cc-corps-bulle[hidden]{display:none}
+/* LA LEGENDE EST UNE REGLE GRADUEE : la teinte est continue, sa legende
+   aussi. Assez courte pour tenir sous le corps a 375 px, assez longue pour
+   que cinq graduations ne se touchent pas. */
 .cc-corps-l{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
   gap:4px 10px;margin-top:7px;padding-top:7px;
   border-top:1px solid rgba(255,255,255,.10)}
 .cc-corps-lt{flex:0 0 100%;text-align:center;font-size:var(--fs-2xs);
   color:var(--text-faint);line-height:1.5}
-.cc-corps-lp{display:inline-flex;align-items:center;gap:4px;
-  font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap}
-.cc-corps-lp i{width:9px;height:9px;border-radius:2px;display:inline-block;
-  flex:0 0 auto}
+.cc-corps-ech{flex:0 0 100%;max-width:240px;display:flex;flex-direction:column;gap:3px}
+.cc-corps-eb{display:block;height:8px;border-radius:4px}
+.cc-corps-eg{display:flex;justify-content:space-between;font-size:var(--fs-2xs);
+  color:var(--sub);font-variant-numeric:tabular-nums}
 /* La charge en toutes lettres, pour un lecteur d'ecran : visuellement cachee. */
 .cc-corps-lu{position:absolute;width:1px;height:1px;overflow:hidden;
   clip:rect(0 0 0 0);white-space:nowrap}
@@ -52515,9 +52529,11 @@ const CORPS_PLANCHE=Object.freeze({
 });
 // ── LES ZONES DE VOLUME, REPOSEES SUR LE NOUVEAU MODELE ────────────────────
 // Kevin, 21/09/2026, apres le changement de modele : « remets les zones de
-// differente couleur comme c'etait ce matin ». La teinte dit la charge de la
-// semaine par muscle — MEV / MAV / MRV —, les quatre couleurs de la grille de
-// charge ; c'est le calcul de ce matin, a l'identique (corpsZones).
+// differente couleur comme c'etait ce matin ». La teinte disait alors la
+// charge de la semaine par muscle en quatre aplats MEV / MAV / MRV.
+// ⚠ DEPUIS LE 22/09/2026, ELLE DIT LES SERIES EN CONTINU — voir
+//   corpsCouleurVolume. La zone reste calculee (corpsZones) et se lit sous le
+//   doigt ; seule la couleur a change de grammaire.
 //
 // ⚠ LES CONTOURS DE CE MATIN NE SERVAIENT PLUS : WO_ZONES decoupe les planches
 //   d'avatar, pas l'image de Kevin. Chaque silhouette porte donc sa CARTE
@@ -52833,11 +52849,94 @@ function corpsZones(u,vue,vol){
   }
   return out;
 }
-// PURE. La meme chose, traduite dans les couleurs de la grille de charge — une
-// seule palette pour une notion.
+// ══ LA TEINTE DIT LE VOLUME DE LA SEMAINE, EN CONTINU ═════════════════════
+// Kevin, 22/09/2026, devant une silhouette presque toute bleue : « recolorie
+// mieux avec le volume total de la semaine ».
+//
+// ⚠ LES QUATRE ZONES N'EN DISAIENT PAS ASSEZ. Traduite en MEV / MAV / MRV, la
+//   semaine se lisait en quatre aplats : 9 et 15 series tombaient dans le meme
+//   bleu, un quadriceps a 7 series dans le meme gris qu'un muscle jamais
+//   travaille, et la moitie du corps restait muette. On voyait QUE ca
+//   travaillait, jamais OU.
+//
+// UNE ECHELLE CONTINUE, UN SEUL TON, LA MEME POUR TOUS LES MUSCLES. De la
+// peche pale — presque le dessin — a l'orange brule a CORPS_VOL_HAUT series
+// dures, et sature au-dela. Un seul ton parce que la couleur dit une
+// QUANTITE, et qu'une quantite se lit en clair / fonce, pas en arc-en-ciel.
+//
+// ⚠ POURQUOI ORANGE, ET NI BLEU NI ROUGE — les trois ont ete poses cote a
+//   cote au banc, sur la meme semaine :
+//   · le BLEU, meme en rampe, rendait encore un corps bleu : 10 et 18 series
+//     s'y distinguaient mal sous l'ombrage du dessin. Et le bleu veut deja
+//     dire « MEV-MAV » dans la grille de charge : le reprendre ici pour des
+//     series aurait donne deux sens a une couleur, d'un ecran a l'autre ;
+//   · le ROUGE appelle une decision dans cette application, et dit
+//     « au-dessus du MRV » dans la grille : un pectoral rouge se lirait comme
+//     un reproche ;
+//   · l'ORANGE n'a aucun sens pris ailleurs sur ces deux ecrans, se lit d'un
+//     coup d'oeil comme de la chaleur, et ses pas restent distincts sous
+//     l'ombrage. La rampe s'arrete a un orange brule, jamais au rouge.
+//
+// ⚠ SIX PAS REGULIERS EN CLARTE PERCUE (OKLab : 0,945 → 0,536, un pas de
+//   0,08 environ). Mesure, pas estime : c'est ce qui fait qu'un ecart de
+//   series se voit pareil en bas et en haut de l'echelle. Et la rampe ne
+//   descend pas jusqu'au brun : posee en multiply sur un dessin gris clair,
+//   lui-meme sur fond noir, un pas trop sombre aurait fondu le muscle le plus
+//   travaille dans le fond.
+//
+// ⚠ PLUS BESOIN DE REPERE POUR ETRE TEINTE. Une serie se compte sans savoir
+//   ou est le MRV : les lombaires, les abducteurs et les adducteurs, qui n'en
+//   ont pas, se colorent enfin quand ils ont travaille. Rien n'est invente —
+//   c'etait la seule raison de les laisser gris. La ZONE, elle, reste dite la
+//   ou elle existe : dans l'infobulle du muscle et dans la phrase lue a voix
+//   haute (corpsZones, inchange).
+const CORPS_VOL_HAUT=20;
+// De la peche pale a l'orange brule, clarte percue decroissante a pas regulier.
+const CORPS_VOL_RAMPE=Object.freeze(['#fde9d6','#fbc99a','#f7a45f','#ef7f2c',
+  '#d9620f','#b04a07']);
+// Les graduations de la legende, en series.
+const CORPS_VOL_GRADUATIONS=Object.freeze([0,5,10,15,20]);
+/**
+ * PURE. La couleur d'un volume hebdomadaire, en « #rrggbb », ou null a zero.
+ * Interpolee entre les pas de la rampe : 9 et 15 series ne tombent plus
+ * jamais dans la meme couleur.
+ * @param {number} v series dures de la semaine
+ * @returns {string|null}
+ */
+function corpsCouleurVolume(v){
+  const x=Number(v);
+  if(!(x>0)) return null;
+  const r=CORPS_VOL_RAMPE, t=Math.min(x,CORPS_VOL_HAUT)/CORPS_VOL_HAUT*(r.length-1);
+  const i=Math.min(Math.floor(t),r.length-2), f=t-i;
+  const a=_corpsRvb(r[i]), b=_corpsRvb(r[i+1]);
+  return '#'+[0,1,2].map(k=>Math.round(a[k]+(b[k]-a[k])*f)
+    .toString(16).padStart(2,'0')).join('');
+}
+// PURE. La couleur de chaque muscle d'une vue, pour un volume hebdomadaire.
+// Un muscle a zero serie n'y figure pas : il garde le gris du dessin.
 function corpsTeintes(u,vue,vol){
-  const z=corpsZones(u,vue,vol), out={};
-  for(const m in z){ const c=GC_COULEURS[z[m]]; if(c) out[m]=c; }
+  const v=vol||{}, out={};
+  for(const m of (CORPS_MUSCLES_VUE[vue]||[])){
+    const c=corpsCouleurVolume(v[m]);
+    if(c) out[m]=c;
+  }
+  return out;
+}
+// PURE. Ce que dit chaque muscle d'une vue quand on le touche : son nom, ses
+// series, et sa zone quand il a un repere. Un muscle a zero le dit aussi —
+// le gris n'est pas un oubli, c'est une semaine sans serie.
+function corpsInfobulles(u,vue,vol){
+  const v=vol||{}, z=corpsZones(u,vue,v), out={};
+  for(const m of (CORPS_MUSCLES_VUE[vue]||[])){
+    const lib=(MUSCLES[m]||{}).lib||m;
+    const n=Number(v[m])||0;
+    // volAffiche arrondit a la demi-serie : un quart de serie secondaire
+    // s'afficherait « 0 série » sur un muscle pourtant teinte.
+    const a=volAffiche(n), r=Math.round(n*2)/2;
+    out[m]=lib+' · '+(!(n>0)?'aucune série'
+      :((r>0?(a+' série'+(r>=2?'s':'')):'moins d’une demi-série')
+        +(z[m]?(' · '+z[m]):'')));
+  }
   return out;
 }
 // « 15 septembre ». La courbe des series dures nomme la semaine ou elle
@@ -52909,7 +53008,9 @@ function _arr1(v){ return Math.round((Number(v)||0)*10)/10; }
 // est peint APRES l'insertion par _corpsPeindreCalques, qui lit la carte de
 // zones de la silhouette. Sans teinte, pas de calque, et la silhouette garde
 // son rouge.
-function _htmlCorpsPlanche(genre,vue,teintes){
+// `infos` : ce que dit chaque muscle quand on le touche (corpsInfobulles). Il
+// voyage avec le calque, qui est le seul a savoir quel muscle est sous le doigt.
+function _htmlCorpsPlanche(genre,vue,teintes,infos){
   const pl=CORPS_PLANCHE[genre+'-'+vue]||CORPS_PLANCHE['h-face'];
   const t=teintes||{};
   const n=Object.keys(t).length;
@@ -52917,8 +53018,48 @@ function _htmlCorpsPlanche(genre,vue,teintes){
     +'%;width:'+CORPS_PART_CORPS+'%">'
     +'<img src="'+pl.src+'" alt="" aria-hidden="true" decoding="async">'
     +(n?'<canvas class="cc-corps-calque" width="'+pl.w+'" height="'+pl.h+'" aria-hidden="true"'
-      +' data-carte="'+pl.zones+'" data-t="'+escapeHtml(JSON.stringify(t))+'"></canvas>':'')
+      +' data-carte="'+pl.zones+'" data-t="'+escapeHtml(JSON.stringify(t))+'"'
+      +' data-i="'+escapeHtml(JSON.stringify(infos||{}))+'"></canvas>':'')
     +'</div>';
+}
+// ══ LE CHIFFRE SOUS LE DOIGT ══════════════════════════════════════════════
+// Une teinte continue se compare d'un coup d'oeil, elle ne se chiffre pas :
+// entre deux oranges voisins, personne ne lit 11 ou 13 series. On touche le
+// muscle, il dit son nombre — et sa zone quand il a un repere.
+//
+// ⚠ LE MUSCLE SE LIT DANS LA CARTE DE ZONES, PAS DANS LE DESSIN. C'est la
+//   meme image que celle qui peint le calque, deja en memoire : aucun second
+//   decoupage qui finirait par ne plus tomber sur les memes pixels.
+//
+// ⚠ AU DOIGT, LA BULLE RESTE. Sur un ecran tactile, pointerleave tombe juste
+//   apres le relachement : la bulle aurait disparu avant d'etre lue. Elle
+//   s'efface au toucher suivant hors d'un muscle.
+function _corpsBrancherBulle(cv,carte){
+  const pl=cv&&cv.parentNode;
+  if(!pl||pl.querySelector('.cc-corps-bulle')) return false;
+  let infos={}; try{ infos=JSON.parse(cv.getAttribute('data-i')||'{}'); }catch(e){ infos={}; }
+  const b=document.createElement('div');
+  b.className='cc-corps-bulle'; b.hidden=true;
+  pl.appendChild(b);
+  const montrer=ev=>{
+    const r=pl.getBoundingClientRect();
+    if(!r.width||!r.height){ b.hidden=true; return; }
+    const x=ev.clientX-r.left, y=ev.clientY-r.top;
+    const px=Math.floor(x/r.width*carte.width), py=Math.floor(y/r.height*carte.height);
+    let m=null;
+    if(px>=0&&py>=0&&px<carte.width&&py<carte.height)
+      m=CORPS_ZONES_ORDRE[Math.round(carte.data[(py*carte.width+px)*4]/CORPS_ZONES_PAS)-1]||null;
+    const txt=m&&infos[m];
+    if(!txt){ b.hidden=true; return; }
+    b.textContent=txt;
+    b.style.left=_arr1(x/r.width*100)+'%';
+    b.style.top=_arr1(y/r.height*100)+'%';
+    b.hidden=false;
+  };
+  pl.addEventListener('pointermove',montrer);
+  pl.addEventListener('pointerdown',montrer);
+  pl.addEventListener('pointerleave',ev=>{ if(ev.pointerType!=='touch') b.hidden=true; });
+  return true;
 }
 // Les cartes de zones, lues une fois chacune.
 const _corpsCartes={};
@@ -52965,6 +53106,7 @@ async function _corpsPeindreCalques(racine){
         if(c){ d[i]=c[0]; d[i+1]=c[1]; d[i+2]=c[2]; d[i+3]=255; }
       }
       ctx.putImageData(out,0,0);
+      _corpsBrancherBulle(cv,carte);
     }catch(e){}
   }
 }
@@ -53359,8 +53501,8 @@ function _htmlCorpsCadre(c){
   const sem=bilans.length?corpsSemaineVolume(u):null;
   let volSem={};
   if(sem){ try{ volSem=volumeSemaine(u,sem.cle)||{}; }catch(e){ volSem={}; } }
-  const zonesVol=sem?corpsZones(u,vue,volSem):{};
   const teintes=sem?corpsTeintes(u,vue,volSem):{};
+  const infos=sem?corpsInfobulles(u,vue,volSem):{};
   // LA SCENE PORTE LE RAPPORT DE LA TOILE, elargi de 100/CORPS_PART_CORPS : la
   // silhouette occupe cette part de sa largeur, et tout — traits, etiquettes —
   // se repere ensuite en centiemes de cette scene.
@@ -53369,7 +53511,7 @@ function _htmlCorpsCadre(c){
   const scene='<div class="cc-corps-scene"'+(bilans.length?'':' data-eteint=""')
     +' style="aspect-ratio:'+_arr1(pl.w*100/CORPS_PART_CORPS)+'/'+pl.h
     +';--et-l:'+_arr1(CORPS_ETIQ_LARG)+'%">'
-    +_htmlCorpsPlanche(genre,vue,teintes)
+    +_htmlCorpsPlanche(genre,vue,teintes,infos)
     +eti.traits
     +eti.etiquettes
     +'</div>';
@@ -53409,24 +53551,37 @@ function _htmlCorpsCadre(c){
         :'<div class="cc-corps-n">Aucun écart à afficher : il faut deux relevés '
           +'d’une même mensuration pour en calculer un.</div>'));
   // ⚠ LA LEGENDE DIT CE QUE LA COULEUR DECRIT, ET CE QU'ELLE NE DECRIT PAS.
-  //   Sans elle, un quadriceps rouge a cote d'un « -1,5 cm » se lirait comme un
-  //   jugement sur la cuisse. Le rouge dit « au-dessus du MRV » — une charge
-  //   de travail, pas un corps.
-  // ET LA CHARGE SE LIT SANS VOIR LA COULEUR : la liste des muscles, leur
-  // volume et leur zone, pour un lecteur d'ecran.
-  const muscles=Object.keys(zonesVol);
+  //   Sans elle, un quadriceps orange vif a cote d'un « -1,5 cm » se lirait
+  //   comme un jugement sur la cuisse. L'orange dit des SERIES — une charge de
+  //   travail, pas un corps.
+  // UNE REGLE GRADUEE, PAS DES PASTILLES : la teinte est continue, sa legende
+  // aussi. Elle part de la rampe elle-meme, pas d'un dessin a cote qui finirait
+  // par ne plus lui ressembler.
+  // ⚠ LA SEMAINE EN COURS SE DIT « EN COURS ». Un mardi, elle ne porte qu'une
+  //   ou deux seances : une silhouette pale n'y veut pas dire « il ne fait
+  //   rien », et le coach doit pouvoir le lire.
+  // ET LA CHARGE SE LIT SANS VOIR LA COULEUR : chaque muscle, ses series et sa
+  // zone, pour un lecteur d'ecran — les memes phrases que sous le doigt.
+  const libSem=sem?(_corpsLibSemaine(sem.cle)+(sem.decalage===0?' (en cours)':'')):'';
+  const lus=Object.keys(infos).filter(m=>(Number(volSem[m])||0)>0)
+    .sort((a,b)=>(Number(volSem[b])||0)-(Number(volSem[a])||0));
   const legende=sem
     ?'<div class="cc-corps-l">'
-      +'<span class="cc-corps-lt">Teinte : charge de la semaine du '
-      +escapeHtml(_corpsLibSemaine(sem.cle))+'</span>'
-      +Object.keys(GC_COULEURS).map(k=>'<span class="cc-corps-lp">'
-        +'<i style="background:'+escapeHtml(GC_COULEURS[k])+'"></i>'
-        +escapeHtml(k)+'</span>').join('')
+      +'<span class="cc-corps-lt">Teinte : séries dures de la semaine du '
+      +escapeHtml(libSem)+'</span>'
+      +'<span class="cc-corps-ech" aria-hidden="true">'
+        +'<span class="cc-corps-eb" style="background:linear-gradient(90deg,'
+          +CORPS_VOL_RAMPE.join(',')+')"></span>'
+        +'<span class="cc-corps-eg">'+CORPS_VOL_GRADUATIONS.map((g,i,l)=>'<span>'
+          +g+(i===l.length-1?'+':'')+'</span>').join('')+'</span>'
+      +'</span>'
       +'<span class="cc-corps-lt">Elle dit le volume d’entraînement, jamais le '
-      +'développement. Un muscle sans repère de volume n’est pas teinté.</span>'
-      +(muscles.length?'<span class="cc-corps-lu">Charge de la semaine : '
-        +muscles.map(m=>escapeHtml(((MUSCLES[m]||{}).lib||m)+' '+volAffiche(Number(volSem[m])||0)
-          +' séries ('+zonesVol[m]+')')).join(', ')+'.</span>':'')
+      +'développement. Gris : aucune série cette semaine. Touchez un muscle pour son chiffre.</span>'
+      // Les points medians separent a l'oeil et ne s'entendent pas : a voix
+      // haute, deux-points puis virgules, et un point-virgule entre muscles.
+      +(lus.length?'<span class="cc-corps-lu">Séries de la semaine : '
+        +lus.map(m=>escapeHtml(String(infos[m]).replace(' · ',' : ').split(' · ').join(', ')))
+          .join(' ; ')+'.</span>':'')
       +'</div>'
     :'';
   // LES GRAPHIQUES NE SORTENT QUE S'ILS ONT DE QUOI TRACER. Chacun se tait

@@ -38600,12 +38600,22 @@ async function testExercices(){
         const h=_htmlCorpsCadre(avec);
         if(h.indexOf('cc-corps-calque')<0) return _echec('aucun calque de zones pour une semaine travaillée');
         if(h.indexOf('data-teinte')<0) return _echec('la silhouette teintée ne passe pas en gris clair');
-        if(h.indexOf('Teinte : charge de la semaine')<0) return _echec('la légende de la teinte a disparu');
+        if(h.indexOf('Teinte : séries dures de la semaine')<0) return _echec('la légende de la teinte a disparu');
         // LA CHARGE SE LIT SANS VOIR LA COULEUR : le muscle, ses séries, sa zone.
         const b=document.createElement('div'); b.innerHTML=h;
         const lu=(b.querySelector('.cc-corps-lu')||{}).textContent||'';
-        if(!/Pectoraux .*séries \((sous-MEV|MEV-MAV|MAV-MRV|sur-MRV)\)/.test(lu))
+        if(!/Pectoraux : \d+(,5)? séries?, (sous-MEV|MEV-MAV|MAV-MRV|sur-MRV)/.test(lu))
           return _echec('la charge ne se lit pas en toutes lettres : « '+lu+' »');
+        // LA LEGENDE EST UNE REGLE GRADUEE, TIREE DE LA RAMPE ELLE-MEME.
+        const eb=b.querySelector('.cc-corps-eb');
+        if(!eb) return _echec('la règle graduée de la légende a disparu');
+        const fond=eb.getAttribute('style')||'';
+        for(const c of [CORPS_VOL_RAMPE[0],CORPS_VOL_RAMPE[CORPS_VOL_RAMPE.length-1]])
+          if(fond.indexOf(c)<0) return _echec('la règle ne part pas de la rampe : '+fond);
+        const grad=[...b.querySelectorAll('.cc-corps-eg span')].map(s=>s.textContent);
+        if(grad.join('/')!=='0/5/10/15/20+') return _echec('graduations : '+grad.join('/'));
+        // ET L'ANCIENNE LEGENDE A QUATRE PASTILLES NE REVIENT PAS A COTE.
+        if(b.querySelector('.cc-corps-lp')) return _echec('les quatre pastilles de zone sont revenues');
         // ET LES ETIQUETTES RESTENT DES MENSURATIONS.
         const muscles=new Set(Object.values(MUSCLES).map(m=>String(m.lib||'').toLowerCase()));
         for(const e of b.querySelectorAll('.cc-corps-em'))
@@ -38640,60 +38650,113 @@ async function testExercices(){
       if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS) return _echec('les fessiers ne sont pas teints de dos');
       return true;})());
 
-    ok('LA TEINTE DIT LE VOLUME, ET SEULEMENT LA OU IL Y A UN REPERE',(()=>{
-      // ⚠ LA COULEUR NE JUGE PAS UN CORPS. Elle dit MEV / MAV / MRV — une
-      //   charge de travail, la seule question de ce cadre pour laquelle il
-      //   existe des reperes publies. Le centimetre, lui, reste dans la meme
-      //   encre quoi qu'il fasse : regle R32.
+    ok('LA TEINTE DIT LES SERIES DE LA SEMAINE, EN CONTINU',(()=>{
+      // Kevin, 22/09/2026 : « recolorie mieux avec le volume total de la
+      // semaine ». Les quatre aplats MEV / MAV / MRV mettaient 9 et 15 séries
+      // dans le même bleu, et un muscle à 7 séries dans le gris d'un muscle
+      // jamais travaillé. On voyait QUE ça travaillait, jamais OÙ.
+      // ⚠ LA COULEUR NE JUGE TOUJOURS PAS UN CORPS : elle dit des séries — une
+      //   charge de travail. Le centimètre reste dans la même encre : règle R32.
       const u={id:'V1',email:'v1@t.fr',role:'athlete',gender:'H'};
-      const rep=reperesEffectifs(u,'PECTORAUX');
-      if(!rep) return _echec('les pectoraux n’ont plus de repère de volume');
-      // LES QUATRE ZONES, UNE PAR UNE, SUR LE MEME MUSCLE.
-      const cas=[
-        [rep.mev-1,      'sous-MEV'],
-        [rep.mev,        'MEV-MAV'],
-        [rep.mavMin,     'MAV-MRV'],
-        [rep.mrv,        'MAV-MRV'],
-        [rep.mrv+1,      'sur-MRV']];
-      for(const [v,zone] of cas){
-        const t=corpsTeintes(u,'face',{PECTORAUX:v});
-        if(t.PECTORAUX!==GC_COULEURS[zone])
-          return _echec(v+' séries donnent « '+t.PECTORAUX+' » au lieu de la couleur « '+zone+' »');
+      const lum=h=>{ const c=_corpsRvb(h); return c?(0.2126*c[0]+0.7152*c[1]+0.0722*c[2]):null; };
+      // PLUS DE SERIES, PLUS FONCE — strictement, de 1 à CORPS_VOL_HAUT. C'est
+      // tout le défaut réparé : deux volumes différents ne se confondent plus.
+      let prec=Infinity;
+      for(let v=1;v<=CORPS_VOL_HAUT;v++){
+        const c=corpsTeintes(u,'face',{PECTORAUX:v}).PECTORAUX;
+        if(!/^#[0-9a-f]{6}$/.test(String(c))) return _echec(v+' séries donnent « '+c+' »');
+        const l=lum(c);
+        if(!(l<prec)) return _echec(v+' séries ne sont pas plus foncées que '+(v-1));
+        prec=l;
       }
-      // ⚠ LES COULEURS SONT CELLES DE LA GRILLE DE CHARGE, PAS UNE TROISIEME
-      //   PALETTE. Trois codes pour une notion finiraient par se contredire.
-      const palette=new Set(Object.values(GC_COULEURS));
-      const tout=corpsTeintes(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
-      for(const m in tout)
-        if(!palette.has(tout[m])) return _echec(m+' est peint hors palette : '+tout[m]);
-      // UN MUSCLE SANS REPERE N'EST PAS TEINTE. Les adducteurs et les
-      // abducteurs n'ont aucun MEV publie : les peindre d'une couleur
-      // quelconque aurait invente le repère qui manque.
-      for(const m of ['ABDUCTEURS','ADDUCTEURS']){
-        if(reperesEffectifs(u,m)) continue;   // un coach a pu en poser un
-        if(corpsTeintes(u,'face',{[m]:12})[m])
-          return _echec(m+' est teinté alors qu’il n’a aucun repère');
-      }
+      // 9 ET 15, LE CAS MEME DE LA DEMANDE : autrefois le même bleu.
+      if(corpsCouleurVolume(9)===corpsCouleurVolume(15))
+        return _echec('9 et 15 séries ont encore la même couleur');
+      // AU-DELA DU HAUT DE L'ECHELLE, LA TEINTE SATURE : elle ne repart pas.
+      if(corpsCouleurVolume(CORPS_VOL_HAUT)!==corpsCouleurVolume(CORPS_VOL_HAUT*2))
+        return _echec('la teinte ne sature pas au-delà de '+CORPS_VOL_HAUT+' séries');
+      // ELLE RESTE DANS LA RAMPE : du premier au dernier pas, jamais plus sombre.
+      const bas=CORPS_VOL_RAMPE[0], haut=CORPS_VOL_RAMPE[CORPS_VOL_RAMPE.length-1];
+      if(corpsCouleurVolume(CORPS_VOL_HAUT)!==haut)
+        return _echec('le haut de l’échelle n’est pas le dernier pas de la rampe');
+      if(!(lum(corpsCouleurVolume(0.1))<=lum(bas)&&lum(corpsCouleurVolume(0.1))>lum(CORPS_VOL_RAMPE[1])))
+        return _echec('un dixième de série ne tombe pas au pied de la rampe');
+      // ZERO SERIE : PAS DE TEINTE. Le muscle garde le gris du dessin — le bas
+      // de l'échelle, dit en toutes lettres dans la légende.
+      for(const v of [0,-3,null,undefined,NaN,'abc'])
+        if(corpsTeintes(u,'face',{PECTORAUX:v}).PECTORAUX)
+          return _echec('« '+v+' » série teinte le muscle');
+      // UNE SEULE ECHELLE POUR TOUS LES MUSCLES : douze séries se lisent
+      // pareil sur un pectoral et sur un biceps, quels que soient leurs repères.
+      const t12=corpsTeintes(u,'face',{PECTORAUX:12,BICEPS:12});
+      if(t12.PECTORAUX!==t12.BICEPS) return _echec('la couleur dépend encore du repère du muscle');
+      // ⚠ UN MUSCLE SANS REPERE EST TEINTE DES QU'IL A TRAVAILLE. Une série se
+      //   compte sans connaître le MRV : ne pas peindre les adducteurs n'avait
+      //   de sens que tant que la couleur disait une zone.
+      for(const m of ['ABDUCTEURS','ADDUCTEURS'])
+        if(!corpsTeintes(u,'face',{[m]:12})[m]) return _echec(m+' n’est pas teinté malgré 12 séries');
+      if(!corpsTeintes(u,'dos',{LOMBAIRES:6}).LOMBAIRES) return _echec('les lombaires ne sont pas teintées');
       // ET LA VUE FILTRE : un muscle que la planche ne montre pas n'a pas de
-      // zone a peindre, et lui en donner une la poserait sur le vide.
+      // zone à peindre, et lui en donner une la poserait sur le vide.
       if(corpsTeintes(u,'face',{FESSIERS:15}).FESSIERS)
         return _echec('les fessiers sont teints en vue de face');
       if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS)
         return _echec('les fessiers ne sont pas teints en vue de dos');
-      // AUCUN VOLUME : AUCUNE EXCEPTION. Un dossier sans seance passe ici.
+      // AUCUN VOLUME : AUCUNE EXCEPTION. Un dossier sans séance passe ici.
       if(typeof corpsTeintes(u,'face',null)!=='object')
         return _echec('un volume absent fait tomber le calcul');
-      // ⚠ LA ZONE ET LA COULEUR NE PEUVENT PAS DIVERGER. La zone est une
-      //   information — elle part dans l'infobulle, ou elle se lit sans voir
-      //   l'ecran — et la couleur n'est qu'une facon de la montrer. Deux
-      //   calculs separes finiraient par dire deux choses.
-      const z=corpsZones(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
-      const t2=corpsTeintes(u,'face',{PECTORAUX:14,BICEPS:3,QUADRICEPS:40});
-      if(Object.keys(z).join(',')!==Object.keys(t2).join(','))
-        return _echec('zones et teintes ne couvrent pas les mêmes muscles');
-      for(const m in z)
-        if(t2[m]!==GC_COULEURS[z[m]])
-          return _echec(m+' : la couleur ne correspond pas à sa zone « '+z[m]+' »');
+      return true;})());
+
+    ok('SOUS LE DOIGT, LE MUSCLE DIT SES SERIES ET SA ZONE',(()=>{
+      // Une teinte continue se compare, elle ne se chiffre pas : le chiffre
+      // exact vit dans la bulle du muscle touché, et la zone MEV / MAV / MRV
+      // — qui n'a plus de couleur — s'y lit encore là où elle existe.
+      const u={id:'V1',email:'v1@t.fr',role:'athlete',gender:'H'};
+      const rep=reperesEffectifs(u,'PECTORAUX');
+      if(!rep) return _echec('les pectoraux n’ont plus de repère de volume');
+      const i=corpsInfobulles(u,'face',{PECTORAUX:rep.mavMin,BICEPS:1,ADDUCTEURS:12.5,QUADRICEPS:0.2});
+      // UNE BULLE PAR MUSCLE DE LA VUE, zéro compris : le gris n'est pas un
+      // oubli, c'est une semaine sans série, et il faut pouvoir le lire.
+      for(const m of CORPS_MUSCLES_VUE.face)
+        if(!i[m]) return _echec(m+' n’a pas de bulle');
+      if(i.FESSIERS) return _echec('une bulle sort pour un muscle hors de la vue');
+      if(i.PECTORAUX!==MUSCLES.PECTORAUX.lib+' · '+rep.mavMin+' séries · '+corpsZones(u,'face',{PECTORAUX:rep.mavMin}).PECTORAUX)
+        return _echec('bulle des pectoraux : « '+i.PECTORAUX+' »');
+      if(i.BICEPS.indexOf('1 série')<0||i.BICEPS.indexOf('1 séries')>=0)
+        return _echec('une série au singulier : « '+i.BICEPS+' »');
+      if(i.ADDUCTEURS.indexOf('12,5 séries')<0)
+        return _echec('la demi-série se perd : « '+i.ADDUCTEURS+' »');
+      // Un muscle SANS REPERE ne s'invente pas de zone.
+      if(!reperesEffectifs(u,'ADDUCTEURS')&&/MEV|MAV|MRV/.test(i.ADDUCTEURS))
+        return _echec('les adducteurs s’inventent une zone : « '+i.ADDUCTEURS+' »');
+      // UN QUART DE SERIE SECONDAIRE N'ECRIT PAS « 0 série » SOUS UNE TEINTE.
+      if(/ 0 série/.test(i.QUADRICEPS)) return _echec('« '+i.QUADRICEPS+' »');
+      if(i.MOLLETS.indexOf('aucune série')<0) return _echec('un muscle à zéro ne le dit pas : « '+i.MOLLETS+' »');
+      // LA BULLE VOYAGE AVEC LE CALQUE, seul à savoir quel muscle est sous le doigt.
+      const h=_htmlCorpsPlanche('h','face',{PECTORAUX:'#3987e5'},i);
+      const b=document.createElement('div'); b.innerHTML=h;
+      const cv=b.querySelector('canvas.cc-corps-calque');
+      if(!cv) return _echec('pas de calque');
+      let lu={}; try{ lu=JSON.parse(cv.getAttribute('data-i')||'{}'); }catch(e){ lu={}; }
+      if(lu.PECTORAUX!==i.PECTORAUX) return _echec('la bulle ne voyage pas avec le calque');
+      if(typeof _corpsBrancherBulle!=='function') return _echec('_corpsBrancherBulle a disparu');
+      // LE BRANCHEMENT LIT LA CARTE DE ZONES : un pixel de pectoral, une bulle.
+      const k=CORPS_ZONES_ORDRE.indexOf('PECTORAUX')+1;
+      const carte={width:2,height:2,data:new Uint8ClampedArray([k*CORPS_ZONES_PAS,0,0,255, 0,0,0,255, 0,0,0,255, 0,0,0,255])};
+      const pl=b.querySelector('.cc-corps-planche');
+      document.body.appendChild(b);
+      try{
+        pl.style.cssText='position:fixed;left:0;top:0;width:100px;height:100px';
+        if(!_corpsBrancherBulle(cv,carte)) return _echec('le branchement échoue');
+        if(_corpsBrancherBulle(cv,carte)) return _echec('la bulle se branche deux fois');
+        const bulle=pl.querySelector('.cc-corps-bulle');
+        const r=pl.getBoundingClientRect();
+        pl.dispatchEvent(new PointerEvent('pointerdown',{clientX:r.left+10,clientY:r.top+10,bubbles:true}));
+        if(bulle.hidden||bulle.textContent!==i.PECTORAUX)
+          return _echec('le pectoral touché ne dit rien : « '+bulle.textContent+' »');
+        pl.dispatchEvent(new PointerEvent('pointermove',{clientX:r.left+90,clientY:r.top+90,bubbles:true}));
+        if(!bulle.hidden) return _echec('la bulle reste hors de tout muscle');
+      } finally { b.remove(); }
       return true;})());
 
     ok('LA TABLE MUSCLE ↔ MENSURATION NE PROMET QUE CE QUI EXISTE',(()=>{
