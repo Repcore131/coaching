@@ -47020,7 +47020,17 @@ async function testExercices(){
       if(new Set(ids).size!==ids.length) return _echec('deux gammes portent le même identifiant');
       for(const g of ML_DISQUES) for(const [c,mm] of g.c)
         if(!(mm>=100&&mm<=600)) return _echec(g.id+' '+c+' : '+mm+' mm n’est pas un diamètre de disque');
-      if(ML_DISQUES.some(g=>g.m==='Technogym'||g.m==='Matrix')) return _echec('une cote est inventée pour une marque qui n’en publie pas');
+      if(ML_DISQUES.some(g=>g.m==='Matrix')) return _echec('une cote est inventée pour une marque qui n’en publie pas');
+      // TECHNOGYM : une cote RELEVÉE par Kevin (1394), jamais présentée comme
+      // une fiche — son nom et sa source le disent, sa tolérance est celle du
+      // mètre ruban, et mesurer une autre gamme reste possible.
+      const tg=ML_DISQUES.filter(g=>g.m==='Technogym');
+      if(tg.length!==1||tg[0].id!=='technogym-releve') return _echec('Technogym : '+tg.map(g=>g.id).join());
+      if(!/mètre ruban/.test(tg[0].g)||!/mètre ruban/.test(tg[0].src)) return _echec('la cote Technogym se présente comme une fiche : '+tg[0].g+' / '+tg[0].src);
+      if(tg[0].tol!==ML_DISQUE_MESURE_TOL) return _echec('la tolérance Technogym n’est pas celle du mètre ruban : '+tg[0].tol);
+      const tgc=Object.fromEntries(tg[0].c);
+      if(tgc['20 kg']!==460||tgc['10 kg']!==320||tgc['5 kg']!==240||tgc['2,5 kg']!==200||tgc['1,25 kg']!==165)
+        return _echec('les cotes Technogym ne sont pas celles relevées : '+JSON.stringify(tgc));
       for(const m of ['Technogym','Matrix','Panatta','Hammer Strength'])
         if(!ML_DISQUES_A_MESURER.includes(m)) return _echec(m+' ne propose pas de mesurer son disque');
       // LES COTES QUI ONT FAIT DÉBAT, telles que les fiches les donnent.
@@ -47042,7 +47052,11 @@ async function testExercices(){
       if(ch('Eleiko','eleiko-ipf','')||ch('Eleiko','','10 kg')||ch('Rogue','eleiko-ipf','10 kg')) return _echec('un choix incomplet ou mêlé passe');
       if(ch('Matrix','mesure','20 kg','45')) return _echec('un disque de 45 mm est accepté');
       if(!ch('Matrix','mesure','20 kg','451')||ch('Matrix','mesure','20 kg','451').src!=='mesure|Matrix|20 kg') return _echec('un disque mesuré ne passe pas');
-      if(mlEchGammes('Technogym').map(g=>g.id).join()!=='mesure') return _echec('Technogym n’offre pas de mesurer son disque');
+      if(mlEchGammes('Technogym').map(g=>g.id).join()!=='technogym-releve,mesure') return _echec('Technogym : '+mlEchGammes('Technogym').map(g=>g.id).join());
+      if(mlEchGammes('Matrix').map(g=>g.id).join()!=='mesure') return _echec('Matrix n’offre pas de mesurer son disque');
+      if(JSON.stringify(ch('Technogym','technogym-releve','1,25 kg'))!==JSON.stringify({mm:165,src:'technogym-releve|1,25 kg'})) return _echec('le choix Technogym 1,25 kg');
+      const tg20=mlDisqueDe('technogym-releve|20 kg');
+      if(!tg20||tg20.mm!==460||tg20.tol!==5||tg20.mesure) return _echec('le 20 kg Technogym : '+JSON.stringify(tg20));
       if(mlEchGammes('Panatta').map(g=>g.id).join()!=='panatta-pl,mesure') return _echec('Panatta : '+mlEchGammes('Panatta').map(g=>g.id).join());
       // L'ÉCHELLE ET LES MESURES : 450 mm sur 210 pixels de vidéo.
       const E={p:'500,200 500,500',mm:450,src:'iwf|20 kg'};
@@ -47182,12 +47196,14 @@ async function testExercices(){
         if(!h||h.kind!=='etiq'||h.id!==tr.id) return 'l’étiquette d’une trajectoire en cours ne se touche pas où elle se voit : '+JSON.stringify(h);
         // UN DISQUE MESURÉ À LA MAIN se retrouve, pour la même marque et la même charge.
         mlOutil('echelle');
-        mlEchMarque('Technogym');
-        if(_ml.echUi.g!=='mesure') return 'Technogym ne passe pas en disque à mesurer';
+        // Sur Matrix, qui n'a QUE « je mesure » : Technogym a désormais sa
+        // gamme relevée (1394), et le panneau n'y choisit plus d'office.
+        mlEchMarque('Matrix');
+        if(_ml.echUi.g!=='mesure') return 'Matrix ne passe pas en disque à mesurer';
         mlEchCharge('20 kg'); mlEchMm('452');
         if(_ml.annot.ech.mm!==452||_ml.annot.ech.ok) return 'le disque mesuré : '+JSON.stringify(_ml.annot.ech);
         if(!mlEchEnregistrer()) return 'le disque mesuré ne s’enregistre pas';
-        mlOutil('echelle'); mlEchMarque('Eleiko'); mlEchMarque('Technogym'); mlEchCharge('20 kg');
+        mlOutil('echelle'); mlEchMarque('Eleiko'); mlEchMarque('Matrix'); mlEchCharge('20 kg');
         if(_ml.echUi.mm!=='452') return 'le diamètre mesuré n’est pas retrouvé : '+_ml.echUi.mm;
         // EFFACER : plus aucune mesure.
         mlEchEffacer();

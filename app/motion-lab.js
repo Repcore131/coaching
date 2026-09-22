@@ -2487,6 +2487,13 @@ const ML_TYPE_LIB=Object.freeze({ligne:'Ligne',fleche:'Flèche',libre:'Trajectoi
 //   KG NE PUBLIENT PAS LEURS DIAMÈTRES. Aucun chiffre n'est posé pour eux : le
 //   coach mesure une fois au mètre ruban, et RepCore s'en souvient. Un
 //   diamètre inventé fausserait en silence chaque centimètre de la vidéo.
+// ⚠ SAUF TECHNOGYM, RELEVÉ PAR KEVIN (build 1394, 22/09/2026) : « poids
+//   techno 20 kg 46 cm, 10 kg 32 cm, 5 kg 24 cm, 2,5 kg 20 cm et 1,25 kg
+//   16,5 cm ». C'est UNE MESURE, PAS UNE FICHE : la gamme le dit dans son nom
+//   et sa source, sa tolérance est celle du mètre ruban (ML_DISQUE_MESURE_TOL,
+//   5 mm — écrite en chiffre ici, la constante n'étant déclarée qu'après ce
+//   tableau), et « Autre gamme — je la mesure » reste proposé : une autre
+//   série Technogym peut ne pas avoir les mêmes cotes.
 //
 // `tol` : la tolérance de fabrication PUBLIÉE, en mm — absente quand la fiche
 // n'en dit rien. On ne l'invente pas non plus.
@@ -2523,7 +2530,10 @@ const ML_DISQUES=Object.freeze([
   {id:'jordan-pu',m:'Jordan',g:'Uréthane',src:'Jordan Fitness, fiche produit',
     c:[['25 kg',450],['20 kg',450],['15 kg',400],['10 kg',360],['5 kg',280],['2,5 kg',235],['1,25 kg',190]]},
   {id:'panatta-pl',m:'Panatta',g:'Powerlifting Pro',src:'Panatta : 20 et 25 kg à 450 mm, norme IPF',
-    c:[['25 kg',450],['20 kg',450]]}
+    c:[['25 kg',450],['20 kg',450]]},
+  {id:'technogym-releve',m:'Technogym',g:'Relevé au mètre ruban',tol:5,
+    src:'Relevé au mètre ruban par Kevin, 22/09/2026 — Technogym ne publie pas ses diamètres',
+    c:[['20 kg',460],['10 kg',320],['5 kg',240],['2,5 kg',200],['1,25 kg',165]]}
 ]);
 // LES MARQUES SANS COTE PUBLIÉE : le diamètre se mesure, et se retient.
 const ML_DISQUES_A_MESURER=Object.freeze(['Panatta','Technogym','Matrix','Hammer Strength','Life Fitness','Autre marque']);
