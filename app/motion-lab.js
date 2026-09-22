@@ -2842,24 +2842,18 @@ function _mlxDessinerUne(g,a,pts,k,R,sMs,comparaison,enCours){
       return;
     }
   }
-  // LE NOM SUR L'IMAGE, dans une étiquette bordée de sa couleur — éteint à la
+  // LE NOM SUR L'IMAGE, écrit dans la couleur de son tracé — éteint à la
   // demande, et jamais pour un texte, qui se dit lui-même.
+  //
+  // ⚠ PLUS DE FIL ENTRE L'ÉTIQUETTE DÉPLACÉE ET SON TRACÉ. Kevin, 22/09/2026 :
+  //   « la légende ne doit pas avoir de trait qui relie au tracé, sinon on se
+  //   perd — juste un rectangle avec le titre qu'on peut bouger, de la même
+  //   couleur de police que le trait ». Le fil du build 1384 ajoutait un trait
+  //   de plus sur une image déjà faite de traits : on ne savait plus lequel
+  //   était une mesure. C'est désormais la COULEUR DU TEXTE qui rattache
+  //   l'étiquette à son tracé, où qu'on la pose.
   const pl=_mlxEtiqPlace(a,pts,k,R,sMs);
-  if(pl){
-    // LE FIL : une étiquette que le coach a éloignée de son tracé (build 1384)
-    // y reste reliée d'un trait fin — sans lui, on ne saurait plus à quel
-    // tracé elle appartient.
-    if(Array.isArray(a.eo)){
-      const b=_mlxEtiqBoite(g,pl.x,pl.y,pl.lib,k,R,false);
-      const cx=Math.max(b.bx,Math.min(pl.ref[0],b.bx+b.w)), cy=Math.max(b.by,Math.min(pl.ref[1],b.by+b.h));
-      if(Math.hypot(cx-pl.ref[0],cy-pl.ref[1])>6*k){
-        g.save(); g.setLineDash([]); g.strokeStyle='rgba(0,0,0,.45)'; g.lineWidth=Math.max(2,3*k);
-        g.beginPath(); g.moveTo(pl.ref[0],pl.ref[1]); g.lineTo(cx,cy); g.stroke();
-        g.strokeStyle=a.c; g.lineWidth=Math.max(1,1.3*k); g.stroke(); g.restore();
-      }
-    }
-    _mlxEtiquette(g,pl.x,pl.y,pl.lib,a.c,k,R,false);
-  }
+  if(pl) _mlxEtiquette(g,pl.x,pl.y,pl.lib,a.c,k,R,false);
 }
 /**
  * Les instants d'une trajectoire suivie, un par point — ou null.
@@ -2957,9 +2951,52 @@ function _mlxPoignees(g,pts,c,k){
   }
   g.restore();
 }
+/** Le fond d'une étiquette : presque opaque, pour que la couleur du texte se
+ *  lise de la même façon sur un mur blanc et sur un fond noir. */
+const MLX_ETIQ_FOND='rgba(8,8,8,.94)';
+/** Le pire fond réel d'une étiquette — MLX_ETIQ_FOND posé sur une image
+ *  blanche : 0,94 × 8 + 0,06 × 255 ≈ 23. C'est contre lui qu'on mesure. */
+const MLX_ETIQ_FOND_PIRE=Object.freeze([23,23,23]);
 /**
- * Une étiquette : fond sombre, bord de la couleur, texte blanc. Elle reste
- * dans l'image : poussée à gauche ou en bas si elle en sortirait.
+ * PURE. L'encre d'une étiquette : la couleur de son tracé, telle quelle tant
+ * qu'elle se lit — contraste d'au moins 4,5:1 sur le pire fond. Sinon
+ * éclaircie vers le blanc par dixièmes, juste assez : la teinte reste celle du
+ * tracé, c'est elle qui dit à qui appartient l'étiquette.
+ *
+ * ⚠ LES SEPT COULEURS DE LA PALETTE PASSENT TELLES QUELLES — c'est pour elles
+ *   que le fond a été monté de 0,84 à 0,94 d'opacité. Seule une couleur
+ *   personnalisée trop sombre est éclaircie : un nom en gris anthracite sur
+ *   fond noir serait une étiquette muette.
+ * @param {string} c  « #rrggbb »
+ * @returns {string} « #rrggbb »
+ */
+function mlEncreEtiquette(c){
+  const m=/^#?([0-9a-f]{6})$/i.exec(String(c||''));
+  if(!m) return '#ffffff';
+  const v=parseInt(m[1],16), rvb=[(v>>16)&255,(v>>8)&255,v&255];
+  /** @param {number[]} q */
+  const lum=q=>{
+    const l=q.map(x=>{ const s=x/255; return s<=0.04045?s/12.92:Math.pow((s+0.055)/1.055,2.4); });
+    return 0.2126*l[0]+0.7152*l[1]+0.0722*l[2];
+  };
+  const fond=lum([...MLX_ETIQ_FOND_PIRE]);
+  for(let t=0;t<=10;t++){
+    const q=rvb.map(x=>Math.round(x+(255-x)*t/10));
+    if((lum(q)+0.05)/(fond+0.05)>=4.5)
+      return '#'+q.map(x=>x.toString(16).padStart(2,'0')).join('');
+  }
+  return '#ffffff';
+}
+/**
+ * Une étiquette : un rectangle sombre, et le nom écrit dans la couleur de son
+ * tracé. Elle reste dans l'image : poussée à gauche ou en bas si elle en
+ * sortirait.
+ *
+ * ⚠ PLUS DE BORD COLORÉ NI DE TEXTE BLANC (Kevin, 22/09/2026) : « juste un
+ *   rectangle avec le titre, de la même couleur de police que le trait ». La
+ *   couleur passe du cadre au texte — c'est elle qui rattache l'étiquette à
+ *   son tracé depuis que le fil a disparu. Un liseré neutre, celui de la
+ *   légende d'ensemble, garde le rectangle lisible sur une image sombre.
  * @param {CanvasRenderingContext2D} g
  * @param {number} x @param {number} y
  * @param {string} texte
@@ -2974,11 +3011,11 @@ function _mlxEtiquette(g,x,y,texte,c,k,R,petite){
   g.save();
   g.font='700 '+fs+'px Montserrat, sans-serif';
   g.textBaseline='middle'; g.textAlign='left';
-  g.fillStyle='rgba(8,8,8,.84)';
+  g.fillStyle=MLX_ETIQ_FOND;
   _mlxRectArrondi(g,bx,by,w,h,Math.min(6,h/3)); g.fill();
-  g.strokeStyle=c; g.lineWidth=Math.max(1,1.4*k);
+  g.strokeStyle='rgba(255,255,255,.16)'; g.lineWidth=1;
   _mlxRectArrondi(g,bx+0.5,by+0.5,w-1,h-1,Math.min(6,h/3)); g.stroke();
-  g.fillStyle='#ffffff';
+  g.fillStyle=mlEncreEtiquette(c);
   g.fillText(texte,bx+fs*0.55,by+h/2+0.5);
   g.restore();
 }
@@ -2994,7 +3031,11 @@ function _mlxEtiquette(g,x,y,texte,c,k,R,petite){
  * @returns {{bx:number, by:number, w:number, h:number, fs:number}}
  */
 function _mlxEtiqBoite(g,x,y,texte,k,R,petite){
-  const fs=Math.round(Math.max(10,(petite?11:13)*k));
+  // UN POIL PLUS PETIT (Kevin, 22/09/2026) : 12 et 10 au lieu de 13 et 11, et
+  // un plancher à 9 — sans lui, sur téléphone, où k descend vers 0,5, les
+  // deux tailles restaient collées à l'ancien plancher de 10 et rien n'aurait
+  // changé à l'écran.
+  const fs=Math.round(Math.max(9,(petite?10:12)*k));
   g.save(); g.font='700 '+fs+'px Montserrat, sans-serif';
   const w=Math.ceil(g.measureText(texte).width)+fs*1.1, h=Math.round(fs*1.9);
   g.restore();

@@ -46444,18 +46444,52 @@ async function testExercices(){
       if(JSON.stringify(dv.a.map(a=>a.eo||null))!=='[[-150,40],null,null,null]') return _echec('décalages gardés : '+JSON.stringify(dv.a.map(a=>a.eo||null)));
       if(dv.leg.x!==120||dv.leg.y!==800) return _echec('le coin libre de la légende se perd');
       if('x' in annotValide({v:1,majLe:0,leg:{x:120},a:[]}).leg) return _echec('une légende à moitié placée passe');
-      // LA GÉOMÉTRIE : le décalage est en millièmes de l'image, et le fil se dessine.
+      // LA GÉOMÉTRIE : le décalage est en millièmes de l'image.
       const cv=document.createElement('canvas'); cv.width=400; cv.height=700;
       const g=cv.getContext('2d'), R={s:1,ox:0,oy:0,vw:400,vh:700};
       const a0={id:'l',n:'Axe',t:'ligne',c:'#ff0000',e:4,d:0,f:9000,p:'100,500 300,500'};
       const p0=_mlxEtiqPlace(a0,[[40,350],[120,350]],1,R,100), p1=_mlxEtiqPlace({...a0,eo:[500,-200]},[[40,350],[120,350]],1,R,100);
       if(Math.round(p1.x-p0.x)!==200||Math.round(p1.y-p0.y)!==-140) return _echec('décalage mal converti : '+[p1.x-p0.x,p1.y-p0.y]);
       mlDessinerAnnotations(g,R,{v:1,majLe:0,leg:{on:0},a:[{...a0,eo:[500,-200]}]},100);
-      // Le milieu du fil, entre le bout de la ligne (120,350) et l'étiquette.
       const b=_mlxEtiqBoite(g,p1.x,p1.y,p1.lib,Math.max(0.45,700/720),R,false);
+      const rouge=d=>d[0]>150&&d[1]<90&&d[2]<90;
+      // ⚠ PLUS DE FIL (Kevin, 22/09/2026) : « la légende ne doit pas avoir de
+      //   trait qui relie au tracé, sinon on se perd ». Le milieu de l'ancien
+      //   fil, entre le bout de la ligne (120,350) et l'étiquette, reste vide.
       const cx=Math.max(b.bx,Math.min(120,b.bx+b.w)), cy=Math.max(b.by,Math.min(350,b.by+b.h));
-      const m=g.getImageData(Math.round((120+cx)/2),Math.round((350+cy)/2),1,1).data;
-      if(!(m[0]>150&&m[1]<90)) return _echec('le fil qui relie l’étiquette à son tracé manque : '+[...m]);
+      for(const f of [0.3,0.5,0.7]){
+        const m=g.getImageData(Math.round(120+(cx-120)*f),Math.round(350+(cy-350)*f),1,1).data;
+        if(rouge(m)||m[3]>0) return _echec('un fil relie encore l’étiquette à son tracé : '+[...m]);
+      }
+      // « UN RECTANGLE AVEC LE TITRE, DE LA MÊME COULEUR DE POLICE QUE LE
+      // TRAIT » : le nom s'écrit en rouge, et plus aucun pixel blanc.
+      const px=g.getImageData(Math.floor(b.bx),Math.floor(b.by),Math.ceil(b.w),Math.ceil(b.h)).data;
+      let nR=0,nB=0;
+      for(let i=0;i<px.length;i+=4){
+        if(rouge(px.subarray(i,i+3))) nR++;
+        if(px[i]>200&&px[i+1]>200&&px[i+2]>200) nB++;
+      }
+      if(nR<8) return _echec('le nom de l’étiquette n’est pas dans la couleur du tracé ('+nR+' pixels rouges)');
+      if(nB) return _echec('le nom de l’étiquette est encore écrit en blanc ('+nB+' pixels)');
+      // ET LA COULEUR A QUITTÉ LE CADRE : le bord haut, hors coins, n'est pas rouge.
+      const bord=g.getImageData(Math.round(b.bx+b.h/2),Math.floor(b.by),Math.max(1,Math.round(b.w-b.h)),2).data;
+      for(let i=0;i<bord.length;i+=4)
+        if(rouge(bord.subarray(i,i+3))) return _echec('le rectangle est encore bordé de la couleur du tracé');
+      // UN POIL PLUS PETIT : 12 et 10 au lieu de 13 et 11, plancher à 9.
+      const fs=(kk,p)=>_mlxEtiqBoite(g,0,0,'Axe',kk,R,p).fs;
+      if(fs(1,false)!==12||fs(1,true)!==10) return _echec('tailles : '+fs(1,false)+' / '+fs(1,true)+' au lieu de 12 / 10');
+      if(fs(0.5,false)!==9) return _echec('le plancher sur téléphone vaut '+fs(0.5,false)+' et non 9');
+      // L'ENCRE SE LIT TOUJOURS : les sept couleurs de la palette passent
+      // telles quelles, une couleur perso trop sombre est éclaircie juste assez.
+      const lin=x=>{ const s=x/255; return s<=0.04045?s/12.92:Math.pow((s+0.055)/1.055,2.4); };
+      const lum=h=>{ const v=parseInt(h.slice(1),16); return 0.2126*lin((v>>16)&255)+0.7152*lin((v>>8)&255)+0.0722*lin(v&255); };
+      const ct=h=>(lum(h)+0.05)/(lum('#171717')+0.05);
+      for(const c of ['#ff3b3b','#22c55e','#3b82f6','#facc15','#fb923c','#a855f7','#ffffff'])
+        if(mlEncreEtiquette(c)!==c) return _echec(c+' est modifiée alors qu’elle se lit : '+mlEncreEtiquette(c));
+      const e=mlEncreEtiquette('#1e3a8a');
+      if(e==='#1e3a8a'||!(ct(e)>=4.5)) return _echec('un bleu nuit reste illisible : '+e+' ('+ct(e).toFixed(2)+':1)');
+      if(!(parseInt(e.slice(5,7),16)>parseInt(e.slice(1,3),16))) return _echec('l’éclaircissement perd la teinte : '+e);
+      if(mlEncreEtiquette('pas une couleur')!=='#ffffff') return _echec('une couleur invalide ne retombe pas sur le blanc');
       // LE DOIGT : l'étiquette déplacée se touche là où elle est, la légende aussi.
       const doc={v:1,majLe:0,leg:{on:1,titre:'Amplitude',pos:'hg',taille:'m',fond:'sombre',op:0.85},a:[{...a0,eo:[500,-200]}]};
       const h1=mlEtiquetteToucher(doc,R,100,b.bx+b.w/2,b.by+b.h/2,g);
