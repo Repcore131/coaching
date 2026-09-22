@@ -46369,6 +46369,150 @@ async function testExercices(){
       if(document.getElementById('mle')) return _echec('la fenêtre reste ouverte');
       return true;});
 
+    okA('MLX — un angle suivi va jusqu’au bout de la vidéo, et un point caché se retrouve',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // Kevin, 22/09/2026, sur une vidéo de 25 s : « l'angle arrête de bouger à
+      // un certain temps, le suivi s'annule ». Quatre causes se cumulaient — la
+      // borne des 20 s, le point perdu pour toujours, les 24 images clés, et le
+      // document trop lourd qui perdait toutes ses clés d'un coup. Ce test les
+      // tient une par une, puis ensemble, sur une vidéo fabriquée.
+      if(!(ML_SUIVI_ANNOT_MAX_MS>=60000)) return _echec('le suivi d’un tracé est borné à '+ML_SUIVI_ANNOT_MAX_MS+' ms');
+      if(ML_SUIVI_MAX_MS!==20000) return _echec('la borne de la trajectoire a bougé : '+ML_SUIVI_MAX_MS);
+      if(!(ANNOT_CLES_MAX>=100)) return _echec('plafond de clés : '+ANNOT_CLES_MAX);
+      // LE TROU SE COMBLE entre deux positions vues ; la fin jamais revue reste
+      // à la dernière position vue.
+      const C=mlSuiviCombler([0,100,200,300,400],[[[100,100]],[null],[null],[[400,100]],[null]]);
+      if(JSON.stringify(C.map(l=>l[0]))!==JSON.stringify([[100,100],[200,100],[300,100],[400,100],[400,100]]))
+        return _echec('trous mal comblés : '+JSON.stringify(C));
+      // UNE TACHE DAMIÉE sur fond uni : chaque détail a son grain, pour qu'aucun
+      // ne ressemble à un autre.
+      const tache=(g,W,H,cx,cy,pas)=>{
+        for(let y=-10;y<=10;y++) for(let x=-10;x<=10;x++){
+          if(x*x+y*y>100) continue;
+          const X=Math.round(cx)+x, Y=Math.round(cy)+y;
+          if(X<0||Y<0||X>=W||Y>=H) continue;
+          g[Y*W+X]=((Math.floor((x+20)/pas)+Math.floor((y+20)/pas))%2)?225:35;
+        }
+      };
+      const fond=(W,H)=>{ const g=new Float32Array(W*H); g.fill(128); return g; };
+      // UN POINT PERDU SE RETROUVE là où il réapparaît, s'il n'est pas trop loin.
+      {
+        const W=200,H=200, g0=fond(W,H); tache(g0,W,H,60,60,4);
+        const s=mlSuiviDemarrer(g0,W,H,60,60,8);
+        if(!s) return _echec('pas de gabarit sur une tache contrastée');
+        for(let i=0;i<4;i++) mlSuiviPas(s,fond(W,H),W,H);
+        if(!s.perdu) return _echec('une tache disparue n’est pas perdue');
+        const g1=fond(W,H); tache(g1,W,H,90,75,4);
+        const t=mlSuiviRetrouver(s,g1,W,H,60,60);
+        if(!t||Math.hypot(t.x-90,t.y-75)>1.5||s.perdu) return _echec('la tache réapparue n’est pas retrouvée : '+JSON.stringify(t));
+        const s2=mlSuiviDemarrer(g0,W,H,60,60,8);
+        for(let i=0;i<4;i++) mlSuiviPas(s2,fond(W,H),W,H);
+        const g2=fond(W,H); tache(g2,W,H,170,170,4);
+        if(mlSuiviRetrouver(s2,g2,W,H,60,60)) return _echec('un point se raccroche à une tache hors de portée');
+        if(!s2.perdu) return _echec('un échec de recherche remet le suivi en marche');
+        // ⚠ ET PAS SUR N'IMPORTE QUOI : un grain différent ne se prend pas pour lui.
+        const s3=mlSuiviDemarrer(g0,W,H,60,60,8);
+        for(let i=0;i<4;i++) mlSuiviPas(s3,fond(W,H),W,H);
+        const g3=fond(W,H); tache(g3,W,H,75,70,7);
+        if(mlSuiviRetrouver(s3,g3,W,H,60,60)) return _echec('un point se raccroche à un détail qui ne lui ressemble pas');
+      }
+      // LA RELECTURE N'AMPUTE PLUS LA FIN, et un document trop lourd s'allège
+      // au lieu de perdre toutes ses clés.
+      const cles=n=>Array.from({length:n},(_,i)=>[i*100,(100+i%50)+','+(200+i%30)+' 500,500 600,600']);
+      const d1=annotValide({v:1,a:[{id:'x',n:'X',t:'angle',c:'#ffffff',e:4,d:0,f:99999,
+        p:'100,200 500,500 600,600',k:cles(ANNOT_CLES_MAX+50)}]});
+      const k1=d1.a[0].k;
+      if(k1.length!==ANNOT_CLES_MAX) return _echec(k1.length+' clés relues au lieu de '+ANNOT_CLES_MAX);
+      if(k1[0][0]!==0||k1[k1.length-1][0]!==(ANNOT_CLES_MAX+49)*100)
+        return _echec('la relecture coupe encore la fin : clés de '+k1[0][0]+' à '+k1[k1.length-1][0]+' ms');
+      const lourd=annotValide({v:1,a:Array.from({length:12},(_,j)=>({id:'q'+j,n:'Angle '+j,t:'angle',c:'#ffffff',e:4,d:0,f:99999,
+        p:'100,200 500,500 600,600',k:cles(ANNOT_CLES_MAX)}))});
+      if(JSON.stringify(lourd).length>ANNOT_TAILLE_MAX) return _echec('le plafond de taille ne tient pas');
+      if(lourd.a.length!==12) return _echec('des tracés tombent alors qu’alléger suffisait : '+lourd.a.length);
+      if(lourd.a.some(x=>!x.k||x.k.length<2)) return _echec('un tracé perd tout son suivi quand le document est lourd');
+      if(lourd.a.some(x=>x.k[x.k.length-1][0]!==(ANNOT_CLES_MAX-1)*100)) return _echec('un allègement coupe la fin');
+      // ── ENSEMBLE, SUR UNE VIDÉO FABRIQUÉE DE 25 s ──────────────────────────
+      // Une hanche et une cheville immobiles, un genou qui décrit une ellipse
+      // toutes les trois secondes — huit répétitions —, et qui passe derrière
+      // la machine pendant 0,6 s vers 21 s.
+      const VW=280, VH=500, D=25000;
+      const hanche=[100,150], cheville=[120,380];
+      const genou=t=>[150+30*Math.sin(2*Math.PI*t/3000),250+20*Math.cos(2*Math.PI*t/3000)];
+      const cache=t=>t>=20800&&t<21400;
+      const mil=p=>[p[0]/VW*1000,p[1]/VH*1000];
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
+      const svTps=window._mlxTempsMs, svEx=window._mlExtraire;
+      const msgs=[];
+      let vid=null;
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=m=>{ msgs.push(String(m)); }; CLOUD.pushOne=()=>Promise.resolve(true);
+        _r28Monter([_r28Video({segments:[]})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        _ml.dureeMs=D;
+        window._mlxTempsMs=()=>0;
+        vid=_mlVideo();
+        if(!vid) return 'pas de vidéo dans le laboratoire';
+        Object.defineProperty(vid,'videoWidth',{value:VW,configurable:true});
+        Object.defineProperty(vid,'videoHeight',{value:VH,configurable:true});
+        /** @type {any} */(vid)._rcFps=30;
+        // L'EXTRACTEUR RENDU FAUX : il fabrique chaque image au lieu de la lire.
+        window._mlExtraire=async(url,deb,fin,w,h,pas,surImage,arreter)=>{
+          if(w!==VW||h!==VH) return {ok:false,code:'chargement'};
+          let n=0;
+          for(let t=deb;t<=fin;t+=pas){
+            if(arreter()) return {ok:false,code:'arret'};
+            const g=fond(w,h);
+            tache(g,w,h,hanche[0],hanche[1],5); tache(g,w,h,cheville[0],cheville[1],6);
+            if(!cache(t)){ const q=genou(t); tache(g,w,h,q[0],q[1],3); }
+            const suite=surImage({tMs:Math.round(t*10)/10,gris:g}); n++;
+            if(typeof suite==='string') return {ok:false,code:suite};
+            if(suite===false) break;
+          }
+          return {ok:true,images:n,doublons:0,ms:0,fps:30,cadenceMesuree:true};
+        };
+        const a=_mlxCreer('angle',[mil(hanche),mil(genou(0)),mil(cheville)]);
+        if(!a) return 'l’angle ne se crée pas';
+        _mlxChanger(a.id,x=>({...x,d:0,f:D}));
+        _ml.sel=a.id;
+        if(await mlAnnotSuiviAuto()!==true) return 'le suivi échoue : '+msgs.join(' | ');
+        const b=_mlxAnnot(a.id), k=(b&&b.k)||[];
+        if(k.length<2) return 'aucune image clé';
+        if(k.length>ANNOT_CLES_MAX) return k.length+' clés, au-delà du plafond';
+        // 1. JUSQU'AU BOUT DE LA VIDÉO, et plus jusqu'à 20 s.
+        if(k[k.length-1][0]<D-500) return 'le suivi s’arrête à '+k[k.length-1][0]+' ms au lieu de la fin de la vidéo';
+        // 2. L'ANGLE SUIT LE GENOU, AVANT COMME APRÈS 20 s — huit répétitions
+        //    sous le plafond de clés, aucune aplatie en ligne droite.
+        const ecart=tt=>{ const q=mlAnnotPointsA(b,tt)[1], vrai=mil(genou(tt)); return Math.hypot(q[0]-vrai[0],q[1]-vrai[1]); };
+        for(const tt of [2250,5000,9750,14250,19000,22500,23250,24500])
+          if(ecart(tt)>15) return 'le genou est à '+ecart(tt).toFixed(1)+' ‰ de sa place à '+tt+' ms';
+        // 3. LE GENOU CACHÉ EST RETROUVÉ : aucun message de perte, et le coach
+        //    est prévenu qu'un passage a été comblé.
+        if(msgs.some(m=>m.indexOf('se perd')>=0)) return 'le point caché n’est pas retrouvé : '+msgs.join(' | ');
+        if(!msgs.some(m=>m.indexOf('retrouvé')>=0)) return 'le message ne dit pas le point retrouvé : '+msgs.join(' | ');
+        // 4. LA DONNÉE PASSE LA RELECTURE telle quelle : pas une clé en moins.
+        const relu=annotValide(_ml.annot).a.find(x=>x.id===a.id);
+        if(!relu||!relu.k||relu.k.length!==k.length) return 'la relecture ampute le suivi : '+(relu&&relu.k?relu.k.length:0)+' / '+k.length;
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      catch(e){ msg='exception : '+e.message; }
+      finally {
+        window._mlExtraire=svEx; window._mlxTempsMs=svTps;
+        if(vid){ try{ delete vid.videoWidth; delete vid.videoHeight; delete /** @type {any} */(vid)._rcFps; }catch(e){} }
+        try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT; CLOUD.pushOne=svPush;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      return msg?_echec(msg):true;
+    });
+
     okA('MLX — tracer au clic puis au clic, pendant la lecture, en tirets ou en pointillé',async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // LA DONNÉE : le style se garde, l'inconnu tombe, un texte n'en a pas.

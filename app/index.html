@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1389';
+window.RC_BUILD='1390';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -92447,10 +92447,30 @@ function enregistrerCorrectionMotion(email,videoId,motion){
 //         seg (la séquence)}]}
 //
 // LE PRIX EST BORNÉ pour la raison de toujours — ce dossier part EN ENTIER à
-// chaque synchronisation : trente tracés, soixante-quatre points chacun, vingt-
-// quatre images clés, et vingt-quatre kilo-octets au plus pour le tout.
-const ANNOT_MAX=30, ANNOT_PTS_MAX=64, ANNOT_CLES_MAX=24, ANNOT_NOM_MAX=40, ANNOT_TEXTE_MAX=80,
+// chaque synchronisation : trente tracés, soixante-quatre points chacun, cent
+// images clés, et vingt-quatre kilo-octets au plus pour le tout.
+//
+// ⚠ CENT IMAGES CLÉS, ET PLUS VINGT-QUATRE (build 1390). Vingt-quatre suffisaient
+//   à un suivi posé à la main ; pas au suivi automatique d'un angle sur une
+//   série. Kevin, 22/09/2026 : « l'angle arrête de bouger à un certain temps ».
+//   Huit répétitions en vingt-cinq secondes demandent au moins un bas et un
+//   haut par répétition : sous ce plafond, la tolérance montait jusqu'à faire
+//   de répétitions entières une ligne droite. Cent clés tiennent un angle
+//   suivi en ~3,6 Ko ; le plafond de taille, lui, ne bouge pas — c'est
+//   l'allègement d'annotValide qui fait la place quand il faut.
+const ANNOT_MAX=30, ANNOT_PTS_MAX=64, ANNOT_CLES_MAX=100, ANNOT_NOM_MAX=40, ANNOT_TEXTE_MAX=80,
   ANNOT_ETIQ_MAX=14, ANNOT_TAILLE_MAX=24000;
+// PURE. Des images clés ramenées à `max` au plus, réparties régulièrement dans
+// le TEMPS de la liste : la première et la dernière restent toujours. Couper
+// la fin — ce que faisait la relecture — figeait le tracé à la dernière clé
+// gardée : le mouvement s'arrêtait net au milieu de la vidéo.
+function _annotAmincir(k,max){
+  const n=k.length, m=Math.max(2,Math.floor(max));
+  if(n<=m) return k;
+  const garde=new Set();
+  for(let i=0;i<m;i++) garde.add(Math.round(i*(n-1)/(m-1)));
+  return k.filter((_,i)=>garde.has(i));
+}
 // LES TYPES, et ce que chacun demande de points : [minimum, maximum].
 const ANNOT_TYPES=Object.freeze({ligne:[2,2],fleche:[2,2],libre:[2,ANNOT_PTS_MAX],courbe:[2,24],
   cercle:[2,2],rect:[2,2],angle:[3,3],point:[1,12],texte:[1,1],zone:[2,2]});
@@ -92498,14 +92518,19 @@ function annotValide(doc){
       d:Math.round(d),f:Math.round(f),p};
     // LES IMAGES CLÉS : même nombre de points que le tracé, instants croissants
     // et distincts. Une clé fautive tombe ; le suivi garde les autres.
-    const k=[];
+    // ⚠ AU-DELÀ DU PLAFOND, ON ALLÈGE, ON NE COUPE PLUS LA FIN (build 1390) :
+    //   garder les ANNOT_CLES_MAX premières figeait le tracé au milieu de la
+    //   vidéo. La lecture reste bornée — dix fois le plafond, pas davantage :
+    //   la donnée vient du réseau.
+    let k=[];
     for(const q of _tabBloc(x.k)){
       if(!Array.isArray(q)) continue;
       const t=num(q[0],0,86400000), pk=_annotPoints(q[1],n,n);
       if(t===null||!pk||(k.length&&Math.round(t)<=k[k.length-1][0])) continue;
       k.push([Math.round(t),pk]);
-      if(k.length>=ANNOT_CLES_MAX) break;
+      if(k.length>=ANNOT_CLES_MAX*10) break;
     }
+    k=_annotAmincir(k,ANNOT_CLES_MAX);
     if(k.length) o.k=k;
     if(x.t==='texte'){
       o.x=txt(x.x,ANNOT_TEXTE_MAX);
@@ -92544,10 +92569,23 @@ function annotValide(doc){
     return o;
   }).filter(Boolean).slice(0,ANNOT_MAX);
   let out={v:1,majLe:Math.round(num(doc.majLe,0,1e14)||0),leg,a};
-  // ⚠ LE PLAFOND NE DOIT PAS ÊTRE UNE SURPRISE À L'ENREGISTREMENT : les images
-  // clés tombent d'abord — le tracé reste, immobile —, puis les derniers tracés.
-  if(JSON.stringify(out).length>ANNOT_TAILLE_MAX) out={...out,a:out.a.map(({k,...r})=>r)};
-  while(JSON.stringify(out).length>ANNOT_TAILLE_MAX&&out.a.length) out={...out,a:out.a.slice(0,-1)};
+  // ⚠ LE PLAFOND NE DOIT PAS ÊTRE UNE SURPRISE À L'ENREGISTREMENT.
+  //   AVANT LE BUILD 1390, LES IMAGES CLÉS DE TOUS LES TRACÉS TOMBAIENT D'UN
+  //   COUP dès le premier octet de trop : un angle de plus, et tous les suivis
+  //   de la vidéo s'annulaient ensemble, figés sur leur tracé de base. On
+  //   ALLÈGE maintenant, par moitiés, le tracé qui porte le plus de clés — les
+  //   autres ne bougent pas —, jusqu'à passer sous le plafond. Les clés ne
+  //   tombent entièrement, puis les derniers tracés, qu'en tout dernier
+  //   recours.
+  const poids=()=>JSON.stringify(out).length;
+  while(poids()>ANNOT_TAILLE_MAX){
+    let iMax=-1, nMax=2;
+    out.a.forEach((x,i)=>{ const nk=(x.k||[]).length; if(nk>nMax){ nMax=nk; iMax=i; } });
+    if(iMax<0) break;
+    out={...out,a:out.a.map((x,i)=>i===iMax?{...x,k:_annotAmincir(x.k,Math.ceil(nMax/2))}:x)};
+  }
+  if(poids()>ANNOT_TAILLE_MAX) out={...out,a:out.a.map(({k,...r})=>r)};
+  while(poids()>ANNOT_TAILLE_MAX&&out.a.length) out={...out,a:out.a.slice(0,-1)};
   return out;
 }
 // PURE. Y a-t-il quelque chose à montrer à l'athlète ? Un document vide, ou

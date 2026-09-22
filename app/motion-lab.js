@@ -4389,9 +4389,93 @@ function _mlxClavier(e){
 //     entoure ou montre quelque chose, et elle le suit EN BLOC — son centre
 //     est suivi, tous ses points se déplacent d'autant. Un cercle dont le bord
 //     suivrait un autre détail que le centre se déformerait.
-const ML_SUIVI_MAX_MS=20000;      // au-delà, le suivi s'arrête : c'est une séquence, pas un film
+//
+// ══ L'ANGLE QUI S'ARRÊTAIT DE BOUGER (build 1390) ════════════════════════
+// Kevin, 22/09/2026, sur une vidéo de 25 s : « l'angle arrête de bouger à un
+// certain temps, le suivi s'annule ». Quatre causes, qui se cumulaient :
+//   1. LE SUIVI D'UN TRACÉ S'ARRÊTAIT À 20 s, la borne des trajectoires. Au
+//      delà, la dernière clé était tenue : l'angle se figeait alors que sa
+//      barre couvrait toute la vidéo. Il a désormais SA borne, ML_SUIVI_ANNOT_
+//      MAX_MS — la trajectoire garde la sienne, voulue.
+//   2. UN POINT PERDU L'ÉTAIT POUR TOUJOURS : trois images floues sur un genou
+//      qui plie vite, et il restait cloué là jusqu'à la fin. Il est maintenant
+//      CHERCHÉ À NOUVEAU à chaque image (mlSuiviRetrouver), et le trou entre la
+//      perte et les retrouvailles est comblé entre deux positions VUES.
+//   3. VINGT-QUATRE IMAGES CLÉS POUR TOUT LE MOUVEMENT. Huit répétitions en
+//      demandent davantage : la tolérance montait jusqu'à ce que des
+//      répétitions entières deviennent une ligne droite. Le plafond est à
+//      ANNOT_CLES_MAX, relevé (index.html).
+//   4. LE DOCUMENT TROP LOURD PERDAIT TOUTES SES CLÉS D'UN COUP, sur tous les
+//      tracés. Il allège désormais celui qui en porte le plus (annotValide).
+const ML_SUIVI_MAX_MS=20000;      // la trajectoire automatique : c'est une séquence, pas un film
+const ML_SUIVI_ANNOT_MAX_MS=60000; // le suivi d'un tracé : jusqu'à la fin du tracé, une minute au plus
 const ML_SUIVI_TOL=2.5;           // l'écart toléré à l'interpolation, en millièmes de l'image
 const ML_SUIVI_TYPES_POINTS=Object.freeze(['point','angle','ligne','fleche']);
+// LES RETROUVAILLES D'UN POINT PERDU : on le cherche dans un disque de
+// ML_REACQ_RAYON fois son rayon autour de là où il devrait être, une image sur
+// ML_REACQ_PAS — la recherche large coûte cher —, et on ne le reprend que sur
+// une ressemblance FRANCHE : se raccrocher au premier détail venu ferait
+// suivre le mauvais point avec aplomb, pire qu'un point perdu.
+const ML_REACQ_RAYON=6;
+const ML_REACQ_PAS=2;
+const ML_REACQ_CONF=0.55;
+// Tous les points perdus depuis ce temps-là : le parcours s'arrête. En deçà,
+// on continue de chercher — une répétition cachée derrière la machine.
+const ML_REACQ_ABANDON_MS=4000;
+/**
+ * Cherche à nouveau un point perdu, autour de (cx,cy), avec le gabarit
+ * d'origine et le gabarit adapté. Rend sa position s'il ressemble franchement,
+ * et remet alors le suivi en marche — vitesse nulle, pertes remises à zéro.
+ * Rend null sinon, et le suivi reste perdu. IMPURE sur `s`, comme mlSuiviPas.
+ * @param {Suivi} s
+ * @param {Float32Array} gris
+ * @param {number} w
+ * @param {number} h
+ * @param {number} cx  où le chercher, en pixels de l'image de travail
+ * @param {number} cy
+ * @returns {{x:number, y:number, conf:number}|null}
+ */
+function mlSuiviRetrouver(s,gris,w,h,cx,cy){
+  const t=mlChercherDisque(s.gabs,gris,w,h,cx,cy,ML_REACQ_RAYON*s.r);
+  if(!(t.conf>=ML_REACQ_CONF)) return null;
+  if(t.x<s.r||t.y<s.r||t.x>w-1-s.r||t.y>h-1-s.r) return null;
+  s.x=t.x; s.y=t.y; s.vx=0; s.vy=0; s.pertes=0; s.perdu=false;
+  return {x:t.x,y:t.y,conf:t.conf};
+}
+/**
+ * PURE. Comble les trous d'un suivi : pour chaque point, les instants où il
+ * était perdu (null) sont remplis en ligne droite entre la dernière position
+ * vue et la suivante. Un point jamais retrouvé reste à sa dernière position
+ * vue — un tracé qui s'arrête ment moins qu'un tracé qui invente.
+ * @param {number[]} T
+ * @param {(number[]|null)[][]} P  pour chaque instant, les points, null si perdu
+ * @returns {number[][][]}
+ */
+function mlSuiviCombler(T,P){
+  const n=P.length, m=n?P[0].length:0;
+  /** @type {number[][][]} */
+  const out=P.map(l=>l.map(p=>p?p.slice():[0,0]));
+  for(let q=0;q<m;q++){
+    let i=0;
+    while(i<n){
+      if(P[i][q]){ i++; continue; }
+      const a=i-1; let b=i;
+      while(b<n&&!P[b][q]) b++;
+      const A=a>=0?P[a][q]:null, B=b<n?P[b][q]:null;
+      for(let j=i;j<b;j++){
+        if(A&&B){
+          const f=(T[j]-T[a])/Math.max(1e-6,T[b]-T[a]);
+          out[j][q]=[_mlxBorne(A[0]+(B[0]-A[0])*f),_mlxBorne(A[1]+(B[1]-A[1])*f)];
+        } else {
+          const R=A||B;
+          out[j][q]=R?R.slice():[0,0];
+        }
+      }
+      i=b;
+    }
+  }
+  return out;
+}
 /**
  * PURE. Les images clés qui suffisent à redire un suivi dense : la première,
  * la dernière, et entre elles celles que l'interpolation linéaire ne saurait
@@ -4442,7 +4526,7 @@ function mlClesDepuisSuivi(T,P,max,tol){
 }
 /**
  * « SUIVI AUTOMATIQUE » du tracé choisi, depuis l'image affichée jusqu'à la fin
- * de sa durée — vingt secondes au plus.
+ * de sa durée — une minute au plus (ML_SUIVI_ANNOT_MAX_MS).
  * @returns {Promise<boolean>}
  */
 async function mlAnnotSuiviAuto(){
@@ -4452,7 +4536,7 @@ async function mlAnnotSuiviAuto(){
   if(!(vw>0&&vh>0)){ toast('Lance d’abord la vidéo une fois : ses dimensions ne sont pas encore connues.','var(--orange)'); return false; }
   try{ v.pause(); }catch(e){}
   const debut=_mlxTempsMs();
-  const fin=Math.min(a0.f,_ml.dureeMs||a0.f,debut+ML_SUIVI_MAX_MS);
+  const fin=Math.min(a0.f,_ml.dureeMs||a0.f,debut+ML_SUIVI_ANNOT_MAX_MS);
   if(fin-debut<200){ toast('Place la tête de lecture au début du mouvement, avant la fin du tracé.','var(--orange)'); return false; }
   const id=a0.id;
   // LES POINTS DE DÉPART : ceux de l'image affichée — le coach vient de les
@@ -4477,13 +4561,36 @@ async function mlAnnotSuiviAuto(){
   /** @type {(Suivi|null)[]} */
   const suivis=cibles.map(()=>null);
   /** @type {number[]} */ const T=[];
-  /** @type {number[][][]} */ const P=[];
+  // Un point perdu vaut null à cet instant : mlSuiviCombler remplit après coup.
+  /** @type {(number[]|null)[][]} */ const P=[];
+  // La dernière position VUE de chaque point, en millièmes de l'image.
+  /** @type {number[][]} */ const vus=cibles.map(c=>c.slice());
+  // L'instant de la perte en cours (-1 : le point est suivi), la toute première
+  // perte, et combien de fois il a été retrouvé — pour le dire au coach.
   /** @type {number[]} */ const perdusA=cibles.map(()=>-1);
+  /** @type {number[]} */ const retrouves=cibles.map(()=>0);
+  // À LA PERTE, on photographie où étaient les AUTRES points : c'est leur
+  // déplacement depuis qui dit où chercher celui-ci. Un genou qui disparaît
+  // pendant que la hanche et la cheville descendent est descendu avec elles.
+  /** @type {({L:number[], refs:(number[]|null)[]}|null)[]} */
+  const ancres=cibles.map(()=>null);
+  /** @param {number} q @returns {number[]} en millièmes */
+  const ouChercher=q=>{
+    const an=ancres[q];
+    if(!an) return vus[q];
+    let dx=0, dy=0, n=0;
+    for(let j=0;j<cibles.length;j++){
+      const r0=an.refs[j];
+      if(j===q||!r0||perdusA[j]>=0) continue;
+      dx+=vus[j][0]-r0[0]; dy+=vus[j][1]-r0[1]; n++;
+    }
+    return n?[an.L[0]+dx/n,an.L[1]+dy/n]:an.L;
+  };
   const total=Math.max(1,Math.ceil((fin-debut)/pasMs));
   let nb=0;
   const res=await _mlExtraire(_ml.url,debut,fin,w,h,pasMs,img=>{
     if(!_ml||jeton!==_ml.analyseJeton) return 'arret';
-    /** @type {number[][]} */
+    /** @type {(number[]|null)[]} */
     const ici=[];
     for(let q=0;q<cibles.length;q++){
       const c=cibles[q];
@@ -4496,12 +4603,30 @@ async function mlAnnotSuiviAuto(){
       }
       const s=suivis[q];
       if(!s) return 'gabarit';
-      // UN POINT PERDU EST TENU là où on l'a vu en dernier : un tracé qui
-      // saute au hasard mentirait plus qu'un tracé qui s'arrête.
-      if(perdusA[q]>=0){ ici.push(P[P.length-1][q].slice()); continue; }
+      // UN POINT PERDU SE CHERCHE À NOUVEAU — une image sur ML_REACQ_PAS, là
+      // où ses voisins l'emmènent. Tant qu'il n'est pas retrouvé, il ne vaut
+      // rien à cet instant (null) : le trou sera comblé entre deux positions
+      // vues, jamais par une position inventée.
+      if(perdusA[q]>=0){
+        if(nb%ML_REACQ_PAS===0){
+          const C=ouChercher(q);
+          const t=mlSuiviRetrouver(s,img.gris,w,h,C[0]/1000*vw*ex,C[1]/1000*vh*ey);
+          if(t){
+            perdusA[q]=-1; ancres[q]=null; retrouves[q]++;
+            const pt=[_mlxBorne(t.x/ex/vw*1000),_mlxBorne(t.y/ey/vh*1000)];
+            vus[q]=pt; ici.push(pt); continue;
+          }
+        }
+        ici.push(null); continue;
+      }
       const p=mlSuiviPas(s,img.gris,w,h);
-      if(p.etat==='perdu'){ perdusA[q]=img.tMs; ici.push(P[P.length-1][q].slice()); continue; }
-      ici.push([_mlxBorne(p.x/ex/vw*1000),_mlxBorne(p.y/ey/vh*1000)]);
+      if(p.etat==='perdu'){
+        perdusA[q]=img.tMs;
+        ancres[q]={L:vus[q].slice(),refs:vus.map((x,j)=>(j!==q&&perdusA[j]<0)?x.slice():null)};
+        ici.push(null); continue;
+      }
+      const pt=[_mlxBorne(p.x/ex/vw*1000),_mlxBorne(p.y/ey/vh*1000)];
+      vus[q]=pt; ici.push(pt);
     }
     T.push(img.tMs); P.push(ici);
     nb++;
@@ -4510,8 +4635,10 @@ async function mlAnnotSuiviAuto(){
       const t=_mlEl('mlx-suivi-txt'); if(t) t.textContent=_ml.progres;
       const b=_mlEl('mlx-suivi-barre'); if(b) b.style.transform='scaleX('+Math.min(1,nb/total).toFixed(3)+')';
     }
-    // TOUS PERDUS : inutile de parcourir le reste.
-    return !perdusA.every(x=>x>=0);
+    // TOUS PERDUS DEPUIS TROP LONGTEMPS : inutile de parcourir le reste. Pas
+    // dès la première perte, comme avant — un point caché derrière la machine
+    // le temps d'une répétition revient, et c'est justement ce qu'on attend.
+    return !(perdusA.every(x=>x>=0)&&img.tMs-Math.max(...perdusA)>ML_REACQ_ABANDON_MS);
   },()=>!_ml||jeton!==_ml.analyseJeton);
   if(!_ml) return false;
   _ml.mode='lecture'; _ml.progres='';
@@ -4527,9 +4654,12 @@ async function mlAnnotSuiviAuto(){
   }
   const a=_mlxAnnot(id);
   if(!a||T.length<2){ toast('Le suivi n’a rien donné de lisible : réessaie.','var(--orange)'); _mlxMajEditeur(); return false; }
+  // LES TROUS SE COMBLENT entre deux positions vues ; un point jamais retrouvé
+  // reste à sa dernière position vue.
+  const PC=mlSuiviCombler(T,P);
   // DU SUIVI AUX POINTS DU TRACÉ : par point, ou le centre et la forme en bloc.
   const ref=cibles[0];
-  const PP=parPoint?P:P.map(q=>depart.map(p=>[_mlxBorne(p[0]+q[0][0]-ref[0]),_mlxBorne(p[1]+q[0][1]-ref[1])]));
+  const PP=parPoint?PC:PC.map(q=>depart.map(p=>[_mlxBorne(p[0]+q[0][0]-ref[0]),_mlxBorne(p[1]+q[0][1]-ref[1])]));
   // LES CLÉS D'AVANT LE DÉPART RESTENT ; celles du parcours sont remplacées.
   const avant=(Array.isArray(a.k)?a.k:[]).filter(q=>q[0]<debut-20);
   const cles=mlClesDepuisSuivi(T,PP,Math.max(2,ANNOT_CLES_MAX-avant.length));
@@ -4541,10 +4671,15 @@ async function mlAnnotSuiviAuto(){
   });
   _mlxApresChangement();
   _mlAller(debut);
+  // CE QUI N'A PAS ÉTÉ RETROUVÉ se dit, avec l'instant — c'est là qu'il faut
+  // replacer le point. Ce qui a été retrouvé se dit aussi, plus doucement :
+  // le passage comblé mérite un coup d'oeil.
   const perdu=perdusA.filter(x=>x>=0);
+  const nRetr=retrouves.filter(x=>x>0).length;
   if(perdu.length) toast((parPoint&&cibles.length>1?perdu.length+' point'+(perdu.length>1?'s se perdent':' se perd'):'Le suivi se perd')
-    +' à '+mlTempsTexte(Math.min(...perdu))+' : replace-le à cet instant, puis relance le suivi depuis là.','var(--orange)');
-  else toast('Suivi posé : '+cles.length+' images clés sur '+mlTempsTexte(T[T.length-1]-T[0]).slice(0,-3)+' ✓');
+    +' à '+mlTempsTexte(Math.min(...perdu))+' sans se retrouver : replace-le à cet instant, puis relance le suivi depuis là.','var(--orange)');
+  else toast('Suivi posé : '+cles.length+' images clés sur '+mlTempsTexte(T[T.length-1]-T[0]).slice(0,-3)
+    +(nRetr?(' · '+(nRetr>1?nRetr+' points perdus un instant, retrouvés':'un point perdu un instant, retrouvé')):'')+' ✓');
   return true;
 }
 // ── LA TRAJECTOIRE SUIVIE AUTOMATIQUEMENT (build 1385) ──────────────────────
@@ -5607,7 +5742,7 @@ function _mlxMajEditeur(){
         +'<button type="button" class="mlx-b" onclick="mlAnnotSuiviArreter()">Arrêter</button></div>'
       :'<div class="mlx-auto-l"><button type="button" class="mlx-b mlx-b-r" onclick="mlAnnotSuiviAuto()"'+(_mlOccupe()?' disabled':'')+'>'
         +S('cible',14)+' Suivi automatique</button><span class="mlx-note">Pose '+(ML_SUIVI_TYPES_POINTS.includes(a.t)?'les points':'le tracé')
-        +' sur l’image de départ : le suivi '+(ML_SUIVI_TYPES_POINTS.includes(a.t)?'les ':'l’')+'accompagne jusqu’à '+_mlxT(Math.min(a.f,sMs+ML_SUIVI_MAX_MS))
+        +' sur l’image de départ : le suivi '+(ML_SUIVI_TYPES_POINTS.includes(a.t)?'les ':'l’')+'accompagne jusqu’à '+_mlxT(Math.min(a.f,sMs+ML_SUIVI_ANNOT_MAX_MS))
         +'.</span></div>')
     +(suit?'<div class="mlx-cles"><span>'+S('cle',12)+' '+(a.k||[]).length+' image'+((a.k||[]).length>1?'s':'')+' clé'+((a.k||[]).length>1?'s':'')
         +'<b id="mlx-cle-etat">'+(cle>=0?' · clé à cet instant':'')+'</b></span><span class="mlx-esp"></span>'
