@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1396';
+window.RC_BUILD='1397';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -4591,18 +4591,14 @@ html{scroll-behavior:smooth}
   transform:translate(-50%,-50%);pointer-events:none}
 .cc-corps-n{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;
   margin-top:8px;text-align:center}
-/* ── LE VOLUME DE LA SEMAINE ───────────────────────────────────────────────
-   Teintee, la silhouette passe en GRIS CLAIR : c'est le bas de l'echelle —
-   « aucune serie » — et la rampe orange monte a partir de lui. Son rouge
-   d'origine aurait teinte tout le corps d'une couleur qui, ici, appelle une
-   decision. Le calque se pose en multiply : il colore la chair et garde les
-   traits du dessin.
-   ⚠ OPACITE PLEINE, ET PLUS .82. L'attenuation convenait a quatre aplats
-   francs ; sur une rampe, elle ecrasait justement l'ecart entre deux pas
-   voisins — tout ce que la rampe existe pour montrer. */
+/* ── LES ZONES DE VOLUME DU PROGRAMME ─────────────────────────────────────
+   Teintee, la silhouette passe en GRIS CLAIR — le bonhomme blanc : son rouge
+   d'origine se serait lu « au-dessus du MRV » sur les muscles non teintes.
+   Le calque se pose en multiply : il colore la chair et garde les traits du
+   dessin, a .82 comme avant le 1386 — quatre aplats francs, pas une rampe. */
 .cc-corps-planche[data-teinte] img{filter:grayscale(1) brightness(1.55) contrast(1.05)}
 .cc-corps-calque{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
-  mix-blend-mode:multiply}
+  mix-blend-mode:multiply;opacity:.82}
 /* LA BULLE DU MUSCLE TOUCHE. Posee au-dessus du doigt, pas dessous : sous le
    doigt, elle serait cachee par lui. Encre de texte, jamais la couleur du
    muscle — le chiffre se lit, la teinte se compare. */
@@ -4612,18 +4608,17 @@ html{scroll-behavior:smooth}
   font-size:var(--fs-2xs);font-weight:700;color:var(--text);line-height:1.3;
   box-shadow:0 4px 14px rgba(0,0,0,.45)}
 .cc-corps-bulle[hidden]{display:none}
-/* LA LEGENDE EST UNE REGLE GRADUEE : la teinte est continue, sa legende
-   aussi. Assez courte pour tenir sous le corps a 375 px, assez longue pour
-   que cinq graduations ne se touchent pas. */
+/* La legende des quatre zones : la meme grammaire que celle de la grille de
+   charge, pastille puis nom de zone. */
 .cc-corps-l{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
   gap:4px 10px;margin-top:7px;padding-top:7px;
   border-top:1px solid rgba(255,255,255,.10)}
 .cc-corps-lt{flex:0 0 100%;text-align:center;font-size:var(--fs-2xs);
   color:var(--text-faint);line-height:1.5}
-.cc-corps-ech{flex:0 0 100%;max-width:240px;display:flex;flex-direction:column;gap:3px}
-.cc-corps-eb{display:block;height:8px;border-radius:4px}
-.cc-corps-eg{display:flex;justify-content:space-between;font-size:var(--fs-2xs);
-  color:var(--sub);font-variant-numeric:tabular-nums}
+.cc-corps-lp{display:inline-flex;align-items:center;gap:4px;
+  font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap}
+.cc-corps-lp i{width:9px;height:9px;border-radius:2px;display:inline-block;
+  flex:0 0 auto}
 /* La charge en toutes lettres, pour un lecteur d'ecran : visuellement cachee. */
 .cc-corps-lu{position:absolute;width:1px;height:1px;overflow:hidden;
   clip:rect(0 0 0 0);white-space:nowrap}
@@ -52531,9 +52526,11 @@ const CORPS_PLANCHE=Object.freeze({
 // Kevin, 21/09/2026, apres le changement de modele : « remets les zones de
 // differente couleur comme c'etait ce matin ». La teinte disait alors la
 // charge de la semaine par muscle en quatre aplats MEV / MAV / MRV.
-// ⚠ DEPUIS LE 22/09/2026, ELLE DIT LES SERIES EN CONTINU — voir
-//   corpsCouleurVolume. La zone reste calculee (corpsZones) et se lit sous le
-//   doigt ; seule la couleur a change de grammaire.
+// ⚠ LE 1386 L'AVAIT REMPLACEE PAR UNE RAMPE ORANGE CONTINUE, et Kevin l'a
+//   refusee le 22/09/2026 (« y a plus de rouge vert bleu… tu devais modifier
+//   selon le volume par muscle du programme ; tout est de la même couleur ») :
+//   les quatre zones sont revenues (build 1397), calculees sur le volume du
+//   programme — voir corpsTeintes.
 //
 // ⚠ LES CONTOURS DE CE MATIN NE SERVAIENT PLUS : WO_ZONES decoupe les planches
 //   d'avatar, pas l'image de Kevin. Chaque silhouette porte donc sa CARTE
@@ -52852,76 +52849,38 @@ function corpsZones(u,vue,vol){
   }
   return out;
 }
-// ══ LA TEINTE DIT LE VOLUME DE LA SEMAINE, EN CONTINU ═════════════════════
+// ══ LA TEINTE DIT LA ZONE DE CHAQUE MUSCLE, SUR LE VOLUME DU PROGRAMME ═══
+//
 // Kevin, 22/09/2026, devant une silhouette presque toute bleue : « recolorie
-// mieux avec le volume total de la semaine ».
+// mieux avec le volume total de la semaine ». Il voulait les MEMES couleurs —
+// rouge, vert, bleu — calculees sur un meilleur volume : celui que le
+// PROGRAMME donne a chaque muscle, pas les seances deja faites d'une semaine
+// en cours. Le 1386 avait compris l'inverse et remplace les couleurs par une
+// rampe orange : a 15 series et plus pour presque chaque muscle, tout le haut
+// du corps sortait du meme orange fonce. Refuse (« y a plus de rouge vert
+// bleu… tout est de la même couleur »), et retire au 1397 avec sa rampe.
 //
-// ⚠ LES QUATRE ZONES N'EN DISAIENT PAS ASSEZ. Traduite en MEV / MAV / MRV, la
-//   semaine se lisait en quatre aplats : 9 et 15 series tombaient dans le meme
-//   bleu, un quadriceps a 7 series dans le meme gris qu'un muscle jamais
-//   travaille, et la moitie du corps restait muette. On voyait QUE ca
-//   travaillait, jamais OU.
+// LES QUATRE ZONES DE LA GRILLE DE CHARGE, AVEC SES COULEURS (GC_COULEURS) :
+// sous-MEV gris, MEV-MAV bleu, MAV-MRV vert, sur-MRV rouge. Un bleu ici veut
+// dire la meme chose que dans la grille : une couleur, un seul sens d'un
+// ecran a l'autre. Le volume vient de _htmlCorpsCadre — celui du programme,
+// ramene a la semaine (volumePrescritProgramme) ; sans programme, les series
+// faites.
 //
-// UNE ECHELLE CONTINUE, UN SEUL TON, LA MEME POUR TOUS LES MUSCLES. De la
-// peche pale — presque le dessin — a l'orange brule a CORPS_VOL_HAUT series
-// dures, et sature au-dela. Un seul ton parce que la couleur dit une
-// QUANTITE, et qu'une quantite se lit en clair / fonce, pas en arc-en-ciel.
-//
-// ⚠ POURQUOI ORANGE, ET NI BLEU NI ROUGE — les trois ont ete poses cote a
-//   cote au banc, sur la meme semaine :
-//   · le BLEU, meme en rampe, rendait encore un corps bleu : 10 et 18 series
-//     s'y distinguaient mal sous l'ombrage du dessin. Et le bleu veut deja
-//     dire « MEV-MAV » dans la grille de charge : le reprendre ici pour des
-//     series aurait donne deux sens a une couleur, d'un ecran a l'autre ;
-//   · le ROUGE appelle une decision dans cette application, et dit
-//     « au-dessus du MRV » dans la grille : un pectoral rouge se lirait comme
-//     un reproche ;
-//   · l'ORANGE n'a aucun sens pris ailleurs sur ces deux ecrans, se lit d'un
-//     coup d'oeil comme de la chaleur, et ses pas restent distincts sous
-//     l'ombrage. La rampe s'arrete a un orange brule, jamais au rouge.
-//
-// ⚠ SIX PAS REGULIERS EN CLARTE PERCUE (OKLab : 0,945 → 0,536, un pas de
-//   0,08 environ). Mesure, pas estime : c'est ce qui fait qu'un ecart de
-//   series se voit pareil en bas et en haut de l'echelle. Et la rampe ne
-//   descend pas jusqu'au brun : posee en multiply sur un dessin gris clair,
-//   lui-meme sur fond noir, un pas trop sombre aurait fondu le muscle le plus
-//   travaille dans le fond.
-//
-// ⚠ PLUS BESOIN DE REPERE POUR ETRE TEINTE. Une serie se compte sans savoir
-//   ou est le MRV : les lombaires, les abducteurs et les adducteurs, qui n'en
-//   ont pas, se colorent enfin quand ils ont travaille. Rien n'est invente —
-//   c'etait la seule raison de les laisser gris. La ZONE, elle, reste dite la
-//   ou elle existe : dans l'infobulle du muscle et dans la phrase lue a voix
-//   haute (corpsZones, inchange).
-const CORPS_VOL_HAUT=20;
-// De la peche pale a l'orange brule, clarte percue decroissante a pas regulier.
-const CORPS_VOL_RAMPE=Object.freeze(['#fde9d6','#fbc99a','#f7a45f','#ef7f2c',
-  '#d9620f','#b04a07']);
-// Les graduations de la legende, en series.
-const CORPS_VOL_GRADUATIONS=Object.freeze([0,5,10,15,20]);
-/**
- * PURE. La couleur d'un volume hebdomadaire, en « #rrggbb », ou null a zero.
- * Interpolee entre les pas de la rampe : 9 et 15 series ne tombent plus
- * jamais dans la meme couleur.
- * @param {number} v series dures de la semaine
- * @returns {string|null}
- */
-function corpsCouleurVolume(v){
-  const x=Number(v);
-  if(!(x>0)) return null;
-  const r=CORPS_VOL_RAMPE, t=Math.min(x,CORPS_VOL_HAUT)/CORPS_VOL_HAUT*(r.length-1);
-  const i=Math.min(Math.floor(t),r.length-2), f=t-i;
-  const a=_corpsRvb(r[i]), b=_corpsRvb(r[i+1]);
-  return '#'+[0,1,2].map(k=>Math.round(a[k]+(b[k]-a[k])*f)
-    .toString(16).padStart(2,'0')).join('');
-}
-// PURE. La couleur de chaque muscle d'une vue, pour un volume hebdomadaire.
-// Un muscle a zero serie n'y figure pas : il garde le gris du dessin.
+// ⚠ UN MUSCLE SANS REPERE N'EST PAS TEINTE : reperesEffectifs rend null pour
+//   les lombaires, les abducteurs et les adducteurs. Les peindre inventerait
+//   le repere qui manque. Leur chiffre reste dans la bulle.
+// ⚠ NI UN MUSCLE SANS SERIE AU PROGRAMME. Les abdominaux, les trapezes et les
+//   avant-bras ont un MEV de 0 : zero serie tombait « dans la zone » et
+//   sortait BLEU — un muscle absent du programme avait l'air bien dose (vu au
+//   banc, 1397). Il garde le gris clair du dessin ; la bulle dit « aucune
+//   série ».
+// PURE. La couleur de chaque muscle d'une vue : celle de sa zone de volume.
 function corpsTeintes(u,vue,vol){
-  const v=vol||{}, out={};
-  for(const m of (CORPS_MUSCLES_VUE[vue]||[])){
-    const c=corpsCouleurVolume(v[m]);
-    if(c) out[m]=c;
+  const v=vol||{}, z=corpsZones(u,vue,v), out={};
+  for(const m in z){
+    if(!((Number(v[m])||0)>0)) continue;
+    const c=GC_COULEURS[z[m]]; if(c) out[m]=c;
   }
   return out;
 }
@@ -53673,22 +53632,20 @@ function _htmlCorpsCadre(c){
     ?'<div class="cc-corps-l">'
       +'<span class="cc-corps-lt">'+(aProg?'Teinte : volume total du programme — ':'Teinte : séries dures de la semaine du ')
       +escapeHtml(libSem)+(aProg?'':' — pas de programme actif')+'</span>'
-      +'<span class="cc-corps-ech" aria-hidden="true">'
-        +'<span class="cc-corps-eb" style="background:linear-gradient(90deg,'
-          +CORPS_VOL_RAMPE.join(',')+')"></span>'
-        +'<span class="cc-corps-eg">'+CORPS_VOL_GRADUATIONS.map((g,i,l)=>'<span>'
-          +g+(i===l.length-1?'+':'')+'</span>').join('')+'</span>'
-      +'</span>'
+      // LES QUATRE ZONES, pastille puis nom — la grammaire de la grille de charge.
+      +Object.keys(GC_COULEURS).map(k=>'<span class="cc-corps-lp">'
+        +'<i style="background:'+escapeHtml(GC_COULEURS[k])+'"></i>'
+        +escapeHtml(k)+'</span>').join('')
       +(aProg
         // LE PREVU SE DIT PREVU, et son intensite aussi : sans consigne de
         // RIR, une serie programmee compte pleine — c'est un maximum, comme
         // le dit deja le panneau « Volume prescrit ».
-        ?'<span class="cc-corps-lt">Elle dit le volume d’entraînement de tout le programme — ni '
-          +'l’avancée de la semaine, ni le développement. '
+        ?'<span class="cc-corps-lt">Chaque muscle prend la couleur de sa zone pour le volume que le '
+          +'programme lui donne par semaine — ni l’avancée de la semaine, ni le développement. '
           +(prog.avecConsigne?'Séries pondérées par l’intensité prescrite. ':'Sans intensité prescrite, c’est un maximum. ')
-          +'Gris : aucune série programmée. Touchez un muscle pour son chiffre.</span>'
-        :'<span class="cc-corps-lt">Elle dit le volume d’entraînement, jamais le '
-          +'développement. Gris : aucune série cette semaine. Touchez un muscle pour son chiffre.</span>')
+          +'Un muscle sans série programmée, ou sans repère de volume, n’est pas teinté. Touchez un muscle pour son chiffre.</span>'
+        :'<span class="cc-corps-lt">Elle dit la zone du volume d’entraînement, jamais le '
+          +'développement. Un muscle sans série, ou sans repère de volume, n’est pas teinté. Touchez un muscle pour son chiffre.</span>')
       // Les points medians separent a l'oeil et ne s'entendent pas : a voix
       // haute, deux-points puis virgules, et un point-virgule entre muscles.
       +(lus.length?'<span class="cc-corps-lu">'+(aProg?'Séries programmées : ':'Séries de la semaine : ')
@@ -71421,12 +71378,11 @@ function volumePrescritSemaine(user,date){
 // ecarts et decharges compris —, additionnees (`total`), puis ramenees a la
 // semaine (`muscles`). La teinte de la silhouette « Evolution eleve » le lit.
 //
-// ⚠ RAMENE A LA SEMAINE, ET C'EST VOULU. Les reperes MEV/MAV/MRV et la rampe
-//   orange (qui sature a CORPS_VOL_HAUT) sont hebdomadaires : un total brut
-//   de huit semaines passerait les vingt series partout, et la silhouette
-//   deviendrait d'une seule couleur. La moyenne garde la repartition du total
-//   — le muscle le plus charge du programme reste le plus fonce —, et le
-//   total reste dit en toutes lettres sous le doigt.
+// ⚠ RAMENE A LA SEMAINE, ET C'EST VOULU. Les reperes MEV/MAV/MRV, dont les
+//   zones colorent la silhouette (build 1397), sont hebdomadaires : un total
+//   brut de huit semaines passerait le MRV partout, et la silhouette sortirait
+//   toute rouge. La moyenne garde la repartition du total, et le total reste
+//   dit en toutes lettres sous le doigt.
 // SANS BLOC DATE, le programme est son gabarit : une semaine type, entiere.
 function volumePrescritProgramme(user){
   const p=programmeDe(user);

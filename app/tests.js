@@ -38711,16 +38711,18 @@ async function testExercices(){
         const lu=(b.querySelector('.cc-corps-lu')||{}).textContent||'';
         if(!/Pectoraux : \d+(,5)? séries?, (sous-MEV|MEV-MAV|MAV-MRV|sur-MRV)/.test(lu))
           return _echec('la charge ne se lit pas en toutes lettres : « '+lu+' »');
-        // LA LEGENDE EST UNE REGLE GRADUEE, TIREE DE LA RAMPE ELLE-MEME.
-        const eb=b.querySelector('.cc-corps-eb');
-        if(!eb) return _echec('la règle graduée de la légende a disparu');
-        const fond=eb.getAttribute('style')||'';
-        for(const c of [CORPS_VOL_RAMPE[0],CORPS_VOL_RAMPE[CORPS_VOL_RAMPE.length-1]])
-          if(fond.indexOf(c)<0) return _echec('la règle ne part pas de la rampe : '+fond);
-        const grad=[...b.querySelectorAll('.cc-corps-eg span')].map(s=>s.textContent);
-        if(grad.join('/')!=='0/5/10/15/20+') return _echec('graduations : '+grad.join('/'));
-        // ET L'ANCIENNE LEGENDE A QUATRE PASTILLES NE REVIENT PAS A COTE.
-        if(b.querySelector('.cc-corps-lp')) return _echec('les quatre pastilles de zone sont revenues');
+        // LA LEGENDE : LES QUATRE ZONES EN PASTILLES, aux couleurs de la grille
+        // de charge (build 1397 — la rampe orange du 1386 a été refusée).
+        const lp=[...b.querySelectorAll('.cc-corps-lp')];
+        if(lp.map(x=>x.textContent).join('/')!=='sous-MEV/MEV-MAV/MAV-MRV/sur-MRV')
+          return _echec('pastilles : '+lp.map(x=>x.textContent).join('/'));
+        for(const x of lp){
+          const i=x.querySelector('i');
+          if(!i||(i.getAttribute('style')||'').indexOf(GC_COULEURS[x.textContent])<0)
+            return _echec('la pastille '+x.textContent+' n’a pas la couleur de la grille');
+        }
+        // ET LA RAMPE ORANGE NE REVIENT PAS A COTE.
+        if(b.querySelector('.cc-corps-eb,.cc-corps-eg,.cc-corps-ech')) return _echec('la rampe orange est revenue');
         // ET LES ETIQUETTES RESTENT DES MENSURATIONS.
         const muscles=new Set(Object.values(MUSCLES).map(m=>String(m.lib||'').toLowerCase()));
         for(const e of b.querySelectorAll('.cc-corps-em'))
@@ -38755,61 +38757,41 @@ async function testExercices(){
       if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS) return _echec('les fessiers ne sont pas teints de dos');
       return true;})());
 
-    ok('LA TEINTE DIT LES SERIES DE LA SEMAINE, EN CONTINU',(()=>{
-      // Kevin, 22/09/2026 : « recolorie mieux avec le volume total de la
-      // semaine ». Les quatre aplats MEV / MAV / MRV mettaient 9 et 15 séries
-      // dans le même bleu, et un muscle à 7 séries dans le gris d'un muscle
-      // jamais travaillé. On voyait QUE ça travaillait, jamais OÙ.
-      // ⚠ LA COULEUR NE JUGE TOUJOURS PAS UN CORPS : elle dit des séries — une
-      //   charge de travail. Le centimètre reste dans la même encre : règle R32.
+    ok('LA TEINTE DIT LA ZONE DE CHAQUE MUSCLE — GRIS, BLEU, VERT, ROUGE — PAS UNE RAMPE',(()=>{
+      // Kevin, 22/09/2026 : « y a plus de rouge vert bleu… tu devais modifier
+      // selon le volume par muscle du programme ; tout est de la même couleur ».
+      // La rampe orange du 1386 est retirée (1397) : les quatre zones reviennent,
+      // aux couleurs de la grille de charge.
       const u={id:'V1',email:'v1@t.fr',role:'athlete',gender:'H'};
-      const lum=h=>{ const c=_corpsRvb(h); return c?(0.2126*c[0]+0.7152*c[1]+0.0722*c[2]):null; };
-      // PLUS DE SERIES, PLUS FONCE — strictement, de 1 à CORPS_VOL_HAUT. C'est
-      // tout le défaut réparé : deux volumes différents ne se confondent plus.
-      let prec=Infinity;
-      for(let v=1;v<=CORPS_VOL_HAUT;v++){
-        const c=corpsTeintes(u,'face',{PECTORAUX:v}).PECTORAUX;
-        if(!/^#[0-9a-f]{6}$/.test(String(c))) return _echec(v+' séries donnent « '+c+' »');
-        const l=lum(c);
-        if(!(l<prec)) return _echec(v+' séries ne sont pas plus foncées que '+(v-1));
-        prec=l;
-      }
-      // 9 ET 15, LE CAS MEME DE LA DEMANDE : autrefois le même bleu.
-      if(corpsCouleurVolume(9)===corpsCouleurVolume(15))
-        return _echec('9 et 15 séries ont encore la même couleur');
-      // AU-DELA DU HAUT DE L'ECHELLE, LA TEINTE SATURE : elle ne repart pas.
-      if(corpsCouleurVolume(CORPS_VOL_HAUT)!==corpsCouleurVolume(CORPS_VOL_HAUT*2))
-        return _echec('la teinte ne sature pas au-delà de '+CORPS_VOL_HAUT+' séries');
-      // ELLE RESTE DANS LA RAMPE : du premier au dernier pas, jamais plus sombre.
-      const bas=CORPS_VOL_RAMPE[0], haut=CORPS_VOL_RAMPE[CORPS_VOL_RAMPE.length-1];
-      if(corpsCouleurVolume(CORPS_VOL_HAUT)!==haut)
-        return _echec('le haut de l’échelle n’est pas le dernier pas de la rampe');
-      if(!(lum(corpsCouleurVolume(0.1))<=lum(bas)&&lum(corpsCouleurVolume(0.1))>lum(CORPS_VOL_RAMPE[1])))
-        return _echec('un dixième de série ne tombe pas au pied de la rampe');
-      // ZERO SERIE : PAS DE TEINTE. Le muscle garde le gris du dessin — le bas
-      // de l'échelle, dit en toutes lettres dans la légende.
-      for(const v of [0,-3,null,undefined,NaN,'abc'])
-        if(corpsTeintes(u,'face',{PECTORAUX:v}).PECTORAUX)
-          return _echec('« '+v+' » série teinte le muscle');
-      // UNE SEULE ECHELLE POUR TOUS LES MUSCLES : douze séries se lisent
-      // pareil sur un pectoral et sur un biceps, quels que soient leurs repères.
-      const t12=corpsTeintes(u,'face',{PECTORAUX:12,BICEPS:12});
-      if(t12.PECTORAUX!==t12.BICEPS) return _echec('la couleur dépend encore du repère du muscle');
-      // ⚠ UN MUSCLE SANS REPERE EST TEINTE DES QU'IL A TRAVAILLE. Une série se
-      //   compte sans connaître le MRV : ne pas peindre les adducteurs n'avait
-      //   de sens que tant que la couleur disait une zone.
+      const rep=reperesEffectifs(u,'PECTORAUX');
+      if(!rep||!(rep.mev>0)) return _echec('les pectoraux n’ont pas de repères');
+      const c=v=>corpsTeintes(u,'face',{PECTORAUX:v}).PECTORAUX;
+      // CHAQUE ZONE A SA COULEUR, celle de la grille de charge.
+      const cas=[[rep.mev-1,'sous-MEV'],[rep.mev,'MEV-MAV'],[rep.mavMin,'MAV-MRV'],[rep.mrv+1,'sur-MRV']];
+      for(const [v,z] of cas)
+        if(c(v)!==GC_COULEURS[z]) return _echec(v+' séries : '+c(v)+' au lieu de '+z+' ('+GC_COULEURS[z]+')');
+      // QUATRE COULEURS DIFFERENTES : plus un corps d'une seule teinte.
+      if(new Set(cas.map(([v])=>c(v))).size!==4) return _echec('les quatre zones ne donnent pas quatre couleurs');
+      // UN MUSCLE SANS REPERE N'EST PAS TEINTE : on n'invente pas son MRV.
       for(const m of ['ABDUCTEURS','ADDUCTEURS'])
-        if(!corpsTeintes(u,'face',{[m]:12})[m]) return _echec(m+' n’est pas teinté malgré 12 séries');
-      if(!corpsTeintes(u,'dos',{LOMBAIRES:6}).LOMBAIRES) return _echec('les lombaires ne sont pas teintées');
-      // ET LA VUE FILTRE : un muscle que la planche ne montre pas n'a pas de
-      // zone à peindre, et lui en donner une la poserait sur le vide.
-      if(corpsTeintes(u,'face',{FESSIERS:15}).FESSIERS)
-        return _echec('les fessiers sont teints en vue de face');
-      if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS)
-        return _echec('les fessiers ne sont pas teints en vue de dos');
-      // AUCUN VOLUME : AUCUNE EXCEPTION. Un dossier sans séance passe ici.
-      if(typeof corpsTeintes(u,'face',null)!=='object')
-        return _echec('un volume absent fait tomber le calcul');
+        if(!reperesEffectifs(u,m)&&corpsTeintes(u,'face',{[m]:12})[m]) return _echec(m+' est teinté sans repère');
+      if(!reperesEffectifs(u,'LOMBAIRES')&&corpsTeintes(u,'dos',{LOMBAIRES:6}).LOMBAIRES)
+        return _echec('les lombaires sont teintées sans repère');
+      // LA VUE FILTRE : un muscle que la planche ne montre pas n'est pas peint.
+      if(corpsTeintes(u,'face',{FESSIERS:15}).FESSIERS) return _echec('les fessiers sont teints en vue de face');
+      if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS) return _echec('les fessiers ne sont pas teints en vue de dos');
+      // AUCUN VOLUME : AUCUNE EXCEPTION.
+      if(typeof corpsTeintes(u,'face',null)!=='object') return _echec('un volume absent fait tomber le calcul');
+      // ZERO SERIE, AUCUNE TEINTE — même pour un muscle dont le MEV vaut 0 :
+      // absent du programme, il n'a pas l'air bien dosé.
+      for(const vue of ['face','dos']){
+        const z0=Object.fromEntries((CORPS_MUSCLES_VUE[vue]||[]).map(m=>[m,0]));
+        const t0=corpsTeintes(u,vue,z0);
+        if(Object.keys(t0).length) return _echec(vue+' : zéro série teinte '+Object.keys(t0).join(', '));
+      }
+      // LA RAMPE ORANGE A DISPARU AVEC SES CONSTANTES.
+      if(typeof corpsCouleurVolume!=='undefined'||typeof CORPS_VOL_RAMPE!=='undefined')
+        return _echec('la rampe orange existe encore');
       return true;})());
 
     ok('SOUS LE DOIGT, LE MUSCLE DIT SES SERIES ET SA ZONE',(()=>{
