@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1403';
+window.RC_BUILD='1404';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -84710,10 +84710,12 @@ function renderCoachNutriSection(c){
         return _o==='ajustement'?_htmlOrigineCibles(c):'';
       }catch(e){ return ''; } })()}
       <!-- REMISE AU POINT DE DEPART. Demande de Kevin : « si la personne lache
-           sa seche ou sa PDM quelque temps ». Discret : il ecrit et remet le
-           compteur de phase a zero. -->
-      <button class="btn btn-outline btn-sm" onclick="reinitialiserCalculs()"
-        style="width:100%;margin:8px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)">Remettre les calculs au point de départ</button>`;
+           sa seche ou sa PDM quelque temps ». EN ROUGE depuis le 22/09/2026
+           (build 1404), a sa demande : « laisse le bouton en rouge ». Il ecrit
+           et remet le compteur de phase a zero — la confirmation de
+           reinitialiserCalculs reste le garde-fou contre le clic de trop. -->
+      <button class="btn btn-red" onclick="reinitialiserCalculs()"
+        style="width:100%;margin:8px 0 16px;min-height:46px">Remettre les calculs au point de départ</button>`;
   // ⚠ DEUX BLOCS ONT QUITTE CETTE FONCTION le 08/09/2026.
   //   • LE TAUX DE DIETE RESPECTEE est remonte au-dessus de cette section,
   //     en camembert, juste sous le type de diete : c'est un CONSTAT, il n'a
@@ -84758,7 +84760,13 @@ function renderCoachNutriSection(c){
       //   au-dessus des tableaux ont disparu, avec leurs fonctions.
       + (()=>{ try{ return _htmlTableauxTableur(c); }catch(e){ return ''; } })()
       + '</div>'
-    + _sect('ccd-nut-reglages','Régler les objectifs','var(--border)',_reglages)
+    // ⚠ « RÉGLER LES OBJECTIFS » N'EST PLUS UN MENU DÉROULANT (build 1404).
+    //   Kevin, 22/09/2026 : « mets pas de menu déroulant mais laisse le bouton
+    //   en rouge ». Le contenu est rendu A DECOUVERT, sans titre ni repli :
+    //   les alertes (violations, ajustement, origine) quand il y en a, et le
+    //   bouton de remise au point de depart. L'id ccd-nut-reglages reste :
+    //   hors .cc-sect, le repli ne le touche plus.
+    + '<div class="ccd-nut-reglages" id="ccd-nut-reglages">'+_reglages+'</div>'
     + _sect('ccd-nut-strict','Diète stricte','var(--border)',_strict);
 }
 

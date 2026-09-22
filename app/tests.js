@@ -36426,6 +36426,24 @@ async function testExercices(){
           if(!/besoinsProposes|_besoinsSurs/.test(s)) return _echec('les cibles ne sont pas recalculees');
           return /origine:'reinit'/.test(s)?true:_echec('la provenance n\'est pas tracee');})());
 
+        // BUILD 1404 — Kevin : « mets pas de menu déroulant mais laisse le bouton
+        // en rouge ».
+        ok('1404 — « RÉGLER LES OBJECTIFS » N’EST PLUS UN MENU DÉROULANT, LE BOUTON EST ROUGE',(()=>{
+          const z=document.getElementById('ccd-nutrition');
+          poser(null); renderCoachNutriSection(getOwnedClient('A1'));
+          const r=document.getElementById('ccd-nut-reglages');
+          if(!r) return _echec('le bloc des réglages a disparu');
+          // Tout #ccd-nutrition vit dans « Calculs alimentaires », section FIXE :
+          // c'est une section qui se replie qu'on refuse.
+          const s=r.closest('.cc-sect');
+          if(s&&!s.classList.contains('cc-sect-fixe')) return _echec('il vit encore dans une section repliable');
+          if(/Régler les objectifs/.test(z.textContent)) return _echec('le titre du menu déroulant est encore là');
+          const b=[...r.querySelectorAll('button')].find(x=>/Remettre les calculs au point de départ/.test(x.textContent));
+          if(!b) return _echec('le bouton de remise au point de départ manque');
+          if(!b.classList.contains('btn-red')) return _echec('le bouton n’est pas rouge : '+b.className);
+          return /reinitialiserCalculs\(\)/.test(b.getAttribute('onclick')||'')
+            ?true:_echec('le bouton n’appelle plus la remise au point de départ');})());
+
         ok('Le bouton de remise a zero est atteignable, et separe du bouton rouge',(()=>{
           const z=document.getElementById('ccd-nutrition');
           poser(null); renderCoachNutriSection(getOwnedClient('A1'));
