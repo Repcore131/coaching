@@ -46513,6 +46513,134 @@ async function testExercices(){
       return msg?_echec(msg):true;
     });
 
+    okA('MLX — les suivis coupés à 20 s se prolongent seuls à l’ouverture, sans nouvelle pastille',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // Kevin, 22/09/2026, après le 1390 : « met en place ». Les angles suivis
+      // avant le 1390 restaient coupés à 20 s ; le laboratoire les prolonge
+      // désormais seul, à l'ouverture de la vidéo.
+      // LA SIGNATURE : une dernière clé à 20 s pile d'une clé antérieure, et le
+      // tracé qui continue nettement au-delà. Rien d'autre.
+      const A=(ts,f)=>({id:'t',n:'T',t:'angle',c:'#ffffff',e:4,d:0,f,p:'100,100 200,200 300,300',
+        k:ts.map(t=>[t,'100,100 200,200 300,300'])});
+      const T=mlSuiviTronque;
+      const r1=T(A([0,5000,10000,15000,20000],25000),25000);
+      if(!r1||r1.debut!==20000||r1.fin!==25000) return _echec('le suivi coupé à 20 s n’est pas reconnu : '+JSON.stringify(r1));
+      if(!T(A([33,10000,19983],25000),25000)) return _echec('la tolérance d’une image manque');
+      if(T(A([3000,13000,23000],23500),23500)) return _echec('un suivi qui va jusqu’au bout est pris pour coupé');
+      if(T(A([0,6000,12000],25000),25000)) return _echec('un suivi sans la signature des 20 s est pris pour coupé');
+      if(T(A([0,19700],25000),25000)) return _echec('un écart de 19,7 s passe pour la borne');
+      if(T(A([20000],25000),25000)||T({id:'x',t:'angle',f:25000},25000)) return _echec('une clé seule, ou aucune, passe pour un suivi');
+      const r2=T(A([0,20000],30000),21000);
+      if(!r2||r2.fin!==21000) return _echec('la fin ne se borne pas à la durée de la vidéo : '+JSON.stringify(r2));
+      // LE BRANCHEMENT : c'est l'arrivée de la durée qui déclenche.
+      if(_mlBrancher.toString().indexOf('_mlxProlongerTronques')<0) return _echec('la prolongation n’est pas branchée à l’ouverture');
+      // ── SUR UNE VIDÉO FABRIQUÉE ─────────────────────────────────────────
+      const tache=(g,W,H,cx,cy,pas)=>{
+        for(let y=-10;y<=10;y++) for(let x=-10;x<=10;x++){
+          if(x*x+y*y>100) continue;
+          const X=Math.round(cx)+x, Y=Math.round(cy)+y;
+          if(X<0||Y<0||X>=W||Y>=H) continue;
+          g[Y*W+X]=((Math.floor((x+20)/pas)+Math.floor((y+20)/pas))%2)?225:35;
+        }
+      };
+      const fond=(W,H)=>{ const g=new Float32Array(W*H); g.fill(128); return g; };
+      const VW=280, VH=500, D=25000;
+      const hanche=[100,150], cheville=[120,380];
+      const genou=t=>[150+30*Math.sin(2*Math.PI*t/3000),250+20*Math.cos(2*Math.PI*t/3000)];
+      const mil=p=>[Math.round(p[0]/VW*1000),Math.round(p[1]/VH*1000)];
+      const trait=t=>[mil(hanche),mil(genou(t)),mil(cheville)].map(q=>q.join(',')).join(' ');
+      // L'ANGLE TEL QUE L'ANCIEN SUIVI L'A LAISSÉ : une clé par seconde, de 0 à 20 s.
+      const cles=[]; for(let t=0;t<=20000;t+=1000) cles.push([t,trait(t)]);
+      const annot={v:1,majLe:1,leg:{on:0},a:[{id:'ang',n:'Angle genou',t:'angle',c:'#3b82f6',e:4,d:0,f:D,p:cles[0][1],k:cles}]};
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
+      const svTps=window._mlxTempsMs, svEx=window._mlExtraire, svAller=window._mlAller;
+      const msgs=[], allers=[];
+      let vid=null;
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=m=>{ msgs.push(String(m)); }; CLOUD.pushOne=()=>Promise.resolve(true);
+        _r28Monter([_r28Video({segments:[],annot,feedbackSeen:true,feedbackDate:1})]);
+        // L'ENREGISTREMENT SILENCIEUX, d'abord seul : le document part, la pastille ne bouge pas.
+        {
+          const r=enregistrerAnnotationsVideo('a28@t.fr','v28',annot,{silencieux:true});
+          const v0=((DB.get('users')||{})['a28@t.fr'].videos||[])[0];
+          if(!r.ok||v0.feedbackSeen!==true||v0.feedbackDate!==1) return 'la réparation rallume la pastille de l’athlète';
+          const r2=enregistrerAnnotationsVideo('a28@t.fr','v28',annot);
+          const v1=((DB.get('users')||{})['a28@t.fr'].videos||[])[0];
+          if(!r2.ok||v1.feedbackSeen!==false) return 'une correction ordinaire ne prévient plus l’athlète';
+          _r28Monter([_r28Video({segments:[],annot,feedbackSeen:true,feedbackDate:1})]);
+        }
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        _ml.dureeMs=D;
+        window._mlxTempsMs=()=>0;
+        window._mlAller=(ms,r)=>{ allers.push(ms); return svAller(ms,r); };
+        vid=_mlVideo();
+        if(!vid) return 'pas de vidéo dans le laboratoire';
+        Object.defineProperty(vid,'videoWidth',{value:VW,configurable:true});
+        Object.defineProperty(vid,'videoHeight',{value:VH,configurable:true});
+        /** @type {any} */(vid)._rcFps=30;
+        window._mlExtraire=async(url,deb,fin,w,h,pas,surImage,arreter)=>{
+          if(w!==VW||h!==VH) return {ok:false,code:'chargement'};
+          let n=0;
+          for(let t=deb;t<=fin;t+=pas){
+            if(arreter()) return {ok:false,code:'arret'};
+            const g=fond(w,h);
+            tache(g,w,h,hanche[0],hanche[1],5); tache(g,w,h,cheville[0],cheville[1],6);
+            const q=genou(t); tache(g,w,h,q[0],q[1],3);
+            const suite=surImage({tMs:Math.round(t*10)/10,gris:g}); n++;
+            if(typeof suite==='string') return {ok:false,code:suite};
+            if(suite===false) break;
+          }
+          return {ok:true,images:n,doublons:0,ms:0,fps:30,cadenceMesuree:true};
+        };
+        if(_mlModifie()) return 'le laboratoire se croit modifié dès l’ouverture';
+        // La mémoire des tentatives vit le temps de la page : la suite peut
+        // être rejouée dans la même page, on repart d'une ardoise propre.
+        _mlxProlongeTentes.delete('v28|ang');
+        const n=await _mlxProlongerTronques();
+        if(n!==1) return n+' suivi(s) prolongé(s) au lieu de 1 : '+msgs.join(' | ');
+        const b=_mlxAnnot('ang'), k=(b&&b.k)||[];
+        // 1. JUSQU'AU BOUT, et les clés d'avant 20 s intactes.
+        if(k[k.length-1][0]<D-500) return 'le suivi prolongé s’arrête à '+k[k.length-1][0]+' ms';
+        for(const t of [0,5000,10000,19000])
+          if(!k.some(q=>q[0]===t&&q[1]===trait(t))) return 'la clé de '+t+' ms a été touchée';
+        if(k.length>ANNOT_CLES_MAX) return k.length+' clés, au-delà du plafond';
+        // 2. LA PARTIE AJOUTÉE SUIT LE GENOU.
+        const ecart=tt=>{ const q=mlAnnotPointsA(b,tt)[1], vrai=mil(genou(tt)); return Math.hypot(q[0]-vrai[0],q[1]-vrai[1]); };
+        for(const tt of [21500,23000,24500]) if(ecart(tt)>15) return 'le genou est à '+ecart(tt).toFixed(1)+' ‰ de sa place à '+tt+' ms';
+        // 3. ENREGISTRÉ, SANS PASTILLE : chez l'athlète, le suivi va au bout,
+        //    et « nouvelle correction » ne s'est pas rallumé.
+        const vv=((DB.get('users')||{})['a28@t.fr'].videos||[])[0];
+        const kk=(((vv.annot||{}).a||[])[0]||{}).k||[];
+        if(!kk.length||kk[kk.length-1][0]<D-500) return 'la prolongation n’est pas enregistrée dans le dossier de l’athlète';
+        if(vv.feedbackSeen!==true||vv.feedbackDate!==1) return 'la réparation rallume la pastille de l’athlète';
+        if(_mlModifie()) return 'le laboratoire reste « modifié » après une réparation enregistrée';
+        // 4. RIEN N'A BOUGÉ SOUS LES YEUX DU COACH, et il est prévenu.
+        if(allers.some(ms=>ms>=19000)) return 'la tête de lecture saute à la fin du suivi : '+allers.join(',');
+        if(!msgs.some(m=>m.indexOf('prolongé')>=0&&m.indexOf('20 s')>=0)) return 'le coach n’est pas prévenu : '+msgs.join(' | ');
+        // 5. UNE SEULE FOIS : rien de coupé ne reste, et rien ne se relance.
+        if(mlSuiviTronque(b,D)) return 'le suivi passe encore pour coupé';
+        if(await _mlxProlongerTronques()!==0) return 'la prolongation se relance';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      catch(e){ msg='exception : '+e.message; }
+      finally {
+        window._mlExtraire=svEx; window._mlxTempsMs=svTps; window._mlAller=svAller;
+        if(vid){ try{ delete vid.videoWidth; delete vid.videoHeight; delete /** @type {any} */(vid)._rcFps; }catch(e){} }
+        try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT; CLOUD.pushOne=svPush;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      return msg?_echec(msg):true;
+    });
+
     okA('MLX — tracer au clic puis au clic, pendant la lecture, en tirets ou en pointillé',async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // LA DONNÉE : le style se garde, l'inconnu tombe, un texte n'en a pas.

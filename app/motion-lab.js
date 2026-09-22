@@ -5252,15 +5252,24 @@ function mlClesDepuisSuivi(T,P,max,tol){
 /**
  * « SUIVI AUTOMATIQUE » du tracé choisi, depuis l'image affichée jusqu'à la fin
  * de sa durée — une minute au plus (ML_SUIVI_ANNOT_MAX_MS).
+ *
+ * `opts` (build 1392), pour la PROLONGATION d'un suivi coupé : `id` le tracé à
+ * suivre plutôt que le tracé choisi, `debutMs` l'instant de départ plutôt que
+ * la tête de lecture — la dernière clé, dont les points sont le départ —, et
+ * `reparation` pour ne rien déplacer sous les yeux du coach : ni la tête de
+ * lecture, ni un message de réussite, que l'appelant formule lui-même. Un
+ * point perdu, lui, se dit toujours.
+ * @param {{id?:string, debutMs?:number, reparation?:boolean}} [opts]
  * @returns {Promise<boolean>}
  */
-async function mlAnnotSuiviAuto(){
-  const a0=_ml&&_mlxAnnot(_ml.sel), v=_mlVideo();
+async function mlAnnotSuiviAuto(opts){
+  const o=(opts&&typeof opts==='object')?opts:{};
+  const a0=_ml&&_mlxAnnot(o.id||_ml.sel), v=_mlVideo();
   if(!_ml||!a0||!v||_mlOccupe()) return false;
   const vw=v.videoWidth, vh=v.videoHeight;
   if(!(vw>0&&vh>0)){ toast('Lance d’abord la vidéo une fois : ses dimensions ne sont pas encore connues.','var(--orange)'); return false; }
   try{ v.pause(); }catch(e){}
-  const debut=_mlxTempsMs();
+  const debut=(typeof o.debutMs==='number'&&isFinite(o.debutMs))?Math.max(0,Math.round(o.debutMs)):_mlxTempsMs();
   const fin=Math.min(a0.f,_ml.dureeMs||a0.f,debut+ML_SUIVI_ANNOT_MAX_MS);
   if(fin-debut<200){ toast('Place la tête de lecture au début du mouvement, avant la fin du tracé.','var(--orange)'); return false; }
   const id=a0.id;
@@ -5395,7 +5404,7 @@ async function mlAnnotSuiviAuto(){
     return {...x,k,p:k[0][1]};
   });
   _mlxApresChangement();
-  _mlAller(debut);
+  if(!o.reparation) _mlAller(debut);
   // CE QUI N'A PAS ÉTÉ RETROUVÉ se dit, avec l'instant — c'est là qu'il faut
   // replacer le point. Ce qui a été retrouvé se dit aussi, plus doucement :
   // le passage comblé mérite un coup d'oeil.
@@ -5403,9 +5412,109 @@ async function mlAnnotSuiviAuto(){
   const nRetr=retrouves.filter(x=>x>0).length;
   if(perdu.length) toast((parPoint&&cibles.length>1?perdu.length+' point'+(perdu.length>1?'s se perdent':' se perd'):'Le suivi se perd')
     +' à '+mlTempsTexte(Math.min(...perdu))+' sans se retrouver : replace-le à cet instant, puis relance le suivi depuis là.','var(--orange)');
-  else toast('Suivi posé : '+cles.length+' images clés sur '+mlTempsTexte(T[T.length-1]-T[0]).slice(0,-3)
+  else if(!o.reparation) toast('Suivi posé : '+cles.length+' images clés sur '+mlTempsTexte(T[T.length-1]-T[0]).slice(0,-3)
     +(nRetr?(' · '+(nRetr>1?nRetr+' points perdus un instant, retrouvés':'un point perdu un instant, retrouvé')):'')+' ✓');
   return true;
+}
+// ══ LES SUIVIS COUPÉS PAR L'ANCIENNE BORNE, PROLONGÉS À L'OUVERTURE ═══════
+// Kevin, 22/09/2026, après le 1390 : « met en place ». Le 1390 suit jusqu'au
+// bout de la vidéo ; les angles suivis AVANT lui restaient coupés à 20 s, et
+// il fallait relancer chaque suivi à la main pour les rattraper. Le
+// laboratoire le fait désormais seul, à l'ouverture de la vidéo.
+//
+// ⚠ ON PROLONGE, ON NE REFAIT PAS. Le suivi repart de sa DERNIÈRE CLÉ — ses
+//   points et son instant —, et les clés d'avant restent telles quelles :
+//   seule la partie manquante se calcule, quelques secondes sur une vidéo de
+//   gym, au lieu de tout le mouvement.
+// ⚠ ON NE TOUCHE QU'À CE QUE L'ANCIENNE BORNE A COUPÉ, reconnu à sa
+//   signature : une dernière clé à 20 s pile d'une clé antérieure, et le tracé
+//   qui continue nettement au-delà. Un suivi posé à la main, ou arrêté parce
+//   que ses points se sont perdus, ne porte pas cette signature.
+// ⚠ C'EST UNE RÉPARATION, PAS UNE CORRECTION : elle s'enregistre sans nouvelle
+//   pastille chez l'athlète, et seulement si rien d'autre n'était en cours
+//   d'édition — sinon elle attend l'enregistrement du coach, comme le reste.
+// ⚠ UNE SEULE TENTATIVE PAR TRACÉ ET PAR SESSION : une vidéo dont l'hébergeur
+//   interdit la lecture des images ne redirait pas son refus à chaque
+//   ouverture. Et le bouton « Arrêter » du suivi l'interrompt, comme d'habitude.
+const ML_ANCIENNE_BORNE_MS=20000;
+/** @type {Set<string>} */
+const _mlxProlongeTentes=new Set();
+/**
+ * PURE. Le suivi d'un tracé a-t-il été coupé par l'ancienne borne des 20 s ?
+ * Rend {debut, fin} — l'instant de sa dernière clé et la fin du tracé — ou null.
+ * @param {Annot} a
+ * @param {number} dureeMs  durée de la vidéo, 0 si inconnue
+ * @returns {{debut:number, fin:number}|null}
+ */
+function mlSuiviTronque(a,dureeMs){
+  const k=(a&&Array.isArray(a.k))?a.k:[];
+  if(k.length<2) return null;
+  const der=k[k.length-1][0];
+  const fin=Math.min(a.f,dureeMs>0?dureeMs:a.f);
+  if(!(fin-der>=1000)) return null;
+  // La borne se lisait de la première image suivie à la dernière : l'écart
+  // tombe à 20 s, à une ou deux images près — la cible visait le milieu de
+  // chaque image, pas son début.
+  const coupe=k.slice(0,-1).some(q=>Math.abs(der-q[0]-ML_ANCIENNE_BORNE_MS)<=120);
+  return coupe?{debut:der,fin}:null;
+}
+/**
+ * Enregistre une réparation : le document part, sans nouvelle pastille.
+ * @returns {boolean}
+ */
+function _mlxEnregistrerReparation(){
+  if(!_ml) return false;
+  const r=enregistrerAnnotationsVideo(_ml.email,_ml.videoId,_ml.annot,{silencieux:true});
+  if(!r.ok&&r.raison) return false;
+  /** @type {DocAnnot} */
+  const garde=r.annot||_ml.annot;
+  _ml.annot=garde;
+  _ml.annotInit=JSON.stringify(garde);
+  if(_ml.sel&&!_mlxAnnot(_ml.sel)) _ml.sel=null;
+  _mlMajListe();
+  _mlxMajTout();
+  return !!r.ok;
+}
+/**
+ * Prolonge, un par un, les suivis de la vidéo ouverte que l'ancienne borne a
+ * coupés. Rend combien l'ont été.
+ * @returns {Promise<number>}
+ */
+async function _mlxProlongerTronques(){
+  if(!_ml||_mlOccupe()) return 0;
+  const jeton=_ml.jeton, video=_ml.videoId, duree=_ml.dureeMs;
+  /** @type {{a:Annot, t:{debut:number, fin:number}, cle:string}[]} */
+  const liste=[];
+  for(const a of _ml.annot.a){
+    const t=mlSuiviTronque(a,duree), cle=video+'|'+a.id;
+    if(t&&!_mlxProlongeTentes.has(cle)) liste.push({a,t,cle});
+  }
+  if(!liste.length) return 0;
+  // RIEN D'AUTRE EN COURS D'ÉDITION : à l'ouverture, c'est le cas ordinaire.
+  const propre=!_mlModifie();
+  const selAvant=_ml.sel;
+  /** @type {string[]} */ const noms=[];
+  for(const x of liste){
+    if(!_ml||_ml.jeton!==jeton) return noms.length;
+    _mlxProlongeTentes.add(x.cle);
+    // LE TRACÉ EST CHOISI le temps du suivi : c'est dans son éditeur que
+    // s'affichent la progression et le bouton « Arrêter ».
+    _ml.sel=x.a.id; _mlxApresSelection();
+    const ok=await mlAnnotSuiviAuto({id:x.a.id,debutMs:x.t.debut,reparation:true});
+    if(!_ml||_ml.jeton!==jeton) return noms.length;
+    const b=_mlxAnnot(x.a.id), k=(b&&b.k)||[];
+    if(!ok||!k.length||k[k.length-1][0]<=x.t.debut+500) break;   // arrêté, ou échec déjà dit
+    noms.push(x.a.n);
+  }
+  if(!_ml||_ml.jeton!==jeton) return noms.length;
+  _ml.sel=(selAvant&&_mlxAnnot(selAvant))?selAvant:null;
+  _mlxApresSelection();
+  if(!noms.length) return 0;
+  const enreg=propre&&_mlxEnregistrerReparation();
+  toast((noms.length>1?noms.length+' suivis prolongés':'Suivi « '+noms[0]+' » prolongé')
+    +' jusqu’à la fin de la vidéo — '+(noms.length>1?'ils s’arrêtaient':'il s’arrêtait')+' à 20 s'
+    +(enreg?'. Enregistré ✓':'. Pense à enregistrer.'));
+  return noms.length;
 }
 // ── LA TRAJECTOIRE SUIVIE AUTOMATIQUEMENT (build 1385) ──────────────────────
 //
@@ -6790,6 +6899,12 @@ function _mlBrancher(){
     // dépendent, et la boucle ci-dessus vient de tous les réactiver.
     _mlMajListe();
     _mlxMajTout();
+    // LES SUIVIS COUPÉS PAR L'ANCIENNE BORNE DES 20 s se prolongent seuls
+    // (build 1392) — maintenant, parce que la fin du tracé se borne à la
+    // durée de la vidéo, qu'on vient seulement d'apprendre.
+    window.setTimeout(()=>{
+      if(_ml&&_ml.jeton===jeton) _mlxProlongerTronques().catch(()=>0);
+    },300);
   };
   if(v.readyState>=1) pret(); else v.addEventListener('loadedmetadata',pret,{once:true});
   let fpsDemande=false;

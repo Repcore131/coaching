@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1391';
+window.RC_BUILD='1392';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -92617,7 +92617,12 @@ function annotAMontrer(doc){
 // L'ENREGISTREMENT. Le chemin de la correction : le dossier de l'athlète, la
 // même garde, et `feedbackSeen=false` + `feedbackDate` — la pastille et la
 // notification existantes font le reste.
-function enregistrerAnnotationsVideo(email,videoId,doc){
+// ⚠ `opts.silencieux` (build 1392) : une RÉPARATION, pas une correction. Le
+//   laboratoire prolonge seul les suivis que l'ancienne borne des 20 s avait
+//   coupés ; l'athlète n'a rien à rouvrir pour ça, et une pastille « nouvelle
+//   correction » pour une retouche qu'il n'a pas demandée serait du bruit.
+//   Le document s'enregistre et part, la pastille ne bouge pas.
+function enregistrerAnnotationsVideo(email,videoId,doc,opts){
   const users=DB.get('users')||{};
   const c=users[email];
   if(!c||c.coachId!==currentUser?.id) return {ok:false,raison:'Élève introuvable ou non autorisé'};
@@ -92626,7 +92631,7 @@ function enregistrerAnnotationsVideo(email,videoId,doc){
   const a=annotValide({...doc,majLe:Date.now()});
   if(!a) return {ok:false,raison:'Les annotations sont illisibles : elles n’ont pas été enregistrées.'};
   c.videos[idx].annot=a;
-  if(a.a.some(x=>!x.h)){ c.videos[idx].feedbackDate=Date.now(); c.videos[idx].feedbackSeen=false; }
+  if(!(opts&&opts.silencieux)&&a.a.some(x=>!x.h)){ c.videos[idx].feedbackDate=Date.now(); c.videos[idx].feedbackSeen=false; }
   c.updatedAt=Date.now(); users[email]=c;
   const ok=DB.set('users',users);
   return {ok,envoi:CLOUD.pushOne(email,c),annot:a};

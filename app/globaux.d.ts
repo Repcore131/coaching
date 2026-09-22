@@ -60,7 +60,8 @@ declare const ANNOT_ETIQ_MAX: number;
 declare const ANNOT_TYPES: { readonly [type: string]: readonly [number, number] };
 declare function annotValide(doc: any): any;
 declare function annotAMontrer(doc: any): boolean;
-declare function enregistrerAnnotationsVideo(email: string, videoId: string, doc: any):
+declare function enregistrerAnnotationsVideo(email: string, videoId: string, doc: any,
+  opts?: { silencieux?: boolean }):
   { ok: boolean; raison?: string; envoi?: any; annot?: any };
 
 // ── L'écran, ses dialogues et ses messages ──────────────────────────────────
