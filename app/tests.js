@@ -46884,6 +46884,200 @@ async function testExercices(){
       return msg?_echec(msg):true;
     });
 
+    okA('MLX — l’échelle : un catalogue de fiches lues, des centimètres justes, et une donnée qui se valide',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // LE CATALOGUE : des identifiants uniques, des diamètres de disque, et
+      // AUCUNE cote pour les marques qui n'en publient pas.
+      const ids=ML_DISQUES.map(g=>g.id);
+      if(new Set(ids).size!==ids.length) return _echec('deux gammes portent le même identifiant');
+      for(const g of ML_DISQUES) for(const [c,mm] of g.c)
+        if(!(mm>=100&&mm<=600)) return _echec(g.id+' '+c+' : '+mm+' mm n’est pas un diamètre de disque');
+      if(ML_DISQUES.some(g=>g.m==='Technogym'||g.m==='Matrix')) return _echec('une cote est inventée pour une marque qui n’en publie pas');
+      for(const m of ['Technogym','Matrix','Panatta','Hammer Strength'])
+        if(!ML_DISQUES_A_MESURER.includes(m)) return _echec(m+' ne propose pas de mesurer son disque');
+      // LES COTES QUI ONT FAIT DÉBAT, telles que les fiches les donnent.
+      const d=s=>(mlDisqueDe(s)||{}).mm;
+      if(d('hammer-lb|45 lb')!==432) return _echec('le 45 lb Hammer Strength ne fait pas 432 mm');
+      if(d('eleiko-xf|5 kg')!==320) return _echec('le 5 kg Eleiko XF ne fait pas 320 mm');
+      if(d('eleiko-ipf|10 kg')!==325||d('gymleco-acier|10 kg')!==316||d('jordan-pu|10 kg')!==360)
+        return _echec('les 10 kg ne sont pas ceux des fiches');
+      if(d('iwf|5 kg')!==undefined) return _echec('la norme IWF invente un 5 kg à 450 mm');
+      if(mlDisqueDe('inconnu|20 kg')!==null) return _echec('une source inconnue rend un diamètre');
+      const iwf=mlDisqueDe('iwf|20 kg');
+      if(!iwf||iwf.tol!==1) return _echec('la tolérance IWF n’est pas ± 1 mm');
+      if(mlDisqueDe('rogue-dd|45 lb').tol!==null) return _echec('une tolérance non publiée est inventée');
+      const me=mlDisqueDe('mesure|Technogym|20 kg',452);
+      if(!me||me.mm!==452||!me.mesure||me.tol!==5) return _echec('un disque mesuré : '+JSON.stringify(me));
+      // LE PANNEAU : un choix complet, ou rien.
+      const ch=(m,g,c,mm)=>mlEchChoix({m,g,c,mm:mm||''});
+      if(JSON.stringify(ch('Eleiko','eleiko-ipf','10 kg'))!==JSON.stringify({mm:325,src:'eleiko-ipf|10 kg'})) return _echec('le choix Eleiko IPF 10 kg');
+      if(ch('Eleiko','eleiko-ipf','')||ch('Eleiko','','10 kg')||ch('Rogue','eleiko-ipf','10 kg')) return _echec('un choix incomplet ou mêlé passe');
+      if(ch('Matrix','mesure','20 kg','45')) return _echec('un disque de 45 mm est accepté');
+      if(!ch('Matrix','mesure','20 kg','451')||ch('Matrix','mesure','20 kg','451').src!=='mesure|Matrix|20 kg') return _echec('un disque mesuré ne passe pas');
+      if(mlEchGammes('Technogym').map(g=>g.id).join()!=='mesure') return _echec('Technogym n’offre pas de mesurer son disque');
+      if(mlEchGammes('Panatta').map(g=>g.id).join()!=='panatta-pl,mesure') return _echec('Panatta : '+mlEchGammes('Panatta').map(g=>g.id).join());
+      // L'ÉCHELLE ET LES MESURES : 450 mm sur 210 pixels de vidéo.
+      const E={p:'500,200 500,500',mm:450,src:'iwf|20 kg'};
+      if(Math.round(mlEchellePx(E,400,700))!==210) return _echec('longueur de l’échelle : '+mlEchellePx(E,400,700));
+      if(Math.abs(mlEchelleMmPx(E,400,700)-450/210)>1e-9) return _echec('millimètres par pixel');
+      if(mlEchelleMmPx({p:E.p},400,700)!==null) return _echec('des mesures sans disque choisi');
+      if(mlEchelleMmPx({...E,p:'500,200 500,240'},400,700)!==null) return _echec('une échelle de 28 pixels donne des mesures');
+      const R={s:1,ox:0,oy:0,vw:400,vh:700}, P=p=>[p[0]/1000*400,p[1]/1000*700], mmpx=450/210;
+      const M=(t,p)=>mlMesureTrace({id:'x',n:'x',t,c:'#ff0000',e:4,d:0,f:1,p:''},p.map(P),R.s,mmpx,1);
+      const tx=(t,p)=>(M(t,p)||{}).txt;
+      if(tx('ligne',[[100,100],[100,600]])!=='75,0 cm') return _echec('ligne : '+tx('ligne',[[100,100],[100,600]]));
+      if(tx('fleche',[[100,100],[100,600]])!=='75,0 cm') return _echec('flèche : '+tx('fleche',[[100,100],[100,600]]));
+      if(tx('libre',[[700,300],[700,450],[700,600]])!=='45,0 cm') return _echec('trajectoire : '+tx('libre',[[700,300],[700,450],[700,600]]));
+      if(tx('cercle',[[250,650],[300,650]])!=='Ø 8,6 cm') return _echec('cercle : '+tx('cercle',[[250,650],[300,650]]));
+      if(tx('zone',[[600,100],[800,200]])!=='17,1 × 15,0 cm') return _echec('zone : '+tx('zone',[[600,100],[800,200]]));
+      if(M('angle',[[1,1],[2,2],[3,3]])||M('point',[[1,1],[2,2]])||M('texte',[[1,1]])) return _echec('un angle, un repère ou un texte porte une longueur');
+      if(mlLongueurTexte(1234)!=='1,23 m'||mlLongueurTexte(99.4)!=='9,9 cm') return _echec('mètres et centimètres');
+      // LA DONNÉE : l'échelle et la mesure déplacée partent avec la correction ;
+      // un diamètre hors de 10 à 60 cm tombe, l'échelle reste à compléter.
+      const A={id:'l',n:'L',t:'ligne',c:'#ff0000',e:4,d:0,f:9000,p:'100,100 100,600'};
+      const v=o=>annotValide({v:1,majLe:0,leg:{},a:[{...A,mo:[30,-40]},{...A,id:'m',mo:[0,0]}],...o});
+      const d1=v({ech:{p:'500,200 500,500',mm:450,src:'iwf|20 kg',ok:1}});
+      if(JSON.stringify(d1.ech)!==JSON.stringify({p:'500,200 500,500',mm:450,src:'iwf|20 kg',ok:1})) return _echec('échelle relue : '+JSON.stringify(d1.ech));
+      if((d1.a[0].mo||[]).join()!=='30,-40'||'mo' in d1.a[1]) return _echec('mesure déplacée relue : '+JSON.stringify(d1.a.map(a=>a.mo)));
+      if(JSON.stringify(v({ech:{p:'500,200 500,500',mm:9000,src:'x',ok:1}}).ech)!==JSON.stringify({p:'500,200 500,500'})) return _echec('un diamètre absurde reste');
+      if('ech' in v({ech:{mm:450,src:'iwf|20 kg'}})||'ech' in v({ech:{p:'500,200',mm:450,src:'iwf|20 kg'}})) return _echec('une échelle sans ses deux points reste');
+      return true;
+    });
+    okA('MLX — l’échelle se pose, prend son disque et mesure ; la mesure se déplace ; le double-clic reprend les étiquettes',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
+      const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
+      const svR=window._mlVideoRect, svTps=window._mlxTempsMs, svAuto=window.mlTrajectoireAuto, svSave=window.saveUser;
+      const verifier=async()=>{
+        window._ratProfilFait=true; window.toast=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true); window.saveUser=()=>true;
+        _r28Monter([_r28Video({segments:[]})]);
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+        go('s-coach-home');
+        if(currentUser) delete currentUser.mlDisques;
+        if(await ouvrirMotionLab('a28@t.fr','v28')!==true) return 'le laboratoire ne s’ouvre pas';
+        _ml.dureeMs=20000;
+        window._mlVideoRect=()=>({s:1,ox:0,oy:0,vw:400,vh:700});
+        let t=3000; window._mlxTempsMs=()=>t;
+        const calque=document.getElementById('ml-calque'), bc=calque.getBoundingClientRect();
+        const pe=(type,x,y,btn)=>calque.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:1,
+          pointerType:'mouse',clientX:bc.left+x,clientY:bc.top+y,buttons:btn?1:0}));
+        const dbl=(x,y)=>{ pe('pointerdown',x,y,1); pe('pointerup',x,y,0); pe('pointerdown',x,y,1); pe('pointerup',x,y,0);
+          calque.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,clientX:bc.left+x,clientY:bc.top+y})); };
+        const X=v=>v/1000*400, Y=v=>v/1000*700, P=p=>[X(p[0]),Y(p[1])];
+        const G=_mlxCalqueGeo();
+        if(!G) return 'le calque n’a pas de géométrie';
+        // L'ÉCHELLE A PRIS LA PLACE DU RECTANGLE, raccourci R compris.
+        if(ML_OUTILS.some(o=>o.o==='rect')||!ML_OUTILS.some(o=>o.o==='echelle'&&o.r==='r')) return 'l’échelle n’a pas pris la place du rectangle';
+        if(!document.querySelector('#mlx-outils [data-outil="echelle"]')||document.querySelector('#mlx-outils [data-outil="rect"]')) return 'la boîte à outils montre encore le rectangle';
+        const li=_mlxCreer('ligne',[[100,100],[100,600]]);
+        if(!li) return 'la ligne ne se crée pas';
+        _ml.sel=null;
+        document.dispatchEvent(new KeyboardEvent('keydown',{key:'r',bubbles:true}));
+        if(_ml.outil!=='echelle') return 'la touche R n’arme pas l’échelle';
+        if(!/haut du disque/i.test(document.getElementById('mlx-outils').textContent)) return 'l’outil ne dit pas quoi pointer';
+        // AU CLIC PUIS AU CLIC : le bas suit la souris ; Échap renonce.
+        pe('pointerdown',X(300),Y(100),1); pe('pointerup',X(300),Y(100),0);
+        if(!_ml.echPose) return 'un toucher sans glisser ne commence pas l’échelle';
+        pe('pointermove',X(300),Y(400),0);
+        if(!_ml.annot.ech||_ml.annot.ech.p!=='300,100 300,400') return 'le bas ne suit pas la souris : '+JSON.stringify(_ml.annot.ech);
+        document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+        if(_ml.echPose||_ml.annot.ech) return 'Échap ne renonce pas à l’échelle commencée';
+        // EN GLISSANT, du haut au bas du disque.
+        pe('pointerdown',X(500),Y(200),1);
+        for(let i=1;i<=5;i++) pe('pointermove',X(500),Y(200+i*60),1);
+        pe('pointerup',X(500),Y(500),0);
+        const e0=_ml.annot.ech;
+        if(!e0||e0.p!=='500,200 500,500') return 'l’échelle glissée : '+JSON.stringify(e0);
+        if(e0.mm||mlEchelleMmPx(e0,400,700)) return 'des mesures avant que le disque soit choisi';
+        // LE DISQUE : Hammer Strength a deux gammes, aucune n'est choisie d'office.
+        mlEchMarque('Hammer Strength');
+        if(_ml.echUi.g!=='') return 'une gamme Hammer est choisie d’office';
+        mlEchGamme('hammer-lb'); mlEchCharge('45 lb');
+        if(_ml.annot.ech.mm!==432||_ml.annot.ech.src!=='hammer-lb|45 lb') return 'le 45 lb Hammer : '+JSON.stringify(_ml.annot.ech);
+        if(!/432 mm/.test(document.getElementById('mlx-outils').textContent)) return 'le panneau ne dit pas le diamètre';
+        const mmpx=432/210;
+        const pts=mlAnnotPointsA(_mlxAnnot(li.id),t).map(P);
+        const m=_mlxMesPlace(_mlxAnnot(li.id),pts,G.k,G.R,mmpx);
+        if(!m||m.txt!=='72,0 cm') return 'la mesure de la ligne : '+(m&&m.txt);
+        // DOUBLE-CLIC SUR LA MESURE : la souris l'emmène, un clic la pose — et
+        // l'éditeur ne fait pas défiler la page.
+        mlOutil('selection');
+        const B=_mlxMesBoite(G.g,m.x,m.y,m.txt,G.k), cx=B.bx+B.w/2, cy=B.by+B.h/2;
+        dbl(cx,cy);
+        if(!_ml.deplEtiq||_ml.deplEtiq.kind!=='mes'||_ml.deplEtiq.id!==li.id) return 'le double-clic ne prend pas la mesure : '+JSON.stringify(_ml.deplEtiq);
+        if(_ml.sel!==li.id||_mlxEdVu!==li.id) return 'prendre la mesure fait venir l’éditeur en vue';
+        if(!/Déplace la mesure/.test(document.getElementById('mlx-outils').textContent)) return 'rien ne dit que la mesure est en main';
+        pe('pointermove',cx+40,cy+100,0); pe('pointerdown',cx+40,cy+100,1); pe('pointerup',cx+40,cy+100,0);
+        if(_ml.deplEtiq) return 'le clic ne pose pas la mesure';
+        const mo=_mlxAnnot(li.id).mo||[];
+        if(!(Math.abs(mo[0]-100)<=3&&Math.abs(mo[1]-143)<=3)) return 'la mesure ne suit pas la souris : '+mo.join();
+        if(_mlxAnnot(li.id).eo) return 'déplacer la mesure a déplacé l’étiquette';
+        // ENREGISTRER LA MESURE : le tracé quitte l'image, la donnée reste.
+        mlOutil('echelle');
+        if(!mlEchEnregistrer()) return 'l’échelle ne s’enregistre pas';
+        if(!_ml.annot.ech.ok||_ml.outil!=='selection') return 'après l’enregistrement : '+JSON.stringify(_ml.annot.ech)+' '+_ml.outil;
+        if(!currentUser.mlDisques||currentUser.mlDisques.dernier!=='hammer-lb|45 lb') return 'le disque n’est pas retenu pour la prochaine vidéo';
+        const blancs=opt=>{
+          const cv=document.createElement('canvas'); cv.width=400; cv.height=700;
+          const g=cv.getContext('2d'); mlDessinerAnnotations(g,G.R,_ml.annot,t,opt);
+          const px=g.getImageData(Math.round(X(500))-3,Math.round(Y(260)),6,Math.round(Y(180))).data;
+          let n=0; for(let i=0;i<px.length;i+=4) if(px[i]>200&&px[i+1]>200&&px[i+2]>200) n++;
+          return n;
+        };
+        if(blancs({})>0) return 'le tracé de l’échelle reste sur la vidéo après l’enregistrement';
+        if(!(blancs({echelle:true})>20)) return 'l’outil Échelle ne remontre pas son tracé';
+        // LES CALCULS LA LISENT : la trajectoire de barre, et la correction envoyée.
+        if(!(Math.abs(_mlMpp(0)-0.432/210)<1e-6)) return 'l’analyse de barre n’utilise pas l’échelle : '+_mlMpp(0);
+        const dv=annotValide(_ml.annot);
+        if(!dv.ech||dv.ech.mm!==432||!dv.ech.ok||!(dv.a[0].mo||[]).length) return 'la correction perd l’échelle ou la mesure déplacée';
+        // LE DOUBLE-CLIC AVEC LA TRAJECTOIRE ARMÉE prend l'étiquette — il
+        // lançait un suivi.
+        let suivis=0; window.mlTrajectoireAuto=async()=>{ suivis++; return true; };
+        mlOutil('libre'); mlTrajMode(true);
+        const a=_mlxAnnot(li.id), pl=_mlxEtiqPlace(a,pts,G.k,G.R,t), bb=_mlxEtiqBoite(G.g,pl.x,pl.y,pl.lib,G.k,G.R,false);
+        dbl(bb.bx+bb.w/2,bb.by+bb.h/2);
+        if(suivis) return 'le double-clic sur une étiquette lance un suivi de trajectoire';
+        if(!_ml.deplEtiq||_ml.deplEtiq.kind!=='etiq'||_ml.deplEtiq.id!==li.id) return 'avec la trajectoire armée, le double-clic ne prend pas l’étiquette';
+        mlEtiqAnnuler();
+        // UNE TRAJECTOIRE QUI SE TRACE : son étiquette se touche là où elle se
+        // dessine, près de la tête du tracé — pas au bout qu'il n'a pas atteint.
+        mlOutil('selection');
+        const tr=_mlxCreer('libre',[[700,900],[700,700],[700,500],[700,300]],{tp:[3000,4000,5000,6000],d0:3000,f0:6500});
+        if(!tr) return 'la trajectoire suivie ne se crée pas';
+        t=4000;
+        const vue=mlTrajVue(mlAnnotPointsA(tr,t).map(P),_mlxTempsTraj(tr)||[],t).pts;
+        const pt=_mlxEtiqPlace(tr,vue,G.k,G.R,t), bt=_mlxEtiqBoite(G.g,pt.x,pt.y,pt.lib,G.k,G.R,false);
+        const h=mlEtiquetteToucher(_ml.annot,G.R,t,bt.bx+bt.w/2,bt.by+bt.h/2,G.g);
+        if(!h||h.kind!=='etiq'||h.id!==tr.id) return 'l’étiquette d’une trajectoire en cours ne se touche pas où elle se voit : '+JSON.stringify(h);
+        // UN DISQUE MESURÉ À LA MAIN se retrouve, pour la même marque et la même charge.
+        mlOutil('echelle');
+        mlEchMarque('Technogym');
+        if(_ml.echUi.g!=='mesure') return 'Technogym ne passe pas en disque à mesurer';
+        mlEchCharge('20 kg'); mlEchMm('452');
+        if(_ml.annot.ech.mm!==452||_ml.annot.ech.ok) return 'le disque mesuré : '+JSON.stringify(_ml.annot.ech);
+        if(!mlEchEnregistrer()) return 'le disque mesuré ne s’enregistre pas';
+        mlOutil('echelle'); mlEchMarque('Eleiko'); mlEchMarque('Technogym'); mlEchCharge('20 kg');
+        if(_ml.echUi.mm!=='452') return 'le diamètre mesuré n’est pas retrouvé : '+_ml.echUi.mm;
+        // EFFACER : plus aucune mesure.
+        mlEchEffacer();
+        if(_ml.annot.ech||_mlMpp(0)) return 'l’échelle effacée mesure encore';
+        return null;
+      };
+      let msg=null;
+      try{ msg=await verifier(); }
+      catch(e){ msg='exception : '+e.message; }
+      finally {
+        window._mlVideoRect=svR; window._mlxTempsMs=svTps; window.mlTrajectoireAuto=svAuto; window.saveUser=svSave;
+        try{ if(_ml){ _mlArreter(); _ml=null; } }catch(e){}
+        window._ratProfilFait=svRat; window.toast=svT; CLOUD.pushOne=svPush;
+        DB.set('users',JSON.parse(svUsers)); currentUser=sU;
+        Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]); Object.assign(_ecranOrigine,svO);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }
+      return msg?_echec(msg):true;
+    });
+
     okA('R28 — le service worker ne reconduit pas motion-lab.js d’une version à l’autre',async()=>{
       let src='';
       try{ src=await (await fetch('./sw.js',{cache:'no-store'})).text(); }catch(e){ return _echec('sw.js illisible'); }

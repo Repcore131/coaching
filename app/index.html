@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1390';
+window.RC_BUILD='1391';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -92444,7 +92444,9 @@ function enregistrerCorrectionMotion(email,videoId,motion){
 //         x (texte), ts (taille du texte), tf (fond), tc (contour),
 //         cb (angle cible), lb ([étiquettes des points]), rel (points reliés),
 //         et (nom affiché sur l'image), lg (dans la légende), h (masquée),
-//         seg (la séquence)}]}
+//         seg (la séquence), eo / mo (étiquette / mesure déplacées)}],
+//     ech:{p ("x,y x,y" : haut et bas d'un disque), mm (son diamètre),
+//          src (d'où vient la cote), ok (enregistrée)}}
 //
 // LE PRIX EST BORNÉ pour la raison de toujours — ce dossier part EN ENTIER à
 // chaque synchronisation : trente tracés, soixante-quatre points chacun, cent
@@ -92559,6 +92561,11 @@ function annotValide(doc){
       const ex=num(x.eo[0],-1000,1000), ey=num(x.eo[1],-1000,1000);
       if(ex!==null&&ey!==null&&(Math.round(ex)||Math.round(ey))) o.eo=[Math.round(ex),Math.round(ey)];
     }
+    // SA MESURE DÉPLACÉE (build 1391) : même règle que l'étiquette.
+    if(x.t!=='texte'&&Array.isArray(x.mo)&&x.mo.length===2){
+      const mx=num(x.mo[0],-1000,1000), my=num(x.mo[1],-1000,1000);
+      if(mx!==null&&my!==null&&(Math.round(mx)||Math.round(my))) o.mo=[Math.round(mx),Math.round(my)];
+    }
     if(x.et===0) o.et=0;
     if(x.lg===0) o.lg=0;
     if(x.h) o.h=1;
@@ -92569,6 +92576,19 @@ function annotValide(doc){
     return o;
   }).filter(Boolean).slice(0,ANNOT_MAX);
   let out={v:1,majLe:Math.round(num(doc.majLe,0,1e14)||0),leg,a};
+  // L'ÉCHELLE (build 1391) : le haut et le bas d'un disque, son diamètre réel
+  // en millimètres, d'où vient la cote, et `ok` une fois enregistrée. Sans
+  // ses deux points elle tombe ; un diamètre hors de 10 à 60 cm n'est pas un
+  // disque — il tombe seul, et l'échelle reste à compléter.
+  const E=doc.ech&&typeof doc.ech==='object'?doc.ech:null;
+  const ep=E?_annotPoints(E.p,2,2):null;
+  if(ep){
+    const ech={p:ep};
+    const mm=num(E.mm,100,600);
+    const src=txt(E.src,80);
+    if(mm!==null&&src){ ech.mm=Math.round(mm); ech.src=src; if(E.ok) ech.ok=1; }
+    out.ech=ech;
+  }
   // ⚠ LE PLAFOND NE DOIT PAS ÊTRE UNE SURPRISE À L'ENREGISTREMENT.
   //   AVANT LE BUILD 1390, LES IMAGES CLÉS DE TOUS LES TRACÉS TOMBAIENT D'UN
   //   COUP dès le premier octet de trop : un angle de plus, et tous les suivis

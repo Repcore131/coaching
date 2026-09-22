@@ -61,7 +61,8 @@
  *   original:boolean, comparaison:boolean, guide:{m:ModeleAnnot, i:number}|null, repereAnat:number,
  *   relier:boolean, phrase:string, tailleTexte:string, onglet:string, jetonVseq:number,
  *   enLecture:boolean, style:string, deplEtiq:DeplEtiq|null,
- *   trajAuto:boolean, trajStop:boolean, trajZone:{c:number[], r:number}|null
+ *   trajAuto:boolean, trajStop:boolean, trajZone:{c:number[], r:number}|null,
+ *   echUi:{m:string, g:string, c:string, mm:string}, echPose:{avant:string, a:number[]}|null
  * }} EtatMl
  */
 /** @typedef {'lecture'|'graine'|'analyse'|'replacer'|'pose'|'etalon'|'action'|'repere'|'repsuivi'|'annotsuivi'|'trajsuivi'} ModeMl */
@@ -2396,19 +2397,30 @@ function mlPhrases(ctx){
 // calque, et c'est tout.
 
 /** @typedef {'ligne'|'fleche'|'libre'|'courbe'|'cercle'|'rect'|'angle'|'point'|'texte'|'zone'} TypeAnnot */
-/** @typedef {'selection'|'gomme'|TypeAnnot} OutilMl */
+/** @typedef {'selection'|'gomme'|'echelle'|TypeAnnot} OutilMl */
 /**
  * Un tracé. Les points sont normés sur l'image (0 à 1000 en largeur ET en
  * hauteur), en texte « x,y x,y » — le format des traits de la correction.
+ * `mo` : le décalage de sa MESURE déplacée au double-clic, comme `eo` pour
+ * son étiquette.
  * @typedef {{id:string, n:string, t:TypeAnnot, c:string, e:number, d:number, f:number, p:string,
  *   k?:[number,string][], x?:string, ts?:string, tf?:number, tc?:number, cb?:number,
  *   lb?:string[], rel?:number, et?:number, lg?:number, h?:number, seg?:string, st?:string, eo?:number[],
- *   tp?:string}} Annot
+ *   tp?:string, mo?:number[]}} Annot
  */
 /**
- * Une étiquette ou la légende qu'on déplace : ce qui bouge (`kind` 'etiq' ou
- * 'leg'), le tracé s'il s'agit d'une étiquette, le document d'avant (pour
- * Échap et l'historique), et l'écart entre le doigt et le coin saisi.
+ * L'ÉCHELLE DE LA VIDÉO (build 1391) : le haut et le bas d'un disque (`p`,
+ * deux points normés), son diamètre réel en millimètres (`mm`), d'où il vient
+ * (`src` : « id de gamme|charge », ou « mesure|marque|charge »), et `ok`
+ * quand le coach l'a enregistrée — le tracé quitte alors l'image, la donnée
+ * reste pour les calculs.
+ * @typedef {{p:string, mm?:number, src?:string, ok?:number}} Echelle
+ */
+/**
+ * Une étiquette, une mesure ou la légende qu'on déplace : ce qui bouge
+ * (`kind` 'etiq', 'mes' ou 'leg'), le tracé s'il s'agit d'une étiquette ou
+ * d'une mesure, le document d'avant (pour Échap et l'historique), et l'écart
+ * entre le doigt et le coin saisi.
  * @typedef {{kind:string, id:string, avant:string, grab:number[]}} DeplEtiq
  */
 /**
@@ -2418,7 +2430,7 @@ function mlPhrases(ctx){
  * @typedef {{t:TypeAnnot, pts:number[][], lb?:string[], clic?:boolean, d0?:number}} TraceEnCours
  */
 /** @typedef {{on:number, titre:string, pos:string, taille:string, fond:string, op:number, x?:number, y?:number}} Legende */
-/** @typedef {{v:1, majLe:number, leg:Legende, a:Annot[]}} DocAnnot */
+/** @typedef {{v:1, majLe:number, leg:Legende, a:Annot[], ech?:Echelle}} DocAnnot */
 /** @typedef {{t:TypeAnnot, c:string, n:string}} EtapeModele */
 /** @typedef {{nom:string, ico:string, titre:string, etapes:EtapeModele[], comparer?:boolean}} ModeleAnnot */
 /**
@@ -2437,15 +2449,87 @@ const ML_PALETTE=Object.freeze([
   {c:'#a855f7',nom:'Violet',sens:''},
   {c:'#ffffff',nom:'Blanc',sens:'Repère neutre'}]);
 // LES OUTILS, dans l'ordre de la boîte. `r` est le raccourci clavier.
+// ⚠ L'ÉCHELLE A PRIS LA PLACE DU RECTANGLE (build 1391, Kevin : « on remplace
+//   le rectangle par une fonction échelle »). Le TYPE 'rect' reste lisible et
+//   dessiné : des corrections déjà envoyées en portent, et l'athlète doit les
+//   revoir telles quelles. Seul l'outil qui en pose de nouveaux disparaît.
 /** @type {ReadonlyArray<{o:OutilMl, lib:string, r:string}>} */
 const ML_OUTILS=Object.freeze([
   {o:'selection',lib:'Sélection',r:'v'},{o:'ligne',lib:'Ligne',r:'l'},{o:'fleche',lib:'Flèche',r:'f'},
   {o:'libre',lib:'Trajectoire',r:'t'},{o:'courbe',lib:'Courbe',r:'u'},{o:'cercle',lib:'Cercle',r:'c'},
-  {o:'rect',lib:'Rectangle',r:'r'},{o:'angle',lib:'Angle',r:'a'},{o:'point',lib:'Point',r:'p'},
+  {o:'echelle',lib:'Échelle',r:'r'},{o:'angle',lib:'Angle',r:'a'},{o:'point',lib:'Point',r:'p'},
   {o:'texte',lib:'Texte',r:'x'},{o:'zone',lib:'Zone',r:'z'},{o:'gomme',lib:'Gomme',r:'e'}]);
 /** @type {Object<string,string>} */
 const ML_TYPE_LIB=Object.freeze({ligne:'Ligne',fleche:'Flèche',libre:'Trajectoire',courbe:'Courbe',
   cercle:'Cercle',rect:'Rectangle',angle:'Angle',point:'Repère',texte:'Texte',zone:'Zone'});
+// ══ LES DISQUES DE L'ÉCHELLE (build 1391) ══════════════════════════════════
+//
+// Kevin, 22/09/2026 : « on part sur les disques, il me faudrait les
+// différentes marques et la taille selon la charge ». Le coach pose le haut et
+// le bas d'un disque sur l'image, choisit ce disque ici, et son diamètre donne
+// les centimètres de tout le reste.
+//
+// ⚠ CHAQUE COTE VIENT D'UNE FICHE LUE, relevée le 22/09/2026. Rien n'est
+//   déduit d'une autre marque ni d'une autre charge : « 450 mm » n'est garanti
+//   que par la norme IWF des bumpers à partir de 10 kg (± 1 mm), et par la
+//   norme IPF pour les 20 et 25 kg en acier. Ailleurs la même charge change de
+//   taille — le 10 kg va de 316 à 450 mm selon la marque, et le 45 lb Hammer
+//   Strength fait 432 mm, pas 450. Le 5 kg Eleiko XF fait 320 mm : un résumé
+//   de recherche le donnait à 450, la fiche Eleiko dit 320.
+// ⚠ PANATTA (hors Powerlifting Pro), TECHNOGYM, MATRIX ET HAMMER STRENGTH EN
+//   KG NE PUBLIENT PAS LEURS DIAMÈTRES. Aucun chiffre n'est posé pour eux : le
+//   coach mesure une fois au mètre ruban, et RepCore s'en souvient. Un
+//   diamètre inventé fausserait en silence chaque centimètre de la vidéo.
+//
+// `tol` : la tolérance de fabrication PUBLIÉE, en mm — absente quand la fiche
+// n'en dit rien. On ne l'invente pas non plus.
+/** @typedef {{id:string, m:string, g:string, src:string, tol?:number, c:ReadonlyArray<[string,number]>}} GammeDisque */
+/** @type {ReadonlyArray<GammeDisque>} */
+const ML_DISQUES=Object.freeze([
+  {id:'iwf',m:'Bumper standard',g:'Norme IWF, toute marque',tol:1,
+    src:'Règles techniques IWF : 450 mm ± 1 mm dès 10 kg',
+    c:[['25 kg',450],['20 kg',450],['15 kg',450],['10 kg',450]]},
+  {id:'eleiko-iwf',m:'Eleiko',g:'IWF compétition',tol:1,src:'Eleiko, disque de compétition IWF',
+    c:[['25 kg',450],['20 kg',450],['15 kg',450],['10 kg',450]]},
+  {id:'eleiko-sport',m:'Eleiko',g:'Sport Training',src:'Eleiko, fiches 3062910',
+    c:[['25 kg',450],['20 kg',450],['15 kg',450],['10 kg',450]]},
+  {id:'eleiko-xf',m:'Eleiko',g:'XF Bumper',src:'Eleiko, fiches 3085125',
+    c:[['20 kg',450],['15 kg',450],['10 kg',450],['5 kg',320]]},
+  {id:'eleiko-ipf',m:'Eleiko',g:'IPF force athlétique (acier)',src:'Eleiko, disque de compétition IPF',
+    c:[['25 kg',450],['20 kg',450],['15 kg',400],['10 kg',325],['5 kg',228],['2,5 kg',190],['1,25 kg',160]]},
+  {id:'rogue-hg',m:'Rogue',g:'HG 2.0 Bumper',src:'Rogue : « chaque bumper fait 450 mm, norme IWF »',
+    c:[['25 kg',450],['20 kg',450],['15 kg',450],['10 kg',450],['5 kg',450]]},
+  {id:'rogue-cal',m:'Rogue',g:'Acier calibré (kg)',src:'Garage Gym Reviews — Rogue indique « variable »',
+    c:[['25 kg',450],['20 kg',450],['15 kg',400],['10 kg',325]]},
+  {id:'rogue-dd',m:'Rogue',g:'Deep Dish, fonte (lb)',src:'Rogue, fiche Deep Dish',
+    c:[['100 lb',450],['45 lb',450],['35 lb',360],['25 lb',276],['10 lb',229],['5 lb',190]]},
+  {id:'hammer-lb',m:'Hammer Strength',g:'Rond uréthane ou caoutchouc (lb)',src:'Life Fitness, fiche Hammer Strength',
+    c:[['45 lb',432],['35 lb',379],['25 lb',320],['10 lb',255],['5 lb',184],['2,5 lb',161]]},
+  {id:'gymleco-sans',m:'Gymleco',g:'Caoutchouc sans poignées',src:'Gymleco, fiche produit',
+    c:[['25 kg',450],['20 kg',450],['15 kg',450],['10 kg',450],['5 kg',450]]},
+  {id:'gymleco-poignees',m:'Gymleco',g:'Caoutchouc à poignées',src:'Gymleco, fiche produit',
+    c:[['25 kg',450],['20 kg',450],['15 kg',450],['10 kg',325],['5 kg',265],['2,5 kg',200],['1,25 kg',157]]},
+  {id:'gymleco-pu',m:'Gymleco',g:'Uréthane à poignées',src:'Gymleco, fiche produit',
+    c:[['20 kg',450],['15 kg',450],['10 kg',325],['5 kg',265],['2,5 kg',200],['1,25 kg',157]]},
+  {id:'gymleco-acier',m:'Gymleco',g:'Acier calibré à poignées',src:'Gymleco, fiche produit',
+    c:[['25 kg',450],['20 kg',450],['15 kg',378],['10 kg',316],['5 kg',240],['2,5 kg',208],['1,25 kg',159]]},
+  {id:'jordan-pu',m:'Jordan',g:'Uréthane',src:'Jordan Fitness, fiche produit',
+    c:[['25 kg',450],['20 kg',450],['15 kg',400],['10 kg',360],['5 kg',280],['2,5 kg',235],['1,25 kg',190]]},
+  {id:'panatta-pl',m:'Panatta',g:'Powerlifting Pro',src:'Panatta : 20 et 25 kg à 450 mm, norme IPF',
+    c:[['25 kg',450],['20 kg',450]]}
+]);
+// LES MARQUES SANS COTE PUBLIÉE : le diamètre se mesure, et se retient.
+const ML_DISQUES_A_MESURER=Object.freeze(['Panatta','Technogym','Matrix','Hammer Strength','Life Fitness','Autre marque']);
+// Les charges qu'on propose pour un disque mesuré.
+const ML_DISQUES_CHARGES=Object.freeze(['25 kg','20 kg','15 kg','10 kg','5 kg','2,5 kg','1,25 kg','45 lb','35 lb','25 lb','10 lb']);
+// L'erreur d'un diamètre pris au mètre ruban, en mm — celle que la morpho
+// retient déjà pour un tour de membre (MORPHO_ERREUR_CM, 0,5 cm).
+const ML_DISQUE_MESURE_TOL=5;
+// Pointer un bord à la souris ou au doigt : un pixel d'erreur à chaque bout.
+const ML_ECHELLE_ERR_PX=2;
+// En dessous, deux points trop proches ne donnent pas d'échelle : un pixel
+// d'erreur y pèserait plus de 5 %.
+const ML_ECHELLE_MIN_PX=40;
 // LES REPÈRES ANATOMIQUES de l'outil Point : chaque toucher pose le suivant.
 const ML_REPERES_ANAT=Object.freeze(['Tête','Épaule','Coude','Poignet','Hanche','Genou','Cheville']);
 // LES PHRASES DE L'OUTIL TEXTE, en capitales comme sur l'image.
@@ -2688,6 +2772,151 @@ function mlAnnotLibelle(a,sMs,vw,vh){
   return a.n+' : '+an.val+'°'+(an.cible===null?'':' (cible '+an.cible+'°)');
 }
 
+// ── L'ÉCHELLE ET LES MESURES (build 1391) ──────────────────────────────────
+/**
+ * PURE. Le disque que désigne une source d'échelle : son diamètre, son nom
+ * lisible, sa tolérance publiée, et d'où vient la cote. Rend null pour une
+ * source inconnue — jamais un diamètre par défaut.
+ * « id|charge » vient du catalogue ; « mesure|marque|charge » d'un disque
+ * mesuré par le coach, dont le diamètre est celui de l'échelle elle-même.
+ * @param {string|undefined} src
+ * @param {number} [mmMesure]
+ * @returns {{mm:number, lib:string, tol:number|null, source:string, mesure:boolean}|null}
+ */
+function mlDisqueDe(src,mmMesure){
+  const s=String(src||'').split('|');
+  if(s[0]==='mesure'){
+    const mm=Number(mmMesure);
+    if(!(mm>0)||!s[1]) return null;
+    return {mm:Math.round(mm),lib:s[1]+(s[2]?' '+s[2]:''),tol:ML_DISQUE_MESURE_TOL,
+      source:'mesuré au mètre ruban',mesure:true};
+  }
+  const g=ML_DISQUES.find(x=>x.id===s[0]);
+  const c=g&&g.c.find(x=>x[0]===s[1]);
+  if(!g||!c) return null;
+  const nom=g.m==='Bumper standard'?'Bumper IWF':g.m+' '+g.g;
+  return {mm:c[1],lib:nom+' '+c[0],tol:typeof g.tol==='number'?g.tol:null,source:g.src,mesure:false};
+}
+/**
+ * PURE. La longueur de l'échelle en pixels de la VIDÉO — pas de l'écran : un
+ * même disque vaut autant de pixels sur un téléphone que sur un poste. Les
+ * points sont normés séparément en largeur et en hauteur, d'où vw et vh.
+ * @param {Echelle|undefined} ech
+ * @param {number} vw @param {number} vh
+ * @returns {number}
+ */
+function mlEchellePx(ech,vw,vh){
+  if(!ech||typeof ech.p!=='string') return 0;
+  const q=mlDecoderTrait(ech.p);
+  if(q.length!==2||!(vw>0)||!(vh>0)) return 0;
+  return Math.hypot((q[1][0]-q[0][0])/1000*vw,(q[1][1]-q[0][1])/1000*vh);
+}
+/**
+ * PURE. Les millimètres que vaut un pixel de la vidéo — null tant que
+ * l'échelle n'a pas son disque, ou qu'elle est trop courte à l'image pour
+ * qu'un pixel d'erreur y reste négligeable.
+ * @param {Echelle|undefined} ech
+ * @param {number} vw @param {number} vh
+ * @returns {number|null}
+ */
+function mlEchelleMmPx(ech,vw,vh){
+  if(!ech||!(Number(ech.mm)>0)) return null;
+  const px=mlEchellePx(ech,vw,vh);
+  return px>=ML_ECHELLE_MIN_PX?Number(ech.mm)/px:null;
+}
+/**
+ * PURE. La précision relative d'une échelle : le pointage (un pixel à chaque
+ * bout) plus la tolérance du disque quand elle est connue.
+ * @param {number} px  longueur de l'échelle, en pixels de la vidéo
+ * @param {number} mm
+ * @param {number|null} tol
+ * @returns {number}  en fraction (0,012 = 1,2 %)
+ */
+function mlEchellePrecision(px,mm,tol){
+  if(!(px>0)||!(mm>0)) return 1;
+  return ML_ECHELLE_ERR_PX/px+(tol?tol/mm:0);
+}
+/**
+ * PURE. « 12,4 cm », ou « 1,24 m » à partir d'un mètre.
+ * @param {number} mm
+ * @returns {string}
+ */
+function mlLongueurTexte(mm){
+  if(!isFinite(mm)||mm<0) return '';
+  return mm>=1000?mlNombre(mm/1000,2)+' m':mlNombre(mm/10,1)+' cm';
+}
+/**
+ * PURE. La longueur d'une ligne brisée.
+ * @param {number[][]} pts
+ * @returns {number}
+ */
+function _mlxLongueur(pts){
+  let l=0;
+  for(let i=1;i<pts.length;i++) l+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+  return l;
+}
+/**
+ * PURE. Ce que mesure un tracé, et où l'écrire. Les points sont ceux de
+ * l'écran ; `s` ramène l'écran à la vidéo (R.s), `mmpx` la vidéo au monde.
+ * Rend null pour un tracé qui ne se mesure pas : un angle dit déjà ses
+ * degrés, un texte et un repère n'ont pas de longueur.
+ *   ligne, flèche → sa longueur ; trajectoire, courbe → la distance
+ *   parcourue ; cercle → son diamètre ; zone, rectangle → largeur × hauteur.
+ * Le point rendu est le CENTRE du texte, avant le décalage `mo`.
+ * @param {Annot} a
+ * @param {number[][]} pts
+ * @param {number} s
+ * @param {number} mmpx
+ * @param {number} k
+ * @returns {{x:number, y:number, txt:string}|null}
+ */
+function mlMesureTrace(a,pts,s,mmpx,k){
+  if(!(mmpx>0)||!(s>0)||pts.length<2) return null;
+  const mm=(/** @type {number} */ l)=>l/s*mmpx;
+  const ecart=16*k;
+  /** Le milieu d'un segment, poussé du côté du haut de l'image.
+   * @param {number[]} A @param {number[]} B @returns {number[]} */
+  const aCote=(A,B)=>{
+    const dx=B[0]-A[0], dy=B[1]-A[1], L=Math.hypot(dx,dy)||1;
+    let nx=-dy/L, ny=dx/L;
+    if(ny>0||(ny===0&&nx>0)){ nx=-nx; ny=-ny; }
+    return [(A[0]+B[0])/2+nx*ecart,(A[1]+B[1])/2+ny*ecart];
+  };
+  switch(a.t){
+    case 'ligne': case 'fleche':{
+      const [x,y]=aCote(pts[0],pts[1]);
+      return {x,y,txt:mlLongueurTexte(mm(Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1])))};
+    }
+    case 'libre': case 'courbe':{
+      const l=a.t==='courbe'?mlCatmull(pts,12):pts;
+      const tot=_mlxLongueur(l);
+      if(!(tot>0)) return null;
+      // Au milieu du CHEMIN, pas au point du milieu : une trajectoire dense
+      // au départ mettrait sinon sa mesure près de son début.
+      let acc=0, i=1;
+      for(;i<l.length;i++){
+        const d=Math.hypot(l[i][0]-l[i-1][0],l[i][1]-l[i-1][1]);
+        if(acc+d>=tot/2) break;
+        acc+=d;
+      }
+      const A=l[Math.min(i,l.length-1)-1], B=l[Math.min(i,l.length-1)];
+      const [x,y]=aCote(A,B);
+      return {x,y,txt:mlLongueurTexte(mm(tot))};
+    }
+    case 'cercle':{
+      const r=Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]);
+      return {x:pts[0][0],y:pts[0][1],txt:'Ø '+mlLongueurTexte(mm(2*r))};
+    }
+    case 'rect': case 'zone':{
+      const w=mm(Math.abs(pts[1][0]-pts[0][0])), h=mm(Math.abs(pts[1][1]-pts[0][1]));
+      const txt=w<1000&&h<1000?mlNombre(w/10,1)+' × '+mlNombre(h/10,1)+' cm'
+        :mlLongueurTexte(w)+' × '+mlLongueurTexte(h);
+      return {x:(pts[0][0]+pts[1][0])/2,y:Math.min(pts[0][1],pts[1][1])-ecart,txt};
+    }
+  }
+  return null;
+}
+
 // ── LE DESSIN ──────────────────────────────────────────────────────────────
 /**
  * Tous les tracés visibles à `sMs`, puis la légende. PARTAGÉ par l'éditeur, le
@@ -2700,7 +2929,8 @@ function mlAnnotLibelle(a,sMs,vw,vh){
  * @param {RectImage} R
  * @param {DocAnnot} doc
  * @param {number} sMs
- * @param {{sel?:string|null, poignees?:boolean, comparaison?:boolean, apercu?:Annot|null}} [o]
+ * @param {{sel?:string|null, poignees?:boolean, comparaison?:boolean, apercu?:Annot|null, echelle?:boolean}} [o]
+ *   `echelle` : montrer le tracé de l'échelle — l'éditeur seul le demande.
  */
 function mlDessinerAnnotations(g,R,doc,sMs,o){
   const opt=o||{};
@@ -2709,6 +2939,11 @@ function mlDessinerAnnotations(g,R,doc,sMs,o){
   const P=p=>[R.ox+p[0]/1000*R.vw*R.s,R.oy+p[1]/1000*R.vh*R.s];
   const liste=(doc&&Array.isArray(doc.a)?doc.a:[]).slice();
   if(opt.apercu) liste.push(opt.apercu);
+  // LES MESURES S'ÉCRIVENT APRÈS TOUS LES TRACÉS : un trait posé ensuite ne
+  // doit pas barrer le chiffre d'un autre.
+  const mmpx=mlEchelleMmPx(doc&&doc.ech,R.vw,R.vh);
+  /** @type {{x:number, y:number, txt:string}[]} */
+  const mesures=[];
   g.save();
   for(const a of liste){
     const estApercu=!!opt.apercu&&a===opt.apercu;
@@ -2718,12 +2953,130 @@ function mlDessinerAnnotations(g,R,doc,sMs,o){
     // UNE TRAJECTOIRE SUIVIE SE TRACE AVEC LE MOUVEMENT : on n'en dessine que
     // la part déjà parcourue, et un point en tête. Les poignées, elles, restent
     // sur le tracé entier — on édite toute la trajectoire, pas son début.
-    const tp=estApercu?null:_mlxTempsTraj(a);
-    const vue=tp?mlTrajVue(pts,tp,sMs):{pts,enCours:false};
+    const vue=_mlxVue(a,pts,sMs,estApercu);
     _mlxDessinerUne(g,a,vue.pts,k,R,sMs,!!opt.comparaison,vue.enCours);
     if(opt.sel===a.id&&opt.poignees) _mlxPoignees(g,pts,a.c,k);
+    if(mmpx){ const m=_mlxMesPlace(a,vue.pts,k,R,mmpx); if(m) mesures.push(m); }
   }
+  for(const m of mesures) _mlxMesure(g,m.x,m.y,m.txt,k);
+  if(opt.echelle&&doc&&doc.ech) _mlxDessinerEchelle(g,R,doc.ech,k);
   if(doc&&doc.leg&&doc.leg.on) _mlxLegende(g,R,doc,sMs,k);
+  g.restore();
+}
+/**
+ * Les points d'un tracé TELS QU'ILS SONT DESSINÉS à `sMs` : une trajectoire
+ * suivie n'en montre que la part parcourue. Le dessin, le toucher et le
+ * déplacement de son étiquette lisent tous cette fonction.
+ * ⚠ AVANT LE BUILD 1391, LE TOUCHER LISAIT LA TRAJECTOIRE ENTIÈRE : pendant
+ *   qu'elle se traçait, son étiquette se dessinait près de la tête du tracé
+ *   et se cherchait à son bout, cent pixels plus loin — le double-clic sur
+ *   l'étiquette qu'on voyait ne la prenait pas.
+ * @param {Annot} a
+ * @param {number[][]} pts  les points entiers, en pixels d'écran
+ * @param {number} sMs
+ * @param {boolean} [apercu]
+ * @returns {{pts:number[][], enCours:boolean}}
+ */
+function _mlxVue(a,pts,sMs,apercu){
+  const tp=apercu?null:_mlxTempsTraj(a);
+  return tp?mlTrajVue(pts,tp,sMs):{pts,enCours:false};
+}
+/**
+ * La mesure d'un tracé, à sa place : celle de mlMesureTrace, décalée de `mo`
+ * quand le coach l'a déplacée, et gardée dans l'image.
+ * @param {Annot} a
+ * @param {number[][]} pts  les points dessinés, en pixels d'écran
+ * @param {number} k
+ * @param {RectImage} R
+ * @param {number} mmpx
+ * @returns {{x:number, y:number, txt:string}|null}
+ */
+function _mlxMesPlace(a,pts,k,R,mmpx){
+  const m=mlMesureTrace(a,pts,R.s,mmpx,k);
+  if(!m||!m.txt) return null;
+  const mo=Array.isArray(a.mo)&&a.mo.length===2?a.mo:[0,0];
+  const x=m.x+mo[0]/1000*R.vw*R.s, y=m.y+mo[1]/1000*R.vh*R.s;
+  const marge=10*k;
+  return {x:Math.max(R.ox+marge,Math.min(R.ox+R.vw*R.s-marge,x)),
+    y:Math.max(R.oy+marge,Math.min(R.oy+R.vh*R.s-marge,y)),txt:m.txt};
+}
+/** La taille du texte d'une mesure. @param {number} k @returns {number} */
+function _mlxMesTaille(k){ return Math.round(Math.max(10,13*k)); }
+/**
+ * La boîte d'une mesure — pour le doigt, qui la saisit au double-clic.
+ * @param {CanvasRenderingContext2D} g
+ * @param {number} x @param {number} y  le centre du texte
+ * @param {string} txt
+ * @param {number} k
+ * @returns {{bx:number, by:number, w:number, h:number}}
+ */
+function _mlxMesBoite(g,x,y,txt,k){
+  const fs=_mlxMesTaille(k);
+  g.save(); g.font='800 '+fs+'px Montserrat, sans-serif';
+  const w=g.measureText(txt).width; g.restore();
+  return {bx:x-w/2-4*k,by:y-fs*0.7,w:w+8*k,h:fs*1.4};
+}
+/**
+ * Une mesure : un nombre BLANC, sans cadre (Kevin, 22/09/2026 : « mesure en
+ * blanc, pas de carré »). Un contour noir le garde lisible sur un mur blanc.
+ * @param {CanvasRenderingContext2D} g
+ * @param {number} x @param {number} y  le centre du texte
+ * @param {string} txt
+ * @param {number} k
+ */
+function _mlxMesure(g,x,y,txt,k){
+  const fs=_mlxMesTaille(k);
+  g.save();
+  g.font='800 '+fs+'px Montserrat, sans-serif';
+  g.textAlign='center'; g.textBaseline='middle'; g.lineJoin='round'; g.setLineDash([]);
+  g.lineWidth=Math.max(3,3.6*k); g.strokeStyle='rgba(0,0,0,.85)';
+  g.strokeText(txt,x,y);
+  g.fillStyle='#ffffff'; g.fillText(txt,x,y);
+  g.restore();
+}
+/**
+ * Le tracé de l'échelle : un trait blanc en tirets entre deux butées, comme
+ * un pied à coulisse, et ce qu'il vaut. L'éditeur seul le montre — et plus du
+ * tout une fois l'échelle enregistrée, sauf quand l'outil Échelle est armé.
+ * @param {CanvasRenderingContext2D} g
+ * @param {RectImage} R
+ * @param {Echelle} ech
+ * @param {number} k
+ */
+function _mlxDessinerEchelle(g,R,ech,k){
+  const q=mlDecoderTrait(ech.p);
+  if(q.length!==2) return;
+  const A=[R.ox+q[0][0]/1000*R.vw*R.s,R.oy+q[0][1]/1000*R.vh*R.s];
+  const B=[R.ox+q[1][0]/1000*R.vw*R.s,R.oy+q[1][1]/1000*R.vh*R.s];
+  const dx=B[0]-A[0], dy=B[1]-A[1], L=Math.hypot(dx,dy);
+  const nx=L?-dy/L:1, ny=L?dx/L:0, b=9*k;
+  g.save();
+  g.lineCap='round';
+  /** @param {()=>void} tracer @param {number[]} tir */
+  const trait=(tracer,tir)=>{
+    g.setLineDash(tir); g.strokeStyle='rgba(0,0,0,.6)'; g.lineWidth=Math.max(3,4*k); g.beginPath(); tracer(); g.stroke();
+    g.strokeStyle='#ffffff'; g.lineWidth=Math.max(1.5,2*k); g.beginPath(); tracer(); g.stroke();
+  };
+  if(L>1) trait(()=>{ g.moveTo(A[0],A[1]); g.lineTo(B[0],B[1]); },[7*k,5*k]);
+  for(const E of L>1?[A,B]:[A]) trait(()=>{ g.moveTo(E[0]-nx*b,E[1]-ny*b); g.lineTo(E[0]+nx*b,E[1]+ny*b); },[]);
+  if(L>1){
+    const txt=Number(ech.mm)>0?'Ø '+mlLongueurTexte(Number(ech.mm)):'Choisis le disque';
+    // À CÔTÉ DU TRAIT, du côté de la main gauche du trait : sur le trait, le
+    // texte cacherait le bord qu'on vise.
+    // Et DANS L'IMAGE : près du bord droit, il passe de l'autre côté du trait.
+    let sx=nx<0||(nx===0&&ny<0)?-1:1;
+    const fs=_mlxMesTaille(k);
+    g.font='800 '+fs+'px Montserrat, sans-serif';
+    const w=g.measureText(txt).width, marge=6*k;
+    /** @param {number} s @returns {number[]} */
+    const place=s=>[(A[0]+B[0])/2+s*nx*(w/2+14*k),(A[1]+B[1])/2+s*ny*(fs+6*k)];
+    /** @param {number[]} c @returns {boolean} */
+    const dedans=c=>c[0]-w/2>=R.ox+marge&&c[0]+w/2<=R.ox+R.vw*R.s-marge&&c[1]-fs/2>=R.oy+marge&&c[1]+fs/2<=R.oy+R.vh*R.s-marge;
+    if(!dedans(place(sx))&&dedans(place(-sx))) sx=-sx;
+    const [cx,cy]=place(sx);
+    _mlxMesure(g,Math.max(R.ox+w/2+marge,Math.min(R.ox+R.vw*R.s-w/2-marge,cx)),
+      Math.max(R.oy+fs/2+marge,Math.min(R.oy+R.vh*R.s-fs/2-marge,cy)),txt,k);
+  }
   g.restore();
 }
 /**
@@ -3144,9 +3497,16 @@ function _mlxLegendeMesure(g,R,doc,sMs,k){
   const libs=lignes.map(a=>mlAnnotLibelle(a,sMs,R.vw,R.vh));
   for(const t of libs) w=Math.max(w,g.measureText(t).width+fs*1.6);
   if(l.length>lignes.length) w=Math.max(w,g.measureText('+'+(l.length-lignes.length)+' autres').width);
+  // L'ÉCHELLE DIT D'OÙ VIENNENT LES CENTIMÈTRES : le disque, et sa cote. Un
+  // chiffre sans sa source ne se discute pas — celui-ci, l'athlète peut le
+  // vérifier sur le disque qu'il a chargé.
+  const ech=mlEchelleMmPx(doc.ech,R.vw,R.vh)&&doc.ech?doc.ech:null;
+  const d=ech?mlDisqueDe(ech.src,ech.mm):null;
+  const echTxt=!ech?'':'Échelle : '+(d?d.lib+' · ':'')+'Ø '+Math.round(Number(ech.mm))+' mm';
+  if(echTxt) w=Math.max(w,g.measureText(echTxt).width);
   g.restore();
   w=Math.ceil(w)+pad*2;
-  const h=pad*2+ft*1.5+lignes.length*lh+(l.length>lignes.length?lh:0);
+  const h=pad*2+ft*1.5+lignes.length*lh+(l.length>lignes.length?lh:0)+(echTxt?lh:0);
   const marge=Math.round(10*k);
   let x=L.pos==='hd'||L.pos==='bd'?R.ox+R.vw*R.s-w-marge:R.ox+marge;
   let y=L.pos==='bg'||L.pos==='bd'?R.oy+R.vh*R.s-h-marge:R.oy+marge;
@@ -3156,7 +3516,7 @@ function _mlxLegendeMesure(g,R,doc,sMs,k){
     x=Math.max(R.ox+marge,Math.min(R.ox+L.x/1000*R.vw*R.s,R.ox+R.vw*R.s-w-marge));
     y=Math.max(R.oy+marge,Math.min(R.oy+L.y/1000*R.vh*R.s,R.oy+R.vh*R.s-h-marge));
   }
-  return {l,L,fs,ft,pad,lh,lignes,libs,w,h,x,y};
+  return {l,L,fs,ft,pad,lh,lignes,libs,w,h,x,y,echTxt};
 }
 /**
  * @param {CanvasRenderingContext2D} g
@@ -3166,7 +3526,7 @@ function _mlxLegendeMesure(g,R,doc,sMs,k){
  * @param {number} k
  */
 function _mlxLegende(g,R,doc,sMs,k){
-  const {l,L,fs,ft,pad,lh,lignes,libs,w,h,x,y}=_mlxLegendeMesure(g,R,doc,sMs,k);
+  const {l,L,fs,ft,pad,lh,lignes,libs,w,h,x,y,echTxt}=_mlxLegendeMesure(g,R,doc,sMs,k);
   g.save();
   const clair=L.fond==='clair';
   if(L.fond!=='aucun'){
@@ -3194,6 +3554,10 @@ function _mlxLegende(g,R,doc,sMs,k){
   if(l.length>lignes.length){
     g.fillStyle=clair?'#555555':'#bbbbbb';
     g.fillText('+'+(l.length-lignes.length)+' autres',x+pad,y+pad+ft*1.5+lh*lignes.length+lh/2);
+  }
+  if(echTxt){
+    g.fillStyle=clair?'#555555':'#bbbbbb';
+    g.fillText(echTxt,x+pad,y+pad+ft*1.5+lh*(lignes.length+(l.length>lignes.length?1:0))+lh/2);
   }
   g.restore();
 }
@@ -3284,9 +3648,19 @@ function mlEtiquetteToucher(doc,R,sMs,x,y,g,comparaison){
     const b=_mlxLegendeMesure(g,R,doc,sMs,k);
     if(x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h) return {kind:'leg',id:''};
   }
-  for(const a of (doc.a||[]).slice().reverse()){
+  const l=(doc.a||[]).slice().reverse();
+  // LES MESURES D'ABORD : elles se dessinent par-dessus les étiquettes.
+  const mmpx=mlEchelleMmPx(doc.ech,R.vw,R.vh);
+  if(mmpx) for(const a of l){
     if(!mlAnnotVisible(a,sMs,comparaison)) continue;
-    const pl=_mlxEtiqPlace(a,mlAnnotPointsA(a,sMs).map(P),k,R,sMs);
+    const m=_mlxMesPlace(a,_mlxVue(a,mlAnnotPointsA(a,sMs).map(P),sMs).pts,k,R,mmpx);
+    if(!m) continue;
+    const b=_mlxMesBoite(g,m.x,m.y,m.txt,k);
+    if(x>=b.bx-3&&x<=b.bx+b.w+3&&y>=b.by-3&&y<=b.by+b.h+3) return {kind:'mes',id:a.id};
+  }
+  for(const a of l){
+    if(!mlAnnotVisible(a,sMs,comparaison)) continue;
+    const pl=_mlxEtiqPlace(a,_mlxVue(a,mlAnnotPointsA(a,sMs).map(P),sMs).pts,k,R,sMs);
     if(!pl) continue;
     const b=_mlxEtiqBoite(g,pl.x,pl.y,pl.lib,k,R,false);
     if(x>=b.bx-3&&x<=b.bx+b.w+3&&y>=b.by-3&&y<=b.by+b.h+3) return {kind:'etiq',id:a.id};
@@ -3352,10 +3726,17 @@ function _mlxEtiqPrendre(hit,px,py){
   if(hit.kind==='leg'){ const b=_mlxLegendeMesure(g,R,_ml.annot,sMs,k); ox=b.x; oy=b.y; }
   else {
     const a=_mlxAnnot(hit.id);
-    const pl=a?_mlxEtiqPlace(a,mlAnnotPointsA(a,sMs).map(P),k,R,sMs):null;
+    const vue=a?_mlxVue(a,mlAnnotPointsA(a,sMs).map(P),sMs).pts:[];
+    const mmpx=mlEchelleMmPx(_ml.annot.ech,R.vw,R.vh);
+    const pl=!a?null:hit.kind==='mes'?(mmpx?_mlxMesPlace(a,vue,k,R,mmpx):null):_mlxEtiqPlace(a,vue,k,R,sMs);
     if(!pl) return false;
     ox=pl.x; oy=pl.y;
     _ml.sel=hit.id;
+    // ⚠ L'ÉDITEUR NE VIENT PAS EN VUE (build 1391). Choisir le tracé le fait
+    //   défiler jusqu'à lui ; sur une seule colonne — téléphone, tablette,
+    //   fenêtre étroite — la page partait vers le bas pendant qu'on tenait
+    //   l'étiquette, et le clic qui devait la poser tombait dans le panneau.
+    _mlxEdVu=hit.id;
   }
   _ml.deplEtiq={kind:hit.kind,id:hit.id,avant:JSON.stringify(_ml.annot),grab:[px-ox,py-oy]};
   _mlxApresSelection(); _mlxMajOutils();
@@ -3376,10 +3757,21 @@ function _mlxEtiqBouger(px,py){
     if(!a) return false;
     /** @param {number[]} p @returns {number[]} */
     const P=p=>[R.ox+p[0]/1000*R.vw*R.s,R.oy+p[1]/1000*R.vh*R.s];
-    const base=_mlxEtiqPlace({...a,eo:[0,0]},mlAnnotPointsA(a,sMs).map(P),k,R,sMs);
-    if(!base) return false;
-    const eo=[borne((tx-base.x)/(R.vw*R.s)*1000,-1000,1000),borne((ty-base.y)/(R.vh*R.s)*1000,-1000,1000)];
-    _mlxChanger(d.id,x=>({...x,eo}));
+    const vue=_mlxVue(a,mlAnnotPointsA(a,sMs).map(P),sMs).pts;
+    if(d.kind==='mes'){
+      // LA MESURE SE DÉPLACE COMME L'ÉTIQUETTE, mais garde son propre
+      // décalage : on éloigne le chiffre sans emporter le nom, et l'inverse.
+      const mmpx=mlEchelleMmPx(_ml.annot.ech,R.vw,R.vh);
+      const m=mmpx?mlMesureTrace(a,vue,R.s,mmpx,k):null;
+      if(!m) return false;
+      const mo=[borne((tx-m.x)/(R.vw*R.s)*1000,-1000,1000),borne((ty-m.y)/(R.vh*R.s)*1000,-1000,1000)];
+      _mlxChanger(d.id,x=>({...x,mo}));
+    } else {
+      const base=_mlxEtiqPlace({...a,eo:[0,0]},vue,k,R,sMs);
+      if(!base) return false;
+      const eo=[borne((tx-base.x)/(R.vw*R.s)*1000,-1000,1000),borne((ty-base.y)/(R.vh*R.s)*1000,-1000,1000)];
+      _mlxChanger(d.id,x=>({...x,eo}));
+    }
   }
   _mlDessinerCalque();
   return true;
@@ -3393,6 +3785,10 @@ function _mlxEtiqPoser(){
   if(d.kind==='etiq') _mlxChanger(d.id,x=>{
     if(!Array.isArray(x.eo)||x.eo[0]||x.eo[1]) return x;
     const o={...x}; delete o.eo; return o;
+  });
+  if(d.kind==='mes') _mlxChanger(d.id,x=>{
+    if(!Array.isArray(x.mo)||x.mo[0]||x.mo[1]) return x;
+    const o={...x}; delete o.mo; return o;
   });
   if(JSON.stringify(_ml.annot)!==d.avant){
     _ml.annule.push(d.avant); if(_ml.annule.length>60) _ml.annule.shift(); _ml.refait=[];
@@ -3417,12 +3813,310 @@ function mlEtiqReplacer(){
   _mlxApresChangement();
   return true;
 }
+/** La mesure du tracé choisi, rendue à sa place le long du tracé. */
+function mlMesReplacer(){
+  const a=_ml&&_mlxAnnot(_ml.sel);
+  if(!_ml||!a||!Array.isArray(a.mo)) return false;
+  _mlxMemoriser();
+  _mlxChanger(a.id,x=>{ const o={...x}; delete o.mo; return o; });
+  _mlxApresChangement();
+  return true;
+}
 /** La légende, rendue au coin choisi dans son panneau. */
 function mlLegendeReplacer(){
   if(!_ml||typeof _ml.annot.leg.x!=='number') return false;
   _mlxMemoriser();
   const L={..._ml.annot.leg}; delete L.x; delete L.y;
   _ml.annot={..._ml.annot,leg:L};
+  _mlxApresChangement();
+  return true;
+}
+
+// ── L'ÉCHELLE : LA POSER, CHOISIR SON DISQUE, L'ENREGISTRER (build 1391) ──
+//
+// Kevin, 22/09/2026 : « une fonction échelle qui demande de mettre le haut et
+// le bas du poids ; on sélectionne la marque, ce qui met automatiquement les
+// mesures sur les autres tracés ; puis un bouton “enregistrer la mesure” afin
+// de faire disparaître le tracé de la vidéo mais garder la donnée pour les
+// calculs ».
+//
+// LE HAUT ET LE BAS, PAS LE BORD GAUCHE ET LE BORD DROIT. Un disque vu un peu
+// de biais devient une ellipse : sa largeur rétrécit, sa HAUTEUR reste son
+// diamètre. C'est ce que l'aide demande de pointer.
+/**
+ * Ce que le coach a retenu de ses disques, d'une vidéo à l'autre : le dernier
+ * choisi — la salle change rarement —, et ceux qu'il a mesurés lui-même.
+ * @returns {{dernier:string, mesures:Object<string,number>}}
+ */
+function _mlxDisquesCoach(){
+  const d=currentUser&&currentUser.mlDisques&&typeof currentUser.mlDisques==='object'?currentUser.mlDisques:{};
+  /** @type {Object<string,number>} */
+  const mesures={};
+  if(d.mesures&&typeof d.mesures==='object')
+    for(const c of Object.keys(d.mesures).slice(0,40)){ const v=Number(d.mesures[c]); if(v>=100&&v<=600) mesures[c]=Math.round(v); }
+  return {dernier:typeof d.dernier==='string'?d.dernier.slice(0,80):'',mesures};
+}
+/**
+ * L'état du panneau pour une échelle : sa marque, sa gamme, sa charge — ou,
+ * sans échelle, le dernier disque que le coach a choisi.
+ * @param {Echelle|undefined} ech
+ * @returns {{m:string, g:string, c:string, mm:string}}
+ */
+function _mlxEchUiDepuis(ech){
+  let src=ech&&ech.src?String(ech.src):'';
+  let mm=ech&&ech.mm?String(ech.mm):'';
+  if(!src){
+    const d=_mlxDisquesCoach();
+    src=d.dernier;
+    mm=src.indexOf('mesure|')===0&&d.mesures[src.slice(7)]?String(d.mesures[src.slice(7)]):'';
+  }
+  const s=src.split('|');
+  if(s[0]==='mesure'&&s[1]) return {m:s[1],g:'mesure',c:s[2]||'',mm};
+  const g=ML_DISQUES.find(x=>x.id===s[0]);
+  if(!g) return {m:'',g:'',c:'',mm:''};
+  return {m:g.m,g:g.id,c:g.c.some(x=>x[0]===s[1])?s[1]:'',mm:''};
+}
+/**
+ * PURE. Le disque que désigne le panneau — {mm, src} —, ou null tant qu'il
+ * manque un choix. Un disque mesuré doit l'être entre 10 et 60 cm : en dehors,
+ * c'est une faute de frappe, pas un disque.
+ * @param {{m:string, g:string, c:string, mm:string}} ui
+ * @returns {{mm:number, src:string}|null}
+ */
+function mlEchChoix(ui){
+  if(!ui||!ui.m||!ui.c) return null;
+  if(ui.g==='mesure'){
+    const mm=Number(String(ui.mm||'').replace(',','.'));
+    return mm>=100&&mm<=600?{mm:Math.round(mm),src:'mesure|'+ui.m+'|'+ui.c}:null;
+  }
+  const g=ML_DISQUES.find(x=>x.id===ui.g&&x.m===ui.m);
+  const c=g&&g.c.find(x=>x[0]===ui.c);
+  return g&&c?{mm:c[1],src:g.id+'|'+c[0]}:null;
+}
+/** PURE. Les marques du panneau : celles du catalogue, puis celles à mesurer. @returns {string[]} */
+function mlEchMarques(){
+  /** @type {string[]} */
+  const l=[];
+  for(const g of ML_DISQUES) if(!l.includes(g.m)) l.push(g.m);
+  for(const m of ML_DISQUES_A_MESURER) if(!l.includes(m)) l.push(m);
+  return l;
+}
+/**
+ * PURE. Les gammes d'une marque, et « je la mesure » quand la marque ne
+ * publie pas toutes ses cotes.
+ * @param {string} m
+ * @returns {{id:string, lib:string}[]}
+ */
+function mlEchGammes(m){
+  const l=ML_DISQUES.filter(x=>x.m===m).map(x=>({id:x.id,lib:x.g}));
+  if(ML_DISQUES_A_MESURER.includes(m)) l.push({id:'mesure',lib:l.length?'Autre gamme — je la mesure':'Je mesure mon disque'});
+  return l;
+}
+/** @param {string} m */
+function mlEchMarque(m){
+  if(!_ml) return false;
+  const gs=mlEchGammes(m);
+  _ml.echUi={m:String(m||''),g:gs.length===1?gs[0].id:'',c:'',mm:''};
+  _mlxEchAppliquer();
+  return true;
+}
+/** @param {string} g */
+function mlEchGamme(g){
+  if(!_ml) return false;
+  _ml.echUi={..._ml.echUi,g:String(g||''),c:'',mm:''};
+  _mlxEchAppliquer();
+  return true;
+}
+/** @param {string} c */
+function mlEchCharge(c){
+  if(!_ml) return false;
+  const ui=_ml.echUi;
+  // LE DISQUE DÉJÀ MESURÉ SE RETROUVE : la même salle, le même 20 kg.
+  const deja=ui.g==='mesure'?_mlxDisquesCoach().mesures[ui.m+'|'+c]:0;
+  _ml.echUi={...ui,c:String(c||''),mm:ui.g==='mesure'?(deja?String(deja):ui.mm):''};
+  _mlxEchAppliquer();
+  return true;
+}
+/** @param {string} v  le diamètre mesuré, en mm */
+function mlEchMm(v){
+  if(!_ml) return false;
+  _ml.echUi={..._ml.echUi,mm:String(v==null?'':v).trim().slice(0,8)};
+  _mlxEchAppliquer();
+  return true;
+}
+/**
+ * Le disque choisi passe dans l'échelle posée. Un choix incomplet l'en
+ * retire : garder le diamètre d'un disque qu'on n'a plus sous les yeux dans
+ * le panneau mentirait sur toutes les mesures.
+ */
+function _mlxEchAppliquer(){
+  if(!_ml) return;
+  const e=_ml.annot.ech;
+  if(e){
+    const ch=mlEchChoix(_ml.echUi);
+    if(ch&&(e.mm!==ch.mm||e.src!==ch.src)){
+      _mlxMemoriser();
+      _ml.annot={..._ml.annot,ech:{...e,mm:ch.mm,src:ch.src}};
+    } else if(!ch&&(e.mm||e.src)){
+      _mlxMemoriser();
+      const n={...e}; delete n.mm; delete n.src; delete n.ok;
+      _ml.annot={..._ml.annot,ech:n};
+    }
+  }
+  _mlxApresChangement();
+}
+/**
+ * Les deux points de l'échelle, posés à neuf : le disque choisi y entre, et
+ * l'échelle redevient à enregistrer.
+ * @param {number[]} a @param {number[]} b  normés
+ */
+function _mlxEchPoints(a,b){
+  if(!_ml) return;
+  const ch=mlEchChoix(_ml.echUi);
+  /** @type {Echelle} */
+  const ech={p:mlEncoderTrait([a,b].map(p=>[_mlxBorne(p[0]),_mlxBorne(p[1])]))};
+  if(ch){ ech.mm=ch.mm; ech.src=ch.src; }
+  _ml.annot={..._ml.annot,ech};
+}
+/**
+ * La loupe, pendant qu'on pose un bout de l'échelle : un pixel d'erreur sur
+ * un disque de 200 pixels, c'est déjà 0,5 % sur tout ce qu'on mesure.
+ * @param {number[]|null} p  normé, ou null pour la cacher
+ */
+function _mlxLoupeEchelle(p){
+  const l=_mlEl('ml-loupe'), v=_mlVideo();
+  if(!(l instanceof HTMLCanvasElement)) return;
+  if(!p||!v||!v.videoWidth||!v.videoHeight){ l.hidden=true; return; }
+  const c=l.getContext('2d'); if(!c) return;
+  l.hidden=false;
+  const x=p[0]/1000*v.videoWidth, y=p[1]/1000*v.videoHeight;
+  const cote=Math.max(12,v.videoHeight*0.03), L=l.width, m=L/2;
+  c.clearRect(0,0,L,L);
+  try{ c.drawImage(v,x-cote,y-cote,2*cote,2*cote,0,0,L,L); }catch(e){}
+  c.lineWidth=3; c.strokeStyle='rgba(0,0,0,.6)';
+  c.beginPath(); c.moveTo(m-26,m); c.lineTo(m-6,m); c.moveTo(m+6,m); c.lineTo(m+26,m);
+  c.moveTo(m,m-26); c.lineTo(m,m-6); c.moveTo(m,m+6); c.lineTo(m,m+26); c.stroke();
+  c.lineWidth=1.5; c.strokeStyle='#ffffff'; c.stroke();
+}
+/**
+ * Un toucher sur l'image quand l'outil Échelle est armé : un bout existant se
+ * reprend, sinon le haut du disque se pose — glisser jusqu'au bas, ou toucher
+ * le bas ensuite.
+ * @param {PointerEvent} e
+ * @param {HTMLElement} calque
+ * @param {RectImage} R
+ * @param {DOMRect} b
+ * @param {(cx:number, cy:number)=>number[]} N
+ */
+function _mlxEchPointer(e,calque,R,b,N){
+  if(!_ml) return;
+  const v=_mlVideo(); try{ if(v) v.pause(); }catch(x){}
+  const px=e.clientX-b.left, py=e.clientY-b.top;
+  // LE CLIC D'ARRIVÉE d'une échelle commencée d'un clic : le bas du disque.
+  const pose=_ml.echPose;
+  if(pose){
+    _ml.echPose=null;
+    _mlxEchPoints(pose.a,N(e.clientX,e.clientY));
+    _mlxLoupeEchelle(null);
+    if(JSON.stringify(_ml.annot)!==pose.avant){ _ml.annule.push(pose.avant); if(_ml.annule.length>60) _ml.annule.shift(); _ml.refait=[]; }
+    _mlxApresChangement();
+    return;
+  }
+  const G=_mlxCalqueGeo();
+  const tol=Math.max(12,11*(G?G.k:1));
+  const ech=_ml.annot.ech;
+  const q=ech?mlDecoderTrait(ech.p):[];
+  const i=q.findIndex(p=>Math.hypot(R.ox+p[0]/1000*R.vw*R.s-px,R.oy+p[1]/1000*R.vh*R.s-py)<=tol);
+  // UN PREMIER TOUCHER SUR UNE ÉTIQUETTE ne pose rien : c'est peut-être le
+  // début d'un double-clic pour la déplacer.
+  if(i<0&&G&&mlEtiquetteToucher(_ml.annot,R,_mlxTempsMs(),px,py,G.g,_ml.comparaison)) return;
+  const avant=JSON.stringify(_ml.annot);
+  const depart=N(e.clientX,e.clientY);
+  if(i<0) _mlxEchPoints(depart,depart);
+  _mlxLoupeEchelle(i>=0?q[i]:depart);
+  _mlDessinerCalque();
+  const x0=e.clientX, y0=e.clientY;
+  let bouge=false;
+  try{ calque.setPointerCapture(e.pointerId); }catch(x){}
+  /** @param {PointerEvent} ev */
+  const bouger=ev=>{
+    if(!_ml) return;
+    if(!bouge&&Math.hypot(ev.clientX-x0,ev.clientY-y0)<(i>=0?2:6)) return;
+    bouge=true;
+    const p=N(ev.clientX,ev.clientY);
+    const e2=_ml.annot.ech;
+    if(i>=0&&e2){
+      const r=mlDecoderTrait(e2.p); r[i]=[_mlxBorne(p[0]),_mlxBorne(p[1])];
+      _ml.annot={..._ml.annot,ech:{...e2,p:mlEncoderTrait(r)}};
+    } else if(i<0) _mlxEchPoints(depart,p);
+    _mlxLoupeEchelle(p);
+    _mlDessinerCalque();
+  };
+  const fin=()=>{
+    calque.removeEventListener('pointermove',bouger);
+    calque.removeEventListener('pointerup',fin);
+    calque.removeEventListener('pointercancel',fin);
+    _mlxLoupeEchelle(null);
+    if(!_ml) return;
+    // UN TOUCHER SANS GLISSER pose le haut ; le bas viendra du clic suivant,
+    // et la souris le montre d'ici là.
+    if(i<0&&!bouge){ _ml.echPose={avant,a:depart}; _mlxMajOutils(); _mlDessinerCalque(); return; }
+    if(JSON.stringify(_ml.annot)!==avant){ _ml.annule.push(avant); if(_ml.annule.length>60) _ml.annule.shift(); _ml.refait=[]; }
+    _mlxApresChangement();
+  };
+  calque.addEventListener('pointermove',bouger);
+  calque.addEventListener('pointerup',fin);
+  calque.addEventListener('pointercancel',fin);
+}
+/**
+ * Renonce à une échelle commencée d'un clic : le document revient à ce qu'il
+ * était avant le premier toucher.
+ * @returns {boolean}
+ */
+function _mlxEchAnnulerPose(){
+  if(!_ml||!_ml.echPose) return false;
+  _ml.annot=JSON.parse(_ml.echPose.avant);
+  _ml.echPose=null;
+  _mlxLoupeEchelle(null);
+  _mlxApresChangement();
+  return true;
+}
+/**
+ * « Enregistrer la mesure » : le tracé de l'échelle quitte l'image — il ne
+ * revient qu'avec l'outil Échelle —, la donnée reste et fait les centimètres.
+ * Le disque est retenu pour la prochaine vidéo, et un disque mesuré à la
+ * main l'est pour de bon.
+ */
+function mlEchEnregistrer(){
+  if(!_ml) return false;
+  const e=_ml.annot.ech, T=_mlxTailleVideo();
+  if(!e){ toast('Pose d’abord le haut et le bas du disque sur la vidéo.','var(--orange)'); return false; }
+  if(!(Number(e.mm)>0)||!e.src){ toast('Choisis le disque : marque, gamme et charge.','var(--orange)'); return false; }
+  if(!mlEchelleMmPx(e,T.vw,T.vh)){
+    toast('Le disque est trop petit à l’image pour mesurer juste : rapproche-toi ou zoome, puis repose l’échelle.','var(--orange)');
+    return false;
+  }
+  _mlxMemoriser();
+  _ml.annot={..._ml.annot,ech:{...e,ok:1}};
+  _ml.echPose=null;
+  if(currentUser){
+    const d=_mlxDisquesCoach(), mesures={...d.mesures};
+    if(e.src.indexOf('mesure|')===0) mesures[e.src.slice(7)]=Math.round(Number(e.mm));
+    currentUser.mlDisques={dernier:e.src,mesures};
+    try{ saveUser(); }catch(x){}
+  }
+  _ml.outil='selection';
+  _mlxApresChangement();
+  toast('Échelle enregistrée : les mesures restent sur les tracés.');
+  return true;
+}
+/** L'échelle retirée : plus aucune mesure sur les tracés. */
+function mlEchEffacer(){
+  if(!_ml||!_ml.annot.ech) return false;
+  _mlxMemoriser();
+  const d={..._ml.annot}; delete d.ech;
+  _ml.annot=d;
+  _ml.echPose=null;
   _mlxApresChangement();
   return true;
 }
@@ -3592,6 +4286,10 @@ function mlOutil(o){
   const def=ML_OUTILS.find(x=>x.o===o);
   if(!def) return false;
   _ml.trace=null;
+  _mlxEchAnnulerPose();
+  // LE PANNEAU DE L'ÉCHELLE montre le disque de l'échelle posée — une
+  // annulation a pu le changer depuis.
+  if(def.o==='echelle'&&_ml.annot.ech&&_ml.annot.ech.src) _ml.echUi=_mlxEchUiDepuis(_ml.annot.ech);
   _ml.outil=def.o;
   _mlxMajOutils();
   _mlDessinerCalque();
@@ -3742,6 +4440,32 @@ function _mlxPointer(e,calque){
     const maintenant=performance.now(), px=e.clientX-b.left, py=e.clientY-b.top, prec=_mlxDernierToucher;
     _mlxDernierToucher={t:maintenant,x:px,y:py};
     if(prec&&maintenant-prec.t<400&&Math.hypot(px-prec.x,py-prec.y)<20&&_mlxEtiqDoubleToucher(px,py)){ _mlxDernierToucher=null; return; }
+  }
+  if(outil==='echelle'){ _mlxEchPointer(e,calque,R,b,N); return; }
+  // ⚠ LE PREMIER TOUCHER D'UN DOUBLE-CLIC SUR UNE ÉTIQUETTE N'AGIT PAS quand
+  //   l'outil agirait tout de suite (build 1391, Kevin : « redonner la
+  //   possibilité de bouger les légendes en double-cliquant »). Avec l'outil
+  //   Trajectoire en suivi automatique, ce premier toucher LANÇAIT UN SUIVI :
+  //   le laboratoire passait en suivi, et le second toucher tombait dans le
+  //   vide. Le texte ouvrait sa saisie, la gomme effaçait le tracé dessous.
+  //   Les outils qui tirent un trait gardent leur règle : le double-clic retire
+  //   le début de tracé qu'il a posé (_mlxEtiqDoubleToucher).
+  if(outil==='texte'||outil==='gomme'||(outil==='libre'&&_ml.trajAuto)){
+    const G=_mlxCalqueGeo();
+    if(G&&mlEtiquetteToucher(_ml.annot,G.R,sMs,e.clientX-b.left,e.clientY-b.top,G.g,_ml.comparaison)) return;
+  }
+  // UN TOUCHER SUR UNE ÉTIQUETTE OU UNE MESURE, avec la sélection : il choisit
+  // son tracé, SANS faire venir l'éditeur en vue et sans saisir le tracé. Le
+  // tracé passe juste sous son étiquette : ce premier toucher d'un double-clic
+  // le choisissait, l'éditeur faisait défiler la page, et le second toucher
+  // n'était plus sur la vidéo.
+  if(outil==='selection'){
+    const G=_mlxCalqueGeo();
+    const et=G?mlEtiquetteToucher(_ml.annot,G.R,sMs,e.clientX-b.left,e.clientY-b.top,G.g,_ml.comparaison):null;
+    if(et){
+      if(et.kind!=='leg'&&_ml.sel!==et.id){ _ml.sel=et.id; _mlxEdVu=et.id; _mlxApresSelection(); }
+      return;
+    }
   }
   if(outil==='selection'||outil==='gomme'){
     const g=calque instanceof HTMLCanvasElement?calque.getContext('2d'):null;
@@ -4360,6 +5084,7 @@ function _mlxClavier(e){
   if(k==='Escape'){
     if(mlTrajArreter()) return true;
     if(mlEtiqAnnuler()) return true;
+    if(_mlxEchAnnulerPose()) return true;
     if(_mlxAnnulerTrace()) return true;
     const m=_mlEl('mlx-menu'); if(m&&!m.hidden){ mlMenu(); return true; }
     if(_ml.sel){ _ml.sel=null; _mlxApresSelection(); return true; }
@@ -5229,7 +5954,8 @@ function mlOuvrir(email,videoId){
     annot:annotDoc,annotInit:JSON.stringify(annotDoc),outil:'selection',couleur:ML_PALETTE[0].c,
     epaisseur:ML_EPAISSEUR_DEFAUT,sel:null,trace:null,curseur:null,annule:[],refait:[],original:false,
     comparaison:false,guide:null,repereAnat:1,relier:true,phrase:'',tailleTexte:'m',onglet:'trace',jetonVseq:0,
-    enLecture:_mlxPrefLecture(),style:'',deplEtiq:null,trajAuto:true,trajStop:false,trajZone:null};
+    enLecture:_mlxPrefLecture(),style:'',deplEtiq:null,trajAuto:true,trajStop:false,trajZone:null,
+    echUi:_mlxEchUiDepuis(annotDoc.ech),echPose:null};
   go('s-coach-motion-lab');
   _mlRendre();
   return true;
@@ -5330,6 +6056,8 @@ function _mlxIco(nom,t){
     courbe:'<path d="M4.5 18.5C7 8 16.5 16.5 19.5 5.5"/><circle cx="4.5" cy="18.5" r="1.7" fill="currentColor"/><circle cx="19.5" cy="5.5" r="1.7" fill="currentColor"/>',
     cercle:'<circle cx="12" cy="12" r="8"/>',
     rect:'<rect x="4" y="6" width="16" height="12" rx="1.2"/>',
+    // UN DISQUE ET SA HAUTEUR : c'est le geste de l'outil.
+    echelle:'<circle cx="9.5" cy="12" r="7"/><circle cx="9.5" cy="12" r="1.6"/><path d="M19.5 5v14M17.5 5h4M17.5 19h4"/>',
     angle:'<path d="M4 19.5h16M4 19.5 14.5 5"/><path d="M9.2 19.5a6 6 0 0 0-2-4.6"/>',
     point:'<circle cx="12" cy="12" r="4.2" fill="currentColor"/>',
     texte:'<path d="M5 7V4.5h14V7M12 4.5v15M9 19.5h6"/>',
@@ -5541,7 +6269,7 @@ function mlZoomAjuster(){
 async function mlRaccourcis(){
   await rcConfirm('Raccourcis clavier',
     'Espace : lecture / pause · ← → : image par image (Maj : dix images) · V sélection · L ligne · F flèche · '
-    +'T trajectoire · U courbe · C cercle · R rectangle · A angle · P point · X texte · Z zone · E gomme · '
+    +'T trajectoire · U courbe · C cercle · R échelle · A angle · P point · X texte · Z zone · E gomme · '
     +'Entrée : terminer une courbe ou des repères · Échap : annuler le tracé en cours · Suppr : effacer le tracé choisi · '
     +'Ctrl+Z : annuler · Ctrl+Maj+Z : rétablir · O : version originale.','Compris','Fermer');
   return true;
@@ -5562,7 +6290,7 @@ function _mlxMajOutils(){
       :'Dessine d’un seul geste — ou touche pour commencer, suis le mouvement à la souris, touche pour finir.',
     courbe:'Touche la vidéo point par point : la courbe passe par chacun. Entrée pour terminer.',
     cercle:'Glisse du centre vers le bord — ou touche le centre, puis le bord.',
-    rect:'Glisse d’un coin à l’autre — ou touche un coin, puis l’autre.',
+    echelle:'Touche le HAUT d’un disque, puis son BAS — ou glisse de l’un à l’autre. La hauteur d’un disque reste son diamètre même vu de biais. Tire un bout pour l’ajuster.',
     angle:'Touche trois points — par exemple épaule, coude, poignet : l’angle au deuxième s’affiche.',
     point:'Touche les repères anatomiques un par un ; ils se relient. Entrée pour terminer.',
     texte:'Touche la vidéo là où le texte doit apparaître.',zone:'Glisse pour surligner une zone — ou touche un coin, puis l’autre.',
@@ -5570,7 +6298,10 @@ function _mlxMajOutils(){
   let h='<div class="mlx-outils">'+ML_OUTILS.map(x=>'<button type="button" class="mlx-outil" data-outil="'+x.o+'" '
     +'aria-pressed="'+(x.o===o)+'" onclick="mlOutil(\''+x.o+'\')" title="'+escapeHtml(x.lib+' ('+x.r.toUpperCase()+')')+'">'
     +S(x.o,22)+'<span>'+x.lib+'</span></button>').join('')+'</div>';
-  h+='<div class="mlx-ligne"><span class="mlx-lab-s">Couleur</span><div class="mlx-couleurs">'
+  // L'ÉCHELLE N'A NI COULEUR, NI ÉPAISSEUR, NI STYLE : c'est une donnée de
+  // calcul. Son panneau prend leur place.
+  if(o==='echelle') h+=_mlxHtmlEchelle();
+  else h+='<div class="mlx-ligne"><span class="mlx-lab-s">Couleur</span><div class="mlx-couleurs">'
     +ML_PALETTE.map(p=>'<button type="button" class="mlx-pastille" style="--c:'+p.c+'" aria-pressed="'+(p.c===_ml?.couleur)+'" '
       +'title="'+escapeHtml(p.nom+(sens[p.c]?' — '+sens[p.c]:''))+'" aria-label="'+escapeHtml(p.nom)+'" onclick="mlCouleur(\''+p.c+'\')"></button>').join('')
     +'<label class="mlx-perso" title="Couleur personnalisée"><input type="color" value="'+escapeHtml(_ml.couleur)+'" '
@@ -5586,7 +6317,7 @@ function _mlxMajOutils(){
   if(o==='libre') h+='<div class="mlx-chips" role="group" aria-label="Façon de tracer la trajectoire">'
     +'<button type="button" class="mlx-chip" aria-pressed="'+(!!_ml.trajAuto)+'" onclick="mlTrajMode(true)">Suivi automatique</button>'
     +'<button type="button" class="mlx-chip" aria-pressed="'+(!_ml.trajAuto)+'" onclick="mlTrajMode(false)">À la main</button></div>';
-  if(o!=='selection'&&o!=='gomme'&&o!=='texte'&&!(o==='libre'&&_ml.trajAuto)) h+='<label class="mlx-coche"><input type="checkbox" id="mlx-en-lecture"'
+  if(o!=='selection'&&o!=='gomme'&&o!=='texte'&&o!=='echelle'&&!(o==='libre'&&_ml.trajAuto)) h+='<label class="mlx-coche"><input type="checkbox" id="mlx-en-lecture"'
     +(_ml.enLecture?' checked':'')+' onchange="mlTracerEnLecture(this.checked)"> Tracer pendant la lecture</label>';
   // LE MODÈLE EN COURS : l'étape, et de quoi la passer ou s'arrêter.
   const G=_ml.guide;
@@ -5611,9 +6342,13 @@ function _mlxMajOutils(){
   if(_ml.mode==='trajsuivi') h+='<div class="mlx-cours"><span id="mlx-traj-txt">'+escapeHtml(_ml.progres||'Suivi en cours…')+'</span>'
     +'<span class="mlx-esp"></span><button type="button" class="mlx-b mlx-b-r" onclick="mlTrajArreter()">Arrêter</button></div>';
   // UNE ÉTIQUETTE EN MAIN : où la poser, et de quoi renoncer.
-  if(_ml.deplEtiq) h+='<div class="mlx-cours"><span>'+(_ml.deplEtiq.kind==='leg'?'Déplace la légende':'Déplace l’étiquette')
+  if(_ml.deplEtiq) h+='<div class="mlx-cours"><span>'+(_ml.deplEtiq.kind==='leg'?'Déplace la légende'
+      :_ml.deplEtiq.kind==='mes'?'Déplace la mesure':'Déplace l’étiquette')
       +', puis touche pour la poser</span><span class="mlx-esp"></span>'
     +'<button type="button" class="mlx-b" onclick="mlEtiqAnnuler()">Annuler</button></div>';
+  // L'ÉCHELLE COMMENCÉE D'UN CLIC : le haut est posé, le bas est attendu.
+  if(_ml.echPose) h+='<div class="mlx-cours"><span>Haut posé : touche maintenant le BAS du disque</span><span class="mlx-esp"></span>'
+    +'<button type="button" class="mlx-b" onclick="_mlxEchAnnulerPose()">Annuler</button></div>';
   // COMMENCÉ D'UN CLIC : ce qu'attend le clic suivant, et de quoi renoncer.
   if(_ml.trace&&_ml.trace.clic) h+='<div class="mlx-cours"><span>'+(_ml.trace.t==='libre'
       ?'Suis le mouvement à la souris, puis touche pour finir (ou Entrée)':'Touche le point d’arrivée')+'</span><span class="mlx-esp"></span>'
@@ -5631,6 +6366,58 @@ function _mlxMajOutils(){
     +(_ml.refait.length?'':' disabled')+'>'+S('retablir',16)+'</button>';
   const c=_mlEl('ml-calque');
   if(c){ c.dataset.outil=o; c.dataset.depl=_ml.deplEtiq?'1':''; }
+}
+/**
+ * Le panneau de l'outil Échelle : où on en est, le disque, ce qu'il vaut à
+ * l'image, et « Enregistrer la mesure ».
+ * @returns {string}
+ */
+function _mlxHtmlEchelle(){
+  if(!_ml) return '';
+  const ui=_ml.echUi, e=_ml.annot.ech;
+  const {vw,vh}=_mlxTailleVideo();
+  const px=e?mlEchellePx(e,vw,vh):0;
+  const ch=mlEchChoix(ui);
+  const d=ch?mlDisqueDe(ch.src,ch.mm):null;
+  /** @param {string} fn @param {string} lib @param {[string,string][]} opts @param {string} val */
+  const sel=(fn,lib,opts,val)=>'<label class="mlx-champ"><span>'+lib+'</span><select class="mlx-in" onchange="'+fn+'(this.value)">'
+    +'<option value=""'+(val?'':' selected')+'>Choisir…</option>'
+    +opts.map(([k,l])=>'<option value="'+escapeHtml(k)+'"'+(k===val?' selected':'')+'>'+escapeHtml(l)+'</option>').join('')+'</select></label>';
+  // OÙ ON EN EST : une seule phrase, la prochaine chose à faire.
+  let etat;
+  if(!e) etat='<b>1.</b> Touche le haut du disque sur la vidéo, puis son bas.';
+  else if(px<ML_ECHELLE_MIN_PX) etat='Le disque ne fait que '+Math.round(px)+' pixels à l’image : un pixel d’erreur y pèserait trop. Rapproche-toi ou zoome, puis repose-le.';
+  else if(!(Number(e.mm)>0)) etat='<b>2.</b> Choisis ce disque : les mesures apparaîtront sur tes tracés.';
+  else if(!e.ok) etat='<b>3.</b> Vérifie les mesures sur tes tracés, puis enregistre.';
+  else etat='Échelle enregistrée : elle n’apparaît plus sur la vidéo, les mesures restent. Tire un bout pour l’ajuster.';
+  let h='<div class="mlx-ech"><p class="mlx-note mlx-ech-etat">'+etat+'</p>';
+  const gammes=ui.m?mlEchGammes(ui.m):[];
+  h+=sel('mlEchMarque','Marque',mlEchMarques().map(m=>[m,m]),ui.m);
+  if(gammes.length>1) h+=sel('mlEchGamme','Gamme',gammes.map(g=>[g.id,g.lib]),ui.g);
+  const g=ML_DISQUES.find(x=>x.id===ui.g&&x.m===ui.m);
+  const charges=ui.g==='mesure'?ML_DISQUES_CHARGES.slice():g?g.c.map(x=>x[0]):[];
+  if(charges.length) h+=sel('mlEchCharge','Charge',charges.map(c=>[c,c]),ui.c);
+  if(ui.g==='mesure'){
+    h+='<p class="mlx-note">'+escapeHtml(ui.m==='Autre marque'?'Ce disque':ui.m)+' ne publie pas ce diamètre : mesure-le au mètre ruban, '
+      +'du haut au bas du disque. RepCore s’en souviendra pour tes prochaines vidéos.</p>';
+    if(ui.c) h+='<label class="mlx-champ"><span>Diamètre mesuré</span><span class="mlx-ech-mm">'
+      +'<input class="mlx-in" type="number" inputmode="numeric" min="100" max="600" step="1" value="'+escapeHtml(ui.mm)+'" '
+      +'aria-label="Diamètre mesuré, en millimètres" onchange="mlEchMm(this.value)"><i>mm</i></span></label>';
+  }
+  // LE DISQUE, SA COTE, SA SOURCE — et la précision qu'en tire l'image.
+  if(d){
+    h+='<p class="mlx-ech-disque"><b>Ø '+d.mm+' mm</b> · '+escapeHtml(d.source)
+      +(d.tol!==null?' · ± '+d.tol+' mm':' · tolérance non publiée')+'</p>';
+    if(px>=ML_ECHELLE_MIN_PX){
+      const pr=mlEchellePrecision(px,d.mm,d.tol);
+      h+='<p class="mlx-note">À l’image, le disque fait '+Math.round(px)+' pixels : chaque mesure est juste à ± '
+        +mlNombre(pr*100,1)+' % environ, si les tracés sont dans le même plan que le disque.</p>';
+    }
+  }
+  h+='<div class="mlx-ech-b"><button type="button" class="btn btn-red btn-sm" onclick="mlEchEnregistrer()"'
+    +(e&&Number(e.mm)>0&&px>=ML_ECHELLE_MIN_PX&&!e.ok?'':' disabled')+'>Enregistrer la mesure</button>'
+    +(e?'<button type="button" class="mlx-b" onclick="mlEchEffacer()">Effacer l’échelle</button>':'')+'</div></div>';
+  return h;
 }
 /**
  * Le petit trait qui montre chaque style sur son bouton.
@@ -5733,6 +6520,14 @@ function _mlxMajEditeur(){
     +(a.et!==0?'<p class="mlx-note">Double-clique le nom sur la vidéo pour le déplacer.'
       +(Array.isArray(a.eo)?' <button type="button" class="mlx-b" onclick="mlEtiqReplacer()">Le remettre près du tracé</button>':'')+'</p>':'')
     +'<label class="mlx-coche"><input type="checkbox"'+(a.lg!==0?' checked':'')+' onchange="mlAnnotOption(\'lg\',this.checked)"> Dans la légende</label>';
+  // SA MESURE, quand l'échelle est posée : elle se déplace elle aussi.
+  {
+    const G=_mlxCalqueGeo();
+    const mmpx=G?mlEchelleMmPx(_ml.annot.ech,G.R.vw,G.R.vh):null;
+    if(mmpx&&['ligne','fleche','libre','courbe','cercle','rect','zone'].includes(a.t))
+      h+='<p class="mlx-note">Double-clique sa mesure sur la vidéo pour la déplacer.'
+        +(Array.isArray(a.mo)?' <button type="button" class="mlx-b" onclick="mlMesReplacer()">Remettre la mesure</button>':'')+'</p>';
+  }
   // LE SUIVI DU MOUVEMENT : images clés, et l'interpolation entre elles.
   h+='<div class="mlx-suivi"><label class="mlx-coche"><input type="checkbox"'+(suit?' checked':'')+' onchange="mlAnnotSuivre()"> Suivre le mouvement</label>'
     // LE SUIVI AUTOMATIQUE : depuis l'image affichée jusqu'à la fin du tracé.
@@ -6057,6 +6852,16 @@ function _mlBrancher(){
       if(_ml&&_ml.deplEtiq&&!e.buttons){
         const b3=calque.getBoundingClientRect();
         _mlxEtiqBouger(e.clientX-b3.left,e.clientY-b3.top);
+        return;
+      }
+      // L'ÉCHELLE COMMENCÉE D'UN CLIC : le bas suit la souris, loupe comprise.
+      if(_ml&&_ml.echPose&&!e.buttons){
+        const v4=_mlVideo(), R4=v4?_mlVideoRect(v4):null; if(!R4) return;
+        const b4=calque.getBoundingClientRect();
+        const q4=[_mlxBorne((e.clientX-b4.left-R4.ox)/R4.s/R4.vw*1000),_mlxBorne((e.clientY-b4.top-R4.oy)/R4.s/R4.vh*1000)];
+        _mlxEchPoints(_ml.echPose.a,q4);
+        _mlxLoupeEchelle(q4);
+        _mlDessinerCalque();
         return;
       }
       const tr=_ml&&_ml.trace;
@@ -6888,8 +7693,11 @@ function _mlDessinerCalque(){
   }
   if(_ml.epingles.length) _mlDessinerEpingles(g,R,_ml.epingles,tNow);
   // LES ANNOTATIONS, par-dessus les mesures : c'est ce que le coach montre.
+  // L'ÉCHELLE SE MONTRE tant qu'elle n'est pas enregistrée, puis seulement
+  // quand l'outil Échelle est armé : c'est une donnée de calcul, pas un tracé.
   mlDessinerAnnotations(g,R,_ml.annot,tNow,{sel:_ml.sel,poignees:_ml.outil==='selection',
-    comparaison:_ml.comparaison,apercu:_mlxApercu()});
+    comparaison:_ml.comparaison,apercu:_mlxApercu(),
+    echelle:_ml.outil==='echelle'||!!(_ml.annot.ech&&!_ml.annot.ech.ok)});
   // LA ZONE SUIVIE, pendant le suivi d'une trajectoire : on voit ce que le
   // suiveur regarde.
   if(_ml.mode==='trajsuivi'&&_ml.trajZone){
@@ -7934,7 +8742,7 @@ async function mlAnalyser(relance){
   if(points.filter(p=>p.etat==='doute'||p.conf<ML_CONF_DOUTE).length>0.1*n) alertes.push('doutes');
   const px=_mlEtalonPx();
   const compacte=mlCompacterBarre(seg,calc,{disqueM,sens,vw,vh,rayonPx,fps:fpsEstime,alertes,
-    mpp,theta:_ml.theta,etalon:px>0?{cm:_ml.etalon.cm,px,type:_ml.etalon.type}:null});
+    mpp,theta:_ml.theta,etalon:px>0?{cm:_ml.etalon.cm,px,type:_ml.etalon.type}:_mlEchelleEtalon()});
   const valide=segBarreValide(compacte,seg.debutMs,seg.finMs);
   if(!valide){ _ml.mode='lecture'; toast('La trajectoire calculée est illisible : réessaie.','var(--orange)'); _mlMajTrajectoire(); return false; }
   _ml.segments=_ml.segments.map(s=>s.id===seg.id?{...s,barre:valide}:s);
@@ -8553,8 +9361,12 @@ const ML_ETALONS=Object.freeze([
 ]);
 
 /**
- * L'échelle en mètres par pixel de la vidéo : l'étalon posé s'il existe, le
- * disque suivi sinon. Rend 0 quand rien ne permet de mesurer.
+ * L'échelle en mètres par pixel de la vidéo : l'étalon posé s'il existe,
+ * puis l'échelle de l'outil Échelle, le disque suivi sinon. Rend 0 quand rien
+ * ne permet de mesurer.
+ * ⚠ L'ÉCHELLE DE L'OUTIL PASSE AVANT LE DISQUE SUIVI (build 1391) : son
+ *   diamètre est celui d'une fiche, et ses deux bouts sont pointés à la
+ *   loupe ; le rayon du disque suivi, lui, se règle au curseur.
  * @param {number} [rayonPx]  le rayon du disque suivi, quand on l'a
  * @returns {number}
  */
@@ -8562,8 +9374,32 @@ function _mlMpp(rayonPx){
   if(!_ml) return 0;
   const px=_mlEtalonPx();
   if(px>0&&_ml.etalon.cm>0) return _ml.etalon.cm/100/px;
+  const ech=_mlEchelleEtalon();
+  if(ech) return ech.cm/100/ech.px;
   const r=Number(rayonPx);
   return (r>0&&_ml.disqueM>0)?_ml.disqueM/(2*r):0;
+}
+/**
+ * La taille de la vidéo en pixels — celle que lit le dessin (_mlVideoRect),
+ * pour que le panneau, l'enregistrement et le calque comptent les mêmes
+ * pixels.
+ * @returns {{vw:number, vh:number}}
+ */
+function _mlxTailleVideo(){
+  const v=_mlVideo(), R=v?_mlVideoRect(v):null;
+  if(R) return {vw:R.vw,vh:R.vh};
+  return {vw:(v&&v.videoWidth)||0,vh:(v&&v.videoHeight)||0};
+}
+/**
+ * L'échelle de l'outil Échelle, sous la forme d'un étalon {cm, px, type} :
+ * c'est ainsi qu'une trajectoire de barre la garde, et la relit.
+ * @returns {{cm:number, px:number, type:string}|null}
+ */
+function _mlEchelleEtalon(){
+  const e=_ml&&_ml.annot&&_ml.annot.ech;
+  const {vw,vh}=_mlxTailleVideo();
+  if(!e||!mlEchelleMmPx(e,vw,vh)) return null;
+  return {cm:Math.round(Number(e.mm))/10,px:Math.round(mlEchellePx(e,vw,vh)*10)/10,type:'echelle'};
 }
 /** La longueur, en pixels, entre les deux points de l'étalon. */
 function _mlEtalonPx(){
@@ -8781,8 +9617,10 @@ function _mlMajPrise(){
       ?'Touche les deux bouts de la longueur connue sur l’image.'
       :px?'Mesurée sur '+Math.round(px)+' pixels : '+mlNombre(e.cm,1).replace(',0','')+' cm, soit '
         +mlNombre(100*_mlMpp(),2)+' cm par pixel.'
+      :_mlEchelleEtalon()?'Sans étalon ici, l’échelle vient de l’outil Échelle (onglet Tracé) : '
+        +mlNombre(100*_mlMpp(),2)+' cm par pixel.'
       :'Sans étalon, l’échelle vient du disque suivi et de son diamètre. Sur machine, pose deux points '
-        +'sur une longueur que tu connais.')+'</p>'
+        +'sur une longueur que tu connais — ou l’outil Échelle, dans l’onglet Tracé.')+'</p>'
     +'<div class="ml-champ"><span>Étalon</span><span class="ml-choix">'
       +ML_ETALONS.map(x=>'<button type="button" class="ml-b" aria-pressed="'+(e.type===x.cle)+'" '
         +'onclick="mlEtalonType(\''+x.cle+'\')">'+escapeHtml(x.nom)+'</button>').join('')+'</span></div>'
@@ -10320,6 +11158,15 @@ function _mlInjecterStyle(){
     '.mlx-champ{display:flex;flex-direction:column;gap:6px;margin-top:12px;font-size:var(--fs-2xs);font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--sub)}',
     '.mlx input.mlx-in,.mlx select.mlx-in{height:40px;margin:0;padding:0 12px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.4);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);text-transform:none;letter-spacing:0}',
     '.mlx input.mlx-in:focus,.mlx select.mlx-in:focus{border-color:var(--red)}',
+    // L'OUTIL ÉCHELLE : le disque, sa cote, et « Enregistrer la mesure ».
+    '.mlx-ech{margin-top:10px}',
+    '.mlx-ech .mlx-ech-etat{margin-top:2px;font-size:var(--fs-xs);color:var(--text-strong)}',
+    '.mlx-ech-disque{margin:12px 0 0;font-size:var(--fs-xs);color:var(--text);line-height:1.5}',
+    '.mlx-ech-disque b{font-weight:800}',
+    '.mlx-ech-mm{display:flex;align-items:center;gap:8px}.mlx-ech-mm input.mlx-in{width:110px;flex:0 0 110px;text-align:right}.mlx-ech-mm i{font-style:normal;text-transform:none;letter-spacing:0}',
+    '.mlx-ech-b{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}',
+    '.mlx-ech-b .btn{flex:1 1 180px;min-height:44px}',
+    '.mlx-ech-b .btn[disabled]{opacity:.45;cursor:default}',
     '.mlx-duree{display:flex;align-items:center;gap:6px}',
     '.mlx input.mlx-tps{width:92px;flex:0 0 92px;padding:0 6px;text-align:center;font-variant-numeric:tabular-nums}',
     '.mlx-fl{color:var(--sub)}',
