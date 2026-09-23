@@ -8996,3 +8996,22 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;
   text-decoration:none;cursor:pointer}
 .vrr-b:active{transform:translateY(1px)}
+
+/* ══ LE BOUT DU MOIS D'ESSAI (lot 6) ════════════════════════════════════════
+   Le meme vocabulaire que l'ecran d'arrivee : un sur-titre discret, un titre
+   qui parle du programme de la personne, puis deux cartes. */
+.eb-tete{font-size:11px;letter-spacing:3px;font-weight:800;text-transform:uppercase;
+  color:var(--red-text);margin:6px 0 10px}
+.eb-titre{font-size:22px;line-height:1.28;font-weight:900;color:var(--text);margin:0 0 8px}
+.eb-sous{font-size:14px;line-height:1.6;color:var(--sub);margin:0 0 18px}
+.eb-carte{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);
+  padding:16px 16px 18px;margin-bottom:14px}
+.eb-c-nom{font-size:15px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#fff}
+.eb-c-prix{font-size:13px;color:var(--sub);margin:4px 0 10px}
+.eb-c-l{margin:0 0 14px 16px;padding:0;font-size:13px;line-height:1.55;color:var(--text)}
+.eb-pied{margin-top:6px;padding-top:14px;border-top:1px solid var(--border)}
+.eb-coach{font-size:13px;line-height:1.6;color:var(--sub);margin:0 0 10px}
+.eb-lien{display:block;width:100%;text-align:center;background:none;border:1px solid var(--border);
+  border-radius:var(--r-3);min-height:44px;line-height:42px;color:var(--text);
+  font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:1.2px;
+  text-decoration:none;cursor:pointer;margin-bottom:8px}

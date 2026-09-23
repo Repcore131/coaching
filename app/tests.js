@@ -1902,10 +1902,35 @@ async function testExercices(){
     ok('Surcharge partielle : le MRV change',_re.mrv===26,String(_re.mrv));
     ok('Surcharge partielle : les autres bornes gardent le défaut',
        _re.mev===6&&_re.mavMin===10&&_re.mavMax===14,JSON.stringify(_re));
-    ok('Muscle sans repère → null',reperesEffectifs(currentUser,'LOMBAIRES')===null);
-    ok('ABDUCTEURS et ADDUCTEURS aussi',
-       reperesEffectifs(currentUser,'ABDUCTEURS')===null&&reperesEffectifs(currentUser,'ADDUCTEURS')===null);
-    ok('Les 14 muscles à repère sont couverts',Object.keys(REPERES_VOLUME).length===14);
+    // ⚠ CES TROIS ASSERTIONS ONT CHANGÉ D'OBJET LE 23/09/2026. Elles
+    //   gardaient l'ABSENCE de repère pour les lombaires, les abducteurs et
+    //   les adducteurs — la table les excluait faute de consensus de terrain.
+    //   Kevin, sa silhouette sous les yeux : « les lombaires, j'ai aucune
+    //   couleur, alors que pourtant j'ai un exo lombaire dans mes séances ».
+    //   Les trois ont rejoint la table, en ARBITRAGE assumé (voir son
+    //   en-tête). CE QUI SURVIT DE LA RÈGLE, et c'est l'essentiel : un
+    //   muscle INCONNU de la table rend toujours null, et rien ne l'invente.
+    ok('Les trois muscles sans repère en ont un, et il est complet',(()=>{
+      for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS']){
+        const r=reperesEffectifs(currentUser,m);
+        if(!r) return _echec(m+' n’a toujours pas de repère');
+        // Les bornes se suivent : un MEV au-dessus du MAV n'aurait aucun sens.
+        if(!(r.mev<=r.mavMin&&r.mavMin<=r.mavMax&&r.mavMax<=r.mrv))
+          return _echec(m+' : bornes incohérentes '+JSON.stringify(r));
+        // ⚠ MEV À 0 : ces trois-là sont chargés en indirect par tout le bas
+        //   du corps et par chaque port lourd. Le travail direct n'est pas
+        //   ce qui les maintient, et c'est ce que l'arbitrage dit.
+        if(r.mev!==0) return _echec(m+' : un MEV de '+r.mev+' pour un muscle chargé en indirect');
+      }
+      // LE LOMBAIRE A LE MRV LE PLUS BAS DES TROIS : site de surmenage
+      // classique, et sa fatigue se paie sur tout le reste.
+      const L=reperesEffectifs(currentUser,'LOMBAIRES');
+      return L.mrv<reperesEffectifs(currentUser,'ABDUCTEURS').mrv
+        ?true:_echec('le lombaire n’a plus le MRV le plus bas : '+L.mrv);})());
+    ok('Un muscle inconnu de la table rend toujours null',
+       reperesEffectifs(currentUser,'SOURCILS')===null);
+    ok('Les 18 muscles à repère sont couverts',Object.keys(REPERES_VOLUME).length===18,
+       Object.keys(REPERES_VOLUME).join(','));
     ok('Tous les repères portent sur un muscle connu',
        Object.keys(REPERES_VOLUME).every(m=>MUSCLES[m]));
     ok('Repères cohérents : mev <= mavMin <= mavMax <= mrv',
@@ -6460,8 +6485,14 @@ async function testExercices(){
           return sec.length?_echec('secondaires absents : '+sec.join(', ')):true;})());
 
         // ── REPERES_VOLUME : l'âge est nommé, aucun barème n'est créé ────
-        ok('REPERES_VOLUME est INCHANGÉ, aucun barème par âge',(()=>{
-          if(Object.keys(REPERES_VOLUME).length!==14)
+        // ⚠ LE TITRE DIT « INCHANGÉ » ET LA TABLE A CHANGÉ LE 23/09/2026 :
+        //   trois muscles de plus (lombaires, abducteurs, adducteurs). CE QUE
+        //   CETTE ASSERTION GARDE N'A PAS BOUGÉ D'UN POUCE — c'est le barème
+        //   par âge, et lui seul : aucune entrée ne gagne de clé liée à l'âge,
+        //   et les bornes des pectoraux sont celles d'origine. Le compte est
+        //   là pour qu'un ajout se remarque, pas pour les interdire.
+        ok('REPERES_VOLUME ne prend aucun barème par âge',(()=>{
+          if(Object.keys(REPERES_VOLUME).length!==18)
             return _echec(Object.keys(REPERES_VOLUME).length+' muscles');
           const r=REPERES_VOLUME.PECTORAUX;
           if(r.mev!==8||r.mavMin!==12||r.mavMax!==20||r.mrv!==22)
@@ -7858,16 +7889,22 @@ async function testExercices(){
           const u=_ath({status:'COACHING_SUIVI',accessExpiry:Date.now()+3*MOIS});
           if(!checkAccess(u)) return _echec('checkAccess refuse');
           const src=String(routeUser);
-          // ⚠ LA GARDE A CHANGE DE FORME LE 15/09/2026, et c'est voulu : elle
-          // lisait `s==='FREE'` en dur, ce qui aurait renvoye au paywall un
-          // athlete en essai. Elle passe par doitVoirLePaywall, qui pose la
-          // MEME question en tenant compte de l'essai. La propriete verifiee
-          // ici ne change pas : un seul chemin vers s-client-code, et un
+          // ⚠ LA GARDE A CHANGE DE FORME DEUX FOIS, et la propriete verifiee
+          // ici n'a jamais bouge : UN SEUL chemin vers l'ecran d'acces, et un
           // COACHING_SUIVI valide ne le prend pas.
-          const m=src.match(/if\(doitVoirLePaywall\(currentUser\)\) return go\('s-client-code'\)/);
-          if(!m) return _echec('la garde vers s-client-code a changé de forme');
-          if((src.match(/go\('s-client-code'\)/g)||[]).length!==1)
-            return _echec('routeUser a plusieurs chemins vers s-client-code');
+          //   15/09/2026 : elle lisait `s==='FREE'` en dur, ce qui aurait
+          //     renvoye au paywall un athlete en essai. Elle est passee par
+          //     doitVoirLePaywall, qui pose la MEME question.
+          //   23/09/2026 (lot 6) : la sortie n'est plus la meme pour tout le
+          //     monde. Celui qui a vecu le mois d'essai voit son bilan, celui
+          //     qui n'en a jamais eu voit l'ecran de code : c'est
+          //     allerApresEssai qui tranche, en un seul endroit lui aussi.
+          const m=src.match(/if\(doitVoirLePaywall\(currentUser\)\) return allerApresEssai\(currentUser\)/);
+          if(!m) return _echec('la garde vers l’écran d’accès a changé de forme');
+          if((src.match(/go\('s-client-code'\)/g)||[]).length!==0)
+            return _echec('routeUser garde un chemin direct vers s-client-code');
+          if(ecranApresEssai(u)!=='s-client-code')
+            return _echec('un dossier sans essai ne mène plus à l’écran de code');
           return !doitVoirLePaywall(u)?true:_echec('un COACHING_SUIVI valide y passerait');})());
 
         // ── Le plafond, vérifié DEUX fois ────────────────────────────────
@@ -15228,21 +15265,31 @@ async function testExercices(){
               return _echec((f.name||'?')+' écrit');
           }
           return true;})());
-        ok('Un muscle SANS repère est absent de la sortie',(()=>{
-          // Règle 3. LOMBAIRES, ABDUCTEURS et ADDUCTEURS n'ont pas de repère :
-          // trois muscles sur dix-sept, et le lombaire est justement celui
-          // dont la charge cumulée fait le plus de dégâts.
+        // ⚠ CETTE ASSERTION A CHANGÉ DE SENS LE 23/09/2026. Elle vérifiait que
+        //   les lombaires, les abducteurs et les adducteurs RESTENT DEHORS,
+        //   faute de repère. Ils en ont un depuis, et la grille les montre :
+        //   c'est même le premier bénéfice de l'arbitrage, parce que la charge
+        //   lombaire cumulée est justement celle qui fait le plus de dégâts et
+        //   qu'elle n'apparaissait nulle part.
+        //   LA RÈGLE ELLE-MÊME N'A PAS BOUGÉ : pas de repère, pas de ligne.
+        //   Elle se vérifie maintenant sur un muscle que la table ne connaît
+        //   pas — ce qui est le seul cas qui reste, et le vrai cas général.
+        ok('La grille montre un muscle des qu’il a un repère, et pas avant',(()=>{
           _viderCacheVolume();
           const g=grilleCharge(_dossierG());
           const vus=new Set(g.map(c=>c.muscle));
           for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS'])
-            if(vus.has(m)) return _echec(m+' est affiché sans repère');
+            if(!vus.has(m)) return _echec(m+' a un repère et reste absent de la grille');
           if(!vus.has('PECTORAUX')) return _echec('un muscle AVEC repère est absent');
-          // Un coach qui fournit ses propres bornes le fait réapparaître.
+          // ET RIEN QUI N'AIT DE REPÈRE : chaque ligne porte un muscle connu.
+          for(const m of vus)
+            if(!reperesEffectifs(_dossierG(),m)) return _echec(m+' est affiché sans repère');
+          // Un coach qui fournit ses propres bornes reste prioritaire.
           _viderCacheVolume();
           const u2=_dossierG({reperesVolume:{LOMBAIRES:{mev:4,mavMin:8,mavMax:14,mrv:18}}});
-          return new Set(grilleCharge(u2).map(c=>c.muscle)).has('LOMBAIRES')
-            ?true:_echec('un repère fourni par le coach ne suffit pas');})());
+          const l=grilleCharge(u2).filter(c=>c.muscle==='LOMBAIRES')[0];
+          return (l&&reperesEffectifs(u2,'LOMBAIRES').mrv===18)
+            ?true:_echec('le repère du coach ne passe pas devant l’arbitrage');})());
         ok('Une semaine sans donnée rend le PRÉVISIONNEL du gabarit',(()=>{
           // Une case vide ne dit rien ; une case prévisionnelle dit ce qui est
           // prévu. Les semaines 2 et 3 du bloc n'ont aucune séance loggée.
@@ -18429,8 +18476,15 @@ async function testExercices(){
             // LE REFUS DIT QUOI FAIRE À LA PLACE, il ne se contente pas de bloquer.
             if(!/retire|deux blocs/i.test(r.raison)) return _echec('le refus ne propose rien : « '+r.raison+' »');
             if(u.blocPriorite.hauts.length!==3) return _echec('le quatrième a quand même été ajouté');
-            // Et un muscle sans repère n'est jamais priorisable.
-            const s=blocAjouterHaut(neuf(),'LOMBAIRES');
+            // ⚠ LE MUSCLE TÉMOIN A CHANGÉ LE 23/09/2026. C'était LOMBAIRES,
+            //   qui n'avait pas de repère ; il en a un depuis, et il est donc
+            //   priorisable comme les autres — ce qui est cohérent : on peut
+            //   vouloir un bloc lombaire. LA RÈGLE GARDÉE est la même, et
+            //   c'est elle qui compte : sans repère, pas de priorisation,
+            //   parce qu'on ne saurait pas dire vers quel volume monter.
+            if(!blocAjouterHaut(neuf(),'LOMBAIRES').ok)
+              return _echec('un muscle qui a maintenant un repère reste refusé');
+            const s=blocAjouterHaut(neuf(),'SOURCILS');
             return s.ok?_echec('un muscle sans repère est priorisé'):true;})());
 
           ok('Le plafond des 10 % est OPPOSABLE, et il dit quoi retirer',(()=>{
@@ -18789,21 +18843,27 @@ async function testExercices(){
               return appliquerRetourMuscle(u,'PECTORAUX',S(1)).bouge==='mrv'
                 ?true:_echec('deux baisses de suite ne descendent pas le MRV');});})());
 
-          ok('Un muscle sans repère est ignoré, à l\'écriture comme au déplacement',(()=>{
-            // LOMBAIRES, ABDUCTEURS, ADDUCTEURS : la table les exclut
-            // volontairement. Ils n'ont ni MEV ni MRV à déplacer, et récolter
-            // un retour qu'on ne pourra pas appliquer, c'est poser une
-            // question pour rien.
+          // ⚠ CETTE ASSERTION A CHANGÉ D'OBJET LE 23/09/2026. Les trois muscles
+          //   qu'elle citait — lombaires, abducteurs, adducteurs — ont rejoint la
+          //   table, et la boucle de retour les traite donc comme les autres :
+          //   leur repère se déplace sur les retours de séance. C'est cohérent,
+          //   et c'est même ce qui rattrape l'arbitrage, puisqu'un arbitrage
+          //   moyen se corrige sur l'athlète qui le porte.
+          //   LA RÈGLE GARDÉE : un muscle que la table ne connaît pas ne récolte
+          //   rien et ne bouge rien. Poser une question dont on ne fera rien
+          //   reste la faute qu'on évite.
+          ok('Un muscle inconnu de la table ne récolte rien et ne bouge rien',(()=>{
             return sansSave(()=>{
-              for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS']){
-                if(reperesTable(m)) return _echec(m+' a un repère de table');
-                const u={email:'x@t.fr',sessions:[],reperesAuto:{},retourMuscle:{}};
-                u.retourMuscle[m]=[{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}];
-                if(appliquerRetourMuscle(u,m,S(1)).bouge) return _echec(m+' a bougé');
-                const e=enregistrerRetourMuscle(u,m,{congestion:'forte'});
-                if(e.ok) return _echec('un retour est accepté sur '+m);
-              }
-              return true;});})());
+              // Les trois arbitrés, eux, sont bien traités comme les autres.
+              for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS'])
+                if(!reperesTable(m)) return _echec(m+' n’a pas de repère de table');
+              const m='SOURCILS';
+              if(reperesTable(m)) return _echec('la table connaît '+m);
+              const u={email:'x@t.fr',sessions:[],reperesAuto:{},retourMuscle:{}};
+              u.retourMuscle[m]=[{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}];
+              if(appliquerRetourMuscle(u,m,S(1)).bouge) return _echec(m+' a bougé');
+              const e=enregistrerRetourMuscle(u,m,{congestion:'forte'});
+              return e.ok?_echec('un retour est accepté sur '+m):true;});})());
 
           ok('Deux semaines muettes gèlent le repère, sans revenir à la table',(()=>{
             // Revenir en silence changerait les seuils de quelqu'un qui n'a
@@ -25114,11 +25174,16 @@ async function testExercices(){
         &&_htmlConcentration({},'PECTORAUX')==='');
 
       // ── Indépendance vis-à-vis des repères ──
-      ok('Critère 4 : un muscle SANS repère reçoit la ligne',(()=>{
+      // ⚠ L'INTITULÉ DISAIT « SANS REPÈRE » ET LES LOMBAIRES EN ONT UN DEPUIS
+      //   LE 23/09/2026. Ce que la ligne garantit n'a pas bougé d'un mot : elle
+      //   parle de RÉPARTITION, pas de dosage, et elle sort pour n'importe quel
+      //   muscle — avec repère ou sans. L'assertion suivante le prouve d'ailleurs
+      //   autrement, et mieux : la fonction ne lit NI REPERES_VOLUME, NI
+      //   reperesEffectifs, NI zoneVolume.
+      ok('Critère 4 : la ligne sort quel que soit le muscle, repère ou pas',(()=>{
         const c=_cAth([14,2],'LOMBAIRES');
         const r=_cRes(c);
-        return reperesEffectifs(c,'LOMBAIRES')===null
-          &&/14 des 16 séries sur une seule séance/.test(_htmlConcentration(r,'LOMBAIRES'));})());
+        return /14 des 16 séries sur une seule séance/.test(_htmlConcentration(r,'LOMBAIRES'));})());
       ok('La ligne ne lit ni REPERES_VOLUME ni zoneVolume',
         _htmlConcentration.toString().indexOf('REPERES_VOLUME')<0
         &&_htmlConcentration.toString().indexOf('reperesEffectifs')<0
@@ -26263,14 +26328,17 @@ async function testExercices(){
       ok('Critère 2 : urgencyScore vaut 6, comme le sous-MEV',
         _vhScore(_vhAth('vh3',24,26))===6,String(_vhScore(_vhAth('vh3',24,26))));
 
-      // ── Critère : un muscle sans repère ne lève jamais rien ──
-      // reperesEffectifs rend null pour LOMBAIRES, ABDUCTEURS et ADDUCTEURS :
-      // ni sous-MEV, ni volume haut, quel que soit le nombre de séries.
-      ok('Critère 3 : un muscle sans repère ne lève pas le signal',(()=>{
+      // ── Critère : le signal suit le repère, et rien d'autre ──
+      // ⚠ CHANGÉ LE 23/09/2026. Les lombaires, les abducteurs et les
+      //   adducteurs n'avaient pas de repère : aucun signal ne pouvait les
+      //   concerner. Ils en ont un depuis, et QUARANTE SÉRIES DE LOMBAIRES
+      //   LÈVENT MAINTENANT LE VOLUME HAUT — ce qui est exactement ce qu'on
+      //   veut d'un muscle dont la charge cumulée fait le plus de dégâts.
+      ok('Critère 3 : un muscle arbitré lève le signal comme les autres',(()=>{
         return ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS'].every((m,i)=>{
           const c=_vhAth('vhs'+i,40,40,{exMuscles:{[_vhK]:{p:[m],s:[]}},reperesVolume:{}});
           const sg=signauxEntrainement(c);
-          return reperesEffectifs(c,m)===null&&sg.volumeHaut===false&&sg.sousMEV===false;});})());
+          return !!reperesEffectifs(c,m)&&sg.volumeHaut===true;});})());
 
       // ── Critère : la santé passe devant ──
       // Un signal de niveau 6 n'est même pas calculé quand un 7, 8 ou 9 est
@@ -35898,76 +35966,143 @@ async function testExercices(){
             return true;
           } finally { _corpsVue=sV; try{ rcInfoFermer(true); }catch(e){} }})());
 
-        okA('1428 — LES CARTES DE ZONES : LE PEC MONTE, LE BICEPS PASSE DEVANT, LA CUISSE VA DU HAUT EN BAS',(async()=>{
-          // Kevin, la silhouette sous les yeux : « le détourage au niveau des
-          // pecs est incomplet, tu peux monter en haut et sélectionner
-          // correctement les pecs ; les biceps, l’entourage est mauvais aussi,
-          // il englobe le triceps ; les cuisses, il faut que ça soit en
-          // entier ». Les quatre cartes sont recoupées par
-          // scripts/corps_zones_recoupe.py, qui est idempotent : le rejouer sur
-          // les cartes livrées ne les change pas.
-          //
-          // ⚠ ON SONDE LA CARTE, PAS LE SCRIPT. Ce sont ces pixels-là que
-          //   l’application lit sous le doigt et peint en couleur ; un jour où
-          //   quelqu’un régénérera les cartes autrement, c’est le résultat qui
-          //   doit tenir, pas la recette.
-          const url=(CORPS_PLANCHE['h-face']||{}).zones;
-          if(!url) return _echec('la silhouette masculine n’a plus de carte de zones');
-          const img=await new Promise(res=>{
-            const i=new Image();
-            i.onload=()=>res(i); i.onerror=()=>res(null);
-            i.src=url;
-          });
-          if(!img) return _echec('la carte '+url+' ne se charge pas');
-          const cv=document.createElement('canvas');
-          cv.width=img.naturalWidth; cv.height=img.naturalHeight;
-          cv.getContext('2d').drawImage(img,0,0);
-          let d=null;
-          try{ d=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data; }
-          catch(e){ return _echec('la carte n’est pas lisible : '+((e&&e.message)||e)); }
-          const zone=(x,y)=>{
-            const v=d[(y*cv.width+x)*4];
-            return v?(CORPS_ZONES_ORDRE[Math.round(v/CORPS_ZONES_PAS)-1]||null):null;
+        // ⚠ CETTE ASSERTION A GRANDI LE 23/09/2026 AU SOIR. Elle sondait douze
+        //   pixels d'une seule planche — le pec, le biceps, la cuisse. Kevin a
+        //   regardé les quatre, et il en manquait bien plus que trois : le
+        //   trapèze moyen n'avait AUCUN territoire (son volume existait, sa
+        //   place sur le dessin non), les dorsaux et les lombaires se
+        //   partageaient le bas du dos par une ligne HORIZONTALE, et le short
+        //   était trop sombre pour qu'une couleur s'y voie.
+        okA('1430 — LES QUATRE CARTES DE ZONES, MUSCLE PAR MUSCLE',(async()=>{
+          // Les cartes sont produites par scripts/corps_zones.py, idempotent.
+          // ⚠ ON SONDE LA CARTE, PAS LE SCRIPT : ce sont ces pixels-là que
+          //   l'application lit sous le doigt et peint en couleur. Le jour où
+          //   quelqu'un les régénérera autrement, c'est le RÉSULTAT qui doit
+          //   tenir, pas la recette.
+          // ⚠ ET ON SONDE UNE FENÊTRE DE 7×7, PAS UN PIXEL. La carte laisse à
+          //   zéro les traits du dessin, pour qu'ils restent lisibles sous la
+          //   teinte : un pixel isolé tombe une fois sur trois dans un trait,
+          //   et l'assertion aurait clignoté sans rien dire de vrai.
+          const lire=async(url)=>{
+            const img=await new Promise(res=>{ const i=new Image();
+              i.onload=()=>res(i); i.onerror=()=>res(null); i.src=url; });
+            if(!img) return null;
+            const cv=document.createElement('canvas');
+            cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+            cv.getContext('2d').drawImage(img,0,0);
+            try{ return {w:cv.width,h:cv.height,
+              d:cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data}; }
+            catch(e){ return null; }
           };
+          const nomZone=v=>v?(CORPS_ZONES_ORDRE[Math.round(v/CORPS_ZONES_PAS)-1]||null):null;
+          const fenetre=(c,x,y)=>{
+            // Le muscle majoritaire de la fenêtre, et rien d'autre dedans.
+            const n={};
+            for(let j=y-3;j<=y+3;j++) for(let i=x-3;i<=x+3;i++){
+              const k=nomZone(c.d[(j*c.w+i)*4]);
+              if(k) n[k]=(n[k]||0)+1;
+            }
+            const cles=Object.keys(n).sort((a,b)=>n[b]-n[a]);
+            return cles.length?cles[0]:null;
+          };
+          const cartes={};
+          for(const g of ['h','f']) for(const v of ['face','dos']){
+            const pl=CORPS_PLANCHE[g+'-'+v];
+            const c=pl&&await lire(pl.zones);
+            if(!c) return _echec('la carte '+((pl||{}).zones||g+'-'+v)+' ne se lit pas');
+            cartes[g+'-'+v]=c;
+          }
+          // ── 1. CHAQUE MUSCLE QUE LA VUE ANNONCE A UN TERRITOIRE ─────────
+          //    C'est le défaut du trapèze moyen, et il ne doit plus pouvoir
+          //    revenir : un muscle listé dans CORPS_MUSCLES_VUE sans pixels sur
+          //    la planche reçoit du volume et ne s'affiche nulle part.
+          //    ET AUCUN INTRUS : un muscle peint que la vue ne déclare pas ne
+          //    serait jamais teinté, donc jamais vu — du travail perdu.
+          for(const g of ['h','f']) for(const v of ['face','dos']){
+            const c=cartes[g+'-'+v], n={};
+            for(let i=0;i<c.d.length;i+=4){
+              const k=nomZone(c.d[i]);
+              if(k) n[k]=(n[k]||0)+1;
+            }
+            for(const m of CORPS_MUSCLES_VUE[v])
+              if(!((n[m]||0)>=500))
+                return _echec(g+'-'+v+' : '+m+' n’a que '+(n[m]||0)+' pixels');
+            for(const m of Object.keys(n))
+              if(CORPS_MUSCLES_VUE[v].indexOf(m)<0)
+                return _echec(g+'-'+v+' : '+m+' est peint mais la vue ne le montre pas');
+          }
+          // ── 2. LES SONDES, LA OU KEVIN A REGARDE ────────────────────────
           const sondes=[
-            // LE HAUT DU THORAX, DES DEUX CÔTÉS : le trapèze y descendait en
-            // coin, et le pec ne commençait qu’à mi-hauteur.
-            [130,200,'PECTORAUX','le haut du thorax, à gauche'],
-            [230,200,'PECTORAUX','le haut du thorax, à droite'],
-            [120,210,'PECTORAUX','le thorax près de l’aisselle gauche'],
-            [240,210,'PECTORAUX','le thorax près de l’aisselle droite'],
-            // LE BRAS DE FACE : le biceps tient la masse, le triceps la bande
-            // extérieure. C’était l’inverse.
-            [78,300,'BICEPS','l’intérieur du bras gauche'],
-            [52,300,'TRICEPS','le bord extérieur du bras gauche'],
-            [300,300,'BICEPS','l’intérieur du bras droit'],
-            // LE HAUT DE LA CUISSE, sous l’ourlet du short : l’abducteur
-            // prenait toute la largeur et le quadriceps ne commençait qu’à
-            // mi-cuisse.
-            [102,510,'QUADRICEPS','le haut de la cuisse gauche'],
-            [255,510,'QUADRICEPS','le haut de la cuisse droite'],
-            [120,540,'QUADRICEPS','la cuisse gauche'],
-            [240,540,'QUADRICEPS','la cuisse droite']];
-          for(const [x,y,attendu,ou] of sondes){
-            const z=zone(x,y);
-            if(z!==attendu) return _echec(ou+' ('+x+','+y+') : '+(z||'rien')+' au lieu de '+attendu);
+            // LE PEC MONTE JUSQUE SOUS LA CLAVICULE, des deux côtés. Le
+            // trapèze descendait en coin sur le haut du thorax.
+            ['h-face',130,196,'PECTORAUX','le haut du thorax, à gauche'],
+            ['h-face',240,206,'PECTORAUX','le haut du thorax, à droite'],
+            ['f-face',130,200,'PECTORAUX','le haut du thorax de la femme'],
+            // DE FACE, LE BICEPS EST LA MASSE et le triceps une bande.
+            ['h-face',65,271,'BICEPS','l’avant du bras'],
+            ['h-face',45,273,'TRICEPS','le bord extérieur du bras'],
+            ['f-face',60,300,'BICEPS','l’avant du bras de la femme'],
+            ['f-face',51,285,'TRICEPS','le bord extérieur de son bras'],
+            // DE DOS, L'INVERSE.
+            ['h-dos',60,300,'TRICEPS','l’arrière du bras'],
+            ['f-dos',60,300,'TRICEPS','l’arrière du bras de la femme'],
+            // LA CUISSE ENTIERE, ses deux bandes de chaque côté.
+            ['h-face',120,545,'QUADRICEPS','la cuisse'],
+            ['h-face',79,533,'ABDUCTEURS','le bord extérieur de la cuisse'],
+            ['h-face',165,548,'ADDUCTEURS','l’intérieur de la cuisse'],
+            ['f-face',100,500,'QUADRICEPS','la cuisse de la femme'],
+            ['h-dos',120,560,'ISCHIOS','l’arrière de la cuisse'],
+            ['f-dos',100,530,'ISCHIOS','l’arrière de la cuisse de la femme'],
+            // LE TRAPEZE, COUPE A L'EPINE DE L'OMOPLATE.
+            ['h-dos',180,190,'TRAP_SUP','la pente cou-épaule'],
+            ['h-dos',145,229,'TRAP_MED','entre les omoplates'],
+            ['f-dos',155,180,'TRAP_SUP','la pente cou-épaule de la femme'],
+            ['f-dos',117,217,'TRAP_MED','entre ses omoplates'],
+            // ET LE BAS DU DOS : la colonne au milieu, les dorsaux de chaque
+            // côté — À LA MÊME HAUTEUR. C'est ce qui prouve que la séparation
+            // est verticale et non plus horizontale.
+            ['h-dos',180,390,'LOMBAIRES','la colonne lombaire'],
+            ['h-dos',133,365,'DORSAUX','le flanc gauche, au niveau des lombaires'],
+            ['h-dos',217,361,'DORSAUX','le flanc droit, au niveau des lombaires'],
+            ['f-dos',139,323,'LOMBAIRES','la colonne lombaire de la femme'],
+            ['f-dos',117,351,'DORSAUX','son flanc, au niveau des lombaires'],
+            ['h-dos',157,451,'FESSIERS','le fessier']];
+          for(const [pl,x,y,attendu,ou] of sondes){
+            const z=fenetre(cartes[pl],x,y);
+            if(z!==attendu)
+              return _echec(pl+' — '+ou+' ('+x+','+y+') : '+(z||'rien')+' au lieu de '+attendu);
           }
-          // ET LES TROIS MUSCLES QUI CÈDENT DU TERRAIN EN GARDENT : un partage
-          // qui en efface un le rendrait introuvable sous le doigt.
-          const compte={};
-          for(let i=0;i<d.length;i+=4){
-            const v=d[i];
-            if(!v) continue;
-            const k=CORPS_ZONES_ORDRE[Math.round(v/CORPS_ZONES_PAS)-1];
-            if(k) compte[k]=(compte[k]||0)+1;
+          return true;}));
+
+        okA('1430 — LE SHORT LAISSE VOIR LA COULEUR DES FESSIERS',(async()=>{
+          // Kevin : « fessiers, essaie de mettre peut-être plus blanc ton
+          // caleçon, pour qu'on puisse voir par-dessus la couleur ». La teinte
+          // est peinte en `multiply` : elle MULTIPLIE la luminance du dessin.
+          // À 24 sur 255, le short rendait un vert à (5,29,14) — noir. Aucun
+          // réglage de couleur ne rattrape une multiplication par presque zéro ;
+          // c'est la luminance du dessin qui a été relevée, sous la seule zone
+          // des fessiers et avec un bord fondu (scripts/corps_short.py).
+          const pl=CORPS_PLANCHE['h-dos'];
+          const charger=url=>new Promise(res=>{ const i=new Image();
+            i.onload=()=>res(i); i.onerror=()=>res(null); i.src=url; });
+          const [dessin,zones]=await Promise.all([charger(pl.src),charger(pl.zones)]);
+          if(!dessin||!zones) return _echec('la silhouette de dos ne se charge pas');
+          const lire=img=>{ const cv=document.createElement('canvas');
+            cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+            cv.getContext('2d').drawImage(img,0,0);
+            return cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data; };
+          let a=null,b=null;
+          try{ a=lire(dessin); b=lire(zones); }catch(e){ return _echec('image illisible : '+((e&&e.message)||e)); }
+          const val=(CORPS_ZONES_ORDRE.indexOf('FESSIERS')+1)*CORPS_ZONES_PAS;
+          let n=0,somme=0;
+          for(let i=0;i<b.length;i+=4){
+            if(b[i]!==val) continue;
+            n++; somme+=(a[i]+a[i+1]+a[i+2])/3;
           }
-          for(const m of ['TRAP_SUP','DELT_ANT','TRICEPS','ABDUCTEURS','ADDUCTEURS']){
-            if(!((compte[m]||0)>400)) return _echec(m+' n’a plus que '+(compte[m]||0)+' pixels sur la vue avant');
-          }
-          // DE FACE, LE BICEPS PASSE DEVANT LE TRICEPS. C’est la demande, et
-          // c’est ce qu’un bras vu de face montre.
-          return (compte.BICEPS>compte.TRICEPS)?true
-            :_echec('le triceps tient encore '+compte.TRICEPS+' pixels contre '+compte.BICEPS+' au biceps');}));
+          if(!n) return _echec('aucun pixel de fessier sur la carte de dos');
+          const moy=somme/n;
+          return moy>=55?true
+            :_echec('le short est à '+Math.round(moy)+' de luminance : la couleur ne s’y verra pas');}));
       })();
 
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
@@ -42519,9 +42654,16 @@ async function testExercices(){
       // vaut le rang de son muscle dans CORPS_ZONES_ORDRE, fois CORPS_ZONES_PAS.
       if(CORPS_ZONES_ORDRE.length*CORPS_ZONES_PAS>255) return _echec('les rangs débordent un octet');
       if(new Set(CORPS_ZONES_ORDRE).size!==CORPS_ZONES_ORDRE.length) return _echec('un muscle a deux rangs');
+      // ⚠ TREIZE DE FACE, QUATORZE DE DOS DEPUIS LE 23/09/2026 : le trapèze
+      //   moyen a rejoint la vue arrière, où il se voit — il n'existait sur
+      //   aucune planche alors que le volume le sépare du supérieur depuis le
+      //   08/09. De face, on ne le voit pas, et il n'y est pas.
+      const ATTENDU={face:13,dos:14};
       for(const vue of ['face','dos']){
         const l=CORPS_MUSCLES_VUE[vue]||[];
-        if(l.length!==13) return _echec(vue+' : '+l.length+' muscles au lieu des 13 de ce matin');
+        if(l.length!==ATTENDU[vue]) return _echec(vue+' : '+l.length+' muscles au lieu de '+ATTENDU[vue]);
+        if(vue==='dos'&&l.indexOf('TRAP_MED')<0) return _echec('le trapèze moyen n’est pas sur la vue de dos');
+        if(vue==='face'&&l.indexOf('TRAP_MED')>=0) return _echec('le trapèze moyen ne se voit pas de face');
         for(const m of l){
           if(CORPS_ZONES_ORDRE.indexOf(m)<0) return _echec(vue+' : '+m+' n’a pas de rang dans la carte');
           if(!MUSCLES[m]) return _echec(m+' n’est pas un muscle connu');
@@ -42551,11 +42693,18 @@ async function testExercices(){
         if(c(v)!==GC_COULEURS[z]) return _echec(v+' séries : '+c(v)+' au lieu de '+z+' ('+GC_COULEURS[z]+')');
       // QUATRE COULEURS DIFFERENTES : plus un corps d'une seule teinte.
       if(new Set(cas.map(([v])=>c(v))).size!==4) return _echec('les quatre zones ne donnent pas quatre couleurs');
-      // UN MUSCLE SANS REPERE N'EST PAS TEINTE : on n'invente pas son MRV.
-      for(const m of ['ABDUCTEURS','ADDUCTEURS'])
-        if(!reperesEffectifs(u,m)&&corpsTeintes(u,'face',{[m]:12})[m]) return _echec(m+' est teinté sans repère');
-      if(!reperesEffectifs(u,'LOMBAIRES')&&corpsTeintes(u,'dos',{LOMBAIRES:6}).LOMBAIRES)
-        return _echec('les lombaires sont teintées sans repère');
+      // ⚠ LES TROIS MUSCLES ARBITRÉS SE TEIGNENT MAINTENANT (23/09/2026). Ce
+      //   test gardait l'inverse : sans repère, pas de teinte, et les
+      //   abducteurs, les adducteurs et les lombaires restaient gris. Kevin
+      //   entraîne les trois et ne comprenait pas leur silence.
+      for(const [m,vue] of [['ABDUCTEURS','face'],['ADDUCTEURS','face'],['LOMBAIRES','dos']])
+        if(!corpsTeintes(u,vue,{[m]:12})[m]) return _echec(m+' n’est toujours pas teinté');
+      // LA RÈGLE, ELLE, TIENT TOUJOURS, et c'est le garde-fou qui compte : le
+      // calcul ÉCARTE un muscle dont reperesEffectifs ne sait rien dire. Elle
+      // ne se démontre plus sur un muscle réel — ils ont tous un repère —,
+      // alors on la lit dans le code, là où elle vit.
+      if(!/if\(!rep\)\s*continue/.test(String(corpsZones)))
+        return _echec('corpsZones n’écarte plus les muscles sans repère');
       // LA VUE FILTRE : un muscle que la planche ne montre pas n'est pas peint.
       if(corpsTeintes(u,'face',{FESSIERS:15}).FESSIERS) return _echec('les fessiers sont teints en vue de face');
       if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS) return _echec('les fessiers ne sont pas teints en vue de dos');
@@ -44264,132 +44413,141 @@ async function testExercices(){
 
     // ══ 15/09/2026 — L'ESSAI ATHLETE ══════════════════════════════════════
     //
-    // ⚠ CE QUE LA PHRASE PROMET, LE CODE DOIT L'APPLIQUER. Une durée annoncée
-    // que le produit n'applique pas serait une promesse contractuelle dont on
-    // ne revient pas — c'est la contrainte du lot, et ces assertions sont là
-    // pour qu'elle tienne quand ESSAI_SEANCES changera.
+    // ⚠ TROIS SEANCES SONT DEVENUES UN MOIS (lot 6, 23/09/2026), ET CE BLOC A
+    //   CHANGE DE CONTRAT, PAS D'EXIGENCE.
+    //
+    //   Ce qu'il tenait : la phrase dit EXACTEMENT ce que l'essai fait, le
+    //   compteur ne peut pas diverger de ce qui est annonce, l'essai ne se
+    //   rouvre jamais, et le paywall se decide en un seul endroit. Tout cela
+    //   tient encore, mot pour mot.
+    //
+    //   Ce qui a change : l'unite. Les seances comptaient parce que le JOUR ne
+    //   se tenait nulle part — l'horloge d'un telephone se change en trois
+    //   secondes. Le lot 0 a pose l'echeance dans droits/, ou personne n'ecrit
+    //   sauf le serveur : le mois devient tenable, et c'est le modele que
+    //   Kevin vend (« un mois d'essai complet, sans carte bancaire »).
+    //
+    //   L'ANCIENNE ASSERTION « la phrase ne promet ni duree » EST DONC
+    //   INVERSEE, et c'est voulu : elle promet un mois, et le produit doit
+    //   accorder un mois. ESSAI_JOURS et la phrase sont verifies ensemble.
     ok('La phrase dit exactement ce que l’essai fait',(()=>{
       if(typeof PROMESSE_ATHLETE!=='string'||!PROMESSE_ATHLETE)
         return _echec('la phrase n’existe pas');
-      // ⚠ LE NOMBRE VIENT DE LA CONSTANTE, il n'est pas écrit en toutes
-      // lettres : sans cela, passer ESSAI_SEANCES à 5 laisserait le produit
-      // promettre 3 séances et en accorder 5 — ou l'inverse.
-      if(PROMESSE_ATHLETE.indexOf(String(ESSAI_SEANCES))<0)
-        return _echec('la phrase ne porte pas le nombre de séances accordé');
-      if(!/ESSAI_SEANCES/.test(_prodSrc().slice(
-          _prodSrc().indexOf('const PROMESSE_ATHLETE'),
-          _prodSrc().indexOf('const PROMESSE_ATHLETE')+260)))
-        return _echec('la phrase écrit le nombre en dur au lieu de lire la constante');
-      // ELLE NE PROMET NI DURÉE, NI GRATUITÉ AU-DELÀ. Même règle que
-      // PROMESSE_COACH, dont le commentaire dit : « essai de N jours dirait
-      // exactement le contraire ».
-      for(const mot of ['jour','semaine','mois','illimit','toujours','à vie'])
-        if(new RegExp(mot,'i').test(PROMESSE_ATHLETE))
-          return _echec('la phrase promet une durée ou un au-delà : « '+mot+' »');
-      // ET ELLE DIT QUE ÇA S'ARRÊTE : une phrase qui ne nommerait que ce qui
-      // est libre serait la moitié de la vérité.
-      if(!/abonnement/i.test(PROMESSE_ATHLETE))
-        return _echec('la phrase ne dit pas ce qui vient après');
+      // LA DUREE ANNONCEE EST CELLE QU'ON ACCORDE. La phrase dit « un mois » ;
+      // le jour où ESSAI_JOURS ne vaudra plus trente, cette assertion tombe et
+      // oblige à réécrire la phrase plutôt qu'à mentir.
+      if(ESSAI_JOURS!==30)
+        return _echec('ESSAI_JOURS vaut '+ESSAI_JOURS+' : la phrase promet toujours un mois');
+      if(!/mois/i.test(PROMESSE_ATHLETE))
+        return _echec('la phrase ne dit pas la durée accordée');
       if(!/carte bancaire/i.test(PROMESSE_ATHLETE))
         return _echec('la phrase ne dit pas qu’aucune carte n’est demandée');
+      // ET ELLE DIT QUE ÇA S'ARRÊTE : une phrase qui ne nommerait que ce qui
+      // est libre serait la moitié de la vérité.
+      if(!/ensuite|après|apres/i.test(PROMESSE_ATHLETE))
+        return _echec('la phrase ne dit pas ce qui vient après');
+      // AUCUN AU-DELA PROMIS.
+      for(const mot of ['illimit','toujours','à vie','gratuit à vie'])
+        if(new RegExp(mot,'i').test(PROMESSE_ATHLETE))
+          return _echec('la phrase promet un au-delà : « '+mot+' »');
       return true;})());
 
     // ÉCRITE UNE FOIS, POSÉE PARTOUT — même mécanique que prixAutonomie, et
     // pour la même raison : trois textes en dur annonceraient trois essais
-    // différents le jour où la constante change.
+    // différents le jour où la phrase change.
     ok('La phrase d’essai n’est écrite qu’une fois',(()=>{
       const src=_prodSrc();
       const n=(src.match(/data-promesse-athlete/g)||[]).length;
       if(n<3) return _echec('moins de deux emplacements portent la phrase ('+n+' occurrences)');
-      // Le texte lui-même n'apparaît qu'à UN endroit : sa constante.
-      const bout='premières séances sont libres';
+      const bout='Ton premier mois est complet';
       const m=(src.split(bout).length-1);
       if(m!==1) return _echec(m+' copies du texte en production au lieu d’une');
-      // Et le poseur lit bien la constante.
       if(String(_poserPromesseAthlete).indexOf('PROMESSE_ATHLETE')<0)
         return _echec('le poseur n’utilise pas la constante');
       return true;})());
 
-    // LE COMPTEUR, SÉANCE PAR SÉANCE. Il se lit dans `sessions`, la donnée
-    // déjà enregistrée : aucun second compteur ne peut diverger d'elle.
-    ok('L’essai se consomme séance par séance, et s’arrête net',(()=>{
+    // LE MOIS, JOUR PAR JOUR. L'échéance est lue dans le dossier tant que le
+    // serveur n'a rien dit, et dans droits/ dès qu'il parle.
+    ok('L’essai dure un mois, s’arrête net, et ne se rouvre jamais',(()=>{
       const u={id:'e',email:'e@t',role:'athlete',status:'FREE',sessions:[]};
-      if(essaiRestant(u)!==null) return _echec('un dossier sans essai en annonce un');
+      if(essaiJoursRestants(u)!==null) return _echec('un dossier sans essai en annonce un');
       if(texteEssaiRestant(u)!=='') return _echec('un dossier sans essai affiche une ligne');
       if(checkAccess(u)) return _echec('un dossier sans essai a l’accès');
       if(!essaiOuvrir(u)) return _echec('l’essai ne s’ouvre pas');
       if(essaiOuvrir(u)) return _echec('l’essai se rouvre : il serait infini');
-      for(let n=0;n<=ESSAI_SEANCES+2;n++){
-        u.sessions=Array.from({length:n},(_,i)=>({date:i+1,exercises:[]}));
-        const reste=Math.max(0,ESSAI_SEANCES-n);
-        if(essaiRestant(u)!==reste)
-          return _echec(n+' séances → reste '+essaiRestant(u)+' au lieu de '+reste);
-        if(checkAccess(u)!==(reste>0))
-          return _echec(n+' séances → accès '+checkAccess(u));
-        // La ligne se tait dès l'épuisement : à ce moment-là c'est le paywall
-        // qui parle, et répéter serait insister.
-        if((texteEssaiRestant(u)!=='')!==(reste>0))
-          return _echec(n+' séances → ligne « '+texteEssaiRestant(u)+' »');
+      // LA FIN EST POSEE A L'OUVERTURE, et elle vaut un mois.
+      const attendu=ESSAI_JOURS*86400000;
+      const ecart=Math.abs((u.essai.finit-u.essai.ouvertLe)-attendu);
+      if(ecart>60000) return _echec('la fin posée n’est pas à un mois : '+ecart+' ms d’écart');
+      if(essaiJoursRestants(u)!==ESSAI_JOURS) return _echec('jour 1 : '+essaiJoursRestants(u)+' jours restants');
+      if(essaiJour(u)!==1) return _echec('jour 1 annoncé comme le jour '+essaiJour(u));
+      if(!essaiActif(u)||essaiFini(u)) return _echec('l’essai n’est pas actif le premier jour');
+      // LE MOIS S'ECOULE : on déplace l'ouverture, ce qui revient au même que
+      // de déplacer l'horloge, sans toucher à l'horloge du banc.
+      const dans=n=>{ const t0=Date.now()-n*86400000;
+        return {id:'e',email:'e@t',role:'athlete',status:'FREE',sessions:[],
+          essai:{ouvertLe:t0,finit:t0+attendu}}; };
+      for(const [n,reste] of [[0,30],[9,21],[21,9],[27,3],[29,1]]){
+        const v=dans(n);
+        if(essaiJoursRestants(v)!==reste) return _echec('jour '+(n+1)+' : '+essaiJoursRestants(v)+' restants au lieu de '+reste);
+        if(!essaiActif(v)) return _echec('jour '+(n+1)+' : l’essai est déjà fini');
+        if(!checkAccess(v)) return _echec('jour '+(n+1)+' : l’accès est coupé');
       }
-      // ⚠ L'ANCRE EST UN NOMBRE DE SÉANCES AU DÉPART, pas un compteur à
-      // rebours : un dossier qui portait déjà des séances n'épuise pas son
-      // essai d'avance.
+      const fini=dans(30);
+      if(essaiActif(fini)) return _echec('au trente-et-unième jour l’essai court encore');
+      if(!essaiFini(fini)) return _echec('l’essai fini n’est pas reconnu comme fini');
+      if(checkAccess(fini)) return _echec('l’accès reste ouvert après le mois');
+      if(texteEssaiRestant(fini)!=='') return _echec('la ligne parle encore après la fin');
+      // UN DOSSIER DEJA GARNI N'ENTAME PAS SON MOIS : la fin se compte en
+      // jours, plus en séances déjà faites.
       const v={id:'v',email:'v@t',role:'athlete',status:'FREE',
         sessions:Array.from({length:10},(_,i)=>({date:i+1}))};
       essaiOuvrir(v);
-      if(essaiRestant(v)!==ESSAI_SEANCES)
-        return _echec('un dossier déjà garni ouvre un essai entamé : '+essaiRestant(v));
-      return true;})());
+      return essaiJoursRestants(v)===ESSAI_JOURS
+        ?true:_echec('un dossier déjà garni ouvre un essai entamé : '+essaiJoursRestants(v));})());
 
     // ⚠ UNE SEULE QUESTION « FAUT-IL MONTRER LE PAYWALL », et six appels.
-    // Six endroits la posaient à la main ; chacun aurait renvoyé un athlète en
-    // essai au paywall, une fois par rechargement, malgré un checkAccess qui
-    // disait oui.
     ok('Le paywall se décide en un seul endroit',(()=>{
       const src=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
-      // Plus aucune copie de la question à la main.
       const maison=(src.match(/role!=='coach'&&\(\w+\.status\|\|'FREE'\)==='FREE'/g)||[]).length;
       if(maison) return _echec(maison+' copie(s) de la question subsistent');
       const n=(src.match(/doitVoirLePaywall\(/g)||[]).length;
-      // 1 définition + 6 appels.
       if(n<7) return _echec('seulement '+n+' mention(s) du prédicat : des chemins n’y passent pas');
-      // Il dit non pendant l'essai, oui après, et jamais rien d'un coach.
-      const f=(st,ess)=>({role:'athlete',status:st,essai:ess,sessions:[]});
-      if(doitVoirLePaywall(f('FREE',{seancesAuDebut:0})))
-        return _echec('un athlète en essai est renvoyé au paywall');
-      const epuise={role:'athlete',status:'FREE',essai:{seancesAuDebut:0},
-        sessions:Array.from({length:ESSAI_SEANCES},(_,i)=>({date:i+1}))};
-      if(!doitVoirLePaywall(epuise)) return _echec('un essai épuisé échappe au paywall');
-      if(!doitVoirLePaywall(f('FREE',undefined)))
+      const t0=Date.now();
+      const enCours={role:'athlete',status:'FREE',sessions:[],
+        essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*86400000}};
+      if(doitVoirLePaywall(enCours)) return _echec('un athlète en essai est renvoyé au paywall');
+      const fini={role:'athlete',status:'FREE',sessions:[],
+        essai:{ouvertLe:t0-40*86400000,finit:t0-10*86400000}};
+      if(!doitVoirLePaywall(fini)) return _echec('un essai fini échappe au paywall');
+      if(!doitVoirLePaywall({role:'athlete',status:'FREE',sessions:[]}))
         return _echec('un compte FREE sans essai échappe au paywall');
       if(doitVoirLePaywall({role:'coach',status:'FREE'}))
         return _echec('un coach est renvoyé au paywall');
       if(doitVoirLePaywall({role:'athlete',status:'COACHING_SUIVI'}))
         return _echec('un athlète à code est renvoyé au paywall');
+      // ET LES DEUX SORTIES NE SONT PAS LA MEME (lot 6) : celui qui a vécu le
+      // mois voit son bilan, celui qui n'a jamais eu d'essai voit le code.
+      if(ecranApresEssai(fini)!=='s-essai-bilan') return _echec('l’essai fini ne mène pas au bilan');
+      if(ecranApresEssai({role:'athlete',status:'FREE'})!=='s-client-code')
+        return _echec('un compte sans essai ne mène plus à l’écran de code');
       return true;})());
 
     // L'ESSAI S'OUVRE POUR UN ATHLÈTE SANS CODE, ET POUR LUI SEUL.
     ok('L’essai s’ouvre à l’inscription sans code, jamais ailleurs',(()=>{
       const src=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(src.match(/essaiOuvrir\(/g)||[]).length;
-      // 1 définition + 1 appel. Un second appel serait un second endroit où
-      // un essai peut naître, donc un endroit où il peut renaître.
       if(n!==2) return _echec(n+' mentions de essaiOuvrir au lieu de deux');
-      // Et cet appel est bien dans la branche « pas de code retenu ».
       if(!/_appliquerCodeApresInscription\(\)\)\s*return;[\s\S]{0,600}?essaiOuvrir\(currentUser\)/.test(src))
         return _echec('l’essai ne s’ouvre pas dans la branche sans code');
-      // Un coach n'en reçoit pas : sa promesse à lui est PROMESSE_COACH.
       const c={role:'coach',sessions:[]};
       if(essaiOuvrir(c)) return _echec('un coach reçoit un essai athlète');
       return true;})());
 
-    // LA MENTION EST DISCRÈTE ET HONNÊTE : elle dit ce qu'il reste, elle ne
-    // relance pas, et elle laisse un chemin volontaire vers l'abonnement.
-    ok('La mention d’essai informe sans relancer',(()=>{
+    // LA MENTION RESTE DISCRÈTE, ET LA SÉQUENCE NE HARCÈLE PAS.
+    ok('La mention d’essai suit la séquence, et se tait entre-temps',(()=>{
       const z=document.getElementById('clh-essai');
       if(!z) return _echec('le nud de la mention n’existe pas');
-      // Après la douleur, les contre-indications et l'échéance, comme tout le
-      // reste de l'accueil.
       const S=Node.DOCUMENT_POSITION_FOLLOWING;
       for(const id of ['clh-echeance','clh-contraintes','clh-douleur']){
         const e=document.getElementById(id);
@@ -44403,14 +44561,70 @@ async function testExercices(){
       if(/var\(--red\)|background:var\(--red/.test(m[1]))
         return _echec('la mention crie : '+m[1].slice(0,70));
       if(/animation:/.test(m[1])) return _echec('la mention bouge');
-      // Le texte lui-même ne promet rien et ne presse personne.
-      const u={role:'athlete',status:'FREE',essai:{seancesAuDebut:0},sessions:[]};
-      const t=texteEssaiRestant(u);
-      for(const mot of ['vite','dépêche','plus que','profite','offre'])
-        if(new RegExp(mot,'i').test(t)) return _echec('la ligne relance : « '+mot+' »');
-      if(t.indexOf(String(ESSAI_SEANCES))<0)
-        return _echec('la ligne ne dit pas combien il en reste');
+      // LA SEQUENCE, JOUR PAR JOUR : on accueille, on se tait, on rappelle,
+      // puis on chiffre. C'est celle que Kevin a écrite.
+      const dans=n=>{ const t0=Date.now()-n*86400000;
+        return {role:'athlete',status:'FREE',email:'seq@t.fr',
+          sessions_config:[{day:'Lundi',active:true,exercises:[{name:'SQUAT'},{name:'TRACTIONS'}]}],
+          sessions:[],essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*86400000}}; };
+      const j1=texteEssaiRestant(dans(0));
+      if(!/un mois/i.test(j1)||!/première séance/i.test(j1))
+        return _echec('le premier jour n’accueille pas : « '+j1+' »');
+      for(const n of [1,5,10,19]){
+        if(texteEssaiRestant(dans(n))!=='')
+          return _echec('la mention parle au jour '+(n+1)+' : « '+texteEssaiRestant(dans(n))+' »');
+      }
+      const j21=texteEssaiRestant(dans(20));
+      if(!/Il te reste 9 jours d’accès complet/.test(j21))
+        return _echec('le vingt-et-unième jour ne rappelle rien : « '+j21+' »');
+      const j27=texteEssaiRestant(dans(26));
+      if(!/Plus que 3 jours/.test(j27)) return _echec('le vingt-septième jour ne chiffre pas : « '+j27+' »');
+      if(j27.indexOf(prixOffre('ultime'))<0||j27.indexOf(prixMoisAnnuel('ultime'))<0)
+        return _echec('la relance finale ne dit pas le prix d’Ultime');
+      // ET ELLE PARLE DE SON PROGRAMME A LUI : deux exercices posés, donc deux
+      // exercices annoncés.
+      if(!/séance/i.test(j27)) return _echec('la relance ne parle pas de ce qu’il a construit');
       return true;})());
+
+    // LE BOUT DU MOIS : ce qu'on montre, c'est SON programme.
+    ok('LOT 6 — L’ÉCRAN DE FIN MONTRE SON PROGRAMME, ET DIT QUE RIEN N’EST EFFACÉ',(()=>{
+      const sv=currentUser;
+      try{
+        const t0=Date.now()-40*86400000;
+        currentUser={id:'fin',email:'fin@t.fr',role:'athlete',status:'FREE',
+          essai:{ouvertLe:t0,finit:t0+ESSAI_JOURS*86400000},
+          sessions:[{date:1},{date:2},{date:3},{date:4}],
+          sessions_config:[
+            {day:'Lundi',active:true,exercises:[{name:'DEVELOPPE COUCHE BARRE'},{name:'DIPS'}]},
+            {day:'Mardi',active:false,exercises:[]},
+            {day:'Mercredi',active:true,exercises:[{name:'TRACTIONS'}]}]};
+        if(!rendreEssaiBilan(currentUser)) return _echec('l’écran ne se dessine pas');
+        const z=document.getElementById('eb-corps');
+        const txt=z.textContent.replace(/\s+/g,' ');
+        if(txt.indexOf('Rien n’est effacé')<0) return _echec('l’écran ne dit pas que rien n’est effacé');
+        if(!/2 séances/.test(txt)) return _echec('les séances de son programme ne sont pas comptées : « '+txt.slice(0,160)+' »');
+        if(!/4 séances? terminées?/.test(txt)) return _echec('les séances faites ne sont pas dites');
+        // LES DEUX FORMULES, AVEC LEURS PRIX, ET AUCUN AUTRE PRIX EN DUR.
+        // ⚠ LE TEXTE LU EST NORMALISE (\s avale l'espace insecable des prix) :
+        //   on normalise donc aussi le prix attendu, sans quoi « 24,90 € »
+        //   cherche un caractere que la lecture vient de remplacer.
+        const _nb=String.fromCharCode(160);
+        for(const p of [prixOffre('ultime'),prixMoisAnnuel('ultime'),prixOffre('essentielle'),prixMoisAnnuel('essentielle')])
+          if(txt.indexOf(p.split(_nb).join(' '))<0) return _echec('le prix '+p+' ne se lit pas');
+        // ET DES PORTES, PAS UN MUR : Ultime, Essentielle, le coaching, le code.
+        const b=[...z.querySelectorAll('button,a')];
+        if(b.length<4) return _echec(b.length+' portes seulement');
+        if(!b.some(x=>/beacons\.ai\/kevin\.gllc/.test(x.getAttribute('href')||'')))
+          return _echec('aucune porte ne mène au coaching');
+        if(!b.some(x=>/s-client-code/.test(x.getAttribute('onclick')||'')))
+          return _echec('aucune porte ne mène au code coach');
+        // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
+        if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0)
+          return _echec('un tiret cadratin traîne sur l’écran de fin');
+        for(const mot of ['palier','quota','capacité','synchronisation'])
+          if(new RegExp(mot,'i').test(txt)) return _echec('mot technique visible : '+mot);
+        return true;
+      } finally { currentUser=sv; }})());
 
     // ⚠ LE FLUX PAYPAL ET LA RENONCIATION NE SONT PAS TOUCHÉS. La case reste
     // obligatoire et décochée par défaut au moment du paiement réel : c'est

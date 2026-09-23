@@ -834,6 +834,42 @@ exports.paypalWebhook = onRequest(
 //
 //   `simulation: true` (defaut) ne fait que compter. Il faut la rappeler avec
 //   `simulation: false` pour ecrire quoi que ce soit.
+// ══ L'ESSAI D'UN MOIS, POSE PAR LE SERVEUR (lot 6) ════════════════════════
+//
+// POURQUOI ELLE EXISTE. L'essai vivait dans le dossier, et database.rules.json
+// accorde au titulaire l'ecriture sans restriction sur users/<sa cle> : on
+// remettait `essai` a zero depuis la console du navigateur, et on recommencait
+// un mois, indefiniment. L'echeance posee ICI vit dans droits/, ou personne
+// n'ecrit sauf l'Admin SDK.
+//
+// UNE SEULE FOIS PAR COMPTE, ET C'EST LE SERVEUR QUI LE SAIT : si droits/
+// porte deja un essaiOuvertLe, la fonction rend l'echeance existante sans rien
+// reecrire. Un second appel ne prolonge rien.
+//
+// ⚠ ELLE N'OUVRE PAS DE DROIT A QUI EN A DEJA UN. Un athlete suivi par un
+//   coach, ou un abonne, n'a pas besoin d'un essai : lui en poser un
+//   laisserait un mois dormant a consommer le jour ou son acces s'arrete.
+exports.ouvrirEssai = onCall(async (request) => {
+  const mail = request.auth && request.auth.token && request.auth.token.email
+    ? String(request.auth.token.email).toLowerCase() : "";
+  if (!mail) throw new HttpsError("unauthenticated", "Connexion requise.");
+  const cle = mail.replace(/\./g, ",");
+  const jours = Math.min(90, Math.max(1, Math.round(Number(request.data && request.data.jours) || 30)));
+  const deja = await lireDroits(cle);
+  if (deja && Number(deja.essaiOuvertLe) > 0) {
+    return { ouvert: false, raison: "deja", essaiFinit: Number(deja.essaiFinit) || 0 };
+  }
+  if (deja && deja.palier && deja.palier !== "aucun") {
+    return { ouvert: false, raison: "acces", palier: deja.palier };
+  }
+  const t = Date.now();
+  const fin = t + jours * 86400000;
+  await ecrireDroits(cle, {
+    palier: "ultime", echeance: fin, essaiOuvertLe: t, essaiFinit: fin, source: "essai",
+  });
+  return { ouvert: true, essaiFinit: fin };
+});
+
 exports.migrerDroits = onCall(async (request) => {
   const mail = request.auth && request.auth.token && request.auth.token.email
     ? String(request.auth.token.email).toLowerCase() : "";
