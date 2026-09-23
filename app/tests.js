@@ -35799,9 +35799,9 @@ async function testExercices(){
           // « Le client n’a pas besoin d’avoir accès à ce petit cadre-là, il a
           // besoin juste d’avoir sa photo, de voir l’évolution au niveau des
           // mesures. » Le coach, lui, garde les trois.
-          const sU=currentUser, sV=_corpsVue;
+          const sU=currentUser, sV=_corpsVue, sm=_corpsMode;
           try{
-            _corpsVue='face';
+            _corpsVue='face'; _corpsMode='volume';   // la lecture sous test est celle du volume
             currentUser=_u('H',_cfg());
             const a=document.createElement('div');
             if(!renderCorpsAthlete(a)) return _echec('le cadre de l’élève ne se rend pas');
@@ -35843,16 +35843,16 @@ async function testExercices(){
             currentUser=sU2;
             return /Un seul bilan/.test(vide.textContent)
               ?true:_echec('l’élève au premier bilan ne lit plus pourquoi il n’y a pas d’écart');
-          } finally { currentUser=sU; _corpsVue=sV; }})());
+          } finally { currentUser=sU; _corpsVue=sV; _corpsMode=sm; }})());
 
         ok('1428 — CHAQUE ZONE DE LA LÉGENDE S’OUVRE SUR SA DÉFINITION',(()=>{
           // « Sous-MEV, MEV-MAV, MAV-MRV et sur-MRV : donne la possibilité de
           // cliquer sur chacun et d’avoir une définition sur ce que ça
           // signifie. » La définition vit dans RC_LEXIQUE, avec les vingt
           // autres — une seule table de définitions dans l’application.
-          const sV=_corpsVue;
+          const sV=_corpsVue, sm=_corpsMode;
           try{
-            _corpsVue='face';
+            _corpsVue='face'; _corpsMode='volume';   // la lecture sous test est celle du volume
             const d=document.createElement('div');
             d.innerHTML=_htmlCorpsCadre(_u('H',_cfg()));
             const zones=Object.keys(GC_COULEURS);
@@ -35879,7 +35879,7 @@ async function testExercices(){
             const lu=(document.getElementById('rc-lexique-corps')||{}).textContent||'';
             if(lu.indexOf('minimum efficace')<0) return _echec('la fiche ouverte ne définit rien : « '+lu+' »');
             return true;
-          } finally { _corpsVue=sV; try{ rcInfoFermer(true); }catch(e){} }})());
+          } finally { _corpsVue=sV; _corpsMode=sm; try{ rcInfoFermer(true); }catch(e){} }})());
 
         // ⚠ CETTE ASSERTION A GRANDI LE 23/09/2026 AU SOIR. Elle sondait douze
         //   pixels d'une seule planche — le pec, le biceps, la cuisse. Kevin a
@@ -42427,9 +42427,9 @@ async function testExercices(){
         {active:true,name:'B',exercises:[{name:'Développé couché',series:'4',reps:'8'}]},
         {active:false},{active:false},{active:false},{active:false},{active:false}];
       const base={id:'P1',email:'p1@t.fr',role:'athlete',gender:'H',bilans:bil,sessions_config:cfg,sessions:[]};
-      const sv=_corpsVue;
+      const sv=_corpsVue, sm=_corpsMode;
       try{
-        _corpsVue='face';
+        _corpsVue='face'; _corpsMode='volume';   // la lecture sous test est celle du volume
         // LE PRÉVU COMPTE LES DEUX CRÉNEAUX : la semaine entière, pas une séance.
         const prevu=volumePrescritSemaine(base,new Date()).muscles;
         if(!(prevu.PECTORAUX>=8)) return _echec('le volume prévu ne compte pas les deux créneaux : '+JSON.stringify(prevu));
@@ -42462,7 +42462,7 @@ async function testExercices(){
         // L'ÉCART PRESCRIT / RÉALISÉ lit le même prévu, calculé au même endroit.
         const ec=ecartPrescritRealise(fait).find(x=>x.muscle==='PECTORAUX');
         if(!ec||ec.prescrit!==Math.round(prevu.PECTORAUX*10)/10) return _echec('l’écart prescrit/réalisé ne lit plus le même prévu : '+JSON.stringify(ec));
-      } finally { _corpsVue=sv; }
+      } finally { _corpsVue=sv; _corpsMode=sm; }
       return true;})());
 
     ok('LA TEINTE NE BOUGE PAS D’UNE SEMAINE À L’AUTRE DU BLOC : ELLE DIT TOUT LE PROGRAMME',(()=>{
@@ -42495,9 +42495,9 @@ async function testExercices(){
       if(JSON.stringify(v1.muscles)!==JSON.stringify(v2.muscles)) return _echec('la teinte change selon la semaine en cours');
       // L'ÉCART PRESCRIT / RÉALISÉ, lui, compare bien la semaine en cours.
       if(volumePrescritSemaine(a2,new Date()).muscles.PECTORAUX!==parSem[3]) return _echec('l’écart prescrit/réalisé ne lit plus la semaine en cours');
-      const sv=_corpsVue;
+      const sv=_corpsVue, sm=_corpsMode;
       try{
-        _corpsVue='face';
+        _corpsVue='face'; _corpsMode='volume';   // la lecture sous test est celle du volume
         const lire=x=>{
           const b=document.createElement('div'); b.innerHTML=_htmlCorpsCadre(x);
           return {lt:[...b.querySelectorAll('.cc-corps-lt')].map(e=>e.textContent).join(' | '),
@@ -42511,7 +42511,7 @@ async function testExercices(){
         const moy=volAffiche(somme/4).replace('.',',');
         if(!new RegExp('Pectoraux : '+volAffiche(somme).replace('.',',')+' séries sur 4 semaines, '+moy+' par semaine').test(r1.lu))
           return _echec('le muscle ne dit pas son total et sa moyenne : '+r1.lu);
-      } finally { _corpsVue=sv; }
+      } finally { _corpsVue=sv; _corpsMode=sm; }
       return true;})());
 
     ok('PAS D’ÉTIQUETTE DE MUSCLE, MAIS LA TEINTE DE VOLUME EST REVENUE',(()=>{
@@ -42528,9 +42528,9 @@ async function testExercices(){
       const avec={id:'M1',email:'m1@t.fr',role:'athlete',gender:'H',bilans:bil,
         sessions:[{id:'s1',date:t-J,data:donnees([['Développé couché',8],['Squat',12]])}]};
       const sans={id:'M2',email:'m2@t.fr',role:'athlete',gender:'H',bilans:bil,sessions:[]};
-      const sv=_corpsVue;
+      const sv=_corpsVue, sm=_corpsMode;
       try{
-        _corpsVue='face';
+        _corpsVue='face'; _corpsMode='volume';   // la lecture sous test est celle du volume
         const h=_htmlCorpsCadre(avec);
         if(h.indexOf('cc-corps-calque')<0) return _echec('aucun calque de zones pour une semaine travaillée');
         if(h.indexOf('data-teinte')<0) return _echec('la silhouette teintée ne passe pas en gris clair');
@@ -42561,8 +42561,171 @@ async function testExercices(){
         const h2=_htmlCorpsCadre(sans);
         if(h2.indexOf('cc-corps-calque')>=0||h2.indexOf('data-teinte')>=0) return _echec('une teinte sort sans séance');
         if(h2.indexOf('Teinte :')>=0) return _echec('une légende de teinte sort sans séance');
-      } finally { _corpsVue=sv; }
+      } finally { _corpsVue=sv; _corpsMode=sm; }
       return true;})());
+
+
+    // ══ LOT 3 : LA SILHOUETTE A DEUX LECTURES (23/09/2026) ═══════════════
+    // « Deux boutons, Évolution et Volume. Évolution est la vue par défaut.
+    //   Vert ce qui a pris depuis le dernier bilan, rouge ce qui a perdu,
+    //   gris ce qui n'a pas bougé depuis trois bilans. »
+    ok('LA SILHOUETTE S’OUVRE SUR L’ÉVOLUTION, ET LE VOLUME TIENT À UN BOUTON',(()=>{
+      if(typeof corpsMode!=='function') return _echec('le sélecteur de lecture n’existe pas');
+      // LA LECTURE PAR DÉFAUT EST L'ÉVOLUTION. On la lit AVANT d'y toucher : ce
+      // qui tient ici, c'est la valeur de départ de la lentille, et aussi le
+      // fait qu'aucun test d'avant ne l'ait laissée sur le volume.
+      if(_corpsMode!=='evolution') return _echec('la lecture ouverte n’est pas l’évolution : '+_corpsMode);
+      const sv=_corpsVue, sm=_corpsMode;
+      try{
+        _corpsVue='face';
+        if(corpsMode('volume')!=='volume') return _echec('le bouton Volume ne bascule pas');
+        if(corpsMode('nimporte quoi')!=='evolution') return _echec('une lecture inconnue ne retombe pas sur l’évolution');
+        const J=864e5, t=Date.now();
+        const u={id:'L3A',email:'l3a@t.fr',role:'athlete',gender:'H',bilans:[
+          {date:t-60*J,'bil-chest':'100'},{date:t-2*J,'bil-chest':'101.5'}]};
+        const d=document.createElement('div'); d.innerHTML=_htmlCorpsCadre(u);
+        const lec=d.querySelector('.cc-corps-lec');
+        if(!lec) return _echec('les deux boutons de lecture ne sortent pas');
+        const b=[...lec.querySelectorAll('.cc-corps-o')];
+        if(b.map(x=>x.textContent).join('/')!=='Évolution/Volume')
+          return _echec('boutons : '+b.map(x=>x.textContent).join('/'));
+        if(!b[0].classList.contains('actif')||b[0].getAttribute('aria-pressed')!=='true')
+          return _echec('l’évolution n’est pas la lecture ouverte');
+        if(b[1].classList.contains('actif')) return _echec('les deux lectures sont actives à la fois');
+        // ET LA VUE AVANT / ARRIÈRE RESTE UN SÉLECTEUR À PART : deux lentilles,
+        // deux groupes, jamais quatre boutons dans le même.
+        if(d.querySelectorAll('.cc-corps-vue').length!==2) return _echec('les deux sélecteurs sont mélangés');
+        // L'ÉLÈVE, LUI, N'A QU'UNE LECTURE : celle du volume. Une silhouette de
+        // son propre corps en vert et rouge n'est pas ce qu'on lui doit.
+        const sU=currentUser;
+        try{
+          currentUser=u;
+          const a=document.createElement('div'); renderCorpsAthlete(a);
+          if(a.querySelector('.cc-corps-lec')) return _echec('l’élève choisit sa lecture');
+          if(/a pris|a perdu/.test(a.textContent||'')) return _echec('l’élève voit la légende de l’évolution');
+        } finally { currentUser=sU; }
+        return true;
+      } finally { _corpsVue=sv; _corpsMode=sm; }})());
+
+    ok('VERT CE QUI A PRIS, ROUGE CE QUI A PERDU, GRIS CE QUI N’A PAS BOUGÉ',(()=>{
+      // LE SEUIL EST CELUI DU RUBAN, et c'est le même dans toute l'application :
+      // deux seuils sur le même cadre donneraient « +0,6 cm » sur une étiquette
+      // et un muscle gris à côté.
+      if(CORPS_BOUGE_MIN!==SYN_BRUIT_MESURE) return _echec('le seuil du cadre a divergé du bruit de mesure : '+CORPS_BOUGE_MIN+' / '+SYN_BRUIT_MESURE);
+      if(CORPS_BOUGE_BILANS!==CCD_DORT_BILANS) return _echec('le nombre de relevés a divergé de celui du verdict');
+      const J=864e5, t=Date.now();
+      const u={id:'L3B',email:'l3b@t.fr',role:'athlete',gender:'H',bilans:[
+        {date:t-90*J,'bil-chest':'100','bil-bicep-r':'30','bil-bicep-l':'29','bil-calf-r':'36','bil-calf-l':'36','bil-thigh-r':'55','bil-thigh-l':'55'},
+        {date:t-60*J,'bil-chest':'100','bil-bicep-r':'30','bil-bicep-l':'29','bil-calf-r':'36','bil-calf-l':'36','bil-thigh-r':'56','bil-thigh-l':'56'},
+        {date:t-30*J,'bil-chest':'100.5','bil-bicep-r':'30','bil-bicep-l':'29','bil-calf-r':'36','bil-calf-l':'36','bil-thigh-r':'57','bil-thigh-l':'57'},
+        {date:t-2*J,'bil-chest':'101.5','bil-bicep-r':'29.4','bil-bicep-l':'28.4','bil-calf-r':'36','bil-calf-l':'36','bil-thigh-r':'57.2','bil-thigh-l':'57.2'}]};
+      const t3=corpsTeintesEvolution(u,'face');
+      if(t3.PECTORAUX!==CORPS_EVO_COULEURS.pris) return _echec('la poitrine qui prend 1 cm n’est pas verte : '+t3.PECTORAUX);
+      if(t3.BICEPS!==CORPS_EVO_COULEURS.perdu) return _echec('le bras qui perd 0,6 cm n’est pas rouge : '+t3.BICEPS);
+      if(t3.TRICEPS!==CORPS_EVO_COULEURS.perdu) return _echec('le triceps ne lit pas le même tour de bras que le biceps');
+      if(t3.MOLLETS!==CORPS_EVO_COULEURS.stable) return _echec('le mollet immobile sur quatre bilans n’est pas gris : '+t3.MOLLETS);
+      // ⚠ STABLE AU DERNIER RELEVÉ N'EST PAS « N'A PAS BOUGÉ » : la cuisse a
+      //   pris 2,2 cm en trois bilans avant de se poser. Elle n'est pas grise.
+      if(t3.QUADRICEPS) return _echec('une cuisse qui a bougé sur trois relevés passe grise : '+t3.QUADRICEPS);
+      // UN MUSCLE QU'AUCUNE MENSURATION NE SUIT N'EST JAMAIS TEINTÉ.
+      for(const m of ['DORSAUX','ABDOS','DELT_LAT','AVANT_BRAS','ABDUCTEURS','ADDUCTEURS'])
+        if(t3[m]) return _echec(m+' est teinté sans mensuration qui le suive');
+      // ET UNE VUE NE TEINTE QUE CE QU'ELLE MONTRE.
+      if(corpsTeintesEvolution(u,'face').FESSIERS) return _echec('les fessiers sont teints de face');
+      // LE SEUIL, DES DEUX CÔTÉS : 0,4 cm n'est pas une évolution, 0,5 en est une.
+      const deux=(a,b)=>({id:'L3C'+a+b,email:'l3c'+a+b+'@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-40*J,'bil-chest':String(a)},{date:t-2*J,'bil-chest':String(b)}]});
+      if(corpsTeintesEvolution(deux(100,100.4),'face').PECTORAUX) return _echec('0,4 cm suffit à teinter');
+      if(corpsTeintesEvolution(deux(100,100.5),'face').PECTORAUX!==CORPS_EVO_COULEURS.pris) return _echec('0,5 cm ne teinte pas');
+      if(corpsTeintesEvolution(deux(100,99.5),'face').PECTORAUX!==CORPS_EVO_COULEURS.perdu) return _echec('−0,5 cm ne teinte pas en rouge');
+      // ⚠ DEUX CÔTÉS QUI SE CONTREDISENT NE SE MOYENNENT PAS : le bras n'est
+      //   pas teinté, et la bulle dit pourquoi.
+      const c={id:'L3D',email:'l3d@t.fr',role:'athlete',gender:'H',bilans:[
+        {date:t-40*J,'bil-bicep-r':'30','bil-bicep-l':'29'},
+        {date:t-2*J,'bil-bicep-r':'30.8','bil-bicep-l':'28.4'}]};
+      if(corpsTeintesEvolution(c,'face').BICEPS) return _echec('une paire contradictoire est quand même teintée');
+      const ph=corpsInfobullesEvolution(c,'face').BICEPS||'';
+      if(!/deux côtés ne vont pas dans le même sens/.test(ph)) return _echec('la bulle ne dit pas la contradiction : '+ph);
+      // ET UN TOUR MESURÉ UNE SEULE FOIS ATTEND LE PROCHAIN BILAN.
+      const s={id:'L3E',email:'l3e@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-2*J,'bil-chest':'100'}]};
+      if(corpsTeintesEvolution(s,'face').PECTORAUX) return _echec('une seule mesure teinte déjà');
+      if(!/une seule mesure/.test(corpsInfobullesEvolution(s,'face').PECTORAUX||''))
+        return _echec('la bulle d’une seule mesure ne le dit pas');
+      return true;})());
+
+    ok('SOUS LE DOIGT : LE TOUR, SA VALEUR DU JOUR, L’ÉCART, LES TROIS DERNIÈRES',(()=>{
+      const J=864e5, t=Date.now();
+      const u={id:'L3F',email:'l3f@t.fr',role:'athlete',gender:'H',bilans:[
+        {date:t-90*J,'bil-chest':'100'},{date:t-60*J,'bil-chest':'100.5'},
+        {date:t-30*J,'bil-chest':'101'},{date:t-2*J,'bil-chest':'102'}]};
+      const i=corpsInfobullesEvolution(u,'face');
+      const p=i.PECTORAUX||'';
+      if(p.indexOf('Pectoraux')!==0) return _echec('la bulle ne commence pas par le muscle : '+p);
+      // LA SOURCE : quel tour suit ce muscle. Biceps et triceps partagent le
+      // tour de bras, et le coach doit le voir.
+      if(!/tour de poitrine/.test(p)) return _echec('la bulle ne nomme pas le tour : '+p);
+      if(!/102 cm/.test(p)) return _echec('la valeur du jour n’y est pas : '+p);
+      if(!/\d{2}\/\d{2}/.test(p)) return _echec('la date du relevé n’y est pas : '+p);
+      if(!/\+1 cm depuis le/.test(p)) return _echec('l’écart depuis le dernier relevé n’y est pas : '+p);
+      if(!/trois derniers : 100,5 ; 101 ; 102 cm/.test(p)) return _echec('les trois dernières valeurs n’y sont pas : '+p);
+      // LA MARGE VOYAGE AVEC LE CHIFFRE : une bulle se lit seule.
+      if(!/ruban, ± 0,5 cm/.test(p)) return _echec('la bulle ne porte pas sa marge : '+p);
+      // ET UN MUSCLE SANS MENSURATION LE DIT, plutôt que de se taire.
+      if(!/aucune mensuration ne suit ce muscle/.test(i.DORSAUX||''))
+        return _echec('un muscle sans mesure ne dit rien : '+i.DORSAUX);
+      // AUCUN TIRET CADRATIN NI DEMI-CADRATIN dans ce que le coach lit.
+      for(const m in i) if(/[—–]/.test(i[m])) return _echec('un tiret cadratin dans la bulle : '+i[m]);
+      return true;})());
+
+    ok('LA TEINTE D’ÉVOLUTION DIT UN SENS, ET DIT QU’ELLE NE JUGE PAS',(()=>{
+      const sv=_corpsVue, sm=_corpsMode;
+      try{
+        _corpsVue='face'; _corpsMode='evolution';
+        const J=864e5, t=Date.now();
+        const u={id:'L3G',email:'l3g@t.fr',role:'athlete',gender:'H',bilans:[
+          {date:t-90*J,'bil-chest':'100','bil-calf-r':'36','bil-calf-l':'36'},
+          {date:t-60*J,'bil-chest':'100','bil-calf-r':'36','bil-calf-l':'36'},
+          {date:t-30*J,'bil-chest':'100.5','bil-calf-r':'36','bil-calf-l':'36'},
+          {date:t-2*J,'bil-chest':'101.5','bil-calf-r':'36','bil-calf-l':'36'}]};
+        const d=document.createElement('div'); d.innerHTML=_htmlCorpsCadre(u);
+        // LES TROIS PASTILLES, AUX TROIS COULEURS, ET DANS CET ORDRE.
+        const lp=[...d.querySelectorAll('.cc-corps-lp')];
+        if(lp.length!==3) return _echec(lp.length+' pastille(s) au lieu de trois');
+        if(!/^a pris/.test(lp[0].textContent)||!/^a perdu/.test(lp[1].textContent)
+          ||!/^n’a pas bougé/.test(lp[2].textContent))
+          return _echec('pastilles : '+lp.map(x=>x.textContent).join('/'));
+        const cl=['pris','perdu','stable'];
+        for(let k=0;k<3;k++){
+          const ic=lp[k].querySelector('i');
+          if(!ic||(ic.getAttribute('style')||'').indexOf(CORPS_EVO_COULEURS[cl[k]])<0)
+            return _echec('la pastille '+lp[k].textContent+' n’a pas sa couleur');
+          // ⚠ ELLES NE S'OUVRENT SUR RIEN : ce sont des <span>, pas des boutons
+          //   morts. Un bouton sans action est un piège au clavier.
+          if(lp[k].tagName!=='SPAN') return _echec('une pastille de légende est un <'+lp[k].tagName+'>');
+        }
+        const txt=d.textContent||'';
+        // CE QUE LA COULEUR NE DIT PAS EST ÉCRIT, pas sous-entendu.
+        if(!/jamais un jugement sur son corps/.test(txt)) return _echec('rien ne borne la lecture de la couleur');
+        if(!/depuis son dernier relevé/.test(txt)) return _echec('la légende ne dit pas sur quelle période porte la teinte');
+        if(!/premier bilan/.test(txt)) return _echec('la légende ne distingue pas la teinte des étiquettes');
+        // LA TEINTE SE LIT SANS LA VOIR : chaque muscle teinté, en toutes lettres.
+        const lu=(d.querySelector('.cc-corps-lu')||{}).textContent||'';
+        if(!/Pectoraux : tour de poitrine/.test(lu)) return _echec('la lecture à voix haute ne dit pas la poitrine : '+lu);
+        if(!/Mollets : tour de mollet/.test(lu)) return _echec('la lecture à voix haute ne dit pas le mollet : '+lu);
+        // La marge une seule fois, en fin de ligne, et non à chaque muscle.
+        if((lu.match(/± 0,5 cm/g)||[]).length!==1) return _echec('la marge se répète ou disparaît : '+lu);
+        // ET AUCUN TIRET CADRATIN DANS TOUT LE CADRE.
+        if(/[—–]/.test(txt)) return _echec('un tiret cadratin dans le cadre : '+txt.slice(0,80));
+        // SANS RIEN À TEINTER, PAS DE LÉGENDE DE TEINTE : un cadre qui annonce
+        // des couleurs absentes se lit comme une panne.
+        const seul={id:'L3H',email:'l3h@t.fr',role:'athlete',gender:'H',
+          bilans:[{date:t-2*J,'bil-chest':'100'}]};
+        const d2=document.createElement('div'); d2.innerHTML=_htmlCorpsCadre(seul);
+        if(d2.querySelector('.cc-corps-lp')) return _echec('la légende sort sans une seule teinte');
+        if(d2.querySelector('.cc-corps-calque')) return _echec('un calque sort sans une seule teinte');
+        return true;
+      } finally { _corpsVue=sv; _corpsMode=sm; }})());
 
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
       // Chaque silhouette porte sa carte : une image ou chaque pixel du corps
@@ -42836,7 +42999,10 @@ async function testExercices(){
         _corpsVue='face';
         const boite=document.createElement('div');
         boite.innerHTML=_htmlCorpsCadre(u);
-        const bs=[...boite.querySelectorAll('.cc-corps-o')];
+        // ⚠ LES ONGLETS DE VUE, PAS CEUX DE LA LECTURE. Le cadre porte deux
+        //   groupes depuis le lot 3 (Evolution/Volume, puis avant/arriere) :
+        //   .cc-corps-o seul en ramenait quatre.
+        const bs=[...boite.querySelectorAll('.cc-corps-vue:not(.cc-corps-lec) .cc-corps-o')];
         if(bs.length!==2) return _echec(bs.length+' onglets de vue au lieu de 2');
         for(const b of bs){
           const actif=b.classList.contains('actif');

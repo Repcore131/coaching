@@ -4180,6 +4180,11 @@ html{scroll-behavior:smooth}
    vue que personne ne peut dessiner. */
 .cc-corps-vue{display:inline-flex;border:1px solid var(--border);
   border-radius:var(--r-2);overflow:hidden;flex:0 0 auto}
+/* CE QUE DIT LA TEINTE : evolution ou volume. Meme fabrique que le selecteur de
+   vue — ce sont deux lentilles de la meme sorte, et deux habits differents
+   auraient fait croire a deux mecaniques differentes. La classe .cc-corps-lec
+   ne porte pas d'habit : elle sert a retrouver le bouton actif pour y reposer le
+   focus apres le rendu (corpsMode), comme .cc-corps-vue pour la vue. */
 .cc-corps-o{appearance:none;-webkit-appearance:none;border:none;
   background:transparent;cursor:pointer;font-family:Montserrat,sans-serif;
   font-size:9.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;
@@ -4264,6 +4269,10 @@ html{scroll-behavior:smooth}
   font-size:var(--fs-2xs);font-weight:700;color:var(--text);line-height:1.3;
   box-shadow:0 4px 14px rgba(0,0,0,.45)}
 .cc-corps-bulle[hidden]{display:none}
+/* UNE PHRASE D'EVOLUTION NE TIENT PAS SUR UNE LIGNE : trois valeurs, deux
+   dates et la tolerance du ruban. Elle passe a la ligne plutot que de sortir du
+   cadre ; une phrase de volume, courte, garde son nowrap. */
+.cc-corps-bulle.long{white-space:normal;max-width:190px;text-align:center}
 /* La legende des quatre zones : la meme grammaire que celle de la grille de
    charge, pastille puis nom de zone. */
 .cc-corps-l{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
@@ -4292,6 +4301,11 @@ html{scroll-behavior:smooth}
 .cc-corps-lp[disabled]{cursor:default;text-decoration:none}
 .cc-corps-lp i{width:9px;height:9px;border-radius:2px;display:inline-block;
   flex:0 0 auto}
+/* LES PASTILLES QUI NE S'OUVRENT SUR RIEN SE LISENT, ELLES NE SE CLIQUENT PAS :
+   les trois de l'evolution (a pris, a perdu, n'a pas bouge) n'ont pas de fiche
+   de lexique a ouvrir. Ce sont des <span>, et un <span> ne doit pas porter le
+   souligne pointille qui annonce une commande. */
+span.cc-corps-lp{cursor:default;text-decoration:none}
 /* L'EXPLICATION DE LA TEINTE, DANS UN PETIT CADRE SOUS LE GRAPHIQUE « Séries
    dures par semaine » (build 1399, Kevin : « le cadre sous le graphique ») —
    la colonne de droite a la place, la legende garde la sienne sous le corps.

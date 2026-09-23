@@ -40742,6 +40742,204 @@ function corpsInfobulles(u,vue,vol,prog){
   }
   return out;
 }
+// ══ LA SILHOUETTE A DEUX LECTURES : L'EVOLUTION, ET LE VOLUME ══════════════
+//
+// Kevin, 23/09/2026 : « Deux boutons, Évolution et Volume. Évolution est la vue
+// par défaut. Vert ce qui a pris depuis le dernier bilan, rouge ce qui a perdu,
+// gris ce qui n'a pas bougé depuis trois bilans. »
+//
+// ⚠ LA COULEUR DIT UN SENS, PAS UN JUGEMENT. Un tour de cuisse qui descend en
+//   seche est exactement ce qu'on cherche ; il sort rouge quand meme, parce que
+//   la teinte dit « ce tour a perdu », et rien d'autre. La legende et le petit
+//   cadre le disent a l'ecran, en toutes lettres, sous les trois pastilles.
+//   C'est la seule facon de tenir la doctrine du corps avec des couleurs :
+//   aucune note, aucun pronostic, aucun « bien » ni « mal ».
+//
+// ⚠ ET C'EST LA MEME PALETTE QUE LA GRILLE DE CHARGE, A DESSEIN. Vert, rouge et
+//   gris ne veulent pas dire la meme chose dans les deux lectures du cadre —
+//   d'ou les deux boutons, un seul actif a la fois, et une legende qui commence
+//   par dire CE QUE la teinte raconte. Une couleur de plus (violet, orange)
+//   aurait ajoute une convention a apprendre pour ne rien dire de mieux.
+//
+// LE SEUIL : POURQUOI 0,5 CM.
+//   Un ruban se lit au demi-centimetre, et toute l'application appelle
+//   « stable » un ecart plus petit : corpsEcart, les etiquettes du cadre, la
+//   synthese d'Evolution (SYN_BRUIT_MESURE). Un second seuil ici — 0,7 cm, la
+//   somme quadratique de deux lectures a ±0,5 — serait plus juste en theorie et
+//   faux a l'ecran : la meme silhouette afficherait « +0,6 cm » sur une
+//   etiquette et un muscle gris a cote, deux verdicts contraires sur la meme
+//   mesure. On garde donc 0,5 cm, on l'affiche, ET on ne s'en sert pas comme
+//   d'une preuve : la bulle donne les trois derniers releves avec leurs dates,
+//   et c'est le coach qui tranche.
+//   ⚠ VALEUR LITTERALE, PAS UNE REFERENCE : SYN_BRUIT_MESURE est declare plus
+//     bas dans le fichier, et un `const` qui le lirait ici tomberait au
+//     chargement. Un test tient l'egalite des deux.
+const CORPS_BOUGE_MIN=0.5;
+// Trois releves pour dire « n'a pas bouge » : deux tours identiques d'un bilan
+// au suivant, ca arrive sans rien signifier. Meme nombre que CCD_DORT_BILANS,
+// meme raison, et un test tient l'egalite.
+const CORPS_BOUGE_BILANS=3;
+const CORPS_EVO_COULEURS=Object.freeze({pris:'#22c55e',perdu:'#e05050',stable:'#6f6f6f'});
+// LA TOLERANCE VOYAGE AVEC CHAQUE PHRASE : « toute valeur affichee porte sa
+// source, sa date et sa marge », et une bulle qu'on lit seule doit porter la
+// sienne. La legende, qui les enchaine toutes, la dit une fois en fin de ligne.
+const CORPS_EVO_RUBAN='ruban, ± '+String(CORPS_BOUGE_MIN).replace('.',',')+' cm';
+// « bicep-r » → les deux cotes. Un muscle du dessin n'a pas de cote : la zone
+// BICEPS couvre les deux bras, donc la teinte doit lire les deux tours.
+function _corpsPaire(cle){
+  const m=/^(.*)-(r|l)$/.exec(String(cle||''));
+  return m?[m[1]+'-r',m[1]+'-l']:[String(cle||'')];
+}
+// « tour de biceps », « tour de poitrine » : le nom du tour SANS son cote, pris
+// dans MEAS — la meme table que les graphiques et les bilans.
+function _corpsLibTour(cle){
+  const l=((typeof MEAS!=='undefined'&&MEAS.find(x=>x.k===cle))||{}).l||CORPS_NOMS[cle]||cle;
+  return _libMesure(l,false).replace(/ (droit|gauche)$/,'');
+}
+/**
+ * PURE. Ce que la mensuration liee a un muscle a fait AU DERNIER BILAN, cote
+ * par cote, ou null quand aucune mensuration ne suit ce muscle.
+ *
+ * ⚠ LE DERNIER ECART, ET NON LE CHEMIN DEPUIS LE DEBUT. C'est la demande :
+ *   « ce qui a pris depuis le dernier bilan ». Les etiquettes du meme cadre
+ *   disent, elles, le premier au dernier bilan : deux portees, deux phrases, et
+ *   la legende dit laquelle est teinte.
+ *
+ * ⚠ LES DEUX COTES DOIVENT ALLER DANS LE MEME SENS. Un biceps droit a +0,8 et
+ *   un gauche a -0,6 donneraient un bras vert alors que l'etiquette de gauche
+ *   affiche une perte : le muscle n'est PAS teinte, et la bulle dit pourquoi.
+ *   Meme regle que pour l'ecart gauche/droite : une paire contradictoire est
+ *   ecartee, pas moyennee.
+ *
+ * ⚠ RELEVES REELS SEULEMENT (corpsRelevesReels) : une valeur recopiee d'un
+ *   bilan sur l'autre afficherait « n'a pas bouge » la ou personne n'a sorti
+ *   le metre.
+ * @returns {{muscle:string,cle:string,cotes:Array<any>,sens:string}|null}
+ */
+function corpsEvolutionMuscle(u,muscle){
+  const base=BLOC_MESURE_DE[muscle];
+  if(!base) return null;
+  const cotes=[];
+  for(const k of _corpsPaire(base)){
+    let rel=[]; try{ rel=corpsRelevesReels(u,k)||[]; }catch(e){ rel=[]; }
+    if(!rel.length) continue;
+    const n=rel.length, fin=rel[n-1];
+    const delta=(n>=2)?Math.round((fin.valeur-rel[n-2].valeur)*10)/10:null;
+    const trois=rel.slice(-CORPS_BOUGE_BILANS).map(x=>x.valeur);
+    const amp=Math.round((Math.max.apply(null,trois)-Math.min.apply(null,trois))*10)/10;
+    cotes.push({cle:k,nom:CORPS_NOMS[k]||k,n:n,valeur:fin.valeur,date:fin.date,
+      depuis:(n>=2)?rel[n-2].date:0,delta:delta,derniers:trois,amp:amp,
+      dort:(n>=CORPS_BOUGE_BILANS&&amp<CORPS_BOUGE_MIN),
+      sens:(delta===null)?'seul'
+        :(delta>=CORPS_BOUGE_MIN?'pris':(delta<=-CORPS_BOUGE_MIN?'perdu':'plat'))});
+  }
+  if(!cotes.length) return null;
+  const s={}; for(const c of cotes) s[c.sens]=1;
+  let sens='seul';
+  if(s.pris&&s.perdu) sens='contraire';
+  else if(s.pris) sens='pris';
+  else if(s.perdu) sens='perdu';
+  else if(!s.seul) sens=cotes.every(c=>c.dort)?'stable':'plat';
+  return {muscle:muscle,cle:base,cotes:cotes,sens:sens};
+}
+// PURE. La couleur de chaque muscle d'une vue : le sens de sa mensuration.
+// Un muscle qu'aucune mensuration ne suit, une paire contradictoire, un tour
+// mesure une seule fois, un tour stable sans ses trois releves : pas de teinte.
+function corpsTeintesEvolution(u,vue){
+  const out={};
+  for(const m of (CORPS_MUSCLES_VUE[vue]||[])){
+    let e=null; try{ e=corpsEvolutionMuscle(u,m); }catch(err){ e=null; }
+    if(!e) continue;
+    const c=CORPS_EVO_COULEURS[e.sens];
+    if(c) out[m]=c;
+  }
+  return out;
+}
+// POURQUOI CE MUSCLE N'EST PAS TEINTE, ou pourquoi il est gris. Une silhouette
+// a trous se lit comme une panne si personne ne dit ce qui manque.
+function _corpsEvoSilence(e){
+  if(e.sens==='contraire') return 'pas de teinte : les deux côtés ne vont pas dans le même sens';
+  if(e.sens==='seul') return 'pas de teinte : une seule mesure, l’écart viendra au prochain bilan';
+  if(e.sens==='stable') return 'n’a pas bougé sur ses trois derniers relevés';
+  if(e.sens!=='plat') return '';
+  // Stable au dernier releve, mais il a bouge avant : les trois releves
+  // existent, ils ne se ressemblent pas. Dire « il faut trois releves » serait
+  // faux, et le coach chercherait une mesure qui est deja la.
+  return e.cotes.every(c=>c.n>=CORPS_BOUGE_BILANS)
+    ?'pas de teinte : stable depuis son dernier relevé, mais il a bougé sur les trois derniers'
+    :'pas de teinte : il faut trois relevés pour dire qu’un tour n’a pas bougé';
+}
+/**
+ * PURE. Ce que dit un muscle sous le doigt en lecture d'evolution : le muscle,
+ * LE TOUR QUI LE SUIT, sa valeur du jour avec sa date, son ecart depuis le
+ * releve d'avant, ses trois derniers releves, et la tolerance du ruban.
+ *
+ * ⚠ LE TOUR EST NOMME, ET C'EST LA REGLE DE BLOC_MESURE_DE : biceps et triceps
+ *   partagent le tour de bras, quadriceps et ischios le tour de cuisse. Le
+ *   coach doit voir qu'il lit UNE mesure, pas deux.
+ */
+function _corpsEvoPhrase(e){
+  const lib=(MUSCLES[e.muscle]||{}).lib||e.muscle;
+  const deux=e.cotes.length>1;
+  const tour=_corpsLibTour(e.cle);
+  const p=[lib];
+  e.cotes.forEach((c,i)=>{
+    const cote=/-r$/.test(c.cle)?'à droite':(/-l$/.test(c.cle)?'à gauche':'');
+    const bouts=[_synNombre(c.valeur)+' cm'+(c.date?(' le '+_corpsJour(c.date)):'')];
+    bouts.push((c.delta===null)?'une seule mesure'
+      :(((Math.abs(c.delta)<CORPS_BOUGE_MIN)?'stable'
+        :((c.delta>0?'+':'−')+_synNombre(c.delta)+' cm'))
+        +(c.depuis?(' depuis le '+_corpsJour(c.depuis)):'')));
+    if(c.derniers.length>1)
+      bouts.push(((c.derniers.length===CORPS_BOUGE_BILANS)?'trois derniers'
+        :(c.derniers.length+' derniers'))+' : '
+        +c.derniers.map(v=>_synNombre(v)).join(' ; ')+' cm');
+    p.push((i===0?(tour+(deux?', ':' : ')):'')+(deux?(cote+' : '):'')+bouts.join(', '));
+  });
+  const s=_corpsEvoSilence(e);
+  if(s) p.push(s);
+  p.push(CORPS_EVO_RUBAN);
+  return p.join(' · ');
+}
+// PURE. La phrase de chaque muscle de la vue, teinte ou pas. Un muscle
+// qu'aucune mensuration ne suit le dit : c'est une absence de mesure, pas un
+// oubli d'affichage, et inventer un rapprochement serait pire.
+function corpsInfobullesEvolution(u,vue){
+  const out={};
+  for(const m of (CORPS_MUSCLES_VUE[vue]||[])){
+    let e=null; try{ e=corpsEvolutionMuscle(u,m); }catch(err){ e=null; }
+    const lib=(MUSCLES[m]||{}).lib||m;
+    out[m]=e?_corpsEvoPhrase(e):(lib+' · aucune mensuration ne suit ce muscle');
+  }
+  return out;
+}
+// Les deux lectures ont la meme forme de sortie : teintes + infobulles.
+function corpsEvolutionVue(u,vue){
+  return {teintes:corpsTeintesEvolution(u,vue),infos:corpsInfobullesEvolution(u,vue)};
+}
+// LA LEGENDE DE L'EVOLUTION. Ce que la teinte raconte, trois pastilles, puis
+// chaque muscle teinte en toutes lettres : la couleur se lit sans la voir.
+const CORPS_EVO_LIB=Object.freeze({pris:'a pris',perdu:'a perdu',
+  stable:'n’a pas bougé (trois relevés)'});
+function _htmlCorpsEvoLegende(vue,evo){
+  // LA TOLERANCE UNE FOIS EN FIN DE LIGNE, pas a chaque muscle : lue a voix
+  // haute, « ruban, plus ou moins 0,5 cm » sept fois de suite est un mur.
+  const lus=(CORPS_MUSCLES_VUE[vue]||[]).filter(m=>evo.teintes[m])
+    .map(m=>String(evo.infos[m]||'').split(' · '+CORPS_EVO_RUBAN).join('')
+      .replace(' · ',' : ').split(' · ').join(', '));
+  return '<div class="cc-corps-l">'
+    +'<span class="cc-corps-lt">Teinte : ce que chaque tour a fait depuis son '
+    +'dernier relevé (les étiquettes, elles, disent tout le chemin depuis le '
+    +'premier bilan)</span>'
+    +Object.keys(CORPS_EVO_LIB).map(k=>'<span class="cc-corps-lp">'
+      +'<i style="background:'+escapeHtml(CORPS_EVO_COULEURS[k])+'"></i>'
+      +escapeHtml(CORPS_EVO_LIB[k])+'</span>').join('')
+    +(lus.length?('<span class="cc-corps-lu">Depuis le dernier relevé : '
+      +lus.map(x=>escapeHtml(x)).join(' ; ')+'. '
+      +escapeHtml(CORPS_EVO_RUBAN.charAt(0).toUpperCase()+CORPS_EVO_RUBAN.slice(1))
+      +' près.</span>'):'')
+    +'</div>';
+}
 // « 15 septembre ». La courbe des series dures nomme la semaine ou elle
 // s'arrete : sans elle, une courbe arretee trois semaines plus tot aurait
 // l'air de decrire celle-ci.
@@ -40813,6 +41011,26 @@ function corpsVue(v){
   }catch(e){}
   return _corpsVue;
 }
+// LA LECTURE EST UNE LENTILLE AUSSI, et elle ne vit pas plus dans le dossier de
+// l'athlete que la vue : c'est le coach qui choisit de regarder l'evolution ou
+// le volume. Par defaut l'evolution (Kevin, 23/09/2026 : « Évolution est la vue
+// par défaut ») — la question de cet onglet est ce que le corps a fait, pas ce
+// que le programme demande.
+let _corpsMode='evolution';
+function corpsMode(m){
+  _corpsMode=(m==='volume')?'volume':'evolution';
+  try{
+    // Le meme rafraichissement que corpsVue, et pour la meme raison : le bouton
+    // qu'on vient de cliquer disparait avec le cadre qu'il rend.
+    if(document.getElementById('ccd-corps')){
+      const c=getOwnedClient(currentClientId);
+      if(c) renderCorpsCoach(c);
+    }
+    const b=document.querySelector('#ccd-corps .cc-corps-lec .cc-corps-o.actif');
+    if(b) b.focus();
+  }catch(e){}
+  return _corpsMode;
+}
 // ⚠ PLUS DE PHOTO SUR LA TETE — Kevin, 21/09/2026 : « supprime le rond sur la
 //   tete, c'est pas utile ». _htmlCorpsTete et son emplacement de visage sont
 //   retires ; la regle qui les gardait tient toujours ailleurs : jamais
@@ -40868,6 +41086,10 @@ function _corpsBrancherBulle(cv,carte){
     const txt=m&&infos[m];
     if(!txt){ b.hidden=true; return; }
     b.textContent=txt;
+    // Une phrase d'evolution porte trois valeurs et deux dates : elle passe a
+    // la ligne plutot que de sortir du cadre. Une phrase de volume, courte,
+    // garde son nowrap.
+    b.classList.toggle('long',String(txt).length>44);
     b.style.left=_arr1(x/r.width*100)+'%';
     b.style.top=_arr1(y/r.height*100)+'%';
     b.hidden=false;
@@ -41391,6 +41613,13 @@ function _htmlCorpsCadre(c,o){
   const vue=(_corpsVue==='dos')?'dos':'face';
   const pl=CORPS_PLANCHE[genre+'-'+vue]||CORPS_PLANCHE['h-face'];
   let bilans=[]; try{ bilans=bilansOrdonnes(u)||[]; }catch(e){ bilans=[]; }
+  // LA LECTURE : celle du coach (_corpsMode), ou celle qu'impose l'appelant —
+  // l'ecran de l'eleve reste sur le volume, une silhouette rouge et verte de son
+  // propre corps n'est pas ce qu'on lui doit.
+  const mode=(o.mode==='volume')?'volume':((o.mode==='evolution')?'evolution'
+    :((_corpsMode==='volume')?'volume':'evolution'));
+  const evo=(mode==='evolution'&&bilans.length)
+    ?(function(){ try{ return corpsEvolutionVue(u,vue); }catch(e){ return null; } })():null;
   // ⚠ L'ONGLET FERME DIT S'IL Y A QUELQUE CHOSE A VOIR DE L'AUTRE COTE — ce
   //   que cette vue ne montre pas : la poitrine et le buste n'existent que de
   //   face, les fessiers que de dos. La pastille et son infobulle le disent.
@@ -41405,7 +41634,7 @@ function _htmlCorpsCadre(c,o){
     const t=n?(n+' mensuration'+(n>1?'s ont':' a')+' bougé de ce côté'):'';
     return '<button type="button" class="cc-corps-o'+(ferme?'':' actif')
       +'" aria-pressed="'+(ferme?'false':'true')+'"'
-      +(t?(' title="'+escapeHtml(t)+'" aria-label="'+escapeHtml(lib+' — '+t)+'"'):'')
+      +(t?(' title="'+escapeHtml(t)+'" aria-label="'+escapeHtml(lib+' : '+t)+'"'):'')
       +' onclick="corpsVue(\''+k+'\')">'+escapeHtml(lib)
       +(n?'<span class="cc-corps-pa" aria-hidden="true"></span>':'')
       +'</button>';
@@ -41416,8 +41645,21 @@ function _htmlCorpsCadre(c,o){
   // sur le numero plutot que d'afficher « numéro 0 ».
   const rang=(function(){ try{ return rangArrivee(c); }catch(e){ return 0; } })();
   const titre=o.titre||('Évolution élève'+(rang?(' numéro '+rang):''));
+  // LES DEUX BOUTONS DE LECTURE, avant ceux de la vue : ils decident de ce que
+  // la couleur raconte, et la vue seulement de quel cote on regarde.
+  // Ils ne sortent pas chez l'eleve (o.modes===false) : il n'a qu'une lecture.
+  const bMode=(k,lib,t)=>{
+    const on=(mode===k);
+    return '<button type="button" class="cc-corps-o'+(on?' actif':'')
+      +'" aria-pressed="'+(on?'true':'false')+'" title="'+escapeHtml(t)+'"'
+      +' onclick="corpsMode(\''+k+'\')">'+escapeHtml(lib)+'</button>';
+  };
   const tete='<div class="cc-corps-h">'
     +'<span class="cc-corps-t">'+escapeHtml(titre)+'</span>'
+    +(o.modes===false?''
+      :('<span class="cc-corps-vue cc-corps-lec" role="group" aria-label="Ce que dit la teinte">'
+        +bMode('evolution','Évolution','Ce que ses tours ont fait depuis leur dernier relevé')
+        +bMode('volume','Volume','Les séries que le programme donne à chaque muscle')+'</span>'))
     +'<span class="cc-corps-vue" role="group" aria-label="Vue du corps">'
     +onglet('face','Vue avant')+onglet('dos','Vue arrière')+'</span></div>';
   // ⚠ LES ETIQUETTES SORTENT DES LE PREMIER BILAN depuis le 23/09/2026. Elles
@@ -41443,15 +41685,15 @@ function _htmlCorpsCadre(c,o){
   // SANS PROGRAMME ACTIF, il n'y a pas de volume prevu a montrer : la teinte
   // retombe sur les series reellement faites (le calcul d'avant), et la
   // legende le dit.
-  const prog=bilans.length?(function(){ try{ return volumePrescritProgramme(u); }catch(e){ return null; } })():null;
+  const prog=(bilans.length&&mode==='volume')?(function(){ try{ return volumePrescritProgramme(u); }catch(e){ return null; } })():null;
   const aProg=!!prog&&Object.keys(prog.muscles||{}).some(m=>(Number(prog.muscles[m])||0)>0);
   const sem=(bilans.length&&!aProg)?corpsSemaineVolume(u):null;
   let volSem={};
   if(aProg) volSem=prog.muscles;
   else if(sem){ try{ volSem=volumeSemaine(u,sem.cle)||{}; }catch(e){ volSem={}; } }
-  const teinte=aProg||!!sem;
-  const teintes=teinte?corpsTeintes(u,vue,volSem):{};
-  const infos=teinte?corpsInfobulles(u,vue,volSem,aProg?prog:null):{};
+  const teintes=evo?evo.teintes:((aProg||!!sem)?corpsTeintes(u,vue,volSem):{});
+  const teinte=evo?(Object.keys(teintes).length>0):(aProg||!!sem);
+  const infos=evo?evo.infos:(teinte?corpsInfobulles(u,vue,volSem,aProg?prog:null):{});
   // LA SCENE PORTE LE RAPPORT DE LA TOILE, elargi de 100/CORPS_PART_CORPS : la
   // silhouette occupe cette part de sa largeur, et tout — traits, etiquettes —
   // se repere ensuite en centiemes de cette scene.
@@ -41496,7 +41738,7 @@ function _htmlCorpsCadre(c,o){
     +String(SYN_BRUIT_MESURE).replace('.',',')+' cm de tolérance · un tour '
     +'mesuré une seule fois affiche 0 cm.</div>';
   const note=(bilans.length<2)
-    ?'<div class="cc-corps-n">Un seul bilan — chaque tour porte sa mesure, et '
+    ?'<div class="cc-corps-n">Un seul bilan : chaque tour porte sa mesure, et '
       +'les écarts apparaîtront au suivant.</div>'
     :(eti.avecEcart
       ?(o.convention===false?'':convention)
@@ -41530,7 +41772,10 @@ function _htmlCorpsCadre(c,o){
     :(sem?(_corpsLibSemaine(sem.cle)+(sem.decalage===0?' (en cours)':'')):'');
   const lus=Object.keys(infos).filter(m=>(Number(volSem[m])||0)>0)
     .sort((a,b)=>(Number(volSem[b])||0)-(Number(volSem[a])||0));
-  const legende=teinte
+  // LA LEGENDE DE LA LECTURE ACTIVE, et elle seule : deux legendes de teinte
+  // sous une silhouette qui n'en porte qu'une, ce sont deux conventions et un
+  // coach qui lit la mauvaise.
+  const legende=(evo&&teinte)?_htmlCorpsEvoLegende(vue,evo):(teinte
     // ⚠ DEUX-POINTS, PAS DE TIRET. Kevin, 23/09/2026 : « teinte, volume total
     //   du programme, deux points ... tu ne me mets pas de tiret, tu laisses
     //   deux points ». Le tiret cadratin se lisait comme une incise ; les
@@ -41556,22 +41801,31 @@ function _htmlCorpsCadre(c,o){
         +lus.map(m=>escapeHtml(String(infos[m]).replace(' · ',' : ').split(' · ').join(', ')))
           .join(' ; ')+'.</span>':'')
       +'</div>'
-    :'';
+    :'');
   // L'EXPLICATION DE LA TEINTE, DANS UN PETIT CADRE (build 1398, Kevin :
   // « dans un petit rectangle »), SOUS LE GRAPHIQUE (1399 : « le cadre sous
   // le graphique »). Elle garde la classe cc-corps-lt : c'est toujours la
   // legende qui parle.
   const explication=(!teinte||o.explication===false)?'':('<div class="cc-corps-x"><p class="cc-corps-lt">'
-    +(aProg
+    +(evo
+      // ⚠ CE QUE LA COULEUR NE DIT PAS, AVANT CE QU'ELLE DIT. Un corps teinte
+      //   en vert et rouge se lit comme une note si personne ne dit que non.
+      ?'La couleur dit le sens de la mesure, jamais un jugement sur son corps : '
+        +'vert, le tour a pris depuis son dernier relevé ; rouge, il a perdu ; '
+        +'gris, il n’a pas bougé sur ses trois derniers relevés, à ± '
+        +String(CORPS_BOUGE_MIN).replace('.',',')+' cm près. '
+        +'Un muscle qu’aucun tour ne suit n’est pas teinté, et un tour mesuré une '
+        +'seule fois non plus. Touchez un muscle pour ses chiffres et ses dates.'
+    :(aProg
       // LE PREVU SE DIT PREVU, et son intensite aussi : sans consigne de
       // RIR, une serie programmee compte pleine — c'est un maximum, comme
       // le dit deja le panneau « Volume prescrit ».
       ?'Chaque muscle prend la couleur de sa zone pour le volume que le '
-        +'programme lui donne par semaine — ni l’avancée de la semaine, ni le développement. '
+        +'programme lui donne par semaine : ni l’avancée de la semaine, ni le développement. '
         +(prog.avecConsigne?'Séries pondérées par l’intensité prescrite. ':'Sans intensité prescrite, c’est un maximum. ')
         +'Un muscle sans série programmée, ou sans repère de volume, n’est pas teinté. Touchez un muscle pour son chiffre.'
       :'Elle dit la zone du volume d’entraînement, jamais le '
-        +'développement. Un muscle sans série, ou sans repère de volume, n’est pas teinté. Touchez un muscle pour son chiffre.')
+        +'développement. Un muscle sans série, ou sans repère de volume, n’est pas teinté. Touchez un muscle pour son chiffre.'))
     +'</p></div>');
   // LES GRAPHIQUES NE SORTENT QUE S'ILS ONT DE QUOI TRACER. Chacun se tait
   // tout seul quand il lui manque un point ; les trois muets, la colonne
@@ -41606,7 +41860,7 @@ function renderCorpsAthlete(z){
   if(!z) return false;
   let h='';
   try{ h=_htmlCorpsCadre(currentUser,{titre:'Ton évolution',graphes:false,
-    dates:false,convention:false,explication:false})||''; }
+    dates:false,convention:false,explication:false,mode:'volume',modes:false})||''; }
   catch(e){ h=''; }
   z.innerHTML=h;
   try{ _corpsPeindreCalques(z); }catch(e){}
