@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1410';
+window.RC_BUILD='1411';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1396,6 +1396,24 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
 .supp-tag{--tc:#f59e0b;grid-area:tag;justify-self:start;max-width:100%;font-size:8px;font-weight:800;letter-spacing:.4px;line-height:1.15;text-transform:uppercase;text-align:center;overflow-wrap:break-word;hyphens:manual;padding:2px 4px;border-radius:3px;color:var(--tc);border:1px solid color-mix(in srgb,var(--tc) 45%,transparent);background:color-mix(in srgb,var(--tc) 9%,transparent)}
 /* LA COCHE : 22 px dessines, 44 px au doigt — le ::after deborde de 11 px de
    chaque cote, sans deplacer la mise en page. */
+/* ══ LA CARTE DU COACH, SUR UN POSTE (build 1411) ══════════════════════
+   Kevin : « côté coach uniquement, sur ordi, mets les noms des compléments
+   sur la même ligne que “VITAMINE…”, entre la photo et le type, pour réduire
+   la hauteur des rectangles ». Cote coach il n'y a PAS de coche : la place
+   qu'elle prenait revient au nom, et la rangee du type disparait — la carte
+   passe de ~79 px a ~56 px.
+   ⚠ C'EST LA LARGEUR DE LA CARTE QUI DECIDE, pas celle de la fenetre. Sur une
+   demi-carte de telephone le nom n'aurait qu'une centaine de pixels : « Whey /
+   Protéine en poudre » y passerait sur trois lignes et la carte serait PLUS
+   HAUTE qu'empilee — c'est la mesure qui avait produit la forme empilee du
+   1383. En dessous de 250 px de carte, rien ne change donc, chez le coach
+   comme chez l'athlete. */
+.supp-carte.supp-co{container:supp-carte/inline-size}
+@container supp-carte (min-width:250px){
+  .supp-co .supp-in{grid-template-areas:"ico txt tag";gap:0 9px}
+  .supp-co .supp-tag{align-self:center}
+  .supp-co .supp-dose{margin-top:1px}
+}
 .supp-coche{grid-area:coche;position:relative;width:22px;height:22px;margin:0;padding:0;border-radius:50%;border:2px solid #666;background:transparent;color:transparent;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .supp-coche::after{content:'';position:absolute;inset:-11px}
 .supp-coche:focus-visible{outline:2px solid var(--red);outline-offset:3px}
@@ -88154,7 +88172,7 @@ function _renderSuppTable(list, isCoach, editFn){
     // puis le type et la coche — la grille de la demi-carte les remonte
     // entre la vignette et la coche sans changer cet ordre.
     const tag=fam?`<span class="supp-tag" style="--tc:${fam.c}">${escapeHtml(fam.lib)}</span>`:'';
-    return `<div class="supp-carte${x.eteint?' eteint':''}" ${ouverture(s)}><div class="supp-in">
+    return `<div class="supp-carte${x.eteint?' eteint':''}${isCoach?' supp-co':''}" ${ouverture(s)}><div class="supp-in">
       <span class="supp-ico" aria-hidden="true" style="background-position:${suppIconePos(ic.ico)}"></span>
       <div class="supp-txt">
         <div class="supp-nomr"><span class="supp-nom">${escapeHtml(s.name||'')}</span>${x.fiche?_suppPastille(x.fiche.preuve):''}</div>

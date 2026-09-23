@@ -33014,6 +33014,39 @@ async function testExercices(){
         return /\bgo\(|loadNutrition\(/.test(String(_repeindreNutritionAthlete))
           ?_echec('le repeint de la nutrition change d’écran'):true;})());
 
+      // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
+      // des compléments sur la même ligne que “VITAMINE…”, entre la photo et le
+      // type, pour réduire la hauteur des rectangles ».
+      ok('1411 — CHEZ LE COACH, SUR UNE CARTE LARGE, LE NOM MONTE SUR LA LIGNE DU TYPE',(()=>{
+        const supp=[{id:1,name:'Whey / Protéine en poudre',qty:2,unit:'scoop(s)',timings:['post'],active:true}];
+        const coach=_renderSuppTable(supp,true,'openCoachSuppEdit');
+        const ath=_renderSuppTable(supp,false,'');
+        const d=document.createElement('div');
+        d.innerHTML=coach;
+        if(!d.querySelector('.supp-carte.supp-co')) return _echec('la carte du coach ne se reconnaît pas');
+        const da=document.createElement('div'); da.innerHTML=ath;
+        if(da.querySelector('.supp-co')) return _echec('la carte de l’athlète a pris la forme du coach');
+        // POUR DE BON, A L'ECRAN : c'est la LARGEUR DE LA CARTE qui decide, et
+        // une requete de conteneur ne se mesure pas sur un noeud detache.
+        const boite=document.createElement('div');
+        boite.style.cssText='position:fixed;left:-9999px;top:0;width:520px';
+        boite.innerHTML=coach;
+        document.body.appendChild(boite);
+        try{
+          const zones=()=>{ const i=boite.querySelector('.supp-in');
+            return getComputedStyle(i).gridTemplateAreas.replace(/"/g,'').trim(); };
+          const haut=()=>Math.round(boite.querySelector('.supp-carte').getBoundingClientRect().height);
+          const large=zones(), hLarge=haut();
+          if(large!=='ico txt tag') return _echec('carte large : « '+large+' »');
+          // ET SOUS 250 px, LA FORME EMPILEE REVIENT : sur une demi-carte de
+          // telephone, un nom long ferait trois lignes et une carte PLUS haute.
+          boite.style.width='200px';
+          const etroit=zones(), hEtroit=haut();
+          if(etroit.indexOf('txt txt')<0) return _echec('carte étroite : « '+etroit+' »');
+          return hLarge<hEtroit
+            ?true:_echec('la carte large ('+hLarge+' px) n’est pas plus basse que l’empilée ('+hEtroit+' px)');
+        } finally { boite.remove(); }})());
+
       // BUILD 1408 — Kevin : « un historique des modifications pour voir les
       // anciens enregistrements […] où l'on peut sélectionner un ancien
       // enregistrement pour le remettre en place et possibilité d'annuler ».
