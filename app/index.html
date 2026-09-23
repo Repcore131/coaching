@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1431';
+window.RC_BUILD='1434';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -403,7 +403,7 @@ if('serviceWorker' in navigator){
 /* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:'Bebas Neue','Arial Narrow','Haettenschweiler','Franklin Gothic Condensed',Impact,sans-serif}
 </style>
-<link rel="stylesheet" href="./rc-style.1431.css">
+<link rel="stylesheet" href="./rc-style.1434.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -2188,6 +2188,22 @@ const COACH_PHOTO='icons/coach.jpg';
       <span class="ccd-tu-lib">Données</span>
     </button>
   </nav>
+  <!-- ══ LES SIX ETAGES DE L'ONGLET DONNEES ═══════════════════════
+       Kevin, 23/09/2026 : « il ne manque presque rien, il manque un ordre ».
+       Soixante sections a plat deviennent six etages, et cette barre mene a
+       chacun. ELLE REPREND LE MECANISME DES TUILES, classe pour classe :
+       meme grille collante, meme calage sous la topbar, meme etat serre au
+       defilement. Un second mecanisme aurait double les regles a tenir.
+       Elle ne parait que sur l'onglet Donnees, et un etage vide n'y a pas
+       de bouton : _ccdMajEtages s'en charge a chaque rendu. -->
+  <nav id="ccd-etages" class="ccd-tuiles ccd-etages" aria-label="Les étages de ses données">
+    <button type="button" class="ccd-tuile ccd-et-b" data-et="verdict" onclick="ccdEtage('verdict')"><span class="ccd-tu-lib">Verdict</span></button>
+    <button type="button" class="ccd-tuile ccd-et-b" data-et="corps" onclick="ccdEtage('corps')"><span class="ccd-tu-lib">Corps</span></button>
+    <button type="button" class="ccd-tuile ccd-et-b" data-et="courbes" onclick="ccdEtage('courbes')"><span class="ccd-tu-lib">Courbes</span></button>
+    <button type="button" class="ccd-tuile ccd-et-b" data-et="longueurs" onclick="ccdEtage('longueurs')"><span class="ccd-tu-lib">Longueurs</span></button>
+    <button type="button" class="ccd-tuile ccd-et-b" data-et="signaux" onclick="ccdEtage('signaux')"><span class="ccd-tu-lib">Signaux</span></button>
+    <button type="button" class="ccd-tuile ccd-et-b" data-et="detail" onclick="ccdEtage('detail')"><span class="ccd-tu-lib">Détail</span></button>
+  </nav>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <!-- L'EN-TETE, EN UNE SEULE CARTE. Il occupait cinq cents pixels avant
@@ -2329,48 +2345,18 @@ const COACH_PHOTO='icons/coach.jpg';
            meme fait dans le meme ecran, c'est une de trop. -->
       <button class="btn btn-red" style="width:100%;margin:0 0 14px;min-height:52px;font-size:var(--fs-md);letter-spacing:1.5px"
         onclick="openCoachSessions()">Modifier le programme</button>
-      <!-- ══ LE CORPS ════════════════════════════════════════════════════
-           La silhouette de l'athlete, ce qui a bouge depuis son dernier bilan,
-           et la charge de travail par muscle. Rempli par renderCorpsCoach ;
-           vide — donc masque par .ccd-vue>div:empty — quand il n'y a rien a
-           montrer, ou quand une grossesse est declaree. -->
-      <div id="ccd-corps"></div>
       <!-- Modèle appliqué : renseigné par openClientDetail -->
       <div id="ccd-assigned-prog" style="display:none;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 var(--r-2) var(--r-2) 0;line-height:1.5"></div>
       <!-- LES TECHNIQUES D'INTENSIFICATION : une phrase quand la semaine est
            chargee, les depassements de regle quand il y en a. Sous le
            programme, parce que c'est du programme qu'elles parlent. -->
       <div id="ccd-methodes"></div>
-      <!-- L'ASYMETRIE : la phrase et le geste. Aucun graphique — la donnee
-           est deja tracee par les mini-courbes gauche/droite existantes. -->
-      <div id="ccd-asymetrie"></div>
       <!-- Charge de la semaine et exercices en hausse. Masqué tant que
            l'historique ne permet pas de les établir : c'est le contrat des
            deux fonctions qui les calculent. -->
       <section class="cc-sect" style="--cc-accent:var(--border);display:none">
         <div class="cc-sect-t"><span>Tendances</span></div>
         <div class="cc-sect-c" id="ccd-tendances"></div>
-      </section>
-      <!-- LA FORME, SANS BANDEAU REPLIABLE. Kevin, 21/09/2026 : « pas besoin
-           que ce soit un menu deroulant ». Le bloc porte son propre titre,
-           « Evolution de sa forme » ; un bandeau « Forme » au-dessus le
-           redisait. Vide, il est masque par .ccd-vue>div:empty. -->
-      <div id="ccd-forme"></div>
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Volume</span></div>
-        <div class="cc-sect-c" id="ccd-volume"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Plateaux</span></div><span class="cc-sect-i" data-lex="plateau"></span>
-        <div class="cc-sect-c" id="ccd-plateaux"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Douleur</span></div>
-        <div class="cc-sect-c" id="ccd-douleur"></div>
-        <!-- LE BLOC DE PRIORITE, SOUS LES SIGNAUX. Il ne s'affiche que quand
-             le coach en ouvre un : un panneau vide a trois colonnes vides
-             serait du mobilier. -->
-        <div class="cc-sect-c" id="ccd-bloc"></div>
       </section>
       <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Récapitulatif des séances</span></div>
@@ -2533,75 +2519,124 @@ const COACH_PHOTO='icons/coach.jpg';
       </section>
       </div>
       <div class="ccd-vue" data-vue="donnees">
-      <!-- Journal du coach. Il etait en TETE de fiche ; depuis la mise en
-           onglets du 25/08/2026 il ouvre l onglet DONNEES, et c est toujours
-           la premiere chose qu on
-           veut relire avant de parler a quelqu un. -->
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Mes notes de coach</span></div>
-        <div class="cc-sect-c" id="ccd-journal"></div>
+      <!-- ══ SIX ETAGES, ET L'ORDRE EST LE SUJET ═══════════════════════
+           1 le verdict, 2 son corps, 3 ses courbes, 4 ses longueurs,
+           5 ce qui appelle un oeil, 6 le detail. Les cinq premiers sont
+           TOUJOURS DEPLOYES : ce sont eux qui repondent en trois secondes.
+           Seul le sixieme s'ouvre replie, parce qu'on y va pour creuser.
+           ⚠ LE CORPS ET LES SIGNAUX VIENNENT DE L'ONGLET ENTRAINEMENT.
+             Ils y etaient au milieu du programme ; ils decrivent l'athlete,
+             pas sa seance. Les fonctions qui les remplissent les retrouvent
+             par leur identifiant, ou qu'ils soient. -->
+      <section class="cc-etage" id="ccd-et-verdict" data-et="verdict">
+        <div class="ccd-et-h"><h3 class="ccd-et-t">Où il en est</h3><span class="ccd-et-s">ses quatre chiffres, et ce qui bouge</span></div>
+        <div id="ccd-verdict"></div>
+        <div id="ccd-verdict-alerte"></div>
       </section>
-      <h3 style="margin-bottom:12px">Bilans récents</h3>
-      <!-- RITE DE FIN DE CYCLE, DESCENDU DE LIFESTYLE LE 26/08/2026. C'est un
-           bilan de quatre semaines, avec une question posée et une réponse
-           écrite : la même famille que les Bilans, sous lesquels il vivait à
-           deux onglets de distance. Il passe AVANT eux, parce que lui porte
-           une question à laquelle quelqu'un attend une réponse.
-           Le balisage seul a bougé : renderCoachRite cherche #ccd-rite par
-           identifiant, où qu'il soit. -->
-      <section class="cc-sect" style="--cc-accent:var(--border);display:none">
-        <div class="cc-sect-t"><span>Rite de cycle</span></div>
-        <div class="cc-sect-c" id="ccd-rite"></div>
+      <section class="cc-etage" id="ccd-et-corps" data-et="corps">
+        <div class="ccd-et-h"><h3 class="ccd-et-t">Son corps</h3><span class="ccd-et-s">ce qui a pris, ce qui a perdu</span></div>
+        <!-- ══ LE CORPS ════════════════════════════════════════════════════
+             La silhouette de l'athlete, ce qui a bouge depuis son dernier bilan,
+             et la charge de travail par muscle. Rempli par renderCorpsCoach ;
+             vide — donc masque par .ccd-vue>div:empty — quand il n'y a rien a
+             montrer, ou quand une grossesse est declaree. -->
+        <div id="ccd-corps"></div>
       </section>
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Bilans</span></div>
-        <div class="cc-sect-c" id="ccd-bilans"></div>
+      <section class="cc-etage" id="ccd-et-courbes" data-et="courbes">
+        <div class="ccd-et-h"><h3 class="ccd-et-t">Ses courbes</h3><span class="ccd-et-s">poids, muscle et mensurations dans le temps</span></div>
+        <div id="ccd-courbes"></div>
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Poids et mesures</span></div>
+          <div class="cc-sect-c" id="ccd-poids"></div>
+        </section>
       </section>
-      <!-- LES AMPLITUDES SONT DES DONNEES DATEES SUR LE CORPS, comme les
-           bilans sous lesquels elles vivent. Elles ne sont pas dans les
-           « Signaux faibles » avec les proportions : ce bloc-la est une zone
-           de LECTURE, sans un bouton, et un relevé se saisit. -->
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Amplitudes</span></div>
-        <div class="cc-sect-c" id="ccd-amplitudes"></div>
+      <section class="cc-etage" id="ccd-et-longueurs" data-et="longueurs">
+        <div class="ccd-et-h"><h3 class="ccd-et-t">Ses longueurs</h3><span class="ccd-et-s">mesurées une fois, sur ses photos de départ</span></div>
+        <div id="ccd-morpho"></div>
       </section>
-      <!-- LE CALENDRIER. La section ci-dessus dit CE QUI a ete repondu ; elle
-           ne dit pas QUAND, ni quand rien ne l'a ete. Un mois par ecran, les
-           jours porteurs d'un bilan en rouge, les reponses du jour choisi
-           dessous. Place ici parce que c'est la meme matiere, lue autrement.
-           Rempli par renderCalendrierBilansCoach. -->
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Calendrier des bilans</span></div>
-        <div class="cc-sect-c" id="ccd-bil-cal"></div>
+      <section class="cc-etage" id="ccd-et-signaux" data-et="signaux">
+        <div class="ccd-et-h"><h3 class="ccd-et-t">Ce qui appelle un œil</h3><span class="ccd-et-s">trié par ce qui bloque une séance</span></div>
+        <div id="ccd-signaux"></div>
+        <!-- L'ASYMETRIE : la phrase et le geste. Aucun graphique — la donnee
+             est deja tracee par les mini-courbes gauche/droite existantes. -->
+        <div id="ccd-asymetrie"></div>
+        <!-- LA FORME, SANS BANDEAU REPLIABLE. Kevin, 21/09/2026 : « pas besoin
+             que ce soit un menu deroulant ». Le bloc porte son propre titre,
+             « Evolution de sa forme » ; un bandeau « Forme » au-dessus le
+             redisait. Vide, il est masque par .ccd-vue>div:empty. -->
+        <div id="ccd-forme"></div>
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Volume</span></div>
+          <div class="cc-sect-c" id="ccd-volume"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Plateaux</span></div><span class="cc-sect-i" data-lex="plateau"></span>
+          <div class="cc-sect-c" id="ccd-plateaux"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--red)">
+          <div class="cc-sect-t"><span>Douleur</span></div>
+          <div class="cc-sect-c" id="ccd-douleur"></div>
+          <!-- LE BLOC DE PRIORITE, SOUS LES SIGNAUX. Il ne s'affiche que quand
+               le coach en ouvre un : un panneau vide a trois colonnes vides
+               serait du mobilier. -->
+          <div class="cc-sect-c" id="ccd-bloc"></div>
+        </section>
       </section>
-      <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Poids et mesures</span></div>
-        <div class="cc-sect-c" id="ccd-poids"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Photos de progression</span></div>
-        <div class="cc-sect-c" id="ccd-pp"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Photos</span></div>
-        <div class="cc-sect-c" id="ccd-photos-progression"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Dossier</span></div>
-        <div class="cc-sect-c" id="ccd-dossier"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Signaux de déficit énergétique (RED-S)</span></div><span class="cc-sect-i" data-lex="reds"></span>
-        <div class="cc-sect-c" id="ccd-reds"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Sécurité</span></div>
-        <div class="cc-sect-c" id="ccd-securite"></div>
-      </section>
-      <section class="cc-sect" style="--cc-accent:var(--red)">
-        <div class="cc-sect-t"><span>Suspension</span></div>
-        <div class="cc-sect-c" id="ccd-suspension"></div>
+      <section class="cc-etage" id="ccd-et-detail" data-et="detail">
+        <div class="ccd-et-h"><h3 class="ccd-et-t">Le détail</h3><span class="ccd-et-s">tout le reste, rangé</span></div>
+        <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:12px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
+        <!-- LE SEUL ETAGE QUI S'OUVRE REPLIE. Son contenu n'est pas cache,
+             il est range : le coach presse ne le voit pas, celui qui creuse
+             le deplie d'un geste. 'ccd-detail' est dans CCD_REPLI_DEFAUT. -->
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Tout le détail</span></div>
+          <div class="cc-sect-c" id="ccd-detail">
+        <section class="cc-sect" style="--cc-accent:var(--border);display:none">
+          <div class="cc-sect-t"><span>Rite de cycle</span></div>
+          <div class="cc-sect-c" id="ccd-rite"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Bilans</span></div>
+          <div class="cc-sect-c" id="ccd-bilans"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Amplitudes</span></div>
+          <div class="cc-sect-c" id="ccd-amplitudes"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Calendrier des bilans</span></div>
+          <div class="cc-sect-c" id="ccd-bil-cal"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Mes notes de coach</span></div>
+          <div class="cc-sect-c" id="ccd-journal"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Photos de progression</span></div>
+          <div class="cc-sect-c" id="ccd-pp"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Photos</span></div>
+          <div class="cc-sect-c" id="ccd-photos-progression"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Dossier</span></div>
+          <div class="cc-sect-c" id="ccd-dossier"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--red)">
+          <div class="cc-sect-t"><span>Signaux de déficit énergétique (RED-S)</span></div><span class="cc-sect-i" data-lex="reds"></span>
+          <div class="cc-sect-c" id="ccd-reds"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--red)">
+          <div class="cc-sect-t"><span>Sécurité</span></div>
+          <div class="cc-sect-c" id="ccd-securite"></div>
+        </section>
+        <section class="cc-sect" style="--cc-accent:var(--red)">
+          <div class="cc-sect-t"><span>Suspension</span></div>
+          <div class="cc-sect-c" id="ccd-suspension"></div>
+        </section>
+          </div>
+        </section>
       </section>
       <div id="ccd-lien-classer" style="display:none;margin-top:16px">
         <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="loadExClassify()">Exercices à classer <span id="ccd-nb-classer"></span></button>
@@ -2909,6 +2944,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <button class="btn btn-outline" style="width:100%" onclick="ajouterDepuisBanque()">
           + Depuis la banque</button>
       </div>
+      <!-- ET A SA PLACE, LE VERROU (lot 4) : rempli par renderProgEx quand le
+           catalogue est ferme. Il dit ce qui est ferme, et ce qui reste
+           possible ici meme : ecrire le nom de son exercice, dans le champ
+           juste en dessous. Vide pour un coach et pour Ultime. -->
+      <div id="prog-banque-verrou"></div>
       <!-- B2.F2 — LE SOMMAIRE DE LA SEANCE.
            Les cartes sont empilees : sur une seance de huit exercices, le
            coach defilait a l'aveugle pour atteindre le sixieme et n'avait
@@ -5519,5 +5559,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1431.js"></script>
+<script src="./rc-core.1434.js"></script>
 </body></html>

@@ -923,6 +923,107 @@ function peut(u,capacite){
   if(!l) return false;
   return l.indexOf(palierEffectif(u))>=0;
 }
+
+// ══════ LE VERROU, ET SA PHRASE QUI VEND (lot 4) ═════════════════════════
+//
+// UN ECRAN FERME DIT DEUX CHOSES, TOUJOURS : ce qui est ferme, et ce qui
+// reste possible TOUT DE SUITE. Un mur sec fait fermer l'application ; une
+// phrase qui propose la suite fait monter d'un cran. C'est la regle du
+// chantier, et c'est pour ca que la construction est la meme partout.
+//
+// JAMAIS DE FENETRE MODALE, JAMAIS DE PAGE D'ERREUR. L'ecran s'affiche
+// normalement, avec sa barre, son titre et ses onglets : SEULE la section
+// fermee est remplacee par ce bloc. Le canal avait une modale « 🔒 Canal
+// reserve » : elle part avec ce lot.
+//
+// DEUX FORMULATIONS, ET DEUX SEULEMENT, et elles vivent ICI, pas dans les
+// ecrans. Un ecran qui ecrirait sa propre phrase finirait par en dire une
+// troisieme, puis une quatrieme, et plus personne ne saurait ce que
+// l'application promet.
+const VERROU_VOIES=Object.freeze({
+  ultime:Object.freeze({
+    phrase:(ferme,ouvert)=>ferme+' fait partie d’Ultime. '+ouvert,
+    bouton:'Voir Ultime'
+  }),
+  coaching:Object.freeze({
+    phrase:(ferme,ouvert)=>ferme+', c’est avec un coach. '+ouvert,
+    bouton:'Voir les formules de coaching'
+  })
+});
+// CE QUI EST FERME, ET CE QUI RESTE POSSIBLE, capacite par capacite.
+// ⚠ LA SECONDE MOITIE DOIT ETRE VRAIE. « Ici, tu peux ecrire le nom de ton
+//   exercice » n'est pas une consolation : c'est ce que l'ecran fait vraiment
+//   a cet endroit-la. Une promesse fausse se paie au premier essai.
+const VERROUS=Object.freeze({
+  volume:               {vers:'ultime',   ferme:'Suivre ton volume par muscle',
+                         ouvert:'Tes séances et ton historique restent complets.'},
+  perfs1rm:             {vers:'ultime',   ferme:'Le calcul de tes maxima',
+                         ouvert:'Tes charges et tes répétitions restent notées à chaque séance.'},
+  bibliothequeExercices:{vers:'ultime',   ferme:'Choisir dans la bibliothèque',
+                         ouvert:'Ici, tu peux écrire le nom de ton exercice.'},
+  bibliothequeMethodes: {vers:'ultime',   ferme:'Choisir une technique dans la liste',
+                         ouvert:'Ici, tu peux écrire la tienne dans « Description / Technique ».'},
+  bibliothequeProtocoles:{vers:'ultime',  ferme:'Les protocoles tout prêts',
+                         ouvert:'Tu peux écrire ton échauffement à la main, il reste dans ta séance.'},
+  planification:        {vers:'ultime',   ferme:'La charge du bloc, semaine par semaine',
+                         ouvert:'Tes séries restent visibles dans chaque séance.'},
+  dieteCalculee:        {vers:'ultime',   ferme:'La diète calculée',
+                         ouvert:'Tu peux noter ce que tu manges et suivre tes totaux.'},
+  complements:          {vers:'ultime',   ferme:'Le plan de compléments',
+                         ouvert:'Ta nutrition reste complète, avec tes totaux du jour.'},
+  rapport:              {vers:'ultime',   ferme:'Le rapport complet',
+                         ouvert:'Tes bilans et tes courbes restent consultables.'},
+  correctionVideo:      {vers:'coaching', ferme:'La correction de tes mouvements',
+                         ouvert:'Filme ta série, il te dit quoi corriger.'},
+  canal:                {vers:'coaching', ferme:'Écrire à quelqu’un qui te répond',
+                         ouvert:'Tes notes de séance gardent ce que tu ressens, séance après séance.'},
+  chargesArticulaires:  {vers:'coaching', ferme:'Le suivi de tes charges articulaires',
+                         ouvert:'Pendant ta séance, tu peux déclarer une gêne et l’app te propose un remplacement.'}
+});
+// LE BLOC, SANS CONDITION. Sert aux deux ou trois endroits ou la porte est
+// deja fermee par une autre regle que la capacite — le canal, qui demande un
+// coach nomme dans le dossier.
+function rcVerrouBloc(capacite){
+  const v=VERROUS[capacite];
+  if(!v) return '';
+  const voie=VERROU_VOIES[v.vers]||VERROU_VOIES.ultime;
+  // LES CHIFFRES VENDENT, et ils viennent d'OFFRES : aucun prix n'est ecrit
+  // ici. Seule la voie « ultime » en porte un ; le coaching se chiffre sur la
+  // page des formules, qui est a jour la-bas et nulle part ailleurs.
+  let prix='';
+  if(v.vers==='ultime'){
+    try{ prix='<div class="vrr-p">Ultime : '+prixMoisAnnuel('ultime')+' par mois en annuel, ou '
+      +prixOffre('ultime')+' au mois.</div>'; }catch(e){ prix=''; }
+  }
+  const action=(v.vers==='coaching')
+    ?'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
+      +escapeHtml(voie.bouton)+'</a>'
+    :'<button type="button" class="vrr-b" onclick="rcVerrouUltime()">'+escapeHtml(voie.bouton)+'</button>';
+  return '<div class="vrr" data-verrou="'+escapeHtml(capacite)+'">'
+    +'<div class="vrr-t">'+escapeHtml(voie.phrase(v.ferme,v.ouvert))+'</div>'
+    +prix+action+'</div>';
+}
+// LA FONCTION UNIQUE. Rend null quand l'acces est libre — l'ecran se dessine
+// alors comme si de rien n'etait — ou le bloc a afficher A LA PLACE.
+//
+// ⚠ LES PROTOCOLES PASSENT PAR peutVoirProtocoles ET NON PAR peut : un compte
+//   qui les avait avant le lot 3 les garde, drapeau ou date de creation. Le
+//   verrou ne doit pas reprendre ce que ce lot-la a promis de ne pas retirer.
+function rcVerrou(capacite,user){
+  const u=(user===undefined)?currentUser:user;
+  if(!VERROUS[capacite]) return null;
+  let libre=false;
+  try{
+    libre=(capacite==='bibliothequeProtocoles')?peutVoirProtocoles(u):peut(u,capacite);
+  }catch(e){ libre=false; }
+  return libre?null:rcVerrouBloc(capacite);
+}
+// LA PORTE D'ULTIME. Le meme chemin que la carte de l'ecran d'arrivee : le
+// choix est memorise, et l'ecran d'abonnement s'ouvre.
+function rcVerrouUltime(){
+  try{ return accueilChoisir('ultime',true); }catch(e){ try{ go('s-subscribe'); }catch(_e){} }
+  return true;
+}
 // Les deux paliers d'abonnement, dans l'ordre d'affichage.
 // ⚠ LES PRIX VIENNENT D'OFFRES, PAS D'ICI (lot 1) : deux ecrans qui annoncent
 //   deux prix pour le meme abonnement, c'est ce que ce lot ferme.
@@ -14917,28 +15018,30 @@ async function _canalPlancher(fil){
   if(_r>0) await new Promise(r=>setTimeout(r,_r));
 }
 function loadCanal(){
-  if(!canalAccessible(currentUser)){ _canalPorteFermee(); return; }
   go('s-canal');
   const fil=document.getElementById('canal-fil');
+  // ⚠ LA MODALE « 🔒 Canal reserve » EST PARTIE AU LOT 4. Une fenetre posee
+  //   par-dessus un ecran vide se referme sans rien laisser ; le fil porte
+  //   maintenant ce qui est ferme et ce qui reste possible.
+  //   rcVerrouBloc ET NON rcVerrou : la porte du canal ne tient pas a la
+  //   capacite seule mais au coach nomme dans le dossier, et c'est
+  //   canalAccessible qui le sait.
+  if(!canalAccessible(currentUser)){
+    if(fil) fil.innerHTML=rcVerrouBloc('canal');
+    return;
+  }
   _canalSquelette(fil);
   _canalCharger();
 }
 // La carte proposée à l'athlète sans coach. Elle mène EXACTEMENT là où mène
 // déjà la carte de l'accueil quand aucun coach n'est rattaché : deux portes
 // visibles, une seule destination.
-function _canalPorteFermee(){
-  document.getElementById('modal-overlay')?.remove();
-  document.body.insertAdjacentHTML('beforeend',
-  `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:24px">
-    <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Canal verrouillé" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:22px 20px;width:100%;max-width:360px;animation:fadeIn var(--t-2) var(--c-out);text-align:center">
-      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:10px">🔒</div>
-      <h2 style="margin-bottom:8px;font-size:var(--fs-lg)">Canal réservé aux athlètes suivis</h2>
-      <p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ton coach y publie ses annonces, ses formations et ses documents. Entre ton code coach pour y accéder.</p>
-      <button class="btn btn-red btn-sm" style="width:100%;margin:0 0 8px;min-height:44px" onclick="closeModal();go('s-client-code')">J'AI UN CODE COACH</button>
-      <button class="btn btn-outline btn-sm" style="width:100%;margin:0;min-height:44px" onclick="closeModal()">Plus tard</button>
-    </div></div>`);
-}
-
+// ⚠ _canalPorteFermee A ETE SUPPRIMEE AU LOT 4, et la trace reste ici. Elle
+//   posait une fenetre « 🔒 Canal reserve aux athletes suivis » par-dessus un
+//   ecran vide, avec un bouton « Plus tard » qui la refermait sans rien
+//   laisser. Le chantier commercial l'interdit : un ecran ferme s'affiche, et
+//   dit dans son corps ce qui est ferme et ce qui reste possible. C'est
+//   rcVerrouBloc('canal') qui le dit maintenant, dans le fil lui-meme.
 async function _canalCharger(){
   const cle=canalCle(currentUser);
   const fil=document.getElementById('canal-fil');
@@ -21252,8 +21355,14 @@ const CCD_REPLI_CLE='rc_ccd_replis';
 // fourre-tout, plus les trois blocs de reference qu'on ne consulte pas chaque
 // jour. Le reste s'ouvre — l'entrainement et la nutrition sont ce qu'on vient
 // voir.
-const CCD_REPLI_DEFAUT=['ccd-journal','ccd-bilans','ccd-poids','ccd-pp',
-  'ccd-photos-progression','ccd-dossier','ccd-reds','ccd-securite',
+// ⚠ QUATRE SECTIONS ONT QUITTE CETTE LISTE le 23/09/2026 : 'ccd-bilans',
+//   'ccd-poids', 'ccd-pp' et 'ccd-photos-progression'. Kevin : « ces quatre
+//   sections contiennent le plus d'information et elles s'ouvrent fermees :
+//   c'est la raison numero un pour laquelle le coach croit que l'app ne sait
+//   rien faire ». Elles s'ouvrent deployees, et c'est desormais l'ETAGE du
+//   detail qui se replie d'un bloc — 'ccd-detail', ci-dessous.
+const CCD_REPLI_DEFAUT=['ccd-journal','ccd-detail',
+  'ccd-dossier','ccd-reds','ccd-securite',
   'ccd-suspension','ccd-sessions-recap','ccd-rite',
   // ⚠ 'ccd-prises' A QUITTE CETTE LISTE le 08/09/2026 avec la section
   // « Proteines par prise ». Une clef qui ne designe plus rien ne casse rien,
@@ -21370,8 +21479,15 @@ const CCD_VUES=['entrainement','nutrition','lifestyle','donnees'];
 // UN ONGLET FERMÉ NE DOIT JAMAIS CACHER UN SIGNAL : la puce s'allume quand l'une
 // d'elles a quelque chose à dire. Sans ça, ranger la fiche l'aurait rendue moins
 // sûre qu'un long rouleau.
-const CCD_ALERTES={entrainement:['ccd-douleur'],
-  donnees:['ccd-reds','ccd-securite','ccd-suspension']};
+// ⚠ 'ccd-douleur' A CHANGE D'ONGLET le 23/09/2026 : la douleur est descendue
+//   dans l'etage « Ce qui appelle un oeil » de l'onglet Donnees, avec les
+//   autres signaux. La pastille la suit — sinon elle se serait allumee sur un
+//   onglet qui ne la contient plus, et se serait tue sur celui qui la porte.
+const CCD_ALERTES={entrainement:[],
+  donnees:['ccd-douleur','ccd-reds','ccd-securite','ccd-suspension']};
+// LES SIX ETAGES DE L'ONGLET DONNEES, dans l'ordre ou ils se lisent. La barre
+// d'ancres en rend un bouton chacun, et seul le dernier s'ouvre replie.
+const CCD_ETAGES=['verdict','corps','courbes','longueurs','signaux','detail'];
 let _ccdVue='entrainement';
 // C'EST LE DOCUMENT QUI DEFILE, PAS .scroll-area. Celle-ci ne deborde jamais :
 // .screen est en min-height sans height, et .scroll-area en flex:1 — le
@@ -21413,9 +21529,18 @@ function _ccdCalerAncres(){
     const tb=e&&e.querySelector(':scope>.topbar');
     const nav=document.getElementById('ccd-ancres');
     if(!tb||!nav) return;
+    // LA BARRE DES ETAGES SE CALE SOUS CELLE DES ONGLETS, par la meme mesure.
+    // Et les deux hauteurs partent dans --ccd-haut : c'est ce que vaut le
+    // bandeau colle, donc de combien un etage vise doit s'arreter plus bas
+    // (scroll-margin-top). Sans elle, le titre de l'etage passait dessous.
+    const etg=document.getElementById('ccd-etages');
     const poser=()=>{
       const h=Math.round(tb.getBoundingClientRect().height);
       if(h>0) nav.style.top=h+'px';
+      const hn=Math.round(nav.getBoundingClientRect().height);
+      if(etg&&h>0&&hn>0) etg.style.top=(h+hn)+'px';
+      const he=(etg&&etg.classList.contains('actif'))?Math.round(etg.getBoundingClientRect().height):0;
+      try{ document.documentElement.style.setProperty('--ccd-haut',(h+hn+he+8)+'px'); }catch(e){}
     };
     poser();
     if(!window._ccdTopObs&&typeof ResizeObserver==='function'){
@@ -21495,10 +21620,15 @@ function ccdVue(nom){
       // identiques, et rien qui dise lequel est ouvert.
       b.setAttribute('aria-current',b.dataset.vue===v?'page':'false');
     });
+    // LA BARRE DES SIX ETAGES NE PARAIT QUE SUR L'ONGLET QU'ELLE SERT. Posee
+    // partout, elle aurait mene a des etages absents des trois autres onglets.
+    const nav=document.getElementById('ccd-etages');
+    if(nav) nav.classList.toggle('actif',v==='donnees');
     // On remonte : garder la position d'un onglet en montrerait un autre par
     // son milieu, sur une hauteur qui n'a aucune raison de correspondre.
     if(_change) _ccdRemonter();
   }catch(e){}
+  _ccdMajEtages();
   _ccdMajAlertes();
   _ccdMajColonnes();
   return v;
@@ -21548,6 +21678,79 @@ function _ccdMajAlertes(){
     }
   }catch(e){}
 }
+// ══ LES SIX ETAGES DE L'ONGLET DONNEES ═══════════════════════════════════
+//
+// Kevin, 23/09/2026 : « il ne manque presque rien, il manque un ordre ». Les
+// sections de l'onglet Donnees sont rangees en six etages — ou il en est, son
+// corps, ses courbes, ses longueurs, ce qui appelle un oeil, le detail — et la
+// barre d'ancres mene a chacun.
+//
+// ⚠ UN ETAGE VIDE N'A PAS DE BOUTON, ET PAS DE TITRE. Un dossier neuf n'a ni
+//   photo, ni bilan, ni signal : la moitie des etages n'ont alors rien a dire.
+//   Un titre seul au-dessus du vide se lit comme une panne. On mesure donc ce
+//   qui est REELLEMENT rendu, exactement comme _ccdMajColonnes le fait pour
+//   les colonnes, et l'etage disparait avec son bouton.
+/**
+ * PURE au sens de l'ecran : elle ne lit que ce qui est rendu.
+ * @param {Element} sec l'etage
+ * @returns {boolean} vrai s'il n'a rien a montrer
+ */
+function _ccdEtageVide(sec){
+  try{
+    for(const e of sec.children){
+      if(e.classList.contains('ccd-et-h')) continue;          // le titre ne compte pas
+      if(getComputedStyle(e).display==='none') continue;
+      if((e.textContent||'').trim()) return false;
+      if(e.querySelector('img,canvas,svg,input,button')) return false;
+    }
+    return true;
+  }catch(e){ return false; }
+}
+// Range les etages vides et leurs boutons. Appelee au changement d'onglet et
+// apres chaque rendu de fiche.
+function _ccdMajEtages(){
+  try{
+    const nav=document.getElementById('ccd-etages');
+    let n=0;
+    for(const cle of CCD_ETAGES){
+      const sec=document.getElementById('ccd-et-'+cle);
+      const b=nav&&nav.querySelector('.ccd-et-b[data-et="'+cle+'"]');
+      const vide=!sec||_ccdEtageVide(sec);
+      if(sec) sec.hidden=vide;
+      if(b) b.hidden=vide;
+      if(!vide) n++;
+    }
+    // UN SEUL ETAGE NE FAIT PAS UNE BARRE : elle ne menerait qu'a l'endroit ou
+    // l'on est deja.
+    if(nav) nav.classList.toggle('vide',n<2);
+  }catch(e){}
+}
+/**
+ * Mene a un etage. Ouvre d'abord l'onglet Donnees — sans quoi le defilement
+ * viserait un bloc masque, et rien ne se passerait, comme pour ccdAller.
+ * @param {string} cle
+ * @returns {boolean}
+ */
+function ccdEtage(cle){
+  const sec=document.getElementById('ccd-et-'+cle);
+  if(!sec) return false;
+  if(_ccdVue!=='donnees') ccdVue('donnees');
+  if(sec.hidden) return false;
+  _ccdEtageActif(cle);
+  try{ sec.scrollIntoView({block:'start'}); }catch(e){ _defiler(sec); }
+  return true;
+}
+// Le bouton de l'etage ou l'on est. Une barre qui ne suit pas le pouce ment
+// des le premier defilement.
+function _ccdEtageActif(cle){
+  try{
+    document.querySelectorAll('#ccd-etages .ccd-et-b').forEach(b=>{
+      const a=b.dataset.et===cle;
+      b.classList.toggle('active',a);
+      b.setAttribute('aria-current',a?'true':'false');
+    });
+  }catch(e){}
+}
 // Garde son role : mener a une section precise. Elle OUVRE d'abord l'onglet
 // qui la contient — sinon elle faisait defiler vers un bloc masque, et il ne
 // se passait rien.
@@ -21593,6 +21796,17 @@ function _ccdArmerAncres(){
           const y=window.scrollY||document.documentElement.scrollTop||0;
           if(y>120) nav.setAttribute('data-serre','');
           else if(y<60) nav.removeAttribute('data-serre');
+          // L'ETAGE SOUS LE BANDEAU : celui dont le haut est passe, le plus
+          // bas des trois premiers pixels visibles. Le meme ecouteur que la
+          // barre serree, une seule frame pour les deux.
+          if(_ccdVue!=='donnees') return;
+          let vu='';
+          for(const cle of CCD_ETAGES){
+            const s=document.getElementById('ccd-et-'+cle);
+            if(!s||s.hidden) continue;
+            if(s.getBoundingClientRect().top<=140) vu=cle;
+          }
+          if(vu) _ccdEtageActif(vu);
         });
       },{passive:true});
     }
@@ -21721,7 +21935,10 @@ function openClientDetail(cid,_refresh,_force){
     ccdVue((_refresh&&_memeAthlete)?_ccdVue:'entrainement');
     // ccdVue le fait deja pour l'onglet visible ; ce second appel couvre
     // les trois autres, dont le contenu vient d'etre rendu.
-    _ccdMajColonnes(); },0);
+    _ccdMajColonnes();
+    // ET LES ETAGES, une fois le contenu pose : c'est lui qui dit lesquels
+    // ont quelque chose a montrer.
+    _ccdMajEtages(); _ccdCalerAncres(); },0);
   setTimeout(_majLiensClasser,0);
   // N3.10 — LE BROUILLON DE SEANCES APPARTIENT A UN ATHLETE. Ouvrir la fiche
   // d'un autre abandonne celui qui restait en memoire : il n'etait remis a
@@ -27648,6 +27865,13 @@ function _bqRendreFiltres(){
 }
 function _bqRendre(){
   const z=document.getElementById('bq-liste'); if(!z) return;
+  // ══ LE VERROU (lot 4) : l'ecran garde sa barre et son titre ; la liste dit
+  // ce qui est ferme, et ce qui reste possible dans le compositeur.
+  const _vrr=rcVerrou('bibliothequeExercices');
+  if(_vrr){
+    const zf=document.getElementById('bq-filtres'); if(zf) zf.innerHTML='';
+    z.innerHTML=_vrr; return;
+  }
   _bqRendreFiltres();
   const q=(document.getElementById('bq-q')||{}).value||'';
   const filtres=Object.assign({},_bqFiltres);
@@ -30198,9 +30422,15 @@ function renderProgEx(){
   // Lu UNE FOIS pour tout le rendu : peutConsulterBanque relit currentUser a
   // chaque appel, et une carte de dix exercices l'appellerait dix fois.
   const _bqDispo=(()=>{ try{ return !!peutConsulterBanque(); }catch(e){ return false; } })();
-  // Le bouton n'apparait que pour un coach : la banque lui est reservee.
+  // Le bouton n'apparait qu'a qui a le catalogue (un coach, ou Ultime).
   const _bq=document.getElementById('prog-banque');
-  if(_bq) _bq.style.display=peutConsulterBanque()?'block':'none';
+  if(_bq) _bq.style.display=_bqDispo?'block':'none';
+  // ET A SA PLACE, LE VERROU (lot 4) : c'est ici, devant le champ du nom, que
+  // la question se pose. La phrase dit ce qui est ferme et ce qu'on peut
+  // faire a la place — ecrire le nom soi-meme, ce que le champ juste en
+  // dessous permet deja.
+  const _bqv=document.getElementById('prog-banque-verrou');
+  if(_bqv) _bqv.innerHTML=_bqDispo?'':(rcVerrou('bibliothequeExercices')||'');
   // Et les commandes d'extraction disparaissent tant que LEGACY_PDF_IMPORT
   // est baisse. Ici et non a l'ouverture de l'ecran : renderProgEx est le
   // seul point par lequel TOUS les chemins d'edition passent.
@@ -33113,7 +33343,10 @@ function _renderSessionManager(){
     const bouton=(lib,act)=>'<button type="button" class="btn btn-outline" onclick="'+act+'" '
       +'style="flex:1 1 46%;min-width:150px;font-size:var(--fs-xs);padding:9px 10px">'+lib+'</button>';
     try{
-      if(peut(currentUser,'planification')&&semainesDuBloc(currentUser).length)
+      // ⚠ PLUS DE CONDITION DE CAPACITE DEPUIS LE LOT 4 : l'ecran s'ouvre pour
+      //   tout le monde et porte son verrou. La seule condition qui reste est
+      //   qu'il y ait un bloc date a regarder.
+      if(semainesDuBloc(currentUser).length)
         b.push(bouton('Charge du bloc','ouvrirGrilleCharge()'));
     }catch(e){}
     try{
@@ -45615,6 +45848,8 @@ function ouvrirRapport(cible){
 function rapRendre(){
   const z=document.getElementById('rap-corps');
   if(!z) return;
+  const _vrr=rcVerrou('rapport');
+  if(_vrr){ z.innerHTML=_vrr; return; }
   let r=null;
   try{ r=rapportPeriode(_rapCible,_rapDebut,_rapFin); }catch(e){ r=null; }
   z.innerHTML=r?htmlRapport(r):'<div class="rap-vide">Rapport indisponible.</div>';
@@ -48110,12 +48345,8 @@ function ouvrirGrilleCharge(athlete){
   if(coach){
     _gcAthlete=athlete||_coachEditClient||null;
   }else{
-    if(!peut(currentUser,'planification')){
-      // Ce qui est fermé, puis ce qui marche tout de suite : le verrou du lot 4
-      // remplacera ce message par son bloc, avec la même construction.
-      toast('La charge du bloc fait partie d’Ultime. Tes séries restent visibles dans chaque séance.','var(--orange)');
-      return false;
-    }
+    // L'ECRAN S'OUVRE POUR TOUT LE MONDE DEPUIS LE LOT 4, et c'est le verrou
+    // qui parle a l'interieur : un ecran qu'on n'atteint pas ne vend rien.
     _gcAthlete=currentUser;
   }
   // LA MISE EN PAGE LARGE DES ECRANS COACH NE SUIT PAS L'ATHLETE. `ecran-coach`
@@ -48135,6 +48366,10 @@ function ouvrirGrilleCharge(athlete){
 function _rendreGrilleCharge(){
   const z=document.getElementById('gc-contenu');
   if(!z) return false;
+  // ══ LE VERROU (lot 4), avant tout calcul : la grille est ce qu'Ultime
+  // ouvre, et le bloc dit ce qui reste lisible sans elle.
+  const _vrr=rcVerrou('planification');
+  if(_vrr){ z.innerHTML=_vrr; return false; }
   const u=_gcAthlete;
   const cases=grilleCharge(u);
   if(!cases.length){
@@ -54333,6 +54568,8 @@ function _chCycle(s,z){
 function renderCharges(){
   const z=document.getElementById('charges-content');
   if(!z) return;
+  const _vrr=rcVerrou('chargesArticulaires');
+  if(_vrr){ z.innerHTML=_vrr; return; }
   const av=avancementCharges();
   const pc=av.total?Math.round(av.pose/av.total*100):0;
   const entete=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
@@ -59819,6 +60056,10 @@ function _progPhotoBilan(b,t){
 // assertion rend chaque onglet et verifie que les deux disent la meme chose.
 function _progOngletVide(tab,u){
   u=u||{};
+  // ⚠ UN ONGLET VERROUILLE N'EST PAS VIDE (lot 4) : il porte la phrase du
+  //   verrou et son bouton. Le dire vide ferait proposer par-dessus un geste
+  //   qui ne mene nulle part, et les deux se disputeraient le meme espace.
+  try{ if(rcVerrou(tab==='volume'?'volume':(tab==='perf'?'perfs1rm':''),u)) return false; }catch(e){}
   const bl=bilansOrdonnes(u);
   if(tab==='poids') return !bl.length&&!(u.weightLog||[]).length;
   if(tab==='mensus'||tab==='masseGrasse') return !bl.length;
@@ -59854,6 +60095,11 @@ function showProgressTab(tab,btn,sansMemo){
   document.querySelectorAll('#prog-tabs button').forEach(b=>{b.className='btn btn-outline btn-sm';b.style.whiteSpace='nowrap';});
   if(btn){btn.className='btn btn-red btn-sm';btn.style.whiteSpace='nowrap';}
   const c=document.getElementById('progress-content');
+  // ══ LE VERROU (lot 4). Les onglets restent tous la, et le choix reste
+  // memorise : seule la vue fermee est remplacee. Un onglet qu'on retire de
+  // la bande ne se vend pas, il s'oublie.
+  const _vrr=rcVerrou(tab==='volume'?'volume':(tab==='perf'?'perfs1rm':''));
+  if(_vrr){ c.innerHTML=_vrr; return; }
   // N3.16 — le MEME ordre et le MEME filtre que la fiche du coach.
   const bl=bilansOrdonnes(currentUser);
   const ss=currentUser.sessions||[];
@@ -65811,6 +66057,8 @@ function cplSetMoment(v){
 function renderPlanCoach(){
   const el=document.getElementById('cpl-body');
   if(!el) return;
+  const _vrr=rcVerrou('dieteCalculee');
+  if(_vrr){ el.innerHTML=_vrr; return; }
   if(!_cplPlan){ el.innerHTML=''; return; }
   const c=_cplAthlete();
   if(!c){ el.innerHTML=''; return; }
@@ -66995,6 +67243,8 @@ function _prepResultat(){
 function _prepRendre(){
   const z=document.getElementById('prep-corps');
   if(!z) return;
+  const _vrr=rcVerrou('dieteCalculee');
+  if(_vrr){ z.innerHTML=_vrr; return; }
   const e=_prepEtat;
   const t=document.getElementById('prep-titre');
   if(t) t.textContent=PREP_MODES[e.mode];
@@ -76894,6 +77144,8 @@ function _renderSupplements(){
   const list=_suppStore();
   const el=document.getElementById('supp-table-content');
   if(!el) return;
+  const _vrr=rcVerrou('complements');
+  if(_vrr){ el.innerHTML=_vrr; return; }
   el.innerHTML=_htmlBlocSupplements(list)+'<div style="height:20px"></div>';
 }
 
@@ -78725,11 +78977,23 @@ function renderCarteAFilmer(sess){
 let _vidsSorted=[];
 function loadVideos(nomPrerempli){
   go('s-videos');
+  // ══ LE VERROU (lot 4). L'envoi et le champ de lien disparaissent — ils ne
+  // menent nulle part sans coach — et la liste porte la phrase. Le reste de
+  // l'ecran ne bouge pas.
+  //
+  // ⚠ IL EST POSE APRES LA PRE-SAISIE DU NOM, a dessein : le champ garde ce
+  //   qu'on lui a passe, et l'ecran redevient entier le jour ou le dossier
+  //   s'ouvre. Rien ne se perd derriere le verrou.
+  const _vrr=rcVerrou('correctionVideo');
+  for(const _id of ['vid-envoi','vid-lien']){
+    const _e=document.getElementById(_id); if(_e) _e.style.display=_vrr?'none':'';
+  }
   // Pré-saisie venue de la carte de fin de séance ou d'une demande du coach.
   // Sans argument, le champ est laissé tel quel : les appels existants ne
   // changent pas de comportement.
   const _nom=document.getElementById('vid-name-input');
   if(_nom&&nomPrerempli) _nom.value=String(nomPrerempli);
+  if(_vrr){ const _l=document.getElementById('vid-list'); if(_l) _l.innerHTML=_vrr; return; }
   _renderVideosListe();
 }
 // LA LISTE SEULE, SANS go() ni champ pre-rempli — voir _repeindreVideosAthlete.
@@ -96092,12 +96356,8 @@ function peutVoirProtocoles(user){
   return protocolesHerites(u);
 }
 function ouvrirProtocoles(phase,champ,retour){
-  if(!peutVoirProtocoles()){
-    // Ce qui est ferme, puis ce qui reste possible tout de suite. Le verrou du
-    // lot 4 reprendra la meme construction dans un bloc, a la place de l'ecran.
-    toast('Les protocoles font partie d’Ultime. Tu peux écrire ton échauffement à la main dans ta séance.','var(--orange)');
-    return false;
-  }
+  // L'ECRAN S'OUVRE POUR TOUT LE MONDE DEPUIS LE LOT 4 : _pfRendre y pose le
+  // verrou, et celui qui herite des protocoles (lot 3) ne le voit jamais.
   _pfCible=champ||null;
   _pfRetour=retour||(champ?'s-coach-program':(currentUser?.role==='coach'?'s-coach-home':'s-client-home'));
   // Arriver depuis le champ « échauffement » sans voir d'emblée les fins de
@@ -96143,6 +96403,19 @@ function _pfFiltrer(){
 
 function _pfRendre(){
   const zf=document.getElementById('pf-filtres'); if(!zf) return;
+  // ══ LE VERROU (lot 4). Les filtres s'effacent avec la liste : filtrer un
+  // catalogue qu'on ne voit pas n'a pas de sens.
+  const _vrr=rcVerrou('bibliothequeProtocoles');
+  if(_vrr){
+    zf.innerHTML='';
+    // La barre de recherche part avec les filtres : chercher dans un
+    // catalogue qu'on ne voit pas ne mene nulle part.
+    const _zq=document.getElementById('pf-q'); if(_zq) _zq.style.display='none';
+    const _zl=document.getElementById('pf-liste');
+    if(_zl) _zl.innerHTML=_vrr; else zf.innerHTML=_vrr;
+    return;
+  }
+  const _zq=document.getElementById('pf-q'); if(_zq) _zq.style.display='';
   const f=_pfFiltres;
   const puce=(actif,libelle,onclick)=>
     `<button class="pf-chip${actif?' active':''}" onclick="${onclick}">${libelle}</button>`;

@@ -4429,6 +4429,37 @@ html{scroll-behavior:smooth}
 #ccd-ancres[data-serre] .ccd-tu-lib{font-size:8.5px;letter-spacing:.3px}
 /* A 360 px, quatre libelles de dix caracteres ne tiennent pas cote a cote. */
 @media(max-width:380px){.ccd-tu-lib{font-size:8.5px;letter-spacing:.2px}}
+/* ══ LA BARRE DES SIX ETAGES ══════════════════════════════════════════
+   Elle REPREND .ccd-tuiles : meme position collante, meme fond, meme trait du
+   bas. Six colonnes au lieu de quatre, sans pictogramme et sur une seule
+   ligne : a 375 px, six libelles courts tiennent, six tuiles de 64 px non.
+   Elle ne parait que sur l'onglet Donnees (.actif), jamais quand il n'y a
+   qu'un etage a montrer (.vide) : une barre qui mene la ou l'on est deja
+   n'est pas une barre. Le decalage du haut est pose par _ccdCalerAncres,
+   mesure, jamais ecrit en dur. */
+/* ⚠ EN FLEX, PAS EN GRILLE A SIX COLONNES. Un dossier neuf n'a ni verdict ni
+   longueurs : la grille gardait leurs colonnes, et les quatre boutons
+   restants se serraient a gauche devant un tiers de barre vide. */
+.ccd-etages{display:none;z-index:4}
+.ccd-etages.actif{display:flex}
+.ccd-etages.vide{display:none}
+.ccd-etages .ccd-et-b{flex:1 1 0;min-width:0;min-height:0;padding:7px 2px 6px;gap:0;
+  font-size:9px;letter-spacing:.2px;border-bottom-width:2px}
+.ccd-etages .ccd-tu-lib{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  max-width:100%;display:block}
+.ccd-etages .ccd-et-b.active{color:var(--text);border-bottom-color:var(--green);
+  background:linear-gradient(180deg,rgba(34,197,94,.10),transparent)}
+.ccd-etages .ccd-et-b[hidden]{display:none}
+/* ══ UN ETAGE ═════════════════════════════════════════════════════════
+   Le titre dit ou l'on est, la ligne dessous dit ce qu'on y lit. L'etage
+   s'arrete sous le bandeau colle quand on le vise : --ccd-haut vaut la
+   hauteur des deux barres, mesuree. */
+.cc-etage{display:block;scroll-margin-top:var(--ccd-haut,140px);margin-bottom:22px}
+.cc-etage[hidden]{display:none}
+.ccd-et-h{display:flex;flex-direction:column;gap:2px;margin:0 0 10px}
+.ccd-et-t{margin:0;font-size:var(--fs-lg);font-weight:900;letter-spacing:-.2px;
+  color:var(--text)}
+.ccd-et-s{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45}
 /* LES QUATRE VUES DE LA FICHE. Une seule est montee a la fois : les autres
    restent dans le document — leurs identifiants sont remplis par
    openClientDetail, qui ne sait rien des onglets et n'a pas a le savoir. */
@@ -8892,3 +8923,19 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   .wel-cartes,.wel-diff,.wel-chiffres{grid-template-columns:1fr 1fr}
   .wel-portes{max-width:560px}
 }
+
+/* ══ LE VERROU, ET SA PHRASE QUI VEND (lot 4) ═══════════════════════════════
+   Le meme bloc partout : un ecran ferme se reconnait au premier coup d'oeil,
+   et ce qu'il propose se lit au second. Le filet rouge a gauche est celui des
+   encarts de l'application, pas une couleur neuve. */
+.vrr{background:var(--surface-1);border:1px solid var(--border);
+  border-left:3px solid var(--red);border-radius:var(--r-3);
+  padding:14px 15px;margin:0 0 14px}
+.vrr-t{font-size:var(--fs-sm);color:var(--text);line-height:1.65}
+.vrr-p{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:7px}
+.vrr-b{display:inline-flex;align-items:center;justify-content:center;
+  margin-top:12px;min-height:44px;padding:0 18px;background:var(--red);
+  color:#fff;border:none;border-radius:var(--r-3);font-family:Montserrat,sans-serif;
+  font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;
+  text-decoration:none;cursor:pointer}
+.vrr-b:active{transform:translateY(1px)}
