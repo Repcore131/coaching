@@ -14000,7 +14000,7 @@ function expliquerUrgence(c){
   if(sg.douleur){
     const d=det.douleur;
     const dates=(d&&Array.isArray(d.dates)&&d.dates.length)?Math.max.apply(null,d.dates):null;
-    ajout('Douleur répétée'+(d&&d.nom?' — '+d.nom:''),9,dates);
+    ajout('Douleur répétée'+(d&&d.nom?' : '+d.nom:''),9,dates);
   }
   if(sg.douleurDiffuse) ajout('Douleur diffuse',8,null);
   if(sg.decrochage) ajout('Séances écourtées',7,null);
@@ -14032,7 +14032,7 @@ function expliquerUrgence(c){
   // d'une douleur deplacerait le regard du coach au mauvais endroit.
   try{
     const _as=signalAsymetrie(c);
-    if(_as) ajout('Asymétrie gauche/droite — '+_as.phrase,ASYM_GRAVITE,dernier);
+    if(_as) ajout('Asymétrie gauche/droite : '+_as.phrase,ASYM_GRAVITE,dernier);
   }catch(e){}
   return out.sort((a,b)=>b.gravite-a.gravite);
 }
@@ -21624,6 +21624,11 @@ function ccdVue(nom){
     // partout, elle aurait mene a des etages absents des trois autres onglets.
     const nav=document.getElementById('ccd-etages');
     if(nav) nav.classList.toggle('actif',v==='donnees');
+    // L'ONGLET OUVERT EST DIT A L'ECRAN LUI-MEME : c'est ce qui permet a la
+    // feuille de styles d'alleger l'en-tete sur Donnees sans qu'une fonction
+    // de rendu ait a le savoir. Voir « L'EN-TETE S'EFFACE DEVANT LE VERDICT ».
+    const ec=document.getElementById('s-coach-client');
+    if(ec) ec.dataset.vue=v;
     // On remonte : garder la position d'un onglet en montrerait un autre par
     // son milieu, sur une hauteur qui n'a aucune raison de correspondre.
     if(_change) _ccdRemonter();
@@ -21980,6 +21985,9 @@ function openClientDetail(cid,_refresh,_force){
   // repeindre a chaque descente de dossier : actualiserClient rappelle
   // openClientDetail des que quelque chose a change, et le bloc suit sans un
   // clic de plus.
+  // LE VERDICT EN PREMIER : c'est le premier etage de l'onglet Donnees, et il
+  // repond a la seule question qu'on se pose en ouvrant une fiche.
+  try{ renderVerdictCoach(c); }catch(e){}
   try{ renderCorpsCoach(c); }catch(e){}
   try{ renderMethodesCoach(c); }catch(e){}
   try{ renderAsymetrieCoach(c); }catch(e){}
@@ -41468,6 +41476,208 @@ function renderCorpsAthlete(z){
   z.innerHTML=h;
   try{ _corpsPeindreCalques(z); }catch(e){}
   return !!h;
+}
+// ══ LE VERDICT : QUATRE CARTES, ET UNE SEULE LIGNE D'ALERTE ═══════════════
+//
+// Kevin, 23/09/2026. La question a laquelle cet etage repond, et la seule :
+// « est-ce qu'il perd du gras ou du muscle ». Le poids seul ne la tranche
+// jamais ; le pourcentage de masse grasse seul non plus.
+//
+// ⚠ LA LECTURE PORTE SUR L'ECART ENTRE DEUX BILANS, JAMAIS SUR LE CHIFFRE.
+//   L'estimation de masse grasse vient de la formule de la marine americaine
+//   (calcBF, deja dans l'app) : elle se trompe de plusieurs points sur un
+//   individu, mais elle se trompe DANS LE MEME SENS d'un bilan a l'autre,
+//   avec le meme ruban et la meme personne. C'est ce qui rend l'ECART lisible
+//   quand le chiffre ne l'est pas. La carte le dit a l'ecran, et pas
+//   seulement ici en commentaire.
+//
+// ⚠ LE SEUIL DE « PRESERVEE » EST MESURE, PAS CHOISI. Un ruban se trompe d'un
+//   demi-centimetre (SYN_BRUIT_MESURE). Passe dans la formule, ce demi-
+//   centimetre deplace la masse maigre estimee de 0,48 kg chez une femme de
+//   62 kg, 0,63 kg chez un homme de 80 kg, 0,64 kg chez un homme de 100 kg —
+//   mesure sur les trois cas, en faisant varier taille, cou et hanches de
+//   ±0,5 cm. La balance, elle, ajoute son propre bruit : 0,3 kg (SYN_BRUIT_
+//   POIDS) fois la part maigre, soit environ 0,25 kg. Au pire, 0,9 kg. En
+//   dessous, on ne sait pas distinguer une perte de muscle d'une erreur de
+//   ruban : on ecrit « preservee », et c'est la verite.
+const CCD_MAIGRE_BRUIT=0.9;
+// La marge de l'estimation, en points de pourcentage. La formule de la marine
+// annonce une erreur type de 3 a 4 points sur un individu.
+const CCD_BF_MARGE=4;
+// Trois bilans sans bouger, c'est une mesure qui dort. Deux ne suffisent pas :
+// un tour peut ne pas bouger d'un bilan au suivant sans que ce soit un oubli.
+const CCD_DORT_BILANS=3;
+/**
+ * PURE. Les trois chiffres du verdict et ce qui dort, ou null quand le
+ * dossier ne porte pas de quoi les etablir.
+ *
+ * @param {any} u le dossier de l'athlete
+ * @returns {{poids:any, gras:any, maigre:any, dort:any}}
+ */
+function ccdVerdict(u){
+  const out={poids:null,gras:null,maigre:null,dort:null};
+  let bl=[];
+  try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  // LE POIDS : les deux derniers bilans qui en portent un.
+  const pesees=bl.filter(b=>getBW(b)>0);
+  if(pesees.length){
+    const fin=pesees[pesees.length-1], deb=pesees.length>1?pesees[pesees.length-2]:null;
+    const vFin=getBW(fin), vDeb=deb?getBW(deb):null;
+    const jours=deb?Math.max(1,Math.round((Number(fin.date)-Number(deb.date))/86400000)):0;
+    let kgSem=null;
+    // LA VITESSE VIENT DES PESEES QUOTIDIENNES QUAND IL Y EN A — c'est le
+    // meme calcul que la courbe de pesee, pas un second. Sans elles, l'ecart
+    // entre les deux bilans, ramene a la semaine.
+    try{ const v=vitesseHebdo(serieVitesse(u)); if(v&&isFinite(v.kgSem)) kgSem=v.kgSem; }catch(e){}
+    if(kgSem==null&&deb&&jours>=7) kgSem=(vFin-vDeb)/(jours/7);
+    out.poids={valeur:vFin,date:Number(fin.date)||0,
+      delta:(vDeb!=null)?Math.round((vFin-vDeb)*10)/10:null,
+      depuis:deb?(Number(deb.date)||0):0,kgSem:kgSem};
+  }
+  // LA MASSE GRASSE : les deux derniers bilans ou la formule a ses mesures.
+  const taille=parseFloat((u&&(u._evol_height||u['init-height']||u.height))||0)||null;
+  const genre=(u&&(u._evol_gender||u.gender))||'';
+  const femme=(function(){ try{ return isFemale(genre); }catch(e){ return false; } })();
+  const pct=b=>{
+    const p=getBW(b);
+    if(!(p>0)||!taille) return null;
+    const v=calcBF(getBM(b,'waist'),getBM(b,'neck'),getBM(b,'hips'),taille,genre);
+    return (v==null)?null:{pct:v,poids:p,date:Number(b.date)||0,
+      gras:Math.round(p*v/100*10)/10,maigre:Math.round((p-p*v/100)*10)/10};
+  };
+  const calc=bl.map(pct).filter(Boolean);
+  if(calc.length){
+    const f=calc[calc.length-1], d=calc.length>1?calc[calc.length-2]:null;
+    out.gras={kg:f.gras,pct:f.pct,date:f.date,marge:CCD_BF_MARGE,
+      delta:d?Math.round((f.gras-d.gras)*10)/10:null,depuis:d?d.date:0};
+    const dm=d?Math.round((f.maigre-d.maigre)*10)/10:null;
+    out.maigre={kg:f.maigre,date:f.date,delta:dm,depuis:d?d.date:0,
+      sens:(dm==null)?null:(Math.abs(dm)<CCD_MAIGRE_BRUIT?'preservee':(dm>0?'hausse':'baisse'))};
+  } else {
+    // RIEN A CALCULER : on dit CE QUI MANQUE, et rien d'autre. Une carte qui
+    // affiche un tiret laisse croire a une panne.
+    const dernier=bl.length?bl[bl.length-1]:null;
+    const manque=[];
+    if(!taille) manque.push('sa taille debout');
+    if(dernier){
+      if(!(getBM(dernier,'waist')>0)) manque.push('son tour de taille');
+      if(!(getBM(dernier,'neck')>0)) manque.push('son tour de cou');
+      if(femme&&!(getBM(dernier,'hips')>0)) manque.push('son tour de hanches');
+    }
+    if(!dernier) manque.push('un premier bilan');
+    out.gras={manque:manque};
+  }
+  // CE QUI DORT : les tours identiques, au ruban pres, sur les trois derniers
+  // bilans qui les portent. C'est ce qu'un coach rate en lisant une liste.
+  const dort=[];
+  for(const cle in CORPS_NOMS){
+    let s=[];
+    try{ s=corpsRelevesReels(u,cle)||[]; }catch(e){ s=[]; }
+    if(s.length<CCD_DORT_BILANS) continue;
+    const trois=s.slice(-CCD_DORT_BILANS).map(x=>x.valeur);
+    const ecart=Math.max.apply(null,trois)-Math.min.apply(null,trois);
+    if(ecart<SYN_BRUIT_MESURE) dort.push({cle,nom:_libMesure(CORPS_NOMS[cle]),depuis:s[s.length-CCD_DORT_BILANS].date});
+  }
+  out.dort={n:dort.length,noms:dort.map(x=>x.nom),bilans:CCD_DORT_BILANS};
+  return out;
+}
+// « 20 sept. » — la date d'un relevé, courte.
+function _ccdJour(ts){
+  const t=Number(ts)||0;
+  if(!t) return '';
+  try{ return new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }
+  catch(e){ return ''; }
+}
+// « −1,4 kg », « +0,3 kg », ou '' — le signe se lit, le zero ne s'ecrit pas.
+function _ccdDelta(v,unite){
+  if(v==null||!isFinite(v)) return '';
+  const a=Math.abs(v);
+  if(a<0.05) return '0 '+unite;
+  return (v>0?'+':'−')+_synNombre(v)+' '+unite;
+}
+/**
+ * Une carte du verdict. `source` porte la date et la marge : aucune valeur
+ * affichee dans cette application ne sort sans elles.
+ */
+function _ccdCarte(libelle,valeur,delta,phrase,source){
+  return '<article class="ccd-v">'
+    +'<span class="ccd-v-l">'+escapeHtml(libelle)+'</span>'
+    +'<span class="ccd-v-n">'+escapeHtml(valeur)+'</span>'
+    +(delta?'<span class="ccd-v-d">'+escapeHtml(delta)+'</span>':'')
+    +(phrase?'<span class="ccd-v-p">'+escapeHtml(phrase)+'</span>':'')
+    +(source?'<span class="ccd-v-s">'+escapeHtml(source)+'</span>':'')
+    +'</article>';
+}
+/**
+ * Les quatre cartes, plus la ligne d'alerte. Rend '' quand il n'y a pas un
+ * seul bilan : l'etage disparait alors avec son bouton (_ccdMajEtages).
+ */
+function _htmlCcdVerdict(u){
+  const v=ccdVerdict(u);
+  if(!v.poids&&(!v.gras||v.gras.manque)&&!v.dort.n) return '';
+  const cartes=[];
+  // 1. LE POIDS.
+  if(v.poids){
+    const p=v.poids;
+    cartes.push(_ccdCarte('Poids',_synNombre(p.valeur)+' kg',_ccdDelta(p.delta,'kg'),
+      (p.kgSem!=null&&isFinite(p.kgSem))?(_ccdDelta(p.kgSem,'kg')+' par semaine'):'',
+      'pesé au bilan du '+_ccdJour(p.date)+' · à 0,3 kg près'));
+  }
+  // 2 et 3. LA MASSE GRASSE ET LA MASSE MAIGRE, ou ce qui manque pour elles.
+  if(v.gras&&v.gras.manque){
+    const m=v.gras.manque;
+    cartes.push('<article class="ccd-v ccd-v-manque"><span class="ccd-v-l">Masse grasse</span>'
+      +'<span class="ccd-v-p">Pas encore calculable : il manque '+escapeHtml(m[0]||'une mesure')+'.</span>'
+      +'<span class="ccd-v-s">avec elle, tu sauras s\'il perd du gras ou du muscle</span></article>');
+  } else if(v.gras){
+    cartes.push(_ccdCarte('Masse grasse',_synNombre(v.gras.kg)+' kg',_ccdDelta(v.gras.delta,'kg'),
+      _synNombre(v.gras.pct)+' % de son poids',
+      'estimée au ruban le '+_ccdJour(v.gras.date)+' · à '+v.gras.marge+' points près'));
+    const m=v.maigre;
+    const dit={preservee:'préservée',baisse:'en baisse',hausse:'en hausse'}[m&&m.sens]||'';
+    cartes.push(_ccdCarte('Masse maigre',_synNombre(m.kg)+' kg',_ccdDelta(m.delta,'kg'),dit,
+      'le poids moins la masse grasse · à '+_synNombre(CCD_MAIGRE_BRUIT)+' kg près'));
+  }
+  // 4. CE QUI DORT.
+  const d=v.dort;
+  cartes.push(_ccdCarte('Ce qui dort',
+    d.n?(d.n+' mesure'+(d.n>1?'s':'')):'Rien',
+    d.n?(d.noms.slice(0,2).join(', ')+(d.n>2?(' et '+(d.n-2)+' autre'+(d.n>3?'s':'')):'')):'',
+    d.n?('pareilles depuis '+d.bilans+' bilans'):'tout a bougé depuis '+d.bilans+' bilans',
+    'au ruban, à 0,5 cm près'));
+  return '<div class="ccd-v4">'+cartes.join('')+'</div>'
+    // LA PHRASE QUI BORNE LES DEUX ESTIMATIONS. Elle est SOUS les cartes, pas
+    // dans une infobulle : ce qu'elle dit change la façon de lire les deux
+    // chiffres du milieu, et personne n'ouvre une infobulle avant de lire.
+    +((v.gras&&!v.gras.manque)
+      ?'<p class="ccd-v-note">Masse grasse estimée au ruban : c\'est son écart d\'un '
+        +'bilan à l\'autre qui se lit, pas le chiffre du jour.</p>':'');
+}
+/**
+ * UNE SEULE LIGNE D'ALERTE, LA PLUS SAILLANTE, ou rien. expliquerUrgence rend
+ * deja les motifs tries par gravite pour la liste « Pourquoi cet athlete est
+ * ici » : on en prend le premier plutot que d'inventer un second classement,
+ * qui finirait par le contredire.
+ */
+function _htmlCcdAlerte(c){
+  let l=[];
+  try{ l=expliquerUrgence(c)||[]; }catch(e){ return ''; }
+  if(!l.length) return '';
+  const x=l[0];
+  const quand=x.date?(' · '+_ccdJour(x.date)):'';
+  return '<p class="ccd-v-al"><span class="ccd-v-al-p"></span>'
+    +escapeHtml(String(x.motif||''))+escapeHtml(quand)+'</p>';
+}
+function renderVerdictCoach(c){
+  const z=document.getElementById('ccd-verdict');
+  if(!z) return false;
+  const u=_dossier(c);
+  let h='';
+  try{ h=u?_htmlCcdVerdict(u):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+  const a=document.getElementById('ccd-verdict-alerte');
+  if(a){ let t=''; try{ t=h?_htmlCcdAlerte(c):''; }catch(e){ t=''; } a.innerHTML=t; }
+  return true;
 }
 function renderCorpsCoach(c){
   const z=document.getElementById('ccd-corps');

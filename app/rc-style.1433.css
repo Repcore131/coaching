@@ -4454,12 +4454,69 @@ html{scroll-behavior:smooth}
    Le titre dit ou l'on est, la ligne dessous dit ce qu'on y lit. L'etage
    s'arrete sous le bandeau colle quand on le vise : --ccd-haut vaut la
    hauteur des deux barres, mesuree. */
-.cc-etage{display:block;scroll-margin-top:var(--ccd-haut,140px);margin-bottom:22px}
+.cc-etage{display:block;scroll-margin-top:var(--ccd-haut,140px);margin-bottom:15px}
 .cc-etage[hidden]{display:none}
 .ccd-et-h{display:flex;flex-direction:column;gap:2px;margin:0 0 10px}
 .ccd-et-t{margin:0;font-size:var(--fs-lg);font-weight:900;letter-spacing:-.2px;
   color:var(--text)}
 .ccd-et-s{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45}
+/* ══ L'EN-TETE S'EFFACE DEVANT LE VERDICT ════════════════════════════
+   Kevin, 23/09/2026 : « j'ouvre la fiche et, sans defiler, je vois les quatre
+   cartes et le debut de la silhouette ». Mesure a 375 px : l'identite, les
+   quatre compteurs et la liste des motifs occupaient 700 px avant la premiere
+   carte, soit tout l'ecran d'un telephone.
+   SUR L'ONGLET DONNEES SEUL, deux blocs s'effacent — et aucun des deux ne
+   disparait de la fiche :
+   · les quatre compteurs, dont le POIDS est la premiere carte du verdict,
+     vingt pixels plus bas, a la decimale pres ;
+   · la liste « Pourquoi cet athlete est ici », dont le motif le plus grave
+     est repris en une ligne sous les cartes — c'est la ligne d'alerte que ce
+     lot demande, « une seule a la fois, jamais un bandeau permanent ».
+   Les contre-indications (#ccd-alertes), elles, ne bougent pas : elles
+   restent visibles sur les quatre onglets. */
+/* ⚠ !important : la rangee porte son display en style EN LIGNE, ecrit dans le
+   squelette. Sans lui, la regle ne l'emporte pas et rien ne bouge. */
+#s-coach-client[data-vue="donnees"] .ccd-compteurs{display:none!important}
+#s-coach-client[data-vue="donnees"] #ccd-pourquoi{display:none}
+/* ET DEUX BLOCS DE PLUS, POUR QUE LA SILHOUETTE ENTRE DANS L'ECRAN : le sexe
+   et l'age, que la carte repete alors que la masse grasse les utilise juste
+   en dessous ; et le mot de l'athlete, qui reste a un geste sur les trois
+   autres onglets. Mesure a 375 x 812 : sans eux, le haut du corps tombait a
+   933 px, soit 121 px sous le pli. */
+#s-coach-client[data-vue="donnees"] #ccd-profile-details{display:none!important}
+#s-coach-client[data-vue="donnees"] #ccd-mot{display:none}
+/* ══ LE VERDICT : QUATRE CARTES ═══════════════════════════════════════
+   Deux par ligne a 375 px : quatre colonnes y donneraient des nombres de
+   quarante pixels, une seule ferait defiler pour comparer deux chiffres qui
+   se lisent ensemble. Au-dela de 560 px, les quatre tiennent sur une ligne.
+   ⚠ AUCUNE COULEUR DE JUGEMENT (regle R32) : un ecart de poids n'est ni bon
+   ni mauvais tant que personne n'a dit ou l'on va. Le chiffre est blanc,
+   l'ecart gris clair, et c'est le MOT qui porte le sens. */
+.ccd-v4{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px}
+@media(min-width:560px){.ccd-v4{grid-template-columns:repeat(4,1fr)}}
+.ccd-v{display:flex;flex-direction:column;gap:2px;min-width:0;
+  background:var(--surface-1);border:1px solid var(--border);
+  border-left:3px solid var(--surface-2);border-radius:var(--r-3);padding:10px 11px}
+.ccd-v-l{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.4px;
+  text-transform:uppercase;color:var(--sub)}
+.ccd-v-n{font-family:var(--pile-titre);font-size:clamp(20px,6.4vw,26px);line-height:1.05;
+  color:var(--text);letter-spacing:.5px}
+.ccd-v-d{font-size:var(--fs-sm);font-weight:800;color:var(--text-strong);
+  font-variant-numeric:tabular-nums}
+.ccd-v-p{font-size:var(--fs-2xs);color:var(--sub);line-height:1.4}
+.ccd-v-s{font-size:9.5px;color:var(--text-faint);line-height:1.35;margin-top:3px}
+.ccd-v-manque{grid-column:span 2}
+@media(min-width:560px){.ccd-v-manque{grid-column:span 2}}
+.ccd-v-note{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;
+  margin:0 0 8px}
+/* LA LIGNE D'ALERTE, UNE SEULE. Elle n'existe que s'il y a quelque chose a
+   dire : pas de bandeau permanent, qu'on finit par ne plus voir. */
+.ccd-v-al{display:flex;align-items:flex-start;gap:8px;margin:0 0 4px;
+  padding:8px 12px;background:#1a0d00;border:1px solid var(--orange);
+  border-left:3px solid var(--orange);border-radius:var(--r-2);
+  font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5}
+.ccd-v-al-p{flex:0 0 auto;width:7px;height:7px;margin-top:6px;border-radius:var(--r-full);
+  background:var(--orange);box-shadow:0 0 6px var(--orange)}
 /* LES QUATRE VUES DE LA FICHE. Une seule est montee a la fois : les autres
    restent dans le document — leurs identifiants sont remplis par
    openClientDetail, qui ne sait rien des onglets et n'a pas a le savoir. */

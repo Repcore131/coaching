@@ -30897,6 +30897,127 @@ async function testExercices(){
             if(s.hidden||b.hidden) return _echec('un etage rempli ne revient pas');
             return true;
           } finally { z.innerHTML=avant; _ccdMajEtages(); try{ ccdVue(sv); }catch(e){} }})());
+        // ══ LE VERDICT : QUATRE CARTES (23/09/2026) ═══════════════════════
+        // « Est-ce qu'il perd du gras ou du muscle » : c'est la question de
+        // cet etage, et le poids seul ne la tranche jamais.
+        ok('LE VERDICT DIT LE POIDS, LE GRAS, LE MUSCLE, ET CE QUI DORT',(()=>{
+          const J=86400000, t=Date.now();
+          // Une athlete qui perd 2 kg dont 1,8 de gras : le muscle tient.
+          const u={id:'V',email:'v@t.fr',role:'athlete',gender:'F',_evol_height:'168',bilans:[
+            {type:'depart',date:t-60*J,'deb-weight':'66','deb-waist':'76','deb-neck':'33','deb-hips':'99',
+             'deb-calf-r':'36','deb-bicep-r':'29'},
+            {type:'coaching',date:t-30*J,'bil-weight':'65','bil-waist':'74','bil-neck':'33','bil-hips':'98',
+             'bil-calf-r':'36','bil-bicep-r':'29.5'},
+            {type:'coaching',date:t-2*J,'bil-weight':'64','bil-waist':'71','bil-neck':'33','bil-hips':'96.5',
+             'bil-calf-r':'36','bil-bicep-r':'30'}]};
+          const v=ccdVerdict(u);
+          if(!v.poids||v.poids.valeur!==64) return _echec('poids : '+JSON.stringify(v.poids));
+          if(v.poids.delta!==-1) return _echec('ecart de poids : '+v.poids.delta);
+          if(!(v.poids.kgSem<0)) return _echec('la vitesse ne descend pas : '+v.poids.kgSem);
+          // LA MASSE GRASSE EST UN PRODUIT, PAS UNE SAISIE : poids x pourcentage.
+          const attendu=Math.round(64*calcBF(71,33,96.5,168,'F')/100*10)/10;
+          if(v.gras.kg!==attendu) return _echec('masse grasse : '+v.gras.kg+' au lieu de '+attendu);
+          if(Math.abs(v.maigre.kg-(64-v.gras.kg))>0.05) return _echec('la maigre n\'est pas le reste : '+v.maigre.kg);
+          if(!(v.gras.delta<0)) return _echec('le gras ne descend pas : '+v.gras.delta);
+          if(v.maigre.sens!=='preservee') return _echec('muscle juge « '+v.maigre.sens+' » alors qu\'il tient');
+          if(v.gras.marge!==CCD_BF_MARGE) return _echec('la marge de l\'estimation ne sort pas');
+          // ET LE SEUIL DE « PRESERVEE » EST CELUI QU'ON A MESURE : sous
+          // CCD_MAIGRE_BRUIT on ne distingue pas une perte d'une erreur de ruban.
+          if(!(CCD_MAIGRE_BRUIT>=0.65)) return _echec('le seuil descend sous le bruit de ruban mesure');
+          // CE QUI DORT : le mollet, identique aux trois bilans ; pas le biceps.
+          const noms=(v.dort.noms||[]).join(' ');
+          if(!/mollet/i.test(noms)) return _echec('le mollet ne dort pas : '+noms);
+          if(/biceps/i.test(noms)) return _echec('le biceps dort alors qu\'il bouge de 1 cm');
+          return true;})());
+
+        ok('SANS LA MESURE QUI MANQUE, LA CARTE LE DIT ET NE MENT PAS',(()=>{
+          const J=86400000, t=Date.now();
+          const u={id:'W',email:'w@t.fr',role:'athlete',gender:'H',_evol_height:'178',bilans:[
+            {type:'depart',date:t-30*J,'deb-weight':'80','deb-waist':'85'},
+            {type:'coaching',date:t-2*J,'bil-weight':'79','bil-waist':'84'}]};
+          const v=ccdVerdict(u);
+          if(!v.gras||!v.gras.manque) return _echec('une masse grasse sort sans tour de cou');
+          if(!/cou/.test(v.gras.manque.join(' '))) return _echec('elle ne nomme pas le tour de cou : '+v.gras.manque.join(', '));
+          if(v.maigre) return _echec('une masse maigre sort sans masse grasse');
+          const h=_htmlCcdVerdict(u);
+          if(h.indexOf('tour de cou')<0) return _echec('l\'ecran ne dit pas ce qui manque');
+          if(/\d+,\d+ kg<\/span><span class="ccd-v-d">/.test(h.split('Masse grasse')[1]||''))
+            return _echec('un chiffre de masse grasse sort quand meme');
+          return true;})());
+
+        ok('CHAQUE CHIFFRE DU VERDICT PORTE SA SOURCE, SA DATE ET SA MARGE',(()=>{
+          const J=86400000, t=Date.now();
+          const u={id:'X',email:'x@t.fr',role:'athlete',gender:'F',_evol_height:'168',bilans:[
+            {type:'depart',date:t-40*J,'deb-weight':'66','deb-waist':'76','deb-neck':'33','deb-hips':'99'},
+            {type:'coaching',date:t-2*J,'bil-weight':'64','bil-waist':'71','bil-neck':'33','bil-hips':'96'}]};
+          const h=_htmlCcdVerdict(u);
+          const d=document.createElement('div'); d.innerHTML=h;
+          const cartes=[...d.querySelectorAll('.ccd-v')];
+          if(cartes.length!==4) return _echec(cartes.length+' cartes au lieu de quatre');
+          const libs=cartes.map(c=>(c.querySelector('.ccd-v-l')||{}).textContent||'');
+          if(libs.join('|')!=='Poids|Masse grasse|Masse maigre|Ce qui dort')
+            return _echec('cartes : '+libs.join('|'));
+          for(const c of cartes){
+            const s=(c.querySelector('.ccd-v-s')||{}).textContent||'';
+            if(!s.trim()) return _echec('une carte sans source : '+(c.textContent||'').slice(0,40));
+            if(!/près/.test(s)) return _echec('une source sans marge : '+s);
+          }
+          // LA DATE DU RELEVE EST SUR LES DEUX CARTES QUI VIENNENT D'UN BILAN.
+          for(const i of [0,1]){
+            const s=(cartes[i].querySelector('.ccd-v-s')||{}).textContent||'';
+            if(!/\d/.test(s)||!/(janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)/.test(s))
+              return _echec('la carte '+libs[i]+' ne dit pas sa date : '+s);
+          }
+          // ET LA PHRASE QUI BORNE L'ESTIMATION EST A L'ECRAN, pas dans une infobulle.
+          if(!/écart d'un bilan à l'autre/.test(d.textContent||''))
+            return _echec('rien ne dit que la lecture porte sur l\'ecart');
+          // AUCUN TIRET CADRATIN NI DEMI-CADRATIN dans ce que le coach lit.
+          if(/[—–]/.test(d.textContent||'')) return _echec('un tiret cadratin traine : '+(d.textContent||'').slice(0,60));
+          return true;})());
+
+        ok('UNE SEULE LIGNE D\'ALERTE, LA PLUS GRAVE, ET RIEN QUAND IL N\'Y A RIEN',(()=>{
+          // ⚠ ON BOUCHONNE expliquerUrgence PLUTOT QUE DE FABRIQUER UN DOSSIER
+          //   SANS MOTIF : un dossier vide en porte deja un, « Jamais
+          //   démarré ». Ce qui se verifie ici est le contrat de la ligne —
+          //   une seule, la plus grave, et rien quand la liste est vide — pas
+          //   le classement, qui a ses propres assertions.
+          const sv=window.expliquerUrgence;
+          try{
+            window.expliquerUrgence=()=>[];
+            if(_htmlCcdAlerte({id:'Z'})!=='') return _echec('une ligne sort sans motif');
+            window.expliquerUrgence=()=>[{motif:'Douleur répétée : genou droit',gravite:9,date:Date.now()},
+              {motif:'Volume sous le minimum efficace',gravite:6,date:null}];
+            const h=_htmlCcdAlerte({id:'Z'});
+            const n=(h.match(/ccd-v-al"/g)||[]).length;
+            if(n!==1) return _echec(n+' lignes d\'alerte au lieu d\'une');
+            if(h.indexOf('genou droit')<0) return _echec('la ligne ne porte pas le motif le plus grave : '+h);
+            if(h.indexOf('Volume sous le minimum')>=0) return _echec('la ligne empile les motifs');
+            const d=document.createElement('div'); d.innerHTML=h;
+            if(/[—–]/.test(d.textContent||'')) return _echec('un tiret cadratin dans l\'alerte');
+            return true;
+          } finally { window.expliquerUrgence=sv; }})());
+
+        ok('SUR DONNEES, L\'EN-TETE S\'EFFACE DEVANT LE VERDICT',(()=>{
+          // « J'ouvre la fiche et, sans defiler, je vois les quatre cartes et
+          // le debut de la silhouette. » Mesure a 375 x 812 : le haut du corps
+          // tombait a 933 px avec l'en-tete complet.
+          const sv=_ccdVue, ec=document.getElementById('s-coach-client');
+          if(!ec) return _echec('la fiche a disparu');
+          try{
+            ccdVue('donnees');
+            if(ec.dataset.vue!=='donnees') return _echec('l\'ecran ne dit pas quel onglet est ouvert');
+            const cach=s=>{ const z=document.querySelector(s);
+              return z?getComputedStyle(z).display==='none':null; };
+            for(const s of ['.ccd-compteurs','#ccd-pourquoi','#ccd-profile-details','#ccd-mot'])
+              if(cach(s)===false) return _echec(s+' occupe encore le haut de l\'onglet Donnees');
+            // ET LES CONTRE-INDICATIONS, ELLES, NE BOUGENT PAS.
+            const al=document.getElementById('ccd-alertes');
+            if(al&&al.closest('.cc-sect')&&getComputedStyle(al).display==='none'&&(al.textContent||'').trim())
+              return _echec('une contre-indication est masquee sur Donnees');
+            ccdVue('entrainement');
+            if(cach('.ccd-compteurs')===true) return _echec('les compteurs restent caches hors de Donnees');
+            return true;
+          } finally { try{ ccdVue(sv); }catch(e){} }})());
 
         ok('LES SECTIONS SE REPLIENT, ET L\'ETAT EST RETENU',(()=>{
           // Vingt-sept sections deployees font un rouleau qu'on ne lit pas ;
