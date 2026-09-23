@@ -951,8 +951,23 @@
       }
     },
 
+    // ── LE CATALOGUE D'EXERCICES : LES COACHS, ET ULTIME (lot 3) ────────
+    //
+    // Il ne se lisait qu'avec un compte coach. Ultime l'achete : la regle
+    // s'ouvre donc au palier que le SERVEUR a ecrit dans droits/, jamais a un
+    // champ du dossier — un dossier, son proprietaire l'ecrit.
+    //
+    // ⚠ « suivi » N'EST PAS DANS CETTE LISTE, ET C'EST VOULU. L'athlete suivi
+    //   recoit les fiches DES EXERCICES DE SON PROGRAMME, construites sur son
+    //   appareil a partir de ses propres seances (exercicesDeMonProgramme).
+    //   Il n'a donc pas a lire les quatre cents autres.
+    //
+    // ⚠ TANT QUE CETTE REGLE N'EST PAS PUBLIEE, un athlete Ultime recoit 401
+    //   et voit un catalogue VIDE. Le code le gere (chargerBanque garde ce
+    //   qu'il a), mais la porte ouverte dans l'interface ne donne rien tant que
+    //   `firebase deploy --only database` n'a pas tourne.
     "exercices": {
-      ".read": "auth != null && root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach'",
+      ".read": "auth != null && (\n  root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach' ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime'\n)",
       ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
     }
   }

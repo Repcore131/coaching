@@ -841,7 +841,8 @@ exports.migrerDroits = onCall(async (request) => {
   const simulation = !(request.data && request.data.simulation === false);
   const snap = await db.ref("users").get();
   const tous = snap.val() || {};
-  const compte = { total: 0, suivi: 0, ultime: 0, essentielle: 0, aucun: 0, coachs: 0, ecrits: 0 };
+  const compte = { total: 0, suivi: 0, ultime: 0, essentielle: 0, aucun: 0, coachs: 0,
+    ecrits: 0, protocoles: 0 };
   for (const cle of Object.keys(tous)) {
     const u = tous[cle] || {};
     compte.total++;
@@ -855,6 +856,20 @@ exports.migrerDroits = onCall(async (request) => {
     if (!simulation && palier !== "aucun") {
       await ecrireDroits(cle, { palier, echeance, source: "migration" });
       compte.ecrits++;
+    }
+    // LE DROIT ACQUIS DES PROTOCOLES (lot 3). La bibliotheque de protocoles
+    // etait ouverte a tout le monde : la fermer pour Essentielle retirerait
+    // quelque chose a des gens qui s'en servent. Le drapeau est donc pose une
+    // fois, sur les dossiers QUI EXISTENT DEJA, et seuls les comptes crees
+    // apres voient le verrou. Personne ne perd rien du jour au lendemain.
+    //
+    // ⚠ IL NE FERME RIEN, IL N'OUVRE QUE. Un dossier qui le porte garde
+    //   l'acces ; un dossier qui ne le porte pas est juge par sa date de
+    //   creation, cote client (protocolesHerites). Les deux chemins disent la
+    //   meme chose, et le second tient meme si cette fonction ne tourne jamais.
+    if (!simulation && u.protocolesHerites !== true) {
+      await db.ref("users/" + cle + "/protocolesHerites").set(true);
+      compte.protocoles++;
     }
   }
   return { simulation, compte };
