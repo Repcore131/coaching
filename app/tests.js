@@ -33270,6 +33270,57 @@ async function testExercices(){
         if(_etiqTient({k:40,p:8,c:93,l:0})!==false) return _echec('une lecture trop haute passe');
         return _etiqTient({p:11,c:58,l:12.5})===true?true:_echec('sans énergie, il n’y a pas d’arbitre');})());
 
+      // ══════════════ BUILD 1415 ══════════════════════════════════════════
+      // Le tour de TOUS les écrans, en 375 px et sur deux appareils, a trouvé
+      // deux défauts que les parcours ciblés ne voyaient pas.
+
+      ok('1415 — LES EXERCICES D’UN CRÉNEAU SURVIVENT À L’ALLER-RETOUR FIREBASE',(()=>{
+        // ⚠ FIREBASE NE STOCKE PAS DE TABLEAUX. `exercises: []` revient en OBJET
+        //   VIDE, et `{0:…,2:…}` quand un rang manque. Mesure au banc, en
+        //   ouvrant « Séances » de l'athlète chez le coach après un aller-retour
+        //   réel : « (s.exercises || []).map is not a function » — l'écran
+        //   refusait de s'ouvrir. Le `|| []` ne protège de rien : un objet vide
+        //   est VRAI. L'écran de l'athlète s'en sortait (_normaliserSessionsConfig
+        //   répare avant d'écrire) ; le coach, qui lit le dossier d'un autre, non.
+        const u={sessions_config:[
+          {day:'Lundi',active:true,exercises:[{name:'Dips'}]},
+          {day:'Mardi',active:false,exercises:{}},
+          {day:'Mercredi',active:true,exercises:{0:{name:'Squat'},2:{name:'Fentes'}}}]};
+        _aplatirSessionsConfig(u);
+        const e=u.sessions_config.map(s=>Array.isArray(s.exercises)?s.exercises.length:'PAS UN TABLEAU');
+        if(e.join(',')!=='1,0,2') return _echec('exercices après remise à plat : '+JSON.stringify(e));
+        // ⚠ LES TROUS D'UN CRÉNEAU SE TASSENT, ceux de la SEMAINE se gardent :
+        //   le rang d'un exercice ne veut rien dire, celui d'un créneau EST le
+        //   jour. Un undefined au milieu des exercices casserait les lecteurs.
+        if(u.sessions_config[2].exercises.some(x=>x===undefined))
+          return _echec('un trou est resté dans les exercices');
+        if(u.sessions_config[2].exercises[1].name!=='Fentes')
+          return _echec('l’ordre des exercices a changé');
+        const v={sessions_config:{0:{day:'Lundi',exercises:{}},3:{day:'Jeudi',exercises:[{name:'Tirage'}]}}};
+        _aplatirSessionsConfig(v);
+        if(!Array.isArray(v.sessions_config)||v.sessions_config.length!==4)
+          return _echec('la semaine n’a pas gardé ses trous : '+JSON.stringify(v.sessions_config&&v.sessions_config.length));
+        if(v.sessions_config[1]!==undefined) return _echec('le mardi vide a été tassé');
+        // ET LE GESTE QUI TOMBAIT : la carte d'un créneau se rend sans lever.
+        try{ htmlCarteSeanceSlot(1,{name:'Repos',exercises:{}}); }
+        catch(e2){ return _echec('un créneau au format Firebase fait encore lever le rendu : '+e2.message); }
+        return true;})());
+
+      ok('1415 — LES MINI-COURBES DE LA FICHE COACH NE POUSSENT PLUS L’ÉCRAN DE CÔTÉ',(()=>{
+        // Mesure en 375 px : la grille des « évolutions par groupe » sortait de
+        // 134 px et faisait glisser TOUTE la fiche, en-tête compris. `1fr` vaut
+        // `minmax(auto,1fr)`, et `auto` ne descend jamais sous la largeur
+        // minimale du contenu — ici un canvas auquel _setupCanvas a posé une
+        // largeur en pixels au rendu précédent.
+        const src=_prodSrc();
+        const i=src.indexOf('const buildGroupCharts=');
+        if(i<0) return _echec('les mini-courbes ont disparu');
+        const bloc=src.slice(i,i+1200);
+        if(bloc.indexOf('grid-template-columns:minmax(0,1fr) minmax(0,1fr)')<0)
+          return _echec('la grille des mini-courbes peut encore déborder');
+        return bloc.indexOf('max-width:100%')>=0
+          ?true:_echec('le canvas d’une mini-courbe n’est pas plafonné à sa carte');})());
+
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
       // des compléments sur la même ligne que “VITAMINE…”, entre la photo et le
       // type, pour réduire la hauteur des rectangles ».

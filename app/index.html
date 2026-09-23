@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1414';
+window.RC_BUILD='1415';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -18173,7 +18173,31 @@ function _aplatirChamp(u,champ,max,garderTrous){
 }
 // Le creneau hebdomadaire : sept cases, l'indice EST le jour. Le plafond a 64
 // est large a dessein — il ecarte une clef aberrante sans jamais tronquer.
-function _aplatirSessionsConfig(u){ return _aplatirChamp(u,'sessions_config',64,true); }
+//
+// ⚠ ET LES EXERCICES DE CHAQUE CRENEAU, depuis le build 1415. Firebase ne
+//   stocke pas de tableaux : `exercises: []` revient en OBJET VIDE, et un objet
+//   n'a pas de .map. Mesure au banc a deux appareils, en ouvrant « Séances » de
+//   l'athlete chez le coach apres un aller-retour reel :
+//       Ouverture des séances impossible — (s.exercises || []).map is not a
+//       function
+//   Le `|| []` ne protege de rien : un objet vide est VRAI. L'ecran de
+//   l'athlete, lui, s'en sortait — _normaliserSessionsConfig repare les
+//   exercices avant d'ecrire — mais le coach n'a pas ce passage, et il lit le
+//   dossier de quelqu'un d'autre.
+//
+//   LA REPARATION EST DONC ICI, a la porte par ou tout dossier venu du reseau
+//   entre : les deux ecrans en profitent, et le prochain lecteur aussi. Le
+//   plafond a 400 : un creneau tres charge en porte quelques dizaines, jamais
+//   des centaines — et tronquer en silence serait pire que l'exception.
+//   L'indice d'un exercice ne porte aucun sens : les trous se tassent.
+function _aplatirSessionsConfig(u){
+  const r=_aplatirChamp(u,'sessions_config',64,true);
+  const l=u&&u.sessions_config;
+  if(Array.isArray(l)) for(const s of l){
+    if(s&&typeof s==='object') _aplatirChamp(s,'exercises',400,false);
+  }
+  return r;
+}
 // LA LISTE DES CRENEAUX, aplatie, toujours un tableau.
 // ⚠ _aplatirSessionsConfig APLATIT EN PLACE ET REND LE DOSSIER, pas la liste.
 //   Trois appelants la lisaient comme si elle rendait les creneaux —
@@ -35986,10 +36010,18 @@ function renderBilanEvolution(c){
   // ── Mini graphiques par groupe ──────────────────────────────────────
   const buildGroupCharts=()=>{
     const labels=bilans.map((_,i)=>`${i+1}`);
-    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">`+
+    // ⚠ minmax(0,1fr) ET NON 1fr. Mesure en 375 px : la grille sortait de
+    //   l'ecran de 134 px et faisait glisser TOUTE la fiche de cote, en-tete
+    //   compris. La raison est un classique : `1fr` vaut `minmax(auto,1fr)`, et
+    //   `auto` ne descend jamais sous la largeur minimale du contenu — ici un
+    //   canvas auquel _setupCanvas a pose une largeur en pixels au rendu
+    //   precedent. La colonne restait donc bloquee a 250 px sur un telephone
+    //   qui n'en offre que 161. minmax(0,…) autorise la colonne a retrecir, et
+    //   le canvas se remesure au rendu suivant.
+    return `<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-bottom:24px">`+
       GROUPS.map((g,gi)=>`<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:10px">
         <div style="font-size:var(--fs-xs);font-weight:800;color:${g.colors[0]};text-align:center;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">${g.label}</div>
-        <canvas id="evo-chart-${gi}" style="width:100%;display:block"></canvas>
+        <canvas id="evo-chart-${gi}" style="width:100%;max-width:100%;display:block"></canvas>
         <div style="display:flex;gap:8px;justify-content:center;margin-top:4px;flex-wrap:wrap">
           ${g.keys.map((k,ki)=>`<span style="font-size:var(--fs-xs);color:${g.colors[ki]};font-weight:700">— ${k.endsWith('-r')?'Droit':k.endsWith('-l')?'Gauche':g.label}</span>`).join('')}
         </div>
