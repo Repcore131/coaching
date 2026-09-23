@@ -33392,6 +33392,44 @@ async function testExercices(){
       // BUILD 1412 — Kevin, trois captures a l'appui : « remplace-moi la version
       // des images 1 et 2 par celle de l'image 3, a l'identique, et mets les
       // fonctions visibles pour la completer ».
+      // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
+      ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
+        const src=_prodSrc();
+        // LA BOUTIQUE : elle chargeait le SDK avec disable-funding=credit,card.
+        const boutique=(src.match(/paypal\.com\/sdk\/js[^;]{0,220}components=buttons[^;]{0,120}/)||[''])[0];
+        if(!boutique) return _echec('le SDK de la boutique est introuvable');
+        if(/disable-funding=[^'"&]*card/.test(boutique))
+          return _echec('la boutique ferme encore la carte : '+boutique.slice(-90));
+        if(boutique.indexOf('enable-funding=card')<0)
+          return _echec('la boutique ne demande pas la carte : '+boutique.slice(-90));
+        // « credit » RESTE FERME : c'est le credit PayPal, pas la carte.
+        if(boutique.indexOf('disable-funding=credit')<0)
+          return _echec('le crédit PayPal n’est plus désactivé');
+        // L'ABONNEMENT : le SDK ne demandait rien, PayPal décidait seul.
+        const abo=(src.match(/paypal\.com\/sdk\/js[^;]{0,220}intent=subscription[^;]{0,120}/)||[''])[0];
+        if(!abo) return _echec('le SDK de l’abonnement est introuvable');
+        return abo.indexOf('enable-funding=card')>=0
+          ?true:_echec('l’abonnement ne demande pas la carte : '+abo.slice(-90));})());
+
+      ok('LOT 5 — UN SECOND BOUTON, EXPLICITE, SOUS CELUI DE PAYPAL',(()=>{
+        const src=_prodSrc();
+        // La source de financement, et le libelle qui la nomme.
+        if(!/FUNDING\s*&&\s*sdk\.FUNDING\.CARD|FUNDING\.CARD/.test(src))
+          return _echec('aucun bouton n’est posé sur la carte bancaire');
+        if((src.match(/Payer par carte bancaire/g)||[]).length<2)
+          return _echec('le libellé « Payer par carte bancaire » manque dans un des deux écrans');
+        // ⚠ ET IL NE S'AFFICHE QUE S'IL EST ELIGIBLE : un cadre vide vaudrait
+        //   pire qu'un bouton absent.
+        if((src.match(/isEligible/g)||[]).length<2)
+          return _echec('l’éligibilité n’est pas vérifiée dans les deux écrans');
+        // LES DEUX BOUTONS PARTAGENT LES MEMES OPTIONS : un plan facture d'un
+        // cote et pas de l'autre, c'est le defaut qu'on ne verrait qu'en
+        // production.
+        if(src.indexOf('paypal.Buttons(_optsAbo).render')<0)
+          return _echec('le bouton PayPal de l’abonnement ne lit plus les options communes');
+        return /Object\.assign\(\{\},_optsAbo,_paiementCarteOptions\(paypal\)\)/.test(src)
+          ?true:_echec('le bouton carte de l’abonnement ne reprend pas les options communes');})());
+
       // ══ LOT 1 — UNE SEULE TABLE D'OFFRES, UNE SEULE DE CAPACITES ═══════
       ok('LOT 1 — LES NEUF OFFRES, LEURS PRIX ET CE QU’ELLES OUVRENT',(()=>{
         const attendu={

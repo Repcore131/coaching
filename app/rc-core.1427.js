@@ -790,6 +790,23 @@ const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
 // « RepCore Annuel », 99,00 EUR, cycle ANNUAL, puis coller l'ID ci-dessous.
 // Rien d'autre à modifier : l'écran s'adapte tout seul.
 const PAYPAL_PLAN_ID_ANNUEL='';
+// ⚠ LES DEUX PLANS D'ULTIME N'EXISTENT PAS ENCORE (lot 5). Ils se creent dans
+//   le tableau de bord PayPal — Billing Plans — puis leur identifiant se colle
+//   ici. Tant qu'une case est vide, l'offre correspondante n'est pas proposee
+//   du tout : mieux vaut une offre de moins qu'un bouton qui echoue au moment
+//   de payer.
+//     « RepCore Ultime mensuel »  24,90 EUR, cycle MONTH
+//     « RepCore Ultime annuel »  249,00 EUR, cycle YEAR
+const PAYPAL_PLAN_ID_ULTIME='';
+const PAYPAL_PLAN_ID_ULTIME_ANNUEL='';
+// PURE. Le plan PayPal d'une offre, ou '' quand il n'a pas encore ete cree.
+// UN SEUL ENDROIT SAIT QUEL PLAN VA AVEC QUELLE OFFRE : sans ca, l'ecran des
+// tarifs et le bouton de paiement finiraient par ne plus parler du meme.
+function planIdOffre(cle,annuel){
+  if(cle==='essentielle') return annuel?PAYPAL_PLAN_ID_ANNUEL:PAYPAL_PLAN_ID;
+  if(cle==='ultime') return annuel?PAYPAL_PLAN_ID_ULTIME_ANNUEL:PAYPAL_PLAN_ID_ULTIME;
+  return '';
+}
 // Les deux paliers, dans l'ordre d'affichage. `dispo` est ce qui décide de
 // montrer ou non une carte : il n'y a pas d'état « bientôt disponible ».
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
@@ -32568,8 +32585,18 @@ function _chargerPaypalAchat(){
   // charger celui-ci par-dessus ecraserait l'un des deux selon l'ordre
   // d'arrivee, et le defaut ne se verrait que sur l'ecran qu'on n'a pas teste.
   sc.setAttribute('data-namespace','paypalAchat');
+  // ⚠ LA CARTE ETAIT FERMEE PAR NOUS (corrige au lot 5). Le SDK etait charge
+  //   avec `disable-funding=credit,card` : personne ne pouvait payer par carte
+  //   sans compte PayPal, et ca se voyait dans les ventes.
+  //   'credit' = le CREDIT PayPal, une offre de financement qui ne concerne
+  //   pas la France : le desactiver est normal.
+  //   'card'   = le paiement par carte SANS compte PayPal : c'est exactement
+  //   ce qu'on veut ouvrir.
+  // L'ARGENT ARRIVE SUR LE MEME COMPTE DANS LES DEUX CAS : c'est PayPal qui
+  // encaisse la carte et qui reverse. Il n'y a rien a changer cote
+  // encaissement, uniquement l'affichage.
   sc.src='https://www.paypal.com/sdk/js?client-id='+PAYPAL_CLIENT_ID
-    +'&currency=EUR&intent=capture&components=buttons&disable-funding=credit,card';
+    +'&currency=EUR&intent=capture&components=buttons&enable-funding=card&disable-funding=credit';
   sc.onload=rendre;
   sc.onerror=()=>{ const b=document.getElementById('ach-paypal');
     if(b) b.innerHTML='<button class="btn btn-outline btn-sm" style="width:100%" '
@@ -32581,7 +32608,12 @@ function _rendreBoutonAchat(){
   if(!z) return;
   const sdk=window.paypalAchat;
   if(!sdk||!sdk.Buttons){ z.innerHTML='<div class="bq-note">PayPal n\'a pas pu se charger.</div>'; return; }
-  z.innerHTML='';
+  // ══ DEUX BOUTONS, DEUX CHEMINS, AUCUNE AMBIGUITE (lot 5) ═══════════════
+  // Le bouton carte n'est plus cache derriere « autres moyens de paiement » :
+  // il a sa place, sous celui de PayPal, avec son propre intitule.
+  z.innerHTML='<div id="ach-pp"></div>'
+    +'<div id="ach-carte-lib" class="bq-note" style="margin:10px 0 6px;display:none">'
+    +'Payer par carte bancaire, sans compte PayPal</div><div id="ach-carte"></div>';
   sdk.Buttons({
     style:{layout:'vertical',color:'black',shape:'rect',label:'pay'},
     createOrder:(data,actions)=>{
@@ -32605,7 +32637,41 @@ function _rendreBoutonAchat(){
       _enregistrerAchat(_achatProgId,(d&&d.id)||(data&&data.orderID)||'');
     }),
     onError:()=>{ toast('Le paiement n\'a pas abouti.','var(--orange)'); }
-  }).render('#ach-paypal');
+  }).render('#ach-pp');
+  // LE BOUTON CARTE, EXPLICITE. `isEligible` decide : si le compte marchand
+  // ou le pays ne l'accepte pas, on n'affiche RIEN plutot qu'un cadre vide.
+  try{
+    const carte=sdk.Buttons(Object.assign({},_paiementCarteOptions(sdk),{
+      createOrder:(data,actions)=>{
+        const c=document.getElementById('ach-cgv');
+        if(!c||!c.checked){ toast('Coche la case avant de payer.','var(--orange)'); return null; }
+        const p=programmeDuCatalogue(_achatProgId);
+        if(!p) return null;
+        return actions.order.create({purchase_units:[{
+          description:('RepCore — '+(p.nom||'Programme')).slice(0,127),
+          custom_id:p.id,
+          amount:{currency_code:'EUR',value:(p.prixCts/100).toFixed(2)}
+        }]});
+      },
+      onApprove:(data,actions)=>actions.order.capture().then(d=>{
+        _enregistrerAchat(_achatProgId,(d&&d.id)||(data&&data.orderID)||'');
+      }),
+      onError:()=>{ toast('Le paiement n\'a pas abouti.','var(--orange)'); }
+    }));
+    if(carte.isEligible&&carte.isEligible()){
+      const lib=document.getElementById('ach-carte-lib');
+      if(lib) lib.style.display='';
+      carte.render('#ach-carte');
+    }
+  }catch(e){}
+}
+// ⚠ LE MEME HABILLAGE POUR LES DEUX ECRANS. Le bouton carte de PayPal porte
+//   SON libelle, que nous ne choisissons pas : le notre est la ligne au-dessus.
+//   `fundingSource: FUNDING.CARD` est ce qui le fait sortir de « autres moyens
+//   de paiement », ou personne ne va le chercher.
+function _paiementCarteOptions(sdk){
+  return {fundingSource:(sdk&&sdk.FUNDING&&sdk.FUNDING.CARD)||'card',
+    style:{layout:'vertical',color:'black',shape:'rect',height:45}};
 }
 // L'ACHAT EST ECRIT, PUIS LE PROGRAMME S'APPLIQUE. Dans cet ordre : si
 // l'application echoue ou si l'athlete refuse d'ecraser ses seances, il a
@@ -94455,7 +94521,12 @@ function initPaypalSubscription(){
   }
   const script=document.createElement('script');
   script.id='paypal-sdk';
-  script.src='https://www.paypal.com/sdk/js?client-id='+clientId+'&vault=true&intent=subscription&currency=EUR';
+  // ⚠ LE SDK NE DEMANDAIT RIEN, DONC PAYPAL DECIDAIT SEUL (corrige au lot 5).
+  //   `enable-funding=card` demande explicitement le paiement par carte sans
+  //   compte PayPal. L'argent arrive sur le meme compte : PayPal encaisse la
+  //   carte et reverse, il n'y a rien a changer cote encaissement.
+  script.src='https://www.paypal.com/sdk/js?client-id='+clientId
+    +'&vault=true&intent=subscription&currency=EUR&enable-funding=card';
   script.onload=()=>renderPaypalButton(planId,coachId);
   script.onerror=()=>{toast('Erreur chargement PayPal. Vérifie la connexion.');if(_ppCon)_ppCon.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Réessayer →</button>';};
   document.head.appendChild(script);
@@ -94479,12 +94550,19 @@ function renderPaypalButton(planId,coachId){
     +"conditions générales de vente</a>. Je demande l'accès immédiat au service et "
     +"reconnais qu'à ce titre je perds mon droit de rétractation de 14 jours une fois "
     +"le contenu numérique fourni.</span></label>"
-    +'<div id="paypal-buttons-inner" style="display:none"></div>';
+    +'<div id="paypal-buttons-inner" style="display:none">'
+    +'<div id="pp-abo"></div>'
+    +'<div id="pp-carte-lib" style="display:none;margin:10px 0 6px;font-size:var(--fs-xs);'
+    +'color:var(--sub);text-align:left">Payer par carte bancaire, sans compte PayPal</div>'
+    +'<div id="pp-carte"></div></div>';
   const _cgv=document.getElementById('cgv-ok');
   const _inner=document.getElementById('paypal-buttons-inner');
   _cgv.addEventListener('change',()=>{_inner.style.display=_cgv.checked?'':'none';});
   if(typeof paypal==='undefined'){toast('PayPal non charge');return;}
-  paypal.Buttons({
+  // ══ LES OPTIONS SONT NOMMEES : DEUX BOUTONS S'EN SERVENT (lot 5) ══════
+  // Celui de PayPal, et celui de la carte bancaire. Le meme abonnement, le
+  // meme plan, la meme confirmation : seul le moyen de paiement change.
+  const _optsAbo={
     style:{layout:'vertical',color:'black',shape:'rect',label:'subscribe'},
     createSubscription:function(data,actions){
       // Deuxieme verrou : masquer ne suffit pas, un clic programmatique
@@ -94572,7 +94650,19 @@ function renderPaypalButton(planId,coachId){
       toast('Erreur paiement. Réessaie.');
       console.error('PayPal error',err);
     }
-  }).render('#paypal-buttons-inner');
+  };
+  paypal.Buttons(_optsAbo).render('#pp-abo');
+  // LE BOUTON CARTE, EXPLICITE ET SOUS L'AUTRE. `isEligible` decide : si le
+  // compte marchand ou le pays ne l'accepte pas, on n'affiche RIEN plutot
+  // qu'un cadre vide — et le chemin PayPal, lui, reste entier.
+  try{
+    const carte=paypal.Buttons(Object.assign({},_optsAbo,_paiementCarteOptions(paypal)));
+    if(carte.isEligible&&carte.isEligible()){
+      const lib=document.getElementById('pp-carte-lib');
+      if(lib) lib.style.display='';
+      carte.render('#pp-carte');
+    }
+  }catch(e){}
 }
 // ══════════════ UI DE CLASSIFICATION MUSCULAIRE ══════════════
 
