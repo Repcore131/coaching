@@ -65,6 +65,16 @@ const faux = {
       f._opts = handler ? opts : {};
       return f;
     },
+    // ⚠ onRequest EST AUSSI IMPORTE PAR functions/index.js DEPUIS LE LOT 0
+    //   (le webhook PayPal). Sans cette entree, l'evaluation du fichier tombe
+    //   sur « onRequest is not a function » et CE CONTROLE FAIT ECHOUER TOUT
+    //   LE DEPLOIEMENT — mesure du 23/09/2026 : le site est reste deux builds
+    //   en arriere pendant que GitHub Pages, lui, servait le neuf.
+    onRequest: (opts, handler) => {
+      const f = handler || opts;
+      f._opts = handler ? opts : {};
+      return f;
+    },
     HttpsError,
   },
   'firebase-functions/params': {defineSecret: (n) => ({value: () => 'secret-' + n, name: n})},
