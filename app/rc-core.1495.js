@@ -5463,7 +5463,12 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'vitrineProgrammes',
   'catchphrase','phone','diplomes','promoBanners','seenBilans','bio','dispo',
   'contact','vision','level','salles','rapPreset','blocPriorite','lastCoachVisit',
-  'demandesVideo','motCoach','brouillonsProg','methodesForcees','programme',
+  'demandesVideo',
+  // Les mesures que le coach reclame a un athlete (lot 6) : une cle de mesure,
+  // une date, l'id du demandeur. Aucune VALEUR mesuree la-dedans — c'est la
+  // meme forme que demandesVideo, et elle doit etre classee comme elle.
+  'demandesMesure',
+  'motCoach','brouillonsProg','methodesForcees','programme',
   'programPdf','programPdfDate','programPdfLink','programPdfName','programPdfSize',
   'programPdfStorageUrl','programPdfVersion',
   'exAlias','exMuscles','exCatalogVersion','exCustom','exFavoris','exRecents',
@@ -13600,10 +13605,19 @@ function _htmlMorphoLecture(user,cal){
   }
   // CE QU'IL RESTERAIT À MESURER. « Je ne sais pas encore » est une sortie de
   // première classe, et celle-ci est actionnable.
+  // ⚠ UNE SEULE LIGNE, ET NON LA LISTE (lot 6, 23/09/2026 : « c'est
+  //   decourageant, et c'est faux : il en manque rarement huit »). La premiere
+  //   de la liste est deja celle qui debloque le plus — morphoAMesurer les rend
+  //   dans cet ordre. Les suivantes reviendront d'elles-memes, une a une.
   if(res.aMesurer.length){
     h+=titre('Il manque, pour aller plus loin');
-    h+=res.aMesurer.map(t=>'<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;'
-      +'margin-bottom:3px">· '+E(t)+'</div>').join('');
+    h+='<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;'
+      +'margin-bottom:3px">'+E(res.aMesurer[0])+'</div>';
+    if(res.aMesurer.length>1)
+      h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;'
+        +'margin-top:3px">Celle-ci d’abord : '+(res.aMesurer.length-1)+' autre'
+        +(res.aMesurer.length>2?'s':'')+' suivra'+(res.aMesurer.length>2?'ont':'')
+        +', une à la fois.</div>';
   }
   const inst=morphoInstrument(res.profils);
   if(inst){
@@ -42316,6 +42330,10 @@ function renderCorpsAthlete(z){
   try{ h=_htmlCorpsCadre(currentUser,{titre:'Ton évolution',graphes:false,
     dates:false,convention:false,explication:false,mode:'volume',modes:false})||''; }
   catch(e){ h=''; }
+  // LA DEMANDE DE SON COACH, AU-DESSUS DE SA SILHOUETTE. Aucune notification,
+  // ici comme pour les videos : la demande attend a l'endroit ou la mesure se
+  // lit, et elle s'eteint toute seule au bilan qui la porte.
+  if(h){ try{ h=_htmlDemandeMesureAthlete(currentUser)+h; }catch(e){} }
   z.innerHTML=h;
   try{ _corpsPeindreCalques(z); }catch(e){}
   return !!h;
@@ -42768,6 +42786,181 @@ function ccdPaireDepuisEcran(){
   }catch(e){}
   return r;
 }
+// ══ LOT 6 : UNE SEULE MESURE RECLAMEE A LA FOIS ════════════════════════════
+//
+// Kevin, 23/09/2026 : « Aujourd'hui l'ecran affiche une liste de huit mesures
+// manquantes sous "il manque, pour aller plus loin". C'est decourageant, et
+// c'est faux : il en manque rarement huit. »
+//
+// UNE LIGNE, UNE MESURE, ET CE QU'ELLE DEBLOQUE. Quand elle est saisie, la
+// suivante apparait — si elle sert a quelque chose, pas avant.
+//
+// ⚠ L'ORDRE N'EST PAS UN GOUT : il va de ce qui debloque le plus a ce qui
+//   debloque le moins. La taille debout ouvre A LA FOIS la masse grasse et
+//   l'echelle des longueurs ; le tour de cou et le tour de taille ouvrent la
+//   masse grasse, donc la lecture « gras ou muscle » qui est la question de
+//   tout cet onglet ; les tours du corps n'ouvrent qu'eux-memes, un muscle a
+//   la fois sur la silhouette.
+const CCD_MANQUES=Object.freeze([
+  {cle:'taille',lib:'sa taille debout',champ:'height',
+   debloque:'calculer sa masse grasse et mettre ses longueurs à l’échelle',
+   effort:'Une fois, et c’est valable pour toujours.'},
+  {cle:'neck',lib:'son tour de cou',champ:'neck',
+   debloque:'calculer sa masse grasse et suivre gras contre muscle',
+   effort:'Trente secondes, une fois.'},
+  {cle:'waist',lib:'son tour de taille',champ:'waist',
+   debloque:'calculer sa masse grasse et suivre gras contre muscle',
+   effort:'Trente secondes, à chaque bilan.'},
+  {cle:'hips',lib:'son tour de hanches',champ:'hips',femme:true,
+   debloque:'calculer sa masse grasse et suivre gras contre muscle',
+   effort:'Trente secondes, à chaque bilan.'},
+  {cle:'chest',lib:'son tour de poitrine',champ:'chest',
+   debloque:'suivre ses pectoraux sur la silhouette',
+   effort:'Trente secondes, à chaque bilan.'},
+  {cle:'bicep-r',lib:'son tour de bras droit',champ:'bicep-r',
+   debloque:'suivre ses bras sur la silhouette',
+   effort:'Trente secondes, à chaque bilan.'},
+  {cle:'thigh-r',lib:'son tour de cuisse droite',champ:'thigh-r',
+   debloque:'suivre ses cuisses sur la silhouette',
+   effort:'Trente secondes, à chaque bilan.'},
+  {cle:'calf-r',lib:'son tour de mollet droit',champ:'calf-r',
+   debloque:'suivre ses mollets sur la silhouette',
+   effort:'Trente secondes, à chaque bilan.'}
+]);
+// PURE. Vrai quand la mesure n'est nulle part au dossier.
+function _ccdManqueCette(u,m){
+  if(m.cle==='taille')
+    return !(parseFloat((u&&(u._evol_height||u['init-height']||u.height))||0)>0);
+  let rel=[]; try{ rel=corpsRelevesReels(u,m.cle)||[]; }catch(e){ rel=[]; }
+  return !rel.length;
+}
+/**
+ * PURE. LA mesure a reclamer, ou null quand il n'en manque aucune qui serve.
+ *
+ * ⚠ LE TOUR DE HANCHES N'EST RECLAME QU'AUX FEMMES : la formule de la marine
+ *   ne le demande pas aux hommes, et le reclamer serait reclamer pour rien.
+ * @returns {{cle,lib,debloque,effort,seule:boolean,reste:number}|null}
+ */
+function ccdMesureManquante(u){
+  if(!u) return null;
+  let femme=false;
+  try{ femme=isFemale((u._evol_gender||u.gender)||''); }catch(e){ femme=false; }
+  const manquantes=CCD_MANQUES.filter(m=>(!m.femme||femme)&&_ccdManqueCette(u,m));
+  if(!manquantes.length) return null;
+  const m=manquantes[0];
+  // COMBIEN IL EN RESTE POUR LA MEME CHOSE : « la seule qui manque » ne
+  // s'ecrit que quand c'est vrai.
+  const memeBut=manquantes.filter(x=>x.debloque===m.debloque);
+  // ⚠ `reste` COMPTE CELLES QUI MANQUENT POUR LA MEME CHOSE, pas toutes :
+  //   « la premiere des 6 qui manquent pour calculer sa masse grasse » etait
+  //   faux, il n'en manquait que deux pour elle.
+  return {cle:m.cle,lib:m.lib,champ:m.champ,debloque:m.debloque,effort:m.effort,
+    seule:memeBut.length===1,reste:memeBut.length,total:manquantes.length};
+}
+// La phrase du coach, en une ligne.
+function ccdPhraseManque(m){
+  if(!m) return '';
+  const tete=m.lib.charAt(0).toUpperCase()+m.lib.slice(1);
+  return tete+'. '+(m.seule
+    ?('C’est la seule mesure qui manque pour '+m.debloque+'.')
+    :('C’est la première des '+m.reste+' qui manquent pour '+m.debloque+'.'))
+    +' '+m.effort;
+}
+// ── LA DEMANDE, PAR LE CHEMIN DES DEMANDES DE VIDEO ────────────────────────
+//
+// Kevin : « Le mecanisme des demandes de video existe : reprends-le. » C'est
+// le meme objet, le meme chemin d'ecriture, la meme poussee, et la meme regle :
+// AUCUNE NOTIFICATION. Une demande est en attente tant qu'elle est dans le
+// tableau ; la consommer, c'est la retirer.
+function demandeMesurePour(cle,user){
+  const u=user||currentUser;
+  if(!cle||!u||!Array.isArray(u.demandesMesure)) return null;
+  return u.demandesMesure.find(d=>d&&d.cle===cle)||null;
+}
+function demanderMesure(cle){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  if(!c.email){ toast('Cet élève n’a pas encore de dossier synchronisé','var(--orange)'); return false; }
+  const m=CCD_MANQUES.find(x=>x.cle===cle);
+  if(!m) return false;
+  if(!Array.isArray(c.demandesMesure)) c.demandesMesure=[];
+  if(demandeMesurePour(cle,c)){ toast('Demande déjà en cours pour cette mesure','var(--orange)'); return false; }
+  c.demandesMesure.push({cle:cle,date:Date.now(),parQui:(currentUser||{}).id});
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  try{ renderVerdictCoach(getOwnedClient(currentClientId)); }catch(e){}
+  toastSync(ok,envoi,'Mesure demandée : '+m.lib,'la demande est');
+  return true;
+}
+function annulerDemandeMesure(cle){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c||!Array.isArray(c.demandesMesure)) return false;
+  const i=c.demandesMesure.findIndex(d=>d&&d.cle===cle);
+  if(i<0) return false;
+  c.demandesMesure.splice(i,1);
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  try{ renderVerdictCoach(getOwnedClient(currentClientId)); }catch(e){}
+  toastSync(ok,envoi,'Demande retirée','le retrait est');
+  return true;
+}
+/**
+ * Le bilan qui arrive eteint les demandes qu'il satisfait. Rend le nombre de
+ * demandes retirees, pour que l'appelant sache s'il doit enregistrer.
+ *
+ * ⚠ ON NE REGARDE PAS SI LA VALEUR EST « BONNE » : elle est saisie, la demande
+ *   n'a plus lieu d'etre. Un controle de vraisemblance vit deja dans le
+ *   formulaire, et le doubler ici laisserait une demande allumee sur une
+ *   mesure que l'athlete a bel et bien envoyee.
+ */
+function consommerDemandesMesure(bi,user){
+  const u=user||currentUser;
+  if(!bi||!u||!Array.isArray(u.demandesMesure)||!u.demandesMesure.length) return 0;
+  const avant=u.demandesMesure.length;
+  u.demandesMesure=u.demandesMesure.filter(d=>{
+    if(!d||!d.cle) return false;
+    const m=CCD_MANQUES.find(x=>x.cle===d.cle);
+    if(!m) return false;
+    const v=bi['bil-'+m.champ]||bi['deb-'+m.champ];
+    return !(v!==undefined&&v!==''&&parseFloat(v)>0);
+  });
+  return avant-u.demandesMesure.length;
+}
+// LA LIGNE DU COACH : la mesure, ce qu'elle debloque, et le geste.
+function _htmlCcdManque(c){
+  const u=_dossier(c);
+  if(!u) return '';
+  let m=null; try{ m=ccdMesureManquante(u); }catch(e){ m=null; }
+  if(!m) return '';
+  const d=demandeMesurePour(m.cle,u);
+  return '<p class="ccd-manque"><span class="ccd-manque-t">'
+    +escapeHtml(ccdPhraseManque(m))+'</span>'
+    +(d
+      ?('<span class="ccd-manque-d">Demandé le '+escapeHtml(_ccdJour(d.date))+'.'
+        +'<button type="button" class="ccd-out-r" onclick="annulerDemandeMesure(\''+m.cle+'\')">Retirer la demande</button></span>')
+      :('<button type="button" class="ccd-manque-b" onclick="demanderMesure(\''+m.cle+'\')">Le lui demander</button>'))
+    +'</p>';
+}
+// ET LA LIGNE DE L'ATHLETE, sur son ecran de mensurations : il n'y a aucune
+// notification, ici comme pour les videos ; la demande attend a l'endroit ou
+// la mesure se saisit.
+function _htmlDemandeMesureAthlete(u){
+  const l=((u&&u.demandesMesure)||[]).filter(Boolean);
+  if(!l.length) return '';
+  const noms=l.map(d=>{
+    const m=CCD_MANQUES.find(x=>x.cle===d.cle);
+    return m?m.lib.replace(/^son /,'ton ').replace(/^sa /,'ta '):'';
+  }).filter(Boolean);
+  if(!noms.length) return '';
+  return '<p class="ccd-manque ccd-manque-a"><span class="ccd-manque-t">'
+    +escapeHtml('Ton coach te demande '+(noms.length>1?'ces mesures':'une mesure')+' : '
+      +noms.join(', ')+'. Tu la saisis à ton prochain bilan.')
+    +'</span></p>';
+}
 function renderVerdictCoach(c){
   const z=document.getElementById('ccd-verdict');
   if(!z) return false;
@@ -42779,7 +42972,7 @@ function renderVerdictCoach(c){
   let h='';
   try{ h=u?_htmlCcdVerdict(b,ccdPaireActive()):''; }catch(e){ h=''; }
   if(h){
-    try{ h=_htmlCcdOutils(u)+h+_htmlCcdEpingles(b); }catch(e){}
+    try{ h=_htmlCcdOutils(u)+h+_htmlCcdEpingles(b)+_htmlCcdManque(c); }catch(e){}
   }
   z.innerHTML=h;
   // LA BARRE VIT DANS LA LIGNE DE TITRE, et elle disparait avec les cartes :
@@ -57333,6 +57526,9 @@ function saveBilanFinal(){
   }
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
+  // LE BILAN ETEINT LES DEMANDES DE MESURE QU'IL SATISFAIT (lot 6). Il est
+  // enregistre juste apres, par le meme chemin : rien a pousser de plus.
+  try{ consommerDemandesMesure(bi,currentUser); }catch(e){}
   if(bi.type==='depart'){
     delete currentUser._firstBilanPending;
     // Le questionnaire de départ installait la Fondation SANS regarder si un
@@ -79138,9 +79334,13 @@ function renderCoachAmplitudesSection(c){
     +` : une amplitude se travaille et se perd.</div>`
     +(faits.length?faits.map(ligne).join(''):`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;padding:4px 0 10px">Aucun test relevé pour l’instant.</div>`)
     +`<button type="button" class="btn btn-outline" style="width:100%;margin:6px 0 0" onclick="ouvrirAmplitudes('${escapeHtml(email)}')">Relever les amplitudes</button>`
+    // ⚠ UNE SEULE LIGNE, ET NON LA LISTE (lot 6). La premiere de la liste
+    //   est deja celle qui debloque le plus ; les autres reviendront une a une,
+    //   quand celle-ci sera saisie.
     +(manque.length?`<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">`
       +`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Il manque, pour aller plus loin</div>`
-      +manque.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:3px">· ${escapeHtml(t)}</div>`).join('')
+      +`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">${escapeHtml(manque[0])}</div>`
+      +(manque.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:3px">Celle-ci d’abord : ${manque.length-1} autre${manque.length>2?'s':''} suivra${manque.length>2?'ont':''}, une à la fois.</div>`:'')
       +`</div>`:'');
 }
 function renderCoachTraitementsSection(c){  const el=document.getElementById('ccd-traitements');

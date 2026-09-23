@@ -43424,6 +43424,122 @@ async function testExercices(){
         return _echec('le bouton du rapport est sous le détail replié');
       return true;})());
 
+
+    // ══ LOT 6 : UNE SEULE MESURE RÉCLAMÉE À LA FOIS (23/09/2026) ═════════
+    // « Aujourd'hui l'écran affiche une liste de huit mesures manquantes.
+    //   C'est décourageant, et c'est faux : il en manque rarement huit. »
+    ok('UNE SEULE MESURE RÉCLAMÉE, ET C’EST CELLE QUI DÉBLOQUE LE PLUS',(()=>{
+      if(typeof ccdMesureManquante!=='function') return _echec('la mesure manquante n’est pas calculée');
+      const J=864e5, t=Date.now();
+      const nu={id:'M6A',email:'m6a@t.fr',role:'athlete',gender:'H',
+        bilans:[{date:t-2*J,'bil-weight':'80'}]};
+      // 1. LA TAILLE DEBOUT D'ABORD : elle ouvre la masse grasse ET l'échelle
+      //    des longueurs. Aucune autre n'ouvre deux choses.
+      let m=ccdMesureManquante(nu);
+      if(!m||m.cle!=='taille') return _echec('la première réclamée : '+(m&&m.cle));
+      if(m.debloque.indexOf('longueurs')<0) return _echec('la taille ne dit pas tout ce qu’elle débloque');
+      // 2. PUIS LE TOUR DE COU, PUIS LE TOUR DE TAILLE : la masse grasse.
+      const h={id:'M6B',email:'m6b@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        bilans:[{date:t-2*J,'bil-weight':'80'}]};
+      m=ccdMesureManquante(h);
+      if(!m||m.cle!=='neck') return _echec('après la taille : '+(m&&m.cle));
+      // ⚠ « LA SEULE QUI MANQUE » NE S'ÉCRIT QUE QUAND C'EST VRAI : ici il en
+      //   manque deux pour la masse grasse.
+      if(m.seule) return _echec('« la seule » alors que le tour de taille manque aussi');
+      if(!/première des 2 qui manquent/.test(ccdPhraseManque(m)))
+        return _echec('la phrase : '+ccdPhraseManque(m));
+      const h2=Object.assign({},h,{bilans:[{date:t-2*J,'bil-weight':'80','bil-waist':'88'}]});
+      const m2=ccdMesureManquante(h2);
+      if(!m2||m2.cle!=='neck'||!m2.seule) return _echec('avec le tour de taille : '+JSON.stringify(m2));
+      // LA PHRASE DE LA MISSION, dans ses mots.
+      const p=ccdPhraseManque(m2);
+      if(p.indexOf('Son tour de cou.')!==0) return _echec('la phrase ne commence pas par la mesure : '+p);
+      if(p.indexOf('C’est la seule mesure qui manque pour calculer sa masse grasse')<0)
+        return _echec('la phrase ne dit pas ce qu’elle débloque : '+p);
+      if(p.indexOf('Trente secondes')<0) return _echec('la phrase ne dit pas ce qu’elle coûte : '+p);
+      // 3. LE TOUR DE HANCHES N'EST RÉCLAMÉ QU'AUX FEMMES : la formule ne le
+      //    demande pas aux hommes.
+      const complet=b=>({id:'M6C',email:'m6c@t.fr',role:'athlete',_evol_height:'168',
+        bilans:[Object.assign({date:t-2*J,'bil-weight':'62','bil-waist':'70','bil-neck':'33'},b||{})]});
+      const hom=Object.assign(complet(),{gender:'H'});
+      const fem=Object.assign(complet(),{gender:'F'});
+      if((ccdMesureManquante(hom)||{}).cle==='hips') return _echec('le tour de hanches est réclamé à un homme');
+      if((ccdMesureManquante(fem)||{}).cle!=='hips') return _echec('le tour de hanches n’est pas réclamé à une femme');
+      // 4. QUAND TOUT EST LÀ, ON NE RÉCLAME RIEN.
+      const plein={id:'M6D',email:'m6d@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        bilans:[{date:t-2*J,'bil-weight':'80','bil-waist':'88','bil-neck':'40','bil-chest':'100',
+          'bil-bicep-r':'38','bil-thigh-r':'60','bil-calf-r':'39'}]};
+      if(ccdMesureManquante(plein)) return _echec('une mesure est réclamée alors qu’il ne manque rien : '+JSON.stringify(ccdMesureManquante(plein)));
+      // 5. ET L'ÉCRAN N'EN AFFICHE QU'UNE : une ligne, pas une liste.
+      const d=document.createElement('div'); d.innerHTML=_htmlCcdManque(h);
+      const l=d.querySelectorAll('.ccd-manque');
+      if(l.length!==1) return _echec(l.length+' lignes de mesure manquante');
+      if(!/Le lui demander/.test(d.textContent||'')) return _echec('le bouton « Le lui demander » manque');
+      if(_htmlCcdManque(plein)!=='') return _echec('une ligne sort sans mesure manquante');
+      return true;})());
+
+    ok('« LE LUI DEMANDER » PASSE PAR LE CHEMIN DES DEMANDES DE VIDÉO',(()=>{
+      const src=String(demanderMesure);
+      // LE MÊME CHEMIN, PAS UN SECOND : même écriture, même poussée, et aucune
+      // notification — le plafond de trois par jour ne bouge pas.
+      for(const x of ['getOwnedClient','DB.set','CLOUD.pushOne','toastSync'])
+        if(src.indexOf(x)<0) return _echec('la demande de mesure n’emprunte pas '+x);
+      if(/notif/i.test(src)) return _echec('la demande de mesure notifie');
+      const J=864e5, t=Date.now();
+      const sD=DB.get, sS=DB.set, sP=CLOUD.pushOne, sT=window.toastSync, sU=currentUser, sC=currentClientId;
+      let ecrit=null, pousse=null;
+      try{
+        const ath={id:'A6','email':'a6@t.fr',role:'athlete',gender:'H',coachId:'C6',
+          bilans:[{date:t-2*J,'bil-weight':'80'}]};
+        currentUser={id:'C6',email:'c6@t.fr',role:'coach'};
+        currentClientId='A6';
+        DB.get=k=>(k==='users')?{'a6@t.fr':ath}:sD.call(DB,k);
+        DB.set=(k,v)=>{ ecrit=v; return true; };
+        CLOUD.pushOne=(e,u)=>{ pousse=e; return Promise.resolve(true); };
+        window.toastSync=()=>{};
+        if(!demanderMesure('neck')) return _echec('la demande n’est pas partie');
+        if(!ecrit||!ecrit['a6@t.fr']) return _echec('rien n’est écrit dans le dossier de l’athlète');
+        const dem=ecrit['a6@t.fr'].demandesMesure;
+        if(!Array.isArray(dem)||dem.length!==1) return _echec('demandes : '+JSON.stringify(dem));
+        if(dem[0].cle!=='neck'||!dem[0].date||dem[0].parQui!=='C6')
+          return _echec('la demande ne porte pas sa clé, sa date et son auteur : '+JSON.stringify(dem[0]));
+        if(pousse!=='a6@t.fr') return _echec('la demande n’est pas poussée au bon dossier : '+pousse);
+        // ⚠ AUCUNE VALEUR MESURÉE DANS LA DEMANDE : une clé, une date, un id.
+        if(JSON.stringify(dem[0]).indexOf('cm')>=0) return _echec('la demande porte une valeur');
+        // DEUX FOIS LA MÊME DEMANDE NE FAIT PAS DEUX LIGNES.
+        demanderMesure('neck');
+        if(ecrit['a6@t.fr'].demandesMesure.length!==1) return _echec('la demande se duplique');
+        // LE BILAN QUI PORTE LA MESURE ÉTEINT LA DEMANDE, et lui seul.
+        const u={demandesMesure:[{cle:'neck',date:t},{cle:'waist',date:t}]};
+        if(consommerDemandesMesure({'bil-neck':'40'},u)!==1) return _echec('le bilan n’éteint pas la demande');
+        if(u.demandesMesure.length!==1||u.demandesMesure[0].cle!=='waist')
+          return _echec('il reste : '+JSON.stringify(u.demandesMesure));
+        if(consommerDemandesMesure({'bil-neck':''},u)!==0) return _echec('un champ vide éteint une demande');
+        // ET L'ATHLÈTE LA VOIT, DANS SES MOTS.
+        const a=_htmlDemandeMesureAthlete({demandesMesure:[{cle:'neck',date:t}]});
+        if(!/ton tour de cou/.test(a)) return _echec('l’athlète ne lit pas sa mesure : '+a);
+        if(/Le lui demander/.test(a)) return _echec('l’athlète voit le bouton du coach');
+        return true;
+      } finally { DB.get=sD; DB.set=sS; CLOUD.pushOne=sP; window.toastSync=sT;
+        currentUser=sU; currentClientId=sC; }})());
+
+    ok('LE PANNEAU DES LONGUEURS NE DÉROULE PLUS SA LISTE DE MANQUES',(()=>{
+      // Kevin : « Remplace la liste par UNE SEULE ligne. » La première de
+      // res.aMesurer est déjà celle qui débloque le plus.
+      // DEUX ECRANS PORTAIENT LA MEME LISTE : la lecture morpho et le bloc des
+      // amplitudes. Les deux tiennent maintenant en une ligne.
+      for(const f of ['_htmlMorphoLecture','renderCoachAmplitudesSection']){
+        if(typeof window[f]!=='function') return _echec(f+' a disparu');
+        const src=String(window[f]);
+        const i=src.indexOf('Il manque, pour aller plus loin');
+        if(i<0) return _echec(f+' : le titre du bloc a disparu');
+        const bout=src.slice(i,i+900);
+        if(/(aMesurer|manque)\.map\(/.test(bout)) return _echec(f+' : la liste se déroule encore');
+        if(!/(res\.aMesurer\[0\]|manque\[0\])/.test(bout)) return _echec(f+' : la ligne ne prend pas la première mesure');
+        if(bout.indexOf('une à la fois')<0) return _echec(f+' : rien ne dit que les autres suivront');
+      }
+      return true;})());
+
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
       // Chaque silhouette porte sa carte : une image ou chaque pixel du corps
       // vaut le rang de son muscle dans CORPS_ZONES_ORDRE, fois CORPS_ZONES_PAS.
