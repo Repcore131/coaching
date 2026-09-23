@@ -4271,8 +4271,25 @@ html{scroll-behavior:smooth}
   border-top:1px solid rgba(255,255,255,.10)}
 .cc-corps-lt{flex:0 0 100%;text-align:center;font-size:var(--fs-2xs);
   color:var(--text-faint);line-height:1.5}
+/* CHAQUE ZONE S'OUVRE SUR SA DEFINITION (23/09/2026, Kevin : « donne la
+   possibilite de cliquer sur chacun et d'avoir une definition sur ce que ca
+   signifie »). La pastille est donc un <button> et non plus un <span> : il
+   faut lui retirer tout l'habit que le navigateur donne aux boutons, sans
+   changer d'un pixel ce que la legende montrait.
+   ⚠ .hit44 PORTE LA ZONE TACTILE, pas la taille du dessin — la meme
+     convention que la pastille ⓘ. Une legende de quatre chips de 44 px de
+     haut aurait double la hauteur du pied de cadre a 375 px.
+   Le souligne pointille dit que ca s'ouvre : sans lui, quatre mots gris en
+   petit corps ne se donnent pas pour des commandes. */
 .cc-corps-lp{display:inline-flex;align-items:center;gap:4px;
-  font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap}
+  font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap;
+  background:none;border:0;margin:0;padding:2px 0;font-family:inherit;
+  font-weight:inherit;line-height:1.4;cursor:pointer;
+  text-decoration:underline dotted rgba(255,255,255,.28);text-underline-offset:3px;
+  -webkit-tap-highlight-color:transparent}
+.cc-corps-lp:hover,.cc-corps-lp:focus-visible{color:var(--text);
+  text-decoration-color:currentColor}
+.cc-corps-lp[disabled]{cursor:default;text-decoration:none}
 .cc-corps-lp i{width:9px;height:9px;border-radius:2px;display:inline-block;
   flex:0 0 auto}
 /* L'EXPLICATION DE LA TEINTE, DANS UN PETIT CADRE SOUS LE GRAPHIQUE « Séries

@@ -1734,7 +1734,35 @@ const RC_LEXIQUE=Object.freeze({
     d:'Des signes que l\'apport alimentaire ne couvre plus la dépense : sommeil, cycle, blessures, humeur.'}),
   plateau:Object.freeze({
     t:'Plateau',
-    d:'Aucun nouveau maximum sur cet exercice depuis plusieurs semaines.'})
+    d:'Aucun nouveau maximum sur cet exercice depuis plusieurs semaines.'}),
+  // ── LES QUATRE ZONES DE VOLUME (23/09/2026) ─────────────────────────────
+  // Elles teintent la silhouette « Évolution » et colorent la grille de
+  // charge ; leur nom — « MEV-MAV » — ne dit rien à qui ne connaît pas les
+  // sigles, et la légende était muette. Kevin : « donne la possibilité de
+  // cliquer sur chacun et d'avoir une définition sur ce que ça signifie ».
+  //
+  // ⚠ LES DÉFINITIONS DISENT CE QUE LE CODE FAIT, pas ce qu'un manuel
+  //   raconte : les bornes sont celles de _repereDe — sous le MEV, du MEV au
+  //   MAV, du MAV au MRV inclus, au-delà du MRV.
+  // ⚠ ET AUCUNE NE PRESCRIT. Elles se lisent sur l'écran de l'athlète comme
+  //   sur celui du coach, et c'est le coach qui décide d'un volume : elles
+  //   disent où l'on est, jamais ce qu'il faut faire.
+  zone_sous_mev:Object.freeze({
+    t:'sous-MEV (minimum efficace)',
+    d:'Moins de séries que le minimum efficace : le muscle garde ce qu\'il a, sans de quoi progresser.',
+    p:'Les trois seuils changent d\'un muscle à l\'autre, et peuvent être ajustés sur les retours de séance ou fixés par le coach.'}),
+  zone_mev_mav:Object.freeze({
+    t:'MEV-MAV (minimum à adapté)',
+    d:'Au-dessus du minimum efficace, sous le volume adapté : de quoi entretenir, et progresser lentement.',
+    p:'Les trois seuils changent d\'un muscle à l\'autre, et peuvent être ajustés sur les retours de séance ou fixés par le coach.'}),
+  zone_mav_mrv:Object.freeze({
+    t:'MAV-MRV (adapté à maximum récupérable)',
+    d:'Du volume adapté jusqu\'au maximum récupérable : la zone où le muscle progresse le mieux.',
+    p:'Les trois seuils changent d\'un muscle à l\'autre, et peuvent être ajustés sur les retours de séance ou fixés par le coach.'}),
+  zone_sur_mrv:Object.freeze({
+    t:'sur-MRV (au-delà du maximum récupérable)',
+    d:'Plus de séries que ce que la récupération suit : le travail s\'accumule sans se transformer.',
+    p:'Les trois seuils changent d\'un muscle à l\'autre, et peuvent être ajustés sur les retours de séance ou fixés par le coach.'})
 });
 // ⚠ ON LIT PAR hasOwnProperty, JAMAIS PAR L'ACCESSEUR. RC_LEXIQUE est un
 // objet litteral : il herite d'Object.prototype, et rcInfo('toString') y
@@ -39267,6 +39295,19 @@ const CORPS_PLANCHE=Object.freeze({
 //   Elle a ete calculee une fois, hors de l'application, a partir de points
 //   poses muscle par muscle sur chaque silhouette et verifies dessines.
 //
+//   ⚠ TROIS TERRITOIRES ONT ETE RECOUPES LE 23/09/2026, et cette fois le
+//     script est dans le depot : scripts/corps_zones_recoupe.py. Kevin, la
+//     silhouette sous les yeux : « le detourage au niveau des pecs est
+//     incomplet ... les biceps, l'entourage est mauvais ... les cuisses, il
+//     faut que ca soit en entier ». Le script ne REFAIT pas les cartes — il
+//     rend le haut du thorax au pectoral, partage le bras de face en donnant
+//     la masse au biceps, et donne la cuisse entiere au quadriceps (a
+//     l'ischio de dos), en ne touchant QUE des pixels deja attribues a l'un
+//     des muscles nommes. Il est idempotent : `--verif` le rejoue sur les
+//     cartes livrees et dit si elles ont derive. Une assertion du 1425 sonde
+//     douze pixels de z-h-face.png, pour que ce soit le RESULTAT qui tienne
+//     et pas la recette.
+//
 // ⚠ LA SILHOUETTE PASSE EN GRIS CLAIR QUAND ELLE EST TEINTEE. Le dessin est
 //   rouge partout ; or le rouge, dans cette legende, dit « au-dessus du MRV ».
 //   Un muscle sans repere serait reste rouge et se serait lu comme surcharge.
@@ -39507,12 +39548,20 @@ function _corpsJourLong(ts){
  *   ne pouvait pas distinguer « pas bouge » de « pas mesure ». Les deux se
  *   disent maintenant, et ils ne se disent pas pareil.
  *
- * ⚠ CE QU'ON NE FAIT PAS : inventer un zero. Un tour mesure UNE SEULE FOIS n'a
- *   pas d'ecart — ecrire « 0 cm » dessus affirmerait qu'il n'a pas bouge,
- *   alors que personne n'en sait rien. Il porte « 1 mesure », et son infobulle
- *   donne la valeur et la date. Un tour JAMAIS mesure n'a pas d'etiquette du
- *   tout : il n'y a rien a montrer, et une etiquette vide sur un corps n'est
- *   que du bruit.
+ * ⚠ UN TOUR MESURE UNE SEULE FOIS AFFICHE « 0 cm ». Kevin, 23/09/2026, apres
+ *   avoir vu la version de ce matin : « met 0 cm partout meme pour une seule
+ *   mesure ». Elle ecrivait « 1 mesure », ce qui etait plus exact ; il l'a
+ *   tranche en le voyant a l'ecran, et c'est defendable : sur une silhouette
+ *   il lit des centimetres, et quinze etiquettes qui disent trois choses
+ *   differentes ne se lisent plus.
+ *   CE QUE LE CHIFFRE NE FAIT PAS DIRE POUR AUTANT : `ecart` reste null. Le
+ *   compteur d'ecarts, le pied de cadre et la pastille de l'onglet ferme ne
+ *   comptent donc PAS ce tour parmi ceux qui ont bouge, et son infobulle dit
+ *   mot pour mot qu'il n'a ete mesure qu'une fois, avec sa date et sa valeur.
+ *   Le zero est un affichage, pas une mesure — et rien dans l'application ne
+ *   le lit comme une.
+ *   Un tour JAMAIS mesure, lui, n'a toujours pas d'etiquette du tout : il n'y
+ *   a rien a montrer, et une etiquette vide sur un corps n'est que du bruit.
  *
  * ⚠ « stable » SOUS LA TOLERANCE, ET NON « +0,3 cm ». C'est _synEcart qui
  *   tranche, avec le meme seuil que le reste de l'application : un metre de
@@ -39534,10 +39583,13 @@ function corpsMesureEtiquette(u,cle){
   if(!rel.length) return null;
   const nom=CORPS_NOMS[cle]||cle;
   const long=_libMesure(((MEAS.find(m=>m.k===cle)||{}).l)||nom,true);
-  // UNE SEULE MESURE : on le DIT, on n'ecrit pas un zero qu'on ne sait pas.
+  // UNE SEULE MESURE : « 0 cm » a l'ecran, et l'infobulle dit qu'il n'y a
+  // qu'un releve. ecart:null — voir la doctrine : ce zero ne compte nulle part
+  // comme un ecart.
   if(rel.length<2){
     const seul=rel[0];
-    return {cle,lib:nom,valeur:'1 mesure',periode:_corpsJour(seul.date),ecart:null,
+    return {cle,lib:nom,valeur:'0'+String.fromCharCode(160)+'cm',
+      periode:_corpsJour(seul.date),ecart:null,
       titre:long+' · mesuré une seule fois, le '+_corpsJourLong(seul.date)
         +' · '+String(seul.valeur).replace('.',',')+' cm'
         +' · un écart demande deux relevés'};
@@ -39727,15 +39779,28 @@ let _corpsVue='face';
 function corpsVue(v){
   _corpsVue=(v==='dos')?'dos':'face';
   try{
-    const c=getOwnedClient(currentClientId);
-    if(c) renderCorpsCoach(c);
-    // ⚠ LE BOUTON QU'ON VIENT DE CLIQUER N'EXISTE PLUS. renderCorpsCoach
-    //   remplace tout le cadre, lui compris : au clavier, le focus retombait
-    //   sur le corps de la page et il fallait re-tabuler depuis le haut de la
-    //   fiche pour revenir a l'autre vue. On le repose sur l'onglet devenu
-    //   actif. A la souris, rien ne se voit : la bague de focus est en
-    //   :focus-visible, qui ne s'allume pas sur un clic.
-    const b=document.querySelector('#ccd-corps .cc-corps-o.actif');
+    // ⚠ ON RE-REND LE CADRE QUI EST A L'ECRAN, PAS SEULEMENT CELUI DU COACH.
+    //   Kevin, 23/09/2026 : « j'ai l'impossibilite de cliquer sur la vue
+    //   arriere, bizarrement, je peux voir que la vue avant ». Le bouton
+    //   marchait — _corpsVue basculait bien — mais seul renderCorpsCoach etait
+    //   rappele, et sur l'ecran de l'athlete il n'y a pas de fiche a rendre :
+    //   l'etat changeait sans que rien ne se redessine, ce qui se voit comme
+    //   un bouton mort. Les deux cadres sont donc rafraichis, chacun si son
+    //   conteneur est la ; ils ne coexistent jamais sur le meme ecran.
+    if(document.getElementById('ccd-corps')){
+      const c=getOwnedClient(currentClientId);
+      if(c) renderCorpsCoach(c);
+    }
+    const za=document.getElementById('prog-corps');
+    if(za) renderCorpsAthlete(za);
+    // ⚠ LE BOUTON QU'ON VIENT DE CLIQUER N'EXISTE PLUS. Le rendu remplace tout
+    //   le cadre, lui compris : au clavier, le focus retombait sur le corps de
+    //   la page et il fallait re-tabuler depuis le haut de la fiche pour
+    //   revenir a l'autre vue. On le repose sur l'onglet devenu actif, dans
+    //   celui des deux cadres qui existe. A la souris, rien ne se voit : la
+    //   bague de focus est en :focus-visible, qui ne s'allume pas sur un clic.
+    const b=document.querySelector('#ccd-corps .cc-corps-o.actif')
+      ||document.querySelector('#prog-corps .cc-corps-o.actif');
     if(b) b.focus();
   }catch(e){}
   return _corpsVue;
@@ -40197,7 +40262,8 @@ function _htmlCorpsGraphes(u){
  *   ont bouge », et le pied de cadre se tromperait de phrase.
  * @returns {{etiquettes:string,traits:string,avecEcart:number,nEtiquettes:number}}
  */
-function _htmlCorpsEtiquettes(u,genre,vue){
+function _htmlCorpsEtiquettes(u,genre,vue,o){
+  o=o||{};
   const g0=(100-CORPS_PART_CORPS)/2;
   const par={l:[],r:[]};
   for(const m of (CORPS_MESURES[vue]||[])){
@@ -40216,12 +40282,25 @@ function _htmlCorpsEtiquettes(u,genre,vue){
       const inf=p.inf;
       nEtiquettes++;
       if(inf.ecart) avecEcart++;
-      // TROIS LIGNES : la mensuration, son ecart, ses deux dates. La source
-      // et la date sont SUR l'etiquette, la tolerance dans l'infobulle et au
-      // pied du cadre — la doctrine, verifiable.
+      // TROIS LIGNES CHEZ LE COACH : la mensuration, son ecart, ses deux
+      // dates. La source et la date sont SUR l'etiquette, la tolerance dans
+      // l'infobulle et au pied du cadre — la doctrine, verifiable.
+      //
+      // ⚠ DEUX LIGNES CHEZ L'ELEVE (o.dates a faux). Kevin, 23/09/2026 : « tu
+      //   ne me mets pas les dates, tu mets juste moins 1 cm, poitrine ... le
+      //   client n'a pas besoin de voir ca. Autant le coach, oui ». Sur son
+      //   ecran, l'athlete a la periode partout ailleurs — l'onglet trace ses
+      //   courbes juste dessous, avec leurs dates.
+      //
+      // ⚠ L'INFOBULLE ET LA PHRASE LUE, ELLES, GARDENT LES DATES DES DEUX
+      //   COTES. Un voyant peut survoler l'etiquette pour les retrouver ; les
+      //   retirer de l'aria-label aurait pris a un lecteur d'ecran ce que le
+      //   survol rend a tous les autres. On enleve une ligne a l'oeil, pas une
+      //   information a quelqu'un.
       const lignes='<span class="cc-corps-em">'+escapeHtml(inf.lib)+'</span>'
         +'<span class="cc-corps-ev">'+escapeHtml(inf.valeur)+'</span>'
-        +'<span class="cc-corps-ed">'+escapeHtml(inf.periode)+'</span>';
+        +(o.dates===false?''
+          :'<span class="cc-corps-ed">'+escapeHtml(inf.periode)+'</span>');
       // ⚠ role="img" ET aria-label, LA CONVENTION DE LA MAISON pour « cet
       //   ensemble visuel dit ceci ». Sans elle, un lecteur d'ecran enfilait
       //   trois fragments detaches sans dire qu'ils parlent du meme tour. Les
@@ -40261,10 +40340,29 @@ function _htmlCorpsEtiquettes(u,genre,vue){
  *   auraient fini par montrer deux corps differents pour le meme dossier — et
  *   c'est exactement ce que l'application evite partout ailleurs.
  *
- *   `o.titre`   remplace « Évolution élève numéro N » : chez l'athlete, c'est
- *               SON corps, et un numero de fiche n'a aucun sens pour lui.
- *   `o.graphes` a faux retire la colonne de courbes : l'onglet Mensurations de
- *               l'athlete trace deja les siennes, juste en dessous.
+ *   `o.titre`       remplace « Évolution élève numéro N » : chez l'athlete,
+ *                   c'est SON corps, et un numero de fiche n'a aucun sens.
+ *   `o.graphes`     a faux retire la colonne de courbes : l'onglet
+ *                   Mensurations de l'athlete trace deja les siennes dessous.
+ *   `o.dates`       a faux retire la troisieme ligne des etiquettes.
+ *   `o.convention`  a faux retire la phrase de methode du pied de cadre.
+ *   `o.explication` a faux retire le petit cadre qui explique la teinte.
+ *
+ * ⚠ LES TROIS DERNIERES SONT LA DEMANDE DE KEVIN DU 23/09/2026, ET ELLES NE
+ *   RETIRENT QUE DE LA METHODE. « Ecart entre le premier et le dernier bilan
+ *   ... supprime ca, je n'ai pas besoin de cette phrase-la sur le cote eleve,
+ *   que sur le cote coach elle est interessante » ; « chaque muscle prend la
+ *   couleur de la zone ... tu supprimes ce petit cadre-la, le client n'a pas
+ *   besoin d'y avoir acces » ; « tu ne me mets pas les dates ». L'eleve garde
+ *   TOUT CE QUI EST UNE MESURE — chaque tour, son ecart, sa silhouette, sa
+ *   teinte et ses infobulles ; ce qui part, c'est le mode d'emploi que le
+ *   coach, lui, doit pouvoir citer.
+ *
+ * ⚠ CE QUI NE DISPARAIT JAMAIS : LES PHRASES QUI EXPLIQUENT UN SILENCE. « Un
+ *   seul bilan », « rien a lire de ce cote », « il faut deux releves » restent
+ *   des deux cotes. Un cadre vide sans un mot serait une panne aux yeux de
+ *   celui qui le regarde, et c'est la regle de la maison : on dit toujours
+ *   pourquoi on se tait.
  *
  * ⚠ GROSSESSE OU ALLAITEMENT DECLARES : LE BLOC N'EXISTE PAS. Meme regle que
  *   les photos de progression, et pour la meme raison — on ne suit pas la
@@ -40320,7 +40418,7 @@ function _htmlCorpsCadre(c,o){
   //   premier bilan en porte deja dix. Chacune annonce alors « 1 mesure » —
   //   ce qui est vrai, utile, et bien meilleur qu'un corps nu.
   const eti=bilans.length
-    ?_htmlCorpsEtiquettes(u,genre,vue)
+    ?_htmlCorpsEtiquettes(u,genre,vue,o)
     :{etiquettes:'',traits:'',avecEcart:0,nEtiquettes:0};
   // LA TEINTE SORT DES LE PREMIER BILAN ; sans aucun bilan le cadre reste
   // eteint, comme ce matin.
@@ -40382,14 +40480,18 @@ function _htmlCorpsCadre(c,o){
       if(x) ailleurs++;
     }
   }
+  // LA PHRASE DE METHODE, celle que l'eleve ne voit plus : elle dit d'ou vient
+  // le chiffre, ce qu'il ecarte, et ce qu'il arrondit. Le coach doit pouvoir la
+  // citer devant un athlete qui conteste un ecart.
+  const convention='<div class="cc-corps-n">Écart entre le premier et le '
+    +'dernier bilan qui portent la mesure, reports exclus · ± '
+    +String(SYN_BRUIT_MESURE).replace('.',',')+' cm de tolérance · un tour '
+    +'mesuré une seule fois affiche 0 cm.</div>';
   const note=(bilans.length<2)
     ?'<div class="cc-corps-n">Un seul bilan — chaque tour porte sa mesure, et '
       +'les écarts apparaîtront au suivant.</div>'
     :(eti.avecEcart
-      ?'<div class="cc-corps-n">Écart entre le premier et le dernier bilan qui '
-        +'portent la mesure, reports exclus · ± '
-        +String(SYN_BRUIT_MESURE).replace('.',',')+' cm de tolérance · '
-        +'« 1 mesure » = relevé une seule fois.</div>'
+      ?(o.convention===false?'':convention)
       :(ailleurs
         ?'<div class="cc-corps-n">Rien à lire de ce côté : les écarts relevés sont '
           +(vue==='dos'?'en vue avant':'en vue arrière')+'.</div>'
@@ -40421,13 +40523,25 @@ function _htmlCorpsCadre(c,o){
   const lus=Object.keys(infos).filter(m=>(Number(volSem[m])||0)>0)
     .sort((a,b)=>(Number(volSem[b])||0)-(Number(volSem[a])||0));
   const legende=teinte
+    // ⚠ DEUX-POINTS, PAS DE TIRET. Kevin, 23/09/2026 : « teinte, volume total
+    //   du programme, deux points ... tu ne me mets pas de tiret, tu laisses
+    //   deux points ». Le tiret cadratin se lisait comme une incise ; les
+    //   deux-points annoncent la valeur qui suit, et c'est bien ce qu'elle est.
     ?'<div class="cc-corps-l">'
-      +'<span class="cc-corps-lt">'+(aProg?'Teinte : volume total du programme — ':'Teinte : séries dures de la semaine du ')
-      +escapeHtml(libSem)+(aProg?'':' — pas de programme actif')+'</span>'
-      // LES QUATRE ZONES, pastille puis nom — la grammaire de la grille de charge.
-      +Object.keys(GC_COULEURS).map(k=>'<span class="cc-corps-lp">'
-        +'<i style="background:'+escapeHtml(GC_COULEURS[k])+'"></i>'
-        +escapeHtml(k)+'</span>').join('')
+      +'<span class="cc-corps-lt">'+(aProg?'Teinte : volume total du programme : ':'Teinte : séries dures de la semaine du ')
+      +escapeHtml(libSem)+(aProg?'':' · pas de programme actif')+'</span>'
+      // LES QUATRE ZONES, pastille puis nom — la grammaire de la grille de
+      // charge — ET CHACUNE S'OUVRE SUR SA DEFINITION (Kevin, 23/09/2026 :
+      // « donne la possibilite de cliquer sur chacun et d'avoir une definition
+      // sur ce que ca signifie »). Elles passent donc de <span> a <button> :
+      // une legende cliquable qui reste un <span> n'est atteignable ni au
+      // clavier ni au lecteur d'ecran. La definition vit dans RC_LEXIQUE, avec
+      // les vingt autres — pas dans un panneau de plus qui divergerait.
+      +Object.keys(GC_COULEURS).map(k=>'<button type="button" class="cc-corps-lp hit44"'
+        +(GC_ZONE_LEX[k]?(' onclick="rcInfoOuvrir(\''+GC_ZONE_LEX[k]+'\')"'
+          +' aria-label="'+escapeHtml('Que veut dire '+k+' ?')+'"'):' disabled')
+        +'><i style="background:'+escapeHtml(GC_COULEURS[k])+'"></i>'
+        +escapeHtml(k)+'</button>').join('')
       // Les points medians separent a l'oeil et ne s'entendent pas : a voix
       // haute, deux-points puis virgules, et un point-virgule entre muscles.
       +(lus.length?'<span class="cc-corps-lu">'+(aProg?'Séries programmées : ':'Séries de la semaine : ')
@@ -40439,7 +40553,7 @@ function _htmlCorpsCadre(c,o){
   // « dans un petit rectangle »), SOUS LE GRAPHIQUE (1399 : « le cadre sous
   // le graphique »). Elle garde la classe cc-corps-lt : c'est toujours la
   // legende qui parle.
-  const explication=!teinte?'':('<div class="cc-corps-x"><p class="cc-corps-lt">'
+  const explication=(!teinte||o.explication===false)?'':('<div class="cc-corps-x"><p class="cc-corps-lt">'
     +(aProg
       // LE PREVU SE DIT PREVU, et son intensite aussi : sans consigne de
       // RIR, une serie programmee compte pleine — c'est un maximum, comme
@@ -40469,8 +40583,12 @@ function _htmlCorpsCadre(c,o){
  *
  * Meme fonction de rendu que la fiche du coach — silhouette de son sexe,
  * etiquettes de toutes ses mensurations, ecart du premier au dernier bilan.
- * Ce qui change tient en deux options : le titre, et la colonne de courbes
- * qu'on retire parce que l'onglet trace deja les siennes juste dessous.
+ * Ce qui change tient en cinq options, et TOUTES RETIRENT, aucune n'ajoute :
+ * le titre (« Ton évolution » plutot qu'un numero de fiche), la colonne de
+ * courbes (l'onglet trace deja les siennes dessous), les dates des etiquettes,
+ * la phrase de methode et le petit cadre de la teinte. Kevin, 23/09/2026 :
+ * « le client n'a pas besoin d'avoir acces a ce petit cadre-la, il a besoin
+ * juste d'avoir sa photo ... de voir l'evolution au niveau des mesures ».
  *
  * ⚠ LES CALQUES DE ZONES SE PEIGNENT APRES L'INJECTION, ici comme chez le
  *   coach : ils lisent une image en niveaux de gris, ce qu'une chaine HTML ne
@@ -40479,7 +40597,8 @@ function _htmlCorpsCadre(c,o){
 function renderCorpsAthlete(z){
   if(!z) return false;
   let h='';
-  try{ h=_htmlCorpsCadre(currentUser,{titre:'Ton évolution',graphes:false})||''; }
+  try{ h=_htmlCorpsCadre(currentUser,{titre:'Ton évolution',graphes:false,
+    dates:false,convention:false,explication:false})||''; }
   catch(e){ h=''; }
   z.innerHTML=h;
   try{ _corpsPeindreCalques(z); }catch(e){}
@@ -47282,6 +47401,19 @@ const GC_COULEURS=Object.freeze({
   'MEV-MAV'  :'#3b82f6',
   'MAV-MRV'  :'#22c55e',
   'sur-MRV'  :'#e05050'
+});
+// CE QUE CHAQUE ZONE VEUT DIRE, en toutes lettres — Kevin, 23/09/2026 :
+// « donne la possibilite de cliquer sur chacun et d'avoir une definition sur
+// ce que ca signifie ». La definition elle-meme vit dans RC_LEXIQUE, avec les
+// vingt autres : une seule table de definitions dans l'application, et le meme
+// panneau qui les montre.
+// ⚠ LES CLES SONT CELLES DE GC_COULEURS, et une assertion verifie qu'aucune
+//   n'est orpheline : une zone sans definition rendrait un bouton mort.
+const GC_ZONE_LEX=Object.freeze({
+  'sous-MEV':'zone_sous_mev',
+  'MEV-MAV' :'zone_mev_mav',
+  'MAV-MRV' :'zone_mav_mrv',
+  'sur-MRV' :'zone_sur_mrv'
 });
 // L athlete courant de la grille. Le coach ouvre la grille DEPUIS une fiche.
 let _gcAthlete=null;
