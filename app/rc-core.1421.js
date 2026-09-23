@@ -8,7 +8,7 @@
 // Tout compte dont consent.policyVersion differe de cette valeur revoit l'ecran
 // de consentement au demarrage — y compris les comptes crees avant l'existence
 // du champ, qui n'en portent aucun.
-const POLICY_VERSION='2026-09';
+const POLICY_VERSION='2026-09b';
 
 // ── Identité créateur & configuration PayPal ─────────────────────────────────
 // Ces constantes sont en dur et NE doivent jamais être exposées ni modifiables
@@ -5285,6 +5285,17 @@ window.onload=()=>{
   // et jamais sans que le preavis ait ete rendu au moins une fois (c'est
   // `preavisVuLe` qui l'atteste, pose au rendu de la liste des videos).
   setTimeout(()=>{ try{ retentionAuDemarrage().catch(()=>{}); }catch(e){} },14000);
+  // LES PHOTOS DE BILAN RESTEES EN BASE64, par paquets de six, une fois l'app
+  // debout. Elles ne sont PAS perdues si l'envoi echoue : le document garde sa
+  // chaine, et le prochain demarrage reessaie. C'est pour cela que ce passage
+  // peut tourner sans filet.
+  setTimeout(()=>{ try{
+    photosBilanMigrer(currentUser,{max:6}).then(r=>{
+      if(r&&r.faites) { saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{});
+        console.log('[RepCore] photos de bilan sorties du document : '+r.faites
+          +' ('+Math.round(r.octets/1024)+' Ko), '+r.restantes+' restante(s)'); }
+    }).catch(()=>{});
+  }catch(e){} },18000);
   // UN SEUL INSTANT DE DEPART. Le voile et l'eclair partaient a l'analyse du
   // HTML, le logo en JS a la toute fin du demarrage — l'eclair frappait donc
   // AVANT que le logo n'apparaisse, et l'ecart grandissait avec la lenteur de
@@ -12618,9 +12629,9 @@ async function lireMorphoPhoto(email){
   const bl=(Array.isArray(c.bilans)?c.bilans:[]).filter(b=>b&&b.date).slice().sort((a,b)=>b.date-a.date);
   let src=null,dateBilan=null;
   for(const b of bl){
-    const p=b['bil-photo-face']||b['deb-photo-face']||(b.photos&&b.photos.face)
-      ||localStorage.getItem('rc_photo_'+b.date+'_bil-photo-face')
-      ||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-face');
+    // UNE SEULE PORTE DE LECTURE : photoBilanSrc connait les quatre
+    // rangements qui ont existe, dont la reference neuve {cle,w,h,url}.
+    const p=photoBilanSrc(b,'face');
     if(p){ src=p; dateBilan=b.date; break; }
   }
   if(!src){ toast('Aucune photo de face dans les bilans.','var(--orange)'); return false; }
@@ -21793,30 +21804,29 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
   // Pas de garde-fou sur file.size ici, contrairement aux avatars : c'est
   // justement une photo d'appareil photo, et la compresser est le travail de
   // cette fonction, pas la refuser.
-  _resizeImage(file,1080,1440,0.82).then(b64=>{
-    if(!b64){toast('Image illisible : réessaie avec une autre photo','var(--orange)');return;}
+  // ⚠ PLUS UN SEUL OCTET D'IMAGE DANS LE DOCUMENT (build 1421). Cette fonction
+  //   ecrivait le data-URL de 1080x1440 — 374 Ko mesures — DANS le bilan, puis
+  //   une SECONDE copie sous rc_photo_. Le document partait ensuite en entier a
+  //   chaque synchronisation, avec une recompression de chaque photo au passage.
+  //   Desormais : un Blob dans IndexedDB, un envoi chez l'hebergeur, et une
+  //   REFERENCE de soixante-dix octets dans le bilan.
+  (async()=>{
     const users=DB.get('users')||{};
     const cl=getOwnedClient(currentClientId,users);
     if(!cl)return;
     const bil=cl.bilans?.find(b=>b.date===bilanDate&&b.type===bilanType);
     if(!bil)return;
-    const prefix=bilanType==='depart'?'deb':'bil';
-    const photoKey=prefix+'-photo-'+view;
-    bil[photoKey]=b64;
-    // Cache de repli lu par getP() quand la photo a disparu du nœud utilisateur.
-    // Son échec ne perd pas la photo, mais l'utilisateur doit l'apprendre : le
-    // catch vide d'avant laissait croire à un enregistrement complet.
-    const cacheOk=_setPhotoLS('rc_photo_'+bilanDate+'_'+photoKey,b64);
-    cl.updatedAt=Date.now();users[cl.email]=cl;
+    const r=await photoBilanEnregistrer(cl,bil,view,file);
+    if(!r.ok){ toast(r.raison||'Photo non enregistree','var(--orange)'); return; }
+    cl.updatedAt=Date.now(); users[cl.email]=cl;
     const localOk=DB.set('users',users);
-    // « Enregistrement… » écraserait l'avertissement de quota : toast() remplace
-    // le texte d'un élément unique, le dernier message est le seul visible.
-    if(localOk&&cacheOk) toast('Enregistrement…');
     renderBilanEvolution(cl);
-    // Les quatre issues (appareil × cloud) sont désormais gérées par toastSync,
-    // qui remonte lui-même les messages actionnables comme « Non authentifié ».
-    toastSync(localOk&&cacheOk,CLOUD.pushOne(cl.email,cl),'Photo ajoutée','la photo est');
-  });
+    try{ photoBilanHydrater(); }catch(e){}
+    // ON DIT CE QUI S'EST PASSE. Une photo gardee sur l'appareil mais pas encore
+    // transmise n'est pas une photo ajoutee : le coach ne la verra pas encore.
+    if(!r.transmise){ toast(r.raison,'var(--orange)'); return; }
+    toastSync(localOk,CLOUD.pushOne(cl.email,cl),'Photo ajoutée','la photo est');
+  })();
 }
 
 function drawLineChart(canvas,datasets,labels){
@@ -22179,13 +22189,19 @@ function renderBilanEvolution(c){
     // On NOMME la version, c'est tout — et le poids du dossier ne change pas
     // d'un octet.
     const getP=(b,t)=>{
-      const dossier=b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||null;
-      if(dossier) return {src:dossier,locale:false};
-      // Le repli sur la copie locale n'existe QUE sur l'appareil qui a pris la
-      // photo : ailleurs, cette clef est absente.
-      const cache=localStorage.getItem('rc_photo_'+b.date+'_bil-photo-'+t)
-                ||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-'+t)||null;
-      return cache?{src:cache,locale:true}:null;
+      // ⚠ TROIS CAS, ET ON DIT LEQUEL. La reference transmise (une URL chez
+      //   l'hebergeur) est visible partout ; le blob local n'existe que sur
+      //   l'appareil qui a pris la photo et s'hydrate APRES le rendu ; le
+      //   base64 est l'ancien format, encore la tant que la migration n'a pas
+      //   tourne. Les trois se ressemblent a l'ecran, et la difference compte
+      //   pour qui juge une photo : « version transmise » n'est pas « haute
+      //   definition, cet appareil ».
+      const ref=photoBilanRef(b,t);
+      if(ref&&ref.url) return {src:ref.url,locale:false};
+      const src=photoBilanSrc(b,t);
+      if(src) return {src:src,locale:!ref};
+      if(ref&&ref.cle) return {src:'',cle:ref.cle,locale:true};
+      return null;
     };
     const VIEWS=[
       {k:'face',label:'De Face',icon:'🧍'},
@@ -22202,13 +22218,13 @@ function renderBilanEvolution(c){
     const viewSections=VIEWS.map(v=>{
       const cards=bilanPhotos.map(({b,i,date,photos})=>{
         const _p=photos[v.k];
-        const img=_p&&_p.src;
+        const img=_p&&(_p.src||(_p.cle?' ':''));
         const safeCap=(c.fname||'').replace(/'/g,'').replace(/"/g,'')+'  B'+(i+1);
         return img
           ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
               style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:#111;border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:var(--text);font-size:var(--fs-xs);font-weight:800;padding:2px 7px;border-radius:var(--r-4);letter-spacing:1px;z-index:1">B${i+1}</div>
-              <img src="${img}" style="width:110px;height:160px;object-fit:cover;display:block">
+              <img src="${img||''}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:#111">
               <div style="padding:5px 6px;font-size:var(--fs-xs);color:#888;font-weight:700;text-align:center">${date}</div>
               <div style="padding:0 6px 5px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
             </div>`
@@ -22267,6 +22283,11 @@ function renderBilanEvolution(c){
     </div>
   </div>`;
   document.getElementById('evo-content').innerHTML=html;
+  // LES VIGNETTES QUI N'ONT QU'UN BLOB LOCAL S'HYDRATENT APRES LE RENDU : une
+  // lecture d'IndexedDB est asynchrone, et ce rendu construit une chaine. Sans
+  // cet appel, une photo prise sur CET appareil et pas encore transmise
+  // n'apparaitrait pas — elle existe, elle serait juste invisible.
+  try{ photoBilanHydrater(document.getElementById('evo-content')); }catch(e){}
   document.querySelectorAll('#evo-content [data-scroll-fade]').forEach(el=>setupScrollFade(el));
 
   // ── Draw charts after DOM is ready ────────────────────────────────
@@ -44204,7 +44225,7 @@ function rapMensurations(u,debut,fin){
 // vue. Comparer une photo de face a une photo de dos ne compare rien.
 function rapPhotos(u,debut,fin){
   const bl=bilansOrdonnes(u).filter(b=>b.date>=debut&&b.date<=fin);
-  const lire=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||null;
+  const lire=(b,t)=>photoBilanSrc(b,t);
   for(const vue of ['face','back','side']){
     const avec=bl.filter(b=>lire(b,vue));
     if(avec.length<2) continue;
@@ -45062,7 +45083,7 @@ async function phpPartagerPose(u,seance,pose){
 // L'endpoint IMAGE, et non /video/upload que l'existant utilise pour tout.
 // AUCUNE transformation n'est demandée : elles consomment des crédits, et la
 // compression est déjà faite côté client.
-async function phpUploadImage(blob,nom){
+async function phpUploadImage(blob,nom,dossier){
   const users=DB.get('users')||{};
   const coach=currentUser&&currentUser.coachId
     ?Object.values(users).find(x=>x.id===currentUser.coachId):null;
@@ -45071,7 +45092,10 @@ async function phpUploadImage(blob,nom){
   const fd=new FormData();
   fd.append('file',blob,(nom||'photo').replace(/\//g,'_')+'.jpg');
   fd.append('upload_preset',preset);
-  fd.append('folder','repcore/'+(currentUser.id||currentUser.email)+'/progression');
+  // LE DOSSIER EST UN ARGUMENT DEPUIS LE BUILD 1421 : les photos de bilan
+  // passent par la meme porte, sous 'bilan/'. Un seul chemin d'envoi, un seul
+  // endroit ou corriger le jour ou l'hebergeur change.
+  fd.append('folder','repcore/'+(currentUser.id||currentUser.email)+'/'+(dossier||'progression'));
   const res=await fetch('https://api.cloudinary.com/v1_1/'+cloudName+'/image/upload',
     {method:'POST',body:fd});
   if(!res.ok) throw new Error('Erreur serveur '+res.status);
@@ -45236,6 +45260,233 @@ async function phpAnnulerUpload(token){
   if(!res.ok) return false;
   const d=await res.json();
   return d&&d.result==='ok';
+}
+
+// ══════════════ LES PHOTOS DE BILAN, HORS DU DOCUMENT ══════════════════════
+//
+// CE QUI SE PASSAIT, MESURÉ LE 23/09/2026 sur une photo de corps plausible :
+//   • `addBilanPhoto` compressait en 1080×1440 et écrivait le data-URL —
+//     373 815 caractères — DANS LE DOSSIER, puis une SECONDE copie sous
+//     rc_photo_<date>_<champ>. Deux fois 365 Ko de chaîne, dans un
+//     localStorage qui plafonne à cinq mégaoctets : trois bilans avec leurs
+//     trois vues et le stockage de l'appareil est plein ;
+//   • `_doPushOne` recompressait CHAQUE photo en 220×293 à chaque poussée —
+//     8 835 caractères l'unité — et poussait le document ENTIER. Vingt-quatre
+//     photos, c'est 212 Ko renvoyés sur le réseau à chaque écriture du
+//     dossier, plus un décodage/réencodage de vingt-quatre images à chaque
+//     fois, sur le téléphone de quelqu'un.
+//
+// CE QU'ON FAIT, et c'est le motif DÉJÀ EN PLACE pour les photos de
+// progression, repris tel quel : compressImageBlob → un Blob dans IndexedDB →
+// l'hébergeur à la demande. LE DOCUMENT NE PORTE PLUS QU'UNE RÉFÉRENCE :
+// {cle, w, h, octets} et, une fois la photo transmise, {url, publicId}.
+// Soixante-dix octets à la place de huit mille huit cents.
+//
+// ⚠ UNE PHOTO DE BILAN EST TRANSMISE AU COACH, ET ELLE L'A TOUJOURS ÉTÉ : elle
+//   fait partie du bilan qu'il lit, c'est même ce pour quoi elle est prise. Ce
+//   lot ne change pas QUI la voit — il change PAR OÙ elle passe. Ce qui change
+//   pour de bon, c'est qu'elle ne traverse plus le document à chaque
+//   synchronisation, et que la haute définition ne quitte plus l'appareil.
+//
+// ⚠ ET LA MIGRATION NE PERD RIEN. Tant qu'une photo ancienne n'est pas montée
+//   chez l'hébergeur, SON BASE64 RESTE DANS LE DOSSIER. On n'échange une chaîne
+//   contre une référence qu'une fois la référence valide — jamais l'inverse.
+const BILP_MAX_DIM=1280;
+const BILP_QUALITE=0.78;
+const BILP_VUES=Object.freeze(['face','back','side']);
+const BILP_PREFIXES=Object.freeze(['bil-photo-','deb-photo-']);
+const BILP_JOURNAL_CLE='rc_migration_photos';
+
+/** La clef de stockage local d'une photo de bilan. Distincte de celles des
+ *  photos de progression (date/pose) : même magasin, deux familles. */
+function bilPhotoCle(date,champ){ return 'bilan/'+(date||0)+'/'+(champ||''); }
+/** PURE. La référence au nouveau format, ou null. */
+function photoBilanRef(b,vue){
+  for(const p of BILP_PREFIXES){
+    const v=b&&b[p+vue];
+    if(v&&typeof v==='object'&&(v.cle||v.url)) return v;
+  }
+  return null;
+}
+/** PURE. Le champ sous lequel la photo est rangée dans ce bilan. */
+function photoBilanChamp(b,vue){
+  for(const p of BILP_PREFIXES) if(b&&b[p+vue]!==undefined&&b[p+vue]!==null) return p+vue;
+  return (b&&b.type==='depart'?'deb-photo-':'bil-photo-')+vue;
+}
+/**
+ * LA PORTE UNIQUE DE LECTURE. Elle rend une source AFFICHABLE TOUT DE SUITE —
+ * une URL ou un data-URL — ou null. Quatre rangements ont existé et coexistent :
+ * la référence neuve, le base64 du document, `photos.<vue>`, et la copie locale
+ * sous rc_photo_. Les quatre lecteurs de l'app passent par ici, sans quoi l'un
+ * d'eux finit par ne plus voir ce que les autres montrent.
+ *
+ * ⚠ LE BLOB LOCAL N'EST PAS RENDU ICI : il demande une lecture asynchrone.
+ *   C'est `photoBilanHydrater` qui le pose après le rendu, et
+ *   `photoBilanRef(...).cle` qui dit qu'il y en a un.
+ */
+function photoBilanSrc(b,vue){
+  for(const p of BILP_PREFIXES){
+    const v=b&&b[p+vue];
+    if(v&&typeof v==='object'&&v.url) return v.url;
+    if(typeof v==='string'&&v) return v;
+  }
+  if(b&&b.photos&&typeof b.photos[vue]==='string'&&b.photos[vue]) return b.photos[vue];
+  try{
+    return localStorage.getItem('rc_photo_'+b.date+'_bil-photo-'+vue)
+      ||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-'+vue)||null;
+  }catch(e){ return null; }
+}
+/** Y a-t-il quelque chose à montrer, d'une façon ou d'une autre ? */
+function photoBilanExiste(b,vue){
+  return !!(photoBilanSrc(b,vue)||(photoBilanRef(b,vue)||{}).cle);
+}
+/** Le Blob local, s'il est sur cet appareil. */
+async function photoBilanBlob(ref){
+  if(!ref||!ref.cle) return null;
+  try{ return await phpLireBlob(ref.cle)||null; }catch(e){ return null; }
+}
+/**
+ * HYDRATATION APRÈS RENDU. Les vignettes qui n'ont qu'un blob local portent
+ * data-bil-cle : on lit IndexedDB et on pose l'URL objet. Les URL objet sont
+ * RELÂCHÉES au chargement de l'image — sans quoi chaque ouverture de l'écran
+ * retiendrait une photo entière en mémoire jusqu'au rechargement de la page.
+ */
+async function photoBilanHydrater(racine){
+  const zone=racine||document;
+  const imgs=[...zone.querySelectorAll('img[data-bil-cle]:not([data-bil-pret])')];
+  for(const img of imgs){
+    img.setAttribute('data-bil-pret','1');
+    try{
+      const blob=await phpLireBlob(img.getAttribute('data-bil-cle'));
+      if(!blob) continue;
+      const u=URL.createObjectURL(blob);
+      img.addEventListener('load',()=>{ try{ URL.revokeObjectURL(u); }catch(e){} },{once:true});
+      img.src=u;
+    }catch(e){}
+  }
+  return imgs.length;
+}
+
+/**
+ * ENREGISTRER UNE PHOTO DE BILAN, AU NOUVEAU FORMAT.
+ *
+ * Le Blob compressé va dans IndexedDB — jamais de base64, jamais localStorage,
+ * qui ne stocke que des chaînes et ferait exactement ce qu'on fuit. Puis la
+ * photo monte chez l'hébergeur, parce que le coach doit la voir.
+ *
+ * SI L'ENVOI ÉCHOUE, LA PHOTO N'EST PAS PERDUE : le blob reste sur l'appareil,
+ * la référence dit `aEnvoyer`, et le prochain passage réessaie. C'est la règle
+ * du chantier : on ne troque jamais une image contre rien.
+ */
+async function photoBilanEnregistrer(cible,bilan,vue,file){
+  if(!bilan) return {ok:false,raison:'Bilan introuvable.'};
+  let c=null;
+  try{ c=await compressImageBlob(file,BILP_MAX_DIM,BILP_QUALITE); }
+  catch(e){ return {ok:false,raison:(e&&e.message)||'Compression impossible.'}; }
+  const champ=photoBilanChamp(bilan,vue);
+  const cle=bilPhotoCle(bilan.date,champ);
+  try{ await phpEcrireBlob(cle,c.blob); }
+  catch(e){ return {ok:false,raison:'Stockage local indisponible : la photo n’a pas été gardée.'}; }
+  const ref={cle:cle,w:c.w,h:c.h,octets:c.octets};
+  try{
+    const d=await phpUploadImage(c.blob,cle,'bilan');
+    ref.url=d.secure_url; ref.publicId=d.public_id;
+  }catch(e){
+    ref.aEnvoyer=true;
+    bilan[champ]=ref;
+    return {ok:true,transmise:false,ref:ref,
+      raison:'La photo est sur ton appareil. Elle partira à ton coach dès que possible.'};
+  }
+  bilan[champ]=ref;
+  return {ok:true,transmise:true,ref:ref};
+}
+
+// ── LA MIGRATION DES ANCIENNES ────────────────────────────────────────────
+// ⚠ ELLE NE S'EXÉCUTE QUE SUR SON PROPRE DOSSIER, et jamais sur celui d'un
+//   autre : c'est l'appareil qui porte les blobs, et migrer le dossier d'un
+//   athlète depuis le téléphone de son coach y écrirait des références vers des
+//   blobs qui n'existent que chez le coach.
+function bilpJournal(){
+  try{ const l=JSON.parse(localStorage.getItem(BILP_JOURNAL_CLE)||'[]');
+    return Array.isArray(l)?l:[]; }catch(e){ return []; }
+}
+function bilpJournalEcrire(l){
+  try{ localStorage.setItem(BILP_JOURNAL_CLE,JSON.stringify((l||[]).slice(-200))); return true; }
+  catch(e){ return false; }
+}
+/** PURE. Ce qu'il reste à migrer dans un dossier : les photos en base64. */
+function photosBilanAMigrer(user){
+  const u=_dossier(user);
+  const out=[];
+  for(const b of (Array.isArray(u&&u.bilans)?u.bilans:[])){
+    if(!b||!b.date) continue;
+    for(const vue of BILP_VUES) for(const p of BILP_PREFIXES){
+      const v=b[p+vue];
+      if(typeof v==='string'&&v.length>600) out.push({bilan:b,champ:p+vue,vue:vue,octets:v.length});
+    }
+  }
+  return out;
+}
+/** Le poids, en octets, des photos encore en base64 dans le document. */
+function poidsPhotosBilan(user){
+  return photosBilanAMigrer(user).reduce((n,x)=>n+x.octets,0);
+}
+/** Un data-URL en Blob, sans passer par le réseau ni par une image. */
+function _dataUrlEnBlob(d){
+  const i=String(d||'').indexOf(',');
+  if(i<0) return null;
+  const tete=d.slice(0,i), b64=d.slice(i+1);
+  const type=(tete.match(/data:([^;]+)/)||[])[1]||'image/jpeg';
+  try{
+    const bin=atob(b64);
+    const buf=new Uint8Array(bin.length);
+    for(let k=0;k<bin.length;k++) buf[k]=bin.charCodeAt(k);
+    return new Blob([buf],{type:type});
+  }catch(e){ return null; }
+}
+/**
+ * LA MIGRATION, UNE PHOTO À LA FOIS, ET JAMAIS DESTRUCTRICE.
+ *
+ * Pour chaque photo en base64 : un Blob dans IndexedDB, un envoi chez
+ * l'hébergeur, et SEULEMENT SI LES DEUX ONT RÉUSSI, la chaîne est remplacée par
+ * la référence. Tout échec laisse le dossier exactement comme il était.
+ *
+ * Elle est journalisée : `rc_migration_photos` dit ce qui est parti, quand, et
+ * combien d'octets ont quitté le document.
+ */
+async function photosBilanMigrer(user,options){
+  const o=options||{};
+  const u=_dossier(user);
+  const liste=photosBilanAMigrer(u);
+  if(!liste.length) return {faites:0,restantes:0,octets:0};
+  const max=o.max||6;                     // par paquets : on ne bloque personne
+  let faites=0,octets=0,echecs=0;
+  const journal=bilpJournal();
+  for(const x of liste.slice(0,max)){
+    const blob=_dataUrlEnBlob(x.bilan[x.champ]);
+    if(!blob){ echecs++; continue; }
+    const cle=bilPhotoCle(x.bilan.date,x.champ);
+    try{ await phpEcrireBlob(cle,blob); }catch(e){ echecs++; continue; }
+    let ref=null;
+    try{
+      const d=await phpUploadImage(blob,cle,'bilan');
+      // ⚠ NI w NI h ICI, ET C'EST VOLONTAIRE : on ne les connait pas sans
+      //   decoder l'image, et ecrire des zeros donnerait a un futur lecteur
+      //   deux chiffres faux qu'il croirait mesures. Absent dit « inconnu ».
+      ref={cle:cle,octets:blob.size,url:d.secure_url,publicId:d.public_id};
+    }catch(e){
+      // ⚠ ON NE TOUCHE PAS AU DOSSIER. Le base64 reste : c'est la seule copie
+      //   que le coach peut lire, et la perdre pour gagner des octets serait
+      //   exactement l'inverse de ce lot.
+      echecs++; continue;
+    }
+    journal.push({date:x.bilan.date,champ:x.champ,octets:x.octets,le:Date.now(),
+      url:ref.url?1:0});
+    x.bilan[x.champ]=ref;
+    faites++; octets+=x.octets;
+  }
+  bilpJournalEcrire(journal);
+  return {faites:faites,restantes:photosBilanAMigrer(u).length,octets:octets,echecs:echecs};
 }
 
 // ── L'écran de consentement ───────────────────────────────────────────────
@@ -53893,14 +54144,27 @@ function saveBilanFinal(){
       initSessionsConfig();
     }
   }
-  // Ancrer photos dans clés séparées (survivent au sync Firebase)
-  let ancrageOk=true;
+  // ── LES PHOTOS SORTENT DU DOCUMENT (build 1421) ─────────────────────────
+  // Le brouillon les garde en base64 — il doit survivre a un changement
+  // d'ecran, et un brouillon est transitoire. A LA VALIDATION, elles passent
+  // par la MEME migration que les anciennes : un Blob dans IndexedDB, un envoi
+  // chez l'hebergeur, et une reference dans le bilan. L'ancrage sous rc_photo_
+  // n'a plus de raison d'etre : le blob local EST l'ancrage, et il ne mange pas
+  // les cinq megaoctets de localStorage.
+  //
+  // ⚠ TANT QUE L'ENVOI N'A PAS REUSSI, LE BASE64 RESTE. On ne troque jamais une
+  //   photo contre rien : c'est photosBilanMigrer qui garantit ce sens unique.
   Object.keys(bi).filter(k=>k.includes('photo')&&bi[k]).forEach(k=>{
-    if(!_setPhotoLS('rc_photo_'+bi.date+'_'+k,bi[k])) ancrageOk=false;
-    // Ce removeItem ne fait que du ménage : son échec ne perd aucune donnée.
     try{localStorage.removeItem('rc_pendingphoto_'+k);}catch(e){}
   });
   const enregistre=saveUser();
+  // La migration des photos de CE bilan, en tache de fond : elle fait un
+  // aller-retour reseau par photo, et l'ecran n'a pas a l'attendre. Elle
+  // reenregistre et repousse quand elle a fini.
+  (async()=>{ try{
+    const r=await photosBilanMigrer(currentUser,{max:9});
+    if(r.faites){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{}); }
+  }catch(e){} })();
   // Le bilan vient d'être poussé dans l'historique : longueur 1 = c'était le
   // premier. Seul le compteur part — ni le type, ni la moindre réponse.
   if((currentUser.bilans||[]).length===1) rcm('first_bilan_completed');
@@ -53912,7 +54176,15 @@ function saveBilanFinal(){
   // Un bilan représente une saisie longue : mensurations, photos et réponses
   // de santé. Annoncer « enregistré ! » alors que le quota a débordé pousse
   // l'utilisateur à fermer l'app sur une fausse certitude.
-  if(enregistre&&ancrageOk) toast(' Bilan n°'+n+' enregistré !');
+  // ⚠ `ancrageOk` A DISPARU DE CETTE CONDITION, ET IL FAUT DIRE POURQUOI. Il
+  //   valait l'ecriture des photos sous rc_photo_ : 374 Ko de base64 par photo
+  //   dans un localStorage de cinq megaoctets, ce qui debordait des le troisieme
+  //   bilan — d'ou cet avertissement. Les photos vivent maintenant en Blob dans
+  //   IndexedDB, dont le quota se compte en centaines de megaoctets, et la
+  //   migration ne remplace JAMAIS une chaine avant que la reference soit
+  //   valide : une photo ne peut plus etre perdue par un quota. Le « ✓ » ne
+  //   depend donc plus que de l'ecriture du dossier, qui est ce qu'il annonce.
+  if(enregistre) toast(' Bilan n°'+n+' enregistré !');
   else toast('Stockage plein : bilan envoyé au cloud, mais absent de cet appareil','var(--orange)');
   go('s-client-home');loadClientHome();
   // LA SORTIE PROPRE. Vérifié : plus rien ne lit `bilData` en dessous — les
@@ -58112,9 +58384,11 @@ function _progBoutonOnglet(tab){
 // Une photo de bilan, sous toutes les clefs ou elle a pu etre rangee. Sortie
 // de showProgressTab pour que _progOngletVide lise EXACTEMENT la meme chose.
 function _progPhotoBilan(b,t){
-  return b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])
-    ||localStorage.getItem('rc_photo_'+b.date+'_bil-photo-'+t)
-    ||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-'+t)||null;
+  // DELEGUE, PLUS RECOPIE. Cette fonction existait deja pour que deux lecteurs
+  // lisent EXACTEMENT la meme chose ; depuis le build 1421, la reference neuve
+  // {cle,w,h,url} est un cinquieme rangement, et photoBilanSrc est le seul
+  // endroit qui les connaisse tous.
+  return photoBilanSrc(b,t);
 }
 // PURE (a la lecture du stockage local pres, pour les photos). Cet onglet
 // s'ouvrirait-il sur un etat vide ? Les conditions sont CELLES de

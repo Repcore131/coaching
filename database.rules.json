@@ -21,6 +21,34 @@
         // par la premiere branche. Le coach le lit ensuite.
         ".write": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').val() !== null &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)",
 
+        // ── LES PHOTOS DE BILAN, ET LA REGLE QUI ATTEND SON HEURE ─────────
+        //
+        // Mesure du 23/09/2026 : une photo de bilan pesait 8 835 caracteres
+        // dans ce noeud (220x293, recompressee a l envoi), et le document part
+        // EN ENTIER a chaque synchronisation — vingt-quatre photos, c est
+        // 212 Ko renvoyes a chaque ecriture du dossier. Depuis le build 1421,
+        // le document ne porte plus qu une reference : {cle,w,h,octets} et,
+        // une fois la photo transmise, {url,publicId}. Soixante-dix octets.
+        //
+        // LA REGLE QUI FERMERAIT LA PORTE EST ECRITE CI-DESSOUS, ET ELLE N EST
+        // PAS ACTIVE. Elle refuserait toute chaine de plus de 600 caracteres
+        // sous une clef contenant « -photo- » :
+        //
+        //   "bilans": { "$i": { "$champ": { ".validate":
+        //     "!($champ.matches(/-photo-/) && newData.isString())
+        //      || newData.val().length < 600" } } },
+        //
+        // ⚠ L ACTIVER AUJOURD HUI CASSERAIT L ECRITURE DU DOSSIER DE TOUS CEUX
+        //   QUI N ONT PAS ENCORE MIGRE. Une seule photo en base64 encore
+        //   presente, et c est le PUT ENTIER que Firebase rejette — le meme
+        //   defaut definitif et silencieux que « dispo » sur coach_public.
+        //   La migration tourne au demarrage, par paquets de six, et ne
+        //   remplace une chaine que quand la reference est valide.
+        //
+        // QUAND L ACTIVER : quand plus aucun dossier ne porte de base64.
+        // `python scripts/mesure_photos_bilan.py <export-rtdb.json>` le dit,
+        // dossier par dossier, avec le poids restant. Zero partout : on decommente.
+
         // Journal RGPD : la DATE du dernier export, et rien d autre. Ni son
         // contenu, ni sa taille, ni ce qui a ete demande. /users n a pas de
         // "$autre": false — l ecriture passerait donc sans cette regle — mais

@@ -8696,27 +8696,46 @@ async function testExercices(){
             return !vus.length
               ?true:_echec('une erreur inconnue se déguise en quota : '+vus[0]);
           } finally { Storage.prototype.setItem=_si; window.toast=_t; }})());
-        ok('Critère : un bilan photo qui déborde le dit, au lieu d\'un « ✓ »',(()=>{
-          // saveBilanFinal fait du réseau : on éprouve la DÉCISION, qui est
-          // ce que le critère du lot vise. Le succès doit dépendre des DEUX
-          // écritures — le dossier ET l'ancrage photo.
+        // ⚠ CETTE ASSERTION A CHANGÉ D'OBJET AU BUILD 1421, ET IL FAUT LE DIRE.
+        //   Elle gardait l'ANCRAGE des photos sous rc_photo_ : saveBilanFinal y
+        //   écrivait 374 Ko de base64 par photo, dans un localStorage de cinq
+        //   mégaoctets, et le « ✓ » devait dépendre de cette écriture — sans
+        //   quoi l'athlète fermait l'app sur une fausse certitude après un
+        //   débordement de quota.
+        //   Les photos vivent maintenant en Blob dans IndexedDB et ne traversent
+        //   plus le document. LE DÉFAUT QUE CETTE ASSERTION EMPÊCHAIT N'A PAS
+        //   DISPARU, IL A CHANGÉ DE FORME : ce serait désormais de remplacer un
+        //   base64 par une référence sans que la référence soit valide. C'est ce
+        //   qu'elle vérifie, avec le reste de la chaîne de garanties.
+        ok('Critère : un bilan photo ne peut pas être perdu, et le « ✓ » ne mentit pas',(()=>{
           const src=String(saveBilanFinal);
-          if(src.indexOf('_setPhotoLS(')<0)
-            return _echec('les photos ne passent plus par le helper');
-          if(!/ancrageOk=false/.test(src))
-            return _echec('un échec d\'ancrage n\'est plus retenu');
-          if(!/enregistre&&ancrageOk/.test(src))
-            return _echec('le « ✓ » ne dépend plus des deux écritures');
-          // Et le repli NOMME le stockage, sinon l'athlète ne sait pas quoi
-          // faire de l'avertissement.
-          const i=src.indexOf('enregistre&&ancrageOk');
-          const suite=src.slice(i,i+320);
+          // 1. LES PHOTOS SORTENT DU DOCUMENT : la migration est appelée ici,
+          //    et l'ancrage de 374 Ko en localStorage a bien disparu.
+          if(src.indexOf('photosBilanMigrer')<0)
+            return _echec('les photos ne sortent plus du document à la validation');
+          if(/_setPhotoLS\('rc_photo_/.test(src))
+            return _echec('le base64 est de nouveau ancré en localStorage');
+          // 2. LE « ✓ » DÉPEND DE L'ÉCRITURE DU DOSSIER, et le repli nomme le
+          //    stockage et dit que le cloud a la copie — « perdu » et « absent
+          //    de cet appareil » ne sont pas la même nouvelle.
+          if(!/if\(enregistre\)/.test(src)) return _echec('le « ✓ » ne dépend plus de l’enregistrement');
+          const i=src.indexOf('if(enregistre)');
+          const suite=src.slice(i,i+400);
           if(!/Stockage plein/.test(suite))
             return _echec('le repli ne parle plus de stockage : '+suite.slice(0,90));
-          // Il dit aussi que le cloud a bien reçu : c'est ce qui distingue
-          // « perdu » de « absent de cet appareil ».
-          return /cloud/i.test(suite)
-            ?true:_echec('le repli ne dit pas que le cloud a la copie');})());
+          if(!/cloud/i.test(suite)) return _echec('le repli ne dit pas que le cloud a la copie');
+          // 3. ET LA GARANTIE QUI REMPLACE L'ANCRAGE : la migration ne remplace
+          //    une chaîne QUE quand l'envoi a réussi. Éprouvée pour de vrai par
+          //    « 1421 — LA MIGRATION NE REMPLACE UNE CHAÎNE QUE QUAND L'ENVOI A
+          //    RÉUSSI » ; ici on vérifie que le sens unique est écrit dans le
+          //    code, à l'endroit où une refonte le casserait.
+          const m=String(photosBilanMigrer);
+          const iCatch=m.indexOf('catch');
+          const iRemplace=m.indexOf('x.bilan[x.champ]=ref');
+          if(iRemplace<0) return _echec('la migration n’écrit plus de référence');
+          if(iCatch>=0&&iCatch>iRemplace)
+            return _echec('le remplacement passe AVANT la garde d’échec de l’envoi');
+          return true;})());
         ok('La purge garde les trois derniers bilans, de CHAQUE utilisateur',(()=>{
           // Sur le téléphone d'un coach, ces clés ne portent que la date, pas
           // l'identité : purger d'après les seuls bilans de currentUser
@@ -34183,6 +34202,160 @@ async function testExercices(){
         } finally {
           CLOUD._callFn=_sCall; window.toast=_sToast; currentUser=_sU;
           _rendre(EXPIRATIONS_CLE,_sExp); _rendre(CLD_FILE_CLE,_sCld);
+        }
+      })();
+
+      // ══════════════ BUILD 1421 — LES PHOTOS DE BILAN HORS DU DOCUMENT ════
+      //
+      // MESURE DU 23/09/2026, sur une photo de corps plausible : 373 815
+      // caractères à la prise (1080×1440, ce qui était écrit DANS le bilan puis
+      // une seconde fois sous rc_photo_), et 8 835 caractères après la
+      // recompression que _doPushOne faisait à CHAQUE envoi (220×293). Le
+      // document part en entier à chaque synchronisation : vingt-quatre photos,
+      // c'est 212 Ko renvoyés sur le réseau à chaque écriture du dossier, plus
+      // vingt-quatre images réencodées sur le téléphone au passage.
+      //
+      // Le document ne porte plus qu'une référence — {cle,w,h,octets} puis
+      // {url,publicId}, environ 180 octets mesurés. Le motif est celui des
+      // photos de progression, repris tel quel.
+      //
+      // ⚠ LA GARANTIE QUE CES ASSERTIONS DÉFENDENT AVANT TOUTES LES AUTRES :
+      //   UNE MIGRATION NE PERD JAMAIS UNE IMAGE. Tant que l'envoi n'a pas
+      //   réussi, le base64 RESTE dans le dossier. On n'échange une chaîne
+      //   contre une référence qu'une fois la référence valide.
+      (()=>{
+        const _sUp=window.phpUploadImage, _sJ=localStorage.getItem(BILP_JOURNAL_CLE);
+        const D='data:image/jpeg;base64,'+'/9j/4AAQSkZJRg'+'A'.repeat(900);
+        try{
+          ok('1421 — UNE SEULE PORTE DE LECTURE, ET ELLE CONNAÎT LES CINQ RANGEMENTS',(()=>{
+            // Cinq formes ont existé, et elles coexistent dans les dossiers
+            // réels. Un lecteur qui en oublie une affiche « pas de photo » sur
+            // une photo qui est là — c'est arrivé, c'est pour cela que
+            // _progPhotoBilan avait été extrait.
+            const ref={cle:'bilan/9/bil-photo-face',w:960,h:1280,octets:120333,
+              url:'https://res.cloudinary.com/x/image/upload/v1/repcore/A/bilan/9.jpg'};
+            if(photoBilanSrc({date:9,'bil-photo-face':ref},'face')!==ref.url)
+              return _echec('la référence transmise n’est pas lue');
+            if(photoBilanSrc({date:9,'bil-photo-face':D},'face')!==D)
+              return _echec('l’ancien base64 n’est plus lu');
+            if(photoBilanSrc({date:9,'deb-photo-side':D},'side')!==D)
+              return _echec('le préfixe « deb- » n’est plus lu');
+            if(photoBilanSrc({date:9,photos:{back:D}},'back')!==D)
+              return _echec('la forme photos.<vue> n’est plus lue');
+            if(photoBilanSrc({date:9},'face')!==null)
+              return _echec('une photo absente ne rend pas null');
+            // ⚠ UNE RÉFÉRENCE SANS URL NE REND PAS DE SOURCE : le blob local
+            //   demande une lecture asynchrone, et rendre sa clef comme une src
+            //   afficherait une image cassée. C'est photoBilanHydrater qui s'en
+            //   charge après le rendu — mais la photo EXISTE, et l'écran doit
+            //   le savoir.
+            const local={cle:'bilan/9/bil-photo-face',w:960,h:1280,octets:1};
+            if(photoBilanSrc({date:9,'bil-photo-face':local},'face')!==null)
+              return _echec('un blob local est rendu comme une source directe');
+            if(!photoBilanExiste({date:9,'bil-photo-face':local},'face'))
+              return _echec('une photo qui n’a qu’un blob local est déclarée absente');
+            // ET LES QUATRE LECTEURS DE L'APP PASSENT PAR LÀ.
+            const src=_prodSrc();
+            for(const f of ['_progPhotoBilan','rapPhotos'])
+              if(String(window[f]).indexOf('photoBilanSrc')<0)
+                return _echec(f+' relit le dossier à sa façon');
+            if((src.match(/b\['bil-photo-'\+/g)||[]).length>0)
+              return _echec('une lecture directe de bil-photo- subsiste');
+            return true;})());
+
+          okA('1421 — LA MIGRATION NE REMPLACE UNE CHAÎNE QUE QUAND L’ENVOI A RÉUSSI',async()=>{
+            localStorage.removeItem(BILP_JOURNAL_CLE);
+            // ── L'ENVOI ÉCHOUE : LE DOSSIER NE BOUGE PAS D'UN OCTET ────────
+            window.phpUploadImage=async()=>{ throw new Error('réseau'); };
+            const u1={email:'m1@t.fr',bilans:[{date:11,'bil-photo-face':D,'bil-poids':'61'}]};
+            const avant=JSON.stringify(u1);
+            const r1=await photosBilanMigrer(u1);
+            if(r1.faites!==0) return _echec(r1.faites+' migration(s) alors que l’envoi échoue');
+            if(JSON.stringify(u1)!==avant) return _echec('le dossier a été modifié malgré l’échec');
+            if(typeof u1.bilans[0]['bil-photo-face']!=='string')
+              return _echec('LA PHOTO A ÉTÉ PERDUE : la chaîne a été remplacée sans référence valide');
+            if(r1.restantes!==1) return _echec('la photo n’est plus comptée comme à migrer');
+            // ── L'ENVOI RÉUSSIT : la chaîne devient une référence ──────────
+            window.phpUploadImage=async(blob,nom,dossier)=>{
+              if(dossier!=='bilan') throw new Error('mauvais dossier : '+dossier);
+              return {secure_url:'https://res.cloudinary.com/x/image/upload/v1/'+nom+'.jpg',
+                public_id:'repcore/A/'+nom};
+            };
+            const u2={email:'m2@t.fr',bilans:[
+              {date:12,'bil-photo-face':D,'bil-poids':'61'},
+              {date:13,'deb-photo-side':D}]};
+            const poidsAvant=poidsPhotosBilan(u2);
+            if(poidsAvant<1800) return _echec('la fixture ne pèse rien : '+poidsAvant);
+            const r2=await photosBilanMigrer(u2);
+            if(r2.faites!==2) return _echec(r2.faites+' photo(s) migrée(s) au lieu de deux');
+            const ref=u2.bilans[0]['bil-photo-face'];
+            if(!ref||typeof ref!=='object') return _echec('la photo n’est pas devenue une référence');
+            if(!ref.url||!ref.publicId||!ref.cle) return _echec('la référence est incomplète : '+JSON.stringify(ref));
+            // AUCUN OCTET D'IMAGE DANS LE DOCUMENT, et c'est la mesure du lot.
+            const brut=JSON.stringify(u2);
+            if(brut.indexOf('data:image')>=0) return _echec('un data-URL est resté dans le dossier');
+            if(poidsPhotosBilan(u2)!==0) return _echec('il reste des photos en base64');
+            const apres=JSON.stringify(ref).length;
+            if(apres>400) return _echec('la référence pèse '+apres+' octets');
+            // LE JOURNAL DIT CE QUI EST SORTI, ET COMBIEN.
+            const j=bilpJournal();
+            if(j.length!==2) return _echec(j.length+' entrée(s) au journal de migration');
+            if(!(r2.octets>=poidsAvant)) return _echec('les octets sortis ne sont pas comptés : '+r2.octets);
+            // La photo est lisible tout de suite, par la porte unique.
+            return photoBilanSrc(u2.bilans[0],'face')===ref.url
+              ?true:_echec('la photo migrée n’est plus lisible');});
+
+          okA('1421 — UNE PHOTO NON TRANSMISE RESTE SUR L’APPAREIL, ET ON LE DIT',async()=>{
+            // ⚠ LE CAS HORS LIGNE. Le blob est écrit localement, la référence
+            //   porte `aEnvoyer`, et l'appelant reçoit une phrase à montrer :
+            //   sans elle, le coach attendrait une photo qui n'est pas partie.
+            const sC=window.compressImageBlob, sE=window.phpEcrireBlob;
+            try{
+              window.compressImageBlob=async()=>({blob:new Blob(['x']),w:960,h:1280,octets:123456});
+              let ecrit=null;
+              window.phpEcrireBlob=async(cle)=>{ ecrit=cle; return true; };
+              window.phpUploadImage=async()=>{ throw new Error('hors ligne'); };
+              const bil={date:14,type:'bilan'};
+              const r=await photoBilanEnregistrer({email:'o@t.fr'},bil,'face',
+                new File([new Uint8Array(8)],'p.jpg',{type:'image/jpeg'}));
+              if(!r.ok) return _echec('la photo est perdue quand l’envoi échoue : '+r.raison);
+              if(r.transmise) return _echec('elle est annoncée transmise alors que l’envoi a échoué');
+              if(!/appareil/i.test(r.raison||'')) return _echec('rien ne dit où est la photo : '+r.raison);
+              const ref=bil['bil-photo-face'];
+              if(!ref||!ref.aEnvoyer) return _echec('la référence ne dit pas qu’elle doit partir');
+              if(ref.url) return _echec('une URL est inventée alors que rien n’est parti');
+              if(ecrit!=='bilan/14/bil-photo-face') return _echec('la clef locale : '+ecrit);
+              if(!photoBilanExiste(bil,'face')) return _echec('la photo est déclarée absente');
+              // ET LE DOCUMENT NE PORTE TOUJOURS AUCUN OCTET D'IMAGE.
+              return JSON.stringify(bil).indexOf('data:')<0
+                ?true:_echec('un data-URL est entré dans le bilan');
+            } finally { window.compressImageBlob=sC; window.phpEcrireBlob=sE; }});
+
+          ok('1421 — L’ENVOI DU DOCUMENT NE RECOMPRESSE PLUS QUE L’ANCIEN FORMAT',(()=>{
+            // _doPushOne recompressait toute valeur de clef « photo ». Une
+            // référence est un OBJET : la garde sur `typeof === 'string'` et
+            // `startsWith('data:')` est ce qui l'épargne. La retirer ferait
+            // passer un objet à _compressPhoto, qui rendrait null — et la
+            // référence disparaîtrait du document poussé, donc la photo du
+            // coach. C'est le genre de perte qu'on ne voit qu'un mois après.
+            const src=String(CLOUD._doPushOne);
+            const i=src.indexOf("k.includes('photo')");
+            if(i<0) return _echec('la boucle de recompression a disparu');
+            const bloc=src.slice(i,i+200);
+            if(bloc.indexOf("typeof cl[k]==='string'")<0)
+              return _echec('la recompression ne vérifie plus qu’il s’agit d’une chaîne');
+            if(bloc.indexOf("startsWith('data:')")<0)
+              return _echec('la recompression ne vérifie plus qu’il s’agit d’un data-URL');
+            // ET LA RÉFÉRENCE PASSE TELLE QUELLE : on le prouve sur un objet.
+            const ref={cle:'bilan/1/bil-photo-face',url:'https://x/y.jpg',w:960,h:1280,octets:1};
+            const faux={...{date:1,'bil-photo-face':ref}};
+            const garde=(k,v)=>k.includes('photo')&&v&&typeof v==='string'&&v.startsWith('data:');
+            return garde('bil-photo-face',faux['bil-photo-face'])===false
+              ?true:_echec('une référence serait recompressée');})());
+        } finally {
+          window.phpUploadImage=_sUp;
+          if(_sJ===null) localStorage.removeItem(BILP_JOURNAL_CLE);
+          else localStorage.setItem(BILP_JOURNAL_CLE,_sJ);
         }
       })();
 
