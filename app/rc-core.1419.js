@@ -93994,6 +93994,14 @@ async function chargerTests(){
   // purge des actifs perimes dans sw.js, et le « immutable » d'un an dans
   // firebase.json. Sans eux, un renommage malheureux remettrait 1,9 Mo sur le
   // reseau a chaque ouverture sans qu'une seule assertion bronche.
+  // ET LE MODULE D'ALLEGEMENT VIDEO. Vingt-deux kilo-octets qui decident du
+  // plus gros levier de l'application — 6 Mo au lieu de 130 — et que la suite ne
+  // pouvait pas lire du tout : il est servi a part, comme le code. Une assertion
+  // y garde desormais ce qu'aucun faux VideoEncoder ne peut eprouver.
+  if(window._RC_VIDEO_PROD===undefined){
+    try{ const r=await fetch('./vendor/rc-video.js',{cache:'no-store'});
+      window._RC_VIDEO_PROD=r.ok?await r.text():null; }catch(e){ window._RC_VIDEO_PROD=null; }
+  }
   if(window._RC_SW===undefined){
     try{ const r=await fetch('./sw.js',{cache:'no-store'});
       window._RC_SW=r.ok?await r.text():null; }catch(e){ window._RC_SW=null; }

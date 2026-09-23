@@ -33857,6 +33857,97 @@ async function testExercices(){
         } finally { _remettre(); }
       })();
 
+      // ══════════════ BUILD 1419 — L’ALLÈGEMENT VIDÉO, VU DE PRÈS ══════════
+      //
+      // Les seize assertions « Envoi — … » plus haut éprouvent la CASCADE en
+      // remplaçant VideoDecoder, VideoEncoder et MediaRecorder par des faux.
+      // Elles ne compressent rien : elles ne peuvent donc rien mesurer, et
+      // elles ne voient RIEN du module lui-même — 22 Ko servis à part, qui
+      // décident du plus gros levier de l'app (6 Mo au lieu de 130).
+      //
+      // CE QUE LE BANC A TROUVÉ LE 23/09/2026, et qu'aucun faux ne pouvait
+      // attraper : l'annulation ne s'appliquait pas pendant le VIDAGE des
+      // codecs. La boucle d'images regardait le signal à chaque lot ; passé le
+      // dernier lot, plus rien ne le regardait. Une annulation demandée à
+      // 400 ms sur un transcodage de 887 ms rendait quand même un Blob — et
+      // l'appelant, croyant à un succès, pouvait envoyer une vidéo que la
+      // personne venait d'annuler. Mesure après correction : rejetée en 780 ms.
+      //
+      // La mesure d'octets vit dans scripts/verif/video-allege.mjs, qui fabrique
+      // une vraie vidéo dans un vrai navigateur : 6 255 Ko en 1080p à 8,6 Mbit/s
+      // deviennent 1 722 Ko en 720p à 2,36 Mbit/s, en 1,1 s pour 6 s de vidéo.
+      // Ces assertions-ci gardent les règles qu'un test d'octets ne dit pas.
+      (()=>{
+        const src=(typeof window!=='undefined'&&window._RC_VIDEO_PROD)||'';
+
+        ok('1419 — LE MODULE D’ALLÈGEMENT EST LÀ, ET LA SUITE PEUT LE LIRE',(()=>{
+          // ⚠ SANS CETTE LECTURE, LES ASSERTIONS QUI SUIVENT SERAIENT MUETTES.
+          //   C'est la même leçon que pour _prodSrc : un test qui cherche dans
+          //   une chaîne vide ne tombe pas, il passe au vert sans rien lire.
+          if(typeof RepCoreVideo!=='object'||!RepCoreVideo)
+            return _echec('RepCoreVideo n’est pas chargé par la page');
+          for(const f of ['peutCompresser','compresser'])
+            if(typeof RepCoreVideo[f]!=='function') return _echec('RepCoreVideo.'+f+' a disparu');
+          if(src.length<8000) return _echec('la source du module n’a pas été lue : '+src.length+' o');
+          return true;})());
+
+        ok('1419 — L’ANNULATION EST REGARDÉE JUSQU’AU BOUT, VIDAGE COMPRIS',(()=>{
+          if(src.length<8000) return _echec('source du module non lue');
+          const i=src.indexOf('decodeur.flush()');
+          if(i<0) return _echec('le vidage des codecs a disparu');
+          // Entre le vidage et le Blob rendu, il DOIT y avoir une garde. Deux
+          // au moins : une entre les deux vidages, une avant de rendre.
+          const j=src.indexOf('ok({blob:blob',i);
+          if(j<0) return _echec('le rendu du Blob a changé de forme');
+          const entre=src.slice(i,j);
+          const gardes=(entre.match(/_coupe\(signal\)/g)||[]).length;
+          if(gardes<2) return _echec(gardes+' garde(s) d’annulation entre le vidage et le Blob rendu');
+          return true;})());
+
+        okA('1419 — UN SIGNAL DÉJÀ COUPÉ N’ENCODE PAS UNE IMAGE',async()=>{
+          // Le contrat de `compresser` : elle ne rejette QUE sur annulation.
+          // Tout le reste dégrade d'une voie. Ici on éprouve la seule rejection
+          // légitime, sans avoir besoin d'une vraie vidéo.
+          const ac=new AbortController();
+          ac.abort();
+          const f=new File([new Uint8Array(4096)],'x.mp4',{type:'video/mp4'});
+          let rejete=null;
+          try{ await RepCoreVideo.compresser(f,{hauteur:720,debit:2500000,signal:ac.signal});
+          }catch(e){ rejete=String(e&&e.message||e); }
+          if(!rejete) return _echec('un signal déjà coupé n’a pas fait rejeter');
+          if(!/annul/i.test(rejete)) return _echec('rejet, mais pas pour annulation : '+rejete);
+          // ET SANS SIGNAL, LE MÊME FICHIER ILLISIBLE NE REJETTE PAS : il rend
+          // « rien allégé », qui est une réponse. Perdre la vidéo de quelqu'un
+          // parce qu'on n'a pas su l'alléger serait le pire résultat possible.
+          const r=await RepCoreVideo.compresser(f,{hauteur:720,debit:2500000,sansRecorder:true})
+            .catch(e=>({erreur:String(e&&e.message||e)}));
+          if(r.erreur) return _echec('un fichier illisible fait rejeter : '+r.erreur);
+          if(r.blob!==null) return _echec('un fichier illisible a produit un blob');
+          return r.octetsApres===f.size
+            ?true:_echec('les octets annoncés ne sont pas ceux de l’original : '+r.octetsApres);});
+
+        ok('1419 — JAMAIS ffmpeg.wasm, ET AUCUN SCRIPT VENU D’AILLEURS',(()=>{
+          // LA RÈGLE DU DÉPÔT, ET ELLE A UNE RAISON CHIFFRÉE : ffmpeg.wasm
+          // pèse 25 à 30 Mo à télécharger et exige les en-têtes COOP/COEP, que
+          // l'hébergement statique de Firebase ne pose pas — il casserait la
+          // page pour tout le monde. Les motifs sont assemblés à l'exécution,
+          // sinon ce test se trouverait lui-même dans la source de la page.
+          if(src.length<8000) return _echec('source du module non lue');
+          for(const m of ['ffmpeg'+'.wasm','createFFmpeg','SharedArrayBuffer'])
+            if(src.indexOf(m)>=0) return _echec(m+' est apparu dans le module vidéo');
+          // Tout ce qu'il charge vient de app/vendor/, jamais d'un CDN.
+          const urls=src.match(/https?:\/\/[^'"\s)]+/g)||[];
+          const dehors=urls.filter(u=>!/^https?:\/\/(?:www\.)?(?:github\.com|opensource\.org|developer\.mozilla\.org|webkit\.org)/.test(u));
+          if(dehors.length) return _echec('adresse chargée hors du dépôt : '+dehors[0]);
+          if(src.indexOf('./vendor/mp4/')<0) return _echec('les copies figées de mp4 ne sont plus lues en local');
+          // ET LE CODEC DE SORTIE RESTE H.264 EN PREMIER : iOS n'offre que lui
+          // en encodage, et proposer VP9 ou AV1 d'abord ferait échouer la voie
+          // rapide sur exactement les appareils qui en ont le plus besoin.
+          if(!/^avc1\./.test(String(RepCoreVideo.CODEC_SORTIE||'')))
+            return _echec('le codec de sortie n’est plus du H.264 : '+RepCoreVideo.CODEC_SORTIE);
+          return true;})());
+      })();
+
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
       // des compléments sur la même ligne que “VITAMINE…”, entre la photo et le
       // type, pour réduire la hauteur des rectangles ».

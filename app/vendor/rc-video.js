@@ -322,7 +322,19 @@ function _voieWebCodecs(file,o){
           attendre.then(lot);
           return;
         }
-        decodeur.flush().then(function(){ return encodeur.flush(); }).then(function(){
+        // ⚠ LE VIDAGE EST LA PHASE LA PLUS LONGUE, ET ELLE N'ETAIT PAS
+        //   ANNULABLE. La boucle ci-dessus regarde le signal a chaque lot ;
+        //   passe le dernier lot, plus rien ne le regardait. Mesure au banc le
+        //   23/09/2026 : une annulation demandee a 400 ms sur un transcodage de
+        //   887 ms rendait quand meme un Blob — et l'appelant, croyant a un
+        //   succes, pouvait envoyer une video que la personne venait d'annuler.
+        //   On regarde donc le signal ENTRE les deux vidages et AVANT de rendre.
+        //   Un flush ne s'interrompt pas ; ce qui compte est de ne pas RENDRE.
+        decodeur.flush().then(function(){
+          if(_coupe(signal)) throw new Error('Envoi annulé');
+          return encodeur.flush();
+        }).then(function(){
+          if(_coupe(signal)) throw new Error('Envoi annulé');
           muxeur.finalize();
           var blob=new Blob([cible.buffer],{type:'video/mp4'});
           ok({blob:blob,largeur:out.l,hauteur:out.h,dureeS:ctx.dureeS,voie:'webcodecs',
