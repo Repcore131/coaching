@@ -4,7 +4,7 @@
 //
 // Déploiement : voir functions/README.md.
 
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
@@ -21,8 +21,50 @@ const PAYPAL_CLIENT_SECRET = defineSecret("PAYPAL_CLIENT_SECRET");
 const CLOUDINARY_API_SECRET = defineSecret("CLOUDINARY_API_SECRET");
 const CLOUDINARY_API_KEY = defineSecret("CLOUDINARY_API_KEY");
 const OCR_SPACE_API_KEY = defineSecret("OCR_SPACE_API_KEY");
+// L'identifiant du webhook PayPal, cree dans le tableau de bord PayPal et pose
+// en secret : `firebase functions:secrets:set PAYPAL_WEBHOOK_ID`. Sans lui, la
+// verification de signature est impossible et le webhook REFUSE tout — il ne
+// fait jamais confiance a un appel qu'il ne peut pas verifier.
+const PAYPAL_WEBHOOK_ID = defineSecret("PAYPAL_WEBHOOK_ID");
 
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+
+// ══ LES DROITS, ECRITS ICI ET NULLE PART AILLEURS ════════════════════════
+// database.rules.json pose ".write": false sur droits/ pour tout le monde.
+// L'Admin SDK ne passe pas par les regles : ces fonctions sont donc le SEUL
+// chemin d'ecriture, et c'est tout l'objet du lot.
+//
+// Quatre paliers, du plus ferme au plus ouvert :
+//   'aucun'        rien n'a ete ouvert (ou tout est expire)
+//   'essentielle'  l'abonnement de base
+//   'ultime'       l'abonnement complet, ou un programme achete, ou l'essai
+//   'suivi'        un coach s'occupe de la personne
+const PALIERS = ["aucun", "essentielle", "ultime", "suivi"];
+function palierValide(p) { return PALIERS.indexOf(String(p)) > 0 ? String(p) : "aucun"; }
+
+// ECRIT droits/<cle>. `champs` porte palier, echeance, source, et ce que
+// l'appelant veut y ajouter. `maj` est toujours pose par le serveur : c'est la
+// seule date a laquelle le client peut se fier.
+async function ecrireDroits(cle, champs) {
+  if (!cle) throw new HttpsError("invalid-argument", "Clef de dossier manquante.");
+  const patch = Object.assign({}, champs || {}, { maj: Date.now() });
+  if (patch.palier !== undefined) patch.palier = palierValide(patch.palier);
+  if (patch.echeance !== undefined) patch.echeance = Number(patch.echeance) || 0;
+  await db.ref("droits/" + cle).update(patch);
+  return patch;
+}
+// LIT droits/<cle>, ou null.
+async function lireDroits(cle) {
+  const s = await db.ref("droits/" + cle).get();
+  return s.exists() ? s.val() : null;
+}
+// ⚠ UNE ECHEANCE NE RECULE JAMAIS SANS RAISON. Un renouvellement, un code de
+// coach ou une revision PROLONGENT ; ils ne raccourcissent pas un droit deja
+// paye. L'annulation, elle, passe par ecrireDroits directement.
+function prolonger(echeanceActuelle, ms) {
+  const base = Math.max(Number(echeanceActuelle) || 0, Date.now());
+  return base + (Number(ms) || 0);
+}
 const CREATOR_EMAIL = "guellec.coachingpro@gmail.com";
 
 // ── Constantes PayPal (valeurs publiques — déjà présentes dans index.html) ───
@@ -226,7 +268,28 @@ exports.verifyAccessToken = onCall({ secrets: [TOKEN_SECRET] }, async (request) 
     }
   }
 
-  return { valid: true, payload };
+  // ══ ET C'EST ICI QUE LE DROIT EST POSE, PAS SUR LE TELEPHONE ══════════
+  // Jusqu'a ce lot, l'application ecrivait elle-meme status:'COACHING_SUIVI'
+  // et accessExpiry dans le dossier de l'athlete — deux champs que son
+  // titulaire peut reecrire depuis la console de son navigateur. Le code
+  // etait verifie par le serveur, mais le DROIT qui en decoulait ne l'etait
+  // pas : il suffisait de se le donner.
+  //
+  // Le client continue d'ecrire ces champs pour l'affichage et pour la fiche
+  // du coach ; ils ne decident plus de rien.
+  let droits = null;
+  if (callerEmail) {
+    const mois = Math.max(1, Math.min(24, Number(payload.mois) || 1));
+    const cle = emailKey(callerEmail);
+    const actuel = await lireDroits(cle);
+    droits = await ecrireDroits(cle, {
+      palier: "suivi",
+      echeance: prolonger(actuel && actuel.echeance, mois * MONTH_MS),
+      source: "code_coach",
+      coachId: String(payload.coachId || "").slice(0, 64),
+    });
+  }
+  return { valid: true, payload, droits };
 });
 
 // ── anonymizeCoach ───────────────────────────────────────────────────────────
@@ -362,8 +425,52 @@ exports.verifyPaypalSubscription = onCall({ secrets: [PAYPAL_CLIENT_SECRET] }, a
   }
 
   await db.ref().update(updates);
+  // LE DROIT, POSE PAR LE SERVEUR. users/ garde ses champs pour l'affichage et
+  // pour la fiche du coach ; c'est droits/ que l'application lit pour ouvrir
+  // ou fermer quoi que ce soit.
+  const actuel = await lireDroits(key);
+  const offre = offreDuPlan(sub.plan_id);
+  await ecrireDroits(key, {
+    palier: offre.palier,
+    echeance: prolonger(actuel && actuel.echeance, offre.mois * MONTH_MS),
+    source: "paypal",
+    abonnement: subscriptionId,
+  });
   return { ok: true };
 });
+
+// ══ QUEL PLAN PAYPAL OUVRE QUOI ══════════════════════════════════════════
+// ⚠ LES IDENTIFIANTS SE REMPLISSENT DANS LE TABLEAU DE BORD PAYPAL, PAS ICI.
+//   Trois des quatre plans n'existent pas encore (lot 5 : Essentielle annuel,
+//   Ultime mensuel, Ultime annuel). Tant qu'un identifiant manque, son entree
+//   reste vide et le plan tombe dans le repli ci-dessous.
+//
+// ET ILS SE LISENT AUSSI DANS LA BASE, sous config/plans : Kevin peut donc
+// declarer un plan cree ce matin sans attendre un deploiement de fonctions.
+// La table du fichier sert de repli quand la base ne dit rien.
+const PLANS_CONNUS = {
+  // planId PayPal            palier         mois
+  "P-95N51603RD882780YNJKS2QA": { palier: "essentielle", mois: 1 },
+};
+let _plansBase = null;
+async function chargerPlans() {
+  if (_plansBase) return _plansBase;
+  try {
+    const s = await db.ref("config/plans").get();
+    _plansBase = (s.exists() && s.val()) || {};
+  } catch (e) { _plansBase = {}; }
+  return _plansBase;
+}
+// ⚠ LE REPLI EST LE PALIER LE PLUS BAS QUI NE CASSE RIEN, JAMAIS LE PLUS HAUT.
+//   Un plan inconnu ouvre Essentielle pour un mois : la personne a paye, elle
+//   doit entrer ; mais on ne lui donne pas Ultime sur la foi d'un identifiant
+//   qu'on ne reconnait pas.
+function offreDuPlan(planId, table) {
+  const t = Object.assign({}, PLANS_CONNUS, table || {});
+  const o = t[String(planId || "")];
+  if (o && o.palier) return { palier: palierValide(o.palier), mois: Math.max(1, Number(o.mois) || 1) };
+  return { palier: "essentielle", mois: 1 };
+}
 
 // ── getCloudinarySignature ───────────────────────────────────────────────────
 // Génère une signature SHA1 Cloudinary pour un upload signé côté serveur.
@@ -615,3 +722,140 @@ exports.cloudinaryDestroy = onCall(
       "Cloudinary a refusé la suppression" + (r ? ` (${r})` : ` (${res.status})`) + ".");
   }
 );
+
+// ══ LE WEBHOOK PAYPAL : LE SEUL CHEMIN D'ECRITURE AUTOMATIQUE ════════════
+// Chaque paiement, chaque renouvellement et chaque annulation passe par ici.
+// PayPal appelle cette adresse ; personne d'autre ne peut la faire mentir,
+// parce que la signature est verifiee AUPRES DE PAYPAL avant toute ecriture.
+//
+// ⚠ UN APPEL QU'ON NE PEUT PAS VERIFIER EST REFUSE, jamais accepte par
+//   defaut : sans PAYPAL_WEBHOOK_ID, sans signature, ou si PayPal repond
+//   autre chose que SUCCESS, on rend 401 et on n'ecrit rien. Le contraire
+//   aurait fait de cette adresse un distributeur d'abonnements.
+//
+// A DECLARER DANS PAYPAL (tableau de bord > Webhooks) :
+//   URL   https://europe-west1-repcore-sync.cloudfunctions.net/paypalWebhook
+//   Evenements : BILLING.SUBSCRIPTION.ACTIVATED, .CANCELLED, .EXPIRED,
+//                .SUSPENDED, PAYMENT.SALE.COMPLETED,
+//                PAYMENT.CAPTURE.COMPLETED, CHECKOUT.ORDER.APPROVED
+exports.paypalWebhook = onRequest(
+  { secrets: [PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID], cors: false },
+  async (req, res) => {
+    if (req.method !== "POST") { res.status(405).send("POST attendu"); return; }
+    const webhookId = PAYPAL_WEBHOOK_ID.value();
+    if (!webhookId) { res.status(401).send("webhook non configure"); return; }
+    const h = req.headers || {};
+    const corps = req.body || {};
+    let verif = null;
+    try {
+      const token = await getPaypalToken(PAYPAL_CLIENT_SECRET.value());
+      const r = await fetch(PAYPAL_API + "/v1/notifications/verify-webhook-signature", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({
+          auth_algo: h["paypal-auth-algo"],
+          cert_url: h["paypal-cert-url"],
+          transmission_id: h["paypal-transmission-id"],
+          transmission_sig: h["paypal-transmission-sig"],
+          transmission_time: h["paypal-transmission-time"],
+          webhook_id: webhookId,
+          webhook_event: corps,
+        }),
+      });
+      verif = await r.json();
+    } catch (e) { verif = null; }
+    if (!verif || verif.verification_status !== "SUCCESS") {
+      res.status(401).send("signature refusee"); return;
+    }
+
+    const type = String(corps.event_type || "");
+    const ress = corps.resource || {};
+    // L'ADRESSE DU PAYEUR, d'ou qu'elle vienne. PayPal la range a trois
+    // endroits selon l'evenement ; on les essaie dans l'ordre, et si aucune
+    // n'est lisible on ne fait rien plutot que d'ecrire au hasard.
+    const mail = String(
+      (ress.subscriber && ress.subscriber.email_address) ||
+      (ress.payer && ress.payer.email_address) ||
+      (ress.payer && ress.payer.payer_info && ress.payer.payer_info.email) ||
+      (corps.summary_email || "")
+    ).toLowerCase().trim();
+    if (!mail || mail.indexOf("@") < 0) { res.status(200).send("sans adresse, rien a faire"); return; }
+    const cle = emailKey(mail);
+    const table = await chargerPlans();
+    const actuel = await lireDroits(cle);
+
+    try {
+      if (type === "BILLING.SUBSCRIPTION.ACTIVATED" || type === "PAYMENT.SALE.COMPLETED") {
+        const planId = String(ress.plan_id || (ress.billing_agreement_id ? "" : "") || "");
+        const offre = offreDuPlan(planId, table);
+        await ecrireDroits(cle, {
+          palier: offre.palier,
+          echeance: prolonger(actuel && actuel.echeance, offre.mois * MONTH_MS),
+          source: "paypal",
+          abonnement: String(ress.id || ress.billing_agreement_id || "").slice(0, 64),
+        });
+      } else if (type === "BILLING.SUBSCRIPTION.CANCELLED" || type === "BILLING.SUBSCRIPTION.EXPIRED"
+              || type === "BILLING.SUBSCRIPTION.SUSPENDED") {
+        // ⚠ ON NE COUPE PAS LE JOUR MEME. Un abonnement annule reste ouvert
+        //   jusqu'a la fin de la periode deja payee : couper a l'instant de
+        //   l'annulation, c'est reprendre un mois que la personne a regle.
+        await ecrireDroits(cle, {
+          source: "paypal_annule",
+          annuleLe: Date.now(),
+          echeance: Number((actuel && actuel.echeance) || 0) || Date.now(),
+        });
+      } else if (type === "PAYMENT.CAPTURE.COMPLETED" || type === "CHECKOUT.ORDER.APPROVED") {
+        // Un achat ponctuel (programme, revision) : le montant dit la duree,
+        // et le client la confirme ensuite par son propre appel. Ici on pose
+        // le minimum : un mois d'Ultime, prolonge si besoin par l'appel dedie.
+        await ecrireDroits(cle, {
+          palier: "ultime",
+          echeance: prolonger(actuel && actuel.echeance, MONTH_MS),
+          source: "paypal_achat",
+        });
+      }
+    } catch (e) {
+      res.status(500).send("ecriture impossible"); return;
+    }
+    res.status(200).send("ok");
+  }
+);
+
+// ══ LA MIGRATION, UNE FOIS ═══════════════════════════════════════════════
+// Elle lit ce que users/ porte aujourd'hui — status, paymentStatus,
+// accessExpiry — et ECRIT le droit correspondant dans droits/. Sans elle, le
+// jour ou les regles sont deployees, tous les comptes existants retombent au
+// palier le plus bas : ils n'ont jamais eu de ligne dans droits/.
+//
+// ⚠ ELLE NE DONNE QUE CE QUE LE DOSSIER PORTE DEJA, et jamais plus. Un dossier
+//   trafique avant ce lot garde ce qu'il s'etait donne : c'est le prix d'une
+//   bascule sans coupure, et la fraude s'arrete la — plus aucune ecriture
+//   client n'a d'effet apres.
+//
+//   `simulation: true` (defaut) ne fait que compter. Il faut la rappeler avec
+//   `simulation: false` pour ecrire quoi que ce soit.
+exports.migrerDroits = onCall(async (request) => {
+  const mail = request.auth && request.auth.token && request.auth.token.email
+    ? String(request.auth.token.email).toLowerCase() : "";
+  if (mail !== CREATOR_EMAIL) throw new HttpsError("permission-denied", "Reserve au createur.");
+  const simulation = !(request.data && request.data.simulation === false);
+  const snap = await db.ref("users").get();
+  const tous = snap.val() || {};
+  const compte = { total: 0, suivi: 0, ultime: 0, essentielle: 0, aucun: 0, coachs: 0, ecrits: 0 };
+  for (const cle of Object.keys(tous)) {
+    const u = tous[cle] || {};
+    compte.total++;
+    if (u.role === "coach") { compte.coachs++; continue; }
+    const st = String(u.status || "FREE");
+    let palier = "aucun", echeance = Number(u.accessExpiry) || 0;
+    if (st === "COACHING_SUIVI") palier = "suivi";
+    else if (st === "AUTONOMIE_PREMIUM" && u.paymentStatus === "active") palier = "essentielle";
+    if (palier !== "aucun" && echeance && echeance < Date.now()) { palier = "aucun"; }
+    compte[palier]++;
+    if (!simulation && palier !== "aucun") {
+      await ecrireDroits(cle, { palier, echeance, source: "migration" });
+      compte.ecrits++;
+    }
+  }
+  return { simulation, compte };
+});

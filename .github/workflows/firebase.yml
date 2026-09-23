@@ -16,9 +16,11 @@ on:
     branches: [main]
     paths-ignore:
       - '**.md'
-      - 'functions/**'
       - 'scripts/**'
       - 'docs/**'
+      # ⚠ 'functions/**' A QUITTE CETTE LISTE (lot 0). Les fonctions sont
+      #   desormais deployees par ce meme workflow : les ignorer aurait laisse
+      #   une correction de fonction dans le depot sans jamais la publier.
   workflow_dispatch:
 
 concurrency:
@@ -140,5 +142,17 @@ jobs:
           npm install -g firebase-tools
           printf '%s' "$CLE" > "$RUNNER_TEMP/cle.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/cle.json"
-          firebase deploy --only hosting --project repcore-sync --non-interactive
+          # ⚠ hosting ET database. Depuis le lot 0, le palier d'un athlete vit
+          #   dans droits/, dont la regle interdit toute ecriture cliente : sans
+          #   ce deploiement, le noeud n'existe pas et l'application retombe sur
+          #   l'ancien modele, celui que chacun pouvait reecrire chez lui.
+          firebase deploy --only hosting,database --project repcore-sync --non-interactive
+          # LES FONCTIONS demandent le plan Blaze. Tant que le projet est en
+          # Spark, ce deploiement echoue : on le tente, on le DIT, et on ne fait
+          # pas tomber la livraison du site pour autant.
+          if firebase deploy --only functions --project repcore-sync --non-interactive; then
+            echo "Fonctions deployees."
+          else
+            echo "::warning::Fonctions NON deployees (plan Blaze requis). droits/ reste vide et l application retombe sur l ancien modele."
+          fi
           rm -f "$RUNNER_TEMP/cle.json"

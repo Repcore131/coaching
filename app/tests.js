@@ -33392,6 +33392,83 @@ async function testExercices(){
       // BUILD 1412 — Kevin, trois captures a l'appui : « remplace-moi la version
       // des images 1 et 2 par celle de l'image 3, a l'identique, et mets les
       // fonctions visibles pour la completer ».
+      // ══ LOT 0 — LE SERVEUR DECIDE DU PALIER, PLUS LE NAVIGATEUR ════════
+      // Kevin : « j'ouvre la console, j'ecris status:'AUTONOMIE_PREMIUM' dans
+      // mon dossier, je recharge, et l'application me laisse en Essentielle ».
+      ok('LOT 0 — LE PALIER VIENT DU NOEUD droits/, ET D’UN DOSSIER TRAFIQUÉ NE VIENT RIEN',(()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        try{
+          const mail='lot0@t.fr';
+          const u={id:'L0',email:mail,role:'athlete',status:'AUTONOMIE_PREMIUM',
+            paymentStatus:'active',accessExpiry:Date.now()+30*864e5};
+          const poser=(d,vide)=>localStorage.setItem(DROITS_CLE,
+            JSON.stringify({[mail]:{d:d||null,vide:!!vide,lu:Date.now()}}));
+          // 1. LE SERVEUR A REPONDU, ET IL DIT « ESSENTIELLE ». Le dossier
+          //    annonce AUTONOMIE_PREMIUM : il n'est pas lu.
+          poser({palier:'essentielle',echeance:Date.now()+10*864e5,source:'paypal',maj:Date.now()});
+          if(palierDe(u)!=='essentielle') return _echec('le dossier a pris le dessus : '+palierDe(u));
+          if(droitsDe(u).etat!=='serveur') return _echec('l’état lu : '+droitsDe(u).etat);
+          // 2. LE SERVEUR A REPONDU, ET IL NE DIT RIEN. Le palier le plus bas,
+          //    jamais le plus haut — meme avec un dossier qui promet tout.
+          poser(null,true);
+          if(palierDe(u)!=='aucun') return _echec('un nœud vide ouvre encore : '+palierDe(u));
+          if(checkAccess(u)!==false) return _echec('l’accès reste ouvert sur un nœud vide');
+          // 3. UNE ECHEANCE DEPASSEE FERME, quoi que dise le dossier.
+          poser({palier:'ultime',echeance:Date.now()-1000,source:'paypal',maj:Date.now()});
+          if(palierDe(u)!=='aucun') return _echec('un droit expiré ouvre encore : '+palierDe(u));
+          // 4. RIEN N'A JAMAIS ETE LU : l'ancien modele decide, et lui seul —
+          //    c'est le pont, le temps que les regles soient deployees. ON NE
+          //    COUPE PERSONNE SUR UN SILENCE DU SERVEUR.
+          localStorage.removeItem(DROITS_CLE);
+          if(droitsDe(u).etat!=='inconnu') return _echec('l’état sans lecture : '+droitsDe(u).etat);
+          if(palierDe(u)!=='essentielle') return _echec('le repli hérité : '+palierDe(u));
+          if(checkAccess(u)!==true) return _echec('le repli coupe un abonné');
+          // 5. ET LE COACH PASSE TOUJOURS.
+          if(palierDe({role:'coach',email:'c@t.fr'})!=='suivi') return _echec('le coach n’est plus au palier suivi');
+          return checkAccess({role:'coach',email:'c@t.fr'})===true
+            ?true:_echec('checkAccess refuse un coach');
+        } finally {
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      okA('LOT 0 — UNE LECTURE QUI ÉCHOUE NE POSE RIEN, ET NE COUPE RIEN',async()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        const sPull=CLOUD.pullDroits;
+        try{
+          localStorage.removeItem(DROITS_CLE);
+          const u={id:'L0b',email:'lot0b@t.fr',role:'athlete',status:'COACHING_SUIVI',
+            accessExpiry:Date.now()+10*864e5};
+          // Un refus du serveur (regles pas deployees) : rien n'entre en cache.
+          CLOUD.pullDroits=async()=>({ok:false,raison:'HTTP 401'});
+          if(await rafraichirDroits(u,true)!==false) return _echec('une lecture refusée a été prise pour bonne');
+          if(droitsDe(u).etat!=='inconnu') return _echec('le cache a été écrit malgré le refus');
+          if(checkAccess(u)!==true) return _echec('un suivi valide est coupé par un refus du serveur');
+          // Et une lecture qui ABOUTIT, elle, fait foi tout de suite.
+          CLOUD.pullDroits=async()=>({ok:true,droits:{palier:'ultime',echeance:0,maj:Date.now()}});
+          if(await rafraichirDroits(u,true)!==true) return _echec('une lecture réussie est rendue fausse');
+          return palierDe(u)==='ultime'?true:_echec('le palier lu : '+palierDe(u));
+        } finally {
+          CLOUD.pullDroits=sPull;
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }});
+
+      ok('LOT 0 — LE CLIENT NE PEUT PAS ÉCRIRE DANS droits/',(()=>{
+        // La serrure est dans les regles ; ici on tient que le code ne tente
+        // meme pas de la forcer, et que la lecture passe par UNE fonction.
+        const src=_prodSrc();
+        const i=src.indexOf('pullDroits');
+        if(i<0) return _echec('la lecture des droits a disparu');
+        if(/droits\/[^']*'\s*,\s*\{\s*method\s*:\s*'(PUT|PATCH|POST)'/.test(src))
+          return _echec('le client écrit dans droits/');
+        // ET LE PALIER N'EST LU QU'A UN SEUL ENDROIT : palierDe. Deux lectures
+        // du meme droit finiraient par diverger.
+        if(typeof palierDe!=='function'||typeof droitsDe!=='function')
+          return _echec('palierDe ou droitsDe a disparu');
+        return /function checkAccess\(u\)\{[\s\S]{0,1800}droitsDe\(u\)/.test(src)
+          ?true:_echec('checkAccess ne lit pas les droits du serveur');})());
+
       ok('1412 — LES CHIFFRES DU MOIS : moyenne par jour saisi, parts des macros, jours saisis',(()=>{
         const p2=x=>(x<10?'0':'')+x;
         const d=new Date(); const ym=d.getFullYear()+'-'+p2(d.getMonth()+1);

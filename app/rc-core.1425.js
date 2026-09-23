@@ -3637,6 +3637,28 @@ const CLOUD={
   // L'AVEUGLE » dans _doPushOne) : un 401 et une coupure ne se reparent pas
   // pareil.
   _lectures:{},
+  // ══ LIRE LES DROITS (build 1425, lot 0) ═════════════════════════════════════════
+  // Le noeud droits/<cle> : le palier et son echeance, poses par le serveur.
+  // Rend {ok:true,droits} quand le serveur a repondu (droits peut etre null —
+  // « rien d'ouvert » est une reponse), {ok:false} quand on n'a pas pu lire.
+  // ⚠ LES DEUX NE SE CONFONDENT PAS : un 401 sur des regles pas encore
+  //   deployees n'est pas « cette personne n'a aucun droit ».
+  async pullDroits(email){
+    const key=String(email||'').replace(/[.]/g,',');
+    if(!key) return {ok:false,raison:'sans adresse'};
+    const base=this._fbUrl.replace('users.json','droits/'+key+'.json');
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      if(!token) return {ok:false,raison:'non authentifie'};
+      const r=await fetch(base+'?auth='+token,{signal:ctrl.signal});
+      if(!r.ok) return {ok:false,raison:'HTTP '+r.status};
+      const txt=await r.text();
+      try{ _quotaCompter('in',txt.length); }catch(e){}
+      const d=txt?JSON.parse(txt):null;
+      return {ok:true,droits:(d&&typeof d==='object')?d:null};
+    }catch(e){ return {ok:false,raison:'reseau'}; }
+  },
   async pullUser(email){
     const key=email.replace(/\./g,',');
     const base=this._fbUrl.replace('users.json','users/'+key+'.json');
@@ -4240,6 +4262,17 @@ const CLOUD={
   // Sync ciblée — coach : lui-même + ses athlètes uniquement ; athlète : lui-même + son coach
   async syncRelevantUsers(){
     if(!currentUser) return;
+    // ══ LES DROITS DESCENDENT AVEC LE RESTE (build 1425, lot 0) ═══════════════════
+    // Meme cycle que les dossiers : au demarrage, au retour au premier plan,
+    // et toutes les cinq minutes. Un palier qui change — un abonnement qui
+    // s'arrete, un code de coach qui ouvre — se voit donc sans rechargement.
+    // ⚠ ON NE BLOQUE PAS LA SYNCHRO DES DOSSIERS SUR CETTE LECTURE : elle
+    //   echoue tant que les regles ne sont pas deployees, et les dossiers,
+    //   eux, doivent continuer de descendre.
+    let _palAvant=null;
+    try{ _palAvant=palierDe(currentUser); }catch(e){}
+    try{ await rafraichirDroits(currentUser); }catch(e){}
+    try{ if(_palAvant!==null&&palierDe(currentUser)!==_palAvant) _planifierRepeint(currentUser.email); }catch(e){}
     const users=DB.get('users')||{};
     const pulls=[];
     if(currentUser.role==='coach'){
@@ -6084,6 +6117,117 @@ function routeUser(){
 // plus depuis le passage en 100 % client, et cette règle n'a jamais existé.
 // Un commentaire faux est pire qu'absent : il invite à retirer le seul garde
 // qui reste.
+// ══ LES DROITS VIENNENT DU SERVEUR (build 1425, lot 0) ═══════════════════════════════
+//
+// CE QUI CHANGE. Le palier d'un athlete ne se lit plus dans son dossier —
+// status, paymentStatus, accessExpiry — mais dans un noeud A PART, droits/,
+// que database.rules.json ouvre en LECTURE au titulaire et a son coach, et
+// qu'il ferme en ECRITURE A TOUT LE MONDE. Seules les Cloud Functions y
+// ecrivent, par l'Admin SDK, qui ne passe pas par les regles.
+//
+// POURQUOI. users/<cle> est ecrit par son titulaire, sans restriction de
+// champ : n'importe qui pouvait taper status:'AUTONOMIE_PREMIUM' dans la
+// console de son navigateur et ouvrir toutes les portes. Le fichier
+// l'assumait en commentaire depuis le 24/07/2026, faute de serveur.
+//
+// LES QUATRE PALIERS, du plus ferme au plus ouvert :
+//   'aucun'  ·  'essentielle'  ·  'ultime'  ·  'suivi'
+const PALIERS_ORDRE=Object.freeze(['aucun','essentielle','ultime','suivi']);
+const DROITS_CLE='rc_droits';
+// Une lecture reussie vaut quinze minutes : au-dela on redemande, mais on
+// continue de s'en servir tant que rien de neuf n'est arrive.
+const DROITS_FRAIS_MS=900000;
+function _droitsTous(){
+  try{ const o=JSON.parse(localStorage.getItem(DROITS_CLE)||'null');
+    return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; }
+}
+// GARDE CE QUE LE SERVEUR A DIT, avec la date de la lecture. `vide:true` est
+// une reponse a part entiere : « le serveur a repondu, et il n'y a rien ».
+function _droitsPoser(email,d,vide){
+  if(!email) return;
+  try{
+    const o=_droitsTous();
+    o[String(email).toLowerCase()]={d:d||null,vide:!!vide,lu:Date.now()};
+    localStorage.setItem(DROITS_CLE,JSON.stringify(o));
+  }catch(e){}
+}
+function _droitsLus(email){
+  if(!email) return null;
+  const o=_droitsTous()[String(email).toLowerCase()];
+  return (o&&typeof o==='object')?o:null;
+}
+// ⚠ ON NE PURGE PAS LES DROITS D'UN AUTRE COMPTE : chaque adresse a sa ligne,
+//   et un appareil partage garde celle de chacun. Ce qui part a la
+//   deconnexion, c'est la session, pas la memoire de ce que le serveur a dit.
+//
+// PURE. Le droit connu pour ce dossier, et D'OU IL VIENT :
+//   'serveur'  le noeud a ete lu, il existe
+//   'absent'   le noeud a ete lu, il est vide (personne n'a rien ouvert)
+//   'inconnu'  on n'a jamais reussi a le lire (regles pas deployees, hors
+//              ligne, premiere ouverture) — c'est le seul cas ou l'ancien
+//              modele sert encore de repli
+function droitsDe(u){
+  const e=(u&&u.email)||'';
+  const o=_droitsLus(e);
+  if(!o) return {etat:'inconnu',palier:null,echeance:0,source:null,maj:0};
+  if(o.vide||!o.d) return {etat:'absent',palier:'aucun',echeance:0,source:null,maj:0,lu:o.lu};
+  const d=o.d||{};
+  const p=PALIERS_ORDRE.indexOf(String(d.palier))>0?String(d.palier):'aucun';
+  return {etat:'serveur',palier:p,echeance:Number(d.echeance)||0,
+    source:d.source||null,maj:Number(d.maj)||0,lu:o.lu,
+    essaiOuvertLe:Number(d.essaiOuvertLe)||0,essaiFinit:Number(d.essaiFinit)||0};
+}
+// ⚠ LE REPLI EST LE PALIER LE PLUS BAS QUI NE CASSE RIEN, JAMAIS LE PLUS HAUT.
+//   Un droit qu'on ne sait pas lire n'est pas un droit acquis. La seule chose
+//   qu'on n'ose pas faire, c'est couper quelqu'un en pleine seance parce qu'un
+//   serveur n'a pas repondu : tant qu'aucune lecture n'a abouti sur cet
+//   appareil, l'ancien modele continue de decider (etat 'inconnu'), et il
+//   cesse de le faire des la premiere reponse du serveur.
+//
+// PURE (elle ne lit que le dossier et le cache local).
+function palierDe(u){
+  if(!u) return 'aucun';
+  if(u.role==='coach') return 'suivi';
+  const d=droitsDe(u);
+  if(d.etat==='serveur'){
+    if(d.echeance>0&&Date.now()>=d.echeance) return 'aucun';
+    return d.palier;
+  }
+  if(d.etat==='absent') return 'aucun';
+  return _palierHerite(u);
+}
+// L'ANCIEN MODELE, ET IL EST EN SURSIS. Il ne sert que tant que droits/ n'a
+// jamais repondu sur cet appareil — le temps que les regles soient deployees
+// et que la migration ait tourne. Il disparaitra quand plus personne ne
+// dependra de lui.
+function _palierHerite(u){
+  const s=String((u&&u.status)||'FREE');
+  const ech=Number(u&&u.accessExpiry)||0;
+  if(ech>0&&Date.now()>=ech) return 'aucun';
+  if(s==='COACHING_SUIVI') return 'suivi';
+  if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active') return 'essentielle';
+  return 'aucun';
+}
+// PURE. L'echeance connue, pour l'affichage — 0 quand il n'y en a pas.
+function echeanceDe(u){
+  const d=droitsDe(u);
+  if(d.etat==='serveur') return d.echeance;
+  return Number(u&&u.accessExpiry)||0;
+}
+// LIT droits/ AU SERVEUR et le garde. Rend true si la lecture a abouti (meme
+// vide), false sinon — un appel qui echoue ne change RIEN au cache.
+async function rafraichirDroits(u,force){
+  const cible=u||currentUser;
+  const mail=(cible&&cible.email)||'';
+  if(!mail||(cible&&cible.role==='coach')) return false;
+  const o=_droitsLus(mail);
+  if(!force&&o&&(Date.now()-Number(o.lu||0))<DROITS_FRAIS_MS) return true;
+  let r=null;
+  try{ r=await CLOUD.pullDroits(mail); }catch(e){ r=null; }
+  if(!r||!r.ok) return false;
+  _droitsPoser(mail,r.droits,!r.droits);
+  return true;
+}
 function checkAccess(u){
   if(!u||u.role==='coach') return true;
   const s=u.status||'FREE';
@@ -6095,6 +6239,21 @@ function checkAccess(u){
   // FREE + essai en cours = acces. FREE + essai epuise = le paywall, comme
   // avant. FREE sans essai du tout = comme avant, inchange : les comptes
   // anterieurs a ce lot ne se voient pas ouvrir un essai retroactif.
+  // ══ LE SERVEUR D'ABORD (build 1425, lot 0) ══════════════════════════════════════
+  // Un droit pose par le serveur ouvre la porte, quoi que dise le dossier ;
+  // un droit expire la ferme, quoi que dise le dossier. L'essai reste lu ici
+  // aussi : il n'ouvre rien d'autre qu'une porte, et c'est la meme porte.
+  const d=droitsDe(u);
+  if(d.etat==='serveur'){
+    const p=palierDe(u);
+    if(p!=='aucun') return true;
+    return essaiActif(u);
+  }
+  if(d.etat==='absent') return essaiActif(u);
+  // ETAT 'inconnu' : droits/ n'a jamais repondu sur cet appareil — regles pas
+  // encore deployees, hors ligne, ou premiere ouverture. L'ancien modele
+  // decide, exactement comme avant ce lot. ON NE COUPE PERSONNE SUR UN
+  // SILENCE DU SERVEUR.
   if(s==='FREE') return essaiActif(u);
   if(s==='COACHING_SUIVI'){
     if(!u.accessExpiry) return true;

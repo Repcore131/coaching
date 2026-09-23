@@ -190,6 +190,36 @@
   // athlete voit doit etre celui que le coach a pose. Sans noeud public, le
   // prix ne pourrait vivre que dans le code, et le modifier demanderait un
   // deploiement.
+  // ══ LES DROITS, ET C EST LE SERVEUR QUI LES POSE ════════════════════
+  //
+  // Jusqu ici, le palier d un athlete vivait dans users/<sa cle> : status,
+  // paymentStatus, accessExpiry. La regle d ecriture de users/ accorde le
+  // noeud ENTIER a son titulaire : n importe qui pouvait donc ecrire
+  // status:"AUTONOMIE_PREMIUM" depuis la console de son navigateur et ouvrir
+  // toutes les portes. Le code l assumait en commentaire, faute de serveur.
+  //
+  // CE NOEUD RENVERSE LA CHARGE : il est LU par le titulaire et par son coach
+  // designe, et ECRIT PAR PERSONNE. ".write": false vaut pour tout le monde,
+  // y compris le titulaire ; seul l Admin SDK (Cloud Functions) le traverse,
+  // parce qu il ne passe pas par les regles. Un paiement PayPal, un code de
+  // coach valide, l ouverture d un essai : trois fonctions, trois ecritures,
+  // aucune main d utilisateur.
+  //
+  // CONTENU : {palier, echeance, essaiOuvertLe, essaiFinit, source, maj}.
+  //   palier   'aucun' | 'essentielle' | 'ultime' | 'suivi'
+  //   echeance horodatage de fin, 0 ou absent = sans fin
+  //   source   d ou vient ce droit (paypal, code_coach, essai, migration…)
+  //
+  // LA LECTURE PAR LE COACH est necessaire : sa fiche athlete dit ce que son
+  // eleve peut faire, et elle doit le dire juste. Elle passe par le meme
+  // test que users/ : le dossier de l athlete designe ce coach.
+  "droits": {
+    "$emailKey": {
+      ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  root.child('users').child($emailKey).child('coachEmailKey').val() === auth.token.email.replace('.', ',')\n)",
+      ".write": false
+    }
+  },
+
   "boutique": {
     ".read": "auth != null",
     ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
