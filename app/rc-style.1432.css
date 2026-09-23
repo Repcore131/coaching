@@ -8892,3 +8892,19 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   .wel-cartes,.wel-diff,.wel-chiffres{grid-template-columns:1fr 1fr}
   .wel-portes{max-width:560px}
 }
+
+/* ══ LE VERROU, ET SA PHRASE QUI VEND (lot 4) ═══════════════════════════════
+   Le meme bloc partout : un ecran ferme se reconnait au premier coup d'oeil,
+   et ce qu'il propose se lit au second. Le filet rouge a gauche est celui des
+   encarts de l'application, pas une couleur neuve. */
+.vrr{background:var(--surface-1);border:1px solid var(--border);
+  border-left:3px solid var(--red);border-radius:var(--r-3);
+  padding:14px 15px;margin:0 0 14px}
+.vrr-t{font-size:var(--fs-sm);color:var(--text);line-height:1.65}
+.vrr-p{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:7px}
+.vrr-b{display:inline-flex;align-items:center;justify-content:center;
+  margin-top:12px;min-height:44px;padding:0 18px;background:var(--red);
+  color:#fff;border:none;border-radius:var(--r-3);font-family:Montserrat,sans-serif;
+  font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;
+  text-decoration:none;cursor:pointer}
+.vrr-b:active{transform:translateY(1px)}

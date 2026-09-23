@@ -15350,12 +15350,17 @@ async function testExercices(){
           for(const m of ['onchange=','oninput=','contenteditable'])
             if(src.indexOf(m)>=0) return _echec('la vue porte une édition : '+m);
           // Un seul onclick dans la vue : aucun. L'export est dans la topbar.
+          //
+          // ⚠ AU LOT 4, L'ECRAN S'OUVRE POUR TOUT LE MONDE ET LE VERROU PARLE
+          //   DEDANS : un ecran qu'on n'atteint pas ne vend rien. Ce qui reste
+          //   garde, c'est le SUJET — jamais le dossier d'un autre — et la
+          //   grille elle-meme, que rcVerrou remplace tant qu'Ultime manque.
           const g=String(ouvrirGrilleCharge);
           if(g.indexOf("role==='coach'")<0) return _echec('ouvrirGrilleCharge ne regarde plus le rôle');
           if(g.indexOf('_gcAthlete=currentUser')<0)
             return _echec('un non-coach pourrait viser le dossier d\'un autre');
-          return g.indexOf("peut(currentUser,'planification')")>=0
-            ?true:_echec('la grille s\'ouvre sans qu\'Ultime soit demandé');})());
+          return String(_rendreGrilleCharge).indexOf("rcVerrou('planification')")>=0
+            ?true:_echec('la grille se dessine sans qu\'Ultime soit demandé');})());
         // ── Substitution lot 1 : le bouton ───────────────────────────────
         (()=>{
         const _woAv=(typeof woState!=='undefined')?woState:undefined;
@@ -32911,6 +32916,12 @@ async function testExercices(){
         const j=Date.now();
         return {id:'R1407',email:'r1407@t.fr',role:'athlete',gender:'F',fname:'Rita',lname:'T',
           birthdate:'1994-04-04','init-age':32,createdAt:j-200*864e5,
+          // LOT 4 — RITA EST SUIVIE PAR UN COACH, et son dossier le dit
+          // maintenant. Il portait deja les compléments poses par son coach et
+          // une video avec retour : c'etait un dossier de suivi sans l'ecrire.
+          // Depuis que les ecrans demandent la formule, l'ecrire n'est plus
+          // facultatif — sans quoi ces tests mesurent un verrou, pas un rendu.
+          status:'COACHING_SUIVI',coachEmailKey:'coach@t,fr',coachId:'C1407',
           consent:{health:true,policyVersion:POLICY_VERSION,date:j-200*864e5},
           sessions_config:['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche']
             .map((d,i)=>({day:d,name:i===0?'PUSH':'',active:i===0,notes:'',
@@ -33092,11 +33103,21 @@ async function testExercices(){
             wo.classList.remove('active');
           }
           // 3 — UN CHAMP AU FOCUS : la saisie passe avant le rafraîchissement.
+          //
+          // ⚠ LE BLOC D'ENVOI EST REMIS VISIBLE D'ABORD (lot 4). loadVideos le
+          //   masque quand le dossier n'a pas de coach, et un test precedent a
+          //   pu le laisser ainsi : un champ dans un bloc masque ne prend pas
+          //   le focus, et ce test-ci mesure la garde du repeint, pas le
+          //   verrou. Rita, elle, est suivie : chez elle le bloc est visible.
+          const env=document.getElementById('vid-envoi');
+          const svEnv=env?env.style.display:'';
+          if(env) env.style.display='';
           const ch=document.getElementById('vid-name-input');
           if(!ch) return _echec('le champ de nom de vidéo a disparu');
           ch.focus();
           const bloque=_ecranAthleteRepeignable('s-videos')===null;
           ch.blur();
+          if(env) env.style.display=svEnv;
           if(!bloque) return _echec('le repeint écrase une saisie en cours');
           // 4 — UN COACH n'a pas ces ecrans.
           currentUser={email:'c1407@t.fr',role:'coach',id:'C1407'};
@@ -33569,10 +33590,14 @@ async function testExercices(){
             return _echec('l’écran garde la mise en page du coach');
           // ET ELLE EST MODIFIABLE SUR SON PROPRE BLOC, pas ailleurs.
           if(!_gcModifiable()) return _echec('il ne peut pas périodiser son propre bloc');
-          // ESSENTIELLE NE L'OUVRE PAS, et le message dit ce qui reste possible.
+          // ESSENTIELLE L'OUVRE AUSSI DEPUIS LE LOT 4, et y lit le verrou :
+          // ce qui est fermé, ce qui reste possible, et le prix d'Ultime.
           localStorage.setItem(DROITS_CLE,JSON.stringify(
             {[mail]:{d:{palier:'essentielle',echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
-          if(ouvrirGrilleCharge()!==false) return _echec('Essentielle ouvre la charge du bloc');
+          if(ouvrirGrilleCharge()!==true) return _echec('Essentielle n’atteint plus l’écran');
+          const _gc=document.getElementById('gc-contenu');
+          if(!_gc||!_gc.querySelector('.vrr')) return _echec('Essentielle ne voit pas le verrou');
+          if(!/Ultime/.test(_gc.textContent)) return _echec('le verrou ne nomme pas Ultime');
           return true;
         } finally {
           currentUser=sv;
@@ -33605,9 +33630,15 @@ async function testExercices(){
           // ULTIME LES OUVRE PAR SA CAPACITE, sans rien heriter.
           poser('ultime');
           if(!peutVoirProtocoles(neuf)) return _echec('Ultime n’ouvre pas les protocoles');
-          // ET LA FONCTION QUI OUVRE L'ECRAN POSE LA QUESTION.
-          return /peutVoirProtocoles\(\)/.test(String(ouvrirProtocoles))
-            ?true:_echec('ouvrirProtocoles n’interroge pas le droit');
+          // ET LA QUESTION SE POSE DANS L'ECRAN (lot 4) : il s'ouvre pour tout
+          // le monde, et c'est le verrou qui distingue, en respectant l'héritage.
+          if(String(_pfRendre).indexOf("rcVerrou('bibliothequeProtocoles')")<0)
+            return _echec('l’écran des protocoles n’interroge pas le droit');
+          poser('essentielle');
+          if(rcVerrou('bibliothequeProtocoles',vieux)!==null)
+            return _echec('un compte existant se voit verrouiller les protocoles');
+          return rcVerrou('bibliothequeProtocoles',neuf)
+            ?true:_echec('un compte neuf en Essentielle ne voit aucun verrou');
         } finally {
           if(sauve==null) localStorage.removeItem(DROITS_CLE);
           else localStorage.setItem(DROITS_CLE,sauve);
@@ -33637,6 +33668,143 @@ async function testExercices(){
         if(sm.indexOf('ouvrirMesExercices()')<0) return _echec('aucune porte dans « Mes séances »');
         return /programmeRecu/.test(sm)
           ?true:_echec('la porte ne demande pas le suivi');})());
+
+      // ══ LOT 4 — LE VERROU, ET SA PHRASE QUI VEND ═══════════════════════
+      ok('LOT 4 — CHAQUE VERROU DIT CE QUI EST FERMÉ ET CE QUI RESTE POSSIBLE',(()=>{
+        const cles=Object.keys(VERROUS);
+        if(cles.length<10) return _echec(cles.length+' capacités verrouillables seulement');
+        for(const c of cles){
+          const v=VERROUS[c];
+          if(!CAPACITES[c]) return _echec(c+' n’est pas une capacité connue');
+          if(v.vers!=='ultime'&&v.vers!=='coaching') return _echec(c+' : voie inconnue « '+v.vers+' »');
+          const h=rcVerrouBloc(c);
+          if(!h) return _echec(c+' ne rend aucun bloc');
+          const d=document.createElement('div'); d.innerHTML=h;
+          const txt=d.textContent;
+          // LES DEUX MOITIES SONT LA : ce qui ferme, et ce qui reste ouvert.
+          if(txt.indexOf(v.ferme)<0) return _echec(c+' : ce qui est fermé ne se lit pas');
+          if(txt.indexOf(v.ouvert)<0) return _echec(c+' : ce qui reste possible ne se lit pas');
+          // DEUX FORMULATIONS, ET DEUX SEULEMENT.
+          const attendu=v.vers==='ultime'
+            ?(v.ferme+' fait partie d’Ultime. '+v.ouvert)
+            :(v.ferme+', c’est avec un coach. '+v.ouvert);
+          const lu=(d.querySelector('.vrr-t')||{}).textContent||'';
+          if(lu!==attendu) return _echec(c+' écrit sa propre phrase : « '+lu+' »');
+          // UN GESTE, ET UN SEUL, qui mène là où il dit.
+          const b=d.querySelectorAll('.vrr-b');
+          if(b.length!==1) return _echec(c+' : '+b.length+' boutons');
+          if(v.vers==='coaching'){
+            if(b[0].getAttribute('href')!=='https://beacons.ai/kevin.gllc')
+              return _echec(c+' ne mène pas à la page de coaching');
+            if(b[0].getAttribute('target')!=='_blank'||!/noopener/.test(b[0].getAttribute('rel')||''))
+              return _echec(c+' ouvre le lien sans précaution');
+          } else {
+            if((b[0].getAttribute('onclick')||'').indexOf('rcVerrouUltime()')<0)
+              return _echec(c+' ne mène pas à Ultime');
+            // LES CHIFFRES VENDENT, et ils viennent de la table des offres.
+            const p=(d.querySelector('.vrr-p')||{}).textContent||'';
+            if(p.indexOf(prixMoisAnnuel('ultime'))<0||p.indexOf(prixOffre('ultime'))<0)
+              return _echec(c+' : le prix d’Ultime ne se lit pas');
+          }
+          // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
+          if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0)
+            return _echec(c+' porte un tiret cadratin');
+          for(const mot of ['palier','quota','capacité','synchronisation'])
+            if(new RegExp(mot,'i').test(txt)) return _echec(c+' dit « '+mot+' »');
+        }
+        return true;})());
+
+      ok('LOT 4 — rcVerrou REND null QUAND C’EST OUVERT, ET LE BLOC QUAND C’EST FERMÉ',(()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        try{
+          const mail='lot4@t.fr';
+          const u={id:'L4',email:mail,role:'athlete',createdAt:Date.now()};
+          const poser=p=>localStorage.setItem(DROITS_CLE,JSON.stringify(
+            {[mail]:{d:{palier:p,echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
+          poser('essentielle');
+          for(const c of ['volume','perfs1rm','bibliothequeExercices','planification','dieteCalculee','complements','rapport'])
+            if(!rcVerrou(c,u)) return _echec('Essentielle passe sur '+c);
+          poser('ultime');
+          for(const c of ['volume','perfs1rm','bibliothequeExercices','planification','dieteCalculee','complements','rapport'])
+            if(rcVerrou(c,u)!==null) return _echec('Ultime est verrouillée sur '+c);
+          for(const c of ['correctionVideo','canal','chargesArticulaires'])
+            if(!rcVerrou(c,u)) return _echec('Ultime passe sur '+c+', qui demande un coach');
+          poser('suivi');
+          for(const c of ['correctionVideo','canal','chargesArticulaires'])
+            if(rcVerrou(c,u)!==null) return _echec('le suivi est verrouillé sur '+c);
+          // UN COACH NE VOIT JAMAIS DE VERROU : il travaille avec ces outils.
+          for(const c of Object.keys(VERROUS))
+            if(rcVerrou(c,{role:'coach',email:'c@t.fr'})!==null) return _echec('un coach voit le verrou de '+c);
+          // UNE CAPACITE SANS PHRASE NE VERROUILLE RIEN : on n’invente pas un
+          // mur sans savoir quoi proposer derrière.
+          return rcVerrou('seance',u)===null&&rcVerrou('capaciteInconnue',u)===null
+            ?true:_echec('une capacité sans phrase verrouille quand même');
+        } finally {
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      ok('LOT 4 — LES ÉCRANS FERMÉS S’AFFICHENT, ET AUCUN NE POSE DE FENÊTRE',(()=>{
+        // LE VERROU VIT DANS LE RENDU DE CHAQUE ECRAN, jamais dans une modale
+        // ni dans une page d'erreur : l'ecran garde sa barre, son titre et ses
+        // onglets, et seule la section fermee change.
+        const attendus=[
+          [showProgressTab,'volume'],[showProgressTab,'perfs1rm'],
+          [renderProgEx,'bibliothequeExercices'],[_bqRendre,'bibliothequeExercices'],
+          [_rendreGrilleCharge,'planification'],[renderPlanCoach,'dieteCalculee'],
+          [_prepRendre,'dieteCalculee'],[_renderSupplements,'complements'],
+          [rapRendre,'rapport'],[loadVideos,'correctionVideo'],
+          [renderCharges,'chargesArticulaires'],[_pfRendre,'bibliothequeProtocoles']];
+        for(const [f,c] of attendus){
+          const s=String(f);
+          if(s.indexOf("rcVerrou('"+c+"')")<0&&s.indexOf("rcVerrou(tab==='volume'?'volume'")<0)
+            return _echec(f.name+' ne pose pas le verrou de '+c);
+        }
+        // LE CANAL AUSSI, par le bloc direct : sa porte tient au coach du
+        // dossier, pas à la capacité seule.
+        if(String(loadCanal).indexOf("rcVerrouBloc('canal')")<0)
+          return _echec('le canal ne pose pas son verrou');
+        // ET LA MODALE DU CANAL A DISPARU.
+        if(typeof window._canalPorteFermee==='function')
+          return _echec('la fenêtre « canal réservé » existe encore');
+        if(/modal-overlay/.test(String(rcVerrouBloc)+String(rcVerrou)))
+          return _echec('le verrou ouvre une fenêtre');
+        // AUCUN ECRAN NE SE CONTENTE D'UN TOAST : un message qui s'efface au
+        // bout de trois secondes ne dit ni ce qui est fermé ni ce qu'on peut
+        // faire, et ne laisse aucun bouton.
+        for(const f of [ouvrirGrilleCharge,ouvrirProtocoles])
+          if(/Réservé aux coachs|fait partie d’Ultime/.test(String(f)))
+            return _echec(f.name+' répond encore par un message qui s’efface');
+        return true;})());
+
+      ok('LOT 4 — L’ÉCRAN D’ÉVOLUTION GARDE SES ONGLETS, ET SEULE LA VUE FERMÉE CHANGE',(()=>{
+        const sv=currentUser, svD=localStorage.getItem(DROITS_CLE);
+        const act=[...document.querySelectorAll('.screen.active')].map(e=>e.id);
+        try{
+          const mail='lot4b@t.fr';
+          localStorage.setItem(DROITS_CLE,JSON.stringify(
+            {[mail]:{d:{palier:'essentielle',echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
+          currentUser={id:'L4B',email:mail,role:'athlete',createdAt:Date.now(),
+            sessions:[],bilans:[],weightLog:[],sessions_config:[]};
+          document.querySelectorAll('.screen.active').forEach(e=>e.classList.remove('active'));
+          document.getElementById('s-progress').classList.add('active');
+          showProgressTab('volume',null,true);
+          const c=document.getElementById('progress-content');
+          if(!c.querySelector('.vrr')) return _echec('l’onglet Volume ne porte pas le verrou');
+          // LES ONGLETS RESTENT TOUS LA : on ne retire pas ce qu’on veut vendre.
+          const n=document.querySelectorAll('#prog-tabs button').length;
+          if(n!==7) return _echec(n+' onglets au lieu de 7');
+          // ET UN ONGLET VERROUILLE N’EST PAS UN ONGLET VIDE.
+          if(_progOngletVide('volume',currentUser)) return _echec('l’onglet verrouillé est annoncé vide');
+          showProgressTab('poids',null,true);
+          return c.querySelector('.vrr')?_echec('le verrou déborde sur l’onglet Poids'):true;
+        } finally {
+          currentUser=sv;
+          if(svD==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,svD);
+          document.querySelectorAll('.screen.active').forEach(e=>e.classList.remove('active'));
+          act.forEach(id=>{ const e=document.getElementById(id); if(e) e.classList.add('active'); });
+        }})());
 
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
@@ -44962,8 +45130,15 @@ async function testExercices(){
     // bloc. Chaque bouton est vérifié jusqu'au bout : un bouton qui aboutit à
     // un toast « rien à faire » serait un cul-de-sac de plus.
 
+    // ⚠ UN COMPTE NEUF PORTE SON ESSAI, et ce decor l'ecrit depuis le lot 4.
+    //   L'inscription sans code coach appelle essaiOuvrir (une seule branche
+    //   dans tout le fichier) : un dossier neuf SANS essai n'existe pas dans
+    //   la vraie vie. Tant que les ecrans ne demandaient rien, l'oubli ne se
+    //   voyait pas ; depuis que l'essai vaut Ultime, il decidait de ce que
+    //   Nina voit — et ces tests-la parlent d'etats vides, pas de verrous.
     const _r13Neuf=()=>({id:'r13',email:'r13@t.fr',fname:'Nina',lname:'Neuve',role:'athlete',exAlias:{},exMuscles:{},
       sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],nutrition:{},
+      essai:{ouvertLe:Date.now(),seancesAuDebut:0},
       consent:{health:true,policyVersion:POLICY_VERSION}});
     const _r13Lire=z=>{
       const e=z&&z.querySelector('.empty-state'); if(!e) return null;
@@ -45039,6 +45214,18 @@ async function testExercices(){
         if(actif()!=='s-client-home') return _echec('la pesée mène à '+actif());
         const f=document.activeElement&&document.activeElement.id;
         if(f!=='pesee-input'&&f!=='pdj-poids') return _echec('le doigt n’est pas sur le champ de poids : '+f);
+        // ⚠ LOT 4 — UN COMPTE NEUF NE VOIT PLUS L'ENVOI : la correction de
+        //   mouvement se fait avec un coach, et l'ecran le dit au lieu de
+        //   proposer un envoi qui n'irait a personne. Le geste qui aboutit est
+        //   donc le bouton des formules de coaching.
+        loadVideos();
+        const _vl=document.getElementById('vid-list');
+        if(!_vl||_vl.querySelectorAll('.vrr-b').length!==1)
+          return _echec('le compte neuf ne se voit rien proposer sur les vidéos');
+        if(document.getElementById('vid-envoi').style.display!=='none')
+          return _echec('l’envoi reste offert à un compte sans coach');
+        // ET L'ATHLETE SUIVIE, ELLE, TOMBE BIEN SUR LE BOUTON D'ENVOI.
+        currentUser=Object.assign(_r13Neuf(),{status:'COACHING_SUIVI',coachEmailKey:'c@t,fr'});
         loadVideos();
         // R17 — le geste mène au bouton « Choisir une vidéo », le lien est replié.
         _focusEnvoiVideo();
