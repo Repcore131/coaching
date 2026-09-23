@@ -1293,63 +1293,90 @@ const PROMESSE_COACH='Gratuit pour votre premier client, sans limite de durée, 
 // Trois est le nombre : assez pour qu'une progression commence a se voir,
 // assez peu pour que l'essai ne remplace pas l'abonnement. Il se change ici,
 // en un endroit, et la phrase suit — voir PROMESSE_ATHLETE.
-const ESSAI_SEANCES=3;
-// ⚠ AUCUN CONTROLE SERVEUR, ET ON NE FAIT PAS SEMBLANT.
+// ⚠ TROIS SEANCES SONT DEVENUES UN MOIS (lot 6), et la trace reste ici.
 //
-// Meme arbitrage que status / paymentStatus, assume le 24/07/2026 et rappele
-// juste au-dessus de checkAccess : sous users/$emailKey, database.rules.json
-// accorde l'ecriture au titulaire SANS restriction de champ. N'importe qui
-// peut donc remettre `essai.seancesAuDebut` a la valeur de son choix depuis la
-// console de son navigateur et recommencer un essai, indefiniment.
+// ESSAI_SEANCES=3 comptait des SEANCES, parce que le jour ne se tenait nulle
+// part : l'horloge du telephone se change en trois secondes dans les reglages,
+// et « trois seances » etait la seule limite qu'un dossier local savait tenir.
+// Le lot 0 a change cela — l'echeance est posee par le serveur dans droits/,
+// et c'est elle qui decide des qu'elle existe.
 //
-// CE N'EST PAS UN OUBLI, C'EST LA LIMITE DU PLAN SPARK — aucune fonction
-// serveur, donc aucun endroit ou poser un compteur que l'utilisateur ne
-// controle pas. La seule barriere est l'interface, exactement comme pour
-// l'abonnement lui-meme.
+// UN MOIS COMPLET, ET COMPLET VEUT DIRE ULTIME. On ne convertit personne en
+// lui montrant une version amputee : pendant l'essai, tout ce qu'Ultime ouvre
+// est ouvert. Ce qu'un coach fait reste a un coach.
+const ESSAI_JOURS=30;
+// ⚠ CE QUE LE CLIENT TIENT, ET CE QU'IL NE TIENT PAS.
 //
-// Ce qui change quand meme quelque chose : l'essai est adosse a `sessions`,
-// qui est aussi ce que le COACH lit. Un athlete qui trafique son compteur se
-// voit sur la fiche de son coach.
-//
-// Condition de reouverture : passage au plan Blaze.
+// Tant que les fonctions ne tournent pas (plan Spark), l'essai est garde par
+// le dossier : `essai.ouvertLe` et `essai.finit`. Les deux se reecrivent
+// depuis la console d'un navigateur, et on ne fait pas semblant du contraire.
+// La barriere reelle arrive avec `ouvrirEssai` (functions/index.js), qui pose
+// l'echeance dans droits/ — noeud en ecriture interdite pour tout le monde.
+// essaiFin lit le serveur D'ABORD : le jour ou la fonction tourne, le dossier
+// ne decide plus de rien, sans qu'une ligne d'interface change.
 
 // LA phrase, ecrite une fois, sur le modele de PROMESSE_COACH. Elle dit CE QUE
-// L'ESSAI FAIT, et rien de plus : trois seances, pas de carte, puis
-// l'abonnement. Elle ne promet ni duree, ni gratuite au-dela, ni
-// renouvellement — une limitation annoncee comme un avantage devient une
-// promesse dont on ne revient pas.
-const PROMESSE_ATHLETE='Tes '+ESSAI_SEANCES+' premières séances sont libres, '
-  +'sans carte bancaire. L\'abonnement ne vient qu\'ensuite.';
+// L'ESSAI FAIT, et rien de plus : un mois, tout ouvert, pas de carte, puis on
+// choisit. Elle ne promet ni renouvellement, ni gratuite au-dela.
+const PROMESSE_ATHLETE='Ton premier mois est complet, sans carte bancaire. '
+  +'Tu choisis ensuite.';
 // ECRIT. Ouvre l'essai, UNE SEULE FOIS DANS LA VIE DU COMPTE.
 //
-// `seancesAuDebut` plutot qu'un simple compteur a rebours : l'essai se lit
-// alors dans `sessions`, la donnee deja enregistree, et aucun second compteur
-// ne peut diverger d'elle. Il vaut 0 sur un compte neuf — le seul cas ou cette
-// fonction est appelee — mais le poser explicitement rend la lecture juste si
-// l'essai devait un jour s'ouvrir sur un dossier deja garni.
+// `finit` est pose EN MEME TEMPS QUE `ouvertLe` : une duree qu'on recalcule a
+// chaque lecture derive au premier changement de constante, et deux dossiers
+// ouverts le meme jour n'auraient pas la meme fin. Le serveur, lui, posera la
+// sienne dans droits/, et c'est elle qui l'emportera.
 function essaiOuvrir(u){
   if(!u||u.role==='coach') return false;
-  if(u.essai&&typeof u.essai==='object') return false;   // deja ouvert, ou deja epuise
-  u.essai={ouvertLe:Date.now(),seancesAuDebut:((u.sessions)||[]).length};
+  if(u.essai&&typeof u.essai==='object') return false;   // deja ouvert, ou deja fini
+  const t=Date.now();
+  u.essai={ouvertLe:t,finit:t+ESSAI_JOURS*86400000};
+  // LE SERVEUR EST PREVENU, SANS QU'ON L'ATTENDE. S'il repond, son echeance
+  // prend la main a la premiere lecture de droits/. S'il ne repond pas — plan
+  // Spark, hors ligne, fonction absente — l'essai s'ouvre quand meme : un
+  // compte neuf ne doit pas rester dehors parce qu'un serveur n'a rien dit.
+  try{ if(CLOUD&&CLOUD._callFn) CLOUD._callFn('ouvrirEssai',{jours:ESSAI_JOURS}).catch(()=>{}); }catch(e){}
   return true;
 }
-// PURE. Les seances faites DEPUIS l'ouverture de l'essai.
-function essaiSeancesFaites(u){
-  const e=u&&u.essai;
-  if(!e||typeof e!=='object') return 0;
-  const n=((u.sessions)||[]).length-(Number(e.seancesAuDebut)||0);
-  return Math.max(0,n);
+// PURE. La fin de l'essai, en millisecondes, ou 0 quand il n'y en a pas.
+//
+// L'ORDRE COMPTE : le serveur, puis la date ecrite a l'ouverture, puis la
+// duree recalculee depuis `ouvertLe` — ce dernier repli sert aux dossiers
+// ouverts AVANT ce lot, qui portent `seancesAuDebut` et aucune fin.
+function essaiFin(u){
+  if(!u||!u.essai||typeof u.essai!=='object') return 0;
+  try{
+    const d=droitsDe(u);
+    if(d.etat==='serveur'&&d.essaiFinit>0) return d.essaiFinit;
+  }catch(e){}
+  const f=Number(u.essai.finit)||0;
+  if(f>0) return f;
+  const o=Number(u.essai.ouvertLe)||0;
+  return o?(o+ESSAI_JOURS*86400000):0;
 }
-// PURE. Ce qu'il reste, ou NULL quand il n'y a pas d'essai du tout — les deux
-// ne se confondent pas : zero veut dire « epuise », null veut dire « ce compte
-// n'en a jamais eu », et le second ne doit rien afficher.
-function essaiRestant(u){
-  if(!u||!u.essai||typeof u.essai!=='object') return null;
-  return Math.max(0,ESSAI_SEANCES-essaiSeancesFaites(u));
+// PURE. Les jours qu'il reste, arrondis au jour entamé, ou NULL quand ce
+// compte n'a jamais eu d'essai — zero veut dire « fini », null veut dire
+// « il n'y en a jamais eu », et le second ne doit rien afficher.
+function essaiJoursRestants(u){
+  const f=essaiFin(u);
+  if(!f) return null;
+  return Math.max(0,Math.ceil((f-Date.now())/86400000));
+}
+// PURE. Le numero du jour en cours dans le mois : 1 le premier jour.
+function essaiJour(u){
+  const f=essaiFin(u);
+  if(!f) return 0;
+  return Math.max(1,ESSAI_JOURS-(essaiJoursRestants(u)||0)+1);
 }
 function essaiActif(u){
-  const r=essaiRestant(u);
-  return r!==null&&r>0;
+  const f=essaiFin(u);
+  return f>0&&Date.now()<f;
+}
+// PURE. L'essai a existe, et il est fini. Ce n'est pas la meme chose que
+// « pas d'essai » : c'est a ceux-la, et a eux seuls, qu'on montre le bilan.
+function essaiFini(u){
+  const f=essaiFin(u);
+  return f>0&&Date.now()>=f;
 }
 // PURE. ⚠ LA QUESTION « FAUT-IL MONTRER LE PAYWALL », ECRITE UNE FOIS.
 //
@@ -1367,15 +1394,82 @@ function doitVoirLePaywall(u){
   if((u.status||'FREE')!=='FREE') return false;
   return !essaiActif(u);
 }
-// PURE. La mention discrete, et HONNETE : elle dit ce qu'il reste, pas ce
-// qu'on espere. Rend '' quand il n'y a rien a dire — pas d'essai, ou essai
-// epuise, cas ou c'est le paywall qui parle et non cette ligne.
+// PURE. OU L'ON ATTERRIT QUAND L'ACCES EST FERME (lot 6). Celui qui a vecu le
+// mois voit CE QU'IL A FAIT et ce qu'il garde ; celui qui n'a jamais eu
+// d'essai voit l'ecran de code, comme avant.
+function ecranApresEssai(u){
+  return essaiFini(u)?'s-essai-bilan':'s-client-code';
+}
+function allerApresEssai(u){
+  const id=ecranApresEssai(u);
+  go(id);
+  if(id==='s-essai-bilan'){ try{ rendreEssaiBilan(u); }catch(e){} }
+  return id;
+}
+// PURE. CE QUE LA PERSONNE A CONSTRUIT, EN CHIFFRES REELS. C'est ce qui
+// convertit : on ne montre pas une grille de tarifs, on lui montre SON
+// programme. Rien n'est efface a l'expiration, et ces chiffres restent vrais.
+function essaiBilan(u){
+  const x=u||currentUser||{};
+  const jours=Array.isArray(x.sessions_config)?x.sessions_config
+    :(x.sessions_config&&typeof x.sessions_config==='object')
+      ?Object.keys(x.sessions_config).map(k=>x.sessions_config[k]):[];
+  let seances=0,exos=0,illustres=0;
+  for(const j of jours){
+    if(!j||typeof j!=='object') continue;
+    const l=(Array.isArray(j.exercises)?j.exercises:[]).filter(e=>e&&String(e.name||'').trim());
+    if(j.active!==false&&l.length) seances++;
+    exos+=l.length;
+    for(const e of l){ try{ if(illustrationExo(e)) illustres++; }catch(err){} }
+  }
+  let semaines=0;
+  try{ const p=programmeDe(x); semaines=(p&&Number(p.semaines))||0; }catch(e){ semaines=0; }
+  return {seances:seances,exos:exos,illustres:illustres,semaines:semaines,
+    faites:((x&&x.sessions)||[]).length};
+}
+// PURE. La meme chose en une phrase, sans les zeros : « tes 4 seances, tes 23
+// exercices illustres et ta planification sur 8 semaines ».
+function essaiBilanPhrase(u){
+  const b=essaiBilan(u);
+  const m=[];
+  // « Tes 1 seance » ne se dit pas : au singulier, le possessif change avec le
+  // nombre, et le nombre disparait.
+  if(b.seances) m.push(b.seances===1?'ta séance':('tes '+b.seances+' séances'));
+  if(b.illustres) m.push(b.illustres===1?'ton exercice illustré'
+    :('tes '+b.illustres+' exercices illustrés'));
+  else if(b.exos) m.push(b.exos===1?'ton exercice':('tes '+b.exos+' exercices'));
+  if(b.semaines) m.push('ta planification sur '+b.semaines+' semaine'+(b.semaines>1?'s':''));
+  if(!m.length) return '';
+  if(m.length===1) return m[0];
+  return m.slice(0,-1).join(', ')+' et '+m[m.length-1];
+}
+// PURE. LA SEQUENCE DE RELANCE, canal principal : le bandeau dans l'app.
+//
+// ⚠ C'EST LE SEUL CANAL QUI MARCHE PARTOUT. periodicsync (sw.js) n'existe ni
+//   sur iPhone ni hors application installee, et c'est le navigateur qui
+//   decide s'il se declenche : une relance qui ne reposerait que sur lui ne
+//   toucherait pas la moitie des gens. La notification poussee et l'e-mail
+//   s'ajouteront a celui-ci, ils ne le remplaceront pas.
+//
+// ET ON NE HARCELE PAS. Le premier jour on accueille, puis on se tait jusqu'au
+// vingt-et-unieme. Un bandeau tous les jours se regarde comme un meuble.
 function texteEssaiRestant(u){
-  const r=essaiRestant(u);
-  if(r===null||r<=0) return '';
-  return r===1
-    ? 'Dernière séance libre. Ensuite, l\'abonnement ou un code de ton coach.'
-    : 'Il te reste '+r+' séances libres sur '+ESSAI_SEANCES+'.';
+  if(!essaiActif(u)) return '';
+  // LE COMPTE SUIT LE NUMERO DU JOUR, et non les jours restants : c'est la
+  // sequence ecrite par Kevin (jour 1, jour 21, jour 27), et « il te reste 9
+  // jours » au vingt-et-unieme se lit 30 moins 21. Les deux comptes different
+  // d'une unite, et c'est le sien qui s'affiche.
+  const j=essaiJour(u);
+  const n=Math.max(0,ESSAI_JOURS-j);
+  if(j<=1) return 'Tout est ouvert pendant un mois. Compose ta première séance.';
+  if(j<21) return '';
+  if(j<27) return 'Il te reste '+n+' jour'+(n>1?'s':'')+' d’accès complet.';
+  const quoi=essaiBilanPhrase(u);
+  const prix='tu les gardes avec Ultime à '+prixOffre('ultime')
+    +', ou '+prixMoisAnnuel('ultime')+' par mois en annuel.';
+  const tete=n>0?('Plus que '+n+' jour'+(n>1?'s':'')+'.'):'Dernier jour d’accès complet.';
+  return tete+(quoi?(' '+quoi.charAt(0).toUpperCase()+quoi.slice(1)+', '+prix)
+                   :(' Ton accès complet, '+prix));
 }
 const LIBRE_MAX=200;
 function _urlCoachsLibres(){
@@ -5840,7 +5934,7 @@ window.onload=()=>{
           silentLogout();
           go('s-welcome');
         } else if(doitVoirLePaywall(currentUser)){
-          go('s-client-code');
+          allerApresEssai(currentUser);
         } else if(sessionStorage.getItem('rc_paypal_return')){
           // Retour depuis redirection PayPal → remettre sur la page paiement
           sessionStorage.removeItem('rc_paypal_return');
@@ -5863,7 +5957,8 @@ window.onload=()=>{
               // déjà être parti voir les abonnements ou remplir son inscription.
               // On ne le ramène que s'il est resté sur un écran d'accès.
               const _ec=document.querySelector('.screen.active')?.id;
-              if(_ec!=='s-client-code'&&_ec!=='s-subscribe'&&_ec!=='s-register') go('s-client-code');
+              if(_ec!=='s-client-code'&&_ec!=='s-subscribe'&&_ec!=='s-register'&&_ec!=='s-essai-bilan')
+                allerApresEssai(currentUser);
               return;
             }
             if(CLOUD.canWrite()){
@@ -6348,7 +6443,7 @@ function routeUser(){
   // beau dire oui, la ligne d'au-dessus aurait detourne l'athlete vers
   // l'ecran de code avant meme qu'on la consulte : s-subscribe et s-client-code
   // ne sont presentes qu'a l'epuisement.
-  if(doitVoirLePaywall(currentUser)) return go('s-client-code');
+  if(doitVoirLePaywall(currentUser)) return allerApresEssai(currentUser);
   if(!checkAccess(currentUser)){go('s-access-gate');loadAccessGate();return;}
   // ── L'ACCUEIL DU NOUVEL INSCRIT ──────────────────────────────────────
   // ICI, et nulle part ailleurs. routeUser est le seul point qui DECIDE ou un
@@ -8959,7 +9054,7 @@ async function doRegister(){
         // s'applique tout seul. Ce chemin est celui du réinstallateur, qui n'a
         // aucune raison de ressaisir un code qu'il vient de valider.
         if(await _appliquerCodeApresInscription()) return;
-        go('s-client-code');
+        allerApresEssai(dossierExistant);
         const enAttente=localStorage.getItem('pendingCode')||window._invitationCode;
         if(enAttente){
           const inp=document.getElementById('cc-code');
@@ -9113,7 +9208,7 @@ async function doLogin(){
       if(!u) return rescueLogin(em,pw);
       synced[em]=u;DB.set('users',synced);
       currentUser=u;DB.set('session',currentUser);
-      if(doitVoirLePaywall(currentUser)){go('s-client-code');return;}
+      if(doitVoirLePaywall(currentUser)){allerApresEssai(currentUser);return;}
       return routeUser();
     }
 
@@ -9126,7 +9221,7 @@ async function doLogin(){
     currentUser=users[em];DB.set('session',currentUser);
     if(CLOUD.canWrite()) saveUser();
     if(doitVoirLePaywall(currentUser)){
-      go('s-client-code');
+      allerApresEssai(currentUser);
       return;
     }
     routeUser();
@@ -9248,7 +9343,7 @@ async function doNewPwdRecovery(){
     if(u){
       users[em]=u;DB.set('users',users);
       currentUser=u;DB.set('session',currentUser);
-      if(doitVoirLePaywall(currentUser)){go('s-client-code');return;}
+      if(doitVoirLePaywall(currentUser)){allerApresEssai(currentUser);return;}
       return routeUser();
     }
     return rescueLogin(em,pw);
@@ -57198,11 +57293,74 @@ function _rendreEssai(){
   if(!z) return;
   let t='';
   try{ t=texteEssaiRestant(currentUser); }catch(e){ t=''; }
+  // LE LIBELLE DU LIEN SUIT LE MOMENT (lot 6) : « voir l'abonnement » ne dit
+  // rien au premier jour, ou tout est ouvert et ou personne ne cherche a
+  // payer. Il ne devient une offre que quand la fin approche.
+  let lien='Voir les formules';
+  try{ const r=essaiJoursRestants(currentUser); if(r!==null&&r<=3) lien='Voir Ultime'; }catch(e){}
   z.innerHTML=t
     ? '<div class="ess-ligne"><span>'+escapeHtml(t)+'</span>'
       +'<button type="button" class="ess-lien" onclick="ouvrirAbonnementDepuisEssai()">'
-      +'Voir l\'abonnement</button></div>'
+      +escapeHtml(lien)+'</button></div>'
     : '';
+}
+// ══════ L'ECRAN DE CHOIX, AU BOUT DU MOIS (lot 6) ════════════════════════
+//
+// ⚠ IL MONTRE SON PROGRAMME, PAS UNE GRILLE DE TARIFS. Ce qui decide, ce
+//   n'est pas la liste de ce qu'on vend : c'est ce que la personne a
+//   construit et qu'elle a sous les yeux.
+//
+// ET RIEN N'EST EFFACE. C'est ecrit en toutes lettres, parce que c'est vrai et
+// parce que c'est exactement la peur qui fait fermer l'application. Ses
+// seances, ses exercices et son historique restent ; ce sont les portes
+// d'Ultime qui se referment, et elles se rouvrent le jour ou elle le decide.
+function rendreEssaiBilan(u){
+  const z=document.getElementById('eb-corps');
+  if(!z) return false;
+  const x=u||currentUser||{};
+  const quoi=essaiBilanPhrase(x);
+  const faites=essaiBilan(x).faites;
+  const titre=quoi
+    ? 'Ton mois est terminé, et '+quoi+' sont toujours là.'
+    : 'Ton mois est terminé.';
+  const ligne=(t)=>'<li style="margin-bottom:6px">'+t+'</li>';
+  z.innerHTML=
+    '<div class="eb-tete">Ton mois d’essai</div>'
+    +'<h1 class="eb-titre">'+escapeHtml(titre)+'</h1>'
+    +(faites?'<p class="eb-sous">'+faites+' séance'+(faites>1?'s':'')+' terminée'
+      +(faites>1?'s':'')+' pendant le mois. Rien n’est effacé.</p>'
+      :'<p class="eb-sous">Rien n’est effacé.</p>')
+    +'<div class="eb-carte">'
+      +'<div class="eb-c-nom">Ultime</div>'
+      +'<div class="eb-c-prix">'+escapeHtml(prixMoisAnnuel('ultime'))+' par mois en annuel, '
+      +'ou '+escapeHtml(prixOffre('ultime'))+' au mois</div>'
+      +'<ul class="eb-c-l">'
+      +ligne('Le catalogue d’exercices, filmés et illustrés')
+      +ligne('La charge de ton bloc, semaine par semaine')
+      +ligne('Ta diète calculée et tes compléments')
+      +'</ul>'
+      +'<button type="button" class="btn btn-red" style="width:100%" '
+      +'onclick="accueilChoisir(\'ultime\',true)">Continuer avec Ultime</button>'
+    +'</div>'
+    +'<div class="eb-carte">'
+      +'<div class="eb-c-nom">Essentielle</div>'
+      +'<div class="eb-c-prix">'+escapeHtml(prixMoisAnnuel('essentielle'))+' par mois en annuel, '
+      +'ou '+escapeHtml(prixOffre('essentielle'))+' au mois</div>'
+      +'<ul class="eb-c-l">'
+      +ligne('Tes séances, ton historique et tes bilans')
+      +ligne('Ta nutrition et ton lifestyle')
+      +'</ul>'
+      +'<button type="button" class="btn btn-outline" style="width:100%" '
+      +'onclick="accueilChoisir(\'essentielle\',true)">Continuer avec Essentielle</button>'
+    +'</div>'
+    +'<div class="eb-pied">'
+      +'<p class="eb-coach">Tu veux que quelqu’un s’en occupe pour toi&nbsp;? '
+      +'Avec un coach, l’application est comprise, et tes vidéos sont corrigées.</p>'
+      +'<a class="eb-lien" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
+      +'Voir les formules de coaching</a>'
+      +'<button type="button" class="eb-lien" onclick="go(\'s-client-code\')">J’ai un code coach</button>'
+    +'</div>';
+  return true;
 }
 // Le seul chemin vers le paywall pendant l'essai, et il est VOLONTAIRE : on
 // ne le pousse pas, on le rend atteignable. C'est la difference entre une
