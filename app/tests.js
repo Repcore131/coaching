@@ -33901,6 +33901,16 @@ async function testExercices(){
               if(String(window[f]).indexOf('_cldDetruire')<0)
                 return _echec(f+' ne demande pas la destruction de la copie distante');
             return true;})());
+          // ⚠ EN DERNIER, ET C'EST VOLONTAIRE : okA differe son corps a la fin de
+          //   la suite. Le `finally` ci-dessous tourne AVANT les corps ci-dessus,
+          //   donc il ne peut pas rendre ce qu'ils ont remplace. Cette assertion,
+          //   inscrite apres eux, tourne apres eux.
+          okA('1418 — LA SUITE REND L’APPAREIL COMME ELLE L’A TROUVÉ',async()=>{
+            _remettre(); _cldIndispo=false; _cldRejeuFait=false;
+            if(CLOUD._callFn!==_sCall) return _echec('CLOUD._callFn est resté bouchonné');
+            if(window.toast!==_sToast) return _echec('toast est resté bouchonné');
+            const f=localStorage.getItem(CLD_FILE_CLE);
+            return f===_sFile?true:_echec('la file à purger a gardé des entrées d’essai');});
         } finally { _remettre(); }
       })();
 
@@ -34199,6 +34209,16 @@ async function testExercices(){
                 return _echec('la suppression des métriques n’est pas réservée au créateur');
             }
             return true;})());
+          // EN DERNIER : okA differe, le finally ci-dessous ne rattrape pas les
+          // corps asynchrones. Voir la meme note au lot 1418.
+          okA('1420 — LA SUITE REND L’APPAREIL COMME ELLE L’A TROUVÉ',async()=>{
+            CLOUD._callFn=_sCall; window.toast=_sToast; currentUser=_sU;
+            _cldIndispo=false;
+            _rendre(EXPIRATIONS_CLE,_sExp); _rendre(CLD_FILE_CLE,_sCld);
+            if(localStorage.getItem(EXPIRATIONS_CLE)!==_sExp)
+              return _echec('le journal d’expirations garde des entrées d’essai');
+            return localStorage.getItem(CLD_FILE_CLE)===_sCld
+              ?true:_echec('la file à purger garde des entrées d’essai');});
         } finally {
           CLOUD._callFn=_sCall; window.toast=_sToast; currentUser=_sU;
           _rendre(EXPIRATIONS_CLE,_sExp); _rendre(CLD_FILE_CLE,_sCld);
@@ -34352,11 +34372,186 @@ async function testExercices(){
             const garde=(k,v)=>k.includes('photo')&&v&&typeof v==='string'&&v.startsWith('data:');
             return garde('bil-photo-face',faux['bil-photo-face'])===false
               ?true:_echec('une référence serait recompressée');})());
+          // EN DERNIER, pour la meme raison qu'aux lots 1418 et 1420.
+          okA('1421 — LA SUITE REND L’APPAREIL COMME ELLE L’A TROUVÉ',async()=>{
+            window.phpUploadImage=_sUp;
+            if(_sJ===null) localStorage.removeItem(BILP_JOURNAL_CLE);
+            else localStorage.setItem(BILP_JOURNAL_CLE,_sJ);
+            if(window.phpUploadImage!==_sUp) return _echec('l’envoi d’image est resté bouchonné');
+            return localStorage.getItem(BILP_JOURNAL_CLE)===_sJ
+              ?true:_echec('le journal de migration garde des entrées d’essai');});
         } finally {
           window.phpUploadImage=_sUp;
           if(_sJ===null) localStorage.removeItem(BILP_JOURNAL_CLE);
           else localStorage.setItem(BILP_JOURNAL_CLE,_sJ);
         }
+      })();
+
+      // ══════════════ BUILD 1422 — LA CAPACITÉ, MESURÉE POUR DE VRAI ═══════
+      //
+      // `etatQuota()` comptait les octets de RTDB — dans le localStorage DE CET
+      // APPAREIL. Sur le téléphone d'un athlète, il disait ce que CE téléphone
+      // avait transporté ; le quota du projet, lui, est la somme de tous. La
+      // carte « Capacité » était donc juste comme mesure d'un appareil et
+      // trompeuse comme mesure du service — et il n'existait AUCUN chiffre sur
+      // ce que l'hébergeur de médias recevait.
+      //
+      // Quatre compteurs agrégés, par jour, par incrément SERVEUR — comme rcm()
+      // pour le tunnel. EN KILO-OCTETS : la règle du nœud metrics borne chaque
+      // compteur à dix millions, ce qu'un seul jour de trafic franchirait en
+      // octets. Dix millions de kilo-octets font dix gigaoctets par jour.
+      (()=>{
+        const _sFetch=window.fetch;
+        try{
+          ok('1422 — LE TAMPON REGROUPE, NE PERD PAS LES RESTES, ET REFUSE L’INCONNU',(()=>{
+            // Une synchronisation écrit plusieurs fois par minute : un
+            // aller-retour par écriture coûterait plus cher que ce qu'on mesure.
+            if(rcq('nom_invente',5)!==false) return _echec('un nom hors liste a été accepté');
+            if(rcq('oct_in_ko',0)!==false) return _echec('un zéro remplit le tampon');
+            if(rcq('oct_in_ko',-3)!==false) return _echec('un négatif remplit le tampon');
+            if(!rcq('oct_in_ko',12)) return _echec('un compteur valide est refusé');
+            const e=rcqEtat();
+            if(!(e.enAttente>=1)) return _echec('le tampon est vide après une écriture');
+            // ⚠ LES RESTES NE SE PERDENT PAS. Mille appels de 500 octets valent
+            //   488 Ko, pas zéro : un arrondi par appel effacerait tout le
+            //   trafic fait de petites écritures — c'est-à-dire l'essentiel.
+            const avant=rcqEtat().enAttente;
+            for(let i=0;i<1000;i++) rcqOctets('oct_out_ko',500);
+            const l=JSON.stringify(rcqEtat());
+            if(rcqEtat().enAttente<=avant-1) return _echec('les petits envois n’ont rien compté : '+l);
+            // Et les quatre noms sont ceux que les règles acceptent.
+            const r=(typeof window!=='undefined')?window._RC_RULES:null;
+            if(typeof r==='string'&&r){
+              for(const n of RCQ_NOMS)
+                if(r.indexOf(n)<0) return _echec(n+' n’est pas déclaré dans les règles : il serait rejeté sans un mot');
+            }
+            return RCQ_NOMS.length===4?true:_echec(RCQ_NOMS.length+' compteurs');})());
+
+          okA('1422 — CE QUI PART EST UN INCRÉMENT SERVEUR, ET UN REFUS NE SE REJOUE PAS SANS FIN',async()=>{
+            const vus=[];
+            window.fetch=async(u,o)=>{ vus.push({u:String(u),body:String((o&&o.body)||''),
+              methode:(o&&o.method)||'GET',keepalive:!!(o&&o.keepalive)});
+              return {ok:true,status:200,json:async()=>({})}; };
+            // On repart d'un tampon connu.
+            await rcqVider();
+            rcq('cld_envois',2); rcq('cld_ko',350);
+            const r=await rcqVider();
+            if(r&&r.local) return true;     // sur un hôte local, rien ne part : c'est voulu
+            if(!vus.length) return _echec('rien n’est parti');
+            const p=vus.find(x=>/cld_envois\.json$/.test(x.u));
+            if(!p) return _echec('le chemin du compteur : '+vus.map(x=>x.u).join(' '));
+            if(p.methode!=='PUT') return _echec('méthode '+p.methode);
+            if(p.body.indexOf('"increment":2')<0)
+              return _echec('ce n’est pas un incrément serveur : '+p.body);
+            if(!/\/metrics\/\d{4}-\d{2}-\d{2}\//.test(p.u)) return _echec('le jour n’est pas dans le chemin : '+p.u);
+            if(!p.keepalive) return _echec('sans keepalive, la dernière mesure d’une session est perdue');
+            // ── UN REFUS : le tampon se regonfle, MAIS PAS INDÉFINIMENT ─────
+            // Si les règles refusent ces noms, rejouer sans fin ferait une
+            // requête toutes les quarante-cinq secondes, pour rien, sur le
+            // forfait de quelqu'un.
+            window.fetch=async()=>({ok:false,status:401,json:async()=>({})});
+            rcq('oct_in_ko',5);
+            for(let i=0;i<5;i++) await rcqVider();
+            if(rcqEtat().enAttente!==0)
+              return _echec('le tampon se rejoue encore après cinq refus');
+            return rcqEtat().refuses>0?true:_echec('les refus ne sont pas comptés');});
+
+          ok('1422 — LA SOMME DU MOIS NE COMPTE QUE LE MOIS, ET DIT SES BORNES',(()=>{
+            const releve={'2026-09-01':{oct_in_ko:100,oct_out_ko:200,cld_envois:1,cld_ko:5000},
+                          '2026-09-15':{oct_out_ko:300,landing_view:42},
+                          '2026-08-31':{oct_in_ko:99999},
+                          '2026-10-01':{oct_in_ko:88888}};
+            const s=rcqSomme(releve,'2026-09');
+            if(s.oct_in_ko!==100) return _echec('entrant : '+s.oct_in_ko);
+            if(s.oct_out_ko!==500) return _echec('sortant : '+s.oct_out_ko);
+            if(s.cld_ko!==5000) return _echec('hébergeur : '+s.cld_ko);
+            if(s.jours!==2) return _echec(s.jours+' jour(s) comptés');
+            if(s.premier!=='2026-09-01'||s.dernier!=='2026-09-15')
+              return _echec('bornes : '+s.premier+' → '+s.dernier);
+            // LES OCTETS SE DÉDUISENT DES KILO-OCTETS, une seule fois et au
+            // même endroit : deux conversions divergentes donneraient deux
+            // pourcentages différents sur le même écran.
+            if(s.rtdbOctets!==600*1024) return _echec('octets RTDB : '+s.rtdbOctets);
+            if(s.cldOctets!==5000*1024) return _echec('octets hébergeur : '+s.cldOctets);
+            // Un jour qui ne porte que des étapes de tunnel ne compte pas comme
+            // un jour de mesure de capacité… mais il n'invente pas d'octets.
+            const vide=rcqSomme({'2026-09-02':{landing_view:9}},'2026-09');
+            return vide.jours===0&&vide.rtdbOctets===0
+              ?true:_echec('un jour sans capacité est compté : '+JSON.stringify(vide));})());
+
+          ok('1422 — LA CARTE DIT CE QU’ELLE NE SAIT PAS, ET NE MONTRE JAMAIS UN FAUX ZÉRO',(()=>{
+            // ⚠ TROIS ÉTATS SE RESSEMBLENT ET NE VEULENT PAS DIRE LA MÊME CHOSE :
+            //   « personne n'a rien consommé », « je n'ai pas encore lu » et
+            //   « mes compteurs sont refusés ». Le troisième arrive tant que
+            //   database.rules.json n'est pas déployé, et afficher zéro
+            //   annoncerait un service au repos alors qu'on ne mesure rien.
+            const sG=_capaciteGlobale, sU=currentUser;
+            try{
+              currentUser={email:CREATOR_EMAIL,role:'coach'};
+              _capaciteGlobale=null;
+              const attente=_htmlCapaciteGlobale();
+              if(!/Lecture en cours/.test(attente)) return _echec('l’attente ne se dit pas : '+attente.slice(0,80));
+              _capaciteGlobale={erreur:'lecture refusée (401)'};
+              if(!/illisible|refus/i.test(_htmlCapaciteGlobale()))
+                return _echec('une lecture refusée passe pour un relevé vide');
+              _capaciteGlobale=rcqSomme({},'2026-09'); _capaciteGlobale.mois='2026-09';
+              const vide=_htmlCapaciteGlobale();
+              if(!/Aucun compteur/.test(vide)) return _echec('un mois sans compteur ne se dit pas');
+              if(!/règles/.test(vide)) return _echec('l’ambiguïté n’est pas nommée : '+vide.slice(0,120));
+              // ET UN RELEVÉ RÉEL AFFICHE LES QUATRE RESSOURCES ET LES DEUX PLAFONDS.
+              _capaciteGlobale=rcqSomme({'2026-09-01':{oct_in_ko:2000,oct_out_ko:8000,
+                cld_envois:12,cld_ko:450000}},'2026-09');
+              _capaciteGlobale.mois='2026-09';
+              const plein=_htmlCapaciteGlobale();
+              for(const mot of ['Base — entrant','Base — sortant','Hébergeur — envois','Hébergeur — octets reçus'])
+                if(plein.indexOf(mot)<0) return _echec('la carte n’affiche pas « '+mot+' »');
+              if(plein.indexOf('%')<0) return _echec('aucun pourcentage');
+              // LE PLAFOND DE L'HÉBERGEUR EST UNE ESTIMATION, et la carte le DIT :
+              // un chiffre présenté comme sûr conduirait à une décision fausse.
+              return /ESTIMATION|estimation/.test(plein)
+                ?true:_echec('le plafond de l’hébergeur passe pour une certitude');
+            } finally { _capaciteGlobale=sG; currentUser=sU; }})());
+
+          ok('1422 — AU-DELÀ DE 85 %, L’ENVOI VIDÉO PROPOSE D’ATTENDRE — ET N’INTERDIT JAMAIS',(()=>{
+            const src=String(uploadVideoFile);
+            const i=src.indexOf('quotaDegrade()');
+            if(i<0) return _echec('l’envoi vidéo ne regarde pas la charge du service');
+            const bloc=src.slice(i,i+1400);
+            if(bloc.indexOf('en charge')<0) return _echec('le message ne dit pas que le service est en charge');
+            if(!/ce soir/.test(bloc)) return _echec('la proposition ne dit pas quand');
+            if(bloc.indexOf('fileEnvoiPoser')<0)
+              return _echec('« attendre » ne met pas la vidéo de côté : elle serait perdue');
+            // ⚠ AUCUN CHEMIN NE REFUSE. Ni return sec, ni message d'erreur : on
+            //   propose, et si la file ne veut pas, ON ENVOIE. Une série filmée
+            //   ne se refilme pas.
+            if(!/on l’envoie maintenant|on l'envoie maintenant/.test(bloc))
+              return _echec('un échec de mise de côté ne retombe pas sur l’envoi');
+            if(/Impossible d’envoyer|quota dépassé.*return/.test(bloc))
+              return _echec('un refus d’envoi est apparu');
+            // ET LE LIBELLÉ DU OUI EST « ATTENDRE » : rcConfirm rend vrai sur le
+            // bouton d'accord, et l'inverse aurait différé quand on voulait
+            // envoyer. Le `null` en deuxième argument est ce qui place les
+            // libellés au bon rang.
+            if(bloc.indexOf("null,'Attendre ce soir','Envoyer maintenant'")<0)
+              return _echec('les libellés ne sont pas au bon rang : le oui et le non sont inversés');
+            // Un envoi REPRIS depuis la file ne se repropose pas.
+            return /!_opt\.fileId/.test(bloc)
+              ?true:_echec('un envoi repris depuis la file se reproposerait, en boucle');})());
+          // ⚠ CELLE-CI A COUTE SEPT ASSERTIONS. window.fetch bouchonne par le
+          //   corps asynchrone ci-dessus survivait au `finally`, et tout ce qui
+          //   lisait un fichier ensuite recevait un faux objet : « r.arrayBuffer
+          //   is not a function », sept fois, dans des lots qui n'y etaient pour
+          //   rien. okA differe : ce qui bouchonne doit rendre DANS un okA.
+          okA('1422 — LA SUITE REND LE RÉSEAU COMME ELLE L’A TROUVÉ',async()=>{
+            window.fetch=_sFetch;
+            _rcqTampon=Object.create(null); _rcqReste=Object.create(null);
+            _rcqRefuses=0; _rcqEnvoyes=0;
+            if(window.fetch!==_sFetch) return _echec('fetch est resté bouchonné');
+            const r=await fetch('./index.html',{cache:'no-store'}).catch(e=>null);
+            if(!r||!r.ok||typeof r.text!=='function')
+              return _echec('le vrai fetch ne répond plus : le bouchon est resté');
+            return rcqEtat().enAttente===0?true:_echec('le tampon garde des mesures d’essai');});
+        } finally { window.fetch=_sFetch; }
       })();
 
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms

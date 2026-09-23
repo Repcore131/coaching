@@ -112,8 +112,25 @@ if(orphelines.length) console.log('regle(s) sans champ correspondant : '+orpheli
 // verifie rien ; ceci, si.
 const mEvts=source.match(/const RCM_EVENEMENTS=\[([\s\S]*?)\];/);
 if(!mEvts){ console.error('RCM_EVENEMENTS introuvable dans app/index.html'); process.exit(1); }
-const evts=[...mEvts[1].replace(/\/\/[^\n]*/g,'').matchAll(/'([^']+)'/g)].map(m=>m[1]);
+let evts=[...mEvts[1].replace(/\/\/[^\n]*/g,'').matchAll(/'([^']+)'/g)].map(m=>m[1]);
 if(evts.length<15){ console.error('RCM_EVENEMENTS : '+evts.length+' nom(s) lu(s), lecture cassee'); process.exit(1); }
+
+// ⚠ DEUX FAMILLES DE COMPTEURS DEPUIS LE BUILD 1422, ET LA MEME LISTE BLANCHE.
+// RCM_EVENEMENTS compte les etapes du tunnel ; RCQ_NOMS compte la CAPACITE
+// (kilo-octets echanges avec la base, envois et octets chez l'hebergeur de
+// medias). Les deux passent par le meme noeud, donc par le meme `.validate` —
+// et un nom absent est rejete SANS AUCUN SIGNAL. Ne verifier que la premiere
+// famille aurait laisse la carte « Capacite » afficher zero pendant des
+// semaines, ce qui est precisement le defaut que ce controle existe pour
+// empecher.
+// ⚠ PAS DE `[^]]` ICI : en JavaScript, `[^]` vaut « n'importe quel
+//   caractere » et non « tout sauf ] » — le motif ne lisait rien, et le
+//   controle annoncait poliment qu'il ne verifiait pas.
+const mQ=source.match(/const RCQ_NOMS=Object\.freeze\(\[([\s\S]*?)\]\)/);
+const qs=mQ?[...mQ[1].matchAll(/'([^']+)'/g)].map(m=>m[1]):[];
+if(mQ&&qs.length<4){ console.error('RCQ_NOMS : '+qs.length+' nom(s) lu(s), lecture cassee'); process.exit(1); }
+if(!mQ) console.log('RCQ_NOMS introuvable : les compteurs de capacite ne sont pas verifies');
+for(const q of qs) evts.push(q);
 
 const mRegex=regles.match(/\$evenement\.matches\(\/\^\(([^)]*)\)\$\/\)/);
 if(!mRegex){ console.error('la liste blanche de /metrics a disparu des regles'); process.exit(1); }

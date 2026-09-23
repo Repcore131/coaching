@@ -357,6 +357,10 @@ function _quotaCompter(sens,octets){
     e[sens]=(Number(e[sens])||0)+n;
     e.n=(Number(e.n)||0)+1;
     e.maj=Date.now();
+    // ET LE MEME COMPTE, AGREGE : ce releve-ci ne vaut que pour cet appareil,
+    // et le quota du projet est la somme de tous. rcqOctets regroupe et
+    // n'envoie qu'au bout de quarante-cinq secondes.
+    try{ rcqOctets(sens==='in'?'oct_in_ko':'oct_out_ko',n); }catch(err){}
     localStorage.setItem(cle,JSON.stringify(e));
     return e;
   }catch(err){ return null; }   // quota localStorage saturé : on n'en meurt pas
@@ -447,6 +451,159 @@ function rcm(nom){
     }).catch(()=>{});
   }catch(e){}
 }
+// ══════════════ LES COMPTEURS DE CAPACITÉ, AGRÉGÉS ═════════════════════════
+//
+// CE QUI MANQUAIT. `etatQuota()` compte les octets de RTDB — mais dans le
+// localStorage DE CET APPAREIL. Sur le téléphone d'un athlète, il dit ce que CE
+// téléphone a transporté ; le quota du projet, lui, est la somme de tous. Le
+// relevé de la carte « Capacité » était donc structurellement faux comme mesure
+// de capacité : juste comme mesure de cet appareil, et illisible comme mesure
+// du service. Il n'existait AUCUN chiffre global, et aucune façon de savoir
+// combien Cloudinary recevait.
+//
+// ON AGRÈGE DONC PAR JOUR, comme rcm() le fait pour le tunnel d'inscription :
+// un incrément SERVEUR (`.sv`), atomique, sans lecture préalable. Deux
+// appareils qui écrivent en même temps ne s'écrasent pas.
+//
+// ⚠ EN KILO-OCTETS, ET CE N'EST PAS UN DÉTAIL. La règle du nœud metrics borne
+//   chaque compteur à dix millions : en octets, un seul jour de trafic la
+//   franchirait et l'écriture serait REFUSÉE. En kilo-octets, dix millions font
+//   dix gigaoctets par jour — largement au-delà de ce que ce service consomme.
+//
+// ⚠ ET LES NOMS DOIVENT ÊTRE DANS LES RÈGLES. Le `.validate` de metrics porte
+//   une liste blanche de noms d'événements : un nom absent est refusé. Les
+//   quatre noms ci-dessous y ont été ajoutés — mais database.rules.json N'EST
+//   PAS DÉPLOYÉ par le déploiement automatique, qui ne publie que l'hébergement.
+//   Tant que `firebase deploy --only database` n'a pas tourné, ces écritures
+//   sont refusées. C'EST COMPTÉ, ET LA CARTE LE DIT : un écran qui afficherait
+//   zéro pendant que les compteurs sont rejetés serait pire qu'un écran vide.
+const RCQ_NOMS=Object.freeze(['oct_in_ko','oct_out_ko','cld_envois','cld_ko']);
+const RCQ_FLUSH_MS=45000;
+const RCQ_CIEL=9000000;          // sous le plafond de dix millions de la règle
+let _rcqTampon=Object.create(null);
+let _rcqReste=Object.create(null);   // les octets pas encore convertis en Ko
+let _rcqMinuteur=null;
+let _rcqEnvoyes=0, _rcqRefuses=0, _rcqDernier=0;
+
+/** PURE. Le jour courant, au format du nœud metrics. */
+function rcqJour(d){ return localISODate(d||new Date()); }
+/**
+ * Ajoute au tampon. RIEN NE PART TOUT DE SUITE : une synchronisation écrit
+ * plusieurs fois par minute, et un aller-retour par écriture coûterait plus
+ * cher que ce qu'on mesure. On regroupe, et on vide au plus tard au bout de
+ * quarante-cinq secondes.
+ */
+function rcq(nom,n){
+  try{
+    if(RCQ_NOMS.indexOf(nom)<0) return false;
+    const v=Number(n);
+    if(!(v>0)) return false;
+    _rcqTampon[nom]=(_rcqTampon[nom]||0)+v;
+    if(!_rcqMinuteur) _rcqMinuteur=setTimeout(()=>{ _rcqMinuteur=null; rcqVider(); },RCQ_FLUSH_MS);
+    return true;
+  }catch(e){ return false; }
+}
+/** Les octets se convertissent en Ko SANS PERDRE LE RESTE : mille appels de
+ *  500 octets valent 488 Ko, pas zéro. */
+function rcqOctets(nom,octets){
+  const o=Number(octets);
+  if(!(o>0)) return false;
+  _rcqReste[nom]=(_rcqReste[nom]||0)+o;
+  const ko=Math.floor(_rcqReste[nom]/1024);
+  if(ko<1) return true;
+  _rcqReste[nom]-=ko*1024;
+  return rcq(nom,ko);
+}
+/**
+ * Vide le tampon. Ne lève jamais : c'est une mesure, pas une fonctionnalité —
+ * et une mesure qui casserait l'app serait le comble.
+ */
+async function rcqVider(){
+  const t=_rcqTampon;
+  _rcqTampon=Object.create(null);
+  const noms=Object.keys(t);
+  if(!noms.length) return {envoyes:0};
+  try{
+    const h=location.hostname;
+    // Le développement local ne pollue pas les chiffres de production, comme
+    // pour rcm() — sinon un banc à deux appareils remplirait le compteur.
+    if(h==='localhost'||h==='127.0.0.1'||h===''||h.startsWith('192.168.')) return {local:true};
+  }catch(e){}
+  const jour=rcqJour();
+  let ok=0,ko=0;
+  for(const nom of noms){
+    const v=Math.min(RCQ_CIEL,Math.round(t[nom]));
+    if(!(v>0)) continue;
+    try{
+      const r=await fetch(RCM_BASE+'/'+jour+'/'+nom+'.json',{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({'.sv':{'increment':v}}),keepalive:true});
+      if(r.ok) ok++;
+      else { ko++; _rcqTampon[nom]=(_rcqTampon[nom]||0)+t[nom]; }
+    }catch(e){ ko++; _rcqTampon[nom]=(_rcqTampon[nom]||0)+t[nom]; }
+  }
+  _rcqEnvoyes+=ok; _rcqRefuses+=ko;
+  if(ok) _rcqDernier=Date.now();
+  // ON NE REJOUE PAS INDÉFINIMENT : si les règles refusent, le tampon
+  // regonflerait sans fin. Au-delà de trois refus, on garde le compte des
+  // refus — que la carte affiche — et on jette le tampon.
+  if(ko&&_rcqRefuses>3) _rcqTampon=Object.create(null);
+  return {envoyes:ok,refuses:ko};
+}
+/** Ce que la carte doit savoir de l'état des compteurs eux-mêmes. */
+function rcqEtat(){
+  return {envoyes:_rcqEnvoyes,refuses:_rcqRefuses,dernier:_rcqDernier,
+    enAttente:Object.keys(_rcqTampon).length};
+}
+
+// ── CE QUE LE MOIS A CONSOMMÉ, TOUS APPAREILS CONFONDUS ───────────────────
+//
+// ⚠ UNE SEULE REQUÊTE, bornée aux jours du mois. Lire le nœud entier
+//   demanderait un droit de lecture sur `metrics`, qui n'est ouvert qu'au
+//   créateur — et c'est lui, et lui seul, qui ouvre cet écran.
+const CLOUDINARY_QUOTA_MOIS_OCTETS=25*Math.pow(2,30);
+/**
+ * PURE. La somme des compteurs d'un relevé {jour:{nom:valeur}}.
+ * Séparée de la lecture réseau pour être éprouvable sans serveur.
+ */
+function rcqSomme(releve,mois){
+  const out={oct_in_ko:0,oct_out_ko:0,cld_envois:0,cld_ko:0,jours:0,premier:null,dernier:null};
+  const pref=String(mois||'');
+  for(const jour of Object.keys(releve||{})){
+    if(pref&&jour.indexOf(pref)!==0) continue;
+    const d=releve[jour]||{};
+    let vu=false;
+    for(const n of RCQ_NOMS) if(Number(d[n])>0){ out[n]+=Number(d[n]); vu=true; }
+    if(vu){
+      out.jours++;
+      if(!out.premier||jour<out.premier) out.premier=jour;
+      if(!out.dernier||jour>out.dernier) out.dernier=jour;
+    }
+  }
+  out.rtdbOctets=(out.oct_in_ko+out.oct_out_ko)*1024;
+  out.cldOctets=out.cld_ko*1024;
+  return out;
+}
+let _capaciteGlobale=null;
+/** Le relevé agrégé du mois. Rend null quand il n'a pas pu être lu — et la
+ *  carte le dit alors, au lieu d'afficher un zéro qui passerait pour du calme. */
+async function etatCapaciteGlobale(){
+  try{
+    if(!currentUser||currentUser.email!==CREATOR_EMAIL) return null;
+    const jeton=await CLOUD._getToken();
+    if(!jeton) return null;
+    const d=new Date();
+    const mois=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const r=await fetch(RCM_BASE+'.json?orderBy="$key"&startAt="'+mois+'-01"'
+      +'&endAt="'+mois+'-31"&auth='+encodeURIComponent(jeton));
+    if(!r.ok) return {erreur:'lecture refusée ('+r.status+')'};
+    const somme=rcqSomme(await r.json()||{},mois);
+    somme.mois=mois;
+    _capaciteGlobale=somme;
+    return somme;
+  }catch(e){ return {erreur:String(e&&e.message||e)}; }
+}
+
 // Étapes « vue d'écran » : comptées une seule fois par session de navigation.
 // Sans ce garde, un aller-retour entre l'accueil et l'inscription — le
 // comportement normal de quelqu'un qui hésite — gonflerait l'étape et ferait
@@ -45101,6 +45258,9 @@ async function phpUploadImage(blob,nom,dossier){
   if(!res.ok) throw new Error('Erreur serveur '+res.status);
   const data=await res.json();
   if(data.error) throw new Error(data.error.message);
+  // CE QUE L'HEBERGEUR A RECU, COMPTE. Sans ce chiffre, le cout de Cloudinary
+  // n'apparait sur aucun ecran et ne se decide nulle part.
+  try{ rcq('cld_envois',1); rcqOctets('cld_ko',(blob&&blob.size)||Number(data.bytes)||0); }catch(e){}
   return data;
 }
 // RÈGLE 6 : la file repart à la reconnexion, jamais avant.
@@ -68533,12 +68693,69 @@ function _htmlCapacite(user){
     ${l('Dernier relevé',e.maj?new Date(e.maj).toLocaleString('fr-FR'):'aucun')}
     ${e.degrade?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Au-delà de ${Math.round(SEUIL_DEGRADATION*100)} % : synchronisation périodique ralentie à ${Math.round(SYNC_PERIODE_DEGRADEE_MS/60000)} min et préchargement de la base alimentaire suspendu. Journalisation et envoi des séances INCHANGÉS.</div>`
       :e.alerte?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Au-delà de ${Math.round(SEUIL_ALERTE*100)} % du quota estimé.</div>`:''}
+    ${_htmlCapaciteGlobale()}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">${escapeHtml(QUOTA_REGISTRE)}</div>
   </div>`;
 }
+/**
+ * LE RELEVÉ DE TOUS LES APPAREILS, ressource par ressource.
+ *
+ * ⚠ ET IL DIT QUAND IL NE SAIT PAS. Trois états se ressemblent à l'écran et ne
+ *   veulent pas du tout dire la même chose : « personne n'a rien consommé »,
+ *   « je n'ai pas encore lu » et « mes compteurs sont refusés ». Le troisième
+ *   arrive tant que database.rules.json n'est pas déployé — la liste blanche de
+ *   noms du nœud metrics refuse les quatre compteurs — et afficher zéro dans ce
+ *   cas serait annoncer un service au repos alors qu'on ne mesure rien.
+ */
+function _htmlCapaciteGlobale(){
+  const l=(t,v,c)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">
+    <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:${c||'var(--text)'}">${escapeHtml(v)}</span></div>`;
+  const q=rcqEtat();
+  const g=_capaciteGlobale;
+  const titre=`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin:14px 0 6px;border-top:1px solid var(--border);padding-top:12px">Tous appareils, ce mois</div>`;
+  if(q.refuses>0&&!q.envoyes)
+    return titre+`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">
+      ${q.refuses} écriture(s) de compteur REFUSÉE(S). Les quatre noms (oct_in_ko,
+      oct_out_ko, cld_envois, cld_ko) doivent être déclarés dans database.rules.json,
+      et les règles déployées : <code>firebase deploy --only database</code>.
+      Tant que ce n'est pas fait, ce bloc ne mesure rien — et ne prétend rien.</div>`;
+  if(!g) return titre+`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">Lecture en cours…</div>`;
+  if(g.erreur) return titre+`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Relevé illisible : ${escapeHtml(g.erreur)}. Le droit de lecture sur le nœud metrics est réservé au créateur, et il vient des règles — déployées ou non.</div>`;
+  if(!g.jours) return titre+`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">Aucun compteur pour ${escapeHtml(g.mois||'')} : soit rien n'a été consommé, soit les règles ne sont pas déployées. ${q.envoyes?('Cet appareil en a fait accepter '+q.envoyes+', donc la première hypothèse est la bonne.'):'Cet appareil n\'en a encore fait accepter aucun.'}</div>`;
+  const part=(o,max)=>{ const p=o/max*100; return (p<0.1?'<0,1':p.toFixed(1)).replace('.',',')+' %'; };
+  const rtdb=g.rtdbOctets;
+  // LA PROJECTION REPREND projectionQuota, sur l'état AGRÉGÉ : même pente, même
+  // règle du « pas assez de recul », un seul calcul dans le fichier.
+  const pj=projectionQuota({octets:rtdb,debut:new Date(g.premier+'T00:00:00').getTime()});
+  return titre
+    +l('Base — entrant',_fmtOctets(g.oct_in_ko*1024))
+    +l('Base — sortant',_fmtOctets(g.oct_out_ko*1024))
+    +l('Base — total / quota',_fmtOctets(rtdb)+' / '+_fmtOctets(QUOTA_MOIS_OCTETS)+' · '+part(rtdb,QUOTA_MOIS_OCTETS),
+       rtdb>=QUOTA_MOIS_OCTETS*SEUIL_DEGRADATION?'var(--orange)':'var(--text)')
+    +l('Hébergeur — envois',String(g.cld_envois))
+    +l('Hébergeur — octets reçus',_fmtOctets(g.cldOctets)+' / '+_fmtOctets(CLOUDINARY_QUOTA_MOIS_OCTETS)
+       +' · '+part(g.cldOctets,CLOUDINARY_QUOTA_MOIS_OCTETS),
+       g.cldOctets>=CLOUDINARY_QUOTA_MOIS_OCTETS*SEUIL_DEGRADATION?'var(--orange)':'var(--text)')
+    +l('Jours relevés',g.jours+' (du '+String(g.premier).slice(8)+' au '+String(g.dernier).slice(8)+')')
+    +(pj?l('Franchissement projeté',pj.depasse?'quota déjà dépassé'
+        :(pj.date.toLocaleDateString('fr-FR')+' (~'+pj.joursRestants+' j)')):'')
+    +(q.refuses?l('Compteurs refusés',String(q.refuses),'var(--orange)'):'')
+    +`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Le plafond de l'hébergeur est une ESTIMATION du plan gratuit (25 crédits) : à vérifier sur le tableau de bord Cloudinary avant d'en tirer une décision.</div>`;
+}
 function _renderCapacite(){
   const z=document.getElementById('mt-capacite');
-  if(z) z.innerHTML=_htmlCapacite(currentUser);
+  if(!z) return;
+  z.innerHTML=_htmlCapacite(currentUser);
+  // LE RELEVÉ AGRÉGÉ EST LU UNE FOIS, PUIS LA CARTE SE REDESSINE. Une lecture
+  // réseau dans un rendu synchrone n'existe pas : ce qui existe, c'est un
+  // rendu tout de suite avec ce qu'on sait, et un second quand on en sait plus.
+  if(_capaciteGlobale===null&&currentUser&&currentUser.email===CREATOR_EMAIL){
+    etatCapaciteGlobale().then(g=>{
+      _capaciteGlobale=g||{erreur:'aucune réponse'};
+      const y=document.getElementById('mt-capacite');
+      if(y) y.innerHTML=_htmlCapacite(currentUser);
+    }).catch(()=>{});
+  }
 }
 let _ciqualPrefetchAsked=false;
 function _prefetchCiqual(){
@@ -78284,6 +78501,41 @@ async function uploadVideoFile(input,options){
     noter('refus_type',(file&&file.type)||'');
     input.value='';return;
   }
+  // ══ LE SERVICE EST-IL EN CHARGE ? ════════════════════════════════════════
+  //
+  // Au-delà de 85 % du quota, la synchronisation périodique ralentit déjà. UNE
+  // VIDÉO EST LE PLUS GROS ENVOI DE L'APPLICATION : c'est le seul endroit où
+  // demander, poliment, si ça peut attendre ce soir change quelque chose.
+  //
+  // ⚠ ON NE REFUSE JAMAIS. Une série filmée ne se refilme pas, et un garde-fou
+  //   de coût qui empêcherait d'envoyer sa vidéo serait un défaut, pas une
+  //   protection. On PROPOSE de différer ; la file persistante existe déjà pour
+  //   ça, et elle propose la reprise au démarrage suivant — jamais d'office.
+  // ⚠ UN ENVOI REPRIS DEPUIS LA FILE NE SE REPROPOSE PAS : il vient DE la
+  //   file, et lui offrir d'y retourner l'y enfermerait pour de bon.
+  if(quotaDegrade()&&!_opt.fileId&&!_opt.dejaAllege){
+    const differer=await rcConfirm(
+      'Le service est en charge : ton envoi peut attendre ce soir.\n\n'
+      +'La vidéo est gardée sur ton téléphone et te sera proposée à la prochaine '
+      +'ouverture de l’app. Tu peux aussi l’envoyer maintenant, ça marchera.',
+      // rcConfirm(titre, texte, libelleOk, libelleNon) : le LIBELLE DU OUI est
+      // « Attendre ce soir », donc rendre vrai veut dire differer. Ecrit sans
+      // le `null`, le grand message servait de titre ET « Attendre ce soir »
+      // devenait le texte : le bouton d'accord disait « Envoyer maintenant »
+      // et repondre oui aurait differe. L'inverse exact de ce qu'il affichait.
+      null,'Attendre ce soir','Envoyer maintenant');
+    if(differer){
+      const id=await fileEnvoiPoser({blob:file,nom:_opt.nom||file.name||'video',
+        emailCible:(currentUser&&currentUser.email)||'',octetsOrigine:file.size,
+        voieCompression:'aucune',lien:_opt.lien}).catch(()=>'');
+      if(id){
+        toast('Gardée sur ton téléphone. Je te la proposerai à la prochaine ouverture.','var(--green)');
+        input.value=''; return;
+      }
+      // La file n'a pas voulu : on ne perd pas la vidéo pour autant, on envoie.
+      toast('Je n’ai pas pu la mettre de côté : on l’envoie maintenant.','var(--orange)');
+    }
+  }
   if(file.size>VIDEO_MAX_OCTETS_TOTAL){
     dire('Fichier trop volumineux ('+_mo(file.size)+', maximum '+_mo(VIDEO_MAX_OCTETS_TOTAL)
       +'). Filme plus court, ou baisse la qualité vidéo dans les réglages du téléphone.');
@@ -78492,6 +78744,10 @@ async function uploadVideoFile(input,options){
     if(!data.secure_url) throw new Error('Le serveur n’a pas renvoyé de lien');
     // CONFIRMÉ PAR CLOUDINARY : la file n’a plus rien à garder.
     if(fileId){ try{ await fileEnvoiRetirer(fileId); }catch(e){} }
+    // ET LE COMPTE AGREGE : une video est le plus gros envoi de l'app, et
+    // c'est celui qu'il faut voir sur l'ecran de capacite.
+    try{ rcq('cld_envois',1);
+      rcqOctets('cld_ko',Number(data.bytes)||(aEnvoyer&&aEnvoyer.size)||0); }catch(e){}
     const url=data.secure_url;
     const _saisi=_opt.nom||((document.getElementById('vid-name-input')||{}).value||'').trim();
     const name=_saisi||file.name.replace(/\.(mp4|mov|webm|mkv|avi)$/i,'');
@@ -91746,6 +92002,7 @@ async function _cloudinaryUpload(file){
   if(!res.ok) throw new Error('Erreur serveur '+res.status);
   const data=await res.json();
   if(data.error) throw new Error(data.error.message);
+  try{ rcq('cld_envois',1); rcqOctets('cld_ko',(file&&file.size)||Number(data.bytes)||0); }catch(e){}
   return data.secure_url;
 }
 function saveCloudinaryConfig(){

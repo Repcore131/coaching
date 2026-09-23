@@ -747,6 +747,11 @@
     // arrive sans jeton : il est structurellement impossible de savoir de qui
     // il vient, y compris pour nous.
     "metrics": {
+      // LE CREATEUR LIT TOUT LE NOEUD, et lui seul : la carte « Capacite »
+      // additionne les jours du mois en UNE requete bornee par orderBy="$key".
+      // Sans ce droit, il faudrait trente-et-une requetes pour un ecran que
+      // seule une personne ouvre. Les autres gardent la lecture par jour.
+      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
       "$jour": {
         ".read": "auth != null",
         ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
@@ -776,8 +781,17 @@
         //   chiffre faux, pas une fuite.
         ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com' && !newData.exists()",
         "$evenement": {
+          // ⚠ LES QUATRE DERNIERS NOMS NE SONT PAS DES ETAPES DE TUNNEL, ce sont
+          //   des COMPTEURS DE CAPACITE : oct_in_ko et oct_out_ko comptent les
+          //   kilo-octets echanges avec cette base, cld_envois et cld_ko ce que
+          //   l hebergeur de medias recoit. EN KILO-OCTETS, et pas en octets :
+          //   le plafond de dix millions ci-dessous serait franchi en un seul
+          //   jour de trafic, et l ecriture refusee. Dix millions de kilo-octets
+          //   font dix gigaoctets par jour, ce qui laisse de la marge.
+          //   Ils sont incrementes par rcq(), par paquets de quarante-cinq
+          //   secondes, et lus par la carte « Capacite » du createur.
           ".write": true,
-          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee)$/)"
+          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|oct_in_ko|oct_out_ko|cld_envois|cld_ko)$/)"
         }
       }
     },
