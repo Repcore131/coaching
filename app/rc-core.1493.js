@@ -22288,6 +22288,7 @@ function openClientDetail(cid,_refresh,_force){
   // repond a la seule question qu'on se pose en ouvrant une fiche.
   try{ renderVerdictCoach(c); }catch(e){}
   try{ renderCorpsCoach(c); }catch(e){}
+  try{ renderCourbesCoach(c); }catch(e){}
   try{ renderMethodesCoach(c); }catch(e){}
   try{ renderAsymetrieCoach(c); }catch(e){}
   try{ renderMotCoachFiche(c); }catch(e){}
@@ -41617,8 +41618,11 @@ function corpsSemainePrevue(u){
  *   s'arrete a la derniere semaine travaillee, comme avant.
  * @returns {{series:{lib:string,couleur:string,points:{x:number,v:number,prevu?:boolean}[]}[],pied:string}|null}
  */
-function corpsCourbesVolume(u){
-  const N=CORPS_GRAPHE_SEMAINES;
+function corpsCourbesVolume(u,semaines){
+  // ⚠ QUATRE SEMAINES AU MINIMUM, quelle que soit la periode demandee : sur
+  //   deux points, une courbe de volume ne dit rien qu'un chiffre ne dise
+  //   mieux.
+  const N=Math.max(4,Number(semaines)||CORPS_GRAPHE_SEMAINES);
   const serie=(m,points)=>({lib:(MUSCLES[m]||{}).lib||m,
     couleur:(MUSCLES[m]||{}).c||'var(--sub)',points});
   const lesTrois=ref=>Object.keys(ref).filter(m=>MUSCLES[m]&&ref[m]>0)
@@ -41634,7 +41638,7 @@ function corpsCourbesVolume(u){
         v:Math.round((Number(prev.muscles[m])||0)*10)/10,prevu:true}]))),
       pied:'Les trois muscles les plus chargés du programme, sur '+N+' semaines : '
         +'les séries faites, puis en pointillé la semaine du '+_corpsLibSemaine(prev.cle)
-        +' entière, telle que le programme la prévoit — pas son avancée.'};
+        +' entière, telle que le programme la prévoit, et non son avancée.'};
   }
   const sem=corpsSemaineVolume(u);
   if(!sem) return null;
@@ -41668,11 +41672,15 @@ function _corpsCourbe(series,o){
   const s=(series||[]).filter(x=>x&&Array.isArray(x.points)&&x.points.length);
   if(!s.length) return null;
   let xmin=Infinity,xmax=-Infinity,vmin=Infinity,vmax=-Infinity,n=0;
+  // ⚠ LA BANDE DE TOLERANCE ENTRE DANS L'ECHELLE, elle n'est pas posee par
+  //   dessus : dessinee hors des bornes, elle serait coupee par le cadre et
+  //   une courbe au plafond n'aurait plus de marge visible au-dessus d'elle.
   for(const g of s) for(const p of g.points){
     if(!isFinite(p.x)||!isFinite(p.v)) continue;
     n++;
+    const b=Math.abs(Number(g.bande)||0);
     if(p.x<xmin) xmin=p.x; if(p.x>xmax) xmax=p.x;
-    if(p.v<vmin) vmin=p.v; if(p.v>vmax) vmax=p.v;
+    if(p.v-b<vmin) vmin=p.v-b; if(p.v+b>vmax) vmax=p.v+b;
   }
   if(n<2) return null;
   const H=Number((o||{}).h)||40;
@@ -41693,11 +41701,27 @@ function _corpsCourbe(series,o){
     +'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"'
     +(tirets?' stroke-dasharray="3 3"':'')
     +' vector-effect="non-scaling-stroke"/>';
-  let corps='';
+  let corps='', bandes='';
   for(const g of s){
     const pts=g.points.filter(p=>isFinite(p.x)&&isFinite(p.v))
       .slice().sort((a,b)=>a.x-b.x);
     if(pts.length<2) continue;
+    // LA MARGE DE MESURE, EN GRIS CLAIR AUTOUR DE LA LIGNE (Kevin, 23/09/2026 :
+    // « sans elles, un coach lit une progression la ou il n'y a que du bruit de
+    // ruban »). En gris et non a la couleur de la serie : la bande n'est pas
+    // une seconde courbe, c'est le flou de la premiere.
+    // ⚠ TOUTES LES BANDES SE DESSINENT AVANT TOUTES LES LIGNES, d'ou les deux
+    //   chaines : sur deux series, la bande de la seconde aurait recouvert la
+    //   ligne de la premiere.
+    const bd=Math.abs(Number(g.bande)||0);
+    if(bd>0){
+      const haut=pts.map(p=>({x:p.x,v:p.v+bd}));
+      const bas=pts.map(p=>({x:p.x,v:p.v-bd})).reverse();
+      bandes+='<path d="'
+        +haut.map((p,i)=>(i?'L':'M')+X(p).toFixed(2)+' '+Y(p).toFixed(2)).join(' ')+' '
+        +bas.map(p=>'L'+X(p).toFixed(2)+' '+Y(p).toFixed(2)).join(' ')
+        +' Z" fill="rgba(255,255,255,.10)" stroke="none"/>';
+    }
     // ⚠ UN POINT PREVU SE TRACE EN POINTILLE, JAMAIS DANS LE TRAIT PLEIN. Le
     //   trait plein dit ce qui a ete fait ; prolonger ce trait jusqu'a un
     //   point prevu ferait passer le programme pour des seances faites.
@@ -41713,7 +41737,7 @@ function _corpsCourbe(series,o){
   const grille='<line x1="0" y1="'+(H-2)+'" x2="100" y2="'+(H-2)
     +'" stroke="rgba(255,255,255,.12)" stroke-width="1" vector-effect="non-scaling-stroke"/>';
   return {svg:'<svg class="cc-corps-gc" viewBox="0 0 100 '+H+'"'
-    +' preserveAspectRatio="none" aria-hidden="true">'+grille+corps+'</svg>',
+    +' preserveAspectRatio="none" aria-hidden="true">'+grille+bandes+corps+'</svg>',
     min:vmin,max:vmax,x0:xmin,x1:xmax,plat};
 }
 // « 100,9 ». Une decimale au plus, virgule francaise, et pas de zero inutile.
@@ -41772,7 +41796,14 @@ function _htmlCorpsGraphe(titre,unite,series,o){
  *   mais par groupe, le volume un calcul. Un graphique qui ne peut rien tracer
  *   ne sort pas — une carte vide avec un titre est du mobilier.
  */
-function _htmlCorpsGraphes(u){
+function _htmlCorpsGraphes(u,o){
+  o=o||{};
+  // LA PERIODE VIENT DE L'ETAGE, PAS DU CADRE : un seul selecteur pilote tout.
+  // `depuis` = 0 pour « tout ». Les series par semaine, elles, se comptent en
+  // rangs de semaine et non en dates : la periode s'y traduit en nombre de
+  // semaines, avec un plancher de quatre — deux points ne font pas une courbe.
+  const _dep=Number(o.depuis)||0;
+  const _f=l=>_dep?(l||[]).filter(p=>p&&Number(p.x)>=_dep):(l||[]);
   let h='';
   // ── 1. LE POIDS ───────────────────────────────────────────────────────
   //
@@ -41792,8 +41823,8 @@ function _htmlCorpsGraphes(u){
   //   regle que personne n'a ecrite.
   let _neutre=false;
   try{ _neutre=aTCA(u); }catch(e){ _neutre=false; }
-  if(!_neutre) h+=_htmlCorpsGraphe('Poids','kg',
-    [{lib:'Poids',couleur:'#E02020',points:corpsPointsPoids(u)}],
+  if(!_neutre&&o.poids!==false) h+=_htmlCorpsGraphe('Poids','kg',
+    [{lib:'Poids',couleur:'#E02020',points:_f(corpsPointsPoids(u))}],
     {h:44,dates:true,
      pied:'Relevé au bilan. La pesée quotidienne a son propre protocole '
       +'et n’est pas mélangée ici.'});
@@ -41805,7 +41836,10 @@ function _htmlCorpsGraphes(u){
   let minis='', mx0=Infinity, mx1=-Infinity;
   for(const g of MENS_GROUPES){
     const series=g.items.map(it=>({lib:it.l||g.label,couleur:it.color,
-      points:corpsPointsMesure(u,it.k)}));
+      points:_f(corpsPointsMesure(u,it.k)),
+      // LA MARGE DU RUBAN, DESSINEE AUTOUR DE CHAQUE TOUR : c'est la meme
+      // tolerance que les etiquettes et la teinte annoncent deja en chiffres.
+      bande:(typeof SYN_BRUIT_MESURE==='number')?SYN_BRUIT_MESURE:0.5}));
     const c=_corpsCourbe(series,{h:30});
     if(!c) continue;
     if(c.x0<mx0) mx0=c.x0;
@@ -41835,7 +41869,12 @@ function _htmlCorpsGraphes(u){
   // ⚠ TROIS, PAS DIX-HUIT. Dix-huit lignes sur quatre-vingts pixels de haut
   //   font une pelote. Ce sont les trois muscles les plus charges de la
   //   semaine de reference — ceux dont la charge decide du reste.
-  const cv=corpsCourbesVolume(u);
+  // ⚠ VINGT-SIX SEMAINES AU PLUS, meme sur « 1 an » ou « Tout ». Cinquante-deux
+  //   points de volume sur quarante-quatre pixels de haut font une pelote, et
+  //   chaque semaine coute un calcul de volume. Le pied de la carte dit
+  //   toujours sur combien de semaines elle porte : la carte ne ment pas sur
+  //   sa propre fenetre, elle la nomme.
+  const cv=corpsCourbesVolume(u,_dep?Math.max(4,Math.min(26,Math.round((Date.now()-_dep)/6048e5))):0);
   if(cv) h+=_htmlCorpsGraphe('Séries dures par semaine','',cv.series,
     {h:44,valeur:'',pied:cv.pied});
   return h;
@@ -42193,7 +42232,7 @@ function _htmlCorpsCadre(c,o){
   // LES GRAPHIQUES NE SORTENT QUE S'ILS ONT DE QUOI TRACER. Chacun se tait
   // tout seul quand il lui manque un point ; les trois muets, la colonne
   // entiere disparait plutot que d'afficher un cadre a trois titres vides.
-  const graphes=_htmlCorpsGraphes(u);
+  const graphes=(o.graphes===false)?'':_htmlCorpsGraphes(u);
   // LE PETIT CADRE DE L'EXPLICATION VA SOUS LES GRAPHIQUES, dans la colonne
   // de droite ; sans graphique, il reste sous la legende.
   const avecG=(o.graphes!==false)&&!!graphes;
@@ -42290,14 +42329,10 @@ function ccdVerdict(u){
   const taille=parseFloat((u&&(u._evol_height||u['init-height']||u.height))||0)||null;
   const genre=(u&&(u._evol_gender||u.gender))||'';
   const femme=(function(){ try{ return isFemale(genre); }catch(e){ return false; } })();
-  const pct=b=>{
-    const p=getBW(b);
-    if(!(p>0)||!taille) return null;
-    const v=calcBF(getBM(b,'waist'),getBM(b,'neck'),getBM(b,'hips'),taille,genre);
-    return (v==null)?null:{pct:v,poids:p,date:Number(b.date)||0,
-      gras:Math.round(p*v/100*10)/10,maigre:Math.round((p-p*v/100)*10)/10};
-  };
-  const calc=bl.map(pct).filter(Boolean);
+  // ⚠ UNE SEULE LISTE DE COMPOSITION POUR TOUT L'ONGLET (lot 4) : les cartes
+  //   d'ici et la courbe de l'etage 3 lisent ccdCompositionSerie. Deux calculs
+  //   de masse maigre dans le meme ecran finiraient par donner deux chiffres.
+  const calc=ccdCompositionSerie(u);
   if(calc.length){
     const f=calc[calc.length-1], d=calc.length>1?calc[calc.length-2]:null;
     out.gras={kg:f.gras,pct:f.pct,date:f.date,marge:CCD_BF_MARGE,
@@ -42431,11 +42466,264 @@ function renderVerdictCoach(c){
   if(a){ let t=''; try{ t=h?_htmlCcdAlerte(c):''; }catch(e){ t=''; } a.innerHTML=t; }
   return true;
 }
+// ══ LOT 4 : LES COURBES, TOUTES SUR LA MEME PERIODE ════════════════════════
+//
+// Kevin, 23/09/2026 : « UN SEUL SELECTEUR DE PERIODE en tete de l'etage, qui
+// pilote TOUS les graphiques a la fois : 30 jours, 90 jours, 1 an, tout.
+// Aujourd'hui chaque bloc fait ce qu'il veut. »
+//
+// ⚠ « TOUT » EST LA VUE D'OUVERTURE, et ce n'est pas un defaut de paresse : a
+//   l'ouverture d'une fiche, rien de ce qui est au dossier ne doit etre cache.
+//   Une fenetre de 30 jours par defaut aurait fait disparaitre trois bilans sur
+//   quatre chez un athlete suivi au trimestre, sans que personne ne le voie.
+//   C'est le coach qui retrecit.
+const CCD_PERIODES=Object.freeze([{j:30,lib:'30 jours'},{j:90,lib:'90 jours'},
+  {j:365,lib:'1 an'},{j:0,lib:'Tout'}]);
+let _ccdPeriode=0;
+function ccdPeriode(j){
+  const n=Number(j)||0;
+  _ccdPeriode=CCD_PERIODES.some(p=>p.j===n)?n:0;
+  try{
+    const c=getOwnedClient(currentClientId);
+    if(c){
+      renderCourbesCoach(c);
+      // LE BLOC DE PESEE SUIT LA MEME PERIODE : c'est exactement la plainte de
+      // depart, « chaque bloc fait ce qu'il veut ». Sa VITESSE, elle, garde sa
+      // propre fenetre de mesure — c'est un protocole, pas un cadrage.
+      renderPoidsCoach(c);
+    }
+    const b=document.querySelector('#ccd-courbes .ccd-per .cc-corps-o.actif');
+    if(b) b.focus();
+  }catch(e){}
+  return _ccdPeriode;
+}
+// L'instant d'ou partent les courbes, ou 0 pour « tout ».
+function ccdDepuis(){ return _ccdPeriode?(Date.now()-_ccdPeriode*86400000):0; }
+// PURE. Les points qui tombent dans la periode choisie.
+function ccdFenetre(points){
+  const d=ccdDepuis();
+  const l=points||[];
+  return d?l.filter(p=>p&&Number(p.x)>=d):l;
+}
+// Le libelle de la periode, pour les phrases qui la nomment.
+function ccdPeriodeLib(){
+  const p=CCD_PERIODES.find(x=>x.j===_ccdPeriode);
+  return p?p.lib.toLowerCase():'tout';
+}
+/**
+ * PURE. La composition du corps, bilan par bilan : le poids releve, le
+ * pourcentage de masse grasse estime, les kilos de gras et ceux de maigre.
+ *
+ * ⚠ UNE SEULE FORMULE DANS TOUT L'ONGLET. Les quatre cartes du verdict lisent
+ *   cette liste, la courbe aussi : deux calculs de masse maigre dans le meme
+ *   ecran finiraient par donner deux chiffres, et le coach ne saurait pas
+ *   lequel croire.
+ * @returns {Array<{date:number,pct:number,poids:number,gras:number,maigre:number}>}
+ */
+function ccdCompositionSerie(u){
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ return []; }
+  const taille=parseFloat((u&&(u._evol_height||u['init-height']||u.height))||0)||null;
+  const genre=(u&&(u._evol_gender||u.gender))||'';
+  const out=[];
+  if(!taille) return out;
+  for(const b of bl){
+    const p=getBW(b);
+    if(!(p>0)) continue;
+    let v=null;
+    try{ v=calcBF(getBM(b,'waist'),getBM(b,'neck'),getBM(b,'hips'),taille,genre); }catch(e){ v=null; }
+    if(v==null) continue;
+    const gras=Math.round(p*v/100*10)/10;
+    out.push({date:Number(b.date)||0,pct:v,poids:p,gras:gras,
+      maigre:Math.round((p-gras)*10)/10});
+  }
+  return out;
+}
+// PURE. La masse maigre en points de courbe.
+function ccdPointsMaigre(u){
+  return ccdCompositionSerie(u).map(c=>({x:c.date,v:c.maigre}));
+}
+// ── LA PROJECTION ──────────────────────────────────────────────────────────
+//
+// « Au rythme des quatre dernieres semaines, 97,5 kg le 21 octobre. »
+//
+// ⚠ ET SES TROIS BORNES, TOUTES DEMANDEES : quatre pesees au minimum, huit
+//   semaines au maximum, et la phrase qui la borne sous elle. On en ajoute une
+//   quatrieme, qui est deja la doctrine du fichier pour la vitesse etendue :
+//   quatre pesees faites en trois jours decrivent une humeur, pas une tendance.
+//   Il faut donc qu'elles s'etalent sur deux semaines au moins.
+//
+// ⚠ CE N'EST PAS LA VITESSE DU PROTOCOLE. vitesseHebdo travaille sur la
+//   moyenne mobile a sept jours et exige un regime de pesee quasi quotidien ;
+//   elle sert a PROPOSER un ajustement calorique, et elle a raison d'etre
+//   exigeante. Ici on ne propose rien : on prolonge une droite pour la montrer,
+//   avec sa fourchette et la phrase qui dit ce qu'elle vaut.
+const CCD_PROJ_JOURS=28;        // « les quatre dernieres semaines »
+const CCD_PROJ_PESEES_MIN=4;    // « pas de projection sur moins de quatre pesees »
+const CCD_PROJ_ETALEMENT=14;    // ... ni sur quatre pesees faites dans la meme semaine
+const CCD_PROJ_SEM_MAX=8;       // « pas de projection au-dela de huit semaines »
+/**
+ * PURE (au jour pres : elle lit la derniere pesee, pas l'horloge).
+ * @returns {{valeur:number,bas:number,haut:number,date:number,kgSem:number,
+ *            n:number,debut:string,fin:string,semaines:number}
+ *           |{manque:'pesees'|'etalement'|'aucune',n?:number,jours?:number}}
+ */
+function ccdProjection(u,semaines){
+  const sem=Math.min(CCD_PROJ_SEM_MAX,Math.max(1,Number(semaines)||CCD_PROJ_SEM_MAX));
+  let s=[]; try{ s=serieWeight(u)||[]; }catch(e){ s=[]; }
+  if(!s.length) return {manque:'aucune',n:0};
+  const fin=s[s.length-1].date;
+  const dans=s.filter(e=>_joursEntre(e.date,fin)<=CCD_PROJ_JOURS-1);
+  if(dans.length<CCD_PROJ_PESEES_MIN) return {manque:'pesees',n:dans.length};
+  const etal=_joursEntre(dans[0].date,fin);
+  if(etal<CCD_PROJ_ETALEMENT) return {manque:'etalement',jours:etal,n:dans.length};
+  // MOINDRES CARRES SUR LES DATES REELLES, comme la vitesse etendue : des
+  // pesees ne sont pas equidistantes, et regresser sur leur rang donnerait une
+  // pente qui ne correspond a aucune duree.
+  const pts=dans.map(e=>({x:_joursEntre(dans[0].date,e.date),y:Number(e.kg)||0}));
+  const n=pts.length;
+  const mx=pts.reduce((a,p)=>a+p.x,0)/n, my=pts.reduce((a,p)=>a+p.y,0)/n;
+  let num=0,den=0;
+  for(const p of pts){ num+=(p.x-mx)*(p.y-my); den+=(p.x-mx)*(p.x-mx); }
+  if(!den) return {manque:'etalement',jours:etal,n:n};
+  const pente=num/den, ord=my-pente*mx;            // kg par jour
+  // LA FOURCHETTE VIENT DE LA DISPERSION DES PESEES ELLES-MEMES : l'ecart type
+  // des residus donne le bruit autour de la droite, et l'incertitude de la
+  // pente, portee jusqu'a la date visee, donne le reste. Les deux s'ajoutent.
+  let sc=0;
+  for(const p of pts) sc+=Math.pow(p.y-(ord+pente*p.x),2);
+  const disp=(n>2)?Math.sqrt(sc/(n-2)):Math.max(SYN_BRUIT_POIDS,Math.sqrt(sc/Math.max(1,n-1)));
+  const sePente=den?(disp/Math.sqrt(den)):0;
+  const h=sem*7, xFin=pts[n-1].x;
+  const valeur=ord+pente*(xFin+h);
+  const marge=Math.max(SYN_BRUIT_POIDS,disp+sePente*h);
+  const d=new Date(); const [A,M,J]=String(fin).split('-').map(Number);
+  d.setFullYear(A,M-1,J); d.setHours(12,0,0,0);
+  d.setDate(d.getDate()+h);
+  return {valeur:Math.round(valeur*10)/10,
+    bas:Math.round((valeur-marge)*10)/10,haut:Math.round((valeur+marge)*10)/10,
+    date:d.getTime(),kgSem:Math.round(pente*7*100)/100,n:n,
+    debut:dans[0].date,fin:fin,semaines:sem};
+}
+// « 21 octobre ».
+function _ccdJourLong(ts){
+  try{ return new Date(Number(ts)||0).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }
+  catch(e){ return ''; }
+}
+// « du 26 août au 23 septembre » a partir de deux dates ISO de pesee.
+function _ccdJourISO(iso){
+  const [A,M,J]=String(iso||'').split('-').map(Number);
+  if(!A) return '';
+  const d=new Date(); d.setFullYear(A,M-1,J); d.setHours(12,0,0,0);
+  return _ccdJourLong(d.getTime());
+}
+/**
+ * La projection en UNE phrase, et la phrase qui la borne sous elle.
+ *
+ * ⚠ AUCUN PRONOM. La phrase de la mission dit « il serait a 97,5 kg » ; la
+ *   moitie des athletes du dossier sont des femmes, et l'ecran ne sait pas
+ *   toujours a qui il parle. On annonce donc le chiffre sans pronom, ce qui ne
+ *   retire rien a la phrase.
+ */
+function _htmlCcdProjection(u){
+  let p=null; try{ p=ccdProjection(u); }catch(e){ p=null; }
+  if(!p) return '';
+  if(p.manque){
+    const q=(p.manque==='aucune')
+      ?'Aucune pesée au dossier : pas de projection.'
+      :(p.manque==='pesees'
+        ?('Pas de projection : '+(p.n||0)+' pesée'+((p.n||0)>1?'s':'')+' sur les quatre dernières semaines, il en faut '+CCD_PROJ_PESEES_MIN+'.')
+        :('Pas de projection : ses '+(p.n||0)+' pesées tiennent sur '+(p.jours||0)+' jour'+((p.jours||0)>1?'s':'')+', il en faut au moins '+CCD_PROJ_ETALEMENT+'.'));
+    return '<p class="ccd-proj ccd-proj-non">'+escapeHtml(q)+'</p>';
+  }
+  return '<p class="ccd-proj"><b>'+escapeHtml('Au rythme des quatre dernières semaines : '
+      +_synNombre(p.valeur)+' kg le '+_ccdJourLong(p.date)+'.')+'</b><br>'
+    +escapeHtml(p.n+' pesées du '+_ccdJourISO(p.debut)+' au '+_ccdJourISO(p.fin)+', soit '
+      +(p.kgSem>0?'+':'−')+_synNombre(p.kgSem)+' kg par semaine. À cette date, la fourchette '
+      +'va de '+_synNombre(p.bas)+' à '+_synNombre(p.haut)+' kg. Une tendance n’est pas une promesse.')
+    +'</p>';
+}
+// ── L'ETAGE DES COURBES ────────────────────────────────────────────────────
+function _htmlCcdPeriodes(){
+  return '<div class="ccd-per" role="group" aria-label="Période de toutes les courbes">'
+    +'<span class="cc-corps-vue">'
+    +CCD_PERIODES.map(p=>'<button type="button" class="cc-corps-o'
+      +((p.j===_ccdPeriode)?' actif':'')+'" aria-pressed="'+((p.j===_ccdPeriode)?'true':'false')
+      +'" onclick="ccdPeriode('+p.j+')">'+escapeHtml(p.lib)+'</button>').join('')
+    +'</span></div>';
+}
+function _htmlCcdCourbes(c){
+  const u=_dossier(c);
+  if(!u) return '';
+  if(c&&c._fromCode) return '';
+  try{ if(!phpDisponible(u)) return ''; }catch(e){}
+  const poids=ccdFenetre(corpsPointsPoids(u));
+  const maigre=ccdFenetre(ccdPointsMaigre(u));
+  // ⚠ LA MARGE DE MESURE EST DESSINEE, PAS SEULEMENT ECRITE. Kevin : « sans
+  //   elles, un coach lit une progression la ou il n'y a que du bruit de
+  //   ruban ». Les deux bandes sont celles qui sont deja mesurees ailleurs :
+  //   0,3 kg pour la balance, 0,9 kg pour la masse maigre (un demi-centimetre
+  //   de ruban passe dans la formule, plus le bruit de la balance).
+  // ⚠ PAS DE LEGENDE POUR UNE COURBE QUI N'EST PAS TRACEE. _htmlCorpsGraphe
+  //   liste TOUTES les series qu'on lui passe : une masse maigre sans point
+  //   sortait en legende sous un graphique qui ne la montrait pas, ce qui se
+  //   lit comme une courbe disparue.
+  const series=[{lib:'Poids',couleur:'#E02020',points:poids,bande:SYN_BRUIT_POIDS}];
+  if(maigre.length>1) series.push({lib:'Masse maigre',couleur:'#3b82f6',
+    points:maigre,bande:CCD_MAIGRE_BRUIT});
+  const principale=_htmlCorpsGraphe((series.length>1)?'Poids et masse maigre':'Poids','kg',
+    series,
+    {h:72,dates:true,valeur:'',
+     pied:'Relevé au bilan · la bande grise est la marge de mesure : ± '
+       +String(SYN_BRUIT_POIDS).replace('.',',')+' kg sur la balance'
+       +((series.length>1)?(', ± '+String(CCD_MAIGRE_BRUIT).replace('.',',')
+         +' kg sur la masse maigre'):'')});
+  // LA PHRASE QUE KEVIN A ECRITE, MOT POUR MOT, et elle ne sort que si les
+  // deux courbes sont la : sans masse maigre, il n'y a pas d'ecart a lire.
+  const phrase=(principale&&maigre.length>1)
+    ?'<p class="ccd-ecart">L’écart entre les deux courbes, c’est le gras.</p>'
+    :'';
+  // SANS MASSE MAIGRE, ON DIT CE QUI MANQUE — jamais une courbe muette.
+  const manque=(principale&&maigre.length<2)?_htmlCcdManqueMaigre(u):'';
+  const groupes=(function(){ try{ return _htmlCorpsGraphes(u,{poids:false,depuis:ccdDepuis()})||''; }
+    catch(e){ return ''; } })();
+  const corps=principale+phrase+manque+_htmlCcdProjection(u)+groupes;
+  // ⚠ LE SELECTEUR RESTE MEME QUAND LA PERIODE NE MONTRE RIEN, sans quoi le
+  //   coach qui retrecit a 30 jours n'a plus de quoi revenir en arriere.
+  if(!corps.trim())
+    return '<div class="ccd-courbes">'+_htmlCcdPeriodes()
+      +'<p class="ccd-proj ccd-proj-non">'
+      +escapeHtml(_ccdPeriode?('Rien à tracer sur '+ccdPeriodeLib()+'. Ouvre « Tout » pour voir l’historique.')
+        :'Rien à tracer : il faut deux relevés d’une même mesure.')
+      +'</p></div>';
+  return '<div class="ccd-courbes">'+_htmlCcdPeriodes()+corps+'</div>';
+}
+// Ce qui manque pour tracer la masse maigre, dans les memes mots que la carte
+// du verdict — une seule facon de nommer une mesure absente.
+function _htmlCcdManqueMaigre(u){
+  let v=null; try{ v=ccdVerdict(u); }catch(e){ v=null; }
+  const m=(v&&v.gras&&v.gras.manque)?v.gras.manque:[];
+  return '<p class="ccd-proj ccd-proj-non">'
+    +escapeHtml(m.length
+      ?('Pas de courbe de masse maigre : il manque '+m.join(', ')+'.')
+      :'Pas de courbe de masse maigre : il faut deux bilans qui portent le tour de taille et le tour de cou.')
+    +'</p>';
+}
+function renderCourbesCoach(c){
+  const z=document.getElementById('ccd-courbes');
+  if(!z) return false;
+  let h='';
+  try{ h=_htmlCcdCourbes(c)||''; }catch(e){ h=''; }
+  z.innerHTML=h;
+  return !!h;
+}
 function renderCorpsCoach(c){
   const z=document.getElementById('ccd-corps');
   if(!z) return false;
   let h='';
-  try{ h=_htmlCorpsCadre(c)||''; }catch(e){ h=''; }
+  // ⚠ LES COURBES SONT MONTEES D'UN ETAGE (lot 4) : elles vivent desormais
+  //   dans « Ses courbes », sous le selecteur de periode qui les commande
+  //   toutes. Le cadre garde la silhouette, ses etiquettes et sa legende.
+  try{ h=_htmlCorpsCadre(c,{graphes:false})||''; }catch(e){ h=''; }
   z.innerHTML=h;
   // Les calques de zones se peignent une fois dans la page : ils lisent une
   // image, ce qu'une chaine HTML ne sait pas faire.
@@ -87600,7 +87888,7 @@ function _courbePesee(serie){
       ${defs}${aires.join('')}${bruts}${traits.join('')}${dernier}
     </svg>
     <div style="display:flex;justify-content:space-between;font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">
-      <span>${_fmtJourCourt(pts[0].date)}</span><span>${mn.toFixed(1)} – ${mx.toFixed(1)} kg</span><span>${_fmtJourCourt(fin)}</span>
+      <span>${_fmtJourCourt(pts[0].date)}</span><span>${_synNombre(mn)} à ${_synNombre(mx)} kg</span><span>${_fmtJourCourt(fin)}</span>
     </div>
     ${brut?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:6px">
        Trait en pointillé : les pesées reliées entre elles. La moyenne sur sept
@@ -87724,8 +88012,13 @@ function togglePoidsMasque(){
 // l'athlète est en mode neutre. Sans cet encart, le coach verrait un écran de
 // poids amputé sans comprendre pourquoi, et redemanderait à l'athlète les
 // chiffres que l'app a délibérément cessé d'afficher.
-function blocPoidsCoach(user){
+function blocPoidsCoach(user,depuis){
   if(!user) return '';
+  // ⚠ LA PERIODE NE CADRE QUE LE TRACE. La vitesse hebdomadaire vient d'un
+  //   protocole de mesure (moyenne mobile a sept jours, fenetre de quatorze ou
+  //   vingt-huit jours) : la recadrer sur ce que le coach a choisi de REGARDER
+  //   changerait un chiffre qui sert a proposer un ajustement calorique.
+  const _pDep=Number(depuis)||0;
   const neutre=aTCA(user);
   const serie=serieWeight(user);
   if(neutre){
@@ -87764,14 +88057,17 @@ function blocPoidsCoach(user){
       </div>
       ${alerte?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6;margin-top:4px">Au-delà du seuil${cible.phase?' de la phase '+cible.lib:''} — à vérifier avec l'athlète.</div>`:''}`
      :`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px">Pas assez de pesées pour une vitesse (il en faut au moins quatre par semaine sur trois semaines).</div>`}
-    ${_courbePesee(serie)}
+    ${_courbePesee(_pDep?serie.filter(e=>{
+      try{ return new Date(e.date+'T12:00:00').getTime()>=_pDep; }catch(x){ return true; }
+    }):serie)}
+    ${_pDep?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">La courbe suit la période choisie en haut de « Ses courbes ». La vitesse, elle, garde sa fenêtre de mesure.</div>':''}
   </div>`;
 }
 function renderPoidsCoach(c){
   const z=document.getElementById('ccd-poids');
   if(!z) return;
   let html='';
-  try{ html=c?blocPoidsCoach(c):''; }catch(e){ html=''; }
+  try{ html=c?blocPoidsCoach(c,(typeof ccdDepuis==='function')?ccdDepuis():0):''; }catch(e){ html=''; }
   z.innerHTML=html;
 }
 // ── Choix de phase, côté athlète ────────────────────────────────────────────

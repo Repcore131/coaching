@@ -43006,6 +43006,154 @@ async function testExercices(){
         return true;
       } finally { _corpsVue=sv; _corpsMode=sm; }})());
 
+
+    // ══ LOT 4 : LES COURBES, TOUTES SUR LA MEME PERIODE (23/09/2026) ═════
+    // « Un seul sélecteur de période en tête de l'étage, qui pilote TOUS les
+    //   graphiques à la fois. Aujourd'hui chaque bloc fait ce qu'il veut. »
+    ok('UN SEUL SÉLECTEUR DE PÉRIODE, ET IL PILOTE TOUS LES GRAPHIQUES',(()=>{
+      if(typeof ccdPeriode!=='function') return _echec('le sélecteur de période n’existe pas');
+      // « TOUT » A L'OUVERTURE : une fiche qui s'ouvre ne cache rien de ce
+      // qu'elle porte. On le lit avant d'y toucher.
+      if(_ccdPeriode!==0) return _echec('la période ouverte n’est pas « tout » : '+_ccdPeriode);
+      if(CCD_PERIODES.map(p=>p.j).join('/')!=='30/90/365/0')
+        return _echec('les périodes ont changé : '+CCD_PERIODES.map(p=>p.j).join('/'));
+      const sp=_ccdPeriode;
+      try{
+        if(ccdPeriode(90)!==90) return _echec('90 jours ne se pose pas');
+        if(ccdPeriode(7)!==0) return _echec('une période inconnue ne retombe pas sur « tout »');
+        const J=864e5, t=Date.now();
+        const pts=[{x:t-200*J,v:10},{x:t-20*J,v:11},{x:t-2*J,v:12}];
+        if(ccdFenetre(pts).length!==3) return _echec('« tout » coupe des points');
+        ccdPeriode(30);
+        if(ccdFenetre(pts).length!==2) return _echec('30 jours ne coupe pas le point de 200 jours');
+        if(!ccdDepuis()) return _echec('30 jours ne donne pas de borne');
+        // LES DEUX AUTRES BLOCS SUIVENT : les mensurations du cadre, et la
+        // courbe de pesée. C'était la plainte de départ.
+        const u={id:'C4A',email:'c4a@t.fr',role:'athlete',gender:'H',bilans:[
+          {date:t-200*J,'bil-chest':'100','bil-weight':'80'},
+          {date:t-20*J,'bil-chest':'101','bil-weight':'79'},
+          {date:t-2*J,'bil-chest':'102','bil-weight':'78'}]};
+        const large=_htmlCorpsGraphes(u,{depuis:0});
+        const etroit=_htmlCorpsGraphes(u,{depuis:t-30*J});
+        if(!/Relevés du/.test(large)) return _echec('les mensurations ne disent plus leur période');
+        if(large===etroit) return _echec('les mensurations ignorent la période');
+        // ET LE POIDS PEUT SORTIR DU CADRE : il est monté dans l'étage.
+        if(!/Poids/.test(_htmlCorpsGraphes(u,{}))) return _echec('la carte du poids a disparu du cadre');
+        if(/Poids<\/span>/.test(_htmlCorpsGraphes(u,{poids:false})))
+          return _echec('la carte du poids reste malgré poids:false');
+        // LA COURBE DE PESÉE AUSSI, ET SA VITESSE NON : un protocole de mesure
+        // ne se recadre pas sur ce que le coach a choisi de regarder.
+        const iso=d=>{const x=new Date(d);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
+        const wl=[]; for(let k=60;k>=0;k-=2) wl.push({date:iso(t-k*J),kg:80-(60-k)*0.02});
+        const p={id:'C4B',email:'c4b@t.fr',role:'athlete',gender:'H',weightLog:wl,bilans:[]};
+        const bTout=blocPoidsCoach(p), b30=blocPoidsCoach(p,t-30*J);
+        if(!bTout||!b30) return _echec('le bloc de poids ne sort pas');
+        if(bTout===b30) return _echec('la courbe de pesée ignore la période');
+        if(!/période choisie/.test(b30)) return _echec('le bloc ne dit pas qu’il suit la période');
+        if(/période choisie/.test(bTout)) return _echec('il l’annonce même sans période');
+        return true;
+      } finally { try{ ccdPeriode(sp); }catch(e){} }})());
+
+    ok('POIDS ET MASSE MAIGRE SUR LE MÊME GRAPHIQUE, ET CE QU’IL Y A ENTRE EUX',(()=>{
+      const J=864e5, t=Date.now();
+      // La periode est un etat global : on la pose a « tout » pour que cette
+      // assertion ne depende pas de celle qui l'a precedee.
+      const sp=_ccdPeriode; _ccdPeriode=0;
+      try{
+      const u={id:'C4C',email:'c4c@t.fr',role:'athlete',gender:'H',_evol_height:'178',bilans:[
+        {date:t-90*J,'bil-weight':'86','bil-waist':'92','bil-neck':'40'},
+        {date:t-60*J,'bil-weight':'84','bil-waist':'89','bil-neck':'40'},
+        {date:t-2*J,'bil-weight':'82','bil-waist':'86','bil-neck':'40'}]};
+      // LA MASSE MAIGRE SORT DE LA MÊME LISTE QUE LES CARTES DU VERDICT.
+      const comp=ccdCompositionSerie(u);
+      if(comp.length!==3) return _echec(comp.length+' points de composition au lieu de trois');
+      const v=ccdVerdict(u);
+      if(!v.maigre||Math.abs(v.maigre.kg-comp[comp.length-1].maigre)>0.01)
+        return _echec('la carte et la courbe ne disent pas la même masse maigre : '+v.maigre.kg+' / '+comp[comp.length-1].maigre);
+      const h=_htmlCcdCourbes(u);
+      if(!/Poids et masse maigre/.test(h)) return _echec('la courbe principale n’existe pas');
+      if(!/Masse maigre/.test(h)) return _echec('la masse maigre n’est pas en légende');
+      // LA PHRASE DE LA MISSION, MOT POUR MOT.
+      if(h.indexOf('L’écart entre les deux courbes, c’est le gras.')<0)
+        return _echec('la phrase sous le graphique a changé');
+      // LA MARGE DE MESURE EST ANNONCÉE, ET LES DEUX SONT LES CONSTANTES MESURÉES.
+      if(h.indexOf('± '+String(SYN_BRUIT_POIDS).replace('.',',')+' kg sur la balance')<0)
+        return _echec('la marge de la balance n’est pas dite');
+      if(h.indexOf('± '+String(CCD_MAIGRE_BRUIT).replace('.',',')+' kg sur la masse maigre')<0)
+        return _echec('la marge de la masse maigre n’est pas dite');
+      // SANS LES MESURES DE LA FORMULE : pas de courbe muette, on dit ce qui manque.
+      const sans={id:'C4D',email:'c4d@t.fr',role:'athlete',gender:'H',_evol_height:'178',bilans:[
+        {date:t-60*J,'bil-weight':'86'},{date:t-2*J,'bil-weight':'84'}]};
+      const h2=_htmlCcdCourbes(sans);
+      if(/Masse maigre/.test(h2)) return _echec('une masse maigre sort sans tour de taille');
+      if(!/Pas de courbe de masse maigre/.test(h2)) return _echec('rien ne dit pourquoi la courbe manque : '+h2.slice(0,200));
+      if(!/tour de cou|tour de taille/.test(h2)) return _echec('la phrase ne nomme pas la mesure absente');
+      if(/L’écart entre les deux courbes/.test(h2)) return _echec('la phrase de l’écart sort avec une seule courbe');
+      // LES MENSURATIONS PAR GROUPE SONT DANS L'ÉTAGE, PLUS DANS LE CADRE.
+      if(!/Mensurations/.test(h)) return _echec('les mensurations ne sont pas rapatriées dans l’étage');
+      if(!/graphes:false/.test(String(renderCorpsCoach))) return _echec('le cadre du coach porte encore ses graphiques');
+      const cad=document.createElement('div');
+      cad.innerHTML=_htmlCorpsCadre(u,{graphes:false});
+      if(cad.querySelector('.cc-corps-g')) return _echec('un graphique reste dans le cadre');
+      return true;
+      } finally { _ccdPeriode=sp; }})());
+
+    ok('LA MARGE DE MESURE EST DESSINÉE AUTOUR DE CHAQUE COURBE',(()=>{
+      const pts=[{x:1,v:10},{x:2,v:10},{x:3,v:10}];
+      const sans=_corpsCourbe([{lib:'A',couleur:'#fff',points:pts}],{h:40});
+      const avec=_corpsCourbe([{lib:'A',couleur:'#fff',points:pts,bande:0.5}],{h:40});
+      if(!sans||!avec) return _echec('la courbe ne se trace plus');
+      if(/rgba\(255,255,255,\.10\)/.test(sans.svg)) return _echec('une bande sort sans tolérance demandée');
+      if(!/rgba\(255,255,255,\.10\)/.test(avec.svg)) return _echec('la bande de tolérance n’est pas dessinée');
+      // ⚠ LA BANDE ENTRE DANS L'ÉCHELLE : dessinée hors des bornes, elle serait
+      //   coupée par le cadre.
+      if(!(avec.min<=9.5+1e-9)||!(avec.max>=10.5-1e-9))
+        return _echec('les bornes n’ouvrent pas la place de la bande : '+avec.min+' / '+avec.max);
+      // ET ELLE PASSE SOUS LES LIGNES, jamais par-dessus : deux séries, la
+      // bande de la seconde recouvrirait la ligne de la première.
+      const deux=_corpsCourbe([
+        {lib:'A',couleur:'#aaa',points:[{x:1,v:10},{x:2,v:11}],bande:0.5},
+        {lib:'B',couleur:'#bbb',points:[{x:1,v:20},{x:2,v:21}],bande:0.5}],{h:40});
+      const s=deux.svg;
+      if(s.lastIndexOf('rgba(255,255,255,.10)')>s.indexOf('stroke="#aaa"'))
+        return _echec('une bande est dessinée après une ligne');
+      return true;})());
+
+    ok('LA PROJECTION TIENT EN UNE LIGNE, ET ELLE EST BORNÉE',(()=>{
+      const J=864e5, t=Date.now();
+      const iso=d=>{const x=new Date(d);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
+      const dossier=(wl)=>({id:'C4E'+wl.length,email:'c4e'+wl.length+'@t.fr',role:'athlete',gender:'H',weightLog:wl,bilans:[]});
+      // MOINS DE QUATRE PESÉES : rien, et on dit pourquoi.
+      const trois=[0,7,14].map(k=>({date:iso(t-k*J),kg:90-k*0.05}));
+      const p3=ccdProjection(dossier(trois));
+      if(!p3||p3.manque!=='pesees') return _echec('trois pesées donnent quand même une projection : '+JSON.stringify(p3));
+      // QUATRE PESÉES DANS LA MÊME SEMAINE : une humeur, pas une tendance.
+      const serrees=[0,1,2,3].map(k=>({date:iso(t-k*J),kg:90-k*0.1}));
+      const ps=ccdProjection(dossier(serrees));
+      if(!ps||ps.manque!=='etalement') return _echec('quatre pesées en trois jours projettent : '+JSON.stringify(ps));
+      // UNE SÉRIE PROPRE : la pente, la date, la fourchette.
+      const propre=[]; for(let k=26;k>=0;k-=2) propre.push({date:iso(t-k*J),kg:90-(26-k)*(0.5/7)});
+      const p=ccdProjection(dossier(propre));
+      if(!p||p.manque) return _echec('une série propre ne projette pas : '+JSON.stringify(p));
+      if(Math.abs(p.kgSem+0.5)>0.08) return _echec('la pente n’est pas celle des pesées : '+p.kgSem);
+      if(p.semaines!==CCD_PROJ_SEM_MAX) return _echec('l’horizon n’est pas de huit semaines : '+p.semaines);
+      if(Math.abs(Math.round((p.date-t)/J)-56)>2) return _echec('la date visée n’est pas à huit semaines : '+Math.round((p.date-t)/J)+' jours');
+      if(!(p.bas<p.valeur&&p.valeur<p.haut)) return _echec('la fourchette n’encadre pas la valeur');
+      if(Math.abs(p.valeur-(90-0.5*4-0.5*8))>1.5) return _echec('la valeur projetée dérive : '+p.valeur);
+      // HUIT SEMAINES AU PLUS, même si on en demande vingt.
+      const loin=ccdProjection(dossier(propre),20);
+      if(loin.semaines!==CCD_PROJ_SEM_MAX) return _echec('l’horizon dépasse huit semaines : '+loin.semaines);
+      // LA PHRASE QUI LA BORNE, SOUS ELLE, ET AUCUN PRONOM : l'écran ne sait
+      // pas toujours s'il parle d'un homme ou d'une femme.
+      const h=_htmlCcdProjection(dossier(propre));
+      if(!/Au rythme des quatre dernières semaines/.test(h)) return _echec('la phrase d’annonce a changé : '+h);
+      if(!/Une tendance n’est pas une promesse/.test(h)) return _echec('la phrase qui borne la projection a disparu');
+      if(/il serait|elle serait/.test(h)) return _echec('la projection met un pronom sur l’athlète : '+h);
+      if(!/pesées du .* au /.test(h)) return _echec('la projection ne dit pas sur quoi elle repose : '+h);
+      if(!/la fourchette va de/.test(h)) return _echec('la projection ne donne pas sa fourchette');
+      if(/[—–]/.test(h.replace(/<[^>]*>/g,''))) return _echec('un tiret cadratin dans la projection');
+      return true;})());
+
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
       // Chaque silhouette porte sa carte : une image ou chaque pixel du corps
       // vaut le rang de son muscle dans CORPS_ZONES_ORDRE, fois CORPS_ZONES_PAS.

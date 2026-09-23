@@ -4273,6 +4273,25 @@ html{scroll-behavior:smooth}
    dates et la tolerance du ruban. Elle passe a la ligne plutot que de sortir du
    cadre ; une phrase de volume, courte, garde son nowrap. */
 .cc-corps-bulle.long{white-space:normal;max-width:190px;text-align:center}
+/* ══ L'ETAGE DES COURBES (lot 4) ══════════════════════════════════════════
+   UN SEUL SELECTEUR DE PERIODE, en tete de l'etage, du meme habit que les
+   selecteurs du cadre corps : ce sont trois lentilles de la meme famille (la
+   vue, la lecture, la periode), et trois habits differents auraient fait
+   croire a trois mecaniques. */
+.ccd-per{display:flex;justify-content:center;margin:0 0 10px}
+.ccd-per .cc-corps-o{padding:7px 9px}
+/* LA PHRASE DE KEVIN SOUS LA COURBE PRINCIPALE. Elle n'est pas un pied de
+   cadre gris : c'est la clef de lecture du graphique, et elle se lit. */
+.ccd-ecart{margin:-6px 0 12px;font-size:var(--fs-xs);color:var(--text);
+  line-height:1.55;text-align:center;font-weight:700}
+/* LA PROJECTION, ET LA PHRASE QUI LA BORNE. Le chiffre en gras, sa source et
+   sa fourchette en petit dessous : une valeur affichee porte sa source, sa
+   date et sa marge. */
+.ccd-proj{margin:-4px 0 14px;padding:9px 11px;background:rgba(255,255,255,.028);
+  border:1px solid rgba(255,255,255,.09);border-radius:var(--r-2);
+  font-size:var(--fs-2xs);color:var(--sub);line-height:1.6}
+.ccd-proj b{color:var(--text);font-size:var(--fs-xs);font-weight:800}
+.ccd-proj-non{color:var(--text-faint)}
 /* La legende des quatre zones : la meme grammaire que celle de la grille de
    charge, pastille puis nom de zone. */
 .cc-corps-l{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
