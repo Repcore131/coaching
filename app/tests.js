@@ -34026,6 +34026,88 @@ async function testExercices(){
           act.forEach(id=>{ const e=document.getElementById(id); if(e) e.classList.add('active'); });
         }})());
 
+      // ══ LOT 7 — LA VIDEO S'EMPORTE AVANT DE PARTIR ════════════════════
+      ok('LOT 7 — L’URL DE TÉLÉCHARGEMENT FAIT ENREGISTRER, ELLE N’OUVRE PAS',(()=>{
+        // ⚠ `download` SUR UN AUTRE DOMAINE EST IGNORE : le navigateur ouvre
+        //   la vidéo, et la personne croit avoir sauvegardé. fl_attachment pose
+        //   l’en-tête côté serveur. Mesuré le 23/09/2026 sur res.cloudinary.com :
+        //   « Content-Disposition: attachment; filename="ma-serie.mp4" ».
+        const u=urlTelechargementVideo({name:'Développé couché',
+          url:'https://res.cloudinary.com/dntu/video/upload/v17/repcore/a/b.mp4'});
+        if(u.indexOf('/upload/fl_attachment:')<0) return _echec('le drapeau n’est pas posé : '+u);
+        if(u.indexOf('/v17/repcore/a/b.mp4')<0) return _echec('la fin de l’URL a changé : '+u);
+        // LE NOM DU FICHIER EST LISIBLE, et sans accent ni espace : c’est lui
+        // que la personne retrouvera dans ses téléchargements.
+        const nom=u.split('fl_attachment:')[1].split('/')[0];
+        if(!/^[A-Za-z0-9-]+$/.test(nom)) return _echec('nom de fichier : « '+nom+' »');
+        if(nom.toLowerCase().indexOf('developpe')<0) return _echec('le nom ne vient pas de la vidéo : '+nom);
+        // ET CE QUI N’EST PAS NOTRE FICHIER NE SE TÉLÉCHARGE PAS COMME ÇA.
+        if(urlTelechargementVideo({name:'x',url:'https://youtu.be/abc'})!=='')
+          return _echec('un lien YouTube est traité comme notre fichier');
+        return urlTelechargementVideo(null)===''
+          ?true:_echec('une vidéo absente produit une URL');})());
+
+      ok('LOT 7 — LES DEUX PLATEFORMES ONT CHACUNE LEUR CHEMIN, ET UN REPLI QUI PARLE',(()=>{
+        const src=String(telechargerVideo);
+        // iOS : la feuille de partage est la SEULE voie vers Photos.
+        if(src.indexOf('_estIOS()')<0) return _echec('le chemin iPhone n’est pas distingué');
+        if(!/navigator\.share/.test(src)) return _echec('iPhone ne passe pas par la feuille de partage');
+        if(!/canShare/.test(src)) return _echec('on partage sans demander si c’est possible');
+        // Android et bureau : l’URL de l’hébergeur, sans rien charger en mémoire.
+        if(src.indexOf('urlTelechargementVideo(')<0) return _echec('Android ne passe pas par fl_attachment');
+        // LE REPLI DIT QUOI FAIRE, et il dit autre chose sur iPhone : l’appui
+        // long y propose « Ajouter aux photos ».
+        if(src.indexOf('Ajouter aux photos')<0) return _echec('le repli iPhone ne dit pas l’appui long');
+        // ET UN PARTAGE REFUSE N’EST PAS UNE ERREUR : on ne crie pas sur
+        // quelqu’un qui a ferme la feuille.
+        if(src.indexOf('AbortError')<0) return _echec('un partage annulé est traité comme un échec');
+        // LE BOUTON EXISTE LA OU LA VIDEO EST MENACEE.
+        return _prodSrc().indexOf('telechargerVideo(')>=0
+          ?true:_echec('aucun bouton n’appelle le téléchargement');})());
+
+      ok('LOT 7 — LE COMPARATEUR N’EXISTE PLUS, ET CE QU’IL PORTAIT EST RECOPIÉ',(()=>{
+        // L’ÉCRAN, LES FONCTIONS ET LE CHAMP SONT PARTIS.
+        if(document.getElementById('s-comparer')) return _echec('l’écran du comparateur existe encore');
+        for(const f of ['ouvrirComparateur','pairePrises','clePaire','annotationsPaire',
+                        'ajouterAnnotationPaire','annotationAJouer','prisesExercice','_renderComparateur'])
+          if(typeof window[f]==='function') return _echec(f+' existe encore');
+        // CE QUE LE COACH AVAIT ÉCRIT EST RECOPIÉ SUR LA VIDÉO QU’IL VISAIT.
+        const u={email:'mig@t.fr',videos:[
+          {id:'v1',name:'A',url:'u1',date:1000},
+          {id:'v3',name:'B',url:'u3',date:3000}],
+          comparaisons:{'DEV|v1|v3':{cle:'DEV',avant:'v1',apres:'v3',annotations:[
+            {sec:12.4,sur:'apres',audioUrl:'https://x/a.webm',note:'',date:5},
+            {sec:3,sur:'avant',note:'dos plus droit',date:6},
+            {sec:9,sur:'apres',note:'perdue',date:7}]}}};
+        // La troisième vise une vidéo qui existe : trois recopiées, zéro orpheline.
+        const n=migrerComparaisons(u);
+        if(n!==3) return _echec(n+' annotations migrées au lieu de 3');
+        if(u.comparaisons!==undefined) return _echec('le champ comparaisons survit');
+        const v3=u.videos.find(v=>v.id==='v3'), v1=u.videos.find(v=>v.id==='v1');
+        if((v3.feedbackTimestamps||[]).length!==2) return _echec('la dernière vidéo n’a pas ses deux repères');
+        if((v1.feedbackTimestamps||[]).length!==1) return _echec('la première vidéo n’a pas son repère');
+        const a=v3.feedbackTimestamps[0];
+        if(a.sec!==12.4||a.audioUrl!=='https://x/a.webm') return _echec('le message audio a été abîmé');
+        if(!/^\d+:\d\d$/.test(String(a.ts||''))) return _echec('l’horodatage lisible manque : '+a.ts);
+        // ET ON NE RECOPIE PAS DEUX FOIS : la migration peut repasser.
+        u.comparaisons={'DEV|v1|v3':{cle:'DEV',avant:'v1',apres:'v3',annotations:[
+          {sec:12.4,sur:'apres',audioUrl:'https://x/a.webm',note:'',date:5}]}};
+        if(migrerComparaisons(u)!==0) return _echec('une annotation déjà migrée est recopiée');
+        // UNE ANNOTATION DONT LA VIDÉO N’EXISTE PLUS EST GARDÉE, PAS JETÉE.
+        const o={email:'orph@t.fr',videos:[],
+          comparaisons:{'SQUAT|vA|vB':{cle:'SQUAT',avant:'vA',apres:'vB',
+            annotations:[{sec:4,sur:'apres',note:'genoux',date:8}]}}};
+        if(migrerComparaisons(o)!==1) return _echec('l’annotation orpheline est perdue');
+        if((o.correctionsOrphelines||[]).length!==1) return _echec('rien n’est gardé de côté');
+        if(o.correctionsOrphelines[0].note!=='genoux') return _echec('le texte du coach est perdu');
+        // ET ELLE S’AFFICHE, sinon la garder ne sert à rien.
+        const h=htmlCorrectionsOrphelines(o);
+        if(h.indexOf('genoux')<0) return _echec('la correction gardée ne s’affiche pas');
+        if(h.indexOf('SQUAT')<0) return _echec('on ne sait pas de quel exercice elle parle');
+        // UN DOSSIER SANS COMPARAISON NE BOUGE PAS.
+        return migrerComparaisons({email:'x@t.fr',videos:[]})===0
+          ?true:_echec('un dossier sans comparaison est modifié');})());
+
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
         const src=_prodSrc();

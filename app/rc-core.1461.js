@@ -79516,36 +79516,82 @@ function gardeVideo(id){
   return true;
 }
 /**
- * « Télécharger » : le fichier, sur l'appareil. On passe par un Blob et non par
- * un simple lien : un href vers un autre domaine avec `download` est IGNORÉ par
- * le navigateur, qui ouvre l'onglet au lieu d'enregistrer — et la personne
- * croirait avoir sauvegardé sa vidéo.
+ * PURE. L'URL QUI FAIT ENREGISTRER AU LIEU D'OUVRIR (lot 7).
  *
- * ⚠ SI LE TÉLÉCHARGEMENT DIRECT ÉCHOUE, on ouvre la vidéo et on le DIT. Mieux
- *   vaut un geste de plus qu'un fichier qu'on croit avoir mis à l'abri.
+ * ⚠ `download` SUR UN AUTRE DOMAINE EST IGNORE. Le navigateur ouvre la video
+ *   dans un onglet, et la personne croit avoir sauvegarde. Cloudinary sait
+ *   faire mieux : `fl_attachment` pose l'en-tete Content-Disposition cote
+ *   serveur, et le fichier part dans les telechargements sans passer par la
+ *   memoire du telephone — une video de trente megaoctets n'a rien a faire
+ *   dans un Blob sur un appareil qui n'en a plus.
+ *
+ * Rend '' quand ce n'est pas un fichier de chez nous : un lien YouTube ou
+ * Drive colle par l'athlete n'est pas notre fichier, et il ne se telecharge
+ * pas comme ca.
+ */
+function urlTelechargementVideo(v){
+  const u=String((v&&v.url)||'');
+  if(u.indexOf('res.cloudinary.com')<0) return '';
+  const i=u.indexOf('/upload/');
+  if(i<0) return '';
+  const nom=(String((v&&v.name)||'video').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+/,'').replace(/-+$/,'')||'video').slice(0,40);
+  return u.slice(0,i+8)+'fl_attachment:'+nom+'/'+u.slice(i+8);
+}
+/**
+ * « Télécharger » : le fichier, dans la galerie.
+ *
+ * ⚠ LES DEUX PLATEFORMES NE SE RESSEMBLENT PAS, et un seul chemin en laisse
+ *   une sur le carreau.
+ *   iOS : Safari ignore largement `download`. La seule voie vers Photos est la
+ *     feuille de partage — « Enregistrer la vidéo » y figure. On prepare donc
+ *     le fichier et on ouvre la feuille.
+ *   Android et bureau : l'URL `fl_attachment` suffit, et ne charge rien en
+ *     memoire.
+ *
+ * ET QUAND RIEN NE MARCHE, ON LE DIT. Mieux vaut un geste de plus qu'un
+ * fichier qu'on croit avoir mis a l'abri : la video s'ouvre, et la phrase dit
+ * l'appui long, qui propose « Ajouter aux photos » sur iPhone.
  */
 async function telechargerVideo(id){
   const v=(currentUser.videos||[]).find(x=>x&&x.id===id);
   if(!v||!v.url){ toast('Plus de fichier à télécharger.','var(--orange)'); return false; }
-  toast('Téléchargement…','var(--sub)');
-  let u=null;
-  try{
-    const r=await fetch(v.url,{mode:'cors'});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const b=await r.blob();
-    u=URL.createObjectURL(b);
-    const a=document.createElement('a');
-    a.href=u;
-    a.download=(String(v.name||'video').replace(/[^\w .-]+/g,'_')||'video')+'.mp4';
-    document.body.appendChild(a); a.click(); a.remove();
-    toast('Vidéo enregistrée sur ton appareil.','var(--green)');
-    return true;
-  }catch(e){
-    try{ window.open(v.url,'_blank','noopener'); }catch(x){}
-    toast('Je n’ai pas pu l’enregistrer directement : elle s’ouvre dans un onglet, '
-      +'enregistre-la depuis là.','var(--orange)');
-    return false;
-  } finally { if(u) setTimeout(()=>{ try{ URL.revokeObjectURL(u); }catch(e){} },60000); }
+  const dl=urlTelechargementVideo(v);
+  const nomFichier=(String(v.name||'video').replace(/[^\w .-]+/g,'_')||'video')+'.mp4';
+  // ── iOS : LA FEUILLE DE PARTAGE, ET ELLE SEULE ────────────────────────
+  if(_estIOS()&&typeof navigator!=='undefined'&&navigator.share){
+    toast('Préparation…','var(--sub)');
+    try{
+      const r=await fetch(dl||v.url,{mode:'cors'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const b=await r.blob();
+      const f=new File([b],nomFichier,{type:b.type||'video/mp4'});
+      if(navigator.canShare&&navigator.canShare({files:[f]})){
+        await navigator.share({files:[f]});
+        toast('Choisis « Enregistrer la vidéo » pour l’ajouter à Photos.','var(--green)');
+        return true;
+      }
+    }catch(e){
+      // Un partage refuse par la personne n'est pas un echec : on se tait.
+      if(e&&(e.name==='AbortError'||e.name==='NotAllowedError')) return false;
+    }
+  }
+  // ── ANDROID ET BUREAU : l'en-tete de l'hebergeur fait le travail ──────
+  if(dl){
+    try{
+      const a=document.createElement('a');
+      a.href=dl; a.download=nomFichier; a.rel='noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      toast('Téléchargement lancé.','var(--green)');
+      return true;
+    }catch(e){}
+  }
+  // ── LE REPLI, ET IL DIT CE QU'IL FAUT FAIRE ──────────────────────────
+  try{ window.open(v.url,'_blank','noopener'); }catch(x){}
+  toast(_estIOS()
+    ?'Elle s’ouvre : appui long sur la vidéo, puis « Ajouter aux photos ».'
+    :'Elle s’ouvre dans un onglet : enregistre-la depuis là.','var(--orange)');
+  return false;
 }
 
 // LE BOUTON « × » NE FAISAIT RIEN, ET AUCUNE ERREUR N'EN SORTAIT. Il portait
@@ -80950,6 +80996,25 @@ async function _videoSerieEnvoyer(input){
 // CE QUI N'EXPIRE PAS, ET IL FAUT LE DIRE : un lien YouTube ou Drive collé par
 // l'athlète (aucune copie chez nous — ce n'est pas notre fichier et il ne coûte
 // rien), une vidéo épinglée, et tout ce qui n'a pas de date.
+// ⚠ LOT 7 : KEVIN A DEMANDE QUATORZE JOURS ET TROIS JOURS, ET CES DEUX
+//   NOMBRES NE SONT PAS ENCORE POSES. Sa consigne, dans le meme lot et mot
+//   pour mot : « TESTE LES DEUX SUR UN VRAI TELEPHONE avant d'activer la
+//   purge. Une purge adossee a un telechargement qui echoue, c'est une perte
+//   de donnees, et c'est impardonnable. »
+//
+//   Le telechargement est ecrit (telechargerVideo, deux chemins), et la moitie
+//   Android est verifiee : l'URL fl_attachment rend bien
+//   « Content-Disposition: attachment » — mesure du 23/09/2026 sur
+//   res.cloudinary.com. La moitie iPhone passe par la feuille de partage, et
+//   il n'y a pas d'iPhone sur ce banc : je ne peux pas la verifier.
+//
+//   CE QU'IL RESTE A FAIRE, ET C'EST TOUT :
+//     1. Sur iPhone, « Telecharger » sur une video, puis « Enregistrer la
+//        video » dans la feuille : elle doit arriver dans Photos.
+//     2. Sur Android, « Telecharger » doit poser le fichier dans les
+//        telechargements, sans ouvrir d'onglet.
+//     3. Ces deux nombres passent a 14 et 3. Rien d'autre ne bouge : toutes
+//        les phrases de l'ecran les lisent.
 const VIDEO_RETENTION_J=90;
 const VIDEO_PREAVIS_J=7;
 const VIDEO_EPINGLES_MAX=10;
