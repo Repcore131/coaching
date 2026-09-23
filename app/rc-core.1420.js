@@ -4676,6 +4676,11 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // date de naissance — seulement un horodatage d'ouverture et un nombre de
   // seances deja faites au depart.
   'essai',
+  // La date a laquelle les medias d'un dossier dormant ont ete detruits. Une
+  // date, et rien d'autre : ni mesure, ni ressenti. Elle DOIT etre classee,
+  // sinon elle n'est protegee par rien — signale par l'assertion « Chaque champ
+  // du dossier est classe sante ou non-sante » a la premiere execution.
+  'mediasDormantsPurgesLe',
   // La trace du programme choisi dans la boutique : un identifiant, un nom, la
   // version H/F et une date. Ce n'est pas une donnee de sante — c'est un achat
   // et un choix de programme — mais elle DOIT etre classee, sinon elle n'est
@@ -5275,6 +5280,11 @@ window.onload=()=>{
   // pas pu faire au moment du geste ne doit pas rester en plan indefiniment —
   // ni couter une requete a chaque ouverture quand le service est absent.
   setTimeout(()=>{ try{ cldFileRejouer().catch(()=>{}); }catch(e){} },9000);
+  // ET LA RETENTION, apres tout le reste. Elle detruit des fichiers : elle ne
+  // passe donc jamais avant que l'app soit debout, jamais pendant une seance,
+  // et jamais sans que le preavis ait ete rendu au moins une fois (c'est
+  // `preavisVuLe` qui l'atteste, pose au rendu de la liste des videos).
+  setTimeout(()=>{ try{ retentionAuDemarrage().catch(()=>{}); }catch(e){} },14000);
   // UN SEUL INSTANT DE DEPART. Le voile et l'eclair partaient a l'analyse du
   // HTML, le logo en JS a la toute fin du demarrage — l'eclair frappait donc
   // AVANT que le logo n'apparaisse, et l'ecart grandissait avec la lenteur de
@@ -76944,9 +76954,12 @@ function _renderVideosListe(){
     el.innerHTML=emptyState('video','Aucune vidéo envoyée.<br>Filme ton exercice et envoie la vidéo pour recevoir les corrections de ton coach.','Envoyer ma première vidéo','_focusEnvoiVideo()');
     return;
   }
-  // LA PURGE EST PROPOSEE, JAMAIS FAITE. La phrase apparait, et c'est tout :
-  // aucune suppression automatique, aucun compte a rebours.
-  const _purge=(()=>{ try{ return phraseVideosAPurger(currentUser); }catch(e){ return ''; } })();
+  // LE PREAVIS EST POSE ICI, AU RENDU, et c'est ce qui autorise l'expiration
+  // sept jours plus tard. Une annonce que personne n'a eue a l'ecran n'annonce
+  // rien : tant que cette ligne n'a pas tourne, rien ne peut partir.
+  const _marques=(()=>{ try{ const n=marquerPreavisVideos(currentUser); if(n) saveUser(); return n; }
+    catch(e){ return 0; } })();
+  const _purge=(()=>{ try{ return phraseRetentionListe(currentUser); }catch(e){ return ''; } })();
   el.innerHTML=(_purge
       ?'<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
        +'padding:10px 12px;margin-bottom:12px;font-size:var(--fs-2xs);color:var(--sub);line-height:1.55">'
@@ -77016,8 +77029,105 @@ function _buildVideoCard(v){
   }catch(e){ return ''; } })();
   const _meta=(()=>{ const s=libLienVideo(v.lien); return s
     ?`<div style="font-size:var(--fs-2xs);color:var(--red-text);font-weight:800;letter-spacing:.5px;margin-top:2px">${escapeHtml(s)}</div>`:''; })();
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_cmp}${fbBlock}</div>`;
+  // ── LA RETENTION, SUR LA CARTE ───────────────────────────────────────────
+  // ⚠ LE BANDEAU PORTE LES DEUX GESTES QUI SAUVENT LE FICHIER, et il les porte
+  //   LA, sur la vidéo concernée : un message général en haut de liste ne dit
+  //   pas laquelle part, et ne se rattrape pas d'un clic.
+  const _ret=(()=>{ try{ return videoRetention(v); }catch(e){ return {etat:'loin'}; } })();
+  const _epi=videoEpinglee(v);
+  const _bandeau=(_ret.etat==='preavis'||_ret.etat==='a prevenir')
+    ?`<div style="background:var(--surface-2);border:1px solid var(--orange,#c97a12);border-radius:var(--r-2);padding:8px 10px;margin-top:8px">
+        <div style="font-size:var(--fs-2xs);color:var(--orange,#e0891a);font-weight:800;letter-spacing:.5px">
+          EXPIRE DANS ${_ret.jours||0} JOUR${(_ret.jours||0)>1?'S':''}</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:2px">
+          Le fichier sera supprimé de l’hébergeur. Le nom, la date et le retour de ton coach restent.</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-outline btn-sm btn-doigt" style="flex:1" onclick="gardeVideo('${escapeHtml(v.id)}')">Garder</button>
+          <button class="btn btn-outline btn-sm btn-doigt" style="flex:1" onclick="telechargerVideo('${escapeHtml(v.id)}')">Télécharger</button>
+        </div></div>`
+    :'';
+  // UNE EXPIREE RESTE A L'ECRAN, et dit ce qui s'est passe. La faire
+  // disparaitre serait exactement la purge muette qu'on refuse.
+  if(videoExpiree(v)){
+    const _le=v.expireeLe?new Date(v.expireeLe).toLocaleDateString('fr-FR'):'';
+    return `<div class="video-card" style="opacity:.82"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge" style="margin-left:8px;flex-shrink:0">Expirée</span></div>`
+      +`<div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_meta}`
+      +`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:6px">`
+      +`Le fichier a été supprimé de l’hébergeur${_le?' le '+_le:''}, après ${VIDEO_RETENTION_J} jours. `
+      +`Ce qui reste est ici : la date, le nom${v.feedback?' et le retour de ton coach':''}.</div>`
+      +`${fbBlock}</div>`;
+  }
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">📌 gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${_cmp}${fbBlock}</div>`;
 }
+/**
+ * LA PHRASE DU HAUT DE LISTE. Elle dit trois choses et rien d'autre : combien
+ * de vidéos sont en sursis, combien sont gardées sur combien, et ce qui a déjà
+ * expiré. Vide quand il n'y a rien à dire — un bandeau permanent finit par ne
+ * plus être lu, et c'est ce jour-là qu'il aurait servi.
+ */
+function phraseRetentionListe(user,maintenant){
+  const bouts=[];
+  try{
+    const pre=videosEnPreavis(user,maintenant);
+    const epi=videosEpinglees(user).length;
+    if(pre.length) bouts.push(pre.length+' vidéo'+(pre.length>1?'s expirent':' expire')
+      +' bientôt : « Garder » '+(pre.length>1?'les':'la')+' met'+(pre.length>1?'':'')
+      +' de côté pour toujours, « Télécharger » '+(pre.length>1?'les':'la')+' récupère.');
+    if(epi) bouts.push(epi+' gardée'+(epi>1?'s':'')+' sur '+VIDEO_EPINGLES_MAX+' (les gardées n’expirent jamais).');
+    else bouts.push('Les vidéos sont supprimées de l’hébergeur après '+VIDEO_RETENTION_J
+      +' jours. « Garder » en épingle jusqu’à '+VIDEO_EPINGLES_MAX+' pour toujours.');
+    const j=phraseJournalExpirations(maintenant);
+    if(j) bouts.push(j);
+    const d=phraseDormant(user,maintenant);
+    if(d) bouts.push(d);
+  }catch(e){}
+  return bouts.join(' ');
+}
+/** « Garder » : l'épingle, avec son plafond annoncé. */
+function gardeVideo(id){
+  const r=basculerEpingleVideo(currentUser,id);
+  if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
+  saveUser();
+  CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{});
+  toast(r.epingle?('Gardée. Elle n’expirera pas'+(r.reste!==undefined?' — '+r.reste+' place'+(r.reste>1?'s':'')+' restante'+(r.reste>1?'s':''):'')+'.')
+                 :'Elle reprend le cours normal : '+VIDEO_RETENTION_J+' jours.',
+    r.epingle?'var(--green)':'var(--sub)');
+  _renderVideosListe();
+  return true;
+}
+/**
+ * « Télécharger » : le fichier, sur l'appareil. On passe par un Blob et non par
+ * un simple lien : un href vers un autre domaine avec `download` est IGNORÉ par
+ * le navigateur, qui ouvre l'onglet au lieu d'enregistrer — et la personne
+ * croirait avoir sauvegardé sa vidéo.
+ *
+ * ⚠ SI LE TÉLÉCHARGEMENT DIRECT ÉCHOUE, on ouvre la vidéo et on le DIT. Mieux
+ *   vaut un geste de plus qu'un fichier qu'on croit avoir mis à l'abri.
+ */
+async function telechargerVideo(id){
+  const v=(currentUser.videos||[]).find(x=>x&&x.id===id);
+  if(!v||!v.url){ toast('Plus de fichier à télécharger.','var(--orange)'); return false; }
+  toast('Téléchargement…','var(--sub)');
+  let u=null;
+  try{
+    const r=await fetch(v.url,{mode:'cors'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const b=await r.blob();
+    u=URL.createObjectURL(b);
+    const a=document.createElement('a');
+    a.href=u;
+    a.download=(String(v.name||'video').replace(/[^\w .-]+/g,'_')||'video')+'.mp4';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('Vidéo enregistrée sur ton appareil.','var(--green)');
+    return true;
+  }catch(e){
+    try{ window.open(v.url,'_blank','noopener'); }catch(x){}
+    toast('Je n’ai pas pu l’enregistrer directement : elle s’ouvre dans un onglet, '
+      +'enregistre-la depuis là.','var(--orange)');
+    return false;
+  } finally { if(u) setTimeout(()=>{ try{ URL.revokeObjectURL(u); }catch(e){} },60000); }
+}
+
 // LE BOUTON « × » NE FAISAIT RIEN, ET AUCUNE ERREUR N'EN SORTAIT. Il portait
 // `onclick="if(await rcConfirm(...))deleteVideo(...)"` : le contenu d'un
 // gestionnaire en ligne est compile comme le corps d'une fonction ORDINAIRE, et
@@ -78341,18 +78451,359 @@ async function _videoSerieEnvoyer(input){
 // Une video de plus de douze mois est proposee a la suppression. JAMAIS
 // supprimee toute seule : c'est la seule trace video d'une periode, et
 // l'effacer sans le dire serait retirer a quelqu'un ce qu'il croyait garde.
-const VIDEO_PURGE_MOIS=12;
-function videosAPurger(user,maintenant){
-  const u=_dossier(user);
+// ⚠ CE QUI ÉTAIT ICI, ET POURQUOI IL N'Y EST PLUS. `videosAPurger` /
+//   `phraseVideosAPurger` proposaient, à douze mois, de supprimer soi-même —
+//   « la purge propose, elle n'agit pas ». L'intention était juste et elle est
+//   TENUE PLUS FORT ci-dessous : annoncée sept jours avant, récupérable d'un
+//   geste, journalisée. Ce qui change, c'est qu'à la fin le fichier part pour
+//   de bon, au lieu de rester à jamais chez l'hébergeur en attendant un geste
+//   que personne ne faisait. Garder les deux mécanismes aurait affiché deux
+//   messages contradictoires sur le même écran.
+// ══════════════ LA RÉTENTION DES MÉDIAS ═══════════════════════════════════
+//
+// POURQUOI ELLE EXISTE, alors que rien n'expirait jusqu'ici. Une vidéo de série
+// pèse 15 à 20 Mo après allègement, et un athlète suivi en envoie deux par
+// semaine : un gigaoctet et demi par an et par personne, gardé pour toujours
+// chez l'hébergeur. Ce coût ne se voit sur aucun écran, personne ne le décide,
+// et c'est le compte qui le paie. QUATRE-VINGT-DIX JOURS suffisent à ce que
+// ces fichiers servent : une correction se lit dans la semaine, et une
+// comparaison se fait sur deux prises — qu'on épingle.
+//
+// ⚠ ET RIEN NE DISPARAÎT EN SILENCE. Trois garanties, dans cet ordre :
+//
+//   1. ANNONCÉ AVANT. Le bandeau « expire dans 7 jours » s'affiche sept jours
+//      avant. Et L'EXPIRATION N'A PAS LIEU TANT QUE CE BANDEAU N'A PAS ÉTÉ
+//      RENDU : `preavisVuLe` est posé au rendu, et rien ne part avant sept
+//      jours de plus. Quelqu'un qui n'ouvre pas l'application pendant trois
+//      mois ne perd donc rien à son retour — il est prévenu, puis il a une
+//      semaine. C'est la seule lecture honnête de « annoncée avant de
+//      survenir » : un compte à rebours que personne n'a vu n'annonce rien.
+//
+//   2. RÉCUPÉRABLE D'UN GESTE. « Garder » épingle — dix au plus par dossier,
+//      et le compte est affiché ; « Télécharger » rend le fichier. Une vidéo
+//      épinglée n'expire JAMAIS, ni par l'âge, ni par la dormance.
+//
+//   3. JOURNALISÉ. Ce qui a expiré est inscrit dans rc_expirations, avec son
+//      nom et ses deux dates, et l'entrée du dossier GARDE {nom, date,
+//      expiree:true} — plus le retour du coach, qui est du texte et ne coûte
+//      rien. « Où est passée ma vidéo ? » a une réponse, à l'écran.
+//
+// CE QUI N'EXPIRE PAS, ET IL FAUT LE DIRE : un lien YouTube ou Drive collé par
+// l'athlète (aucune copie chez nous — ce n'est pas notre fichier et il ne coûte
+// rien), une vidéo épinglée, et tout ce qui n'a pas de date.
+const VIDEO_RETENTION_J=90;
+const VIDEO_PREAVIS_J=7;
+const VIDEO_EPINGLES_MAX=10;
+const EXPIRATIONS_CLE='rc_expirations';
+const EXPIRATIONS_MAX=300;
+
+function _vidDate(v){ return Number(v&&v.date)||0; }
+function _vidListe(user){ const u=_dossier(user); return Array.isArray(u&&u.videos)?u.videos:[]; }
+function videoEpinglee(v){ return !!(v&&v.epingle); }
+function videoExpiree(v){ return !!(v&&v.expiree); }
+function videosEpinglees(user){ return _vidListe(user).filter(videoEpinglee); }
+/** Une copie chez l'hébergeur, donc un coût, donc une rétention. */
+function videoHebergee(v){ return !!(v&&v.cloudinaryPublicId&&!videoExpiree(v)); }
+
+/**
+ * PURE. Où en est une vidéo vis-à-vis de la rétention.
+ *
+ * `etat` vaut : 'epinglee' (jamais), 'expiree' (déjà partie), 'hors hebergeur'
+ * (un lien collé), 'sans date', 'loin', 'preavis' (le bandeau doit s'afficher),
+ * 'a prevenir' (échue mais JAMAIS annoncée — on annonce, on n'efface pas), ou
+ * 'due' (annoncée depuis au moins sept jours : elle peut partir).
+ */
+function videoRetention(v,maintenant){
   const t=Number(maintenant)||Date.now();
-  const limite=t-VIDEO_PURGE_MOIS*30.44*86400000;
-  return (Array.isArray(u&&u.videos)?u.videos:[]).filter(v=>v&&Number(v.date)>0&&v.date<limite);
+  if(videoExpiree(v)) return {etat:'expiree',jours:null,le:Number(v.expireeLe)||null};
+  if(videoEpinglee(v)) return {etat:'epinglee',jours:null};
+  if(!videoHebergee(v)) return {etat:'hors hebergeur',jours:null};
+  if(!_vidDate(v)) return {etat:'sans date',jours:null};
+  const du=_vidDate(v)+VIDEO_RETENTION_J*864e5;
+  const jours=Math.ceil((du-t)/864e5);
+  if(jours>VIDEO_PREAVIS_J) return {etat:'loin',jours:jours,du:du};
+  if(jours>0) return {etat:'preavis',jours:jours,du:du};
+  // ÉCHUE. Reste à savoir si quelqu'un a été prévenu.
+  const vu=Number(v.preavisVuLe)||0;
+  if(!vu) return {etat:'a prevenir',jours:0,du:du};
+  const reste=Math.ceil((vu+VIDEO_PREAVIS_J*864e5-t)/864e5);
+  if(reste>0) return {etat:'preavis',jours:reste,du:vu+VIDEO_PREAVIS_J*864e5};
+  return {etat:'due',jours:0,du:du};
 }
-function phraseVideosAPurger(user,maintenant){
-  const l=videosAPurger(user,maintenant);
+function videosEnPreavis(user,maintenant){
+  return _vidListe(user).filter(v=>{const e=videoRetention(v,maintenant).etat;
+    return e==='preavis'||e==='a prevenir';});
+}
+function videosDues(user,maintenant){
+  return _vidListe(user).filter(v=>videoRetention(v,maintenant).etat==='due');
+}
+/**
+ * LE PRÉAVIS EST POSÉ QUAND IL EST RENDU, et c'est tout l'intérêt : c'est
+ * l'horodatage de l'annonce qui autorise l'expiration sept jours plus tard.
+ * Rend le nombre de marques posées — zéro veut dire « rien de neuf à annoncer ».
+ */
+function marquerPreavisVideos(user,maintenant){
+  const t=Number(maintenant)||Date.now();
+  let n=0;
+  for(const v of videosEnPreavis(user,t)) if(!Number(v.preavisVuLe)){ v.preavisVuLe=t; n++; }
+  return n;
+}
+/**
+ * ÉPINGLER, OU DÉSÉPINGLER. Le plafond est de dix par dossier, et il est
+ * ANNONCÉ : un bouton qui refuse sans dire pourquoi est un bouton cassé.
+ */
+function basculerEpingleVideo(user,id,maintenant){
+  const l=_vidListe(user);
+  const v=l.find(x=>x&&x.id===id);
+  if(!v) return {ok:false,raison:'Vidéo introuvable.'};
+  if(videoExpiree(v)) return {ok:false,raison:'Cette vidéo a déjà expiré : il n’y a plus de fichier à garder.'};
+  // ⚠ DESEPINGLER EFFACE AUSSI L'ANNONCE, et pas seulement l'epingle. Sans
+  //   cela, une video gardee il y a six mois — dont le preavis d'alors dormait
+  //   dans l'entree — partirait dans la seconde qui suit son desepinglage. Le
+  //   geste inverse serait un piege. Elle repart par une annonce.
+  if(videoEpinglee(v)){ delete v.epingle; delete v.preavisVuLe; return {ok:true,epingle:false}; }
+  const n=videosEpinglees(user).length;
+  if(n>=VIDEO_EPINGLES_MAX)
+    return {ok:false,raison:'Tu gardes déjà '+VIDEO_EPINGLES_MAX+' vidéos. Désépingle-en une pour garder celle-ci.'};
+  v.epingle=true;
+  // Épingler remet le compte à zéro côté préavis : la vidéo n'est plus en
+  // sursis, et si elle est désépinglée un jour, elle recommencera par être
+  // annoncée. Sans cela, un désépinglage la ferait partir dans la seconde.
+  delete v.preavisVuLe;
+  return {ok:true,epingle:true,reste:VIDEO_EPINGLES_MAX-(n+1)};
+}
+/**
+ * L'ENTRÉE RESTE, LE FICHIER PART. On retire les pointeurs vers l'hébergeur et
+ * RIEN D'AUTRE : le nom, la date, le rattachement à l'exercice et le retour du
+ * coach sont du texte, ils ne coûtent rien, et ce sont eux qu'on garde.
+ */
+function expirerEntreeVideo(v,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const trace={id:v.id,nom:v.name||'',date:_vidDate(v),le:t,
+    publicId:v.cloudinaryPublicId||'',octets:Number(v.octetsOrigine)||0};
+  delete v.url; delete v.cloudinaryPublicId; delete v.cloudinaryName;
+  delete v.deleteToken; delete v.preavisVuLe;
+  v.expiree=true; v.expireeLe=t;
+  return trace;
+}
+// ── LE JOURNAL, SUR L'APPAREIL ────────────────────────────────────────────
+// Local et non dans le dossier : c'est une trace pour la personne, pas une
+// donnée à synchroniser, et elle doit survivre à une synchro qui échoue.
+function journalExpirations(){
+  try{ const l=JSON.parse(localStorage.getItem(EXPIRATIONS_CLE)||'[]');
+    return Array.isArray(l)?l.filter(x=>x&&x.nom!==undefined):[]; }catch(e){ return []; }
+}
+function journalExpirationsEcrire(l){
+  try{ localStorage.setItem(EXPIRATIONS_CLE,JSON.stringify((l||[]).slice(-EXPIRATIONS_MAX)));
+    return true; }catch(e){ return false; }
+}
+function journalExpirationAjouter(trace){
+  if(!trace) return false;
+  const l=journalExpirations();
+  l.push({nom:trace.nom||'',date:trace.date||0,le:trace.le||Date.now(),
+    quoi:trace.quoi||'vidéo',octets:trace.octets||0});
+  return journalExpirationsEcrire(l);
+}
+/** La phrase du journal, pour l'écran. Vide quand il n'y a rien à dire. */
+function phraseJournalExpirations(maintenant){
+  const l=journalExpirations();
   if(!l.length) return '';
-  return l.length+' vidéo'+(l.length>1?'s':'')+' de plus de '+VIDEO_PURGE_MOIS
-    +' mois. Tu peux '+(l.length>1?'les':'la')+' supprimer si tu n’en as plus besoin.';
+  const t=Number(maintenant)||Date.now();
+  const recents=l.filter(x=>t-(x.le||0)<180*864e5);
+  if(!recents.length) return '';
+  const d=new Date(recents[recents.length-1].le).toLocaleDateString('fr-FR');
+  return recents.length+' média'+(recents.length>1?'s ont':' a')
+    +' expiré depuis six mois, le dernier le '+d+'.';
+}
+
+/**
+ * L'EXPIRATION, POUR DE BON. Le fichier est détruit chez l'hébergeur par la
+ * porte unique (_cldDetruire, qui met en file ce qui résiste), l'entrée est
+ * réduite à son texte, et la trace est écrite.
+ *
+ * ⚠ ELLE NE TOUCHE QUE CE QUI EST 'due' — donc annoncé depuis au moins sept
+ *   jours. Tout le reste attend, y compris une vidéo échue depuis un an que
+ *   personne n'a jamais vue à l'écran.
+ */
+async function expirerVideosEchues(user,maintenant){
+  const u=_dossier(user);
+  const dues=videosDues(u,maintenant);
+  if(!dues.length) return {expirees:0,restants:0};
+  let n=0;
+  for(const v of dues){
+    const pid=v.cloudinaryPublicId;
+    // On détruit AVANT de réduire l'entrée : après, on n'aurait plus
+    // l'identifiant, et le fichier resterait chez l'hébergeur pour toujours.
+    if(pid) await _cldDetruire(pid,'video',
+      {proprietaire:u&&u.email,cloudName:v.cloudinaryName,quoi:'vidéo expirée '+(v.name||'')});
+    const trace=expirerEntreeVideo(v,maintenant);
+    journalExpirationAjouter(trace);
+    n++;
+  }
+  return {expirees:n,restants:cldFileLire().length};
+}
+
+// ══════════════ LES DOSSIERS DORMANTS ══════════════════════════════════════
+//
+// Un athlète dont l'accès est fermé depuis six mois ne revient pas, et ses
+// vidéos continuent de peser. ON DÉTRUIT SES MÉDIAS, ET RIEN D'AUTRE : le
+// dossier texte RESTE — mesures, séances, bilans, échanges. C'est son histoire,
+// elle ne pèse rien, et il peut revenir.
+//
+// ⚠ TRENTE JOURS D'AVERTISSEMENT À L'ÉCRAN, avant. Chez lui s'il ouvre
+//   l'application, et dans sa fiche chez le coach, qui peut l'appeler.
+const MEDIA_DORMANT_J=180;
+const MEDIA_DORMANT_PREAVIS_J=30;
+/** PURE. L'accès est-il fermé, et depuis quand ? null s'il est ouvert. */
+function accesFermeDepuis(u,maintenant){
+  if(!u||u._fromCode) return null;
+  const t=Number(maintenant)||Date.now();
+  const e=Number(u.accessExpiry);
+  if(u.status==='COACHING_SUIVI'&&isFinite(e)&&e>0&&e<=t) return e;
+  // Un abonnement résilié : la date de résiliation n'est pas conservée, la
+  // dernière écriture du dossier est ce qu'on a de plus juste.
+  if(u.status==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='cancelled')
+    return Number(u.updatedAt)||null;
+  return null;
+}
+/** PURE. {etat:'actif'|'preavis'|'du', jours, depuis} */
+function mediaDormant(u,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const ferme=accesFermeDepuis(u,t);
+  if(!ferme) return {etat:'actif',jours:null,depuis:null};
+  // La dernière écriture compte autant que la fermeture : un dossier qu'on
+  // remplit encore n'est pas dormant, même si l'accès est clos.
+  const depuis=Math.max(ferme,Number(u.updatedAt)||0);
+  const jours=Math.floor((t-depuis)/864e5);
+  if(jours>=MEDIA_DORMANT_J) return {etat:'du',jours:jours,depuis:depuis};
+  if(jours>=MEDIA_DORMANT_J-MEDIA_DORMANT_PREAVIS_J)
+    return {etat:'preavis',jours:MEDIA_DORMANT_J-jours,depuis:depuis};
+  return {etat:'actif',jours:jours,depuis:depuis};
+}
+/** La phrase de l'avertissement. Vide quand il n'y a rien à annoncer. */
+function phraseDormant(u,maintenant){
+  const d=mediaDormant(u,maintenant);
+  if(d.etat==='preavis')
+    return 'Ton accès est fermé depuis six mois. Dans '+d.jours+' jour'+(d.jours>1?'s':'')
+      +', tes vidéos et tes photos partagées seront supprimées de l’hébergeur. '
+      +'Tes mesures, tes séances et tes bilans restent. Épingle ou télécharge ce que tu veux garder.';
+  if(d.etat==='du')
+    return 'Tes vidéos et tes photos partagées ont été supprimées de l’hébergeur : '
+      +'ton accès était fermé depuis plus de six mois. Tes mesures, tes séances et tes bilans sont intacts.';
+  return '';
+}
+/**
+ * DÉTRUIT LES MÉDIAS D'UN DOSSIER DORMANT. Les épinglées sont épargnées : c'est
+ * le geste par lequel quelqu'un a dit « celle-là, je la garde ».
+ */
+async function expirerMediasDormants(user,maintenant){
+  const u=_dossier(user);
+  if(mediaDormant(u,maintenant).etat!=='du') return {videos:0,photos:0};
+  const t=Number(maintenant)||Date.now();
+  let nv=0,np=0;
+  for(const v of _vidListe(u)){
+    if(videoEpinglee(v)||!videoHebergee(v)) continue;
+    await _cldDetruire(v.cloudinaryPublicId,'video',
+      {proprietaire:u&&u.email,cloudName:v.cloudinaryName,quoi:'vidéo d’un dossier dormant'});
+    journalExpirationAjouter(Object.assign(expirerEntreeVideo(v,t),{quoi:'vidéo (dossier dormant)'}));
+    nv++;
+  }
+  // LES PHOTOS DE PROGRESSION PARTAGÉES passent par leur propre porte, qui
+  // sait ce qu'elle a détruit et ce qui reste à purger.
+  try{
+    if(u&&u.photosProgression&&typeof phpRevoquer==='function'&&phpPartagees(u).length){
+      const r=await phpRevoquer(u);
+      np=(r&&r.local!==undefined)?phpPartagees(u).length===0?1:0:0;
+      journalExpirationAjouter({nom:'photos de progression',date:t,le:t,quoi:'photos (dossier dormant)'});
+    }
+  }catch(e){}
+  u.mediasDormantsPurgesLe=t;
+  return {videos:nv,photos:np};
+}
+
+/**
+ * LE PASSAGE DE RÉTENTION, UNE FOIS PAR OUVERTURE. Il ne fait QUE ce qui a été
+ * annoncé : les vidéos dont le préavis a été rendu il y a au moins sept jours,
+ * et les médias d'un dossier dormant depuis six mois — avertis trente jours
+ * avant. Il dit ce qu'il a fait, à l'écran.
+ *
+ * ⚠ JAMAIS PENDANT UNE SÉANCE. Écrire le dossier au milieu d'un entraînement,
+ *   pour une tâche de fond, c'est risquer de perdre des séries en cours pour
+ *   gagner des octets. Ça attendra la prochaine ouverture.
+ */
+async function retentionAuDemarrage(){
+  try{
+    if(!currentUser||!currentUser.email) return {saute:'personne'};
+    if(typeof _seanceEnCours==='function'&&_seanceEnCours()) return {saute:'séance en cours'};
+    let bilan={expirees:0,dormants:null,metrics:null};
+    const r=await expirerVideosEchues(currentUser);
+    bilan.expirees=r.expirees;
+    const d=await expirerMediasDormants(currentUser);
+    bilan.dormants=d;
+    if(r.expirees||d.videos){
+      saveUser();
+      CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{});
+      const n=r.expirees+d.videos;
+      // ON LE DIT. Une expiration muette est un défaut, pas une optimisation.
+      toast(n+' vidéo'+(n>1?'s ont':' a')+' expiré après '+VIDEO_RETENTION_J
+        +' jours. Le nom, la date et le retour du coach restent.','var(--sub)');
+      try{ if(document.getElementById('s-videos')
+        &&document.getElementById('s-videos').classList.contains('active')) _renderVideosListe(); }catch(e){}
+    }
+    // LES MÉTRIQUES : réservées au créateur, et silencieuses pour tout autre.
+    bilan.metrics=await purgerMetricsPerimes();
+    return bilan;
+  }catch(e){ return {saute:String(e&&e.message||e)}; }
+}
+
+// ══════════════ LES MÉTRIQUES : QUATRE CENTS JOURS ═════════════════════════
+//
+// Le nœud metrics porte un compteur par jour et par étape. Il n'a JAMAIS été
+// purgé : il grossit d'une trentaine d'entiers par jour, pour toujours. Quatre
+// cents jours couvrent une comparaison d'une année sur l'autre, ce qui est le
+// seul usage réel de ces chiffres.
+//
+// ⚠ SEUL LE CRÉATEUR PEUT PURGER, et il faut une règle pour cela : le nœud
+//   accepte des incréments de tout le monde, mais une SUPPRESSION écrit `null`,
+//   que le `.validate` de $evenement refuse (il exige un nombre). La règle
+//   ajoutée n'autorise donc au créateur que des suppressions, sur le jour
+//   entier. Tant que database.rules.json n'est pas déployé — le déploiement
+//   automatique ne publie que l'hébergement — cette purge échoue, et elle le
+//   DIT plutôt que de faire semblant.
+const METRICS_RETENTION_J=400;
+/** PURE. Les clefs de jour trop vieilles, parmi celles qu'on lui donne. */
+function metricsJoursPerimes(cles,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const limite=t-METRICS_RETENTION_J*864e5;
+  return (Array.isArray(cles)?cles:[]).filter(function(k){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(k))) return false;
+    const d=new Date(String(k)+'T12:00:00Z').getTime();
+    return isFinite(d)&&d<limite;
+  }).sort();
+}
+/**
+ * La purge, côté créateur. Rend ce qu'elle a fait, et pourquoi elle n'a pas pu.
+ * Elle ne lève jamais : c'est une tâche de fond, pas un geste d'utilisateur.
+ */
+async function purgerMetricsPerimes(){
+  try{
+    if(!currentUser||currentUser.email!==CREATOR_EMAIL) return {saute:'réservé au créateur'};
+    const jeton=await CLOUD._getToken();
+    if(!jeton) return {saute:'aucun jeton'};
+    const r=await fetch(RCM_BASE+'.json?shallow=true&auth='+encodeURIComponent(jeton));
+    if(!r.ok) return {saute:'lecture refusée ('+r.status+')'};
+    const cles=Object.keys((await r.json())||{});
+    const vieux=metricsJoursPerimes(cles);
+    if(!vieux.length) return {jours:0,total:cles.length};
+    let n=0,refus=0;
+    for(const k of vieux.slice(0,60)){
+      const d=await fetch(RCM_BASE+'/'+k+'.json?auth='+encodeURIComponent(jeton),{method:'DELETE'});
+      if(d.ok) n++; else refus++;
+    }
+    if(refus) console.warn('[RepCore] purge des métriques : '+refus+' jour(s) refusé(s) — '
+      +'database.rules.json n’est peut-être pas déployé');
+    return {jours:n,refus:refus,total:cles.length,restants:vieux.length-n};
+  }catch(e){ return {saute:String(e&&e.message||e)}; }
 }
 
 // ══════════════ LE COMPARATEUR DE PRISES ═══════════════════════════════

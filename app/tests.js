@@ -17110,24 +17110,52 @@ async function testExercices(){
             return /state==='recording'/.test(String(cmpBasculerMicro))
               ?true:_echec('le micro n’est plus une bascule');})());
 
-          ok('Une vidéo de plus de douze mois est PROPOSÉE, jamais supprimée',(()=>{
-            // C'est la seule trace vidéo d'une période : l'effacer sans le dire
-            // serait retirer à quelqu'un ce qu'il croyait gardé.
-            const u={email:'p@t.fr',videos:[
-              {id:'a',url:'x',date:Date.now()-400*86400000},
-              {id:'b',url:'x',date:Date.now()-30*86400000}]};
-            const avant=u.videos.length;
-            const l=videosAPurger(u);
-            if(l.length!==1||l[0].id!=='a') return _echec(l.length+' vidéo(s) proposée(s)');
-            // RIEN N'A ÉTÉ SUPPRIMÉ : la fonction propose, elle n'agit pas.
-            if(u.videos.length!==avant) return _echec('la liste a été modifiée');
-            if(!/supprimer/.test(phraseVideosAPurger(u))) return _echec('la phrase ne propose rien');
-            if(phraseVideosAPurger({email:'q@t.fr',videos:[]})!=='')
-              return _echec('une phrase sort sans vidéo ancienne');
-            // AUCUN APPEL AUTOMATIQUE À LA SUPPRESSION depuis la purge.
-            const s=String(videosAPurger)+String(phraseVideosAPurger);
-            return /deleteVideo|splice|filter\(v=>v\.id/.test(s)
-              ?_echec('la purge touche à la liste'):true;})());
+          // ⚠ CETTE ASSERTION A CHANGÉ D'OBJET LE 23/09/2026, ET IL FAUT LE DIRE.
+          //   Elle gardait « une vidéo de plus de douze mois est PROPOSÉE,
+          //   jamais supprimée » : `videosAPurger` listait, `phraseVideosAPurger`
+          //   invitait à supprimer soi-même, et rien ne partait jamais. La
+          //   promesse — ne rien effacer sans le dire — est TENUE PLUS FORT par
+          //   la rétention à quatre-vingt-dix jours : annoncée sept jours avant
+          //   ET seulement si l'annonce a été rendue, récupérable d'un geste
+          //   (garder, télécharger), journalisée, et l'entrée reste dans le
+          //   dossier. Ce qui change, c'est qu'à la fin le fichier part pour de
+          //   bon au lieu de rester chez l'hébergeur en attendant un geste que
+          //   personne ne faisait. Les deux fonctions ont été retirées : garder
+          //   deux mécanismes aurait affiché deux messages contradictoires.
+          ok('Une vidéo n’expire pas sans avoir été annoncée, et son entrée reste',(()=>{
+            const J=n=>Date.now()-n*86400000;
+            const vid=(id,j,extra)=>Object.assign({id:id,name:'Squat '+id,url:'https://x/'+id+'.mp4',
+              cloudinaryPublicId:'repcore/A/'+id,date:J(j)},extra||{});
+            // Échue depuis longtemps, mais JAMAIS annoncée : on annonce, on
+            // n'efface pas. C'est le cas de qui n'a pas ouvert l'app depuis
+            // trois mois — et c'est exactement là que la purge muette frappait.
+            const u={email:'p@t.fr',videos:[vid('a',400),vid('b',30)]};
+            const av=u.videos.length;
+            if(videoRetention(u.videos[0]).etat!=='a prevenir')
+              return _echec('une vidéo échue jamais annoncée est déjà « '+videoRetention(u.videos[0]).etat+' »');
+            if(videosDues(u).length) return _echec('elle est due alors que personne n’a été prévenu');
+            if(u.videos.length!==av) return _echec('la liste a été modifiée par une simple lecture');
+            // On annonce (c'est ce que fait le rendu de la liste), et là encore
+            // rien ne part : il reste sept jours.
+            if(marquerPreavisVideos(u)!==1) return _echec('le préavis n’a pas été posé');
+            if(videosDues(u).length) return _echec('elle part le jour même de l’annonce');
+            if(videoRetention(u.videos[0]).etat!=='preavis') return _echec('l’état après annonce est faux');
+            // Sept jours plus tard, elle est due — et pas avant.
+            u.videos[0].preavisVuLe=J(8);
+            if(videosDues(u).length!==1) return _echec('elle n’est pas due sept jours après l’annonce');
+            // L'ENTRÉE RESTE, avec son nom, sa date et le retour du coach.
+            u.videos[0].feedback='Descends plus bas';
+            const t=expirerEntreeVideo(u.videos[0]);
+            const v=u.videos[0];
+            if(u.videos.length!==av) return _echec('l’entrée a disparu du dossier');
+            if(!v.expiree||!v.expireeLe) return _echec('elle n’est pas marquée expirée');
+            if(v.name!=='Squat a'||!v.date) return _echec('le nom ou la date ont été perdus');
+            if(v.feedback!=='Descends plus bas') return _echec('le retour du coach a été effacé');
+            if(v.url||v.cloudinaryPublicId) return _echec('un pointeur vers l’hébergeur est resté');
+            if(t.publicId!=='repcore/A/a') return _echec('la trace ne dit pas quel fichier a été détruit');
+            // Et une vidéo récente ne bouge pas d'un pouce.
+            return videoRetention(u.videos[1]).etat==='loin'
+              ?true:_echec('une vidéo de trente jours est déjà menacée');})());
         })();
 
         // ══════ L'ÉCART GAUCHE / DROITE ══════
@@ -33946,6 +33974,216 @@ async function testExercices(){
           if(!/^avc1\./.test(String(RepCoreVideo.CODEC_SORTIE||'')))
             return _echec('le codec de sortie n’est plus du H.264 : '+RepCoreVideo.CODEC_SORTIE);
           return true;})());
+      })();
+
+      // ══════════════ BUILD 1420 — LA RÉTENTION DES MÉDIAS ═════════════════
+      //
+      // Une vidéo de série pèse 15 à 20 Mo et un athlète suivi en envoie deux
+      // par semaine : un gigaoctet et demi par an et par personne, gardé pour
+      // toujours. Quatre-vingt-dix jours, donc — mais la règle du chantier est
+      // absolue : RIEN NE DISPARAÎT EN SILENCE. Ces assertions défendent les
+      // trois garanties, une par une, parce que chacune peut être perdue par
+      // une refonte qui n'y penserait pas :
+      //   1. annoncé avant, et l'annonce doit avoir été RENDUE ;
+      //   2. récupérable d'un geste — garder, télécharger ;
+      //   3. journalisé, et l'entrée reste dans le dossier.
+      (()=>{
+        const _sExp=localStorage.getItem(EXPIRATIONS_CLE);
+        const _sCld=localStorage.getItem(CLD_FILE_CLE);
+        const _sCall=CLOUD._callFn, _sToast=window.toast, _sU=currentUser;
+        const _rendre=(k,v)=>{ if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v); };
+        const J=n=>Date.now()-n*86400000;
+        const vid=(id,j,extra)=>Object.assign({id:id,name:'Squat '+id,
+          url:'https://res.cloudinary.com/x/video/upload/v1/repcore/A/'+id+'.mp4',
+          cloudinaryPublicId:'repcore/A/'+id,cloudinaryName:'dntu57ml',date:J(j)},extra||{});
+        try{
+          window.toast=()=>{};
+
+          ok('1420 — GARDER : DIX AU PLUS, LE COMPTE EST DIT, ET UNE GARDÉE N’EXPIRE JAMAIS',(()=>{
+            const u={email:'g@t.fr',videos:[]};
+            for(let i=0;i<12;i++) u.videos.push(vid('v'+i,200));
+            let dernier=null;
+            for(let i=0;i<10;i++){
+              const r=basculerEpingleVideo(u,'v'+i);
+              if(!r.ok) return _echec('l’épingle '+(i+1)+' a été refusée : '+r.raison);
+              dernier=r;
+            }
+            if(videosEpinglees(u).length!==10) return _echec(videosEpinglees(u).length+' épinglées');
+            if(dernier.reste!==0) return _echec('le compte restant est faux : '+dernier.reste);
+            // LA ONZIÈME EST REFUSÉE, ET LA RAISON DIT QUOI FAIRE.
+            const r11=basculerEpingleVideo(u,'v10');
+            if(r11.ok) return _echec('une onzième épingle est passée');
+            if(!/10|dix/.test(r11.raison)||!/[Dd]ésépingle/.test(r11.raison))
+              return _echec('la raison ne dit pas le plafond ni l’issue : '+r11.raison);
+            // UNE GARDÉE N'EXPIRE PAS, même échue depuis longtemps.
+            if(videoRetention(u.videos[0]).etat!=='epinglee') return _echec('une gardée est menacée');
+            if(videosDues(u).length) return _echec('une gardée est due');
+            // DÉSÉPINGLER LA REMET DANS LE RANG, mais elle repart par une
+            // ANNONCE : sans cela, un désépinglage la ferait partir dans la
+            // seconde, et le geste inverse serait un piège.
+            u.videos[0].preavisVuLe=J(30);
+            const r=basculerEpingleVideo(u,'v0');
+            if(!r.ok||r.epingle!==false) return _echec('le désépinglage a échoué');
+            if(u.videos[0].preavisVuLe) return _echec('l’ancienne annonce a survécu au désépinglage');
+            return videoRetention(u.videos[0]).etat==='a prevenir'
+              ?true:_echec('après désépinglage, l’état est « '+videoRetention(u.videos[0]).etat+' »');})());
+
+          ok('1420 — LE BANDEAU J-7 EST RENDU, AVEC SES DEUX GESTES',(()=>{
+            // ⚠ LE BANDEAU EST LA GARANTIE N° 1 : sans lui à l'écran, rien ne
+            //   doit expirer. On le rend pour de vrai et on lit ce qu'il porte.
+            const sU=currentUser;
+            try{
+              currentUser={email:'b@t.fr',videos:[vid('p',85),vid('r',10)]};
+              const d=document.createElement('div');
+              d.innerHTML=_buildVideoCard(currentUser.videos[0]);
+              const txt=(d.textContent||'').replace(/\s+/g,' ');
+              if(!/EXPIRE DANS \d+ JOUR/.test(txt)) return _echec('aucun compte à rebours : '+txt.slice(0,80));
+              const b=[...d.querySelectorAll('button')].map(x=>(x.textContent||'').trim());
+              if(!b.includes('Garder')) return _echec('pas de bouton Garder : '+b.join('|'));
+              if(!b.includes('Télécharger')) return _echec('pas de bouton Télécharger : '+b.join('|'));
+              // LES DEUX GESTES SONT CÂBLÉS SUR DES FONCTIONS QUI EXISTENT.
+              const on=[...d.querySelectorAll('button')].map(x=>x.getAttribute('onclick')||'').join(' ');
+              if(!/gardeVideo\('p'\)/.test(on)) return _echec('Garder n’est pas câblé : '+on);
+              if(!/telechargerVideo\('p'\)/.test(on)) return _echec('Télécharger n’est pas câblé');
+              if(typeof gardeVideo!=='function'||typeof telechargerVideo!=='function')
+                return _echec('un des deux gestes n’existe pas');
+              // ET IL DIT CE QUI RESTE : personne ne doit croire qu'il perd tout.
+              if(!/nom.*date.*retour|retour de ton coach/i.test(txt))
+                return _echec('le bandeau ne dit pas ce qui reste : '+txt.slice(0,120));
+              // UNE VIDÉO RÉCENTE N'A PAS DE BANDEAU.
+              const d2=document.createElement('div');
+              d2.innerHTML=_buildVideoCard(currentUser.videos[1]);
+              return /EXPIRE DANS/.test(d2.textContent||'')
+                ?_echec('une vidéo de dix jours porte un compte à rebours'):true;
+            } finally { currentUser=sU; }})());
+
+          ok('1420 — UNE EXPIRÉE RESTE À L’ÉCRAN ET DIT CE QUI S’EST PASSÉ',(()=>{
+            const sU=currentUser;
+            try{
+              currentUser={email:'e@t.fr',videos:[]};
+              const v=vid('x',200,{feedback:'Descends plus bas'});
+              expirerEntreeVideo(v);
+              currentUser.videos=[v];
+              const d=document.createElement('div');
+              d.innerHTML=_buildVideoCard(v);
+              const txt=(d.textContent||'').replace(/\s+/g,' ');
+              if(!/Expirée/.test(txt)) return _echec('la carte ne dit pas qu’elle a expiré');
+              if(txt.indexOf('Squat x')<0) return _echec('le nom a disparu de l’écran');
+              if(txt.indexOf('Descends plus bas')<0) return _echec('le retour du coach a disparu de l’écran');
+              if(!/supprimé de l’hébergeur/.test(txt)) return _echec('la carte ne dit pas où est passé le fichier');
+              // AUCUN LECTEUR : il n'y a plus rien à lire, et un lecteur mort
+              // ferait croire à une panne.
+              if(d.querySelector('video')) return _echec('un lecteur vidéo est rendu sans fichier');
+              return true;
+            } finally { currentUser=sU; }})());
+
+          okA('1420 — L’EXPIRATION DÉTRUIT CHEZ L’HÉBERGEUR, JOURNALISE, ET GARDE L’ENTRÉE',async()=>{
+            journalExpirationsEcrire([]); cldFileEcrire([]); _cldIndispo=false;
+            const vus=[];
+            CLOUD._callFn=async(n,d)=>{ vus.push(d.publicId); return {result:'ok'}; };
+            const u={email:'x@t.fr',videos:[
+              vid('due',200,{preavisVuLe:J(10)}),          // annoncée il y a dix jours
+              vid('neuve',5),                              // récente
+              vid('gardee',300,{epingle:true,preavisVuLe:J(30)}),
+              {id:'lien',name:'YouTube',url:'https://youtu.be/abc',date:J(500)}]};
+            const r=await expirerVideosEchues(u);
+            if(r.expirees!==1) return _echec(r.expirees+' vidéo(s) expirée(s) au lieu d’une');
+            if(vus.length!==1||vus[0]!=='repcore/A/due')
+              return _echec('la destruction a visé : '+JSON.stringify(vus));
+            if(u.videos.length!==4) return _echec('une entrée a disparu du dossier');
+            if(!u.videos[0].expiree) return _echec('la due n’est pas marquée');
+            if(u.videos[1].expiree||u.videos[2].expiree||u.videos[3].expiree)
+              return _echec('une vidéo qui devait être épargnée a expiré');
+            // ⚠ UN LIEN COLLÉ N'EXPIRE JAMAIS : ce n'est pas notre fichier, il
+            //   ne coûte rien, et l'effacer serait retirer un lien que
+            //   quelqu'un a mis là.
+            if(videoRetention(u.videos[3]).etat!=='hors hebergeur')
+              return _echec('un lien collé est soumis à la rétention');
+            // LE JOURNAL RÉPOND À « OÙ EST PASSÉE MA VIDÉO ? »
+            const jr=journalExpirations();
+            if(jr.length!==1) return _echec(jr.length+' entrée(s) au journal');
+            if(jr[0].nom!=='Squat due') return _echec('le journal ne nomme pas la vidéo : '+jr[0].nom);
+            if(!phraseJournalExpirations()) return _echec('le journal ne se dit pas à l’écran');
+            // ET CE QUI RÉSISTE CHEZ L'HÉBERGEUR RESTE INSCRIT À PURGER.
+            journalExpirationsEcrire([]); cldFileEcrire([]); _cldIndispo=false;
+            CLOUD._callFn=async()=>{ throw new Error('Erreur serveur (503).'); };
+            const u2={email:'y@t.fr',videos:[vid('resiste',200,{preavisVuLe:J(10)})]};
+            await expirerVideosEchues(u2);
+            if(!cldFileLire().some(x=>x.publicId==='repcore/A/resiste'))
+              return _echec('un fichier non détruit n’est pas inscrit à purger');
+            // L'entrée est quand même réduite : le fichier est condamné, et la
+            // file le rejouera. Laisser l'entrée intacte ferait réessayer la
+            // destruction à chaque ouverture, pour toujours.
+            return u2.videos[0].expiree===true
+              ?true:_echec('l’entrée n’a pas été réduite alors que la file prend le relais');});
+
+          ok('1420 — DOSSIER DORMANT : TRENTE JOURS D’AVERTISSEMENT, ET LE TEXTE RESTE',(()=>{
+            const base=(j,extra)=>Object.assign({email:'d@t.fr',status:'COACHING_SUIVI',
+              accessExpiry:J(j),updatedAt:J(j),videos:[],bilans:[{date:J(j+10)}],
+              sessions:[{date:J(j+5)}]},extra||{});
+            if(mediaDormant(base(10)).etat!=='actif') return _echec('un accès fermé depuis dix jours est dormant');
+            const p=mediaDormant(base(160));
+            if(p.etat!=='preavis') return _echec('à 160 jours, l’état est « '+p.etat+' »');
+            if(p.jours!==20) return _echec('le préavis annonce '+p.jours+' jours au lieu de 20');
+            if(!/20 jours/.test(phraseDormant(base(160)))) return _echec('la phrase ne dit pas le délai');
+            if(!/mesures|séances|bilans/.test(phraseDormant(base(160))))
+              return _echec('la phrase ne rassure pas sur ce qui reste');
+            if(mediaDormant(base(200)).etat!=='du') return _echec('à 200 jours, rien n’est dû');
+            // UN DOSSIER QU'ON REMPLIT ENCORE N'EST PAS DORMANT, même si
+            // l'accès est clos : c'est la dernière écriture qui compte.
+            if(mediaDormant(base(300,{updatedAt:J(3)})).etat!=='actif')
+              return _echec('un dossier écrit il y a trois jours est déclaré dormant');
+            // ET UN ACCÈS OUVERT NE DORT JAMAIS.
+            return mediaDormant({email:'o@t.fr',status:'COACHING_SUIVI',accessExpiry:Date.now()+864e5*30}).etat==='actif'
+              ?true:_echec('un accès ouvert est déclaré dormant');})());
+
+          okA('1420 — LA PURGE D’UN DORMANT ÉPARGNE LES GARDÉES ET NE TOUCHE PAS AU DOSSIER',async()=>{
+            journalExpirationsEcrire([]); cldFileEcrire([]); _cldIndispo=false;
+            CLOUD._callFn=async()=>({result:'ok'});
+            const u={email:'dd@t.fr',status:'COACHING_SUIVI',accessExpiry:J(200),updatedAt:J(200),
+              fname:'Léa',videos:[vid('a',300),vid('b',300,{epingle:true})],
+              bilans:[{date:J(250),'bil-poids':'61'}],sessions:[{date:J(240)}],
+              weightLog:[{date:'2026-01-02',kg:61}]};
+            const avant=JSON.stringify({b:u.bilans,s:u.sessions,w:u.weightLog,f:u.fname});
+            const r=await expirerMediasDormants(u);
+            if(r.videos!==1) return _echec(r.videos+' vidéo(s) détruite(s) au lieu d’une');
+            if(!u.videos[0].expiree) return _echec('la vidéo non gardée n’a pas expiré');
+            if(u.videos[1].expiree) return _echec('une vidéo GARDÉE a été détruite');
+            // LE DOSSIER TEXTE EST INTACT, ET C'EST LE CŒUR DE CE LOT.
+            if(JSON.stringify({b:u.bilans,s:u.sessions,w:u.weightLog,f:u.fname})!==avant)
+              return _echec('le dossier texte a été modifié');
+            if(!u.mediasDormantsPurgesLe) return _echec('la purge ne laisse pas de date');
+            // Elle ne repasse pas : le dossier n'est plus « du ».
+            return journalExpirations().length>=1
+              ?true:_echec('la purge d’un dormant ne journalise rien');});
+
+          ok('1420 — LES MÉTRIQUES : QUATRE CENTS JOURS, ET SEUL LE CRÉATEUR PEUT PURGER',(()=>{
+            const iso=j=>new Date(Date.now()-j*864e5).toISOString().slice(0,10);
+            const cles=[iso(500),iso(401),iso(399),iso(10),'pas-une-date','2026-13-45',''];
+            const v=metricsJoursPerimes(cles);
+            if(v.length!==2) return _echec(v.length+' jour(s) périmé(s) : '+JSON.stringify(v));
+            if(v.indexOf(iso(399))>=0) return _echec('un jour de 399 jours est déclaré périmé');
+            if(v.indexOf(iso(500))<0||v.indexOf(iso(401))<0) return _echec('un vieux jour est oublié');
+            if(METRICS_RETENTION_J!==400) return _echec('la rétention vaut '+METRICS_RETENTION_J);
+            // ⚠ LA RÈGLE DOIT EXISTER, sinon la purge échoue en silence :
+            //   supprimer écrit `null`, et le .validate de $evenement exige un
+            //   nombre. La règle ouvre le JOUR entier, en suppression seule, au
+            //   seul créateur.
+            const r=(typeof window!=='undefined')?window._RC_RULES:null;
+            if(typeof r==='string'&&r){
+              const i=r.indexOf('"metrics"');
+              if(i<0) return _echec('le nœud metrics a disparu des règles');
+              const bloc=r.slice(i,i+3000);
+              if(bloc.indexOf('!newData.exists()')<0)
+                return _echec('aucune règle ne permet de supprimer un jour de métriques');
+              if(bloc.indexOf(CREATOR_EMAIL)<0)
+                return _echec('la suppression des métriques n’est pas réservée au créateur');
+            }
+            return true;})());
+        } finally {
+          CLOUD._callFn=_sCall; window.toast=_sToast; currentUser=_sU;
+          _rendre(EXPIRATIONS_CLE,_sExp); _rendre(CLD_FILE_CLE,_sCld);
+        }
       })();
 
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms

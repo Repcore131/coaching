@@ -722,6 +722,31 @@
       "$jour": {
         ".read": "auth != null",
         ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+
+        // PURGE GLISSANTE A QUATRE CENTS JOURS : la seule ecriture permise ici,
+        // et elle est reservee au createur. Ce noeud n avait JAMAIS ete purge —
+        // une trentaine d entiers par jour, pour toujours.
+        //
+        // POURQUOI UNE REGLE ETAIT NECESSAIRE. Supprimer, c est ecrire `null`,
+        // et le .validate de $evenement exige un NOMBRE : une suppression y
+        // etait donc refusee. On ouvre le jour entier, en suppression
+        // uniquement (`!newData.exists()`), au seul createur.
+        //
+        // ELLE N ELARGIT RIEN. Pour un increment sur $jour/$evenement, newData
+        // vu d ici est le jour APRES ecriture : il existe, la regle ne donne
+        // donc rien, et c est le `.write` de $evenement qui accorde comme
+        // avant. Le .validate du jour, lui, n est pas evalue sur une
+        // suppression — c est la regle de Firebase, pas un contournement.
+        //
+        // ⚠ RESIDU CONNU, ET ASSUME : `$evenement` porte `.write: true`, et un
+        //   .validate n est pas evalue quand on supprime. N importe qui peut
+        //   donc effacer UN compteur. On ne le referme pas ici parce que la
+        //   correction (`.write: newData.isNumber()`) ferait dependre l ecriture
+        //   de la resolution d un `.sv increment` AVANT la regle, et un doute
+        //   sur ce point couterait TOUTES les mesures du tunnel, en silence.
+        //   Le noeud ne porte aucune donnee personnelle : le risque est un
+        //   chiffre faux, pas une fuite.
+        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com' && !newData.exists()",
         "$evenement": {
           ".write": true,
           ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee)$/)"
