@@ -5439,6 +5439,11 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // ⚠ LE GENRE Y FIGURE, et il est deja classe ailleurs : c'est le meme que
   // `gender`, recopie ici pour savoir quelle version a ete posee.
   'programmeApplique',
+  // Les trois mesures que le coach a epinglees sur la fiche d'un athlete
+  // (lot 5). C'est une preference DE LECTURE, rangee dans le dossier DU COACH :
+  // une table {idAthlete: [cles de mesure]}, sans une seule valeur mesuree.
+  // Elle DOIT etre classee, sinon elle n'est protegee par rien.
+  'ccdEpingles',
   // Les programmes achetes : un identifiant, une date, le prix paye et le
   // numero d'ordre PayPal. De la facturation, pas de la sante — mais qui DOIT
   // etre classee, sinon elle n'est protegee par rien.
@@ -41220,19 +41225,25 @@ function _corpsLibTour(cle){
  *   le metre.
  * @returns {{muscle:string,cle:string,cotes:Array<any>,sens:string}|null}
  */
-function corpsEvolutionMuscle(u,muscle){
+function corpsEvolutionMuscle(u,muscle,depuisLePremier){
   const base=BLOC_MESURE_DE[muscle];
   if(!base) return null;
+  // ⚠ `depuisLePremier` VIENT DE LA PAIRE DE BILANS (lot 5). Le dossier est
+  //   alors deja borne aux deux dates choisies, et la teinte doit dire l'ecart
+  //   d'un bout a l'autre de cette fenetre, pas celui de ses deux derniers
+  //   releves.
+  const _dp=(depuisLePremier===true);
   const cotes=[];
   for(const k of _corpsPaire(base)){
     let rel=[]; try{ rel=corpsRelevesReels(u,k)||[]; }catch(e){ rel=[]; }
     if(!rel.length) continue;
     const n=rel.length, fin=rel[n-1];
-    const delta=(n>=2)?Math.round((fin.valeur-rel[n-2].valeur)*10)/10:null;
+    const avant=(n>=2)?rel[_dp?0:(n-2)]:null;
+    const delta=avant?Math.round((fin.valeur-avant.valeur)*10)/10:null;
     const trois=rel.slice(-CORPS_BOUGE_BILANS).map(x=>x.valeur);
     const amp=Math.round((Math.max.apply(null,trois)-Math.min.apply(null,trois))*10)/10;
     cotes.push({cle:k,nom:CORPS_NOMS[k]||k,n:n,valeur:fin.valeur,date:fin.date,
-      depuis:(n>=2)?rel[n-2].date:0,delta:delta,derniers:trois,amp:amp,
+      depuis:avant?avant.date:0,delta:delta,derniers:trois,amp:amp,
       dort:(n>=CORPS_BOUGE_BILANS&&amp<CORPS_BOUGE_MIN),
       sens:(delta===null)?'seul'
         :(delta>=CORPS_BOUGE_MIN?'pris':(delta<=-CORPS_BOUGE_MIN?'perdu':'plat'))});
@@ -41249,10 +41260,10 @@ function corpsEvolutionMuscle(u,muscle){
 // PURE. La couleur de chaque muscle d'une vue : le sens de sa mensuration.
 // Un muscle qu'aucune mensuration ne suit, une paire contradictoire, un tour
 // mesure une seule fois, un tour stable sans ses trois releves : pas de teinte.
-function corpsTeintesEvolution(u,vue){
+function corpsTeintesEvolution(u,vue,depuisLePremier){
   const out={};
   for(const m of (CORPS_MUSCLES_VUE[vue]||[])){
-    let e=null; try{ e=corpsEvolutionMuscle(u,m); }catch(err){ e=null; }
+    let e=null; try{ e=corpsEvolutionMuscle(u,m,depuisLePremier); }catch(err){ e=null; }
     if(!e) continue;
     const c=CORPS_EVO_COULEURS[e.sens];
     if(c) out[m]=c;
@@ -41308,18 +41319,19 @@ function _corpsEvoPhrase(e){
 // PURE. La phrase de chaque muscle de la vue, teinte ou pas. Un muscle
 // qu'aucune mensuration ne suit le dit : c'est une absence de mesure, pas un
 // oubli d'affichage, et inventer un rapprochement serait pire.
-function corpsInfobullesEvolution(u,vue){
+function corpsInfobullesEvolution(u,vue,depuisLePremier){
   const out={};
   for(const m of (CORPS_MUSCLES_VUE[vue]||[])){
-    let e=null; try{ e=corpsEvolutionMuscle(u,m); }catch(err){ e=null; }
+    let e=null; try{ e=corpsEvolutionMuscle(u,m,depuisLePremier); }catch(err){ e=null; }
     const lib=(MUSCLES[m]||{}).lib||m;
     out[m]=e?_corpsEvoPhrase(e):(lib+' · aucune mensuration ne suit ce muscle');
   }
   return out;
 }
 // Les deux lectures ont la meme forme de sortie : teintes + infobulles.
-function corpsEvolutionVue(u,vue){
-  return {teintes:corpsTeintesEvolution(u,vue),infos:corpsInfobullesEvolution(u,vue)};
+function corpsEvolutionVue(u,vue,depuisLePremier){
+  return {teintes:corpsTeintesEvolution(u,vue,depuisLePremier),
+    infos:corpsInfobullesEvolution(u,vue,depuisLePremier)};
 }
 // LA LEGENDE DE L'EVOLUTION. Ce que la teinte raconte, trois pastilles, puis
 // chaque muscle teinte en toutes lettres : la couleur se lit sans la voir.
@@ -42061,7 +42073,7 @@ function _htmlCorpsCadre(c,o){
   const mode=(o.mode==='volume')?'volume':((o.mode==='evolution')?'evolution'
     :((_corpsMode==='volume')?'volume':'evolution'));
   const evo=(mode==='evolution'&&bilans.length)
-    ?(function(){ try{ return corpsEvolutionVue(u,vue); }catch(e){ return null; } })():null;
+    ?(function(){ try{ return corpsEvolutionVue(u,vue,o.evoPremier===true); }catch(e){ return null; } })():null;
   // ⚠ L'ONGLET FERME DIT S'IL Y A QUELQUE CHOSE A VOIR DE L'AUTRE COTE — ce
   //   que cette vue ne montre pas : la poitrine et le buste n'existent que de
   //   face, les fessiers que de dos. La pastille et son infobulle le disent.
@@ -42345,14 +42357,22 @@ const CCD_DORT_BILANS=3;
  * @param {any} u le dossier de l'athlete
  * @returns {{poids:any, gras:any, maigre:any, dort:any}}
  */
-function ccdVerdict(u){
+function ccdVerdict(u,depuisLePremier){
+  // ⚠ `depuisLePremier` EST POSE PAR LA PAIRE DE BILANS (lot 5), jamais par
+  //   defaut. Sans paire, l'ecart des cartes est celui du bilan d'avant ; avec
+  //   une paire, le dossier est deja borne aux deux dates choisies, et l'ecart
+  //   doit alors courir d'un bout a l'autre de cette fenetre — sans quoi deux
+  //   bilans compares a six mois d'intervalle afficheraient l'ecart des deux
+  //   derniers de la periode, ce que personne n'a demande.
+  const _dp=(depuisLePremier===true);
   const out={poids:null,gras:null,maigre:null,dort:null};
   let bl=[];
   try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
   // LE POIDS : les deux derniers bilans qui en portent un.
   const pesees=bl.filter(b=>getBW(b)>0);
   if(pesees.length){
-    const fin=pesees[pesees.length-1], deb=pesees.length>1?pesees[pesees.length-2]:null;
+    const fin=pesees[pesees.length-1];
+    const deb=(pesees.length>1)?pesees[_dp?0:(pesees.length-2)]:null;
     const vFin=getBW(fin), vDeb=deb?getBW(deb):null;
     const jours=deb?Math.max(1,Math.round((Number(fin.date)-Number(deb.date))/86400000)):0;
     let kgSem=null;
@@ -42363,7 +42383,9 @@ function ccdVerdict(u){
     if(kgSem==null&&deb&&jours>=7) kgSem=(vFin-vDeb)/(jours/7);
     out.poids={valeur:vFin,date:Number(fin.date)||0,
       delta:(vDeb!=null)?Math.round((vFin-vDeb)*10)/10:null,
-      depuis:deb?(Number(deb.date)||0):0,kgSem:kgSem};
+      depuis:deb?(Number(deb.date)||0):0,kgSem:kgSem,
+      // LA VALEUR DE DEPART, pour la lecture en pourcentage : « depuis 66 kg ».
+      premier:getBW(pesees[0])};
   }
   // LA MASSE GRASSE : les deux derniers bilans ou la formule a ses mesures.
   const taille=parseFloat((u&&(u._evol_height||u['init-height']||u.height))||0)||null;
@@ -42374,11 +42396,14 @@ function ccdVerdict(u){
   //   de masse maigre dans le meme ecran finiraient par donner deux chiffres.
   const calc=ccdCompositionSerie(u);
   if(calc.length){
-    const f=calc[calc.length-1], d=calc.length>1?calc[calc.length-2]:null;
+    const f=calc[calc.length-1];
+    const d=(calc.length>1)?calc[_dp?0:(calc.length-2)]:null;
     out.gras={kg:f.gras,pct:f.pct,date:f.date,marge:CCD_BF_MARGE,
-      delta:d?Math.round((f.gras-d.gras)*10)/10:null,depuis:d?d.date:0};
+      delta:d?Math.round((f.gras-d.gras)*10)/10:null,depuis:d?d.date:0,
+      premier:calc[0].gras};
     const dm=d?Math.round((f.maigre-d.maigre)*10)/10:null;
     out.maigre={kg:f.maigre,date:f.date,delta:dm,depuis:d?d.date:0,
+      premier:calc[0].maigre,
       sens:(dm==null)?null:(Math.abs(dm)<CCD_MAIGRE_BRUIT?'preservee':(dm>0?'hausse':'baisse'))};
   } else {
     // RIEN A CALCULER : on dit CE QUI MANQUE, et rien d'autre. Une carte qui
@@ -42439,14 +42464,15 @@ function _ccdCarte(libelle,valeur,delta,phrase,source){
  * Les quatre cartes, plus la ligne d'alerte. Rend '' quand il n'y a pas un
  * seul bilan : l'etage disparait alors avec son bouton (_ccdMajEtages).
  */
-function _htmlCcdVerdict(u){
-  const v=ccdVerdict(u);
+function _htmlCcdVerdict(u,depuisLePremier){
+  const v=ccdVerdict(u,depuisLePremier);
   if(!v.poids&&(!v.gras||v.gras.manque)&&!v.dort.n) return '';
   const cartes=[];
   // 1. LE POIDS.
   if(v.poids){
     const p=v.poids;
-    cartes.push(_ccdCarte('Poids',_synNombre(p.valeur)+' kg',_ccdDelta(p.delta,'kg'),
+    const lu=_ccdLu(p.valeur,'kg',p.delta,p.premier);
+    cartes.push(_ccdCarte('Poids',lu.grand,lu.petit,
       (p.kgSem!=null&&isFinite(p.kgSem))?(_ccdDelta(p.kgSem,'kg')+' par semaine'):'',
       'pesé au bilan du '+_ccdJour(p.date)+' · à 0,3 kg près'));
   }
@@ -42457,12 +42483,14 @@ function _htmlCcdVerdict(u){
       +'<span class="ccd-v-p">Pas encore calculable : il manque '+escapeHtml(m[0]||'une mesure')+'.</span>'
       +'<span class="ccd-v-s">avec elle, tu sauras s\'il perd du gras ou du muscle</span></article>');
   } else if(v.gras){
-    cartes.push(_ccdCarte('Masse grasse',_synNombre(v.gras.kg)+' kg',_ccdDelta(v.gras.delta,'kg'),
+    const lg=_ccdLu(v.gras.kg,'kg',v.gras.delta,v.gras.premier);
+    cartes.push(_ccdCarte('Masse grasse',lg.grand,lg.petit,
       _synNombre(v.gras.pct)+' % de son poids',
       'estimée au ruban le '+_ccdJour(v.gras.date)+' · à '+v.gras.marge+' points près'));
     const m=v.maigre;
     const dit={preservee:'préservée',baisse:'en baisse',hausse:'en hausse'}[m&&m.sens]||'';
-    cartes.push(_ccdCarte('Masse maigre',_synNombre(m.kg)+' kg',_ccdDelta(m.delta,'kg'),dit,
+    const lm=_ccdLu(m.kg,'kg',m.delta,m.premier);
+    cartes.push(_ccdCarte('Masse maigre',lm.grand,lm.petit,dit,
       'le poids moins la masse grasse · à '+_synNombre(CCD_MAIGRE_BRUIT)+' kg près'));
   }
   // 4. CE QUI DORT.
@@ -42495,13 +42523,269 @@ function _htmlCcdAlerte(c){
   return '<p class="ccd-v-al"><span class="ccd-v-al-p"></span>'
     +escapeHtml(String(x.motif||''))+escapeHtml(quand)+'</p>';
 }
+// ══ LOT 5 : LES OUTILS DE LECTURE ══════════════════════════════════════════
+//
+// Kevin, 23/09/2026 : « C'est ce qui separe un ecran joli d'un ecran qu'on
+// utilise dix fois par jour. »
+//
+// TROIS OUTILS, ET ILS NE VIVENT QUE DANS LA TETE DE L'ECRAN :
+//   • la LECTURE (valeur du jour, ecart, pourcentage) ;
+//   • la PAIRE de bilans compares, qui recalcule les etages 1 et 2 ;
+//   • les TROIS MESURES EPINGLEES, qui remontent en grand sous les cartes.
+//
+// ⚠ AUCUN DES TROIS N'EST UNE DONNEE DE L'ATHLETE. La lecture et la paire sont
+//   des lentilles : elles vivent le temps d'une consultation, comme la vue
+//   avant/arriere. Les epingles, elles, sont une preference DU COACH sur un
+//   athlete : elles se rangent dans le dossier du coach, jamais dans celui de
+//   l'athlete, qui decrit quelqu'un d'autre.
+const CCD_LECTURES=Object.freeze([
+  {cle:'absolu',lib:'Valeur',aide:'La valeur du dernier bilan'},
+  {cle:'ecart',lib:'Écart',aide:'L’écart depuis le bilan d’avant'},
+  {cle:'pourcent',lib:'%',aide:'Le pourcentage depuis le premier bilan'}
+]);
+let _ccdLecture='absolu';
+function ccdLecture(m){
+  _ccdLecture=CCD_LECTURES.some(x=>x.cle===m)?m:'absolu';
+  _ccdRefaireEtages();
+  try{
+    const b=document.querySelector('#ccd-outils .ccd-lec .cc-corps-o.actif');
+    if(b) b.focus();
+  }catch(e){}
+  return _ccdLecture;
+}
+// LES DEUX BILANS COMPARES, en millisecondes, ou 0 pour « les deux derniers ».
+let _ccdPaireA=0, _ccdPaireB=0;
+function ccdPaire(a,b){
+  const x=Number(a)||0, y=Number(b)||0;
+  // Deux bornes ou aucune, et dans l'ordre : une paire a moitie posee
+  // afficherait une periode que personne n'a choisie.
+  if(!x||!y||x===y){ _ccdPaireA=0; _ccdPaireB=0; }
+  else { _ccdPaireA=Math.min(x,y); _ccdPaireB=Math.max(x,y); }
+  _ccdRefaireEtages();
+  return {a:_ccdPaireA,b:_ccdPaireB};
+}
+function ccdPaireActive(){ return !!(_ccdPaireA&&_ccdPaireB); }
+/**
+ * PURE. Le dossier RAMENE A LA PAIRE CHOISIE, ou le dossier tel quel.
+ *
+ * ⚠ ON BORNE LA SOURCE, ON NE PARAMETRE PAS LES CALCULS. Toutes les lectures
+ *   de cet onglet partent de bilansOrdonnes et de serieWeight : leur donner un
+ *   dossier dont les bilans s'arretent aux deux dates choisies recalcule TOUT
+ *   l'etage 1 et l'etage 2 d'un coup, sans ajouter un parametre a douze
+ *   fonctions qui finiraient par ne plus le passer au bon endroit.
+ *
+ * ⚠ LES PESEES QUOTIDIENNES SONT BORNEES AUSSI. Sans cela, la vitesse affichee
+ *   sur la carte du poids serait celle d'aujourd'hui sous deux bilans
+ *   d'octobre : un chiffre juste, au mauvais endroit.
+ */
+function ccdBorner(u){
+  if(!u||!ccdPaireActive()) return u;
+  const a=_ccdPaireA, b=_ccdPaireB;
+  const iA=_jourISO(a), iB=_jourISO(b);
+  return Object.assign({},u,{
+    bilans:((u.bilans)||[]).filter(x=>x&&Number(x.date)>=a&&Number(x.date)<=b),
+    weightLog:((u.weightLog)||[]).filter(e=>e&&e.date>=iA&&e.date<=iB)
+  });
+}
+// Les etages 1 et 2 se refont ensemble : ce sont eux que les outils commandent.
+function _ccdRefaireEtages(){
+  try{
+    const c=getOwnedClient(currentClientId);
+    if(!c) return false;
+    try{ renderVerdictCoach(c); }catch(e){}
+    try{ renderCorpsCoach(c); }catch(e){}
+    return true;
+  }catch(e){ return false; }
+}
+// ── LA LECTURE APPLIQUEE A UN CHIFFRE ──────────────────────────────────────
+// « 61,4 kg », « −1,4 kg », « −7 % ». Rend aussi la ligne qui accompagne, pour
+// qu'aucune des trois lectures ne cache ce que les deux autres montrent.
+function _ccdPourcent(valeur,premier){
+  if(premier==null||!isFinite(premier)||!premier) return null;
+  return Math.round((valeur-premier)/premier*1000)/10;
+}
+function _ccdLu(valeur,unite,delta,premier){
+  const abs=_synNombre(valeur)+' '+unite;
+  if(_ccdLecture==='ecart'){
+    if(delta==null||!isFinite(delta)) return {grand:abs,petit:'premier bilan, pas encore d’écart'};
+    return {grand:_ccdDelta(delta,unite),petit:abs+' aujourd’hui'};
+  }
+  if(_ccdLecture==='pourcent'){
+    const p=_ccdPourcent(valeur,premier);
+    if(p==null) return {grand:abs,petit:'premier bilan, pas encore de pourcentage'};
+    return {grand:(p>0?'+':(p<0?'−':''))+_synNombre(p)+' %',
+      petit:'depuis '+_synNombre(premier)+' '+unite};
+  }
+  return {grand:abs,petit:_ccdDelta(delta,unite)};
+}
+// ── LES TROIS MESURES EPINGLEES ────────────────────────────────────────────
+//
+// ⚠ TROIS, ET LE QUATRIEME POUSSE LE PLUS ANCIEN. Refuser le quatrieme clic en
+//   silence se lit comme un bouton casse ; ouvrir une alerte pour dire non est
+//   pire. La ligne d'aide dit la regle avant qu'on la rencontre.
+const CCD_EPINGLE_MAX=3;
+// Ce qu'on peut epingler : les trois chiffres du verdict, et chaque tour.
+function ccdEpinglables(){
+  const l=[{cle:'poids',lib:'Poids'},{cle:'gras',lib:'Masse grasse'},
+    {cle:'maigre',lib:'Masse maigre'}];
+  for(const k in CORPS_NOMS) l.push({cle:k,lib:CORPS_NOMS[k]});
+  return l;
+}
+function ccdEpingles(id){
+  const t=(currentUser&&currentUser.ccdEpingles)||{};
+  const l=t[String(id||currentClientId||'')];
+  return Array.isArray(l)?l.slice(0,CCD_EPINGLE_MAX):[];
+}
+function ccdEpingler(cle){
+  const id=String(currentClientId||'');
+  if(!id||!currentUser) return [];
+  const t=Object.assign({},currentUser.ccdEpingles||{});
+  let l=(Array.isArray(t[id])?t[id]:[]).slice();
+  const i=l.indexOf(cle);
+  if(i>=0) l.splice(i,1);
+  else { l.push(cle); if(l.length>CCD_EPINGLE_MAX) l.shift(); }
+  t[id]=l;
+  currentUser.ccdEpingles=t;
+  // ⚠ LE DOSSIER DU COACH, ET C'EST TOUT. saveUser n'enregistre que
+  //   currentUser : l'athlete ne porte rien de ce choix, qui n'est pas le sien.
+  try{ saveUser(); }catch(e){}
+  _ccdRefaireEtages();
+  return l;
+}
+/**
+ * PURE. Ce que dit une mesure epinglee : sa valeur du jour, son ecart, sa
+ * valeur au premier bilan, sa source et sa marge.
+ * @returns {{lib:string,valeur:number,unite:string,delta:number|null,
+ *            premier:number|null,date:number,source:string}|null}
+ */
+function ccdEpingleValeur(u,cle){
+  if(cle==='poids'||cle==='gras'||cle==='maigre'){
+    let v=null; try{ v=ccdVerdict(u); }catch(e){ return null; }
+    if(cle==='poids'){
+      if(!v.poids) return null;
+      return {lib:'Poids',valeur:v.poids.valeur,unite:'kg',delta:v.poids.delta,
+        premier:v.poids.premier!=null?v.poids.premier:null,date:v.poids.date,
+        source:'pesé au bilan · à '+_synNombre(SYN_BRUIT_POIDS)+' kg près'};
+    }
+    if(!v.gras||v.gras.manque) return null;
+    if(cle==='gras') return {lib:'Masse grasse',valeur:v.gras.kg,unite:'kg',
+      delta:v.gras.delta,premier:v.gras.premier!=null?v.gras.premier:null,date:v.gras.date,
+      source:'estimée au ruban · à '+v.gras.marge+' points près'};
+    return {lib:'Masse maigre',valeur:v.maigre.kg,unite:'kg',delta:v.maigre.delta,
+      premier:v.maigre.premier!=null?v.maigre.premier:null,date:v.maigre.date,
+      source:'le poids moins la masse grasse · à '+_synNombre(CCD_MAIGRE_BRUIT)+' kg près'};
+  }
+  let rel=[]; try{ rel=corpsRelevesReels(u,cle)||[]; }catch(e){ rel=[]; }
+  if(!rel.length) return null;
+  const fin=rel[rel.length-1];
+  return {lib:CORPS_NOMS[cle]||cle,valeur:fin.valeur,unite:'cm',
+    delta:(rel.length>1)?Math.round((fin.valeur-rel[rel.length-2].valeur)*10)/10:null,
+    premier:rel[0].valeur,date:fin.date,
+    source:'au ruban · à '+_synNombre(SYN_BRUIT_MESURE)+' cm près'};
+}
+function _htmlCcdEpingles(u){
+  const l=ccdEpingles();
+  if(!l.length) return '';
+  const cartes=[];
+  for(const cle of l){
+    let e=null; try{ e=ccdEpingleValeur(u,cle); }catch(err){ e=null; }
+    const lib=e?e.lib:((ccdEpinglables().find(x=>x.cle===cle)||{}).lib||cle);
+    if(!e){
+      cartes.push('<article class="ccd-v ccd-v-manque"><span class="ccd-v-l">'+escapeHtml(lib)+'</span>'
+        +'<span class="ccd-v-p">Pas encore de relevé sur la période lue.</span></article>');
+      continue;
+    }
+    const lu=_ccdLu(e.valeur,e.unite,e.delta,e.premier);
+    cartes.push(_ccdCarte(lib,lu.grand,lu.petit,'',
+      e.source+(e.date?(' · '+_ccdJour(e.date)):'')));
+  }
+  return '<div class="ccd-v4 ccd-epi">'+cartes.join('')+'</div>';
+}
+// ── LA BARRE D'OUTILS, EN TETE DE L'ETAGE 1 ────────────────────────────────
+//
+// ⚠ UNE SEULE LIGNE VISIBLE. Mesure a 375 px : les quatre cartes tombent a
+//   445 px du haut et le corps commence a 802 px, pour 812 px d'ecran. Deux
+//   lignes d'outils poussaient la silhouette hors de vue des l'ouverture.
+//   Les boutons de lecture restent donc dehors, et le reste s'ouvre d'un
+//   geste, replie par defaut.
+// LA BARRE VA DANS LA LIGNE DE TITRE DE L'ETAGE (#ccd-outils), LE PANNEAU
+// RESTE DANS L'ETAGE : deplie, il a besoin de toute la largeur, et la ligne de
+// titre n'en a plus qu'un tiers une fois le titre pose.
+function _htmlCcdBarre(){
+  return '<div class="ccd-outils"><div class="ccd-out-h">'
+    +'<span class="cc-corps-vue ccd-lec" role="group" aria-label="Ce que les cartes affichent">'
+    +CCD_LECTURES.map(x=>'<button type="button" class="cc-corps-o'
+      +((x.cle===_ccdLecture)?' actif':'')+'" aria-pressed="'+((x.cle===_ccdLecture)?'true':'false')
+      +'" title="'+escapeHtml(x.aide)+'" onclick="ccdLecture(\''+x.cle+'\')">'
+      +escapeHtml(x.lib)+'</button>').join('')+'</span>'
+    +'<button type="button" class="ccd-out-b" aria-expanded="false"'
+    +' aria-controls="ccd-out-c" onclick="ccdOutils(this)">Outils</button>'
+    +'</div></div>';
+}
+function _htmlCcdOutils(u){
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  const opts=(sel)=>bl.map(b=>'<option value="'+Number(b.date)+'"'
+    +((Number(b.date)===sel)?' selected':'')+'>'
+    +escapeHtml(_ccdJour(b.date))+'</option>').join('');
+  const a=ccdPaireActive()?_ccdPaireA:(bl.length>1?Number(bl[bl.length-2].date):0);
+  const b=ccdPaireActive()?_ccdPaireB:(bl.length?Number(bl[bl.length-1].date):0);
+  const epi=ccdEpingles();
+  return '<div class="ccd-out-c" id="ccd-out-c" hidden>'
+    +(bl.length>1
+      ?('<div class="ccd-out-l"><label>Comparer<select onchange="ccdPaireDepuisEcran()" id="ccd-pa">'
+        +opts(a)+'</select></label><label>à<select onchange="ccdPaireDepuisEcran()" id="ccd-pb">'
+        +opts(b)+'</select></label>'
+        +(ccdPaireActive()?'<button type="button" class="ccd-out-r" onclick="ccdPaire(0,0)">Revenir aux deux derniers</button>':'')
+        +'</div><p class="ccd-out-p">Les cartes et la silhouette se recalculent entre ces deux bilans. '
+        +'Les courbes, elles, suivent la période choisie dans « Ses courbes ».</p>')
+      :'<p class="ccd-out-p">Il faut deux bilans pour en comparer deux.</p>')
+    +'<div class="ccd-out-l ccd-out-e">'
+    +ccdEpinglables().map(x=>'<button type="button" class="ccd-epi-b'
+      +((epi.indexOf(x.cle)>=0)?' actif':'')+'" aria-pressed="'+((epi.indexOf(x.cle)>=0)?'true':'false')
+      +'" onclick="ccdEpingler(\''+x.cle+'\')">'+escapeHtml(x.lib)+'</button>').join('')
+    +'</div><p class="ccd-out-p">Trois mesures épinglées au plus : la quatrième '
+    +'remplace la plus ancienne. Le choix se garde pour cet athlète.</p>'
+    +'</div>';
+}
+function ccdOutils(b){
+  const c=document.getElementById('ccd-out-c');
+  if(!c) return false;
+  const ouvert=!c.hidden;
+  c.hidden=ouvert;
+  b.setAttribute('aria-expanded',ouvert?'false':'true');
+  return !ouvert;
+}
+function ccdPaireDepuisEcran(){
+  const a=document.getElementById('ccd-pa'), b=document.getElementById('ccd-pb');
+  if(!a||!b) return null;
+  const r=ccdPaire(Number(a.value)||0,Number(b.value)||0);
+  // LE PANNEAU RESTE OUVERT : le rendu l'a referme, et le coach qui compare
+  // deux bilans en compare souvent trois.
+  try{
+    const z=document.getElementById('ccd-out-c');
+    const t=document.querySelector('#ccd-outils .ccd-out-b');
+    if(z){ z.hidden=false; if(t) t.setAttribute('aria-expanded','true'); }
+  }catch(e){}
+  return r;
+}
 function renderVerdictCoach(c){
   const z=document.getElementById('ccd-verdict');
   if(!z) return false;
   const u=_dossier(c);
+  // ⚠ LES CARTES LISENT LE DOSSIER BORNE A LA PAIRE, LES OUTILS LE DOSSIER
+  //   ENTIER : les deux menus deroulants doivent proposer TOUS les bilans,
+  //   sans quoi on ne pourrait plus sortir de la paire qu'on vient de poser.
+  const b=ccdBorner(u);
   let h='';
-  try{ h=u?_htmlCcdVerdict(u):''; }catch(e){ h=''; }
+  try{ h=u?_htmlCcdVerdict(b,ccdPaireActive()):''; }catch(e){ h=''; }
+  if(h){
+    try{ h=_htmlCcdOutils(u)+h+_htmlCcdEpingles(b); }catch(e){}
+  }
   z.innerHTML=h;
+  // LA BARRE VIT DANS LA LIGNE DE TITRE, et elle disparait avec les cartes :
+  // trois boutons de lecture au-dessus d'un etage vide ne lisent rien.
+  const zb=document.getElementById('ccd-outils');
+  if(zb) zb.innerHTML=h?_htmlCcdBarre():'';
   const a=document.getElementById('ccd-verdict-alerte');
   if(a){ let t=''; try{ t=h?_htmlCcdAlerte(c):''; }catch(e){ t=''; } a.innerHTML=t; }
   return true;
@@ -42763,7 +43047,11 @@ function renderCorpsCoach(c){
   // ⚠ LES COURBES SONT MONTEES D'UN ETAGE (lot 4) : elles vivent desormais
   //   dans « Ses courbes », sous le selecteur de periode qui les commande
   //   toutes. Le cadre garde la silhouette, ses etiquettes et sa legende.
-  try{ h=_htmlCorpsCadre(c,{graphes:false})||''; }catch(e){ h=''; }
+  // LA PAIRE DE BILANS BORNE AUSSI LA SILHOUETTE (lot 5) : les etiquettes
+  // disent alors l'ecart entre les deux bilans choisis, et la teinte le sens
+  // de cet ecart-la.
+  try{ h=_htmlCorpsCadre(ccdBorner(_dossier(c)),
+    {graphes:false,evoPremier:ccdPaireActive()})||''; }catch(e){ h=''; }
   z.innerHTML=h;
   // Les calques de zones se peignent une fois dans la page : ils lisent une
   // image, ce qu'une chaine HTML ne sait pas faire.

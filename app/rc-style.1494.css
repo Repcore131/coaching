@@ -4292,6 +4292,59 @@ html{scroll-behavior:smooth}
   font-size:var(--fs-2xs);color:var(--sub);line-height:1.6}
 .ccd-proj b{color:var(--text);font-size:var(--fs-xs);font-weight:800}
 .ccd-proj-non{color:var(--text-faint)}
+/* ══ LES OUTILS DE LECTURE (lot 5) ═══════════════════════════════════════
+   UNE SEULE LIGNE VISIBLE : mesure a 375 px, les quatre cartes tombent a
+   445 px du haut et la silhouette commence a 802 px pour 812 px d'ecran.
+   Deux lignes d'outils auraient pousse le corps hors de vue des l'ouverture.
+   La bascule reste dehors, le reste s'ouvre d'un geste. */
+/* ⚠ LA BARRE D'OUTILS S'INSTALLE DANS LA LIGNE DE TITRE DE L'ETAGE 1, et ce
+   n'est pas une coquetterie : posee dessous, elle coutait 44 px et faisait
+   tomber le haut de la silhouette de 802 a 846 px, pour 812 px d'ecran. Le
+   titre « Ou il en est » et les trois boutons tiennent sur la meme ligne a
+   375 px ; le panneau deplie, lui, passe a la ligne entiere. */
+#ccd-et-verdict .ccd-et-h{flex-direction:row;flex-wrap:wrap;align-items:center;
+  justify-content:space-between;gap:8px;margin-bottom:6px}
+#ccd-et-verdict .ccd-et-h .ccd-et-s{flex:0 0 100%}
+#ccd-outils:empty{display:none}
+.ccd-outils{margin:0}
+#ccd-outils .ccd-out-h{justify-content:flex-end}
+.ccd-out-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ccd-lec .cc-corps-o{padding:7px 11px}
+.ccd-out-b{appearance:none;-webkit-appearance:none;background:transparent;
+  border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);
+  font-family:Montserrat,sans-serif;font-size:9.5px;font-weight:800;
+  letter-spacing:.8px;text-transform:uppercase;padding:7px 11px;min-height:32px;
+  cursor:pointer}
+.ccd-out-b[aria-expanded="true"]{background:rgba(224,32,32,.20);color:var(--text)}
+.ccd-out-b:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
+.ccd-out-c{margin-top:9px;padding:10px 11px;background:rgba(255,255,255,.028);
+  border:1px solid rgba(255,255,255,.09);border-radius:var(--r-2)}
+.ccd-out-c[hidden]{display:none}
+.ccd-out-l{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.ccd-out-l label{display:inline-flex;align-items:center;gap:5px;
+  font-size:var(--fs-2xs);color:var(--sub)}
+.ccd-out-l select{background:var(--dark);color:var(--text);border:1px solid var(--border);
+  border-radius:var(--r-2);padding:6px 7px;font-family:inherit;font-size:var(--fs-2xs);
+  min-height:32px}
+.ccd-out-r{appearance:none;-webkit-appearance:none;background:none;border:0;
+  color:var(--sub);font-family:inherit;font-size:var(--fs-2xs);padding:6px 0;
+  text-decoration:underline dotted rgba(255,255,255,.28);text-underline-offset:3px;
+  cursor:pointer}
+.ccd-out-p{margin:7px 0 0;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55}
+.ccd-out-e{margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.10)}
+/* LES MESURES EPINGLABLES : des jetons, pas une liste deroulante. Le coach
+   voit d'un coup ce qui est epingle et ce qui ne l'est pas. */
+.ccd-epi-b{appearance:none;-webkit-appearance:none;background:var(--dark);
+  border:1px solid var(--border);border-radius:var(--r-full);color:var(--sub);
+  font-family:inherit;font-size:var(--fs-2xs);font-weight:700;padding:6px 10px;
+  min-height:32px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ccd-epi-b.actif{background:rgba(224,32,32,.20);border-color:rgba(224,32,32,.45);
+  color:var(--text)}
+.ccd-epi-b:focus-visible{outline:2px solid var(--red);outline-offset:1px}
+/* LES TROIS EPINGLEES, SOUS LES CARTES DU VERDICT : memes cartes, meme
+   grammaire, et une barre qui dit qu'elles sont choisies. */
+.ccd-epi{margin-top:10px}
+.ccd-epi .ccd-v{border-left:2px solid rgba(224,32,32,.45)}
 /* La legende des quatre zones : la meme grammaire que celle de la grille de
    charge, pastille puis nom de zone. */
 .cc-corps-l{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;

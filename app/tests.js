@@ -43255,6 +43255,175 @@ async function testExercices(){
       if(/[—–]/.test(h.replace(/<[^>]*>/g,''))) return _echec('un tiret cadratin dans la projection');
       return true;})());
 
+
+    // ══ LOT 5 : LES OUTILS DE LECTURE (23/09/2026) ═══════════════════════
+    // « C'est ce qui sépare un écran joli d'un écran qu'on utilise dix fois
+    //   par jour. »
+    ok('TROIS LECTURES POUR LES MÊMES CHIFFRES, ET AUCUNE NE CACHE LES AUTRES',(()=>{
+      if(typeof ccdLecture!=='function') return _echec('la bascule n’existe pas');
+      // LA VALEUR DU JOUR A L'OUVERTURE : c'est ce que les cartes disaient
+      // avant cette bascule, et une bascule ne change pas ce qu'on voyait.
+      if(_ccdLecture!=='absolu') return _echec('la lecture ouverte n’est pas la valeur : '+_ccdLecture);
+      const sl=_ccdLecture;
+      try{
+        if(CCD_LECTURES.map(x=>x.cle).join('/')!=='absolu/ecart/pourcent')
+          return _echec('les lectures ont changé : '+CCD_LECTURES.map(x=>x.cle).join('/'));
+        if(ccdLecture('pourcent')!=='pourcent') return _echec('le pourcentage ne se pose pas');
+        if(ccdLecture('nimporte')!=='absolu') return _echec('une lecture inconnue ne retombe pas sur la valeur');
+        // LES TROIS LECTURES D'UN MEME CHIFFRE : 61,4 kg, −1,4 kg, −7 %.
+        _ccdLecture='absolu';
+        let l=_ccdLu(61.4,'kg',-1.4,66);
+        if(l.grand!=='61,4 kg') return _echec('valeur : '+l.grand);
+        if(l.petit!=='−1,4 kg') return _echec('la valeur cache l’écart : '+l.petit);
+        _ccdLecture='ecart';
+        l=_ccdLu(61.4,'kg',-1.4,66);
+        if(l.grand!=='−1,4 kg') return _echec('écart : '+l.grand);
+        if(l.petit.indexOf('61,4 kg')<0) return _echec('l’écart cache la valeur : '+l.petit);
+        _ccdLecture='pourcent';
+        l=_ccdLu(61.4,'kg',-1.4,66);
+        if(l.grand!=='−7 %') return _echec('pourcentage : '+l.grand);
+        if(l.petit.indexOf('66 kg')<0) return _echec('le pourcentage cache son point de départ : '+l.petit);
+        // ⚠ SANS ÉCART ET SANS DÉPART, ON LE DIT : un tiret ou un zéro
+        //   laisserait croire que rien n'a bougé.
+        _ccdLecture='ecart';
+        if(_ccdLu(61.4,'kg',null,null).petit.indexOf('premier bilan')<0)
+          return _echec('un premier bilan ne dit pas pourquoi il n’a pas d’écart');
+        _ccdLecture='pourcent';
+        if(_ccdLu(61.4,'kg',null,null).grand!=='61,4 kg')
+          return _echec('un pourcentage sort sans point de départ');
+        // ET LA BASCULE CHANGE CE QUE LA CARTE MONTRE EN GRAND.
+        const J=864e5, t=Date.now();
+        const u={id:'O5A',email:'o5a@t.fr',role:'athlete',gender:'H',_evol_height:'178',bilans:[
+          {date:t-60*J,'bil-weight':'86','bil-waist':'92','bil-neck':'40'},
+          {date:t-2*J,'bil-weight':'84','bil-waist':'89','bil-neck':'40'}]};
+        const grand=()=>{ const d=document.createElement('div'); d.innerHTML=_htmlCcdVerdict(u);
+          return ((d.querySelector('.ccd-v .ccd-v-n')||{}).textContent||''); };
+        _ccdLecture='absolu'; const a=grand();
+        _ccdLecture='ecart'; const b=grand();
+        _ccdLecture='pourcent'; const c=grand();
+        if(a===b||b===c||a===c) return _echec('les trois lectures affichent la même chose : '+a+'/'+b+'/'+c);
+        if(a!=='84 kg') return _echec('la valeur : '+a);
+        if(b!=='−2 kg') return _echec('l’écart : '+b);
+        if(!/%$/.test(c)) return _echec('le pourcentage : '+c);
+        return true;
+      } finally { _ccdLecture=sl; }})());
+
+    ok('COMPARER DEUX BILANS AU CHOIX, ET TOUT L’ÉTAGE SE RECALCULE ENTRE EUX',(()=>{
+      if(typeof ccdPaire!=='function') return _echec('la comparaison n’existe pas');
+      const J=864e5, t=Date.now();
+      const iso=d=>{const x=new Date(d);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
+      const u={id:'O5B',email:'o5b@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        weightLog:[{date:iso(t-100*J),kg:90},{date:iso(t-70*J),kg:89},
+          {date:iso(t-50*J),kg:88},{date:iso(t-2*J),kg:86}],
+        bilans:[
+          {date:t-100*J,'bil-weight':'90','bil-waist':'96','bil-neck':'41','bil-bicep-r':'38'},
+          {date:t-60*J,'bil-weight':'88','bil-waist':'94','bil-neck':'41','bil-bicep-r':'39'},
+          {date:t-30*J,'bil-weight':'87','bil-waist':'92','bil-neck':'41','bil-bicep-r':'39.3'},
+          {date:t-2*J,'bil-weight':'86','bil-waist':'90','bil-neck':'41','bil-bicep-r':'39.5'}]};
+      const sa=_ccdPaireA, sb=_ccdPaireB;
+      try{
+        // SANS PAIRE : le dossier n'est pas touché, et l'écart est celui du
+        // bilan d'avant.
+        if(ccdBorner(u)!==u) return _echec('le dossier est copié sans paire posée');
+        const v0=ccdVerdict(u);
+        if(v0.poids.delta!==-1) return _echec('l’écart des deux derniers bilans : '+v0.poids.delta);
+        // UNE PAIRE A MOITIÉ POSÉE N'EST PAS UNE PAIRE.
+        ccdPaire(Number(u.bilans[0].date),0);
+        if(ccdPaireActive()) return _echec('une seule borne suffit à poser une paire');
+        // LA PAIRE : le premier bilan et le dernier.
+        const r=ccdPaire(Number(u.bilans[0].date),Number(u.bilans[3].date));
+        if(!ccdPaireActive()) return _echec('la paire ne se pose pas');
+        if(r.a>r.b) return _echec('la paire n’est pas remise dans l’ordre');
+        const b=ccdBorner(u);
+        if(b===u) return _echec('le dossier n’est pas borné');
+        if(b.bilans.length!==4) return _echec('les bilans intermédiaires ont disparu : '+b.bilans.length);
+        // ⚠ LES PESÉES QUOTIDIENNES SONT BORNÉES AUSSI : sinon la vitesse
+        //   affichée serait celle d'aujourd'hui sous deux bilans anciens.
+        const b2=(function(){ const s0=_ccdPaireA, s1=_ccdPaireB;
+          ccdPaire(Number(u.bilans[0].date),Number(u.bilans[1].date));
+          const x=ccdBorner(u); ccdPaire(s0,s1); return x; })();
+        if(b2.bilans.length!==2) return _echec('la fenêtre ne coupe pas les bilans : '+b2.bilans.length);
+        if(b2.weightLog.length!==2) return _echec('la fenêtre ne coupe pas les pesées : '+b2.weightLog.length);
+        // ET L'ÉCART COURT D'UN BOUT À L'AUTRE DE LA FENÊTRE, pas des deux
+        // derniers bilans qu'elle contient.
+        const v=ccdVerdict(b,true);
+        if(v.poids.delta!==-4) return _echec('l’écart de la paire : '+v.poids.delta+' au lieu de −4');
+        if(v.poids.depuis!==Number(u.bilans[0].date)) return _echec('la carte ne date pas son point de départ');
+        // LA SILHOUETTE SUIT : la teinte dit le sens sur la fenêtre entière.
+        const e=corpsEvolutionMuscle(b,'BICEPS',true);
+        if(!e||e.sens!=='pris') return _echec('le biceps qui prend 1,5 cm sur la fenêtre n’est pas vert : '+(e&&e.sens));
+        // ⚠ ET SANS LA PAIRE, LE MÊME BICEPS N'EST PAS TEINTÉ : son dernier
+        //   écart vaut 0,2 cm, sous la tolérance du ruban. C'est exactement ce
+        //   que la comparaison de deux bilans change.
+        const e2=corpsEvolutionMuscle(b,'BICEPS',false);
+        if(!e2||e2.sens!=='plat') return _echec('sans paire, le dernier écart de 0,2 cm devient « '+(e2&&e2.sens)+' »');
+        // ET ON PEUT REVENIR AUX DEUX DERNIERS.
+        ccdPaire(0,0);
+        if(ccdPaireActive()) return _echec('la paire ne se retire pas');
+        return true;
+      } finally { _ccdPaireA=sa; _ccdPaireB=sb; }})());
+
+    ok('TROIS MESURES ÉPINGLÉES, GARDÉES PAR ATHLÈTE, CHEZ LE COACH',(()=>{
+      if(typeof ccdEpingler!=='function') return _echec('l’épingle n’existe pas');
+      const sU=currentUser, sC=currentClientId, sS=window.saveUser;
+      let ecrit=0;
+      try{
+        currentUser={id:'CO5',email:'co5@t.fr',role:'coach'};
+        currentClientId='A5';
+        window.saveUser=()=>{ ecrit++; return true; };
+        if(ccdEpingles().length) return _echec('un coach neuf a déjà des épingles');
+        ccdEpingler('poids');
+        if(!ecrit) return _echec('le choix n’est pas enregistré');
+        if(ccdEpingles().join()!=='poids') return _echec('épingles : '+ccdEpingles().join());
+        // UN SECOND CLIC RETIRE.
+        ccdEpingler('poids');
+        if(ccdEpingles().length) return _echec('le second clic n’a pas retiré l’épingle');
+        // ⚠ LA QUATRIÈME REMPLACE LA PLUS ANCIENNE : refuser en silence se lit
+        //   comme un bouton cassé.
+        for(const k of ['poids','gras','maigre','waist']) ccdEpingler(k);
+        if(ccdEpingles().join()!=='gras,maigre,waist') return _echec('épingles : '+ccdEpingles().join());
+        if(ccdEpingles().length!==CCD_EPINGLE_MAX) return _echec('plus de trois épingles');
+        // ⚠ LE CHOIX EST CELUI DU COACH, ET IL SE RANGE CHEZ LUI : le dossier
+        //   de l'athlète décrit quelqu'un d'autre.
+        if(!currentUser.ccdEpingles||!currentUser.ccdEpingles.A5) return _echec('le choix n’est pas dans le dossier du coach');
+        currentClientId='A6';
+        if(ccdEpingles().length) return _echec('les épingles d’un athlète débordent sur l’autre');
+        currentClientId='A5';
+        if(ccdEpingles().join()!=='gras,maigre,waist') return _echec('le choix ne revient pas avec l’athlète');
+        // CE QU'UNE ÉPINGLE AFFICHE : sa valeur, son écart, son départ, sa source.
+        const J=864e5, t=Date.now();
+        const u={id:'A5',email:'a5@t.fr',role:'athlete',gender:'H',_evol_height:'178',bilans:[
+          {date:t-60*J,'bil-weight':'86','bil-bicep-r':'38'},
+          {date:t-2*J,'bil-weight':'84','bil-bicep-r':'39'}]};
+        const e=ccdEpingleValeur(u,'bicep-r');
+        if(!e) return _echec('le tour de biceps ne rend rien');
+        if(e.valeur!==39||e.delta!==1||e.premier!==38) return _echec('épingle : '+JSON.stringify(e));
+        if(!/près/.test(e.source)) return _echec('une épingle sans marge : '+e.source);
+        if(ccdEpingleValeur(u,'glutes')) return _echec('une mesure jamais relevée rend une valeur');
+        // ET LES CARTES ÉPINGLÉES SORTENT SOUS CELLES DU VERDICT.
+        currentUser.ccdEpingles={A5:['poids','bicep-r']};
+        const d=document.createElement('div'); d.innerHTML=_htmlCcdEpingles(u);
+        const libs=[...d.querySelectorAll('.ccd-v-l')].map(x=>x.textContent);
+        if(libs.join('/')!=='Poids/Biceps D') return _echec('cartes épinglées : '+libs.join('/'));
+        for(const c of d.querySelectorAll('.ccd-v'))
+          if(!(c.querySelector('.ccd-v-s')||{}).textContent) return _echec('une carte épinglée sans source');
+        return true;
+      } finally { currentUser=sU; currentClientId=sC; window.saveUser=sS; }})());
+
+    ok('LE RAPPORT DE LA PÉRIODE EST EN TÊTE DE L’ÉTAGE 6',(()=>{
+      const et=document.getElementById('ccd-et-detail');
+      if(!et) return _echec('l’étage du détail a disparu');
+      const b=[...et.querySelectorAll('button')].find(x=>/Rapport de la période/.test(x.textContent||''));
+      if(!b) return _echec('le bouton du rapport n’est pas dans l’étage 6');
+      if(!/ouvrirRapport/.test(b.getAttribute('onclick')||'')) return _echec('le bouton n’ouvre pas le rapport');
+      const det=document.getElementById('ccd-detail');
+      if(!det) return _echec('le bloc replié a disparu');
+      // ⚠ AVANT LE BLOC REPLIÉ : un bouton rangé dans le repli demande deux
+      //   gestes pour une action qu'on fait à chaque fin de période.
+      if(!(b.compareDocumentPosition(det)&Node.DOCUMENT_POSITION_FOLLOWING))
+        return _echec('le bouton du rapport est sous le détail replié');
+      return true;})());
+
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
       // Chaque silhouette porte sa carte : une image ou chaque pixel du corps
       // vaut le rang de son muscle dans CORPS_ZONES_ORDRE, fois CORPS_ZONES_PAS.
