@@ -9433,19 +9433,21 @@ async function testExercices(){
             return !bon.incoherent&&bon.p===11
               ?true:_echec('une étiquette juste est déclarée incohérente');})());
 
-          ok('La deuxieme lecture ne remplace jamais la premiere',(()=>{
-            // DEUX LECTURES, et la seconde ne sert qu'a COMPLETER : deux
-            // lectures qui se contredisent ne se departagent pas, et prendre la
-            // seconde au hasard reviendrait a tirer a pile ou face sur une
-            // macro. Mesure : deux passes rendent 11 justes et 0 fausse ; une
-            // troisieme monterait a 14 justes mais ramenerait 4 fausses.
-            const src=String(lireEtiquette).replace(/\/\/.*/g,'');
-            if(!/r\[k\]==null&&r2\[k\]!=null/.test(src))
-              return _echec('la seconde lecture écrase la première');
-            // ELLE EST DISQUALIFIEE EN BLOC si ses macros ne tiennent pas
-            // ensemble : on ne pioche pas une valeur dans une lecture fausse.
-            if(!/if\(!r2\.incoherent\)/.test(src))
-              return _echec('une seconde lecture incohérente peut compléter la première');
+          ok('Aucune lecture ne peut inventer une valeur',(()=>{
+            // ⚠ LA REGLE A CHANGE DE FORME AU BUILD 1412, PAS DE FOND. Avant :
+            //   la seconde lecture ne remplissait que les cases VIDES de la
+            //   premiere, et une lecture incoherente etait disqualifiee en bloc.
+            //   C'etait deja bon, mais aveugle : quand les deux lisaient la meme
+            //   case differemment — « 28 g » et « 58 g » — la premiere gagnait
+            //   par principe, meme en contredisant l'energie imprimee au-dessus.
+            //   Depuis : c'est l'ENERGIE qui arbitre (voir _etiqFusionner), et
+            //   l'interdit de fond reste le meme — on ne choisit QUE parmi des
+            //   valeurs reellement lues, jamais une moyenne ni une virgule
+            //   deplacee.
+            const deux=_etiqFusionner([{k:375,p:11,c:28,l:12.5},{k:375,p:11,c:58,l:12.5}]);
+            if(deux.c!==58) return _echec('l’arbitrage retient '+deux.c+' contre l’énergie');
+            const memes=_etiqFusionner([{k:375,p:11,c:28,l:12.5},{k:375,p:11,c:28,l:12.5}]);
+            if(memes.c!==28) return _echec('une valeur jamais lue est apparue : '+memes.c);
             // ET LE MODE DE SEGMENTATION EST RENDU. Il vit sur le worker, qui
             // sert aussi l'import des captures de pas : le laisser en place
             // ferait lire la capture suivante avec le découpage d'un tableau.
@@ -33014,6 +33016,260 @@ async function testExercices(){
         return /\bgo\(|loadNutrition\(/.test(String(_repeindreNutritionAthlete))
           ?_echec('le repeint de la nutrition change d’écran'):true;})());
 
+      // ══════════════ BUILD 1412 ══════════════════════════════════════════
+      // Trois demandes de Kevin le 23/09/2026, mesurees au banc a deux
+      // appareils : les aliments perso qu'on ne pouvait pas cliquer, la photo
+      // d'etiquette qui lisait mal et ne reportait rien, et le ±20 kcal a
+      // remettre des DEUX cotes, synchronise dans les deux sens.
+
+      ok('1412 — LES ALIMENTS PERSO ET CEUX DU COACH REDEVIENNENT CLIQUABLES',(()=>{
+        // ⚠ L'IDENTIFIANT D'UN ALIMENT PERSO EST UNE CHAINE ('p'+Date.now()).
+        //   JSON.stringify rendait donc "p1790…" avec ses GUILLEMETS DOUBLES,
+        //   poses dans un attribut lui-meme delimite par des guillemets
+        //   doubles : l'attribut se terminait au premier guillemet interieur.
+        //   Mesure au banc : onclick valait « selectPersoFood( » et
+        //   typeof row.onclick valait 'object' (null) — le clic ne faisait RIEN,
+        //   ni sur la ligne, ni sur le crayon.
+        if(typeof _attrArg!=='function') return _echec('_attrArg a disparu');
+        if(_attrArg('p123')!=='&quot;p123&quot;') return _echec('_attrArg : '+_attrArg('p123'));
+        if(_attrArg(12)!=='12') return _echec('_attrArg abîme un nombre : '+_attrArg(12));
+        // POUR DE BON : on rend la ligne, on la met dans le DOM, et on demande
+        // au NAVIGATEUR de compiler son gestionnaire.
+        const d=document.createElement('div');
+        d.innerHTML=_htmlPersoResult({id:'p1790146202429',n:'Pain maison',k:265,p:9,c:49,l:3.2})
+          +_htmlCoachResult({id:'c1790146202429',n:'Riz du coach',k:350});
+        const lignes=[...d.querySelectorAll('.fj-result')];
+        if(lignes.length!==2) return _echec(lignes.length+' lignes rendues');
+        document.body.appendChild(d);
+        try{
+          for(const l of lignes){
+            const a=l.getAttribute('onclick')||'';
+            if(!/^select(Perso|Coach)Food\("[pc]1790146202429"\)$/.test(a))
+              return _echec('attribut : '+a);
+            if(typeof l.onclick!=='function') return _echec('le gestionnaire ne compile pas : '+a);
+          }
+          const cr=d.querySelector('.fj-result button[aria-label*="Modifier"]');
+          if(!cr) return _echec('le crayon a disparu');
+          if(typeof cr.onclick!=='function')
+            return _echec('le crayon ne compile pas : '+cr.getAttribute('onclick'));
+          return true;
+        } finally { d.remove(); }})());
+
+      ok('1412 — AUCUN ARGUMENT D’ATTRIBUT N’OUBLIE PLUS SES &quot;',(()=>{
+        // LE FILET GENERIQUE, et c'est lui qui aurait attrape les quatre lignes
+        // cassees : partout ou un JSON.stringify entre dans un onclick, ses
+        // guillemets doivent etre echappes — par _attrArg, ou a la main comme
+        // les quinze autres endroits du fichier le faisaient deja.
+        const src=_prodSrc();
+        const mauvais=[];
+        const re=/onclick="[^"]*?'\+\s*JSON\.stringify\(([^)]*)\)([^+]*)\+/g;
+        let m;
+        while((m=re.exec(src))){
+          const suite=src.slice(m.index,m.index+260);
+          if(suite.indexOf('&quot;')<0&&suite.indexOf('_attrArg')<0)
+            mauvais.push(src.slice(m.index,m.index+90).replace(/\s+/g,' '));
+        }
+        return mauvais.length?_echec(mauvais.length+' argument(s) non échappé(s) : '+mauvais[0]):true;})());
+
+      // Le dossier d'essai du lot : une athlete dont le calcul ABOUTIT — poids,
+      // taille, age et sexe, sans quoi cibleTableur ne rend que « manque ». Et
+      // NON CYCLE (`cycle:false`), pour que ±20 fasse exactement ±20 : en
+      // cyclage les glucides du jour ON prennent 15 % de plus, et l'ecart
+      // mesure alors autre chose que le geste.
+      const _dossier1412=()=>{
+        const j=Date.now();
+        return {id:'D1412',email:'d1412@t.fr',role:'athlete',gender:'F',
+          _evol_gender:'Femme',_evol_height:'168',birthdate:'1995-05-05','init-age':31,
+          createdAt:j-200*864e5,
+          consent:{health:true,policyVersion:POLICY_VERSION,date:j-200*864e5},
+          bilans:[{type:'depart',date:j-60*864e5,'deb-weight':'61','deb-height':'168',
+                   'deb-age':'31','deb-gender':'Femme'}],
+          weightLog:[{date:localISODate(new Date(j-864e5)),kg:61}],
+          sessions_config:Array.from({length:7},(_,i)=>({day:'J'+i,active:i<3,exercises:[]})),
+          nutrition:{dietType:'flexible',cycle:false,tableur:{}}};
+      };
+
+      ok('1412 — LE ±20 EST UN SEUL RÉGLAGE, PARTAGÉ PAR LES DEUX ÉCRANS',(()=>{
+        for(const f of ['deltaKcalPartage','appliquerDeltaKcal','libelleDeltaKcal','tbkDelta','athDelta'])
+          if(typeof window[f]!=='function') return _echec(f+' a disparu');
+        // LA LECTURE : la case partagee d'abord, les deux anciennes en repli.
+        if(deltaKcalPartage({nutrition:{tableur:{delta:40}}})!==40) return _echec('tableur.delta ignoré');
+        if(deltaKcalPartage({nutrition:{perso:{delta:-60}}})!==-60) return _echec('l’ancien perso.delta n’est plus repris');
+        if(deltaKcalPartage({nutrition:{tableur:{deltaAthlete:20}}})!==20) return _echec('l’ancien deltaAthlete n’est plus repris');
+        if(deltaKcalPartage({nutrition:{tableur:{delta:0},perso:{delta:80}}})!==0)
+          return _echec('la case partagée ne prime pas sur l’ancienne');
+        if(deltaKcalPartage({nutrition:{tableur:{delta:9000}}})!==DELTA_KCAL_MAX) return _echec('la borne haute ne joue pas');
+        if(deltaKcalPartage({})!==0) return _echec('un dossier sans nutrition ne rend pas 0');
+        if(libelleDeltaKcal({nutrition:{tableur:{delta:40}}})!=='+40') return _echec('le libellé : '+libelleDeltaKcal({nutrition:{tableur:{delta:40}}}));
+        if(libelleDeltaKcal({nutrition:{tableur:{delta:0}}})!=='') return _echec('un delta nul affiche quelque chose');
+        // LES DEUX BOUTONS SONT DANS LES DEUX ECRANS.
+        const coach=String(_htmlTableauxTableur);
+        if(coach.indexOf('tbkDelta(-1)')<0||coach.indexOf('tbkDelta(1)')<0)
+          return _echec('la grille du coach n’a pas ses deux boutons');
+        const ath=String(_htmlCiblesAthlete);
+        if((ath.match(/athDelta\(-1\)/g)||[]).length<2||(ath.match(/athDelta\(1\)/g)||[]).length<2)
+          return _echec('la carte de l’athlète n’a pas ses boutons dans les DEUX formes');
+        // ET LE VERROU DU COACH NE BLOQUE PLUS LE ±20 de l'athlete.
+        if(/_athVerrouille\(\)/.test(String(athDelta)))
+          return _echec('le ±20 de l’athlète est encore bloqué par le verrou');
+        return true;})());
+
+      ok('1412 — LE ±20 DÉPLACE LE MÊME TOTAL, DES DEUX CÔTÉS, SANS LEVER LE VERROU',(()=>{
+        const _sv=window.saveUser; window.saveUser=()=>true;
+        try{
+          const u=_dossier1412();
+          // Le coach pose ses cibles par la grille : c'est l'etat verrouille.
+          const t0=cibleTableur(u,{});
+          if(t0.manque&&t0.manque.length) return _echec('calcul impossible : '+t0.manque.join(','));
+          u.nutrition.macros={on:{kcal:t0.kcal,p:t0.p,l:t0.l,g:t0.g,f:t0.f},
+            off:{kcal:t0.kcal,p:t0.p,l:t0.l,g:t0.g,f:t0.f},origine:'tableur',origineDate:Date.now()};
+          if(!ciblesPoseesParCoach(u)) return _echec('le dossier n’est pas vu comme posé par le coach');
+          const depart=ciblesEnVigueur(u).kcal;
+          // LE COACH : +20, deux fois.
+          const r1=appliquerDeltaKcal(u,1,'tableur');
+          const r2=appliquerDeltaKcal(u,1,'tableur');
+          if(!r1.bouge||!r2.bouge) return _echec('le ±20 du coach n’a pas bougé');
+          if(deltaKcalPartage(u)!==40) return _echec('delta après deux +20 : '+deltaKcalPartage(u));
+          const apres=ciblesEnVigueur(u).kcal;
+          if(Math.abs((apres-depart)-40)>3)
+            return _echec('le total a bougé de '+(apres-depart)+' kcal pour +40 demandées');
+          // ⚠ LE VERROU TIENT : l'origine n'a pas ete reecrite en 'athlete'.
+          if(u.nutrition.macros.origine!=='tableur')
+            return _echec('l’origine est devenue « '+u.nutrition.macros.origine+' » : le verrou saute');
+          // L'ATHLETE : −20 sur LE MEME champ, et le total redescend d'autant.
+          const r3=appliquerDeltaKcal(u,-1,'athlete');
+          if(!r3.bouge) return _echec('le ±20 de l’athlète n’a pas bougé');
+          if(deltaKcalPartage(u)!==20) return _echec('delta après le −20 : '+deltaKcalPartage(u));
+          if(u.nutrition.macros.origine!=='tableur')
+            return _echec('le −20 de l’athlète a levé le verrou du coach');
+          const fin=ciblesEnVigueur(u).kcal;
+          if(Math.abs((fin-apres)+20)>3) return _echec('le −20 a déplacé de '+(fin-apres));
+          // UN SEUL FOYER : l'ancienne case est effacee, pas doublee.
+          if((u.nutrition.perso||{}).delta!==undefined) return _echec('perso.delta survit');
+          if((u.nutrition.tableur||{}).deltaAthlete!==undefined) return _echec('deltaAthlete survit');
+          // ET LE DELTA NE SE COMPTE QU'UNE FOIS : la carte de l'athlete et la
+          // grille du coach sortent du meme calcul.
+          const t1=cibleTableur(u,{});
+          if(t1.delta!==20) return _echec('cibleTableur n’expose pas le delta : '+t1.delta);
+          if(Math.abs(t1.kcal-(t1.brut+20))>1)
+            return _echec('le delta n’est pas appliqué une seule fois : '+t1.kcal+' pour '+t1.brut+'+20');
+          const ca=ciblesAthlete(u);
+          if(ca&&Math.abs(ca.kcal-t1.kcal)>1)
+            return _echec('la carte athlète compte le delta deux fois : '+ca.kcal+' contre '+t1.kcal);
+          return true;
+        } finally { window.saveUser=_sv; }})());
+
+      ok('1412 — EN SAISIE MANUELLE, LE ±20 DÉCALE LES CHIFFRES ÉCRITS À LA MAIN',(()=>{
+        const _sv=window.saveUser; window.saveUser=()=>true;
+        try{
+          const u=_dossier1412();
+          // Le contrat de la saisie manuelle : ce sont SES chiffres qui priment.
+          u.nutrition.manuel=true;
+          u.nutrition.macros={on:{kcal:2000,p:150,l:60,g:245,f:28},
+            off:{kcal:1800,p:150,l:60,g:195,f:25},origine:'manuel'};
+          const r=appliquerDeltaKcal(u,1,'tableur');
+          if(!r.bouge||!r.manuel) return _echec('le mode manuel n’est pas reconnu : '+JSON.stringify(r));
+          const on=u.nutrition.macros.on, off=u.nutrition.macros.off;
+          if(on.kcal!==2020||off.kcal!==1820) return _echec('les totaux : '+on.kcal+' / '+off.kcal);
+          // Les glucides absorbent l'ecart, les proteines et lipides ne bougent pas.
+          if(on.p!==150||on.l!==60) return _echec('une macro écrite à la main a bougé');
+          // VINGT KILOCALORIES, C'EST CINQ GRAMMES DE GLUCIDES — ajoutes aux
+          // grammes DU COACH, pas recalcules a partir du total : ses chiffres
+          // peuvent s'ecarter de la somme 4/4/9, et les redresser au passage
+          // changerait sa prescription bien au-dela du geste.
+          if(on.g!==250) return _echec('les glucides n’absorbent pas : '+on.g+' pour 250');
+          if(off.g!==200) return _echec('le jour OFF ne suit pas : '+off.g+' pour 200');
+          if(u.nutrition.macros.origine!=='manuel') return _echec('l’origine manuelle a été réécrite');
+          // LA BORNE : a ±500, on ne bouge plus, et on le dit.
+          u.nutrition.tableur.delta=DELTA_KCAL_MAX;
+          const avant=u.nutrition.macros.on.kcal;
+          const b=appliquerDeltaKcal(u,1,'tableur');
+          if(b.bouge!==false) return _echec('la borne ne retient pas le geste');
+          return u.nutrition.macros.on.kcal===avant?true:_echec('le total a bougé malgré la borne');
+        } finally { window.saveUser=_sv; }})());
+
+      ok('1412 — LA SYNCHRO DE FOND DU COACH REDESCEND LA FICHE QU’IL REGARDE',(()=>{
+        // Mesure au banc : l'athlete bougeait son total de −20, son dossier
+        // partait au serveur, et la fiche ouverte chez le coach gardait
+        // l'ancien chiffre indefiniment — seul un retour d'arriere-plan allait
+        // le chercher. C'est la cecite du 1407 vue de l'autre bord.
+        const src=_prodSrc();
+        const i=src.indexOf('const _tourSync=async()=>{');
+        if(i<0) return _echec('la boucle de synchro a disparu');
+        const boucle=src.slice(i,i+7000);
+        if(boucle.indexOf("currentUser.role==='coach'&&currentClientId")<0)
+          return _echec('la boucle du coach ne regarde pas la fiche ouverte');
+        if(!/CLOUD\.syncUser\(_em\)/.test(boucle))
+          return _echec('la fiche ouverte n’est pas redescendue');
+        // AVANT LES RENDUS : sinon _change ne couvre pas ce dossier-la et la
+        // fiche ne se repeint pas dans le meme tour.
+        if(boucle.indexOf('CLOUD.syncUser(_em)')>boucle.indexOf('if(!_change) return;'))
+          return _echec('la descente de la fiche arrive après les rendus');
+        return true;})());
+
+      ok('1412 — LA PHOTO D’ÉTIQUETTE EST PRÉPARÉE AVANT D’ÊTRE LUE',(()=>{
+        // Mesure sur huit tableaux abimes comme des photos (48 valeurs) :
+        // lecture directe 29 justes / 3 fausses / 16 absentes ; image preparee
+        // et deux lectures arbitrees 41 justes / 2 fausses / 5 absentes. Et par
+        // le VRAI bouton photo, sur l'etiquette classique : six valeurs sur six
+        // posees dans le formulaire.
+        for(const f of ['_etiqPreparer','_etiqFusionner','_etiqTient','_etiqSansUniteCollee'])
+          if(typeof window[f]!=='function') return _echec(f+' a disparu');
+        const src=String(lireEtiquette);
+        if(src.indexOf('_etiqPreparer(dataUrl,1500)')<0)
+          return _echec('la photo n’est plus préparée avant la lecture');
+        if(src.indexOf('_etiqFusionner(_lectures)')<0)
+          return _echec('les lectures ne sont plus arbitrées');
+        // ON RELIT AUSSI QUAND LA LECTURE NE TIENT PAS, pas seulement quand
+        // elle est incomplete : c'est ce qui a rattrape « 28 g » pour 58.
+        if(!/_aRelire\(\)/.test(src)||src.indexOf('!_etiqTient(x)')<0)
+          return _echec('une lecture complète mais incohérente ne déclenche plus de relecture');
+        // ET LE MODE DE SEGMENTATION EST TOUJOURS REMIS : le worker est partage
+        // avec l'import des captures de pas.
+        return /tessedit_pageseg_mode:'3'/.test(String(_lireCaptureStats))
+          ?true:_echec('le mode de segmentation n’est pas remis');})());
+
+      ok('1412 — C’EST L’ÉNERGIE QUI ARBITRE ENTRE DEUX LECTURES',(()=>{
+        // Deux lectures du meme tableau : la premiere lit 28 g de glucides, la
+        // seconde 58. L'energie annoncee — 375 kcal — tranche : 4×11 + 4×58 +
+        // 9×12,5 = 388, qui tient ; avec 28, la somme tombe a 268 et laisse
+        // cent kilocalories inexpliquees.
+        const a={k:375,p:11,c:28,l:12.5,f:6.7,e:0.85,pour100:true};
+        const b={k:375,p:11,c:58,l:12.5,f:6.7,e:0.85,pour100:true};
+        const r=_etiqFusionner([a,b]);
+        if(r.c!==58) return _echec('l’arbitrage garde '+r.c+' g de glucides');
+        if(r.k!==375) return _echec('l’énergie a bougé : '+r.k);
+        // ⚠ IL NE CHOISIT QUE PARMI DES VALEURS LUES : jamais une moyenne, ni
+        //   une virgule deplacee. Deux lectures a 28 ne donnent pas 58.
+        const r2=_etiqFusionner([a,a]);
+        if(r2.c!==28) return _echec('une valeur non lue est apparue : '+r2.c);
+        // LE SEL EST BORNE : 85 g pour 100 g n'existe pas, et « 8,5 » ou « 0,85 »
+        // ne se departagent pas — la case reste VIDE plutot que fausse.
+        const sel=_etiqFusionner([{k:375,p:11,c:58,l:12.5,e:85,pour100:true}]);
+        if(sel.e!=null) return _echec('85 g de sel acceptés : '+sel.e);
+        // LE « g » LU 9 ET COLLE : une etiquette europeenne n'imprime qu'UNE
+        // decimale aux macros, donc « 3,19 » est « 3,1 g ». Le sel, lui, se
+        // declare au centieme : on n'y touche pas.
+        const gg=_etiqFusionner([{k:375,p:3.19,c:58,l:12.5,f:6.79,e:1.19,pour100:true}]);
+        if(gg.p!==3.1) return _echec('« 3,19 » n’est pas ramené à 3,1 : '+gg.p);
+        if(gg.f!==6.7) return _echec('« 6,79 » n’est pas ramené à 6,7 : '+gg.f);
+        if(gg.e!==1.19) return _echec('le sel a été tronqué : '+gg.e);
+        // ET QUAND RIEN NE TIENT, on garde l'energie et on ecarte les macros —
+        // le jus d'orange : 0,8 g lu « 8 » et 8,9 g lu « 93 ».
+        // ⚠ TOUT OU RIEN : jeter les seuls glucides ferait tenir l'arithmetique
+        //   et laisserait « 8 g » de proteines pour 0,8 — dix fois trop, sans
+        //   rien pour s'en mefier. On ne sait pas laquelle est fausse : on n'en
+        //   garde aucune.
+        const jus=_etiqFusionner([{k:40,p:8,c:93,l:0,pour100:true}]);
+        if(jus.p!=null||jus.c!=null) return _echec('macros incohérentes conservées : p='+jus.p+' c='+jus.c);
+        if(jus.k!==40) return _echec('l’énergie a été jetée avec les macros');
+        if(!jus.incoherent) return _echec('l’incohérence n’est pas signalée');
+        // _etiqTient : le juge, isole.
+        if(_etiqTient({k:375,p:11,c:58,l:12.5})!==true) return _echec('une lecture juste est déclarée fausse');
+        if(_etiqTient({k:375,p:11,c:28,l:12.5})!==false) return _echec('une lecture trop basse passe');
+        if(_etiqTient({k:40,p:8,c:93,l:0})!==false) return _echec('une lecture trop haute passe');
+        return _etiqTient({p:11,c:58,l:12.5})===true?true:_echec('sans énergie, il n’y a pas d’arbitre');})());
+
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
       // des compléments sur la même ligne que “VITAMINE…”, entre la photo et le
       // type, pour réduire la hauteur des rectangles ».
@@ -36798,15 +37054,20 @@ async function testExercices(){
             return true;
           } finally { _tbOpts=svO; }})());
 
-        ok('VERROUILLEE, LA CARTE NE GARDE QUE LE RÉGLAGE PARTAGÉ',(()=>{
-          // ⚠ CE TEST A CHANGE DE FRONTIERE, PAS D'INTENTION. Il interdisait
-          //   TOUT reglage sur la carte verrouillee. Depuis le 20/09/2026, les
-          //   deux menus g/kg y restent : Kevin les a rendus PARTAGES — ce que
-          //   l'athlete y change, le coach le voit sur sa grille, et
-          //   inversement. Ce qui reste interdit, c'est ce qui creuse un ECART
-          //   a la grille du coach : le ±20 et l'objectif personnel.
+        ok('VERROUILLEE, LA CARTE GARDE LES RÉGLAGES PARTAGÉS — ET LE ±20 EN FAIT PARTIE',(()=>{
+          // ⚠ CE TEST A CHANGE DE FRONTIERE DEUX FOIS, ET JAMAIS D'INTENTION.
+          //   Il interdisait TOUT reglage sur la carte verrouillee. Le
+          //   20/09/2026, les deux menus g/kg y sont restes : Kevin les a rendus
+          //   PARTAGES. Le 23/09/2026, le ±20 les rejoint, pour la meme raison et
+          //   dans les memes mots : « les deux doivent synchroniser les résultats
+          //   l'un chez l'autre ». Il ecrit dans la meme case que le coach
+          //   (nutrition.tableur.delta) et ne touche pas a l'origine des cibles.
+          //
+          //   CE QUI RESTE INTERDIT : l'objectif personnel, qui remplacerait le
+          //   coefficient de la grille du coach par le sien.
           const h=_htmlCiblesAthlete(mkCoach());
-          if(/athDelta/.test(h)) return _echec('le ±20 survit sur la carte verrouillee');
+          if(!/athDelta\(-1\)/.test(h)||!/athDelta\(1\)/.test(h))
+            return _echec('le ±20 partagé manque sur la carte verrouillée');
           if(/athObjectif/.test(h)) return _echec('l’objectif personnel survit sur la carte verrouillee');
           return /athGkg/.test(h)?true
             :_echec('les menus g/kg partagés ont disparu de la carte verrouillée');})());
@@ -36826,8 +37087,14 @@ async function testExercices(){
           const avant=Object.assign({},((currentUser.nutrition||{}).macros||{}).on||{});
           athDelta(1); athObjectif('masse'); athGkg('prot',2.4);
           const m=(currentUser.nutrition||{}).macros||{};
-          if(Number((m.on||{}).kcal)!==CO.kcal)
-            return _echec('les cibles du coach sont passees a '+(m.on||{}).kcal+' kcal');
+          // ⚠ LE ±20 DEPLACE LE TOTAL DEPUIS LE BUILD 1412, et c'est demande :
+          //   il ecrit dans la case PARTAGEE, le coach le voit, et la
+          //   prescription reste la sienne — c'est l'origine qui le dit, pas le
+          //   chiffre. Le total bouge donc de vingt calories, d'un pas, et de
+          //   rien d'autre : ni l'objectif personnel ni le g/kg n'y touchent.
+          if(Number((m.on||{}).kcal)!==CO.kcal+ATH_DELTA_PAS)
+            return _echec('le ±20 n’a pas déplacé le total d’exactement 20 : '+(m.on||{}).kcal
+              +' pour '+(CO.kcal+ATH_DELTA_PAS)+' attendues');
           if(m.origine!=='coach')
             return _echec('l\'origine des cibles est devenue « '+m.origine+' »');
           // ET LE GESTE A BIEN AGI : sans cette verification, un athGkg
@@ -36843,6 +37110,10 @@ async function testExercices(){
           const tb=(currentUser.nutrition||{}).tableur||{};
           if(tb.objectifAthlete||tb.coef!=null)
             return _echec('la grille du coach a bouge : '+JSON.stringify(tb));
+          // LE DELTA PARTAGE, LUI, EST BIEN DANS LA GRILLE : c'est son foyer, et
+          // c'est par la que le coach le voit.
+          if(tb.delta!==ATH_DELTA_PAS)
+            return _echec('le ±20 n’a pas atterri dans la case partagée : '+JSON.stringify(tb));
           const per=(currentUser.nutrition||{}).perso||{};
           return (!per.objectif&&!per.delta)?true
             :_echec('le reglage personnel a ete ecrit : '+JSON.stringify(per));})());

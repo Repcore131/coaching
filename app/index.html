@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1411';
+window.RC_BUILD='1412';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -5537,6 +5537,14 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   justify-content:space-between;gap:12px;padding:2px;border:0;background:none}
 .tbk-carte .tbk-mac tr.tbk-swi-r .tbk-lt{color:#fff;font-weight:700}
 .tbk-carte .tbk-mac tr.tbk-swi-r>td{margin:0;flex:0 0 auto}
+/* LES DEUX BOUTONS DE ±20 DU TOTAL (build 1412). Assez grands pour le doigt
+   (44 px de zone utile via le remplissage), assez discrets pour ne pas voler
+   la vedette au nombre qu'ils ajustent. */
+.tbk-d20{display:inline-flex;gap:6px;margin-left:10px;vertical-align:middle}
+.tbk-d20-b{background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+  border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;
+  letter-spacing:.5px;padding:8px 10px;min-width:46px;min-height:36px;cursor:pointer}
+.tbk-d20-b:hover{border-color:var(--red);color:var(--red-text)}
 .tbk-carte .tbk-mac tr.tbk-tot{grid-column:1/-1;flex-direction:row;align-items:center;
   justify-content:space-between;gap:14px;border-color:rgba(224,32,32,.45);
   background:linear-gradient(90deg,rgba(224,32,32,.22),rgba(224,32,32,.08))}
@@ -19401,6 +19409,33 @@ window.onload=()=>{
             checkReponseBilanNotif();
             _majPastilleBilan();
             if(document.getElementById('s-client-home')?.classList.contains('active')) renderNotifs();
+          }
+          // ⚠ LE COACH NE REDESCENDAIT QUE SON PROPRE DOSSIER (corrige au
+          //   build 1412). Mesure au banc a deux appareils : l'athlete bouge son
+          //   total de −20, son dossier part au serveur, et la fiche ouverte chez
+          //   le coach continue d'afficher l'ancien chiffre — indefiniment. Seul
+          //   un retour d'arriere-plan (_descenteAuRetour → syncRelevantUsers)
+          //   allait le chercher. C'est la meme cecite que celle corrigee au 1407
+          //   cote athlete, vue de l'autre bord.
+          //
+          //   ON NE DESCEND QUE CE QU'IL REGARDE : la fiche ouverte, et rien
+          //   d'autre. Un coach de trente athletes ne doit pas payer trente
+          //   requetes toutes les cinq minutes pour un ecran qui n'en montre
+          //   qu'un. Le tableau de bord, lui, garde son rythme d'avant — il se
+          //   remet a jour au retour au premier plan, ou quand le coach ouvre
+          //   une fiche.
+          //
+          //   AVANT LES RENDUS, comme la synchro du dossier du coach juste
+          //   au-dessus : c'est ce qui fait que _change couvre ce dossier-la et
+          //   que la fiche se repeint dans le meme tour.
+          if(currentUser.role==='coach'&&currentClientId
+             &&document.getElementById('s-coach-client')?.classList.contains('active')){
+            let _em=null;
+            try{ _em=(getOwnedClient(currentClientId)||{}).email||null; }catch(e){ _em=null; }
+            if(_em){
+              const _a2=await CLOUD.syncUser(_em).catch(()=>false);
+              _change=_change||_a2;
+            }
           }
           // Athlète : sync les données du coach pour mettre à jour le banner.
           // Fait AVANT les rendus, pour que _change couvre aussi ce dossier-là.
@@ -73822,6 +73857,112 @@ const ATH_OBJECTIFS=Object.freeze([
   {k:'masse',   lib:'Prise de masse'}
 ]);
 const ATH_DELTA_PAS=20;
+// ══ LE ±20 EST UN REGLAGE PARTAGE, DES DEUX COTES (build 1412) ════════════
+//
+// Demande de Kevin, 23/09/2026 : « remets la possibilité de mettre +20 / −20
+// cal chez le coach ET chez l'athlète, les deux doivent synchroniser les
+// résultats l'un chez l'autre : si le coach clique +20, les calories de
+// l'élève et celles affichées sur son profil chez le coach augmentent, et
+// inversement si c'est l'athlète qui baisse ou augmente. »
+//
+// CE QUI EXISTAIT : un ±20 cote athlete SEULEMENT, ecrit dans
+// `nutrition.perso.delta` — donc invisible du coach — et BLOQUE des que le
+// coach avait pose les chiffres. Il recopiait bien sa valeur dans
+// `nutrition.tableur.deltaAthlete`, mais PERSONNE ne lisait cette case :
+// verifie, aucun lecteur dans tout le fichier. Le coach, lui, n'avait aucun
+// bouton.
+//
+// ⚠ UN SEUL FOYER : `nutrition.tableur.delta`, la grille que les deux cotes
+//   partagent deja pour les g/kg et le coefficient. Les deux anciennes cases
+//   sont relues en REPLI (un athlete qui avait deja un ±40 le garde) et
+//   effacees au premier geste, pour qu'il n'y ait jamais deux verites.
+//
+// ⚠ IL S'APPLIQUE DANS cibleTableur, sur le total et AVANT le plancher : un
+//   −20 ne peut donc pas faire descendre sous le plancher de securite, et les
+//   grammes se repartissent dans le total ajuste plutot qu'a cote.
+//
+// ⚠ L'ORIGINE DES CIBLES N'EST JAMAIS TOUCHEE PAR UN ±20. C'est la garde du
+//   19/09/2026 : `origine:'athlete'` leve le verrou du coach. Un ±20 de
+//   l'athlete deplace donc le total SANS reprendre la main sur la
+//   prescription — exactement comme les menus g/kg depuis le 20/09.
+const DELTA_KCAL_MAX=500;
+// PURE. Le ±20 en vigueur, quel que soit celui qui l'a pose.
+function deltaKcalPartage(u){
+  const nut=(u&&u.nutrition)||{};
+  const tb=nut.tableur||{};
+  let v=Number(tb.delta);
+  // LES DEUX REPLIS SONT DU LEGS, dans l'ordre ou ils ont existe.
+  if(!isFinite(v)) v=Number(((nut.perso)||{}).delta);
+  if(!isFinite(v)) v=Number(tb.deltaAthlete);
+  if(!isFinite(v)) return 0;
+  return Math.max(-DELTA_KCAL_MAX,Math.min(DELTA_KCAL_MAX,Math.round(v)));
+}
+// ECRIT. Le seul ecrivain du ±20 : le bouton du coach et celui de l'athlete
+// passent tous les deux par lui, sur le meme champ, avec le meme pas.
+// Il ne persiste ni ne pousse : c'est l'appelant qui sait s'il ecrit un
+// dossier a lui (saveUser) ou celui d'un athlete (DB.set + pushOne).
+//
+// `origineSiAbsente` : ce que vaut la prescription quand le dossier n'en porte
+// pas encore. Elle n'est JAMAIS deduite du role du dossier — sur l'appareil du
+// coach, le dossier lu est celui de l'athlete, et en deduire 'athlete'
+// deverrouillerait ses propres cibles.
+//
+// Rend {delta, bouge, kcal?, manque?, manuel?} — jamais null hors dossier
+// absent, pour que l'appelant puisse toujours dire ce qui s'est passe.
+function appliquerDeltaKcal(u,sens,origineSiAbsente){
+  if(!u) return null;
+  if(!u.nutrition) u.nutrition={};
+  const nut=u.nutrition;
+  const avant=deltaKcalPartage(u);
+  const n=Math.max(-DELTA_KCAL_MAX,Math.min(DELTA_KCAL_MAX,
+    avant+(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS)));
+  const tb=Object.assign({},nut.tableur||{});
+  tb.delta=n;
+  delete tb.deltaAthlete;                       // un seul foyer, pas deux
+  nut.tableur=tb;
+  if(nut.perso&&nut.perso.delta!==undefined){
+    const p=Object.assign({},nut.perso); delete p.delta; nut.perso=p;
+  }
+  if(n===avant) return {delta:n,bouge:false};   // borne atteinte
+  const pas=n-avant;
+  let manuel=false; try{ manuel=saisieManuelle(u); }catch(e){ manuel=false; }
+  if(manuel){
+    // LES CHIFFRES ECRITS A LA MAIN SE DECALENT, ils ne se recalculent pas :
+    // le contrat de la saisie manuelle est que ce sont EUX qui priment. Les
+    // glucides absorbent l'ecart, comme partout ailleurs dans le fichier.
+    const m=nut.macros||{};
+    // ⚠ ON DECALE, ON NE RECALCULE PAS. Les grammes du coach peuvent s'ecarter
+    //   de la somme 4/4/9 — il compte les fibres autrement, ou il arrondit a sa
+    //   main — et les redresser au passage changerait sa prescription bien
+    //   au-dela des vingt calories demandees. Les glucides prennent l'ecart, et
+    //   eux seuls : vingt kilocalories, c'est cinq grammes.
+    const dec=b=>{
+      const o=Object.assign({},b||{});
+      o.kcal=Math.max(0,Math.round(Number(o.kcal)||0)+pas);
+      o.g=Math.max(0,Math.round((Number(o.g)||0)+pas/4));
+      return o;
+    };
+    nut.macros=Object.assign({},m,{on:dec(m.on),off:dec(m.off||m.on)});
+    try{ _histoNoter(u,origineSiAbsente==='athlete'?'athlete':'coach'); }catch(e){}
+    return {delta:n,bouge:true,manuel:true,kcal:(nut.macros.on||{}).kcal};
+  }
+  let t=null; try{ t=cibleTableur(u,{}); }catch(e){ t=null; }
+  if(!t||(t.manque&&t.manque.length))
+    return {delta:n,bouge:true,manque:(t&&t.manque)||['calcul impossible']};
+  const cyc=(function(){ try{ return dieteCyclee(u); }catch(e){ return false; } })();
+  let j=null; try{ j=_tbJournees(u,t,cyc); }catch(e){ j=null; }
+  if(!j||!j.on) return {delta:n,bouge:true,manque:['calcul impossible']};
+  const m=nut.macros||{};
+  const origine=m.origine||origineSiAbsente||'tableur';
+  nut.macros={on:j.on,off:cyc?j.off:j.on,origine,origineDate:Date.now()};
+  try{ _histoNoter(u,origine==='athlete'?'athlete':'tableur'); }catch(e){}
+  return {delta:n,bouge:true,kcal:j.on.kcal,sousPlancher:!!t.sousPlancher};
+}
+// PURE. La mention affichee a cote du total, des deux cotes : « +40 » ou rien.
+function libelleDeltaKcal(u){
+  const d=deltaKcalPartage(u);
+  return d?((d>0?'+':'')+d):'';
+}
 function _athPerso(u){
   const n=(u&&u.nutrition)||{};
   const p=n.perso||{};
@@ -73937,14 +74078,16 @@ function ciblesAthlete(u){
   let t=null;
   try{ t=cibleTableur(u,opts); }catch(e){ return null; }
   if(!t||(t.manque&&t.manque.length)) return t?{manque:t.manque||[]}:null;
-  const kcal=Math.max(0,Math.round(t.kcal+per.delta));
+  // ⚠ PLUS DE +per.delta ICI (build 1412) : cibleTableur porte desormais le
+  //   ±20 partage. L'ajouter une seconde fois le comptait deux fois.
+  const kcal=Math.max(0,Math.round(t.kcal));
   const p=Math.round(t.p),l=Math.round(t.l);
   // Les glucides absorbent l'ecart. Jamais negatifs : un total impossible se
   // lit a zero glucide, pas en chiffre rouge invente.
   const g=Math.max(0,Math.round((kcal-p*4-l*9)/4));
   return {kcal,p,l,g,protGkg:t.protGkg,lipGkg:t.lipGkg,
           coef:per.objectif?objCoefDefaut(per.objectif):t.coef,
-          objectif:per.objectif||t.phase,delta:per.delta,manque:[]};
+          objectif:per.objectif||t.phase,delta:deltaKcalPartage(u),manque:[]};
 }
 // Ecrit les cibles LA OU TOUT LE MONDE LES LIT : nutrition.macros.on/off.
 // Les deux journees recoivent la meme valeur — le cyclage ON/OFF est une
@@ -73999,17 +74142,31 @@ function athObjectif(k){
   currentUser.nutrition.tableur=tb;
   _athEcrireCibles(); loadNutrition();
 }
+/**
+ * Le ±20 de l'athlete.
+ *
+ * ⚠ IL N'EST PLUS BLOQUE PAR LE VERROU DU COACH (build 1412), et c'est la
+ *   demande de Kevin du 23/09/2026 : les deux cotes doivent pouvoir bouger le
+ *   total, et chacun doit voir l'autre. Meme doctrine que athGkg depuis le
+ *   20/09 : il ecrit dans LA MEME case que le coach, « nutrition.tableur », et
+ *   l'ORIGINE des cibles n'est pas touchee — la prescription reste la sienne,
+ *   c'est le total commun qui se decale de vingt calories.
+ */
 function athDelta(sens){
-  if(_athVerrouille()) return;
-  if(!currentUser.nutrition) currentUser.nutrition={};
-  const p=currentUser.nutrition.perso||{};
-  // Borne a plus ou moins 500 kcal : au-dela ce n'est plus un ajustement,
-  // c'est un autre objectif — et il y a un bouton pour ca juste au-dessus.
-  p.delta=Math.max(-500,Math.min(500,(Number(p.delta)||0)+(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS)));
-  currentUser.nutrition.perso=p;
-  const tb=currentUser.nutrition.tableur||{};
-  tb.deltaAthlete=p.delta; currentUser.nutrition.tableur=tb;
-  _athEcrireCibles(); loadNutrition();
+  if(!currentUser) return;
+  const r=appliquerDeltaKcal(currentUser,sens,'athlete');
+  if(!r) return;
+  if(r.manque&&r.manque.length){
+    toast('Cibles impossibles à recalculer : il manque '+r.manque.join(', '),'var(--orange)');
+    return;
+  }
+  if(!r.bouge){
+    toast('Limite atteinte : '+DELTA_KCAL_MAX+' kcal d’écart au maximum','var(--orange)');
+    return;
+  }
+  saveUser();
+  try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
+  loadNutrition();
 }
 /**
  * Le g/kg vu de l'ecran de l'athlete.
@@ -74144,21 +74301,27 @@ function _htmlCiblesAthlete(u){
     const l=(t,n,extra)=>'<div class="rc-obj-l2"><span class="rc-obj-n2">'+t+'</span>'
       +'<span class="rc-obj-v2">'+(extra||'')
       +'<span class="rc-obj-g">'+n+' g</span></span></div>';
+    // ⚠ LE ±20 REVIENT, MEME VERROUILLEE (build 1412). Il ne reprend pas la
+    //   main sur la prescription : il decale le total PARTAGE, et le coach le
+    //   voit sur sa grille comme elle voit le sien.
+    const _dl=libelleDeltaKcal(u);
     return '<div class="rc-obj-carte">'
       +'<div class="rc-obj-titre">Mes cibles</div>'
-      +'<div class="rc-obj-kcal" style="justify-content:center">'
+      +'<div class="rc-obj-kcal">'
+        +'<button type="button" class="rc-obj-pas" onclick="athDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
         +'<div class="rc-obj-centre">'
           +'<div class="rc-obj-nb">'+Number(v.kcal).toLocaleString('fr-FR')+'</div>'
-          +'<div class="rc-obj-u">kcal par jour</div></div>'
+          +'<div class="rc-obj-u">kcal par jour'+(_dl?' · '+_dl:'')+'</div></div>'
+        +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
       +'</div>'
       +'<div class="rc-obj-macros">'
         +l('Protéines',v.p,_gr?_sel('prot',Number(_gr.protGkg)||1.8,1.2,2.6):'')
         +l('Lipides',v.l,_gr?_sel('lip',Number(_gr.lipGkg)||0.9,0.6,1.4):'')
         +l('Glucides',v.g,'<span class="rc-obj-reste">le reste</span>')
       +'</div>'
-      +'<div class="rc-obj-note">Le total est posé par ton coach. Les grammes '
-      +'par kilo se règlent des deux côtés : ce que tu changes ici, il le voit '
-      +'sur sa grille.</div>'
+      +'<div class="rc-obj-note">Le total vient de ton coach. Le ±20 et les '
+      +'grammes par kilo se règlent des deux côtés : ce que tu changes ici, il '
+      +'le voit sur sa grille — et ce qu’il change, tu le vois ici.</div>'
       +'</div>';
   }
   const c=ciblesAthlete(u);
@@ -74190,7 +74353,7 @@ function _htmlCiblesAthlete(u){
       +'<div class="rc-obj-centre">'
         +'<div class="rc-obj-nb">'+Number(c.kcal).toLocaleString('fr-FR')+'</div>'
         +'<div class="rc-obj-u">kcal par jour'
-        +(per.delta?' · '+(per.delta>0?'+':'')+per.delta:'')+'</div></div>'
+        +(c.delta?' · '+(c.delta>0?'+':'')+c.delta:'')+'</div></div>'
       +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
     +'</div>'
     +'<div class="rc-obj-macros">'
@@ -79588,10 +79751,22 @@ function _fjTitreSection(t){
 // acces direct a la modification — c est la seule liste ou il se corrige.
 // Meme forme qu une ligne perso, SANS le crayon : l athlete ne modifie pas
 // ce que son coach a saisi. S il n est pas d accord, il cree le sien.
+// ══ UN ARGUMENT DANS UN ATTRIBUT onclick ═════════════════════════════════
+// Le guillemet double doit sortir en &quot;, sinon il FERME l'attribut : le
+// navigateur compile « selectPersoFood( », c'est-a-dire rien, et le clic est
+// mort sans un mot dans la console. C'etait le cas des aliments perso et de
+// ceux du coach — mesure au banc le 23/09/2026, typeof onclick === 'object'.
+//
+// Le nom dit ce qu'elle fait : un ARGUMENT d'attribut. Le motif etait deja
+// ecrit quinze fois a la main dans le fichier ; il vit desormais ici, et les
+// prochains appels n'auront plus a s'en souvenir.
+function _attrArg(v){
+  return JSON.stringify(v===undefined?null:v).replace(/"/g,'&quot;');
+}
 function _htmlCoachResult(a){
   const kcal=a.k!=null?('<span style="color:var(--red-text);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
   const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
-  return '<div class="fj-result" role="button" tabindex="0" onclick="selectCoachFood('+JSON.stringify(a.id)+')"'
+  return '<div class="fj-result" role="button" tabindex="0" onclick="selectCoachFood('+_attrArg(a.id)+')"'
     +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
     +'<div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">'+escapeHtml(a.n||'')+'</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
@@ -79624,7 +79799,7 @@ function selectCoachFood(id){
 function _htmlPersoResult(a){
   const kcal=a.k!=null?('<span style="color:var(--red-text);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
   const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
-  return '<div class="fj-result" role="button" tabindex="0" onclick="selectPersoFood('+JSON.stringify(a.id)+')"'
+  return '<div class="fj-result" role="button" tabindex="0" onclick="selectPersoFood('+_attrArg(a.id)+')"'
     +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}"'
     +' style="display:flex;align-items:center;gap:10px">'
     +'<div style="flex:1;min-width:0">'
@@ -79632,7 +79807,7 @@ function _htmlPersoResult(a){
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
     +'</div>'
     +'<button type="button" class="hit44" aria-label="Modifier cet aliment" style="flex-shrink:0;background:none;border:none;color:var(--sub);font-size:var(--fs-lg)"'
-    +' onclick="event.stopPropagation();ouvrirAlimentPerso('+JSON.stringify(a.id)+')">✎</button>'
+    +' onclick="event.stopPropagation();ouvrirAlimentPerso('+_attrArg(a.id)+')">✎</button>'
     +'</div>';
 }
 function _fjResultHtml(f,avecEpingle){
@@ -80956,7 +81131,7 @@ function selectPersoFood(id){
   const ep=document.getElementById('fja-epingle-slot');
   if(ep) ep.innerHTML='';
   const po=document.getElementById('fja-portions');
-  if(po) po.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="ouvrirAlimentPerso('+JSON.stringify(a.id)+')">Modifier mes valeurs</button>';
+  if(po) po.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="ouvrirAlimentPerso('+_attrArg(a.id)+')">Modifier mes valeurs</button>';
   _majFjaFiabilite();
   _fjUnite='g';
   const pu=document.getElementById('fja-unites-slot');
@@ -81106,6 +81281,220 @@ function _etiqAnalyser(texte){
   out.pour100=/(pour|par)\s*100\s*(g|9|5|6|s|ml|mi|$)|100\s*(g|9|ml)\b/.test(t);
   return out;
 }
+// ══ LA PHOTO EST PREPAREE AVANT D'ETRE LUE (build 1412) ═══════════════════
+//
+// Kevin, 23/09/2026 : « la photo du tableau des valeurs nutritionnelles ne
+// fonctionne pas très bien, il lit mal les infos et ne les renote pas ».
+//
+// MESURE, sur huit tableaux dessines puis abimes comme des photos de telephone
+// (reduits, JPEG, flous, penches, fond sombre, colonne eloignee, sodium au lieu
+// de sel, ligne d'apports de reference) — 48 valeurs a trouver :
+//   • lecture directe, telle qu'elle etait : 29 justes, 3 fausses, 16 absentes ;
+//   • image PREPAREE avant lecture        : 35 justes, 5 fausses,  8 absentes.
+// La preparation double presque le nombre de cases remplies. Les fausses, elles,
+// sont reglees par l'arbitrage ci-dessous, pas par la preparation.
+//
+// CE QUE FAIT LA PREPARATION, et pourquoi chaque etape :
+//   • GRIS : le moteur travaille de toute facon en luminance ; le faire nous
+//     evite qu'il le fasse sur une image deja reduite.
+//   • NIVEAUX ETIRES (2 % / 98 %) : une photo de rayon n'a ni blanc ni noir —
+//     du gris clair sur du gris moyen. Etirer l'histogramme rend au texte le
+//     contraste que le papier avait.
+//   • AGRANDIE jusqu'a 1 500 px de petit cote (×3 au plus) : c'est la hauteur
+//     de texte ou la VIRGULE DECIMALE fait plus de deux pixels. Sa disparition
+//     est la premiere cause de valeur fausse — « 0,85 g » lu « 85 ».
+//   • INVERSEE si le fond est sombre : un tableau blanc sur noir se lit mal,
+//     et les emballages sombres sont courants.
+//
+// ELLE NE JETTE JAMAIS LA PHOTO D'ORIGINE : si la preparation echoue, on lit
+// l'image telle quelle. Une lecture moins bonne vaut mieux que pas de lecture.
+function _etiqPreparer(dataUrl,cible){
+  return new Promise((res,rej)=>{
+    const im=new Image();
+    im.onload=()=>{
+      try{
+        const petit=Math.min(im.width,im.height)||1;
+        const f=Math.max(1,Math.min(3,(cible||1500)/petit));
+        const W=Math.round(im.width*f), H=Math.round(im.height*f);
+        // Au-dela de 40 Mpx, un telephone d'entree de gamme rend un canvas vide.
+        if(W*H>40e6){ res(dataUrl); return; }
+        const c=document.createElement('canvas'); c.width=W; c.height=H;
+        const x=c.getContext('2d',{willReadFrequently:true});
+        x.imageSmoothingQuality='high';
+        x.drawImage(im,0,0,W,H);
+        const d=x.getImageData(0,0,W,H), p=d.data;
+        const hist=new Uint32Array(256);
+        for(let i=0;i<p.length;i+=4){
+          const g=(p[i]*0.299+p[i+1]*0.587+p[i+2]*0.114)|0;
+          p[i]=p[i+1]=p[i+2]=g; hist[g]++;
+        }
+        const n=W*H;
+        let bas=0,haut=255,acc=0;
+        for(let i=0;i<256;i++){ acc+=hist[i]; if(acc>n*0.02){ bas=i; break; } }
+        acc=0;
+        for(let i=255;i>=0;i--){ acc+=hist[i]; if(acc>n*0.02){ haut=i; break; } }
+        // Image deja plate (photo tres sous-exposee, ou unie) : on n'etire pas,
+        // ca ne ferait qu'amplifier le bruit.
+        if(haut-bas<20){ bas=0; haut=255; }
+        let somme=0; for(let i=0;i<256;i++) somme+=i*hist[i];
+        const inverser=(somme/n)<110;
+        const ech=255/(haut-bas);
+        for(let i=0;i<p.length;i+=4){
+          let g=(p[i]-bas)*ech;
+          g=g<0?0:(g>255?255:g);
+          if(inverser) g=255-g;
+          p[i]=p[i+1]=p[i+2]=g;
+        }
+        x.putImageData(d,0,0);
+        res(c.toDataURL('image/png'));
+      }catch(e){ res(dataUrl); }
+    };
+    im.onerror=()=>res(dataUrl);
+    try{ im.src=dataUrl; }catch(e){ res(dataUrl); }
+  });
+}
+// ══ DEUX LECTURES, ET C'EST L'ENERGIE QUI ARBITRE ═════════════════════════
+//
+// CE QUI NE MARCHAIT PAS : la seconde lecture ne servait qu'a remplir les cases
+// VIDES de la premiere. Quand les deux lisaient la meme case differemment —
+// « 58 g » d'un cote, « 28 g » de l'autre — la premiere gagnait par principe,
+// meme quand son chiffre contredisait l'energie imprimee juste au-dessus.
+//
+// L'ENERGIE EST L'ARBITRE, et elle a le droit de l'etre : elle est lue sur sa
+// propre ligne, avec son unite ecrite en toutes lettres, et c'est la valeur la
+// plus sure du tableau. 4 kcal le gramme de proteine et de glucide, 9 pour le
+// lipide : parmi les combinaisons possibles, on retient celle qui tombe SOUS
+// l'energie annoncee, et la plus complete.
+//
+// ⚠ ON NE DEVINE TOUJOURS AUCUNE VIRGULE. « 589 » peut valoir 5,8 ou 58,9 : la
+//   regle du fichier reste de laisser la case vide, et les assertions des dix
+//   photos reelles le verifient. L'arbitrage ne CHOISIT QUE parmi des valeurs
+//   REELLEMENT LUES, jamais une valeur calculee.
+//
+// ⚠ ET SI AUCUNE COMBINAISON NE TIENT, on garde l'energie et on ecarte les
+//   macros, comme avant : c'est le cas du jus d'orange (0,8 g lu « 8 », 8,9 g lu
+//   « 93 »), ou les deux macros sont fausses ensemble.
+const ETIQ_SEL_MAX=30;        // au-dela, ce n'est plus du sel : c'est un chiffre perdu
+// La somme 4/4/9 doit tomber SOUS l'energie, et pas tres loin en dessous : les
+// fibres et les polyols expliquent un ecart de quelques pour cent, pas trente.
+// Au-dessus de 1,08, c'est une macro lue trop grande ; sous 0,78, c'en est une
+// lue trop petite ou une virgule perdue dans l'autre sens.
+const ETIQ_SOMME_HAUT=1.08, ETIQ_SOMME_BAS=0.78;
+// PURE. Cette lecture se tient-elle ? Sans energie, rien a comparer : on dit
+// oui, faute d'arbitre. Sans aucune macro, non — une lecture de plus ne coute
+// qu'un instant et peut tout remplir.
+function _etiqTient(x){
+  if(!x) return false;
+  if(x.k==null) return true;
+  const s=4*(Number(x.p)||0)+4*(Number(x.c)||0)+9*(Number(x.l)||0);
+  if(!s) return false;
+  return s<=x.k*ETIQ_SOMME_HAUT&&s>=x.k*ETIQ_SOMME_BAS;
+}
+// ══ LE « g » LU COMME UN 9 COLLE AU NOMBRE ════════════════════════════════
+//
+// Mesure, sur le banc d'etiquettes ET par le vrai bouton photo : « 6,7 g » de
+// fibres ressort « 6,79 », « 3,1 g » de proteines ressort « 3,19 », « 3,6 g »
+// ressort « 3,69 ». Toujours le meme motif : le g de l'unite se lit 9 et se
+// colle a la derniere decimale.
+//
+// CE N'EST PAS UNE DEVINETTE, ET C'EST LA REGLE QUI LE DIT : le reglement
+// europeen 1169/2011 impose UNE decimale aux matieres grasses, glucides,
+// proteines et fibres. « 3,19 g » de proteines n'existe donc pas sur une
+// etiquette ; deux decimales dont la derniere est un 9, c'est l'unite qu'on a
+// relue. On retire ce seul chiffre.
+//
+// ⚠ LE SEL EST EXCLU, ET C'EST TOUT L'INTERET DE LE DIRE : lui se declare AU
+//   CENTIEME (« 0,85 g », « 1,19 g »). Sa deuxieme decimale est legitime, on
+//   n'y touche pas.
+function _etiqSansUniteCollee(cle,v){
+  if(cle==='e'||cle==='k') return v;
+  const n=Number(v);
+  if(!isFinite(n)) return v;
+  const s=String(n);
+  const pt=s.indexOf('.');
+  if(pt<0) return n;                          // un entier ne porte pas d'unite collee
+  const dec=s.slice(pt+1);
+  if(dec.length!==2||dec[1]!=='9') return n;  // une seule decimale, ou pas de 9 final
+  return Number(s.slice(0,pt+2));
+}
+function _etiqCandidats(lectures,cle){
+  const out=[];
+  (lectures||[]).forEach((l,rang)=>{
+    if(!l||l[cle]==null) return;
+    const v=_etiqSansUniteCollee(cle,Number(l[cle]));
+    if(!isFinite(v)) return;
+    if(!out.some(x=>Math.abs(x.v-v)<0.001)) out.push({v,rang});
+  });
+  return out;
+}
+function _etiqFusionner(lectures){
+  const L=(lectures||[]).filter(Boolean);
+  if(!L.length) return {};
+  const out={};
+  // pour100 : il suffit qu'UNE lecture ait vu la mention.
+  out.pour100=L.some(l=>!!l.pour100);
+  // L'energie : la premiere lecture qui en a une. Les bornes ont deja joue
+  // dans _etiqAnalyser, on ne les rejoue pas.
+  const ks=_etiqCandidats(L,'k');
+  if(ks.length) out.k=ks[0].v;
+  // Le sel et les fibres ne pesent pas dans la somme 4/4/9 : ils se choisissent
+  // a la majorite, puis au rang. Le sel est BORNE — 85 g pour 100 g n'existe
+  // pas, et on ne sait pas si c'etait 8,5 ou 0,85 : on laisse vide.
+  for(const cle of ['f','e']){
+    const c=_etiqCandidats(L,cle).filter(x=>cle!=='e'||x.v<=ETIQ_SEL_MAX);
+    if(!c.length) continue;
+    const compte=c.map(x=>({x,n:L.filter(l=>l&&Math.abs(Number(l[cle])-x.v)<0.001).length}));
+    // ⚠ A EGALITE DE VOIX, LA VALEUR AVEC DECIMALES GAGNE quand l'autre est son
+    //   entier tronque : « 6,7 g » lu « 6 » est le cas courant, l'inverse
+    //   n'existe pas. On ne fabrique rien — les deux valeurs ont ete LUES.
+    const tronque=(a,b)=>Number.isInteger(a)&&!Number.isInteger(b)&&Math.abs(a-b)<1;
+    compte.sort((a,b)=>(b.n-a.n)
+      ||(tronque(a.x.v,b.x.v)?1:(tronque(b.x.v,a.x.v)?-1:0))
+      ||(a.x.rang-b.x.rang));
+    out[cle]=compte[0].x.v;
+  }
+  // Les trois macros qui pesent : on essaie toutes les combinaisons de valeurs
+  // LUES (au plus quelques dizaines), et on garde la plus complete qui tienne
+  // sous l'energie. A egalite de completude, la somme la plus proche de
+  // l'energie ; puis le meilleur rang de lecture.
+  // ⚠ TOUT OU RIEN, JAMAIS UNE MACRO SACRIFIEE POUR EN SAUVER UNE AUTRE.
+  //   Sur le jus d'orange des photos reelles — 0,8 g de proteines lu « 8 » et
+  //   8,9 g de glucides lu « 93 » pour 40 kcal —, jeter les seuls glucides
+  //   faisait tenir l'arithmetique et laissait « 8 g » de proteines dans le
+  //   formulaire : dix fois trop, et l'athlete n'avait aucune raison de s'en
+  //   mefier. On ne sait pas laquelle des deux est fausse ; on ne garde donc
+  //   AUCUNE des deux. Les combinaisons examinees remplissent toutes les cases
+  //   pour lesquelles une valeur a ete lue — ou aucune.
+  const P=_etiqCandidats(L,'p');
+  const C=_etiqCandidats(L,'c');
+  const G=_etiqCandidats(L,'l');
+  const _ou=c=>c.length?c:[{v:null,rang:0}];
+  let meilleur=null;
+  for(const p of _ou(P)) for(const c of _ou(C)) for(const g of _ou(G)){
+    const somme=4*(p.v||0)+4*(c.v||0)+9*(g.v||0);
+    const remplies=(p.v!=null?1:0)+(c.v!=null?1:0)+(g.v!=null?1:0);
+    if(out.k!=null&&somme>out.k*ETIQ_SOMME_HAUT) continue;   // ne tient pas sous l'energie
+    const score={remplies,ecart:out.k!=null?Math.abs(out.k-somme):0,
+      rang:p.rang+c.rang+g.rang,p,c,g,somme};
+    if(!meilleur
+       ||score.ecart<meilleur.ecart
+       ||(score.ecart===meilleur.ecart&&score.rang<meilleur.rang))
+      meilleur=score;
+  }
+  if(meilleur&&meilleur.remplies>0){
+    if(meilleur.p.v!=null) out.p=meilleur.p.v;
+    if(meilleur.c.v!=null) out.c=meilleur.c.v;
+    if(meilleur.g.v!=null) out.l=meilleur.g.v;
+  } else if(out.k!=null){
+    // Aucune combinaison ne tient : on le DIT, et on garde l'energie seule.
+    // La somme la plus BASSE des lectures : c'est le chiffre le moins accusateur
+    // qu'on puisse montrer, et celui qu'on met dans le message.
+    const pires=L.map(l=>4*(Number(l.p)||0)+4*(Number(l.c)||0)+9*(Number(l.l)||0))
+      .filter(x=>x>0);
+    if(pires.length) out.incoherent=Math.round(Math.min.apply(null,pires));
+  }
+  return out;
+}
 let _etiqEnCours=false;
 async function lireEtiquette(input){
   if(_etiqEnCours) return;
@@ -81153,23 +81542,39 @@ async function lireEtiquette(input){
     // pile ou face sur une macro. Mesure : la fusion en deux passes rend 12
     // valeurs justes et AUCUNE fausse ; en ajouter une troisieme monte a 14
     // justes mais en ramene 4 fausses, ce qu'on ne veut a aucun prix.
-    const r=_etiqAnalyser(await _lireCaptureStats(dataUrl));
+    // ══ LA PHOTO EST PREPAREE, PUIS LUE DEUX FOIS, PUIS ARBITREE ════════
+    //
+    // Mesure sur huit tableaux abimes comme des photos (48 valeurs) :
+    // lecture directe 29 justes / 3 fausses / 16 absentes ; image preparee
+    // 35 / 5 / 8. La preparation remplit les cases, l'arbitrage par l'energie
+    // retire les fausses — voir _etiqPreparer et _etiqFusionner.
+    //
+    // LA TROISIEME LECTURE — l'image BRUTE, sans preparation — ne part que s'il
+    // reste des cases vides : une etiquette deja bien lue ne doit pas coûter
+    // trois passages de moteur sur un telephone.
+    const _lectures=[];
+    const _prep=await _etiqPreparer(dataUrl,1500).catch(()=>dataUrl);
+    _lectures.push(_etiqAnalyser(await _lireCaptureStats(_prep)));
+    // ⚠ ON RELIT AUSSI QUAND LA LECTURE NE TIENT PAS, et pas seulement quand
+    //   elle est incomplete. Mesure : un tableau sur fond sombre rendait
+    //   « 28 g » de glucides pour 58 — une case REMPLIE, donc aucune relecture
+    //   ne partait, et l'arbitrage n'avait rien a comparer. La somme 4/4/9
+    //   tombait a 268 kcal pour 375 annoncees : c'est ce desaccord qui declenche
+    //   desormais la lecture suivante.
+    const _aRelire=()=>{
+      const x=_etiqFusionner(_lectures);
+      return ['k','p','c','l','f','e'].some(k=>x[k]==null)||!_etiqTient(x);
+    };
     try{
-      const _manque=['k','p','c','l','f','e'].some(k=>r[k]==null);
-      if(_manque&&!r.incoherent){
-        const _grand=await _resizeImage(f,1800,2400,0.9);
-        if(_grand){
-          const r2=_etiqAnalyser(await _lireCaptureStats(_grand,{psm:4}));
-          // L INCOHERENCE DE LA SECONDE LA DISQUALIFIE ENTIEREMENT : si ses
-          // macros ne tiennent pas ensemble, aucune de ses valeurs ne vient
-          // completer celles de la premiere.
-          if(!r2.incoherent)
-            for(const k of ['k','p','c','l','f','e'])
-              if(r[k]==null&&r2[k]!=null) r[k]=r2[k];
-          if(!r.pour100&&r2.pour100) r.pour100=true;
-        }
+      if(_aRelire()){
+        const _grand=await _etiqPreparer(dataUrl,2400).catch(()=>null);
+        if(_grand) _lectures.push(_etiqAnalyser(await _lireCaptureStats(_grand,{psm:4})));
       }
     }catch(e){}
+    try{
+      if(_aRelire()) _lectures.push(_etiqAnalyser(await _lireCaptureStats(dataUrl)));
+    }catch(e){}
+    const r=_etiqFusionner(_lectures);
     const mis=[];
     const pose=(id,v)=>{ if(v==null) return; const e=document.getElementById(id);
       if(e){ e.value=v; mis.push(id); } };
@@ -82777,7 +83182,16 @@ function cibleTableur(user,opts){
   // automatique. Un coefficient de 0,70 sur une petite depense peut descendre
   // sous ce qu'un adulte doit manger ; le tableur, lui, ne le savait pas.
   let pl=0; try{ pl=plancherKcal(u)||0; }catch(e){ pl=0; }
-  const kcal=Math.max(brut,pl);
+  // ⚠ LE ±20 PARTAGE S'APPLIQUE ICI, et nulle part ailleurs (build 1412) : le
+  //   tableau du coach, les journees ON/OFF et la carte de l'athlete sortent
+  //   tous de ce calcul, donc tous les trois le portent du meme coup. AVANT le
+  //   plancher : un −20 ne fait pas descendre sous le plancher de securite.
+  //   Le total brut reste la depense × coefficient, sans l'ajustement : c'est ce que
+  //   la ligne « total brut » du tableau annonce, et elle ne doit pas se mettre
+  //   a inclure un reglage manuel sans le dire.
+  const deltaKcal=(typeof o.delta==='number'&&isFinite(o.delta))?Math.round(o.delta):deltaKcalPartage(u);
+  const ajuste=Math.max(0,brut+deltaKcal);
+  const kcal=Math.max(ajuste,pl);
   const rep=_repartition(kcal,poids,protGkg,lipGkg);
   const bloc=_bloc(rep.p,rep.l,rep.g);
 
@@ -82789,7 +83203,7 @@ function cibleTableur(user,opts){
     sportSource:sport.source, creneaux:sport.creneaux, dureeMin:sport.dureeMin,
     sportLignes:sport.lignes||[],
     avecSport,
-    coef, phase, brut, plancher:pl, sousPlancher:kcal>brut,
+    coef, phase, brut, delta:deltaKcal, ajuste, plancher:pl, sousPlancher:kcal>ajuste,
     kcal, p:bloc.p, l:bloc.l, g:bloc.g, f:bloc.f,
     protGkg, lipGkg, manque:[]
   };
@@ -84096,6 +84510,38 @@ function _tbAvis(localOk,envoi,texte){
     try{ toastSync(ok,Promise.all(envois),texte,'la cible est'); }catch(e){}
   },700);
 }
+/**
+ * Le ±20 du coach (build 1412). Meme champ, meme pas et meme ecrivain que
+ * celui de l'athlete : c'est ce qui fait que les deux ecrans ne peuvent pas
+ * annoncer deux totaux.
+ *
+ * ⚠ IL ECRIT ET POUSSE AU GESTE MEME, comme les menus de ce tableau depuis le
+ *   19/09 : l'athlete recoit le nouveau total a sa prochaine synchro, sans que
+ *   le coach ait a trouver un bouton d'envoi.
+ */
+function tbkDelta(sens){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  const r=appliquerDeltaKcal(c,sens,'tableur');
+  if(!r) return false;
+  if(r.manque&&r.manque.length){
+    try{ toast('Calcul incomplet : '+r.manque.join(', '),'var(--orange)'); }catch(e){}
+    try{ renderCoachNutriSection(c); }catch(e){}
+    return false;
+  }
+  if(!r.bouge){
+    try{ toast('Limite atteinte : '+DELTA_KCAL_MAX+' kcal d’écart au maximum','var(--orange)'); }catch(e){}
+    return false;
+  }
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  _tbAvis(ok,CLOUD.pushOne(c.email,c),
+    'Ton athlète est sur '+_tbNb(r.kcal)+' kcal'
+    +(r.delta?(' ('+(r.delta>0?'+':'')+r.delta+' d’ajustement)'):''));
+  try{ renderCoachNutriSection(c); }catch(e){}
+  return true;
+}
 function majTableauTableur(quoi,val){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
@@ -84841,6 +85287,14 @@ function _htmlTableauxTableur(c){
     return t.kcal;
   })();
   const mi=v=>'<div class="tbk-mi">'+v+'</div>';
+  // LES DEUX BOUTONS DE ±20, sur la ligne du total et de ce cote-ci aussi
+  // (build 1412). Le meme pas, le meme champ et le meme ecrivain que le ±20
+  // de l'athlete : voir appliquerDeltaKcal.
+  const _dl20=libelleDeltaKcal(c);
+  const _d20='<span class="tbk-d20">'
+    +'<button type="button" class="tbk-d20-b" onclick="tbkDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
+    +'<button type="button" class="tbk-d20-b" onclick="tbkDelta(1)" aria-label="Vingt calories de plus">+20</button>'
+    +'</span>';
   h+=_tbkCarte('<table class="tbk tbk-mac'+(_man&&_cycT?' tbk-man':'')+'">'
     +_tbkCap('utensils','Macronutriments','Répartition de ses apports journaliers')
     +(_man&&_cycT?'<thead><tr><th></th><th>Jour ON</th><th>Jour OFF</th></tr></thead>':'')
@@ -84882,10 +85336,12 @@ function _htmlTableauxTableur(c){
     // Rien a taper, donc rien a ouvrir.
     +liC('#9aa0a6','Sel',mv(selG?(_tbDec(selG.targetSaltG)+' g'):'—'),
         selG?'cible du moteur sodique':'cible indisponible',false,'',undefined,undefined,'salt')
-    +liC('var(--red)','Total calorique',_man?_in('ccd-on-kcal',_mOn.kcal):mv(_tbNb(totK)+' kcal'),
-        _man?('en kilocalories, écrites par toi · le calcul donnerait '+_tbNb(totK))
+    +liC('var(--red)','Total calorique',
+        (_man?_in('ccd-on-kcal',_mOn.kcal):mv(_tbNb(totK)+' kcal'))+_d20,
+        (_man?('en kilocalories, écrites par toi · le calcul donnerait '+_tbNb(totK))
             :(_tbNb(t.p)+' g de protéines · '+_tbNb(t.g)+' g de glucides · '
-              +_tbNb(t.l)+' g de lipides'),
+              +_tbNb(t.l)+' g de lipides'))
+        +(_dl20?(' · ajustement '+_dl20+' kcal, partagé avec elle'):''),
         true,_in('ccd-off-kcal',_mOff.kcal),'kcal',totK,'zap')
     +'</tbody></table>','tbk-mac-c');
   // LE BOUTON D'ENREGISTREMENT N'EXISTE QU'EN MANUEL. En automatique, ce sont
