@@ -34554,6 +34554,229 @@ async function testExercices(){
         } finally { window.fetch=_sFetch; }
       })();
 
+      // ══════════════ BUILD 1423 — LA FICHE ALIMENTAIRE IMPRIMABLE ═════════
+      //
+      // Kevin livre ses programmes sur deux planches — le programme repas par
+      // repas, et les tableaux de sources — que ses athlètes impriment et
+      // collent sur le frigo. L'application composait le même plan sans jamais
+      // pouvoir le sortir : il se lisait sur un téléphone, et nulle part
+      // ailleurs.
+      //
+      // ⚠ LA RÈGLE DE CE LOT : AUCUN CHIFFRE NOUVEAU. Chaque valeur de la
+      //   planche vient d'une fonction déjà éprouvée — planCiblesJour,
+      //   planCouverture, planSources, PLAN_FRUITS. Une fiche qui afficherait
+      //   un grammage différent de l'écran de l'athlète serait pire qu'une
+      //   fiche absente : l'un des deux mentirait, et on ne saurait pas lequel.
+      (()=>{
+        const J=n=>Date.now()-n*86400000;
+        // Un plan minuscule mais complet : une note, un aliment chiffré, un
+        // marqueur de source, un fruit — les quatre formes de ligne.
+        const _plan=()=>({v:1,avecComplements:false,nRepasSourcesLibres:null,
+          squelette:[
+            {id:1,repas:'petit_dej',note:'Sous forme de SHAKER'},
+            {id:2,repas:'petit_dej',portion:'oeuf',q:3},
+            {id:3,repas:'midi',src:'p'},
+            {id:4,repas:'midi',src:'c'},
+            {id:5,repas:'midi',fruit:true},
+            {id:6,repas:'soir',libre:'Un bol de légumes',q:150,u:'g',p:2,c:5,l:0}],
+          sources:{proteines:[{ciqual:1,nom:'Thon',p:24}],
+                   glucides:[{ciqual:2,nom:'Riz basmati',c:78}]}});
+        const _ath=(extra)=>Object.assign({id:'FA',email:'fa@t.fr',role:'athlete',
+          fname:'Léa',lname:'Test',coachName:'Kévin Guellec',
+          nutrition:{dietType:'strict',strictAcces:true,manuel:true,
+            macros:{on:{kcal:3000,p:180,g:330,l:80,f:35},off:{kcal:2700,p:180,g:260,l:80,f:35}},
+            plan:_plan()},
+          bilans:[],sessions:[]},extra||{});
+        // Le résolveur d'aliment est injecté, comme partout dans ce module :
+        // la planche s'éprouve sans charger 873 Ko de Ciqual.
+        const _ciq=(id)=>({1:{n:'Thon, cru',p:24,c:0,l:1},
+                           2:{n:'Riz thaï ou basmati, cru',p:7,c:78.4,l:1}})[id]||null;
+
+        ok('1423 — SANS PLAN, LA FICHE DIT POURQUOI AU LIEU D’UNE PAGE BLANCHE',(()=>{
+          const d=ficheAlimDonnees({email:'x@t.fr',nutrition:{}},_ciq);
+          if(d.ok) return _echec('une fiche est produite sans plan');
+          if(!/plan/i.test(d.raison||'')) return _echec('la raison ne dit rien : '+d.raison);
+          const h=htmlFicheAlim({email:'x@t.fr',nutrition:{}},_ciq);
+          if(h.indexOf('fa-page')>=0) return _echec('une planche est rendue sans plan');
+          return /plan/i.test(h)?true:_echec('le message n’apparaît pas à l’écran');})());
+
+        ok('1423 — LA PLANCHE DIT EXACTEMENT CE QUE L’ÉCRAN DE L’ATHLÈTE DIT',(()=>{
+          const u=_ath();
+          const d=ficheAlimDonnees(u,_ciq);
+          if(!d.ok) return _echec('aucune donnée : '+d.raison);
+          // ── LES REPAS, DANS L'ORDRE DU PLAN ──────────────────────────────
+          const cles=d.repas.map(r=>r.cle).join(',');
+          if(cles!=='petit_dej,midi,soir') return _echec('ordre des repas : '+cles);
+          // ── LES QUATRE FORMES DE LIGNE, CHACUNE RECONNUE ─────────────────
+          const pd=d.repas[0].lignes;
+          if(pd[0].type!=='note'||pd[0].nom!=='Sous forme de SHAKER')
+            return _echec('la note du coach n’est pas une note : '+JSON.stringify(pd[0]));
+          if(pd[1].type!=='aliment'||pd[1].q!==3)
+            return _echec('la ligne chiffrée : '+JSON.stringify(pd[1]));
+          if(!/œuf/i.test(pd[1].unite||'')) return _echec('l’unité d’un œuf : '+pd[1].unite);
+          const mi=d.repas[1].lignes;
+          if(mi[0].type!=='source'||mi[0].macro!=='p') return _echec('le marqueur de protéines');
+          if(mi[1].type!=='source'||mi[1].macro!=='c') return _echec('le marqueur de glucides');
+          if(mi[2].type!=='fruit') return _echec('la ligne de fruit');
+          for(const l of [mi[0],mi[1],mi[2]])
+            if(!/tableau/i.test(l.qte||'')) return _echec('une source ne renvoie pas au tableau');
+          // ── LE MÊME CHIFFRE QUE L'ÉCRAN, ET ON LE COMPARE POUR DE VRAI ───
+          const couv=planCouverture(planDe(u),_ciq);
+          const nom=couv.parRepas['soir'].lignes[0].nom;
+          const q=couv.parRepas['soir'].lignes[0].item.q;
+          const l=d.repas[2].lignes[0];
+          if(l.nom!==nom||l.q!==q)
+            return _echec('la planche et l’écran divergent : '+l.nom+' '+l.q+' vs '+nom+' '+q);
+          // ── LES CIBLES, ET LA MENTION « ( … Cal ) » ──────────────────────
+          const cib=planCiblesJour(u,nutIsOnDay(localISODate(new Date()),u),localISODate(new Date()));
+          if(d.kcal!==Math.round(cib.kcal)) return _echec('les calories : '+d.kcal+' vs '+Math.round(cib.kcal));
+          // ⚠ ET AUCUN CHIFFRE INVENTÉ QUAND IL N'Y EN A PAS. Un dossier sans
+          //   cible n'affiche pas « ( 0 Cal ) » — il n'affiche rien.
+          const sansCible=_ath({nutrition:Object.assign({},_ath().nutrition,{macros:{}})});
+          const d2=ficheAlimDonnees(sansCible,_ciq);
+          if(d2.kcal!=null) return _echec('une cible est inventée : '+d2.kcal);
+          return htmlFicheAlim(sansCible,_ciq).indexOf(' Cal )')<0
+            ?true:_echec('« Cal » apparaît sans cible');})());
+
+        ok('1423 — LES TABLEAUX PORTENT LES TROIS COLONNES, ET LA JOURNÉE SE DÉDUIT',(()=>{
+          const u=_ath();
+          const d=ficheAlimDonnees(u,_ciq);
+          const p=d.proteines[0];
+          if(!p) return _echec('aucune source de protéines');
+          if(p.per100==null||p.q==null) return _echec('colonne manquante : '+JSON.stringify(p));
+          // « Pour la journée » = le grammage du repas × le nombre de repas qui
+          // appellent une source. C'est ce que fait la liste de courses, et
+          // c'est ce que la planche du coach appelle « quantité (portion) ».
+          if(p.jour!==Math.round(p.q*d.nSources.p))
+            return _echec('la colonne journée : '+p.jour+' pour '+p.q+'×'+d.nSources.p);
+          // LE NOM TIENT SUR UNE LIGNE : deux segments Ciqual, pas six.
+          if(faNomPlanche('Sardine, à l’huile, appertisée, égouttée')!=='Sardine, à l’huile')
+            return _echec('le nom de planche : '+faNomPlanche('Sardine, à l’huile, appertisée, égouttée'));
+          if(faNomPlanche('Jambon sec')!=='Jambon sec') return _echec('un nom court a été coupé');
+          // La table des fruits est celle du produit, entière.
+          if(d.fruits.length!==PLAN_FRUITS.length) return _echec('la table des fruits est tronquée');
+          return true;})());
+
+        ok('1423 — LE DOCUMENT : DEUX PLANCHES, LA MARQUE DU COACH, ET RIEN QUI FUITE',(()=>{
+          const u=_ath();
+          const h=htmlFicheAlim(u,_ciq);
+          const d=document.createElement('div');
+          d.innerHTML=h;
+          const pages=d.querySelectorAll('.fa-page');
+          if(pages.length!==2) return _echec(pages.length+' planche(s)');
+          const t=(d.textContent||'').replace(/\s+/g,' ');
+          if(t.indexOf('PROGRAMME NUTRITIONNEL')<0) return _echec('le titre de la première planche');
+          if(t.indexOf('TABLEAUX NUTRITIONNELS')<0) return _echec('le titre de la seconde');
+          // ⚠ PAS DE LITTERAL : la cible du jour depend du planning — 3 000 un
+          //   jour d'entrainement, 2 700 un jour de repos. Comparer a un
+          //   nombre ecrit a la main faisait tomber l'assertion un jour sur
+          //   deux, selon le jour ou la suite tourne.
+          const _k=ficheAlimDonnees(u,_ciq).kcal;
+          if(t.indexOf('( '+_k+' Cal )')<0) return _echec('les calories ne sont pas au titre : '+_k);
+          if(t.indexOf('KÉVIN GUELLEC')<0) return _echec('le nom du coach n’est pas sur la planche');
+          // Les repas sont NUMÉROTÉS et portent leur moment : c'est la forme
+          // de la planche, et c'est ce qui la rend lisible d'un coup d'œil.
+          const nums=[...d.querySelectorAll('.fa-repas-num')].map(x=>x.textContent);
+          if(nums.join(',')!=='01,02,03') return _echec('numérotation : '+nums.join(','));
+          const moments=[...d.querySelectorAll('.fa-repas-moment')].map(x=>x.textContent);
+          if(moments.indexOf('HEURE LIBRE')<0||moments.indexOf('MIDI')<0)
+            return _echec('les moments : '+moments.join(','));
+          // ⚠ ÉCHAPPEMENT. Un nom d'aliment vient de Ciqual ou du coach ; un
+          //   nom de coach vient d'un champ libre. Rien de tout cela n'entre
+          //   dans le document sans passer par escapeHtml.
+          const mechant=_ath({lname:'<img src=x onerror=alert(1)>',coachName:'<b>X</b>'});
+          const h2=htmlFicheAlim(mechant,_ciq);
+          if(/<img src=x/.test(h2)||/<b>X<\/b>/.test(h2))
+            return _echec('un champ libre est rendu sans échappement');
+          return true;})());
+
+        ok('1423 — LA FICHE S’OUVRE DES DEUX CÔTÉS, ET SORT PAR window.print()',(()=>{
+          const src=_prodSrc();
+          // L'écran ne porte NI `s-coach-` NI `s-client-` : le garde de rôle de
+          // go() filtre sur ces deux préfixes, et cette fiche s'ouvre des deux
+          // côtés. La nommer d'un côté la fermerait à l'autre.
+          if(src.indexOf('id="s-fiche-alim" class="screen"')<0)
+            return _echec('l’écran de la fiche n’est pas ouvert aux deux rôles');
+          if(!document.getElementById('s-fiche-alim')) return _echec('l’écran n’existe pas dans le document');
+          if(!document.getElementById('fa-corps')) return _echec('le corps de la fiche n’existe pas');
+          // LES DEUX BOUTONS, un par écran.
+          // ⚠ LE BOUTON EST POSE PAR L'ECRAN, pas par _htmlPlanAthlete : ce
+          //   rendu-la ne porte AUCUN bouton, et une assertion plus haute le
+          //   garde depuis longtemps.
+          if(String(_renderStrictDiet).indexOf('ouvrirFicheAlim()')<0)
+            return _echec('l’athlète n’a pas de bouton vers sa fiche');
+          if(String(renderPlanCoach).indexOf('ouvrirFicheAlim(_cplAthlete())')<0)
+            return _echec('le coach n’a pas de bouton vers la fiche de son athlète');
+          // AUCUN CANAL D'ENVOI : la seule sortie est l'impression du système,
+          // exactement comme le rapport de période et la fiche programme.
+          const f=String(faImprimer);
+          if(f.indexOf('rapImprimer')<0) return _echec('la fiche n’imprime pas par la sortie commune');
+          if(/fetch\(|XMLHttpRequest|mailto:/.test(f)) return _echec('un canal d’envoi est apparu');
+          return true;})());
+
+        ok('1423 — À L’IMPRESSION : UNE PLANCHE PAR FEUILLE, ET RIEN DE L’APPLICATION',(()=>{
+          const css=_stylesProd().map(x=>x.textContent).join('\n');
+          const i=css.indexOf('#s-fiche-alim.active');
+          if(i<0) return _echec('la fiche n’est pas déclarée imprimable');
+          const bloc=css.slice(i,i+1800);
+          // Le fond NOIR est tenu jusqu'au papier : c'est la marque du coach,
+          // et le navigateur aplatit les fonds par défaut.
+          if(bloc.indexOf('print-color-adjust:exact')<0)
+            return _echec('le fond de la planche serait aplati par le navigateur');
+          if(bloc.indexOf('break-after:page')<0)
+            return _echec('les deux planches ne se séparent pas en deux feuilles');
+          if(bloc.indexOf('break-inside:avoid')<0)
+            return _echec('un bloc de repas pourrait être coupé en deux');
+          // La barre, les boutons et les autres écrans ne sortent pas : la
+          // règle générale les couvre déjà, on vérifie qu'elle existe encore.
+          if(css.indexOf('.topbar,.bottom-nav,.rap-outils')<0)
+            return _echec('la règle qui masque l’interface a disparu');
+          // ET L'ÉCHELLE EST CALCULÉE AVANT D'IMPRIMER : une planche de
+          // 1 024 px de large tient sur 182 mm, à condition qu'on le demande.
+          const f=String(faImprimer);
+          if(f.indexOf('--fa-k-print')<0) return _echec('aucune mise à l’échelle avant impression');
+          if(!/0\.93|\*\s*0\.93/.test(f)) return _echec('la marge de sécurité a disparu');
+          return true;})());
+
+        okA('1423 — LA MISE À L’ÉCHELLE FAIT ENTRER LA PLANCHE, ET NE RÉTRÉCIT PAS À CHAQUE FOIS',async()=>{
+          // ⚠ LE PIÈGE : getBoundingClientRect rend la hauteur DÉJÀ mise à
+          //   l'échelle par le zoom d'écran. Mesurer sans remettre le zoom à
+          //   plat ferait rétrécir la planche un peu plus à chaque impression.
+          // ⚠ L'ECRAN DOIT ETRE VISIBLE POUR ETRE MESURE. Sous un parent en
+          //   display:none, getBoundingClientRect rend zero : le facteur
+          //   tombait alors sur la borne de largeur et l'assertion mesurait
+          //   une planche qui n'existait pas. On allume l'ecran a la main et
+          //   on le rend, comme partout ailleurs dans cette suite.
+          const sPrint=window.print, sCible=_faCible;
+          const ec=document.getElementById('s-fiche-alim');
+          const etaitActif=ec&&ec.classList.contains('active');
+          if(ec&&!etaitActif) ec.classList.add('active');
+          const z=document.getElementById('fa-corps');
+          if(!z) return _echec('le corps de la fiche est absent');
+          const garde=z.innerHTML;
+          try{
+            window.print=()=>{};
+            z.innerHTML='<article class="fa-page" style="width:1024px;height:1600px"></article>'
+              +'<article class="fa-page" style="width:1024px;height:900px"></article>';
+            const p=[...z.querySelectorAll('.fa-page')];
+            p[0].style.zoom='0.3';                      // comme après faEchelle
+            faImprimer();
+            const k1=Number(p[0].style.getPropertyValue('--fa-k-print'));
+            const k2=Number(p[1].style.getPropertyValue('--fa-k-print'));
+            if(!(k1>0&&k1<=0.672)) return _echec('facteur hors bornes : '+k1);
+            // La haute planche est bornée par sa HAUTEUR, la courte par sa
+            // largeur : 1 009 × 0,93 / 1 600 = 0,586 ; 687,9 / 1 024 = 0,671.
+            if(Math.abs(k1-0.586)>0.01) return _echec('facteur de la planche haute : '+k1);
+            if(Math.abs(k2-0.671)>0.01) return _echec('facteur de la planche courte : '+k2);
+            // DEUX APPELS DE SUITE DONNENT LE MÊME FACTEUR : c'est ce qui
+            // prouve que la mesure ne s'empile pas sur elle-même.
+            faImprimer();
+            const k1b=Number(p[0].style.getPropertyValue('--fa-k-print'));
+            return k1b===k1?true:_echec('la planche rétrécit à chaque impression : '+k1+' puis '+k1b);
+          } finally { window.print=sPrint; _faCible=sCible; z.innerHTML=garde;
+            if(ec&&!etaitActif) ec.classList.remove('active'); }});
+      })();
+
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
       // des compléments sur la même ligne que “VITAMINE…”, entre la photo et le
       // type, pour réduire la hauteur des rectangles ».

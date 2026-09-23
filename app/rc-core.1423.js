@@ -44808,6 +44808,330 @@ function rapImprimer(){
 // alias ; il est seulement atteignable.
 window.ppImprimer=rapImprimer;
 
+// ══════════════ LA FICHE ALIMENTAIRE IMPRIMABLE ═══════════════════════════
+//
+// Kevin livre ses programmes sur deux planches : le PROGRAMME NUTRITIONNEL —
+// un bloc par repas, avec les quantités — et les TABLEAUX NUTRITIONNELS — les
+// sources de protéines, les fruits, les sources de glucides. Ses athlètes les
+// impriment et les collent sur le frigo. L'application composait le même plan
+// sans jamais pouvoir le sortir sur une feuille : le plan se lisait sur un
+// téléphone, et nulle part ailleurs.
+//
+// ⚠ AUCUN CHIFFRE NOUVEAU. Chaque valeur de cette fiche vient d'une fonction
+//   déjà écrite et déjà éprouvée — planCiblesJour, planCouverture, planSources,
+//   PLAN_FRUITS. La fiche MET EN PAGE, elle ne calcule pas : un grammage qui
+//   différerait de l'écran de l'athlète serait pire qu'une fiche absente.
+//
+// ⚠ ET ELLE SORT PAR window.print(), comme le rapport de période et la fiche
+//   programme. Aucune bibliothèque, aucun appel réseau, aucune Cloud Function :
+//   le plan Firebase reste Spark.
+//
+// LE FOND RESTE NOIR À L'IMPRESSION, contrairement aux deux autres fiches qui
+// se blanchissent. C'est une demande explicite : ces planches SONT le support
+// de marque du coach, et les siennes sont noires. `print-color-adjust:exact`
+// l'impose au navigateur, qui aplatit les fonds par défaut. Sur une imprimante
+// à jet d'encre, une page noire coûte cher — c'est pourquoi le bouton dit
+// « Imprimer / Enregistrer en PDF » : le PDF est la sortie attendue.
+const FA_LIB_MOMENT=Object.freeze({
+  petit_dej:'HEURE LIBRE', collation1:'MATIN', midi:'MIDI',
+  avant:'ENTRAÎNEMENT', pendant:'ENTRAÎNEMENT', apres:'ENTRAÎNEMENT',
+  collation2:'APRÈS-MIDI', soir:'SOIR', coucher:'AVANT SOMMEIL'
+});
+const FA_ICONE=Object.freeze({
+  petit_dej:'☀', collation1:'🥤', midi:'🍽', avant:'⚡', pendant:'🏋',
+  apres:'⚡', collation2:'🥤', soir:'🍽', coucher:'🌙'
+});
+const FA_MOTTO='« UNE MEILLEURE ALIMENTATION, DE MEILLEURS RÉSULTATS. »';
+
+/**
+ * LE NOM D'UN ALIMENT SUR UNE PLANCHE, ET LE COMPROMIS QU'IL PORTE.
+ *
+ * Ciqual nomme ses aliments par qualificatifs successifs : « Sardine, à
+ * l'huile, appertisée, égouttée ». A L'ECRAN, la ligne est coupée et le nom
+ * ENTIER reste dans l'attribut title — la donnée n'est pas perdue, elle est à
+ * un survol. SUR DU PAPIER, IL N'Y A PAS DE SURVOL : ce qui est coupé est
+ * perdu, et ce qui déborde passe sur trois lignes dans une colonne étroite.
+ *
+ * On garde donc les DEUX PREMIERS segments, qui identifient l'aliment
+ * (« Sardine, à l'huile »), et on laisse les suivants, qui décrivent le
+ * conditionnement. C'est ce que fait la planche du coach, et c'est assez pour
+ * faire ses courses. Un nom déjà court n'est pas touché.
+ */
+function faNomPlanche(n){
+  let t='';
+  try{ t=planNomCourt(n); }catch(e){ t=String(n||''); }
+  const b=String(t).split(',');
+  if(b.length<=2) return t.trim();
+  return (b[0]+','+b[1]).trim();
+}
+
+/**
+ * PURE (à la table Ciqual près, comme tout ce module). Tout ce que la fiche
+ * affiche, sans une once de mise en page — c'est ce qui la rend vérifiable.
+ *
+ * Rend TOUJOURS un objet : `ok:false` porte la raison, et la fiche l'affiche
+ * au lieu d'une page blanche.
+ */
+function ficheAlimDonnees(user,chercher){
+  const u=_dossier(user);
+  if(!u) return {ok:false,raison:'Aucun dossier.'};
+  if(!planActif(u)) return {ok:false,raison:'Le plan alimentaire n’est pas encore composé.'};
+  const plan=planDe(u);
+  const today=localISODate(new Date());
+  let isOn=false;
+  try{ isOn=nutIsOnDay(today,u); }catch(e){}
+  const cib=planCiblesJour(u,isOn,today);
+  const couv=planCouverture(plan,chercher);
+  const rest=planRestant(cib,couv);
+  const src=planSources(plan,rest,chercher);
+  const nSrc={p:src.proteines.nSources,c:src.glucides.nSources};
+  const moment=planMoment(plan,u);
+  const cles=Object.keys(couv.parRepas)
+    .sort((a,b)=>planOrdreRepas(a,moment)-planOrdreRepas(b,moment));
+  const repas=cles.map(cle=>{
+    const r=couv.parRepas[cle];
+    const lignes=(r.lignes||[]).map(x=>{
+      if(x.note) return {type:'note',nom:x.nom};
+      if(x.source) return {type:'source',macro:x.source,nom:x.nom,
+        qte:'Se référer au tableau plus bas pour les quantités'};
+      if(x.fruit) return {type:'fruit',nom:x.nom,
+        qte:'Se référer au tableau plus bas pour les quantités'};
+      const q=_planNb(x.item&&x.item.q);
+      const un=planUniteItem(x.item);
+      return {type:'aliment',nom:x.nom,
+        q:(q==null?null:Math.round(q*100)/100),unite:planUnitePluriel(q,un),
+        qte:(q==null?'—':String(Math.round(q*100)/100).replace('.',',')+' '+planUnitePluriel(q,un))};
+    });
+    return {cle,lib:planLibRepas(cle),moment:FA_LIB_MOMENT[cle]||'',
+      icone:FA_ICONE[cle]||'▪',lignes};
+  });
+  // LES DEUX CATALOGUES, AVEC LEURS TROIS COLONNES. « pour la journée » est le
+  // grammage du repas multiplié par le nombre de repas qui appellent une
+  // source : c'est ce que la liste de courses fait déjà, et c'est ce que la
+  // planche de Kevin appelle « quantité (portion) ».
+  const table=(bloc,n)=>(bloc&&bloc.liste?bloc.liste:[]).map(s=>({
+    nom:faNomPlanche(s.nom),
+    q:(s.q==null?null:Math.round(s.q)),
+    per100:(s.per100==null?null:Math.round(s.per100*100)/100),
+    jour:(s.q==null||!(n>0))?null:Math.round(s.q*n),
+    alerte:!!s.excessif}));
+  const coach=(function(){ try{ return coachAffichable(u)||null; }catch(e){ return null; } })();
+  const nomCoach=(function(){
+    const c=coach||{};
+    const n=((c.fname||'')+' '+(c.lname||'')).trim();
+    return n||String(u.coachName||'').trim()||'';
+  })();
+  return {ok:true,
+    athlete:((u.fname||'')+' '+(u.lname||'')).trim()||u.email||'',
+    kcal:(cib&&cib.kcal>0)?Math.round(cib.kcal):null,
+    jourOn:isOn,
+    marque:(function(){ try{ return marqueCoachDe(u)||''; }catch(e){ return ''; } })(),
+    coachNom:nomCoach,
+    nSources:nSrc, moment,
+    avecComplements:!!(plan&&plan.avecComplements),
+    repas,
+    proteines:table(src.proteines,nSrc.p),
+    glucides:table(src.glucides,nSrc.c),
+    fruits:PLAN_FRUITS.map(f=>({n:f.n,q:f.q}))};
+}
+
+/** Le document. Deux planches, dans l'ordre des deux PDF du coach. */
+function htmlFicheAlim(user,chercher){
+  const d=ficheAlimDonnees(user,chercher);
+  if(!d.ok) return `<div class="fa-vide">${escapeHtml(d.raison)}</div>`;
+  const E=escapeHtml;
+  // L'EN-TÊTE, LE PIED ET LES DEUX RAILS sont communs aux deux planches : ils
+  // FONT la planche. Les écrire deux fois les aurait fait diverger au premier
+  // ajustement.
+  const marque=d.marque
+    ? `<img class="fa-logo-img" src="${E(d.marque)}" alt="">`
+    : `<div class="fa-logo-txt">REP<span>CORE</span></div>`;
+  const tete=(titre1,titre2,sous)=>`<header class="fa-tete">
+      <div class="fa-tete-g">${marque}<div class="fa-logo-sous">MORE THAN PROGRESS</div></div>
+      <div class="fa-tete-d">
+        ${d.coachNom?`<div class="fa-tete-coach"><span class="fa-tiret"></span>${E(d.coachNom.toUpperCase())}</div>`:''}
+        <div class="fa-tete-sous">NUTRITION | PERFORMANCE | RÉSULTATS</div>
+      </div>
+    </header>
+    <div class="fa-bandeau">
+      <div class="fa-rail fa-rail-g">NUTRITION<br>PERFORMANCE<br>SANTÉ<br>DISCIPLINE</div>
+      <div class="fa-titre-bloc">
+        <h1 class="fa-h1">${E(titre1)} <em>${E(titre2)}</em></h1>
+        ${sous?`<div class="fa-h1-sous">${sous}</div>`:''}
+      </div>
+      <div class="fa-rail fa-rail-d">DISCIPLINE<br>AUJOURD'HUI<br><b>RÉSULTATS</b><br>DEMAIN.</div>
+    </div>`;
+  const pied=`<footer class="fa-pied">
+      <div class="fa-pied-g">${d.coachNom?`<b>${E(d.coachNom.toUpperCase())}</b>`:''}<span>COACHING | NUTRITION | SUIVI</span></div>
+      <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.</div>
+      <div class="fa-pied-d">REP<span>CORE</span><em>MORE THAN PROGRESS</em></div>
+    </footer>`;
+
+  // ── PLANCHE 1 : LE PROGRAMME ────────────────────────────────────────────
+  const ligne=(l)=>{
+    if(l.type==='note') return `<tr class="fa-note"><td colspan="2">${E(l.nom)}</td></tr>`;
+    const cls=l.type==='source'?(l.macro==='p'?' fa-l-prot':' fa-l-gluc')
+      :(l.type==='fruit'?' fa-l-fruit':'');
+    const val=(l.type==='aliment'&&l.q!=null)
+      ? `<b>${E(String(l.q).replace('.',','))}</b> ${E(l.unite||'')}`
+      : E(l.qte||'');
+    return `<tr class="fa-l${cls}"><td class="fa-l-n">${E(l.nom)}</td><td class="fa-l-q">${val}</td></tr>`;
+  };
+  const blocs=d.repas.map((r,i)=>{
+    const mots=String(r.lib).split(' ');
+    const t1=mots.shift(), t2=mots.join(' ');
+    const note=(r.lignes[0]&&r.lignes[0].type==='note')?r.lignes[0].nom:'';
+    const corps=r.lignes.filter((l,k)=>!(k===0&&l.type==='note')).map(ligne).join('');
+    return `<section class="fa-repas">
+      <div class="fa-repas-tete">
+        <span class="fa-repas-ico">${r.icone}</span>
+        <span class="fa-repas-t">${E(t1)} <em>${E(t2)}</em></span>
+        ${note?`<span class="fa-repas-note">${E(note)}</span>`:''}
+        <span class="fa-repas-moment">${E(r.moment)}</span>
+        <span class="fa-repas-num">${String(i+1).padStart(2,'0')}</span>
+      </div>
+      <table class="fa-tbl">${corps||'<tr class="fa-l"><td colspan="2">—</td></tr>'}</table>
+    </section>`;
+  }).join('');
+
+  // ── PLANCHE 2 : LES TABLEAUX ────────────────────────────────────────────
+  const tbl4=(lignes,n)=>lignes.length
+    ? `<table class="fa-t4"><thead><tr><th>Aliment</th><th>Quantité</th>
+        <th>Pour 100 g</th><th>Pour la journée${n>0?' ('+n+' repas)':''}</th></tr></thead><tbody>`
+      +lignes.map(l=>`<tr><td class="fa-t4-n">${E(l.nom)}</td>
+        <td${l.alerte?' class="fa-alerte"':''}>${l.q==null?'—':E(l.q+' g')}</td>
+        <td>${l.per100==null?'—':E(String(l.per100).replace('.',',')+' g')}</td>
+        <td>${l.jour==null?'—':E(l.jour+' g')}</td></tr>`).join('')
+      +'</tbody></table>'
+    : `<div class="fa-vide-t">Aucune source posée par le coach.</div>`;
+  const tblFruits=`<table class="fa-t2"><thead><tr><th>Aliment</th><th>Quantité</th></tr></thead><tbody>`
+    +d.fruits.map(f=>`<tr><td class="fa-t4-n">${E(f.n)}</td><td>${E(f.q)}</td></tr>`).join('')
+    +'</tbody></table>';
+
+  return `<article class="fa-page fa-p1">
+    ${tete('PROGRAMME','NUTRITIONNEL',
+      (d.kcal?`( ${d.kcal} Cal )`:'')
+      +`<div class="fa-h1-note">Ce programme alimentaire est proposé à titre indicatif, `
+      +`en tant qu'exemple adapté à vos besoins.</div>`)}
+    ${blocs}
+    ${pied}
+  </article>
+  <article class="fa-page fa-p2">
+    ${tete('TABLEAUX','NUTRITIONNELS',
+      `<div class="fa-h1-note">DES REPÈRES SIMPLES POUR MIEUX MANGER</div>`)}
+    <div class="fa-cols">
+      <section class="fa-carte fa-c-prot">
+        <div class="fa-carte-t"><span>🥩</span>SOURCES DE PROTÉINES</div>
+        ${tbl4(d.proteines,d.nSources.p)}
+      </section>
+      <section class="fa-carte fa-c-fruit">
+        <div class="fa-carte-t"><span>🍎</span>1 PORTION DE FRUITS</div>
+        ${tblFruits}
+      </section>
+    </div>
+    <section class="fa-carte fa-c-gluc">
+      <div class="fa-carte-t"><span>🌾</span>SOURCES DE GLUCIDES</div>
+      ${tbl4(d.glucides,d.nSources.c)}
+    </section>
+    <div class="fa-motto">${E(FA_MOTTO)}</div>
+    ${pied}
+  </article>`;
+}
+
+let _faCible=null;
+/**
+ * L'ÉCRAN, POUR LES DEUX CÔTÉS. `s-fiche-alim` ne porte NI `s-coach-` NI
+ * `s-client-` : le garde de rôle de go() filtre sur ces deux préfixes, et un
+ * écran que l'athlète et son coach ouvrent tous les deux ne doit s'appeler ni
+ * l'un ni l'autre. Même raison que `s-traitement-edit`.
+ */
+function ouvrirFicheAlim(cible){
+  _faCible=cible||currentUser;
+  goAvecRetour('s-fiche-alim');
+  faRendre();
+  return true;
+}
+function faRendre(){
+  const z=document.getElementById('fa-corps');
+  if(!z) return false;
+  // LA TABLE CIQUAL EST NÉCESSAIRE : sans elle, toutes les sources
+  // s'afficheraient « aliment introuvable ». On rend une fois — l'écran ne
+  // doit pas rester blanc — puis on recommence quand elle est là, exactement
+  // comme le fait l'écran de l'athlète.
+  if(!_ciqualDB){ try{ _loadCiqual().then(()=>{ if(_faCible) faRendre(); }); }catch(e){} }
+  let h='';
+  try{ h=htmlFicheAlim(_faCible); }
+  catch(e){ h='<div class="fa-vide">Fiche indisponible : '+escapeHtml(String(e&&e.message||e))+'</div>'; }
+  z.innerHTML=h;
+  faEchelle();
+  return true;
+}
+/**
+ * LA PLANCHE NE SE REFLOW PAS, ELLE SE MET A L'ECHELLE. Un tableau de quatre
+ * colonnes replie sur 375 px ne ressemble plus a ce qui sortira de
+ * l'imprimante, et l'apercu ne servirait alors a rien.
+ *
+ * `zoom` D'ABORD : il change la mise en page, donc la planche reduite ne laisse
+ * pas un demi-ecran de vide sous elle. La ou il manque, `transform` fait la
+ * meme chose a l'oeil — mais il ne reprend pas la place, et il faut alors poser
+ * la hauteur a la main.
+ */
+function faEchelle(){
+  const z=document.getElementById('fa-corps');
+  if(!z) return null;
+  const pages=[...z.querySelectorAll('.fa-page')];
+  if(!pages.length) return null;
+  const k=Math.min(1,(z.clientWidth||1024)/1024);
+  const zoomOk=(typeof CSS!=='undefined'&&CSS.supports&&CSS.supports('zoom','0.5'));
+  for(const p of pages){
+    p.style.zoom=''; p.style.transform=''; p.style.height='';
+    if(k>=1) continue;
+    if(zoomOk){ p.style.zoom=String(k); continue; }
+    const h=p.getBoundingClientRect().height;
+    p.style.transform='scale('+k+')';
+    p.style.height=Math.round(h*k)+'px';
+  }
+  return k;
+}
+/**
+ * LA PLANCHE TIENT SUR UNE FEUILLE, ET C'EST CALCULE AVANT D'IMPRIMER.
+ *
+ * Une planche fait 1024 px de large et deux mille et quelques de haut : c'est
+ * une AFFICHE, pas une page A4. Laissee telle quelle, chacune se coupait en
+ * deux feuilles — mesure au banc : un PDF de quatre pages pour deux planches,
+ * avec un tableau tranche au milieu.
+ *
+ * On garde donc la mise en page EXACTE de l'ecran — meme largeur, mêmes
+ * colonnes, mêmes retours a la ligne — et on met la planche entiere a
+ * l'echelle pour qu'elle entre dans la surface utile : 182 mm sur 267 mm,
+ * c'est-a-dire une A4 moins les marges de 14 mm de @page.
+ *
+ * ⚠ LA HAUTEUR SE MESURE A ZOOM 1. `getBoundingClientRect` rend la hauteur
+ *   DEJA mise a l'echelle par le zoom d'ecran : mesurer sans le remettre a
+ *   plat ferait retrecir la planche un peu plus a chaque impression.
+ */
+function faImprimer(){
+  const pages=[...document.querySelectorAll('#fa-corps .fa-page')];
+  const L=687.9, H=1009;                  // 182 mm et 267 mm, en pixels CSS
+  for(const p of pages){
+    const garde=p.style.zoom;
+    p.style.zoom='1';
+    const h=p.getBoundingClientRect().height||1;
+    p.style.zoom=garde;
+    // ⚠ SEPT POUR CENT DE MARGE, ET UN ARRONDI VERS LE BAS. La hauteur se
+    //   mesure en media ECRAN, et la planche est un peu plus haute en media
+    //   IMPRESSION : l'ecran qui la porte passe de flex a block, et les
+    //   paddings tombent a zero. Mesure au banc : 1 033 px rendus pour 988
+    //   attendus, soit 4,5 % de plus — et le PDF sortait en trois pages pour
+    //   deux planches. Sept pour cent couvrent cet ecart sans qu'on ait a
+    //   deviner d'ou vient chaque pixel.
+    const k=Math.min(L/1024,(H*0.93)/h);
+    p.style.setProperty('--fa-k-print',String(Math.floor(k*1000)/1000));
+  }
+  return rapImprimer();
+}
+window.faImprimer=faImprimer;
+
 // LES COLONNES CHIFFREES, dans l’ordre où on les lit sur un banc. Le nom,
 // la méthode et la description ne sont PAS ici : ce sont des textes longs,
 // ils tiennent dans la première cellule, en sous-lignes. Dix colonnes sur
@@ -62432,6 +62756,17 @@ function _renderStrictDiet(){
     ${!planActif(currentUser)?suiviDuJour:''}
     <!-- Le plan composé par le coach : repas imposés et sources interchangeables -->
     ${_htmlPlanAthlete(currentUser,suiviDuJour)}
+    <!-- LA FICHE A IMPRIMER. Le plan se lisait sur un telephone et nulle part
+         ailleurs ; Kevin livre ses programmes sur deux planches que ses
+         athletes collent sur le frigo. Le bouton ouvre EXACTEMENT ces planches,
+         remplies avec ce plan-ci.
+         ⚠ IL EST POSE PAR L'ECRAN, ET NON PAR _htmlPlanAthlete : ce rendu-la ne
+           porte AUCUN bouton, et une assertion le garde — le plan de l'athlete
+           ne se modifie pas de son cote. Celui-ci ne modifie rien, mais la
+           regle se tient mieux quand elle n'a pas d'exception a expliquer.
+         Et pas de plan, pas de fiche : il n'y aurait rien a imprimer. -->
+    ${planActif(currentUser)?`<button class="btn btn-outline btn-doigt" style="width:100%;margin-bottom:16px"
+      onclick="ouvrirFicheAlim()">Fiche alimentaire à imprimer</button>`:''}
 `;
 }
 
@@ -64602,6 +64937,18 @@ function renderPlanCoach(){
       ${dt!=='strict'?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6;margin-top:6px">Cet athlète est en diète flexible : il ne verra pas ce plan tant que tu n'auras pas basculé son suivi en diète stricte sur sa fiche.</div>`:''}
     </div>
     ${_cplHtmlModele(c)}
+    <!-- LA FICHE A IMPRIMER, DU COTE DU COACH AUSSI. C'est lui qui la donne :
+         il la relit avant de l'envoyer, et il l'imprime pour les athletes qui
+         n'ouvrent pas l'application. Elle ouvre EXACTEMENT la meme planche que
+         le bouton de l'athlete, remplie avec le plan enregistre.
+         ⚠ ELLE IMPRIME LA COMPOSITION EN COURS, et c'est voulu : _cplAthlete()
+           rend le dossier avec le plan de l'ECRAN, pas celui enregistre. Le
+           coach ajuste, regarde la planche, ajuste encore — imprimer le
+           dossier enregistre lui montrerait autre chose que ce qu'il a sous
+           les yeux. L'athlete, lui, ne verra ces lignes qu'apres
+           « Enregistrer » : c'est deja la regle de cet ecran. -->
+    <button class="btn btn-outline btn-doigt" style="width:100%;margin-bottom:14px"
+      onclick="ouvrirFicheAlim(_cplAthlete())">Fiche alimentaire à imprimer</button>
     <div id="cpl-alertes">${_cplHtmlAlertes()}</div>
     <div id="cpl-apercu" style="margin-bottom:16px">${_cplHtmlApercu()}</div>
 

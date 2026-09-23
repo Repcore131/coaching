@@ -8556,6 +8556,38 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   #s-programme-print.active{display:block!important;position:static!important;padding:0!important;
     background:#fff!important;color:#000!important}
   .topbar,.bottom-nav,.rap-outils,.rap-noprint,.btn,button,input,select,textarea{display:none!important}
+  /* ══ LA FICHE ALIMENTAIRE : FEUILLE BLANCHE, TABLEAUX NOIRS ══════════
+     La planche est blanche — demande de Kevin le 23/09/2026 — et ce sont les
+     TABLEAUX qui gardent le fond sombre et les en-tetes de couleur : c est eux
+     qui portent la marque, le reste est une feuille. Le texte hors tableau est
+     noir, les accents rouges.
+     `print-color-adjust:exact` reste INDISPENSABLE : sans lui, le navigateur
+     aplatit les fonds pour economiser l encre, et les blocs de repas
+     sortiraient en blanc sur blanc — c est-a-dire vides. */
+  #s-fiche-alim.active{display:block!important;position:static!important;
+    background:#fff!important;color:#111!important;padding:0!important;max-width:none!important}
+  #s-fiche-alim.active .pad,#s-fiche-alim.active .scroll-area{padding:0!important;overflow:visible!important}
+  #s-fiche-alim.active .fa-page{
+    /* L ECHELLE D ECRAN NE SUIT PAS SUR LE PAPIER : faEchelle reduit la
+       planche pour la faire tenir dans un telephone, l imprimante a 182 mm
+       utiles (A4 moins les marges de 14 mm) et n en a pas besoin. */
+    /* LA MEME MISE EN PAGE QU'A L ECRAN, A L ECHELLE. Poser 182 mm de large
+       ferait TOUT reflower : colonnes, retours a la ligne, coupures de
+       tableau — et le papier ne montrerait plus ce que l apercu a montre. On
+       garde donc les 1024 px, et faImprimer() calcule le facteur qui fait
+       entrer la planche dans 182 x 267 mm. */
+    width:1024px!important;zoom:var(--fa-k-print,.672)!important;
+    transform:none!important;height:auto!important;
+    /* CENTREE : une planche bornee par sa HAUTEUR n occupe pas toute la
+       largeur utile — 594 px sur 688 pour la seconde — et collee a gauche
+       elle laisse une bande blanche au bord droit de la feuille. */
+    margin:0 auto!important;border:none!important;border-radius:0!important;
+    break-after:page;page-break-after:always;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #s-fiche-alim.active .fa-page:last-child{break-after:auto;page-break-after:auto}
+  /* Un bloc de repas coupe en deux d une page a l autre est illisible. */
+  #s-fiche-alim.active .fa-repas,#s-fiche-alim.active .fa-carte{
+    break-inside:avoid;page-break-inside:avoid}
   .rap-bloc{break-inside:avoid;page-break-inside:avoid;margin-bottom:16px}
   .rap-bloc h2{color:#444!important;border-bottom-color:#bbb!important}
   .rap-nb{color:#000!important}
@@ -8633,3 +8665,121 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   .rap-bloc svg,.rap-bloc rect,.rap-bloc path{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   svg{color:#000}
 }
+
+/* ══ LA FICHE ALIMENTAIRE IMPRIMABLE ═══════════════════════════════════════
+   Les planches que Kevin livre a ses athletes : fond noir, filet rouge en
+   diagonale, blocs de repas numerotes, tableaux de sources. Elles sont faites
+   pour etre imprimees ou enregistrees en PDF, et le fond NOIR est tenu jusqu au
+   papier (print-color-adjust) — c est la marque du coach, pas une coquetterie.
+
+   ⚠ TOUT EST EN PIXELS ET EN LARGEUR FIXE DE PLANCHE. Le reste de
+   l application est fluide ; ici non : une planche A4 a des proportions, et un
+   tableau de quatre colonnes qui se reflow a 375 px ne ressemble plus a rien.
+   L ecran met donc la planche a l echelle (transform), et l impression la
+   reprend a sa taille reelle. */
+.fa-page{
+  --fa-rouge:#E02020; --fa-rouge-clair:#ff3b30; --fa-or:#f5c518; --fa-vert:#22c55e;
+  width:1024px; box-sizing:border-box; position:relative;
+  /* FOND BLANC AUTOUR DES TABLEAUX, ET RIEN QUE AUTOUR : les blocs de repas et
+     les cartes de sources gardent leur fond sombre, c est eux qui portent la
+     marque. La planche, elle, est une feuille. */
+  background:#fff; color:#111;
+  background-image:
+    radial-gradient(120% 55% at 50% 0,rgba(224,32,32,.055),transparent 62%),
+    repeating-linear-gradient(-55deg,transparent,transparent 17px,rgba(224,32,32,.030) 17px,rgba(224,32,32,.030) 18px);
+  border:1px solid #d9d9d9; border-radius:10px;
+  padding:26px 26px 18px; margin:0 auto 22px;
+  font-family:Montserrat,system-ui,sans-serif;
+}
+/* L EN-TETE : la marque a gauche, le coach a droite. */
+.fa-tete{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:6px}
+.fa-logo-img{height:34px;max-width:230px;object-fit:contain;display:block}
+.fa-logo-txt{font-family:var(--pile-titre),Bebas Neue,Montserrat,sans-serif;
+  font-size:30px;line-height:1;letter-spacing:1px;color:#111}
+.fa-logo-txt span{color:var(--fa-rouge)}
+.fa-logo-sous{font-size:8px;letter-spacing:4.5px;color:#6f6f6f;margin-top:3px}
+.fa-tete-d{text-align:right}
+.fa-tete-coach{font-size:13px;font-weight:800;letter-spacing:2.5px;color:#111;
+  display:flex;align-items:center;justify-content:flex-end;gap:9px}
+.fa-tiret{display:inline-block;width:26px;height:2px;background:var(--fa-rouge)}
+.fa-tete-sous{font-size:8px;letter-spacing:2.6px;color:var(--fa-rouge);margin-top:4px;font-weight:700}
+/* LE BANDEAU DE TITRE, avec ses deux rails. Les rails sont des reperes de
+   marque : ils ne portent aucune donnee, et ils ne bougent jamais. */
+.fa-bandeau{display:grid;grid-template-columns:120px 1fr 120px;align-items:start;
+  gap:10px;margin:10px 0 18px}
+.fa-rail{font-size:9px;line-height:1.85;letter-spacing:2.2px;color:#6f6f6f;font-weight:700}
+.fa-rail-d{text-align:right}
+.fa-rail-d b{color:var(--fa-rouge);font-weight:800}
+.fa-titre-bloc{text-align:center}
+.fa-h1{font-family:var(--pile-titre),Bebas Neue,Montserrat,sans-serif;
+  font-size:46px;line-height:.95;letter-spacing:2px;margin:0;color:#111;text-transform:uppercase}
+.fa-h1 em{font-style:normal;color:var(--fa-rouge)}
+.fa-h1-sous{font-size:15px;color:#333;margin-top:4px;letter-spacing:1px}
+.fa-h1-note{font-size:9.5px;color:#6f6f6f;letter-spacing:1.4px;margin-top:6px;line-height:1.5}
+/* ── UN REPAS ─────────────────────────────────────────────────────────── */
+.fa-repas{border:1px solid rgba(224,32,32,.45);border-radius:9px;overflow:hidden;margin-bottom:11px;
+  background:linear-gradient(180deg,#131313,#0c0c0c)}
+.fa-repas-tete{display:flex;align-items:center;gap:11px;padding:7px 12px;
+  background:linear-gradient(90deg,rgba(224,32,32,.60),rgba(120,6,6,.28) 62%,rgba(10,10,10,0));
+  border-bottom:1px solid rgba(224,32,32,.35)}
+.fa-repas-ico{font-size:15px;line-height:1;flex:none}
+.fa-repas-t{font-family:var(--pile-titre),Bebas Neue,Montserrat,sans-serif;
+  font-size:19px;letter-spacing:1.6px;color:#fff;text-transform:uppercase;flex:none}
+.fa-repas-t em{font-style:normal;color:#ff9a9a}
+.fa-repas-note{font-size:9.5px;color:#d8d8d8;letter-spacing:1.6px;font-weight:700;
+  border-left:1px solid rgba(255,255,255,.28);padding-left:11px;text-transform:uppercase}
+.fa-repas-moment{margin-left:auto;font-size:8.5px;letter-spacing:2.2px;color:#bdbdbd;font-weight:700}
+.fa-repas-num{font-family:var(--pile-titre),Bebas Neue,Montserrat,sans-serif;
+  font-size:19px;color:#fff;letter-spacing:1px;min-width:26px;text-align:right}
+.fa-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.fa-tbl td{padding:6px 12px;font-size:12px;border-top:1px solid #1d1d1d;vertical-align:middle}
+.fa-l td:first-child{color:#e8e8e8}
+.fa-l-q{text-align:left;width:46%;color:#cfcfcf}
+.fa-l-q b{color:var(--fa-rouge-clair);font-weight:800;font-size:13px}
+.fa-tbl tr:nth-child(odd) td{background:rgba(255,255,255,.022)}
+/* Une ligne de note du coach : elle titre le groupe, elle ne se lit pas comme
+   un aliment. */
+.fa-note td{color:#b9b9b9;font-size:10px;letter-spacing:1.6px;text-transform:uppercase;
+  background:rgba(255,255,255,.04)!important;font-weight:700}
+/* LES TROIS LIGNES QUI RENVOIENT AUX TABLEAUX. Teintees comme sur la planche
+   du coach : rouge pour les proteines, or pour les glucides, vert pour le
+   fruit. C est le seul endroit ou la couleur porte une information. */
+.fa-l-prot td{background:rgba(224,32,32,.16)!important}
+.fa-l-gluc td{background:rgba(245,197,24,.16)!important}
+.fa-l-fruit td{background:rgba(34,197,94,.16)!important}
+.fa-l-prot .fa-l-n,.fa-l-gluc .fa-l-n,.fa-l-fruit .fa-l-n{color:#fff;font-weight:700}
+/* ── LES TABLEAUX DE LA SECONDE PLANCHE ───────────────────────────────── */
+.fa-cols{display:grid;grid-template-columns:1.45fr 1fr;gap:14px;align-items:start}
+.fa-carte{border:1px solid #1d1d1d;border-radius:9px;overflow:hidden;margin-bottom:14px;
+  background:linear-gradient(180deg,#121212,#0b0b0b)}
+.fa-carte-t{display:flex;align-items:center;gap:9px;padding:7px 12px;
+  font-family:var(--pile-titre),Bebas Neue,Montserrat,sans-serif;
+  font-size:17px;letter-spacing:2px;color:#fff;text-transform:uppercase}
+.fa-c-prot .fa-carte-t{background:linear-gradient(90deg,rgba(224,32,32,.75),rgba(90,4,4,.30))}
+.fa-c-fruit .fa-carte-t{background:linear-gradient(90deg,rgba(34,197,94,.70),rgba(8,70,34,.28))}
+.fa-c-gluc .fa-carte-t{background:linear-gradient(90deg,rgba(245,197,24,.75),rgba(110,84,6,.28));color:#111}
+.fa-t4,.fa-t2{width:100%;border-collapse:collapse;table-layout:fixed}
+.fa-t4 th,.fa-t2 th{font-size:9.5px;letter-spacing:1.2px;padding:5px 9px;text-align:center;
+  background:rgba(255,255,255,.07);color:#e6e6e6;font-weight:800;border-bottom:1px solid #262626}
+.fa-t4 td,.fa-t2 td{font-size:11px;padding:4px 9px;text-align:center;color:#d6d6d6;
+  border-top:1px solid #1b1b1b}
+.fa-t4 tr:nth-child(even) td,.fa-t2 tr:nth-child(even) td{background:rgba(255,255,255,.022)}
+/* ⚠ « .fa-t4 td » PORTE DEJA text-align:center ET GAGNE EN SPECIFICITE
+   (0,1,1 contre 0,1,0) : la colonne des aliments se centrait malgre cette
+   regle. On qualifie le selecteur, on n ajoute pas un !important. */
+.fa-t4 td.fa-t4-n,.fa-t2 td.fa-t4-n{text-align:left;color:#fff}
+.fa-alerte{color:var(--fa-or)}
+.fa-vide-t{padding:10px 12px;font-size:11px;color:#8a8a8a}
+.fa-motto{text-align:center;font-size:9.5px;letter-spacing:2.4px;color:#6f6f6f;margin:14px 0 10px}
+/* ── LE PIED ──────────────────────────────────────────────────────────── */
+.fa-pied{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  border-top:1px solid #d9d9d9;padding-top:11px;margin-top:14px}
+.fa-pied-g b{display:block;font-size:12px;letter-spacing:2px;color:#111}
+.fa-pied-g span{font-size:8px;letter-spacing:2.4px;color:#6f6f6f}
+.fa-pied-c{text-align:center;font-size:8.5px;letter-spacing:2.2px;color:#6f6f6f;line-height:1.7}
+.fa-pied-d{text-align:right;font-family:var(--pile-titre),Bebas Neue,Montserrat,sans-serif;
+  font-size:18px;letter-spacing:1px;color:#111}
+.fa-pied-d span{color:var(--fa-rouge)}
+.fa-pied-d em{display:block;font-style:normal;font-family:Montserrat,sans-serif;
+  font-size:7px;letter-spacing:3.4px;color:#6f6f6f;margin-top:2px}
+.fa-vide{padding:26px;text-align:center;color:var(--text-dim);font-size:var(--fs-sm);line-height:1.7}
