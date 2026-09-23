@@ -9006,3 +9006,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   border-radius:var(--r-3);min-height:44px;line-height:42px;color:var(--text);
   font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:1.2px;
   text-decoration:none;cursor:pointer;margin-bottom:8px}
+
+/* ══ LA FICHE PRODUIT QUI VEND (lot 8) ═════════════════════════════════════
+   Trois blocs sous la description : les faits, le materiel, et l'apercu des
+   premiers exercices. L'apercu est ENCADRE : c'est la seule partie qui montre
+   le contenu, et c'est elle qu'on regarde avant de payer. */
+.bq-faits{font-size:12px;font-weight:800;letter-spacing:.4px;color:var(--red-text);
+  margin:8px 0 2px}
+.bq-mat{font-size:12px;color:var(--sub);line-height:1.5;margin-bottom:8px}
+.bq-apercu{background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--r-2);padding:9px 11px;margin:8px 0 2px}
+.bq-apercu-t{font-size:10px;letter-spacing:1.6px;font-weight:800;text-transform:uppercase;
+  color:var(--sub);margin-bottom:4px}
+.bq-apercu-l{margin:0 0 0 16px;padding:0;font-size:13px;line-height:1.55;color:var(--text)}
+.bq-apercu-s{font-size:11px;color:var(--text-faint);margin-top:4px}

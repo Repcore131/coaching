@@ -951,6 +951,18 @@
       }
     },
 
+    // ── LES ORDRES DEJA HONORES (lot 8) ────────────────────────────────
+    //
+    // Un identifiant d'ordre PayPal, et rien d'autre : il dit que cet ordre
+    // a deja ouvert un droit. Sans lui, le meme ordre rouvrirait trois mois
+    // autant de fois qu'on le renvoie a la fonction.
+    //
+    // FERME DES DEUX COTES. Personne ne lit, personne n'ecrit : seul
+    // l'Admin SDK y touche, et il ignore ces regles. Un client qui pourrait
+    // le lire saurait quels ordres existent ; un client qui pourrait l'ecrire
+    // pourrait bruler l'ordre d'un autre avant qu'il ne soit honore.
+    "achats": { ".read": false, ".write": false },
+
     // ── LE CATALOGUE D'EXERCICES : LES COACHS, ET ULTIME (lot 3) ────────
     //
     // Il ne se lisait qu'avec un compte coach. Ultime l'achete : la regle

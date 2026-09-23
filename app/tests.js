@@ -34108,6 +34108,105 @@ async function testExercices(){
         return migrerComparaisons({email:'x@t.fr',videos:[]})===0
           ?true:_echec('un dossier sans comparaison est modifié');})());
 
+      // ══ LOT 8 — LA BOUTIQUE, ET CE QU'ELLE MONTRE AVANT DE VENDRE ═════
+      ok('LOT 8 — LA FICHE MONTRE CE QU’ON ACHÈTE AVANT DE PAYER',(()=>{
+        const p=programmeDuCatalogue('fondations');
+        if(!p) return _echec('Fondations a disparu');
+        // LES FAITS VIENNENT DU CATALOGUE, pas d’une phrase à relire.
+        const f=faitsProgramme(p);
+        if(f.length!==3) return _echec(f.length+' faits au lieu de 3 : '+f.join(' | '));
+        if(!/semaines/.test(f[0])||!/séances par semaine/.test(f[1]))
+          return _echec('les faits ne disent pas la durée et le rythme : '+f.join(' | '));
+        // ET ILS NE SE REPETENT PAS : Fondations dit deja son rythme et sa
+        // durée dans ses étiquettes, la ligne ne les redit pas une seconde fois.
+        const fn=faitsProgrammeNeufs(p);
+        if(fn.length>=f.length) return _echec('la ligne de faits répète les étiquettes');
+        // L’APERÇU EST CALCULÉ SUR LES VRAIES SÉANCES : il ne peut pas mentir
+        // sur ce qu’on recevra.
+        const a=apercuProgramme(p,'H');
+        if(!a||a.exercices.length!==3) return _echec('aperçu : '+JSON.stringify(a));
+        const vraies=p.seances('H').find(x=>x&&x.active&&(x.exercises||[]).length);
+        if(a.exercices[0]!==String(vraies.exercises[0].name).trim())
+          return _echec('l’aperçu ne montre pas la vraie première ligne : '+a.exercices[0]);
+        if(a.total<a.exercices.length) return _echec('le total est plus petit que l’aperçu');
+        // LE MATÉRIEL EST LU DANS LES EXERCICES, jamais écrit à côté.
+        const m=materielProgramme(p,'H');
+        if(m.some(x=>!x)) return _echec('un matériel vide est listé');
+        // ET TOUT ÇA SE LIT SUR LA CARTE, AVANT LE BOUTON D’ACHAT.
+        const h=_htmlCarteProgramme(p);
+        const d=document.createElement('div'); d.innerHTML=h;
+        const txt=d.textContent;
+        // La durée se lit, étiquette ou ligne de faits : l'un des deux suffit.
+        if(txt.indexOf('8 à 12')<0) return _echec('la durée ne se lit pas sur la carte');
+        if(fn.length&&txt.indexOf(fn[0])<0) return _echec('un fait annoncé ne se lit pas');
+        if(!d.querySelector('.bq-apercu')) return _echec('aucun aperçu sur la carte');
+        const li=[...d.querySelectorAll('.bq-apercu-l li')].map(x=>x.textContent);
+        if(li.length!==3) return _echec(li.length+' lignes d’aperçu');
+        // L’APERÇU EST AVANT L’ACTION : on regarde, puis on décide.
+        const iAp=h.indexOf('bq-apercu'), iAc=h.indexOf('ouvrirAchatProgramme');
+        return (iAp>=0&&iAc>=0&&iAp<iAc)?true:_echec('l’aperçu passe après le bouton d’achat');})());
+
+      ok('LOT 8 — UN PROGRAMME ACHETÉ OUVRE ULTIME PENDANT SA DURÉE',(()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        try{
+          const mail='ach8@t.fr';
+          localStorage.removeItem(DROITS_CLE);   // le serveur n’a rien dit : l’ancien modèle décide
+          const t0=Date.now();
+          const u={id:'A8',email:mail,role:'athlete',status:'FREE',
+            programmesAchetes:{fondations:{le:t0,prixCts:1490,ordre:'X',ouvertJusqu:t0+60*86400000}}};
+          if(!programmeOuvreUltime(u)) return _echec('un programme acheté n’ouvre rien');
+          if(palierDe(u)!=='ultime') return _echec('palier : '+palierDe(u));
+          for(const c of ['bibliothequeExercices','planification','dieteCalculee'])
+            if(!peut(u,c)) return _echec('l’acheteur n’a pas '+c);
+          if(peut(u,'correctionVideo')) return _echec('un achat ouvre la correction vidéo');
+          // LA FENÊTRE SE REFERME.
+          const vieux={id:'V8',email:mail,role:'athlete',status:'FREE',
+            programmesAchetes:{fondations:{le:t0,prixCts:1490,ordre:'X',ouvertJusqu:t0-86400000}}};
+          if(programmeOuvreUltime(vieux)) return _echec('un programme expiré ouvre encore');
+          if(palierDe(vieux)!=='aucun') return _echec('palier après expiration : '+palierDe(vieux));
+          // UN ACHAT SANS FENÊTRE (dossier d’avant ce lot) n’ouvre rien de neuf.
+          if(programmeOuvreUltime({programmesAchetes:{x:{le:t0}}}))
+            return _echec('un achat sans échéance ouvre Ultime');
+          // ET LE SERVEUR GARDE LE DERNIER MOT : un droit posé à « aucun »
+          // ferme, quoi que dise le dossier.
+          localStorage.setItem(DROITS_CLE,JSON.stringify(
+            {[mail]:{d:{palier:'aucun',echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
+          if(palierDe(u)!=='aucun') return _echec('le dossier passe devant le serveur');
+          // L’ACHAT PREVIENT LE SERVEUR, et ne se contente pas du dossier.
+          const src=String(_enregistrerAchat);
+          if(src.indexOf('verifierAchatProgramme')<0)
+            return _echec('l’achat ne demande rien au serveur');
+          return src.indexOf('ouvertJusqu')>=0
+            ?true:_echec('l’achat ne pose aucune fenêtre côté dossier');
+        } finally {
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      ok('LOT 8 — LE REMERCIEMENT PROPOSE LA SUITE, AU PRIX DE LA TABLE',(()=>{
+        const sv=currentUser;
+        try{
+          currentUser={id:'M8',email:'m8@t.fr',role:'athlete'};
+          if(!ouvrirMerciAchat('fondations')) return _echec('l’écran de remerciement ne s’ouvre pas');
+          const m=document.getElementById('modal-overlay');
+          if(!m) return _echec('rien n’est affiché');
+          const txt=m.textContent.replace(/\s+/g,' ');
+          if(txt.indexOf('Fondations')<0) return _echec('le programme acheté n’est pas nommé');
+          // LE PRIX VIENT DE LA TABLE DES OFFRES, jamais du texte.
+          const nb=String.fromCharCode(160);
+          if(txt.indexOf(prixOffre('programme_perso').split(nb).join(' '))<0)
+            return _echec('le prix du programme personnalisé ne se lit pas');
+          if(!/adapte ce programme à toi/i.test(txt)) return _echec('la suite n’est pas proposée');
+          const a=[...m.querySelectorAll('a')].find(x=>/beacons\.ai\/kevin\.gllc/.test(x.getAttribute('href')||''));
+          if(!a) return _echec('aucun bouton vers les formules de coaching');
+          // ET UNE SORTIE QUI N’ACHETE RIEN : on n’enferme personne.
+          if(![...m.querySelectorAll('button')].some(b=>/Plus tard/.test(b.textContent)))
+            return _echec('aucune sortie sans acheter');
+          if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0)
+            return _echec('un tiret cadratin traîne sur le remerciement');
+          return true;
+        } finally { try{ closeModal(); }catch(e){} currentUser=sv; }})());
+
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
         const src=_prodSrc();
@@ -45222,9 +45321,21 @@ async function testExercices(){
       const vus=new Set();
       for(const p of RC_PROGRAMMES){
         if(!Object.isFrozen(p)) return _echec(p.id+' : l’entrée n’est pas gelée');
-        for(const k of ['id','nom','description']) if(!p[k]) return _echec('un programme sans '+k);
         if(vus.has(p.id)) return _echec('deux programmes portent l’id « '+p.id+' »');
         vus.add(p.id);
+        // ⚠ LES EMPLACEMENTS A COMPLETER (lot 8) SONT DES ENTREES VIDES, ET
+        //   C'EST LEUR RAISON D'ETRE : quatre programmes attendent leur
+        //   contenu de la main de Kevin. Ce qui doit tenir, c'est qu'AUCUN
+        //   d'eux ne se vende tant qu'il est vide — le reste des exigences
+        //   ci-dessous ne s'applique qu'a ce qui est en rayon.
+        if(p.aCompleter){
+          if(!p.id||!p.nom) return _echec('un emplacement sans id ni nom');
+          if(programmeVendable(p)) return _echec(p.id+' : un emplacement vide est vendable');
+          if(programmesBoutique().some(x=>x.id===p.id))
+            return _echec(p.id+' : un emplacement vide est en boutique');
+          continue;
+        }
+        for(const k of ['id','nom','description']) if(!p[k]) return _echec('un programme sans '+k);
         // ⚠ LE PRIX EST EN CENTIMES, ENTIER. Aucun flottant ne touche à de
         // l'argent : 0,1 + 0,2 ne vaut pas 0,3 en binaire, et un prix qui
         // dérive d'un centime est un prix faux.
@@ -51948,7 +52059,15 @@ async function testExercices(){
         // « DANS LA BOUTIQUE » : ce qu'aucun modèle ne porte, et seulement ça.
         loadCoachProgramsList();
         const bq=[...document.querySelectorAll('#cpl-list .cpl-bq-n')].map(x=>x.textContent);
-        if(bq.join()!=='Fondations') return 'dans la boutique : '+bq.join();
+        // ⚠ LOT 8 : quatre emplacements attendent leur contenu, et ils se
+        //   voient ICI, chez le vendeur — c'est l'ecran ou on les remplit. Ils
+        //   portent « À compléter » et ne sont pas en vente.
+        if(bq[0]!=='Fondations') return 'dans la boutique : '+bq.join();
+        const aComp=[...document.querySelectorAll('#cpl-list .cpl-bq-p')]
+          .filter(x=>/À compléter/.test(x.textContent)).length;
+        if(bq.length-aComp!==1) return bq.length+' rangs pour 1 en vente et '+aComp+' à compléter';
+        // (Le compte de la boutique elle-meme n'a rien a faire ici : deux
+        //  programmes viennent d'y etre publies par ce test.)
         return null;
       };
       let msg=null;
