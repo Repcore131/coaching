@@ -1164,7 +1164,10 @@ const VERROUS=Object.freeze({
                          ouvert:'Ici, tu peux écrire le nom de ton exercice.'},
   bibliothequeMethodes: {vers:'ultime',   ferme:'Choisir une technique dans la liste',
                          ouvert:'Ici, tu peux écrire la tienne dans « Description / Technique ».'},
-  bibliothequeProtocoles:{vers:'ultime',  ferme:'Les protocoles tout prêts',
+  // ⚠ AU SINGULIER : la phrase de la table se termine par « fait partie
+  //   d'Ultime », et « Les protocoles tout prêts FAIT partie » se lit comme
+  //   une faute. La tournure suit celle du catalogue, juste au-dessus.
+  bibliothequeProtocoles:{vers:'ultime',  ferme:'Choisir un protocole tout prêt',
                          ouvert:'Tu peux écrire ton échauffement à la main, il reste dans ta séance.'},
   planification:        {vers:'ultime',   ferme:'La charge du bloc, semaine par semaine',
                          ouvert:'Tes séries restent visibles dans chaque séance.'},
@@ -1259,8 +1262,40 @@ function _palierCoachEnAttente(){
 function _palierEstCoach(cle){
   return !!cle&&COACH_PALIERS.some(x=>x.cle===cle);
 }
+// PURE. LA FORMULE QUE LA PERSONNE A CHOISIE avant d'arriver ici. Posee par
+// accueilChoisir (carte de l'accueil, verrou, sortie de pack), lue ici.
+// « essentielle » par defaut : c'est ce que l'ecran a toujours presente.
+function subOffreChoisie(){
+  let c='';
+  try{ c=sessionStorage.getItem('rc_offre_choisie')||''; }catch(e){ c=''; }
+  if(c==='ultime_demi') c='ultime';
+  return (c==='ultime')?'ultime':'essentielle';
+}
+// LES DEUX PERIODES D'UNE FORMULE, a la forme que l'ecran sait afficher.
+// ⚠ ELLES SE CONSTRUISENT SUR OFFRES, comme SUB_PALIERS : deux tables de prix
+//   pour deux formules auraient diverge au premier ajustement.
+function subPaliersDe(cle){
+  const o=offre(cle);
+  if(!o) return [];
+  const an=Number(o.prixAn)||0, mois=Number(o.prix)||0;
+  const l=[];
+  if(an) l.push({cle:'annuel',titre:'Annuel',prix:prixOffre(cle,true),periode:'par an',
+    detail:'soit '+prixMoisAnnuel(cle)+' / mois',
+    econ:'Économise '+_euros(Math.round((mois*12-an)*100)/100),
+    remise:'−'+Math.round((1-an/(mois*12))*100)+' %',
+    planId:()=>planIdOffre(cle,true)});
+  if(mois) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre(cle),periode:'par mois',
+    detail:_euros(Math.round(mois*12*100)/100)+' sur un an',econ:'',remise:'',
+    planId:()=>planIdOffre(cle)});
+  return l;
+}
 function _tablePaliers(){
-  return _palierCoachEnAttente()?COACH_PALIERS:SUB_PALIERS;
+  if(_palierCoachEnAttente()) return COACH_PALIERS;
+  // ⚠ L'ECRAN PRESENTE LA FORMULE QU'ON A CHOISIE (lot 11). Il presentait
+  //   Essentielle quoi qu'on ait demande : « Voir Ultime » ouvrait un ecran
+  //   ou Ultime n'etait pas ecrit une seule fois.
+  const c=subOffreChoisie();
+  return (c==='ultime')?subPaliersDe('ultime'):SUB_PALIERS;
 }
 // `prix` est un NOMBRE dans COACH_PALIERS et une CHAÎNE dans SUB_PALIERS.
 // L’écran les affiche tels quels : on normalise ici plutôt que dans chaque
@@ -1721,7 +1756,7 @@ async function incrementerCompteurLibres(){
 // laisse une adresse — pas de formulaire, pas de collecte, pas d'e-mail
 // sortant à envoyer.
 const LIBRE_ATTENTE_TEXTE='Les '+LIBRE_MAX+' comptes gratuits ouverts sont pris. '
-  +'Ce n\'est pas un refus : c\'est la capacité de l\'hébergement, et elle se '
+  +'Ce n\'est pas un refus : c\'est la place qu\'il reste sur l\'hébergement, et elle se '
   +'libère. Écris à '+CREATOR_EMAIL+' pour être prévenu dès qu\'une place se '
   +'rouvre — aucun compte n\'a été créé, et rien n\'a été enregistré.';
 // Le quota, en toutes lettres. Infinity ne s'affiche pas.
@@ -1785,9 +1820,9 @@ function alertePalier(coach,users){
   // ── Falaise : N === M-1, et il existe un palier au-dessus ─────────────
   if(suivant&&quota!==Infinity&&n===quota-1){
     return {type:'falaise',palier:suivant.cle,
-      titre:'Au prochain athlète, ton palier passe à '+suivant.titre
+      titre:'Au prochain athlète, ta formule passe à '+suivant.titre
         +' — '+suivant.prix+' €/mois.',
-      texte:'Tu peux ajouter cet athlète sans changer de palier maintenant. '
+      texte:'Tu peux ajouter cet athlète sans changer de formule maintenant. '
         +'Rien n\'est prélevé tant que tu ne l\'as pas décidé toi-même.'};
   }
   // ── Montée : au-dessus depuis deux cycles ─────────────────────────────
@@ -1795,9 +1830,9 @@ function alertePalier(coach,users){
     const c=paliersDe(u).cyclesAuDessus;
     if(c<PALIERS_CYCLES_AVANT_PROPOSITION) return null;   // un pic ne compte pas
     return {type:'montee',palier:suivant.cle,
-      titre:'Tu suis '+n+' athlètes depuis '+c+' mois, pour un palier qui en '
+      titre:'Tu suis '+n+' athlètes depuis '+c+' mois, pour une formule qui en '
         +'prévoit '+_quotaTexte(quota)+'.',
-      texte:'Le palier '+suivant.titre+' est à '+suivant.prix+' €/mois. '
+      texte:'La formule '+suivant.titre+' est à '+suivant.prix+' €/mois. '
         +'Rien ne change tant que tu ne le choisis pas : tes athlètes gardent '
         +'tout leur accès, et ton prix actuel reste le tien.'};
   }
@@ -1806,7 +1841,7 @@ function alertePalier(coach,users){
   if(inf.length){
     const cible=inf[0];
     return {type:'descente',palier:cible.cle,
-      titre:'Tu suis '+n+' athlète'+(n>1?'s':'')+' : le palier '+cible.titre
+      titre:'Tu suis '+n+' athlète'+(n>1?'s':'')+' : la formule '+cible.titre
         +' te suffirait.',
       texte:(cible.prix?('Il est à '+cible.prix+' €/mois. '):'Il est gratuit. ')
         +'Le changement prend effet à la fin de la période déjà réglée, '
@@ -1829,7 +1864,7 @@ function _htmlAlertePalier(coach,users){
     +'<div class="sub" style="font-size:var(--fs-xs);margin-top:5px;line-height:1.6">'
     +escapeHtml(a.texte)+'</div>'
     +'<button class="btn btn-outline btn-sm" style="margin-top:9px;width:100%;min-height:44px" '
-    +'onclick="ouvrirMonAbonnement()">Changer de palier</button>'
+    +'onclick="ouvrirMonAbonnement()">Changer de formule</button>'
     +'</div>';
 }
 
@@ -1858,7 +1893,7 @@ function _htmlBandeauPaliers(coach,users){
     +'padding:10px 13px;margin-bottom:14px">'
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-weight:800;font-size:var(--fs-sm)">'+escapeHtml(compte)+'</div>'
-    +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">Palier '+escapeHtml(pal.titre)
+    +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">Formule '+escapeHtml(pal.titre)
     +(pal.prix?(' : '+pal.prix+' € par mois'):' : gratuit')+'</div></div>'
     +'<button class="btn btn-outline btn-sm" style="flex-shrink:0;min-height:38px" '
     +'onclick="ouvrirMonAbonnement()">Changer</button>'
@@ -1925,10 +1960,10 @@ function _renderAbonnementCoach(users){
     <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
     ${l('Formule',pal.titre)}
     ${l('Athlètes',compteur)}
-    ${suivant?l('Palier suivant',suivant.titre+' — '+suivant.prix+' € '+suivant.periode):''}
+    ${suivant?l('Formule suivante',suivant.titre+', '+suivant.prix+' € '+suivant.periode):''}
     ${depasse?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);
       border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">
-      Tu suis ${n} athlètes pour un palier qui en prévoit ${_quotaTexte(quota)}.
+      Tu suis ${n} athlètes pour une formule qui en prévoit ${_quotaTexte(quota)}.
       Rien n'est bloqué : tes athlètes gardent tout leur accès.</div>`:''}
     <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
     <button class="btn btn-outline btn-sm" style="margin-top:14px;width:100%"
@@ -1942,7 +1977,7 @@ function _renderAbonnementCoach(users){
 // page qui échouera au moment de payer.
 function souscrireCoach(cle){
   const p=COACH_PALIERS.find(x=>x.cle===cle);
-  if(!p||!p.planId()){ toast('Ce palier n\'est pas encore ouvert au paiement.','var(--orange)'); return false; }
+  if(!p||!p.planId()){ toast('Cette formule n\'est pas encore ouverte au paiement.','var(--orange)'); return false; }
   try{ sessionStorage.setItem('rc_palier_coach',cle); }catch(e){}
   go('s-subscribe');
   // L ÉCRAN DOIT ÊTRE RENDU. Sans cet appel, il gardait les paliers ATHLÈTE
@@ -14138,8 +14173,8 @@ function _htmlTraitementsCoach(c){
     +'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;'
     +'margin-bottom:10px">'
     +escapeHtml('Ce que tu vois ici dépend de ce que ton athlète partage. '
-      +'Sans partage, tu sais qu’un traitement est pris à tel moment, et rien de plus '
-      +'— de quoi éviter de proposer un complément qui entrerait en conflit.')
+      +'Sans partage, tu sais qu’un traitement est pris à tel moment, et rien de plus : '
+      +'de quoi éviter de proposer un complément qui entrerait en conflit.')
     +'</div>'
     +(l.length?l.map(ligne).join('')
       :'<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;'
@@ -17118,7 +17153,7 @@ function _texteSignal(type,c,sg){
   if(type==='entrainement'){
     if(d.restrictionLongue) return 'sèche depuis '+d.restrictionLongue.semaines
       +' semaines à '+d.restrictionLongue.kcal+' kcal, pour un plancher de '
-      +d.restrictionLongue.plancher+' kcal. Un palier est à envisager.';
+      +d.restrictionLongue.plancher+' kcal. Une pause dans la restriction est à envisager.';
     if(d.plateauMuscle) return d.plateauMuscle.lib.toLowerCase()+' en plateau : '
       +d.plateauMuscle.bloques+' exercices sans nouveau maximum depuis '
       +d.plateauMuscle.semaines+' semaines.';
@@ -19442,7 +19477,7 @@ function loadCoachHome(){
   // les memes fonctions, et rendus par renderPortefeuille depuis
   // renderClientList. Un seul comptage, un seul rendu.
   try{ const _av=avancementCharges(), _e=document.getElementById('ch-charges-av');
-    if(_e) _e.textContent=_av.pose+'/'+_av.total+(_av.pose<_av.total?' — à compléter':' ✓'); }catch(e){}
+    if(_e) _e.textContent=_av.pose+'/'+_av.total+(_av.pose<_av.total?', à compléter':' ✓'); }catch(e){}
   const elList=document.getElementById('ch-clients-list');
   if(!clients.length){
     renderTodoBlock([]);
@@ -58174,7 +58209,7 @@ function htmlHabitudesCoach(c){
       ? '<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:9px">Trois au maximum. Retires-en une pour en ajouter une autre.</div>'
       : `<div style="margin-top:10px">
           <select id="hab-cat" style="width:100%;margin-bottom:7px">
-            <option value="">— choisir dans la liste —</option>
+            <option value="">Choisir dans la liste</option>
             ${dispo.map(x=>`<option value="${x.cle}">${escapeHtml(x.lib)}</option>`).join('')}
           </select>
           <input id="hab-libre" maxlength="${HAB_LIBELLE_MAX}" placeholder="ou saisis-en une (${HAB_LIBELLE_MAX} caractères max)" style="width:100%;box-sizing:border-box">
@@ -75043,7 +75078,7 @@ function _htmlTableauxTableur(c){
       +'border-radius:var(--r-3);padding:11px 13px;margin-bottom:14px;'
       +'font-size:var(--fs-xs);color:var(--text);line-height:1.6">'
       +escapeHtml('Calcul impossible : il manque '+t.manque.join(', ')
-        +'. Rien n’est deviné — un chiffre inventé serait pire que pas de chiffre.')
+        +'. Rien n’est deviné : un chiffre inventé serait pire que pas de chiffre.')
       +'</div>';
 
   // ⚠ _cycT EST DECLAREE TOUT EN HAUT, et il le faut : TROIS tableaux la
@@ -75072,7 +75107,7 @@ function _htmlTableauxTableur(c){
   // dossier. Un poids retape a la main dans un coin finirait par contredire
   // la derniere pesee, et personne ne saurait laquelle fait foi.
   const _srcAge=(c&&c.birthdate)||_dernierChamp(c,'deb-birthdate')
-    ? 'date de naissance' : 'âge saisi — pense à demander sa date de naissance';
+    ? 'date de naissance' : 'âge saisi, pense à demander sa date de naissance';
   // ⚠ L'UNITE EST SUR LA VALEUR, PAS DANS LE LIBELLE. Kevin, 08/09/2026 :
   // « n'oublie pas de mettre les données, que ce soit centimètres, kilos, ans ».
   // « Poids en kg | 82 » oblige a relire l'intitule pour savoir ce que vaut le
@@ -75083,13 +75118,13 @@ function _htmlTableauxTableur(c){
     +li('Taille',vb(_tbNb(t.taille)+' cm'),'premier bilan',false,'taille')
     +li('Âge',vb(_tbNb(t.age)+' ans'),_srcAge,false,'calendar')
     +li('Niveau d’activité hors sport',
-        sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+' — ×'+String(x.f).replace('.',',')})),
+        sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+' (×'+String(x.f).replace('.',',')+')'})),
           t.naf.cle),
         t.nafSource==='declare'?'déclaré par l’athlète dans son bilan'
         :t.nafSource==='metier'?('déduit de « '+t.metier+' »')
           :(t.nafSource==='reglage'?'choisi par toi'
-            :(t.metier?('« '+t.metier+' » non reconnue — choisis le niveau')
-              :'aucune profession renseignée — choisis le niveau')),false,'course')
+            :(t.metier?('« '+t.metier+' » non reconnue, choisis le niveau')
+              :'aucune profession renseignée, choisis le niveau')),false,'course')
     +li('Coefficient d’objectif',
         sel('tbk-coef','coef',(OBJ_COEF_ECHELLE[t.phase]||[1]).map(v=>({v:v,
           lib:Math.round(v*100)+' % de la dépense'})),t.coef),
@@ -75127,7 +75162,7 @@ function _htmlTableauxTableur(c){
   hSport+=lignesSp.map((x,i)=>{
     const kh=(function(){ try{ return kcalHeureSport(String(x.sport),x.intensite); }catch(e){ return null; } })();
     const sem=(kh!=null)?Math.round(kh*Number(x.heures)):null;
-    const aide=kh==null?'hors barème — choisis un sport'
+    const aide=kh==null?'hors barème, choisis un sport'
       :(x.origine==='creneaux'?t.creneaux+' créneau'+(t.creneaux>1?'x':'')+' RepCore'
         :(x.origine==='bilan'?'déclaré au bilan':''));
     const nom=escapeHtml(String(x.sport));
@@ -75138,11 +75173,11 @@ function _htmlTableauxTableur(c){
       +(aide?'<span class="tbk-aide"'+(kh==null?' style="color:var(--orange)"':'')+'>'+escapeHtml(aide)+'</span>':'')
       +'</span></span></th>'
       +'<td style="text-align:left"><span class="tbk-sp-h"><input class="tbk-in tbk-sp-i" type="number" '
-      +'min="0" max="60" step="0.5" inputmode="decimal" aria-label="Heures par semaine — '+nom+'" '
+      +'min="0" max="60" step="0.5" inputmode="decimal" aria-label="Heures par semaine, '+nom+'" '
       +'value="'+escapeHtml(String(Number(x.heures)||0))+'" '
       +'onchange="majSportTableur('+i+',\'heures\',this.value)"><span>h</span></span></td>'
       +'<td style="text-align:left"><select class="tbk-sp-n tbk-sp-n-'+escapeHtml(String(x.intensite||'moderee'))+'" '
-      +'aria-label="Intensité — '+nom+'" onchange="majSportTableur('+i+',\'intensite\',this.value)">'
+      +'aria-label="Intensité, '+nom+'" onchange="majSportTableur('+i+',\'intensite\',this.value)">'
       +optInt(x.intensite||'moderee')+'</select></td>'
       +'<td><span class="tbk-sp-d">'+(sem!=null?(_tbNb(sem)+' kcal')
         :'<span style="color:var(--orange);font-weight:700">hors barème</span>')+'</span>'
@@ -75230,8 +75265,8 @@ function _htmlTableauxTableur(c){
   // 3 360. Deux chiffres pour la meme decision, et le second n'apparaissait
   // nulle part.
   const _optCyc='<select id="tbk-cycle" onchange="saveClientNutriCycle(this.value)">'
-    +'<option value="1"'+(_cycT?' selected':'')+'>Oui — jour ON / jour OFF</option>'
-    +'<option value="0"'+(_cycT?'':' selected')+'>Non — mêmes valeurs tous les jours</option>'
+    +'<option value="1"'+(_cycT?' selected':'')+'>Oui, jour ON et jour OFF</option>'
+    +'<option value="0"'+(_cycT?'':' selected')+'>Non, mêmes valeurs tous les jours</option>'
     +'</select>';
   let hJournees='<table class="tbk tbk-jr">'+_tbkCap('calendar','Journées',
       'Ajustement de la répartition des glucides')+'<tbody>'
@@ -75509,7 +75544,7 @@ function _htmlTableauxTableur(c){
       +'border-radius:var(--r-3);padding:10px 12px;font-size:var(--fs-2xs);'
       +'line-height:1.55;color:var(--sub)">'
       +'<span style="color:var(--green);flex:0 0 auto;display:flex">'+icon('check',15)+'</span>'
-      +'<span>Chaque réglage ci-dessus part vers ton athlète dès que tu le changes — '
+      +'<span>Chaque réglage ci-dessus part vers ton athlète dès que tu le changes, '
       +'en diète flexible comme en stricte. Son application les reçoit à sa prochaine '
       +'ouverture, et au plus tard dans les cinq minutes si elle est ouverte.</span>'
       +'</div>';
@@ -96848,6 +96883,7 @@ function goRegisterPourSouscrire(){
 function _renderSubPaliers(){
   const zone=document.getElementById('sub-paliers');
   if(!zone) return;
+  try{ _subAnnoncerFormule(); }catch(e){}
   const dispo=_paliersDispo();
   if(!dispo.length){zone.innerHTML='';return;}
   // Le palier retenu doit toujours exister : si l'annuel disparaît (constante
@@ -96882,6 +96918,44 @@ function _renderSubPaliers(){
         font-weight:${p.econ?'800':'400'}">${escapeHtml(p.econ||p.detail)}</div>
     </div>`;
   }).join('');
+}
+// CE QUE L'ECRAN ANNONCE, AVANT SES TARIFS (lot 11).
+//
+// Trois cas, et le troisieme est celui qui manquait :
+//   1. On a choisi Essentielle : rien a dire, l'ecran est le sien.
+//   2. On a choisi Ultime et ses plans existent : il nomme Ultime.
+//   3. On a choisi Ultime et ses plans n'existent pas encore : IL LE DIT, et
+//      il dit ce qui reste possible tout de suite. Presenter Essentielle en
+//      silence a quelqu'un qui a demande Ultime, c'est lui faire payer autre
+//      chose que ce qu'il a demande.
+function _subAnnoncerFormule(){
+  const z=document.getElementById('sub-formule');
+  if(!z) return false;
+  if(_palierCoachEnAttente()){ z.innerHTML=''; return false; }
+  const cle=subOffreChoisie();
+  if(cle!=='ultime'){ z.innerHTML=''; return false; }
+  const payable=subPaliersDe('ultime').some(p=>!!p.planId());
+  if(payable){
+    z.innerHTML='<div class="sub-form-t">Ultime</div>'
+      +'<div class="sub-form-s">Le catalogue d’exercices, la charge de ton bloc, '
+      +'ta diète calculée et tes compléments.</div>';
+    return true;
+  }
+  z.innerHTML='<div class="sub-form-t">Ultime</div>'
+    +'<div class="sub-form-s">Le paiement d’Ultime n’est pas encore ouvert ici. '
+    +'Ce qui se règle dans l’application aujourd’hui, c’est Essentielle, à '
+    +escapeHtml(prixOffre('essentielle'))+' par mois. Écris-moi et je t’ouvre Ultime.</div>'
+    +'<a class="sub-form-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
+    +'Me contacter</a>';
+  return true;
+}
+// PRENDRE CE QUI SE PAIE VRAIMENT. On ne change pas d'avis a la place de la
+// personne : c'est un bouton, elle le prend ou elle ne le prend pas.
+function subPrendreEssentielle(){
+  try{ sessionStorage.setItem('rc_offre_choisie','essentielle'); }catch(e){}
+  _subPalier='';
+  loadSubscribePage();
+  return true;
 }
 function _choisirPalier(cle){
   _subPalier=cle;
@@ -96966,9 +97040,21 @@ function loadSubscribePage(mode,payload){
   // et le parcours nominal repasse ici juste après la création.
   _subAfficherRenonciation(true);
   _majBoutonPaypal();
-  _pp.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire</button>';
-  // Ecrit apres l insertion : le bouton doit exister pour recevoir son libelle.
-  _majBoutonSouscrire();
+  // ⚠ AUCUN BOUTON DE PAIEMENT QUAND AUCUN TARIF N'EST FACTURABLE (lot 11).
+  //   Le bouton appelait initPaypalSubscription, qui retombait sur le mensuel
+  //   d'Essentielle faute de mieux : quelqu'un qui demande Ultime se serait
+  //   fait debiter autre chose que ce qu'il a demande. A la place, la seule
+  //   chose vraie : ce qui se paie aujourd'hui.
+  if(!_paliersDispo().length){
+    _pp.innerHTML=(subOffreChoisie()==='ultime')
+      ?'<button class="btn btn-outline" onclick="subPrendreEssentielle()">'
+        +'Prendre Essentielle à '+escapeHtml(prixOffre('essentielle'))+' par mois</button>'
+      :'<div class="bq-note">Aucun abonnement n’est ouvert au paiement pour le moment.</div>';
+  }else{
+    _pp.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire</button>';
+    // Ecrit apres l insertion : le bouton doit exister pour recevoir son libelle.
+    _majBoutonSouscrire();
+  }
   const codeOpt=document.getElementById('sub-code-option');
   const pendingInfo=document.getElementById('sub-pending-info');
   if(mode==='pending-code'&&payload){
@@ -96998,7 +97084,15 @@ function initPaypalSubscription(){
   const clientId=PAYPAL_CLIENT_ID;
   // Le plan facture est celui que l athlete a choisi a l ecran, jamais une
   // constante figee : sans cela, selectionner l annuel debiterait le mensuel.
-  const planId=_planIdChoisi()||PAYPAL_PLAN_ID;
+  //
+  // ⚠ ET LE REPLI SUR PAYPAL_PLAN_ID A DISPARU (lot 11). Il facturait le
+  //   mensuel d'Essentielle des que le plan choisi n'existait pas — donc a
+  //   qui demandait Ultime. On ne devine pas ce que quelqu'un veut payer.
+  const planId=_planIdChoisi();
+  if(!planId){
+    toast('Ce tarif n’est pas encore ouvert au paiement.','var(--orange)');
+    return;
+  }
   const coachId=CREATOR_EMAIL;
   const _ppCon=document.getElementById('paypal-btn-container');
   if(_ppCon) _ppCon.innerHTML='<div class="skeleton fx-loop" style="height:55px;border-radius:var(--r-2)"></div>';

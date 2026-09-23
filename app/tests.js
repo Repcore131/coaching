@@ -14614,7 +14614,10 @@ async function testExercices(){
           if(!/39[ \u00a0]€\/mois/.test(a.titre)) return _echec('prix absent : '+a.titre);
           if(a.titre.indexOf('Pro')<0) return _echec('le palier suivant n\'est pas nommé');
           // Et elle dit explicitement que rien ne bascule.
-          if(!/sans changer de palier/.test(a.texte)) return _echec('texte : '+a.texte);
+          // ⚠ LE MOT A CHANGE AU LOT 11, PAS LA PROMESSE : « palier » est du
+          //   vocabulaire de facturation, et il ne se dit pas devant un
+          //   client. L'ecran dit « formule », ici comme ailleurs.
+          if(!/sans changer de formule/.test(a.texte)) return _echec('texte : '+a.texte);
           // À 13, il est trop tôt ; à 15, la falaise est passée.
           const av=alertePalier(_coachP(),_cacheP(13,3));
           if(av&&av.type==='falaise') return _echec('alerte prématurée à 13 / 15');
@@ -23077,7 +23080,11 @@ async function testExercices(){
         if(sc!==6) return _echec('rang '+sc+' au lieu de 6');
         return l.length===1&&l[0].label==='Restriction prolongée'
           &&/sèche depuis 20 semaines/.test(l[0].texte)
-          &&/palier/.test(l[0].texte);})());
+          // ⚠ LE MOT A CHANGE AU LOT 11 : « un palier est à envisager » se
+          //   disait d'une sèche, et « palier » est le mot qu'on ne met plus
+          //   sous les yeux de personne. Ce que le signal doit dire n'a pas
+          //   bougé : qu'il faut lever le pied.
+          &&/pause dans la restriction/.test(l[0].texte);})());
       ok('Le cache de signaux se rafraîchit quand les MACROS changent',(()=>{
         // La clé de mémoïsation porte les séances ; sans y ajouter la phase et
         // les macros, remonter les calories laissait le signal allumé.
@@ -34401,6 +34408,145 @@ async function testExercices(){
         if(g.indexOf('ultime_demi')<0||g.indexOf('accueilChoisir')<0)
           return _echec('« Garder l’app » ne mène pas à l’abonnement');
         return true;})());
+
+      // ══ LOT 11 — CE QUE LA RELECTURE A TROUVE ═════════════════════════
+      ok('LOT 11 — ON NE FACTURE JAMAIS AUTRE CHOSE QUE CE QUI EST DEMANDÉ',(()=>{
+        // ⚠ LE DEFAUT : `_planIdChoisi()||PAYPAL_PLAN_ID` retombait sur le
+        //   mensuel d’Essentielle quand le tarif choisi n’avait pas de plan.
+        //   Quelqu’un qui demande Ultime et appuie sur « Souscrire » se
+        //   faisait débiter 9,95 € pour autre chose. Un débit non voulu se
+        //   répare avant tout le reste.
+        const src=String(initPaypalSubscription);
+        if(/_planIdChoisi\(\)\s*\|\|\s*PAYPAL_PLAN_ID/.test(src))
+          return _echec('le repli facture Essentielle à qui demande autre chose');
+        if(src.indexOf('if(!planId)')<0) return _echec('un plan vide n’est pas refusé');
+        // ET L’ECRAN NE PROPOSE PAS DE PAYER CE QU’IL NE SAIT PAS FACTURER.
+        const l=String(loadSubscribePage);
+        if(l.indexOf('_paliersDispo().length')<0)
+          return _echec('l’écran propose « Souscrire » sans tarif facturable');
+        return l.indexOf('subPrendreEssentielle()')>=0
+          ?true:_echec('aucune sortie vers ce qui se paie vraiment');})());
+
+      ok('LOT 11 — L’ÉCRAN D’ABONNEMENT NOMME LA FORMULE QU’ON A CHOISIE',(()=>{
+        const sv=(()=>{ try{ return sessionStorage.getItem('rc_offre_choisie'); }catch(e){ return null; } })();
+        const svPal=(()=>{ try{ return sessionStorage.getItem('rc_palier_coach'); }catch(e){ return null; } })();
+        try{
+          try{ sessionStorage.removeItem('rc_palier_coach'); }catch(e){}
+          // ESSENTIELLE : l’écran reste celui qu’il a toujours été.
+          try{ sessionStorage.setItem('rc_offre_choisie','essentielle'); }catch(e){}
+          if(subOffreChoisie()!=='essentielle') return _echec('la formule lue : '+subOffreChoisie());
+          if(_tablePaliers()!==SUB_PALIERS) return _echec('Essentielle ne rend pas sa propre table');
+          _subAnnoncerFormule();
+          const z=document.getElementById('sub-formule');
+          if(!z) return _echec('l’emplacement de la formule n’existe pas');
+          if(z.textContent.trim()!=='') return _echec('l’écran annonce quelque chose à tort');
+          // ULTIME : il la nomme, et il dit ce qui se paie vraiment tant que
+          // son plan n’existe pas.
+          try{ sessionStorage.setItem('rc_offre_choisie','ultime'); }catch(e){}
+          if(subOffreChoisie()!=='ultime') return _echec('Ultime n’est pas retenue');
+          const tab=_tablePaliers();
+          if(tab===SUB_PALIERS) return _echec('Ultime rend la table d’Essentielle');
+          for(const p of tab) if(typeof p.planId!=='function') return _echec('un tarif sans plan');
+          _subAnnoncerFormule();
+          const txt=z.textContent.replace(/\s+/g,' ');
+          if(txt.indexOf('Ultime')<0) return _echec('Ultime n’est pas nommée : « '+txt+' »');
+          const nb=String.fromCharCode(160);
+          if(!planIdOffre('ultime')&&!planIdOffre('ultime',true)){
+            if(txt.indexOf('pas encore ouvert')<0)
+              return _echec('l’écran ne dit pas que le paiement n’est pas ouvert');
+            if(txt.indexOf(prixOffre('essentielle').split(nb).join(' '))<0
+               &&txt.indexOf(prixOffre('essentielle'))<0)
+              return _echec('l’écran ne dit pas ce qui se paie aujourd’hui');
+            if(!z.querySelector('a[href*="beacons.ai/kevin.gllc"]'))
+              return _echec('aucune porte pour demander Ultime');
+          }
+          // ET « ultime_demi » EST LA MEME FORMULE : on ne fabrique pas une
+          // troisième carte pour un premier mois.
+          try{ sessionStorage.setItem('rc_offre_choisie','ultime_demi'); }catch(e){}
+          return subOffreChoisie()==='ultime'
+            ?true:_echec('le premier mois n’est pas rattaché à Ultime');
+        } finally {
+          try{
+            if(sv==null) sessionStorage.removeItem('rc_offre_choisie');
+            else sessionStorage.setItem('rc_offre_choisie',sv);
+            if(svPal!=null) sessionStorage.setItem('rc_palier_coach',svPal);
+            const z=document.getElementById('sub-formule'); if(z) z.innerHTML='';
+          }catch(e){}
+        }})());
+
+      ok('LOT 11 — NI TIRET CADRATIN NI MOT TECHNIQUE SUR LES ÉCRANS DE L’OFFRE',(()=>{
+        // ⚠ LE PERIMETRE EST NOMME, ET C'EST VOLONTAIRE. Le balayage complet
+        //   du 24/09/2026 rend 231 tirets cadratins de prose ailleurs dans
+        //   l'application : l'etude morpho, les textes de sante, les outils
+        //   du coach. Ce sont des textes d'autres chantiers, et leur
+        //   relecture en est un a elle seule. Ce test tient LE TERRAIN
+        //   NETTOYE — les ecrans que l'offre traverse — et il ne fait pas
+        //   semblant de tenir le reste.
+        const ECRANS=['s-welcome','s-subscribe','s-essai-bilan','s-access-gate',
+          's-boutique','s-videos','s-canal','s-charges','s-supplements','s-rapport',
+          's-food-prep','s-protocoles','s-progress','s-coach-charge','s-client-home',
+          's-session-manager','s-client-code','s-register','s-coach-entry','s-athlete-entry'];
+        // ⚠ ON LIT LE DOM, PAS LE SOURCE. Un balayage du fichier releve les
+        //   commentaires et les gabarits ; l’écran, lui, ne ment pas sur ce
+        //   qui s’affiche. Les 80 écrans y passent.
+        const CAD=String.fromCharCode(8212), DEMI=String.fromCharCode(8211);
+        // LES TIRETS RESTANTS SONT DES VALEURS VIDES, PAS DES PHRASES : « —
+        // Séances », « —Poids », le code coach avant sa génération. Ils ne se
+        // lisent pas comme du texte, et les remplacer par un zéro dirait
+        // « zéro » là où on ne sait pas encore.
+        const phrases=[];
+        for(const id of ECRANS){
+          const s=document.getElementById(id);
+          if(!s) return _echec('écran introuvable : '+id);
+          const t=s.textContent||'';
+          for(const sep of [CAD,DEMI]){
+            // ⚠ ON RAISONNE PAR LIGNE, et c'est ce qui distingue une PHRASE
+            //   d'une VALEUR VIDE. « 0/73 — à compléter » est une phrase ;
+            //   un « — » seul sur sa ligne est la valeur d'un compteur qu'on
+            //   ne connaît pas encore, et écrire « 0 » à la place dirait zéro
+            //   là où on ne sait rien. Le texte du DOM colle les lignes : sans
+            //   ce découpage, chaque compteur vide passait pour une faute.
+            for(const brut of t.split(/[\r\n]+/)){
+              const li=brut.trim();
+              // ⚠ LA PROSE ESPACE SON TIRET, la valeur vide ne l'espace pas.
+              //   « le test du genou au mur — trente secondes » est une
+              //   phrase ; « —RIR 0 » et « —Poids » sont des compteurs qu'on
+              //   ne connait pas encore, colles a leur libelle par le texte
+              //   du DOM. Ecrire « 0 » a leur place dirait zero la ou on ne
+              //   sait rien.
+              const k=li.indexOf(' '+sep+' ');
+              if(k<0) continue;
+              if((li.match(/[A-Za-zÀ-ÿ]{3,}/g)||[]).length<2) continue;
+              // LE MESSAGE MONTRE LE TIRET, pas le debut de la ligne : sur un
+              // ecran dont le texte tient sur une seule ligne, le debut ne dit
+              // pas ou chercher.
+              phrases.push(s.id+' : '+li.slice(Math.max(0,k-45),k+46).replace(/\s+/g,' '));
+            }
+          }
+        }
+        if(phrases.length){
+          const vus=[]; for(const p of phrases) if(vus.indexOf(p)<0) vus.push(p);
+          return _echec(phrases.length+' phrase(s) au tiret cadratin : '+vus.slice(0,6).join(' ~~ '));
+        }
+        // LE VOCABULAIRE : « palier », « quota », « capacité »,
+        // « synchronisation » n’ont rien à faire devant un client.
+        // LE VOCABULAIRE, SUR LE MEME PERIMETRE.
+        //
+        // ⚠ « PALIER » GARDE SON SENS DE METIER AILLEURS, et c'est pour ca
+        //   que ce balayage ne couvre pas toute l'application : les paliers
+        //   hebdomadaires d'une transition alimentaire, « un palier de plus
+        //   quand le corps sort du lit », « palier des 100 kg franchi » sont
+        //   des mots d'entrainement, pas du vocabulaire de facturation. Ce
+        //   qu'on traque, c'est le jargon commercial sous les yeux d'un
+        //   client : « ton palier », « ton quota », « synchronisation ».
+        const fuites=[];
+        for(const id of ECRANS){
+          const s=document.getElementById(id);
+          const t=((s&&s.textContent)||'').toLowerCase();
+          for(const m of ['palier','quota','synchronisation'])
+            if(t.indexOf(m)>=0) fuites.push(id+' : '+m);
+        }
+        return fuites.length?_echec('mot technique à l’écran : '+fuites.join(', ')):true;})());
 
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
