@@ -9157,3 +9157,12 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .vrr-deux{display:flex;gap:8px;flex-wrap:wrap}
 .vrr-deux .vrr-b{flex:1 1 46%;min-width:150px;margin-top:12px}
 .vrr-b2{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+
+/* ══ LA FORMULE ANNONCEE SUR L'ECRAN D'ABONNEMENT (lot 11) ═════════════════ */
+.sub-form-t{font-size:15px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;
+  color:#fff;margin-bottom:4px}
+.sub-form-s{font-size:13px;line-height:1.6;color:var(--sub);margin-bottom:12px}
+.sub-form-b{display:inline-flex;align-items:center;justify-content:center;min-height:44px;
+  padding:0 16px;margin-bottom:14px;background:var(--surface-2);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--r-3);font-family:Montserrat,sans-serif;
+  font-size:12px;font-weight:800;letter-spacing:1.2px;text-decoration:none}

@@ -724,7 +724,7 @@ const COACH_PHOTO='icons/coach.jpg';
          Internet. Ici il est offert, pas imposé. -->
     <div id="rc-inst-chrome" style="display:none;text-align:center;margin-top:10px">
       <a href="#" onclick="rcOuvrirDansNavigateur({sansRepli:true});return false;"
-        style="display:inline-block;padding:8px 12px;font-size:var(--fs-sm);color:rgba(255,255,255,.55);text-decoration:underline;text-underline-offset:3px;font-family:Montserrat,sans-serif;cursor:pointer">J'ai Chrome — ouvrir dedans</a>
+        style="display:inline-block;padding:8px 12px;font-size:var(--fs-sm);color:rgba(255,255,255,.55);text-decoration:underline;text-underline-offset:3px;font-family:Montserrat,sans-serif;cursor:pointer">J'ai Chrome, ouvrir dedans</a>
     </div>
 
     <!-- ── LE REPERE DE VERSION ─────────────────────────────────────────
@@ -946,7 +946,7 @@ const COACH_PHOTO='icons/coach.jpg';
              c'est vrai pour UN athlète, puis les paliers Coach et Pro s'appliquent.
              L'ancienne formule promettait « des codes d'accès gratuits » que seul le
            créateur peut émettre : la promesse ne pouvait pas être tenue. -->
-      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:var(--text)">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, un palier suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:var(--text)">jusqu'à 12 mois</strong>. <strong style="color:var(--text)">Tes athlètes ne paient rien</strong> tant qu'ils utilisent un de tes codes. Sans code, l'accès en autonomie leur coûte <span data-prix-autonomie>9,95&nbsp;€/mois</span>, sans engagement.</div>
+      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:var(--text)">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, ta formule suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:var(--text)">jusqu'à 12 mois</strong>. <strong style="color:var(--text)">Tes athlètes ne paient rien</strong> tant qu'ils utilisent un de tes codes. Sans code, l'accès en autonomie leur coûte <span data-prix-autonomie></span>, sans engagement.</div>
     </div>
   </div>
 </div>
@@ -1036,7 +1036,7 @@ const COACH_PHOTO='icons/coach.jpg';
                pose par _poserPromesseAthlete — ecrit une fois, comme
                PROMESSE_COACH. -->
           <div class="sub" style="font-size:var(--fs-xs);margin-top:3px;color:var(--green)" data-promesse-athlete></div>
-          <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Ensuite : <span data-prix-autonomie>9,95 €/mois</span>, sans engagement</div>
+          <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Ensuite : <span data-prix-autonomie></span>, sans engagement</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:var(--fs-xl)">›</div>
       </div>
@@ -1045,7 +1045,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Info box athlète -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:var(--r-3);padding:14px 16px;margin-top:4px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ℹ️ ESPACE ATHLÈTE</div>
-      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, <span data-promesse-athlete></span> L'accès en autonomie coûte ensuite <span data-prix-autonomie>9,95 €/mois</span>, sans engagement.</div>
+      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, <span data-promesse-athlete></span> L'accès en autonomie coûte ensuite <span data-prix-autonomie></span>, sans engagement.</div>
     </div>
 
   </div>
@@ -1178,7 +1178,7 @@ const COACH_PHOTO='icons/coach.jpg';
          fonctionner sans cette donnee-la. -->
     <button class="btn btn-outline" onclick="refuserConsentementSante()">Pas maintenant</button>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.65">
-      Sans cet accord, rien n'est enregistré — ni sur cet appareil, ni ailleurs. Tu peux
+      Sans cet accord, rien n'est enregistré : ni sur cet appareil, ni ailleurs. Tu peux
       le donner plus tard, et le retirer à tout moment en supprimant ton compte.
     </div>
   </div>
@@ -2056,11 +2056,11 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
             <div style="width:36px;height:36px;background:var(--surface-2);border-radius:var(--r-2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></div>
             <div>
-              <div style="font-weight:800;font-size:var(--fs-md)">Synchronisation Cloud</div>
+              <div style="font-weight:800;font-size:var(--fs-md)">Tes données en ligne</div>
               <div id="cloud-status" style="font-size:var(--fs-xs);margin-top:2px;color:var(--sub)">Non configurée</div>
             </div>
           </div>
-          <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:14px">Synchronisation automatique et sécurisée. Tes données sont partagées en temps réel sur tous tes appareils connectés avec les mêmes identifiants.</p>
+          <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:14px">Tes données sont sauvegardées et protégées. Elles arrivent en temps réel sur tous tes appareils connectés avec les mêmes identifiants.</p>
           <div id="cloud-sw-version" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:12px"></div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin:26px 0 14px">
@@ -2125,7 +2125,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="font-size:var(--fs-xs);color:#a3a300;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:10px">⚙ Admin : Offboarding coach</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:12px;line-height:1.5">Réassigner les athlètes d'un coach avant de désactiver son compte.</div>
           <select id="admin-offboard-select" style="width:100%;margin-bottom:10px;padding:10px;background:#1a1a08;border:1px solid #3a3a00;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-family:Montserrat,sans-serif">
-            <option value="">— Sélectionne un coach —</option>
+            <option value="">Sélectionne un coach</option>
           </select>
           <button onclick="_adminOffboardSelected()" style="width:100%;background:#a3a300;border:none;border-radius:var(--r-2);padding:10px;color:#000;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px">Offboarder ce coach →</button>
         </div>
@@ -3635,12 +3635,12 @@ const COACH_PHOTO='icons/coach.jpg';
              qu'il sache ce qu'il perd. -->
         <div style="border-top:1px solid #1a1a1a;padding-top:16px;margin-top:22px">
           <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Exporter mes données</div>
-          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">RGPD (Art. 20) : récupère l'intégralité de ton dossier dans un fichier JSON — bilans, séances, nutrition, mensurations et photos. Les mots de passe en sont exclus.</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">RGPD (Art. 20) : récupère l'intégralité de ton dossier dans un fichier JSON : bilans, séances, nutrition, mensurations et photos. Les mots de passe en sont exclus.</div>
           <button onclick="exportMyData()" style="width:100%;background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:10px;color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Exporter mes données (JSON)</button>
         </div>
         <div style="border:1px solid #2a0000;border-radius:var(--r-3);padding:16px;margin-top:22px;text-align:left">
           <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Supprimer mon compte</div>
-          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">Action irréversible. Conformément au RGPD (Art. 17), toutes tes données seront effacées : profil, séances, bilans, photos, et tes données de santé — poids, mensurations, cycle, constantes, analyses.</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">Action irréversible. Conformément au RGPD (Art. 17), toutes tes données seront effacées : profil, séances, bilans, photos, et tes données de santé (poids, mensurations, cycle, constantes, analyses).</div>
           <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:var(--r-2);padding:10px;color:#cc0000;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Supprimer mon compte</button>
         </div>
       </div>
@@ -5536,6 +5536,12 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Sélecteur de palier — rempli par _renderSubPaliers(). Rendu en JS et
            non en dur, parce que le nombre de paliers dépend de l'existence du
            plan annuel côté PayPal. -->
+      <!-- CE QUE CET ECRAN PRESENTE (lot 11). Rempli par
+           _subAnnoncerFormule : vide quand on a choisi Essentielle, qui est
+           ce que l'ecran a toujours montre ; il nomme Ultime quand c'est
+           elle qu'on a demandee, et dit ce qui se paie vraiment quand son
+           paiement n'est pas encore ouvert. -->
+      <div id="sub-formule"></div>
       <div id="sub-paliers" style="display:flex;gap:10px;margin-bottom:16px"></div>
       <div id="sub-pending-info" style="display:none"></div>
       <!-- Renoncement au droit de rétractation, art. L221-28 13°.
