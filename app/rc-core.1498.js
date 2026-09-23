@@ -22384,6 +22384,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderCorpsCoach(c); }catch(e){}
   try{ renderCourbesCoach(c); }catch(e){}
   try{ renderSignauxCoach(c); }catch(e){}
+  try{ renderMensCoach(c); }catch(e){}
   try{ renderMethodesCoach(c); }catch(e){}
   try{ renderAsymetrieCoach(c); }catch(e){}
   try{ renderMotCoachFiche(c); }catch(e){}
@@ -42601,6 +42602,9 @@ let _ccdLecture='absolu';
 function ccdLecture(m){
   _ccdLecture=CCD_LECTURES.some(x=>x.cle===m)?m:'absolu';
   _ccdRefaireEtages();
+  // « Un seul jeu de boutons, il s'applique aux cartes ET aux tableaux »
+  // (lot 5) : le tableau des douze tours est arrive au lot 10, il suit.
+  try{ renderMensCoach(getOwnedClient(currentClientId)); }catch(e){}
   try{
     const b=document.querySelector('#ccd-outils .ccd-lec .cc-corps-o.actif');
     if(b) b.focus();
@@ -43109,6 +43113,89 @@ function ccdVoirDetail(ancre){
     if(z.scrollIntoView) z.scrollIntoView({block:'center',behavior:'smooth'});
     return true;
   }catch(e){ return false; }
+}
+// ══ LOT 10 : LE TABLEAU DES DOUZE TOURS, DANS LE DETAIL ════════════════════
+//
+// Kevin, 23/09/2026 : « Tout le reste part dans l'etage 6, replie : le tableau
+// des douze tours, le calendrier des bilans, le journal, le dossier, la
+// securite. Rien n'est supprime, tout est range. »
+//
+// Le calendrier, le journal, le dossier et la securite y etaient deja. Il
+// manquait le tableau : il vivait sur l'ecran « Evolution », que le coach doit
+// ouvrir a part.
+//
+// ⚠ IL N'EST PAS RECOPIE DE renderBilanEvolution, ET IL NE LA REMPLACE PAS.
+//   Celui-la nomme ses colonnes « Bilan 1, 2, 3 » et ignore la bascule ; celui-ci
+//   les DATE et suit la lecture choisie en tete de fiche (valeur, ecart,
+//   pourcentage). Les deux passent par renderDataTable, qui reste la seule
+//   fabrique de tableaux de l'application.
+//
+// ⚠ UNE VALEUR REPORTEE RESTE GRISE, ici comme ailleurs : le coach doit
+//   distinguer d'un coup d'oeil une mesure reprise d'un releve du jour, sans
+//   quoi il lit une stagnation la ou personne n'a sorti le metre.
+function _htmlCcdMensurations(c){
+  const u=_dossier(c);
+  if(!u) return '';
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  if(!bl.length) return '';
+  // LES TOURS QUI ONT AU MOINS UNE MESURE : une ligne de douze tirets pour un
+  // athlete qui n'en a mesure que trois, c'est neuf lignes de mobilier.
+  const tours=MEAS.filter(m=>bl.some(b=>getBM(b,m.k)>0));
+  if(!tours.length) return '';
+  const lu=(v,i,vals)=>{
+    if(v==null) return null;
+    if(_ccdLecture==='ecart'){
+      let p=null;
+      for(let j=i-1;j>=0;j--) if(vals[j]!=null){ p=vals[j]; break; }
+      return (p==null)?_synNombre(v):_ccdDelta(Math.round((v-p)*10)/10,'');
+    }
+    if(_ccdLecture==='pourcent'){
+      let d=null;
+      for(let j=0;j<i;j++) if(vals[j]!=null){ d=vals[j]; break; }
+      if(d==null||!d) return _synNombre(v);
+      const p=Math.round((v-d)/d*1000)/10;
+      return (p>0?'+':(p<0?'−':''))+_synNombre(p)+' %';
+    }
+    return _synNombre(v);
+  };
+  // ⚠ LA DERNIERE COLONNE N'EST PAS UN ECART DANS LE TEMPS : _cellEcartMensuration
+  //   rend l'ecart DROITE/GAUCHE au dernier bilan, et rien pour un tour qui
+  //   n'existe que d'un cote. Le tableau de l'ecran Evolution l'intitule
+  //   « Écart » tout court, ce qui se lit comme le chemin parcouru : ici elle
+  //   porte son vrai nom, et le pied de tableau le redit.
+  const colonnes=['Tour'].concat(bl.map(b=>_ccdJour(b.date))).concat(['Écart D/G']);
+  const lignes=tours.map(m=>{
+    const vals=bl.map(b=>{ const v=getBM(b,m.k); return (v>0)?v:null; });
+    return {label:_libMesure(m.l,true),labelBg:m.color||'var(--border)',labelColor:'var(--text)',
+      values:vals.map((v,i)=>lu(v,i,vals))
+        .concat([(function(){ try{ return _cellEcartMensuration(bl,m.k); }catch(e){ return null; } })()]),
+      valueStyleFn:(v,ci,vide)=>(ci>=bl.length)
+        ?(vide?'background:#080808;color:var(--sub);':'background:var(--dark);color:var(--sub);')
+        :(vide?'background:#080808;color:var(--sub);'
+          :('background:var(--dark);color:'
+            +((bl[ci]&&(function(){ try{ return bmReportee(bl[ci],m.k); }catch(e){ return false; } })())
+              ?'var(--text-faint)':'var(--text)')+';'))};
+  });
+  const t=renderDataTable(colonnes,lignes,
+    {stickyCol0:true,firstColMinWidth:'118px',pad:'4px 6px',mb:'8px'});
+  const dit={absolu:'la valeur relevée à chaque bilan',
+    ecart:'l’écart avec le bilan d’avant',
+    pourcent:'le pourcentage depuis le premier bilan'}[_ccdLecture]||'';
+  return t+'<p class="ccd-out-p">Chaque colonne porte la date de son bilan, et '
+    +'chaque case '+escapeHtml(dit)+' (la bascule en tête de fiche). La dernière '
+    +'colonne dit l’écart entre le côté droit et le côté gauche au dernier bilan, '
+    +'quand la mesure existe des deux côtés. Tout est au ruban, à ± '
+    +String(SYN_BRUIT_MESURE).replace('.',',')+' cm près. En gris, une valeur '
+    +'reportée du bilan précédent sans avoir été re-mesurée.</p>';
+}
+function renderMensCoach(c){
+  const z=document.getElementById('ccd-mens');
+  if(!z) return false;
+  let h='';
+  try{ h=c?_htmlCcdMensurations(c):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+  try{ z.querySelectorAll('[data-scroll-fade]').forEach(e=>setupScrollFade(e)); }catch(e){}
+  return !!h;
 }
 function renderVerdictCoach(c){
   const z=document.getElementById('ccd-verdict');

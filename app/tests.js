@@ -43775,6 +43775,88 @@ async function testExercices(){
         return true;
       } finally { s.classList.toggle('replie',avant); }})());
 
+
+    // ══ LOT 10 : LE DÉTAIL, REPLIÉ (23/09/2026) ══════════════════════════
+    // « Tout le reste part dans l'étage 6, replié : le tableau des douze
+    //   tours, le calendrier des bilans, le journal, le dossier, la sécurité.
+    //   Rien n'est supprimé, tout est rangé. »
+    ok('LE TABLEAU DES DOUZE TOURS EST DANS LE DÉTAIL, ET IL SUIT LA BASCULE',(()=>{
+      const z=document.getElementById('ccd-mens');
+      if(!z) return _echec('le tableau des douze tours n’existe pas');
+      const et=z.closest('.cc-etage');
+      if(!et||et.dataset.et!=='detail') return _echec('le tableau n’est pas dans le détail : '+(et&&et.dataset.et));
+      // IL EST DANS LE REPLI, avec le reste : le coach pressé ne le voit pas.
+      const d=document.getElementById('ccd-detail');
+      if(!d||!d.contains(z)) return _echec('le tableau est hors du repli du détail');
+      const J=864e5, t=Date.now();
+      const u={id:'T10',email:'t10@t.fr',role:'athlete',gender:'H',bilans:[
+        {date:t-60*J,'bil-bicep-r':'38','bil-bicep-l':'37.5','bil-waist':'90'},
+        {date:t-30*J,'bil-bicep-r':'39','bil-bicep-l':'38','bil-waist':'89'},
+        {date:t-2*J,'bil-bicep-r':'40','bil-bicep-l':'39','bil-waist':'88'}]};
+      const sl=_ccdLecture;
+      try{
+        const lire=()=>{ const d2=document.createElement('div');
+          d2.innerHTML=_htmlCcdMensurations(u);
+          const tb=d2.querySelector('table');
+          if(!tb) return null;
+          return {colonnes:[...tb.querySelectorAll('tr')][0]?[...[...tb.querySelectorAll('tr')][0].children].map(x=>(x.textContent||'').trim()):[],
+            ligne1:[...(tb.querySelectorAll('tbody tr')[0]||{children:[]}).children].map(x=>(x.textContent||'').trim()),
+            n:tb.querySelectorAll('tbody tr').length};
+        };
+        _ccdLecture='absolu';
+        const a=lire();
+        if(!a) return _echec('le tableau ne se construit pas');
+        // ⚠ UNE COLONNE PAR BILAN, ET ELLE PORTE SA DATE : « Bilan 1, 2, 3 » ne
+        //   dit pas quand.
+        if(a.colonnes[0]!=='Tour') return _echec('colonnes : '+a.colonnes.join('/'));
+        if(a.colonnes.length!==5) return _echec(a.colonnes.length+' colonnes pour trois bilans');
+        if(!/\d/.test(a.colonnes[1])) return _echec('la colonne d’un bilan ne porte pas sa date : '+a.colonnes[1]);
+        // ⚠ LA DERNIERE COLONNE EST L'ECART DROITE/GAUCHE, pas le chemin
+        //   parcouru : _cellEcartMensuration rend l'asymétrie du dernier bilan.
+        //   Elle porte donc son vrai nom.
+        if(a.colonnes[4]!=='Écart D/G') return _echec('la dernière colonne s’intitule « '+a.colonnes[4]+' »');
+        // TROIS TOURS MESURÉS, TROIS LIGNES : pas douze lignes de tirets.
+        if(a.n!==3) return _echec(a.n+' lignes pour trois tours mesurés');
+        if(a.ligne1.slice(1,4).join('/')!=='38/39/40') return _echec('valeurs : '+a.ligne1.join('/'));
+        // LA BASCULE S'APPLIQUE AU TABLEAU, comme aux cartes (lot 5).
+        _ccdLecture='ecart';
+        const e=lire();
+        if(e.ligne1.slice(1,4).join('/')!=='38/+1/+1') return _echec('écarts : '+e.ligne1.join('/'));
+        _ccdLecture='pourcent';
+        const p=lire();
+        if(p.ligne1.slice(1,4).join('/')!=='38/+2,6 %/+5,3 %') return _echec('pourcentages : '+p.ligne1.join('/'));
+        // ET LE PIED DIT CE QUE CHAQUE CASE MONTRE, à chaque lecture.
+        const d3=document.createElement('div'); d3.innerHTML=_htmlCcdMensurations(u);
+        const pied=(d3.querySelector('.ccd-out-p')||{}).textContent||'';
+        if(pied.indexOf('pourcentage depuis le premier bilan')<0) return _echec('le pied ne dit pas la lecture : '+pied);
+        if(pied.indexOf('côté droit et le côté gauche')<0) return _echec('le pied ne dit pas ce qu’est la dernière colonne');
+        if(pied.indexOf('reportée')<0) return _echec('le pied ne dit pas ce que le gris veut dire');
+        if(/[—–]/.test(pied)) return _echec('un tiret cadratin dans le pied du tableau');
+        // SANS BILAN, PAS DE TABLEAU VIDE.
+        if(_htmlCcdMensurations({id:'V',email:'v@t.fr',role:'athlete',bilans:[]})!=='')
+          return _echec('un tableau sort sans bilan');
+        return true;
+      } finally { _ccdLecture=sl; }})());
+
+    ok('PLUS RIEN NE FLOTTE HORS DES SIX ÉTAGES',(()=>{
+      // « Rien n'est supprimé, tout est rangé. » Chaque zone de l'onglet
+      // appartient à un étage, et le détail est replié à l'ouverture.
+      const vue=document.querySelector('#s-coach-client .ccd-vue[data-vue="donnees"]');
+      if(!vue) return _echec('la vue Données a disparu');
+      const orphelins=[...vue.querySelectorAll('[id^="ccd-"]')]
+        .filter(e=>!e.closest('.cc-etage')).map(e=>e.id);
+      if(orphelins.length) return _echec('hors étage : '+orphelins.join(', '));
+      // LES CINQ ZONES QUE LA MISSION NOMME SONT BIEN DANS LE DÉTAIL.
+      for(const id of ['ccd-mens','ccd-bil-cal','ccd-journal','ccd-dossier','ccd-securite']){
+        const e=document.getElementById(id);
+        if(!e) return _echec(id+' a disparu');
+        const s=e.closest('.cc-etage');
+        if(!s||s.dataset.et!=='detail') return _echec(id+' n’est pas dans le détail : '+(s&&s.dataset.et));
+      }
+      // ET LE DÉTAIL EST LE SEUL ÉTAGE REPLIÉ PAR DÉFAUT.
+      if(CCD_REPLI_DEFAUT.indexOf('ccd-detail')<0) return _echec('le détail ne s’ouvre plus replié');
+      return true;})());
+
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
       // Chaque silhouette porte sa carte : une image ou chaque pixel du corps
       // vaut le rang de son muscle dans CORPS_ZONES_ORDRE, fois CORPS_ZONES_PAS.
