@@ -792,12 +792,131 @@ const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
 const PAYPAL_PLAN_ID_ANNUEL='';
 // Les deux paliers, dans l'ordre d'affichage. `dispo` est ce qui décide de
 // montrer ou non une carte : il n'y a pas d'état « bientôt disponible ».
+// ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
+//
+// UNE SEULE TABLE POUR LE COACHING ET POUR LES ABONNEMENTS. Deux tables
+// auraient diverge : un prix corrige d'un cote, oublie de l'autre, et deux
+// ecrans qui ne disent pas la meme chose a la meme personne. C'est deja
+// arrive ici — PRIX_ATHLETE_MOIS annoncait 9,50 pendant que PayPal
+// encaissait 9,95.
+//
+// CHAQUE OFFRE DIT CE QU'ELLE OUVRE, ET POUR COMBIEN DE TEMPS :
+//   palier   le palier ouvert (voir PALIERS_ORDRE)
+//   mois     la duree ouverte, en mois ; 0 pour un abonnement, qui court
+//   prix     en euros, un NOMBRE — la mise en forme est faite par prixOffre
+//   prixAn   le tarif annuel d'un abonnement, quand il existe
+//
+// ⚠ AUCUN MONTANT EN DUR AILLEURS. Tout ecran qui affiche un prix le lit ici,
+//   par prixOffre ou prixMoisAnnuel.
+const OFFRES=Object.freeze({
+  // ── Ce que le coach vend ────────────────────────────────────────────
+  programme_perso:    Object.freeze({lib:'Programme personnalisé',   prix:99,   palier:'ultime', mois:3, type:'ponctuel'}),
+  revision_prog:      Object.freeze({lib:'Révision de programme',    prix:40,   palier:'ultime', mois:1, type:'ponctuel'}),
+  boutique_prog:      Object.freeze({lib:'Programme de la boutique', prix:14.9, palier:'ultime', mois:3, type:'ponctuel'}),
+  coaching_essentiel: Object.freeze({lib:'Coaching Essentiel',       prix:150,  palier:'suivi',  mois:1, type:'coaching'}),
+  coaching_transfo:   Object.freeze({lib:'Coaching Transformation',  prix:350,  palier:'suivi',  mois:3, type:'coaching'}),
+  coaching_evolution: Object.freeze({lib:'Coaching Évolution',       prix:600,  palier:'suivi',  mois:6, type:'coaching'}),
+  // ── Ce que l'application vend, quand personne ne suit la personne ───
+  essentielle:        Object.freeze({lib:'Essentielle', prix:9.95,  prixAn:99,  palier:'essentielle', mois:0, type:'abonnement'}),
+  ultime:             Object.freeze({lib:'Ultime',      prix:24.90, prixAn:249, palier:'ultime',      mois:0, type:'abonnement'}),
+  // ── Et l'essai, qui ne se paie pas ──────────────────────────────────
+  essai:              Object.freeze({lib:'Essai',       prix:0,     palier:'ultime', mois:1, type:'essai'}),
+});
+// PURE. Un montant en euros, a la francaise.
+// ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,95 » / « € » en fin de
+//   ligne est fautive en typographie francaise, et elle arrive sur telephone.
+function _euros(n){
+  const v=Number(n)||0;
+  // ⚠ DEUX DECIMALES DES QU'IL Y A DES CENTIMES, ET LES DEUX : « 24,9 € » se
+  //   lit comme une faute de frappe sur un prix, et « 14,9 € » aussi.
+  const s=(Math.round(v*100)%100===0)?String(Math.round(v))
+    :v.toFixed(2).replace('.',',');
+  return s+'\u00a0€';
+}
+function offre(cle){ return OFFRES[cle]||null; }
+// PURE. Le prix d'une offre. `an` demande le tarif annuel quand il existe.
+function prixOffre(cle,an){
+  const o=offre(cle);
+  if(!o) return '';
+  if(an&&o.prixAn) return _euros(o.prixAn);
+  return _euros(o.prix);
+}
+// PURE. Ce que coute un mois d'abonnement annuel — le chiffre qui vend.
+function prixMoisAnnuel(cle){
+  const o=offre(cle);
+  if(!o||!o.prixAn) return '';
+  return _euros(Math.round(o.prixAn/12*100)/100);
+}
+
+// ══ CE QUE CHAQUE PALIER OUVRE ═══════════════════════════════════════════
+// UNE SEULE SOURCE DE VERITE : aucun ecran ne teste le palier a la main, tous
+// appellent peut(u,'capacite'). Un test a la main dans un ecran, c'est une
+// regle de plus a corriger le jour ou l'offre bouge — et celle qu'on oublie.
+//
+// ⚠ LES SEPT PREMIERES SONT DEJA LE COMPORTEMENT D'AUJOURD'HUI, et ce lot n'y
+//   touche pas : composer ses seances, s'entrainer, son historique, ses
+//   bilans, son journal libre, son lifestyle et sa sante restent ouverts.
+//   Ce lot DECLARE l'existant ; les lots 3 et 4 ouvrent et ferment le reste.
+const CAPACITES=Object.freeze({
+  composerSeances:      Object.freeze(['essentielle','ultime','suivi']),
+  seance:               Object.freeze(['essentielle','ultime','suivi']),
+  historique:           Object.freeze(['essentielle','ultime','suivi']),
+  bilans:               Object.freeze(['essentielle','ultime','suivi']),
+  nutritionLibre:       Object.freeze(['essentielle','ultime','suivi']),
+  lifestyle:            Object.freeze(['essentielle','ultime','suivi']),
+  sante:                Object.freeze(['essentielle','ultime','suivi']),
+  bibliothequeMethodes: Object.freeze(['ultime','suivi']),
+  bibliothequeProtocoles:Object.freeze(['ultime','suivi']),
+  planification:        Object.freeze(['ultime','suivi']),
+  dieteCalculee:        Object.freeze(['ultime','suivi']),
+  complements:          Object.freeze(['ultime','suivi']),
+  volume:               Object.freeze(['ultime','suivi']),
+  perfs1rm:             Object.freeze(['ultime','suivi']),
+  rapport:              Object.freeze(['ultime','suivi']),
+  // ⚠ LE CATALOGUE D'EXERCICES EST A ULTIME SEUL. L'athlete suivi ne le
+  //   parcourt pas : il recoit les fiches DES EXERCICES DE SON PROGRAMME,
+  //   ciblees par son coach (lot 3).
+  bibliothequeExercices:Object.freeze(['ultime']),
+  // Ce qu'un coach fait, et que personne d'autre ne fait.
+  correctionVideo:      Object.freeze(['suivi']),
+  canal:                Object.freeze(['suivi']),
+  protocolesMorpho:     Object.freeze(['suivi']),
+  amplitudes:           Object.freeze(['suivi']),
+  chargesArticulaires:  Object.freeze(['suivi']),
+  programmeRecu:        Object.freeze(['suivi']),
+});
+// PURE (elle ne lit que le dossier et le cache des droits).
+//
+// ⚠ L'ESSAI VAUT ULTIME, et c'est le modele : on ne convertit personne en lui
+//   montrant une version amputee. Il ouvre tout ce qu'Ultime ouvre, et rien
+//   de ce que seul un coach fait.
+// ⚠ UN COACH PASSE PARTOUT : il travaille sur les dossiers des autres, et la
+//   bibliotheque d'exercices est son outil de tous les jours.
+function palierEffectif(u){
+  if(!u) return 'aucun';
+  if(u.role==='coach') return 'suivi';
+  const p=palierDe(u);
+  if(p!=='aucun') return p;
+  try{ if(essaiActif(u)) return 'ultime'; }catch(e){}
+  return 'aucun';
+}
+function peut(u,capacite){
+  if(u&&u.role==='coach') return true;
+  const l=CAPACITES[capacite];
+  if(!l) return false;
+  return l.indexOf(palierEffectif(u))>=0;
+}
+// Les deux paliers d'abonnement, dans l'ordre d'affichage.
+// ⚠ LES PRIX VIENNENT D'OFFRES, PAS D'ICI (lot 1) : deux ecrans qui annoncent
+//   deux prix pour le meme abonnement, c'est ce que ce lot ferme.
 const SUB_PALIERS=[
-  {cle:'annuel', titre:'Annuel', prix:'99'+' €', periode:'par an',
-   detail:'soit 8,25 € / mois', econ:'Économise 20,40 €', remise:'−17 %',
+  {cle:'annuel', titre:'Annuel', prix:prixOffre('essentielle',true), periode:'par an',
+   detail:'soit '+prixMoisAnnuel('essentielle')+' / mois',
+   econ:'Économise '+_euros(Math.round((OFFRES.essentielle.prix*12-OFFRES.essentielle.prixAn)*100)/100),
+   remise:'−'+Math.round((1-OFFRES.essentielle.prixAn/(OFFRES.essentielle.prix*12))*100)+' %',
    planId:()=>PAYPAL_PLAN_ID_ANNUEL},
-  {cle:'mensuel', titre:'Mensuel', prix:'9,95'+' €', periode:'par mois',
-   detail:'119,40 € sur un an', econ:'', remise:'',
+  {cle:'mensuel', titre:'Mensuel', prix:prixOffre('essentielle'), periode:'par mois',
+   detail:_euros(Math.round(OFFRES.essentielle.prix*12*100)/100)+' sur un an', econ:'', remise:'',
    planId:()=>PAYPAL_PLAN_ID},
 ];
 // LA TABLE EMPLOYÉE PAR L’ÉCRAN D’ABONNEMENT.
@@ -1595,7 +1714,7 @@ function _renderAbonnement(){
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:18px;margin-bottom:18px">
     <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">Mon abonnement</div>
     ${l('Formule',(pal&&pal.titre)||'Mensuel')}
-    ${l('Prix',((pal&&pal.prix)||'9,95 €')+' '+((pal&&pal.periode)||'par mois'))}
+    ${l('Prix',((pal&&pal.prix)||prixOffre('essentielle'))+' '+((pal&&pal.periode)||'par mois'))}
     ${fin?l(r?'Accès jusqu\'au':'Prochaine échéance',finTxt):''}
     ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 13px">
         <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}.</div>
@@ -13672,7 +13791,7 @@ function expliquerUrgence(c){
 // l’endroit — celui de la table sur la carte, l’ancien dans les textes.
 function prixAutonomie(){
   const p=SUB_PALIERS.find(x=>x.cle==='mensuel');
-  return ((p&&p.prix)||'9,95 €')+'/mois';
+  return ((p&&p.prix)||prixOffre('essentielle'))+'/mois';
 }
 // Les emplacements statiques qui l’annoncent. Un attribut plutôt que trois
 // identifiants : un quatrième texte s’y branche sans toucher à ce code.
@@ -92636,7 +92755,10 @@ function lienAbonnement(){
   }catch(e){}
   return '/app/';
 }
-const PRIX_ATHLETE_MOIS='9,50 €';
+// ⚠ IL ANNONCAIT 9,50 PENDANT QUE PAYPAL ENCAISSAIT 9,95 (corrige au lot 1).
+//   Un prix ecrit en dur finit toujours par diverger de celui qu'on facture :
+//   celui-ci vient d'OFFRES, comme tous les autres.
+const PRIX_ATHLETE_MOIS=prixOffre('essentielle');
 // Quinze jours : assez tot pour relancer sans harceler, assez tard pour que la
 // relance parle d'une echeance que l'athlete a en tete.
 const RELANCE_JOURS=15;

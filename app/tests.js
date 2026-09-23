@@ -33392,6 +33392,106 @@ async function testExercices(){
       // BUILD 1412 — Kevin, trois captures a l'appui : « remplace-moi la version
       // des images 1 et 2 par celle de l'image 3, a l'identique, et mets les
       // fonctions visibles pour la completer ».
+      // ══ LOT 1 — UNE SEULE TABLE D'OFFRES, UNE SEULE DE CAPACITES ═══════
+      ok('LOT 1 — LES NEUF OFFRES, LEURS PRIX ET CE QU’ELLES OUVRENT',(()=>{
+        const attendu={
+          programme_perso:[99,'ultime',3], revision_prog:[40,'ultime',1],
+          boutique_prog:[14.9,'ultime',3], coaching_essentiel:[150,'suivi',1],
+          coaching_transfo:[350,'suivi',3], coaching_evolution:[600,'suivi',6],
+          essentielle:[9.95,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1]};
+        const cles=Object.keys(OFFRES).sort().join(',');
+        if(cles!==Object.keys(attendu).sort().join(',')) return _echec('les offres : '+cles);
+        for(const k in attendu){
+          const o=OFFRES[k], a=attendu[k];
+          if(o.prix!==a[0]) return _echec(k+' coûte '+o.prix+' au lieu de '+a[0]);
+          if(o.palier!==a[1]) return _echec(k+' ouvre '+o.palier+' au lieu de '+a[1]);
+          if(o.mois!==a[2]) return _echec(k+' dure '+o.mois+' mois au lieu de '+a[2]);
+        }
+        // LES DEUX TARIFS ANNUELS, et les deux seuls.
+        if(OFFRES.essentielle.prixAn!==99||OFFRES.ultime.prixAn!==249)
+          return _echec('les tarifs annuels ont changé');
+        // LA MISE EN FORME : deux decimales des qu'il y a des centimes, un
+        // espace insecable avant le symbole.
+        const nbsp=String.fromCharCode(160);
+        if(prixOffre('ultime')!=='24,90'+nbsp+'€') return _echec('Ultime s’écrit « '+prixOffre('ultime')+' »');
+        if(prixOffre('essentielle')!=='9,95'+nbsp+'€') return _echec('Essentielle s’écrit « '+prixOffre('essentielle')+' »');
+        if(prixOffre('programme_perso')!=='99'+nbsp+'€') return _echec('99 € s’écrit « '+prixOffre('programme_perso')+' »');
+        if(prixMoisAnnuel('ultime')!=='20,75'+nbsp+'€') return _echec('Ultime annuel au mois : '+prixMoisAnnuel('ultime'));
+        if(prixMoisAnnuel('essentielle')!=='8,25'+nbsp+'€') return _echec('Essentielle annuel au mois : '+prixMoisAnnuel('essentielle'));
+        // ET « COACHING PREMIUM » N'EXISTE NULLE PART : il est supprime de
+        // l'offre, il ne doit pas survivre dans un identifiant oublie.
+        const src=_prodSrc();
+        if(/coaching_premium|Coaching Premium/i.test(src)) return _echec('« Coaching Premium » traîne encore');
+        return true;})());
+
+      ok('LOT 1 — AUCUN PRIX ÉCRIT EN DUR HORS DE LA TABLE',(()=>{
+        // Le defaut repare par ce lot : PRIX_ATHLETE_MOIS annoncait 9,50 €
+        // pendant que PayPal encaissait 9,95 €. On balaie le fichier, hors
+        // commentaires, et on ne retient que les chaines qui portent un €.
+        const src=_prodSrc();
+        const i=src.indexOf('const OFFRES=');
+        const j=src.indexOf('const SUB_PALIERS');
+        const hors=(src.slice(0,i)+src.slice(j)).split('\n')
+          .filter(x=>!/^\s*(\/\/|\*)/.test(x)).join('\n');
+        const nbsp=String.fromCharCode(160);
+        const fautes=[];
+        for(const m of ['9,50','9,95','24,90','14,90','249','99']){
+          const re=new RegExp("'[^'\\n]{0,30}"+m.replace(',','[,]')+"[ "+nbsp+"]?€[^'\\n]{0,30}'",'g');
+          const trouves=(hors.match(re)||[]).filter(x=>!/prixOffre|OFFRES/.test(x));
+          if(trouves.length) fautes.push(m+' : '+trouves.slice(0,2).join(' | '));
+        }
+        return fautes.length?_echec(fautes.join('  ·  ')):true;})());
+
+      ok('LOT 1 — LES CAPACITÉS, ET peut() QUI LES LIT SEUL',(()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        try{
+          const mail='cap1@t.fr';
+          const u={id:'C1',email:mail,role:'athlete'};
+          const poser=p=>localStorage.setItem(DROITS_CLE,JSON.stringify(
+            {[mail]:{d:{palier:p,echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
+          // ESSENTIELLE : le quotidien, rien de plus.
+          poser('essentielle');
+          for(const c of ['composerSeances','seance','historique','bilans','nutritionLibre','lifestyle','sante'])
+            if(!peut(u,c)) return _echec('Essentielle a perdu '+c);
+          for(const c of ['bibliothequeExercices','bibliothequeMethodes','planification','dieteCalculee','volume','rapport','correctionVideo'])
+            if(peut(u,c)) return _echec('Essentielle ouvre '+c);
+          // ULTIME : tout sauf ce que fait un coach.
+          poser('ultime');
+          for(const c of ['bibliothequeExercices','bibliothequeMethodes','bibliothequeProtocoles','planification','dieteCalculee','complements','volume','perfs1rm','rapport'])
+            if(!peut(u,c)) return _echec('Ultime n’ouvre pas '+c);
+          for(const c of ['correctionVideo','canal','protocolesMorpho','amplitudes','chargesArticulaires','programmeRecu'])
+            if(peut(u,c)) return _echec('Ultime ouvre '+c+', qui demande un coach');
+          // SUIVI : le coaching, et le catalogue d'exercices EN MOINS — il le
+          // recoit cible (lot 3).
+          poser('suivi');
+          for(const c of ['correctionVideo','canal','protocolesMorpho','amplitudes','chargesArticulaires','programmeRecu','planification','dieteCalculee'])
+            if(!peut(u,c)) return _echec('le suivi n’ouvre pas '+c);
+          if(peut(u,'bibliothequeExercices')) return _echec('le suivi ouvre le catalogue entier');
+          // AUCUN DROIT : rien, sauf pendant l'essai, qui vaut Ultime.
+          poser('aucun');
+          if(peut(u,'seance')) return _echec('un compte sans droit s’entraîne encore');
+          const enEssai=Object.assign({},u,{essai:{ouvertLe:Date.now(),seancesAuDebut:0},sessions:[]});
+          if(!peut(enEssai,'bibliothequeExercices')) return _echec('l’essai n’ouvre pas Ultime');
+          if(peut(enEssai,'correctionVideo')) return _echec('l’essai ouvre la correction vidéo');
+          // UN COACH PASSE PARTOUT.
+          if(!peut({role:'coach'},'bibliothequeExercices')) return _echec('un coach n’a pas le catalogue');
+          // UNE CAPACITE INCONNUE NE S'OUVRE PAS.
+          return peut({role:'athlete',email:mail},'capaciteQuiNExistePas')===false
+            ?true:_echec('une capacité inconnue est ouverte');
+        } finally {
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      ok('LOT 1 — AUCUN COMPTEUR DE CORRECTIONS VIDÉO',(()=>{
+        // Le modele : un athlete suivi filme autant qu'il veut. Un compteur,
+        // meme dormant, finirait par etre lu.
+        const src=_prodSrc();
+        const m=src.match(/(correctionsRestantes|quotaVideo|videosRestantes|CORRECTION_MAX|maxCorrections|VIDEOS_MAX)[^a-zA-Z]/);
+        if(m) return _echec('un compteur de corrections existe : '+m[1]);
+        return CAPACITES.correctionVideo.join(',')==='suivi'
+          ?true:_echec('la correction vidéo n’est plus réservée au suivi');})());
+
       // ══ LOT 0 — LE SERVEUR DECIDE DU PALIER, PLUS LE NAVIGATEUR ════════
       // Kevin : « j'ouvre la console, j'ecris status:'AUTONOMIE_PREMIUM' dans
       // mon dossier, je recharge, et l'application me laisse en Essentielle ».
