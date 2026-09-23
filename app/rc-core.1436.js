@@ -5262,7 +5262,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'programPdfStorageUrl','programPdfVersion',
   'exAlias','exMuscles','exCatalogVersion','exCustom','exFavoris','exRecents',
   'chargesSchema','sessions_config','sessions','streak','streakWeek','lastSession',
-  'videos','athletePhoto','objective','badges','habitudes','sonRepos',
+  // correctionsOrphelines porte EXACTEMENT ce que porte videos[].feedback :
+  // le retour d'un coach sur un mouvement, quand la video qui l'a motive
+  // n'existe plus (lot 7). Il est classe avec elle, et pour la meme raison.
+  'videos','correctionsOrphelines','athletePhoto','objective','badges','habitudes','sonRepos',
   // R20 — le dernier onglet d'Évolution ouvert : un NOM d'onglet ('perf',
   // 'mensus'…), une preference d'affichage. Aucune mesure n'y transite.
   'uiProgressTab',
@@ -79366,6 +79369,10 @@ function loadVideos(nomPrerempli){
 }
 // LA LISTE SEULE, SANS go() ni champ pre-rempli — voir _repeindreVideosAthlete.
 function _renderVideosListe(){
+  // LA MIGRATION DU LOT 7, ICI : c'est le seul ecran ou ces commentaires se
+  // lisent, et le dossier est deja en main. Elle ne fait rien sur un dossier
+  // qui n'a jamais eu de comparaison, c'est-a-dire presque tous.
+  try{ if(migrerComparaisons(currentUser)) saveUser(); }catch(e){}
   _vidsSorted=(currentUser.videos||[]).slice().sort((a,b)=>b.date-a.date);
   const el=document.getElementById('vid-list');
   if(!_vidsSorted.length){
@@ -79384,6 +79391,7 @@ function _renderVideosListe(){
        +escapeHtml(_purge)+'</div>'
       :'')
     +'<div id="vid-card-list"></div>'
+    +(()=>{ try{ return htmlCorrectionsOrphelines(currentUser); }catch(e){ return ''; } })()
     +'<button id="vid-more-btn" onclick="loadMoreVideos()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:700;letter-spacing:.5px;min-height:44px">Voir plus de vidéos</button>';
   _renderVideoBatch(0,20);
 }
@@ -79436,15 +79444,9 @@ function _buildVideoCard(v){
   const tsBlock=tsInner?`<div style="margin-top:8px">${tsInner}</div>`:'';
   const motionBtn=(_motion||_annot)?`<button class="btn btn-red btn-sm" style="width:100%;margin:${v.feedback||tsInner?'10px':'2px'} 0 0" onclick="ouvrirCorrectionMotion('${escapeHtml(currentUser?.email||'')}','${escapeHtml(v.id)}')">${_motion?'▶ Voir la correction vidéo · '+_motionDuree(_motion.dureeMs):'▶ Voir ma vidéo annotée par mon coach'}</button>`:'';
   const fbBlock=hasFb?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px;margin-top:10px;font-size:var(--fs-sm)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:var(--fs-xs);font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:var(--fs-xs);color:var(--text-dim)">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}${motionBtn}</div>`:'';
-  // COMPARER : offert seulement quand une deuxieme prise du meme exercice
-  // existe. Un bouton qui repondrait « il faut deux prises » serait un geste
-  // perdu, et c'est le genre de geste qui ramene sur Instagram.
-  const _cmp=(()=>{ try{
-    if(!v.lien||!v.lien.exerciceCle) return '';
-    if(!pairePrises(currentUser,v.lien.exerciceCle)) return '';
-    return `<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" `
-      +`onclick="ouvrirComparateur(null,'${escapeHtml(v.lien.exerciceCle)}')">Comparer avec la première prise</button>`;
-  }catch(e){ return ''; } })();
+  // ⚠ LE BOUTON « COMPARER AVEC LA PREMIERE PRISE » EST PARTI AU LOT 7, avec
+  //   tout le comparateur. Ce qui le remplace n'est pas un autre bouton :
+  //   c'est la correction directe, qui existait deja a cote.
   const _meta=(()=>{ const s=libLienVideo(v.lien); return s
     ?`<div style="font-size:var(--fs-2xs);color:var(--red-text);font-weight:800;letter-spacing:.5px;margin-top:2px">${escapeHtml(s)}</div>`:''; })();
   // ── LA RETENTION, SUR LA CARTE ───────────────────────────────────────────
@@ -79475,7 +79477,7 @@ function _buildVideoCard(v){
       +`Ce qui reste est ici : la date, le nom${v.feedback?' et le retour de ton coach':''}.</div>`
       +`${fbBlock}</div>`;
   }
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">📌 gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${_cmp}${fbBlock}</div>`;
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">📌 gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
 }
 /**
  * LA PHRASE DU HAUT DE LISTE. Elle dit trois choses et rien d'autre : combien
@@ -81263,358 +81265,86 @@ async function purgerMetricsPerimes(){
   }catch(e){ return {saute:String(e&&e.message||e)}; }
 }
 
-// ══════════════ LE COMPARATEUR DE PRISES ═══════════════════════════════
+// ══════════════ LE COMPARATEUR A ETE RETIRE (lot 7) ════════════════════
 //
-// UN SEUL MODE DE SELECTION : la derniere prise contre la plus ancienne
-// disponible. Une liste deroulante de douze dates ferait de la comparaison un
-// travail de recherche — et le coach, devant un travail de recherche, retourne
-// sur Instagram.
+// Kevin, 23/09/2026 : « supprime le comparateur, entierement. Je n'en ai pas
+// besoin, je corrige la video directement. » Partent avec lui : l'ecran
+// s-comparer, le bouton « Comparer avec la premiere prise », les huit
+// fonctions de paire et d'annotation, les constantes CMP_, et le champ
+// `comparaisons` du dossier.
 //
-// LE CURSEUR DE DECALAGE EST INDISPENSABLE, et c'est le seul reglage non
-// evident de l'ecran : deux videos ne demarrent jamais au meme instant du
-// mouvement. Sans lui, on compare une descente a une montee et on en tire des
-// conclusions sur la technique.
-
-// PURE. Les videos rattachees a un exercice, de la plus ancienne a la plus
-// recente. Une video sans lien n'entre pas : on ne sait pas ce qu'elle montre.
-function prisesExercice(user,exerciceCle){
-  const u=_dossier(user);
-  const cle=String(exerciceCle||'');
-  if(!cle) return [];
-  return (Array.isArray(u&&u.videos)?u.videos:[])
-    .filter(v=>v&&v.url&&v.lien&&v.lien.exerciceCle===cle)
-    .slice().sort((a,b)=>Number(a.date)-Number(b.date));
-}
-// PURE. LA PAIRE : la plus ancienne contre la derniere. Rend null tant qu'il
-// n'y a pas deux prises — comparer une video a elle-meme n'apprend rien.
-function pairePrises(user,exerciceCle){
-  const l=prisesExercice(user,exerciceCle);
-  if(l.length<2) return null;
-  return {cle:exerciceCle,avant:l[0],apres:l[l.length-1],total:l.length};
-}
-// PURE. L'IDENTITE D'UNE PAIRE. L'annotation est rattachee A LA PAIRE et non a
-// une video : un commentaire qui dit « la, tu casses moins le dos qu'avant »
-// ne parle ni de l'une ni de l'autre, il parle des deux.
-function clePaire(paire){
-  if(!paire||!paire.avant||!paire.apres) return '';
-  return String(paire.cle)+'|'+String(paire.avant.id)+'|'+String(paire.apres.id);
-}
-// Les annotations d'une paire, dans le dossier de l'ATHLETE — c'est chez lui
-// que vit la video, et c'est lui qui doit pouvoir les relire.
-function annotationsPaire(user,paire){
-  const u=_dossier(user);
-  const k=clePaire(paire);
-  if(!k) return [];
-  const t=(u&&u.comparaisons&&typeof u.comparaisons==='object')?u.comparaisons[k]:null;
-  return _tabBloc(t&&t.annotations);
-}
-const CMP_ANNOT_MAX=20;
-// L'ECRITURE. `sec` est l'instant de la video AU MOMENT OU LE COACH PARLE, et
-// `sur` dit de laquelle des deux — sans quoi le commentaire se declencherait
-// au mauvais moment sur l'autre lecteur.
-function ajouterAnnotationPaire(user,paire,annot){
-  const u=_dossier(user);
-  const k=clePaire(paire);
-  if(!u||!k||!annot) return {ok:false};
-  if(!u.comparaisons||typeof u.comparaisons!=='object') u.comparaisons={};
-  const t=u.comparaisons[k]||(u.comparaisons[k]={cle:paire.cle,
-    avant:paire.avant.id,apres:paire.apres.id,annotations:[]});
-  t.annotations=_tabBloc(t.annotations);
-  t.annotations.push({sec:Math.max(0,Math.round(Number(annot.sec)*10)/10)||0,
-    sur:(annot.sur==='avant')?'avant':'apres',
-    audioUrl:String(annot.audioUrl||''),
-    note:String(annot.note||''),date:Date.now()});
-  if(t.annotations.length>CMP_ANNOT_MAX)
-    t.annotations=t.annotations.slice(-CMP_ANNOT_MAX);
-  try{ saveUser(); }catch(e){}
-  return {ok:true,n:t.annotations.length};
-}
-// PURE. L'annotation a declencher a l'instant `sec` sur le lecteur `sur`.
-// Une fenetre d'une demi-seconde : plus etroite, un rafraichissement de
-// timeupdate la manquerait — le navigateur en emet quatre par seconde.
-const CMP_FENETRE_S=0.5;
-function annotationAJouer(annotations,sur,sec,dejaJouees){
-  const l=_tabBloc(annotations);
-  const vus=dejaJouees||{};
-  for(let i=0;i<l.length;i++){
-    const a=l[i];
-    if(!a||a.sur!==sur) continue;
-    if(vus[i]) continue;
-    if(sec>=a.sec&&sec<a.sec+CMP_FENETRE_S) return {index:i,annot:a};
-  }
-  return null;
-}
-
-// ── L'ECRAN ────────────────────────────────────────────────────────────
-let _cmpPaire=null, _cmpCible=null, _cmpJouees={};
-function ouvrirComparateur(user,exerciceCle){
+// ⚠ CE QUE LE COACH AVAIT DEJA ECRIT NE DISPARAIT PAS AVEC L'ECRAN. Les
+//   annotations vivaient dans le dossier de l'athlete, rattachees a une PAIRE
+//   de videos. Elles sont recopiees sur la video qu'elles visent, dans
+//   feedbackTimestamps — le meme format, le meme rendu, le meme lecteur — et
+//   celles dont la video n'existe plus sont gardees a part plutot que jetees.
+//
+// LA CORRECTION DIRECTE NE BOUGE PAS : le coach ouvre la video, il annote, il
+// commente, c'est dans videos[].feedback. Motion Lab non plus : c'est
+// l'analyse d'UNE video, et c'est exactement ce qu'on garde.
+function migrerComparaisons(user){
   const u=user||currentUser;
-  const p=pairePrises(u,exerciceCle);
-  if(!p){ toast('Il faut deux prises du même exercice pour comparer','var(--orange)'); return false; }
-  _cmpCible=u; _cmpPaire=p; _cmpJouees={};
-  go('s-comparer');
-  _renderComparateur();
-  return true;
-}
-function fermerComparateur(){
-  _cmpPaire=null; _cmpJouees={};
-  const coach=!!(currentUser&&currentUser.role==='coach');
-  if(coach){ go('s-coach-client'); try{ renderClientDetail(); }catch(e){} }
-  else { go('s-videos'); try{ loadVideos(); }catch(e){} }
-  return true;
-}
-function _cmpVideos(){
-  return [document.getElementById('cmp-v-avant'),document.getElementById('cmp-v-apres')];
-}
-function _renderComparateur(){
-  const z=document.getElementById('cmp-contenu');
-  if(!z||!_cmpPaire) return false;
-  const p=_cmpPaire;
-  const t=document.getElementById('cmp-titre');
-  if(t) t.textContent=(p.avant.lien&&p.avant.lien.exerciceNom)||'Comparer';
-  const cart=(v)=>{
-    const lib=libLienVideo(v.lien);
-    const d=new Date(Number(v.date)).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
-    // LA CHARGE ET LES REPS EN PREMIER, la date ensuite : c'est la charge qui
-    // rend les deux prises comparables.
-    return '<div class="cmp-cart">'+(lib?escapeHtml(lib)+'<br>':'')
-      +'<span style="opacity:.7;font-weight:600">'+d+'</span></div>';
-  };
-  const lecteur=(id,v)=>'<div style="position:relative">'
-    +'<video id="'+id+'" src="'+safeUrl(v.url)+'" preload="metadata" playsinline webkit-playsinline '
-    +'onerror="_videoIndisponible(this)"></video>'+cart(v)+'</div>';
-  z.innerHTML='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin:10px 0 8px">'
-      +'La plus ancienne à gauche, la dernière à droite. '+p.total+' prises au total.</div>'
-    +'<div id="cmp-duo">'+lecteur('cmp-v-avant',p.avant)+lecteur('cmp-v-apres',p.apres)+'</div>'
-    +_cmpHtmlCommandes()
-    +_cmpHtmlAnnotations();
-  _cmpBrancherLecture();
-  return true;
-}
-function _cmpHtmlCommandes(){
-  const b='min-height:40px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;'
-    +'font-weight:800;font-size:var(--fs-2xs);background:var(--surface-2);border:1px solid var(--border);'
-    +'color:var(--text);padding:0 10px';
-  return '<div style="margin-top:10px">'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-    +'<button style="'+b+';flex:1;min-width:90px" onclick="cmpLecture()" id="cmp-play">Lecture</button>'
-    +'<button style="'+b+'" onclick="cmpImage(-1)" title="Image précédente">◀ img</button>'
-    +'<button style="'+b+'" onclick="cmpImage(1)" title="Image suivante">img ▶</button>'
-    +'</div>'
-    +'<div style="display:flex;gap:6px;margin-top:6px">'
-    +[0.25,0.5,1].map(v=>'<button style="'+b+';flex:1" onclick="cmpVitesse('+v+')" '
-      +'data-cmp-vit="'+v+'">'+String(v).replace('.',',')+'×</button>').join('')
-    +'</div>'
-    // LE CURSEUR DE DECALAGE. Il s'applique AUX DEUX LECTEURS : positif, il
-    // retarde la seconde ; negatif, il retarde la premiere. Un decalage qui ne
-    // bougerait qu'une des deux videos ne callerait jamais les deux phases.
-    +'<div style="margin-top:9px">'
-    +'<label style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:.5px">'
-    +'Décalage <span id="cmp-dec-val">0,0 s</span></label>'
-    +'<input id="cmp-decalage" type="range" min="-5" max="5" step="0.1" value="0" '
-    +'oninput="cmpDecalage(this.value)" style="width:100%;margin-top:4px">'
-    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:3px">'
-    +'Cale la même phase du mouvement sur les deux prises.</div>'
-    +'</div></div>';
-}
-let _cmpDecalage=0;
-function cmpDecalage(v){
-  _cmpDecalage=Number(v)||0;
-  const el=document.getElementById('cmp-dec-val');
-  if(el) el.textContent=String(Math.round(_cmpDecalage*10)/10).replace('.',',')+' s';
-  _cmpAppliquerDecalage();
-  return _cmpDecalage;
-}
-// PURE. Les deux instants a poser, pour une base et un decalage. C'EST LA
-// FONCTION QUI PORTE LA REGLE : le decalage touche LES DEUX lecteurs, jamais
-// un seul, et aucun des deux ne passe sous zero.
-function cmpInstants(base,decalage){
-  const t=Math.max(0,Number(base)||0);
-  const d=Number(decalage)||0;
-  // Decalage positif : la seconde prise est EN AVANCE, on la retarde. Negatif :
-  // c'est la premiere qu'on retarde. Aucune des deux ne passe sous zero — une
-  // video ne remonte pas avant son debut, et un currentTime negatif est
-  // silencieusement ramene a 0 par le navigateur, ce qui ferait mentir le
-  // curseur sans qu'on le voie.
-  return (d>=0)
-    ? {avant:t, apres:Math.max(0,t-d)}
-    : {avant:Math.max(0,t+d), apres:t};
-}
-function _cmpAppliquerDecalage(){
-  const [a,b]=_cmpVideos();
-  if(!a||!b) return false;
-  // LA REGLE VIT DANS cmpInstants, PAS ICI. Deux calculs du decalage —
-  // l'un pour la lecture, l'autre pour le pas a pas — finiraient par ne plus
-  // caler de la meme facon.
-  const i=cmpInstants(Number(a.currentTime)||0,_cmpDecalage);
-  a.currentTime=i.avant;
-  b.currentTime=i.apres;
-  return true;
-}
-function cmpLecture(){
-  const [a,b]=_cmpVideos();
-  if(!a||!b) return false;
-  const btn=document.getElementById('cmp-play');
-  if(a.paused){ _cmpAppliquerDecalage(); a.play(); b.play(); if(btn) btn.textContent='Pause'; }
-  else { a.pause(); b.pause(); if(btn) btn.textContent='Lecture'; }
-  return true;
-}
-function cmpVitesse(v){
-  const [a,b]=_cmpVideos();
-  const r=Number(v)||1;
-  if(a) a.playbackRate=r;
-  if(b) b.playbackRate=r;
-  return r;
-}
-// AVANCE IMAGE PAR IMAGE : un trentieme de seconde, sur LES DEUX. Le decalage
-// est reapplique apres, sinon un pas a pas les desynchroniserait peu a peu.
-const CMP_IMAGE_S=1/30;
-function cmpImage(sens){
-  const [a,b]=_cmpVideos();
-  if(!a||!b) return false;
-  a.pause(); b.pause();
-  const btn=document.getElementById('cmp-play'); if(btn) btn.textContent='Lecture';
-  a.currentTime=Math.max(0,(Number(a.currentTime)||0)+(sens<0?-CMP_IMAGE_S:CMP_IMAGE_S));
-  _cmpAppliquerDecalage();
-  return true;
-}
-// ── L'ANNOTATION AUDIO, RATTACHEE A LA PAIRE ───────────────────────────
-//
-// ⚠ L'HORODATAGE EXISTAIT DEJA, MAIS IL SE TAPAIT A LA MAIN.
-// confirmAudioAnnotation REFUSE l'envoi tant que le champ « m:ss » est vide :
-// le coach devait lire l'instant sur le lecteur, ouvrir le clavier, taper
-// « 0:12 », puis enregistrer. Trois gestes et un clavier avant d'avoir parle.
-// C'est exactement le genre de detour qui renvoie tout le monde sur Instagram.
-//
-// ICI L'INSTANT EST PRIS TOUT SEUL, au moment ou l'enregistrement demarre :
-// (1) toucher le micro — la lecture se met en pause et l'instant est capture ;
-// (2) toucher a nouveau pour arreter — l'envoi part et l'annotation se pose.
-// DEUX GESTES, aucun clavier.
-let _cmpAnnotSec=0, _cmpAnnotSur='apres', _cmpAnnotRec=null, _cmpAnnotChunks=[];
-function _cmpHtmlAnnotations(){
-  const l=annotationsPaire(_cmpCible,_cmpPaire);
-  const coach=!!(currentUser&&currentUser.role==='coach');
-  let h='<div style="margin-top:14px">'
-    +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);'
-    +'text-transform:uppercase;margin-bottom:6px">Commentaires</div>';
-  if(!l.length)
-    h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55">'
-      +(coach?'Lance la lecture, et parle : l’instant est enregistré tout seul.'
-             :'Ton coach n’a pas encore commenté cette comparaison.')+'</div>';
-  for(let i=0;i<l.length;i++){
-    const a=l[i];
-    h+='<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;'
-      +'border-bottom:1px solid var(--surface-2)">'
-      +'<span onclick="cmpAller('+a.sec+',\''+a.sur+'\')" role="button" tabindex="0" '
-      +'style="font-family:var(--pile-titre);font-size:var(--fs-md);color:var(--red-text);'
-      +'flex-shrink:0;min-width:52px;cursor:pointer">'+_cmpMMSS(a.sec)+'</span>'
-      +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:2px">'
-      +(a.sur==='avant'?'sur la plus ancienne':'sur la dernière')+'</div>'
-      +(a.audioUrl?'<audio src="'+safeUrl(a.audioUrl)+'" controls style="height:32px;width:100%"></audio>':'')
-      +(a.note?'<div style="font-size:var(--fs-sm);line-height:1.5">'+escapeHtml(a.note)+'</div>':'')
-      +'</div></div>';
-  }
-  if(coach){
-    h+='<div style="display:flex;gap:6px;margin-top:10px;align-items:center">'
-      +'<button id="cmp-mic" class="btn btn-outline btn-sm" style="flex:1;margin:0" '
-      +'onclick="cmpBasculerMicro()">Commenter à cet instant</button></div>'
-      +'<div id="cmp-mic-etat" style="font-size:var(--fs-2xs);color:var(--sub);margin-top:4px"></div>';
-  }
-  return h+'</div>';
-}
-function _cmpMMSS(s){
-  const n=Math.max(0,Math.round(Number(s)||0));
-  return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');
-}
-// Aller a l'instant d'une annotation : sur SON lecteur, et l'autre suit par le
-// decalage — c'est la meme regle que partout ailleurs dans cet ecran.
-function cmpAller(sec,sur){
-  const [a,b]=_cmpVideos();
-  if(!a||!b) return false;
-  const t=Math.max(0,Number(sec)||0);
-  if(sur==='avant') a.currentTime=t;
-  else { const i=cmpInstants(t+ (_cmpDecalage>=0?_cmpDecalage:0),_cmpDecalage); a.currentTime=i.avant; }
-  _cmpAppliquerDecalage();
-  return true;
-}
-function cmpBasculerMicro(){
-  if(_cmpAnnotRec&&_cmpAnnotRec.state==='recording'){ _cmpAnnotRec.stop(); return true; }
-  return _cmpDemarrerMicro();
-}
-async function _cmpDemarrerMicro(){
-  const etat=document.getElementById('cmp-mic-etat');
-  const btn=document.getElementById('cmp-mic');
-  try{
-    const [a,b]=_cmpVideos();
-    // L'INSTANT EST PRIS ICI, avant tout await : c'est celui que le coach a
-    // sous les yeux quand il decide de parler. Le capturer apres l'ouverture
-    // du micro le decalerait de la duree de l'autorisation navigateur.
-    _cmpAnnotSur='apres';
-    _cmpAnnotSec=b?Math.round((Number(b.currentTime)||0)*10)/10:0;
-    if(a) a.pause();
-    if(b) b.pause();
-    const flux=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
-    _cmpAnnotChunks=[];
-    const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':
-               MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')?'audio/ogg;codecs=opus':'';
-    _cmpAnnotRec=new MediaRecorder(flux,mime?{mimeType:mime}:{});
-    _cmpAnnotRec.ondataavailable=e=>{ if(e.data.size>0) _cmpAnnotChunks.push(e.data); };
-    _cmpAnnotRec.onstop=async ()=>{
-      flux.getTracks().forEach(t=>t.stop());
-      if(btn) btn.textContent='Commenter à cet instant';
-      if(etat) etat.textContent='Envoi…';
-      try{
-        const blob=new Blob(_cmpAnnotChunks,{type:_cmpAnnotRec.mimeType||'audio/webm'});
-        const ext=blob.type.indexOf('ogg')>=0?'.ogg':'.webm';
-        const f=new File([blob],'cmp_'+Date.now()+ext,{type:blob.type});
-        // ⚠ CLOUDINARY, PAS LE DOCUMENT. Le son part sur l'hebergeur deja
-        // declare, et seule son URL entre dans le dossier.
-        const url=await _cloudinaryUpload(f);
-        ajouterAnnotationPaire(_cmpCible,_cmpPaire,{sec:_cmpAnnotSec,sur:_cmpAnnotSur,audioUrl:url});
-        if(etat) etat.textContent='';
-        _renderComparateur();
-      }catch(err){
-        if(etat) etat.textContent='';
-        toast(_cloudinaryUserMsg(err,'audio'),'var(--orange)');
+  if(!u||typeof u!=='object') return 0;
+  const c=u.comparaisons;
+  if(!c||typeof c!=='object') return 0;
+  const vids=Array.isArray(u.videos)?u.videos:[];
+  const parId=new Map();
+  for(const v of vids) if(v&&v.id!=null) parId.set(String(v.id),v);
+  let n=0;
+  for(const k of Object.keys(c)){
+    const t=c[k];
+    if(!t||typeof t!=='object') continue;
+    const l=Array.isArray(t.annotations)?t.annotations:[];
+    for(const a of l){
+      if(!a) continue;
+      const sec=Math.max(0,Number(a.sec)||0);
+      const e={sec:sec,note:String(a.note||''),date:Number(a.date)||0};
+      try{ e.ts=secsToTs(sec); }catch(err){ e.ts='0:00'; }
+      if(a.audioUrl) e.audioUrl=String(a.audioUrl);
+      const v=parId.get(String(a.sur==='avant'?t.avant:t.apres))||null;
+      if(v){
+        v.feedbackTimestamps=_tabBloc(v.feedbackTimestamps);
+        // On ne recopie pas deux fois la meme chose : la migration peut
+        // repasser sur un dossier deja migre par un autre appareil.
+        const deja=v.feedbackTimestamps.some(x=>x&&Math.abs((Number(x.sec)||0)-sec)<0.05
+          &&String(x.note||'')===e.note&&String(x.audioUrl||'')===String(e.audioUrl||''));
+        if(!deja){ v.feedbackTimestamps.push(e); n++; }
+      }else{
+        // LA VIDEO N'EXISTE PLUS — expiree, supprimee. Le commentaire du coach,
+        // lui, pese quelques octets et vaut encore quelque chose : il est garde
+        // avec le nom de l'exercice, et l'ecran des videos le montre.
+        u.correctionsOrphelines=_tabBloc(u.correctionsOrphelines);
+        const o=Object.assign({exercice:String(t.cle||'')},e);
+        const dejaO=u.correctionsOrphelines.some(x=>x&&x.exercice===o.exercice
+          &&Math.abs((Number(x.sec)||0)-sec)<0.05&&String(x.note||'')===o.note
+          &&String(x.audioUrl||'')===String(o.audioUrl||''));
+        if(!dejaO){ u.correctionsOrphelines.push(o); n++; }
       }
-    };
-    _cmpAnnotRec.start(100);
-    if(btn) btn.textContent='Arrêter';
-    if(etat) etat.textContent='⏺ à '+_cmpMMSS(_cmpAnnotSec)+' sur la dernière prise';
-    return true;
-  }catch(e){
-    toast('Micro non autorisé : active l’accès au microphone dans les réglages du navigateur','var(--orange)');
-    return false;
+    }
   }
+  delete u.comparaisons;
+  return n;
 }
-// LE DECLENCHEMENT A LA LECTURE. C'est ce qui remplace vraiment le vocal
-// Instagram : le commentaire arrive au moment du mouvement dont il parle, sans
-// que personne n'ait a chercher la bonne seconde.
-function _cmpBrancherLecture(){
-  const [a,b]=_cmpVideos();
-  if(!a||!b) return false;
-  _cmpJouees={};
-  const l=annotationsPaire(_cmpCible,_cmpPaire);
-  const suivre=(el,sur)=>{
-    el.ontimeupdate=()=>{
-      const r=annotationAJouer(l,sur,Number(el.currentTime)||0,_cmpJouees);
-      if(!r) return;
-      _cmpJouees[r.index]=true;
-      if(!r.annot.audioUrl) return;
-      try{
-        const s=new Audio(r.annot.audioUrl);
-        // LA VIDEO S'ARRETE PENDANT LE COMMENTAIRE. Les faire jouer ensemble
-        // obligerait a ecouter une correction en regardant la suite du
-        // mouvement dont elle ne parle pas encore.
-        a.pause(); b.pause();
-        const btn=document.getElementById('cmp-play'); if(btn) btn.textContent='Lecture';
-        s.play().catch(()=>{});
-      }catch(e){}
-    };
-  };
-  suivre(a,'avant'); suivre(b,'apres');
-  return true;
+// LE BLOC DES CORRECTIONS SANS VIDEO, en bas de la liste. Vide tant qu'il n'y
+// en a pas, ce qui est le cas de presque tout le monde.
+function htmlCorrectionsOrphelines(user){
+  const u=_dossier(user);
+  const l=_tabBloc(u&&u.correctionsOrphelines);
+  if(!l.length) return '';
+  const ligne=o=>'<div style="padding:7px 0;border-bottom:1px solid var(--surface-2)">'
+    +'<div style="font-size:var(--fs-2xs);color:var(--red-text);font-weight:800;letter-spacing:.5px">'
+    +escapeHtml(String(o.exercice||'').replace(/-/g,' ').toUpperCase())+'</div>'
+    +(o.audioUrl
+      ?'<audio src="'+escapeHtml(o.audioUrl)+'" controls style="height:32px;width:100%;margin-top:4px"></audio>'
+      :'<div style="font-size:var(--fs-sm);line-height:1.5;margin-top:2px">'+escapeHtml(o.note||'')+'</div>')
+    +'</div>';
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-3);padding:12px 13px;margin-top:14px">'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);font-weight:800;letter-spacing:1px;'
+    +'text-transform:uppercase;margin-bottom:4px">Corrections de ton coach</div>'
+    +'<p class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin:0 0 6px">'
+    +'La vidéo n’existe plus, le retour de ton coach reste.</p>'
+    +l.map(ligne).join('')+'</div>';
 }
 // ======= QUICK COMMENTS =======
 
@@ -83525,6 +83255,18 @@ function toggleAudioRec(){
   else startAudioRec();
 }
 async function startAudioRec(){
+  // ⚠ L'INSTANT EST PRIS SUR LE LECTEUR (lot 7). Le comparateur le faisait, et
+  //   c'est le seul geste qu'on aurait perdu avec lui : lire l'instant a
+  //   l'ecran, ouvrir le clavier, taper « 0:12 », puis parler, ce sont trois
+  //   gestes de trop, et a cinq gestes le coach repart sur Instagram.
+  //   LE CHAMP RESTE MODIFIABLE, et ce qui y est deja ecrit n'est jamais
+  //   ecrase : on ne prend l'instant que sur un champ vide.
+  try{
+    const champ=document.getElementById('vc-audio-ts');
+    const v=_rcVideo('vc-video');
+    const t=v?Number(v.currentTime):NaN;
+    if(champ&&!String(champ.value||'').trim()&&isFinite(t)&&t>0) champ.value=secsToTs(t);
+  }catch(e){}
   try{
     const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
     _audioChunks=[];_audioBlob=null;

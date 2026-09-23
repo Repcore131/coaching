@@ -17038,15 +17038,7 @@ async function testExercices(){
             // pèse quelques centaines d'octets, une vignette en pèserait des
             // dizaines de milliers.
             if(json.length>2000) return _echec('une entrée pèse '+json.length+' octets');
-            // ET L'ANNOTATION AUDIO NON PLUS : seule son URL entre.
-            return sansSave(()=>{
-              const u={email:'p@t.fr',videos:[V('a',1000,80,8),V('b',2000,85,8)]};
-              const p=pairePrises(u,CLE);
-              ajouterAnnotationPaire(u,p,{sec:12.4,sur:'apres',
-                audioUrl:'https://res.cloudinary.com/x/a.webm'});
-              return /data:[a-z]+\/[a-z0-9.+-]+;base64,/i.test(JSON.stringify(u.comparaisons))
-                ?_echec('l’annotation porte une charge base64'):true;});})());
-
+            return true;})());
           ok('La charge et les reps viennent de la SÉRIE, et ne s\'inventent pas',(()=>{
             // Une vidéo sans charge n'est qu'un souvenir : ce sont la charge et
             // les répétitions qui rendent deux prises comparables.
@@ -17087,87 +17079,6 @@ async function testExercices(){
             return lienVideoSerie(null,{weight:'80'},{})===null
               ?true:_echec('un exercice absent produit un rattachement');})());
 
-          ok('Le décalage s\'applique aux DEUX lecteurs',(()=>{
-            // Sans lui, deux vidéos qui ne démarrent pas au même instant du
-            // mouvement ne se comparent pas : on met une descente en face
-            // d'une montée et on en tire des conclusions sur la technique.
-            const z=cmpInstants(10,0);
-            if(z.avant!==10||z.apres!==10) return _echec('à zéro, les deux ne sont pas alignés');
-            // POSITIF : la seconde prise est retardée. NÉGATIF : la première.
-            const p=cmpInstants(10,1.5);
-            if(p.avant!==10||p.apres!==8.5) return _echec('décalage positif : '+JSON.stringify(p));
-            const n=cmpInstants(10,-1.5);
-            if(n.avant!==8.5||n.apres!==10) return _echec('décalage négatif : '+JSON.stringify(n));
-            // ⚠ AUCUN DES DEUX NE PASSE SOUS ZÉRO. Un currentTime négatif est
-            // silencieusement ramené à 0 par le navigateur : le curseur
-            // mentirait sans qu'on le voie.
-            if(cmpInstants(0.5,2).apres!==0) return _echec('la seconde passe sous zéro');
-            if(cmpInstants(0.5,-2).avant!==0) return _echec('la première passe sous zéro');
-            // ET UNE SEULE DÉFINITION DE LA RÈGLE : le pas à pas et la lecture
-            // ne calculent pas le décalage chacun de leur côté.
-            const s=String(_cmpAppliquerDecalage);
-            if(s.indexOf('cmpInstants(')<0)
-              return _echec('l’application du décalage recalcule la règle');
-            // Elle écrit bien LES DEUX lecteurs.
-            if(!/a\.currentTime=/.test(s)||!/b\.currentTime=/.test(s))
-              return _echec('un seul lecteur est déplacé');
-            // Et le pas à pas la réapplique, sinon les deux dérivent.
-            return String(cmpImage).indexOf('_cmpAppliquerDecalage()')>=0
-              ?true:_echec('le pas à pas ne réapplique pas le décalage');})());
-
-          ok('L\'annotation est rattachée à la PAIRE, pas à une vidéo',(()=>{
-            // Un commentaire qui dit « là, tu casses moins le dos qu'avant » ne
-            // parle ni de l'une ni de l'autre : il parle des deux.
-            return sansSave(()=>{
-              const u={email:'c@t.fr',videos:[V('v3',3000,90,6),V('v1',1000,80,8),V('v2',2000,85,7)]};
-              const p=pairePrises(u,CLE);
-              if(!p) return _echec('aucune paire');
-              // UN SEUL MODE DE SÉLECTION : la plus ancienne contre la
-              // dernière. Une liste de douze dates ferait de la comparaison un
-              // travail de recherche.
-              if(p.avant.id!=='v1'||p.apres.id!=='v3')
-                return _echec('la paire est '+p.avant.id+'/'+p.apres.id);
-              ajouterAnnotationPaire(u,p,{sec:12.4,sur:'apres',audioUrl:'https://x/a.webm'});
-              const cles=Object.keys(u.comparaisons||{});
-              if(cles.length!==1) return _echec(cles.length+' clefs écrites');
-              // ⚠ ON NE COMPARE PAS clePaire À ELLE-MÊME. La première version
-              // vérifiait `cles[0]===clePaire(p)` : les deux côtés changeaient
-              // ensemble, et une clef réduite au seul identifiant de la
-              // dernière vidéo passait au vert. L'assertion regardait le code
-              // se donner raison. On vérifie donc ce que la clef DOIT porter.
-              const k=cles[0];
-              for(const [quoi,part] of [['l’exercice',CLE],['la plus ancienne','v1'],
-                                        ['la dernière','v3']])
-                if(k.indexOf(part)<0) return _echec('la clef ne porte pas '+quoi+' : « '+k+' »');
-              // ET DEUX PAIRES QUI PARTAGENT LA DERNIÈRE PRISE SE DISTINGUENT :
-              // c'est ce qu'une clef réduite à `apres` ne saurait pas faire.
-              if(clePaire(p)===clePaire({cle:CLE,avant:{id:'v2'},apres:{id:'v3'}}))
-                return _echec('deux paires différentes ont la même clef');
-              // RIEN SUR LES VIDÉOS ELLES-MÊMES.
-              if(p.avant.annotations!==undefined||p.apres.annotations!==undefined)
-                return _echec('une annotation est posée sur une vidéo');
-              // UNE AUTRE PAIRE NE LES VOIT PAS.
-              if(annotationsPaire(u,{cle:CLE,avant:{id:'v1'},apres:{id:'v2'}}).length!==0)
-                return _echec('une autre paire voit ces annotations');
-              // L'HORODATAGE EST GARDÉ, ET IL DIT SUR QUELLE VIDÉO.
-              const l=annotationsPaire(u,p);
-              if(l[0].sec!==12.4||l[0].sur!=='apres') return _echec('horodatage perdu');
-              // ET IL SE DÉCLENCHE AU BON MOMENT, sur le BON lecteur.
-              if(!annotationAJouer(l,'apres',12.4,{})) return _echec('ne se déclenche pas à l’instant pile');
-              if(!annotationAJouer(l,'apres',12.7,{})) return _echec('la fenêtre est trop étroite');
-              if(annotationAJouer(l,'apres',13.5,{})) return _echec('se déclenche trop tard');
-              if(annotationAJouer(l,'avant',12.4,{})) return _echec('se déclenche sur l’autre lecteur');
-              if(annotationAJouer(l,'apres',12.4,{0:true})) return _echec('se déclenche deux fois');
-              // Il faut DEUX prises : comparer une vidéo à elle-même n'apprend
-              // rien, et une vidéo sans rattachement ne dit pas ce qu'elle
-              // montre — elle n'entre pas.
-              if(pairePrises({email:'s@t.fr',videos:[V('a',1,80,8)]},CLE))
-                return _echec('une seule prise fait une paire');
-              const mixte={email:'m@t.fr',videos:[V('a',1,80,8),V('b',2,85,8),
-                {id:'x',url:'https://x/x.mp4',date:3}]};
-              return prisesExercice(mixte,CLE).length===2
-                ?true:_echec('une vidéo sans rattachement entre dans la comparaison');});})());
-
           ok('Deux gestes pour filmer, deux pour répondre',(()=>{
             // Le flux de correction technique passe par Instagram. Ce module
             // n'a d'intérêt que s'il est PLUS RAPIDE qu'un message : à cinq
@@ -17197,17 +17108,21 @@ async function testExercices(){
             const e=String(_videoSerieEnvoyer);
             for(const q of ['prompt(','rcSaisie(','rcConfirm('])
               if(e.indexOf(q)>=0) return _echec('l’envoi pose une question : '+q);
-            // ET LE COACH RÉPOND EN DEUX GESTES. ⚠ L'horodatage EXISTAIT déjà
-            // mais se TAPAIT : confirmAudioAnnotation refuse l'envoi tant que
-            // le champ « m:ss » est vide — lire l'instant, ouvrir le clavier,
-            // taper « 0:12 », puis enregistrer. Ici il est pris tout seul.
-            const m=String(_cmpDemarrerMicro);
+            // ET LE COACH RÉPOND EN DEUX GESTES.
+            //
+            // ⚠ CETTE MOITIÉ A CHANGÉ DE MAISON AU LOT 7, PAS DE PROPRIÉTÉ.
+            //   Elle regardait le micro DU COMPARATEUR, qui prenait l'instant
+            //   tout seul sur le lecteur. Le comparateur est supprimé ; la
+            //   feuille de correction, elle, reste, et c'est ELLE qui doit
+            //   tenir la promesse : le micro y bascule d'un bouton, et
+            //   l'instant y est pris sur le lecteur au lieu d'être tapé.
+            const m=String(startAudioRec);
             if(m.indexOf('currentTime')<0)
               return _echec('l’instant n’est plus pris sur le lecteur');
-            if(/getElementById\('cmp-ts'\)|value.*m:ss/.test(m))
-              return _echec('un champ d’horodatage est à remplir');
+            if(m.indexOf("getElementById('vc-audio-ts')")<0)
+              return _echec('l’instant pris n’atteint pas le champ du message audio');
             // Un seul bouton, qui bascule : démarrer puis arrêter.
-            return /state==='recording'/.test(String(cmpBasculerMicro))
+            return /state==='recording'/.test(String(toggleAudioRec))
               ?true:_echec('le micro n’est plus une bascule');})());
 
           // ⚠ CETTE ASSERTION A CHANGÉ D'OBJET LE 23/09/2026, ET IL FAUT LE DIRE.
