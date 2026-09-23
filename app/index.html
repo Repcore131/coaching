@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1412';
+window.RC_BUILD='1413';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -2678,7 +2678,10 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   padding:11px 12px;border-radius:var(--r-2);border:1px solid #26262b;
   background:linear-gradient(180deg,#0b0b0d,#131316);
   box-shadow:0 2px 10px rgba(0,0,0,.5) inset}
-.rc-obj-pas{min-width:56px;min-height:40px;border-radius:var(--r-2);cursor:pointer;
+/* ⚠ 44 px DE HAUT, PAS 40 : mesure en mode telephone (375 px, tactile), la
+   pastille tombait sous la cible minimale d'un doigt. Elle sert maintenant aussi
+   sur la carte VERROUILLEE, ou l'athlete l'utilise autant que le coach. */
+.rc-obj-pas{min-width:56px;min-height:44px;border-radius:var(--r-2);cursor:pointer;
   font-family:inherit;font-size:var(--fs-sm);font-weight:900;color:var(--text);
   border:1px solid #33333a;background:linear-gradient(180deg,#202024,#16161a);
   transition:transform .12s ease,border-color .12s ease}
@@ -5541,9 +5544,14 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
    (44 px de zone utile via le remplissage), assez discrets pour ne pas voler
    la vedette au nombre qu'ils ajustent. */
 .tbk-d20{display:inline-flex;gap:6px;margin-left:10px;vertical-align:middle}
+/* ⚠ 44 px DE HAUT, PAS 36. Mesure en mode telephone (375 px, tactile) : a
+   36 px la pastille tombe sous la cible minimale d'un doigt — 44 px chez Apple,
+   48 dp chez Android. Le coach regle ces vingt calories depuis son telephone,
+   souvent d'une main, et une cible trop basse se rate. La largeur, elle, suffit
+   deja. */
 .tbk-d20-b{background:var(--surface-2);border:1px solid var(--border);color:var(--text);
   border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;
-  letter-spacing:.5px;padding:8px 10px;min-width:46px;min-height:36px;cursor:pointer}
+  letter-spacing:.5px;padding:8px 10px;min-width:46px;min-height:44px;cursor:pointer}
 .tbk-d20-b:hover{border-color:var(--red);color:var(--red-text)}
 .tbk-carte .tbk-mac tr.tbk-tot{grid-column:1/-1;flex-direction:row;align-items:center;
   justify-content:space-between;gap:14px;border-color:rgba(224,32,32,.45);
