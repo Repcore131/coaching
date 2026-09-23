@@ -6736,7 +6736,12 @@ function go(id){
   // s-coach-program est l'éditeur d'exercices partagé : l'athlète y accède pour SA propre
   // séance (openSessionExercises fixe le contexte juste avant l'appel à go()).
   const _athleteEditing=_progEditorCtx.mode==='athlete';
-  if(id.startsWith('s-coach-')&&!['s-coach-home','s-coach-entry'].includes(id)&&currentUser?.role!=='coach'&&!(id==='s-coach-program'&&_athleteEditing)){
+  // LA GRILLE DE CHARGE EST LE SECOND ECRAN PARTAGE (lot 3), au meme titre et
+  // pour la meme raison : l'athlete Ultime y regarde SON bloc. _gcSurSoi le
+  // dit, et il ne peut le dire que de lui-meme — ouvrirGrilleCharge ne pose
+  // _gcAthlete a autre chose que currentUser que pour un coach.
+  const _athleteCharge=(id==='s-coach-charge')&&(()=>{ try{ return _gcSurSoi(); }catch(e){ return false; } })();
+  if(id.startsWith('s-coach-')&&!['s-coach-home','s-coach-entry'].includes(id)&&currentUser?.role!=='coach'&&!(id==='s-coach-program'&&_athleteEditing)&&!_athleteCharge){
     toast('Accès réservé au coach','var(--orange)');
     go(currentUser?'s-client-home':'s-welcome');
     return;
@@ -27410,15 +27415,27 @@ function illustrationExo(ex){
   return parSlug||illustrationDe(ex.name);
 }
 
-// ── Accès à la banque : coachs seulement ─────────────────────────────────
+// ── Accès à la banque : les coachs, et Ultime ────────────────────────────
 // Garde D'INTERFACE. La vraie barrière est dans database.rules.json, et elle
 // tient même si celle-ci saute.
+//
+// ⚠ ULTIME Y ENTRE DEPUIS LE LOT 3. Le catalogue n'est plus l'outil du seul
+//   coach : c'est une des deux choses qu'Ultime achète. La CAPACITE décide
+//   donc, plus le rôle seul, et la formule Essentielle continue d'écrire ses
+//   noms d'exercices à la main — ce comportement-là existait déjà, il ne
+//   change pas d'un iota.
+// ⚠ LA REGLE DE LA BASE SUIT DANS LE MEME LOT : /exercices ne se lisait
+//   qu'avec un compte coach. Elle s'ouvre au palier « ultime », que le serveur
+//   écrit dans droits/. TANT QU'ELLE N'EST PAS PUBLIEE, un athlète Ultime voit
+//   un catalogue VIDE et non une erreur : chargerBanque garde ce qu'il a.
 function peutConsulterBanque(user){
   // undefined → l'utilisateur courant. null → PERSONNE. Les deux ne disent
   // pas la même chose, et les confondre ferait répondre « oui » à une
   // question posée sur aucun dossier.
   const u=(user===undefined)?currentUser:user;
-  return !!(u&&u.role==='coach');
+  if(!u) return false;
+  if(u.role==='coach') return true;
+  try{ return !!peut(u,'bibliothequeExercices'); }catch(e){ return false; }
 }
 let _banque=null;
 function _banqueUrl(){ return CLOUD._fbUrl.replace('/users.json','/exercices.json'); }
@@ -27468,7 +27485,10 @@ async function chargerBanque(force){
     if(!tok) return _banque;
     const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),8000);
     const r=await fetch(_banqueUrl()+'?auth='+tok,{signal:ctrl.signal});
-    if(!r.ok) return _banque;                 // 401 pour un athlète : normal
+    // 401 : normal pour qui n'a pas le catalogue, et normal aussi pour un
+    // athlète Ultime tant que la règle du lot 3 n'est pas publiée. On garde ce
+    // qu'on a plutôt que de vider : un catalogue vide se voit, une erreur non.
+    if(!r.ok) return _banque;
     const t=await r.text();
     try{ _quotaCompter('in',t.length); }catch(e){}
     const d=t?JSON.parse(t):null;
@@ -27479,8 +27499,8 @@ async function chargerBanque(force){
   }catch(e){}
   return _banque;
 }
-// Vidage du cache local. Appelé à la déconnexion : la banque est réservée
-// aux coachs, elle n'a rien à faire dans le stockage d'un athlète qui se
+// Vidage du cache local. Appelé à la déconnexion : le catalogue suit le
+// compte qui y a droit, il n'a rien à faire dans le stockage de celui qui se
 // connecterait ensuite sur le même appareil.
 function oublierBanque(){
   _banque=null;
@@ -29950,19 +29970,25 @@ function resumeMethodesForcees(user,maintenant){
   const l=_tabBloc(u&&u.methodesForcees).filter(x=>x&&x.date>t-7*86400000);
   return l;
 }
-// LA LISTE DES TECHNIQUES EST L'OUTIL DU COACH, PAS CELUI DE L'ATHLÈTE.
+// LA LISTE DES TECHNIQUES EST L'OUTIL DU COACH, ET CELUI D'ULTIME.
 // Demande de Kevin, 25/08/2026 : « la liste des techniques d'intensification
 // doit être disponible uniquement aux coachs ; les athlètes sont obligés de
 // taper manuellement s'ils veulent mettre une technique ». C'est la même règle
 // que pour le guide des exercices, tranchée la veille : le catalogue est la
 // référence du coach, l'élève écrit à la main.
 //
+// ⚠ LOT 3 : « l'élève » reste vrai de la formule Essentielle, qui écrit sa
+//   technique à la main comme avant. Ultime, elle, choisit dans la liste : ce
+//   catalogue fait partie de ce qu'elle paie. La capacité décide, pas le rôle.
+//
 // Même convention d'appel que peutConsulterBanque : `undefined` désigne
 // l'utilisateur courant, `null` désigne PERSONNE. Les confondre ferait
 // répondre « oui » à une question posée sur aucun dossier.
 function peutChoisirTechnique(user){
   const u=(user===undefined)?currentUser:user;
-  return !!(u&&u.role==='coach');
+  if(!u) return false;
+  if(u.role==='coach') return true;
+  try{ return !!peut(u,'bibliothequeMethodes'); }catch(e){ return false; }
 }
 // CE QUE L'ATHLÈTE VOIT À LA PLACE. Il n'a plus le catalogue, mais il continue
 // de LIRE ce que son coach a prescrit : le nom, la consigne, la vidéo, et sur
@@ -33000,6 +33026,145 @@ async function appliquerProgramme(id){
   loadSessionManager();
   return true;
 }
+// ══════ LES FICHES DE SES EXERCICES, ET RIEN DU CATALOGUE (lot 3) ════════
+//
+// Un athlete suivi ne parcourt pas le catalogue : il recoit les mouvements que
+// son coach a poses, et c'est devant CEUX-LA qu'il se demande comment faire.
+// Sans reponse, il repose la question par message, une fois par semaine.
+//
+// LA LISTE EST CONSTRUITE DEPUIS SES PROPRES SEANCES, jamais depuis la banque :
+// aucun exercice qui ne soit pas dans son programme n'y apparait. C'est le
+// filtre demande, et c'est aussi ce qui la rend lisible — douze mouvements, pas
+// quatre cent trente-six.
+//
+// TOUT EST LOCAL, ET C'EST CE QUI LA REND POSSIBLE. L'illustration vient de
+// l'index des images, les videos d'EX_VIDEOS, les muscles du guide : les memes
+// tables qui habillent deja sa seance. La fiche ECRITE par le coach dans la
+// banque n'y est pas, et ce n'est pas un oubli — /exercices ne se lit qu'avec
+// un compte coach, et rien ne justifie de recopier quatre cents fiches dans le
+// dossier d'un athlete pour les lui montrer.
+let _mesExos=[];
+// PURE. Les exercices du programme, une fois chacun, dans l'ordre alphabetique.
+// La clef de dedoublonnage est exKey : « Developpe couche » et « DEVELOPPE
+// COUCHE » sont le meme mouvement, et il ne doit apparaitre qu'une fois.
+function exercicesDeMonProgramme(user){
+  const u=user||currentUser;
+  if(!u) return [];
+  const jours=Array.isArray(u.sessions_config)?u.sessions_config
+    :(u.sessions_config&&typeof u.sessions_config==='object')?Object.keys(u.sessions_config).map(k=>u.sessions_config[k])
+    :[];
+  const vus=new Map();
+  for(const j of jours){
+    if(!j||typeof j!=='object') continue;
+    const exs=Array.isArray(j.exercises)?j.exercises:[];
+    for(const ex of exs){
+      const nom=String((ex&&ex.name)||'').trim();
+      if(!nom) continue;
+      let k=''; try{ k=exKey(nom)||''; }catch(e){ k=nom.toUpperCase(); }
+      if(!k||vus.has(k)) continue;
+      vus.set(k,{nom:nom,ex:ex});
+    }
+  }
+  return [...vus.values()].sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+}
+// L'INDEX DES ILLUSTRATIONS SE CHARGE A LA DEMANDE, et il n'est pas la au
+// premier dessin : sans lui, _slugIllustre ne rend rien et la fiche s'affiche
+// sans image. Meme conduite que la banque du coach : on montre tout de suite
+// ce qu'on a, et on redessine quand l'index arrive. UNE SEULE FOIS — le
+// drapeau `rejoue` de la fiche interdit la boucle.
+function _meRejouer(fn){
+  try{
+    const p=chargerIndexIllustrations();
+    if(p&&p.then) p.then(()=>{ try{ fn(); }catch(e){} }).catch(()=>{});
+  }catch(e){}
+}
+// LA LISTE. Un bouton par mouvement, et la vignette quand elle existe : c'est
+// l'image qu'on reconnait, pas le nom.
+function ouvrirMesExercices(){
+  _mesExos=exercicesDeMonProgramme();
+  const vign=x=>{
+    let sl=''; try{ sl=_slugIllustre(exSlug(x.nom))||''; }catch(e){ sl=''; }
+    return sl?'<img src="'+escapeHtml(EXO_IMG_DOSSIER+sl+'.webp')+'" alt="" decoding="async" '
+      +'onerror="_illusAbsente(this)" style="width:44px;height:44px;object-fit:contain;'
+      +'background:#fff;border-radius:var(--r-2);flex-shrink:0">'
+      :'<span style="width:44px;height:44px;border-radius:var(--r-2);background:var(--surface-2);flex-shrink:0"></span>';
+  };
+  const corps=()=>_mesExos.length
+    ?_mesExos.map((x,i)=>'<button type="button" onclick="ouvrirFicheMonExercice('+i+')" '
+      +'style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;'
+      +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
+      +'padding:8px 10px;margin-bottom:7px;cursor:pointer;font-family:inherit">'
+      +vign(x)
+      +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text);letter-spacing:.4px">'
+      +escapeHtml(x.nom)+'</span></button>').join('')
+    :'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6">Tes séances sont encore vides. '
+      +'Dès qu\'un exercice y est posé, sa fiche apparaît ici.</p>';
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;'
+    +'max-height:90vh;overflow-y:auto">'
+    +'<h2 style="margin-bottom:4px;font-size:var(--fs-lg)">Mes exercices</h2>'
+    +'<p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">'
+    +'Les mouvements de ton programme, avec l\'image et la vidéo quand elles existent.</p>'
+    +'<div id="me-liste">'+corps()+'</div>'
+    +'<button class="btn btn-outline" style="margin-top:14px" onclick="closeModal()">Fermer</button>'
+    +'</div></div>';
+  document.body.insertAdjacentHTML('beforeend',html);
+  _meRejouer(()=>{ const z=document.getElementById('me-liste'); if(z) z.innerHTML=corps(); });
+  return true;
+}
+// LA FICHE. Ce que le guide sait du mouvement, et ce que le coach a ecrit
+// dessus : deux choses differentes, et la seconde prime a l'oeil parce qu'elle
+// vise cet athlete-la.
+function ouvrirFicheMonExercice(i,rejoue){
+  const x=_mesExos[Number(i)];
+  if(!x) return false;
+  const nom=x.nom, ex=x.ex||{};
+  let sl=''; try{ sl=_slugIllustre(exSlug(nom))||''; }catch(e){ sl=''; }
+  const img=sl?(EXO_IMG_DOSSIER+sl+'.webp'):'';
+  let d=null; try{ d=_dimsParSlug(exSlug(nom)); }catch(e){ d=null; }
+  let g=null; try{ g=_exGuide().get(resoudreAlias(exKey(nom)))||null; }catch(e){ g=null; }
+  const muscles=g?[].concat(g.p||[],g.s||[]).map(m=>(MUSCLES[m]||{}).lib||m).join(', '):'';
+  const l=(t,v)=>v?'<div style="display:flex;justify-content:space-between;gap:10px;'
+    +'font-size:var(--fs-sm);padding:3px 0"><span style="color:var(--sub)">'+escapeHtml(t)+'</span>'
+    +'<span style="color:var(--text);text-align:right">'+escapeHtml(v)+'</span></div>':'';
+  let pastilles=''; try{ pastilles=htmlVideosExo(ex)||''; }catch(e){ pastilles=''; }
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div class="mdl-large" id="me-fiche" onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;'
+    +'max-height:90vh;overflow-y:auto">'
+    +'<h2 style="margin-bottom:10px;font-size:var(--fs-lg)">'+escapeHtml(nom)+'</h2>'
+    +(img?'<img src="'+escapeHtml(img)+'" alt="'+escapeHtml(nom)+'" decoding="async"'
+      +(d?' width="'+d[0]+'" height="'+d[1]+'"':'')+' onerror="_illusAbsente(this)" '
+      +'style="display:block;margin:0 auto 12px;width:100%;'+(d?'max-width:'+d[0]+'px;':'')
+      +'height:auto;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3)">'
+      :'<div class="sub" style="font-size:var(--fs-xs);text-align:center;padding:16px;'
+      +'background:var(--surface-1);border-radius:var(--r-3);margin-bottom:12px">'
+      +'Pas d\'image pour ce mouvement.</div>')
+    +l('Muscles',muscles)
+    +l('Matériel',ex.materiel||'')
+    +(ex.description?'<div style="margin-top:12px"><div style="font-size:var(--fs-xs);'
+      +'color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;'
+      +'margin-bottom:5px">Ce que ton coach a écrit</div><div style="font-size:var(--fs-sm);'
+      +'color:#bbb;line-height:1.65;white-space:pre-wrap">'+escapeHtml(ex.description)+'</div></div>':'')
+    +pastilles
+    +(pastilles?'':'<p class="sub" style="font-size:var(--fs-xs);margin-top:12px;line-height:1.6">'
+      +'Aucune vidéo pour ce mouvement. Demande-la à ton coach dans le canal : il peut la filmer '
+      +'pour toi.</p>')
+    +'<button class="btn btn-outline" style="margin-top:16px" onclick="closeModal();ouvrirMesExercices()">Retour à mes exercices</button>'
+    +'<button class="btn btn-outline" style="margin-top:9px" onclick="closeModal()">Fermer</button>'
+    +'</div></div>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
+  // SANS IMAGE, ON REDEMANDE L'INDEX UNE FOIS : au premier passage il n'est
+  // pas encore charge, et la fiche vaut surtout pour son dessin.
+  if(!img&&!rejoue) _meRejouer(()=>{
+    if(document.getElementById('me-fiche')) ouvrirFicheMonExercice(i,true);
+  });
+  return true;
+}
 function loadSessionManager(){
   go('s-session-manager');
   _renderSessionManager();
@@ -33027,6 +33192,27 @@ function _renderSessionManager(){
   //
   // UNE FOIS, ET NON PAR JOUR : la phrase est la meme pour les sept creneaux.
   // Repetee sept fois, elle deviendrait un motif de fond qu'on ne lit plus.
+  // ══ LES DEUX PORTES DU BLOC (lot 3) ══════════════════════════════════
+  // La charge semaine par semaine pour qui planifie, les fiches de ses propres
+  // exercices pour qui est suivi. CHACUNE NE S'AFFICHE QUE POUR QUI ELLE
+  // S'OUVRE : un bouton qui repond « reserve » est un bouton mort, et le verrou
+  // du lot 4 se poste sur les ecrans, pas sur les portes d'entree.
+  const _zOut=document.getElementById('sm-outils');
+  if(_zOut){
+    const b=[];
+    const bouton=(lib,act)=>'<button type="button" class="btn btn-outline" onclick="'+act+'" '
+      +'style="flex:1 1 46%;min-width:150px;font-size:var(--fs-xs);padding:9px 10px">'+lib+'</button>';
+    try{
+      if(peut(currentUser,'planification')&&semainesDuBloc(currentUser).length)
+        b.push(bouton('Charge du bloc','ouvrirGrilleCharge()'));
+    }catch(e){}
+    try{
+      if(peut(currentUser,'programmeRecu')&&exercicesDeMonProgramme(currentUser).length)
+        b.push(bouton('Mes exercices en images','ouvrirMesExercices()'));
+    }catch(e){}
+    _zOut.innerHTML=b.length?'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
+      +b.join('')+'</div>':'';
+  }
   const _zStruct=document.getElementById('sm-structure');
   if(_zStruct){
     let _l=''; try{ _l=ligneStructureBloc(currentUser); }catch(e){ _l=''; }
@@ -47975,11 +48161,48 @@ const GC_ZONE_LEX=Object.freeze({
   'MAV-MRV' :'zone_mav_mrv',
   'sur-MRV' :'zone_sur_mrv'
 });
-// L athlete courant de la grille. Le coach ouvre la grille DEPUIS une fiche.
+// L athlete courant de la grille. Le coach ouvre la grille DEPUIS une fiche ;
+// l'athlete ouvre LA SIENNE depuis « Mes seances » (lot 3).
 let _gcAthlete=null;
+// QUI REGARDE, ET SUR QUI. Les trois se lisent partout dans l'ecran : la
+// grille d'un coach et la grille de son propre bloc ne disent pas les memes
+// phrases, et ne proposent pas les memes gestes.
+function _gcCoach(){ return !!(currentUser&&currentUser.role==='coach'); }
+function _gcSurSoi(){
+  return !!(currentUser&&_gcAthlete&&_gcAthlete.email&&_gcAthlete.email===currentUser.email);
+}
+function _gcModifiable(){ return _gcCoach()||_gcSurSoi(); }
+// ══ L'ENTREE ATHLETE (lot 3) ════════════════════════════════════════════
+// L'ecran etait complet et ne s'ouvrait que depuis la fiche d'un coach :
+// l'athlete qui planifie son bloc n'avait aucun moyen de voir ce que sa
+// semaine pese. Il l'ouvre maintenant sur SON dossier, et sur aucun autre.
+//
+// L'ARGUMENT EST IGNORE HORS D'UN COMPTE COACH, et c'est la barriere : sans
+// cela, `ouvrirGrilleCharge(dossierDeQuelquUn)` depuis la console aurait
+// affiche le bloc d'un autre. La lecture du dossier reste par ailleurs
+// interdite par database.rules.json — mais l'interface ne doit pas y conduire.
 function ouvrirGrilleCharge(athlete){
-  if(!currentUser||currentUser.role!=='coach'){ toast('Réservé aux coachs.','var(--orange)'); return false; }
-  _gcAthlete=athlete||_coachEditClient||null;
+  if(!currentUser) return false;
+  const coach=currentUser.role==='coach';
+  if(coach){
+    _gcAthlete=athlete||_coachEditClient||null;
+  }else{
+    if(!peut(currentUser,'planification')){
+      // Ce qui est fermé, puis ce qui marche tout de suite : le verrou du lot 4
+      // remplacera ce message par son bloc, avec la même construction.
+      toast('La charge du bloc fait partie d’Ultime. Tes séries restent visibles dans chaque séance.','var(--orange)');
+      return false;
+    }
+    _gcAthlete=currentUser;
+  }
+  // LA MISE EN PAGE LARGE DES ECRANS COACH NE SUIT PAS L'ATHLETE. `ecran-coach`
+  // pose la barre laterale du coach et un retrait de 260 px au-dela de
+  // 1025 px : sur le bloc d'un athlete, ce serait la barre de quelqu'un
+  // d'autre. La classe suit donc celui qui ouvre, et revient au coach ensuite.
+  try{
+    const e=document.getElementById('s-coach-charge');
+    if(e) e.classList.toggle('ecran-coach',coach);
+  }catch(e){}
   // goAvecRetour pose le couloir de retour : on revient d'ou l'on vient, et
   // non sur un ecran choisi a l'ecriture.
   goAvecRetour('s-coach-charge');
@@ -47994,12 +48217,17 @@ function _rendreGrilleCharge(){
   if(!cases.length){
     // Programme absent, corrompu, ou aucun muscle jugeable : la vue
     // disparait, elle ne s affiche pas a moitie.
-    z.innerHTML=emptyState('calendar','<strong style="font-size:var(--fs-md)">Aucun bloc à afficher</strong>'
-      +'<br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Cet athlète n\'a pas '
-      +'de bloc d\'entraînement daté, ou aucun de ses muscles n\'a de repère de volume.</span>',
+    // ET LA SORTIE MENE LA OU L'ON PEUT AGIR, chacun chez soi : le coach dans
+    // le programme de son athlete, l'athlete dans ses propres seances.
+    const _vide=(txt,cta,fn)=>emptyState('calendar','<strong style="font-size:var(--fs-md)">Aucun bloc à afficher</strong>'
+      +'<br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">'+txt+'</span>',cta,fn);
+    z.innerHTML=_gcSurSoi()
+      ?_vide('Tu n\'as pas encore de bloc d\'entraînement daté, ou aucun de tes muscles n\'a de repère de volume.',
+        'Composer mes séances','loadSessionManager()')
       // R13 — un bloc date se pose dans son programme : ecran coach, depuis
       // un ecran coach. currentClientId est l'athlete dont on vient.
-      'Modifier le programme','openCoachSessions()');
+      :_vide('Cet athlète n\'a pas de bloc d\'entraînement daté, ou aucun de ses muscles n\'a de repère de volume.',
+        'Modifier le programme','openCoachSessions()');
     return false;
   }
   const semaines=[...new Set(cases.map(c=>c.index))].sort((a,b)=>a-b);
@@ -48059,10 +48287,13 @@ function _rendreGrilleCharge(){
     +'<span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);color:var(--sub)">'
     +'<span style="width:11px;height:11px;border-radius:var(--r-1);border:1px dashed var(--sub)"></span>prévisionnel</span>'
     +'</div>';
+  // LA PHRASE NE PROMET QUE CE QUE CELUI QUI LIT PEUT FAIRE : le geste de la
+  // semaine n'existe que pour le coach et pour qui regarde son propre bloc.
   h+='<p class="sub" style="font-size:var(--fs-2xs);line-height:1.6;margin-top:12px">'
-    +'L\'intensité de la case suit la charge relative à la semaine la plus chargée du bloc. '
-    +'Touche le numéro d\'une semaine pour en changer le volume ou l\'intensité — '
-    +'les autres ne bougent pas.</p>';
+    +'L\'intensité de la case suit la charge relative à la semaine la plus chargée du bloc.'
+    +(_gcModifiable()?' Touche le numéro d\'une semaine pour en changer le volume ou l\'intensité, '
+      +'les autres ne bougent pas.':'')
+    +'</p>';
   z.innerHTML=h;
   return true;
 }
@@ -48087,7 +48318,10 @@ function _rendreGrilleCharge(){
 async function ajusterSemaineBloc(i){
   const u=_gcAthlete;
   if(!u){ toast('Aucun athlète ouvert.','var(--orange)'); return false; }
-  if(!currentUser||currentUser.role!=='coach'){ toast('Réservé aux coachs.','var(--orange)'); return false; }
+  // LE COACH SUR SES ATHLETES, L'ATHLETE SUR SON PROPRE BLOC (lot 3). Un
+  // athlete qui compose son programme doit pouvoir periodiser le sien ; il ne
+  // touche a aucun autre, puisque _gcAthlete ne peut etre que lui-meme.
+  if(!_gcModifiable()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
   const nl='\n';
   const porte=(()=>{ try{ return semainePorteEcart(u,i); }catch(e){ return false; } })();
   const r=await rcSaisie('Semaine '+(i+1)+' — écart au gabarit'+nl+nl
@@ -48123,6 +48357,9 @@ async function ajusterSemaineBloc(i){
 }
 // L'ECRITURE, PAR LE MEME CHEMIN QUE LE RESTE DE LA FICHE COACH :
 // DB.set puis CLOUD.pushOne, et le toast dit ce qui est parti.
+// ⚠ ELLE SERT AUSSI L'ATHLETE SUR SON PROPRE BLOC (lot 3) : `u` est alors
+//   currentUser, users[u.email] est son dossier, et la regle de la base
+//   l'autorise a l'ecrire. Aucun chemin d'ecriture de plus n'a ete ajoute.
 function _gcEnregistrer(u,message){
   try{
     const users=DB.get('users')||{};
@@ -95900,7 +96137,44 @@ async function _peSupprimer(){
   toast('Protocole supprimé');
 }
 
+// ══════ CE QU'ON NE RETIRE A PERSONNE (lot 3) ════════════════════════════
+//
+// La bibliotheque de protocoles etait OUVERTE a tout le monde. La fermer pour
+// la formule Essentielle retirerait quelque chose a des gens qui l'ont deja
+// et qui s'en servent : ce n'est pas une porte a fermer, c'est un droit acquis.
+//
+// DEUX CHEMINS, DANS CET ORDRE :
+//   1. le drapeau `protocolesHerites`, pose une fois pour toutes sur les
+//      dossiers existants (migrerDroits, dans functions/index.js) ;
+//   2. A DEFAUT, LA DATE DE CREATION DU DOSSIER. Le drapeau demande une
+//      fonction deployee ; la date, elle, est deja dans le dossier. Le second
+//      chemin fait donc tenir la promesse meme si le premier n'a jamais tourne,
+//      et c'est la raison d'etre de ce repli.
+//
+// UN DOSSIER SANS DATE DE CREATION EST ANCIEN, et non recent : createdAt est
+// pose a l'inscription depuis longtemps. Trancher dans l'autre sens fermerait
+// la porte a des comptes qui l'avaient ouverte.
+const PROTOCOLES_HERITAGE_AVANT=Date.UTC(2026,8,24);
+function protocolesHerites(user){
+  const u=(user===undefined)?currentUser:user;
+  if(!u||typeof u!=='object') return false;
+  if(u.protocolesHerites===true) return true;
+  const c=Number(u.createdAt)||0;
+  return c?(c<PROTOCOLES_HERITAGE_AVANT):true;
+}
+// LA QUESTION QUE L'INTERFACE POSE, et la seule : la capacite, ou l'heritage.
+function peutVoirProtocoles(user){
+  const u=(user===undefined)?currentUser:user;
+  try{ if(peut(u,'bibliothequeProtocoles')) return true; }catch(e){}
+  return protocolesHerites(u);
+}
 function ouvrirProtocoles(phase,champ,retour){
+  if(!peutVoirProtocoles()){
+    // Ce qui est ferme, puis ce qui reste possible tout de suite. Le verrou du
+    // lot 4 reprendra la meme construction dans un bloc, a la place de l'ecran.
+    toast('Les protocoles font partie d’Ultime. Tu peux écrire ton échauffement à la main dans ta séance.','var(--orange)');
+    return false;
+  }
   _pfCible=champ||null;
   _pfRetour=retour||(champ?'s-coach-program':(currentUser?.role==='coach'?'s-coach-home':'s-client-home'));
   // Arriver depuis le champ « échauffement » sans voir d'emblée les fins de

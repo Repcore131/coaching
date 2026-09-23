@@ -757,8 +757,23 @@ async function testExercices(){
         if(s.indexOf('retirerEcartSemaine(')<0) return _echec('on ne peut pas defaire');
         if(s.indexOf("DB.set('users'")<0||s.indexOf('CLOUD.pushOne(')<0)
           return _echec('l\'ecriture ne passe pas par le chemin de la fiche');
-        // RESERVE AUX COACHS, comme l'ecran qui le porte.
-        if(s.indexOf("role!=='coach'")<0) return _echec('un athlete pourrait periodiser son bloc');
+        // ⚠ LA GARDE A CHANGE DE FORME AU LOT 3, PAS D'OBJET. Le geste etait
+        //   reserve aux coachs parce que l'ecran l'etait ; l'athlete Ultime
+        //   ouvre desormais SON bloc, et periodiser le sien est exactement ce
+        //   qu'il vient y faire. La garde devient donc _gcModifiable : le
+        //   coach, ou celui qui regarde son propre dossier, et personne d'autre.
+        if(s.indexOf('_gcModifiable()')<0) return _echec('n\'importe qui pourrait periodiser un bloc');
+        // ET ELLE TIENT, A L'EXECUTION : sur le dossier d'un autre, non.
+        (()=>{
+          const _sv=currentUser, _sa=_gcAthlete;
+          try{
+            currentUser={id:'b32',email:'moi@t.fr',role:'athlete'};
+            _gcAthlete={email:'unautre@t.fr'};
+            if(_gcModifiable()) throw new Error('un athlete modifie le bloc d\'un autre');
+            _gcAthlete=currentUser;
+            if(!_gcModifiable()) throw new Error('il ne peut pas modifier le sien');
+          } finally { currentUser=_sv; _gcAthlete=_sa; }
+        })();
         // ET LA GRILLE OFFRE LA POIGNEE.
         return String(_rendreGrilleCharge).indexOf('ajusterSemaineBloc(')>=0
           ?true:_echec('la grille n\'offre aucun point d\'entree');})());
@@ -15320,8 +15335,14 @@ async function testExercices(){
           return /pectoraux/i.test(tout)&&/s1/i.test(tout)
             ?true:_echec('l\'image ne porte pas ce qu\'elle devrait : '+tout.slice(0,90));})());
         ok('La grille est derrière la garde de rôle, et lecture seule',(()=>{
-          // Instrument de programmation : jamais chez l'athlète. Et aucune
-          // édition depuis la vue — règle 1.
+          // Instrument de programmation. Et aucune édition depuis la vue —
+          // règle 1.
+          //
+          // ⚠ « JAMAIS CHEZ L'ATHLETE » EST DEVENU « JAMAIS SUR LE DOSSIER
+          //   D'UN AUTRE » AU LOT 3, et c'est une garde plus precise, pas plus
+          //   faible : l'athlete Ultime ouvre SA grille, ouvrirGrilleCharge
+          //   ignore alors l'argument qu'on lui passe, et un compte Essentielle
+          //   ne l'ouvre pas du tout.
           if(!document.getElementById('s-coach-charge')) return _echec('l\'écran n\'existe pas');
           if(!/id\.startsWith\('s-coach-'\)/.test(String(go)))
             return _echec('la garde de préfixe a disparu');
@@ -15329,8 +15350,12 @@ async function testExercices(){
           for(const m of ['onchange=','oninput=','contenteditable'])
             if(src.indexOf(m)>=0) return _echec('la vue porte une édition : '+m);
           // Un seul onclick dans la vue : aucun. L'export est dans la topbar.
-          return /peutConsulterBanque|role!=='coach'/.test(String(ouvrirGrilleCharge))
-            ?true:_echec('ouvrirGrilleCharge n\'a pas de garde de rôle');})());
+          const g=String(ouvrirGrilleCharge);
+          if(g.indexOf("role==='coach'")<0) return _echec('ouvrirGrilleCharge ne regarde plus le rôle');
+          if(g.indexOf('_gcAthlete=currentUser')<0)
+            return _echec('un non-coach pourrait viser le dossier d\'un autre');
+          return g.indexOf("peut(currentUser,'planification')")>=0
+            ?true:_echec('la grille s\'ouvre sans qu\'Ultime soit demandé');})());
         // ── Substitution lot 1 : le bouton ───────────────────────────────
         (()=>{
         const _woAv=(typeof woState!=='undefined')?woState:undefined;
@@ -33606,6 +33631,128 @@ async function testExercices(){
         for(const mot of ['palier','quota','capacité','synchronisation'])
           if(new RegExp('\\b'+mot,'i').test(t)) return _echec('mot technique visible : '+mot);
         return true;})());
+
+      // ══ LOT 3 — OUVRIR LES PORTES D'ULTIME ═════════════════════════════
+      ok('LOT 3 — LE CATALOGUE ET LES TECHNIQUES S’OUVRENT À ULTIME, PAS À ESSENTIELLE',(()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        try{
+          const mail='lot3a@t.fr';
+          const u={id:'L3A',email:mail,role:'athlete'};
+          const poser=p=>localStorage.setItem(DROITS_CLE,JSON.stringify(
+            {[mail]:{d:{palier:p,echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
+          // ESSENTIELLE ECRIT SES NOMS A LA MAIN : c'est le comportement qui
+          // existait deja, et le lot ne le change pas.
+          poser('essentielle');
+          if(peutConsulterBanque(u)) return _echec('Essentielle ouvre le catalogue');
+          if(peutChoisirTechnique(u)) return _echec('Essentielle ouvre la liste des techniques');
+          // ULTIME LES ACHETE.
+          poser('ultime');
+          if(!peutConsulterBanque(u)) return _echec('Ultime n’ouvre pas le catalogue');
+          if(!peutChoisirTechnique(u)) return _echec('Ultime n’ouvre pas les techniques');
+          // LE SUIVI N'A PAS LE CATALOGUE ENTIER : il recoit ses fiches ciblees.
+          poser('suivi');
+          if(peutConsulterBanque(u)) return _echec('le suivi ouvre le catalogue entier');
+          // UN COACH PASSE, ET « PERSONNE » NE PASSE PAS — la convention d'appel
+          // de ces deux fonctions, qui distingue null de undefined.
+          if(!peutConsulterBanque({role:'coach'})) return _echec('un coach n’a plus le catalogue');
+          if(peutConsulterBanque(null)) return _echec('null ouvre le catalogue');
+          return peutChoisirTechnique(null)===false
+            ?true:_echec('null ouvre les techniques');
+        } finally {
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      ok('LOT 3 — LA GRILLE DE CHARGE A UNE ENTRÉE ATHLÈTE, ET ELLE NE S’OUVRE QUE SUR SOI',(()=>{
+        const sv=currentUser, svD=localStorage.getItem(DROITS_CLE);
+        const act=[...document.querySelectorAll('.screen.active')].map(e=>e.id);
+        try{
+          const mail='lot3b@t.fr';
+          localStorage.setItem(DROITS_CLE,JSON.stringify(
+            {[mail]:{d:{palier:'ultime',echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
+          currentUser={id:'L3B',email:mail,role:'athlete',sessions_config:[],sessions:[]};
+          // ON OUVRE LA SIENNE, MEME EN PASSANT LE DOSSIER DE QUELQU'UN D'AUTRE :
+          // l'argument est ignore hors d'un compte coach, et c'est la barriere.
+          const r=ouvrirGrilleCharge({email:'quelquun.dautre@t.fr',id:'X'});
+          if(r!==true) return _echec('l’athlète Ultime n’ouvre pas la grille');
+          if(!_gcAthlete||_gcAthlete.email!==mail)
+            return _echec('la grille s’est ouverte sur '+((_gcAthlete||{}).email||'personne'));
+          if((document.querySelector('.screen.active')||{}).id!=='s-coach-charge')
+            return _echec('l’écran n’est pas celui de la charge');
+          // LA MISE EN PAGE COACH NE SUIT PAS L'ATHLETE : sa barre laterale
+          // n'a rien a faire sur le bloc de quelqu'un qui n'a pas d'athletes.
+          if(document.getElementById('s-coach-charge').classList.contains('ecran-coach'))
+            return _echec('l’écran garde la mise en page du coach');
+          // ET ELLE EST MODIFIABLE SUR SON PROPRE BLOC, pas ailleurs.
+          if(!_gcModifiable()) return _echec('il ne peut pas périodiser son propre bloc');
+          // ESSENTIELLE NE L'OUVRE PAS, et le message dit ce qui reste possible.
+          localStorage.setItem(DROITS_CLE,JSON.stringify(
+            {[mail]:{d:{palier:'essentielle',echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
+          if(ouvrirGrilleCharge()!==false) return _echec('Essentielle ouvre la charge du bloc');
+          return true;
+        } finally {
+          currentUser=sv;
+          if(svD==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,svD);
+          try{ document.getElementById('s-coach-charge').classList.add('ecran-coach'); }catch(e){}
+          document.querySelectorAll('.screen.active').forEach(e=>e.classList.remove('active'));
+          act.forEach(id=>{ const e=document.getElementById(id); if(e) e.classList.add('active'); });
+        }})());
+
+      ok('LOT 3 — LES PROTOCOLES NE SONT RETIRÉS À PERSONNE',(()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        try{
+          const mail='lot3c@t.fr';
+          const poser=p=>localStorage.setItem(DROITS_CLE,JSON.stringify(
+            {[mail]:{d:{palier:p,echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
+          const vieux={id:'V',email:mail,role:'athlete',createdAt:PROTOCOLES_HERITAGE_AVANT-864e5};
+          const neuf ={id:'N',email:mail,role:'athlete',createdAt:PROTOCOLES_HERITAGE_AVANT+864e5};
+          poser('essentielle');
+          // UN COMPTE QUI EXISTAIT GARDE L'ACCES.
+          if(!peutVoirProtocoles(vieux)) return _echec('un compte existant perd les protocoles');
+          // UN COMPTE NEUF EN ESSENTIELLE VOIT LE VERROU.
+          if(peutVoirProtocoles(neuf)) return _echec('un compte neuf en Essentielle les ouvre');
+          // LE DRAPEAU SUFFIT, SANS LA DATE.
+          if(!peutVoirProtocoles({email:mail,role:'athlete',createdAt:Date.now(),protocolesHerites:true}))
+            return _echec('le drapeau ne suffit pas');
+          // SANS DATE DE CREATION, LE DOSSIER EST ANCIEN.
+          if(!protocolesHerites({email:mail,role:'athlete'}))
+            return _echec('un dossier sans date de création est traité comme neuf');
+          // ULTIME LES OUVRE PAR SA CAPACITE, sans rien heriter.
+          poser('ultime');
+          if(!peutVoirProtocoles(neuf)) return _echec('Ultime n’ouvre pas les protocoles');
+          // ET LA FONCTION QUI OUVRE L'ECRAN POSE LA QUESTION.
+          return /peutVoirProtocoles\(\)/.test(String(ouvrirProtocoles))
+            ?true:_echec('ouvrirProtocoles n’interroge pas le droit');
+        } finally {
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      ok('LOT 3 — LES FICHES DE L’ATHLÈTE SUIVI VIENNENT DE SON PROGRAMME, JAMAIS DU CATALOGUE',(()=>{
+        const u={id:'L3D',email:'lot3d@t.fr',role:'athlete',sessions_config:[
+          {day:'Lundi',active:true,exercises:[{name:'TRACTIONS'},{name:'CURL BARRE'}]},
+          {day:'Mardi',active:false,exercises:[]},
+          {day:'Mercredi',active:true,exercises:[{name:'tractions'},{name:'SQUAT',materiel:'Barre'}]},
+        ]};
+        const l=exercicesDeMonProgramme(u);
+        // TROIS MOUVEMENTS, PAS QUATRE : « TRACTIONS » et « tractions » sont le
+        // meme, et il ne doit apparaitre qu'une fois.
+        if(l.length!==3) return _echec(l.length+' fiches au lieu de 3');
+        const noms=l.map(x=>x.nom.toUpperCase()).join('|');
+        if(noms!=='CURL BARRE|SQUAT|TRACTIONS') return _echec('la liste : '+noms);
+        // ET AUCUN EXERCICE QUI N'EST PAS DANS SON PROGRAMME.
+        if(noms.indexOf('DEVELOPPE')>=0) return _echec('un exercice étranger est entré');
+        // LA LISTE NE LIT NI LA BANQUE NI LE CATALOGUE : c'est la promesse
+        // « jamais le catalogue », et elle se verifie dans le code.
+        const src=String(exercicesDeMonProgramme)+String(ouvrirMesExercices)+String(ouvrirFicheMonExercice);
+        for(const interdit of ['catalogueCoach','fichesBanque','chargerBanque','_banque'])
+          if(src.indexOf(interdit)>=0) return _echec('la fiche ciblée passe par '+interdit);
+        // ET LA PORTE NE S'OUVRE QUE POUR QUI EST SUIVI.
+        const sm=String(_renderSessionManager);
+        if(sm.indexOf('ouvrirMesExercices()')<0) return _echec('aucune porte dans « Mes séances »');
+        return /programmeRecu/.test(sm)
+          ?true:_echec('la porte ne demande pas le suivi');})());
 
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{

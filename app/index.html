@@ -3827,6 +3827,10 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- LA STRUCTURE DU BLOC. Au-DESSUS de la liste des jours : c'est le
            cadre dans lequel les sept creneaux se lisent, et il se lit
            avant eux. Vide tant qu'aucun bloc date n'existe. -->
+      <!-- LES DEUX PORTES DU BLOC (lot 3). Remplies par
+           _renderSessionManager : la charge du bloc pour qui planifie, les
+           fiches de ses exercices pour qui est suivi. Vide pour les autres. -->
+      <div id="sm-outils"></div>
       <div id="sm-structure"></div>
       <!-- R36 — LE BANDEAU DES SÉANCES D'ESSAI, au-dessus des créneaux : le
            même que le sélecteur (_bandeauEssai), rempli par
