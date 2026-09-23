@@ -42,3 +42,8 @@ __pycache__/
 *.orig
 # Bac a sable de test OCR etiquettes : images tierces, jamais commitees.
 .tmp-etiq/
+
+# Documents de strategie (offre, tarifs, plans). Hors git pour deux raisons :
+# le depot est publie tel quel par pages.yml, et un git clean -fd a deja
+# efface ces fichiers le 23/09/2026 quand ils etaient a la racine sans etre ignores.
+docs/offre/

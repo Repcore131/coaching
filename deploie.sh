@@ -75,4 +75,35 @@ echo "$n fichiers"
 [ "$n" -ge 400 ] || { echo "!! assemblage suspect ($n fichiers), on n'envoie rien"; exit 1; }
 
 echo "== envoi =="
-firebase deploy --project "$PROJET" --only hosting,database
+# ⚠ L'HEBERGEMENT ET LES REGLES D'ABORD, LES FONCTIONS ENSUITE, et dans cet
+#   ordre : un echec des fonctions — plan Spark, secret absent — ne doit pas
+#   empecher le site de partir. Les regles, elles, partent avec le site :
+#   depuis le lot 0, le palier d'un athlete vit dans droits/, dont la regle
+#   interdit toute ecriture cliente. Sans ce deploiement, le noeud n'existe
+#   pas, l'application ne peut pas le lire, et elle retombe sur l'ancien
+#   modele — celui que n'importe qui pouvait reecrire depuis sa console.
+firebase deploy --project "$PROJET" --only hosting,database || {
+  echo "!! hosting/database en echec"; exit 1; }
+
+# LES FONCTIONS : le seul endroit qui ecrit droits/. Elles demandent le plan
+# BLAZE. Sur Spark, ce deploiement echoue — on le DIT, precisement, et on ne
+# fait pas semblant que le serveur decide alors qu'il ne tourne pas.
+echo "== fonctions =="
+if firebase deploy --project "$PROJET" --only functions; then
+  echo "== fonctions deployees =="
+else
+  cat <<'FIN'
+!! LES FONCTIONS NE SONT PAS DEPLOYEES.
+   Tant qu'elles ne tournent pas :
+     · droits/ reste vide, l'application retombe sur l'ancien modele
+       (status / accessExpiry, ecrits par le telephone) ;
+     · aucun paiement PayPal ni code de coach n'ouvre de droit serveur.
+   Ce qu'il faut, dans cet ordre :
+     1. passer repcore-sync en plan Blaze (console Firebase > Facturation) ;
+     2. poser les secrets manquants :
+        firebase functions:secrets:set PAYPAL_WEBHOOK_ID
+     3. relancer : bash deploie.sh
+     4. une fois deploye, migrer les comptes existants (une seule fois) :
+        appeler migrerDroits avec {simulation:false} depuis la console.
+FIN
+fi

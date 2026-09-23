@@ -291,4 +291,33 @@ if(fautes.length){
 }
 console.log('regles : aucun appel JavaScript inconnu du langage');
 
+// ══ LE NOEUD droits/ : LU PAR DEUX, ECRIT PAR PERSONNE (lot 0) ═══════════
+// C'est la serrure du modele economique. Si ".write" cessait d'etre false, le
+// titulaire du dossier retrouverait le droit de se poser lui-meme un palier —
+// exactement ce que ce lot ferme.
+{
+  const i=regles.indexOf('"droits"');
+  const bloc=i<0?'':regles.slice(i,i+900);
+  if(!bloc){
+    console.error('\ndroits/ ABSENT de database.rules.json : le palier serveur ne peut pas etre lu.');
+    process.exit(1);
+  }
+  if(!/"\.write"\s*:\s*false/.test(bloc)){
+    console.error('\ndroits/ n\'est plus ferme en ecriture : n\'importe qui pourrait se poser un palier.');
+    process.exit(1);
+  }
+  if(!/"\.read"\s*:/.test(bloc)){
+    console.error('\ndroits/ n\'est pas lisible : l\'application ne pourra jamais lire le palier.');
+    process.exit(1);
+  }
+  // ET LE CLIENT N'ECRIT JAMAIS DEDANS. Une ecriture cliente serait refusee
+  // par la regle, mais elle dirait qu'on a cru pouvoir le faire.
+  const ecrit=source.match(/method\s*:\s*'(PUT|PATCH)'[^\n]{0,160}droits\//);
+  if(ecrit){
+    console.error('\nLe client tente d\'ecrire dans droits/ : '+ecrit[0].slice(0,110));
+    process.exit(1);
+  }
+  console.log('droits : lisible par le titulaire et son coach, ferme en ecriture');
+}
+
 console.log('\nRien de bloquant.');

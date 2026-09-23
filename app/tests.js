@@ -33392,6 +33392,221 @@ async function testExercices(){
       // BUILD 1412 — Kevin, trois captures a l'appui : « remplace-moi la version
       // des images 1 et 2 par celle de l'image 3, a l'identique, et mets les
       // fonctions visibles pour la completer ».
+      // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
+      ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
+        const src=_prodSrc();
+        // LA BOUTIQUE : elle chargeait le SDK avec disable-funding=credit,card.
+        const boutique=(src.match(/paypal\.com\/sdk\/js[^;]{0,220}components=buttons[^;]{0,120}/)||[''])[0];
+        if(!boutique) return _echec('le SDK de la boutique est introuvable');
+        if(/disable-funding=[^'"&]*card/.test(boutique))
+          return _echec('la boutique ferme encore la carte : '+boutique.slice(-90));
+        if(boutique.indexOf('enable-funding=card')<0)
+          return _echec('la boutique ne demande pas la carte : '+boutique.slice(-90));
+        // « credit » RESTE FERME : c'est le credit PayPal, pas la carte.
+        if(boutique.indexOf('disable-funding=credit')<0)
+          return _echec('le crédit PayPal n’est plus désactivé');
+        // L'ABONNEMENT : le SDK ne demandait rien, PayPal décidait seul.
+        const abo=(src.match(/paypal\.com\/sdk\/js[^;]{0,220}intent=subscription[^;]{0,120}/)||[''])[0];
+        if(!abo) return _echec('le SDK de l’abonnement est introuvable');
+        return abo.indexOf('enable-funding=card')>=0
+          ?true:_echec('l’abonnement ne demande pas la carte : '+abo.slice(-90));})());
+
+      ok('LOT 5 — UN SECOND BOUTON, EXPLICITE, SOUS CELUI DE PAYPAL',(()=>{
+        const src=_prodSrc();
+        // La source de financement, et le libelle qui la nomme.
+        if(!/FUNDING\s*&&\s*sdk\.FUNDING\.CARD|FUNDING\.CARD/.test(src))
+          return _echec('aucun bouton n’est posé sur la carte bancaire');
+        if((src.match(/Payer par carte bancaire/g)||[]).length<2)
+          return _echec('le libellé « Payer par carte bancaire » manque dans un des deux écrans');
+        // ⚠ ET IL NE S'AFFICHE QUE S'IL EST ELIGIBLE : un cadre vide vaudrait
+        //   pire qu'un bouton absent.
+        if((src.match(/isEligible/g)||[]).length<2)
+          return _echec('l’éligibilité n’est pas vérifiée dans les deux écrans');
+        // LES DEUX BOUTONS PARTAGENT LES MEMES OPTIONS : un plan facture d'un
+        // cote et pas de l'autre, c'est le defaut qu'on ne verrait qu'en
+        // production.
+        if(src.indexOf('paypal.Buttons(_optsAbo).render')<0)
+          return _echec('le bouton PayPal de l’abonnement ne lit plus les options communes');
+        return /Object\.assign\(\{\},_optsAbo,_paiementCarteOptions\(paypal\)\)/.test(src)
+          ?true:_echec('le bouton carte de l’abonnement ne reprend pas les options communes');})());
+
+      // ══ LOT 1 — UNE SEULE TABLE D'OFFRES, UNE SEULE DE CAPACITES ═══════
+      ok('LOT 1 — LES NEUF OFFRES, LEURS PRIX ET CE QU’ELLES OUVRENT',(()=>{
+        const attendu={
+          programme_perso:[99,'ultime',3], revision_prog:[40,'ultime',1],
+          boutique_prog:[14.9,'ultime',3], coaching_essentiel:[150,'suivi',1],
+          coaching_transfo:[350,'suivi',3], coaching_evolution:[600,'suivi',6],
+          essentielle:[9.95,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1]};
+        const cles=Object.keys(OFFRES).sort().join(',');
+        if(cles!==Object.keys(attendu).sort().join(',')) return _echec('les offres : '+cles);
+        for(const k in attendu){
+          const o=OFFRES[k], a=attendu[k];
+          if(o.prix!==a[0]) return _echec(k+' coûte '+o.prix+' au lieu de '+a[0]);
+          if(o.palier!==a[1]) return _echec(k+' ouvre '+o.palier+' au lieu de '+a[1]);
+          if(o.mois!==a[2]) return _echec(k+' dure '+o.mois+' mois au lieu de '+a[2]);
+        }
+        // LES DEUX TARIFS ANNUELS, et les deux seuls.
+        if(OFFRES.essentielle.prixAn!==99||OFFRES.ultime.prixAn!==249)
+          return _echec('les tarifs annuels ont changé');
+        // LA MISE EN FORME : deux decimales des qu'il y a des centimes, un
+        // espace insecable avant le symbole.
+        const nbsp=String.fromCharCode(160);
+        if(prixOffre('ultime')!=='24,90'+nbsp+'€') return _echec('Ultime s’écrit « '+prixOffre('ultime')+' »');
+        if(prixOffre('essentielle')!=='9,95'+nbsp+'€') return _echec('Essentielle s’écrit « '+prixOffre('essentielle')+' »');
+        if(prixOffre('programme_perso')!=='99'+nbsp+'€') return _echec('99 € s’écrit « '+prixOffre('programme_perso')+' »');
+        if(prixMoisAnnuel('ultime')!=='20,75'+nbsp+'€') return _echec('Ultime annuel au mois : '+prixMoisAnnuel('ultime'));
+        if(prixMoisAnnuel('essentielle')!=='8,25'+nbsp+'€') return _echec('Essentielle annuel au mois : '+prixMoisAnnuel('essentielle'));
+        // ET « COACHING PREMIUM » N'EXISTE NULLE PART : il est supprime de
+        // l'offre, il ne doit pas survivre dans un identifiant oublie.
+        const src=_prodSrc();
+        if(/coaching_premium|Coaching Premium/i.test(src)) return _echec('« Coaching Premium » traîne encore');
+        return true;})());
+
+      ok('LOT 1 — AUCUN PRIX ÉCRIT EN DUR HORS DE LA TABLE',(()=>{
+        // Le defaut repare par ce lot : PRIX_ATHLETE_MOIS annoncait 9,50 €
+        // pendant que PayPal encaissait 9,95 €. On balaie le fichier, hors
+        // commentaires, et on ne retient que les chaines qui portent un €.
+        const src=_prodSrc();
+        const i=src.indexOf('const OFFRES=');
+        const j=src.indexOf('const SUB_PALIERS');
+        const hors=(src.slice(0,i)+src.slice(j)).split('\n')
+          .filter(x=>!/^\s*(\/\/|\*)/.test(x)).join('\n');
+        const nbsp=String.fromCharCode(160);
+        const fautes=[];
+        for(const m of ['9,50','9,95','24,90','14,90','249','99']){
+          const re=new RegExp("'[^'\\n]{0,30}"+m.replace(',','[,]')+"[ "+nbsp+"]?€[^'\\n]{0,30}'",'g');
+          const trouves=(hors.match(re)||[]).filter(x=>!/prixOffre|OFFRES/.test(x));
+          if(trouves.length) fautes.push(m+' : '+trouves.slice(0,2).join(' | '));
+        }
+        return fautes.length?_echec(fautes.join('  ·  ')):true;})());
+
+      ok('LOT 1 — LES CAPACITÉS, ET peut() QUI LES LIT SEUL',(()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        try{
+          const mail='cap1@t.fr';
+          const u={id:'C1',email:mail,role:'athlete'};
+          const poser=p=>localStorage.setItem(DROITS_CLE,JSON.stringify(
+            {[mail]:{d:{palier:p,echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
+          // ESSENTIELLE : le quotidien, rien de plus.
+          poser('essentielle');
+          for(const c of ['composerSeances','seance','historique','bilans','nutritionLibre','lifestyle','sante'])
+            if(!peut(u,c)) return _echec('Essentielle a perdu '+c);
+          for(const c of ['bibliothequeExercices','bibliothequeMethodes','planification','dieteCalculee','volume','rapport','correctionVideo'])
+            if(peut(u,c)) return _echec('Essentielle ouvre '+c);
+          // ULTIME : tout sauf ce que fait un coach.
+          poser('ultime');
+          for(const c of ['bibliothequeExercices','bibliothequeMethodes','bibliothequeProtocoles','planification','dieteCalculee','complements','volume','perfs1rm','rapport'])
+            if(!peut(u,c)) return _echec('Ultime n’ouvre pas '+c);
+          for(const c of ['correctionVideo','canal','protocolesMorpho','amplitudes','chargesArticulaires','programmeRecu'])
+            if(peut(u,c)) return _echec('Ultime ouvre '+c+', qui demande un coach');
+          // SUIVI : le coaching, et le catalogue d'exercices EN MOINS — il le
+          // recoit cible (lot 3).
+          poser('suivi');
+          for(const c of ['correctionVideo','canal','protocolesMorpho','amplitudes','chargesArticulaires','programmeRecu','planification','dieteCalculee'])
+            if(!peut(u,c)) return _echec('le suivi n’ouvre pas '+c);
+          if(peut(u,'bibliothequeExercices')) return _echec('le suivi ouvre le catalogue entier');
+          // AUCUN DROIT : rien, sauf pendant l'essai, qui vaut Ultime.
+          poser('aucun');
+          if(peut(u,'seance')) return _echec('un compte sans droit s’entraîne encore');
+          const enEssai=Object.assign({},u,{essai:{ouvertLe:Date.now(),seancesAuDebut:0},sessions:[]});
+          if(!peut(enEssai,'bibliothequeExercices')) return _echec('l’essai n’ouvre pas Ultime');
+          if(peut(enEssai,'correctionVideo')) return _echec('l’essai ouvre la correction vidéo');
+          // UN COACH PASSE PARTOUT.
+          if(!peut({role:'coach'},'bibliothequeExercices')) return _echec('un coach n’a pas le catalogue');
+          // UNE CAPACITE INCONNUE NE S'OUVRE PAS.
+          return peut({role:'athlete',email:mail},'capaciteQuiNExistePas')===false
+            ?true:_echec('une capacité inconnue est ouverte');
+        } finally {
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      ok('LOT 1 — AUCUN COMPTEUR DE CORRECTIONS VIDÉO',(()=>{
+        // Le modele : un athlete suivi filme autant qu'il veut. Un compteur,
+        // meme dormant, finirait par etre lu.
+        const src=_prodSrc();
+        const m=src.match(/(correctionsRestantes|quotaVideo|videosRestantes|CORRECTION_MAX|maxCorrections|VIDEOS_MAX)[^a-zA-Z]/);
+        if(m) return _echec('un compteur de corrections existe : '+m[1]);
+        return CAPACITES.correctionVideo.join(',')==='suivi'
+          ?true:_echec('la correction vidéo n’est plus réservée au suivi');})());
+
+      // ══ LOT 0 — LE SERVEUR DECIDE DU PALIER, PLUS LE NAVIGATEUR ════════
+      // Kevin : « j'ouvre la console, j'ecris status:'AUTONOMIE_PREMIUM' dans
+      // mon dossier, je recharge, et l'application me laisse en Essentielle ».
+      ok('LOT 0 — LE PALIER VIENT DU NOEUD droits/, ET D’UN DOSSIER TRAFIQUÉ NE VIENT RIEN',(()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        try{
+          const mail='lot0@t.fr';
+          const u={id:'L0',email:mail,role:'athlete',status:'AUTONOMIE_PREMIUM',
+            paymentStatus:'active',accessExpiry:Date.now()+30*864e5};
+          const poser=(d,vide)=>localStorage.setItem(DROITS_CLE,
+            JSON.stringify({[mail]:{d:d||null,vide:!!vide,lu:Date.now()}}));
+          // 1. LE SERVEUR A REPONDU, ET IL DIT « ESSENTIELLE ». Le dossier
+          //    annonce AUTONOMIE_PREMIUM : il n'est pas lu.
+          poser({palier:'essentielle',echeance:Date.now()+10*864e5,source:'paypal',maj:Date.now()});
+          if(palierDe(u)!=='essentielle') return _echec('le dossier a pris le dessus : '+palierDe(u));
+          if(droitsDe(u).etat!=='serveur') return _echec('l’état lu : '+droitsDe(u).etat);
+          // 2. LE SERVEUR A REPONDU, ET IL NE DIT RIEN. Le palier le plus bas,
+          //    jamais le plus haut — meme avec un dossier qui promet tout.
+          poser(null,true);
+          if(palierDe(u)!=='aucun') return _echec('un nœud vide ouvre encore : '+palierDe(u));
+          if(checkAccess(u)!==false) return _echec('l’accès reste ouvert sur un nœud vide');
+          // 3. UNE ECHEANCE DEPASSEE FERME, quoi que dise le dossier.
+          poser({palier:'ultime',echeance:Date.now()-1000,source:'paypal',maj:Date.now()});
+          if(palierDe(u)!=='aucun') return _echec('un droit expiré ouvre encore : '+palierDe(u));
+          // 4. RIEN N'A JAMAIS ETE LU : l'ancien modele decide, et lui seul —
+          //    c'est le pont, le temps que les regles soient deployees. ON NE
+          //    COUPE PERSONNE SUR UN SILENCE DU SERVEUR.
+          localStorage.removeItem(DROITS_CLE);
+          if(droitsDe(u).etat!=='inconnu') return _echec('l’état sans lecture : '+droitsDe(u).etat);
+          if(palierDe(u)!=='essentielle') return _echec('le repli hérité : '+palierDe(u));
+          if(checkAccess(u)!==true) return _echec('le repli coupe un abonné');
+          // 5. ET LE COACH PASSE TOUJOURS.
+          if(palierDe({role:'coach',email:'c@t.fr'})!=='suivi') return _echec('le coach n’est plus au palier suivi');
+          return checkAccess({role:'coach',email:'c@t.fr'})===true
+            ?true:_echec('checkAccess refuse un coach');
+        } finally {
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      okA('LOT 0 — UNE LECTURE QUI ÉCHOUE NE POSE RIEN, ET NE COUPE RIEN',async()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        const sPull=CLOUD.pullDroits;
+        try{
+          localStorage.removeItem(DROITS_CLE);
+          const u={id:'L0b',email:'lot0b@t.fr',role:'athlete',status:'COACHING_SUIVI',
+            accessExpiry:Date.now()+10*864e5};
+          // Un refus du serveur (regles pas deployees) : rien n'entre en cache.
+          CLOUD.pullDroits=async()=>({ok:false,raison:'HTTP 401'});
+          if(await rafraichirDroits(u,true)!==false) return _echec('une lecture refusée a été prise pour bonne');
+          if(droitsDe(u).etat!=='inconnu') return _echec('le cache a été écrit malgré le refus');
+          if(checkAccess(u)!==true) return _echec('un suivi valide est coupé par un refus du serveur');
+          // Et une lecture qui ABOUTIT, elle, fait foi tout de suite.
+          CLOUD.pullDroits=async()=>({ok:true,droits:{palier:'ultime',echeance:0,maj:Date.now()}});
+          if(await rafraichirDroits(u,true)!==true) return _echec('une lecture réussie est rendue fausse');
+          return palierDe(u)==='ultime'?true:_echec('le palier lu : '+palierDe(u));
+        } finally {
+          CLOUD.pullDroits=sPull;
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }});
+
+      ok('LOT 0 — LE CLIENT NE PEUT PAS ÉCRIRE DANS droits/',(()=>{
+        // La serrure est dans les regles ; ici on tient que le code ne tente
+        // meme pas de la forcer, et que la lecture passe par UNE fonction.
+        const src=_prodSrc();
+        const i=src.indexOf('pullDroits');
+        if(i<0) return _echec('la lecture des droits a disparu');
+        if(/droits\/[^']*'\s*,\s*\{\s*method\s*:\s*'(PUT|PATCH|POST)'/.test(src))
+          return _echec('le client écrit dans droits/');
+        // ET LE PALIER N'EST LU QU'A UN SEUL ENDROIT : palierDe. Deux lectures
+        // du meme droit finiraient par diverger.
+        if(typeof palierDe!=='function'||typeof droitsDe!=='function')
+          return _echec('palierDe ou droitsDe a disparu');
+        return /function checkAccess\(u\)\{[\s\S]{0,1800}droitsDe\(u\)/.test(src)
+          ?true:_echec('checkAccess ne lit pas les droits du serveur');})());
+
       ok('1412 — LES CHIFFRES DU MOIS : moyenne par jour saisi, parts des macros, jours saisis',(()=>{
         const p2=x=>(x<10?'0':'')+x;
         const d=new Date(); const ym=d.getFullYear()+'-'+p2(d.getMonth()+1);
@@ -34885,7 +35100,7 @@ async function testExercices(){
             ?true:_echec('le cadre vide ne dit rien');})());
       })();
 
-      // ══════════════ BUILD 1425 — CE QUE L’ÉLÈVE VOIT DE SON CORPS ════════
+      // ══════════════ BUILD 1428 — CE QUE L’ÉLÈVE VOIT DE SON CORPS ════════
       //
       // Kevin, 23/09/2026 au soir, le 1424 sous les yeux sur son compte. Sept
       // corrections, dont quatre tiennent ici (le « 0 cm » est verifié avec
@@ -34905,7 +35120,7 @@ async function testExercices(){
             {date:t-5*J,'bil-weight':'78','bil-bicep-r':'39.5','bil-chest':'101',
               'bil-waist':'82.5','bil-calf-r':'38','bil-neck':'41','bil-hips':'94'}]});
 
-        ok('1425 — LA VUE ARRIÈRE RÉPOND SUR L’ÉCRAN DE L’ÉLÈVE, PAS SEULEMENT SUR CELUI DU COACH',(()=>{
+        ok('1428 — LA VUE ARRIÈRE RÉPOND SUR L’ÉCRAN DE L’ÉLÈVE, PAS SEULEMENT SUR CELUI DU COACH',(()=>{
           // Kevin : « j’ai l’impossibilité de cliquer sur la vue arrière,
           // bizarrement, je peux voir que la vue avant ». Le bouton marchait —
           // _corpsVue basculait — mais corpsVue ne rappelait que le rendu du
@@ -34944,7 +35159,7 @@ async function testExercices(){
             if(zc&&sC!==null) zc.innerHTML=sC;
           }})());
 
-        ok('1425 — L’ÉLÈVE GARDE TOUTES SES MESURES ET PERD LE MODE D’EMPLOI',(()=>{
+        ok('1428 — L’ÉLÈVE GARDE TOUTES SES MESURES ET PERD LE MODE D’EMPLOI',(()=>{
           // Trois retraits, et TROIS SEULEMENT : les dates des étiquettes, la
           // phrase de méthode du pied de cadre, le petit cadre de la teinte.
           // « Le client n’a pas besoin d’avoir accès à ce petit cadre-là, il a
@@ -34996,7 +35211,7 @@ async function testExercices(){
               ?true:_echec('l’élève au premier bilan ne lit plus pourquoi il n’y a pas d’écart');
           } finally { currentUser=sU; _corpsVue=sV; }})());
 
-        ok('1425 — CHAQUE ZONE DE LA LÉGENDE S’OUVRE SUR SA DÉFINITION',(()=>{
+        ok('1428 — CHAQUE ZONE DE LA LÉGENDE S’OUVRE SUR SA DÉFINITION',(()=>{
           // « Sous-MEV, MEV-MAV, MAV-MRV et sur-MRV : donne la possibilité de
           // cliquer sur chacun et d’avoir une définition sur ce que ça
           // signifie. » La définition vit dans RC_LEXIQUE, avec les vingt
@@ -35032,7 +35247,7 @@ async function testExercices(){
             return true;
           } finally { _corpsVue=sV; try{ rcInfoFermer(true); }catch(e){} }})());
 
-        okA('1425 — LES CARTES DE ZONES : LE PEC MONTE, LE BICEPS PASSE DEVANT, LA CUISSE VA DU HAUT EN BAS',(async()=>{
+        okA('1428 — LES CARTES DE ZONES : LE PEC MONTE, LE BICEPS PASSE DEVANT, LA CUISSE VA DU HAUT EN BAS',(async()=>{
           // Kevin, la silhouette sous les yeux : « le détourage au niveau des
           // pecs est incomplet, tu peux monter en haut et sélectionner
           // correctement les pecs ; les biceps, l’entourage est mauvais aussi,

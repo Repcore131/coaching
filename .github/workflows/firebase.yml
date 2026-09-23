@@ -16,9 +16,11 @@ on:
     branches: [main]
     paths-ignore:
       - '**.md'
-      - 'functions/**'
       - 'scripts/**'
       - 'docs/**'
+      # ⚠ 'functions/**' A QUITTE CETTE LISTE (lot 0). Les fonctions sont
+      #   desormais deployees par ce meme workflow : les ignorer aurait laisse
+      #   une correction de fonction dans le depot sans jamais la publier.
   workflow_dispatch:
 
 concurrency:
@@ -140,5 +142,28 @@ jobs:
           npm install -g firebase-tools
           printf '%s' "$CLE" > "$RUNNER_TEMP/cle.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/cle.json"
+          # ⚠ L'HEBERGEMENT D'ABORD, ET SEUL A POUVOIR FAIRE TOMBER L'ETAPE.
+          #   Mesure du 23/09/2026 : en ajoutant `database` a cette meme
+          #   commande, la livraison a echoue en entier et le site est reste
+          #   deux builds en arriere — sans que rien ne le dise ici. Le compte
+          #   de service de GitHub n'a pas forcement le droit d'ecrire les
+          #   regles ; l'hebergement, lui, doit partir quoi qu'il arrive.
           firebase deploy --only hosting --project repcore-sync --non-interactive
+          # LES REGLES. Depuis le lot 0, le palier d'un athlete vit dans
+          # droits/, dont la regle interdit toute ecriture cliente : sans ce
+          # deploiement, le noeud n'existe pas et l'application retombe sur
+          # l'ancien modele. On le tente, et on le DIT quand il echoue.
+          if firebase deploy --only database --project repcore-sync --non-interactive; then
+            echo "Regles deployees."
+          else
+            echo "::warning::REGLES NON DEPLOYEES. droits/ reste inaccessible et l application retombe sur l ancien modele : bash deploie.sh depuis un poste autorise."
+          fi
+          # LES FONCTIONS demandent le plan Blaze. Tant que le projet est en
+          # Spark, ce deploiement echoue : on le tente, on le DIT, et on ne fait
+          # pas tomber la livraison du site pour autant.
+          if firebase deploy --only functions --project repcore-sync --non-interactive; then
+            echo "Fonctions deployees."
+          else
+            echo "::warning::Fonctions NON deployees (plan Blaze requis). droits/ reste vide et l application retombe sur l ancien modele."
+          fi
           rm -f "$RUNNER_TEMP/cle.json"

@@ -790,14 +790,150 @@ const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
 // « RepCore Annuel », 99,00 EUR, cycle ANNUAL, puis coller l'ID ci-dessous.
 // Rien d'autre à modifier : l'écran s'adapte tout seul.
 const PAYPAL_PLAN_ID_ANNUEL='';
+// ⚠ LES DEUX PLANS D'ULTIME N'EXISTENT PAS ENCORE (lot 5). Ils se creent dans
+//   le tableau de bord PayPal — Billing Plans — puis leur identifiant se colle
+//   ici. Tant qu'une case est vide, l'offre correspondante n'est pas proposee
+//   du tout : mieux vaut une offre de moins qu'un bouton qui echoue au moment
+//   de payer.
+//     « RepCore Ultime mensuel »  24,90 EUR, cycle MONTH
+//     « RepCore Ultime annuel »  249,00 EUR, cycle YEAR
+const PAYPAL_PLAN_ID_ULTIME='';
+const PAYPAL_PLAN_ID_ULTIME_ANNUEL='';
+// PURE. Le plan PayPal d'une offre, ou '' quand il n'a pas encore ete cree.
+// UN SEUL ENDROIT SAIT QUEL PLAN VA AVEC QUELLE OFFRE : sans ca, l'ecran des
+// tarifs et le bouton de paiement finiraient par ne plus parler du meme.
+function planIdOffre(cle,annuel){
+  if(cle==='essentielle') return annuel?PAYPAL_PLAN_ID_ANNUEL:PAYPAL_PLAN_ID;
+  if(cle==='ultime') return annuel?PAYPAL_PLAN_ID_ULTIME_ANNUEL:PAYPAL_PLAN_ID_ULTIME;
+  return '';
+}
 // Les deux paliers, dans l'ordre d'affichage. `dispo` est ce qui décide de
 // montrer ou non une carte : il n'y a pas d'état « bientôt disponible ».
+// ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
+//
+// UNE SEULE TABLE POUR LE COACHING ET POUR LES ABONNEMENTS. Deux tables
+// auraient diverge : un prix corrige d'un cote, oublie de l'autre, et deux
+// ecrans qui ne disent pas la meme chose a la meme personne. C'est deja
+// arrive ici — PRIX_ATHLETE_MOIS annoncait 9,50 pendant que PayPal
+// encaissait 9,95.
+//
+// CHAQUE OFFRE DIT CE QU'ELLE OUVRE, ET POUR COMBIEN DE TEMPS :
+//   palier   le palier ouvert (voir PALIERS_ORDRE)
+//   mois     la duree ouverte, en mois ; 0 pour un abonnement, qui court
+//   prix     en euros, un NOMBRE — la mise en forme est faite par prixOffre
+//   prixAn   le tarif annuel d'un abonnement, quand il existe
+//
+// ⚠ AUCUN MONTANT EN DUR AILLEURS. Tout ecran qui affiche un prix le lit ici,
+//   par prixOffre ou prixMoisAnnuel.
+const OFFRES=Object.freeze({
+  // ── Ce que le coach vend ────────────────────────────────────────────
+  programme_perso:    Object.freeze({lib:'Programme personnalisé',   prix:99,   palier:'ultime', mois:3, type:'ponctuel'}),
+  revision_prog:      Object.freeze({lib:'Révision de programme',    prix:40,   palier:'ultime', mois:1, type:'ponctuel'}),
+  boutique_prog:      Object.freeze({lib:'Programme de la boutique', prix:14.9, palier:'ultime', mois:3, type:'ponctuel'}),
+  coaching_essentiel: Object.freeze({lib:'Coaching Essentiel',       prix:150,  palier:'suivi',  mois:1, type:'coaching'}),
+  coaching_transfo:   Object.freeze({lib:'Coaching Transformation',  prix:350,  palier:'suivi',  mois:3, type:'coaching'}),
+  coaching_evolution: Object.freeze({lib:'Coaching Évolution',       prix:600,  palier:'suivi',  mois:6, type:'coaching'}),
+  // ── Ce que l'application vend, quand personne ne suit la personne ───
+  essentielle:        Object.freeze({lib:'Essentielle', prix:9.95,  prixAn:99,  palier:'essentielle', mois:0, type:'abonnement'}),
+  ultime:             Object.freeze({lib:'Ultime',      prix:24.90, prixAn:249, palier:'ultime',      mois:0, type:'abonnement'}),
+  // ── Et l'essai, qui ne se paie pas ──────────────────────────────────
+  essai:              Object.freeze({lib:'Essai',       prix:0,     palier:'ultime', mois:1, type:'essai'}),
+});
+// PURE. Un montant en euros, a la francaise.
+// ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,95 » / « € » en fin de
+//   ligne est fautive en typographie francaise, et elle arrive sur telephone.
+function _euros(n){
+  const v=Number(n)||0;
+  // ⚠ DEUX DECIMALES DES QU'IL Y A DES CENTIMES, ET LES DEUX : « 24,9 € » se
+  //   lit comme une faute de frappe sur un prix, et « 14,9 € » aussi.
+  const s=(Math.round(v*100)%100===0)?String(Math.round(v))
+    :v.toFixed(2).replace('.',',');
+  return s+'\u00a0€';
+}
+function offre(cle){ return OFFRES[cle]||null; }
+// PURE. Le prix d'une offre. `an` demande le tarif annuel quand il existe.
+function prixOffre(cle,an){
+  const o=offre(cle);
+  if(!o) return '';
+  if(an&&o.prixAn) return _euros(o.prixAn);
+  return _euros(o.prix);
+}
+// PURE. Ce que coute un mois d'abonnement annuel — le chiffre qui vend.
+function prixMoisAnnuel(cle){
+  const o=offre(cle);
+  if(!o||!o.prixAn) return '';
+  return _euros(Math.round(o.prixAn/12*100)/100);
+}
+
+// ══ CE QUE CHAQUE PALIER OUVRE ═══════════════════════════════════════════
+// UNE SEULE SOURCE DE VERITE : aucun ecran ne teste le palier a la main, tous
+// appellent peut(u,'capacite'). Un test a la main dans un ecran, c'est une
+// regle de plus a corriger le jour ou l'offre bouge — et celle qu'on oublie.
+//
+// ⚠ LES SEPT PREMIERES SONT DEJA LE COMPORTEMENT D'AUJOURD'HUI, et ce lot n'y
+//   touche pas : composer ses seances, s'entrainer, son historique, ses
+//   bilans, son journal libre, son lifestyle et sa sante restent ouverts.
+//   Ce lot DECLARE l'existant ; les lots 3 et 4 ouvrent et ferment le reste.
+const CAPACITES=Object.freeze({
+  composerSeances:      Object.freeze(['essentielle','ultime','suivi']),
+  seance:               Object.freeze(['essentielle','ultime','suivi']),
+  historique:           Object.freeze(['essentielle','ultime','suivi']),
+  bilans:               Object.freeze(['essentielle','ultime','suivi']),
+  nutritionLibre:       Object.freeze(['essentielle','ultime','suivi']),
+  lifestyle:            Object.freeze(['essentielle','ultime','suivi']),
+  sante:                Object.freeze(['essentielle','ultime','suivi']),
+  bibliothequeMethodes: Object.freeze(['ultime','suivi']),
+  bibliothequeProtocoles:Object.freeze(['ultime','suivi']),
+  planification:        Object.freeze(['ultime','suivi']),
+  dieteCalculee:        Object.freeze(['ultime','suivi']),
+  complements:          Object.freeze(['ultime','suivi']),
+  volume:               Object.freeze(['ultime','suivi']),
+  perfs1rm:             Object.freeze(['ultime','suivi']),
+  rapport:              Object.freeze(['ultime','suivi']),
+  // ⚠ LE CATALOGUE D'EXERCICES EST A ULTIME SEUL. L'athlete suivi ne le
+  //   parcourt pas : il recoit les fiches DES EXERCICES DE SON PROGRAMME,
+  //   ciblees par son coach (lot 3).
+  bibliothequeExercices:Object.freeze(['ultime']),
+  // Ce qu'un coach fait, et que personne d'autre ne fait.
+  correctionVideo:      Object.freeze(['suivi']),
+  canal:                Object.freeze(['suivi']),
+  protocolesMorpho:     Object.freeze(['suivi']),
+  amplitudes:           Object.freeze(['suivi']),
+  chargesArticulaires:  Object.freeze(['suivi']),
+  programmeRecu:        Object.freeze(['suivi']),
+});
+// PURE (elle ne lit que le dossier et le cache des droits).
+//
+// ⚠ L'ESSAI VAUT ULTIME, et c'est le modele : on ne convertit personne en lui
+//   montrant une version amputee. Il ouvre tout ce qu'Ultime ouvre, et rien
+//   de ce que seul un coach fait.
+// ⚠ UN COACH PASSE PARTOUT : il travaille sur les dossiers des autres, et la
+//   bibliotheque d'exercices est son outil de tous les jours.
+function palierEffectif(u){
+  if(!u) return 'aucun';
+  if(u.role==='coach') return 'suivi';
+  const p=palierDe(u);
+  if(p!=='aucun') return p;
+  try{ if(essaiActif(u)) return 'ultime'; }catch(e){}
+  return 'aucun';
+}
+function peut(u,capacite){
+  if(u&&u.role==='coach') return true;
+  const l=CAPACITES[capacite];
+  if(!l) return false;
+  return l.indexOf(palierEffectif(u))>=0;
+}
+// Les deux paliers d'abonnement, dans l'ordre d'affichage.
+// ⚠ LES PRIX VIENNENT D'OFFRES, PAS D'ICI (lot 1) : deux ecrans qui annoncent
+//   deux prix pour le meme abonnement, c'est ce que ce lot ferme.
 const SUB_PALIERS=[
-  {cle:'annuel', titre:'Annuel', prix:'99'+' €', periode:'par an',
-   detail:'soit 8,25 € / mois', econ:'Économise 20,40 €', remise:'−17 %',
+  {cle:'annuel', titre:'Annuel', prix:prixOffre('essentielle',true), periode:'par an',
+   detail:'soit '+prixMoisAnnuel('essentielle')+' / mois',
+   econ:'Économise '+_euros(Math.round((OFFRES.essentielle.prix*12-OFFRES.essentielle.prixAn)*100)/100),
+   remise:'−'+Math.round((1-OFFRES.essentielle.prixAn/(OFFRES.essentielle.prix*12))*100)+' %',
    planId:()=>PAYPAL_PLAN_ID_ANNUEL},
-  {cle:'mensuel', titre:'Mensuel', prix:'9,95'+' €', periode:'par mois',
-   detail:'119,40 € sur un an', econ:'', remise:'',
+  {cle:'mensuel', titre:'Mensuel', prix:prixOffre('essentielle'), periode:'par mois',
+   detail:_euros(Math.round(OFFRES.essentielle.prix*12*100)/100)+' sur un an', econ:'', remise:'',
    planId:()=>PAYPAL_PLAN_ID},
 ];
 // LA TABLE EMPLOYÉE PAR L’ÉCRAN D’ABONNEMENT.
@@ -1595,7 +1731,7 @@ function _renderAbonnement(){
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:18px;margin-bottom:18px">
     <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">Mon abonnement</div>
     ${l('Formule',(pal&&pal.titre)||'Mensuel')}
-    ${l('Prix',((pal&&pal.prix)||'9,95 €')+' '+((pal&&pal.periode)||'par mois'))}
+    ${l('Prix',((pal&&pal.prix)||prixOffre('essentielle'))+' '+((pal&&pal.periode)||'par mois'))}
     ${fin?l(r?'Accès jusqu\'au':'Prochaine échéance',finTxt):''}
     ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 13px">
         <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}.</div>
@@ -3665,6 +3801,28 @@ const CLOUD={
   // L'AVEUGLE » dans _doPushOne) : un 401 et une coupure ne se reparent pas
   // pareil.
   _lectures:{},
+  // ══ LIRE LES DROITS (build 1425, lot 0) ═════════════════════════════════════════
+  // Le noeud droits/<cle> : le palier et son echeance, poses par le serveur.
+  // Rend {ok:true,droits} quand le serveur a repondu (droits peut etre null —
+  // « rien d'ouvert » est une reponse), {ok:false} quand on n'a pas pu lire.
+  // ⚠ LES DEUX NE SE CONFONDENT PAS : un 401 sur des regles pas encore
+  //   deployees n'est pas « cette personne n'a aucun droit ».
+  async pullDroits(email){
+    const key=String(email||'').replace(/[.]/g,',');
+    if(!key) return {ok:false,raison:'sans adresse'};
+    const base=this._fbUrl.replace('users.json','droits/'+key+'.json');
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      if(!token) return {ok:false,raison:'non authentifie'};
+      const r=await fetch(base+'?auth='+token,{signal:ctrl.signal});
+      if(!r.ok) return {ok:false,raison:'HTTP '+r.status};
+      const txt=await r.text();
+      try{ _quotaCompter('in',txt.length); }catch(e){}
+      const d=txt?JSON.parse(txt):null;
+      return {ok:true,droits:(d&&typeof d==='object')?d:null};
+    }catch(e){ return {ok:false,raison:'reseau'}; }
+  },
   async pullUser(email){
     const key=email.replace(/\./g,',');
     const base=this._fbUrl.replace('users.json','users/'+key+'.json');
@@ -4268,6 +4426,17 @@ const CLOUD={
   // Sync ciblée — coach : lui-même + ses athlètes uniquement ; athlète : lui-même + son coach
   async syncRelevantUsers(){
     if(!currentUser) return;
+    // ══ LES DROITS DESCENDENT AVEC LE RESTE (build 1425, lot 0) ═══════════════════
+    // Meme cycle que les dossiers : au demarrage, au retour au premier plan,
+    // et toutes les cinq minutes. Un palier qui change — un abonnement qui
+    // s'arrete, un code de coach qui ouvre — se voit donc sans rechargement.
+    // ⚠ ON NE BLOQUE PAS LA SYNCHRO DES DOSSIERS SUR CETTE LECTURE : elle
+    //   echoue tant que les regles ne sont pas deployees, et les dossiers,
+    //   eux, doivent continuer de descendre.
+    let _palAvant=null;
+    try{ _palAvant=palierDe(currentUser); }catch(e){}
+    try{ await rafraichirDroits(currentUser); }catch(e){}
+    try{ if(_palAvant!==null&&palierDe(currentUser)!==_palAvant) _planifierRepeint(currentUser.email); }catch(e){}
     const users=DB.get('users')||{};
     const pulls=[];
     if(currentUser.role==='coach'){
@@ -6112,6 +6281,117 @@ function routeUser(){
 // plus depuis le passage en 100 % client, et cette règle n'a jamais existé.
 // Un commentaire faux est pire qu'absent : il invite à retirer le seul garde
 // qui reste.
+// ══ LES DROITS VIENNENT DU SERVEUR (build 1425, lot 0) ═══════════════════════════════
+//
+// CE QUI CHANGE. Le palier d'un athlete ne se lit plus dans son dossier —
+// status, paymentStatus, accessExpiry — mais dans un noeud A PART, droits/,
+// que database.rules.json ouvre en LECTURE au titulaire et a son coach, et
+// qu'il ferme en ECRITURE A TOUT LE MONDE. Seules les Cloud Functions y
+// ecrivent, par l'Admin SDK, qui ne passe pas par les regles.
+//
+// POURQUOI. users/<cle> est ecrit par son titulaire, sans restriction de
+// champ : n'importe qui pouvait taper status:'AUTONOMIE_PREMIUM' dans la
+// console de son navigateur et ouvrir toutes les portes. Le fichier
+// l'assumait en commentaire depuis le 24/07/2026, faute de serveur.
+//
+// LES QUATRE PALIERS, du plus ferme au plus ouvert :
+//   'aucun'  ·  'essentielle'  ·  'ultime'  ·  'suivi'
+const PALIERS_ORDRE=Object.freeze(['aucun','essentielle','ultime','suivi']);
+const DROITS_CLE='rc_droits';
+// Une lecture reussie vaut quinze minutes : au-dela on redemande, mais on
+// continue de s'en servir tant que rien de neuf n'est arrive.
+const DROITS_FRAIS_MS=900000;
+function _droitsTous(){
+  try{ const o=JSON.parse(localStorage.getItem(DROITS_CLE)||'null');
+    return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; }
+}
+// GARDE CE QUE LE SERVEUR A DIT, avec la date de la lecture. `vide:true` est
+// une reponse a part entiere : « le serveur a repondu, et il n'y a rien ».
+function _droitsPoser(email,d,vide){
+  if(!email) return;
+  try{
+    const o=_droitsTous();
+    o[String(email).toLowerCase()]={d:d||null,vide:!!vide,lu:Date.now()};
+    localStorage.setItem(DROITS_CLE,JSON.stringify(o));
+  }catch(e){}
+}
+function _droitsLus(email){
+  if(!email) return null;
+  const o=_droitsTous()[String(email).toLowerCase()];
+  return (o&&typeof o==='object')?o:null;
+}
+// ⚠ ON NE PURGE PAS LES DROITS D'UN AUTRE COMPTE : chaque adresse a sa ligne,
+//   et un appareil partage garde celle de chacun. Ce qui part a la
+//   deconnexion, c'est la session, pas la memoire de ce que le serveur a dit.
+//
+// PURE. Le droit connu pour ce dossier, et D'OU IL VIENT :
+//   'serveur'  le noeud a ete lu, il existe
+//   'absent'   le noeud a ete lu, il est vide (personne n'a rien ouvert)
+//   'inconnu'  on n'a jamais reussi a le lire (regles pas deployees, hors
+//              ligne, premiere ouverture) — c'est le seul cas ou l'ancien
+//              modele sert encore de repli
+function droitsDe(u){
+  const e=(u&&u.email)||'';
+  const o=_droitsLus(e);
+  if(!o) return {etat:'inconnu',palier:null,echeance:0,source:null,maj:0};
+  if(o.vide||!o.d) return {etat:'absent',palier:'aucun',echeance:0,source:null,maj:0,lu:o.lu};
+  const d=o.d||{};
+  const p=PALIERS_ORDRE.indexOf(String(d.palier))>0?String(d.palier):'aucun';
+  return {etat:'serveur',palier:p,echeance:Number(d.echeance)||0,
+    source:d.source||null,maj:Number(d.maj)||0,lu:o.lu,
+    essaiOuvertLe:Number(d.essaiOuvertLe)||0,essaiFinit:Number(d.essaiFinit)||0};
+}
+// ⚠ LE REPLI EST LE PALIER LE PLUS BAS QUI NE CASSE RIEN, JAMAIS LE PLUS HAUT.
+//   Un droit qu'on ne sait pas lire n'est pas un droit acquis. La seule chose
+//   qu'on n'ose pas faire, c'est couper quelqu'un en pleine seance parce qu'un
+//   serveur n'a pas repondu : tant qu'aucune lecture n'a abouti sur cet
+//   appareil, l'ancien modele continue de decider (etat 'inconnu'), et il
+//   cesse de le faire des la premiere reponse du serveur.
+//
+// PURE (elle ne lit que le dossier et le cache local).
+function palierDe(u){
+  if(!u) return 'aucun';
+  if(u.role==='coach') return 'suivi';
+  const d=droitsDe(u);
+  if(d.etat==='serveur'){
+    if(d.echeance>0&&Date.now()>=d.echeance) return 'aucun';
+    return d.palier;
+  }
+  if(d.etat==='absent') return 'aucun';
+  return _palierHerite(u);
+}
+// L'ANCIEN MODELE, ET IL EST EN SURSIS. Il ne sert que tant que droits/ n'a
+// jamais repondu sur cet appareil — le temps que les regles soient deployees
+// et que la migration ait tourne. Il disparaitra quand plus personne ne
+// dependra de lui.
+function _palierHerite(u){
+  const s=String((u&&u.status)||'FREE');
+  const ech=Number(u&&u.accessExpiry)||0;
+  if(ech>0&&Date.now()>=ech) return 'aucun';
+  if(s==='COACHING_SUIVI') return 'suivi';
+  if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active') return 'essentielle';
+  return 'aucun';
+}
+// PURE. L'echeance connue, pour l'affichage — 0 quand il n'y en a pas.
+function echeanceDe(u){
+  const d=droitsDe(u);
+  if(d.etat==='serveur') return d.echeance;
+  return Number(u&&u.accessExpiry)||0;
+}
+// LIT droits/ AU SERVEUR et le garde. Rend true si la lecture a abouti (meme
+// vide), false sinon — un appel qui echoue ne change RIEN au cache.
+async function rafraichirDroits(u,force){
+  const cible=u||currentUser;
+  const mail=(cible&&cible.email)||'';
+  if(!mail||(cible&&cible.role==='coach')) return false;
+  const o=_droitsLus(mail);
+  if(!force&&o&&(Date.now()-Number(o.lu||0))<DROITS_FRAIS_MS) return true;
+  let r=null;
+  try{ r=await CLOUD.pullDroits(mail); }catch(e){ r=null; }
+  if(!r||!r.ok) return false;
+  _droitsPoser(mail,r.droits,!r.droits);
+  return true;
+}
 function checkAccess(u){
   if(!u||u.role==='coach') return true;
   const s=u.status||'FREE';
@@ -6123,6 +6403,21 @@ function checkAccess(u){
   // FREE + essai en cours = acces. FREE + essai epuise = le paywall, comme
   // avant. FREE sans essai du tout = comme avant, inchange : les comptes
   // anterieurs a ce lot ne se voient pas ouvrir un essai retroactif.
+  // ══ LE SERVEUR D'ABORD (build 1425, lot 0) ══════════════════════════════════════
+  // Un droit pose par le serveur ouvre la porte, quoi que dise le dossier ;
+  // un droit expire la ferme, quoi que dise le dossier. L'essai reste lu ici
+  // aussi : il n'ouvre rien d'autre qu'une porte, et c'est la meme porte.
+  const d=droitsDe(u);
+  if(d.etat==='serveur'){
+    const p=palierDe(u);
+    if(p!=='aucun') return true;
+    return essaiActif(u);
+  }
+  if(d.etat==='absent') return essaiActif(u);
+  // ETAT 'inconnu' : droits/ n'a jamais repondu sur cet appareil — regles pas
+  // encore deployees, hors ligne, ou premiere ouverture. L'ancien modele
+  // decide, exactement comme avant ce lot. ON NE COUPE PERSONNE SUR UN
+  // SILENCE DU SERVEUR.
   if(s==='FREE') return essaiActif(u);
   if(s==='COACHING_SUIVI'){
     if(!u.accessExpiry) return true;
@@ -13541,7 +13836,7 @@ function expliquerUrgence(c){
 // l’endroit — celui de la table sur la carte, l’ancien dans les textes.
 function prixAutonomie(){
   const p=SUB_PALIERS.find(x=>x.cle==='mensuel');
-  return ((p&&p.prix)||'9,95 €')+'/mois';
+  return ((p&&p.prix)||prixOffre('essentielle'))+'/mois';
 }
 // Les emplacements statiques qui l’annoncent. Un attribut plutôt que trois
 // identifiants : un quatrième texte s’y branche sans toucher à ce code.
@@ -32318,8 +32613,18 @@ function _chargerPaypalAchat(){
   // charger celui-ci par-dessus ecraserait l'un des deux selon l'ordre
   // d'arrivee, et le defaut ne se verrait que sur l'ecran qu'on n'a pas teste.
   sc.setAttribute('data-namespace','paypalAchat');
+  // ⚠ LA CARTE ETAIT FERMEE PAR NOUS (corrige au lot 5). Le SDK etait charge
+  //   avec `disable-funding=credit,card` : personne ne pouvait payer par carte
+  //   sans compte PayPal, et ca se voyait dans les ventes.
+  //   'credit' = le CREDIT PayPal, une offre de financement qui ne concerne
+  //   pas la France : le desactiver est normal.
+  //   'card'   = le paiement par carte SANS compte PayPal : c'est exactement
+  //   ce qu'on veut ouvrir.
+  // L'ARGENT ARRIVE SUR LE MEME COMPTE DANS LES DEUX CAS : c'est PayPal qui
+  // encaisse la carte et qui reverse. Il n'y a rien a changer cote
+  // encaissement, uniquement l'affichage.
   sc.src='https://www.paypal.com/sdk/js?client-id='+PAYPAL_CLIENT_ID
-    +'&currency=EUR&intent=capture&components=buttons&disable-funding=credit,card';
+    +'&currency=EUR&intent=capture&components=buttons&enable-funding=card&disable-funding=credit';
   sc.onload=rendre;
   sc.onerror=()=>{ const b=document.getElementById('ach-paypal');
     if(b) b.innerHTML='<button class="btn btn-outline btn-sm" style="width:100%" '
@@ -32331,7 +32636,12 @@ function _rendreBoutonAchat(){
   if(!z) return;
   const sdk=window.paypalAchat;
   if(!sdk||!sdk.Buttons){ z.innerHTML='<div class="bq-note">PayPal n\'a pas pu se charger.</div>'; return; }
-  z.innerHTML='';
+  // ══ DEUX BOUTONS, DEUX CHEMINS, AUCUNE AMBIGUITE (lot 5) ═══════════════
+  // Le bouton carte n'est plus cache derriere « autres moyens de paiement » :
+  // il a sa place, sous celui de PayPal, avec son propre intitule.
+  z.innerHTML='<div id="ach-pp"></div>'
+    +'<div id="ach-carte-lib" class="bq-note" style="margin:10px 0 6px;display:none">'
+    +'Payer par carte bancaire, sans compte PayPal</div><div id="ach-carte"></div>';
   sdk.Buttons({
     style:{layout:'vertical',color:'black',shape:'rect',label:'pay'},
     createOrder:(data,actions)=>{
@@ -32355,7 +32665,41 @@ function _rendreBoutonAchat(){
       _enregistrerAchat(_achatProgId,(d&&d.id)||(data&&data.orderID)||'');
     }),
     onError:()=>{ toast('Le paiement n\'a pas abouti.','var(--orange)'); }
-  }).render('#ach-paypal');
+  }).render('#ach-pp');
+  // LE BOUTON CARTE, EXPLICITE. `isEligible` decide : si le compte marchand
+  // ou le pays ne l'accepte pas, on n'affiche RIEN plutot qu'un cadre vide.
+  try{
+    const carte=sdk.Buttons(Object.assign({},_paiementCarteOptions(sdk),{
+      createOrder:(data,actions)=>{
+        const c=document.getElementById('ach-cgv');
+        if(!c||!c.checked){ toast('Coche la case avant de payer.','var(--orange)'); return null; }
+        const p=programmeDuCatalogue(_achatProgId);
+        if(!p) return null;
+        return actions.order.create({purchase_units:[{
+          description:('RepCore — '+(p.nom||'Programme')).slice(0,127),
+          custom_id:p.id,
+          amount:{currency_code:'EUR',value:(p.prixCts/100).toFixed(2)}
+        }]});
+      },
+      onApprove:(data,actions)=>actions.order.capture().then(d=>{
+        _enregistrerAchat(_achatProgId,(d&&d.id)||(data&&data.orderID)||'');
+      }),
+      onError:()=>{ toast('Le paiement n\'a pas abouti.','var(--orange)'); }
+    }));
+    if(carte.isEligible&&carte.isEligible()){
+      const lib=document.getElementById('ach-carte-lib');
+      if(lib) lib.style.display='';
+      carte.render('#ach-carte');
+    }
+  }catch(e){}
+}
+// ⚠ LE MEME HABILLAGE POUR LES DEUX ECRANS. Le bouton carte de PayPal porte
+//   SON libelle, que nous ne choisissons pas : le notre est la ligne au-dessus.
+//   `fundingSource: FUNDING.CARD` est ce qui le fait sortir de « autres moyens
+//   de paiement », ou personne ne va le chercher.
+function _paiementCarteOptions(sdk){
+  return {fundingSource:(sdk&&sdk.FUNDING&&sdk.FUNDING.CARD)||'card',
+    style:{layout:'vertical',color:'black',shape:'rect',height:45}};
 }
 // L'ACHAT EST ECRIT, PUIS LE PROGRAMME S'APPLIQUE. Dans cet ordre : si
 // l'application echoue ou si l'athlete refuse d'ecraser ses seances, il a
@@ -39304,7 +39648,7 @@ const CORPS_PLANCHE=Object.freeze({
 //     la masse au biceps, et donne la cuisse entiere au quadriceps (a
 //     l'ischio de dos), en ne touchant QUE des pixels deja attribues a l'un
 //     des muscles nommes. Il est idempotent : `--verif` le rejoue sur les
-//     cartes livrees et dit si elles ont derive. Une assertion du 1425 sonde
+//     cartes livrees et dit si elles ont derive. Une assertion du 1428 sonde
 //     douze pixels de z-h-face.png, pour que ce soit le RESULTAT qui tienne
 //     et pas la recette.
 //
@@ -92609,7 +92953,10 @@ function lienAbonnement(){
   }catch(e){}
   return '/app/';
 }
-const PRIX_ATHLETE_MOIS='9,50 €';
+// ⚠ IL ANNONCAIT 9,50 PENDANT QUE PAYPAL ENCAISSAIT 9,95 (corrige au lot 1).
+//   Un prix ecrit en dur finit toujours par diverger de celui qu'on facture :
+//   celui-ci vient d'OFFRES, comme tous les autres.
+const PRIX_ATHLETE_MOIS=prixOffre('essentielle');
 // Quinze jours : assez tot pour relancer sans harceler, assez tard pour que la
 // relance parle d'une echeance que l'athlete a en tete.
 const RELANCE_JOURS=15;
@@ -94306,7 +94653,12 @@ function initPaypalSubscription(){
   }
   const script=document.createElement('script');
   script.id='paypal-sdk';
-  script.src='https://www.paypal.com/sdk/js?client-id='+clientId+'&vault=true&intent=subscription&currency=EUR';
+  // ⚠ LE SDK NE DEMANDAIT RIEN, DONC PAYPAL DECIDAIT SEUL (corrige au lot 5).
+  //   `enable-funding=card` demande explicitement le paiement par carte sans
+  //   compte PayPal. L'argent arrive sur le meme compte : PayPal encaisse la
+  //   carte et reverse, il n'y a rien a changer cote encaissement.
+  script.src='https://www.paypal.com/sdk/js?client-id='+clientId
+    +'&vault=true&intent=subscription&currency=EUR&enable-funding=card';
   script.onload=()=>renderPaypalButton(planId,coachId);
   script.onerror=()=>{toast('Erreur chargement PayPal. Vérifie la connexion.');if(_ppCon)_ppCon.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Réessayer →</button>';};
   document.head.appendChild(script);
@@ -94330,12 +94682,19 @@ function renderPaypalButton(planId,coachId){
     +"conditions générales de vente</a>. Je demande l'accès immédiat au service et "
     +"reconnais qu'à ce titre je perds mon droit de rétractation de 14 jours une fois "
     +"le contenu numérique fourni.</span></label>"
-    +'<div id="paypal-buttons-inner" style="display:none"></div>';
+    +'<div id="paypal-buttons-inner" style="display:none">'
+    +'<div id="pp-abo"></div>'
+    +'<div id="pp-carte-lib" style="display:none;margin:10px 0 6px;font-size:var(--fs-xs);'
+    +'color:var(--sub);text-align:left">Payer par carte bancaire, sans compte PayPal</div>'
+    +'<div id="pp-carte"></div></div>';
   const _cgv=document.getElementById('cgv-ok');
   const _inner=document.getElementById('paypal-buttons-inner');
   _cgv.addEventListener('change',()=>{_inner.style.display=_cgv.checked?'':'none';});
   if(typeof paypal==='undefined'){toast('PayPal non charge');return;}
-  paypal.Buttons({
+  // ══ LES OPTIONS SONT NOMMEES : DEUX BOUTONS S'EN SERVENT (lot 5) ══════
+  // Celui de PayPal, et celui de la carte bancaire. Le meme abonnement, le
+  // meme plan, la meme confirmation : seul le moyen de paiement change.
+  const _optsAbo={
     style:{layout:'vertical',color:'black',shape:'rect',label:'subscribe'},
     createSubscription:function(data,actions){
       // Deuxieme verrou : masquer ne suffit pas, un clic programmatique
@@ -94423,7 +94782,19 @@ function renderPaypalButton(planId,coachId){
       toast('Erreur paiement. Réessaie.');
       console.error('PayPal error',err);
     }
-  }).render('#paypal-buttons-inner');
+  };
+  paypal.Buttons(_optsAbo).render('#pp-abo');
+  // LE BOUTON CARTE, EXPLICITE ET SOUS L'AUTRE. `isEligible` decide : si le
+  // compte marchand ou le pays ne l'accepte pas, on n'affiche RIEN plutot
+  // qu'un cadre vide — et le chemin PayPal, lui, reste entier.
+  try{
+    const carte=paypal.Buttons(Object.assign({},_optsAbo,_paiementCarteOptions(paypal)));
+    if(carte.isEligible&&carte.isEligible()){
+      const lib=document.getElementById('pp-carte-lib');
+      if(lib) lib.style.display='';
+      carte.render('#pp-carte');
+    }
+  }catch(e){}
 }
 // ══════════════ UI DE CLASSIFICATION MUSCULAIRE ══════════════
 
