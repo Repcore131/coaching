@@ -6392,6 +6392,103 @@ async function rafraichirDroits(u,force){
   _droitsPoser(mail,r.droits,!r.droits);
   return true;
 }
+// ══ L'ARRIVEE : LES DEUX FORMULES, LES CHIFFRES, LES PORTES (lot 2) ══════
+// Les prix viennent d'OFFRES et de nulle part ailleurs : l'ecran d'arrivee et
+// l'ecran de paiement ne peuvent donc pas annoncer deux chiffres differents.
+let _accueilAnnuel=true;   // l'annuel est montre par defaut
+function accueilVersTarifs(){
+  const z=document.getElementById('wel-tarifs');
+  if(z) z.scrollIntoView({behavior:'smooth',block:'start'});
+  return true;
+}
+function accueilPeriode(annuel){
+  _accueilAnnuel=!!annuel;
+  const a=document.getElementById('wel-b-an'), m=document.getElementById('wel-b-mois');
+  if(a) a.classList.toggle('actif',_accueilAnnuel);
+  if(m) m.classList.toggle('actif',!_accueilAnnuel);
+  const b=document.getElementById('wel-badge');
+  if(b) b.style.display=_accueilAnnuel?'':'none';
+  accueilRendreTarifs();
+  return _accueilAnnuel;
+}
+// UNE CARTE D'OFFRE. Le prix AU MOIS est toujours le chiffre le plus gros ; le
+// total annuel est ecrit en petit dessous. Jamais l'inverse : c'est le prix
+// mensuel que les gens comparent.
+function _accueilCarte(cle,pref,lignes){
+  const o=offre(cle);
+  if(!o) return '';
+  const annuel=_accueilAnnuel&&!!o.prixAn;
+  const auMois=annuel?prixMoisAnnuel(cle):prixOffre(cle);
+  const dessous=annuel
+    ? (prixOffre(cle,true)+' par an, facturés en une fois')
+    : (_euros(Math.round(o.prix*12*100)/100)+' sur un an');
+  const plan=planIdOffre(cle,annuel);
+  // ⚠ UN BOUTON QUI NE PEUT PAS ABOUTIR NE S'AFFICHE PAS EN ROUGE. Tant que le
+  //   plan n'existe pas chez PayPal, on le dit au lieu de faire semblant.
+  const bouton=plan
+    ? '<button type="button" class="wel-c-b" onclick="accueilChoisir(\''+cle+'\','+(annuel?'true':'false')+')">Commencer le mois offert</button>'
+    : '<button type="button" class="wel-c-b creux" onclick="accueilChoisir(\''+cle+'\','+(annuel?'true':'false')+')">Commencer le mois offert</button>'
+      +'<div class="wel-c-att">Le paiement de cette formule ouvre bientôt. Ton mois offert, lui, commence tout de suite.</div>';
+  return '<div class="wel-c'+(pref?' pref':'')+'">'
+    +'<div class="wel-c-top"><span class="wel-c-nom">'+escapeHtml(o.lib)+'</span>'
+    +(pref?'<span class="wel-c-pref">Le plus choisi</span>':'')+'</div>'
+    +'<div class="wel-c-prix"><span class="wel-c-nb">'+auMois+'</span>'
+    +'<span class="wel-c-par">par mois</span></div>'
+    +'<div class="wel-c-tot">'+dessous+'</div>'
+    +bouton+'</div>';
+}
+// CE QUI JUSTIFIE LE PRIX. Quatre chiffres, quatre icones, aucune phrase
+// creuse. ⚠ LES DEUX NOMBRES SONT MESURES, pas arrondis pour faire joli :
+// 436 fiches d'exercices dans le depot, 3 484 aliments dans la base
+// ANSES-Ciqual embarquee.
+const ACCUEIL_CHIFFRES=Object.freeze([
+  Object.freeze({i:'video',t:'436 exercices filmés et illustrés',
+    s:'Chaque mouvement montré, pas décrit.'}),
+  Object.freeze({i:'utensils',t:'3 484 aliments',
+    s:'La base ANSES-Ciqual, dans ton téléphone, utilisable sans réseau.'}),
+  Object.freeze({i:'dumbbell',t:'Tes séances en salle, même sans connexion',
+    s:'Le sous-sol de ta salle ne coupe plus ton entraînement.'}),
+  Object.freeze({i:'crosshair',t:'L’analyse de tes mouvements, image par image',
+    s:'Angles, trajectoires, amplitude : ce que l’œil ne voit pas à vitesse réelle.'}),
+]);
+const ACCUEIL_DIFF=Object.freeze([
+  Object.freeze({t:'Essentielle',l:Object.freeze([
+    'Tu composes tes séances et tu les enchaînes.',
+    'Tu t’entraînes : charges, séries, minuteur.',
+    'Tu mesures : historique, bilans, poids.'])}),
+  Object.freeze({t:'Ultime',l:Object.freeze([
+    '436 exercices filmés, avec les erreurs à éviter.',
+    'Les méthodes d’intensification et les échauffements tout faits.',
+    'La planification de tes blocs, et ta diète calculée.'])}),
+]);
+function accueilRendreTarifs(){
+  const z=document.getElementById('wel-cartes');
+  if(!z) return false;
+  z.innerHTML=_accueilCarte('essentielle',false)+_accueilCarte('ultime',true);
+  const d=document.getElementById('wel-diff');
+  if(d) d.innerHTML=ACCUEIL_DIFF.map(x=>'<div class="wel-d"><div class="wel-d-t">'
+    +escapeHtml(x.t)+'</div><ul>'+x.l.map(y=>'<li>'+escapeHtml(y)+'</li>').join('')+'</ul></div>').join('');
+  const c=document.getElementById('wel-chiffres');
+  if(c) c.innerHTML=ACCUEIL_CHIFFRES.map(x=>'<div class="wel-ch">'
+    +'<span class="wel-ch-i" aria-hidden="true">'+icon(x.i,18)+'</span>'
+    +'<span><span class="wel-ch-t">'+escapeHtml(x.t)+'</span>'
+    +'<span class="wel-ch-s">'+escapeHtml(x.s)+'</span></span></div>').join('');
+  // Le prix annonce sur la troisieme porte vient de la meme table.
+  document.querySelectorAll('[data-prix-essentielle-mois]')
+    .forEach(e=>{ e.textContent=prixOffre('essentielle'); });
+  return true;
+}
+// LA PORTE « JE M'ENTRAINE SEUL » MENE A L'INSCRIPTION, pas a un mur de
+// paiement : l'essai d'un mois est offert et sans carte bancaire. Le choix de
+// la formule est garde pour l'ecran d'abonnement, qui le relira.
+function accueilChoisir(cle,annuel){
+  try{ sessionStorage.setItem('rc_offre_choisie',String(cle||'')); }catch(e){}
+  try{ sessionStorage.setItem('rc_offre_annuel',annuel?'1':''); }catch(e){}
+  if(currentUser){ go('s-subscribe'); try{ initPaypalSubscription(); }catch(e){} return true; }
+  go('s-register');
+  try{ selectRole('athlete',true); }catch(e){}
+  return true;
+}
 function checkAccess(u){
   if(!u||u.role==='coach') return true;
   const s=u.status||'FREE';
@@ -6826,7 +6923,12 @@ function go(id){
   // Étapes de tunnel adossées à l'affichage d'un écran. Posées ici plutôt que
   // chez les appelants : plusieurs chemins mènent à chacun de ces écrans, et
   // n'en instrumenter qu'un donnerait un tunnel faux sans que ça se voie.
-  if(id==='s-welcome') rcmVue('welcome_view');
+  if(id==='s-welcome'){
+    rcmVue('welcome_view');
+    // LES DEUX FORMULES SE PEIGNENT A L'ARRIVEE (lot 2) : leurs prix viennent
+    // d'OFFRES, et l'ecran doit les montrer des la premiere ouverture.
+    try{ accueilRendreTarifs(); }catch(e){}
+  }
   if(id==='s-register') rcmVue('register_started');
   // L'ECRAN D'INSTALLATION EST LE HAUT DU TUNNEL, et il se rejoint par trois
   // chemins : le demarrage, le fragment #install, et un retour arriere. La

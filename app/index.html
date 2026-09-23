@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1428';
+window.RC_BUILD='1429';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -403,7 +403,7 @@ if('serviceWorker' in navigator){
 /* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:'Bebas Neue','Arial Narrow','Haettenschweiler','Franklin Gothic Condensed',Impact,sans-serif}
 </style>
-<link rel="stylesheet" href="./rc-style.1428.css">
+<link rel="stylesheet" href="./rc-style.1429.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -758,64 +758,99 @@ const COACH_PHOTO='icons/coach.jpg';
 
 </div>
 
-<div id="s-welcome" class="screen carbon-bg" style="flex-direction:column;height:100vh;height:100dvh;position:relative;overflow:hidden">
+<!-- ══ L'ARRIVEE : CE QUI VEND (lot 2) ═══════════════════════════════════
+     Kevin, 23/09/2026 : « c'est le lot le plus important commercialement.
+     Quelqu'un qui arrive ne sait ni ce que ca coute, ni ce qu'il peut faire ».
+     L'ecran gardait son visuel et son accroche — ils sont bons — et renvoyait
+     les tarifs deux ecrans plus loin, dans s-subscribe.
+     ORDRE IMPOSE : le visuel, les trois portes (code, coach, autonomie), puis
+     l'ancrage, les deux formules, ce qui les separe, les quatre chiffres, et
+     le rappel du coaching. Le premier ecran porte l'accroche ET les trois
+     portes, sans defilement, a 375 px.
+     ⚠ L'ECRAN DEFILE DESORMAIS : il etait fige a 100dvh avec overflow:hidden,
+       ce qui rendait tout ce qui suit invisible. -->
+<div id="s-welcome" class="screen carbon-bg wel" style="flex-direction:column;position:relative;overflow-x:hidden">
 
   <!-- Rougeur subtile haut-centre -->
-  <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:400px;background:radial-gradient(ellipse at 50% 0%,rgba(224,32,32,.18) 0%,transparent 65%);pointer-events:none;z-index:0"></div>
+  <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:min(500px,100%);height:400px;background:radial-gradient(ellipse at 50% 0%,rgba(224,32,32,.13),transparent 62%);pointer-events:none;z-index:0"></div>
 
   <!-- Diagonales de texture -->
   <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 28px,rgba(255,255,255,.012) 28px,rgba(255,255,255,.012) 29px);pointer-events:none;z-index:0"></div>
 
-  <!-- VIGNETTE BORDS — ligne noire large qui absorbe vers les contours -->
-  <div style="position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 88% 78% at 50% 42%,transparent 22%,rgba(0,0,0,.5) 58%,rgba(0,0,0,.92) 100%)"></div>
+  <!-- PREMIER ECRAN : l'accroche, puis les trois portes. -->
+  <div class="wel-un">
+    <div class="wel-logo">
+      <img src="./icons/logo.png" alt="RepCore" width="200" height="200">
+    </div>
+    <div class="wel-accroche">
+      <div class="wel-titre">Entraîne-toi<br>comme un<br><span class="wel-titre-r">pro.</span></div>
+      <div class="wel-sous">DISCIPLINE &nbsp;·&nbsp; TRAVAIL &nbsp;·&nbsp; RÉSULTAT</div>
+    </div>
 
-  <!-- Mention légale verticale — bord droit -->
-  <div style="position:absolute;right:0;top:0;bottom:0;width:18px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:1">
-    <span style="writing-mode:vertical-rl;text-orientation:mixed;font-size:var(--fs-xs);color:rgba(255,255,255,.1);letter-spacing:1.8px;font-family:Montserrat,sans-serif;font-weight:500;text-transform:uppercase;white-space:nowrap">© Kevin Guellec · RepCore · Données &amp; idées protégées</span>
+    <!-- LES TROIS PORTES. L'ordre compte : le code d'abord (c'est le plus
+         rapide), le coach ensuite (c'est le plus rentable), l'autonomie en
+         dernier. -->
+    <div class="wel-portes">
+      <button type="button" class="wel-p wel-p-code" onclick="go('s-client-code')">
+        <span class="wel-p-t">J'ai un code coach</span>
+        <span class="wel-p-s">Ton coach te l'a donné : tout est compris dans son suivi.</span>
+      </button>
+      <a class="wel-p wel-p-coach" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">
+        <span class="wel-p-t">Je cherche un coach</span>
+        <span class="wel-p-s">Un plan écrit pour toi, tes vidéos corrigées, quelqu'un qui suit.</span>
+      </a>
+      <button type="button" class="wel-p wel-p-seul" onclick="accueilVersTarifs()">
+        <span class="wel-p-t">Je m'entraîne seul</span>
+        <span class="wel-p-s">L'application seule, à partir de <span data-prix-essentielle-mois></span> par mois.</span>
+      </button>
+    </div>
+    <button type="button" class="wel-fleche" onclick="accueilVersTarifs()" aria-label="Voir les tarifs">▾</button>
   </div>
 
-  <!-- TOP: Logo + texte
-       min-height:0 : sans lui, un enfant flex:1 refuse de descendre sous la
-       taille de son contenu (min-height:auto par défaut). Le bloc restait donc
-       à 448px quelle que soit la hauteur disponible, et « ESPACE ATHLÈTE »
-       passait sous le pli, coupé par l'overflow:hidden de l'écran.
-       Les min(fixe, Ndvh) ne mordent qu'en dessous de ~667px de hauteur : sur
-       un grand écran, les valeurs restent exactement celles d'avant. -->
-  <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding-top:60px;padding-top:min(60px,6dvh)">
+  <!-- ══ CE QUE CA COUTE, ET CE QUE CA FAIT ══════════════════════════════ -->
+  <div class="wel-deux" id="wel-tarifs">
 
-    <!-- Logo avec ombre directionnelle droite + bas -->
-    <div style="animation:wFadeUp 0.45s var(--c-out) 0s both;min-height:0">
-      <img src="./icons/logo.png" style="display:block;width:200px;height:200px;height:min(200px,30dvh);width:auto;aspect-ratio:1;filter:drop-shadow(5px 8px 16px rgba(0,0,0,.95)) drop-shadow(2px 4px 6px rgba(0,0,0,.7))">
+    <!-- L'ANCRAGE. Factuel, verifiable, et il fait paraitre tout le reste
+         leger. Il precede les prix : lu apres, il ne sert plus a rien. -->
+    <p class="wel-ancre">Un coach en salle, c'est 50 à 80 € la séance. Deux fois par
+      semaine, on est entre 400 et 640 € par mois, sans le plan nutrition et sans
+      application.</p>
+
+    <!-- LE SELECTEUR. L'annuel est affiche par defaut. -->
+    <div class="wel-bascule" role="group" aria-label="Choisir la période">
+      <button type="button" id="wel-b-an" class="actif" onclick="accueilPeriode(true)">Annuel</button>
+      <button type="button" id="wel-b-mois" onclick="accueilPeriode(false)">Mensuel</button>
+      <span class="wel-badge" id="wel-badge">2 mois offerts</span>
     </div>
 
-    <!-- Tagline avec text-shadow pour faire ressortir -->
-    <div style="margin-top:48px;margin-top:min(48px,5dvh);text-align:center;padding:0 32px;animation:wFadeUp var(--t-4) var(--c-out) 0.18s both;opacity:0">
-      <div style="font-size:var(--fs-2xl);font-weight:900;line-height:1.1;letter-spacing:-1.5px;color:var(--text);text-shadow:0 2px 20px rgba(0,0,0,.95),0 0 50px rgba(0,0,0,.8),0 4px 8px rgba(0,0,0,.6)">Entraîne-toi<br>comme un<br><span style="color:#E02020;--halo-c:rgba(224,32,32,.5);text-shadow:var(--halo-3),0 2px 14px rgba(0,0,0,.9)">pro.</span></div>
+    <!-- LES DEUX FORMULES. Remplies par accueilRendreTarifs : les prix vivent
+         dans OFFRES, et nulle part ailleurs. -->
+    <div class="wel-cartes" id="wel-cartes"></div>
+    <p class="wel-offert">Ton premier mois est offert, sans carte bancaire.</p>
+
+    <!-- CE QUI DIFFERENCIE LES DEUX, six lignes, pas un tableau. -->
+    <div class="wel-diff" id="wel-diff"></div>
+
+    <!-- CE QUI JUSTIFIE LE PRIX. Quatre chiffres, quatre icones. -->
+    <div class="wel-chiffres" id="wel-chiffres"></div>
+
+    <!-- LE RAPPEL DU COACHING, EN BAS : c'est la vente la plus rentable, et
+         celle qu'on propose apres avoir montre le reste. -->
+    <div class="wel-coach">
+      <div class="wel-coach-t">Tu veux que quelqu'un s'en occupe pour toi&nbsp;?</div>
+      <div class="wel-coach-s">Un plan écrit pour toi, ta diète calculée, tes vidéos
+        corrigées, et quelqu'un qui te répond.</div>
+      <a class="wel-coach-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">Voir les formules de coaching</a>
     </div>
 
-    <!-- Descriptor — DISCIPLINE · TRAVAIL · RÉSULTAT -->
-    <div style="margin-top:20px;margin-top:min(20px,2.6dvh);animation:wFadeUp var(--t-4) var(--c-out) 0.3s both;opacity:0">
-      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.38);letter-spacing:2px;text-align:center;font-weight:500">DISCIPLINE &nbsp;·&nbsp; TRAVAIL &nbsp;·&nbsp; RÉSULTAT</div>
+    <!-- L'ENTREE DES DEUX ESPACES, discrete : qui a deja un compte sait ou il
+         va, et cette page est ecrite pour qui arrive. -->
+    <div class="wel-pied">
+      <button type="button" onclick="go('s-athlete-entry')">J'ai déjà un compte</button>
+      <button type="button" onclick="go('s-coach-entry')">Espace coach</button>
     </div>
-  </div>
-
-  <!-- BOTTOM: CTA buttons — flex-shrink:0 pour que ce soit le bloc du HAUT
-       qui cède, jamais les deux boutons d'entrée dans l'app. -->
-  <div style="padding:32px 28px 48px;padding:min(32px,4dvh) 28px min(48px,6dvh);flex-shrink:0;z-index:1;animation:wSlideUp var(--t-4) var(--c-out) 0.24s both;opacity:0">
-    <!-- ESPACE COACH — bevel 3D inset + glow rouge -->
-    <button class="hv-rouge" onclick="go('s-coach-entry')"
-      style="width:100%;padding:20px;background:#E02020;color:var(--text);border:none;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:background var(--t-1);box-shadow:var(--e-inset),var(--glow-red)"
-     >ESPACE COACH</button>
-    <!-- ESPACE ATHLÈTE — bevel subtil -->
-    <button class="hv-athlete" onclick="go('s-athlete-entry')"
-      style="width:100%;padding:20px;background:rgba(255,255,255,.04);color:var(--text);border:1px solid rgba(255,255,255,.15);font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:border-color var(--t-1),color var(--t-1);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 18px rgba(0,0,0,.55)"
-     >ESPACE ATHLÈTE</button>
-    <button class="hv-teinte" id="install-btn" onclick="installApp()"
-      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:var(--pile-titre);font-size:var(--fs-sm);font-weight:400;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:background var(--t-1);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
-     >⬇ Installer l'app sur ce téléphone</button>
-    <button class="hv-teinte" id="ios-install-btn" onclick="showIosInstallGuide()"
-      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:var(--pile-titre);font-size:var(--fs-sm);font-weight:400;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:background var(--t-1);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
-     >📲 Installer l'app</button>
+    <button class="hv-teinte wel-install" id="install-btn" onclick="installApp()" style="display:none">⬇ Installer l'app sur ce téléphone</button>
+    <button class="hv-teinte wel-install" id="ios-install-btn" onclick="showIosInstallGuide()" style="display:none">📲 Installer l'app</button>
   </div>
 
 </div>
@@ -5480,5 +5515,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1428.js"></script>
+<script src="./rc-core.1429.js"></script>
 </body></html>

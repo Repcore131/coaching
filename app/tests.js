@@ -12631,37 +12631,41 @@ async function testExercices(){
               return nus.length?_echec('texte désaccentué : '+nus.join(', ')):true;
             } finally { currentUser=_cu; if(_db) DB.set('users',_db); }})());
         // ── LE PRIX AVANT LE COMPTE ─────────────────────────────────────
-        // Un visiteur doit atteindre 9,95 €/mois en DEUX clics, sans avoir
-        // saisi la moindre donnee. Rien ne tenait ce parcours — et c'est celui
-        // qui decide si quelqu'un s'inscrit ou referme.
-        ok('Critère : deux clics de l\'accueil au prix, sans rien saisir',(()=>{
+        // Un visiteur doit atteindre le prix sans avoir saisi la moindre
+        // donnee. C'est ce parcours qui decide si quelqu'un s'inscrit ou
+        // referme.
+        //
+        // ⚠ L'ASSERTION A CHANGE DE CHEMIN AVEC LE LOT 2, PAS D'INTENTION.
+        //   Les prix vivaient deux ecrans plus loin, dans s-subscribe : il
+        //   fallait deux clics pour les lire, et ce test tenait ces deux clics.
+        //   Depuis la refonte de l'arrivee, les deux formules sont SUR la page
+        //   d'arrivee, sous les trois portes : zero clic. On tient donc plus
+        //   fort qu'avant, pas moins.
+        ok('Critère : le prix se lit sur l\'arrivée, sans un clic et sans rien saisir',(()=>{
           const _sv=currentUser;
           const _act=[...document.querySelectorAll('.screen.active')].map(e=>e.id);
           try{
             currentUser=null;
             document.querySelectorAll('.screen.active').forEach(e=>e.classList.remove('active'));
             document.getElementById('s-welcome').classList.add('active');
-            // Clic 1 : un BOUTON natif, atteignable au clavier sans rien ajouter.
-            const b=[...document.querySelectorAll('#s-welcome button')]
-              .find(e=>/ATHL/i.test(e.innerText||''));
-            if(!b) return _echec('« espace athlète » introuvable sur l\'accueil');
-            b.click();
-            if((document.querySelector('.screen.active')||{}).id!=='s-athlete-entry')
-              return _echec('le premier clic ne mène pas à l\'espace athlète');
-            // Clic 2 : la carte, qui doit PORTER le prix — un libellé muet
-            // obligerait a cliquer pour l'apprendre, donc a trois clics.
-            const carte=[...document.querySelectorAll('#s-athlete-entry [role="button"],#s-athlete-entry div[onclick]')]
-              .find(e=>/PAS DE CODE/i.test(e.innerText||''));
-            if(!carte) return _echec('la carte « je n\'ai pas de code » a disparu');
-            const lib=(carte.innerText||'').replace(/\s+/g,' ');
-            if(lib.indexOf('9,95')<0) return _echec('la carte n\'annonce pas le prix : '+lib.slice(0,60));
-            carte.click();
-            if((document.querySelector('.screen.active')||{}).id!=='s-subscribe')
-              return _echec('le second clic ne mène pas à l\'abonnement');
-            // Et AUCUN champ de saisie personnelle sur le chemin.
-            const champs=document.querySelectorAll('#s-subscribe input[type="email"],#s-subscribe input[type="password"]');
-            return champs.length===0
-              ?true:_echec(champs.length+' champ(s) personnel(s) sur l\'écran de prix');
+            accueilRendreTarifs();
+            const w=document.getElementById('s-welcome');
+            const nbsp=String.fromCharCode(160);
+            const txt=(w.innerText||w.textContent||'').replace(/\s+/g,' ');
+            // La CSS ecrit les noms en capitales, et innerText rend le texte
+            // tel qu'il s'affiche : on compare donc sans la casse.
+            const bas=txt.toLowerCase();
+            if(bas.indexOf('essentielle')<0||bas.indexOf('ultime')<0)
+              return _echec('les deux formules ne sont pas nommées sur l’arrivée');
+            for(const p of [prixMoisAnnuel('essentielle'),prixMoisAnnuel('ultime')])
+              if(txt.indexOf(p.replace(nbsp,' '))<0&&txt.indexOf(p)<0)
+                return _echec('le prix '+p+' ne se lit pas sur l’arrivée');
+            const champs=w.querySelectorAll('input[type="email"],input[type="password"],input[type="text"]');
+            if(champs.length) return _echec(champs.length+' champ(s) de saisie sur l’arrivée');
+            const seul=[...w.querySelectorAll('.wel-p')].find(e=>/entraîne seul/i.test(e.textContent||''));
+            if(!seul) return _echec('la porte « je m’entraîne seul » a disparu');
+            return (seul.getAttribute('onclick')||'').indexOf('accueilVersTarifs')>=0
+              ?true:_echec('elle ne mène pas aux tarifs');
           } finally { currentUser=_sv;
             document.querySelectorAll('.screen.active').forEach(e=>e.classList.remove('active'));
             _act.forEach(id=>document.getElementById(id)?.classList.add('active')); }})());
@@ -19648,6 +19652,11 @@ async function testExercices(){
             // nutritionnelles, citée en clair. Depuis que le scanner retire les
             // commentaires, il n'y a plus rien à excuser. Une exception qui ne
             // couvre plus rien est une invitation à en ajouter une de trop.
+            'beacons.ai',            // l. 257 — la page publique des formules de
+                                     // coaching, ouverte dans un nouvel onglet
+                                     // depuis l'arrivee et depuis les ecrans
+                                     // fermes (lots 2 et 4). RepCore n'y envoie
+                                     // rien : la ligne de la politique le dit.
             'w3.org','repcore131.github.io'];
           // ══ LE SCANNER LISAIT LES COMMENTAIRES ═══════════════════════
           //
@@ -33392,6 +33401,96 @@ async function testExercices(){
       // BUILD 1412 — Kevin, trois captures a l'appui : « remplace-moi la version
       // des images 1 et 2 par celle de l'image 3, a l'identique, et mets les
       // fonctions visibles pour la completer ».
+      // ══ LOT 2 — L'ARRIVEE, CELLE QUI VEND ══════════════════════════════
+      ok('LOT 2 — LES TROIS PORTES, DANS L’ORDRE, AU PREMIER ÉCRAN',(()=>{
+        const w=document.getElementById('s-welcome');
+        if(!w) return _echec('l’écran d’arrivée a disparu');
+        const un=w.querySelector('.wel-un');
+        if(!un) return _echec('le premier écran n’est plus identifiable');
+        const portes=[...un.querySelectorAll('.wel-p')];
+        if(portes.length!==3) return _echec(portes.length+' portes au lieu de 3');
+        const t=portes.map(p=>p.querySelector('.wel-p-t').textContent.trim());
+        if(t[0]!=='J\'ai un code coach') return _echec('la première porte : '+t[0]);
+        if(t[1]!=='Je cherche un coach') return _echec('la deuxième porte : '+t[1]);
+        if(t[2]!=='Je m\'entraîne seul') return _echec('la troisième porte : '+t[2]);
+        // CHACUNE MENE QUELQUE PART, et la bonne : le code vers l'écran de
+        // code, le coach vers la page de coaching, l'autonomie vers les prix.
+        if((portes[0].getAttribute('onclick')||'').indexOf('s-client-code')<0)
+          return _echec('« J’ai un code coach » ne mène pas à l’écran de code');
+        if((portes[1].getAttribute('href')||'').indexOf('beacons.ai/kevin.gllc')<0)
+          return _echec('« Je cherche un coach » ne mène pas à la page de coaching');
+        if((portes[2].getAttribute('onclick')||'').indexOf('accueilVersTarifs')<0)
+          return _echec('« Je m’entraîne seul » ne mène pas aux tarifs');
+        // ET L'ACCROCHE D'ORIGINE EST TOUJOURS LA : elle etait bonne.
+        const titre=(un.querySelector('.wel-titre')||{}).textContent||'';
+        return /Entraîne-toi/.test(titre)&&/pro\./.test(titre)
+          ?true:_echec('l’accroche a changé : '+titre);})());
+
+      ok('LOT 2 — LES DEUX FORMULES, L’ANNUEL PAR DÉFAUT, LE PRIX AU MOIS EN GROS',(()=>{
+        const sauve=_accueilAnnuel;
+        try{
+          accueilPeriode(true);
+          accueilRendreTarifs();
+          const cartes=[...document.querySelectorAll('#wel-cartes .wel-c')];
+          if(cartes.length!==2) return _echec(cartes.length+' formules au lieu de 2');
+          const nbsp=String.fromCharCode(160);
+          const nb=i=>cartes[i].querySelector('.wel-c-nb').textContent;
+          const tot=i=>cartes[i].querySelector('.wel-c-tot').textContent;
+          // L'ANNUEL EST AFFICHE PAR DEFAUT, et le chiffre le plus gros est le
+          // prix AU MOIS. Le total annuel est en petit dessous.
+          if(nb(0)!=='8,25'+nbsp+'€') return _echec('Essentielle annuel au mois : '+nb(0));
+          if(nb(1)!=='20,75'+nbsp+'€') return _echec('Ultime annuel au mois : '+nb(1));
+          if(tot(0).indexOf('99'+nbsp+'€')<0) return _echec('le total annuel d’Essentielle : '+tot(0));
+          if(tot(1).indexOf('249'+nbsp+'€')<0) return _echec('le total annuel d’Ultime : '+tot(1));
+          // ULTIME PORTE « LE PLUS CHOISI », et elle seule.
+          if(document.querySelectorAll('#wel-cartes .wel-c-pref').length!==1)
+            return _echec('le bandeau « le plus choisi » n’est pas unique');
+          if(!cartes[1].classList.contains('pref')) return _echec('le bandeau n’est pas sur Ultime');
+          // LE MENSUEL DIT LES VRAIS PRIX, et le badge des deux mois disparait.
+          accueilPeriode(false);
+          const m=[...document.querySelectorAll('#wel-cartes .wel-c-nb')].map(x=>x.textContent);
+          if(m[0]!=='9,95'+nbsp+'€'||m[1]!=='24,90'+nbsp+'€') return _echec('les prix mensuels : '+m.join(' / '));
+          const badge=document.getElementById('wel-badge');
+          if(badge&&badge.style.display!=='none') return _echec('« 2 mois offerts » reste affiché en mensuel');
+          return true;
+        } finally { accueilPeriode(sauve); }})());
+
+      ok('LOT 2 — L’ANCRAGE, LE MOIS OFFERT, LES QUATRE CHIFFRES ET LE RAPPEL DU COACHING',(()=>{
+        const w=document.getElementById('s-welcome');
+        const txt=w.textContent.replace(/\s+/g,' ');
+        // L'ANCRAGE PRECEDE LES PRIX : lu apres, il ne sert plus a rien.
+        const iAncre=txt.indexOf('50 à 80 € la séance');
+        const iPrix=txt.indexOf('Annuel');
+        if(iAncre<0) return _echec('la phrase d’ancrage a disparu');
+        if(!(iAncre<iPrix)) return _echec('l’ancrage est passé après les prix');
+        if(txt.indexOf('Ton premier mois est offert, sans carte bancaire')<0)
+          return _echec('le mois offert n’est plus annoncé');
+        // LES QUATRE CHIFFRES, et les deux nombres mesures.
+        accueilRendreTarifs();
+        const ch=[...w.querySelectorAll('.wel-ch-t')].map(x=>x.textContent);
+        if(ch.length!==4) return _echec(ch.length+' chiffres au lieu de 4');
+        if(!/436 exercices/.test(ch[0])||!/3 484 aliments/.test(ch[1]))
+          return _echec('les deux nombres ont changé : '+ch.join(' | '));
+        // LE RAPPEL DU COACHING, EN BAS, avec son bouton.
+        const b=[...w.querySelectorAll('a')].find(a=>/formules de coaching/i.test(a.textContent));
+        if(!b) return _echec('le rappel du coaching n’a pas de bouton');
+        return (b.getAttribute('href')||'').indexOf('beacons.ai/kevin.gllc')>=0
+          ?true:_echec('le bouton du coaching ne mène pas à la page de coaching');})());
+
+      ok('LOT 2 — AUCUN TIRET CADRATIN DANS LES TEXTES DE L’ARRIVÉE',(()=>{
+        // Regle d'ecriture du chantier : ni cadratin ni demi-cadratin dans ce
+        // que l'utilisateur lit. La virgule, le deux-points, la parenthese.
+        const w=document.getElementById('s-welcome');
+        const t=w.textContent;
+        const i=t.indexOf(String.fromCharCode(8212));
+        const j=t.indexOf(String.fromCharCode(8211));
+        if(i>=0) return _echec('tiret cadratin : « '+t.slice(Math.max(0,i-40),i+40).replace(/\s+/g,' ')+' »');
+        if(j>=0) return _echec('tiret demi-cadratin : « '+t.slice(Math.max(0,j-40),j+40).replace(/\s+/g,' ')+' »');
+        // ET AUCUN MOT TECHNIQUE : on dit « ta formule », pas « palier ».
+        for(const mot of ['palier','quota','capacité','synchronisation'])
+          if(new RegExp('\\b'+mot,'i').test(t)) return _echec('mot technique visible : '+mot);
+        return true;})());
+
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
         const src=_prodSrc();
