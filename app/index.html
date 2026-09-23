@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1413';
+window.RC_BUILD='1414';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -1304,6 +1304,15 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
 .btn-outline:hover{border-color:var(--red);color:var(--red-text)}
 .btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-sm{padding:9px 16px;font-size:var(--fs-xs);width:auto;border-radius:var(--r-1);letter-spacing:.3px}
+/* ── LA TAILLE D'UN DOIGT (build 1414) ──────────────────────────────────────
+   .btn-sm dessine des boutons de 34 a 35 px de haut. C'est assez a la souris,
+   pas au doigt : 44 px chez Apple, 48 dp chez Android, et la mesure en mode
+   telephone (375 px, tactile) les a tous les deux signales.
+   ⚠ ON NE TOUCHE PAS A .btn-sm LUI-MEME. Il habille des dizaines de boutons,
+   dont des rangees denses ou dix pixels de plus feraient deborder la ligne.
+   La classe se POSE, bouton par bouton, sur ceux qu'on vise vraiment : ceux
+   qui sont seuls sur leur ligne et que l'on tape en pleine largeur. */
+.btn-doigt{min-height:44px}
 /* LES DEUX SORTIES DU BILAN SUR UNE LIGNE. « Finir plus tard » ne prend que
    sa largeur de texte, Suivant garde tout le reste : la porte de secours ne
    doit pas peser autant que l action principale. */
@@ -13005,7 +13014,7 @@ const COACH_PHOTO='icons/coach.jpg';
            Elle ne part sur aucun serveur et n est pas conservee. -->
       <input type="file" id="perso-etiq-file" accept="image/*" capture="environment"
         style="display:none" onchange="lireEtiquette(this)">
-      <button type="button" id="perso-etiq-btn" class="btn btn-outline btn-sm" style="width:100%"
+      <button type="button" id="perso-etiq-btn" class="btn btn-outline btn-sm btn-doigt" style="width:100%"
         onclick="document.getElementById('perso-etiq-file').click()">📷 Lire l'étiquette (photo)</button>
       <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:7px">
         La lecture se fait sur ton téléphone, sans envoi. Cadre le tableau
@@ -75617,7 +75626,7 @@ function _htmlStrictVerrou(raison){
       <div style="font-size:var(--fs-md);font-weight:800;color:var(--text-strong);margin-bottom:10px">${escapeHtml(v.titre)}</div>
       <p style="margin:0 0 10px;font-size:var(--fs-sm);color:var(--sub);line-height:1.65">${escapeHtml(v.texte)}</p>
       <p style="margin:0 0 18px;font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">${escapeHtml(v.action)}</p>
-      <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-xs)" onclick="setNutriDietType('flexible')">Passer en diète flexible</button>
+      <button class="btn btn-outline btn-sm btn-doigt" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-xs)" onclick="setNutriDietType('flexible')">Passer en diète flexible</button>
       ${raison==='sans_coach'?`<button class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0;letter-spacing:1px;font-size:var(--fs-xs)" onclick="go('s-client-code')">J'ai un code coach</button>`:''}
     </div>
   </div>`;
