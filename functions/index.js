@@ -834,6 +834,69 @@ exports.paypalWebhook = onRequest(
 //
 //   `simulation: true` (defaut) ne fait que compter. Il faut la rappeler avec
 //   `simulation: false` pour ecrire quoi que ce soit.
+// ══ UN PROGRAMME ACHETE OUVRE ULTIME (lot 8) ══════════════════════════════
+//
+// LE CLIENT NE DECIDE PAS DE SON PALIER. Il envoie l'identifiant de l'ordre
+// PayPal ; c'est PayPal qui dit si l'argent est arrive, et c'est l'Admin SDK
+// qui ecrit droits/. Meme chemin que verifyPaypalSubscription, pour un ordre
+// ponctuel au lieu d'un abonnement.
+//
+// ⚠ UN ORDRE NE SERT QU'UNE FOIS. Sans ce garde-fou, le meme identifiant
+//   rouvrirait trois mois autant de fois qu'on le renvoie. Le noeud achats/
+//   est ferme a tout le monde sauf a l'Admin SDK.
+async function fetchOrder(orderId, token) {
+  const r = await fetch(PAYPAL_API + "/v2/checkout/orders/" + encodeURIComponent(orderId), {
+    headers: { Authorization: "Bearer " + token },
+  });
+  if (!r.ok) throw new HttpsError("not-found", "Commande PayPal introuvable (" + r.status + ").");
+  return r.json();
+}
+exports.verifierAchatProgramme = onCall({ secrets: [PAYPAL_CLIENT_SECRET] }, async (request) => {
+  if (!request.auth || !request.auth.token || !request.auth.token.email) {
+    throw new HttpsError("unauthenticated", "Connecte-toi pour acheter.");
+  }
+  const mail = String(request.auth.token.email).toLowerCase();
+  const cle = emailKey(mail);
+  const orderId = String((request.data && request.data.orderId) || "").trim().slice(0, 64);
+  const programmeId = String((request.data && request.data.programmeId) || "").trim().slice(0, 64);
+  if (!orderId) throw new HttpsError("invalid-argument", "Commande manquante.");
+
+  // UN ORDRE, UNE FOIS. On pose le drapeau AVANT d'ecrire le droit : deux
+  // appels simultanes ne doivent pas ouvrir deux fois.
+  const ref = db.ref("achats/" + orderId);
+  const pose = await ref.transaction((v) => (v === null ? { cle, programmeId, le: Date.now() } : undefined));
+  if (!pose.committed) {
+    const deja = pose.snapshot && pose.snapshot.val();
+    return { ouvert: false, raison: "deja", pour: deja && deja.cle === cle };
+  }
+
+  let ordre = null;
+  try {
+    const token = await getPaypalToken(PAYPAL_CLIENT_SECRET.value());
+    ordre = await fetchOrder(orderId, token);
+  } catch (e) {
+    // La verification n'a pas abouti : on relache le drapeau, sinon un incident
+    // reseau brulerait l'ordre d'un client qui a paye.
+    await ref.remove().catch(() => {});
+    throw e;
+  }
+  if (!ordre || ordre.status !== "COMPLETED") {
+    await ref.remove().catch(() => {});
+    throw new HttpsError("failed-precondition",
+      "Paiement non capture cote PayPal (statut : " + ((ordre && ordre.status) || "inconnu") + ").");
+  }
+
+  const mois = 3;   // OFFRES.boutique_prog.mois, cote application
+  const actuel = await lireDroits(cle);
+  const droits = await ecrireDroits(cle, {
+    palier: "ultime",
+    echeance: prolonger(actuel && actuel.echeance, mois * MONTH_MS),
+    source: "programme",
+    programme: programmeId,
+  });
+  return { ouvert: true, echeance: droits.echeance };
+});
+
 // ══ L'ESSAI D'UN MOIS, POSE PAR LE SERVEUR (lot 6) ════════════════════════
 //
 // POURQUOI ELLE EXISTE. L'essai vivait dans le dossier, et database.rules.json

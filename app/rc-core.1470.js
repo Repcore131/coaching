@@ -100,9 +100,67 @@ const RC_PROGRAMMES=Object.freeze([
     // au premier ajustement, et c'est la version non relue qui serait restee
     // fausse. La fonction differe la lecture : les deux constantes sont
     // declarees plus bas dans le fichier.
+    // CE QUE LA FICHE ANNONCE, ECRIT UNE FOIS. Les tags le disaient deja en
+    // toutes lettres ; ces trois champs le disent en DONNEES, pour que la
+    // fiche produit les affiche sans les deviner dans une chaine.
+    semaines:'8 à 12', seancesSemaine:3, niveau:'Tous niveaux',
     seances:genre=>(genre==='F')?FONDATION_F:FONDATION_H
+  }),
+  // ══ QUATRE EMPLACEMENTS, ET ILS ATTENDENT LEUR CONTENU ════════════════
+  //
+  // Kevin, 23/09/2026 : « Propose-moi des intitules coherents avec ce que
+  // l'app sait faire et laisse les contenus a ma main. Ne les invente PAS :
+  // mets des entrees visiblement a completer et dis-le-moi. »
+  //
+  // ⚠ ILS N'APPARAISSENT PAS DANS LA BOUTIQUE TANT QUE `aCompleter` EST VRAI.
+  //   Un article sans description et sans seances serait pire qu'une boutique
+  //   a un seul programme : ce serait une boutique qui vend du vide.
+  //   catalogueBoutique les ecarte, et une assertion verifie qu'aucun d'eux ne
+  //   se vend.
+  //
+  // CE QU'IL FAUT REMPLIR POUR QU'UN EMPLACEMENT S'OUVRE :
+  //   accroche     une phrase, ce que le programme apporte
+  //   description  trois a cinq lignes : le rythme, la progression, pour qui
+  //   tags         trois ou quatre etiquettes courtes
+  //   prixCts      le prix EN CENTIMES (14,90 € s'ecrit 1490)
+  //   seances      la fonction qui rend les sept creneaux, comme Fondations
+  //   aCompleter   a retirer, c'est lui qui tient la porte fermee
+  //
+  // ET IL Y A UN AUTRE CHEMIN, deja en place : « Gerer mes programmes en
+  // vente » publie n'importe lequel de tes propres programmes depuis le
+  // telephone, sans passer par ce fichier. Ces emplacements-ci servent aux
+  // programmes livres AVEC l'application.
+  Object.freeze({
+    id:'prise-de-masse', nom:'Prise de masse', phase:'Phase 2',
+    accroche:'', description:'', tags:Object.freeze([]),
+    semaines:'', seancesSemaine:0, niveau:'',
+    prixCts:0, image:'', aCompleter:true, seances:null
+  }),
+  Object.freeze({
+    id:'seche', nom:'Sèche', phase:'Phase 3',
+    accroche:'', description:'', tags:Object.freeze([]),
+    semaines:'', seancesSemaine:0, niveau:'',
+    prixCts:0, image:'', aCompleter:true, seances:null
+  }),
+  Object.freeze({
+    id:'force', nom:'Force', phase:'Phase 2',
+    accroche:'', description:'', tags:Object.freeze([]),
+    semaines:'', seancesSemaine:0, niveau:'',
+    prixCts:0, image:'', aCompleter:true, seances:null
+  }),
+  Object.freeze({
+    id:'reprise', nom:'Reprise après arrêt', phase:'Phase 1',
+    accroche:'', description:'', tags:Object.freeze([]),
+    semaines:'', seancesSemaine:0, niveau:'',
+    prixCts:0, image:'', aCompleter:true, seances:null
   })
 ]);
+// PURE. UN EMPLACEMENT VIDE NE SE VEND PAS. La regle est ici, une fois, et
+// tout ce qui liste la boutique passe par elle.
+function programmeVendable(p){
+  if(!p||p.aCompleter) return false;
+  return !!(p.nom&&Number(p.prixCts)>0);
+}
 // ══ LE CATALOGUE EFFECTIF : LE CODE, PUIS CE QUE LE COACH A PUBLIE ═══════
 //
 // DEUX SOURCES, ET UNE SEULE VERITE A L'ARRIVEE. Le catalogue en dur porte les
@@ -193,6 +251,13 @@ function programmeDuCatalogue(id){
     prixCts:(typeof pub.prixCts==='number')?pub.prixCts:(base?base.prixCts:0),
     image:f('image',base&&base.image),
     masque:pub.masque===true,
+    // CE QUE LA FICHE PRODUIT ANNONCE (lot 8). Le publie gagne, comme le reste.
+    semaines:f('semaines',base&&base.semaines),
+    seancesSemaine:Number(f('seancesSemaine',base&&base.seancesSemaine))||0,
+    niveau:f('niveau',base&&base.niveau),
+    // UN EMPLACEMENT VIDE S'OUVRE DES QUE LE COACH Y PUBLIE DES SEANCES : la
+    // publication est l'autre chemin pour le remplir, et elle vaut la main.
+    aCompleter:(base&&base.aCompleter)?!pub.seances:false,
     seances:seances
   });
 }
@@ -201,14 +266,71 @@ function programmeDuCatalogue(id){
 function programmesBoutique(){
   const vus=new Set(), out=[];
   for(const p of RC_PROGRAMMES){ vus.add(p.id);
-    const e=programmeDuCatalogue(p.id); if(e&&!e.masque) out.push(e); }
+    // ⚠ UN EMPLACEMENT A COMPLETER NE S'AFFICHE PAS (lot 8). Il existe dans le
+    //   fichier pour etre rempli, pas pour etre vendu vide.
+    const e=programmeDuCatalogue(p.id); if(e&&!e.masque&&programmeVendable(e)) out.push(e); }
   const b=_boutiqueLocale()||{};
   for(const id of Object.keys(b)){
     if(vus.has(id)) continue;
     const e=programmeDuCatalogue(id);
-    if(e&&!e.masque&&e.nom) out.push(e);
+    if(e&&!e.masque&&e.nom&&programmeVendable(e)) out.push(e);
   }
   return out;
+}
+// ══ CE QUE LA FICHE PRODUIT DOIT MONTRER AVANT L'ACHAT (lot 8) ═══════════
+//
+// Kevin : « Personne n'achete un programme qu'il ne peut pas regarder. »
+// Les trois lectures ci-dessous ne DECRIVENT rien : elles lisent les seances
+// du programme. Une accroche se redige, un apercu se calcule — et un apercu
+// calcule ne peut pas mentir sur ce qu'on recevra.
+function _seancesProgramme(p,genre){
+  try{
+    const l=(typeof p.seances==='function')?p.seances(genre||'H')
+      :(Array.isArray(p.seances)?p.seances:null);
+    return Array.isArray(l)?l:[];
+  }catch(e){ return []; }
+}
+// PURE. Les trois premiers exercices de la premiere seance qui en porte.
+function apercuProgramme(p,genre){
+  for(const j of _seancesProgramme(p,genre)){
+    if(!j||j.active===false) continue;
+    const l=(Array.isArray(j.exercises)?j.exercises:[])
+      .map(e=>String((e&&e.name)||'').trim()).filter(Boolean);
+    if(l.length) return {seance:String(j.name||j.day||'').trim(),exercices:l.slice(0,3),total:l.length};
+  }
+  return null;
+}
+// PURE. Le materiel, lu dans les exercices eux-memes. Rien n'est ecrit a la
+// main : un programme dont le materiel serait decrit a cote de ses exercices
+// finirait par mentir au premier ajustement.
+function materielProgramme(p,genre){
+  const vus=[];
+  for(const j of _seancesProgramme(p,genre))
+    for(const e of (Array.isArray(j&&j.exercises)?j.exercises:[])){
+      const m=String((e&&e.materiel)||'').trim();
+      if(m&&vus.indexOf(m)<0) vus.push(m);
+    }
+  return vus.slice(0,5);
+}
+// PURE. La ligne de faits : duree, rythme, niveau. Vide quand rien n'est su.
+function faitsProgramme(p){
+  const l=[];
+  if(p&&p.semaines) l.push(String(p.semaines)+' semaines');
+  if(p&&Number(p.seancesSemaine)>0)
+    l.push(Number(p.seancesSemaine)+' séance'+(Number(p.seancesSemaine)>1?'s':'')+' par semaine');
+  if(p&&p.niveau) l.push(String(p.niveau));
+  return l;
+}
+// PURE. LES MEMES FAITS, MOINS CE QUE LES ETIQUETTES DISENT DEJA. Fondations
+// porte « 3 séances/semaine » et « 8 à 12 semaines » en etiquettes : les
+// repeter deux lignes plus bas fait lire deux fois la meme chose, et donne
+// l'impression que la fiche se remplit toute seule.
+function faitsProgrammeNeufs(p){
+  const norm=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/\b(par|de|du|des|a|au|aux|en)\b/g,' ').replace(/[^a-z0-9]+/g,'');
+  const ets=((p&&p.tags)||[]).map(norm).filter(Boolean);
+  const dedans=f=>{ const n=norm(f); return ets.some(e=>e.indexOf(n)>=0||n.indexOf(e)>=0); };
+  return faitsProgramme(p).filter(f=>!dedans(f));
 }
 // PURE. « 14,90 € ». L'espace avant l'euro est INSECABLE (U+00A0), comme
 // partout ailleurs dans le fichier : « 14,90 » et « € » ne se separent pas.
@@ -6569,7 +6691,22 @@ function _palierHerite(u){
   if(ech>0&&Date.now()>=ech) return 'aucun';
   if(s==='COACHING_SUIVI') return 'suivi';
   if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active') return 'essentielle';
+  // UN PROGRAMME ACHETE OUVRE ULTIME LE TEMPS DE SON PROGRAMME (lot 8). Meme
+  // sursis que le reste de ce repli : le serveur decidera des qu'il parlera.
+  if(programmeOuvreUltime(u)) return 'ultime';
   return 'aucun';
+}
+// PURE. Un programme achete, encore dans sa fenetre. Rend false sur un dossier
+// sans achat, ce qui est le cas de presque tout le monde.
+function programmeOuvreUltime(u,maintenant){
+  const a=u&&u.programmesAchetes;
+  if(!a||typeof a!=='object') return false;
+  const t=Number(maintenant)||Date.now();
+  for(const k of Object.keys(a)){
+    const x=a[k];
+    if(x&&Number(x.ouvertJusqu)>t) return true;
+  }
+  return false;
 }
 // PURE. L'echeance connue, pour l'affichage — 0 quand il n'y en a pas.
 function echeanceDe(u){
@@ -25214,8 +25351,15 @@ function _htmlCplBoutique(){
       +'<div class="cpl-bq-img" aria-hidden="true">'
         +(e.image?'<img src="'+escapeHtml(e.image)+'" alt="" loading="lazy" onerror="this.remove()">':'')+'</div>'
       +'<div class="cpl-bq-c"><div class="cpl-bq-n">'+escapeHtml(e.nom)+'</div>'
-        +'<div class="cpl-bq-p">'+prixProgramme(e)+' · '+(e.masque?'Retiré de la vente':'En vente')+'</div></div>'
-      +'<button class="btn btn-outline btn-sm" onclick="ouvrirFicheVente(\''+escapeHtml(id)+'\')">Modifier</button>'
+        // ⚠ UN EMPLACEMENT A COMPLETER SE VOIT ICI, ET NULLE PART AILLEURS
+        //   (lot 8). C'est l'ecran ou Kevin le remplira : le cacher ici
+        //   reviendrait a poser quatre emplacements que personne ne trouve.
+        //   La boutique, elle, ne les montre pas — voir programmesBoutique.
+        +'<div class="cpl-bq-p">'+(e.aCompleter
+          ?'À compléter, pas encore en vente'
+          :(prixProgramme(e)+' · '+(e.masque?'Retiré de la vente':'En vente')))+'</div></div>'
+      +'<button class="btn btn-outline btn-sm" onclick="ouvrirFicheVente(\''+escapeHtml(id)+'\')">'
+      +(e.aCompleter?'Compléter':'Modifier')+'</button>'
       +'</div>';
   }).join('');
   if(!rangs) return '';
@@ -32776,6 +32920,26 @@ function _htmlCarteProgramme(p){
     +((p.tags&&p.tags.length)
       ?'<div class="bq-tags">'+p.tags.map(t=>'<span>'+escapeHtml(t)+'</span>').join('')+'</div>':'')
     +(p.description?'<div class="bq-desc">'+escapeHtml(p.description)+'</div>':'')
+    // ══ CE QU'ON ACHETE, AVANT DE PAYER (lot 8) ══════════════════════════
+    +(()=>{
+      const g=(()=>{ try{ return _genreProgramme(currentUser)||'H'; }catch(e){ return 'H'; } })();
+      const faits=faitsProgrammeNeufs(p);
+      const mat=materielProgramme(p,g);
+      const ap=apercuProgramme(p,g);
+      let h='';
+      if(faits.length) h+='<div class="bq-faits">'+faits.map(escapeHtml).join(' · ')+'</div>';
+      if(mat.length) h+='<div class="bq-mat">Matériel : '+escapeHtml(mat.join(', '))+'</div>';
+      if(ap){
+        h+='<div class="bq-apercu"><div class="bq-apercu-t">Aperçu'
+          +(ap.seance?' · '+escapeHtml(ap.seance):'')+'</div><ol class="bq-apercu-l">'
+          +ap.exercices.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ol>'
+          +(ap.total>ap.exercices.length
+            ?'<div class="bq-apercu-s">et '+(ap.total-ap.exercices.length)+' autre'
+              +((ap.total-ap.exercices.length)>1?'s':'')+' dans cette séance</div>':'')
+          +'</div>';
+      }
+      return h;
+    })()
     +_htmlActionProgramme(p)
     +'</div></div>';
 }
@@ -33043,7 +33207,7 @@ function _htmlActionProgramme(p){
     if(!RC_BOUTIQUE_GRATUITE&&p.prixCts) h+='<div class="bq-note">Programme acquis.</div>';
   } else {
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:15px" '
-      +'onclick="ouvrirAchatProgramme(\''+id+'\')">Acheter — '+prixProgramme(p)+'</button>';
+      +'onclick="ouvrirAchatProgramme(\''+id+'\')">Acheter, '+prixProgramme(p)+'</button>';
     // ⚠ LE COACH L'APPLIQUE SANS PAYER, et c'est un pouvoir, pas un raccourci :
     // il vend ses propres programmes. La porte est fermee a tout autre compte.
     if(createur)
@@ -33197,13 +33361,64 @@ function _enregistrerAchat(id,ordre){
   if(!p||!currentUser) return false;
   if(!currentUser.programmesAchetes||typeof currentUser.programmesAchetes!=='object')
     currentUser.programmesAchetes={};
-  currentUser.programmesAchetes[p.id]={le:Date.now(),prixCts:p.prixCts,
-    ordre:String(ordre||'').slice(0,64)};
+  const t=Date.now();
+  // ⚠ UN PROGRAMME ACHETE OUVRE ULTIME PENDANT SA DUREE (lot 8). Quelqu'un qui
+  //   paie un programme de huit a douze semaines doit pouvoir l'utiliser
+  //   jusqu'au bout : la bibliotheque, la charge du bloc, la diete calculee.
+  //   L'ECHEANCE SERIEUSE EST CELLE DU SERVEUR — verifierAchatProgramme la
+  //   pose dans droits/ apres avoir verifie l'ordre chez PayPal. Celle-ci est
+  //   le repli tant que les fonctions ne tournent pas, et elle vaut ce que
+  //   vaut un champ du dossier : le meme arbitrage, deja assume, que pour
+  //   `status` et `programmesAchetes` eux-memes.
+  const mois=(offre('boutique_prog')||{}).mois||3;
+  currentUser.programmesAchetes[p.id]={le:t,prixCts:p.prixCts,
+    ordre:String(ordre||'').slice(0,64),ouvertJusqu:t+mois*30*86400000};
   saveUser();
+  // LE SERVEUR, SANS QU'ON L'ATTENDE : s'il repond, son echeance prend la main
+  // a la premiere lecture de droits/.
+  try{
+    if(CLOUD&&CLOUD._callFn&&ordre)
+      CLOUD._callFn('verifierAchatProgramme',{orderId:String(ordre),programmeId:p.id})
+        .then(()=>{ try{ rafraichirDroits(currentUser,true); }catch(e){} }).catch(()=>{});
+  }catch(e){}
   fermerAchatProgramme(true);
-  toast('Merci ! « '+(p.nom||'Programme')+' » est à toi.','var(--green)');
   _rendreBoutique();
   appliquerProgramme(p.id);
+  // ══ LE REMERCIEMENT, ET LA SUITE QU'IL PROPOSE ═══════════════════════
+  // Kevin : « C'est le bon moment, la carte est encore chaude. » Il arrive
+  // APRES l'application du programme : la personne voit d'abord ce qu'elle a
+  // achete, la proposition vient par-dessus.
+  try{ setTimeout(()=>{ try{ ouvrirMerciAchat(p.id); }catch(e){} },400); }catch(e){}
+  return true;
+}
+// L'ECRAN DE REMERCIEMENT. Il dit ce qui vient d'arriver, ce que l'achat
+// ouvre, et propose UNE seule suite : le programme ecrit pour soi.
+function ouvrirMerciAchat(id){
+  const p=programmeDuCatalogue(id);
+  if(!p) return false;
+  const mois=(offre('boutique_prog')||{}).mois||3;
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 22px;width:100%;max-width:480px;'
+    +'max-height:90vh;overflow-y:auto">'
+    +'<h2 style="margin-bottom:6px;font-size:var(--fs-lg)">« '+escapeHtml(p.nom||'Programme')+' » est à toi.</h2>'
+    +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:14px">'
+    +'Il est installé dans tes séances. Et pendant '+mois+' mois, tu as aussi le catalogue '
+    +'d’exercices, la charge de ton bloc et ta diète calculée.</p>'
+    +'<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--red);'
+    +'border-radius:var(--r-3);padding:14px 15px;margin-bottom:14px">'
+    +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.65">'
+    +'Tu veux que j’adapte ce programme à toi&nbsp;? Le programme personnalisé, c’est '
+    +escapeHtml(prixOffre('programme_perso'))+'.</div>'
+    +'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
+    +'Voir les formules de coaching</a></div>'
+    +'<button class="btn btn-red" style="width:100%" onclick="closeModal();loadSessionManager()">'
+    +'Voir mes séances</button>'
+    +'<button class="btn btn-outline" style="width:100%;margin-top:9px" onclick="closeModal()">Plus tard</button>'
+    +'</div></div>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
   return true;
 }
 // LE COACH OFFRE SON PROPRE PROGRAMME. Aucun ordre PayPal, et le dossier le
@@ -79770,36 +79985,82 @@ function gardeVideo(id){
   return true;
 }
 /**
- * « Télécharger » : le fichier, sur l'appareil. On passe par un Blob et non par
- * un simple lien : un href vers un autre domaine avec `download` est IGNORÉ par
- * le navigateur, qui ouvre l'onglet au lieu d'enregistrer — et la personne
- * croirait avoir sauvegardé sa vidéo.
+ * PURE. L'URL QUI FAIT ENREGISTRER AU LIEU D'OUVRIR (lot 7).
  *
- * ⚠ SI LE TÉLÉCHARGEMENT DIRECT ÉCHOUE, on ouvre la vidéo et on le DIT. Mieux
- *   vaut un geste de plus qu'un fichier qu'on croit avoir mis à l'abri.
+ * ⚠ `download` SUR UN AUTRE DOMAINE EST IGNORE. Le navigateur ouvre la video
+ *   dans un onglet, et la personne croit avoir sauvegarde. Cloudinary sait
+ *   faire mieux : `fl_attachment` pose l'en-tete Content-Disposition cote
+ *   serveur, et le fichier part dans les telechargements sans passer par la
+ *   memoire du telephone — une video de trente megaoctets n'a rien a faire
+ *   dans un Blob sur un appareil qui n'en a plus.
+ *
+ * Rend '' quand ce n'est pas un fichier de chez nous : un lien YouTube ou
+ * Drive colle par l'athlete n'est pas notre fichier, et il ne se telecharge
+ * pas comme ca.
+ */
+function urlTelechargementVideo(v){
+  const u=String((v&&v.url)||'');
+  if(u.indexOf('res.cloudinary.com')<0) return '';
+  const i=u.indexOf('/upload/');
+  if(i<0) return '';
+  const nom=(String((v&&v.name)||'video').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+/,'').replace(/-+$/,'')||'video').slice(0,40);
+  return u.slice(0,i+8)+'fl_attachment:'+nom+'/'+u.slice(i+8);
+}
+/**
+ * « Télécharger » : le fichier, dans la galerie.
+ *
+ * ⚠ LES DEUX PLATEFORMES NE SE RESSEMBLENT PAS, et un seul chemin en laisse
+ *   une sur le carreau.
+ *   iOS : Safari ignore largement `download`. La seule voie vers Photos est la
+ *     feuille de partage — « Enregistrer la vidéo » y figure. On prepare donc
+ *     le fichier et on ouvre la feuille.
+ *   Android et bureau : l'URL `fl_attachment` suffit, et ne charge rien en
+ *     memoire.
+ *
+ * ET QUAND RIEN NE MARCHE, ON LE DIT. Mieux vaut un geste de plus qu'un
+ * fichier qu'on croit avoir mis a l'abri : la video s'ouvre, et la phrase dit
+ * l'appui long, qui propose « Ajouter aux photos » sur iPhone.
  */
 async function telechargerVideo(id){
   const v=(currentUser.videos||[]).find(x=>x&&x.id===id);
   if(!v||!v.url){ toast('Plus de fichier à télécharger.','var(--orange)'); return false; }
-  toast('Téléchargement…','var(--sub)');
-  let u=null;
-  try{
-    const r=await fetch(v.url,{mode:'cors'});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const b=await r.blob();
-    u=URL.createObjectURL(b);
-    const a=document.createElement('a');
-    a.href=u;
-    a.download=(String(v.name||'video').replace(/[^\w .-]+/g,'_')||'video')+'.mp4';
-    document.body.appendChild(a); a.click(); a.remove();
-    toast('Vidéo enregistrée sur ton appareil.','var(--green)');
-    return true;
-  }catch(e){
-    try{ window.open(v.url,'_blank','noopener'); }catch(x){}
-    toast('Je n’ai pas pu l’enregistrer directement : elle s’ouvre dans un onglet, '
-      +'enregistre-la depuis là.','var(--orange)');
-    return false;
-  } finally { if(u) setTimeout(()=>{ try{ URL.revokeObjectURL(u); }catch(e){} },60000); }
+  const dl=urlTelechargementVideo(v);
+  const nomFichier=(String(v.name||'video').replace(/[^\w .-]+/g,'_')||'video')+'.mp4';
+  // ── iOS : LA FEUILLE DE PARTAGE, ET ELLE SEULE ────────────────────────
+  if(_estIOS()&&typeof navigator!=='undefined'&&navigator.share){
+    toast('Préparation…','var(--sub)');
+    try{
+      const r=await fetch(dl||v.url,{mode:'cors'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const b=await r.blob();
+      const f=new File([b],nomFichier,{type:b.type||'video/mp4'});
+      if(navigator.canShare&&navigator.canShare({files:[f]})){
+        await navigator.share({files:[f]});
+        toast('Choisis « Enregistrer la vidéo » pour l’ajouter à Photos.','var(--green)');
+        return true;
+      }
+    }catch(e){
+      // Un partage refuse par la personne n'est pas un echec : on se tait.
+      if(e&&(e.name==='AbortError'||e.name==='NotAllowedError')) return false;
+    }
+  }
+  // ── ANDROID ET BUREAU : l'en-tete de l'hebergeur fait le travail ──────
+  if(dl){
+    try{
+      const a=document.createElement('a');
+      a.href=dl; a.download=nomFichier; a.rel='noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      toast('Téléchargement lancé.','var(--green)');
+      return true;
+    }catch(e){}
+  }
+  // ── LE REPLI, ET IL DIT CE QU'IL FAUT FAIRE ──────────────────────────
+  try{ window.open(v.url,'_blank','noopener'); }catch(x){}
+  toast(_estIOS()
+    ?'Elle s’ouvre : appui long sur la vidéo, puis « Ajouter aux photos ».'
+    :'Elle s’ouvre dans un onglet : enregistre-la depuis là.','var(--orange)');
+  return false;
 }
 
 // LE BOUTON « × » NE FAISAIT RIEN, ET AUCUNE ERREUR N'EN SORTAIT. Il portait
@@ -81204,6 +81465,25 @@ async function _videoSerieEnvoyer(input){
 // CE QUI N'EXPIRE PAS, ET IL FAUT LE DIRE : un lien YouTube ou Drive collé par
 // l'athlète (aucune copie chez nous — ce n'est pas notre fichier et il ne coûte
 // rien), une vidéo épinglée, et tout ce qui n'a pas de date.
+// ⚠ LOT 7 : KEVIN A DEMANDE QUATORZE JOURS ET TROIS JOURS, ET CES DEUX
+//   NOMBRES NE SONT PAS ENCORE POSES. Sa consigne, dans le meme lot et mot
+//   pour mot : « TESTE LES DEUX SUR UN VRAI TELEPHONE avant d'activer la
+//   purge. Une purge adossee a un telechargement qui echoue, c'est une perte
+//   de donnees, et c'est impardonnable. »
+//
+//   Le telechargement est ecrit (telechargerVideo, deux chemins), et la moitie
+//   Android est verifiee : l'URL fl_attachment rend bien
+//   « Content-Disposition: attachment » — mesure du 23/09/2026 sur
+//   res.cloudinary.com. La moitie iPhone passe par la feuille de partage, et
+//   il n'y a pas d'iPhone sur ce banc : je ne peux pas la verifier.
+//
+//   CE QU'IL RESTE A FAIRE, ET C'EST TOUT :
+//     1. Sur iPhone, « Telecharger » sur une video, puis « Enregistrer la
+//        video » dans la feuille : elle doit arriver dans Photos.
+//     2. Sur Android, « Telecharger » doit poser le fichier dans les
+//        telechargements, sans ouvrir d'onglet.
+//     3. Ces deux nombres passent a 14 et 3. Rien d'autre ne bouge : toutes
+//        les phrases de l'ecran les lisent.
 const VIDEO_RETENTION_J=90;
 const VIDEO_PREAVIS_J=7;
 const VIDEO_EPINGLES_MAX=10;
