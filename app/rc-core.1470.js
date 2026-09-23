@@ -161,6 +161,62 @@ function programmeVendable(p){
   if(!p||p.aCompleter) return false;
   return !!(p.nom&&Number(p.prixCts)>0);
 }
+// ══ LA REVISION DE PROGRAMME (lot 9) ═════════════════════════════════════
+//
+// ⚠ CE N'EST PAS UN SECOND FLUX DE PAIEMENT, et Kevin l'a ecrit noir sur
+//   blanc : « NE CREE PAS un nouveau flux de paiement : ouvrirAchatProgramme
+//   fait deja exactement ca. Reutilise-le. » C'est donc un ARTICLE, avec un
+//   identifiant, un prix et une fiche — simplement, il ne s'installe pas dans
+//   les seances et il ne s'affiche pas en rayon.
+//
+// LE PRIX VIENT D'OFFRES, comme tous les autres : revision_prog, 40 €.
+const REVISION_ID='revision-programme';
+function offreRevision(){
+  const o=offre('revision_prog')||{prix:40,mois:1};
+  return Object.freeze({
+    id:REVISION_ID, service:true, nom:'Révision de ton programme',
+    accroche:'Un ajustement de ton plan, par ton coach.',
+    // LE PERIMETRE EST ECRIT AVANT LE PAIEMENT, et c'est lui qui evite la
+    // soiree d'allers-retours : on dit ce que la revision fait, ET ce qu'elle
+    // n'est pas.
+    description:'Une révision, c’est un ajustement de ton plan : exercices, '
+      +'volume, répartition des séances. Ce n’est pas une refonte complète, '
+      +'ni un nouveau plan nutrition.',
+    tags:Object.freeze(['Ajustement','Par ton coach']),
+    prixCts:Math.round(Number(o.prix)*100), image:'', seances:null
+  });
+}
+// PURE. Le programme personnalise a-t-il ete livre ? C'est la seule porte de
+// la revision : reviser un plan qu'on n'a pas ne veut rien dire.
+//
+// DEUX CHEMINS, et le second existe parce que le premier ne passe pas par
+// l'application : le programme personnalise se vend hors de l'app (99 €), et
+// c'est le coach qui pose le marqueur en livrant.
+function programmePersoLivre(u){
+  const x=u||currentUser;
+  if(!x) return false;
+  // ⚠ PAS A QUELQU'UN QUI EST DEJA SUIVI. Son coaching comprend deja les
+  //   ajustements : lui vendre 40 € ce qu'il paie chaque mois serait lui
+  //   vendre deux fois la meme chose, et il le verrait.
+  try{ if(peut(x,'correctionVideo')) return false; }catch(e){}
+  if(x.role==='coach') return false;
+  if(x.programmePerso&&Number(x.programmePerso.le)>0) return true;
+  try{ return programmeAcquis(x,'programme-perso'); }catch(e){ return false; }
+}
+// PURE. Les revisions deja payees.
+function revisionsPayees(u){
+  const x=u||currentUser;
+  const l=(x&&x.revisions);
+  return Array.isArray(l)?l.filter(r=>r&&Number(r.le)>0):[];
+}
+// PURE. CE QUE LA PERSONNE A DEPENSE en plan ecrit pour elle. C'est ce chiffre
+// qui fait basculer vers Transformation : il se compare tout seul aux 350 €.
+function totalPlanPerso(u,revisionsEnPlus){
+  const p=Number((offre('programme_perso')||{}).prix)||0;
+  const r=Number((offre('revision_prog')||{}).prix)||0;
+  const n=revisionsPayees(u).length+(Number(revisionsEnPlus)||0);
+  return p+n*r;
+}
 // ══ LE CATALOGUE EFFECTIF : LE CODE, PUIS CE QUE LE COACH A PUBLIE ═══════
 //
 // DEUX SOURCES, ET UNE SEULE VERITE A L'ARRIVEE. Le catalogue en dur porte les
@@ -228,6 +284,9 @@ function _seancesPubliees(p,genre){
 // dur, recouvert par ce que le coach a publie.
 function programmeDuCatalogue(id){
   if(typeof id!=='string'||!id) return null;
+  // LA REVISION EST UN ARTICLE COMME UN AUTRE POUR L'ACHAT, et elle n'est
+  // dans aucun rayon : elle se trouve par son identifiant, et uniquement la.
+  if(id===REVISION_ID) return offreRevision();
   const base=RC_PROGRAMMES.find(p=>p.id===id)||null;
   const pub=_programmePublie(id);
   if(!base&&!pub) return null;
@@ -5387,7 +5446,12 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // correctionsOrphelines porte EXACTEMENT ce que porte videos[].feedback :
   // le retour d'un coach sur un mouvement, quand la video qui l'a motive
   // n'existe plus (lot 7). Il est classe avec elle, et pour la meme raison.
-  'videos','correctionsOrphelines','athletePhoto','objective','badges','habitudes','sonRepos',
+  // programmePerso : la DATE a laquelle un coach a ecrit un plan pour cette
+  // personne, et l'identifiant du coach. revisions : les ajustements payes,
+  // date et montant. Ni l'une ni les autres ne disent quoi que ce soit du
+  // corps : ce sont des faits commerciaux, comme programmesAchetes (lot 9).
+  'videos','correctionsOrphelines','programmePerso','revisions',
+  'athletePhoto','objective','badges','habitudes','sonRepos',
   // R20 — le dernier onglet d'Évolution ouvert : un NOM d'onglet ('perf',
   // 'mensus'…), une preference d'affichage. Aucune mesure n'y transite.
   'uiProgressTab',
@@ -27424,6 +27488,13 @@ function saveCoachSessions(){
   // est le dossier RELU à l’instant, avec ce que l’athlète y a écrit depuis
   // l’ouverture de l’éditeur.
   const stocke=_reporterSeances(users[emailKey],c);
+  // ⚠ LE PROGRAMME ECRIT POUR QUELQU'UN EST DATE ICI (lot 9), une seule fois.
+  //   C'est ce qui ouvre la revision a 40 € chez lui : reviser un plan qu'on
+  //   n'a pas ne veut rien dire, et cette date est le seul endroit du produit
+  //   qui sache qu'un plan a ete ECRIT POUR LUI. Elle ne se repose jamais :
+  //   une deuxieme publication n'est pas un deuxieme plan.
+  if(!stocke.programmePerso||!Number(stocke.programmePerso.le))
+    stocke.programmePerso={le:Date.now(),par:String((currentUser&&currentUser.id)||'')};
   c.updatedAt=stocke.updatedAt;
   users[emailKey]=stocke;
   // Publié : le brouillon n'a plus de raison d'être, et le garder ferait
@@ -33235,7 +33306,12 @@ function ouvrirAchatProgramme(id){
   const z=document.getElementById('ach-corps');
   if(z) z.innerHTML='<div class="rci-t">'+escapeHtml(p.nom||'')+'</div>'
     +'<div class="bq-tete" style="margin-top:4px"><span class="bq-accroche" style="margin:0">'
-    +escapeHtml(p.accroche||'')+'</span><span class="bq-prix">'+prixProgramme(p)+'</span></div>';
+    +escapeHtml(p.accroche||'')+'</span><span class="bq-prix">'+prixProgramme(p)+'</span></div>'
+    // ⚠ CE QU'ON ACHETE EST ECRIT AVANT DE PAYER (lot 9). Pour une revision,
+    //   c'est la phrase qui evite la soiree d'allers-retours : elle dit ce que
+    //   l'ajustement fait, ET ce qu'il n'est pas.
+    +(p.description?'<p class="bq-desc" style="margin-top:8px;line-height:1.6">'
+      +escapeHtml(p.description)+'</p>':'');
   const b=document.getElementById('ach-paypal');
   if(b) b.innerHTML='<div class="skeleton fx-loop" style="height:55px;border-radius:var(--r-2)"></div>';
   const c=document.getElementById('ach-cgv');
@@ -33382,6 +33458,16 @@ function _enregistrerAchat(id,ordre){
         .then(()=>{ try{ rafraichirDroits(currentUser,true); }catch(e){} }).catch(()=>{});
   }catch(e){}
   fermerAchatProgramme(true);
+  // UN SERVICE NE S'INSTALLE PAS DANS LES SEANCES (lot 9) : il n'a rien a y
+  // ecrire, et « Programme applique » serait un mensonge poli.
+  if(p.service){
+    if(!Array.isArray(currentUser.revisions)) currentUser.revisions=[];
+    currentUser.revisions.push({le:t,prixCts:p.prixCts,ordre:String(ordre||'').slice(0,64)});
+    saveUser();
+    try{ _rendreOutilsSeances(); }catch(e){}
+    try{ setTimeout(()=>{ try{ ouvrirMerciRevision(); }catch(e){} },300); }catch(e){}
+    return true;
+  }
   _rendreBoutique();
   appliquerProgramme(p.id);
   // ══ LE REMERCIEMENT, ET LA SUITE QU'IL PROPOSE ═══════════════════════
@@ -33630,6 +33716,86 @@ function loadSessionManager(){
   go('s-session-manager');
   _renderSessionManager();
 }
+// ══ LES PORTES DU BLOC, ET LA REVISION ═══════════════════════════════════
+//
+// La charge du bloc pour qui planifie, les fiches de ses exercices pour qui
+// est suivi, et la revision pour qui a un plan ecrit pour lui. NOMMEE plutot
+// qu'ecrite dans _renderSessionManager : un achat de revision doit changer ce
+// bloc sans repeindre tout l'ecran, et donc sans fermer une saisie en cours.
+function _rendreOutilsSeances(){
+  const z=document.getElementById('sm-outils');
+  if(!z) return false;
+  const b=[];
+  const bouton=(lib,act,rouge)=>'<button type="button" class="btn '
+    +(rouge?'btn-red':'btn-outline')+'" onclick="'+act+'" '
+    +'style="flex:1 1 46%;min-width:150px;font-size:var(--fs-xs);padding:9px 10px">'+lib+'</button>';
+  try{
+    // ⚠ PLUS DE CONDITION DE CAPACITE DEPUIS LE LOT 4 : l'ecran s'ouvre pour
+    //   tout le monde et porte son verrou. La seule condition qui reste est
+    //   qu'il y ait un bloc date a regarder.
+    if(semainesDuBloc(currentUser).length)
+      b.push(bouton('Charge du bloc','ouvrirGrilleCharge()'));
+  }catch(e){}
+  try{
+    if(peut(currentUser,'programmeRecu')&&exercicesDeMonProgramme(currentUser).length)
+      b.push(bouton('Mes exercices en images','ouvrirMesExercices()'));
+  }catch(e){}
+  // LA REVISION N'EST OFFERTE QU'A QUI A UN PLAN ECRIT POUR LUI : reviser un
+  // plan qu'on n'a pas ne veut rien dire, et le bouton serait une question.
+  let rev='';
+  try{
+    if(programmePersoLivre(currentUser)){
+      const p=offreRevision();
+      b.push(bouton('Faire réviser mon programme, '+prixProgramme(p),
+        'ouvrirAchatProgramme(\''+REVISION_ID+'\')',true));
+      rev=_htmlRelanceTransformation(currentUser);
+    }
+  }catch(e){}
+  z.innerHTML=(b.length?'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:'
+    +(rev?'10px':'14px')+'">'+b.join('')+'</div>':'')+rev;
+  return true;
+}
+// LA TROISIEME REVISION, ET SEULEMENT LA. Kevin : « C'est le profil le plus
+// chaud du fichier : il revient tout seul. » Avant la troisieme, on se tait —
+// proposer 350 € a quelqu'un qui vient d'en payer 40 ferait fuir.
+//
+// LE CHIFFRE EST CALCULE, JAMAIS ECRIT : le plan ecrit pour soi, plus autant
+// de revisions qu'il y en a eu. Les deux montants vivent dans OFFRES, et le
+// total suit tout seul le jour ou l'un des deux bouge.
+function _htmlRelanceTransformation(u){
+  const n=revisionsPayees(u).length;
+  if(n<3) return '';
+  const total=_euros(totalPlanPerso(u));
+  const t=offre('coaching_transfo')||{prix:350,mois:3};
+  return '<div class="vrr" style="margin-bottom:14px">'
+    +'<div class="vrr-t">Tu en es à '+escapeHtml(total)+' de révisions. Transformation, '
+    +'c’est '+escapeHtml(_euros(t.prix))+' pour trois mois où je te suis vraiment.</div>'
+    +'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
+    +'Voir les formules de coaching</a></div>';
+}
+// LE REMERCIEMENT D'UNE REVISION. Il dit ce qui se passe ensuite, parce que
+// ce qui se passe ensuite n'est pas dans l'application : c'est le coach qui
+// ecrit, et la personne doit savoir quand.
+function ouvrirMerciRevision(){
+  const n=revisionsPayees(currentUser).length;
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 22px;width:100%;max-width:480px;'
+    +'max-height:90vh;overflow-y:auto">'
+    +'<h2 style="margin-bottom:6px;font-size:var(--fs-lg)">Révision demandée.</h2>'
+    +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:12px">'
+    +'Ton coach ajuste ton plan et te le renvoie dans l’application. Dis-lui dans le canal '
+    +'ce qui coince en ce moment : c’est ce qui rend la révision utile.</p>'
+    +'<p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:14px">'
+    +'Ton accès complet est rouvert pour un mois.</p>'
+    +_htmlRelanceTransformation(currentUser)
+    +'<button class="btn btn-red" style="width:100%" onclick="closeModal()">J’ai compris</button>'
+    +'</div></div>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
+  return (n>=3);
+}
 // LE RENDU SEUL, SANS go() : c'est lui que la descente rejoue — voir
 // _repeindreSeancesAthlete. go() fermerait une saisie ouverte.
 function _renderSessionManager(){
@@ -33658,25 +33824,7 @@ function _renderSessionManager(){
   // exercices pour qui est suivi. CHACUNE NE S'AFFICHE QUE POUR QUI ELLE
   // S'OUVRE : un bouton qui repond « reserve » est un bouton mort, et le verrou
   // du lot 4 se poste sur les ecrans, pas sur les portes d'entree.
-  const _zOut=document.getElementById('sm-outils');
-  if(_zOut){
-    const b=[];
-    const bouton=(lib,act)=>'<button type="button" class="btn btn-outline" onclick="'+act+'" '
-      +'style="flex:1 1 46%;min-width:150px;font-size:var(--fs-xs);padding:9px 10px">'+lib+'</button>';
-    try{
-      // ⚠ PLUS DE CONDITION DE CAPACITE DEPUIS LE LOT 4 : l'ecran s'ouvre pour
-      //   tout le monde et porte son verrou. La seule condition qui reste est
-      //   qu'il y ait un bloc date a regarder.
-      if(semainesDuBloc(currentUser).length)
-        b.push(bouton('Charge du bloc','ouvrirGrilleCharge()'));
-    }catch(e){}
-    try{
-      if(peut(currentUser,'programmeRecu')&&exercicesDeMonProgramme(currentUser).length)
-        b.push(bouton('Mes exercices en images','ouvrirMesExercices()'));
-    }catch(e){}
-    _zOut.innerHTML=b.length?'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
-      +b.join('')+'</div>':'';
-  }
+  try{ _rendreOutilsSeances(); }catch(e){}
   const _zStruct=document.getElementById('sm-structure');
   if(_zStruct){
     let _l=''; try{ _l=ligneStructureBloc(currentUser); }catch(e){ _l=''; }
