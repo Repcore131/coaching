@@ -5296,8 +5296,13 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="background:var(--dark);border:1px solid #2a0000;border-radius:var(--r-4);padding:20px;margin-bottom:24px;text-align:left">
       <div id="ag-status-block"></div>
     </div>
-    <div class="gap">
-      <button class="btn btn-red" onclick="goAvecRetour('s-subscribe');loadSubscribePage()">Renouveler mon accès</button>
+    <!-- ⚠ LE BOUTON « Renouveler mon accès » DISPARAIT SUR UNE SORTIE DE
+         PACK (lot 10) : le bloc au-dessus porte alors ses deux portes, et
+         celle-ci mene au meme endroit que « Garder l'app ». Quatre actions
+         dont deux identiques, c'est une hesitation de plus a un moment ou
+         il n'en faut aucune. loadAccessGate le montre ou le cache. -->
+    <div class="gap" id="ag-actions">
+      <button class="btn btn-red" id="ag-renouveler" onclick="goAvecRetour('s-subscribe');loadSubscribePage()">Renouveler mon accès</button>
       <button class="btn btn-outline" onclick="go('s-client-code')">Entrer un nouveau code coach</button>
     </div>
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;align-items:center">

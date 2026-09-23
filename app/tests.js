@@ -12592,9 +12592,17 @@ async function testExercices(){
             ?true:_echec('la mention autonome a disparu de loadAccessGate');})());
           // ══════ L'ÉCRAN D'ACCÈS EXPIRÉ ══════
           ok('Accès expiré : le coach est joignable en un geste',(()=>{
-            // Sur cet écran, joindre son coach est la SEULE action qui débloque quoi
-            // que ce soit. « Contacte ton coach » dit à l'athlète de se débrouiller ;
-            // le bouton fait le travail.
+            // Sur cet écran, joindre son coach est UNE des deux actions qui
+            // débloquent quelque chose. « Contacte ton coach » dit à l'athlète de
+            // se débrouiller ; le bouton fait le travail.
+            //
+            // ⚠ L'ECRAN A CHANGE DE TITRE ET DE SORTIE AU LOT 10, ET C'EST LE
+            //   LOT ENTIER. « Accès expiré » avec une seule issue — recontacter
+            //   le coach — perdait tous ceux qui ne le recontactent pas, avec
+            //   leurs séances et leur historique derrière la porte. Il dit
+            //   maintenant que rien n'est effacé, et il porte DEUX portes.
+            //   Ce que cette assertion tient n'a pas bougé : le lien du coach
+            //   est réel, pré-rempli, et ne porte aucune donnée de santé.
             const _cu=currentUser,_db=DB.get('users');
             const _ls=localStorage.getItem('rc_coach_profil');
             try{
@@ -12610,9 +12618,10 @@ async function testExercices(){
               DB.set('users',{'lea@t.fr':currentUser});
               loadAccessGate();
               const q=x=>document.getElementById(x);
-              if(q('ag-title').textContent!=='Accès expiré')
+              if(q('ag-title').textContent!=='Ton suivi est terminé')
                 return _echec('titre : '+q('ag-title').textContent);
-              if(!/^Ton accès coaching avec suivi a expiré le \d/.test(q('ag-sub').textContent))
+              // CE QUI DECIDE : rien n'est effacé, et c'est dit avant tout le reste.
+              if(!/Rien n’est effacé/.test(q('ag-sub').textContent))
                 return _echec('sous-titre : '+q('ag-sub').textContent);
               // Le bloc d'icône restait vide et laissait 56px de trou au-dessus du titre.
               if(!/<svg/.test(q('ag-icon').innerHTML)) return _echec('le bloc d\'icône est vide');
@@ -12624,20 +12633,38 @@ async function testExercices(){
               if(href==='#') return _echec('bouton mort');
               // Le message est pré-rempli : l'athlète n'a plus qu'à envoyer.
               const msg=decodeURIComponent(href.split('text=')[1]||'');
-              if(!/expiré le \d/.test(msg)) return _echec('message non pré-rempli : '+msg);
+              if(!/reprendre mon suivi/i.test(msg)) return _echec('message non pré-rempli : '+msg);
               // ET IL NE PORTE AUCUNE DONNÉE DE SANTÉ : le canal n'est pas chiffré.
               const interdits=['douleur','cycle','SOPK','thyroïde','PES','règles',
                                'grossesse','poids','blessure'];
               const fuite=interdits.filter(m=>new RegExp(m,'i').test(msg));
               if(fuite.length) return _echec('donnée de santé dans le message : '+fuite.join(', '));
               // La phrase de repli a cédé la place au bouton, elle ne double pas.
-              return !/Contacte ton coach/.test(q('ag-status-block').innerHTML)
-                ?true:_echec('la phrase de repli coexiste avec le bouton');
+              if(/Contacte ton coach/.test(q('ag-status-block').innerHTML))
+                return _echec('la phrase de repli coexiste avec le bouton');
+              // ET LA SECONDE PORTE EST LA (lot 10) : garder l'app, avec son prix.
+              const b=q('ag-status-block');
+              const garder=[...b.querySelectorAll('button')]
+                .find(x=>/Garder l’app/.test(x.textContent));
+              if(!garder) return _echec('aucune seconde porte : l’écran ne propose qu’une issue');
+              if((garder.getAttribute('onclick')||'').indexOf('garderLApp()')<0)
+                return _echec('la seconde porte ne mène nulle part');
+              const nb=String.fromCharCode(160);
+              if(b.textContent.indexOf(prixOffre('ultime').split(nb).join(' '))<0
+                 &&b.textContent.indexOf(prixOffre('ultime'))<0)
+                return _echec('le prix de ce qu’on propose ne se lit pas');
+              return /historique/.test(b.textContent)
+                ?true:_echec('l’écran ne dit pas ce qui reste');
             } finally { currentUser=_cu; if(_db) DB.set('users',_db);
               if(_ls) localStorage.setItem('rc_coach_profil',_ls);
               else localStorage.removeItem('rc_coach_profil'); }})());
           ok('Coach injoignable : la phrase reste, sans bouton mort',(()=>{
             // Un bouton qui ne mène nulle part vaut moins que pas de bouton.
+            //
+            // ⚠ LOT 10 : sans moyen de joindre SON coach, la porte ne disparaît
+            //   pas — elle mène à la page des formules. Ce que cette assertion
+            //   tenait reste entier : aucun lien WhatsApp fabriqué de nulle
+            //   part, et aucun bouton mort.
             const _cu=currentUser,_db=DB.get('users');
             const _ls=localStorage.getItem('rc_coach_profil');
             try{
@@ -12647,10 +12674,13 @@ async function testExercices(){
               DB.set('users',{'lea@t.fr':currentUser});
               loadAccessGate();
               const b=document.getElementById('ag-status-block');
-              if(!/Contacte ton coach pour le prolonger\./.test(b.innerHTML))
-                return _echec('la phrase de repli a disparu');
               const a=b.querySelector('a');
-              if(a&&(a.getAttribute('href')||'#')==='#') return _echec('un bouton mort est rendu');
+              if(!a) return _echec('aucune porte de reprise');
+              const href=a.getAttribute('href')||'#';
+              if(href==='#') return _echec('un bouton mort est rendu');
+              if(href.indexOf('https://beacons.ai/kevin.gllc')!==0)
+                return _echec('la porte de repli ne mène pas aux formules : '+href.slice(0,40));
+              if(!/Garder l’app/.test(b.textContent)) return _echec('la seconde porte a disparu');
               // TÉMOIN : sans coach joignable, aucun lien wa.me n'est fabriqué.
               return b.innerHTML.indexOf('wa.me')<0
                 ?true:_echec('un lien WhatsApp sort de nulle part');
@@ -34305,6 +34335,73 @@ async function testExercices(){
           return _echec('un tiret cadratin traîne dans la relance');
         return true;})());
 
+      // ══ LOT 10 — LA SORTIE DE PACK ════════════════════════════════════
+      ok('LOT 10 — À QUINZE JOURS, L’APP PARLE, ET ELLE PROPOSE DEUX CHOSES',(()=>{
+        const t0=Date.now();
+        const pack=j=>({id:'p10',email:'p10@t.fr',role:'athlete',fname:'Léa',
+          status:'COACHING_SUIVI',accessExpiry:t0+j*864e5});
+        // LOIN DE LA FIN, ON SE TAIT : relancer un athlète au premier mois de
+        // son suivi, c’est lui dire qu’on l’attend dehors.
+        if(finDePack(pack(40),t0).etat!=='non') return _echec('l’app parle à quarante jours de la fin');
+        if(htmlSortiePack(pack(40),t0)!=='') return _echec('un bloc sort à quarante jours');
+        // À QUINZE JOURS, ELLE PARLE.
+        const f=finDePack(pack(15),t0);
+        if(f.etat!=='bientot') return _echec('à quinze jours : '+f.etat);
+        if(finDePack(pack(-1),t0).etat!=='finie') return _echec('le lendemain de la fin n’est pas « finie »');
+        // UN ATHLETE SANS SUIVI N’EST PAS UNE SORTIE DE PACK.
+        if(finDePack({id:'x',email:'x@t.fr',role:'athlete',status:'FREE'},t0).etat!=='non')
+          return _echec('un compte sans suivi sort d’un pack');
+        if(finDePack({role:'coach',email:'c@t.fr',status:'COACHING_SUIVI',accessExpiry:t0},t0).etat!=='non')
+          return _echec('un coach sort d’un pack');
+        // LA PHRASE DIT LA DATE, CE QU’ON GARDE, ET LE PRIX.
+        const p=phraseSortiePack(pack(15),t0);
+        if(!/se termine le \d/.test(p)) return _echec('la phrase ne dit pas la date : « '+p+' »');
+        if(!/reprendre/i.test(p)) return _echec('la phrase ne propose pas de reprendre');
+        const nb=String.fromCharCode(160);
+        if(p.indexOf(prixOffre('ultime'))<0) return _echec('la phrase ne dit pas le prix : « '+p+' »');
+        // DEUX BOUTONS, JAMAIS UN SEUL.
+        const d=document.createElement('div');
+        d.innerHTML=htmlSortiePack(pack(15),t0);
+        const portes=d.querySelectorAll('.vrr-b');
+        if(portes.length!==2) return _echec(portes.length+' porte(s) au lieu de 2');
+        if(!/Reprendre mon suivi/.test(portes[0].textContent)) return _echec('première porte : '+portes[0].textContent);
+        if(!/Garder l’app/.test(portes[1].textContent)) return _echec('seconde porte : '+portes[1].textContent);
+        // ET LA PREMIÈRE CHOSE QU’ON LIT, C’EST QUE RIEN N’EST EFFACÉ.
+        if(!/Rien n’est effacé/.test(d.textContent)) return _echec('l’app ne dit pas que rien n’est effacé');
+        if(d.textContent.indexOf(String.fromCharCode(8212))>=0)
+          return _echec('un tiret cadratin traîne dans la sortie de pack');
+        return true;})());
+
+      ok('LOT 10 — LE DEMI-TARIF NE S’ANNONCE QUE SI ON SAIT L’ENCAISSER',(()=>{
+        const t0=Date.now();
+        const u={id:'d10',email:'d10@t.fr',role:'athlete',status:'COACHING_SUIVI',
+          accessExpiry:t0+10*864e5};
+        // LE PRIX SE CALCULE SUR ULTIME : la moitié, et elle suivra.
+        if(OFFRES.ultime_demi.prix!==Math.round(OFFRES.ultime.prix*50)/100)
+          return _echec('le demi-tarif ne vaut pas la moitié d’Ultime : '+OFFRES.ultime_demi.prix);
+        // ⚠ TANT QUE LE PLAN PAYPAL N’EXISTE PAS, L’OFFRE N’EST PAS ANNONCÉE.
+        //   Annoncer 12,45 € et facturer 24,90 serait pire que se taire.
+        const plan=planIdOffre('ultime_demi');
+        if(plan){
+          if(!demiPremierMoisDispo(u,t0)) return _echec('le plan existe et l’offre ne sort pas');
+          if(phraseSortiePack(u,t0).indexOf(prixOffre('ultime_demi'))<0)
+            return _echec('le plan existe et le demi-tarif ne se lit pas');
+        } else {
+          if(demiPremierMoisDispo(u,t0)) return _echec('l’offre est annoncée sans plan pour l’encaisser');
+          if(phraseSortiePack(u,t0).indexOf(prixOffre('ultime_demi'))>=0)
+            return _echec('le demi-tarif est annoncé sans plan');
+          if(phraseSortiePack(u,t0).indexOf(prixOffre('ultime'))<0)
+            return _echec('sans demi-tarif, le prix normal devrait être annoncé');
+        }
+        // UNE SEULE FOIS DANS LA VIE DU COMPTE.
+        const deja=Object.assign({},u,{demiPackUtilise:true});
+        if(demiPremierMoisDispo(deja,t0)) return _echec('le demi-tarif se reprend une seconde fois');
+        // ET LA SECONDE PORTE MÈNE À CE QU’ON PEUT ENCAISSER.
+        const g=String(garderLApp);
+        if(g.indexOf('ultime_demi')<0||g.indexOf('accueilChoisir')<0)
+          return _echec('« Garder l’app » ne mène pas à l’abonnement');
+        return true;})());
+
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
         const src=_prodSrc();
@@ -34344,12 +34441,16 @@ async function testExercices(){
           ?true:_echec('le bouton carte de l’abonnement ne reprend pas les options communes');})());
 
       // ══ LOT 1 — UNE SEULE TABLE D'OFFRES, UNE SEULE DE CAPACITES ═══════
-      ok('LOT 1 — LES NEUF OFFRES, LEURS PRIX ET CE QU’ELLES OUVRENT',(()=>{
+      ok('LOT 1 — LES OFFRES, LEURS PRIX ET CE QU’ELLES OUVRENT',(()=>{
         const attendu={
           programme_perso:[99,'ultime',3], revision_prog:[40,'ultime',1],
           boutique_prog:[14.9,'ultime',3], coaching_essentiel:[150,'suivi',1],
           coaching_transfo:[350,'suivi',3], coaching_evolution:[600,'suivi',6],
-          essentielle:[9.95,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1]};
+          essentielle:[9.95,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1],
+          // LOT 10 : le premier mois apres un pack. Son prix se LIT sur
+          // Ultime, il n'est pas recopie : la moitie de 24,90 fait 12,45, et
+          // elle suivra le jour ou Ultime bougera.
+          ultime_demi:[OFFRES.ultime.prix/2,'ultime',1]};
         const cles=Object.keys(OFFRES).sort().join(',');
         if(cles!==Object.keys(attendu).sort().join(',')) return _echec('les offres : '+cles);
         for(const k in attendu){

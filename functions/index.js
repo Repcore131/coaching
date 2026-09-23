@@ -429,13 +429,19 @@ exports.verifyPaypalSubscription = onCall({ secrets: [PAYPAL_CLIENT_SECRET] }, a
   // pour la fiche du coach ; c'est droits/ que l'application lit pour ouvrir
   // ou fermer quoi que ce soit.
   const actuel = await lireDroits(key);
-  const offre = offreDuPlan(sub.plan_id);
-  await ecrireDroits(key, {
+  const plans = await chargerPlans();
+  const offre = offreDuPlan(sub.plan_id, plans);
+  const champs = {
     palier: offre.palier,
     echeance: prolonger(actuel && actuel.echeance, offre.mois * MONTH_MS),
     source: "paypal",
     abonnement: subscriptionId,
-  });
+  };
+  // ⚠ UNE SEULE FOIS DANS LA VIE DU COMPTE. Le drapeau est pose ICI, au
+  //   moment ou le demi-tarif est encaisse : pose ailleurs, il aurait pu
+  //   l'etre sans qu'un euro soit passe.
+  if (offre.demi) champs.demiPackUtilise = true;
+  await ecrireDroits(key, champs);
   return { ok: true };
 });
 
@@ -468,8 +474,18 @@ async function chargerPlans() {
 function offreDuPlan(planId, table) {
   const t = Object.assign({}, PLANS_CONNUS, table || {});
   const o = t[String(planId || "")];
-  if (o && o.palier) return { palier: palierValide(o.palier), mois: Math.max(1, Number(o.mois) || 1) };
-  return { palier: "essentielle", mois: 1 };
+  if (o && o.palier) {
+    return {
+      palier: palierValide(o.palier),
+      mois: Math.max(1, Number(o.mois) || 1),
+      // LE PREMIER MOIS A MOITIE PRIX NE SE DONNE QU'UNE FOIS (lot 10). Le
+      // plan qui le porte est declare `demi` dans config/plans ; c'est ce
+      // drapeau qui fait marquer le dossier, et le marquage qui ferme la
+      // porte a une seconde sortie de pack.
+      demi: o.demi === true,
+    };
+  }
+  return { palier: "essentielle", mois: 1, demi: false };
 }
 
 // ── getCloudinarySignature ───────────────────────────────────────────────────

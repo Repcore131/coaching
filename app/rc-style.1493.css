@@ -9053,3 +9053,12 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   color:var(--sub);margin-bottom:4px}
 .bq-apercu-l{margin:0 0 0 16px;padding:0;font-size:13px;line-height:1.55;color:var(--text)}
 .bq-apercu-s{font-size:11px;color:var(--text-faint);margin-top:4px}
+
+/* ══ LA SORTIE DE PACK : DEUX PORTES, JAMAIS UNE (lot 10) ══════════════════
+   La premiere est rouge parce que c'est celle qu'on souhaite : reprendre le
+   suivi. La seconde a le meme encombrement et le meme relief, en teinte
+   neutre : on la voit, on la lit, et on peut la prendre sans avoir
+   l'impression de choisir le mauvais bouton. */
+.vrr-deux{display:flex;gap:8px;flex-wrap:wrap}
+.vrr-deux .vrr-b{flex:1 1 46%;min-width:150px;margin-top:12px}
+.vrr-b2{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
