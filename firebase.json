@@ -66,6 +66,16 @@
             "value": "no-cache"
           }
         ]
+      },
+      {
+        "//": "LES ACTIFS VERSIONNES PAR LEUR NOM (build 1417). app/index.html DOIT rester en no-cache : il porte le numero de build et le squelette. Mais il pesait 2,1 Mo compresses, dont 5,2 Mo de code et 574 Ko de styles qui ne changent pas d'une ouverture a l'autre — et le plafond Hosting de 360 Mo/jour n'autorisait que 175 ouvertures par jour pour tout le monde. Le code et la feuille vivent desormais dans rc-core.<build>.js et rc-style.<build>.css : leur NOM change a chaque livraison, donc `immutable` ne peut jamais servir une version perimee, et le meme appareil ne les retelecharge pas deux fois. index.html tombe a 111 Ko compresses : 3 316 ouvertures par jour au lieu de 175. Ne pas remplacer ce nommage par un ?v= : un intermediaire qui ignore la chaine de requete servirait alors un fichier d'hier sous un cache d'un an.",
+        "source": "/app/rc-*.@(js|css)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
       }
     ]
   }

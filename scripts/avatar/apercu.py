@@ -20,7 +20,13 @@ K = 3                   # loupe pour le controle
 FILL = np.array([255, 35, 35], float)
 BLUR = 0.4
 
-src = io.open(os.path.join(APP, 'index.html'), encoding='utf-8', newline='').read()
+# LE CODE N'EST PLUS DANS index.html (build 1417) : il vit dans
+# app/rc-core.<build>.js, servi immuable pour un an. On passe par le lecteur
+# partage, qui rend la page RECONSTITUEE — voir scripts/source_prod.py.
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..', '..', 'scripts'))
+from source_prod import source_prod, fichier_code
+src = source_prod()
 i = src.index('const WO_ZONES = {')
 j = src.index('// Les six groupes', i)
 bloc = src[i:j].strip().replace('\r\n', '\n')

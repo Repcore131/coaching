@@ -19,9 +19,14 @@
 // casse pendant que la suite etait verte. Ici, les deux fichiers sont lus sur
 // le disque : il n'y a rien a servir, et rien qui puisse etre muet.
 import {readFileSync} from 'node:fs';
+// LE CODE N'EST PLUS DANS index.html (build 1417) : il vit dans
+// app/rc-core.<build>.js. sourceProd() rend la page reconstituee, telle que
+// _prodSrc() la voit dans la suite. Sans ca, ce controle s'arretait sur
+// « CHAMPS_PROFIL_COACH introuvable » — bruyamment, au moins.
+import {sourceProd} from './source-prod.mjs';
 
 const regles=readFileSync('database.rules.json','utf8');
-const source=readFileSync('app/index.html','utf8');
+const source=sourceProd();
 
 // ── La liste blanche du code ──────────────────────────────────────────────
 // Lue dans la source plutot que recopiee : une copie ici divergerait, et

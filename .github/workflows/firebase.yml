@@ -76,6 +76,22 @@ jobs:
           echo "Version du service worker :"
           head -1 _site/app/sw.js
 
+      # LES ACTIFS VERSIONNES. Depuis le build 1417, index.html ne porte plus le
+      # code : il le DEMANDE, sous un nom qui contient le numero de build, et
+      # l'hebergement sert ces deux fichiers immuables pour un an. Un nom qui ne
+      # suit pas RC_BUILD, ou un actif absent, et la page s'ouvre sur un 404 :
+      # ecran BLANC pour tout le monde, sans rien dans le diff pour le dire.
+      - name: Verifier les actifs versionnes
+        run: node scripts/verif/actifs.mjs
+
+      # ET LA PURGE DU WORKER, SUR UN BANC. rc-core pese 5,5 Mo et le report
+      # d'un cache a l'autre recopie tout : sans garde, chaque livraison en
+      # EMPILE une de plus sur le telephone. Le banc seme trois caches, joue
+      # activate, et verifie qu'il n'en reste que deux versions — plus la scene
+      # inverse, ou un cache neuf inutilisable ne fait pas jeter l'ancien.
+      - name: Verifier la purge des actifs par le worker
+        run: node scripts/verif/worker-actifs.mjs
+
       # LES ILLUSTRATIONS. Un deploiement remplace TOUT le site : une image
       # annoncee par l'index mais absente du depot disparait de la production
       # sans que rien ne le dise. Le script refuse une fiche manquante, un

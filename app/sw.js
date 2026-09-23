@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1416';
+const CACHE = 'repcore-v1417';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -117,7 +117,15 @@ CORPS.push('./img/diete-respectee.webp');
 // Le plan de complements se consulte au moment de la prise — le matin, en
 // salle, souvent sans reseau — et sans elle chaque carte perdrait sa vignette.
 CORPS.push('./img/complements.webp');
-const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
+// ⚠ LES DEUX ACTIFS VERSIONNES (build 1417). Le code et la feuille de styles
+// ne sont plus dans index.html : ils sont servis sous un nom qui porte le
+// numero de build, avec un cache d'un an et `immutable`. Ils DOIVENT entrer
+// ici : sans eux, la premiere ouverture hors ligne apres installation n'aurait
+// ni code ni style — c'est-a-dire rien du tout.
+// Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
+// chaque build et reecrit cette ligne comme celle d'index.html.
+const ASSETS = ['./index.html', './rc-core.1417.js', './rc-style.1417.css',
+  './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
   // filme souvent dans une salle sans reseau, et une compression qui echoue
@@ -279,7 +287,34 @@ self.addEventListener('activate', e => {
       // motion-lab.js NON PLUS : index.html le demande avec ?v=<build>, et
       // chaque report reconduirait la copie d'une version que plus aucune
       // page ne demandera.
-      const _exclu = u => /\/index\.html$/.test(u) || /\/tests\.js$/.test(u)
+      // ══ LES ACTIFS VERSIONNES : LA COURANTE ET LA PRECEDENTE, PAS PLUS ══
+      //
+      // rc-core.<build>.js pese 5,5 Mo. Le report general recopie tout ce qu'un
+      // ancien cache porte : sans garde, chaque mise a jour EMPILERAIT une
+      // version de plus sur le telephone — dix builds, 55 Mo, pour du code que
+      // plus aucune page ne demande.
+      //
+      // ON EN GARDE DEUX, et c'est delibere : la courante, et celle d'avant.
+      // Un appareil qui a encore l'ancien index.html en memoire (page ouverte
+      // avant la mise a jour) demande encore l'ancien nom ; le lui retirer le
+      // laisserait sans code jusqu'au rechargement, hors ligne compris.
+      const _ACTIF = /\/rc-(?:core|style)\.(\d+)\.(?:js|css)$/;
+      const _versionActif = u => { const m = String(u).match(_ACTIF); return m ? Number(m[1]) : null; };
+      const _versionsVues = new Set();
+      { const m = CACHE.match(/(\d+)/); if (m) _versionsVues.add(Number(m[1])); }
+      for (const k of anciens) {
+        try {
+          const c = await caches.open(k);
+          for (const rq of await c.keys()) {
+            const v = _versionActif(rq.url);
+            if (v !== null) _versionsVues.add(v);
+          }
+        } catch (err) {}
+      }
+      const _gardees = [..._versionsVues].sort((a, b) => b - a).slice(0, 2);
+      const _actifGarde = u => { const v = _versionActif(u); return v === null || _gardees.indexOf(v) >= 0; };
+      const _exclu = u => !_actifGarde(u)
+        || /\/index\.html$/.test(u) || /\/tests\.js$/.test(u)
         || /\/sw\.js$/.test(u) || /\/database\.rules\.json$/.test(u)
         || /\/motion-lab\.js(\?|$)/.test(u)
         || (PURGE_EXERCICES === CACHE && /\/exercices\//.test(u));
@@ -332,6 +367,24 @@ self.addEventListener('activate', e => {
           }
         } catch (err) {}
       }
+      // ══ PURGE DES ACTIFS PERIMES, DANS LE CACHE NEUF ═══════════════════
+      // Le report ne peut plus en amener (voir _exclu), mais un cache deja
+      // constitue avant ce lot en porte, et le handler fetch a pu en ajouter.
+      // On les retire ici : c'est le seul moment ou personne ne les lit.
+      let _purges = 0, _octetsPurges = 0;
+      try {
+        for (const rq of await neuf.keys()) {
+          if (_actifGarde(rq.url)) continue;
+          try {
+            const r = await neuf.match(rq);
+            if (r) _octetsPurges += _taille(r);
+            await neuf.delete(rq);
+            _purges++;
+          } catch (err) {}
+        }
+      } catch (err) {}
+      if (_purges) console.log('[RepCore SW] actifs perimes retires :', _purges,
+        'fichier(s),', _lisible(_octetsPurges), '— versions gardees :', _gardees.join(', '));
       // ON DIT CE QU'ON N'A PAS FAIT. Un report tronqué en silence se lirait
       // comme un cache complet, et la prochaine ouverture hors ligne serait une
       // surprise.

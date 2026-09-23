@@ -13,7 +13,7 @@
 // ── LA SOURCE DE PRODUCTION ─────────────────────────────────────────────
 //
 // Une trentaine d’assertions lisent le fichier pour vérifier ce qu’il
-// contient. Elles prenaient document.documentElement.outerHTML et le
+// contient. Elles prenaient _prodSrc() et le
 // coupaient à « function testExercices » : la suite vivait dans le même
 // fichier, et ce point de coupe l’en séparait.
 //
@@ -28,6 +28,23 @@ function _prodSrc(){
   const s=(typeof window!=='undefined'&&window._RC_SRC_PROD)||'';
   if(s.length<100000) throw new Error('source de production non chargée : passe par chargerTests()');
   return s;
+}
+
+// ══ LE CSS DU PRODUIT, POUR LES ASSERTIONS QUI LE LISENT ══════════════════
+//
+// Depuis le build 1417, la feuille de styles ne vit plus dans un <style> : elle
+// est servie a part et mise en cache pour un an (rc-style.<build>.css), pour que
+// index.html cesse de repartir en entier a chaque ouverture.
+//
+// LES QUARANTE-DEUX ASSERTIONS QUI LISAIENT LE CSS PAR LE DOM CONTINUENT DE
+// FONCTIONNER : on leur rend exactement la MEME FORME — une liste d'objets
+// porteurs de textContent — en y ajoutant la feuille externe, que chargerTests
+// a deja telechargee dans _RC_CSS_PROD. Sans elle, elles ne regarderaient plus
+// rien et passeraient toutes au vert sur du vide : le pire des deux mondes.
+function _stylesProd(){
+  const l=Array.from(document.querySelectorAll('style'));
+  const f=(typeof window!=='undefined'&&window._RC_CSS_PROD)||'';
+  return f?l.concat([{textContent:f}]):l;
 }
 
 // ELLE EST DEVENUE `async`, ET IL LE FALLAIT. Le produit est passe de
@@ -2392,7 +2409,7 @@ async function testExercices(){
           // ceux-là apparaissent légitimement dans six comparaisons et dans des
           // libellés, et une recherche écrite en clair se trouverait elle-même
           // dans la source de la page. Les motifs sont assemblés à l'exécution.
-          const src=document.documentElement.outerHTML;
+          const src=_prodSrc();
           const seuilLuteal=new RegExp('Math\\.ceil\\('+'len'+'\\*0\\.80\\)\\+1','g');
           const seuilRegles=new RegExp('jour'+'<=5','g');
           const a=src.match(seuilLuteal)||[], b=src.match(seuilRegles)||[];
@@ -5118,7 +5135,7 @@ async function testExercices(){
         ok('Et les quatre écrans de caféine passent bien l\'argument',(()=>{
           // Deux noms de fonctions inventes ici faisaient tomber la suite
           // entiere : on balaye la source rendue, qui existe toujours.
-          const tous=document.documentElement.outerHTML;
+          const tous=_prodSrc();
           const nus=(tous.match(/caffeineThresholds\(wKg,_ageUtilisateur\(currentUser\)\)/g)||[]).length;
           return nus===0?true:_echec(nus+' appel(s) sans le troisième argument');})());
         ok('Critère : enceinte → aucun modal de cycle, et rien n\'est écrit',(()=>{
@@ -11235,7 +11252,7 @@ async function testExercices(){
           // base au plancher, les sept libelles restent sous 11px sur tous les
           // ecrans ; sans l exception, ils debordent sur un iPhone de 375px.
           // Corriger l une en cassant l autre est le risque exact de ce lot.
-          const css=Array.from(document.querySelectorAll('style'))
+          const css=_stylesProd()
             .map(x=>x.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
           const base=/\.tab-btn\{[^}]*font-size:var\(--fs-xs\)/.test(css);
           if(!base) return _echec('la règle de base ne pose plus le plancher');
@@ -14876,12 +14893,11 @@ async function testExercices(){
           return true;})());
         ok('Le code court et le QR survivent, en repli',(()=>{
           // Ils deviennent des replis, ils ne disparaissent pas.
-          const tout=[...document.querySelectorAll('script')].filter(x=>!x.src)
-            .map(x=>x.textContent).join('\n');
+          const tout=_prodSrc();
           if(typeof copyCoachInviteLink!=='function') return _echec('le lien générique a disparu');
-          if(!/CLOUD\.showQR/.test(document.documentElement.outerHTML)) return _echec('le QR a disparu');
+          if(!/CLOUD\.showQR/.test(_prodSrc())) return _echec('le QR a disparu');
           // Et le dépliant existe bien, avec son libellé.
-          const h=document.documentElement.outerHTML;
+          const h=_prodSrc();
           if(h.indexOf('Autre méthode')<0) return _echec('le dépliant de repli n\'existe pas');
           return h.indexOf('id="inv-prenom"')>=0&&h.indexOf('id="inv-nom"')>=0
             ?true:_echec('le formulaire unifié est absent');})());
@@ -24611,7 +24627,7 @@ async function testExercices(){
       // retiré du produit, mais la leçon reste : on vérifie que chacun de mes
       // noms est déclaré UNE SEULE FOIS dans le fichier.
       ok('Aucune de mes fonctions ne double un nom existant',(()=>{
-        const src=document.documentElement.outerHTML;
+        const src=_prodSrc();
         // Deux noms de moins : les deux fonctions du panneau de depart ont
         // ete retirees le 08/09/2026, et un nom absent n'est declare ni une
         // fois ni deux.
@@ -32575,7 +32591,7 @@ async function testExercices(){
           return _echec('le grammage des protéines n’est plus en fin de ligne');
         // LA FEUILLE : la grille des macros et le repli des paires a la largeur
         // de la SECTION, pas de la fenetre.
-        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
         if(!/\.tbk-carte \.tbk-mac tbody\{display:grid/.test(css)) return _echec('les macros ne sont pas en grille');
         if(css.indexOf('@container tbk-serre (max-width:719px)')<0)
           return _echec('les paires ne se replient pas quand la section est étroite');
@@ -32584,7 +32600,7 @@ async function testExercices(){
       // BUILD 1403 — LE BANC A DEUX APPAREILS L'A MONTRE : les reglages du coach
       // arrivaient dans le dossier de l'athlete, pas sur son ecran Nutrition.
       ok('1403 — L’ÉCRAN NUTRITION DE L’ATHLÈTE SUIT LA DESCENTE DES RÉGLAGES DU COACH',(()=>{
-        const src=[...document.scripts].map(s=>s.textContent||'').join('\n');
+        const src=_prodSrc();
         const i=src.indexOf('function _repeindreApresDescente(');
         if(i<0) return _echec('_repeindreApresDescente a disparu');
         if(src.slice(i,i+1200).indexOf('_repeindreNutritionAthlete()')<0)
@@ -33470,6 +33486,140 @@ async function testExercices(){
         return CCD_REPLI_DEFAUT.indexOf('ccd-cal')<0
           ?true:_echec('le journal est encore dans les sections repliées par défaut');})());
 
+      // ══════════════ BUILD 1417 — LE POIDS DE LA PAGE ════════════════════
+      //
+      // Mesure avant : app/index.html pesait 6 624 629 o, 2 101 Ko compresses,
+      // et il est servi en `no-cache` — il le DOIT. Le plafond Hosting de
+      // 360 Mo par jour n'autorisait donc que 175 OUVERTURES PAR JOUR pour
+      // tout le monde, athletes et coach confondus.
+      // Mesure apres : 444 881 o, 111 Ko compresses — 3 316 ouvertures. Le
+      // premier chargement suivant une livraison coute toujours 2 096 Ko : ce
+      // lot ne supprime pas le poids du code, il cesse de le renvoyer A CHAQUE
+      // OUVERTURE. Huit ouvertures et une livraison par jour : 16 812 Ko par
+      // appareil avant, 2 874 Ko apres.
+      // Le code et la feuille de styles vivent a part, sous un nom qui porte
+      // le build, servis `immutable` pour un an.
+      //
+      // CE LOT TIENT A QUATRE CHOSES, et chacune a son assertion : le nom
+      // versionne, l'en-tete d'un an, la purge des anciennes versions par le
+      // worker, et le fait que la suite continue de LIRE la source.
+
+      ok('1417 — LA SOURCE DE PRODUCTION EST RECONSTITUEE EN ENTIER',(()=>{
+        // LE GARDE-FOU DU LOT. Cent quarante-six assertions lisent _prodSrc()
+        // et quarante-trois lisent le CSS. Si la reconstitution rendait la
+        // page NUE, aucune ne tomberait : toutes celles qui verifient une
+        // ABSENCE passeraient au vert sur du vide. C'est le pire des deux
+        // mondes, et c'est exactement ce qui est arrive au premier jet.
+        const src=_prodSrc();
+        if(src.length<5000000) return _echec('source trop courte : '+src.length+' o');
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
+        if(css.length<400000) return _echec('feuille de styles trop courte : '+css.length+' o');
+        // ⚠ RECONSTITUEE A SA PLACE, pas collee en queue : une assertion
+        //   verifie que rien ne suit </html>, et le scanner de domaines ne
+        //   retire les commentaires QUE dans un <script>. Collee bout a bout,
+        //   la premiere tombait et le second lisait des commentaires comme des
+        //   appels reseau.
+        const i=src.lastIndexOf('</html>');
+        if(i<0||src.slice(i+7).trim()!=='') return _echec('le code a ete colle APRES la page');
+        if(src.indexOf('function _repeindreApresDescente(')<0)
+          return _echec('le code de production manque a la source');
+        if(src.indexOf('.screen{')<0)
+          return _echec('la feuille de styles manque a la source');
+        return true;})());
+
+      ok('1417 — LES DEUX ACTIFS PORTENT LE NUMERO DU BUILD',(()=>{
+        // Le nom EST la version. Un actif servi un an sous un nom qui ne
+        // change pas figerait l'app pour un an chez qui l'a ouverte une fois.
+        const page=(typeof window!=='undefined'&&window._RC_PAGE_PROD)||'';
+        if(page.length<100000) return _echec('la page seule n’a pas ete lue');
+        const b=window.RC_BUILD;
+        for(const n of ['rc-core.'+b+'.js','rc-style.'+b+'.css'])
+          if(page.indexOf(n)<0) return _echec(n+' n’est pas reference par la page');
+        // ET PLUS AUCUN GROS BLOC EN LIGNE : c'est la mesure du lot, pas une
+        // intention. 300 Ko de squelette, large pour ce qui reste.
+        if(page.length>700000) return _echec('la page seule pese '+page.length+' o : un bloc est revenu en ligne');
+        const gros=[];
+        const re=/<(style|script)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi;
+        let m;
+        while((m=re.exec(page))) if(m[2].length>50000) gros.push(m[1]+' de '+m[2].length+' o');
+        if(gros.length) return _echec('bloc(s) en ligne trop lourd(s) : '+gros.join(', '));
+        // Le worker doit les connaitre, sinon ils ne sont pas hors ligne.
+        const sw=(typeof window!=='undefined'&&window._RC_SW)||'';
+        if(!sw) return true;                       // sw.js non servi : on le dit ailleurs
+        for(const n of ['rc-core.'+b+'.js','rc-style.'+b+'.css'])
+          if(sw.indexOf(n)<0) return _echec(n+' manque a ASSETS du worker : il ne serait pas hors ligne');
+        return true;})());
+
+      ok('1417 — LE WORKER NE GARDE QUE DEUX VERSIONS D’ACTIFS',(()=>{
+        // rc-core pese 5,5 Mo. Le report d'un cache a l'autre recopie tout ce
+        // qu'un ancien cache porte : sans garde, dix livraisons EMPILERAIENT
+        // 55 Mo de code que plus aucune page ne demande. On garde la courante
+        // et la precedente — la precedente parce qu'un onglet ouvert AVANT la
+        // mise a jour demande encore l'ancien nom, et le lui retirer le
+        // laisserait sans code, hors ligne compris.
+        const sw=(typeof window!=='undefined'&&window._RC_SW)||'';
+        if(!sw) return true;
+        if(sw.indexOf('rc-(?:core|style)')<0)
+          return _echec('le worker ne reconnait pas un actif versionne');
+        if(sw.indexOf('.slice(0, 2)')<0&&sw.indexOf('.slice(0,2)')<0)
+          return _echec('le worker ne plafonne plus a deux versions');
+        if(sw.indexOf('_actifGarde')<0) return _echec('la garde des actifs a disparu');
+        // LES DEUX MOMENTS : le report ne doit plus en amener, et le cache
+        // neuf doit etre PURGE de ceux qu'il porte deja.
+        if(sw.indexOf('!_actifGarde(u)')<0)
+          return _echec('le report recopierait encore les versions perimees');
+        if(sw.indexOf('actifs perimes retires')<0)
+          return _echec('la purge ne dit pas ce qu’elle a retire');
+        return true;})());
+
+      ok('1417 — LES ACTIFS SONT SERVIS IMMUABLES, ET LES EN-TETES DEJA PAYES RESTENT',(()=>{
+        // ⚠ LES QUATRE ENTREES /app, /i, /app/sw.js ET **/*.html NE SE
+        //   TOUCHENT PAS. Leurs commentaires dans firebase.json racontent
+        //   quatre lots de degats : les en-tetes suivent le chemin DEMANDE,
+        //   pas le fichier servi, et /app — l'adresse du lien court, du QR et
+        //   de la page de vente — heritait d'un max-age d'une heure.
+        const h=(typeof window!=='undefined'&&window._RC_HOSTING)||'';
+        if(!h) return true;                        // firebase.json non servi ici
+        let j=null; try{ j=JSON.parse(h); }catch(e){ return _echec('firebase.json illisible : '+e.message); }
+        const regles=((j.hosting||{}).headers)||[];
+        const trouve=s=>regles.find(r=>r.source===s);
+        const valeur=r=>{const k=(r&&r.headers||[]).find(x=>x.key==='Cache-Control');return k?k.value:null;};
+        for(const s of ['/app','/i','/app/sw.js','**/*.html']){
+          const r=trouve(s);
+          if(!r) return _echec('la regle '+s+' a disparu de firebase.json');
+          if(valeur(r)!=='no-cache') return _echec(s+' n’est plus en no-cache : «'+valeur(r)+'»');
+        }
+        const a=trouve('/app/rc-*.@(js|css)');
+        if(!a) return _echec('aucune regle ne sert les actifs versionnes');
+        if(valeur(a)!=='public, max-age=31536000, immutable')
+          return _echec('les actifs ne sont pas immuables : «'+valeur(a)+'»');
+        // L'ORDRE COMPTE : chez Firebase la PREMIERE regle qui correspond
+        // gagne. **/*.html ne voit pas un .js, mais un futur **/* le verrait.
+        const iH=regles.indexOf(trouve('**/*.html')), iA=regles.indexOf(a);
+        return iA>iH?true:_echec('la regle des actifs passe avant celle des pages');})());
+
+      ok('1417 — LE REJEU D’UNE CLEF REFUSEE RECONNAIT VRAIMENT UN 401',(()=>{
+        // TROUVE EN RELISANT LE FICHIER SORTI : deux vraies touches RETOUR
+        // ARRIERE (U+0008) avaient remplace les bornes de mot du motif, dans un
+        // lot ecrit par heredoc. Le motif ne reconnaissait donc AUCUN code —
+        // et le `break` que ce lot-la voulait supprimer bloquait toujours la
+        // file au premier refus definitif. Le commentaire disait le contraire.
+        const f=String(CLOUD.viderFile);
+        for(let i=0;i<f.length;i++){
+          const c=f.charCodeAt(i);
+          if(c<32&&c!==9&&c!==10&&c!==13)
+            return _echec('caractere de controle U+'+('000'+c.toString(16)).slice(-4)+' dans le code');
+        }
+        const i=f.indexOf('40[13]');
+        if(i<0) return _echec('le refus definitif ne reconnait plus un 401');
+        if(f.slice(i-2,i)!=='\\b'||f.slice(i+6,i+8)!=='\\b')
+          return _echec('bornes de mot corrompues : «'+f.slice(i-4,i+10)+'»');
+        // ET IL FAIT BIEN CE QU'IL DIT : une clef refusee est defilee, les
+        // autres continuent.
+        const re=new RegExp(f.slice(i-2,i+8));
+        return re.test('HTTP 401 Unauthorized')&&re.test('403')&&!re.test('40134')
+          ?true:_echec('le motif ne reconnait pas un 401 reel');})());
+
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
       // des compléments sur la même ligne que “VITAMINE…”, entre la photo et le
       // type, pour réduire la hauteur des rectangles ».
@@ -33634,7 +33784,7 @@ async function testExercices(){
 
       ok('LE BOUTON D\'ENREGISTREMENT EST CENTRE ET SEUL SUR SA LIGNE',(()=>{
         // Pleine largeur il se confondait avec le tableau qu'il enregistre.
-        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
         const m=css.match(/\.tbk-save-c\{([^}]*)\}/);
         if(!m) return _echec('la regle .tbk-save-c a disparu');
         if(!/margin:0 auto/.test(m[1])) return _echec('il n\'est pas centre');
@@ -33652,7 +33802,7 @@ async function testExercices(){
         // ligne ». Un flex qui se replie (flex-wrap:wrap, ou une base en px)
         // redonnerait les quatre lignes empilees qu'on vient de supprimer des
         // que la fiche est etroite — or c'est justement la qu'on la lit.
-        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
         const barre=css.match(/\.tbk-trio\{([^}]*)\}/);
         if(!barre) return _echec('la regle .tbk-trio a disparu');
         if(!/display:flex/.test(barre[1])) return _echec('la barre n\'est pas une ligne');
@@ -33667,7 +33817,7 @@ async function testExercices(){
         // enfants des 900 px : les deux paires se retrouvaient cote a cote —
         // quatre tableaux sur une rangee — et les boutons flottaient a droite
         // des macros. L'appariement est desormais explicite, paire par paire.
-        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
         const i=css.indexOf('.tbk-serre{display:grid');
         if(i>=0) return _echec('.tbk-serre est encore une grille');
         return !/\.tbk-serre\{[^}]*grid-template-columns/.test(css)
@@ -33676,7 +33826,7 @@ async function testExercices(){
         // « Depense selon l'activite sportive » porte QUATRE colonnes : a
         // 820 px, une demi-largeur lui laissait 44 px par colonne et les
         // intitules se cassaient caractere par caractere.
-        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
         if(css.indexOf('.tbk-duo.tbk-duo-l{grid-template-columns:1fr}')<0)
           return _echec('la paire du sport n\'est pas retenue sous son seuil');
         // 1 025 et non 1 024 : une tablette en paysage fait exactement 1 024.
@@ -34180,7 +34330,7 @@ async function testExercices(){
           return _echec('mauvais nombre de feuilles marquées');
         if(p.indexOf('mdl-video')<0) return _echec('le lecteur vidéo n’est pas distingué');
         // LA REGLE NE VAUT QU'AU-DELA DE 1025 PX.
-        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
         const i=css.indexOf('.mdl-large{max-width:960px');
         if(i<0) return _echec('aucune largeur pour les modales larges');
         const av=css.lastIndexOf('@media(min-width:1025px)',i);
@@ -34313,7 +34463,7 @@ async function testExercices(){
           ?true:_echec('on peut se porter une séance à soi-même');})());
 
       ok('N5.5 — LES TROIS FAMILLES LES PLUS CLIQUEES REPONDENT AU SURVOL',(()=>{
-        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        const css=_stylesProd().map(s=>s.textContent).join('\n');
         for(const [sel,quoi] of [['.ch-tri:hover','les puces de tri'],
                                  ['.pf-chip:hover','les onglets du dossier'],
                                  ['#s-coach-client .cc-sect-t:hover','les en-têtes repliables']])
@@ -34358,7 +34508,7 @@ async function testExercices(){
           ?true:_echec('--red a changé : '+jeton('--red'));})());
 
       ok('N5.14 — LES CINQ ZONES DEFILANTES ONT LE MEME ASCENSEUR',(()=>{
-        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        const css=_stylesProd().map(s=>s.textContent).join('\n');
         for(const id of ['ct-dashboard','ct-codes','ct-profil','ct-monetisation','ch-sidebar'])
           if(css.indexOf('#'+id+'::-webkit-scrollbar')<0)
             return _echec('#'+id+' garde l’ascenseur du système');
@@ -34373,7 +34523,7 @@ async function testExercices(){
           ?true:_echec('Firefox garde l’ascenseur du système');})());
 
       ok('N5.12 — UN SEUL ETAT ACTIF, une seule apparence',(()=>{
-        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        const css=_stylesProd().map(s=>s.textContent).join('\n');
         // Les deux noms de classe sont acceptés — `active` est posé par ccdVue
         // et bqOnglet, `actif` par setFiltreClients et setTriClients — et ils
         // rendent la MEME chose.
@@ -34411,7 +34561,7 @@ async function testExercices(){
         return (src.match(/<span/g)||[]).length;
       };
       ok('N5.1 et N5.16 — L\'EN-TETE DU TABLEAU S\'AFFICHE, et ses libelles tiennent',(()=>{
-        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        const css=_stylesProd().map(s=>s.textContent).join('\n');
         // N5.1 — `.cr-head{display:none}` est declare PLUS BAS a specificite
         // egale : il gagnait la cascade, requete de media ou pas, et l'en-tete
         // n'apparaissait a AUCUNE largeur. La regle large doit donc etre plus
@@ -34556,7 +34706,7 @@ async function testExercices(){
 
 
       ok('N5.17 — LE TITRE DE SECTION PASSE PAR LE JETON D\'IDENTITE',(()=>{
-        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        const css=_stylesProd().map(s=>s.textContent).join('\n');
         const i=css.indexOf('.cc-sect-t>span{');
         if(i<0) return _echec('la règle a disparu');
         const bloc=css.slice(i,css.indexOf('}',i));
@@ -34608,14 +34758,14 @@ async function testExercices(){
         // ET AUCUNE SECTION N'A DISPARU : seul l'accent change.
         if(!vus['--red']) return _echec('plus aucune section d’alerte');
         // LA TRAME ET LE FILET RESTENT : ils font partie de l'identite.
-        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
         const i=css.indexOf('.cc-sect-t{position:relative');
         const bloc=css.slice(i,css.indexOf('}',i));
         return /border-left:3px solid var\(--cc-accent/.test(bloc)
           ?true:_echec('le filet de gauche ne porte plus l’accent');})());
 
       ok('N5.9 — LA TOPBAR COLLE SUR TOUS LES ECRANS COACH',(()=>{
-        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        const css=_stylesProd().map(s=>s.textContent).join('\n');
         // Les ecrans que la mise en page large reconnait deja comme coach, moins
         // #s-coach-home qui a son propre modele et les deux ecrans de connexion.
         const ECRANS=['s-coach-client','s-coach-sessions','s-coach-program',
@@ -34770,7 +34920,7 @@ async function testExercices(){
         // a douze pixels, 144 px, qui debordaient de huit. A huit pixels ils
         // font 96, et tout rentre. Mesure refaite a 1360, 1366 et 1440 : aucun
         // debordement, aucun libelle d'en-tete coupe.
-        const css=Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+        const css=_stylesProd().map(s=>s.textContent).join('\n');
         const m=css.match(/--cr-cols:([^;}]+)/);
         if(!m) return _echec('aucune grille de colonnes');
         const cols=m[1].split(/\s+(?![^(]*\))/).filter(Boolean);
@@ -35543,7 +35693,7 @@ async function testExercices(){
         }
         return true;})());
       ok('Trois regles suffisent, et elles lisent la classe',(()=>{
-        const css=Array.from(document.querySelectorAll('style'))
+        const css=_stylesProd()
           .map(s=>s.textContent).join('\n');
         for(const r of ['body:has(.ecran-coach.active){max-width:1440px}',
                         'body:has(.ecran-coach.active) #ch-sidebar',
@@ -35593,7 +35743,7 @@ async function testExercices(){
         // Les constats traites, dans l'ordre du document.
         const repris=['B1.1','B1.2','B1.4','B1.5','B1.6','B1.7','B1.8','B1.9',
           'B1.10','B1.11','B1.12','B2.1','B2.2','B2.3','B2.5','B3.1'];
-        const source=Array.from(document.querySelectorAll('style'))
+        const source=_stylesProd()
           .map(s=>s.textContent).join('\n')
           +String(go)+String(coachTab)+String(_majBarreCoach)+String(CLOUD.pushOne)
           +String(DB.setLocal)+String(renderProgEx)+String(_viserOuLeDire)
@@ -35739,7 +35889,7 @@ async function testExercices(){
       // toute la ligne. La largeur n'affichait pas une donnee de plus : elle
       // allongeait le trajet de l'oeil entre le libelle et sa valeur.
       ok('La carte d\'exercice groupe et borne ce qui se lit ensemble',(()=>{
-        const css=Array.from(document.querySelectorAll('style'))
+        const css=_stylesProd()
           .map(s=>s.textContent).join('\n');
         const base='body:has(#s-coach-program.active[data-ctx="coach"]) #prog-exercises';
         if(css.indexOf(base+' .px-duo')<0)
@@ -35823,7 +35973,7 @@ async function testExercices(){
         return _htmlTiroirAthlete(null)===''
           ?true:_echec('un athlete absent produit un tiroir');})());
       ok('B2.F1 — le tableau retombe a dix colonnes, et la ligne se designe',(()=>{
-        const css=Array.from(document.querySelectorAll('style'))
+        const css=_stylesProd()
           .map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
         // LE TIROIR NE PREND PAS DE PLACE TANT QU'IL EST VIDE : sans :has(),
         // une colonne de 340 px resterait beante avant le premier clic.
@@ -35845,7 +35995,7 @@ async function testExercices(){
       // etaient meme rebornes a 72ch — une colonne de lecture centree dans un
       // vide. Elargir n'est pas exploiter.
       ok('B2.4 — deux ecrans posent enfin deux blocs cote a cote',(()=>{
-        const css=Array.from(document.querySelectorAll('style'))
+        const css=_stylesProd()
           .map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
         for(const [ecran,cle] of [['s-coach-sessions','#coach-session-slots'],
                                   ['s-rapport','#rap-corps']]){
@@ -36034,7 +36184,7 @@ async function testExercices(){
         if(!(iN<iD&&iD<iO&&iO<iC))
           return _echec('ordre lu : '+[['nom',iN],['duree',iD],['obj',iO],['desc',iC]]
             .sort((a,b)=>a[1]-b[1]).map(x=>x[0]).join(' > '));
-        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
         // LE HAUT NE S'ENVELOPPE PLUS : c'est ce qui garantit le rang unique.
         if(!/\.pr-haut\{[^}]*flex-wrap:nowrap/.test(css))
           return _echec('le haut de carte enveloppe encore');
@@ -36098,7 +36248,7 @@ async function testExercices(){
         // UN <select> NE SE CENTRE PAS COMME UN <input> : text-align le centre,
         // mais il garde la place de sa fleche a droite. Sans text-align-last,
         // le texte paraissait decale d'une dizaine de pixels.
-        const css=Array.from(document.querySelectorAll('style'))
+        const css=_stylesProd()
           .map(x=>x.textContent).join('\n');
         if(css.indexOf('select.f-c{text-align-last:center}')<0)
           return _echec('le selecteur n\'est pas centre comme les champs');
@@ -36132,7 +36282,7 @@ async function testExercices(){
       // nus. Mesure : apres 1 218 px de defilement, l'en-tete se cale
       // exactement sur le haut du panneau.
       ok('B2.11 — l\'en-tete du tableau reste visible pendant le defilement',(()=>{
-        const css=Array.from(document.querySelectorAll('style'))
+        const css=_stylesProd()
           .map(x=>x.textContent).join('\n');
         const i=css.indexOf('#ch-clients-list .cr-head{');
         if(i<0) return _echec('la regle de l\'en-tete a disparu');
@@ -36235,7 +36385,7 @@ async function testExercices(){
       // 260 px moins ses marges, il sortait de la barre et se faisait couper
       // par son bord.
       ok('B2.8 — le focus clavier reste dans la barre',(()=>{
-        const css=Array.from(document.querySelectorAll('style'))
+        const css=_stylesProd()
           .map(s=>s.textContent).join('\n');
         if(css.indexOf('.sb-lien:focus-visible')<0)
           return _echec('aucune regle de focus sur les liens de la barre');
@@ -36302,7 +36452,7 @@ async function testExercices(){
         // Aucun appelant n'a a se souvenir de prevenir la barre.
         if(String(go).indexOf('_majBarreCoach()')<0)
           return _echec('go() ne previent pas la barre laterale');
-        const css=Array.from(document.querySelectorAll('style'))
+        const css=_stylesProd()
           .map(s=>s.textContent).join('\n');
         return css.indexOf('.sb-lien[aria-current="page"]')>=0
           ?true:_echec('l\'etat courant des liens n\'a aucune forme');})());
@@ -40957,7 +41107,7 @@ async function testExercices(){
     // plancher » l'a refusee — comme elle avait refuse la ligne de la pesee.
     // C'est la PHRASE qui a ete raccourcie, pas le corps.
     ok('La ligne du cas nul tient le plancher de l’accueil',(()=>{
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
       const m=css.match(/\.sk-reste\{([^}]*)\}/);
       if(!m) return _echec('la regle .sk-reste n’existe pas');
       const px=(m[1].match(/font-size:(\d+(?:\.\d+)?)px/)||[])[1];
@@ -40970,7 +41120,7 @@ async function testExercices(){
       return /\.sk-chiffres:not\(\[data-nul\]\) \.sk-reste\{display:none\}/.test(css)
         ?true:_echec('la ligne du dessous survivrait a l’etat normal');})());
     ok('Le compteur de semaines ne porte plus de tiret',(()=>{
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
       if(document.querySelector('.sk-tiret')) return _echec('le tiret est encore dans le document');
       if(/\.sk-tiret\s*\{/.test(css)) return _echec('la regle .sk-tiret est encore ecrite');
       const v=document.getElementById('clh-streak-val');
@@ -41180,7 +41330,7 @@ async function testExercices(){
       // Hors de tout .screen : elle doit survivre au changement d'ecran, comme
       // le toast — majBadges est appelee AVANT go('s-workout-done').
       if(z.closest('.screen')) return _echec('la banniere vit dans un ecran');
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
       const m=css.match(/\.bdg-fete\{([^}]*)\}/);
       if(!m) return _echec('la regle .bdg-fete n’existe pas');
       if(!/pointer-events:none/.test(m[1]))
@@ -41844,7 +41994,7 @@ async function testExercices(){
         if(e&&!(e.compareDocumentPosition(z)&S))
           return _echec('la mention passe devant '+id);
       }
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
       const m=css.match(/\.ess-ligne\{([^}]*)\}/);
       if(!m) return _echec('la règle .ess-ligne n’existe pas');
       // DISCRÈTE : ni rouge de relance, ni animation, ni pastille.
@@ -41899,7 +42049,7 @@ async function testExercices(){
       // efface par le premier `style.display=''` venu.
       if(/display\s*:/.test(z.getAttribute('style')||''))
         return _echec('#clh-stats a de nouveau un display en ligne : il sera effacé au premier masquage');
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
       if(!/#clh-stats\{[^}]*display:flex/.test(css))
         return _echec('la regle #clh-stats{display:flex} n’existe pas dans la feuille');
       // ⚠ ET ON REJOUE LE MASQUAGE : masquer puis rendre doit retrouver flex.
@@ -41967,7 +42117,7 @@ async function testExercices(){
       }
       // ⚠ SUR UNE LIGNE, et c'est la demande. La regle suffit quand l'ecran
       // n'est pas monte ; quand il l'est, on mesure.
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
       const m=css.match(/\.hero-duo\{([^}]*)\}/);
       if(!m||!/display:flex/.test(m[1])) return _echec('.hero-duo n’est pas une rangée');
       // flex:1 1 0 AVEC min-width:0 : sans le min-width, un libellé qui ne se
@@ -44134,7 +44284,7 @@ async function testExercices(){
     // la feuille, on la pose sur une copie de la barre large de 360 px, et on
     // mesure. C'est la largeur d'un Galaxy ; sous 360, la barre défile.
     ok('R17 — les sept onglets tiennent entiers sur un téléphone de 360 px',(()=>{
-      const css=[...document.querySelectorAll('style')].map(s=>s.textContent).join('\n');
+      const css=_stylesProd().map(s=>s.textContent).join('\n');
       const m=css.match(/@media\(max-width:420px\)\{\.tab-btn\{([^}]*)\}\}/);
       if(!m) return _echec('la règle des petits écrans est introuvable');
       const bar=document.getElementById('client-tabbar');
@@ -50888,7 +51038,7 @@ async function testExercices(){
       const src=_prodSrc();
       if(/id="clh-m[123]-sub"[^>]*style=/.test(src)||/style=[^>]*id="clh-m[123]-sub"/.test(src))
         return _echec('un sous-titre porte encore une mise en forme en ligne');
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent)
+      const css=_stylesProd().map(x=>x.textContent)
         .join('\n').replace(/\/\*[\s\S]*?\*\//g,' ');
       if(!/\.clh-m-sub\{[^}]*color:/.test(css))
         return _echec('la couleur de base n’est pas dans la feuille : elle sera effacée');
@@ -50956,7 +51106,7 @@ async function testExercices(){
         // fois que le depot l'apprend : la sonde trouvait le mot dans le
         // commentaire qui explique pourquoi il ne faut PAS l'ecrire. Une
         // regle porte sur les declarations, jamais sur la prose.
-        const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent)
+        const css=_stylesProd().map(x=>x.textContent)
           .join('\n').replace(/\/\*[\s\S]*?\*\//g,' ');
         if(/mask-composite/.test(css))
           return _echec('mask-composite est revenu : le masque peut degenerer');
@@ -51102,7 +51252,7 @@ async function testExercices(){
     // « animations reduites », un echec de mesure ou un ecran jamais affiche
     // le laissaient en bas a gauche de la volee.
     ok('Le grimpeur est pose sur sa marche sans JavaScript',(()=>{
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
       const m=css.match(/\.rcf-grimpeur\{([^}]*)\}/);
       if(!m) return _echec('la regle .rcf-grimpeur n’existe plus');
       // Un `left` fixe dans la feuille contredirait le `left` en ligne du
@@ -51287,7 +51437,7 @@ async function testExercices(){
     // d'assiduite. Et l'encouragement doit garder le bord droit du cadre :
     // c'est le tiret qui portait le margin-left:auto.
     ok('L\'encouragement d\'assiduite ne porte plus de tiret',(()=>{
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
       if(/\.nb-tiret\s*\{/.test(css)) return _echec('la regle .nb-tiret est encore ecrite');
       const s=String(_htmlNotifAssiduite);
       if(s.indexOf('nb-tiret')>=0) return _echec('la balise du tiret est encore posee');
@@ -51322,7 +51472,7 @@ async function testExercices(){
     // « Encore 4 pesees cette semaine avant une moyenne fiable » passait a la
     // ligne et faisait grandir la carte d'un rang pour trois mots.
     ok('La ligne sous la pesee du jour tient sur un seul rang',(()=>{
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
       const m=css.match(/\.pes-sous\{([^}]*)\}/);
       if(!m) return _echec('la regle .pes-sous n\'existe pas');
       if(m[1].indexOf('white-space:nowrap')<0) return _echec('rien n\'empeche le retour a la ligne');
@@ -51357,7 +51507,7 @@ async function testExercices(){
       // tomber le chiffre a 19,76, mais emporterait aussi le cadran, la flambee
       // et le cadre neon — trois pieces dessinees a 29 qu'aucun constat ne
       // remet en cause.
-      const css=Array.from(document.querySelectorAll('style'))
+      const css=_stylesProd()
         .map(x=>x.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
       if(!/--sk-f:min\(/.test(css))
         return _echec('le corps du chiffre n’est plus plafonné');
@@ -57363,8 +57513,8 @@ async function testExercices(){
           // Les tests ci-dessus interrogent _htmlHydratation en isolation : on
           // pouvait retirer entièrement son appel du rendu et tout restait vert,
           // pour une restitution que personne ne verrait jamais.
-          return /_htmlHydratation\(/.test(document.documentElement.outerHTML)
-            &&/_htmlHydratation\(u,/.test(document.documentElement.outerHTML)
+          return /_htmlHydratation\(/.test(_prodSrc())
+            &&/_htmlHydratation\(u,/.test(_prodSrc())
             ?true:_echec('l\'appel a disparu du rendu de progression');})());
         ok('La fiche coach lit le planning de L\'ATHLÈTE, pas celui du coach',(()=>{
           // nutIsOnDay lit currentUser, qui est le COACH sur cet écran : un
@@ -58090,7 +58240,7 @@ async function testExercices(){
           // Le motif est ASSEMBLE a l'execution : ecrit en clair, il se
           // trouverait lui-meme dans la source de la page et le test ne
           // pourrait jamais passer.
-          const src=document.documentElement.outerHTML;
+          const src=_prodSrc();
           const re=new RegExp('dietType'+'\\s*\\|\\|','g');
           const m=src.match(re);
           return !m?true:_echec(m.length+' occurrence(s) restantes');})());
@@ -58921,7 +59071,7 @@ async function testExercices(){
           }
           return coupables.length?_echec('ancienne signature : '+coupables.join(', ')):true;})());
         ok('La bulle de poids estimé n\'annonce plus 75 kg',(()=>{
-          const src=document.documentElement.outerHTML;
+          const src=_prodSrc();
           return !/Poids estimé \(75 kg\)/.test(src)
             ?true:_echec('le 75 kg en dur est toujours là');})());
       } finally { currentUser=_sU; }
@@ -59179,7 +59329,7 @@ async function testExercices(){
             return !(r.H>0)||!(r.F>0)||!r.lib||!r.unite;});
           return mauvais.length?_echec(mauvais.join(',')):true;})());
         ok('MICRO_REFS cite sa source dans le code',(()=>{
-          const src=document.documentElement.outerHTML;
+          const src=_prodSrc();
           return /anses\.fr\/fr\/content\/les-references-nutritionnelles/.test(src)
             ?true:_echec('aucune source citée');})());
       } finally { currentUser=_sU; }
@@ -62759,7 +62909,7 @@ vendredi 78 6h 44m
     ok('Les fleches de periode tiennent la cible de 44 px',(()=>{
       // Ce sont les seules commandes de navigation de l'ecran : les rater au
       // doigt, c'est ne pas pouvoir consulter la semaine passee du tout.
-      const css=Array.from(document.querySelectorAll('style')).map(x=>x.textContent).join('\n');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
       const m=css.match(/\.san-nav-b\{([^}]*)\}/);
       if(!m) return _echec('regle .san-nav-b introuvable');
       const w=(m[1].match(/min-width:(\d+)px/)||[])[1];
@@ -62838,7 +62988,7 @@ vendredi 78 6h 44m
     // expliquer le rapport entre l'etat par defaut et le contexte large. Un
     // indexOf sur la source brute s'arretait sur la premiere citation et
     // decoupait la regle voisine — la sonde tombait alors que le CSS etait bon.
-    const _cssNu=Array.from(document.querySelectorAll('style'))
+    const _cssNu=_stylesProd()
       .map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
     const _cssLarge=(()=>{
       const css=_cssNu;
@@ -62926,7 +63076,7 @@ vendredi 78 6h 44m
 
     // ══════ ARC — SYSTÈME D'ANIMATION (lot 1) ══════
     (()=>{
-      const _cssArc=Array.from(document.querySelectorAll('style'))
+      const _cssArc=_stylesProd()
         .map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
       const _v=n=>getComputedStyle(document.documentElement)
         .getPropertyValue(n).trim();
@@ -63454,7 +63604,7 @@ vendredi 78 6h 44m
             // LE TRAIT GLISSE d'une seconde a l'autre — sans transition, le
             // bandeau etant reconstruit a chaque tick, l'anneau avancait par
             // crans visibles.
-            const css=Array.from(document.querySelectorAll('style'))
+            const css=_stylesProd()
               .map(x=>x.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
             if(!/#rep-arc\{transition:stroke-dashoffset/.test(css))
               return _echec('le trait avance encore par crans');

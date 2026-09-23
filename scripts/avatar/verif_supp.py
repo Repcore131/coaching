@@ -11,7 +11,13 @@ import io, os, re, json
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.join(HERE, '..', '..', 'app')
-src = io.open(os.path.join(APP, 'index.html'), encoding='utf-8', newline='').read()
+# LE CODE N'EST PLUS DANS index.html (build 1417) : il vit dans
+# app/rc-core.<build>.js, servi immuable pour un an. On passe par le lecteur
+# partage, qui rend la page RECONSTITUEE — voir scripts/source_prod.py.
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..', '..', 'scripts'))
+from source_prod import source_prod, fichier_code
+src = source_prod()
 
 styles = '\n'.join(re.findall(r'<style[^>]*>(.*?)</style>', src, re.S))
 script = max(re.findall(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', src, re.S), key=len)

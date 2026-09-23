@@ -30,6 +30,12 @@ SORTIE
 """
 
 import os, re, sys, json, csv, unicodedata
+# LE CODE N'EST PLUS DANS index.html (build 1417) : il vit dans
+# app/rc-core.<build>.js, servi immuable pour un an. On passe par le lecteur
+# partage, qui rend la page RECONSTITUEE — voir scripts/source_prod.py.
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '.'))
+from source_prod import source_prod, fichier_code
 from difflib import SequenceMatcher
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -102,7 +108,7 @@ def noms_historiques(export):
 
 def noms_application():
     """Repli : les noms que l'application connait deja."""
-    src = open(os.path.join(RACINE, "app", "index.html"), encoding="utf-8").read()
+    src = source_prod()
     src = src[:src.find("function testExercices")]
     out = {}
     for nom in ("EX_GUIDE_BRUT", "SCHEMAS_BRUT"):

@@ -30,7 +30,13 @@ import io, sys, os
 CR = '\r\n'
 BS = chr(92)
 Q = chr(39)
-CIBLE = 'app/index.html'
+# LE CODE N'EST PLUS DANS index.html (build 1417) : il vit dans
+# app/rc-core.<build>.js, servi immuable pour un an. On passe par le lecteur
+# partage, qui rend la page RECONSTITUEE — voir scripts/source_prod.py.
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '.'))
+from source_prod import source_prod, fichier_code
+CIBLE = fichier_code()
 
 HELPERS = u'''// LES EXERCICES D'UNE SÉANCE, RENDUS RENDABLES.
 //
