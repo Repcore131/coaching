@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1415';
+window.RC_BUILD='1416';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -6140,6 +6140,148 @@ button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
    accuserait de rate ce qui n'a simplement pas ete note. */
 .cal{background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);
   padding:12px 13px;margin-bottom:14px}
+/* ══ LE JOURNAL ALIMENTAIRE, MAQUETTE DU 23/09/2026 (build 1412) ═══════
+   Barre de mois et actions, chiffres du mois, semaine de sept colonnes ou
+   chaque jour porte ses repas, vue liste, legende et astuce.
+   LA LARGEUR DE LA SECTION DECIDE : sept colonnes sur un poste, trois sur une
+   tablette, une seule sur un telephone — sept cartes a repas sur 343 px
+   donneraient des colonnes de 45 px. */
+.jr{container:jr/inline-size}
+.jr-sous{font-size:10.5px;font-weight:700;letter-spacing:2.6px;text-transform:uppercase;
+  color:var(--text-faint);margin:0 0 10px}
+.jr-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin-bottom:10px}
+.jr-mois{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:11px;
+  border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.03)}
+.jr-mois>span{min-width:130px;text-align:center;font-family:Montserrat,sans-serif;
+  font-size:14px;font-weight:800;color:#fff}
+.jr-nav{width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.04);color:#fff;font-size:15px;line-height:1;cursor:pointer}
+.jr-nav:hover{border-color:rgba(224,32,32,.5);color:#ff5a5a}
+.jr-act{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-left:auto}
+.jr-vb,.jr-stats-b,.jr-form-x{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;
+  border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);
+  color:var(--text);font-family:Montserrat,sans-serif;font-size:12.5px;font-weight:700;cursor:pointer}
+.jr-vb.actif{border-color:rgba(224,32,32,.5);color:#ff5a5a;background:rgba(224,32,32,.10)}
+.jr-vb:hover,.jr-stats-b:hover,.jr-form-x:hover{border-color:rgba(255,255,255,.25)}
+.jr-add{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:10px;
+  border:1px solid rgba(224,32,32,.55);background:linear-gradient(180deg,#e02020,#b91414);
+  color:#fff;font-family:Montserrat,sans-serif;font-size:12.5px;font-weight:800;cursor:pointer}
+.jr-add:hover{filter:brightness(1.08)}
+/* LES CHIFFRES DU MOIS. */
+.jr-stats{display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;margin-bottom:12px;
+  padding:10px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.09);
+  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012))}
+.jr-s{display:flex;align-items:center;gap:9px;min-width:0}
+.jr-si{flex:0 0 32px;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;
+  justify-content:center;color:var(--jc,#ff5a5a);background:color-mix(in srgb,var(--jc,#ff5a5a) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--jc,#ff5a5a) 40%,transparent)}
+.jr-sx{display:flex;flex-direction:column;min-width:0}
+.jr-sx b{font-size:15px;font-weight:800;color:#fff;line-height:1.15}
+.jr-sx b.jr-rouge{color:#ff3b3b}
+.jr-sx small{font-size:10.5px;color:var(--text-faint);line-height:1.3}
+.jr-don{gap:8px}
+.jr-stats-b{margin-left:auto}
+/* LA SEMAINE. */
+.jr-sem,.jr-grille{display:grid;grid-template-columns:1fr;gap:6px}
+.jr-sem{display:none}
+.jr-sem span{text-align:center;font-size:9.5px;font-weight:800;letter-spacing:1.4px;
+  text-transform:uppercase;color:var(--text-faint)}
+.jr-j{display:flex;flex-direction:column;gap:4px;min-height:54px;padding:8px 9px;text-align:left;
+  border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.028);
+  color:var(--text);font-family:Montserrat,sans-serif;cursor:pointer}
+.jr-j.jr-hors{opacity:.35;cursor:default;background:none}
+.jr-j.jr-vide{border-style:dashed;align-items:stretch;color:var(--text-faint)}
+.jr-j.jr-vide:hover{border-color:rgba(224,32,32,.45);color:#ff5a5a}
+.jr-j.jr-oui{border-color:rgba(34,197,94,.38)}
+.jr-j.jr-non{border-color:rgba(224,32,32,.55);background:rgba(224,32,32,.08)}
+.jr-j.jr-auj{box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.jr-j.jr-ouvert{border-color:#ff2d3f;box-shadow:0 0 0 1px rgba(224,32,32,.45)}
+.jr-t{display:flex;align-items:center;gap:7px}
+.jr-n{font-size:13px;font-weight:800;color:#fff}
+.jr-j.jr-oui .jr-b{color:#22c55e;display:flex}
+.jr-j.jr-non .jr-b{color:#ff3b3b;display:flex}
+.jr-j.jr-neutre .jr-b{color:var(--text-faint);display:flex}
+.jr-k{margin-left:auto;font-size:12px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
+.jr-r{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--sub);line-height:1.35}
+.jr-ri{display:flex;color:var(--text-faint);flex:0 0 auto}
+.jr-rl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jr-rk{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--text-dim);flex:0 0 auto}
+.jr-plus{display:flex;align-items:center;justify-content:center;gap:8px;flex:1;
+  font-size:11.5px;font-weight:700}
+/* LA VUE LISTE. */
+.jr-liste{display:flex;flex-direction:column;gap:6px}
+.jr-li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:9px 11px;
+  text-align:left;border-radius:12px;border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.028);color:var(--text);font-family:Montserrat,sans-serif;cursor:pointer}
+/* ⚠ CHAQUE MORCEAU DIT SA COLONNE. Sans `grid-column`, le total — troisieme
+   enfant — se plaçait en premiere colonne et s'ecrivait PAR-DESSUS la date. */
+.jr-li-d{grid-column:1;font-size:12.5px;font-weight:800;color:#fff}
+.jr-li-r{grid-column:1}
+.jr-li-k{grid-column:2;grid-row:1/3;align-self:center;font-size:15px;font-weight:800;
+  color:#fff;font-variant-numeric:tabular-nums}
+.jr-li-r{display:flex;flex-wrap:wrap;gap:2px 14px;min-width:0;margin-top:2px}
+.jr-li-r .jr-r{width:auto}
+.jr-li-r .jr-rk{margin-left:4px}
+.jr-vide-t{padding:12px;border-radius:12px;border:1px dashed rgba(255,255,255,.14);
+  font-size:12px;color:var(--text-faint);text-align:center}
+/* LE FORMULAIRE D'AJOUT. */
+.jr-form{margin:0 0 12px;padding:11px 12px;border-radius:14px;
+  border:1px solid rgba(224,32,32,.35);background:rgba(224,32,32,.06)}
+.jr-form-t{font-size:12.5px;font-weight:800;color:#fff;margin-bottom:9px}
+.jr-form-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.jr-form-g label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;font-weight:700;
+  letter-spacing:.6px;text-transform:uppercase;color:var(--text-faint);min-width:0}
+.jr-form-g .jr-form-l{grid-column:1/-1}
+.jr-form-g input,.jr-form-g select{width:100%;min-height:36px;padding:6px 9px;border-radius:9px;
+  border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.35);color:var(--text);
+  font-family:Montserrat,sans-serif;font-size:13px;font-weight:700;text-transform:none;letter-spacing:0}
+.jr-form-b{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.jr-form-b .jr-add{margin-left:auto}
+.jr-form-n{margin-top:8px;font-size:11px;line-height:1.45;color:var(--text-faint)}
+.jr-add-j{margin-top:10px}
+/* LA LEGENDE ET L'ASTUCE. */
+.jr-bas{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;margin-top:10px}
+.jr-leg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--text-faint)}
+.jr-leg span{display:inline-flex;align-items:center;gap:5px}
+.jr-p{width:9px;height:9px;border-radius:3px;display:inline-block}
+.jr-p-oui{background:#22c55e}.jr-p-non{background:#ff2d3f}
+.jr-p-neutre{background:#8a8a8a}
+.jr-p-vide{background:none;border:1px dashed rgba(255,255,255,.35)}
+.jr-astuce{display:flex;align-items:center;gap:8px;margin-left:auto;padding:7px 11px;
+  border-radius:10px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.03);
+  font-size:11px;color:var(--text-faint)}
+.jr-astuce svg{color:#f5c518;flex:0 0 auto}
+.jr .cal-d{margin-top:12px;padding:11px 12px;border-top:0;border-radius:14px;
+  border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.028)}
+.jr .cal-d-t{font-size:13px;font-weight:800;color:#fff}
+.jr .cal-e{display:flex;align-items:center;gap:10px;padding:5px 0;
+  border-top:1px solid rgba(255,255,255,.06)}
+.jr .cal-e-v{margin-left:auto;display:flex;align-items:center;white-space:nowrap}
+.jr-par{margin-left:6px;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:800;
+  letter-spacing:.6px;text-transform:uppercase;color:#ff4d4d;background:rgba(224,32,32,.12);
+  border:1px solid rgba(224,32,32,.35)}
+.jr-ret{margin-left:8px;width:20px;height:20px;border-radius:6px;border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.04);color:var(--text-faint);font-size:13px;line-height:1;cursor:pointer}
+.jr-ret:hover{color:#ff5a5a;border-color:rgba(224,32,32,.5)}
+/* ⚠ A L'ETROIT, ON NE MONTRE QUE LES JOURS QUI PORTENT QUELQUE CHOSE. Sur un
+   telephone la grille tombe a une colonne : trente-cinq cartes empilees
+   faisaient une section de quatre mille pixels, dont un tiers de cases vides
+   et de jours du mois voisin. L'ajout reste a portee — le bouton de la barre
+   ouvre le formulaire avec son champ de date. */
+@container jr (max-width:559px){
+  .jr-j.jr-hors,.jr-j.jr-vide{display:none}
+}
+@container jr (min-width:560px){
+  .jr-form-g{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .jr-form-g .jr-form-l{grid-column:span 2}
+  .jr-sem,.jr-grille{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .jr-sem{display:none}
+}
+@container jr (min-width:900px){
+  .jr-sem,.jr-grille{grid-template-columns:repeat(7,minmax(0,1fr))}
+  .jr-sem{display:grid;margin-bottom:2px}
+  .jr-j{min-height:96px}
+}
 .cal-tete{display:flex;align-items:center;gap:8px}
 .cal-mois{flex:1;min-width:0;text-align:center;font-family:Montserrat,sans-serif;
   font-size:var(--fs-sm);font-weight:800;color:var(--text)}
@@ -10953,8 +11095,8 @@ const COACH_PHOTO='icons/coach.jpg';
            plan compose par le coach et ne journalise rien : la section restait
            vide, ou pire, montrait un reliquat de la periode d'avant.
            Rempli par renderJournalNutriCoach. -->
-      <section class="cc-sect" id="ccd-cal-sect" style="--cc-accent:var(--border);display:none">
-        <div class="cc-sect-t"><span>Journal alimentaire</span></div>
+      <section class="cc-sect cc-sect-fixe" id="ccd-cal-sect" style="--cc-accent:var(--border);display:none">
+        <div class="cc-sect-t"><span>Journal <em>alimentaire</em></span></div>
         <div class="cc-sect-c" id="ccd-cal"></div>
       </section>
       </div>
@@ -34594,7 +34736,9 @@ const CCD_REPLI_DEFAUT=['ccd-journal','ccd-bilans','ccd-poids','ccd-pp',
   // ET LE CALENDRIER DU JOURNAL S OUVRE REPLIE. Kevin, 08/09/2026 : « le
   // journal alimentaire, honnetement, moi il ne m'interesse pas ». Il est au
   // fond de l'onglet, et il ne se deploie que si on va le chercher.
-  'ccd-cal',
+  // ⚠ 'ccd-cal' RETIRE le 23/09/2026 (build 1412) : le journal est devenu une
+  //   section FIXE, comme « Calculs alimentaires ». Un etat de repli retenu
+  //   pour une section qui ne se replie plus n'aurait plus aucun effet.
   // LES REGLAGES DE NUTRITION S OUVRENT REPLIES. Le coach vient d abord LIRE
   // ce qui est CONSTATE — le type de diete, la phase, le taux de respect et
   // les cibles en cours, tous en tete d onglet — et ne regle qu ensuite. C est
@@ -85972,100 +86116,315 @@ function ccdCalJour(iso){
   try{ const c=getOwnedClient(currentClientId); if(c) renderJournalNutriCoach(c); }catch(e){}
   return _ccdCalJour;
 }
+// ══ LE JOURNAL ALIMENTAIRE, MAQUETTE DU 23/09/2026 (build 1412) ══════════
+// Kevin, trois captures a l'appui : « remplace-moi la version des images 1 et
+// 2 par celle de l'image 3, a l'identique, et mets les fonctions visibles pour
+// la completer ».
+//
+// CE QUI REMPLACE QUOI. La grille de trente cases muettes — un numero, un
+// total, « Lecture seule » — devient une semaine de SEPT COLONNES ou chaque
+// jour montre ce qu'il contient : son verdict, son total, et ses repas ligne
+// par ligne avec leurs kilocalories. Au-dessus, la barre du mois et les
+// chiffres du mois ; en dessous, la legende et l'astuce.
+//
+// ⚠ ET LE COACH PEUT DESORMAIS COMPLETER LE JOURNAL. C'est la demande : « mets
+//   les fonctions visibles pour la completer ». Un repas ajoute ici porte
+//   `par:'coach'` — l'athlete voit d'ou il vient, et c'est la SEULE chose que
+//   le coach peut retirer : ce que l'athlete a journalise lui appartient.
+//
+// ⚠ AUCUN VERDICT INVENTE. La maquette portait quatre etats dont « à ajuster »
+//   en orange ; il n'en existe que trois dans le calcul — jourDieteTenu rend
+//   vrai, faux, ou rien quand aucune cible n'est posee. Un quatrieme etat
+//   aurait demande un seuil sorti de nulle part, sur des cibles alimentaires.
+//   La legende dit donc les trois vrais, plus les jours non saisis.
+let _ccdCalVue='grille';    // 'grille' | 'liste'
+let _ccdCalForm=null;       // 'YYYY-MM-DD' — le jour dont le formulaire est ouvert
+const FJ_REPAS_ICO=Object.freeze({matin:'sun',dejeuner:'utensils',diner:'moon',
+  collation:'coffee',coucher:'moon'});
+// DANS LA CARTE D'UN JOUR, le libelle a une centaine de pixels a cote de son
+// total : « Petit-déjeuner » s'y coupait en « Petit-déje… ». Le detail, lui,
+// garde le libelle entier.
+const FJ_REPAS_COURT=Object.freeze({matin:'Petit-déj.',dejeuner:'Déjeuner',
+  diner:'Dîner',collation:'Collation',coucher:'Coucher'});
+function ccdCalVue(v){
+  _ccdCalVue=(v==='liste')?'liste':'grille';
+  try{ const c=getOwnedClient(currentClientId); if(c) renderJournalNutriCoach(c); }catch(e){}
+  return _ccdCalVue;
+}
+// LE FORMULAIRE D'AJOUT. Ouvert sur un jour precis quand on touche une case
+// vide, sur aujourd'hui quand on passe par le bouton de la barre.
+function ccdJournalAjout(iso){
+  const j=String(iso||'')||localISODate(new Date());
+  _ccdCalForm=(_ccdCalForm===j)?null:j;
+  if(_ccdCalForm) _ccdCalMois=_calMois(_ccdCalForm);
+  try{ const c=getOwnedClient(currentClientId); if(c) renderJournalNutriCoach(c); }catch(e){}
+  try{ if(_ccdCalForm){ const e=document.getElementById('ccd-jr-nom'); if(e) e.focus(); } }catch(e){}
+  return _ccdCalForm;
+}
+// ⚠ LES KILOCALORIES SE DEDUISENT DES MACROS QUAND ELLES MANQUENT, et jamais
+//   l'inverse : 4 par gramme de proteines et de glucides, 9 par gramme de
+//   lipides. Un repas sans aucun chiffre n'est pas enregistre — une ligne a
+//   zero kcal fausserait la moyenne du mois et le verdict du jour.
+function ccdJournalEnregistrer(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  const v=id=>{ const e=document.getElementById(id); return e?String(e.value||'').trim():''; };
+  const nb=id=>{ const x=parseFloat(v(id).replace(',','.')); return isFinite(x)&&x>=0?x:null; };
+  const iso=v('ccd-jr-date');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso)){ toast('Date incomplète','var(--orange)'); return false; }
+  const repas=v('ccd-jr-repas')||'dejeuner';
+  const nom=v('ccd-jr-nom');
+  const p=nb('ccd-jr-p'), g=nb('ccd-jr-g'), l=nb('ccd-jr-l');
+  let kcal=nb('ccd-jr-kcal');
+  if(kcal==null&&(p!=null||g!=null||l!=null)) kcal=Math.round(4*(p||0)+4*(g||0)+9*(l||0));
+  if(kcal==null||!(kcal>0)){ toast('Donne au moins les kilocalories, ou les macros','var(--orange)'); return false; }
+  if(!c.nutrition) c.nutrition={};
+  if(!c.nutrition.log) c.nutrition.log={};
+  if(!c.nutrition.log[iso]) c.nutrition.log[iso]={entries:[]};
+  if(!Array.isArray(c.nutrition.log[iso].entries)) c.nutrition.log[iso].entries=[];
+  c.nutrition.log[iso].entries.push({id:'co'+Date.now().toString(36),
+    nom:nom||(FJ_REPAS_LIB[repas]||'Repas'),repas:repas,
+    kcal:Math.round(kcal),p:p||0,c:g||0,l:l||0,
+    par:'coach',ajoutLe:Date.now()});
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  _ccdCalForm=null; _ccdCalJour=iso; _ccdCalMois=_calMois(iso);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Repas ajouté au journal ✓','le repas est');
+  try{ renderJournalNutriCoach(c); }catch(e){}
+  return true;
+}
+// ⚠ LE COACH NE RETIRE QUE CE QU'IL A AJOUTE. Ce que l'athlete a journalise
+//   est a lui : l'effacer depuis la fiche du coach serait reecrire son
+//   journal dans son dos.
+async function ccdJournalRetirer(iso,id){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  const e=(((c.nutrition||{}).log||{})[iso]||{}).entries||[];
+  const i=e.findIndex(x=>x&&String(x.id)===String(id)&&x.par==='coach');
+  if(i<0){ toast('Seuls les repas que tu as ajoutés peuvent être retirés','var(--orange)'); return false; }
+  const ok=await rcConfirm('Retirer ce repas ?',
+    escapeHtml(e[i].nom||'Repas')+' — '+Math.round(Number(e[i].kcal)||0)+' kcal. '
+    +'Il disparaîtra du journal de ton athlète.','Retirer');
+  if(!ok) return false;
+  e.splice(i,1);
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const _ok=DB.set('users',users);
+  toastSync(_ok,CLOUD.pushOne(c.email,c),'Repas retiré','le retrait est');
+  try{ renderJournalNutriCoach(c); }catch(e2){}
+  return true;
+}
+// PURE. Les chiffres du mois affiche : moyenne par jour saisi, part de chaque
+// macro dans cette moyenne, et jours saisis sur jours ECOULES — pas sur trente
+// et un, sinon un mois en cours afficherait toujours un retard qui n'existe
+// pas.
+function journalMois(log,ym){
+  const n=_calNbJours(ym);
+  if(!n) return null;
+  const p2=x=>(x<10?'0':'')+x;
+  const auj=localISODate(new Date());
+  const fin=(_calMois(auj)===ym)?parseInt(auj.slice(8,10),10):n;
+  let jours=0,kcal=0,p=0,g=0,l=0;
+  for(let j=1;j<=n;j++){
+    const tj=journalTotalJour(log,ym+'-'+p2(j));
+    if(!tj.n) continue;
+    jours++; kcal+=tj.kcal; p+=tj.p; g+=tj.c; l+=tj.l;
+  }
+  if(!jours) return {jours:0,total:fin,kcal:0,p:0,g:0,l:0,pcP:0,pcG:0,pcL:0,pcJours:0};
+  const mk=Math.round(kcal/jours), mp=Math.round(p/jours), mg=Math.round(g/jours), ml=Math.round(l/jours);
+  const somme=4*mp+4*mg+9*ml;
+  const pc=x=>somme>0?Math.round(x/somme*100):0;
+  // ⚠ JAMAIS PLUS DE CENT POUR CENT. Un athlete qui journalise un jour a
+  //   venir — un repas prepare la veille — donnait « 109 % · 25 / 23 jours ».
+  //   Le denominateur suit alors le nombre de jours REELLEMENT saisis.
+  const tot=Math.max(fin,jours);
+  return {jours:jours,total:tot,kcal:mk,p:mp,g:mg,l:ml,
+    pcP:pc(4*mp),pcG:pc(4*mg),pcL:pc(9*ml),
+    pcJours:tot>0?Math.min(100,Math.round(jours/tot*100)):0};
+}
 function _htmlJournalCal(c){
   const log=((c||{}).nutrition||{}).log||{};
   const tous=journalJours(log,null,null);
-  if(!tous.length) return '';
-  // A l'ouverture : le mois du dernier jour saisi. C'est celui qu'on vient
-  // regarder — pas le mois courant, qui peut etre entierement vide.
-  const ym=_ccdCalMois||_calMois(tous[0]);
-  const nb=v=>Math.round(v).toLocaleString('fr-FR');
+  const nb=v=>Math.round(Number(v)||0).toLocaleString('fr-FR');
   const p2=x=>(x<10?'0':'')+x;
+  const auj=localISODate(new Date());
+  const ym=_ccdCalMois||_calMois(tous[0]||auj);
   const dec=_calDecalage(ym), n=_calNbJours(ym);
-  const m7=journalMoyenne(log,7,tous[0]), m28=journalMoyenne(log,28,tous[0]);
-  const premier=tous[tous.length-1], dernier=tous[0];
-  // On ne propose pas de sortir de la plage saisie : un coach qui feuillette
-  // six mois vides pour rien se demande si l'ecran est casse.
-  const prec=(_calDecale(ym,-1)>=_calMois(premier))?_calDecale(ym,-1):null;
-  const suiv=(_calDecale(ym,1)<=_calMois(dernier))?_calDecale(ym,1):null;
-  const fleche=(m,f,lib)=>m
-    ?'<button type="button" class="cal-nav" onclick="ccdCalMois('+JSON.stringify(m).replace(/"/g,'&quot;')+')" aria-label="'+lib+'">'+f+'</button>'
-    :'<button type="button" class="cal-nav" disabled aria-hidden="true">'+f+'</button>';
   const titre=(()=>{ const d=new Date(parseInt(ym.slice(0,4),10),parseInt(ym.slice(5,7),10)-1,1);
-    const t=d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
-    return t.charAt(0).toUpperCase()+t.slice(1); })();
-  let cases='';
-  for(let i=0;i<dec;i++) cases+='<div class="cal-c cal-vide" aria-hidden="true"></div>';
-  let saisis=0;
-  for(let j=1;j<=n;j++){
+    const x=d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+    return x.charAt(0).toUpperCase()+x.slice(1); })();
+  const fleche=(m,f,lib)=>'<button type="button" class="jr-nav" onclick="ccdCalMois('
+    +JSON.stringify(m).replace(/"/g,'&quot;')+')" aria-label="'+lib+'">'+f+'</button>';
+  // ── LA BARRE : le mois, les deux vues, et l'ajout ──────────────────────
+  const barre='<div class="jr-bar">'
+    +'<div class="jr-mois">'+fleche(_calDecale(ym,-1),'‹','Mois précédent')
+      +'<span>'+escapeHtml(titre)+'</span>'
+      +fleche(_calDecale(ym,1),'›','Mois suivant')+'</div>'
+    +'<div class="jr-act">'
+      +'<button type="button" class="jr-vb'+(_ccdCalVue==='grille'?' actif':'')+'" aria-pressed="'
+        +(_ccdCalVue==='grille'?'true':'false')+'" title="Vue calendrier" onclick="ccdCalVue(\'grille\')">'
+        +icon('calendar',16)+'</button>'
+      +'<button type="button" class="jr-vb'+(_ccdCalVue==='liste'?' actif':'')+'" aria-pressed="'
+        +(_ccdCalVue==='liste'?'true':'false')+'" onclick="ccdCalVue(\'liste\')">'
+        +icon('clipboard',16)+'<span>Vue liste</span></button>'
+      +'<button type="button" class="jr-add" onclick="ccdJournalAjout(\'\')">'
+        +icon('plus-circle',16)+'<span>Ajouter un repas</span></button>'
+    +'</div></div>';
+  // ── LES CHIFFRES DU MOIS ───────────────────────────────────────────────
+  const m=journalMois(log,ym)||{jours:0,total:0,kcal:0,p:0,g:0,l:0,pcP:0,pcG:0,pcL:0,pcJours:0};
+  const bloc=(ico,coul,val,lib,sous)=>'<div class="jr-s">'
+    +'<span class="jr-si" style="--jc:'+coul+'">'+icon(ico,17)+'</span>'
+    +'<span class="jr-sx"><b>'+val+'</b><small>'+lib+(sous?' · '+sous:'')+'</small></span></div>';
+  const R=52, C=2*Math.PI*R;
+  const donut='<div class="jr-s jr-don">'
+    +'<svg viewBox="0 0 120 120" width="42" height="42" aria-hidden="true">'
+    +'<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="14"/>'
+    +'<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="#ff2d3f" stroke-width="14" stroke-linecap="round"'
+    +' stroke-dasharray="'+(C*Math.min(1,m.pcJours/100)).toFixed(1)+' '+C.toFixed(1)+'"'
+    +' transform="rotate(-90 60 60)"/></svg>'
+    +'<span class="jr-sx"><b class="jr-rouge">'+m.pcJours+' %</b>'
+    +'<small>jours saisis · '+m.jours+' / '+m.total+' jours</small></span></div>';
+  const stats='<div class="jr-stats">'
+    +bloc('flame','#ff5a5a',m.jours?(nb(m.kcal)+' kcal'):'—','moyenne / jour')
+    +bloc('chart-bar','#ff2d3f',m.pcP+' %','protéines',nb(m.p)+' g')
+    +bloc('wheat','#f5c518',m.pcG+' %','glucides',nb(m.g)+' g')
+    +bloc('droplet','#22c55e',m.pcL+' %','lipides',nb(m.l)+' g')
+    +donut
+    +'<button type="button" class="jr-stats-b" onclick="ccdAller(\'ccd-diete-respect\')">'
+      +icon('chart-bar',15)+'<span>Voir les statistiques</span></button>'
+    +'</div>';
+  // ── LE FORMULAIRE D'AJOUT ──────────────────────────────────────────────
+  let form='';
+  if(_ccdCalForm){
+    const dl=new Date(_ccdCalForm+'T12:00:00');
+    const lib=isNaN(dl.getTime())?_ccdCalForm:dl.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+    form='<div class="jr-form"><div class="jr-form-t">Ajouter un repas — '
+      +escapeHtml(lib.charAt(0).toUpperCase()+lib.slice(1))+'</div>'
+      +'<div class="jr-form-g">'
+      +'<label>Jour<input type="date" id="ccd-jr-date" value="'+escapeHtml(_ccdCalForm)+'"></label>'
+      +'<label>Repas<select id="ccd-jr-repas">'
+        +Object.keys(FJ_REPAS_LIB).map(k=>'<option value="'+k+'"'+(k==='dejeuner'?' selected':'')+'>'
+          +escapeHtml(FJ_REPAS_LIB[k])+'</option>').join('')+'</select></label>'
+      +'<label class="jr-form-l">Aliment ou repas<input type="text" id="ccd-jr-nom" placeholder="Riz, poulet, légumes…"></label>'
+      +'<label>kcal<input type="number" id="ccd-jr-kcal" min="0" inputmode="numeric" placeholder="620"></label>'
+      +'<label>Protéines (g)<input type="number" id="ccd-jr-p" min="0" inputmode="numeric" placeholder="40"></label>'
+      +'<label>Glucides (g)<input type="number" id="ccd-jr-g" min="0" inputmode="numeric" placeholder="70"></label>'
+      +'<label>Lipides (g)<input type="number" id="ccd-jr-l" min="0" inputmode="numeric" placeholder="15"></label>'
+      +'</div>'
+      +'<div class="jr-form-b">'
+      +'<button type="button" class="jr-form-x" onclick="ccdJournalAjout(\'\')">Annuler</button>'
+      +'<button type="button" class="jr-add" onclick="ccdJournalEnregistrer()">'+icon('check',15)
+      +'<span>Ajouter au journal</span></button></div>'
+      +'<div class="jr-form-n">Sans kilocalories, elles se déduisent des macros (4 · 4 · 9). '
+      +'Le repas apparaîtra dans le journal de ton athlète, marqué comme ajouté par toi.</div></div>';
+  }
+  // ── UN JOUR ────────────────────────────────────────────────────────────
+  const repasDuJour=iso=>{
+    const e=((log[iso]||{}).entries)||[];
+    const par={};
+    e.forEach(x=>{ const k=x&&x.repas&&FJ_REPAS_LIB[x.repas]?x.repas:'collation';
+      par[k]=(par[k]||0)+(Number(x.kcal)||0); });
+    return Object.keys(FJ_REPAS_LIB).filter(k=>par[k]!=null).map(k=>'<span class="jr-r">'
+      +'<span class="jr-ri">'+icon(FJ_REPAS_ICO[k]||'utensils',13)+'</span>'
+      +'<span class="jr-rl">'+escapeHtml(FJ_REPAS_COURT[k]||FJ_REPAS_LIB[k])+'</span>'
+      +'<span class="jr-rk">'+nb(par[k])+' kcal</span></span>').join('');
+  };
+  const carteJour=(j)=>{
     const iso=ym+'-'+p2(j);
-    const t=journalTotalJour(log,iso);
-    if(!t.n){
-      cases+='<div class="cal-c cal-rien"><span class="cal-j">'+j+'</span></div>';
-      continue;
-    }
-    saisis++;
+    const tj=journalTotalJour(log,iso);
+    if(!tj.n) return '<button type="button" class="jr-j jr-vide'+(iso===auj?' jr-auj':'')+'"'
+      +' onclick="ccdJournalAjout('+JSON.stringify(iso).replace(/"/g,'&quot;')+')"'
+      +' aria-label="Ajouter un repas le '+j+'">'
+      +'<span class="jr-t"><span class="jr-n">'+j+'</span></span>'
+      +'<span class="jr-plus">'+icon('plus-circle',20)+'<span>Ajouter un repas</span></span></button>';
     let v=null; try{ v=jourDieteTenu(c,iso); }catch(e){ v=null; }
     const et=v===true?'oui':(v===false?'non':'neutre');
-    cases+='<button type="button" class="cal-c cal-saisi cal-'+et
-      +(_ccdCalJour===iso?' cal-ouvert':'')+'"'
-      +' aria-pressed="'+(_ccdCalJour===iso?'true':'false')+'"'
+    const pastille=v===true?icon('check-circle',15):(v===false?icon('x-circle',15):icon('clock',15));
+    return '<button type="button" class="jr-j jr-'+et+(iso===auj?' jr-auj':'')
+      +(_ccdCalJour===iso?' jr-ouvert':'')+'" aria-pressed="'+(_ccdCalJour===iso?'true':'false')+'"'
       +' onclick="ccdCalJour('+JSON.stringify(iso).replace(/"/g,'&quot;')+')">'
-      +'<span class="cal-j">'+j+'</span>'
-      +'<span class="cal-k">'+nb(t.kcal)+'</span></button>';
+      +'<span class="jr-t"><span class="jr-n">'+j+'</span>'
+      +'<span class="jr-b" aria-hidden="true">'+pastille+'</span>'
+      +'<span class="jr-k">'+nb(tj.kcal)+' kcal</span></span>'
+      +repasDuJour(iso)+'</button>';
+  };
+  // ── LA GRILLE : sept colonnes, lundi en premier ────────────────────────
+  let grille='';
+  if(_ccdCalVue==='grille'){
+    const prevYm=_calDecale(ym,-1), prevN=_calNbJours(prevYm);
+    let cases='';
+    for(let i=0;i<dec;i++) cases+='<div class="jr-j jr-hors" aria-hidden="true"><span class="jr-t">'
+      +'<span class="jr-n">'+(prevN-dec+1+i)+'</span></span></div>';
+    for(let j=1;j<=n;j++) cases+=carteJour(j);
+    const reste=(7-((dec+n)%7))%7;
+    for(let i=1;i<=reste;i++) cases+='<div class="jr-j jr-hors" aria-hidden="true"><span class="jr-t">'
+      +'<span class="jr-n">'+i+'</span></span></div>';
+    grille='<div class="jr-sem">'+['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche']
+      .map(x=>'<span>'+x+'</span>').join('')+'</div>'
+      +'<div class="jr-grille">'+cases+'</div>';
+  } else {
+    // ── LA VUE LISTE : les jours saisis du mois, du plus recent au plus ancien.
+    const lignes=[];
+    for(let j=n;j>=1;j--){
+      const iso=ym+'-'+p2(j);
+      const tj=journalTotalJour(log,iso);
+      if(!tj.n) continue;
+      let v=null; try{ v=jourDieteTenu(c,iso); }catch(e){ v=null; }
+      const et=v===true?'oui':(v===false?'non':'neutre');
+      const d=new Date(iso+'T12:00:00');
+      const lib=isNaN(d.getTime())?iso:d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+      lignes.push('<button type="button" class="jr-li jr-'+et+(_ccdCalJour===iso?' jr-ouvert':'')+'"'
+        +' onclick="ccdCalJour('+JSON.stringify(iso).replace(/"/g,'&quot;')+')">'
+        +'<span class="jr-li-d">'+escapeHtml(lib.charAt(0).toUpperCase()+lib.slice(1))+'</span>'
+        +'<span class="jr-li-r">'+repasDuJour(iso)+'</span>'
+        +'<span class="jr-li-k">'+nb(tj.kcal)+' kcal</span></button>');
+    }
+    grille='<div class="jr-liste">'+(lignes.join('')
+      ||'<div class="jr-vide-t">Aucun jour saisi ce mois-ci.</div>')+'</div>';
   }
-  // Le detail du jour ouvert, sous la grille.
+  // ── LE DETAIL D'UN JOUR ────────────────────────────────────────────────
   let detail='';
   if(_ccdCalJour&&_calMois(_ccdCalJour)===ym){
-    const t=journalTotalJour(log,_ccdCalJour);
+    const tj=journalTotalJour(log,_ccdCalJour);
     const entrees=((log[_ccdCalJour]||{}).entries)||[];
     const d=new Date(_ccdCalJour+'T12:00:00');
     const lib=isNaN(d.getTime())?_ccdCalJour
       :d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
     const lignes=entrees.map(e=>'<div class="cal-e">'
       +'<span class="cal-e-n">'+escapeHtml(e.nom||'—')
-      +'<span class="cal-e-r"> · '+escapeHtml(FJ_REPAS_LIB[e.repas]||e.repas||'')+'</span></span>'
+      +'<span class="cal-e-r"> · '+escapeHtml(FJ_REPAS_LIB[e.repas]||e.repas||'')+'</span>'
+      +(e.par==='coach'?'<span class="jr-par">ajouté par toi</span>':'')+'</span>'
       +'<span class="cal-e-v">'+(e.qty?nb(e.qty)+' g · ':'')
-      +(e.kcal!=null?nb(e.kcal)+' kcal':'—')+'</span></div>').join('');
+      +(e.kcal!=null?nb(e.kcal)+' kcal':'—')
+      +(e.par==='coach'?('<button type="button" class="jr-ret" title="Retirer ce repas"'
+        +' aria-label="Retirer '+escapeHtml(e.nom||'ce repas')+'"'
+        +' onclick="event.stopPropagation();ccdJournalRetirer('+JSON.stringify(_ccdCalJour).replace(/"/g,'&quot;')
+        +','+JSON.stringify(String(e.id||'')).replace(/"/g,'&quot;')+')">×</button>'):'')
+      +'</span></div>').join('');
     detail='<div class="cal-d">'
       +'<div class="cal-d-t">'+escapeHtml(lib.charAt(0).toUpperCase()+lib.slice(1))+'</div>'
-      +'<div class="cal-d-m">'+nb(t.kcal)+' kcal · '+nb(t.p)+' P · '+nb(t.c)+' G · '+nb(t.l)+' L</div>'
-      +(lignes||'<div class="cal-d-v">Aucun aliment ce jour-là.</div>')+'</div>';
+      +'<div class="cal-d-m">'+nb(tj.kcal)+' kcal · '+nb(tj.p)+' P · '+nb(tj.c)+' G · '+nb(tj.l)+' L</div>'
+      +(lignes||'<div class="cal-d-v">Aucun aliment ce jour-là.</div>')
+      +'<button type="button" class="jr-add jr-add-j" onclick="ccdJournalAjout('
+        +JSON.stringify(_ccdCalJour).replace(/"/g,'&quot;')+')">'+icon('plus-circle',15)
+      +'<span>Ajouter un repas ce jour-là</span></button>'
+      +'</div>';
   }
-  return '<div class="cal">'
-    +'<div class="cal-tete">'+fleche(prec,'‹','Mois précédent')
-    +'<span class="cal-mois">'+escapeHtml(titre)+'</span>'
-    +fleche(suiv,'›','Mois suivant')+'</div>'
-    +'<div class="cal-sous">'+saisis+' jour'+(saisis>1?'s':'')+' saisi'+(saisis>1?'s':'')
-    +' ce mois-ci · '+tous.length+' en tout. Lecture seule.</div>'
-    // LES DEUX MOYENNES, SUR UNE LIGNE. Les cartes d'avant en prenaient huit
-    // et repoussaient le calendrier hors de l'ecran ; l'information, elle, vaut
-    // toujours d'etre la : c'est ce qu'on lit quand on veut savoir si la
-    // semaine ressemble au mois. Elles se comptent depuis le DERNIER JOUR
-    // SAISI et non depuis aujourd'hui — sinon un athlete qui a arrete de
-    // journaliser il y a dix jours affiche une moyenne 7 j vide.
-    +(m7||m28?('<div class="cal-moy">'
-      +(m7?('7 j : <b>'+nb(m7.kcal)+'</b> kcal'):'')
-      +(m7&&m28?' · ':'')
-      +(m28?('28 j : <b>'+nb(m28.kcal)+'</b> kcal'):'')+'</div>'):'')
-    +'<div class="cal-sem">'+['L','M','M','J','V','S','D']
-      .map(x=>'<span>'+x+'</span>').join('')+'</div>'
-    +'<div class="cal-grille">'+cases+'</div>'
-    +'<div class="cal-leg">'
-      +'<span><i class="cal-p cal-p-oui"></i>dans les cibles</span>'
-      +'<span><i class="cal-p cal-p-non"></i>hors cibles</span>'
-      +'<span><i class="cal-p cal-p-neutre"></i>saisi, sans cible</span>'
-    +'</div>'
-    +(detail||'<div class="cal-d-v" style="text-align:center">Touche un jour saisi pour voir ce qu’il a mangé.</div>')
+  const leg='<div class="jr-leg">'
+    +'<span><i class="jr-p jr-p-oui"></i>Dans les cibles</span>'
+    +'<span><i class="jr-p jr-p-non"></i>Hors cibles</span>'
+    +'<span><i class="jr-p jr-p-neutre"></i>Saisi, sans cible</span>'
+    +'<span><i class="jr-p jr-p-vide"></i>Non saisi</span>'
     +'</div>';
+  const astuce='<div class="jr-astuce">'+icon('info',15)
+    +'<span>Astuce : touche un jour pour voir le détail de ses repas, ou une case vide pour en ajouter un.</span></div>';
+  return '<div class="jr">'
+    +'<div class="jr-sous">Suivi · Discipline · Résultats</div>'
+    +barre+stats+form+grille
+    +'<div class="jr-bas">'+leg+astuce+'</div>'
+    +detail+'</div>';
 }
-// ⚠ EN DIETE STRICTE, LA SECTION ENTIERE DISPARAIT. Kevin : « fais en sorte
-// qu'il ne s'affiche pas si j'ai valide la diete stricte pour l'eleve ».
-// L'athlete en stricte suit un plan compose par son coach et ne journalise
-// rien : la section restait vide, ou pire, montrait le reliquat de la periode
-// flexible d'avant, qui ne dit plus rien de ce qu'il mange aujourd'hui.
-// LA DONNEE N'EST PAS EFFACEE — elle redevient visible si l'athlete repasse en
-// flexible. On cache un ecran, on ne jette pas un journal.
 function renderJournalNutriCoach(c){
   const z=document.getElementById('ccd-cal');
   const sect=document.getElementById('ccd-cal-sect');

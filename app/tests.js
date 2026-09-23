@@ -33321,6 +33321,155 @@ async function testExercices(){
         return bloc.indexOf('max-width:100%')>=0
           ?true:_echec('le canvas d’une mini-courbe n’est pas plafonné à sa carte');})());
 
+      // BUILD 1412 — Kevin, trois captures a l'appui : « remplace-moi la version
+      // des images 1 et 2 par celle de l'image 3, a l'identique, et mets les
+      // fonctions visibles pour la completer ».
+      ok('1412 — LES CHIFFRES DU MOIS : moyenne par jour saisi, parts des macros, jours saisis',(()=>{
+        const p2=x=>(x<10?'0':'')+x;
+        const d=new Date(); const ym=d.getFullYear()+'-'+p2(d.getMonth()+1);
+        const jour=(k,p,g,l)=>({entries:[{nom:'x',repas:'dejeuner',kcal:k,p:p,c:g,l:l}]});
+        const log={}; log[ym+'-01']=jour(2000,150,200,60); log[ym+'-02']=jour(2400,170,260,70);
+        const m=journalMois(log,ym);
+        if(!m) return _echec('aucun chiffre');
+        if(m.jours!==2) return _echec(m.jours+' jours saisis au lieu de 2');
+        if(m.kcal!==2200) return _echec('moyenne : '+m.kcal);
+        if(m.p!==160||m.g!==230||m.l!==65) return _echec('macros moyennes : '+JSON.stringify(m));
+        // LES PARTS SE COMPTENT SUR LES KILOCALORIES DES MACROS, 4 · 4 · 9.
+        const somme=4*160+4*230+9*65;
+        if(m.pcP!==Math.round(4*160/somme*100)||m.pcG!==Math.round(4*230/somme*100)
+          ||m.pcL!==Math.round(9*65/somme*100)) return _echec('parts : '+JSON.stringify(m));
+        if(m.pcP+m.pcG+m.pcL<98||m.pcP+m.pcG+m.pcL>102) return _echec('les trois parts ne font pas 100 %');
+        // ⚠ JAMAIS PLUS DE CENT POUR CENT : un jour journalise en avance
+        //   donnait « 109 % · 25 / 23 jours ».
+        const futur={}; for(let j=1;j<=28;j++) futur[ym+'-'+p2(j)]=jour(2000,150,200,60);
+        const f=journalMois(futur,ym);
+        if(f.pcJours>100) return _echec('le taux dépasse cent : '+f.pcJours);
+        return f.total>=f.jours?true:_echec('moins de jours au dénominateur qu’au numérateur');})());
+
+      ok('1412 — LE JOURNAL DU COACH A LA FORME DE LA MAQUETTE, ET SES FONCTIONS MARCHENT',(()=>{
+        const sVue=_ccdCalVue, sMois=_ccdCalMois, sJour=_ccdCalJour, sForm=_ccdCalForm;
+        try{
+          const p2=x=>(x<10?'0':'')+x;
+          const d=new Date(); const ym=d.getFullYear()+'-'+p2(d.getMonth()+1);
+          const c={id:'J1412',email:'j1412@t.fr',role:'athlete',nutrition:{dietType:'flexible',log:{}}};
+          c.nutrition.log[ym+'-02']={entries:[
+            {id:'a',nom:'Flocons',repas:'matin',kcal:520,p:20,c:80,l:10},
+            {id:'b',nom:'Poulet riz',repas:'dejeuner',kcal:700,p:50,c:90,l:12}]};
+          _ccdCalVue='grille'; _ccdCalMois=ym; _ccdCalJour=null; _ccdCalForm=null;
+          const box=document.createElement('div');
+          box.innerHTML=_htmlJournalCal(c);
+          // LA BARRE : les deux fleches de mois, les deux vues, l'ajout.
+          if(box.querySelectorAll('.jr-nav').length!==2) return _echec('les deux flèches de mois manquent');
+          if(box.querySelectorAll('.jr-vb').length!==2) return _echec('les deux vues ne sont pas offertes');
+          if(!box.querySelector('.jr-add')) return _echec('« Ajouter un repas » manque');
+          // LES CHIFFRES DU MOIS, puis la semaine de sept colonnes.
+          if(box.querySelectorAll('.jr-stats .jr-s').length!==5)
+            return _echec('les cinq chiffres du mois ne sont pas tous là');
+          if(box.querySelectorAll('.jr-sem span').length!==7) return _echec('la semaine n’a pas sept colonnes');
+          const cases=[...box.querySelectorAll('.jr-grille>.jr-j')];
+          if(cases.length%7!==0) return _echec(cases.length+' cases : la grille ne tombe pas juste');
+          // LE JOUR SAISI PORTE SES REPAS, ligne par ligne, avec leurs kcal.
+          const j2=cases.find(x=>x.className.indexOf('jr-hors')<0
+            &&(x.querySelector('.jr-n')||{}).textContent==='2');
+          if(!j2) return _echec('le 2 du mois est introuvable');
+          const txt=j2.textContent.replace(/\s+/g,' ');
+          if(txt.indexOf('1 220 kcal')<0) return _echec('le total du jour manque : '+txt);
+          if(j2.querySelectorAll('.jr-r').length!==2) return _echec('les deux repas ne sont pas listés : '+txt);
+          if(txt.indexOf('Petit-déj.')<0||txt.indexOf('520 kcal')<0) return _echec('le petit-déjeuner manque : '+txt);
+          // UN JOUR VIDE OUVRE L'AJOUT ; un jour du mois voisin ne fait rien.
+          const vide=cases.find(x=>x.classList.contains('jr-vide'));
+          if(!vide||(vide.getAttribute('onclick')||'').indexOf('ccdJournalAjout')<0)
+            return _echec('une case vide ne propose pas d’ajouter');
+          const hors=cases.find(x=>x.classList.contains('jr-hors'));
+          if(hors&&hors.tagName==='BUTTON') return _echec('un jour du mois voisin est cliquable');
+          // LA LEGENDE DIT LES TROIS VERDICTS REELS, PLUS LES JOURS NON SAISIS —
+          // et AUCUN quatrieme etat invente.
+          const leg=box.querySelector('.jr-leg').textContent;
+          for(const mot of ['Dans les cibles','Hors cibles','Saisi, sans cible','Non saisi'])
+            if(leg.indexOf(mot)<0) return _echec('la légende oublie « '+mot+' » : '+leg);
+          if(/à ajuster/i.test(leg)) return _echec('un verdict inventé est apparu dans la légende');
+          // LA VUE LISTE montre les jours saisis, du plus recent au plus ancien.
+          _ccdCalVue='liste';
+          const box2=document.createElement('div'); box2.innerHTML=_htmlJournalCal(c);
+          if(!box2.querySelector('.jr-liste')) return _echec('la vue liste ne rend rien');
+          if(box2.querySelectorAll('.jr-li').length!==1) return _echec('la liste ne porte pas le jour saisi');
+          if(box2.querySelector('.jr-grille')) return _echec('la grille survit en vue liste');
+          // LE FORMULAIRE, quand il est ouvert : ses sept champs.
+          _ccdCalVue='grille'; _ccdCalForm=ym+'-05';
+          const box3=document.createElement('div'); box3.innerHTML=_htmlJournalCal(c);
+          const ids=[...box3.querySelectorAll('.jr-form input,.jr-form select')].map(x=>x.id).join(',');
+          return ids==='ccd-jr-date,ccd-jr-repas,ccd-jr-nom,ccd-jr-kcal,ccd-jr-p,ccd-jr-g,ccd-jr-l'
+            ?true:_echec('les champs du formulaire : '+ids);
+        } finally { _ccdCalVue=sVue; _ccdCalMois=sMois; _ccdCalJour=sJour; _ccdCalForm=sForm; }})());
+
+      okA('1412 — LE COACH COMPLÈTE LE JOURNAL, ET NE RETIRE QUE SES PROPRES REPAS',async()=>{
+        const sU=currentUser, sId=currentClientId, sDB=DB.get('users'), sPush=CLOUD.pushOne,
+              sTS=window.toastSync, sConf=window.rcConfirm, sToast=window.toast,
+              sForm=_ccdCalForm, sJour=_ccdCalJour, sMois=_ccdCalMois;
+        try{
+          CLOUD.pushOne=()=>Promise.resolve(true);
+          window.toastSync=()=>Promise.resolve(true); window.toast=()=>{};
+          window.rcConfirm=async()=>true;
+          const p2=x=>(x<10?'0':'')+x;
+          const dte=new Date(); const iso=dte.getFullYear()+'-'+p2(dte.getMonth()+1)+'-08';
+          const CO={id:'CJ',email:'cj@t.fr',role:'coach',fname:'K',seenBilans:{},alertStatus:{}};
+          const AT={id:'AJ',email:'aj@t.fr',role:'athlete',coachId:'CJ',
+            nutrition:{dietType:'flexible',log:{}}};
+          AT.nutrition.log[iso]={entries:[{id:'ath1',nom:'Yaourt',repas:'collation',kcal:120,p:10,c:12,l:3}]};
+          DB.set('users',{[CO.email]:CO,[AT.email]:AT}); currentUser=CO; currentClientId='AJ';
+          const lu=()=>getOwnedClient('AJ');
+          const champs=(o)=>{ const b=document.createElement('div');
+            b.innerHTML='<input id="ccd-jr-date" value="'+(o.date||'')+'">'
+              +'<select id="ccd-jr-repas"><option value="dejeuner" selected>D</option></select>'
+              +'<input id="ccd-jr-nom" value="'+(o.nom||'')+'">'
+              +'<input id="ccd-jr-kcal" value="'+(o.kcal==null?'':o.kcal)+'">'
+              +'<input id="ccd-jr-p" value="'+(o.p==null?'':o.p)+'">'
+              +'<input id="ccd-jr-g" value="'+(o.g==null?'':o.g)+'">'
+              +'<input id="ccd-jr-l" value="'+(o.l==null?'':o.l)+'">';
+            b.id='_jr-test'; document.body.appendChild(b); return b; };
+          // RIEN DU TOUT : on n'ecrit pas une ligne a zero, elle fausserait la
+          // moyenne du mois et le verdict du jour.
+          let b=champs({date:iso,nom:'Rien'});
+          const vide=ccdJournalEnregistrer(); b.remove();
+          if(vide!==false) return _echec('un repas sans aucun chiffre a été enregistré');
+          // LES KCAL SE DEDUISENT DES MACROS QUAND ELLES MANQUENT.
+          b=champs({date:iso,nom:'Riz poulet',p:40,g:80,l:10});
+          const ok1=ccdJournalEnregistrer(); b.remove();
+          if(!ok1) return _echec('l’ajout a échoué');
+          let e=((lu().nutrition.log[iso]||{}).entries)||[];
+          if(e.length!==2) return _echec(e.length+' entrées au lieu de 2');
+          const neuf=e[1];
+          if(neuf.kcal!==4*40+4*80+9*10) return _echec('les kcal déduites : '+neuf.kcal);
+          if(neuf.par!=='coach') return _echec('le repas n’est pas marqué comme ajouté par le coach');
+          // LE COACH NE RETIRE PAS CE QUE L'ATHLETE A JOURNALISE.
+          const refus=await ccdJournalRetirer(iso,'ath1');
+          if(refus!==false) return _echec('le repas de l’athlète a pu être retiré');
+          if((((lu().nutrition.log[iso]||{}).entries)||[]).length!==2)
+            return _echec('le journal de l’athlète a changé');
+          // MAIS IL RETIRE LE SIEN.
+          const ote=await ccdJournalRetirer(iso,neuf.id);
+          if(!ote) return _echec('le repas du coach n’a pas pu être retiré');
+          e=((lu().nutrition.log[iso]||{}).entries)||[];
+          return e.length===1&&e[0].id==='ath1'
+            ?true:_echec('après retrait : '+JSON.stringify(e.map(x=>x.id)));
+        } finally {
+          CLOUD.pushOne=sPush; window.toastSync=sTS; window.rcConfirm=sConf; window.toast=sToast;
+          currentUser=sU; currentClientId=sId; if(sDB) DB.set('users',sDB);
+          _ccdCalForm=sForm; _ccdCalJour=sJour; _ccdCalMois=sMois;
+          try{ const x=document.getElementById('_jr-test'); if(x) x.remove(); }catch(e){}
+        }});
+
+      ok('1412 — LE JOURNAL N’EST PLUS UN MENU DÉROULANT',(()=>{
+        const s=document.getElementById('ccd-cal-sect');
+        if(!s) return _echec('la section du journal a disparu');
+        if(!s.classList.contains('cc-sect-fixe')) return _echec('elle se replie encore');
+        const t=s.querySelector(':scope>.cc-sect-t');
+        if(!t||t.textContent.trim()!=='Journal alimentaire') return _echec('le titre : '+(t&&t.textContent));
+        if(!t.querySelector('em')) return _echec('« alimentaire » n’est plus mis en valeur');
+        // ET SON ETAT DE REPLI N'EST PLUS RETENU : la clef a quitté la liste.
+        return CCD_REPLI_DEFAUT.indexOf('ccd-cal')<0
+          ?true:_echec('le journal est encore dans les sections repliées par défaut');})());
+
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
       // des compléments sur la même ligne que “VITAMINE…”, entre la photo et le
       // type, pour réduire la hauteur des rectangles ».
