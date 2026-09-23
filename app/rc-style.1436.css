@@ -8689,15 +8689,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
      les legendes y etaient deja lisibles. On rend donc les valeurs d avant. */
   .rap-lgd{font-size:9px}
   .rap-lgd-s{font-size:7px}
-  /* Comparateur : empile par defaut, cote a cote des que l'ecran est plus
-   large que haut. C'est l'ORIENTATION qui commande, pas la largeur. */
-#cmp-duo{display:grid;grid-template-columns:1fr;gap:10px}
-@media (orientation:landscape){#cmp-duo{grid-template-columns:1fr 1fr}}
-#cmp-duo video{width:100%;display:block;border-radius:var(--r-2);background:#000;max-height:46vh}
-@media (orientation:landscape){#cmp-duo video{max-height:64vh}}
-.cmp-cart{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.62);
-  color:#fff;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;
-  padding:4px 8px;border-radius:var(--r-1);pointer-events:none;line-height:1.35}
 
 /* UNE SEANCE NE SE COUPE PAS EN DEUX PAGES : sur le patron de .rap-bloc.
      Une fiche dont l echauffement est page 1 et les exercices page 2 se
