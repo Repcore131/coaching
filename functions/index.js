@@ -886,12 +886,15 @@ exports.verifierAchatProgramme = onCall({ secrets: [PAYPAL_CLIENT_SECRET] }, asy
       "Paiement non capture cote PayPal (statut : " + ((ordre && ordre.status) || "inconnu") + ").");
   }
 
-  const mois = 3;   // OFFRES.boutique_prog.mois, cote application
+  // COMBIEN DE MOIS S'OUVRENT. Une revision rouvre UN mois (lot 9) : sans
+  // cela, quelqu'un qui revient au huitieme mois paie 40 € pour un programme
+  // qu'il ne peut pas ouvrir. Un programme de la boutique en ouvre trois.
+  const mois = programmeId === "revision-programme" ? 1 : 3;
   const actuel = await lireDroits(cle);
   const droits = await ecrireDroits(cle, {
     palier: "ultime",
     echeance: prolonger(actuel && actuel.echeance, mois * MONTH_MS),
-    source: "programme",
+    source: programmeId === "revision-programme" ? "revision" : "programme",
     programme: programmeId,
   });
   return { ouvert: true, echeance: droits.echeance };

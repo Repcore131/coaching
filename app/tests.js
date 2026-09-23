@@ -33884,7 +33884,13 @@ async function testExercices(){
         for(const interdit of ['catalogueCoach','fichesBanque','chargerBanque','_banque'])
           if(src.indexOf(interdit)>=0) return _echec('la fiche ciblée passe par '+interdit);
         // ET LA PORTE NE S'OUVRE QUE POUR QUI EST SUIVI.
-        const sm=String(_renderSessionManager);
+        //
+        // ⚠ ELLE A CHANGE DE MAISON AU LOT 9, PAS DE REGLE : le bloc des
+        //   portes est devenu une fonction nommee, _rendreOutilsSeances, pour
+        //   qu'un achat de revision le repeigne sans repeindre tout l'ecran.
+        const sm=String(_rendreOutilsSeances);
+        if(String(_renderSessionManager).indexOf('_rendreOutilsSeances()')<0)
+          return _echec('« Mes séances » ne pose plus ses portes');
         if(sm.indexOf('ouvrirMesExercices()')<0) return _echec('aucune porte dans « Mes séances »');
         return /programmeRecu/.test(sm)
           ?true:_echec('la porte ne demande pas le suivi');})());
@@ -34206,6 +34212,98 @@ async function testExercices(){
             return _echec('un tiret cadratin traîne sur le remerciement');
           return true;
         } finally { try{ closeModal(); }catch(e){} currentUser=sv; }})());
+
+      // ══ LOT 9 — LA REVISION, ET CE QU'ELLE N'EST PAS ══════════════════
+      ok('LOT 9 — LA RÉVISION PASSE PAR LE MÊME FLUX D’ACHAT, ET DIT SON PÉRIMÈTRE',(()=>{
+        const p=programmeDuCatalogue(REVISION_ID);
+        if(!p) return _echec('la révision ne se trouve pas dans le catalogue');
+        if(!p.service) return _echec('la révision n’est pas marquée comme un service');
+        // LE PRIX VIENT DE LA TABLE, jamais du texte.
+        if(p.prixCts!==Math.round((offre('revision_prog').prix)*100))
+          return _echec('prix de la révision : '+p.prixCts+' centimes');
+        // ELLE N’EST DANS AUCUN RAYON : on ne révise pas un plan qu’on n’a pas.
+        if(programmesBoutique().some(x=>x.id===REVISION_ID))
+          return _echec('la révision est en rayon dans la boutique');
+        // LE PÉRIMÈTRE EST ÉCRIT, et il dit les deux moitiés.
+        const d=p.description||'';
+        if(!/ajustement/i.test(d)) return _echec('la description ne dit pas ce que c’est');
+        if(!/pas une refonte/i.test(d)||!/plan nutrition/i.test(d))
+          return _echec('la description ne dit pas ce que ce n’est PAS : « '+d+' »');
+        // ET IL EST AFFICHÉ AVANT LE PAIEMENT, pas après.
+        if(String(ouvrirAchatProgramme).indexOf('p.description')<0)
+          return _echec('la feuille d’achat n’affiche pas le périmètre');
+        // AUCUN SECOND FLUX : c’est ouvrirAchatProgramme, et lui seul.
+        const src=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
+        const sdk=(src.match(/paypal\.com\/sdk\/js/g)||[]).length;
+        if(sdk>2) return _echec(sdk+' chargements du SDK PayPal : un troisième flux est né');
+        return true;})());
+
+      ok('LOT 9 — LE BOUTON N’EXISTE QUE POUR QUI A UN PLAN ÉCRIT POUR LUI',(()=>{
+        const sauve=localStorage.getItem(DROITS_CLE);
+        try{
+          const mail='rev9@t.fr';
+          localStorage.removeItem(DROITS_CLE);
+          // SANS PLAN : rien.
+          if(programmePersoLivre({id:'a',email:mail,role:'athlete',status:'FREE'}))
+            return _echec('un dossier sans plan se voit proposer une révision');
+          // AVEC UN PLAN ÉCRIT PAR UN COACH : oui.
+          const u={id:'b',email:mail,role:'athlete',status:'FREE',
+            programmePerso:{le:Date.now()-30*864e5,par:'c1'}};
+          if(!programmePersoLivre(u)) return _echec('un plan écrit n’ouvre pas la révision');
+          // MAIS PAS À QUELQU’UN QUI EST DÉJÀ SUIVI : son coaching comprend
+          // déjà les ajustements, lui vendre 40 € serait vendre deux fois.
+          localStorage.setItem(DROITS_CLE,JSON.stringify(
+            {[mail]:{d:{palier:'suivi',echeance:0,maj:Date.now()},vide:false,lu:Date.now()}}));
+          if(programmePersoLivre(u)) return _echec('un athlète suivi se voit vendre une révision');
+          if(programmePersoLivre({role:'coach',email:'c@t.fr'}))
+            return _echec('un coach se voit proposer une révision');
+          // ET LE MARQUEUR SE POSE QUAND LE COACH PUBLIE, une seule fois.
+          const sm=String(saveCoachSessions);
+          if(sm.indexOf('programmePerso')<0) return _echec('publier un programme ne date rien');
+          return /!Number\(stocke\.programmePerso\.le\)/.test(sm)
+            ?true:_echec('une seconde publication reposerait la date');
+        } finally {
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
+      ok('LOT 9 — CHAQUE RÉVISION ROUVRE UN MOIS, ET LA TROISIÈME PARLE DE TRANSFORMATION',(()=>{
+        // LE SERVEUR ROUVRE : une révision vaut un mois, un programme trois.
+        // (La fonction vit dans functions/index.js ; ce que l’application
+        //  garantit, c’est qu’elle lui envoie bien l’identifiant.)
+        const src=String(_enregistrerAchat);
+        if(src.indexOf('verifierAchatProgramme')<0)
+          return _echec('l’achat d’une révision ne prévient pas le serveur');
+        if(src.indexOf('p.service')<0) return _echec('un service s’installerait dans les séances');
+        if(src.indexOf('revisions')<0) return _echec('la révision n’est pas comptée');
+        // LE COMPTE, ET LE TOTAL, VIENNENT DE LA TABLE.
+        const u={id:'r',email:'r9@t.fr',role:'athlete',revisions:[]};
+        if(revisionsPayees(u).length!==0) return _echec('un dossier neuf compte des révisions');
+        const p=Number(offre('programme_perso').prix), r=Number(offre('revision_prog').prix);
+        for(let n=1;n<=3;n++) u.revisions.push({le:Date.now(),prixCts:r*100,ordre:'o'+n});
+        if(revisionsPayees(u).length!==3) return _echec('le compte des révisions est faux');
+        if(totalPlanPerso(u)!==p+3*r) return _echec('total : '+totalPlanPerso(u)+' au lieu de '+(p+3*r));
+        // AVANT LA TROISIÈME, ON SE TAIT.
+        const deux={id:'d',email:'d9@t.fr',role:'athlete',revisions:u.revisions.slice(0,2)};
+        if(_htmlRelanceTransformation(deux)!=='') return _echec('la relance parle dès la deuxième révision');
+        // À LA TROISIÈME, elle dit le total et le prix de Transformation.
+        const h=_htmlRelanceTransformation(u);
+        if(!h) return _echec('la troisième révision ne déclenche rien');
+        const d=document.createElement('div'); d.innerHTML=h;
+        const txt=d.textContent.replace(/\s+/g,' ');
+        const nb=String.fromCharCode(160);
+        if(txt.indexOf(_euros(p+3*r).split(nb).join(' '))<0)
+          return _echec('le total dépensé ne se lit pas : « '+txt+' »');
+        if(txt.indexOf(_euros(offre('coaching_transfo').prix).split(nb).join(' '))<0)
+          return _echec('le prix de Transformation ne se lit pas');
+        if(!/trois mois/.test(txt)) return _echec('la durée de Transformation n’est pas dite');
+        const a=d.querySelector('a');
+        if(!a||!/beacons\.ai\/kevin\.gllc/.test(a.getAttribute('href')||''))
+          return _echec('la relance ne mène pas aux formules de coaching');
+        // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
+        if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0)
+          return _echec('un tiret cadratin traîne dans la relance');
+        return true;})());
 
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
