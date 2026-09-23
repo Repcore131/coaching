@@ -22348,6 +22348,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderVerdictCoach(c); }catch(e){}
   try{ renderCorpsCoach(c); }catch(e){}
   try{ renderCourbesCoach(c); }catch(e){}
+  try{ renderSignauxCoach(c); }catch(e){}
   try{ renderMethodesCoach(c); }catch(e){}
   try{ renderAsymetrieCoach(c); }catch(e){}
   try{ renderMotCoachFiche(c); }catch(e){}
@@ -42960,6 +42961,119 @@ function _htmlDemandeMesureAthlete(u){
     +escapeHtml('Ton coach te demande '+(noms.length>1?'ces mesures':'une mesure')+' : '
       +noms.join(', ')+'. Tu la saisis à ton prochain bilan.')
     +'</span></p>';
+}
+// ══ LOT 9 : LES SIGNAUX, REGROUPES ET TRIES ════════════════════════════════
+//
+// Kevin, 23/09/2026 : « Aujourd'hui les plateaux, la douleur, l'asymetrie, la
+// forme et le volume sont disperses dans la page. Rassemble-les dans l'etage 5,
+// chacun en une ligne, et trie-les par importance : ce qui bloque un
+// entrainement d'abord, ce qui merite un oeil ensuite. Un signal absent ne
+// laisse pas de case vide, il n'apparait pas. »
+//
+// ⚠ AUCUN SECOND CLASSEMENT. L'ordre vient d'expliquerUrgence, celui qui range
+//   deja les motifs de la liste « Pourquoi cet athlete est ici » et qui decide
+//   du rang de l'athlete dans la file du coach. Un classement ecrit ici
+//   finirait par le contredire : le meme athlete serait « urgent » en haut de
+//   liste et « a regarder ensuite » dans sa fiche.
+//
+// ⚠ ET LES BLOCS COMPLETS NE SONT PAS SUPPRIMES, ILS SONT RANGES (lot 10) :
+//   chaque ligne pointe vers le sien dans l'etage du detail, avec ses boutons
+//   et ses tableaux. Une ligne qui resume sans donner acces a ce qu'elle
+//   resume, c'est une information de moins, pas une de plus.
+const CCD_SIG_BLOQUE=7;   // au-dessus, ca bloque un entrainement
+const CCD_SIG_BLOCS=Object.freeze([
+  {re:/^Douleur/,ancre:'ccd-douleur',
+   geste:'Ne rien forcer dessus, et structurer la gêne.'},
+  {re:/^Plateau/,ancre:'ccd-plateaux',
+   geste:'Le détail dit quel muscle plafonne, et depuis quand.'},
+  {re:/^Volume/,ancre:'ccd-volume',
+   geste:'Le détail donne le prescrit et le réalisé, muscle par muscle.'},
+  {re:/^Forme/,ancre:'ccd-forme',
+   geste:'Le détail trace ce qu’il a déclaré, séance après séance.'},
+  {re:/^Asymétrie/,ancre:'ccd-asymetrie',geste:''},
+  {re:/^Décharge/,ancre:'ccd-bloc',geste:'La proposition attend sa réponse.'},
+  {re:/^Drapeau/,ancre:'ccd-securite',geste:'À traiter avant toute séance.'},
+  {re:/^Restriction/,ancre:'ccd-reds',geste:''},
+  {re:/^Séances écourtées/,ancre:'ccd-plateaux',geste:''}
+]);
+/**
+ * PURE. Les signaux de la fiche, dans l'ordre d'expliquerUrgence, chacun avec
+ * son geste et le bloc qui le detaille.
+ * @returns {Array<{motif:string,gravite:number,date:number|null,
+ *                  geste:string,ancre:string,bloque:boolean}>}
+ */
+function ccdSignaux(c){
+  let l=[];
+  try{ l=expliquerUrgence(c)||[]; }catch(e){ return []; }
+  return l.map(x=>{
+    const b=CCD_SIG_BLOCS.find(y=>y.re.test(String(x.motif||'')))||{};
+    return {motif:String(x.motif||''),gravite:Number(x.gravite)||0,
+      date:x.date||null,geste:b.geste||'',ancre:b.ancre||'',
+      bloque:(Number(x.gravite)||0)>=CCD_SIG_BLOQUE};
+  });
+}
+// Une ligne : la pastille de gravite, le motif, sa date, son geste, et le
+// chemin vers son bloc.
+function _htmlCcdSignal(s){
+  return '<li class="ccd-sig'+(s.bloque?' ccd-sig-b':'')+'">'
+    +'<span class="ccd-sig-p" aria-hidden="true"></span>'
+    +'<span class="ccd-sig-c">'
+    +'<span class="ccd-sig-m">'+escapeHtml(s.motif)
+    +(s.date?('<span class="ccd-sig-d"> · '+escapeHtml(_ccdJour(s.date))+'</span>'):'')
+    +'</span>'
+    +(s.geste?('<span class="ccd-sig-g">'+escapeHtml(s.geste)+'</span>'):'')
+    +'</span>'
+    +(s.ancre?('<button type="button" class="ccd-out-r" onclick="ccdVoirDetail(\''
+      +s.ancre+'\')">Voir le détail</button>'):'')
+    +'</li>';
+}
+function _htmlCcdSignaux(c){
+  const l=ccdSignaux(c);
+  if(!l.length) return '';
+  const bloc=l.filter(x=>x.bloque), oeil=l.filter(x=>!x.bloque);
+  // ⚠ UN GROUPE VIDE NE SORT PAS. « Ce qui bloque une seance : rien » est une
+  //   case vide avec un titre, et la mission le refuse explicitement.
+  const groupe=(titre,items)=>items.length
+    ?('<div class="ccd-sig-gr"><h4 class="ccd-sig-t">'+escapeHtml(titre)+'</h4>'
+      +'<ul class="ccd-sig-l">'+items.map(_htmlCcdSignal).join('')+'</ul></div>')
+    :'';
+  return groupe('Ce qui bloque une séance',bloc)
+    +groupe('Ce qui mérite un œil',oeil);
+}
+function renderSignauxCoach(c){
+  const z=document.getElementById('ccd-signaux');
+  if(!z) return false;
+  let h='';
+  try{ h=c?_htmlCcdSignaux(c):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+  return !!h;
+}
+// Le detail d'un signal : l'etage 6, son repli ouvert, et le bloc sous les yeux.
+//
+// ⚠ DEUX REPLIS PEUVENT ETRE FERMES : celui de l'etage entier (« Tout le
+//   detail ») et celui de la section du bloc (« Volume », « Douleur »...).
+//   Scroller vers un noeud replie ne montre rien, et le coach conclurait que le
+//   bouton ne marche pas. On passe par ccdReplier, qui memorise l'ouverture :
+//   c'est lui qui l'a demandee.
+function ccdVoirDetail(ancre){
+  try{
+    ccdEtage('detail');
+    const ouvrir=id=>{
+      const c=document.getElementById(id);
+      const s=c&&c.closest&&c.closest('.cc-sect');
+      if(s&&s.classList.contains('replie')) ccdReplier(id);
+    };
+    ouvrir('ccd-detail');
+    const z=document.getElementById(ancre);
+    if(!z) return false;
+    const sz=z.closest&&z.closest('.cc-sect');
+    if(sz&&sz.classList.contains('replie')){
+      const c=sz.querySelector(':scope>.cc-sect-c');
+      if(c&&c.id) ouvrir(c.id);
+    }
+    if(z.scrollIntoView) z.scrollIntoView({block:'center',behavior:'smooth'});
+    return true;
+  }catch(e){ return false; }
 }
 function renderVerdictCoach(c){
   const z=document.getElementById('ccd-verdict');

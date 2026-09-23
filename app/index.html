@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1495';
+window.RC_BUILD='1497';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -403,7 +403,7 @@ if('serviceWorker' in navigator){
 /* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:'Bebas Neue','Arial Narrow','Haettenschweiler','Franklin Gothic Condensed',Impact,sans-serif}
 </style>
-<link rel="stylesheet" href="./rc-style.1495.css">
+<link rel="stylesheet" href="./rc-style.1497.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -2557,6 +2557,21 @@ const COACH_PHOTO='icons/coach.jpg';
       <section class="cc-etage" id="ccd-et-signaux" data-et="signaux">
         <div class="ccd-et-h"><h3 class="ccd-et-t">Ce qui appelle un œil</h3><span class="ccd-et-s">trié par ce qui bloque une séance</span></div>
         <div id="ccd-signaux"></div>
+      </section>
+      <section class="cc-etage" id="ccd-et-detail" data-et="detail">
+        <div class="ccd-et-h"><h3 class="ccd-et-t">Le détail</h3><span class="ccd-et-s">tout le reste, rangé</span></div>
+        <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:12px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
+        <!-- LE SEUL ETAGE QUI S'OUVRE REPLIE. Son contenu n'est pas cache,
+             il est range : le coach presse ne le voit pas, celui qui creuse
+             le deplie d'un geste. 'ccd-detail' est dans CCD_REPLI_DEFAUT. -->
+        <section class="cc-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Tout le détail</span></div>
+          <div class="cc-sect-c" id="ccd-detail">
+        <!-- ⚠ LES CINQ BLOCS DE SIGNAUX SONT ICI DEPUIS LE LOT 9, et non
+             plus dans l'etage « Ce qui appelle un oeil » : celui-ci n'en
+             porte plus qu'une LIGNE chacun, triee par ce qui bloque une
+             seance. Le bouton « Voir le detail » de chaque ligne ouvre ce
+             repli et amene le bloc sous les yeux. Rien n'a ete supprime. -->
         <!-- L'ASYMETRIE : la phrase et le geste. Aucun graphique — la donnee
              est deja tracee par les mini-courbes gauche/droite existantes. -->
         <div id="ccd-asymetrie"></div>
@@ -2581,16 +2596,6 @@ const COACH_PHOTO='icons/coach.jpg';
                serait du mobilier. -->
           <div class="cc-sect-c" id="ccd-bloc"></div>
         </section>
-      </section>
-      <section class="cc-etage" id="ccd-et-detail" data-et="detail">
-        <div class="ccd-et-h"><h3 class="ccd-et-t">Le détail</h3><span class="ccd-et-s">tout le reste, rangé</span></div>
-        <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:12px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
-        <!-- LE SEUL ETAGE QUI S'OUVRE REPLIE. Son contenu n'est pas cache,
-             il est range : le coach presse ne le voit pas, celui qui creuse
-             le deplie d'un geste. 'ccd-detail' est dans CCD_REPLI_DEFAUT. -->
-        <section class="cc-sect" style="--cc-accent:var(--border)">
-          <div class="cc-sect-t"><span>Tout le détail</span></div>
-          <div class="cc-sect-c" id="ccd-detail">
         <section class="cc-sect" style="--cc-accent:var(--border);display:none">
           <div class="cc-sect-t"><span>Rite de cycle</span></div>
           <div class="cc-sect-c" id="ccd-rite"></div>
@@ -5565,5 +5570,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1495.js"></script>
+<script src="./rc-core.1497.js"></script>
 </body></html>

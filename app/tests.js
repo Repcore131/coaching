@@ -21355,8 +21355,16 @@ async function testExercices(){
       if(!/Déclaratif/.test((d.querySelector('.fm-sous')||{}).title||'')) return _echec('le rappel a disparu tout à fait');
       // LES CAS QUE RIEN D'AUTRE NE DIT PARLENT TOUJOURS.
       if(!/avant de pouvoir comparer/.test(_fb(_fbU([6,7,6])))) return _echec('le manque de séances ne se dit plus');
+      // ⚠ CE QUI EST INTERDIT, C'EST UN BANDEAU A LUI. Kevin, 21/09/2026 :
+      //   « pas besoin que ce soit un menu deroulant » — le bandeau « Forme »
+      //   au-dessus du bloc redisait son titre. Depuis le lot 9 le bloc vit
+      //   dans « Tout le detail », un repli commun a douze blocs : il n'a
+      //   toujours pas de bandeau a lui, et c'est ce qu'on verifie.
       const z=document.getElementById('ccd-forme');
-      if(z&&z.closest('.cc-sect')) return _echec('la forme est encore dans une section repliable');
+      const sc=z&&z.closest('.cc-sect');
+      const cc=sc&&sc.querySelector(':scope>.cc-sect-c');
+      if(cc&&cc.id!=='ccd-detail')
+        return _echec('la forme a de nouveau son propre bandeau repliable : '+cc.id);
       return true;})());
 
     // ── La maquette de Kevin (21/09/2026) : « Évolution de ta forme » ──
@@ -30830,10 +30838,15 @@ async function testExercices(){
             if(!t||!(t.textContent||'').trim()) return _echec(cle+' n\'a pas de titre');
           }
           // ET CHAQUE CONTENU EST A SON ETAGE.
+          // ⚠ LES CINQ BLOCS DE SIGNAUX ONT CHANGE D'ETAGE AU LOT 9 : l'etage
+          //   des signaux ne porte plus qu'une LIGNE par signal (#ccd-signaux),
+          //   et les blocs complets, avec leurs boutons et leurs tableaux, sont
+          //   ranges dans le detail. Rien n'a ete supprime.
           const chez={'ccd-verdict':'verdict','ccd-corps':'corps','ccd-poids':'courbes',
-            'ccd-courbes':'courbes','ccd-morpho':'longueurs','ccd-asymetrie':'signaux',
-            'ccd-forme':'signaux','ccd-volume':'signaux','ccd-plateaux':'signaux',
-            'ccd-douleur':'signaux','ccd-bilans':'detail','ccd-journal':'detail',
+            'ccd-courbes':'courbes','ccd-morpho':'longueurs','ccd-signaux':'signaux',
+            'ccd-asymetrie':'detail','ccd-forme':'detail','ccd-volume':'detail',
+            'ccd-plateaux':'detail','ccd-douleur':'detail','ccd-bloc':'detail',
+            'ccd-bilans':'detail','ccd-journal':'detail',
             'ccd-dossier':'detail','ccd-photos-progression':'detail','ccd-bil-cal':'detail'};
           for(const id in chez){
             const z=document.getElementById(id);
@@ -43539,6 +43552,82 @@ async function testExercices(){
         if(bout.indexOf('une à la fois')<0) return _echec(f+' : rien ne dit que les autres suivront');
       }
       return true;})());
+
+
+    // ══ LOT 9 : LES SIGNAUX, REGROUPÉS ET TRIÉS (23/09/2026) ═════════════
+    // « Rassemble-les dans l'étage 5, chacun en une ligne, et trie-les par
+    //   importance : ce qui bloque un entraînement d'abord, ce qui mérite un
+    //   œil ensuite. Un signal absent ne laisse pas de case vide. »
+    ok('CHAQUE SIGNAL TIENT EN UNE LIGNE, ET LE PLUS GRAVE EST EN HAUT',(()=>{
+      if(typeof ccdSignaux!=='function') return _echec('les signaux ne sont pas regroupés');
+      // ⚠ AUCUN SECOND CLASSEMENT : l'ordre vient d'expliquerUrgence, celui
+      //   qui décide déjà du rang de l'athlète dans la file du coach.
+      const src=String(ccdSignaux);
+      if(src.indexOf('expliquerUrgence')<0) return _echec('les signaux ne lisent pas expliquerUrgence');
+      if(/\.sort\(/.test(src)) return _echec('les signaux se reclassent au lieu de suivre l’ordre existant');
+      const sE=window.expliquerUrgence;
+      try{
+        const t=Date.now();
+        window.expliquerUrgence=()=>[
+          {motif:'Douleur répétée : Squat',gravite:9,date:t},
+          {motif:'Volume sous le minimum efficace',gravite:6,date:null},
+          {motif:'Bilan en retard',gravite:4,date:t}];
+        const l=ccdSignaux({id:'S9'});
+        if(l.length!==3) return _echec(l.length+' signaux au lieu de trois');
+        if(l[0].motif.indexOf('Douleur')!==0) return _echec('le plus grave n’est pas en tête : '+l[0].motif);
+        if(!l[0].bloque) return _echec('une douleur répétée ne bloque pas une séance');
+        if(l[1].bloque||l[2].bloque) return _echec('un signal de priorité basse bloque une séance');
+        // CHAQUE FAMILLE CONNUE POINTE VERS SON BLOC, et ce bloc existe.
+        if(l[0].ancre!=='ccd-douleur') return _echec('la douleur ne pointe pas son bloc : '+l[0].ancre);
+        if(l[1].ancre!=='ccd-volume') return _echec('le volume ne pointe pas son bloc : '+l[1].ancre);
+        for(const s of l) if(s.ancre&&!document.getElementById(s.ancre))
+          return _echec('le bloc '+s.ancre+' n’existe pas dans la page');
+        // DEUX GROUPES, ET UN GROUPE VIDE NE SORT PAS.
+        const d=document.createElement('div'); d.innerHTML=_htmlCcdSignaux({id:'S9'});
+        const gr=[...d.querySelectorAll('.ccd-sig-t')].map(x=>x.textContent);
+        if(gr.join('/')!=='Ce qui bloque une séance/Ce qui mérite un œil')
+          return _echec('groupes : '+gr.join('/'));
+        if(d.querySelectorAll('.ccd-sig').length!==3) return _echec('une ligne par signal, pas plus');
+        window.expliquerUrgence=()=>[{motif:'Bilan en retard',gravite:4,date:null}];
+        const d2=document.createElement('div'); d2.innerHTML=_htmlCcdSignaux({id:'S9'});
+        const gr2=[...d2.querySelectorAll('.ccd-sig-t')].map(x=>x.textContent);
+        if(gr2.join('/')!=='Ce qui mérite un œil') return _echec('un groupe vide sort quand même : '+gr2.join('/'));
+        // AUCUN SIGNAL : rien du tout, pas un cadre vide.
+        window.expliquerUrgence=()=>[];
+        if(_htmlCcdSignaux({id:'S9'})!=='') return _echec('un cadre sort sans un seul signal');
+        return true;
+      } finally { window.expliquerUrgence=sE; }})());
+
+    ok('LES CINQ BLOCS DE SIGNAUX SONT RANGÉS, PAS SUPPRIMÉS',(()=>{
+      // Kevin : « Rien n'est supprimé, tout est rangé. » Chaque bloc vit
+      // maintenant dans l'étage du détail, et la ligne y mène.
+      const et=id=>{ const e=document.getElementById(id);
+        if(!e) return 'absent';
+        const s=e.closest('.cc-etage');
+        return s?(s.dataset.et||'?'):'hors étage'; };
+      for(const id of ['ccd-asymetrie','ccd-forme','ccd-volume','ccd-plateaux','ccd-douleur','ccd-bloc']){
+        const x=et(id);
+        if(x==='absent') return _echec(id+' a disparu de la page');
+        if(x!=='detail') return _echec(id+' est resté dans l’étage « '+x+' »');
+      }
+      // L'ÉTAGE DES SIGNAUX NE PORTE PLUS QUE SES LIGNES.
+      const e5=document.getElementById('ccd-et-signaux');
+      if(!e5) return _echec('l’étage des signaux a disparu');
+      if(e5.querySelector('.cc-sect')) return _echec('un bloc complet est resté dans l’étage des signaux');
+      if(!e5.querySelector('#ccd-signaux')) return _echec('la zone des lignes a disparu');
+      // ET LE BOUTON « VOIR LE DÉTAIL » OUVRE LE REPLI, sans quoi il mènerait
+      // à un bloc invisible.
+      if(typeof ccdVoirDetail!=='function') return _echec('le chemin vers le détail n’existe pas');
+      const d=document.getElementById('ccd-detail');
+      const s=d&&d.closest('.cc-sect');
+      if(!s) return _echec('le repli du détail a disparu');
+      const avant=s.classList.contains('replie');
+      try{
+        s.classList.add('replie');
+        ccdVoirDetail('ccd-volume');
+        if(s.classList.contains('replie')) return _echec('le repli reste fermé sur le bloc visé');
+        return true;
+      } finally { s.classList.toggle('replie',avant); }})());
 
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
       // Chaque silhouette porte sa carte : une image ou chaque pixel du corps

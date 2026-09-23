@@ -4364,6 +4364,29 @@ html{scroll-behavior:smooth}
 /* Chez l'athlete, la meme ligne sans bouton : il n'a rien a demander, il a
    quelque chose a mesurer. */
 .ccd-manque-a{margin:0 0 12px}
+/* ══ LES SIGNAUX, UNE LIGNE CHACUN (lot 9) ═══════════════════════════════
+   Deux groupes, et un groupe vide ne sort pas : « ce qui bloque une seance :
+   rien » serait une case vide avec un titre. La pastille dit la famille, pas
+   une note : rouge pour ce qui bloque un entrainement, gris pour ce qui merite
+   un oeil. */
+.ccd-sig-gr{margin-bottom:12px}
+.ccd-sig-t{margin:0 0 6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;
+  text-transform:uppercase;color:var(--sub)}
+.ccd-sig-l{list-style:none;margin:0;padding:0}
+.ccd-sig{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;margin-bottom:6px;
+  background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.09);
+  border-radius:var(--r-2);flex-wrap:wrap}
+.ccd-sig-p{flex:0 0 auto;width:7px;height:7px;margin-top:5px;border-radius:var(--r-full);
+  background:rgba(255,255,255,.45)}
+.ccd-sig-b{border-color:rgba(224,32,32,.42)}
+.ccd-sig-b .ccd-sig-p{background:var(--red)}
+.ccd-sig-c{flex:1 1 180px;min-width:0}
+.ccd-sig-m{display:block;font-size:var(--fs-xs);font-weight:700;color:var(--text);
+  line-height:1.5}
+.ccd-sig-d{font-weight:400;color:var(--text-faint)}
+.ccd-sig-g{display:block;font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;
+  margin-top:3px}
+.ccd-sig .ccd-out-r{flex:0 0 auto;white-space:nowrap}
 /* La legende des quatre zones : la meme grammaire que celle de la grille de
    charge, pastille puis nom de zone. */
 .cc-corps-l{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
